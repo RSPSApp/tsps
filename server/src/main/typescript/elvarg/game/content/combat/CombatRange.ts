@@ -3,6 +3,7 @@ import type { Mobile } from "../../entity/impl/Mobile";
 import { Location } from "../../model/Location";
 import { PathFinder } from "../../model/movement/path/PathFinder";
 import { PluginManager } from "../../../plugins/PluginManager";
+import { CrossFloor } from "../../CrossFloor";
 import { CombatPosition } from "./CombatPosition";
 import { CombatType } from "./CombatType";
 import type { CombatMethod } from "./method/CombatMethod";
@@ -23,7 +24,8 @@ export class CombatRange {
         // main world's clipping (CombatPosition).
         const attackerLocation = CombatPosition.location(attacker, target);
         const targetLocation = CombatPosition.location(target, attacker);
-        if (attackerLocation.getZ() !== targetLocation.getZ()) {
+        const differentFloor = attackerLocation.getZ() !== targetLocation.getZ();
+        if (differentFloor && (!CrossFloor.canCross(attackerLocation, targetLocation) || method.type() === CombatType.MELEE)) {
             return false;
         }
         const area = CombatPosition.area(attacker, target);
@@ -35,7 +37,7 @@ export class CombatRange {
         // A large NPC fights on while its target stands inside its footprint: it cannot
         // vacate in a step, so overlap only stops 1x1 attackers (and players, who route out).
         const overlapBlocks = !attacker.isNpc() || Math.max(1, attacker.getSize() | 0) <= 1;
-        if ((overlapBlocks && overlapped) || this.distance(attackerBounds, targetBounds) > range) {
+        if ((!differentFloor && overlapBlocks && overlapped) || this.distance(attackerBounds, targetBounds) > range) {
             return false;
         }
 
@@ -55,6 +57,11 @@ export class CombatRange {
             // Use the projectile line below: walking collision would reject those attacks.
         }
 
+        if (differentFloor) {
+            // Check both floors' horizontal clipping so a wall on either floor blocks the shot.
+            return this.hasProjectileLine(attackerBounds, targetBounds, area, attackerLocation.getZ()) &&
+                this.hasProjectileLine(targetBounds, attackerBounds, area, targetLocation.getZ());
+        }
         if (attacker.isNpc()) {
             return this.hasProjectileLine(targetBounds, attackerBounds, area, attackerLocation.getZ());
         }
@@ -79,12 +86,77 @@ export class CombatRange {
     }
 
     static route(attacker: Mobile, method: CombatMethod, target: Mobile): boolean {
+        const attackerLocation = CombatPosition.location(attacker, target);
+        const targetLocation = CombatPosition.location(target, attacker);
+        if (attackerLocation.getZ() !== targetLocation.getZ() && CrossFloor.canCross(attackerLocation, targetLocation)) {
+            // The pathfinder stays on the attacker's floor. Route only to tiles that are both
+            // in range and have projectile line of sight on each floor; a generic range box
+            // can end behind a wall and make the player wander without ever being able to fire.
+            if (method.type() === CombatType.MELEE) return false;
+            const range = this.attackDistance(attacker, method, target);
+            const clearShotTiles = this.clearShotRouteTiles(attacker, target, range, attackerLocation, targetLocation);
+            // Search beyond the nearest geometric candidates. A wall can block every one of
+            // those while a slightly farther clear-shot tile is reachable around its edge.
+            // The old generic range fallback sent players to tiles without LOS;
+            // once they got there, combat replanned forever because a successful step counted
+            // as pursuit progress even though no attack was possible.
+            const candidatesPerSearch = 32;
+            for (let offset = 0; offset < clearShotTiles.length; offset += candidatesPerSearch) {
+                const candidates = clearShotTiles.slice(offset, offset + candidatesPerSearch);
+                if (PathFinder.calculateRouteToAny(attacker, candidates) > 0) return true;
+            }
+            return false;
+        }
         // Route toward the moving entity itself. Combat's post-movement phase stops the queue
         // as soon as the method's real range/line-of-sight check succeeds, so this
         // naturally finds the first usable ranged, magic, or melee tile without a
         // separate geometric attack-tile heuristic.
         PathFinder.calculateEntityRoute(attacker, target);
         return attacker.getMovementQueue().hasRoute();
+    }
+
+    /** Candidate current-floor tiles that are in range and have clear projectile lines on both floors. */
+    private static clearShotRouteTiles(
+        attacker: Mobile,
+        target: Mobile,
+        range: number,
+        attackerLocation: Location,
+        targetLocation: Location,
+    ): Location[] {
+        const attackerSize = Math.max(1, attacker.getSize() | 0);
+        const attackerBounds = this.bounds(attacker, attackerLocation);
+        const targetBounds = this.bounds(target, targetLocation);
+        const area = CombatPosition.area(attacker, target);
+        const candidates: Location[] = [];
+        const footprintPadding = attackerSize - 1;
+        for (let x = targetBounds.minX - range - footprintPadding; x <= targetBounds.maxX + range; x++) {
+            for (let y = targetBounds.minY - range - footprintPadding; y <= targetBounds.maxY + range; y++) {
+                const sourceBounds = {
+                    minX: x,
+                    minY: y,
+                    maxX: x + attackerSize - 1,
+                    maxY: y + attackerSize - 1,
+                };
+                if (this.distance(sourceBounds, targetBounds) > range) continue;
+                if (!target.hasFlag?.(CombatRange.BUILT_INTO_SCENERY_FLAG) &&
+                    (!this.hasProjectileLine(sourceBounds, targetBounds, area, attackerLocation.getZ()) ||
+                        !this.hasProjectileLine(targetBounds, sourceBounds, area, targetLocation.getZ()))) continue;
+                candidates.push(new Location(x, y, attackerLocation.getZ()));
+            }
+        }
+        candidates.sort((a, b) =>
+            this.distance(attackerBounds, this.boundsAt(a, attackerSize)) -
+            this.distance(attackerBounds, this.boundsAt(b, attackerSize)));
+        return candidates;
+    }
+
+    private static boundsAt(location: Location, size: number): Bounds {
+        return {
+            minX: location.getX(),
+            minY: location.getY(),
+            maxX: location.getX() + size - 1,
+            maxY: location.getY() + size - 1,
+        };
     }
 
     /**
@@ -162,8 +234,8 @@ export class CombatRange {
      * southern boundary is still max range + reach from its spawn, while its northern and
      * eastern boundary is two tiles further out.
      */
-    static footprintDistance(origin: Location, size: number, point: Location): number {
-        if (origin.getZ() !== point.getZ()) return Number.MAX_SAFE_INTEGER;
+    static footprintDistance(origin: Location, size: number, point: Location, allowCrossFloor = false): number {
+        if (origin.getZ() !== point.getZ() && !allowCrossFloor) return Number.MAX_SAFE_INTEGER;
         const extent = Math.max(1, size | 0) - 1;
         const dx = Math.max(origin.getX() - point.getX(), 0, point.getX() - (origin.getX() + extent));
         const dy = Math.max(origin.getY() - point.getY(), 0, point.getY() - (origin.getY() + extent));

@@ -246,9 +246,9 @@ function definePoweredStaff(api, config) {
  * not measured to its south-west corner (rsprox: seas trident on a size-2 lobster, Eye of Ayak on Tombs of
  * Amascut bosses; the Sanguinesti staff, #2568). Zero inside the footprint; each caller applies its own minimum.
  */
-function distance(from, to) {
+function distance(from, to, CombatPosition) {
+  if (CombatPosition?.edgeDistance) return CombatPosition.edgeDistance(from, to);
   const at = from.getLocation(), corner = to.getLocation();
-  if (at.getZ() !== corner.getZ()) return at.getDistance(corner);
   const size = Math.max(1, to.getSize?.() ?? 1);
   const dx = Math.max(0, corner.getX() - at.getX(), at.getX() - (corner.getX() + size - 1));
   const dy = Math.max(0, corner.getY() - at.getY(), at.getY() - (corner.getY() + size - 1));

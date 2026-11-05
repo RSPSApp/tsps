@@ -501,8 +501,6 @@ function combatMethod(special) {
       return character?.getFightType?.()?.isRapid?.() === true ? Math.max(1, baseSpeed - 1) : baseSpeed;
     }
     hits(character, target) {
-      // The blowpipe's own hit-delay profile, as RangedCombatMethod reads it, by the target's nearest tile
-      // (Wiki: Hit delay; rsprox 3279, the Drygore blowpipe's darts at Vorkath).
       const delay = core.RangedCombatMethod.landingDelays(character, target)[0];
       return [new core.PendingHit(character, target, this, delay)];
     }

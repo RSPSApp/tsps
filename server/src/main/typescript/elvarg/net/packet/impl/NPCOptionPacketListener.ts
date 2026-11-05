@@ -1,3 +1,4 @@
+import { CrossFloor } from "../../../game/CrossFloor";
 import { World } from "../../../game/World";
 import { CombatSpells } from "../../../game/content/combat/magic/CombatSpells";
 import { EffectSpells } from "../../../game/content/combat/magic/EffectSpells";
@@ -47,7 +48,7 @@ export class NPCOptionPacketListener {
     // in a deck scene; range must be measured root-to-root.
     const playerRoot = BoatManager.rootLocation(player);
     const npcRoot = BoatManager.rootLocation(npc);
-    if (!playerRoot.isWithinDistance(npcRoot, 24)) { trace("DROPPED: >24 tiles", npc); return; }
+    if (!CrossFloor.visible(playerRoot, npcRoot, 24)) { trace("DROPPED: >24 tiles", npc); return; }
 
     const definition = npc.getCurrentDefinition(player);
     const option = definition?.getActions()?.[clickType - 1]?.toLowerCase();
@@ -63,6 +64,7 @@ export class NPCOptionPacketListener {
       return;
     }
 
+    if (playerRoot.getZ() !== npcRoot.getZ()) return;
     player.setPositionToFace(npc.getLocation());
     const routeEvent = {
       player, npc, definition, npcId: npc.getContentId(player), npcIndex: index, clickType,
@@ -167,7 +169,7 @@ export class NPCOptionPacketListener {
     // Plugins can supply scripted utility spells missing from the legacy spell tables.
     if (!resolution.spell && selection) PluginManager.emitCustomEvent("magic:resolve-spell", resolution);
     const spell = resolution.spell;
-    if (!npc || !spell || !BoatManager.rootLocation(player).isWithinDistance(BoatManager.rootLocation(npc), 24) || npc.getHitpoints?.() <= 0) {
+    if (!npc || !spell || !CrossFloor.visible(BoatManager.rootLocation(player), BoatManager.rootLocation(npc), 24) || npc.getHitpoints?.() <= 0) {
       player.getMovementQueue().reset();
       return false;
     }
@@ -177,6 +179,7 @@ export class NPCOptionPacketListener {
     // rejects them when no plugin takes the cast.
     const allowed = !!combatSpell && (areaPermission ?? !!npc.getCurrentDefinition?.(player)?.isAttackable?.());
     if (!allowed) {
+      if (BoatManager.rootLocation(player).getZ() !== BoatManager.rootLocation(npc).getZ()) return false;
       player.getMovementQueue().reset();
       if (areaPermission === false) return false;
       return NPCOptionPacketListener.castSpellOnScriptedNpc(player, index, npc, spell);

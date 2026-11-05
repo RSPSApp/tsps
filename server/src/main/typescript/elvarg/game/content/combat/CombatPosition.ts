@@ -1,3 +1,4 @@
+import { CrossFloor } from "../../CrossFloor";
 import { BoatManager } from "../sailing/BoatManager";
 import type { Mobile } from "../../entity/impl/Mobile";
 import type { Location } from "../../model/Location";
@@ -35,7 +36,14 @@ export class CombatPosition {
 
     /** Chebyshev distance between their tiles, as `Location.getDistance` measures it. */
     static distance(a: Mobile, b: Mobile): number {
-        return CombatPosition.location(a, b).getDistance(CombatPosition.location(b, a));
+        const first = CombatPosition.location(a, b), second = CombatPosition.location(b, a);
+        return CrossFloor.combatEnabled() ? CrossFloor.distance(first, second) : first.getDistance(second);
+    }
+
+    /** Projectile flight distance includes the vertical gap between floors. */
+    static projectileDistance(a: Mobile, b: Mobile): number {
+        const first = CombatPosition.location(a, b), second = CombatPosition.location(b, a);
+        return CrossFloor.projectileDistance(first, second);
     }
 
     /**

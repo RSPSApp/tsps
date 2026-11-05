@@ -1,6 +1,6 @@
 // TODO: ported from xrsps-typescript; untested.
 module.exports = function registerZaryteCrossbowSpecialAttack(api) {
-  const { Animation, CombatFactory, CombatSpecial, ItemIdentifiers, PendingHit, Projectile, RangedCombatMethod, RangedWeapon, Sound, Sounds, WeaponProfiles } = api.core;
+  const { Animation, CombatFactory, CombatPosition, CombatSpecial, ItemIdentifiers, PendingHit, Projectile, RangedCombatMethod, RangedWeapon, Sound, Sounds, WeaponProfiles } = api.core;
 
   const DRAIN = 75;
   const EVOKE_ACCURACY_MULTIPLIER = 2;
@@ -8,7 +8,12 @@ module.exports = function registerZaryteCrossbowSpecialAttack(api) {
 
   class ZaryteCrossbowCombatMethod extends RangedCombatMethod {
     hits(character, target) {
-      return [new PendingHit(character, target, this, 2)];
+      if (character.getLocation().getZ() === target.getLocation().getZ()) {
+        return [new PendingHit(character, target, this, 2)];
+      }
+      const distance = CombatPosition.projectileDistance(character, target);
+      const delay = RangedCombatMethod.playerHitDelays(character, target, distance)[0];
+      return [new PendingHit(character, target, this, Math.max(2, delay))];
     }
 
     canAttack(character, target) {
@@ -33,7 +38,7 @@ module.exports = function registerZaryteCrossbowSpecialAttack(api) {
       // ended before it started, so the client clamped it to a single cycle at the player.
       const profile = WeaponProfiles.ranged(player);
       const shot = profile?.projectiles?.[0] ?? { delay: 41, lengthAdjustment: 5, stepMultiplier: 5, startHeight: 38.75, endHeight: 36.5, angle: 5, progress: 11 };
-      const distance = character.getLocation().getDistance(target.getLocation());
+      const distance = CombatPosition.projectileDistance(character, target);
       const end = RangedCombatMethod.projectileEnd(shot, distance);
       const ammo = player.getCombat().getAmmunition();
       const projectile = Projectile.createProjectile(

@@ -37,7 +37,7 @@ const core = {
   },
   DamageFormulas: { sourceMaxHit: () => sourceMax },
   PluginManager: { modifyRangedMaxHit: (_a, _t, maxHit) => maxHit },
-  Projectile: { createProjectile: (...args) => {
+  Projectile: { ticksToLand: (cycles) => Math.max(1, Math.ceil(cycles / 30)), createProjectile: (...args) => {
     const shot = { args };
     projectiles.push(shot);
     return {
@@ -82,7 +82,7 @@ function fakePlayer({ weapon, ammo = Ammunition.RUNE_ARROW, rangedWeapon, specia
         : { getId: () => 0, getDefinition: () => ({ getBonuses: () => ({ 11: ammoStrength }) }) },
     }),
     getSkillManager: () => ({ getCurrentLevel: () => rangedLevel }),
-    getLocation: () => ({ getDistance: () => 1 }),
+    getLocation: () => new core.Location(3200, 3200, 0),
     performAnimation: () => { state.animations++; },
     performGraphic: () => {},
     performGraphicInSlot: (slot, graphic) => state.slotGraphics.push({ slot, graphic }),
@@ -91,7 +91,7 @@ function fakePlayer({ weapon, ammo = Ammunition.RUNE_ARROW, rangedWeapon, specia
   return player;
 }
 
-const target = { getLocation: () => ({}), performGraphic: () => {}, isNpc: () => true };
+const target = { getLocation: () => new core.Location(3201, 3200, 0), performGraphic: () => {}, isNpc: () => true };
 
 function shoot(attacker, accurate, startingDamage = 0) {
   rolledBounds = [];
@@ -242,6 +242,32 @@ test("Descent of Darkness: other arrows hit up to 1.3x, at least 5, uncapped", (
   assert.equal(hit.bounds[0].minimumBonus, 0);
 });
 
+test("Dark bow cross-floor hits use finite horizontal projectile travel delays", (t) => {
+  const { CombatPosition, Location, WeaponProfiles } = core;
+  const previous = process.env.CROSS_FLOOR_COMBAT;
+  t.after(() => { if (previous === undefined) delete process.env.CROSS_FLOOR_COMBAT; else process.env.CROSS_FLOOR_COMBAT = previous; });
+  process.env.CROSS_FLOOR_COMBAT = "1";
+  t.mock.method(WeaponProfiles, "hitDelays", (_player, distance) => distance > 100
+    ? [1501199875790166, 3002399751580331]
+    : [1, 2]);
+  t.mock.method(core.PendingHit.prototype, "prepareHits", () => []);
+
+  const attacker = fakePlayer({ weapon: I.DARK_BOW, special: "dark_bow" });
+  attacker.getLocation = () => new Location(3200, 3200, 1);
+  const victim = {
+    ...target,
+    getLocation: () => new Location(3200, 3200, 0),
+    isNpc: () => true,
+    getHitpoints: () => 99,
+    isUntargetable: () => false,
+    isNeedsPlacement: () => false,
+  };
+  const hits = CombatSpecial.getById("dark_bow").getCombatMethod().hits(attacker, victim);
+
+  assert.equal(CombatPosition.projectileDistance(attacker, victim), 0);
+  assert.deepEqual(hits.map((hit) => hit.getDelay()), [2, 2]);
+});
+
 test("a dark bow arrow that misses still deals the minimum", () => {
   const dragon = fakePlayer({ weapon: I.DARK_BOW, ammo: Ammunition.DRAGON_ARROW, special: "dark_bow" });
   sourceMax = 40;
@@ -321,7 +347,7 @@ test("Descent serializes both captured player-target flight arcs at different di
 
 test("Descent measures its flights in combat coordinates across boat decks", (t) => {
   const { Location, CombatPosition } = core;
-  t.mock.method(CombatPosition, "distance", () => 4);
+  t.mock.method(CombatPosition, "projectileDistance", () => 4);
   projectiles.length = 0;
   const attacker = fakePlayer({ weapon: I.DARK_BOW, rangedWeapon: RangedWeapon.DARK_BOW, special: "dark_bow", ammo: Ammunition.DRAGON_ARROW });
   attacker.getLocation = () => new Location(16000, 16000, 0);
@@ -389,7 +415,7 @@ test("Snapshot and Descent each launch two independently delayed hits", (t) => {
     player.getEquipment = () => ({ getItems: () => items });
     player.getWeapon = () => profile;
     player.getFightType = () => null;
-    player.getLocation = () => ({ getDistance: () => 6 });
+    player.getLocation = () => new core.Location(3195, 3200, 0);
     const hits = CombatSpecial.getById(special).getCombatMethod().hits(player, target);
     assert.deepEqual(hits.map((hit) => hit.getDelay()), expected);
     assert.equal(hits.length, 2);

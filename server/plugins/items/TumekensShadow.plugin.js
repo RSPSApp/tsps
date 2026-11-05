@@ -76,7 +76,7 @@ function inTombs(player) {
 // ------------------------------------------------------------------ combat
 
 function travelCycles(from, to) {
-  return PROJECTILE.DELAY + PROJECTILE.LENGTH + distance(from, to) * PROJECTILE.PER_TILE;
+  return PROJECTILE.DELAY + PROJECTILE.LENGTH + distance(from, to, core().CombatPosition) * PROJECTILE.PER_TILE;
 }
 
 function look({ Animation, Graphic, GraphicHeight, Projectile }) {

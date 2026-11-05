@@ -51,7 +51,6 @@ export class OverheadPrayerLayer {
         const stacks = args.state.actor2dStacks;
 
         for (const entry of entries) {
-            if ((entry.plane | 0) !== (args.state.playerLevel ?? 0)) continue;
             const sprites = [
                 this.getSprite("pk", entry.headIconPk | 0),
                 this.getSprite("prayer", entry.headIconPrayer | 0),

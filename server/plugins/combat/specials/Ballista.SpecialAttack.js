@@ -1,5 +1,5 @@
 module.exports = function registerBallistaSpecialAttack(api) {
-  const { Animation, CombatFactory, CombatSpecial, Graphic, ItemIdentifiers, PendingHit, Projectile, RangedCombatMethod, RangedWeapon, Sound, Sounds, WeaponProfiles } = api.core;
+  const { Animation, CombatFactory, CombatPosition, CombatSpecial, Graphic, ItemIdentifiers, PendingHit, Projectile, RangedCombatMethod, RangedWeapon, Sound, Sounds, WeaponProfiles } = api.core;
 
   const DRAIN = 65;
   const ANIMATION = new Animation(7222);
@@ -9,8 +9,8 @@ module.exports = function registerBallistaSpecialAttack(api) {
 
   class BallistaCombatMethod extends RangedCombatMethod {
     hits(character, target) {
-      const distance = character.getLocation().getDistance(target.getLocation());
-      const delay = WeaponProfiles.hitDelays(character.getAsPlayer(), distance)[0];
+      const distance = CombatPosition.projectileDistance(character, target);
+      const delay = RangedCombatMethod.playerHitDelays(character, target, distance)[0];
       return [new PendingHit(character, target, this, delay)];
     }
 
@@ -40,7 +40,7 @@ module.exports = function registerBallistaSpecialAttack(api) {
       // an end before the start made it vanish at the player after one cycle.
       const profile = WeaponProfiles.ranged(player);
       const shot = profile?.projectiles?.[0] ?? { delay: 42, lengthAdjustment: 2, stepMultiplier: 3, startHeight: 38.75, endHeight: 44.25, angle: 14, progress: 120 };
-      const distance = character.getLocation().getDistance(target.getLocation());
+      const distance = CombatPosition.projectileDistance(character, target);
       const end = RangedCombatMethod.projectileEnd(shot, distance);
       const ammo = player.getCombat().getAmmunition();
       const projectileId = profile?.projectileId ?? ammo?.getProjectileId() ?? 205;

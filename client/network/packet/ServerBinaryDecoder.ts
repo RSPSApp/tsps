@@ -714,14 +714,16 @@ export function decodeServerPacket(data: Uint8Array | ArrayBuffer): DecodedServe
 
         case ServerPacketId.NPC_INFO: {
             const loopCycle = reader.readInt();
-            const large = reader.readBoolean();
+            const npcFlags = reader.readByte();
+            const large = (npcFlags & 1) !== 0;
+            const crossFloor = (npcFlags & 2) !== 0;
             const rootTileX = reader.readShort();
             const rootTileY = reader.readShort();
             const packetLen = reader.readShort();
             const packet = reader.readBytes(packetLen);
             return {
                 type: "npc_info",
-                payload: { loopCycle, large, rootTileX, rootTileY, packet },
+                payload: { loopCycle, large, crossFloor, rootTileX, rootTileY, packet },
             };
         }
 

@@ -116,7 +116,7 @@ function initialize(pluginApi) {
 // ------------------------------------------------------------------ combat
 
 function projectileEnd(from, to) {
-  return PROJECTILE.BASE + Math.max(1, distance(from, to)) * PROJECTILE.PER_TILE;
+  return PROJECTILE.BASE + Math.max(1, distance(from, to, core.CombatPosition)) * PROJECTILE.PER_TILE;
 }
 
 function maxHit(recipe, player) {

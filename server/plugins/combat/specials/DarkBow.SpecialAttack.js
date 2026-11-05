@@ -52,8 +52,17 @@ function buildDarkBowSpecialAttack(core) {
 
   class DarkBowCombatMethod extends RangedCombatMethod {
     hits(character, target) {
-      const distance = character.getLocation().getDistance(target.getLocation());
+      const distance = CombatPosition.projectileDistance(character, target);
       const delays = WeaponProfiles.hitDelays(character.getAsPlayer(), distance);
+      if (character.getLocation().getZ() !== target.getLocation().getZ()) {
+        const arrivals = [
+          Projectile.ticksToLand(46 + (target.isNpc() ? 5 : 6) * distance),
+          Projectile.ticksToLand(55 + 10 * distance),
+        ];
+        return delays.map((delay, index) => new PendingHit(character, target, this, {
+          delay: Math.max(delay, arrivals[index] ?? delay), hitAmount: 1,
+        }));
+      }
       return delays.map((delay) => new PendingHit(character, target, this, { delay, hitAmount: 1 }));
     }
 
@@ -80,7 +89,7 @@ function buildDarkBowSpecialAttack(core) {
       const dragon = isDragonArrow(player);
       Sounds.sendSound(character, dragon ? Sound.DARK_BOW_DRAGON_SPECIAL : Sound.DARK_BOW_SHADOW_SPECIAL);
       const projectileId = dragon ? DRAGON_PROJECTILE : ammo === Ammunition.BROAD_ARROW ? BROAD_SHADOW_PROJECTILE : SHADOW_PROJECTILE;
-      const distance = CombatPosition.distance(character, target);
+      const distance = CombatPosition.projectileDistance(character, target);
       // RSProx 273/2510: the visible arrow travels inside each special effect.
       const flights = [
         { end: 46 + (target.isNpc() ? 5 : 6) * distance, angle: 5 },

@@ -778,3 +778,124 @@ test('Brutus t-bone steaks cook on native ranges and fires with the correct leve
     }
   });
 });
+
+
+// These two cases create their pending jug through the real recipe listener and
+// bank it before the original shared fermentation task reaches its deadline.
+test("native queued wine conserves banked jugs at the output stack limit", async t => {
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const { PlayerSession } = require("../dist/net/PlayerSession");
+  const { SkillManager } = require("../dist/game/content/skill/SkillManager");
+  const { Bank } = require("../dist/game/model/container/impl/Bank");
+  const { MAX_STACK_AMOUNT } = require("../dist/game/model/container/StackType");
+  const { UseItemPacketListener } = require("../dist/net/packet/impl/UseItemPacketListener");
+  const pending = Cooking._test.wine.fermenting; // observation and teardown only
+  const captured = submittedCookingTasks.filter(task => !Number.isInteger(task.cycle));
+  assert.equal(captured.length, 1, "SETUP: one original Wine task was captured by legacy registration");
+  const wineTask = captured[0];
+  assert.equal(wineTask.isRunning(), false, "SETUP: the captured Wine task has not already been submitted");
+  assert.equal(wineTask.key, core.Task.DEFAULT_KEY);
+  assert.equal(pending.size, 0, "SETUP: legacy Wine cases left no pending players");
+  assert.equal(MAX_STACK_AMOUNT, 2147483647);
+  assert.equal(core.GameConstants.EXPERIENCE_MULTIPLIER, 1, "SETUP: literal base-XP checks need the ordinary world rate");
+
+  const execute = wineTask.execute, descriptor = Object.getOwnPropertyDescriptor(wineTask, "execute");
+  let passes = 0;
+  t.after(() => {
+    wineTask.stop();
+    if (descriptor) Object.defineProperty(wineTask, "execute", descriptor);
+    else delete wineTask.execute;
+    core.TaskManager.process(); // retire stopped tasks after the material observations
+  });
+  wineTask.execute = function (...args) {
+    passes++;
+    return Reflect.apply(execute, this, args);
+  };
+  core.TaskManager.submit(wineTask); // the actual captured task, activated exactly once
+  function turn(p) {
+    p.resetUpdating();
+    core.World.processCycle = (core.World.processCycle + 1) & 0x7fffffff;
+    const before = passes;
+    core.TaskManager.process();
+    assert.equal(passes, before + 1, "SETUP: exactly one Wine-task execution per global pass");
+  }
+
+  const grapes = obj("grapes"), water = obj("jug_water");
+  const unfermented = obj("jug_unfermented_wine"), wine = obj("jug_wine"), bad = obj("jug_bad_wine");
+  assert.equal(new Set([grapes, water, unfermented, wine, bad]).size, 5);
+  let index = 3000;
+  for (const full of [false, true]) {
+    await t.test(full
+      ? "a newly banked pending jug conserves its unit and credited XP beside a saturated wine stack"
+      : "a newly banked pending jug matures normally when one output-stack unit fits", t => {
+      const p = new Player(new PlayerSession({ kind: "test", isOpen: () => true, send: () => true }))
+        .setUsername("winebank" + index).setIndex(index++);
+      p.setRegistered(true);
+      p.setLocation(new core.Location(3221, 3218, 0));
+      p.setNeedsPlacement(false);
+      t.after(() => {
+        p.getPacketSender().sendInterfaceRemoval();
+        p.setRegistered(false);
+        core.TaskManager.cancelTasks(p.getIndex());
+        pending.delete(p);
+      });
+      const skills = p.getSkillManager();
+      skills.setCurrentLevel(core.Skill.COOKING, 68, false).setMaxLevels(core.Skill.COOKING, 68, false)
+        .setExperience(core.Skill.COOKING, SkillManager.getExperienceForLevel(68));
+      const startXp = skills.getExperience(core.Skill.COOKING);
+      const inventory = p.getInventory(), bank = p.getBank(0);
+      const initialWine = MAX_STACK_AMOUNT - (full ? 0 : 1);
+      bank.add(new core.Item(wine, initialWine), false);
+      inventory.adds(grapes, 1).adds(water, 1);
+      const tabs = p.getBanks().filter((tab, i) => tab && i !== Bank.BANK_SEARCH_TAB_INDEX);
+      const total = id => inventory.getAmount(id) + tabs.reduce((sum, tab) => sum + tab.getAmount(id), 0);
+      const state = () => ({
+        grapes: total(grapes), water: total(water), pending: total(unfermented),
+        wine: total(wine), delivered: total(wine) - initialWine, bad: total(bad),
+        xp: skills.getExperience(core.Skill.COOKING) - startXp,
+        timer: pending.get(p) ?? null, bankOpen: Bank.isOpen(p), passes,
+      });
+      const diagnostic = label => label + ": " + JSON.stringify(state());
+      assert.equal(bank.getAmount(wine), initialWine, "SETUP: one legal plain output stack");
+      assert.equal(bank.getAddableAmount(new core.Item(wine, 1)), full ? 0 : 1);
+      assert.ok(Bank.freeSlots(p) > 1, "SETUP: this is a stack-amount limit, not a full-slot bank");
+      assert.equal(total(unfermented), 0);
+      assert.equal(total(bad), 0);
+
+      UseItemPacketListener.itemOnItem(p, inventory.getSlotForItemId(grapes), inventory.getSlotForItemId(water));
+      assert.ok(p.getCreationMenu() == null, "SETUP: one jug uses the native automatic recipe without a menu");
+      turn(p);
+      assert.deepEqual([total(grapes), total(water), total(unfermented), state().xp], [1, 1, 0, 0]);
+      turn(p);
+      assert.deepEqual([total(grapes), total(water), total(unfermented), state().xp], [0, 0, 1, 0],
+        diagnostic("SETUP: actual ingredient debit produced one pending jug and no XP"));
+      assert.equal(pending.get(p), 20, "SETUP: the real made callback armed the full twenty-pass timer");
+      assert.equal(skills.getCurrentLevel(core.Skill.COOKING), 68);
+
+      bank.open();
+      assert.equal(Bank.isOpen(p), true, "SETUP: native bank admission");
+      Bank.deposits(p, unfermented, inventory.getSlotForItemId(unfermented), 1);
+      assert.equal(inventory.getAmount(unfermented), 0, "SETUP: the actual pending jug left inventory");
+      assert.equal(tabs.reduce((sum, tab) => sum + tab.getAmount(unfermented), 0), 1);
+      assert.equal(Bank.handleWidgetAction(p, {
+        groupId: Bank.MAIN_INTERFACE_ID, childId: Bank.FRAME_CHILD, buttonNum: 1, option: "Close",
+      }), true);
+      assert.equal(Bank.isOpen(p), false, "SETUP: close through the real native bank interface path");
+      assert.equal(pending.get(p), 20, "SETUP: no timer pass was invented during banking");
+      for (let n = 0; n < 19; n++) turn(p);
+      assert.deepEqual([total(unfermented), total(wine), total(bad), state().xp], [1, initialWine, 0, 0],
+        diagnostic("SETUP: no fermentation or XP before the deadline"));
+      assert.equal(pending.get(p), 1);
+      turn(p);
+      const observed = state();
+      if (!full) assert.equal(observed.delivered, 1, diagnostic("the fitting-output positive control must actually mature"));
+      // Count the existing Wine consumer's inventory/bank contents. A pending
+      // or actually credited jug conserves the unit; no repair is selected here.
+      assert.deepEqual({
+        units: observed.pending + observed.delivered + observed.bad,
+        bad: observed.bad, xp: observed.xp,
+      }, { units: 1, bad: 0, xp: observed.delivered * 200 },
+      diagnostic("pending-wine conservation and XP only for actual credited wine"));
+    });
+  }
+});

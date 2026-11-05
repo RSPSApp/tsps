@@ -7918,7 +7918,7 @@ export class OsrsClient {
         }
 
         if (block.say && ecsId !== undefined) {
-            this.npcEcs.setOverheadText(ecsId, block.say, 100);
+            this.npcEcs.setOverheadText(ecsId, this.clientPlugins.npcOverheadText(serverId, block.say), 100);
         }
 
         if (block.colorOverride && ecsId !== undefined) {

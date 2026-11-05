@@ -617,6 +617,24 @@
         "tip": "Use an ore on the furnace and pick the bar: your character keeps smelting from your bank."
       },
       {
+        "id": "varrock-anvils",
+        "name": "Anvils",
+        "place": "Varrock, south of the west bank",
+        "skill": "SMITHING",
+        "kind": "station",
+        "target": "Anvil",
+        "option": "Smith",
+        "tile": [
+          3187,
+          3424,
+          0
+        ],
+        "level": 1,
+        "icon": 2347,
+        "tool": "A hammer and bars in your bank",
+        "tip": "Use a bar on the anvil and pick what to smith: your character keeps smithing from your bank."
+      },
+      {
         "id": "al-kharid-crafting",
         "name": "Fletching, crafting, herblore",
         "place": "Al Kharid bank",

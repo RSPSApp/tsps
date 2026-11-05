@@ -162,7 +162,9 @@ is duplicated here:
   `emitObjectInteraction`). The creation menu it opens is answered with the same choice and
   `makeAll`: the product when the menu lists products (fletching, smelting), the item used when
   it lists what is used (cooking lists the raw food), or its only entry. A menu it can't read is
-  closed.
+  closed. An anvil's smithing interface (312) is not a creation menu: `Anvil.Smithing.js` emits
+  `smithing:anvil-opened` { player, bar, menu } with a `menu` that reads as one (`getItems`,
+  `execute(itemId, amount)`, `close`, `isOpen`), and it is answered the same way.
 - **Pauses**: out of a material in the bank too ("out of materials"), or `maxFailedAttempts`
   tries in a row that make nothing, said once. `::idle auto on` lifts them.
 - **Offline**: each product is recorded like a gather, and each top-up adds what the last batch
@@ -186,8 +188,8 @@ is duplicated here:
 
 Checked in game: willow shortbows (u) from logs, lobsters on Al Kharid's range, iron bars at its
 furnace, online and two minutes offline; firemaking at the Grand Exchange, a line back and forth
-and a fed fire lit again, until the bank's logs ran out. Not covered yet: smithing at an anvil
-(its interface is not the creation menu).
+and a fed fire lit again, until the bank's logs ran out; bronze daggers at Varrock's anvils, 83
+from the inventory and the bank, then "out of bronze bar".
 
 | Setting (`"production"`) | Default |
 | --- | --- |
@@ -461,6 +463,7 @@ one there and starts at once. Travelling turns auto-resume on.
 | `catherby-range` | Cooking range | Catherby, by the bank (members) | Cooking | any |
 | `al-kharid-furnace` | Furnace | Al Kharid, by the bank | Smithing | any |
 | `edgeville-furnace` | Furnace | Edgeville, by the bank (members) | Smithing | any |
+| `varrock-anvils` | Anvils | Varrock, south of the west bank | Smithing | any |
 | `al-kharid-crafting` | Fletching, crafting, herblore | Al Kharid bank | Fletching | any |
 | `grand-exchange-firemaking` | Firemaking | Grand Exchange, south entrance (five open rows) | Firemaking | any |
 

@@ -259,6 +259,28 @@ test("anvil timing, messages and the last-made varbits follow the captures", () 
   assert.equal(player.items.get(I.STEEL_DART_TIP), 20);
 });
 
+test("the open interface reads as a creation menu for content (smithing:anvil-opened)", () => {
+  const opened = [];
+  events.set("smithing:anvil-opened", [(event) => opened.push(event)]);
+  try {
+    const player = playerWith(I.BRONZE_BAR, 5);
+    open(player);
+    const { bar, menu } = opened.at(-1);
+    assert.equal(bar, I.BRONZE_BAR);
+    assert.ok(menu.getItems().includes(I.BRONZE_DAGGER));
+    assert.equal(menu.isOpen(), true);
+    assert.equal(menu.execute(I.BRONZE_DAGGER, 28), true, "All of it, as a click with All selected");
+    assert.equal(player.interfaceId, -1, "the interface closes, as on a click");
+    assert.equal(menu.execute(I.BRONZE_DAGGER, 28), false, "closed: nothing more");
+    ticks();
+    assert.equal(player.items.get(I.BRONZE_DAGGER), 5);
+    player.items.set(I.BRONZE_BAR, 2);
+    open(player);
+    opened.at(-1).menu.close();
+    assert.equal(player.interfaceId, -1);
+  } finally { events.delete("smithing:anvil-opened"); }
+});
+
 // Captured (rsprox, rec 68): a product above the player's level closes the interface with a message
 // box naming it in title case.
 test("a product above the player's level is refused in a message box", () => {

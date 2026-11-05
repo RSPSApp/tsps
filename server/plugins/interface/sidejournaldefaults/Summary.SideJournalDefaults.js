@@ -177,10 +177,14 @@ function initialize(api) {
   core = api.core;
 }
 
+/** Keep the saved choice across opt-outs without installing an invisible XP gate. */
+function persistCombatXpChoice(api) {
+  api.persistAttribute(COMBAT_XP_LOCKED_ATTRIBUTE, false);
+}
+
 module.exports = function attachSummary(api) {
   initialize(api);
   api.registerCustomInterface(Layout.DEFINITION);
-  api.persistAttribute(COMBAT_XP_LOCKED_ATTRIBUTE, false);
   api.onCustomEvent("side-journal:resolve-content", resolveContent);
   api.onCustomEvent("side-journal:mounted", mounted);
   api.onCustomEvent("interface:opened", interfaceOpened);
@@ -190,3 +194,5 @@ module.exports = function attachSummary(api) {
   api.onPlayerProcess(refresh);
   api.onPlayerLogout(logout);
 };
+
+module.exports.persistCombatXpChoice = persistCombatXpChoice;

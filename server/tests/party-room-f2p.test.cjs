@@ -38,19 +38,36 @@ let savedPersistence;
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, '..'));
-  PM.loadFromDirectory(path.resolve(__dirname, '../plugins'));
   core = PM.getCoreApi();
+  try {
+    PM.loadFromDirectory(path.resolve(__dirname, '../plugins'));
+  } finally {
+    // The loader may have installed SQLite even if a later plugin fails to load.
+    savedPersistence = core.GameConstants.PLAYER_PERSISTENCE;
+  }
   core.RegionManager.init();
-  savedPersistence = core.GameConstants.PLAYER_PERSISTENCE;
   core.GameConstants.PLAYER_PERSISTENCE = { requestSave() {}, flush: () => Promise.resolve() };
 });
 
-after(() => {
+after(async () => {
   try {
     if (core && savedPersistence) core.GameConstants.PLAYER_PERSISTENCE = savedPersistence;
     PM.emitServerShutdown({});
+    await savedPersistence?.flush();
   } finally {
-    fs.rmSync(temp, { recursive: true, force: true });
+    try {
+      const writer = savedPersistence?.writer;
+      if (writer) {
+        savedPersistence.writer = null; // Prevent the exit handler restarting the worker.
+        await writer.terminate();
+      }
+    } finally {
+      try {
+        savedPersistence?.database?.close();
+      } finally {
+        fs.rmSync(temp, { recursive: true, force: true });
+      }
+    }
   }
 });
 

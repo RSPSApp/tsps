@@ -495,6 +495,7 @@ function handleCraftRunes(event) {
       amountPerEssence,
       objectId: event.objectId,
       essenceIds: craftedEssenceIds,
+      altarId: event.objectId,
     });
   }
 

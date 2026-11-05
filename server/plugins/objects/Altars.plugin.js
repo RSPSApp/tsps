@@ -14,6 +14,8 @@ const VARROCK_PALACE_ALTAR_TASK = "pray-at-the-altar-in-varrock-palace-with-smit
 
 const JALDRAOCHT_ALTAR_ID = 6552;
 const JALDRAOCHT_ALTAR_TASK = "activate-ancient-magicks-at-the-altar-in-the-jal";
+const KOUREND_CASTLE_ALTAR = { id: 18258, x: 1617, y: 3672, z: 2 };
+const KOUREND_CASTLE_ALTAR_TASK = "pray-at-the-altar-in-kourend-castle";
 
 // The easy Wilderness Diary's "Pray at the Chaos Altar in Western Wilderness.": the Chaos Temple
 // (church) altar at level 38 (OSRS Wiki: Chaos Temple), not the Wilderness hut's.
@@ -111,11 +113,18 @@ function prayerAltar({ player, object }) {
   const prayerAfter = skillManager.getCurrentLevel(Skill.PRAYER);
 
   if (object && prayerAfter > prayerBefore) {
-    api.emitCustomEvent("altar:prayed", { player, objectId: object.getId(), location: object.getLocation() });
+    const location = object.getLocation();
+    api.emitCustomEvent("altar:prayed", { player, objectId: object.getId(), location });
+    // Content that credits praying by place (the Desert Diary's Sophanem altar) reads the gain.
+    api.emitCustomEvent("altars:prayed", {
+      player,
+      location: { x: location.getX(), y: location.getY(), z: location.getZ() },
+      restored: prayerAfter - prayerBefore,
+    });
     api.emitCustomEvent("prayer:restored-at-altar", {
       player,
       objectId: object.getId(),
-      location: object.getLocation(),
+      location,
       prayerBefore,
       prayerAfter,
     });
@@ -132,15 +141,26 @@ function prayerAltar({ player, object }) {
     }
   }
 
-  if (object && prayerAfter > prayerBefore && object.getId() === ObjectIds.ALTAR) {
+  if (object && prayerAfter > prayerBefore && player.getPrivateArea() === null) {
     const location = object.getLocation();
-    const [x, y, z] = EAST_ARDOUGNE_CHURCH_ALTAR;
-    if (location.getX() === x && location.getY() === y && location.getZ() === z
-      && player.getPrivateArea() === null) {
+    if (object.getId() === ObjectIds.ALTAR) {
+      const [x, y, z] = EAST_ARDOUGNE_CHURCH_ALTAR;
+      if (location.getX() === x && location.getY() === y && location.getZ() === z) {
+        api.emitCustomEvent("diary:task", {
+          player,
+          diary: "ardougne",
+          task: ARDOUGNE_ALTAR_TASK,
+        });
+      }
+    }
+    if (object.getId() === KOUREND_CASTLE_ALTAR.id
+      && location.getX() === KOUREND_CASTLE_ALTAR.x
+      && location.getY() === KOUREND_CASTLE_ALTAR.y
+      && location.getZ() === KOUREND_CASTLE_ALTAR.z) {
       api.emitCustomEvent("diary:task", {
         player,
-        diary: "ardougne",
-        task: ARDOUGNE_ALTAR_TASK,
+        diary: "kourend",
+        task: KOUREND_CASTLE_ALTAR_TASK,
       });
     }
   }
@@ -159,6 +179,16 @@ function prayAtChaosAltar({ player, objectId, location }) {
   const west = WESTERN_CHAOS_ALTAR;
   if (handled && location?.x === west.x && location?.y === west.y && location?.z === west.z) {
     api.emitCustomEvent("diary:task", { player, diary: "wilderness", task: "pray-at-the-chaos-altar-in-western-wilderness" });
+  }
+  return handled;
+}
+
+/** The Nature Grotto's altar: restores Prayer as altars do, and reports the restored points. */
+function natureAltar({ player }) {
+  const before = player.getSkillManager().getCurrentLevel(Skill.PRAYER);
+  const handled = handlePrayerAltar(player);
+  if (handled && player.getSkillManager().getCurrentLevel(Skill.PRAYER) > before) {
+    api.emitCustomEvent("altar:nature", { player });
   }
   return handled;
 }
@@ -200,6 +230,7 @@ module.exports = {
     pluginApi.onObjectInteraction("Altar", { "Pray-at": prayerAltar, Pray: prayerAltar });
     pluginApi.onObjectInteraction("Altar of Guthix", { "Pray-at": prayerAltar });
     pluginApi.onObjectInteraction("Chaos altar", { "Pray-at": prayAtChaosAltar });
+    pluginApi.onObjectInteraction("Altar of nature", { "Pray-at": natureAltar });
     pluginApi.onObjectInteraction("Shrine", { "Pray-at": prayAtShrine });
     pluginApi.onObjectInteraction("Shrine of Ralos", { Bask: prayerAltar });
     pluginApi.onObjectInteraction("Altar of the Occult", {

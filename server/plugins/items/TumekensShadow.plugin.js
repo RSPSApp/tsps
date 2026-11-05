@@ -33,6 +33,8 @@ const ATTACK_RANGE = 8;
 const LONGRANGE_EXTRA = 2;
 const MAX_MAGIC_DAMAGE = 100;
 const SOUND_CAST = 6410;
+// Captures 1846, 1885, 3285, 3299, 3340: a `sound_area id=1460 range=10` at the target in 672 casts.
+const SOUND_IMPACT = 1460;
 // The projectile (rsprox captures): it leaves after 56 client cycles and takes 16 more plus 10 a
 // tile, with angle 32 and progress 40. Heights are sent times four (248 and 124; captured 250, 124).
 const PROJECTILE = { DELAY: 56, LENGTH: 16, PER_TILE: 10, START_HEIGHT: 62, END_HEIGHT: 31, ANGLE: 32, PROGRESS: 40 };
@@ -85,6 +87,7 @@ function look({ Animation, Graphic, GraphicHeight, Projectile }) {
       travelCycles(cast, castOn), PROJECTILE.START_HEIGHT, PROJECTILE.END_HEIGHT)
       .withAngle(PROJECTILE.ANGLE).withProgress(PROJECTILE.PROGRESS),
     castSound: () => SOUND_CAST,
+    impactSound: () => SOUND_IMPACT,
     endGraphic: () => new Graphic(GRAPHIC.IMPACT, GraphicHeight.HIGH),
   };
 }

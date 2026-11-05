@@ -11,7 +11,8 @@
  *   `maxCharges`.
  * - `pairs`: [[chargedId, unchargedId], ...]. Only these staves attack with the built-in spell.
  * - `maxHit(player)`, `attackSpeed`, `range` (Longrange adds `LONGRANGE_EXTRA`), `levelRequired`.
- * - `spell(core)`: the spell's look - `castAnimation`, `startGraphic`, `castSound` (sound id) and
+ * - `spell(core)`: the spell's look - `castAnimation`, `startGraphic`, `castSound` (sound id),
+ *   `impactSound` (sound id, an area sound at the target when the hit lands) and
  *   `castProjectile(cast, castOn)`.
  * - `hitDelay(attacker, target)`: ticks until the hit lands (default: the usual magic delay).
  * - `impact(attacker, target, accurate)`: when set, the impact (or splash) is sent with the cast,
@@ -78,6 +79,7 @@ function definePoweredStaff(api, config) {
       // Sent with the cast when the staff times its own impact.
       endGraphic: config.impact ? () => null : (look.endGraphic ?? (() => null)),
       castSound: look.castSound,
+      impactSound: look.impactSound,
       // Powered staves pay only the damage-based experience.
       baseExperience: () => 0,
       levelRequired: () => config.levelRequired ?? 1,

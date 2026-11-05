@@ -120,7 +120,12 @@ function setup() {
       },
     },
     TaskManager: { ...realCore.TaskManager, submit: (task) => pendingTasks.push(task) },
-    Sounds: { ...realCore.Sounds, sendSound: (target, sound) => sounds.push({ target, sound }) },
+    Sounds: {
+      ...realCore.Sounds,
+      sendSound: (target, sound) => sounds.push({ target, sound }),
+      // Impacts and splashes are range-10 area sounds at the target (RSProx 102 tick 232, 3275 line 1370).
+      playAreaSoundAt: (target, sound, radius) => sounds.push({ target, sound, radius, area: true }),
+    },
     CacheDefinitions: {
       getItem: (id) => ({ name: itemNames.get(id) }),
       getSpellName: () => 'Wind Bolt',
@@ -893,6 +898,8 @@ test('spell puzzles resolve at projectile impact, and a Boneguard splash can be 
   assert.equal(h.quest.getStage(h.player), 16, 'a splash leaves the guard and quest unchanged');
   assert.equal(h.graphics.length, 1);
   assert.equal(h.sounds.length, 1);
+  assert.deepEqual([h.sounds[0].area, h.sounds[0].radius, h.sounds[0].sound.getId()], [true, 10, 227],
+    'a splash is the captured area sound at the boneguard, not a private one');
 
   h.accuracyResults.push(true);
   h.spellOnNpc(N.BONEGUARD, 'CRUMBLE_UNDEAD', null, false);
@@ -901,6 +908,9 @@ test('spell puzzles resolve at projectile impact, and a Boneguard splash can be 
   assert.equal(h.quest.getStage(h.player), 17, 'the accurate impact frees the guard');
   assert.equal(h.removed.filter((npc) => npc.id === N.BONEGUARD).length, 1);
   assert.equal(h.graphics.length, 2, 'the successful cast shows its spell end graphic');
+  assert.equal(h.sounds.length, 2, 'and its impact sound, which the old spell.impactSound() lookup never found');
+  assert.deepEqual([h.sounds[1].area, h.sounds[1].radius, h.sounds[1].sound.getId()], [true, 10, 124],
+    'Crumble Undead (spell 1171) lands as the table sound 124 at range 10');
 });
 
 test('a player logout before impact cancels quest effects and removes owner NPCs', () => {

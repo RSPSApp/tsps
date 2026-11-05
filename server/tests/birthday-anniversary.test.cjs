@@ -133,6 +133,18 @@ test('rewards are all or nothing with a full inventory, given once, and the jug 
   assert.equal(inventory.getAmount(I.HALF_FULL_WINE_JUG_2), 5);
 });
 
+test('completing with a full inventory still registers the cosmetics with Diango', () => {
+  const { p } = fixture('bdaydiango');
+  for (let slot = 0; slot < 28; slot++) p.getInventory().setItem(slot, new core.Item(core.ItemIdentifiers.BRONZE_DAGGER, 1));
+  Progress.markComplete(api, p);
+  PM.emitCustomEvent('birthday-2026:unlock', { player: p });
+  PM.emitCustomEvent('birthday-2026:reward', { player: p });
+  assert.equal(Progress.rewarded(p), false, 'the hand-out still waits for space');
+  const names = core.CacheDefinitions.getObjNames();
+  const unlocked = p.getAttribute('holiday-rewards:unlocked');
+  for (const name of Data.REWARDS) assert.ok(unlocked.includes(names.get(core.ItemIdentifiers[name])), name + ' claimable from Diango');
+});
+
 test('transcript conditions read real quest state, the 20th Anniversary absence and completion', () => {
   setActive(true);
   try {

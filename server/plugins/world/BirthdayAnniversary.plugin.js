@@ -65,6 +65,7 @@ module.exports = {
     api.onCustomEvent("birthday-2026:changed", Sync.safeRefresh.bind(null, api));
     api.onCustomEvent("birthday-2026:strayed", Interactions.strayed.bind(null, api));
     api.onCustomEvent("birthday-2026:arrived", Interactions.arrived.bind(null, api));
+    api.onCustomEvent("birthday-2026:unlock", Rewards.unlock.bind(null, api));
     api.onCustomEvent("birthday-2026:reward", Rewards.grant.bind(null, api));
     api.onCustomEvent("birthday-2026:reward-space", Rewards.space.bind(null, api));
     api.onCanSpawnNpc(Actors.vetoNative.bind(null, api));

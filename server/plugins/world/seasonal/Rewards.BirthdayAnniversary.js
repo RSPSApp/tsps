@@ -16,6 +16,16 @@ function slotsNeeded(api, player) {
   return Data.REWARDS.length + (inventory.getAmount(jugs(api).getId()) > 0 ? 0 : 1);
 }
 function missingSlots(api, player) { return Math.max(0, slotsNeeded(api, player) - player.getInventory().getFreeSlots()); }
+/**
+ * Completing the event registers the cosmetics with Diango, whether or not the hand-out
+ * fits: a full inventory that misses Wizard Gary before the window closes still has them.
+ */
+function unlock(api, { player }) {
+  const names = api.core.CacheDefinitions.getObjNames();
+  const request = { player, items: items(api).map(item => names.get(item.getId())), accepted: false };
+  api.emitCustomEvent("holiday-rewards:unlock", request);
+  if (!request.accepted) api.log("25th Anniversary rewards are not in Diango's holiday catalogue", { items: request.items });
+}
 function grant(api, { player }) {
   if (Progress.rewarded(player) || !Progress.complete(player)) return;
   const inventory = player.getInventory(), all = [...items(api), jugs(api)];
@@ -24,11 +34,7 @@ function grant(api, { player }) {
   Progress.markRewarded(player);
   for (const item of all) inventory.addItem(item);
   Progress.advance(api, player, "rewarding", "complete");
-  const names = api.core.CacheDefinitions.getObjNames();
-  const unlock = { player, items: items(api).map(item => names.get(item.getId())), accepted: false };
-  api.emitCustomEvent("holiday-rewards:unlock", unlock);
-  if (!unlock.accepted) api.log("25th Anniversary rewards are not in Diango's holiday catalogue", { items: unlock.items });
 }
 function space(api, request) { request.needed = missingSlots(api, request.player); }
 
-module.exports = { grant, space, slotsNeeded, missingSlots };
+module.exports = { unlock, grant, space, slotsNeeded, missingSlots };

@@ -85,6 +85,7 @@ node scripts/import-anniversary-definitions.cjs --reference <reference-folder> -
   those steps are skipped.
 - **Rewards:** the helmet, both tabards, the 5x5 hat and two noted half full wine jugs
   are given once per account, all or nothing. Wizard Gary keeps them if the inventory
-  is full. Diango's catalogue (enum 708, slots 223-226) unlocks the four cosmetics.
+  is full. Completing the event unlocks the four cosmetics in Diango's catalogue (enum 708,
+  slots 223-226) straight away, so they stay claimable even if the hand-out is missed.
 - **Slice of birthday cake:** Take gives one. During the event it heals 3. Afterwards,
   eating one deletes every slice with the Wiki's message.

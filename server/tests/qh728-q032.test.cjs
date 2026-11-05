@@ -355,6 +355,9 @@ test('fresh stage 0 follows the full mandatory route to completion and rewards o
   const N = PluginManager.getCoreApi().NpcIdentifiers;
   const O = PluginManager.getCoreApi().ObjectIdentifiers;
   h.core = PluginManager.getCoreApi();
+  // The map's statue multiloc: a click names it, and varbit 1593 shows each stage.
+  h.core.ObjectDefinition.init();
+  const STATUE = 10952;
   assert.equal(h.quest.getStage(h.player), 0);
   assert.equal(h.variant(N.LAZIM), 'starting-out-talking-to-lazim');
 
@@ -372,7 +375,7 @@ test('fresh stage 0 follows the full mandatory route to completion and rewards o
   h.itemOnItem(I.SANDSTONE_32KG_, I.CHISEL);
   assert.equal(h.quest.getStage(h.player), 3);
   assert.equal(h.inventory.get(I.SANDSTONE_BASE), 1);
-  h.itemOnObject(I.SANDSTONE_BASE, O.FLAT_GROUND);
+  h.itemOnObject(I.SANDSTONE_BASE, STATUE);
   assert.equal(h.quest.getStage(h.player), 4);
 
   // 20 kg body, chisel, place, chisel statue. Talking at stage 4 while carrying
@@ -385,9 +388,9 @@ test('fresh stage 0 follows the full mandatory route to completion and rewards o
   assert.equal(h.quest.getStage(h.player), 5);
   h.itemOnItem(I.SANDSTONE_20KG_, I.CHISEL);
   assert.equal(h.quest.getStage(h.player), 6);
-  h.itemOnObject(I.SANDSTONE_BODY, O.HEADLESS_STATUE);
+  h.itemOnObject(I.SANDSTONE_BODY, STATUE);
   assert.equal(h.quest.getStage(h.player), 7);
-  h.itemOnObject(I.CHISEL, O.HEADLESS_STATUE_2);
+  h.itemOnObject(I.CHISEL, STATUE);
   assert.equal(h.quest.getStage(h.player), 8);
 
   // Choose and carve the head, confirm it, use it on the statue.
@@ -398,7 +401,7 @@ test('fresh stage 0 follows the full mandatory route to completion and rewards o
   assert.equal(h.quest.getStage(h.player), 9);
   assert.equal(h.inventory.get(I.STONE_HEAD), 1);
   assert.equal(conditionValue(h, 'Oxb3xp', N.LAZIM), true);
-  h.itemOnObject(I.STONE_HEAD, O.HEADLESS_STATUE_3);
+  h.itemOnObject(I.STONE_HEAD, STATUE);
   assert.equal(h.varbits.get(1593), 28, 'the head handover transforms the cache statue into its hole');
   h.action('ARRUvf', N.LAZIM);
   assert.equal(h.quest.getStage(h.player), 10);

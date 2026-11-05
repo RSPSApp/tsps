@@ -4,9 +4,11 @@
  * Saltpetre deposits in Hosidius (Wiki: Saltpetre (deposit)).
  *
  * Digging needs a spade, gives no Mining experience, and yields 1 saltpetre, or 2 with a chance
- * roughly equal to the player's Mining level out of 100. The five deposits are placed at the
- * Wiki's map pins; the Wiki's single active deposit (the one Konoo is working) is not modelled,
- * and the game does not publish the rotation. The dig animation and sound are the captures the
+ * roughly equal to the player's Mining level out of 100. Only one of the Wiki's five deposits is
+ * active at a time, with Konoo digging 1 east and 3 north of it; object-spawns.json places that one
+ * deposit as natively captured (27433 at 1708,3545, rotation 0; Konoo at 1709,3548).
+ * shortcut: the deposit never moves, because no capture shows its depletion, stage order or next
+ * site; model the rotation once a depletion capture exists. The dig animation and sound are the captures the
  * shared Spade plugin uses for a plain dig; the chat lines for a missing spade or a full
  * inventory are not captured.
  */

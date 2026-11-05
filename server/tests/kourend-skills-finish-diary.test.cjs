@@ -133,6 +133,13 @@ test("the Arceuus lectern lists the Ape Atoll tablet with its Wiki recipe", () =
   assert.equal(Lectern._test.wrongSpellbook(fakePlayer(core.MagicSpellbook.ARCEUUS), { spellbook: core.MagicSpellbook.ARCEUUS }), false);
 });
 
+test("only one saltpetre deposit is spawned, with Konoo digging beside it as captured", () => {
+  const deposits = require("../data/definitions/object-spawns.json").filter((spawn) => spawn.id >= 27433 && spawn.id <= 27436);
+  assert.deepEqual(deposits, [{ id: 27433, position: { x: 1708, y: 3545, z: 0 }, type: 10, face: 0 }]);
+  const konoo = require("../data/definitions/npc-spawns.json").filter((spawn) => spawn.id === 6922);
+  assert.deepEqual(konoo.map(({ x, y, wanderRadius }) => [x - deposits[0].position.x, y - deposits[0].position.y, wanderRadius]), [[1, 3, 0]]);
+});
+
 test("saltpetre digging takes one of the three spades and doubles on a low roll", () => {
   Saltpetre.attach({ core, onObjectInteraction() {} });
   const spade = fakeInventory([core.ItemIdentifiers.SPADE]);

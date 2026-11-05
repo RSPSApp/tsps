@@ -19581,7 +19581,7 @@ test('RFD Amik shrine requires the Wise Old Man clue, enters the mapped lair and
 
 
 test('RFD shows the Feldip spit-roast only while Skrach can be rescued', () => {
-  assert.deepEqual(require('../data/definitions/object-spawns.json'), []);
+  assert.equal(require('../data/definitions/object-spawns.json').some(spawn => [3375].includes(spawn.id)), false);
   const { api: base, handlers } = mockApi();
   const objects = [];
   base.core = { ...base.core, ObjectManager: {

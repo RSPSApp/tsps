@@ -1322,7 +1322,7 @@ test('DOTI backstage requires searching the real bookshelf and discussing every 
 });
 
 test('DOTI backstage bookshelf is a player-scoped stage spawn, not a global object spawn', () => {
-  assert.deepEqual(require('../data/definitions/object-spawns.json'), []);
+  assert.equal(require('../data/definitions/object-spawns.json').some(spawn => [54734, 54735].includes(spawn.id)), false);
   const { h, p } = doti(); h.quest.setStage(p, 36);
   const shelf = h.objects.find(object => object.getId() === 54734);
   assert.ok(shelf, 'the searchable changing bookshelf appears for this player');

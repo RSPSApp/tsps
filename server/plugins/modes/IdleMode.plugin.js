@@ -31,6 +31,7 @@ module.exports = {
     require("./idle/Progression.IdleMode")(api);
     require("./idle/Combat.IdleMode")(api);
     require("./idle/Production.IdleMode")(api);
+    require("./idle/Bonfires.IdleMode")(api);
     require("./idle/Goals.IdleMode")(api);
     require("./idle/Achievements.IdleMode")(api);
     require("./idle/Screen.IdleMode")(api);

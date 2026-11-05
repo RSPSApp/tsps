@@ -81,7 +81,9 @@ Na primeira vez que uma conta fica idle (conta nova num mundo idle, ou o primeir
    à mão (cru no fogão, faca no tronco, minério na fornalha, barra na bigorna) e escolha o produto. O personagem
    continua sozinho: guarda os produtos no banco, pega mais material do banco e repete, até o
    material acabar. Offline, gasta o material do banco no mesmo ritmo.
-   - **Firemaking**: tinderbox nas toras faz uma linha de fogueiras; ao se afastar 12 tiles do
+   - **Firemaking**: no Grand Exchange há uma **fogueira fixa** (bonfire) que nunca apaga: use
+     toras nela e o personagem fica parado alimentando-a com as toras do banco, como no RS3.
+     Também funciona do jeito antigo: tinderbox nas toras faz uma linha de fogueiras; ao se afastar 12 tiles do
      início, ele volta para um tile livre e recomeça. Toras numa fogueira alimentam a fogueira;
      quando ela apaga (uma pessoa sozinha não a mantém acesa), ele acende outra com a tinderbox.
 7. **Thieving idle**: bata carteira (Pickpocket) ou roube de uma barraca (Steal-from) uma vez e o

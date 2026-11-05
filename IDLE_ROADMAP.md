@@ -80,6 +80,7 @@ Uma moeda própria do jogo idle, separada dos pontos de melhoria.
       usando os materiais do banco (testado no jogo: cozinhar, fundir e fletching, online e offline)
 - [x] **Locais de viagem para produção**: aba Making com fogões (Al Kharid, Catherby), fornalhas
       (Al Kharid, Edgeville) e o banco de Al Kharid
+- [x] **Fogueira fixa** (bonfire) no Grand Exchange que nunca apaga: o personagem fica alimentando
 - [x] **Firemaking e Thieving idle**: linha de fogueiras ou alimentar fogueira (reacende sozinho);
       bater carteira e barracas, com o saque no banco, aba Thieving na viagem (testado no jogo)
 - [x] **Smithing na bigorna**: barra na bigorna e escolha o item; o personagem continua forjando

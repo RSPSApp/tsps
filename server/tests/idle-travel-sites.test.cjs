@@ -51,6 +51,24 @@ function objectsInReach(site) {
   return count;
 }
 
+/** Idle Mode's bonfires (fires placed at startup, not in the map) a Fire station has in reach. */
+function bonfiresInReach(site) {
+  if (site.target !== "Fire") return 0;
+  const [x0, y0, z] = site.tile;
+  return (DATA.production.bonfires?.tiles ?? []).filter(([x, y, bz = 0]) => bz === z && Math.max(Math.abs(x - x0), Math.abs(y - y0)) <= reach(site)).length;
+}
+
+test("bonfires: an ObjectIdentifiers fire on free tiles", () => {
+  const { object, tiles } = DATA.production.bonfires;
+  const id = core.ObjectIdentifiers[object];
+  assert.ok(Number.isInteger(id), object);
+  assert.equal(core.ObjectDefinition.forId(id).getName(), "Fire");
+  for (const [x, y, z = 0] of tiles) {
+    core.RegionManager.loadMapFiles(x, y);
+    assert.equal(core.RegionManager.blocked(new core.Location(x, y, z), null), false, `bonfire tile ${x},${y}`);
+  }
+});
+
 /** NPC spawns of that name, with the option, in reach (a fishing spot's id sets its options). */
 function npcsInReach(site) {
   const [x0, y0, z] = site.tile;
@@ -83,7 +101,7 @@ for (const site of DATA.travel.sites) {
     core.RegionManager.loadMapFiles(x, y);
     assert.equal(core.RegionManager.blocked(new core.Location(x, y, z), null), false, `${site.id}: arrival tile ${site.tile} is blocked`);
     if (site.kind !== "anywhere") {
-      const count = site.kind === "npc" ? npcsInReach(site) : objectsInReach(site);
+      const count = site.kind === "npc" ? npcsInReach(site) : objectsInReach(site) + bonfiresInReach(site);
       // A station, or a stall (it stays stocked for an idle thief), is enough on its own.
       const needed = site.kind === "station" || (site.skill === "THIEVING" && site.kind === "object") ? 1 : MIN_TARGETS;
       assert.ok(count >= needed, `${site.id}: ${count} ${site.target} within ${reach(site)} tiles`);

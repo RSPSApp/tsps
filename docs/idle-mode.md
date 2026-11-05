@@ -180,6 +180,12 @@ is duplicated here:
     `lineTiles` (`12`) from where it started, or on a tile a fire is on, it walks back to the
     first free tile by the start, row by row. The repeated uses are not new ones by hand, so the
     start stays put.
+  - **A bonfire** (`bonfires`, `Bonfires.IdleMode.js`): a fire placed at each listed tile when the
+    server starts (the Grand Exchange's south entrance), which never goes out: when it, or the
+    Forester's Campfire it becomes once fed, would burn out, it burns on (`firemaking:burns-out`,
+    emitted by `Logs.Firemaking.js`). Logs used on it are fed from the bank for as long as they
+    last, standing still, as at a bonfire; several players can feed it at once. This is the way
+    the travel site sends players.
   - **Feeding a fire**: logs used on a fire tend it, all of them. Fed, it becomes a Forester's
     Campfire (`sameObjects`: the same object to idle production). One tender alone can't keep it
     lit (a log adds 3 ticks, tending takes 9), so when it has gone out the character lights
@@ -188,7 +194,8 @@ is duplicated here:
 
 Checked in game: willow shortbows (u) from logs, lobsters on Al Kharid's range, iron bars at its
 furnace, online and two minutes offline; firemaking at the Grand Exchange, a line back and forth
-and a fed fire lit again, until the bank's logs ran out; bronze daggers at Varrock's anvils, 83
+and a fed fire lit again, until the bank's logs ran out; the bonfire fed 86 logs in a row without
+going out; bronze daggers at Varrock's anvils, 83
 from the inventory and the bank, then "out of bronze bar".
 
 | Setting (`"production"`) | Default |
@@ -498,7 +505,7 @@ one there and starts at once. Travelling turns auto-resume on.
 | `edgeville-furnace` | Furnace | Edgeville, by the bank (members) | Smithing | any |
 | `varrock-anvils` | Anvils | Varrock, south of the west bank | Smithing | any |
 | `al-kharid-crafting` | Fletching, crafting, herblore | Al Kharid bank | Fletching | any |
-| `grand-exchange-firemaking` | Firemaking | Grand Exchange, south entrance (five open rows) | Firemaking | any |
+| `grand-exchange-firemaking` | Bonfire | Grand Exchange, south entrance (a fire that never goes out) | Firemaking | any |
 
 ## Roadmap
 

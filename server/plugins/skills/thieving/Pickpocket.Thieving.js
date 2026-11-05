@@ -261,7 +261,10 @@ function giveLoot(player, target, loot, random = Math.random, multiplier = 1) {
     }
     const total = clue ? amount : amount * times;
     const left = total - storedGems(player, id, total);
-    if (left > 0) inventory.forceAdd(player, new core.Item(id, left));
+    // Wiki (Seed box): "Seeds pickpocketed from Master Farmers will now be directly placed into an open seed box."
+    const request = { player, itemId: id, amount: left, stored: 0 };
+    if (target.key === "master_farmer") pluginApi.emitCustomEvent("seed-box:gather", request);
+    if (left > request.stored) inventory.forceAdd(player, new core.Item(id, left - request.stored));
     given.push({ ...item, amount: total });
   }
   return given;

@@ -83,6 +83,7 @@ function playerWith(entries = [], { level = 99, threadUses } = {}) {
     sendObjectAnimation(object, animation) { log.push(['loc-animation', animation.getId()]); return packetSender; },
     sendConfig(id, value) { log.push(['config', id, value]); return packetSender; },
     sendVarbit(id, value) { log.push(['varbit', id, value]); return packetSender; },
+    getVarbit(id) { return player.varbits?.get(id) ?? 0; },
     sendSubInterface(uid, group) { log.push(['open', group]); return packetSender; },
     closeSubInterface() { log.push(['close']); return packetSender; },
   };
@@ -783,4 +784,48 @@ test('the oven leaves pot lids out until One Small Favour teaches them, as the w
   player.questStage = 34;
   openPottery(player, true);
   assert.equal(getMenu().getItems().at(-1), ItemIds.UNFIRED_POT_LID);
+});
+
+/** Opens the gold menu and clicks one of its buttons; the made item comes on the task's second run. */
+function goldButton(entries, component, { varbits } = {}) {
+  const { player } = playerWith([[ItemIds.GOLD_BAR, 1], ...entries]);
+  player.varbits = varbits;
+  const furnace = { getDefinition: () => ({ getName: () => 'Furnace' }) };
+  handlers.handleBarOnFurnace({ player, itemId: ItemIds.GOLD_BAR, object: furnace, handled: false });
+  const before = tasks.length;
+  handlers.button({ player, buttonId: (446 << 16) | component, handled: false });
+  if (tasks.length > before) { tasks.at(-1).execute(); tasks.at(-1).execute(); }
+  return player;
+}
+
+test('each rev 241 bracelet button makes its own bracelet (446:50, 52-58; 51 is the mould layer)', t => {
+  membersWorld(t, true);
+  const rows = [
+    [50, null, ItemIds.GOLD_BRACELET_2], [52, ItemIds.SAPPHIRE, ItemIds.SAPPHIRE_BRACELET_2],
+    [53, ItemIds.EMERALD, ItemIds.EMERALD_BRACELET], [54, ItemIds.RUBY, ItemIds.RUBY_BRACELET],
+    [55, ItemIds.DIAMOND, ItemIds.DIAMOND_BRACELET], [56, ItemIds.DRAGONSTONE, ItemIds.DRAGONSTONE_BRACELET],
+    [57, ItemIds.ONYX, ItemIds.ONYX_BRACELET], [58, ItemIds.ZENYTE, ItemIds.ZENYTE_BRACELET_2],
+  ];
+  for (const [component, gem, bracelet] of rows) {
+    const player = goldButton([[ItemIds.BRACELET_MOULD, 1], ...(gem ? [[gem, 1]] : [])], component);
+    assert.equal(player.amounts.get(bracelet), 1, `446:${component}`);
+    assert.equal(player.amounts.get(ItemIds.GOLD_BAR), 0);
+  }
+  const layer = goldButton([[ItemIds.BRACELET_MOULD, 1]], 51);
+  assert.equal(layer.amounts.get(ItemIds.GOLD_BRACELET_2), undefined, 'the mould layer makes nothing');
+});
+
+test('the slayer ring button (446:16) needs Ring bling, and makes the eternal ring from an eternal gem', t => {
+  membersWorld(t, true);
+  const unlocked = new Map([[PluginManager.getCoreApi().CacheDefinitions.getVarbitId('slayer_ring_unlocked'), 1]]);
+  const locked = goldButton([[ItemIds.RING_MOULD, 1], [ItemIds.ENCHANTED_GEM, 1]], 16);
+  assert.equal(locked.amounts.get(ItemIds.SLAYER_RING_8_), undefined);
+  assert.ok(locked.log.some(row => row[0] === 'message' && /slayer rings/.test(row[1])));
+  const ring = goldButton([[ItemIds.RING_MOULD, 1], [ItemIds.ENCHANTED_GEM, 1]], 16, { varbits: unlocked });
+  assert.equal(ring.amounts.get(ItemIds.SLAYER_RING_8_), 1);
+  assert.equal(ring.amounts.get(ItemIds.ENCHANTED_GEM), 0);
+  assert.ok(ring.log.some(row => row[0] === 'xp' && row[1] === 15));
+  const eternal = goldButton([[ItemIds.RING_MOULD, 1], [ItemIds.ENCHANTED_GEM, 1], [ItemIds.ETERNAL_GEM, 1]], 16, { varbits: unlocked });
+  assert.equal(eternal.amounts.get(ItemIds.SLAYER_RING_ETERNAL_), 1);
+  assert.equal(eternal.amounts.get(ItemIds.ENCHANTED_GEM), 1, 'the eternal gem is used, as the client shows');
 });

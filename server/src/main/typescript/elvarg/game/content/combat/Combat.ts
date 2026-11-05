@@ -895,11 +895,13 @@ export class Combat {
      * An NPC whose target is fighting it from where it cannot be reached (a safespot) keeps it,
      * facing it and trying its step every cycle, as live does; it does not reset and walk home
      * between the target's hits. Fighting it means attacking it, or having hit it within the
-     * attacker window. A target that stops fighting is let go by the usual releases.
+     * attacker window. A target that stops fighting is let go by the usual releases, unless content
+     * says it never lets go ("combat:keep-target", the Fight Cave's monsters).
      */
     private isSafespotted(target: Mobile): boolean {
         return this.character.isNpc() &&
-            (target.getCombat().getTarget() === this.character || this.attacker === target);
+            (this.character.hasFlag("combat:keep-target")
+                || target.getCombat().getTarget() === this.character || this.attacker === target);
     }
 
     /** Every new engagement, and every actor with no engagement, starts with full patience. */

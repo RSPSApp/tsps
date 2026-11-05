@@ -48,6 +48,7 @@ function setMode(player, mode) {
   player.setAttribute(MODE_ATTRIBUTE, mode === "none" ? null : mode);
   sendVarbits(player);
   api.emitCustomEvent("account:refresh-chat-icons", { player });
+  api.emitCustomEvent("ironman:mode-changed", { player, mode: modeOf(player) });
 }
 
 module.exports = {

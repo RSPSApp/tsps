@@ -222,3 +222,91 @@ test("restarting Fill retains the new cannon marker for torrent targeting", () =
   Shared.stopAction(player);
   assert.equal(player.__temporossLoading, null);
 });
+
+const { attachSupplies } = require("../plugins/minigames/tempoross/Supplies.Tempoross");
+const { Cannons } = require("../plugins/minigames/tempoross/Cannons.Tempoross");
+
+// Issue #2692: the pump turned every bucket into water on one tick. Captures 552 and 1858
+// fill one a tick, each with its own animation, sound and message.
+test("the water pump fills one bucket a tick until none are empty", () => {
+  const { player, tasks } = actionPlayer();
+  const counts = { [Shared.ITEM.BUCKET]: 3, [Shared.ITEM.BUCKET_OF_WATER]: 0 };
+  const messages = [];
+  let sounds = 0;
+  const sender = { sendSound() { sounds++; return sender; }, sendVarbit() {} };
+  player.getPacketSender = () => sender;
+  player.sendMessage = (text) => messages.push(text);
+  player.getInventory = () => ({
+    getAmount: (id) => counts[id] ?? 0,
+    delete: (id, n) => { counts[id] -= n; },
+    adds: (id, n) => { counts[id] += n; },
+    refreshItems() {},
+  });
+  let pump;
+  attachSupplies({ onObjectInteraction(name, hooks) { if (name === "Water pump") pump = hooks["Fill-bucket"]; } });
+  pump({ player, object: { getLocation: () => ({ getX: () => 0, getY: () => 0 }) } });
+  assert.equal(counts[Shared.ITEM.BUCKET], 3, "nothing fills on the click itself");
+
+  const task = tasks[tasks.length - 1];
+  for (let tick = 1; tick <= 3; tick++) {
+    task.execute();
+    assert.equal(counts[Shared.ITEM.BUCKET_OF_WATER], tick);
+    assert.equal(messages.length, tick);
+    assert.equal(sounds, tick);
+  }
+  assert.deepEqual(messages, Array(3).fill("You fill the bucket with water."));
+  task.execute();
+  assert.equal(Shared.actionOf(player), null, "the action ends once no bucket is left");
+});
+
+// Issue #2692: Tempoross submerging before the wave landed skipped the hit and left the
+// overlay up until the next wave.
+test("a wave cut short by a submerge still closes its overlay", () => {
+  const scripts = [];
+  const player = { getPacketSender: () => ({ sendClientScript: (id, ...args) => scripts.push([id, ...args]) }) };
+  const fight = { phase: "submerged", players: new Set([player]), forEachPlayer(action) { action(player); } };
+  const attacks = new Attacks(fight);
+  attacks.waveHits();
+  assert.deepEqual(scripts, [[Shared.SCRIPT.WAVE_HIDE, DATA.fight.waveOverlayHide]]);
+  assert.equal(attacks.waves, 0, "no wave landed");
+});
+
+// Issue #2692: the torrent held a loader for the cannon's 24-tick disable, long after the
+// stars stopped circling their head.
+test("a torrent stuns its loader with the stars, only as long as they last", () => {
+  const realLaterNow = Shared.later;
+  const timers = [];
+  Shared.later = (_key, ticks, action) => {
+    const timer = { ticks, action, stop() {} };
+    timers.push(timer);
+    return timer;
+  };
+  try {
+    const { player } = actionPlayer();
+    const core = Shared.core();
+    Shared.bind({ core: { ...core, Graphic: class { constructor(id, delay = 0, height = 0) { this.id = id; this.height = height; } } } });
+    const graphics = [];
+    let blocked = false;
+    player.performGraphic = (graphic) => graphics.push(graphic);
+    player.getMovementQueue = () => ({ reset() {}, setBlockMovement(value) { blocked = value; } });
+    const crate = { data: { cannon: 41241 }, cannonLoc: {} };
+    const cannons = Object.create(Cannons.prototype);
+    cannons.crates = [crate];
+    cannons.cove = { replaceLoc: () => ({}) };
+    cannons.fight = { ticks: 0, players: new Set([player]) };
+    Shared.startAction(player, "load", () => true);
+    player.__temporossLoading = crate;
+    cannons.disable(crate);
+    assert.equal(blocked, true);
+    assert.deepEqual(graphics.map((graphic) => graphic.id), [Shared.GFX.STUNNED]);
+    assert.equal(graphics[0].height, 124, "stars at head height, like every other stunned_thieving");
+    assert.equal(Shared.GFX.STUNNED, 245, "stunned_thieving, the circling stars");
+    const release = timers.find((timer) => timer.ticks === DATA.fight.torrentStunTicks);
+    assert.ok(release, "released after the stars' ticks");
+    assert.ok(DATA.fight.torrentStunTicks < DATA.fight.torrentDisabledTicks);
+    release.action();
+    assert.equal(blocked, false);
+  } finally {
+    Shared.later = realLaterNow;
+  }
+});

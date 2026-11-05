@@ -110,6 +110,14 @@ module.exports = function registerCorsairCurseQuest(api) {
   const NAVIGATOR_ATTRIBUTE = "quest.the_corsair_curse.navigator";
   const TRAITOR_ATTRIBUTE = "quest.the_corsair_curse.traitor";
 
+  // The cache's corscurs_doll: draws the doll over the screen and clears itself. Nothing in the cache calls it.
+  const DOLL_SCRIPT = 2085;
+  // Interface wom_telescope, a shared lens despite its name. The cache has no Corsair overlay of its own, and
+  // no capture of this view is public. rsprox 4259 opens it for the Wise Old Man's telescope, with the sequence
+  // (2171) this view plays, a tick after the camera; 1698 opens it at 161:1 in another scene (sequence 11409).
+  const TELESCOPE_INTERFACE = 386;
+  const OVERLAY_ATMOSPHERE_UID = (161 << 16) | 1;
+
   const CABINBOY_HEARD = 1;
   const CABINBOY_TELESCOPE = 2;
   const CABINBOY_TOLD = 3;
@@ -726,6 +734,7 @@ module.exports = function registerCorsairCurseQuest(api) {
     const scene = scenes.get(player);
     if (!scene) return;
     scenes.delete(player); TaskManager.cancelTasks(scene);
+    if (scene.kind === "telescope") player.getPacketSender().closeSubInterface(OVERLAY_ATMOSPHERE_UID);
     player.setNpcTransformationId(scene.model); player.performAnimation(new Animation(-1));
     player.getMovementQueue().setBlockMovement(false); player.setUntargetable(false);
     player.getPacketSender().sendVarbit(6719, 0); player.getPacketSender().sendVarbit(12393, 0);
@@ -767,6 +776,7 @@ module.exports = function registerCorsairCurseQuest(api) {
   }
   function gnocciBurial(player) {
     const scene=scenes.get(player);freezeScene(player);
+    player.getPacketSender().sendClientScript(DOLL_SCRIPT);
     sceneSpeech(player,GNOCCI,"Gnocci the Cook","She's moving!<br>SHE'S POSSESSED!<br>HELP!");
     later(scene,8,()=>{
       StatementDialogue.send(player,"",false);camera(player,2510,2835,350,2504,2840,200);
@@ -807,7 +817,10 @@ module.exports = function registerCorsairCurseQuest(api) {
       beginScene(player, "telescope", { x: 2528, y: 2816, z: 0 });
       camera(player, 2528, 2821, 400, 2528, 2822, 300);
       const scene = scenes.get(player);
-      later(scene,1,()=>moveCamera(player,2528,2818,400,1));
+      later(scene,1,()=>{
+        moveCamera(player,2528,2818,400,1);
+        player.getPacketSender().sendSubInterface(OVERLAY_ATMOSPHERE_UID,TELESCOPE_INTERFACE,1);
+      });
       const ogre = api.spawnNpc({ id: NpcIdentifiers.BUGS_2, x: 2528, y: 2822, z: 0, wanderRadius: 0, owner: player, ownerOnly: true });
       if (ogre) scene.enter(ogre);
       freezeScene(player);
@@ -844,10 +857,18 @@ module.exports = function registerCorsairCurseQuest(api) {
       later(scene, 10, () => {
         moveTo(player, { x: 2529, y: 2838, z: 0 });
         camera(player, 2531, 2841, 300, 2531, 2835, 240);
-        const ithoi = api.spawnNpc({ id: ITHOI_2, x: 2529, y: 2833, z: 0, wanderRadius: 0, owner: player, ownerOnly: true });
+        // From the foot of his stairs (31735, 2531,2833): every tile west of it on that row is blocked on the map.
+        const ithoi = api.spawnNpc({ id: ITHOI_2, x: 2532, y: 2833, z: 0, wanderRadius: 0, owner: player, ownerOnly: true });
         if (!ithoi) return;
         scene.enter(ithoi); ithoi.forceChat("Arrr... uh-oh!");
-        for (const [tick, x, y] of [[1,2530,2833],[2,2532,2833],[3,2532,2835],[4,2532,2836]]) later(scene, tick, () => ithoi.moveTo(new Location(x, y, 0)));
+        // moveTo teleports; queued steps play 7963's walk sequence, human_running. The route covers up to 2 tiles a tick.
+        ithoi.setMovementSteps?.(2);
+        for (const [tick, x, y] of [[3,2532,2835],[4,2532,2836]]) later(scene, tick, () => {
+          const destination = new Location(x, y, 0);
+          const movement = ithoi.getMovementQueue?.();
+          if (movement?.addSteps) movement.addSteps(destination);
+          else ithoi.moveTo(destination);
+        });
         later(scene, 8, () => {
           ithoi.forceChat("Arrr!"); ithoi.performAnimation(new Animation(711)); ithoi.performGraphic(new Graphic(93, 92));
           // Water Strike (the Wiki transcript: "Ithoi casts Water Strike"): cast graphic 93, projectile 94, as CombatSpells.WATER_STRIKE.

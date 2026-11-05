@@ -9,6 +9,8 @@
  * OSRS Wiki: Varrock Diary. Locations are the cache's object placements (`yarn dump:loc`).
  */
 const DIARY = "varrock";
+const DiaryProgress = require("./Progress.AchievementDiaries");
+const DIARY_DATA = require("./Data.AchievementDiaries").BY_KEY.get(DIARY);
 
 const TASK = {
   iron: "mine-some-iron-in-the-south-east-mining-patch-ne",
@@ -101,7 +103,10 @@ function chopped({ player, object, success }) {
   if (name === "Dying tree" && publicAt(player, LUMBER_YARD)) {
     done(player, TASK.dyingTree);
   } else if (name === "Yew tree" && publicAt(player, VARROCK_CITY)) {
-    player.setAttribute(YEW_CHOPPED_ATTRIBUTE, true);
+    if (player.getAttribute(YEW_CHOPPED_ATTRIBUTE) !== true) {
+      player.setAttribute(YEW_CHOPPED_ATTRIBUTE, true);
+      DiaryProgress.notifyTaskProgress(player, DIARY_DATA, TASK.yewBurn);
+    }
   }
 }
 
@@ -125,7 +130,10 @@ function runesCrafted({ player, runeId, rolls, amountPerEssence }) {
 function potteryMade({ player, itemId, kind }) {
   if (kind !== "pottery" || !publicAt(player, BARBARIAN_VILLAGE_POTTERY)) return;
   const ids = api.core.ItemIdentifiers;
-  if (itemId === ids.UNFIRED_BOWL) player.setAttribute(BOWL_SPUN_ATTRIBUTE, true);
+  if (itemId === ids.UNFIRED_BOWL && player.getAttribute(BOWL_SPUN_ATTRIBUTE) !== true) {
+    player.setAttribute(BOWL_SPUN_ATTRIBUTE, true);
+    DiaryProgress.notifyTaskProgress(player, DIARY_DATA, TASK.bowl);
+  }
   if (itemId === ids.BOWL && player.getAttribute(BOWL_SPUN_ATTRIBUTE) === true) {
     player.setAttribute(BOWL_SPUN_ATTRIBUTE, false);
     done(player, TASK.bowl);
@@ -209,9 +217,11 @@ function jewelleryTeleport({ player, key, label }) {
 function emote({ player, slot }) {
   if (!player || !STRONGHOLD_EMOTES.has(slot)) return;
   const seen = new Set(Array.isArray(player.getAttribute(SOS_EMOTES_ATTRIBUTE)) ? player.getAttribute(SOS_EMOTES_ATTRIBUTE) : []);
+  const alreadySeen = seen.has(slot);
   seen.add(slot);
   player.setAttribute(SOS_EMOTES_ATTRIBUTE, [...seen]);
   if (seen.size === STRONGHOLD_EMOTES.size) done(player, TASK.emotes);
+  else if (!alreadySeen) DiaryProgress.notifyTaskProgress(player, DIARY_DATA, TASK.emotes);
 }
 
 function burned({ player, itemId }) {
@@ -248,10 +258,13 @@ function dartsFletched({ player, itemId, amount }) {
 }
 
 function countDarts(player, attribute, amount = 1) {
+  const previous = Number(player.getAttribute(attribute)) || 0;
   const next = Math.min(DART_TARGET, (Number(player.getAttribute(attribute)) || 0) + amount);
   player.setAttribute(attribute, next);
-  if ((Number(player.getAttribute(DART_TIPS_ATTRIBUTE)) || 0) >= DART_TARGET
-    && (Number(player.getAttribute(DARTS_ATTRIBUTE)) || 0) >= DART_TARGET) done(player, TASK.runeDarts);
+  const complete = (Number(player.getAttribute(DART_TIPS_ATTRIBUTE)) || 0) >= DART_TARGET
+    && (Number(player.getAttribute(DARTS_ATTRIBUTE)) || 0) >= DART_TARGET;
+  if (complete) done(player, TASK.runeDarts);
+  else if (next > previous) DiaryProgress.notifyTaskProgress(player, DIARY_DATA, TASK.runeDarts);
 }
 
 /** Plank Make's repeat task: one event per genuine log conversion, an end event on interruption. */
@@ -263,6 +276,7 @@ function lunarPlank({ player, plankId }) {
     done(player, TASK.lunarPlanks);
   } else {
     player.setAttribute(LUNAR_PLANKS_ATTRIBUTE, made);
+    DiaryProgress.notifyTaskProgress(player, DIARY_DATA, TASK.lunarPlanks);
   }
 }
 

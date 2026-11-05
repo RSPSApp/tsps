@@ -6,6 +6,8 @@
  * action succeeded with the Wiki's location, item, NPC or rank condition.
  */
 const DIARY = "falador";
+const DiaryProgress = require("./Progress.AchievementDiaries");
+const DIARY_DATA = require("./Data.AchievementDiaries").BY_KEY.get(DIARY);
 
 const TASK = {
   crestIdentified: "find-out-what-your-family-crest-is-from-sir-reni",
@@ -70,7 +72,9 @@ function atNorthWall(location, z) {
 function onAgilityObstacle({ player, objectId, method, location }) {
   if (!player || !location) return;
   if (GRAPPLE_IDS.has(objectId) && method === "grapple" && atNorthWall(location, 0)) {
+    const previous = Number(player.getAttribute(GRAPPLE_ATTRIBUTE) ?? 0);
     player.setAttribute(GRAPPLE_ATTRIBUTE, Date.now());
+    if (!previous) DiaryProgress.notifyTaskProgress(player, DIARY_DATA, TASK.grapple);
     return;
   }
   if (!JUMP_DOWN_IDS.has(objectId) || !atNorthWall(location, 1)) return;

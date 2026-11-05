@@ -8,6 +8,8 @@
  * Strong Tree (Karamja), Lady of the Waves, Shilo Village cart system, Leafy Palm Tree.
  */
 const DIARY = "karamja";
+const DIARY_DATA = require("./Data.AchievementDiaries").BY_KEY.get(DIARY);
+const DiaryProgress = require("./Progress.AchievementDiaries");
 
 const TASK = {
   musaFerry: "travel-to-port-sarim-via-the-dock-east-of-musa-p",
@@ -49,6 +51,7 @@ function count(player, attribute, target, task) {
   const total = (Number(player.getAttribute(attribute)) || 0) + 1;
   player.setAttribute(attribute, Math.min(total, target));
   if (total >= target) complete(player, task);
+  else DiaryProgress.notifyTaskProgress(player, DIARY_DATA, task);
 }
 
 /** PiratesTreasure's Musa Point <-> Port Sarim voyage, after the ship lands. */

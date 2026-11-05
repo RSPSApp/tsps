@@ -10,6 +10,8 @@
  * by other workers.
  */
 const DIARY = "karamja";
+const DIARY_DATA = require("./Data.AchievementDiaries").BY_KEY.get(DIARY);
+const DiaryProgress = require("./Progress.AchievementDiaries");
 
 const BANANAS = 5;
 const SEAWEED = 5;
@@ -70,6 +72,7 @@ function count(player, attribute, target, task) {
   const total = (Number(player.getAttribute(attribute)) || 0) + 1;
   player.setAttribute(attribute, Math.min(total, target));
   if (total >= target) complete(player, task);
+  else DiaryProgress.notifyTaskProgress(player, DIARY_DATA, task);
 }
 
 /** Picks are counted from the tree's tile, so Ape Atoll's plantation cannot count. */

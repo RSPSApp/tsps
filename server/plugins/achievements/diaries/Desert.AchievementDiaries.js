@@ -30,6 +30,8 @@ const TASKS = Object.freeze({
   grandGoldChest: "steal-from-the-grand-gold-chest-in-the-final-roo",
   sophanemAltar: "restore-at-least-85-prayer-points-when-praying-a",
 });
+const DiaryProgress = require("./Progress.AchievementDiaries");
+const DIARY_DATA = require("./Data.AchievementDiaries").BY_KEY.get("desert");
 
 /** The Kharidian Desert's map, outside Al Kharid (plugins/areas/data/desert-heat.json). */
 const DESERT = [3136, 3519, 2688, 3115];
@@ -82,6 +84,7 @@ function counter(player, attribute, task, target) {
   const value = (Number(player.getAttribute(attribute)) || 0) + 1;
   if (value < target) {
     player.setAttribute(attribute, value);
+    DiaryProgress.notifyTaskProgress(player, DIARY_DATA, task);
     return;
   }
   player.setAttribute(attribute, 0);
@@ -154,7 +157,10 @@ function thieved({ player, method, target }) {
 }
 
 function knockedOut({ player, npcId }) {
-  if (MENAPHITE_THUG_IDS.includes(npcId)) player.setAttribute(THUG_KNOCKED_ATTRIBUTE, true);
+  if (MENAPHITE_THUG_IDS.includes(npcId) && player.getAttribute(THUG_KNOCKED_ATTRIBUTE) !== true) {
+    player.setAttribute(THUG_KNOCKED_ATTRIBUTE, true);
+    DiaryProgress.notifyTaskProgress(player, DIARY_DATA, TASKS.menaphiteThug);
+  }
 }
 
 function chestSearched({ player, room }) {

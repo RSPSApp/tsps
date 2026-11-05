@@ -77,6 +77,7 @@ before(async () => {
     request.stage = stage ?? null;
   });
   api.onCustomEvent("diary:task", Diaries._test.onTask);
+  Progress(api);
   Finish.register(api);
   Crane.register(api);
   Ginea.register(api);

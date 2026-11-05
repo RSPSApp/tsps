@@ -312,12 +312,16 @@ function cookTick(task) {
 function cookOne(player, session) {
   const { Item, Skill } = Common.core;
   const cookable = cookedResult(player, session.cookable);
-  player.getInventory().deleteNumber(session.cookable.raw, 1);
+  const inventory = player.getInventory();
   if (cookable.deliberate) {
+    inventory.deleteNumber(session.cookable.raw, 1);
     player.getInventory().addItem(new Item(cookable.cooked, 1));
     Common.spam(player, successMessage(cookable));
     return;
   }
+  const rawItem = inventory.getItems().find((item) => item?.getId() === session.cookable.raw);
+  const rawRestore = rawItem?.clone ? rawItem.clone().setAmount(1) : new Item(session.cookable.raw, 1);
+  inventory.deleteNumber(session.cookable.raw, 1);
   const burnRequest = {
     player,
     rawId: session.cookable.raw,
@@ -326,12 +330,40 @@ function cookOne(player, session) {
   };
   Common.api.emitCustomEvent("cooking:burn", burnRequest);
   if (!burnRequest.burn) {
-    player.getInventory().addItem(new Item(cookable.cooked, 1));
+    const output = new Item(cookable.cooked, 1);
+    if (typeof inventory.getAddableAmount === "function" && inventory.getAddableAmount(output) === 0) {
+      inventory.addItem(rawRestore);
+      return;
+    }
+    const before = inventory.getAmount(cookable.cooked);
+    inventory.addItem(output);
+    const amount = Math.max(0, inventory.getAmount(cookable.cooked) - before);
+    if (amount === 0) {
+      inventory.addItem(rawRestore);
+      return;
+    }
     Common.spam(player, successMessage(cookable));
     countCook(player, false);
+    if (amount > 0) {
+      const location = session.location.clone();
+      Common.api.emitCustomEvent("items:obtained", {
+        player,
+        itemId: cookable.cooked,
+        rawId: cookable.raw,
+        amount,
+        source: "cooking",
+        location,
+      });
+    }
     Common.api.emitCustomEvent("cooking:success", {
-      player, skill: Skill.COOKING, itemId: cookable.cooked,
-      objectId: session.objectId, objectLocation: session.location,
+      player,
+      skill: Skill.COOKING,
+      rawId: cookable.raw,
+      itemId: cookable.cooked,
+      amount,
+      location: session.location.clone(),
+      objectId: session.objectId,
+      objectLocation: session.location,
     });
     Common.addXp(player, cookable.xp);
     Common.api.emitCustomEvent("skills:produced", { player, skill: Skill.COOKING, itemId: cookable.cooked, amount: 1, xp: cookable.xp, kind: "cook" });
@@ -448,7 +480,7 @@ function attachCookers(api) {
 module.exports = Object.assign(attachCookers, {
   isCookingActive, COOKABLE_OBJECT_NAMES, FIRE_OBJECT_NAMES,
   _test: {
-    startCooking, offerCook, isSuccess, stopBurnLevel, successMessage, burnMessage, cookAnimationFor, cookableFor,
+    startCooking, offerCook, cookOne, isSuccess, stopBurnLevel, successMessage, burnMessage, cookAnimationFor, cookableFor,
     GAUNTLETS_STOP_BURN, activeSessions,
   },
 });

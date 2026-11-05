@@ -1,4 +1,6 @@
 "use strict";
+const DiaryProgress = require("../../achievements/diaries/Progress.AchievementDiaries");
+const DIARY_DATA = require("../../achievements/diaries/Data.AchievementDiaries").BY_KEY.get("wilderness");
 
 // The easy Wilderness Diary (OSRS Wiki: Wilderness Diary; the journal text is the rule). The tasks
 // that belong to another plugin's mechanic are counted there: the levers (Levers.plugin.js), the Chaos
@@ -77,10 +79,14 @@ function itemTaken({ player, itemId, amount, groundItem }) {
   const at = groundItem.getPosition();
   if (!inWilderness(at.getX(), at.getY())) return;
   const total = (Number(player.getAttribute(EGGS.attribute)) || 0) + amount;
+  const previous = Number(player.getAttribute(EGGS.attribute)) || 0;
   const collected = Math.min(total, EGGS.count);
   player.setAttribute(EGGS.attribute, collected);
   if (collected >= EGGS.count) done(player, EGGS);
-  else player.sendMessage(`You have collected ${collected} of ${EGGS.count} Red spiders' eggs from the Wilderness.`);
+  else {
+    if (collected > previous) DiaryProgress.notifyTaskProgress(player, DIARY_DATA, EGGS.task);
+    player.sendMessage(`You have collected ${collected} of ${EGGS.count} Red spiders' eggs from the Wilderness.`);
+  }
 }
 
 /**

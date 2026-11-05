@@ -6,6 +6,7 @@ const path = require("node:path");
 const { Server } = require("../dist/Server");
 Server.installProductionPathResolver();
 
+const { PlayerSave } = require("../dist/game/entity/impl/player/persistence/PlayerSave");
 const QuestRuntime = require("../plugins/quests/QuestRuntime");
 const Diaries = require("../plugins/achievements/AchievementDiaries.plugin");
 const Data = require("../plugins/achievements/diaries/Data.AchievementDiaries");
@@ -18,6 +19,10 @@ const CAPTURED = require("./fixtures/achievement-diary-journals.json").journals;
 
 const tasks = [];
 const xpRewards = [];
+const saveEvents = [];
+const tierCompleteEvents = [];
+const acceptedTasks = [];
+const customHandlers = new Map();
 const SKILLS = ["Attack", "Smithing"].map((name) => ({ getName: () => name }));
 Diaries.register(new Proxy({
   core: {
@@ -30,8 +35,20 @@ Diaries.register(new Proxy({
     Bank: require("../dist/game/model/container/impl/Bank").Bank,
   },
   getTaskManager: () => ({ submit: (task) => { task.setRunning(true); tasks.push(task); } }),
-  emitCustomEvent: (name, request) => { if (name === "xpreward:open") xpRewards.push(request); },
+  emitCustomEvent: (name, request) => {
+    if (name === "xpreward:open") xpRewards.push(request);
+    if (name === "persistence:save") saveEvents.push(request);
+    if (name === "diary:tier-complete") tierCompleteEvents.push(request);
+    for (const handler of customHandlers.get(name) ?? []) handler(request);
+  },
+  onCustomEvent: (name, handler) => {
+    const handlers = customHandlers.get(name) ?? [];
+    handlers.push(handler);
+    customHandlers.set(name, handlers);
+  },
+  persistAttribute: (...args) => PlayerSave.persistAttribute(...args),
 }, { get: (target, key) => target[key] ?? (() => {}) }));
+customHandlers.set("diary:task-completed", [event => acceptedTasks.push(event)]);
 
 const dialogues = [];
 QuestRuntime.startDialogue = (_api, _player, _context, steps) => {
@@ -145,6 +162,98 @@ test("as captured (Ardougne easy): message and count on the tick, started on the
   const all = { player };
   Diaries._test.onAllComplete(all);
   assert.equal(all.complete, false, "the other diaries are not done");
+});
+
+test("accepted task events report new progress once and preserve player and diary identity", async () => {
+  const ardougne = createPlayer();
+  const start = acceptedTasks.length;
+  const task = ARDOUGNE.tiers.elite.tasks[0].key;
+  const results = await Promise.all(Array.from({ length: 12 }, () => Promise.resolve().then(
+    () => Progress.completeTask(ardougne, ARDOUGNE, task),
+  )));
+  assert.equal(results.filter(Boolean).length, 1, "only one request wins the task");
+  assert.equal(Progress.completeTask(ardougne, ARDOUGNE, "not-a-diary-task"), false, "unknown tasks are denied");
+  assert.equal(Progress.completeTask(ardougne, ARDOUGNE, task), false, "a duplicate request is denied");
+  assert.deepEqual(acceptedTasks.slice(start).map(({ player, diary, task: acceptedTask, tier }) => [
+    player, diary, acceptedTask, tier,
+  ]), [[ardougne, "ardougne", task, "elite"]]);
+
+  const falador = createPlayer();
+  const faladorDiary = Data.BY_KEY.get("falador");
+  const faladorTask = faladorDiary.tiers.easy.tasks[0].key;
+  Progress.completeTask(falador, faladorDiary, faladorTask);
+  assert.equal(Progress.doneTasks(ardougne, faladorDiary).has(faladorTask), false, "players do not share progress");
+  assert.equal(Progress.doneTasks(falador, ARDOUGNE).has(task), false, "diaries do not share progress");
+  assert.equal(acceptedTasks.at(-1).player, falador);
+  assert.equal(acceptedTasks.at(-1).diary, "falador");
+
+  const serialized = JSON.parse(JSON.stringify(ardougne.getAttribute(Progress.TASKS_ATTRIBUTE)));
+  const reloaded = createPlayer();
+  reloaded.setAttribute(Progress.TASKS_ATTRIBUTE, serialized);
+  assert.equal(Progress.doneTasks(reloaded, ARDOUGNE).has(task), true, "accepted progress survives attribute serialization");
+  assert.equal(acceptedTasks.length, start + 2, "denied and duplicate requests do not create progress events");
+});
+
+test("a synchronous accepted-progress listener cannot double-count tier completion", () => {
+  const player = createPlayer();
+  const easy = ARDOUGNE.tiers.easy.tasks;
+  for (const task of easy.slice(0, -2)) Progress.completeTask(player, ARDOUGNE, task.key);
+  player.log.length = 0;
+  tasks.length = 0;
+  saveEvents.length = 0;
+  tierCompleteEvents.length = 0;
+  const before = acceptedTasks.length;
+  const lastTask = easy.at(-1).key;
+  const triggerTask = easy.at(-2).key;
+  const nestedCompletion = ({ player: current, task }) => {
+    if (current === player && task === triggerTask) Progress.completeTask(player, ARDOUGNE, lastTask);
+  };
+  const handlers = customHandlers.get("diary:task-completed");
+  handlers.push(nestedCompletion);
+
+  try {
+    Progress.completeTask(player, ARDOUGNE, triggerTask);
+  } finally {
+    handlers.splice(handlers.indexOf(nestedCompletion), 1);
+  }
+
+  const countVarbit = ARDOUGNE.tiers.easy.countVarbit;
+  assert.deepEqual(player.log.filter((line) => line.startsWith(`varbit ${countVarbit}=`)), [
+    `varbit ${countVarbit}=9`, `varbit ${countVarbit}=10`,
+  ]);
+  assert.equal(player.log.filter((line) => line.includes("You have completed an easy task")).length, 2);
+  assert.equal(saveEvents.filter(({ reason }) => reason === "diary-tier-completion").length, 1);
+  assert.equal(tasks.length, 1, "only one congratulations task is scheduled");
+  assert.deepEqual(acceptedTasks.slice(before).map(({ task }) => task), [triggerTask, lastTask]);
+
+  for (let tick = 0; tick < 3; tick++) tasks[0].tick();
+  assert.equal(player.log.filter((line) => line.startsWith("mesbox")).length, 1);
+  assert.equal(player.log.filter((line) => line === `varbit ${ARDOUGNE.tiers.easy.completeVarbit}=1`).length, 1);
+  assert.equal(tierCompleteEvents.length, 1);
+});
+
+test("accepted diary progress survives a PlayerSave logout and reload", () => {
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const core = PluginManager.getCoreApi();
+  const makePlayer = (username) => {
+    const player = new Player(null, new core.Location(3200, 3200, 0));
+    player.setUsername(username);
+    player.setRegistered(true);
+    player.getSession = () => ({ sendClientPacket: () => true, write() {} });
+    player.sendMessage = () => {};
+    return player;
+  };
+  const player = makePlayer("diary-save-roundtrip");
+  const task = ARDOUGNE.tiers.elite.tasks[0].key;
+  assert.equal(Progress.completeTask(player, ARDOUGNE, task), true);
+  const save = PlayerSave.fromPlayer(player);
+  PluginManager.emitPlayerLogout({ player, username: player.getUsername() });
+  const reloaded = makePlayer("diary-save-roundtrip");
+  save.applyToPlayer(reloaded);
+  Progress.restore({ player: reloaded });
+  PluginManager.emitPlayerLogin({ player: reloaded, username: reloaded.getUsername(), isNewAccount: false });
+  assert.equal(Progress.doneTasks(reloaded, ARDOUGNE).has(task), true);
 });
 
 test("is-started and has-task answer for a diary task query", () => {

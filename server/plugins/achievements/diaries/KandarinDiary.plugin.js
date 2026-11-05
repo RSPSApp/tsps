@@ -8,6 +8,8 @@
  */
 
 const DIARY = "kandarin";
+const DiaryProgress = require("./Progress.AchievementDiaries");
+const DIARY_DATA = require("./Data.AchievementDiaries").BY_KEY.get(DIARY);
 
 const CATHERBY_FISHING = { minX: 2820, maxX: 2870, minY: 3410, maxY: 3445, z: 0 };
 const OTTO_GROTTO = { minX: 2480, maxX: 2530, minY: 3460, maxY: 3520, z: 0 };
@@ -85,9 +87,11 @@ function craftingMade({ player, itemId }) {
 function picked({ player, itemId, plant }) {
   if (itemId !== api.core.ItemIds.FLAX || plant !== "Flax" || player.getPrivateArea?.() != null
     || !inBox(player.getLocation(), SEERS_FLAX_FIELD)) return;
-  const picked = Math.min(5, (Number(player.getAttribute(FLAX_ATTRIBUTE)) | 0) + 1);
+  const previous = Number(player.getAttribute(FLAX_ATTRIBUTE)) | 0;
+  const picked = Math.min(5, previous + 1);
   player.setAttribute(FLAX_ATTRIBUTE, picked);
   if (picked === 5) credit(player, "collect-five-flax-from-the-seers-flax-fields");
+  else if (picked > previous) DiaryProgress.notifyTaskProgress(player, DIARY_DATA, "collect-five-flax-from-the-seers-flax-fields");
 }
 
 function barbarianAssaultWave({ player }) {
@@ -121,9 +125,11 @@ function npcDeath({ killer, npc }) {
     credit(killer, "kill-a-mithril-dragon");
   } else if (inBox(at, WORKSHOP) && ELEMENTALS.has(name)) {
     if (name === "Earth elemental" && npc.getId() !== api.core.NpcIdentifiers.EARTH_ELEMENTAL) return;
-    const killed = (Number(killer.getAttribute(ELEMENTALS_ATTRIBUTE)) | 0) | ELEMENTALS.get(name);
+    const previous = Number(killer.getAttribute(ELEMENTALS_ATTRIBUTE)) | 0;
+    const killed = previous | ELEMENTALS.get(name);
     killer.setAttribute(ELEMENTALS_ATTRIBUTE, killed);
     if (killed === ALL_ELEMENTALS) credit(killer, "defeat-one-of-each-elemental-in-the-workshop");
+    else if (killed !== previous) DiaryProgress.notifyTaskProgress(killer, DIARY_DATA, "defeat-one-of-each-elemental-in-the-workshop");
   }
 }
 

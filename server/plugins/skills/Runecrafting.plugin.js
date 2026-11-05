@@ -42,6 +42,8 @@ const RUNE_MYSTERIES_STAGE_ATTRIBUTE = "quest.rune_mysteries.stage";
 const RUNE_MYSTERIES_COMPLETE_STAGE = 6;
 const ENTER_THE_ABYSS_KEY = "enter_the_abyss";
 const ABYSS_LOCKED_MESSAGE = "You need to complete Enter the Abyss before you can enter the Abyss.";
+const MOURNINGS_END_PART_II_KEY = "mournings_end_part_ii";
+const MOURNINGS_END_PART_II_ALTAR_ACCESS_STAGE = 6;
 const ABYSS_OBSTACLE_XP = 25;
 const SINS_OF_THE_FATHER_KEY = "sins_of_the_father";
 /** Ours: no capture shows the rift refused for the quest; the Wiki gives only the rule. */
@@ -181,6 +183,7 @@ function initialize(api) {
   // inventory, so rune and pure essence go together where both work.
   const ANY_ESSENCE = { ids: [ItemIdentifiers.RUNE_ESSENCE, ItemIdentifiers.PURE_ESSENCE], missing: "You don't have any essence in your inventory." };
   const PURE_ESSENCE_ONLY = { ids: [ItemIdentifiers.PURE_ESSENCE], missing: "You do not have any pure essences to bind.", mesbox: true };
+  const DEATH_ESSENCE = { ids: [ItemIdentifiers.PURE_ESSENCE, ItemIdentifiers.DAEYALT_ESSENCE], missing: "You do not have any pure or daeyalt essences to bind.", mesbox: true };
   // Kourend's Blood Altar binds dark essence fragments, never pure essence (Wiki: Blood Altar (Kourend)).
   const DARK_ESSENCE = { ids: [ItemIdentifiers.DARK_ESSENCE_FRAGMENTS], missing: "You have nothing suitable to bind.", mesbox: true };
 
@@ -196,7 +199,10 @@ function initialize(api) {
     [ObjectIdentifiers.ALTAR_57, { runeId: ItemIdentifiers.ASTRAL_RUNE, level: 40, xp: 8.7, essence: PURE_ESSENCE_ONLY, multiplier: [[82, 2]] }],
     [ObjectIdentifiers.ALTAR_46, { runeId: ItemIdentifiers.NATURE_RUNE, level: 44, xp: 9, essence: PURE_ESSENCE_ONLY, multiplier: [[91, 2]] }],
     [ObjectIdentifiers.ALTAR_40, { runeId: ItemIdentifiers.LAW_RUNE, level: 54, xp: 9.5, essence: PURE_ESSENCE_ONLY, multiplier: [[95, 2]] }],
-    [ObjectIdentifiers.ALTAR_56, { runeId: ItemIdentifiers.DEATH_RUNE, level: 65, xp: 10, essence: PURE_ESSENCE_ONLY, multiplier: [[99, 2]] }],
+    [ObjectIdentifiers.ALTAR_56, {
+      runeId: ItemIdentifiers.DEATH_RUNE, level: 65, xp: 10, essence: DEATH_ESSENCE,
+      essenceXp: { [ItemIdentifiers.PURE_ESSENCE]: 10, [ItemIdentifiers.DAEYALT_ESSENCE]: 15 }, multiplier: [[99, 2]],
+    }],
     // Wiki: 95 Runecraft, 8 XP an essence, no multiples.
     [ObjectIdentifiers.ALTAR_58, { runeId: ItemIdentifiers.WRATH_RUNE, level: 95, xp: 8, essence: PURE_ESSENCE_ONLY, multiplier: [] }],
     // Wiki: 77 Runecraft, 23.8 XP and one blood rune a fragment.
@@ -322,6 +328,36 @@ function hasCompletedEnterTheAbyss(player) {
   return request.complete === true;
 }
 
+function hasCompletedMourningsEndPartII(player) {
+  const request = { player, key: MOURNINGS_END_PART_II_KEY, complete: false };
+  pluginApi.emitCustomEvent("quest:is-complete", request);
+  return request.complete === true;
+}
+
+function hasReachedMourningsEndPartIIAltarAccess(player) {
+  const request = { player, key: MOURNINGS_END_PART_II_KEY, stage: null };
+  pluginApi.emitCustomEvent("quest:get-stage", request);
+  if (!Number.isInteger(request.stage) || request.stage < MOURNINGS_END_PART_II_ALTAR_ACCESS_STAGE ||
+      hasCompletedMourningsEndPartII(player)) return false;
+  const inventory = player.getInventory();
+  return inventory.contains(ItemIdentifiers.NEWLY_MADE_CRYSTAL) ||
+    inventory.contains(ItemIdentifiers.NEWLY_MADE_CRYSTAL_2);
+}
+
+function canEnterDeathAltar(player) {
+  if (hasCompletedMourningsEndPartII(player) || hasReachedMourningsEndPartIIAltarAccess(player)) return true;
+  player.sendMessage("You must solve the Death Altar puzzle during Mourning's End Part II before entering the Death Altar.");
+  return false;
+}
+
+function canUseDeathAltar(player, action) {
+  if (hasCompletedMourningsEndPartII(player)) return true;
+  player.sendMessage(action === "enter"
+    ? "You must complete Mourning's End Part II before you can enter the Death Altar."
+    : "You must complete Mourning's End Part II before you can craft death runes.");
+  return false;
+}
+
 /**
  * The easy Wilderness Diary's "Enter the Chaos Runecrafting temple.": through the ruins or the
  * Abyss's rift (Wiki: Chaos Altar). The Tunnel of Chaos and Guardians of the Rift do not count, and
@@ -433,6 +469,10 @@ function handleCraftRunes(event) {
   }
 
   const player = event.player;
+  if (runeData.runeId === ItemIdentifiers.DEATH_RUNE && !player.__gotrTrip && !canUseDeathAltar(player, "craft")) {
+    event.handled = true;
+    return true;
+  }
   const level = player.getSkillManager().getCurrentLevel(Skill.RUNECRAFTING);
   if (level < runeData.level) {
     player.sendMessage(
@@ -457,6 +497,7 @@ function handleCraftRunes(event) {
   }
 
   const amountPerEssence = runeMultiplier(level, runeData);
+  let craftedXp = 0;
   const inventory = player.getInventory();
   const preview = new pluginApi.core.Inventory(player).setItems(inventory.getCopiedItems());
   const plan = [];
@@ -481,6 +522,7 @@ function handleCraftRunes(event) {
     inventory.deleteNumber(essenceId, count);
     inventory.addItem(output);
     craftedEssence += count;
+    craftedXp += count * (runeData.essenceXp?.[essenceId] ?? runeData.xp);
     craftedEssenceIds.push(essenceId);
   }
 
@@ -490,7 +532,7 @@ function handleCraftRunes(event) {
     Sounds.sendSound(player, Sound.CRAFT_RUNES);
     player
       .getSkillManager()
-      .addExperiences(Skill.RUNECRAFTING, craftedEssence * runeData.xp);
+      .addExperiences(Skill.RUNECRAFTING, craftedXp);
     // The rift guardian rolls per essence (Wiki).
     pluginApi.emitCustomEvent("runecrafting:success", {
       player,
@@ -499,6 +541,8 @@ function handleCraftRunes(event) {
       rolls: craftedEssence,
       runeId: runeData.runeId,
       amountPerEssence,
+      source: "altar",
+      altarId: event.objectId,
       objectId: event.objectId,
       essenceIds: craftedEssenceIds,
       altarId: event.objectId,
@@ -604,6 +648,7 @@ function handleTalismanOnRuins(event) {
   event.handled = true;
   const { player, itemId } = event;
   if (player.getAttribute(TRAVEL_ATTRIBUTE)) return;
+  if (ruins.name === "Death" && !canEnterDeathAltar(player)) return;
   const name = TALISMANS.get(itemId)?.holdName ?? pluginApi.core.CacheDefinitions.getItem(itemId)?.name ?? "talisman";
   const busy = pluginApi.core.CacheDefinitions.getVarbitId("busy");
   let held = false;
@@ -653,6 +698,7 @@ function handleEnterRuins({ player, objectId }) {
   if (!ruins) return false;
   const headId = player.getEquipment().getItems()[Equipment.HEAD_SLOT]?.getId();
   if (!matchesRuins(ruins, headId, true) && !wearsRunecraftCape(player)) return false;
+  if (ruins.name === "Death" && !canEnterDeathAltar(player)) return true;
   enterRuins(player, ruins);
   return true;
 }
@@ -944,6 +990,7 @@ function handleEnterRift(event) {
   const destination = ALTAR_DESTINATIONS.get(runeId);
   if (destination) {
     const { player } = event;
+    if (runeId === ItemIdentifiers.DEATH_RUNE && !canUseDeathAltar(player, "enter")) return true;
     requestTeleport(player, new Location(destination.x, destination.y, 0),
       runeId === ItemIdentifiers.CHAOS_RUNE ? () => enteredChaosTemple(player) : undefined);
   }

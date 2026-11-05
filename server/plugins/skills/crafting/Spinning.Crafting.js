@@ -49,22 +49,70 @@ function carriedMaterial(player, recipe) {
   return recipe.materials.find((id) => player.getInventory().getAmount(id) >= recipe.amount);
 }
 
+function locationSnapshot(location) {
+  if (!location || !["getX", "getY", "getZ"].every((method) => typeof location[method] === "function")) return null;
+  return { x: location.getX(), y: location.getY(), z: location.getZ() };
+}
+
+function stationSnapshot(station) {
+  if (!station || typeof station.getId !== "function" || typeof station.getLocation !== "function") return null;
+  const location = locationSnapshot(station.getLocation());
+  const stationObjectId = station.getId();
+  if (!Number.isInteger(stationObjectId) || !location) return null;
+  return { stationObjectId, location };
+}
+
+function stationContext(player, station) {
+  const stationData = stationSnapshot(station);
+  const startLocation = locationSnapshot(player.getLocation?.());
+  const teleportSerial = player.getTeleportSerial?.();
+  if (!stationData || !startLocation || !Number.isInteger(teleportSerial)) return null;
+  return { ...stationData, startLocation, teleportSerial, area: player.getArea?.() ?? null };
+}
+
+function remainsAtStation(player, context) {
+  if (!context) return true;
+  const location = locationSnapshot(player.getLocation?.());
+  return location != null
+    && player.getTeleportSerial?.() === context.teleportSerial
+    && (player.getArea?.() ?? null) === context.area
+    && location.x === context.startLocation.x
+    && location.y === context.startLocation.y
+    && location.z === context.startLocation.z;
+}
+
+function canGrantAfterConsumption(player, recipe, material) {
+  const inventory = player.getInventory();
+  if (typeof inventory.getCopiedItems !== "function" || typeof Shared.getCore().Inventory !== "function") return true;
+  const preview = new (Shared.getCore().Inventory)(player).setItems(inventory.getCopiedItems());
+  preview.deleted(material, recipe.amount, false);
+  const output = new (Shared.getCore().Item)(recipe.itemId, 1);
+  return preview.getAddableAmount(output) >= 1;
+}
+
 /**
  * Makes one item. A spun one is announced as "crafting:spun" { player, itemId, amount }, so a
  * carried bow string spool (Fletching) can take spun bow strings.
  */
-function makeOne(player, recipe, spinning) {
+function makeOne(player, recipe, spinning, provenance) {
   const material = carriedMaterial(player, recipe);
-  if (material === undefined) return false;
+  if (material === undefined || !remainsAtStation(player, provenance) || !canGrantAfterConsumption(player, recipe, material)) return false;
   player.getInventory().deleteNumber(material, recipe.amount);
   player.getInventory().addItem(new (Shared.getCore().Item)(recipe.itemId, 1));
   Shared.addCraftingXp(player, recipe.xp);
-  if (spinning) Shared.getApi().emitCustomEvent("crafting:spun", { player, itemId: recipe.itemId, amount: 1 });
-  Shared.produced(player, recipe.itemId, 1, recipe.xp, spinning ? "spinning" : "weaving");
+  const action = {
+    inputItemIds: [material],
+    inputs: [{ itemId: material, amount: recipe.amount }],
+    outputItemId: recipe.itemId,
+    ...(provenance ? { stationObjectId: provenance.stationObjectId, location: provenance.location } : {}),
+  };
+  if (spinning) Shared.getApi().emitCustomEvent("crafting:spun", { player, itemId: recipe.itemId, amount: 1, ...action });
+  Shared.getApi().emitCustomEvent("skills:produced", { player, skill: Shared.getCore().Skill.CRAFTING, itemId: recipe.itemId, amount: 1, xp: recipe.xp, kind: spinning ? "spinning" : "weaving", materials: null, ...action });
   return true;
 }
 
-function start(player, station, recipe, amount, spinning) {
+function start(player, station, recipe, amount, spinning, provenance = stationContext(player, station)) {
+  if (!remainsAtStation(player, provenance)) return;
   if (Shared.craftingLevel(player) < recipe.level) {
     // ponytail: not captured; the live text may differ.
     player.sendMessage(`You need a Crafting level of ${recipe.level} to make ${Shared.withArticle(Shared.itemName(recipe.itemId).toLowerCase())}.`);
@@ -74,16 +122,17 @@ function start(player, station, recipe, amount, spinning) {
   Shared.startMaking(player, spinning ? {
     amount, startTick: 0, firstTick: 2, interval: 2, animation: tables.spinningAnimation, sound: tables.spinningSound, kind: "spinning",
     onAnimate: () => player.getPacketSender().sendObjectAnimation(station, tables.wheelAnimation),
-    has: () => carriedMaterial(player, recipe) !== undefined,
-    make: () => makeOne(player, recipe, true),
+    has: () => remainsAtStation(player, provenance) && carriedMaterial(player, recipe) !== undefined,
+    make: () => makeOne(player, recipe, true, provenance),
   } : {
     amount, startTick: 0, firstTick: 3, interval: 3, animation: tables.weavingAnimation, sound: tables.weavingSound, kind: "weaving",
-    has: () => carriedMaterial(player, recipe) !== undefined,
-    make: () => makeOne(player, recipe, false),
+    has: () => remainsAtStation(player, provenance) && carriedMaterial(player, recipe) !== undefined,
+    make: () => makeOne(player, recipe, false, provenance),
   });
 }
 
 function openMenu(player, station, spinning) {
+  const provenance = stationContext(player, station);
   const recipes = Shared.available(spinning ? data().spinning : data().weaving)
     .filter((recipe) => carriedMaterial(player, recipe) !== undefined);
   if (recipes.length === 0) {
@@ -99,7 +148,7 @@ function openMenu(player, station, spinning) {
     items: recipes,
     maxAmount: Math.max(...recipes.map((recipe) =>
       Math.floor(Math.max(...recipe.materials.map((id) => inventory.getAmount(id))) / recipe.amount))),
-    choose: (recipe, amount) => start(player, station, recipe, amount, spinning),
+    choose: (recipe, amount) => start(player, station, recipe, amount, spinning, provenance),
   });
 }
 

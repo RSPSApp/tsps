@@ -66,13 +66,16 @@ export class Equipment extends ItemContainer {
         return StackType.DEFAULT;
     }
 
-    public refreshItems(): ItemContainer {
+    public refreshItems(change?: { equipped: true; itemId: number; slot: number }): ItemContainer {
         this.getPlayer().getPacketSender().sendItemContainer(this, Equipment.INVENTORY_INTERFACE_ID);
         if ((this.getPlayer().getNpcTransformationId?.() ?? -1) >= 0) {
             this.sendWornInventory();
         }
         this.getPlayer().onEquipmentChanged();
-        require("../../../../plugins/PluginManager").PluginManager.emitCustomEvent("equipment:changed", { player: this.getPlayer() });
+        require("../../../../plugins/PluginManager").PluginManager.emitCustomEvent("equipment:changed", {
+            player: this.getPlayer(),
+            ...(change ? { equipped: true, itemId: change.itemId, slot: change.slot } : {}),
+        });
         return this;
     }
 

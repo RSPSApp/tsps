@@ -11,6 +11,8 @@
  */
 
 const DIARY = "western";
+const DiaryProgress = require("./Progress.AchievementDiaries");
+const DIARY_DATA = require("./Data.AchievementDiaries").BY_KEY.get(DIARY);
 
 // Cache tiles (yarn dump:loc and npc-spawns.json) bound the actions that the Wiki scopes to a place.
 const PISCATORIS_HUNTER = [2295, 2350, 3575, 3610, 0];
@@ -198,7 +200,10 @@ function fished({ player, itemId }) {
   const at = player.getLocation();
   const I = api.core.ItemIdentifiers;
   if (itemId === I.RAW_BASS && inBox(at, APE_ATOLL)) done(player, TASK.bassApeAtoll);
-  else if (itemId === I.RAW_MONKFISH && inBox(at, PISCATORIS_COLONY)) monkfishCaught.add(player);
+  else if (itemId === I.RAW_MONKFISH && inBox(at, PISCATORIS_COLONY) && !monkfishCaught.has(player)) {
+    monkfishCaught.add(player);
+    DiaryProgress.notifyTaskProgress(player, DIARY_DATA, TASK.monkfishPiscatoris);
+  }
 }
 
 function cooked({ player, itemId }) {
@@ -217,8 +222,13 @@ function produced({ player, itemId }) {
 function chopped({ player, logId }) {
   if (!active(player) || !inBox(player.getLocation(), APE_ATOLL)) return;
   const I = api.core.ItemIdentifiers;
-  if (logId === I.TEAK_LOGS) teakChopped.add(player);
-  else if (logId === I.MAHOGANY_LOGS) mahoganyChopped.add(player);
+  if (logId === I.TEAK_LOGS && !teakChopped.has(player)) {
+    teakChopped.add(player);
+    DiaryProgress.notifyTaskProgress(player, DIARY_DATA, TASK.teakApeAtoll);
+  } else if (logId === I.MAHOGANY_LOGS && !mahoganyChopped.has(player)) {
+    mahoganyChopped.add(player);
+    DiaryProgress.notifyTaskProgress(player, DIARY_DATA, TASK.mahoganyApeAtoll);
+  }
 }
 
 /** Only a newly completed task resets the ordered chop-then-burn pair; repeats and rejected events do not. */

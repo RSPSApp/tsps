@@ -200,7 +200,7 @@ function startCooking(player, object, cookable, sessions = activeSessions, amoun
     objectId: object.getId(),
     location: object.getLocation().clone(),
     privateArea: object.getPrivateArea(),
-    nextCookTick: (cookingTask?.cycle ?? 0) + FIRST_COOK_TICKS,
+    nextCookTick: (cookingTask?.cycle ?? 0) + (cookable.firstCookTicks ?? FIRST_COOK_TICKS),
     cooked: 0,
     remaining: amount,
   });

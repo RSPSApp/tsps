@@ -8,7 +8,9 @@
  * and for a health check's XP (`farming:check-health`), to the inventory when they fit (else they
  * stay owed: ours). The shards bind as pure essence at any altar that takes it
  * (`runecrafting:essence`).
- * Not here: the Teomat's libation bowl (100 shards for 550 Prayer XP), which the server lacks;
+ * Not here: Soul shards in the Teomat's libation bowl (100 shards for 550 Prayer XP). The bowl
+ * itself is plugins/skills/RalosRise.plugin.js, but it takes only blessed bone shards: no
+ * recording shows Soul shards' rate there, so hooking them in is a follow-up. Also not here:
  * the shards as essence at the Ourania Altar, the combination runes and the minigames' altars,
  * which bind their own essence lists.
  */

@@ -745,6 +745,28 @@ test("fishing spots roll on the Wiki's tick lengths after the captured first rol
   assert.equal(Fishing.pikeInterval(() => 0.5), 5);
 });
 
+test("a one-step walk stops fishing even after the route has drained", async () => {
+  const { core, fisher, amount, spot, start, ticks } = await fishingLoop();
+  const { ItemIdentifiers: I, NpcIdentifiers: N } = core;
+  await withRandom(0.02, async () => {
+    // FishingTask runs before player turns. A one-tile walk is a single step, so by the next
+    // pass the queue is empty and only the moving flag says the player walked away (#2449).
+    for (const walked of [false, true]) {
+      const lobster = fisher({ items: [[I.LOBSTER_POT]] });
+      let moving = false;
+      lobster.getMovementQueue = () => ({ size: () => 0, isMovings: () => moving });
+      start(lobster, spot(N.FISHING_SPOT_10, walked ? 21 : 20), "Cage");
+      ticks(1);
+      moving = walked;
+      ticks(1);
+      moving = false;
+      ticks(4);
+      assert.equal(amount(lobster, I.RAW_LOBSTER), walked ? 0 : 1, walked ? "the walk ends the session" : "control: the catch lands");
+      if (walked) assert.equal(lobster.animations.at(-1), 65535, "the walk resets the fishing animation");
+    }
+  });
+});
+
 test("karambwan vessels fish every 4 ticks and every attempt uses the karambwanji", async () => {
   const { core, Fishing, fisher, amount, spot, start, ticks } = await fishingLoop();
   const { ItemIdentifiers: I, NpcIdentifiers: N } = core;

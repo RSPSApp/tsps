@@ -1,0 +1,133 @@
+[
+ {
+  "k": "say",
+  "t": 115,
+  "who": "Aubury",
+  "text": "Do you want to buy some runes?"
+ },
+ {
+  "k": "menu",
+  "t": 116,
+  "title": "Select an option",
+  "options": [
+   "Can you tell me about your cape?",
+   "Yes please!",
+   "No thank you.",
+   "Can you teleport me to the Rune Essence Mine?",
+   "Actually, I'm here with a business proposal from Ali Morrisane."
+  ]
+ },
+ {
+  "k": "pick",
+  "t": 120,
+  "n": 5
+ },
+ {
+  "k": "say",
+  "t": 120,
+  "who": "player",
+  "text": "Actually, I'm here with a business proposal from Ali Morrisane."
+ },
+ {
+  "k": "say",
+  "t": 121,
+  "who": "Aubury",
+  "text": "Ali who?"
+ },
+ {
+  "k": "say",
+  "t": 122,
+  "who": "player",
+  "text": "Ali Morrisane, a salesman of great repute based in Al Kharid."
+ },
+ {
+  "k": "say",
+  "t": 123,
+  "who": "Aubury",
+  "text": "What is this proposal then?"
+ },
+ {
+  "k": "say",
+  "t": 124,
+  "who": "player",
+  "text": "He wants to set up a rune-selling franchise in the markets of Al Kharid and he wants you to supply him with the stock."
+ },
+ {
+  "k": "say",
+  "t": 125,
+  "who": "Aubury",
+  "text": "Why doesn't he get his own runes and sell them?"
+ },
+ {
+  "k": "say",
+  "t": 126,
+  "who": "player",
+  "text": "His talents don't lie in that area. What he's good at is selling things, and lots of them."
+ },
+ {
+  "k": "say",
+  "t": 127,
+  "who": "Aubury",
+  "text": "Hmm, interesting... So let's get this straight, he wants me to supply him with runes, which he will sell, and send me the profits?"
+ },
+ {
+  "k": "say",
+  "t": 128,
+  "who": "player",
+  "text": "Nearly. He will charge a small commission on the runes."
+ },
+ {
+  "k": "say",
+  "t": 129,
+  "who": "Aubury",
+  "text": "Do you think that it will work? Will people actually buy these runes off him?"
+ },
+ {
+  "k": "say",
+  "t": 130,
+  "who": "player",
+  "text": "I wouldn't be surprised. Supply and demand are his rune essence and ore."
+ },
+ {
+  "k": "say",
+  "t": 131,
+  "who": "Aubury",
+  "text": "Now this is very important, is he trustworthy?"
+ },
+ {
+  "k": "say",
+  "t": 132,
+  "who": "player",
+  "text": "Yes, I believe so. Trust is a key part of commerce and something, which I doubt he would neglect."
+ },
+ {
+  "k": "say",
+  "t": 133,
+  "who": "Aubury",
+  "text": "Fair enough, I'll trust your judgement."
+ },
+ {
+  "k": "say",
+  "t": 134,
+  "who": "player",
+  "text": "So you'll supply him with runes then?"
+ },
+ {
+  "k": "varbit",
+  "t": 135,
+  "id": 913,
+  "value": 2
+ },
+ {
+  "k": "varbit",
+  "t": 135,
+  "id": 917,
+  "value": 1
+ },
+ {
+  "k": "say",
+  "t": 135,
+  "who": "Aubury",
+  "text": "Well if he's half as good a salesman as you suggest I should have no problem in funding my research and maybe even redecorating this place."
+ }
+]

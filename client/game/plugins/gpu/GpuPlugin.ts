@@ -3,6 +3,7 @@ import { ConfigManager } from "@runelite/client/config/ConfigManager";
 import { Plugin, type PluginDescriptor } from "@runelite/client/plugins/Plugin";
 import { CLIENT_TOKEN, inject } from "@runelite/client/plugins/PluginInjector";
 import type { OsrsClient } from "../../OsrsClient";
+import { lowEndDeviceModeExplicit } from "../lowenddevice/LowEndDeviceMode";
 import { AntiAliasingMode, GpuConfig, MAX_DRAW_DISTANCE, MIN_DRAW_DISTANCE } from "./GpuConfig";
 
 /** What the renderers apply while the plugin is on. */
@@ -103,17 +104,21 @@ export class GpuPlugin extends Plugin {
     }
 
     private applySkyColor(): void {
-        if (this.configManager.getConfiguration(GpuConfig.group, "skyColor") === undefined) return;
-        const color = this.configManager.getConfig(GpuConfig).skyColor() >>> 0;
         const renderer = this.client.renderer as {
-            setSkyColor?: (r: number, g: number, b: number) => void;
-        };
-        renderer.setSkyColor?.((color >>> 16) & 0xff, (color >>> 8) & 0xff, color & 0xff);
+            setSkyColor?: (r: number, g: number, b: number, explicit?: boolean) => void;
+            clearSkyColorOverride?: () => void;
+        } | undefined;
+        if (this.configManager.getConfiguration(GpuConfig.group, "skyColor") === undefined) {
+            renderer?.clearSkyColorOverride?.();
+            return;
+        }
+        const color = this.configManager.getConfig(GpuConfig).skyColor() >>> 0;
+        renderer?.setSkyColor?.((color >>> 16) & 0xff, (color >>> 8) & 0xff, color & 0xff, true);
     }
 
-    /** The settings to apply, or undefined while the plugin is off. */
+    /** The settings to apply, or undefined while the plugin is off or an explicit Low-end Device wins. */
     gpuSettings(): GpuSettings | undefined {
-        return this.isEnabled() ? this.current : undefined;
+        return this.isEnabled() && !lowEndDeviceModeExplicit ? this.current : undefined;
     }
 
     private readConfig(): GpuSettings {

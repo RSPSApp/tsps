@@ -86,13 +86,20 @@ test("a picked sky colour reaches the active renderer, and an unpicked one leave
     const config = new ConfigManager(events);
     const manager = new PluginManager(events, config);
     const colours: number[][] = [];
+    let clears = 0;
     manager.getInjector().provide(CLIENT_TOKEN, {
         applyScreenBrightness: () => {},
-        renderer: { setSkyColor: (r: number, g: number, b: number) => colours.push([r, g, b]) },
+        renderer: {
+            setSkyColor: (r: number, g: number, b: number) => colours.push([r, g, b]),
+            clearSkyColorOverride: () => clears++,
+        },
     });
     manager.loadCorePlugins([GpuPlugin]);
     await manager.setPluginEnabled(GpuPlugin, true);
     assert.deepEqual(colours, [], "the area's own sky keeps following the environment");
     config.setConfigValue(GpuConfig, "skyColor", 0x112233);
     assert.deepEqual(colours, [[0x11, 0x22, 0x33]], "the pick applies immediately");
+    const beforeReset = clears;
+    config.setDefaultConfiguration(GpuConfig, true);
+    assert.equal(clears, beforeReset + 1, "Reset releases the picked sky back to the area environment");
 });

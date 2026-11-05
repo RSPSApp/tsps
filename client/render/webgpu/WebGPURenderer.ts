@@ -833,9 +833,13 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
         this.ui?.registerMinimapData(mapData);
     }
 
-    setSkyColor(r: number, g: number, b: number): void {
+    clearSkyColorOverride(): void {
+        this.skyColorOverride = false;
+    }
+
+    setSkyColor(r: number, g: number, b: number, explicit = false): void {
         const unchanged = [r, g, b].every((value, i) => Math.round(value) === Math.round(this.skyColor[i] * 255));
-        if (unchanged) return;
+        if (unchanged && !explicit) return;
         this.skyColorOverride = true;
         this.skyColor[0] = r / 255;
         this.skyColor[1] = g / 255;

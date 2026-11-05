@@ -404,7 +404,7 @@ function finishTheft(event, stall) {
     return;
   }
   const { item: reward, message } = rollStall(stall);
-  const request = { player, itemId: reward.getId(), amount: reward.getAmount(), stored: 0 };
+  const request = { player, itemId: reward.getId(), amount: reward.getAmount(), stored: 0, skill: core.Skill.THIEVING, xp: stall.xp };
   pluginApi.emitCustomEvent("storage:gather", request);
   if (reward.getAmount() > request.stored) player.getInventory().addItem(new core.Item(reward.getId(), reward.getAmount() - request.stored));
   player.getSkillManager().addExperiences(core.Skill.THIEVING, stall.xp);

@@ -13,7 +13,7 @@ function skill(index) {
 
 const Skill = {
   ATTACK: skill(0), DEFENCE: skill(1), STRENGTH: skill(2), HITPOINTS: skill(3), RANGED: skill(4), MAGIC: skill(6),
-  COOKING: skill(7), WOODCUTTING: skill(8), FISHING: skill(10), MINING: skill(14),
+  COOKING: skill(7), WOODCUTTING: skill(8), FISHING: skill(10), FIREMAKING: skill(11), MINING: skill(14), THIEVING: skill(17),
 };
 const SHARK = 385;
 const BONES = 526;
@@ -85,6 +85,7 @@ function fakeApi(config = {}) {
     click: (player, buttonId) => handlers.buttons[buttonId]({ player, buttonId, action: 1, opId: 1 }),
     onPlayerDisconnect: (handler) => (handlers.events.disconnect ??= []).push(handler),
     onExperienceGained: (handler) => (handlers.events.xp ??= []).push(handler),
+    emitCustomEvent: (name, payload) => api.emit(name, payload),
     emitObjectInteraction: (event) => { api.interactions.push({ kind: "object", ...event }); return true; },
     emitNpcInteraction: (event) => { api.interactions.push({ kind: "npc", ...event }); return true; },
     registerCommand: (name, handler, rights) => { handlers.commands[name] = { handler, rights }; },
@@ -109,6 +110,7 @@ class FakeLocation {
   getX() { return this.x; }
   getY() { return this.y; }
   getZ() { return this.z; }
+  equals(other) { return other.getX() === this.x && other.getY() === this.y && other.getZ() === this.z; }
 }
 
 /** The stand-in world the auto-resume searches: objects and NPCs by name, with their options. */
@@ -205,6 +207,7 @@ function fakePlayer({ bankSlots = 800 } = {}) {
         size: () => player.moving,
         walkToObject: (object, action) => { walks.push(object); action.execute(); },
         walkToEntity: (npc, arrive) => { walks.push(npc); arrive(); },
+        walkToTile: (tile, arrive) => { walks.push(tile); player.moveTo(tile); arrive(); },
       };
     },
     getAttribute: (key) => attributes.get(key),
@@ -1100,7 +1103,8 @@ test("travel screen: rows per site with level and panel, tabs per activity, open
   const layout = JSON.parse(player.screen.texts.get(uid(COMPONENT.LAYOUT)));
   assert.equal(layout.active, 2, "the Mining tab, the current activity");
   assert.deepEqual(layout.tabs[0][0], { header: "Woodcutting" });
-  assert.equal(layout.tabs[4].length, 6, "six combat sites");
+  assert.equal(layout.tabs[4].length, 4, "four thieving sites");
+  assert.equal(layout.tabs[5].length, 6, "six combat sites");
 });
 
 test("travel screen: Travel on a row or the panel's button goes there", (t) => {
@@ -1472,10 +1476,10 @@ test("travel screen: a Making tab lists the production sites, and opens on them 
   const { player } = cookingShrimps(t);
   api.command(player, "idle travel");
   const layout = JSON.parse(player.screen.texts.get(uid(COMPONENT.LAYOUT)));
-  assert.equal(layout.active, 5, "the Making tab");
+  assert.equal(layout.active, 6, "the Making tab");
   const rows = JSON.parse(player.screen.texts.get(uid(COMPONENT.DATA)));
-  const making = layout.tabs[5].map((id) => rows.find((row) => row.id === id).name);
-  assert.deepEqual(making, ["Cooking range", "Cooking range", "Furnace", "Furnace", "Fletching, crafting, herblore"]);
+  const making = layout.tabs[6].map((id) => rows.find((row) => row.id === id).name);
+  assert.deepEqual(making, ["Cooking range", "Cooking range", "Furnace", "Furnace", "Fletching, crafting, herblore", "Firemaking"]);
   const range = rows.find((row) => row.name === "Cooking range");
   assert.equal(range.detail, " - Al Kharid, by the bank");
   assert.equal(range.panel.level, "Cooking: <col=00ff00>any level</col>");
@@ -1761,4 +1765,112 @@ test("work: an Idle screen stays open when there is nothing to do (out of materi
   advance(10_000);
   assert.equal(work(player, Date.now()), "paused");
   assert.equal(player.getInterfaceId(), GROUP_ID, "out of materials: the screen stays");
+});
+
+const COINS = 995;
+const CLUE = 2677;
+
+test("thieving: a pickpocket's loot goes to the bank as a Thieving gather, coins with no pouch; clues stay", (t) => {
+  t.mock.method(Date, "now", () => 7_000_000);
+  const player = idlePlayer();
+  const man = fakeNpc("Man", ["Talk-to", "Attack", "Pickpocket"], 3201, 3200);
+  api.emit("before-npc", { player, npc: man, npcId: 1, clickType: 3, handled: false });
+  const loot = api.emit("thieving:loot", { player, npc: man, target: "man", loot: [{ id: COINS, amount: 3 }, { id: CLUE, amount: 1, clue: true }], multiplier: 2 });
+  assert.equal(player.bank.get(COINS), 6, "times the multiplier");
+  assert.deepEqual(loot.loot, [{ id: CLUE, amount: 1, clue: true }]);
+  assert.deepEqual(player.getAttribute("idle-mode:auto-target"), {
+    skill: "THIEVING", kind: "npc", name: "Man", option: "Pickpocket", anchor: { x: 3200, y: 3200, z: 0 },
+  });
+  // Not idle: nothing changes.
+  const other = fakePlayer();
+  const untouched = api.emit("thieving:loot", { player: other, npc: man, target: "man", loot: [{ id: COINS, amount: 3 }], multiplier: 1 });
+  assert.equal(untouched.loot.length, 1);
+});
+
+test("thieving: stalls stay stocked; a theft that worked asks for the next, not a failed one or with low hitpoints", () => {
+  const player = idlePlayer();
+  assert.equal(api.emit("thieving:deplete-stall", { player, object: {}, handled: false }).handled, true);
+  assert.equal(api.emit("thieving:done", { player, kind: "stall", succeeded: true, again: false }).again, true);
+  assert.equal(api.emit("thieving:done", { player, kind: "pickpocket", succeeded: false, again: false }).again, false);
+  player.hitpoints = 40;
+  assert.equal(api.emit("thieving:done", { player, kind: "pickpocket", succeeded: true, again: false }).again, false, "eat first");
+  player.hitpoints = 99;
+  api.command(player, "idle auto off");
+  assert.equal(api.emit("thieving:done", { player, kind: "stall", succeeded: true, again: false }).again, false, "auto-resume off");
+  assert.equal(api.emit("thieving:done", { player: fakePlayer(), kind: "stall", succeeded: true, again: false }).again, false, "not idle");
+});
+
+test("thieving: auto-resume eats before a pickpocket, and waits to heal with no food; a stun is work, not a failed try", (t) => {
+  let now = 8_000_000;
+  t.mock.method(Date, "now", () => now);
+  const player = idlePlayer();
+  const { adopt, resume, stateOf } = require(AUTO);
+  world.npcs.push(fakeNpc("Man", ["Talk-to", "Attack", "Pickpocket"], 3201, 3200));
+  adopt(player, { skill: "THIEVING", kind: "npc", name: "Man", option: "Pickpocket", anchor: { x: 3200, y: 3200, z: 0 } });
+  player.hitpoints = 40;
+  player.inventory = [new Item(SHARK, 1)];
+  assert.equal(resume(player, now), "ate");
+  assert.equal(api.itemActions.at(-1).option, "Eat");
+  player.inventory = [];
+  assert.equal(resume(player, now), "resumed", "no food, but above stopBelowPercent: it goes on");
+  player.hitpoints = 20;
+  now += 60_000;
+  assert.equal(resume(player, now), "low");
+  assert.match(player.messages.pop(), /out of food: idle thieving waits/);
+  api.emit("thieving:done", { player, kind: "pickpocket", succeeded: false, again: false });
+  assert.equal(stateOf(player).lastGatherAt, now);
+});
+
+test("firemaking: logs used on a fire tend it, the campfire it becomes is the same object, and nothing made is banked", (t) => {
+  let now = 9_000_000;
+  t.mock.method(Date, "now", () => now);
+  const player = idlePlayer();
+  player.setAttribute("idle-mode:onboarded", true);
+  player.inventory = [new Item(LOGS, 27)];
+  player.bank.set(LOGS, 100);
+  const fire = fakeObject("Fire", [], 3201, 3200);
+  world.objects.push(fire);
+  api.emit("item-on-object", { player, object: fire, objectId: 1276, item: player.inventory[0], itemId: LOGS, itemSlot: 0, interfaceType: 0, handled: false });
+  api.emit("firemaking:success", { player, skill: Skill.FIREMAKING, itemId: LOGS });
+  const target = player.getAttribute("idle-mode:production-target");
+  assert.equal(target.skill, "FIREMAKING");
+  assert.equal(target.objectName, "Fire");
+  api.command(player, "idle");
+  assert.equal(screenText(player, require(SCREEN).COMPONENT.STATUS_LINE_START + 2), "Activity: Burning logs");
+  // Fed, the fire is a Forester's Campfire now; the logs are all burnt.
+  world.objects = [fakeObject("Forester's Campfire", [], 3201, 3200)];
+  player.inventory = [];
+  now += 10_000;
+  const { work } = require(PRODUCTION);
+  assert.equal(work(player, now), "repeated");
+  assert.equal(api.uses.at(-1).kind, "item-object");
+  assert.equal(player.bank.get(LOGS), 73);
+  assert.deepEqual(require(OFFLINE).totals(player).byItem ?? {}, {}, "nothing made");
+});
+
+test("firemaking: a tinderbox on logs lights the next as soon as it has stepped off, and walks back to a free tile when far", (t) => {
+  let now = 10_000_000;
+  t.mock.method(Date, "now", () => now);
+  const TINDERBOX = 590;
+  const player = idlePlayer();
+  player.setAttribute("idle-mode:onboarded", true);
+  player.inventory = [new Item(TINDERBOX, 1), new Item(LOGS, 27)];
+  player.bank.set(LOGS, 100);
+  api.emit("item-on-item", { player, usedItemId: TINDERBOX, usedItemSlot: 0, usedWithItemId: LOGS, usedWithItemSlot: 1, handled: false });
+  api.emit("firemaking:success", { player, skill: Skill.FIREMAKING, itemId: LOGS });
+  const { work } = require(PRODUCTION);
+  assert.equal(work(player, now), "producing", "still on the fire's tick");
+  now += 1200;
+  player.moveTo(3199, 3200);
+  assert.equal(work(player, now), "repeated", "no wait for a stall");
+  assert.equal(api.uses.at(-1).kind, "item-item");
+  assert.equal(player.walks.length, 0);
+  // Twelve tiles on, with a fire where it started: it walks back to the next free tile there.
+  api.emit("firemaking:success", { player, skill: Skill.FIREMAKING, itemId: LOGS });
+  player.moveTo(3188, 3200);
+  world.objects.push(fakeObject("Fire", [], 3200, 3200));
+  now += 1200;
+  assert.equal(work(player, now), "repeated");
+  assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [3200, 3201]);
+  assert.equal(api.uses.at(-1).kind, "item-item");
 });

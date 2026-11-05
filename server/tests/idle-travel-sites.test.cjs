@@ -68,7 +68,7 @@ test("every site has a unique id, a known activity and a level", () => {
     assert.ok(!ids.has(site.id), `duplicate ${site.id}`);
     ids.add(site.id);
     const production = PRODUCTION_KINDS.includes(site.kind);
-    const skills = production ? DATA.production.skills : ["WOODCUTTING", "MINING", "FISHING", "COMBAT"];
+    const skills = production ? DATA.production.skills : [...DATA.skills, "COMBAT"];
     assert.ok(skills.includes(site.skill), `${site.id}: ${site.skill}`);
     assert.ok(["object", "npc", ...PRODUCTION_KINDS].includes(site.kind), site.id);
     assert.ok(!production || typeof site.tip === "string", `${site.id}: a production site tells the player what to do`);
@@ -84,7 +84,8 @@ for (const site of DATA.travel.sites) {
     assert.equal(core.RegionManager.blocked(new core.Location(x, y, z), null), false, `${site.id}: arrival tile ${site.tile} is blocked`);
     if (site.kind !== "anywhere") {
       const count = site.kind === "npc" ? npcsInReach(site) : objectsInReach(site);
-      const needed = site.kind === "station" ? 1 : MIN_TARGETS;
+      // A station, or a stall (it stays stocked for an idle thief), is enough on its own.
+      const needed = site.kind === "station" || (site.skill === "THIEVING" && site.kind === "object") ? 1 : MIN_TARGETS;
       assert.ok(count >= needed, `${site.id}: ${count} ${site.target} within ${reach(site)} tiles`);
     }
     const icon = core.ItemDefinition.forId(site.icon);

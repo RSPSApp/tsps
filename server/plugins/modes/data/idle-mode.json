@@ -3,7 +3,8 @@
   "skills": [
     "WOODCUTTING",
     "MINING",
-    "FISHING"
+    "FISHING",
+    "THIEVING"
   ],
   "gathering": {
     "bankResources": true,
@@ -74,6 +75,15 @@
         "extraChancePerLevel": 0.04
       }
     }
+  },
+  "thieving": {
+    "_description": "Idle Thieving (docs/idle-mode.md): stalls and pickpockets go on by themselves. What they give goes to the bank (coins straight in, with no coin pouch), stalls stay stocked, each theft is followed by the next, and a pickpocketing character eats below eatBelowPercent hitpoints and stops when out of food below stopBelowPercent.",
+    "enabled": true,
+    "bankLoot": true,
+    "keepStalls": true,
+    "repeat": true,
+    "eatBelowPercent": 50,
+    "stopBelowPercent": 25
   },
   "combat": {
     "_description": "Idle combat (docs/idle-mode.md): the last kind of monster an idle player attacked and killed is the target; the character attacks the nearest one around where it started, eats below eatBelowPercent hitpoints, stops when out of food below stopBelowPercent, and banks the loot. Kills come slower than gathers: maxGapSeconds is the longest wait between two kills that keeps one offline session.",
@@ -462,6 +472,76 @@
         "tool": "A weapon and plenty of food"
       },
       {
+        "id": "lumbridge-men",
+        "name": "Men",
+        "place": "Lumbridge",
+        "skill": "THIEVING",
+        "kind": "npc",
+        "target": "Man",
+        "option": "Pickpocket",
+        "tile": [
+          3222,
+          3218,
+          0
+        ],
+        "level": 1,
+        "icon": 995,
+        "tool": "Some food: a failed pickpocket hurts"
+      },
+      {
+        "id": "varrock-tea-stall",
+        "name": "Tea stall",
+        "place": "Varrock, east",
+        "skill": "THIEVING",
+        "kind": "object",
+        "target": "Tea stall",
+        "option": "Steal-from",
+        "tile": [
+          3271,
+          3410,
+          0
+        ],
+        "level": 5,
+        "icon": 1978,
+        "tool": "Nothing"
+      },
+      {
+        "id": "ardougne-bakers-stall",
+        "name": "Baker's stall",
+        "place": "East Ardougne market",
+        "skill": "THIEVING",
+        "kind": "object",
+        "target": "Baker's stall",
+        "option": "Steal-from",
+        "tile": [
+          2662,
+          3307,
+          0
+        ],
+        "level": 5,
+        "icon": 2309,
+        "tool": "Nothing",
+        "members": true
+      },
+      {
+        "id": "ardougne-silk-stall",
+        "name": "Silk stall",
+        "place": "East Ardougne market",
+        "skill": "THIEVING",
+        "kind": "object",
+        "target": "Silk stall",
+        "option": "Steal-from",
+        "tile": [
+          2662,
+          3307,
+          0
+        ],
+        "level": 20,
+        "icon": 950,
+        "tool": "Nothing",
+        "members": true
+      },
+      {
         "id": "al-kharid-range",
         "name": "Cooking range",
         "place": "Al Kharid, by the bank",
@@ -550,6 +630,22 @@
         "icon": 946,
         "tool": "A knife, needle or herbs, and materials in your bank",
         "tip": "Make one by hand (a knife on logs, a needle on leather, a herb in a vial) and pick the product: your character keeps making it from your bank."
+      },
+      {
+        "id": "varrock-firemaking",
+        "name": "Firemaking",
+        "place": "Varrock west bank",
+        "skill": "FIREMAKING",
+        "kind": "anywhere",
+        "tile": [
+          3183,
+          3436,
+          0
+        ],
+        "level": 1,
+        "icon": 590,
+        "tool": "A tinderbox and logs in your bank",
+        "tip": "Use a tinderbox on logs, or logs on a fire: your character keeps burning logs from your bank."
       }
     ]
   },
@@ -602,8 +698,25 @@
       "SMITHING",
       "FLETCHING",
       "CRAFTING",
-      "HERBLORE"
+      "HERBLORE",
+      "FIREMAKING"
     ],
+    "_verbs": "What the Idle screen says the character is doing, by skill (the rest are 'Making').",
+    "verbs": {
+      "FIREMAKING": "Burning"
+    },
+    "_sameObjects": "Names that are one object to idle production: a fire fed logs becomes a Forester's Campfire.",
+    "sameObjects": [
+      [
+        "Fire",
+        "Forester's Campfire"
+      ]
+    ],
+    "_lines": "Skills whose item-on-item use makes one at a time and walks on (a tinderbox on logs, a line of fires): the next follows as soon as the character has stepped off, and lineTiles from where it started it walks back to a free tile there.",
+    "lineSkills": [
+      "FIREMAKING"
+    ],
+    "lineTiles": 12,
     "tickInterval": 2,
     "restartAfterSeconds": 6,
     "retrySeconds": 4,

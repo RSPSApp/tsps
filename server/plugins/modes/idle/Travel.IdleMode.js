@@ -68,7 +68,7 @@ function adoptTarget(player, site) {
   else if (!isProduction(site)) Auto.adopt(player, { skill: site.skill, kind: site.kind, name: site.target, option: site.option, anchor });
   else if (Production.moveTo(player, site, anchor)) {
     const made = player.getAttribute(Common.PRODUCTION_TARGET_ATTRIBUTE);
-    return `Your character carries on making ${Common.itemName(made.productId).toLowerCase()} here.`;
+    return `Your character carries on ${Production.doing(made).toLowerCase()} here.`;
   } else {
     Common.setActivity(player, Common.PRODUCTION_TARGET_ATTRIBUTE, null);
     return site.tip ?? null;

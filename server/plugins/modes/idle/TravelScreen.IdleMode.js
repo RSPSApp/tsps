@@ -27,6 +27,7 @@ const TABS = [
   { label: "Woodcut", header: "Woodcutting", has: (site) => site.skill === "WOODCUTTING" },
   { label: "Mining", header: "Mining", has: (site) => site.skill === "MINING" },
   { label: "Fishing", header: "Fishing", has: (site) => site.skill === "FISHING" },
+  { label: "Thieving", header: "Thieving", has: (site) => site.skill === "THIEVING" },
   { label: "Combat", header: "Combat", has: (site) => site.skill === Travel.COMBAT },
   { label: "Making", header: "Making", has: (site) => Travel.isProduction(site) },
 ];

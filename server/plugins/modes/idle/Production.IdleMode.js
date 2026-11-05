@@ -1,6 +1,6 @@
 /**
  * Idle production (plugins/modes/data/idle-mode.json "production"): Cooking, Smithing, Fletching,
- * Crafting and Herblore, by the skills' own flows. The last thing an idle player did by hand that
+ * Crafting, Herblore and Firemaking, by the skills' own flows. The last thing an idle player did by hand that
  * made something (`skills:produced`) within `rememberClickSeconds` is the target:
  *
  * - an item used on an object (raw food on a range), an item used on another (a knife on logs),
@@ -16,16 +16,24 @@
  * materials last. Out of materials, or `maxFailedAttempts` tries in a row that make nothing, it
  * pauses and says so. One activity at a time: making something replaces the gathering or combat
  * target, and gathering or fighting replaces this one.
+ *
+ * Firemaking makes nothing (`firemaking:success`, a log burnt, counts as a make of none): what the
+ * restocks used is what it counts. Logs used on a fire tend it (a Forester's Campfire, `sameObjects`:
+ * the fire changes name as it is fed). A tinderbox on logs lights one fire and steps off (a
+ * `lineSkills` skill): the next follows as soon as the character stands still, and `lineTiles` from
+ * where it started (or on a tile a fire is on) it walks back to a free tile there first.
  */
 const Common = require("./Common.IdleMode");
 const Offline = require("./Offline.IdleMode");
 
 const TARGET_ATTRIBUTE = Common.PRODUCTION_TARGET_ATTRIBUTE;
+/** The object type of ground decorations (grass, flowers); most don't keep a fire off. */
+const GROUND_DECORATION_TYPE = 22;
 const KIND = { ITEM_OBJECT: "item-object", ITEM_ITEM: "item-item", OBJECT_OPTION: "object-option" };
 
 /** player -> the last use by hand: { kind, ..., loadout, at }. */
 const uses = new Map();
-/** player -> { lastProducedAt, lastAttemptAt, failedAttempts, paused, awaitingMenu }. */
+/** player -> { lastProducedAt, lastAttemptAt, failedAttempts, paused, awaitingMenu, chainAt }. */
 const states = new Map();
 const tracked = new Set();
 let skills = null;
@@ -36,7 +44,7 @@ function config() {
 
 function stateOf(player) {
   let state = states.get(player);
-  if (!state) states.set(player, (state = { lastProducedAt: 0, lastAttemptAt: 0, failedAttempts: 0, paused: null, awaitingMenu: false }));
+  if (!state) states.set(player, (state = { lastProducedAt: 0, lastAttemptAt: 0, failedAttempts: 0, paused: null, awaitingMenu: false, chainAt: 0 }));
   return state;
 }
 
@@ -102,7 +110,32 @@ function produced(request) {
     Common.changed(player);
   }
   const target = player.getAttribute(TARGET_ATTRIBUTE);
-  if (target?.skill === skillKey) Offline.record(player, skillKey, [skill], { [itemId]: amount }, config().maxGapSeconds);
+  if (target?.skill !== skillKey) return;
+  // One at a time (a line of fires): the next as soon as the character has stepped off.
+  if (isLine(target)) state.chainAt = now + config().tickInterval * 600;
+  Offline.record(player, skillKey, [skill], amount > 0 ? { [itemId]: amount } : {}, config().maxGapSeconds);
+}
+
+/** `firemaking:success`: a log burnt is a make of nothing (the logs the restocks use are counted). */
+function burnt({ player, skill, itemId }) {
+  produced({ player, skill, itemId, amount: 0 });
+}
+
+/** A target made one at a time, walking on: a tinderbox on logs. */
+function isLine(target) {
+  return target.kind === KIND.ITEM_ITEM && (config().lineSkills ?? []).includes(target.skill);
+}
+
+/** Whether two object names are the same object to idle production (`sameObjects`). */
+function sameObject(name, wanted) {
+  if (name === wanted) return true;
+  return (config().sameObjects ?? []).some((names) => names.includes(name) && names.includes(wanted));
+}
+
+/** What the character is doing: "Making iron bars", "Burning logs". */
+function doing(target) {
+  const verb = config().verbs?.[target.skill] ?? "Making";
+  return `${verb} ${Common.itemName(target.productId).toLowerCase()}`;
 }
 
 function optionIndex(options, option) {
@@ -122,7 +155,7 @@ function findObject(player, target, option = null) {
     for (let y = anchor.y - radius; y <= anchor.y + radius; y++) {
       for (const object of MapObjects.mapObjects.get(MapObjects.getHash(x, y, anchor.z)) ?? []) {
         const definition = object.getDefinition?.();
-        if (definition?.getName?.() !== target.objectName) continue;
+        if (!sameObject(definition?.getName?.(), target.objectName)) continue;
         if (option && optionIndex(definition.getInteractions?.(), option) === 0) continue;
         const distance = Math.max(Math.abs(here.getX() - x), Math.abs(here.getY() - y));
         if (distance < bestDistance) {
@@ -175,10 +208,17 @@ function restock(player, target) {
 function repeat(player, target) {
   const { UseItemPacketListener } = Common.core;
   if (target.kind === KIND.ITEM_ITEM) {
-    const used = slotOf(player, target.usedItemId);
-    const withSlot = slotOf(player, target.withItemId);
-    if (used < 0 || withSlot < 0) return false;
-    UseItemPacketListener.itemOnItem(player, used, withSlot);
+    const use = () => {
+      const used = slotOf(player, target.usedItemId);
+      const withSlot = slotOf(player, target.withItemId);
+      if (used < 0 || withSlot < 0) return false;
+      UseItemPacketListener.itemOnItem(player, used, withSlot);
+      return true;
+    };
+    if (!isLine(target) || lineGoesOn(player, target)) return use();
+    const start = lineStart(target);
+    if (!start) return false;
+    player.getMovementQueue().walkToTile(start, () => use());
     return true;
   }
   const object = findObject(player, target, target.kind === KIND.OBJECT_OPTION ? target.option : null);
@@ -200,6 +240,36 @@ function repeat(player, target) {
     },
   });
   return true;
+}
+
+/** An object no fire can be lit on: anything but a ground decoration that doesn't block (grass). */
+function blocksFire(object) {
+  return object.getType?.() !== GROUND_DECORATION_TYPE || object.getDefinition?.()?.isClippedDecoration?.() === true;
+}
+
+/** Whether a tile has an object on it that keeps a fire off (a fire, a tree), as Firemaking checks. */
+function taken(location) {
+  const { MapObjects, ObjectManager } = Common.core;
+  if ((ObjectManager?.objectsAt?.(location) ?? []).some(blocksFire)) return true;
+  const objects = MapObjects.mapObjects.get(MapObjects.getHash(location.getX(), location.getY(), location.getZ())) ?? [];
+  return objects.some((object) => object.getLocation().equals(location) && blocksFire(object));
+}
+
+/** A line of fires goes on from here: not too far from where it started, and on a free tile. */
+function lineGoesOn(player, target) {
+  const location = player.getLocation();
+  return Common.chebyshev(location, target.anchor) < config().lineTiles && !taken(location);
+}
+
+/** Where a line starts again: the first free tile by where it first started, row by row. */
+function lineStart(target) {
+  const { Location } = Common.core;
+  const { x, y, z } = target.anchor;
+  for (const dy of [0, 1, -1, 2, -2, 3, -3]) {
+    const tile = new Location(x, y + dy, z);
+    if (!taken(tile)) return tile;
+  }
+  return null;
 }
 
 /**
@@ -253,10 +323,12 @@ function work(player, now) {
   const inventory = player.getInventory();
   const drained = Object.keys(target.loadout).some((itemId) => inventory.getAmount(Number(itemId)) <= 0);
   const waitSeconds = drained ? restartAfterSeconds : stalledSeconds;
-  if (now - state.lastProducedAt < waitSeconds * 1000 || now - state.lastAttemptAt < retrySeconds * 1000) return "producing";
+  const chained = state.chainAt > 0 && now >= state.chainAt && !drained;
+  if (!chained && (now - state.lastProducedAt < waitSeconds * 1000 || now - state.lastAttemptAt < retrySeconds * 1000)) return "producing";
   if (!Common.mayWork(player)) return "busy";
   const location = player.getLocation();
   if (location.getZ() !== target.anchor.z || Common.chebyshev(location, target.anchor) > leashTiles) return "away";
+  state.chainAt = 0;
   const product = Common.itemName(target.productId).toLowerCase();
   if (state.lastAttemptAt > state.lastProducedAt && ++state.failedAttempts >= maxFailedAttempts) {
     return pause(player, "stuck", `Idle production has paused: your character can't make ${product} here. Make one to restart it.`);
@@ -268,8 +340,10 @@ function work(player, now) {
   }
   if (!Common.readyToWork(player)) return "busy";
   state.lastAttemptAt = now;
-  state.awaitingMenu = repeat(player, target);
-  return state.awaitingMenu ? "repeated" : "none";
+  const repeated = repeat(player, target);
+  // A line's use opens no menu.
+  state.awaitingMenu = repeated && !isLine(target);
+  return repeated ? "repeated" : "none";
 }
 
 function tick() {
@@ -311,7 +385,7 @@ function moveTo(player, site, anchor) {
   if (!suits) return false;
   Common.setActivity(player, TARGET_ATTRIBUTE, { ...target, anchor });
   const state = stateOf(player);
-  Object.assign(state, { lastProducedAt: 0, lastAttemptAt: 0, failedAttempts: 0, paused: null, awaitingMenu: false });
+  Object.assign(state, { lastProducedAt: 0, lastAttemptAt: 0, failedAttempts: 0, paused: null, awaitingMenu: false, chainAt: 0 });
   tracked.add(player);
   Common.changed(player);
   return true;
@@ -343,6 +417,7 @@ module.exports = function attach(api) {
   api.onItemOnItem(usedOnItem);
   api.onBeforeObjectInteraction(objectOption);
   api.onCustomEvent("skills:produced", produced);
+  api.onCustomEvent("firemaking:success", burnt);
   api.onPlayerLogin(login);
   api.onPlayerLogout(logout);
   api.onServerStartup(startTask);
@@ -354,4 +429,5 @@ module.exports.work = work;
 module.exports.unpause = unpause;
 module.exports.moveTo = moveTo;
 module.exports.pausedFor = pausedFor;
+module.exports.doing = doing;
 module.exports.tracked = tracked;

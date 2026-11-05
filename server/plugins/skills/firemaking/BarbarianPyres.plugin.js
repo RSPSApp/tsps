@@ -86,6 +86,18 @@ function swap(object, id) {
   return next;
 }
 
+function resetPyre(key, use) {
+  if (pyres.get(key) !== use) return;
+  swap(use.object, PYRE_SITE);
+  pyres.delete(key);
+}
+
+function disconnected({ player }) {
+  for (const [key, use] of pyres) {
+    if (use.player === player) resetPyre(key, use);
+  }
+}
+
 function near(object, player) {
   return object.isWithinInteractionDistance(player.getLocation());
 }
@@ -177,13 +189,17 @@ function itemOnPyre(event) {
     player.sendMessage("You light the pyre.");
     event.handled = true;
     core.TaskManager.submit(new (class extends core.Task {
-      constructor() { super(6); }
+      constructor() { super(6); this.floating = false; }
       execute() {
-        this.stop();
-        const current = pyres.get(tileKey(object));
-        if (current) {
-          swap(use.object, PYRE_FLOATING);
-          pyres.delete(tileKey(object));
+        const key = tileKey(object);
+        if (pyres.get(key) !== use) {
+          this.stop();
+        } else if (!this.floating) {
+          use.object = swap(use.object, PYRE_FLOATING);
+          this.floating = true;
+        } else {
+          resetPyre(key, use);
+          this.stop();
         }
       }
     })());
@@ -199,6 +215,7 @@ function attach(registry) {
   registry.onObjectInteraction("Pyre site", { Construct: construct });
   registry.onItemOnObject(itemOnSite, { noted: false });
   registry.onItemOnObject(itemOnPyre, { noted: false });
+  registry.onPlayerDisconnect(disconnected);
 }
 
 module.exports = {

@@ -160,10 +160,9 @@ test("only a newly completed diary task resets an ordered Kandarin sequence; rep
     "a newly completed intervening task resets the catch-then-cook sequence");
 });
 
-test("super antipoison needs a cleaned irit, the unfinished potion and the final mix in the area", (t) => {
+test("super antipoison starts with mixing a clean irit into water, without an extra cleaning step", (t) => {
   const f = fixture(t);
   at(f.player, 2700, 3460);
-  T.skillProduced({ player: f.player, skill: core.Skill.HERBLORE, itemId: T.IRIT_LEAF, kind: "clean" });
   T.herbloreMade({ player: f.player, itemId: T.IRIT_POTION_UNF });
   T.herbloreMade({ player: f.player, itemId: T.SUPERANTIPOISON_3 });
   assert.deepEqual(f.tasks, [T.TASK.superAntipoison]);
@@ -206,6 +205,11 @@ test("water obelisk grapple credits only the grapple landing on the Catherby sho
   at(barehanded.player, 2840, 3434);
   T.agilityObstacle({ player: barehanded.player, shortcut: "Crossbow Tree", method: "barehanded" });
   assert.equal(barehanded.tasks.length, 0);
+
+  const reverse = fixture(t);
+  at(reverse.player, 2843, 3434);
+  T.agilityObstacle({ player: reverse.player, shortcut: "Crossbow Tree", method: "grapple" });
+  assert.equal(reverse.tasks.length, 0, "landing on the obelisk side is not the diary task");
 });
 
 test("Hemenster chest needs the right chest, 47 Thieving and a lockpick", (t) => {
@@ -294,6 +298,25 @@ test("a candle bought from the Candle Shop credits the easy task", (t) => {
   T.resetCandleShop();
 });
 
+test("the candle shop opens on the tick after the dialogue closes, not under it", (t) => {
+  const f = fixture(t);
+  T.setCandleShopId(1495);
+  f.player.setInterfaceId(-1);
+  let opened = null;
+  t.mock.method(core.ShopManager, "open", (...args) => { opened = args; return true; });
+  let submitted = null;
+  t.mock.method(core.TaskManager, "submit", (task) => { submitted = task; });
+  const event = { player: f.player, action: "open_interface", target: "Candle Shop", handled: false };
+  T.openCandleShop(event);
+  assert.equal(event.handled, true);
+  assert.equal(event.end, true);
+  assert.equal(opened, null, "the closing dialogue would close a shop opened under it");
+  assert.ok(submitted, "the shop open is deferred");
+  submitted.execute();
+  assert.deepEqual(opened, [f.player, 1495, true]);
+  T.resetCandleShop();
+});
+
 
 test("bow Firemaking credits Maple logs lit in Seers only", (t) => {
   const f = fixture(t);
@@ -327,4 +350,42 @@ test("entering the cache-derived courthouse with Piety credits the task", (t) =>
   noPrayer.player.getPrayerActive = () => ({ 26: false });
   noPrayer.api.area.postEnter({ isPlayer: () => true, getAsPlayer: () => noPrayer.player });
   assert.equal(noPrayer.tasks.length, 0);
+});
+
+
+test("Hemenster chest keeps all loot available when two new stacks do not fit", (t) => {
+  const f = fixture(t);
+  f.player.getSkillManager().setCurrentLevels(core.Skill.THIEVING, 47);
+  add(f.player, core.ItemIdentifiers.LOCKPICK);
+  add(f.player, 1511, 26);
+  assert.equal(f.player.getInventory().getFreeSlots(), 1);
+  const event = { player: f.player, objectId: T.HEMENSTER_CHEST_ID, object: { getLocation: () => new core.Location(T.HEMENSTER_CHEST.x, T.HEMENSTER_CHEST.y, 0) } };
+  T.hemensterChest(event);
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.STEEL_ARROWTIPS), 0);
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.COINS), 0);
+  assert.equal(f.tasks.length, 0);
+  f.player.getInventory().deleteNumber(1511, 1);
+  T.hemensterChest(event);
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.COINS), 20);
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.STEEL_ARROWTIPS), 5);
+  assert.deepEqual(f.tasks, [T.TASK.hemensterChest]);
+});
+
+test("Hemenster chest refuses a capped reward stack before granting either reward", (t) => {
+  const f = fixture(t);
+  f.player.getSkillManager().setCurrentLevels(core.Skill.THIEVING, 47);
+  add(f.player, core.ItemIdentifiers.LOCKPICK);
+  add(f.player, core.ItemIdentifiers.COINS, 2147483647);
+  T.hemensterChest({ player: f.player, objectId: T.HEMENSTER_CHEST_ID, object: { getLocation: () => new core.Location(T.HEMENSTER_CHEST.x, T.HEMENSTER_CHEST.y, 0) } });
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.STEEL_ARROWTIPS), 0);
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.COINS), 2147483647);
+  assert.equal(f.tasks.length, 0);
+});
+
+
+test("a pre-made unfinished irit potion alone does not satisfy the from-scratch task", (t) => {
+  const f = fixture(t);
+  at(f.player, 2700, 3460);
+  T.herbloreMade({ player: f.player, itemId: T.SUPERANTIPOISON_3 });
+  assert.equal(f.tasks.length, 0);
 });

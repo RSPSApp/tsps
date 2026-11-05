@@ -338,6 +338,11 @@ function processFires() {
   }
 }
 
+/** Wiki Barbarian Training: bow lighting adds 20 levels, capped at 99 for high-tier logs. */
+function lightingLevel(log, bow = false) {
+  return bow ? Math.min(99, log.requiredLevel + 20) : log.requiredLevel;
+}
+
 function startFiremakingAttempt(player, log, source, activeSessions) {
   if (!player || !log || !source) {
     return false;
@@ -347,15 +352,16 @@ function startFiremakingAttempt(player, log, source, activeSessions) {
     return false;
   }
 
-  if (getFiremakingLevel(player) < log.requiredLevel) {
+  const bow = source.bow === true;
+  const requiredLevel = lightingLevel(log, bow);
+  if (getFiremakingLevel(player) < requiredLevel) {
     player.sendMessage(
-      `You need a Firemaking level of at least ${log.requiredLevel} to light those logs.`
+      `You need a Firemaking level of at least ${requiredLevel} to light those logs.`
     );
     return false;
   }
 
   const inventory = player.getInventory();
-  const bow = source.bow === true;
   if (!bow && requiresTinderbox(player) && !inventory.contains(TINDERBOX_ID)) {
     player.sendMessage("You need a tinderbox to light fires.");
     return false;
@@ -407,6 +413,7 @@ function startFiremakingAttempt(player, log, source, activeSessions) {
     mode: SESSION_MODE.GROUND,
     fromInventory,
     bow,
+    bowId: source.bowId,
     log,
     location: sessionLocation,
     privateArea,
@@ -605,7 +612,7 @@ function processFiremakingTick(activeSessions, currentTick) {
       continue;
     }
 
-    if (getFiremakingLevel(player) < session.log.requiredLevel) {
+    if (getFiremakingLevel(player) < lightingLevel(session.log, session.bow)) {
       stopFiremaking(activeSessions, player);
       continue;
     }
@@ -616,6 +623,12 @@ function processFiremakingTick(activeSessions, currentTick) {
       }
       session.nextActionTick = currentTick + tendInterval(player);
       tendFire(player, session, activeSessions);
+      continue;
+    }
+
+    if (session.bow && !player.getInventory().contains(session.bowId)) {
+      player.sendMessage("You need a bow to light fires.");
+      stopFiremaking(activeSessions, player);
       continue;
     }
 
@@ -697,6 +710,7 @@ function handleItemOnItem(event, activeSessions) {
 
   let logId = -1;
   let bow = false;
+  let bowId;
   if (usedItemId === TINDERBOX_ID) {
     logId = usedWithItemId;
   } else if (usedWithItemId === TINDERBOX_ID) {
@@ -704,12 +718,20 @@ function handleItemOnItem(event, activeSessions) {
   } else if (isFiremakingBow(usedItemId) && LIGHTABLE_LOGS_BY_ID.has(usedWithItemId)) {
     logId = usedWithItemId;
     bow = true;
+    bowId = usedItemId;
   } else if (isFiremakingBow(usedWithItemId) && LIGHTABLE_LOGS_BY_ID.has(usedItemId)) {
     logId = usedItemId;
     bow = true;
+    bowId = usedWithItemId;
   }
 
   if (logId <= 0) {
+    return;
+  }
+
+  if (bow && !pluginApi.core.WorldDefinition.isMembersWorld()) {
+    player.sendMessage("You need to be on a members' world to light fires with a bow.");
+    event.handled = true;
     return;
   }
 
@@ -721,7 +743,7 @@ function handleItemOnItem(event, activeSessions) {
   const started = startFiremakingAttempt(
     player,
     log,
-    { mode: SESSION_MODE.INVENTORY, bow },
+    { mode: SESSION_MODE.INVENTORY, bow, bowId },
     activeSessions
   );
   if (started) {

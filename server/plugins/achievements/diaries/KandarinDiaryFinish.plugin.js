@@ -39,6 +39,7 @@ const TASK = {
 const CATHERBY = { minX: 2810, maxX: 2870, minY: 3410, maxY: 3460, z: 0 };
 const SEERS_VILLAGE = { minX: 2670, maxX: 2780, minY: 3430, maxY: 3530, z: 0 };
 const SEERS_BANK_ROOF = { minX: 2720, maxX: 2732, minY: 3486, maxY: 3495, z: 3 };
+const WATER_OBELISK_SHORE = { x: 2840, y: 3434, z: 0 };
 const HEMENSTER_CHEST = { x: 2639, y: 3424, z: 0 };
 const SEERS_AGENT = { x: 2737, y: 3502, z: 0, radius: 4 };
 const BA_BLACKBOARD = [20134];
@@ -65,7 +66,6 @@ const CHEWED_BONES = 11338;
 const YEW_LONGBOW_U = 66;
 const YEW_LONGBOW = 855;
 const BOW_STRING = 1777;
-const IRIT_LEAF = 259;
 const IRIT_POTION_UNF = 101;
 const SUPERANTIPOISON_3 = 181;
 const STAMINA_POTION_2 = 12629;
@@ -146,11 +146,22 @@ function resolveCandleShop() {
 
 // ---------------------------------------------------------------- candle / shop
 
-function openCandleShop({ player, action, target, handled }) {
-  if (handled || action !== "open_interface" || target !== CANDLE_SHOP) return;
+function openCandleShop(event) {
+  if (event.handled || event.action !== "open_interface" || event.target !== CANDLE_SHOP) return;
   const shopId = resolveCandleShop();
   if (shopId < 0) return;
-  if (core.ShopManager.open(player, shopId, true)) handled = true;
+  // Ending this action closes the chatbox, which also closes any shop opened under it.
+  // Answer the dialogue now and open the shop once the close has settled.
+  event.handled = true;
+  event.end = true;
+  const { player } = event;
+  core.TaskManager.submit(new (class extends core.Task {
+    constructor() { super(1); }
+    execute() {
+      this.stop();
+      if (player.isRegistered?.() && player.getInterfaceId?.() === -1) core.ShopManager.open(player, shopId, true);
+    }
+  })());
 }
 
 function candlePurchased({ player, shopId, itemId }) {
@@ -310,20 +321,12 @@ function herbloreMade({ player, itemId }) {
   const inArea = inBox(at, SEERS_VILLAGE) || inBox(at, CATHERBY);
   if (!inArea) return;
   const s = state(player);
-  if (itemId === IRIT_POTION_UNF && s.iritLeaf) {
+  if (itemId === IRIT_POTION_UNF) {
     s.iritUnfinished = true;
   } else if (itemId === SUPERANTIPOISON_3 && s.iritUnfinished) {
-    delete s.iritLeaf;
     delete s.iritUnfinished;
     credit(player, TASK.superAntipoison);
   }
-}
-
-function skillProduced({ player, skill, itemId, kind }) {
-  if (!active(player) || kind !== "clean" || skill !== core.Skill.HERBLORE) return;
-  if (itemId !== IRIT_LEAF) return;
-  if (!inBox(player.getLocation(), SEERS_VILLAGE) && !inBox(player.getLocation(), CATHERBY)) return;
-  state(player).iritLeaf = true;
 }
 
 // ---------------------------------------------------------------- water obelisk
@@ -332,6 +335,8 @@ function agilityObstacle({ player, shortcut, method }) {
   // Wiki: the task needs the mith grapple, not the 72-Agility barehanded climb. The cache
   // models the crossing two-way; the source route is the Obelisk of Water to Catherby shore.
   if (!active(player) || shortcut !== "Crossbow Tree" || method !== "grapple") return;
+  const at = player.getLocation();
+  if (at.getX() !== WATER_OBELISK_SHORE.x || at.getY() !== WATER_OBELISK_SHORE.y || at.getZ() !== WATER_OBELISK_SHORE.z) return;
   credit(player, TASK.waterObelisk);
 }
 
@@ -358,12 +363,11 @@ function hemensterChest(event) {
     player.sendMessage("You need a lockpick to open this chest.");
     return true;
   }
-  if (!inventory.contains(core.ItemIdentifiers.STEEL_ARROWTIPS)) {
-    // The lockpick opens the chest; the loot needs a slot.
-    if (inventory.getFreeSlots() < 1) {
-      player.sendMessage("You need a free inventory slot to take the loot.");
-      return true;
-    }
+  const rewards = [new core.Item(core.ItemIdentifiers.STEEL_ARROWTIPS, 5), new core.Item(core.ItemIdentifiers.COINS, 20)];
+  const slotsNeeded = rewards.filter((item) => !inventory.contains(item.getId())).length;
+  if (inventory.getFreeSlots() < slotsNeeded || rewards.some((item) => inventory.getAddableAmount(item) < item.getAmount())) {
+    player.sendMessage("You need room in your inventory for the loot.");
+    return true;
   }
   inventory.adds(core.ItemIdentifiers.STEEL_ARROWTIPS, 5);
   inventory.adds(core.ItemIdentifiers.COINS, 20);
@@ -479,7 +483,6 @@ module.exports = {
     registry.onCustomEvent("woodcutting:success", woodcuttingSuccess);
     registry.onCustomEvent("fletching:made", fletchingMade);
     registry.onCustomEvent("herblore:made", herbloreMade);
-    registry.onCustomEvent("skills:produced", skillProduced);
     registry.onCustomEvent("agility:obstacle", agilityObstacle);
     registry.onCustomEvent("equipment:changed", equipmentChanged);
     registry.onCustomEvent("construction:house-redecorated", houseRedecorated);
@@ -500,12 +503,12 @@ module.exports = {
     TASK, CATHERBY, SEERS_VILLAGE, SEERS_BANK_ROOF, HEMENSTER_CHEST, SEERS_AGENT,
     HEMENSTER_CHEST_ID, BA_BLACKBOARD, GRANITE_BODY, COOKING_GAUNTLETS, CANDLE, STEW,
     RAW_BASS, BASS, RAW_SHARK, SHARK, YEW_LOGS, YEW_LONGBOW_U, YEW_LONGBOW, BOW_STRING,
-    IRIT_LEAF, IRIT_POTION_UNF, SUPERANTIPOISON_3, STAMINA_POTION_2, STAMINA_MIX_2, CAVIAR,
+    IRIT_POTION_UNF, SUPERANTIPOISON_3, STAMINA_POTION_2, STAMINA_MIX_2, CAVIAR,
     TINY_NET, PET_FISH_IDS, GRANITE_BODY_COST, BA_SHOP_ID, FANCY_STONE_STYLE,
     MAPLE_LOGS, MAGIC_LOGS, CHEWED_BONES, SEERS_COURTHOUSE,
     pending, inBox, near, diaryProgress, AQUARIUM, AQUARIUM_ID,
     openCandleShop, candlePurchased, harryDialogue, fishPet, foresterArms, fishingSuccess,
-    cookingSuccess, woodcuttingSuccess, fletchingMade, herbloreMade, skillProduced,
+    cookingSuccess, woodcuttingSuccess, fletchingMade, herbloreMade,
     agilityObstacle, hemensterChest, houseRedecorated, blackboardRead, graniteBodyBought,
     equipmentChanged, staminaMix, firemakingSuccess, pyreBuilt, resolveCandleShop, credit,
     setCandleShopId: (id) => { candleShopId = id; },

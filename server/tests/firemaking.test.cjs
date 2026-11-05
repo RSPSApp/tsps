@@ -460,3 +460,54 @@ test("Barbarian Firemaking accepts ordinary bows and rejects the Wiki's excluded
   assert.equal(isFiremakingBow(I.DARK_BOW), false);
   assert.equal(isFiremakingBow(I.CROSSBOW), false);
 });
+
+
+test("bow lighting requires 65 Firemaking for maple logs and retains the bow through completion", async t => {
+  const h = await campfireHarness(t);
+  let level = 64;
+  const skills = h.player.getSkillManager();
+  h.player.getSkillManager = () => ({ ...skills, getCurrentLevel: () => level });
+  h.inventory.set(h.I.MAPLE_LOGS, 2);
+  h.inventory.set(h.I.MAGIC_SHORTBOW, 1);
+  const use = () => h.hooks.combine({ player: h.player, usedItemId: h.I.MAGIC_SHORTBOW, usedWithItemId: h.I.MAPLE_LOGS });
+  use();
+  assert.equal(h.inventory.get(h.I.MAPLE_LOGS), 2, "ordinary maple level is insufficient with a bow");
+  assert.match(h.messages.at(-1), /at least 65/);
+  level = 65;
+  use();
+  assert.equal(h.inventory.get(h.I.MAPLE_LOGS), 1);
+  h.tick(4);
+  assert.equal(h.xp(), 135);
+});
+
+test("dropping the bow or losing the boosted bow level cancels a pending fire", async t => {
+  const h = await campfireHarness(t);
+  let level = 65;
+  const skills = h.player.getSkillManager();
+  h.player.getSkillManager = () => ({ ...skills, getCurrentLevel: () => level });
+  h.inventory.set(h.I.MAPLE_LOGS, 2);
+  h.inventory.set(h.I.MAGIC_SHORTBOW, 1);
+  h.hooks.combine({ player: h.player, usedItemId: h.I.MAGIC_SHORTBOW, usedWithItemId: h.I.MAPLE_LOGS });
+  h.inventory.delete(h.I.MAGIC_SHORTBOW);
+  h.tick(4);
+  assert.equal(h.xp(), 0);
+  assert.equal(h.objects.size, 0);
+  h.inventory.set(h.I.MAGIC_SHORTBOW, 1);
+  h.hooks.combine({ player: h.player, usedItemId: h.I.MAGIC_SHORTBOW, usedWithItemId: h.I.MAPLE_LOGS });
+  level = 64;
+  h.tick(4);
+  assert.equal(h.xp(), 0);
+  assert.equal(h.objects.size, 0);
+});
+
+
+test("bow firemaking stays members-only while ordinary firemaking works on free worlds", async t => {
+  const h = await campfireHarness(t);
+  t.mock.method(h.core.WorldDefinition, "isMembersWorld", () => false);
+  h.inventory.set(h.I.MAGIC_SHORTBOW, 1);
+  h.hooks.combine({ player: h.player, usedItemId: h.I.MAGIC_SHORTBOW, usedWithItemId: h.I.LOGS });
+  assert.equal(h.inventory.get(h.I.LOGS), 3);
+  assert.match(h.messages.at(-1), /members' world/);
+  h.light();
+  assert.equal(h.xp(), 40);
+});

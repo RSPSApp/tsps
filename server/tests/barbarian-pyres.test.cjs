@@ -42,6 +42,9 @@ function player({ inventory = {}, levels = {} } = {}) {
 
 function fixture() {
   const events = [];
+  const objects = [];
+  const tasks = [];
+  let disconnect;
   const core = {
     ItemDefinition: {
       forId: (id) => ({ getName: () => ({
@@ -51,9 +54,9 @@ function fixture() {
       }[id] ?? "") }),
     },
     Skill: { CRAFTING: "CRAFTING", FIREMAKING: "FIREMAKING" },
-    ObjectManager: { register() {} },
+    ObjectManager: { register(object) { objects.push(object); } },
     GameObject: class { constructor(id, loc, type, face, privateArea) { Object.assign(this, { id, loc, type, face, privateArea }); } getLocation() { return this.loc; } getId() { return this.id; } getType() { return this.type; } getFace() { return this.face; } getPrivateArea() { return this.privateArea; } isWithinInteractionDistance() { return true; } },
-    TaskManager: { submit(task) { task.execute(); } },
+    TaskManager: { submit(task) { tasks.push(task); } },
     Task: class { constructor(ticks) { this.ticks = ticks; } stop() {} },
   };
   const registry = {
@@ -61,10 +64,11 @@ function fixture() {
     emitCustomEvent: (name, event) => events.push({ name, event }),
     onObjectInteraction() {},
     onItemOnObject() {},
+    onPlayerDisconnect(handler) { disconnect = handler; },
   };
   plugin.register(registry);
   T.pyres.clear();
-  return { events };
+  return { events, objects, tasks, disconnect: (player) => disconnect({ player }) };
 }
 
 test("magic-log pyre + chewed bones builds and credits only the chewed-bones ship", () => {
@@ -119,4 +123,39 @@ test("using magic logs on the site builds a magic pyre even with maple logs carr
   assert.equal(p.getInventory().getAmount(1513), 0);
   assert.equal(p.getInventory().getAmount(1517), 1);
   assert.equal(p.messages.at(-1), "You place the logs on the pyre.");
+});
+
+// Exercise the visible world state, rather than only the diary event.
+test("a burnt pyre restores its constructible site for the next player", () => {
+  const f = fixture();
+  const p = player({ inventory: { 1351: 1, 1513: 1, 11338: 1, 590: 1 } });
+  T.construct({ player: p, object: objectAt(T.PYRE_SITE, 2503, 3498) });
+  T.itemOnPyre({ player: p, object: f.objects.at(-1), objectId: T.PYRE_BOAT, itemId: 11338 });
+  T.itemOnPyre({ player: p, object: f.objects.at(-1), objectId: T.PYRE_BOAT_BONES, itemId: 590 });
+  f.tasks[0].execute();
+  assert.equal(T.pyres.size, 1, "retain the site until the floating boat clears");
+  f.tasks[0].execute();
+  assert.equal(f.objects.at(-1).getId(), T.PYRE_SITE);
+  assert.equal(T.pyres.size, 0);
+  const next = player({ inventory: { 1351: 1, 1513: 1 } });
+  T.construct({ player: next, object: f.objects.at(-1) });
+  assert.equal(next.getInventory().getAmount(1513), 0);
+});
+
+test("logout releases an unfinished site and old lighting tasks cannot replace a new pyre", () => {
+  const f = fixture();
+  const p = player({ inventory: { 1351: 1, 1513: 1, 11338: 1, 590: 1 } });
+  T.construct({ player: p, object: objectAt(T.PYRE_SITE, 2503, 3498) });
+  T.itemOnPyre({ player: p, object: f.objects.at(-1), objectId: T.PYRE_BOAT, itemId: 11338 });
+  T.itemOnPyre({ player: p, object: f.objects.at(-1), objectId: T.PYRE_BOAT_BONES, itemId: 590 });
+  f.disconnect(p);
+  assert.equal(T.pyres.size, 0);
+  assert.equal(f.objects.at(-1).getId(), T.PYRE_SITE);
+  const next = player({ inventory: { 1351: 1, 1513: 1 } });
+  T.construct({ player: next, object: f.objects.at(-1) });
+  f.tasks[0].execute();
+  assert.equal(f.objects.at(-1).getId(), T.PYRE_BOAT);
+  assert.equal([...T.pyres.values()][0].player, next);
+  f.disconnect(next);
+  assert.equal(f.objects.at(-1).getId(), T.PYRE_SITE);
 });

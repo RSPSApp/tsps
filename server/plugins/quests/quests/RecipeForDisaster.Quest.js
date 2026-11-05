@@ -770,7 +770,8 @@ module.exports = function registerRecipeForDisasterQuest(api) {
       if (has(player, ItemIdentifiers.MUDSKIPPER_HIDE)) return { page: PIRATE_PAGE, variant: "underwater-bringing-nung-the-mudskipper-hides" };
       return { page: PIRATE_PAGE, variant: hides >= 5 ? "underwater-talking-to-nung-again-2" : "underwater-talking-to-nung" };
     }
-    if (COUNCIL_IDS.has(npcId) && stage(player) >= STAGE_OPENING_COMPLETE) {
+    if (COUNCIL_IDS.has(npcId) && inZone(player, DINING_DIMENSION)
+      && stage(player) >= STAGE_OPENING_COMPLETE) {
       const rescue = RESCUES.find(({ ids }) => ids.includes(npcId));
       if (rescue && pages.some((entry) => entry.page === rescue.page)) {
         if (!hasFlag(player, rescue.flag)) {
@@ -1492,7 +1493,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
 
   function handleCouncilInteraction(event) {
     const { player, npcId } = event;
-    if (stage(player) < STAGE_OPENING_COMPLETE) return false;
+    if (!inZone(player, DINING_DIMENSION) || stage(player) < STAGE_OPENING_COMPLETE) return false;
     const option = event.definition?.getActions?.()?.[event.clickType - 1];
     if (option !== "Talk-to" && option !== "Inspect") return false;
     const rescue = RESCUES.find((entry) => entry.ids.includes(npcId));

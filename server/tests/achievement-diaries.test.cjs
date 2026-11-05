@@ -33,15 +33,18 @@ Diaries.register(new Proxy({
 }, { get: (target, key) => target[key] ?? (() => {}) }));
 
 const dialogues = [];
+let deferDialogue = false;
+let activeDialogue = false;
 QuestRuntime.startDialogue = (_api, _player, _context, steps) => {
   dialogues.push(steps);
-  for (const step of steps) step.exec?.();
+  if (!deferDialogue) for (const step of steps) if (step.stopOnFalse) step.exec?.();
 };
 
 function createPlayer({ freeSlots = 28, levels = {} } = {}) {
   const log = [];
   const attributes = new Map();
   const inventory = [];
+  let availableSlots = freeSlots;
   let interfaceId = -1;
   const sender = {
     sendVarbit: (id, value) => { log.push(`varbit ${id}=${value}`); return sender; },
@@ -54,15 +57,19 @@ function createPlayer({ freeSlots = 28, levels = {} } = {}) {
   return {
     log,
     inventory,
+    setFreeSlots: (slots) => { availableSlots = slots; },
     getPacketSender: () => sender,
     getAttribute: (key) => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
     sendMessage: (message) => log.push(message),
     isRegistered: () => true,
     setInterfaceId: (id) => { interfaceId = id; },
-    getDialogueManager: () => ({ startDialogues: (chain) => log.push(`mesbox ${JSON.stringify(chain)}`.slice(0, 40)) }),
+    getDialogueManager: () => ({
+      isActive: () => activeDialogue,
+      startDialogues: (chain) => log.push(`mesbox ${JSON.stringify(chain)}`.slice(0, 40)),
+    }),
     getInventory: () => ({
-      getFreeSlots: () => freeSlots,
+      getFreeSlots: () => availableSlots,
       adds: (id) => inventory.push(id),
       contains: (id) => inventory.includes(id),
       get: (slot) => inventory[slot],
@@ -144,6 +151,32 @@ test("as captured (Ardougne easy): message and count on the tick, started on the
   const all = { player };
   Diaries._test.onAllComplete(all);
   assert.equal(all.complete, false, "the other diaries are not done");
+});
+
+test("tier notices keep their delay and varbit without replacing dialogue or surviving reset/claim", () => {
+  const player = createPlayer();
+  tasks.length = 0;
+  for (const task of ARDOUGNE.tiers.easy.tasks) Progress.completeTask(player, ARDOUGNE, task.key);
+  activeDialogue = true;
+  runTasks(); runTasks(); runTasks();
+  assert.deepEqual(player.log.filter((line) => line.startsWith("varbit 4458=")), ["varbit 4458=1"]);
+  assert.equal(player.log.some((line) => line.startsWith("mesbox")), false);
+
+  const reset = createPlayer();
+  tasks.length = 0;
+  for (const task of ARDOUGNE.tiers.easy.tasks) Progress.completeTask(reset, ARDOUGNE, task.key);
+  Progress.resetTiers(reset, ARDOUGNE, ["easy"]);
+  runTasks(); runTasks(); runTasks();
+  assert.equal(reset.log.some((line) => line.startsWith("varbit 4458=") && line.endsWith("=1")), false);
+
+  const claimed = createPlayer();
+  tasks.length = 0;
+  for (const task of ARDOUGNE.tiers.easy.tasks) Progress.completeTask(claimed, ARDOUGNE, task.key);
+  Progress.claimTier(claimed, ARDOUGNE, "easy");
+  runTasks(); runTasks(); runTasks();
+  assert.equal(claimed.log.some((line) => line === "varbit 4458=1"), true, "the delayed completion varbit still arrives");
+  assert.equal(claimed.log.some((line) => line.startsWith("mesbox")), false, "a claimed tier has no stale notice");
+  activeDialogue = false;
 });
 
 test("migration merges valid legacy progress and survives a save round trip", () => {
@@ -253,7 +286,24 @@ test("as captured (Two-pints): the claim conversation, the cloak and lamp after 
   assert.equal(talk(), false, "claimed");
 });
 
-test("claiming: full inventory, the elite skill requirement, and a lost item handed back", () => {
+test("claiming rechecks space at the reward step and reclaims another highest-tier cloak", () => {
+  const delayed = createPlayer();
+  for (const task of ARDOUGNE.tiers.easy.tasks) Progress.completeTask(delayed, ARDOUGNE, task.key);
+  deferDialogue = true;
+  dialogues.length = 0;
+  Rewards.talkTo({ player: delayed, definition: { getName: () => "Two-pints", getId: () => 5519 } });
+  delayed.setFreeSlots(1);
+  dialogues[0].find((step) => step.exec)?.exec();
+  assert.deepEqual(delayed.inventory, []);
+  assert.equal(Progress.claimedTiers(delayed, ARDOUGNE).has("easy"), false);
+  delayed.setFreeSlots(2);
+  dialogues[0].find((step) => step.exec)?.exec();
+  assert.deepEqual(delayed.inventory, [13121, 13145]);
+  assert.equal(Progress.claimedTiers(delayed, ARDOUGNE).has("easy"), true);
+  dialogues[0].find((step) => step.exec)?.exec();
+  assert.deepEqual(delayed.inventory, [13121, 13145], "replayed callback does not duplicate reward items");
+  deferDialogue = false;
+
   const cramped = createPlayer({ freeSlots: 1 });
   for (const task of ARDOUGNE.tiers.easy.tasks) Progress.completeTask(cramped, ARDOUGNE, task.key);
   cramped.log.length = 0;
@@ -266,6 +316,7 @@ test("claiming: full inventory, the elite skill requirement, and a lost item han
   dialogues.length = 0;
   Rewards.talkTo({ player: smith, definition: { getName: () => "Two-pints", getId: () => 5519 } });
   assert.match(dialogues[0][1].npc[0], /Smithing level of 91/);
+  assert.equal(typeof dialogues[0].at(-1).exec, "function", "refusal resumes the generated standard dialogue");
   assert.ok(!Progress.claimedTiers(smith, ARDOUGNE).has("elite"));
 
   const player = createPlayer();
@@ -276,7 +327,15 @@ test("claiming: full inventory, the elite skill requirement, and a lost item han
   assert.equal(action.handled, true);
   assert.deepEqual(player.inventory, [13122], "the highest claimed tier's cloak");
   Rewards.reclaim({ ...action });
-  assert.deepEqual(player.inventory, [13122], "not while one is owned");
+  assert.deepEqual(player.inventory, [13122, 13122], "another cloak is available while one is owned");
+
+  const tiered = createPlayer();
+  Progress.claimTier(tiered, ARDOUGNE, "easy");
+  Progress.claimTier(tiered, ARDOUGNE, "medium");
+  tiered.getEquipment = () => ({ contains: (id) => id === 13122 });
+  tiered.getBanks = () => [{ contains: (id) => id === 13122 }];
+  Rewards.reclaim({ ...action, player: tiered });
+  assert.deepEqual(tiered.inventory, [13122], "worn and banked copies do not block reclaim");
 });
 
 test("lamps: the xpreward interface, offering skills at the lamp's level, and the Wiki's experience", () => {

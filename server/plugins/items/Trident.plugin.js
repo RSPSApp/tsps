@@ -21,7 +21,7 @@
  * 1042).
  */
 
-const { definePoweredStaff, refundsFit, distance, ticksFor } = require("./PoweredStaff");
+const { definePoweredStaff, refundsFit, restricted, plainAmount, takePlain, PRESET_TEXT, distance, ticksFor } = require("./PoweredStaff");
 
 const TRIDENT_CHARGE_META_KEY = "trident-charges";
 const TRIDENT_MAX_CHARGES = 2500;
@@ -250,25 +250,30 @@ function chargeTrident(player, tridentItem, tridentSlot, recipe) {
   }
 
   const inventory = player.getInventory();
-  const affordable = Math.min(
-    inventory.getAmount(DEATH_RUNE_ID),
-    inventory.getAmount(CHAOS_RUNE_ID),
-    Math.floor(inventory.getAmount(FIRE_RUNE_ID) / FIRE_RUNES_PER_CHARGE),
-    Math.floor(inventory.getAmount(recipe.primaryResourceId) / recipe.primaryPerCharge),
+  const batches = (amountOf) => Math.min(
+    amountOf(DEATH_RUNE_ID),
+    amountOf(CHAOS_RUNE_ID),
+    Math.floor(amountOf(FIRE_RUNE_ID) / FIRE_RUNES_PER_CHARGE),
+    Math.floor(amountOf(recipe.primaryResourceId) / recipe.primaryPerCharge),
     recipe.maxCharges - current
   );
+  const affordable = batches((id) => plainAmount(inventory, id));
 
   if (affordable <= 0) {
+    if (batches((id) => inventory.getAmount(id)) > 0) {
+      player.sendMessage(PRESET_TEXT);
+      return;
+    }
     player.sendMessage(
       `You need death runes, chaos runes, fire runes and ${recipe.primaryName} to charge this.`
     );
     return;
   }
 
-  inventory.deleteNumber(DEATH_RUNE_ID, affordable);
-  inventory.deleteNumber(CHAOS_RUNE_ID, affordable);
-  inventory.deleteNumber(FIRE_RUNE_ID, affordable * FIRE_RUNES_PER_CHARGE);
-  inventory.deleteNumber(recipe.primaryResourceId, affordable * recipe.primaryPerCharge);
+  takePlain(inventory, DEATH_RUNE_ID, affordable);
+  takePlain(inventory, CHAOS_RUNE_ID, affordable);
+  takePlain(inventory, FIRE_RUNE_ID, affordable * FIRE_RUNES_PER_CHARGE);
+  takePlain(inventory, recipe.primaryResourceId, affordable * recipe.primaryPerCharge);
 
   setCharges(tridentItem, current + affordable);
   refreshTridentState(player, tridentItem, tridentSlot);
@@ -307,6 +312,10 @@ function chargeWithResources(event) {
   }
 
   event.handled = true;
+  if (restricted(tridentOnLeft ? usedWithItem : usedItem)) {
+    player.sendMessage(PRESET_TEXT);
+    return;
+  }
   chargeTrident(player, tridentItem, tridentSlot, recipe);
 }
 

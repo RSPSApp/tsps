@@ -242,6 +242,17 @@ function player({ realWire = false } = {}) {
   return p;
 }
 
+/** The player's local NPCs as the world tick has them: those within the 15 tiles NPCs show at. */
+function inRealView(p, h) {
+  Object.defineProperty(p, 'localNpcs', {
+    get: () => h.npcs.filter(npc => {
+      const at = npc.getLocation();
+      const from = p.getLocation();
+      return Math.max(Math.abs(at.getX() - from.getX()), Math.abs(at.getY() - from.getY())) <= 15;
+    }),
+  });
+}
+
 function supplied() {
   const h = harness();
   const p = player({ realWire: true });
@@ -249,9 +260,9 @@ function supplied() {
     [I.BEER, 1], [I.VIAL, 2], [I.REDBERRIES, 1], [I.WHITE_BERRIES, 1],
     [I.LANTERN_LENS, 1], [I.EARTH_RUNE, 5], [I.BUCKET_OF_SAND, 1],
   ]) p.items.set(id, amount);
-  // Fixture scene actor: the transcript's cutscene overhead line is spoken by
-  // Bert, who is in Yanille's loaded local-NPC scene while Zavistic is at the bell.
-  p.localNpcs = h.npcs;
+  // Bert, the transcript's overhead speaker, at his sandpit. The real range decides
+  // whether he is local: the bell is 48 tiles from him and NPCs show within 15.
+  inRealView(p, h);
   h.api.spawnNpc({ id: N.BERT, name: 'Bert', x: 2551, y: 3099, z: 0 });
   return { h, p, stage: () => h.quest.getStage(p) };
 }
@@ -637,7 +648,7 @@ test('a full bag refuses the Zavistic orb replacement without losing the interro
 test('the sandpit enchantment spends 5 earth runes and one bucket of sand once', () => {
   const h = harness();
   const p = player();
-  p.localNpcs = h.npcs;
+  inRealView(p, h);
   h.api.spawnNpc({ id: N.BERT, name: 'Bert', x: 2551, y: 3099, z: 0 });
   p.items.set(I.EARTH_RUNE, 10);
   p.items.set(I.BUCKET_OF_SAND, 2);
@@ -647,6 +658,7 @@ test('the sandpit enchantment spends 5 earth runes and one bucket of sand once',
   h.choose(p, 'I have a rather sandy problem that I\'d like to palm off on you.');
   h.finish(p);
   assert.equal(h.quest.getStage(p), 140);
+  assert.ok(p.messages.includes('Bert: My sand! My lovely sand!'), 'Bert, out of view, is marked in the chat');
   assert.equal(p.items.get(I.EARTH_RUNE), 5, 'only the 5 required earth runes are spent');
   assert.equal(p.items.get(I.BUCKET_OF_SAND), 1, 'only one bucket of sand is spent');
 });

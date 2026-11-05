@@ -894,19 +894,30 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
             const actorsAvailable = () => !!actors && actors.every(actor => isExplicitCast
               ? explicitlyBoundActorAvailable(player, actor)
               : actorAvailable(player, actor));
-            if (!actorsAvailable()) {
+            // A speaker out of view has nobody to say it over, and the steps after the
+            // line may be ones the quest can't go on without. Unless a quest bound its own
+            // cast, the line goes to chat marked as theirs (our wording, no capture shows
+            // it) and the chain goes on.
+            const outOfView = !actors && !isExplicitCast && isRegistered(player);
+            if (!outOfView && !actorsAvailable()) {
               unavailable();
               manager.reset?.();
               return;
             }
             playedAny = true;
-            actors.forEach(actor => actor.forceChat(formatted));
+            if (outOfView) {
+              const name = typedLine ? step.speaker : event.definition?.getName?.();
+              player.sendMessage(name ? `${name}: ${formatted}` : formatted);
+            } else {
+              actors.forEach(actor => actor.forceChat(formatted));
+            }
             // shortcut: generic 2-tick cadence, not a captured OSRS overhead timing.
             api.core.TaskManager.submit(new api.core.CountdownTask(player, OVERHEAD_CONTINUATION_TICKS, () => {
               const current = manager.getCurrent?.();
               // A replacement dialogue owns the chat now; never close or continue it.
               if (current !== overheadAction) return;
-              if (!actorsAvailable()) {
+              // The out-of-view line has no actor to recheck, so the player is rechecked alone.
+              if (outOfView ? !isRegistered(player) : !actorsAvailable()) {
                 unavailable();
                 manager.reset?.();
                 return;

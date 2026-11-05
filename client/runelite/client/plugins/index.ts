@@ -59,6 +59,9 @@ import { XpTrackerPlugin } from "../../../game/plugins/xptracker/XpTrackerPlugin
 import { XpGlobesPlugin } from "../../../game/plugins/xpglobes/XpGlobesPlugin";
 import { GuidePlugin } from "../../../game/plugins/optimalquestguide/GuidePlugin";
 import { ShortestPathPlugin } from "../../../game/plugins/shortestpath/ShortestPathPlugin";
+import { AgilityTrackerPlugin } from "../../../game/plugins/agilitytracker/AgilityTrackerPlugin";
+import { GatheringTrackerPlugin } from "../../../game/plugins/gatheringtracker/GatheringTrackerPlugin";
+import { SlayerTrackerPlugin } from "../../../game/plugins/slayertracker/SlayerTrackerPlugin";
 import type { LegacyConfigMigration } from "../../impl/LegacyConfigMigration";
 import { migrateGroundItemsConfig } from "../../../game/plugins/grounditems/migrateGroundItems";
 import { TooltipPlugin } from "../ui/overlay/tooltip/TooltipOverlay";
@@ -121,6 +124,9 @@ export const CORE_PLUGINS: ReadonlyArray<PluginClass> = [
     QuestHelperPlugin,
     XpTrackerPlugin,
     XpGlobesPlugin,
+    AgilityTrackerPlugin,
+    GatheringTrackerPlugin,
+    SlayerTrackerPlugin,
     GuidePlugin,
     ShortestPathPlugin,
     // After VoiceChatPlugin: while voice chat holds the chatbox Report button, its clicks are voice's.

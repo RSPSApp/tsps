@@ -46,7 +46,7 @@ function fitsChest(item) {
  * config:
  *   mainGroup, offerList, confirmComponent, chestInv, chestSize, offerAttribute: the screen and its saves;
  *   chestOf(context): the chest array, {id, amount} stacks;
- *   canDeposit(player, context): true, or says why not itself;
+ *   canDeposit(player, context): true, or says why not itself; canOpen? overrides it for opening;
  *   afterConfirm?(player, context, items): called once the items are in the chest;
  *   confirm?(player, state, tools): replaces the synchronous confirm;
  *   newConfirmId?(): the id a pending offer carries;
@@ -128,7 +128,7 @@ function create(config) {
         return;
       }
     }
-    if (!config.canDeposit(player, context)) return;
+    if (!(config.canOpen ?? config.canDeposit)(player, context)) return;
     close(player);
     openChests.set(player, { context, items: [], pending: false, closed: false, gone: false, confirmId: null });
     // Before the mount: partydrop_main_init sizes its rows from the inventories' capacity.

@@ -36,6 +36,9 @@ const MAX_ODDS = 0.5; // ours: the chance of one balloon at a full chest; the Wi
 const ROOM = { minX: 3037, maxX: 3055, minY: 3370, maxY: 3383 };
 const LEAGUE_TASK = "use-the-falador-party-room";
 const NO_DONATIONS = "The chest can't take donations right now.";
+const MIN_FREE_PLAYTIME = 20 * 60 * 60 * 1000;
+const MEMBERSHIP_ATTRIBUTE = "bond-membership-expiry";
+const QUEST_POINTS_ATTRIBUTE = "quest.points";
 
 let api = null;
 let core = null;
@@ -57,7 +60,7 @@ function profileFile() {
   return path.join(process.env.TSPS_PARTY_ROOM_DIR || path.join(process.cwd(), "data", "saves"), name);
 }
 
-function canDeposit(player) {
+function canOpen(player) {
   if (ironman(player) !== "none") {
     player.sendMessage("As an Ironman, you stand alone.");
     return false;
@@ -68,6 +71,21 @@ function canDeposit(player) {
     return false;
   }
   return true;
+}
+
+/** New free accounts need the trade requirements, unless they have redeemed membership. */
+function canDeposit(player) {
+  if (!canOpen(player)) return false;
+  if (core.WorldDefinition.isMembersWorld()) return true;
+  const expiry = Number(player.getAttribute(MEMBERSHIP_ATTRIBUTE));
+  if (Number.isFinite(expiry) && expiry > 0) return true;
+  const time = { player, milliseconds: null };
+  api.emitCustomEvent("account:play-time", time);
+  if (Number.isFinite(time.milliseconds) && time.milliseconds > MIN_FREE_PLAYTIME &&
+      Number(player.getAttribute(QUEST_POINTS_ATTRIBUTE)) >= 10 &&
+      player.getSkillManager().getTotalLevel() >= 100) return true;
+  player.sendMessage("Your account is not yet eligible to donate to the party chest.");
+  return false;
 }
 
 /** What a login does with a saved offer, by the chest's own record of it. */
@@ -127,7 +145,7 @@ async function confirm(player, state, tools) {
       player.sendMessage(NO_DONATIONS);
       return;
     }
-    if (!tools.isCurrent(player, state, confirmId, snapshot)) return;
+    if (!tools.isCurrent(player, state, confirmId, snapshot) || !canDeposit(player)) return;
     const result = Store.deposit(accountOf(player), confirmId, snapshot);
     if (!result.ok) {
       player.sendMessage(result.reason === "full" ? "The chest is full." : NO_DONATIONS);
@@ -308,6 +326,7 @@ function attach(pluginApi) {
     offerAttribute: ATTRIBUTE,
     chestOf: () => Store.chest(),
     welcome: "Whatever you put in stays in the chest until a balloon takes it.",
+    canOpen,
     canDeposit,
     confirm,
     newConfirmId: () => crypto.randomUUID(),

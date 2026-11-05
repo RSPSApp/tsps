@@ -8,6 +8,9 @@ Wiki: [Party Room](https://oldschool.runescape.wiki/w/Party_Room), [Party chest]
 
 - **Chest:** Open the shut chest (loc 26193) or Deposit at the open one (2418). Offer from the inventory, Confirm. Nothing
   comes out except through balloons. 216 individual items: a stackable id counts once, anything else each.
+- On a free world a new account can open the chest, but cannot offer items until it has over 20 hours of play time,
+  10 quest points and a total level of 100, or has redeemed membership through a bond. Eligibility is checked again
+  after the pending save flush and before the chest takes the offer.
 - **Lever** (2421, 26194): 1,000 coins, up to 200 balloons (locs 115-122, Burst), on tiles a player can walk to from the
   chest inside a box around the room (found by a flood fill that respects wall edges; the box is ours). The coins are taken
   once balloons are down, so a lever that drops none costs nothing. Balloons last two minutes and live in memory, so a
@@ -20,8 +23,9 @@ Wiki: [Party Room](https://oldschool.runescape.wiki/w/Party_Room), [Party chest]
 
 ## Not done / ours
 
-- Party Pete removing cheap items, the knights (separate PR), and the F2P donation restriction (no source for how the
-  server records "trade restrictions lifted").
+- Party Pete removing cheap items and the knights (separate PR).
+- The F2P membership exception currently recognises the server's persisted bond-redemption history; no other source of
+  membership purchase history was found, so externally granted membership is not represented by this check.
 - Ironmen cannot donate (ours: the Wiki is silent and may allow it; Clan Halls have no such rule).
 - Ours: where balloons land (the box), the odds, one drop at a time, the refusal on an empty chest, and all wording.
 - No lever, balloon-burst or pop animation or sound (the cache has `balloondrop_lever`, `balloon_burst` and pop locs 124+).

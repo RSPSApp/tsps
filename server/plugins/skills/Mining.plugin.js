@@ -495,6 +495,21 @@ function depleteRock(player, rockObject, rock) {
 }
 
 /**
+ * Whether content keeps a rock standing for the players mining it ("mining:deplete-rock", Demonic Pacts'
+ * Endless Harvest), asked for the oozing water that stops, which mines its wet rocks out whoever is there.
+ */
+function minersKeepStanding(rockObject, rock) {
+  for (const [player, state] of activeSessions ?? []) {
+    if (state.objectId !== rockObject.getId() || !state.location.equals(rockObject.getLocation())) continue;
+    // `water`: this is not an ore depleting the rock, so counts of ores (Power Miner's four) do not move.
+    const event = { player, object: rockObject, rock: rock.objectName, handled: false, water: true };
+    pluginApi.emitCustomEvent("mining:deplete-rock", event);
+    if (event.handled) return true;
+  }
+  return false;
+}
+
+/**
  * Mines a rock out with nothing to keep it standing (the water that stops on a calcified rock): its
  * mined-out loc, depletion sound and respawn, and the respawn timer for each of `viewers`.
  */
@@ -984,7 +999,7 @@ module.exports = {
     InfernalPickaxe.attach(api);
     CrystalPickaxe.attach(api);
     ClueGeodes.attach(api);
-    CalcifiedWater.attach(api, ROCK_BY_NAME.get(CalcifiedWater.ROCK_NAME), exhaustRock);
+    CalcifiedWater.attach(api, ROCK_BY_NAME.get(CalcifiedWater.ROCK_NAME), exhaustRock, minersKeepStanding);
     Saltpetre.attach(api);
 
     api.log("registered", {

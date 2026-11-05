@@ -32,6 +32,8 @@ function secondChance(request) {
 
 /** The rock stands until its fourth ore; a rock depleted by anyone else starts its count afresh. */
 function keepRock(request) {
+  // The oozing water's end is no ore: it neither counts toward the four nor clears another miner's count.
+  if (request.water) return;
   if (!withTool(request.player)) {
     // Another miner's last ore really depletes it; the respawned rock is the same object.
     if (!request.handled) mined.delete(request.object);

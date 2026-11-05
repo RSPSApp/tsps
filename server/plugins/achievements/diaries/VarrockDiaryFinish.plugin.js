@@ -269,7 +269,7 @@ function onDialogueAction(registry, event) {
     if (canChooseKitten(player, registry)) openKittenColourMenu(registry, player);
     return;
   }
-  if (event.action === "open_interface" && event.target === CUSTOM_FUR_TARGET) {
+  if (event.npcId === ASYFF_NPC_ID && event.action === "open_interface" && event.target === CUSTOM_FUR_TARGET) {
     event.handled = true;
     openSpottierCapeMenu(registry, player);
   }

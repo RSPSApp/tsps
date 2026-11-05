@@ -213,3 +213,20 @@ test("picking a white tree fruit credits the diary task", (t) => {
   f.api.emitCustomEvent("garden-of-tranquillity:white-tree-fruit", { player: f.player });
   assert.equal(f.taskKeys.has(T.TASK.whiteTreeFruit), true);
 });
+
+
+test("only Asyff's Custom Fur Clothing dialogue opens the spottier cape service", (t) => {
+  const f = fixture(t);
+  let started = 0;
+  t.mock.method(f.player, "getDialogueManager", () => ({ startDialogues: () => { started++; } }));
+  for (const npcId of [core.NpcIdentifiers.NIA, core.NpcIdentifiers.PELLEM]) {
+    const event = { player: f.player, npcId, action: "open_interface", target: "Custom Fur Clothing", handled: false };
+    T.onDialogueAction(f.api, event);
+    assert.equal(event.handled, false, "other fur merchants must keep their own service");
+  }
+  assert.equal(started, 0);
+  const event = { player: f.player, npcId: core.NpcIdentifiers.ASYFF, action: "open_interface", target: "Custom Fur Clothing", handled: false };
+  T.onDialogueAction(f.api, event);
+  assert.equal(event.handled, true);
+  assert.equal(started, 1);
+});

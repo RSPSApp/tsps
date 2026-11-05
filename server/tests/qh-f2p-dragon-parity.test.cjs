@@ -685,3 +685,18 @@ test('Dragon Slayer Ned selector defers to Prince Ali wig while preserving DS vo
   setStages(inactive, 0, 20);
   assert.ok(isPrinceWig(pick(inactive)), 'inactive DS already defers to Prince wig');
 });
+
+
+test('Crandor diary route credits climbing from the dungeon to the surface only', () => {
+  const h = harness(), p = player();
+  const arrivals = [];
+  (h.events['dragon-slayer:crandor-visited'] ??= []).push(event => arrivals.push(event));
+  p.attrs.set('dragon-slayer.shortcut', true);
+  p.moveTo(new core.Location(2832, 9657, 0));
+  h.clicks.get(25213)({ player: p });
+  assert.ok(p.getLocation().getY() < 6400);
+  assert.equal(arrivals.length, 1);
+  h.clicks.get(25213)({ player: p });
+  assert.ok(p.getLocation().getY() >= 6400);
+  assert.equal(arrivals.length, 1);
+});

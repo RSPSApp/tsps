@@ -253,18 +253,33 @@ test("a cart ride takes the quoted fare and moves to the other cart; a poor play
   assert.equal(poor.getAttribute("moved"), undefined);
 });
 
-test("Vigroy's transcript rides only after its line; a short fare never credits", () => {
+test("Vigroy's exported message charges and arrives, without a speech-line event", () => {
   const api = bus({ quests: { shilo_village: true } });
   Cart.register(api);
   const player = playerAt(2831, 2952, 0, { coins: 500 });
   const definition = { getName: () => "Vigroy" };
-  const line = { player, definition, text: "You hop into the cart and the driver urges the horses on. You take a taxing journey through the jungle to Brimhaven. You feel tired from the journey, but at least you didn't have to walk all that distance." };
-  api.fire("npc-dialogue:line", line);
-  assert.equal(typeof line.after, "function");
-  assert.equal(player.getAttribute("moved"), undefined);
-  line.after();
+  api.fire("variant", { player, definition });
+  const transcript = require("../data/definitions/npc-dialogues.json").Vigroy;
+  const variant = transcript.variants[Cart._test.DRIVERS.get(5357).normal];
+  const message = variant[1].options[0].steps[1].steps[0];
+  assert.equal(message.type, "message");
+  api.fire("npc-dialogue:action", { player, definition, kind: message.type, text: message.text });
   assert.equal(player.getAttribute("moved").getY(), 3214);
   assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.COINS), 475);
+});
+
+test("cart Pay-fare refuses players who have not completed Shilo Village", () => {
+  const api = bus();
+  Cart.register(api);
+  for (const use of [
+    player => Cart._test.payFareCart({ player, objectId: 2230 }),
+    player => Cart._test.payFareNpc({ player, definition: { getName: () => "Hajedy" } }),
+  ]) {
+    const player = playerAt(2777, 3211, 0, { coins: 500 });
+    use(player);
+    assert.equal(player.getAttribute("moved"), undefined);
+    assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.COINS), 500);
+  }
 });
 
 test("Lady of the Waves sells its ticket, refuses without coins, and credits Port Khazard only", () => {
@@ -304,4 +319,18 @@ test("shaking a leafy palm drops one leaf on a 35-second cooldown", () => {
   assert.equal(manager.items[0].item.getId(), core.ItemIdentifiers.PALM_LEAF);
   assert.equal(Palm._test.shake({ player, object: tree }), true);
   assert.equal(manager.items.length, 1);
+});
+
+
+test("Captain Shanks cannot charge for a ticket that will not fit or sail without one", () => {
+  const api = bus({ quests: { shilo_village: true } });
+  Lady.register(api);
+  const definition = { getName: () => "Captain Shanks" };
+  const player = playerAt(2763, 2961, 0, { coins: 100 });
+  player.inventory.isFull = () => true;
+  api.fire("npc-dialogue:line", { player, definition, text: "It's a good deal and no mistake. Here you go, me old shipmate, here's your ticket." });
+  assert.equal(player.inventory.getAmount(core.ItemIdentifiers.COINS), 100);
+  assert.equal(player.inventory.getAmount(Lady._test.SHIP_TICKET), 0);
+  api.fire("npc-dialogue:action", { player, definition, kind: "message", text: "You arrive safely in the quiet fishing port of Khazard." });
+  assert.equal(player.getAttribute("moved"), undefined);
 });

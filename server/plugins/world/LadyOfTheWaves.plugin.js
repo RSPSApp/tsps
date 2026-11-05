@@ -87,7 +87,12 @@ function buyTicket({ player, definition, text }) {
   if (!isShanks(definition) || text !== BUY_LINE || hasTicket(player)) return;
   const price = priceFor(player);
   const inventory = player.getInventory();
-  if (inventory.getAmount(core.ItemIdentifiers.COINS) < price) return;
+  const coins = inventory.getAmount(core.ItemIdentifiers.COINS);
+  if (coins < price) return;
+  if (inventory.isFull() && coins > price) {
+    player.sendMessage("You need a free inventory space for the ticket.");
+    return;
+  }
   inventory.deleteNumber(core.ItemIdentifiers.COINS, price);
   inventory.adds(SHIP_TICKET, 1);
   inventory.refreshItems?.();
@@ -99,7 +104,11 @@ function sail({ player, definition, kind, text }) {
   const destination = DESTINATIONS.get(text);
   if (!destination) return;
   const inventory = player.getInventory();
-  if (inventory.getAmount(SHIP_TICKET) > 0) inventory.deleteNumber(SHIP_TICKET, 1);
+  if (!shiloComplete(player) || !hasTicket(player)) {
+    player.sendMessage("You need a ship ticket to sail.");
+    return;
+  }
+  inventory.deleteNumber(SHIP_TICKET, 1);
   if (inventory.getAmount(core.ItemIdentifiers.KARAMJAN_RUM) > 0) {
     inventory.deleteNumber(core.ItemIdentifiers.KARAMJAN_RUM, 1);
     player.sendMessage("During the trip you lose your rum to a sailor in a game of dice. Better luck next time!");

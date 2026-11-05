@@ -104,6 +104,10 @@ function fillLine(event) {
  * flat 200 (Pay-fare). A refused fare never moves the player.
  */
 function ride(player, driver, amount, announce = false) {
+  if (!questDone(player, "shilo_village")) {
+    player.sendMessage("You must complete Shilo Village before using the cart service.");
+    return false;
+  }
   if (amount > 0) {
     const inventory = inventoryOf(player);
     if (inventory.getAmount(core.ItemIdentifiers.COINS) < amount) return false;
@@ -122,22 +126,13 @@ function payFare(player, driver) {
 
 /** Hajedy's transcript teleports from an action step; Vigroy's only from its single ride line. */
 function dialogueAction(event) {
-  const { player, definition, text } = event;
+  const { player, definition, text, kind } = event;
   const driver = driverOfNpc(definition);
   if (!driver) return;
-  if (text === `The player is transported to ${driver.destination}`) {
+  if (driver.name === "Vigroy" && kind === "message" && text.includes("You hop into the cart") && text.includes("You feel tired")) {
     ride(player, driver, quotedFare(player, driver).amount);
-  }
-}
-
-function dialogueLine(event) {
-  const { player, definition, text } = event;
-  const driver = driverOfNpc(definition);
-  // Hajedy's variant teleports from its action step; Vigroy's only has this one ride line.
-  if (driver?.name !== "Vigroy") return;
-  if (typeof text === "string" && text.includes("You hop into the cart") && text.includes("You feel tired")) {
-    const amount = quotedFare(player, driver).amount;
-    event.after = () => ride(player, driver, amount);
+  } else if (text === `The player is transported to ${driver.destination}`) {
+    ride(player, driver, quotedFare(player, driver).amount);
   }
 }
 
@@ -165,14 +160,13 @@ function payFareNpc(event) {
 module.exports = {
   name: "ShiloCart",
   members: true,
-  _test: { DRIVERS, CARTS, fareFor, selectVariant, answerCondition, fillLine, ride, payFare, boardCart, payFareCart, payFareNpc, dialogueAction, dialogueLine },
+  _test: { DRIVERS, CARTS, fareFor, selectVariant, answerCondition, fillLine, ride, payFare, boardCart, payFareCart, payFareNpc, dialogueAction },
   register(pluginApi) {
     api = pluginApi;
     core = pluginApi.core;
     api.onNpcDialogueVariant(selectVariant);
     api.onNpcDialogueCondition(answerCondition);
     api.onCustomEvent("npc-dialogue:line", fillLine);
-    api.onCustomEvent("npc-dialogue:line", dialogueLine);
     api.onCustomEvent("npc-dialogue:action", dialogueAction);
     api.onObjectInteraction("Travel cart", { Board: boardCart, "Pay-fare": payFareCart });
     for (const name of ["Hajedy", "Vigroy"]) api.onNpcInteraction(name, { "Pay-fare": payFareNpc });

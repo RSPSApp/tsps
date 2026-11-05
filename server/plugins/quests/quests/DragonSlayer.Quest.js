@@ -1070,7 +1070,7 @@ module.exports = function registerDragonSlayerQuest(api) {
     player.moveTo((inLair ? TILE.crandorSurface : TILE.crandorLair).clone());
     // The Wiki's diary route: through the secret wall, past the demons, then this rope to the
     // surface. Only a player who has opened the wall has come that way.
-    if (!inLair && player.getAttribute(ATTR_SHORTCUT) === true) {
+    if (inLair && player.getAttribute(ATTR_SHORTCUT) === true) {
       api.emitCustomEvent("dragon-slayer:crandor-visited", { player });
     }
   }

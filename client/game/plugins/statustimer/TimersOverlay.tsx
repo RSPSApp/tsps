@@ -4,7 +4,7 @@ import { IndexType } from "../../../rs/cache/IndexType";
 import { skillIconSprite } from "../../../rs/skill/skillIcons";
 import { SkillId } from "../../../rs/skill/skills";
 import { SpriteLoader } from "../../../rs/sprite/SpriteLoader";
-import { spriteToCanvas } from "../../../ui/item/ItemIcon";
+import { spriteToCanvas } from "../../../widgets/gl/texture-cache";
 import type { OsrsClient } from "../../OsrsClient";
 import { VENGEANCE_TIME_LIMIT_VARBIT } from "../vengeancetimer/VengeanceTimer";
 import { VengeanceTimerOverlay } from "../vengeancetimer/VengeanceTimerOverlay";

@@ -348,8 +348,15 @@ test("Hotfoot: the worn boots cook fish and smelt ore (banked by Endless Harvest
   assert.equal(fish.stored, 1);
   assert.equal(who.relic.getInventory().getAmount(I.SHRIMPS), 1);
   assert.ok(xp(who.relic, Skill.COOKING) > 0);
-  gather(who.relic, I.IRON_ORE, 1, Skill.MINING, 35);
-  assert.equal(who.relic.getInventory().getAmount(I.IRON_BAR), 1);
+  const smithing = xp(who.relic, Skill.SMITHING);
+  who.relic.getInventory().adds(I.COAL, 2);
+  gather(who.relic, I.IRON_ORE, 2, Skill.MINING, 35);
+  assert.equal(who.relic.getInventory().getAmount(I.STEEL_BAR), 2, "234/03285: iron ore comes as a steel bar");
+  assert.equal(who.relic.getInventory().getAmount(I.IRON_BAR), 0);
+  assert.equal(xp(who.relic, Skill.SMITHING) - smithing, 35, "a steel bar's 17.5 Smithing XP each (XP is kept whole)");
+  assert.equal(who.relic.getInventory().getAmount(I.COAL), 2, "no coal is taken");
+  gather(who.relic, I.MITHRIL_ORE, 1, Skill.MINING, 80);
+  assert.equal(who.relic.getInventory().getAmount(I.MITHRIL_BAR), 1, "mithril ore, its own bar");
   assert.equal(gather(who.relic, I.COAL, 1, Skill.MINING, 50).stored, 0, "coal stays coal");
   assert.equal(emit("agility:roll", { player: who.relic, success: false }).success, true);
   assert.equal(emit("cooking:burn", { player: who.relic, burn: true }).burn, false);
@@ -359,7 +366,7 @@ test("Hotfoot: the worn boots cook fish and smelt ore (banked by Endless Harvest
   const both = character("both", "league", { ...HOTFOOT, ...ENDLESS_HARVEST });
   both.getEquipment().set(core.Equipment.FEET_SLOT, new core.Item(I.SEARING_BOOTS, 1));
   assert.equal(gather(both, I.IRON_ORE, 1, Skill.MINING, 35).stored, 1);
-  assert.equal(banked(both, I.IRON_BAR), 2, "Endless Harvest banks two bars");
+  assert.equal(banked(both, I.STEEL_BAR), 2, "Endless Harvest banks two steel bars");
   const bare = character("bare", "league", HOTFOOT);
   assert.equal(gather(bare, I.RAW_SHRIMPS, 1, Skill.FISHING, 10).stored, 0, "no boots, no cooking");
   for (const player of others(who)) {

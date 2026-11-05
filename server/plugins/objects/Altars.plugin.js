@@ -114,19 +114,17 @@ function prayerAltar({ player, object }) {
 
   if (object && prayerAfter > prayerBefore) {
     const location = object.getLocation();
+    api.emitCustomEvent("altar:prayed", { player, objectId: object.getId(), location });
     // Content that credits praying by place (the Desert Diary's Sophanem altar) reads the gain.
     api.emitCustomEvent("altars:prayed", {
       player,
       location: { x: location.getX(), y: location.getY(), z: location.getZ() },
       restored: prayerAfter - prayerBefore,
     });
-  }
-
-  if (object && prayerAfter > prayerBefore) {
     api.emitCustomEvent("prayer:restored-at-altar", {
       player,
       objectId: object.getId(),
-      location: object.getLocation(),
+      location,
       prayerBefore,
       prayerAfter,
     });
@@ -230,6 +228,7 @@ module.exports = {
     pluginApi.onObjectInteraction("Lunar Altar", { Venerate: lunarAltar });
     pluginApi.onObjectInteraction("Dark Altar", { Venerate: darkAltar });
     pluginApi.onObjectInteraction("Altar", { "Pray-at": prayerAltar, Pray: prayerAltar });
+    pluginApi.onObjectInteraction("Altar of Guthix", { "Pray-at": prayerAltar });
     pluginApi.onObjectInteraction("Chaos altar", { "Pray-at": prayAtChaosAltar });
     pluginApi.onObjectInteraction("Altar of nature", { "Pray-at": natureAltar });
     pluginApi.onObjectInteraction("Shrine", { "Pray-at": prayAtShrine });

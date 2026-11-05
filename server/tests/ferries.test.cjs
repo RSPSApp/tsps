@@ -659,3 +659,18 @@ test('Veos native travel menus work without quests and throughout Client of Kour
   assert.equal(rejected.p.getPacketSender().getVarbit(4897), 0, 'a rejected handoff cannot mark Kourend visited');
   assert.deepEqual(at(rejected.p), [3054, 3245, 0]);
 });
+
+test("Entrana boarding credit follows only an accepted outward voyage", () => {
+  Common.init(api);
+  const boarded = [];
+  hooks.events.set("entrana:boarded", [(event) => boarded.push(event.player)]);
+  const outward = createPlayer({ at: new Location(3045, 3235, 0) });
+  click(outward, "Monk of Entrana", "Take-boat", { gameval: "shipmonk" });
+  assert.deepEqual(boarded, [outward]);
+  const back = createPlayer({ at: new Location(2829, 3335, 0) });
+  click(back, "Monk of Entrana", "Take-boat", { gameval: "shipmonk2" });
+  assert.deepEqual(boarded, [outward]);
+  const armed = createPlayer({ at: new Location(3045, 3235, 0), items: [ItemIdentifiers.BRONZE_SWORD] });
+  click(armed, "Monk of Entrana", "Take-boat", { gameval: "shipmonk" });
+  assert.deepEqual(boarded, [outward]);
+});

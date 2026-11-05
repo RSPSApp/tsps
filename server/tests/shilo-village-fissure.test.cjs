@@ -23,6 +23,7 @@ function harness() {
     core,
     persistAttribute() {},
     onItemOnObject(handler) { handlers.push(handler); },
+    onObjectInteraction(handler) { handlers.push(handler); },
     onNpcInteraction(_name, options) { for (const handler of Object.values(options)) handlers.push(handler); },
     onPlayerLogin(handler) { handlers.push(handler); },
     onPlayerLogout(handler) { handlers.push(handler); },
@@ -136,6 +137,13 @@ test('spade turns the mound into this player\'s fissure; light, rope and relog r
   h.emit('npc-dialogue:choice', { player, npcId: N.TRUFITUS, option: 'Yes' });
   assert.equal(attrs.get('quest.shilo_village.stage'), 4, 'an unrelated Trufitus Yes does not consume a stale light prompt');
   assert.equal(items.get(I.LIT_TORCH), 1);
+
+  use(I.LIT_TORCH, O.FISSURE);
+  const objectInteraction = handlers.find((handler) => handler.name === 'handleObjectInteraction');
+  objectInteraction({ player, objectId: O.FISSURE, clickType: 2 });
+  h.emit('npc-dialogue:choice', { player, npcId: N.TRUFITUS, option: "Yes, I'll give it a go!" });
+  assert.equal(attrs.get('quest.shilo_village.stage'), 4, 'accepting Search after replacing the light prompt does not light the fissure');
+  assert.equal(items.get(I.LIT_TORCH), 1, 'Search does not consume a light source');
 
   use(I.LIT_TORCH, O.FISSURE);
   h.emit('npc-dialogue:choice', { player, npcId: N.TRUFITUS, option: 'Yes' });

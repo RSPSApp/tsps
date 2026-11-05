@@ -283,6 +283,7 @@ test("the gnome chocolate-bomb steps use the Wiki materials, XP and four-tick ba
   useItems(p, "gianne_dough", "gnomebowl_mould"); ticks(1);
   assert.equal(p.getInventory().getAmount(obj("raw_gnomebowl")), 1);
   assert.equal(p.xp.length, 0, "the raw bowl gives no XP");
+  assert.equal(p.getInventory().getAmount(obj("gnomebowl_mould")), 0, "the raw bowl still holds the mould");
 
   const cookTask = submittedCookingTasks.find(task => Number.isInteger(task.cycle));
   cookTask.setRunning(true);
@@ -299,6 +300,7 @@ test("the gnome chocolate-bomb steps use the Wiki materials, XP and four-tick ba
 
   useItems(p, obj("half_baked_bowl"), "chocolate_bar"); ticks(1);
   assert.equal(p.getInventory().getAmount(HALF_MADE), 1);
+  assert.equal(p.getInventory().getAmount(obj("gnomebowl_mould")), 1, "preparing releases the reusable mould");
   assert.equal(p.xp.at(-1), 50);
 
   const xpBeforeBake = p.xp.length;

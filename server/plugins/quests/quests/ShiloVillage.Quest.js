@@ -252,6 +252,7 @@ module.exports = function registerShiloVillageQuest(api) {
   }
 
   function scene(player, npcId, variant) {
+    pendingLightByPlayer.delete(player);
     startTranscript(api, player, npcId, PAGE, variant);
   }
 
@@ -971,10 +972,10 @@ module.exports = function registerShiloVillageQuest(api) {
       return;
     }
     if (quest.getStage(player) !== STAGE_DUG_MOUND || ownedMoundObject(player)?.getId() !== FISSURE) return;
-    pendingLightByPlayer.set(player, itemId);
     scene(player, TRUFITUS, itemId === ItemIdentifiers.LIT_BLACK_CANDLE
       ? "visiting-ah-za-rhoon-use-lit-black-candle-on-fissure"
       : "visiting-ah-za-rhoon-use-lit-candle-on-fissure");
+    pendingLightByPlayer.set(player, itemId);
   }
 
   function ropeFissure(player) {
@@ -1145,7 +1146,7 @@ module.exports = function registerShiloVillageQuest(api) {
     const pendingLight = pendingLightByPlayer.get(player);
     if (pendingLight !== undefined) {
       pendingLightByPlayer.delete(player);
-      if (/^yes\b/i.test(option)
+      if (option === "Yes"
         && quest.getStage(player) === STAGE_DUG_MOUND
         && ownedMoundObject(player)?.getId() === FISSURE
         && held(player, pendingLight)) {

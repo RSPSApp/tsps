@@ -51,6 +51,7 @@ export class GatheringTrackerPlugin extends Plugin {
 
     protected async startUp(): Promise<void> {
         this.resetSession();
+        this.seedXpBaselines();
     }
 
     protected async shutDown(): Promise<void> {
@@ -96,5 +97,15 @@ export class GatheringTrackerPlugin extends Plugin {
     private resetSession(): void {
         this.lastXp.clear();
         this.sessions.clear();
+    }
+
+    private seedXpBaselines(): void {
+        const getStatXp = this.client.cs2Vm?.context?.getStatXp;
+        if (!getStatXp) return;
+
+        for (const skill of GATHERING_SKILLS) {
+            const xp = getStatXp(skill);
+            if (Number.isFinite(xp) && xp >= 0) this.lastXp.set(skill, xp);
+        }
     }
 }

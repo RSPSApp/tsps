@@ -10,6 +10,10 @@ import { SlayerTrackerConfig } from "./SlayerTrackerConfig";
 
 const SLAYER_BOSS_TASK = 98;
 const NPC_SLAYER_TASK_PARAM = 50;
+// slayer_task gameval table: `id` and `name_uppercase` columns in the cache DB rows.
+const SLAYER_TASK_TABLE_ID = 113;
+const SLAYER_TASK_ID_COLUMN = 0;
+const SLAYER_TASK_NAME_COLUMN = 10;
 const ORANGE = 0xff981f;
 
 type SlayerSnapshot = {
@@ -44,6 +48,7 @@ export class SlayerTrackerPlugin extends Plugin {
         wildernessStreak: 0,
     };
     private targetNpcs: { ecsId: number; serverId: number; name: string }[] = [];
+    private readonly taskNames = new Map<number, string | null>();
     readonly widgetOverlay: WidgetOverlay;
 
     constructor(client?: OsrsClient) {
@@ -131,7 +136,7 @@ export class SlayerTrackerPlugin extends Plugin {
         if (count > 0 && target > 0) {
             const name = target === SLAYER_BOSS_TASK
                 ? "Boss task"
-                : this.targetNpcs[0]?.name ?? `Task #${target}`;
+                : this.taskName(target) ?? `Task #${target}`;
             rows.push(`${name}: ${count.toLocaleString()} remaining`);
             if (originalCount > count) rows.push(`Completed this task: ${(originalCount - count).toLocaleString()}`);
         } else {
@@ -143,5 +148,16 @@ export class SlayerTrackerPlugin extends Plugin {
             rows.push(`Wilderness streak: ${wildernessStreak.toLocaleString()}`);
         }
         return rows;
+    }
+
+    private taskName(target: number): string | undefined {
+        if (this.taskNames.has(target)) return this.taskNames.get(target) ?? undefined;
+
+        const rows = this.client.cs2Vm?.context?.dbRepository?.getRows(SLAYER_TASK_TABLE_ID) ?? [];
+        const row = rows.find(candidate => candidate.getColumn(SLAYER_TASK_ID_COLUMN)?.values[0] === target);
+        const value = row?.getColumn(SLAYER_TASK_NAME_COLUMN)?.values[0];
+        const name = typeof value === "string" && value.trim() ? value.trim() : null;
+        this.taskNames.set(target, name);
+        return name ?? undefined;
     }
 }

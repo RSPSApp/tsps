@@ -30,10 +30,10 @@
  * Gaps/approximations:
  * - Will and Anne's tutorial ship is the shared `pandemonium_tutorial_ship` static ship
  *   (owner-only), with its captured 2x5 deck, helm, sails and hook. Taking the helm
- *   only sets the helm; raising the sails starts a real BoatManager voyage south to the
- *   wreck, and arrival plays its dialogue. The observed course is
- *   collision-checked against the active cache; optional sail-trim boosts and exact journey
- *   timing are not reproduced. The ship is disposed when the player is pushed overboard or leaves.
+ *   uses the canonical controls and raising the sails starts a real BoatManager voyage.
+ *   The player steers to the wreck; arrival observes its real position. Optional sail-trim
+ *   boosts and exact journey timing are not reproduced. The ship is disposed when the
+ *   player is pushed overboard or leaves.
  * - The raft and cargo route use the real Sailing system: Junior Jim grants a raft in
  *   the player's boat slot, the shipyard visit shows it and the cargo hold is built on
  *   its hotspot, and the crate is port task 599 (crate 32807) collected and delivered
@@ -641,10 +641,7 @@ module.exports = function registerPandemoniumQuest(api) {
   const WORLD_WRECK_FINE = { fineX: 3035 * 128 + 32, fineY: 3048 * 128 + 96 };
   const WORLD_WRECK_TILE = { x: 3035, y: 3048 };
   const WORLD_WRECK_ZONE = { minX: 3018, maxX: 3040, minY: 3030, maxY: 3050 };
-  // Observed full-sail headings (ticks368–459), verified with this cache's real hull collision.
-  const VOYAGE_HEADING_RUNS = [
-    [0, 25], [2, 6], [1, 30], [0, 31],
-  ];
+  // Capture381's headings at367/393/399/429 are client inputs, not an automatic course.
 
   function tutorialScene(player) {
     return tutorialScenes.get(player) ?? null;
@@ -708,15 +705,19 @@ module.exports = function registerPandemoniumQuest(api) {
     StaticShips.board(player, ship);
     const helmTaken = atWreck || (stage >= STAGE_SAIL_ACCEPTED && player.getAttribute(TUTORIAL_HELM_ATTRIBUTE) === true);
     const sailsRaised = atWreck || (stage >= STAGE_SAIL_ACCEPTED && player.getAttribute(TUTORIAL_SAILS_ATTRIBUTE) === true);
-    const scene = { boat: ship.boat, deck, will, anne, staticShip: ship, helmTaken, sailsRaised, voyageStarted: sailsRaised && !atWreck, arrived: atWreck, headingRun: 0, headingTicks: 0 };
+    const scene = { boat: ship.boat, deck, will, anne, staticShip: ship, helmTaken, sailsRaised, voyageStarted: false, arrived: atWreck };
     tutorialScenes.set(player, scene);
-    if (helmTaken) scene.boat.helmPlayerId = player.getIndex();
-    scene.boat.moveMode = sailingContent.MOVE_MODE.STOPPED;
-    if (scene.voyageStarted && !atWreck) {
-      startVoyage(scene);
-    } else if (!atWreck) {
-      tutorialFadeIn(player, scene);
+    api.emitCustomEvent("sailing:board-supplied-panel", { player, boat: scene.boat, stopped: atWreck, accepted: false });
+    if (helmTaken && !atWreck) {
+      const request = { player, boat: scene.boat, accepted: false };
+      api.emitCustomEvent("sailing:take-helm", request);
+      scene.helmTaken = request.accepted === true;
     }
+    scene.boat.moveMode = sailingContent.MOVE_MODE.STOPPED;
+    if (scene.helmTaken && sailsRaised && !atWreck) api.emitCustomEvent("sailing:set-supplied-sails", {
+      player, boat: scene.boat, mode: "full", accepted: false,
+    });
+    if (!atWreck) tutorialFadeIn(player, scene);
     return true;
   }
 
@@ -763,10 +764,12 @@ module.exports = function registerPandemoniumQuest(api) {
     };
   }
 
-  function endTutorialShip(player) {
+  function endTutorialShip(player, reason) {
     const scene = tutorialScenes.get(player);
     if (!scene) return;
     tutorialScenes.delete(player);
+    api.emitCustomEvent("sailing:leave-helm", { player, boat: scene.boat });
+    api.emitCustomEvent("sailing:leave-supplied-panel", { player, boat: scene.boat, reason });
     Scenes.cancel(player);
     Scenes.closeFade(player);
     if (scene.will) api.removeNpc(scene.will);
@@ -1263,15 +1266,15 @@ module.exports = function registerPandemoniumQuest(api) {
     if (option !== undefined && option !== "Navigate") return false;
     event.handled = true;
     if (scene.will?.getInteractingMobile() === player) scene.will.setMobileInteraction(null);
+    const request = { player, boat: scene.boat, accepted: false };
+    api.emitCustomEvent("sailing:take-helm", request);
+    if (request.accepted !== true) return true;
     if (scene.helmTaken) return true;
     scene.helmTaken = true;
     player.setAttribute(TUTORIAL_HELM_ATTRIBUTE, true);
-    scene.boat.helmPlayerId = player.getIndex();
-    scene.boat.moveMode = sailingContent.MOVE_MODE.STOPPED;
     if (stage === STAGE_SAILING) quest.setStage(player, STAGE_SAIL_ACCEPTED);
     Scenes.cancel(player);
     Scenes.closeFade(player);
-    player.getPacketSender().sendCameraTarget({ worldEntity: scene.boat.entityIndex });
     return true;
   }
 
@@ -1290,20 +1293,26 @@ module.exports = function registerPandemoniumQuest(api) {
       player.sendMessage("You need to take the helm before raising the sails.");
       return true;
     }
-    if (scene.sailsRaised) return true;
-    scene.sailsRaised = true;
-    scene.voyageStarted = true;
-    player.setAttribute(TUTORIAL_SAILS_ATTRIBUTE, true);
-    startVoyage(scene);
+    api.emitCustomEvent("sailing:set-supplied-sails", { player, boat: scene.boat, mode: "full", accepted: false });
     return true;
   }
 
-  function startVoyage(scene) {
-    scene.headingRun = 0;
-    scene.headingTicks = VOYAGE_HEADING_RUNS[0][1];
-    scene.boat.heading = VOYAGE_HEADING_RUNS[0][0] * 128;
-    scene.boat.moveMode = sailingContent.MOVE_MODE.FULL;
-    scene.boat.velocity = 0;
+  /** Observe an accepted canonical mode change; repeated inputs never restart a voyage. */
+  function handleTutorialSailModeChanged({ player, boat, mode }) {
+    const scene = tutorialScene(player);
+    const moveMode = mode === "full" ? sailingContent.MOVE_MODE.FULL
+      : mode === "half" ? sailingContent.MOVE_MODE.HALF
+      : mode === "reverse" ? sailingContent.MOVE_MODE.REVERSE : undefined;
+    if (!scene || scene.boat !== boat || scene.arrived || scene.voyageStarted || moveMode === undefined
+      || !player.isRegistered() || player.getHitpoints() <= 0 || player.isDying
+      || quest.getStage(player) !== STAGE_SAIL_ACCEPTED || !scene.helmTaken
+      || !boat.ownerOnly || boat.ownerPlayerId !== player.getIndex()
+      || boat.helmPlayerId !== player.getIndex() || boat.moveMode !== moveMode
+      || sailingContent.getVarbit(player, sailingContent.VARBIT.SIDEPANEL_BOAT_MOVE_MODE) !== moveMode
+      || !StaticShips.isAboard(player, scene.staticShip)) return;
+    scene.sailsRaised = true;
+    scene.voyageStarted = true;
+    if (player.getAttribute(TUTORIAL_SAILS_ATTRIBUTE) !== true) player.setAttribute(TUTORIAL_SAILS_ATTRIBUTE, true);
   }
 
   /**
@@ -1320,7 +1329,7 @@ module.exports = function registerPandemoniumQuest(api) {
     event.destination = { x: at.getX(), y: at.getY(), z: at.getZ() };
   }
 
-  /** Follow a collision-checked route between the captured start and wreck positions. */
+  /** Observe arrival without replaying a recorder's heading inputs over the player's controls. */
   function watchTutorialVoyages() {
     for (const [player, scene] of tutorialScenes) {
       if (!StaticShips.isAboard(player, scene.staticShip)) {
@@ -1329,14 +1338,6 @@ module.exports = function registerPandemoniumQuest(api) {
       }
       if (!scene.voyageStarted || scene.arrived) continue;
       if (player.isRegistered?.() === false) continue;
-      if (scene.headingTicks > 0) scene.headingTicks--;
-      if (scene.headingTicks === 0 && scene.headingRun < VOYAGE_HEADING_RUNS.length - 1) {
-        scene.headingRun++;
-        const [heading, ticks] = VOYAGE_HEADING_RUNS[scene.headingRun];
-        scene.headingTicks = ticks;
-        scene.boat.heading = heading * 128;
-        scene.boat.moveMode = sailingContent.MOVE_MODE.FULL;
-      }
       const boat = scene.boat;
       if (boat.tileX >= WORLD_WRECK_ZONE.minX && boat.tileX <= WORLD_WRECK_ZONE.maxX
         && boat.tileY >= WORLD_WRECK_ZONE.minY && boat.tileY <= WORLD_WRECK_ZONE.maxY
@@ -1349,6 +1350,8 @@ module.exports = function registerPandemoniumQuest(api) {
 
   function arriveAtWreck(player, scene) {
     scene.arrived = true;
+    // Capture381 releases the helm/hand pose when stage12 is reached, before the hook.
+    api.emitCustomEvent("sailing:leave-helm", { player, boat: scene.boat });
     scene.boat.moveMode = sailingContent.MOVE_MODE.STOPPED;
     scene.boat.velocity = 0;
     Scenes.fade(player, true);
@@ -1444,7 +1447,7 @@ module.exports = function registerPandemoniumQuest(api) {
   function handleLogout({ player }) {
     if (!player) return;
     endSalvageScene(player, true, false);
-    endTutorialShip(player);
+    endTutorialShip(player, "logout");
     removeOldGrog(player);
     removeTracked(player, steveByPlayer);
     removeTracked(player, ribsByPlayer);
@@ -1627,6 +1630,7 @@ module.exports = function registerPandemoniumQuest(api) {
   BoatManager.onAfterTick(watchTutorialVoyages);
   api.onObjectRoute(routeTutorialHook);
   api.onCustomEvent("sailing:facility-built", handleFacilityBuilt);
+  api.onCustomEvent("sailing:sail-mode-changed", handleTutorialSailModeChanged);
   api.onCustomEvent("sailing:boarded", handleBoarded);
   api.onCustomEvent("sailing:left", handleLeft);
   api.onCustomEvent("interface:closed", ({ player, interfaceId }) => {

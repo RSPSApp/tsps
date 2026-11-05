@@ -1,5 +1,6 @@
 {
   "gems": ["Uncut sapphire", "Uncut emerald", "Uncut ruby", "Uncut diamond", "Uncut dragonstone"],
+  "semiPreciousGems": ["Uncut opal", "Uncut jade", "Uncut red topaz"],
   "fish": [
     "Raw shrimps", "Raw anchovies", "Raw sardine", "Raw herring", "Raw mackerel", "Raw trout", "Raw cod",
     "Raw pike", "Raw slimy eel", "Raw salmon", "Raw tuna", "Raw rainbow fish", "Raw cave eel", "Raw lobster",

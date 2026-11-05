@@ -275,6 +275,10 @@ function createRideTask(Task) {
     }
 
     execute() {
+      if (this.player.isDyingReturn?.() === true) {
+        this.abandon();
+        return;
+      }
       if (!this.started) this.setOff();
       else if (this.sitAt == null) this.walk();
       if (this.sitAt == null) return;
@@ -357,9 +361,29 @@ function createRideTask(Task) {
       this.pending = [x, y];
     }
 
+    /** Death aloft: undoes what the ride changed and moves nothing, as the respawn is the death's. */
+    abandon() {
+      if (this.finished) return;
+      const { player, route, flightTick } = this;
+      const sender = player.getPacketSender();
+      this.pending = null;
+      player.setForceMovement(null);
+      if (flightTick >= 1 && flightTick <= route.land) {
+        sender.sendVarbit(HIDE_CARPETS_VARBIT, 0);
+        setFlying(player, false);
+      }
+      if (flightTick >= 0 && flightTick <= route.land) restoreTabs(player);
+      sender.sendCameraReset();
+      this.finish(false);
+    }
+
     /** Lands the rider at once (logout mid-flight). */
     fastForward() {
       if (this.finished) return;
+      if (this.player.isDyingReturn?.() === true) {
+        this.abandon();
+        return;
+      }
       const { player, route } = this;
       player.setForceMovement(null);
       if (this.flightTick >= 1) setFlying(player, false);
@@ -374,13 +398,14 @@ function createRideTask(Task) {
       this.finish();
     }
 
-    finish() {
+    /** `free`: false when the movement lock is someone else's, a death's. */
+    finish(free = true) {
       if (this.finished) return;
       this.finished = true;
       super.stop();
       const { player } = this;
       player.setAttribute(RIDE_ATTRIBUTE, null);
-      player.getMovementQueue().setBlockMovement(false);
+      if (free) player.getMovementQueue().setBlockMovement(false);
     }
 
     /** Anything that cancels the task must still free the rider. */

@@ -1,7 +1,8 @@
 const assert = require("node:assert/strict");
 const { test } = require("node:test");
+const fs = require("node:fs");
+const path = require("node:path");
 const Statistics = require("../plugins/combat/PvpStatistics.plugin");
-const Defaults = require("../plugins/interface/SideJournalDefaults.plugin");
 const Layout = require("../plugins/interface/sidejournaldefaults/Layout.SideJournalDefaults");
 
 function fixture(world = { plugins: { CustomCharacterSummary: true } }) {
@@ -27,7 +28,15 @@ function fixture(world = { plugins: { CustomCharacterSummary: true } }) {
   };
   api.onCustomEvent("persistence:save", ({ player }) => saves.push(player));
   Statistics.register(api);
-  Defaults.register(api);
+  // Real modules present on this tree: the old state has only Defaults, not the future wrapper.
+  const directory = path.join(__dirname, "../plugins/interface");
+  const candidates = fs.readdirSync(directory)
+    .filter(name => ["SideJournalDefaults.plugin.js", "CustomCharacterSummary.plugin.js"].includes(name))
+    .map(name => require(path.join(directory, name)));
+  assert.ok(candidates.some(plugin => plugin.name === "SideJournalDefaults"));
+  for (const name of ["SideJournalDefaults", "CustomCharacterSummary"]) {
+    candidates.find(plugin => plugin.name === name)?.register(api);
+  }
   function query(player) {
     const request = { player, stats: null };
     api.emitCustomEvent("pvp:stats", request);

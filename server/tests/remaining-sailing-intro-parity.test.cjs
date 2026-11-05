@@ -10,11 +10,17 @@ const unitHelms = new Set();
 
 afterEach(() => {
   const { TaskManager } = require('../dist/game/task/TaskManager');
+  const { BoatManager } = require('../dist/game/content/sailing/BoatManager');
   let firstError;
-  for (const { player, api } of unitHelms) {
+  for (const { player, api, hooks } of unitHelms) {
+    for (const logout of hooks.logout) {
+      try { logout({ player }); } catch (error) { firstError ??= error; }
+    }
     try { api.emitCustomEvent('sailing:leave-helm', { player }); }
     catch (error) { firstError ??= error; }
     finally {
+      try { api.emitCustomEvent('sailing:leave-supplied-panel', { player, boat: BoatManager.getBoatAboard(player) }); }
+      catch (error) { firstError ??= error; }
       try { TaskManager.cancelTasks(player); } catch (error) { firstError ??= error; }
     }
   }
@@ -82,7 +88,7 @@ function setup() {
     getWorld() { return { getNpcs: () => [] }; },
   }, { get(target, key) { return target[key] ?? (() => {}); } });
 
-  const attrs = new Map(), inventory = new Map(), varbits = new Map(), messages = [], xp = [], interfaces = [], scripts = [], cameras = [], hints = [], modes = [], closedInterfaces = 0;
+  const attrs = new Map(), inventory = new Map(), varbits = new Map(), messages = [], xp = [], interfaces = [], scripts = [], cameras = [], hints = [], modes = [], flags = [], closedInterfaces = 0;
   const levels = new Map();
   let location = new core.Location(3025, 3208, 0);
   const sailing = { boats: [], activeBoatSlot: null };
@@ -100,6 +106,7 @@ function setup() {
     sendCameraReset() { cameras.push(['reset']); return sender; },
     sendCameraTarget(target) { cameras.push(['target', target]); return sender; },
     sendSubInterface(uid, id, type, options) { scripts.push({ uid, id, type, ...options }); return sender; },
+    sendInterfaceFlagsRange(...args) { flags.push(args); return sender; },
     closeSubInterface(uid) { scripts.push({ close: uid }); return sender; },
     sendPositionalHint(...args) { hints.push(args.slice(0, 4)); return sender; },
     clearHintArrow() { hints.push(['clear']); return sender; },
@@ -193,12 +200,13 @@ function setup() {
     lastPrompt.pairs[index + 1]();
   };
   const clickObject = (objectId) => { for (const fn of hooks.objects) fn({ player, objectId, clickType: 1 }); };
-  const clickInterface = (groupId, childId) => { const event = { player, groupId, childId, handled: false }; for (const fn of hooks.interfaceClicks) fn(event); return event; };
+  const clickInterface = (groupId, childId, slot) => { const event = { player, groupId, childId, slot, handled: false }; for (const fn of hooks.interfaceClicks) fn(event); return event; };
   // These quest-unit calls still use their direct object hook. Register the real
   // sailing control requests; dispatcher order is outside this quest-unit helper.
   require('../plugins/skills/sailing/Helm.plugin').register({ ...api, onObjectInteraction() {}, onObjectRoute() {} });
-  unitHelms.add({ player, api });
-  return { api, core, hooks, player, attrs, persistentKeys, saveState, restoreState, relog, inventory, varbits, messages, xp, levels, sailing, location, emit, action, line, variant, tickOnce, answerPrompt, clickObject, clickInterface, interfaces, scripts, cameras, hints, modes, get lastLineSpeakerId() { return lastLineSpeakerId; }, get closedInterfaces() { return closedInterfaces; }, prompt: () => lastPrompt, setLocation(value) { location = value; } };
+  require('../plugins/skills/sailing/Sailing.plugin').register({ ...api, onPlayerLogin() {} });
+  unitHelms.add({ player, api, hooks });
+  return { api, core, hooks, player, attrs, persistentKeys, saveState, restoreState, relog, inventory, varbits, messages, xp, levels, sailing, location, emit, action, line, variant, tickOnce, answerPrompt, clickObject, clickInterface, interfaces, scripts, cameras, hints, modes, flags, get lastLineSpeakerId() { return lastLineSpeakerId; }, get closedInterfaces() { return closedInterfaces; }, prompt: () => lastPrompt, setLocation(value) { location = value; } };
 }
 
 function clickAction(h, objectId, name, actions, optionIndex) {
@@ -572,12 +580,25 @@ test('Pandemonium uses the actual static-ship blueprint and its lifecycle hooks'
   assert.equal(quest.getStage(h.player), 10, 'raising sails starts the voyage, not arrival');
   assert.equal(ship.boat.moveMode, 2, 'the captured voyage runs at full sail');
   const startY = ship.boat.fineY;
-  for (let tick = 0; tick < 300 && quest.getStage(h.player) < 12; tick++) BoatManager.tick();
+  // These are the recorder's actual heading inputs, driven by this helper actor rather than
+  // replayed by production on a timer. The native regression separately decodes real packets.
+  const headings = new Map([[0, 0], [25, 2], [31, 1], [61, 0]]);
+  for (let tick = 0; tick < 300 && quest.getStage(h.player) < 12; tick++) {
+    if (headings.has(tick)) BoatManager.setHelmHeading(h.player, headings.get(tick));
+    BoatManager.tick();
+  }
   assert.notEqual(ship.boat.fineY, startY, 'the static ship actually moves on the real map');
   assert.equal(quest.getStage(h.player), 12, `the real collision route reaches the captured wreck (boat ${ship.boat.tileX},${ship.boat.tileY})`);
   assert.ok(Math.abs(ship.boat.tileX - 3035) <= 2 && Math.abs(ship.boat.tileY - 3048) <= 2,
     'the boat stops at the captured wreck root');
   assert.equal(h.varbits.get(18315), 1, 'reached-wreck varbit set on arrival');
+  assert.equal(ship.boat.helmPlayerId, undefined, 'arrival releases the live helm without losing the earned capability');
+  assert.equal(h.varbits.get(sailingContent.VARBIT.FACILITY_LOCKEDIN), 0, 'arrival frees the facility for the salvage hook');
+  assert.equal(h.varbits.get(sailingContent.VARBIT.SIDEPANEL_PLAYER_AT_HELM), 0);
+  assert.equal(h.varbits.get(sailingContent.VARBIT.SIDEPANEL_HELM_STATUS), 1);
+  assert.equal(h.varbits.get(sailingContent.VARBIT.SIDEPANEL_BOAT_MOVE_MODE), 0);
+  assert.equal(h.attrs.get('pandemonium:tutorial-helm'), true);
+  assert.equal(h.attrs.get('pandemonium:tutorial-sails'), true);
   assert.ok(BoatManager.getSpec(ship.boat).locs.some((loc) => loc.id === 60480), 'the placed salvage parent is already on the deck');
   assert.equal(BoatManager.getSpec(ship.boat).locs.some((loc) => loc.id === 60464), false, 'the world wreck is not added to the deck');
   const firstIndex = ship.boat.entityIndex;
@@ -693,6 +714,9 @@ test('Pandemonium relog restores stages 12/14 at the earned wreck, docked and ar
   assert.equal(ship.boat.tileY, 3048);
   assert.equal(BoatManager.getBoatAboard(h.player), ship.boat, 'the player is restored on the deck');
   assert.equal(ship.boat.moveMode, 0, 'the voyage is stopped at the wreck');
+  assert.equal(ship.boat.helmPlayerId, undefined, 'stage 12 recovery does not reacquire a live helm');
+  assert.equal(h.varbits.get(sailingContent.VARBIT.FACILITY_LOCKEDIN), 0);
+  assert.equal(h.varbits.get(sailingContent.VARBIT.SIDEPANEL_PLAYER_AT_HELM), 0);
   const spec = BoatManager.getSpec(ship.boat);
   assert.equal(spec.locs.filter((loc) => loc.id === 60480).length, 1, 'the placed hook is not duplicated');
   assert.equal(spec.locs.filter((loc) => loc.id === 60464).length, 0, 'the real-world wreck is not put on the deck');
@@ -717,6 +741,12 @@ test('Pandemonium relog restores stages 12/14 at the earned wreck, docked and ar
   assert.equal(ship.boat.tileX, 3035);
   assert.equal(ship.boat.tileY, 3048);
   assert.equal(BoatManager.getBoatAboard(h.player), ship.boat);
+  assert.equal(ship.boat.helmPlayerId, undefined, 'earned flags do not re-grip the helm at stage 14');
+  assert.equal(ship.boat.moveMode, 0);
+  assert.equal(h.varbits.get(sailingContent.VARBIT.FACILITY_LOCKEDIN), 0);
+  assert.equal(h.varbits.get(sailingContent.VARBIT.SIDEPANEL_PLAYER_AT_HELM), 0);
+  assert.equal(h.attrs.get('pandemonium:tutorial-helm'), true, 'earned capability remains saved');
+  assert.equal(h.attrs.get('pandemonium:tutorial-sails'), true);
   assert.equal(BoatManager.getSpec(ship.boat).locs.filter((loc) => loc.id === 60480).length, 1);
   h.action(h.core.NpcIdentifiers.WILL, 'p40qKY');
   assert.equal(quest.getStage(h.player), 14);
@@ -1095,7 +1125,7 @@ test('Pandemonium only earns the helm after accepted canonical control and reapp
     assert.equal(h.varbits.get(VARBIT.SIDEPANEL_PLAYER_AT_HELM), 1);
     assert.equal(h.scripts.some(script => script.id === SCRIPT_HELM_UPDATE), true);
     assert.equal(h.sailing.boats.length, 0, 'no personal boat is invented');
-    assert.equal(h.varbits.get(VARBIT.SIDEPANEL_BOAT_MOVE_MODE), 0, 'the authored Set action is still required');
+    assert.equal(h.varbits.get(VARBIT.SIDEPANEL_BOAT_MOVE_MODE), 4, 'the first accepted heading can raise full sail');
     const loops = TaskManager.pendingTasks.length, modes = h.modes.length, scripts = h.scripts.length;
     clickAction(h, 59620, 'Helm', ['Navigate', 'Escape'], 0);
     assert.equal(TaskManager.pendingTasks.length, loops, 'repeat activation does not create another native loop');
@@ -1159,4 +1189,101 @@ test('a supplied control releases after physical leave without clearing a newer 
   } finally {
     for (const logout of h.hooks.logout) logout({ player: h.player });
   }
+});
+
+test('the tutorial panel remount preserves accepted helm and sail state without restarting departure', () => {
+  const h = setup();
+  const StaticShips = require('../plugins/skills/sailing/StaticShips.Sailing');
+  const { BoatManager } = h.core;
+  const { VARBIT } = sailingContent;
+  const quest = load(h, 'Pandemonium.Quest.js');
+  let earnedSails = 0;
+  const setAttribute = h.player.setAttribute.bind(h.player);
+  h.player.setAttribute = (key, value) => {
+    if (key === 'pandemonium:tutorial-sails' && value === true) earnedSails++;
+    return setAttribute(key, value);
+  };
+  h.action(h.core.NpcIdentifiers.WILL, 'BDfVg8');
+  quest.setStage(h.player, 8);
+  const ship = StaticShips.all().find(ship => ship.boat === BoatManager.getBoatAboard(h.player));
+  assert.ok(ship);
+  const panel = () => {
+    h.clickInterface(593, 48);
+    const mount = h.scripts.findLast(script => script.id === 937 && script.uid === ((161 << 16) | 76));
+    assert.ok(mount, 'the tutorial has a real Sailing panel mount');
+    assert.equal(mount.varps[5117], 8113, 'the panel describes the actual temporary boat');
+    assert.equal(mount.varbits[VARBIT.SIDEPANEL_BOAT_HP], ship.hitpoints);
+    assert.equal(mount.varbits[VARBIT.SIDEPANEL_BOAT_HP_MAX], ship.maxHitpoints);
+    assert.equal(mount.varbits[VARBIT.SIDEPANEL_FACILITY_SAIL], 0, 'the supplied Sail part uses record zero');
+    assert.equal(mount.varbits[VARBIT.SIDEPANEL_FACILITY_HELM], 0, 'the supplied Helm part uses record zero');
+    assert.ok(h.flags.some(args => args[0] === ((937 << 16) | 25) && args[1] === 0 && args[2] === 7 && args[3] === 30),
+      'only the proven common Sail and Helm prefix receives facility operation permissions');
+    return mount.varbits;
+  };
+  assert.equal(panel()[VARBIT.SIDEPANEL_HELM_STATUS], 1);
+  clickAction(h, 59620, 'Helm', ['Navigate', 'Escape'], 0);
+  assert.equal(quest.getStage(h.player), 10);
+  assert.equal(panel()[VARBIT.SIDEPANEL_PLAYER_AT_HELM], 1);
+  assert.equal(panel()[VARBIT.SIDEPANEL_BOAT_MOVE_MODE], 4);
+  // This unit helper calls the real steering entry. The private native case drives the codec.
+  BoatManager.setHelmHeading(h.player, 0);
+  assert.equal(ship.boat.moveMode, 2);
+  assert.equal(h.attrs.get('pandemonium:tutorial-sails'), true);
+  assert.equal(earnedSails, 1);
+  assert.equal(panel()[VARBIT.SIDEPANEL_BOAT_MOVE_MODE], 2, 'remount never restores initial moored state');
+  assert.equal(panel()[VARBIT.SIDEPANEL_HELM_STATUS], 2);
+  BoatManager.setHelmHeading(h.player, 7);
+  assert.equal(earnedSails, 1, 'repeat heading does not re-earn or restart departure');
+  h.clickInterface(937, 25, 0);
+  assert.equal(ship.boat.moveMode, 0, 'the actual sail-row Stop uses canonical control');
+  BoatManager.setHelmHeading(h.player, 1);
+  for (let i = 0; i < 40; i++) BoatManager.tick();
+  assert.equal(ship.boat.moveMode, 0, 'Stop survives the old recorder replay boundaries');
+  assert.equal(ship.boat.heading, 128, 'the heading remains the accepted player input');
+  assert.equal(panel()[VARBIT.SIDEPANEL_BOAT_MOVE_MODE], 0, 'remount preserves stopped state');
+  assert.equal(earnedSails, 1);
+  clickAction(h, 59553, 'Sails', h.core.CacheDefinitions.getObject(59553).actions, 1);
+  assert.equal(ship.boat.moveMode, 2, 'direct Set uses the same canonical sail path');
+  assert.equal(earnedSails, 1, 'setting sails again does not restart the voyage');
+  assert.equal(h.sailing.boats.length, 0);
+});
+
+test('a supplied panel refuses foreign, unboarded and retired requests and ignores an old release', () => {
+  const h = setup();
+  const StaticShips = require('../plugins/skills/sailing/StaticShips.Sailing');
+  const { BoatManager } = h.core;
+  const { VARBIT } = sailingContent;
+  const quest = load(h, 'Pandemonium.Quest.js');
+  h.action(h.core.NpcIdentifiers.WILL, 'BDfVg8'); quest.setStage(h.player, 8);
+  const previous = BoatManager.getBoatAboard(h.player);
+  assert.equal(h.player.getPacketSender().getVarbit(VARBIT.SHIPYARD_MODE), 0, 'normal supplied-panel mode');
+  assert.equal(h.emit('sailing:board-supplied-panel', { boat: previous, accepted: false }).accepted, true);
+  clickAction(h, 59620, 'Helm', ['Navigate', 'Escape'], 0);
+  const foreign = { ...h.player, getIndex: () => 2 };
+  const disconnected = { ...h.player, isRegistered: () => false };
+  assert.equal(h.emit('sailing:board-supplied-panel', { player: foreign, boat: previous, accepted: false }).accepted, false);
+  assert.equal(h.emit('sailing:board-supplied-panel', { player: disconnected, boat: previous, accepted: false }).accepted, false);
+  h.varbits.set(VARBIT.SHIPYARD_MODE, 1);
+  assert.equal(h.emit('sailing:board-supplied-panel', { boat: previous, accepted: false }).accepted, false,
+    'the common-prefix request refuses a different native construction mode');
+  h.varbits.set(VARBIT.SHIPYARD_MODE, 0);
+  const other = StaticShips.spawn('pandemonium_tutorial_ship', { owner: h.player, ownerOnly: true });
+  try {
+    assert.equal(h.emit('sailing:board-supplied-panel', { boat: other.boat, accepted: false }).accepted, false);
+    StaticShips.dispose(other);
+    assert.equal(h.emit('sailing:board-supplied-panel', { boat: other.boat, accepted: false }).accepted, false);
+  } finally { StaticShips.dispose(other); }
+  assert.equal(h.varbits.get(VARBIT.SIDEPANEL_PLAYER_AT_HELM), 1, 'invalid requests do not clear the current lease');
+  const beforeRemount = h.scripts.length;
+  h.clickInterface(593, 48);
+  assert.ok(h.scripts.slice(beforeRemount).some(script => script.id === 937),
+    'an invalid replacement request does not discard the valid panel record');
+  h.action(h.core.NpcIdentifiers.WILL, 'BDfVg8');
+  const current = BoatManager.getBoatAboard(h.player);
+  assert.notEqual(current, previous);
+  const scripts = h.scripts.length;
+  h.emit('sailing:leave-supplied-panel', { boat: previous });
+  assert.equal(h.scripts.length, scripts, 'an older scene cannot clear a newer panel');
+  assert.equal(h.varbits.get(VARBIT.SIDEPANEL_PLAYER_AT_HELM), 1);
+  assert.equal(h.sailing.boats.length, 0);
 });

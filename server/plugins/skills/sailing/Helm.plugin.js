@@ -24,6 +24,7 @@ const {
   isHelm,
   boatAnim,
   boatType,
+  suppliedBoatProfile,
 } = require("./SailingContent.Sailing");
 const { windFor, canTrim, trimSails, isTrimmed, helmOperator } = require("./Trim.Helm");
 const { Task } = require("../../../src/main/typescript/elvarg/game/task/Task");
@@ -110,6 +111,7 @@ function setSailMode(player, boat, mode, { raiseSound = SOUND_SAIL_RAISE } = {})
   } else if (mode === "stop") {
     playSound(player, SOUND_SAIL_LOWER);
   }
+  pluginApi?.emitCustomEvent("sailing:sail-mode-changed", { player, boat, mode });
 }
 
 /**
@@ -202,11 +204,7 @@ function takeHelm(player, boat, supplied) {
   loopHelm(player, boat, supplied);
   sender.sendInterfaceScript(SCRIPT_SIDEBUTTON_SWITCH, [0]);
   playHelmSound(player, boat, "enter");
-  if (supplied) {
-    // A content-scripted voyage still requires its authored Set-sails action;
-    // the ordinary moored boat's first heading must not raise these sails.
-    setVarbit(player, VARBIT.SIDEPANEL_BOAT_MOVE_MODE, MOVE_MODE.STOPPED);
-  } else if (getVarbit(player, VARBIT.SIDEPANEL_BOAT_MOVE_MODE) === MOVE_MODE.STOPPED) {
+  if (getVarbit(player, VARBIT.SIDEPANEL_BOAT_MOVE_MODE) === MOVE_MODE.STOPPED) {
     setVarbit(player, VARBIT.SIDEPANEL_BOAT_MOVE_MODE, MOVE_MODE.MOORED);
   }
   setVarbit(player, VARBIT.SIDEPANEL_PLAYER_AT_HELM, 1);
@@ -228,6 +226,24 @@ function takeSuppliedHelm(event) {
     return; // Reapplying an earned control never starts another loop or toggles it off.
   }
   event.accepted = takeHelm(player, boat, { boat });
+}
+
+function suppliedHelmAboard(player) {
+  if (!player?.isRegistered() || player.getHitpoints() <= 0 || player.isDying) return undefined;
+  const control = suppliedHelms.get(player);
+  const boat = control?.boat;
+  return boat && BoatManager.getBoat(boat.entityIndex) === boat
+    && BoatManager.getBoatAboard(player) === boat && boat.helmPlayerId === player.getIndex()
+    ? boat : undefined;
+}
+
+/** A content scene may use the same accepted sail adjustment as the panel and first heading. */
+function setSuppliedSails(event) {
+  event.accepted = false;
+  const boat = suppliedHelmAboard(event.player);
+  if (!boat || !Object.hasOwn(SAIL_MODES, event.mode) || boat !== event.boat) return;
+  setSailMode(event.player, boat, event.mode);
+  event.accepted = true;
 }
 
 function releaseSuppliedHelm(player, control) {
@@ -256,7 +272,8 @@ function stopNavigating(player, boat) {
   boat.moveMode = BoatMoveMode.Stopped;
   boat.heading = boat.angle;
   walkByClicks(player, boat);
-  const inactive = boatAnim(boat, "helm")?.inactive;
+  const inactive = boatAnim(boat, "helm")?.inactive
+    ?? (suppliedBoatProfile(boat) ? Animation.DEFAULT_RESET_ANIMATION.getId() : undefined);
   if (inactive !== undefined) animateDeckLocs(player, boat, isHelm, inactive);
   setSailClothOps(player, boat, false);
   animateSails(player, boat, sailState(moveMode), "down");
@@ -375,7 +392,7 @@ function leaveHelmFor(event) {
 }
 
 function toggleHelm({ player, object }) {
-  const boat = Sailing.instanceAboard(player);
+  const boat = Sailing.instanceAboard(player) ?? suppliedHelmAboard(player);
   if (!boat) return;
   if (boat.helmPlayerId === player.getIndex()) {
     leaveHelm(player, boat);
@@ -429,7 +446,7 @@ function clickSailButton(event) {
   if ((event.slot ?? -1) > 2) return;
   event.handled = true;
   const { player } = event;
-  const boat = Sailing.instanceAboard(player);
+  const boat = Sailing.instanceAboard(player) ?? suppliedHelmAboard(player);
   if (!boat || !BoatManager.steers(player, boat)) return;
   const moveMode = getVarbit(player, VARBIT.SIDEPANEL_BOAT_MOVE_MODE);
   const mode = sailButtonTransition(event.slot ?? -1, moveMode);
@@ -446,11 +463,11 @@ function clickSailButton(event) {
  */
 function adjustSails(mode) {
   return ({ player }) => {
-    const boat = Sailing.instanceAboard(player);
+    const boat = Sailing.instanceAboard(player) ?? suppliedHelmAboard(player);
     if (!boat) return;
     keepFacingBow(player, boat);
-    const helmsman = helmOperator(boat)?.player;
-    if (!helmsman || Sailing.instanceAboard(helmsman) !== boat) {
+    const helmsman = boat.helmPlayerId === player.getIndex() ? player : helmOperator(boat)?.player;
+    if (!helmsman || (Sailing.instanceAboard(helmsman) ?? suppliedHelmAboard(helmsman)) !== boat) {
       player.sendMessage("You or a crewmate must be navigating at the helm to adjust the sails.");
       return;
     }
@@ -524,6 +541,7 @@ module.exports = {
     api.onObjectRoute(routeOnDeck);
     api.onCustomEvent("sailing:left", walkAfterLeaving);
     api.onCustomEvent("sailing:take-helm", takeSuppliedHelm);
+    api.onCustomEvent("sailing:set-supplied-sails", setSuppliedSails);
     api.onCustomEvent("sailing:leave-helm", leaveHelmFor);
     api.onInterfaceActionClick(clickSailButton);
     require("./WindCatcher.Helm").attach(api);

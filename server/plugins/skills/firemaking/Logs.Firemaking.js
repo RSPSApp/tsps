@@ -675,23 +675,24 @@ function handleItemOnItem(event, activeSessions) {
 
   const helmetId = usedItemId === TINDERBOX_ID ? usedWithItemId
     : usedWithItemId === TINDERBOX_ID ? usedItemId : -1;
-  if (helmetId === ItemIds.MINING_HELMET) {
+  // The Wiki's unlit mining helmet is 5014 and the lit one 5013 (Darkness counts 5013 as lit).
+  if (helmetId === ItemIds.MINING_HELMET_2) {
     event.handled = true;
     if (getFiremakingLevel(player) < 65) {
       player.sendMessage("You need a Firemaking level of at least 65 to light a mining helmet.");
       return;
     }
-    const inventory = player.getInventory();
-    const slot = inventory.getItems().findIndex((item) => item?.getId() === helmetId);
-    if (slot < 0) return;
-    inventory.setItem(slot, new Item(ItemIds.MINING_HELMET_2, 1));
-    inventory.refreshItems();
+    // The helmet that was clicked: its marks (a preset copy) stay with it.
+    const helmet = [event.usedItem, event.usedWithItem].find((held) => held?.getId() === helmetId);
+    if (!helmet) return;
+    helmet.setId(ItemIds.MINING_HELMET);
+    player.getInventory().refreshItems();
     player.sendMessage("You light your mining helmet.");
     pluginApi.emitCustomEvent("firemaking:success", {
       player,
       skill: Skill.FIREMAKING,
       itemId: helmetId,
-      resultId: ItemIds.MINING_HELMET_2,
+      resultId: ItemIds.MINING_HELMET,
       activity: "mining-helmet",
     });
     return;

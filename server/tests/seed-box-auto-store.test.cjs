@@ -17,6 +17,7 @@ const { PluginManager: PM } = require("../dist/plugins/PluginManager");
 const { Player } = require("../dist/game/entity/impl/player/Player");
 const { PlayerSession } = require("../dist/net/PlayerSession");
 const { ClientConnection } = require("../dist/net/NetworkBuilder");
+const { OperationType: GroundOperationType } = require("../dist/game/entity/impl/grounditem/ItemOnGroundManager");
 const Data = require("../plugins/skills/farming/Data.Farming");
 const Loot = require("../plugins/skills/sailing/seacombat/Loot.SeaCombat");
 const { Wilderness } = require("../dist/game/content/wilderness/Wilderness");
@@ -130,16 +131,15 @@ test("partial pickup reports the changed floor stack and each credited quantity"
   const manager = core.ItemOnGroundManager;
   const perform = manager.perform.bind(manager);
   t.mock.method(manager, "perform", (item, operation) => {
-    if (item === ground) changes.push([item.getOldAmount(), item.getItem().getAmount()]);
+    if (item === ground) changes.push([item.getOldAmount(), item.getItem().getAmount(), operation]);
     return perform(item, operation);
   });
   await take(f, I.POTATO_SEED);
   tick(f, 2);
   assert.equal(inBox(f, I.POTATO_SEED), 2147483647);
   assert.equal(f.inv.getAmount(I.POTATO_SEED), 3);
-  assert.ok(changes.some(([oldAmount, amount]) => oldAmount === 5 && amount === 3));
-  assert.equal(events.reduce((sum, event) => sum + event.amount, 0), 5);
-  assert.ok(events.every((event) => event.source === "pickup"));
+  assert.ok(changes.some(([oldAmount, amount, operation]) => oldAmount === 5 && amount === 3 && operation === GroundOperationType.ALTER));
+  assert.deepEqual(events, [{ amount: 2, discarded: 0, source: "pickup" }, { amount: 3, discarded: 0, source: "pickup" }]);
 });
 
 test("a refused ground take never stores or removes the seed", async (t) => {
@@ -155,6 +155,24 @@ test("a refused ground take never stores or removes the seed", async (t) => {
   assert.equal(ground.getItem().getAmount(), 5);
   assert.equal(ground.isPendingRemoval(), false);
   assert.deepEqual(events, []);
+});
+
+test("a nested pickup during the take policy cannot take the same seed twice", async (t) => {
+  const f = actor(t, "Open seed box");
+  const ground = drop(f, I.POTATO_SEED, 5);
+  const events = [];
+  pickupEvents.set(f.p, events);
+  let calls = 0;
+  pickupPolicies.set(f.p, () => {
+    calls++;
+    if (calls === 1) core.ItemOnGroundManager.pickup(f.p, ground);
+  });
+  await take(f, I.POTATO_SEED);
+  tick(f, 2);
+  assert.equal(calls, 1);
+  assert.equal(inBox(f, I.POTATO_SEED), 5);
+  assert.equal(f.inv.getAmount(I.POTATO_SEED), 0);
+  assert.deepEqual(events, [{ amount: 5, discarded: 0, source: "pickup" }]);
 });
 
 test("metadata-bearing seeds follow the ordinary pickup path", async (t) => {

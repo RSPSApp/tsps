@@ -230,8 +230,11 @@ function seedBoxPickup(event) {
     const { player, groundItem } = event, item = groundItem.getItem();
     const box = openSeedBox(player), manager = core.ItemOnGroundManager;
     const amount = item.getAmount(), itemId = item.getId();
-    if (!box || item.getMeta() != null || !Number.isSafeInteger(amount) || amount <= 0
-        || seedPickupItems.has(groundItem) || seedPickupPlayers.has(player)) return;
+    if (seedPickupItems.has(groundItem) || seedPickupPlayers.has(player)) {
+        event.handled = true;
+        return;
+    }
+    if (!box || item.getMeta() != null || !Number.isSafeInteger(amount) || amount <= 0) return;
     const room = storeRoom(player, box, itemId);
     const proposed = Math.min(amount, room);
     if (proposed <= 0) return;

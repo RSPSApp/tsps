@@ -283,6 +283,24 @@ Bought levels are saved as `idle-mode:upgrades` `{ upgrade: level }`.
 The prices and effects are in `"progression"` in the data. Quick Hands' speed shows in the rate
 the offline progress measures, so it counts offline as well.
 
+## Hiscores
+
+`server/plugins/modes/idle/Hiscores.IdleMode.js`, settings in `"hiscores"`. Every idle account
+(player bots left off) is ranked by its **idle XP** (gained idle, playing or away: the totals'
+XP), the **idle points it has earned**, spent or not (`idle-mode:points-earned`; an account from
+before it was kept starts from its points and what its upgrades cost), and its **hours idle**.
+Of two equal scores, the one reached first ranks higher.
+
+```
+::idle top [xp|points|hours]   the top 5 in chat, and your own place
+```
+
+The Idle screen's **Ranks** tab shows the top 10 of a category, picked by its buttons, with the
+player's own row in green and their place below. Scores are kept current while an account plays
+and stay on the board while it is away. The board is `data/saves/idle-hiscores.json` (as the
+server's other scoreboards; `IDLE_HISCORES_FILE` points it elsewhere), written to a temporary
+file and renamed, at most every `saveEverySeconds` (`60`), on logout and on shutdown.
+
 ## Balance
 
 Reviewed with the rates measured in game (agent MCP, a fresh account, normal gear) and the

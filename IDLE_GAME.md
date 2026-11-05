@@ -95,6 +95,9 @@ Na primeira vez que uma conta fica idle (conta nova num mundo idle, ou o primeir
    bigornas, um banco pra produção e o Grand Exchange pra firemaking, de Lumbridge a Karamja). O personagem
    teleporta e já começa a trabalhar sozinho. Locais de coleta pedem o nível da skill.
 
+9. **Ranking**: a aba **Ranks** da tela idle (e `::idle top xp|points|hours`) mostra os 10
+   melhores em XP idle, pontos idle ganhos e horas idle, e a sua posição.
+
 ![A tela de viagem](docs/images/idle-travel.png)
 
 O que falta para o jogo ficar jogável está em [`IDLE_ROADMAP.md`](IDLE_ROADMAP.md).

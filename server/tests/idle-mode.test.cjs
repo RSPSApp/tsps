@@ -5,6 +5,11 @@ const assert = require("node:assert/strict");
 const { test, beforeEach } = require("node:test");
 
 const PLUGIN = "../plugins/modes/IdleMode.plugin";
+const os = require("node:os");
+const fs = require("node:fs");
+const path = require("node:path");
+// The hiscores' file: a fresh one for each test (load()).
+const HISCORES_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "idle-hiscores-"));
 const OFFLINE = "../plugins/modes/idle/Offline.IdleMode";
 
 function skill(index) {
@@ -85,6 +90,7 @@ function fakeApi(config = {}) {
     onBeforeObjectInteraction: (handler) => (handlers.events["before-object"] ??= []).push(handler),
     onBeforeNpcInteraction: (handler) => (handlers.events["before-npc"] ??= []).push(handler),
     onServerStartup: (handler) => (handlers.events.startup ??= []).push(handler),
+    onServerShutdown: (handler) => (handlers.events.shutdown ??= []).push(handler),
     onNpcAttackOption: (handler) => (handlers.events["attack-option"] ??= []).push(handler),
     onItemOnObject: (handler) => (handlers.events["item-on-object"] ??= []).push(handler),
     onItemOnItem: (handler) => (handlers.events["item-on-item"] ??= []).push(handler),
@@ -238,6 +244,7 @@ function fakePlayer({ bankSlots = 800 } = {}) {
 let api;
 
 function load(config) {
+  process.env.IDLE_HISCORES_FILE = path.join(HISCORES_DIR, `hiscores-${Math.random().toString(36).slice(2)}.json`);
   for (const key of Object.keys(require.cache)) if (key.includes("/plugins/modes/")) delete require.cache[key];
   api = fakeApi(config);
   world.objects = [];
@@ -562,8 +569,8 @@ test("auto: a task looks at tracked players from server start, and logout forget
   const { tracked } = require(AUTO);
   assert.ok(tracked.has(player));
   api.emit("startup", {});
-  assert.equal(world.tasks.length, 3, "auto-resume, idle combat and production");
-  assert.deepEqual(world.tasks.map((task) => task.delay), [2, 2, 2]);
+  assert.equal(world.tasks.length, 4, "auto-resume, idle combat, production and the hiscores' saves");
+  assert.deepEqual(world.tasks.map((task) => task.delay), [2, 2, 2, 100]);
   api.logout({ player });
   assert.equal(tracked.has(player), false);
   api.login({ player });
@@ -1535,7 +1542,7 @@ test("screen tabs: Stats shows the totals and hides the Overview; Overview bring
   api.click(player, uid(COMPONENT.TAB_START));
   assert.equal(player.screen.hidden.get(uid(COMPONENT.STATUS_BOX)), false);
   assert.equal(player.screen.hidden.get(uid(COMPONENT.STATS_BOX)), true);
-  api.click(player, uid(COMPONENT.TAB_START + 4));
+  api.click(player, uid(COMPONENT.TAB_START + 5));
   assert.equal(player.getInterfaceId(), require(TRAVEL_SCREEN).GROUP_ID);
 });
 
@@ -1968,4 +1975,86 @@ test("bonfires: placed on startup, and they never burn out; other fires do", () 
   assert.deepEqual([placed.location.getX(), placed.location.getY(), placed.location.getZ(), placed.type], [x, y, z, 10]);
   assert.equal(api.emit("firemaking:burns-out", { object: placed, location: new FakeLocation(x, y, z), campfire: true, keep: false }).keep, true);
   assert.equal(api.emit("firemaking:burns-out", { object: {}, location: new FakeLocation(x + 1, y, z), campfire: true, keep: false }).keep, false);
+});
+
+const HISCORES = "../plugins/modes/idle/Hiscores.IdleMode";
+
+function rankedPlayer(name, { xp = 0, points = 0, hours = 0 } = {}) {
+  const player = idlePlayer();
+  player.getUsername = () => name;
+  player.setAttribute("idle-mode:totals", { workedMs: hours * 3600000, offlineMs: 0, xp, items: 0, bySkill: {}, byItem: {} });
+  player.setAttribute("idle-mode:points-earned", points);
+  return player;
+}
+
+test("hiscores: idle accounts ranked by XP, points earned and hours; bots and plain accounts left off", (t) => {
+  let now = 1_000;
+  t.mock.method(Date, "now", () => now);
+  const { update, ranking, lines } = require(HISCORES);
+  const alice = rankedPlayer("Alice", { xp: 50_000, points: 300, hours: 2 });
+  const bob = rankedPlayer("Bob", { xp: 90_000, points: 100, hours: 30 });
+  const carol = rankedPlayer("Carol", { xp: 50_000, points: 10, hours: 1 });
+  const bot = rankedPlayer("Bot", { xp: 9_000_000 });
+  bot.isPlayerBot = () => true;
+  const plain = rankedPlayer("Plain", { xp: 9_000_000 });
+  plain.setAttribute("idle-mode:enabled", false);
+  for (const player of [alice, bob, bot, plain]) update(player);
+  now += 1000;
+  update(carol);
+  assert.deepEqual(ranking("xp").map((row) => row.name), ["Bob", "Alice", "Carol"], "a tie goes to who got there first");
+  assert.deepEqual(ranking("points").map((row) => row.name), ["Alice", "Bob", "Carol"]);
+  assert.deepEqual(ranking("hours").map((row) => row.name), ["Bob", "Alice", "Carol"]);
+  const board = lines(carol, "xp", 2);
+  assert.equal(board.title, "Idle hiscores: Idle XP");
+  assert.deepEqual(board.rows.map((row) => `${row.place}. ${row.name} ${row.value}`), ["1. Bob 90,000 XP", "2. Alice 50,000 XP"]);
+  assert.equal(board.you, "You are #3 of 3: 50,000 XP.");
+  assert.match(lines(rankedPlayer("New"), "hours").you, /aren't on this board yet/);
+});
+
+test("hiscores: kept current as the screen's data changes, saved to the file and read back", (t) => {
+  const alice = rankedPlayer("Alice", { xp: 1000 });
+  api.emit("xp", { player: alice, skill: Skill.WOODCUTTING, experience: 500 });
+  assert.equal(require(HISCORES).ranking("points")[0]?.name, "Alice", "a point earned put her on the board");
+  api.logout({ player: alice });
+  const saved = JSON.parse(fs.readFileSync(process.env.IDLE_HISCORES_FILE, "utf8"));
+  assert.equal(saved.alice.name, "Alice");
+  assert.equal(saved.alice.points, 2);
+  // A restart reads it back.
+  const file = process.env.IDLE_HISCORES_FILE;
+  load();
+  process.env.IDLE_HISCORES_FILE = file;
+  require(HISCORES).save();
+  assert.equal(require(HISCORES).ranking("xp")[0].name, "Alice");
+});
+
+test("hiscores: ::idle top and the Ranks tab", () => {
+  const { COMPONENT, uid } = require(SCREEN);
+  const bob = rankedPlayer("Bob", { xp: 90_000, points: 100, hours: 30 });
+  require(HISCORES).update(bob);
+  const alice = rankedPlayer("Alice", { xp: 5_000, points: 300, hours: 2 });
+  api.command(alice, "idle top points");
+  assert.deepEqual(alice.messages.slice(-4), ["<col=ff981f>Idle hiscores: Idle points earned</col>", "1. Alice - 300 points", "2. Bob - 100 points", "You are #1 of 2: 300 points."]);
+  api.command(alice, "idle");
+  api.click(alice, uid(COMPONENT.TAB_START + 4));
+  assert.equal(alice.screen.hidden.get(uid(COMPONENT.RANKS_BOX)), false);
+  assert.equal(screenText(alice, COMPONENT.RANKS_TITLE), "Idle hiscores: Idle XP");
+  assert.equal(screenText(alice, COMPONENT.RANK_ROW_START), "1. Bob");
+  assert.equal(screenText(alice, COMPONENT.RANK_ROW_START + 1), "90,000 XP");
+  assert.equal(alice.screen.texts.get(uid(COMPONENT.RANK_ROW_START + 2)), "<col=00ff00>2. Alice</col>", "your own row stands out");
+  api.click(alice, uid(COMPONENT.RANK_BUTTON_START + 2));
+  assert.equal(screenText(alice, COMPONENT.RANKS_TITLE), "Idle hiscores: Hours idle");
+  assert.equal(screenText(alice, COMPONENT.RANK_ROW_START + 1), "30 hours");
+  assert.equal(screenText(alice, COMPONENT.RANK_YOU), "You are #2 of 2: 2.0 hours.");
+});
+
+test("points earned: kept apart from the points to spend; an account from before counts what it bought", () => {
+  const { earned } = require("../plugins/modes/idle/Progression.IdleMode");
+  const player = idlePlayer();
+  player.setAttribute("idle-mode:points", 40);
+  player.setAttribute("idle-mode:upgrades", { "quick-hands": 2 });
+  assert.equal(earned(player), 40 + 100 + 250);
+  api.emit("xp", { player, skill: Skill.WOODCUTTING, experience: 250 });
+  assert.equal(earned(player), 391);
+  api.command(player, "idle buy long-dreams");
+  assert.equal(earned(player), 391, "spending keeps it");
 });

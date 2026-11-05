@@ -13,6 +13,8 @@ data/saves/clans.json
 data/saves/display-names.json
 data/saves/display-names.json.tmp
 data/saves/nex-scoreboard.json
+data/saves/idle-hiscores.json
+data/saves/idle-hiscores.json.tmp
 data/saves/shooting-stars.json
 data/saves/abuse-reports.jsonl
 logs/

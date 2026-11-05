@@ -952,5 +952,29 @@
         ]
       }
     ]
+  },
+  "hiscores": {
+    "_description": "Idle hiscores (docs/idle-mode.md): idle accounts ranked by idle XP, idle points earned and hours idle, kept in data/saves/idle-hiscores.json. size rows on the Idle screen's Ranks tab, chatSize in ::idle top.",
+    "enabled": true,
+    "size": 10,
+    "chatSize": 5,
+    "saveEverySeconds": 60,
+    "categories": [
+      {
+        "id": "xp",
+        "name": "Idle XP",
+        "unit": "XP"
+      },
+      {
+        "id": "points",
+        "name": "Idle points earned",
+        "unit": "points"
+      },
+      {
+        "id": "hours",
+        "name": "Hours idle",
+        "unit": "hours"
+      }
+    ]
   }
 }

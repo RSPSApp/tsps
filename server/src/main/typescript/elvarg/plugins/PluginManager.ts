@@ -4265,19 +4265,35 @@ export class PluginManager {
       },
       restoreMapRegion: (regionId) => {
         // Only the plugin that replaced a region may hand it back.
-        if (MapRegionReplacementManager.getSource(regionId) !== pluginName || !MapRegionReplacementManager.removeMapRegion(regionId)) return false;
+        if (MapRegionReplacementManager.getSource(regionId) !== pluginName) return false;
+        // Build the native map first: without one, keep the replacement so the server's
+        // clipping and every client still agree.
+        let packet;
         try {
-          require("../game/collision/RegionManager").RegionManager.reloadRegion(regionId);
-          const { World } = require("../game/World");
-          World.getPlayers()?.forEach?.((player: any) => {
-            if (player && World.isPlayerSessionConnected(player)) {
-              MapRegionReplacementManager.sendNativeRegionToPlayer(player, regionId);
-            }
-          });
+          packet = MapRegionReplacementManager.nativeRegionPacket(regionId);
         } catch (err) {
-          console.error(`[plugins] ${pluginName} failed to restore map region ${regionId}`, err);
+          console.error(`[plugins] ${pluginName} could not encode native map region ${regionId}`, err);
+          return false;
         }
-        return true;
+        if (!packet) {
+          console.warn(`[plugins] ${pluginName} kept region ${regionId}: the cache has no native map for it`);
+          return false;
+        }
+        MapRegionReplacementManager.removeMapRegion(regionId);
+        require("../game/collision/RegionManager").RegionManager.reloadRegion(regionId);
+        // Every connected client gets the native map; one failed send does not stop the rest.
+        let delivered = true;
+        const { World } = require("../game/World");
+        World.getPlayers()?.forEach?.((player: any) => {
+          if (!player || !World.isPlayerSessionConnected(player)) return;
+          try {
+            if (!MapRegionReplacementManager.sendRegionPacketToPlayer(player, packet)) delivered = false;
+          } catch (err) {
+            delivered = false;
+            console.error(`[plugins] ${pluginName} failed to send native map region ${regionId}`, err);
+          }
+        });
+        return delivered;
       },
       registerDefinitionSource: (definitionType, source) => {
         try {

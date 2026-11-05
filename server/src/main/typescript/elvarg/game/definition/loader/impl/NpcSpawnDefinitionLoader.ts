@@ -264,6 +264,9 @@ export class NpcSpawnDefinitionLoader extends DefinitionLoader {
      */
     public static requeue(npc: NPC): boolean {
         if (!NpcSpawnDefinitionLoader.lineage || npc.getSpawnLineage() !== NpcSpawnDefinitionLoader.lineage) return false;
+        // A dead or dying spawn already has its respawn queued, and that clone would not
+        // ask onCanSpawnNpc: requeueing it too would bring the NPC back twice.
+        if (!npc.isRegistered() || npc.isDyingFunction()) return false;
         const home = npc.getSpawnPosition();
         const definition = NpcSpawnDefinition.all().find((entry) => entry.getId() === npc.getId() && entry.getPosition().equals(home));
         if (!definition) return false;

@@ -18,6 +18,7 @@ const { inCrater } = require("./Fort.BountyHunter");
 const UNLOCKED_ATTRIBUTE = "bounty-hunter:target-teleport-unlocked";
 const UNLOCKED_VARBIT = "bounty_target_teleport";
 const SPELL_NAME = "Teleport to Target";
+const WARNING_OP = 10;
 const LEVEL = 85;
 const EXPERIENCE = 45;
 const COMBAT_COOLDOWN_MS = 12_000;
@@ -153,7 +154,8 @@ function spellFor(player) {
 }
 
 function cast(event) {
-  if (event.spellName !== SPELL_NAME) return;
+  // op10 toggles the spell's Wilderness warning (SpellTeleports.plugin.js), it doesn't cast.
+  if (event.spellName !== SPELL_NAME || event.opId === WARNING_OP) return;
   event.handled = true;
   const { player } = event;
   if (player.busy() || player.getMovementQueue().isMovementBlocked()) return;

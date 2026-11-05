@@ -114,7 +114,7 @@ function runTicks({ ticks, nextTick }, count) {
 
 /** The ring in the capture (ring-walk.txt), configured from the tile north of it. */
 const RING = { x: 3129, y: 3496, z: 0 };
-const click = (p, groupId, childId, option) => T.interfaceAction({ player: p, groupId, childId, option, handled: false });
+const click = (p, groupId, childId, option, action) => T.interfaceAction({ player: p, groupId, childId, option, action, handled: false });
 
 test("the cache's fairy ring table: 64 combinations, as captured for AJR and AJQ", () => {
   const rings = T.rings();
@@ -383,6 +383,23 @@ test("travel log favourites: add from a code's star, use and remove them", () =>
   click(p, 381, 161);
   assert.equal(p.getAttribute(T.FAVOURITES_ATTRIBUTE), "");
   void varbits;
+});
+
+test("travel log right-click ops: op2 adds or removes a favourite without moving the dials, op1 uses the code", () => {
+  const { p } = player();
+  const rings = T.rings();
+  const aiq = rings.get("AIQ"), djr = rings.get("DJR");
+  click(p, 381, djr.logComponent, undefined, 1);
+  assert.equal(T.codeFromDials(p), "DJR", "op1 Use code");
+  // IF_BUTTON2 carries no menu text: "Add Favourite" is op2 alone.
+  click(p, 381, aiq.logComponent, undefined, 2);
+  assert.equal(p.getAttribute(T.FAVOURITES_ATTRIBUTE), "AIQ");
+  assert.equal(T.codeFromDials(p), "DJR", "adding doesn't set the dials");
+  click(p, 381, 141, undefined, 1);
+  assert.equal(T.codeFromDials(p), "AIQ", "op1 on a favourite uses it");
+  click(p, 381, 141, undefined, 2);
+  assert.equal(p.getAttribute(T.FAVOURITES_ATTRIBUTE), "", "op2 Remove Favourite");
+  assert.equal(T.codeFromDials(p), "AIQ");
 });
 
 test('database table indexing skips mixed tuple values without changing decoded rows', () => {

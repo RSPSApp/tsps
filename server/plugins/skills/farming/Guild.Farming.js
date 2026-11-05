@@ -175,7 +175,7 @@ function storeRoom(player, container, id) {
 function storeCrop(player, container, id, maximum) {
     const amount = Math.min(maximum, storeRoom(player, container, id));
     if (amount <= 0) return 0;
-    const stored = (container.getMetaValue("farming:stored") ?? {});
+    const stored = container.getMetaValue("farming:stored") ?? {};
     stored[id] = (stored[id] ?? 0) + amount;
     container.setMetaValue("farming:stored", stored);
     return amount;
@@ -264,6 +264,69 @@ function storageAction(event) {
     }
     inventory.refreshItems();
 }
+/**
+ * https://oldschool.runescape.wiki/w/Seed_box: open, it takes "seeds that the player picks up", seeds pickpocketed from
+ * Master Farmers, and "looting Sailing creatures". Only these: it names salvage as not, and is silent on stalls. So
+ * those two sources emit "seed-box:gather" { player, itemId, amount, stored }, and not "storage:gather", which every
+ * open container answers. Silent, as no capture read shows a line: ours.
+ */
+function openSeedBox(player) {
+    const open = Data.itemId("Open seed box");
+    return player.getInventory().getItems().find(item => item?.getId() === open) ?? null;
+}
+function seedBoxGather(event) {
+    const box = openSeedBox(event.player), left = event.amount - event.stored;
+    if (box && left > 0) event.stored += storeCrop(event.player, box, event.itemId, left);
+}
+const seedPickupItems = new WeakSet();
+const seedPickupPlayers = new WeakSet();
+function seedBoxPickup(event) {
+    if (event.handled) return;
+    const { player, groundItem } = event, item = groundItem.getItem();
+    const box = openSeedBox(player), manager = core.ItemOnGroundManager;
+    const amount = item.getAmount(), itemId = item.getId();
+    if (seedPickupItems.has(groundItem) || seedPickupPlayers.has(player)) {
+        event.handled = true;
+        return;
+    }
+    if (!box || item.getMeta() != null || !Number.isSafeInteger(amount) || amount <= 0) return;
+    const room = storeRoom(player, box, itemId);
+    const proposed = Math.min(amount, room);
+    if (proposed <= 0) return;
+    const position = groundItem.getPosition().clone(), owner = groundItem.getOwner();
+    const area = groundItem.getPrivateArea(), state = groundItem.getState();
+    const boxContents = JSON.stringify(box.getMetaValue("farming:stored") ?? {});
+    const request = { player, groundItem, source: "pickup", itemId, amount: proposed, discard: 0, allow: true, error: null };
+    seedPickupItems.add(groundItem);
+    seedPickupPlayers.add(player);
+    event.handled = true;
+    try {
+        core.PluginManager.emitCustomEvent("ground-items:take", request);
+        if (request.allow !== true || request.error != null || !Number.isSafeInteger(request.amount)
+            || request.amount <= 0 || request.amount > proposed || !Number.isSafeInteger(request.discard)
+            || request.discard < 0 || request.amount + request.discard > amount) return;
+        if (!core.World.getItems().includes(groundItem) || !manager.canSee(player, groundItem)
+            || groundItem.getItem() !== item || item.getId() !== itemId || item.getAmount() !== amount
+            || item.getMeta() != null || !groundItem.getPosition().equals(position) || groundItem.getOwner() !== owner
+            || groundItem.getPrivateArea() !== area || groundItem.getState() !== state || openSeedBox(player) !== box
+            || JSON.stringify(box.getMetaValue("farming:stored") ?? {}) !== boxContents
+            || storeRoom(player, box, itemId) < request.amount) return;
+        const stored = storeCrop(player, box, itemId, request.amount);
+        const removed = stored + request.discard;
+        if (removed === amount) manager.deregister(groundItem);
+        else {
+            groundItem.setOldAmount(amount);
+            item.decrementAmountBy(removed);
+            manager.perform(groundItem, core.GroundItemOperationType.ALTER);
+        }
+        core.PluginManager.emitCustomEvent("ground-items:taken", { player, groundItem, source: "pickup", itemId, amount: stored, discarded: request.discard });
+        if (removed === amount) player.getLastItemPickup().reset();
+        else event.handled = false; // The remainder follows the ordinary pickup route.
+    } finally {
+        seedPickupItems.delete(groundItem);
+        seedPickupPlayers.delete(player);
+    }
+}
 // https://oldschool.runescape.wiki/w/Herb_sack: Empty starts with the lowest-level herb.
 function withdrawalEntries(stored, kind) {
     const entries = Object.entries(stored);
@@ -287,4 +350,4 @@ function openSeedVault(event) {
     Vault.open({ player: event.player, object: null, anywhere: true });
 }
 
-Object.assign(module.exports, { openHerbSack, CONTRACTS, guildNpc, completeContract, harvestContract, giveSeedPack, guildItemOnNpc, rewardItem, storeCrop, splitForOpenSack, pickup, storagePair, storageAction, bankStorageOp, guildObject, openSeedVault });
+Object.assign(module.exports, { seedBoxGather, seedBoxPickup, openHerbSack, CONTRACTS, guildNpc, completeContract, harvestContract, giveSeedPack, guildItemOnNpc, rewardItem, storeCrop, splitForOpenSack, pickup, storagePair, storageAction, bankStorageOp, guildObject, openSeedVault });

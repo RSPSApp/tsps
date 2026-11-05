@@ -3,8 +3,24 @@
 `server/plugins/minigames/TzhaarFightCaves.plugin.js` runs the cave; its Elite Karamja Diary
 resurrection is `tzhaar/Resurrection.TzhaarFightCaves.js`. Rules come from the OSRS Wiki
 (<https://oldschool.runescape.wiki/w/TzHaar_Fight_Cave>, <https://oldschool.runescape.wiki/w/Karamja_Diary>,
-<https://oldschool.runescape.wiki/w/TzTok-Jad>). The recordings predate these rules (rev 235), so every
-rule below is Wiki only.
+<https://oldschool.runescape.wiki/w/TzTok-Jad>). The recordings predate the sections on entering and the
+diary (rev 235), which are Wiki only.
+
+## Monsters
+
+- **Waves** are the Wiki's list. Wave 31 is one Ket-Zek and wave 32 one Ket-Zek and a Tz-Kih, as all 5 runs in
+  recording 551 show.
+- **They keep the player.** A monster that can't get to the player stands still and walks on when it can, in
+  recording 551: a Tz-Kih stood 20 ticks at 2384,5095 with the player at 2384,5075, unclicked. It's the
+  `combat:keep-target` flag. The Wiki has no rule for this.
+- **Yt-HurKot heal Jad only while beside him and not fighting.** All 21 heals in recordings 83 and 551 came with a
+  healer beside him facing him, none from one facing the player, over 29 healer-ticks of a healer facing the player
+  within 5 tiles of Jad. One run shows those 29, with the healers moving. The Wiki reads otherwise, "They can still
+  heal if within the trigger range and in combat with the player"; this goes with the recordings.
+- **A healer lets go** of a player 10 or more tiles off, 9 or more ticks after it was last hit, and goes back to Jad.
+  Wiki: "If the player is too far from the Yt-HurKot after attacking them, they will quickly lose aggression and
+  re-target Jad". Both numbers are ours, from two recorded cases at 10 and 12 tiles, 9 and 10 ticks after the hit.
+- **Not built:** healers healing each other. In recording 83 a healer facing the player heals another healer, not Jad.
 
 ## Entering and leaving
 

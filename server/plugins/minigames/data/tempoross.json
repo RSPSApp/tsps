@@ -81,6 +81,8 @@
     "torrentTicks": 6,
     "torrentChance": 0.25,
     "torrentDisabledTicks": 24,
+    "$torrentStunTicks": "no capture of a stunned player; the stars (spotanim 245, seq 1054) last 8 ticks, and the stun ends with them",
+    "torrentStunTicks": 8,
     "lightningTicks": { "grow": 6, "charge": 11, "cast": 13, "strike": 15, "fire": 16, "shrink": 16 },
     "strikes": [4, 8],
     "fireSpreadTicks": 40,

@@ -108,7 +108,13 @@
     "stopBelowPercent": 25,
     "maxFailedAttempts": 5,
     "maxGapSeconds": 180,
-    "skipSeconds": 120
+    "skipSeconds": 120,
+    "retreatTile": [
+      3222,
+      3218,
+      0
+    ],
+    "stalledFightSeconds": 30
   },
   "travel": {
     "_description": "Idle travel (docs/idle-mode.md): an idle player picks a site from ::idle travel and teleports to its tile, which becomes the activity's anchor; auto-resume then walks to the nearest target there and starts. Tiles are free tiles checked against the cache map, with the targets within auto-resume's or idle combat's searchTiles (server/tests/idle-travel-sites.test.cjs). level: the skill level needed (gathering) or the combat level advised (combat); icon: the item shown in the list. Production sites (kind station or anywhere) only take you there: the first item made by hand there sets what is made (or a production target of the same skill moves there).",
@@ -543,6 +549,49 @@
         "members": true
       },
       {
+        "id": "gemstone-crab",
+        "name": "Gemstone Crab",
+        "place": "Tlati Rainforest, Varlamore (members)",
+        "skill": "COMBAT",
+        "kind": "npc",
+        "target": "Gemstone Crab",
+        "option": "Attack",
+        "tile": [
+          1277,
+          3168,
+          0
+        ],
+        "level": 1,
+        "icon": 1623,
+        "tool": "Any weapon and a pickaxe (for its shell)",
+        "members": true,
+        "boss": true,
+        "tip": "It hits for at most 1. When it burrows your character mines its shell for gems and follows it to its next mine."
+      },
+      {
+        "id": "scurrius",
+        "name": "Scurrius",
+        "place": "Varrock Sewers, the public room (members)",
+        "skill": "COMBAT",
+        "kind": "npc",
+        "target": "Scurrius",
+        "option": "Attack",
+        "tile": [
+          3290,
+          9868,
+          0
+        ],
+        "level": 60,
+        "icon": 526,
+        "tool": "Good gear and plenty of food",
+        "members": true,
+        "boss": true,
+        "searchTiles": 16,
+        "leashTiles": 20,
+        "eatBelowPercent": 70,
+        "retreatBelowPercent": 40
+      },
+      {
         "id": "al-kharid-range",
         "name": "Cooking range",
         "place": "Al Kharid, by the bank",
@@ -950,6 +999,22 @@
           400,
           1500
         ]
+      },
+      {
+        "id": "boss-hunter",
+        "name": "Boss Hunter",
+        "counts": "bosses",
+        "unit": "bosses killed",
+        "tiers": [
+          10,
+          100,
+          1000
+        ],
+        "points": [
+          100,
+          500,
+          2000
+        ]
       }
     ]
   },
@@ -963,18 +1028,56 @@
       {
         "id": "xp",
         "name": "Idle XP",
-        "unit": "XP"
+        "unit": "XP",
+        "unitOne": "XP"
       },
       {
         "id": "points",
         "name": "Idle points earned",
-        "unit": "points"
+        "unit": "points",
+        "unitOne": "point"
       },
       {
         "id": "hours",
         "name": "Hours idle",
-        "unit": "hours"
+        "unit": "hours",
+        "unitOne": "hour"
+      },
+      {
+        "id": "bosses",
+        "name": "Boss kills",
+        "unit": "boss kills",
+        "unitOne": "boss kill"
       }
     ]
+  },
+  "bosses": {
+    "_description": "Idle bosses (docs/idle-mode.md): bosses idle combat fights from the Bosses tab, which asks for a combat level. A kill of one named here also counts for the boss achievements and hiscores. The Gemstone Crab never dies: its burrowing is the kill for those who may mine its shell, which the character mines (the gems to the bank) before following it through a cave to its next mine.",
+    "names": [
+      "Scurrius",
+      "Giant Mole",
+      "Gemstone Crab"
+    ],
+    "gemstoneCrab": {
+      "crab": "Gemstone Crab",
+      "shell": "Gemstone Crab Shell",
+      "mineOption": "Mine",
+      "cave": "Cave",
+      "caveOption": "Crawl-through",
+      "searchTiles": 12,
+      "caveTiles": 20,
+      "followTiles": 10,
+      "recordEverySeconds": 60,
+      "gems": [
+        "UNCUT_OPAL",
+        "UNCUT_JADE",
+        "UNCUT_RED_TOPAZ",
+        "UNCUT_SAPPHIRE",
+        "UNCUT_EMERALD",
+        "UNCUT_RUBY",
+        "UNCUT_DIAMOND",
+        "UNCUT_DRAGONSTONE"
+      ]
+    }
   }
 }

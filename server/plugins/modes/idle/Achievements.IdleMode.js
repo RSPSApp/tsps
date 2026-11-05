@@ -5,7 +5,7 @@
  * - gathered / made: items an idle gathering or production skill brought in, playing or away
  *   (`Offline.onTotals`);
  * - hours: time idle, playing or away (`Offline.onTotals`);
- * - kills: kills of idle combat's target (online);
+ * - kills: kills of idle combat's target (online), and bosses: those of a boss (Bosses);
  * - goals: daily goals done (`Goals.onGoalDone`).
  *
  * Reaching a tier pays its points in idle points once, and says so. Saved as
@@ -73,7 +73,14 @@ function totalsGrew(player, { activity, workedMs, offlineMs, items }) {
 
 function killed({ player, npc }) {
   const target = player?.getAttribute?.(Common.COMBAT_TARGET_ATTRIBUTE);
-  if (target && npc?.getDefinition?.()?.getName?.() === target.name) add(player, { kills: 1 });
+  const name = npc?.getDefinition?.()?.getName?.();
+  if (!target || name !== target.name) return;
+  add(player, Common.data.bosses.names.includes(name) ? { kills: 1, bosses: 1 } : { kills: 1 });
+}
+
+/** How many of a count (`gathered`, `kills`, `bosses`...) the player has. */
+function count(player, key) {
+  return records(player).counts[key] ?? 0;
 }
 
 function goalDone(player) {
@@ -107,3 +114,4 @@ module.exports = function attach(api) {
 module.exports.RECORDS_ATTRIBUTE = RECORDS_ATTRIBUTE;
 module.exports.add = add;
 module.exports.lines = lines;
+module.exports.count = count;

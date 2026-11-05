@@ -43,7 +43,7 @@ function describe(player) {
  * `::idle` opens the Idle screen; `::idle status` says whether it is on; `::idle on|off` sets it; `::idle auto [on|off]` is auto-resume;
  * `::idle points | shop | buy <upgrade>` are the idle points and upgrades; `::idle travel` opens
  * the travel screen, `::idle go <site>` travels and `::idle sites` lists the sites; `::idle top
- * [xp|points|hours]` lists the hiscores.
+ * [xp|points|hours|bosses]` lists the hiscores.
  */
 function idleCommand({ player, parts }) {
   const choice = String(parts[1] ?? "").toLowerCase();
@@ -75,7 +75,7 @@ function idleCommand({ player, parts }) {
     if (Onboarding.start(player)) return true;
   } else if (OFF.includes(choice)) Common.setIdle(player, false);
   else if (choice !== "status") {
-    player.sendMessage("Use ::idle, ::idle [on|off|status], ::idle auto [on|off], ::idle travel, ::idle go <site>, ::idle points, ::idle shop, ::idle buy <upgrade> or ::idle top [xp|points|hours].");
+    player.sendMessage("Use ::idle, ::idle [on|off|status], ::idle auto [on|off], ::idle travel, ::idle go <site>, ::idle points, ::idle shop, ::idle buy <upgrade> or ::idle top [xp|points|hours|bosses].");
     return true;
   }
   player.sendMessage(describe(player));
@@ -85,7 +85,7 @@ function idleCommand({ player, parts }) {
 module.exports = function attach(api) {
   api.persistAttribute(Common.ENABLED_ATTRIBUTE, false);
   api.onPlayerLogin(login);
-  api.registerCommand("idle", idleCommand, api.core.PlayerRights.NONE, "Idle Mode: ::idle opens its screen; ::idle [on|off|status], ::idle auto [on|off], ::idle travel, ::idle go <site>, ::idle points, ::idle shop, ::idle buy <upgrade>, ::idle top [xp|points|hours]");
+  api.registerCommand("idle", idleCommand, api.core.PlayerRights.NONE, "Idle Mode: ::idle opens its screen; ::idle [on|off|status], ::idle auto [on|off], ::idle travel, ::idle go <site>, ::idle points, ::idle shop, ::idle buy <upgrade>, ::idle top [xp|points|hours|bosses]");
 };
 
 module.exports.idleCommand = idleCommand;

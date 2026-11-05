@@ -263,10 +263,10 @@ function repeat(player, target) {
   player.getMovementQueue().walkToObject(object, {
     execute: () => {
       player.setPositionToFace(at);
-      Common.api.emitObjectInteraction({
+      Common.act(player, () => Common.api.emitObjectInteraction({
         player, object, objectId: object.getId(), clickType: optionIndex(object.getDefinition().getInteractions(), target.option),
         location: { x: at.getX(), y: at.getY(), z: at.getZ() }, handled: false,
-      });
+      }));
       ownUse(player);
     },
   });

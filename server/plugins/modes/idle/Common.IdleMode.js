@@ -152,6 +152,26 @@ function setActivity(player, attribute, target) {
   player.setAttribute(attribute, target);
 }
 
+/** Players whose click Idle Mode itself is making right now (`act`). */
+const acting = new Set();
+
+/**
+ * Runs `action`, a click Idle Mode makes for the player (an option on an object or NPC): what
+ * listens for the player's own clicks (`isActing`) leaves it be, so it pauses nothing.
+ */
+function act(player, action) {
+  acting.add(player);
+  try {
+    return action();
+  } finally {
+    acting.delete(player);
+  }
+}
+
+function isActing(player) {
+  return acting.has(player);
+}
+
 function onChange(listener) {
   changeListeners.push(listener);
 }
@@ -171,17 +191,25 @@ function skillName(skill) {
   return key ? key.charAt(0) + key.slice(1).toLowerCase() : "Skill";
 }
 
-/** The first food in the inventory: its slot, id and the "Eat" option's click. */
+/**
+ * The best food in the inventory, by its value (a shark before a shrimp), the first of equals:
+ * its slot, id and the "Eat" option's click.
+ */
 function findFood(player) {
   const items = player.getInventory().getItems();
+  let best = null;
   for (let slot = 0; slot < items.length; slot++) {
     const itemId = items[slot]?.getId?.();
     if (!Number.isInteger(itemId) || itemId < 0) continue;
     const actions = core.CacheDefinitions.getItem(itemId)?.inventoryActions ?? [];
     const index = actions.findIndex((action) => typeof action === "string" && action.toLowerCase() === "eat");
-    if (index >= 0) return { slot, itemId, clickType: index + 1 };
+    if (index < 0) continue;
+    const value = Number(core.ItemDefinition.forId(itemId)?.getValue?.()) || 0;
+    if (!best || value > best.value) best = { slot, itemId, clickType: index + 1, value };
   }
-  return null;
+  if (!best) return null;
+  const { value, ...food } = best;
+  return food;
 }
 
 /** Eats `food` (from `findFood`) as its click would. */
@@ -228,6 +256,8 @@ module.exports = {
   skillKey,
   onChange,
   changed,
+  act,
+  isActing,
   skillName,
   itemName,
   findFood,

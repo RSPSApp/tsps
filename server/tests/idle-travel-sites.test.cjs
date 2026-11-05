@@ -25,7 +25,7 @@ before(async () => {
 /** How far the activity looks for its targets from the anchor. */
 function reach(site) {
   if (site.kind === "station") return DATA.production.searchTiles;
-  return site.skill === "COMBAT" ? DATA.combat.searchTiles : DATA.auto.searchTiles;
+  return site.skill === "COMBAT" ? site.searchTiles ?? DATA.combat.searchTiles : DATA.auto.searchTiles;
 }
 
 /** Production sites: a station is one object (a range, a furnace); "anywhere" needs none. */
@@ -49,6 +49,18 @@ function objectsInReach(site) {
     }
   }
   return count;
+}
+
+/** Bosses their plugins spawn (not in npc-spawns.json): where, by the plugin's own tiles. */
+function pluginBossTiles(name) {
+  if (name === "Gemstone Crab") return require("../plugins/bosses/GemstoneCrab.plugin")._test.SPOTS.map(({ crab: [x, y] }) => [x, y, 0]);
+  if (name === "Scurrius") return [require("../plugins/bosses/scurrius/Common.Scurrius").SPAWN_TILE];
+  return [];
+}
+
+function pluginBossesInReach(site) {
+  const [x0, y0, z] = site.tile;
+  return pluginBossTiles(site.target).filter(([x, y, bz = 0]) => bz === z && Math.max(Math.abs(x - x0), Math.abs(y - y0)) <= reach(site)).length;
 }
 
 /** Idle Mode's bonfires (fires placed at startup, not in the map) a Fire station has in reach. */
@@ -101,9 +113,9 @@ for (const site of DATA.travel.sites) {
     core.RegionManager.loadMapFiles(x, y);
     assert.equal(core.RegionManager.blocked(new core.Location(x, y, z), null), false, `${site.id}: arrival tile ${site.tile} is blocked`);
     if (site.kind !== "anywhere") {
-      const count = site.kind === "npc" ? npcsInReach(site) : objectsInReach(site) + bonfiresInReach(site);
-      // A station, or a stall (it stays stocked for an idle thief), is enough on its own.
-      const needed = site.kind === "station" || (site.skill === "THIEVING" && site.kind === "object") ? 1 : MIN_TARGETS;
+      const count = site.kind === "npc" ? npcsInReach(site) + pluginBossesInReach(site) : objectsInReach(site) + bonfiresInReach(site);
+      // A station, a stall (it stays stocked for an idle thief) or a boss is enough on its own.
+      const needed = site.kind === "station" || site.boss || (site.skill === "THIEVING" && site.kind === "object") ? 1 : MIN_TARGETS;
       assert.ok(count >= needed, `${site.id}: ${count} ${site.target} within ${reach(site)} tiles`);
     }
     const icon = core.ItemDefinition.forId(site.icon);

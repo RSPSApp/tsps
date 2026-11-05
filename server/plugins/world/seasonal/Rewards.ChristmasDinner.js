@@ -2,9 +2,11 @@
 
 const Progress=require('./Progress.ChristmasDinner');
 const COSMETICS=Object.freeze(['xmas25_bib','xmas25_christmas_dinner','xmas25_beer_belly_sweater','xmas25_contest_jumper']);
-// Original zMOOL1CZhhk6:31 shows individual noted hats, not GE partyhat-set boxes.
-const RARES=Object.freeze(['cert_red_partyhat','cert_yellow_partyhat','cert_blue_partyhat',
-  'cert_green_partyhat','cert_purple_partyhat','cert_white_partyhat','cert_santa_hat','cert_christmas_cracker']);
+// Wiki 2025 Christmas event (Rewards) and Partyhat set: two noted partyhat sets,
+// two noted Santa hats and two noted Christmas crackers. The original video
+// (zMOOL1CZhhk 6:31) shows individual noted hats instead; the Wiki wins
+// (server/docs/agents/sources.md).
+const RARES=Object.freeze(['cert_set_partyhat','cert_santa_hat','cert_christmas_cracker']);
 // Christmas event rewards template15083464 intersected with Diango15318540 and
 // active enum708's nonnegative catalogue slots. Negative enum keys are rare awards,
 // not reclaim slots. Transformed gingerbread shields use their green base family.

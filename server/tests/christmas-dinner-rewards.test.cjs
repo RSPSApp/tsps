@@ -36,12 +36,12 @@ function plan(p){return Rewards.plan(api,p,Progress.read(p).revision);}
 function amount(items,id){return items.filter(item=>item.getId()===id).reduce((total,item)=>total+item.getAmount(),0);}
 function snapshot(p){return p.getInventory().getItems().map(item=>({id:item.getId(),amount:item.getAmount(),meta:item.getMeta()}));}
 
-test('25-hour boundary uses the canonical online-time owner and awards individual noted hats',()=>{
+test('25-hour boundary uses the canonical online-time owner and awards the Wiki noted sets, hats and crackers',()=>{
   const young=fixture(89999),old=fixture(90000),before=snapshot(old);
-  const basic=plan(young),full=plan(old);assert.equal(basic.rewards.length,4);assert.equal(full.rewards.length,12);
-  for(const id of [1039,1041,1043,1045,1047,1049,1051,963])assert.equal(amount(full.items,id),2);
+  const basic=plan(young),full=plan(old);assert.equal(basic.rewards.length,4);assert.equal(full.rewards.length,7);
+  for(const id of [13174,1051,963])assert.equal(amount(full.items,id),2);
   for(const id of [32928,32934,32930,32932])assert.equal(amount(full.items,id),1);
-  assert.equal(amount(full.items,13173),0,'no GE partyhat-set box');assert.equal(amount(full.items,13174),0,'no noted GE box');
+  for(const id of [13173,1039,1041,1043,1045,1047,1049])assert.equal(amount(full.items,id),0,'only the noted set, not unnoted sets or loose hats');
   assert.equal(amount(full.items,platter),0);assert.deepEqual(snapshot(old),before,'planning cannot consume the live platter or mutate live items');
   assert.equal(Progress.read(old).phase,'ready');assert.equal(old.getAttribute('holiday-rewards:unlocked'),undefined);
 });
@@ -54,11 +54,11 @@ test('source 12-slot requirement permits retry after a real inventory removal an
   inventory.deleteAtSlot(inventory.getSlotForItemId(platter),1);assert.equal(plan(p),null,'lost physical platter cannot be silently exchanged');
 });
 
-test('real inventory stack cap refuses the whole award until both noted hats fit',()=>{
-  const p=fixture(),inventory=p.getInventory();inventory.setItem(1,new api.core.Item(1039,2147483646));
+test('real inventory stack cap refuses the whole award until both noted partyhat sets fit',()=>{
+  const p=fixture(),inventory=p.getInventory();inventory.setItem(1,new api.core.Item(13174,2147483646));
   const before=snapshot(p);assert.equal(plan(p),null);assert.deepEqual(snapshot(p),before);
-  inventory.deleteAtSlot(1,1);const next=plan(p);assert.ok(next);assert.equal(amount(next.items,1039),2147483647);
-  assert.equal(inventory.getAmount(1039),2147483645,'successful planning also leaves live stack untouched');
+  inventory.deleteAtSlot(1,1);const next=plan(p);assert.ok(next);assert.equal(amount(next.items,13174),2147483647);
+  assert.equal(inventory.getAmount(13174),2147483645,'successful planning also leaves live stack untouched');
 });
 
 test('Christmas unlock names are accepted by the real Diango service and exclude rare-award enum entries',()=>{
@@ -78,7 +78,7 @@ test('reward commit exchanges the platter once and preserves unrelated inventory
   assert.equal(Progress.read(p).phase,'complete');
   assert.equal(p.getInventory().getAmount(platter),0);
   assert.equal(p.getInventory().getAmount(api.core.ItemIdentifiers.LOGS),15);
-  assert.equal(p.getInventory().getAmount(1039),2);
+  assert.equal(p.getInventory().getAmount(13174),2);
   assert.ok(p.getAttribute('holiday-rewards:unlocked').includes('rubber_chicken'));
   assert.ok(p.getAttribute('holiday-rewards:unlocked').includes('xm21_present_1'));
   const before=snapshot(p);assert.equal(Rewards.claim(api,p,revision),false);

@@ -2765,12 +2765,32 @@
     },
     {
       "name": "Stepping stone (Nemus Retreat)",
-      "object": 56717,
-      "at": [1315,9378,0],
+      "object": 56988,
+      "at": [[1395,3309,0],[1397,3309,0]],
       "level": 36,
       "xp": 14,
+      "between": {
+        "ends": [[1393,3309,0],[1399,3309,0]],
+        "via": [[1395,3309,0],[1397,3309,0]],
+        "cross": [
+          {"sound":2461,"delay":15},
+          {"move":"via0","anim":"JUMP","delay":15,"speed":[30,45],"ticks":2},
+          {"sound":2461,"delay":15},
+          {"move":"via1","anim":"JUMP","delay":15,"speed":[30,45],"ticks":2},
+          {"sound":2461,"delay":15},
+          {"move":"to","anim":"JUMP","delay":15,"speed":[30,45],"ticks":2}
+        ]
+      },
+      "note": "rsprox captures 1098, 1100 (Leagues worlds only): human_spot_jump with sound 2461 at 15 cycles, exactmove 30-45, a stone every 2 ticks from 1393 to 1399 and back. The Wiki's 'east of the Nemus Retreat bank', level 36, 14 XP."
+    },
+    {
+      "name": "Stepping stone (Tonali Cavern)",
+      "object": 56717,
+      "at": [1315,9378,0],
+      "level": 46,
       "unverified": "the movement and both ends (no capture; ends from the map)",
-      "between": {"ends":[[1313,9378,0],[1317,9378,0]],"cross":[{"use":"hops","args":["object","to"]}]}
+      "between": {"ends":[[1313,9378,0],[1317,9378,0]],"cross":[{"use":"hops","args":["object","to"]}]},
+      "note": "The Wiki's Agility shortcuts list: Tonali Cavern's stepping stone, level 46, no XP (it was named and levelled as Nemus Retreat's here)."
     },
     {
       "name": "Log balance (Tlati Rainforest)",

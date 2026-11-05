@@ -54,13 +54,9 @@ function last(event) {
 
 module.exports = function attach(api) {
   effect = Common.data.effects.evilEye;
-  const { CacheDefinitions } = api.core;
-  const cast = {
-    steps: [{ tick: effect.cast.tick, animation: CacheDefinitions.getSeqId(effect.cast.animation), graphic: CacheDefinitions.getSpotanimId(effect.cast.graphic) }],
-    lockTick: effect.cast.tick, landTick: effect.cast.landTick,
-  };
   bosses = Teleports.areaTeleports({
-    key: KEY, title: DATA.menu.title, areaTitle, areas: DATA.areas, cast, lastVarp: CacheDefinitions.getVarpId(effect.cast.lastVarp),
+    key: KEY, title: DATA.menu.title, areaTitle, areas: DATA.areas, cast: Teleports.itemCast(effect.cast),
+    lastVarp: api.core.CacheDefinitions.getVarpId(effect.cast.lastVarp),
   });
   Teleports.attachMenu(api);
   api.persistAttribute(Teleports.lastAttribute(KEY), null);

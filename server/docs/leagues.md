@@ -111,6 +111,7 @@ colours and screens here but no relic, area or task catalogs yet.
 | `welcome-screen:shown` | `{ player }` when the welcome screen is up | Tutorial, Welcome listen |
 | `league:areas` | `{ player } -> { league, unlocked: [area ids], next: { slot, tasks } \| null, available }` | LeagueAreaUnlocks |
 | `league:area-at` | `{ x, y, player \| league } -> { area: id \| null, name }` | LeagueAreaUnlocks |
+| `league:near-bank` | `{ player, distance? } -> { near }` (a bank loc or banker within `distance`, Shattered Relics' `bank.distance` unless given) | LeagueMode (NearBank) |
 | `league:teleport-cast` | `{ player } -> { cast: { steps, lockTick, landTick } \| null }` (the league's area-teleport cast, `teleportCast`) | LeagueAreaUnlocks |
 | `league:relic-triggered` | `{ player, relic }` when a once-in-a-while relic fires (Undying Retribution, Last Stand) | LeagueRelics emits |
 | `ironman:set-mode` | `{ player, mode } -> { handled }` (the Ironman plugin's) | LeagueMode emits at a league login |
@@ -675,6 +676,9 @@ tooltip is 655:53.
   item is its struct's param 2049 (param 1855 says it has one); such a relic unlocks only in a
   bank or near the Leagues Tutor ("You must be within a bank or near the Leagues Tutor to unlock
   this as it gives you items.", 237/01102), then the captured line and a "You receive ..." box.
+  In a bank is the bank open, or a bank loc or banker within 4 tiles (`league:near-bank`; ours:
+  live unlocked 3 tiles from the Colosseum's tables but refused 2 from Nemus Retreat's Bank
+  buffalo, 237/01098, so live's bank is an area the server has no data for).
 - **The flow, as captured.** The side panel's View Relics (656:44) opens 655 as the main modal
   with `if_setevents` on its slots (655:22, 0-23) and menu (655:6, 10-20). A slot click sets
   `league_relic_last_viewed` (10048) to the raw slot and runs the client's redraw scripts 3193
@@ -742,8 +746,8 @@ varp `league_relic_effect_toggle_1` with the recorded "Relic - ..." lines (237/0
 | 2 | Woodsman | partial: Fletching batches, log burning, Hunter catches, impling loot doubled and noted (`hunter:impling-loot`), double rumour XP and sack loot rolls (`hunter:rumour-reward`, `hunter:sack-rolls`), whistles that keep their charges (`quetzals:whistle-charge`); not the trap's herb or tree seed: the Wiki says only "a random herb seed or tree seed", and no Leagues VI recording has a Woodsman holder (every trapper in them chose Friendly Forager) |
 | 3 | Bank Heist | done |
 | 3 | Evil Eye | partial: the Wiki's 60 bosses and raids by area, each on the entrance tile the server's own data gives (`league-evil-eye.json`), with the eye's recorded cast (evil_eye_cast01, leagues_6_evil_eye, the move 4 ticks on, varp league_default_teleport_last_destination; 237/04057) and live's menus (interface 187 "Select a region", locked areas struck through, "Evil Eye teleports - <region>" with Back; live's labels for the five recorded areas); not the strike-through of bosses whose own requirements are unmet |
-| 3 | Map of Alacrity | partial: 57 of the Wiki map's 141 shortcuts, those the server has with a side the pin and the data agree on (`league-map-of-alacrity.json`, which lists the rest and why), no Agility level to teleport (Wiki: the shortcut keeps its own), the Wiki's "to use the teleport" quest notes, interface 187's menus as Evil Eye's; the league's area-teleport cast |
-| 4 | Transmute | done: Alchemic Divergence and Convergence (218:199, 218:200) move up to 10 of an item a tier along the cache's `transmutation` table, 10 Magic XP each, no level or runes, every 5 ticks, a stack cast on again while its slot holds it, noted stays noted, to the bank by toggle, loose items in place with a slot each (237/01102, 01106, 238/04211); the alchemy spell while toggled off; the ledger's endless nature runes and its scroll for an item used on it; not Divergence on a top tier (unrecorded), the ledger's Read (nothing says what it shows), or which skilling pauses the casts |
+| 3 | Map of Alacrity | partial: 58 of the Wiki map's 141 shortcuts, those the server has with a side the pin and the data agree on (`league-map-of-alacrity.json`, which lists the rest and why), no Agility level to teleport (Wiki: the shortcut keeps its own), the Wiki's "to use the teleport" quest notes, interface 187's menus as Evil Eye's; its own cast (hotfoot_grace_teleport, leagues_6_hotfoot; inferred, unrecorded) |
+| 4 | Transmute | done: Alchemic Divergence and Convergence (218:199, 218:200) move up to 10 of an item a tier along the cache's `transmutation` table, 10 Magic XP each, no level or runes, every 5 ticks, a stack cast on again while its slot holds it, noted stays noted, to the bank by toggle, loose items in place, 10 or fewer held with no free slot, more held only with a slot for each of the 10 (237/01102, 01106, 238/04211); the alchemy spell while toggled off; the ledger's endless nature runes and its scroll for an item used on it; not Divergence on a top tier (unrecorded), the ledger's Read (nothing says what it shows), or which skilling pauses the casts |
 | 4 | Conniving Clues | done |
 | 4 | Butler's Bell | done but for the bell's Check (its line is in no source): Ring summons the Demon butler beside its owner (not in an instance; in view, he asks to be spoken to), one job of the cache's butlers_bell_actions at its rate a minute or half that processed, rolled on the Wiki's weighted tables, reckoned from the clock (offline too), 10 XP a processed item in the row's skill; Talk-to and Collect as the Wiki transcript, the collection shown on 954. Ours, unsourced: the job menu (the cache's nouns), where he stands and when he leaves, the collection banked (`league-butlers-bell.json` `_ours`) |
 | 5 | Nature's Accord | partial: noted yields, undying crops, kept seeds, the Fairy mushroom, no Farming level to plant, make a seedling or a scarecrow (`farming:level-rules`); not the spirit tree count, the Tithe Farm's seeds, or Tree Gnome Village on unlock |
@@ -755,7 +759,7 @@ varp `league_relic_effect_toggle_1` with the recorded "Relic - ..." lines (237/0
 | 7 | Flow State | done but for stealing valuables (not on the server) and diabolic worms (no Fishing spot uses them here): a 2-tick pace for Fishing, Mining, Woodcutting, Cooking, Firemaking (lighting, campfire tending), bone offering, Fletching, Smithing (furnace, anvil, cannonballs: the Wiki's current list), Crafting, Farming (raking, harvesting), alchemy, Superheat Item, enchanting and transmutation (`skills:action-interval`), Wintertodt's root chopping and fletching and brazier lighting, Tempoross's harpooning, with a fletching knife's tick off after it (1 tick) |
 | 7 | Reloaded | done (a pick from tiers 1 to 6) |
 | 8 | Executioner | done: the execute (never Yama or the Gemstone Crab) and the axe's 6 tiles of reach for its owner, 8 on Longrange (`onCombatAttackDistance` over the profile's 5, 7 on Longrange: its `longRangeFightType`; Trailblazer Reloaded's stays 5 and 7) |
-| 8 | Minion | partial: Blow summons the minion (league_guardian) for 30 minutes with the recorded melee spawn and the client's buff timer (league_guardian_active, map_clock), Banish; it follows and fights its owner's NPC (never a player, Yama or the Gemstone Crab) every 3 ticks in the target's weakest style with that style's recorded looks, attack roll 45,000, 3 to 10 +2 a unique Zamorak item fed to the whistle (up to five, the Wiki's list by id); a thrall's pursuit and reach (ours). Not the AoE (no source gives its reach), the auto-loot and its settings (the whistle's Rules and Check are unrecorded), or any message (no Demonic Pacts recording of the whistle) |
+| 8 | Minion | partial: Blow summons the minion for 30 minutes with the recorded melee spawn and the client's buff timer (league_guardian_active, map_clock), Banish; it follows and fights its owner's NPC, or with none the NPC fighting its owner (never a player, Yama or the Gemstone Crab), every 3 ticks in the target's weakest style, attack roll 45,000, 3 to 10 +2 a unique Zamorak item fed to the whistle (up to five, the Wiki's list by id), each hit holding off the target's regeneration; a thrall's pursuit and reach (ours). Its look is the cache's debug_thrall_imp_melee / _ranged / _magic, transformed on a change of style: the models and bas live dresses league_guardian in (server-only columns). The whistle's Rules set league_guardian_aoe_disabled, _follow_disabled (honoured: it waits between fights), _pickup_items_disabled, _pickup_noted_disabled and league_guardian_pickup_value, saved and sent at login; Check says the time left (both unrecorded: lines ours). Not the AoE (no source gives its reach) or the auto-loot itself (nothing records where loot goes), whose settings are stored for them |
 | 8 | Flask of Fervour | done: explosions 1, 3 and 5 ticks on with the recorded impacts (237/01158), 30% to players the area lets the owner fight; the buff bar's cooldown varp as the map_clock tick it ends on (the clock + 301 on Activate, each cut, at login), now that core sends map_clock every tick |
 
 ### Not in this cache
@@ -1067,8 +1071,9 @@ Animal Wrangler's Hunter and cooking ones) do not.
 
 ### The item and teleport relics
 
-Their teleports share the standard animation (Demonic Pacts' Map of alacrity: the league's
-area-teleport cast, `league:teleport-cast`; the Evil eye: its own recorded cast), their item's Wilderness limit, and the league's
+Their teleports share the standard animation (Demonic Pacts' Map of alacrity: its own cast,
+hotfoot_grace_teleport with spotanim leagues_6_hotfoot, inferred from the Wiki's video and the
+cache's names; the Evil eye: its own recorded cast), their item's Wilderness limit, and the league's
 areas: a destination in an area the character has not unlocked is refused (`league:area-at`
 and `league:areas`, answered by the league's area unlocks; with nobody answering, everywhere is
 open). Each item remembers its last destination. The menus' grouping and wording are ours.
@@ -1130,8 +1135,8 @@ open). Each item remembers its last destination. The menus' grouping and wording
   Agility level to use it") and only the Wiki's "to use the teleport" quest notes (Shadows of
   Custodia, The Final Dawn; `quest:is-complete`). The shortcut keeps its own requirements. The
   Wiki's "less favourable side" is read as the end of the server's shortcut nearest the Wiki's
-  pin: `plugins/modes/data/league-map-of-alacrity.json` keeps the 57 shortcuts the server has
-  where that end is clear and open, and lists the other 84 rows and why.
+  pin: `plugins/modes/data/league-map-of-alacrity.json` keeps the 58 shortcuts the server has
+  where that end is clear and open, and lists the other 83 rows and why.
 - **Total Recall** (Raging Echoes tier 6): the Crystal of Echoes' Save-memory keeps the place,
   Hitpoints (up to 127, as live), Prayer and special attack energy; Teleport-back returns there
   from any Wilderness level and sets the three back; Check-memories says what is kept (ours). Not

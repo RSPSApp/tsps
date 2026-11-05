@@ -65,9 +65,10 @@ function onHotspot(house, tile) {
   return house.hotspotTiles(position).some(hotspot => covers(hotspot.x, hotspot.y, hotspot.width ?? 1, hotspot.length ?? 1, tile));
 }
 
-function occupied(house, tile) {
+function occupied(house, tile, except = null) {
   const objects = [...house.furnitureObjects, ...house.extraObjects];
   return objects.some(object => {
+    if (object === except) return false;
     const at = object.getLocation(), definition = CacheDefinitions.getObject(object.getId());
     const turned = (object.getFace() & 1) === 1;
     const width = (turned ? definition?.sizeY : definition?.sizeX) ?? 1, length = (turned ? definition?.sizeX : definition?.sizeY) ?? 1;
@@ -107,13 +108,16 @@ function refresh(house) {
   for (const decoration of decorations) {
     const entry = entries[decoration.key], object = objects.get(decoration.key);
     const tile = entry && tileOf(house, entry);
-    if (object && entry && object.getLocation().equals(tile) && object.getFace() === (entry.face & 3)) continue;
+    // Re-checked on every rebuild, also when the decoration is already drawn: a room moved,
+    // removed or rebuilt under it on this same instance must not leave it standing there.
+    const stands = entry && outdoors(house, tile) && !onHotspot(house, tile) && !occupied(house, tile, object);
+    if (stands && object && object.getLocation().equals(tile) && object.getFace() === (entry.face & 3)) continue;
     if (object) {
       house.removeExtraObject(object);
       objects.delete(decoration.key);
     }
     if (!entry) continue;
-    if (!outdoors(house, tile) || onHotspot(house, tile) || occupied(house, tile)) {
+    if (!stands) {
       delete entries[decoration.key];
       changed = true;
       continue;

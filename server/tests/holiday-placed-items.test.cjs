@@ -187,3 +187,23 @@ test('walking away during Plant cancels it without leaving the player stuck (rev
  log.anims.length=0;plantClick(p);assert.deepEqual(log.anims,[c.getSeqId('farming_trowel_dig')],'a new Plant starts');
  ticks(3);assert.ok(drawn(h,'gub_wintumber_tree_standard'));
 });
+
+test('a room moved, removed or rebuilt indoors under a drawn decoration is noticed by rebuild on the same instance (reviewer reproduction)',()=>{
+ // Where the garden goes: another cell, nowhere, or its cell rebuilt as an indoor room.
+ const edits={
+  moved:(h,garden)=>{h.save.rooms[1][5][4]=garden;},
+  removed:()=>{},
+  indoors:h=>{h.save.rooms[1][4][4]={roomKey:'PARLOUR',rotation:0,furniture:{}};},
+ };
+ for(const [name,edit] of Object.entries(edits)){
+  const {p}=player(`decor${name}`),tree=c.getObjId('gub_wintumber_tree');p.getInventory().setItem(0,new core.Item(tree,1));
+  const h=house(p),{stand,target}=gardenSpot(h);enter(p,h,stand);p.setPositionToFace(target);plantClick(p);ticks(3);
+  assert.ok(drawn(h,'gub_wintumber_tree_standard'),name);
+  const garden=h.save.rooms[1][4][4];h.save.rooms[1][4][4]=null;edit(h,garden);
+  h.rebuild(p,false);
+  assert.equal(drawn(h,'gub_wintumber_tree_standard'),undefined,`${name}: the tree no longer stands there`);
+  assert.equal(core.RegionManager.blocked(target,h),false,`${name}: its clipping is gone`);
+  assert.deepEqual(p.getAttribute('construction:holiday-decorations'),{},`${name}: forgotten, so Diango replaces it`);
+  const owned={player:p,itemIds:[]};HouseRewards.planted({core},owned);assert.deepEqual(owned.itemIds,[],name);
+ }
+});

@@ -100,6 +100,24 @@ module.exports = function registerTheGolemQuest(api) {
   const BOOKCASE_TILE = { x: 3366, y: 3332 };
   // 24626 is the world's Open-able museum case; 6294/6295 are not placed.
   const DISPLAY_CASE_IDS = new Set([24626]);
+  const TIMELINE_GROUP = 534;
+  const TIMELINE_CLOSE = 1;
+  const TIMELINE_TEXT = 2;
+  const TIMELINE_NUMBER = 84;
+  const TIMELINE_STATUE_MODEL = 49;
+  const TIMELINE_EMPTY_MODEL = 35;
+  const CASE_STATUE_MODEL_ID = 25576;
+  const CASE_EMPTY_MODEL_ID = 25568;
+  const SET_SPINNER_SCRIPT = 65;
+  const STUDY_SEQUENCE = 6383;
+  const BUSY_VARBIT = 12393;
+  const CASE_NUMBER = "30";
+  const CASE_DATE = "3rd Age - yr 3000-4000";
+  const CASE_DESCRIPTION = "This statuette was found in an underground temple in the ruined city of Uzer, which was "
+    + "destroyed late in the 3rd Age, suddenly, due to causes unknown. It probably represents one of the clay golems "
+    + "that the craftsmen of the city built as warriors and servants. The statuette was originally part of a "
+    + "mechanism whose purpose is unknown.";
+  const CASE_STOLEN = "Recently this display was stolen and its whereabouts are unknown.";
   const THRONE_IDS = new Set([ObjectIdentifiers.THRONE_10, ObjectIdentifiers.THRONE_11]); // 6301/6302
   // Uzer temple alcoves. 6303-6306 are the placed base objects; the client
   // transforms them through varbits 349-352 to 6307 (right), 6308 (left) or 6309
@@ -645,6 +663,35 @@ module.exports = function registerTheGolemQuest(api) {
     }
   }
 
+  /**
+   * Study on display 30. Interface and components are the cache's (vm_timeline, 534). The packets
+   * follow rsprox 1723 tick 14869, Study on the sibling digsite display (528), as no capture opens
+   * 534. The model is that of the loc variant shown (24627, or vm_timeline_no_display). The wording
+   * is the Wiki's; how its paragraphs are split on the interface is inferred.
+   */
+  function studyDisplayCase(player) {
+    const stolen = Boolean(player.getAttribute(RETRIEVED_ATTRIBUTE));
+    const text = [CASE_DATE, CASE_DESCRIPTION, ...(stolen ? [CASE_STOLEN] : [])].join("<br><br>");
+    const model = (TIMELINE_GROUP << 16) | (stolen ? TIMELINE_EMPTY_MODEL : TIMELINE_STATUE_MODEL);
+    const sender = player.getPacketSender();
+    sender.sendVarbit(BUSY_VARBIT, 1);
+    player.performAnimation(new api.core.Animation(STUDY_SEQUENCE));
+    sender.sendString(text, (TIMELINE_GROUP << 16) | TIMELINE_TEXT);
+    sender.sendString(CASE_NUMBER, (TIMELINE_GROUP << 16) | TIMELINE_NUMBER);
+    sender.sendInterfaceRawModel(model, stolen ? CASE_EMPTY_MODEL_ID : CASE_STATUE_MODEL_ID);
+    sender.sendClientScript(SET_SPINNER_SCRIPT, 0, 5, 0, model);
+    sender.sendInterfaceScript(2524, [0, 100]);
+    sender.sendInterface(TIMELINE_GROUP);
+  }
+
+  function closeTimeline({ player }) {
+    player.getPacketSender().sendInterfaceRemoval();
+  }
+
+  function handleInterfaceClosed({ player, interfaceId }) {
+    if (interfaceId === TIMELINE_GROUP) player.getPacketSender().sendVarbit(BUSY_VARBIT, 0);
+  }
+
   function openDisplayCase(player) {
     if (player.getAttribute(RETRIEVED_ATTRIBUTE) || held(player, STATUETTE_ITEM_ID)) {
       player.sendMessage("You have already taken the statuette.");
@@ -795,6 +842,11 @@ module.exports = function registerTheGolemQuest(api) {
     }
     if (DISPLAY_CASE_IDS.has(objectId)) {
       const option = String(event.definition?.getInteractions?.()?.[event.clickType - 1] ?? "").toLowerCase();
+      if (option.includes("study")) {
+        event.handled = true;
+        studyDisplayCase(player);
+        return;
+      }
       if (!option.includes("open")) return;
       event.handled = true;
       if (!held(player, CABINET_KEY_ITEM_ID)) {
@@ -962,6 +1014,8 @@ module.exports = function registerTheGolemQuest(api) {
   api.onItemOnNpc(handleItemOnNpc);
   api.onItemOnObject(handleItemOnObject, { noted: false });
   api.onObjectInteraction(handleObjectInteraction);
+  api.onCustomEvent("interface:closed", handleInterfaceClosed);
+  api.onInterfaceActionButton((TIMELINE_GROUP << 16) | TIMELINE_CLOSE, closeTimeline);
   api.onCustomEvent("door:toggle", handleDoorToggle);
   api.onNpcInteraction(handleNpcInteraction);
   api.onPlayerLogin(handleLogin);

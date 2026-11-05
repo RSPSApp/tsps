@@ -43,8 +43,8 @@ export class ClueScrollMusicOverlay extends ClueScrollDynamicOverlay {
         if (found === null) return;
 
         if (live && !this.hasScrolled) {
-            this.hasScrolled = true;
-            this.plugin.scrollToWidget(MUSIC_SCROLLABLE, MUSIC_SCROLLBAR, found);
+            // Not yet scrolled when the client script VM is busy this frame: try again next frame.
+            this.hasScrolled = this.plugin.scrollToWidget(MUSIC_SCROLLABLE, MUSIC_SCROLLBAR, found);
         }
         this.plugin.highlightWidget(graphics, found, trackList, PADDING, null);
     }

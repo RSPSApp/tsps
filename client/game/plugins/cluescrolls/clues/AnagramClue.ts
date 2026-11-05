@@ -519,7 +519,14 @@ export const ANAGRAM_CLUES: readonly AnagramClue[] = [
             .area("Ardougne Zoo")
             .question("How many animals in total are there in the zoo?")
             .answerProvider((plugin) => {
-                const state = Quest.EAGLES_PEAK.getState(plugin.getClient());
+                // The quest state comes from a client script; when the VM is busy this frame, the
+                // answer for an unfinished quest shows until it can run.
+                let state: QuestState | null = null;
+                try {
+                    state = Quest.EAGLES_PEAK.getState(plugin.getClient());
+                } catch {
+                    // Can't run the script right now.
+                }
                 return state === QuestState.FINISHED ? "51" : "50";
             })
             .build(),

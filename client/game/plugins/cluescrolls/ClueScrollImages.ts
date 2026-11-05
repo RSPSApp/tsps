@@ -4,6 +4,7 @@
  * All rights reserved.
  * Ported to TypeScript from RuneLite 1.13.6. BSD 2-Clause License, see ./LICENSE.
  */
+import * as ItemID from "@runelite/api/gameval/ItemID";
 import { runeliteImage } from "@runelite/client/ui/runeliteImages";
 
 /**
@@ -46,13 +47,13 @@ export class ClueScrollImages {
 
     /** ItemManager.getImage(TRAIL_CLUE_MASTER). */
     clueScroll(): HTMLCanvasElement | null {
-        if (!this.clueScrollCanvas && this.itemImage) this.clueScrollCanvas = this.itemImage(19835, 1, 0) ?? null;
+        if (!this.clueScrollCanvas && this.itemImage) this.clueScrollCanvas = this.itemImage(ItemID.TRAIL_CLUE_MASTER, 1, 0) ?? null;
         return this.clueScrollCanvas;
     }
 
     /** ItemManager.getImage(SPADE). */
     spade(): HTMLCanvasElement | null {
-        if (!this.spadeCanvas && this.itemImage) this.spadeCanvas = this.itemImage(952, 1, 0) ?? null;
+        if (!this.spadeCanvas && this.itemImage) this.spadeCanvas = this.itemImage(ItemID.SPADE, 1, 0) ?? null;
         return this.spadeCanvas;
     }
 }

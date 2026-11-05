@@ -25,7 +25,12 @@ type Provider<T> = (plugin: ClueScrollPlugin) => T;
 
 /** Eluned moves to Prifddinas once Song of the Elves is done. */
 function isElunedInPrifddinas(plugin: ClueScrollPlugin): boolean {
-    return Quest.SONG_OF_THE_ELVES.getState(plugin.getClient()) === QuestState.FINISHED;
+    // The quest state comes from a client script; when the VM is busy this frame, Lletya it is.
+    try {
+        return Quest.SONG_OF_THE_ELVES.getState(plugin.getClient()) === QuestState.FINISHED;
+    } catch {
+        return false;
+    }
 }
 
 type CipherClueOptions = {

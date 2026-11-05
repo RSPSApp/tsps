@@ -38,9 +38,11 @@ If inactive / On pickup).
 - Off by default here; RuneLite enables it.
 - The `::clue <text>` developer command works only in development builds (RuneLite: developer
   mode).
-- RuneLite reads world objects from the loaded scene's tiles; here named objects (impostor
-  lookups through the varbit-driven multiloc) come from a scan of the scene's locs each game
-  tick and after a plane change.
+- RuneLite reads world objects as the scene spawns them; here named objects (impostor lookups
+  through the varbit-driven multiloc) come from a scan of the scene's locs when a clue is set,
+  and again a tick after a plane change or a scene rebuild.
+- The scroll's text is read on the game tick after the clue interface opens (RuneLite: on the
+  next client frame), so the panel can appear up to a tick later.
 - The ✓/✗ requirement marks use the panel's own font (RuneLite draws them with a system font).
 - Two clue texts in this cache are not in RuneLite 1.13.6's tables and get no help
   (`tests/clue-scroll-cache-crosscheck.test.ts` lists them): the easy cryptic "Someone watching

@@ -5,6 +5,7 @@ import * as InventoryID from "@runelite/api/gameval/InventoryID";
 import * as ItemID from "@runelite/api/gameval/ItemID";
 import { ItemContainer } from "@runelite/api/Item";
 import { RecordingGraphics2D } from "@runelite/awt/Graphics2D";
+import { PanelComponent } from "@runelite/client/ui/overlay/components/PanelComponent";
 import { ConfigManager } from "@runelite/client/config/ConfigManager";
 import { EventBus } from "@runelite/client/eventbus/EventBus";
 import { inject } from "@runelite/client/plugins/PluginInjector";
@@ -18,6 +19,8 @@ import { ClueScrollOverlay } from "../game/plugins/cluescrolls/ClueScrollOverlay
 import { ClueScrollPlugin } from "../game/plugins/cluescrolls/ClueScrollPlugin";
 import { ClueScrollWorldMapPoint } from "../game/plugins/cluescrolls/ClueScrollWorldMapPoint";
 import { ClueScrollWorldOverlay } from "../game/plugins/cluescrolls/ClueScrollWorldOverlay";
+import { AnagramClue } from "../game/plugins/cluescrolls/clues/AnagramClue";
+import { CipherClue } from "../game/plugins/cluescrolls/clues/CipherClue";
 import { CoordinateClue } from "../game/plugins/cluescrolls/clues/CoordinateClue";
 import { CrypticClue } from "../game/plugins/cluescrolls/clues/CrypticClue";
 import { EmoteClue } from "../game/plugins/cluescrolls/clues/EmoteClue";
@@ -158,6 +161,34 @@ async function main(): Promise<void> {
     assert.equal(point.getImagePoint(), null, "snapped: the plain image, centred");
     point.onEdgeUnsnap();
     assert.deepEqual(point.getImagePoint(), { x: 18, y: 32 });
+
+    // --- Client scripts that cannot run right now never abort an overlay frame ------------------------
+    const busy = osrsClient.cs2Vm;
+    osrsClient.cs2Vm = { ...busy, isRunning: () => true };
+    plugin.resetClue(true);
+    emote.draw(context);
+    plugin.updateClue(emoteClue);
+    scriptRuns.length = 0;
+    assert.doesNotThrow(() => emote.draw(context), "a busy CS2 VM: the scroll is skipped, not thrown");
+    assert.equal(scriptRuns.length, 0);
+    osrsClient.cs2Vm = busy;
+    emote.draw(context);
+    assert.equal(scriptRuns.length, 1, "and tried again on the next frame once the VM is free");
+    osrsClient.cs2Vm = { ...busy, isRunning: () => true };
+    const zoo = AnagramClue.CLUES.find((c) => c.getText() === "EEK ZERO OP")!;
+    assert.doesNotThrow(() => zoo.makeOverlayHint(new PanelComponent(), plugin), "the Eagles' Peak answer provider swallows a busy VM");
+    const eluned = CipherClue.CLUES.find((c) => c.getText().endsWith("OVEXON"))!;
+    assert.ok(eluned, "the Eluned cipher row");
+    assert.doesNotThrow(() => eluned.getLocation(plugin), "Eluned's location provider swallows a busy VM");
+    osrsClient.cs2Vm = busy;
+
+    // --- The map marker composes its images once they have loaded, not only when it is made --------------
+    const late = new ClueScrollWorldMapPoint(new WorldPoint(3222, 3218, 0), plugin);
+    assert.equal(late.getImage(), scroll, "no arrow yet: the plain scroll");
+    const arrow = { width: 20, height: 40 } as HTMLCanvasElement;
+    (plugin as any).getMapArrow = () => arrow;
+    assert.equal(late.getImage(), arrow, "the arrow arrived: the marker is composed on it (no canvas here, so the arrow itself)");
+    assert.deepEqual(late.getImagePoint(), { x: 10, y: 40 }, "anchored at the arrow's tip");
 
     console.log("clue-scroll-overlays: ok");
 }

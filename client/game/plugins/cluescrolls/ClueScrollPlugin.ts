@@ -31,6 +31,7 @@ import { Text } from "@runelite/client/util/Text";
 import { ClientImpl } from "../../../runelite/impl/ClientImpl";
 import type { MenuActionData } from "../../../ui/menu/menuEvents";
 import type { OsrsClient } from "../../OsrsClient";
+import { ClientState } from "../../ClientState";
 import type { WidgetOverlay } from "../ClientPluginManager";
 import { CLICKBOX_BORDER_COLOR, CLICKBOX_FILL_COLOR, CLICKBOX_HOVER_BORDER_COLOR } from "./ClueScrollColors";
 import { BankTagsPlugin } from "../banktags/BankTagsPlugin";
@@ -118,6 +119,8 @@ export class ClueScrollPlugin extends Plugin {
     private worldMapPointsSet = false;
     /** Objects on a new plane only show their active form a tick after the varbits land. */
     private currentPlane = -1;
+    private currentBaseX = -1;
+    private currentBaseY = -1;
     private namedObjectCheckThisTick = false;
     /** The clue text interface opened this tick; its text is read on the game tick. */
     private clueTextToRead = false;
@@ -258,10 +261,14 @@ export class ClueScrollPlugin extends Plugin {
         this.textComponent.render(graphics);
     }
 
-    /** Scrolls a list so the given widgets' average centre is in view (RuneLite's scrollToWidget). */
-    scrollToWidget(list: number, scrollbar: number, ...toHighlight: Array<Widget | null>): void {
+    /**
+     * Scrolls a list so the given widgets' average centre is in view (RuneLite's scrollToWidget).
+     * False when the scroll could not run (nothing to scroll to, or the client script VM is busy
+     * this frame), so the caller can try again next frame.
+     */
+    scrollToWidget(list: number, scrollbar: number, ...toHighlight: Array<Widget | null>): boolean {
         const parent = this.client.getWidget(list);
-        if (parent === null) return;
+        if (parent === null) return false;
         let averageCentralY = 0;
         let nonnullCount = 0;
         for (const widget of toHighlight) {
@@ -270,10 +277,15 @@ export class ClueScrollPlugin extends Plugin {
                 nonnullCount += 1;
             }
         }
-        if (nonnullCount === 0) return;
+        if (nonnullCount === 0) return false;
         averageCentralY = Math.trunc(averageCentralY / nonnullCount);
         const newScroll = Math.max(0, Math.min(parent.getScrollHeight(), averageCentralY - Math.trunc(parent.getHeight() / 2)));
-        this.client.runScript(ScriptID.UPDATE_SCROLLBAR, scrollbar, list, newScroll);
+        try {
+            this.client.runScript(ScriptID.UPDATE_SCROLLBAR, scrollbar, list, newScroll);
+            return true;
+        } catch {
+            return false;
+        }
     }
 
     /** Bank Tags' TagManager (RuneLite's PluginDependency(BankTagsPlugin)), when that plugin is loaded. */
@@ -293,6 +305,9 @@ export class ClueScrollPlugin extends Plugin {
     // ------------------------------------------------------------------ lifecycle
 
     protected async startUp(): Promise<void> {
+        // RuneLite loads its images synchronously; here they load over the network, so start now.
+        this.images.mapArrow();
+        this.images.emote();
         const tags = this.tagManager();
         if (tags) {
             registerClueTags(this, tags);
@@ -308,6 +323,8 @@ export class ClueScrollPlugin extends Plugin {
         this.inventoryItems = null;
         this.equippedItems = null;
         this.currentPlane = -1;
+        this.currentBaseX = -1;
+        this.currentBaseY = -1;
         this.namedObjectCheckThisTick = false;
         this.resetClue(true);
     }
@@ -495,10 +512,16 @@ export class ClueScrollPlugin extends Plugin {
             }
         }
 
-        // A plane change: rescan for named objects one tick later, once their forms have settled.
-        if (this.currentPlane !== this.client.getPlane()) {
+        // A plane change or a scene rebuild (region reload while walking, where RuneLite's
+        // *ObjectSpawned re-add the objects): rescan for named objects one tick later, once their
+        // forms have settled.
+        const plane = this.client.getPlane();
+        const baseX = ClientState.baseX, baseY = ClientState.baseY;
+        if (this.currentPlane !== plane || this.currentBaseX !== baseX || this.currentBaseY !== baseY) {
             this.namedObjectsToMark.clear();
-            this.currentPlane = this.client.getPlane();
+            this.currentPlane = plane;
+            this.currentBaseX = baseX;
+            this.currentBaseY = baseY;
             this.namedObjectCheckThisTick = true;
         } else if (this.namedObjectCheckThisTick) {
             this.namedObjectCheckThisTick = false;

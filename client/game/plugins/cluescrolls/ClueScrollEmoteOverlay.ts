@@ -47,8 +47,8 @@ export class ClueScrollEmoteOverlay extends ClueScrollDynamicOverlay {
         }
 
         if (live && !this.hasScrolled) {
-            this.hasScrolled = true;
-            this.plugin.scrollToWidget(EMOTE_SCROLLABLE, EMOTE_SCROLLBAR, firstEmoteWidget, secondEmoteWidget);
+            // Not yet scrolled when the client script VM is busy this frame: try again next frame.
+            this.hasScrolled = this.plugin.scrollToWidget(EMOTE_SCROLLABLE, EMOTE_SCROLLBAR, firstEmoteWidget, secondEmoteWidget);
         }
     }
 }

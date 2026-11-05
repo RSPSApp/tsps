@@ -18,6 +18,7 @@ import { TRAIL_CLUETEXT_TEXT } from "../game/plugins/cluescrolls/ClueScrollInter
 import { CoordinateClue } from "../game/plugins/cluescrolls/clues/CoordinateClue";
 import { CrypticClue } from "../game/plugins/cluescrolls/clues/CrypticClue";
 import { HotColdClue } from "../game/plugins/cluescrolls/clues/HotColdClue";
+import { isNamedObjectClueScroll } from "../game/plugins/cluescrolls/clues/ClueScrollTypes";
 import { SkillChallengeClue } from "../game/plugins/cluescrolls/clues/SkillChallengeClue";
 import { Inventory } from "../rs/inventory/Inventory";
 
@@ -185,6 +186,18 @@ async function main(): Promise<void> {
 
     await plugin.stop();
     assert.equal(plugin.getClue(), null, "shutting down resets");
+    // (i) A scene rebuild (region reload while walking) re-finds named objects, as RuneLite's
+    // *ObjectSpawned handlers do on every scene load; the stale objects from the old scene go.
+    const lamps = SkillChallengeClue.CLUES.find((c) => isNamedObjectClueScroll(c))!;
+    plugin.updateClue(lamps);
+    bus.post(new GameTick());
+    plugin.getNamedObjectsToMark().add({ stale: true } as any);
+    ClientState.baseX += 64;
+    bus.post(new GameTick());
+    bus.post(new GameTick());
+    assert.equal(plugin.getNamedObjectsToMark().size, 0, "a region change drops the old scene's objects and rescans");
+    plugin.resetClue(true);
+
     console.log("clue-scroll-behaviour: ok");
 }
 

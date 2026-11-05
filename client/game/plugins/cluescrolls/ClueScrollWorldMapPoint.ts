@@ -12,28 +12,52 @@ import type { ClueScrollPlugin } from "./ClueScrollPlugin";
  * anchored at the arrow's tip; snapped to the map's edge it shows the plain clue scroll.
  */
 export class ClueScrollWorldMapPoint extends WorldMapPoint {
-    private readonly clueScrollWorldImage: HTMLCanvasElement | null;
-    private readonly clueScrollWorldImagePoint: { x: number; y: number } | null;
+    private clueScrollWorldImage: HTMLCanvasElement | null = null;
+    private clueScrollWorldImagePoint: { x: number; y: number } | null = null;
+    /** Whether the arrow was in when the marker image was composed; until then it is composed again on each read. */
+    private composedWithArrow = false;
+    private snapped = false;
 
     constructor(worldPoint: WorldPoint, private readonly plugin: ClueScrollPlugin) {
         super(worldPoint, null);
-        const arrow = plugin.getMapArrow();
-        const scroll = plugin.getClueScrollImage();
-        this.clueScrollWorldImage = arrow ? compose(arrow, scroll) : scroll;
-        this.clueScrollWorldImagePoint = this.clueScrollWorldImage ? { x: Math.trunc(this.clueScrollWorldImage.width / 2), y: this.clueScrollWorldImage.height } : null;
         this.setSnapToEdge(true);
         this.setJumpOnClick(true);
         this.setName("Clue Scroll");
-        this.setImage(this.clueScrollWorldImage);
-        this.setImagePoint(this.clueScrollWorldImagePoint);
+        this.compose();
+    }
+
+    /**
+     * RuneLite composes the marker once, from images it loads synchronously; here the arrow and
+     * the item image arrive later, so the marker is composed again until both are in.
+     */
+    private compose(): void {
+        const arrow = this.plugin.getMapArrow();
+        const scroll = this.plugin.getClueScrollImage();
+        this.clueScrollWorldImage = arrow ? compose(arrow, scroll) : scroll;
+        this.clueScrollWorldImagePoint = this.clueScrollWorldImage ? { x: Math.trunc(this.clueScrollWorldImage.width / 2), y: this.clueScrollWorldImage.height } : null;
+        this.composedWithArrow = arrow !== null && scroll !== null;
+        if (this.snapped) {
+            this.setImage(scroll);
+            this.setImagePoint(null);
+        } else {
+            this.setImage(this.clueScrollWorldImage);
+            this.setImagePoint(this.clueScrollWorldImagePoint);
+        }
+    }
+
+    getImage(): HTMLCanvasElement | null {
+        if (!this.composedWithArrow) this.compose();
+        return super.getImage();
     }
 
     onEdgeSnap(): void {
+        this.snapped = true;
         this.setImage(this.plugin.getClueScrollImage());
         this.setImagePoint(null);
     }
 
     onEdgeUnsnap(): void {
+        this.snapped = false;
         this.setImage(this.clueScrollWorldImage);
         this.setImagePoint(this.clueScrollWorldImagePoint);
     }

@@ -324,10 +324,30 @@ function cookOne(player, session) {
   };
   Common.api.emitCustomEvent("cooking:burn", burnRequest);
   if (!burnRequest.burn) {
+    const before = player.getInventory().getAmount(cookable.cooked);
     player.getInventory().addItem(new Item(cookable.cooked, 1));
+    const amount = Math.max(0, player.getInventory().getAmount(cookable.cooked) - before);
     Common.spam(player, successMessage(cookable));
     countCook(player, false);
-    Common.api.emitCustomEvent("cooking:success", { player, skill: Skill.COOKING, itemId: cookable.cooked });
+    if (amount > 0) {
+      const location = session.location.clone();
+      Common.api.emitCustomEvent("items:obtained", {
+        player,
+        itemId: cookable.cooked,
+        rawId: cookable.raw,
+        amount,
+        source: "cooking",
+        location,
+      });
+      Common.api.emitCustomEvent("cooking:success", {
+        player,
+        skill: Skill.COOKING,
+        rawId: cookable.raw,
+        itemId: cookable.cooked,
+        amount,
+        location,
+      });
+    }
     Common.addXp(player, cookable.xp);
     Common.api.emitCustomEvent("skills:produced", { player, skill: Skill.COOKING, itemId: cookable.cooked, amount: 1, xp: cookable.xp, kind: "cook" });
   } else {
@@ -442,7 +462,7 @@ function attachCookers(api) {
 module.exports = Object.assign(attachCookers, {
   isCookingActive, COOKABLE_OBJECT_NAMES, FIRE_OBJECT_NAMES,
   _test: {
-    startCooking, offerCook, isSuccess, stopBurnLevel, successMessage, burnMessage, cookAnimationFor, cookableFor,
+    startCooking, offerCook, cookOne, isSuccess, stopBurnLevel, successMessage, burnMessage, cookAnimationFor, cookableFor,
     GAUNTLETS_STOP_BURN, activeSessions,
   },
 });

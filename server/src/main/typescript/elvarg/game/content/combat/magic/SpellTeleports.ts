@@ -31,6 +31,9 @@ class TeleportSpell extends Spell {
         if (!TeleportHandler.checkReqs(player, destination) || !this.canCast(player, false)) {
             return true;
         }
+        const request = { player, name, allowed: true };
+        PluginManager.emitCustomEvent("spell:teleport-before-cast", request);
+        if (!request.allowed) return true;
         if (!this.canCast(player, true)) {
             return true;
         }

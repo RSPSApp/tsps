@@ -110,7 +110,7 @@ function announceTierComplete(player, diary, tier) {
   ));
 }
 
-/** Marks a task done; false when it already was (or is unknown). */
+/** Returns false for unknown or completed tasks; emits `diary:task-completed` after normal updates. */
 function completeTask(player, diary, taskKey) {
   const tier = tierOfTask(diary, taskKey);
   if (!tier) return false;
@@ -130,6 +130,7 @@ function completeTask(player, diary, taskKey) {
       execute() { this.stop(); announceTierComplete(player, diary, tier); }
     })());
   }
+  api.emitCustomEvent("diary:task-completed", { player, diary: diary.key, task: taskKey, tier });
   return true;
 }
 

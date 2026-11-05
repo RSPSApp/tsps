@@ -236,6 +236,7 @@ export class EquipPacketListener {
     inventory.refreshItems();
     player.getUpdateFlag().flag(Flag.APPEARANCE);
     Sounds.sendSound(player, EquipmentSounds.soundFor(item.getDefinition()));
+    PluginManager.emitCustomEvent("equipment:equipped", { player, itemId: item.getId(), slot: equipmentSlot });
   }
 
   public static unequip(player: any, slot: number): boolean {

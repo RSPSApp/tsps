@@ -16,6 +16,7 @@ const LEATHER_CRAFTING_ANIMATION = 1249;
 let handleNeedleOnLeather;
 const handlers = {};
 const namedObjects = {};
+const provenanceEvents = [];
 const tasks = [];
 
 before(async () => {
@@ -35,7 +36,10 @@ before(async () => {
     sendMultiChatboxPrompt: player => player.log.push(["legacy-choice-menu"]),
     emitCustomEvent: (name, event) => {
       if (name === "quest:get-stage") event.stage = event.player.questStage ?? 0;
-      else api.emitCustomEvent(name, event);
+      else {
+        if (name === "crafting:spun") provenanceEvents.push(event);
+        api.emitCustomEvent(name, event);
+      }
     },
     getTaskManager: () => ({ submit: task => tasks.push(task) }),
   });
@@ -416,6 +420,7 @@ test('glassblowing lists all eight items and makes one every 3 ticks from the se
 
 test('the wheel offers what the carried materials spin into, starts on the choice and spins one every 2 ticks from the second', t => {
   membersWorld(t, true);
+  provenanceEvents.length = 0;
   const { player, getMenu } = playerWith([[ItemIds.FLAX, 2]], { level: 12 });
   namedObjects['Spinning wheel'].Spin({ player, object: {}, handled: false });
   assert.equal(getMenu().getTitle(), 'What would you like to spin?');
@@ -430,6 +435,9 @@ test('the wheel offers what the carried materials spin into, starts on the choic
   assert.deepEqual(xpOn(byTick, 2), [16]);
   assert.equal(player.amounts.get(ItemIds.LINEN_YARN), 2);
   assert.equal(player.amounts.get(ItemIds.FLAX), 0);
+  assert.equal(provenanceEvents.length, 2);
+  assert.equal(Object.hasOwn(provenanceEvents[0], 'stationObjectId'), false);
+  assert.equal(Object.hasOwn(provenanceEvents[0], 'location'), false);
 });
 
 test('free-to-play wheels only spin wool, and wool used on the wheel opens the menu', t => {

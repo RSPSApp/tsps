@@ -127,6 +127,7 @@ class FlightTask extends Task {
     if (this.elapsed === 1) {
       if (this.quick) sender.sendVarbit(BUSY_VARBIT, 1);
       player.moveTo(to.location.clone());
+      api.emitCustomEvent("gnome-gliders:arrived", { player, destination: to });
     } else if (this.elapsed === 3) {
       sender.sendVarbit(PREVIOUS_DESTINATION_VARBIT, to.index);
       player.setAttribute(PREVIOUS_ATTRIBUTE, to.index);

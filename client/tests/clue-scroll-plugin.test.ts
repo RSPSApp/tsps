@@ -8,7 +8,13 @@ import { PanelComponent } from "@runelite/client/ui/overlay/components/PanelComp
 import { BankTagsPlugin } from "../game/plugins/banktags/BankTagsPlugin";
 import { ClueScrollConfig, IdentificationMode } from "../game/plugins/cluescrolls/ClueScrollConfig";
 import { ClueScrollPlugin } from "../game/plugins/cluescrolls/ClueScrollPlugin";
+import { WorldPoint } from "@runelite/api/coords/WorldPoint";
+import * as ObjectID from "@runelite/api/gameval/ObjectID";
+import { Text } from "@runelite/client/util/Text";
+import { AnagramClue } from "../game/plugins/cluescrolls/clues/AnagramClue";
+import { CipherClue } from "../game/plugins/cluescrolls/clues/CipherClue";
 import { ClueScroll } from "../game/plugins/cluescrolls/clues/ClueScroll";
+import { CrypticClue } from "../game/plugins/cluescrolls/clues/CrypticClue";
 import { isLocationsClueScroll, isNpcClueScroll } from "../game/plugins/cluescrolls/clues/ClueScrollTypes";
 import { Enemy } from "../game/plugins/cluescrolls/clues/Enemy";
 import { EquipmentInventorySlot } from "../game/plugins/cluescrolls/clues/EquipmentInventorySlot";
@@ -133,6 +139,45 @@ assert.equal(Enemy.BRASSICAN_OR_WIZARDS.getText(), "Brassican Mage OR Ancient Wi
     assert.ok(!isNpcClueScroll(clue));
     assert.ok(isLocationsClueScroll({ reset: () => {}, getLocations: () => [] }));
     assert.ok(!isLocationsClueScroll({ getLocations: () => [] }), "LocationsClueScroll also resets");
+}
+
+// --- Cryptic, anagram and cipher tables ----------------------------------------------------------------
+{
+    const plugin: any = { getClient: () => ({ getVarbitValue: () => 0, runScript: () => {}, getIntStack: () => [0] }) };
+    assert.equal(CrypticClue.CLUES.length, 287, "RuneLite 1.13.6's cryptic rows");
+    assert.equal(AnagramClue.CLUES.length, 102, "RuneLite 1.13.6's anagram rows");
+    assert.equal(CipherClue.CLUES.length, 18, "RuneLite 1.13.6's cipher rows");
+
+    const crate = CrypticClue.forText("a crate found in the tower of a church is your next location.")!;
+    assert.ok(crate, "matched case-insensitively against the table's text");
+    assert.ok(crate.getLocation(plugin)!.equals(new WorldPoint(2612, 3304, 1)));
+    assert.deepEqual(crate.getObjectIds(), [ObjectID.CRATE2_OLD]);
+    assert.equal(crate.getNpc(plugin), null);
+    assert.equal(crate.isRequiresSpade(), false, "an object clue needs no spade");
+    assert.deepEqual(crate.getConfigKeys(), [-2104190885], "Java's String.hashCode of the text");
+    assert.equal(CrypticClue.forText(Text.sanitizeMultilineText("A crate found in the tower<br><br>of a church is your next location.").toLowerCase()), crate, "line breaks collapse to one space");
+    const sherlock = CrypticClue.forText("show this to sherlock.")!;
+    assert.equal(sherlock.getNpc(plugin), "Sherlock");
+    assert.ok(sherlock.getItemIds().size > 1, "the elite skill scrolls share the row");
+    assert.equal(CrypticClue.forText("nothing like this exists"), null);
+
+    const baker = AnagramClue.forText(plugin, "this anagram reveals who to speak to next: a baker")!;
+    assert.ok(baker);
+    assert.equal(baker.getNpcs(plugin)[0], "Baraek");
+    assert.equal(baker.getArea(), "Varrock square");
+    assert.equal(baker.getAnswer(plugin), "5");
+    assert.equal(AnagramClue.forText(plugin, "the anagram reveals who to speak to next: a baker"), baker, "the beginner prefix too");
+    assert.equal(AnagramClue.forText(plugin, "how many stalls are there in varrock square?"), baker, "and the NPC's question");
+    assert.deepEqual(baker.getConfigKeys(), [-1462706950]);
+    assert.equal(AnagramClue.forItemId(ItemID.TRAIL_MEDIUM_ANAGRAM_EXP2), baker);
+
+    const kebab = CipherClue.forText("the cipher reveals who to speak to next: bmj uif lfcbc tfmmfs")!;
+    assert.ok(kebab);
+    assert.equal(kebab.getArea(plugin), "Pollnivneach");
+    assert.equal(kebab.getAnswer(), "399");
+    assert.ok(kebab.getLocation(plugin)!.equals(new WorldPoint(3354, 2974, 0)));
+    assert.equal(CipherClue.forText("how many coins would you need to purchase 133 kebabs from me?"), kebab);
+    assert.deepEqual(kebab.getConfigKeys(), [293517585]);
 }
 
 console.log("clue-scroll-plugin: ok");

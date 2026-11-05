@@ -38,27 +38,29 @@ export const OverlayUtil = {
         graphics.drawString(text, textLocation.x, textLocation.y);
     },
 
-    /** An image with its top left at the point. */
-    renderImageLocation(graphics: Graphics2D, imageLocation: Point, image: HTMLCanvasElement): void {
-        graphics.drawImage(image, imageLocation.x, imageLocation.y);
+    /** An image with its top left at the point (nothing while the image has not loaded). */
+    renderImageLocation(graphics: Graphics2D, imageLocation: Point, image: HTMLCanvasElement | null): void {
+        if (image) graphics.drawImage(image, imageLocation.x, imageLocation.y);
     },
 
     /** An image centred over a tile, `zOffset` local units (128 a tile) above the ground. */
-    renderImageLocationAt(client: PerspectiveClient, graphics: Graphics2D, point: WorldPoint, image: HTMLCanvasElement, zOffset: number): void {
+    renderImageLocationAt(client: PerspectiveClient, graphics: Graphics2D, point: WorldPoint, image: HTMLCanvasElement | null, zOffset: number): void {
+        if (!image) return;
         const imageLocation = Perspective.getCanvasImageLocation(client, point, image, zOffset);
         if (imageLocation) OverlayUtil.renderImageLocation(graphics, imageLocation, image);
     },
 
     /** An NPC's tile outlined in the colour, with an image above it. */
-    renderActorOverlayImage(client: PerspectiveClient, graphics: Graphics2D, actor: NPC, image: HTMLCanvasElement, color: Color, zOffset: number): void {
+    renderActorOverlayImage(client: PerspectiveClient, graphics: Graphics2D, actor: NPC, image: HTMLCanvasElement | null, color: Color, zOffset: number): void {
         const poly = Perspective.getActorTilePoly(client, actor);
         if (poly) OverlayUtil.renderPolygon(graphics, poly, color);
+        if (!image) return;
         const imageLocation = Perspective.getActorImageLocation(client, actor, image, zOffset);
         if (imageLocation) OverlayUtil.renderImageLocation(graphics, imageLocation, image);
     },
 
     /** A tile outlined in the colour, with an image centred on it. */
-    renderTileOverlay(client: PerspectiveClient, graphics: Graphics2D, point: WorldPoint, image: HTMLCanvasElement, color: Color): void {
+    renderTileOverlay(client: PerspectiveClient, graphics: Graphics2D, point: WorldPoint, image: HTMLCanvasElement | null, color: Color): void {
         const poly = Perspective.getCanvasTilePoly(client, point);
         if (poly) OverlayUtil.renderPolygon(graphics, poly, color);
         OverlayUtil.renderImageLocationAt(client, graphics, point, image, 0);

@@ -5,9 +5,14 @@ export const Text = {
         return text.replace(/<[^>]*>/g, "");
     },
 
-    /** RuneLite's sanitizeMultilineText: `<br>` runs become one space, other tags go, whitespace is trimmed. */
+    /**
+     * RuneLite's sanitizeMultilineText: a hyphenated line break joins its word, other `<br>` and
+     * `<n>` breaks become spaces, runs of spaces collapse to one, then every tag goes. Not trimmed.
+     */
     sanitizeMultilineText(text: string): string {
-        return Text.removeTags(text.replace(/-<br>/g, "-").replace(/(<br>)+/g, " ")).trim();
+        return Text.removeTags(
+            text.replace(/-<br>/g, "-").replace(/<br>/g, " ").replace(/-<n>/g, "-").replace(/<n>/g, " ").replace(/ +/g, " "),
+        );
     },
 
     /** RuneLite's standardize: lower case, no tags, collapsed whitespace, for comparing names. */

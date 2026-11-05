@@ -190,6 +190,14 @@ export class ClientImpl implements Client {
         return getObjectDefinition(this.osrsClient, id);
     }
 
+    getNpcDefinition(id: number): NPCComposition | null {
+        const client = this.osrsClient;
+        if (!(id >= 0)) return null;
+        let type = client.npcTypeLoader?.load(id | 0);
+        if (type?.transforms && client.varManager) type = type.transform(client.varManager, client.npcTypeLoader) ?? type;
+        return type ? { getName: () => type.name, getActions: () => type.actions ?? [] } : null;
+    }
+
     getPlane(): number {
         return ClientState.plane | 0;
     }

@@ -80,6 +80,8 @@ export interface Client {
     getItemDefinition(id: number): ItemComposition | null;
     getEnum(id: number): EnumComposition | null;
     getObjectDefinition(id: number): ObjectComposition | null;
+    /** An NPC type by id, after the player's var transforms (RuneLite's getNpcDefinition + transform). */
+    getNpcDefinition(id: number): NPCComposition | null;
     /** Every server NPC in the scene, one wrapper each, in store order. */
     getNpcs(): NPC[];
     /** The plane the player is on, 0-3. */

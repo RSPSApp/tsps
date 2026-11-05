@@ -115,6 +115,7 @@ const sourceAt = p => sourceXY(p, p.getLocation().getX(), p.getLocation().getY()
 function player() {
   const attrs = new Map(), items = new Map(), configs = new Map(), varbits = new Map(), log = [], xp = [];
   let location = new core.Location(3210, 3220, 0), area = null;
+  let npcViewDistance = 15;
   const inv = { getAmount: id => items.get(id) ?? 0, isFull: () => Boolean(p.full), getFreeSlots: () => p.full ? 0 : 28 - items.size, contains: id => (items.get(id) ?? 0) > 0,
     adds(id, amount) { items.set(id, (items.get(id) ?? 0) + amount); },
     deleteNumber(id, amount) { assert.ok((items.get(id) ?? 0) >= amount, `missing ${id}`); items.set(id, items.get(id) - amount); },
@@ -129,6 +130,8 @@ function player() {
     log.push([key, ...args]); return packet;
   }) });
   const p = { setEnteredAmountAction: action => { p.amountAction = action; }, attrs, items, configs, varbits, log, xp, messages: [], animations: [], prompt: null, text: '', index: nextIndex++,
+    getNpcViewDistance: () => npcViewDistance,
+    setNpcViewDistance: value => { npcViewDistance = value == null ? 15 : Math.max(1, Math.min(127, Math.trunc(value))); },
     getAttribute: key => attrs.get(key), setAttribute: (key, value) => attrs.set(key, value), getInventory: () => inv,
     getBanks: () => [{ getAmount: id => p.bank?.get(id) ?? 0 }], getEquipment: () => ({ get: () => null, getItems: () => [] }),
     getSession: () => ({ sendClientPacket: frame => { log.push(['frame', Buffer.from(frame)]); return true; } }), getPacketSender: () => packet, getDialogueManager: () => p.manager, getUpdateFlag: () => ({ flag: noop }),

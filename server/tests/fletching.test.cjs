@@ -50,6 +50,9 @@ function player({ level = 99, items = {}, at = [3000, 3000] } = {}) {
     deleteNumber(id, n) { const left = (counts.get(id) ?? 0) - n; if (left > 0) counts.set(id, left); else counts.delete(id); },
     addItem(item) { counts.set(item.getId(), (counts.get(item.getId()) ?? 0) + item.getAmount()); },
     getFreeSlots: () => 28 - counts.size,
+    getAddableAmount: (item) => item.getAmount(),
+    getItems: () => [...counts].map(([id, n]) => new core.Item(id, n)),
+    deleteAtSlot(slot, n) { inventory.deleteNumber([...counts.keys()][slot], n); },
   };
   const sender = new Proxy({
     sendCreationMenu(value) { menu = value; return sender; },

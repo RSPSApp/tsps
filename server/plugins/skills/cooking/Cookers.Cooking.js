@@ -72,7 +72,7 @@ function burnMessage(cookable) {
 // oven, such as the main-game "Range" and "Oven", cooks with human_cooking.
 const FIRE_OBJECT_NAMES = new Set(["Fire", "Forester's Campfire", "Firepit", "Firepit with hook", "Firepit with pot"]);
 const HOUSE_RANGE_NAMES = new Set(["Small oven", "Large oven", "Steel range", "Fancy range"]);
-const RANGE_OBJECT_NAMES = new Set(["Cooking range", "Range", "Stove", "Oven"]);
+const RANGE_OBJECT_NAMES = new Set(["Cooking range", "Range", "Stove", "Oven", "Clay Oven"]);
 const COOKABLE_OBJECT_NAMES = new Set([...RANGE_OBJECT_NAMES, ...HOUSE_RANGE_NAMES, ...FIRE_OBJECT_NAMES]);
 
 function cookAnimationFor(name) {
@@ -200,7 +200,7 @@ function startCooking(player, object, cookable, sessions = activeSessions, amoun
     objectId: object.getId(),
     location: object.getLocation().clone(),
     privateArea: object.getPrivateArea(),
-    nextCookTick: (cookingTask?.cycle ?? 0) + FIRST_COOK_TICKS,
+    nextCookTick: (cookingTask?.cycle ?? 0) + (cookable.firstCookTicks ?? FIRST_COOK_TICKS),
     cooked: 0,
     remaining: amount,
   });
@@ -270,7 +270,9 @@ function cookTick(task) {
       continue;
     }
 
-    if (player.getMovementQueue().size() > 0 || player.getForceMovement() != null) {
+    // Global tasks precede player turns; the last step may have drained the route.
+    const movement = player.getMovementQueue();
+    if (movement.size() > 0 || movement.isMovings?.() || player.getForceMovement() != null) {
       stopCooking(player);
       continue;
     }
@@ -327,7 +329,10 @@ function cookOne(player, session) {
     player.getInventory().addItem(new Item(cookable.cooked, 1));
     Common.spam(player, successMessage(cookable));
     countCook(player, false);
-    Common.api.emitCustomEvent("cooking:success", { player, skill: Skill.COOKING, itemId: cookable.cooked });
+    Common.api.emitCustomEvent("cooking:success", {
+      player, skill: Skill.COOKING, itemId: cookable.cooked,
+      objectId: session.objectId, objectLocation: session.location,
+    });
     Common.addXp(player, cookable.xp);
     Common.api.emitCustomEvent("skills:produced", { player, skill: Skill.COOKING, itemId: cookable.cooked, amount: 1, xp: cookable.xp, kind: "cook" });
   } else {
@@ -431,6 +436,7 @@ function attachCookers(api) {
   api.onObjectInteraction("Cooking range", { Cook: handleRangeCook });
   api.onObjectInteraction("Stove", { Cook: handleRangeCook });
   api.onObjectInteraction("Oven", { Cook: handleRangeCook });
+  api.onObjectInteraction("Clay Oven", { Cook: handleRangeCook });
   api.onObjectInteraction("Small oven", { Cook: handleRangeCook });
   api.onObjectInteraction("Large oven", { Cook: handleRangeCook });
   api.onObjectInteraction("Steel range", { Cook: handleRangeCook });

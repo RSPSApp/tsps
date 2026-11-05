@@ -111,7 +111,9 @@ function hops(...tiles) {
  * Squeezes through a pipe in two crawls, via its middle tile, as captured (rsprox: the Edgeville,
  * Taverley and Yanille dungeon pipes): each half moves from cycle 30 to 126 and lands 4 ticks
  * later with the pipe's sound; the second half starts a tick after the first lands. The crawl
- * replays with each half, so the squeeze pose (no weapon in hand) lasts the whole way. A long pipe
+ * replays with each half. Its hand overrides apply only after the 30-cycle start delay (native
+ * `Actor.dp()` gates on `sequenceFrame`), which is the cycle the exact move starts, so the empty
+ * hands take over just as the player moves into the pipe. A long pipe
  * passes `resume`, the tile its second half starts from: the player is moved there unseen a tick
  * after the first half lands, and crawls on the tick after (rsprox 449-461, the Wilderness course).
  */

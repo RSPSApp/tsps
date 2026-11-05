@@ -98,20 +98,21 @@ function walkThrough(player, vine, to) {
 }
 
 /** The vine falls: gone for everyone for a tick, the player through it. */
-function hackThrough(player, vine, object, to) {
+function hackThrough(player, vine, object, to, inward) {
   player.sendMessage(SUCCESS_MESSAGE);
   player.performAnimation(new core.Animation(-1));
   const snapshot = { id: object.getId(), type: object.getType(), face: object.getFace() };
   core.ObjectManager.deregister(object, true);
   core.TaskManager.submit(new core.CountdownTask(vine, REGROW_TICKS, () => regrow(vine, snapshot)));
   walkThrough(player, vine, to);
+  pluginApi.emitCustomEvent("brimhaven-dungeon:vines-cut", { player, vine: vine.loc, inward });
 }
 
 /**
  * The rolls, keyed to the player's index so walking off, combat or a new action stops them.
  * `axe` is null when cutting by hand on the way out, which never fails.
  */
-function chopping(player, vine, object, axe, to) {
+function chopping(player, vine, object, axe, to, inward) {
   const start = player.getLocation().clone();
   let ticks = 0;
   return new (class extends core.Task {
@@ -127,7 +128,7 @@ function chopping(player, vine, object, axe, to) {
       if (ticks % ROLL_TICKS !== 0) return;
       if (axe && Math.random() >= cutChance(woodcuttingLevel(player), axe)) return;
       this.stop();
-      hackThrough(player, vine, object, to);
+      hackThrough(player, vine, object, to, inward);
     }
   })();
 }
@@ -158,7 +159,7 @@ function chopDown(event) {
   player.setPositionToFace(object.getLocation());
   player.sendMessage(TRY_MESSAGE);
   if (axe) player.performAnimation(new core.Animation(axe.animationId));
-  core.TaskManager.submit(chopping(player, vine, object, axe, inward ? vine.inner : vine.outer));
+  core.TaskManager.submit(chopping(player, vine, object, axe, inward ? vine.inner : vine.outer, inward));
   return true;
 }
 

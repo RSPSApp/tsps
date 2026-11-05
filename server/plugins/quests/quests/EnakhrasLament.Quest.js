@@ -1562,13 +1562,13 @@ module.exports = function registerEnakhrasLamentQuest(api) {
           (action === "ice" && (hasBit(player, BIT_ICE) || npc.getId() !== CRUST_OF_ICE_NPC_ID))) return;
       if (!accurate) {
         npc.performGraphic(api.core.MagicCombatMethod.SPLASH_GRAPHIC);
-        api.core.Sounds.sendSound(player, api.core.Sound.SPELL_FAIL_SPLASH);
+        api.core.Sounds.playAreaSoundAt(npc, api.core.Sound.SPELL_FAIL_SPLASH, api.core.MagicCombatMethod.IMPACT_SOUND_RADIUS);
         return;
       }
       const endGraphic = event.spell.endGraphic();
       if (endGraphic) npc.performGraphic(endGraphic);
-      const impactSound = event.spell.impactSound();
-      if (impactSound) api.core.Sounds.sendSound(npc, impactSound);
+      const impactSound = api.core.MagicCombatMethod.impactSoundFor(event.spell);
+      if (impactSound) api.core.Sounds.playAreaSoundAt(npc, impactSound, api.core.MagicCombatMethod.IMPACT_SOUND_RADIUS);
       if (action === "boneguard") {
         removeQuestNpc(player, BONEGUARD_NPC_ID);
         advanceTo(player, STAGE_BONEGUARD1);

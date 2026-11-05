@@ -626,7 +626,10 @@ module.exports = function registerHolyGrailQuest(api) {
     const { player, stepId } = event;
     if (STATEMENT_MESSAGE_IDS.has(stepId)) event.box = { statement: true };
     if (stepId === FEATHER_GIVEN_MESSAGE_ID) event.box = { items: [MAGIC_FEATHER_ITEM_ID] };
-    if (TEA_MESSAGE_IDS.has(stepId)) giveOnce(player, CUP_OF_TEA_ITEM_ID);
+    if (TEA_MESSAGE_IDS.has(stepId)) {
+      giveOnce(player, CUP_OF_TEA_ITEM_ID);
+      api.emitCustomEvent("diary:task", { player, diary: "kandarin", task: "have-galahad-make-you-a-cup-of-tea" });
+    }
     if (stepId === SACK_OPENED_MESSAGE_ID) openingSack.delete(player);
     if (stepId === INSIDE_CASTLE_MESSAGE_ID) event.after = () => player.moveTo(toLocation(CASTLE_INSIDE_TILE));
     if (WHISTLE_ACTION_IDS.has(stepId)) {

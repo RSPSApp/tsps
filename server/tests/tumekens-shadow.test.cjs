@@ -86,6 +86,8 @@ test("Tumeken's shadow: its own spell, the x3 (x4 in the tombs) passive and char
   assert.equal(castSpell.maximumHit(), 34);
   // The cast as captured: sound 6410, the projectile at angle 32 and progress 40, heights sent x4.
   assert.equal(castSpell.castSound().getId(), 6410);
+  // Its impact: `sound_area id=1460 range=10` at the target in 672 casts (captures 1846, 1885, 3285, 3299, 3340).
+  assert.equal(castSpell.impactSound()?.getId(), 1460);
   const at = (x, y) => ({ getLocation: () => new Location(x, y, 0), getSize: () => 1, getPrivateArea: () => null });
   const projectile = castSpell.castProjectile(at(3200, 3200), at(3204, 3200));
   assert.deepEqual([projectile.angle, projectile.progress, projectile.startHeight, projectile.endHeight], [32, 40, 62, 31]);

@@ -217,7 +217,7 @@ function catchImpling(player, npc, npcId, def) {
   xp(player, puro ? def.puroXp : def.xp, "impling", npcId);
   npc.performAnimation(new H.core.Animation(ANIM.IMPLING_CAUGHT));
   // Roaming spawns (Puro-Puro's and the overworld's) manage their own removal and respawn.
-  const event = { npc, handled: false };
+  const event = { player, npc, npcId, puro, handled: false };
   H.api.emitCustomEvent("hunter:impling-caught", event);
   if (!event.handled) hide(npc, CAUGHT_TICKS + (puro ? def.puroRespawn : OUTSIDE_RESPAWN_TICKS), CAUGHT_TICKS);
 }

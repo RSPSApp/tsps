@@ -20,23 +20,30 @@ const inFlight = new WeakMap();
 /** ForceMovement direction indices, as ObstacleRunner gives them. */
 const FORCE_DIRECTION = Object.freeze({ north: 0, east: 1, south: 2, west: 3 });
 
+/** The steps a walk takes, in RegionManager.canMoveIsBlocked's directions (0 north-west .. 7 south-east). */
+const STEPS = [[0, -1, 1], [1, 0, 1], [2, 1, 1], [3, -1, 0], [4, 1, 0], [5, -1, -1], [6, 0, -1], [7, 1, -1]];
+/** How many tiles the walk to the shore searches from the player before giving up on a path. */
+const PATH_LIMIT = 4096;
+
 const tileKey = (x, y) => `${x},${y}`;
-let stoneTiles = null;
-let shoreTiles = null;
 
 function rules(player) {
   const type = Common.leagueOf(player);
   return type === null ? null : Common.league(type)?.stones ?? null;
 }
 
-function isStone(stones, x, y) {
-  stoneTiles ??= new Set(stones.tiles.map(([sx, sy]) => tileKey(sx, sy)));
-  return stoneTiles.has(tileKey(x, y));
+/** A stone: the league's loc is placed on the tile in the map (72 in the lair, as the cache places them). */
+function isStone(stones, x, y, z = 0) {
+  const { RegionManager, MapObjects, CacheDefinitions } = Common.core;
+  RegionManager.loadMapFiles(x, y);
+  const id = CacheDefinitions.getLocId(stones.loc);
+  return (MapObjects.mapObjects.get(MapObjects.getHash(x, y, z)) ?? []).some((object) => object.getId() === id);
 }
 
-function isShore(stones, x, y) {
-  shoreTiles ??= new Set(stones.shore.map(([sx, sy]) => tileKey(sx, sy)));
-  return shoreTiles.has(tileKey(x, y));
+/** The shore: any tile the player can stand on that is not a stone (the lava around them is blocked). */
+function isShore(stones, x, y, z = 0) {
+  const { RegionManager, Location } = Common.core;
+  return !isStone(stones, x, y, z) && !RegionManager.blocked(new Location(x, y, z), null);
 }
 
 function ours(stones, objectId) {
@@ -47,23 +54,60 @@ const distance = (a, b) => Math.max(Math.abs(a.getX() - b.getX()), Math.abs(a.ge
 
 /** How far the player can jump from where it stands: off a stone, off the shore, or not at all. */
 function reachFrom(stones, at) {
-  if (isStone(stones, at.getX(), at.getY())) return stones.reach;
-  if (isShore(stones, at.getX(), at.getY())) return stones.shoreReach;
+  if (isStone(stones, at.getX(), at.getY(), at.getZ())) return stones.reach;
+  if (isShore(stones, at.getX(), at.getY(), at.getZ())) return stones.shoreReach;
   return 0;
 }
 
-/** On the stones, or on the shore in reach: jump from where it stands. Further off: to the nearest shore tile. */
+/** The shore tiles a jump onto the stone can be made from: within `shoreReach` of it. */
+function shoreAround(stones, target) {
+  const tiles = new Map();
+  const [cx, cy, z] = [target.getX(), target.getY(), target.getZ()];
+  for (let dx = -stones.shoreReach; dx <= stones.shoreReach; dx++) {
+    for (let dy = -stones.shoreReach; dy <= stones.shoreReach; dy++) {
+      if (isShore(stones, cx + dx, cy + dy, z)) tiles.set(tileKey(cx + dx, cy + dy), [cx + dx, cy + dy]);
+    }
+  }
+  return tiles;
+}
+
+/** The first of `tiles` a walk from `from` reaches (the nearest by path), or null. */
+function nearestByPath(from, tiles) {
+  const { RegionManager, Location } = Common.core;
+  const seen = new Set([tileKey(from.getX(), from.getY())]);
+  const queue = [from];
+  for (let head = 0; head < queue.length && seen.size < PATH_LIMIT; head++) {
+    const at = queue[head];
+    const here = tiles.get(tileKey(at.getX(), at.getY()));
+    if (here) return here;
+    for (const [direction, dx, dy] of STEPS) {
+      const key = tileKey(at.getX() + dx, at.getY() + dy);
+      if (seen.has(key) || !RegionManager.canMoveIsBlocked(at, direction, null)) continue;
+      seen.add(key);
+      queue.push(new Location(at.getX() + dx, at.getY() + dy, at.getZ()));
+    }
+  }
+  return null;
+}
+
+/**
+ * On the stones, or on the shore in reach: jump from where it stands. Further off: walk to the
+ * nearest shore tile (by path) within `shoreReach` of the stone clicked, else the shore tile
+ * closest to it.
+ */
 function route(event) {
   const stones = rules(event.player);
   if (!stones || !ours(stones, event.objectId)) return;
   const at = event.player.getLocation();
   const target = event.object.getLocation();
-  if (isStone(stones, at.getX(), at.getY()) || (reachFrom(stones, at) && distance(at, target) <= stones.shoreReach)) {
+  if (isStone(stones, at.getX(), at.getY(), at.getZ()) || (reachFrom(stones, at) && distance(at, target) <= stones.shoreReach)) {
     event.destination = { x: at.getX(), y: at.getY(), z: at.getZ() };
     return;
   }
-  const [x, y] = stones.shore.reduce((best, tile) =>
-    Math.max(Math.abs(tile[0] - target.getX()), Math.abs(tile[1] - target.getY())) < Math.max(Math.abs(best[0] - target.getX()), Math.abs(best[1] - target.getY())) ? tile : best);
+  const shore = shoreAround(stones, target);
+  if (shore.size === 0) return;
+  const gap = ([x, y]) => Math.max(Math.abs(x - target.getX()), Math.abs(y - target.getY()));
+  const [x, y] = nearestByPath(at, shore) ?? [...shore.values()].reduce((best, tile) => (gap(tile) < gap(best) ? tile : best));
   event.destination = { x, y, z: target.getZ() };
 }
 
@@ -139,7 +183,7 @@ function start(player, stones, to) {
   player.performAnimation(new Animation(animation));
   player.setForceMovement(slide);
   player.getPacketSender().sendSoundEffect(stones.sound.id, 1, stones.sound.delay);
-  if (isStone(stones, from.getX(), from.getY())) light(player, stones, from.getX(), from.getY());
+  if (isStone(stones, from.getX(), from.getY(), from.getZ())) light(player, stones, from.getX(), from.getY());
   land(player, stones, to);
   inFlight.set(player, to);
   later(1, () => {

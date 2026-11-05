@@ -8,9 +8,7 @@
       "level": 52,
       "route": [2998,3916,0],
       "render": "BALANCE_WALK",
-      "steps": [
-        {"walk":[[2998,3931]]}
-      ]
+      "script": "wildernessRidgeIn"
     },
     {
       "name": "Wilderness Agility Course gate (back to the door)",
@@ -18,9 +16,7 @@
       "level": 1,
       "route": [2998,3931,0],
       "render": "BALANCE_WALK",
-      "steps": [
-        {"walk":[[2998,3916]]}
-      ]
+      "script": "wildernessRidgeOut"
     },
     {
       "name": "Barbarian Outpost pipe",
@@ -354,6 +350,7 @@
       "unverified": "the barehanded climb's animation (no capture); the screen fade before the teleport (no step for it yet)",
       "requires": [
         {
+          "method": "grapple",
           "skills": {"agility":11,"strength":37,"ranged":19},
           "equipped": [
             {"slot":"weapon","name":"crossbow","message":"You need a crossbow equipped to do that."},
@@ -361,6 +358,7 @@
           ]
         },
         {
+          "method": "barehanded",
           "skills": {"agility":52},
           "steps": [
             {"face":{"object":[0,0]}},
@@ -391,6 +389,7 @@
       "unverified": "the barehanded climb's animation (no capture); the screen fade before the teleport (no step for it yet)",
       "requires": [
         {
+          "method": "grapple",
           "skills": {"agility":11,"strength":37,"ranged":19},
           "equipped": [
             {"slot":"weapon","name":"crossbow","message":"You need a crossbow equipped to do that."},
@@ -398,6 +397,7 @@
           ]
         },
         {
+          "method": "barehanded",
           "skills": {"agility":52},
           "steps": [
             {"face":{"object":[0,0]}},
@@ -2507,6 +2507,7 @@
       "unverified": "the grapple's steps and both ends (no capture; ends from the map)",
       "requires": [
         {
+          "method":"grapple",
           "skills": {"agility":8,"strength":8,"ranged":19},
           "equipped": [
             {"slot":"weapon","name":"crossbow","message":"You need a crossbow equipped to do that."},
@@ -2514,6 +2515,7 @@
           ]
         },
         {
+          "method":"barehanded",
           "skills": {"agility":48},
           "cross": [
             {"move":"to","anim":"CLIMB_ROCKS","speed":[0,210],"ticks":7},
@@ -4100,6 +4102,31 @@
       "script": "arceuusLibraryRailing",
       "unverified": "the jump-down animation and duration (no RSProx capture)",
       "note": "OSRS Wiki: top floor railing requires 62 Agility; locs 28373/28374 and placements from cache; landing tiles follow the rail face"
+    },
+    {
+      "name": "Strong Tree (Karamja)",
+      "object": 17074,
+      "at": [2873,3134,0],
+      "option": "Grapple",
+      "level": 53,
+      "xp": 0,
+      "script": "karamjaStrongTree",
+      "params": {
+        "islandY": 3134,
+        "north": [[2874,3142,0],[2874,3136,0]],
+        "south": [[2874,3127,0],[2874,3133,0]]
+      },
+      "requires": [
+        {
+          "method": "grapple",
+          "skills": {"agility": 53, "strength": 21, "ranged": 42},
+          "equipped": [
+            {"slot": "weapon", "name": "crossbow", "message": "You need a crossbow equipped to do that."},
+            {"slot": "ammunition", "ids": [9419], "message": "You need a mithril grapple tipped bolt with a rope to do that."}
+          ]
+        }
+      ],
+      "note": "OSRS Wiki: Strong Tree (Karamja) grapple, 53 Agility/21 Strength/42 Ranged. Object 17074 at 2873,3134 (yarn dump:loc); the two channels' ends are the cache map's walkable shore/island tiles."
     }
   ]
 }

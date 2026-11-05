@@ -139,8 +139,9 @@ export class PlayerChatheadFactory {
                 pushKitModels(kitId);
                 headCoveredByItem = true;
             } else if (rawHead >= 0 && this.objTypeLoader) {
-                // Item ids encoded as val - 512 (but try raw first)
-                const candidates: number[] = [];
+                // Native appearances already contain decoded item IDs; legacy encodings
+                // are fallback candidates, not replacements for the actual item.
+                const candidates: number[] = [rawHead];
                 const masked = rawHead & 0x7fff;
                 const offsets = [0, -512, -1024, -2048, 512, 1024, 2048];
                 for (const off of offsets) {

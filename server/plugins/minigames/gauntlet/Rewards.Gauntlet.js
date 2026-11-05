@@ -151,12 +151,10 @@ function openChest(player, random = Math.random) {
   for (const reward of items) {
     const noteId = reward.noted ? ItemDefinition.forId(reward.id)?.getNoteId?.() ?? -1 : -1;
     const id = noteId >= 0 ? noteId : reward.id;
-    const stackable = ItemDefinition.forId(id)?.isStackable?.() ?? false;
-    const fits = stackable ? inventory.contains(id) || inventory.getFreeSlots() > 0 : inventory.getFreeSlots() >= reward.amount;
-    if (fits) {
-      inventory.adds(id, reward.amount);
-    } else {
-      Shared.api().getItemOnGroundManager().registerLocation(player, new Item(id, reward.amount), player.getLocation().clone());
+    const room = inventory.getAddableAmount(new Item(id, reward.amount));
+    if (room > 0) inventory.adds(id, room);
+    if (room < reward.amount) {
+      Shared.api().getItemOnGroundManager().registerLocation(player, new Item(id, reward.amount - room), player.getLocation().clone());
     }
   }
   inventory.refreshItems();

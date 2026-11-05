@@ -4,7 +4,7 @@
 // recipes and XP. Jagex's release notes say upgrades retain gems and a higher tier blocks lower tiers.
 // Mining gem-rock auto-storage follows the poll blog; equal-tier duplicates remain an assumption.
 // No capture shows them; no transcript page exists. Ours: every line here, that only mining fills
-// an open one, the contents staying through an upgrade, and the upgrade coming out closed.
+// an open one, and the upgrade coming out closed.
 process.env.DISABLE_PLAYER_BOTS = "1";
 const assert = require("node:assert/strict");
 const fs = require("node:fs");

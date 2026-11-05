@@ -24,7 +24,7 @@ before(async () => {
 });
 
 function harness(name, page = null, options = {}) {
-  const hooks = {}, events = {}, tasks = [], npcs = [], removed = [], objects = [], deregistered = [], worldPlayers = [], areas = [], namedNpcs = new Map(), namedObjects = new Map();
+  const hooks = {}, events = {}, tasks = [], npcs = [], removed = [], objects = [], deregistered = [], worldPlayers = [], areas = [], namedNpcs = new Map(), namedObjects = new Map(), namedItemActions = new Map();
   const api = new Proxy({
     core: {
       ...core,
@@ -43,6 +43,10 @@ function harness(name, page = null, options = {}) {
     persistAttribute: noop,
     registerArea: area => areas.push(area),
     onNpcInteraction: (target, actions) => namedNpcs.set(target, actions),
+    onItemAction: (target, actions) => {
+      if (typeof target === 'function') (hooks.onItemAction ??= []).push(target);
+      else namedItemActions.set(target, actions);
+    },
     onObjectInteraction: (target, actions) => { if (typeof target === 'function') (hooks.onObjectInteraction ??= []).push(target); else namedObjects.set(target, actions); },
     onCustomEvent: (key, fn) => (events[key] ??= []).push(fn),
     emitCustomEvent: (key, event) => (events[key] ?? []).forEach(fn => fn(event)),
@@ -88,7 +92,7 @@ function harness(name, page = null, options = {}) {
     });
   }
   const h = {
-    api, hooks, events, tasks, npcs, removed, objects, deregistered, worldPlayers, areas, namedNpcs, namedObjects,
+    api, hooks, events, tasks, npcs, removed, objects, deregistered, worldPlayers, areas, namedNpcs, namedObjects, namedItemActions,
     login(player) { (hooks.onPlayerLogin ?? []).forEach(fn => fn({ player })); },
     logout(player) { (hooks.onPlayerLogout ?? []).forEach(fn => fn({ player })); },
     quest: runtime.getRegisteredQuests().at(-1),
@@ -148,6 +152,10 @@ function player() {
     get(slot) {
       const entry = [...items.entries()][slot];
       return entry && entry[1] > 0 ? { getId: () => entry[0], getAmount: () => entry[1] } : null;
+    },
+    deleteAtSlot(slot, amount = 1) {
+      const entry = [...items.entries()][slot];
+      if (entry) items.set(entry[0], Math.max(0, entry[1] - amount));
     },
   };
   const packet = new Proxy({
@@ -365,6 +373,44 @@ test('Sins finale reaches 138 and grants the experience tome once', () => {
   assert.equal(p.items.get(TOME_OF_EXPERIENCE), 1);
   h.action(p, N.IVAN_STROM, 'epguG1');
   assert.equal(p.items.get(TOME_OF_EXPERIENCE), 1, 'completion cannot pay the tome twice');
+});
+
+
+test('Sins tome mirrors the captured chapter varbits', () => {
+  const h = harness('SinsOfTheFather'), p = player();
+  h.quest.setStage(p, 138);
+  p.items.set(TOME_OF_EXPERIENCE, 1);
+  const tome = p.getInventory().get(0);
+  const inventoryGet = p.getInventory().get.bind(p.getInventory());
+  p.getInventory().get = slot => (slot === 0 ? tome : inventoryGet(slot));
+  h.events['xpreward:open'] = [event => event.onConfirm(core.Skill.THIEVING, 'Thieving')];
+  const read = () => h.namedItemActions.get('Tome of Experience').Read({
+    player: p, itemId: TOME_OF_EXPERIENCE, item: tome, slot: 0,
+  });
+
+  read();
+  assert.equal(p.varbits.get(10346), 1, 'capture 1637: first chapter is myq5_xp_reward 1');
+  assert.equal(p.varbits.get(14611), 0);
+  read();
+  assert.equal(p.varbits.get(10346), 2);
+  read();
+  assert.equal(p.varbits.get(10346), 3);
+  assert.equal(p.varbits.get(14611), 0);
+  read();
+  assert.equal(p.varbits.get(10346), 3);
+  assert.equal(p.varbits.get(14611), 1, 'capture 1637: fourth chapter starts myq5_bonus_xp_reward 1');
+  read();
+  assert.equal(p.varbits.get(14611), 2);
+  read();
+  assert.equal(p.varbits.get(14611), 3);
+  assert.equal(p.items.get(TOME_OF_EXPERIENCE), 0, 'the sixth chapter consumes the tome');
+
+  const restored = player();
+  h.quest.setStage(restored, 138);
+  restored.attrs.set('quest.sins_of_the_father.tome-chapters', 4);
+  h.hooks.onPlayerLogin[0]({ player: restored });
+  assert.equal(restored.varbits.get(10346), 3, 'login restores the first three chapters');
+  assert.equal(restored.varbits.get(14611), 1, 'login restores the bonus chapter');
 });
 
 

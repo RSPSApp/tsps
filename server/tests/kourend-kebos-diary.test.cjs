@@ -162,3 +162,27 @@ test("kills credit only the named NPC in its own area, and never a dead or priva
   assert.deepEqual(fired(dead), []);
   assert.deepEqual(fired(privateArea), []);
 });
+
+
+test("native house entry and matching boss instances can credit, unrelated private areas cannot", () => {
+  const p = player(0, 0);
+  const area = {};
+  p.getPrivateArea = () => area;
+  Plugin._test.enteredHouse({ player: p, location: 8 });
+  for (const name of ["Skotizo", "Alchemical Hydra"]) {
+    const boss = npc(name, 0, 0);
+    boss.getPrivateArea = () => ({});
+    Plugin._test.killed({ killer: p, npc: boss });
+    boss.getPrivateArea = () => area;
+    Plugin._test.killed({ killer: p, npc: boss });
+  }
+  Plugin._test.mined({ player: p, itemId: I.LOVAKITE_ORE });
+  assert.deepEqual(fired(p), [
+    "enter-your-player-owned-house-from-hosidius",
+    "defeat-skotizo-in-the-catacombs-of-kourend",
+    "kill-a-hydra-in-the-karuulm-slayer-dungeon",
+  ]);
+  p.getHitpoints = () => 0;
+  Plugin._test.enteredHouse({ player: p, location: 8 });
+  assert.equal(fired(p).length, 3);
+});

@@ -46,16 +46,16 @@ function near(location, area) {
   return z === area.z && Math.hypot(x - area.x, y - area.y) <= area.radius;
 }
 
-function eligible(player) {
+function eligible(player, allowPrivate = false) {
   return Boolean(player)
     && player.isRegistered?.() === true
     && (player.getHitpoints?.() ?? 1) > 0
     && player.isDyingReturn?.() !== true
-    && !player.getPrivateArea?.();
+    && (allowPrivate || !player.getPrivateArea?.());
 }
 
-function complete(player, task) {
-  if (eligible(player)) api.emitCustomEvent("diary:task", { player, diary: DIARY, task });
+function complete(player, task, allowPrivate = false) {
+  if (eligible(player, allowPrivate)) api.emitCustomEvent("diary:task", { player, diary: DIARY, task });
 }
 
 function npcName(npc, player) {
@@ -119,7 +119,7 @@ function travelledFairyRing({ player, code }) {
 }
 
 function enteredHouse({ player, location }) {
-  if (location === HOSIDIUS_HOUSE_PORTAL) complete(player, "enter-your-player-owned-house-from-hosidius");
+  if (location === HOSIDIUS_HOUSE_PORTAL) complete(player, "enter-your-player-owned-house-from-hosidius", true);
 }
 
 function agilityObstacle({ player, objectId }) {
@@ -146,8 +146,10 @@ function monsterExamined({ player, npc }) {
 
 function killed({ killer, npc }) {
   const player = killer?.isPlayer?.() ? killer : null;
-  if (!eligible(player)) return;
   const name = npcName(npc, player);
+  const ownBoss = (name === "Skotizo" || name === "Alchemical Hydra")
+    && npc?.getPrivateArea?.() === player?.getPrivateArea?.();
+  if (!eligible(player, ownBoss)) return;
   const location = npc.getLocation?.();
   if (name === "Lizardman") complete(player, "kill-a-lizardman");
   if (name === "Lizardman shaman" && within(location, LIZARDMAN_TEMPLE)) {
@@ -160,9 +162,9 @@ function killed({ killer, npc }) {
     complete(player, "kill-a-wyrm-in-the-karuulm-slayer-dungeon");
   }
   if ((name === "Hydra" && within(location, KARUULM_SLAYER_DUNGEON)) || name === "Alchemical Hydra") {
-    complete(player, "kill-a-hydra-in-the-karuulm-slayer-dungeon");
+    complete(player, "kill-a-hydra-in-the-karuulm-slayer-dungeon", ownBoss);
   }
-  if (name === "Skotizo") complete(player, "defeat-skotizo-in-the-catacombs-of-kourend");
+  if (name === "Skotizo") complete(player, "defeat-skotizo-in-the-catacombs-of-kourend", ownBoss);
 }
 
 module.exports = {

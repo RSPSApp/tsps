@@ -8,6 +8,8 @@ const { ObjectIds } = require("../../src/main/typescript/elvarg/util/IdEnums");
 const PRAY_AT_ALTAR_ANIMATION = new Animation(645);
 const EAST_ARDOUGNE_CHURCH_ALTAR = [2617, 3309, 0];
 const ARDOUGNE_ALTAR_TASK = "use-the-altar-in-east-ardougne-s-church";
+const JALDRAOCHT_ALTAR_ID = 6552;
+const JALDRAOCHT_ALTAR_TASK = "activate-ancient-magicks-at-the-altar-in-the-jal";
 const KOUREND_CASTLE_ALTAR = { id: 18258, x: 1617, y: 3672, z: 2 };
 const KOUREND_CASTLE_ALTAR_TASK = "pray-at-the-altar-in-kourend-castle";
 
@@ -57,6 +59,27 @@ function handlePrayerAltar(player, fullMessage = "You already have full Prayer p
   return true;
 }
 
+function handleJaldraochtAltar(player) {
+  player.performAnimation(PRAY_AT_ALTAR_ANIMATION);
+  Sounds.sendSound(player, Sound.PRAYER_RECHARGE);
+  const skillManager = player.getSkillManager();
+  skillManager.setCurrentLevels(Skill.PRAYER, 0);
+  skillManager.updateSkill(Skill.PRAYER);
+  if (player.getSpellbook() === MagicSpellbook.ANCIENT) {
+    player.sendMessage("You feel a strange drain upon your memory...");
+    MagicSpellbook.changeSpellbook(player, MagicSpellbook.NORMAL);
+  } else {
+    player.sendMessage("You feel a strange wisdom fill your mind....");
+    MagicSpellbook.changeSpellbook(player, MagicSpellbook.ANCIENT);
+    api.emitCustomEvent("diary:task", {
+      player,
+      diary: "desert",
+      task: JALDRAOCHT_ALTAR_TASK,
+    });
+  }
+  return true;
+}
+
 function handleOccultAltar(player, spellbook) {
   player.performAnimation(PRAY_AT_ALTAR_ANIMATION);
   Sounds.sendSound(player, Sound.PRAYER_RECHARGE);
@@ -78,6 +101,7 @@ function darkAltar({ player }) {
 
 function prayerAltar({ player, object }) {
   if (player.getHitpoints() <= 0 || player.isDyingReturn?.() === true) return false;
+  if (object?.getId?.() === JALDRAOCHT_ALTAR_ID) return handleJaldraochtAltar(player);
 
   const skillManager = player.getSkillManager();
   const prayerBefore = skillManager.getCurrentLevel(Skill.PRAYER);

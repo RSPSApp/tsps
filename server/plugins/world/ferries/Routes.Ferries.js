@@ -72,11 +72,8 @@ function answerEntrana({ player, definition, text }) {
 
 function sail(player, routeName) {
   if (routeName === ENTRANA_ROUTE) sailedToEntrana.add(player);
-  const atPortSarim = player.getLocation?.().getZ?.() === 0
-    && Math.abs(player.getLocation().getX() - 2829) <= 8
-    && Math.abs(player.getLocation().getY() - 3335) <= 8;
   const started = Voyages.travel(player, routeName);
-  if (started && atPortSarim && (routeName === ENTRANA_ROUTE || routeName === "entrana-back")) {
+  if (started && routeName === ENTRANA_ROUTE) {
     Common.api.emitCustomEvent("entrana:boarded", { player, route: routeName });
   }
   return started;

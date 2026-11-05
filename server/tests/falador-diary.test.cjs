@@ -144,7 +144,7 @@ test("shop, pump, tiara, lantern, strut and Entrana credit only their own succes
   const p = player();
   assert.deepEqual(run("custom:shop:opened", { player: p, shopId: 1309 }), ["browse-sarah-s-farm-shop"]);
   assert.deepEqual(run("custom:shop:opened", { player: p, shopId: 1 }), []);
-  assert.deepEqual(run("custom:water-source:filled", { player: player({ x: 2947, y: 3382 }), objectId: 24004, name: "Waterpump" }), ["fill-a-bucket-from-the-pump-north-of-falador-wes"]);
+  assert.deepEqual(run("custom:water-source:filled", { player: player({ x: 2947, y: 3382 }), objectId: 24004, name: "Waterpump", itemId: core.ItemIdentifiers.BUCKET }), ["fill-a-bucket-from-the-pump-north-of-falador-wes"]);
   assert.deepEqual(run("custom:water-source:filled", { player: player({ x: 2900, y: 3300 }), objectId: 24004 }), []);
   assert.deepEqual(run("custom:runecrafting:tiara", { player: p, tiaraId: 5529 }), ["make-a-mind-tiara"]);
   assert.deepEqual(run("custom:runecrafting:tiara", { player: p, tiaraId: 5527 }), []);
@@ -200,7 +200,7 @@ test("willow needs both a chop and a burn in Taverley", () => {
 test("teleports, telegrab, thieving and agility credit their real success event", () => {
   assert.deepEqual(run("custom:spell:teleport-arrival", { player: player({ x: 2966, y: 3379 }), name: "Falador Teleport" }), ["teleport-to-falador"]);
   assert.deepEqual(run("custom:spell:teleport-arrival", { player: player({ x: 3213, y: 3424 }), name: "Varrock Teleport" }), []);
-  assert.deepEqual(run("custom:magic:telekinetic-grab", { player: player(), itemId: 245, position: new core.Location(2947, 3820, 0) }), ["telegrab-some-wine-of-zamorak-at-the-chaos-templ"]);
+  assert.deepEqual(run("custom:magic:telekinetic-grab", { player: player(), itemId: 245, position: new core.Location(2930, 3515, 0) }), ["telegrab-some-wine-of-zamorak-at-the-chaos-templ"]);
   assert.deepEqual(run("custom:magic:telekinetic-grab", { player: player(), itemId: 245, position: new core.Location(3000, 3400, 0) }), []);
   assert.deepEqual(run("custom:thieving:done", { player: player(), kind: "pickpocket", succeeded: true, npc: npc("Guard", 2965, 3380) }), ["pickpocket-a-falador-guard"]);
   assert.deepEqual(run("custom:thieving:done", { player: player(), kind: "pickpocket", succeeded: false, npc: npc("Guard", 2965, 3380) }), []);
@@ -238,8 +238,8 @@ test("altar, helmet and cape-emote credit require the full equipment and the rig
 
 test("zone entry tasks check the guild helmet and credit the rat pits", () => {
   const helmet = { [core.Equipment.HEAD_SLOT]: { getId: () => 12013 } };
-  assert.deepEqual(zoneEnter(player({ equipment: helmet }), 3048, 9763), ["enter-the-mining-guild-wearing-a-prospector-helm"]);
-  assert.deepEqual(zoneEnter(player(), 3048, 9763), []);
+  assert.deepEqual(zoneEnter(player({ equipment: helmet }), 3048, 9755), ["enter-the-mining-guild-wearing-a-prospector-helm"]);
+  assert.deepEqual(zoneEnter(player(), 3048, 9755), []);
   assert.deepEqual(zoneEnter(player(), 2860, 3546), ["enter-the-warriors-guild"]);
   assert.deepEqual(zoneEnter(player(), 3018, 3232), ["visit-the-port-sarim-rat-pits"]);
 });
@@ -262,4 +262,40 @@ test("an actual award reaches diary progress, not just the plugin's event", () =
   run("death", { killer: p, npc: npc("Duck", 2990, 3380) });
   assert.ok(Progress.doneTasks(p, diary).has("kill-a-duck-in-falador-park"));
   assert.equal(Progress.tierCount(p, diary, "easy"), 1);
+});
+
+test("the pump needs a bucket and the wine must be from the Falador temple", () => {
+  const p = player({ x: 2947, y: 3382 });
+  assert.deepEqual(run("custom:water-source:filled", { player: p, objectId: 24004, name: "Waterpump", itemId: core.ItemIdentifiers.VIAL }), []);
+  assert.deepEqual(run("custom:magic:telekinetic-grab", { player: p, itemId: 245, position: new core.Location(2950, 3824, 0) }), []);
+});
+
+test("a full inventory cannot claim security-book progress", () => {
+  const p = player({ items: null });
+  const inventory = p.getInventory();
+  inventory.addItem = () => inventory;
+  assert.deepEqual(run("custom:npc-dialogue:action", { player: p, npcId: 5442, stepId: "Uj1iZS" }), []);
+  assert.equal(inventory.getAmount(9003), 0);
+});
+
+
+test("outside guild doors cannot award entry tasks", () => {
+  const helmet = { [core.Equipment.HEAD_SLOT]: { getId: () => 12013 } };
+  assert.deepEqual(zoneEnter(player({ equipment: helmet }), 3046, 9757), []);
+  assert.deepEqual(zoneEnter(player(), 2877, 3546), []);
+  assert.deepEqual(zoneEnter(player({ equipment: helmet }), 3046, 9756), [plugin._test.TASK.miningGuild]);
+  assert.deepEqual(zoneEnter(player(), 2876, 3546), [plugin._test.TASK.warriorsGuild]);
+  for (const [x, y] of [[3019, 9732], [3043, 9729]]) {
+    assert.deepEqual(zoneEnter(player({ equipment: helmet }), x, y + 1), []);
+    assert.deepEqual(zoneEnter(player({ equipment: helmet }), x, y), [plugin._test.TASK.miningGuild]);
+  }
+});
+
+test("the ordinary herblore recipe's three-dose brew credits the east bank", () => {
+  const recipe = require("../plugins/skills/data/herblore.json").recipes.find((r) => r.product === "3dosepotionofsaradomin");
+  assert.ok(recipe);
+  const productId = core.CacheDefinitions.getObjId(recipe.product);
+  assert.equal(productId, 6687);
+  assert.deepEqual(run("custom:herblore:made", { player: player({ x: 3012, y: 3355 }), itemId: productId }), [plugin._test.TASK.saradominBrew]);
+  assert.deepEqual(run("custom:herblore:made", { player: player(), itemId: productId }), []);
 });

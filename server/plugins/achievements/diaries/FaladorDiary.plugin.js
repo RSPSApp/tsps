@@ -50,7 +50,7 @@ const FALADOR_HAIRDRESSER = [2946, 3379];
 const PUMP_LOC_ID = 24004;
 const PUMP = [2947, 3382];
 const CHEMIST = [2934, 3210];
-const CHAOS_TEMPLE = [2947, 3820];
+const CHAOS_TEMPLE = [2930, 3515];
 const GUTHIX_ALTAR_LOC_ID = 410;
 const GUTHIX_ALTAR = [2925, 3483];
 const PORT_SARIM_ALTAR_LOC_ID = 409;
@@ -71,8 +71,11 @@ const FALADOR_CITY = { minX: 2935, maxX: 3065, minY: 3320, maxY: 3405, levels: [
 const TAVERLEY = { minX: 2860, maxX: 2960, minY: 3380, maxY: 3480, levels: [0] };
 const FALADOR_EAST_BANK = { minX: 3006, maxX: 3020, minY: 3350, maxY: 3362, levels: [0] };
 const DWARVEN_MINE = { minX: 3005, maxX: 3070, minY: 9730, maxY: 9850, levels: [0] };
-const MINING_GUILD = { minX: 3035, maxX: 3068, minY: 9735, maxY: 9785, levels: [0] };
-const WARRIORS_GUILD = { minX: 2835, maxX: 2880, minY: 3533, maxY: 3560, levels: [0] };
+const MINING_GUILD = { minX: 3035, maxX: 3068, minY: 9735, maxY: 9756, levels: [0] };
+// The two members' entrances are south of their north-facing doors (cache locs 30365/30366).
+const MINING_GUILD_WEST_ENTRANCE = { minX: 3019, maxX: 3019, minY: 9732, maxY: 9732, levels: [0] };
+const MINING_GUILD_SOUTH_ENTRANCE = { minX: 3043, maxX: 3043, minY: 9729, maxY: 9729, levels: [0] };
+const WARRIORS_GUILD = { minX: 2835, maxX: 2876, minY: 3533, maxY: 3560, levels: [0] };
 const PORT_SARIM_RAT_PITS = { minX: 3010, maxX: 3028, minY: 3225, maxY: 3240, levels: [0] };
 
 const CRUMBLING_FALADOR_WALL = 24222;
@@ -81,7 +84,7 @@ const TAVERLEY_STRANGE_FLOOR = 16510;
 
 const GOLD_ORE_IDS = new Set([444, 445]);
 const BLURITE_LIMBS_IDS = new Set([9422, 15103]);
-const SARADOMIN_BREW_IDS = new Set([6685, 6686, 15269]);
+const SARADOMIN_BREW_IDS = new Set([6685, 6686, 6687, 15269]);
 const WILLOW_LOG_IDS = new Set([1519, 1520, 13985]);
 const MIND_TIARA_IDS = new Set([5529, 5530, 19250]);
 const LIT_BULLSEYE_LANTERN_IDS = new Set([4550]);
@@ -138,7 +141,8 @@ function onShopOpened({ player, shopId }) {
   if (shopId === SARAH_SHOP_ID) award(player, TASK.sarahShop);
 }
 
-function onWaterFilled({ player, objectId, name }) {
+function onWaterFilled({ player, objectId, name, itemId }) {
+  if (itemId !== core.ItemIdentifiers.BUCKET) return;
   if (objectId !== PUMP_LOC_ID && String(name ?? "").toLowerCase() !== "waterpump") return;
   if (near(player.getLocation(), PUMP, 2)) award(player, TASK.pumpBucket);
 }
@@ -289,6 +293,7 @@ function onDialogueAction(event) {
   if (!givesBook) return;
   if (!hasSecurityBook(event.player)) {
     event.player.getInventory().addItem(new core.Item(SECURITY_BOOK_ID, 1));
+    if (!hasSecurityBook(event.player)) return;
   }
   award(event.player, TASK.securityBook);
 }
@@ -322,6 +327,8 @@ function bind(registry) {
   api.onNpcDialogueCondition(onDialogueCondition);
   api.onZoneEnter(WARRIORS_GUILD, onWarriorsGuildEntered);
   api.onZoneEnter(MINING_GUILD, onMiningGuildEntered);
+  api.onZoneEnter(MINING_GUILD_WEST_ENTRANCE, onMiningGuildEntered);
+  api.onZoneEnter(MINING_GUILD_SOUTH_ENTRANCE, onMiningGuildEntered);
   api.onZoneEnter(PORT_SARIM_RAT_PITS, onRatPitsEntered);
 }
 

@@ -154,7 +154,8 @@ function bankStorageOp(event) {
     player.getBank(player.getCurrentBankTab()).refreshItems();
     inventory.refreshItems();
 }
-function storeCrop(player, container, id, maximum) {
+/** How many of `id` the container would take now: 0 if it refuses the item, the player, or is full of it. */
+function storeRoom(player, container, id) {
     const kind = containerKind(container);
     if (!kind) return 0;
     if (kind === "herb" && player.getSkillManager().getCurrentLevel(core.Skill.HERBLORE) < 58) return 0;
@@ -163,11 +164,42 @@ function storeCrop(player, container, id, maximum) {
     if (kind === "herb" && !core.CacheDefinitions.getItem(id).name?.startsWith("Grimy ")) return 0;
     const stored = (container.getMetaValue("farming:stored") ?? {});
     if (kind === "seed" && !stored[id] && Object.keys(stored).length >= 6) return 0;
-    const amount = Math.min(maximum, (kind === "herb" ? 30 : 2147483647) - (stored[id] ?? 0));
+    return Math.max(0, (kind === "herb" ? 30 : 2147483647) - (stored[id] ?? 0));
+}
+function storeCrop(player, container, id, maximum) {
+    const amount = Math.min(maximum, storeRoom(player, container, id));
     if (amount <= 0) return 0;
+    const stored = (container.getMetaValue("farming:stored") ?? {});
     stored[id] = (stored[id] ?? 0) + amount;
     container.setMetaValue("farming:stored", stored);
     return amount;
+}
+const openHerbSack = player => player.getInventory().getItems().find(i => i?.getId() === Data.itemId("Open herb sack"));
+/**
+ * Wiki (Herb sack): an open sack stores grimy herbs picked up or harvested from patches and herbiboars, "provided there is
+ * space for it". Splits [id, amount] pairs into what the open sack would take and the rest, without storing anything.
+ */
+function splitForOpenSack(player, items) {
+    const sack = openHerbSack(player), stored = [], rest = [], taken = new Map();
+    for (const [id, amount] of items) {
+        const room = sack ? Math.max(0, storeRoom(player, sack, id) - (taken.get(id) ?? 0)) : 0, take = Math.min(room, amount);
+        if (take) { stored.push([id, take]); taken.set(id, (taken.get(id) ?? 0) + take); }
+        if (amount > take) rest.push([id, amount - take]);
+    }
+    return { sack, stored, rest };
+}
+/** A grimy herb picked up from the ground goes straight into an open herb sack that has room for all of it. */
+function pickup(event) {
+    const { player, groundItem } = event, item = groundItem.getItem();
+    // Stored by id, so only a plain herb goes in; a preset or marked one takes the normal pickup.
+    if (!item.isTradeable() || item.getMeta() != null) return;
+    const { sack, stored } = splitForOpenSack(player, [[item.getId(), item.getAmount()]]);
+    if (!sack || stored.length !== 1 || stored[0][1] !== item.getAmount()) return;
+    storeCrop(player, sack, item.getId(), item.getAmount());
+    core.ItemOnGroundManager.deregister(groundItem);
+    player.getLastItemPickup().reset();
+    player.getInventory().refreshItems();
+    event.handled = true;
 }
 function storagePair(event) {
     const inventory = event.player.getInventory();
@@ -228,4 +260,4 @@ function openSeedVault(event) {
     Vault.open({ player: event.player, object: null, anywhere: true });
 }
 
-Object.assign(module.exports, { CONTRACTS, guildNpc, completeContract, harvestContract, giveSeedPack, guildItemOnNpc, rewardItem, storeCrop, storagePair, storageAction, bankStorageOp, guildObject, openSeedVault });
+Object.assign(module.exports, { CONTRACTS, guildNpc, completeContract, harvestContract, giveSeedPack, guildItemOnNpc, rewardItem, storeCrop, splitForOpenSack, pickup, storagePair, storageAction, bankStorageOp, guildObject, openSeedVault });

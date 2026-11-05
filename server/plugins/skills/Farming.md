@@ -200,6 +200,11 @@ so limited inventory space is filled from the lowest-level herb first (including
 Huasca before Snapdragon). Regression checks cover both sack variants, partial/repeated
 withdrawals and full inventories. Source: [Herb sack](https://oldschool.runescape.wiki/w/Herb_sack).
 
+An open sack also takes grimy herbs picked up from the ground and herbs harvested from a herbiboar,
+as it does from patches, whole or not at all for a pickup and per herb for a harvest, while it has room
+(30 of each type here; the silklined 100 is not modelled). A closed sack takes none. Wiki: "will automatically
+store any grimy herbs that are picked up", "provided there is space for it". No message is shown, as none is documented.
+
 The four South Falador allotment/flower/herb patches award 10% extra Farming XP
 after the Medium Falador Diary, queried through canonical diary progress. The
 bonus follows the acted-on patch; it does not apply to Falador Park trees,

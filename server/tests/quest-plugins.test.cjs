@@ -4903,15 +4903,15 @@ test('Blood Moon crossing preserves the captured native stages and starts the sh
     area.process(boss);
     const hitModifier = handlers.npcHitModify.find(handler => handler.name === 'handleFirstBloodHit');
     let damage = 20;
-    const hit = { getHits: () => [{ getDamage: () => damage, setDamage: value => { damage = value; } }], updateTotalDamage() {} };
-    hitModifier({ npc: boss, attacker: player, hit });
+    const hit = { getAttacker: () => player, getHits: () => [{ getDamage: () => damage, setDamage: value => { damage = value; } }], updateTotalDamage() {} };
+    hitModifier({ npc: boss, hit });
     assert.equal(damage, 0, 'player hits cannot bypass the initial lunge-dodge mechanic');
     damage = 69;
-    const allyHit = { getHits: () => [{ getDamage: () => damage, setDamage: value => { damage = value; } }], updateTotalDamage() {} };
-    hitModifier({ npc: vanescula, attacker: boss, hit: allyHit });
+    const allyHit = { getAttacker: () => boss, getHits: () => [{ getDamage: () => damage, setDamage: value => { damage = value; } }], updateTotalDamage() {} };
+    hitModifier({ npc: vanescula, hit: allyHit });
     assert.equal(damage, 0, 'Lowerniel cannot remove the ally before the opening dodge sequence ends');
     for (let dodge = 0; dodge < 3; dodge++) {
-      if (dodge > 0) { worldCycle += 2; area.process(boss); }
+      if (dodge > 0) { worldCycle += 3; area.process(boss); }
       assert.ok(messages.at(-1)?.includes('sparkling safe tile'),
         'each lunge tells the player to follow the visible safe-tile mark');
       assert.equal(graphics.length, dodge + 1, 'one safe-tile mark is sent for each lunge');
@@ -4926,13 +4926,13 @@ test('Blood Moon crossing preserves the captured native stages and starts the sh
       assert.equal(api.core.RegionManager.canMove(player.location.getX(), player.location.getY(), x, y, z, 1, 1, area),
         true, 'the safe-tile mark is reachable from the player');
       player.location = marked;
-      worldCycle += 2;
+      worldCycle += 3;
       area.process(boss);
     }
     assert.equal(boss.target, player, 'three successful spear-lunge dodges make Lowerniel focus the player');
     assert.equal(boss.flags['combat:no-retaliate'], false, 'Lowerniel can retaliate after the opening sequence');
     damage = 20;
-    hitModifier({ npc: boss, attacker: player, hit });
+    hitModifier({ npc: boss, hit });
     assert.equal(damage, 20, 'player damage becomes available after the lunge sequence');
     boss.hitpoints = 2899;
     player.location = new api.core.Location(2712, 7840, 0);

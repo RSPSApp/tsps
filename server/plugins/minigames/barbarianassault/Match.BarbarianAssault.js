@@ -1126,7 +1126,9 @@ class BarbarianAssaultMatch {
     const inventory = player.getInventory();
     const hammer = this.core.ItemIdentifiers.HAMMER ?? 2347;
     const logs = this.core.ItemIdentifiers.LOGS ?? 1511;
-    if (!inventory.contains?.(hammer) || !inventory.contains?.(logs)) {
+    const hammers = [hammer, this.core.ItemIdentifiers.IMCANDO_HAMMER, this.core.ItemIdentifiers.IMCANDO_HAMMER_OFF_HAND_];
+    const hasHammer = hammers.some((id) => inventory.contains?.(id) || player.getEquipment().contains(id));
+    if (!hasHammer || !inventory.contains?.(logs)) {
       player.sendMessage("You need a hammer and some logs to repair the trap.");
       return true;
     }

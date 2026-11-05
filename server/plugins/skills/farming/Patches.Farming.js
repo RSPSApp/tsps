@@ -1176,6 +1176,8 @@ function attach(api) {
     api.onItemAction(Services.farmingItemAction);
     api.onItemAction(Guild.rewardItem);
     api.onItemAction(Guild.storageAction);
+    api.onCustomEvent("seed-box:gather", Guild.seedBoxGather);
+    api.onGroundItemPickup(Guild.seedBoxPickup);
     api.onCustomEvent(core.Bank.INVENTORY_OP_EVENT, Guild.bankStorageOp);
     api.onSpellOnObject(spellOnObject);
     api.onButtonClick(Spells.farmingButton);

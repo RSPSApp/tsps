@@ -205,6 +205,34 @@ function storageAction(event) {
     }
     inventory.refreshItems();
 }
+/**
+ * https://oldschool.runescape.wiki/w/Seed_box: open, it takes "seeds that the player picks up", seeds pickpocketed from
+ * Master Farmers, and "looting Sailing creatures". Only these: it names salvage as not, and is silent on stalls. So
+ * those two sources emit "seed-box:gather" { player, itemId, amount, stored }, and not "storage:gather", which every
+ * open container answers. Silent, as no capture read shows a line: ours.
+ */
+function openSeedBox(player) {
+    const open = Data.itemId("Open seed box");
+    return player.getInventory().getItems().find(item => item?.getId() === open) ?? null;
+}
+function seedBoxGather(event) {
+    const box = openSeedBox(event.player), left = event.amount - event.stored;
+    if (box && left > 0) event.stored += storeCrop(event.player, box, event.itemId, left);
+}
+function seedBoxPickup(event) {
+    const { player, groundItem } = event, item = groundItem.getItem();
+    const box = openSeedBox(player);
+    const stored = box ? storeCrop(player, box, item.getId(), item.getAmount()) : 0;
+    if (stored <= 0) return;
+    // A stack past the box's limit: the rest stays on the floor for the usual pickup.
+    if (stored < item.getAmount()) {
+        item.setAmount(item.getAmount() - stored);
+        return;
+    }
+    core.ItemOnGroundManager.deregister(groundItem);
+    player.getLastItemPickup().reset();
+    event.handled = true;
+}
 // https://oldschool.runescape.wiki/w/Herb_sack: Empty starts with the lowest-level herb.
 function withdrawalEntries(stored, kind) {
     const entries = Object.entries(stored);
@@ -228,4 +256,4 @@ function openSeedVault(event) {
     Vault.open({ player: event.player, object: null, anywhere: true });
 }
 
-Object.assign(module.exports, { CONTRACTS, guildNpc, completeContract, harvestContract, giveSeedPack, guildItemOnNpc, rewardItem, storeCrop, storagePair, storageAction, bankStorageOp, guildObject, openSeedVault });
+Object.assign(module.exports, { seedBoxGather, seedBoxPickup, CONTRACTS, guildNpc, completeContract, harvestContract, giveSeedPack, guildItemOnNpc, rewardItem, storeCrop, storagePair, storageAction, bankStorageOp, guildObject, openSeedVault });

@@ -61,7 +61,8 @@
  *    is held: the static spawn 6287 resolves to nothing at varbit 799's default,
  *    so varbit 799 is left alone rather than toggling the world spawn.
  *  - The "Aim and Fire" combat interface is not scripted; the loaded fixed device
- *    is used directly on a flock and the loaded toad's colour must match it.
+ *    is used directly on a flock and the loaded toad's colour must match it. Loading the
+ *    device says so, in a line of our own wording.
  *  - Oronwen's incremental silk/fur item-on-NPC hand-ins are not scripted; her
  *    dialogue hands the trousers over when 2 silk and bear fur are carried.
  *  - The 50 Thieving, 60 Ranged, Roving Elves, Big Chompy Bird Hunting and
@@ -885,6 +886,8 @@ module.exports = function registerMourningsEndPartIQuest(api) {
     player.sendMessage(
       "You put the dye-filled toad in to the firing chamber. To use the device, select the Aim and Fire mode from your Combat Options."
     );
+    // Our wording, not live's: Aim and Fire isn't scripted, as no capture shows how it aims.
+    player.sendMessage("Aim and Fire isn't available here: use the loaded device directly on a sheep of that colour.");
     take(player, toadId, 1);
     loadedToadByPlayer.set(player, COLOUR_BY_TOAD.get(toadId));
     player.getPacketSender().sendVarbit(VARBIT_GUN_AMMO, 1);

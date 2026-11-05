@@ -843,6 +843,44 @@ test("Holy Lake karambwanji: floor(level / 5) + 1 a catch, shrimps only with roo
   });
 });
 
+test("Civitas illa Fortis's park pond: Cast with a big net lands its table, 7.5 XP a catch; another net is the wrong size", async () => {
+  const { core, Fishing, fisher, amount, spot, start, ticks } = await fishingLoop();
+  const { ItemIdentifiers: I, NpcIdentifiers: N, NpcDefinition } = core;
+  const { TOOLS, FISH, rollTable, getSpotTool } = Fishing;
+  const pond = NpcDefinition.forId(N.FISHING_SPOT_101);
+  assert.equal(getSpotTool(N.FISHING_SPOT_101, pond, pond.getActions().indexOf("Cast") + 1), TOOLS.PARK_NET);
+
+  // 0.02 lands every roll, past the pre-rolls and the tertiary, on the first weighted item.
+  await withRandom(0.02, async () => {
+    const caster = fisher({ level: 1, items: [[I.BIG_FISHING_NET]] });
+    assert.equal(start(caster, spot(N.FISHING_SPOT_101, 9), "Cast"), true, "the fishing loop takes the park pond");
+    assert.deepEqual(caster.messages, ["You cast out your net..."]);
+    ticks(1);
+    assert.equal(amount(caster, I.BROKEN_GLASS_2), 1);
+    assert.equal(caster.messages.at(-1), "You find some broken glass.");
+    assert.equal(caster.xp, 7.5);
+    ticks(3);
+    assert.equal(amount(caster, I.BROKEN_GLASS_2), 4, "a roll a tick, and the spot never moves");
+    assert.ok(caster.animations.length >= 5 && caster.animations.every((id) => id === 620), "human_largenet each tick");
+
+    const wrong = fisher({ items: [[I.SMALL_FISHING_NET]] });
+    start(wrong, spot(N.FISHING_SPOT_101, 10), "Cast");
+    assert.deepEqual(wrong.messages, ["This is the wrong size net for fishing here."]);
+    assert.equal(wrong.statements.length, 0, "a chat line, not a box");
+  });
+
+  // The table: pre-rolls first, else the weights (glass 3, boot 2, net 2, casket 2, keys 1 of 10), a tertiary on top.
+  const rolls = (...values) => () => values.shift();
+  assert.deepEqual(rollTable(TOOLS.PARK_NET.table, rolls(0.005)), [FISH.PARK_JADE], "jade, 1/100");
+  assert.deepEqual(rollTable(TOOLS.PARK_NET.table, rolls(0.5, 0.001, 0.5)), [FISH.PARK_RED_TOPAZ]);
+  for (const [pick, fish] of [[0.29, FISH.PARK_BROKEN_GLASS], [0.31, FISH.PARK_OLD_BOOT], [0.55, FISH.PARK_BIG_FISHING_NET],
+    [0.75, FISH.PARK_CASKET], [0.95, FISH.PARK_HOUSE_KEYS]]) {
+    assert.deepEqual(rollTable(TOOLS.PARK_NET.table, rolls(0.5, 0.5, pick, 0.5)), [fish], `${pick}`);
+  }
+  assert.deepEqual(rollTable(TOOLS.PARK_NET.table, rolls(0.5, 0.5, 0.95, 0.0001)), [FISH.PARK_HOUSE_KEYS, FISH.PARK_LOOP_HALF]);
+  assert.equal(FISH.PARK_LOOP_HALF.experience, 0, "a tertiary gives no experience of its own");
+});
+
 test("Gita Prymes upgrades angler kit to spirit kit for 1,200 flakes, then both ways free", async () => {
   const { CachePipeline } = require("../dist/game/cache/CachePipeline");
   const { PluginManager } = require("../dist/plugins/PluginManager");

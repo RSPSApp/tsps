@@ -324,3 +324,34 @@ test("goblin: a fade in that closes its own overlay leaves another interface mou
   assert.equal(sender.subInterfaceTargets.get(OTHER_GROUP)?.targetUid, OVERLAY_UID, "the other interface is still mounted on 161:1");
   assert.equal(sender.subInterfaceTargets.has(FADE_GROUP), false, "and the fade overlay is not");
 });
+
+test("shared quest fade-in closes only its own mount after the animation", (t) => {
+  const f = actor(t, SCENES.juliet);
+  const sender = f.player.getPacketSender();
+  const scenes = require("../plugins/quests/QuestScenes").createQuestScenes({ core });
+  const mounted = () => sender.getSubInterfaceAt(OVERLAY_UID);
+
+  scenes.fade(f.player, false);
+  assert.equal(mounted()?.groupId, FADE_GROUP, "fade-in is initially mounted");
+  ticks(f, 2);
+  assert.equal(mounted()?.groupId, FADE_GROUP, "fade remains during the animation");
+  ticks(f, 1);
+  assert.equal(mounted(), undefined, "completed fade-in closes");
+
+  scenes.fade(f.player, false);
+  sender.sendSubInterface(OVERLAY_UID, OTHER_GROUP, 1);
+  ticks(f, 3);
+  assert.equal(mounted()?.groupId, OTHER_GROUP, "replacement interface survives");
+
+  scenes.fade(f.player, false);
+  scenes.fade(f.player, true);
+  const laterFade = mounted();
+  ticks(f, 3);
+  assert.equal(mounted(), laterFade, "later fade-out survives the old fade-in close");
+
+  scenes.fade(f.player, false);
+  scenes.closeFade(f.player);
+  sender.sendSubInterface(OVERLAY_UID, OTHER_GROUP, 1);
+  ticks(f, 3);
+  assert.equal(mounted()?.groupId, OTHER_GROUP, "an explicit close makes the delayed token stale");
+});

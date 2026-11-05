@@ -59,8 +59,8 @@ function isCacheModel(bytes) {
 }
 
 function addAsset(root, { kind, name, data }) {
-    if (kind !== "model") throw Object.assign(new Error("Only model uploads are supported; sprites and textures can be browsed"), { status: 400 });
     const entry = kindOf(kind);
+    if (kind !== "model") throw Object.assign(new Error("Only model uploads are supported; sprites and textures can be browsed"), { status: 400 });
     if (typeof data !== "string" || data.length === 0) throw Object.assign(new Error("Missing file data"), { status: 400 });
     const bytes = Buffer.from(data, "base64");
     if (bytes.length === 0) throw Object.assign(new Error("The file is empty"), { status: 400 });

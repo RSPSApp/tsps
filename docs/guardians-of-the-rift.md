@@ -439,7 +439,9 @@ Ticks from the rift opening:
 - **Targets** (Wiki):
   - Creatures go for the nearest standing barrier, else the Great Guardian.
   - They fight back only against a rift guardian that struck them, while it's beside them.
-  - Rift guardians go for the nearest creature within 10 tiles.
+  - Rift guardians go for the nearest creature anywhere in the temple. In capture
+    20261020T162558 they walk at creatures 11-26 tiles away, so there is no sight limit (a
+    10-tile one left guardians idle at the far end of their post; issue 2698).
 - **The Great Guardian** plays `9372` every 50 ticks of a game (capture 1840). The close's map anims
   (2064 x3, sound 5406) aren't built.
 - **Creature hits on the Great Guardian** (two solo losses): hitsplat 17 with no health bar, and
@@ -470,7 +472,8 @@ Ticks from the rift opening:
 - **Pearls:** [Abyssal pearls](https://oldschool.runescape.wiki/w/Abyssal_pearls) are the
   minigame's reward currency and, as on live, the `abyssal_pearl` item. They come from the
   Rewards Guardian's searches only; a closed game pays none. Felix's shop, Felix's lantern and
-  Cordelia take them from the inventory, and with no points 25 pearls buy a search. For a while
+  Cordelia take them from the inventory, and 25 pearls used on the Rewards Guardian buy one roll
+  (Wiki). For a while
   (PR 1643) they were a saved balance; a balance left from then (`shop-currency:Abyssal pearls`)
   is given back as pearls once, on login, to the inventory or the bank if it's full.
 - **Rewards Guardian** (captured):
@@ -481,8 +484,12 @@ Ticks from the rift opening:
   - When the searches run out: mesbox "There doesn't seem to be anything else in the rift for
     you." With none at all: "There doesn't seem to be anything in the rift for you."
   - Big-search: the animation, and three ticks later up to five rewards at once.
-  - A search costs an elemental and a catalytic point (Wiki); with no points, 25 pearls buy
-    the search instead. The points are spent first.
+  - A search costs an elemental and a catalytic point (Wiki). Search and Big-search spend only
+    points. Before issue 2698 they went on to spend 25 pearls a search once the points ran out,
+    eating the pearls they had just found.
+  - Abyssal pearls used on the Rewards Guardian: 25 buy one roll (Wiki: "use 25 pearls on the
+    Rewards Guardian for an additional loot roll"), searched like a single Search. With fewer,
+    "You need 25 abyssal pearls to search the rift with them." (ours: no capture or Wiki text).
   - A search is rolled first and given only if the whole roll fits. Otherwise the inventory-full
     message shows and the points stay.
 - **Loot** (Wiki; `server/plugins/minigames/data/guardians-of-the-rift-rewards.json`):
@@ -541,6 +548,10 @@ Ticks from the rift opening:
     exit portal are Runecrafting's own locs, so GotR claims them in `onBeforeObjectInteraction`
     for a player on an altar trip; without guardian essence the click falls through to plain
     Runecraft.
+  - A logout ends the game, so a login at the altar of a trip (saved as
+    `guardians-of-the-rift:altar-trip`) goes to the temple's lobby, as a login on the game's side
+    of the barrier does. Before issue 2698 the altar's portal then sent the player out to its
+    ruins.
 - **Data:** the Great Guardian and the apprentices in `npc-spawns.json`, the fighters in
   `npc-combat-defs.json`, and Felix's old shop binding dropped from `shops.json`.
 - **`plugins/interface/data/minigame-teleports.json`** already lists Guardians of the Rift

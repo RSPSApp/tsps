@@ -399,9 +399,10 @@ test("an uploaded model is stored once, named, and given an id above the cache",
   const second = Assets.addAsset(root, { kind: "model", name: "my_tree", data: modelBytes(80).toString("base64") });
   assert.equal(second.asset.id, first.asset.id + 1);
 
-  // Kinds have their own ranges, so ids cannot collide across them.
-  const sprite = Assets.addAsset(root, { kind: "sprite", name: "my_icon", data: Buffer.from("png-like").toString("base64") });
-  assert.equal(sprite.asset.id, Assets.ASSET_KINDS.sprite.start);
+  // Previously stored non-model manifests remain readable without offering unsupported uploads.
+  const document = Document.read(root);
+  Document.write(root, { ...document, assets: [...document.assets, { kind: "sprite", id: Assets.ASSET_KINDS.sprite.start, name: "Legacy icon", file: "sprite/legacy.png" }] });
+  assert.equal(Assets.assetsOf(root).filter(asset => asset.kind === "sprite").length, 1);
 
   assert.deepEqual(Assets.customModels(root).map((row) => row.id), [first.asset.id, second.asset.id], "only models ship as custom models");
   assert.equal(Assets.assetNames(root).get(`model:${first.asset.id}`), "my_loc");

@@ -741,10 +741,13 @@ module.exports = function registerSinsOfTheFatherQuest(api) {
     player.moveTo(new Location(tile.x, tile.y, tile.z));
   }
 
+  /** A fade back in leaves the full-screen fade overlay mounted on 161:1 once the script has run (#2640). Take it down then, but only if it is still the interface mounted there: a ladder or transport that mounted something else in the meantime is not ours to close, and a later fade out is a new mount. */
   function fade(player, out) {
-    player.getPacketSender().sendSubInterface((161 << 16) | 1, 174, 1, {
+    const mount = player.getPacketSender().mountSubInterface((161 << 16) | 1, 174, 1, {
       postScripts: [{ scriptId: 948, args: out ? [0, 255, 0, 0, 80] : [0, 0, 0, 255, 80] }],
     });
+    const { CountdownTask, TaskManager } = api.core;
+    if (!out) TaskManager.submit(new CountdownTask(player, 4, () => player.getPacketSender().closeSubInterfaceMount(mount)));
   }
 
   function playCamera(player, shots) {

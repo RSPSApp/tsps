@@ -42,7 +42,7 @@ const PROJECTILE = { DELAY: 56, LENGTH: 16, PER_TILE: 10, START_HEIGHT: 62, END_
 const MAGIC_ATTACK = 3; // BonusManager.ATTACK_MAGIC
 const MAGIC_DAMAGE = 12; // BonusManager.MAGIC_STRENGTH among the "other" bonuses
 
-const { definePoweredStaff } = require("./PoweredStaff");
+const { definePoweredStaff, distance } = require("./PoweredStaff");
 
 let api = null;
 let staff = null;
@@ -76,7 +76,7 @@ function inTombs(player) {
 // ------------------------------------------------------------------ combat
 
 function travelCycles(from, to) {
-  return PROJECTILE.DELAY + PROJECTILE.LENGTH + from.getLocation().getDistance(to.getLocation()) * PROJECTILE.PER_TILE;
+  return PROJECTILE.DELAY + PROJECTILE.LENGTH + distance(from, to) * PROJECTILE.PER_TILE;
 }
 
 function look({ Animation, Graphic, GraphicHeight, Projectile }) {

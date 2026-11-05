@@ -11,6 +11,8 @@ import { PluginMessage } from "./PluginMessage";
 import { PluginChanged } from "./PluginChanged";
 import { PostClientTick } from "./PostClientTick";
 import { StatChanged } from "./StatChanged";
+import { ItemContainerChanged } from "./ItemContainerChanged";
+import { WidgetLoaded } from "./WidgetLoaded";
 
 export { BeforeRender } from "./BeforeRender";
 export { ChatMessage } from "./ChatMessage";
@@ -25,6 +27,8 @@ export { PluginMessage } from "./PluginMessage";
 export { PluginChanged } from "./PluginChanged";
 export { PostClientTick } from "./PostClientTick";
 export { StatChanged } from "./StatChanged";
+export { ItemContainerChanged } from "./ItemContainerChanged";
+export { WidgetLoaded } from "./WidgetLoaded";
 
 export type EventInstance = object;
 export type EventClass<E = EventInstance> = new (...args: never[]) => E;
@@ -49,4 +53,6 @@ export const EVENT_CLASSES: Record<string, EventClass> = {
     NpcSpawned,
     NpcDespawned,
     NpcChanged,
+    ItemContainerChanged,
+    WidgetLoaded,
 };

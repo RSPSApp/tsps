@@ -23,6 +23,7 @@ import { CLIENT_TOKEN } from "./plugins/PluginInjector";
 import { CORE_PLUGINS, LEGACY_CONFIG_MIGRATIONS } from "./plugins";
 import { toRuneLiteGameState } from "../impl/GameStateMapping";
 import { bindNpcEvents } from "../impl/NpcEventSource";
+import { bindContainerEvents, bindWidgetEvents } from "../impl/ContainerEventSource";
 import { runLegacyConfigMigrations } from "../impl/LegacyConfigMigration";
 import { migrateTileMarkersConfig } from "../../game/plugins/tilemarkers/migrateTileMarkers";
 import { migrateTimersConfig } from "../../game/plugins/statustimer/TimersPlugin";
@@ -114,6 +115,9 @@ export class RuneLite {
             }
         });
         this.postNpcEvents();
+        // ItemContainerChanged from the backpack and worn equipment; WidgetLoaded from group loads.
+        bindContainerEvents(this.client, (event) => this.eventBus.post(event));
+        bindWidgetEvents(this.client, (event) => this.eventBus.post(event));
 
         // state.tickListeners fire after the tick's packets are applied.
         subscribeTick(() => this.eventBus.post(new GameTick()));

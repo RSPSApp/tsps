@@ -67,6 +67,39 @@ test("blowpipe hits land 1 + distance / 6 ticks after the attack (Wiki: Hit dela
   }
 });
 
+// Captured blowpipe casts at Vorkath (size 7, south-west tile 2269,4062), rsprox 3279 (rev 234): the Drygore blowpipe's
+// ordinary attack, steel_dart_travel (228) at starttime 32, ending 32 + 5 a tile of the distance to the NEAREST tile.
+// The shooter at 2278,4064 is 3 tiles from Vorkath's edge and 9 from its south-west tile (end 47, not 77); at
+// 2280,4066 it is 5 and 11 (57); at 2276,4068 it is 1 and 7 (37). The Drygore blowpipe is the Leagues variant, not
+// the Toxic blowpipe; the projectile ids, profile and formulas are the same ones (rsprox has no Toxic blowpipe cast).
+const VORKATH = { x: 2269, y: 4062, size: 7 };
+const vorkath = () => ({ getLocation: () => new Location(VORKATH.x, VORKATH.y, 0), getSize: () => VORKATH.size });
+
+test("blowpipe hits land by the target's nearest tile: 1 + distance / 6 ticks (Wiki: Hit delay; rsprox 3279)", (t) => {
+  t.mock.method(PendingHit.prototype, "prepareHits", () => []);
+  // From 2278,4064 the edge is 3 tiles away (1 tick); the south-west tile, 9 away, would give 2.
+  const near = holding(2278, 4064);
+  assert.equal(blowpipeMethod(near).hits(near, vorkath())[0].getDelay(), 1);
+  // 5 from the edge (1 tick), 11 from the south-west tile (2).
+  const mid = holding(2280, 4066);
+  assert.equal(blowpipeMethod(mid).hits(mid, vorkath())[0].getDelay(), 1);
+  // A one-tile target is unchanged: 7 tiles is 2 ticks.
+  const small = holding(3200, 3200);
+  assert.equal(blowpipeMethod(small).hits(small, { getLocation: () => new Location(3207, 3200, 0) })[0].getDelay(), 2);
+});
+
+test("blowpipe darts fly 32 + 5 a tile of the nearest-tile distance, ending with the hit (rsprox 3279)", () => {
+  const { dartShot } = ToxicBlowpipe._test;
+  for (const [x, y, end] of [[2278, 4064, 47], [2280, 4066, 57], [2276, 4068, 37]]) {
+    const player = holding(x, y);
+    const shot = dartShot(player, vorkath(), 228);
+    assert.equal(shot.end, end, `from ${x},${y}`);
+    assert.deepEqual([shot.id, shot.delay, shot.startHeight, shot.endHeight], [228, 32, 35.5, 36.5], "the captured delay and heights (142 and 146 sent)");
+  }
+  const small = holding(3200, 3200);
+  assert.equal(dartShot(small, { getLocation: () => new Location(3205, 3200, 0) }, 228).end, 32 + 5 * 5, "a one-tile target is unchanged");
+});
+
 test("blowpipe attack speed applies the Rapid style reduction in PvM and PvP", () => {
   for (const [againstPlayer, rapid, expected] of [
     [false, false, 3],

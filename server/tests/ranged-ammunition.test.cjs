@@ -8,6 +8,13 @@ Server.installProductionPathResolver();
 const { Ammunition, RangedWeapon } = require('../dist/game/content/combat/ranged/RangedData');
 const { ItemIdentifiers: Items } = require('../dist/util/ItemIdentifiers');
 
+test('the standard shortbow and longbow fire arrows up to iron', () => {
+  for (const [weapon, name] of [[RangedWeapon.SHORTBOW, 'shortbow'], [RangedWeapon.LONGBOW, 'longbow']]) {
+    assert.ok(weapon.getAmmunitionData().includes(Ammunition.BRONZE_ARROW), `${name} fires bronze arrows`);
+    assert.ok(weapon.getAmmunitionData().includes(Ammunition.IRON_ARROW), `${name} fires iron arrows`);
+  }
+});
+
 test('dragon bolts, plain and gem-tipped, are ammunition for the dragon-tier crossbows only', () => {
   const dragonBolts = [Items.DRAGON_BOLTS_2, Items.RUBY_DRAGON_BOLTS_E_, Items.RUBY_DRAGON_BOLTS, Items.ONYX_DRAGON_BOLTS_E_, Items.OPAL_DRAGON_BOLTS];
   for (const id of dragonBolts) {

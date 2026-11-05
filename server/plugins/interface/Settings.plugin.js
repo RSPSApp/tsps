@@ -330,6 +330,15 @@ function toggleSetting(player, settingId) {
   return true;
 }
 
+/** Another plugin sets one of its rows' variables: sent and saved as when its row is clicked. */
+function setSettingValue({ player, settingId, value }) {
+  const row = SETTINGS[settingId];
+  if (!row || row.options || !Number.isInteger(value)) return false;
+  setSettingVar(player, varKey(row), value);
+  if (row.script !== undefined) player.getPacketSender().sendClientScript(row.script);
+  return true;
+}
+
 /** A dropdown option chosen: set the option's vars, or the one var to the option's index. */
 function chooseSettingOption(player, settingId, option) {
   const row = SETTINGS[settingId];
@@ -821,6 +830,7 @@ module.exports = {
     api.onInterfaceActionButton(ALL_SETTINGS_SEARCH_BAR, startSettingsSearch);
     api.onInterfaceActionButton(QUEST_LIST_SETTINGS_BUTTON, openQuestSettings);
     api.onCustomEvent("interface:closed", endSettingsSearch);
+    api.onCustomEvent("settings:set", setSettingValue);
     api.onInterfaceActionButton(ALL_SETTINGS_SETTINGS_CLICKZONE, clickSetting);
     api.onInterfaceActionButton(ALL_SETTINGS_DROPDOWN_BUTTONS, clickDropdownOption);
     api.onInterfaceActionButton(ALL_SETTINGS_DROPDOWN_CLOSE, closeDropdown);

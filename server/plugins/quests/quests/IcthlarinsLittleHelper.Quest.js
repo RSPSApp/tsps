@@ -1327,6 +1327,11 @@ module.exports = function registerIcthlarinsLittleHelperQuest(api) {
       return;
     }
     if (stage === STAGE_RITUAL) {
+      // Refused before the jump: a drop would land on the far side. No capture of this: the wording is ours.
+      if (!held(player, UNHOLY_SYMBOL_ITEM_ID) && player.getInventory().getFreeSlots() < 1) {
+        player.sendMessage("You don't have enough inventory space to do that.");
+        return;
+      }
       playCutscene(player, NpcIdentifiers.WANDERER_2, "reconsecrating-the-tomb-flashback-3-jumping-over-the-pit-after-the-ceremony-has-begun");
       if (!held(player, UNHOLY_SYMBOL_ITEM_ID)) player.getInventory().adds(UNHOLY_SYMBOL_ITEM_ID, 1);
       teleport(player, PYRAMID_NORTH);
@@ -1337,6 +1342,15 @@ module.exports = function registerIcthlarinsLittleHelperQuest(api) {
       teleport(player, PYRAMID_NORTH);
       setStage(player, STAGE_EAST_ROOM);
       return;
+    }
+    // Only the jump gives a symbol and the sarcophagus needs one, so a lost one comes back here.
+    // Crossing without one on a full bag is ours: the pit works both ways, so they can come back for it.
+    if (stage === STAGE_FLASHBACK_3 && !held(player, UNHOLY_SYMBOL_ITEM_ID)) {
+      if (player.getInventory().getFreeSlots() < 1) {
+        player.sendMessage("You don't have enough inventory space to do that.");
+      } else {
+        player.getInventory().adds(UNHOLY_SYMBOL_ITEM_ID, 1);
+      }
     }
     const location = player.getLocation();
     teleport(player, location.getY() <= 9194 ? PYRAMID_NORTH : PYRAMID_SOUTH);

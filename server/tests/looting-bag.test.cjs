@@ -506,3 +506,115 @@ test("on death the killer gets everything but food and potions (Wiki)", () => {
   hooks.defeated({ killer: player(), victim });
   assert.deepEqual(dropped.slice(before).map((entry) => entry.getId()), [COINS]);
 });
+
+// Source-only diagnostic: normal decoded widget/amount dispatch, without a saved callback call.
+test("bank Deposit-X keeps its selected item across another bag operation", async (t) => {
+  const { ClientConnection } = require("../dist/net/NetworkBuilder");
+  const { HeadlessBinaryChannel } = require("../dist/net/BinaryChannel");
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const { PlayerSession } = require("../dist/net/PlayerSession");
+  const { PlayerStatus } = require("../dist/game/model/PlayerStatus");
+  const real = PluginManager.getCoreApi();
+  // Reuse the listeners registered by this fixture; the router and bank/widget handlers stay real.
+  t.mock.method(PluginManager, "emitInterfaceActionClick", (event) => click(event).handled);
+  t.mock.method(PluginManager, "emitCustomEvent", (name, event) => hooks.events[name]?.(event));
+
+  function actor(entries = [{ id: FIRE_RUNE, amount: 13 }, { id: COINS, amount: 7 }]) {
+    bankTabs = bankTab();
+    const channel = new HeadlessBinaryChannel();
+    const sent = [];
+    channel.send = (frame) => { sent.push(Buffer.from(frame)); };
+    const session = new PlayerSession(channel);
+    const p = new Player(session, new Location(...LUMBRIDGE, 0));
+    session.setPlayer(p);
+    p.setStatus(PlayerStatus.BANKING);
+    p.setInterfaceId(real.Bank.MAIN_INTERFACE_ID);
+    p.bankOpen = true; // The existing plugin fixture's bank-open adapter.
+    p.getBank = () => bankTabs;
+    const bag = bagWith(OPEN_BAG, entries);
+    p.getInventory().setItem(0, bag);
+    hooks.events[core.Bank.INVENTORY_OP_EVENT]({ player: p, item: bag, slot: 0, op: 1, handled: false });
+    const connection = new ClientConnection(channel);
+    assert.ok(sent.some((frame) => frame.length > 0), "the real constructor sends its welcome on an open transport");
+    connection.player = p;
+    // Await the real turn-dispatch promise so setup/router failures cannot disappear in a logged catch.
+    const send = (packet) => connection.dispatch([packet], true);
+    const op = (action) => send({ type: "widget_action", widgetId: (15 << 16) | bankside("lootingbag_items"),
+      groupId: 15, childId: bankside("lootingbag_items"), slot: 0, itemId: FIRE_RUNE,
+      buttonNum: action });
+    return { p, bag, op, send };
+  }
+
+  await t.test("original item accepts a normal amount submission", async () => {
+    const { p, bag, op, send } = actor();
+    await op(6);
+    assert.equal(typeof p.getEnteredAmountAction()?.execute, "function");
+    await send({ type: "dialogue_amount", amount: 3 });
+    assert.equal(p.getEnteredAmountAction(), null);
+    assert.equal(bankTabs.held.get(FIRE_RUNE), 3);
+    assert.deepEqual(stored(bag).map(({ id, amount }) => [id, amount]), [[FIRE_RUNE, 10], [COINS, 7]]);
+  });
+
+  await t.test("closed banks, replacement bags and full banks preserve contents", async () => {
+    for (const control of ["closed", "replacement", "full"]) {
+      const { p, bag, op, send } = actor();
+      await op(6);
+      if (control === "closed") {
+        p.bankOpen = false;
+        p.setStatus(PlayerStatus.NONE);
+      }
+      if (control === "replacement") p.getInventory().setItem(0, bagWith(OPEN_BAG));
+      if (control === "full") bankTabs.getAddableAmount = () => 0;
+      await send({ type: "dialogue_amount", amount: 3 });
+      assert.equal(p.getEnteredAmountAction(), null, control);
+      assert.equal(bankTabs.held.size, 0, control);
+      assert.deepEqual(stored(bag).map(({ id, amount }) => [id, amount]), [[FIRE_RUNE, 13], [COINS, 7]], control);
+    }
+  });
+
+  await t.test("a partial deposit keeps the pending rune target valid", async () => {
+    const { p, bag, op, send } = actor();
+    await op(6);
+    const pending = p.getEnteredAmountAction();
+    await op(3); // Deposit-5 clones the bag metadata, but leaves the same semantic target.
+    assert.equal(p.getEnteredAmountAction(), pending);
+    assert.equal(bankTabs.held.get(FIRE_RUNE), 5);
+    assert.deepEqual(stored(bag).map(({ id, amount }) => [id, amount]), [[FIRE_RUNE, 8], [COINS, 7]]);
+    await send({ type: "dialogue_amount", amount: 3 });
+    assert.equal(p.getEnteredAmountAction(), null);
+    assert.equal(bankTabs.held.get(FIRE_RUNE), 8);
+    assert.deepEqual(stored(bag).map(({ id, amount }) => [id, amount]), [[FIRE_RUNE, 5], [COINS, 7]]);
+  });
+
+  await t.test("a compacted rune stack with different metadata is a different target", async () => {
+    const selected = { id: FIRE_RUNE, amount: 13, meta: { diagnostic: "selected" } };
+    const other = { id: FIRE_RUNE, amount: 7, meta: { diagnostic: "other" } };
+    const { p, bag, op, send } = actor([selected, other]);
+    await op(6);
+    const pending = p.getEnteredAmountAction();
+    assert.equal(typeof pending?.execute, "function", "the metadata target has an armed amount callback");
+    await op(7);
+    assert.equal(bankTabs.held.get(FIRE_RUNE), 13);
+    assert.deepEqual(stored(bag), [other], "the other metadata stack compacts into the selected slot");
+    assert.equal(p.getEnteredAmountAction(), pending);
+    await send({ type: "dialogue_amount", amount: 3 });
+    assert.equal(p.getEnteredAmountAction(), null);
+    assert.deepEqual(stored(bag), [other], "the original prompt must leave the different metadata stack intact");
+    assert.equal(bankTabs.held.get(FIRE_RUNE), 13, "the ID-coalescing fixture tab receives no additional runes");
+  });
+
+  await t.test("a compacted slot cannot redirect the pending amount to coins", async () => {
+    const { p, bag, op, send } = actor();
+    await op(6);
+    const pending = p.getEnteredAmountAction();
+    assert.equal(typeof pending?.execute, "function");
+    await op(7); // Real registered Deposit-All removes runes and compacts coins into slot zero.
+    assert.equal(bankTabs.held.get(FIRE_RUNE), 13);
+    assert.deepEqual(stored(bag).map(({ id, amount }) => [id, amount]), [[COINS, 7]]);
+    assert.equal(p.getEnteredAmountAction(), pending, "the intervening bank operation leaves this prompt armed");
+    await send({ type: "dialogue_amount", amount: 3 });
+    assert.equal(p.getEnteredAmountAction(), null, "normal amount dispatch consumes the callback");
+    assert.equal(bankTabs.held.get(COINS) ?? 0, 0, "a rune prompt must not bank coins");
+    assert.deepEqual(stored(bag).map(({ id, amount }) => [id, amount]), [[COINS, 7]]);
+  });
+});

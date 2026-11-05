@@ -147,11 +147,41 @@ test("as captured (Zulrah): the count, the category, the obtained items packed f
   Interface.click({ player, buttonId: (621 << 16) | 11, slot: zulrah.key });
   assert.deepEqual(player.log, [
     "varp 2048=1",
+    "varp 2941=0",
+    "varp 2942=0",
     `varbit 6906=${zulrah.key}`,
     `inv [[0,${ZULRAH_SCALES},109]] of ${Data.load().maxCategorySize}`,
     `script 7797 [0,${(621 << 16) | 10},${(621 << 16) | 11},${(621 << 16) | 12},${(621 << 16) | 13},471,${zulrah.key}]`,
   ]);
   customEvents.delete("collection-log:category-count");
+});
+
+test("raid categories send each cache mode counter before drawing and clear unused counts", () => {
+  const cox = require("../plugins/minigames/cox/Rewards.ChambersOfXeric").collectionLogCount;
+  const toa = require("../plugins/minigames/toa/Raid.TombsOfAmascut").collectionLogCount;
+  customEvents.set("collection-log:category-count", [cox, toa]);
+  try {
+    const player = createPlayer();
+    player.setAttribute("cox:kills", 3);
+    player.setAttribute("cox:challenge-kills", 2);
+    player.setAttribute("toa:completions", { entry: 4, normal: 5, expert: 6 });
+    const check = (category, expected) => {
+      player.log.length = 0;
+      Interface.open(player, category);
+      assert.deepEqual(player.log.filter((line) => /^varp (2048|2941|2942)=/.test(line)), expected);
+      assert.ok(player.log.indexOf(expected[2]) < player.log.findIndex((line) => line.startsWith("script 7797")),
+        "all mode counts reach the cache before it draws");
+    };
+    check("Tombs of Amascut", ["varp 2048=5", "varp 2941=4", "varp 2942=6"]);
+    check("Chambers of Xeric", ["varp 2048=2", "varp 2941=3", "varp 2942=0"]);
+    check("Zulrah", ["varp 2048=0", "varp 2941=0", "varp 2942=0"]);
+    const fresh = createPlayer();
+    Interface.open(fresh, "Tombs of Amascut");
+    assert.deepEqual(fresh.log.filter((line) => /^varp (2048|2941|2942)=/.test(line)),
+      ["varp 2048=0", "varp 2941=0", "varp 2942=0"], "new players start with zero in every mode");
+  } finally {
+    customEvents.delete("collection-log:category-count");
+  }
 });
 
 test("empty latest items are -1 (the overview's script skips them; 0 would be Dwarf remains)", () => {
@@ -164,7 +194,7 @@ test("empty latest items are -1 (the overview's script skips them; 0 would be Dw
 test("as captured: switching tab resets to its first category and enables its rows", () => {
   const player = createPlayer();
   Interface.click({ player, buttonId: (621 << 16) | 7 });
-  assert.deepEqual(player.log.slice(0, 4), ["varp 2048=0", "varbit 6906=0", "varbit 6905=3", "flags 621:27 0-21"]);
+  assert.deepEqual(player.log.slice(0, 6), ["varp 2048=0", "varp 2941=0", "varp 2942=0", "varbit 6906=0", "varbit 6905=3", "flags 621:27 0-21"]);
   assert.equal(player.log.at(-1).startsWith("script 7797 [3,"), true);
 });
 
@@ -391,6 +421,10 @@ test("reward-shop purchases log quantities, but unrelated shops and resold stock
   emit("shop:purchase", { ...purchase, shopName: "General Store" });
   emit("shop:purchase", { ...purchase, originalStock: false });
   assert.equal(Progress.obtained(player, CARPENTERS_BOOTS), 3);
+  emit("shop:purchase", {
+    player, shopName: "Petrified Pete's Ore Shop", itemId: 21697, amount: 1, originalStock: true,
+  });
+  assert.equal(Progress.obtained(player, 21697), 1, "the Volcanic Mine reward shop already credits");
 });
 
 test("every configured reward shop exists in canonical shop data", () => {
@@ -513,4 +547,78 @@ test("a newly earned item is told as collection-log:new-item, by any route, and 
   Progress.obtain(player, CARPENTERS_BOOTS, 1);
   assert.deepEqual(heard, [CARPENTERS_BOOTS], "once, when it's new");
   customEvents.set("collection-log:new-item", listeners);
+});
+
+test("imported Corp sigils use one weighted access and still reach the log", async (t) => {
+  const { _test, __internals } = require("../plugins/npcs/NpcDrops.plugin");
+  _test.loadDrops();
+  const corp = _test.tablesByNpc.get(319)[0];
+  const sigils = corp.entries.filter((entry) => [12819, 12823, 12827].includes(entry.item_id));
+  assert.deepEqual(
+    sigils.map((entry) => [entry.item_id, entry.weight, entry.out_of, entry.roll_group, entry.group_access_weight, entry.group_access_out_of]),
+    [
+      [12823, 3, 7, "Sigils", 1, 585],
+      [12827, 3, 7, "Sigils", 1, 585],
+      [12819, 1, 7, "Sigils", 1, 585],
+    ],
+  );
+  const sequence = (...values) => { let index = 0; return () => values[index++] ?? 0; };
+  const dropPlayer = createPlayer();
+  dropPlayer.getEquipment = () => ({ get: () => null, getItems: () => [] });
+
+  // Access hits, then the weighted pick lands on each source weight in turn.
+  for (const [roll, itemId] of [[0, 12823], [3 / 7, 12827], [6 / 7, 12819]]) {
+    t.mock.method(Math, "random", sequence(0, roll));
+    const rolled = __internals.rollOnce(corp, sigils, dropPlayer, true, null, []);
+    assert.deepEqual(rolled.map((drop) => drop.itemId), [itemId]);
+  }
+
+  // A sigil hit replaces the main roll; tertiary rolls are still made.
+  t.mock.method(Math, "random", () => 0);
+  const hit = __internals.rollTable(corp, dropPlayer, null);
+  const hitSigils = hit.filter((drop) => [12819, 12823, 12827].includes(drop.itemId));
+  assert.equal(hitSigils.length, 1, "exactly one sigil per kill");
+  assert.ok(!hit.some((drop) => drop.itemId === 4091), "main loot is replaced on a sigil hit");
+  assert.ok(hit.some((drop) => corp.tertiary.some((entry) => entry.item_id === drop.itemId)), "tertiary rows still roll");
+
+  // A miss keeps the ordinary main roll and reaches no sigil.
+  t.mock.method(Math, "random", sequence(0.5, 0));
+  const miss = __internals.rollTable(corp, dropPlayer, null);
+  assert.ok(!miss.some((drop) => [12819, 12823, 12827].includes(drop.itemId)));
+  assert.ok(miss.some((drop) => drop.itemId === 4091), "main loot is retained on a miss");
+
+  // Always and tertiary rows survive a conditional access hit.
+  const synthetic = {
+    entries: [
+      { item_id: 526, name: "Bones", quantity: [1, 1], always: true },
+      ...sigils,
+      { item_id: 4091, name: "Mystic robe top", quantity: [1, 1], weight: 1, out_of: 512 },
+    ],
+    main_max_roll: 512,
+    tertiary: [{ item_id: 995, name: "Coins", quantity: [1, 1], weight: 1, out_of: 2 }],
+  };
+  t.mock.method(Math, "random", () => 0);
+  const syntheticHit = __internals.rollTable(synthetic, dropPlayer, null);
+  assert.equal(syntheticHit.filter((drop) => [12819, 12823, 12827].includes(drop.itemId)).length, 1);
+  assert.ok(syntheticHit.some((drop) => drop.itemId === 526), "always drop preserved");
+  assert.ok(syntheticHit.some((drop) => drop.itemId === 995), "tertiary drop preserved");
+  assert.ok(!syntheticHit.some((drop) => drop.itemId === 4091), "main replaced on a group hit");
+
+  const corpLog = createPlayer();
+  Clog._test.onLoot({ player: corpLog, drops: hitSigils, npc: { getDefinition: () => ({ getName: () => "Corporeal Beast" }) } });
+  await Promise.resolve();
+  assert.equal(Progress.obtained(corpLog, hitSigils[0].itemId), 1);
+
+  const branda = _test.tablesByNpc.get(12596)[0];
+  const amulet = branda.entries.find((entry) => entry.name === "Giantsoul amulet");
+  assert.equal(amulet.item_id, 30637);
+  assert.equal(amulet.out_of, 16);
+  t.mock.method(Math, "random", () => 0);
+  const royal = __internals.rollOnce(branda, [amulet], createPlayer(), true, null, []);
+  assert.deepEqual(royal.map((drop) => drop.itemId), [30637]);
+  const royalLog = createPlayer();
+  Clog._test.onLoot({ player: royalLog, drops: royal, npc: { getDefinition: () => ({ getName: () => "Branda the Fire Queen" }) } });
+  await Promise.resolve();
+  assert.equal(Progress.obtained(royalLog, 30637), 1);
+  assert.equal(Progress.obtained(royalLog, 30638), 0);
 });

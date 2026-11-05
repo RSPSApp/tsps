@@ -128,6 +128,8 @@ test("the sceptre uses its powered-staff spell, max-hit formula, speed and range
   assert.equal(built.state.castSpell.castAnimation().getId(), 10500);
   assert.equal(built.state.castSpell.startGraphic().getId(), 2567);
   assert.equal(built.state.castSpell.endGraphic().getId(), 2568);
+  // Its impact: `sound_area id=1460 range=10` at the target in 51 casts (capture 1885).
+  assert.equal(built.state.castSpell.impactSound()?.getId(), 1460);
   built.state.castSpell.startCast = () => {};
   method.start(built.player, { isPlayer: () => false });
   assert.equal(

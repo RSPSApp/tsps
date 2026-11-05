@@ -63,6 +63,7 @@ function playerWith(entries = [], { level = 99, threadUses } = {}) {
     deleteNumber: (id, amount) => amounts.set(id, Math.max(0, (amounts.get(id) ?? 0) - amount)),
     addItem: item => amounts.set(item.id, (amounts.get(item.id) ?? 0) + item.getAmount()),
     adds: (id, amount = 1) => amounts.set(id, (amounts.get(id) ?? 0) + amount),
+    getItems: () => [],
   };
   const packetSender = {
     sendCreationMenu(value) {

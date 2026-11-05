@@ -578,6 +578,8 @@ test("Yama's stepping stones: a jump a tick, the stone left on fire, a burn on a
   const ObstacleRunner = require("../plugins/skills/agility/ObstacleRunner.Agility");
   ObstacleRunner.init({ core, getTaskManager: () => core.TaskManager });
   const YamaStones = require("../plugins/modes/leagueareas/YamaStones.LeagueAreaUnlocks");
+  // The map, as the server indexes it at start: the stones are the loc's placements in it.
+  if (core.RegionManager.regions.size === 0) core.RegionManager.init();
   worldLeague = 6;
   const jumper = character("stonejumper");
   worldLeague = 4;
@@ -650,6 +652,26 @@ test("Yama's stepping stones: a jump a tick, the stone left on fire, a burn on a
   ticks(3);
   assert.equal(jumper.sent.messages.at(-1), "Your Yama's stepping stone count is: <col=ff0000>10</col>.");
   assert.deepEqual({ course: laps().at(-1).course, laps: laps().at(-1).laps }, { course: "yama-stepping-stones", laps: 10 });
+
+  // Every stone the cache places is one, not just those the recording jumped on: the south row.
+  ticks(7);
+  jumper.moveTo(at(1508, 5580));
+  jumper.sent.messages.length = 0;
+  assert.equal(YamaStones.jump(stone(1511, 5579)), true);
+  ticks(3);
+  assert.ok(!jumper.sent.messages.includes("I can't reach that!"), "a stone jumps on to the next");
+  assert.ok(jumper.getLocation().equals(at(1511, 5579)), "on the south row's stone");
+
+  // Clicked from further off, the walk is to the shore beside the stone clicked, not a fixed entry.
+  const walkable = (x, y) => !core.RegionManager.blocked(at(x, y), null);
+  for (const [from, [sx, sy]] of [[[1503, 5577], [1511, 5579]], [[1503, 5590], [1529, 5599]], [[1500, 5600], [1480, 5592]]]) {
+    jumper.moveTo(at(...from));
+    const far = { ...stone(sx, sy), destination: { x: sx, y: sy, z: 0 } };
+    YamaStones.route(far);
+    const { x, y } = far.destination;
+    assert.ok(Math.max(Math.abs(x - sx), Math.abs(y - sy)) <= 4, `to ${x}, ${y}: in the shore's reach of ${sx}, ${sy}`);
+    assert.ok(walkable(x, y), `to ${x}, ${y}: a tile to stand on`);
+  }
 
   const echoes = character("echoesjumper");
   assert.equal(YamaStones.jump({ ...stone(1486, 5598), player: echoes }), false, "only a Demonic Pacts character's");

@@ -564,6 +564,9 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
   function handleDialogueLine(event) {
     const { player, npcId } = event;
     const text = String(event.text ?? "");
+    if (npcId === GENIE_NPC_ID) {
+      api.emitCustomEvent("diary:task", { player, diary: "desert", task: "visit-the-genie" });
+    }
     if (npcId === AWUSAH_NPC_ID && quest.getStage(player) === STAGE_SPIRITS) {
       if (text.includes("deep crevice in the desert to the west")) {
         quest.setStage(player, STAGE_MAYOR);
@@ -1164,12 +1167,17 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
 
   function prayAtStatuette(player) {
     const skills = player.getSkillManager();
+    const prayerBefore = skills.getCurrentLevel(Skill.PRAYER);
     player.performAnimation(new Animation(645));
     skills.setCurrentLevels(Skill.HITPOINTS, skills.getMaxLevel(Skill.HITPOINTS));
     skills.updateSkill(Skill.HITPOINTS);
     skills.setCurrentLevels(Skill.PRAYER, skills.getMaxLevel(Skill.PRAYER));
     skills.updateSkill(Skill.PRAYER);
     player.sendMessage("You feel Elidinis' blessing restore you.");
+    // The Desert Diary's "Pray at the Elidinis statuette in Nardah" needs a prayer to restore (Wiki).
+    if (prayerBefore < skills.getMaxLevel(Skill.PRAYER)) {
+      api.emitCustomEvent("diary:task", { player, diary: "desert", task: "pray-at-the-elidinis-statuette-in-nardah" });
+    }
   }
 
   // ==========================================================================

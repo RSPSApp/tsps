@@ -184,11 +184,9 @@ function withdrawNow(context) {
   if (pin.locked || pending.get(player) !== context || !safe(context)) return;
   pending.delete(player);
   if (player.getInventory().getFreeSlots() === 0) return player.sendMessage("You don't have enough inventory space.");
-  const takenItemId = storedPet(player, slot).itemId;
   slots.delete(slot);
   player.setAttribute(STORED_ATTRIBUTE, [...slots]);
-  player.getInventory().adds(takenItemId, 1);
-  api.emitCustomEvent("construction:menagerie-withdrawn", { player, itemId: takenItemId, house });
+  player.getInventory().adds(storedPet(player, slot).itemId, 1);
   const forms = {...player.getAttribute(FORMS_ATTRIBUTE)};
   delete forms[slot];
   player.setAttribute(FORMS_ATTRIBUTE, forms);

@@ -576,11 +576,9 @@ module.exports = function registerThroneOfMiscellaniaQuest(api) {
   }
 
   function setApproval(player, value) {
-    const clamped = clampApproval(value);
-    player.setAttribute(APPROVAL_NATIVE_ATTRIBUTE, clamped);
+    player.setAttribute(APPROVAL_NATIVE_ATTRIBUTE, clampApproval(value));
     sendSideVarbits(player);
     refreshQuestList(player);
-    api.emitCustomEvent("miscellania:approval-changed", { player, value: clamped, max: APPROVAL_MAX });
   }
 
   /** Managing Miscellania reads and moves approval after the quest (it keeps varbit misc_approval here). */

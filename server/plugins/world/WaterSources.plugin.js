@@ -79,10 +79,10 @@ function fillFromWaterSource(event) {
   if (!fillOne(player, itemId, container, sound)) return;
   const from = WATER_SOURCES.get(name);
   player.sendMessage(from ? `You fill the ${container.noun} ${from}.` : `You fill the ${container.noun}.`);
+  api.emitCustomEvent("water-source:filled", { player, objectId, name, itemId, filledId: container.filled });
 
   // Keyed to the player's index, so walking or another click cancels the rest (walkToReset).
   const at = player.getLocation().clone();
-  api.emitCustomEvent("water-source:filled", { player, objectId, itemId, name, location: at });
   core.TaskManager.submit(new (class extends core.Task {
     constructor() { super(1, player.getIndex()); }
     execute() {
@@ -96,7 +96,7 @@ module.exports = {
   name: "WaterSources",
   register(pluginApi) {
     api = pluginApi;
-    core = pluginApi.core;
+    core = api.core;
     defineContainers(core);
     api.onItemOnObject(fillFromWaterSource, { noted: false });
   },

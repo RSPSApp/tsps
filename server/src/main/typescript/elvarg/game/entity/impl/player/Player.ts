@@ -247,8 +247,10 @@ export class Player extends Mobile {
         PrayerHandler.deactivatePrayers(this);
         this.getEquipment().refreshItems();
         this.getInventory().refreshItems();
+        // Every level back to where it rests: the base, raised by a plugin's permanent boost
+        // (SkillManager.registerRestingLevelModifier), so a death keeps such a boost.
         for (let skill of Skill.values())
-            this.getSkillManager().setCurrentLevels(skill, this.getSkillManager().getMaxLevel(skill));
+            this.getSkillManager().setCurrentLevels(skill, this.getSkillManager().getRestingLevel(skill));
         this.setRunEnergy(100);
         this.getPacketSender().sendRunEnergy();
         this.getMovementQueue().setBlockMovement(false).reset();

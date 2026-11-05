@@ -8,6 +8,10 @@
  *     -> sets `completed` true when the task was newly done
  *   api.emitCustomEvent("diary:is-complete", { player, diary: "ardougne", tier: "hard" })
  *     -> sets `complete`
+ *   api.emitCustomEvent("diary:is-started", { player, diary: "western" })
+ *     -> sets `started`
+ *   api.emitCustomEvent("diary:has-task", { player, diary: "western", task: "<task key>" })
+ *     -> sets `done`
  *   api.emitCustomEvent("diary:is-reward-claimed", { player, diary: "western", tier: "elite" })
  *     -> sets `claimed` from the canonical claimed-tier record, not task completion
  *   api.emitCustomEvent("diary:all-complete", { player })
@@ -49,6 +53,18 @@ function onIsComplete(request) {
     request.complete = Progress.isTierComplete(request.player, diary, request.tier);
   }
 }
+function onIsStarted(request) {
+  const diary = BY_KEY.get(request.diary);
+  if (diary && request.player) request.started = Progress.isStarted(request.player, diary);
+}
+
+function onHasTask(request) {
+  const diary = BY_KEY.get(request.diary);
+  if (diary && request.player && typeof request.task === "string") {
+    request.done = Progress.doneTasks(request.player, diary).has(request.task);
+  }
+}
+
 /** Claimed rewards are distinct from completed tasks (e.g. pet eligibility). */
 function onIsRewardClaimed(request) {
   const diary = BY_KEY.get(request.diary);
@@ -109,12 +125,16 @@ module.exports = {
     Rewards(api);
     Lamps(api);
     require("./diaries/Actions.AchievementDiaries")(api);
+    require("./diaries/Desert.AchievementDiaries")(api);
+    require("./diaries/Morytania.AchievementDiaries")(api);
     api.onCustomEvent("diary:task", onTask);
     api.onCustomEvent("diary:is-complete", onIsComplete);
+    api.onCustomEvent("diary:is-started", onIsStarted);
+    api.onCustomEvent("diary:has-task", onHasTask);
     api.onCustomEvent("diary:is-reward-claimed", onIsRewardClaimed);
     api.onCustomEvent("diary:all-complete", onAllComplete);
     api.onCustomEvent("diary:tokkul", onTokkul);
     api.registerCommand("diary", diaryCommand, api.core.PlayerRights.ADMINISTRATOR, "Show or set achievement diary progress: ::diary <name> [tier|all] [complete|reset]");
   },
-  _test: { diaryCommand, findDiaries, onTask, onIsComplete, onAllComplete, onTokkul },
+  _test: { diaryCommand, findDiaries, onTask, onIsComplete, onIsStarted, onHasTask, onAllComplete, onTokkul },
 };

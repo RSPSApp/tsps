@@ -24,6 +24,7 @@ const npcId = (name) => CacheDefinitions.getNpcId(name);
 let tasks = [];
 let quests = { complete: new Set(), started: new Set() };
 const starts = [];
+const arrivals = [];
 const hooks = { npc: [], object: [], events: new Map(), conditions: [], logout: [], shutdown: [] };
 
 class Task {
@@ -86,6 +87,7 @@ const api = {
   onPlayerLogout: (handler) => hooks.logout.push(handler),
   onServerShutdown: (handler) => hooks.shutdown.push(handler),
   emitCustomEvent: (name, request) => {
+    if (name === "ferries:arrived") arrivals.push(request);
     if (name === "quest:is-complete") request.complete = quests.complete.has(request.key);
     if (name === "quest:is-started") request.started = quests.started.has(request.key);
     if (name === "npc-dialogue:start") {
@@ -195,6 +197,7 @@ before(async () => {
 beforeEach(() => {
   tasks = [];
   starts.length = 0;
+  arrivals.length = 0;
   quests = { complete: new Set(), started: new Set() };
 });
 
@@ -387,6 +390,7 @@ test("Veos's ship fades with the sea's song and says where it sails as the playe
   tick(1);
   assert.deepEqual(at(player), [3055, 3242, 1]);
   assert.deepEqual(player.sent.messages, ["You board the ship and sail to Port Sarim."]);
+  assert.deepEqual(arrivals.map((event) => event.route), ["kourend-sarim"]);
 
   // Veos's menu has no travel step: his closing line sails to the port picked.
   const talker = createPlayer({ at: new Location(3054, 3245, 0) });
@@ -397,6 +401,7 @@ test("Veos's ship fades with the sea's song and says where it sails as the playe
   line.after();
   tick(3);
   assert.deepEqual(at(talker), [1504, 3395, 1]);
+  assert.deepEqual(arrivals.map((event) => event.route), ["kourend-sarim", "kourend-landsend"]);
   const owned = { player: talker, definition, text: line.text, after: () => {} };
   const previous = owned.after;
   for (const handler of hooks.events.get("npc-dialogue:line")) handler(owned);
@@ -548,6 +553,22 @@ test("every route's gamevals resolve in the cache", () => {
   assert.equal(Ferries.members, true);
 });
 
+test("a departure receipt preserves the origin and is not emitted for refused trips", () => {
+  const departures = [];
+  api.onCustomEvent("ferries:departed", (event) => departures.push(event));
+  const player = createPlayer();
+  player.moveTo(new Location(2773, 3229, 0));
+  assert.equal(Voyages.travel(player, "atlantis"), false);
+  assert.equal(departures.length, 0);
+  assert.equal(Voyages.travel(player, "barnaby-ardougne"), true);
+  assert.equal(Voyages.travel(player, "barnaby-ardougne"), false);
+  assert.equal(departures.length, 1);
+  assert.equal(departures[0].route, "barnaby-ardougne");
+  tick(3);
+  assert.deepEqual(at(player), [2680, 3274, 0]);
+  assert.deepEqual([departures[0].from.getX(), departures[0].from.getY(), departures[0].from.getZ()], [2773, 3229, 0]);
+});
+
 test('Veos native travel menus work without quests and throughout Client of Kourend', async t => {
   const { PluginManager: PM } = require('../dist/plugins/PluginManager');
   const { PlayerSession } = require('../dist/net/PlayerSession');
@@ -642,4 +663,19 @@ test('Veos native travel menus work without quests and throughout Client of Kour
   assert.equal(Common.travelling(rejected.p), false);
   assert.equal(rejected.p.getPacketSender().getVarbit(4897), 0, 'a rejected handoff cannot mark Kourend visited');
   assert.deepEqual(at(rejected.p), [3054, 3245, 0]);
+});
+
+test("Entrana boarding credit follows only an accepted outward voyage", () => {
+  Common.init(api);
+  const boarded = [];
+  hooks.events.set("entrana:boarded", [(event) => boarded.push(event.player)]);
+  const outward = createPlayer({ at: new Location(3045, 3235, 0) });
+  click(outward, "Monk of Entrana", "Take-boat", { gameval: "shipmonk" });
+  assert.deepEqual(boarded, [outward]);
+  const back = createPlayer({ at: new Location(2829, 3335, 0) });
+  click(back, "Monk of Entrana", "Take-boat", { gameval: "shipmonk2" });
+  assert.deepEqual(boarded, [outward]);
+  const armed = createPlayer({ at: new Location(3045, 3235, 0), items: [ItemIdentifiers.BRONZE_SWORD] });
+  click(armed, "Monk of Entrana", "Take-boat", { gameval: "shipmonk" });
+  assert.deepEqual(boarded, [outward]);
 });

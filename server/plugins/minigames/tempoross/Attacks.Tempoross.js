@@ -18,6 +18,10 @@
  * The attacks first come ~49 ticks after Tempoross surfaces, then every 50-55 ticks, wave and
  * lightning in turn. Wiki: none at or below 10% energy; a wave puts out every fire; standing in a
  * fire costs items every 2 ticks; dousing gives 40 points.
+ *
+ * The fire's Douse has to be claimed through the attack-option hook: Royal Titans registers
+ * "Douse" with `registerNpcCombatOption`, so core routes every Douse click as an attack before
+ * NPC interaction hooks run (found in-game: the click produced CANT_ATTACK_IN_AREA).
  */
 
 const Shared = require("./Shared.Tempoross");
@@ -46,6 +50,8 @@ class Attacks {
     this.debris = [];
     /** Bumped by every wave, so a spread still in the air when it lands doesn't light. */
     this.waves = 0;
+    /** One damage pulse every two ticks, from the first fire (not the fight's tick parity). */
+    this.nextBurnAt = 0;
   }
 
   setUp() {}
@@ -232,6 +238,7 @@ class Attacks {
     this.clearFires();
     this.nextAttackAt = -1;
     this.nextTorrentAt = -1;
+    this.nextBurnAt = 0;
   }
 
   tickFires() {
@@ -252,7 +259,8 @@ class Attacks {
         if (this.waves === wave) this.ignite(to, fire.spreads);
       });
     }
-    if (now % F.fireBurnTicks !== 0) return;
+    if (now < this.nextBurnAt) return;
+    this.nextBurnAt = now + F.fireBurnTicks;
     this.fight.forEachPlayer((player) => {
       const [x, y] = this.cove.templateTile(player.getLocation());
       for (const fire of this.fires.values()) {
@@ -289,7 +297,10 @@ class Attacks {
     Shared.animate(fight.boss, ANIM.BOSS_TORRENT);
     const from = this.cove.tile([...DATA.cove.bossCentre, 0]);
     this.cove.mapGraphic(GFX.TORRENT_CAST, from);
-    this.cove.projectile(GFX.TORRENT, from, crate.cannonLoc.getLocation(), { cycles: 120, slope: 127 });
+    // The capture gives no heights for 1842. It leaves the boss's water pillar and falls to the
+    // cannon, so use the captured cannon shot's ends the other way round (90 at Tempoross to
+    // the deck). The 127 slope threw it high out of view.
+    this.cove.projectile(GFX.TORRENT, from, crate.cannonLoc.getLocation(), { cycles: 120, startHeight: 90, endHeight: 0 });
     this.at(F.torrentTicks, () => fight.cannons.disable(crate));
   }
 }
@@ -361,9 +372,9 @@ function douse(event) {
   const cove = coveOfNpc(npc);
   if (!cove) return false;
   if (coveOf(player) !== cove || !cove.fight) return true;
-  untetherFor(player);
   const fire = cove.fight.attacks.fireOf(npc);
   if (!fire) return true;
+  untetherFor(player);
   if (!player.getInventory().contains(ITEM.BUCKET_OF_WATER)) {
     player.sendMessage("You need a bucket of water to put out the fire.");
     return true;
@@ -381,8 +392,36 @@ function douse(event) {
   return true;
 }
 
+/** Wiki: a bucket of water used on the fire also puts it out. */
+function waterOnFire(event) {
+  if (event.itemId !== ITEM.BUCKET_OF_WATER) return;
+  const cove = coveOfNpc(event.target);
+  if (!cove?.fight?.attacks.fireOf(event.target)) return;
+  event.handled = true;
+  douse({ player: event.player, npc: event.target });
+}
+
+/**
+ * Royal Titans registers "Douse" with `registerNpcCombatOption`, so core routes our fire's
+ * Douse through the attack-option hook before any NPC interaction hook. Claim it here while
+ * the NPC is one of our fires; other Douse NPCs (the Titans) fall through.
+ */
+function fireCombatOption(event) {
+  if (event?.npc?.getId?.() !== NPC.FIRE) return;
+  const actions = event.npc.getCurrentDefinition?.(event.player)?.getActions?.() ?? [];
+  if (String(actions[event.clickType - 1] ?? "").toLowerCase() !== "douse") return;
+  if (!coveOfNpc(event.npc)?.fight?.attacks.fireOf(event.npc)) return;
+  event.handled = true;
+  untetherFor(event.player);
+  event.player.getMovementQueue().walkToEntity(event.npc, () => {
+    douse({ player: event.player, npc: event.npc });
+  }, 1, false, true);
+}
+
 function attachAttacks(api) {
   api.onNpcInteraction("<col=00ffff>Fire</col>", { Douse: douse });
+  api.onNpcAttackOption(fireCombatOption);
+  api.onItemOnNpc(waterOnFire);
 }
 
 module.exports = { Attacks, attachAttacks, loseItems };

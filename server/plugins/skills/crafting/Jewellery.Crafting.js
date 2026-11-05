@@ -26,7 +26,7 @@
  */
 const Shared = require("./Shared.Crafting");
 
-const FURNACE_NAMES = new Set(["Furnace", "Small furnace", "Clay forge"]);
+const FURNACE_NAMES = new Set(["Furnace", "Small furnace"]);
 /** human_furnace and the smelting sound, as captured for silver. */
 const FURNACE_ANIMATION_ID = 899;
 const FURNACE_SOUND = 2725;
@@ -292,13 +292,13 @@ function stringAmulet(event) {
     inventory.addItem(new Item(strung.itemId, 1));
     Shared.addCraftingXp(player, data().stringXp);
     Shared.spam(player, `You put some string on your ${strung.noun}.`);
+    Shared.produced(player, strung.itemId, 1, data().stringXp, "string", [[unstrungId, 1], [woolId, 1]]);
   });
 }
 
 module.exports = function attach(api) {
   api.onObjectInteraction("Furnace", { Smelt: smeltAtFurnace });
   api.onObjectInteraction("Small furnace", { Smelt: smeltAtFurnace });
-  api.onObjectInteraction("Clay forge", { Smelt: smeltAtFurnace });
   api.onItemOnObject(handlePerfectJewellery, { noted: false });
   api.onItemOnObject(handleBarOnFurnace, { noted: false });
   api.onInterfaceActionClick(handleJewelleryButton);

@@ -561,8 +561,12 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
     if (!hat) return;
     const index = CHOMPY_HATS.indexOf(hat);
     if (hatClaimed(player, index)) return;
-    if (!has(player, hat.item)) player.getInventory().adds(hat.item, 1);
+    if (!has(player, hat.item)) {
+      player.getInventory().adds(hat.item, 1);
+      api.emitCustomEvent("collection-log:obtain", { player, itemId: hat.item, amount: 1 });
+    }
     player.setAttribute(HATS_CLAIMED_ATTRIBUTE, hatsClaimed(player) | (1 << index));
+    api.emitCustomEvent?.("big-chompy-bird-hunting:hat-claimed", { player, hat: hat.label, kills: chompyKills(player) });
   }
 
   /** Chompys can only be hurt with the ogre bow and ogre arrows. */

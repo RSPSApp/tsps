@@ -51,8 +51,11 @@ function fly(player, npc) {
   player.setPositionToFace?.(npc.getLocation());
   player.performAnimation(new Common.core.Animation(Common.ids.seqs.lasso));
   player.sendMessage(Common.message("lasso"));
+  const desert = Common.data.eyries.desert.arrive;
+  const toDesert = to[0] === desert[0] && to[1] === desert[1] && to[2] === desert[2];
   Common.travel(player, to, Common.data.flightTicks, () => {
     Common.api.emitCustomEvent("eagle-transport:arrived", { player, eyrie, to });
+    if (toDesert) Common.api.emitCustomEvent("diary:task", { player, diary: "desert", task: "travel-to-the-desert-via-eagle" });
   });
   return true;
 }

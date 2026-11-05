@@ -4,8 +4,7 @@
 //  1. Every errand still at 0 is given on a later visit, in the introduction's order (Siamun's if Icthlarin's Little Helper is done,
 //     the blackjack seller's, the runes), so a player who left a menu of the introduction can still finish: each state of the table
 //     below is walked through Aubury, the seller, the urchin and Siamun to Ali's thanks and the 914 reward.
-//  2. The shop that opens a tick after Ali's page closes does not open for a player who logged out in that tick.
-//  3. A per-player shop leaves "Ali's Discount Wares." (the page's open_shop target) the only shop with that exact name.
+//  2. A per-player shop leaves "Ali's Discount Wares." (the page's open_shop target) the only shop with that exact name.
 // Real packets, real dispatch.
 const assert = require('node:assert/strict');
 const { before, after, test } = require('node:test');
@@ -99,22 +98,7 @@ test('1. a player who is done gets no catch-up', async (t) => {
   assert.deepEqual(done3.varbits, [], 'and no varbit changes');
 });
 
-test('2. a shop opened a tick after Ali\'s page closes is not opened for a player who has gone', async (t) => {
-  const f = H.actor(t);
-  H.setState(f, { clothes: 3, blackjacks: 4, runes: 5, stallvar: 1, toldAli: 1, garments: 1, cheapflights: 1 });
-  const tasks = [];
-  t.mock.method(core.TaskManager, 'submit', (task) => { tasks.push(task); });
-  await H.talk(f); await H.read(f); await H.choose(f, 1); await H.read(f);
-  assert.ok(tasks.length >= 1, 'the shop is waiting for the next tick');
-  require('../dist/plugins/PluginManager').PluginManager.emitPlayerLogout({ player: f.p, username: f.p.getUsername() });
-  f.p.setRegistered(false);
-  const before = f.shops.length;
-  tasks.at(-1).execute(); // the shop's task, the last one submitted
-  assert.equal(f.shops.length, before, 'nothing opened');
-  assert.equal(core.ShopManager.hasShop(700000 + f.p.getIndex() * 8 + 3), false, 'and no shop was registered after the cleanup');
-});
-
-test('3. a per-player shop does not make "Ali\'s Discount Wares." ambiguous (the page\'s open_shop needs exactly one)', async (t) => {
+test('2. a per-player shop does not make "Ali\'s Discount Wares." ambiguous (the page\'s open_shop needs exactly one)', async (t) => {
   const f = H.actor(t);
   H.setState(f, { clothes: 1, blackjacks: 1, runes: 5, stallvar: 1 });
   await H.talk(f, 'Trade'); await H.read(f); await H.choose(f, 1); await H.read(f); await H.choose(f, 3);

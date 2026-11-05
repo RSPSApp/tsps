@@ -488,8 +488,13 @@ function aliAction(request) {
   if (action === "receive" && String(request.text).includes("Ali's Discount Wares")) { request.handled = true; junkSale(player); }
 }
 
-/** The generated page's Captain Dalbur options: nothing here tracks that question, so they are not offered. */
+/**
+ * The generated Ali page's Captain Dalbur options: nothing here tracks that question, so they are not offered. The dialogue runtime
+ * asks every plugin about every condition, so this answers for Ali's own conversation only (event.npcId, Ali's 3533): other pages
+ * that mention Captain Dalbur, such as Gianne jnr.'s delivery steps in the Gnome Restaurant, are not ours to answer.
+ */
 function aliCondition(request) {
+  if (request.npcId !== ALI) return null;
   if (/Captain Dalbur/.test(String(request.text))) return false;
   return null;
 }

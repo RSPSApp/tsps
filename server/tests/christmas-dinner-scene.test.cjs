@@ -11,12 +11,61 @@ before(async()=>{
   require('../plugins/world/DefinitionArchives.plugin').register(PM.createApi('DefinitionArchives'));
   require('../plugins/npcs/NpcDialogues.plugin').register(PM.createApi('NpcDialogues'));
   require('../plugins/world/HolidayRewards.plugin').register(PM.createApi('HolidayRewards'));
+  require('../plugins/items/HolidayToys.plugin').register(PM.createApi('HolidayToys'));
   require('../plugins/world/PlayerOnlineTimer.plugin').register(PM.createApi('PlayerOnlineTimer'));
   require('../plugins/world/Music.plugin').register(PM.createApi('Music'));
   require('../plugins/world/ChristmasDinner.plugin').register(api);
   for(const row of data.placements)c.RegionManager.loadMapFiles(row.x,row.y,false);
 });
 function at(row){return new c.Location(row.x,row.y,row.z);}
+function snowFixture(t){
+  const {Player}=require('../dist/game/entity/impl/player/Player');
+  const {PlayerSession}=require('../dist/net/PlayerSession');
+  const {ClientConnection}=require('../dist/net/NetworkBuilder');
+  const channel={kind:'test',remoteAddress:'127.0.0.1',isOpen:()=>true,send:()=>true,close(){},onData(){},onError(){},onClose(){}};
+  const player=new Player(new PlayerSession(channel)),connection=new ClientConnection(channel);connection.player=player;
+  player.setUsername('christmassnow');
+  assert.equal(c.World.getPlayers().add(player),true);
+  t.after(()=>{c.TaskManager.cancelTasks(player.getIndex());PM.emitCustomEvent('events:active',{key:'christmas-2025',active:false});c.World.getPlayers().remove(player);});
+  PM.emitCustomEvent('events:active',{key:'christmas-2025',active:true});
+  const object=Scene.objects().find(row=>row.symbol==='xmas25_snowball_pile'&&row.object?.getLocation().getX()===3237).object;
+  player.setLocation(new c.Location(3236,3397));player.setNeedsPlacement(false);
+  const id=c.CacheDefinitions.getObjId('gublinch_snowball');
+  async function click(){const p=object.getLocation();await connection.dispatch([{type:'object_option',id:object.getId(),x:p.getX(),y:p.getY(),clickType:1,action:'Take-from'}]);connection.processTurnPackets();c.TaskManager.processWalkTo(player.getIndex());}
+  function ticks(n){for(let i=0;i<n;i++){c.TaskManager.process();player.getMovementQueue().process();c.TaskManager.processWalkTo(player.getIndex());}}
+  return {player,connection,object,id,click,ticks,amount:()=>player.getInventory().getAmount(id)};
+}
+
+test('native Christmas snow pile collects after two ticks then every four; real walking and calendar closure stop it',async t=>{
+  const f=snowFixture(t);await f.click();f.ticks(1);assert.equal(f.amount(),0);
+  f.ticks(1);assert.equal(f.amount(),3);f.ticks(3);assert.equal(f.amount(),3);
+  f.ticks(1);assert.equal(f.amount(),6);
+  await f.click();f.ticks(2);assert.equal(f.amount(),9,'a fresh native click restarts collection at two ticks');
+  const globe=c.CacheDefinitions.getObjId('xmas16_snowglobe');f.player.getInventory().addItem(new c.Item(globe,1));
+  await f.connection.dispatch([{type:'widget_action',widgetId:149<<16,groupId:149,childId:0,slot:1,itemId:globe,buttonNum:2}]);f.connection.processTurnPackets();
+  assert.equal(f.player.getInterfaceId(),c.CacheDefinitions.getInterfaceId('xmas16_snow_globe'));
+  f.ticks(8);assert.equal(f.amount(),9,'a real inventory modal action interrupts collection');
+  await f.connection.dispatch([{type:'interface_close'}]);f.connection.processTurnPackets();
+  await f.click();f.ticks(2);assert.equal(f.amount(),12,'a legitimate fresh collection works after Close');
+  await f.connection.dispatch([{type:'move',worldX:3234,worldY:3397,modifierFlags:0,run:false}]);f.connection.processTurnPackets();
+  f.ticks(8);assert.equal(f.amount(),12,'normal movement cannot leave a collection loop running');
+  f.player.setLocation(new c.Location(3236,3397));f.player.getMovementQueue().reset();await f.click();f.ticks(1);
+  PM.emitCustomEvent('events:active',{key:'christmas-2025',active:false});
+  PM.emitCustomEvent('events:active',{key:'christmas-2025',active:true});
+  f.ticks(8);assert.equal(f.amount(),12,'same scene reopened cannot revive a task belonging to the old object');
+});
+
+test('Christmas snow collection uses live stack capacity even with a full inventory',async t=>{
+  const f=snowFixture(t),inventory=f.player.getInventory();
+  inventory.addItem(new c.Item(f.id,1));
+  for(let n=1;n<28;n++)inventory.setItem(n,new c.Item(c.ItemIdentifiers.LOGS,1));
+  await f.click();f.ticks(2);assert.equal(f.amount(),4,'full inventory still accepts an existing stack');
+  c.TaskManager.cancelTasks(f.player.getIndex());
+  const {MAX_STACK_AMOUNT}=require('../dist/game/model/container/StackType');
+  inventory.resetItems();inventory.addItem(new c.Item(f.id,MAX_STACK_AMOUNT-2));
+  await f.click();f.ticks(2);assert.equal(f.amount(),MAX_STACK_AMOUNT-2,'a batch must not overflow the live stack cap');
+  inventory.resetItems();f.ticks(8);assert.equal(f.amount(),0,'freeing capacity after refusal cannot silently restart collection');
+});
 function originals(){return data.placements.map(row=>({row,objects:[...(c.MapObjects.mapObjects.get(c.MapObjects.getHash(row.x,row.y,row.z))??[])].filter(o=>o.getLocation().equals(at(row))&&o.getType()===row.shape)}));}
 function clipping(area=null){
   const flags=[];

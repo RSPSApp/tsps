@@ -11,10 +11,11 @@ const Actors=require('./seasonal/Actors.ChristmasDinner');
 const Completion=require('./seasonal/Completion.ChristmasDinner');
 const Rewards=require('./seasonal/Rewards.ChristmasDinner');
 const Music=require('./seasonal/Music.ChristmasDinner');
+const Snow=require('./seasonal/Snow.ChristmasDinner');
 
 function calendar(api,event){
   if(event.key!=='christmas-2025')return;
-  if(!event.active){Completion.cancelAll(api);Dialogue.activate(event);Dialogue.cancelAll(api);}
+  if(!event.active){Snow.cancelAll();Completion.cancelAll(api);Dialogue.activate(event);Dialogue.cancelAll(api);}
   const result=event.active?Scene.open(api):Scene.close(api);
   if(result.handled){if(event.active)Dialogue.activate(event);}
   else {Dialogue.activate({key:event.key,active:false});Dialogue.cancelAll(api);api.log('Christmas scene: '+result.error);}
@@ -57,6 +58,7 @@ module.exports={
     api.onObjectInteraction('Table',{Serve:Objects.serve.bind(null,api)});
     api.onObjectInteraction('Bar',{'Get Drink From':Objects.drink.bind(null,api)});
     api.onObjectInteraction('Crate',{Search:Objects.search.bind(null,api)});
+    api.onObjectInteraction('Snowball pile',{'Take-from':Snow.take.bind(null,api)});
     api.onCustomEvent('npc-dialogue:line',Dialogue.line.bind(null,api));
     api.onCustomEvent('npc-dialogue:choice',Dialogue.choice.bind(null,api));
     api.onCustomEvent('npc-dialogue:action',Dialogue.action.bind(null,api));
@@ -66,6 +68,8 @@ module.exports={
     api.onCustomEvent('item:discarded',Progress.discard.bind(null,api));
     api.onPlayerLogout(Dialogue.clear);
     api.onPlayerDisconnect(Dialogue.clear);
+    api.onPlayerLogout(Snow.clear);
+    api.onPlayerDisconnect(Snow.clear);
     api.onPlayerLogout(Actors.clear.bind(null,api));
     api.onPlayerDisconnect(Actors.clear.bind(null,api));
     api.onPlayerLogout(Completion.clear.bind(null,api));

@@ -68,6 +68,7 @@ module.exports = function registerCorsairCurseQuest(api) {
   const DUNGEON_HOLE_OBJECT = ObjectIdentifiers.HOLE_54; // 31791, Enter (four pillars)
   const OGRE_CAVE_OBJECT = ObjectIdentifiers.CAVE_59; // 31766, Enter (west of the cove)
   const VINE_LADDER_OBJECT = ObjectIdentifiers.VINE_LADDER_2; // 31790, Climb
+  const HUT_STAIRS_OBJECT = 31735; // ds2_corsair_cove_stairs_ramp, a lone "Climb": ground end 2531,2833,0 leads up, upper end 2529,2834,1 leads down
 
   // Prose conditions on the "The Corsair Curse" page.
   const COND_NO_TOCK_YET = "EXq6K1";
@@ -667,9 +668,16 @@ module.exports = function registerCorsairCurseQuest(api) {
 
   /** The generic Ladders plugin asks "which way?" for a lone "Climb"; own that click. */
   function claimClimb(request) {
-    if (!request || request.objectId !== VINE_LADDER_OBJECT || !request.player) return;
-    request.handled = true;
-    leaveDungeon(request.player);
+    if (!request || !request.player) return;
+    if (request.objectId === VINE_LADDER_OBJECT) {
+      request.handled = true;
+      leaveDungeon(request.player);
+    } else if (request.objectId === HUT_STAIRS_OBJECT) {
+      // Ithoi's stairs are a ramp: each end leads only one way, so the floor of the clicked end decides.
+      const floor = request.object?.getLocation?.().getZ?.() ?? request.player.getLocation().getZ();
+      request.handled = true;
+      api.emitCustomEvent(floor === 0 ? "ladders:climbUp" : "ladders:climbDown", { player: request.player, object: request.object });
+    }
   }
 
   function handleItemOnObject(event) {

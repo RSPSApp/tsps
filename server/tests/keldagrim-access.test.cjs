@@ -10,34 +10,22 @@ const core = PluginManager.getCoreApi();
 const Keldagrim = require("../plugins/areas/Keldagrim.plugin");
 const Rellekka = require("../plugins/areas/Rellekka.plugin");
 
-test("the Rellekka tunnel reaches the cave, while the city passage needs The Giant Dwarf started", () => {
-  let started = false;
-  const pluginApi = {
-    core,
-    emitCustomEvent(name, request) {
-      if (name === "quest:is-started") request.started = started;
-    },
-  };
-  Keldagrim._test.init(pluginApi);
+test("the Rellekka tunnel and cave passage reach the Dwarven Boatman without The Giant Dwarf started", () => {
+  Keldagrim._test.init({ core, emitCustomEvent() {} });
   Rellekka.register({ core, onObjectInteraction() {} });
 
   const landings = [];
-  const messages = [];
   const player = {
     moveTo: (location) => landings.push([location.getX(), location.getY()]),
-    sendMessage: (message) => messages.push(message),
+    sendMessage: () => {},
   };
   const entry = { player, location: { x: 2731, y: 3712, z: 0 }, handled: false };
   Rellekka._test.enterTunnel(entry);
-  assert.deepEqual(landings, [[2773, 10162]], "the cave remains reachable so the quest can be started");
+  assert.deepEqual(landings, [[2773, 10162]], "the Rellekka tunnel reaches the cave");
 
   Keldagrim._test.goThrough({ player, objectId: core.ObjectIdentifiers.CAVE_ENTRANCE_29 });
-  assert.deepEqual(landings, [[2773, 10162]], "the city passage rejects an unstarted quest");
-  assert.match(messages[0], /start The Giant Dwarf/);
-
-  started = true;
-  Keldagrim._test.goThrough({ player, objectId: core.ObjectIdentifiers.CAVE_ENTRANCE_29 });
-  assert.deepEqual(landings.at(-1), [2838, 10124], "starting The Giant Dwarf opens the city passage");
+  assert.deepEqual(landings.at(-1), [2838, 10124],
+    "the cave passage reaches the boatman, who starts the quest and takes the player into the city");
 });
 
 test("the ferrymen's Travel takes the 2-coin fare, one coin as the transcript's exception, and refuses with none", () => {

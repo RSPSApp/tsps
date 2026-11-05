@@ -9,7 +9,7 @@
 // takes it follows load order, so only the count is asserted. The marked-herb test is the one
 // that fails without the instance check.
 //
-// Native fixture: the pickup is a real ground_item_action through ClientConnection.dispatch. The herbiboar is
+// Native fixture: the pickup is a decoded ground_item_action object through ClientConnection.dispatch. The herbiboar is
 // tracked through the real Hunter producers (inspect, attack, harvest) on a real Player, with Math.random fixed so
 // the trail is deterministic; it is not a packet (the Harvest option is the hook Hunter.plugin registers, called
 // directly). No client ran.
@@ -33,6 +33,8 @@ const MAX_STORED = 30;
 
 let core, I, Data, Herbi, Hunter;
 let next = 9100;
+const pickupPolicies = new WeakMap();
+const pickupEvents = new WeakMap();
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
@@ -47,6 +49,10 @@ before(async () => {
   core.RegionManager.loadMapFiles(...WILDERNESS);
   core.RegionManager.loadMapFiles(3700, 3820);
   PM.emitServerStartup({});
+  PM.createApi("HerbPickupPolicyTest").onCustomEvent("ground-items:take", (event) => pickupPolicies.get(event.player)?.(event));
+  PM.createApi("HerbPickupEventTest").onCustomEvent("ground-items:taken", (event) => pickupEvents.get(event.player)?.push({
+    itemId: event.itemId, amount: event.amount, discarded: event.discarded, source: event.source,
+  }));
 });
 after(() => PM.emitServerShutdown({}));
 
@@ -145,6 +151,63 @@ test("an open sack takes a grimy herb picked up from the ground", async (t) => {
   assert.equal(stored(f)[guam], 1, "in the sack");
   assert.equal(f.inv.getAmount(guam), 0, "not in the pack");
   assert.equal(core.ItemOnGroundManager.getGroundItem(f.p.getUsername(), guam, f.p.getLocation(), null), null, "off the ground");
+});
+
+for (const sack of ["Open herb sack", "Open silklined herb sack"]) {
+  test(`${sack} respects a refused ground take`, async (t) => {
+    const f = actor(t, sack), herb = I.GRIMY_GUAM_LEAF, events = [];
+    let calls = 0;
+    pickupPolicies.set(f.p, (event) => { calls++; event.allow = false; });
+    pickupEvents.set(f.p, events);
+    t.after(() => {
+      const ground = core.ItemOnGroundManager.getGroundItem(f.p.getUsername(), herb, f.p.getLocation(), null);
+      if (ground) core.ItemOnGroundManager.deregister(ground);
+    });
+    await take(f, herb);
+    assert.equal(calls, 1, "the take policy was consulted");
+    assert.equal(storedTotal(f), 0, "the sack did not take a refused herb");
+    assert.equal(f.inv.getAmount(herb), 0, "the inventory did not take it");
+    assert.ok(core.ItemOnGroundManager.getGroundItem(f.p.getUsername(), herb, f.p.getLocation(), null), "the herb remains on the ground");
+    assert.deepEqual(events, []);
+  });
+
+  test(`${sack} reports a successfully stored ground herb`, async (t) => {
+    const f = actor(t, sack), herb = I.GRIMY_GUAM_LEAF, events = [];
+    pickupEvents.set(f.p, events);
+    await take(f, herb);
+    assert.equal(stored(f)[herb], 1);
+    assert.deepEqual(events, [{ itemId: herb, amount: 1, discarded: 0, source: "pickup" }]);
+  });
+}
+
+test("a nested ground take during herb policy does not duplicate the herb", async (t) => {
+  const f = actor(t, "Open herb sack"), herb = I.GRIMY_GUAM_LEAF, events = [];
+  let calls = 0;
+  pickupEvents.set(f.p, events);
+  pickupPolicies.set(f.p, (event) => {
+    calls++;
+    if (calls === 1) core.ItemOnGroundManager.pickup(f.p, event.groundItem);
+  });
+  await take(f, herb);
+  assert.equal(calls, 1);
+  assert.equal(stored(f)[herb], 1);
+  assert.equal(f.inv.getAmount(herb), 0);
+  assert.deepEqual(events, [{ itemId: herb, amount: 1, discarded: 0, source: "pickup" }]);
+});
+
+test("a policy that changes a ground herb cancels storage", async (t) => {
+  const f = actor(t, "Open herb sack"), herb = I.GRIMY_GUAM_LEAF, events = [];
+  pickupEvents.set(f.p, events);
+  pickupPolicies.set(f.p, (event) => event.groundItem.getItem().setMetaValue("herb-test:changed", 1));
+  t.after(() => {
+    const ground = core.ItemOnGroundManager.getGroundItem(f.p.getUsername(), herb, f.p.getLocation(), null);
+    if (ground) core.ItemOnGroundManager.deregister(ground);
+  });
+  await take(f, herb);
+  assert.equal(storedTotal(f), 0);
+  assert.equal(f.inv.getAmount(herb), 0);
+  assert.equal(core.ItemOnGroundManager.getGroundItem(f.p.getUsername(), herb, f.p.getLocation(), null)?.getItem().getMetaValue("herb-test:changed"), 1);
+  assert.deepEqual(events, []);
 });
 
 test("a closed sack does not take a picked up herb", async (t) => {

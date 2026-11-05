@@ -10,8 +10,8 @@
 // and no sequence or sound. NO capture of any other item was found (rsprox 1694, 1633, 392 and 2902 decoded:
 // braziers and fires only), so the others get no message and no animation, and the level refusal's wording is
 // OilLights' (uncaptured).
-// Native fixture: the click goes through ClientConnection.dispatch as the decoded "inventory_use_on" packet,
-// gameplay plugins loaded; unrelated PlayerBots are disabled below.
+// Native fixture: the click goes through ClientConnection.dispatch as the decoded "inventory_use_on" packet.
+// Native plugin loading excludes PlayerBots and its dependent BountyHunter.
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const { before, after, test } = require("node:test");

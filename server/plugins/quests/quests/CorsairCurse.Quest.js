@@ -536,6 +536,8 @@ module.exports = function registerCorsairCurseQuest(api) {
         const doll = api.spawnNpc({ id: DOLL, x: 2505, y: 2839, z: 0, wanderRadius: 0, owner: player, ownerOnly: true });
         if (!doll) return;
         doll.__skipDefaultRespawn = true; dolls.set(player, doll);
+        // The captured route crosses the map's blocked edge between 2509,2839 and 2509,2838; queued steps are clipped.
+        doll.setFlag?.("movement:ignore-clipping");
         const path = [[2505,2840],[2506,2841],[2507,2842],[2508,2842],[2509,2841],[2509,2840],[2509,2839],[2509,2838],[2509,2839]];
         // moveTo teleports and resets movement; queue each tile so the doll uses its walk sequence.
         path.forEach(([x,y], index) => later(player, index + 1, () => {

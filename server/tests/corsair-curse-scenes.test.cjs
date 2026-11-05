@@ -165,3 +165,33 @@ test("Ithoi walks out of his hut to the same tile, and doesn't teleport there", 
   assert.deepEqual(teleports, [], "he doesn't teleport along the route");
   assert.deepEqual(seen.at(-1), RUN_END, "and ends where the route did");
 });
+
+test("Gnocci's dug-up doll walks its whole route, across the clipped edge at 2509,2839-2838 (#2558)", (t) => {
+  const DOLL = 7975;
+  const GNOCCI = 7970;
+  const STAGE_HEARD = 3;
+  let doll = null;
+  const spawn = PM.spawnNpc;
+  // A spawn waits in World's add queue for a tick this fixture doesn't run, so take it here.
+  t.mock.method(PM, "spawnNpc", (...args) => {
+    const npc = spawn.apply(PM, args);
+    if (npc?.getId() === DOLL) doll = npc;
+    return npc;
+  });
+  const f = actor(t);
+  quest().setStage(f.p, STAGE_HEARD);
+  f.p.setAttribute("quest.the_corsair_curse.cook", 1);
+  PM.emitCustomEvent("npc-dialogue:choice", { player: f.p, npcId: GNOCCI, option: "Search for the possessed doll and face the consequences." });
+
+  const seen = [];
+  for (let i = 0; i < 10; i++) {
+    core.TaskManager.process();
+    if (!doll || !doll.isRegistered?.()) continue;
+    doll.getMovementQueue().process();
+    seen.push([doll.getLocation().getX(), doll.getLocation().getY()]);
+  }
+  t.diagnostic(`doll ${JSON.stringify(seen)}`);
+  assert.ok(doll, "the doll comes up");
+  assert.ok(seen.some(([x, y]) => x === 2509 && y === 2838), "it reaches 2509,2838, past the clipped edge");
+  assert.deepEqual(seen.at(-1), [2509, 2839], "and ends back on 2509,2839, as the route does");
+});

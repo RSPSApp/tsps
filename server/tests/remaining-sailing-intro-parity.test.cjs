@@ -136,6 +136,7 @@ function setup() {
     isDying: false,
     isPlayerBot: () => false,
     getIndex: () => 1,
+    getLocalPlayers: () => [],
     isPlayer: () => true,
     getAsPlayer() { return player; },
     isNpc: () => false,

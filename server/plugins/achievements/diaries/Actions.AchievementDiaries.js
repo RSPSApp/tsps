@@ -6,6 +6,7 @@ const CAKE_ITEM_ID = 1891;
 const VARROCK_TEA_SQUARE = [51, 53];
 const LUMBRIDGE_SQUARE = [50, 50];
 const DRAYNOR_SEWERS_SQUARE = [48, 151];
+const LUMBRIDGE_SWAMP_CAVES = { minX: 3140, maxX: 3235, minY: 9535, maxY: 9595, z: 0 };
 const HAM_TRAPDOOR_ID = 5492; // ham_multi_trapdoor, nameless in the cache
 
 function inSquare(location, [x, y]) {
@@ -34,10 +35,16 @@ function stoleCake({ player, method, stall, itemId, location }) {
 }
 
 function killed({ killer, npc }) {
-  if (!killer?.isPlayer?.() || npc.getPrivateArea() !== null || npc.getCurrentDefinition(killer)?.getName() !== "Zombie") return;
+  if (!killer?.isPlayer?.() || npc.getPrivateArea() !== null) return;
   const at = npc.getLocation();
-  if (at.getZ() === 0 && inSquare(at, DRAYNOR_SEWERS_SQUARE)) {
+  const name = npc.getCurrentDefinition(killer)?.getName();
+  if (name === "Zombie" && at.getZ() === 0 && inSquare(at, DRAYNOR_SEWERS_SQUARE)) {
     api.emitCustomEvent("diary:task", { player: killer, diary: "lumbridge", task: "kill-a-zombie-in-draynor-sewers" });
+  } else if ([api.core.NpcIdentifiers.CAVE_BUG, api.core.NpcIdentifiers.CAVE_BUG_2].includes(npc.getId?.())
+    && at.getZ() === LUMBRIDGE_SWAMP_CAVES.z
+    && at.getX() >= LUMBRIDGE_SWAMP_CAVES.minX && at.getX() <= LUMBRIDGE_SWAMP_CAVES.maxX
+    && at.getY() >= LUMBRIDGE_SWAMP_CAVES.minY && at.getY() <= LUMBRIDGE_SWAMP_CAVES.maxY) {
+    api.emitCustomEvent("diary:task", { player: killer, diary: "lumbridge", task: "slay-a-cave-bug-beneath-lumbridge-swamp" });
   }
 }
 

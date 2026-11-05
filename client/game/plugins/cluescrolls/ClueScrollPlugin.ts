@@ -15,7 +15,13 @@ import * as ItemID from "@runelite/api/gameval/ItemID";
 import * as VarbitID from "@runelite/api/gameval/VarbitID";
 import { Item } from "@runelite/api/Item";
 import * as ParamID from "@runelite/api/ParamID";
+import * as ScriptID from "@runelite/api/ScriptID";
+import type { Widget } from "@runelite/api/widgets/Widget";
+import type { Graphics2D } from "@runelite/awt/Graphics2D";
+import { Rectangle } from "@runelite/awt/Shapes";
 import { ConfigManager } from "@runelite/client/config/ConfigManager";
+import { TextComponent } from "@runelite/client/ui/overlay/components/TextComponent";
+import { OverlayUtil } from "@runelite/client/ui/overlay/OverlayUtil";
 import { ChatboxPanelManager } from "@runelite/client/game/chatbox/ChatboxPanelManager";
 import { Plugin, type PluginDescriptor } from "@runelite/client/plugins/Plugin";
 import { CLIENT_TOKEN, inject } from "@runelite/client/plugins/PluginInjector";
@@ -25,11 +31,17 @@ import { Text } from "@runelite/client/util/Text";
 import { ClientImpl } from "../../../runelite/impl/ClientImpl";
 import type { MenuActionData } from "../../../ui/menu/menuEvents";
 import type { OsrsClient } from "../../OsrsClient";
+import type { WidgetOverlay } from "../ClientPluginManager";
+import { CLICKBOX_BORDER_COLOR, CLICKBOX_FILL_COLOR, CLICKBOX_HOVER_BORDER_COLOR } from "./ClueScrollColors";
 import { BankTagsPlugin } from "../banktags/BankTagsPlugin";
 import type { TagManager } from "../banktags/TagManager";
 import { registerClueTags, testClueTag, unregisterClueTags } from "./ClueScrollBankTags";
 import { ClueScrollConfig, type IdentificationMode } from "./ClueScrollConfig";
+import { ClueScrollEmoteOverlay } from "./ClueScrollEmoteOverlay";
 import { ClueScrollImages } from "./ClueScrollImages";
+import { ClueScrollMusicOverlay } from "./ClueScrollMusicOverlay";
+import { ClueScrollOverlay } from "./ClueScrollOverlay";
+import { ClueScrollWorldOverlay } from "./ClueScrollWorldOverlay";
 import { OBJECTBOX_ITEM, TRAIL_CLUETEXT_TEXT, TRAIL_MAP_FIRST, TRAIL_MAP_LAST } from "./ClueScrollInterfaces";
 import { findClueScrollForItem, findClueScrollForText, findNpcChatClueScroll } from "./ClueScrollLookup";
 import { ClueScrollNotes } from "./ClueScrollNotes";
@@ -90,6 +102,11 @@ export class ClueScrollPlugin extends Plugin {
     private readonly tagManagerOverride?: TagManager;
     private registeredTags?: TagManager;
     private readonly images = new ClueScrollImages();
+    private readonly textComponent = new TextComponent();
+    private readonly clueScrollOverlay = new ClueScrollOverlay(this);
+    private readonly clueScrollEmoteOverlay = new ClueScrollEmoteOverlay(this);
+    private readonly clueScrollWorldOverlay = new ClueScrollWorldOverlay(this);
+    private readonly clueScrollMusicOverlay = new ClueScrollMusicOverlay(this);
 
     private clue: ClueScroll | null = null;
     private readonly npcsToMark: NPC[] = [];
@@ -195,6 +212,68 @@ export class ClueScrollPlugin extends Plugin {
     /** The item image renderer, from the overlay draw context once it has drawn. */
     setItemImageSource(itemImage: ClueScrollImages["itemImage"]): void {
         this.images.itemImage = itemImage;
+    }
+
+    // ------------------------------------------------------------------ overlays
+
+    /** RuneLite's overlayManager.add(...) for the four overlays, while the plugin runs. */
+    widgetOverlays(): WidgetOverlay[] {
+        if (!this.isStarted()) return [];
+        return [this.clueScrollOverlay, this.clueScrollEmoteOverlay, this.clueScrollWorldOverlay, this.clueScrollMusicOverlay];
+    }
+
+    /**
+     * Outlines the visible part of a widget inside its scrolling container, with an optional label
+     * centred above it (RuneLite's highlightWidget).
+     */
+    highlightWidget(graphics: Graphics2D, toHighlight: Widget, container: Widget, padding: Rectangle | null, text: string | null): void {
+        padding = padding ?? new Rectangle();
+        const canvasLocation = toHighlight.getCanvasLocation();
+        if (canvasLocation === null) return;
+        const windowLocation = container.getCanvasLocation();
+        if (windowLocation === null) return;
+        if (windowLocation.y > canvasLocation.y + toHighlight.getHeight() || windowLocation.y + container.getHeight() < canvasLocation.y) return;
+
+        // Visible area of widget
+        const widgetArea = new Rectangle(
+            canvasLocation.x - padding.x,
+            Math.max(canvasLocation.y, windowLocation.y) - padding.y,
+            toHighlight.getWidth() + padding.x + padding.width,
+            Math.min(
+                Math.min(windowLocation.y + container.getHeight() - canvasLocation.y, toHighlight.getHeight()),
+                Math.min(canvasLocation.y + toHighlight.getHeight() - windowLocation.y, toHighlight.getHeight()),
+            ) + padding.y + padding.height,
+        );
+
+        OverlayUtil.renderHoverableArea(graphics, widgetArea, this.client.getMouseCanvasPosition(),
+            CLICKBOX_FILL_COLOR, CLICKBOX_BORDER_COLOR, CLICKBOX_HOVER_BORDER_COLOR);
+
+        if (text === null) return;
+        const fontMetrics = graphics.getFontMetrics();
+        this.textComponent.setPosition(
+            canvasLocation.x + Math.trunc(toHighlight.getWidth() / 2) - Math.trunc(fontMetrics.stringWidth(text) / 2),
+            canvasLocation.y + fontMetrics.getHeight(),
+        );
+        this.textComponent.setText(text);
+        this.textComponent.render(graphics);
+    }
+
+    /** Scrolls a list so the given widgets' average centre is in view (RuneLite's scrollToWidget). */
+    scrollToWidget(list: number, scrollbar: number, ...toHighlight: Array<Widget | null>): void {
+        const parent = this.client.getWidget(list);
+        if (parent === null) return;
+        let averageCentralY = 0;
+        let nonnullCount = 0;
+        for (const widget of toHighlight) {
+            if (widget !== null) {
+                averageCentralY += widget.getRelativeY() + Math.trunc(widget.getHeight() / 2);
+                nonnullCount += 1;
+            }
+        }
+        if (nonnullCount === 0) return;
+        averageCentralY = Math.trunc(averageCentralY / nonnullCount);
+        const newScroll = Math.max(0, Math.min(parent.getScrollHeight(), averageCentralY - Math.trunc(parent.getHeight() / 2)));
+        this.client.runScript(ScriptID.UPDATE_SCROLLBAR, scrollbar, list, newScroll);
     }
 
     /** Bank Tags' TagManager (RuneLite's PluginDependency(BankTagsPlugin)), when that plugin is loaded. */

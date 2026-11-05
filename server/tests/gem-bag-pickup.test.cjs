@@ -108,6 +108,32 @@ test("an open bag takes the player's own gem (control)", async (t) => {
   assert.ok(f.messages.includes(STRAIGHT_IN), JSON.stringify(f.messages));
 });
 
+test("an open sack stores the player's own gem once", async (t) => {
+  const f = actor(t, HOME, false);
+  f.inv.add(new core.Item(core.CacheDefinitions.getObjId("gem_sack_open")), true);
+  const pile = gemHere(t, f);
+  await take(f);
+  const sack = Storage.FAMILIES.get("gem-sack");
+  assert.ok(sack);
+  assert.equal(Storage.amountOf(f.p, sack, I.UNCUT_RUBY), 1);
+  assert.equal(f.inv.getAmount(I.UNCUT_RUBY), 0);
+  assert.equal(pile.isPendingRemoval(), true);
+});
+
+test("an Ironman's open sack cannot take another player's gem", async (t) => {
+  const f = actor(t, HOME, false);
+  f.inv.add(new core.Item(core.CacheDefinitions.getObjId("gem_sack_open")), true);
+  setIron(f);
+  const pile = gemHere(t, f, "OtherPlayer");
+  await take(f);
+  const sack = Storage.FAMILIES.get("gem-sack");
+  assert.ok(sack);
+  assert.equal(Storage.amountOf(f.p, sack, I.UNCUT_RUBY), 0);
+  assert.equal(f.inv.getAmount(I.UNCUT_RUBY), 0);
+  assert.equal(pile.isPendingRemoval(), false);
+  assert.ok(f.messages.includes(REFUSED), JSON.stringify(f.messages));
+});
+
 test("an Ironman's open bag doesn't take another player's gem, and it stays on the ground", async (t) => {
   const f = actor(t);
   setIron(f);

@@ -237,6 +237,7 @@ function autoLine(player) {
   if (paused === "stuck") return col(COLOUR.PAUSED, "Paused (it couldn't carry on)");
   if (paused === "logout") return col(COLOUR.PAUSED, "Paused (logging out)");
   if (paused === "out") return col(COLOUR.PAUSED, "Paused (out of materials)");
+  if (paused === "retreat") return col(COLOUR.PAUSED, "Paused (fled: out of food)");
   return col(COLOUR.ON, "On");
 }
 

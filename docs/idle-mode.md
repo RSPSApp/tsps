@@ -283,6 +283,34 @@ Bought levels are saved as `idle-mode:upgrades` `{ upgrade: level }`.
 The prices and effects are in `"progression"` in the data. Quick Hands' speed shows in the rate
 the offline progress measures, so it counts offline as well.
 
+## Idle bosses
+
+`server/plugins/modes/idle/Bosses.IdleMode.js`, settings in `"bosses"`, sites on the travel
+screen's **Bosses** tab (`boss: true`). A boss site asks for its combat level (a character left
+alone below it would die), and can carry its own reach (`searchTiles`, `leashTiles`: a lair
+bigger than a field of cows) and safety (`eatBelowPercent`: eat sooner; `retreatBelowPercent`:
+out of food below it, teleport to `combat.retreatTile`, Lumbridge, and pause, said once). A kill
+of a boss in `names` counts for the **Boss Hunter** achievement track and the **Boss kills**
+hiscores.
+
+- **Gemstone Crab** (any level, members): it never dies. When it burrows (`gemstone-crab:burrowed`,
+  emitted by `GemstoneCrab.plugin.js`), the idle players among its top 16 damage dealers are
+  credited with a kill and mine its shell once (the gems to the bank, recorded for the offline
+  progress with the combat XP, recorded every `recordEverySeconds` as no kill does it); with no
+  crab in reach the character crawls through the nearest cave to the mine it rises at
+  (`gemstone-crab:location`) and fights it there.
+- **Scurrius** (combat 60, members): the public room, 1,500 hitpoints; in testing a maxed
+  character in rune with 18 sharks fled out of food before he died, so bring a lot.
+
+Idle combat learned on the way, for every monster: the best food first (by value), a monster that
+hides (`isUntargetable`, not `isVisible`: the Giant Mole burrowing) is let go and fought again
+where it comes up, one it fought is never taken for one out of reach, a fight with no hitpoints
+lost for `stalledFightSeconds` (`30`) is dropped and looked for again, and its own clicks
+(`Common.act`) don't pause it.
+
+Not on the list: the **Giant Mole**. On this server, after burrowing across the lair she walks
+back to her spawn healed to full and can't be hit on the way, for any player.
+
 ## Hiscores
 
 `server/plugins/modes/idle/Hiscores.IdleMode.js`, settings in `"hiscores"`. Every idle account

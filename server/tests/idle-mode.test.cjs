@@ -101,8 +101,9 @@ function fakeApi(config = {}) {
     onPlayerDisconnect: (handler) => (handlers.events.disconnect ??= []).push(handler),
     onExperienceGained: (handler) => (handlers.events.xp ??= []).push(handler),
     emitCustomEvent: (name, payload) => api.emit(name, payload),
-    emitObjectInteraction: (event) => { api.interactions.push({ kind: "object", ...event }); return true; },
-    emitNpcInteraction: (event) => { api.interactions.push({ kind: "npc", ...event }); return true; },
+    // As the server does: the plugins' "before" hooks hear it first.
+    emitObjectInteraction: (event) => { api.emit("before-object", event); api.interactions.push({ kind: "object", ...event }); return true; },
+    emitNpcInteraction: (event) => { api.emit("before-npc", event); api.interactions.push({ kind: "npc", ...event }); return true; },
     registerCommand: (name, handler, rights) => { handlers.commands[name] = { handler, rights }; },
     emit(name, payload) {
       for (const handler of handlers.events[name] ?? []) handler(payload);
@@ -177,6 +178,7 @@ function fakePlayer({ bankSlots = 800 } = {}) {
       getTarget() { return this.target; },
       getAttacker() { return this.attacker; },
       attack(target) { this.target = target; },
+      reset() { this.target = null; },
     },
     getHitpoints() { return this.hitpoints; },
     screen,
@@ -569,8 +571,8 @@ test("auto: a task looks at tracked players from server start, and logout forget
   const { tracked } = require(AUTO);
   assert.ok(tracked.has(player));
   api.emit("startup", {});
-  assert.equal(world.tasks.length, 4, "auto-resume, idle combat, production and the hiscores' saves");
-  assert.deepEqual(world.tasks.map((task) => task.delay), [2, 2, 2, 100]);
+  assert.equal(world.tasks.length, 5, "auto-resume, idle combat, the bosses, production and the hiscores' saves");
+  assert.deepEqual(world.tasks.map((task) => task.delay), [2, 2, 2, 2, 100]);
   api.logout({ player });
   assert.equal(tracked.has(player), false);
   api.login({ player });
@@ -1501,9 +1503,9 @@ test("travel screen: a Making tab lists the production sites, and opens on them 
   const { player } = cookingShrimps(t);
   api.command(player, "idle travel");
   const layout = JSON.parse(player.screen.texts.get(uid(COMPONENT.LAYOUT)));
-  assert.equal(layout.active, 6, "the Making tab");
+  assert.equal(layout.active, 7, "the Making tab");
   const rows = JSON.parse(player.screen.texts.get(uid(COMPONENT.DATA)));
-  const making = layout.tabs[6].map((id) => rows.find((row) => row.id === id).name);
+  const making = layout.tabs[7].map((id) => rows.find((row) => row.id === id).name);
   assert.deepEqual(making, ["Cooking range", "Cooking range", "Furnace", "Furnace", "Anvils", "Fletching, crafting, herblore", "Bonfire"]);
   const range = rows.find((row) => row.name === "Cooking range");
   assert.equal(range.detail, " - Al Kharid, by the bank");
@@ -2057,4 +2059,179 @@ test("points earned: kept apart from the points to spend; an account from before
   assert.equal(earned(player), 391);
   api.command(player, "idle buy long-dreams");
   assert.equal(earned(player), 391, "spending keeps it");
+});
+
+const BOSSES = "../plugins/modes/idle/Bosses.IdleMode";
+const UNCUT_SAPPHIRE = 1623;
+
+/** An idle player sent to the Gemstone Crab, by the Bosses tab's site. */
+function atTheCrab(t) {
+  let now = 20_000_000;
+  t.mock.method(Date, "now", () => now);
+  api.core.ItemIdentifiers.UNCUT_SAPPHIRE = UNCUT_SAPPHIRE;
+  const player = idlePlayer();
+  player.getUsername = () => "Crabber";
+  player.combatLevel = 30;
+  api.command(player, "idle go gemstone-crab");
+  player.moveTo(1277, 3168);
+  return { player, advance: (ms) => (now += ms), now: () => now };
+}
+
+test("bosses: a boss site asks for its combat level; the crab's site makes it the target", (t) => {
+  const player = idlePlayer();
+  player.combatLevel = 40;
+  api.command(player, "idle go scurrius");
+  assert.match(player.messages.pop(), /You need combat level 60 to fight Scurrius idle\./);
+  assert.equal(api.teleports.length, 0);
+  player.combatLevel = 60;
+  api.command(player, "idle go scurrius");
+  assert.deepEqual(player.getAttribute("idle-mode:combat-target"), {
+    name: "Scurrius", anchor: { x: 3290, y: 9868, z: 0 }, searchTiles: 16, leashTiles: 20, eatBelowPercent: 70, retreatBelowPercent: 40,
+  }, "his whole room, and eating sooner");
+  const { player: crabber } = atTheCrab(t);
+  assert.equal(crabber.getAttribute("idle-mode:combat-target").name, "Gemstone Crab");
+});
+
+test("bosses: the crab burrowing is a kill for those who may mine it; the shell is mined once, the gems banked", (t) => {
+  const { player, advance, now } = atTheCrab(t);
+  const { look } = require(BOSSES);
+  const crab = fakeMonster("Gemstone Crab", 1271, 3171, 900);
+  world.npcs.push(crab);
+  player.combat.target = crab;
+  assert.equal(look(player, now()), "fighting");
+  // It burrows: the shell is left, and the player was among its top dealers.
+  player.combat.target = null;
+  crab.hp = 1;
+  api.emit("gemstone-crab:burrowed", { npc: crab, location: crab.getLocation(), top: ["crabber", "someone"] });
+  assert.equal(player.getAttribute("idle-mode:records").counts.bosses, 1);
+  assert.equal(player.getAttribute("idle-mode:records").counts.kills, 1);
+  const shell = fakeNpc("<col=00ffff>Gemstone Crab Shell</col>", ["Mine", null, null, null, null], 1272, 3172);
+  world.npcs = [shell];
+  assert.equal(look(player, now()), "mining");
+  assert.equal(api.interactions.at(-1).npc, shell);
+  assert.equal(api.interactions.at(-1).clickType, 1);
+  // The mine gives three gems: the next look banks them.
+  player.inventory.push(new Item(UNCUT_SAPPHIRE, 3));
+  advance(1200);
+  look(player, now());
+  assert.equal(player.bank.get(UNCUT_SAPPHIRE), 3);
+  assert.equal(player.getInventory().getAmount(UNCUT_SAPPHIRE), 0);
+  assert.notEqual(look(player, now()), "mining", "once a shell");
+});
+
+test("bosses: with no crab in reach, the character crawls through a cave to where it rises", (t) => {
+  const { player, now } = atTheCrab(t);
+  const { look } = require(BOSSES);
+  (api.handlers.events["gemstone-crab:location"] ??= []).push((request) => { request.tile = [1351, 3122, 0]; });
+  const cave = fakeObject("Cave", ["Crawl-through"], 1278, 3167);
+  world.objects.push(cave);
+  assert.equal(look(player, now()), "following");
+  assert.equal(api.interactions.at(-1).object, cave);
+  assert.deepEqual(player.getAttribute("idle-mode:combat-target").anchor, { x: 1351, y: 3122, z: 0 }, "idle combat fights it there");
+  assert.equal(require(COMBAT).pausedFor(player), null, "its own crawl is not a click that pauses idle combat");
+  player.moveTo(1351, 3122);
+  assert.equal(look(player, now()), "waiting", "there: it waits for the crab to rise");
+});
+
+test("bosses: a kill of a named boss counts for the Boss Hunter track and the hiscores", (t) => {
+  let now = 30_000_000;
+  t.mock.method(Date, "now", () => now);
+  const player = idlePlayer();
+  player.getUsername = () => "Slayer";
+  const mole = fakeMonster("Giant Mole", 1760, 5191, 200);
+  api.emit("attack-option", { player, npc: mole, npcId: 5779, clickType: 2, handled: false });
+  api.emit("npc-drops:generated", { player, npc: mole, npcId: 5779, drops: [], handled: false });
+  assert.equal(player.getAttribute("idle-mode:records").counts.bosses, 1);
+  const cow = fakeMonster("Cow", 3201, 3200);
+  api.emit("attack-option", { player, npc: cow, npcId: 2790, clickType: 2, handled: false });
+  api.emit("npc-drops:generated", { player, npc: cow, npcId: 2790, drops: [], handled: false });
+  assert.equal(player.getAttribute("idle-mode:records").counts.bosses, 1, "a cow is no boss");
+  require(HISCORES).update(player);
+  assert.deepEqual(require(HISCORES).ranking("bosses").map((row) => [row.name, row.value]), [["Slayer", 1]]);
+});
+
+test("bosses: it eats the best food first, sooner, and flees out of food before it dies", (t) => {
+  t.mock.method(Date, "now", () => 40_000_000);
+  const SHRIMPS_ID = 315;
+  api.core.CacheDefinitions.getItem = (id) => ({ inventoryActions: [SHARK, SHRIMPS_ID].includes(id) ? ["Eat", null, null, null, "Drop"] : [null, null, null, null, "Drop"] });
+  api.core.ItemDefinition.forId = (id) => ({ getName: () => "Food", getValue: () => (id === SHARK ? 300 : 5) });
+  const player = idlePlayer();
+  player.combatLevel = 99;
+  api.command(player, "idle go scurrius");
+  player.moveTo(3290, 9868);
+  const { fight, pausedFor } = require(COMBAT);
+  player.inventory = [new Item(SHRIMPS_ID, 1), new Item(SHARK, 1)];
+  player.hitpoints = 65;
+  assert.equal(fight(player, Date.now()), "ate", "below 70% at a boss");
+  assert.equal(api.itemActions.at(-1).itemId, SHARK, "the shark before the shrimps");
+  player.inventory = [];
+  player.hitpoints = 35;
+  const teleports = api.teleports.length;
+  assert.equal(fight(player, Date.now()), "retreated");
+  assert.deepEqual([api.teleports.at(-1).x, api.teleports.at(-1).y], [3222, 3218]);
+  assert.equal(api.teleports.length, teleports + 1);
+  assert.equal(pausedFor(player), "retreat");
+  assert.match(player.messages.pop(), /fled to Lumbridge/);
+});
+
+test("bosses: a monster that burrows is let go, and fought again where it comes up", (t) => {
+  let now = 50_000_000;
+  t.mock.method(Date, "now", () => now);
+  const player = idlePlayer();
+  const { fight, adopt } = require(COMBAT);
+  adopt(player, { name: "Giant Mole", anchor: { x: 1760, y: 5190, z: 0 }, searchTiles: 45, leashTiles: 50 });
+  player.moveTo(1760, 5190);
+  const mole = fakeMonster("Giant Mole", 1761, 5191, 200);
+  world.npcs.push(mole);
+  assert.equal(fight(player, now), "attacking");
+  // She burrows: out of sight, and not to be hit.
+  mole.isVisible = () => false;
+  mole.isUntargetable = () => true;
+  now += 5000;
+  assert.equal(fight(player, now), "none", "let go, and none to fight while she is under");
+  assert.equal(player.combat.target, null);
+  // She comes up across the lair, still in its reach.
+  mole.isVisible = () => true;
+  mole.isUntargetable = () => false;
+  mole.at = { x: 1740, y: 5170, z: 0 };
+  mole.getLocation = () => new FakeLocation(1740, 5170, 0);
+  now += 5000;
+  assert.equal(fight(player, now), "attacking", "not left alone as if out of reach");
+  assert.equal(player.combat.target, mole);
+  // A fight that ends with her alive (she burrowed mid-fight and came up; the fight dropped): she was fought, so she is no monster out of reach.
+  assert.equal(fight(player, now), "fighting");
+  player.combat.target = null;
+  now += 5000;
+  assert.equal(fight(player, now), "attacking", "attacked again, not left alone");
+  // She burrows again and again (a quarter of the hits): no pause, as attacks that never fight.
+  for (let i = 0; i < 8; i++) {
+    mole.isVisible = () => false;
+    now += 5000;
+    fight(player, now);
+    mole.isVisible = () => true;
+    now += 5000;
+    assert.equal(fight(player, now), "attacking", `burrow ${i + 1}`);
+  }
+});
+
+test("combat: a fight that goes nowhere (the monster loses no hitpoints) is dropped and looked for again", (t) => {
+  let now = 60_000_000;
+  t.mock.method(Date, "now", () => now);
+  const { player, cow } = killingCows(t);
+  const { fight } = require(COMBAT);
+  const next = fakeMonster("Cow", 3201, 3201, 10);
+  world.npcs.push(next);
+  now += 5000;
+  assert.equal(fight(player, now), "attacking");
+  for (let i = 0; i < 5; i++) {
+    now += 6000;
+    assert.equal(fight(player, now), "fighting", "not yet");
+  }
+  now += 6000;
+  assert.equal(fight(player, now), "stalled");
+  assert.equal(player.combat.target, null);
+  next.hp = 9;
+  now += 5000;
+  assert.equal(fight(player, now), "attacking", "and fought again");
+  assert.ok(cow);
 });

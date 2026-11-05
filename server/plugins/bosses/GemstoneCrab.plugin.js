@@ -158,6 +158,9 @@ function spawnCrab() {
 
 function startBurrow() {
   state.burrow = { at: state.tick, spot: state.spot, location: state.crab.getLocation().clone(), top: topDealers() };
+  // "gemstone-crab:burrowed" { npc, location, top }: the crab has gone, and who may mine its shell
+  // (Idle Mode counts it as a kill for them).
+  pluginApi.emitCustomEvent("gemstone-crab:burrowed", { npc: state.crab, location: state.burrow.location, top: [...state.burrow.top] });
   state.nextSpot = pickSpot(state.spot);
   // Its bar empties, but an NPC set to 0 hitpoints dies (NPC.setHitpoints), so it keeps 1.
   state.crab.setHitpoints(1);

@@ -178,9 +178,9 @@ function useObject(player, object, target) {
     execute: () => {
       const clickType = optionIndex(object.getDefinition().getInteractions(), target.option);
       player.setPositionToFace(object.getLocation());
-      Common.api.emitObjectInteraction({
+      Common.act(player, () => Common.api.emitObjectInteraction({
         player, object, objectId: object.getId(), clickType, location: at(object), sourceLocation: at(player), handled: false,
-      });
+      }));
     },
   });
 }
@@ -189,9 +189,9 @@ function useNpc(player, npc, target) {
   player.getMovementQueue().walkToEntity(npc, () => {
     const clickType = optionIndex(npc.getDefinition().getActions(), target.option);
     player.setPositionToFace(npc.getLocation());
-    Common.api.emitNpcInteraction({
+    Common.act(player, () => Common.api.emitNpcInteraction({
       player, npc, npcId: npc.getId(), npcIndex: npc.getIndex(), clickType, location: at(npc), handled: false,
-    });
+    }));
   }, 1);
 }
 

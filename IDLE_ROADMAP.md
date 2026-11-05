@@ -98,6 +98,9 @@ Uma moeda própria do jogo idle, separada dos pontos de melhoria.
 
 - [x] Ranking (hiscores): XP idle, pontos idle ganhos e horas idle; aba Ranks na tela idle e `::idle top`
 - [ ] Viagem andando em vez de teleporte, usando as rotas longas dos bots
-- [ ] Bosses idle
+- [x] Bosses idle: aba Bosses na viagem; Gemstone Crab (minera a casca e segue o caranguejo) e
+      Scurrius; nível de combate exigido, come antes e foge quando a comida acaba; conquista e
+      ranking de bosses
+- [ ] Giant Mole: depois de cavar ela volta ao spawn curada e não toma dano (bug do servidor)
 - [ ] Testes automáticos rodando no GitHub em todo PR (CI)
 - [ ] Sincronizar com o projeto original de tempos em tempos (`git merge upstream/main`)

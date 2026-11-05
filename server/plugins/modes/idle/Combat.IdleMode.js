@@ -30,8 +30,8 @@ const TARGET_ATTRIBUTE = Common.COMBAT_TARGET_ATTRIBUTE;
 /** player -> the last monster the player chose to attack: { name, at }. */
 const attacks = new Map();
 /**
- * player -> { lastAttemptAt, warned, failedAttempts, paused: null | "click" | "stuck" | "logout",
- * lastNpc (the last attacked), skips (npc -> until when it is left alone) }.
+ * player -> { lastAttemptAt, warned, failedAttempts, paused: null | "click" | "stuck" | "logout" | "retreat",
+ * lastNpc (the last attacked), lastNpcFought (whether that attack took), skips (npc -> until when it is left alone) }.
  */
 const states = new Map();
 const tracked = new Set();
@@ -71,7 +71,7 @@ function pause(player) {
 }
 
 function otherClick({ player }) {
-  if (Common.isIdle(player)) pause(player);
+  if (Common.isIdle(player) && !Common.isActing(player)) pause(player);
 }
 
 /**
@@ -94,6 +94,32 @@ function adopt(player, target) {
 /** Logout pressed (`onCanLogout`, answered by others) or the connection lost: no new fights. */
 function leaving({ player }) {
   if (player.getAttribute(TARGET_ATTRIBUTE) && Common.isIdle(player)) stateOf(player).paused = "logout";
+}
+
+/**
+ * A kill that drops nothing (a Gemstone Crab burrowing, for those who may mine its shell): the
+ * fight went somewhere, so no pause for attacks that never killed.
+ */
+function credit(player) {
+  const state = stateOf(player);
+  state.paused = null;
+  state.failedAttempts = 0;
+  state.lastNpc = null;
+  state.skips.clear();
+  Common.changed(player);
+}
+
+/** Teleports out (`retreatTile`) and pauses, said once. */
+function retreat(player) {
+  const state = stateOf(player);
+  state.paused = "retreat";
+  Common.changed(player);
+  const { Location, TeleportHandler, TeleportType } = Common.core;
+  const [x, y, z = 0] = config().retreatTile;
+  const destination = new Location(x, y, z);
+  if (TeleportHandler.checkReqs(player, destination)) TeleportHandler.teleport(player, destination, TeleportType.NORMAL, false);
+  player.sendMessage("Out of food and low on hitpoints, your character has fled to Lumbridge. Bring more food and travel back.");
+  return "retreated";
 }
 
 /** `::idle auto on` lifts a pause. */
@@ -133,18 +159,48 @@ function killed(event) {
   if (!chosen) return;
   const location = player.getLocation();
   const keepAnchor = previous?.name === name && previous.anchor.z === location.getZ() &&
-    Common.chebyshev(location, previous.anchor) <= config().searchTiles;
-  Common.setActivity(player, TARGET_ATTRIBUTE, {
-    name,
-    anchor: keepAnchor ? previous.anchor : { x: location.getX(), y: location.getY(), z: location.getZ() },
+    Common.chebyshev(location, previous.anchor) <= searchTiles(previous);
+  Common.setActivity(player, TARGET_ATTRIBUTE, keepAnchor ? previous : {
+    name, anchor: { x: location.getX(), y: location.getY(), z: location.getZ() },
   });
   tracked.add(player);
   Common.changed(player);
 }
 
-/** A monster this player may attack: alive, not fought by another player, and allowed. */
+/** How far around its place the target is looked for, and how far the player may be: a boss's lair can be bigger. */
+function searchTiles(target) {
+  return target.searchTiles ?? config().searchTiles;
+}
+
+function leashTiles(target) {
+  return target.leashTiles ?? config().leashTiles;
+}
+
+/**
+ * A fight that has gone `stalledFightSeconds` without the monster losing a hitpoint (it walks
+ * home out of reach, healed): dropped, so the next look finds a fight again.
+ */
+function stalled(state, combat, fought, now) {
+  const hp = fought.getHitpoints?.() ?? 0;
+  if (state.watch?.npc !== fought || hp < state.watch.hp) {
+    state.watch = { npc: fought, hp, at: now };
+    return false;
+  }
+  if (now - state.watch.at < config().stalledFightSeconds * 1000) return false;
+  state.watch = null;
+  state.lastNpc = null;
+  combat.reset();
+  return true;
+}
+
+/** A monster that can't be hit for now: burrowed, out of sight (the Giant Mole). */
+function hidden(npc) {
+  return npc.isUntargetable?.() === true || npc.isVisible?.() === false;
+}
+
+/** A monster this player may attack: alive, in sight, not fought by another player, and allowed. */
 function attackable(player, npc) {
-  if (npc.isRegistered?.() === false || !(npc.getHitpoints?.() > 0)) return false;
+  if (npc.isRegistered?.() === false || !(npc.getHitpoints?.() > 0) || hidden(npc)) return false;
   const fighting = npc.getCombat?.()?.getAttacker?.();
   if (fighting && fighting !== player && fighting.isPlayer?.()) return false;
   const { CombatFactory, CanAttackResponse } = Common.core;
@@ -157,7 +213,7 @@ function findMonster(player, target, usable) {
   const here = player.getLocation();
   let best = null;
   let bestDistance = Infinity;
-  for (const npc of World.getNpcsNear(new Location(anchor.x, anchor.y, anchor.z), config().searchTiles)) {
+  for (const npc of World.getNpcsNear(new Location(anchor.x, anchor.y, anchor.z), searchTiles(target))) {
     if (npcName(npc) !== target.name || !usable(npc) || !attackable(player, npc)) continue;
     const distance = Common.chebyshev(here, { x: npc.getLocation().getX(), y: npc.getLocation().getY() });
     if (distance < bestDistance) {
@@ -175,12 +231,14 @@ function fight(player, now) {
   const state = stateOf(player);
   if (state.paused) return "paused";
   const hp = Common.hitpointsPercent(player);
-  if (hp < config().eatBelowPercent) {
+  if (hp < (target.eatBelowPercent ?? config().eatBelowPercent)) {
     const food = Common.findFood(player);
     if (food) {
       Common.eat(player, food);
       return "ate";
     }
+    // At a boss, out of food: away before it kills a character left alone.
+    if (target.retreatBelowPercent !== undefined && hp < target.retreatBelowPercent) return retreat(player);
     if (hp < config().stopBelowPercent) {
       if (!state.warned) player.sendMessage("You're out of food: idle combat waits until you have healed.");
       state.warned = true;
@@ -189,7 +247,18 @@ function fight(player, now) {
   }
   state.warned = false;
   const combat = player.getCombat();
-  if (combat.getTarget()) return "fighting";
+  const fought = combat.getTarget();
+  // A monster gone where it can't be hit (the Giant Mole burrowed): look for it again.
+  if (fought && hidden(fought)) {
+    combat.reset();
+    state.lastNpc = null;
+    // That attack took: it is no try that never got a fight.
+    state.failedAttempts = Math.max(0, state.failedAttempts - 1);
+  } else if (fought) {
+    // The attack took: the one attacked is no monster out of reach.
+    if (fought === state.lastNpc) state.lastNpcFought = true;
+    return stalled(state, combat, fought, now) ? "stalled" : "fighting";
+  }
   const attacker = combat.getAttacker();
   if (attacker?.isNpc?.() && attacker.getHitpoints?.() > 0) {
     combat.attack(attacker);
@@ -197,10 +266,10 @@ function fight(player, now) {
   }
   if (!Common.mayWork(player)) return "busy";
   const location = player.getLocation();
-  if (location.getZ() !== target.anchor.z || Common.chebyshev(location, target.anchor) > config().leashTiles) return "away";
+  if (location.getZ() !== target.anchor.z || Common.chebyshev(location, target.anchor) > leashTiles(target)) return "away";
   if (now - state.lastAttemptAt < config().retrySeconds * 1000) return "waiting";
   // The last one attacked is alive and not being fought: the attack never took (out of reach).
-  if (state.lastNpc?.getHitpoints?.() > 0 && state.lastNpc.isRegistered?.() !== false) {
+  if (!state.lastNpcFought && state.lastNpc?.getHitpoints?.() > 0 && state.lastNpc.isRegistered?.() !== false && !hidden(state.lastNpc)) {
     state.skips.set(state.lastNpc, now + config().skipSeconds * 1000);
   }
   state.lastNpc = null;
@@ -215,6 +284,7 @@ function fight(player, now) {
   if (!Common.readyToWork(player)) return "busy";
   state.lastAttemptAt = now;
   state.lastNpc = npc;
+  state.lastNpcFought = false;
   combat.attack(npc);
   return "attacking";
 }
@@ -269,6 +339,7 @@ module.exports.TARGET_ATTRIBUTE = TARGET_ATTRIBUTE;
 module.exports.fight = fight;
 module.exports.unpause = unpause;
 module.exports.adopt = adopt;
+module.exports.credit = credit;
 /** Why idle combat is paused ("click", "stuck", "logout"), or null. */
 module.exports.pausedFor = (player) => states.get(player)?.paused ?? null;
 module.exports.tracked = tracked;

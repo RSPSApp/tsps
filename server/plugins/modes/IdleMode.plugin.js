@@ -30,6 +30,7 @@ module.exports = {
     require("./idle/Auto.IdleMode")(api);
     require("./idle/Progression.IdleMode")(api);
     require("./idle/Combat.IdleMode")(api);
+    require("./idle/Bosses.IdleMode")(api);
     require("./idle/Production.IdleMode")(api);
     require("./idle/Bonfires.IdleMode")(api);
     require("./idle/Goals.IdleMode")(api);

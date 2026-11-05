@@ -42,13 +42,17 @@ function levelFor(player, site) {
   return skill ? player.getSkillManager().getMaxLevel(skill) : 0;
 }
 
-/** Why the player can't go there, or null when they can. A combat level is advice, not a rule. */
+/**
+ * Why the player can't go there, or null when they can. A combat level is advice, not a rule,
+ * except at a boss (`boss`): a character left alone there below it would die.
+ */
 function refusal(player, site) {
   if (!Common.isIdle(player)) return "Turn Idle Mode on first (::idle on).";
   // Production sites need no level: what the player makes there sets it.
   if (site.skill !== COMBAT && !isProduction(site) && levelFor(player, site) < site.level) {
     return `You need ${Common.skillName(site.skill)} level ${site.level} for ${site.name.toLowerCase()}.`;
   }
+  if (site.boss && levelFor(player, site) < site.level) return `You need combat level ${site.level} to fight ${site.name} idle.`;
   return null;
 }
 
@@ -64,7 +68,13 @@ function anchorOf(site) {
  */
 function adoptTarget(player, site) {
   const anchor = anchorOf(site);
-  if (site.skill === COMBAT) Combat.adopt(player, { name: site.target, anchor });
+  if (site.skill === COMBAT) {
+    // A boss's lair can be bigger than a field of cows: the site says how far to look.
+    const reach = site.searchTiles ? { searchTiles: site.searchTiles, leashTiles: site.leashTiles ?? site.searchTiles } : {};
+    // And eats sooner, fleeing when out of food.
+    const safety = site.eatBelowPercent ? { eatBelowPercent: site.eatBelowPercent, retreatBelowPercent: site.retreatBelowPercent } : {};
+    Combat.adopt(player, { name: site.target, anchor, ...reach, ...safety });
+  }
   else if (!isProduction(site)) Auto.adopt(player, { skill: site.skill, kind: site.kind, name: site.target, option: site.option, anchor });
   else if (Production.moveTo(player, site, anchor)) {
     const made = player.getAttribute(Common.PRODUCTION_TARGET_ATTRIBUTE);

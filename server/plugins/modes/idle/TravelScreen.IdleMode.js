@@ -28,11 +28,12 @@ const TABS = [
   { label: "Mining", header: "Mining", has: (site) => site.skill === "MINING" },
   { label: "Fishing", header: "Fishing", has: (site) => site.skill === "FISHING" },
   { label: "Thieving", header: "Thieving", has: (site) => site.skill === "THIEVING" },
-  { label: "Combat", header: "Combat", has: (site) => site.skill === Travel.COMBAT },
+  { label: "Combat", header: "Combat", has: (site) => site.skill === Travel.COMBAT && !site.boss },
+  { label: "Bosses", header: "Bosses", has: (site) => site.skill === Travel.COMBAT && site.boss === true },
   { label: "Making", header: "Making", has: (site) => Travel.isProduction(site) },
 ];
-const TAB_WIDTH = 60;
-const TAB_STEP = 64;
+const TAB_WIDTH = 54;
+const TAB_STEP = 57;
 const ROW_SLOTS = 10;
 const ROW_HEIGHT = 26;
 const LIST = { x: 18, y: 96, width: 258, height: 204 };
@@ -159,6 +160,7 @@ function skillLabel(site) {
 function levelLine(player, site) {
   if (Travel.isProduction(site)) return `${skillLabel(site)}: ${col(COLOUR.OK, "any level")}`;
   const level = Travel.levelFor(player, site);
+  if (site.boss) return `Combat level: ${col(level >= site.level ? COLOUR.OK : COLOUR.SHORT, site.level)}`;
   if (site.skill === Travel.COMBAT) return `Advised combat level: ${col(level >= site.level ? COLOUR.OK : COLOUR.SHORT, site.level)}`;
   return `${skillLabel(site)} level: ${col(level >= site.level ? COLOUR.OK : COLOUR.SHORT, site.level)}`;
 }
@@ -175,7 +177,7 @@ function description(site) {
 function rows(player) {
   return Travel.sites().map((site, index) => {
     const level = Travel.levelFor(player, site);
-    const short = site.skill !== Travel.COMBAT && !Travel.isProduction(site) && level < site.level;
+    const short = (site.boss || site.skill !== Travel.COMBAT) && !Travel.isProduction(site) && level < site.level;
     return {
       id: rowId(index),
       name: site.name,
@@ -212,7 +214,8 @@ function activeTab(player) {
   const fight = player.getAttribute(Common.COMBAT_TARGET_ATTRIBUTE);
   const gather = player.getAttribute(Common.GATHER_TARGET_ATTRIBUTE);
   const skill = fight ? Travel.COMBAT : gather?.skill;
-  const index = TABS.findIndex((tab) => tab.has && skill && tab.has({ skill, kind: "object" }));
+  const boss = !!fight && Common.data.bosses.names.includes(fight.name);
+  const index = TABS.findIndex((tab) => tab.has && skill && tab.has({ skill, kind: "object", boss }));
   return index >= 0 ? index : 0;
 }
 

@@ -1,10 +1,10 @@
 /**
  * Idle hiscores (plugins/modes/data/idle-mode.json "hiscores"): every idle account ranked by its
- * idle XP (gained idle, playing or away), the idle points it has earned (spent or not) and its
- * hours idle. An account's scores are kept current while it plays (`Common.onChange`) and stay on
+ * idle XP (gained idle, playing or away), the idle points it has earned (spent or not), its
+ * hours idle and its boss kills. An account's scores are kept current while it plays (`Common.onChange`) and stay on
  * the board while it is away. Player bots are left off.
  *
- * Kept in data/saves/idle-hiscores.json ({ username: { name, xp, points, hours, at } }, `at` when
+ * Kept in data/saves/idle-hiscores.json ({ username: { name, xp, points, hours, bosses, at } }, `at` when
  * the scores last changed: of two equal scores the one reached first ranks higher), written to a
  * temporary file, then renamed, at most every `saveEverySeconds`, on logout and on shutdown.
  * `IDLE_HISCORES_FILE` points it elsewhere (the tests).
@@ -17,6 +17,7 @@ const path = require("node:path");
 const Common = require("./Common.IdleMode");
 const Offline = require("./Offline.IdleMode");
 const Progression = require("./Progression.IdleMode");
+const Achievements = require("./Achievements.IdleMode");
 
 const FILE_ENV = "IDLE_HISCORES_FILE";
 const DEFAULT_FILE = path.join("data", "saves", "idle-hiscores.json");
@@ -61,7 +62,7 @@ function save() {
 /** The player's scores now. */
 function scores(player) {
   const { xp, workedMs, offlineMs } = Offline.totals(player);
-  return { xp: Math.floor(xp), points: Progression.earned(player), hours: (workedMs + offlineMs) / 3600000 };
+  return { xp: Math.floor(xp), points: Progression.earned(player), hours: (workedMs + offlineMs) / 3600000, bosses: Achievements.count(player, "bosses") };
 }
 
 function keyOf(player) {
@@ -75,7 +76,7 @@ function update(player, now = Date.now()) {
   if (!key) return;
   const current = scores(player);
   const previous = entries().get(key);
-  if (previous && previous.xp === current.xp && previous.points === current.points && previous.hours === current.hours) return;
+  if (previous && config().categories.every(({ id }) => previous[id] === current[id])) return;
   entries().set(key, { name: player.getUsername(), ...current, at: now });
   dirty = true;
 }
@@ -94,9 +95,9 @@ function ranking(id) {
 }
 
 function format(id, value) {
-  const { unit } = category(id);
+  const { unit, unitOne = unit } = category(id);
   const amount = id === "hours" ? (value < 10 ? value.toFixed(1) : Math.floor(value).toLocaleString("en-US")) : Math.floor(value).toLocaleString("en-US");
-  return `${amount} ${unit}`;
+  return `${amount} ${amount === "1" ? unitOne : unit}`;
 }
 
 /** The top `size` and the player's own place: { title, rows: [{ place, name, value, you }], you }. */
@@ -113,7 +114,7 @@ function lines(player, id, size = config().size) {
   };
 }
 
-/** `::idle top [xp|points|hours]`. */
+/** `::idle top [xp|points|hours|bosses]`. */
 function topCommand(player, parts) {
   const { id } = category(String(parts[2] ?? "").toLowerCase());
   const { title, rows, you } = lines(player, id, config().chatSize);

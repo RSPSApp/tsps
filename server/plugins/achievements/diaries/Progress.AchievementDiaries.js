@@ -160,6 +160,6 @@ module.exports = function attachProgress(pluginApi) {
 };
 
 Object.assign(module.exports, {
-  TASKS_ATTRIBUTE, REWARDS_ATTRIBUTE, doneTasks, claimedTiers, tierCount, isTierComplete,
+  TASKS_ATTRIBUTE, REWARDS_ATTRIBUTE, doneTasks, claimedTiers, tierCount, isTierComplete, isStarted,
   completeTask, claimTier, resetTiers, restore, sendDiary,
 });

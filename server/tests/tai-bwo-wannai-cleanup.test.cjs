@@ -287,7 +287,10 @@ test('favour stops at 100%, with the recorded message', (t) => {
   Favour.gain(p, 3);
   assert.equal(Favour.points(p), 1000);
   assert.equal(varbit(p, 'favour_percentage'), 100);
-  assert.deepEqual(p.messages, ['Your Favour total is now full, you cannot gain any more.<br>Talk to the villagers to get favour converted to trading sticks.']);
+  assert.deepEqual(p.messages, [
+    'Your Favour total is now full, you cannot gain any more.<br>Talk to the villagers to get favour converted to trading sticks.',
+    '<col=dc143c>Well done! You have completed a medium task in the Karamja area. Your Achievement Diary has been updated.</col>',
+  ]);
 });
 
 test('sticks: the fit passes through the three recorded claims', () => {

@@ -510,7 +510,7 @@ test("feeling the device tells the temperature against last time and hurts; with
   assert.equal(f.hits.length, 1);
   assert.ok(f.hits[0].getDamage() >= 3 && f.hits[0].getDamage() <= 8);
   for (const [x, said] of [[60, "The device is very hot, and warmer than last time."], [60, "The device is very hot, and the same temperature as last time."],
-    [600, "The device is ice cold, but colder than last time."], [2, "The device is visibly shaking, and warmer than last time."]]) {
+    [600, "The device is ice cold, but colder than last time."], [2, "The device is visibly shaking and burns to the touch. This must be the spot."]]) {
     f.sent.length = 0;
     f.player.setLocation(target.x + x, target.y, target.z);
     feel(f);

@@ -876,6 +876,13 @@ module.exports = function registerCorsairCurseQuest(api) {
           // Water Strike (the Wiki transcript: "Ithoi casts Water Strike"): cast graphic 93, projectile 94, as CombatSpells.WATER_STRIKE.
           player.getPacketSender().sendProjectile(ithoi.getLocation(), new Location(2530, 2837, 0), 0, 90, 94, 43, 31, null, 51);
           placeDriftwood(player, WET_DRIFTWOOD_OBJECT);
+          // Wiki: he "returns to his hut". The tick he leaves isn't recorded: the next one is ours, to the foot of his stairs.
+          later(scene, 1, () => {
+            const destination = new Location(2532, 2833, 0);
+            const movement = ithoi.getMovementQueue?.();
+            if (movement?.addSteps) movement.addSteps(destination);
+            else ithoi.moveTo(destination);
+          });
         });
       });
       later(scene,22,()=>moveCamera(player,2531,2840,300,1));

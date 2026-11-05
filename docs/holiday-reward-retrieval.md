@@ -155,17 +155,46 @@ from the inventory or the worn tab (cache worn options, params 451+).
   chat line and shows the message box with its line break. Inventory clicks are accepted
   from both the native `inventory:items` component and the legacy inventory id.
 
+## Dialogue options (HolidayToys, Dialogue.HolidayToys.js)
+
+Their words are Wiki transcripts in `data/definitions/npc-dialogues.json`, imported from
+osrsreboxed-db. Zombie head, Eek and Archibald were already there (NPC dialogue pages); the
+Haunted wine bottle, Magic egg ball and Secret santa present item transcripts were added to
+the dumper's explicit item-transcript list. Every item transcript now exports with
+`activation: explicit`, so it plays only from its item and never answers an NPC's Talk-to.
+`holiday-toys.json` (`dialogues`) names the page and section for each option;
+`npc-dialogue:start` plays a page with no NPC when no `npcId` is given.
+
+- Zombie head Question, Eek Talk-to and Archibald Interact play their sections with the cache
+  NPC's chathead (`break_zomb_head`, `hw18_spider_eek`, and the Archibald NPC of the same paint).
+- Haunted wine bottle Talk-to: without a worn ghostspeak amulet the spirit only wails; with one
+  the first, second, third and later conversations follow the transcript. A saved count fills
+  its "[number of times spoken to]" line. The bottle's lines show it in an item box.
+- Magic egg ball Shake: the question menu, "You shake the egg violently." as a message box and
+  the answers in chat. The Wiki writes the answers in red; the dump keeps no colour.
+- Secret santa present Read-tag gives the tag for the next colour to unlock. Talk-to on Bob,
+  Aggie, Benny and then Malignius Mortifer while holding a present offers "I have a present for
+  you!"; each delivery plays the ring-enchant sequence and spotanim on the NPC (Wiki trivia)
+  and unlocks the next colour, saved per account. "Talk about other things." returns to the
+  NPC's ordinary conversation. Change-colour lists the unlocked colours and recolours the
+  present in its slot. Needing to hold a present to deliver is an inference.
+- Santa's list Check has no transcript. The Wiki item page gives its chat lines: the first
+  Check puts the player on the nice or naughty list at random and later checks repeat it. The
+  2022 event's Pass the Coal and dog-petting changes to the list are not implemented.
+
+Tests: `node --test tests/holiday-toy-dialogues.test.cjs` from `server/` after a build.
+
 Not yet covered, and why:
 - Sounds and timing for everything not recorded; the rubber chicken's Wiki jingle id could
   not be matched to the cache.
-- Dialogue-driven options (Zombie head Question, Eek and Haunted bottle Talk-to, Magic egg
-  ball, Treat cauldron Check, Santa's list Check, Secret santa present, Archibald Interact)
-  need their Wiki transcripts imported as dialogue data rather than written into a plugin.
+- Treat cauldron Check: the transcript describes the 2022 event's stored treats, but the Wiki
+  item page says Check now shows the treats deposited by everyone and by the player. No
+  transcript records that wording, so it is left out.
 - The Halloween scarecrow's Change (colour and expression) and its crows, and its plant,
   dig-up and no-space lines (see below).
 - Items from the years the annual event plugins implement (Christmas 2025, Halloween 2025
   and the chosen birthday event) are left to those plugins. The Easter 2026 plugin grants
-  Archibald; his Interact and the Magic egg ball's Shake are dialogue items (above), and the
+  Archibald; his Interact and the Magic egg ball's Shake are covered above, and the
   Eastfloor spade's Dig belongs with the Treasure Trails spade handling.
 
 Seasonal rares get no in-game source here. In OSRS, the discontinued rares (partyhats,

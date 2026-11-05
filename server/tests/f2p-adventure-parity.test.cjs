@@ -154,6 +154,8 @@ test('Dragon Slayer sails through the private fire and crash sequence, then coll
   const npc={getLocation:()=>new core.Location(2853,9637,0)};h.hooks.onNpcDeath[0]({killer:p,npcId:8033,npc});
   h.tick(1);assert.equal(p.configs.get(176),9);assert.equal(p.items.get(I.ELVARGS_HEAD),undefined);assert.equal(h.quest.isComplete(p),false);
   h.tick(10);assert.equal(p.items.get(I.ELVARGS_HEAD),1);assert.ok(p.animations.includes(6654));assert.ok(p.animations.includes(6655));h.tick(3);
+  // seq 6655 is 10.0 ticks in the cache (sum of its frame delays, 300 client ticks), so the player stays held to its end: free at tick 21, not 14 (cache length, ours)
+  assert.equal(p.blocked,true,'still in the head-cut animation 3 ticks after it started');h.tick(6);assert.equal(p.blocked,true);h.tick(1);assert.equal(p.blocked,false);
   h.talk(p,N.OZIACH);h.continueUntil(p,()=>h.quest.isComplete(p));assert.equal(p.items.get(I.ELVARGS_HEAD),0);assert.equal(p.attrs.get('quest.points'),2);assert.deepEqual(p.xp,[[core.Skill.STRENGTH.getIndex(),18650],[core.Skill.DEFENCE.getIndex(),18650]]);
 });
 

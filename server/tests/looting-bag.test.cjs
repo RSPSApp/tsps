@@ -592,6 +592,7 @@ test("bank Deposit-X keeps its selected item across another bag operation", asyn
     const { p, bag, op, send } = actor([selected, other]);
     await op(6);
     const pending = p.getEnteredAmountAction();
+    assert.equal(typeof pending?.execute, "function", "the metadata target has an armed amount callback");
     await op(7);
     assert.equal(bankTabs.held.get(FIRE_RUNE), 13);
     assert.deepEqual(stored(bag), [other], "the other metadata stack compacts into the selected slot");

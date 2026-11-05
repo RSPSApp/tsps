@@ -145,17 +145,20 @@ test("a Camulet rub teleports inside Enakhra's Temple, spends one shared charge 
 test("Humidify credits waterskins refilled in the desert, but not in a settlement or with another vessel", async () => {
   await setup();
   const inDesert = fakePlayer({ x: 3300, y: 3000 });
+  inDesert.getInventory = () => ({ contains: (id) => id === core.ItemIdentifiers.WATERSKIN_3_ });
   const containers = new Map([[core.ItemIdentifiers.WATERSKIN_3_, core.ItemIdentifiers.WATERSKIN_4_]]);
   api.emitCustomEvent("magic:water-containers", { player: inDesert, containers });
   api.emitCustomEvent("magic:humidified", { player: inDesert });
   assert.equal(done(inDesert, "refill-your-waterskins-in-the-desert-using-lunar"), true);
 
   const inTown = fakePlayer({ x: 3350, y: 2980 });
+  inTown.getInventory = () => ({ contains: (id) => id === core.ItemIdentifiers.WATERSKIN_3_ });
   api.emitCustomEvent("magic:water-containers", { player: inTown, containers });
   api.emitCustomEvent("magic:humidified", { player: inTown });
   assert.equal(done(inTown, "refill-your-waterskins-in-the-desert-using-lunar"), false, "a desert settlement does not count");
 
   const bucketsOnly = fakePlayer({ x: 3300, y: 3000 });
+  bucketsOnly.getInventory = () => ({ contains: (id) => id === core.ItemIdentifiers.BUCKET });
   api.emitCustomEvent("magic:water-containers", {
     player: bucketsOnly,
     containers: new Map([[core.ItemIdentifiers.BUCKET, core.ItemIdentifiers.BUCKET_OF_WATER]]),
@@ -185,6 +188,7 @@ test("a successful Ice Barrage hit on a foe outside a desert settlement credits 
   assert.equal(done(wrongSpell, "cast-ice-barrage-against-a-foe-in-the-desert"), false);
 
   const inTown = fakePlayer({ x: 3350, y: 2980 });
+  inTown.getInventory = () => ({ contains: (id) => id === core.ItemIdentifiers.WATERSKIN_3_ });
   PluginManager.emitCombatHitResolved({ attacker: inTown, target: fakePlayer({ x: 3351, y: 2980 }), hit: hit(true) });
   assert.equal(done(inTown, "cast-ice-barrage-against-a-foe-in-the-desert"), false, "a desert settlement does not count");
 });
@@ -216,4 +220,31 @@ test("talking to the mounted KQ head credits the owner through the real object i
 
   const missingHead = { player: fakePlayer(), furniture: { trophy: 0 } };
   assert.equal(Trophies._test.talkTo({ ...missingHead, object: { getId: () => 56127 } }), false, "another trophy has no KQ talk");
+});
+
+
+test("real Humidify producer credits a refilled waterskin but not a bucket-only cast", async (t) => {
+  await setup();
+  const { LunarSpells } = require("../dist/game/content/combat/magic/LunarSpells");
+  const spell = LunarSpells.SELF.get("humidify");
+  t.mock.method(spell, "pay", () => true);
+  function castWith(itemId) {
+    const player = fakePlayer({ x: 3300, y: 3000 });
+    player.getIndex = () => 1;
+    const item = new core.Item(itemId, 1);
+    player.getInventory = () => ({
+      getValidItems: () => [item],
+      contains: (id) => item.getId() === id,
+      refreshItems() {},
+    });
+    player.getSkillManager = () => ({ addExperiences() {} });
+    assert.equal(LunarSpells.handleSelf(player, "Humidify"), true);
+    return { player, item };
+  }
+  const bucket = castWith(core.ItemIdentifiers.BUCKET);
+  assert.equal(bucket.item.getId(), core.ItemIdentifiers.BUCKET_OF_WATER);
+  assert.equal(done(bucket.player, "refill-your-waterskins-in-the-desert-using-lunar"), false);
+  const skin = castWith(core.ItemIdentifiers.WATERSKIN_3_);
+  assert.equal(skin.item.getId(), core.ItemIdentifiers.WATERSKIN_4_);
+  assert.equal(done(skin.player, "refill-your-waterskins-in-the-desert-using-lunar"), true);
 });

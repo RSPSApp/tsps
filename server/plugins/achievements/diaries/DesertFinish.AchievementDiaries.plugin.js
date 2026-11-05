@@ -22,19 +22,19 @@ function inDesert(location) {
   return plane !== 0 || !Object.values(HEAT.towns.boxes).some((box) => inBox(box, x, y));
 }
 
-function waterskinVessel(containers) {
+function waterskinVessel(player, containers) {
   const ids = [
     core.ItemIdentifiers.WATERSKIN_0_,
     core.ItemIdentifiers.WATERSKIN_1_,
     core.ItemIdentifiers.WATERSKIN_2_,
     core.ItemIdentifiers.WATERSKIN_3_,
   ];
-  return ids.some((id) => containers.has(id));
+  return ids.some((id) => containers.has(id) && player.getInventory().contains(id));
 }
 
 function onWaterContainers(event) {
   const player = event.player;
-  if (!player || !inDesert(player.getLocation()) || !waterskinVessel(event.containers)) return;
+  if (!player || !inDesert(player.getLocation()) || !waterskinVessel(player, event.containers)) return;
   pendingHumidify.set(player, core.World.getProcessCycle());
 }
 

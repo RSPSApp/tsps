@@ -205,7 +205,10 @@ test('four native pillar hits defeat the guardian without regeneration; ordinary
   const ordinary = new NPC(guardian.getId(), new Location(2952, 5778));
   ordinary.setHitpoints(30);
   ordinary.process();
-  assert.equal(ordinary.getHitpoints(), 34, 'a normal unflagged NPC retains its existing regeneration');
+  World.processCycle = cycle + ordinary.getRegenTicks();
+  ordinary.process();
+  World.processCycle = cycle;
+  assert.equal(ordinary.getHitpoints(), 31, 'a normal unflagged NPC still regenerates, a hitpoint a minute');
   h.api.onCustomEvent('mining:best-pickaxe', event => { event.pickaxe = { animation: new h.core.Animation(625) }; });
   for (let mined = 1; mined <= 4; mined++) {
     const object = h.objects.find(object => object.getId() === h.core.ObjectIdentifiers.STRUCTURAL_PILLAR);

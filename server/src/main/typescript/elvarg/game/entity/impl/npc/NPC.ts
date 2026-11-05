@@ -8,7 +8,7 @@ import { CombatType } from "../../../content/combat/CombatType";
 import { PendingHit } from "../../../content/combat/hit/PendingHit";
 import { CombatMethod } from "../../../content/combat/method/CombatMethod";
 import { NpcDefinition } from "../../../definition/NpcDefinition";
-import { CoordinateState, NPCMovementCoordinator } from "./NPCMovementCoordinator";
+import { NPCMovementCoordinator } from "./NPCMovementCoordinator";
 import type { Player } from "../player/Player";
 import { FacingDirection } from "../../../model/FacingDirection";
 import { Direction } from "../../../model/Direction";
@@ -169,6 +169,14 @@ export class NPC extends Mobile {
     private scriptedMovement: boolean = false;
     /** Hits show their damage but never lower this NPC's hitpoints (a boss whose HP is a timer). */
     private hitpointsLocked: boolean = false;
+    /**
+     * Hitpoints come back one at a time on the NPC's own timer, in combat or not: every 100 ticks
+     * for most (OSRS Wiki, User:Orion/Regen, measured with Monster Examine: hill giants, bloodvelds,
+     * ankous), faster for some (demons and dagannoth 20, ghosts 50), which content sets.
+     */
+    public static readonly DEFAULT_REGEN_TICKS = 100;
+    private regenTicks: number = NPC.DEFAULT_REGEN_TICKS;
+    private regenCycle: number = -1;
     /** The headbar (healthbar config id and its width) shown over this NPC, when not the default. */
     private healthBarOverride: { id: number; width: number } | null = null;
     /** Scales the combat XP players get for damaging this NPC (OSRS gives some bosses less). */
@@ -330,17 +338,7 @@ export class NPC extends Mobile {
             AreaManager.process(this);
             // "combat:no-regen": a boss whose fight has phases it can't be hit in (Vet'ion's hounds)
             // keeps its damage.
-            if (this.hitpoints > 0 && !this.hitpointsLocked && !this.hasFlag("combat:no-regen") && (this.getCombat().getLastAttack().hasElapsed(20000)
-                || this.movementCoordinator.getCoordinateState() == CoordinateState.RETREATING)) {
-                const max = this.getMaxHitpoints();
-                if (max > this.hitpoints) {
-                    // OSRS hitpoints are integers. Floor the 10% step and the stored value so
-                    // regeneration can never leave a fractional HP (the old code produced
-                    // 1.5 from max 5 and a fractional target could no longer be finished).
-                    const regen = Math.max(1, Math.floor(max * 0.1));
-                    this.setHitpoints(Math.min(max, Math.floor(this.hitpoints + regen)));
-                }
-            }
+            if (this.hitpoints > 0 && !this.hitpointsLocked && !this.hasFlag("combat:no-regen")) this.regenerate();
         }
     }
 
@@ -1004,6 +1002,30 @@ export class NPC extends Mobile {
 
     public isScriptedMovement(): boolean {
         return this.scriptedMovement;
+    }
+
+    /** Ticks between this NPC's regenerated hitpoints (DEFAULT_REGEN_TICKS unless content sets it). */
+    public setRegenTicks(ticks: number): NPC {
+        this.regenTicks = Math.max(1, Math.floor(ticks));
+        return this;
+    }
+
+    public getRegenTicks(): number {
+        return this.regenTicks;
+    }
+
+    /** One hitpoint back each `regenTicks`, never past full; the timer runs whether or not it is hurt. */
+    private regenerate(): void {
+        const cycle = World.getProcessCycle();
+        if (this.regenCycle < 0 || cycle < this.regenCycle) {
+            this.regenCycle = cycle;
+            return;
+        }
+        if (cycle - this.regenCycle < this.regenTicks) return;
+        this.regenCycle = cycle;
+        const max = this.getMaxHitpoints();
+        // OSRS hitpoints are integers: a legacy fractional value is floored as it heals.
+        if (max > this.hitpoints) this.setHitpoints(Math.min(max, Math.floor(this.hitpoints + 1)));
     }
 
     public setHitpointsLocked(locked: boolean): void {

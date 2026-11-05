@@ -1016,13 +1016,10 @@ test('TP battle: the scripted spar keeps real NPC.process() from regenerating th
       npc.process();
     }
     assert.equal(npc.getHitpoints(), 23, 'real out-of-combat regeneration never starts while the pair fights');
-    // Control: the same processing heals it once the combat stopwatch is stale.
-    npc.setHitpoints(23);
-    core.World.processCycle = 100;
-    npc.getCombat().getLastAttack().reset();
-    core.World.processCycle = 140;
+    // Control: the same processing heals it on its own timer, a hitpoint each 100 ticks (OSRS Wiki).
+    core.World.processCycle = 100 + 1 + npc.getRegenTicks();
     npc.process();
-    assert.equal(npc.getHitpoints(), 25, 'the production regeneration path is still live');
+    assert.equal(npc.getHitpoints(), 24, 'the production regeneration path is still live');
   } finally {
     core.World.processCycle = cycle;
   }

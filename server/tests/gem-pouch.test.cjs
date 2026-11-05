@@ -354,6 +354,24 @@ test("a banked duplicate blocks sack upgrade without losing either store", async
   assert.equal(f.p.getBank(0).getAmount(id("gem_satchel")), 1);
 });
 
+test("banked or equipped duplicate real bags block upgrade and preserve inputs", async (t) => {
+  const tote = id("gem_tote");
+  const bag = id("gem_bag");
+  const bagFamily = Storage.FAMILIES.get("gem-bag");
+  for (const where of ["bank", "equipment"]) {
+    const f = actor(t, [I.NEEDLE, I.THREAD, I.IMMACULATE_MOLE_SKIN, tote, bag]);
+    if (where === "bank") f.p.getBank(0).add(new core.Item(bag), false);
+    else f.p.getEquipment().setItem(core.Equipment.HEAD_SLOT, new core.Item(bag));
+    Storage.store(f.p, family, I.UNCUT_OPAL, 4);
+    Storage.store(f.p, bagFamily, I.UNCUT_RUBY, 3);
+    const given = watchXp(t, f);
+    await use(f, tote, bag);
+    assert.deepEqual([has(f, tote), has(f, bag), has(f, I.THREAD), has(f, I.IMMACULATE_MOLE_SKIN), has(f, 33393)], [1, 1, 1, 1, 0]);
+    assert.deepEqual([stored(f, I.UNCUT_OPAL), Storage.amountOf(f.p, bagFamily, I.UNCUT_RUBY)], [4, 3]);
+    assert.deepEqual(given, []);
+  }
+});
+
 test("sack destroy event clears only the last owned copy's store", (t) => {
   const f = actor(t, [33393, 33393]);
   const sack = Storage.FAMILIES.get("gem-sack");
@@ -383,7 +401,7 @@ test("sack ingredients route in either direction and incomplete recipes leave it
 test("invalid saved source records block upgrade without changing either raw store or items", async (t) => {
   const tote = id("gem_tote");
   const bag = id("gem_bag");
-  const cases = ["invalid", [[I.UNCUT_OPAL, 1], [I.UNCUT_OPAL, 2]], [[I.UNCUT_RUBY, 1]], [[I.UNCUT_OPAL, 1.5]], [[I.UNCUT_OPAL, 61]]];
+  const cases = ["invalid", [[]], [[1.5, 1]], [[I.UNCUT_OPAL, 1], [I.UNCUT_OPAL, 2]], [[I.UNCUT_RUBY, 1]], [[I.UNCUT_OPAL, 1.5]], [[I.UNCUT_OPAL, 61]]];
   for (const raw of cases) {
     const f = actor(t, [I.NEEDLE, I.THREAD, I.IMMACULATE_MOLE_SKIN, tote, bag]);
     f.p.setAttribute("storage-items:gem-pouch", raw);

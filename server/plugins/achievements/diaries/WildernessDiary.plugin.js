@@ -19,8 +19,9 @@
  * NPCs and do not count. The Emblem Trader task fires on his conversation's emblems line (the Wiki says
  * only "talk to him about emblems"; that line is inferred as the point of credit). Not credited here, and
  * why, is in the audit table of #2430: the orbs wait on the Kandarin PR's `crafting:made` event, the boss
- * trios need their own sequence state, and the Resource Area (blocked on its gate and fee) is not reachable
- * yet; the Muddy chest and the Rogues' chest are plugins/items/WildernessChests.plugin.js's.
+ * trios need their own sequence state. The Muddy chest and the Rogues' chest are in
+ * plugins/items/WildernessChests.plugin.js; the Resource Area's gate and fee are in areas/ResourceArea.plugin.js
+ * and its three reachable tasks in WildernessResourceDiary.plugin.js (the rune scimitar is not credited).
  */
 const DIARY = "wilderness";
 

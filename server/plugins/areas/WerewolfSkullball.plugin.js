@@ -12,7 +12,10 @@
 //
 // No recording has a game in it, so the ball's speed (a walking NPC's tile a tick), the bounce (back the
 // way it came for the rest of its distance), who may kick it (its owner), the Agility refusal line and
-// the missing sounds and goal jingle are this plugin's choices, not captured behaviour.
+// the missing sounds and goal jingle are this plugin's choices, not captured behaviour. So is a ball
+// resting on a goal's tile moving only along the goal's line. The trainer's pronoun pick mirrors the
+// dialogue plugin's "[He/She/They]" rule; plugins share no formatter, and these lines are overheads,
+// not a played transcript.
 
 const DATA = require("./data/werewolf-skullball.json");
 const TRANSCRIPTS = require("../../data/definitions/npc-dialogues.json");
@@ -105,7 +108,8 @@ function removeBall(player) {
   const game = games.get(player);
   if (!game) return;
   games.delete(player);
-  if (game.npc?.isRegistered?.()) api.removeNpc(game.npc);
+  // removeNpc also takes a ball still waiting in the world's add queue.
+  if (game.npc) api.removeNpc(game.npc);
 }
 
 function spawnBall(player) {
@@ -279,5 +283,6 @@ module.exports = {
   _test: {
     GOAL_EVENT, COURSE, DATA, games, roll, spawnBall, removeBall, experienceFor, pronounText, canStep, goalAt,
     setRandom(fn) { random = fn; },
+    now: () => tick,
   },
 };

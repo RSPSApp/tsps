@@ -76,7 +76,7 @@ const OPS = { Tap: 1, Kick: 3, Shoot: 4, "Show-Goal": 5 };
 function play(player, option, from) {
   const npc = ball(player);
   player.setLocation(new core.Location(from[0], from[1], 0));
-  PluginManager.emitNpcInteraction?.({ player, npc, npcId: npc.getId(), npcIndex: npc.getIndex(), clickType: OPS[option],
+  PluginManager.emitNpcInteraction({ player, npc, npcId: npc.getId(), npcIndex: npc.getIndex(), clickType: OPS[option],
     definition: npc.getCurrentDefinition?.(player) ?? npc.getDefinition?.(), option, location: { x: 0, y: 0, z: 0 }, handled: false });
   for (let i = 0; i < 12 && games.get(player)?.motion?.left > 0; i++) {
     roll();
@@ -171,16 +171,32 @@ test("the final goal is the first goal again: XP by time, the scoreboard, and th
   startGame(player);
   const game = games.get(player);
   game.scored = 10;
-  game.startedTick = -400; // 4:00 before the first roll's tick: exactly par plus one roll
+  game.startedTick = Skullball._test.now() - 400;
   const before = player.getSkillManager().getExperience(core.Skill.AGILITY);
   placeBall(player, 3555, 9866);
   play(player, "Shoot", [3555, 9865]);
   assert.equal(games.has(player), false, "the ball is taken away");
-  const gained = player.getSkillManager().getExperience(core.Skill.AGILITY) - before;
-  assert.ok(gained > 0 && gained <= 750);
+  assert.ok(player.getSkillManager().getExperience(core.Skill.AGILITY) > before);
+  const text = component => sent.filter(([name, , id]) => name === "sendString" && id === C.getComponentId(`werewolf_goal:${component}`)).at(-1)?.[1];
   assert.ok(sent.some(([name, id]) => name === "sendInterface" && id === C.getInterfaceId("werewolf_goal")));
-  assert.ok(sent.some(([name, text, id]) => name === "sendString" && id === C.getComponentId("werewolf_goal:waa_xp") && text === String(gained)));
+  // The ball crosses the goal on its fourth roll: 404 ticks, 4:02, inside the first 3 seconds over par.
+  assert.equal(text("waa_time"), "4:02");
+  assert.equal(text("waa_xp"), "750");
   assert.equal(goals.at(-1).goal, 11);
+});
+
+test("a slower round gives less XP on the scoreboard", t => {
+  const { player, sent } = playerAt(t, 3550, 9866);
+  startGame(player);
+  const game = games.get(player);
+  game.scored = 10;
+  game.startedTick = Skullball._test.now() - 500;
+  placeBall(player, 3555, 9866);
+  play(player, "Shoot", [3555, 9865]);
+  const text = component => sent.filter(([name, , id]) => name === "sendString" && id === C.getComponentId(`werewolf_goal:${component}`)).at(-1)?.[1];
+  // 504 ticks: 5:02, 20 whole steps of 3 seconds over par.
+  assert.equal(text("waa_time"), "5:02");
+  assert.equal(text("waa_xp"), String(750 - 8 * 20));
 });
 
 test("750 XP under four minutes, 8 less for every 3 seconds over", () => {
@@ -208,7 +224,7 @@ test("giving up, or leaving the arena, takes the ball away; others can't kick it
   const npc = ball(owner.player);
   const start = at(owner.player);
   other.player.setLocation(new core.Location(start[0], start[1] - 1, 0));
-  PluginManager.emitNpcInteraction?.({ player: other.player, npc, npcId: npc.getId(), npcIndex: npc.getIndex(), clickType: OPS.Shoot,
+  PluginManager.emitNpcInteraction({ player: other.player, npc, npcId: npc.getId(), npcIndex: npc.getIndex(), clickType: OPS.Shoot,
     definition: npc.getDefinition?.(), option: "Shoot", location: { x: 0, y: 0, z: 0 }, handled: false });
   assert.equal(games.get(owner.player).motion, null, "only the owner's kicks move the ball");
 

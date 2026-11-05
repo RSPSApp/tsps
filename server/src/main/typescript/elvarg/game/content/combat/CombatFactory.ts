@@ -237,6 +237,9 @@ export class CombatFactory {
         PluginManager.emitCustomEvent("combat:hit-rolled", rolled);
         if (rolled.damage !== damage && Number.isFinite(rolled.damage)) damage = Math.max(0, Math.floor(rolled.damage));
 
+        // OSRS Project Rebalance (29 May 2024): successful player zeroes become ones before defences.
+        if (entity.isPlayer() && damage === 0 && range.maximum > 0) damage = 1;
+
         // Wiki (Ward of Arceuus): demons hit 10% less, that 10% rounded down first.
         if (entity.isNpc() && victim.isPlayer() && ArceuusSpells.hasWard(victim)) {
             if (entity.getAsNpc().getCurrentDefinition()?.isDemon?.()) damage -= Math.floor(damage / 10);

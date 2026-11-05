@@ -1,0 +1,67 @@
+{
+  "$comment": "Ralos' Rise prayer training (docs/ralos-rise.md): the exposed altar blesses bones and wine, a chisel breaks blessed bones into shards, the Teomat's libation bowl takes the shards for Prayer XP. Names are gamevals. Bones, their blessed form and their shard count are in bones.json (`blessed`, `shards`). Messages, sequences, sounds and varbits are from rsprox recordings 1104, 1141, 1157 and 4054 (rev 237, Leagues VI) unless their `_` note says ours; amounts and levels from the Wiki (Exposed altar, Libation bowl, Blessed bone shards).",
+  "mesboxChatType": 115,
+  "_mesboxChatType": "A message box's line goes in the chat log too, as this type (the recordings' `message_game type=mesbox`; plugins/interface/clans/Guests.Clans.js).",
+  "altar": {
+    "level": 30,
+    "seq": "human_lockedchest",
+    "sound": 2674,
+    "wines": [
+      { "obj": "jug_wine", "blessed": "jug_wine_blessed" },
+      { "obj": "jug_sunfire_wine", "blessed": "jug_sunfire_wine_blessed" }
+    ]
+  },
+  "breakdown": {
+    "tool": "chisel",
+    "shard": "blessed_bone_shard",
+    "xp": 5,
+    "seq": "human_cutting_restart",
+    "sound": 2586,
+    "intervalTicks": 4,
+    "_intervalTicks": "Wiki (Blessed bone shards): one at once, then one every 4 ticks; recording 1104 tick 29892 (+0, +4).",
+    "extra": [
+      { "obj": "sun_kissed_bone", "shards": 45 },
+      { "obj": "varlamore_bone_statuette01", "shards": 125 },
+      { "obj": "varlamore_bone_statuette02", "shards": 125 },
+      { "obj": "varlamore_bone_statuette03", "shards": 125 }
+    ],
+    "_extra": "Already blessed, so broken down without the altar (Wiki: Sun-kissed bones, Blessed bone statuette)."
+  },
+  "bowl": {
+    "level": 30,
+    "chargeVarbit": "varlamore_prayer_winequant",
+    "wineVarbit": "varlamore_prayer_winetype",
+    "_varbits": "The bowl (multiloc varlamore_libation_bowl) shows varlamore_libation_bowl_empty (Fill) at charge 0 and varlamore_libation_bowl_full (Sacrifice, Check) at 1 and up: its transforms are [empty] with full as the default. winetype is 0 for blessed wine and 1 for blessed sunfire wine (recording 4054 tick 4072).",
+    "chargePerJug": 400,
+    "shardsPerAction": 100,
+    "prayerPerAction": 2,
+    "intervalTicks": 4,
+    "_intervalTicks": "Wiki (Pay-to-play Prayer training): 4 ticks an action when left alone, every tick when clicked; recording 1141 ticks 6688-6704.",
+    "emptyJug": "jug_empty",
+    "wines": [
+      { "obj": "jug_wine_blessed", "type": 0, "xpPerShard": 5, "fill": "You pour some regular blessed wine into the libation<br>bowl.", "name": "blessed wine" },
+      { "obj": "jug_sunfire_wine_blessed", "type": 1, "xpPerShard": 6, "fill": "You pour some blessed sunfire wine into the libation<br>bowl.", "name": "blessed sunfire wine" }
+    ],
+    "fill": { "seq": "human_pickuptable", "sound": 2401 },
+    "sacrifice": { "seq": "human_pray_blessed_bone_shards_01", "sound": 958 },
+    "refillSound": 2401
+  },
+  "messages": {
+    "blessWine": "You bless {count} jugs of wine on the altar.",
+    "blessBones": "You bless {count} bones on the altar.",
+    "nothingToBless": "You don't have anything suitable to bless on this altar. You'll either<br>need to bring bones or wines to bless.",
+    "altarLevel": "You need a Prayer level of {level} to bless anything on this altar.",
+    "superiorLevel": "You need a Prayer level of {level} to bless these bones.",
+    "breakdownLevel": "You need a Prayer level of {level} to break down these bones.",
+    "noChisel": "You need a chisel to break down the bones.",
+    "noWineToFill": "You don't have any blessed wine to fill the libation bowl with.",
+    "noShards": "You don't have any blessed bone shards to sacrifice into the libation<br>bowl.",
+    "noPrayer": "You need at least two prayer points to sacrifice blessed bone shards<br>into the libation bowl.",
+    "noPrayerToContinue": "You need at least two prayer points to continue sacrificing blessed<br>bone shards into the libation bowl.",
+    "outOfWine": "You don't have enough blessed wine to sacrifice any more shards<br>into the libation bowl.",
+    "refill": "You pour some more blessed wine into the libation bowl.",
+    "bowlLevel": "You need a Prayer level of {level} to sacrifice at the libation bowl.",
+    "check": "The libation bowl has enough {wine} left to sacrifice {count} more blessed bone shards."
+  },
+  "_messages": "Ours (no recording or Wiki text): altarLevel, superiorLevel, breakdownLevel, noChisel, bowlLevel and check. The recordings show the bless lines only for 7 to 24 items, so they are used for one too."
+}

@@ -20,7 +20,7 @@
  *   used, bits 7-8 bones placed, bits 9-11 Nazastarool form defeated.
  *
  * Source: LostCityRS/Content scripts/quests/quest_zombiequeen (pinned in #196).
- * Gaps: no world object hot-swapping (rope on the fissure, opened doors) and no
+ * Gaps: no world object hot-swapping for opened doors and no
  * raft/waterfall/cave-in cinematic - the waterfall exit and Bervirius crawl
  * teleport straight to the next tile; Shilo's roaming undead and Rashiliyia's
  * timed summon are only spawned by the transcript's own action markers; the
@@ -37,6 +37,8 @@ module.exports = function registerShiloVillageQuest(api) {
     Skill,
     Equipment,
     Location,
+    GameObject,
+    ObjectManager,
     ItemIdentifiers,
     NpcIdentifiers,
     ObjectIdentifiers,
@@ -104,7 +106,9 @@ module.exports = function registerShiloVillageQuest(api) {
   ]);
 
   const MOUND_OF_EARTH = ObjectIdentifiers.MOUND_OF_EARTH; // 2217
-  const FISSURE_IDS = new Set([ObjectIdentifiers.FISSURE, ObjectIdentifiers.FISSURE_2]); // 2218, 2219
+  const FISSURE = ObjectIdentifiers.FISSURE; // 2218
+  const ROPE_FISSURE = ObjectIdentifiers.FISSURE_2; // 2219
+  const FISSURE_IDS = new Set([FISSURE, ROPE_FISSURE]);
   const CAVE_IN = ObjectIdentifiers.CAVE_IN; // 2220
   const STRANGE_LOOKING_STONE = ObjectIdentifiers.STRANGE_LOOKING_STONE; // 2221
   const LOOSE_ROCKS = ObjectIdentifiers.LOOSE_ROCKS; // 2222
@@ -170,6 +174,11 @@ module.exports = function registerShiloVillageQuest(api) {
   const BONES_SHIFT = 7;
   const BONES_MASK = 0x3;
 
+  /** The cache places the 3x3 Mound of earth at 2921,2999 shape 10, rotation 0. */
+  const MOUND_TILE = { x: 2921, y: 2999, z: 0 };
+  const MOUND_TYPE = 10;
+  const MOUND_FACE = 0;
+
   /** Tomb of Rashiliyia surface centre (LostCity 0_45_48_36_20). */
   const TOMB_CENTER = { x: 2916, y: 3092 };
   const SACRED_ZONE = { minX: 2794, maxX: 2806, minY: 3087, maxY: 3102 };
@@ -200,6 +209,7 @@ module.exports = function registerShiloVillageQuest(api) {
   let quest;
   const nazastaroolByPlayer = new Map();
   const nazNarration = new Map();
+  const pendingLightByPlayer = new Map();
 
   const held = (player, itemId, amount = 1) => player.getInventory().getAmount(itemId) >= amount;
   const give = (player, itemId, amount = 1) => player.getInventory().adds(itemId, amount);
@@ -270,6 +280,31 @@ module.exports = function registerShiloVillageQuest(api) {
 
   function teleport(player, tile) {
     player.moveTo(new Location(tile.x, tile.y, tile.z));
+  }
+
+  function ownedMoundObject(player) {
+    return ObjectManager.objectsAt(new Location(MOUND_TILE.x, MOUND_TILE.y, MOUND_TILE.z))
+      .find((object) => object.getOwner?.() === player && (object.getId() === FISSURE || object.getId() === ROPE_FISSURE));
+  }
+
+  /** The saved stage decides which fissure (or none) this player sees after login. */
+  function ensureMoundObject(player) {
+    if (!player || !quest) return;
+    const stage = quest.getStage(player);
+    if (stage < STAGE_DUG_MOUND) return;
+    const wanted = stage >= STAGE_ROPED_MOUND ? ROPE_FISSURE : FISSURE;
+    const existing = ownedMoundObject(player);
+    if (existing?.getId() === wanted) return;
+    if (existing) ObjectManager.deregister(existing, true);
+    ObjectManager.register(
+      new GameObject(wanted, new Location(MOUND_TILE.x, MOUND_TILE.y, MOUND_TILE.z), MOUND_TYPE, MOUND_FACE, null).setOwner(player),
+      true
+    );
+  }
+
+  function clearMoundObject(player) {
+    const existing = ownedMoundObject(player);
+    if (existing) ObjectManager.deregister(existing, true);
   }
 
   function buildJournal(player, questHandle) {
@@ -426,6 +461,7 @@ module.exports = function registerShiloVillageQuest(api) {
    */
   function handleTrufitusTalk(event) {
     const { player } = event;
+    pendingLightByPlayer.delete(player);
     if (quest.getStage(player) < STAGE_STARTED) return false;
     event.handled = true;
     scene(player, TRUFITUS, trufitusVariant(player));
@@ -436,6 +472,7 @@ module.exports = function registerShiloVillageQuest(api) {
     const npcId = event.npcId ?? event.target?.getId?.();
     if (npcId !== TRUFITUS) return;
     const { player, itemId } = event;
+    pendingLightByPlayer.delete(player);
     event.handled = true;
     let variant = TRUFITUS_ITEM_VARIANTS.get(itemId);
     if (!variant && LOCATING_CRYSTAL_IDS.has(itemId)) {
@@ -876,7 +913,7 @@ module.exports = function registerShiloVillageQuest(api) {
 
   function handleItemOnObject(event) {
     const { player, itemId, objectId } = event;
-    if (itemId === SPADE && objectId === MOUND_OF_EARTH) {
+    if (itemId === SPADE && (objectId === MOUND_OF_EARTH || FISSURE_IDS.has(objectId))) {
       event.handled = true;
       digMound(player);
       return;
@@ -924,6 +961,7 @@ module.exports = function registerShiloVillageQuest(api) {
       return;
     }
     advance(player, STAGE_DUG_MOUND);
+    ensureMoundObject(player);
     scene(player, TRUFITUS, "visiting-ah-za-rhoon-use-spade-on-mound-of-earth");
   }
 
@@ -932,8 +970,8 @@ module.exports = function registerShiloVillageQuest(api) {
       player.sendMessage("You have already seen inside the fissure.");
       return;
     }
-    take(player, itemId);
-    advance(player, STAGE_LIT_MOUND);
+    if (quest.getStage(player) !== STAGE_DUG_MOUND || ownedMoundObject(player)?.getId() !== FISSURE) return;
+    pendingLightByPlayer.set(player, itemId);
     scene(player, TRUFITUS, itemId === ItemIdentifiers.LIT_BLACK_CANDLE
       ? "visiting-ah-za-rhoon-use-lit-black-candle-on-fissure"
       : "visiting-ah-za-rhoon-use-lit-candle-on-fissure");
@@ -951,6 +989,7 @@ module.exports = function registerShiloVillageQuest(api) {
     }
     take(player, ROPE);
     advance(player, STAGE_ROPED_MOUND);
+    ensureMoundObject(player);
     scene(player, TRUFITUS, "visiting-ah-za-rhoon-use-rope-on-fissure");
   }
 
@@ -1103,6 +1142,18 @@ module.exports = function registerShiloVillageQuest(api) {
     const { player } = event;
     if (!player || event.npcId !== TRUFITUS) return;
     const option = String(event.option ?? "");
+    const pendingLight = pendingLightByPlayer.get(player);
+    if (pendingLight !== undefined) {
+      pendingLightByPlayer.delete(player);
+      if (/^yes\b/i.test(option)
+        && quest.getStage(player) === STAGE_DUG_MOUND
+        && ownedMoundObject(player)?.getId() === FISSURE
+        && held(player, pendingLight)) {
+        take(player, pendingLight);
+        advance(player, STAGE_LIT_MOUND);
+      }
+      return;
+    }
     if (option.includes("I can think of nothing nicer")) {
       if (agilityLevel(player) < 32) {
         player.sendMessage("You need an Agility level of at least 32 to squeeze in there.");
@@ -1155,13 +1206,23 @@ module.exports = function registerShiloVillageQuest(api) {
   }
 
   function handleLogout({ player }) {
-    if (player) clearNazastarool(player);
+    if (!player) return;
+    clearNazastarool(player);
+    pendingLightByPlayer.delete(player);
+    clearMoundObject(player);
   }
 
   function handleLogin({ player }) {
     if (!player) return;
     clearNazastarool(player);
+    pendingLightByPlayer.delete(player);
+    ensureMoundObject(player);
     refreshQuestList(player);
+  }
+
+  /** A closed chatbox cancels the pending light confirmation. */
+  function handleInterfaceClose({ player } = {}) {
+    if (player) pendingLightByPlayer.delete(player);
   }
 
   api.persistAttribute(MECH_ATTRIBUTE);
@@ -1188,6 +1249,7 @@ module.exports = function registerShiloVillageQuest(api) {
   api.onCustomEvent("npc-dialogue:condition", handleCondition);
   api.onCustomEvent("npc-dialogue:line", handleNazastaroolLine);
   api.onCustomEvent("npc-dialogue:choice", handleChoice);
+  api.onCustomEvent("interface:close", handleInterfaceClose);
   api.onItemOnNpc(handleItemOnNpc);
   api.onItemOnItem(handleItemOnItem);
   api.onItemAction(handleItemAction);

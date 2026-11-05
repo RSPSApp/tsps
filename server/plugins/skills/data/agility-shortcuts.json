@@ -1147,7 +1147,7 @@
     },
     {
       "name": "Vine (Kharazi Jungle)",
-      "object": [26875,26877],
+      "object": [26875,26877,26884,26886],
       "level": 79,
       "requires": [
         {

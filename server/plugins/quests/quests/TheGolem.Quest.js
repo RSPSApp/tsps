@@ -118,7 +118,7 @@ module.exports = function registerTheGolemQuest(api) {
     + "that the craftsmen of the city built as warriors and servants. The statuette was originally part of a "
     + "mechanism whose purpose is unknown.";
   const CASE_STOLEN = "Recently this display was stolen and its whereabouts are unknown.";
-  const THRONE_IDS = new Set([ObjectIdentifiers.THRONE_10, ObjectIdentifiers.THRONE_11]); // 6301/6302
+  const THRONE_IDS = new Set([6300, ObjectIdentifiers.THRONE_10, ObjectIdentifiers.THRONE_11]); // 6301/6302
   // Uzer temple alcoves. 6303-6306 are the placed base objects; the client
   // transforms them through varbits 349-352 to 6307 (right), 6308 (left) or 6309
   // (empty). A click can arrive as either the base or the transformed id, so

@@ -146,7 +146,9 @@ function recordKing(player, id) {
   }
 }
 
-function onGroundItemsTaken({ player, itemId, amount, groundItem }) {
+function onGroundItemsTaken(event) {
+  const { player, itemId, amount, groundItem } = event;
+  if (PET_ROCK_IDS.has(itemId)) return onPetRockTaken(event);
   if (!active(player) || itemId !== api.core.ItemIdentifiers.SNAPE_GRASS) return;
   if (!inBox(groundItem?.getPosition?.(), WATERBIRTH)) return;
   const total = (Number(player.getAttribute(SNAPE_GRASS_ATTRIBUTE)) || 0) + amount;
@@ -259,8 +261,14 @@ function onWaterSourceFilled({ player, itemId, name, location }) {
   }
 }
 
-function onMenagerieWithdrawn({ player, itemId, house }) {
-  if (!house || house.owner !== player || !active(player, house) || !PET_ROCK_IDS.has(itemId)) return;
+function onPetRockTaken({ player, itemId, amount, source, groundItem }) {
+  const house = player?.getPrivateArea?.();
+  if (!house || house.owner !== player || house.buildingMode || !active(player, house)
+    || source !== "pickup" || amount < 1 || !PET_ROCK_IDS.has(itemId)
+    || groundItem?.getPrivateArea?.() !== house) return;
+  const position = house.getRoomPositionAt?.(player.getLocation());
+  const room = position && house.getRoom?.(position);
+  if (!["MENAGERIE_INDOORS", "MENAGERIE_OUTDOORS"].includes(room?.roomKey)) return;
   if (questStarted(player, FREMENNIK_TRIALS)) {
     complete(player, "pick-up-your-pet-rock-from-your-poh-menagerie");
   }
@@ -344,7 +352,6 @@ module.exports = {
     api.onCustomEvent("teleport:landed", onFairyRingLanded);
     api.onCustomEvent("spell:teleport-arrival", onSpellArrival);
     api.onCustomEvent("water-source:filled", onWaterSourceFilled);
-    api.onCustomEvent("construction:menagerie-withdrawn", onMenagerieWithdrawn);
     api.onCustomEvent("miscellania:approval-changed", onApprovalChanged);
     api.onCustomEvent("npc-dialogue:line", onDialogueLine);
     api.onCustomEvent("fremennik-isles:shield-made", onShieldMade);
@@ -356,7 +363,7 @@ module.exports = {
     inBox, questComplete, questStarted, onShopOpened, onHunterSuccess, onNpcDeath, onGroundItemsTaken,
     onMiningSuccess, onSmeltingSuccess, onCraftingMade, onWoodcuttingSuccess, onFiremakingSuccess,
     onHerbloreMade, onThievingSuccess, onTrollStrongholdEnter, onEagleArrived, onFairyRingLanded, onSpellArrival,
-    onWaterSourceFilled, onMenagerieWithdrawn, onApprovalChanged, onDialogueLine, onShieldMade,
+    onWaterSourceFilled, onPetRockTaken, onApprovalChanged, onDialogueLine, onShieldMade,
     onRunecraftingSuccess, onGodWarsKill, onDiaryTask,
     RELLEKKA, RELLEKKA_FURNACE, RELLEKKA_WELL, FREMENNIK_PROVINCE, WATERBIRTH, KELDAGRIM,
     JATIZSO_MINE, ARZINIAN_MINE, NEITIZNOT_CLAY_FORGE,

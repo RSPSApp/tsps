@@ -87,13 +87,33 @@ test('base Giant squirrel house storage uses the normal POH definition and nativ
 
 test('base Tangleroot house storage uses the normal POH definition and native Take preserves base item',async t=>{const f=await store(t,'skillpetfarming');assert.ok(f.h.getNpcs().some(n=>n.getId()===core.CacheDefinitions.getNpcId('poh_skillpet_farming')));assert.equal(f.h.getNpcs().some(n=>n.getId()===core.CacheDefinitions.getNpcId('skillpet_farming')),false);await view(f);const slot=[...core.CacheDefinitions.getEnumValues(985)].find(([,id])=>id===f.itemId)[0];await send(f,{type:'widget_action',widgetId:(211<<16)|7,groupId:211,childId:7,slot,buttonNum:1});assert.equal(f.p.getInventory().getAmount(f.itemId),1);});
 
-test('native Pet rock menagerie withdrawal credits the Fremennik diary in the owned house', async t => {
-  const f = await store(t, 'pet_rock');
-  // The quest producer answers the real saved quest state.
+test('native Pet rock ground pickup credits only inside the owned non-building menagerie', async t => {
+  const f = actor(t);
+  MaxHouse.maxHouse({ player: f.p });
+  House.enterHouse(f.p, false);
+  const house = House.houseFor(f.p);
+  const entry = house.furnitureEntries().find(e => e.room.roomKey === 'MENAGERIE_INDOORS');
+  assert.ok(entry);
+  f.p.setLocation(entry.location.clone());
+  f.p.needsPlacement = false;
   f.p.setAttribute('quest.fremennik_trials.stage', 1);
-  await view(f);
-  const slot = [...core.CacheDefinitions.getEnumValues(985)].find(([, id]) => id === f.itemId)[0];
-  await send(f, { type: 'widget_action', widgetId: (211 << 16) | 7, groupId: 211, childId: 7, slot, buttonNum: 1 });
-  assert.equal(f.p.getInventory().getAmount(f.itemId), 1);
-  assert.ok((f.p.getAttribute('achievement-diaries:tasks')?.fremennik ?? []).includes('pick-up-your-pet-rock-from-your-poh-menagerie'));
+  const task = 'pick-up-your-pet-rock-from-your-poh-menagerie';
+  const credited = () => (f.p.getAttribute('achievement-diaries:tasks')?.fremennik ?? []).includes(task);
+  const take = () => {
+    const pile = core.ItemOnGroundManager.registers(f.p, new core.Item(core.ItemIdentifiers.PET_ROCK));
+    core.ItemOnGroundManager.pickup(f.p, pile);
+  };
+  house.buildingMode = true;
+  take();
+  assert.equal(credited(), false);
+  house.buildingMode = false;
+  const room = house.getRoom(house.getRoomPositionAt(f.p.getLocation()));
+  const roomKey = room.roomKey;
+  room.roomKey = 'GARDEN';
+  take();
+  assert.equal(credited(), false);
+  room.roomKey = roomKey;
+  take();
+  assert.equal(f.p.getInventory().getAmount(core.ItemIdentifiers.PET_ROCK), 3);
+  assert.equal(credited(), true);
 });

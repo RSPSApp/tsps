@@ -199,11 +199,11 @@ test("medium producers credit only in their area, with their quest gate", () => 
   assert.equal(fired("collect-5-snape-grass-on-waterbirth-island"), 1);
 
   const petOwner = started(player(), "fremennik_trials");
-  const petHouse = { owner: petOwner };
+  const petHouse = { owner: petOwner, getRoomPositionAt: () => ({}), getRoom: () => ({ roomKey: "MENAGERIE_INDOORS" }) };
   petOwner.getPrivateArea = () => petHouse;
-  fire("construction:menagerie-withdrawn", { player: petOwner, itemId: 3695, house: petHouse });
+  fire("ground-items:taken", { player: petOwner, itemId: 3695, amount: 1, source: "pickup", groundItem: { getPrivateArea: () => petHouse } });
   assert.equal(fired("pick-up-your-pet-rock-from-your-poh-menagerie"), 1);
-  fire("construction:menagerie-withdrawn", { player: started(player(), "fremennik_trials"), itemId: 1555 });
+  fire("ground-items:taken", { player: started(player(), "fremennik_trials"), itemId: 1555, amount: 1, source: "pickup", groundItem: { getPrivateArea: () => ({}) } });
   assert.equal(fired("pick-up-your-pet-rock-from-your-poh-menagerie"), 1);
 
   fire("mining:success", { player: player(2400, 4950), itemId: Item.GOLD_ORE });
@@ -322,14 +322,18 @@ test("negative paths: unstarted quests, wrong location, wrong item", () => {
 test("native-context diary guards accept an owned POH and a three-dose super defence", () => {
   reset();
   const owner = started(player(), "fremennik_trials");
-  const house = { owner };
+  const house = { owner, getRoomPositionAt: () => ({}), getRoom: () => ({ roomKey: "MENAGERIE_INDOORS" }) };
   owner.getPrivateArea = () => house;
-  fire("construction:menagerie-withdrawn", { player: owner, itemId: 3695, house });
+  fire("ground-items:taken", { player: owner, itemId: 3695, amount: 1, source: "pickup", groundItem: { getPrivateArea: () => house } });
   assert.equal(fired("pick-up-your-pet-rock-from-your-poh-menagerie"), 1);
-  fire("construction:menagerie-withdrawn", { player: owner, itemId: 1555, house });
-  fire("construction:menagerie-withdrawn", { player: owner, itemId: 3695, house: { owner } });
+  fire("ground-items:taken", { player: owner, itemId: 1555, amount: 1, source: "pickup", groundItem: { getPrivateArea: () => house } });
+  fire("ground-items:taken", { player: owner, itemId: 3695, amount: 1, source: "pickup", groundItem: { getPrivateArea: () => ({ owner }) } });
+  fire("ground-items:taken", { player: owner, itemId: 3695, amount: 1, source: "telegrab", groundItem: { getPrivateArea: () => house } });
+  house.buildingMode = true;
+  fire("ground-items:taken", { player: owner, itemId: 3695, amount: 1, source: "pickup", groundItem: { getPrivateArea: () => house } });
+  house.buildingMode = false;
   owner.isRegistered = () => false;
-  fire("construction:menagerie-withdrawn", { player: owner, itemId: 3695, house });
+  fire("ground-items:taken", { player: owner, itemId: 3695, amount: 1, source: "pickup", groundItem: { getPrivateArea: () => house } });
   assert.equal(fired("pick-up-your-pet-rock-from-your-poh-menagerie"), 1);
 
   fire("herblore:made", { player: player(2650, 3680), itemId: Item.SUPER_DEFENCE_3_ });

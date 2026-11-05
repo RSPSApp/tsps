@@ -617,8 +617,11 @@ module.exports = function registerEaglesPeakQuest(api) {
     player.getInventory().deleteNumber(SWAMP_TAR_ITEM_ID, 1);
     player.getInventory().deleteNumber(YELLOW_DYE_ITEM_ID, 1);
     player.getInventory().deleteNumber(COINS_ITEM_ID, COSTUME_COIN_COST);
-    player.getInventory().adds(EAGLE_CAPE_ITEM_ID, 2);
-    player.getInventory().adds(FAKE_BEAK_ITEM_ID, 2);
+    // The step frees at most 3 slots and gives 4 items, inside a dialogue, so what doesn't fit goes to
+    // the ground. One at a time, as neither stacks and a batch would lie as one item of amount 2.
+    for (const itemId of [EAGLE_CAPE_ITEM_ID, EAGLE_CAPE_ITEM_ID, FAKE_BEAK_ITEM_ID, FAKE_BEAK_ITEM_ID]) {
+      player.getInventory().forceAdd(player, new api.core.Item(itemId, 1));
+    }
     if (quest.getStage(player) < STAGE_DISGUISE) quest.setStage(player, STAGE_DISGUISE);
   }
 

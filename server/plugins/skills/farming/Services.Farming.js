@@ -581,6 +581,7 @@ function askGardener(player, npc, p) {
         pay(player, crop.payment);
         state.protected = true;
         if (state.status === "diseased") { state.status = "growing"; state.nextAt = Model.nextGrowth(Date.now(), Data.stageMinutes(crop, state.stage), farm.offset); }
+        core.PluginManager.emitCustomEvent("farming:protected", { player, npc, patch: p, crop: crop.key });
         Patches.spam(player, `You pay the gardener ${paymentText(crop.payment)} to protect the patch.`);
         gardenerSays(player, npc, `That'll do nicely, ${player.getAppearance().isMale() ? "sir" : "madam"}. Leave it with me - I'll make sure that patch grows for you.`);
     };

@@ -234,7 +234,7 @@ test("the elite skilling tasks check their location and item", (t) => {
   assert.equal(completed(guild, TASK.summerPie), true);
 
   const darts = fixture(t, { at: [3186, 3438, 0] }).player;
-  for (let i = 0; i < 10; i++) dispatch("smithing:success", { player: darts, itemId: core.ItemIdentifiers.RUNE_DART_TIP });
+  dispatch("skills:produced", { player: darts, kind: "smith", itemId: core.ItemIdentifiers.RUNE_DART_TIP, amount: 10 });
   assert.equal(completed(darts, TASK.runeDarts), false, "tips alone do not complete it");
   dispatch("fletching:made", { player: darts, itemId: core.ItemIdentifiers.RUNE_DART, amount: 10 });
   assert.equal(completed(darts, TASK.runeDarts), true);
@@ -307,4 +307,28 @@ test("Plank Make only counts mahogany converted in one Lumber Yard batch", (t) =
   const fresh = setup([3302, 3492, 0]);
   cast(fresh, 20);
   assert.equal(completed(fresh, TASK.lunarPlanks), true, "one fresh 20-plank batch completes it");
+});
+
+// Review regression: each one-log cast must end its own batch.
+test("separate one-log Plank Make casts never accumulate", (t) => {
+  const { player } = fixture(t, { at: [3302, 3492, 0] });
+  player.setSpellbook(core.MagicSpellbook.LUNAR);
+  player.getSkillManager().setCurrentLevels(core.Skill.MAGIC, 99, false);
+  player.getSkillManager().setMaxLevel(core.Skill.DEFENCE, 99);
+  for (const [id, amount] of [[9075, 500], [561, 500], [557, 500]]) player.getInventory().adds(id, amount);
+  player.getInventory().adds(core.ItemIdentifiers.COINS, 21000);
+  for (let i = 0; i < 20; i++) {
+    player.getInventory().adds(core.ItemIdentifiers.MAHOGANY_LOGS, 1);
+    const slot = player.getInventory().getItems().findIndex(item => item?.getId?.() === core.ItemIdentifiers.MAHOGANY_LOGS);
+    LunarSpells.handleItemTarget(player, core.ItemIdentifiers.MAHOGANY_LOGS, slot, "plank make");
+    for (let tick = 0; tick < 10; tick++) core.TaskManager.process();
+  }
+  assert.equal(completed(player, TASK.lunarPlanks), false);
+});
+
+test("one bar of ten rune dart tips followed by ten darts completes the task", (t) => {
+  const { player } = fixture(t, { at: [3186, 3438, 0] });
+  dispatch("skills:produced", { player, kind: "smith", itemId: core.ItemIdentifiers.RUNE_DART_TIP, amount: 10 });
+  dispatch("fletching:made", { player, itemId: core.ItemIdentifiers.RUNE_DART, amount: 10 });
+  assert.equal(completed(player, TASK.runeDarts), true);
 });

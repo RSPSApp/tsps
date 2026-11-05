@@ -1,3 +1,4 @@
+import { lowEndDeviceModeEnabled } from "../../game/plugins/lowenddevice/LowEndDeviceMode";
 import Denque from "denque";
 import { computeSceneViewportRect, type SceneViewportInput } from "./viewportRect";
 import { mat4, vec2, vec3, vec4 } from "gl-matrix";
@@ -189,7 +190,7 @@ import {
 } from "../shaders/Shaders";
 import { KNOWN_WATER_TEXTURE_IDS } from "../water/WaterTextureIds";
 import type { WebGLOsrsRendererHost } from "./hostInterface";
-import { RENDER_CONSTANTS, BrowserQualityProfile, DESKTOP_QUALITY_PROFILE, IOS_SAFARI_QUALITY_PROFILE, MOBILE_TOUCH_QUALITY_PROFILE } from "./constants";
+import { RENDER_CONSTANTS, BrowserQualityProfile, DESKTOP_QUALITY_PROFILE, IOS_SAFARI_QUALITY_PROFILE, MOBILE_TOUCH_QUALITY_PROFILE, LOW_END_QUALITY_PROFILE } from "./constants";
 
 const LOW_END_SCENE_SCALE = 0.6;
 
@@ -419,6 +420,7 @@ export function getCanvasResolutionScale(host: Pick<WebGLOsrsRendererHost, "osrs
 
 export function resolveBrowserQualityProfile(host: WebGLOsrsRendererHost, ): BrowserQualityProfile {
 
+        if (lowEndDeviceModeEnabled) return LOW_END_QUALITY_PROFILE;
         // The platform, not touch hardware: a touchscreen laptop on the desktop layout is a
         // desktop (#358), and must not get the handheld profile's half-resolution scene. A low-end
         // device (a tablet on "desktop site") gets the handheld's view distance.
@@ -461,7 +463,7 @@ export function getSceneResolutionScale(host: WebGLOsrsRendererHost, ): number {
 
         // A low-end device draws the 3D view at reduced resolution (an iPhone's profile at half):
         // the GPU budget goes further and the UI stays sharp.
-        if (isLowEndDevice && !host.osrsClient.isOnLoginScreen()) {
+        if ((isLowEndDevice || lowEndDeviceModeEnabled) && !host.osrsClient.isOnLoginScreen()) {
             const scale = Math.min(LOW_END_SCENE_SCALE, host.syncBrowserQualityProfile().defaultSceneScale || 1);
             host.osrsClient.mobileEffectiveResolutionScale = scale;
             return scale;

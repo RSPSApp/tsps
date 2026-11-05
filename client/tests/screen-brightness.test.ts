@@ -16,7 +16,8 @@ close(gammaFromScreenBrightness(0), 0.9, "the darkest is the classic level 1");
 close(gammaFromScreenBrightness(100), 0.6, "the brightest is the classic level 4");
 close(gammaFromScreenBrightness(50), 0.75, "linear in between");
 assert.ok(gammaFromScreenBrightness(70) < gammaFromScreenBrightness(30), "a higher setting is a lower gamma (brighter)");
-close(gammaFromScreenBrightness(DEFAULT_SCREEN_BRIGHTNESS), 0.795, "the default keeps the scene's long-standing 0.8");
+close(gammaFromScreenBrightness(DEFAULT_SCREEN_BRIGHTNESS), 0.75, "the default is 50% brightness");
+assert.equal(DEFAULT_SCREEN_BRIGHTNESS, 50);
 assert.equal(DEFAULT_SCREEN_BRIGHTNESS % 5, 0, "the default is a slider step");
 
 assert.equal(normalizeScreenBrightness(-20), 0);

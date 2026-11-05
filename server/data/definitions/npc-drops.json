@@ -38678,7 +38678,7 @@
           "section": "Other"
         },
         {
-          "item_id": 30638,
+          "item_id": 30637,
           "name": "Giantsoul amulet",
           "quantity": [
             1,
@@ -53358,6 +53358,63 @@
       "wiki_page": "Corporeal Beast",
       "main_max_roll": 512,
       "entries": [
+        {
+          "item_id": 12823,
+          "name": "Spectral sigil",
+          "quantity": [
+            1,
+            1
+          ],
+          "pre_roll": true,
+          "separate_roll": true,
+          "weight": 3,
+          "out_of": 7,
+          "rarity": 0.0007326,
+          "section": "Sigils",
+          "group_access_weight": 1,
+          "group_access_out_of": 585,
+          "roll_group": "Sigils",
+          "weight_basis": "conditional_group",
+          "published_rarity": "1/1365"
+        },
+        {
+          "item_id": 12827,
+          "name": "Arcane sigil",
+          "quantity": [
+            1,
+            1
+          ],
+          "pre_roll": true,
+          "separate_roll": true,
+          "weight": 3,
+          "out_of": 7,
+          "rarity": 0.0007326,
+          "section": "Sigils",
+          "group_access_weight": 1,
+          "group_access_out_of": 585,
+          "roll_group": "Sigils",
+          "weight_basis": "conditional_group",
+          "published_rarity": "1/1365"
+        },
+        {
+          "item_id": 12819,
+          "name": "Elysian sigil",
+          "quantity": [
+            1,
+            1
+          ],
+          "pre_roll": true,
+          "separate_roll": true,
+          "weight": 1,
+          "out_of": 7,
+          "rarity": 0.0002442,
+          "section": "Sigils",
+          "group_access_weight": 1,
+          "group_access_out_of": 585,
+          "roll_group": "Sigils",
+          "weight_basis": "conditional_group",
+          "published_rarity": "1/4095"
+        },
         {
           "item_id": 4091,
           "name": "Mystic robe top",
@@ -72588,7 +72645,7 @@
           "section": "Other"
         },
         {
-          "item_id": 30638,
+          "item_id": 30637,
           "name": "Giantsoul amulet",
           "quantity": [
             1,
@@ -121199,6 +121256,19 @@
           "always": true,
           "rarity_raw": "Always",
           "section": "100%"
+        },
+        {
+          "item_id": 13576,
+          "name": "Dragon warhammer",
+          "quantity": [
+            1,
+            1
+          ],
+          "pre_roll": true,
+          "weight": 1,
+          "out_of": 3000,
+          "rarity": 0.0003333,
+          "section": "Pre-roll"
         },
         {
           "item_id": 1147,
@@ -196587,6 +196657,19 @@
           "out_of": 93,
           "rarity": 0.0107527,
           "section": "Seeds"
+        },
+        {
+          "item_id": 24777,
+          "name": "Blood shard",
+          "quantity": [
+            1,
+            1
+          ],
+          "separate_roll": true,
+          "weight": 1,
+          "out_of": 1500,
+          "rarity": 0.0006667,
+          "section": "Unique"
         },
         {
           "item_id": 45,

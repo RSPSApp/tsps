@@ -11,6 +11,8 @@ import { PURO_PURO, regionId } from "../game/plugins/implings/ImplingsOverlay";
 import { ImplingsPlugin } from "../game/plugins/implings/ImplingsPlugin";
 import { bindNpcEvents } from "../runelite/impl/NpcEventSource";
 
+assert.equal(ImplingsPlugin.descriptor.enabledByDefault, false, "fresh installs start disabled");
+
 // --- Impling lookup by NPC id ---------------------------------------------------------------------
 assert.equal(IMPLINGS.length, 39, "RuneLite's 39 impling NPC ids");
 assert.equal(new Set(IMPLINGS.map((i) => i.npcId)).size, IMPLINGS.length, "no id twice");

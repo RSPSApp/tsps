@@ -318,6 +318,67 @@ test("Hotfoot: the worn boots cook fish and smelt ore (banked by Endless Harvest
   for (const player of [who.without, who.main]) assert.equal(emit("agility:roll", { player, success: false }).success, false);
 });
 
+test("Hotfoot and Endless Harvest on a Cam Torum calcified rock (#2507): shards and deposits mined, no bar, banked twice", () => {
+  const { MapObjects } = require("../dist/game/entity/impl/object/MapObjects");
+  const { GameObject } = require("../dist/game/entity/impl/object/GameObject");
+  // The real Mining plugin on this test's event bus, so the relics hear its storage:gather and storage:room.
+  const tasks = [];
+  const interactions = new Map();
+  const miningApi = new Proxy({
+    core,
+    getTaskManager: () => ({ submit(task) { task.setRunning(true); tasks.push(task); } }),
+    getObjectManager: () => ({ register() {}, deregister() {} }),
+    onObjectInteraction: (name, actions) => interactions.set(name, actions),
+    onCustomEvent: (name, handler) => (custom[name] = (custom[name] ?? []).concat(handler)),
+    emitCustomEvent: emit,
+  }, { get: (target, key) => (key in target ? target[key] : () => {}) });
+  const Mining = require("../plugins/skills/Mining.plugin");
+  Mining.register(miningApi);
+  const miningTask = tasks.find((task) => task.constructor.name === "MiningTask");
+  // Clue geodes roll on every ore (their own plugin's chances); left out so the scripted rolls stay the ore's.
+  const successHandlers = custom["mining:success"];
+  custom["mining:success"] = [];
+
+  const player = character("cam-torum", "league", { ...HOTFOOT, ...ENDLESS_HARVEST });
+  player.setLocation(new Location(1498, 9540, 1));
+  player.getSkillManager().setMaxLevel(Skill.MINING, 61);
+  player.getSkillManager().setCurrentLevel(Skill.MINING, 61);
+  player.getEquipment().set(core.Equipment.FEET_SLOT, new core.Item(I.SEARING_BOOTS, 1));
+  player.getInventory().adds(I.RUNE_PICKAXE, 1);
+  const rock = new GameObject(core.CacheDefinitions.getLocId("varlamore_mining_rock"), new Location(1497, 9540, 1), 10, 0, null);
+  const originalGet = MapObjects.get;
+  MapObjects.get = (id) => (id === rock.getId() ? rock : null);
+  // Roll 1: no gem, a hit, shards, three of them; roll 2: a calcified deposit; then one shard a roll.
+  const rolls = [0, 0, 0, 0.99, 0, 0, 0.995];
+  Math.random = () => (rolls.length ? rolls.shift() : 0);
+  const miningXp = xp(player, Skill.MINING);
+  try {
+    const event = { player, object: rock, definition: { getName: () => "Calcified rocks" } };
+    interactions.get("Calcified rocks").Mine(event);
+    assert.equal(event.handled, true, "the rock is mineable with both relics");
+    assert.equal(Mining.isMiningActive(player), true);
+    for (let tick = 0; tick < 2; tick++) miningTask.tick();
+    assert.equal(banked(player, I.BLESSED_BONE_SHARDS), 6, "three shards, doubled and banked");
+    assert.equal(player.getInventory().getAmount(I.BLESSED_BONE_SHARDS), 0, "nothing left to the inventory");
+    assert.equal(xp(player, Skill.SMITHING), 0, "shards have no bar: Hotfoot leaves them");
+    const firstXp = xp(player, Skill.MINING) - miningXp;
+    assert.ok(firstXp > 0, "the ore and its extra pay Mining XP");
+    for (let tick = 0; tick < 3; tick++) miningTask.tick();
+    assert.equal(banked(player, I.CALCIFIED_DEPOSIT), 2, "a deposit, doubled and banked");
+    assert.equal(player.getInventory().getAmount(I.CALCIFIED_DEPOSIT), 0);
+    assert.equal(xp(player, Skill.SMITHING), 0, "a deposit has no bar either");
+    assert.equal(Mining.isMiningActive(player), true, "still mining");
+    // Past the rock's 117-tick countdown: Demonic Pacts' Endless Harvest keeps it standing, and mining goes on.
+    for (let tick = 0; tick < 120; tick++) miningTask.tick();
+    assert.equal(Mining.isMiningActive(player), true, "the rock stands under Endless Harvest");
+    assert.ok(banked(player, I.BLESSED_BONE_SHARDS) > 6 + 2 * 35, "a shard a roll, doubled, throughout");
+    assert.equal(player.getInventory().getAmount(I.BLESSED_BONE_SHARDS), 0);
+  } finally {
+    MapObjects.get = originalGet;
+    custom["mining:success"] = successHandlers;
+  }
+});
+
 test("Friendly Forager (Demonic Pacts): Herblore all at once; Raging Echoes' keeps its one at a time", () => {
   const who = cases(FRIENDLY_FORAGER);
   const actions = (player) => emit("skills:actions-per-cycle", { player, skill: Skill.HERBLORE, kind: "clean", actions: 1 }).actions;

@@ -237,9 +237,9 @@ function cooked({ player, itemId }) {
   done(player, TASK.summerPie);
 }
 
-function dartTips({ player, itemId }) {
-  if (itemId !== api.core.ItemIdentifiers.RUNE_DART_TIP || !publicAt(player, VARROCK_CITY)) return;
-  countDarts(player, DART_TIPS_ATTRIBUTE);
+function dartTips({ player, itemId, amount, kind }) {
+  if (kind !== "smith" || itemId !== api.core.ItemIdentifiers.RUNE_DART_TIP || !publicAt(player, VARROCK_CITY)) return;
+  countDarts(player, DART_TIPS_ATTRIBUTE, Number(amount) || 1);
 }
 
 function dartsFletched({ player, itemId, amount }) {
@@ -305,7 +305,7 @@ module.exports = {
     api.onCustomEvent("diary:task", resetYewOnOtherTask);
     api.onCustomEvent("herblore:made", potionMade);
     api.onCustomEvent("cooking:success", cooked);
-    api.onCustomEvent("smithing:success", dartTips);
+    api.onCustomEvent("skills:produced", dartTips);
     api.onCustomEvent("fletching:made", dartsFletched);
     api.onCustomEvent("magic:plank-make", lunarPlank);
     api.onCustomEvent("magic:plank-make-end", lunarPlankBatchEnded);

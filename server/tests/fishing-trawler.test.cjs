@@ -17,7 +17,7 @@ let Shared, Voyage, Rewards, Lobby, Sea;
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, '..'));
   Shared = require('../plugins/minigames/fishingtrawler/Shared.FishingTrawler');
-  Shared.bind({ core });
+  Shared.bind({ core, emitCustomEvent: () => {} });
   ({ Voyage } = require('../plugins/minigames/fishingtrawler/Voyage.FishingTrawler'));
   Rewards = require('../plugins/minigames/fishingtrawler/Rewards.FishingTrawler');
   Lobby = require('../plugins/minigames/fishingtrawler/Lobby.FishingTrawler');
@@ -437,4 +437,19 @@ test('balance: an idle crew sinks before the end, a steady patcher lasts the who
   }
   assert.equal(busy.result, 'returned');
   assert.equal(busy.contribution.get(player), Shared.DATA.points.max);
+});
+
+test('an angler piece is credited to the collection log when it reaches the bank', () => {
+  const obtains = [];
+  Shared.bind({ core, emitCustomEvent: (name, event) => { if (name === 'collection-log:obtain') obtains.push(event); } });
+  const player = fakePlayer();
+  const ids = Shared.ids();
+  player.getInventory = () => ({ contains: () => false, getAmount: () => 0, getAddableAmount: () => 1, adds: () => {} });
+  player.getBank = () => ({ contains: () => false, getAmount: () => 0, getFreeSlots: () => 800,
+    getAddableAmount: (item) => item.getAmount(), add: () => {} });
+  player.getSkillManager = () => ({ getMaxLevel: () => 99, getCurrentLevel: () => 99, addExperiences: () => {} });
+  player.setAttribute(Shared.REWARD_ATTRIBUTE, { items: [[ids.items.anglerHat, 1], [317, 1]], xp: 1 });
+  Rewards.inspectNet({ player });
+  assert.deepEqual(obtains.map((event) => [event.itemId, event.amount]), [[ids.items.anglerHat, 1]]);
+  Shared.bind({ core, emitCustomEvent: () => {} });
 });

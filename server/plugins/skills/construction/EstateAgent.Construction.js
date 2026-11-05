@@ -1,6 +1,6 @@
 "use strict";
 
-const { api, Skill, ItemDefinition, ItemIdentifiers: Items, DialogueChainBuilder, NpcDialogue, StatementDialogue, ActionDialogue, EndDialogue } = require("./Core.Construction");
+const { api, Skill, ItemDefinition, ItemIdentifiers: Items, DialogueChainBuilder, NpcDialogue, StatementDialogue, ItemStatementDialogue, ActionDialogue, EndDialogue } = require("./Core.Construction");
 const Data = require("./Data.Construction");
 const Ids = require("./Ids.Construction");
 const Estate = require("./Estate.Construction");
@@ -245,7 +245,24 @@ function talk(event) {
 }
 
 
+const MESSAGE_BOX_CHAT_TYPE = 115;
+
+/**
+ * Inspect, as captured on the Twisted blueprints (rsprox 2548, rev 229, cycle 35): the chat line
+ * as a message box type, then the object box beside the item. Hosidius's words are the Wiki's.
+ */
+function inspectBlueprints(theme) {
+  return ({ player, itemId }) => {
+    const text = `These blueprints appear to be a set of instructions for<br>creating the ${theme} player-owned house theme.<br>Perhaps an Estate Agent can make use of these?`;
+    player.getPacketSender().sendTypedMessage(MESSAGE_BOX_CHAT_TYPE, text.replace(/<br>/g, " "));
+    player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new ItemStatementDialogue(0, itemId, text)));
+    return true;
+  };
+}
+
 function attachEstateAgents(api) {
+  api.onItemAction("Twisted blueprints", { Inspect: inspectBlueprints("Twisted") });
+  api.onItemAction("Hosidius blueprints", { Inspect: inspectBlueprints("Hosidius") });
   api.onNpcInteraction("Estate agent", { "Talk-to": talk, Relocate: relocate, Redecorate: redecorate });
   api.onNpcInteraction("Estate Agent", { "Talk-to": talk, Relocate: relocate, Redecorate: redecorate });
   api.onNpcInteraction("Alwyn", { "Talk-to": talk, Relocate: relocate, Redecorate: redecorate });

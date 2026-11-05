@@ -320,6 +320,13 @@ function itemOnItem(event) {
 
 // ------------------------------------------------------------------ the slot's options
 
+/** The quiver keeps only an id and an amount, so preset (restricted) ammo would come back plain. */
+function restrictedAmmo(player, worn) {
+  if (!worn || !(worn.isPresetItem() || worn.isUntradeable() || worn.isUnbankable())) return false;
+  player.sendMessage("Preset items cannot be used for this.");
+  return true;
+}
+
 function wornAmmo(player) {
   const item = player.getEquipment().getItems()[core().Equipment.AMMUNITION_SLOT];
   return item && item.getId() > 0 && item.getAmount() > 0 ? item : null;
@@ -345,6 +352,7 @@ function fill(player) {
     player.sendMessage("Dizana's quiver can only hold arrows or bolts.");
     return;
   }
+  if (restrictedAmmo(player, worn)) return;
   const ammo = stored(player);
   if (ammo && ammo.id !== worn.getId()) {
     player.sendMessage(`Your quiver already holds ${name(ammo.id)}.`);
@@ -363,6 +371,7 @@ function swap(player) {
     player.sendMessage("Dizana's quiver can only hold arrows or bolts.");
     return;
   }
+  if (restrictedAmmo(player, worn)) return;
   setWornAmmo(player, ammo);
   store(player, worn ? { id: worn.getId(), amount: worn.getAmount() } : null);
 }

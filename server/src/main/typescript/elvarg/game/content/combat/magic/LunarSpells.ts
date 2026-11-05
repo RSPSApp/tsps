@@ -626,6 +626,8 @@ export class LunarSpells {
             this.repeat(player, PLANK_TICKS, make,
                 () => PluginManager.emitCustomEvent("magic:plank-make-end", { player }),
                 PLANK_FIRST_REPEAT_TICKS);
+        } else {
+            PluginManager.emitCustomEvent("magic:plank-make-end", { player });
         }
         return true;
     }

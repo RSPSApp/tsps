@@ -172,9 +172,10 @@ test("every food, dough, recipe and wine in cooking.json names a cache item", ()
   for (const row of data.cookables) for (const key of ["raw", "cooked", "burnt"]) names.add(row[key]);
   for (const pair of [data.doughs.flour, ...data.doughs.waters]) for (const name of pair) names.add(name);
   for (const row of data.doughs.products) names.add(row.product);
-  for (const row of data.recipes) for (const name of [row.product, ...row.ingredients, ...(row.returns ?? [])]) names.add(name);
+  const ref = (entry) => Array.isArray(entry) ? entry[0] : entry;
+  for (const row of data.recipes) for (const name of [ref(row.product), ...row.ingredients.map(ref), ...(row.returns ?? []).map(ref)]) names.add(name);
   for (const row of data.wines) for (const key of ["grapes", "unfermented", "wine", "bad"]) names.add(row[key]);
-  for (const name of names) assert.ok(Number.isInteger(obj(name)), name);
+  for (const name of names) assert.ok(Number.isInteger(typeof name === "number" ? name : obj(name)), name);
   assert.equal(Cooking.COOKABLE_BY_RAW.size, data.cookables.length, "one row per raw item");
 });
 
@@ -230,6 +231,10 @@ function maker(cooking, carried) {
     getIndex: () => 1,
     isRegistered: () => true,
     getHitpoints: () => 10,
+    getMovementQueue: () => ({ size: () => 0 }),
+    getForceMovement: () => null,
+    getLocation: () => new core.Location(3221, 3218, 0),
+    getPrivateArea: () => null,
     getInventory: () => inventory,
     getBanks: () => [],
     getSkillManager: () => ({ getCurrentLevel: () => cooking, addExperiences: (_skill, gained) => xp.push(gained) }),
@@ -239,7 +244,8 @@ function maker(cooking, carried) {
 }
 
 function useItems(p, used, usedWith) {
-  const event = { player: p, usedItemId: obj(used), usedWithItemId: obj(usedWith), handled: false };
+  const id = (value) => typeof value === "number" ? value : obj(value);
+  const event = { player: p, usedItemId: id(used), usedWithItemId: id(usedWith), handled: false };
   for (const handler of hooks.itemOnItem) if (!event.handled) handler(event);
   return event;
 }
@@ -261,6 +267,53 @@ test("flour on water opens the four-dough menu; pastry dough comes a tick after 
   assert.equal(p.getInventory().getAmount(obj("pot_empty")), 3);
   assert.equal(p.getInventory().getAmount(obj("bucket_empty")), 3);
   assert.ok(p.sent.spam.some(([, text]) => text === "You mix the water and flour to make some pastry dough."));
+});
+
+test("the gnome chocolate-bomb steps use the Wiki materials, XP and four-tick bakes", (t) => {
+  Cooking._test.activeSessions.clear();
+  core.ObjectDefinition.init();
+  const range = new core.GameObject(core.CacheDefinitions.getLocId('fai_varrock_range'), new core.Location(3222, 3218), 10, 0);
+  core.MapObjects.add(range);
+  t.after(() => core.MapObjects.remove(range));
+  const HALF_MADE = 9563, UNFINISHED = 9564;
+  const p = maker(42, [
+    [obj("gianne_dough"), 1], [obj("gnomebowl_mould"), 1], [obj("chocolate_bar"), 4],
+    [obj("equa_leaves"), 1], [obj("chocolate_dust"), 1], [obj("pot_of_cream"), 2],
+  ]);
+  useItems(p, "gianne_dough", "gnomebowl_mould"); ticks(1);
+  assert.equal(p.getInventory().getAmount(obj("raw_gnomebowl")), 1);
+  assert.equal(p.xp.length, 0, "the raw bowl gives no XP");
+
+  const cookTask = submittedCookingTasks.find(task => Number.isInteger(task.cycle));
+  cookTask.setRunning(true);
+  const cookTicks = (count) => { for (let i = 0; i < count; i++) cookTask.tick(); };
+  const cook = (itemId) => {
+    const event = { player: p, object: range, itemId, handled: false };
+    hooks.itemOnObject.find(({ filter }) => !filter.fallback).handler(event);
+  };
+  cook(obj("raw_gnomebowl")); cookTicks(3);
+  assert.equal(p.getInventory().getAmount(obj("half_baked_bowl")), 0, "four ticks, not two");
+  cookTicks(1);
+  assert.equal(p.getInventory().getAmount(obj("half_baked_bowl")), 1);
+  assert.equal(p.xp.at(-1), 30);
+
+  useItems(p, obj("half_baked_bowl"), "chocolate_bar"); ticks(1);
+  assert.equal(p.getInventory().getAmount(HALF_MADE), 1);
+  assert.equal(p.xp.at(-1), 50);
+
+  const xpBeforeBake = p.xp.length;
+  cook(HALF_MADE); cookTicks(3);
+  assert.equal(p.getInventory().getAmount(UNFINISHED), 0, "four ticks again");
+  cookTicks(1);
+  assert.equal(p.getInventory().getAmount(UNFINISHED), 1);
+  assert.equal(p.xp.length, xpBeforeBake, "the second bake gives no XP");
+  Cooking._test.activeSessions.clear();
+  cookTask.setRunning(false);
+
+  useItems(p, UNFINISHED, "chocolate_dust"); ticks(1);
+  assert.equal(p.getInventory().getAmount(obj("chocolate_bomb")), 1);
+  assert.equal(p.getInventory().getAmount(obj("pot_of_cream")), 0);
+  assert.equal(p.xp.at(-1), 110);
 });
 
 test("a pizza base needs 35 Cooking", () => {

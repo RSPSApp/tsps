@@ -10,6 +10,7 @@ import { Item } from "../../../model/Item";
 import { MagicSpellbook } from "../../../model/MagicSpellbook";
 import { Skill } from "../../../model/Skill";
 import { Spell } from "./Spell";
+import { PluginManager } from "../../../../plugins/PluginManager";
 
 export class EffectSpells extends Spell {
 
@@ -52,8 +53,17 @@ export class EffectSpells extends Spell {
                 });
                 player.performGraphic(new Graphic(141, GraphicHeight.MIDDLE));
                 player.performAnimation(new Animation(722));
+                // Wiki, List of sound IDs: 114, bones_to_bananas_all, used for both spells.
+                player.getPacketSender().sendSoundEffect(114, 1, 0, 255);
                 player.getSkillManager().addExperiences(Skill.MAGIC, spell.baseExperience() * i);
                 player.getClickDelay().reset();
+                if (i > 0 && spell === EffectSpells.BONES_TO_PEACHES) {
+                    PluginManager.emitCustomEvent("magic:spell-effect-succeeded", {
+                        player,
+                        spellName: "Bones to peaches",
+                        amount: i,
+                    });
+                }
                 break;
             case EffectSpells.VENGEANCE:
                 if (player.getDueling().inDuel()) {

@@ -339,15 +339,17 @@ function cookOne(player, session) {
         source: "cooking",
         location,
       });
-      Common.api.emitCustomEvent("cooking:success", {
-        player,
-        skill: Skill.COOKING,
-        rawId: cookable.raw,
-        itemId: cookable.cooked,
-        amount,
-        location,
-      });
     }
+    Common.api.emitCustomEvent("cooking:success", {
+      player,
+      skill: Skill.COOKING,
+      rawId: cookable.raw,
+      itemId: cookable.cooked,
+      amount,
+      location: session.location.clone(),
+      objectId: session.objectId,
+      objectLocation: session.location,
+    });
     Common.addXp(player, cookable.xp);
     Common.api.emitCustomEvent("skills:produced", { player, skill: Skill.COOKING, itemId: cookable.cooked, amount: 1, xp: cookable.xp, kind: "cook" });
   } else {

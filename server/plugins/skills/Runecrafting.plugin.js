@@ -408,7 +408,11 @@ function craftOurania(player) {
       const amount = diary && Math.random() * 100 < rune.extraChance ? 2 : 1;
       inventory.addItem(new Item(rune.runeId, amount));
       xp += rune.xp * essence.xpScale;
-      crafted.set(rune, (crafted.get(rune) ?? 0) + 1);
+      const entry = crafted.get(rune) ?? { essence: 0, runeAmount: 0, essenceIds: new Set() };
+      entry.essence++;
+      entry.runeAmount += amount;
+      entry.essenceIds.add(essence.id);
+      crafted.set(rune, entry);
     }
   }
 
@@ -419,7 +423,7 @@ function craftOurania(player) {
   if (diary) spam(player, OURANIA_DIARY_MESSAGE);
   player.getSkillManager().addExperiences(Skill.RUNECRAFTING, xp);
   // The rift guardian rolls per essence at the altar's own base; each rune is reported for its colour.
-  for (const [rune, essence] of crafted) {
+  for (const [rune, { essence, runeAmount, essenceIds }] of crafted) {
     pluginApi.emitCustomEvent("runecrafting:success", {
       player,
       skill: Skill.RUNECRAFTING,
@@ -427,6 +431,9 @@ function craftOurania(player) {
       rolls: essence,
       runeId: rune.runeId,
       amountPerEssence: 1,
+      runeAmount,
+      objectId: OURANIA_ALTAR,
+      essenceIds: [...essenceIds],
     });
   }
 }
@@ -503,11 +510,13 @@ function handleCraftRunes(event) {
   }
 
   let craftedEssence = 0;
+  const craftedEssenceIds = [];
   for (const { essenceId, count, output } of plan) {
     inventory.deleteNumber(essenceId, count);
     inventory.addItem(output);
     craftedEssence += count;
     craftedXp += count * (runeData.essenceXp?.[essenceId] ?? runeData.xp);
+    craftedEssenceIds.push(essenceId);
   }
 
   if (craftedEssence > 0) {
@@ -527,6 +536,8 @@ function handleCraftRunes(event) {
       amountPerEssence,
       source: "altar",
       altarId: event.objectId,
+      objectId: event.objectId,
+      essenceIds: craftedEssenceIds,
     });
   }
 

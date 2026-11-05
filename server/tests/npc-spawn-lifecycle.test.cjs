@@ -157,6 +157,34 @@ for (const [label, id, walkSeq] of [
   assert.equal(npc.getMovementCoordinator().getRadius(), 0);
 });
 
+// Every spawn whose cache walk animation is a seated or lying pose must stand still: with a wander radius
+// it slides around in that pose. 4851 aide sitting cross-legged, 6284 sitting up, 6282 barely conscious.
+// The Corsair crew were found first (#2410); this takes every other row on the same poses, found from the
+// cache so a later import cannot bring one back.
+const SEATED_WALK_SEQUENCES = new Set([4851, 6284, 6282]);
+
+test("no spawn walks in a seated pose", () => {
+  const offenders = require("../data/definitions/npc-spawns.json")
+    .filter(row => typeof row.id === "number" && SEATED_WALK_SEQUENCES.has(CacheDefinitions.getNpc(row.id)?.walkSeqId) && row.wanderRadius !== 0)
+    .map(row => `${row.name} ${row.id} at ${row.x},${row.y},${row.level} radius ${row.wanderRadius ?? "default"}`);
+  assert.deepEqual(offenders, [], "these rows would slide around in a seated or lying pose");
+});
+
+for (const id of [8573, 9193, 14227]) test(`NPC ${id} does not slide around in a seated pose`, (t) => {
+  const row = require("../data/definitions/npc-spawns.json").find(spawn => spawn.id === id);
+  assert.ok(row, "the spawn exists");
+  assert.ok(SEATED_WALK_SEQUENCES.has(CacheDefinitions.getNpc(id).walkSeqId), "its cache walk animation is a seated pose");
+  spawnFile([row]);
+  const [npc] = live(id);
+  assert.ok(npc, "the real loader activates the spawn");
+  t.mock.method(World, "isLocationActive", () => true);
+  t.mock.method(Math, "random", () => 0.1);
+  const steps = t.mock.method(npc.getMovementQueue(), "addSteps");
+  for (let tick = 0; tick < 100; tick++) npc.getMovementCoordinator().process();
+  assert.equal(steps.mock.callCount(), 0, "a seated NPC never attempts to wander");
+  assert.equal(npc.getMovementCoordinator().getRadius(), 0);
+});
+
 for (const [name, parentName, childName, stage, pose] of [
   ["crossroads", "corsair_captain_crossroads", "corsair_captain_1op", 0, "human_ready"],
   ["post-quest", "corsair_captain_throne", "corsair_captain_throne_child", 60, "rd_sitting_at_bench"],

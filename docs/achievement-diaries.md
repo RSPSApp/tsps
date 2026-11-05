@@ -126,5 +126,6 @@ Every lamp (the genie's lamp and the diary lamps) uses OSRS's "Choose the stat y
   - "You need 2 free inventory spaces to claim your reward."
   - "You can no longer claim this reward."
   - "You don't need another … right now."
+  - "You don't have enough inventory space."
   - the diary lamps' message box, "You have been awarded … XP!" (the genie lamp's is captured).
 - **The task message's area name for the other diaries:** "… in the Kourend & Kebos area."

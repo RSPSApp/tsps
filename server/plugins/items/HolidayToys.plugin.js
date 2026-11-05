@@ -33,6 +33,7 @@ function build() {
       seq: entry.seq ? resolve(entry.seq, "getSeqId", "sequence") : null,
       spotanim: entry.spotanim ? resolve(entry.spotanim, "getSpotanimId", "spotanim") : null,
       sound: entry.sound ?? null, say: entry.say ?? null, unlocks: entry.unlocks === true,
+      unsafe: entry.unsafe ?? null,
     };
     for (const item of entry.items) add(resolve(item, "getObjId", "item"), entry.option, action);
   }
@@ -101,6 +102,11 @@ function useToy(api, event) {
   event.handled = true;
   if (player.getHitpoints() <= 0 || player.getStatus() !== core.PlayerStatus.NONE || player.isTeleportingReturn()) return;
   if (action.kind === "animation") {
+    // Wiki (Giant easter egg): refused in PvP areas with its own line.
+    if (action.unsafe && core.Wilderness.levelAt(player.getLocation().getX(), player.getLocation().getY()) > 0) {
+      player.sendMessage(action.unsafe);
+      return;
+    }
     animate(player, action);
     // Rev 232 recording 3200: the first Play-with of a held toy unlocks it at Diango.
     if (action.unlocks) api.emitCustomEvent("holiday-rewards:used", { player, itemId: event.itemId });

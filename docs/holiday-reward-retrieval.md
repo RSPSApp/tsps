@@ -145,7 +145,8 @@ from the inventory or the worn tab (cache worn options, params 451+).
   with no hugs.
 - Cache names plus the Wiki: yo-yo Play/Loop/Walk/Crazy with the Wiki's yoyo1-4 sounds,
   marionettes in their colour, Rubber chicken Dance, Haunted wine bottle Wake-ghost, the
-  Zombie head's Display overhead (no sequence is known), the gingerbread shield's
+  Zombie head's Display overhead (no sequence is known), the Giant easter egg's Easter dance
+  (refused in the Wilderness with the Wiki's line), the Book of Egg's Preach, the gingerbread shield's
   green/red/blue Transform cycle and the ugly jumper's Reverse.
 - Only the WWF toys' Play-with reports `holiday-rewards:used`, the recorded first-use
   unlock; other toys unlock through Diango's normal routes until a recording shows theirs.
@@ -163,7 +164,9 @@ Not yet covered, and why:
 - Placed items (Wintumber tree, Halloween scarecrow) and the Snow globe's Shake and Snow
   need temporary or POH objects; Cat ears Chase needs Hell-Rat proximity rules.
 - Items from the years the annual event plugins implement (Christmas 2025, Halloween 2025
-  and the chosen Easter and birthday events) are left to those plugins.
+  and the chosen birthday event) are left to those plugins. The Easter 2026 plugin grants
+  Archibald; his Interact and the Magic egg ball's Shake are dialogue items (above), and the
+  Eastfloor spade's Dig belongs with the Treasure Trails spade handling.
 
 Seasonal rares get no in-game source here. In OSRS, the discontinued rares (partyhats,
 Halloween masks, Santa hat and the rest) are not obtainable in game. This server's only

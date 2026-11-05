@@ -87,7 +87,8 @@ Uma moeda própria do jogo idle, separada dos pontos de melhoria.
       jogador ganha por hora
 - [x] **Metas diárias**: 3 por dia (aba Goals), que pagam pontos idle e um bônus por completar
       todas; contam online e offline
-- [ ] **Conquistas idle** (marcos permanentes, como 1.000 itens produzidos ou 24h idle)
+- [x] **Conquistas idle**: 5 trilhas com 3 níveis (Gatherer, Maker, Fighter, Patient, Dedicated),
+      que pagam pontos idle; aba Feats
 
 ## P2 - Depois
 

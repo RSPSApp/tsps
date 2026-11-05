@@ -299,7 +299,29 @@ one's progress and reward, the bonus, and the time to the next day's.
 **Working with the Idle screen open**: a restart (auto-resume, idle combat, a production batch)
 needs the player free, and an open interface makes them busy. When the only thing in the way is
 one of Idle Mode's own screens (`Common.registerScreen`), it is closed and the work goes on
-(`Common.readyToWork`); any other interface (a bank, a shop) still waits.
+(`Common.readyToWork`); any other interface (a bank, a shop) still waits. It closes only right
+before acting: with nothing to do (out of materials, no target in reach) it stays open
+(`Common.mayWork` is the check before that).
+
+## Achievements
+
+`server/plugins/modes/idle/Achievements.IdleMode.js`, settings in `"achievements"`: permanent
+milestones in tracks of tiers. Saved as `idle-mode:records`
+`{ counts: { gathered, made, kills, goals, hours }, tiers: { track: tier } }`.
+
+| Track | Counts | Tiers | Points |
+| --- | --- | --- | --- |
+| Gatherer | resources gathered (playing and away) | 1,000 / 10,000 / 100,000 | 50 / 250 / 1,000 |
+| Maker | items made (playing and away) | 500 / 5,000 / 50,000 | 50 / 250 / 1,000 |
+| Fighter | kills of idle combat's target | 100 / 1,000 / 10,000 | 50 / 250 / 1,000 |
+| Patient | hours idle (playing and away) | 24 / 168 / 720 | 100 / 500 / 2,000 |
+| Dedicated | daily goals done (`Goals.onGoalDone`) | 10 / 50 / 200 | 100 / 400 / 1,500 |
+
+A tier reached pays its points once and says so; a long time away can reach several at once. The
+Idle screen's **Feats** tab shows each track's tier and the next tier's progress and reward.
+Counting starts with this version: what was done before it isn't counted.
+
+![The Feats tab](images/idle-feats.png)
 
 ## The Idle screen's tabs
 

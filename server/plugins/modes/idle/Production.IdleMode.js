@@ -254,7 +254,7 @@ function work(player, now) {
   const drained = Object.keys(target.loadout).some((itemId) => inventory.getAmount(Number(itemId)) <= 0);
   const waitSeconds = drained ? restartAfterSeconds : stalledSeconds;
   if (now - state.lastProducedAt < waitSeconds * 1000 || now - state.lastAttemptAt < retrySeconds * 1000) return "producing";
-  if (!Common.readyToWork(player)) return "busy";
+  if (!Common.mayWork(player)) return "busy";
   const location = player.getLocation();
   if (location.getZ() !== target.anchor.z || Common.chebyshev(location, target.anchor) > leashTiles) return "away";
   const product = Common.itemName(target.productId).toLowerCase();
@@ -266,6 +266,7 @@ function work(player, now) {
   if (missing !== null) {
     return pause(player, "out", `Idle production has paused: you're out of ${Common.itemName(missing).toLowerCase()}. Bank some more and make one to restart it.`);
   }
+  if (!Common.readyToWork(player)) return "busy";
   state.lastAttemptAt = now;
   state.awaitingMenu = repeat(player, target);
   return state.awaitingMenu ? "repeated" : "none";

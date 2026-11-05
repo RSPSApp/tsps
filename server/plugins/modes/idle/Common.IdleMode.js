@@ -92,9 +92,15 @@ function registerScreen(groupId) {
   IDLE_SCREENS.add(groupId);
 }
 
+/** Free to go back to work, or only an Idle screen in the way (checked before anything is done). */
+function mayWork(player) {
+  return free(player) || IDLE_SCREENS.has(player.getInterfaceId?.());
+}
+
 /**
  * Free to go back to work, as `free`, except that an open Idle screen is closed for it: the player
- * may leave it open to watch, and a click on the world needs no interface open.
+ * may leave it open to watch, and a click on the world needs no interface open. Called right
+ * before acting, so the screen only closes when there is work to do.
  */
 function readyToWork(player) {
   if (free(player)) return true;
@@ -182,6 +188,7 @@ module.exports = {
   free,
   registerScreen,
   readyToWork,
+  mayWork,
   bank,
   bankHasRoom,
   bankAmount,

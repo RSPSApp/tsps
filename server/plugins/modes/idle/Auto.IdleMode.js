@@ -194,7 +194,7 @@ function resume(player, now) {
   if (state.paused) return "paused";
   const { restartAfterSeconds, retrySeconds, leashTiles, maxFailedAttempts } = config();
   if (now - state.lastGatherAt < restartAfterSeconds * 1000 || now - state.lastAttemptAt < retrySeconds * 1000) return "gathering";
-  if (!Common.readyToWork(player)) return "busy";
+  if (!Common.mayWork(player)) return "busy";
   const location = player.getLocation();
   if (location.getZ() !== target.anchor.z || chebyshev(location, target.anchor) > leashTiles) return "away";
   // The last try gathered nothing: leave that one alone a while, and after a few such tries stop
@@ -212,6 +212,7 @@ function resume(player, now) {
   const usable = (entity) => !(state.skips.get(entity) > now);
   const entity = target.kind === "npc" ? findNpc(player, target, usable) : findObject(player, target, usable);
   if (!entity) return "none";
+  if (!Common.readyToWork(player)) return "busy";
   state.lastAttemptAt = now;
   state.lastEntity = entity;
   if (target.kind === "npc") useNpc(player, entity, target);

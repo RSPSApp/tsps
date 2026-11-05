@@ -766,7 +766,7 @@ module.exports = function registerPathOfGlouphrieQuest(api) {
     const { player, npcId, text } = event;
     if (!player || typeof text !== "string") return;
     if (text.includes("[player name]")) {
-      event.text = text.replace(/\[player name\]/gi, String(player.getUsername()));
+      event.text = text.replace(/\[player name\]/gi, String(player.getDisplayName()));
     }
     if (npcId === KING_BOLREN_NPC_ID && text.includes("Did you have a look down in the caves?")) {
       if (quest.getStage(player) === STAGE_STARTED) quest.setStage(player, STAGE_GOLRIE_TOLD);

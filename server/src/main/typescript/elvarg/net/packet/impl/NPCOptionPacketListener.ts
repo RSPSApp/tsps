@@ -1,5 +1,8 @@
+import { CrossFloor } from "../../../game/CrossFloor";
 import { World } from "../../../game/World";
 import { CombatSpells } from "../../../game/content/combat/magic/CombatSpells";
+import { EffectSpells } from "../../../game/content/combat/magic/EffectSpells";
+import { Spell } from "../../../game/content/combat/magic/Spell";
 import { NpcInteractionManager } from "../../../game/entity/impl/npc/NpcInteractionManager";
 import { PluginManager } from "../../../plugins/PluginManager";
 import { Combat } from "../../../game/content/combat/Combat";
@@ -45,7 +48,7 @@ export class NPCOptionPacketListener {
     // in a deck scene; range must be measured root-to-root.
     const playerRoot = BoatManager.rootLocation(player);
     const npcRoot = BoatManager.rootLocation(npc);
-    if (!playerRoot.isWithinDistance(npcRoot, 24)) { trace("DROPPED: >24 tiles", npc); return; }
+    if (!CrossFloor.visible(playerRoot, npcRoot, 24)) { trace("DROPPED: >24 tiles", npc); return; }
 
     const definition = npc.getCurrentDefinition(player);
     const option = definition?.getActions()?.[clickType - 1]?.toLowerCase();
@@ -61,6 +64,7 @@ export class NPCOptionPacketListener {
       return;
     }
 
+    if (playerRoot.getZ() !== npcRoot.getZ()) return;
     player.setPositionToFace(npc.getLocation());
     const routeEvent = {
       player, npc, definition, npcId: npc.getContentId(player), npcIndex: index, clickType,
@@ -100,7 +104,20 @@ export class NPCOptionPacketListener {
     if (player.getDialogueManager().isActive()) npc.setMobileInteraction?.(player);
   }
 
+  /**
+   * An NPC's menu option done (not Attack): its handler, else the bank, else a plugin. One that
+   * something answered is `npc:operated` { player, npc, npcId, option } (the option lower-cased: a
+   * Talk-to that started a dialogue, a Pet), for whatever counts the deed itself.
+   */
   private static operate(player: any, npc: any, index: number, clickType: number, definition: any, option: string | undefined): void {
+    if (NPCOptionPacketListener.dispatch(player, npc, index, clickType, definition, option)) {
+      PluginManager.emitCustomEvent(NPCOptionPacketListener.OPERATED_EVENT, { player, npc, npcId: npc.getContentId(player), option });
+    }
+  }
+
+  public static readonly OPERATED_EVENT = "npc:operated";
+
+  private static dispatch(player: any, npc: any, index: number, clickType: number, definition: any, option: string | undefined): boolean {
     if (
       NpcInteractionManager.handle(
         player,
@@ -109,12 +126,12 @@ export class NPCOptionPacketListener {
         clickType
       )
     ) {
-      return;
+      return true;
     }
 
     if (option === "bank") {
       player.getBank(player.getCurrentBankTab()).open();
-      return;
+      return true;
     }
 
     const handled = PluginManager.emitNpcInteraction({
@@ -135,20 +152,34 @@ export class NPCOptionPacketListener {
     if (!handled) {
       player.sendMessage("Nothing interesting happens.");
     }
+    return handled;
   }
 
-  public static castSpell(player: any, index: number, spellId: number): boolean {
+  public static castSpell(player: any, index: number, spellId: number, selection?: { name: string; widgetId: number }): boolean {
     if (!player || player.getHitpoints?.() <= 0 || player.busy?.()) return false;
     if (index < 0 || index >= World.getNpcs().capacityReturn()) return false;
     const npc = World.getNpcs().get(index);
-    const spell = CombatSpells.getCombatSpell(spellId);
-    if (!npc || !spell || !BoatManager.rootLocation(player).isWithinDistance(BoatManager.rootLocation(npc), 24) || npc.getHitpoints?.() <= 0) {
+    // Utility spells (Telekinetic Grab in the Mage Training Arena) are scripted on NPCs just as
+    // combat spells are: the fall-back keeps the same rune and XP handling.
+    const combatSpell = CombatSpells.getCombatSpell(spellId);
+    const resolution = {
+      player, spellId, spellName: selection?.name, spellWidget: selection?.widgetId,
+      spell: (combatSpell ?? EffectSpells.forSpellId(spellId)) as Spell | null,
+    };
+    // Plugins can supply scripted utility spells missing from the legacy spell tables.
+    if (!resolution.spell && selection) PluginManager.emitCustomEvent("magic:resolve-spell", resolution);
+    const spell = resolution.spell;
+    if (!npc || !spell || !CrossFloor.visible(BoatManager.rootLocation(player), BoatManager.rootLocation(npc), 24) || npc.getHitpoints?.() <= 0) {
       player.getMovementQueue().reset();
       return false;
     }
     const areaPermission = (npc.getPrivateArea?.() ?? npc.getArea?.())?.canCastOnNpc?.(player, npc, spell);
-    const allowed = areaPermission ?? !!npc.getCurrentDefinition?.(player)?.isAttackable?.();
+    // Only a CombatSpell may enter Combat.castSpellOn: an effect spell has no hits/maximumHit, so
+    // the combat method would throw on it. Utility spells stay on the scripted route, which also
+    // rejects them when no plugin takes the cast.
+    const allowed = !!combatSpell && (areaPermission ?? !!npc.getCurrentDefinition?.(player)?.isAttackable?.());
     if (!allowed) {
+      if (BoatManager.rootLocation(player).getZ() !== BoatManager.rootLocation(npc).getZ()) return false;
       player.getMovementQueue().reset();
       if (areaPermission === false) return false;
       return NPCOptionPacketListener.castSpellOnScriptedNpc(player, index, npc, spell);
@@ -167,15 +198,19 @@ export class NPCOptionPacketListener {
     const privateArea = npc.getPrivateArea();
     const playerBoat = BoatManager.getBoatAboard(player);
     const npcBoat = BoatManager.getBoatAboard(npc);
+    // Telekinetic Grab reaches across the Theatre's maze walls; utility spells are not checked
+    // for a combat line of sight.
+    const needsLineOfSight = !(spell instanceof EffectSpells);
     if (playerLocation.getZ() !== targetLocation.getZ() ||
         !playerLocation.isWithinDistance(targetLocation, 10) ||
         (privateArea && privateArea !== player.getPrivateArea()) ||
         (npc.getOwner() && npc.getOwner() !== player) ||
         (npcBoat && npcBoat !== playerBoat) ||
-        !RegionManager.canProjectileAttackTarget(player, npc) ||
+        (needsLineOfSight && !RegionManager.canProjectileAttackTarget(player, npc)) ||
         !spell.canCastOnTarget(player, npc) || !spell.canCast(player, false)) return false;
 
     let consumed = false;
+    let consumptionAttempted = false;
     const event = {
       player,
       npc,
@@ -185,6 +220,7 @@ export class NPCOptionPacketListener {
       spellId: spell.spellId(),
       location: { x: targetLocation.getX(), y: targetLocation.getY(), z: targetLocation.getZ() },
       consumeRunes: () => {
+        consumptionAttempted = true;
         if (consumed || !spell.canCast(player, true)) return false;
         consumed = true;
         player.setPositionToFace(targetLocation);
@@ -197,6 +233,11 @@ export class NPCOptionPacketListener {
       },
       handled: false,
     };
-    return PluginManager.emitSpellOnNpc(event) && consumed;
+    const handled = PluginManager.emitSpellOnNpc(event);
+    // A scripted cast may already have refused with its own resource/cooldown feedback.
+    if (!handled && !consumptionAttempted && !npc.getCurrentDefinition?.(player)?.isAttackable?.()) {
+      player.sendMessage("You can't attack this npc.");
+    }
+    return handled && consumed;
   }
 }

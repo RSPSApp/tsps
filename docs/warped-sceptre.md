@@ -1,5 +1,7 @@
 # Warped sceptre charging
 
+Its built-in spell and combat method are the shared powered staff's ([powered-staves.md](powered-staves.md)).
+
 Live OSRS evidence comes from rsprox recording **3899** (revision 235),
 with charge checks also present in recording **13** (revision 223).
 The active cache confirms sceptre item IDs 28583 (uncharged) and 28585

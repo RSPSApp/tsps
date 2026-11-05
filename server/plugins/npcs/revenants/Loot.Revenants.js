@@ -38,6 +38,7 @@ function dropLoot({ killer, npc, npcId }) {
   const avarice = player.getEquipment().getItems()[AMULET_SLOT]?.getId?.() === ITEMS.AMULET_OF_AVARICE;
   const where = npc.getLocation().clone();
   for (const drop of drops) {
+    Revenants.api.emitCustomEvent("collection-log:obtain", { player, itemId: drop.itemId, amount: drop.amount });
     let amount = drop.amount;
     if (drop.itemId === ITEMS.ETHER) amount = Bracelet.absorbEther(player, amount);
     if (amount <= 0) continue;

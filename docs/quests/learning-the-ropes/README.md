@@ -21,6 +21,13 @@ None recorded.
 
 ## Runs
 
+### 2026-11-02 · agent · capture audit
+
+- **Source:** rsprox database recording 826 (rev 234) and the OSRS Wiki.
+- **Result:** the completed journal now matches the captured 39-line Tutorial Island narrative; the quest was renamed Learning the Ropes on 11 February 2026. Completion at tutorial step 671 and the stage following varp 281 to 1000 were already correct.
+- **Checked:** `node tests/qh728-q129.test.cjs` (7 pass, including the new journal case).
+- **Not checked:** no in-progress journal capture and no live replay.
+
 ### date not recorded · agent · model not recorded
 
 - **Source:** issue [#728](https://github.com/RSPSApp/tsps/issues/728) supplemental (q129); moved here from its ledger on 2026-10-29. Proven against plugin hashes, not a commit, so a later plugin change is not flagged automatically.

@@ -3,8 +3,12 @@
 // collision and the live-game transport table (plugins/agent/data/transports.json, see
 // scripts/import-shortest-path.cjs); every hop is a normal client click (move, object_option,
 // npc_option), so a door or boat that doesn't work here stops the trip and says where.
+//
+// skipWalks (unwatched runs): the walking between transports is moved over in hops along the
+// planned path instead of walked, except a few tiles either side of every Area change and every
+// wilderness tile. Transports are still clicked. Every hop is listed in the result's legs.
 const path = require("node:path");
-const { planTravel, toLegs, indexTransports, unmetRequirements, key, BLOCKED } = require("./TravelRoutes.AgentMcp");
+const { planTravel, toLegs, indexTransports, unmetRequirements, skipPlan, key, BLOCKED } = require("./TravelRoutes.AgentMcp");
 
 const DATA_FILE = path.join(__dirname, "..", "data", "transports.json");
 // Path tiles walked per click: well inside the route finder's 128-tile window.
@@ -52,12 +56,12 @@ function describeLeg(leg) {
   return { transport: describe(leg.transport) };
 }
 
-module.exports = function registerTravelTools(ctx) {
+module.exports = function registerTravelTools(ctx, { areas }) {
   const {
     core, tool, z, player, find, send, tile, settle, sleepTicks, takeMessages, takeClient, area,
     nearby, npcClick, items, activity, waitingOn, movementBlocked,
   } = ctx;
-  const { World, Skill, RegionManager, MapObjects, ObjectDefinition, PluginManager } = core;
+  const { World, Skill, RegionManager, MapObjects, ObjectDefinition, PluginManager, Location, Wilderness } = core;
 
   // Missing map squares are off the map, not open floor.
   const regions = new Map();
@@ -227,6 +231,37 @@ module.exports = function registerTravelTools(ctx) {
     return { result: "budget" };
   };
 
+  // skipWalks: hop over the stretches skipPlan allows, walk the rest with walkLeg.
+  const skipLeg = async (username, leg, run, deadline, messages, done) => {
+    const here = tile(find(username).getLocation());
+    // From the path tile nearest the player, as walkLeg picks up.
+    let start = 0;
+    leg.tiles.forEach((t, i) => {
+      if (t.z === here.z && chebyshev(t, here) <= chebyshev(leg.tiles[start], here)) start = i;
+    });
+    const tiles = leg.tiles.slice(start);
+    const at = (t) => new Location(t.x, t.y, t.z);
+    const steps = skipPlan(tiles, { areaAt: (t) => areas.get(at(t)), unsafe: (t) => Wilderness.isInLocation(at(t)) });
+    let from = 0;
+    for (const step of steps) {
+      if (World.getProcessCycle() >= deadline) return { result: "budget" };
+      if ("walk" in step) {
+        const result = await walkLeg(username, { kind: "walk", tiles: tiles.slice(from, step.walk + 1) }, run, deadline, messages, done);
+        if (result.result !== "arrived") return result;
+        from = step.walk;
+        continue;
+      }
+      const to = tiles[step.skip];
+      find(username).moveTo(at(to));
+      await sleepTicks(1);
+      messages.push(...takeMessages(find(username)));
+      done.skipped += step.skip - from;
+      done.legs.push({ skipped: step.skip - from, from: tiles[from], to });
+      from = step.skip;
+    }
+    return { result: "arrived" };
+  };
+
   const transportLeg = async (username, leg, deadline, messages) => {
     const p = find(username);
     const { transport, arrive } = leg;
@@ -265,7 +300,7 @@ module.exports = function registerTravelTools(ctx) {
 
   tool(
     "travel_to",
-    "Travel to a tile like a player: plans over the map's collision plus the live game's doors, stairs, ladders, shortcuts, boats and other transports (requirements checked: skills, items, quests, varbits), then walks it with normal clicks, opening and climbing on the way. Returns after arriving, when a dialogue or interface needs answering (answer it with the dialogue tools, then call again), when a leg fails (blocked: what was clicked, the reason and game messages; the next call routes around it), or when the tick budget runs out (call again to continue). Never teleports. Main world only.",
+    "Travel to a tile like a player: plans over the map's collision plus the live game's doors, stairs, ladders, shortcuts, boats and other transports (requirements checked: skills, items, quests, varbits), then walks it with normal clicks, opening and climbing on the way. Returns after arriving, when a dialogue or interface needs answering (answer it with the dialogue tools, then call again), when a leg fails (blocked: what was clicked, the reason and game messages; the next call routes around it), or when the tick budget runs out (call again to continue). Never teleports, unless skipWalks is set. Main world only.",
     {
       player, x: z.number().int().min(0).max(16383), y: z.number().int().min(0).max(16383), z: z.number().int().min(0).max(3).default(0),
       exact: z.boolean().default(false).describe("Require the exact tile, not one next to it"),
@@ -273,8 +308,12 @@ module.exports = function registerTravelTools(ctx) {
       budgetTicks: z.number().int().min(10).max(MAX_BUDGET_TICKS).default(DEFAULT_BUDGET_TICKS)
         .describe("Game ticks to spend this call before returning progress"),
       retryFailed: z.boolean().default(false).describe("Forget transports that failed on this trip and try them again"),
+      skipWalks: z.boolean().default(false).describe(
+        "Unwatched runs only: move over the walking between transports in hops along the planned path instead of walking it. "
+        + "Tiles near an Area change and wilderness tiles are still walked, and transports still clicked. Each hop is listed in legs; "
+        + "record the travel as walks skipped."),
     },
-    async ({ player: username, x, y, z: level, exact, run, budgetTicks, retryFailed }) => {
+    async ({ player: username, x, y, z: level, exact, run, budgetTicks, retryFailed, skipWalks }) => {
       const deadline = World.getProcessCycle() + budgetTicks;
       let p = find(username);
       // Still riding from the last call (a boat, a cutscene, a climb): let it land first.
@@ -295,14 +334,14 @@ module.exports = function registerTravelTools(ctx) {
         trips.set(username.toLowerCase(), trip);
       }
       const messages = [...takeMessages(p)];
-      const done = { walked: 0, legs: [] };
+      const done = { walked: 0, skipped: 0, legs: [] };
       const taken = new Set();
       const report = (result, extra = {}) => {
         const now = find(username);
         if (result === "arrived") trips.delete(username.toLowerCase());
         return {
           result, ...tile(now.getLocation()), area: area(now), ...extra,
-          walkedTiles: done.walked, legs: done.legs,
+          walkedTiles: done.walked, ...(skipWalks ? { skippedTiles: done.skipped } : {}), legs: done.legs,
           ...(trip.failed.size ? { routedAround: [...trip.failed.values()] } : {}),
           messages, client: takeClient(now),
         };
@@ -332,9 +371,9 @@ module.exports = function registerTravelTools(ctx) {
           return report("blocked", { reason, transport: describe(leg.transport) });
         }
         if (leg.kind === "transport") taken.add(transportKey(leg.transport));
-        const result = leg.kind === "walk"
-          ? await walkLeg(username, leg, run, deadline, messages, done)
-          : await transportLeg(username, leg, deadline, messages);
+        const result = leg.kind === "transport"
+          ? await transportLeg(username, leg, deadline, messages)
+          : await (skipWalks ? skipLeg : walkLeg)(username, leg, run, deadline, messages, done);
         if (leg.kind === "transport") {
           done.legs.push({
             ...describe(leg.transport), result: result.result, clicked: result.clicked,

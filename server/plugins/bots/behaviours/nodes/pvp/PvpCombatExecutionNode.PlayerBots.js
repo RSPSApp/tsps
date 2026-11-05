@@ -11,8 +11,8 @@ const { GameConstants } = require("../../../../../src/main/typescript/elvarg/gam
 const { ItemDefinition } = require("../../../../../src/main/typescript/elvarg/game/definition/ItemDefinition");
 const { TimerKey } = require("../../../../../src/main/typescript/elvarg/util/timers/TimerKey");
 const { getPotionName } = require("../../../../items/Potions.plugin");
+const { usesSmiteOnlyPrayers } = require("../../pvp/WildernessHotspotRegistry.PlayerBots");
 const { randomInRange } = require("../../navigation/Navigation.PlayerBots");
-const { maybeChat } = require("../../pvp/PvpChatter.PlayerBots");
 const {
   getPvpCombatSnapshot,
   getWeaponId,
@@ -290,10 +290,11 @@ class PvpCombatExecutionNode {
 
     this.reviewItemProtection(player, state, target);
     const confidenceTier = Number(resolvedProfile?.confidenceTier ?? 0);
-    // Novices only protect items; standard and above also manage combat prayers.
+    const smiteOnly = usesSmiteOnlyPrayers(player, state);
+    // Novices only protect items, with Smite also available at Smite-only sites.
     // Tiers below veteran lean on targetStyleReactionTicks
     // so they switch late rather than reading the style instantly.
-    if (confidenceTier < 2) {
+    if (confidenceTier < 2 && !smiteOnly) {
       pvp.nextPrayerReviewAt =
         nowMs + randomInRange(basePrayerReviewMinMs, basePrayerReviewMaxMs);
       return false;
@@ -310,9 +311,9 @@ class PvpCombatExecutionNode {
       nowMs,
       resolvedProfile
     );
-    const smiting = this.shouldSmite(state, target, resolvedProfile, targetUsername) &&
+    const smiting = (smiteOnly || this.shouldSmite(state, target, resolvedProfile, targetUsername)) &&
       this.PrayerHandler.canUse(player, this.core.PrayerData.prayerData.get(this.PrayerHandler.SMITE), false);
-    const desiredProtectionPrayer = smiting ? this.PrayerHandler.SMITE : this.resolveProtectionPrayer(
+    const desiredProtectionPrayer = smiting ? this.PrayerHandler.SMITE : smiteOnly ? null : this.resolveProtectionPrayer(
       player,
       target,
       confidenceTier,
@@ -340,7 +341,7 @@ class PvpCombatExecutionNode {
     }
 
     const offensivePrayerIds =
-      flickPrayers && player.getCombat?.()?.willAttackBeReadyIn?.(1) !== true
+      confidenceTier < 2 || (flickPrayers && player.getCombat?.()?.willAttackBeReadyIn?.(1) !== true)
         ? []
         : this.resolveOffensivePrayerPriority(state, playerCombatType);
     const preferredOffensivePrayer = offensivePrayerIds[0] ?? null;
@@ -574,7 +575,6 @@ class PvpCombatExecutionNode {
     }
 
     const profile = this.getProfile?.(state) ?? null;
-    maybeChat(player, state, nowMs);
     this.reviewItemProtection(player, state, target);
     if (this.drinkPrayerPotion(player, profile) || this.drinkStartCombatPotion(player, state)) {
       this.setPhase?.(state, this.pvpPhase?.COMBAT ?? "combat");

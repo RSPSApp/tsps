@@ -166,3 +166,29 @@ export function linksByField(links: readonly CacheLink[] | undefined): Array<{ f
 }
 
 export const linkTone = (link: CacheLink): "known" | "missing" | "unverified" => link.exists;
+
+/** Keep structured cache fields lossless while editing; reject malformed input before saving. */
+export function formatFieldValue(value: unknown): string {
+    return value === undefined ? "" : typeof value === "object" && value !== null ? JSON.stringify(value) : String(value);
+}
+export function parseFieldValue(field: CacheField, raw: string): unknown {
+    const text = raw.trim();
+    const parse = (type: string, value: unknown): boolean => {
+        if (type.endsWith("[]")) return Array.isArray(value) && value.every(entry => entry === null && field.name === "actions" || parse(type.slice(0, -2), entry));
+        if (type === "int") return typeof value === "number" && Number.isInteger(value);
+        if (type === "number") return typeof value === "number" && Number.isFinite(value);
+        if (type === "map") return value !== null && typeof value === "object" && !Array.isArray(value);
+        return typeof value === type;
+    };
+    let value: unknown = raw;
+    if (field.type.endsWith("[]") || field.type === "map") {
+        try { value = JSON.parse(text || (field.type === "map" ? "{}" : "[]")); }
+        catch { throw new Error(`${field.name}: enter valid JSON (${field.type})`); }
+    } else if (field.type === "int" || field.type === "number") value = text ? Number(text) : NaN;
+    else if (field.type === "boolean") value = text === "true" ? true : text === "false" ? false : undefined;
+    if (!parse(field.type, value)) throw new Error(`${field.name}: expected ${field.type}`);
+    return value;
+}
+export function initialOverrides(fields: readonly CacheField[], name: string): Record<string, unknown> {
+    return name && fields.some(field => field.name === "name") ? { name } : {};
+}

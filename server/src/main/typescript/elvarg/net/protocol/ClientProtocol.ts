@@ -49,6 +49,7 @@ export const enum ServerPacket {
 
 export type PlayerAppearance = {
   gender: number;
+  pronouns?: number;
   colors: number[];
   kits: number[];
   equip: number[];
@@ -265,6 +266,8 @@ export type ClientMessage =
   | { type: "object_option"; id: number; x: number; y: number; clickType?: number; action?: string }
   | { type: "world_entity_option"; index: number; clickType: number }
   | { type: "chat"; text: string; messageType: "public" | "game" | "friends_chat"; autoChat?: boolean; style?: ChatStyle }
+  | { type: "clan_chat"; clanType: number; text: string }
+  | { type: "clan_channel_action"; action: "kick" | "ban" | "mute"; name: string; value: number }
   | { type: "friends_chat_action"; action: FriendsChatAction }
   | { type: "private_message"; recipient: string; text: string }
   | { type: "chat_filter"; publicMode: number; privateMode: number; tradeMode: number }
@@ -416,6 +419,8 @@ function clientPacketLength(opcode: number): number | undefined {
 
 /** The CHAT packet's kind byte for public autochat (0 public, 1 game, 2 friends chat). */
 const CHAT_KIND_AUTOCHAT = 3;
+/** Clan chat (chat_sendclan): the clan type follows the kind byte. */
+const CHAT_KIND_CLAN = 4;
 
 export function decodeClientPackets(frame: Buffer): ClientMessage[] {
   const messages: ClientMessage[] = [];
@@ -789,12 +794,22 @@ export function decodeClientPacket(frame: Buffer): ClientMessage {
     case ClientPacket.CHAT: {
       // Kind 3 is public chat the client's autochat timer repeats (chat_sendpublic type 1).
       const kind = reader.byte();
+      if (kind === CHAT_KIND_CLAN) {
+        const clanType = (reader.byte() << 24) >> 24; // -1 is the listened guest clan
+        return { type: "clan_chat", clanType, text: reader.string() };
+      }
       const messageType = (["public", "game", "friends_chat"] as const)[kind] ?? "public";
       const text = reader.string();
       const style = readChatStyle(reader);
       return kind === CHAT_KIND_AUTOCHAT
         ? { type: "chat", messageType: "public", autoChat: true, text, ...(style && { style }) }
         : { type: "chat", messageType, text, ...(style && { style }) };
+    }
+    case HighClientPacket.CLAN_CHANNEL_ACTION: {
+      const action = (["kick", "ban", "mute"] as const)[reader.byte()];
+      const value = reader.byte();
+      const name = reader.string();
+      return action ? { type: "clan_channel_action", action, name, value } : { type: "raw", opcode, payload: frame.subarray(frame.length - length) };
     }
     case HighClientPacket.FRIENDS_CHAT_ACTION: {
       const actionCode = reader.byte();
@@ -1030,6 +1045,8 @@ export const ChatType = {
   MODAUTOTYPER: 91,
   /** A server broadcast ("Lethal fog will soon fill the island! ..." in Last Man Standing). */
   BROADCAST: 14,
+  /** friendschatnotification: shown on the chat-channel tab as well (the Chambers of Xeric's raid messages). */
+  FRIENDS_CHAT_NOTIFICATION: 11,
   /** Filtered out with "Filter: on" (the Game tab's filter). */
   SPAM: 105,
   /** An NPC's overhead line, shown as "Name: text"; the NPC's name goes in `from`. */
@@ -1066,6 +1083,12 @@ function chatStyleBytes(style: ChatStyle | undefined): Buffer {
   return Buffer.from([style.colour & 0xff, style.effect & 0xff, ...(style.pattern ?? []).map((value) => value & 0xff)]);
 }
 
+const LEGACY_CHAT_COLOURS: Record<string, string> = {
+  red: "ff0000", gre: "00ff00", blu: "0000ff", yel: "ffff00", cya: "00ffff", mag: "ff00ff",
+  whi: "ffffff", bla: "000000", lre: "ff9040", dre: "800000", dbl: "000080",
+  or1: "ffb000", or2: "ff7000", or3: "ff3000", gr1: "c0ff00", gr2: "80ff00", gr3: "40ff00",
+};
+
 export function encodeChatMessage(
   messageType: "game" | "public" | "private_in" | "private_out" | "channel" | "clan" | "trade" | "server",
   text: string,
@@ -1087,6 +1110,11 @@ export function encodeChatMessage(
     server: 0,
   };
   const type = chatType ?? defaultTypes[messageType];
+  // Existing server content uses legacy colours; both clients render native font markup.
+  if (messageType === "game" || messageType === "server") {
+    text = text.replace(/@([a-z0-9]{3})@/g, (tag, colour) =>
+      LEGACY_CHAT_COLOURS[colour] ? `<col=${LEGACY_CHAT_COLOURS[colour]}>` : tag);
+  }
   const id = Buffer.alloc(2);
   id.writeUInt16BE(playerId & 0xffff);
   return encodeServerPacket(ServerPacketId.CHAT_MESSAGE, Buffer.concat([
@@ -1134,6 +1162,143 @@ export function encodeFriendsChatSnapshot(snapshot: FriendsChatSnapshot): Buffer
     parts.push(string(ignored.name), string(ignored.previousName));
   }
   return encodeServerPacket(ServerPacketId.FRIENDS_CHAT_UPDATE, Buffer.concat(parts));
+}
+
+/** One clan's persistent state, as `ClanSettingsFull` carries it. */
+export interface ClanSettingsSnapshot {
+  updateNum: number;
+  creationTime: number;
+  name: string;
+  allowGuests: boolean;
+  talkRank: number;
+  kickRank: number;
+  ownerSlot: number;
+  replacementOwnerSlot: number;
+  members: { name: string; rank: number; extraInfo: number; joinRuneDay: number; muted: boolean }[];
+  banned: string[];
+  settings: { id: number; value: number }[];
+}
+
+/** A clan's live channel, as `ClanChannelFull` carries it. */
+export interface ClanChannelSnapshot {
+  key: number;
+  updateNum: number;
+  name: string;
+  talkRank: number;
+  kickRank: number;
+  users: ClanChannelUser[];
+}
+
+export interface ClanChannelUser {
+  name: string;
+  rank: number;
+  world: number;
+}
+
+export type ClanChannelDeltaEvent =
+  | { type: "add"; user: ClanChannelUser }
+  | { type: "delete"; index: number };
+
+function u16(value: number): Buffer {
+  const bytes = Buffer.alloc(2);
+  bytes.writeUInt16BE(value & 0xffff);
+  return bytes;
+}
+
+function i32(value: number): Buffer {
+  const bytes = Buffer.alloc(4);
+  bytes.writeInt32BE(value | 0);
+  return bytes;
+}
+
+function clanChannelUserBytes(user: ClanChannelUser): Buffer {
+  return Buffer.concat([string(user.name), Buffer.from([user.rank & 0xff]), u16(user.world)]);
+}
+
+/** The clan type comes first; a null clan means the player has none of that type. */
+export function encodeClanSettingsFull(clanType: number, clan: ClanSettingsSnapshot | null): Buffer {
+  const parts: Buffer[] = [Buffer.from([clanType & 0xff, clan ? 1 : 0])];
+  if (clan) {
+    parts.push(
+      i32(clan.updateNum),
+      i32(clan.creationTime),
+      string(clan.name),
+      Buffer.from([clan.allowGuests ? 1 : 0, clan.talkRank & 0xff, clan.kickRank & 0xff]),
+      u16(clan.ownerSlot),
+      u16(clan.replacementOwnerSlot),
+      u16(clan.members.length),
+    );
+    for (const member of clan.members) {
+      parts.push(
+        string(member.name),
+        Buffer.from([member.rank & 0xff, member.muted ? 1 : 0]),
+        i32(member.extraInfo),
+        u16(member.joinRuneDay),
+      );
+    }
+    parts.push(u16(clan.banned.length), ...clan.banned.map(string), u16(clan.settings.length));
+    for (const setting of clan.settings) parts.push(u16(setting.id), i32(setting.value));
+  }
+  return encodeServerPacket(ServerPacketId.CLAN_SETTINGS_FULL, Buffer.concat(parts));
+}
+
+/** A null channel is `ClanChannelFull(Leave)`. */
+export function encodeClanChannelFull(clanType: number, channel: ClanChannelSnapshot | null): Buffer {
+  const parts: Buffer[] = [Buffer.from([clanType & 0xff, channel ? 1 : 0])];
+  if (channel) {
+    parts.push(
+      i32(channel.key),
+      i32(channel.updateNum),
+      string(channel.name),
+      Buffer.from([channel.talkRank & 0xff, channel.kickRank & 0xff]),
+      u16(channel.users.length),
+      ...channel.users.map(clanChannelUserBytes),
+    );
+  }
+  return encodeServerPacket(ServerPacketId.CLAN_CHANNEL_FULL, Buffer.concat(parts));
+}
+
+export function encodeClanChannelDelta(
+  clanType: number,
+  key: number,
+  updateNum: number,
+  events: ClanChannelDeltaEvent[],
+): Buffer {
+  const parts: Buffer[] = [Buffer.from([clanType & 0xff]), i32(key), i32(updateNum), u16(events.length)];
+  for (const event of events) {
+    parts.push(
+      event.type === "add"
+        ? Buffer.concat([Buffer.from([1]), clanChannelUserBytes(event.user)])
+        : Buffer.concat([Buffer.from([2]), u16(event.index)]),
+    );
+  }
+  return encodeServerPacket(ServerPacketId.CLAN_CHANNEL_DELTA, Buffer.concat(parts));
+}
+
+export function encodeClanVar(id: number, value: number): Buffer {
+  return encodeServerPacket(ServerPacketId.CLAN_VAR, Buffer.concat([u16(id), i32(value)]));
+}
+
+export type ClanSettingsDeltaUpdate =
+  | { type: "add_member"; name: string; joinRuneDay: number }
+  | { type: "delete_member"; index: number }
+  | { type: "member_rank"; index: number; rank: number }
+  | { type: "member_muted"; index: number; muted: boolean }
+  | { type: "member_extra_info"; index: number; value: number; startBit: number; endBit: number }
+  | { type: "int_setting"; setting: number; value: number };
+
+export function encodeClanSettingsDelta(clanType: number, updateNum: number, updates: ClanSettingsDeltaUpdate[]): Buffer {
+  const parts: Buffer[] = [Buffer.from([clanType & 0xff]), i32(updateNum), u16(updates.length)];
+  for (const update of updates) {
+    if (update.type === "add_member") parts.push(Buffer.from([1]), string(update.name), u16(update.joinRuneDay));
+    else if (update.type === "delete_member") parts.push(Buffer.from([2]), u16(update.index));
+    else if (update.type === "member_rank") parts.push(Buffer.from([3]), u16(update.index), Buffer.from([update.rank & 0xff]));
+    else if (update.type === "member_muted") parts.push(Buffer.from([4]), u16(update.index), Buffer.from([update.muted ? 1 : 0]));
+    else if (update.type === "member_extra_info") {
+      parts.push(Buffer.from([5]), u16(update.index), i32(update.value), Buffer.from([update.startBit, update.endBit]));
+    } else parts.push(Buffer.from([6]), u16(update.setting), i32(update.value));
+  }
+  return encodeServerPacket(ServerPacketId.CLAN_SETTINGS_DELTA, Buffer.concat(parts));
 }
 
 export function encodeVarp(id: number, value: number): Buffer {
@@ -1675,25 +1840,89 @@ export function encodeWorldEntityInfo(updates: WorldEntityUpdate[], spawns: Worl
   return encodeServerPacket(ServerPacketId.WORLDENTITY_INFO, out.toBuffer());
 }
 
+/**
+ * A REGION_REPLACEMENT travels in a short packet inside a 64 KiB frame, so its payload
+ * (region header + terrain + objects) stops at 0xfffd. Dense regions are over that from the
+ * cache's own bytes alone (Falador 12084 is 82,249), so anything that does not fit is
+ * deflated instead of refused. The client inflates it back to the same raw terrain/objects.
+ */
+export const MAX_REGION_REPLACEMENT_PAYLOAD = 0xfffd;
+
+/** regionId(2) + flags(1) + rawTerrainLength(4) + rawObjectLength(4) */
+const COMPRESSED_REGION_REPLACEMENT_HEADER = 11;
+
+/** A prepared replacement payload; byte 2 is the allowReload flag, so it can be flipped. */
+export type RegionReplacementPacket = { opcode: ServerPacketId; payload: Buffer };
+
+/**
+ * Builds the payload once. A dense region costs a deflate (~3 ms), so callers that send
+ * the same replacement to many players (or on every scene-window change) keep this and
+ * re-wrap it instead of re-encoding the terrain each time.
+ */
+export function regionReplacementPacket(
+  regionId: number,
+  allowReload: boolean,
+  terrainData: Uint8Array,
+  objectData: Uint8Array | null
+): RegionReplacementPacket {
+  const objects = objectData ?? new Uint8Array(0);
+  // Matches the decoder's bounded output buffer; check before copying or compressing.
+  if (terrainData.length === 0 || terrainData.length + objects.length > 16 * 1024 * 1024) {
+    throw new RangeError(`Region replacement ${regionId} has invalid section lengths`);
+  }
+  const payloadLength = 7 + terrainData.length + objects.length;
+  if (payloadLength <= MAX_REGION_REPLACEMENT_PAYLOAD) {
+    const payload = Buffer.allocUnsafe(payloadLength);
+    payload.writeUInt16BE(regionId & 0xffff, 0);
+    payload[2] = allowReload ? 1 : 0;
+    payload.writeUInt16BE(terrainData.length, 3);
+    payload.writeUInt16BE(objects.length, 5);
+    Buffer.from(terrainData).copy(payload, 7);
+    Buffer.from(objects).copy(payload, 7 + terrainData.length);
+    return { opcode: ServerPacketId.REGION_REPLACEMENT, payload };
+  }
+  const deflated = deflateSync(
+    Buffer.concat([Buffer.from(terrainData), Buffer.from(objects)]),
+    { level: 9 }
+  );
+  const compressedLength = COMPRESSED_REGION_REPLACEMENT_HEADER + deflated.length;
+  if (compressedLength > MAX_REGION_REPLACEMENT_PAYLOAD) {
+    throw new Error(
+      `Region replacement ${regionId} is too large to stream: ${payloadLength} bytes, ` +
+      `${compressedLength} compressed, max ${MAX_REGION_REPLACEMENT_PAYLOAD}`
+    );
+  }
+  const payload = Buffer.allocUnsafe(compressedLength);
+  payload.writeUInt16BE(regionId & 0xffff, 0);
+  payload[2] = allowReload ? 1 : 0;
+  payload.writeUInt32BE(terrainData.length, 3);
+  payload.writeUInt32BE(objects.length, 7);
+  deflated.copy(payload, COMPRESSED_REGION_REPLACEMENT_HEADER);
+  return { opcode: ServerPacketId.REGION_REPLACEMENT_COMPRESSED, payload };
+}
+
+/** Wraps a prepared payload into a frame, reusing it when the reload flag already matches. */
+export function encodeCachedRegionReplacement(
+  packet: RegionReplacementPacket,
+  allowReload: boolean
+): Buffer {
+  const flag = allowReload ? 1 : 0;
+  if (packet.payload[2] === flag) return encodeServerPacket(packet.opcode, packet.payload);
+  const payload = Buffer.from(packet.payload);
+  payload[2] = flag;
+  return encodeServerPacket(packet.opcode, payload);
+}
+
 export function encodeRegionReplacement(
   regionId: number,
   allowReload: boolean,
   terrainData: Uint8Array,
   objectData: Uint8Array | null
 ): Buffer {
-  const objects = objectData ?? new Uint8Array(0);
-  const payloadLength = 7 + terrainData.length + objects.length;
-  if (payloadLength > 0xffff) {
-    throw new Error(`Region replacement ${regionId} exceeds short packet length`);
-  }
-  const payload = Buffer.allocUnsafe(payloadLength);
-  payload.writeUInt16BE(regionId & 0xffff, 0);
-  payload[2] = allowReload ? 1 : 0;
-  payload.writeUInt16BE(terrainData.length, 3);
-  payload.writeUInt16BE(objects.length, 5);
-  Buffer.from(terrainData).copy(payload, 7);
-  Buffer.from(objects).copy(payload, 7 + terrainData.length);
-  return encodeServerPacket(ServerPacketId.REGION_REPLACEMENT, payload);
+  return encodeCachedRegionReplacement(
+    regionReplacementPacket(regionId, allowReload, terrainData, objectData),
+    allowReload
+  );
 }
 
 export type ShopSlotView = { slot: number; itemId: number; quantity: number; defaultQuantity?: number; priceEach?: number; sellPrice?: number };
@@ -1795,8 +2024,26 @@ export function encodeChatFilterSettings(publicMode: number, privateMode: number
   return encodeServerPacket(ServerPacketId.CHAT_FILTER_SETTINGS, Buffer.from([publicMode & 0xff, privateMode & 0xff, tradeMode & 0xff]));
 }
 
-export function encodeRunEnergy(percent: number, running: boolean): Buffer {
-  return encodeServerPacket(ServerPacketId.RUN_ENERGY, Buffer.from([Math.max(0, Math.min(100, percent)), running ? 1 : 0]));
+/** OSRS run energy is 0-10,000 units; 100 units is 1%. */
+const RUN_ENERGY_MAX_UNITS = 10_000;
+
+/**
+ * percent(1) + running(1) + units(2) + weight kg signed(2) + stamina ticks(2) + stamina
+ * active(2). The percent stays for older readers; units are the exact value the orb and the
+ * Run Energy plugin use.
+ */
+export function encodeRunEnergy(units: number, running: boolean, weightKg: number, staminaTicks = 0): Buffer {
+  const clampedUnits = Math.max(0, Math.min(RUN_ENERGY_MAX_UNITS, Math.floor(units)));
+  const clampedWeight = Math.max(-32768, Math.min(32767, Math.round(weightKg)));
+  const clampedStamina = Math.max(0, Math.min(65535, Math.floor(staminaTicks)));
+  const payload = Buffer.alloc(10);
+  payload[0] = Math.floor(clampedUnits / 100) & 0xff;
+  payload[1] = running ? 1 : 0;
+  payload.writeUInt16BE(clampedUnits, 2);
+  payload.writeInt16BE(clampedWeight, 4);
+  payload.writeUInt16BE(clampedStamina, 6);
+  payload.writeUInt16BE(clampedStamina > 0 ? 1 : 0, 8);
+  return encodeServerPacket(ServerPacketId.RUN_ENERGY, payload);
 }
 
 /** Remaining shutdown countdown in centiseconds (0 clears the client's countdown HUD). */
@@ -1917,10 +2164,12 @@ export function encodeTriggerOnDialogAbort(): Buffer {
   return encodeServerPacket(ServerPacketId.TRIGGER_ONDIALOGABORT, Buffer.alloc(0));
 }
 
-export function encodeWidgetSetText(uid: number, text: string): Buffer {
+export function encodeWidgetSetText(uid: number, text: string, serverOwned?: boolean): Buffer {
   const id = Buffer.alloc(4);
   id.writeInt32BE(uid | 0);
-  return encodeServerPacket(ServerPacketId.WIDGET_SET_TEXT, Buffer.concat([id, string(text)]));
+  return encodeServerPacket(ServerPacketId.WIDGET_SET_TEXT, Buffer.concat([
+    id, string(text), serverOwned === undefined ? Buffer.alloc(0) : Buffer.from([serverOwned ? 1 : 0]),
+  ]));
 }
 
 export function encodeWidgetSetHidden(uid: number, hidden: boolean): Buffer {
@@ -2023,41 +2272,6 @@ export function encodeWidgetSetAnimation(uid: number, animationId: number): Buff
   payload.writeInt32BE(uid | 0);
   payload.writeInt16BE(animationId, 4);
   return encodeServerPacket(ServerPacketId.WIDGET_SET_ANIMATION, payload);
-}
-
-export type QuestListEntry = {
-  slot: number;
-  status: number;
-  key: string;
-  displayName: string;
-};
-
-export type QuestListGroup = {
-  title: string;
-  quests: QuestListEntry[];
-};
-
-/** Mirrors the client's WIDGET_SET_QUEST_LIST decoder (ServerBinaryDecoder.ts). */
-export function encodeWidgetSetQuestList(groups: readonly QuestListGroup[]): Buffer {
-  const parts: Buffer[] = [];
-  const groupCount = Buffer.alloc(2);
-  groupCount.writeUInt16BE(groups.length & 0xffff);
-  parts.push(groupCount);
-  for (const group of groups) {
-    parts.push(string(group.title));
-    const questCount = Buffer.alloc(2);
-    questCount.writeUInt16BE(group.quests.length & 0xffff);
-    parts.push(questCount);
-    for (const quest of group.quests) {
-      const slot = Buffer.alloc(2);
-      slot.writeUInt16BE(quest.slot & 0xffff);
-      parts.push(slot);
-      parts.push(Buffer.from([quest.status & 0xff]));
-      parts.push(string(quest.key));
-      parts.push(string(quest.displayName));
-    }
-  }
-  return encodeServerPacket(ServerPacketId.WIDGET_SET_QUEST_LIST, Buffer.concat(parts));
 }
 
 export type ScriptInventorySnapshot = {
@@ -2191,6 +2405,11 @@ const QUEST_TAB_ICON_CHILD_BY_ROOT: Record<number, number> = {
 const SIDE_JOURNAL_GROUP_ID = 629;
 const SIDE_JOURNAL_TAB_CONTAINER_CHILD_ID = 43;
 const INTERFACE_CHARACTER_SUMMARY_ID = 712;
+// The social tab is a tab bar (side_channels): the server swaps its content on each tab click,
+// starting on the chat-channel (rsprox 4186, 2528). plugins/interface/SideChannels.plugin.js.
+const SIDE_CHANNELS_GROUP_ID = 707;
+const SIDE_CHANNELS_CONTENT_CHILD_ID = 7;
+const CHAT_CHANNEL_GROUP_ID = 7;
 const QUEST_TAB_ICON_CHILD_ID = 61;
 // Mirrors client/widgets/WidgetFlags.ts: op1 (default, already implied) | op2/op3/op4
 // (Character Summary / Quest List / Achievement Diaries submenu entries).
@@ -2256,6 +2475,9 @@ export function encodeGameframeTabSetup(group: number, root: number = 161): Buff
     packets.push(encodeOpenSub(SIDE_JOURNAL_GROUP_ID, SIDE_JOURNAL_TAB_CONTAINER_CHILD_ID, INTERFACE_CHARACTER_SUMMARY_ID));
     groups.push(INTERFACE_CHARACTER_SUMMARY_ID);
   }
+  if (group === SIDE_CHANNELS_GROUP_ID) {
+    packets.push(encodeOpenSub(SIDE_CHANNELS_GROUP_ID, SIDE_CHANNELS_CONTENT_CHILD_ID, CHAT_CHANNEL_GROUP_ID));
+  }
   for (const [uid, packet] of gameframeFlagEntries(root)) {
     if (groups.includes(uid >>> 16)) packets.push(packet);
   }
@@ -2303,7 +2525,7 @@ export function encodeGameframeBootstrap(playerName: string, root: number = 161,
     // 161:7 (hud_container_back) has no fixed-layout pane, so XP drops mounted there vanished.
     [96, 162], [93, 163], [33, orbsGroupFor(root)], ...(xpDropsEnabled ? [[9, 122]] : []), [6, 651, 5929],
     [76, 593], [77, 320], [78, 629], [79, MAIN_INVENTORY_GROUP_ID], [80, 387], [81, 541],
-    [82, 218], [83, 7], [84, 109], [85, 429], [86, 182], [87, 116],
+    [82, 218], [83, SIDE_CHANNELS_GROUP_ID], [84, 109], [85, 429], [86, 182], [87, 116],
     [88, 216], [89, 239],
     // The boss HP bar HUD (hpbar_hud), as OSRS opens it at login (164:2 resizable).
     [2, 303],
@@ -2321,6 +2543,7 @@ export function encodeGameframeBootstrap(playerName: string, root: number = 161,
     // the client maps them onto the active root's components (pane redirects).
     ...mounts.map(([child, group, postScript]) => encodeOpenSub(161, child, group, postScript)),
     encodeOpenSub(SIDE_JOURNAL_GROUP_ID, SIDE_JOURNAL_TAB_CONTAINER_CHILD_ID, INTERFACE_CHARACTER_SUMMARY_ID),
+    encodeOpenSub(SIDE_CHANNELS_GROUP_ID, SIDE_CHANNELS_CONTENT_CHILD_ID, CHAT_CHANNEL_GROUP_ID),
     ...encodeGameframeFlags(root),
     packet(ServerPacket.WIDGET_RUN_SCRIPT, loginScript, 2),
   ];
@@ -2599,10 +2822,11 @@ export function encodePlayerAppearance(
   text("");
   text("");
   text("");
-  byte(0);
+  byte(appearance.pronouns ?? appearance.gender);
   int(appearance.equipQty?.[13] ?? 0);
   int(appearance.equip[13] ?? -1);
   int(appearance.equip[12] ?? -1);
+  int(appearance.equipQty?.[3] ?? 0);
   return Buffer.from(bytes);
 }
 
@@ -3171,6 +3395,7 @@ export function encodeNpcSync(
   state: NpcSyncState,
   deckLocal?: Tile,
   deckBase?: (worldView: number) => Tile | undefined,
+  crossFloor = false,
 ): Buffer {
   const writer = new BitWriter();
   const desired = new Map<number, NpcView>();
@@ -3185,7 +3410,7 @@ export function encodeNpcSync(
   for (const index of state.indices.slice(0, 255)) {
     const view = desired.get(index);
     const last = state.lastTiles.get(index);
-    if (!view || !last || view.level !== local.level || state.typeIds.get(index) !== view.typeId
+    if (!view || !last || (crossFloor ? view.level !== last.level : view.level !== local.level) || state.typeIds.get(index) !== view.typeId
       || (state.worldViews.get(index) ?? -1) !== (view.worldView ?? -1)) {
       writer.writeBits(1, 1);
       writer.writeBits(2, 3);
@@ -3251,7 +3476,8 @@ export function encodeNpcSync(
   const signed = (value: number, bits: number) => (value < 0 ? value + (1 << bits) : value) & ((1 << bits) - 1);
   for (const view of additions) {
     const base = baseFor(view);
-    if (nextIndices.length >= 255 || view.level !== local.level) break;
+    if (nextIndices.length >= 255) break;
+    if (!crossFloor && view.level !== local.level) continue;
     writer.writeBits(16, view.index);
     const writeInteraction = (view.interactionIndex ?? -1) >= 0;
     const writeHeadIcon = (view.headIcon ?? -1) >= 0;
@@ -3265,6 +3491,7 @@ export function encodeNpcSync(
     writer.writeBits(large ? 8 : 5, signed(view.x - base.x, large ? 8 : 5));
     writer.writeBits(3, view.rotation & 7);
     writer.writeBits(16, view.typeId & 0xffff);
+    if (crossFloor) writer.writeBits(2, view.level & 3);
     nextIndices.push(view.index);
     nextSet.add(view.index);
     if (block) updateBlocks.push(writeNpcUpdateBlock(view, writeInteraction, writeHeadIcon));
@@ -3292,7 +3519,7 @@ export function encodeNpcSync(
   // a boat deck, otherwise their own).
   const header = Buffer.alloc(11);
   header.writeInt32BE(loopCycle | 0, 0);
-  header[4] = large ? 1 : 0;
+  header[4] = (large ? 1 : 0) | (crossFloor ? 2 : 0);
   header.writeUInt16BE(local.x & 0xffff, 5);
   header.writeUInt16BE(local.y & 0xffff, 7);
   header.writeUInt16BE(sync.length, 9);

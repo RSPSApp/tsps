@@ -37,6 +37,23 @@ function sendPrivateMessage(event) {
   event.sent = FriendsChatManager.deliverPrivateMessage(sender, recipient, text);
 }
 
+/** "display-names:changed" ({ player, previous, name }). */
+function showChangedDisplayName({ player }) {
+  if (player) FriendsChatManager.onDisplayNameChanged(player);
+}
+
+/**
+ * OSRS has no rule against attacking someone in your chat-channel. Only bots are held back,
+ * since a recruited bot shouldn't pick its owner's channel as a target.
+ */
+function keepRecruitedBotsFriendly(event) {
+  if (event.allow !== null) return;
+  const { attacker, target } = event;
+  if (!attacker?.isPlayerBot?.() || !target || attacker === target) return;
+  const channel = attacker.getAttribute?.(CLAN_CHAT_ATTRIBUTE);
+  if (channel != null && channel === target.getAttribute?.(CLAN_CHAT_ATTRIBUTE)) event.allow = false;
+}
+
 module.exports = {
   name: "FriendsList",
   register(api) {
@@ -46,16 +63,9 @@ module.exports = {
     api.onCustomEvent("friends-chat:channel", describeChannel);
     api.onCustomEvent("friends-chat:join", joinChannel);
     api.onCustomEvent("friends-chat:leave", leaveChannel);
+    api.onCustomEvent("display-names:changed", showChangedDisplayName);
     api.persistAttribute(CHAT_FILTERS_ATTRIBUTE);
-    api.onCanAttack((event) => {
-      if (event.allow !== null) return;
-      const { attacker, target } = event;
-      if (!attacker || !target || attacker === target) return;
-      const channel = attacker.getAttribute?.(CLAN_CHAT_ATTRIBUTE);
-      if (channel == null || channel !== target.getAttribute?.(CLAN_CHAT_ATTRIBUTE)) return;
-      attacker.sendMessage("You cannot attack a player who is in your clan chat.");
-      event.allow = false;
-    });
+    api.onCanAttack(keepRecruitedBotsFriendly);
 
     api.onPlayerLogin(({ player }) => {
       FriendsChatManager.onLogin(player);

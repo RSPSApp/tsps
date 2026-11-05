@@ -74,7 +74,12 @@ export class Gamevals {
     private tables?: Map<number, GamevalTable>;
     private readonly names = new Map<GamevalKind, Map<number, string>>();
 
-    constructor(private readonly store: FileStore = CachePipeline.getStore()) {}
+    /** `store` pins one store; without it, each read uses the pipeline's current one, which initialize replaces. */
+    constructor(private readonly pinnedStore?: FileStore) {}
+
+    private get store(): FileStore {
+        return this.pinnedStore ?? CachePipeline.getStore();
+    }
 
     /** Every named id of one kind (not interfaces): id -> name. */
     public namesOf(kind: GamevalKind): Map<number, string> {

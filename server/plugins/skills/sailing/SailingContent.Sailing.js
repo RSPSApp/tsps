@@ -11,6 +11,7 @@ const { Location } = require("../../../src/main/typescript/elvarg/game/model/Loc
 const { Task } = require("../../../src/main/typescript/elvarg/game/task/Task");
 const { TaskManager } = require("../../../src/main/typescript/elvarg/game/task/TaskManager");
 const { ChatType } = require("../../../src/main/typescript/elvarg/net/protocol/ClientProtocol");
+const StaticShips = require("./StaticShips.Sailing");
 
 const VARBIT = {
   // The Pandemonium is done (50): the boat customisation refuses every build below it (9022).
@@ -33,6 +34,7 @@ const VARBIT = {
   SIDEPANEL_FACILITY_KEEL: 19167,
   SIDEPANEL_FACILITY_HULL: 19168,
   SIDEPANEL_FACILITY_TRIM: 19172,
+  SHIPYARD_MODE: 19173,
   SIDEPANEL_SAIL_BUTTON_TOGGLED: 19174,
   SIDEPANEL_BOAT_MOVE_MODE: 19175,
   SIDEPANEL_HELM_STATUS: 19176,
@@ -117,9 +119,15 @@ function boatType(type) {
   return content().boats.find((boat) => boat.type === type);
 }
 
+/** Authored sailing content for a registered physical ship, without a personal boat record. */
+function suppliedBoatProfile(boat) {
+  const ship = boat && StaticShips.get(boat.entityIndex);
+  return ship && ship.boat === boat ? ship.definition.sailing : undefined;
+}
+
 /** A boat's animations by name from boats.json `anims` (helm, sail, trim), if known. */
 function boatAnim(boat, name) {
-  return boatType(BoatManager.getSpec(boat)?.type)?.anims?.[name];
+  return (boatType(BoatManager.getSpec(boat)?.type) ?? suppliedBoatProfile(boat))?.anims?.[name];
 }
 
 /**
@@ -192,8 +200,9 @@ function spam(player, text) {
 
 /** Plays a loc animation on the boat's deck for the player and everyone who sees them. */
 function animateDeckLocs(player, boat, isLoc, animId) {
-  const type = boatType(BoatManager.getSpec(boat)?.type);
-  for (const loc of type?.locs ?? []) {
+  const spec = BoatManager.getSpec(boat);
+  const locs = boatType(spec?.type)?.locs ?? (suppliedBoatProfile(boat) ? spec?.locs : undefined);
+  for (const loc of locs ?? []) {
     if (isLoc(loc)) animateDeckLoc(player, boat, loc, animId);
   }
 }
@@ -306,6 +315,7 @@ module.exports = {
   SCRIPT_SIDEBUTTON_SWITCH,
   content,
   boatType,
+  suppliedBoatProfile,
   boatAnim,
   dockById,
   boatName,

@@ -77,7 +77,7 @@ function makePlayer() {
       getExperience: skill => xp.get(skill) ?? 0,
       addExperience: (skill, amount) => { xp.set(skill, (xp.get(skill) ?? 0) + amount); return amount; },
     }),
-    getUsername: () => 'q083-test',
+    getUsername: () => 'q083-test', getDisplayName: () => 'q083-test',
     getPrivateArea: () => area,
     getArea: () => area,
     setArea: next => { area = next; },
@@ -151,7 +151,7 @@ function harness(options = {}) {
   questRef = quest;
   // The normal-mode Theatre of Blood plugin, when asked for, brings its own
   // completion count and its own answer to the quest's raid query.
-  if (options.rewards) require('../plugins/minigames/tob/Rewards.TheatreOfBlood')(api);
+  if (options.rewards) require('../plugins/minigames/tob/Stats.TheatreOfBlood')(api);
   const npc = (npcId, x = 3673, y = 3223) => ({ getId: () => npcId, getLocation: () => new core.Location(x, y, 0) });
   const fireObject = (objectId, option, player, extra = {}) => {
     const event = { player, objectId, option, location: player.getLocation(), handled: false, ...extra };
@@ -209,6 +209,34 @@ test('completion uses the cache threshold on varbit 12276 and keeps stage-80 sav
   runtime.sendQuestVarps({ player: p });
   assert.equal(h.wire(p), 86, 'login replay maps a stage-80 save to native 86');
   assert.equal(h.quest.isComplete(p), true);
+});
+
+test('the captured Theatre sibling bits are published at bootstrap and on the raid completion', () => {
+  // Capture 101 sets done_tob (12972) when the Theatre run finishes and
+  // given_acid (12974) when Daer Krand hands the acid over; capture 1695 (an
+  // account that had cleared before) already holds done_tob on login.
+  const h = harness({ raidComplete: true });
+  const p = makePlayer();
+  h.quest.setStage(p, 78);
+  p.setAttribute('night-at-the-theatre:acid-given', 1);
+  p.log.length = 0;
+  h.events['player:bootstrap-complete'].forEach(handler => handler({ player: p }));
+  assert.equal(h.wire(p, 12972), 1, 'a completed raid is re-published at bootstrap');
+  assert.equal(h.wire(p, 12974), 1, 'the captured acid bit is re-published at bootstrap');
+
+  const fresh = makePlayer();
+  h.quest.setStage(fresh, 78);
+  fresh.log.length = 0;
+  h.events['player:bootstrap-complete'].forEach(handler => handler({ player: fresh }));
+  assert.equal(h.wire(fresh, 12972), 1, 'the raid query answers from the registered provider');
+  assert.equal(h.wire(fresh, 12974), 0, 'a player without the acid keeps the bit clear');
+
+  const raider = makePlayer();
+  h.quest.setStage(raider, 56);
+  raider.log.length = 0;
+  h.emit('tob:completed', { player: raider });
+  assert.equal(h.quest.getStage(raider), 78, 'the completion still advances the stage');
+  assert.equal(h.wire(raider, 12972), 1, 'the completion publishes done_tob');
 });
 
 test('the two helper dialogue-line gates match real transcript lines and advance the durable stage', () => {
@@ -459,21 +487,23 @@ test('the real head hand-in and the separate "So about that memory..." conversat
   }
 });
 
-test('the post-quest Stranger conversation opens the crystal shop and hides the unimplemented shroud reward', () => {
+test('the post-quest Stranger conversation opens the crystal shop and offers the shroud only once one is earned', () => {
   const { DialogueManager } = require('../dist/game/model/dialogues/DialogueManager');
   const h = harness();
   const p = makePlayer();
   const manager = new DialogueManager(p);
   p.getDialogueManager = () => manager;
   const hook = { pluginName: 'q083-test', handler: h.conditions.at(-1) };
-  PluginManager.npcDialogueConditionHooks.push(hook);
+  // The Theatre's Stats unit answers the shroud conditions (registered before the quest, as plugins load).
+  const shrouds = { pluginName: 'q083-test-shrouds', handler: require('../plugins/minigames/tob/Stats.TheatreOfBlood').shroudCondition };
+  PluginManager.npcDialogueConditionHooks.push(shrouds, hook);
   try {
     h.quest.setStage(p, 80);
     h.fireNpc('Mysterious Stranger', 'Talk-to', p, { npc: h.npc(STRANGER), npcId: STRANGER });
     for (let step = 0; step < 500 && manager.getCurrent(); step++) manager.advance();
     const labels = h.state.prompts.flatMap(prompt => prompt.labels);
     assert.ok(labels.includes('Can I get those teleport crystals you mentioned?'), 'the crystal option is offered');
-    assert.ok(!labels.includes('What do you have for me?'), 'the shroud reward this server cannot award is not offered');
+    assert.ok(!labels.includes('What do you have for me?'), 'no shroud before 100 completions');
     // The cache's own shop definition: the Stranger sells the escape crystal.
     const shop = require('../data/definitions/shops.json').find(entry => entry.id === 1240);
     assert.equal(shop.name, 'Mysterious Stranger (shop)');
@@ -481,18 +511,44 @@ test('the post-quest Stranger conversation opens the crystal shop and hides the 
     h.state.tasks.forEach(task => task.callback());
     assert.deepEqual(h.state.shops, [1240], 'the crystal option opens the Stranger shop');
   } finally {
-    const index = PluginManager.npcDialogueConditionHooks.indexOf(hook);
-    if (index >= 0) PluginManager.npcDialogueConditionHooks.splice(index, 1);
+    for (const each of [hook, shrouds]) {
+      const index = PluginManager.npcDialogueConditionHooks.indexOf(each);
+      if (index >= 0) PluginManager.npcDialogueConditionHooks.splice(index, 1);
+    }
+  }
+});
+
+test('a hundred completions put the shroud on the Stranger\'s menu', () => {
+  const { DialogueManager } = require('../dist/game/model/dialogues/DialogueManager');
+  const h = harness();
+  const p = makePlayer();
+  const manager = new DialogueManager(p);
+  p.getDialogueManager = () => manager;
+  const hook = { pluginName: 'q083-test', handler: h.conditions.at(-1) };
+  const shrouds = { pluginName: 'q083-test-shrouds', handler: require('../plugins/minigames/tob/Stats.TheatreOfBlood').shroudCondition };
+  PluginManager.npcDialogueConditionHooks.push(shrouds, hook);
+  try {
+    h.quest.setStage(p, 80);
+    p.setAttribute('tob:completions', 100);
+    h.fireNpc('Mysterious Stranger', 'Talk-to', p, { npc: h.npc(STRANGER), npcId: STRANGER });
+    for (let step = 0; step < 500 && manager.getCurrent(); step++) manager.advance();
+    const labels = h.state.prompts.flatMap(prompt => prompt.labels);
+    assert.ok(labels.includes('What do you have for me?'), 'the shroud is offered');
+  } finally {
+    for (const each of [hook, shrouds]) {
+      const index = PluginManager.npcDialogueConditionHooks.indexOf(each);
+      if (index >= 0) PluginManager.npcDialogueConditionHooks.splice(index, 1);
+    }
   }
 });
 
 test('a normal-mode Theatre of Blood completion reaches the quest through the registered bridge', () => {
   const h = harness({ rewards: true });
   const p = makePlayer();
-  const Rewards = require('../plugins/minigames/tob/Rewards.TheatreOfBlood');
+  const Stats = require('../plugins/minigames/tob/Stats.TheatreOfBlood');
   h.quest.setStage(p, 56);
   // The real normal-mode completion path: the count, the event, the query.
-  Rewards.countCompletion(p);
+  Stats.countCompletion(p);
   assert.equal(p.getAttribute('tob:completions'), 1, 'the normal completion is counted');
   assert.equal(h.quest.getStage(p), 78, 'the registered quest handler advances the stage');
   assert.equal(h.state.emitted.filter(key => key === 'tob:completed').length, 1, 'one completion event');
@@ -514,7 +570,7 @@ test('a normal-mode Theatre of Blood completion reaches the quest through the re
   const veteran = makePlayer();
   veteran.setAttribute('tob:completions', 1);
   h.quest.setStage(veteran, 56);
-  Rewards.countCompletion(veteran);
+  Stats.countCompletion(veteran);
   assert.equal(veteran.getAttribute('tob:completions'), 2, 'the count keeps counting');
   assert.equal(h.quest.getStage(veteran), 78, 'the prior completion still advances the stage');
 });

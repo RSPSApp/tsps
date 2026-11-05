@@ -2,22 +2,42 @@ import { AnimationSmoothingConfig } from "../../../game/plugins/animationsmoothi
 import { BugReportPlugin } from "../../../game/plugins/bugreport/BugReportPlugin";
 import { VoiceChatPlugin } from "../../../game/plugins/voice/VoiceChatPlugin";
 import { AnimationSmoothingPlugin } from "../../../game/plugins/animationsmoothing/AnimationSmoothingPlugin";
-import { AttackTimerPlugin } from "../../../game/plugins/attacktimer/AttackTimerPlugin";
+import { BankPlugin } from "../../../game/plugins/bank/BankPlugin";
 import { BankTagsPlugin } from "../../../game/plugins/banktags/BankTagsPlugin";
+import { BoostsPlugin } from "../../../game/plugins/boosts/BoostsPlugin";
+import { ChatNotificationsPlugin } from "../../../game/plugins/chatnotifications/ChatNotificationsPlugin";
+import { ChatPastePlugin } from "../../../game/plugins/chatpaste/ChatPastePlugin";
+import { ChatFilterPlugin } from "../../../game/plugins/chatfilter/ChatFilterPlugin";
+import { MouseHighlightPlugin } from "../../../game/plugins/mousehighlight/MouseHighlightPlugin";
+import { RegenMeterPlugin } from "../../../game/plugins/regenmeter/RegenMeterPlugin";
+import { RunEnergyPlugin } from "../../../game/plugins/runenergy/RunEnergyPlugin";
+import { TimestampPlugin } from "../../../game/plugins/timestamp/TimestampPlugin";
+import { WikiPlugin } from "../../../game/plugins/wiki/WikiPlugin";
+import { CombatLevelPlugin } from "../../../game/plugins/combatlevel/CombatLevelPlugin";
 import { CameraPlugin } from "../../../game/plugins/camera/CameraPlugin";
 import { QuestHelperPlugin } from "../../../game/plugins/questhelper/QuestHelperPlugin";
 import { FirstPersonPlugin } from "../../../game/plugins/firstperson/FirstPersonPlugin";
 import { TouchControlsPlugin } from "../../../game/plugins/touchcontrols/TouchControlsPlugin";
 import { GameFrame317Plugin } from "../../../game/plugins/gameframe317/GameFrame317Plugin";
+import { PortraitModePlugin } from "../../../game/plugins/portraitmode/PortraitModePlugin";
 import { GpuPlugin } from "../../../game/plugins/gpu/GpuPlugin";
 import { GroundItemsConfig } from "../../../game/plugins/grounditems/GroundItemsConfig";
 import { GroundItemsPlugin } from "../../../game/plugins/grounditems/GroundItemsPlugin";
 import { GroundMarkerPlugin } from "../../../game/plugins/groundmarkers/GroundMarkerPlugin";
+import { MultiLinesPlugin } from "../../../game/plugins/multilines/MultiLinesPlugin";
 import { HdPlugin } from "../../../game/plugins/hd/HdPlugin";
+import { IdleNotifierPlugin } from "../../../game/plugins/idlenotifier/IdleNotifierPlugin";
+import { ImplingsPlugin } from "../../../game/plugins/implings/ImplingsPlugin";
 import { InteractHighlightConfig } from "../../../game/plugins/interacthighlight/InteractHighlightConfig";
 import { InteractHighlightPlugin } from "../../../game/plugins/interacthighlight/InteractHighlightPlugin";
 import { InventoryTagsPlugin } from "../../../game/plugins/inventorytags/InventoryTagsPlugin";
+import { ItemStatsPlugin } from "../../../game/plugins/itemstats/ItemStatsPlugin";
+import { ItemPricesPlugin } from "../../../game/plugins/itemprices/ItemPricesPlugin";
+import { ItemRarityPlugin } from "../../../game/plugins/itemrarity/ItemRarityPlugin";
 import { MenuSwapperPlugin } from "../../../game/plugins/menuswapper/MenuSwapperPlugin";
+import { DoorKickerPlugin } from "../../../game/plugins/doorkicker/DoorKickerPlugin";
+import { InventorySetupsPlugin } from "../../../game/plugins/inventorysetups/InventorySetupsPlugin";
+import { LootTrackerPlugin } from "../../../game/plugins/loottracker/LootTrackerPlugin";
 import { NotesConfig } from "../../../game/plugins/notes/NotesPlugin";
 import { ObjectIndicatorsPlugin } from "../../../game/plugins/objectindicators/ObjectIndicatorsPlugin";
 import { NpcIndicatorsPlugin } from "../../../game/plugins/npcindicators/NpcIndicatorsPlugin";
@@ -30,21 +50,18 @@ import { PrayerPlugin } from "../../../game/plugins/tabreorder/PrayerPlugin";
 import { FairyRingPlugin } from "../../../game/plugins/fairyring/FairyRingPlugin";
 import { PestControlPlugin } from "../../../game/plugins/pestcontrol/PestControlPlugin";
 import { SpellbookPlugin } from "../../../game/plugins/tabreorder/SpellbookPlugin";
-import {
-    FreezeTimerPlugin,
-    PoisonTimerPlugin,
-} from "../../../game/plugins/statustimer/StatusTimerPlugin";
+import { TimersPlugin } from "../../../game/plugins/statustimer/TimersPlugin";
 import { LegacyTileMarkersConfig } from "../../../game/plugins/tilemarkers/migrateTileMarkers";
 import { TileMarkersPlugin } from "../../../game/plugins/tilemarkers/TileMarkersPlugin";
 import { TilePacksPlugin } from "../../../game/plugins/tilepacks/TilePacksPlugin";
-import { VengeanceTimerPlugin } from "../../../game/plugins/vengeancetimer/VengeanceTimerPlugin";
-import { WeatherPlugin } from "../../../game/plugins/weather/WeatherPlugin";
+import { LowEndDevicePlugin } from "../../../game/plugins/lowenddevice/LowEndDevicePlugin";
 import { XpTrackerPlugin } from "../../../game/plugins/xptracker/XpTrackerPlugin";
 import { XpGlobesPlugin } from "../../../game/plugins/xpglobes/XpGlobesPlugin";
 import { GuidePlugin } from "../../../game/plugins/optimalquestguide/GuidePlugin";
 import { ShortestPathPlugin } from "../../../game/plugins/shortestpath/ShortestPathPlugin";
 import type { LegacyConfigMigration } from "../../impl/LegacyConfigMigration";
 import { migrateGroundItemsConfig } from "../../../game/plugins/grounditems/migrateGroundItems";
+import { TooltipPlugin } from "../ui/overlay/tooltip/TooltipOverlay";
 import { ConfigPlugin } from "./config/ConfigPlugin";
 import type { PluginClass } from "./Plugin";
 
@@ -55,27 +72,43 @@ export const CORE_PLUGINS: ReadonlyArray<PluginClass> = [
     HdPlugin,
     FirstPersonPlugin,
     TouchControlsPlugin,
+    PortraitModePlugin,
     GameFrame317Plugin,
     GroundItemsPlugin,
+    LootTrackerPlugin,
+    InventorySetupsPlugin,
+    DoorKickerPlugin,
     InteractHighlightPlugin,
     GroundMarkerPlugin,
+    MultiLinesPlugin,
     TileMarkersPlugin,
     TilePacksPlugin,
     MenuSwapperPlugin,
     // After Menu Swapper: its "Inventory tag" submenu joins the swapped menu.
     InventoryTagsPlugin,
+    ItemStatsPlugin,
+    ItemPricesPlugin,
+    ItemRarityPlugin,
     BankTagsPlugin,
+    // After Bank Tags: its tag tab title is set before the value joins it.
+    BankPlugin,
+    CombatLevelPlugin,
     NotesPlugin,
     NpcIndicatorsPlugin,
+    ImplingsPlugin,
     ObjectIndicatorsPlugin,
     SplitPrivateChatPlugin,
+    ChatNotificationsPlugin,
+    ChatPastePlugin,
+    TimestampPlugin,
+    ChatFilterPlugin,
     AnimationSmoothingPlugin,
-    AttackTimerPlugin,
-    VengeanceTimerPlugin,
-    PoisonTimerPlugin,
-    FreezeTimerPlugin,
-    WeatherPlugin,
+    TimersPlugin,
     StatusBarsPlugin,
+    BoostsPlugin,
+    RegenMeterPlugin,
+    RunEnergyPlugin,
+    IdleNotifierPlugin,
     OpponentInfoPlugin,
     SpellbookPlugin,
     PrayerPlugin,
@@ -83,6 +116,7 @@ export const CORE_PLUGINS: ReadonlyArray<PluginClass> = [
     FairyRingPlugin,
     StretchedModePlugin,
     GpuPlugin,
+    LowEndDevicePlugin,
     CameraPlugin,
     QuestHelperPlugin,
     XpTrackerPlugin,
@@ -91,6 +125,10 @@ export const CORE_PLUGINS: ReadonlyArray<PluginClass> = [
     ShortestPathPlugin,
     // After VoiceChatPlugin: while voice chat holds the chatbox Report button, its clicks are voice's.
     BugReportPlugin,
+    MouseHighlightPlugin,
+    WikiPlugin,
+    // Last: draws the tooltips the plugins above add (RuneLite's TooltipOverlay).
+    TooltipPlugin,
 ];
 
 /** Legacy `osrs.plugin.*.v1` localStorage blobs to fold into rl.config. */

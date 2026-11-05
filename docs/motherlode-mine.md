@@ -1,6 +1,6 @@
 # Motherlode Mine
 
-Prospector Percy's mine under Falador (`server/plugins/areas/MotherlodeMine.plugin.js`, with its parts in `server/plugins/areas/motherlode/`). Behaviour is from the OSRS Wiki, and the mine's packets are from two live captures. Where neither covers something, it follows OpenRune-Server's `motherlode-mine` module (ISC licence).
+Prospector Percy's mine under Falador (`server/plugins/areas/MotherlodeMine.plugin.js`, with its parts in `server/plugins/areas/motherlode/`). Behaviour is from the OSRS Wiki, and the mine's packets are from live captures. Where neither covers something, it follows OpenRune-Server's `motherlode-mine` module (ISC licence).
 
 The plugin lives under `areas/` so that its "Ladder" handler runs before the generic one in `objects/Ladders.plugin.js` (plugins load in path order).
 
@@ -18,10 +18,11 @@ The plugin lives under `areas/` so that its "Ladder" handler runs before the gen
   - A hopper takes as much pay-dirt as the sack has room for. The sack holds 108, or 189 with the bigger sack, counting what's still being washed.
   - The pay-dirt floats down the channel and becomes ore in the sack 12 ticks after the deposit.
   - The upper hopper is fenced in by railings, so it's used across them from the walkway in front, (3755, 5676). An object route hook sends the player there instead of to a side of the hopper.
-  - It only moves while at least one water wheel turns: "any pay-dirt that was making its way to the sack will stop in place" (Wiki).
+  - It only moves while at least one water wheel turns: "any pay-dirt that was making its way to the sack will stop in place" (Wiki). Pay-dirt deposited while both wheels are jammed still appears at the top of the channel and waits there.
+  - The channel's water only shows while a wheel turns. When both are jammed it is removed, and it comes back after a repair.
 - **The struts:**
   - A broken strut is repaired with a hammer. Each tick there's a 12% chance of a repair at Smithing 1, up to 27% at 99, for 1.5 Smithing XP per level (Wiki).
-  - Percy calls out his transcript's overhead lines when a wheel, or both, breaks.
+  - While a wheel is jammed, Percy calls out one of his transcript's overhead lines every 6 ticks, from the lines for one wheel or for both.
 - **The sack** gives the nuggets first, then each ore into the free inventory slots. Varbit 5558 is its count, which the HUD and the sack loc (26688, empty or full) both read.
 - **Rockfalls** (26679/26680) are mined away for 10 XP (Wiki). They come back down later and hit whoever stands on the tile for 1-4 (Wiki), moving them off it.
 - **Prospector Percy's unlocks** run through his Wiki transcript. The plugin answers its "If the player..." conditions (`api.onNpcDialogueCondition`) and makes each purchase on its "You pay Percy N nuggets." step:
@@ -63,13 +64,17 @@ Bold is captured; the rest are OpenRune's.
 - **The hopper:**
   - Deposit plays animation 832 and sound 2496.
   - A pay-dirt NPC (6564) appears at (3748, 5671) the next tick and moves one tile south each tick.
+  - With both wheels jammed it still appears the next tick, then stays idle at (3748, 5671).
   - 12 ticks after the deposit, varbit 5558 rose by the deposit, with "Some ore is ready to be collected from the sack." and sound 2739 (delay 30).
 - **The sack:**
   - Search took the 7 nuggets, then 26 ores into the free slots.
   - Varbit 5558 was updated twice (172 → 165 → 139).
   - Interface 193 (objectbox) showed pay-dirt with "You collect your ore from the sack." even though ore was left. It is built by script 2868, with the item at zoom 400. This is the new core `ItemStatementDialogue`.
 - **A rockfall:** it was gone 2 ticks after the swing. It came down again 78 ticks later as two falling rocks (projectile 645, from heights 1000 and 900, landing after 30 cycles), a splash (spotanim 305) and sound 360.
-- **The channel:** water overlays (10459) and small foams (2018) are spawned by the server. The foams are re-sent every 3 ticks.
+- **The channel:**
+  - Water overlays (10459) and small foams (2018) are spawned by the server. They are all re-sent every 3 ticks while a wheel turns, and a single jammed wheel leaves them as they are.
+  - The tick after the second wheel jams, every overlay and foam is removed (`loc_del`), with Percy's "That water ain't flowing!". Nothing is re-sent while both are jammed.
+  - After a repair the full set comes back on the next re-send, 2 ticks later in both captured repairs.
 
 ### A strut breaking and being repaired
 
@@ -79,6 +84,11 @@ Bold is captured; the rest are OpenRune's.
   - The strut was fixed 6 ticks after the first swing.
   - The fixed strut 26669 (rotation 0), the wheel 26671 (rotation 0) and the foam 2016 (rotation 1) were sent, with Smithing XP.
 - **Where:** the northern strut is at (3742, 5669), its wheel at (3743, 5668) and its foam at (3743, 5671). The southern strut's foam is at (3743, 5665).
+
+- **Percy:** while a wheel is jammed he says a random line every 6 ticks, on a cycle that a break doesn't restart (a break at tick 165 was followed by a line at 166, one at 1444 by 1446).
+  - One wheel: "We got us a jammed wheel!", "Ye'd better fix that wheel!", "Git yer hammer an' fix that wheel!".
+  - Both: "That water ain't flowing!", "Both them wheels be jammed!", "Git yer hammer an' fix them wheels!". The next line after the second break already comes from these.
+  - He stops once both are repaired.
 
 ### The crates
 
@@ -93,7 +103,6 @@ Bold is captured; the rest are OpenRune's.
 
 - **How often a strut breaks:** 2-4 rounds of 97 ticks after its repair (OpenRune).
 - **The pay-dirt roll** (OpenRune's 60/256 at level 1 to 105/256 at 99, every pickaxe interval) and the rockfall's respawn (78-100 ticks).
-- **The channel when both wheels are broken:** the water's locs are left as they are.
 - **The messages for:**
   - no pickaxe or level;
   - a full inventory or sack;

@@ -93,7 +93,7 @@ function askAmount(player, then) {
 function withdraw(player, slot, amount) {
   const entry = Pouch.slots(player)[slot];
   if (!entry || !(amount > 0)) return;
-  if (!Pouch.inventoryFits(player, entry.id)) {
+  if (!Pouch.inventoryFits(player, entry.id, Math.min(amount, entry.amount))) {
     player.sendMessage(Pouch.MESSAGE.NO_SPACE);
     return;
   }
@@ -103,12 +103,17 @@ function withdraw(player, slot, amount) {
 
 function deposit(player, runeId, amount) {
   const inventory = player.getInventory();
-  const moved = Pouch.store(player, runeId, Math.min(amount, inventory.getAmount(runeId)));
+  const plain = Pouch.plainInInventory(player, runeId);
+  if (plain <= 0) {
+    if (inventory.getAmount(runeId) > 0) player.sendMessage(Pouch.MESSAGE.PRESET);
+    return;
+  }
+  const moved = Pouch.store(player, runeId, Math.min(amount, plain));
   if (moved <= 0) {
     player.sendMessage(Pouch.MESSAGE.CANT_HOLD);
     return;
   }
-  inventory.deleteNumber(runeId, moved);
+  Pouch.takeFromInventory(player, runeId, moved);
   inventory.refreshItems();
 }
 
@@ -124,6 +129,10 @@ function clickInventorySlot(player, slot, op, itemId) {
   const item = player.getInventory().getItems()[slot];
   if (!item || item.getId() !== itemId) return;
   if (!Pouch.isRune(itemId)) return;
+  if (!Pouch.isPlainRune(item)) {
+    player.sendMessage(Pouch.MESSAGE.PRESET);
+    return;
+  }
   if (op === 5) return askAmount(player, (amount) => deposit(player, itemId, amount));
   deposit(player, itemId, opAmount(player, op));
 }

@@ -174,7 +174,7 @@ function player() {
     getLocation: () => location, moveTo: to => { location = to; },
     getArea: () => null, getPrivateArea: () => null, setArea: noop, getIndex: () => p.index, getSpellbook: () => p.spellbook ?? core.MagicSpellbook.NORMAL,
     isPlayer: () => true, isNpc: () => false, getAsPlayer: () => p, isRegistered: () => true, getHitpoints: () => 99, performAnimation: animation => (p.animations ??= []).push(animation.getId()),
-    getUsername: () => p.username ?? 'Parity', getAppearance: () => ({ isMale: () => true }),
+    getUsername: () => p.username ?? 'Parity', getDisplayName: () => p.username ?? 'Parity', getAppearance: () => ({ isMale: () => true }),
     setPositionToFace: noop, forceChat: noop, sendMessage: text => p.messages.push(text),
   };
   p.manager = new DialogueManager(p);
@@ -548,6 +548,31 @@ test('Defender of Varrock starts through Elias and keeps the talking trail order
   for (const bit of [9659, 9660, 9661, 9662, 9663, 9664]) assert.equal(p.varbits.get(bit), 1);
 });
 
+const DOV_CENSUS = 50116;
+const DOV_CENSUS_INTERFACE = 245;
+const DOV_CENSUS_NEXT = (DOV_CENSUS_INTERFACE << 16) | 9;
+
+test('Defender of Varrock census opens group 245 and pages the captured varbit', () => {
+  const h = harness('DefenderOfVarrock'), p = player();
+  h.quest.setStage(p, 44);
+  h.object(p, DOV_CENSUS, 'Read', 3214, 3497);
+  assert.equal(h.quest.getStage(p), 46, 'reading the census moves the list stage to the candidates');
+  assert.equal(p.varbits.get(9668), 1, 'dov_read_census is set when the book opens');
+  assert.ok(p.log.some(([name, id]) => name === 'sendInterface' && id === DOV_CENSUS_INTERFACE),
+    'the census book interface is opened');
+
+  for (let page = 1; page <= 5; page++) {
+    for (const handler of h.hooks.onInterfaceActionButton ?? []) handler({ player: p, buttonId: DOV_CENSUS_NEXT });
+    assert.equal(p.varbits.get(9667), page, `capture 1636 pages dov_censuspage to ${page}`);
+  }
+  for (const handler of h.hooks.onInterfaceActionButton ?? []) handler({ player: p, buttonId: DOV_CENSUS_NEXT });
+  assert.equal(p.varbits.get(9667), 5, 'the page counter stops at five');
+
+  h.hooks.onPlayerLogin[0]({ player: p });
+  assert.equal(p.varbits.get(9667), 5, 'login restores the census page');
+});
+
+
 test('Defender of Varrock trapdoor is gated by all six child-loc clues and enters the base once', () => {
   const h = harness('DefenderOfVarrock'), p = player();
   h.quest.setStage(p, 6);
@@ -763,7 +788,7 @@ test('real ItemOnGroundManager respawns a captured bottle after four ticks', () 
   };
   const packet = new Proxy({}, { get: () => () => packet });
   const realPlayer = {
-    username, getUsername: () => username, isPlayerBot: () => false,
+    username, getUsername: () => username, getDisplayName: () => username, isPlayerBot: () => false,
     getLocation: () => position, getPrivateArea: () => null,
     getInventory: () => inventory, getMovementQueue: () => ({ reset() {} }), getSize: () => 1,
     getLastItemPickup: () => ({ reset() {} }), getSession: () => ({ getChannel: () => ({ readyState: 1 }) }),
@@ -1106,6 +1131,7 @@ test('real Mining task yields normal Barronite deposit XP/message and canonical 
   const rockObject = {
     getId: () => 41547, getLocation: () => new core.Location(2941, 5810, 0),
     getType: () => 10, getFace: () => 0, getPrivateArea: () => null,
+    isWithinInteractionDistance: () => true,
   };
   const {
     MapObjects,
@@ -1121,11 +1147,15 @@ test('real Mining task yields normal Barronite deposit XP/message and canonical 
       player: p, object: rockObject,
       definition: { getName: () => 'Barronite rocks' }, handled: false,
     });
-    h.tick(20);
-    assert.equal(h.tasks.length, 2, 'mining task + rock respawn task submitted');
+    for (let i = 0; i < 20 && !p.items.get(I.BARRONITE_DEPOSIT); i++) h.tick(1);
+    // Barronite keeps standing through its ores and runs out on its own 33-tick timer.
+    // Mining also submits Cam Torum's water cycle (CalcifiedWater.Mining.js).
+    assert.ok(h.tasks.some(task => task.constructor.name === 'MiningTask'), 'mining task submitted');
+    assert.equal(h.tasks.filter(task => task.constructor.name === 'RockRespawnTask').length, 0, 'no respawn task yet');
     assert.equal(p.items.get(I.BARRONITE_DEPOSIT), 1);
     assert.equal(p.items.get(I.BARRONITE_SHARDS), undefined);
-    assert.ok(p.messages.includes('You manage to mine a barronite deposit.'));
+    assert.ok(p.log.some(([key, , text]) => key === 'sendTypedMessage' && text === 'You manage to mine a barronite deposit.'),
+      'the ore line is spam');
     assert.deepEqual(p.xp.at(-1), [core.Skill.MINING.getIndex(), 32]);
   } finally {
     MapObjects.get = originalGet;

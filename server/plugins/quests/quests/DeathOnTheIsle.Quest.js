@@ -141,6 +141,7 @@ module.exports = function registerDeathOnTheIsleQuest(api) {
   // ==========================================================================
 
   const STAGE_VARBIT = 11210; // doti
+  const VARBIT_FINAL_FIGHT = 11258; // doti_final_fight, varp 4402 bits 25-27
   const VARBIT_MET_XOCOTLA = 11211;
   const VARBIT_MET_COZYAC = 11212;
   const VARBIT_MET_PAVO = 11213;
@@ -509,6 +510,7 @@ module.exports = function registerDeathOnTheIsleQuest(api) {
       if (varbit) sender.sendVarbit(varbit, hasFlag(player, name) ? 1 : 0);
     }
     sender.sendVarbit(VARBIT_MASK_ASSIGNMENT, maskAssignment(player));
+    sender.sendVarbit(VARBIT_FINAL_FIGHT, Number(player.getAttribute(FINAL_FIGHT_ATTRIBUTE)) || 0);
     if (quest.isComplete(player)) {
       sender.sendVarbit(VARBIT_ALDARIN_PENDANT, hasFlag(player, "icon.found") ? 1 : 0);
       sender.sendVarbit(

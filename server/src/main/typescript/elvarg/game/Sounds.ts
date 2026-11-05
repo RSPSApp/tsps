@@ -59,6 +59,7 @@ export class Sounds {
         if (location) {
             Sounds.playAreaSound({
                 soundId: sound.getId(),
+                source: entity,
                 x: location.getX(),
                 y: location.getY(),
                 level: location.getZ(),
@@ -72,6 +73,28 @@ export class Sounds {
         player.getPacketSender().sendSoundEffect(soundId, loopType, delay, volume);
     }
 
+    /**
+     * A sound at an entity's own tile. Live sends most melee special attacks this way (an area
+     * sound with range 5), so players standing nearby hear them too. Use `sendSound` for the
+     * private synth variant.
+     */
+    public static playAreaSoundAt(entity: unknown, sound: Sound, radius = 5): void {
+        if (!sound) return;
+        const location = (entity as any)?.getLocation?.();
+        if (!location) return;
+        const level = typeof location.getZ === "function" ? location.getZ() : 0;
+        Sounds.playAreaSound({
+            soundId: sound.getId(),
+            source: entity,
+            x: location.getX(),
+            y: location.getY(),
+            level,
+            loops: sound.getLoopType(),
+            delay: sound.getDelay(),
+            radius,
+        });
+    }
+
     public static playAreaSound(options: {
         soundId: number;
         x: number;
@@ -81,13 +104,19 @@ export class Sounds {
         delay?: number;
         radius?: number;
         attenuation?: number;
+        /** Entity whose private-area boundary owns this sound. */
+        source?: unknown;
+        exclude?: Player;
     }): void {
         if (!(options.soundId > 0)) return;
         const level = options.level ?? 0;
         const radius = Math.max(0, Math.min(31, options.radius ?? 0));
         const broadcastRadius = Math.max(15, radius + 1);
+        const source = options.source as { getPrivateArea?: () => unknown } | undefined;
+        const sourceArea = source?.getPrivateArea?.();
         for (const player of World.getPlayers()) {
-            if (player.isPlayerBot()) continue;
+            if (player.isPlayerBot() || player === options.exclude) continue;
+            if (source?.getPrivateArea && player.getPrivateArea() !== sourceArea) continue;
             const location = player.getLocation();
             if (location.getZ() !== level || Math.max(
                 Math.abs(location.getX() - options.x),

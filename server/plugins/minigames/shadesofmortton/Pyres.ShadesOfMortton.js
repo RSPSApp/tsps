@@ -6,7 +6,8 @@
  * - Light: "You attempt to light the funeral pyre."; 3 ticks on the fire, the Prayer and
  *   Firemaking experience; 2 ticks later the Shade Spirit rises; 4 ticks after that the reward on
  *   the stone stand (private, gone after 500 ticks) with a puff of smoke, and the pyre is empty;
- * - Wiki: the Firemaking level each wood needs and gives, the wood each remains needs, 21% coins or
+ * - Wiki: the Prayer experience by remains and wood, +50% Prayer (Morytania Hard) and +50% Firemaking
+ *   (Morytania Elite), the Firemaking level each wood needs and gives, the wood each remains needs, 21% coins or
  *   else a key (the remains decide which).
  * The quest (quests/quests/ShadesOfMortton.Quest.js) hears "shades-of-mortton:pyre-logs" and
  * "shades-of-mortton:cremated" for its stages.
@@ -44,6 +45,13 @@ function remainsOf(itemId) {
     if (Common.objId(name) === itemId) return { name, ...remains, itemId };
   }
   return null;
+}
+
+/** Morytania diary tier done (Hard: Prayer +50%, Elite: Firemaking +50% from cremating; Wiki). */
+function diaryDone(player, tier) {
+  const request = { player, diary: "morytania", tier, complete: false };
+  Common.api.emitCustomEvent("diary:is-complete", request);
+  return request.complete === true;
 }
 
 function questStage(player) {
@@ -205,8 +213,11 @@ function light({ player, object }) {
   Common.later(p().fireTicks, () => {
     if (!current()) return;
     graphicAt(p().graphics.fire, at, nearbyPlayers(at));
-    skills.addExperience(Common.core.Skill.PRAYER, remains.prayer);
-    skills.addExperience(Common.core.Skill.FIREMAKING, wood.xp);
+    // The experience is added in tenths (the skill manager drops the rest).
+    const prayer = remains.prayer[wood.wood] * (diaryDone(player, "hard") ? p().diaryBonus : 1);
+    const firemaking = wood.xp * (diaryDone(player, "elite") ? p().diaryBonus : 1);
+    skills.addExperience(Common.core.Skill.PRAYER, prayer);
+    skills.addExperience(Common.core.Skill.FIREMAKING, firemaking);
   });
   Common.later(p().fireTicks + p().spiritTicks, () => {
     if (!current()) return;
@@ -224,7 +235,7 @@ function light({ player, object }) {
     graphicAt(p().graphics.smoke, stand, nearbyPlayers(stand));
     pyres.delete(key);
     swap(object, Common.locId(EMPTY_PYRE));
-    Common.api.emitCustomEvent("shades-of-mortton:cremated", { player, remains: remains.itemId, reward });
+    Common.api.emitCustomEvent("shades-of-mortton:cremated", { player, remains: remains.itemId, wood: use.wood.wood, reward });
   });
   return true;
 }

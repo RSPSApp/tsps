@@ -66,13 +66,16 @@ export class Equipment extends ItemContainer {
         return StackType.DEFAULT;
     }
 
-    public refreshItems(): ItemContainer {
+    public refreshItems(change?: { equipped: true; itemId: number; slot: number }): ItemContainer {
         this.getPlayer().getPacketSender().sendItemContainer(this, Equipment.INVENTORY_INTERFACE_ID);
         if ((this.getPlayer().getNpcTransformationId?.() ?? -1) >= 0) {
             this.sendWornInventory();
         }
         this.getPlayer().onEquipmentChanged();
-        require("../../../../plugins/PluginManager").PluginManager.emitCustomEvent("equipment:changed", { player: this.getPlayer() });
+        require("../../../../plugins/PluginManager").PluginManager.emitCustomEvent("equipment:changed", {
+            player: this.getPlayer(),
+            ...(change ? { equipped: true, itemId: change.itemId, slot: change.slot } : {}),
+        });
         return this;
     }
 
@@ -117,19 +120,20 @@ export class Equipment extends ItemContainer {
             return false;
         }
 
-        const WeaponInterfaces = getWeaponInterfaces();
-        const equippedWeaponInterface = staff.getDefinition()?.getWeaponInterface?.();
-        if (equippedWeaponInterface != null) {
-            return (
-                equippedWeaponInterface == WeaponInterfaces.STAFF ||
-                equippedWeaponInterface == WeaponInterfaces.ANCIENT_STAFF
-            );
-        }
+        // Fallback to the player's interface for any edge-case definition that doesn't expose one.
+        return Equipment.canAutocastWith(staff.getDefinition()?.getWeaponInterface?.() ?? this.player.getWeapon());
+    }
 
-        // Fallback for any edge-case definitions that don't expose a weapon interface.
-        return (
-            this.player.getWeapon() == WeaponInterfaces.STAFF ||
-            this.player.getWeapon() == WeaponInterfaces.ANCIENT_STAFF
+    /**
+     * Staves and bladed staves (Staff of the Dead, Staff of Light/Balance, Blue Moon spear) autocast;
+     * powered staves and polestaves don't (wiki: Autocast).
+     */
+    public static canAutocastWith(weaponInterface: unknown): boolean {
+        const WeaponInterfaces = getWeaponInterfaces();
+        return weaponInterface != null && (
+            weaponInterface == WeaponInterfaces.STAFF ||
+            weaponInterface == WeaponInterfaces.ANCIENT_STAFF ||
+            weaponInterface == WeaponInterfaces.BLADED_STAFF
         );
     }
 

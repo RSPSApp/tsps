@@ -1,4 +1,4 @@
-import { FONT_PLAIN_12 } from "../../../ui/fonts";
+import { overlayFont } from "@runelite/client/ui/overlay/OverlayFonts";
 import { drawTextGL } from "../../../widgets/components/TextRenderer";
 import type { WidgetOverlay, WidgetOverlayDrawContext } from "../ClientPluginManager";
 import { argbToRgba } from "../npcindicators/NpcIndicatorsConfig";
@@ -46,16 +46,18 @@ function drawFrame(context: WidgetOverlayDrawContext, frame: Frame): Rect[] {
         if (shape.fill) glr.drawPolygon?.(shape.points, shape.fill);
         for (const [x, y] of shape.points) grow(x, y, shape.width);
     }
+    // A DYNAMIC overlay: the dynamic overlay font.
+    const { id: fontId, scale } = overlayFont("dynamic");
     for (const t of frame.texts) {
-        const font = context.fontLoader(FONT_PLAIN_12);
-        const w = font ? font.measure(t.text) : t.text.length * 7;
-        const h = 16;
+        const font = context.fontLoader(fontId);
+        const w = (font ? font.measure(t.text) : t.text.length * 7) * scale;
+        const h = 16 * scale;
         const x = t.x - w / 2;
         // OverlayUtil.renderTextLocation: the point is the baseline, with a shadow.
-        drawTextGL(context.renderer, context.fontLoader, t.text, x - 2, t.y - h + 3, w + 4, h, FONT_PLAIN_12,
-            t.color & 0xffffff, 1, 2, true);
+        drawTextGL(context.renderer, context.fontLoader, t.text, x - 2, t.y - h + 3 * scale, w + 4, h, fontId,
+            t.color & 0xffffff, 1, 2, true, 1, undefined, scale, scale);
         grow(x, t.y - h, 0);
-        grow(x + w, t.y + 4, 0);
+        grow(x + w, t.y + 4 * scale, 0);
     }
     return Number.isFinite(minX) ? [{ x: minX, y: minY, w: maxX - minX, h: maxY - minY }] : [];
 }

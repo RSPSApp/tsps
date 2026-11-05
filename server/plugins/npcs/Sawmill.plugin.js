@@ -17,6 +17,7 @@ const fs = require("fs");
 const path = require("path");
 
 const LAST_AMOUNT_ATTRIBUTE = "sawmill:last-amount";
+const SAWDUST_LIFETIME = 200; // rsprox3225: public quantity1,199ticks left on its first tick.
 
 let api = null;
 let core = null;
@@ -73,6 +74,15 @@ function convert(player, npcId, plank, amount) {
     made += doubled ? 2 : 1;
   }
   if (shortOfCoins) say(player, npcId, messages.noCoins.replace("{cost}", String(plank.cost)));
+  if (made > 0) {
+    const floor = api.getItemOnGroundManager(), location = player.getLocation().clone(), area = player.getPrivateArea();
+    if (!floor.getGroundItem(null, core.ItemIdentifiers.SAWDUST, location, area)) {
+      const dust = new core.ItemOnGround(core.GroundItemState.SEEN_BY_EVERYONE, undefined, location,
+        new core.Item(core.ItemIdentifiers.SAWDUST, 1), false, -1, area);
+      dust.setDespawnDelay(SAWDUST_LIFETIME);
+      floor.register(dust);
+    }
+  }
   if (made > 0 && plank.plank === diary.anyPlank.plank) api.emitCustomEvent("diary:task", { player, diary: diary.anyPlank.diary, task: diary.anyPlank.task });
   if (plank.plank === diary.mahogany.plank && made >= diary.mahogany.count) {
     api.emitCustomEvent("diary:task", { player, diary: diary.mahogany.diary, task: diary.mahogany.task });

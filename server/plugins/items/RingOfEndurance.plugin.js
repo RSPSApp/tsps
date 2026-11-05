@@ -4,15 +4,18 @@
  * Charged with stamina potions and mixes, one charge per dose (1,000 max).
  * While a charged ring is worn, a stamina dose is doubled (40% energy and a
  * 4-minute buff) and spends one charge; uncharging does not refund charges.
- * With 500 or more charges, the ring skips 15% of run-energy drain.
+ * With 500 or more charges, run-energy drain is 85% of normal (a stamina effect wins
+ * and the two do not stack).
  */
 const Equipment = require("../../src/main/typescript/elvarg/game/model/container/impl/Equipment").Equipment;
 const { ItemIdentifiers } = require("../../src/main/typescript/elvarg/util/ItemIdentifiers");
 
 const MAX_CHARGES = 1000;
 const PASSIVE_MIN_CHARGES = 500;
-const PASSIVE_SKIP_PERCENT = 15;
+const PASSIVE_DRAIN_MULTIPLIER = 0.85;
 const CHARGES_META_KEY = "ring-of-endurance";
+/** Potions plugin: when the stamina effect ends (it already cuts the drain to 30%). */
+const STAMINA_END_ATTRIBUTE = "potions:stamina:end";
 
 const DOSE_BY_ITEM = new Map([
   [ItemIdentifiers.STAMINA_POTION_4_, 4],
@@ -38,17 +41,26 @@ function wornRing(player) {
   return item && chargedIds.has(Number(item.getId?.() ?? -1)) ? item : null;
 }
 
-function passiveApplies(player, roll) {
+function passiveApplies(player) {
   const ring = wornRing(player);
-  return ring != null && charges(ring) >= PASSIVE_MIN_CHARGES && roll < PASSIVE_SKIP_PERCENT;
+  return ring != null && charges(ring) >= PASSIVE_MIN_CHARGES;
 }
 
-/** The ring skips 15% of run-energy drain once it holds 500 charges (Wiki). */
+function staminaActive(player) {
+  const endsAt = Number(player?.getAttribute?.(STAMINA_END_ATTRIBUTE));
+  return Number.isFinite(endsAt) && Date.now() < endsAt;
+}
+
+/** 500+ charges cut run-energy drain to 85%; a stamina potion's 30% wins and they don't stack. */
 function drainModifier(entity, amount) {
   if (!entity?.isPlayer?.()) {
     return amount;
   }
-  return passiveApplies(entity.getAsPlayer(), core.Misc.getRandom(99)) ? 0 : amount;
+  const player = entity.getAsPlayer();
+  if (staminaActive(player)) {
+    return amount;
+  }
+  return passiveApplies(player) ? Math.floor(amount * PASSIVE_DRAIN_MULTIPLIER) : amount;
 }
 
 function refresh(player) {
@@ -76,11 +88,12 @@ function doubleStamina(request) {
   }
   request.energy *= 2;
   request.durationMs *= 2;
+  request.player.sendMessage("Your Ring of endurance doubles the duration of your stamina potion's effect.");
   useCharge(request.player, ring);
 }
 
 function checkCharges({ player, item }) {
-  player.sendMessage(`Your ring of endurance has ${charges(item).toLocaleString("en-US")} charges left.`);
+  player.sendMessage(`Your Ring of endurance is charged with ${charges(item).toLocaleString("en-US")} charges.`);
 }
 
 function chargeRing(event) {
@@ -103,8 +116,9 @@ function chargeRing(event) {
     ring.setId(chargedByUncharged.get(ring.getId()));
     refresh(player);
   }
-  ring.setMetaValue(CHARGES_META_KEY, charges(ring) + added);
-  player.sendMessage(`You add ${added} charge${added === 1 ? "" : "s"} to your ring of endurance.`);
+  const total = charges(ring) + added;
+  ring.setMetaValue(CHARGES_META_KEY, total);
+  player.sendMessage(`You load your Ring of endurance with ${added} charge${added === 1 ? "" : "s"}. It now has ${total.toLocaleString("en-US")} charges.`);
   event.handled = true;
 }
 
@@ -113,6 +127,7 @@ function uncharge({ player, item }) {
   item.setMetaValue(CHARGES_META_KEY, undefined);
   refresh(player);
   player.sendMessage("You discharge your ring of endurance; the stamina is lost.");
+  player.sendMessage("Your Ring of endurance is charged with 0 charges.");
   return true;
 }
 

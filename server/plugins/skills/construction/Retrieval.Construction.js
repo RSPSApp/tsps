@@ -1,5 +1,6 @@
 "use strict";
-const {HOUSE_ATTRIBUTE}=require("./StorageState.Construction");
+const {HOUSE_ATTRIBUTE,DECORATIONS_ATTRIBUTE}=require("./StorageState.Construction");
+const DECORATIONS=require("./data/holiday-decorations.json").decorations;
 const COSTUME_CONTAINERS=new Set(["TOY_BOX","MAGIC_WARDROBE","ARMOUR_CASE","FANCY_DRESS_BOX","CAPE_RACK","TREASURE_CHEST"]);
 
 /** External retrieval is still a transfer from the owner's actual house save, not a copy. */
@@ -25,4 +26,11 @@ function retrieve(api,request) {
   request.taken=true;
   inventory.refreshItems();
 }
-module.exports={retrieve};
+/** "construction:planted" { player, itemIds }: holiday decorations planted in the house are still owned, like stored ones. */
+function planted(api,request) {
+  if(!request?.player||!Array.isArray(request.itemIds))return;
+  const saved=request.player.getAttribute(DECORATIONS_ATTRIBUTE);
+  if(!saved||typeof saved!=="object")return;
+  for(const decoration of DECORATIONS)if(saved[decoration.key])request.itemIds.push(api.core.CacheDefinitions.getObjId(decoration.item));
+}
+module.exports={retrieve,planted};

@@ -54,7 +54,7 @@ function registered({persistAttribute = () => {}} = {}) {
     onInterfaceActionButton: (id, handler) => ids(id).forEach((one) => buttons.set(one, handler)),
     onCustomEvent: (name, handler) => events.set(name, handler),
     onPlayerLogin: (handler) => logins.push(handler),
-    core: { CacheDefinitions },
+    core: { CacheDefinitions, orbsGroupFor: require('../dist/net/protocol/ClientProtocol').orbsGroupFor },
   };
   Settings.register(new Proxy(api, { get: (target, prop) => (prop in target ? target[prop] : () => {}) }));
   return { buttons, events, logins };
@@ -73,6 +73,34 @@ function recordingPlayer() {
   };
   return { sent, getPacketSender: () => sender, setAttribute: (k, v) => attributes.set(k, v), getAttribute: (k) => attributes.get(k) };
 }
+
+test('responsive gameframes validate messages, ignore duplicates and restore the saved desktop layout', () => {
+  const { events } = registered();
+  const receive = events.get('network:plugin-message');
+  const player = recordingPlayer();
+  const roots = [], orbs = [];
+  const sender = player.getPacketSender();
+  sender.sendRootInterface = root => { roots.push(root); return sender; };
+  sender.sendSubInterface = (uid, group) => { orbs.push(group); return sender; };
+  player.getSession = () => ({ sendClientPacket() {} });
+  player.setAttribute('client-layout-root', 548);
+  player.setAttribute('client-layout317', true);
+  const request = mobile => receive({ player, channel: 'gameframe:layout', data: { mobile } });
+  for (const invalid of [undefined, null, 1, 'true', {}, []]) request(invalid);
+  assert.deepEqual(roots, [], 'only a boolean is accepted');
+  request(true);
+  request(true);
+  assert.deepEqual(roots, [601], 'duplicate requests do not rebuild the gameframe');
+  assert.deepEqual(orbs, [897], 'mobile uses the mobile orbs');
+  request(false);
+  assert.deepEqual(roots, [601, 548]);
+  assert.deepEqual(orbs, [897, 160]);
+  assert.equal(player.getAttribute('client-layout-root'), 548);
+  assert.equal(player.getAttribute('client-layout317'), true);
+  player.setAttribute('native-client', true);
+  request(true);
+  assert.deepEqual(roots, [601, 548], 'native gateway sessions keep their own layout');
+});
 
 test('as captured: the search bar takes the keyboard, and closing All Settings by any route gives it back', () => {
   const { buttons, events } = registered();
@@ -327,52 +355,6 @@ test('all native quest preferences are mapped, constrained and restored includin
   }
 });
 
-test('quest cache sort modes, status/requirements filters, empty lists and hidden headers', () => {
-  const {questListGroups} = require('../plugins/quests/QuestList.QuestRuntime');
-  const vars=new Map();
-  const player={getAttribute:()=>0,getPacketSender:()=>({getVarbit:id=>vars.get(id)??0}),getSkillManager:()=>({getMaxLevels:()=>1,getCombatLevel:()=>3})};
-  const quests=[{key:'animal',name:'Animal Magnetism',status:1},{key:'below',name:'Below Ice Mountain',status:0},{key:'bar',name:"Alfred Grimhand's Barcrawl",status:2}];
-  const groups=()=>questListGroups(quests,player,CacheDefinitions,q=>q.status);
-  const rows=()=>groups().flatMap(g=>g.quests);
-  for(let sort=0;sort<12;sort++){
-    vars.set(13772,sort);
-    const result=groups();
-    assert.equal(rows().length,3,`sort ${sort} retains all entries`);
-    assert.ok(result.every(g=>g.title.length>0),`sort ${sort} produces a real group label`);
-  }
-  vars.set(13772,3);
-  assert.ok(groups().some(g=>g.title==='Novice'));
-  vars.set(13772,11);
-  assert.ok(groups().some(g=>g.title==='Free Quests'));
-  vars.set(13778,1);
-  assert.equal(rows().find(q=>q.quest.key==='animal').status,3,'missing requirements shown as unavailable');
-  vars.set(13890,1);
-  assert.ok(!rows().some(q=>q.quest.key==='animal'),'unavailable filter excludes the row');
-  vars.set(13890,0);vars.set(13778,2);
-  assert.ok(!rows().some(q=>q.quest.key==='animal'),'hide requirements filter excludes the row');
-  vars.set(13778,0);vars.set(13779,2);
-  assert.ok(!rows().some(q=>q.quest.key==='below'),'recommended combat filter uses cache metadata');
-  vars.set(13779,0);vars.set(13889,1);
-  assert.deepEqual(groups().map(g=>g.title),['']);
-  vars.set(13775,1);vars.set(13776,1);vars.set(13777,1);
-  assert.deepEqual(groups(),[],'all statuses filtered yields an empty list');
-  vars.clear();vars.set(13772,1);
-  const ties=questListGroups([{key:'z',name:'Animal Magnetism',status:1},{key:'a',name:'Animal Magnetism',status:1}],player,CacheDefinitions,q=>q.status);
-  assert.deepEqual(ties[0].quests.map(q=>q.quest.key),['a','z'],'equal names use stable quest keys');
-});
-
-test('quest requirements translate cache stat ids to Skill objects including Hunter/Construction', () => {
-  const {questListGroups,metadata}=require('../plugins/quests/QuestList.QuestRuntime');
-  const {Skill}=require('../dist/game/model/Skill');
-  const ids=[];
-  const player={getAttribute:()=>9999,getPacketSender:()=>({getVarbit:id=>id===13778?2:0}),getSkillManager:()=>({getMaxLevel:skill=>{ids.push(skill.getClientId());return 99;},getCombatLevel:()=>126})};
-  const records=[...metadata(CacheDefinitions).values()];
-  const names=records.filter(r=>r.requirement_stats?.some((v,i)=>i%2===0&&(v===21||v===22))).map(r=>({key:r.rowId.toString(),name:r.displayname[0],status:1}));
-  questListGroups(names,player,CacheDefinitions,q=>q.status,Skill);
-  assert.ok(ids.includes(21),'Hunter uses its client id');
-  assert.ok(ids.includes(22),'Construction uses its client id');
-});
-
 test('closing or replacing a quest colour picker invalidates only its owned amount callback', () => {
   const {buttons,events}=registered();
   const player=recordingPlayer();let amount;
@@ -524,6 +506,19 @@ test('a volume slider released sets the stored volume from its trigger argument'
   assert.equal(applied.length, 0);
 });
 
+test('an All Settings volume slider stores its volume, not a click on its row', () => {
+  const { buttons } = registered();
+  const applied = [];
+  const player = { applyAudioSettingFromClient: (varp, value) => applied.push([varp, value]), getAttribute: () => undefined, setAttribute: () => {} };
+  const list = (134 << 16) | 20;
+  // Scripts 9260-9278 trigger the row with the setting (30: music) and the volume, zigzag varints.
+  assert.equal(buttons.get(list)({ player, buttonId: list, slot: 7, argsData: Buffer.from([60, 84]), scriptTrigger: true }), true);
+  assert.deepEqual(applied, [[168, 42]]);
+  // A setting that isn't a volume is left alone.
+  assert.equal(buttons.get(list)({ player, buttonId: list, slot: 7, argsData: Buffer.from([2, 84]), scriptTrigger: true }), false);
+  assert.equal(applied.length, 1);
+});
+
 test('the mute buttons save the volume and restore it, as live does', () => {
   const { buttons } = registered();
   const audio = { 168: 8, 169: 65, 872: 100, 3796: 100, 3109: 0, 3797: 0 };
@@ -563,4 +558,24 @@ test('the volume sliders get the transmit-trigger event at login, so the client 
   await new Promise((resolve) => setImmediate(resolve));
   const sliders = flags.filter(([group]) => group === 116).map(([, component, from, to, value]) => [component, from, to, value]);
   assert.deepEqual(sliders.sort((a, b) => a[0] - b[0]), [95, 109, 123, 137].map((component) => [component, -1, -1, 1 << 23]));
+});
+
+test('"Shift click to drop items" (setting 51) starts on and is a plain toggle', () => {
+  assert.equal(CacheDefinitions.getVarbitId('desktop_shiftclickdrop_enabled'), 11556);
+  const { player, click, logins } = allSettings('search');
+  const restore = logins.find((login) => login.name === 'restoreSettings');
+  restore({ player });
+  assert.ok(player.sent.includes('varbit 11556=1'), 'a fresh account has shift-click drop on');
+  const ids = [];
+  for (const [, categoryId] of [...CacheDefinitions.getEnumValues(422)].sort(([a], [b]) => a - b)) {
+    const category = CacheDefinitions.getStructParams(Number(categoryId));
+    for (const [, structId] of [...CacheDefinitions.getEnumValues(Number(category.get(745)))].sort(([a], [b]) => a - b))
+      ids.push(CacheDefinitions.getStructParams(Number(structId)).get(1077));
+  }
+  const row = ids.indexOf(51);
+  assert.ok(row >= 0, 'the setting is in the search results');
+  assert.equal(click(CLICKZONE, row).at(-1), 'varbit 11556=0', 'the first click turns it off');
+  player.sent.length = 0;
+  restore({ player });
+  assert.ok(player.sent.includes('varbit 11556=0') && !player.sent.includes('varbit 11556=1'), 'login keeps it off');
 });

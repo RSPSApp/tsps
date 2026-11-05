@@ -144,6 +144,7 @@ test('refused, self, distant, dead and different-plane Cure Other targets cost n
 
 test('other Lunar player spells still reach their existing fallback', async t => {
   const caster = actor(t), target = actor(t, 3201, 3200);
+  caster.amounts.set(core.ItemIdentifiers.NATURE_RUNE, 1);
   caster.player.setRunEnergy(100); target.player.setRunEnergy(0);
   await cast(t, caster, 'Energy Transfer', [target], target);
   assert.equal(caster.player.getRunEnergy(), 0);

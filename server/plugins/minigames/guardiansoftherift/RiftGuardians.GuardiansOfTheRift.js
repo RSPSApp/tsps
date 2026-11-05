@@ -12,10 +12,13 @@
  *   walks out; +5: the cell is used up, "The powers
  *   of the weak cell extend into the essence. A Guardian comes to life.", sound 956, 80 Crafting
  *   XP, the cell's Runecraft XP (30 weak, 250 overcharged) and the pile's energy (6/15/27/45).
- *   With ten guardians up: "The powers of the cell extend into the essence, but no guardian forms."
+ *   A limit reached during the assembly: "The powers of the cell extend into the essence, but no
+ *   guardian forms."
+ * - At the limit already: "There are already enough rift guardians in the room." and nothing is
+ *   taken (solo capture, limit 2).
  * - Without a charged cell: objectbox with a weak cell, "You will need a charged cell to power any
  *   rift guardians you create from this essence pile."
- * - The HUD counts the guardians up to the cap of 10.
+ * - The HUD counts the guardians against the limit: 2 solo, 10 on a busy world (Game.riftGuardianCap).
  * Wiki: a chisel is needed; the guardian's kind follows the pile and the cell (weak air or mind,
  * medium water or chaos, strong earth or death, overcharged fire or blood); every guardian and
  * creature dies at 100% power.
@@ -66,6 +69,10 @@ function assemble(event) {
   const { player, objectId } = event;
   const pile = pileFor(objectId);
   if (!pile || !Shared.inTemple(player.getLocation()) || !Shared.questComplete(player) || !Game.isPlaying(player)) return false;
+  if (alive() >= Game.riftGuardianCap()) {
+    player.sendMessage("There are already enough rift guardians in the room.");
+    return true;
+  }
   if (Shared.count(player, "chisel") <= 0) {
     Shared.itemStatement(player, "chisel", "You need a chisel to carve the essence into a guardian.");
     return true;
@@ -74,10 +81,11 @@ function assemble(event) {
     Shared.itemStatement(player, Shared.ITEM.CELLS[0], "You will need a charged cell to power any rift guardians you create from this essence pile.");
     return true;
   }
+  // Live holds the player until the guardian rises: walking away doesn't cancel an assembly.
+  if (!Shared.startAction(player, "assemble", (ticks) => step(player, pile, ticks), { locked: true })) return true;
   Shared.spam(player, "You scrape together what usable components you can find.");
   Shared.animate(player, "human_pickupfloor");
   player.getPacketSender().sendSoundEffect(SOUND.SCRAPE, 2, 0);
-  Shared.startAction(player, "assemble", (ticks) => step(player, pile, ticks));
   return true;
 }
 
@@ -101,8 +109,7 @@ function finish(player, pile) {
   Shared.addXp(player, "CRAFTING", CRAFTING_XP);
   Shared.addXp(player, "RUNECRAFTING", Cells.CELL[tier].xp);
   Game.addEnergy(player, pile.type, GUARDIAN_ENERGY[tier]);
-  Game.addContribution(player, 10);
-  if (alive() >= Shared.RIFT_GUARDIAN_CAP) {
+  if (alive() >= Game.riftGuardianCap()) {
     player.sendMessage("The powers of the cell extend into the essence, but no guardian forms.");
     return;
   }
@@ -144,12 +151,16 @@ function dismissAll() {
   Game.setRiftGuardians(0);
 }
 
-/** A guardian goes for the nearest creature it can see: melee beside it, ranged within 7. */
+/**
+ * A guardian goes for the nearest creature it can see. Capture 1840: elementals only ever fight
+ * beside it with the melee sequences, catalytics only at range with the ranged ones.
+ */
 function guardianTurn(npc, now) {
   const from = Creatures.tileOf(npc);
   const target = Creatures.nearestCreature(from, Creatures.sizeOf(npc), SIGHT);
   if (!target) return;
-  if (target.gap > RANGED_REACH) {
+  const melee = Creatures.isElementalGuardian(npc);
+  if (target.gap > (melee ? 1 : RANGED_REACH)) {
     const at = Creatures.tileOf(target.npc);
     Creatures.route(npc, at.x, at.y);
     return;
@@ -158,7 +169,7 @@ function guardianTurn(npc, now) {
   if (now < npc.__gotrNextAttack) return;
   npc.__gotrNextAttack = now + ATTACK_TICKS;
   npc.setPositionToFace?.(target.npc.getLocation());
-  Creatures.animate(npc, target.gap <= 1 ? "rift_guardian_attack_melee" : "rift_guardian_attack_ranged");
+  Creatures.animate(npc, melee ? "rift_guardian_attack_melee" : "rift_guardian_attack_ranged");
   Creatures.hit(target.npc, MAX_HIT[npc.__gotrTier ?? 1]);
   Creatures.struckBy(target.npc, npc);
 }

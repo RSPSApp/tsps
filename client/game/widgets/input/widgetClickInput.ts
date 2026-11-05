@@ -11,6 +11,7 @@ import { runWidgetJsOp } from "../../../widgets/custom/dynamicWidgets";
 import { ClientState } from "../../ClientState";
 import { ClickMode } from "../../InputManager";
 import type { WidgetInteractionController } from "../WidgetInteractionController";
+import { spellClickNeedsTarget, spellWidgetChildSlot } from "../SpellSelectionController";
 import type { WidgetManager } from "../../../widgets/WidgetManager";
 import type { WidgetInputControllerDeps, WidgetInputFrame, WidgetInputState } from "./widgetInputTypes";
 import type { PrimaryWidgetAction } from "./widgetPrimaryAction";
@@ -107,8 +108,9 @@ export function processWidgetClickInput(
                 const targetMask = (flags >>> 11) & 0x3f;
                 const hasSpellAction =
                     targetMask > 0 &&
-                    !!sanitizeText((w as any).spellActionName ?? (w as any).targetVerb);
+                    !!sanitizeText((w as any).spellActionName || (w as any).targetVerb);
                 const isDynamicWidget = ((w as any).fileId | 0) === -1;
+                const canDrag = widgetInteraction.isWidgetDraggable(w);
                 const hasHandlers = !!(
                     w.eventHandlers?.onClick ||
                     w.eventHandlers?.onClickRepeat ||
@@ -123,9 +125,7 @@ export function processWidgetClickInput(
                     hasActions ||
                     hasInventoryItem ||
                     // OSRS: any widget can be a drag source if it has drag listener or implicit drag
-                    w.eventHandlers?.onDrag ||
-                    w.onDrag ||
-                    w.isDraggable ||
+                    canDrag ||
                     isPauseButtonWidget ||
                     // IF_SETEVENTS transmit bits can make otherwise-empty STATIC widgets
                     // clickable (e.g., server-authoritative tab controls). For dynamic children,
@@ -138,7 +138,7 @@ export function processWidgetClickInput(
                 // the gravestone window's corner handle lies over its Close button.
                 const dragOnly =
                     hasHandlers &&
-                    !!(w.isDraggable || w.eventHandlers?.onDrag || w.onDrag) &&
+                    canDrag &&
                     !hasActions &&
                     !hasOnOpHandler &&
                     !hasInventoryItem &&
@@ -148,6 +148,34 @@ export function processWidgetClickInput(
                     !(w.eventHandlers?.onClick || w.eventHandlers?.onClickRepeat || w.eventHandlers?.onHold ||
                         w.eventHandlers?.onRelease || w.onClick || w.onClickRepeat || w.onHold || w.onRelease);
                 if (dragOnly && clickHits.slice(0, i).some((below: any) => offersMenuOp(below, getWidgetFlags, getWidgetOpMask))) {
+                    continue;
+                }
+                // OSRS fires onClick on the widgets under the mouse and runs the top menu entry,
+                // so a widget with a press script but no op of its own (a button's face graphic:
+                // the Demonic Pacts tree's Apply Changes buttons, script 8190's onClick 9125 over
+                // the container whose op is Apply Changes) runs its onClick and lets the click
+                // reach the widget beneath that offers the op. "No op" is no op offered in the
+                // menu (no op text): the face also carries an onOp script, 9126, for ops it has none of.
+                const clickOnly =
+                    hasHandlers &&
+                    !!(w.eventHandlers?.onClick || w.onClick) &&
+                    !hasActions &&
+                    !hasInventoryItem &&
+                    !isPauseButtonWidget &&
+                    !hasSpellAction &&
+                    !(!isDynamicWidget && hasTransmitOps && !opsCleared);
+                if (clickOnly && clickHits.slice(0, i).some((below: any) => offersMenuOp(below, getWidgetFlags, getWidgetOpMask))) {
+                    const scaleX = w._absScaleX ?? 1;
+                    const scaleY = w._absScaleY ?? 1;
+                    const pressCtx: Partial<ScriptEvent> = {
+                        mouseX: ((input.leftClickX - (w._absX ?? w.x ?? 0)) / scaleX) | 0,
+                        mouseY: ((input.leftClickY - (w._absY ?? w.y ?? 0)) / scaleY) | 0,
+                        opIndex: 1,
+                    };
+                    if (w.eventHandlers?.onClick) deps.getCs2Vm().invokeEventHandler(w, "onClick", pressCtx);
+                    else deps.executeScriptListener(w, w.onClick, pressCtx);
+                    widgetInteraction.pressedWidget = w;
+                    widgetManager?.invalidateAll?.();
                     continue;
                 }
                 if (hasHandlers) {
@@ -169,15 +197,22 @@ export function processWidgetClickInput(
                     const clickGroupId = (w.groupId ?? w.uid >>> 16) | 0;
                     const clickChildId = (w.fileId ?? w.uid & 0xffff) | 0;
                     const isSpellbookWidget = clickGroupId === 218 && clickChildId > 0;
+                    // Any other static button with a verb and targets, such as clan creation's Invite.
+                    // One with an op1 keeps that as its left-click, as OSRS does.
+                    const isTargetButton =
+                        (w.childIndex ?? -1) < 0 &&
+                        !w.actions?.[0] &&
+                        !!w.targetVerb &&
+                        deps.getSpellSelection().getWidgetTargetMask(w) > 0;
 
-                    if (isSpellbookWidget) {
+                    if (isSpellbookWidget || isTargetButton) {
                         // Get targetVerb from widget or use "Cast" as fallback for spell widgets
                         let targetVerb = w.targetVerb || w.spellActionName;
 
                         // Only enter targeting mode if targetMask > 0 (spell needs a target)
                         // Teleport spells have targetMask === 0 and should cast immediately.
                         const targetMask = deps.getSpellSelection().getWidgetTargetMask(w);
-                        const needsTarget = targetMask > 0;
+                        const needsTarget = spellClickNeedsTarget(w, targetMask);
 
                         if (
                             !needsTarget &&
@@ -208,10 +243,14 @@ export function processWidgetClickInput(
                         }
 
                         if (targetVerb && needsTarget) {
+                            // A static spell component has no child slot (-1), as the menu's
+                            // target entry passes it. Its component id is not a slot: as one,
+                            // High Level Alchemy (218:47) read slot 47 of another list and
+                            // selected Wind Wave.
                             const spellSelection = deps.getSpellSelection().resolveSpellSelectionFromWidget(
                                 w,
                                 w.uid,
-                                clickChildId,
+                                spellWidgetChildSlot(w),
                                 -1,
                             );
                             // Clicking the currently selected spell deselects it.
@@ -421,10 +460,13 @@ export function processWidgetClickInput(
                         handled = deps.getCs2Vm().invokeEventHandler(w, "onClick", clickCtx);
                     }
 
-                    // Fall back to onOp if onClick didn't handle it (tabs use onOp)
-                    if (!handled && w.eventHandlers?.onOp) {
+                    // OSRS: a left-click fires the widget's onClick and also runs the top menu
+                    // entry, so a widget that offers an op runs its onOp as well (the Demonic Pacts
+                    // tree's Apply Changes buttons, script 8190: onClick for the press, onOp for
+                    // the action). Without an op of its own, onOp is only the fallback (tabs).
+                    if ((!handled || hasActions) && w.eventHandlers?.onOp) {
                         invokedAnyHandler = true;
-                        handled = deps.getCs2Vm().invokeEventHandler(w, "onOp", clickCtx);
+                        handled = deps.getCs2Vm().invokeEventHandler(w, "onOp", clickCtx) || handled;
                     }
 
                     // Try legacy handlers

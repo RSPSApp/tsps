@@ -13,6 +13,8 @@ const { PluginManager } = require("../dist/plugins/PluginManager");
 const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { MapObjects } = require("../dist/game/entity/impl/object/MapObjects");
 const { GameObject } = require("../dist/game/entity/impl/object/GameObject");
+const { BotPlayerSession } = require("../dist/net/BotPlayerSession");
+const { Player } = require("../dist/game/entity/impl/player/Player");
 const { ItemIds } = require("../dist/util/IdEnums");
 
 const core = PluginManager.getCoreApi();
@@ -25,6 +27,110 @@ const RESPAWN_TIMER_SCRIPT = 5474;
 const ORE_MINED_VARP = 4526; // tracking_ore_mined
 const RESET_ANIMATION = core.Animation.DEFAULT_RESET_ANIMATION.getId();
 const noop = () => {};
+
+/** Exercise guild guards through the real generic door/ladder handlers and cache map. */
+function guildVisitor(x, y, current = 60, members = true) {
+  const hooks = new Map(), interactions = new Map(), tasks = [], packets = [], messages = [];
+  const guildCore = { ...core, TaskManager: { submit: task => tasks.push(task) },
+    WorldDefinition: { ...core.WorldDefinition, isMembersWorld: () => members } };
+  const api = new Proxy({ core: guildCore, getTaskManager: () => guildCore.TaskManager,
+    onCustomEvent(name, handler) {
+      if (!hooks.has(name)) hooks.set(name, []);
+      hooks.get(name).push(handler);
+    },
+    emitCustomEvent(name, event) { for (const handler of hooks.get(name) ?? []) handler(event); },
+    onObjectInteraction(name, handlers) { interactions.set(name, handlers); },
+  }, { get: (target, key) => target[key] ?? noop });
+  require("../plugins/areas/MiningGuild.plugin").register(api);
+  require("../plugins/objects/Doors.plugin").register(api);
+  require("../plugins/objects/Ladders.plugin").register(api);
+  const player = new Player(new BotPlayerSession());
+  player.setUsername("guildcheck");
+  player.setRegistered(true);
+  player.setLocation(new core.Location(x, y, 0));
+  player.getSkillManager().setMaxLevel(core.Skill.MINING, 59);
+  player.getSkillManager().setCurrentLevel(core.Skill.MINING, current);
+  player.sendMessage = message => messages.push(message);
+  player.getPacketSender = () => new Proxy({
+    sendObjectRemoval: object => packets.push(["remove", object]),
+    sendObject: object => packets.push(["restore", object]),
+  }, { get: (target, key) => target[key] ?? noop });
+  function click(object, option) {
+    const location = object.getLocation(), definition = object.getDefinition();
+    return interactions.get(definition.getName())[option]({ player, object, objectId: object.getId(),
+      definition, location: { x: location.getX(), y: location.getY(), z: location.getZ() }, clickType: 1 });
+  }
+  function finish() {
+    for (let tick = 0; tick < 8; tick++) for (const task of [...tasks]) task.execute();
+  }
+  return { player, click, finish, tasks, packets, messages };
+}
+
+function guildObject(x, y, name) {
+  core.RegionManager.loadMapFiles(x, y);
+  const object = (MapObjects.mapObjects.get(MapObjects.getHash(x, y, 0)) ?? [])
+    .find(object => object.getId() === core.CacheDefinitions.getLocId(name));
+  assert.ok(object, `${name} at ${x},${y} must exist in the active cache`);
+  return object;
+}
+
+test("Mining Guild: all four surface ladders require 60 current Mining, and boosts count", () => {
+  core.RegionManager.init();
+  for (const [x, y] of [[3018, 3339], [3019, 3338], [3019, 3340], [3020, 3339]]) {
+    const ladder = guildObject(x, y, "mguild_ladder");
+    const low = guildVisitor(x, y, 59);
+    low.click(ladder, "Climb-down");
+    assert.equal(low.tasks.length, 0, "under-level entry never reaches the generic climb");
+    assert.match(low.messages[0], /Mining level of 60/);
+    const boosted = guildVisitor(x, y, 60);
+    boosted.click(ladder, "Climb-down");
+    assert.ok(boosted.tasks.length > 0, "59 base boosted to 60 may climb");
+    boosted.finish();
+    assert.ok(boosted.player.getLocation().getY() >= 9700, "the real cache link enters the mine");
+
+    const exit = guildVisitor(x, y + 6400, 1);
+    exit.click(guildObject(x, y + 6400, "ladder_from_cellar"), "Climb-up");
+    exit.finish();
+    assert.ok(exit.player.getLocation().getY() < 4000, "a drained player can always climb out");
+  }
+});
+
+test("Mining Guild: outer and both members doors check entry, cross, and restore the closed wall", () => {
+  for (const [x, y, name] of [[3046, 9756, "mguild_door"], [3019, 9732, "mguild_door_inner1"], [3043, 9729, "mguild_door_inner2"]]) {
+    const door = guildObject(x, y, name);
+    assert.equal(door.getFace(), 1, "the cached doorway faces north");
+    const low = guildVisitor(x, y + 1, 59);
+    low.click(door, "Open");
+    assert.equal(low.tasks.length, 0);
+    assert.equal(low.packets.length, 0);
+    assert.match(low.messages[0], /Mining level of 60/);
+    const eligible = guildVisitor(x, y + 1, 60);
+    eligible.click(door, "Open");
+    eligible.finish();
+    assert.equal(eligible.player.getLocation().getY(), y);
+    assert.deepEqual(eligible.packets.map(([action]) => action), ["remove", "restore"]);
+    assert.ok((MapObjects.mapObjects.get(MapObjects.getHash(x, y, 0)) ?? []).includes(door),
+      "the shared wall stays closed so other players cannot bypass the guard");
+    const exit = guildVisitor(x, y, 1);
+    exit.click(door, "Open");
+    exit.finish();
+    assert.equal(exit.player.getLocation().getY(), y + 1, "leaving has no skill requirement");
+  }
+});
+
+test("Mining Guild: the main entrance remains free-to-play, while members doors permit only exit", () => {
+  for (const [x, y, name] of [[3046, 9756, "mguild_door"], [3019, 9732, "mguild_door_inner1"], [3043, 9729, "mguild_door_inner2"]]) {
+    const door = guildObject(x, y, name), visitor = guildVisitor(x, y + 1, 60, false);
+    visitor.click(door, "Open");
+    visitor.finish();
+    assert.equal(visitor.player.getLocation().getY(), name === "mguild_door" ? y : y + 1);
+    if (name !== "mguild_door") assert.match(visitor.messages[0], /members' world/);
+    const exit = guildVisitor(x, y, 1, false);
+    exit.click(door, "Open");
+    exit.finish();
+    assert.equal(exit.player.getLocation().getY(), y + 1);
+  }
+});
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
@@ -247,6 +353,20 @@ test("the ore counter is sent again on login", () => {
   assert.deepEqual(player.packets.configs, [[ORE_MINED_VARP, 7]]);
 });
 
+test("Mining is tracking_ore_mined's one writer: stardust counts through it, and it answers the count", () => {
+  const h = harness();
+  const player = createPlayer();
+  player.setAttribute("mining:ores-mined", 23);
+  // Leagues VI capture 237/01101: four stardust from one star roll, tracking_ore_mined 23 -> 27.
+  h.events["mining:count-ore"]({ player, amount: 4 });
+  assert.deepEqual(player.packets.configs, [[ORE_MINED_VARP, 27]]);
+  h.events["mining:count-ore"]({ player, amount: 0 });
+  assert.equal(player.packets.configs.length, 1, "nothing kept, nothing sent");
+  const asked = { player, count: 0 };
+  h.events["mining:ores-mined"](asked);
+  assert.equal(asked.count, 27, "the league summary reads Mining's count");
+});
+
 test("each pickaxe swings its own animation", () => {
   // human_mining_<pickaxe> sequences, as recorded (black 90, crystal 3276, dragon 561, infernal 1634, steel 69, mithril 1098).
   const expected = {
@@ -254,9 +374,34 @@ test("each pickaxe swings its own animation", () => {
     [ItemIds.BLACK_PICKAXE]: 3873, [ItemIds.MITHRIL_PICKAXE]: 629, [ItemIds.ADAMANT_PICKAXE]: 628,
     [ItemIds.RUNE_PICKAXE]: 624, [ItemIds.DRAGON_PICKAXE]: 7139, [ItemIds.CRYSTAL_PICKAXE]: 8347,
     [ItemIds.INFERNAL_PICKAXE]: 4482, [ItemIds.ECHO_PICKAXE]: 8347,
+    // Cosmetic and uncharged variants: their own cache sequences.
+    [ItemIds.GILDED_PICKAXE]: 8313, [ItemIds.DRAGON_PICKAXE_3]: 642, [ItemIds._3RD_AGE_PICKAXE]: 7283,
+    [ItemIds.DRAGON_PICKAXE_OR_]: 8346, [ItemIds.DRAGON_PICKAXE_OR__3]: 8887, [ItemIds.DRAGON_PICKAXE_OR__5]: 11833,
+    [ItemIds.INFERNAL_PICKAXE_OR_]: 11831, [ItemIds.INFERNAL_PICKAXE_OR__3]: 11832,
+    [ItemIds.INFERNAL_PICKAXE_UNCHARGED_]: 4482, [ItemIds.INFERNAL_PICKAXE_UNCHARGED__2]: 11831,
+    [ItemIds.INFERNAL_PICKAXE_UNCHARGED__4]: 11832, [ItemIds.CRYSTAL_PICKAXE_INACTIVE_]: 8347,
   };
   for (const pickaxe of Mining.PICKAXES) {
     assert.equal(pickaxe.animation.getId(), expected[pickaxe.id], `pickaxe ${pickaxe.id}`);
+  }
+});
+
+test("every pickaxe variant can mine, and its wall swings are cache sequences (3rd age pickaxe, issue 1883)", () => {
+  const variants = [
+    ItemIds._3RD_AGE_PICKAXE, ItemIds.GILDED_PICKAXE, ItemIds.DRAGON_PICKAXE_3, ItemIds.DRAGON_PICKAXE_OR_,
+    ItemIds.DRAGON_PICKAXE_OR__3, ItemIds.DRAGON_PICKAXE_OR__5, ItemIds.INFERNAL_PICKAXE_OR_, ItemIds.INFERNAL_PICKAXE_OR__3,
+    ItemIds.INFERNAL_PICKAXE_UNCHARGED_, ItemIds.INFERNAL_PICKAXE_UNCHARGED__2, ItemIds.INFERNAL_PICKAXE_UNCHARGED__4,
+    ItemIds.CRYSTAL_PICKAXE_INACTIVE_,
+  ];
+  for (const id of variants) {
+    const found = Mining.findBestPickaxe(createPlayer({ pickaxe: id }));
+    assert.equal(found?.id, id, `pickaxe ${id}`);
+    assert.ok(core.CacheDefinitions.getSeqName(found.animation.getId()), `swing of ${id}`);
+    for (const kind of ["wall", "sang"]) {
+      const name = found.walls?.[kind]
+        ?? (kind === "wall" ? `human_mining_${found.key}_pickaxe_wall` : `sang_mining_wall_${found.key}_pickaxe`);
+      assert.notEqual(core.CacheDefinitions.getSeqId(name), null, `${kind} swing ${name}`);
+    }
   }
 });
 
@@ -942,6 +1087,149 @@ test("daeyalt rocks (226-231): sang wall swings, sound 2998, one stage down per 
   }
 });
 
+test("calcified rocks (1105; Wiki): wall swings, shards or a deposit, each shard counted, then out with the first ore after 117 ticks", () => {
+  const { Sounds } = core;
+  const original = Sounds.playAreaSound;
+  const areaSounds = [];
+  Sounds.playAreaSound = (options) => areaSounds.push(options);
+  const h = harness();
+  const player = createPlayer();
+  // Roll 1: no gem, a hit, shards, three of them; roll 2: a deposit; then single shards on every roll.
+  const restoreRandom = scriptRandom([0, 0, 0, 0.99, 0, 0, 0.995], 0);
+  const { rock, restore } = mineRock(h, player, "Calcified rocks", loc("varlamore_mining_rock04"));
+  try {
+    h.tick(2);
+    assert.equal(player.animations[0], core.CacheDefinitions.getSeqId("human_mining_rune_pickaxe_wall"));
+    assert.equal(player.spam.at(-1), "You manage to chip off some bone shards.");
+    assert.deepEqual(player.added, [[core.ItemIdentifiers.BLESSED_BONE_SHARDS, 3]]);
+    assert.deepEqual(player.xp.at(-1), [core.Skill.MINING, 33]);
+    assert.deepEqual(player.packets.configs.at(-1), [ORE_MINED_VARP, 3], "each shard counts (1105: +3 for three)");
+    h.tick(3);
+    assert.equal(player.spam.at(-1), "You manage to mine a calcified deposit.");
+    assert.deepEqual(player.added.at(-1), [core.ItemIdentifiers.CALCIFIED_DEPOSIT, 1]);
+    assert.deepEqual(player.xp.at(-1), [core.Skill.MINING, 36]);
+    assert.deepEqual(player.packets.configs.at(-1), [ORE_MINED_VARP, 4]);
+    // Rolls land on +2, +5, ... +116 with the timer still running; the one on +119 is past it.
+    h.tick(113);
+    assert.deepEqual(h.registered, [], "still standing at +118");
+    assert.equal(player.added.length, 39);
+    h.tick(1);
+    assert.equal(player.added.length, 40, "the last ore still comes");
+    assert.equal(h.registered[0].getId(), loc("varlamore_mining_rock_empty04"));
+    assert.deepEqual(areaSounds.map((sound) => [sound.soundId, sound.delay, sound.radius, sound.x, sound.y]), [[2661, 10, 1, rock.getLocation().getX(), rock.getLocation().getY()]]);
+    assert.equal(player.packets.scripts.at(-1)[5], 50, "30 s respawn (Wiki)");
+    assert.equal(Mining.isMiningActive(player), false);
+    h.tick(50);
+    assert.equal(h.registered.at(-1), rock, "the same rock respawns");
+  } finally {
+    Sounds.playAreaSound = original;
+    restoreRandom();
+    restore();
+  }
+  const byName = new Map(Mining.ROCKS.map((entry) => [entry.objectName, entry]));
+  const calcified = byName.get("Calcified rocks");
+  assert.deepEqual([calcified.level, calcified.respawnTicks, calcified.depletionTicks], [41, 50, 117]);
+  for (const variant of ["", "02", "03", "04"]) {
+    const event = { player, object: { getId: () => loc(`varlamore_mining_rock_empty${variant}`) } };
+    h.interactions.get("Rocks").Mine(event);
+    assert.equal(event.handled, true, `varlamore_mining_rock_empty${variant} says it is empty`);
+  }
+});
+
+test("Cam Torum's oozing water (1105): two rocks a half, +15% while wet, then each is mined out the tick after it stops", () => {
+  const { Sounds } = core;
+  const original = Sounds.playAreaSound;
+  const areaSounds = [];
+  Sounds.playAreaSound = (options) => areaSounds.push(options);
+  core.RegionManager.init();
+  const h = harness();
+  const Water = require("../plugins/skills/mining/CalcifiedWater.Mining")._test;
+  const sites = Water.sites();
+  // Wiki Calcified rocks locations; the cache places the same sixteen.
+  assert.deepEqual(sites.map((site) => `${site.getLocation().getX()},${site.getLocation().getY()}`).sort(), [
+    "1497,9540", "1497,9542", "1497,9543", "1498,9546", "1499,9546", "1501,9537", "1502,9537", "1505,9537",
+    "1514,9546", "1516,9546", "1517,9537", "1517,9546", "1518,9537", "1521,9541", "1521,9542", "1521,9543",
+  ]);
+  const player = createPlayer();
+  Object.assign(player, { isPlayer: () => true, isNpc: () => false, getIndex: () => 1, getAsPlayer: () => player, getArea: () => null });
+  Water.mine().enter(player);
+  try {
+    Water.cycle.nextOoze = Water.cycle.tick + 1;
+    h.tick(1);
+    const water = h.registered.filter((object) => object.getId() === loc("varlamore_mining_special_rock"));
+    assert.equal(water.length, 4);
+    assert.ok(water.every((object) => object.getType() === 4), "a wall decoration");
+    assert.deepEqual(water.map((object) => object.getLocation().getX() >= 1510).sort(), [false, false, true, true], "two west, two east");
+    for (const object of water) {
+      const site = sites.find((entry) => entry.getLocation().equals(object.getLocation()));
+      assert.equal(object.getFace(), site.getFace(), "the rock's rotation");
+    }
+    assert.equal(player.messages.at(-1), "<col=a53fff>Some cracks around the cave begin to ooze water.");
+    assert.equal(player.packets.sounds.at(-1), 2041);
+    const lasts = Water.cycle.stopAt - Water.cycle.tick;
+    assert.ok(lasts >= 38 && lasts <= 54, `water for ${lasts} ticks`);
+    assert.ok(Water.cycle.nextOoze - Water.cycle.tick >= 117 && Water.cycle.nextOoze - Water.cycle.tick <= 146);
+
+    // +15% of a 50% roll: a miss becomes a hit 15% of the time, on a wet rock only.
+    const wetRock = sites.find((site) => Water.isWet(site));
+    const dryRock = sites.find((site) => !Water.isWet(site));
+    const attempt = (object, roll) => {
+      const request = { player, object, rock: "Calcified rocks", success: false, chance: 0.5 };
+      Water.waterBoost(request, () => roll);
+      return request.success;
+    };
+    assert.equal(attempt(wetRock, 0.149), true);
+    assert.equal(attempt(wetRock, 0.151), false);
+    assert.equal(attempt(dryRock, 0), false);
+
+    h.tick(lasts);
+    assert.equal(Water.isWet(wetRock), false, "no boost once the water stops");
+    assert.equal(h.registered.length, 4, "the rocks stand until the next tick");
+    h.tick(1);
+    const emptied = h.registered.slice(4);
+    assert.equal(emptied.length, 4);
+    for (const object of emptied) {
+      const site = water.find((entry) => entry.getLocation().equals(object.getLocation()));
+      assert.ok(site, "each wet rock, mined or not");
+      const gameval = core.CacheDefinitions.getLocNames().get(sites.find((entry) => entry.getLocation().equals(object.getLocation())).getId());
+      assert.equal(object.getId(), loc(gameval.replace(/rock(\d*)$/, "rock_empty$1")));
+    }
+    assert.deepEqual(areaSounds.map((sound) => sound.soundId), [2661, 2661, 2661, 2661]);
+    assert.equal(player.packets.scripts.length, 4, "the respawn timers go to the players in the mine");
+  } finally {
+    Water.mine().leave(player, false);
+    Sounds.playAreaSound = original;
+  }
+});
+
+test("Cam Torum's water still finds a rock that is mined out when the mine is first scanned", () => {
+  const { MapObjects, GameObject } = core;
+  core.RegionManager.init();
+  harness();
+  const Water = require("../plugins/skills/mining/CalcifiedWater.Mining")._test;
+  core.RegionManager.loadMapFiles(Water.MINE.x, Water.MINE.y);
+  const hash = MapObjects.getHash(1502, 9537, 1);
+  const placed = MapObjects.mapObjects.get(hash);
+  const original = placed.find((object) => object.getId() === loc("varlamore_mining_rock02") || core.CacheDefinitions.getObject(object.getId())?.name === "Calcified rocks");
+  assert.ok(original, "a calcified rock at 1502,9537");
+  const rockId = original.getId();
+  const emptyId = loc(core.CacheDefinitions.getLocNames().get(rockId).replace(/rock(\d*)$/, "rock_empty$1"));
+  const emptied = new GameObject(emptyId, original.getLocation().clone(), original.getType(), original.getFace(), null);
+  MapObjects.mapObjects.set(hash, placed.map((object) => (object === original ? emptied : object)));
+  try {
+    const sites = Water.sites();
+    assert.equal(sites.length, 16, "the mined-out rock still counts as a site");
+    const site = sites.find((entry) => entry.getLocation().getX() === 1502 && entry.getLocation().getY() === 9537);
+    assert.equal(site.getId(), rockId, "as the rock its empty loc stands in for");
+    assert.equal(site.getFace(), original.getFace());
+  } finally {
+    MapObjects.mapObjects.set(hash, placed);
+  }
+  // Respawned, the rock can ooze again.
+  assert.ok(Water.sites().some((entry) => entry.getLocation().getX() === 1502 && entry.getLocation().getY() === 9537
+    && MapObjects.get(entry.getId(), entry.getLocation(), null)), "the respawned rock is standing at its site");
+});
+
 test("every loc named for mining in the cache has a handler (this plugin, or the content that owns it)", () => {
   // Rocks other plugins mine, by name: quests, minigames, bosses, stars, Motherlode.
   const elsewhere = new Set([
@@ -954,7 +1242,7 @@ test("every loc named for mining in the cache has a handler (this plugin, or the
   ]);
   // Not mineable yet (docs/mining.md, Not done): each needs its own area or mechanic.
   const notYet = new Set([
-    "Limestone rock", "Pile of rock", "Pile of Rock", "Rubium deposit", "Infernal shale deposit", "Calcified rocks",
+    "Limestone rock", "Pile of rock", "Pile of Rock", "Rubium deposit", "Infernal shale deposit",
     "Daeyalt Essence", "Gem Rock", "Easter egg rock", "Amalgamation", "Ancient essence crystals",
     "Adamant ore vein", "Clay ore vein", "Coal ore vein", "Copper ore vein", "Iron ore vein", "Mithril ore vein",
     "Tin ore vein", "Depleted vein", "Gold vein", "Ash pile", "Empty ash pile", "Giant Boulder", "Large Boulder",
@@ -971,4 +1259,24 @@ test("every loc named for mining in the cache has a handler (this plugin, or the
     if (!h.interactions.has(name) && !elsewhere.has(name) && !notYet.has(name)) missing.add(name);
   }
   assert.deepEqual([...missing], []);
+});
+
+
+test("sulphur mining stops when the breathing filter is removed before the roll", () => {
+  const h = harness();
+  const player = createPlayer();
+  let filtered = true;
+  player.getEquipment = () => ({ get: () => ({ getId: () => filtered ? core.ItemIdentifiers.GAS_MASK : -1 }), getItems: () => [] });
+  const { restore } = mineRock(h, player, "Volcanic sulphur", 28496);
+  try {
+    assert.equal(Mining.isMiningActive(player), true);
+    h.tick();
+    filtered = false;
+    h.tick(20);
+    assert.equal(Mining.isMiningActive(player), false);
+    assert.equal(player.added.length, 0);
+    assert.equal(player.xp.length, 0);
+  } finally {
+    restore();
+  }
 });

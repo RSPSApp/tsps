@@ -52,17 +52,15 @@ test('a sequence priority lookup reads the decoded archive, not a fresh decompre
   assert.equal(getSequencePriority(733), 1, 'cooking is still dropped by movement');
 });
 
-// Wiki: Animation stall. The client decides both halves of a stall from the seq config, and the
-// server reads the same fields so it never locks someone the client would let step out.
-test('the cache says which attack animations hold the player and for how long', async () => {
+// Wiki: Animation stall. The seq config says how long the client keeps the animation on screen.
+// It can withhold the actor's steps too (a partial stall), but the server keeps walking the true
+// tile; full stalls are content, never cache config.
+test('the cache says how long a swing animation stays on screen', async () => {
   await CachePipeline.initialize(path.resolve(__dirname, '..'));
-  // Crossbows carry no masks and run 81 client cycles: the hunters' crossbow stall the Wiki names.
-  assert.deepEqual(getSequenceStall(4230), { ticks: 3, blocks: true, cancelsOnStep: false });
-  // A battleaxe swing is masked, so the client lets the player step out of it.
-  assert.equal(getSequenceStall(401).blocks, false, 'battleaxe swing holds nobody');
-  assert.equal(getSequenceStall(401).ticks, 2);
-  // Net fishing is dropped by a step, so it holds nothing at all.
-  assert.equal(getSequenceStall(621).cancelsOnStep, true);
+  // Crossbows run 81 client cycles: the hunters' crossbow stall the Wiki names.
+  assert.equal(getSequenceStall(4230).ticks, 3);
+  assert.equal(getSequenceStall(401).ticks, 2, 'a battleaxe swing');
+  assert.equal(getSequenceStall(711).ticks, 3, 'a wind strike cast');
 });
 
 /** A player with a real Combat, and only the packet and movement plumbing stubbed out. */
@@ -102,6 +100,25 @@ function buildFighter(stepped) {
   return { player, combat, sent };
 }
 
+/**
+ * Stands in for a data row: makes core measure this seq as a full stall. The real row is
+ * covered by the definition-file test; hit stacking needs a full stall and no player fixture
+ * here owns an equipment container to give the plugin.
+ */
+const forcedFullStalls = new Set();
+let fullStallHookInstalled = false;
+function forceFullStall(animationId) {
+  if (!fullStallHookInstalled) {
+    const { PluginManager } = require('../dist/plugins/PluginManager');
+    PluginManager.createApi('TestFullStall').onAnimationStall((event) => {
+      if (forcedFullStalls.has(event.animationId)) event.kind = 'full';
+    });
+    fullStallHookInstalled = true;
+  }
+  forcedFullStalls.add(animationId);
+  return () => forcedFullStalls.delete(animationId);
+}
+
 function swingTarget() {
   return {
     isPlayer: () => true,
@@ -115,7 +132,7 @@ function swingTarget() {
 }
 
 /** The swing itself, with the real attack pipeline in front of it. */
-test('a swing through Combat arms the measurement and holds the player where they stand', async (t) => {
+test('a swing through Combat measures a partial stall and keeps the true tile walking', async (t) => {
   const { CombatFactory, CanAttackResponse } = require('../dist/game/content/combat/CombatFactory');
   const { CombatRange } = require('../dist/game/content/combat/CombatRange');
   const { CombatType } = require('../dist/game/content/combat/CombatType');
@@ -147,11 +164,72 @@ test('a swing through Combat arms the measurement and holds the player where the
   assert.equal(combat.performNewAttack(false), true, 'the swing went off');
 
   assert.deepEqual(sent, [4230], 'the swing played its animation');
-  assert.equal(combat.getAnimationStallTicks(), 3, 'and measured its stall');
-  assert.equal(queue.getMobility().canMove(), false, 'the animation holds their feet');
+  assert.equal(combat.getAnimationStallTicks(), 0,
+      'the seq withholds steps visually, so it is a partial stall, not a full one');
+  assert.equal(combat.getIncomingHitCycle(), -1, 'a partial stall does not stack incoming hits');
+  assert.equal(queue.getMobility().canMove(), true, 'a partial stall does not hold their feet');
+  queue.addSteps(new Location(3200, 3201, 0));
+  assert.equal(queue.size(), 1, 'a click during the animation still walks the true tile');
 
   World.processCycle = 203;
-  assert.equal(queue.getMobility().canMove(), true, 'released once the animation has played out');
+  assert.equal(queue.getMobility().canMove(), true, 'and the server never locks them');
+});
+
+/**
+ * Issue #1679: casting a spell is a partial stall, not a full one. A player who clicks away the
+ * tick the cast lands must keep their true tile walking; the client holds the animation on the
+ * old tile and rubber-bands them once it ends.
+ */
+test('a spell cast leaves movement and the true tile free while its animation plays', async (t) => {
+  const { CombatFactory, CanAttackResponse } = require('../dist/game/content/combat/CombatFactory');
+  const { CombatRange } = require('../dist/game/content/combat/CombatRange');
+  const { CombatType } = require('../dist/game/content/combat/CombatType');
+  const { MovementQueue } = require('../dist/game/model/movement/MovementQueue');
+  await CachePipeline.initialize(path.resolve(__dirname, '..'));
+  World.processCycle = 210;
+  const { player, combat, sent } = buildFighter(false);
+  const queue = new MovementQueue(player);
+  player.getMovementQueue = () => queue;
+
+  const method = {
+    type: () => CombatType.MAGIC,
+    attackSpeed: () => 5,
+    onCombatBegan: () => {},
+    onCombatEnded: () => {},
+    finished: () => {},
+    requireProjectiles: () => false,
+    hits: () => [],
+    start: (character) => character.performAnimation(new Animation(711)), // wind strike
+  };
+  t.mock.method(CombatFactory, 'validTarget', () => true);
+  t.mock.method(CombatFactory, 'canAttackPermission', () => CanAttackResponse.CAN_ATTACK);
+  t.mock.method(CombatFactory, 'canAttack', () => CanAttackResponse.CAN_ATTACK);
+  t.mock.method(CombatFactory, 'getMethod', () => method);
+  t.mock.method(CombatRange, 'canReach', () => true);
+
+  combat.attack(swingTarget());
+  assert.equal(combat.performNewAttack(false), true, 'the cast went off');
+  assert.deepEqual(sent, [711], 'the cast animation plays');
+
+  assert.equal(combat.isAnimationStalled(), false, 'a cast is not a full stall');
+  assert.equal(queue.getMobility().canMove(), true, 'the player may walk the same tick');
+  queue.addSteps(new Location(3200, 3201, 0));
+  assert.equal(queue.size(), 1, 'and their true tile takes the step');
+
+  // Process the tick: the step lands even though the client will keep the cast on screen.
+  let location = new Location(3200, 3200, 0);
+  player.getLocation = () => location;
+  player.setLocation = (next) => { location = next; return player; };
+  queue.handleRegionChange = () => {};
+  queue.syncWildernessStateForMovedPlayer = () => {};
+  queue.drainRunEnergy = () => {};
+  queue.process();
+  assert.deepEqual([location.getX(), location.getY()], [3200, 3201],
+      'the true tile walked under the still-playing cast');
+
+  // The partial stall still owns the animation: a click that drops the target must not cut it.
+  combat.clearInteraction();
+  assert.deepEqual(sent, [711], 'the click left the cast animation playing');
 });
 
 /**
@@ -340,12 +418,13 @@ function equipRubyCrossbow(player, combat) {
 // schedules each splat past its own delay straight into the target's pendingDamage list - dragon
 // claws' Slice and Dice lands its front pair, then a tick later its back pair (Wiki: Animation
 // stall queues the hits coming in to the player, so a stalled target must not take the tail early).
-test('a stalled player takes a delayed special hit only when the animation releases', async () => {
+test('a stalled player takes a delayed special hit only when the animation releases', async (t) => {
   const { CombatFactory } = require('../dist/game/content/combat/CombatFactory');
   const { TaskManager } = require('../dist/game/task/TaskManager');
   await CachePipeline.initialize(path.resolve(__dirname, '..'));
   World.processCycle = 301;
   const { player, combat, taken } = buildDamageTarget();
+  t.after(forceFullStall(4230));
   const queue = combat.getHitQueue();
 
   const swing = clawsSwing(clawsAttacker(dragonClawsSpecial()), player, 35);
@@ -360,7 +439,7 @@ test('a stalled player takes a delayed special hit only when the animation relea
   assert.deepEqual(taken, [35, 17], 'the front pair lands on the swing tick');
 
   player.getCombat().expectAttackAnimation();
-  player.performAnimation(new Animation(4230)); // a hunters' crossbow swing: a full 3-tick stall
+  player.performAnimation(new Animation(4230)); // 3 ticks, promoted to a full stall for this test
   assert.equal(combat.getIncomingHitCycle(), 304, 'held through cycle 304');
 
   World.processCycle = 302;
@@ -373,12 +452,13 @@ test('a stalled player takes a delayed special hit only when the animation relea
   assert.deepEqual(taken, [35, 17, 8, 9], 'the whole chain lands as the animation releases');
 });
 
-test('stopping the animation early releases the delayed special hit with it', async () => {
+test('stopping the animation early releases the delayed special hit with it', async (t) => {
   const { CombatFactory } = require('../dist/game/content/combat/CombatFactory');
   const { TaskManager } = require('../dist/game/task/TaskManager');
   await CachePipeline.initialize(path.resolve(__dirname, '..'));
   World.processCycle = 301;
   const { player, combat, taken } = buildDamageTarget();
+  t.after(forceFullStall(4230));
   const queue = combat.getHitQueue();
 
   const swing = clawsSwing(clawsAttacker(dragonClawsSpecial()), player, 35);
@@ -406,7 +486,7 @@ test('stopping the animation early releases the delayed special hit with it', as
 // its source, so the stall must not hold it. Breaking the drain at the first held splat let a
 // player who fired one while a delayed special was queued behind their animation dodge the cost
 // until the stall ended - and whether they dodged it depended on which entry was queued first.
-test('a stalled player still pays a bolt effect that costs them their own hitpoints', async () => {
+test('a stalled player still pays a bolt effect that costs them their own hitpoints', async (t) => {
   const { CombatFactory } = require('../dist/game/content/combat/CombatFactory');
   const { TaskManager } = require('../dist/game/task/TaskManager');
   const { CombatType } = require('../dist/game/content/combat/CombatType');
@@ -417,6 +497,7 @@ test('a stalled player still pays a bolt effect that costs them their own hitpoi
 
   World.processCycle = 301;
   const { player, combat, taken } = buildDamageTarget();
+  t.after(forceFullStall(4230));
   const queue = combat.getHitQueue();
   equipRubyCrossbow(player, combat);
   player.getPacketSender = () => ({
@@ -435,7 +516,7 @@ test('a stalled player still pays a bolt effect that costs them their own hitpoi
   assert.equal(player.getHitpoints(), 78);
 
   player.getCombat().expectAttackAnimation();
-  player.performAnimation(new Animation(4230)); // a hunters' crossbow swing: a full 3-tick stall
+  player.performAnimation(new Animation(4230)); // 3 ticks, promoted to a full stall for this test
   assert.equal(combat.getIncomingHitCycle(), 304, 'held through cycle 304');
 
   World.processCycle = 302;
@@ -479,19 +560,20 @@ test('a swing is measured from its own animation, and a click does not cut it aw
   combat.expectAttackAnimation();
   player.performAnimation(new Animation(4230));
   assert.deepEqual(sent, [4230], 'the swing plays out');
-  assert.equal(combat.getAnimationStallTicks(), 3, 'its 81 cycles hold the player 3 ticks');
+  assert.equal(combat.getAnimationStallTicks(), 0,
+      'its 81 cycles withhold steps on the client, a partial stall the server never locks for');
 
   // Only the armed swing is measured: a flinch or an overhead effect stalls nobody. The block
   // does not even reach the screen here - the cache gives an attack interrupt priority 6 and a
   // block 5, so it cannot replace the swing it lands on (Wiki: Animation interrupt priority).
   player.performAnimation(new Animation(424));
-  assert.equal(combat.getAnimationStallTicks(), 3, 'the block anim that followed is not a stall');
+  assert.equal(combat.isAnimationStalled(), false, 'the block anim that followed holds nobody');
 
   combat.clearInteraction();
   assert.deepEqual(sent, [4230], 'the click that dropped the target left the animation playing');
 
+  // The partial stall ends with the animation, and an ordinary reset may cut what follows.
   World.processCycle = 103;
-  assert.equal(combat.getAnimationStallTicks(), 0, 'the stall releases with the animation');
   combat.attack(swingTarget());
   combat.clearInteraction();
   assert.equal(sent.at(-1), 65535, 'an ordinary reset still stops the animation');
@@ -511,47 +593,50 @@ test('a swing started on the tick the player stepped holds their actions but not
   assert.deepEqual(sent, [4230], 'and the click still cannot cut the animation away');
 });
 
-test('content that stops the animation on purpose ends the stall with it', async () => {
+test('content that stops a full stall on purpose releases it with the animation', async (t) => {
   await CachePipeline.initialize(path.resolve(__dirname, '..'));
   World.processCycle = 100;
   const { player, combat } = buildFighter(false);
+  t.after(forceFullStall(4230));
 
   combat.expectAttackAnimation();
   player.performAnimation(new Animation(4230));
-  assert.equal(combat.getAnimationStallTicks(), 3);
+  assert.equal(combat.getAnimationStallTicks(), 3, 'the promoted swing still locks');
   player.performAnimation(Animation.DEFAULT_RESET_ANIMATION);
   assert.equal(combat.getAnimationStallTicks(), 0, 'teleports and deaths are not held by a swing');
 });
 
-test('the definition file states the stalls the cache cannot see', () => {
+test('the definition file declares no unsourced full stalls', () => {
   const { Equipment } = require('../dist/game/model/container/impl/Equipment');
   const { ItemIdentifiers } = require('../dist/util/ItemIdentifiers');
+  const stalls = require('../plugins/combat/data/animation-stalls.json');
+  // The Wiki's "Attack animation stalls" list does not distinguish full stalls from partial
+  // ones, so a row needs evidence beyond membership in it. None has that today.
+  assert.deepEqual(stalls.animations, {}, 'no animation rows');
+  assert.deepEqual(stalls.weapons, {}, 'no weapon rows');
+
   let applyStall = null;
   require('../plugins/combat/AnimationStalls.plugin').register({
     core: { Equipment },
     onAnimationStall: (handler) => { applyStall = handler; },
   });
 
-  const swing = (weaponId) => ({
+  // The leaf-bladed battleaxe's walk delay was fixed on 9 July 2020 (Wiki: Leaf-bladed
+  // battleaxe - Changes), so it is a partial stall like the other listed attack animations.
+  const named = {
     player: {
       getEquipment: () => ({
-        get: (slot) => slot === Equipment.WEAPON_SLOT ? { getId: () => weaponId } : null,
+        get: (slot) => slot === Equipment.WEAPON_SLOT
+            ? { getId: () => ItemIdentifiers.LEAF_BLADED_BATTLEAXE }
+            : null,
       }),
     },
     animationId: 401,
     ticks: 2,
     kind: 'partial',
     holdsHits: true,
-  });
-
-  // Wiki: Animation stall names the leaf-bladed battleaxe, but its swing reuses the masked
-  // battleaxe seqs, which the cache therefore rates as free.
-  const named = swing(ItemIdentifiers.LEAF_BLADED_BATTLEAXE);
+  };
   applyStall(named);
-  assert.equal(named.kind, 'full', 'the row promotes the swing to a full stall');
-  assert.equal(named.ticks, 2, 'its length still comes from the cache');
-
-  const other = swing(ItemIdentifiers.GRANITE_MAUL);
-  applyStall(other);
-  assert.equal(other.kind, 'partial', 'a weapon the Wiki does not name keeps the cache answer');
+  assert.equal(named.kind, 'partial', 'no row: the battleaxe keeps core\'s partial stall');
+  assert.equal(named.ticks, 2, 'and its length still comes from the cache');
 });

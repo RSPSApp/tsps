@@ -356,7 +356,9 @@ test("a manual cast keeps its cast animation: the combat reset after it doesn't 
     const animations = [];
     const character = {
         isPlayer: () => true, isNpc: () => false,
-        getAsPlayer: () => ({ getPacketSender: () => ({ sendConfig() {} }) }),
+        getAsPlayer: () => character,
+        getPacketSender: () => ({ sendConfig() {} }),
+        getEquipment: () => ({ hasStaffEquipped: () => false }),
         setMobileInteraction() {}, setPositionToFace() {},
         performAnimation: (animation) => animations.push(animation.getId()),
         getMovementQueue: () => ({ reset() {} }),
@@ -450,7 +452,13 @@ test('a combat cast pays its Wiki base XP once, at the XP rate: splashes pay the
     assert.equal(cast(CombatSpells.WIND_STRIKE, hit(false, 0)), 11, 'a Wind Strike splash: 5.5 base only, doubled');
     assert.equal(cast(CombatSpells.WIND_STRIKE, hit(true, 2)), 11 + 8, '5.5 base + 2 per damage, doubled');
     assert.equal(cast(CombatSpells.ICE_BARRAGE, hit(true, 10), hit(true, 10)), 104 + 80, 'one 52 base for two targets');
-    assert.equal(cast(CombatSpells.TRIDENT_OF_THE_SEAS, hit(true, 10)), 40, 'a powered staff: 2 per damage, no base');
+    // A powered staff's built-in spell (plugins/items/PoweredStaff.js) has no base experience.
+    const { CombatNormalSpell } = require('../dist/game/content/combat/magic/CombatNormalSpell');
+    const poweredStaffSpell = new CombatNormalSpell({
+        spellId: () => 11907, maximumHit: () => 20, castAnimation: () => null, startGraphic: () => null,
+        castProjectile: () => null, endGraphic: () => null, baseExperience: () => 0,
+    });
+    assert.equal(cast(poweredStaffSpell, hit(true, 10)), 40, 'a powered staff: 2 per damage, no base');
     // Wiki: the binding spells and Tele Block pay less on a splash.
     assert.equal(cast(CombatSpells.ENTANGLE, hit(true, 0)), 178, 'Entangle hit: 89');
     assert.equal(cast(CombatSpells.ENTANGLE, hit(false, 0)), 140, 'Entangle splash: 70');

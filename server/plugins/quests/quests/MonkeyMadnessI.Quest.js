@@ -881,6 +881,15 @@ module.exports = function registerMonkeyMadnessIQuest(api) {
     return "chapter-3-talking-to-a-monkey-in-the-cage";
   }
 
+  function wasPutInZooCage(player, from) {
+    if (player.isRegistered?.() !== true || player.getHitpoints?.() <= 0 || player.isDyingReturn?.()) return false;
+    if (player.getPrivateArea?.()) return false;
+    const current = player.getLocation?.();
+    return current?.getX() === ZOO_PEN.getX() && current?.getY() === ZOO_PEN.getY()
+      && current?.getZ() === ZOO_PEN.getZ()
+      && (current.getX() !== from?.getX() || current.getY() !== from?.getY() || current.getZ() !== from?.getZ());
+  }
+
   function selectWaymottinVariant({ npcId, player }) {
     if (!WAYMOTTIN_IDS.has(npcId)) return null;
     if (stageOf(player) < STAGE_CHAPTERS) return null;
@@ -995,9 +1004,9 @@ module.exports = function registerMonkeyMadnessIQuest(api) {
       }
       case "pgN5Sw": // sigil: subsequent times
         return flag(player, SIGIL_USED_ATTRIBUTE);
-      case "Agjjnw": // the player is male
+      case "AYjoK1": // the player is male
         return player.getAppearance?.().isMale?.() !== false;
-      case "DTbh6y": // the player is female
+      case "c39yGh": // the player is female
         return player.getAppearance?.().isMale?.() === false;
       default:
         return null;
@@ -1775,8 +1784,16 @@ module.exports = function registerMonkeyMadnessIQuest(api) {
         && !flag(player, MONKEY_CAPTURED_ATTRIBUTE) && inZone(player.getLocation(), ZOO_IDS)) {
         event.handled = true;
         player.setAttribute(MONKEY_CAPTURED_ATTRIBUTE, true);
+        const from = player.getLocation();
         startTranscript(api, player, npcId, PAGE, "chapter-3-getting-captured-by-the-monkey-minder");
         player.moveTo(ZOO_PEN);
+        if (wasPutInZooCage(player, from)) {
+          api.emitCustomEvent("diary:task", {
+            player,
+            diary: "ardougne",
+            task: "have-a-zookeeper-put-you-in-ardougne-zoo-s-monke",
+          });
+        }
         return true;
       }
       if (!monkeyForm(player) && flag(player, MONKEY_CAPTURED_ATTRIBUTE)

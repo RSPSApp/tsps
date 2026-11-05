@@ -18,6 +18,35 @@ test("lair bounds cover the arena but not the tunnel approach", () => {
   assert.equal(Area.insideLair(null), false);
 });
 
+test("Araxxor access requires boosted Slayer 92, Priest in Peril and an araxyte or spider task", () => {
+  class CoreArea {}
+  class PrivateArea {}
+  class Boundary {}
+  const events = [];
+  const core = { Area: CoreArea, PrivateArea, Boundary, Skill: { SLAYER: 18 } };
+  Area.attach({
+    core,
+    registerArea() {},
+    emitCustomEvent(name, request) {
+      events.push(name);
+      if (name === "quest:is-complete") request.complete = request.player.priestInPeril;
+      if (name === "slayer:current-task") request.task = request.player.task;
+    },
+  });
+  const player = (level, priestInPeril, task) => ({
+    priestInPeril,
+    task,
+    getSkillManager: () => ({ getCurrentLevel: skill => skill === core.Skill.SLAYER ? level : 1 }),
+  });
+  assert.match(Area._test.entryReason(player(91, true, { name: "Araxytes" })), /92/);
+  assert.match(Area._test.entryReason(player(92, false, { name: "Araxytes" })), /Priest in Peril/);
+  assert.match(Area._test.entryReason(player(92, true, { name: "Vampyres" })), /araxyte|spider/i);
+  assert.equal(Area._test.entryReason(player(92, true, { name: "Spiders" })), null);
+  assert.equal(Area._test.entryReason(player(92, true, { name: "Araxytes" })), null);
+  assert.equal(events.filter(name => name === "slayer:current-task").length, 3,
+    "the Slayer task is queried only after level and quest checks pass");
+});
+
 test("edge distance measures to the 7x7 body, not its corner", () => {
   assert.equal(Shared.edgeDistance(3631, 9812, 3638, 9812), 1);
   assert.equal(Shared.edgeDistance(3631, 9812, 3637, 9818), 0, "under the body");
@@ -100,6 +129,22 @@ test("captured projectile flights land on the captured ticks", () => {
   assert.equal(Shared.landingTicks(Shared.projectileEnd(ballBurst, 1)), 4);
   // Ranged, magic and the drip have a fixed 120-cycle flight: four ticks.
   for (const shape of [ranged, magic, drip]) assert.equal(Shared.landingTicks(Shared.projectileEnd(shape, 9)), 4);
+});
+
+test("her ranged and magic hits splat with the 120-cycle shot, not a tick before (#1862)", () => {
+  const { Projectile } = require("../dist/game/model/Projectile");
+  const Combat = require("../plugins/bosses/araxxor/Combat.Araxxor");
+  Combat.attach({
+    core: { Projectile, CombatMethod: class {}, CombatType: {}, NpcIdentifiers: { ARAXXOR: 13668 } },
+    getPrayerHandler: () => ({}),
+    onNpcHitModify: () => {},
+    registerNpcCombatMethodProvider: () => {},
+  });
+  for (const shape of [Shared.PROJECTILE.ranged, Shared.PROJECTILE.magic]) {
+    const ticks = Combat._test.shotTicks(shape);
+    assert.equal(ticks, Shared.DISTANT_HIT_TICKS);
+    assert.ok(ticks * 30 >= shape.end && (ticks - 1) * 30 < shape.end);
+  }
 });
 
 test("captured attack schedule: special on every seventh attack", () => {
@@ -397,3 +442,51 @@ test("Araxxor cleanup leaves incoming hits alone for players without a lair", ()
   assert.equal(cleared, 1, "cleanup ends with the actual instance");
 });
 
+test("the harvest pet roll and the destroyed corpse's Nid roll are loot, not extra kills", () => {
+  const Corpse = require("../plugins/bosses/araxxor/Corpse.Araxxor");
+  const events = [];
+  const core = {
+    Animation: class {},
+    Item: class {},
+    ItemDefinition: { forId: () => ({ getNoteId: () => -1, isNoted: () => false, isStackable: () => false }) },
+    World: { getRemoveNPCQueue: () => ({ push() {} }), getProcessCycle: () => 0 },
+    Task: class { stop() {} },
+    TaskManager: { submit: (task) => task.execute() },
+  };
+  const api = {
+    core,
+    persistAttribute() {},
+    onNpcDeath() {},
+    onCustomEvent() {},
+    onNpcInteraction() {},
+    emitCustomEvent(name, payload) { events.push([name, payload]); },
+    getItemOnGroundManager: () => ({ registerLocation() {} }),
+  };
+  Corpse.attach(api);
+  const corpse = (session) => ({
+    getId: () => Shared.CORPSE_ID,
+    getAttribute: () => session,
+    isRegistered: () => true,
+    getLocation: () => ({}),
+    performAnimation() {},
+  });
+  const player = { performAnimation() {} };
+  const originalRandom = Math.random;
+  Math.random = () => 0; // roll Nid (1/1500) on destroy
+  try {
+    const harvested = corpse({ pendingPet: [{ itemId: Shared.NID_ITEM_ID, amount: 1 }], stash: [] });
+    harvested.__session = { corpse: harvested, pendingPet: [{ itemId: Shared.NID_ITEM_ID, amount: 1 }], stash: [] };
+    harvested.getAttribute = () => harvested.__session;
+    Corpse.harvest({ player, npc: harvested });
+    const destroyed = corpse(null);
+    destroyed.__session = { corpse: destroyed, stash: [] };
+    destroyed.getAttribute = () => destroyed.__session;
+    Corpse.destroyConfirmed({ player, npc: destroyed });
+    const rolls = events.filter(([name]) => name === "npc-drops:roll").map(([, payload]) => payload);
+    assert.equal(rolls.length, 2, "the pet and the destroy Nid roll each emit once");
+    for (const roll of rolls) assert.equal(roll.countKill, false, "neither re-roll tallies another kill");
+    assert.deepEqual(rolls.map((roll) => roll.drops[0].itemId), [Shared.NID_ITEM_ID, Shared.NID_ITEM_ID]);
+  } finally {
+    Math.random = originalRandom;
+  }
+});

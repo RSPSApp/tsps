@@ -57,9 +57,13 @@ checked inside the enclave boundary. Server build and 20 focused/adjacent tests 
 
 Lumbridge, Ferox and pond arrivals are adjacent cache-bank tiles checked for collision,
 not recorded OSRS landing coordinates. Their sinking positions are likewise provisional.
-The rowing scene uses the captured source map, camera, rowing animation and four moving
-scenery NPCs. It uses a single 26-tick scene for every route; repeated scenery spawns,
-distance-dependent duration, underground Wilderness tunnel transition and canoe soundscape
-are not reproduced. The Wilderness confirmation uses the existing chatbox prompt with a
+The rowing scene uses the captured source map, camera, west-facing rowing animation, the
+`fov_clamp`/`draw_distance_max_override` variables, the river sound (2728, 16 loops) and the
+captured scenery: four NPCs stepping north through the map one tile a tick, the three that reach
+y 4522 deleted on +7 and replaced further south (scenery_1 at 1821,4500 on +7, bullrush 1820,4501
+and leaf 1819,4505 on +10). Every ride in RSProx 4005 is the same 26-tick scene whatever the
+distance. The first Chop-down swing waits three ticks after the click lands, and the tree falls
+with sound 2734, as captured. The underground Wilderness tunnel transition is not reproduced,
+and the station walk-to-chop-tile live does before swinging is not reproduced either. The Wilderness confirmation uses the existing chatbox prompt with a
 one-way warning; the captured native Wilderness warning interface was unavailable.
 Assistant right-click storage works; generated NPC teaching transcripts are not rewritten.

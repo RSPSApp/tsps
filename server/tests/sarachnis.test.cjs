@@ -151,8 +151,13 @@ test("the projectile ends grow with travel and the hit lands from the end", () =
   const ranged = Common.PROJECTILE_SHAPE.ranged;
   assert.equal(ranged.start, 39);
   assert.equal(Common.projectileEnd(ranged, 5), 76 + 50);
-  assert.equal(Common.landingTicks(156) - 1, 5);
-  assert.equal(Common.landingTicks(71) - 1, 2);
+  // The hit lands on the first tick at or after the bolt, not the tick before (#1862).
+  assert.equal(Fight._test.shotTicks(156), 6);
+  assert.equal(Fight._test.shotTicks(71), 3);
+  for (const tiles of [1, 4, 8]) {
+    const end = Common.projectileEnd(ranged, tiles);
+    assert.ok(Fight._test.shotTicks(end) * 30 >= end && (Fight._test.shotTicks(end) - 1) * 30 < end, `${tiles} tiles`);
+  }
   const web = Common.PROJECTILE_SHAPE.web;
   assert.equal(Common.projectileEnd(web, 1), 61);
   assert.ok(Common.projectileEnd(web, 20) <= web.cap);

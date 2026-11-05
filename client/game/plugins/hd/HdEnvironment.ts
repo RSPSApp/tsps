@@ -45,7 +45,7 @@ const regions: Array<[HdEnvironment, number[]]> = [
     [{"name":"CANOE_CUTSCENE","ambient":0.75,"ambientColor":[0.592156862745098,0.7294117647058823,1],"lightStrength":2.8,"directionalColor":[1,1,1],"lightPitch":-128,"lightYaw":55,"fogColor":[0.7254901960784313,0.8392156862745098,1],"fogDepth":5,"fogScale":1,"groundFogStart":-200,"groundFogEnd":-500,"groundFogOpacity":0},[6981,6982,7237,7238]],
     [{"name":"LUNAR_DIPLOMACY_DREAM_WORLD","ambient":3,"ambientColor":[0.4666666666666667,0.6274509803921569,1],"lightStrength":0.7,"directionalColor":[0.792156862745098,0.7137254901960784,0.803921568627451],"lightPitch":260,"lightYaw":10,"fogColor":[0,0,0],"fogDepth":3.076923076923077,"fogScale":1,"groundFogStart":-200,"groundFogEnd":-500,"groundFogOpacity":0},[6990,6991,6992,7246,7247,7248]],
     [{"name":"ANCIENT_CAVERN_UPPER","ambient":0.75,"ambientColor":[0.592156862745098,0.7294117647058823,1],"lightStrength":2.8,"directionalColor":[1,1,1],"lightPitch":-128,"lightYaw":55,"fogColor":[0.7254901960784313,0.8392156862745098,1],"fogDepth":5,"fogScale":1,"groundFogStart":-200,"groundFogEnd":-500,"groundFogOpacity":0},[6994,6995]],
-    [{"name":"FISHING_TRAWLER","ambient":0.75,"ambientColor":[0.592156862745098,0.7294117647058823,1],"lightStrength":2.8,"directionalColor":[1,1,1],"lightPitch":-128,"lightYaw":55,"fogColor":[0.7254901960784313,0.8392156862745098,1],"fogDepth":5,"fogScale":1,"groundFogStart":-200,"groundFogEnd":-500,"groundFogOpacity":0},[7241,7242,7243,7244,7498,7499,7500,7754,7755,7756,8010,8011,8012]],
+    [{"name":"FISHING_TRAWLER","ambient":0.75,"ambientColor":[0.592156862745098,0.7294117647058823,1],"lightStrength":2.8,"directionalColor":[1,1,1],"lightPitch":-128,"lightYaw":55,"fogColor":[0.7254901960784313,0.8392156862745098,1],"fogDepth":5,"fogScale":1,"groundFogStart":-200,"groundFogEnd":-500,"groundFogOpacity":0},[7241,7242,7243,7244,7498,7499,7500,7754,7755,7756,8011,8012]],
     [{"name":"DS2_FLASHBACK_PLATFORM","ambient":1.2,"ambientColor":[1,1,1],"lightStrength":0,"directionalColor":[1,1,1],"lightPitch":-128,"lightYaw":55,"fogColor":[0,0,0],"fogDepth":1.5384615384615385,"fogScale":1,"groundFogStart":-200,"groundFogEnd":-500,"groundFogOpacity":0},[7250]],
     [{"name":"TUTORIAL_ISLE_OF_SOULS","ambient":0.75,"ambientColor":[0.592156862745098,0.7294117647058823,1],"lightStrength":2.8,"directionalColor":[1,1,1],"lightPitch":-128,"lightYaw":55,"fogColor":[0.7254901960784313,0.8392156862745098,1],"fogDepth":5,"fogScale":1,"groundFogStart":-200,"groundFogEnd":-500,"groundFogOpacity":0},[7258,7259,7260,7261,7262,7514,7515,7516,7517,7518,7770,7771,7772,7773,7774,8026,8027,8028,8029,8030,8282,8283,8284,8538,8539,8540,8541,8542]],
     [{"name":"PYRAMID_PLUNDER","ambient":1,"ambientColor":[0.7098039215686275,0.6078431372549019,0.4745098039215686],"lightStrength":0.75,"directionalColor":[0.5411764705882353,0.6196078431372549,0.7137254901960784],"lightPitch":260,"lightYaw":10,"fogColor":[0.09803921568627451,0.050980392156862744,0.00784313725490196],"fogDepth":3.076923076923077,"fogScale":1,"groundFogStart":-200,"groundFogEnd":-500,"groundFogOpacity":0},[7492,7493,7494,7748,7749,7750,8004,8005,8006]],
@@ -149,8 +149,18 @@ const environments = new Map<number, HdEnvironment>();
 for (const [environment, ids] of regions) {
     for (const id of ids) environments.set(id, environment);
 }
+/**
+ * Rooms and dungeons sit at y 4160 and up, off the surface map. There is nothing around them, so
+ * the void shows through their open edges: black in the real client, not the surface's sky (the
+ * Mime's theatre, region 8010, has no back wall and fades its stage into it; 117HD listed that
+ * region for the Fishing Trawler, whose boats are in the region north of it).
+ */
+const FIRST_INTERIOR_REGION_Y = 65;
+const INTERIOR_ENVIRONMENT: HdEnvironment = { ...DEFAULT_ENVIRONMENT, name: "interior", fogColor: [0, 0, 0] };
+
 export function resolveHdEnvironmentForRegion(regionId: number): HdEnvironment {
-    return environments.get(regionId) ?? DEFAULT_ENVIRONMENT;
+    return environments.get(regionId)
+        ?? ((regionId & 0xff) >= FIRST_INTERIOR_REGION_Y ? INTERIOR_ENVIRONMENT : DEFAULT_ENVIRONMENT);
 }
 
 export function resolveHdEnvironment(worldX: number, worldZ: number): HdEnvironment {

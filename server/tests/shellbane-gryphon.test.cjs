@@ -98,7 +98,11 @@ function fakeCave(player) {
 
 function newFight(player, random = () => 0) {
   const cave = fakeCave(player);
-  return { fight: new Fight(cave, fakeBoss(), random), cave };
+  const boss = fakeBoss();
+  const fight = new Fight(cave, boss, random);
+  boss.__sgCave = cave;
+  cave.fight = fight;
+  return { fight, cave, boss };
 }
 
 /** Rune full helm, platebody, kiteshield, granite legs and the tortugan shield: about 44 kg. */
@@ -163,6 +167,33 @@ test('knockback: a light player is thrown back for up to 30; 40 kg worn stops it
   assert.deepEqual(heavy.damage, []);
   assert.equal(heavy.messages.at(-1), Common.message('heavyEquipment'));
   assert.equal(second.boss.attackDelay, 3 + Common.data.knockback.stunTicks, 'the stun adds to its wait');
+});
+
+test('a heavy player who does not hit the stunned gryphon is knocked back anyway (Wiki)', () => {
+  const heavy = fakePlayer(3175, 8873, HEAVY);
+  const { fight } = newFight(heavy);
+  fight.special(heavy, 'knockback');
+  ticks(fight, Common.data.knockback.warnTicks);
+  assert.equal(fight.stun.countered, false);
+  ticks(fight, Common.data.knockback.stunTicks + 1);
+  assert.equal(heavy.messages.at(-1), Common.message('regains'));
+  assert.equal(heavy.damage.length, 1);
+  assert.ok(heavy.getLocation().getX() < 3175, 'thrown back regardless of weight');
+  assert.equal(fight.stun, null);
+});
+
+test('hitting the gryphon during its stun counters the knockback: no throw, no damage', () => {
+  const heavy = fakePlayer(3175, 8873, HEAVY);
+  const { fight, boss } = newFight(heavy);
+  fight.special(heavy, 'knockback');
+  ticks(fight, Common.data.knockback.warnTicks);
+  // combat:attack-started, as the engine emits it for the player's own swing.
+  Cave.onAttackStarted({ attacker: heavy, target: { isNpc: () => true, getAsNpc: () => boss } });
+  assert.equal(fight.stun.countered, true);
+  ticks(fight, Common.data.knockback.stunTicks + 1);
+  assert.deepEqual(heavy.damage, []);
+  assert.ok(!heavy.messages.includes(Common.message('regains')));
+  assert.equal(fight.stun, null);
 });
 
 test('a heavy player gets the knockback less often; no new whirlwinds while some are up', () => {
@@ -336,4 +367,25 @@ test('the kill: its kill count and a second main-table roll', () => {
   const extra = events.filter(([name]) => name === 'npc-drops:extra-rolls');
   assert.equal(extra.length, 1);
   assert.equal(extra[0][1].rolls, 1);
+});
+
+test('its ranged hit lands with a well-formed projectile at any range (#1862)', (t) => {
+  const sent = [];
+  t.mock.method(core.Projectile.prototype, 'sendProjectile', function () { sent.push(this); });
+  const { GryphonCombat } = Combat.methods();
+  for (const x of [3175, 3172, 3166]) {
+    const player = fakePlayer(x, 8873, { 1: 31398 });
+    const boss = fakeBoss();
+    const { fight } = newFight(player, () => 0);
+    boss.__sgCave = { fight };
+    const npc = { ...boss, getAsNpc: () => boss };
+    const method = new GryphonCombat();
+    method.start(npc, player);
+    assert.equal(method.style, 'ranged');
+    const shot = sent.at(-1);
+    assert.ok(shot.speed > shot.delay + 1, `from ${x} it is drawn as a flight`);
+    assert.equal(method.plan.delay, Math.ceil(shot.speed / 30), `from ${x}`);
+  }
+  assert.equal(Combat.flightEnd(1), 40);
+  assert.equal(Combat.flightEnd(4), 60);
 });

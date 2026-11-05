@@ -1,12 +1,17 @@
 /**
  * What the relics' teleport items share: a paged destination menu, the teleport itself (the
- * standard animation, the Wilderness limit of the item, and only to areas the league character
- * has unlocked), and the item's last destination.
+ * standard animation, or the league's area-teleport cast for an item that asks for it; the
+ * Wilderness limit of the item, and only to areas the league character has unlocked), the item's
+ * last destination, and the destinations listed by league area that Demonic Pacts' items share
+ * (`areaTeleports`, in the menu interface as live lists Evil Eye's: `listMenu`).
  *
  * Areas: `league:area-at` { player, x, y } -> area (null when open) and `league:areas` { player } ->
- * unlocked, from the league's area unlocks; with nobody answering, every area is open.
+ * unlocked, from the league's area unlocks; with nobody answering, every area is open. The cast:
+ * `league:teleport-cast` { player } -> cast, from the same; with nobody answering, the standard
+ * teleport.
  */
 const Common = require("./Common.LeagueRelics");
+const { startHomeTeleport, castOf } = require("../../combat/HomeTeleportSequence");
 
 /** Four destinations a page and "More...", as the jewellery's own menus. */
 const PAGE_SIZE = 5;
@@ -17,14 +22,26 @@ function lastAttribute(key) {
   return `league:last-destination:${key}`;
 }
 
+/** The area ids the league character has unlocked, or null when nobody answers (everything open). */
+function unlockedAreas(player) {
+  const areas = { player, unlocked: null };
+  Common.api.emitCustomEvent("league:areas", areas);
+  return Array.isArray(areas.unlocked) ? areas.unlocked : null;
+}
+
 /** Whether the tile is in an area the league character has unlocked (or no area at all). */
 function areaOpen(player, location) {
   const at = { player, x: location.getX(), y: location.getY(), area: null };
   Common.api.emitCustomEvent("league:area-at", at);
   if (at.area === null || at.area === undefined) return true;
-  const areas = { player, unlocked: null };
-  Common.api.emitCustomEvent("league:areas", areas);
-  return !Array.isArray(areas.unlocked) || areas.unlocked.includes(at.area);
+  const unlocked = unlockedAreas(player);
+  return unlocked === null || unlocked.includes(at.area);
+}
+
+/** Whether league area `area` (an id) is unlocked; true with nobody answering. */
+function areaUnlocked(player, area) {
+  const unlocked = unlockedAreas(player);
+  return unlocked === null || unlocked.includes(area);
 }
 
 /** Enough open floor to walk from (tiles): not a pocket behind a counter. */
@@ -74,12 +91,21 @@ function landing(location) {
   return best?.tile ?? location;
 }
 
+/** The league's area-teleport cast for the character (`league:teleport-cast`), or null. */
+function leagueCast(player) {
+  const query = { player, cast: null };
+  Common.api.emitCustomEvent("league:teleport-cast", query);
+  return query.cast ?? null;
+}
+
 /**
  * Teleports to `destination` { label, location, wildernessLevel?, remember? } for item `key`,
  * remembering it as the item's last destination on arrival (not with `remember: false`, a
- * destination that needs its own arrival, the house). `onArrival` runs after.
+ * destination that needs its own arrival, the house). `onArrival` runs after. With `cast` true, the
+ * league's area-teleport cast plays (interrupted as a home teleport is) where the league has one; a
+ * cast definition ({ steps, lockTick, landTick }, an item's own recorded cast) plays instead.
  */
-function go(player, key, destination, { wildernessLevel = ANY_WILDERNESS_LEVEL, onArrival = null } = {}) {
+function go(player, key, destination, { wildernessLevel = ANY_WILDERNESS_LEVEL, onArrival = null, cast = false } = {}) {
   const { TeleportHandler, TeleportType } = Common.core;
   const location = landing(destination.location);
   if (!areaOpen(player, location)) {
@@ -88,15 +114,30 @@ function go(player, key, destination, { wildernessLevel = ANY_WILDERNESS_LEVEL, 
   }
   const limit = destination.wildernessLevel ?? wildernessLevel;
   if (!TeleportHandler.checkReqs(player, location, limit)) return false;
-  TeleportHandler.teleport(player, location, TeleportType.NORMAL, false, () => {
+  const arrived = () => {
     if (destination.remember !== false) {
       player.setAttribute(lastAttribute(key), {
         label: destination.label, x: location.getX(), y: location.getY(), z: location.getZ(), wildernessLevel: limit,
       });
     }
     onArrival?.();
-  });
+  };
+  const definition = cast === true ? leagueCast(player) : cast || null;
+  if (definition) startHomeTeleport(Common.core, player, location, arrived, castOf(definition));
+  else TeleportHandler.teleport(player, location, TeleportType.NORMAL, false, arrived);
   return true;
+}
+
+/**
+ * An item's own cast from its data ({ tick, landTick, animation, graphic }, seq and spotanim by
+ * gameval name): the animation and graphic on `tick`, locked from it, the move on `landTick`.
+ */
+function itemCast(spec) {
+  const { CacheDefinitions } = Common.core;
+  return {
+    steps: [{ tick: spec.tick, animation: CacheDefinitions.getSeqId(spec.animation), graphic: CacheDefinitions.getSpotanimId(spec.graphic) }],
+    lockTick: spec.tick, landTick: spec.landTick,
+  };
 }
 
 /** The item's last destination, or a message when there is none yet. */
@@ -108,6 +149,101 @@ function goLast(player, key) {
   }
   const location = new Common.core.Location(last.x, last.y, last.z ?? 0);
   return go(player, key, { label: last.label, location, wildernessLevel: last.wildernessLevel });
+}
+
+/**
+ * The cache's generic option menu (interface `menu`, 187), as live opens Evil Eye's (237/04057,
+ * 01133): the modal on toplevel mainmodal, pause-button events on menu:lj_layer1 slots 0-512,
+ * toplevel_mainmodal_open [-1, -1], then script `menu` [title, "a|b|c", true]. A pick is a
+ * resume_pausebutton on menu:lj_layer1, its sub the entry's index; the modal closes and
+ * chatdefault_restoreinput runs, as live.
+ */
+const MENU_INTERFACE = "menu";
+const MENU_CHOICES = "menu:lj_layer1";
+const SCRIPT_MAINMODAL_OPEN = 2524;
+const SCRIPT_MENU = 217;
+/** chatdefault_restoreinput: the chatbox's input back after the menu. */
+const SCRIPT_RESTORE_INPUT = 2158;
+const MAINMODAL_OPEN_ARGS = [-1, -1];
+const MENU_NUMBERED = 1;
+const PAUSE_BUTTON = 1;
+const MENU_SLOTS = 512;
+/** An entry the character can't take, struck through as live lists a locked area or boss. */
+const struck = (label) => `<str>${label}</str>`;
+
+/** The area menu's last entry, back to the regions (live's, 237/01104, 01107, 01159). */
+const BACK = "Back";
+
+/** A menu on screen, by player: { entries }. */
+const pendingMenus = new WeakMap();
+const menuAttached = new WeakSet();
+
+let ids = null;
+
+/** The menu's group and choices component, by the cache's names (looked up once). */
+function menuIds() {
+  const { CacheDefinitions } = Common.core;
+  ids ??= { group: CacheDefinitions.getInterfaceId(MENU_INTERFACE), choices: CacheDefinitions.getComponentId(MENU_CHOICES) };
+  return ids;
+}
+
+/**
+ * The menu interface with `entries` [{ label, locked, choose, next? }] under `title`; a locked
+ * entry is struck through and still picked (its `choose` gives the refusal); `next` marks one that
+ * opens another menu.
+ */
+function listMenu(player, title, entries) {
+  const { group, choices } = menuIds();
+  const sender = player.getPacketSender();
+  // One menu to the next (a region's, Back) replaces it in place, as live does (237/04070).
+  if (player.getInterfaceId() !== group) sender.sendInterfaceRemoval();
+  sender.sendInterface(group);
+  sender.sendInterfaceFlagsRange(choices, 0, MENU_SLOTS, PAUSE_BUTTON);
+  sender.sendInterfaceScript(SCRIPT_MAINMODAL_OPEN, MAINMODAL_OPEN_ARGS);
+  sender.sendClientScript(SCRIPT_MENU, title, entries.map(({ label, locked }) => (locked ? struck(label) : label)).join("|"), MENU_NUMBERED);
+  pendingMenus.set(player, { entries });
+}
+
+/**
+ * A pick from `listMenu`: the menu closes (a teleport needs it shut), then the entry's action runs;
+ * an entry that opens another menu (`next`) leaves it open for that one to replace.
+ */
+function chooseFromMenu(event) {
+  const { group, choices } = menuIds();
+  const buttonId = Number(event.buttonId ?? 0);
+  if ((event.groupId ?? (buttonId >>> 16)) !== group || (event.childId ?? (buttonId & 0xffff)) !== (choices & 0xffff)) return;
+  const { player } = event;
+  const pending = pendingMenus.get(player);
+  if (!pending) return;
+  event.handled = true;
+  pendingMenus.delete(player);
+  const entry = pending.entries[Number(event.slot ?? event.action)];
+  if (!entry?.next) {
+    const sender = player.getPacketSender();
+    sender.sendInterfaceRemoval();
+    sender.sendInterfaceScript(SCRIPT_RESTORE_INPUT);
+  }
+  entry?.choose();
+}
+
+/** The menu closed another way (walking off, another interface): nothing pending. */
+function menuClosed({ player, interfaceId }) {
+  if (interfaceId !== menuIds().group || !pendingMenus.has(player)) return;
+  pendingMenus.delete(player);
+  player.getPacketSender().sendInterfaceScript(SCRIPT_RESTORE_INPUT);
+}
+
+/** The menu's handlers, once per api (each relic that lists by area attaches it). */
+function attachMenu(api) {
+  if (menuAttached.has(api)) return;
+  menuAttached.add(api);
+  api.onInterfaceActionClick(chooseFromMenu);
+  api.onCustomEvent("interface:closed", menuClosed);
+  api.onPlayerLogout(forgetMenu);
+}
+
+function forgetMenu({ player }) {
+  pendingMenus.delete(player);
 }
 
 /** A paged chatbox menu of [label, action] entries. */
@@ -150,4 +286,113 @@ function spawnsNamed(name) {
   });
 }
 
-module.exports = { areaOpen, landing, reach, go, goLast, menu, destinations, ask, spawnsNamed, lastAttribute, ANY_WILDERNESS_LEVEL };
+/** The worn options' submenus (cache params): the first entry at 661 + op, later ones at 2066 + op + 8 * n. */
+const WORN_OPTION_CLICK = 2;
+const WORN_SUBOP_FIRST = 661;
+const WORN_SUBOP_BASE = 2066;
+const WORN_SUBOP_STEP = 8;
+
+/** The submenu entry an item click came from (the cache's subops carried, its params worn), or null. */
+function subOption(event) {
+  if (!Number.isInteger(event.subOpId) || event.subOpId <= 0) return null;
+  const { CacheDefinitions, Equipment } = Common.core;
+  const definition = CacheDefinitions.getItem(event.itemId);
+  const sub = event.subOpId - 1;
+  if (event.interfaceId === Equipment.INVENTORY_INTERFACE_ID) {
+    const op = event.clickType - WORN_OPTION_CLICK;
+    const params = definition?.params;
+    if (op < 0 || !params?.get) return null;
+    if (sub === 0) return params.get(WORN_SUBOP_FIRST + op) ?? params.get(WORN_SUBOP_BASE + op) ?? null;
+    return params.get(WORN_SUBOP_BASE + op + WORN_SUBOP_STEP * sub) ?? null;
+  }
+  return definition?.subops?.[event.clickType - 1]?.[sub] ?? null;
+}
+
+/**
+ * A Demonic Pacts item's destinations by league area (data `areas`: [{ name, region?, area,
+ * destinations: [{ name, label?, x, y, z, level?, quest? }] }], `name` the item's submenu entry,
+ * `region` the area's name on the menu and `label` the destination's where live's differs, `area`
+ * the league's area id), in the menu
+ * interface (`listMenu`): Teleport lists the areas under `title` (or its area submenu, the cache's
+ * subops, goes straight to one), an area lists its destinations under `areaTitle(name)` with Back,
+ * and Last-destination repeats the last. An area not unlocked, or a destination the character
+ * can't take, is struck through, and picking it gives the refusal. A destination needs its area
+ * unlocked (and its tile's: `areaOpen`) and its `quest` completed (`quest:is-complete` by name;
+ * unanswered, no bar); its Agility `level` is the shortcut's own, not the teleport's (Wiki:
+ * "teleporting to a shortcut does not require you to have the Agility level to use it"). Any
+ * Wilderness level, with the league's area-teleport cast, or the item's own `cast` (a cast
+ * definition), and with `lastVarp` the varp sent the destination's packed tile as the cast starts.
+ */
+function areaTeleports({ key, title, areaTitle = (name) => name, areas, cast = true, lastVarp = null }) {
+  const byName = new Map(areas.flatMap((area) => area.destinations.map((destination) => [destination.name, { area, destination }])));
+  const regionName = (area) => area.region ?? area.name;
+
+  function refusal(player, area, destination) {
+    if (!areaUnlocked(player, area.area)) return Common.message("areaLocked");
+    if (destination?.quest !== undefined) {
+      const query = { player, name: destination.quest, complete: null };
+      Common.api.emitCustomEvent("quest:is-complete", query);
+      if (query.complete === false) return Common.message("questNeeded", { quest: destination.quest });
+    }
+    return null;
+  }
+
+  function choose(player, area, destination) {
+    const refused = refusal(player, area, destination);
+    if (refused) {
+      player.sendMessage(refused);
+      return false;
+    }
+    const location = new Common.core.Location(destination.x, destination.y, destination.z ?? 0);
+    const went = go(player, key, { label: destination.name, location }, { cast });
+    // The varp holds the tile as live packs one: plane << 28 | x << 14 | y.
+    if (went && lastVarp !== null) player.getPacketSender().sendConfig(lastVarp, ((location.getZ() << 28) | (location.getX() << 14) | location.getY()) >>> 0);
+    return went;
+  }
+
+  function regionMenu(player) {
+    listMenu(player, title, areas.map((area) => {
+      const locked = refusal(player, area, null) !== null;
+      return { label: regionName(area), locked, next: !locked, choose: () => areaMenu(player, area) };
+    }));
+  }
+
+  function areaMenu(player, area) {
+    const refused = refusal(player, area, null);
+    if (refused) {
+      player.sendMessage(refused);
+      return;
+    }
+    listMenu(player, areaTitle(regionName(area)), [
+      ...area.destinations.map((destination) => ({
+        label: destination.label ?? destination.name, locked: refusal(player, area, destination) !== null, choose: () => choose(player, area, destination),
+      })),
+      { label: BACK, locked: false, next: true, choose: () => regionMenu(player) },
+    ]);
+  }
+
+  function teleport(event) {
+    const picked = subOption(event);
+    const area = picked === null ? null : areas.find((entry) => entry.name === picked);
+    if (area) areaMenu(event.player, area);
+    else regionMenu(event.player);
+  }
+
+  function last(event) {
+    const { player } = event;
+    const saved = player.getAttribute(lastAttribute(key));
+    const found = saved ? byName.get(saved.label) : undefined;
+    if (!found) {
+      player.sendMessage(Common.message("noLastDestination"));
+      return false;
+    }
+    return choose(player, found.area, found.destination);
+  }
+
+  return { teleport, last, choose };
+}
+
+module.exports = {
+  areaOpen, areaUnlocked, landing, reach, go, goLast, itemCast, menu, listMenu, attachMenu, destinations, ask, spawnsNamed, lastAttribute, subOption, areaTeleports,
+  ANY_WILDERNESS_LEVEL,
+};

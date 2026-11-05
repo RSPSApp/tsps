@@ -48,6 +48,7 @@ const OFFER_ILLIQUID_MAX_MS = 5 * 60_000;
 const OFFER_GUIDE_DELAY = 0.1;
 const OFFER_PRICE_SENSITIVITY = 50;
 const MAX = 0x7fffffff;
+const PRESET_TEXT = "Preset items cannot be used for this.";
 const COINS = ItemIdentifiers.COINS;
 const PLATINUM_TOKEN = ItemIdentifiers.PLATINUM_TOKEN;
 // OSRS Wiki Update:GE_Improvements:_Beyond_Max_Cash: payment mixes coins and platinum tokens,
@@ -391,9 +392,8 @@ function home(player) {
   closeSearch(player);
   offers.delete(player);
   viewing.delete(player);
-  player.setEnteredAmountAction(null);
-  player.setEnteredSyntaxAction(null);
   player.getPacketSender()
+    .abortInputPrompt()
     .sendConfig(SELECTED_ITEM, -1)
     .sendVarbit(SELL, 0)
     .sendVarbit(QUANTITY, 1)
@@ -411,9 +411,8 @@ function showCompleted(player, slot) {
   if (!Object.hasOwn(completedOffers(player), slot)) return;
   offers.delete(player);
   viewing.set(player, slot);
-  player.setEnteredAmountAction(null);
-  player.setEnteredSyntaxAction(null);
   player.getPacketSender()
+    .abortInputPrompt()
     .sendConfig(SELECTED_ITEM, -1)
     .sendVarbit(SELECTED_SLOT, 0)
     .sendVarbit(SELECTED_SLOT, slot + 1)
@@ -462,8 +461,7 @@ function start(player, sell, slot = 0, itemId = -1) {
     price: itemId > 0 ? (sell ? sellPrice(itemId) : price(itemId)) : 1,
   };
   offers.set(player, offer);
-  player.setEnteredAmountAction(null);
-  player.setEnteredSyntaxAction(null);
+  player.getPacketSender().abortInputPrompt();
   refresh(player, offer);
   if (itemId < 0) chooseItem(player, offer);
 }
@@ -525,11 +523,25 @@ function confirm(player, offer) {
       return;
     }
   } else {
-    result.deleted(inputId, inputAmount, false);
-    if (result.getAmount(inputId) !== inventory.getAmount(inputId) - inputAmount) {
+    // An offer's input comes from one stack; a delete by id would run on into the next.
+    const plain = (item) => item.getId() === inputId && item.getAmount() > 0 && !restricted(item);
+    const firstStack = inventory.getItems().find(plain);
+    const plainTotal = inventory.getItems().filter(plain).reduce((sum, item) => sum + item.getAmount(), 0);
+    if (!firstStack || plainTotal < inputAmount && !ItemDefinition.forId(inputId).isStackable()) {
+      sender.sendMessage(PRESET_TEXT);
+      return;
+    }
+    if (ItemDefinition.forId(inputId).isStackable() && firstStack.getAmount() < inputAmount) {
       sender.sendMessage("Trade one item stack at a time.");
       return;
     }
+    let left = inputAmount;
+    result.getItems().forEach((item, slot) => {
+      if (left <= 0 || !plain(item)) return;
+      const taken = Math.min(left, item.getAmount());
+      result.deleteAtSlot(slot, taken, false);
+      left -= taken;
+    });
   }
   inventory.setItems(result.getItems()).refreshItems();
   const delay = fillDelayMs(offer);
@@ -539,8 +551,7 @@ function confirm(player, offer) {
   saveOffers(player);
   offers.delete(player);
   viewing.set(player, offer.slot);
-  player.setEnteredAmountAction(null);
-  player.setEnteredSyntaxAction(null);
+  player.getPacketSender().abortInputPrompt();
   sender.sendInterfaceScript(786, [], { [SELECTED_ITEM]: -1, ...marketVarps(offer.slot, finished) },
       { [SELECTED_SLOT]: offer.slot + 1 },
       { [COLLECTIONS[offer.slot]]: collection(finished) })
@@ -559,7 +570,8 @@ function collectionOutputId(baseId, amount, action, forceNotes = false) {
   const noteId = ItemDefinition.forId(baseId).getNoteId();
   const noteable = noteId >= 0 && ItemDefinition.forId(noteId).isNoted();
   if (!noteable || action === 3) return baseId;
-  if (forceNotes) return noteId;
+  // Collect-all notes a stack but not a single item: notes begin at two in a slot (rsprox 1521: one bought item arrives as the item).
+  if (forceNotes) return amount > 1 ? noteId : baseId;
   if (action === 2) return amount === 1 ? noteId : baseId;
   if (action === 1) return amount > 1 ? noteId : baseId;
   return baseId;
@@ -633,7 +645,7 @@ function abort(player, slot = viewing.get(player)) {
   sender.sendMessage("Abort request acknowledged. Please be aware that your offer may have already been completed.");
 }
 
-/** The Collect button (465:6, dynamic child 0): op 1 to the inventory (as notes), op 2 to the bank. */
+/** The Collect button (465:6, dynamic child 0): op 1 to the inventory (a slot of two or more as notes, a single item as the item), op 2 to the bank. */
 function collectAll(player, action) {
   const to = action === 2 ? 3 : 1;
   for (const slot of Object.keys(completedOffers(player)).map(Number)) collect(player, to, slot, to === 1);
@@ -731,6 +743,11 @@ function handleCollectionButton({ player, buttonId, slot, action }) {
   return true;
 }
 
+/** Preset (and other untradeable or unbankable) copies never sell. */
+function restricted(item) {
+  return item.isPresetItem() || item.isUntradeable() || item.isUnbankable();
+}
+
 function handleInventoryItem(event) {
   // The cache has used both 467:0 and the normal inventory id for this
   // mounted panel. The item/slot validation is the reliable discriminator.
@@ -739,6 +756,10 @@ function handleInventoryItem(event) {
   if (item?.getId() === event.itemId && validItem(event.itemId)) {
     if (!exchangeable(event.itemId)) {
       event.player.sendMessage("That item can't be traded on the Grand Exchange.");
+      return true;
+    }
+    if (restricted(item)) {
+      event.player.sendMessage(PRESET_TEXT);
       return true;
     }
     start(event.player, true, offers.get(event.player)?.slot ?? 0, event.itemId);
@@ -853,7 +874,7 @@ module.exports = {
     api.registerCommand("gecollect", openCollectionBox, undefined, "Open the Grand Exchange collection box");
 
     api.onNpcInteraction("Grand Exchange Clerk", { "Exchange": openGrandExchange });
-    api.onNpcsInteraction(["Banker", "Ashuelot Reis"], { "Collect": openCollectionBox });
+    api.onNpcsInteraction(["Banker", "Ashuelot Reis", "Fadli"], { "Collect": openCollectionBox });
 
     api.onObjectInteraction("Bank booth", { "Collect": openCollectionBox });
     api.onObjectInteraction("Grand Exchange booth", {
@@ -864,6 +885,9 @@ module.exports = {
       "Collect": openCollectionBox,
     });
     api.onObjectInteraction("Bank Chest", {
+      "Collect": openCollectionBox,
+    });
+    api.onObjectInteraction("Chest", {
       "Collect": openCollectionBox,
     });
 

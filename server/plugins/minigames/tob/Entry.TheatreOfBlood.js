@@ -1,7 +1,8 @@
 /**
- * Solo Entry Mode at the cache's real room coordinates, isolated with PrivateArea.
- * Sources: OSRS Wiki Theatre of Blood/Entry Mode and /Strategies (OSRS Index mirror).
- * Normal/Hard Mode and multiplayer parties are separate raid content.
+ * The Blood Moon Rises' encounters in the theatre's rooms (tob:bmr-start), at the cache's real room
+ * coordinates, isolated with PrivateArea. This was also a solo Entry Mode, whose path remains only
+ * for a save that finished its raid before Entry Mode joined the party raid (RaidState.*): the
+ * notice board and the entrance now belong to the party's mode.
  */
 const RAIDS = new WeakMap();
 const NPC_RAIDS = new WeakMap();
@@ -605,10 +606,6 @@ function startBmr({player}) {
   const area=createArea(),raid={player,area,npcs:new Set(),objects:new Set(),effects:[],pools:[],room:2,mode:"bmr",bmrIndex:0};
   RAIDS.set(player,raid);area.enter(player);player.getPacketSender().sendVarbit(6440,2);enterRoom(raid,BMR_ENCOUNTERS[0].room);
 }
-function notice({player,objectId}) {
-  if(objectId!==core.ObjectIdentifiers.NOTICE_BOARD_5)return false;
-  api.sendMultiChatboxPrompt(player,"Theatre of Blood: choose a mode","Solo Entry Mode.",()=>{player.setAttribute(PARTY_ATTRIBUTE,true);player.sendMessage("Your Entry Mode party is ready. Enter the Theatre when prepared.");},"Normal Mode party.",()=>{player.setAttribute(PARTY_ATTRIBUTE,false);api.emitCustomEvent("tob:normal-party",{player});},"Cancel.",()=>{});return true;
-}
 function barrier({player,objectId,location}) {
   const raid=RAIDS.get(player);if(!raid||objectId!==BARRIER)return false;
   if(!raid.complete)startRoom(raid);
@@ -712,7 +709,6 @@ function splitNylocas(raid,npc,d) {
   }
 }
 function drops(event) {if(NPC_RAIDS.has(event.npc))event.handled=true;}
-function hasCompletion(request) { if((Number(request.player.getAttribute(COMPLETIONS_ATTRIBUTE)) || 0) > 0) request.complete = true; }
 function keepItems(event) {if(RAIDS.has(event.player))event.shouldDrop=false;}
 function died(event) {
   const raid=RAIDS.get(event.player);if(!raid)return;event.handled=true;
@@ -743,7 +739,7 @@ function restoreCompletedRaid(player) {
 }
 function login({player}) {
   if(restoreCompletedRaid(player))return;
-  const p=player.getLocation();if(p.getX()>=3136&&p.getX()<=3391&&p.getY()>=4224&&p.getY()<=4479){player.moveTo(new core.Location(3676,3217,0));player.sendMessage("Your previous Theatre run is no longer available. Start a new party at the notice board.");}
+  // The party raid brings its own back (Raid.returnAfterLogout) and puts everyone else out.
 }
 module.exports=function registerEntryTheatreOfBlood(pluginApi) {
   api=pluginApi;core=api.core;
@@ -753,10 +749,8 @@ module.exports=function registerEntryTheatreOfBlood(pluginApi) {
     hits(npc,player) { return [new core.PendingHit(npc,player,this)]; }
   }
   NYLO_METHODS=[core.CombatType.MELEE,core.CombatType.RANGED,core.CombatType.MAGIC].map(type=>new NylocasCombatMethod(type));
-  api.persistAttribute(COMPLETIONS_ATTRIBUTE);
   api.persistAttribute(TREASURE_READY_ATTRIBUTE);
   api.onObjectInteraction("Theatre of Blood",{Enter:enter});
-  api.onObjectInteraction("Notice board",{Read:notice,read:notice});
   api.onObjectInteraction("Barrier",{Pass:barrier});
   api.onObjectInteraction("Formidable passage",{Enter:passage,"Quick-Enter":passage});
   api.onObjectInteraction("Door",{Enter:passage,"Quick-enter":passage});
@@ -774,7 +768,6 @@ module.exports=function registerEntryTheatreOfBlood(pluginApi) {
   api.onNpcDeath(npcDeath);
   api.onCustomEvent("npc-drops:generated",drops);
   api.onCustomEvent("tob:bmr-start",startBmr);
-  api.onCustomEvent("tob:has-completion",hasCompletion);
   api.onCustomEvent("combat-special:can-use",allowDawnbringer);
   api.onShouldDropItemsOnDeath(keepItems);
   api.onPlayerDeath(died);

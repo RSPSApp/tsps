@@ -38,9 +38,10 @@ yarn sync:npc-spawns --box 2520,2170,2660,2310 --box 2560,8560,2640,8660 --tag W
 **Add-only.** Per NPC name and plane, a Wiki spawn with an existing one of that name within `--radius` is already there (closest pairs first), and leftover existing spawns **in the same 64×64 map square** still count, so only the difference in number is added there (the Wiki spawns furthest from any existing one). A spawn elsewhere on the map doesn't stand in for one missing here, so a whole-map run counts correctly. Nothing is moved or removed, so a second run adds nothing. In an area that already has its spawns, only real gaps show up: Lumbridge has 85 Wiki spawns and 84 existing, and the script would add 7. Added spawns carry `"source": "wiki"`, so they can be found and replaced by captured positions later.
 
 **Wander radius:**
-1. What existing spawns of that NPC mostly use (by id, else by name): 0 for fishing spots and bankers, as the old data set by hand.
-2. Otherwise 0 for an NPC without a walk animation in the cache.
-3. Otherwise the loader's default (5).
+1. For a non-attackable NPC, an established explicit radius wins over the implicit default when at least two explicit spawns agree and they are the majority: 0 for fishing spots, bankers, tool leprechauns and other stationary NPCs.
+2. Otherwise what existing spawns of that NPC mostly use, counting a missing radius as the loader's default 5 (by id, else by name).
+3. Otherwise 0 for an NPC without a walk animation in the cache.
+4. Otherwise the loader's default (5).
 
 The Wiki map's `r` only sizes its marker, so it isn't used: Mortimer's map has `r=4`, and he wanders one tile (rsprox captures).
 
@@ -168,6 +169,9 @@ The fix to the version pairing above, on the 60 spawns it affected (32 Wiki page
 - **Quest stages removed:** Attala and the builder at the Ralos' Rise camp (in Cam Torum after *Perilous Moons*, where they already are); Antos, Shas and Etz injured; the injured Guild Hunter Fox in the Avium Savannah; Forebearer Janus as a cultist, captured and bound; Furia Tullus as a cultist; Junior Jim's "limbo".
 - **Achilka:** one per boat stop, each with that stop's id (14727 Kastori, 14728 Tal Teklan, 14729 the Gloomthorn Trail); there had been two or three per stop with the wrong ids.
 - **Added:** Primio's Varrock end (12888), lost when the Civitas one took its id.
+- **Auburnvale's Renu:** normal-game RSProx recording 3127 (revision 232, 13 August 2025) adds parent 14690 twice at 1410,3362,0. Cache 241 transforms her on `quetzal_auburnvalley` (17756): 0 hides her, 1–5 show Renu's colours. The transport table's player landing at 1411,3361 and the Wiki map marker are not NPC spawn coordinates. The stationary row uses the cache's default south facing, matching the capture; login restores missing automatic-site visibility for existing Renu owners without changing their colour, built sites or Fortis feeding state.
+- **The other sites' Renus (#2449):** each landing site's quetzal is its own parent NPC on the site's varbit (`quetzal_sunsetcoast` 13357 … `quetzal_kastori` 14691), and nine had no spawn, so a built or automatic site showed no Renu. Each stands still on its landing-site loc's tile (`quetzal_landing_site_built`, or the site's `quetzal_landing_site_<site>` multiloc). RSProx recordings (revisions 226 and 237) add Sunset Coast, Aldarin, Quetzacalli Gorge, Cam Torum and Tal Teklan there, facing the way the loc does: rotation 0 south, 1 west, 2 north. Colossal Wyrm Remains, Outer Fortis, the Colosseum, Salvager Overlook and Kastori have no recording; they take their loc's tile and rotation by the same rule (3 is east). Tal Teklan's existing row gained its captured north facing. `quetzals.test.cjs` checks every site.
+- **Varlamore's dogs and caiques (#2449):** their Wiki pages place every spawn with a LocLine, which carries no version, so the sync gave each page one id: Xolo got the cabbage dog (13000, no options) everywhere, Molossus the light-brown 12993 everywhere, and every Caique the unreachable Tal Teklan one (14574). RSProx recordings (revisions 224-238) add an id on each tile, and the rows now use it: Xolo 12996 (12997 indoors at Aldarin, 13000 only by the cabbage patch at 1749,3049); Molossus dark brown 12992 in Civitas, Aldarin and Kastori (12994 indoors), light brown 12993 at Sunset Coast, Outer Fortis and Auburnvale, the cabbage 12999 at 1748,3050; Caique 14568 flying, the sitting `varlamore_parrot_caique_rock_west` (14572) by the statue of Ates and `_rock_south` (14570) in the north of the Tlati Rainforest, standing still, and 14574 stays at 1224,3134. Three Tlati caiques (1258,3008; 1260,2999; 1275,2985) have no recording and take the Wiki's regular 14568. The sync's per-page choice can't express per-tile variants, so these were set from the captures; a rerun adds nothing (it matches by name). `caique.test.cjs` checks them.
 - **Decisions:** the quest-stage ids are in `npc-spawn-sync.json` under `ids` (`Quest stage`, skipped), so a rerun doesn't add them back.
 
 ## Labelled and several maps on one line
@@ -184,3 +188,16 @@ The sync read a map line only when it began with `{{Map}}`, and only its first m
 
 The fix was applied to the data: those NPCs' Wiki spawns in the 7 affected map squares (126) were removed and synced again with the fixed script, which added back only 5 bloodvelds, where the God Wars Dungeon really lacks them; the 9 same-tile copies elsewhere were removed. The three bards at each camp stay: three different NPCs on one Wiki pin.
 
+
+## Audits
+
+- [NPC wander and aggression audit (2026-11-01)](audits/npc-wander-and-aggression.md) - every
+  spawned NPC id, the stationary/prop cases still on a positive radius, the service-NPC default
+  outliers, and the aggression-range code against the Wiki.
+
+## Draynor jail (Prince Ali Rescue)
+
+Lady Keli, Prince Ali and Joe were spawned as their visible ids (11578, 11579, 11577), which never change, so Keli stayed in the jail after the player tied her up. Live spawns their nameless parents, keyed on the quest's varp 273, as rsprox recording 1723 shows for Keli. They're spawned as those now:
+- **Lady Keli** `lady_keli` (11643): shows as 11578 at varp 273 values 0-40, then nothing, so she's gone from stage 50, when she's tied up and put in a cupboard.
+- **Prince Ali** `prince_ali_prison` (11644): 11579 at 0-90, then gone once he's freed (100).
+- **Joe** (11642): 11577 at 0-101.

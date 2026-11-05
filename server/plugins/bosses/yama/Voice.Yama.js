@@ -4,7 +4,7 @@
  *   plays the Wiki's first-time transcript and sets it to 2 (Talk-to, Travel, Join) as its menu
  *   comes up; later talks play the short one;
  * - "Enter Yama's domain." and Travel take the player into the domain (Domain.Yama).
- * Open access: A Kingdom Divided isn't asked for (docs/yama.md).
+ * Access requires A Kingdom Divided (Yama Wiki; Domain.Yama checks it before entry).
  *
  * OSRS keeps what a challenger drops in a gravestone by the Voice. tsps has no gravestones, so the
  * Voice holds it, as Zul-Gwenwynig does at Zulrah; Talk-to hands it back for the gravestone's fee
@@ -141,8 +141,10 @@ function talkToVoice({ player }) {
   for (const [id, amount] of held.items) {
     const stackable = ItemDefinition.forId(id)?.isStackable?.();
     const fits = stackable ? inventory.contains(id) || inventory.getFreeSlots() > 0 : inventory.getFreeSlots() > 0;
-    if (fits) inventory.add(new Item(id, amount), false);
-    else left.push([id, amount]);
+    // A stack can't grow past its cap: what it can't hold stays here.
+    const moved = !fits ? 0 : stackable && inventory.contains(id) ? inventory.getAddableAmount(new Item(id, amount)) : amount;
+    if (moved > 0) inventory.add(new Item(id, moved), false);
+    if (moved < amount) left.push([id, amount - moved]);
   }
   inventory.refreshItems?.();
   player.setAttribute(Common.HELD_ITEMS_ATTRIBUTE, left.length > 0 ? { items: left, paid: true } : null);

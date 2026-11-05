@@ -9,20 +9,24 @@ const { PluginManager } = require("../dist/plugins/PluginManager");
 const { Skill } = require("../dist/game/model/Skill");
 const { ItemIds } = require("../dist/util/IdEnums");
 const { Location } = require("../dist/game/model/Location");
+const { TaskManager } = require("../dist/game/task/TaskManager");
+const ObstacleRunner = require("../plugins/skills/agility/ObstacleRunner.Agility");
 
 const plugin = require("../plugins/minigames/BrimhavenAgilityArena.plugin");
 const {
   init, cycle, stateOf, hasSession, tick, advanceCycle, activeTile, setRandom,
-  tagXp, trapDamage, trapAt, isBladeHit, isInArena, CYCLE_TICKS, DISPENSER_TILES, OBSTACLE_XP,
-  ENTRY, HUT, createArea, processPlayer, stepTrap, stepBlades,
+  tagXp, trapDamage, trapAt, trapSpanAt, isInArena, CYCLE_TICKS, DISPENSER_TILES, OBSTACLE_XP,
+  ENTRY, HUT, createArea, processPlayer, stepTrap, LAPS_ATTRIBUTE, lineAt, crossing, crossingSteps,
   enterArena, leaveArena, tagDispenser, logout, death,
   PAID_ATTRIBUTE, payIzzy, climbDown, hasPaid, answerCondition, transcriptPayment,
   obstacleXp, familyAt, crossingTarget, ropeSwingSteps, routeToObstacle,
 } = plugin._test;
 
 init({ core: PluginManager.getCoreApi(), emitCustomEvent() {} });
+ObstacleRunner.init({ core: PluginManager.getCoreApi(), getTaskManager: () => TaskManager });
 
-const TICKET = ItemIds.AGILITY_ARENA_TICKET;
+/** The 2024 ticket (29480); ItemIds.AGILITY_ARENA_TICKET (2996) is the discontinued one. */
+const TICKET = ItemIds.AGILITY_ARENA_TICKET_3;
 const VOUCHER = ItemIds.BRIMHAVEN_VOUCHER;
 const COINS = ItemIds.COINS;
 
@@ -34,7 +38,7 @@ function player({ agility = 50, coins = 0, hitpoints = 99, x = 2804, y = 9590, z
     messages: [], xp: 0, hits: [], levels: {}, hints: [], hintCleared: false,
     varbits: new Map(), dialogues: [], animations: [],
     x, y, z,
-    getLocation: () => ({ getX: () => p.x, getY: () => p.y, getZ: () => p.z }),
+    getLocation: () => new Location(p.x, p.y, p.z),
     moveTo: (loc) => { p.x = loc.getX(); p.y = loc.getY(); p.z = loc.getZ(); },
     setLocation: (loc) => { p.x = loc.getX(); p.y = loc.getY(); p.z = loc.getZ(); },
     getAttribute: (key) => attributes.get(key),
@@ -52,7 +56,17 @@ function player({ agility = 50, coins = 0, hitpoints = 99, x = 2804, y = 9590, z
     }),
     getHitpoints: () => hitpoints,
     getCombat: () => ({ getHitQueue: () => ({ addPendingDamage: (hits) => p.hits.push(hits[0]) }) }),
+    isRegistered: () => true,
+    setSkillAnimation() {},
+    getUpdateFlag: () => ({ flag() {} }),
+    setForceMovement() {},
+    getForceMovement: () => null,
+    setPositionToFace() {},
+    setWalkingDirection() {},
+    getMovementQueue: () => ({ reset() {}, setBlockMovement() {}, handleRegionChange() {} }),
     getPacketSender: () => ({
+      sendSoundEffect() {},
+      sendTypedMessage: (_type, message) => p.messages.push(message),
       sendPositionalHint: (loc) => p.hints.push(loc),
       clearHintArrow: () => { p.hintCleared = true; },
       sendVarbit: (id, value) => p.varbits.set(id, value),
@@ -138,6 +152,9 @@ test("tagging the active dispenser pays a ticket, a voucher and scaled XP once p
   assert.equal(p.inventory.get(TICKET), 1);
   assert.equal(p.inventory.get(VOUCHER), 1);
   assert.ok(p.messages.includes("You have received an Agility Arena Ticket and Brimhaven Voucher!"));
+  assert.equal(p.getAttribute(LAPS_ATTRIBUTE), 1);
+  assert.ok(p.messages.includes("Your Agility Arena lap count is: <col=ff0000>1</col>."), "the count comes first (rsprox 75)");
+  assert.equal(p.dialogues.length, 1, "the ticket's item box");
 
   tagDispenser(event);
   assert.equal(p.xp, 150, "a second tag in the same cycle is free of XP");
@@ -157,32 +174,16 @@ test("a miss on an inactive dispenser awards nothing and says so", () => {
   assert.ok(p.messages.includes("You can only get a ticket when the flashing arrow is above the pillar."));
 });
 
-test("the darts dispenser needs 40 Agility and can hit for damage and a drain", () => {
+test("a darts dispenser tags like any other: its darts are in the corridors, not on the tag", () => {
+  // rsprox 75 ticks 13549/13580 and 1863 tick 2030: tagging 3581 pays only the tag XP.
   advanceCycle();
   setActive(tileOfId(3581));
-  const event = (p) => ({ player: p, objectId: 3581, location: { x: cycle.active.x, y: cycle.active.y, z: 3 } });
-
-  const low = player({ agility: 30 });
-  setRandom(() => 0);
-  tagDispenser(event(low));
-  assert.ok(low.messages.some((message) => message.includes("at least 40")));
-  assert.equal(low.xp, 0);
-
-  const miss = player({ agility: 40 });
+  const p = player({ agility: 30 });
   setRandom(() => 0.99);
-  tagDispenser(event(miss));
-  assert.equal(miss.agility, 38, "a miss drains two Agility levels");
-  assert.equal(miss.hits.length, 1);
-  assert.ok(miss.messages.includes("You were hit by some darts, something on them makes you feel dizzy!"));
-  assert.equal(miss.inventory.get(TICKET) ?? 0, 0);
-  assert.equal(miss.xp, 0);
-
-  const success = player({ agility: 40 });
-  setRandom(() => 0);
-  tagDispenser(event(success));
-  assert.equal(success.xp, 30 + tagXp(40), "darts XP plus the tag XP");
-  assert.equal(success.inventory.get(TICKET), 1);
-  assert.equal(success.inventory.get(VOUCHER), 1);
+  tagDispenser({ player: p, objectId: 3581, location: { x: cycle.active.x, y: cycle.active.y, z: 3 } });
+  assert.equal(p.xp, tagXp(30));
+  assert.equal(p.hits.length, 0);
+  assert.equal(p.inventory.get(TICKET), 1);
 });
 
 test("logging out in the arena ejects to the hut and forgets the tag lock", () => {
@@ -208,69 +209,111 @@ test("death outside the arena leaves the tag lock alone", () => {
   assert.equal(p.x, 2808);
 });
 
-test("floor spikes pay 24 XP, never fail at 50+ and refuse below 20", () => {
-  const expert = player({ agility: 50 });
+/** Runs the obstacle task the trap started until it is done. */
+function settle(ticks = 12) {
+  for (let i = 0; i < ticks; i++) TaskManager.process();
+}
+
+test("floor spikes jump the whole span for 24 XP once, never fail at 50+ and refuse below 20", () => {
+  // rsprox 75 13531-13533: on 2800,9568 heading west, 1115 over both spike tiles to 2798.
+  const expert = player({ agility: 50, x: 2800, y: 9568 });
   setRandom(() => 0.99);
-  stepTrap(expert, "FLOOR_SPIKES");
+  stepTrap(expert, trapSpanAt(2800, 9568), { x: 2801, y: 9568 });
+  settle();
   assert.equal(expert.xp, 24);
   assert.equal(expert.hits.length, 0);
+  assert.deepEqual([expert.x, expert.y], [2798, 9568]);
 
-  const low = player({ agility: 10 });
-  stepTrap(low, "FLOOR_SPIKES");
+  const low = player({ agility: 10, x: 2772, y: 9551 });
+  stepTrap(low, trapSpanAt(2772, 9551), { x: 2772, y: 9550 });
+  settle();
   assert.equal(low.xp, 0);
   assert.ok(low.messages.some((message) => message.includes("at least 20")));
 
-  const unlucky = player({ agility: 30, hitpoints: 99 });
+  const unlucky = player({ agility: 30, hitpoints: 99, x: 2772, y: 9551 });
   setRandom(() => 0.99);
-  stepTrap(unlucky, "FLOOR_SPIKES");
+  stepTrap(unlucky, trapSpanAt(2772, 9551), { x: 2772, y: 9550 });
+  settle();
   assert.equal(unlucky.xp, 0);
   assert.equal(unlucky.hits.length, 1);
   assert.equal(trapDamage(99), 6);
 });
 
 test("pressure pads pay twice, then sit out eight ticks", () => {
-  const p = player({ agility: 50 });
-  stepTrap(p, "PRESSURE_PAD");
-  stepTrap(p, "PRESSURE_PAD");
+  const p = player({ agility: 50, x: 2800, y: 9557 });
+  setRandom(() => 0);
+  const cross = () => {
+    p.x = 2800;
+    stepTrap(p, trapSpanAt(2800, 9557), { x: 2801, y: 9557 });
+    settle();
+  };
+  cross();
+  cross();
   assert.equal(p.xp, 52);
-
-  stepTrap(p, "PRESSURE_PAD");
+  cross();
   assert.equal(p.xp, 52, "the third consecutive use is on cooldown");
   for (let i = 0; i < 8; i++) tick();
-  stepTrap(p, "PRESSURE_PAD");
+  cross();
   assert.equal(p.xp, 78);
 });
 
-test("spinning blades need 40 Agility and their miss hurts", () => {
-  const low = player({ agility: 30 });
-  setRandom(() => 0);
-  stepBlades(low);
+test("spinning blades need 40 Agility, use their own chart and knock a miss back a tile", () => {
+  const low = player({ agility: 30, x: 2783, y: 9573 });
+  stepTrap(low, trapSpanAt(2783, 9573), { x: 2783, y: 9572 });
   assert.ok(low.messages.some((message) => message.includes("at least 40")));
   assert.equal(low.xp, 0);
 
-  const miss = player({ agility: 60 });
+  // rsprox 4308 2173-2175: 1114 back to 9572, the message, then the hit.
+  const miss = player({ agility: 60, x: 2783, y: 9573 });
   setRandom(() => 0.99);
-  stepBlades(miss);
-  assert.ok(miss.messages.includes("You were hit by the spinning blades!"));
+  stepTrap(miss, trapSpanAt(2783, 9573), { x: 2783, y: 9572 });
+  settle();
   assert.equal(miss.hits.length, 1);
+  assert.ok(miss.messages.includes("You were hit by the spinning blades!"));
   assert.equal(miss.xp, 0);
+  assert.deepEqual([miss.x, miss.y], [2783, 9572]);
 
-  const success = player({ agility: 60 });
+  // rsprox 4308 2176-2180: from 9573 over the three blade tiles to 9576.
+  const success = player({ agility: 60, x: 2783, y: 9573 });
   setRandom(() => 0);
-  stepBlades(success);
+  stepTrap(success, trapSpanAt(2783, 9573), { x: 2783, y: 9572 });
+  settle();
   assert.equal(success.xp, 28);
+  assert.deepEqual([success.x, success.y], [2783, 9576]);
 });
 
-test("trap tiles trigger once per tile entered, through the area's process", () => {
-  const p = player({ agility: 50, x: 2772, y: 9551 });
+test("the darts dodge walks the player past the corridor's middle for 30 XP; a hit drains two", () => {
+  // rsprox 1735 378-387: stop on 2778,9568 heading west, 1110, then walked to 2776.
+  const dodge = player({ agility: 70, x: 2778, y: 9568 });
+  setRandom(() => 0);
+  stepTrap(dodge, trapSpanAt(2778, 9568), { x: 2779, y: 9568 });
+  settle();
+  assert.equal(dodge.xp, 30);
+  assert.deepEqual([dodge.x, dodge.y], [2776, 9568]);
+
+  // rsprox 1735 2901-2904: knocked back to 2779, then the message, 6 damage and -2 Agility.
+  const hit = player({ agility: 70, x: 2778, y: 9568 });
+  setRandom(() => 0.99);
+  stepTrap(hit, trapSpanAt(2778, 9568), { x: 2779, y: 9568 });
+  settle();
+  assert.equal(hit.xp, 0);
+  assert.equal(hit.hits.length, 1);
+  assert.equal(hit.agility, 68);
+  assert.ok(hit.messages.includes("You were hit by some darts, something on them makes you feel dizzy!"));
+  assert.deepEqual([hit.x, hit.y], [2779, 9568]);
+});
+
+test("a trap span goes off once when the area sees the player stop on it", () => {
+  const p = player({ agility: 50, x: 2772, y: 9550 });
   const mobile = { isPlayer: () => true, getAsPlayer: () => p };
   processPlayer(mobile);
-  assert.equal(p.xp, 24);
+  p.y = 9551;
+  setRandom(() => 0);
   processPlayer(mobile);
-  assert.equal(p.xp, 24, "standing still does not re-roll");
-  p.y = 9552;
   processPlayer(mobile);
-  assert.equal(p.xp, 48, "the next spike tile rolls again");
+  settle();
+  assert.equal(p.xp, 24, "one jump over both spike tiles, one payment");
+  assert.deepEqual([p.x, p.y], [2772, 9553]);
 });
 
 test("the arena area covers the map's pillar grid and nothing else", () => {
@@ -337,10 +380,32 @@ test("a diagonal rope swing click picks the rope's axis, not the longer offset",
   assert.deepEqual(event.destination, { x: 2806, y: 9587, z: 3 });
 });
 
-test("the trap tiles are the cache's, and the blades catch the tiles beside them", () => {
+test("the trap spans are the cache's tiles; the blades' spans are the path beside them", () => {
   assert.equal(trapAt(2772, 9551), "FLOOR_SPIKES");
   assert.equal(trapAt(2799, 9557), "PRESSURE_PAD");
   assert.equal(trapAt(2783, 9546), null, "a dispenser pillar is not a trap");
-  assert.equal(isBladeHit(2777, 9555), true);
-  assert.equal(isBladeHit(2777, 9556), false, "the blade tile itself is not walkable");
+  assert.equal(trapAt(2778, 9557), "SPINNING_BLADES");
+  assert.equal(trapAt(2777, 9556), null, "the blade loc itself is not walkable");
+  assert.equal(trapAt(2794, 9573), "DARTS");
+});
+
+test("one click crosses a whole obstacle and pays its XP once, as every capture shows", () => {
+  const cases = [
+    // [kind, loc, player, approach, landing, source]
+    ["BALANCING_ROPE", [2783, 9581], [2783, 9580], [2783, 9580], [2783, 9588], "rsprox 1863 2624"],
+    ["LOG_BALANCE", [2794, 9587], [2794, 9588], [2794, 9588], [2794, 9581], "rsprox 1863 2017"],
+    ["BALANCING_LEDGE", [2769, 9546], [2772, 9548], [2770, 9546], [2763, 9546], "rsprox 1738 692"],
+    ["PLANK", [2802, 9590], [2803, 9590], [2803, 9590], [2796, 9590], "rsprox 1738 113"],
+    ["PILLAR", [2805, 9576], [2805, 9577], [2805, 9577], [2805, 9570], "rsprox 75 13517"],
+    ["HAND_HOLDS", [2792, 9592], [2794, 9591], [2792, 9592], [2785, 9592], "rsprox 1738 123"],
+    ["MONKEY_BARS", [2771, 9570], [2773, 9569], [2772, 9570], [2772, 9578], "rsprox 1735 2638"],
+    ["LOW_WALL", [2783, 9562], [2783, 9564], [2783, 9564], [2783, 9561], "rsprox 1735 750"],
+  ];
+  for (const [kind, [lx, ly], [px, py], approach, landing, source] of cases) {
+    const line = lineAt(kind, lx, ly);
+    const route = crossing(line, player({ x: px, y: py }));
+    assert.deepEqual(route.approach, approach, `${kind} approach (${source})`);
+    assert.deepEqual(route.path[route.path.length - 1], landing, `${kind} landing (${source})`);
+    assert.ok(crossingSteps(line, route).length > 0);
+  }
 });

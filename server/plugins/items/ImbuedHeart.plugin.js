@@ -27,7 +27,8 @@ function readyAt(player) {
   return Number.isFinite(saved) && saved > 0 ? saved : 0;
 }
 
-function invigorate(core, event) {
+function invigorate(api, event) {
+  const { core } = api;
   const { player } = event;
   const now = Date.now();
   const nextReadyAt = readyAt(player);
@@ -40,6 +41,8 @@ function invigorate(core, event) {
   boostSkill(player, core.Skill.MAGIC, 1, 0.1);
   player.performGraphic(new core.Graphic(INVIGORATE_GRAPHIC));
   player.getPacketSender().sendSoundEffect(INVIGORATE_SOUND, 1, 0);
+  // "imbued-heart:invigorated" { player, itemId }: the heart activated, its boost given.
+  api.emitCustomEvent("imbued-heart:invigorated", { player, itemId: event.itemId });
 }
 
 /** Death restores the stats, so the heart's wait goes with them (Wiki). */
@@ -54,7 +57,7 @@ module.exports = {
   _test: { invigorate, readyAt, READY_AT_ATTRIBUTE },
   register(api) {
     api.persistAttribute(READY_AT_ATTRIBUTE, 0);
-    api.onItemAction("Imbued heart", { Invigorate: invigorate.bind(null, api.core) });
+    api.onItemAction("Imbued heart", { Invigorate: invigorate.bind(null, api) });
     api.onPlayerDeath(resetOnDeath);
   },
 };

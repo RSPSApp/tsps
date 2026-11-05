@@ -88,7 +88,7 @@ class EntityMirror(
                 is NpcSync.Change.Removed -> if (change.index !in readded) npcs.remove(change.index)?.let(world::releaseNpc)?.also { npcTypeIds.remove(change.index) }
                 is NpcSync.Change.Added -> {
                     val npc = change.npc
-                    npc.level = if (npc.onDeck) EntityWorld.DECK_LEVEL else level
+                    npc.level = if (npc.onDeck) EntityWorld.DECK_LEVEL else if (npc.level >= 0) npc.level else level
                     npcTypeIds[change.index] = npc.type
                     val existing = npcs[change.index]
                     if (existing != null) {
@@ -201,6 +201,11 @@ class EntityMirror(
             icons.forEachIndexed { slot, (group, index) -> info.setHeadIconChange(slot, group, index) }
         }
         block.baseAnimations?.let { anims ->
+            // tsps sends the whole set each time, empty for the type's own; rsprot's set keeps its
+            // slots until reset and only adds to them, so a reset (or a dropped slot) never reached
+            // the client: Scurrius kept his eating idle after getting up from the food pile.
+            info.resetBaseAnimationSet()
+            if (anims.isEmpty()) return@let
             val bySlot = anims.toMap()
             info.setBaseAnimationSet(
                 readyAnim = bySlot[NPC_IDLE] ?: Int.MIN_VALUE,

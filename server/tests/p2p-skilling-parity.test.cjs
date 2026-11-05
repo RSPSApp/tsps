@@ -262,16 +262,19 @@ test('quest sourhog uses captured five-tick melee and ranged spit without sharin
   class Hit { constructor(attacker,target,method,delay){Object.assign(this,{attacker,target,method,delay});}isAccurate(){return true;} }
   const q=register('PorcineOfInterest','a_porcine_of_interest',{
     Misc:{randomInclusive:()=>roll}, PendingHit:Hit,
-    Projectile:{createProjectile(...args){const shot={args,withAngle(angle){this.angle=angle;return this;},withProgress(progress){this.progress=progress;return this;},sendProjectile(){shots.push(this);}};return shot;}},
+    Projectile:{centreOf:core.Projectile.centreOf,ticksToLand:core.Projectile.ticksToLand,createProjectile(...args){const shot={args,withAngle(angle){this.angle=angle;return this;},withProgress(progress){this.progress=progress;return this;},sendProjectile(){shots.push(this);}};return shot;}},
   }),p=player();const animations=[],graphics=[];p.performGraphic=value=>graphics.push(value);
-  let distance=4;const npc={calculateDistance:()=>distance,getLocation:()=>new core.Location(3162,9699,0),performAnimation:value=>animations.push(value)};
+  let distance=4;const npc={calculateDistance:()=>distance,getSize:()=>3,getLocation:()=>new core.Location(3162,9699,0),performAnimation:value=>animations.push(value)};
+  p.getSize=()=>1;p.getLocation=()=>new core.Location(3163+distance+1,9700,0);
   const provider=q.providers.find(provider=>provider.ids.includes(10436)),spit=new provider.ctor();spit.start(npc,p);
-  assert.equal(spit.type(),core.CombatType.RANGED);assert.equal(spit.attackSpeed(),5);assert.equal(spit.hits(npc,p)[0].delay,2);
+  assert.equal(spit.type(),core.CombatType.RANGED);assert.equal(spit.attackSpeed(),5);assert.equal(spit.hits(npc,p)[0].delay,3,'lands at 86 cycles: the 3rd tick');
   assert.equal(animations.at(-1).getId(),8770);assert.deepEqual(shots[0].args.slice(2),[1817,57,86,43,45]);assert.equal(shots[0].progress,128);assert.equal(shots[0].angle,16);
   assert.deepEqual([graphics[0].getId(),graphics[0].getDelay(),graphics[0].getHeight()],[1818,86,20]);
   distance=1;roll=1;const melee=new provider.ctor();melee.start(npc,p);assert.equal(melee.type(),core.CombatType.MELEE);assert.equal(melee.hits(npc,p)[0].delay,0);assert.equal(animations.at(-1).getId(),8769);
   assert.equal(spit.type(),core.CombatType.RANGED);assert.equal(shots.length,1);
-  roll=0;const near=new provider.ctor();near.start(npc,p);assert.equal(near.hits(npc,p)[0].delay,1);assert.equal(shots.at(-1).args[4],58);
+  // Adjacent, the captured 58 ends by launch + 1, so PacketSender sends 57 + 5 + 5 a tile (2 tiles centre to centre).
+  roll=0;const near=new provider.ctor();near.start(npc,p);assert.equal(near.hits(npc,p)[0].delay,3,'lands at 72 cycles');assert.equal(shots.at(-1).args[4],58);
+  distance=6;const far=new provider.ctor();far.start(npc,p);assert.equal(shots.at(-1).args[4],106);assert.equal(far.hits(npc,p)[0].delay,4,'lands at 106 cycles');
 });
 
 test('Sleeping Giants tutorial pickup gives the captured three-stage preform quality and temperature', () => {

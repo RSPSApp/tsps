@@ -1031,7 +1031,7 @@
     ]
   },
   "gold": {
-    "$comment": "crafting_gold (446): `firstComponent` is each type's plain-gold button; product rows are [item, level, XP] in `gems` order (null: plain gold).",
+    "$comment": "crafting_gold (446): `components` are each type's buttons and product rows are [item, level, XP], both in `gems` order (null: plain gold). The rev 241 bracelet row skips 51 (its mould layer). `slayerRing` is the ring row's extra button (446:16, Wiki Slayer ring): the client offers the eternal ring when an eternal gem is carried (script crafting_gold_checkgem), and both need the Ring bling unlock.",
     "gems": [
       null,
       "SAPPHIRE",
@@ -1045,7 +1045,7 @@
     "types": [
       {
         "name": "ring",
-        "firstComponent": 8,
+        "components": [8, 9, 10, 11, 12, 13, 14, 15],
         "mould": "RING_MOULD",
         "products": [
           [
@@ -1092,7 +1092,7 @@
       },
       {
         "name": "necklace",
-        "firstComponent": 23,
+        "components": [23, 24, 25, 26, 27, 28, 29, 30],
         "mould": "NECKLACE_MOULD",
         "products": [
           [
@@ -1139,7 +1139,7 @@
       },
       {
         "name": "amulet",
-        "firstComponent": 37,
+        "components": [37, 38, 39, 40, 41, 42, 43, 44],
         "mould": "AMULET_MOULD",
         "products": [
           [
@@ -1186,7 +1186,7 @@
       },
       {
         "name": "bracelet",
-        "firstComponent": 50,
+        "components": [50, 52, 53, 54, 55, 56, 57, 58],
         "mould": "BRACELET_MOULD",
         "products": [
           [
@@ -1232,6 +1232,17 @@
         ]
       }
     ],
+    "slayerRing": {
+      "component": 16,
+      "mould": "RING_MOULD",
+      "level": 75,
+      "xp": 15,
+      "unlockVarbit": "slayer_ring_unlocked",
+      "products": [
+        ["ETERNAL_GEM", "SLAYER_RING_ETERNAL_"],
+        ["ENCHANTED_GEM", "SLAYER_RING_8_"]
+      ]
+    },
     "quantities": {
       "60": 1,
       "61": 5,
@@ -1492,9 +1503,19 @@
     ]
   },
   "strungAmulets": {
-    "$comment": "A ball of wool on the unstrung amulet, 4 XP (Wiki: amulet stringing).",
+    "$comment": "A ball of wool on unstrung jewellery, 4 XP (Wiki: ball of wool products).",
     "xp": 4,
     "pairs": [
+      [
+        "UNSTRUNG_SYMBOL",
+        "UNBLESSED_SYMBOL",
+        "symbol"
+      ],
+      [
+        "UNSTRUNG_EMBLEM",
+        "UNPOWERED_SYMBOL",
+        "symbol"
+      ],
       [
         "GOLD_AMULET_U_",
         "GOLD_AMULET"

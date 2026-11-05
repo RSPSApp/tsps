@@ -59,6 +59,20 @@ test("a dropped item reports the cycles it was created, turns public and despawn
   assert.deepEqual(lifetime(pile), {publicAt: created + 100, goneAt: created + 300});
 }));
 
+test("a public unowned untradeable world item keeps its 200-tick lifetime", () => withWorld(() => {
+  let pile;
+  cycle({players: () => {
+    pile = new ItemOnGround(State.SEEN_BY_EVERYONE, undefined, player.getLocation(), new Item(9468), false, -1, null);
+    pile.setDespawnDelay(200);
+    ItemOnGroundManager.register(pile);
+  }});
+  const created = World.getProcessCycle();
+  assert.equal(ItemOnGroundManager.canSee(player, pile), true);
+  assert.equal(pile.isStaticSpawn(), false);
+  assert.deepEqual(pile.getTiming(), {createdTick: created, privateUntilTick: 0, expiresTick: created + 200});
+  assert.equal(lifetime(pile).goneAt, created + 200);
+}));
+
 test("an NPC drop made during the task phase counts the cycle it was made in", () => withWorld(() => {
   let pile, timing;
   cycle({tasks: () => {

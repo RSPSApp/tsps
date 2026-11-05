@@ -131,6 +131,7 @@ export class NPC extends Mobile {
     private combatOverrideViews: Map<NpcDefinition, NpcDefinition> | null = null;
     /** Multiplies this NPC's attack and defence rolls (raid scaling); 1 leaves them alone. */
     private rollFactor = 1;
+    private defenceRollFactor: number | null = null;
     private spawnPosition: Location;
     private headIcon = -1;
     private defenceBonusOverrides: Array<number | null> | null = null;
@@ -219,6 +220,7 @@ export class NPC extends Mobile {
     public static readonly WALK_THROUGH_ENTITIES_FLAG = "movement:walk-through-entities";
     /** OSRS's "full" entity collision: players wait instead of stepping onto this NPC (the Agility Pyramid's moving blocks). */
     public static readonly BLOCKS_PLAYERS_FLAG = "movement:blocks-players";
+    public static readonly BLOCKS_PROJECTILES_FLAG = "combat:blocks-projectiles";
 
     public canWalkThroughNPCs(): boolean {
         if (this.pet || this.hasFlag(NPC.WALK_THROUGH_ENTITIES_FLAG)) {
@@ -251,13 +253,8 @@ export class NPC extends Mobile {
 
     public isAggressiveTo(player: Player): boolean {
         return player.getSkillManager().getCombatLevel() <= (this.getCurrentDefinition().getCombatLevel() * 2)
-            || Wilderness.isIn(player);
-    }
-
-    public aggressionDistance(): number {
-        let attackDistance = CombatFactory.getMethod(this).attackDistance(this);
-
-        return Math.max(attackDistance, 3);
+            || (Wilderness.isIn(player)
+                && Wilderness.levelAt(player.getLocation().getX(), player.getLocation().getY()) > 0);
     }
 
     public process() {
@@ -333,7 +330,7 @@ export class NPC extends Mobile {
             AreaManager.process(this);
             // "combat:no-regen": a boss whose fight has phases it can't be hit in (Vet'ion's hounds)
             // keeps its damage.
-            if (!this.hitpointsLocked && !this.hasFlag("combat:no-regen") && (this.getCombat().getLastAttack().hasElapsed(20000)
+            if (this.hitpoints > 0 && !this.hitpointsLocked && !this.hasFlag("combat:no-regen") && (this.getCombat().getLastAttack().hasElapsed(20000)
                 || this.movementCoordinator.getCoordinateState() == CoordinateState.RETREATING)) {
                 const max = this.getMaxHitpoints();
                 if (max > this.hitpoints) {
@@ -400,6 +397,16 @@ export class NPC extends Mobile {
 
     public setRollFactor(factor: number): NPC {
         this.rollFactor = Number.isFinite(factor) && factor > 0 ? factor : 1;
+        return this;
+    }
+
+    /** The defence roll's own factor, where it differs from the attack's. */
+    public getDefenceRollFactor(): number {
+        return this.defenceRollFactor ?? this.rollFactor;
+    }
+
+    public setDefenceRollFactor(factor: number): NPC {
+        this.defenceRollFactor = factor;
         return this;
     }
 
@@ -520,13 +527,25 @@ export class NPC extends Mobile {
         return drained.level;
     }
 
+    /**
+     * The level setCurrentLevels would leave for `skill`, without changing this NPC: the same
+     * stat-drain immunity and 0..base clamp. Content that predicts a pending drain (a second
+     * ranged hit's defence roll) can use it without draining the NPC early.
+     */
+    public previewCurrentLevel(skill: Skill, level: number): number {
+        if (!Number.isFinite(level)) throw new RangeError("Invalid NPC combat level");
+        const base = this.getMaxLevel(skill);
+        if (this.statDrainImmune && level < base) return base;
+        return Math.max(0, Math.min(base, Math.floor(level)));
+    }
+
     public setCurrentLevels(skill: Skill, level: number): void {
         if (!Number.isFinite(level)) throw new RangeError("Invalid NPC combat level");
         const base = this.getMaxLevel(skill);
         if (this.statDrainImmune && level < base) return;
         this.getCurrentLevel(skill);
         const cycle = this.drainedLevels.get(skill)?.cycle ?? World.getProcessCycle();
-        level = Math.max(0, Math.min(base, Math.floor(level)));
+        level = this.previewCurrentLevel(skill, level);
         if (level === base) this.drainedLevels.delete(skill);
         else this.drainedLevels.set(skill, { level, cycle });
     }

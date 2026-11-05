@@ -2,7 +2,7 @@
 
 `server/plugins/items/StorageItems.plugin.js`, with one unit per container in
 `server/plugins/items/storage/`: the coal bag, gem bag, fish barrel (and fish sack barrel), log
-basket (and forestry basket), plank sack and tackle box. The herb sack and seed box were already
+basket (and forestry basket), Forestry kit, plank sack and tackle box. The herb sack and seed box were already
 in the Farming plugin and are unchanged.
 
 ## Replaces
@@ -24,17 +24,19 @@ login, and Mining's `mining:ore` event it listened to is now `storage:gather`.
 ## How contents are kept
 
 As with the rune pouch, a container's contents live on the player in the attribute
-`storage-items:<family>` (`coal-bag`, `gem-bag`, `fish-barrel`, `log-basket`, `plank-sack`,
-`tackle-box`), not on the item. Every copy a player owns shares one store (Wiki: Fish barrel,
+`storage-items:<family>` (`coal-bag`, `gem-bag`, `fish-barrel`, `log-basket`, `forestry-kit`,
+`plank-sack`, `tackle-box`), not on the item. Every copy a player owns shares one store (Wiki: Fish barrel,
 Log basket, Tackle box). The open and closed variants are the same container (`Coal bag` /
 `Open coal bag` and so on); Open and Close swap the item in place.
 
 | Container | Holds | Fills itself | Used from it |
 | --- | --- | --- | --- |
 | Coal bag | 27 coal, 36 with the Smithing cape's perk (`skillcape:has-perk`) | open: mined coal | smelting, after the inventory's coal |
-| Gem bag | 60 of each uncut sapphire to dragonstone | open: picked-up gems, the gem stall, Shooting Star gems | - |
+| Gem bag | 60 of each uncut sapphire to dragonstone | open: picked-up gems, mined gems, the gem stall, pickpocketed gems, Shooting Star gems | - |
+| Gem pouch, gem satchel, gem tote | 5, 10 and 20 of each uncut opal, jade and red topaz | open: mined gems only | - |
 | Fish barrel, fish sack barrel | 28 raw fish (no stackable fish) | open: caught fish | - |
 | Log basket, forestry basket | 28 logs or bark, carried or worn | open: chopped logs | - |
+| Forestry kit (and the kit in a forestry basket) | enum 817: bark, nature offerings, rations, secateurs attachment, leaves | carried or worn: Forestry bark and leaves | the Forestry Shop's bark |
 | Plank sack | 28 planks | always: sawmill planks | Construction, after the inventory's planks |
 | Tackle box | 35 kinds of tackle (`data/storage-items.json`) | - | fishing bait only; gear has to come out first |
 
@@ -45,7 +47,7 @@ Other plugins reach the containers only through custom events (owned by `Common.
 | Event | Payload | Emitted by |
 | --- | --- | --- |
 | `storage:room` | `{ player, itemId, room }` | Mining, Fishing, Woodcutting: a full inventory doesn't stop them while an open container has room |
-| `storage:gather` | `{ player, itemId, amount, stored }` | Mining, Fishing, Woodcutting, the sawmill, stall thieving, Shooting Stars: open containers take what fits, the rest goes to the inventory |
+| `storage:gather` | `{ player, itemId, amount, stored, announce? }` | Mining, Fishing, Woodcutting, the sawmill, stall thieving, pickpocketed gems, Shooting Stars: open containers take what fits, the rest goes to the inventory |
 | `storage:amount` | `{ player, itemId, amount }` | Smithing (smelting), Construction, Fishing (bait) |
 | `storage:take` | `{ player, itemId, amount, taken }` | the same, after the inventory's own items |
 
@@ -68,7 +70,7 @@ inventory option, even from the bank panel; it now leaves the bank panel's ops t
 | Container | Line | Source |
 | --- | --- | --- |
 | Coal bag | "The coal bag contains # pieces of coal." / "The coal bag is empty." / "The coal bag is now empty." / "The coal bag can hold only # pieces of coal." | parsed from live chat |
-| Gem bag | "You add the gems to your bag." / "You put it straight into your open gem bag." | Wiki |
+| Gem bag | "You just found a/an [gem]!" / "You put it straight into your open gem bag." / "You open your gem bag, ready to fill it." / "You close your gem bag." / "Sapphires: # / Emeralds: # / Rubies: #" / "Diamonds: # / Dragonstones: #" / "Only uncut gems can be stored in the bag." / "Your bag is too full to hold all your gems." / "You have nothing suitable for storing in the bag." | Wiki; Fill itself has no line |
 | Fish barrel | "The barrel is full. It may be emptied at a bank." | Wiki |
 | Log basket | "The basket is full." / "Your basket is empty." / "The basket is empty." / "You empty your basket." / "You empty as many logs as you can carry." / "You empty your basket into the bank." | parsed from live chat |
 | Tackle box | "The tackle box is now empty." | captured |
@@ -87,6 +89,28 @@ The quantity buttons 683:4-7 set varbit 11795 (`ii_elnock_storage_selectedquanti
 box's scripts share): 0 = 1, 1 = 5, 2 = All, 3 = X. Cache scripts 4052 (Withdraw) and 4053
 (Deposit) put the selected quantity on op1 and fix ops 2-5 as 1, 5, X and All. Fill (683:8)
 moves everything the box takes, silently; Empty (683:9) says "The tackle box is now empty."
+
+## Forestry kit interface
+
+Captured (rsprox 1704, rev 227; 1104, rev 237): View sends inventory 814, runs script 917
+(-1, -3), opens 823 (main modal) and 822 (side modal), and sets events 1150 (ops 1-6, op 10) on
+823:21 slots 0-252 and 1180734 on 822:0 slots 0-27. Fill with nothing storable says "You have
+nothing that can be stored in the forestry kit."; bark awarded during an event went straight
+into the worn kit.
+
+The withdraw buttons 823:11-14 set varbit 14985 (`forestry_kit_selectedquantity`), with the tackle
+box's values (0 = 1, 1 = 5, 2 = All, 3 = X); script 1768 puts the selected quantity on the side
+panel's op1 and fixes ops 2-5 as 1, 5, X and All. The main grid is taken to work the same way
+(not captured). Fill (823:15) and Empty (823:16) move everything.
+
+The forestry basket's "Forestry kit" sub-options on Fill and View reach the same store, and
+Configure > Dismantle splits the basket into its log basket, the Forestry kit and the sturdy
+harness, each keeping its contents. The kit's bank op ("Use") empties it into the inventory
+(Wiki). The Forestry Shop spends bark from the inventory and then from a carried or worn kit; this
+is ours, as neither the Wiki nor a capture shows it.
+
+The Lumberjack and Forestry outfits and the Woodcutting cape are also in enum 817, but only
+with the clothes or cape pouch installed (Wiki); tsps has no pouches, so they stay out.
 
 ## Death
 
@@ -117,8 +141,6 @@ Elemental ore: "Even this spell is not hot enough to heat this item." (Wiki).
 
 ## Not done
 
-- The forestry basket's Forestry kit sub-options and Dismantle: tsps has no Forestry events yet,
-  so there is little to store. The kit is captured (interfaces 822/823, inventory 814) for when
-  they exist.
+- The Forestry kit's clothes and cape pouches, and the Forester's rations' run energy.
 - The deposit box's container options; the Ultimate Ironman bank-booth emptying of the fish
   barrel.

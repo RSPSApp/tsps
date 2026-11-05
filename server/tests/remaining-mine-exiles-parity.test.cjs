@@ -121,6 +121,7 @@ function setup(pluginPath, questKey, options = {}) {
     sendConfig(id, value) { configs.set(id, value); return sender; },
     sendInterfaceRemoval() { current = null; return sender; },
     sendSubInterface(target, group, type) { subInterfaces.set(group, { target, type }); return sender; },
+    mountSubInterface(target, group, type) { const mount = { target, type }; subInterfaces.set(group, mount); return mount; },
     sendCameraMoveTo(...args) { cameras.moves.push(args); return sender; },
     sendCameraLookAt(...args) { cameras.looks.push(args); return sender; },
     sendCameraReset() { cameras.resets += 1; return sender; },
@@ -158,7 +159,7 @@ function setup(pluginPath, questKey, options = {}) {
     }),
     getLocation: () => location, moveTo(value) { location = value; },
     getMovementQueue: () => ({ reset() { return this; }, setBlockMovement() { return this; } }), setUntargetable() {},
-    getUsername: () => 'tester', getAppearance: () => ({ isMale: () => true }), getPositionToFace: () => null,
+    getUsername: () => 'tester', getDisplayName: () => 'tester', getAppearance: () => ({ isMale: () => true }), getPositionToFace: () => null,
     setEnteredSyntaxAction(action) { player.syntaxAction = action; },
     getDialogueManager: () => ({ startDialogues(chain) { current = chain; }, getCurrent: () => current, reset() { current = null; }, isActive: () => Boolean(current), advance() {} }),
     isPlayer: () => true, isNpc: () => false, isRegistered: () => true, isPlayerBot: () => false,
@@ -813,7 +814,7 @@ test('combined real dispatch: Brundt 9263 offers Exiles before Lunar/FremennikTr
     getBank: () => ({ contains: () => false }),
     getEquipment: () => ({ get: () => ({ getId: () => -1 }) }),
     getSkillManager: () => ({ getCurrentLevel: () => 99, getMaxLevel: () => 99, addExperiences() {}, setCurrentLevelCombat() {} }),
-    getUsername: () => 'tester', getAppearance: () => ({ isMale: () => true }),
+    getUsername: () => 'tester', getDisplayName: () => 'tester', getAppearance: () => ({ isMale: () => true }),
     getLocation: () => new core.Location(2659, 3669, 0), moveTo() {},
     getDialogueManager: () => ({ reset() {}, isActive: () => false, startDialogues() {} }),
     isPlayer: () => true, isPlayerBot: () => false,
@@ -1001,7 +1002,7 @@ test('Waterbirth gate is shared: two players can cooperate, and release closes i
   const friend = {
     getLocation: () => new h.core.Location(2490, 10164, 0),
     isRegistered: () => true,
-    getUsername: () => 'friend',
+    getUsername: () => 'friend', getDisplayName: () => 'friend',
   };
   h.setPlayers([h.player, friend]);
   h.setLocation(new h.core.Location(2490, 10162, 0));
@@ -1028,7 +1029,7 @@ test('Waterbirth gate is shared: two players can cooperate, and release closes i
 test('Waterbirth gate times out with Doors auto-close even while held', () => {
   const h = setup('../plugins/quests/quests/TheFremennikExiles.Quest', 'the_fremennik_exiles', { waterbirth: true });
   h.quest.setStage(h.player, 50);
-  const friend = { getLocation: () => new h.core.Location(2490, 10164, 0), isRegistered: () => true, getUsername: () => 'friend' };
+  const friend = { getLocation: () => new h.core.Location(2490, 10164, 0), isRegistered: () => true, getUsername: () => 'friend', getDisplayName: () => 'friend' };
   h.setPlayers([h.player, friend]);
   h.setLocation(new h.core.Location(2490, 10162, 0));
   const gate = {
@@ -1046,7 +1047,7 @@ test('Waterbirth gate times out with Doors auto-close even while held', () => {
 test('Waterbirth relog does not reapply a saved global gate or support despawn', () => {
   const h = setup('../plugins/quests/quests/TheFremennikExiles.Quest', 'the_fremennik_exiles', { waterbirth: true });
   h.quest.setStage(h.player, 50);
-  const friend = { getLocation: () => new h.core.Location(2490, 10164, 0), isRegistered: () => true, getUsername: () => 'friend' };
+  const friend = { getLocation: () => new h.core.Location(2490, 10164, 0), isRegistered: () => true, getUsername: () => 'friend', getDisplayName: () => 'friend' };
   h.setPlayers([h.player, friend]);
   h.setLocation(new h.core.Location(2490, 10162, 0));
   const gate = {
@@ -1095,7 +1096,7 @@ test('Waterbirth captured landings, cache gate ids and the lower pathfinder reac
     getSize: () => 1,
     getPrivateArea: () => null,
     isPlayer: () => true,
-    getAsPlayer: () => ({ isPlayerBot: () => false, getUsername: () => 'tester' }),
+    getAsPlayer: () => ({ isPlayerBot: () => false, getUsername: () => 'tester', getDisplayName: () => 'tester' }),
     getMovementQueue: queue,
   };
   assert.equal(PathFinder.calculateWalkRoute(player, 1850, 4392), 1, 'the captured landing walks to Bardur');
@@ -1164,7 +1165,7 @@ test('Waterbirth handler opens the real base-map door clipping and restores it',
   };
   const walker = {
     getLocation: () => new Location(2545, 10146, 0), getSize: () => 1, getPrivateArea: () => null,
-    isPlayer: () => true, getAsPlayer: () => ({ isPlayerBot: () => false, getUsername: () => 'tester' }),
+    isPlayer: () => true, getAsPlayer: () => ({ isPlayerBot: () => false, getUsername: () => 'tester', getDisplayName: () => 'tester' }),
     getMovementQueue: queue,
   };
   assert.ok(PathFinder.calculateWalkRoute(walker, 2545, 10144) > 0, 'path into the ladder room opens');
@@ -1592,8 +1593,8 @@ test('Fremennik Trials: Peer offers and performs his bank spell when talked to a
   const moved = [];
   const items = [new h.core.Item(I.COINS, 5)];
   const container = (list) => ({
-    getValidItems: () => list.slice(), refreshItems() {}, getAmount: () => 0,
-    switchItems(_to, item) { moved.push(item.getId()); list.splice(list.findIndex((entry) => entry.getId() === item.getId()), 1); },
+    getItems: () => list, getValidItems: () => list.slice(), refreshItems() {}, getAmount: () => 0,
+    switchItem(_to, item, _sort, slot) { moved.push(item.getId()); list.splice(slot, 1); },
   });
   Object.assign(h.player, {
     getInventory: () => container(items), getEquipment: () => container([]),

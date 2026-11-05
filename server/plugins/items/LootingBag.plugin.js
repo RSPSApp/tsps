@@ -150,7 +150,7 @@ function sendTotals(player, bag, deposit) {
   const shown = deposit
     ? player.getInventory().getItems().slice(0, BAG_SIZE).map((item) => (item?.isValid?.() ? { id: item.getId() } : null))
     : entries;
-  const prices = Array.from({ length: BAG_SIZE }, (_, slot) => (shown[slot] ? price(shown[slot].id) : -1));
+  const prices = Array.from({ length: BAG_SIZE }, (_, slot) => BigInt(shown[slot] ? price(shown[slot].id) : -1));
   sender.sendInterfaceScript(PRICES_SCRIPT, [deposit ? PLAYER_INVENTORY : BAG_INVENTORY, ...prices]);
 }
 
@@ -266,6 +266,8 @@ function openBag({ player, item }) {
   item.setMetaValue(`${BAG_DATA}:open`, undefined);
   player.getInventory().refreshItems();
   player.sendMessage(MESSAGE.OPEN);
+  // "looting-bag:opened" { player }: the bag opened (picked-up loot goes in).
+  api.emitCustomEvent("looting-bag:opened", { player });
   return true;
 }
 
@@ -441,11 +443,14 @@ function clickBankView(event) {
     if (!entry) return;
     const op = Number(event.action);
     if (op === BANK_X_PROMPT_OP) {
+      const key = entryKey(entry);
       return askAmount(player, (amount) => {
         if (!(amount > 0)) return;
         player.setBankCustomQuantity(amount);
         player.getPacketSender().sendVarbit(BANK_X_VARBIT, amount);
         if (!bankViewing(player) || bagFor(player) !== bag) return;
+        const current = bagItems(bag)[event.slot];
+        if (!current || entryKey(current) !== key) return;
         bankSlot(player, bag, event.slot, amount);
         refreshBank(player);
         sendContents(player, bag);

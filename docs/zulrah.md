@@ -1,6 +1,8 @@
 # Zulrah
 
-Zulrah, built from the OSRS Wiki ("Zulrah", "Zulrah/Strategies", "Snakeling", "Priestess Zul-Gwenwynig", "Sacrificial boat", "Zul-andra teleport") and the cache. Near-Reality's implementation was the reference for what the Wiki leaves out: tiles, animations, projectiles and timings. No live capture has been taken yet. Wherever only Near-Reality's values are used, this page says so, so a capture can check them later.
+Zulrah, built from the [OSRS Wiki](https://oldschool.runescape.wiki/w/Zulrah) and [rotation guide](https://oldschool.runescape.wiki/w/Zulrah/Strategies), cache definitions and RSProx captures. Near-Reality's implementation is still the reference for values the captures do not settle, such as attack timings and many projectile placements.
+
+Captures reviewed: RSProx #820 (Grid Master:Forestry) contains Zulrah spawn/form packets, animations 5071/5069/5073 and cloud projectiles; #3342 (Grid Master:Forestry) records the warning at 50 kills that future item returns cost 100,000 coins; #1157 and #1161 (Leagues VI) contain shrine dialogue and repeated fights. These are useful packet and message evidence, but none shows the daily resurrection or a full multi-rotation fight.
 
 It is one plugin, `server/plugins/bosses/Zulrah.plugin.js`, which delegates to the units in `server/plugins/bosses/zulrah/`.
 
@@ -12,7 +14,8 @@ It is one plugin, `server/plugins/bosses/Zulrah.plugin.js`, which delegates to t
 | `Rotations.Zulrah.js` | The four rotations as data, and the order phases come in. |
 | `Fight.Zulrah.js` | One player's fight: the shrine, Zulrah rising, its attacks, the tail, the dives. |
 | `Hazards.Zulrah.js` | Venom clouds, snakelings and the snakelings' attacks. |
-| `Shrine.*` | The boat, the teleport scrolls, kills and loot, the damage cap, deaths and Zul-Gwenwynig's retrieval. |
+| `Shrine.*` | The boat, the teleport scrolls, kills and loot, the damage cap, deaths and Zul-Gwenwynig's retrieval interface. |
+| `Resurrection.Zulrah.js` | The Elite Western Provinces Diary's daily safe resurrection during an active fight. |
 | `Commands.*` | Developer commands. |
 
 ## Getting there
@@ -51,6 +54,7 @@ The server resolves both per player, so the options are handled by name.
 
 **Ranged and Magic attacks:**
 - Every 3 ticks, max hit 41.
+- After 300 ticks (3 minutes), green-form attacks can unpredictably use Ranged or Magic (Wiki). The implementation uses a uniform 50/50 choice because the Wiki gives no ratio; this split is an inference, not a capture result.
 - Damage is rolled with the player's prayer as the attack starts (Wiki).
 - An attack that lands envenoms (venom 6), even through prayer (Wiki).
 - Projectiles: Ranged 1044, Magic 1046, from cycle 40, landing at 58 + 5 per tile (Near-Reality).
@@ -99,12 +103,13 @@ Zulrah's south-west tile (Near-Reality):
 
 ### Rotations
 
-`Rotations.Zulrah.js` holds the Wiki's four rotations phase by phase: place, form, and what Zulrah does, in order. The test checks them against the Wiki's list.
+`Rotations.Zulrah.js` holds the Wiki's four rotations phase by phase: place, form, and what Zulrah does, in order. The regression suite checks them against the Wiki's list.
 
 **The cycle:**
 - The fight always opens in the middle in green form with four venom cloud barrages.
 - Every rotation ends in the middle in green form with five Ranged attacks and four barrages. The Wiki counts this phase as the first of the next rotation.
 - The next rotation is then picked at random, and may be the same one.
+- The Wiki also warns that after the first rotation, a phase can differ from the expected phase. The available recordings did not capture this, and the Wiki does not specify the selection or odds, so this extra phase deviation is not modeled yet.
 
 **Timing** (Near-Reality):
 - Zulrah rises with anim 5071, can be attacked 4 ticks later, and starts its first phase 9 ticks after rising.
@@ -114,9 +119,7 @@ Zulrah's south-west tile (Near-Reality):
 - Its next phase starts 3 ticks after it rises (7 after the dive, as in Near-Reality), which is also when it can be attacked again.
 - A tail phase takes 18 ticks.
 
-**Not done:**
-- The Wiki says rotations after the first can randomly differ from the expected phase.
-- It also says long fights (3+ minutes) can have a green form attacking with unpredictable Ranged and Magic.
+**Still open:** the post-first-rotation phase deviation above. Its selection and probability need a longer RSProx capture or a more exact source before implementing it without inventing encounter behavior.
 
 ### Clouds and snakelings
 
@@ -177,16 +180,15 @@ Near-Reality's tables were checked against the Wiki and corrected:
 **Talk-to** while she holds items: "You left some stuff at Zulrah's shrine when you left earlier." (Near-Reality), then the same as Collect. Otherwise her Wiki transcript plays.
 
 **Collect:**
-- It returns the items in the order they dropped (inventory, then equipment), as far as the inventory has room.
+- Collect opens the shared `gravestone_retrieval` interface; Take and Examine work per item, and the button pays the fee or takes everything that fits. The interface behavior reuses the captured Vorkath retrieval widget; no Zulrah-specific interface capture was found, so this part is inferred from the shared cache interface.
 - It is free for the first 50 kills, then costs 100,000 coins once per death (Wiki).
+- Ultimate Ironmen retrieve items directly, free, without opening the interface (Wiki).
 - Her line asking for the coins is ours; the Wiki gives none.
 - With nothing held: "I'm afraid I don't have anything for you to collect. …" (Near-Reality).
 
 **Losing them:** an unsafe death anywhere else before collecting loses what she holds (Wiki). A death while carrying nothing droppable does not clear them.
 
-**Not done:**
-- The Wiki's item-retrieval interface: Collect gives the items straight back.
-- The Western Provinces elite diary's daily resurrection.
+**Daily resurrection:** with the Elite Western Provinces Diary complete, the first lethal hit during an active Zulrah fight each day restores all skills and lets the same fight continue. The limit resets at 00:00 UTC, but the player must log in after reset before using it again. It prevents the death, making the rescue safe for Hardcore accounts (Wiki). No capture of the rescue was available.
 
 ## Sounds
 
@@ -237,3 +239,5 @@ Near-Reality's sound effects are played to the player:
 - **Line of sight:** whether a pillar blocking line of sight skips an attack.
 - **Text:** the boat's "Return to Zulrah's shrine?" choice and the priestess's lines.
 - **Sounds:** the sound effect ids.
+- **Rare mechanics:** the uniform 50/50 split for long-fight green attacks is inferred; the Wiki gives no probability. The extra phase deviation after the first rotation is not implemented pending evidence for its selection and odds.
+- **Retrieval UI and resurrection:** the shared cache interface was captured for Vorkath, not Zulrah; the Zulrah-specific UI and daily rescue behavior still need direct capture confirmation.

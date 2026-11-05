@@ -17,6 +17,8 @@ import { getNpcMenuOptions } from "../../menu/WorldMenuBuilder";
 import { stripTags } from "../npcindicators/npcMatching";
 import { RS_TO_RADIANS } from "../../../rs/MathConstants";
 import { MOBILE_ROOT_INTERFACE } from "../../../rs/cs2/ClientType";
+import { mobileHudScale } from "../../widgets/MobileHudLayout";
+import { isMobilePortraitLayoutActive, PORTRAIT_COMPONENTS } from "../portraitmode/PortraitLayout";
 import { menuAction } from "../../../ui/menu/MenuAction";
 import { MenuOpcode } from "../../../ui/menu/MenuState";
 import type { SimpleMenuEntry } from "../../../ui/menu/MenuEngine";
@@ -52,11 +54,16 @@ export type TouchAction = {
 };
 
 export type TouchControlsUiState = {
+    scale: number;
     visible: boolean;
     /** The object the player walked into; its first option is the button. */
     action?: TouchAction;
     /** CSS px from the game's right edge to the tab stones' left edge (0 without them). */
     stonesInset: number;
+    /** Portrait Mode layout: the stick is drawn smaller, above the minimap. */
+    portrait: boolean;
+    /** Portrait Mode layout: CSS px from the game's bottom edge to the top of the minimap. */
+    hudInset: number;
 };
 
 /**
@@ -74,11 +81,12 @@ export type TouchControlsClient = {
     cs2Vm?: { inputDialogType?: number };
     widgetManager?: {
         rootInterface?: number;
+        canvasWidth?: number;
         interfaceParents: Map<number, { type: number }>;
         isEffectivelyHidden?(uid: number): boolean;
-        getWidgetByUid?(uid: number): { x?: number; parentUid?: number } | undefined;
+        getWidgetByUid?(uid: number): { x?: number; y?: number; parentUid?: number } | undefined;
     };
-    renderer?: { canvas?: { width: number; clientWidth: number } };
+    renderer?: { canvas?: { width: number; height: number; clientWidth: number; clientHeight: number } };
     playerEcs?: { getIndexForServerId(serverId: number): number | undefined; getX(i: number): number; getY(i: number): number; getLevel(i: number): number };
     controlledPlayerServerId?: number;
     sceneGeometry?: Pick<SceneGeometry, "locsAtTile">;
@@ -162,7 +170,7 @@ export class TouchControlsPlugin extends Plugin implements ClientPlugin {
     private npcLeftAt?: number;
     private gameTicks = 0;
     private padMode: PadModeValue = PadMode.DEFAULT;
-    private uiState: TouchControlsUiState = { visible: false, stonesInset: 0 };
+    private uiState: TouchControlsUiState = { scale: 1, visible: false, stonesInset: 0, portrait: false, hudInset: 0 };
     private uiKey = "";
 
     constructor(client?: TouchControlsClient) {
@@ -472,25 +480,51 @@ export class TouchControlsPlugin extends Plugin implements ClientPlugin {
         return { x: players.getX(index) >> 7, y: players.getY(index) >> 7, plane: players.getLevel(index) | 0 };
     }
 
-    /** CSS px from the right edge of the game to the left edge of the mobile tab stones. */
-    private stonesInset(): number {
+    /** A mobile gameframe widget's top-left corner in CSS px on the canvas, if it is shown. */
+    private mobileWidgetCssPos(uid: number): { x: number; y: number } | undefined {
         const widgets = this.client.widgetManager;
         const canvas = this.client.renderer?.canvas;
-        if (widgets?.rootInterface !== MOBILE_ROOT_INTERFACE || !canvas?.width || !canvas.clientWidth ||
-            widgets.isEffectivelyHidden?.(MOBILE_STONES)) return 0;
-        let widget = widgets.getWidgetByUid?.(MOBILE_STONES);
-        if (!widget) return 0;
-        // Add up layout x to the root, whose render transform maps it onto the canvas.
+        if (widgets?.rootInterface !== MOBILE_ROOT_INTERFACE || !canvas?.width || !canvas.height ||
+            !canvas.clientWidth || !canvas.clientHeight || widgets.isEffectivelyHidden?.(uid)) return undefined;
+        let widget = widgets.getWidgetByUid?.(uid);
+        if (!widget) return undefined;
+        // Add up layout x/y to the root, whose render transform maps it onto the canvas.
         let x = 0;
+        let y = 0;
         let root = widget;
         for (let hops = 0; widget && hops < 50; hops++) {
             x += widget.x ?? 0;
+            y += widget.y ?? 0;
             root = widget;
             widget = widget.parentUid === undefined || widget.parentUid === -1 ? undefined : widgets.getWidgetByUid?.(widget.parentUid);
         }
-        const transform = root as { __widgetRenderScaleX?: number; __widgetRenderOffsetX?: number };
+        const transform = root as {
+            __widgetRenderScaleX?: number; __widgetRenderOffsetX?: number;
+            __widgetRenderScaleY?: number; __widgetRenderOffsetY?: number;
+        };
         const canvasX = x * (transform.__widgetRenderScaleX ?? 1) + (transform.__widgetRenderOffsetX ?? 0);
-        return Math.max(0, Math.round(canvas.clientWidth - canvasX * canvas.clientWidth / canvas.width));
+        const canvasY = y * (transform.__widgetRenderScaleY ?? 1) + (transform.__widgetRenderOffsetY ?? 0);
+        return {
+            x: canvasX * canvas.clientWidth / canvas.width,
+            y: canvasY * canvas.clientHeight / canvas.height,
+        };
+    }
+
+    /** CSS px from the right edge of the game to the left edge of the mobile tab stones. */
+    private stonesInset(): number {
+        // Portrait Mode puts the stones along the bottom instead (see hudInset).
+        if (isMobilePortraitLayoutActive()) return 0;
+        const pos = this.mobileWidgetCssPos(MOBILE_STONES);
+        const width = this.client.renderer?.canvas?.clientWidth ?? 0;
+        return pos ? Math.max(0, Math.round(width - pos.x)) : 0;
+    }
+
+    /** Portrait Mode layout: CSS px from the bottom of the game up to the top of the minimap. */
+    private hudInset(): number {
+        if (!isMobilePortraitLayoutActive()) return 0;
+        const pos = this.mobileWidgetCssPos(PORTRAIT_COMPONENTS.mapContainer);
+        const height = this.client.renderer?.canvas?.clientHeight ?? 0;
+        return pos ? Math.max(0, Math.round(height - pos.y)) : 0;
     }
 
     /**
@@ -540,14 +574,21 @@ export class TouchControlsPlugin extends Plugin implements ClientPlugin {
         // On/Off beat detection and the ?touch= query override; Default keeps both.
         const padOn =
             this.padMode === PadMode.ON ? true : this.padMode === PadMode.OFF ? false : this.touchDevice;
-        const visible = this.isEnabled() && padOn && this.client.isLoggedIn();
+        // Portrait Mode centres banks and shops right above the minimap, where the stick sits. It
+        // can't move then anyway, so it steps aside instead of covering their buttons.
+        const portrait = isMobilePortraitLayoutActive();
+        const visible = this.isEnabled() && padOn && this.client.isLoggedIn() &&
+            (!portrait || this.canMove());
         const action = visible && this.focus && this.canMove()
             ? { kind: this.focus.kind, options: this.menuOrder(this.focus) } : undefined;
         const stonesInset = visible ? this.stonesInset() : 0;
-        const key = JSON.stringify([visible, action, stonesInset]);
+        const hudInset = visible ? this.hudInset() : 0;
+        const scale = mobileHudScale(this.client.widgetManager?.rootInterface,
+            this.client.renderer?.canvas?.clientWidth ?? 0, this.client.widgetManager?.canvasWidth);
+        const key = JSON.stringify([visible, action, stonesInset, portrait, hudInset, scale]);
         if (key === this.uiKey) return;
         this.uiKey = key;
-        this.uiState = { visible, action, stonesInset };
+        this.uiState = { visible, action, stonesInset, portrait, hudInset, scale };
         for (const listener of [...this.listeners]) {
             try {
                 listener();

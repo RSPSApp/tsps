@@ -54,7 +54,6 @@ function chisel(player) {
   Shared.animate(player, "gotr_chisel_essence");
   Shared.sound(player, SOUND);
   Shared.addXp(player, "CRAFTING", craftingXp(player));
-  Game.addContribution(player, 1);
   return true;
 }
 

@@ -30,6 +30,8 @@ function setupBarricade({ player }) {
   if (
     RegionManager.blocked(location, player.getPrivateArea()) ||
     game.isSteppingStone(game.getLocationTile(location)) ||
+    // Not where a tunnel's rocks stand or would fall, even once mined away (issue 1929).
+    game.isTunnelRockTile?.(location) ||
     World.isNpcOccupyingTile(location, null, 1, player.getPrivateArea())
   ) {
     player.sendMessage("You can't set up a barricade here.");
@@ -58,6 +60,10 @@ function releaseDeadBarricade({ npc }) {
   }
   npc.__skipDefaultRespawn = true;
   game.releaseBarricade(npc);
+}
+
+function preventBarricadeShove(event) {
+  if (game.isBarricade(event.target)) event.allow = false;
 }
 
 function isBurning(npc) {
@@ -174,6 +180,7 @@ module.exports = function attachCastleWarsBarricades(api, castleWars) {
   World = api.getWorld();
   api.onItemAction("Barricade", { "Set-up": setupBarricade });
   api.onNpcDeath(releaseDeadBarricade);
+  api.onCustomEvent("combat:shove-rules", preventBarricadeShove);
   api.onNpcInteraction("Barricade", { Burn: requireManualBurn, Extinguish: extinguishBarricade });
   api.onItemOnNpc(useItemOnBarricade);
 };

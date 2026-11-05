@@ -149,6 +149,51 @@ function loadItemAlch() {
   return { filePath, loaded };
 }
 
+const amount = (value) => Number.isSafeInteger(value) && value >= 0;
+/** Fields a world may change on an existing item; all are read on the server, so the client needs nothing. */
+const OVERRIDE_FIELDS = {
+  value: amount, grandExchangeValue: amount, highAlch: amount, lowAlch: amount, dropValue: amount,
+  tradeable: (value) => typeof value === "boolean",
+  sellable: (value) => typeof value === "boolean",
+  attackSpeed: (value) => Number.isInteger(value) && value >= 1 && value <= 20,
+  bonuses: (value) => Array.isArray(value) && value.length === 14 && value.every((n) => Number.isInteger(n) && Math.abs(n) <= 10000),
+  requirements: (value) => Array.isArray(value) && value.length === 23 && value.every((n) => Number.isInteger(n) && n >= 0 && n <= 99),
+  examine: (value) => typeof value === "string" && value.length <= 200,
+};
+
+/**
+ * A world's own item changes (item-overrides.json, written by the browser host's Items tab), applied
+ * last so they win over the cache, item-gameplay.json, alch and prices. Keyed by item id; unknown
+ * items and invalid fields are skipped with a warning rather than stopping the world.
+ */
+function applyItemOverrides(overrides) {
+  const ItemDefinition = getItemDefinition();
+  let loaded = 0;
+  for (const [key, fields] of Object.entries(overrides ?? {})) {
+    const id = Number(key);
+    const definition = Number.isInteger(id) && id >= 0 ? ItemDefinition.forId(id) : ItemDefinition.DEFAULT;
+    if (definition === ItemDefinition.DEFAULT || !fields || typeof fields !== "object") {
+      console.warn(`[item-overrides] skipped unknown item ${key}`);
+      continue;
+    }
+    for (const [field, value] of Object.entries(fields)) {
+      if (!OVERRIDE_FIELDS[field]?.(value)) {
+        console.warn(`[item-overrides] skipped invalid ${field} for item ${key}`);
+        continue;
+      }
+      definition[field] = Array.isArray(value) ? [...value] : value;
+    }
+    loaded += 1;
+  }
+  return loaded;
+}
+
+function loadItemOverrides() {
+  const filePath = path.resolve(process.cwd(), getGameConstants().DEFINITIONS_DIRECTORY, "item-overrides.json");
+  if (!fs.existsSync(filePath)) return { filePath, loaded: 0 };
+  return { filePath, loaded: applyItemOverrides(JSON.parse(fs.readFileSync(filePath, "utf8"))) };
+}
+
 function loadItemDefinitions() {
   const ItemDefinition = getItemDefinition();
   const filePath = getItemDefinitionsPath();
@@ -175,10 +220,9 @@ function loadItemDefinitions() {
       mismatched++;
       continue;
     }
-    // "NONE" is the export's default, not a claim; keep the cache wearPos slot
-    // (e.g. Bronze sword 1277 is exported as NONE but wearPos 3).
-    const equipmentType = hydrateEquipmentType(rawDef.equipmentType);
-    if (equipmentType.getSlot() !== -1) def.equipmentType = equipmentType;
+    // The equipment slot is the cache wearPos (ItemDefinition), never the export's equipmentType:
+    // it marks ~800 unwearable items FULL_HELMET (packs, Eel sushi, Cog) and gives others the
+    // wrong slot (Torag's hammers as a helmet, Verac's brassard as a weapon).
     def.weaponInterface = hydrateWeaponInterface(rawDef.weaponInterface);
     // Two-handedness is the cache's (ItemDefinition), like stackable and tradeable.
     for (const property of [
@@ -287,6 +331,7 @@ function loadItemDefinitions() {
     mismatched,
     prices: loadItemPrices(),
     alch: loadItemAlch(),
+    overrides: loadItemOverrides(),
   };
 }
 
@@ -308,7 +353,7 @@ function sendCustomItems({ player }) {
 
 module.exports = {
   name: "ItemDefinitionLoader",
-  _test: { loadItemPrices, loadItemAlch },
+  _test: { loadItemPrices, loadItemAlch, applyItemOverrides },
   register(api) {
     const startedAt = Date.now();
     const result = loadItemDefinitions();
@@ -320,6 +365,7 @@ module.exports = {
       mismatched: result.mismatched,
       prices: result.prices.loaded,
       alch: result.alch.loaded,
+      overrides: result.overrides.loaded,
       elapsedMs: Date.now() - startedAt,
     });
     api.registerContentEndpoint("custom-items", customItemsResource);

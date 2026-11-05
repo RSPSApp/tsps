@@ -35,6 +35,7 @@ const SEA_SONG = 147;
 const SEA_JINGLE = 171;
 const MINIMAP_STATE_VARBIT = "minimap_state";
 const MINIMAP_OFF = 2;
+const BUSY_VARBIT = "busy";
 /** Side tabs the ship at sea closes (combat to magic, logout to music), with the group each gets back. */
 const SHIP_TABS = [[77, 320], [78, 629], [79, 149], [80, 387], [86, 182], [87, 116], [88, 216], [89, 239]];
 const COMBAT_TAB = 76;
@@ -77,6 +78,11 @@ function sender(player) {
 function setMinimap(player, off) {
   const id = Common.core.CacheDefinitions.getVarbitId(MINIMAP_STATE_VARBIT);
   if (id != null) sender(player).sendVarbit(id, off ? MINIMAP_OFF : 0);
+}
+
+function setBusy(player, busy) {
+  const id = Common.core.CacheDefinitions.getVarbitId(BUSY_VARBIT);
+  if (id != null) sender(player).sendVarbit(id, busy ? 1 : 0);
 }
 
 function fade(player, out) {
@@ -135,6 +141,7 @@ function boardShip(player, trip, modal, onLand) {
     landed = true;
     Common.end(player);
     player.moveTo(Common.toLocation(trip.to));
+    Common.arrived(player, trip.routeName);
     hold(player, false);
     if (logout) return;
     reopenShipTabs(player);
@@ -189,6 +196,7 @@ function galleon(player, trip) {
     if (!Common.travelling(player)) return;
     Common.end(player);
     player.moveTo(Common.toLocation(trip.to));
+    Common.arrived(player, trip.routeName);
     hold(player, false);
     out.sendInterfaceRemoval();
   };
@@ -199,9 +207,11 @@ function galleon(player, trip) {
 function fadeTrip(player, trip) {
   const out = sender(player);
   const [minimapOff, minimapOn] = trip.minimap ?? [];
+  const [busyOn, busyOff] = trip.busy ?? [];
   const land = () => {
     if (!Common.travelling(player)) return;
     player.moveTo(Common.toLocation(trip.to));
+    Common.arrived(player, trip.routeName);
     if (trip.message?.at === trip.teleport) message(player, trip.message.text, trip.message.spam);
   };
   hold(player, true);
@@ -214,6 +224,7 @@ function fadeTrip(player, trip) {
     Common.end(player);
     hold(player, false);
     if (minimapOn != null) setMinimap(player, false);
+    if (busyOff != null) setBusy(player, false);
   };
   const steps = {
     [trip.teleport]: land,
@@ -228,6 +239,10 @@ function fadeTrip(player, trip) {
     const previous = steps[minimapOff];
     steps[minimapOff] = () => { previous?.(); setMinimap(player, true); };
   }
+  if (busyOn != null) {
+    const previous = steps[busyOn];
+    steps[busyOn] = () => { previous?.(); setBusy(player, true); };
+  }
   runTicks(player, steps);
 }
 
@@ -240,6 +255,7 @@ function rowing(player, trip) {
   const land = () => {
     if (!Common.travelling(player)) return;
     player.moveTo(Common.toLocation(trip.to));
+    Common.arrived(player, trip.routeName);
   };
   const finish = () => {
     if (!Common.travelling(player)) return;
@@ -271,9 +287,12 @@ const STYLES = { ship_journey: shipJourney, longship, galleon, fade: fadeTrip, r
 
 /** Sends the player on a route by name; false if they're already travelling or it's unknown. */
 function travel(player, routeName) {
-  const trip = Common.route(routeName);
-  if (!trip || !player || Common.travelling(player)) return false;
+  const route = Common.route(routeName);
+  if (!route || !player || Common.travelling(player)) return false;
+  const trip = { ...route, routeName };
+  const from = player.getLocation().clone();
   STYLES[trip.style](player, trip);
+  Common.api.emitCustomEvent("ferries:departed", { player, route: routeName, from });
   return true;
 }
 

@@ -38,8 +38,8 @@ const numbers = (value: unknown): number[] =>
 export function previewModels(definition: CacheDefinition, kind = definition.kind): number[] {
     const values = definition.values ?? {};
     if (kind === "loc") {
-        // `models` is already flattened by the server's field reader.
-        return numbers(values.models ?? []);
+        // Flatten only the preview summary; authored definitions retain their placement groups.
+        return numbers(Array.isArray(values.models) ? values.models.flat(Infinity) : []);
     }
     if (kind === "npc") {
         return numbers(values.modelIds ?? values.models ?? []);
@@ -80,7 +80,7 @@ export function sequenceFrameCount(client: OsrsClient, sequenceId: number | unde
     if (sequenceId === undefined || sequenceId < 0) return 1;
     try {
         const sequence = client.seqTypeLoader?.load?.(sequenceId);
-        return Math.max(1, sequence?.frameIds?.length ?? 1);
+        return Math.max(1, sequence?.isSkeletalSeq?.() ? sequence.getSkeletalDuration() : sequence?.frameIds?.length ?? 1);
     } catch {
         return 1;
     }
@@ -153,7 +153,7 @@ function fitToCanvas(source: HTMLCanvasElement, size: number, zoom = 1): { canva
     if (maxX < minX || maxY < minY) return null;
     const width = maxX - minX + 1;
     const height = maxY - minY + 1;
-    const ratio = Math.min(1, Math.max(1, typeof window === "undefined" ? 1 : window.devicePixelRatio || 1));
+    const ratio = Math.min(2, Math.max(1, typeof window === "undefined" ? 1 : window.devicePixelRatio || 1));
     const padding = Math.max(4, Math.round(size * 0.06));
     const available = size - padding * 2;
     const scale = Math.min(available / width, available / height) * Math.max(0.25, Math.min(8, zoom));
@@ -254,6 +254,7 @@ export function createPreviewRenderer(client: OsrsClient): PreviewRenderer {
             // on the shape it is placed as, an npc's on its stance animations and transforms, an item's
             // on its model plus recolours, and a graphic's on its model plus a sequence frame.
             let model: Model | null = null;
+            let animatedByBuilder = false;
             if (kind === "npc") {
                 try {
                     const npcType = client.npcTypeLoader?.load?.(id);
@@ -264,6 +265,7 @@ export function createPreviewRenderer(client: OsrsClient): PreviewRenderer {
                             client.varManager,
                         );
                         model = npcModels.getModel(npcType, spec.sequenceId ?? -1, spec.sequenceFrame ?? 0) ?? null;
+                        animatedByBuilder = model !== null;
                     }
                 } catch (error) {
                     return `Could not build npc ${id}: ${String((error as Error).message ?? error)}`;
@@ -302,7 +304,7 @@ export function createPreviewRenderer(client: OsrsClient): PreviewRenderer {
                         zoom2d: spec.zoom2d ?? 1800,
                         offsetX2d: spec.offsetX2d, offsetY2d: spec.offsetY2d,
                         ambient: spec.ambient, contrast: spec.contrast,
-                        sequenceId: spec.sequenceId, sequenceFrame: spec.sequenceFrame,
+                        sequenceId: animatedByBuilder ? undefined : spec.sequenceId, sequenceFrame: animatedByBuilder ? undefined : spec.sequenceFrame,
                     },
                     renderSize,
                     renderSize,

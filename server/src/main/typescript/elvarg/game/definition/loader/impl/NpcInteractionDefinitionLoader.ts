@@ -1,10 +1,8 @@
-import * as fs from "fs";
-import { GameConstants } from "../../../GameConstants";
 import {
     NpcInteractionActionDefinition,
     NpcInteractionDefinition,
 } from "../../NpcInteractionDefinition";
-import { DefinitionLoader, LoadedDefinitionSource } from "../DefinitionLoader";
+import { DefinitionLoader } from "../DefinitionLoader";
 
 interface RawNpcInteractionDefinition {
     npcId?: unknown;
@@ -16,6 +14,8 @@ interface RawNpcInteractionDefinition {
     third_click?: unknown;
     fourthClick?: unknown;
     fourth_click?: unknown;
+    fifthClick?: unknown;
+    fifth_click?: unknown;
 }
 
 interface MutableNpcInteractionDefinition {
@@ -23,30 +23,16 @@ interface MutableNpcInteractionDefinition {
     secondClick: NpcInteractionActionDefinition | null;
     thirdClick: NpcInteractionActionDefinition | null;
     fourthClick: NpcInteractionActionDefinition | null;
+    fifthClick: NpcInteractionActionDefinition | null;
 }
 
 export class NpcInteractionDefinitionLoader extends DefinitionLoader {
     public static readonly DEFINITION_TYPE = "npc_interactions";
-    public static readonly CORE_SOURCE = "core";
 
     public load(): boolean {
-        const contributed = this.loadSources<RawNpcInteractionDefinition>(
+        const { sources, failures } = this.loadSources<RawNpcInteractionDefinition>(
             NpcInteractionDefinitionLoader.DEFINITION_TYPE
         );
-        const sources: LoadedDefinitionSource<RawNpcInteractionDefinition>[] = [
-            {
-                name: NpcInteractionDefinitionLoader.CORE_SOURCE,
-                owner: NpcInteractionDefinitionLoader.CORE_SOURCE,
-                priority: 0,
-                definitions: this.readCoreDefinitions(),
-            },
-            ...contributed.sources,
-        ].sort((a, b) => {
-            const priorityDifference = a.priority - b.priority;
-            return priorityDifference !== 0
-                ? priorityDifference
-                : a.name.localeCompare(b.name);
-        });
 
         const mergedByNpcId = new Map<number, MutableNpcInteractionDefinition>();
         let candidates = 0;
@@ -64,12 +50,14 @@ export class NpcInteractionDefinitionLoader extends DefinitionLoader {
                     secondClick: null,
                     thirdClick: null,
                     fourthClick: null,
+                    fifthClick: null,
                 };
                 this.mergeAction(raw, "firstClick", "first_click", source.owner, merged);
                 this.mergeAction(raw, "secondClick", "second_click", source.owner, merged);
                 this.mergeAction(raw, "thirdClick", "third_click", source.owner, merged);
                 this.mergeAction(raw, "fourthClick", "fourth_click", source.owner, merged);
-                if (merged.firstClick || merged.secondClick || merged.thirdClick || merged.fourthClick) {
+                this.mergeAction(raw, "fifthClick", "fifth_click", source.owner, merged);
+                if (merged.firstClick || merged.secondClick || merged.thirdClick || merged.fourthClick || merged.fifthClick) {
                     mergedByNpcId.set(npcId, merged);
                 } else {
                     invalid++;
@@ -84,7 +72,8 @@ export class NpcInteractionDefinitionLoader extends DefinitionLoader {
                     actions.firstClick,
                     actions.secondClick,
                     actions.thirdClick,
-                    actions.fourthClick
+                    actions.fourthClick,
+                    actions.fifthClick
                 )
         );
         NpcInteractionDefinition.replace(definitions);
@@ -93,38 +82,18 @@ export class NpcInteractionDefinitionLoader extends DefinitionLoader {
             `${sources.map((source) => source.name).join("+")} ` +
             `(candidates=${candidates}, invalid=${invalid})`
         );
-        return contributed.failures === 0;
+        return failures === 0;
     }
 
+    /** Plugins supply every definition, so there is no file; this only labels run()'s log. */
     public file(): string {
-        return GameConstants.DEFINITIONS_DIRECTORY + "npc-interactions.json";
-    }
-
-    private readCoreDefinitions(): RawNpcInteractionDefinition[] {
-        const parsed: unknown = this.readCoreDocument();
-        if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") {
-            throw new Error(
-                "npc-interactions.json must contain an object keyed by NPC id"
-            );
-        }
-        return Object.entries(parsed as Record<string, unknown>).map(
-            ([npcId, definition]) => ({
-                npcId: Number(npcId),
-                ...(
-                    definition &&
-                    !Array.isArray(definition) &&
-                    typeof definition === "object"
-                        ? definition as Record<string, unknown>
-                        : {}
-                ),
-            })
-        );
+        return NpcInteractionDefinitionLoader.DEFINITION_TYPE;
     }
 
     private mergeAction(
         raw: RawNpcInteractionDefinition,
-        camelCaseProperty: "firstClick" | "secondClick" | "thirdClick" | "fourthClick",
-        snakeCaseProperty: "first_click" | "second_click" | "third_click" | "fourth_click",
+        camelCaseProperty: "firstClick" | "secondClick" | "thirdClick" | "fourthClick" | "fifthClick",
+        snakeCaseProperty: "first_click" | "second_click" | "third_click" | "fourth_click" | "fifth_click",
         source: string,
         target: MutableNpcInteractionDefinition
     ): void {
@@ -222,15 +191,5 @@ export class NpcInteractionDefinitionLoader extends DefinitionLoader {
             return null;
         }
         return { x: Math.trunc(x), y: Math.trunc(y), z: Math.trunc(z) };
-    }
-
-    private readCoreDocument(): Record<string, unknown> {
-        const parsed: unknown = JSON.parse(fs.readFileSync(this.file(), "utf8"));
-        if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") {
-            throw new Error(
-                "npc-interactions.json must contain an object keyed by NPC id"
-            );
-        }
-        return parsed as Record<string, unknown>;
     }
 }

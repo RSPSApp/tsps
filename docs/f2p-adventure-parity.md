@@ -10,6 +10,8 @@ The six lever states write varp33 bits1–6 and recompute the nine doors in668. 
 
 The three parts are handed over together and varbit19655 changes at the handover. Transformation runs in a private area: the professor approaches the machine, plays832 at+2, the machine hums at+4, graphics173/80 and projectile174 fire at+7, and Ernest3563 replaces the chicken10556 at+9. The canonical public spawn uses6142 so his appearance also follows saved varp32 outside the scene. The client stage becomes3 as Ernest thanks the player; the four Quest points and300coins wait for the final reply. Feather314 and jingle153 match the reward scroll. Interrupted handover/transformation conversations can resume without taking parts again.
 
+**Database capture coverage (2026-11-02):** the rsprox database has no route capture for this quest. Submission 3209 (revision 232) covers Professor Oddenstein's post-quest menu, both replies and their chat-heads (570/567/589), plus the basement lever puzzle. The replies and animations are now in `plugins/quests/data/chathead-animations.json`; the lever/door states are already covered by the 23-state test. The 14 January 2026 journal rewrite has no post-update capture, so its wording remains unverified.
+
 References: [Ernest the Chicken](https://oldschool.runescape.wiki/w/Ernest_the_Chicken), [Draynor Manor](https://oldschool.runescape.wiki/w/Draynor_Manor).
 
 ## Dragon Slayer I
@@ -21,6 +23,8 @@ Selecting a conversation no longer starts Oziach's challenge, discovers the Orac
 Boarding the ship does not skip Ned's departure dialogue. The voyage displays the native ship-journey299, route544, clouds543 and flying-dragon545/546 interfaces, then copies the sailing scene into a private instance with Captain Ned824 and Jenkins826. Camera changes follow dialogue, while the two fire volleys use projectile1155, fire objects25155/25156 and the recorded panic/death animations. The crash restores the real beach, clears repair flags and advances176 to8. First descent plays the private20tick Elvarg introduction with817. Crossing the low wall uses the recorded839 exact move and hands control to the canonical Elvarg area.
 
 Elvarg's death creates body25202. The client advances to9 one tick later; head removal plays6654 at+5, then6655 with headless body25203 and proof11279 at+11. Killing the dragon grants no Quest points or quest XP. Returning to Oziach grants2QP and18650Strength/DefenceXP once, with head11279 and jingle152 on the scroll. Completed legacy saves retain their existing completion status.
+
+**Database capture coverage (2026-11-02):** no submission covers the quest route. The archive has the completed journal text (1581), Oziach's clue-scroll dialogue, post-quest Crandor visits and unrelated Melzar sightings, so this quest is skipped until a route capture exists.
 
 References: [Dragon Slayer I](https://oldschool.runescape.wiki/w/Dragon_Slayer_I), [Elvarg](https://oldschool.runescape.wiki/w/Elvarg).
 

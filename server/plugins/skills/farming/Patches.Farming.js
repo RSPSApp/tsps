@@ -11,9 +11,11 @@ const Vault = require("./Vault.Farming");
 const Hespori = require("./Hespori.Farming");
 const Redwood = require("./Redwood.Farming");
 const Tools = require("./Tools.Farming");
-const { pauseForLevelUp } = require("../SkillActions");
+const { pauseForLevelUp, actionInterval } = require("../SkillActions");
 
 const FARM_ATTRIBUTE = "farming:state";
+/** Making and placing a scarecrow (Wiki, Scarecrow). */
+const SCARECROW_LEVEL = 23;
 const TROLL_HERB_PATCH = Data.CACHE.patches.find(p => p.type === "HERB" && p.x === 2826 && p.y === 3694 && p.z === 0);
 const FALADOR_FARM_PATCHES = new Set(Data.CACHE.patches.filter(p => p.z === 0
     && ["ALLOTMENT", "FLOWER", "HERB"].includes(p.type)
@@ -21,6 +23,8 @@ const FALADOR_FARM_PATCHES = new Set(Data.CACHE.patches.filter(p => p.z === 0
 // Rev 241 seq gamevals: farming_raking, farming_seed_dibbing(_nodib), human_dig, farming_trowel_shortdig,
 // farming_watering, picking_low/high, farming_pick_mushroom, farming_pour_water, farming_plant_cure,
 // pruning_mid_high. Which one each action plays, and its sound, follow rsprox captures (docs/farming.md).
+/** Gricoller's can's doses of water (item meta, as Rewards.Farming saves it). */
+const GRICOLLER_WATER_META = "farming:water";
 const ANIM = { RAKE: 2273, PLANT: 2291, PLANT_BARE_HANDED: 10721, SAPLING: 830, FILL_POT: 11121, WATER: 2293, DIG: 830,
     PICK_LOW: 2282, PICK_HIGH: 2280, PICK_MUSHROOM: 2292, COMPOST: 2283, CURE: 2288, PRUNE: 2275 };
 const SOUND = { RAKE: 2442, PLANT: 2432, DIG: 1470, PICK: 2437, COMPOST: 2427, CRYSTAL_SHATTER: 2541 };
@@ -172,10 +176,22 @@ function farmingOptionClick(event) {
     select(event.slot === undefined || event.slot === -1 ? event.action : event.slot);
 }
 function clearPatch(player, patch) {
+    const state = stateFor(player, patch);
+    if (state.status === "dead") awardPendingPlantExperience(player, patch, state);
     if (patch.type === "REDWOOD") redwoodRegrowth.delete(player);
     const farm = farmFor(player);
     farm.patches[Data.patchKey(patch)] = Model.emptyPatch(Date.now(), farm);
     syncPatch(player, patch);
+}
+function awardPendingPlantExperience(player, patch, state = stateFor(player, patch)) {
+    const crop = Data.CROPS.get(state.crop);
+    if (!crop || state.plantExperiencePending === false) return false;
+    const pending = state.plantExperiencePending === true
+        || (state.plantExperiencePending === undefined && crop.type === "HERB");
+    if (!pending) return false;
+    award(player, crop.plant, patch);
+    state.plantExperiencePending = false;
+    return true;
 }
 function syncPatch(player, patch) {
     const state = stateFor(player, patch);
@@ -307,6 +323,10 @@ function workStep(player, work) {
     if (!again) WORK.delete(player);
     if (!work.action.endsWith("-bin")) syncPatch(player, work.patch);
 }
+/** Ticks between rake swings or harvest picks; content may make them faster ("skills:action-interval", a league relic's 2-tick pace). */
+function pace(player, kind, ticks) {
+    return actionInterval(core.PluginManager, player, core.Skill.FARMING, kind, ticks);
+}
 function rakeStep(player, work) {
     const state = stateFor(player, work.patch);
     if (work.swung && !rake(player, work.patch)) return false;
@@ -314,7 +334,7 @@ function rakeStep(player, work) {
     animate(player, ANIM.RAKE);
     sound(player, SOUND.RAKE);
     work.swung = true;
-    work.nextTick = workTick + RAKE_PERIOD;
+    work.nextTick = workTick + pace(player, "rake", RAKE_PERIOD);
     return true;
 }
 function rake(player, patch) {
@@ -324,6 +344,8 @@ function rake(player, patch) {
     state.weeds--;
     state.nextAt = Model.nextGrowth(Date.now(), Data.FORMULAS.growth.tickMinutes, farmFor(player).offset);
     award(player, 4, patch);
+    // "farming:raked" { player, patch, patchType }: a weed raked from the patch.
+    core.PluginManager.emitCustomEvent("farming:raked", { player, patch, patchType: patch.type });
     return state.weeds > 0;
 }
 function harvestStep(player, work) {
@@ -344,7 +366,7 @@ function harvestStep(player, work) {
             again = false;
         }
         if (!again) return false;
-        work.nextTick = work.swungAt + PICK_PERIOD;
+        work.nextTick = work.swungAt + pace(player, "harvest", PICK_PERIOD);
         if (workTick < work.nextTick) return true;
     }
     if (!canPick(player, work.patch)) return false;
@@ -356,6 +378,19 @@ function harvestStep(player, work) {
     work.nextTick = workTick + pick.delay;
     return true;
 }
+/**
+ * Whether the player has the Farming level `required` to plant, place or make a crop's item
+ * (`kind`: "plant", "scarecrow", "seedling"); else says the refusal. Content may waive it
+ * ("farming:level-rules" { player, kind, required, waived }, a league relic).
+ */
+function hasLevel(player, required, kind, refusal = `You need level ${required} Farming.`) {
+    if (player.getSkillManager().getCurrentLevel(core.Skill.FARMING) >= required) return true;
+    const rules = { player, kind, required, waived: false };
+    core.PluginManager.emitCustomEvent("farming:level-rules", rules);
+    if (rules.waived === true) return true;
+    player.sendMessage(refusal);
+    return false;
+}
 function plant(player, patch, id) {
     const crop = Data.SEEDS.get(id);
     const state = stateFor(player, patch);
@@ -366,7 +401,7 @@ function plant(player, patch, id) {
         player.sendMessage(`You can only plant ${crop.sapling ? saplingNoun(crop) : seedNoun(crop)}s in ${article(PATCH_NOUNS[crop.type] ?? "patch")}.`); return;
     }
     if (patch === TROLL_HERB_PATCH && crop.key === "GOUTWEED") { player.sendMessage("Regular goutweed cannot grow in this patch."); return; }
-    if (player.getSkillManager().getCurrentLevel(core.Skill.FARMING) < crop.level) { player.sendMessage(`You need level ${crop.level} Farming to plant that.`); return; }
+    if (!hasLevel(player, crop.level, "plant", `You need level ${crop.level} Farming to plant that.`)) return;
     const barbarian = farmFor(player).barbarian;
     const bareHanded = !crop.sapling && crop.type !== "GRAPES" && barbarian?.planting > 0 && !hasTool(player, "Seed dibber");
     if (!bareHanded && !requireTool(player, crop.sapling ? "Spade" : "Seed dibber")) return;
@@ -420,7 +455,7 @@ function plant(player, patch, id) {
         }
         const plantedAt = Date.now(), offset = farmFor(player).offset;
         Object.assign(state, { crop: crop.key, stage: 0, status: "growing", checked: false, protected: false, watered: false,
-            lives: 0, plantedAt, plantedTick: Model.tickIndex(plantedAt, offset),
+            lives: 0, plantExperiencePending: true, plantedAt, plantedTick: Model.tickIndex(plantedAt, offset),
             nextAt: Model.nextGrowth(plantedAt, Data.stageMinutes(crop, 0), offset),
             diseaseFree: rules.diseaseFree === true, undying: rules.undying === true });
         // Fully grown at once, as the growth model leaves a crop on its last stage (an anima plant's last stage is its end).
@@ -428,8 +463,6 @@ function plant(player, patch, id) {
             Object.assign(state, { stage: crop.stages, status: "grown", lives: Model.startingLives(crop, state.compost) });
             if (crop.regrow) state.nextAt = Model.nextGrowth(Date.now(), crop.regrow, farmFor(player).offset);
         }
-        // Herbs award their planting XP only after the final herb is picked.
-        if (crop.type !== "HERB") award(player, crop.plant, patch);
         spam(player, plantLine(crop, patch, crop.seedCount));
         if (typeof rules.message === "string") player.sendMessage(rules.message);
         syncPatch(player, patch);
@@ -457,23 +490,47 @@ function seedNoun(crop) {
     if (HOP_SEEDS.has(crop.key)) return `${crop.name} hop seed`;
     return core.CacheDefinitions.getItem(crop.seed).name.toLowerCase();
 }
-function water(player, id, slot) {
-    const inventory = player.getInventory();
-    const matches = i => i && (!id || i.getId() === id) && (core.CacheDefinitions.getItem(i.getId()).name?.match(/^Watering can\([1-8]\)$/)
-        || i.getId() === Data.itemId("Magic watering can") || i.getId() === Data.itemId("Gricoller's can"));
-    const can = slot === undefined ? inventory.getItems().find(matches) : inventory.forSlot(slot);
-    if (!matches(can)) { player.sendMessage("You need a watering can containing water."); return false; }
+/**
+ * A watering can with water or Gricoller's can (matching `id` when given). By name: the cache has
+ * no "Magic watering can", and looking one up threw for Gricoller's can.
+ */
+function isWateringCan(item, id) {
+    if (!item || (id && item.getId() !== id)) return false;
+    return /^Watering can\([1-8]\)$|^Gricoller's can$/.test(core.CacheDefinitions.getItem(item.getId())?.name ?? "");
+}
+/** Pours one charge from `can`; false when it is Gricoller's can with none left. */
+function pour(player, can) {
     const name = core.CacheDefinitions.getItem(can.getId()).name;
     if (name === "Gricoller's can") {
-        const charges = Number(can.getMetaValue("farming:water") ?? 0);
-        if (!charges) { player.sendMessage("Your can is empty."); return false; }
-        can.setMetaValue("farming:water", charges - 1);
+        const charges = Number(can.getMetaValue(GRICOLLER_WATER_META) ?? 0);
+        if (!charges) return false;
+        can.setMetaValue(GRICOLLER_WATER_META, charges - 1);
     }
     const charges = name.match(/^Watering can\(([1-8])\)$/);
     if (charges) can.setId(Data.itemId(+charges[1] === 1 ? "Watering can" : `Watering can(${+charges[1] - 1})`));
-    inventory.refreshItems();
+    player.getInventory().refreshItems();
+    return true;
+}
+function water(player, id, slot) {
+    const inventory = player.getInventory();
+    const can = slot === undefined ? inventory.getItems().find(item => isWateringCan(item, id)) : inventory.forSlot(slot);
+    if (!isWateringCan(can, id)) { player.sendMessage("You need a watering can containing water."); return false; }
+    if (!pour(player, can)) { player.sendMessage("Your can is empty."); return false; }
     animate(player, ANIM.WATER);
     return true;
+}
+/**
+ * "farming:use-water" `{ player, check?, used }`: watering for content outside Farming (a POH
+ * garden plant). Pours one charge from the first carried can that has water and sets `used`;
+ * with `check` it only says whether one would pour. Silent, no animation: the caller owns both.
+ */
+function useWater(event) {
+    if (event.used) return;
+    const cans = event.player.getInventory().getItems().filter(item => isWateringCan(item));
+    const wet = cans.find(can => core.CacheDefinitions.getItem(can.getId()).name !== "Gricoller's can"
+        || Number(can.getMetaValue(GRICOLLER_WATER_META) ?? 0) > 0);
+    if (!wet) return;
+    event.used = event.check ? true : pour(event.player, wet);
 }
 function waterPatch(player, patch, id, slot) {
     const state = stateFor(player, patch);
@@ -570,20 +627,21 @@ function healthCheck(player, patch) {
     if (!crop || state.status !== "grown" || state.checked) return;
     state.checked = true;
     award(player, crop.check, patch);
+    awardPendingPlantExperience(player, patch, state);
     // Captured nouns: "the tree" (tree, fruit, hardwood and crystal patches), "the Spirit Tree",
     // "the Calquat Tree", "the potato cactus"; the Wiki gives "the bush".
     const noun = crop.type === "SPIRIT_TREE" ? "Spirit Tree" : crop.type === "CALQUAT" ? "Calquat Tree"
         : crop.type === "CACTUS" ? crop.name.toLowerCase() : crop.type === "BUSH" ? "bush" : "tree";
     spam(player, `You examine the ${noun} for signs of disease and find that it is in perfect health.`);
     Services.cropRewards(player, crop);
-    core.PluginManager.emitCustomEvent("farming:check-health", { player, crop: crop.key, patch });
+    core.PluginManager.emitCustomEvent("farming:check-health", { player, crop: crop.key, type: crop.type, patch, experience: crop.check });
 }
 function hasSpaceFor(player, state) {
     const crop = Data.CROPS.get(state.crop);
     const inventory = player.getInventory();
     if (!inventory.isFull()) return true;
     // An open herb sack takes the herbs itself (Guild.storeCrop).
-    if (crop?.type === "HERB" && inventory.contains(Data.itemId("Open herb sack"))) return true;
+    if (crop?.type === "HERB" && Guild.openHerbSack(player)) return true;
     return crop?.produce > 0 && core.CacheDefinitions.getItem(crop.produce).stackability !== 0 && inventory.contains(crop.produce);
 }
 /** Whether a grown patch can be picked now, and how (PICKS); says why not. */
@@ -631,8 +689,9 @@ function harvest(player, patch) {
     const picked = Number.isInteger(pick.itemId) && pick.itemId > 0 ? pick.itemId : produce;
     const pickedAmount = Number.isSafeInteger(pick.amount) && pick.amount > 0 ? pick.amount : amount;
     const left = pickedAmount - (Number.isSafeInteger(pick.stored) ? Math.min(pickedAmount, Math.max(0, pick.stored)) : 0);
-    const sack = crop.type === "HERB" && picked === produce && player.getInventory().getItems().find(i => i.getId() === Data.itemId("Open herb sack"));
+    const sack = crop.type === "HERB" && picked === produce && Guild.openHerbSack(player);
     if (left > 0 && !(sack && Guild.storeCrop(player, sack, produce, left)) && !give(player, picked, left)) return false;
+    core.PluginManager.emitCustomEvent("farming:harvested", { player, crop: crop.key, patch, itemId: picked, amount: pickedAmount });
     if (blessing) player.getInventory().deleteNumber(Data.itemId("Bologa's blessing"), 1);
     if (pickLine) spam(player, pickLine === true ? `You pick ${article(core.CacheDefinitions.getItem(picked).name.toLowerCase())}.`
         : pickLine.startsWith("You ") ? pickLine : `You pick ${pickLine}.`);
@@ -651,7 +710,7 @@ function harvest(player, patch) {
     if (["FLOWER", "BELLADONNA", "CRYSTAL_TREE"].includes(crop.type)) state.lives = 0;
     if (state.lives === 0) {
         if (PICKS[crop.type]?.begin) player.sendMessage(`The ${patchNoun(patch)} is now empty.`);
-        if (crop.type === "HERB") award(player, crop.plant, patch);
+        awardPendingPlantExperience(player, patch, state);
         if (!crop.check) Services.cropRewards(player, crop);
         core.PluginManager.emitCustomEvent("farming:harvest", { player, crop: crop.key, patch });
         if (crop.type === "GRAPES") state.status = "dead";
@@ -670,6 +729,9 @@ function dig(player, patch) {
     const crop = Data.CROPS.get(state.crop);
     if (crop.type === "REDWOOD" && state.status === "grown") { player.sendMessage("Ask Alexandra to remove the redwood tree."); return; }
     if (state.status === "dead" || state.stump) { clearCrop(player, patch, state, crop); return; }
+    if (state.status === "growing" && onlyOneCropFits(patch)) {
+        player.sendMessage("You cannot dig up a healthy crop while it is growing in this patch."); return;
+    }
     if ((Data.WOOD_TREES.has(crop.type) || crop.type === "FRUIT_TREE") && state.status === "grown") {
         player.sendMessage("Chop the tree down before digging out the stump, or pay a gardener to remove it."); return;
     }
@@ -688,11 +750,19 @@ function clearCrop(player, patch, state, crop) {
             // Wiki Tree_roots_(Farming): one more root every eight levels above planting,
             // capped at four; temporary boosts apply when the stump is dug.
             const roots = 1 + Math.min(3, Math.floor((player.getSkillManager().getCurrentLevel(core.Skill.FARMING) - crop.level) / 8));
-            if (!give(player, Data.itemId(`${crop.name} roots`), Math.max(1, roots))) return;
+            const amount = Math.max(1, roots);
+            const itemId = Data.itemId(`${crop.name} roots`);
+            if (!give(player, itemId, amount)) return;
+            core.PluginManager.emitCustomEvent("farming:roots", { player, crop: crop.key, patch, itemId, amount });
         }
         clearPatch(player, patch);
         spam(player, stump ? `You dig up the ${stump}.` : "You have successfully cleared this patch for new crops.");
     });
+}
+/** The June 2026 early-clear rule excludes patches which can grow only one crop species. */
+function onlyOneCropFits(patch) {
+    const crops = new Set([...Data.CROPS.values()].filter(crop => crop.type === patch.type).map(crop => crop.key));
+    return crops.size === 1;
 }
 /** The captured one-paragraph inspect line, and the gardener's when one protects the patch. */
 function inspect(player, patch) {
@@ -808,7 +878,7 @@ function itemOnObject(event) {
             }
             if (player.getInventory().forSlot(event.itemSlot)?.getId() === id) {
                 const can = player.getInventory().forSlot(event.itemSlot);
-                if (core.CacheDefinitions.getItem(id).name === "Gricoller's can") can.setMetaValue("farming:water", 1000);
+                if (core.CacheDefinitions.getItem(id).name === "Gricoller's can") can.setMetaValue(GRICOLLER_WATER_META, 1000);
                 else can.setId(Data.itemId("Watering can(8)"));
                 player.getInventory().refreshItems();
             }
@@ -838,8 +908,9 @@ function itemOnObject(event) {
     else if (id === Data.itemId("Saltpetre") && patch.type === "GRAPES" && !state.crop && !state.compost && requireTool(player, "Gardening trowel")) {
         player.getInventory().deleteNumber(id, 1); state.compost = 1;
     } else if (id === Data.itemId("Scarecrow") && patch.type === "FLOWER" && !state.crop && !state.weeds && !state.scarecrow) {
-        if (player.getSkillManager().getCurrentLevel(core.Skill.FARMING) < 23) { player.sendMessage("You need level 23 Farming."); return; }
+        if (!hasLevel(player, SCARECROW_LEVEL, "scarecrow")) return;
         player.getInventory().deleteNumber(id, 1); state.scarecrow = true;
+        core.PluginManager.emitCustomEvent("farming:scarecrow", { player, patch });
     } else if (id === Data.itemId("Plant pot")) fillPlantPot(player, patch, state, id);
     else player.sendMessage("Nothing interesting happens.");
     syncPatch(player, patch);
@@ -1105,6 +1176,9 @@ function attach(api) {
     api.onItemAction(Services.farmingItemAction);
     api.onItemAction(Guild.rewardItem);
     api.onItemAction(Guild.storageAction);
+    api.onCustomEvent("seed-box:gather", Guild.seedBoxGather);
+    api.onGroundItemPickup(Guild.seedBoxPickup);
+    api.onGroundItemPickup(Guild.pickup);
     api.onCustomEvent(core.Bank.INVENTORY_OP_EVENT, Guild.bankStorageOp);
     api.onSpellOnObject(spellOnObject);
     api.onButtonClick(Spells.farmingButton);
@@ -1118,10 +1192,12 @@ function attach(api) {
     api.onCustomEvent("farming:open-seed-vault", Guild.openSeedVault);
     api.onCustomEvent("woodcutting:deplete-tree", depleteTree);
     api.onCustomEvent("magic:water-containers", Services.waterContainers);
+    api.onCustomEvent("farming:use-water", useWater);
     api.onCustomEvent("magic:humidified", Services.humidified);
     api.onCustomEvent("agent:advance-time", advanceTime);
     api.onCustomEvent("player:world-input", Hespori.hesporiInput);
     api.onCustomEvent("npc-dialogue:action", Hespori.reentryAction);
+    api.onCustomEvent("npc-dialogue:action", Services.gardenerProtection);
     api.onCustomEvent("interface:changed", Hespori.warningInterfaceChanged);
     api.onCustomEvent("player:world-input", cancelWork);
     api.onCustomEvent("npc-drops:generated", Hespori.hesporiLoot);
@@ -1140,5 +1216,5 @@ function attach(api) {
     api.registerNpcCombatMethodProvider(core.NpcIdentifiers.HESPORI_2, Hespori.HesporiCombat, { singleton: false });
 }
 
-Object.assign(module.exports, { FARM_ATTRIBUTE, farmFor, stateFor, hasTool, requireTool, award, give, choose, clearPatch, syncPatch, nearPatch, water, fertilize, pourCompost, cure, noteSeedling, advanceTime, attach, tick: farmingTick, retrievalItems, startBinWork,
-    startClear, after, spam, sound });
+Object.assign(module.exports, { FARM_ATTRIBUTE, SCARECROW_LEVEL, farmFor, hasLevel, stateFor, hasTool, requireTool, award, give, choose, clearPatch, syncPatch, nearPatch, water, fertilize, pourCompost, cure, harvest, noteSeedling, advanceTime, attach, tick: farmingTick, retrievalItems, startBinWork,
+    startClear, after, spam, sound, awardPendingPlantExperience });

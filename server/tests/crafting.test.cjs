@@ -16,6 +16,7 @@ const LEATHER_CRAFTING_ANIMATION = 1249;
 let handleNeedleOnLeather;
 const handlers = {};
 const namedObjects = {};
+const provenanceEvents = [];
 const tasks = [];
 
 before(async () => {
@@ -35,7 +36,10 @@ before(async () => {
     sendMultiChatboxPrompt: player => player.log.push(["legacy-choice-menu"]),
     emitCustomEvent: (name, event) => {
       if (name === "quest:get-stage") event.stage = event.player.questStage ?? 0;
-      else api.emitCustomEvent(name, event);
+      else {
+        if (name === "crafting:spun") provenanceEvents.push(event);
+        api.emitCustomEvent(name, event);
+      }
     },
     getTaskManager: () => ({ submit: task => tasks.push(task) }),
   });
@@ -63,6 +67,7 @@ function playerWith(entries = [], { level = 99, threadUses } = {}) {
     deleteNumber: (id, amount) => amounts.set(id, Math.max(0, (amounts.get(id) ?? 0) - amount)),
     addItem: item => amounts.set(item.id, (amounts.get(item.id) ?? 0) + item.getAmount()),
     adds: (id, amount = 1) => amounts.set(id, (amounts.get(id) ?? 0) + amount),
+    getItems: () => [],
   };
   const packetSender = {
     sendCreationMenu(value) {
@@ -78,6 +83,7 @@ function playerWith(entries = [], { level = 99, threadUses } = {}) {
     sendObjectAnimation(object, animation) { log.push(['loc-animation', animation.getId()]); return packetSender; },
     sendConfig(id, value) { log.push(['config', id, value]); return packetSender; },
     sendVarbit(id, value) { log.push(['varbit', id, value]); return packetSender; },
+    getVarbit(id) { return player.varbits?.get(id) ?? 0; },
     sendSubInterface(uid, group) { log.push(['open', group]); return packetSender; },
     closeSubInterface() { log.push(['close']); return packetSender; },
   };
@@ -134,6 +140,38 @@ function craft(player, menu, itemId, amount, ticks) {
 }
 
 const messages = rows => rows.filter(row => row[0] === 'message').map(row => row[1]);
+
+test('wool strings holy and unholy symbols in either order for four Crafting XP', () => {
+  for (const [input, output] of [[ItemIds.UNSTRUNG_SYMBOL, ItemIds.UNBLESSED_SYMBOL], [ItemIds.UNSTRUNG_EMBLEM, ItemIds.UNPOWERED_SYMBOL]]) {
+    for (const reverse of [false, true]) {
+      const { player } = playerWith([[input, 1], [ItemIds.BALL_OF_WOOL, 1]], { level: 1 });
+      const event = { player, usedItemId: reverse ? input : ItemIds.BALL_OF_WOOL,
+        usedWithItemId: reverse ? ItemIds.BALL_OF_WOOL : input, handled: false };
+      handlers.stringAmulet(event);
+      assert.equal(event.handled, true);
+      assert.equal(player.getInventory().getAmount(output), 0, 'the action retains its existing one-tick delay');
+      tasks.at(-1).execute();
+      assert.equal(player.getInventory().getAmount(input), 0);
+      assert.equal(player.getInventory().getAmount(ItemIds.BALL_OF_WOOL), 0);
+      assert.equal(player.getInventory().getAmount(output), 1);
+      assert.deepEqual(player.log.filter(row => row[0] === 'xp'), [['xp', 4]]);
+      assert.ok(player.log.some(row => row[1] === 'You put some string on your symbol.'));
+    }
+  }
+});
+
+test('stringing keeps ordinary amulets and rechecks materials before consuming them', () => {
+  for (const cancel of [false, true]) {
+    const { player } = playerWith([[ItemIds.GOLD_AMULET_U_, 1], [ItemIds.BALL_OF_WOOL, 1]]);
+    handlers.stringAmulet({ player, usedItemId: ItemIds.BALL_OF_WOOL, usedWithItemId: ItemIds.GOLD_AMULET_U_ });
+    if (cancel) player.getInventory().deleteNumber(ItemIds.BALL_OF_WOOL, 1);
+    tasks.at(-1).execute();
+    assert.equal(player.getInventory().getAmount(ItemIds.GOLD_AMULET), cancel ? 0 : 1);
+    assert.equal(player.getInventory().getAmount(ItemIds.GOLD_AMULET_U_), cancel ? 1 : 0);
+    assert.equal(player.log.filter(row => row[0] === 'xp').length, cancel ? 0 : 1);
+    if (!cancel) assert.ok(player.log.some(row => row[1] === 'You put some string on your amulet.'));
+  }
+});
 
 test('needle on leather opens the captured skillmulti menu with all seven items, coif included', t => {
   membersWorld(t, true);
@@ -384,6 +422,7 @@ test('glassblowing lists all eight items and makes one every 3 ticks from the se
 
 test('the wheel offers what the carried materials spin into, starts on the choice and spins one every 2 ticks from the second', t => {
   membersWorld(t, true);
+  provenanceEvents.length = 0;
   const { player, getMenu } = playerWith([[ItemIds.FLAX, 2]], { level: 12 });
   namedObjects['Spinning wheel'].Spin({ player, object: {}, handled: false });
   assert.equal(getMenu().getTitle(), 'What would you like to spin?');
@@ -398,6 +437,9 @@ test('the wheel offers what the carried materials spin into, starts on the choic
   assert.deepEqual(xpOn(byTick, 2), [16]);
   assert.equal(player.amounts.get(ItemIds.LINEN_YARN), 2);
   assert.equal(player.amounts.get(ItemIds.FLAX), 0);
+  assert.equal(provenanceEvents.length, 2);
+  assert.equal(Object.hasOwn(provenanceEvents[0], 'stationObjectId'), false);
+  assert.equal(Object.hasOwn(provenanceEvents[0], 'location'), false);
 });
 
 test('free-to-play wheels only spin wool, and wool used on the wheel opens the menu', t => {
@@ -742,4 +784,48 @@ test('the oven leaves pot lids out until One Small Favour teaches them, as the w
   player.questStage = 34;
   openPottery(player, true);
   assert.equal(getMenu().getItems().at(-1), ItemIds.UNFIRED_POT_LID);
+});
+
+/** Opens the gold menu and clicks one of its buttons; the made item comes on the task's second run. */
+function goldButton(entries, component, { varbits } = {}) {
+  const { player } = playerWith([[ItemIds.GOLD_BAR, 1], ...entries]);
+  player.varbits = varbits;
+  const furnace = { getDefinition: () => ({ getName: () => 'Furnace' }) };
+  handlers.handleBarOnFurnace({ player, itemId: ItemIds.GOLD_BAR, object: furnace, handled: false });
+  const before = tasks.length;
+  handlers.button({ player, buttonId: (446 << 16) | component, handled: false });
+  if (tasks.length > before) { tasks.at(-1).execute(); tasks.at(-1).execute(); }
+  return player;
+}
+
+test('each rev 241 bracelet button makes its own bracelet (446:50, 52-58; 51 is the mould layer)', t => {
+  membersWorld(t, true);
+  const rows = [
+    [50, null, ItemIds.GOLD_BRACELET_2], [52, ItemIds.SAPPHIRE, ItemIds.SAPPHIRE_BRACELET_2],
+    [53, ItemIds.EMERALD, ItemIds.EMERALD_BRACELET], [54, ItemIds.RUBY, ItemIds.RUBY_BRACELET],
+    [55, ItemIds.DIAMOND, ItemIds.DIAMOND_BRACELET], [56, ItemIds.DRAGONSTONE, ItemIds.DRAGONSTONE_BRACELET],
+    [57, ItemIds.ONYX, ItemIds.ONYX_BRACELET], [58, ItemIds.ZENYTE, ItemIds.ZENYTE_BRACELET_2],
+  ];
+  for (const [component, gem, bracelet] of rows) {
+    const player = goldButton([[ItemIds.BRACELET_MOULD, 1], ...(gem ? [[gem, 1]] : [])], component);
+    assert.equal(player.amounts.get(bracelet), 1, `446:${component}`);
+    assert.equal(player.amounts.get(ItemIds.GOLD_BAR), 0);
+  }
+  const layer = goldButton([[ItemIds.BRACELET_MOULD, 1]], 51);
+  assert.equal(layer.amounts.get(ItemIds.GOLD_BRACELET_2), undefined, 'the mould layer makes nothing');
+});
+
+test('the slayer ring button (446:16) needs Ring bling, and makes the eternal ring from an eternal gem', t => {
+  membersWorld(t, true);
+  const unlocked = new Map([[PluginManager.getCoreApi().CacheDefinitions.getVarbitId('slayer_ring_unlocked'), 1]]);
+  const locked = goldButton([[ItemIds.RING_MOULD, 1], [ItemIds.ENCHANTED_GEM, 1]], 16);
+  assert.equal(locked.amounts.get(ItemIds.SLAYER_RING_8_), undefined);
+  assert.ok(locked.log.some(row => row[0] === 'message' && /slayer rings/.test(row[1])));
+  const ring = goldButton([[ItemIds.RING_MOULD, 1], [ItemIds.ENCHANTED_GEM, 1]], 16, { varbits: unlocked });
+  assert.equal(ring.amounts.get(ItemIds.SLAYER_RING_8_), 1);
+  assert.equal(ring.amounts.get(ItemIds.ENCHANTED_GEM), 0);
+  assert.ok(ring.log.some(row => row[0] === 'xp' && row[1] === 15));
+  const eternal = goldButton([[ItemIds.RING_MOULD, 1], [ItemIds.ENCHANTED_GEM, 1], [ItemIds.ETERNAL_GEM, 1]], 16, { varbits: unlocked });
+  assert.equal(eternal.amounts.get(ItemIds.SLAYER_RING_ETERNAL_), 1);
+  assert.equal(eternal.amounts.get(ItemIds.ENCHANTED_GEM), 1, 'the eternal gem is used, as the client shows');
 });

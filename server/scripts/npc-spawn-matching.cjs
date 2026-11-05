@@ -278,4 +278,60 @@ function alignLayers(wikiSpawns, existingSpawns, minVotes = 2) {
   return { shiftOf, layers };
 }
 
-module.exports = { versionIds, SURFACE_LAYERS, alignLayers, parsePoint, parseInfoboxMaps, parseBox, inBoxes, nameKey, distance, planAdditions, reconcileIdentities, squareOf, parseLocLines, locationName };
+/** The loader's radius for a spawn that has none. */
+const DEFAULT_WANDER_RADIUS = 5;
+
+/** Counts a spawn set's radii, either explicitly written or including the loader default. */
+function radiusCounts(spawns, matches, explicitOnly) {
+  const counts = new Map();
+  for (const spawn of spawns) {
+    if (!matches(spawn)) continue;
+    const radius = explicitOnly ? spawn.wanderRadius : (spawn.wanderRadius ?? DEFAULT_WANDER_RADIUS);
+    if (radius === undefined) continue;
+    counts.set(radius, (counts.get(radius) ?? 0) + 1);
+  }
+  return counts;
+}
+
+/** The most common radius, or `{ found: false }` when no spawn matches. */
+function dominantRadius(counts) {
+  if (!counts.size) return { found: false };
+  const total = [...counts.values()].reduce((sum, count) => sum + count, 0);
+  const [radius, count] = [...counts].sort((a, b) => b[1] - a[1] || a[0] - b[0])[0];
+  return { found: true, radius, count, total };
+}
+
+/**
+ * The radius a Wiki-added spawn inherits from the spawns already placed.
+ *
+ * A non-attackable NPC prefers its established explicit radius (at least two witnesses and a
+ * majority of the explicit rows) over the implicit default. That is what stops a batch added
+ * after a refine from reintroducing the default 5 on tool leprechauns, soldiers and other
+ * stationary NPCs. Attackable NPCs keep the effective majority, because a monster's radius is
+ * not measured by a capture that may only contain a fight.
+ *
+ * Returns `undefined` for the default 5, so new rows stay as short as the existing ones.
+ */
+function chooseWanderRadius(spawns, { id, name }, { walkSeqId, attackable = false } = {}, keyOf = nameKey) {
+  if (!attackable) {
+    for (const matches of [
+      (spawn) => spawn.id === id,
+      (spawn) => keyOf(spawn.name) === keyOf(name),
+    ]) {
+      const explicit = dominantRadius(radiusCounts(spawns, matches, true));
+      if (explicit.found && explicit.count >= 2 && explicit.count * 2 >= explicit.total) {
+        return explicit.radius === DEFAULT_WANDER_RADIUS ? undefined : explicit.radius;
+      }
+    }
+  }
+  for (const matches of [
+    (spawn) => spawn.id === id,
+    (spawn) => keyOf(spawn.name) === keyOf(name),
+  ]) {
+    const effective = dominantRadius(radiusCounts(spawns, matches, false));
+    if (effective.found) return effective.radius === DEFAULT_WANDER_RADIUS ? undefined : effective.radius;
+  }
+  return walkSeqId === -1 ? 0 : undefined;
+}
+
+module.exports = { versionIds, SURFACE_LAYERS, alignLayers, parsePoint, parseInfoboxMaps, parseBox, inBoxes, nameKey, distance, planAdditions, reconcileIdentities, squareOf, parseLocLines, locationName, DEFAULT_WANDER_RADIUS, chooseWanderRadius };

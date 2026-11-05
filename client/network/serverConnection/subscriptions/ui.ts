@@ -1,3 +1,4 @@
+import type { ClanState } from "../../../common/social/Clans";
 import { cloneRunEnergyState, state } from "../state";
 import { cloneShopState, cloneSmithingState, cloneTradeState } from "../domain/defaults";
 import { cloneGroundItemsPayload } from "../utils/groundItems";
@@ -169,22 +170,15 @@ export function subscribeFriendsChat(cb: (snapshot: FriendsChatSnapshot) => void
     return () => state.friendsChatListeners.delete(cb);
 }
 
+export function subscribeClans(cb: (clans: ClanState) => void): () => void {
+    state.clanListeners.add(cb);
+    cb(state.clans);
+    return () => state.clanListeners.delete(cb);
+}
+
 export function subscribeNotifications(cb: (event: NotificationEvent) => void): () => void {
     state.notificationListeners.add(cb);
     return () => state.notificationListeners.delete(cb);
-}
-
-export function subscribeSystemUpdate(
-    cb: (info: { remainingCentis: number }) => void,
-): () => void {
-    state.systemUpdateListeners.add(cb);
-    const last = state.lastSystemUpdate;
-    if (last && last.remainingCentis > 0) {
-        try {
-            cb({ remainingCentis: last.remainingCentis });
-        } catch {}
-    }
-    return () => state.systemUpdateListeners.delete(cb);
 }
 
 /**

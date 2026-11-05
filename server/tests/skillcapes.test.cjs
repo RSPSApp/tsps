@@ -63,6 +63,11 @@ function container(ids, size) {
         amount -= taken;
       }
     },
+    deleteAtSlot(slot, amount = 1) {
+      const held = items[slot];
+      held.setAmount(held.getAmount() - amount);
+      if (held.getAmount() <= 0) held.setId(-1);
+    },
     adds(id, amount) {
       const stack = items.find((i) => i.getId() === id && core.ItemDefinition.forId(id)?.isStackable?.());
       if (stack) { stack.setAmount(stack.getAmount() + amount); return; }
@@ -324,4 +329,21 @@ test("Mac sells the max cape only to a player with every 99, and buys it back fo
   sellBack(maxed);
   assert.equal(maxed.getInventory().getAmount(core.ItemIdentifiers.COINS), 1900800);
   assert.equal(maxed.getInventory().contains(obj("skillcape_max_hood")), false);
+});
+
+test("Brother Jered offers and blesses one symbol with a full inventory", () => {
+  const symbol = core.ItemIdentifiers.UNBLESSED_SYMBOL;
+  const holy = core.ItemIdentifiers.HOLY_SYMBOL;
+  const p = player({ inventory: Array(28).fill(symbol) });
+  const base = { player: p, definition: { getName: () => "Brother Jered" } };
+  assert.equal(Sellers._test.sellerCondition({ ...base, text: "If the player does not have 99 Prayer:" }), false);
+  assert.equal(Sellers._test.sellerCondition({ ...base, text: "If the player is carrying an unblessed symbol:" }), true);
+  const action = { ...base, stepId: "4VbQ5b" };
+  Sellers._test.sellerAction(action);
+  assert.equal(action.handled, true);
+  assert.equal(p.getInventory().getAmount(symbol), 27);
+  assert.equal(p.getInventory().getAmount(holy), 1);
+  const empty = player();
+  Sellers._test.sellerAction({ ...base, player: empty, stepId: "4VbQ5b" });
+  assert.equal(empty.getInventory().getAmount(holy), 0);
 });

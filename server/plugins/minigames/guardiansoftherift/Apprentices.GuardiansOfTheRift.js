@@ -12,6 +12,8 @@
  *   abyssal pearl to repair the pouches." (her transcript; 25 pearls first unlock the contact,
  *   gotr_cordelia_repair_pouch, which turns her into the variant with Repair).
  * - A dye on Felix: "You show the abyssal red dye to Felix." (Leagues capture), then the swap.
+ * Felix's transcript sells him dyes for 50 pearls and lanterns for 100, and sells a lantern for
+ * 1,500 pearls held in the inventory (Wiki: Abyssal pearls, Abyssal lantern).
  * The chatter is what the apprentices said in the Leagues recordings; how often is ours.
  */
 
@@ -21,10 +23,27 @@ const Records = require("./Records.GuardiansOfTheRift");
 
 const SHOP_QUESTS = [["law", "troll_stronghold"], ["death", "mournings_end_part_ii"], ["blood", "sins_of_the_father"]];
 const SHOP_TARGET = "Temple Supplies";
-const PEARL_CURRENCY_ROW = "omnishop_currency_abyssal_pearl";
 const UNLOCK_PEARLS = 25;
 const REPAIR_PEARLS = 1;
 const DYES = { red: "abyssal_red_dye", green: "abyssal_green_dye", blue: "abyssal_blue_dye" };
+const DYE_PRICE = 50;
+const LANTERN_PRICE = 100;
+const LANTERN_COST = 1500;
+const LANTERN = "abyssal_lantern";
+/** Every abyssal lantern Felix takes: unlit, lit and the dyed ones. */
+const LANTERNS = [LANTERN, "abyssal_lantern_normal", "abyssal_lantern_normal_blue", "abyssal_lantern_normal_red",
+  "abyssal_lantern_normal_white", "abyssal_lantern_normal_purple", "abyssal_lantern_normal_green",
+  "abyssal_lantern_oak", "abyssal_lantern_willow", "abyssal_lantern_maple", "abyssal_lantern_yew",
+  "abyssal_lantern_blisterwood", "abyssal_lantern_magic", "abyssal_lantern_redwood"];
+
+/** Felix's transcript, by step id. */
+const FELIX = {
+  HOLDING_DYE_OR_LANTERN: "egBoE0", HAS_LANTERN: "vIvYTP",
+  SELL_DYE: { qkLWJl: "green", "32RVNN": "blue", qggrYW: "red" },
+  SOLD_DYE: { "1No4Er": "green", hu6hWA: "blue", XJI400: "red" },
+  SOLD_LANTERN: "POUtFr",
+  NOT_ENOUGH_FOR_LANTERN: "TxWvgk", ENOUGH_FOR_LANTERN: "Ja_oUN", BUY_LANTERN: "mxgm7s",
+};
 
 /** Cordelia's transcript, by step id. */
 const CORDELIA = {
@@ -83,18 +102,6 @@ function openShop(player) {
   Shared.api().emitCustomEvent("omnishop:open", { player, shop: shopFor(player), handled: false });
 }
 
-/**
- * Every gotr_reward_shop_* row prices its stock in the cache's abyssal-pearl currency. That row
- * has an obj (the old item), but pearls are the saved balance now: answer the Omnishop's
- * currency request so one purchase takes its price once from `Records`.
- */
-function currency(request) {
-  if (!request.shop.startsWith("gotr_reward_shop_")) return;
-  if (request.currency !== Shared.core().CacheDefinitions.getDbRowId(PEARL_CURRENCY_ROW)) return;
-  request.balance = Records.pearls(request.player);
-  request.set = (value) => Records.setPearls(request.player, value);
-}
-
 function trade({ player, npcId }) {
   if (!isFelix(npcId)) return false;
   openShop(player);
@@ -115,6 +122,36 @@ function exchangeDye(player, from, to) {
   player.getInventory().delete(Shared.obj(DYES[from]), 1);
   player.getInventory().adds(Shared.obj(DYES[to]), 1);
   player.getInventory().refreshItems();
+}
+
+function heldLantern(player) {
+  return LANTERNS.find((lantern) => Shared.count(player, lantern) > 0) ?? null;
+}
+
+function hasDye(player) {
+  return Object.values(DYES).some((dye) => Shared.count(player, dye) > 0);
+}
+
+/** Sells Felix one item for pearls; false (and nothing changes) when it's no longer held. */
+function sellToFelix(player, item, price) {
+  if (!item || Shared.count(player, item) <= 0) return false;
+  player.getInventory().delete(Shared.obj(item), 1);
+  player.getInventory().refreshItems();
+  Records.addPearls(player, price);
+  return true;
+}
+
+function buyLantern(player) {
+  const { Item } = Shared.core();
+  const fits = player.getInventory().getAddableAmount(new Item(Shared.obj(LANTERN), 1)) > 0;
+  if (!fits) {
+    player.getInventory().full();
+    return;
+  }
+  if (!Records.spendPearls(player, LANTERN_COST)) return;
+  player.getInventory().adds(Shared.obj(LANTERN), 1);
+  player.getInventory().refreshItems();
+  Shared.api().emitCustomEvent("collection-log:obtain", { player, itemId: Shared.obj(LANTERN), amount: 1 });
 }
 
 // ------------------------------------------------------------------ Cordelia
@@ -176,6 +213,11 @@ function answerCondition({ npcId, player, stepId, text }) {
     return null;
   }
   if (!isFelix(npcId)) return null;
+  if (stepId === FELIX.HOLDING_DYE_OR_LANTERN) return hasDye(player) || heldLantern(player) !== null;
+  if (stepId === FELIX.HAS_LANTERN) return heldLantern(player) !== null;
+  if (FELIX.SELL_DYE[stepId]) return Shared.count(player, DYES[FELIX.SELL_DYE[stepId]]) > 0;
+  if (stepId === FELIX.NOT_ENOUGH_FOR_LANTERN) return pearls(player) < LANTERN_COST;
+  if (stepId === FELIX.ENOUGH_FOR_LANTERN) return pearls(player) >= LANTERN_COST;
   const shown = /^For abyssal (\w+) dye:$/.exec(text ?? "");
   if (shown) return player.__gotrDye === shown[1];
   const held = /^If the player has abyssal (\w+) dye:$/.exec(text ?? "");
@@ -191,6 +233,17 @@ function dialogueAction(request) {
     return;
   }
   if (!isFelix(npcId)) return;
+  if (FELIX.SOLD_DYE[stepId] || stepId === FELIX.SOLD_LANTERN) {
+    const item = stepId === FELIX.SOLD_LANTERN ? heldLantern(player) : DYES[FELIX.SOLD_DYE[stepId]];
+    // Dropped or banked since the choice: no sale, and no line saying there was one.
+    if (!sellToFelix(player, item, stepId === FELIX.SOLD_LANTERN ? LANTERN_PRICE : DYE_PRICE)) request.handled = true;
+    return;
+  }
+  if (stepId === FELIX.BUY_LANTERN) {
+    request.handled = true;
+    buyLantern(player);
+    return;
+  }
   if (request.action === "open_shop" && request.target === SHOP_TARGET) {
     request.handled = true;
     request.end = true;
@@ -217,14 +270,13 @@ function chatter() {
 }
 
 module.exports = {
-  shopFor, currency,
+  shopFor, FELIX, LANTERNS,
   attach(api) {
     api.onNpcInteraction("Apprentice Felix", { Trade: trade });
     api.onNpcInteraction("Apprentice Cordelia", { "Talk-to": talkToCordelia, Repair: repairOption });
     api.onItemOnNpc(dyeOnFelix);
     api.onNpcDialogueCondition(answerCondition);
     api.onCustomEvent("npc-dialogue:action", dialogueAction);
-    api.onCustomEvent("omnishop:currency", currency);
     Game.on("tick", chatter);
   },
 };

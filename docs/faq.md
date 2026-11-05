@@ -30,7 +30,7 @@ Set the `GAMEMODE` environment variable or add `"gamemode": "my-gamemode"` to `s
 
 ### Can I use vanilla's combat system without extending VanillaGamemode?
 
-Yes. Import the provider create functions directly from `server/gamemodes/vanilla/combat/` and register them in your `initialize()`. See [Reuse vanilla providers from BaseGamemode](gamemodes.md#customizing-a-provider).
+Gameplay now lives in `server/plugins/`. Reuse shared plugin modules and access core classes through `api.core`; see the [plugin guide](https://github.com/RSPSApp/tsps/blob/main/server/docs/agents/plugins.md#core-access).
 
 ### Where does gamemode-specific player data get stored?
 

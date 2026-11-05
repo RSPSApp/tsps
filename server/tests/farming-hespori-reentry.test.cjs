@@ -61,7 +61,7 @@ async function choice(f, number) {
 }
 test('canonical collect choice exits the cave without consuming stored items', async t => {
   const f = fixture(t); await warning(f); await choice(f,1); await speech(f);
-  assert.equal(f.p.getLocation().equals(new core.Location(1232,3728,0)),true);
+  assert.equal(f.p.getLocation().equals(new core.Location(1230,3730,0)),true);
   assert.deepEqual(f.farm.deathbank,f.old); assert.equal(f.state.hesporiFight,undefined);
 });
 test('canonical fight choice starts one private fight and preserves retrieval until death', async t => {
@@ -100,6 +100,17 @@ test('unsafe empty death destroys the old retrieval, while new drops replace it'
 test('without a previous retrieval the existing immediate fight remains available', t => {
   const f = fixture(t,false); Hespori.harvestHespori(f.p,patch); Patches.tick();
   assert.equal(f.state.hesporiFight,true); assert.equal(MultiChatboxPrompt.getPending(f.p),null);
+});
+test('Hespori awards pending planting XP when the harvested patch is cleared', t => {
+  const f = fixture(t, false), xp = [];
+  t.mock.method(f.p.getSkillManager(), 'addExperiences', (skill, amount) => xp.push([skill, amount]));
+  f.p.getInventory().add(new core.Item(Data.itemId('Spade')), false);
+  f.state.hesporiLoot = [{ itemId: core.ItemIdentifiers.COINS, amount: 1 }];
+  f.state.plantExperiencePending = true;
+  Hespori.harvestHespori(f.p, patch);
+  for (let tick = 0; tick < 5; tick++) Patches.tick();
+  assert.deepEqual(xp.map(([, amount]) => amount), [Data.CROPS.get('HESPORI').harvest, Data.CROPS.get('HESPORI').plant]);
+  assert.equal(Patches.stateFor(f.p, patch).crop, undefined);
 });
 test('teleport or logout before the delayed harvest cannot open a remote warning or start a fight', async t => {
   for (const transition of ['teleport','logout']) {

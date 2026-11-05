@@ -1,0 +1,17 @@
+{
+  "comment": "Werewolf Skullball. goals: each werewolf_goal_mid tile in the order the Wiki's route scores them, with the way the ball must cross it (the loc's rotation); the final goal is the first goal again. holes: the four waa_cavewall_skullhole spawnholes south of the first goal; the ball comes out on the walkable tile north of each. arena: the Skullball side of the werewolf cavern, east of the Agility course.",
+  "goals": [
+    [3555, 9870, "north"],
+    [3556, 9883, "north"],
+    [3558, 9891, "north"],
+    [3557, 9900, "north"],
+    [3558, 9906, "north"],
+    [3563, 9911, "east"],
+    [3575, 9905, "south"],
+    [3574, 9888, "south"],
+    [3575, 9878, "south"],
+    [3568, 9864, "west"]
+  ],
+  "holes": [[3552, 9859], [3554, 9860], [3555, 9860], [3557, 9859]],
+  "arena": { "x": [3549, 3582], "y": [9856, 9915], "z": 0 }
+}

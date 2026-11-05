@@ -127,9 +127,12 @@ function defineAreas() {
         game.returnToLobby(player);
         return;
       }
+      game.startParticipation(player);
       player.setAttribute(game.TRANSITION_KEY, false);
       player.getPacketSender().sendSubInterface(data.OVERLAY_HUD_UID, data.STATUS_OVERLAY_INTERFACE[game.getTeamId(player)], 1);
+      sendGameVars(player, game.getTeamId(player));
       player.getPacketSender().sendPlayerOption(data.ATTACK_OPTION_SLOT, "Attack", true);
+      player.getPacketSender().sendPlayerOption(data.TAKE_FROM_OPTION_SLOT, "Take-from", false);
     }
 
     postLeave(character, logout) {
@@ -138,6 +141,7 @@ function defineAreas() {
         return;
       }
       player.getPacketSender().sendPlayerOption(data.ATTACK_OPTION_SLOT, "", false);
+      player.getPacketSender().sendPlayerOption(data.TAKE_FROM_OPTION_SLOT, "", false);
       game.closeOverlay(player);
       player.getPacketSender().sendEntityHintRemoval(true);
       game.clearCastleWarsItems(player);
@@ -197,10 +201,17 @@ function sendGameVars(player, teamId) {
   for (const team of [SARADOMIN, ZAMORAK]) {
     game.setVar(player, data.SCORE_VARBIT[team], game.score[team], true);
     game.setVar(player, data.FLAG_VARBIT[team], game.flagStatus[team], true);
+    game.setVar(player, data.TEAM_PLAYING_VARBIT[team], team === teamId ? 1 : 0, true);
   }
-  for (const varbit of Object.values(data.TEAM_VARBIT)) {
-    game.setVar(player, varbit, game.getTeamVar(teamId, varbit), true);
+  for (const [status, varbit] of Object.entries(data.TEAM_VARBIT)) {
+    game.setVar(player, data.TEAM_HUD_VARBIT[teamId][status], game.getTeamVar(teamId, varbit), true);
   }
+  game.setVar(player, data.STANDARD_WORLD_VARBIT, 0, true);
+  const count = game.teamBarricadeCount(teamId);
+  const limit = game.getBarricadeLimit?.() ?? data.MAX_BARRICADES;
+  game.setVar(player, data.BARRICADE_COUNT_VARBIT, count, true);
+  // Native scripts hardcode /10; only a configured practice cap needs server-owned text.
+  player.getPacketSender().sendString(`${count}/${limit} Barricades`, data.BARRICADE_TEXT_UID[teamId], limit !== data.MAX_BARRICADES);
   game.setVar(player, data.TIMER_VARP, game.gameMinutesLeft());
 }
 
@@ -218,7 +229,11 @@ function ejectIdlersFromSpawn(player, teamId) {
     inSpawn ? `You have ${formatTicks(idleTicks)} to leave the respawn room.` : "",
     data.EJECT_TEXT_UID[teamId]
   );
-  if (!inSpawn || player.isPlayerBot?.() === true) {
+  if (!inSpawn) {
+    game.resetIdleTicks(player);
+    return;
+  }
+  if (player.isPlayerBot?.() === true) {
     return;
   }
   if (idleTicks > 0) {
@@ -301,6 +316,12 @@ function keepItemsOnDeath(event) {
   }
 }
 
+function preventBonesOnDeath(event) {
+  if (game.castleWarsAreas.has(event.player?.getArea?.())) {
+    event.allow = false;
+  }
+}
+
 function allowBountyHunterWeapons(event) {
   if (event.attacker?.getArea?.() === game.gameArea && event.target?.getArea?.() === game.gameArea) event.allowed = true;
 }
@@ -311,6 +332,7 @@ module.exports = function attachCastleWarsAreas(api, castleWars) {
   data = castleWars.data;
   registerAreas(api);
   api.onCustomEvent("bounty-hunter:weapon-area", allowBountyHunterWeapons);
+  api.onCustomEvent("player:death-bones", preventBonesOnDeath);
   api.onServerStartup(setUpCastle);
   api.onPlayerLogin(restoreLoginInsideCastleWars);
   api.onCanEquip(protectTeamColours);

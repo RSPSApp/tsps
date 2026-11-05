@@ -265,3 +265,14 @@ test("logging out restarts the special attack restore timer", (t) => {
   assert.equal(CombatSpecial.ensureRestoreTask(loaded), true);
   assert.equal(tasks.at(-1).getRemainingTicks(), 50);
 });
+
+test("new accounts default to Punch/Accurate while saved Kick preferences survive", () => {
+  const { FightType } = require("../dist/game/content/combat/FightType");
+  const player = new Player(null);
+  assert.equal(player.getFightType(), FightType.UNARMED_PUNCH);
+  assert.equal(PlayerSave.resolveSavedFightType(undefined, []), FightType.UNARMED_PUNCH);
+  player.setFightType(FightType.UNARMED_KICK);
+  const loaded = new Player(null);
+  PlayerSave.fromPlayer(player).applyToPlayer(loaded);
+  assert.equal(loaded.getFightType(), FightType.UNARMED_KICK);
+});

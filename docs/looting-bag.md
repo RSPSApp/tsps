@@ -47,7 +47,9 @@ Both open `wilderness_lootingbag` in the side panel. The server sends the bag as
 
 Script 497 names the deposit ops Store-1, Store-5, Store-All and Store-X. The prices are each item's
 guide price (Wiki: a price check of the Grand Exchange value), sent per slot with script 1235. After
-each store the total and the prices are sent again.
+each store the total and the prices are sent again. In revision 241, script 1235 takes the inventory
+as an int and all 28 prices as longs, including the empty-slot `-1` values. Sending the prices as
+ints aborts the client script before the following setup script can draw the items.
 
 ## Using an item on the bag (captured)
 With the default setting the bag asks "How many do you want to deposit?" (`chatbox_multi_init`). The
@@ -84,10 +86,15 @@ Deposit-10, Deposit-X and Deposit-All (script 3744; op1 follows the bank's quant
 asks "Enter amount:". "Deposit loot" banks everything and "Dismiss" goes back to the inventory.
 
 ## Destroy (captured, Wiki)
+Recording [1541](https://rsprox.net/download/1541) sends synth `2381` (one loop, no delay)
+on the same tick as the confirmed inventory removal. The shared destroy handler plays it only
+after removal, including item-owned destruction; opening, cancelling or vetoing the prompt is silent.
+
 Destroy asks first, through the shared destroy prompt: "Are you sure you want to destroy the bag?",
 then "If you destroy it, the contents will be lost." or, for an empty bag, "The bag is empty. Are you
-sure you want to destroy it?". Once confirmed in the Wilderness, the contents drop to the floor for
-anyone to see, except un-noted food, potions and vials of water, which are destroyed; noted items drop
+sure you want to destroy it?". The shared prompt uses native cache interface 584/script 814: 1/Y confirms,
+2/N cancels, and mouse clicks use the same guarded resume. Once confirmed in the Wilderness, the
+contents drop to the floor for anyone to see, except un-noted food, potions and vials of water, which are destroyed; noted items drop
 (Wiki). Anywhere else, including the Ferox Enclave, everything is lost.
 
 **Not done:** in recording 456 the server refused a destroy with "This doesn't seem like a good place

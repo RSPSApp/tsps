@@ -66,6 +66,7 @@ const player = {
     getLocation: () => location(3222, 3218),
     getHitpoints: () => 10,
     getRunEnergy: () => 100,
+    getRunEnergyUnits: () => 10000,
     getPacketSender: () => packetSender,
     getSkillManager: () => ({ getCurrentLevel: () => 1, getMaxLevel: () => 1, getExperience: () => 0 }),
     getInventory: () => ({ getItems: () => [item(1351), null, item(-1), item(590)] }),
@@ -85,7 +86,7 @@ const npc = {
 const rival = {
     getUsername: () => "Agent2", getIndex: () => 2, getLocation: () => location(3223, 3218),
     getArea: () => ({ getName: () => "Wilderness", pluginName: "Wilderness" }),
-    getPrivateArea: () => null, getHitpoints: () => 10, getRunEnergy: () => 100,
+    getPrivateArea: () => null, getHitpoints: () => 10, getRunEnergy: () => 100, getRunEnergyUnits: () => 10000,
     getPacketSender: () => ({ sendMessage: () => {}, sendTypedMessage: () => {}, getVarbit: () => 0, getVarp: () => 0 }),
     getSkillManager: () => ({ getCurrentLevel: () => 1, getMaxLevel: () => 1, getExperience: () => 0 }),
     getInventory: () => ({ getItems: () => [] }), getEquipment: () => ({ getItems: () => [] }),
@@ -277,7 +278,8 @@ const sessionHooks: Record<string, any> = {};
 const previousMcpFlag = process.env.AGENT_MCP;
 process.env.AGENT_MCP = "0";
 agentPlugin.register({ core, onServerShutdown() {}, onPlayerLogin() {}, onPlayerLogout() {},
-    onCustomEvent: (name: string, handler: any) => { sessionHooks[name] = handler; }, emitCustomEvent() {} });
+    onCustomEvent: (name: string, handler: any) => { sessionHooks[name] = handler; }, emitCustomEvent() {},
+    getAreaManager: () => ({ get: () => null }) });
 process.env.AGENT_MCP = "1";
 rights = "MODERATOR";
 agentPlugin._test.grantDeveloperRights({ player });

@@ -91,12 +91,20 @@ function xp(player, skill, amount) {
   if (amount > 0) player.getSkillManager().addExperience(core.Skill[skill], amount);
 }
 
-/** Bark into the pack (on the floor when there's no room), with the award line. */
+/**
+ * Into a carried or worn Forestry kit first ("storage:gather": rsprox 1104 has event bark go
+ * straight into the worn kit), then the pack, then the floor.
+ */
+function award(player, id, amount) {
+  const gather = { player, itemId: id, amount, stored: 0 };
+  api.emitCustomEvent("storage:gather", gather);
+  if (amount - gather.stored > 0) give(player, id, amount - gather.stored);
+}
+
+/** Bark into the kit or the pack (on the floor when there's no room), with the award line. */
 function bark(player, amount, lump = false) {
   if (amount <= 0) return;
-  const item = new core.Item(data.items.bark, amount);
-  if (player.getInventory().getAddableAmount(item) >= amount) player.getInventory().add(item, true);
-  else core.ItemOnGroundManager.registers(player, item);
+  award(player, data.items.bark, amount);
   const text = message("bark", { amount });
   if (lump) player.sendMessage(text);
   else spam(player, text);
@@ -109,7 +117,7 @@ function give(player, id, amount) {
 }
 
 function hasKit(player) {
-  return player.getInventory().contains(data.items.kit);
+  return player.getInventory().contains(data.items.kit) || player.getEquipment().contains(data.items.kit);
 }
 
 function distance(a, b) {
@@ -246,6 +254,7 @@ module.exports = {
   xp,
   bark,
   give,
+  award,
   hasKit,
   distance,
   nearbyPlayers,

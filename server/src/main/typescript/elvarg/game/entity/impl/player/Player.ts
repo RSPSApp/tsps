@@ -13,6 +13,7 @@ import { PendingHit } from "../../../content/combat/hit/PendingHit";
 import { Autocasting } from "../../../content/combat/magic/Autocasting";
 import { SkillManager } from "../../../content/skill/SkillManager";
 import { ItemDefinition } from "../../../definition/ItemDefinition";
+import type { Item } from "../../../model/Item";
 import { Mobile } from "../Mobile";
 import { NPC } from "../npc/NPC";
 import { NpcAggression } from "../npc/NpcAggression";
@@ -59,6 +60,7 @@ import { PluginManager } from "../../../../plugins/PluginManager";
 import { ServerPerf } from "../../../../util/ServerPerf";
 import { getSequencePriority } from "../../../cache/NpcAnimationScanner";
 import { LOGIN_TOKENS_ATTRIBUTE } from "../../../../net/login/LoginTokens";
+import { CacheDefinitions } from "../../../cache/CacheDefinitions";
 
 const ATTR_SKIP_PERSISTENCE = "bot-skip-persistence";
 const DEFAULT_AUDIO_SETTINGS: Readonly<Record<number, number>> = {
@@ -131,6 +133,7 @@ export class Player extends Mobile {
     public dialogueManager = new DialogueManager(this);
 
     public username: string;
+    private displayName = "";
     private passwordHashWithSalt: string;
     private hostAddress: string;
     private isDiscordLogin: boolean = false;
@@ -147,8 +150,8 @@ export class Player extends Mobile {
     private isRunning = true;
     private playerBot = false;
     private botAreaProcessTick = 0;
-    private runEnergy = 100;
-    private lastRunRecovery = new TickStopwatch();
+    /** Run energy in OSRS units (0-10,000; 100 units = 1%). */
+    private runEnergy = GameConstants.RUN_ENERGY_MAX_UNITS;
     private isDying: boolean;
     public forceMovement: ForceMovement;
     private skillAnimation: number;
@@ -193,7 +196,7 @@ export class Player extends Mobile {
     public banks: Bank[] = Array(Bank.TOTAL_BANK_TABS).fill(null); // last index is for bank searches
     private searchingBank = false;
     private searchSyntax = "";
-    private fightType = FightType.UNARMED_KICK;
+    private fightType = FightType.UNARMED_PUNCH;
     public weapon: WeaponInterfaces = WeaponInterfaces.UNARMED;
     private autoRetaliate = true;
     private audioSettings: Record<number, number> = { ...DEFAULT_AUDIO_SETTINGS };
@@ -244,8 +247,10 @@ export class Player extends Mobile {
         PrayerHandler.deactivatePrayers(this);
         this.getEquipment().refreshItems();
         this.getInventory().refreshItems();
+        // Every level back to where it rests: the base, raised by a plugin's permanent boost
+        // (SkillManager.registerRestingLevelModifier), so a death keeps such a boost.
         for (let skill of Skill.values())
-            this.getSkillManager().setCurrentLevels(skill, this.getSkillManager().getMaxLevel(skill));
+            this.getSkillManager().setCurrentLevels(skill, this.getSkillManager().getRestingLevel(skill));
         this.setRunEnergy(100);
         this.getPacketSender().sendRunEnergy();
         this.getMovementQueue().setBlockMovement(false).reset();
@@ -273,6 +278,10 @@ export class Player extends Mobile {
             }
             // A respawn is the same Player object; drop rolls cached against the state it died in.
             CombatFactory.clearHitRollCache(this);
+            // Kill credit is per life: damage this player dealt stops counting once they die.
+            World.getPlayers().forEach((other) => {
+                if (other !== this) other.getCombat().removeDamager(this);
+            });
             TaskManager.submit(new PlayerDeathTask(this, beforeDeath.announce !== false));
             this.isDying = true;
         }
@@ -283,13 +292,13 @@ export class Player extends Mobile {
     }
 
     public getAttackAnim(target?: Mobile): number {
-        const fightType = FightType.resolve(this.getFightType()) ?? FightType.UNARMED_KICK;
+        const fightType = FightType.resolve(this.getFightType()) ?? FightType.UNARMED_PUNCH;
         const againstNpc = target?.isNpc?.() === true;
         return WeaponProfiles.attackAnimation(this, fightType.getAnimationAgainst(againstNpc), againstNpc);
     }
 
     public getAttackSound(): Sound {
-        const fightType = FightType.resolve(this.getFightType()) ?? FightType.UNARMED_KICK;
+        const fightType = FightType.resolve(this.getFightType()) ?? FightType.UNARMED_PUNCH;
         return WeaponProfiles.get(this)?.attackSound ?? fightType.getAttackSound();
     }
 
@@ -420,6 +429,14 @@ export class Player extends Mobile {
         this.getPacketSender().sendConfig(CombatPoisonEffect.ORB_VARP, value);
     }
 
+    private static mapClockVarp: number | null | undefined = undefined;
+
+    /** Sends the varp map_clock as the world's tick count, once a tick. */
+    private sendMapClock(): void {
+        if (Player.mapClockVarp === undefined) Player.mapClockVarp = CacheDefinitions.getVarpId("map_clock");
+        if (Player.mapClockVarp !== null) this.getPacketSender().sendConfig(Player.mapClockVarp, World.getProcessCycle());
+    }
+
     public process() {
         const isBot = this.isPlayerBot();
         const timed = <T>(phase: string, fn: () => T): T =>
@@ -427,6 +444,9 @@ export class Player extends Mobile {
 
         // Client input first: packets received since the last turn act now, on the tick.
         timed("client_input", () => this.getSession()?.processPackets());
+        // The tick count, every tick, as live sends it (varp map_clock): the client's timers
+        // (buff bar cooldowns, script4678 and script5940) count against it.
+        if (!isBot) this.sendMapClock();
         // Queued impacts land before this player acts, matching LostCity's
         // processQueues-then-processInteraction order. A hit that kills them here
         // stops the rest of this turn via the isDying/hitpoints guards below.
@@ -486,12 +506,13 @@ export class Player extends Mobile {
 
         this.processSkullTimer();
 
-        // Increase run energy
-        if (!isBot && this.runEnergy < 100 && (!this.getMovementQueue().isMovings() || !this.isRunning)) {
-            if (this.lastRunRecovery.elapsedTime(MovementQueue.runEnergyRestoreDelay(this))) {
-                this.runEnergy++;
+        // Increase run energy every tick not spent running (Wiki: Recovery).
+        if (!isBot && this.runEnergy < GameConstants.RUN_ENERGY_MAX_UNITS
+            && !this.getMovementQueue().didRunThisCycle()) {
+            const restored = MovementQueue.runEnergyRestoreUnits(this);
+            if (restored > 0) {
+                this.addRunEnergyUnits(restored);
                 this.getPacketSender().sendRunEnergy();
-                this.lastRunRecovery.reset();
             }
         }
 
@@ -528,11 +549,18 @@ export class Player extends Mobile {
         if (rapidRestoreDue) this.rapidRestoreDue = cycle + Player.STAT_RESTORE_TICKS;
 
         if (restoreDue || rapidRestoreDue) {
-            const points = (restoreDue ? 1 : 0) + (rapidRestoreDue ? 1 : 0);
-            for (const skill of Skill.values()) {
-                if (skill === Skill.HITPOINTS || skill === Skill.PRAYER) continue;
-                const max = skills.getMaxLevel(skill);
-                if (skills.getCurrentLevel(skill) < max) skills.increaseCurrentLevel(skill, points, max);
+            // An area can pause non-Hitpoints restoration (Rogues' Den holds a drained Agility/
+            // Thieving level for the whole maze). Hitpoints still regenerate below.
+            const request = { player: this, allowed: true };
+            PluginManager.emitCustomEvent("stats:natural-restore", request);
+            if (request.allowed) {
+                const points = (restoreDue ? 1 : 0) + (rapidRestoreDue ? 1 : 0);
+                for (const skill of Skill.values()) {
+                    if (skill === Skill.HITPOINTS || skill === Skill.PRAYER) continue;
+                    // Up to the resting level: the base, or above it with a permanent boost.
+                    const max = skills.getRestingLevel(skill);
+                    if (skills.getCurrentLevel(skill) < max) skills.increaseCurrentLevel(skill, points, max);
+                }
             }
         }
 
@@ -608,16 +636,20 @@ export class Player extends Mobile {
     }
 
     /**
-     
-    Requests a logout by sending the logout packet to the client. This leads to
-    the connection being closed, which then adds the player to the remove
-    characters queue.
-    */
+     * Logs the player out from the server's side (content's "log out" buttons, a newer login of
+     * the same account): queued for removal, and a connected client told as an accepted logout
+     * button tells it (the logout response, then the socket closes), so the browser and the
+     * official client through the gateway both return to the login screen. (The old packet 109
+     * reached no client: legacy packets are no-ops.)
+     */
     requestLogout() {
         if (!World.getRemovePlayerQueue().includes(this)) {
             World.getRemovePlayerQueue().push(this);
         }
-        this.getPacketSender().sendLogout();
+        if (World.isPlayerSessionConnected(this)) {
+            this.setDisconnectSource("logout");
+            this.getSession().logout();
+        }
     }
 
     onLogout() {
@@ -702,7 +734,7 @@ export class Player extends Mobile {
             this.status !== PlayerStatus.TRADING &&
             this.status !== PlayerStatus.DUELING &&
             (this.status !== PlayerStatus.NONE || this.interfaceId >= 0 || this.dialogueManager.isActive() ||
-                this.packetSender.hasInterruptibleInterface())
+                this.packetSender.hasInterruptibleInterface() || this.packetSender.hasInputPrompt())
         ) {
             this.packetSender.closeInterruptibleInterfaces();
         }
@@ -736,6 +768,13 @@ export class Player extends Mobile {
     clearPendingAction(): void {
         this.getCombat().clearInteraction();
         TaskManager.cancelWalkToTasks(this.getIndex());
+        // Following is an interaction too, so an inventory item action ends it.
+        const following = this.getFollowing();
+        if (following) {
+            this.setFollowing(null);
+            if (this.getInteractingMobile() === following) this.setMobileInteraction(null);
+            if (this.getPositionToFace()?.equals(following.getLocation())) this.setPositionToFace(null);
+        }
     }
 
     isStaff(): boolean {
@@ -803,6 +842,17 @@ export class Player extends Mobile {
 
     public setUsername(username: string): Player {
         this.username = username;
+        return this;
+    }
+
+    /** The name other players see (DisplayNames); the username stays the account's key. */
+    public getDisplayName(): string {
+        return this.displayName || this.username;
+    }
+
+    public setDisplayName(displayName: string): Player {
+        this.displayName = displayName;
+        this.getUpdateFlag().flag(Flag.APPEARANCE);
         return this;
     }
 
@@ -1066,12 +1116,64 @@ export class Player extends Mobile {
             this.displayedEquipment?.get(slot) ?? item?.getId?.() ?? -1);
     }
 
+    /** Run energy as a percentage (0-100), for content that works in whole or fractional percent. */
     public getRunEnergy(): number {
+        return this.runEnergy / 100;
+    }
+
+    public setRunEnergy(runEnergyPercent: number) {
+        this.setRunEnergyUnits(runEnergyPercent * 100);
+    }
+
+    /** Run energy in OSRS units (0-10,000), the precision the formulas and the client use. */
+    public getRunEnergyUnits(): number {
         return this.runEnergy;
     }
 
-    public setRunEnergy(runEnergy: number) {
-        this.runEnergy = Math.max(0, Math.min(100, Math.floor(runEnergy)));
+    public setRunEnergyUnits(units: number) {
+        this.runEnergy = Math.max(0, Math.min(GameConstants.RUN_ENERGY_MAX_UNITS, Math.floor(units)));
+    }
+
+    public addRunEnergyUnits(units: number) {
+        this.setRunEnergyUnits(this.runEnergy + units);
+    }
+
+    /**
+     * Carried weight in grams: inventory plus equipment, the one total the equipment panel, the
+     * run-energy packet and the drain all use. Stackables (coins, runes, notes) weigh nothing
+     * (Wiki: Weight, their cache weight is overridden to 0), and plugins can replace a worn
+     * slot's weight through "equipment:weights" (graceful's negative weights), so the total
+     * can be negative.
+     */
+    public getCarriedWeightGrams(): number {
+        const request = { player: this, slotWeights: {} as Record<number, number> };
+        PluginManager.emitCustomEvent("equipment:weights", request);
+        const itemGrams = (item: Item | null | undefined): number => {
+            if (item == null || item.getId() < 0 || item.getAmount() <= 0) {
+                return 0;
+            }
+            const definition = ItemDefinition.forId(item.getId());
+            return definition.isStackable() || definition.isNoted() ? 0 : definition.getWeight();
+        };
+        let grams = 0;
+        const equipment = this.getEquipment().getItems();
+        for (let slot = 0; slot < equipment.length; slot++) {
+            const override = request.slotWeights[slot];
+            if (Number.isFinite(override) && equipment[slot]?.getId() >= 0 && equipment[slot].getAmount() > 0) {
+                grams += override * 1000;
+            } else {
+                grams += itemGrams(equipment[slot]);
+            }
+        }
+        for (const item of this.getInventory().getItems()) {
+            grams += itemGrams(item);
+        }
+        return grams;
+    }
+
+    /** Carried weight in whole kilograms, the fraction dropped toward zero as the client shows it. */
+    public getWeightKg(): number {
+        return Math.trunc(this.getCarriedWeightGrams() / 1000);
     }
 
     public isDrainingPrayer(): boolean {
@@ -1410,7 +1512,7 @@ export class Player extends Mobile {
             }
         }
 
-        this.fightType = FightType.UNARMED_KICK;
+        this.fightType = FightType.UNARMED_PUNCH;
         return this.fightType;
     }
 

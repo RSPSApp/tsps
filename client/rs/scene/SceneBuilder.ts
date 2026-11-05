@@ -28,6 +28,7 @@ import { Scene } from "./Scene";
 import { SceneTileModel } from "./SceneTileModel";
 import { Entity } from "./entity/Entity";
 import { EntityType, calculateEntityTag, getIdFromTag } from "./entity/EntityTag";
+import { resolveLocOverrideId } from "./LocOverride";
 import { LocEntity } from "./entity/LocEntity";
 
 export enum LocLoadType {
@@ -312,14 +313,14 @@ export class SceneBuilder {
         // Set floor collision BEFORE bridge demotion (matches OSRS client order)
         this.setFloorCollision(scene);
 
-        // OSRS-accurate: Physically relink/shift bridge columns between planes and
-        // attach the original base tile as linkedBelow for correct roof/bridge culling.
-        scene.applyBridgeLinks();
-        scene.setTileMinLevels();
-
+        // Merge neighbouring scenery on its original planes before bridge columns move.
         if (locLoadType === LocLoadType.MODELS) {
             scene.light(this.locModelLoader.textureLoader, -50, -10, -50);
         }
+
+        // Retain the original base tile below the demoted bridge for roof/bridge culling.
+        scene.applyBridgeLinks();
+        scene.setTileMinLevels();
 
         yield;
         return scene;
@@ -657,18 +658,15 @@ export class SceneBuilder {
                             type,
                             rotation,
                         );
-                        const finalId = override
-                            ? (override.newId | 0) >= 0
-                                ? override.newId
-                                : id
-                            : id;
+                        const finalId = resolveLocOverrideId(override, id);
                         const finalRotation = override?.newRotation ?? rotation;
                         const moveToX = override?.moveToX;
                         const moveToY = override?.moveToY;
                         const seqId = override?.seqId;
                         const seqRandomStart = override?.seqRandomStart;
 
-                        if ((finalId | 0) <= 0) {
+                        // Loc id 0 is a real loc; a removal resolves to -1.
+                        if ((finalId | 0) < 0) {
                             continue;
                         }
 
@@ -825,7 +823,7 @@ export class SceneBuilder {
         seqRandomStartOverride?: boolean,
         heightLevel: number = level,
     ): void {
-        if ((id | 0) <= 0) {
+        if ((id | 0) < 0) {
             return;
         }
 
@@ -1926,11 +1924,11 @@ export class SceneBuilder {
         yield;
         scene.setTileMinLevels();
         this.setFloorCollision(scene);
-        scene.applyBridgeLinks();
-        scene.setTileMinLevels();
         if (locLoadType === LocLoadType.MODELS) {
             scene.light(this.locModelLoader.textureLoader, -50, -10, -50);
         }
+        scene.applyBridgeLinks();
+        scene.setTileMinLevels();
 
         yield;
         return scene;
@@ -2212,8 +2210,8 @@ export class SceneBuilder {
                         // A server-spawned loc suppresses the template hotspot at that tile.
                         const finalRotation = (orientation + rotation) & 3;
                         const override = this.getLocOverride(sceneX, sceneY, targetPlane, id, type, finalRotation);
-                        const finalId = override && override.newId >= 0 ? override.newId : id;
-                        if (finalId <= 0) continue;
+                        const finalId = resolveLocOverrideId(override, id);
+                        if (finalId < 0) continue;
                         const moved = Number.isFinite(override?.moveToX) && Number.isFinite(override?.moveToY);
                         const targetX = moved ? override!.moveToX! | 0 : sceneX;
                         const targetY = moved ? override!.moveToY! | 0 : sceneY;

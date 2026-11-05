@@ -37,8 +37,6 @@ const ATTACK_SOUND = DATA.sounds.attack;
 /** Wiki: typeless magical ranged, speed 2, range 8. */
 const ATTACK_SPEED = DATA.combat.attackSpeed;
 const ATTACK_DISTANCE = DATA.combat.attackDistance;
-/** Fitted estimate: the captured projectile flies 32-56 cycles; the hit lands ~2 ticks on. */
-const HIT_DELAY_TICKS = DATA.combat.hitDelayTicks;
 
 let api = null;
 let core = null;
@@ -70,6 +68,18 @@ function onTask(player, npc) {
   return request.onTask === true;
 }
 
+/** Wiki: one off-task boss kill is allowed once the Western diary is started, before its task is done, at base 93 Slayer. */
+function diaryOffTaskKillAllowed(player) {
+  const slayer = player?.getSkillManager?.()?.getMaxLevel?.(core.Skill.SLAYER) ?? 0;
+  if (slayer < 93) return false;
+  const started = { player, diary: "western", started: false };
+  api.emitCustomEvent("diary:is-started", started);
+  if (started.started !== true) return false;
+  const task = { player, diary: "western", task: "kill-the-thermonuclear-smoke-devil-col-800000-do", done: false };
+  api.emitCustomEvent("diary:has-task", task);
+  return task.done !== true;
+}
+
 /** Players fighting in the same room as `npc`: in the lair and alive. */
 function playersInRoom(npc) {
   const area = npc.getPrivateArea?.() ?? null;
@@ -81,8 +91,8 @@ module.exports = {
   DATA, BOSS_ID, SMOKE_DEVIL_ID, CREVICE_OUTSIDE_ID, CREVICE_INSIDE_ID,
   LAIR, OUTSIDE_TILE, INSIDE_TILE,
   ANIM_ATTACK, PROJECTILE_ID, IMPACT_ID, ATTACK_SOUND,
-  ATTACK_SPEED, ATTACK_DISTANCE, HIT_DELAY_TICKS,
-  init, location, within, inLair, isBoss, onTask, playersInRoom,
+  ATTACK_SPEED, ATTACK_DISTANCE,
+  init, location, within, inLair, isBoss, onTask, diaryOffTaskKillAllowed, playersInRoom,
   get api() { return api; },
   get core() { return core; },
 };

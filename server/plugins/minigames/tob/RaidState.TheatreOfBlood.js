@@ -82,15 +82,23 @@ function areaClass() {
     }
 
     postLeave(mobile, logout) {
-      if (mobile.isPlayer?.()) this.raid.onAreaLeave(mobile.getAsPlayer(), logout);
+      if (mobile.isPlayer?.() && this.raid.isSpectator(mobile.getAsPlayer())) this.raid.spectators.delete(mobile.getAsPlayer());
+      else if (mobile.isPlayer?.()) this.raid.onAreaLeave(mobile.getAsPlayer(), logout);
       super.postLeave(mobile, logout);
     }
 
+    /**
+     * The raid ticks once a turn, on its first mobile (an NPC, before players move). A player's own
+     * call comes after their movement, while the step's direction is still set: rooms that need what a
+     * player stepped over read it then (`onPlayerMoved`).
+     */
     process(mobile) {
       this.raid.processOnce();
+      if (mobile.isPlayer?.()) this.raid.room?.onPlayerMoved?.(mobile.getAsPlayer());
     }
 
     canTeleport(player) {
+      if (this.raid.isSpectator(player)) return true;
       Shared.statement(player, "You can't teleport from the Theatre of Blood.");
       return false;
     }
@@ -98,7 +106,7 @@ function areaClass() {
     /** Scripted NPCs (an entrance, a phase change) and the jailed don't attack. */
     canAttack(attacker) {
       if (attacker?.__tobScripted) return false;
-      if (attacker?.isPlayer?.() && this.raid.member(attacker)?.jailed) return false;
+      if (attacker?.isPlayer?.() && (this.raid.isSpectator(attacker) || this.raid.member(attacker)?.jailed)) return false;
       return null;
     }
   };
@@ -247,7 +255,12 @@ class Room {
     this.stage = STAGE.STARTED;
     this.startCycle = Shared.cycle();
     // The overall time runs from the Maiden's fight (rsprox 237/01163, 227/01758).
-    if (!this.raid.startCycle) this.raid.startCycle = this.startCycle;
+    if (!this.raid.startCycle) {
+      this.raid.startCycle = this.startCycle;
+      // Captured (227/01764): as the first fight starts, Hard Mode states its target.
+      const target = Shared.MODES[this.raid.mode].challengeTicks?.[this.raid.size];
+      if (target) for (const player of this.raid.players) player.sendMessage(`Time to beat: <col=ff0000>${Math.floor((target * 0.6) / 60)}:00</col>`);
+    }
     this.onStart();
   }
 
@@ -269,10 +282,13 @@ class Room {
     }
     const duration = `Duration: <col=ff0000>${Shared.formatTicks(ticks)}</col>`;
     const total = `Total: <col=ff0000>${Shared.formatTicks(raid.totalTicks)}</col>`;
-    const message = `Wave '${this.def.name}' ${Shared.MODES[raid.mode].tag} complete!<br>${duration} ${total}`;
+    const wave = `Wave '${this.def.name}' ${Shared.MODES[raid.mode].tag} complete!<br>${duration}`;
     for (const player of raid.players) {
       player.getPacketSender().sendJingle?.(ROOM_COMPLETE_JINGLE, 0);
-      player.sendMessage(message);
+      // The last wave's line and the raid's records come from Stats (as captured).
+      if (this.def.next === "REWARDS") Shared.api().emitCustomEvent("tob:raid-won", { raid, player, wave });
+      else player.sendMessage(`${wave} ${total}`);
+      Shared.api().emitCustomEvent("tob:room-won", { raid, room: this, player });
       raid.restore(player);
       if (raid.member(player).jailed) raid.release(player, this);
     }
@@ -395,7 +411,8 @@ class Room {
     }
     this.supplyChest = this.placeObject(Shared.OBJECT.SUPPLY_CHEST_OPEN, { ...chest, z: this.def.entrance.z }, 10, chest.face);
     for (const player of this.roomPlayers()) {
-      player.sendMessage("The Vampyres are impressed by your prowess. <col=ef1020>Check the chest</col> to see how many points they've granted you.");
+      // Captured: Entry Mode's chest holds bandages rather than points.
+      player.sendMessage(`The Vampyres are impressed by your prowess. <col=ff0000>Check the chest</col> to see ${this.raid.isEntry ? "what they've sent you" : "how many points they've granted you"}.`);
     }
   }
 
@@ -445,10 +462,42 @@ class Raid {
     this.overallTicks = 0;
     this.roster = null;
     this.lastCycle = -1;
+    /** Players watching (Spectate.*): never members; they see what the raid's area sees. */
+    this.spectators = new Set();
+    /** Combat Achievement tasks already failed this raid. */
+    this.failedTasks = new Set();
     this.over = false;
     this.failed = false;
     for (const player of party.members) this.add(player);
     raids.set(this.id, this);
+  }
+
+  isSpectator(player) {
+    return this.spectators.has(player);
+  }
+
+  get isEntry() {
+    return this.mode === "entry";
+  }
+
+  get isHard() {
+    return this.mode === "hard";
+  }
+
+  /**
+   * Combat Achievements (CombatAchievements.*): a task the raid can still earn. Rooms name the
+   * task as the Wiki does and say why it failed, as the captured "You have failed" message does.
+   */
+  failTask(task, reason) {
+    Shared.api().emitCustomEvent("tob:task-failed", { raid: this, task, reason });
+  }
+
+  completeTask(task, players = this.players) {
+    Shared.api().emitCustomEvent("tob:task-complete", { raid: this, task, players });
+  }
+
+  taskLive(task) {
+    return !this.failedTasks.has(task);
   }
 
   member(player) {
@@ -480,6 +529,7 @@ class Raid {
     this.room?.destroy();
     this.room = new RoomClass(this, ROOMS[key]);
     this.room.build();
+    Shared.api().emitCustomEvent("tob:room-built", { raid: this, room: this.room });
     return this.room;
   }
 
@@ -487,6 +537,7 @@ class Raid {
   enter(player) {
     if (!this.players.includes(player)) return;
     if (!this.room) this.buildRoom("MAIDEN");
+    Shared.api().emitCustomEvent("tob:raid-entered", { raid: this, player });
     Shared.sound(player, ENTER_SOUND);
     player.sendMessage(`You enter the Theatre of Blood ${Shared.MODES[this.mode].tag}...`);
     Shared.fade(player, 0, "The Theatre awaits...");
@@ -569,6 +620,7 @@ class Raid {
     if (now === this.lastCycle || this.over) return;
     this.lastCycle = now;
     if (this.room && !this.room.destroyed) this.room.tick();
+    Shared.api().emitCustomEvent("tob:raid-tick", { raid: this });
     this.refreshHealthBars();
     this.refreshStatuses();
   }
@@ -673,9 +725,21 @@ class Raid {
     member.deaths++;
     member.roomStats(room.key).deaths++;
     member.deathTile = Shared.tileOf(player);
+    // A room can take something off the dead before the jail: Verzik's Dawnbringer is dropped
+    // for the rest of the party (Wiki: "drop instantly on death so other players can use it").
+    room.onMemberDied?.(player, member);
+    this.tellDeath(player);
     Shared.fade(player, 255, "If your party survives the wave, you will respawn.");
     this.jail(player, room);
     this.checkWipe();
+  }
+
+  /** Captured: "You have died. Death count: N." and "<name> has died. Death count: N." */
+  tellDeath(player) {
+    const count = `Death count: <col=ff0000>${this.members.get(player)?.deaths ?? 0}</col>.`;
+    player.sendMessage(`You have died. ${count}`);
+    for (const other of this.players) if (other !== player) other.sendMessage(`<col=ff0000>${Shared.displayName(player)}</col> has died. ${count}`);
+    Shared.api().emitCustomEvent("tob:player-died", { raid: this, player });
   }
 
   jail(player, room) {
@@ -724,13 +788,51 @@ class Raid {
     player.sendMessage("You feel refreshed as your health is replenished.");
   }
 
-  /** The raid fails once every member is jailed (or away after dying). */
-  checkWipe() {
-    if (this.over || this.players.length === 0) return;
-    if (this.players.some((player) => !this.member(player).jailed)) return;
-    Shared.later(this, WIPE_DELAY, () => {
-      if (!this.over && this.players.every((player) => this.member(player).jailed)) this.fail();
+  /**
+   * Members actually in the current fight: those who crossed its barrier and those already dead
+   * in it. A party member who never entered, or was left behind at the barrier's "they will be
+   * abandoned", has no business keeping a wipe alive.
+   */
+  fightMembers() {
+    const room = this.room;
+    if (!room) return [];
+    return this.players.filter((player) => {
+      const member = this.member(player);
+      return member.jailed || (member.roomKey === room.key && member.inFight);
     });
+  }
+
+  /** The raid fails once every member in the fight is jailed. */
+  checkWipe() {
+    if (this.over) return;
+    const inFight = this.fightMembers();
+    if (inFight.length === 0 || inFight.some((player) => !this.member(player).jailed)) return;
+    Shared.later(this, WIPE_DELAY, () => {
+      const waiting = this.fightMembers();
+      if (this.over || waiting.length === 0 || waiting.some((player) => !this.member(player).jailed)) return;
+      if (this.isEntry) this.retryRoom();
+      else this.fail();
+    });
+  }
+
+  /**
+   * Wiki: Entry Mode has unlimited attempts, and a wipe hands the team bandages. The room starts
+   * again from nothing, with everyone restored at its entrance. Our wording and the room restart
+   * are estimates: no capture has an Entry Mode wipe.
+   */
+  retryRoom() {
+    const room = this.room;
+    if (!room) return;
+    const rebuilt = this.buildRoom(room.key);
+    for (const player of this.players) {
+      // Someone who never reached this room stays where they are instead of being pulled in.
+      if (this.member(player).roomKey !== room.key) continue;
+      this.release(player, rebuilt);
+      this.restore(player);
+      this.arrive(player, rebuilt);
+      Shared.api().emitCustomEvent("tob:entry-wipe", { raid: this, player });
+      player.sendMessage("You may retry this challenge. Entry Mode has unlimited attempts.");
+    }
   }
 
   fail() {
@@ -738,8 +840,12 @@ class Raid {
     this.failed = true;
     const Retrieval = require("./Retrieval.TheatreOfBlood");
     for (const player of [...this.players]) {
-      Retrieval.storeAfterWipe(player);
-      player.sendMessage("A magical chest has retrieved some of your items. You can collect them from it outside of the Theatre of Blood.");
+      // Only the dead have items to retrieve. A member who never joined the fight keeps
+      // theirs: a wipe in a room they aren't in must not take anything off them.
+      if (this.member(player).jailed) {
+        Retrieval.storeAfterWipe(player, { free: this.isEntry });
+        player.sendMessage("A magical chest has retrieved some of your items. You can collect them from it outside the Theatre of Blood.");
+      }
       this.leave(player, "Your party has failed.", { heal: true });
     }
   }
@@ -798,7 +904,7 @@ class Raid {
     if (fight) member.deaths++;
     // The member (deaths, damage, supply points) is kept for when they come back.
     this.away.set(player.getUsername(), { fight: fight || member.jailed, member });
-    player.setAttribute(ATTR_LOGOUT, { raid: this.id, fight: fight || member.jailed });
+    player.setAttribute(ATTR_LOGOUT, { raid: this.id, fight: fight || member.jailed, mode: this.mode });
     this.players = this.players.filter((other) => other !== player);
     this.members.delete(player);
     player.setAttribute(ATTR_RAID, null);
@@ -809,6 +915,13 @@ class Raid {
       return;
     }
     this.checkWipe();
+  }
+
+  /** A member who logged out won't come back (their crystal took them out). */
+  forget(player) {
+    this.away.delete(player.getUsername());
+    this.party.members = this.party.members.filter((member) => member.getUsername() !== player.getUsername());
+    if (this.players.length === 0 && this.away.size === 0) this.dispose();
   }
 
   /** Back from a logout: into the room the party is in, among the dead if they died. */
@@ -826,6 +939,10 @@ class Raid {
     if (away.fight && room?.isStarted()) {
       this.member(player).roomKey = room.key;
       this.jail(player, room);
+      // Finishing logging in lifts movement blocks, so the jail takes hold again a tick on.
+      Shared.later(player, 1, () => {
+        if (this.members.get(player)?.jailed) player.getMovementQueue().setBlockMovement(true).reset();
+      });
     } else {
       this.arrive(player, room);
     }
@@ -837,6 +954,7 @@ class Raid {
   dispose() {
     if (this.over) return;
     this.over = true;
+    Shared.api().emitCustomEvent("tob:raid-over", { raid: this });
     this.room?.destroy();
     this.room = null;
     if (!this.area.isDestroyed()) this.area.destroy();
@@ -853,6 +971,7 @@ function begin(leader) {
   if (!party) return null;
   if (party.raid) return party.raid;
   const raid = new Raid(party);
+  Shared.api().emitCustomEvent("tob:raid-begun", { raid });
   for (const member of raid.players) {
     if (member === leader) continue;
     member.getPacketSender().sendVarbit(VARBIT.PARTY_STATE, 2);
@@ -896,6 +1015,11 @@ function styleMethod(style) {
  * leaves only an onion. Performance here is a player's share of the damage dealt in those two
  * rooms against the team's average, a band lower per death (an estimate: the Wiki gives the
  * bands, not how they're judged).
+ *
+ * Hard Mode's chest gives fewer points (Wiki, "Theatre of Blood/Hard Mode": "they give less
+ * points than normal mode - assuming no deaths before or during Sotetseg, the player will
+ * usually have an average of 15 points, though the highest is 18"). A band lower is our fit to
+ * that line, since the Wiki gives no rule (estimate).
  */
 const SUPPLY_BANDS = [[6, 9], [8, 11], [10, 13]];
 const SUPPLY_ROOMS = { BLOAT: ["MAIDEN", "BLOAT"], SOTETSEG: ["NYLOCAS", "SOTETSEG"] };
@@ -906,6 +1030,7 @@ function supplyGrade(raid, player, keys) {
   const share = average > 0 ? damageOf(player) / average : 1;
   let grade = share >= 1.25 ? 2 : share <= 0.75 ? 0 : 1;
   for (const key of keys) grade -= raid.member(player).roomStats(key).deaths;
+  if (raid.isHard) grade--;
   return Math.max(0, grade);
 }
 

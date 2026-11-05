@@ -14,6 +14,9 @@ Trident.register({
   core: PluginManager.getCoreApi(),
   onItemAction: (name, itemActions) => actions.set(name, itemActions),
   onItemOnItem() {},
+  registerCombatMethodResolver() {},
+  onCustomEvent() {},
+  emitCustomEvent() {},
 });
 
 function makePlayer(trident, resources = {}) {
@@ -21,7 +24,8 @@ function makePlayer(trident, resources = {}) {
   const amounts = new Map(Object.entries(resources).map(([id, amount]) => [Number(id), amount]));
   const messages = [];
   const inventory = {
-    getItems: () => items,
+    getItems: () => [...items, ...[...amounts].filter(([, amount]) => amount > 0).map(([id, amount]) => new Item(id, amount))],
+    deleteAtSlot(slot, amount) { this.deleteNumber(this.getItems()[slot].getId(), amount); },
     getAmount: (id) => amounts.get(id) ?? 0,
     deleteNumber(id, amount) {
       amounts.set(id, Math.max(0, this.getAmount(id) - amount));
@@ -29,6 +33,7 @@ function makePlayer(trident, resources = {}) {
     },
     contains: (id) => (amounts.get(id) ?? 0) > 0,
     getFreeSlots: () => 28,
+    getAddableAmount: (item) => item.getAmount(),
     addItem(item) {
       amounts.set(item.getId(), this.getAmount(item.getId()) + item.getAmount());
     },
@@ -110,7 +115,7 @@ test("uncharging restores runes and swamp scales but not sea-trident coins", () 
     assert.equal(resourceAmount({ amounts }, ItemIdentifiers.FIRE_RUNE), 60);
     assert.equal(
       resourceAmount({ amounts }, ItemIdentifiers.ZULRAHS_SCALES),
-      recipe === Trident._test.RECIPES[1] ? 12 : 0
+      recipe.primaryResourceId === ItemIdentifiers.ZULRAHS_SCALES ? 12 : 0
     );
     assert.equal(resourceAmount({ amounts }, ItemIdentifiers.COINS), 0);
     assert.match(messages.at(-1), /uncharge/i);
@@ -122,6 +127,9 @@ test("named inventory actions expose Charge, Check, and Uncharge", () => {
   assert.equal(typeof actions.get("Trident of the Seas").Check, "function");
   assert.equal(typeof actions.get("Trident of the Seas").Uncharge, "function");
   assert.equal(typeof actions.get("Uncharged toxic trident").Charge, "function");
+  for (const name of ["Uncharged trident", "Uncharged toxic trident", "Uncharged trident (e)", "Uncharged toxic trident (e)"]) {
+    assert.equal(typeof actions.get(name).Check, "function", `${name} has Check, so a worn one isn't unequipped`);
+  }
   assert.equal(typeof actions.get("Trident of the Swamp").Check, "function");
   assert.equal(typeof actions.get("Trident of the Swamp").Uncharge, "function");
 });

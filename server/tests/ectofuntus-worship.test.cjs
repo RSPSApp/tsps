@@ -18,6 +18,7 @@ before(async () => {
       worship = actions.Worship;
     },
     onItemOnObject(handler) { useOnEctofuntus = handler; },
+    emitCustomEvent() {},
   };
   Common.init(api);
   require("../plugins/skills/ectofuntus/Worship.Ectofuntus")(api);
@@ -68,6 +69,11 @@ test("bat bonemeal awards 21.2 XP per worship, retaining tenths across repeated 
   assert.equal(h.p.getInventory().getAmount(core.ItemIdentifiers.POT), 5);
   assert.equal(h.p.getInventory().getAmount(core.ItemIdentifiers.BUCKET), 5);
   assert.equal(Common.tokens(h.p), 25);
+});
+
+test("ground-only bones have no Ectofuntus bonemeal mapping", () => {
+  assert.equal(Common.bonemealFor(obj("bull_bones")), null);
+  assert.equal(Common.bonemealFor(obj("giant_bones")), null);
 });
 
 test("normal worship and item-use retain the captured swaps, rewards and feedback (377)", () => {

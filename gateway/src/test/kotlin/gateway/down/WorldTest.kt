@@ -11,6 +11,9 @@ import net.rsprot.protocol.game.outgoing.sound.SynthSound
 import net.rsprot.protocol.game.outgoing.specific.ProjAnimSpecificV4
 import net.rsprot.protocol.game.outgoing.misc.client.SetInteractionMode
 import net.rsprot.protocol.game.outgoing.specific.LocAnimSpecific
+import net.rsprot.protocol.game.outgoing.specific.ObjAddSpecific
+import net.rsprot.protocol.game.outgoing.specific.ObjCountSpecific
+import net.rsprot.protocol.game.outgoing.specific.ObjDelSpecific
 import net.rsprot.protocol.game.outgoing.zone.header.UpdateZonePartialEnclosed
 import net.rsprot.protocol.message.OutgoingGameMessage
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -112,6 +115,58 @@ class WorldTest {
         assertEquals(172 to 124, sent.startHeight to sent.endHeight)
     }
 
+    @Test
+    fun `a scene rebuild removes retained ground stacks before sending their replacements`() {
+        val items = GroundItems { sent += it }
+        items.rebuild(LUMBRIDGE_ZONE_X, LUMBRIDGE_ZONE_Z)
+        val snapshot = TspsWriter().i32(1).u16(2)
+        groundStack(snapshot, 1)
+        groundStack(snapshot, 2) // Separate identical stacks must both survive.
+        items.handle(packet(TspsServerPacket.GROUND_ITEMS, snapshot))
+        assertEquals(2, sent.filterIsInstance<ObjAddSpecific>().size)
+        sent.clear()
+        items.handle(packet(TspsServerPacket.GROUND_ITEMS, snapshot))
+        assertTrue(sent.isEmpty(), "an unchanged snapshot does not add another copy")
+
+        repeat(5) {
+            items.rebuild(LUMBRIDGE_ZONE_X + 4, LUMBRIDGE_ZONE_Z)
+            assertEquals(listOf(ObjDelSpecific::class, ObjDelSpecific::class, ObjAddSpecific::class, ObjAddSpecific::class), sent.map { it::class })
+            assertEquals(2, sent.filterIsInstance<ObjDelSpecific>().count { it.id == PLANK && it.quantity == 1 })
+            assertEquals(2, sent.filterIsInstance<ObjAddSpecific>().count { it.id == PLANK && it.quantity == 1 })
+            sent.clear()
+        }
+
+        val delta = TspsWriter().i32(2).u16(1)
+        groundStack(delta, 1, quantity = 2)
+        delta.u16(1).i32(2)
+        items.handle(packet(TspsServerPacket.GROUND_ITEMS_DELTA, delta))
+        assertTrue(sent[0] is ObjCountSpecific, "a quantity change updates the one remaining stack")
+        assertTrue(sent[1] is ObjDelSpecific, "taking the other stack removes it once")
+        sent.clear()
+        items.handle(packet(TspsServerPacket.GROUND_ITEMS, TspsWriter().i32(3).u16(0)))
+        assertEquals(2, (sent.single() as ObjDelSpecific).quantity)
+    }
+
+    @Test
+    fun `ground stacks are restored once after leaving and returning to the scene`() {
+        val items = GroundItems { sent += it }
+        items.rebuild(LUMBRIDGE_ZONE_X, LUMBRIDGE_ZONE_Z)
+        val snapshot = TspsWriter().i32(1).u16(1)
+        groundStack(snapshot, 1)
+        items.handle(packet(TspsServerPacket.GROUND_ITEMS, snapshot))
+        sent.clear()
+        items.rebuild(LUMBRIDGE_ZONE_X + 20, LUMBRIDGE_ZONE_Z)
+        assertTrue(sent.single() is ObjDelSpecific)
+        sent.clear()
+        items.rebuild(LUMBRIDGE_ZONE_X, LUMBRIDGE_ZONE_Z)
+        assertTrue(sent.single() is ObjAddSpecific)
+    }
+
+    private fun groundStack(writer: TspsWriter, id: Int, quantity: Int = 1) {
+        writer.i32(id).u16(PLANK).i32(quantity).u16(3222).u16(3218).u8(0)
+            .i32(0).i32(0).i32(200).i32(-1).u8(0).u8(0)
+    }
+
     /** A tsps packet with [payload]'s bytes, as TspsCodec.split would hand it over. */
     private fun packet(opcode: Int, payload: TspsWriter) = TspsPacket(opcode, payload.body())
 
@@ -127,5 +182,6 @@ class WorldTest {
         const val NPC_INDEX = 42
         const val PLAYER_INDEX = 7
         const val PROJECTILE = 91
+        const val PLANK = 960
     }
 }

@@ -14,6 +14,8 @@ const { TaskManager } = require("../../src/main/typescript/elvarg/game/task/Task
 const { FLAG_OP1, TYPE_GRAPHIC, TYPE_TEXT, createWidgetGroup } = require("../interface/widgetGroup");
 const { EQUIPMENT_SLOTS, addEquipmentWidgets } = require("../modes/pvp/PresetsWidget.PvpMode");
 const Scoreboard = require("./duelarena/Scoreboard.DuelArena");
+const Hospital = require("./duelarena/Hospital.DuelArena");
+const Matchmaking = require("./duelarena/Matchmaking.DuelArena");
 
 // Cache 237: confirmation group 756 and rule config varp 286.
 const ARENA = new Boundary(3326, 3383, 3197, 3295, 0);
@@ -333,7 +335,9 @@ function end(session, loser) {
   for (const player of session.players) sessions.delete(player);
   // A duel that reached the arena and has a loser: its record (the Emir's Arena scoreboards hear it).
   const winner = fought && loser ? session.players.find(player => player !== loser) : null;
-  if (winner) pluginApi.emitCustomEvent("duelarena:duel-won", { winner, loser });
+  // A matchmade fight is no Legacy Duel: its own event, so the Legacy record stays Legacy.
+  if (session.ranked) pluginApi.emitCustomEvent("pvp-arena:fight-ended", { players: session.players, winner, loser });
+  else if (winner) pluginApi.emitCustomEvent("duelarena:duel-won", { winner, loser });
   for (const player of session.players) {
     if (fought && player.getHitpoints() <= 0) pendingSafeDeaths.add(player);
     resetState(player);
@@ -393,7 +397,7 @@ function showOptions(session, info = "") {
       const other = session.players.find(p => p !== player);
       player.getPacketSender().sendConfiguredInterface("duel-offer");
       player.setStatus(PlayerStatus.DUELING);
-      player.getPacketSender().sendString(other.getUsername(), uid(CACHE_OPTIONS, 6))
+      player.getPacketSender().sendString(other.getDisplayName(), uid(CACHE_OPTIONS, 6))
         .sendString(`Combat level: ${other.getSkillManager().getCombatLevel()}`, uid(CACHE_OPTIONS, 7))
         .sendString(info, uid(CACHE_OPTIONS, 83));
       for (const [i, skill] of [Skill.ATTACK, Skill.STRENGTH, Skill.DEFENCE, Skill.HITPOINTS, Skill.RANGED, Skill.PRAYER, Skill.MAGIC].entries()) player.getPacketSender().sendString(String(other.getSkillManager().getMaxLevel(skill)), uid(CACHE_OPTIONS, 10 + i * 3));
@@ -416,7 +420,7 @@ function showOptions(session, info = "") {
     // (161:74), so the tabs stay up throughout instead of blinking out here and
     // back on at the start of the fight. Rule enforcement lives in the onCan* hooks.
     player.getPacketSender()
-      .sendString(`Dueling with: ${session.players.find(p => p !== player).getUsername()}`, uid(OPTIONS, UI.TITLE));
+      .sendString(`Dueling with: ${session.players.find(p => p !== player).getDisplayName()}`, uid(OPTIONS, UI.TITLE));
     player.setStatus(PlayerStatus.DUELING);
     if (info) player.sendMessage(info);
     renderStakes(player, session);
@@ -450,8 +454,8 @@ function request({ player, target }) {
     }
     showOptions(session);
   } else {
-    player.sendMessage(`You've sent a duel challenge to ${target.getUsername()}.`);
-    target.sendMessage(`${player.getUsername()} challenges you to a duel. Right-click them and choose Challenge to accept.`);
+    player.sendMessage(`You've sent a duel challenge to ${target.getDisplayName()}.`);
+    target.sendMessage(`${player.getDisplayName()} challenges you to a duel. Right-click them and choose Challenge to accept.`);
     if (!target.isPlayerBot()) return;
     const event = { player: target, challenger: player, accept: false };
     pluginApi.emitCustomEvent("duelarena:request", event);
@@ -477,7 +481,7 @@ function reportBlockedAcceptance(player, message, botMessage) {
   player.forceChat(botMessage);
   for (const opponent of sessions.get(player).players) {
     if (!opponent.isPlayerBot()) {
-      opponent.getPacketSender().sendPublicChat(botMessage, player.getUsername(), player.getIndex());
+      opponent.getPacketSender().sendPublicChat(botMessage, player.getDisplayName(), player.getIndex());
     }
   }
 }
@@ -563,7 +567,7 @@ function confirmText(player, other, status = "") {
   // Cache script 6193 builds and sizes the scrollable summary in component 53.
   player.getPacketSender().sendInterfaceScript(6193, [
     sessions.get(player).mask, presets.get(player) ?? -1, lastRules.get(player) ?? -1,
-    `${other.getUsername()}<br>Your stake: ${stakeText(player)}<br>Opponent stake: ${stakeText(other)}${status ? `<br>${status}` : ""}<br>Hitpoints and boosted stats will be restored.`,
+    `${other.getDisplayName()}<br>Your stake: ${stakeText(player)}<br>Opponent stake: ${stakeText(other)}${status ? `<br>${status}` : ""}<br>Hitpoints and boosted stats will be restored.`,
   ]);
 }
 class DuelCountdown extends Task {
@@ -621,6 +625,22 @@ function start(session) {
   session.task = new DuelCountdown(session);
   TaskManager.submit(session.task);
 }
+/** A fight the PvP Arena matchmaking arranged: no options or stakes, straight to the countdown. */
+function startArranged(players) {
+  // Staging movement requests placement, so busy() would also reject legitimate arrivals.
+  if (players.some(p => sessions.has(p) || p.getHitpoints() <= 0 || p.isDying
+    || p.isTeleportingReturn() || p.getStatus() !== PlayerStatus.NONE || inCombat(p))
+    || !arenaSpawns()) return false;
+  const session = { players, mask: 0, accepted: new Set(), offers: new Map(players.map(p => [p, new Map()])), stage: "confirm", ranked: true };
+  for (const p of players) {
+    sessions.set(p, session);
+    p.getMovementQueue().reset();
+    resetCombat(p);
+    p.getDueling().setInteract(players.find(other => other !== p));
+  }
+  start(session);
+  return true;
+}
 function accept(player, session, botEvent = "duelarena:accept") {
   if (!session.players.every(inZone) || !nearby(...session.players) || session.players.some(p => p.getHitpoints() <= 0 || inCombat(p))) return end(session);
   if (session.players.some((p, i) => snapshot(p) !== session.snapshots[i])) return showOptions(session, "Items changed. Please review the duel again.");
@@ -639,7 +659,7 @@ function accept(player, session, botEvent = "duelarena:accept") {
   if (confirm) confirmText(other, player, "Your opponent has accepted.");
   else {
     renderAccept(player, true);
-    other.sendMessage(`${player.getUsername()} has accepted.`);
+    other.sendMessage(`${player.getDisplayName()} has accepted.`);
   }
   if (session.accepted.size === 2) {
     if (confirm) start(session); else showConfirm(session);
@@ -773,6 +793,12 @@ function canAttack(event) {
 function shutdown() {
   for (const session of new Set(sessions.values())) end(session);
 }
+function excludePvpStats(event) {
+  if ([event.killer, event.victim].some(player => player?.isPlayer?.()
+      && (sessions.has(player) || pendingSafeDeaths.has(player)
+        || (player.getPrivateArea() == null && ARENA.inside(player.getLocation()))))) event.allow = false;
+}
+
 module.exports = {
   name: "DuelArena",
   enableStaking,
@@ -787,6 +813,7 @@ module.exports = {
     api.onPlayerDisconnect(disconnect);
     api.onPlayerLogout(disconnect);
     api.onPlayerDeath(handleDeath);
+    api.onCustomEvent("pvp:count-stats", excludePvpStats);
     api.onShouldDropItemsOnDeath(shouldDrop);
     api.onCanAttack(canAttack);
     api.onCanTeleport(preventDuringDuel);
@@ -799,6 +826,8 @@ module.exports = {
     api.onCanUnequip(canUnequip);
     api.onServerShutdown(shutdown);
     Scoreboard.attach(api);
+    Hospital.attach(api);
+    Matchmaking.attach(api, { startArranged });
   },
   /** For server/tests/pvp-arena-scoreboard.test.cjs and server/tests/ironman.test.cjs. */
   _test: { accept, end, sessions, snapshot },

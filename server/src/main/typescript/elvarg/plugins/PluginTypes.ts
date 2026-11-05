@@ -39,6 +39,8 @@ export type PluginSocialPacketEvent = {
   player: any;
   handled: boolean;
   packet:
+    | { type: "clan_chat"; clanType: number; text: string }
+    | { type: "clan_channel_action"; action: "kick" | "ban" | "mute"; name: string; value: number }
     | { type: "friends_chat_action"; action: FriendsChatAction }
     | { type: "private_message"; recipient: string; text: string }
     | { type: "chat_filter"; publicMode: number; privateMode: number; tradeMode: number }
@@ -211,6 +213,7 @@ export interface PluginNpcInteractionDefinition {
   secondClick?: PluginNpcInteractionActionDefinition;
   thirdClick?: PluginNpcInteractionActionDefinition;
   fourthClick?: PluginNpcInteractionActionDefinition;
+  fifthClick?: PluginNpcInteractionActionDefinition;
 }
 
 export interface PluginNpcDeathEvent {
@@ -293,6 +296,8 @@ export interface PluginCanTeleportEvent {
   wildernessLevelLimit?: number;
   /** Where the teleport lands, when the caller knows it. */
   destination?: any;
+  /** Name of the spell, when the teleport comes from a spell cast. */
+  spellName?: string;
   allow: boolean | null;
 }
 
@@ -541,10 +546,10 @@ export interface PluginAttackTimingEvent {
 
 /**
  * Raised once per attack to say how much the swing's animation holds the attacker
- * (Wiki: Animation stall). Core measures it from the cache's own seq config: an animation
- * with no masks and no priority of its own withholds the actor's steps in the client, which
- * is a `full` stall when they were standing still; one they started mid-path is `partial`,
- * because their true tile keeps moving under the animation (the PvP rubber band).
+ * (Wiki: Animation stall). Core measures its length from the cache's seq config and starts it
+ * `partial`: the client withholds the actor's steps while it plays, but the server keeps
+ * walking the true tile, so they rubber-band once it ends. A plugin promotes a swing to `full`
+ * (movement, input and incoming hits held) for content the seq config cannot express.
  */
 export interface PluginAnimationStallEvent {
   player: any;
@@ -842,6 +847,11 @@ export interface PluginCombatEngine {
 
 export interface PluginCombatMethodResolver {
   resolve(attacker: any): any | null;
+  /**
+   * Replaces the attack whatever weapon is held (an armed worn item, such as the Dragonfire
+   * shield's blast), so it is asked before the weapon resolvers whatever the plugin load order.
+   */
+  overridesWeapon?: boolean;
 }
 
 export interface PluginCombatSpecialDefinition {
@@ -1242,6 +1252,17 @@ export interface PluginApi {
     regionId: number,
     source: string | [string, string]
   ): void;
+  /**
+   * Replace a region with in-memory map data (decoded terrain and loc files), reload its
+   * clipping and stream it to connected players. Returns false when it was refused.
+   */
+  replaceMapRegionData(regionId: number, terrainData: Uint8Array, objectData: Uint8Array | null): boolean;
+  /**
+   * Drop this plugin's runtime replacement: native clipping returns and connected clients get
+   * the native map. False when it was refused (another owner, no native map: the replacement is
+   * kept) or when a connected client could not be sent the native map.
+   */
+  restoreMapRegion(regionId: number): boolean;
   registerDefinitionSource(
     definitionType: string,
     source: DefinitionSource
@@ -1331,6 +1352,20 @@ export interface PluginApi {
   registerMeleeStrengthPercentModifier(
     modifier: (entity: any, percent: number) => number
   ): void;
+  /**
+   * Adds to the worn melee strength bonus as a max hit is worked out, before the formula, for
+   * boosts the Wiki words as "melee strength is increased by".
+   */
+  registerMeleeStrengthBonusModifier(
+    modifier: (entity: any, strengthBonus: number) => number
+  ): void;
+  /**
+   * Raises the level a skill rests at above its base level: boost decay lowers a boosted level
+   * no further than it, and natural restoration raises a drained one up to it (a permanent boost).
+   */
+  registerRestingLevelModifier(
+    modifier: (player: any, skill: any, level: number) => number
+  ): void;
   registerMeleeHitModifier(
     modifier: (entity: any, baseHit: number) => number
   ): void;
@@ -1370,12 +1405,17 @@ export interface PluginApi {
   registerMagicDefenseModifier(
     modifier: (entity: any, baseHit: number) => number
   ): void;
+  /** Run energy units regained per tick; the graceful set raises the amount. */
   registerRunEnergyRestoreModifier(
-    modifier: (entity: any, delayMs: number) => number
+    modifier: (entity: any, units: number) => number
   ): void;
-  /** Run energy spent per movement step; return 0 to skip the drain. */
+  /** Run energy spent per running tick; return 0 to skip the drain. */
   registerRunEnergyDrainModifier(
     modifier: (entity: any, amount: number) => number
+  ): void;
+  /** Fills the run-energy status the client needs (the stamina effect's remaining ticks). */
+  registerRunEnergyStatusModifier(
+    modifier: (entity: any, status: { staminaTicks: number; staminaMultiplier: number }) => void
   ): void;
   /** Ticks between special-attack restores; a rate-doubling effect halves this. */
   registerSpecialEnergyRestoreModifier(
@@ -1457,9 +1497,11 @@ export interface PluginCoreApi {
   HitDamage: any;
   HitMask: any;
   RangedWeapon: any;
+  RangedWeaponType: any;
   Ammunition: any;
   WeaponProfiles: any;
   FightStyle: any;
+  FightType: any;
   WeaponInterfaceManager: any;
   PrayerHandler: any;
   PrayerData: any;
@@ -1475,8 +1517,10 @@ export interface PluginCoreApi {
   Priority: any;
   Projectile: any;
   Skill: any;
+  SkillManager: any;
   Item: any;
   Flag: any;
+  Appearance: any;
   Direction: any;
   Equipment: any;
   Bank: any;
@@ -1501,10 +1545,17 @@ export interface PluginCoreApi {
   Location: any;
   Mobile: any;
   encodePluginMessage: typeof import("../net/protocol/ClientProtocol").encodePluginMessage;
+  encodeChatMessage: typeof import("../net/protocol/ClientProtocol").encodeChatMessage;
+  encodeClanSettingsFull: typeof import("../net/protocol/ClientProtocol").encodeClanSettingsFull;
+  encodeClanChannelFull: typeof import("../net/protocol/ClientProtocol").encodeClanChannelFull;
+  encodeClanChannelDelta: typeof import("../net/protocol/ClientProtocol").encodeClanChannelDelta;
+  encodeClanSettingsDelta: typeof import("../net/protocol/ClientProtocol").encodeClanSettingsDelta;
+  encodeClanVar: typeof import("../net/protocol/ClientProtocol").encodeClanVar;
   MOBILE_CLIENT_ATTRIBUTE: typeof import("../net/protocol/ClientProtocol").MOBILE_CLIENT_ATTRIBUTE;
   XPDROPS_ENABLED_ATTRIBUTE: typeof import("../net/protocol/ClientProtocol").XPDROPS_ENABLED_ATTRIBUTE;
   encodeGameframeBootstrap: typeof import("../net/protocol/ClientProtocol").encodeGameframeBootstrap;
   resolveGameframeRoot: typeof import("../net/protocol/ClientProtocol").resolveGameframeRoot;
+  orbsGroupFor: typeof import("../net/protocol/ClientProtocol").orbsGroupFor;
   encodeFinePosition: typeof import("../net/protocol/ClientProtocol").encodeFinePosition;
   Boundary: any;
   PolygonalBoundary: any;
@@ -1518,6 +1569,7 @@ export interface PluginCoreApi {
     isEnabled(): boolean;
   };
   World: any;
+  DisplayNames: any;
   BoatManager: any;
   Sailing: any;
   BOAT_VIEW_DISTANCE: number;
@@ -1529,6 +1581,9 @@ export interface PluginCoreApi {
   LocModelType: any;
   MapObjects: any;
   ItemOnGroundManager: any;
+  GroundItemOperationType: any;
+  ItemOnGround: any;
+  GroundItemState: any;
   ItemDefinition: any;
   EquipPacketListener: any;
   /** The death task; `getItemsToKeep(player)` is what a death would let the player keep. */
@@ -1554,6 +1609,8 @@ export interface PluginCoreApi {
   CombatSpells: any;
   Autocasting: any;
   NPC: any;
+  /** World spawns: `requeue(npc)` returns a live spawn to pending, `activateNear(location)` spawns what is due. */
+  NpcSpawnDefinitionLoader: any;
   GameConstants: any;
   Music: any;
   WorldDefinition: any;
@@ -1572,6 +1629,7 @@ export interface PluginCoreApi {
   PlayerRights: any;
   Server: any;
   PluginManager: any;
+  CustomInterfaceRegistry: any;
   ShopManager: any;
   ShopDefinition: any;
   MultiChatboxPrompt: any;

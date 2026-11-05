@@ -8,6 +8,8 @@
   have Open, their notes do not, and none has an equipment slot. The legacy helmet flags
   in `item-gameplay.json` caused the fallback equip behavior. This is the old server-owned
   export with no generator (see `cache-revision-update.md`), not an osrsreboxed-db import.
+  The equipment slot now always comes from the cache wearPos, never that export
+  (`tests/item-wear-slots.test.cjs`).
 - [Stray dog](https://oldschool.runescape.wiki/w/Stray_dog): Pet and feeding bones or meat
   make the public Varrock dogs follow temporarily; Shoo-away makes them whine and retreat.
   Inedible items, notes, Shaikahan bones and marinated j' bones are retained. Cat ears scare

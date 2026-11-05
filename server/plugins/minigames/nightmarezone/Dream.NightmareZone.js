@@ -12,7 +12,7 @@
  *   gather on the dream's counter (varbit nzone_currentpoints, whose 20 bits are the Wiki's
  *   1,048,575 cap a dream) and are paid into the reward points as the dream ends;
  * - the arena's potion wakes the player at once, by Dominic, with no message (recorded); so do a
- *   death (safe: nothing is lost) and a logout (Wiki).
+ *   death (safe: nothing is lost), a logout and the Wiki's 6-hour log.
  * Potions.NightmareZone and PowerUps.NightmareZone add the potions and the power-ups.
  * Not yet: Rumble groups, spectators, Customisable dreams.
  */
@@ -29,7 +29,10 @@ const EMPTY_VIAL_NAME = "<col=ff9040>Empty vial";
 const FADE = { overlay: 174, script: 948, out: [0, 255, 0, 0, 50] };
 const LOBBY_OVERLAY_SCRIPT = 264;
 
-/** Each dreamer's dream: { area, dream, npcs, queue, kills, points, tick }. */
+/** Where a dream is in its life: entering (fade), active (fighting), ending, ended. */
+const PHASE = { ENTERING: "entering", ACTIVE: "active", ENDING: "ending", ENDED: "ended" };
+
+/** Each dreamer's dream: { phase, area, dream, npcs, locs, queue, kills, points, tick, ended }. */
 const { dreams, dreamOf } = Common;
 let DreamArea = null;
 let enclosure = null;
@@ -97,6 +100,11 @@ function areaClass() {
       return false;
     }
 
+    /** No trading in the dream either (either trader's area can refuse it). */
+    canTrade() {
+      return false;
+    }
+
     at([x, y, z]) {
       return this.tile(x - this.origin[0], y - this.origin[1], z ?? 0);
     }
@@ -145,8 +153,14 @@ function spawnBoss(player, state, boss, form = 0, at = null) {
 }
 
 function despawn(state, npc) {
-  state.npcs.delete(npc);
+  if (!state.npcs.delete(npc)) return;
+  state.area.detach(npc);
   Common.core.World.getRemoveNPCQueue().push(npc);
+}
+
+/** The dream's own locs (plinth, vial, rockslides): gone with it, not just its map. */
+function cleanupLocs(state) {
+  for (const object of state.locs.splice(0)) Common.core.ObjectManager.deregister(object, true);
 }
 
 // ---------------------------------------------------------------- starting
@@ -201,7 +215,20 @@ function start(player) {
     postScripts: [{ scriptId: FADE.script, args: FADE.out }],
   });
   sender(player).sendSound?.(Common.data.sounds.prepared, 100, 0);
-  const state = { area: new (areaClass())(), dream, npcs: new Set(), queue: [], unlocked, kills: 0, points: 0, tick: 0, cost, entered: false };
+  const state = {
+    phase: PHASE.ENTERING,
+    area: new (areaClass())(),
+    dream,
+    npcs: new Set(),
+    locs: [],
+    queue: [],
+    unlocked,
+    kills: 0,
+    points: 0,
+    tick: 0,
+    cost,
+    ended: false,
+  };
   dreams.set(player, state);
   Common.later(1, () => dreamOf(player) === state && Common.setPreparedDream(player, null));
   Common.later(3, () => enter(player, state));
@@ -213,23 +240,28 @@ function start(player) {
  */
 function cancelEntry(player) {
   const state = dreamOf(player);
-  if (!state || state.entered) return;
+  if (!state || state.phase !== PHASE.ENTERING || state.ended) return;
+  state.ended = true;
+  state.phase = PHASE.ENDING;
   dreams.delete(player);
   Common.setCoffer(player, Common.coffer(player) + state.cost);
   Common.setPreparedDream(player, state.dream);
   sender(player).closeSubInterface?.(Common.component("toplevel_osrs_stretch:overlay_atmosphere"));
+  cleanupLocs(state);
+  PowerUps.dreamEnded(state);
+  for (const npc of [...state.npcs]) despawn(state, npc);
   Common.later(1, () => {
     if (!state.area.isDestroyed?.()) state.area.destroy?.();
   });
 }
 
 function enter(player, state) {
-  if (dreamOf(player) !== state) return;
+  if (dreamOf(player) !== state || state.ended || state.phase !== PHASE.ENTERING) return;
   if (player.isRegistered?.() === false) {
     cancelEntry(player);
     return;
   }
-  state.entered = true;
+  state.phase = PHASE.ACTIVE;
   player.sendMessage(Common.message("welcome"));
   state.area.enter(player);
   placeLocs(state);
@@ -241,8 +273,12 @@ function enter(player, state) {
   if (state.dream.mode === "endurance") state.queue = [...state.unlocked];
   Common.varbit(player, "nzone_currentpoints", 0);
   Common.every(() => {
-    if (dreamOf(player) !== state) return false;
+    if (dreamOf(player) !== state || state.ended) return false;
     state.tick++;
+    if (state.tick >= Common.data.arena.maxTicks) {
+      finish(player);
+      return false;
+    }
     PowerUps.tick(player, state, () => spawnTile(state));
     return true;
   });
@@ -259,7 +295,11 @@ function placeLocs(state) {
   const { GameObject, ObjectManager, CacheDefinitions } = Common.core;
   for (const [name, tile, shape, rotation] of Common.data.arena.locs) {
     const id = CacheDefinitions.getLocId(name);
-    if (id != null) ObjectManager.register(new GameObject(id, state.area.at(tile), shape, rotation, state.area), true);
+    if (id != null) {
+      const object = new GameObject(id, state.area.at(tile), shape, rotation, state.area);
+      ObjectManager.register(object, true);
+      state.locs.push(object);
+    }
   }
 }
 
@@ -299,16 +339,13 @@ function bossDied({ npc }) {
   }
 }
 
-/** A dream's bosses leave nothing on the ground: they are memories (the generated tables are their quest selves'). */
-function noDrops(event) {
-  if (event?.npc?.__nightmareZone && event.drops) event.drops.length = 0;
-}
-
 // ---------------------------------------------------------------- waking
 
 function endDream(player) {
   const state = dreamOf(player);
-  if (!state) return;
+  if (!state || state.ended) return false;
+  state.ended = true;
+  state.phase = PHASE.ENDING;
   dreams.delete(player);
   // The dream's points (nzone_currentpoints, up to 1,048,575) are paid as it ends (Wiki's cap).
   if (state.points > 0) Common.addPoints(player, state.points);
@@ -316,11 +353,15 @@ function endDream(player) {
   Potions.dreamEnded(player);
   PowerUps.dreamEnded(state);
   for (const npc of [...state.npcs]) despawn(state, npc);
+  cleanupLocs(state);
   Common.varbit(player, "multiway_indicator", 0);
+  sender(player).closeSubInterface?.(Common.component("toplevel_osrs_stretch:overlay_atmosphere"));
   closeOverlay(player);
+  state.phase = PHASE.ENDED;
   Common.later(1, () => {
     if (!state.area.isDestroyed?.()) state.area.destroy?.();
   });
+  return true;
 }
 
 /** Recorded [252]: the arena's potion, and the player is by Dominic the same tick. */
@@ -331,7 +372,7 @@ function wake({ player }) {
   return true;
 }
 
-/** A dream overcome. */
+/** A dream overcome (or its 6-hour limit reached). */
 function finish(player) {
   wake({ player });
   player.sendMessage(Common.message("dreamOver"));
@@ -348,13 +389,44 @@ function died(event) {
 function loggedOut({ player }) {
   const state = dreamOf(player);
   if (!state) return;
-  if (state.entered) endDream(player);
-  else cancelEntry(player);
+  if (state.phase === PHASE.ENTERING) {
+    cancelEntry(player);
+    return;
+  }
+  endDream(player);
+  player.setLocation?.(Common.toLocation(Common.data.lobby.afterDream));
+}
+
+/** A dropped connection is an end too: nothing is left in the instance for the next login. */
+function disconnected({ player }) {
+  const state = dreamOf(player);
+  if (!state) return;
+  if (state.phase === PHASE.ENTERING) {
+    cancelEntry(player);
+    return;
+  }
+  endDream(player);
+  player.setLocation?.(Common.toLocation(Common.data.lobby.afterDream));
 }
 
 function keepItems(event) {
   if (dreams.has(event.player)) event.shouldDrop = false;
   return null;
+}
+
+/** Banks, chests and deposit boxes are not reachable inside a dream. */
+function canBank(event) {
+  if (!dreams.has(event.player)) return;
+  event.allow = false;
+  event.player.sendMessage(Common.message("noBank"));
+}
+
+/** agent:advance-time: testing's way of reaching the 6-hour limit without waiting. */
+function advanceTime({ player, ms, handledBy }) {
+  const state = dreamOf(player);
+  if (!state || state.phase !== PHASE.ACTIVE) return;
+  state.tick += Math.max(0, Math.floor(Number(ms) / 600));
+  handledBy?.push("Nightmare Zone");
 }
 
 function loggedIn({ player }) {
@@ -370,6 +442,7 @@ function attachDream(api) {
   api.persistAttribute(Common.PREVIOUS_ATTRIBUTE, "");
   api.onPlayerLogin(loggedIn);
   api.onPlayerLogout(loggedOut);
+  api.onPlayerDisconnect(disconnected);
   const [x0, y0, x1, y1] = Common.data.lobby.enclosure;
   enclosure = new (enclosureClass())([new Common.core.Boundary(x0, x1, y0, y1, 0)]);
   api.registerArea(enclosure);
@@ -377,9 +450,10 @@ function attachDream(api) {
   api.onObjectInteraction(VIAL_NAME, { Drink: drinkLobbyVial });
   api.onObjectInteraction(EMPTY_VIAL_NAME, { Investigate: emptyVial });
   api.onNpcDeath(bossDied);
-  api.onCustomEvent("npc-drops:roll", noDrops);
   api.onPlayerDeath(died);
   api.onShouldDropItemsOnDeath(keepItems);
+  api.onCanBank(canBank);
+  api.onCustomEvent("agent:advance-time", advanceTime);
 }
 
-module.exports = { attachDream, start, wake, finish, drinkLobbyVial, bossDied, pointsFor, dreams, engine, enterEnclosure };
+module.exports = { attachDream, start, wake, finish, drinkLobbyVial, bossDied, pointsFor, dreams, engine, enterEnclosure, disconnected };

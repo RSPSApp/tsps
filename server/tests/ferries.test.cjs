@@ -16,6 +16,7 @@ const { ItemIdentifiers } = require("../dist/util/ItemIdentifiers");
 const { ObjectDefinition } = require("../dist/game/definition/ObjectDefinition");
 const { Player } = require("../dist/game/entity/impl/player/Player");
 const Ferries = require("../plugins/world/Ferries.plugin");
+const BarnabyFerry = require("../plugins/world/BarnabyFerry.plugin");
 
 const { Common, Voyages, Routes } = Ferries._test;
 const npcId = (name) => CacheDefinitions.getNpcId(name);
@@ -23,6 +24,7 @@ const npcId = (name) => CacheDefinitions.getNpcId(name);
 let tasks = [];
 let quests = { complete: new Set(), started: new Set() };
 const starts = [];
+const arrivals = [];
 const hooks = { npc: [], object: [], events: new Map(), conditions: [], logout: [], shutdown: [] };
 
 class Task {
@@ -75,6 +77,8 @@ const api = {
     ChatType: { SPAM: "spam" },
     TaskManager: { submit: (task) => tasks.push(task), cancelTasks: (key) => tasks.forEach((task) => task.key === key && task.stop()) },
     StatementDialogue: { send: (player, text) => player.sent.boxes.push(text) },
+    TeleportHandler: { checkReqs: () => true, teleport: () => assert.fail("a ferry must not cast a teleport") },
+    TeleportType: { NORMAL: "NORMAL" },
   },
   onNpcInteraction: (handler) => hooks.npc.push(handler),
   onObjectInteraction: (handler) => hooks.object.push(handler),
@@ -83,6 +87,7 @@ const api = {
   onPlayerLogout: (handler) => hooks.logout.push(handler),
   onServerShutdown: (handler) => hooks.shutdown.push(handler),
   emitCustomEvent: (name, request) => {
+    if (name === "ferries:arrived") arrivals.push(request);
     if (name === "quest:is-complete") request.complete = quests.complete.has(request.key);
     if (name === "quest:is-started") request.started = quests.started.has(request.key);
     if (name === "npc-dialogue:start") {
@@ -115,6 +120,7 @@ function createPlayer({ at = new Location(3046, 3236, 0), items = [], worn = [],
   const sent = { messages: [], spam: [], boxes: [], interfaces: [], scripts: [], anims: [], subs: [], closed: [], songs: [], jingles: [], shown: [], varbits: new Map(), removals: 0 };
   let location = at;
   let blocked = false;
+  let registered = true;
   const sender = {
     sendTypedMessage: (type, text) => { sent.spam.push(text); return sender; },
     sendSong: (id) => { sent.songs.push(id); return sender; },
@@ -131,6 +137,7 @@ function createPlayer({ at = new Location(3046, 3236, 0), items = [], worn = [],
     sendVarbit: (id, value) => { sent.varbits.set(id, value); return sender; },
   };
   const container = (slots) => ({
+    get: (slot) => slots[slot],
     getItems: () => slots,
     getAmount: (id) => slots.reduce((sum, item) => sum + (item.getId() === id ? item.getAmount() : 0), 0),
     deleteNumber: (id, amount) => { const item = slots.find((slot) => slot.getId() === id); item.setAmount(item.getAmount() - amount); },
@@ -150,7 +157,8 @@ function createPlayer({ at = new Location(3046, 3236, 0), items = [], worn = [],
     getDialogueManager: () => ({ reset() {} }),
     getSpellbook: () => ({ getInterfaceId: () => 218 }),
     setUntargetable() {},
-    isRegistered: () => true,
+    isRegistered: () => registered,
+    setRegistered: (value) => { registered = value; },
     sendMessage: (text) => sent.messages.push(text),
   };
 }
@@ -183,11 +191,13 @@ before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
   ObjectDefinition.init();
   Ferries.register(api);
+  BarnabyFerry.register({ ...api, onNpcInteraction() {}, onNpcDialogueVariant() {}, onNpcDialogueCondition() {}, onCustomEvent() {} });
 });
 
 beforeEach(() => {
   tasks = [];
   starts.length = 0;
+  arrivals.length = 0;
   quests = { complete: new Set(), started: new Set() };
 });
 
@@ -380,6 +390,7 @@ test("Veos's ship fades with the sea's song and says where it sails as the playe
   tick(1);
   assert.deepEqual(at(player), [3055, 3242, 1]);
   assert.deepEqual(player.sent.messages, ["You board the ship and sail to Port Sarim."]);
+  assert.deepEqual(arrivals.map((event) => event.route), ["kourend-sarim"]);
 
   // Veos's menu has no travel step: his closing line sails to the port picked.
   const talker = createPlayer({ at: new Location(3054, 3245, 0) });
@@ -390,6 +401,7 @@ test("Veos's ship fades with the sea's song and says where it sails as the playe
   line.after();
   tick(3);
   assert.deepEqual(at(talker), [1504, 3395, 1]);
+  assert.deepEqual(arrivals.map((event) => event.route), ["kourend-sarim", "kourend-landsend"]);
   const owned = { player: talker, definition, text: line.text, after: () => {} };
   const previous = owned.after;
   for (const handler of hooks.events.get("npc-dialogue:line")) handler(owned);
@@ -436,6 +448,99 @@ test("quest plugins hand crossings over with ferries:travel", () => {
   assert.equal(unknown.handled, false, "the quest falls back to its own move");
 });
 
+test("Barnaby's three destinations fade, sail and arrive without casting a teleport or charging twice", () => {
+  const destinations = [[2680, 3274, 0], [2768, 3227, 0], [2916, 3225, 0]];
+  for (const [index, port] of BarnabyFerry._test.PORTS.entries()) {
+    const player = createPlayer({ coins: 100 });
+    const sail = () => BarnabyFerry._test.sail(player, port, BarnabyFerry._test.fareFor(player));
+    sail();
+    sail();
+    assert.equal(player.getInventory().getAmount(ItemIdentifiers.COINS), 70, "only the accepted voyage charges");
+    assert.deepEqual(player.sent.messages, ["You pay 30 coins and board the ship."]);
+    assert.equal(player.blocked, true);
+    assert.equal(player.sent.subs.length, 1);
+    assert.equal(player.sent.subs[0].id, 174, "fade overlay, not a spellbook animation");
+    assert.deepEqual(player.sent.subs[0].options.postScripts, [{ scriptId: 948, args: [0, 255, 0, 0, 50] }]);
+    tick(2);
+    assert.deepEqual(at(player), [3046, 3236, 0], "the crossing takes time");
+    tick(1);
+    assert.deepEqual(at(player), destinations[index]);
+    assert.equal(player.blocked, true, "arrival remains held until fade-in");
+    tick(1);
+    assert.deepEqual(player.sent.subs[1].options.postScripts, [{ scriptId: 948, args: [0, 0, 0, 255, 50] }]);
+    assert.equal(player.blocked, false);
+    assert.equal(Common.travelling(player), false);
+    tick(3);
+    assert.deepEqual(player.sent.closed, [(161 << 16) | 1]);
+  }
+});
+
+test("logging out on Barnaby's discounted crossing lands the player and releases the travel hold", () => {
+  const player = createPlayer({ coins: 100, worn: [ItemIdentifiers.KARAMJA_GLOVES_1] });
+  const port = BarnabyFerry._test.PORTS[1];
+  BarnabyFerry._test.sail(player, port, BarnabyFerry._test.fareFor(player));
+  assert.equal(player.getInventory().getAmount(ItemIdentifiers.COINS), 85);
+  tick(1);
+  for (const handler of hooks.logout) handler({ player });
+  player.setRegistered(false);
+  assert.deepEqual(at(player), [2768, 3227, 0]);
+  assert.equal(player.blocked, false);
+  assert.equal(Common.travelling(player), false);
+  tick(10);
+  assert.equal(player.sent.subs.length, 1, "logged-out players receive no later fade callbacks");
+  assert.equal(player.getInventory().getAmount(ItemIdentifiers.COINS), 85);
+});
+
+test("Achilka's riverboat: fade, minimap and busy off on +1, Kastori with the captured message on +3, back on +5", () => {
+  const minimap = CacheDefinitions.getVarbitId("minimap_state");
+  const busy = CacheDefinitions.getVarbitId("busy");
+  const player = createPlayer({ at: new Location(1257, 3122, 0) });
+  const event = click(player, "Achilka", "Kastori", { gameval: "tlati_riverboat_owner_west" });
+  assert.equal(event.handled, true);
+  assert.deepEqual(player.sent.subs.at(-1).options.postScripts[0].args, [0, 255, 0, 0, 50]);
+  tick(1);
+  assert.equal(player.sent.varbits.get(minimap), 2);
+  assert.equal(player.sent.varbits.get(busy), 1);
+  tick(2);
+  assert.deepEqual(at(player), [1390, 3074, 0]);
+  assert.deepEqual(player.sent.spam, ["Achilka takes you along the river to Kastori."]);
+  tick(2);
+  assert.equal(player.sent.varbits.get(minimap), 0);
+  assert.equal(player.sent.varbits.get(busy), 0);
+  assert.deepEqual(player.sent.subs.at(-1).options.postScripts[0].args, [0, 0, 0, 255, 50]);
+  assert.equal(player.blocked, false);
+  tick(2);
+  assert.ok(player.sent.closed.includes((161 << 16) | 1));
+});
+
+test("every Achilka offers the other two stops; her transcript rides and hides the stop she stands at", () => {
+  const stops = { tlati_riverboat_owner_south: "Kastori", tlati_riverboat_owner_west: "Tal Teklan", tlati_riverboat_owner_north: "Gloomthorn Trail" };
+  for (const [gameval, stop] of Object.entries(stops)) {
+    const definition = CacheDefinitions.getNpc(npcId(gameval));
+    assert.equal(definition.name, "Achilka");
+    const others = Object.values(stops).filter((other) => other !== stop).sort();
+    assert.deepEqual(definition.actions.filter((action) => action && action !== "Talk-to").sort(), others, gameval);
+    for (const option of others) {
+      tasks = [];
+      const player = createPlayer();
+      assert.equal(click(player, "Achilka", option, { gameval }).handled, true, `${gameval} ${option}`);
+    }
+  }
+  const player = createPlayer();
+  const step = { player, stepId: "WjyUrt", handled: false };
+  for (const handler of hooks.events.get("npc-dialogue:action")) handler(step);
+  assert.equal(step.handled, true);
+  tick(7);
+  assert.deepEqual(at(player), [1400, 3246, 0]);
+  const west = npcId("tlati_riverboat_owner_west");
+  const ask = (name, text) => hooks.conditions.map((handler) => handler({
+    player, npcId: west, text, definition: { getName: () => name },
+  })).find((answer) => answer != null);
+  assert.equal(ask("Achilka", "If not already at Tal Teklan:"), false);
+  assert.equal(ask("Achilka", "If not already at Kastori:"), true);
+  assert.equal(ask("Hans", "If not already at Kastori:"), undefined);
+});
+
 test("every route's gamevals resolve in the cache", () => {
   for (const [name, route] of Object.entries(Common.data.routes)) {
     if (route.seq) assert.ok(CacheDefinitions.getSeqId(route.seq) != null, `${name}: ${route.seq}`);
@@ -446,4 +551,131 @@ test("every route's gamevals resolve in the cache", () => {
     assert.ok(Common.data.routes[entry.route], entry.route);
   }
   assert.equal(Ferries.members, true);
+});
+
+test("a departure receipt preserves the origin and is not emitted for refused trips", () => {
+  const departures = [];
+  api.onCustomEvent("ferries:departed", (event) => departures.push(event));
+  const player = createPlayer();
+  player.moveTo(new Location(2773, 3229, 0));
+  assert.equal(Voyages.travel(player, "atlantis"), false);
+  assert.equal(departures.length, 0);
+  assert.equal(Voyages.travel(player, "barnaby-ardougne"), true);
+  assert.equal(Voyages.travel(player, "barnaby-ardougne"), false);
+  assert.equal(departures.length, 1);
+  assert.equal(departures[0].route, "barnaby-ardougne");
+  tick(3);
+  assert.deepEqual(at(player), [2680, 3274, 0]);
+  assert.deepEqual([departures[0].from.getX(), departures[0].from.getY(), departures[0].from.getZ()], [2773, 3229, 0]);
+});
+
+test('Veos native travel menus work without quests and throughout Client of Kourend', async t => {
+  const { PluginManager: PM } = require('../dist/plugins/PluginManager');
+  const { PlayerSession } = require('../dist/net/PlayerSession');
+  const { ClientConnection } = require('../dist/net/NetworkBuilder');
+  const { MultiChatboxPrompt } = require('../dist/game/model/menu/MultiChatboxPrompt');
+  const core = PM.getCoreApi();
+  let members = true;
+  t.mock.method(core.WorldDefinition, 'isMembersWorld', () => members);
+  require('../plugins/npcs/NpcDialogues.plugin').register(PM.createApi('NativeVeosDialogue'));
+  Ferries.register(PM.createApi('NativeVeosFerries'));
+  let index = 2000;
+  function actor(npcId, tile) {
+    const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true, send: () => true,
+      close() {}, onData() {}, onError() {}, onClose() {} };
+    const p = new Player(new PlayerSession(channel), new Location(...tile));
+    p.setIndex(index++); p.setRegistered(true); p.setUsername('veosnative' + index);
+    const connection = new ClientConnection(channel); connection.player = p;
+    const npc = core.NPC.create(npcId, new Location(...tile));
+    t.after(() => { Voyages.landNow({ player: p }); p.closeInterruptibleInterfaces(); p.setRegistered(false); core.TaskManager.cancelTasks(p); });
+    const send = async packet => { await connection.dispatch([packet]); connection.processTurnPackets(); };
+    const next = () => send({ type: 'dialogue_continue', widgetId: (p.getPacketSender().getChatboxGroupId() << 16) | 5, childIndex: -1 });
+    async function choose(text) {
+      for (let n = 0; !MultiChatboxPrompt.getPending(p) && n < 60; n++) {
+        assert.ok(p.getDialogueManager().getCurrent(), `dialogue ended before ${text}`); await next();
+      }
+      const prompt = MultiChatboxPrompt.getPending(p);
+      assert.ok(prompt?.options.includes(text), `${text}: ${JSON.stringify(prompt)}`);
+      await send({ type: 'dialogue_continue', widgetId: MultiChatboxPrompt.OPTIONS_WIDGET_ID, childIndex: prompt.options.indexOf(text) + 1 });
+    }
+    async function finish() {
+      for (let n = 0; p.getDialogueManager().getCurrent() && n < 60; n++) await next();
+    }
+    async function arrive(route) {
+      await finish();
+      assert.equal(Common.travelling(p), true, 'the native final line starts the shared ferry fade');
+      for (let n = 0; n < 9; n++) core.TaskManager.process();
+      assert.deepEqual(at(p), Common.route(route).to);
+      assert.equal(Common.travelling(p), false);
+    }
+    return { p, npc, choose, arrive, next, finish };
+  }
+  for (const [variant, option, route, tile, id] of [
+    ['standard-dialogue-at-port-piscarilius', 'Travel to Port Sarim.', 'kourend-sarim', [1825, 3691, 0], core.NpcIdentifiers.VEOS_5],
+    ['standard-dialogue-at-port-sarim-subsequent-dialogue', "I'd like to travel to Port Piscarilius, please.", 'kourend-piscarilius', [3054, 3245, 0], core.NpcIdentifiers.VEOS],
+  ]) {
+    const f = actor(id, tile), request = { player: f.p, npc: f.npc, npcId: id, variant: { page: 'Veos', variant }, exact: true };
+    PM.emitCustomEvent('npc-dialogue:start', request); assert.equal(request.handled, true);
+    await f.choose('Can you take me somewhere?'); await f.choose(option); await f.arrive(route);
+  }
+  members = false;
+  const free = actor(core.NpcIdentifiers.VEOS, [3054, 3245, 0]);
+  PM.emitCustomEvent('npc-dialogue:start', { player: free.p, npc: free.npc, npcId: free.npc.getId(),
+    variant: { page: 'Veos', variant: 'standard-dialogue-at-port-sarim-subsequent-dialogue' }, exact: true });
+  await free.choose('Can you take me somewhere?'); await free.finish();
+  assert.equal(Common.travelling(free.p), false);
+  assert.deepEqual(at(free.p), [3054, 3245, 0], 'the members-only route is refused on a free world');
+  members = true;
+  require('../plugins/quests/Quests.plugin').register(PM.createApi('Quests'));
+  const quests = require('../plugins/quests/QuestRuntime').getRegisteredQuests();
+  const client = quests.find(q => q.key === 'client_of_kourend'), xmarks = quests.find(q => q.key === 'x_marks_the_spot');
+  for (const stage of [0, 1, 2, 3, 4, 5]) {
+    for (const [id, tile, option, route] of [
+      [core.NpcIdentifiers.VEOS_5, [1825, 3691, 0], 'Travel to Port Sarim.', 'kourend-sarim'],
+      [core.NpcIdentifiers.VEOS, [3054, 3245, 0], "I'd like to travel to Port Piscarilius, please.", 'kourend-piscarilius'],
+    ]) {
+      const f = actor(id, tile);
+      xmarks.setStage(f.p, 6); client.setStage(f.p, stage);
+      f.p.getInventory().adds(ItemIdentifiers.COINS, 123);
+      assert.equal(PM.emitNpcInteraction({ player: f.p, npc: f.npc, npcId: f.npc.getId(), action: 'Talk-to', clickType: 1, handled: false }), true);
+      await f.choose('Can you take me somewhere?'); await f.choose(option); await f.arrive(route);
+      assert.equal(client.getStage(f.p), stage, 'ordinary travel does not advance the quest');
+      assert.equal(f.p.getInventory().getAmount(ItemIdentifiers.COINS), 123, 'Veos charges no fare');
+    }
+  }
+  for (const option of ["Travel to Land's End.", 'Stay where you are.']) {
+    const f = actor(core.NpcIdentifiers.VEOS_5, [1825, 3691, 0]);
+    xmarks.setStage(f.p, 6); client.setStage(f.p, 1);
+    PM.emitNpcInteraction({ player: f.p, npc: f.npc, npcId: f.npc.getId(), action: 'Talk-to', clickType: 1, handled: false });
+    await f.choose('Can you take me somewhere?'); await f.choose(option);
+    if (option === "Travel to Land's End.") await f.arrive('kourend-landsend');
+    else { await f.finish(); assert.equal(Common.travelling(f.p), false); assert.deepEqual(at(f.p), [1825, 3691, 0]); }
+  }
+  const rejected = actor(core.NpcIdentifiers.VEOS, [3054, 3245, 0]);
+  xmarks.setStage(rejected.p, 6); client.setStage(rejected.p, 1);
+  const emit = PM.emitCustomEvent;
+  t.mock.method(PM, 'emitCustomEvent', (name, event) => {
+    if (name === 'ferries:travel' && event.player === rejected.p) { event.handled = false; return; }
+    return emit.call(PM, name, event);
+  });
+  PM.emitNpcInteraction({ player: rejected.p, npc: rejected.npc, npcId: rejected.npc.getId(), action: 'Talk-to', clickType: 1, handled: false });
+  await rejected.choose('Can you take me somewhere?'); await rejected.choose("I'd like to travel to Port Piscarilius, please."); await rejected.finish();
+  assert.equal(Common.travelling(rejected.p), false);
+  assert.equal(rejected.p.getPacketSender().getVarbit(4897), 0, 'a rejected handoff cannot mark Kourend visited');
+  assert.deepEqual(at(rejected.p), [3054, 3245, 0]);
+});
+
+test("Entrana boarding credit follows only an accepted outward voyage", () => {
+  Common.init(api);
+  const boarded = [];
+  hooks.events.set("entrana:boarded", [(event) => boarded.push(event.player)]);
+  const outward = createPlayer({ at: new Location(3045, 3235, 0) });
+  click(outward, "Monk of Entrana", "Take-boat", { gameval: "shipmonk" });
+  assert.deepEqual(boarded, [outward]);
+  const back = createPlayer({ at: new Location(2829, 3335, 0) });
+  click(back, "Monk of Entrana", "Take-boat", { gameval: "shipmonk2" });
+  assert.deepEqual(boarded, [outward]);
+  const armed = createPlayer({ at: new Location(3045, 3235, 0), items: [ItemIdentifiers.BRONZE_SWORD] });
+  click(armed, "Monk of Entrana", "Take-boat", { gameval: "shipmonk" });
+  assert.deepEqual(boarded, [outward]);
 });

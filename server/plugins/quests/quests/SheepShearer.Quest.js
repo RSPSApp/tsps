@@ -293,6 +293,7 @@ module.exports = function registerSheepShearerQuest(api) {
           return;
         }
         quest.setStage(event.player, STAGE_STARTED);
+        event.player.sendMessage("You've started a new quest: <col=081190>Sheep Shearer</col>");
       };
     }
     const remaining = remainingWool(quest.getStage(event.player));
@@ -324,9 +325,9 @@ module.exports = function registerSheepShearerQuest(api) {
           event.end = true;
           return;
         }
-        const removed = removeWoolBalls(player, remaining);
+        // Live takes the wool with the reward, on the last page (rsprox 1718), not at this box.
         player.setAttribute(FINAL_DELIVERY_ATTRIBUTE, true);
-        event.text = removed === 1 ? "You give Fred a ball of wool." : `You give Fred ${removed} balls of wool.`;
+        event.text = remaining === 1 ? "You give Fred a ball of wool." : `You give Fred ${remaining} balls of wool.`;
         event.box = { statement: true };
         return;
       }
@@ -334,7 +335,11 @@ module.exports = function registerSheepShearerQuest(api) {
       case FINISHING_UP_STEP_ID:
         if (player.getAttribute(FINAL_DELIVERY_ATTRIBUTE) === true) {
           player.setAttribute(FINAL_DELIVERY_ATTRIBUTE, false);
-          quest.complete(player);
+          const remaining = remainingWool(quest.getStage(player));
+          if (woolBalls(player) >= remaining) {
+            removeWoolBalls(player, remaining);
+            quest.complete(player);
+          }
         }
         event.handled = true;
         event.end = true;
@@ -411,6 +416,7 @@ module.exports = function registerSheepShearerQuest(api) {
     questPoints: 1,
     xpRewards: [{ skillId: Skill.CRAFTING.getIndex(), amount: 150, label: "Crafting" }],
     scrollItemId: SHEARS_ITEM_ID,
+    completionJingleId: 154,
     rewardItemLabel: "60 Coins",
     buildJournal,
     onReward: reward,

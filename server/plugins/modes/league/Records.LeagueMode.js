@@ -197,7 +197,7 @@ function openStatistics(player) {
   const sender = openModal(player, group);
   sender.sendInterfaceScript(script, [
     ...components.map((child) => uid(group, child)),
-    player.getUsername(),
+    player.getDisplayName(),
     ...leagueTypes().map((type) => pointsIn(player, type)),
   ]);
   return true;

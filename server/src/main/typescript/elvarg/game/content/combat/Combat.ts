@@ -15,6 +15,7 @@ import { World } from "../../World";
 import { CombatConstants } from "./CombatConstants";
 import { CombatFactory, CanAttackResponse } from "./CombatFactory";
 import { CombatRange } from "./CombatRange";
+import { CrossFloor } from "../../CrossFloor";
 import { CombatSpecial } from "./CombatSpecial";
 import { SpecialAttackTargetingResolver } from "./SpecialAttackTargeting";
 import { AccuracyFormulasDpsCalc } from "./formula/AccuracyFormulasDpsCalc";
@@ -51,6 +52,7 @@ const COMBAT_TARGET_PLAYER_VARP = 1075;
 
 /** No attack animation may hold a player longer than this; guards a bad seq decode. */
 const MAX_ANIMATION_STALL_TICKS = 5;
+const MAX_CONTENT_ANIMATION_STALL_TICKS = 100;
 
 /** Owns one character's target, attack deadline, approach route, and delayed hits. */
 export class Combat {
@@ -144,9 +146,11 @@ export class Combat {
 
     /**
      * Wiki: Animation stall. The cycle this character's swing animation releases them. A
-     * `partial` stall only keeps a click from cutting the animation away; a `full` stall also
-     * holds their clicks, their movement and any hit coming in, all released together on the
-     * cycle the client finishes playing the animation.
+     * `partial` stall only keeps a click from cutting the animation away - the server still
+     * processes movement, and the client withholds the actor's steps until the animation ends,
+     * then catches up (the rubber band). A `full` stall also holds their clicks, their movement
+     * and, when requested by content, incoming hits until the animation finishes.
+     * Only content declares one; seq config cannot.
      */
     private animationStall: {
         untilCycle: number;
@@ -186,14 +190,15 @@ export class Combat {
         if (!this.character.isPlayer()) return;
 
         const sequence = getSequenceStall(animationId);
-        const stepped = this.character.getMovementQueue().steppedThisWorldCycle();
         const event: PluginAnimationStallEvent = {
             player: this.character.getAsPlayer(),
             animationId,
             ticks: Math.min(Math.max(0, sequence.ticks), MAX_ANIMATION_STALL_TICKS),
-            // Someone who stepped this cycle keeps their steps: the client plays the animation
-            // over a true tile that has already moved, the rubber band the Wiki calls partial.
-            kind: sequence.cancelsOnStep || stepped || !sequence.blocks ? "partial" : "full",
+            // Every swing animation the client starts is a partial stall: it plays out even when
+            // a click drops the target. The seq's step withholding only decides what the client
+            // does visually; the server keeps walking the true tile underneath it. A full stall
+            // is content, and AnimationStalls.plugin.js rows declare it.
+            kind: "partial",
             holdsHits: true,
         };
         PluginManager.emitAnimationStall(event);
@@ -201,6 +206,19 @@ export class Combat {
             untilCycle: World.getProcessCycle() + event.ticks,
             kind: event.kind,
             holdsHits: event.kind === "full" && event.holdsHits,
+        };
+    }
+
+    /** Content can hold actions and movement without delaying incoming damage. */
+    public setAnimationStall(ticks: number): void {
+        if (!Number.isFinite(ticks) || ticks <= 0) return;
+        const now = World.getProcessCycle();
+        const existing = this.animationStall;
+        const activeFull = existing?.kind === "full" && existing.untilCycle > now;
+        this.animationStall = {
+            untilCycle: Math.max(now + Math.min(MAX_CONTENT_ANIMATION_STALL_TICKS, Math.trunc(ticks)), activeFull ? existing.untilCycle : now),
+            kind: "full",
+            holdsHits: activeFull && existing.holdsHits,
         };
     }
 
@@ -322,7 +340,7 @@ export class Combat {
             this.cancelIfCurrent(target, generation);
             return;
         }
-        if (this.shouldRetreat()) {
+        if (this.shouldRetreat(method)) {
             this.cancelIfCurrent(target, generation);
             return;
         }
@@ -403,12 +421,15 @@ export class Combat {
         if (!movement.getMobility().canMove()) {
             this.trace(`bail=immobile:${movement.getMobility().constructor.name}`, target);
             state.mobilityBlocked = true;
-            // A frozen player's attack on a target out of reach ends there, as live answers it.
+            // A frozen player's attack on a target out of reach ends there, as live answers it,
+            // still turned to the target for that tick (rsprox 2238 OpPlayer, 3391 OpNpc).
             if (this.character.isPlayer() && this.character.getTimers().has(TimerKey.FREEZE)) {
                 if (this.character.getAsPlayer().isPlayerBot?.() !== true) {
                     this.character.getAsPlayer().sendMessage("I can't reach that!");
                 }
+                const current = this.target === target && this.generation === state.generation;
                 this.cancelIfCurrent(target, state.generation);
+                if (current) this.character.faceMobileBriefly(target);
             }
             return;
         }
@@ -416,7 +437,7 @@ export class Combat {
         if (this.character.isNpc()) {
             movement.setPursuitCheckpoint(PathFinder.naiveEntityDestination(this.character, target));
             state.routeRequested = true;
-        } else if (this.shouldRouteToward(movement, location)) {
+        } else if (this.shouldRouteToward(movement, location, target)) {
             this.trace("route", target);
             state.routeRequested = true;
             this.routedTargetX = location.getX();
@@ -427,9 +448,9 @@ export class Combat {
     }
 
     /**
-     * A path is only recalculated on its final checkpoint, and only when the target
-     * has actually moved - turning points earlier in the corridor are preserved, and
-     * a stationary target does not need the same route rebuilt every cycle.
+     * A path is only recalculated near its final checkpoint. Same-floor targets may
+     * trigger a refresh when they move; cross-floor targets keep the chosen clear-shot
+     * route until it finishes, so a wandering target cannot make the player reverse course.
      *
      * Two cases sit outside that rule. An empty queue has no path to preserve, so it
      * always routes. A step the clipping map rejected (a door shut across the
@@ -437,10 +458,18 @@ export class Combat {
      * an entity rejected does not, since the pathfinder cannot see entities and would
      * hand back the identical corridor.
      */
-    private shouldRouteToward(movement: MovementQueue, targetLocation: Location): boolean {
+    private shouldRouteToward(movement: MovementQueue, targetLocation: Location, target: Mobile): boolean {
         if (movement.size() === 0 || movement.wasRouteInvalidated()) {
             return true;
         }
+        const attackerLocation = CombatPosition.location(this.character, target);
+        const routedTargetLocation = CombatPosition.location(target, this.character);
+        const crossFloorTarget = CrossFloor.canCross(attackerLocation, routedTargetLocation) &&
+            attackerLocation.getZ() !== routedTargetLocation.getZ();
+        // Cross-floor routes end at a carefully selected clear-shot tile. Replacing the final
+        // checkpoint whenever a wandering target moves can make the player turn back and forth
+        // forever. Finish this route, then select a fresh firing tile when the queue empties.
+        if (crossFloorTarget) return false;
         if (movement.size() > 1) {
             return false;
         }
@@ -488,7 +517,7 @@ export class Combat {
             }
             if (this.character.isNpc() && state.routeRequested &&
                 !movement.wasBlockedByDynamicOccupancy()) {
-                this.cancelIfCurrent(target, generation);
+                if (!this.isSafespotted(target)) this.cancelIfCurrent(target, generation);
                 return;
             }
             if (movement.size() > 0) return;
@@ -674,6 +703,11 @@ export class Combat {
         this.damageMap = null;
     }
 
+    /** Forgets one player's damage, so the dead do not win a later kill. */
+    public removeDamager(player: Player): void {
+        this.damageMap?.delete(player);
+    }
+
     public damageMapContains(player: Player): boolean {
         const cached = this.damageMap?.get(player);
         return cached != null && cached.getStopwatch() < CombatConstants.DAMAGE_CACHE_TIMEOUT;
@@ -751,15 +785,48 @@ export class Combat {
     public getPrayerBlockTimer(): SecondsTimer { return this.prayerBlockTimer ??= new SecondsTimer(); }
     public getLastAttack(): TickStopwatch { return this.lastAttack; }
 
-    private shouldRetreat(): boolean {
+    private shouldRetreat(method: CombatMethod): boolean {
         if (!this.character.isNpc()) return false;
         const npc = this.character.getAsNpc();
         if (Number(npc.getAttribute("arceuus:dark-lure-until") ?? 0) > World.getProcessCycle()) return false;
-        if (!npc.getCurrentDefinition().doesRetreat()) return false;
+        // "combat:no-retreat": an NPC content moves about its arena (a raid boss teleported by its own
+        // specials) never gives up on its target for being far from where it spawned.
+        if (npc.hasFlag("combat:no-retreat")) return false;
         const coordinator = npc.getMovementCoordinator();
-        if (coordinator.getCoordinateState() === CoordinateState.RETREATING ||
-            npc.getLocation().getDistance(npc.getSpawnPosition()) >=
-                npc.getCurrentDefinition().getCombatFollowDistance()) {
+        if (coordinator.getCoordinateState() === CoordinateState.RETREATING) return true;
+
+        const definition = npc.getCurrentDefinition();
+        const spawn = npc.getSpawnPosition();
+        const spawnDistance = npc.getLocation().getDistance(spawn);
+        // A low-health retreat (chickens, unicorns) is confined to the max range.
+        if (definition.doesRetreat() && spawnDistance >= definition.getCombatFollowDistance()) {
+            coordinator.setCoordinateState(CoordinateState.RETREATING);
+            return true;
+        }
+
+        const target = this.target;
+        if (target == null || this.isSafespotted(target)) return false;
+        // Instanced content owns its arena and its reset rules (Zulrah's phase moves, the raid
+        // rooms): the open-world aggression range must not cut a scripted fight short.
+        if (npc.getPrivateArea() != null) return false;
+
+        // Outside its aggression range an NPC cannot attack the target at all, so it loses
+        // interest and walks home: the Wiki draws the aggression range from the static spawn
+        // (max range + attack range, measured from the spawn footprint), and osrs-docs has an
+        // NPC dragged outside its max range lose its target. A target still fighting it (a
+        // safespot or a normal engagement) keeps it, so this bounds hunting, not the fight the
+        // player started. The footprint already extends `size - 1` north and east.
+        const aggressionRange = definition.getAggressionRange(method.attackDistance(npc));
+        const crossFloorRangedFight = method.type() !== CombatType.MELEE &&
+            CrossFloor.canCross(npc.getLocation(), target.getLocation());
+        const targetDistance = CombatRange.footprintDistance(
+            spawn,
+            definition.getSize(),
+            target.getLocation(),
+            crossFloorRangedFight,
+        );
+        if (spawnDistance > definition.getCombatFollowDistance()
+            || targetDistance > aggressionRange) {
             coordinator.setCoordinateState(CoordinateState.RETREATING);
             return true;
         }
@@ -800,6 +867,10 @@ export class Combat {
      * @return true when the interaction was dropped, so this cycle does nothing else.
      */
     private giveUpUnreachableTarget(target: Mobile, generation: number): boolean {
+        if (this.isSafespotted(target)) {
+            this.resetUnreachableTracking();
+            return false;
+        }
         const distance = this.character.getLocation().getDistance(target.getLocation());
         // The first cycle measured only records the starting gap; it is not progress.
         const closing = this.unreachableDistance >= 0 && distance < this.unreachableDistance;
@@ -818,6 +889,19 @@ export class Combat {
         this.resetUnreachableTracking();
         this.cancelIfCurrent(target, generation);
         return true;
+    }
+
+    /**
+     * An NPC whose target is fighting it from where it cannot be reached (a safespot) keeps it,
+     * facing it and trying its step every cycle, as live does; it does not reset and walk home
+     * between the target's hits. Fighting it means attacking it, or having hit it within the
+     * attacker window. A target that stops fighting is let go by the usual releases, unless content
+     * says it never lets go ("combat:keep-target", the Fight Cave's monsters).
+     */
+    private isSafespotted(target: Mobile): boolean {
+        return this.character.isNpc() &&
+            (this.character.hasFlag("combat:keep-target")
+                || target.getCombat().getTarget() === this.character || this.attacker === target);
     }
 
     /** Every new engagement, and every actor with no engagement, starts with full patience. */
@@ -863,6 +947,11 @@ export class Combat {
         } else if (!bypass && timing.minimumDelay > 0) {
             this.nextAttackCycle = Math.max(this.nextAttackCycle, cycle + (timing.minimumDelay | 0));
             this.sendAttackTimer();
+        } else if (specialTraits?.bypassAttackDelay === true && specialTraits.attackSpeedTicks != null) {
+            // A bypassing special (Quick Smash) armed before the target was clicked: keep any
+            // cooldown already running and leave at least its own delay after it.
+            this.extendAttackDelay(PluginManager.emitAttackSpeed(this.character, target, method.type(),
+                specialTraits.attackSpeedTicks));
         }
         this.lastAttackTarget = target;
 
@@ -870,11 +959,13 @@ export class Combat {
         // perform it themselves - many through super.start() first - so the arm stays open across
         // the whole call, and the seq left standing when it returns is the one that is measured.
         this.expectAttackAnimation();
+        PluginManager.emitCustomEvent("combat:attack-started", { attacker: this.character, target, method });
         method.start(this.character, target);
         this.measureAnimationCycle = -1;
         const hits = method.hits(this.character, target);
         if (hits == null) {
             this.trace("hits=null", target);
+            PluginManager.emitCustomEvent("combat:attack-finished", { attacker: this.character, target, method });
             return false;
         }
         this.trace(`hits=${hits.length} dmg=[${hits.map((h: any) => h?.getTotalDamage?.()).join(",")}]`, target);
@@ -902,6 +993,9 @@ export class Combat {
         }
 
         method.finished(this.character, target);
+        // The swing has used the weapon, style and special it started with (animation, rolls,
+        // xp): what it spent may now change the equipment (a weapon degrading on its last charge).
+        PluginManager.emitCustomEvent("combat:attack-finished", { attacker: this.character, target, method });
 
         this.specialAttackQueued = false;
         if (this.character.isSpecialActivated()) {
@@ -972,7 +1066,7 @@ export class Combat {
             case CanAttackResponse.TARGET_IN_COMBAT:
                 if (!player) return;
                 player.sendMessage(target.isPlayer()
-                    ? `Someone else is already fighting ${target.getAsPlayer().getUsername()}.`
+                    ? `Someone else is already fighting ${target.getAsPlayer().getDisplayName()}.`
                     : "Someone else is fighting that.");
                 break;
             case CanAttackResponse.LEVEL_DIFFERENCE_TOO_GREAT:
@@ -981,7 +1075,7 @@ export class Combat {
                 break;
             case CanAttackResponse.NOT_ENOUGH_SPECIAL_ENERGY:
                 if (player) {
-                    player.sendMessage("You do not have enough special attack energy left!");
+                    player.sendMessage("You don't have enough power left.");
                     player.setSpecialActivated(false);
                     CombatSpecial.updateBar(player);
                 }

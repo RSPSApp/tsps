@@ -5,13 +5,15 @@ const { test } = require("node:test");
 const Common = require("../plugins/bosses/yama/Common.Yama");
 
 const VALUES = { 4151: 1_500_000, 11832: 15_000_000, 385: 200, 6585: 300_000 };
-const hooks = { variants: [], custom: {}, npc: {}, login: [] };
+const hooks = { variants: [], custom: {}, npc: {}, login: [], item: {} };
 let ironmanMode = "none";
+let aKingdomDividedComplete = false;
 
 const fakeApi = {
   core: {
     ItemDefinition: { forId: (id) => ({ getGrandExchangeValue: () => VALUES[id] ?? 0, isStackable: () => id === 995 }) },
     Item: class { constructor(id, amount) { this.id = id; this.amount = amount; } },
+    ItemIdentifiers: { FORGOTTEN_LOCKBOX: 30763 },
   },
   persistAttribute() {},
   onPlayerLogin(handler) { hooks.login.push(handler); },
@@ -22,9 +24,11 @@ const fakeApi = {
   },
   emitCustomEvent(name, payload) {
     if (name === "ironman:mode") payload.mode = ironmanMode;
+    if (name === "quest:is-complete" && payload.key === "a_kingdom_divided") payload.complete = aKingdomDividedComplete;
     for (const handler of hooks.custom[name] ?? []) handler(payload);
   },
   onNpcInteraction(name, actions) { hooks.npc[name] = actions; },
+  onItemAction(name, actions) { hooks.item[name] = actions; },
   onObjectInteraction() {},
   onPlayerDeathItemDrop(handler) { hooks.drop = handler; },
   onPlayerDeath() {},
@@ -36,8 +40,10 @@ Common.init(fakeApi);
 const Voice = require("../plugins/bosses/yama/Voice.Yama");
 const Throne = require("../plugins/bosses/yama/Throne.Yama");
 const Fight = require("../plugins/bosses/yama/Fight.Yama");
+const Lockbox = require("../plugins/bosses/yama/Lockbox.Yama");
 Voice.attachVoice(fakeApi);
 Throne.attachThrone(fakeApi);
+Lockbox.attachLockbox(fakeApi);
 
 function fakePlayer(attributes = {}) {
   const store = new Map(Object.entries(attributes));
@@ -46,6 +52,7 @@ function fakePlayer(attributes = {}) {
     varbits,
     getAttribute: (key) => store.get(key),
     setAttribute: (key, value) => store.set(key, value),
+    sendMessage(text) { this.message = text; },
     getPacketSender: () => ({ sendVarbit: (id, value) => varbits.set(id, value) }),
   };
 }
@@ -66,6 +73,18 @@ test("the Voice plays its first talk until the player has met it, then the short
   fakeApi.emitCustomEvent("npc-dialogue:choice", { player, npcId: 14183, option: "Stay." });
   assert.equal(player.varbits.get(16284), 2);
   assert.equal(variantFor(player, 14185), "standard-dialogue-subsequent-times");
+});
+
+test("Yama's domain requires A Kingdom Divided", () => {
+  const Domain = require("../plugins/bosses/yama/Domain.Yama");
+  const player = fakePlayer();
+  aKingdomDividedComplete = false;
+  assert.equal(Domain.canEnter(player), false);
+  assert.equal(Domain.enter(player), false);
+  assert.match(player.message, /complete A Kingdom Divided/i);
+  aKingdomDividedComplete = true;
+  assert.equal(Domain.canEnter(player), true);
+  aKingdomDividedComplete = false;
 });
 
 test("the Voice holds a death's items for the gravestone's fee, discounted for Yama's first 10 kills", () => {
@@ -126,6 +145,7 @@ test("a death in the domain leaves the items with the Voice, who hands them back
     delete: (id, amount) => inventory.set(id, (inventory.get(id) ?? 0) - amount),
     contains: (id) => inventory.has(id),
     getFreeSlots: () => 20,
+    getAddableAmount: (item) => Math.min(item.amount, 2147483647 - (inventory.get(item.id) ?? 0)),
     add: (item) => inventory.set(item.id, (inventory.get(item.id) ?? 0) + item.amount),
     refreshItems() {},
   });
@@ -194,4 +214,49 @@ test("void flares stand in for one shadow special a phase, where the Wiki says",
     assert.ok(allowed.includes(fight.rotation.flareSlot), `${firstSpecial} first: slot ${fight.rotation.flareSlot}`);
     assert.equal(firstSpecial, Attacks.OTHER[fight.rotation.opening]);
   }
+});
+
+test("the Forgotten lockbox rolls the Wiki table's 403 chances", () => {
+  const { entries } = Common.data.lockbox;
+  assert.equal(entries.reduce((sum, entry) => sum + entry.weight, 0), 403);
+  assert.deepEqual(entries.map((entry) => [entry.itemId, entry.amount, entry.weight]), [
+    [21930, 125, 60], [11230, 125, 60], [30765, 14, 60],
+    [11230, 80, 50], [30765, 11, 50], [4087, 1, 50], [4585, 1, 50],
+    [995, 233333, 20], [30750, 1, 1], [30753, 1, 1], [30756, 1, 1],
+  ]);
+});
+
+test("opening a Forgotten lockbox consumes it and gives its reward", () => {
+  const inventory = new Map([[30763, 1]]);
+  const player = {
+    message: null,
+    getInventory: () => ({
+      contains: (id) => (inventory.get(id) ?? 0) > 0,
+      delete: (id, amount) => inventory.set(id, (inventory.get(id) ?? 0) - amount),
+      forceAdd: (_player, item) => inventory.set(item.id, (inventory.get(item.id) ?? 0) + item.amount),
+      refreshItems() {},
+    }),
+    sendMessage(text) { this.message = text; },
+  };
+  const open = hooks.item["Forgotten lockbox"].Open;
+  assert.equal(open({ player, itemId: 30763 }), true);
+  assert.equal(inventory.get(30763), 0, "the lockbox is consumed");
+  const rewards = [...inventory.entries()].filter(([id]) => id !== 30763);
+  assert.equal(rewards.length, 1, "one reward");
+  const [itemId, amount] = rewards[0];
+  const entry = Common.data.lockbox.entries.find((row) => row.itemId === itemId && row.amount === amount);
+  assert.ok(entry, `${itemId}x${amount} is on the Wiki table`);
+  assert.equal(player.message, entry.message);
+  assert.equal(open({ player, itemId: 30764 }), false, "only the lockbox's own Open is handled");
+});
+
+test("Yama's specials use the Wiki's damage numbers", () => {
+  const { specials, flares, judge } = Common.data;
+  assert.equal(specials.rockfall.maxHit, 46);
+  assert.equal(specials.spike.maxHit, 46);
+  assert.deepEqual(specials.meteor.byDistance, [[1, "kill"], [2, 80], [3, 40]]);
+  assert.equal(specials.stomp.maxHit, 80);
+  assert.deepEqual(flares.damage["1"], [42, 45]);
+  assert.deepEqual(flares.damage["3"], [23, 25]);
+  assert.equal(judge.surge.maxHit, 30);
 });

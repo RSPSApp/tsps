@@ -116,13 +116,43 @@ The next batch uses native `vmq2` stages 0–50 and the individual knight, crest
 Azali and Itzla visibility varbits. It restores the crypt entrance, all four
 knight errands, the crate and letter, Azali's escort/rest/fountain sequence,
 Mezan's two-style spar, Velam's judgement, Renu's feed and flight, and the
-Teomat attack and aftermath. The eight cultists are real combat targets; Mezan
+Teomat attack and aftermath. The eight cultists are real combat targets and the guards and
+Itzla fight them for real: each pair closes to melee range, trades the captured swing/block
+animations, and the hits take hitpoints. Each exchange also refreshes the scripted pair's
+combat stopwatch, so `NPC.process()` cannot regenerate the damage between blows, and a
+cultist's death is counted at the death itself, so an allied kill counts toward the eight
+even though it carries no player damage credit. Mezan
 changes protection after a streak of attacks in one style. Progress and scene
 cleanup survive logout. Earlier stage values are migrated once.
+
+The judgement now includes Ennius's recorded approach: three westward steps to
+(1679,3156), then two northward steps beside Velam at (1679,3158). Recording1695
+ticks2033–2040 supplies both legs; strike390 has delay5 and fall836 delay20.
+The aftermath uses its scene heads12897/12928 (ticks2392–2399); a global name
+lookup had selected generic Guard397. Those bindings apply only to this quest's
+owned aftermath. Azali's dunk sits at the capture's two tiles (1755→1757) but plays
+as the walk it stands for rather than the recording's 1541 teleport. The fountain tile itself is
+clipped and holds the fountain actor, so the last two tiles walk under the same scoped
+`movement:ignore-clipping` exemption the other scripted cutscene moves use; the flag is set only
+for that move and cleared before the splash. splash10942 waits for that walk, so it lands two
+ticks later than the capture.
+
+The crypt gate is now a world loc change: the invisible wall 38848 stands on the
+gate tile, the open leaf 50862 swings onto the tile across the doorway, and both
+are sent to every player. It shuts two ticks after `ObstacleRunner` reports the
+crossing finished, rather than two ticks after the click, so a route from a
+distance cannot leave the player walking through a closed gate. "A Matter of
+Intrigue" (810) plays and unlocks as the gate opens during the quest.
 
 Quetzal travel uses the cache landing table and interface 874, with saved
 unlocks, locked-destination checks and a single flight at a time. The new camera
 arc packet is encoded and decoded by the server and client together.
+
+Primio's Varrock service lands at (1700,3141,0), separately from Renu's Fortis
+table entry, matching the [pinned RuneLite transport data](https://github.com/Skretzo/shortest-path/blob/65314c02128302402c15c730328030a78ae28f44/src/main/resources/transports/transports.tsv)
+and the [April 2024 landing-site swap](https://oldschool.runescape.wiki/w/Quetzal_Transport_System#Changes).
+Its first-trip and visited varbits are saved individually alongside the quetzal
+snapshot; restoring the whole shared parent varp would overwrite Twilight's Promise progress.
 
 ## The Heart of Darkness (ticks 2423–4992)
 
@@ -186,8 +216,8 @@ normal lock inputs and dialogue choices. Unit tests also cover wrong answers.
 
 The earlier visual gaps remain. Additional known limits:
 
-- Twilight's Promise's allied sparring is cosmetic: the player defeats all eight
-  cultists. The Wiki also allows allied kills.
+- Twilight's Promise's allied sparring uses the captured swing/block animations but an
+  inferred maximum hit (the capture gives no max hits), and the guards and Itzla cannot die.
 - Trial brawler slam damage uses its normal maximum because the available source
   does not specify the special's maximum. Random puzzle distributions, trap
   initial phase and some failure/re-entry presentation are inferred.

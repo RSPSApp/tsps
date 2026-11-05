@@ -168,6 +168,9 @@ test("Check shows the bag's inv 516 with Examine only, and a click takes nothing
   assert.deepEqual(contents.map(({ id, amount }) => [id, amount]), [[KARAMBWAN, 1], [COINS, 7]]);
   assert.deepEqual(packets(p, "sendInterfaceFlagsRange")[0].slice(1), [(81 << 16) | 5, 0, 27, 1 << 10]);
   assert.ok(packets(p, "sendInterfaceScript").some(([, id, args]) => id === 495 && args[0] === "Looting bag" && args[1] === 0));
+  const prices = packets(p, "sendInterfaceScript").find(([, id]) => id === 1235)[2];
+  assert.deepEqual(prices, [BAG_INV, BigInt(core.ItemDefinition.forId(KARAMBWAN).getGrandExchangeValue()), 1n,
+    ...Array(26).fill(-1n)], "rev 241 expects one inventory int and 28 long prices");
   const value = core.ItemDefinition.forId(KARAMBWAN).getGrandExchangeValue() + 7;
   assert.ok(packets(p, "sendString").some(([, text]) => text === `Value: ${value.toLocaleString("en-US")} coins`));
 });
@@ -208,6 +211,11 @@ test("Deposit: Store-1/5/All/X and Examine, one bag slot per unstackable item (r
   assert.deepEqual(stored(bag).at(-1), { id: FIRE_RUNE, amount: 13, meta: null }, "Store-All");
   assert.equal(p.inv.count(FIRE_RUNE), 0);
   assert.ok(packets(p, "sendString").some(([, text]) => /^Bag value: [\d,]+ coins$/.test(text)));
+  for (const [, , args] of packets(p, "sendInterfaceScript").filter(([, id]) => id === 1235)) {
+    assert.equal(args[0], 93, "Deposit prices the player's inventory");
+    assert.equal(args.length, 29);
+    assert.ok(args.slice(1).every((price) => typeof price === "bigint"), "opening and updates send 28 longs");
+  }
 });
 
 test("the bag holds 28 slots: 'The bag's too full.' (rsprox 1545)", () => {
@@ -396,11 +404,12 @@ test("Destroy goes through the shared confirmation, worded as live (rsprox 448, 
 });
 
 test("the shared destroy prompt shows the lines the bag gives it, and its own for other items", () => {
-  const strings = [];
-  const sender = new Proxy({}, { get: (_, name) => (...args) => { if (name === "sendString") strings.push(args[0]); return sender; } });
+  const scripts = [];
+  const sender = new Proxy({}, { get: (_, name) => (...args) => { if (name === "sendClientScript") scripts.push(args); return sender; } });
   let policy;
   delete require.cache[require.resolve("../plugins/interface/DestroyItem.plugin")];
   require("../plugins/interface/DestroyItem.plugin").register({
+    onCustomEvent() {},
     core, registerCustomInterface() {}, onInterfaceActionButton() {},
     onItemDropPolicy: (fn) => { policy = fn; },
     emitCustomEvent: (name, event) => hooks.events[name]?.(event),
@@ -409,11 +418,64 @@ test("the shared destroy prompt shows the lines the bag gives it, and its own fo
   p.getPacketSender = () => sender;
   const bag = bagWith(OPEN_BAG);
   policy({ player: p, item: bag, itemId: OPEN_BAG, slot: 0, dropToGround: true, handled: false });
-  assert.deepEqual(strings.slice(-2), ["Are you sure you want to destroy the bag?", "The bag is empty. Are you sure you want to destroy it?"]);
+  assert.deepEqual(scripts.at(-1).slice(-2), ["Are you sure you want to destroy the bag?", "The bag is empty. Are you sure you want to destroy it?"]);
   const untradeable = item(UNIDENTIFIED_MINERALS);
   untradeable.isDropable = () => false;
   policy({ player: p, item: untradeable, itemId: UNIDENTIFIED_MINERALS, slot: 1, dropToGround: true, handled: false });
-  assert.deepEqual(strings.slice(-2), ["Are you sure you want to destroy this item?", "This item will be destroyed permanently."]);
+  assert.deepEqual(scripts.at(-1).slice(-2), ["Are you sure you want to destroy this item?", "This item will be destroyed permanently."]);
+});
+
+test("confirmed destruction plays the captured sound once; cancellation, stale items and vetoes stay silent", (t) => {
+  let policy, confirm, veto = false;
+  const events = [];
+  const emitItemDropPolicy = (event) => {
+    policy(event);
+    if (veto) event.handled = true;
+    else hooks.dropPolicy(event);
+    return event.handled;
+  };
+  t.mock.method(core.PluginManager, "emitItemDropPolicy", emitItemDropPolicy);
+  delete require.cache[require.resolve("../plugins/interface/DestroyItem.plugin")];
+  require("../plugins/interface/DestroyItem.plugin").register({
+    onCustomEvent() {},
+    core,
+    onItemDropPolicy: (handler) => { policy = handler; },
+    onInterfaceActionButton: (_uid, handler) => { confirm = handler; },
+    emitCustomEvent: (name, event) => { events.push(name); hooks.events[name]?.(event); },
+  });
+  const prompt = (bag = false) => {
+    const held = bag ? bagWith(OPEN_BAG) : item(UNIDENTIFIED_MINERALS);
+    held.isDropable = () => false;
+    const p = player({ items: [held] });
+    p.getHitpoints = () => 99;
+    p.getRights = () => null;
+    p.getUsername = () => 'destroyqa';
+    p.isPlayerBot = () => false;
+    p.busy = () => false;
+    p.getSkillManager = () => ({ stopSkillable() {} });
+    const { DropItemPacketListener } = require('../dist/net/packet/impl/DropItemPacketListener');
+    DropItemPacketListener.drop(p, held.getId(), core.Inventory.INTERFACE_ID, 0);
+    assert.deepEqual(packets(p, "sendSound"), [], 'opening the prompt is silent');
+    assert.deepEqual(packets(p, "sendSoundEffect"), [], 'the drop listener does not play a drop effect for the prompt');
+    return p;
+  };
+  for (const bag of [false, true]) {
+    const p = prompt(bag);
+    confirm({ player: p, action: 1 });
+    confirm({ player: p, action: 1 });
+    assert.equal(p.inv.getItems()[0], null, 'generic and item-owned destruction both remove the item');
+    assert.deepEqual(packets(p, "sendSound"), [["sendSound", 2381, 100, 0]]);
+  }
+  for (const refusal of ['cancel', 'stale', 'veto']) {
+    const p = prompt();
+    if (refusal === 'stale') p.inv.getItems()[0] = item(COINS);
+    veto = refusal === 'veto';
+    const before = events.length;
+    confirm({ player: p, action: refusal === 'cancel' ? 0 : 1 });
+    assert.ok(p.inv.getItems()[0], refusal);
+    assert.deepEqual(packets(p, "sendSound"), [], refusal);
+    assert.equal(events.length, before, 'no destruction event on refusal');
+  }
 });
 
 test("a confirmed Destroy in the Wilderness drops coins and noted items, not food or vials of water; elsewhere all is lost (Wiki)", () => {
@@ -443,4 +505,116 @@ test("on death the killer gets everything but food and potions (Wiki)", () => {
   const before = dropped.length;
   hooks.defeated({ killer: player(), victim });
   assert.deepEqual(dropped.slice(before).map((entry) => entry.getId()), [COINS]);
+});
+
+// Source-only diagnostic: normal decoded widget/amount dispatch, without a saved callback call.
+test("bank Deposit-X keeps its selected item across another bag operation", async (t) => {
+  const { ClientConnection } = require("../dist/net/NetworkBuilder");
+  const { HeadlessBinaryChannel } = require("../dist/net/BinaryChannel");
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const { PlayerSession } = require("../dist/net/PlayerSession");
+  const { PlayerStatus } = require("../dist/game/model/PlayerStatus");
+  const real = PluginManager.getCoreApi();
+  // Reuse the listeners registered by this fixture; the router and bank/widget handlers stay real.
+  t.mock.method(PluginManager, "emitInterfaceActionClick", (event) => click(event).handled);
+  t.mock.method(PluginManager, "emitCustomEvent", (name, event) => hooks.events[name]?.(event));
+
+  function actor(entries = [{ id: FIRE_RUNE, amount: 13 }, { id: COINS, amount: 7 }]) {
+    bankTabs = bankTab();
+    const channel = new HeadlessBinaryChannel();
+    const sent = [];
+    channel.send = (frame) => { sent.push(Buffer.from(frame)); };
+    const session = new PlayerSession(channel);
+    const p = new Player(session, new Location(...LUMBRIDGE, 0));
+    session.setPlayer(p);
+    p.setStatus(PlayerStatus.BANKING);
+    p.setInterfaceId(real.Bank.MAIN_INTERFACE_ID);
+    p.bankOpen = true; // The existing plugin fixture's bank-open adapter.
+    p.getBank = () => bankTabs;
+    const bag = bagWith(OPEN_BAG, entries);
+    p.getInventory().setItem(0, bag);
+    hooks.events[core.Bank.INVENTORY_OP_EVENT]({ player: p, item: bag, slot: 0, op: 1, handled: false });
+    const connection = new ClientConnection(channel);
+    assert.ok(sent.some((frame) => frame.length > 0), "the real constructor sends its welcome on an open transport");
+    connection.player = p;
+    // Await the real turn-dispatch promise so setup/router failures cannot disappear in a logged catch.
+    const send = (packet) => connection.dispatch([packet], true);
+    const op = (action) => send({ type: "widget_action", widgetId: (15 << 16) | bankside("lootingbag_items"),
+      groupId: 15, childId: bankside("lootingbag_items"), slot: 0, itemId: FIRE_RUNE,
+      buttonNum: action });
+    return { p, bag, op, send };
+  }
+
+  await t.test("original item accepts a normal amount submission", async () => {
+    const { p, bag, op, send } = actor();
+    await op(6);
+    assert.equal(typeof p.getEnteredAmountAction()?.execute, "function");
+    await send({ type: "dialogue_amount", amount: 3 });
+    assert.equal(p.getEnteredAmountAction(), null);
+    assert.equal(bankTabs.held.get(FIRE_RUNE), 3);
+    assert.deepEqual(stored(bag).map(({ id, amount }) => [id, amount]), [[FIRE_RUNE, 10], [COINS, 7]]);
+  });
+
+  await t.test("closed banks, replacement bags and full banks preserve contents", async () => {
+    for (const control of ["closed", "replacement", "full"]) {
+      const { p, bag, op, send } = actor();
+      await op(6);
+      if (control === "closed") {
+        p.bankOpen = false;
+        p.setStatus(PlayerStatus.NONE);
+      }
+      if (control === "replacement") p.getInventory().setItem(0, bagWith(OPEN_BAG));
+      if (control === "full") bankTabs.getAddableAmount = () => 0;
+      await send({ type: "dialogue_amount", amount: 3 });
+      assert.equal(p.getEnteredAmountAction(), null, control);
+      assert.equal(bankTabs.held.size, 0, control);
+      assert.deepEqual(stored(bag).map(({ id, amount }) => [id, amount]), [[FIRE_RUNE, 13], [COINS, 7]], control);
+    }
+  });
+
+  await t.test("a partial deposit keeps the pending rune target valid", async () => {
+    const { p, bag, op, send } = actor();
+    await op(6);
+    const pending = p.getEnteredAmountAction();
+    await op(3); // Deposit-5 clones the bag metadata, but leaves the same semantic target.
+    assert.equal(p.getEnteredAmountAction(), pending);
+    assert.equal(bankTabs.held.get(FIRE_RUNE), 5);
+    assert.deepEqual(stored(bag).map(({ id, amount }) => [id, amount]), [[FIRE_RUNE, 8], [COINS, 7]]);
+    await send({ type: "dialogue_amount", amount: 3 });
+    assert.equal(p.getEnteredAmountAction(), null);
+    assert.equal(bankTabs.held.get(FIRE_RUNE), 8);
+    assert.deepEqual(stored(bag).map(({ id, amount }) => [id, amount]), [[FIRE_RUNE, 5], [COINS, 7]]);
+  });
+
+  await t.test("a compacted rune stack with different metadata is a different target", async () => {
+    const selected = { id: FIRE_RUNE, amount: 13, meta: { diagnostic: "selected" } };
+    const other = { id: FIRE_RUNE, amount: 7, meta: { diagnostic: "other" } };
+    const { p, bag, op, send } = actor([selected, other]);
+    await op(6);
+    const pending = p.getEnteredAmountAction();
+    assert.equal(typeof pending?.execute, "function", "the metadata target has an armed amount callback");
+    await op(7);
+    assert.equal(bankTabs.held.get(FIRE_RUNE), 13);
+    assert.deepEqual(stored(bag), [other], "the other metadata stack compacts into the selected slot");
+    assert.equal(p.getEnteredAmountAction(), pending);
+    await send({ type: "dialogue_amount", amount: 3 });
+    assert.equal(p.getEnteredAmountAction(), null);
+    assert.deepEqual(stored(bag), [other], "the original prompt must leave the different metadata stack intact");
+    assert.equal(bankTabs.held.get(FIRE_RUNE), 13, "the ID-coalescing fixture tab receives no additional runes");
+  });
+
+  await t.test("a compacted slot cannot redirect the pending amount to coins", async () => {
+    const { p, bag, op, send } = actor();
+    await op(6);
+    const pending = p.getEnteredAmountAction();
+    assert.equal(typeof pending?.execute, "function");
+    await op(7); // Real registered Deposit-All removes runes and compacts coins into slot zero.
+    assert.equal(bankTabs.held.get(FIRE_RUNE), 13);
+    assert.deepEqual(stored(bag).map(({ id, amount }) => [id, amount]), [[COINS, 7]]);
+    assert.equal(p.getEnteredAmountAction(), pending, "the intervening bank operation leaves this prompt armed");
+    await send({ type: "dialogue_amount", amount: 3 });
+    assert.equal(p.getEnteredAmountAction(), null, "normal amount dispatch consumes the callback");
+    assert.equal(bankTabs.held.get(COINS) ?? 0, 0, "a rune prompt must not bank coins");
+    assert.deepEqual(stored(bag).map(({ id, amount }) => [id, amount]), [[COINS, 7]]);
+  });
 });

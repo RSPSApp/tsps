@@ -1,7 +1,7 @@
 // TODO: ported from xrsps-typescript; untested.
 // TODO: Impale special attack animation/graphic ids not found; skipped.
 module.exports = function registerRuneClawsSpecialAttack(api) {
-  const { CombatSpecial, ItemIdentifiers, MeleeCombatMethod } = api.core;
+  const { Animation, CombatSpecial, ItemIdentifiers, MeleeCombatMethod, Sound, Sounds } = api.core;
 
   const DRAIN = 25;
   const LEVEL_MULTIPLIER = 1.1;
@@ -10,7 +10,12 @@ module.exports = function registerRuneClawsSpecialAttack(api) {
   class RuneClawsCombatMethod extends MeleeCombatMethod {
     start(character, target) {
       CombatSpecial.drain(character, DRAIN);
-      super.start(character, target);
+      // Impale keeps the claws' attack animation but has its own sound (Wiki: Impale.wav).
+      const animation = character.getAttackAnim(target);
+      if (animation !== -1) {
+        character.performAnimation(new Animation(animation));
+      }
+      Sounds.playAreaSoundAt(character, Sound.RUNE_CLAWS_SPECIAL);
     }
 
     attackSpeed(character) {

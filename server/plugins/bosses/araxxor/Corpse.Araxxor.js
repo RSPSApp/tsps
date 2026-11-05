@@ -20,6 +20,7 @@ const Minions = require("./Minions.Araxxor");
 const Specials = require("./Specials.Araxxor");
 const CombatAchievements = require("./CombatAchievements.Araxxor");
 const Scoreboard = require("./Scoreboard.Araxxor");
+const BOSS_NAME = "Araxxor";
 
 /** Cache varp total_araxxor_kills: the kill count the boss log reads. Combat Achievements sends
  * it (its count is the one the boss page shows); this plugin only does when that is not running. */
@@ -106,6 +107,7 @@ function announceKill(player, kills, ticks) {
   const best = Number(player.getAttribute(Shared.ATTR_BEST_TICKS)) || 0;
   if (!best || ticks < best) {
     player.setAttribute(Shared.ATTR_BEST_TICKS, ticks);
+    api.emitCustomEvent("boss:personal-best", { player, boss: BOSS_NAME, ticks });
     player.sendMessage(`Fight duration: <col=ff0000>${formatTicks(ticks)}</col> (new personal best)`);
   } else {
     player.sendMessage(`Fight duration: <col=ff0000>${formatTicks(ticks)}</col>. Personal best: ${formatTicks(best)}`);
@@ -193,7 +195,8 @@ function harvest({ player, npc }) {
     if (!npc.isRegistered?.()) return;
     spawnDrops(player, session, stash);
     if (pet.length > 0) {
-      api.emitCustomEvent("npc-drops:roll", { player, npc, npcId: Shared.BOSS_ID, drops: pet });
+      // The death roll already counted the kill; Nid is only extra loot.
+      api.emitCustomEvent("npc-drops:roll", { player, npc, npcId: Shared.BOSS_ID, drops: pet, countKill: false });
     }
   });
   later(HARVEST_SINK_TICKS, npc, () => {
@@ -215,7 +218,8 @@ function destroyConfirmed({ player, npc }) {
     if (!npc.isRegistered?.()) return;
     spawnDrops(player, session, clues);
     if (nid.length > 0) {
-      api.emitCustomEvent("npc-drops:roll", { player, npc, npcId: Shared.BOSS_ID, drops: nid });
+      // The death roll already counted the kill; Nid is only extra loot.
+      api.emitCustomEvent("npc-drops:roll", { player, npc, npcId: Shared.BOSS_ID, drops: nid, countKill: false });
     }
     endCorpse(npc, session, 2);
   });

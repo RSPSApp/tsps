@@ -121,7 +121,7 @@ async function findCacheOnOpenRS2(
     }
     const caches: OpenRS2CacheEntry[] = await resp.json();
 
-    const match = caches.find(
+    return caches.find(
         (c) =>
             c.scope === "runescape" &&
             c.game === "oldschool" &&
@@ -131,21 +131,6 @@ async function findCacheOnOpenRS2(
             c.timestamp?.startsWith(date),
     );
 
-    if (match) return match;
-
-    const revisionMatches = caches
-        .filter(
-            (c) =>
-                c.scope === "runescape" &&
-                c.game === "oldschool" &&
-                c.language === "en" &&
-                c.builds.length > 0 &&
-                c.builds[0].major === revision &&
-                c.timestamp,
-        )
-        .sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp));
-
-    return revisionMatches[0];
 }
 
 async function downloadWithProgress(url: string, label: string): Promise<Buffer> {
@@ -193,20 +178,19 @@ async function downloadCache(entry: OpenRS2CacheEntry, cacheDir: string): Promis
 
     console.log("[CacheDownloader] Downloading XTEA keys...");
     const keysResp = await fetch(`${OPENRS2_API}/caches/${entry.scope}/${entry.id}/keys.json`);
-    let xteas: Record<string, number[]> = {};
-    if (keysResp.ok) {
-        const keys: Array<{ group: number; key: number[] }> = await keysResp.json();
-        for (const k of keys) {
-            xteas[k.group.toString()] = k.key;
-        }
+    if (!keysResp.ok) throw new Error(`XTEA keys download failed: ${keysResp.status}`);
+    const xteas: Record<string, number[]> = {};
+    const keys: Array<{ group: number; key: number[] }> = await keysResp.json();
+    for (const k of keys) {
+        xteas[k.group.toString()] = k.key;
     }
 
     fs.writeFileSync(path.join(cacheDir, "keys.json"), JSON.stringify(xteas), "utf8");
     fs.writeFileSync(path.join(cacheDir, "info.json"), JSON.stringify(entry), "utf8");
 }
 
-function writeCachesJson(target: string, entry: OpenRS2CacheEntry): void {
-    const cachesJsonPath = path.resolve(CACHES_DIR, "caches.json");
+function writeCachesJson(directory: string, target: string, entry: OpenRS2CacheEntry): void {
+    const cachesJsonPath = path.join(directory, "caches.json");
     const cacheEntry = {
         name: target,
         game: entry.game,
@@ -216,67 +200,78 @@ function writeCachesJson(target: string, entry: OpenRS2CacheEntry): void {
         size: entry.size ?? 0,
     };
 
-    fs.writeFileSync(cachesJsonPath, JSON.stringify([cacheEntry]), "utf8");
+    const temporary = `${cachesJsonPath}.${process.pid}.tmp`;
+    fs.writeFileSync(temporary, JSON.stringify([cacheEntry]), "utf8");
+    fs.renameSync(temporary, cachesJsonPath);
+}
+
+function publishCache(directory: string, target: string, entry: OpenRS2CacheEntry): void {
+    const destination = path.join(directory, target);
+    fs.mkdirSync(directory, { recursive: true });
+    if (!isCacheValid(destination)) {
+        const staging = fs.mkdtempSync(path.join(directory, `.${target}-`));
+        try {
+            fs.cpSync(path.join(CACHES_DIR, target), staging, { recursive: true });
+            if (!isCacheValid(staging)) throw new Error("Published cache is incomplete");
+            fs.chmodSync(staging, 0o755); // mkdtemp starts private; nginx needs directory access.
+            fs.rmSync(destination, { recursive: true, force: true });
+            fs.renameSync(staging, destination);
+        } finally {
+            fs.rmSync(staging, { recursive: true, force: true });
+        }
+    }
+    // Existing clients keep their versioned files; new clients see this only after the copy.
+    writeCachesJson(directory, target, entry);
+    console.log(`[CacheDownloader] Published ${target} to ${directory}`);
 }
 
 async function ensureCache(): Promise<void> {
+    const args = process.argv.slice(2);
+    if (args.length && (args.length !== 2 || args[0] !== "--publish" || !path.isAbsolute(args[1]))) {
+        throw new Error("Usage: ensure-cache [--publish <absolute public cache directory>]");
+    }
+    const publishDirectory = args[1];
     const target = readTarget();
     const { revision, date } = parseTargetName(target);
     const cacheDir = path.resolve(CACHES_DIR, target);
 
     console.log(`[CacheDownloader] Target cache: "${target}" (rev ${revision})`);
 
-    if (isCacheValid(cacheDir)) {
-        console.log("[CacheDownloader] Cache is present and valid");
-        return;
-    }
-
     if (!acquireLock()) {
         await waitForLock();
-        if (isCacheValid(cacheDir)) {
-            console.log("[CacheDownloader] Cache is now available (downloaded by another process)");
-            return;
-        }
         if (!acquireLock()) {
             throw new Error("Failed to acquire cache download lock after waiting");
         }
     }
 
     try {
-        const cachesRoot = path.resolve(CACHES_DIR);
-        if (fs.existsSync(cachesRoot)) {
-            console.log("[CacheDownloader] Clearing caches/ directory...");
-            const lockPath = path.resolve(LOCK_FILE);
-            const entries = fs.readdirSync(cachesRoot);
-            for (const e of entries) {
-                const fullPath = path.join(cachesRoot, e);
-                if (fullPath === lockPath) continue;
-                fs.rmSync(fullPath, { recursive: true, force: true });
-            }
-        }
-
-        console.log("[CacheDownloader] Cache missing or incomplete, searching OpenRS2...");
-
-        const entry = await findCacheOnOpenRS2(revision, date);
-        if (!entry) {
-            throw new Error(
-                `Could not find cache for revision ${revision} (date=${date}) on OpenRS2 archive`,
-            );
-        }
-
-        console.log(
-            `[CacheDownloader] Found cache id=${entry.id} (rev ${entry.builds[0].major}, ${entry.timestamp})`,
-        );
-
-        fs.mkdirSync(CACHES_DIR, { recursive: true });
-        await downloadCache(entry, cacheDir);
-        writeCachesJson(target, entry);
-
         if (!isCacheValid(cacheDir)) {
-            throw new Error("Cache download completed but validation failed");
+            console.log("[CacheDownloader] Cache missing or incomplete, searching OpenRS2...");
+            const entry = await findCacheOnOpenRS2(revision, date);
+            if (!entry) {
+                throw new Error(
+                    `Could not find cache for revision ${revision} (date=${date}) on OpenRS2 archive`,
+                );
+            }
+            console.log(`[CacheDownloader] Found cache id=${entry.id} (rev ${revision}, ${entry.timestamp})`);
+            const staging = fs.mkdtempSync(path.join(CACHES_DIR, `.${target}-`));
+            try {
+                await downloadCache(entry, staging);
+                if (!isCacheValid(staging)) throw new Error("Cache download completed but validation failed");
+                fs.rmSync(cacheDir, { recursive: true, force: true });
+                fs.renameSync(staging, cacheDir);
+            } finally {
+                fs.rmSync(staging, { recursive: true, force: true });
+            }
+        } else {
+            console.log("[CacheDownloader] Cache is present and valid");
         }
-
-        console.log("[CacheDownloader] Cache downloaded and validated successfully");
+        const entry: OpenRS2CacheEntry = JSON.parse(fs.readFileSync(path.join(cacheDir, "info.json"), "utf8"));
+        if (entry.builds[0]?.major !== revision || !entry.timestamp?.startsWith(date)) {
+            throw new Error(`Cache metadata does not match ${target}`);
+        }
+        writeCachesJson(CACHES_DIR, target, entry);
+        if (publishDirectory) publishCache(publishDirectory, target, entry);
     } finally {
         releaseLock();
     }

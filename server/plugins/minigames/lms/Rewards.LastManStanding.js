@@ -1,8 +1,7 @@
 /**
  * Justine's stuff for the Last Shopper Standing (interface 645), as captured:
  * - Justine's Trade opens it (the generic shop 1449 bound to her in shops.json gives way); with
- *   no win yet she first says "Before I show you the rewards, I'll grant access to further
- *   rewards once you've been the Last Man Standing at least once.";
+ *   no win yet she first explains the win requirement for tradeable rewards;
  * - the stock and prices arrive as an inventory (422: each slot's count is its price), the points
  *   on varp 261 and the wins on varp 262, which the client draws the list from;
  * - the confirm button's sub is the slot; set rewards ask "How many sets of 50 would you like?
@@ -17,6 +16,7 @@ const OP1 = 1 << 1;
 /** The most of one item a stack holds. */
 const MAX_STACK = 2147483647;
 const JUSTINE_HEAD = "br_reward_shopkeeper";
+const COLLECTION_LOG_CATEGORY = "Last Man Standing";
 
 function wins(player) {
   return Common.number(player, Common.ATTRIBUTES.wins);
@@ -78,6 +78,7 @@ function buy(player, entry, count) {
   if (stackable) inventory.add(new Common.core.Item(id, amount), false);
   else for (let i = 0; i < amount; i++) inventory.add(new Common.core.Item(id, 1), false);
   inventory.refreshItems();
+  Common.api.emitCustomEvent("collection-log:obtain", { player, itemId: id, amount, category: COLLECTION_LOG_CATEGORY });
   player.getPacketSender().sendSound(Common.data.sounds.bought, 100, 0);
 }
 

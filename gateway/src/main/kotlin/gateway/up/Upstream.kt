@@ -1,6 +1,7 @@
 package gateway.up
 
 import gateway.coverage.DropCounter
+import gateway.session.PlayerOps
 import gateway.session.VarpMirror
 import gateway.tsps.TspsClientPacket
 import gateway.down.ChatStyle
@@ -11,6 +12,9 @@ import net.rsprot.protocol.game.incoming.buttons.IfButtonD
 import net.rsprot.protocol.game.incoming.buttons.IfButtonT
 import net.rsprot.protocol.game.incoming.buttons.IfScriptTrigger
 import net.rsprot.protocol.game.incoming.buttons.IfSubOp
+import net.rsprot.protocol.game.incoming.clan.AffinedClanSettingsAddBannedFromChannel
+import net.rsprot.protocol.game.incoming.clan.AffinedClanSettingsSetMutedFromChannel
+import net.rsprot.protocol.game.incoming.clan.ClanChannelKickUser
 import net.rsprot.protocol.game.incoming.friendchat.FriendChatJoinLeave
 import net.rsprot.protocol.game.incoming.friendchat.FriendChatKick
 import net.rsprot.protocol.game.incoming.friendchat.FriendChatSetRank
@@ -36,6 +40,7 @@ import net.rsprot.protocol.game.incoming.objs.OpObjT
 import net.rsprot.protocol.game.incoming.objs.OpObjV2
 import net.rsprot.protocol.game.incoming.players.OpPlayer
 import net.rsprot.protocol.game.incoming.players.OpPlayerT
+import net.rsprot.protocol.game.incoming.resumed.ResumePObjDialog
 import net.rsprot.protocol.game.incoming.resumed.ResumePCountDialog
 import net.rsprot.protocol.game.incoming.social.FriendListAdd
 import net.rsprot.protocol.game.incoming.worldentities.OpWorldEntity
@@ -63,6 +68,8 @@ class Upstream(
     private val interceptCount: (Int) -> Boolean = { false },
     /** tsps's index for a boat the client names by its world id. */
     private val worldEntityIndex: (Int) -> Int? = { it },
+    /** Whether the welcome screen is up (a modal, as live opens it). */
+    private val welcomeShown: () -> Boolean = { false },
     private val send: (ByteArray) -> Unit,
 ) {
     fun handle(message: IncomingGameMessage) {
@@ -119,11 +126,29 @@ class Upstream(
             is ResumePauseButton -> send(TspsWriter().u16AddLE(message.sub).i32(message.combinedId).fixed(RESUME_PAUSEBUTTON))
             is ResumePCountDialog -> if (!interceptCount(message.count)) send(TspsWriter().i32(message.count).fixed(RESUME_COUNTDIALOG))
             is ResumePLongDialog -> send(TspsWriter().i32(message.count.coerceIn(0, Int.MAX_VALUE.toLong()).toInt()).fixed(RESUME_COUNTDIALOG))
+            is ResumePObjDialog -> send(TspsWriter().string(message.obj.toString()).varByte(RESUME_NAMEDIALOG))
             is ResumePNameDialog -> send(TspsWriter().string(message.name).varByte(RESUME_NAMEDIALOG))
             is ResumePStringDialog -> send(TspsWriter().string(message.string).varByte(RESUME_STRINGDIALOG))
-            is CloseModal -> send(TspsWriter().fixed(IF_CLOSE))
+            // The client closes modals itself (Escape, a close button) and then tells the server. On
+            // the welcome screen tsps would leave the player on the login root without a gameframe,
+            // so closing it means Play, the only way tsps leaves it.
+            is CloseModal -> send(if (welcomeShown()) TspsClientPacket.ifButtonX(WELCOME_PLAY, NONE, NONE, 1) else TspsWriter().fixed(IF_CLOSE))
             is MessagePublic ->
-                PUBLIC_CHAT_KINDS[message.type]?.let { send(TspsClientPacket.chat(it, message.message, publicChatStyle(message))) } ?: DropCounter.up(message)
+                when {
+                    // tsps's clan chat has no colour or effect.
+                    message.type == CLAN_CHAT_TYPE ->
+                        if (message.clanType == OWN_CLAN) send(TspsClientPacket.clanChat(OWN_CLAN, message.message)) else DropCounter.up(message)
+                    message.type == GUEST_CLAN_CHAT_TYPE -> send(TspsClientPacket.clanChat(GUEST_CLAN, message.message))
+                    else ->
+                        PUBLIC_CHAT_KINDS[message.type]?.let {
+                            // Native chat_send prepends a routing slash only for Friends Chat.
+                            val text = if (message.type == 2) message.message.removePrefix("/") else message.message
+                            send(TspsClientPacket.chat(it, text, publicChatStyle(message)))
+                        } ?: DropCounter.up(message)
+                }
+            is ClanChannelKickUser -> clanChannelAction(message, message.clanId, KICK_USER, message.name)
+            is AffinedClanSettingsAddBannedFromChannel -> clanChannelAction(message, message.clanId, BAN_USER, message.name)
+            is AffinedClanSettingsSetMutedFromChannel -> clanChannelAction(message, message.clanId, MUTE_USER, message.name, if (message.muted) 1 else 0)
             // Autocomplete is the client asking for suggestions as you type; tsps has none.
             is ClientCheat -> if (!message.autocomplete) send(TspsClientPacket.command(message.command))
             is MessagePrivate -> send(TspsWriter().string(message.name).string(message.message).varByte(PRIVATE_MESSAGE))
@@ -144,7 +169,7 @@ class Upstream(
             }
             is ClickWorldMap -> send(WorldOps.worldMapClick(message.level, message.x, message.z))
             is Teleport -> send(WorldOps.teleport(message.level, message.x, message.z))
-            is OpPlayer -> send(TspsClientPacket.playerOp(message.op, message.index))
+            is OpPlayer -> send(TspsClientPacket.playerOp(PlayerOps.toTsps(message.op), message.index))
             is OpNpcV2 -> if (message.op in 1..5) send(TspsClientPacket.npcOp(message.op, message.index)) else DropCounter.up(message)
             is OpNpc6 -> send(TspsClientPacket.examineNpc(message.id))
             is OpLocV2 -> if (message.op in 1..5) send(WorldOps.loc(message.op, message.id, message.x, message.z)) else DropCounter.up(message)
@@ -191,6 +216,10 @@ class Upstream(
     /** FRIENDS_CHAT_ACTION: one packet for the friend, ignore and friends-chat actions. */
     private fun social(action: Int, name: String, rank: Int = 0) =
         send(TspsWriter().u8(action).string(name).u8(rank).varByte(FRIENDS_CHAT_ACTION))
+
+    /** tsps only takes these ops in the player's own clan channel, whichever the client means. */
+    private fun clanChannelAction(message: IncomingGameMessage, clanId: Int, action: Int, name: String, value: Int = 0) =
+        if (clanId == OWN_CLAN) send(TspsClientPacket.clanChannelAction(action, name, value)) else DropCounter.up(message)
 
     private fun button(message: If3Button) {
         if (interceptButton(message.combinedId, message.sub, message.obj, message.op)) return
@@ -256,8 +285,23 @@ class Upstream(
         const val RUN_VARP = 173
         const val LOGOUT_TAB_BUTTON = (182 shl 16) or 8
         const val WORLD_SWITCHER_LOGOUT = (69 shl 16) or 25
+        const val WELCOME_PLAY = (378 shl 16) or 72
+
+        /** The slot and obj an IF_BUTTONX on a plain component carries. */
+        const val NONE = 0xFFFF
 
         /** OSRS public-chat types (0 public, 1 autotyper, 2 friends chat) to tsps chat kinds. */
         val PUBLIC_CHAT_KINDS = mapOf(0 to 0, 1 to 3, 2 to 2)
+
+        /** OSRS public-chat types for clan chat; rsprot only reads a clan type for the first. */
+        const val CLAN_CHAT_TYPE = 3
+        const val GUEST_CLAN_CHAT_TYPE = 4
+        const val OWN_CLAN = 0
+        const val GUEST_CLAN = -1
+
+        // CLAN_CHANNEL_ACTION's action codes.
+        const val KICK_USER = 0
+        const val BAN_USER = 1
+        const val MUTE_USER = 2
     }
 }

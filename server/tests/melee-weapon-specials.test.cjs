@@ -57,7 +57,7 @@ function skills(levelsByName) {
 }
 
 function fakePlayer({ weaponId, energy = 100, levels = {} }) {
-  const calls = { orb: 0, state: [], animations: [], graphics: [], chat: [], messages: [], sounds: [] };
+  const calls = { orb: 0, state: [], animations: [], graphics: [], chat: [], messages: [], sounds: [], area: [] };
   const player = {
     calls,
     skillManager: skills(levels),
@@ -79,6 +79,7 @@ function fakePlayer({ weaponId, energy = 100, levels = {} }) {
     getWeapon: () => ({ getSpecialBar: () => -1, getSpecialMeter: () => -1 }),
     getPacketSender: () => ({
       sendSoundEffect: (...args) => calls.sounds.push(args),
+      sendAreaSound: (...args) => calls.area.push(args),
       updateSpecialAttackOrb: () => { calls.orb++; },
       sendSpecialAttackState: (on) => { calls.state.push(on); },
     }),
@@ -185,6 +186,33 @@ test("activating Rampage drains energy once, updates the bar and applies the sta
   assert.deepEqual(player.calls.sounds, [[2538, 1, 0, 1]], "rsprox recording 1023: immediate activation sound");
 });
 
+test("special attacks play their own recorded sound, not the normal weapon sound", () => {
+  const cases = [
+    ["armadyl_godsword", ItemIdentifiers.ARMADYL_GODSWORD, [3869], []],
+    ["bandos_godsword", ItemIdentifiers.BANDOS_GODSWORD, [3869], []],
+    ["saradomin_godsword", ItemIdentifiers.SARADOMIN_GODSWORD, [3869], []],
+    ["zamorak_godsword", ItemIdentifiers.ZAMORAK_GODSWORD, [3869], []],
+    ["ancient_godsword", ItemIdentifiers.ANCIENT_GODSWORD, [3869], []],
+    ["dragon_warhammer", ItemIdentifiers.DRAGON_WARHAMMER, [2520], []],
+    ["statius_warhammer", ItemIdentifiers.STATIUSS_WARHAMMER, [2520], []],
+    ["barrelchest_anchor", ItemIdentifiers.BARRELCHEST_ANCHOR, [3481], []],
+    ["excalibur", ItemIdentifiers.EXCALIBUR, [], [2539]],
+  ];
+  for (const [id, weaponId, areaIds, synthIds] of cases) {
+    const player = fakePlayer({ weaponId });
+    const target = npcTarget(99);
+    const original = World.getPlayers;
+    World.getPlayers = () => [player];
+    try {
+      special(id).getCombatMethod().start(player, target);
+    } finally {
+      World.getPlayers = original;
+    }
+    assert.deepEqual(player.calls.area.map(([soundId]) => soundId), areaIds, `${id} area sound`);
+    assert.deepEqual(player.calls.sounds.map(([soundId]) => soundId), synthIds, `${id} synth sound`);
+  }
+});
+
 test("Rampage refreshes its base Strength boost without stacking repeated uses", () => {
   const player = fakePlayer({ weaponId: ItemIdentifiers.DRAGON_BATTLEAXE,
     levels: { ATTACK: 99, DEFENCE: 99, RANGED: 99, MAGIC: 99, STRENGTH: 99 } });
@@ -229,7 +257,7 @@ test("an instant special without enough energy changes nothing", () => {
   assert.equal(player.skillManager.level("STRENGTH"), 90);
   assert.equal(player.skillManager.level("ATTACK"), 90);
   assert.deepEqual(player.calls.chat, []);
-  assert.deepEqual(player.calls.messages, ["You do not have enough special attack energy left!"]);
+  assert.deepEqual(player.calls.messages, ["You don't have enough power left."]);
 });
 
 // Wiki: Excalibur gives a visible +8 Defence boost; visible boosts do not stack.
@@ -239,6 +267,7 @@ test("Sanctuary boosts Defence immediately without a target and spends 100% ener
   assert.equal(player.skillManager.level("DEFENCE"), 58);
   assert.equal(player.energy, 0);
   assert.equal(player.activated, false);
+  assert.equal(player.calls.animations.at(-1).getId(), 1057, "sanctuary");
   assert.equal(special("excalibur").getCombatMethod().hits(player, null), null);
 });
 
@@ -267,7 +296,7 @@ test("Sanctuary below 100% energy leaves Defence and energy unchanged", () => {
   CombatSpecial.activate(player);
   assert.equal(player.skillManager.level("DEFENCE"), 50);
   assert.equal(player.energy, 99);
-  assert.deepEqual(player.calls.messages, ["You do not have enough special attack energy left!"]);
+  assert.deepEqual(player.calls.messages, ["You don't have enough power left."]);
 });
 
 test("a swing special lights on the first press and toggling it off cancels without spending energy", () => {
@@ -460,19 +489,35 @@ test("Healing Blade restores at least 10 Hitpoints and 5 Prayer, half and a quar
 
 test("Ice Cleave freezes for 32 ticks on a hit only", () => {
   const registered = [];
+  const targetGraphics = [];
   const target = {
     getTimers: () => ({ has: () => false, registers: (key, ticks) => registered.push(ticks) }),
     getSize: () => 1,
     hasFlag: () => false,
     getMovementQueue: () => ({ reset() {} }),
     isPlayer: () => false,
-    performGraphic() {},
+    performGraphic: (graphic) => targetGraphics.push(graphic.getId()),
   };
   const zgs = special("zamorak_godsword").getCombatMethod();
   zgs.handleAfterHitEffects(hit(target, 0, false));
   assert.equal(registered.length, 0);
+  assert.deepEqual(targetGraphics, [], "no ice block on a miss");
   zgs.handleAfterHitEffects(hit(target, 10, true));
   assert.equal(Math.round(registered[0]), 32);
+  assert.deepEqual(targetGraphics, [369], "issue 2007: the target is encased in the Ice Barrage block");
+});
+
+test("Ice Cleave plays the red slash on the attacker, not the target", () => {
+  const player = fakePlayer({ weaponId: ItemIdentifiers.ZAMORAK_GODSWORD });
+  const original = World.getPlayers;
+  World.getPlayers = () => [player];
+  try {
+    special("zamorak_godsword").getCombatMethod().start(player, npcTarget(99));
+  } finally {
+    World.getPlayers = original;
+  }
+  assert.equal(player.calls.animations[0].getId(), 7638);
+  assert.deepEqual(player.calls.graphics.map((graphic) => graphic.getId()), [1210], "issue 2007: wiki Ice_Cleave.gif");
 });
 
 test("Blood Sacrifice heals 15% of the target's max Hitpoints, capped at 25 on NPCs and 15 on players", () => {

@@ -66,8 +66,16 @@ test("projectiles land when the capture says: 46 cycles, then 5 a tile (rock) or
   const { projectileEnd, hitDelay } = Combat;
   assert.equal(projectileEnd({ delay: 46, cyclesPerTile: 5 }, 1), 51);
   assert.equal(projectileEnd({ delay: 46, cyclesPerTile: 4 }, 1), 50);
-  assert.equal(hitDelay(51), 1);
-  assert.equal(hitDelay(61), 2);
+  // The hit shows on the first tick (30 cycles) at or after the landing (#1862).
+  assert.equal(hitDelay(51), 2);
+  assert.equal(hitDelay(60), 2);
+  assert.equal(hitDelay(61), 3);
+  for (const spec of [{ delay: 46, cyclesPerTile: 5 }, { delay: 46, cyclesPerTile: 4 }]) {
+    for (const tiles of [1, 4, 10]) {
+      const end = projectileEnd(spec, tiles);
+      assert.ok(hitDelay(end) * 30 >= end && (hitDelay(end) - 1) * 30 < end, `${spec.cyclesPerTile}/tile, ${tiles} tiles`);
+    }
+  }
 });
 
 test("a boulder takes a third of the hitpoints, rounded down, and never kills", () => {

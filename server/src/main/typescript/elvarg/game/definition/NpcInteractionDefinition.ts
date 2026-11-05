@@ -12,7 +12,8 @@ export class NpcInteractionDefinition {
         private readonly firstClick: NpcInteractionActionDefinition | null,
         private readonly secondClick: NpcInteractionActionDefinition | null,
         private readonly thirdClick: NpcInteractionActionDefinition | null,
-        private readonly fourthClick: NpcInteractionActionDefinition | null = null
+        private readonly fourthClick: NpcInteractionActionDefinition | null = null,
+        private readonly fifthClick: NpcInteractionActionDefinition | null = null
     ) {}
 
     public static replace(definitions: NpcInteractionDefinition[]): void {
@@ -47,6 +48,9 @@ export class NpcInteractionDefinition {
         if (clickType === 4) {
             return this.fourthClick;
         }
+        if (clickType === 5) {
+            return this.fifthClick;
+        }
         return null;
     }
 
@@ -64,5 +68,9 @@ export class NpcInteractionDefinition {
 
     public getFourthClick(): NpcInteractionActionDefinition | null {
         return this.fourthClick;
+    }
+
+    public getFifthClick(): NpcInteractionActionDefinition | null {
+        return this.fifthClick;
     }
 }

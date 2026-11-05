@@ -58,7 +58,6 @@ object TspsServerPacket {
     const val WIDGET_SET_ANGLE = 113
     const val WIDGET_SET_ANIMATION = 114
     const val WIDGET_SET_PLAYER_HEAD = 115
-    const val WIDGET_SET_QUEST_LIST = 116
     const val WIDGET_SET_MODEL = 117
     const val WIDGET_SET_POSITION = 118
     const val WIDGET_SET_COLOUR = 119
@@ -66,6 +65,11 @@ object TspsServerPacket {
     const val FRIENDS_CHAT_UPDATE = 121
     const val CHAT_FILTER_SETTINGS = 122
     const val TRIGGER_ONDIALOGABORT = 123
+    const val CLAN_SETTINGS_FULL = 124
+    const val CLAN_CHANNEL_FULL = 125
+    const val CLAN_CHANNEL_DELTA = 126
+    const val CLAN_SETTINGS_DELTA = 127
+    const val CLAN_VAR = 128
     const val LOC_CHANGE = 130
     const val SOUND = 131
     const val PLAY_JINGLE = 132
@@ -81,6 +85,7 @@ object TspsServerPacket {
     const val REGION_REPLACEMENT = 144
     const val SET_INTERACTION_MODE = 145
     const val RESET_INTERACTION_MODE = 146
+    const val REGION_REPLACEMENT_COMPRESSED = 147
     const val SHOP_OPEN = 150
     const val SHOP_SLOT = 151
     const val SHOP_CLOSE = 152
@@ -127,7 +132,7 @@ object TspsServerPacket {
             SKILLS_SNAPSHOT to -1,
             SKILLS_DELTA to -1,
             COMBAT_STATE to -1,
-            RUN_ENERGY to 2,
+            RUN_ENERGY to 10,
             HITSPLAT to -1,
             SPOT_ANIM to -1,
             PROJECTILES to -2,
@@ -156,11 +161,15 @@ object TspsServerPacket {
             WIDGET_SET_FLAGS to 8,
             WIDGET_SET_ANIMATION to 6,
             WIDGET_SET_PLAYER_HEAD to 4,
-            WIDGET_SET_QUEST_LIST to -2,
             CHAT_MESSAGE to -2,
             FRIENDS_CHAT_UPDATE to -2,
             CHAT_FILTER_SETTINGS to 3,
             TRIGGER_ONDIALOGABORT to 0,
+            CLAN_SETTINGS_FULL to -2,
+            CLAN_CHANNEL_FULL to -2,
+            CLAN_CHANNEL_DELTA to -2,
+            CLAN_SETTINGS_DELTA to -2,
+            CLAN_VAR to 6,
             LOC_CHANGE to -1,
             LOC_ADD_CHANGE to -1,
             LOC_DEL to -1,
@@ -175,6 +184,7 @@ object TspsServerPacket {
             REGION_REPLACEMENT to -2,
             SET_INTERACTION_MODE to 4,
             RESET_INTERACTION_MODE to 2,
+            REGION_REPLACEMENT_COMPRESSED to -2,
             SHOP_OPEN to -2,
             SHOP_SLOT to -1,
             SHOP_CLOSE to 0,

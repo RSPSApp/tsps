@@ -116,10 +116,16 @@ const ANIM = {
   UNTETHER: 832,
   REPAIR: 3676,
   DOUSE: 2771,
+  /** Cache `human_stunned`: the generic stun the torrent's zap leaves a loader in. */
+  STUNNED: 848,
   CANNON_FIRING: 8871,
   CANNON_FIRING_MIRROR: 8872,
   BOSS_TIDAL_WAVE: 8902,
   BOSS_SPAWN: 8897,
+  BOSS_READY_TO_WHIRL: 8900,
+  BOSS_WHIRL_TO_READY: 8901,
+  BOSS_ENRAGED_TRANSITION: 8906,
+  BOSS_ENRAGED_SPAWN: 8908,
   BOSS_TORRENT: 8903,
   BOSS_LIGHTNING: 8905,
   BOSS_DEATH: 8904,
@@ -134,6 +140,11 @@ const ANIM = {
 
 const GFX = {
   SPOT_SPLASH: 3,
+  /**
+   * Cache `stunned_thieving`, the circling stars: capture 552 shows it on the cannoneer of the
+   * cannon a torrent struck. Its seq (1054) runs 8 ticks.
+   */
+  STUNNED: 245,
   PROJECTILE_COOKED: 525,
   PROJECTILE_RAW: 528,
   PROJECTILE_CRYSTALLISED: 1837,
@@ -329,6 +340,7 @@ function startAction(player, name, step) {
 function endAction(player, action) {
   if (player.__temporossAction !== action) return;
   player.__temporossAction = null;
+  if (action.name === "load") player.__temporossLoading = null;
   animate(player, -1);
 }
 

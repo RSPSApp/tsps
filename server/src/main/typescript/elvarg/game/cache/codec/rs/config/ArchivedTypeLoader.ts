@@ -3,10 +3,20 @@ import { ByteBuffer } from "../io/ByteBuffer";
 import type { Type } from "./Type";
 import type { TypeConstructor, TypeLoader } from "./TypeLoader";
 
+const npcSeqFields = ["idleSeqId", "turnLeftSeqId", "turnRightSeqId", "walkSeqId", "walkBackSeqId",
+    "walkLeftSeqId", "walkRightSeqId", "runSeqId", "runBackSeqId", "runLeftSeqId", "runRightSeqId",
+    "crawlSeqId", "crawlBackSeqId", "crawlLeftSeqId", "crawlRightSeqId"] as const;
+const locSeqFields = ["seqId"] as const;
+export type ArchivedSeqField = typeof npcSeqFields[number] | typeof locSeqFields[number];
 export type ArchivedReferenceField = "transforms" | "countObj" | "note" | "noteTemplate" |
-    "notedId" | "unnotedId" | "placeholder" | "placeholderTemplate";
+    "notedId" | "unnotedId" | "placeholder" | "placeholderTemplate" | ArchivedSeqField;
 const referenceFields: readonly string[] = ["transforms", "countObj", "note", "noteTemplate",
-    "notedId", "unnotedId", "placeholder", "placeholderTemplate"];
+    "notedId", "unnotedId", "placeholder", "placeholderTemplate", ...npcSeqFields, ...locSeqFields];
+
+/** Native animation fields of an archived NPC or loc that may name a bundled sequence. */
+export function archivedSeqFields(kind: string): readonly ArchivedSeqField[] {
+    return kind === "npc" ? npcSeqFields : kind === "loc" ? locSeqFields : [];
+}
 
 /** Complete native definition bytes, supplied by the validated archive registry. */
 export interface ArchivedTypeSource {

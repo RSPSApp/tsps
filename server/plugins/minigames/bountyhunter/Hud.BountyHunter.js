@@ -71,7 +71,7 @@ function sync(player) {
   setVarbit(sender, VARBIT_PVP_OR_BH_WORLD, inCrater ? 1 : 0);
   setVarbit(sender, VARBIT_IN_BH, inCrater ? 1 : 0);
   setVarbit(sender, VARBIT_IN_LOBBY, bh.inLobby(player) ? 1 : 0);
-  sender.sendString(target ? target.getUsername() : "", TARGET_NAME_UID);
+  sender.sendString(target ? target.getDisplayName() : "", TARGET_NAME_UID);
   setVarbit(sender, VARBIT_TARGET_WILDERNESS_LEVEL, target && bh.inArena(target) ? 1 : 0);
   setVarbit(sender, VARBIT_TARGET_DISTANCE, target ? distanceStep(player, target) : 0);
   setVarbit(sender, VARBIT_TARGET_EXISTS, target ? 1 : 0);

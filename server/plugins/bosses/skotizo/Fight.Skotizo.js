@@ -4,8 +4,8 @@
  * /w/Dark_Ankou):
  * - Skotizo attacks every 6 ticks: a stab next to the player (demon_update_attack_lesser, landing
  *   the same tick) or, at any range, a hellfire burst (demon_casting): projectile 1242 from tick
- *   30, the impact graphic on the player as it lands, the hit floor(end / 30) ticks after the
- *   cast. He prefers melee in reach (Wiki) and never steps in to use it.
+ *   30, the impact graphic on the player as it lands, the hit on the first tick at or after
+ *   it (ceil(end / 30) ticks after the cast). He prefers melee in reach (Wiki) and never steps in to use it.
  * - The four altars each wait 50-129 ticks (chosen again each time), then wake if asleep and
  *   off their minute's cooldown. Each awake altar takes 25% off the damage Skotizo takes, up to
  *   100% (15%, up to 60%, with Arclight or Emberlight, which put an altar back to sleep in one
@@ -292,7 +292,8 @@ class Fight {
     const sender = target.getPacketSender();
     sender.sendAreaSound(magic.castSound, from.getX(), from.getY(), from.getZ(), 1, 0, 10);
     sender.sendAreaSound(magic.impactSound, to.getX(), to.getY(), to.getZ(), 1, endCycle, 10);
-    return [new PendingHit(this.boss, target, MagicStyle, Math.floor(endCycle / 30))];
+    // The first tick at or after the burst lands; floor() splatted before it arrived (#1862).
+    return [new PendingHit(this.boss, target, MagicStyle, Projectile.ticksToLand(endCycle))];
   }
 
   /** Three spawns on open tiles near the player, each in a puff of smoke (as captured). */

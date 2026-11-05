@@ -67,12 +67,15 @@ function pairSpawns(spawns, sites, reach) {
  *   from what the spawn gets now (its own direction, else the cache's spawnDirection). Bankers
  *   and clerks turn towards whoever uses them, so a majority is enough: the Grand Exchange's
  *   north clerks agree on north in only 61-65% of sightings.
+ * - otherwise, for an NPC that walks and can't be attacked, `wanderRadius` from how far it
+ *   walked (wanderChanges).
  * Sites with labels (follower, roaming, prop, instance, special worlds…) or too few watched
  * sightings change nothing.
  */
-function changesFor(spawn, site, { minWatched = 3, still = 0.9, facing = 0.5, defaultDirection = 1 } = {}) {
-  if ((site.labels ?? []).length || (site.watched ?? 0) < minWatched || site.still_share == null) return {};
-  if (site.still_share < still) return {};
+function changesFor(spawn, site, { minWatched = 3, still = 0.9, facing = 0.5, defaultDirection = 1, attackable = true } = {}) {
+  if ((site.watched ?? 0) < minWatched || site.still_share == null) return {};
+  if (site.still_share < still) return attackable ? {} : wanderChanges(spawn, site);
+  if ((site.labels ?? []).length) return {};
   const changes = {};
   if (spawn.wanderRadius !== 0) changes.wanderRadius = 0;
   const captured = directionOf(site.facing);
@@ -81,4 +84,28 @@ function changesFor(spawn, site, { minWatched = 3, still = 0.9, facing = 0.5, de
   return changes;
 }
 
-module.exports = { DIRECTIONS, directionOf, pairSpawns, changesFor };
+/** The loader's wanderRadius for a spawn that has none (NpcSpawnDefinitionLoader). */
+const DEFAULT_WANDER_RADIUS = 5;
+/**
+ * Labels that only say how the capture index named the NPC: a multinpc parent such as Aubury
+ * (aubury_3op) has no display name of its own. They say nothing about where it walks.
+ */
+const NAMING_LABELS = new Set(["unnamed"]);
+
+/**
+ * A walking NPC's `wanderRadius`: how far from its site 90% of its sightings were (`range_p90`),
+ * at least 1, when that is less than what the spawn gets now. Blue Moon Inn's bartender stays
+ * within 2 tiles behind the bar and Aubury within 3 in his shop, where the default 5 walked them
+ * out through the counter and the door. Only for NPCs that can't be attacked (`attackable`
+ * false): a monster's sightings include chasing players, which says nothing about its wander.
+ * Never widened, for the same reason. Roaming NPCs, followers and the like are left alone.
+ */
+function wanderChanges(spawn, site) {
+  if ((site.labels ?? []).some((label) => !NAMING_LABELS.has(label))) return {};
+  if (!Number.isInteger(site.range_p90)) return {};
+  const radius = Math.max(1, site.range_p90);
+  const current = Number.isInteger(spawn.wanderRadius) ? spawn.wanderRadius : DEFAULT_WANDER_RADIUS;
+  return radius < current ? { wanderRadius: radius } : {};
+}
+
+module.exports = { DIRECTIONS, directionOf, pairSpawns, changesFor, DEFAULT_WANDER_RADIUS };

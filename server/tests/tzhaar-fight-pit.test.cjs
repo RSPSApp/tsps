@@ -27,7 +27,7 @@ function fighter(name, at = ARENA_TILE) {
   const attributes = new Map();
   const player = {
     tokkul: 0, skullTicks: null, skullIcon: null,
-    getUsername: () => name,
+    getUsername: () => name, getDisplayName: () => name,
     getAttribute: (key) => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
     isRegistered: () => true,

@@ -17,7 +17,7 @@ function refuse(player, target) {
   }
   if (Common.isIron(target)) {
     const pronoun = target.getAppearance?.().isMale?.() === false ? "She" : "He";
-    player.sendMessage(Common.message("tradeOther", { name: target.getUsername(), pronoun }));
+    player.sendMessage(Common.message("tradeOther", { name: target.getDisplayName(), pronoun }));
     return true;
   }
   return false;

@@ -136,6 +136,19 @@ in game: the login screen (its art is the cache's `title.jpg`), world map (switc
 (all buttons, tags), GE (buy, sell, collect, abort), shops, a skill menu, settings, sailing, and an
 NPC whose name moved into a transform (see below).
 
+### 11. Publish the client cache
+
+The production Deploy workflow runs `ensure-cache --publish /var/www/flarum/play/caches`
+on the VPS as part of World 1 deployment. It downloads the exact cache in `server/target.txt`
+if missing, stages the public copy, then atomically replaces `caches.json`. Existing versioned
+cache directories stay available for clients that are still using them. It also repairs the
+manifest when the cache is already present. CI verifies the public manifest and HTTP range
+requests after deployment; a successful client JavaScript upload alone does not update the cache.
+
+The VPS forced command is installed from `.github/scripts/deploy-world1.sh`:
+`install -m 755 .github/scripts/deploy-world1.sh /usr/local/bin/tsps-deploy`.
+Reinstall it on the VPS whenever that script changes.
+
 ## What revision 241 changed
 
 ### Cache formats

@@ -85,6 +85,18 @@ From the most specific source to the least:
 - **Per attack type:** `attackAnim` is one animation for every style, or one per attack type: the Soulreaper axe has `{"slash": 10171, "crush": 10172}` (`ancient_axe_slash` / `ancient_axe_crush`).
 - **Against NPCs:** the cache has separate animations for some ranged attacks on NPCs, named `..._pvn`. A style's `npcAnimation`, or a profile's `npcAttackAnimation`, is used when the target is an NPC; the plain one when it's a player. The captures (all on NPCs) show the `_pvn` ones. There's no capture of these attacks on players, so the plain ones stay there.
 
+Every weapon's resolved animation, and every type's style animations, were reviewed against the
+Wiki's combat styles and the cache's sequence names in [audits/weapons.md](audits/weapons.md).
+It records the types still without a capture.
+
+## Held stances and special-attack animations
+
+The idle stance (`standAnim`/`walkAnim`/`runAnim`) of every weapon in `item-gameplay.json`,
+and the animation each special attack plays, were audited against the real game's player
+appearance packets in [audits/weapon-animations.md](audits/weapon-animations.md). That audit
+also lists the 127 weapons no recording could confirm and the specials whose plugin is
+still unverified.
+
 ### From rsprox captures
 
 The weapon view of the capture index (attacks with each weapon equipped, special attack off). Ids are the rev 241 cache's for the names.
@@ -215,3 +227,17 @@ The bow shows the arrow being drawn: the ammunition's `<ammo>_arrow_launch` spot
   and are intentionally excluded from the repository.
 - The wand of the praesul is a RuneScape 3 item; neither the OSRS Wiki wand list nor this
   cache has one. No unrelated item or invented identifier was added.
+
+## Reported holding stances (#2382)
+
+The Nightmare staff family uses cache sequence `human_nightmare_staff_ready` (4504).
+Crimson kisten uses its cache-named `human_weapons_crimson_kisten_ready01/walk_f/run_f/def`
+(14251/14252/14254/14257). Fang and its wearable variants use ready animation 809: official
+[RSProx1779](https://rsprox.net/download/1779), tick 3674 and repeated later appearance updates,
+equips Fang (or), item 27246, in identKit slot 3 (29294 minus 2048) and sends
+BAS 809/823/819/820/821/822/824. The SDK exposes these appearance fields even when the default
+text transcript filters omit them.
+
+These are canonical `item-gameplay.json` stances. `sync-weapon-types` preserves non-default
+stances through `hasHumanStance`, so rerunning it does not replace these sets with category
+majorities. Wearable variants are checked against the active cache in `weapon-data` tests.

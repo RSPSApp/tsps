@@ -3,13 +3,14 @@ import Denque from "denque";
 import { strict as assert } from "node:assert";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { deflateSync } from "node:zlib";
 
 import { MapManager } from "../game/MapManager";
 import { ClientState } from "../game/ClientState";
 import { decodeServerPacket } from "../network/packet/ServerBinaryDecoder";
 import { clearSessionCaches } from "../render/render/session";
 import { onLocAddChange } from "../render/render/locs";
-import { onLocDel, scheduleLocReload } from "../render/render/locs2";
+import { onLocDel, reloadLocAnimationTile, scheduleLocReload } from "../render/render/locs2";
 import { getMapSquareId } from "../rs/map/MapFileIndex";
 import { MapFileLoader } from "../rs/map/MapFileLoader";
 import { LocModelLoader } from "../rs/config/loctype/LocModelLoader";
@@ -17,12 +18,14 @@ import { LocModelType } from "../rs/config/loctype/LocModelType";
 import { LocType } from "../rs/config/loctype/LocType";
 import { ModelData } from "../rs/model/ModelData";
 import { SceneBuilder, LocLoadType } from "../rs/scene/SceneBuilder";
+import { LOC_OVERRIDE_REMOVED } from "../rs/scene/LocOverride";
 import { getEditModeSceneLoadingStatus } from "../game/plugins/editmode/editModeLoadingScreen";
 import { isMapProfileEnabled } from "../render/render/mapLoadProfile";
 import CONSTRUCTION_ROOMS from "../../server/plugins/skills/construction/data/rooms.json";
 import HOUSE_TEMPLATE_CHUNKS from "../../server/plugins/skills/construction/data/template-chunks.json";
 import { CachePipeline } from "../../server/src/main/typescript/elvarg/game/cache/CachePipeline";
 import { CacheMaps } from "../../server/src/main/typescript/elvarg/game/cache/CacheMaps";
+import { encodeRegionReplacement } from "../../server/src/main/typescript/elvarg/net/protocol/ClientProtocol";
 import { getMinimapMaps } from "../widgets/gl/MinimapRenderer";
 import { registerMinimapData } from "../render/render/minimap";
 import { clearInstance, doInstanceSceneBuild, loadInstanceScene, replaceSceneWithInstance, scheduleInstanceLocUpdate } from "../render/render/instance";
@@ -99,7 +102,7 @@ async function instanceRebuildKeepsTheSceneUntilTheSwap(): Promise<void> {
         },
         addedLocs: new Map(), locOverrides: new Map(), locSpawns: new Map(),
         instanceActive: false, instanceTemplateChunks: null, instanceLocRebuildTimer: null,
-        instanceBuildSeq: 0, pendingInstanceScene: null,
+        instanceBuildSeq: 0, instanceAppliedBuild: 0, pendingInstanceScene: null,
         mapsToLoad: { items: [] as any[], clear() { this.items.length = 0; }, push(item: any) { this.items.push(item); }, toArray() { return this.items; } },
         pendingStreamMapsByGeneration: new Map(),
         mapManager: { loadingMapIds: new Set<number>(), mapSquares: new Map() },
@@ -125,6 +128,22 @@ async function instanceRebuildKeepsTheSceneUntilTheSwap(): Promise<void> {
     assert.deepEqual(host.mapsToLoad.items.map((map: any) => map.id), ["new"], "a superseded build is dropped");
     assert.equal(host.pendingInstanceScene?.id, "new");
     assert.ok(drawn.has("old") && cleared === 0, "still drawing the old scene until the new one is applied");
+
+    // Loc rebuilds of the same instance overlap when locs change every tick (Tempoross' cannons):
+    // each finished build is drawn, else none would be until the changes stopped, and one
+    // finishing after a newer build was drawn is dropped.
+    const chunks = host.instanceTemplateChunks;
+    const rebuilds = [1, 2, 3].map(() => doInstanceSceneBuild(host, chunks, 100, 100, 12, 12));
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    assert.equal(builds.length, 5);
+    builds[2]({ mapX: 12, mapY: 12, id: "rebuild-1" });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    assert.equal(host.pendingInstanceScene?.id, "rebuild-1", "a build superseded while in flight is still drawn");
+    builds[4]({ mapX: 12, mapY: 12, id: "rebuild-3" });
+    builds[3]({ mapX: 12, mapY: 12, id: "rebuild-2" });
+    await Promise.all(rebuilds);
+    assert.equal(host.pendingInstanceScene?.id, "rebuild-3", "an older build finishing later is dropped");
+    assert.deepEqual(host.mapsToLoad.items.map((map: any) => map.id), ["rebuild-3"]);
 
     replaceSceneWithInstance(host, host.pendingInstanceScene);
     assert.equal(cleared, 1);
@@ -407,11 +426,16 @@ function foregroundLoadsBeforeBackgroundAndPublishesTogether(): void {
 
 function duplicateLocReplayIsIgnored(): void {
     let refreshes = 0;
+    // The tile holds a cache loc in the same slot a fire (shape 10, rotation 1) addresses, so
+    // adding it suppresses that loc id; a replay needs no second rebuild.
+    const tileLoc = { id: 16011, level: 1, typeRot: (1 << 6) | 10 };
     const host = {
         addedLocs: new Map(),
         locOverrides: new Map(),
         instanceActive: false,
         osrsClient: { locTypeLoader: { load: () => undefined } },
+        getLocIdsAtTileAllLevels: (x: number, y: number) =>
+            x === 2431 && y === 3076 ? [tileLoc] : [],
         scheduleLocGeometryUpdate: () => {
             refreshes++;
         },
@@ -420,6 +444,7 @@ function duplicateLocReplayIsIgnored(): void {
     onLocAddChange(host, 411, { x: 2431, y: 3076 }, 1, 10, 1);
     onLocAddChange(host, 411, { x: 2431, y: 3076 }, 1, 10, 1);
     assert.equal(refreshes, 1);
+    assert.deepEqual(host.locOverrides.get("2431,3076,1,16011"), { newId: LOC_OVERRIDE_REMOVED }, "the replaced loc is suppressed");
 
     host.locOverrides.clear();
     onLocAddChange(host, 411, { x: 2431, y: 3076 }, 1, 10, 1);
@@ -469,7 +494,7 @@ function instanceFurnitureReplacesOnlyItsHotspot(): void {
             builder.setLocOverride(tileX, tileY, plane, oldId, value.newId,
                 undefined, undefined, undefined, undefined, undefined, value.matchType);
         }
-        assert.equal((builder as any).getLocOverride(x, y, 1, 999, 22, 0)?.newId, 0,
+        assert.equal((builder as any).getLocOverride(x, y, 1, 999, 22, 0)?.newId, LOC_OVERRIDE_REMOVED,
             "the floor hotspot removal must survive the chair override");
         decode();
         assert.deepEqual(placements, [neighbor], "overlapping hotspot removals must not overwrite each other");
@@ -494,8 +519,8 @@ function instanceFurnitureReplacesOnlyItsHotspot(): void {
         builder.clearLocOverrides(); // Removing furniture rebuilds the saved house without its spawn.
         decode();
         assert.equal(placements.length, 2, "removing furniture must restore its template hotspot");
-        builder.setLocOverride(x, y, 0, -1, 0);
-        builder.setLocOverride(x, y, 1, -1, 0, undefined, undefined, undefined, undefined, undefined, 0);
+        builder.setLocOverride(x, y, 0, -1, LOC_OVERRIDE_REMOVED);
+        builder.setLocOverride(x, y, 1, -1, LOC_OVERRIDE_REMOVED, undefined, undefined, undefined, undefined, undefined, 0);
         decode();
         assert.equal(placements.length, 2, "other planes and object shapes must remain independent");
     }
@@ -524,9 +549,18 @@ function instanceFurnitureReplacesOnlyItsHotspot(): void {
         host.instanceBuildsInFlight = 1;
         onLocAddChange(host, 13016, { x: 6439, y: 6443 }, 1, 0, 2);
         assert.equal(rebuilds, 1, "a change during a whole-scene build rebuilds the scene, which covers it");
+
+        // A loc animation (a Tempoross cannon firing every 2 ticks) rebuilds only the scene's
+        // locs too: a whole-scene rebuild per animation kept the scene's new locs from showing.
+        host.instanceBuildsInFlight = 0;
+        host.osrsClient.locTypeLoader = { load: () => ({ id: 41238, actions: [], name: "Harpoonfish cannon", seqId: -1 }) };
+        updates.length = 0;
+        reloadLocAnimationTile(host, { x: 6438, y: 6443 }, 41238);
+        assert.deepEqual(updates, ["100,100,loc"], "an instance loc animation rebuilds only the scene's locs");
+        assert.equal(rebuilds, 1);
     }
     builder.clearLocOverrides();
-    builder.setLocOverride(2, 3, 0, -1, 0, undefined, undefined, undefined, undefined, undefined, 10);
+    builder.setLocOverride(2, 3, 0, -1, LOC_OVERRIDE_REMOVED, undefined, undefined, undefined, undefined, undefined, 10);
     placements.length = 0;
     builder.decodeLocs(scene, data, 0, 0, LocLoadType.NO_MODELS);
     assert.deepEqual(placements, [[0, 3, 3, 100, 10, 1]], "normal maps must retain the same replacement behavior");
@@ -617,6 +651,65 @@ function regionReplacementUsesNativeMapData(): void {
     assert.deepEqual([...loader.getLocData(48, 55, new Map())!], [4, 5]);
 }
 
+function denseRegionReplacementIsDeflated(): void {
+    // A dense region is over the short-packet ceiling raw (Falador 12084 is 82,249 bytes),
+    // so the server deflates it and the client inflates it back to the same sections.
+    const terrain = new Uint8Array(80_000);
+    for (let index = 0; index < terrain.length; index++) terrain[index] = index & 0xff;
+    const objects = Uint8Array.from([9, 8, 7, 6]);
+    const frame = new Uint8Array(encodeRegionReplacement(12343, true, terrain, objects));
+    const decoded = decodeServerPacket(frame) as any;
+    assert.equal(decoded.type, "region_replacement");
+    assert.equal(decoded.payload.regionId, 12343);
+    assert.equal(decoded.payload.allowReload, true);
+    assert.deepEqual(decoded.payload.terrainData, terrain);
+    assert.deepEqual(decoded.payload.objectData, objects);
+}
+
+
+function compressedRegionInflationIsBounded(): void {
+    const compressedFrame = (size: number, declaredSize: number): Buffer => {
+        const compressed = deflateSync(Buffer.alloc(size));
+        const frame = Buffer.alloc(14 + compressed.length);
+        frame[0] = 147;
+        frame.writeUInt16BE(frame.length - 3, 1);
+        frame.writeUInt16BE(12084, 3);
+        frame[5] = 1;
+        frame.writeUInt32BE(declaredSize, 6);
+        compressed.copy(frame, 14);
+        return frame;
+    };
+    const pako = require("pako");
+    const push = pako.Inflate.prototype.push;
+    let emittedBytes = 0;
+    pako.Inflate.prototype.push = function (...args: any[]) {
+        const onData = this.onData;
+        this.onData = function (part: Uint8Array) {
+            emittedBytes += part.length;
+            return onData.call(this, part);
+        };
+        return push.apply(this, args);
+    };
+    try {
+        const bomb = compressedFrame(32 * 1024 * 1024, 1);
+        assert.ok(bomb.length < 65536);
+        assert.throws(() => decodeServerPacket(bomb), RangeError);
+        assert.ok(emittedBytes <= 16384, `stop after the first overflowing chunk, emitted ${emittedBytes} bytes`);
+    } finally {
+        pako.Inflate.prototype.push = push;
+    }
+    assert.throws(() => decodeServerPacket(compressedFrame(1, 16 * 1024 * 1024 + 1)), /invalid section lengths/);
+    assert.throws(() => decodeServerPacket(compressedFrame(1, 2)), /expected 2/);
+    const truncated = compressedFrame(80_000, 80_000).subarray(0, -1);
+    truncated.writeUInt16BE(truncated.length - 3, 1);
+    assert.throws(() => decodeServerPacket(truncated), /invalid compressed data/);
+    const corrupt = compressedFrame(80_000, 80_000);
+    corrupt[corrupt.length - 1] ^= 1;
+    assert.throws(() => decodeServerPacket(corrupt), /invalid compressed data/);
+    const atLimit = decodeServerPacket(compressedFrame(16 * 1024 * 1024, 16 * 1024 * 1024)) as any;
+    assert.equal(atLimit.payload.terrainData.length, 16 * 1024 * 1024);
+}
+
 mapLoadBackoff();
 mapProfilingRequiresExplicitFlag();
 editorWaitsForRenderableRegion();
@@ -630,6 +723,8 @@ locUpdateBeforeInitialMapDoesNotStartADuplicateMapTask();
 locReplayInvalidatesCompletedMapsWaitingToRender();
 crossShapeReplacementKeepsBaseWallHidden();
 regionReplacementUsesNativeMapData();
+denseRegionReplacementIsDeflated();
+compressedRegionInflationIsBounded();
 console.log("Map loading regression tests passed");
 
 // Disconnect restores the cache door and must discard its old open counterpart.
@@ -652,7 +747,7 @@ for (const key of [
     "minimapIcons", "projectileRenderDebugCounts", "cachedLocIds", "cachedObjIds", "cachedNpcIds",
 ]) session[key] = new Map();
 session.mapsToLoad = new Denque();
-session.locOverrides.set("3200,3200,0,-1", { newId: 0, matchType: 0 });
+session.locOverrides.set("3200,3200,0,-1", { newId: LOC_OVERRIDE_REMOVED, matchType: 0 });
 session.addedLocs.set("3199,3200,0,0", { locId: 778, x: 3199, y: 3200, level: 0, shape: 0, rotation: 1 });
 clearSessionCaches(session);
 assert.equal(session.locOverrides.size, 0);

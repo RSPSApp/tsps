@@ -21,6 +21,7 @@ let RUINS_BY_ID;
 const RUINS_DATA = require("./data/runecrafting-ruins.json");
 const OURANIA_DATA = require("./data/ourania-altar.json");
 const Pouches = require("./runecrafting/Pouches.Runecrafting");
+const Combination = require("./runecrafting/Combination.Runecrafting");
 let RUINS;
 /** The exit portal's sound (synth 200). */
 const EXIT_PORTAL_SOUND = 200;
@@ -41,7 +42,14 @@ const RUNE_MYSTERIES_STAGE_ATTRIBUTE = "quest.rune_mysteries.stage";
 const RUNE_MYSTERIES_COMPLETE_STAGE = 6;
 const ENTER_THE_ABYSS_KEY = "enter_the_abyss";
 const ABYSS_LOCKED_MESSAGE = "You need to complete Enter the Abyss before you can enter the Abyss.";
+const MOURNINGS_END_PART_II_KEY = "mournings_end_part_ii";
+const MOURNINGS_END_PART_II_ALTAR_ACCESS_STAGE = 6;
 const ABYSS_OBSTACLE_XP = 25;
+const SINS_OF_THE_FATHER_KEY = "sins_of_the_father";
+/** Ours: no capture shows the rift refused for the quest; the Wiki gives only the rule. */
+const BLOOD_RIFT_LOCKED_MESSAGE = "You need to complete Sins of the Father before you can use this rift.";
+/** rsprox 1636, Exit-through (Kourend) by a player who hasn't unlocked it. */
+const BLOOD_RIFT_KOUREND_TEXT = "The rift cannot find the true Blood Altar. However, if you bring a<br>sample of the Dark Altar's power to the rift, the Dark Altar can<br>redirect the rift to the place in Arceuus where it focuses the Blood<br>Altar's energy.";
 const ABYSS_SKULL_SECONDS = 10 * 60;
 /**
  * The Ourania Altar (Wiki: Ourania Altar) binds pure and daeyalt essence into a random rune each,
@@ -59,7 +67,10 @@ const BLOOD_RIFT_GUARDIAN_BASE = 804984;
 /** The Ourania Altar's rift guardian base, whatever rune is made (Wiki: Rift guardian). */
 const OURANIA_RIFT_GUARDIAN_BASE = 1487213;
 const ABYSS_TELEPORT_STEP = "o8m7y6";
-const ESSENCE_TELEPORT_STEPS = new Set(["ILlRUH", "SvUvek"]);
+const ESSENCE_TELEPORT_STEPS = new Set(["ILlRUH", "SvUvek", "PDYldg"]);
+const CROMPERTY_ESSENCE_TELEPORT_STEP = "EkCGKW";
+const ARDOUGNE_ESSENCE_TELEPORT_TASK = "have-wizard-cromperty-teleport-you-to-the-rune-e";
+const VARROCK_ESSENCE_TELEPORT_TASK = "have-aubury-teleport-you-to-the-essence-mine";
 /** The Rune Essence mine's exit portals (loc 34825, "Portal", Use). */
 const ESSENCE_MINE_PORTAL = 34825;
 /** Where the player stood when a wizard teleported them into the mine: the portals return there. */
@@ -172,6 +183,7 @@ function initialize(api) {
   // inventory, so rune and pure essence go together where both work.
   const ANY_ESSENCE = { ids: [ItemIdentifiers.RUNE_ESSENCE, ItemIdentifiers.PURE_ESSENCE], missing: "You don't have any essence in your inventory." };
   const PURE_ESSENCE_ONLY = { ids: [ItemIdentifiers.PURE_ESSENCE], missing: "You do not have any pure essences to bind.", mesbox: true };
+  const DEATH_ESSENCE = { ids: [ItemIdentifiers.PURE_ESSENCE, ItemIdentifiers.DAEYALT_ESSENCE], missing: "You do not have any pure or daeyalt essences to bind.", mesbox: true };
   // Kourend's Blood Altar binds dark essence fragments, never pure essence (Wiki: Blood Altar (Kourend)).
   const DARK_ESSENCE = { ids: [ItemIdentifiers.DARK_ESSENCE_FRAGMENTS], missing: "You have nothing suitable to bind.", mesbox: true };
 
@@ -179,7 +191,7 @@ function initialize(api) {
     [ObjectIdentifiers.ALTAR_33, { runeId: ItemIdentifiers.AIR_RUNE, level: 1, xp: 5, essence: ANY_ESSENCE, multiplier: [[11, 2], [22, 3], [33, 4], [44, 5], [55, 6], [66, 7], [77, 8], [88, 9], [99, 10]] }],
     [ObjectIdentifiers.ALTAR_34, { runeId: ItemIdentifiers.MIND_RUNE, level: 2, xp: 5.5, essence: ANY_ESSENCE, multiplier: [[14, 2], [28, 3], [42, 4], [56, 5], [70, 6], [84, 7], [98, 8]] }],
     [ObjectIdentifiers.ALTAR_35, { runeId: ItemIdentifiers.WATER_RUNE, level: 5, xp: 6, essence: ANY_ESSENCE, multiplier: [[19, 2], [38, 3], [57, 4], [76, 5], [95, 6]] }],
-    [ObjectIdentifiers.ALTAR_36, { runeId: ItemIdentifiers.EARTH_RUNE, level: 9, xp: 6.5, essence: ANY_ESSENCE, multiplier: [[26, 2], [52, 3], [78, 4]] }],
+    [ObjectIdentifiers.ALTAR_36, { runeId: ItemIdentifiers.EARTH_RUNE, level: 9, xp: 6.5, essence: ANY_ESSENCE, multiplier: [[26, 2], [52, 3], [78, 4], [104, 5]] }],
     [ObjectIdentifiers.ALTAR_37, { runeId: ItemIdentifiers.FIRE_RUNE, level: 14, xp: 7, essence: ANY_ESSENCE, multiplier: [[35, 2], [70, 3]] }],
     [ObjectIdentifiers.ALTAR_38, { runeId: ItemIdentifiers.BODY_RUNE, level: 20, xp: 7.5, essence: ANY_ESSENCE, multiplier: [[46, 2], [92, 3]] }],
     [ObjectIdentifiers.ALTAR_39, { runeId: ItemIdentifiers.COSMIC_RUNE, level: 27, xp: 8, essence: PURE_ESSENCE_ONLY, multiplier: [[59, 2]] }],
@@ -187,7 +199,10 @@ function initialize(api) {
     [ObjectIdentifiers.ALTAR_57, { runeId: ItemIdentifiers.ASTRAL_RUNE, level: 40, xp: 8.7, essence: PURE_ESSENCE_ONLY, multiplier: [[82, 2]] }],
     [ObjectIdentifiers.ALTAR_46, { runeId: ItemIdentifiers.NATURE_RUNE, level: 44, xp: 9, essence: PURE_ESSENCE_ONLY, multiplier: [[91, 2]] }],
     [ObjectIdentifiers.ALTAR_40, { runeId: ItemIdentifiers.LAW_RUNE, level: 54, xp: 9.5, essence: PURE_ESSENCE_ONLY, multiplier: [[95, 2]] }],
-    [ObjectIdentifiers.ALTAR_56, { runeId: ItemIdentifiers.DEATH_RUNE, level: 65, xp: 10, essence: PURE_ESSENCE_ONLY, multiplier: [[99, 2]] }],
+    [ObjectIdentifiers.ALTAR_56, {
+      runeId: ItemIdentifiers.DEATH_RUNE, level: 65, xp: 10, essence: DEATH_ESSENCE,
+      essenceXp: { [ItemIdentifiers.PURE_ESSENCE]: 10, [ItemIdentifiers.DAEYALT_ESSENCE]: 15 }, multiplier: [[99, 2]],
+    }],
     // Wiki: 95 Runecraft, 8 XP an essence, no multiples.
     [ObjectIdentifiers.ALTAR_58, { runeId: ItemIdentifiers.WRATH_RUNE, level: 95, xp: 8, essence: PURE_ESSENCE_ONLY, multiplier: [] }],
     // Wiki: 77 Runecraft, 23.8 XP and one blood rune a fragment.
@@ -313,8 +328,47 @@ function hasCompletedEnterTheAbyss(player) {
   return request.complete === true;
 }
 
-function requestTeleport(player, destination) {
-  pluginApi.emitCustomEvent("lever:teleport", { player, destination: destination.clone() });
+function hasCompletedMourningsEndPartII(player) {
+  const request = { player, key: MOURNINGS_END_PART_II_KEY, complete: false };
+  pluginApi.emitCustomEvent("quest:is-complete", request);
+  return request.complete === true;
+}
+
+function hasReachedMourningsEndPartIIAltarAccess(player) {
+  const request = { player, key: MOURNINGS_END_PART_II_KEY, stage: null };
+  pluginApi.emitCustomEvent("quest:get-stage", request);
+  if (!Number.isInteger(request.stage) || request.stage < MOURNINGS_END_PART_II_ALTAR_ACCESS_STAGE ||
+      hasCompletedMourningsEndPartII(player)) return false;
+  const inventory = player.getInventory();
+  return inventory.contains(ItemIdentifiers.NEWLY_MADE_CRYSTAL) ||
+    inventory.contains(ItemIdentifiers.NEWLY_MADE_CRYSTAL_2);
+}
+
+function canEnterDeathAltar(player) {
+  if (hasCompletedMourningsEndPartII(player) || hasReachedMourningsEndPartIIAltarAccess(player)) return true;
+  player.sendMessage("You must solve the Death Altar puzzle during Mourning's End Part II before entering the Death Altar.");
+  return false;
+}
+
+function canUseDeathAltar(player, action) {
+  if (hasCompletedMourningsEndPartII(player)) return true;
+  player.sendMessage(action === "enter"
+    ? "You must complete Mourning's End Part II before you can enter the Death Altar."
+    : "You must complete Mourning's End Part II before you can craft death runes.");
+  return false;
+}
+
+/**
+ * The easy Wilderness Diary's "Enter the Chaos Runecrafting temple.": through the ruins or the
+ * Abyss's rift (Wiki: Chaos Altar). The Tunnel of Chaos and Guardians of the Rift do not count, and
+ * do not come through here.
+ */
+function enteredChaosTemple(player) {
+  pluginApi.emitCustomEvent("diary:task", { player, diary: "wilderness", task: "enter-the-chaos-runecrafting-temple" });
+}
+
+function requestTeleport(player, destination, onArrival) {
+  pluginApi.emitCustomEvent("lever:teleport", { player, destination: destination.clone(), onArrival });
 }
 
 function ouraniaWeights(level) {
@@ -361,7 +415,11 @@ function craftOurania(player) {
       const amount = diary && Math.random() * 100 < rune.extraChance ? 2 : 1;
       inventory.addItem(new Item(rune.runeId, amount));
       xp += rune.xp * essence.xpScale;
-      crafted.set(rune, (crafted.get(rune) ?? 0) + 1);
+      const entry = crafted.get(rune) ?? { essence: 0, runeAmount: 0, essenceIds: new Set() };
+      entry.essence++;
+      entry.runeAmount += amount;
+      entry.essenceIds.add(essence.id);
+      crafted.set(rune, entry);
     }
   }
 
@@ -372,7 +430,7 @@ function craftOurania(player) {
   if (diary) spam(player, OURANIA_DIARY_MESSAGE);
   player.getSkillManager().addExperiences(Skill.RUNECRAFTING, xp);
   // The rift guardian rolls per essence at the altar's own base; each rune is reported for its colour.
-  for (const [rune, essence] of crafted) {
+  for (const [rune, { essence, runeAmount, essenceIds }] of crafted) {
     pluginApi.emitCustomEvent("runecrafting:success", {
       player,
       skill: Skill.RUNECRAFTING,
@@ -380,8 +438,23 @@ function craftOurania(player) {
       rolls: essence,
       runeId: rune.runeId,
       amountPerEssence: 1,
+      runeAmount,
+      objectId: OURANIA_ALTAR,
+      essenceIds: [...essenceIds],
     });
   }
+}
+
+/**
+ * The essence an altar binds: its own, and, where pure essence works, what content binds in its
+ * place ("runecrafting:essence" { player, pure }: push item ids to `pure`, a league relic's soul
+ * shards).
+ */
+function bindable(player, essence) {
+  if (!essence.ids.includes(ItemIdentifiers.PURE_ESSENCE)) return essence.ids;
+  const request = { player, pure: [] };
+  pluginApi.emitCustomEvent("runecrafting:essence", request);
+  return essence.ids.concat(request.pure.filter((id) => Number.isInteger(id) && !essence.ids.includes(id)));
 }
 
 function handleCraftRunes(event) {
@@ -396,6 +469,10 @@ function handleCraftRunes(event) {
   }
 
   const player = event.player;
+  if (runeData.runeId === ItemIdentifiers.DEATH_RUNE && !player.__gotrTrip && !canUseDeathAltar(player, "craft")) {
+    event.handled = true;
+    return true;
+  }
   const level = player.getSkillManager().getCurrentLevel(Skill.RUNECRAFTING);
   if (level < runeData.level) {
     player.sendMessage(
@@ -406,7 +483,8 @@ function handleCraftRunes(event) {
   }
 
   const { essence } = runeData;
-  if (!essence.ids.some((essenceId) => player.getInventory().contains(essenceId))) {
+  const essenceIds = bindable(player, essence);
+  if (!essenceIds.some((essenceId) => player.getInventory().contains(essenceId))) {
     // The true Blood Altar's and Kourend's refusals are message boxes (rsprox captures 1636, 1673).
     if (essence.mesbox) {
       const { DialogueChainBuilder, StatementDialogue } = pluginApi.core;
@@ -419,13 +497,33 @@ function handleCraftRunes(event) {
   }
 
   const amountPerEssence = runeMultiplier(level, runeData);
-  let craftedEssence = 0;
-  for (const essenceId of essence.ids) {
-    while (player.getInventory().contains(essenceId)) {
-      player.getInventory().deleteNumber(essenceId, 1);
-      player.getInventory().addItem(new Item(runeData.runeId, amountPerEssence));
-      craftedEssence++;
+  let craftedXp = 0;
+  const inventory = player.getInventory();
+  const preview = new pluginApi.core.Inventory(player).setItems(inventory.getCopiedItems());
+  const plan = [];
+  for (const essenceId of essenceIds) {
+    // Simulate each complete input stack in order: its freed slot can hold the runes.
+    const count = preview.getAmount(essenceId);
+    if (count <= 0) continue;
+    preview.deleted(essenceId, count, false);
+    const output = new Item(runeData.runeId, count * amountPerEssence);
+    if (preview.getAddableAmount(output) < output.getAmount()) {
+      inventory.full();
+      event.handled = true;
+      return true;
     }
+    preview.add(output, false);
+    plan.push({ essenceId, count, output });
+  }
+
+  let craftedEssence = 0;
+  const craftedEssenceIds = [];
+  for (const { essenceId, count, output } of plan) {
+    inventory.deleteNumber(essenceId, count);
+    inventory.addItem(output);
+    craftedEssence += count;
+    craftedXp += count * (runeData.essenceXp?.[essenceId] ?? runeData.xp);
+    craftedEssenceIds.push(essenceId);
   }
 
   if (craftedEssence > 0) {
@@ -434,7 +532,7 @@ function handleCraftRunes(event) {
     Sounds.sendSound(player, Sound.CRAFT_RUNES);
     player
       .getSkillManager()
-      .addExperiences(Skill.RUNECRAFTING, craftedEssence * runeData.xp);
+      .addExperiences(Skill.RUNECRAFTING, craftedXp);
     // The rift guardian rolls per essence (Wiki).
     pluginApi.emitCustomEvent("runecrafting:success", {
       player,
@@ -443,6 +541,11 @@ function handleCraftRunes(event) {
       rolls: craftedEssence,
       runeId: runeData.runeId,
       amountPerEssence,
+      source: "altar",
+      altarId: event.objectId,
+      objectId: event.objectId,
+      essenceIds: craftedEssenceIds,
+      altarId: event.objectId,
     });
   }
 
@@ -532,6 +635,7 @@ function enterRuins(player, ruins) {
   player.moveTo(new Location(...ruins.destination));
   player.getPacketSender().sendSound(EXIT_PORTAL_SOUND, 1, 0);
   spam(player, "You feel a powerful force take hold of you...");
+  if (ruins.name === "Chaos") enteredChaosTemple(player);
 }
 
 /**
@@ -544,6 +648,7 @@ function handleTalismanOnRuins(event) {
   event.handled = true;
   const { player, itemId } = event;
   if (player.getAttribute(TRAVEL_ATTRIBUTE)) return;
+  if (ruins.name === "Death" && !canEnterDeathAltar(player)) return;
   const name = TALISMANS.get(itemId)?.holdName ?? pluginApi.core.CacheDefinitions.getItem(itemId)?.name ?? "talisman";
   const busy = pluginApi.core.CacheDefinitions.getVarbitId("busy");
   let held = false;
@@ -554,6 +659,10 @@ function handleTalismanOnRuins(event) {
       player.getPacketSender().sendSound(EXIT_PORTAL_SOUND, 1, 0);
       spam(player, `You hold the ${name} towards the mysterious ruins.<br>You feel a powerful force take hold of you...`);
       player.getPacketSender().sendVarbit(busy, 1);
+    },
+    // The landing follows this step in the same tick.
+    [1 + HOLD_TALISMAN_TICKS]: () => {
+      if (ruins.name === "Chaos") enteredChaosTemple(player);
     },
   }, () => {
     if (held) player.getPacketSender().sendVarbit(busy, 0);
@@ -581,6 +690,7 @@ function handleBindTiara(event) {
   inventory.addItem(new Item(tiara.tiaraId, 1));
   player.getSkillManager().addExperiences(Skill.RUNECRAFTING, tiara.xp);
   spam(player, "You bind the power of the talisman into your Tiara.");
+  pluginApi.emitCustomEvent("runecrafting:tiara", { player, tiaraId: tiara.tiaraId });
 }
 
 function handleEnterRuins({ player, objectId }) {
@@ -588,6 +698,7 @@ function handleEnterRuins({ player, objectId }) {
   if (!ruins) return false;
   const headId = player.getEquipment().getItems()[Equipment.HEAD_SLOT]?.getId();
   if (!matchesRuins(ruins, headId, true) && !wearsRunecraftCape(player)) return false;
+  if (ruins.name === "Death" && !canEnterDeathAltar(player)) return true;
   enterRuins(player, ruins);
   return true;
 }
@@ -610,9 +721,20 @@ function teleportToEssenceMine(player, wizard) {
   if (player.getAttribute(TRAVEL_ATTRIBUTE)) return;
   if (!TeleportHandler.checkReqs(player, RUNE_ESSENCE_MINE, Infinity)) return;
   const at = player.getLocation();
+  const wizardName = wizard?.getCurrentDefinition?.(player)?.getName();
   player.setAttribute(ESSENCE_MINE_RETURN_ATTRIBUTE, [at.getX(), at.getY(), at.getZ()]);
   player.getPacketSender().sendInterfaceRemoval();
-  travel(player, ESSENCE_TELEPORT_TICKS, RUNE_ESSENCE_MINE.clone());
+  travel(player, ESSENCE_TELEPORT_TICKS, RUNE_ESSENCE_MINE.clone(), {}, undefined, () => {
+    if (wizardName === "Archmage Sedridor") {
+      pluginApi.emitCustomEvent("diary:task", { player, diary: "lumbridge", task: "have-sedridor-teleport-you-to-the-essence-mine" });
+    } else if (wizardName === "Wizard Cromperty") {
+      pluginApi.emitCustomEvent("diary:task", { player, diary: "ardougne", task: ARDOUGNE_ESSENCE_TELEPORT_TASK });
+    } else if (wizardName === "Brimstail") {
+      pluginApi.emitCustomEvent("runecrafting:brimstail-essence", { player });
+    } else if (wizardName === "Aubury") {
+      pluginApi.emitCustomEvent("diary:task", { player, diary: "varrock", task: VARROCK_ESSENCE_TELEPORT_TASK });
+    }
+  });
   if (wizard) {
     wizard.forceChat?.(ESSENCE_TELEPORT_LINE);
     wizard.setPositionToFace?.(at);
@@ -633,7 +755,7 @@ function teleportToEssenceMine(player, wizard) {
  * travel cancels it; `onRelease` runs whenever the hold ends, landed or not. A death leaves the
  * movement and targeting holds to the death sequence, which resets them on respawn.
  */
-function travel(player, ticks, destination, steps = {}, onRelease = undefined) {
+function travel(player, ticks, destination, steps = {}, onRelease = undefined, onLanded = undefined) {
   const { Task } = pluginApi.core;
   const token = { from: player.getLocation?.()?.clone?.() ?? null, fromInstance: player.getPrivateArea?.() != null, onRelease };
   player.setAttribute(TRAVEL_ATTRIBUTE, token);
@@ -661,7 +783,11 @@ function travel(player, ticks, destination, steps = {}, onRelease = undefined) {
       if (tick < ticks) return;
       releaseTravel(player, token);
       player.moveTo(destination);
-      pluginApi.emitCustomEvent("teleport:landed", { player, from: token.from, fromInstance: token.fromInstance, to: destination });
+      const landed = player.getLocation?.();
+      if (landed?.getX?.() === destination.getX() && landed?.getY?.() === destination.getY() && landed?.getZ?.() === destination.getZ()) {
+        pluginApi.emitCustomEvent("teleport:landed", { player, from: token.from, fromInstance: token.fromInstance, to: destination });
+        onLanded?.();
+      }
       this.stop();
     }
     stop() {
@@ -743,7 +869,10 @@ function teleportToAbyss(player) {
   player.getSkillManager().setCurrentLevels(Skill.PRAYER, 0);
   // The Mage of Zamorak skulls the player for 10 minutes (Wiki).
   pluginApi.core.CombatFactory.skull(player, pluginApi.core.SkullType.WHITE_SKULL, ABYSS_SKULL_SECONDS);
-  requestTeleport(player, ABYSS_INNER_RING);
+  // The Wilderness Diary's "Have the Mage of Zamorak teleport you to the Abyss.", on landing.
+  requestTeleport(player, ABYSS_INNER_RING, () => {
+    pluginApi.emitCustomEvent("diary:task", { player, diary: "wilderness", task: "have-the-mage-of-zamorak-teleport-you-to-the-aby" });
+  });
 }
 
 function handleZamorakTeleport(event) {
@@ -759,6 +888,14 @@ function handleDialogueAction(event) {
   const player = event.player;
   if (event.stepId === ABYSS_TELEPORT_STEP) {
     teleportToAbyss(player);
+  } else if (event.stepId === CROMPERTY_ESSENCE_TELEPORT_STEP) {
+    const npcName = event.npc?.getCurrentDefinition?.(player)?.getName?.();
+    if (npcName !== "Wizard Cromperty") return;
+    if (!hasCompletedRuneMysteries(player)) {
+      player.sendMessage("You need to complete Rune Mysteries before using this teleport.");
+    } else {
+      teleportToEssenceMine(player, event.npc);
+    }
   } else if (ESSENCE_TELEPORT_STEPS.has(event.stepId)) {
     if (!hasCompletedRuneMysteries(player)) {
       player.sendMessage("You need to complete Rune Mysteries before using this teleport.");
@@ -781,7 +918,8 @@ function abyssObstacleChance(player, obstacle) {
 }
 
 function handleAbyssObstacle(event) {
-  const obstacle = ABYSS_OBSTACLES.get(event.objectId);
+  // The map places a multiloc at each gap in the ring; the definition is the obstacle it shows this player.
+  const obstacle = ABYSS_OBSTACLES.get(event.definition?.id ?? event.objectId);
   if (!obstacle) {
     return false;
   }
@@ -820,14 +958,41 @@ function handleExitPortal(event) {
   return true;
 }
 
+/**
+ * rsprox 1636: Exit-through lands at 3226,4831; Exit-through (Kourend) gives a message box. Varbit 13783
+ * swaps which slot each is in, so this goes by the label. The Wiki's unlock for the Kourend side, dark
+ * essence used on the rift, isn't implemented, so that side always refuses.
+ */
+function handleBloodRift(event) {
+  const { player } = event;
+  if (String(event.option ?? "").toLowerCase().includes("kourend")) {
+    const { DialogueChainBuilder, StatementDialogue } = pluginApi.core;
+    player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, BLOOD_RIFT_KOUREND_TEXT)));
+    return true;
+  }
+  const request = { player, key: SINS_OF_THE_FATHER_KEY, complete: false };
+  pluginApi.emitCustomEvent("quest:is-complete", request);
+  if (request.complete !== true) {
+    player.sendMessage(BLOOD_RIFT_LOCKED_MESSAGE);
+    return true;
+  }
+  requestTeleport(player, new Location(3226, 4831, 0));
+  return true;
+}
+
 function handleEnterRift(event) {
-  const runeId = RIFT_RUNES.get(event.objectId);
+  // The blood rift is a multiloc on the map; the others are plain.
+  const runeId = RIFT_RUNES.get(event.definition?.id ?? event.objectId);
   if (!runeId) {
     return false;
   }
+  if (runeId === ItemIdentifiers.BLOOD_RUNE) return handleBloodRift(event);
   const destination = ALTAR_DESTINATIONS.get(runeId);
   if (destination) {
-    requestTeleport(event.player, new Location(destination.x, destination.y, 0));
+    const { player } = event;
+    if (runeId === ItemIdentifiers.DEATH_RUNE && !canUseDeathAltar(player, "enter")) return true;
+    requestTeleport(player, new Location(destination.x, destination.y, 0),
+      runeId === ItemIdentifiers.CHAOS_RUNE ? () => enteredChaosTemple(player) : undefined);
   }
   return true;
 }
@@ -849,6 +1014,7 @@ module.exports = {
     api.onObjectInteraction("Portal", { Use: handleExitPortal });
 
     Pouches.attach(api);
+    Combination.attach(api);
     api.onCustomEvent("runecrafting:altar-rune", answerAltarRune);
 
     for (const talisman of TALISMANS.values()) {

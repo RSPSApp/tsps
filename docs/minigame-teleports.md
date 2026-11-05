@@ -30,6 +30,8 @@ The Minigame Teleport spell (all four spellbooks) and the home teleports (Lumbri
 
 ## Implementation
 
+The Grouping tab's Teleport is a dynamic child of `76:32`: cache script 435 gives it the selected activity's slot from varc 64, named by enum 848. The minigame plugin enables op 1 on those slots when group 76 mounts and routes eligible activities through the existing spell's cooldown, requirements, choices and cast. Slot 0, unknown slots and activities without a canonical teleport are ignored. The cache's `Sorceress Garden` is an explicit name alias in the canonical destination data. The separate PvP Arena button is handled by `plugins/minigames/duelarena/Matchmaking.DuelArena.js`.
+
 - `server/plugins/combat/HomeTeleportSequence.js`: the cast above. Before tick 21, walking or combat interrupts it (Wiki); no teleport and no cooldown. From tick 21 the player is held until landing.
 - `server/plugins/interface/MinigameTeleports.plugin.js`: the spell, the list, the enum mapping, Rat Pits' menu, requirements and the 20-minute cooldown (varp 888, saved per player).
 - `server/plugins/combat/HomeTeleports.plugin.js`: the four home teleports with one shared 30-minute cooldown (varp 892); on cooldown, "You need to wait another N minutes to cast this spell." (OSRS). Destinations from the Wiki: Lumbridge (3222, 3218), Edgeville (a random tile of 3087-3090, 3501-3504), Lunar Isle (2094, 3913), Arceuus (within 2 tiles of 1700, 3882). They used to be instant teleports in the core spell tables.

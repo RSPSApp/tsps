@@ -157,7 +157,7 @@ function registerRoom(name, area) {
 }
 
 function roomAt(player) {
-  for (const [name, area] of rooms) if (inBox(player.getLocation(), data[name].bounds)) return area;
+  for (const [name, area] of rooms) if (inBox(player.getLocation(), data[name].bounds, data[name].levels ?? null)) return area;
   return null;
 }
 

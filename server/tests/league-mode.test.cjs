@@ -227,3 +227,29 @@ test("persistence keys league saves apart from main ones, and from any real name
     "the prefix is added after normalisation, so no account name can produce it");
   assert.equal(profileStorageKey("bob", "main"), "bob");
 });
+
+test("a new Demonic Pacts character starts with the recorded kit and a Dramen staff, once; nobody else gets one", () => {
+  const { CacheDefinitions } = require("../dist/game/cache/CacheDefinitions");
+  const kit = require("../plugins/modes/data/leagues.json").leagues["6"].starterKit;
+  for (const [name] of kit) assert.ok(CacheDefinitions.getObjId(name) !== null, `the cache names ${name}`);
+  const held = (player) => player.getInventory().getItems().filter((item) => item && item.getId() > 0).map((item) => [item.getId(), item.getAmount()]);
+  const expected = kit.map(([name, amount]) => [CacheDefinitions.getObjId(name), amount]);
+  worldLeague = 6;
+  try {
+    const pacts = character("pactskit", "league");
+    login(pacts, true);
+    assert.deepEqual(held(pacts), expected, "237/01098's first inventory, in its slot order");
+    assert.ok(held(pacts).some(([id]) => id === CacheDefinitions.getObjId("dramen_staff")), "the Dramen staff");
+    assert.equal(pacts.getEquipment().getItems().filter((item) => item && item.getId() > 0).length, 0, "nothing worn");
+    login(pacts);
+    assert.equal(held(pacts).length, kit.length, "a later login adds nothing");
+    const main = character("mainnokit");
+    login(main, true);
+    assert.equal(held(main).length, 0, "a main character on this world gets no league kit");
+  } finally {
+    worldLeague = 4;
+  }
+  const echoes = character("trailblazernokit", "league");
+  login(echoes, true);
+  assert.equal(held(echoes).length, 0, "Trailblazer Reloaded's start has no recorded kit");
+});

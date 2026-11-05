@@ -36,45 +36,5 @@
       "1000000": "dragonic-katana/drop.dat",
       "1000001": "dragonic-katana/equip.dat"
     }
-  },
-  {
-    "id": 50001,
-    "baseItemId": 25159,
-    "objType": {
-      "name": "Castlewars special restore(4)",
-      "examine": "Restores 25% special attack energy, once every 30 seconds during Castle Wars.",
-      "inventoryActions": ["Drink", null, null, null, "Drop"],
-      "isTradable": false
-    }
-  },
-  {
-    "id": 50002,
-    "baseItemId": 25160,
-    "objType": {
-      "name": "Castlewars special restore(3)",
-      "examine": "Restores 25% special attack energy, once every 30 seconds during Castle Wars.",
-      "inventoryActions": ["Drink", null, null, null, "Drop"],
-      "isTradable": false
-    }
-  },
-  {
-    "id": 50003,
-    "baseItemId": 25161,
-    "objType": {
-      "name": "Castlewars special restore(2)",
-      "examine": "Restores 25% special attack energy, once every 30 seconds during Castle Wars.",
-      "inventoryActions": ["Drink", null, null, null, "Drop"],
-      "isTradable": false
-    }
-  },
-  {
-    "id": 50004,
-    "baseItemId": 25162,
-    "objType": {
-      "name": "Castlewars special restore(1)",
-      "examine": "Restores 25% special attack energy, once every 30 seconds during Castle Wars.",
-      "inventoryActions": ["Drink", null, null, null, "Drop"],
-      "isTradable": false
-    }
   }
 ]

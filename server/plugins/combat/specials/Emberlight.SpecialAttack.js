@@ -1,5 +1,5 @@
 function buildSpecial(core) {
-  const { Animation, CombatSpecial, Graphic, ItemIdentifiers, MeleeCombatMethod, Skill } = core;
+  const { Animation, CombatSpecial, Graphic, ItemIdentifiers, MeleeCombatMethod, Skill, Sound, Sounds } = core;
 
   const DRAIN = 50;
   const SPECIAL_ANIMATION = new Animation(11138);
@@ -27,9 +27,12 @@ function buildSpecial(core) {
   class EmberlightCombatMethod extends MeleeCombatMethod {
     start(character, target) {
       CombatSpecial.drain(character, DRAIN);
-      super.start(character, target);
       character.performAnimation(SPECIAL_ANIMATION);
       character.performGraphic(SPECIAL_VFX);
+      // The three-part special, staggered as in rsprox recording 3333.
+      Sounds.sendSound(character, Sound.EMBERLIGHT_SPECIAL_1);
+      Sounds.sendSound(character, Sound.EMBERLIGHT_SPECIAL_2);
+      Sounds.sendSound(character, Sound.EMBERLIGHT_SPECIAL_3);
     }
 
     handleAfterHitEffects(hit) {

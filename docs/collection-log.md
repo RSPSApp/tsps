@@ -51,7 +51,7 @@ The client reads the log straight from its cache too. It used to override these 
 - per tab, the count and maximum: bosses 4613/4614, raids 4615/4616, clues 4617/4618, minigames 4619/4620, other 4621/4622;
 - `collection_count_highscores` (4612) and `collection_count_unsynced` (4848);
 - the 12 recent items at varps 4623, 4625 … 4645, each followed by its day number (days since 27 February 2002, UTC);
-- `option_collection_new_item` (varbit 11959) = 3, for chat message plus popup.
+- `option_collection_new_item` (varbit 11959) = the saved preference: 0 Off, 1 chat, 2 popup, 3 both (a new account starts at 3). All Settings rows 85 ("New addition notification") and 171 ("New addition popup") toggle its two bits (cache script 6716), and the client's whole varp 2856 transmission is kept so the bits survive relog without disturbing the other settings sharing that varp.
 
 **Opening the log** (account summary, row 6):
 1. the last category's items in `collection_transmit` (620);

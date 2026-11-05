@@ -27,36 +27,9 @@ const uid = (component) => (GROUP_ID << 16) | component;
 const LEFT_ROW_UIDS = Array.from({ length: LEFT_ROW_COUNT }, (_, row) => uid(COMPONENT.LEFT_LABEL_START + row));
 const LIST_CONTENT_HEIGHT = LEFT_ROW_COUNT * LEFT_ROW_HEIGHT;
 const selectedShopIds = new WeakMap();
-const ICON_ITEM_IDS = {
-  "Fire rune": 554,
-  "Manta ray": 391,
-  "Super strength(4)": 2440,
-  "Rune arrow": 892,
-  "Armadyl godsword": 11802,
-  "Rune platebody": 1127,
-  "Staff of fire": 1387,
-  "Mystic robe top": 4091,
-  "Magic shortbow": 861,
-  "Black d'hide body": 2503,
-  "Dragon claws": 13652,
-  "Dharok's helm": 4716,
-  "Amulet of glory": 1704,
-  "Berserker ring": 6737,
-  "Fire cape": 6570,
-  "Dragonfire shield": 11283,
-  "Barrows gloves": 7462,
-  "Dragon boots": 11840,
-  "Rune pickaxe": 1275,
-  "Blue partyhat": 1042,
-};
 
 let CombatFactory;
 let ItemDefinition;
-
-function iconItemId(icon) {
-  if (Number.isInteger(icon)) return icon;
-  return typeof icon === "string" ? ICON_ITEM_IDS[icon] ?? -1 : -1;
-}
 
 function customShops() {
   const file = path.join(GameConstants.DEFINITIONS_DIRECTORY, "custom-shops.json");
@@ -65,8 +38,7 @@ function customShops() {
   return raw
     .map((entry) => {
       const definition = ShopDefinition.forId(Number(entry?.id));
-      const icon = entry?.icon ?? "";
-      return definition ? { definition, iconItemId: iconItemId(icon) } : null;
+      return definition ? { definition, iconItemId: Number.isInteger(entry?.icon) ? entry.icon : -1 } : null;
     })
     .filter(Boolean);
 }

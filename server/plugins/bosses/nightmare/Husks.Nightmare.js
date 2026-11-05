@@ -83,7 +83,8 @@ function process(fight) {
       Common.areaSound(fight.players(), npc.getLocation(), [spec.sound, 0, 6]);
       Common.projectile(fight.dream.area, npc, player, spec.projectile);
       if (spec.impact) player.performGraphic(Common.graphic(spec.impact.id, { delay: spec.impact.delay, height: spec.impact.height }));
-      Common.strike(npc, player, husk.style, husks.maxHit, 1, {
+      // The splat lands with the captured projectile (end 67 magic, 60 ranged), not a tick out.
+      Common.strike(npc, player, husk.style, husks.maxHit, Common.core.Projectile.ticksToLand(spec.projectile.end), {
         prayed: (style, prayer) => (prayer && require("./Specials.Nightmare").blockedBy(fight, player, prayer) === style ? 0 : 1),
       });
     }

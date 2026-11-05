@@ -1,7 +1,7 @@
 /**
  * A league character on login (every login on a league world): joins the world's league the
- * first time (starting levels from the Wiki), gets the league varbits the client's journal and
- * panels read, its XP rate, the league content every plugin contributes (Content.LeagueMode),
+ * first time (starting levels from the Wiki, the starter kit as recorded), gets the league varbits
+ * the client's journal and panels read, its XP rate, the league content every plugin contributes (Content.LeagueMode),
  * plays as a standard Ironman (Wiki "Player restrictions": every league player is one; set through
  * the Ironman plugin's `ironman:set-mode` at every login the character is anything else, and kept,
  * since `ironman:change-mode` is refused for a league character), and answers `league:profile`
@@ -45,6 +45,34 @@ function applyStartingLevels(player, type) {
   }
 }
 
+/**
+ * A new league character's inventory (`starterKit`, obj gameval names): Demonic Pacts' is what live
+ * sends at the first login (237/01098), the Lumbridge kit and a Dramen staff. Given once, as the
+ * character joins. A name the cache lacks is skipped and logged (the tests check every name).
+ */
+function giveStarterKit(player, type) {
+  const kit = Common.league(type).starterKit;
+  if (!Array.isArray(kit)) return;
+  const inventory = player.getInventory();
+  for (const [name, amount] of kit) {
+    const id = Common.core.CacheDefinitions.getObjId(name);
+    if (id === null) Common.api.log?.("starter kit: no obj", { name });
+    else inventory.add(new Common.core.Item(id, amount));
+  }
+}
+
+/**
+ * The league's automatic quests (`startQuests`; Demonic Pacts: Druidic Ritual, Rune Mysteries and
+ * the rest the Wiki lists), at every login so a character made before the list gets them too; the
+ * quests already complete are left alone, and none gives experience or items (`league:complete-quests`,
+ * `items: false`): live's new Demonic Pacts character holds only the starter kit (237/01098), no Air
+ * talisman, Elemental shield or Wolfbane.
+ */
+function completeStartQuests(player, type) {
+  const quests = Common.league(type).startQuests;
+  if (Array.isArray(quests) && quests.length) Common.api.emitCustomEvent("league:complete-quests", { player, quests, items: false });
+}
+
 /** The mode the Ironman plugin reports ("none" without one), or undefined when that plugin is not loaded. */
 function ironmanMode(player) {
   const query = { player };
@@ -69,11 +97,15 @@ function login({ player, isNewAccount }) {
   if (type === null) {
     type = Common.configuredType();
     player.setAttribute(Common.LEAGUE_TYPE_ATTRIBUTE, type);
-    if (isNewAccount) applyStartingLevels(player, type);
+    if (isNewAccount) {
+      applyStartingLevels(player, type);
+      giveStarterKit(player, type);
+    }
     Common.api.emitCustomEvent("league:joined", { player, league: type });
   }
   sendVarbits(player, type);
   applyIronman(player);
+  completeStartQuests(player, type);
   Common.api.emitCustomEvent("league:login", { player, league: type });
 }
 

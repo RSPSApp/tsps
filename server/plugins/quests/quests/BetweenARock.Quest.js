@@ -8,6 +8,9 @@
  * golden cannonball, the gold helmet and assembled schematic, the shot into
  * Dondakan's mine and the Arzinian Avatar fight.
  *
+ * The stage numbers below are durable plugin stages. nativeProgress maps them to
+ * the native cache phases; see docs/quests/native-quest-state-a.md.
+ *
  * Stage varbit: 299 "dwarfrock_quest" (varp 433 "dwarfrock_main", bits 0-7).
  * Evidence: cache varbit dump (scripts/lookup-gameval.ts) names 299
  * dwarfrock_quest on varp 433; the spawned Dondakan (npc 6262) is a varbit-299
@@ -190,8 +193,8 @@ module.exports = function registerBetweenARockQuest(api) {
 
   // The Dwarven Mine (scorpions, book cart, tin/clay/copper/iron rocks).
   const DWARVEN_MINE_BOUNDS = new Boundary(2960, 3070, 9690, 9860, 0);
-  // Dondakan's mine behind the rock.
-  const ARZINIAN_MINE_BOUNDS = new Boundary(2300, 2460, 4920, 5010, 0);
+  // Dondakan's mine ends before map square 38: that square holds the Recruitment Drive rooms.
+  const ARZINIAN_MINE_BOUNDS = new Boundary(2300, 2431, 4920, 5010, 0);
 
   // The wiki golden-helmet warning messages, by tick spent inside the rock.
   const HELMET_TIMER_MESSAGES = [
@@ -575,6 +578,7 @@ module.exports = function registerBetweenARockQuest(api) {
     if (hook !== START_HOOK || !DONDAKAN_NPC_IDS.has(npcId)) return;
     if (quest.getStage(player) !== 0) return;
     if (!meetsStartRequirements(player)) {
+      event.end = true;
       notifySkillRequirements(player);
       notifyQuestRequirements(player);
       return;
@@ -749,7 +753,11 @@ module.exports = function registerBetweenARockQuest(api) {
       return;
     }
     if (itemId === GOLD_BAR_ITEM && event.object?.getDefinition?.()?.getName?.() === "Anvil") {
-      if (stageOf(player) < STAGE_GOLD || quest.isComplete(player)) return;
+      // Wiki (Gold helmet): "Partial completion of Between a Rock..." (no step named; the lower bound here, the
+      // golden cannonball, is inferred and sits right before the Quick guide's helmet step) and, after the quest,
+      // "smith it on any anvil". The Wilderness Diary row: not "while you already have a gold helmet in your
+      // inventory or bank"; that row is not limited to after the quest, so the rule holds at every stage.
+      if (stageOf(player) < STAGE_GOLD || holdsGoldHelmet(player)) return;
       event.handled = true;
       smithGoldHelmet(player);
       return;
@@ -765,8 +773,14 @@ module.exports = function registerBetweenARockQuest(api) {
     startTranscript(api, player, DONDAKAN, PAGE, "going-for-the-gold-using-gold-bar-on-a-furnace-with-an-ammo-mould");
   }
 
+  function holdsGoldHelmet(player) {
+    return hasItem(player, GOLD_HELMET_ITEM)
+      || Array.from({ length: api.core.Bank.TOTAL_BANK_TABS }, (_, tab) => player.getBank(tab)).some((bank) => bank.getAmount(GOLD_HELMET_ITEM) > 0);
+  }
+
   function smithGoldHelmet(player) {
-    if (player.getSkillManager().getMaxLevel(Skill.SMITHING) < 50) {
+    // Wiki: the 50 Smithing is boostable, so the current level counts.
+    if (player.getSkillManager().getCurrentLevel(Skill.SMITHING) < 50) {
       player.sendMessage("You need a Smithing level of 50 to make a golden helmet.");
       return;
     }
@@ -778,11 +792,19 @@ module.exports = function registerBetweenARockQuest(api) {
       player.sendMessage("You need three gold bars to make a golden helmet.");
       return;
     }
-    player.getInventory().deleteNumber(GOLD_BAR_ITEM, 3);
+    // Preset bars are not the player's own: they make no helmet (and so no diary credit).
+    const { plainAmount, takePlain, PRESET_TEXT } = require("../../items/PoweredStaff");
+    if (plainAmount(player.getInventory(), GOLD_BAR_ITEM) < 3) {
+      player.sendMessage(PRESET_TEXT);
+      return;
+    }
+    takePlain(player.getInventory(), GOLD_BAR_ITEM, 3);
     addItem(player, GOLD_HELMET_ITEM, 1);
     // Wiki (Gold helmet): 30 Smithing XP.
     player.getSkillManager().addExperiences(Skill.SMITHING, 30);
     player.sendMessage("You hammer the gold bars into a golden helmet.");
+    // The Wilderness Diary credits it in the Resource Area (WildernessResourceDiary.plugin.js).
+    api.emitCustomEvent("smithing:success", { player, skill: Skill.SMITHING, itemId: GOLD_HELMET_ITEM });
   }
 
   function handleItemOnNpc(event) {
@@ -946,6 +968,7 @@ module.exports = function registerBetweenARockQuest(api) {
     if (activeAvatars.get(killer) === event.npc) activeAvatars.delete(killer);
     if (stageOf(killer) === STAGE_MINE && !avatarKilled(killer)) {
       killer.setAttribute(AVATAR_KILLED_ATTRIBUTE, true);
+      killer.getPacketSender().sendVarbit(VARBIT_STAGE, nativeProgress(stageOf(killer), killer));
       exitMine(killer);
     }
   }
@@ -1004,7 +1027,7 @@ module.exports = function registerBetweenARockQuest(api) {
         }
       }
     }
-    return new DondakanMineArea([new Boundary(2300, 2460, 4920, 5010, 0)]);
+    return new DondakanMineArea([ARZINIAN_MINE_BOUNDS]);
   }
 
   // ==========================================================================
@@ -1115,11 +1138,21 @@ module.exports = function registerBetweenARockQuest(api) {
   api.persistAttribute(AVATAR_KILLED_ATTRIBUTE);
   api.persistAttribute(MINE_TICKS_ATTRIBUTE, 0);
 
+  // QH 06da90: 90 fights the Avatar, 100 returns to Dondakan; cache DB completes at 110.
+  // Durable stage 100 already means the reward was paid, so old saves keep that meaning.
+  function nativeProgress(stage, player) {
+    stage |= 0;
+    if (stage >= STAGE_COMPLETE) return 110;
+    if (stage === STAGE_MINE && avatarKilled(player)) return 100;
+    return stage;
+  }
+
   quest = registerQuest(api, {
     key: "between_a_rock",
     name: "Between a Rock...",
     varpId: VARP_DWARFROCK,
     varbitId: VARBIT_STAGE,
+    varbitValue: nativeProgress,
     startedValue: STAGE_STARTED,
     completionValue: STAGE_COMPLETE,
     questPoints: 2,

@@ -75,14 +75,19 @@ function chooseDistantAttack(player) {
 
 /**
  * The captured ranged or magic shot: a fixed 30-120 cycle flight from her middle, so the hit
- * is queued to land with it (melee lands on delay 0, a tick after the swing; these on 3).
+ * is queued to land with it: delay 4, the first tick at or after cycle 120 (the old 3 splatted
+ * a tick before the shot arrived, #1862).
  */
 function sendShot(npc, target, shape) {
   new core.Projectile(
     core.Projectile.centreOf(npc), target.getLocation(), target, shape.id, shape.start,
     shape.end, shape.startHeight, shape.endHeight, npc.getPrivateArea(),
   ).withSource(npc).withAngle(shape.angle).withProgress(shape.progress).sendProjectile();
-  return Shared.DISTANT_HIT_TICKS - 1;
+  return shotTicks(shape);
+}
+
+function shotTicks(shape) {
+  return core.Projectile.ticksToLand(shape.end);
 }
 
 function drainSkill(player, skill, factor) {
@@ -342,5 +347,5 @@ module.exports = {
   checkEnrage,
   startCleave,
   drainSkill,
-  _test: { isAdjacent, protections, chooseDistantAttack },
+  _test: { isAdjacent, protections, chooseDistantAttack, shotTicks },
 };

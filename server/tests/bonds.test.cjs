@@ -85,7 +85,7 @@ function makePlayer(name) {
   return {
     messages: [],
     attributes: new Map(),
-    getUsername: () => name,
+    getUsername: () => name, getDisplayName: () => name,
     sendMessage(message) {
       this.messages.push(message);
     },
@@ -181,6 +181,28 @@ test("Bonds plugin registers its hooks and persists the membership expiry", () =
   assert.ok(handlers.itemActions.has("Old school bond"));
   assert.ok(handlers.itemActions.has("Old school bond (untradeable)"));
   assert.equal(handlers.tradeCompleted.length, 1);
+});
+
+test('native Account Bond Pouch buttons already reach the pouch and its stored bonds', t => {
+  const { PluginManager } = require('../dist/plugins/PluginManager');
+  const { InterfaceActionClickOpcode } = require('../dist/net/packet/impl/InterfaceActionClickOpcode');
+  const hookCount = PluginManager.interfaceActionClickHooks.length;
+  t.after(() => PluginManager.interfaceActionClickHooks.splice(hookCount));
+  const { api } = mockApi();
+  api.onInterfaceActionButton = PluginManager.createApi('BondsAccountRouteTest').onInterfaceActionButton;
+  require('../plugins/items/Bonds.plugin').register(api);
+  const player = makePlayer('alice');
+  player.getHitpoints = () => 10;
+  player.isTeleportingReturn = () => false;
+  player.setAttribute('bonds:pouch-tradeable', 3);
+  const press = (group, child) => InterfaceActionClickOpcode.handle(player, uid(group, child), 1,
+    { groupId: group, childId: child, opId: 1, slot: -1 });
+  assert.equal(press(109, 37), true);
+  assert.equal(player.getInterfaceId(), 861);
+  assert.equal(press(861, 7), true);
+  assert.equal(player.getInterfaceId(), 863);
+  assert.ok(player.sent.some(([kind, id, size, items]) => kind === 'inventory' &&
+    items.some(item => item?.id === TRADEABLE_BOND && item.amount === 3)));
 });
 
 test("a traded bond arrives untradeable, and only the traded amount converts", () => {
@@ -356,10 +378,7 @@ test("confirming destroy re-checks the drop policy and refuses an untradeable bo
     sendChatboxInterface() {
       return this;
     },
-    sendItemOnInterface() {
-      return this;
-    },
-    sendString() {
+    sendClientScript() {
       return this;
     },
     sendInterfaceRemoval() {},
@@ -377,7 +396,7 @@ test("confirming destroy re-checks the drop policy and refuses an untradeable bo
   };
   assert.equal(emitItemDropPolicy(drop), true, "dropping opens the destroy confirmation");
 
-  yesHandler({ player });
+  yesHandler({ player, action: 1 });
   assert.equal(deleted, 0, "the confirmed destroy must not delete the bond");
   assert.ok(player.messages.some((message) => message.includes("cannot be dropped or destroyed")));
 });

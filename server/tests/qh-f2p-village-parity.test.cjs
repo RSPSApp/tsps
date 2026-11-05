@@ -56,7 +56,7 @@ function player() {
   const p = { attributes, items, messages: [],
     getAttribute: (key) => attributes.get(key), setAttribute: (key, value) => attributes.set(key, value),
     getInventory: () => inventory, getBanks: () => [{ getAmount: () => 0 }],
-    getPacketSender: () => packet, getUsername: () => 'Parity',
+    getPacketSender: () => packet, getUsername: () => 'Parity', getDisplayName: () => 'Parity',
     getLocation: () => new core.Location(3210, 3220, 0),
     getSkillManager: () => ({ getCombatLevel: () => 3, addExperiences() {} }),
     sendMessage: (message) => p.messages.push(message),
@@ -193,7 +193,7 @@ function realPlayer() {
     getLocation: () => location, moveTo: (to) => { location = to; },
     getArea: () => null, getPrivateArea: () => null, setArea() {}, getIndex: () => p.index,
     isPlayer: () => true, isNpc: () => false, getAsPlayer: () => p, isRegistered: () => true,
-    getUsername: () => 'HarlowTest', setPositionToFace() {}, forceChat() {},
+    getUsername: () => 'HarlowTest', getDisplayName: () => 'HarlowTest', setPositionToFace() {}, forceChat() {},
     performAnimation: (animation) => p.animations.push(animation?.getId?.() ?? animation), sendMessage: (text) => p.messages.push(text),
     getAppearance: () => ({ isMale: () => true }),
   };
@@ -622,6 +622,65 @@ test('Bartenders let exactly 2 coins free a full-bag slot at all three pubs and 
     assert.equal(player.items.get(I.COINS), 5, 'failed add refunds both coins');
     assert.match(player.messages.at(-1), /free inventory slot/);
     player.failAddId = null;
+  } finally {
+    cleanup();
+  }
+});
+
+test("Yanille's real Greenman's Ale dialogue charges ten coins and supplies one ale safely", () => {
+  const { cleanup } = registerBartendersDispatch();
+  registerRealDialogues();
+  try {
+    const I = core.ItemIdentifiers;
+    const player = realPlayer();
+    const buy = () => buyAt(player, core.NpcIdentifiers.BARTENDER_9, "Can I have some Greenman's Ale?", 'Dragon Inn');
+    const bought = () => player.messages.filter(message => message === "You buy a pint of Greenman's Ale.").length;
+    const amount = () => player.items.get(I.GREENMANS_ALE) ?? 0;
+
+    assert.equal(core.CacheDefinitions.getItem(I.GREENMANS_ALE).name, "Greenman's ale");
+    player.items.set(I.COINS, 25);
+    buy();
+    buy();
+    assert.equal(amount(), 2, 'each completed transcript buys exactly one ale');
+    assert.equal(player.items.get(I.COINS), 5);
+    assert.equal(bought(), 2, 'the canonical purchase message is preserved once per success');
+
+    for (const coins of [0, 9]) {
+      player.items.set(I.COINS, coins);
+      buy();
+      assert.equal(amount(), 2, 'not enough money supplies no ale');
+      assert.equal(player.items.get(I.COINS), coins);
+      assert.equal(bought(), 2, 'refusal must not print the success message');
+    }
+
+    player.full = true;
+    player.items.set(I.COINS, 11);
+    buy();
+    assert.equal(amount(), 2);
+    assert.equal(player.items.get(I.COINS), 11, 'a full bag with remaining coins is unchanged');
+    assert.equal(bought(), 2);
+    assert.match(player.messages.at(-1), /free inventory slot/);
+
+    player.items.set(I.COINS, 10);
+    buy();
+    assert.equal(amount(), 3, 'the exact price frees the coin stack slot');
+    assert.equal(player.items.get(I.COINS), 0);
+    assert.equal(bought(), 3);
+
+    player.full = false;
+    player.items.set(I.COINS, 20);
+    player.failAddId = I.GREENMANS_ALE;
+    buy();
+    assert.equal(amount(), 3);
+    assert.equal(player.items.get(I.COINS), 20, 'failed delivery refunds the ten coins');
+    assert.equal(bought(), 3);
+
+    const event = { player, stepId: 'x6UKzD', kind: 'message', pages: [{ page: 'Hetty' }], handled: false };
+    for (const hook of PluginManager.customEventHooks.get('npc-dialogue:action') ?? []) {
+      if (hook.pluginName === 'BartendersTest') hook.handler(event);
+    }
+    assert.equal(event.handled, false, 'the same step id on another page is not a purchase');
+    assert.equal(player.items.get(I.COINS), 20);
   } finally {
     cleanup();
   }

@@ -1,7 +1,7 @@
 /**
  * How the skillmulti menu shows: per-item labels (default: the item names), the most that can be
  * chosen and the amount it opens on (default: the menu maximum), and clientscript 2046's first
- * argument (default 13; the sawmill sends 0).
+ * argument (default 0: Make; callers override it for Cook, Smelt, String, etc.).
  */
 export interface CreationMenuOptions {
     labels?: string[];

@@ -6,6 +6,7 @@ import net.rsprot.buffer.extensions.toJagByteBuf
 import net.rsprot.compression.HuffmanCodec
 import net.rsprot.crypto.cipher.IsaacRandom
 import net.rsprot.protocol.message.IncomingMessage
+import net.rsprot.protocol.game.incoming.prot.GameClientProt
 import net.rsprox.cache.api.Cache
 import net.rsprox.cache.api.CacheProvider
 import net.rsprox.cache.api.type.GameVal
@@ -136,6 +137,9 @@ class HeadlessClient(private val host: String, private val port: Int) {
                 }.buffer.let { it.array().copyOf(it.writerIndex()) },
             )
 
+        /** CLOSE_MODAL: the client closed its modals itself, as on Escape. */
+        fun closeModal() = sendFixed(CLOSE_MODAL, ByteArray(0))
+
         /** MESSAGE_PUBLIC: plain public chat. */
         fun say(text: String, colour: Int = 0, effect: Int = 0) =
             sendVarByte(
@@ -187,6 +191,27 @@ class HeadlessClient(private val host: String, private val port: Int) {
                 Unpooled.buffer().toJagByteBuf().apply {
                     p2Alt1(sub)
                     p4Alt1((interfaceId shl 16) or componentId)
+                }.buffer.let { it.array().copyOf(it.writerIndex()) },
+            )
+
+        /** Native object-search answer (cache RESUME_OBJDIALOG); RSProt's decoder reads g2. */
+        fun resumeObject(obj: Int) = sendFixed(GameClientProt.RESUME_P_OBJDIALOG.opcode,
+            Unpooled.buffer().toJagByteBuf().apply { p2(obj) }.buffer.let { it.array().copyOf(it.writerIndex()) })
+
+        fun resumeCount(count: Int) = sendFixed(GameClientProt.RESUME_P_COUNTDIALOG.opcode,
+            Unpooled.buffer().toJagByteBuf().apply { p4(count) }.buffer.let { it.array().copyOf(it.writerIndex()) })
+
+        /** IF_BUTTONT: the selected component (a spell, or an item's Use) on a target component's slot. */
+        fun buttonT(selected: Int, selectedSub: Int, selectedObj: Int, target: Int, targetSub: Int, targetObj: Int) =
+            sendFixed(
+                IF_BUTTONT,
+                Unpooled.buffer().toJagByteBuf().apply {
+                    p4Alt1(target)
+                    p2Alt3(selectedObj)
+                    p4Alt2(selected)
+                    p2Alt3(targetObj)
+                    p2(targetSub)
+                    p2Alt3(selectedSub)
                 }.buffer.let { it.array().copyOf(it.writerIndex()) },
             )
 
@@ -246,18 +271,37 @@ class HeadlessClient(private val host: String, private val port: Int) {
                 }.buffer.let { it.array().copyOf(it.writerIndex()) },
             )
 
-        /** OPPLAYER2 (tsps's Trade with). */
-        fun playerOp2(index: Int) =
+        /** OPPLAYER4: Trade with, and what clicking a trade request in the chatbox sends. */
+        fun playerOp4(index: Int) =
             sendFixed(
-                OPPLAYER2,
+                OPPLAYER4,
                 Unpooled.buffer().toJagByteBuf().apply {
-                    p2Alt1(index)
-                    p1Alt2(0)
+                    p2Alt3(index)
+                    p1Alt3(0)
                 }.buffer.let { it.array().copyOf(it.writerIndex()) },
             )
 
         /** UPDATE_PLAYER_MODEL_V2: 26 raw bytes, as the character designer sends them. */
         fun updatePlayerModel(bytes: ByteArray) = sendFixed(UPDATE_PLAYER_MODEL_V2, bytes)
+
+        /** Terminal check after the expected final packet; discards any trailing bytes. */
+        fun disconnectsWithin(timeoutMs: Int): Boolean {
+            val previousTimeout = socket.soTimeout
+            val deadline = System.nanoTime() + timeoutMs * 1_000_000L
+            val trailing = ByteArray(1024)
+            try {
+                while (true) {
+                    val remaining = deadline - System.nanoTime()
+                    if (remaining <= 0) return false
+                    socket.soTimeout = ((remaining + 999_999) / 1_000_000).toInt().coerceAtLeast(1)
+                    if (input.read(trailing) == -1) return true
+                }
+            } catch (_: SocketTimeoutException) {
+                return false
+            } finally {
+                socket.soTimeout = previousTimeout
+            }
+        }
 
         /** CLIENT_CHEAT: a `::` command, without the colons. */
         fun command(text: String) =
@@ -417,7 +461,7 @@ class HeadlessClient(private val host: String, private val port: Int) {
         const val JS5_BLOCK = 512
         const val LOGIN_OK = 2
         const val MOVE_GAMECLICK = 55
-        const val OPPLAYER2 = 35
+        const val OPPLAYER4 = 26
         const val IF_BUTTOND = 46
         const val OPLOC1_V2 = 72
         const val IF_SCRIPT_TRIGGER = 17
@@ -426,11 +470,13 @@ class HeadlessClient(private val host: String, private val port: Int) {
         const val KEEPALIVE_MS = 5_000L
         const val OPNPC2 = 44
         const val OPNPC1 = 92
+        const val IF_BUTTONT = 15
         const val RESUME_PAUSEBUTTON = 16
         const val FRIENDLIST_ADD = 14
         const val MESSAGE_PRIVATE = 50
         const val MESSAGE_PUBLIC = 49
         const val IF_BUTTONX = 38
+        const val CLOSE_MODAL = 41
         const val CLIENT_CHEAT = 84
         const val LOGIN_OK_PAYLOAD = 34
         const val OTP_NONE = 2
@@ -464,7 +510,7 @@ class HeadlessClient(private val host: String, private val port: Int) {
     }
 
     /** RSProx reads NPC types to decode some NPC_INFO blocks; M1 decodes none of those. */
-    private object NoCache : Cache {
+    internal object NoCache : Cache {
         override fun getNpcType(id: Int): NpcType? = null
 
         override fun listNpcTypes(): Collection<NpcType> = emptyList()

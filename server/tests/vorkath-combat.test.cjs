@@ -71,10 +71,12 @@ test("leaving the crater removes owned spawn and acid state", () => {
   assert.equal(Specials.fights.has(boss), false);
 });
 
-test("only the Dragon Slayer II Vorkath step uses the quest form; everyone else gets 750", () => {
-  const player = (stage) => ({ getAttribute: (key) => key === "quest.dragon_slayer_ii.stage" ? stage : undefined });
+test("only an active Dragon Slayer II fight uses the quest form; everyone else gets 750", () => {
+  const player = (stage, trip = false) => ({ getAttribute: (key) => key === "quest.dragon_slayer_ii.stage" ? stage
+    : key === "dragon-slayer-ii:ungael-trip" ? trip : undefined });
   // The quest form exists for the one stage where she blocks the laboratory, and drops nothing.
-  assert.equal(Shared.awakeIdForPlayer(player(Shared.QUEST_FIGHT_STAGE)), 8060);
+  assert.equal(Shared.awakeIdForPlayer(player(Shared.QUEST_FIGHT_STAGE, true)), 8060);
+  assert.equal(Shared.awakeIdForPlayer(player(Shared.QUEST_FIGHT_STAGE)), 8061, "stage alone does not prove the player entered via the quest route");
   assert.equal(Shared.maxHitpointsForId(8060), 460);
   // Not started (0), the earlier stages and every stage past the fight: the post-quest boss.
   for (const stage of [0, 1, 7, 9, 13, 14]) {
@@ -83,6 +85,29 @@ test("only the Dragon Slayer II Vorkath step uses the quest form; everyone else 
   assert.equal(Shared.maxHitpointsForId(8061), 750);
   assert.equal(Shared.isAwakeNpc({ getId: () => 8060 }), true);
   assert.equal(Shared.isAwakeNpc({ getId: () => 8061 }), true);
+});
+
+test("Vorkath's crater refuses players before Dragon Slayer II and allows its quest or postquest state", () => {
+  const completed = new Set();
+  Area.attach({
+    core: { PrivateArea: class {}, Boundary: class {} },
+    emitCustomEvent(name, request) { if (name === "quest:is-complete") request.complete = completed.has(request.key); },
+    onPlayerProcess() {}, onPlayerLogout() {}, onPlayerDisconnect() {},
+  });
+  const player = (stage, trip = false) => ({ getAttribute: (key) => key === "quest.dragon_slayer_ii.stage" ? stage
+    : key === "dragon-slayer-ii:ungael-trip" ? trip : undefined });
+  assert.equal(Area.canEnter(player(0)), false);
+  assert.equal(Area.canEnter(player(Shared.QUEST_FIGHT_STAGE)), false);
+  assert.equal(Area.canEnter(player(Shared.QUEST_FIGHT_STAGE, true)), true);
+  completed.add("dragon_slayer_ii");
+  assert.equal(Area.canEnter(player(Shared.QUEST_FIGHT_STAGE + 1)), true);
+});
+
+test("the quest form's ranged attack caps at 28, the post-quest form's at 32 (Wiki infobox)", () => {
+  assert.equal(Shared.rangedMaxForId(8060), 28);
+  assert.equal(Shared.rangedMaxForId(8061), 32);
+  assert.equal(Shared.rangedMaxForNpc({ getAttribute: () => 8060 }), 28);
+  assert.equal(Shared.rangedMaxForNpc({ getAttribute: () => 8061 }), 32);
 });
 
 test("the post-quest form carries her loot table and the quest form drops nothing", () => {
@@ -120,8 +145,14 @@ test("her shots leave her head and land 70 + 5 cycles a tile later", () => {
   const head = Shared.headTile(core, npc, south);
   assert.deepEqual([head.getX() - 2269, head.getY() - 4062], [3, 1], "captured: (3, 1) for a target to the south");
   assert.equal(Shared.SHOT.base + Shared.SHOT.perTile * head.getDistance(south.getLocation()), 95, "5 tiles: 95, as captured");
-  assert.equal(Shared.shotHitDelay(80), 2);
-  assert.equal(Shared.shotHitDelay(115), 3);
+  // The hit splats on the first tick at or after the shot lands (#1862).
+  for (const tiles of [2, 5, 9]) {
+    const end = Shared.SHOT.base + Shared.SHOT.perTile * tiles;
+    assert.equal(Shared.shotHitDelay(end), Projectile.ticksToLand(end), `${tiles} tiles`);
+    assert.ok(Shared.shotHitDelay(end) * 30 >= end, `${tiles} tiles: no splat before the shot lands`);
+  }
+  assert.equal(Shared.shotHitDelay(80), 3);
+  assert.equal(Shared.shotHitDelay(115), 4);
 });
 
 test("dragonfire caps follow the shield/prayer/potion pipeline", () => {

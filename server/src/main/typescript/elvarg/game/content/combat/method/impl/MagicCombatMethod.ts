@@ -16,6 +16,8 @@ import { MagicSpellbook } from "../../../../model/MagicSpellbook";
 import { Skill } from "../../../../model/Skill";
 import type { CombatSpell } from "../../magic/CombatSpell";
 import { Spell } from "../../magic/Spell";
+import { Autocasting } from "../../magic/Autocasting";
+import { CrossFloor } from "../../../../CrossFloor";
 
 
 export class MagicCombatMethod extends CombatMethod {
@@ -42,6 +44,8 @@ export class MagicCombatMethod extends CombatMethod {
         // Capture: Undead Grasp.
         21832: 5030,
     };
+    /** Live plays a spell's impact and its splash as an area sound this far round the target's tile. */
+    public static readonly IMPACT_SOUND_RADIUS = 10;
     private static readonly IMPACT_SOUNDS: Readonly<Record<number, number>> = {
         1: 1460,
         1152: 221, 1153: 121, 1154: 212, 1156: 133, 1157: 3010, 1158: 161,
@@ -61,32 +65,34 @@ export class MagicCombatMethod extends CombatMethod {
         return CombatType.MAGIC;
     }
 
-    /** NPC casters keep their old fixed delay; their attacks are tuned around it. */
-    private static readonly NPC_HIT_DELAY = 3;
-
     /**
      * Wiki (Hit delay): a player's magic lands 1 + (1 + distance) / 3 ticks after the cast, the
      * distance measured edge to edge (to the target's nearest tile); barrage spells measure to
      * its south-west tile. A spell with a fixed delay of its own keeps it.
+     *
+     * An NPC's cast lands when its projectile does (the legacy magic shape, 46 + 10 cycles a
+     * tile). A fixed 3 ticks hit a player a tick before a spell from 10 tiles arrived, and a
+     * tick after one from the next tile had landed (#1862).
      */
     public static hitDelay(attacker: Mobile, target: Mobile, spell?: any): number {
         const own = spell?.hitDelay?.();
         if (typeof own === "number") return own;
-        if (!attacker.isPlayer()) return MagicCombatMethod.NPC_HIT_DELAY;
+        if (!attacker.isPlayer()) return Projectile.arrivalTicks(attacker, target, Projectile.LEGACY_MAGIC_END_BASE);
+        const from = CombatPosition.location(attacker, target);
+        const to = CombatPosition.location(target, attacker);
+        const crossFloor = CrossFloor.canCross(from, to) && from.getZ() !== to.getZ();
         const distance = MagicCombatMethod.isBarrage(spell)
-            ? CombatPosition.distance(attacker, target)
+            ? crossFloor ? CombatPosition.projectileDistance(attacker, target) : CombatPosition.distance(attacker, target)
             : MagicCombatMethod.edgeDistance(attacker, target);
+        if (crossFloor) {
+            return Projectile.ticksToLand(Projectile.LEGACY_MAGIC_END_BASE + distance * 10);
+        }
         return 1 + Math.floor((1 + distance) / 3);
     }
 
-    /** Chebyshev distance from the attacker's tile to the nearest tile of the target. */
+    /** Flight distance in tile units from the attacker to the nearest tile of the target. */
     private static edgeDistance(attacker: Mobile, target: Mobile): number {
-        const from = CombatPosition.location(attacker, target);
-        const to = CombatPosition.location(target, attacker);
-        const size = Math.max(1, target.getSize?.() ?? 1);
-        const dx = Math.max(0, to.getX() - from.getX(), from.getX() - (to.getX() + size - 1));
-        const dy = Math.max(0, to.getY() - from.getY(), from.getY() - (to.getY() + size - 1));
-        return Math.max(dx, dy);
+        return CombatPosition.edgeDistance(attacker, target);
     }
 
     /** Barrages are the only area spells from level 86 (bursts go up to 70). */
@@ -98,7 +104,10 @@ export class MagicCombatMethod extends CombatMethod {
     public hits(character: Mobile, target: Mobile): PendingHit[] {
         let spell = character.getCombat().getSelectedSpell();
         const context = Spell.getCastContext(character, spell);
-        let hits: PendingHit[] = [new PendingHit(character, target, this, MagicCombatMethod.hitDelay(character, target, spell), true, context).setSpell(spell)];
+        // A spell cast is never a special attack: a special armed meanwhile (Soul Rend, Condemn)
+        // keeps its energy and must not lend the spell its accuracy or damage (ordinary).
+        let hits: PendingHit[] = [new PendingHit(character, target, this,
+            { delay: MagicCombatMethod.hitDelay(character, target, spell), handleAfterHitEffects: true, ordinary: true }, undefined, context).setSpell(spell)];
 
 
         if (!spell) {
@@ -134,7 +143,8 @@ export class MagicCombatMethod extends CombatMethod {
                 if (!CombatFactory.canAttackSecondaryTarget(character, target, next, spellRadius)) {
                     continue;
                 }
-                let pendingHit: PendingHit = new PendingHit(character, next, this, MagicCombatMethod.hitDelay(character, next, spell), false, context).setSpell(spell);
+                let pendingHit: PendingHit = new PendingHit(character, next, this,
+                    { delay: MagicCombatMethod.hitDelay(character, next, spell), handleAfterHitEffects: false, ordinary: true }, undefined, context).setSpell(spell);
                 multiCombatHits.push(pendingHit);
                 spell.onHitCalc(pendingHit);
             }
@@ -165,7 +175,7 @@ export class MagicCombatMethod extends CombatMethod {
         }
 
         // Set the current spell to the autocast spell if it's null.
-        if (character.getCombat().getCastSpell() == null) {
+        if (character.getCombat().getCastSpell() == null && Autocasting.isActive(character.getAsPlayer())) {
             character.getCombat().setCastSpell(character.getCombat().getAutocastSpell());
         }
 
@@ -256,7 +266,9 @@ export class MagicCombatMethod extends CombatMethod {
         // Update previousCastSpell so effects can be handled.
         const current = character.getCombat().getCastSpell();
         character.getCombat().setCastSpell(null);
-        if (character.getCombat().getAutocastSpell() === null) {
+        // A default spell kept without a staff isn't autocast: a hand cast still stops here,
+        // rather than falling back to melee and walking around a safespot to reach the target.
+        if (!Autocasting.isActive(character.getAsPlayer())) {
             // The same tick as the cast: keep its animation, which the reset would replace.
             character.getCombat().reset(false);
             // reset() clears the interaction; a resolved manual cast still faces its target.
@@ -282,16 +294,24 @@ export class MagicCombatMethod extends CombatMethod {
                 const endGraphic = previousSpell.endGraphic();
                 // A spell with no impact graphic (a grasp shows its own at the cast) sends none.
                 if (endGraphic) target.performGraphic(endGraphic);
-                const impactSound = previousSpell.impactSound()
-                    ?? MagicCombatMethod.resolveImpactSound(previousSpell.spellId());
-                Sounds.sendSound(target, impactSound);
+                // Live (RSProx 102 tick 232, 3275): an area sound at the target's tile with range 10,
+                // for an NPC or a player. A private synth never reached the caster, and an area sound
+                // of range 0 (what Sounds.sendSound gives an NPC) is dropped by the client.
+                const impactSound = MagicCombatMethod.impactSoundFor(previousSpell);
+                if (impactSound) Sounds.playAreaSoundAt(target, impactSound, MagicCombatMethod.IMPACT_SOUND_RADIUS);
               } else {
                 // Send splash graphics for the spell because it wasn't accurate
                 target.performGraphic(MagicCombatMethod.SPLASH_GRAPHIC);
-                Sounds.sendSound(attacker, Sound.SPELL_FAIL_SPLASH);
+                // Also an area sound at the target (3275: 492 `sound_area id=227 range=10`).
+                Sounds.playAreaSoundAt(target, Sound.SPELL_FAIL_SPLASH, MagicCombatMethod.IMPACT_SOUND_RADIUS);
             }
             previousSpell.finishCast(attacker, target, accurate, damage, hit.getSpellContext());
         }
+    }
+
+    /** A spell's own impact sound, else the table by its spell id (null: none captured). */
+    public static impactSoundFor(spell: { impactSound(): Sound | null; spellId(): number }): Sound | null {
+        return spell.impactSound() ?? MagicCombatMethod.resolveImpactSound(spell.spellId());
     }
 
     private static resolveImpactSound(spellId: number): Sound | null {

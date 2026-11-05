@@ -31,9 +31,11 @@ OSRS calls the kill count "Essence" in the dungeon, and so does tsps.
 
 Every monster in the dungeon attacks on sight, whatever the player's combat level, unless the player wears something of its god; one item per god is enough (Wiki). The generals and bodyguards ignore god items and attack anyone who comes into their chamber.
 
+A chamber is a scripted public arena, so `Combat.engage` gives its general and bodyguards the existing `combat:no-retreat` flag when the area claims them: a player crossing the room cannot outrun the ordinary aggression leash and leave the boss walking home. Followers are not flagged - they still attack on sight through `npcAggression`, but keep the normal leash. The chamber's own reset when it empties (`Dungeon.resetChamber`) and the private instance's arena rules are unchanged.
+
 ### God items
 
-Each god's `protectionItems` in the data file is the Wiki's protection table for it ([God Wars Dungeon](https://oldschool.runescape.wiki/w/God_Wars_Dungeon), "God equipment", read 26 October 2026), written as the cache's item names and compared without case. Zaros's list (`ancient`) is there too. The same list drives aggression, the altar's Prayer boost, `godwars:kill`'s `godItems` and anything else that calls `godItemCount`.
+Each god's `protectionItems` in the data file is the Wiki's protection table for it ([God Wars Dungeon](https://oldschool.runescape.wiki/w/God_Wars_Dungeon), "God equipment", read 28 October 2026), written as the cache's item names and compared without case. Zaros's list (`ancient`) is there too. The same list drives aggression, the altar's Prayer boost, `godwars:kill`'s `godItems` and anything else that calls `godItemCount`.
 
 - **Variants:** a cache name that is a listed name plus a bracketed suffix counts as that item: `(or)`, `(l)`, `(u)`, `(uncharged)`, `(Deadman)`, `(g)`, `(t)`. The Wiki sends these pages to the base item's page, and those pages say the item counts (Craw's bow, Thammaron's sceptre, the Holy Scythe of Vitur, the halos, Monk's robe (t)).
 - **Ids:** the painted heraldic helm and kiteshield and the god rune scimitars are called "Rune heraldic helm", "Rune kiteshield" and "Rune scimitar" in the cache, the same names as the other crests' copies and the plain scimitar. These go in `protectionItemIds`: `poh_helmet_saradomin_rune` 8488, `poh_shield_saradomin_rune` 8738, `rune_scimitar_saradomin` 23332, and 8494, 8744 and 23334 for Zamorak. The table names only the rune helm and kiteshield, so the steel and adamant painted copies are not listed.
@@ -48,6 +50,10 @@ This needs a generic core hook: `Area.npcAggression(player, npc)` returns false 
 | Boulder, crack | Troll Stronghold (Dad defeated); the boulder needs 60 Strength or Agility. | Wiki |
 | Hole | The first visit ties a rope (varbit `godwars_entrance_rope` 3966, kept for good). After that: "You climb down the rope.", the ladder animation (828), the move to (2882, 5311, 2) a tick later. | capture |
 | Rope back up | Back to the surface by the hole. | |
+
+## The Wilderness dungeon's Strength route
+
+Boulder NPC 6621 at 3053,10165,3 needs 60 Strength, which can be boosted, and gives 5.5 XP going in (Wiki). Crevice 26767 at 3049,10165,3 behind it leads to 26769 at 3035,10158,0 (cache map). No capture moves the boulder or uses these two crevices, so these tiles are inferred: the boulder's landings 3052,10165,3 and 3055,10165,3, read off the corridor's collision, and the crevice landings 3034,10158,0 and 3050,10165,3, on each crevice's facing side, as the captured crevice at 3066,10142 lands. The Agility route is `gwdJuttingWall`.
 
 ## Strongholds
 

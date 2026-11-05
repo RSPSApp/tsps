@@ -94,6 +94,7 @@ function fakePlayer({ coins = 0, capacity = 28 } = {}) {
     dialogue: null,
     inv: inventory(capacity),
     getUsername: () => "Z-Kris",
+    getDisplayName: () => "Z-Kris",
     getAttribute: (key) => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
     sendMessage: (text) => player.messages.push(text),

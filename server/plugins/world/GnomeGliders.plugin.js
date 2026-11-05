@@ -53,6 +53,19 @@ const BY_OPTION = new Map(DESTINATIONS.map((destination) => [`Glider-to ${destin
 const PILOT_NAMES = [...new Set(DESTINATIONS.flatMap((destination) => destination.pilots))];
 
 let TaskManager;
+let api;
+
+/**
+ * Asked before a pilot's glider is used: content that flies the player its own way (The Grand
+ * Tree's escape with Captain Errdo) sets `handled`. Payload: { player, npc, handled }.
+ */
+const GLIDER_REQUEST_EVENT = "gnome-gliders:glider";
+
+function claimedByContent(player, npc) {
+  const request = { player, npc, handled: false };
+  api.emitCustomEvent(GLIDER_REQUEST_EVENT, request);
+  return request.handled;
+}
 
 /** A quest this server does not have counts as not done: its gliders stay locked. */
 function questComplete(player, name) {
@@ -114,6 +127,7 @@ class FlightTask extends Task {
     if (this.elapsed === 1) {
       if (this.quick) sender.sendVarbit(BUSY_VARBIT, 1);
       player.moveTo(to.location.clone());
+      api.emitCustomEvent("gnome-gliders:arrived", { player, destination: to });
     } else if (this.elapsed === 3) {
       sender.sendVarbit(PREVIOUS_DESTINATION_VARBIT, to.index);
       player.setAttribute(PREVIOUS_ATTRIBUTE, to.index);
@@ -152,6 +166,7 @@ function openMap(event) {
   const { player, npc, definition } = event;
   const origin = originOf(npc, definition.getName());
   if (!origin) return false;
+  if (claimedByContent(player, npc)) return true;
   if (!mayFly(player) || player.getAttribute(FLYING_ATTRIBUTE)) return true;
   player.setAttribute(ORIGIN_ATTRIBUTE, origin.index);
   player.getPacketSender().sendInterface(GLIDER_MAP);
@@ -207,7 +222,8 @@ const PILOT_ACTIONS = {
 module.exports = {
   name: "GnomeGliders",
   members: true,
-  register(api) {
+  register(pluginApi) {
+    api = pluginApi;
     TaskManager = api.getTaskManager();
     api.persistAttribute(PREVIOUS_ATTRIBUTE);
     api.persistAttribute(MULTINPC_ATTRIBUTE);

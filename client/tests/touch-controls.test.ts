@@ -366,3 +366,52 @@ void (async () => {
     assert.equal(plugin.getUiState().visible, true, "back when enabled again");
     console.log("touch controls plugin test passed");
 })();
+
+// Portrait Mode layout: the stick comes back smaller and above the minimap (hudInset is the
+// distance from the bottom to the minimap's top), and steps aside while a bank or shop is open.
+void (async () => {
+    const { setMobilePortraitLayoutActive } = await import("../game/plugins/portraitmode/PortraitLayout");
+    const parents = new Map<number, { type: number }>();
+    const widgets = new Map<number, { x?: number; y?: number; parentUid?: number }>([
+        [(601 << 16) | 20, { x: 0, y: 0, parentUid: -1 }],
+        [(601 << 16) | 22, { x: 2, y: 1600, parentUid: (601 << 16) | 20 }],
+    ]);
+    const { client } = makeClient({
+        renderer: { canvas: { width: 1000, height: 2000, clientWidth: 500, clientHeight: 1000 } },
+        widgetManager: {
+            rootInterface: 601,
+            canvasWidth: 625,
+            interfaceParents: parents,
+            isEffectivelyHidden: () => false,
+            getWidgetByUid: (uid: number) => widgets.get(uid),
+        },
+    } as Partial<TouchControlsClient>);
+    setMobilePortraitLayoutActive(true);
+    try {
+        const plugin = new TouchControlsPlugin(client);
+        await plugin.start();
+        plugin.onClientTick();
+        const state = plugin.getUiState();
+        assert.equal(state.visible, true, "the stick shows in portrait");
+        assert.equal(state.portrait, true, "drawn as the portrait stick");
+        assert.equal(state.hudInset, 200, "lifted above the minimap");
+        assert.equal(state.stonesInset, 0, "the stones are along the bottom, not on the right");
+        assert.equal(state.scale, 1, "phone-sized controls stay compact");
+        client.renderer!.canvas!.clientWidth = 1000;
+        plugin.onClientTick();
+        assert.equal(plugin.getUiState().scale, 2, "joystick and action controls follow a larger mobile viewport without reload");
+        client.renderer!.canvas!.clientWidth = 500;
+        plugin.onClientTick();
+        assert.equal(plugin.getUiState().scale, 1, "shrinking restores the compact size");
+
+        parents.set((601 << 16) | 27, { type: 0 });
+        plugin.onClientTick();
+        assert.equal(plugin.getUiState().visible, false, "a bank or shop hides it in portrait");
+        parents.clear();
+        plugin.onClientTick();
+        assert.equal(plugin.getUiState().visible, true, "back once it closes");
+    } finally {
+        setMobilePortraitLayoutActive(false);
+    }
+    console.log("touch controls portrait test passed");
+})();

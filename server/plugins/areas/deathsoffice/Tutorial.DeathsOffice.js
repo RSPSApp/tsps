@@ -185,7 +185,7 @@ function collect(player) {
 /** The portal waits for the last topic: "it will wait until you leave this place". */
 function keepInOffice(player) {
   if (!inTutorial(player) || heardAll(player)) return false;
-  Common.talk(player, [{ npc: `I haven't finished talking to you yet, ${player.getUsername()}. Please don't worry about your gravestone - it will wait until you leave this place.`, mood: "neutral" }]);
+  Common.talk(player, [{ npc: `I haven't finished talking to you yet, ${player.getDisplayName()}. Please don't worry about your gravestone - it will wait until you leave this place.`, mood: "neutral" }]);
   return true;
 }
 

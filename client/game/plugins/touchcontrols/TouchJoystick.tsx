@@ -4,8 +4,9 @@ import { isIosLandscapeRotated } from "../../InputManager";
 import { type TouchAction, type TouchControlsPlugin } from "./TouchControlsPlugin";
 import "./TouchJoystick.css";
 
-/** Knob travel from the centre, in px; matches the CSS base/knob sizes. */
+/** Reference travel/base size; the rendered bounds scale travel with the smaller stick. */
 const RADIUS = 44;
+const BASE_SIZE = 120;
 /** Fraction of the travel that still counts as centred. */
 const DEAD_ZONE = 0.2;
 /** Holding the action button this long lists every option instead. */
@@ -30,6 +31,8 @@ export function TouchJoystick({ plugin }: { plugin: TouchControlsPlugin }): JSX.
 
     const steer = (clientX: number, clientY: number, base: HTMLElement) => {
         const rect = base.getBoundingClientRect();
+        // Travel follows the rendered stick size in either orientation.
+        const radius = RADIUS * (rect.width > 0 ? Math.min(rect.width, rect.height) / BASE_SIZE : 1);
         const screenX = clientX - (rect.left + rect.width / 2);
         const screenY = clientY - (rect.top + rect.height / 2);
         // iOS portrait turns the whole game +90deg (index.css): map the finger back
@@ -38,14 +41,14 @@ export function TouchJoystick({ plugin }: { plugin: TouchControlsPlugin }): JSX.
         let x = rotated ? screenY : screenX;
         let y = rotated ? -screenX : screenY;
         const distance = Math.hypot(x, y);
-        if (distance > RADIUS) {
-            x *= RADIUS / distance;
-            y *= RADIUS / distance;
+        if (distance > radius) {
+            x *= radius / distance;
+            y *= radius / distance;
         }
         setKnob({ x, y });
         // Screen y grows down; forward is up.
-        if (Math.hypot(x, y) < RADIUS * DEAD_ZONE) plugin.steer(0, 0);
-        else plugin.steer(-y / RADIUS, x / RADIUS);
+        if (Math.hypot(x, y) < radius * DEAD_ZONE) plugin.steer(0, 0);
+        else plugin.steer(-y / radius, x / radius);
     };
 
     const onDown = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -76,7 +79,10 @@ export function TouchJoystick({ plugin }: { plugin: TouchControlsPlugin }): JSX.
     if (!state.visible) return null;
 
     return (
-        <div className="touch-controls">
+        <div
+            className={`touch-controls${state.portrait ? " portrait" : ""}`}
+            style={{ "--hud-inset": `${state.hudInset}px`, "--touch-ui-scale": state.scale } as React.CSSProperties}
+        >
             <div
                 className={`touch-joystick${knob ? " is-active" : ""}`}
                 role="group"

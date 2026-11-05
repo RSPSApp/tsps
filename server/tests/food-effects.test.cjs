@@ -31,7 +31,7 @@ const NOT_FOOD = {
     "Infernal eel", "Jar of congealed blood", "Leechfin", "Leftovers", "Logavano fruit", "Melted easter egg", "Mint cake",
     "Mystery fruit", "Nightshade", "Poison karambwan", "Rock cake",
     "Rotten apple", "Rotten potato", "Sacred eel", "Seaweed sandwich", "Shrunk ogleroot",
-    "Slice of birthday cake", "Special super hot kebab", "Spicy stew", "Sweetcorn", "Tchiki nut paste",
+    "Special super hot kebab", "Spicy stew", "Sweetcorn", "Tchiki nut paste",
     "Servery cooked meat", "Servery meat pie", "Servery pineapple pizza", "Servery plain pizza",
     "Servery potato", "Servery stew",
   ],
@@ -218,6 +218,10 @@ test("eating a shark: animation, the messages, the food-eaten varp, 3 ticks on b
   player.give(0, id("SHARK"));
   player.eat(0);
   assert.equal(player.hp, 70);
+  const eaten = customEvents.findLast(event => event.name === "food:eaten").request;
+  assert.equal(eaten.hitpointsBefore, 50, "eating observers receive the HP before healing");
+  assert.equal(eaten.heal, 20);
+  assert.equal(eaten.restores, 20, "league observers retain the food restoration amount");
   assert.equal(player.slots[0], null);
   assert.deepEqual(player.messages, ["You eat the shark.", "It heals some health."]);
   assert.equal(player.varps.get(4518), 1, "tracking_food_eaten");
@@ -230,6 +234,10 @@ test("eating a shark: animation, the messages, the food-eaten varp, 3 ticks on b
   full.give(0, id("SHARK"));
   full.eat(0);
   assert.deepEqual(full.messages, ["You eat the shark."], "no heal line at full Hitpoints");
+  const fullEaten = customEvents.findLast(event => event.name === "food:eaten").request;
+  assert.equal(fullEaten.hitpointsBefore, 99);
+  assert.equal(fullEaten.heal, 0);
+  assert.equal(fullEaten.restores, 20, "full HP still reports potential restoration to league tasks");
 });
 
 test("a karambwan follows food in the same tick; a fast pie's 1-tick delay ends sooner", () => {
@@ -394,4 +402,9 @@ test('quest supplies restore bounded Prayer and share stamina, with their real c
       assert.equal(player.hp, 50 + healed);
     }
   } finally { foodAreaAllowed = false; }
+});
+
+test("eating a Mackerel names the Mackerel, not the cod (issue #2455)", () => {
+  const mackerel = DATA.foods.find((food) => food.name === "Mackerel");
+  assert.equal(mackerel.message, "You eat the mackerel.");
 });

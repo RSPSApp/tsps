@@ -1,0 +1,21 @@
+{
+  "$comment": "NPCs that fight each other (plugins/npcs/NpcRivalries.plugin.js). Every side of a rivalry is hostile to every other side. Ids from the cache; who fights whom from the OSRS Wiki. Other plugins add their own with the npc-rivalries:add event (God Wars Dungeon factions).",
+  "rivalries": [
+    {
+      "name": "Shayzien army and lizardmen",
+      "source": "Wiki Lizardman: 'the Lizardmen will automatically attack the nearby soldiers'; Lizardman Canyon: 'Soldiers are always engaging the lizardmen in battle'; Battlefront: 'where the majority of Shayzien soldiers fight the lizardmen'. Shayzien soldiers do not attack lizardman shamans, nor they them (Lizardman Canyon), so shamans are left out.",
+      "sides": [
+        {
+          "name": "Shayzien army",
+          "$comment": "Soldier (Lizardman Canyon) 6868-6871, Ranger (Shayzien) 8566 (Battlefront) and 11089 (Lizardman Canyon), Soldier (Battlefront) 8567-8568.",
+          "npcs": [6868, 6869, 6870, 6871, 8566, 8567, 8568, 11089]
+        },
+        {
+          "name": "Lizardmen",
+          "$comment": "Lizardman 6914-6917 and 8563 (Battlefront), lizardman brute 6918-6919, 8564 and 10947 (Battlefront).",
+          "npcs": [6914, 6915, 6916, 6917, 6918, 6919, 8563, 8564, 10947]
+        }
+      ]
+    }
+  ]
+}

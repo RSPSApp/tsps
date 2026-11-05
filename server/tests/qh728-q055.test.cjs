@@ -190,7 +190,7 @@ function player() {
     getDialogueManager: () => p.manager,
     getSkillManager: () => ({ addExperiences: (skill, amount) => xp.push([skill.getIndex(), amount]),
       getCombatLevel: () => 3, getCurrentLevel: () => 99, getMaxLevel: skill => p.levels[skill.getIndex()] ?? 99 }),
-    getLocation: () => p.loc, moveTo: loc => { p.loc = loc; }, getUsername: () => 'Q055',
+    getLocation: () => p.loc, moveTo: loc => { p.loc = loc; }, getUsername: () => 'Q055', getDisplayName: () => 'Q055',
     sendMessage: text => p.messages.push(text), isRegistered: () => true, isPlayerBot: () => false,
   };
   p.manager = new DialogueManager(p);

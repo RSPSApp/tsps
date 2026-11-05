@@ -28,7 +28,7 @@
  */
 module.exports = function registerTheGolemQuest(api) {
   const { Item, Location, Skill, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
-  const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
+  const { registerQuest, refreshQuestList, startTranscript, openBook } = require("../QuestRuntime");
 
   const PAGE = "The Golem";
   const VARP_THE_GOLEM = 437; // golem_quest
@@ -100,7 +100,25 @@ module.exports = function registerTheGolemQuest(api) {
   const BOOKCASE_TILE = { x: 3366, y: 3332 };
   // 24626 is the world's Open-able museum case; 6294/6295 are not placed.
   const DISPLAY_CASE_IDS = new Set([24626]);
-  const THRONE_IDS = new Set([ObjectIdentifiers.THRONE_10, ObjectIdentifiers.THRONE_11]); // 6301/6302
+  const TIMELINE_GROUP = 534;
+  const TIMELINE_CLOSE = 1;
+  const TIMELINE_TEXT = 2;
+  const TIMELINE_NUMBER = 84;
+  const TIMELINE_STATUE_MODEL = 49;
+  const TIMELINE_EMPTY_MODEL = 35;
+  const CASE_STATUE_MODEL_ID = 25576;
+  const CASE_EMPTY_MODEL_ID = 25568;
+  const SET_SPINNER_SCRIPT = 65;
+  const STUDY_SEQUENCE = 6383;
+  const BUSY_VARBIT = 12393;
+  const CASE_NUMBER = "30";
+  const CASE_DATE = "3rd Age - yr 3000-4000";
+  const CASE_DESCRIPTION = "This statuette was found in an underground temple in the ruined city of Uzer, which was "
+    + "destroyed late in the 3rd Age, suddenly, due to causes unknown. It probably represents one of the clay golems "
+    + "that the craftsmen of the city built as warriors and servants. The statuette was originally part of a "
+    + "mechanism whose purpose is unknown.";
+  const CASE_STOLEN = "Recently this display was stolen and its whereabouts are unknown.";
+  const THRONE_IDS = new Set([6300, ObjectIdentifiers.THRONE_10, ObjectIdentifiers.THRONE_11]); // 6301/6302
   // Uzer temple alcoves. 6303-6306 are the placed base objects; the client
   // transforms them through varbits 349-352 to 6307 (right), 6308 (left) or 6309
   // (empty). A click can arrive as either the base or the transformed id, so
@@ -151,17 +169,28 @@ module.exports = function registerTheGolemQuest(api) {
   const SEEN_ATTRIBUTE = "quest.the_golem.seen_underground";
   const HEAD_OPEN_ATTRIBUTE = "quest.the_golem.head_open";
 
+  /** Interface 220's lines 1-15, as captured (rsprox 3333, tick 396). */
+  const LETTER_GROUP = 220;
   const LETTER_LINES = [
+    "",
+    "",
     "Dearest Varmen,",
     "I hope this finds you well. Here are the books you asked for.",
     "There has been an exciting development closer to home --",
-    "another city from the same period has been discovered east of Varrock,",
-    "and we are starting a huge excavation project here. I don't know if the",
-    "museum will be able to finance your expedition as well as this one, so I",
-    "fear your current trip will be the last.",
+    "another city from the same period has been discovered east",
+    "of Varrock, and we are starting a huge excavation project",
+    "here. I don't know if the museum will be able to finance your",
+    "expedition as well as this one, so I fear your current trip will be",
+    "the last.",
     "May Saradomin grant you a safe journey home.",
     "Your loving Elissa.",
+    "",
+    "",
+    "",
   ];
+  const NOTES_TITLE = "The Ruins of Uzer";
+  /** The book's 16 pages, as captured (rsprox 3232, ticks 1613-1621). */
+  const NOTES_PAGES = require("../data/the-golem-notes-book.json");
 
   let quest;
 
@@ -457,7 +486,7 @@ module.exports = function registerTheGolemQuest(api) {
     const option = String(event.option ?? "").toLowerCase();
     if (!option.includes("read")) return;
     if (event.itemId === LETTER_ITEM_ID) {
-      for (const line of LETTER_LINES) event.player.sendMessage(line);
+      showLetter(event.player);
       if (letterProgress(event.player) === 0) {
         event.player.setAttribute(LETTER_ATTRIBUTE, 1);
         setVarbit(event.player, VARBIT_GOLEM_B, 1);
@@ -465,14 +494,21 @@ module.exports = function registerTheGolemQuest(api) {
       event.handled = true;
       return;
     }
-    if (event.itemId === NOTES_ITEM_ID && letterProgress(event.player) >= 2) {
-      event.player.sendMessage("You read Varmen's notes. He describes the four statuettes in the temple.");
-      if (letterProgress(event.player) < 3) {
+    if (event.itemId === NOTES_ITEM_ID) {
+      openBook(event.player, NOTES_TITLE, NOTES_PAGES);
+      if (letterProgress(event.player) === 2) {
         event.player.setAttribute(LETTER_ATTRIBUTE, 3);
         setVarbit(event.player, VARBIT_GOLEM_B, 3);
       }
       event.handled = true;
     }
+  }
+
+  function showLetter(player) {
+    const sender = player.getPacketSender();
+    LETTER_LINES.forEach((line, index) => sender.sendString(line, (LETTER_GROUP << 16) | (index + 1)));
+    sender.sendInterfaceScript(2524, [-1, -1]);
+    sender.sendInterface(LETTER_GROUP);
   }
 
   function repairGolem(player, npcId) {
@@ -627,6 +663,35 @@ module.exports = function registerTheGolemQuest(api) {
     }
   }
 
+  /**
+   * Study on display 30. Interface and components are the cache's (vm_timeline, 534). The packets
+   * follow rsprox 1723 tick 14869, Study on the sibling digsite display (528), as no capture opens
+   * 534. The model is that of the loc variant shown (24627, or vm_timeline_no_display). The wording
+   * is the Wiki's; how its paragraphs are split on the interface is inferred.
+   */
+  function studyDisplayCase(player) {
+    const stolen = Boolean(player.getAttribute(RETRIEVED_ATTRIBUTE));
+    const text = [CASE_DATE, CASE_DESCRIPTION, ...(stolen ? [CASE_STOLEN] : [])].join("<br><br>");
+    const model = (TIMELINE_GROUP << 16) | (stolen ? TIMELINE_EMPTY_MODEL : TIMELINE_STATUE_MODEL);
+    const sender = player.getPacketSender();
+    sender.sendVarbit(BUSY_VARBIT, 1);
+    player.performAnimation(new api.core.Animation(STUDY_SEQUENCE));
+    sender.sendString(text, (TIMELINE_GROUP << 16) | TIMELINE_TEXT);
+    sender.sendString(CASE_NUMBER, (TIMELINE_GROUP << 16) | TIMELINE_NUMBER);
+    sender.sendInterfaceRawModel(model, stolen ? CASE_EMPTY_MODEL_ID : CASE_STATUE_MODEL_ID);
+    sender.sendClientScript(SET_SPINNER_SCRIPT, 0, 5, 0, model);
+    sender.sendInterfaceScript(2524, [0, 100]);
+    sender.sendInterface(TIMELINE_GROUP);
+  }
+
+  function closeTimeline({ player }) {
+    player.getPacketSender().sendInterfaceRemoval();
+  }
+
+  function handleInterfaceClosed({ player, interfaceId }) {
+    if (interfaceId === TIMELINE_GROUP) player.getPacketSender().sendVarbit(BUSY_VARBIT, 0);
+  }
+
   function openDisplayCase(player) {
     if (player.getAttribute(RETRIEVED_ATTRIBUTE) || held(player, STATUETTE_ITEM_ID)) {
       player.sendMessage("You have already taken the statuette.");
@@ -777,6 +842,11 @@ module.exports = function registerTheGolemQuest(api) {
     }
     if (DISPLAY_CASE_IDS.has(objectId)) {
       const option = String(event.definition?.getInteractions?.()?.[event.clickType - 1] ?? "").toLowerCase();
+      if (option.includes("study")) {
+        event.handled = true;
+        studyDisplayCase(player);
+        return;
+      }
       if (!option.includes("open")) return;
       event.handled = true;
       if (!held(player, CABINET_KEY_ITEM_ID)) {
@@ -881,6 +951,7 @@ module.exports = function registerTheGolemQuest(api) {
       if (thiefLevel(player) >= THIEVING_LEVEL) {
         player.getInventory().adds(FEATHER_ITEM_ID, 1);
         player.sendMessage("You grab the feather and pull your hand back before the phoenix reacts.");
+        api.emitCustomEvent("diary:task", { player, diary: "desert", task: "steal-a-feather-from-the-desert-phoenix" });
       } else {
         player.sendMessage("You fail to grab the feather.");
         player.sendMessage("You've been stunned!");
@@ -944,6 +1015,8 @@ module.exports = function registerTheGolemQuest(api) {
   api.onItemOnNpc(handleItemOnNpc);
   api.onItemOnObject(handleItemOnObject, { noted: false });
   api.onObjectInteraction(handleObjectInteraction);
+  api.onCustomEvent("interface:closed", handleInterfaceClosed);
+  api.onInterfaceActionButton((TIMELINE_GROUP << 16) | TIMELINE_CLOSE, closeTimeline);
   api.onCustomEvent("door:toggle", handleDoorToggle);
   api.onNpcInteraction(handleNpcInteraction);
   api.onPlayerLogin(handleLogin);

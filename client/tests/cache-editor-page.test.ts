@@ -95,3 +95,42 @@ assert.deepEqual(previewModels({ ...loc, kind: "varbit", values: {} }), [], "a k
 assert.equal(sequenceFrameCount(undefined as any, 3206), 1, "without a client a sequence is a still");
 
 console.log("cache-editor preview specs ok");
+
+import { CustomDefinitionLoader, replaceCustomDefinitions, getCustomDefinitions } from "../custom/definitions/CustomDefinitionStore";
+const canonical = { id: 1, name: "Goblin", modelIds: [3], params: new Map([[1, "base"]]), isInteractive: 1 };
+const loader = new CustomDefinitionLoader<any>({ load: () => canonical, getCount: () => 10, clearCache() {} }, "npc");
+replaceCustomDefinitions([{ kind: "npc", id: 50000, baseId: 1, fields: { name: "Demo goblin", actions: [null], params: { "2": "custom" } } }]);
+assert.equal(loader.getCount(), 50001);
+const custom = loader.load(50000);
+assert.equal(custom.id, 50000);
+assert.equal(custom.name, "Demo goblin");
+assert.equal(custom.isInteractive, 0);
+assert.equal(custom.params.get(2), "custom");
+custom.modelIds.push(4);
+assert.deepEqual(canonical.modelIds, [3]);
+const exported = getCustomDefinitions(); exported[0].fields.name = "mutated";
+assert.equal(getCustomDefinitions()[0].fields.name, "Demo goblin");
+assert.throws(() => replaceCustomDefinitions([{ kind: "npc", id: 1, baseId: 1, fields: {} }]), /Invalid/);
+assert.equal(loader.load(50000), custom);
+replaceCustomDefinitions([]);
+assert.equal(loader.getCount(), 10);
+assert.equal(loader.load(1), canonical);
+console.log("custom definition client identity, isolation and reset ok");
+
+import { formatFieldValue, parseFieldValue, initialOverrides } from "../custom/cache-editor/CacheEditorModel";
+for (const [field, value] of [
+    [{ name: "actions", type: "string[]" }, ["Talk-to", null, "Trade"]],
+    [{ name: "models", type: "int[][]" }, [[1, 2], [3]]],
+    [{ name: "params", type: "map" }, { "1": "custom", "2": 3 }],
+] as const) assert.deepEqual(parseFieldValue(field, formatFieldValue(value)), value);
+assert.throws(() => parseFieldValue({ name: "models", type: "int[][]" }, "[1,2]"), /expected int/);
+assert.throws(() => parseFieldValue({ name: "models", type: "int[]" }, "1,broken"), /valid JSON/);
+assert.throws(() => parseFieldValue({ name: "size", type: "int" }, "1.5"), /expected int/);
+assert.deepEqual(initialOverrides([{ name: "name", type: "string" }], "My goblin"), { name: "My goblin" });
+assert.deepEqual(initialOverrides([], "Sequence"), {});
+console.log("cache-editor structured fields and new names ok");
+
+assert.deepEqual(previewModels({ ...loc, values: { models: [[15402, 15403], [15404]] } }), [15402, 15403, 15404]);
+assert.ok(previewSpec({ ...loc, values: { models: [[15402]], seqId: 3206 } }));
+
+assert.equal(sequenceFrameCount({ seqTypeLoader: { load: () => ({ isSkeletalSeq: () => true, getSkeletalDuration: () => 42 }) } } as any, 1), 42);

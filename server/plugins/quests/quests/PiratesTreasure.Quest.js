@@ -7,6 +7,8 @@ module.exports = function registerPiratesTreasureQuest(api) {
   const WYDIN_NPC_ID = NpcIdentifiers.WYDIN;
   const LUTHAS_NPC_ID = NpcIdentifiers.LUTHAS;
   const BARTENDER_NPC_ID = NpcIdentifiers.BARTENDER_6;
+  const ZEMBO_NPC_ID = NpcIdentifiers.ZEMBO;
+  const BARCRAWL_PROGRESS_VARBIT = 13714; // Cache241: 0 unstarted, 1 during, >=2 complete.
   const GARDENER_NPC_ID = NpcIdentifiers.GARDENER_3;
   const CUSTOMS_OFFICER_IDS = new Set([
     NpcIdentifiers.CUSTOMS_OFFICER,
@@ -65,6 +67,10 @@ module.exports = function registerPiratesTreasureQuest(api) {
   /** The customs officer's half fare for worn Karamja gloves (Pay-fare transcript). */
   const GLOVES_FARE = 15;
   const GARDENER_SHOUT = "First moles, now this! Take this, vandal!";
+
+  /** Packing a banana into the crate: captured animation and sound (rsprox 4287). */
+  const PACK_BANANA_ANIMATION = 832;
+  const PACK_BANANA_SOUND = 2739;
 
   const EMPLOYMENT_ATTRIBUTE = "pirates-treasure.employment";
   const BANANA_ATTRIBUTE = "pirates-treasure.bananas";
@@ -241,11 +247,15 @@ module.exports = function registerPiratesTreasureQuest(api) {
       if (stepId === "GGmLiT" || value.includes("has 30 coins")) {
         return !wearsKaramjaGloves(player) && coins >= FARE;
       }
-      if (value.includes("ring of charos")) return false;
+      if (value.includes("ring of charos")) return wearsRingOfCharos(player);
     }
 
     if (SAIL_FARE_CONDITION_IDS.has(stepId)) {
       return player.getInventory().getAmount(COINS_ITEM_ID) < FARE;
+    }
+
+    if (npcId === ZEMBO_NPC_ID && value === "during alfred grimhand's barcrawl:") {
+      return player.getPacketSender().getVarbit(BARCRAWL_PROGRESS_VARBIT) === 1;
     }
 
     if (npcId === BARTENDER_NPC_ID) {
@@ -507,6 +517,12 @@ module.exports = function registerPiratesTreasureQuest(api) {
     return /^Karamja gloves/.test(gloves?.getDefinition?.()?.getName?.() ?? "");
   }
 
+  /** The customs officer's free-passage option needs the Ring of Charos(a) worn. */
+  function wearsRingOfCharos(player) {
+    const ring = player.getEquipment?.()?.get?.(Equipment.RING_SLOT);
+    return ring?.getId?.() === ItemIdentifiers.RING_OF_CHAROS_A_;
+  }
+
   /** The Pay-fare transcript: worn Karamja gloves halve the 30-coin fare. */
   function payFareToPortSarim(player) {
     if (!wearsKaramjaGloves(player)) return sailToPortSarim(player);
@@ -613,6 +629,9 @@ module.exports = function registerPiratesTreasureQuest(api) {
     player.getMovementQueue().setBlockMovement(false);
     player.setUntargetable(false);
     if (logout) return;
+    if (ship.destination.equals(PORT_SARIM_LANDING)) {
+      api.emitCustomEvent("ferries:arrived", { player, route: "musa-point-port-sarim" });
+    }
     const sender = player.getPacketSender();
     sender.sendTabInterface(0, 593);
     sender.sendTabInterface(5, 541);
@@ -626,11 +645,16 @@ module.exports = function registerPiratesTreasureQuest(api) {
   function payForBananas(player) {
     if (attr(player, BANANA_ATTRIBUTE) < 10) return;
     player.getInventory().adds(COINS_ITEM_ID, 30);
+    player.sendMessage("Luthas hands you 30 coins.");
     setAttr(player, BANANA_ATTRIBUTE, 0);
     if (attr(player, RUM_ATTRIBUTE) === 1) setAttr(player, RUM_ATTRIBUTE, 2);
   }
 
   function packBanana(player) {
+    if (!isEmployed(player, 1)) {
+      player.sendMessage("Why would I want to do that?");
+      return;
+    }
     const stored = attr(player, BANANA_ATTRIBUTE);
     if (stored >= 10) {
       player.sendMessage("The crate is already full.");
@@ -639,10 +663,16 @@ module.exports = function registerPiratesTreasureQuest(api) {
     if (!hasItem(player, BANANA_ITEM_ID)) return;
     player.getInventory().deleteNumber(BANANA_ITEM_ID, 1);
     setAttr(player, BANANA_ATTRIBUTE, stored + 1);
-    player.sendMessage("You pack a banana into the crate.");
+    player.performAnimation(new Animation(PACK_BANANA_ANIMATION));
+    player.getPacketSender().sendSoundEffect(PACK_BANANA_SOUND);
+    StatementDialogue.send(player, "You pack a banana into the crate.");
   }
 
   function fillCrate(player) {
+    if (!isEmployed(player, 1)) {
+      player.sendMessage("Why would I want to do that?");
+      return;
+    }
     const stored = attr(player, BANANA_ATTRIBUTE);
     if (stored >= 10) {
       player.sendMessage("The crate is already full.");
@@ -656,10 +686,19 @@ module.exports = function registerPiratesTreasureQuest(api) {
     const packed = Math.min(carried, 10 - stored);
     player.getInventory().deleteNumber(BANANA_ITEM_ID, packed);
     setAttr(player, BANANA_ATTRIBUTE, stored + packed);
-    StatementDialogue.send(player, "You pack all your bananas into the crate.");
+    player.performAnimation(new Animation(PACK_BANANA_ANIMATION));
+    player.getPacketSender().sendSoundEffect(PACK_BANANA_SOUND);
+    // Captured: filling the crate to capacity says "fill", otherwise "pack all".
+    StatementDialogue.send(player, stored + packed >= 10
+      ? "You fill the crate with bananas."
+      : "You pack all your bananas into the crate.");
   }
 
   function stashRum(player) {
+    if (!isEmployed(player, 1)) {
+      player.sendMessage("Why would I want to do that?");
+      return;
+    }
     if (quest.getStage(player) !== STAGE_STARTED) return;
     if (attr(player, RUM_ATTRIBUTE) >= 1) {
       player.sendMessage("There's already some rum in here...");
@@ -674,6 +713,7 @@ module.exports = function registerPiratesTreasureQuest(api) {
   function searchPlantationCrate(player) {
     const bananas = attr(player, BANANA_ATTRIBUTE), rum = attr(player, RUM_ATTRIBUTE) === 1;
     if (rum && bananas === 0) player.sendMessage("There is some rum in here, although with no bananas to cover it. It is a little obvious.");
+    else if (bananas === 0) player.sendMessage("The crate is completely empty.");
     else player.sendMessage(bananas >= 10 ? "The crate is full of bananas." : `The crate has ${bananas} banana${bananas === 1 ? "" : "s"} inside.`);
     if (rum && bananas > 0) player.sendMessage("There is also some rum stashed in here too.");
   }
@@ -682,9 +722,12 @@ module.exports = function registerPiratesTreasureQuest(api) {
     if (!isEmployed(player, 2)) { player.sendMessage("Wydin won't let you into the stock room."); return; }
     if (!wearingApron(player)) { player.sendMessage("You need to put your white apron on first."); return; }
     player.sendMessage("There are a lot of bananas in the crate.");
-    if (attr(player, RUM_ATTRIBUTE) >= 2 && giveItem(player, RUM_ITEM_ID)) {
-      setAttr(player, RUM_ATTRIBUTE, 0);
-      player.sendMessage("You find your bottle of rum in amongst the bananas.");
+    if (attr(player, RUM_ATTRIBUTE) >= 2) {
+      if (giveItem(player, RUM_ITEM_ID)) {
+        setAttr(player, RUM_ATTRIBUTE, 0);
+        player.sendMessage("You find your bottle of rum in amongst the bananas.");
+      }
+      return;
     }
     api.sendMultiChatboxPrompt(player, "Do you want to take a banana?", "Yes.", () => {
       if (player.getInventory().isFull()) { player.sendMessage("You need more inventory space."); return; }

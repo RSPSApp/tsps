@@ -3,7 +3,7 @@ import { applyInterpolatedFrames, interpolationFrame, interpolationKey, type Act
 import { vec2 } from "gl-matrix";
 import PicoGL, { DrawCall, Texture, VertexBuffer } from "picogl";
 
-import { withSeqHandItems } from "../../rs/config/player/Equipment";
+import { withActionSeqHandItems } from "../../rs/config/player/Equipment";
 import { PlayerAppearance } from "../../rs/config/player/PlayerAppearance";
 import { Model } from "../../rs/model/Model";
 import { ModelData } from "../../rs/model/ModelData";
@@ -80,6 +80,7 @@ type PlayerGpuPass = {
 
 type PlayerGpuGeometry = {
     geometryKey: string;
+    logicalHeight?: number;
     bytes: number;
     opaque?: PlayerGpuPass;
     alpha?: PlayerGpuPass;
@@ -343,7 +344,7 @@ export class PlayerRenderer {
     private static readonly GEOM_CACHE_MAX_ENTRIES = 384;
     private geomCache: Map<
         string,
-        { verts: Uint8Array; inds: Int32Array; vertsA: Uint8Array; indsA: Int32Array }
+        { verts: Uint8Array; inds: Int32Array; vertsA: Uint8Array; indsA: Int32Array; logicalHeight: number }
     > = new Map();
     private playerGpuGeometryCache: Map<string, PlayerGpuGeometry> = new Map();
     private playerGpuGeometryBytes = 0;
@@ -468,6 +469,7 @@ export class PlayerRenderer {
         const r: any = this.renderer as any;
         const geometry: PlayerGpuGeometry = {
             geometryKey,
+            logicalHeight: cached.logicalHeight,
             bytes:
                 cached.verts.byteLength +
                 cached.inds.byteLength +
@@ -738,6 +740,8 @@ export class PlayerRenderer {
             if (!matrices) continue;
             const geometry = this.restMeshFor(baseRec.baseModel, this.rigFor(baseRec.baseModel)!);
             if (!geometry) continue;
+            const height = this.rigFor(baseRec.baseModel)!.height(matrices);
+            for (const inst of group.instances) r.osrsClient.playerEcs.setAnimatedHeight(inst.pid, height);
             out.set(batchKey, { geometry, matrices, row: -1 });
         }
         for (const [key, entry] of out) {
@@ -1522,6 +1526,7 @@ export class PlayerRenderer {
                 // Keep cache access LRU-ordered (Map preserves insertion order).
                 this.geomCache.delete(cacheKey);
                 this.geomCache.set(cacheKey, c);
+                r.osrsClient.playerEcs.setAnimatedHeight(pid, c.logicalHeight);
                 const cachedOpaqueCount = c.inds.length | 0;
                 const cachedAlphaCount = c.indsA.length | 0;
                 if (uploadOpaque) {
@@ -1600,6 +1605,8 @@ export class PlayerRenderer {
             const dz = ((baseCenterZ | 0) - ((model as any).zMid | 0)) | 0;
             if ((dx | dz) !== 0) model.translate(dx, 0, dz);
         } catch {}
+        model.calculateBoundsCylinder();
+        r.osrsClient.playerEcs.setAnimatedHeight(pid, model.height);
         const textureLoader = this.renderer.osrsClient.textureLoader;
         const textureIdIndexMap =
             (this.renderer as any).textureIdIndexMap ?? new Map<number, number>();
@@ -1816,6 +1823,7 @@ export class PlayerRenderer {
                 const cacheAlphaVerts = new Uint8Array(verticesAlpha);
                 const cacheAlphaInds = new Int32Array(indicesAlpha);
                 this.geomCache.set(cacheKey, {
+                    logicalHeight: model.height,
                     verts: cacheOpaqueVerts,
                     inds: cacheOpaqueInds,
                     vertsA: cacheAlphaVerts,
@@ -2313,11 +2321,14 @@ export class PlayerRenderer {
             if (!app) continue;
 
             let effectiveApp = app;
-            if (useActionSequence && (app.npcTransformationId ?? -1) < 0) {
+            if ((app.npcTransformationId ?? -1) < 0) {
                 try {
-                    effectiveApp = withSeqHandItems(
+                    effectiveApp = withActionSeqHandItems(
                         app,
                         this.renderer.osrsClient.seqTypeLoader.load(actionSeqId | 0),
+                        actionSeqId,
+                        actionDelay,
+                        forcedSeq !== undefined,
                     );
                 } catch {}
             }
@@ -2447,6 +2458,7 @@ export class PlayerRenderer {
                       );
                 for (const inst of group.instances) {
                     if (this.canBatchPlayer(inst.pid, playerEcs)) {
+                        if (gpuGeometry?.logicalHeight !== undefined) playerEcs.setAnimatedHeight(inst.pid, gpuGeometry.logicalHeight);
                         this.framePlayerAlphaCounts.set(inst.pid | 0, counts.countAlpha | 0);
                     }
                 }
@@ -2651,11 +2663,14 @@ export class PlayerRenderer {
                 }
 
                 let effectiveApp = app;
-                if (useActionSequence && (app.npcTransformationId ?? -1) < 0) {
+                if ((app.npcTransformationId ?? -1) < 0) {
                     try {
-                        effectiveApp = withSeqHandItems(
+                        effectiveApp = withActionSeqHandItems(
                             app,
                             this.renderer.osrsClient.seqTypeLoader.load(actionSeqId | 0),
+                            actionSeqId,
+                            actionDelay,
+                            forcedSeq !== undefined,
                         );
                     } catch {}
                 }

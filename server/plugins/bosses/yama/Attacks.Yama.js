@@ -217,7 +217,7 @@ function meteor(fight) {
   });
 }
 
-/** Shadow Stomp: a shadow along the ground, up to 60, roots for 2 ticks and drains prayer. */
+/** Shadow Stomp: a shadow along the ground, up to 80, roots for 2 ticks and drains prayer. */
 function stomp(fight) {
   const spec = Common.data.specials.stomp;
   const { yama, player } = fight;

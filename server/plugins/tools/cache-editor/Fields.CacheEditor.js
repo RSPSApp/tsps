@@ -40,7 +40,11 @@ const FIELDS = {
     field("name", "string"),
     field("desc", "string"),
     field("category", "int"),
-    field("models", "int[]", { ref: "model", many: true, note: "model ids, flattened across the cache's groups" }),
+    field("models", "int[][]", { ref: "model", many: true, note: "model groups, matched to the placement shapes in types" }),
+    field("types", "int[]"),
+    field("modelSizeX", "int"), field("modelSizeHeight", "int"), field("modelSizeY", "int"),
+    field("offsetX", "int"), field("offsetHeight", "int"), field("offsetY", "int"),
+    field("randomSeqDelays", "int[]"),
     field("sizeX", "int"), field("sizeY", "int"),
     field("seqId", "int", { ref: "seq", note: "the loc's animation" }),
     field("randomSeqIds", "int[]", { ref: "seq", many: true, note: "played at random when the loc is interacted with" }),
@@ -60,6 +64,7 @@ const FIELDS = {
     field("isRotated", "boolean"), field("clipped", "boolean"),
     field("obstructsGround", "boolean"), field("isHollow", "boolean"),
     field("supportItems", "int"),
+    field("isInteractive", "int"),
     field("flipMapSceneSprite", "boolean"),
     field("decorDisplacement", "int"),
     field("params", "map", { ref: "param", note: "param id -> value" }),
@@ -167,10 +172,11 @@ const FIELDS = {
   ],
 };
 
-/** A loc carries its model ids as `models[][]`, one group per model type; the field is flattened. */
+/** Preserve model groups so editing an object does not lose its placement shapes. */
 const READERS = {
+  seq: { frameDelays: definition => definition.frameLengths, interleaveLeave: definition => definition.masks },
   loc: {
-    models: (definition) => (definition.models ?? []).flat(),
+    models: (definition) => definition.models,
   },
 };
 

@@ -100,7 +100,7 @@ function createAuthoring(core, root) {
 function startup(apiCore) {
   // Opening a write service is an explicit local development choice.
   if (process.env.CACHE_EDITOR_ENABLED !== "1" || process.env.BROWSER_HOST === "1") return;
-  const root = path.resolve(__dirname, "../../../..");
+  const root = path.resolve(__dirname, "../../..");
   const { handle } = createAuthoring(apiCore, root);
   const port = Number(process.env.WEBSOCKET_PORT || 43594) + 1101;
   const server = http.createServer(handle);

@@ -70,7 +70,7 @@ function player() {
     getDialogueManager: () => ({ reset() {}, startDialogues() {} }),
     getSkillManager: () => ({ getCombatLevel: () => 20, addExperiences: (skill, amount) => p.xp.push([skill.getIndex(), amount]) }),
     getLocation: () => location, moveTo: (value) => { location = value; },
-    getUsername: () => 'QhParity', sendMessage: (text) => p.messages.push(text),
+    getUsername: () => 'QhParity', getDisplayName: () => 'QhParity', sendMessage: (text) => p.messages.push(text),
     performAnimation: () => {}, isRegistered: () => true,
   };
   const proxy = p.getPacketSender();

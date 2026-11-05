@@ -14,7 +14,9 @@
  *   non-stackables noted; deaths lower the amounts for everyone. A player with no contribution
  *   gets a cabbage and a message.
  * - Tertiaries, scaled by the player's own performance: an elite clue (3/25), Lil' Zik (1/650).
- * - Unclaimed loot can be claimed from the chest outside the bank in Ver Sinhaza.
+ * - Unclaimed loot can be claimed from the chest outside the bank in Ver Sinhaza; it is lost
+ *   on logging out. Players also report it lost on starting another raid, so entering one
+ *   clears it too. Lil' Zik is delivered first rather than lost.
  * Cache: the chests (33086-33090), each a multiloc on its varbit (6450-6454): 0 someone else's,
  * 1 someone else's with a unique, 2 the player's, 3 the player's with a unique; opened 32994
  * (41746 with a unique). Interface 23: Bank-all (6), Take-all (8), Discard-all (10), the items
@@ -22,17 +24,22 @@
  * Captured: the loot interface (23), "Your completed Theatre of Blood count is: N.".
  * Estimates: the chests' tiles and order (party slot), their facing, the player's opening
  * animation (536), inventory 612 for the loot.
+ * Inventory 612 has six slots in the cache, but a Hard Mode roll in the target time can hold
+ * seven items (three commons, the clue, the dust and both kits). The Wiki gives no rule, so the
+ * interface shows the first six; Bank-all, Take-all and Discard-all act on those, and the rest
+ * move into view as slots empty (our handling; the line saying so is our wording).
  * Estimates (the Wiki gives no formula): each death costs a fifth of a player's share - of the
  * unique chance (averaged over the team), of the unique weighting (with damage dealt), of the
  * common amounts (averaged) and of their tertiary odds; Rewards Chest varbit values (0 empty,
- * 1 loot waiting); loot left behind is kept on the player rather than lost on logout.
+ * 1 loot waiting).
+ * Collection log: opening the loot interface logs what is in it (as the Tombs' sarcophagus
+ * does); Lil' Zik is logged through the pet delivery.
  */
 
 const Shared = require("./Shared.TheatreOfBlood");
 const Raid = require("./RaidState.TheatreOfBlood");
 
 const ATTR_LOOT = "tob:loot";
-const ATTR_COMPLETIONS = "tob:completions";
 const INTERFACE = 23;
 const LOOT_INVENTORY = 612;
 const LOOT_SLOTS = 6;
@@ -49,15 +56,25 @@ const CHESTS = [[33, 42], [40, 39], [26, 39], [26, 35], [40, 35]].map(([x, y], s
 const CHEST_STATE = { OTHERS: 0, OTHERS_UNIQUE: 1, MINE: 2, MINE_UNIQUE: 3 };
 const OPENED = { REGULAR: 32994, UNIQUE: 41746 };
 const CLAIM_CHEST = { id: 41437, varbit: 11958 };
+/** "Message (Theatre of Blood)", the Wiki's id. */
+const DEADWEIGHT_MESSAGE = 22475;
 
-const UNIQUE_CHANCE = 1 / 9.1;
+/**
+ * By mode (Wiki, Monumental chest; Hard Mode): Entry has no uniques or pet, and 80% less common
+ * loot; Hard has 1/7.7, the hilt's weight down by one, 15% more common loot and 15% more within
+ * the target time, whose tertiaries (dust, kits) need the target met. Clue: 1/25, 3/25, 3.5/25.
+ */
+const LOOT_BY_MODE = {
+  entry: { unique: 0, hilt: 8, common: 0.2, clue: 1 / 25, pet: 0 },
+  normal: { unique: 1 / 9.1, hilt: 8, common: 1, clue: 3 / 25, pet: 1 / 650 },
+  hard: { unique: 1 / 7.7, hilt: 7, common: 1.15, targetCommon: 1.3, clue: 3.5 / 25, pet: 1 / 500, dust: 1 / 275, sanguineKit: 1 / 150, holyKit: 1 / 100 },
+};
 const DEATH_PENALTY = 0.2;
 const COMMON_ROLLS = 3;
-const TERTIARY = { clue: 3 / 25, pet: 1 / 650 };
 
-function uniqueTable(I) {
+function uniqueTable(I, hilt = 8) {
   return [
-    [I.AVERNIC_DEFENDER_HILT, 8], [I.GHRAZI_RAPIER, 2], [I.SANGUINESTI_STAFF_UNCHARGED_, 2],
+    [I.AVERNIC_DEFENDER_HILT, hilt], [I.GHRAZI_RAPIER, 2], [I.SANGUINESTI_STAFF_UNCHARGED_, 2],
     [I.JUSTICIAR_FACEGUARD, 2], [I.JUSTICIAR_CHESTGUARD, 2], [I.JUSTICIAR_LEGGUARDS, 2],
     [I.SCYTHE_OF_VITUR_UNCHARGED_, 1],
   ];
@@ -126,14 +143,18 @@ function rollRaid(raid, random = Math.random) {
   const result = new Map();
   let uniqueWinner = null;
   let uniqueId = -1;
-  if (random() < UNIQUE_CHANCE * teamStanding) {
+  const table = LOOT_BY_MODE[raid.mode];
+  const target = Shared.MODES[raid.mode].challengeTicks?.[raid.size];
+  const inTarget = !!target && raid.overallTicks <= target;
+  const commonScale = (inTarget ? table.targetCommon : table.common) * teamStanding;
+  if (random() < table.unique * teamStanding) {
     const pick = weightedPick(players, (player) => {
       const member = raid.member(player);
       return standing(member) * Math.max(1, damageDealt(member));
     }, random);
     if (pick) {
       uniqueWinner = pick;
-      uniqueId = weightedPick(uniqueTable(I), ([, weight]) => weight, random)[0];
+      uniqueId = weightedPick(uniqueTable(I, table.hilt), ([, weight]) => weight, random)[0];
     }
   }
   const commons = commonTable(I);
@@ -143,17 +164,22 @@ function rollRaid(raid, random = Math.random) {
     if (player === uniqueWinner) {
       loot.push({ id: uniqueId, amount: 1 });
     } else if (damageDealt(member) <= 0) {
-      loot.push({ id: I.CABBAGE, amount: 1 }, { id: I.MESSAGE_4, amount: 1 });
+      loot.push({ id: I.CABBAGE, amount: 1 }, { id: DEADWEIGHT_MESSAGE, amount: 1 });
     } else {
       for (let roll = 0; roll < COMMON_ROLLS; roll++) {
         const [id, , min, max] = weightedPick(commons, ([, weight]) => weight, random);
-        const amount = Math.max(1, Math.floor((min + Math.floor(random() * (max - min + 1))) * teamStanding));
+        const amount = Math.max(1, Math.floor((min + Math.floor(random() * (max - min + 1))) * commonScale));
         addLoot(loot, noted(id), amount);
       }
     }
     const own = standing(member);
-    if (random() < TERTIARY.clue * own) addLoot(loot, I.CLUE_SCROLL_ELITE_, 1);
-    if (random() < TERTIARY.pet * own) addLoot(loot, I.LIL_ZIK, 1);
+    if (random() < table.clue * own) addLoot(loot, I.CLUE_SCROLL_ELITE_, 1);
+    if (random() < table.pet * own) addLoot(loot, I.LIL_ZIK, 1);
+    if (inTarget) {
+      if (random() < table.dust * own) addLoot(loot, I.SANGUINE_DUST, 1);
+      if (random() < table.sanguineKit * own) addLoot(loot, I.SANGUINE_ORNAMENT_KIT, 1);
+      if (random() < table.holyKit * own) addLoot(loot, I.HOLY_ORNAMENT_KIT, 1);
+    }
     result.set(player, loot);
   }
   return { loot: result, uniqueWinner, uniqueId };
@@ -167,6 +193,43 @@ function lootOf(player) {
 function setLoot(player, loot) {
   player.setAttribute(ATTR_LOOT, loot.length > 0 ? loot : null);
   player.getPacketSender().sendVarbit(CLAIM_CHEST.varbit, loot.length > 0 ? 1 : 0);
+}
+
+/**
+ * Unclaimed loot is lost on logging out (Wiki) and on starting another raid (players' reports).
+ * Lil' Zik still goes to the pet delivery rather than being lost with the rest.
+ */
+function loseLoot(player) {
+  if (lootOf(player).length === 0) return;
+  claimPetLoot(player);
+  setLoot(player, []);
+}
+
+/** Entering a raid that hasn't reached its vault starts a new run. */
+function enterRaid({ raid, player }) {
+  if (!(raid.room instanceof RewardsRoom)) loseLoot(player);
+}
+
+/**
+ * The chest's loot reaches the collection log when the interface is opened, as the Tombs' loot
+ * does. Lil' Zik is left to the pet delivery (`npc-drops:roll`), which already logs it, so it
+ * is not counted twice. `loggedAmount` is marked, so reopening a part-claimed chest adds
+ * nothing.
+ */
+function logLoot(player) {
+  const loot = lootOf(player);
+  let changed = false;
+  const { LIL_ZIK } = Shared.core().ItemIdentifiers;
+  for (const entry of loot) {
+    const seen = Math.min(entry.amount, Number(entry.loggedAmount) || 0);
+    const amount = entry.amount - seen;
+    if (amount > 0 && entry.id !== LIL_ZIK) Shared.api().emitCustomEvent("collection-log:obtain", { player, itemId: entry.id, amount });
+    if (entry.loggedAmount !== entry.amount) {
+      entry.loggedAmount = entry.amount;
+      changed = true;
+    }
+  }
+  if (changed) player.setAttribute(ATTR_LOOT, loot);
 }
 
 // ------------------------------------------------------------------ the vault
@@ -186,7 +249,8 @@ class RewardsRoom extends Raid.Room {
     });
     if (uniqueWinner) {
       const name = Shared.core().ItemDefinition.forId(uniqueId)?.getName?.() ?? "a unique";
-      for (const player of raid.players) player.sendMessage(`<col=ef1020>${Shared.displayName(uniqueWinner)} found something special: ${name}</col>`);
+      // Captured (227/01852, 227/01764): both names in red.
+      for (const player of raid.players) player.sendMessage(`<col=ff0000>${Shared.displayName(uniqueWinner)}</col> found something special: <col=ff0000>${name}</col>`);
     }
   }
 
@@ -237,6 +301,7 @@ class RewardsRoom extends Raid.Room {
 function openLoot(player) {
   // Includes persisted rewards recovered outside the Theatre, not only this raid's chest.
   claimPetLoot(player);
+  logLoot(player);
   const loot = lootOf(player);
   if (loot.length === 0) {
     player.sendMessage("Your reward chest is empty.");
@@ -266,8 +331,14 @@ function claimPetLoot(player) {
   return consumed;
 }
 
+/** What the six slots show; anything after them waits until slots empty. */
+function shown(loot) {
+  return loot.slice(0, LOOT_SLOTS);
+}
+
 function sendLoot(player, loot) {
-  player.getPacketSender().sendInventory(LOOT_INVENTORY, LOOT_SLOTS, loot.map(({ id, amount }) => ({ id, amount })));
+  player.getPacketSender().sendInventory(LOOT_INVENTORY, LOOT_SLOTS, shown(loot).map(({ id, amount }) => ({ id, amount })));
+  if (loot.length > LOOT_SLOTS) player.sendMessage("More rewards are waiting in the chest. Take some to make room for them.");
 }
 
 function bankFor(player, id) {
@@ -287,20 +358,19 @@ function bankFor(player, id) {
 function take(player, entry, destination) {
   // Also protect a saved pet reached through a transfer click without reopening the UI.
   if (entry.id === Shared.core().ItemIdentifiers.LIL_ZIK && claimPetLoot(player).has(entry)) return entry.amount;
-  const { Item, ItemDefinition } = Shared.core();
+  const { Item } = Shared.core();
   if (destination === "bank") {
     const bank = bankFor(player, entry.id);
-    if (!bank) {
+    const banked = bank ? bank.getAddableAmount(new Item(entry.id, entry.amount)) : 0;
+    if (banked <= 0) {
       player.sendMessage("You need more space in your bank.");
       return 0;
     }
-    bank.add(new Item(entry.id, entry.amount), false);
-    return entry.amount;
+    bank.add(new Item(entry.id, banked), false);
+    return banked;
   }
   const inventory = player.getInventory();
-  const stackable = ItemDefinition.forId(entry.id)?.isStackable?.() === true || ItemDefinition.forId(entry.id)?.isNoted?.() === true;
-  const moved = stackable ? (inventory.contains(entry.id) || inventory.getFreeSlots() > 0 ? entry.amount : 0)
-    : Math.min(entry.amount, inventory.getFreeSlots());
+  const moved = inventory.getAddableAmount(new Item(entry.id, entry.amount));
   if (moved <= 0) {
     player.sendMessage("You don't have enough inventory space.");
     return 0;
@@ -311,11 +381,9 @@ function take(player, entry, destination) {
 }
 
 function takeAll(player, destination) {
-  const left = [];
-  for (const entry of lootOf(player)) {
-    entry.amount -= take(player, entry, destination);
-    if (entry.amount > 0) left.push(entry);
-  }
+  const loot = lootOf(player);
+  for (const entry of shown(loot)) entry.amount -= take(player, entry, destination);
+  const left = loot.filter((entry) => entry.amount > 0);
   setLoot(player, left);
   sendLoot(player, left);
 }
@@ -337,8 +405,11 @@ function clickDiscardAll({ player }) {
   if (lootOf(player).length === 0) return;
   Shared.options(player, "Are you sure you want to destroy the items?",
     "<col=ff0000>DESTROY!", () => {
-      setLoot(player, []);
-      sendLoot(player, []);
+      // Only what the player could see; anything waiting behind it comes into view.
+      const left = lootOf(player).slice(LOOT_SLOTS);
+      setLoot(player, left);
+      if (left.length > 0) openLoot(player);
+      else sendLoot(player, left);
     },
     "Cancel", () => openLoot(player));
 }
@@ -369,13 +440,17 @@ function useChest(event) {
   return room.openChest(player, event.location ?? Shared.tileOf(event.object));
 }
 
-/** The teleport crystal takes the player out of the theatre. */
+/** The teleport crystal takes the player out of the theatre, asking first (captured, 227/01764). */
 function useCrystal(event) {
   const { player } = event;
   const raid = Raid.raidOf(player);
   if (!raid) return false;
-  if (lootOf(player).length > 0) player.sendMessage("Your unclaimed rewards can be collected from the Rewards Chest by the bank in Ver Sinhaza.");
-  raid.leave(player, "");
+  Shared.options(player, "Make sure you've collected all your stuff!",
+    "Leave the Theatre.", () => {
+      if (lootOf(player).length > 0) player.sendMessage("Your unclaimed rewards can be collected from the Rewards Chest by the bank in Ver Sinhaza.");
+      raid.leave(player, "");
+    },
+    "Stay in the Theatre.", () => {});
   return true;
 }
 
@@ -392,34 +467,20 @@ function showClaimChest({ player }) {
   player.getPacketSender().sendVarbit(CLAIM_CHEST.varbit, lootOf(player).length > 0 ? 1 : 0);
 }
 
-/** Verzik beaten: the completion count goes up for everyone still in the raid. */
-function countCompletion(player) {
-  const completions = (Number(player.getAttribute(ATTR_COMPLETIONS)) || 0) + 1;
-  player.setAttribute(ATTR_COMPLETIONS, completions);
-  player.sendMessage(`Your completed Theatre of Blood count is: <col=ff0000>${completions}</col>.`);
-  // The raid is over for normal mode too, so the quests waiting on a clear hear it.
-  Shared.api()?.emitCustomEvent("tob:completed", { player, mode: "normal" });
-}
-
-/** A normal-mode clear counts as a Theatre of Blood completion. */
-function hasCompletion(request) {
-  if ((Number(request.player.getAttribute(ATTR_COMPLETIONS)) || 0) > 0) request.complete = true;
-}
-
 module.exports = function registerTheatreRewards(api) {
   Shared.bind(api);
   Raid.registerRoom("REWARDS", RewardsRoom);
   api.persistAttribute(ATTR_LOOT);
-  api.persistAttribute(ATTR_COMPLETIONS);
   Shared.onObject(api, ["Monumental chest", ...CHESTS.map((chest) => chest.id)], useChest);
   Shared.onObject(api, Shared.OBJECT.TELEPORT_CRYSTAL, useCrystal);
   Shared.onObject(api, CLAIM_CHEST.id, claimChest);
   api.onPlayerLogin(showClaimChest);
+  api.onPlayerLogout(({ player }) => loseLoot(player));
+  api.onCustomEvent("tob:raid-entered", enterRaid);
   api.onInterfaceActionButton((INTERFACE << 16) | COMPONENT.BANK_ALL, clickBankAll);
   api.onInterfaceActionButton((INTERFACE << 16) | COMPONENT.TAKE_ALL, clickTakeAll);
   api.onInterfaceActionButton((INTERFACE << 16) | COMPONENT.DISCARD_ALL, clickDiscardAll);
   api.onInterfaceActionButton(ITEMS_UID, clickLootItem);
-  api.onCustomEvent("tob:has-completion", hasCompletion);
 };
 
-Object.assign(module.exports, { RewardsRoom, rollRaid, standing, lootOf, setLoot, countCompletion, CHESTS, ATTR_LOOT, ATTR_COMPLETIONS });
+Object.assign(module.exports, { RewardsRoom, rollRaid, standing, lootOf, setLoot, loseLoot, logLoot, openLoot, CHESTS, ATTR_LOOT, LOOT_BY_MODE });

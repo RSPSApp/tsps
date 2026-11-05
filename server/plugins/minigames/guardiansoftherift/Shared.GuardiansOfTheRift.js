@@ -74,12 +74,14 @@ const ITEM = {
   ],
 };
 
-/** What the game takes back when you leave it or a new one begins (Wiki, rsprox captures). */
-const GAME_ITEMS = [
-  ITEM.FRAGMENTS, ITEM.ESSENCE, ITEM.ELEMENTAL_STONE, ITEM.CATALYTIC_STONE,
-  ITEM.POLYELEMENTAL_STONE, ITEM.POLYCATALYTIC_STONE, ITEM.UNCHARGED_CELL,
-  ...ITEM.CELLS, ...ITEM.PORTAL_TALISMANS,
-];
+const STONES = [ITEM.ELEMENTAL_STONE, ITEM.CATALYTIC_STONE, ITEM.POLYELEMENTAL_STONE, ITEM.POLYCATALYTIC_STONE];
+/**
+ * What a new game takes back (Wiki: fragments, essence and portal talismans; the stones already
+ * went with the lobby countdown). Cells stay: live players keep theirs into the next game (rsprox captures).
+ */
+const NEW_GAME_ITEMS = [ITEM.FRAGMENTS, ITEM.ESSENCE, ...STONES, ...ITEM.PORTAL_TALISMANS];
+/** What the game takes back when you leave it: everything, cells too (rsprox captures). */
+const GAME_ITEMS = [...NEW_GAME_ITEMS, ITEM.UNCHARGED_CELL, ...ITEM.CELLS];
 
 const VARBIT = {
   CATALYTIC_EARNED: "gotr_catalytic_earned_this_game",
@@ -208,14 +210,25 @@ function repeat(ticks, action) {
 /**
  * One repeated action per player (mining, the workbench): starting another, moving, or
  * `stopAction` ends it. `step(ticks)` runs every tick and returns false to stop.
+ * A `locked` action (assembling a guardian) holds the player still and can't be cancelled by
+ * clicking away or starting another; only `stopAction(player, true)` (leaving the game) ends it.
+ * Returns false when a locked action is already running.
  */
-function startAction(player, name, step) {
+function startAction(player, name, step, { locked = false } = {}) {
+  if (player.__gotrAction?.locked) return false;
   stopAction(player);
   const origin = player.getLocation();
   let ticks = 0;
-  const action = { name, task: null };
+  const action = { name, task: null, locked };
+  if (locked) {
+    player.getMovementQueue().reset();
+    player.getMovementQueue().setBlockMovement(true);
+  }
   action.task = repeat(1, () => {
-    if (player.__gotrAction !== action || !player.isRegistered()) return false;
+    if (player.__gotrAction !== action || !player.isRegistered()) {
+      endAction(player, action);
+      return false;
+    }
     if (!player.getLocation().equals(origin) || step(++ticks) === false) {
       endAction(player, action);
       return false;
@@ -223,17 +236,22 @@ function startAction(player, name, step) {
     return true;
   });
   player.__gotrAction = action;
+  return true;
 }
 
 function endAction(player, action) {
+  if (action.locked && !action.released) {
+    action.released = true;
+    player.getMovementQueue().setBlockMovement(false);
+  }
   if (player.__gotrAction !== action) return;
   player.__gotrAction = null;
-  animate(player, null);
+  if (!action.locked) animate(player, null);
 }
 
-function stopAction(player) {
+function stopAction(player, force = false) {
   const action = player.__gotrAction;
-  if (!action) return;
+  if (!action || (action.locked && !force)) return;
   action.task?.stop();
   endAction(player, action);
 }
@@ -354,7 +372,7 @@ module.exports = {
   bind, core, api,
   TEMPLE, BARRIER, LOBBY_TILE, REQUIRED_RUNECRAFT,
   MAX_ENERGY_PER_TYPE, MAX_ENERGY_TOTAL, REWARD_ENERGY, MINING_XP_CAP, HUD_PERIOD, RIFT_GUARDIAN_CAP,
-  LOC, NPC, ITEM, GAME_ITEMS, VARBIT, VARP, INTERFACE, SCRIPT, OVERLAY_HUD_UID, OVERLAY_ATMOSPHERE_UID,
+  LOC, NPC, ITEM, STONES, NEW_GAME_ITEMS, GAME_ITEMS, VARBIT, VARP, INTERFACE, SCRIPT, OVERLAY_HUD_UID, OVERLAY_ATMOSPHERE_UID,
   loc, isLoc, npc, obj, seq, spotanim, iface, setVarbit, getVarbit, setVarp,
   location, inTemple, inGameSide, now, later, repeat, startAction, stopAction, statement, itemStatement, options, npcSays, spam, highlight,
   animate, graphic, damageNpc, prepareNpc, sound, runecraftLevel, addXp, questComplete, count, removeItems, formatNumber, random,

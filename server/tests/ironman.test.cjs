@@ -366,6 +366,14 @@ for (const source of ["pickup", "telegrab"]) {
       spawn.owner = null; spawn.setState(State.SEEN_BY_EVERYONE); spawn.staticSpawn = true;
       take(spawn);
       assert.equal(player.getInventory().getAmount(995), 12, "unowned world spawns remain available");
+      const publicUntradeable = manager.registers(player, new core.Item(core.ItemIdentifiers.SAWDUST));
+      publicUntradeable.owner = undefined; publicUntradeable.setState(State.SEEN_BY_EVERYONE);
+      assert.equal(publicUntradeable.isStaticSpawn(), false);
+      assert.equal(publicUntradeable.getItem().isTradeable(), false);
+      assert.equal(manager.canSee(player, publicUntradeable), true);
+      take(publicUntradeable);
+      assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.SAWDUST), 1,
+        "temporary unowned world items remain available to every Ironman mode");
     });
   }
 }

@@ -168,6 +168,7 @@ function player(level = 99, current = 99) {
     sendCameraReset: () => { p.camera.push(['reset']); return packet; },
     sendCameraShake: (...args) => { p.camera.push(['shake', ...args]); return packet; },
     sendSubInterface: (...args) => { p.camera.push(['sub', ...args]); return packet; },
+    mountSubInterface: (...args) => { p.camera.push(['sub', ...args]); return {}; },
     closeSubInterface: (...args) => { p.camera.push(['close', ...args]); return packet; },
     sendObjectRemoval: object => { clientRemovals.push(object); return packet; },
     sendObject: object => { clientSpawns.push(object); return packet; },
@@ -203,7 +204,7 @@ function player(level = 99, current = 99) {
     getPrivateArea: () => area, getHitpoints: () => 99, performAnimation: noop,
     setUntargetable: value => { p.untargetable = value; },
 
-    getUsername: () => 'Parity',
+    getUsername: () => 'Parity', getDisplayName: () => 'Parity',
     sendMessage: text => p.messages.push(text),
     setEnteredAmountAction(action) { p.amountAction = action; },
     getEnteredAmountAction() { return p.amountAction; },

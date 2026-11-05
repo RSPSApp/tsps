@@ -18,12 +18,14 @@ import { EventBus } from "./eventbus/EventBus";
 import { PluginManager } from "./plugins/PluginManager";
 import { ClientToolbar } from "./ui/ClientToolbar";
 import { OverlayRenderer } from "./ui/overlay/OverlayRenderer";
+import { bindOverlayFonts } from "./ui/overlay/OverlayFonts";
 import { CLIENT_TOKEN } from "./plugins/PluginInjector";
 import { CORE_PLUGINS, LEGACY_CONFIG_MIGRATIONS } from "./plugins";
 import { toRuneLiteGameState } from "../impl/GameStateMapping";
 import { bindNpcEvents } from "../impl/NpcEventSource";
 import { runLegacyConfigMigrations } from "../impl/LegacyConfigMigration";
 import { migrateTileMarkersConfig } from "../../game/plugins/tilemarkers/migrateTileMarkers";
+import { migrateTimersConfig } from "../../game/plugins/statustimer/TimersPlugin";
 
 /**
  * Boots the RuneLite-shaped plugin runtime around an OsrsClient: singletons,
@@ -50,6 +52,7 @@ export class RuneLite {
         private readonly loadPlugins: boolean,
     ) {
         this.configManager = new ConfigManager(this.eventBus);
+        bindOverlayFonts(this.configManager);
         this.pluginManager = new PluginManager(this.eventBus, this.configManager);
         this.clientToolbar = this.pluginManager.getInjector().get(ClientToolbar);
         this.overlayRenderer = new OverlayRenderer(client, this.configManager);
@@ -101,7 +104,7 @@ export class RuneLite {
 
         subscribePluginMessages(({ channel, data }) => this.eventBus.post(new PluginMessage(channel, data)));
         subscribeChatMessages((msg) => this.eventBus.post(
-            new ChatMessage(msg.chatType ?? 0, msg.from ?? "", msg.text, msg.prefix ?? null),
+            new ChatMessage(msg.chatType ?? 0, msg.from ?? "", msg.text ?? "", msg.prefix ?? null),
         ));
 
         // A stats snapshot (login) or update: one StatChanged per skill it carries.
@@ -123,6 +126,7 @@ export class RuneLite {
         // Edit mode: no plugins, so nothing for the overlay renderer to lay out either.
         if (!this.loadPlugins) return;
         runLegacyConfigMigrations(LEGACY_CONFIG_MIGRATIONS, this.configManager);
+        migrateTimersConfig(this.configManager);
         migrateTileMarkersConfig(this.configManager);
         this.pluginManager.loadCorePlugins(CORE_PLUGINS);
 

@@ -6,10 +6,30 @@ const { Server } = require("../dist/Server");
 Server.installProductionPathResolver();
 
 const { Skill } = require("../dist/game/model/Skill");
+const { ItemIdentifiers } = require("../dist/util/ItemIdentifiers");
 const { SkillManager } = require("../dist/game/content/skill/SkillManager");
 
 const sender = new Proxy({}, { get: (_, name) => (name === "then" ? undefined : () => sender) });
 const skills = new SkillManager({ getPacketSender: () => sender });
+
+test("combat levels retain the fractional base until the final round down", () => {
+  const cases = [
+    [[1, 1, 99, 65, 99, 1, 99], 64],
+    [[50, 1, 99, 65, 99, 1, 99], 64],
+    [[1, 1, 99, 65, 1, 1, 99], 64],
+    [[50, 1, 99, 65, 1, 1, 1], 64],
+    [[1, 1, 1, 10, 99, 1, 1], 50],
+    [[1, 1, 99, 66, 99, 1, 99], 64],
+    [[1, 1, 99, 66, 99, 2, 99], 65],
+    [[1, 1, 99, 66, 99, 3, 99], 65],
+    [[1, 1, 1, 10, 1, 1, 1], 3],
+    [[99, 99, 99, 99, 99, 99, 99], 126],
+  ];
+  for (const [levels, expected] of cases) {
+    assert.equal(SkillManager.calculateCombatLevel(levels), expected, levels.join(","));
+    assert.equal(SkillManager.prototype.getCombatLevel.call({ skills: { maxLevel: levels } }), expected);
+  }
+});
 
 test("lowering a skill takes effect on the first call (issue #101)", () => {
   for (const level of [99, 1]) {
@@ -85,7 +105,7 @@ test("Hunter cache data, trap ownership, transactions, cancellation and persiste
     };
     return {
       counts, attrs, levels, baseLevels, experience, configs, equipment, banks, setSize(n) { size = n; },
-      isRegistered: () => true, getHitpoints: () => 99, busy: () => false, getUsername: () => "hunter-test",
+      isRegistered: () => true, getHitpoints: () => 99, busy: () => false, getUsername: () => "hunter-test", getDisplayName: () => "hunter-test",
       getInventory: () => inv, getSkillManager: () => skillManager,
       getBank: (tab = 0) => banks[tab], getCurrentBankTab: () => 0,
       getEquipment: () => ({ getItems: () => [...equipment].map(([slot,id])=>new core.Item(id,1)), get: slot => new core.Item(equipment.get(slot)??-1,1),set(slot,item){equipment.set(slot,item.getId());},refreshItems(){} }),
@@ -650,6 +670,7 @@ function feedbackPlayer(core) {
   };
   const sender = new Proxy({
     sendCreationMenu(value) { menu = value; return sender; },
+    sendTypedMessage(type, text) { sent.push(["sendTypedMessage", type, text]); messages.push(text); return sender; },
     sendChatboxInterface(id) { chatbox = id; sent.push(["chatbox", id]); return sender; },
     isChatboxInterface: id => chatbox === id,
     closeInterface(id) { if (chatbox === id) chatbox = -1; return sender; },
@@ -662,7 +683,7 @@ function feedbackPlayer(core) {
     getInventory: () => inventory, getEquipment: () => ({ contains: () => false }), getPacketSender: () => sender,
     getMovementQueue: () => ({ size: () => 0 }), getForceMovement: () => null,
     isRegistered: () => true, getHitpoints: () => 99,
-    getUsername: () => "feedback-test", getIndex: () => 1, isPlayerBot: () => false,
+    getUsername: () => "feedback-test", getDisplayName: () => "feedback-test", getIndex: () => 1, isPlayerBot: () => false,
     performAnimation: a => animations.push(a.getId()), performGraphic: g => graphics.push(g.getId()), sendMessage: m => messages.push(m),
     getClickDelay: () => ({ elapsedTime: () => true, reset() {} }),
     getSkill: () => activeSkill, setSkill(value) { activeSkill = value; }, setCreationMenu() {},
@@ -677,7 +698,7 @@ function feedbackPlayer(core) {
 function registerFeedbackPlugin(name, core, extra = {}) {
   // Like the plugin API, every handler a hook name gets runs until one handles the event.
   const handlers = {}, hooks = { customEvents: new Map() };
-  const api = new Proxy({ core, log() {}, ...extra }, {
+  const api = new Proxy({ core, log() {}, getPluginConfig: (_key, defaultValue) => defaultValue, ...extra }, {
     get: (target, key) => target[key] ?? ((...args) => {
       if (key === "onCustomEvent") {
         const [name, handler] = args;
@@ -733,6 +754,23 @@ test("every skill gets native level-up text, its own model, stats before hooks, 
   } finally { PluginManager.emitPlayerLevelUp = emit; }
 });
 
+test("as captured: a level-up raises the current level by the levels gained, not to the new max (issue #2040)", () => {
+  const xp = new SkillManager({ getPacketSender: () => sender, getAttribute: () => undefined, getUpdateFlag: () => ({ flag() {} }) });
+  // rsprox 1098 ticks 3103-3104: Hitpoints 3/11 at 1567 xp, then 4/12 at 1587 xp.
+  xp.setMaxLevel(Skill.HITPOINTS, 11).setExperience(Skill.HITPOINTS, 1567);
+  xp.setCurrentLevels(Skill.HITPOINTS, 3, false);
+  xp.addExperience(Skill.HITPOINTS, 20, false);
+  assert.equal(xp.getMaxLevel(Skill.HITPOINTS), 12);
+  assert.equal(xp.getCurrentLevel(Skill.HITPOINTS), 4);
+
+  // A boost and a multi-level gain keep their offset from the base level.
+  xp.setMaxLevel(Skill.STRENGTH, 50).setExperience(Skill.STRENGTH, SkillManager.getExperienceForLevel(50));
+  xp.setCurrentLevels(Skill.STRENGTH, 55, false);
+  xp.addExperience(Skill.STRENGTH, SkillManager.getExperienceForLevel(52) - SkillManager.getExperienceForLevel(50), false);
+  assert.equal(xp.getMaxLevel(Skill.STRENGTH), 52);
+  assert.equal(xp.getCurrentLevel(Skill.STRENGTH), 57);
+});
+
 /** A player whose skill totals the level-up plugin reads are fixed. */
 function levelledPlayer(core, { total = 101, combat = 3 } = {}) {
   const p = feedbackPlayer(core);
@@ -754,6 +792,30 @@ test("as captured: Disabled pop-ups keep the message and graphic, and interrupt 
   assert.deepEqual(p.messages, ["Congratulations, you've just advanced your Defence level. You are now level 81."]);
   assert.deepEqual(p.graphics, [199]);
   assert.equal(p.sent.some(([type]) => type === "chatbox"), false);
+  assert.equal(p.stopped, 0);
+  assert.deepEqual(emitted, []);
+  assert.deepEqual(p.animations, []);
+});
+
+test("world config can disable interruption without closing another dialogue or stopping the action", () => {
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  const core = PluginManager.getCoreApi(), emitted = [];
+  const hooks = registerFeedbackPlugin("interface/SkillLevelUp", core, {
+    getPluginConfig(key, defaultValue) {
+      assert.equal(key, "SkillLevelUp:interruptActions");
+      assert.equal(defaultValue, true);
+      return false;
+    },
+    emitCustomEvent: name => emitted.push(name),
+  });
+  const p = levelledPlayer(core);
+  p.getPacketSender().sendChatboxInterface(999);
+  p.sent.length = 0;
+  hooks.onPlayerLevelUp({ player: p, skill: Skill.FISHING, oldLevel: 66, newLevel: 67 });
+  assert.deepEqual(p.messages, ["Congratulations, you've just advanced your Fishing level. You are now level 67."]);
+  assert.deepEqual(p.graphics, [199]);
+  assert.equal(p.getPacketSender().isChatboxInterface(999), true);
+  assert.equal(p.sent.some(([type]) => type === "chatbox" || type === "sendInterfaceRemoval"), false);
   assert.equal(p.stopped, 0);
   assert.deepEqual(emitted, []);
   assert.deepEqual(p.animations, []);
@@ -867,17 +929,20 @@ test("Fletching keeps going while moving, stops on the next click and resumes af
     getTaskManager: () => ({ submit: task => { task.setRunning(true); tasks.push(task); } }),
   });
   // The level-up pop-up is what stops Fletching: SkillLevelUp announces it as an event.
+  let interruptActions = true;
   const feedback = registerFeedbackPlugin("interface/SkillLevelUp", core, {
+    getPluginConfig: () => interruptActions,
     emitCustomEvent: (name, event) => name === "level-up:popup-opened" && hooks.onCustomEvent(event),
   });
-  for (const mode of ["moving", "click", "level-up"]) {
+  for (const mode of ["moving", "click", "level-up", "uninterrupted-level-up"]) {
+    interruptActions = mode !== "uninterrupted-level-up";
     const p = feedbackPlayer(core);
     let xp = 0;
     p.skills = {
       getCurrentLevel: () => 99, getTotalLevel: () => 100, getCombatLevel: () => 3, stopSkillable() {},
       addExperiences() {
         xp++;
-        if (mode === "level-up" && xp === 1) feedback.onPlayerLevelUp({ player: p, skill: Skill.FLETCHING, oldLevel: 1, newLevel: 2 });
+        if (mode.endsWith("level-up") && xp === 1) feedback.onPlayerLevelUp({ player: p, skill: Skill.FLETCHING, oldLevel: 1, newLevel: 2 });
       },
     };
     p.counts.set(core.ItemIdentifiers.KNIFE, 1); p.counts.set(core.ItemIdentifiers.LOGS, 2);
@@ -892,8 +957,8 @@ test("Fletching keeps going while moving, stops on the next click and resumes af
       if (mode === "moving") p.moveTo(new core.Location(3000 + n, 3000, 0));
       if (task.isRunning()) task.execute();
     }
-    assert.equal(xp, { moving: 2, click: 0, "level-up": 1 }[mode]);
-    assert.equal(p.counts.get(core.ItemIdentifiers.LOGS) ?? 0, { moving: 0, click: 2, "level-up": 1 }[mode]);
+    assert.equal(xp, { moving: 2, click: 0, "level-up": 1, "uninterrupted-level-up": 2 }[mode]);
+    assert.equal(p.counts.get(core.ItemIdentifiers.LOGS) ?? 0, { moving: 0, click: 2, "level-up": 1, "uninterrupted-level-up": 0 }[mode]);
     assert.equal(task.isRunning(), mode === "level-up");
     if (mode === "level-up") {
       assert.equal(p.animations.at(-1), 65535, "the popup holds the remaining batch and animation");
@@ -1061,9 +1126,10 @@ test("native autocast indicators clear on staff removal while remembering the de
     const varbits = new Map();
     const sender = new Proxy({ sendVarbit(id, n) { varbits.set(id, n); return sender; } }, { get: (t, key) => t[key] ?? (() => sender) });
     const p = { getCombat: () => ({ getAutocastSpell: () => selected, setAutocastSpell: s => { selected = s; } }),
-      getEquipment: () => ({ hasStaffEquipped: () => staff, getItems: () => new Array(14).fill(new Item(-1, 0)) }),
+      getEquipment: () => ({ hasStaffEquipped: () => staff, getWeapon: () => new Item(staff ? ItemIdentifiers.STAFF_OF_AIR : -1, 1), getItems: () => new Array(14).fill(new Item(-1, 0)) }),
       getPacketSender: () => sender, getFightType: () => fightType, setFightType: type => { fightType = type; },
-      setWeapon() {}, autoRetaliateReturn: () => false, sendMessage() {} };
+      setWeapon(weapon) { this.weapon = weapon; }, getWeapon() { return this.weapon; }, autoRetaliateReturn: () => false, sendMessage() {},
+      attrs: new Map(), getAttribute(key) { return this.attrs.get(key); }, setAttribute(key, value) { this.attrs.set(key, value); } };
     Autocasting.setAutocast(p, CombatSpells.WIND_STRIKE);
     assert.equal(varbits.get(275), 1); assert.equal(varbits.get(276), 1);
     staff = false; WeaponInterfaceManager.assign(p);
@@ -1076,6 +1142,7 @@ test("native autocast indicators clear on staff removal while remembering the de
 
 
 test("choosing a style while autocasting turns autocast off, and autocast shows as com_mode 4 (rsprox)", () => {
+  const { Item } = require("../dist/game/model/Item");
   const { Autocasting } = require("../dist/game/content/combat/magic/Autocasting");
   const { CombatSpells } = require("../dist/game/content/combat/magic/CombatSpells");
   const { BonusManager } = require("../dist/game/model/equipment/BonusManager");
@@ -1092,10 +1159,10 @@ test("choosing a style while autocasting turns autocast off, and autocast shows 
       sendConfig(id, n) { varps.set(id, n); return sender; },
     }, { get: (t, key) => t[key] ?? (() => sender) });
     const p = { getCombat: () => ({ getAutocastSpell: () => selected, setAutocastSpell: s => { selected = s; } }),
-      getEquipment: () => ({ hasStaffEquipped: () => true }),
+      getEquipment: () => ({ hasStaffEquipped: () => true, getWeapon: () => new Item(ItemIdentifiers.STAFF_OF_AIR, 1) }),
       getWeapon: () => WeaponInterfaces.STAFF,
       getPacketSender: () => sender, getFightType: () => fightType, setFightType: type => { fightType = type; },
-      sendMessage() {} };
+      sendMessage() {}, attrs: new Map(), getAttribute(key) { return this.attrs.get(key); }, setAttribute(key, value) { this.attrs.set(key, value); } };
 
     Autocasting.setAutocast(p, CombatSpells.FIRE_STRIKE);
     assert.equal(varps.get(43), 4, "autocasting is com_mode 4, so any style click is a change");
@@ -1208,7 +1275,35 @@ test("sound lookup excludes Lost City IDs, altar switches use OSRS audio, and re
   assert.equal(Music.forRegion(-1), undefined);
 });
 
-test("Defence threshold changes update native prayer-unlock varbits", () => {
+test("the cache Shrine of Ralos Bask action restores Prayer without reducing boosts", async () => {
+  const { CachePipeline } = require("../dist/game/cache/CachePipeline");
+  const { CacheDefinitions } = require("../dist/game/cache/CacheDefinitions");
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  await CachePipeline.initialize(require("node:path").resolve(__dirname, ".."));
+  const core = PluginManager.getCoreApi(), interactions = new Map();
+  require("../plugins/objects/Altars.plugin").register({
+    core, onObjectInteraction: (name, actions) => interactions.set(name, actions),
+  });
+  const shrine = CacheDefinitions.getObject(core.ObjectIdentifiers.SHRINE_OF_RALOS);
+  assert.equal(shrine.name, "Shrine of Ralos");
+  assert.equal(shrine.actions[0], "Bask");
+  const bask = interactions.get(shrine.name)?.[shrine.actions[0]];
+  assert.equal(typeof bask, "function", "the real cache name/action has an altar handler");
+  for (const current of [0, 30, 70, 75]) {
+    const player = feedbackPlayer(core);
+    player.skills.setMaxLevel(Skill.PRAYER, 70, false);
+    player.skills.setCurrentLevels(Skill.PRAYER, current);
+    player.sent.length = 0;
+    assert.equal(bask({ player }), true);
+    assert.equal(player.skills.getCurrentLevel(Skill.PRAYER), Math.max(current, 70));
+    const restored = current < 70;
+    assert.deepEqual(player.messages, [restored ? "You recharge your Prayer points." : "You already have full Prayer points."]);
+    assert.deepEqual(player.animations, restored ? [645] : []);
+    assert.equal(player.sent.filter(([type, id]) => type === "sendSoundEffect" && id === 2674).length, restored ? 1 : 0);
+  }
+});
+
+test("Defence threshold changes leave the prayer-unlock varbits to PrayerUnlocks", () => {
   const { PluginManager } = require("../dist/plugins/PluginManager");
   const p = feedbackPlayer(PluginManager.getCoreApi());
   p.skills.setMaxLevel(Skill.PRAYER, 99, false);
@@ -1216,9 +1311,7 @@ test("Defence threshold changes update native prayer-unlock varbits", () => {
     p.sent.length = 0;
     p.skills.setMaxLevel(Skill.DEFENCE, level);
     const bits = new Map(p.sent.filter(([type]) => type === "sendVarbit").map(([, id, n]) => [id, n]));
-    assert.equal(bits.get(3909), level >= 60 ? 8 : 0);
-    assert.equal(bits.get(5451), level >= 70 ? 1 : 0);
-    assert.equal(bits.get(5452), level >= 70 ? 1 : 0);
+    for (const id of [3909, 5451, 5452, 5453]) assert.equal(bits.has(id), false, `varbit ${id}, Defence ${level}`);
   }
 });
 

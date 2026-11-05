@@ -7,7 +7,7 @@ const { PlayerRenderer } = require("../render/player/PlayerRenderer");
 
 const pose = (value: number, labels = 1) => new Float32Array(labels * 12).fill(value);
 const groups = (...rows: [string, Float32Array][]) =>
-    new Map(rows.map(([key, matrices]) => [key, { matrices, appearance: {} }]));
+    new Map(rows.map(([key, matrices]) => [key, { matrices, appearance: {}, instances: [{ pid: 1 }] }]));
 
 function harness() {
     const writes: { y: number; width: number; height: number; data: Float32Array }[] = [];
@@ -15,6 +15,7 @@ function harness() {
     let bound: object;
     const texture = () => ({ currentUnit: 0, bind() { bound = this; } });
     const renderer = {
+        osrsClient: { playerEcs: { setAnimatedHeight: (_pid: number, _height: number) => {} } },
         playerPoseTexture: texture() as any,
         app: { gl: {
             TEXTURE_2D: 3553, RGBA: 6408, FLOAT: 5126,
@@ -34,7 +35,7 @@ function harness() {
     const player: any = new PlayerRenderer(renderer);
     player.ensureBaseForAppearance = () => ({ baseModel: {} });
     player.poseFor = (_key: string, _base: any, group: any) => group.matrices;
-    player.rigFor = () => ({});
+    player.rigFor = () => ({ height: () => 196 });
     player.restMeshFor = () => ({});
     const read = (row: number, length: number) => images.get(renderer.playerPoseTexture)?.get(row)?.slice(0, length);
     return { renderer, player, writes, texture, read };

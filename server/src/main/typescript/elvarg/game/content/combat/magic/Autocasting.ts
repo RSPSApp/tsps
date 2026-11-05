@@ -1,5 +1,6 @@
 import { Player } from "../../../entity/impl/player/Player";
 import { MagicSpellbook } from "../../../model/MagicSpellbook";
+import { ItemAliases } from "../../../model/ItemAliases";
 import { ItemIdentifiers } from "../../../../util/ItemIdentifiers";
 import { FightStyle } from "../FightStyle";
 import { FightType } from "../FightType";
@@ -23,8 +24,8 @@ export class Autocasting {
     public static readonly ANCIENT_SPELL_AUTOCAST_STAFFS = new Set<number>([
         ItemIdentifiers.KODAI_WAND, ItemIdentifiers.MASTER_WAND, ItemIdentifiers.ANCIENT_STAFF,
         ItemIdentifiers.NIGHTMARE_STAFF, ItemIdentifiers.VOLATILE_NIGHTMARE_STAFF,
-        ItemIdentifiers.ELDRITCH_NIGHTMARE_STAFF, ItemIdentifiers.TOXIC_STAFF_OF_THE_DEAD,
-        ItemIdentifiers.STAFF_OF_THE_DEAD, ItemIdentifiers.STAFF_OF_LIGHT,
+        ItemIdentifiers.ELDRITCH_NIGHTMARE_STAFF,
+        ItemIdentifiers.ZURIELS_STAFF, ItemIdentifiers.ZURIELS_STAFF_BH_,
     ]);
 
     private static readonly AUTOCAST_SPELLS = new Map<number, CombatSpell>([
@@ -77,7 +78,7 @@ export class Autocasting {
 
     /** What varp 664 is set to when the selector opens, for this spellbook and weapon. */
     public static selectorList(spellbook: MagicSpellbook, weaponId: number): number {
-        if (spellbook === MagicSpellbook.ANCIENT) return weaponId;
+        if (spellbook === MagicSpellbook.ANCIENT) return ItemIdentifiers.ANCIENT_STAFF;
         if (spellbook === MagicSpellbook.ARCEUUS) return this.SELECTOR_ARCEUUS;
         if (weaponId === ItemIdentifiers.SLAYERS_STAFF || weaponId === ItemIdentifiers.SLAYERS_STAFF_E_) {
             return this.SELECTOR_SLAYERS_STAFF;
@@ -121,22 +122,13 @@ export class Autocasting {
         }
 
         const weaponId = player.getEquipment().getWeapon().getId();
-        if (player.getSpellbook() === MagicSpellbook.ANCIENT &&
-            !this.ANCIENT_SPELL_AUTOCAST_STAFFS.has(weaponId) && !Barrows.hasDamnedSet(player, "ahrims")) {
-            player.sendMessage("You can only autocast regular offensive spells with this staff.");
-            return true;
-        }
-        if (player.getSpellbook() === MagicSpellbook.NORMAL && weaponId === ItemIdentifiers.ANCIENT_STAFF) {
-            player.sendMessage("You can only autocast ancient magicks with that.");
-            return true;
-        }
-        if (player.getSpellbook() === MagicSpellbook.ARCEUUS &&
-            !this.canAutocastArceuus(player.getEquipment().getWeapon().getDefinition().getName())) {
-            player.sendMessage("You can only autocast regular offensive spells with this staff.");
+        const refusal = this.weaponRefusal(player, player.getSpellbook());
+        if (refusal != null) {
+            player.sendMessage(refusal);
             return true;
         }
 
-        const fightType = defensive ? FightType.STAFF_FOCUS : FightType.STAFF_POUND;
+        const fightType = this.selectorFightType(player, defensive);
         player.setFightType(fightType);
         player.getPacketSender()
             .sendConfig(fightType.getParentId(), fightType.getChildId())
@@ -147,11 +139,63 @@ export class Autocasting {
         return true;
     }
 
+    /**
+     * Why the wielded weapon can't autocast spells from `spellbook`, or null when it can (wiki: Autocast).
+     * Only the ancient staff family autocasts Ancient Magicks (the Staff of the Dead and Staff of Light
+     * don't), and the Ancient staff autocasts nothing else.
+     */
+    private static weaponRefusal(player: Player, spellbook: MagicSpellbook): string | null {
+        const weapon = player.getEquipment().getWeapon();
+        const weaponId = weapon.getId();
+        if (spellbook === MagicSpellbook.ANCIENT &&
+            !this.ANCIENT_SPELL_AUTOCAST_STAFFS.has(weaponId) &&
+            !this.ANCIENT_SPELL_AUTOCAST_STAFFS.has(ItemAliases.baseOf(weaponId) ?? -1) &&
+            !Barrows.hasDamnedSet(player, "ahrims")) {
+            return "You can only autocast regular offensive spells with this staff.";
+        }
+        if (spellbook === MagicSpellbook.NORMAL && weaponId === ItemIdentifiers.ANCIENT_STAFF) {
+            return "You can only autocast ancient magicks with that.";
+        }
+        if (spellbook === MagicSpellbook.ARCEUUS && !this.canAutocastArceuus(weapon.getDefinition().getName())) {
+            return "You can only autocast regular offensive spells with this staff.";
+        }
+        return null;
+    }
+
+    /**
+     * Whether the player is autocasting now. A default spell kept without a staff ("Default spell
+     * set. Please equip a staff to use autocast.") is only remembered, not cast.
+     */
+    public static isActive(player: Player): boolean {
+        return player.getCombat().getAutocastSpell() != null && player.getEquipment().hasStaffEquipped();
+    }
+
+    /** Whether the wielded weapon is a staff that can autocast `spell`. */
+    public static canAutocast(player: Player, spell: CombatSpell): boolean {
+        return player.getEquipment().hasStaffEquipped() && this.weaponRefusal(player, spell.getSpellbook()) == null;
+    }
+
+    /** The weapon's own defensive or aggressive style (Focus/Pound on a staff, Fend/Swipe on a bladed staff). */
+    private static selectorFightType(player: Player, defensive: boolean): FightType {
+        const wanted = defensive ? FightStyle.DEFENSIVE : FightStyle.AGGRESSIVE;
+        const styles = player.getEquipment().getWeapon().getDefinition()?.getWeaponInterface?.()?.getFightType?.() ?? [];
+        return styles.find((type) => type.getStyle() === wanted)
+            ?? (defensive ? FightType.STAFF_FOCUS : FightType.STAFF_POUND);
+    }
+
     private static openCombatInterface(player: Player): void {
         player.getPacketSender().sendTabInterface(0, this.COMBAT_INTERFACE);
     }
 
+    /**
+     * Sets (or, after an equipment switch or login, restores) the autocast spell. A staff that can't
+     * cast it clears it rather than keeping it, so switching from an Ancient staff to a Staff of the
+     * Dead doesn't go on casting Ice Barrage.
+     */
     public static setAutocast(player: Player, spell: CombatSpell | null): void {
+        if (spell != null && player.getEquipment().hasStaffEquipped() && !this.canAutocast(player, spell)) {
+            spell = null;
+        }
         player.getCombat().setAutocastSpell(spell);
         const activeSpell = player.getEquipment().hasStaffEquipped() ? spell : null;
         if (activeSpell == null && spell != null) {

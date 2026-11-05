@@ -1,4 +1,4 @@
-import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { RenderStatsOverlay } from "../components/RenderStatsOverlay";
 import { OsrsLoadingBar } from "../components/OsrsLoadingBar";
@@ -11,12 +11,17 @@ import { isDebugMode, isIos, isMobileMode } from "../common/utils/DeviceUtil";
 import { DebugControls } from "./DebugControls";
 import "./GameContainer.css";
 import { GameRenderer } from "./GameRenderer";
-import { GameState } from "./login/GameState";
+import { useSidebarVisible } from "./useSubscribedGameState";
+import { useResponsiveGameframe } from "./useResponsiveGameframe";
 import { OsrsClient } from "./OsrsClient";
 import { Sidebar } from "./sidebar/Sidebar";
 import { SidebarToggleArrow } from "./sidebar/SidebarToggleArrow";
 import { ControlsHelp } from "./controls/ControlsHelp";
 import "./controls/ControlsHelp.css";
+import {
+    isPortraitModeEnabled, subscribePortraitModeEnabled,
+    isPortraitLeftHanded, subscribePortraitHandedness, PORTRAIT_COMPONENTS,
+} from "./plugins/portraitmode/PortraitLayout";
 import { FirstPersonPlugin } from "./plugins/firstperson/FirstPersonPlugin";
 
 interface OsrsContainerProps {
@@ -98,6 +103,15 @@ function resolvePointerCoordinate(
 }
 
 export function GameContainer({ osrsClient }: OsrsContainerProps): JSX.Element {
+    const mobileGameframe = useResponsiveGameframe(osrsClient);
+    const allowPortrait = useSyncExternalStore(subscribePortraitModeEnabled, isPortraitModeEnabled);
+    const leftHanded = useSyncExternalStore(subscribePortraitHandedness, isPortraitLeftHanded);
+    useEffect(() => {
+        const manager = osrsClient.widgetManager;
+        if (manager?.rootInterface !== 601) return;
+        const safezone = manager.getWidgetByUid(PORTRAIT_COMPONENTS.safezone);
+        if (safezone) manager.invalidateWidget(safezone, "portrait settings");
+    }, [osrsClient, leftHanded, allowPortrait]);
     const closeCamera = osrsClient.runeLite.pluginManager.getPlugin(FirstPersonPlugin);
     const [closeCameraActive, setCloseCameraActive] = useState(() => closeCamera?.isActive() ?? false);
     const [renderer, setRenderer] = useState<GameRenderer>(osrsClient.renderer);
@@ -105,8 +119,11 @@ export function GameContainer({ osrsClient }: OsrsContainerProps): JSX.Element {
     const [downloadProgress, setDownloadProgress] = useState<DownloadProgress>();
 
     const [hideUi, setHideUi] = useState(false);
+    const sidebarVisible = useSidebarVisible(osrsClient.stateMachine, hideUi);
 
-    const [fps, setFps] = useState(0);
+    // The FPS readout is written straight into its element: as React state it re-rendered this
+    // whole tree (sidebar, HUD, canvas shell) four times a second for a number nothing else reads.
+    const fpsCounterRef = useRef<HTMLDivElement | null>(null);
 
     const [, forceStatsOverlayRefresh] = useState(0);
 
@@ -130,7 +147,11 @@ export function GameContainer({ osrsClient }: OsrsContainerProps): JSX.Element {
             // Cap React FPS UI updates (~4Hz). Per-RAF setState was thrashing the tree.
             if (now - fpsUiLastMs.current >= 250) {
                 fpsUiLastMs.current = now;
-                setFps(Math.round(renderer.stats.frameTimeFps));
+                const fpsCounter = fpsCounterRef.current;
+                if (fpsCounter) {
+                    const fps = String(Math.round(renderer.stats.frameTimeFps));
+                    if (fpsCounter.textContent !== fps) fpsCounter.textContent = fps;
+                }
                 setCloseCameraActive(osrsClient.runeLite.pluginManager.getPlugin(FirstPersonPlugin)?.isActive() ?? false);
                 if (!hideUi && osrsClient.hoverOverlayEnabled) {
                     forceStatsOverlayRefresh(renderer.stats.frameCount | 0);
@@ -358,11 +379,15 @@ export function GameContainer({ osrsClient }: OsrsContainerProps): JSX.Element {
     }
 
     return (
-        <div className="max-height game-container-root">
+        <div className={[
+            "max-height game-container-root",
+            mobileGameframe && allowPortrait ? "portrait-mode" : "",
+            leftHanded ? "portrait-left-handed" : "",
+        ].filter(Boolean).join(" ")}>
             <div
                 className={[
                     "game-viewport",
-                    isMobileMode ? "game-viewport-mobile" : "",
+                    mobileGameframe ? "game-viewport-mobile" : "",
                     isMobileMode && isIos ? "game-viewport-apple" : "",
                 ]
                     .filter(Boolean)
@@ -385,7 +410,7 @@ export function GameContainer({ osrsClient }: OsrsContainerProps): JSX.Element {
                         )}
 
                         <div className="hud right-top">
-                            <div className="fps-counter content-text">{fps}</div>
+                            <div ref={fpsCounterRef} className="fps-counter content-text" />
 
                             {!hideUi && (
                                 <>
@@ -433,7 +458,7 @@ export function GameContainer({ osrsClient }: OsrsContainerProps): JSX.Element {
                 </div>
 
                 {/* RuneLite's open/close arrow at the game's right edge (Ctrl+F11 does the same). */}
-                {!hideUi && osrsClient.gameState >= GameState.LOGIN_SCREEN && (
+                {sidebarVisible && (
                     <SidebarToggleArrow store={osrsClient.sidebar} />
                 )}
 
@@ -455,14 +480,14 @@ export function GameContainer({ osrsClient }: OsrsContainerProps): JSX.Element {
                 )}
             </div>
 
-            {/* Beside the game view, so a docked panel narrows it. From the login screen on: not
+            {/* Beside the game view (below it in portrait), so a docked panel narrows it. From login on: not
                 while the cache downloads or loads (DOWNLOADING, LOADING). */}
-            {!hideUi && osrsClient.gameState >= GameState.LOGIN_SCREEN && (
+            {sidebarVisible && (
                 <Sidebar
                     toolbar={osrsClient.runeLite.clientToolbar}
                     store={osrsClient.sidebar}
                     configManager={osrsClient.runeLite.configManager}
-                    mobile={isMobileMode}
+                    mobile={mobileGameframe}
                 />
             )}
 

@@ -23,6 +23,7 @@ const { animation, spam } = Common;
 
 // Wiki: goldsmith gauntlets (or the Smithing or max cape) raise gold bar XP from 22.5 to 56.2.
 const GOLDSMITH_GAUNTLETS_BONUS_XP = 33.7;
+const SMELT_MENU_MODE = 13; // skillmulti Smelt, cache enum 1809
 const SMELT_TITLE = "What would you like to smelt?";
 const LOVAKITE_FURNACE = "Lovakite furnace";
 const NO_ORE_MESSAGE = "You don't have any ore to smelt.";
@@ -158,7 +159,7 @@ function finishSmelt(player, chosen, furnaceId) {
   const extraXp = (outcome.bars - 1) * smeltingXp(player, outcome.secondRecipe ?? recipe);
   player.getSkillManager().addExperiences(skill, smeltingXp(player, recipe) + extraXp);
   if (recipe.retrieveMessage) spam(player, recipe.retrieveMessage);
-  Core.api.emitCustomEvent("smelting:success", { player, skill, itemId: recipe.barId });
+  Core.api.emitCustomEvent("smelting:success", { player, skill, itemId: recipe.barId, furnaceId });
   Common.produced(player, skill, recipe.barId, outcome.bars, smeltingXp(player, recipe) + extraXp, "smelt");
   return true;
 }
@@ -217,6 +218,7 @@ function openMenu(player, entries) {
   const most = Math.max(1, ...entries.map((entry) => entry.most));
   player.getPacketSender().sendCreationMenu(
     new CreationMenu(SMELT_TITLE, [...byItem.keys()], { execute: (itemId, amount) => byItem.get(itemId)?.start(player, amount) }, {
+      mode: SMELT_MENU_MODE,
       maxAmount: Math.min(most, MAX_QUANTITY),
     })
   );
@@ -242,7 +244,8 @@ function smelt({ player, objectId }) {
 }
 
 /**
- * An item used on a furnace: ore opens the Smelt menu; sand, soda ash and 'perfect' gold ore,
+ * An item used on a furnace: a lone, unambiguous ore smelts once; otherwise ore opens the menu.
+ * Sand, soda ash and 'perfect' gold ore,
  * which aren't on it, open a menu of their own product.
  */
 function useOnFurnace(event) {
@@ -251,6 +254,14 @@ function useOnFurnace(event) {
   const recipes = Data.SMELTING_RECIPES.filter((recipe) => !recipe.furnace && recipe.ingredients.some(([id]) => id === event.itemId));
   if (recipes.length === 0) return;
   event.handled = true;
+  const ready = recipes.filter((recipe) => !recipe.skill && !recipe.notInMenu && hasIngredients(event.player, recipe));
+  const singleOre = Data.SMELTING_RECIPES.filter((recipe) => !recipe.skill && !recipe.furnace)
+    .every((recipe) => recipe.ingredients.every(([id]) => available(event.player, id) === (id === event.itemId ? 1 : 0)));
+  // A single ore used on the furnace needs no quantity choice; Smelt keeps its menu.
+  if (singleOre && ready.length === 1 && extraEntries(event.player).length === 0) {
+    startSmelting(event.player, ready[0], 1, furnaceIdOf(event));
+    return;
+  }
   const offMenu = recipes.filter((recipe) => recipe.notInMenu);
   if (offMenu.length > 0) openMenu(event.player, recipeEntries(event.player, offMenu, furnaceIdOf(event)));
   else smelt({ player: event.player, objectId: furnaceIdOf(event) });
@@ -281,10 +292,12 @@ function fillFurnaceIds() {
 /**
  * "smithing:bar-for-ore": the bar an ore smelts into and its XP, for content that smelts as it mines (a
  * league relic): the furnace recipe whose main ore it is (its first ingredient), so coal, a steel bar's
- * second ingredient, smelts into nothing.
+ * second ingredient, smelts into nothing. An optional outputId selects that bar's recipe.
  */
 function answerBarForOre(request) {
-  const recipe = Data.SMELTING_RECIPES.find((candidate) => !candidate.furnace && candidate.ingredients[0]?.[0] === request.oreId);
+  const recipe = Data.SMELTING_RECIPES.find((candidate) =>
+    !candidate.furnace && candidate.ingredients[0]?.[0] === request.oreId &&
+    (request.outputId == null || candidate.barId === request.outputId));
   if (!recipe) return;
   request.barId = recipe.barId;
   request.xp = recipe.xp;

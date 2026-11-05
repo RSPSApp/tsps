@@ -1,0 +1,170 @@
+{
+  "_source": "OSRS Wiki: Rogues' Den, Wall safe, Wall safe (lobby), Floor (Rogues' Den), Wall (Rogues' Den), Contortion Bars, Ledge (Rogues' Den), Grill (Rogues' Den), Door (Rogues' Den shortcut), Temporary skill drain, Transcript:Brian O'Richard, Transcript:Rogue's equipment crate, Transcript:Rogue kit. Cache osrs-241_2026-10-20 object placements. RSProx lobby recordings 3131, 3142, 3247 and 3248 (no maze recording exists in the RSProx database).",
+
+  "bounds": {
+    "maze": { "minX": 2944, "maxX": 3071, "minY": 4992, "maxY": 5119, "z": 1 },
+    "lobby": { "minX": 3035, "maxX": 3065, "minY": 4958, "maxY": 4991, "z": 1 }
+  },
+
+  "lobby": {
+    "trapdoorTile": [2905, 3537, 0],
+    "entryTile": [3061, 4985, 1],
+    "pubTile": [2906, 3537, 0],
+    "safeRoom": [3013, 3018, 5045, 5050, 1]
+  },
+
+  "ids": {
+    "objects": {
+      "trapdoor": 7257,
+      "mazeDoorway": 7256,
+      "pubPassageway": 7258,
+      "pubDoor": 7259,
+      "viewingLadder": 7221,
+      "mazeDoor": 7222,
+      "mazeDoorOpen": 7223,
+      "gearDoor": 7232,
+      "mosaicDoor": 7234,
+      "shortcutDoor": 7246,
+      "grill": 7255,
+      "grillClosed": 7254,
+      "passagewayA": 7219,
+      "passagewayB": 7220,
+      "contortionBars": 7251,
+      "pendulum": 7241,
+      "ledgeWall": 7239,
+      "ledgeBridge": 7240,
+      "spinningBlades": 7224,
+      "floorBlade": 7252,
+      "wallBlade": 7225,
+      "wallSaw": 7248,
+      "wallSpikes": 7228,
+      "wallGas": 7229,
+      "wallCrusher": 7249,
+      "floorSpikes": 7227,
+      "floorSpring": 7245,
+      "floorExplosive": 7230,
+      "floorTrapdoor": 7250,
+      "lobbySafe": 7236,
+      "mazeSafe": 7237,
+      "chest": 11735
+    },
+    "npcs": {
+      "brian": 3189,
+      "guards": [3190, 3191, 3192]
+    },
+    "items": {
+      "mysticJewel": 5561,
+      "flashPowder": 5559,
+      "tile": 5568,
+      "rogueKit": 5558,
+      "rogueCrate": 21307,
+      "stethoscope": 5560,
+      "coins": 995,
+      "uncutSapphire": 1623,
+      "uncutEmerald": 1621,
+      "uncutRuby": 1619,
+      "uncutDiamond": 1617,
+      "rogueMask": 5554,
+      "rogueTop": 5553,
+      "rogueTrousers": 5555,
+      "rogueGloves": 5556,
+      "rogueBoots": 5557,
+      "spade": 952,
+      "chisel": 1755,
+      "rope": 954,
+      "tinderbox": 590
+    }
+  },
+
+  "drains": {
+    "contortionBars": 5,
+    "pendulum": 3,
+    "ledge": 4,
+    "longLedge": 7,
+    "floorBlade": 3,
+    "wallBlade": 10,
+    "wallSaw": 10,
+    "wallCrusherFail": 5,
+    "wallCrusherSuccess": 1,
+    "trap": 1,
+    "shortcutDoor": 10,
+    "mazeSafe": 1
+  },
+
+  "xp": {
+    "perLevel": 12,
+    "failFraction": {
+      "beforeFirstPendulum": 0,
+      "afterFirstPendulum": 0.5,
+      "safeRoom": 1
+    }
+  },
+
+  "lobbySafe": {
+    "level": 50,
+    "xp": 70,
+    "damage": [2, 6],
+    "success": { "low": 0.33203125, "high": 0.62890625, "stethoscopeLow": 0.41015625, "stethoscopeHigh": 0.75390625 },
+    "retryTicks": 4,
+    "trapChance": 0.25,
+    "drops": [
+      { "id": 995, "min": 10, "max": 10, "weight": 25 },
+      { "id": 995, "min": 20, "max": 20, "weight": 56 },
+      { "id": 995, "min": 40, "max": 40, "weight": 21 },
+      { "id": 1623, "min": 1, "max": 1, "weight": 12 },
+      { "id": 1621, "min": 1, "max": 1, "weight": 9 },
+      { "id": 1619, "min": 1, "max": 1, "weight": 4 },
+      { "id": 1617, "min": 1, "max": 1, "weight": 1 }
+    ]
+  },
+
+  "mazeSafe": {
+    "kitWeight": 3,
+    "crateWeight": 5,
+    "rollMax": 199
+  },
+
+  "grillRoom": {
+    "bounds": [3028, 3046, 5065, 5082, 1],
+    "start": [3046, 5082, 1],
+    "correct": [
+      [3030, 5079], [3032, 5078], [3034, 5076], [3036, 5076],
+      [3038, 5069], [3039, 5079], [3040, 5070], [3041, 5068],
+      [3042, 5076], [3044, 5069]
+    ]
+  },
+
+  "messages": {
+    "notInMaze": "You don't really need my help do you? You're not even in the maze yet!",
+    "needLevels": "You need level 50 Agility and level 50 Thieving to enter the maze.",
+    "trapEject": "You trigger a trap and are thrown out of the maze!",
+    "bladeEject": "You are hit by a blade and thrown out of the maze!",
+    "guardEject": "A rogue guard catches you and throws you out of the maze!",
+    "noAgility": "You don't have enough Agility skill left!",
+    "noThieving": "You don't have enough Thieving skill left!",
+    "searchTrap": "You search the trap...",
+    "disarmTrap": "You disarm the trap.",
+    "safeSearch": "You search the wall safe...",
+    "safeFail": "You fail to crack the safe and trigger a trap!",
+    "safeSuccess": "You crack the safe open.",
+    "safeFull": "You need a free inventory space to hold the reward.",
+    "lobbySafeFail": "You fail to crack the safe and trigger a trap!",
+    "lobbySafeSuccess": "You crack the safe open.",
+    "lobbySafeLevel": "You need level 50 Thieving to crack this safe.",
+    "shortcutLevel": "You need level 80 Thieving to pick this lock.",
+    "shortcutFail": "You fail to pick the lock.",
+    "wrongGrill": "You find yourself back at the start of the grill room.",
+    "chestCoins": "You find 10 coins inside the chest.",
+    "jewelLeft": "You activate the mystic jewel and leave the maze.",
+    "jewelOutside": "You don't really need my help do you? You're not even in the maze yet!",
+    "enterMaze": "You enter the maze.",
+    "full": "You need a free inventory space for that.",
+    "noTile": "You need a tile to repair the mosaic.",
+    "mosaicWrong": "The tile does not fit the mosaic.",
+    "mosaicRight": "The mosaic door swings open.",
+    "gearWrong": "The gears grind and the door stays shut.",
+    "gearRight": "The gears click into place and the door opens.",
+    "flashBlind": "You throw the flash powder at the rogue guard.",
+    "guardBlinded": "The rogue guard is blinded!"
+  }
+}

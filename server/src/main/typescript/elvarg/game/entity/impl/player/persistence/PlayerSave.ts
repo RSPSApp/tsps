@@ -3,7 +3,7 @@ import { AggressionTolerance } from "../../npc/AggressionTolerance";
 import { CREATION_MENU_LAST_ITEM_ATTRIBUTE } from "../../../../../net/packet/PacketSender";
 import { LOGIN_TOKENS_ATTRIBUTE } from "../../../../../net/login/LoginTokens";
 import { normalizeSailingState, type SailingState } from "../../../../content/sailing/SailingState";
-import { FightType } from "../../../../content/combat/FightType";
+import { COMBAT_STYLE_BY_CATEGORY_ATTRIBUTE, FightType } from "../../../../content/combat/FightType";
 import { WeaponInterfaces } from "../../../../content/combat/WeaponInterfaces";
 import { Equipment } from "../../../../model/container/impl/Equipment";
 import { CombatSpells } from "../../../../content/combat/magic/CombatSpells";
@@ -20,6 +20,7 @@ import { ItemContainer } from "../../../../model/container/ItemContainer";
 import { StackType } from "../../../../model/container/StackType";
 import { Inventory } from "../../../../model/container/impl/Inventory";
 import { Appearance } from "../../../../model/Appearance";
+import { CacheDefinitions } from "../../../../cache/CacheDefinitions";
 
 export class PlayerSave {
     /** Save fields that are player attributes now; an older save's value is read once on load. */
@@ -101,7 +102,7 @@ export class PlayerSave {
     private static readonly MAX_FRIENDS = 200;
     private static readonly MAX_IGNORES = 100;
     private static readonly DEFAULT_MALE_APPEARANCE = [0, 3, 18, 26, 34, 38, 42, 14, 2, 14, 5, 4, 0];
-    private static readonly DEFAULT_FEMALE_APPEARANCE = [1, 48, 57, 65, 68, 77, 80, 57, 2, 14, 5, 4, 0];
+    private static readonly DEFAULT_FEMALE_APPEARANCE = [1, 48, 57, 65, 68, 77, 80, -1, 2, 14, 5, 4, 0];
     private static readonly MALE_LOOK_RANGES: Array<[number, number]> = [
         [0, 8],   // head
         [10, 17], // beard
@@ -113,7 +114,7 @@ export class PlayerSave {
     ];
     private static readonly FEMALE_LOOK_RANGES: Array<[number, number]> = [
         [45, 54], // head
-        [57, 57], // jaw/beard placeholder
+        [-1, -1], // no jaw kit; cache-valid styles are preserved separately
         [56, 60], // chest
         [61, 65], // arms
         [67, 68], // hands
@@ -164,6 +165,7 @@ export class PlayerSave {
     private skullTimer: number;
     private skullType;
     private running: boolean;
+    /** Percent (0-100, fractional since run energy moved to units); old integer saves load as-is. */
     private runEnergy: number;
     private inventory: Item[];
     private equipment: Item[];
@@ -225,7 +227,7 @@ export class PlayerSave {
         const item = equipment[Equipment.WEAPON_SLOT];
         const weapon = item?.getId() > 0 ? item.getDefinition()?.getWeaponInterface() : null;
         const availableTypes = (weapon ?? WeaponInterfaces.UNARMED).getFightType();
-        return FightType.resolve(value, availableTypes) ?? FightType.UNARMED_KICK;
+        return FightType.resolve(value, availableTypes) ?? FightType.UNARMED_PUNCH;
     }
 
     public getFightType(): FightType {
@@ -518,6 +520,31 @@ export class PlayerSave {
         return fallback;
     }
 
+    /** Selectable identity kit ids by body part (0-13), read from the cache once it can be read. */
+    private static selectableKits: Map<number, Set<number>> | undefined;
+
+    /**
+     * A kit the cache offers players for this body part: the character designer and the makeover
+     * styles choose among these, beyond the legacy ranges.
+     */
+    private static isSelectableKit(kit: number, bodyPart: number): boolean {
+        if (PlayerSave.selectableKits === undefined) {
+            try {
+                const byPart = new Map<number, Set<number>>();
+                for (const identKit of CacheDefinitions.getIdentKits()) {
+                    if (!identKit || identKit.nonSelectable || identKit.bodyPartId < 0) continue;
+                    if (!byPart.has(identKit.bodyPartId)) byPart.set(identKit.bodyPartId, new Set());
+                    byPart.get(identKit.bodyPartId)!.add(identKit.id);
+                }
+                PlayerSave.selectableKits = byPart;
+            } catch {
+                // No cache loaded (some tools and tests): the legacy ranges alone apply.
+                return false;
+            }
+        }
+        return PlayerSave.selectableKits?.get(bodyPart)?.has(kit) ?? false;
+    }
+
     private static clamp(value: number, min: number, max: number): number {
         return Math.min(max, Math.max(min, value));
     }
@@ -543,10 +570,15 @@ export class PlayerSave {
             Appearance.FEET,
         ];
 
+        // lookIndices are in body part order (head, jaw, torso, arms, hands, legs, feet); female parts are 7-13.
         lookIndices.forEach((lookIndex, idx) => {
             const [min, max] = lookRanges[idx];
             const candidate = PlayerSave.toFiniteInt(raw[lookIndex], defaults[lookIndex]);
-            sanitized[lookIndex] = PlayerSave.clamp(candidate, min, max);
+            // -1 is "no kit": the jaw is optional (clean-shaven, and females have no beard kit).
+            const noJaw = lookIndex === Appearance.BEARD && candidate === -1;
+            sanitized[lookIndex] = noJaw || PlayerSave.isSelectableKit(candidate, idx + (gender === 1 ? 7 : 0))
+                ? candidate
+                : PlayerSave.clamp(candidate, min, max);
         });
 
         const colorIndices = [
@@ -727,6 +759,7 @@ export class PlayerSave {
         PlayerSave.persistAttribute(Player.BANK_QUANTITY_MODE_ATTRIBUTE, 0);
         PlayerSave.persistAttribute(Player.BANK_CUSTOM_QUANTITY_ATTRIBUTE, 0);
         PlayerSave.persistAttribute(Player.BANK_PLACEHOLDERS_ATTRIBUTE, false);
+        PlayerSave.persistAttribute(COMBAT_STYLE_BY_CATEGORY_ATTRIBUTE, {});
         playerSave.inventory = inventory.getCopiedItems();
         playerSave.equipment = player.getEquipment().getCopiedItems();
         playerSave.appearance = PlayerSave.sanitizeAppearance(player.getAppearance().getLook());

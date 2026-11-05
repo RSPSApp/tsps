@@ -16,6 +16,7 @@ const VOID_COMBAT_LEVEL = 42;
 const VOID_PRAYER_LEVEL = 22;
 
 let core = null;
+let pluginApi = null;
 
 function getPoints(player) {
   const points = Number(player?.getAttribute?.(POINTS_ATTRIBUTE));
@@ -151,7 +152,12 @@ function claimReward(player, option) {
     return false;
   }
   setPoints(player, getPoints(player) - reward.points);
-  for (const [id, amount] of items) inventory.adds(id, amount);
+  for (const [id, amount] of items) {
+    const before = inventory.getAmount(id);
+    inventory.adds(id, amount);
+    const credited = Math.max(0, inventory.getAmount(id) - before);
+    if (credited > 0) pluginApi.emitCustomEvent("collection-log:obtain", { player, itemId: id, amount: credited });
+  }
   return true;
 }
 
@@ -161,6 +167,7 @@ function confirmReward({ player, slot }) {
 }
 
 function initRewards(api) {
+  pluginApi = api;
   core = api.core;
 }
 

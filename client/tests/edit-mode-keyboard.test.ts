@@ -10,7 +10,15 @@ const canvas = document.querySelector("canvas")!;
 const input = new InputManager();
 input.init(canvas);
 const plugin = new EditModePlugin();
-plugin.attach({ getCanvas: () => canvas, getPointerTile: () => undefined, isLoggedIn: () => true, setFreeCamera: () => {}, cancelPendingClick: () => {} } as any);
+let loggedIn = true, modalOpen = false;
+let pointerTile: { tileX: number; tileY: number; plane: number } | undefined;
+const previewChanges: boolean[] = [], restoredObjects: number[] = [];
+plugin.attach({ getCanvas: () => canvas, getPointerTile: () => pointerTile,
+    getPointerLoc: () => ({ kind: "loc", locId: 10060, locName: "Test object", shape: 10, rotation: 0 }),
+    isLoggedIn: () => loggedIn, isEditorModalOpen: () => modalOpen,
+    setScenePreview: (enabled: boolean) => previewChanges.push(enabled),
+    setFreeCamera: () => {}, cancelPendingClick: () => {}, onLocDel: () => {},
+    onLocAddChange: (id: number) => restoredObjects.push(id) } as any);
 for (let attempt = 0; attempt < 2; attempt++) {
     document.querySelector("button")!.focus();
     plugin.setConfig({ enabled: true, active: true, tool: "place", locId: 10060 });
@@ -58,7 +66,62 @@ const search = document.querySelector("input")!;
 search.focus();
 plugin.setConfig({ locId: 590 });
 assert.equal(document.activeElement, search, "ordinary config updates preserve typing focus");
-plugin.setConfig({ active: false });
+
+// The standalone map editor renders its world while logged out. Escape must
+// cancel editing actions without handing that preview back to the login screen.
+loggedIn = false;
+plugin.setScenePreview(true);
+plugin.setConfig({ tool: "place", edits: [{ kind: "place", locId: 10060, tileX: 3222, tileY: 3218, plane: 0, shape: 10, rotation: 0 }] });
+const unsavedEdits = plugin.getConfig().edits;
+const escape = () => {
+    const event = new dom.window.KeyboardEvent("keydown", { key: "Escape", code: "Escape", keyCode: 27, bubbles: true, cancelable: true });
+    canvas.dispatchEvent(event);
+    const reachedGame = input.isKeyDown("Escape");
+    canvas.dispatchEvent(new dom.window.KeyboardEvent("keyup", { key: "Escape", code: "Escape", keyCode: 27, bubbles: true }));
+    return { event, reachedGame };
+};
+for (let press = 0; press < 2; press++) {
+    const { event, reachedGame } = escape();
+    assert.equal(plugin.getConfig().active, true, "Escape keeps the editor session active");
+    assert.equal(event.defaultPrevented, true, "editor Escape cannot reach game or login input");
+    assert.equal(reachedGame, false, "editor Escape stays out of InputManager");
+    assert.equal(plugin.getConfig().tool, "select");
+    assert.equal(plugin.getState().scenePreview, true);
+    assert.deepEqual(plugin.getConfig().edits, unsavedEdits, "unsaved map edits survive repeated Escape");
+}
+assert.deepEqual(previewChanges, [true], "Escape never closes the scene preview");
+pointerTile = { tileX: 3222, tileY: 3218, plane: 0 };
+for (const tool of ["path", "wall"] as const) {
+    plugin.setConfig({ tool });
+    plugin.applyAtPointer();
+    const start = tool === "path" ? "pathStart" : "wallStart";
+    assert.deepEqual(plugin.getState()[start], pointerTile);
+    escape();
+    assert.equal(plugin.getState()[start], undefined, `Escape cancels an unfinished ${tool}`);
+    assert.equal(plugin.getConfig().active, true);
+    assert.deepEqual(plugin.getConfig().edits, unsavedEdits);
+}
+plugin.setConfig({ tool: "select" });
+plugin.applyAtPointer();
+plugin.moveSelection();
+escape();
+assert.deepEqual(restoredObjects, [10060], "Escape restores the object removed by a move preview");
+assert.deepEqual(plugin.getConfig().edits, unsavedEdits);
+assert.equal(plugin.getConfig().active, true);
+
+// Editor modals, such as its world map, retain their own Escape handler.
+modalOpen = true;
+const closeModal = (event: KeyboardEvent) => { if (event.key === "Escape") modalOpen = false; };
+window.addEventListener("keydown", closeModal);
+escape();
+window.removeEventListener("keydown", closeModal);
+assert.equal(modalOpen, false);
+assert.equal(plugin.getState().scenePreview, true);
+canvas.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "e", code: "KeyE", ctrlKey: true, bubbles: true }));
+assert.equal(plugin.getConfig().active, false, "Ctrl+E still explicitly exits the editor");
+assert.equal(plugin.getState().scenePreview, false);
+assert.deepEqual(previewChanges, [true, false]);
+assert.equal(escape().reachedGame, true, "Escape still reaches the client after explicitly leaving the editor");
 input.cleanUp();
 dom.window.close();
 console.log("Editor placement keyboard tests passed");

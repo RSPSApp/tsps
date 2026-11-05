@@ -8,6 +8,7 @@ const { MagicSpellbook } = require("../../../../src/main/typescript/elvarg/game/
 const { ItemIdentifiers } = require("../../../../src/main/typescript/elvarg/util/ItemIdentifiers");
 const { Equipment } = require("../../../../src/main/typescript/elvarg/game/model/container/impl/Equipment");
 const { getPvpProfile } = require("../pvp/PvpAssignment.PlayerBots");
+const { archetypeCombatLevel } = require("../pvp/PvpTierLoadouts.PlayerBots");
 const { getPvpLoadout, isLoadoutAvailable, PVP_LOADOUT_DEFINITIONS } = require("../pvp/PvpLoadoutRegistry.PlayerBots");
 const { getWildernessHotspot } = require("../pvp/WildernessHotspotRegistry.PlayerBots");
 const { SPEC_WEAPON_IDS } = require("./PvpCombatRuntimeCache.PlayerBots");
@@ -107,14 +108,7 @@ function matchesHotspotCombatBand(stats, state) {
   // Hotspot assignments carry their band; minigames (Castle Wars tiers) set one directly.
   const band = state?.pvp?.combatLevelRange ?? getWildernessHotspot(state?.pvp?.hotspotId)?.combatLevelRange;
   if (!band) return true;
-  // Match SkillManager.getCombatLevel, using the preset's seven combat stats.
-  const [attack, defence, strength, hp, ranged, prayer, magic] = stats;
-  const base = Math.floor((defence + hp + Math.floor(prayer / 2)) * 0.2535) + 1;
-  const level = Math.min(126, Math.max(3, Math.floor(base + Math.max(
-    (attack + strength) * 0.325,
-    Math.floor(ranged * 1.5) * 0.325,
-    Math.floor(magic * 1.5) * 0.325
-  ))));
+  const level = archetypeCombatLevel(stats);
   return level >= band.min && level <= band.max;
 }
 
@@ -384,6 +378,15 @@ function buildGeneratedPreset(player, state) {
   };
 }
 
+/** True when a PvP bot has nothing on, or is wearing armour but no weapon. */
+function needsLoadoutRestore(player) {
+  const items = player?.getEquipment?.()?.getItems?.() ?? [];
+  if (!items.some((item) => (item?.getId?.() ?? 0) > 0)) {
+    return true;
+  }
+  return !((items[Equipment.WEAPON_SLOT]?.getId?.() ?? 0) > 0);
+}
+
 /** True when the bot wears nothing: a regear cannot disturb any fight. */
 function hasNoEquipment(player) {
   const worn = player.getEquipment?.()?.getItems?.() ?? [];
@@ -493,5 +496,6 @@ function applyGeneratedPvpLoadout(player, state, options = {}) {
 
 module.exports = {
   applyGeneratedPvpLoadout,
+  needsLoadoutRestore,
   __testing: { buildGeneratedPreset, matchesHotspotCombatBand },
 };

@@ -12,13 +12,13 @@ const { Inventory } = require("../dist/game/model/container/impl/Inventory");
 before(() => {
   CachePipeline.initialize(require("node:path").resolve(__dirname, ".."));
   require("../plugins/items/ItemDefinitionLoader.plugin").register({ log() {}, onPlayerLogin() {}, registerContentEndpoint() {} });
-  require("../plugins/items/RunePacks.plugin").register(PluginManager.createApi("RunePacks"));
+  require("../plugins/items/OpenableItems.plugin").register(PluginManager.createApi("OpenableItems"));
 });
 
 function playerWith(pack, full = false) {
   const messages = [];
   const player = {
-    getPacketSender: () => ({ sendItemContainer() {}, sendInterfaceRemoval() {} }),
+    getPacketSender: () => ({ sendItemContainer() {}, sendInterfaceRemoval() {}, sendSound() {} }),
     sendMessage: text => messages.push(text),
     isTeleportingReturn: () => false,
     getHitpoints: () => 10,
@@ -58,7 +58,7 @@ test("Open merges a rune stack, and preserves the clicked pack and stack at the 
   assert.equal(pack.getId(), 12728);
   assert.equal(player.getInventory().getAmount(12728), 1);
   assert.equal(player.getInventory().getAmount(556), 2147483600);
-  assert.match(player.messages.at(-1), /can't hold/);
+  assert.match(player.messages.at(-1), /enough inventory space/);
 });
 
 test("noted packs have no Open action; an invalid packet cannot consume a different slot", () => {

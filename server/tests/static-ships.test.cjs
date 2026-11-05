@@ -77,8 +77,11 @@ function fakePlayer(index, location, area = null) {
   return player;
 }
 
+let nextPlayerIndex = 1600;
 function realPlayer(x, y) {
   const player = new Player(null);
+  player.setIndex(nextPlayerIndex++);
+  player.setRegistered(true);
   const sender = new Proxy({}, {
     get: (target, key) => {
       if (key === "getVarbit") return () => 0;
@@ -396,8 +399,13 @@ test("real NPC listener keeps same-deck routing and rejects foreign decks, owner
   const listener = new NPCOptionPacketListener();
   try {
     listener.executeOption(player, deckNpc.getIndex(), 1);
-    for (let tick = 0; tick < 2 && interacted.length === 0; tick++) TaskManager.process();
-    assert.deepEqual(interacted.map((event) => event.npc), [deckNpc],
+    for (let tick = 0; tick < 6 && interacted.length === 0; tick++) {
+      TaskManager.processWalkTo(player.getIndex());
+      player.getMovementQueue().beginCycle();
+      player.getMovementQueue().process();
+      TaskManager.process();
+    }
+    assert.deepEqual(interacted.map((event) => event.npc === deckNpc), [true],
       "same-deck NPC keeps local routing");
 
     interacted.length = 0;
@@ -423,18 +431,68 @@ test("Pandemonium's tutorial ship keeps its explicit deck tiles and dynamic locs
   assert.equal(StaticShips.definitions.has("pandemonium_tutorial_ship"), true);
   const ship = StaticShips.spawn("pandemonium_tutorial_ship");
   try {
-    assert.deepEqual(ship.spec.walkableDeck, [{ x: 3, y: 2 }, { x: 3, y: 3 }, { x: 3, y: 4 }]);
-    assert.deepEqual(ship.spec.locs.filter((loc) => [59554, 59530, 29506, 59663].includes(loc.id))
-      .map((loc) => loc.id).sort((a, b) => a - b), [29506, 59530, 59554, 59663]);
+    assert.deepEqual(ship.spec.walkableDeck, [3, 4].flatMap(x => [2, 3, 4, 5].map(y => ({ x, y }))));
+    assert.deepEqual(ship.spec.locs.filter((loc) => [59620, 59553, 60480].includes(loc.id))
+      .map((loc) => loc.id).sort((a, b) => a - b), [59553, 59620, 60480]);
     const npc = StaticShips.addDeckNpc(ship, 14959, 3, 2, fakePlayer(1, new Location(0, 0, 0)));
     assert.equal(BoatManager.getBoatAboard(npc), ship.boat, "deck NPCs join the static ship's area");
     const packets = require("../dist/game/content/sailing/WorldEntitySync")
       .WorldEntitySync.flush(fakePlayer(1, new Location(3025, 3209, 0)));
-    assert.equal(packets.filter((packet) => packet[0] === 134).length, 4,
-      "the blueprint's dynamic helm/sails/sail-cloth/placeholder locs are sent");
+    assert.equal(packets.filter((packet) => packet[0] === 134).length, 3,
+      "the blueprint's dynamic helm/sails/hook locs are sent");
     assert.ok(packets.some((packet) => packet[0] === 142) && packets.some((packet) => packet[0] === 143));
   } finally {
     StaticShips.dispose(ship);
+  }
+});
+
+test("Red Reef pirate ships send their captured deck locs and crew", () => {
+  const CAPTURED_LOCS = [
+    [29464, 5, 7, 0, 10, 0],
+    [29469, 1, 7, 0, 10, 0],
+    [29467, 5, 8, 0, 10, 0],
+    [29470, 1, 8, 0, 10, 0],
+    [29463, 2, 7, 1, 10, 1],
+    [29463, 4, 8, 1, 10, 3],
+    [29536, 3, 11, 1, 10, 0],
+    [29497, 4, 10, 1, 10, 0],
+  ];
+  const CREW = {
+    red_reef_pirate_1: [15677, 15678, 15679, 15683],
+    red_reef_pirate_2: [15680, 15681, 15682, 15684],
+  };
+  const locTuple = (loc) => [loc.id, loc.x, loc.y, loc.level, loc.shape, loc.rotation];
+  for (const id of Object.keys(CREW)) {
+    const ship = StaticShips.spawn(id);
+    try {
+      // Local x/y are tiles in the ship's template zone: deckBaseX is the scene tile the first
+      // template chunk is copied to, the frame capture 4152's "local to (3864, 6360)" uses.
+      assert.deepEqual((ship.spec.syncLocs ?? []).map(locTuple), CAPTURED_LOCS, `${id} sends live's loc set`);
+      assert.deepEqual(ship.spec.locs.filter((loc) => loc.x === 5 && loc.y === 7).map((loc) => loc.id),
+        [29464], "an added loc replaces the template gunport on its tile, rather than doubling it");
+      const packets = require("../dist/game/content/sailing/WorldEntitySync")
+        .WorldEntitySync.flush(fakePlayer(1, new Location(ship.boat.tileX, ship.boat.tileY, 0)));
+      assert.equal(packets.filter((packet) => packet[0] === 134).length, CAPTURED_LOCS.length,
+        `${id} sends one LOC_ADD_CHANGE per captured loc`);
+      const locPackets = packets.filter((packet) => packet[0] === 134);
+      // x/y are the deck scene's tiles: deckBase plus the template-zone local, so they line up
+      // with the rebuild's first template chunk. The capture's lines carry no op flags (8 bytes).
+      assert.deepEqual(locPackets.map((packet) => [
+        packet.readUInt16BE(2), packet.readUInt16BE(4), packet.readUInt16BE(6), packet[8], packet[1],
+      ]), CAPTURED_LOCS.map(([locId, x, y, level]) => [
+        locId, ship.boat.deckBaseX + x, ship.boat.deckBaseY + y, level, 8,
+      ]), `${id} sends its locs in the deck scene's tile frame`);
+      assert.deepEqual(ship.npcs.map((npc) => npc.getId()).sort((a, b) => a - b),
+        [15188, ...CREW[id]].sort((a, b) => a - b), `${id} holds its HP dummy and crew`);
+      for (const npc of ship.npcs) assert.equal(BoatManager.getBoatAboard(npc), ship.boat);
+    } finally {
+      const npcs = ship.npcs.slice();
+      StaticShips.dispose(ship);
+      for (const npc of npcs) {
+        assert.notEqual(World.getNpcs().get(npc.getIndex()), npc, "dispose removes the deck NPCs");
+        assert.equal(World.getAddNPCQueue().includes(npc), false);
+      }
+    }
   }
 });
 

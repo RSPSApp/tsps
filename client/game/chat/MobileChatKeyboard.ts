@@ -28,17 +28,51 @@ export class MobileChatKeyboard {
     }
 
     show(hint: string = "", keyboardType: number = 0): void {
-        if (typeof document === "undefined" || (!isMobileMode && !isTouchDevice)) return;
-        // The chat toggle treats an unset (-1) varc as open and would immediately hide it.
-        if (this.deps.varManager.getVarcInt(OSM_CHAT_KEYBOARD) < 0) {
-            this.deps.varManager.setVarcInt(OSM_CHAT_KEYBOARD, 0);
-        }
+        if (!this.canShow()) return;
+        this.initToggle();
         const input = this.ensureInput();
         input.placeholder = hint;
         input.inputMode = (keyboardType | 0) === 1 ? "numeric" : "text";
         input.value = this.deps.varManager.getVarcString(CHAT_INPUT_VARC) ?? "";
         this.lastValue = input.value;
         this.open = true;
+        this.focusInput(false);
+    }
+
+    /**
+     * Focus from the touchend of the chatbox input line. A server-run search may already have
+     * focused the input outside a gesture, which iOS accepts without opening the keyboard;
+     * blurring first makes the in-gesture focus show it.
+     */
+    showFromGesture(): void {
+        if (!this.canShow()) return;
+        this.initToggle();
+        const input = this.ensureInput();
+        input.value = this.deps.varManager.getVarcString(CHAT_INPUT_VARC) ?? "";
+        this.lastValue = input.value;
+        this.open = true;
+        this.focusInput(true);
+    }
+
+    private canShow(): boolean {
+        return typeof document !== "undefined" && (isMobileMode || isTouchDevice);
+    }
+
+    private initToggle(): void {
+        // The chat toggle treats an unset (-1) varc as open and would immediately hide it.
+        if (this.deps.varManager.getVarcInt(OSM_CHAT_KEYBOARD) < 0) {
+            this.deps.varManager.setVarcInt(OSM_CHAT_KEYBOARD, 0);
+        }
+    }
+
+    private focusInput(force: boolean): void {
+        const input = this.input;
+        if (!input) return;
+        if (force && document.activeElement === input) {
+            try {
+                input.blur();
+            } catch {}
+        }
         try {
             input.focus({ preventScroll: true });
         } catch {

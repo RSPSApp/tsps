@@ -1,6 +1,6 @@
 import { GameState } from "@runelite/api/GameState";
 import { toRuneLiteGameState } from "../../../runelite/impl/GameStateMapping";
-import { FONT_PLAIN_11, FONT_PLAIN_12 } from "../../../ui/fonts";
+import { type OverlayFont, overlayFont } from "@runelite/client/ui/overlay/OverlayFonts";
 import { drawTextGL } from "../../../widgets/components/TextRenderer";
 import type { WidgetOverlay, WidgetOverlayDrawContext } from "../ClientPluginManager";
 import { argbToRgba } from "./NpcIndicatorsConfig";
@@ -11,9 +11,10 @@ import { formatRespawn, respawnSecondsLeft } from "./respawn";
 type Rgba = [number, number, number, number];
 type Point = [number, number];
 type Shape = { points: Point[]; stroke: Rgba; fill: Rgba; width: number };
-type Text = { text: string; x: number; y: number; color: number; font: number; center: boolean };
+type Text = { text: string; x: number; y: number; color: number; center: boolean };
 type Dot = { x: number; y: number; color: Rgba; radius: number };
-type Frame = { shapes: Shape[]; texts: Text[]; dots: Dot[]; signature: string };
+/** `font` is the dynamic overlay font, which every text here is drawn in. */
+type Frame = { shapes: Shape[]; texts: Text[]; dots: Dot[]; font: OverlayFont; signature: string };
 
 const MINIMAP_DOT_RADIUS = 4;
 const BLACK: Rgba = [0, 0, 0, 1];
@@ -56,23 +57,24 @@ export class NpcOverlay implements WidgetOverlay {
             glr.drawPolygon?.(circle(dot.x, dot.y, dot.radius), dot.color);
             grow(dot.x, dot.y, dot.radius + 1);
         }
+        const { id: fontId, scale } = frame.font;
         for (const t of frame.texts) {
-            const font = context.fontLoader(t.font);
-            const w = font ? font.measure(t.text) : t.text.length * 7;
-            const h = 16;
+            const font = context.fontLoader(fontId);
+            const w = (font ? font.measure(t.text) : t.text.length * 7) * scale;
+            const h = 16 * scale;
             const x = t.center ? t.x - w / 2 : t.x;
             // The point is the text baseline, as Graphics.drawString takes it.
-            drawTextGL(context.renderer, context.fontLoader, t.text, x - 2, t.y - h + 3, w + 4, h, t.font, t.color,
-                1, 2, true);
+            drawTextGL(context.renderer, context.fontLoader, t.text, x - 2, t.y - h + 3 * scale, w + 4, h, fontId, t.color,
+                1, 2, true, 1, undefined, scale, scale);
             grow(x, t.y - h, 0);
-            grow(x + w, t.y + 4, 0);
+            grow(x + w, t.y + 4 * scale, 0);
         }
         if (!Number.isFinite(minX)) return [];
         return [{ x: minX, y: minY, w: maxX - minX, h: maxY - minY }];
     }
 
     private build(): Frame {
-        const frame: Frame = { shapes: [], texts: [], dots: [], signature: "" };
+        const frame: Frame = { shapes: [], texts: [], dots: [], font: overlayFont("dynamic"), signature: "" };
         const plugin = this.plugin;
         if (!plugin.isStarted()) return frame;
         const client: any = plugin.getClient();
@@ -106,7 +108,7 @@ export class NpcOverlay implements WidgetOverlay {
                 if (showNames) {
                     const height = scene.tileHeight(cx, cy, plane) - (scene.npcHeight(npc.id) + 40) / 128;
                     const p = scene.worldToScreen(cx, height, cy);
-                    if (p) frame.texts.push({ text: npc.name, x: p[0], y: p[1], color: rgb(npc.color), font: FONT_PLAIN_12, center: true });
+                    if (p) frame.texts.push({ text: npc.name, x: p[0], y: p[1], color: rgb(npc.color), center: true });
                 }
             }
             if (config.showRespawnTimer()) this.respawns(frame, scene, plane, fill, width);
@@ -122,7 +124,7 @@ export class NpcOverlay implements WidgetOverlay {
                 const color = argbToRgba(npc.color);
                 frame.dots.push({ x: loc[0], y: loc[1], color: [color[0], color[1], color[2], 1], radius: (MINIMAP_DOT_RADIUS / 2) * minimap.scale });
                 if (showMinimapNames) {
-                    frame.texts.push({ text: npc.name, x: loc[0], y: loc[1], color: rgb(npc.color), font: FONT_PLAIN_11, center: false });
+                    frame.texts.push({ text: npc.name, x: loc[0], y: loc[1], color: rgb(npc.color), center: false });
                 }
             }
         }
@@ -177,7 +179,7 @@ export class NpcOverlay implements WidgetOverlay {
             const p = scene.worldToScreen(cx, scene.tileHeight(cx, cy, plane), cy);
             if (!p) continue;
             const text = formatRespawn(respawnSecondsLeft(npc, plugin.getTickCount(), sinceTick));
-            frame.texts.push({ text, x: p[0], y: p[1] + 6, color: WHITE, font: FONT_PLAIN_12, center: true });
+            frame.texts.push({ text, x: p[0], y: p[1] + 6, color: WHITE, center: true });
         }
     }
 }

@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 (globalThis as any).self = globalThis;
 const {
     requestBrowserHostWorldDefinition,
-    parseBrowserHostShops,
     parseBrowserHostWorldDefinition,
     parseEditModeWorldDefinition,
 } = require("../game/plugins/editmode/install");
@@ -11,24 +10,6 @@ const {
     WORLD_DEFINITION_MESSAGE,
     WORLD_DEFINITION_REQUEST_MESSAGE,
 } = require("../game/plugins/editmode/hostProtocol/worldDefinitionMessage");
-
-assert.deepEqual(
-    parseBrowserHostShops(JSON.stringify([{
-        id: 1,
-        name: "General Store",
-        currency: "COINS",
-        defaultRestockTicks: 10,
-        originalStock: [{ id: 995, amount: 1, price: 1 }],
-    }])),
-    [{
-        id: 1,
-        name: "General Store",
-        currency: "COINS",
-        defaultRestockTicks: 10,
-        originalStock: [{ id: 995, amount: 1, price: 1 }],
-    }],
-);
-assert.throws(() => parseBrowserHostShops('[{"id":1,"name":"Bad","originalStock":[{"id":0,"amount":1}]}]'));
 
 const parsedWorld = {
     spawn: { x: 3089, y: 3524, z: 0 },

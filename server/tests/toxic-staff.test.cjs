@@ -54,6 +54,7 @@ function createPlayer({ weapon = null, head = -1, inCombat = true, scales = 0, i
       getAmount: () => scales,
       deleteNumber: (id, amount) => { scales = Math.max(0, scales - (amount ?? 1)); },
       getFreeSlots: () => inventorySlots,
+      getAddableAmount: (item) => (inventorySlots > 0 ? item.getAmount() : 0),
       addItem: () => {},
       refreshItems: () => {},
     }),

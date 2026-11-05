@@ -152,6 +152,16 @@ test("the skills' lookups: a bar only for a recipe's main ore, shafts only for a
   assert.equal(bar(I.COPPER_ORE), I.BRONZE_BAR);
   assert.equal(bar(I.COAL), null, "coal is a steel bar's second ingredient, not its ore");
   assert.equal(bar(I.TIN_ORE), null);
+  const steel = emit("smithing:bar-for-ore", { oreId: I.IRON_ORE, outputId: I.STEEL_BAR, barId: null, xp: null });
+  assert.deepEqual([steel.barId, steel.xp], [I.STEEL_BAR, 17.5], "a caller can choose a matching recipe's output and XP");
+  assert.equal(emit("smithing:bar-for-ore", { oreId: I.COAL, outputId: I.STEEL_BAR, barId: null }).barId, null, "an output selector cannot turn a secondary ingredient into a bar");
+  const conversions = require("../plugins/modes/data/league-relics.json").effects.powerMiner.smeltBars;
+  for (const [ore, output] of Object.entries(conversions)) {
+    assert.ok(Number.isInteger(I[ore]) && Number.isInteger(I[output]), `${ore} and ${output} resolve in the cache`);
+    const result = emit("smithing:bar-for-ore", { oreId: I[ore], outputId: I[output], barId: null, xp: null });
+    assert.equal(result.barId, I[output], `${ore}'s configured output has a matching recipe`);
+    assert.ok(result.xp > 0);
+  }
   const shafts = (logId) => emit("fletching:shafts", { logId, itemId: null, amount: 0, xp: null });
   assert.deepEqual([shafts(I.LOGS).itemId, shafts(I.LOGS).amount], [I.ARROW_SHAFT, 15]);
   assert.equal(shafts(I.TEAK_LOGS).itemId, null, "a teak log makes a stock, not shafts");
@@ -250,32 +260,32 @@ test("Power Miner: with the pickaxe, a second chance, four ores a rock, ore bank
   assert.deepEqual([deplete(who.relic, shared), deplete(who.relic, shared), deplete(who.relic, shared), deplete(who.relic, shared)], [true, true, true, false],
     "four ores again from the respawned rock, not one");
 
-  // Room (storage:room), for Mining only: a full inventory with a full bank but an iron bar stack mines on (smelt mode).
+  // Room (storage:room), for Mining only: a full bank with a steel bar stack mines on (smelt mode).
   const room = (player, itemId, skill) => emit("storage:room", { player, itemId, skill, room: false }).room;
   assert.equal(room(who.relic, I.LOGS, Skill.WOODCUTTING), false, "not another skill's resource");
   const full = cases(POWER_MINER, 5, "ECHO_PICKAXE").relic;
-  const tab = full.getBank(core.Bank.getTabForItem(full, I.IRON_BAR));
-  tab.add(new core.Item(I.IRON_BAR, 1), false);
+  const tab = full.getBank(core.Bank.getTabForItem(full, I.STEEL_BAR));
+  tab.add(new core.Item(I.STEEL_BAR, 1), false);
   for (let id = 2000; tab.getFreeSlots() > 0 && id < 30000; id++) {
     const definition = core.ItemDefinition.forId(id);
-    if (definition?.getName?.() && !definition.isNoted?.() && id !== I.IRON_ORE && id !== I.IRON_BAR) tab.add(new core.Item(id, 1), false);
+    if (definition?.getName?.() && !definition.isNoted?.() && id !== I.IRON_ORE && id !== I.STEEL_BAR) tab.add(new core.Item(id, 1), false);
   }
   assert.equal(tab.getFreeSlots(), 0, "the bank tab is full");
   assert.equal(tab.contains(I.IRON_ORE), false);
   assert.equal(room(full, I.IRON_ORE, Skill.MINING), true, "the ore becomes a bar in the stack the bank already has");
   assert.equal(gather(full, I.IRON_ORE, 1, Skill.MINING, 35).stored, 1, "and is delivered there");
-  assert.equal(banked(full, I.IRON_BAR), 2);
+  assert.equal(banked(full, I.STEEL_BAR), 2);
 
   const smithing = xp(who.relic, Skill.SMITHING);
   assert.equal(gather(who.relic, I.IRON_ORE, 1, Skill.MINING, 35).stored, 1);
-  assert.deepEqual([banked(who.relic, I.IRON_BAR), banked(who.relic, I.IRON_ORE)], [1, 0], "smelted on the way");
+  assert.deepEqual([banked(who.relic, I.STEEL_BAR), banked(who.relic, I.IRON_BAR), banked(who.relic, I.IRON_ORE)], [1, 0, 0], "iron smelts to steel on the way");
   assert.ok(xp(who.relic, Skill.SMITHING) > smithing);
   const crafting = xp(who.relic, Skill.CRAFTING);
   assert.equal(gather(who.relic, I.UNCUT_SAPPHIRE, 1, Skill.MINING, 0).stored, 1);
   assert.equal(banked(who.relic, I.SAPPHIRE), 1, "cut on the way");
   assert.ok(xp(who.relic, Skill.CRAFTING) > crafting);
   assert.equal(gather(who.relic, I.COAL, 1, Skill.MINING, 50).stored, 1);
-  assert.deepEqual([banked(who.relic, I.COAL), banked(who.relic, I.STEEL_BAR)], [1, 0], "coal is banked as coal");
+  assert.deepEqual([banked(who.relic, I.COAL), banked(who.relic, I.STEEL_BAR)], [1, 1], "coal is banked as coal");
   assert.equal(gather(who.relic, I.LOGS, 1, Skill.WOODCUTTING, 25).stored, 0, "not another skill's take");
 
   const toggle = itemActions.get("Echo pickaxe").Toggle;
@@ -296,9 +306,36 @@ test("Power Miner: with the pickaxe, a second chance, four ores a rock, ore bank
   for (const player of [who.without, who.main]) {
     assert.equal(gather(player, I.IRON_ORE, 1, Skill.MINING, 35).stored, 0);
     assert.equal(banked(player, I.IRON_BAR), 0);
+    assert.equal(banked(player, I.STEEL_BAR), 0);
   }
   gather(who.other, I.IRON_ORE, 1, Skill.MINING, 35);
   assert.equal(banked(who.other, I.IRON_BAR), 0, "the other league's slot banks ore, not bars");
+  assert.equal(banked(who.other, I.STEEL_BAR), 0);
+});
+
+test("Power Miner: carried or wielded Echo pickaxes smelt steel at Smithing 1 without coal and award steel XP", () => {
+  for (const wielded of [false, true]) {
+    const player = cases(POWER_MINER, 5, "ECHO_PICKAXE").relic;
+    if (wielded) {
+      player.getInventory().deleteNumber(I.ECHO_PICKAXE, 1);
+      player.getEquipment().set(core.Equipment.WEAPON_SLOT, new core.Item(I.ECHO_PICKAXE, 1));
+    }
+    const skills = player.getSkillManager();
+    assert.equal(skills.getMaxLevel(Skill.SMITHING), 1);
+    const awards = [];
+    const addExperiences = skills.addExperiences.bind(skills);
+    skills.addExperiences = (skill, experience) => {
+      awards.push([skill, experience]);
+      return addExperiences(skill, experience);
+    };
+    assert.equal(player.getInventory().getAmount(I.COAL), 0);
+    assert.equal(banked(player, I.COAL), 0);
+    assert.equal(gather(player, I.IRON_ORE, 3, Skill.MINING, 35).stored, 3);
+    assert.deepEqual([banked(player, I.STEEL_BAR), banked(player, I.IRON_BAR), banked(player, I.IRON_ORE)], [3, 0, 0]);
+    assert.deepEqual(awards, [[Skill.SMITHING, 3 * 17.5]], "XP comes from the steel recipe before league multipliers");
+    assert.equal(player.getInventory().getAmount(I.COAL), 0);
+    assert.equal(banked(player, I.COAL), 0);
+  }
 });
 
 test("Lumberjack: with the axe, a second chance, logs burnt, fletched or banked by its toggle; fires that always light", () => {

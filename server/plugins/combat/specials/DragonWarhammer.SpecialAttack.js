@@ -5,7 +5,7 @@
  * "combat-special:missed-drain" whether the target still loses some (Tekton: 5%).
  */
 function buildSpecial(api) {
-  const { Animation, CombatSpecial, Graphic, ItemIdentifiers, MeleeCombatMethod, Priority, Skill, Sounds } = api.core;
+  const { Animation, CombatSpecial, Graphic, ItemIdentifiers, MeleeCombatMethod, Priority, Skill, Sound, Sounds } = api.core;
 
   const ID = "dragon_warhammer";
   const DRAIN = 50;
@@ -41,7 +41,7 @@ function buildSpecial(api) {
       CombatSpecial.drain(character, DRAIN);
       character.performAnimation(ANIMATION);
       character.performGraphic(GRAPHIC);
-      Sounds.sendSound(character, character.getAttackSound());
+      Sounds.playAreaSoundAt(character, Sound.DRAGON_WARHAMMER_SPECIAL);
     }
 
     handleAfterHitEffects(hit) {

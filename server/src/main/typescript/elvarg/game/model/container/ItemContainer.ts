@@ -316,18 +316,13 @@ export abstract class ItemContainer {
       (this instanceof Inventory || this instanceof Equipment) &&
       to instanceof Bank
     ) {
-      if (
-        to.getAmount(item.getId()) + item.getAmount() >
-          MAX_STACK_AMOUNT ||
-        to.getAmount(item.getId()) + item.getAmount() <= 0
-      ) {
-        item.setAmount(MAX_STACK_AMOUNT - to.getAmount(item.getId()));
-        if (item.getAmount() <= 0) {
-          this.getPlayer().sendMessage(
-            "You cannot deposit that entire amount into your bank."
-          );
-          return this;
-        }
+      const bankItem = item.clone().setId(getItemDefinition().forId(item.getId()).unNote());
+      item.setAmount(to.getAddableAmount(bankItem));
+      if (item.getAmount() <= 0) {
+        this.getPlayer().sendMessage(
+          "You cannot deposit that entire amount into your bank."
+        );
+        return this;
       }
     }
 
@@ -379,6 +374,17 @@ export abstract class ItemContainer {
 
     if (item.getAmount() <= 0) {
       return this;
+    }
+
+    if (to instanceof Bank) {
+      const bankItem = item.clone().setId(getItemDefinition().forId(item.getId()).unNote());
+      item.setAmount(to.getAddableAmount(bankItem));
+      if (item.getAmount() <= 0) {
+        this.getPlayer().sendMessage(
+          "You cannot deposit that entire amount into your bank."
+        );
+        return this;
+      }
     }
 
     this.deleteBoolean(item, refresh);
@@ -471,13 +477,18 @@ export abstract class ItemContainer {
 
   /** How much of an item add() can accept, without changing either item or container. */
   public getAddableAmount(item: Item): number {
+    ensureContainersLoaded();
     const requested = Math.max(0, Math.floor(item.getAmount()));
     if (item.getId() < 0 || !Number.isFinite(requested) || requested <= 0) return 0;
     if (getItemDefinition().forId(item.getId()).isStackable() || this.stackType() == StackType.STACKS) {
       const meta = JSON.stringify(item.getMeta() ?? null);
-      const existing = this.items.find((held) => held.getId() === item.getId() &&
+      const existing = this.items.find((held) => held.getId() === item.getId() && (!(this instanceof Bank) || held.getAmount() > 0) &&
         JSON.stringify(held.getMeta() ?? null) === meta);
       if (existing) return Math.min(requested, Math.max(0, MAX_STACK_AMOUNT - existing.getAmount()));
+      if (this instanceof Bank && this.items.some((held) =>
+        held.getAmount() === 0 && Bank.sharesPlaceholder(held.getId(), item.getId()))) {
+        return Math.min(requested, MAX_STACK_AMOUNT);
+      }
       return this.getFreeSlots() > 0 ? Math.min(requested, MAX_STACK_AMOUNT) : 0;
     }
     return Math.min(requested, this.getFreeSlots());
@@ -496,7 +507,18 @@ export abstract class ItemContainer {
       this.stackType() == StackType.STACKS
     ) {
       let slot = -1;
+      let emptyBankSlot = -1;
+      let familyBankSlot = -1;
       for (let i = 0; i < this.capacity(); i++) {
+        if (this instanceof Bank && this.items[i].getAmount() === 0) {
+          if (this.items[i].getId() === item.getId()) {
+            if (emptyBankSlot === -1) emptyBankSlot = i;
+          } else if (familyBankSlot === -1
+            && Bank.sharesPlaceholder(this.items[i].getId(), item.getId())) {
+            familyBankSlot = i;
+          }
+          continue;
+        }
         if (this.items[i].getId() !== item.getId()) {
           continue;
         }
@@ -509,7 +531,9 @@ export abstract class ItemContainer {
         }
       }
       if (slot == -1) {
-        slot = this.getEmptySlot();
+        slot = emptyBankSlot >= 0 ? emptyBankSlot
+          : familyBankSlot >= 0 ? familyBankSlot
+          : this.getEmptySlot();
       }
       if (slot == -1) {
         if (this.getPlayer() != null) {
@@ -623,11 +647,25 @@ export abstract class ItemContainer {
    * @return The ItemContainer instance.
    */
   public deleted(id: number, amount: number, refresh: boolean): ItemContainer {
-    return this.deletedItem(
-      new Item(id, amount),
-      this.getSlotForItemId(id),
-      refresh
-    );
+    const item = new Item(id, amount);
+    const stacks = id < 0 || amount <= 0 ? [] : this.items.flatMap((held, slot) =>
+      held?.getId() === id && held.getAmount() > 0 ? [slot] : []);
+    if (stacks.length < 2 || !(item.getDefinition().isStackable() || this.stackType() == StackType.STACKS)) {
+      return this.deletedItem(item, this.getSlotForItemId(id), refresh);
+    }
+    // One id can sit in several stacks (different metadata), and callers count the total: take the
+    // whole amount, or deleteItemContainer would stop at the end of the one slot it is given.
+    let left = amount;
+    for (const slot of stacks) {
+      if (left <= 0) break;
+      const taken = Math.min(left, this.items[slot].getAmount());
+      this.deletedItem(new Item(id, taken), slot, false);
+      left -= taken;
+    }
+    if (refresh) {
+      this.refreshItems();
+    }
+    return this;
   }
 
   public deletedItem(item: Item, slot: number, refresh: boolean) {
@@ -647,12 +685,13 @@ export abstract class ItemContainer {
     ) {
       return this;
     }
-    // Only items with a cache placeholder leave one.
-    let leavePlaceHolder =
-      toContainer instanceof Inventory &&
-      this instanceof Bank &&
-      this.getPlayer().isPlaceholders() &&
-      getItemDefinition().forId(item.getId()).getPlaceholderId() >= 0;
+    // Only items with a cache placeholder, or a family shared through one, leave one.
+    let placeholderBankId = -1;
+    let leavePlaceHolder = false;
+    if (toContainer instanceof Inventory && this instanceof Bank && this.getPlayer().isPlaceholders()) {
+      placeholderBankId = Bank.placeholderBankId(item.getId());
+      leavePlaceHolder = placeholderBankId >= 0;
+    }
     if (item.getAmount() > this.getAmount(item.getId())) {
       item.setAmount(this.getAmount(item.getId()));
     }
@@ -668,6 +707,9 @@ export abstract class ItemContainer {
         if (!leavePlaceHolder) {
           this.items[slot].setId(-1);
           this.items[slot].setMeta(null);
+        } else if (this.items[slot].getId() !== placeholderBankId) {
+          this.items[slot].setId(placeholderBankId);
+          this.items[slot].setMeta(null);
         }
       }
     } else {
@@ -679,6 +721,9 @@ export abstract class ItemContainer {
         }
         if (!leavePlaceHolder) {
           this.items[slot].setId(-1);
+          this.items[slot].setMeta(null);
+        } else if (this.items[slot].getId() !== placeholderBankId) {
+          this.items[slot].setId(placeholderBankId);
           this.items[slot].setMeta(null);
         }
         this.items[slot].setAmount(0);

@@ -43,23 +43,19 @@
  * any skill over 30) and the fairy ring network.
  *
  * Gaps/approximations:
- * - The fairy ring sequence that opens the hideout (AIR/DLR/DJQ/AJS) is the
- *   FairyRings plugin's territory, which refuses every ring until FT2 is
- *   complete. During the quest the player is teleported by the verifier; the
- *   shared change needed is a "fairyring_permission" branch in FairyRings.
- * - The cosmic plane and gorak plane are reached with ::tele in the same way;
- *   the star flowers are spawned instantly on entering the plane rather than
- *   after the wiki's 2-5 minute growth.
- * - The certificate "Study" and rune temple sign "Read" have no transcript page;
- *   they send short messages and set 2336/2338 (the sign message is not from a
- *   wiki transcript).
+ * - The star flower page says plants begin blooming within one minute, while the
+ *   quick guide says 2-5 minutes; this plugin uses a one-minute timer and does not
+ *   model the faster growth caused by more players being present.
+ * - The Wiki confirms a first-entry scene in Nuff's room, but no first-entry
+ *   capture or native client script establishes its camera track, so it is not
+ *   implemented rather than guessed.
  * - The queen's awakening scene has several speakers (Queen, Nuff, Very Wise)
  *   but the shared transcript replay renders one chathead; the qUAH/lamp/complete
  *   step ids are hooked instead of re-authoring the scene.
  * - Pickpocket success is a level-scaled roll (min 40 Thieving, not boostable);
  *   failing teleports to the Lumbridge Swamp shed as the wiki describes.
- * - The potion is only accepted once Fairy Nuff has been given the secateurs, so
- *   no dose is lost on a premature use (the wiki lets the dose go to waste).
+ * - Brewing is gated until Fairy Nuff finishes explaining the recipe; the Wiki's
+ *   early-mix failure is represented as a refusal rather than a wasted potion.
  * - The multi-tile sleeping queen loc 16316 has no generated identifier, so it is
  *   a raw constant here (as FT1's grove wall).
  * - Fairy Nuff's Talk-to is claimed through onNpcInteraction: FT1's own variant
@@ -139,6 +135,10 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
   const LEGACY_STAGE_COMPLETE = 80;
 
   const NUFFS_CERTIFICATE_ITEM_ID = ItemIdentifiers.NUFFS_CERTIFICATE; // 9025
+  const CERTIFICATE_FRONT_INTERFACE = 423;
+  const CERTIFICATE_BACK_INTERFACE = 424;
+  const RUNE_TEMPLE_SIGN_INTERFACE = 425;
+  const DOCUMENT_OPEN_SCRIPT = 2524;
   const QUEENS_SECATEURS_ITEM_ID = ItemIdentifiers.QUEENS_SECATEURS_2; // 9020
   const GORAK_CLAWS_ITEM_ID = ItemIdentifiers.GORAK_CLAWS; // 9016
   const GORAK_CLAW_POWDER_ITEM_ID = ItemIdentifiers.GORAK_CLAW_POWDER; // 9018
@@ -165,6 +165,11 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
   const START_HOOK = "quest:fairytale-ii-cure-a-queen:start";
   const MARTIN_QUEST_OPTION = "Ask about the quest.";
   const MARTIN_WAIT_MS = 5.5 * 60 * 1000;
+  // The quick guide says 2-5 minutes, while the Star flower page says they
+  // start blooming within a minute and grow faster with more players. Use the
+  // more specific page's one-minute upper bound; concurrent-player growth is
+  // not modeled in the owner-only plane.
+  const STARFLOWER_GROWTH_MS = 60 * 1000;
 
   // Transcript step ids.
   const CERT_BEFORE_STUDY_CONDITION_IDS = new Set(["HOEOez", "IznESa", "eOKuqb", "eQw7c6"]);
@@ -239,10 +244,16 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
   const MYSTERY_ATTRIBUTE = "quest.fairytale-ii-cure-a-queen:universal-mystery";
   const GORAK_ATTRIBUTE = "quest.fairytale-ii-cure-a-queen:gorak-killed";
   const MARTIN_TALK_ATTRIBUTE = "quest.fairytale-ii-cure-a-queen:martin-talk-at";
+  const RECIPE_TAUGHT_ATTRIBUTE = "quest.fairytale-ii-cure-a-queen:potion-recipe-taught";
+  const STARFLOWER_GROWTH_AT_ATTRIBUTE = "quest.fairytale-ii-cure-a-queen:starflower-growth-at";
+  const STARFLOWER_AVAILABLE_ATTRIBUTE = "quest.fairytale-ii-cure-a-queen:starflower-available";
   const PLANE_COSMIC = 1 << 0;
   const PLANE_GORAK = 1 << 1;
 
   const HIDEOUT_ZONE = { minX: 2324, maxX: 2367, minY: 4420, maxY: 4468, levels: [0] };
+  const HIDEOUT_SEQUENCE = ["AIR", "DLR", "DJQ", "AJS"];
+  // Cache loc 29495 is 1x1 here; ordinary DB89 destinations likewise match its anchor.
+  const HIDEOUT_RING = new Location(2328, 4426, 0);
   const STAR_PLANE_ZONE = { minX: 2060, maxX: 2098, minY: 4806, maxY: 4862, levels: [0] };
   const GORAK_PLANE_ZONE = { minX: 3009, maxX: 3072, minY: 5312, maxY: 5380, levels: [0] };
 
@@ -264,10 +275,33 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
   const starflowers = new Map(); // player -> spawned NPCs
   const awakeQueen = new Map(); // player -> spawned NPC
   const pendingLamp = new WeakMap();
+  const hideoutSequence = new WeakMap();
 
   const held = (player, itemId, amount = 1) => player.getInventory().getAmount(itemId) >= amount;
   const freeSlots = (player) => player.getInventory().getFreeSlots();
   const studied = (player) => Number(player.getAttribute(STUDIED_ATTRIBUTE)) > 0;
+
+  function answerFairyRingAccess(request) {
+    request.allowed = quest.getStage(request.player) >= STAGE_PERMISSION;
+  }
+
+  function resolveFairyRingDestination(request) {
+    const { player, code } = request;
+    if (quest.getStage(player) < STAGE_PERMISSION) return;
+    // DJQ is the sequence's no-trip step, not a new destination.
+    if (code === "DJQ") request.destination = request.origin ?? player.getLocation().clone();
+    if (code !== "AJS" || hideoutSequence.get(player) !== 3) return;
+    if (quest.isComplete(player)
+      || (held(player, NUFFS_CERTIFICATE_ITEM_ID) && studied(player) && Number(player.getAttribute(SIGN_ATTRIBUTE)) > 0)) {
+      request.destination = HIDEOUT_RING;
+    }
+  }
+
+  function recordFairyRingTravel({ player, code }) {
+    const step = hideoutSequence.get(player) ?? 0;
+    const next = code === HIDEOUT_SEQUENCE[step] ? step + 1 : code === HIDEOUT_SEQUENCE[0] ? 1 : 0;
+    hideoutSequence.set(player, next < HIDEOUT_SEQUENCE.length ? next : 0);
+  }
 
   function ft1Complete(player) {
     const request = { player, key: "fairytale_i_growing_pains", complete: null };
@@ -293,6 +327,13 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
 
   function hasMagicEssence(player) {
     return ESSENCE_DOSE_ITEM_IDS.some((itemId) => held(player, itemId));
+  }
+
+  function potionRecipeTaught(player) {
+    // Stage 70 was committed before the recipe dialogue in older saves; preserve
+    // those players' progress while new saves commit it after the final line.
+    return quest.getStage(player) >= STAGE_INGREDIENTS
+      || Number(player.getAttribute(RECIPE_TAUGHT_ATTRIBUTE)) > 0;
   }
 
   function martinWaited(player) {
@@ -355,7 +396,6 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
     if (stage >= STAGE_COMPLETE) return "after-fairytale-part-2";
     if (stage >= STAGE_HANDED_OVER) {
       if (stage < STAGE_INGREDIENTS && planesVisited(player)) {
-        advance(player, STAGE_INGREDIENTS);
         return NUFF_RECAP_VARIANT;
       }
       return NUFF_POTION_VARIANT;
@@ -454,6 +494,17 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
     player.setAttribute(DENIED_ATTRIBUTE, 0);
     if (quest.getStage(player) < STAGE_PERMISSION) advance(player, STAGE_PERMISSION);
     syncProgress(player);
+  }
+
+  function handleNuffRecipeLine(event) {
+    if (!FAIRY_NUFF_NPC_IDS.has(event.npcId) || event.text !== "Yes, I'm on my way.") return;
+    if (!event.pages?.some(({ page, variants }) => page === PAGE && variants?.includes(NUFF_RECAP_VARIANT))) return;
+    event.after = () => {
+      event.player.setAttribute(RECIPE_TAUGHT_ATTRIBUTE, 1);
+      if (quest.getStage(event.player) < STAGE_INGREDIENTS && planesVisited(event.player)) {
+        advance(event.player, STAGE_INGREDIENTS);
+      }
+    };
   }
 
   function handleChoice({ player, npcId, option }) {
@@ -625,18 +676,27 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
     }
     player.setAttribute(SIGN_ATTRIBUTE, 1);
     syncProgress(player);
-    player.sendMessage("You read the sign. It says: Cosmic Rune Altar.");
+    openDocument(player, RUNE_TEMPLE_SIGN_INTERFACE);
     return true;
   }
 
-  function handleItemAction(event) {
-    if (event.itemId !== NUFFS_CERTIFICATE_ITEM_ID || event.option !== "Study") return;
-    const { player } = event;
-    event.handled = true;
+  function openDocument(player, interfaceId, args = [-1, -1]) {
+    player.getPacketSender().sendClientScript(DOCUMENT_OPEN_SCRIPT, ...args).sendInterface(interfaceId);
+  }
+
+  function handleReadCertificate({ player }) {
+    openDocument(player, CERTIFICATE_FRONT_INTERFACE);
+    return true;
+  }
+
+  function handleStudyCertificate({ player }) {
     player.setAttribute(STUDIED_ATTRIBUTE, 1);
     advance(player, STAGE_CERTIFICATE_STUDIED);
     syncProgress(player);
-    player.sendMessage("You study the certificate and notice strange symbols on the back.");
+    player.sendMessage("You turn the certificate over and look at the back...");
+    // RSProx 424 supplies the back document's distinct mainmodal arguments.
+    openDocument(player, CERTIFICATE_BACK_INTERFACE, [4269835, 100]);
+    return true;
   }
 
   function handleItemOnNpc(event) {
@@ -644,7 +704,7 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
     const variant = CERTIFICATE_VARIANTS.get(event.npcId);
     if (!variant) return;
     event.handled = true;
-    startTranscript(api, player, event.npcId, PAGE, variant);
+    startTranscript(api, event.player, event.npcId, PAGE, variant);
   }
 
   function handlePickpocket(event) {
@@ -690,6 +750,10 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
     }
     if (pair(event, STAR_FLOWER_ITEM_ID, VIAL_OF_WATER_ITEM_ID)) {
       event.handled = true;
+      if (!potionRecipeTaught(player)) {
+        player.sendMessage("I should learn how Fairy Nuff wants the potion prepared first.");
+        return;
+      }
       if (player.getSkillManager().getCurrentLevel(Skill.HERBLORE) < 57) {
         player.sendMessage("You need a Herblore level of 57 to mix this potion.");
         return;
@@ -705,6 +769,10 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
     }
     if (pair(event, GORAK_CLAW_POWDER_ITEM_ID, MAGIC_ESSENCE_UNF_ITEM_ID)) {
       event.handled = true;
+      if (!potionRecipeTaught(player)) {
+        player.sendMessage("I should learn how Fairy Nuff wants the potion prepared first.");
+        return;
+      }
       if (player.getSkillManager().getCurrentLevel(Skill.HERBLORE) < 57) {
         player.sendMessage("You need a Herblore level of 57 to mix this potion.");
         return;
@@ -733,6 +801,10 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
     const stage = quest.getStage(player);
     if (stage < STAGE_HANDED_OVER) {
       player.sendMessage("Fairy Nuff should see this potion before you use it.");
+      return;
+    }
+    if (!potionRecipeTaught(player)) {
+      player.sendMessage("I should learn how Fairy Nuff wants the potion prepared first.");
       return;
     }
     if (stage >= STAGE_POTION_USED) {
@@ -804,7 +876,18 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
   function handleStarflowerPick(event) {
     const { player, npcId } = event;
     if (npcId !== STARFLOWER_NPC_ID) return;
+    if (actionOf(event) !== "pick") return;
     event.handled = true;
+    const stage = quest.getStage(player);
+    const complete = stage >= STAGE_COMPLETE;
+    if (!complete && (stage < STAGE_HANDED_OVER || !held(player, NUFFS_CERTIFICATE_ITEM_ID))) {
+      player.sendMessage("You need Nuff's certificate and Fairy Nuff's instructions to find a star flower.");
+      return;
+    }
+    if (!complete && held(player, STAR_FLOWER_ITEM_ID)) {
+      player.sendMessage("You already have a Star flower, you don't need another one.");
+      return;
+    }
     if (player.getSkillManager().getCurrentLevel(Skill.FARMING) < 49) {
       player.sendMessage("You need a Farming level of 49 to pick the star flower.");
       return;
@@ -814,11 +897,20 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
       return;
     }
     const spawned = starflowers.get(player);
+    const spawnIndex = STARFLOWER_SPAWNS.findIndex(({ x, y, z }) => {
+      const location = event.npc?.getLocation?.();
+      return location?.getX?.() === x && location?.getY?.() === y && location?.getZ?.() === z;
+    });
     if (Array.isArray(spawned)) {
       const index = spawned.indexOf(event.npc);
       if (index >= 0) spawned.splice(index, 1);
     }
     api.removeNpc(event.npc);
+    if (spawnIndex >= 0) {
+      const remaining = (Number(player.getAttribute(STARFLOWER_AVAILABLE_ATTRIBUTE)) || 0) & ~(1 << spawnIndex);
+      player.setAttribute(STARFLOWER_AVAILABLE_ATTRIBUTE, remaining);
+      if (remaining === 0) player.setAttribute(STARFLOWER_GROWTH_AT_ATTRIBUTE, Date.now() + STARFLOWER_GROWTH_MS);
+    }
     player.getInventory().adds(STAR_FLOWER_ITEM_ID, 1);
     if (!quest.isComplete(player)) {
       setPlane(player, PLANE_COSMIC);
@@ -830,6 +922,7 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
   function handleGorakDeath({ killer, npc, npcId, location }) {
     if (npcId !== GORAK_NPC_ID) return;
     if (!killer || killer.isNpc?.()) return;
+    if (quest.getStage(killer) < STAGE_HANDED_OVER) return;
     const spot = npc?.getLocation?.() ?? (location ? new Location(location.x, location.y, location.z) : null);
     if (spot && groundItems) groundItems.registerLocation(killer, new Item(GORAK_CLAWS_ITEM_ID, 1), spot);
     killer.setAttribute(GORAK_ATTRIBUTE, 1);
@@ -838,10 +931,30 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
   }
 
   function ensureStarflowers(player) {
+    const stage = quest.getStage(player);
+    const complete = stage >= STAGE_COMPLETE;
+    if (!complete && (stage < STAGE_HANDED_OVER || !held(player, NUFFS_CERTIFICATE_ITEM_ID))) return;
+    let available = Number(player.getAttribute(STARFLOWER_AVAILABLE_ATTRIBUTE)) || 0;
+    if (available === 0) {
+      let growthAt = Number(player.getAttribute(STARFLOWER_GROWTH_AT_ATTRIBUTE));
+      if (!Number.isFinite(growthAt) || growthAt <= 0) {
+        growthAt = Date.now() + STARFLOWER_GROWTH_MS;
+        player.setAttribute(STARFLOWER_GROWTH_AT_ATTRIBUTE, growthAt);
+      }
+      if (Date.now() < growthAt) return;
+      available = (1 << STARFLOWER_SPAWNS.length) - 1;
+      player.setAttribute(STARFLOWER_AVAILABLE_ATTRIBUTE, available);
+      player.setAttribute(STARFLOWER_GROWTH_AT_ATTRIBUTE, 0);
+    }
     const alive = (starflowers.get(player) ?? []).filter((npc) => npc?.isRegistered?.() !== false);
+    const aliveSpots = new Set(alive.map((npc) => {
+      const location = npc?.getLocation?.();
+      return STARFLOWER_SPAWNS.findIndex(({ x, y, z }) =>
+        location?.getX?.() === x && location?.getY?.() === y && location?.getZ?.() === z);
+    }));
     starflowers.set(player, alive);
-    if (alive.length > 0) return;
-    for (const spot of STARFLOWER_SPAWNS) {
+    for (const [index, spot] of STARFLOWER_SPAWNS.entries()) {
+      if (!(available & (1 << index)) || aliveSpots.has(index)) continue;
       const npc = api.spawnNpc({
         id: STARFLOWER_NPC_ID,
         x: spot.x,
@@ -898,7 +1011,8 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
   }
 
   function handleStarPlaneZoneEnter({ player }) {
-    if (!questActive(player)) return;
+    if (!questActive(player) && !quest.isComplete(player)) return;
+    if (!quest.isComplete(player) && quest.getStage(player) < STAGE_HANDED_OVER) return;
     setPlane(player, PLANE_COSMIC);
     syncProgress(player);
     ensureStarflowers(player);
@@ -906,16 +1020,22 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
 
   function handleGorakPlaneZoneEnter({ player }) {
     if (!questActive(player)) return;
+    if (quest.getStage(player) < STAGE_HANDED_OVER) return;
     setPlane(player, PLANE_GORAK);
     syncProgress(player);
   }
 
   function handleAdvanceTime(event) {
     const { player, ms } = event;
-    const at = Number(player.getAttribute(MARTIN_TALK_ATTRIBUTE));
-    if (!Number.isFinite(at) || at <= 0) return;
-    player.setAttribute(MARTIN_TALK_ATTRIBUTE, at - ms);
-    event.handledBy.push("FairytaleIICureAQueen");
+    if (!player || !Number.isFinite(ms) || ms <= 0) return;
+    let moved = false;
+    for (const attribute of [MARTIN_TALK_ATTRIBUTE, STARFLOWER_GROWTH_AT_ATTRIBUTE]) {
+      const at = Number(player.getAttribute(attribute));
+      if (!Number.isFinite(at) || at <= 0) continue;
+      player.setAttribute(attribute, Math.max(1, at - ms));
+      moved = true;
+    }
+    if (moved) event.handledBy.push("FairytaleIICureAQueen");
   }
 
   function migrateLegacyCompletion(player) {
@@ -929,7 +1049,7 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
     syncProgress(player);
     const location = player.getLocation?.();
     if (!location) return;
-    if (questActive(player) && insideZone(location, STAR_PLANE_ZONE)) ensureStarflowers(player);
+    if ((questActive(player) || quest.isComplete(player)) && insideZone(location, STAR_PLANE_ZONE)) ensureStarflowers(player);
     if (quest.getStage(player) >= STAGE_POTION_USED && insideZone(location, HIDEOUT_ZONE)) ensureAwakeQueen(player);
   }
 
@@ -939,6 +1059,7 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
   }
 
   function handleLogout({ player }) {
+    hideoutSequence.delete(player);
     removePlayerSpawns(player);
   }
 
@@ -1053,6 +1174,9 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
   api.persistAttribute(MYSTERY_ATTRIBUTE);
   api.persistAttribute(GORAK_ATTRIBUTE);
   api.persistAttribute(MARTIN_TALK_ATTRIBUTE);
+  api.persistAttribute(RECIPE_TAUGHT_ATTRIBUTE, 0);
+  api.persistAttribute(STARFLOWER_GROWTH_AT_ATTRIBUTE, 0);
+  api.persistAttribute(STARFLOWER_AVAILABLE_ATTRIBUTE, 0);
   api.persistAttribute(REWARD_GIVEN_ATTRIBUTE, 0);
 
   groundItems = api.getItemOnGroundManager();
@@ -1062,8 +1186,8 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
     name: "Fairytale II - Cure a Queen",
     varpId: VARP_FAIRYTALE,
     varbitId: VARBIT_QUEST,
-    // Cache DB row 47 column 18: varbit 2326 >= 10 is started (stage 5 is the wait step).
-    startedValue: STAGE_READY,
+    // Cache DB unstartedstate is inclusive: 0..10 precedes acceptance; the start hook sets 20.
+    startedValue: STAGE_INVESTIGATING,
     completionValue: STAGE_COMPLETE,
     questPoints: 2,
     xpRewards: [
@@ -1083,6 +1207,11 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:condition", handleConditionEvent);
   api.onCustomEvent("npc-dialogue:action", handleActionEvent);
+  api.onCustomEvent("npc-dialogue:line", handleNuffRecipeLine);
+  api.onCustomEvent("fairy-rings:access", answerFairyRingAccess);
+  api.onCustomEvent("fairy-rings:destination", resolveFairyRingDestination);
+  api.onCustomEvent("fairy-rings:travelled", recordFairyRingTravel);
+  api.onCustomEvent("fairy-rings:invalid", recordFairyRingTravel);
   api.onObjectInteraction("Healing certificate", { Take: handleTakeCertificate });
   api.onObjectInteraction("Potion shelves", { Search: handleShelfSearch });
   api.onObjectInteraction("Potion shelf", { Search: handleShelfSearch });
@@ -1090,12 +1219,27 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
   api.onItemOnNpc(handleItemOnNpc);
   api.onItemOnItem(handleItemOnItem);
   api.onItemOnObject(handlePotionOnQueen, { noted: false });
-  api.onItemAction(handleItemAction);
+  api.onItemAction("Nuff's certificate", { Read: handleReadCertificate, Study: handleStudyCertificate });
   api.onItemAction("Antique lamp", { Rub: handleLampRub });
   api.onNpcInteraction("Fairy Godfather", { "Pick-pocket": handlePickpocket });
   api.onNpcInteraction(handleNuffTalk);
   api.onNpcInteraction(handleStarflowerPick);
   api.onNpcDeath(handleGorakDeath);
+  class StarflowerPlaneArea extends api.core.Area {
+    process(mobile) {
+      if (!mobile.isPlayer()) return;
+      ensureStarflowers(mobile.getAsPlayer());
+    }
+  }
+  api.registerArea(new StarflowerPlaneArea([
+    new api.core.Boundary(
+      STAR_PLANE_ZONE.minX,
+      STAR_PLANE_ZONE.maxX,
+      STAR_PLANE_ZONE.minY,
+      STAR_PLANE_ZONE.maxY,
+      STAR_PLANE_ZONE.levels[0],
+    ),
+  ]));
   api.onZoneEnter(HIDEOUT_ZONE, handleHideoutZoneEnter);
   api.onZoneEnter(STAR_PLANE_ZONE, handleStarPlaneZoneEnter);
   api.onZoneEnter(GORAK_PLANE_ZONE, handleGorakPlaneZoneEnter);

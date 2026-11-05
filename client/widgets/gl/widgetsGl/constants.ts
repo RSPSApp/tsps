@@ -1,12 +1,14 @@
 import { ClientState } from "../../../game/ClientState";
+import { clearSpellSelectionWithHandler } from "../../../ui/menu/MenuAction";
 import type { WidgetNode } from "../../../widgets/WidgetNode";
 // Debug flag: draw purple outlines around clickable areas
 export const DEBUG_CLICK_AREAS = false;
 export const NOOP = () => {};
 
-// PERF: Cached cancel selection handler to avoid closure allocation per widget
+// PERF: Cached cancel selection handler to avoid closure allocation per widget.
+// The spell's onTargetLeave must run, or it keeps its outline after the cancel (#2052).
 export const CANCEL_SELECTION_HANDLER = () => {
-    ClientState.clearSpellSelection();
+    clearSpellSelectionWithHandler();
     ClientState.clearItemSelection();
 };
 export const WIDGET_MENU_DERIVE_CACHE_MAX = 8192;

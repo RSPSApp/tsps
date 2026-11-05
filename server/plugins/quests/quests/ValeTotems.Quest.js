@@ -477,6 +477,8 @@ module.exports = function registerValeTotemsQuest(api) {
     varbitId: STAGE_VARBIT,
     startedValue: STAGE_STARTED,
     completionValue: STAGE_COMPLETE,
+    // Keep persisted gameplay stages; publish the cache quest state, including its final reward phase.
+    varpValue: stage => stage >= STAGE_COMPLETE ? 100 : stage,
     questPoints: 0,
     scrollItemId: SACRAMENTS_OF_ENT_FOLK,
     otherRewards: ["Access to the Vale Totems minigame"],

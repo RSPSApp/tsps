@@ -95,6 +95,7 @@ function player(name = 'Parity') {
     sendVarbit(id, value) { varbits.set(id, value); varbitHistory.push([id, value]); packets.varbits.push([id, value]); return packet; },
     getVarbit(id) { return varbits.get(id) ?? 0; },
     sendSubInterface(...args) { packets.interfaces.push(args); return packet; },
+    mountSubInterface(...args) { packets.interfaces.push(args); return {}; },
     closeSubInterface(...args) { packets.closes.push(args); return packet; },
     sendString(text, uid) { packets.strings.push([text, uid]); return packet; },
     sendClientScript(id, ...args) { packets.scripts.push([id, ...args]); return packet; },
@@ -114,7 +115,7 @@ function player(name = 'Parity') {
     getLocation: () => location, moveTo: to => { location = to; },
     getArea: () => area, getPrivateArea: () => area, setArea: value => { area = value; },
     isPlayer: () => true, isNpc: () => false, getAsPlayer: () => p, isRegistered: () => true,
-    getIndex: () => p.index, getUsername: () => name, getAppearance: () => ({ isMale: () => true }), sendMessage: text => messages.push(text),
+    getIndex: () => p.index, getUsername: () => name, getDisplayName: () => name, getAppearance: () => ({ isMale: () => true }), sendMessage: text => messages.push(text),
     getHitpoints: () => p.hitpoints ?? 99,
     setPositionToFace: noop, forceChat: noop, performAnimation: noop, setUntargetable: noop, getCombat: () => ({ reset: noop, getHitQueue: () => ({ addPendingDamage: noop }) }),
   };
@@ -1231,7 +1232,7 @@ test('Paterdomus fight is reached through the captured side trapdoor, cellar lad
   let position = new Location(3423, 3485, 0);
   const packets = { sendSound: noop, sendSoundEffect: noop, sendVarbit: noop, sendSubInterface: noop, closeSubInterface: noop };
   const player = {
-    getUsername: () => 'QA7', isPlayerBot: () => false, getPrivateArea: () => null,
+    getUsername: () => 'QA7', getDisplayName: () => 'QA7', isPlayerBot: () => false, getPrivateArea: () => null,
     getLocation: () => position, moveTo: (to) => { position = to; },
     getAttribute: () => undefined, setAttribute: noop,
     getPacketSender: () => packets,

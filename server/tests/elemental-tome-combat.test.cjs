@@ -130,6 +130,15 @@ test('all nine Water curse casts pay once, while Tele Block and Iban Blast retai
   if(spellName==='IBAN_BLAST')f.p.getEquipment().getItems()[core.Equipment.WEAPON_SLOT]=new core.Item(core.ItemIdentifiers.IBANS_STAFF);
   assert.equal(f.commit(),true,spellName);
   assert.equal(Common.read(f.book).charges,3,spellName);
+  }
+});
+
+test('Iban Blast accepts both the regular and upgraded Iban staffs',t=>{
+ for(const staffId of [core.ItemIdentifiers.IBANS_STAFF,core.ItemIdentifiers.IBANS_STAFF_U_]){
+  const f=fixture(t,{element:'fire',spellName:'IBAN_BLAST'});
+  f.p.getEquipment().getItems()[core.Equipment.WEAPON_SLOT]=new core.Item(staffId);
+  assert.equal(f.commit(),true,'staff '+staffId);
+  assert.equal(f.p.getEquipment().getItems()[core.Equipment.WEAPON_SLOT].getId(),staffId);
  }
 });
 

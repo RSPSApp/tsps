@@ -229,10 +229,11 @@ function mayEat(player, itemId, food) {
     return false;
   }
   if (food.area) {
-    const request = { player, area: food.area, inside: false };
+    // The area's owner may give its own refusal (a seasonal food that has gone off).
+    const request = { player, area: food.area, inside: false, message: "You cannot eat these supplies here." };
     pluginApi.emitCustomEvent("food:area", request);
     if (!request.inside) {
-      player.sendMessage("You cannot eat these supplies here.");
+      player.sendMessage(request.message);
       return false;
     }
   }
@@ -323,6 +324,7 @@ function eat(event) {
   player.performAnimation(new core.Animation(EAT_ANIMATION));
 
   const message = eatMessage(food, bite, itemId);
+  const meta = inventory.getItems()[slot]?.getMeta();
   inventory.deleteAtSlot(slot, 1, false);
   const next = leftover(food, bite);
   if (next !== undefined) inventory.setItem(slot, new core.Item(next, 1));
@@ -334,7 +336,10 @@ function eat(event) {
   for (const line of after) player.sendMessage(line);
   countBite(player);
   const heal = player.getSkillManager().getCurrentLevel(core.Skill.HITPOINTS) - hitpointsBefore;
-  pluginApi.emitCustomEvent("food:eaten", { player, itemId, heal });
+  // `heal` is what it healed (nothing at full health); `restores` what the food restores.
+  const maxHp = player.getSkillManager().getMaxLevel(core.Skill.HITPOINTS);
+  const restores = food.outcomes ? heal : healAmount(food.heal?.max ?? food.heal, maxHp, () => 0, baseLevels(player));
+  pluginApi.emitCustomEvent("food:eaten", { player, itemId, hitpointsBefore, heal, restores, meta });
 }
 
 module.exports = {

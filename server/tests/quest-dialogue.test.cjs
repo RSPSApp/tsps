@@ -68,7 +68,9 @@ function fakePlayer(stage, attributes = {}) {
     getEquipment: () => ({ get: () => equipmentItem, getItems: () => [], hasItem: () => false }),
     getBanks: () => [],
     getSkillManager: () => ({ getCurrentLevel: () => 99, getMaxLevel: () => 99, getCombatLevel: () => 126 }),
-    getLocation: () => ({ getX: () => 0, getY: () => 0, getZ: () => 0 }),
+    getLocation: () => ({ getX: () => 0, getY: () => 0, getZ: () => 0,
+      isWithinDistance: (other, distance) => Math.max(
+        Math.abs(other.getX()), Math.abs(other.getY()), Math.abs(other.getZ())) <= distance }),
     getPacketSender: () => new Proxy({}, { get: () => () => {} }),
     getDialogueManager: () => ({ reset: () => {}, startDialogues: () => {} }),
     sendMessage: () => {},

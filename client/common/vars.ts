@@ -329,24 +329,27 @@ export const FEATURE_FLAG_LEAGUES = 1 << 1;
 export const ADVENTURE_PATHS_TRANSMIT_VARPS: readonly number[] = [2357, 2358, 2359, 2370];
 
 export const TRANSMIT_VARPS: ReadonlySet<number> = new Set([
+    3023, 3024, 3025, 3026, 3027, // clan_editing_0-4: the clan's Rank Titles and Hall settings edits
+    733, 736, 737, // the same screen's edits for ranks 96-124, on varps the cache shares with a quest
+    675, // canoeing_menu, bits 14-15 of which are the clan party chest's chosen quantity
     VARP_OPTION_RUN, // Run toggle
     VARP_ATTACK_STYLE, // Combat attack style
     VARP_AUTO_RETALIATE, // Auto-retaliate toggle
-    VARP_SPECIAL_ATTACK, // Special attack toggle
+    // %sa_attack (301) is predicted locally for the orb, but the orb and special bar send a
+    // native widget operation and the server decides. Sending the prediction too would turn
+    // one click into two toggles.
     VARP_KEYBINDING_ESC_TO_CLOSE, // %keybinding_esc_to_close
     VARP_SHOP_QUANTITY, // Shop quantity selector (%shop_quantity)
     VARP_SIDE_JOURNAL_STATE, // Side journal tab selection (drives IF_OPENSUB swap for 629:43)
     ...ADVENTURE_PATHS_TRANSMIT_VARPS,
     ...XPDROPS_TRANSMIT_VARPS, // XP drops setup/tracker persistence
-    // Sound/music settings - transmit so server can persist them
-    VARP_MUSIC_VOLUME, // Music volume (0-100)
-    VARP_SOUND_EFFECTS_VOLUME, // Sound effects volume (0-100)
-    VARP_AREA_SOUNDS_VOLUME, // Area sounds volume (0-100)
-    VARP_MASTER_VOLUME, // Master volume (0-100)
+    // Volume sliders persist through script triggers; mute buttons toggle on the server.
+    // Transmitting their local varp changes first would make the server toggle them back.
     VARP_MUSICPLAY, // Music play mode (0=Area, 1=Shuffle, 2=Single)
     // Attack option settings - transmit so server can persist them
     VARP_OPTION_ATTACK_PRIORITY_PLAYER, // Player attack options (0-4)
     VARP_OPTION_ATTACK_PRIORITY_NPC, // NPC attack options (0-3)
+    2856, // option_collection_new_item (varbit 11959) shares this varp with other settings
 ]);
 
 // ========== VARC (Client variables - not persisted) ==========

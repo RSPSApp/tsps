@@ -1,8 +1,31 @@
 "use strict";
 
+// Lines and order from the Wiki's Dr Jekyll transcript and recordings 560 (tick 13077: a herb
+// handed over) and 4056 (tick 6010: no herb). The potion is handed over when the player's own
+// line is continued, then Jekyll says his thanks. See SOURCES.md.
+const Flow = require("./DialogueFlow.RandomEvents");
+const ASK_EXPRESSION = 569, PLAYER_EXPRESSION = 588, THANKS_EXPRESSION = 567, SPARE_EXPRESSION = 589;
+const THANKS = "Thank you so much! Here, take this potion in return.";
+const SPARE = "Fair enough. Here, have a spare potion, and thanks for<br>your time.";
+
 function addDefinition(api, { definitions }) {
-  definitions.push({ id: api.core.NpcIdentifiers.DR_JEKYLL, kind: "jekyll",
-    greeting: "Please help me", talk: talk.bind(null, api) });
+  const { DR_JEKYLL, DR_JEKYLL_2 } = api.core.NpcIdentifiers;
+  definitions.push({ id: DR_JEKYLL, underwaterId: DR_JEKYLL_2, kind: "jekyll",
+    linger: true,
+    greet: name => `Hello, ${name}. I need a herb.`,
+    nags: [name => `Hey, ${name}!`, name => `Excuse me, ${name}?`, name => `Can you hear me, ${name}?`,
+      name => `I just need a herb, ${name}!`, name => `I'll give you a free potion, ${name}!`],
+    goodbye: "Maybe later.",
+    // 3273: "someone else", where the Wiki transcript has the owner's name.
+    otherPlayerLine: owner => `Sorry, I'm trying to get a herb from someone else, but ${owner.getAppearance().isMale() ? "he" : "she"} seems to be ignoring me.`,
+    leavingLine: () => "Excuse me, I must be off now.",
+    zoneLine: () => "I'll be off now.",
+    talk: talk.bind(null, api) });
+}
+
+// The article stays "a", avantoe and irit leaf included (the transcript marks them {{sic}}).
+function askLine(name) {
+  return `Have you got any ${name}? I've fixed my Hyde problem, so it's not urgent, but I could do with a ${name}.`;
 }
 
 function talk(api, active, { valid, serve }) {
@@ -24,28 +47,38 @@ function talk(api, active, { valid, serve }) {
     [I.DWARF_WEED, I.MAGIC_POTION_4_, "dwarf weed"],
     [I.TORSTOL, I.STAMINA_POTION_4_, "torstol"],
   ];
-  const player = active.player, inventory = player.getInventory();
-  const exchange = exchanges.reverse().find(([id]) => inventory.containsNumber(id));
+  const player = active.player, inventory = player.getInventory(), npcId = active.npc.getId();
+  const exchange = [...exchanges].reverse().find(([id]) => inventory.containsNumber(id));
   const request = {};
   active.prompt = request;
   const current = () => active.prompt === request && valid(active, player);
-  const fallback = () => {
-    if (current() && serve(active, [I.STRENGTH_POTION_2_])) player.sendMessage("Dr Jekyll gives you a strength potion.");
+  const say = (text, expression) => Flow.chat(api, { player, npcId, lines: [{ text, expression }] });
+  const close = () => player.getPacketSender().sendInterfaceRemoval();
+  const spare = () => {
+    if (current() && serve(active, [I.STRENGTH_POTION_2_])) say(SPARE, SPARE_EXPRESSION);
+    else close();
   };
-  if (!exchange) { fallback(); return; }
+  const reply = (text, onEnd) => Flow.chat(api, { player, npcId,
+    pages: [{ player: true, text, expression: PLAYER_EXPRESSION }], onEnd });
+  if (!exchange) {
+    Flow.chat(api, { player, npcId,
+      pages: [{ text: askLine("guam leaf"), expression: ASK_EXPRESSION },
+        { player: true, text: "I don't have any.", expression: PLAYER_EXPRESSION }],
+      onEnd: spare });
+    return;
+  }
   const [herbId, potionId, name] = exchange;
   const slot = inventory.getItems().findIndex(item => item?.getId() === herbId && item.getAmount() > 0);
   const herb = inventory.get(slot);
-  api.sendMultiChatboxPrompt(player, `Give Dr Jekyll your ${name} for a potion?`,
-    "Give him the herb", () => {
-      if (!current()) return;
-      if (inventory.get(slot) !== herb || herb.getId() !== herbId || herb.getAmount() !== 1) {
-        player.sendMessage("Your herb has moved. Talk to Dr Jekyll again.");
-        return;
-      }
-      if (serve(active, [potionId], { slot, item: herb })) player.sendMessage("Dr Jekyll trades your herb for a potion.");
-    },
-    "Keep my herb", fallback);
+  const trade = () => {
+    if (!current()) { close(); return; }
+    // The herb moved during the dialogue: nothing to hand over, so he gives the spare potion.
+    if (inventory.get(slot) !== herb || herb.getId() !== herbId || herb.getAmount() !== 1) { spare(); return; }
+    if (serve(active, [potionId], { slot, item: herb })) say(THANKS, THANKS_EXPRESSION);
+  };
+  Flow.chat(api, { player, npcId, lines: [{ text: askLine(name), expression: ASK_EXPRESSION }],
+    options: [["Here you are.", () => reply("Here you are.", trade)],
+      ["No, I need it myself.", () => reply("No, I need it myself.", spare)]] });
 }
 
 module.exports = { addDefinition };

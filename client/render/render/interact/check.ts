@@ -1152,11 +1152,11 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
                         });
                     }
                 } else if (interactType === InteractType.NPC) {
-                    // SceneRaycaster encodes players as InteractType.NPC with a high interactId offset.
-                    const PLAYER_INTERACT_BASE = 0x8000;
-                    if (interactId >= PLAYER_INTERACT_BASE) {
+                    // Player hits carry their ECS index; custom NPC IDs can also exceed 0x8000.
+                    if (hit.playerEcsIndex != null) {
                         const ecsIndex = hit.playerEcsIndex;
                         if (ecsIndex == null) continue;
+                        const firstNpcs: number[] = [];
 
                         const playerSubX = playerEcs.getX(ecsIndex) | 0;
                         const playerSubY = playerEcs.getY(ecsIndex) | 0;
@@ -1184,6 +1184,11 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
                                 if (otherWorldSubX !== playerSubX || otherWorldSubY !== playerSubY)
                                     continue;
 
+                                const npcType = host.getEffectiveNpcType(npcEcs.getNpcTypeId(otherId) | 0);
+                                if (npcType?.drawPriority === NpcDrawPriority.DRAW_PRIORITY_FIRST) {
+                                    firstNpcs.push(otherId);
+                                    continue;
+                                }
                                 addNpcMenuEntries(
                                     npcEcs.getNpcTypeId(otherId) | 0,
                                     npcEcs.getServerId(otherId) | 0,
@@ -1204,6 +1209,16 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
                         }
 
                         addPlayerMenuEntries(ecsIndex, worldTileX, worldTileY);
+                        // Later entries win the menu order, including when the ray hit the player first.
+                        for (const npc of firstNpcs) {
+                            addNpcMenuEntries(
+                                npcEcs.getNpcTypeId(npc) | 0,
+                                npcEcs.getServerId(npc) | 0,
+                                npc,
+                                worldTileX,
+                                worldTileY,
+                            );
+                        }
                     } else {
                         const npcServerId = hit.npcServerId;
                         const npcEcsId = hit.npcEcsId;
@@ -1241,6 +1256,11 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
                                 );
                             }
 
+                            // Lower-priority NPCs sit beneath overlapping player actions.
+                            const npcType = host.getEffectiveNpcType(interactId);
+                            if (npcType?.drawPriority !== NpcDrawPriority.DRAW_PRIORITY_FIRST) {
+                                addNpcMenuEntries(interactId, npcServerId, npcEcsId, worldTileX, worldTileY);
+                            }
                             // Players on the same coords
                             const hitMapId = hit.mapId | 0;
                             const hitMapX = (hitMapId >> 8) & 0xff;
@@ -1393,6 +1413,12 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
             !leftClickInUIRegion &&
             !hasUIClickTarget
         ) {
+            // Main and side modals close when the click lands on the world outside
+            // them (OSRS sends IF_CLOSE for it). The click still runs its world
+            // action, so a bank can be closed and a tile walked to in one click.
+            if (host.osrsClient.hasCloseOnOutsideClickModal()) {
+                host.osrsClient.closeModalInterface();
+            }
             const clicked = host.computeTileAt(inputManager.leftClickX, inputManager.leftClickY);
             if (clicked) {
                 host.osrsClient.menuTile = clicked;

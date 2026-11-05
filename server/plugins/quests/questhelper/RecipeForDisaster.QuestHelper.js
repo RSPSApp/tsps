@@ -7,7 +7,7 @@ const OWNED_ATTRIBUTES = Object.freeze([
   'quest.points', 'quest.recipe_for_disaster.stage', ...['rescues', 'pirate-state', 'pirate-hides-given',
     'goblin-state', 'dwarf-state', 'guide-state', 'evil-dave-state',
     'evil-dave-stew', 'skrach-state', 'awowogei-state', 'amik-state',
-    'culinaromancer-wave', 'culinaromancer-defeated'].map(name => PREFIX + name),
+    'culinaromancer-wave', 'culinaromancer-defeated', 'feast-pending'].map(name => PREFIX + name),
 ]);
 const VARIANTS = Object.freeze([
   'START', 'DWARF', 'WARTFACE_AND_BENTNOZE', 'PIRATE_PETE',
@@ -24,7 +24,7 @@ function completionProjection(player) {
   const flags = Number(player.getAttribute(PREFIX + 'rescues')) || 0;
   const result = {};
   if (stage >= 5) result[1850] = 5;
-  else if (stage === 4) result[1850] = flags === 255 ? 4 : 3;
+  else if (stage === 4) result[1850] = player.getAttribute(PREFIX + 'feast-pending') ? 2 : flags === 255 ? 4 : 3;
   else if (stage === 0 || stage === 1) result[1850] = stage;
   for (const [flag, id, value] of [[1,1892,60],[2,1867,40],[4,1895,110],
     [8,1896,5],[16,1878,5],[32,1904,170],[64,1910,20],[128,1914,50]]) {
@@ -96,14 +96,14 @@ function createRfdRenderer({core, getQuests}) {
   const N = identifiers('NpcIdentifiers');
   const O = identifiers('ObjectIdentifiers');
   const rescueRows = [
-    ['DWARF', 1, 'the Mountain Dwarf', [N.MOUNTAIN_DWARF], I.DWARVEN_ROCK_CAKE_2, 3236, 3219],
-    ['WARTFACE_AND_BENTNOZE', 2, 'the goblin generals', [N.GENERAL_WARTFACE_5, N.GENERAL_BENTNOZE_5], I.SLOP_OF_COMPROMISE, 3237, 3219],
-    ['PIRATE_PETE', 4, 'Pirate Pete', [N.PIRATE_PETE_3], I.COOKED_FISHCAKE, 3239, 3219],
-    ['LUMBRIDGE_GUIDE', 8, 'the Lumbridge Guide', [N.LUMBRIDGE_GUIDE, N.LUMBRIDGE_GUIDE_4], I.CAKE_OF_GUIDANCE, 3240, 3219],
-    ['EVIL_DAVE', 16, 'Evil Dave', [N.EVIL_DAVE_3], I.SPICY_STEW, 3236, 3220],
-    ['SKRACH_UGLOGWEE', 32, 'Skrach Uglogwee', [N.SKRACH_UGLOGWEE], I.COOKED_JUBBLY, 3237, 3220],
-    ['SIR_AMIK_VARZE', 64, 'Sir Amik Varze', [N.SIR_AMIK_VARZE_3, N.SIR_AMIK_VARZE_4], I.BRULEE_SUPREME, 3238, 3220],
-    ['MONKEY_AMBASSADOR', 128, 'King Awowogei', [N.AWOWOGEI], I.STUFFED_SNAKE, 3239, 3220],
+    ['DWARF', 1, 'the Mountain Dwarf', [N.MOUNTAIN_DWARF], I.DWARVEN_ROCK_CAKE_2, 1862, 5345],
+    ['WARTFACE_AND_BENTNOZE', 2, 'the goblin generals', [N.GENERAL_WARTFACE_5, N.GENERAL_BENTNOZE_5], I.SLOP_OF_COMPROMISE, 1862, 5351],
+    ['PIRATE_PETE', 4, 'Pirate Pete', [N.PIRATE_PETE_3], I.COOKED_FISHCAKE, 1862, 5347],
+    ['LUMBRIDGE_GUIDE', 8, 'the Lumbridge Guide', [N.LUMBRIDGE_GUIDE, N.LUMBRIDGE_GUIDE_4], I.CAKE_OF_GUIDANCE, 1865, 5349],
+    ['EVIL_DAVE', 16, 'Evil Dave', [N.EVIL_DAVE_3], I.SPICY_STEW, 1865, 5347],
+    ['SKRACH_UGLOGWEE', 32, 'Skrach Uglogwee', [N.SKRACH_UGLOGWEE], I.COOKED_JUBBLY, 1863, 5352],
+    ['SIR_AMIK_VARZE', 64, 'Sir Amik Varze', [N.SIR_AMIK_VARZE_3, N.SIR_AMIK_VARZE_4], I.BRULEE_SUPREME, 1865, 5345],
+    ['MONKEY_AMBASSADOR', 128, 'King Awowogei', [N.AWOWOGEI], I.STUFFED_SNAKE, 1865, 5343],
   ];
   const cookedRanges = () => [O.COOKING_RANGE, O.RANGE, O.COOKING_RANGE_2, O.RANGE_2, O.RANGE_3];
 
@@ -142,7 +142,9 @@ function createRfdRenderer({core, getQuests}) {
       const item = id => ({kind: 'item', id});
       const tile = (tx, ty, z = 0) => ({kind: 'tile', x: tx, y: ty, plane: z});
       const cook = () => npc([N.COOK, N.COOK_2, N.COOK_3, N.COOK_4, N.COOK_5, N.COOK_6, N.COOK_7, N.COOK_8], 3209, 3215);
-      const aris = () => npc([N.ARIS_2, N.ARIS_3], 3240, 3220);
+      const council = (ids, tx, ty) => at(1855, 1870, 5338, 5358)
+        ? npc(ids, tx, ty) : object([12349, 12350], 3213, 3221);
+      const aris = () => council([N.ARIS_2, N.ARIS_3], 1866, 5351);
       const requirements = [];
       const need = (name, met, ids, quantity) => {
         const r = {name, met: Boolean(met)};
@@ -167,6 +169,9 @@ function createRfdRenderer({core, getQuests}) {
         return need("M'speak amulet carried or worn", any(ids) || equipped(core.Equipment.AMULET_SLOT, ids), ids);
       };
       const step = (id, text, targets, choices = []) => {
+        if (id !== 'opening-feast' && targets.some(target => target.kind === 'object' && target.id === 12349)) {
+          text = [...(Array.isArray(text) ? text : [text]), 'Enter the frozen dining room through the large doors in Lumbridge Castle to reach Aris and the council.'];
+        }
         response.activeStep = {id, text: Array.isArray(text) ? text : [text], targets,
           requirements, dialogueChoices: choices.map(text => ({text})), widgets: [], overlays: []};
         response.panels = [{title: 'Recipe for Disaster', text: [part.replaceAll('_', ' ').toLowerCase()], requirements}];
@@ -176,6 +181,10 @@ function createRfdRenderer({core, getQuests}) {
       const failedRequirements = () => requirements.some(r => !r.met);
 
       if (quest.isComplete(player) || stage >= 5) return complete();
+      if (stage === 4 && player.getAttribute(PREFIX + 'feast-pending')) {
+        return step('opening-feast', 'Enter the dining room beside the Lumbridge Cook and watch the feast.',
+          [object([O.LARGE_DOOR_41, O.LARGE_DOOR_42], 3213, 3221, 0)]);
+      }
       const rescue = rescueRows.find(r => r[0] === part);
       if (rescue && (flags & rescue[1])) return complete();
       if (part === 'START') {
@@ -216,8 +225,8 @@ function createRfdRenderer({core, getQuests}) {
         if (has(rescue[4]) && (rescue[1] !== 16 || (number('evil-dave-state') & 4))) {
           if (rescue[1] === 128) speech();
           if ((flags | rescue[1]) === 255) need('One empty inventory slot for the final rescue', inv.getFreeSlots() >= 1);
-          return step('rescue-' + part.toLowerCase(), `Use the prepared item on ${rescue[2]} at the actual Lumbridge Castle council. ${rescue[1] === 16 ? 'Use the same spice mixture Dave accepted; if you changed it, test that mixture with him first.' : ''}`.trim(),
-            [item(rescue[4]), npc(rescue[3], rescue[5], rescue[6])]);
+          return step('rescue-' + part.toLowerCase(), `Use the prepared item on ${rescue[2]} in the frozen dining room. ${rescue[1] === 16 ? 'Use the same spice mixture Dave accepted; if you changed it, test that mixture with him first.' : ''}`.trim(),
+            [item(rescue[4]), council(rescue[3], rescue[5], rescue[6])]);
         }
       }
 
@@ -226,7 +235,7 @@ function createRfdRenderer({core, getQuests}) {
         const rohak = () => npc([N.OLD_DWARF, N.ROHAK, N.ROHAK_2, 4810, 6254, 6255]);
         if (has(I.DWARVEN_ROCK_CAKE)) {
           const gloves = need('Ice gloves worn', equipped(core.Equipment.HANDS_SLOT, [I.ICE_GLOVES]), [I.ICE_GLOVES]);
-          return step('dwarf-cool', gloves ? 'Use the hot rock cake on the Mountain Dwarf while wearing ice gloves. This cools it; use the cooled cake on him again to free him.' : 'Wear ice gloves and use the hot rock cake on the Mountain Dwarf, or kill an icefiend while carrying it.', [item(I.DWARVEN_ROCK_CAKE), item(I.ICE_GLOVES), npc(N.MOUNTAIN_DWARF,3236,3219), npc([N.ICEFIEND,N.ICEFIEND_2,N.ICEFIEND_3])]);
+          return step('dwarf-cool', gloves ? 'Use the hot rock cake on the Mountain Dwarf while wearing ice gloves. This cools it; use the cooled cake on him again to free him.' : 'Wear ice gloves and use the hot rock cake on the Mountain Dwarf, or kill an icefiend while carrying it.', [item(I.DWARVEN_ROCK_CAKE), item(I.ICE_GLOVES), council(N.MOUNTAIN_DWARF,1862,5345), npc([N.ICEFIEND,N.ICEFIEND_2,N.ICEFIEND_3])]);
         }
         if (state & 0x800) {
           [['Bowl of water', I.BOWL_OF_WATER], ['Egg', I.EGG], ['Pot of flour', I.POT_OF_FLOUR], ['Bucket of milk', I.BUCKET_OF_MILK]].forEach(([name,id]) => ingredient(name,id));
@@ -399,7 +408,7 @@ function createRfdRenderer({core, getQuests}) {
       }
 
       if (part === 'FINALE') {
-        if(flags!==255)return step('final-rescues','Free all eight council members before facing the Culinaromancer. Ask Aris about the remaining rescues.',[aris(),...rescueRows.filter(r=>!(flags&r[1])).map(r=>npc(r[3],r[5],r[6]))]);
+        if(flags!==255)return step('final-rescues','Free all eight council members before facing the Culinaromancer. Ask Aris about the remaining rescues.',[aris(),...rescueRows.filter(r=>!(flags&r[1])).map(r=>council(r[3],r[5],r[6]))]);
         points(175);needsQuest('desert_treasure_i');needsQuest('horror_from_the_deep');
         if(failedRequirements())return step('final-requirements','Meet the listed requirements, then talk to Aris at the Lumbridge council about the Culinaromancer.',[aris()]);
         if(attr('culinaromancer-defeated')===true)return step('final-claim','Continue the post-fight dialogue with Aris to claim completion. The server only marks Recipe for Disaster complete after this dialogue.',[npc([N.ARIS,N.ARIS_2,N.ARIS_3])]);

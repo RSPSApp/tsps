@@ -490,7 +490,7 @@ module.exports = function registerDepthsOfDespairQuest(api) {
     const { player, npcId } = event;
     let text = String(event.text ?? "");
     if (QUEST_SPEAKER_NPC_IDS.has(npcId) && text.includes("[player name]")) {
-      text = text.replace(/\[player name\]/gi, String(player.getUsername()));
+      text = text.replace(/\[player name\]/gi, String(player.getDisplayName()));
       event.text = text;
     }
     if (LORD_NPC_IDS.has(npcId) &&

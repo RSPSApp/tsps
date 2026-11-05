@@ -124,7 +124,7 @@ function makePlayer({ transcript = false } = {}) {
       addExperience: (skill, amount) => experience.set(skill, (experience.get(skill) ?? 0) + amount),
       getMaxLevel: () => 99,
     }),
-    getUsername: () => 'qh728-q130',
+    getUsername: () => 'qh728-q130', getDisplayName: () => 'qh728-q130',
     getLocation: () => location,
     sendMessage: (text) => messages.push(text),
     isRegistered: () => true,

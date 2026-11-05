@@ -10,6 +10,8 @@
  * - The Revenant cave teleport scroll: "Teleport" to an entrance (its sub-options, or the one
  *   chosen with "Config" on a left-click).
  * - Singles-plus indicator (varbit 5961) while inside.
+ * - The caves are Wilderness: an actor holds one area, so the caves' area runs the Wilderness
+ *   plugin's own rules ("wilderness:rules") first - PvP attacks, the overlay, teleport limits.
  */
 const { Location } = require("../../src/main/typescript/elvarg/game/model/Location");
 const { Boundary } = require("../../src/main/typescript/elvarg/game/model/Boundary");
@@ -70,6 +72,7 @@ const SCROLL_DESTINATIONS = [
 let api = null;
 let core = null;
 let scrollTeleportType = null;
+let wildernessRules = null;
 
 const tileKey = (location) => `${location.x},${location.y}`;
 const at = ([x, y]) => new Location(x, y, 0);
@@ -298,14 +301,42 @@ function sendStateOnLogin({ player }) {
     .sendVarbit(CREVICE_WARNING_VARBIT, player.getAttribute(CREVICE_WARNED_ATTRIBUTE) === true ? 1 : 0);
 }
 
+/** The Wilderness plugin's area rules, asked on first use once every plugin has registered. */
+function rules() {
+  if (!wildernessRules) {
+    const request = { rules: null };
+    api.emitCustomEvent("wilderness:rules", request);
+    wildernessRules = request.rules;
+  }
+  return wildernessRules;
+}
+
 function createCavesArea() {
   class RevenantCaves extends core.Area {
+    process(mobile) {
+      rules()?.process(mobile);
+    }
+
     postEnter(mobile) {
+      rules()?.postEnter(mobile);
       if (mobile.isPlayer()) mobile.getAsPlayer().getPacketSender().sendVarbit(SINGLES_PLUS_VARBIT, 1);
     }
 
-    postLeave(mobile) {
+    postLeave(mobile, logout) {
+      rules()?.postLeave(mobile, logout);
       if (mobile.isPlayer()) mobile.getAsPlayer().getPacketSender().sendVarbit(SINGLES_PLUS_VARBIT, 0);
+    }
+
+    canAttack(attacker, target, method) {
+      return rules()?.canAttack(attacker, target, method) ?? null;
+    }
+
+    canTeleport(player, wildernessLevelLimit) {
+      return rules()?.canTeleport(player, wildernessLevelLimit) ?? null;
+    }
+
+    npcAggressionTolerance(player, npc) {
+      return rules()?.npcAggressionTolerance(player, npc) ?? null;
     }
   }
   return new RevenantCaves([CAVES]);
@@ -315,7 +346,7 @@ module.exports = {
   name: "RevenantCaves",
   members: true,
   _test: {
-    enter, exit, creviceWarning, teleportOption, configOption, readScroll, onDeath, payFee, inCaves,
+    enter, exit, creviceWarning, teleportOption, configOption, readScroll, onDeath, payFee, inCaves, createCavesArea,
     ENTRANCES, EXITS, SCROLL_DESTINATIONS, FEE_PAID_ATTRIBUTE, FEE_AUTO_ATTRIBUTE,
     SCROLL_LOCATION_ATTRIBUTE, CREVICE_WARNED_ATTRIBUTE, attach: (pluginApi) => { api = pluginApi; core = pluginApi.core; },
   },

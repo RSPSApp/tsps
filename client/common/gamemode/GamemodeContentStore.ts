@@ -118,6 +118,11 @@ export function loadFromPayload(payload: {
 }): void {
     for (const dataset of payload.datasets) {
         switch (dataset.key) {
+            case "customDefinitions": {
+                const { replaceCustomDefinitions } = require("../../custom/definitions/CustomDefinitionStore");
+                replaceCustomDefinitions(dataset.rows);
+                break;
+            }
             case "definitionArchives": {
                 const { replaceDefinitionArchives } = require("../../custom/archives/ArchivedDefinitionStore");
                 replaceDefinitionArchives(dataset.rows);

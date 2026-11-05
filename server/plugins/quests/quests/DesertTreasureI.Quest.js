@@ -36,7 +36,7 @@ module.exports = function registerDesertTreasureIQuest(api) {
   const {
     Skill, Equipment, Location, GameObject, Item,
     ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers,
-    ObjectManager, MapObjects, RegionManager,
+    ObjectManager, MapObjects, RegionManager, Sound, Sounds, Task, TaskManager,
   } = api.core;
   const { registerQuest, refreshQuestList, getRegisteredQuests } = require("../QuestRuntime");
 
@@ -97,16 +97,30 @@ module.exports = function registerDesertTreasureIQuest(api) {
   const ICE_PATH_GATE_IDS = new Set([6461, 6462]); // icegate_left/right_small on the ice path
   const ICE_LEDGE_ID = ObjectIdentifiers.ICE_LEDGE;
   const ICE_LEDGE_TOP_ID = 6456;
-  // Pyramid descent: entrance ladder 6497 -> floors 3, 2, 1 -> ground ladder
-  // 6500 -> the ancient temple door 6553. The 6545/6547 ids are side doors,
-  // not the route QH uses.
-  const PYRAMID_ENTRANCE_ID = 6497;
-  const PYRAMID_LADDER_DOWN = new Map([
-    [6498, { from: [2909, 4964, 3], to: new Location(2845, 4964, 2) }],
-    [6499, { from: [2846, 4973, 2], to: new Location(2782, 4973, 1) }],
-    [6500, { from: [2784, 4941, 1], to: new Location(3232, 9293, 0) }],
+  // The generic 6400-tile search joins the top to the basement; these cache pairs own the route.
+  // Land beside the clipped ladder anchors, where the return ladder can be used.
+  const PYRAMID_ENTRANCE_ID = ObjectIdentifiers.LADDER_69;
+  const PYRAMID_EAST_LEAF_OPEN_ID = 6546;
+  const PYRAMID_WEST_LEAF_OPEN_ID = 6548;
+  const PYRAMID_ENTRANCE_LEAVES = new Map([
+    [ObjectIdentifiers.PYRAMID_ENTRANCE, { x: 3233, openedId: PYRAMID_EAST_LEAF_OPEN_ID }],
+    [ObjectIdentifiers.PYRAMID_ENTRANCE_2, { x: 3232, openedId: PYRAMID_WEST_LEAF_OPEN_ID }],
   ]);
-  const PYRAMID_ENTRANCE_LANDING = new Location(2913, 4953, 3);
+  const PYRAMID_ENTRANCE_Y = 2899;
+  const IGNORE_CLIPPING_FLAG = "movement:ignore-clipping";
+  const pyramidPassages = new WeakMap();
+  const PYRAMID_LADDER_DOWN = new Map([
+    [ObjectIdentifiers.LADDER_70, { from: [2909, 4964, 3], to: new Location(2844, 4964, 2) }],
+    [ObjectIdentifiers.LADDER_71, { from: [2846, 4973, 2], to: new Location(2781, 4973, 1) }],
+    [ObjectIdentifiers.LADDER_72, { from: [2784, 4941, 1], to: new Location(3231, 9293, 0) }],
+  ]);
+  const PYRAMID_LADDER_UP = new Map([
+    [ObjectIdentifiers.LADDER_76, { from: [2913, 4953, 3], to: new Location(3232, 2897, 0) }],
+    [ObjectIdentifiers.LADDER_75, { from: [2845, 4964, 2], to: new Location(2908, 4964, 3) }],
+    [ObjectIdentifiers.LADDER_74, { from: [2782, 4973, 1], to: new Location(2845, 4973, 2) }],
+    [ObjectIdentifiers.LADDER_73, { from: [3232, 9293, 0], to: new Location(2783, 4941, 1) }],
+  ]);
+  const PYRAMID_ENTRANCE_LANDING = new Location(2912, 4953, 3);
   const PYRAMID_DOOR_ID = 6553;
   const PYRAMID_DOOR_LANDING = new Location(3234, 9323, 0);
   const PYRAMID_OBELISK_IDS = new Set([6482, 6485, 6488, 6491]);
@@ -1078,6 +1092,83 @@ module.exports = function registerDesertTreasureIQuest(api) {
     return true;
   }
 
+  function pyramidEntranceLeaf(objectId, location) {
+    const leaf = PYRAMID_ENTRANCE_LEAVES.get(objectId);
+    return leaf && location?.x === leaf.x && location.y === PYRAMID_ENTRANCE_Y && location.z === 0 ? leaf : null;
+  }
+
+  function restorePyramidLeaf(player, passage) {
+    if (!passage.opened) return;
+    ObjectManager.deregister(passage.opened, true);
+    passage.opened = null;
+    player.getPacketSender().sendObject(passage.object);
+  }
+
+  function cancelPyramidPassage({ player }) {
+    const passage = pyramidPassages.get(player);
+    if (!passage) return;
+    pyramidPassages.delete(player);
+    passage.task.stop();
+    player.getMovementQueue().reset();
+    restorePyramidLeaf(player, passage);
+    if (passage.started && !passage.previousClipping) player.removeFlag(IGNORE_CLIPPING_FLAG);
+  }
+
+  /** Approach the clicked column from the current side, never through its closed solid tile. */
+  function routePyramidEntrance(event) {
+    const previous = pyramidPassages.get(event.player);
+    cancelPyramidPassage(event);
+    if (!PYRAMID_ENTRANCE_LEAVES.has(event.objectId)) return;
+    const leaf = pyramidEntranceLeaf(event.objectId, event.object.getLocation());
+    if (!leaf || event.clickType !== 1) return;
+    const side = Math.sign(event.sourceLocation.y - PYRAMID_ENTRANCE_Y) || -(previous?.direction ?? -1);
+    event.destination = { x: leaf.x, y: PYRAMID_ENTRANCE_Y + side, z: 0 };
+  }
+
+  /** RSProx3017/3020: ordinary walk onto the leaf, sound62, then exit and close two ticks later. */
+  function openPyramidEntrance(event) {
+    const { player, object, objectId, location } = event;
+    const leaf = pyramidEntranceLeaf(objectId, location);
+    if (!leaf) return false;
+    event.handled = true;
+    if (quest.getStage(player) < STAGE_PLACED) {
+      player.sendMessage("A powerful force prevents you from entering the pyramid.");
+      return;
+    }
+    const start = player.getLocation().clone();
+    const direction = -Math.sign(start.getY() - PYRAMID_ENTRANCE_Y);
+    if (start.getX() !== leaf.x || Math.abs(start.getY() - PYRAMID_ENTRANCE_Y) !== 1 || start.getZ() !== 0) return;
+    cancelPyramidPassage(event);
+    const passage = { object, direction, area: player.getPrivateArea(), started: false, opened: null,
+      previousClipping: player.hasFlag(IGNORE_CLIPPING_FLAG) };
+    let tick = 0;
+    const task = new Task(1, passage, false);
+    passage.task = task;
+    task.execute = () => {
+      const at = player.getLocation();
+      const expectedY = tick === 0 ? start.getY() : tick < 3 ? PYRAMID_ENTRANCE_Y : PYRAMID_ENTRANCE_Y + direction;
+      if (!player.isRegistered() || player.getPrivateArea() !== passage.area || at.getX() !== leaf.x
+        || at.getY() !== expectedY || at.getZ() !== 0 || !player.getMovementQueue().getMobility().canMove() || tick === 3) {
+        cancelPyramidPassage({ player });
+        return;
+      }
+      if (tick === 0) {
+        passage.started = true;
+        player.setFlag(IGNORE_CLIPPING_FLAG, true);
+        passage.opened = new GameObject(leaf.openedId, object.getLocation().clone(), object.getType(), object.getFace(), passage.area).setOwner(player);
+        ObjectManager.register(passage.opened, true);
+        Sounds.sendSound(player, Sound.DOOR_OPEN);
+        player.getMovementQueue().reset().addSteps(new Location(leaf.x, PYRAMID_ENTRANCE_Y, 0));
+      } else if (tick === 2) {
+        player.getMovementQueue().reset().addSteps(new Location(leaf.x, PYRAMID_ENTRANCE_Y + direction, 0));
+        restorePyramidLeaf(player, passage);
+      }
+      tick++;
+    };
+    pyramidPassages.set(player, passage);
+    TaskManager.submit(task);
+  }
+
   function handlePyramidObject({ player, objectId, location }) {
     if (!location) return false;
     if (objectId === PYRAMID_ENTRANCE_ID && location.x === 3233 && location.y === 2897 && location.z === 0) {
@@ -1089,11 +1180,12 @@ module.exports = function registerDesertTreasureIQuest(api) {
       if (quest.getStage(player) < STAGE_ENTERED) quest.setStage(player, STAGE_ENTERED);
       return true;
     }
-    const ladder = PYRAMID_LADDER_DOWN.get(objectId);
+    const ladder = PYRAMID_LADDER_DOWN.get(objectId) ?? PYRAMID_LADDER_UP.get(objectId);
     if (ladder && location.x === ladder.from[0] && location.y === ladder.from[1]
       && location.z === ladder.from[2]) {
       player.moveTo(ladder.to.clone());
-      if (quest.getStage(player) < STAGE_ENTERED) quest.setStage(player, STAGE_ENTERED);
+      if (PYRAMID_LADDER_DOWN.has(objectId) && quest.getStage(player) >= STAGE_PLACED
+        && quest.getStage(player) < STAGE_ENTERED) quest.setStage(player, STAGE_ENTERED);
       return true;
     }
     if (objectId === PYRAMID_DOOR_ID && location.x === 3234 && location.y === 9324 && location.z === 0) {
@@ -1101,6 +1193,15 @@ module.exports = function registerDesertTreasureIQuest(api) {
       return true;
     }
     return false;
+  }
+
+  /** Claim the pyramid before Ladders guesses an adjacent-plane or underground destination. */
+  function claimPyramidClimb(event) {
+    if (event.handled || (event.objectId !== PYRAMID_ENTRANCE_ID
+      && !PYRAMID_LADDER_DOWN.has(event.objectId) && !PYRAMID_LADDER_UP.has(event.objectId))) return;
+    const location = event.object?.getLocation?.();
+    if (!location) return;
+    event.handled = handlePyramidObject({ ...event, location: { x: location.getX(), y: location.getY(), z: location.getZ() } });
   }
 
   /** The Smoke Dungeon's east gate is named "Gate", so Doors asks quests first. */
@@ -1187,7 +1288,7 @@ module.exports = function registerDesertTreasureIQuest(api) {
       event.handled = stepOffIceLedge(event) === true;
       return;
     }
-    if (objectId === PYRAMID_ENTRANCE_ID || PYRAMID_LADDER_DOWN.has(objectId)
+    if (objectId === PYRAMID_ENTRANCE_ID || PYRAMID_LADDER_DOWN.has(objectId) || PYRAMID_LADDER_UP.has(objectId)
       || objectId === PYRAMID_DOOR_ID) {
       event.handled = handlePyramidObject(event);
       return;
@@ -1411,6 +1512,7 @@ module.exports = function registerDesertTreasureIQuest(api) {
   api.onCustomEvent("npc-dialogue:condition", handleCondition);
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onCustomEvent("door:toggle", handleDoorToggle);
+  api.onCustomEvent("ladders:climb", claimPyramidClimb);
   api.onNpcDeath(handleNpcDeath);
   api.onNpcBeforeDeath(handleNpcBeforeDeath);
   api.onItemOnNpc(handleItemOnNpc);
@@ -1418,6 +1520,12 @@ module.exports = function registerDesertTreasureIQuest(api) {
   api.onItemOnObject(handleItemOnObject);
   api.onAnyNpcInteraction({ "Smash-ice": smashIceBlock });
   api.onObjectInteraction(handleObjectInteraction);
+  api.onObjectInteraction("Pyramid entrance", { Open: openPyramidEntrance });
+  api.onObjectRoute(routePyramidEntrance);
+  api.onNpcRoute(cancelPyramidPassage);
+  api.onWalkRoute(cancelPyramidPassage);
+  api.onPlayerDisconnect(cancelPyramidPassage);
+  api.onPlayerLogout(cancelPyramidPassage);
   api.onZoneEnter(FAREED_ROOM_ZONE, handleFareedRoomEnter);
   api.onZoneEnter(SHADOW_DIAMOND_ZONE, handleShadowRoomEnter);
   api.onServerStartup(installQuestObjects);

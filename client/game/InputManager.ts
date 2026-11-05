@@ -216,6 +216,9 @@ export class InputManager {
     idleTime: number = 0;
     /** Timestamp of last click */
     clickTime: number = 0;
+    /** Monotonic timestamp of the last key press, in ms (RuneLite's keyboard idle ticks). */
+    private lastKeyTimeMs: number =
+        typeof performance !== "undefined" ? performance.now() : Date.now();
 
     /**
      * Monotonic timestamp of last user input (mouse/key/touch/wheel), in ms.
@@ -284,8 +287,10 @@ export class InputManager {
     keys: Map<string, boolean> = new Map();
     /** Key events queued this frame (for widget onKey handlers) */
     keyEvents: { keyTyped: number; keyPressed: number; code: string }[] = [];
-    /** Shift key state */
+    /** Shift key state (also OSRS keybind 81, ClientState.isShiftPressed; see setShiftHeld) */
     shiftDown: boolean = false;
+    /** Shift went down or up: menus that follow it (shift-click drop) must be rebuilt. */
+    onShiftChanged?: () => void;
 
     // === OSRS Internal Key State (for CS2 KEYHELD/KEYPRESSED opcodes) ===
 
@@ -518,6 +523,17 @@ export class InputManager {
         return this.shiftDown;
     }
 
+    /**
+     * Records Shift from every key and mouse event, before any filter or handler can consume the
+     * event, so widget input and the menus (keybind 81) never disagree.
+     */
+    private setShiftHeld(down: boolean): void {
+        this.shiftDown = down;
+        if (ClientState.isShiftPressed() === down) return;
+        ClientState.setKeybindState(81, down);
+        this.onShiftChanged?.();
+    }
+
     isKeyDown(key: string): boolean {
         return this.keys.has(key);
     }
@@ -621,6 +637,8 @@ export class InputManager {
         this.writeIndex = (this.writeIndex + 1) & 0x7f;
         this.idleTime = 0;
         this.lastInputTimeMs = this.nowMs();
+        // Typed text (a paste, the mobile keyboard) is keyboard input.
+        this.lastKeyTimeMs = this.lastInputTimeMs;
     }
 
     /**
@@ -640,6 +658,7 @@ export class InputManager {
         }
         this.idleTime = 0;
         this.lastInputTimeMs = this.nowMs();
+        this.lastKeyTimeMs = this.lastInputTimeMs;
     }
 
     /** Read next character from queue (OSRS: readChar) */
@@ -711,6 +730,11 @@ export class InputManager {
         return typeof performance !== "undefined" ? performance.now() : Date.now();
     }
 
+    /** Milliseconds since the last key press. */
+    getKeyboardIdleMs(): number {
+        return Math.max(0, this.nowMs() - this.lastKeyTimeMs);
+    }
+
     /**
      * OSRS AFK logout window is 5 minutes (300s). CS2 scripts query remaining time in ms.
      */
@@ -757,7 +781,7 @@ export class InputManager {
 
         const [x, y] = getMousePos(this.element, event);
         // Keep modifier state in sync even if key events were missed due to focus.
-        this.shiftDown = event.shiftKey === true;
+        this.setShiftHeld(event.shiftKey === true);
         this.idleTime = 0;
         this.lastInputTimeMs = this.nowMs();
         this.clickX = x;
@@ -810,7 +834,7 @@ export class InputManager {
 
         const [x, y] = getMousePos(this.element, event);
         // Keep modifier state in sync even if key events were missed due to focus.
-        this.shiftDown = event.shiftKey === true;
+        this.setShiftHeld(event.shiftKey === true);
         this.idleTime = 0;
         this.lastInputTimeMs = this.nowMs();
         this.clickMode2 = ClickMode.NONE;
@@ -832,7 +856,7 @@ export class InputManager {
 
         const [x, y] = getMousePos(this.element, event);
         // Keep modifier state in sync even if key events were missed due to focus.
-        this.shiftDown = event.shiftKey === true;
+        this.setShiftHeld(event.shiftKey === true);
         this.idleTime = 0;
         this.lastInputTimeMs = this.nowMs();
         // A locked pointer reports the spot it was locked at. While a plugin aims with its own
@@ -918,7 +942,7 @@ export class InputManager {
         if (this.element.contains(event.target as Node)) return;
 
         const [x, y] = getMousePos(this.element, event);
-        this.shiftDown = event.shiftKey === true;
+        this.setShiftHeld(event.shiftKey === true);
         this.idleTime = 0;
         this.lastInputTimeMs = this.nowMs();
         this.clickMode2 = ClickMode.NONE;
@@ -1126,10 +1150,12 @@ export class InputManager {
     // === Keyboard handlers - OSRS GameApplet.keyPressed/keyReleased ===
 
     onKeyDown = (event: KeyboardEvent, prioritizeChat = false) => {
+        this.setShiftHeld(event.shiftKey === true || event.keyCode === 16);
         if (this.filterInput("keyPressed", event)) return;
         event.preventDefault();
         this.idleTime = 0;
         this.lastInputTimeMs = this.nowMs();
+        this.lastKeyTimeMs = this.lastInputTimeMs;
 
         // A held Shift/Ctrl/Alt auto-repeats keydown. It is already held; queueing each repeat as a
         // key press re-ran every onKey script and redrew all widgets many times a second (#845).
@@ -1146,11 +1172,6 @@ export class InputManager {
                 : 0;
         const osrsKeyCode = toOsrsKeyCode(keyCode);
 
-        // Track shift state
-        if (event.shiftKey) {
-            this.shiftDown = true;
-        }
-
         // Track OSRS internal key state for KEYHELD/KEYPRESSED opcodes.
         if (osrsKeyCode !== -1) {
             if (osrsKeyCode > 0 && osrsKeyCode < 128) {
@@ -1158,7 +1179,7 @@ export class InputManager {
             }
             this.osrsKeyState[osrsKeyCode] = 1;
             this.osrsKeyPressedThisFrame.add(osrsKeyCode);
-            if (osrsKeyCode === 81 || osrsKeyCode === 82) {
+            if (osrsKeyCode === 82) {
                 ClientState.setKeybindState(osrsKeyCode, true);
             }
         }
@@ -1204,7 +1225,7 @@ export class InputManager {
         // Clear shift state
         if (keyCode === 16) {
             // VK_SHIFT
-            this.shiftDown = false;
+            this.setShiftHeld(false);
         }
 
         const osrsKeyCode = toOsrsKeyCode(keyCode);
@@ -1213,7 +1234,7 @@ export class InputManager {
                 this.keyArray[osrsKeyCode] = 0;
             }
             this.osrsKeyState[osrsKeyCode] = 0;
-            if (osrsKeyCode === 81 || osrsKeyCode === 82) {
+            if (osrsKeyCode === 82) {
                 ClientState.setKeybindState(osrsKeyCode, false);
             }
         }
@@ -1238,9 +1259,8 @@ export class InputManager {
             this.osrsKeyState[i] = 0;
         }
         this.osrsKeyPressedThisFrame.clear();
-        this.shiftDown = false;
+        this.setShiftHeld(false);
         this.keys.clear();
-        ClientState.setKeybindState(81, false);
         ClientState.setKeybindState(82, false);
         this.resetMouse();
     };

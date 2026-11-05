@@ -1,0 +1,64 @@
+{
+  "$comment": "Demonic Pacts' pact tree (docs/leagues.md, Demonic Pacts), used by plugins/modes/LeaguePacts.plugin.js. The nodes are the rev 241 cache's: DB table `talent_tree` (216), one row per node in row order (the node's index, its bit in the unlock varps; recording 237/01098's first buy, payload [1, 0], set bit 0 of combat_mastery_perm_0), with `linked_nodes` (the rows it touches) and `effect` [effect id, value]. Each effect id has its varbit in `effects`, and nodes sharing an effect add their values up (talent_prayer_pen_all 25 -> 50 -> 75). Apply Changes' trigger sends the selected nodes as one int array, its length as a plain varint and each node zigzag-encoded (237/01098: [1, 126] set bit 63; 238: [2, 88, 94] bought nodes 44 and 47). Everything sent is by gameval name. Flow and texts from the Leagues VI recordings 237/01098, 01102, 01103, 01149, 01158, 01167, 01170 and 238/01219, 01223; the rules (40 points to spend of the 44 the tasks give, two of them the tutorial's; six resets: two free, one for the Hueycoatl's first kill and three from echo bosses, both reset tasks (`resetTasks`); PvP limits) are the Wiki's Demonic_Pacts_League/Demonic_Pacts.",
+  "league": 6,
+  "table": { "name": "talent_tree", "linked": "linked_nodes", "effect": "effect" },
+  "rootNode": 0,
+  "spendCap": 40,
+  "_effects": "Each node's effect id -> the varbit the client reads for it, by what the node's text says (the table carries no varbit, and the ids are not the varbits' order). Checked against the recordings: 1, 12, 13, 14, 18, 19, 20, 23, 25, 26, 40 (237/01158's reset), 43 (237/01098, light_weapon_doublehit), 64, 65, 73, 75, 77 and 84 (237/01158). A node's value adds to its effect's varbit.",
+  "effects": {"1": "talent_regen_ammo_chance", "3": "talent_airrune_regen_prayer_restore", "4": "talent_waterrune_regen_healing", "5": "talent_firerune_regen_damage_boost", "6": "talent_earthrune_regen_defence_boost", "7": "talent_percentage_magic_damage", "8": "talent_crossbow_echo_reproc_chance", "9": "talent_bow_echo_pass_accuracy", "10": "talent_thrown_maxhit_echoes", "11": "talent_ranged_regen_echo_chance", "12": "talent_all_style_accuracy", "13": "talent_defence_boost", "14": "talent_percentage_melee_damage", "15": "talent_percentage_ranged_damage", "16": "talent_offhand_stat_boost", "17": "talent_thrown_weapon_melee_str_scale", "18": "talent_overhealing_via_talents", "19": "talent_thorns_damage", "20": "talent_melee_range_multiplier", "23": "talent_shield_reflect", "24": "talent_spec_for_free", "25": "talent_distance_melee_minhit", "26": "talent_melee_distance_healing_chance", "29": "talent_water_spell_damage_high_hp", "30": "talent_air_spell_max_hit_prayer_bonus", "31": "talent_water_spell_bouce_heal", "32": "talent_fire_hp_consume_for_damage", "33": "talent_fire_spell_burn_bounce", "34": "talent_magic_attack_speed_traditional", "35": "talent_regen_stave_charges_water", "36": "talent_regen_stave_charges_fire", "40": "talent_prayer_pen_all", "41": "talent_earth_scale_defence_stat", "42": "talent_earth_reduce_defence", "43": "talent_light_weapon_doublehit", "44": "talent_free_random_weapon_attack_chance", "45": "talent_smoke_counts_as_air", "46": "talent_ice_counts_as_water", "47": "talent_blood_counts_as_fire", "48": "talent_shadow_counts_as_earth", "49": "talent_ranged_strength_hp_difference", "50": "talent_crossbow_slow_big_hits", "51": "talent_crossbow_max_hit", "52": "talent_ranged_echo_cyclical", "53": "talent_bow_fast_hits", "55": "talent_thrown_weapon_accuracy", "56": "talent_thrown_weapon_multi", "57": "talent_max_accuracy_roll_from_range", "58": "talent_buffed_ranged_prayers", "59": "talent_bow_min_hit_stacking_increase", "60": "talent_bow_max_hit_stacking_increase", "61": "talent_prayer_restore_no_overhead", "62": "talent_restore_sa_energy_from_distance", "64": "talent_defence_recoil_scaling", "65": "talent_light_weapon_faster", "66": "talent_hit_restore_spec_energy", "67": "talent_overheal_consumption_boost", "68": "talent_unique_blindbag_damage", "69": "talent_melee_range_conditional_boost", "70": "talent_percentage_melee_maxhit_distance", "71": "talent_2h_melee_echos", "72": "talent_unique_blindbag_chance", "73": "talent_melee_strength_prayer_bonus", "75": "talent_shield_block_heal", "76": "talent_max_hit_style_swap", "77": "talent_multi_hit_str_increase", "78": "talent_regen_magic_level_boost", "79": "talent_regen_stave_charges_air", "80": "talent_regen_stave_charges_earth", "81": "talent_magic_attack_speed_powered", "82": "talent_crossbow_double_accuracy_roll", "83": "talent_air_spell_damage_active_prayers", "84": "talent_thorns_double_hit"},
+  "varps": {
+    "earned": "talent_points_earned",
+    "spent": "talent_points_spent",
+    "unlocked": ["combat_mastery_perm_0", "combat_mastery_perm_1", "combat_mastery_perm_2", "combat_mastery_perm_3", "combat_mastery_perm_4", "combat_mastery_perm_5"]
+  },
+  "varbits": {
+    "resets": "talent_resets_available",
+    "freeReset": "talent_free_reset_1",
+    "secondFreeReset": "talent_free_reset_2",
+    "hueycoatlReset": "talent_huey_pact_reset"
+  },
+  "start": {
+    "_comment": "A new Demonic Pacts character: no point yet (the tutorial's two are its pact tasks, Open the Leagues Menu and Complete the Leagues Tutorial: 237/01098 earns each with the task's own line) and the two free resets the Wiki gives, both flagged (talent_free_reset_1 and _2: live flagged each as it was given, the second with 'Yama has taken kindly...' to characters that already played, 238/01219).",
+    "points": 0,
+    "resets": 2
+  },
+  "resetTasks": {
+    "_comment": "Pact reset tasks: each gives a reset after its pact point, with the resetEarned line (237/01158: Defeat 3 unique Echo Bosses, the point, then talent_resets_available 2 -> 3 and the line). Wiki: the Hueycoatl's first kill became a reset task on 23 April 2026, and three resets come from echo bosses; which three of the four unique-echo-boss tasks is ours (1, 2 and 3; 3 is the recorded one).",
+    "hueycoatl": "defeat-hueycoatl-1-time",
+    "tasks": ["defeat-hueycoatl-1-time", "defeat-1-unique-echo-boss", "defeat-2-unique-echo-bosses", "defeat-3-unique-echo-bosses"]
+  },
+  "interface": {
+    "_comment": "talent_tree (647) in the toplevel floater as an overlay (237/01098, 01102): the main modal closed first, league_border_pulse_stop (3186) on league_side_panel:mastery_highlight, the floater, if_setevents frame 647:5 slot 11 OP1, data_layer 647:11 IF_SCRIPT_TRIGGER, perm_floating_panel_content 647:20 OP1 and IF_SCRIPT_TRIGGER, then talent_tree_init (7892) [1] and script 9397. frame slot 11 closes it.",
+    "group": 647,
+    "openButton": [656, 32],
+    "highlight": [656, 31],
+    "floater": [161, 18],
+    "overlay": 1,
+    "frame": 5,
+    "frameSlot": 11,
+    "dataLayer": 11,
+    "panel": 20,
+    "scripts": { "pulseStop": 3186, "init": 7892, "initArgs": [1], "after": 9397, "combatLevel": 5224 },
+    "_buy": "Nodes bought (data_layer's script trigger, Apply Changes: [count, 2 x node, ...]), each: talent_points_spent, the node's unlock bit, its effect varbit; then once: busy, human_relic_unlock with leagues_6_mastery_unlock at height 92, pvp_icons_comlevelrange (5224) with the combat level, the floater closed and sounds 4215/4211/4213/4212 at 8/44/80/104; five ticks later the tree again (237/01098, 01102, 01149).",
+    "buyAnimation": "human_relic_unlock",
+    "buyGraphic": "leagues_6_mastery_unlock",
+    "buyGraphicHeight": 92,
+    "buySounds": [[4215, 8], [4211, 44], [4213, 80], [4212, 104]],
+    "reopenTicks": 5
+  },
+  "messages": {
+    "alreadyOpen": { "text": "The Demonic Pacts interface is already open.", "source": "237/01102" },
+    "earned": { "text": "<col=229628>Congratulations, you've earned a Demonic Pact! You now have {count} Demonic Pacts to spend.</col>", "source": "237/01103 and twelve more, plural even for 1 to spend" },
+    "firstEarned": { "text": "<col=229628>Congratulations, you've earned a Demonic Pact! You now have {count} Demonic Pact to spend.</col>", "source": "237/01098: the first point earned (talent_points_earned 0 -> 1), the only singular in the recordings" },
+    "resetEarned": { "text": "<col=229628>Congratulations, you've earned a Full Pact reset! You now have {count} Full Pact resets</col>", "source": "237/01158 (3 resets; the wording at 1 is not recorded)" },
+    "resetConfirm": { "text": "Are you sure you want to reset your pacts, this opportunity might not arise again.", "source": "237/01158 (mesbox)" },
+    "resetTitle": { "text": "Reset Pacts?", "source": "237/01158 (chatbox_multi_init)" },
+    "resetDone": { "text": "Demonic Pacts have been reset, you have {count} points to spend.", "source": "237/01158 (mesbox)" },
+    "noResets": { "text": "You have no pact resets left.", "source": "ours: live's refusal was not recorded" },
+    "nothingToReset": { "text": "You have no pacts to reset.", "source": "ours" },
+    "noPoints": { "text": "You have no pact points to spend.", "source": "ours: the client's tree shows it; a buy without points never reached live's server" },
+    "notLinked": { "text": "That pact is not linked to one you have.", "source": "ours: the client's tree only offers linked pacts" },
+    "capReached": { "text": "You cannot spend more than {cap} pact points.", "source": "ours, after the Wiki's limit of 40" },
+    "status": { "text": "Pacts: {spent} of {earned} points spent ({left} to spend), {resets} resets; {nodes}.", "source": "ours (::pacts)" }
+  }
+}

@@ -219,3 +219,73 @@ test("the data names every special and phase mage", () => {
   }
   assert.equal(chamber.aisles.length, 4);
 });
+
+test("the mages' and reavers' hits land with their projectiles (#1862)", (t) => {
+  require("../dist/Server").Server.installProductionPathResolver();
+  const { Projectile } = require("../dist/game/model/Projectile");
+  const { Location } = require("../dist/game/model/Location");
+  const added = {
+    Projectile,
+    Animation: class {},
+    CombatType: { MAGIC: "magic" },
+    CombatMethod: class {},
+    CombatFactory: { applyStyleDamage: () => {} },
+    PendingHit: class {
+      constructor(attacker, target, method, delay) { this.delay = delay; }
+      getDelay() { return this.delay; }
+    },
+  };
+  Object.assign(fakeApi.core, added);
+  t.after(() => { for (const key of Object.keys(added)) delete fakeApi.core[key]; });
+  const sent = [];
+  t.mock.method(Projectile.prototype, "sendProjectile", function () { sent.push(this); });
+  const providers = new Map();
+  const registrar = new Proxy({
+    registerNpcCombatMethodProvider: (ids, method) => { for (const id of [].concat(ids)) providers.set(id, method); },
+  }, { get: (target, key) => target[key] ?? (() => {}) });
+  require("../plugins/bosses/nex/Mages.Nex").attachMages(registrar);
+  Specials.attachSpecials(registrar);
+  const mobile = (x, y) => ({
+    getLocation: () => new Location(x, y, 0), getSize: () => 1, getPrivateArea: () => null,
+    getIndex: () => 1, isPlayer: () => false, performAnimation: () => {},
+  });
+  const { npcs } = Common.data;
+  const cases = [
+    ["fumus", npcs.mages.fumus, (npc) => { npc.__nexMage = "fumus"; }],
+    ["glacies", npcs.mages.glacies, (npc) => { npc.__nexMage = "glacies"; }],
+    ["reaver", [].concat(npcs.reaver)[0], () => {}],
+  ];
+  for (const [name, id, setup] of cases) {
+    for (const tiles of [1, 8]) {
+      const npc = mobile(2925, 5203);
+      setup(npc);
+      const player = mobile(2925 + tiles, 5203);
+      const method = new (providers.get(id))();
+      const before = sent.length;
+      method.start(npc, player);
+      assert.equal(sent.length, before + 1, `${name} sends a projectile`);
+      const shot = sent.at(-1);
+      assert.ok(shot.speed > shot.delay + 1, `${name} lands after it launches`);
+      assert.equal(method.hits(npc, player)[0].getDelay(), Math.max(1, Math.ceil(shot.speed / 30)), `${name} at ${tiles} tiles`);
+    }
+  }
+});
+
+test("Nex's loot roll is marked as loot, not a second kill: the fight counts the kill", () => {
+  const player = { sendMessage() {} };
+  const original = fakeApi.core.ItemDefinition.forId;
+  fakeApi.getItemOnGroundManager = () => ({ registerLocation() {} });
+  fakeApi.core.Item = class { constructor(itemId, amount) { this.itemId = itemId; this.amount = amount; } };
+  fakeApi.core.ItemDefinition.forId = (id) => ({ ...original(id), getNoteId: () => -1, isNoted: () => false, isStackable: () => true });
+  try {
+    const fight = { boss: {}, arena: { area: {} }, contribution: new Map([[player, 100]]) };
+    const before = events.length;
+    Loot.reward(fight, [player], {});
+    const rolls = events.slice(before).filter(([name]) => name === "npc-drops:roll").map(([, payload]) => payload);
+    assert.equal(rolls.length, 1);
+    assert.equal(rolls[0].countKill, false);
+    assert.equal(rolls[0].npc, fight.boss);
+  } finally {
+    fakeApi.core.ItemDefinition.forId = original;
+  }
+});

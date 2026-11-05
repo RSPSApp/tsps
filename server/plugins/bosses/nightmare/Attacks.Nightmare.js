@@ -52,9 +52,14 @@ function breakProtection(fight, players) {
   if (!fight.phosani || fight.phase !== 3) return;
   const { PrayerHandler } = Common.core;
   for (const player of players) {
+    let disabled = false;
     for (const prayer of ["PROTECT_FROM_MAGIC", "PROTECT_FROM_MISSILES", "PROTECT_FROM_MELEE"]) {
-      if (PrayerHandler.isActivated(player, PrayerHandler[prayer])) PrayerHandler.deactivatePrayer(player, PrayerHandler[prayer]);
+      if (PrayerHandler.isActivated(player, PrayerHandler[prayer])) {
+        PrayerHandler.deactivatePrayer(player, PrayerHandler[prayer]);
+        disabled = true;
+      }
     }
+    if (disabled) require("./CombatAchievements.Nightmare").prayerDisabled(fight, player);
   }
 }
 

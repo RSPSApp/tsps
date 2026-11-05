@@ -26,6 +26,8 @@ const WARNING_VARBIT = 9589;
 const SKIP_WARNING_ATTRIBUTE = "scurrius:skip-warning";
 /** Set while the player is in a private instance, so a login there puts them outside. */
 const INSTANCE_ATTRIBUTE = "scurrius:in-instance";
+/** Generic engine flag: a scripted arena keeps its NPC on its target however far it moves from spawn. */
+const NO_RETREAT_FLAG = "combat:no-retreat";
 
 const BUSY_VARBIT = 12393;
 const MINIMAP_STATE_VARBIT = 6719;
@@ -164,6 +166,13 @@ function spawnBoss(id, area) {
   npc.__skipDefaultRespawn = true;
   npc.__scurriusArmedAt = core.World.getProcessCycle() + ARM_TICKS;
   npc.setMultiCombat?.(true);
+  // The public lair is a scripted arena, like a God Wars chamber: Scurrius fights the room,
+  // not the few tiles open-world hunting covers. Between feeding rounds he swipes from melee
+  // reach, so the spawn aggression range would otherwise drop a player still in the room.
+  // A private instance is already exempt as a PrivateArea. Exits and the death/respawn cycle
+  // keep their own handling: a player who leaves stops being a valid target, and no-retreat
+  // never overrides target validity or the unreachable-target release.
+  if (!area) npc.setFlag(NO_RETREAT_FLAG, true);
   if (area) {
     area.add(npc);
     area.boss = npc;

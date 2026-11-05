@@ -214,6 +214,9 @@ test("Molten Miner: ore smelted into its bar with the Smithing XP; an ore with n
   Math.random = () => 0.99;
   gather(owner, "MINING", I.RUNITE_ORE, 125);
   assert.equal(owner.getInventory().getAmount(I.RUNITE_BAR), 1);
+  gather(owner, "MINING", I.IRON_ORE, 35);
+  assert.equal(owner.getInventory().getAmount(I.IRON_BAR), 1, "Molten Miner's default recipe remains iron");
+  assert.equal(owner.getInventory().getAmount(I.STEEL_BAR), 0);
   assert.ok(xp(owner, "SMITHING") > 0, "Smithing XP at Smithing 1");
   gather(owner, "MINING", I.COAL, 50);
   assert.equal(owner.getInventory().getAmount(I.COAL), 1, "coal is no recipe's main ore");
@@ -339,6 +342,7 @@ test("Farming's harvest: Certified Farmer notes the produce; Greedy Gatherer mor
     farm.patches[Data.patchKey(patch)] = { ...Model.emptyPatch(Date.now(), farm), crop: "ELKHORN_CORAL", status: "grown", stage: crop.stages, lives: 6 };
     player.setAttribute(Patches.FARM_ATTRIBUTE, farm);
     farmingHooks.onObjectInteraction({ player, object: { getId: () => patch.id }, location: { x: patch.x, y: patch.y, z: patch.z }, clickType: 1 });
+    Patches.tick(); // the swing is on the click, its harvest the next farming tick, as captured
   };
   const note = core.ItemDefinition.forId(crop.produce).getNoteId();
 

@@ -7,11 +7,12 @@ import { Mobile } from "../../../entity/impl/Mobile";
 import type { Player } from "../../../entity/impl/player/Player";
 import type { NPC } from "../../../entity/impl/npc/NPC";
 import type { CombatSpell } from "../magic/CombatSpell";
-import { applyCombatEffectiveLevelModifiers, applyMagicDamageBonusModifiers, applyMeleeStrengthPercentModifiers, applyMagicHitModifiers, applyMeleeHitModifiers, applyRangedHitModifiers } from "../EquipmentEffects";
+import { applyCombatEffectiveLevelModifiers, applyMagicDamageBonusModifiers, applyMeleeStrengthPercentModifiers, applyMeleeStrengthBonusModifiers, applyMagicHitModifiers, applyMeleeHitModifiers, applyRangedHitModifiers } from "../EquipmentEffects";
 import { CombatSpecial } from "../CombatSpecial";
 import { SpecialAttackMaximumHitSource, WeaponSpecialTraits } from "../WeaponSpecialTraits";
 import { PluginManager } from "../../../../plugins/PluginManager";
 import { Spell } from "../magic/Spell";
+import { WeaponProfiles } from "../WeaponProfile";
 
 const getPlayerCombatSpecial = (player: Player): any | null => {
     const accessor = (player as any)?.getCombatSpecial;
@@ -26,8 +27,14 @@ const getPlayerCombatSpecial = (player: Player): any | null => {
 
 export class DamageFormulas {
     public static sourceHitBounds(entity: Mobile, attackType: CombatType, target?: Mobile): { minimum: number; maximum: number } {
-        if (attackType === CombatType.MAGIC && CombatSpecial.activeTraitsFor(entity)?.maximumHitSource === undefined) {
-            return DamageFormulas.getMagicHitBounds(entity, undefined, target);
+        const traits = attackType === CombatType.MAGIC ? CombatSpecial.activeTraitsFor(entity) : null;
+        if (attackType === CombatType.MAGIC && traits?.maximumHitSource === undefined) {
+            const bounds = DamageFormulas.getMagicHitBounds(entity, undefined, target);
+            // A magic special's damage traits scale the spell's max hit, as melee and ranged
+            // specials' do (Soul Rend's 1.3, Condemn's 1.5).
+            if (!traits || (traits.damageMultiplier === undefined && !traits.damageMultiplierStages?.length)) return bounds;
+            const maximum = DamageFormulas.applyDamageMultiplierTraits(bounds.maximum, traits, 1);
+            return { minimum: Math.min(bounds.minimum, maximum), maximum };
         }
         return { minimum: 0, maximum: DamageFormulas.sourceMaxHit(entity, attackType) };
     }
@@ -83,6 +90,8 @@ export class DamageFormulas {
         switch (traits?.maximumHitSource) {
             case SpecialAttackMaximumHitSource.PhysicalMelee:
                 return DamageFormulas.calculateMaxMeleeHit(entity);
+            case SpecialAttackMaximumHitSource.Ranged:
+                return DamageFormulas.calculateMaxRangedHit(entity);
             case SpecialAttackMaximumHitSource.Magic:
             case SpecialAttackMaximumHitSource.VisibleMagic:
                 return DamageFormulas.calculateMaxMagicHit(entity);
@@ -158,7 +167,7 @@ export class DamageFormulas {
         if (entity.isPlayer()) {
             let player = entity.getAsPlayer();
             const traits = CombatSpecial.activeTraitsFor(entity);
-            let strengthBonus = player.getBonusManager().getOtherBonus()[BonusManager.STRENGTH];
+            const strengthBonus = applyMeleeStrengthBonusModifiers(player, player.getBonusManager().getOtherBonus()[BonusManager.STRENGTH]);
             maxHit = DamageFormulas.scaleRatio(
                 DamageFormulas.effectiveStrengthLevel(player, traits?.strengthLevelMultiplier) * (strengthBonus + 64) + 320,
                 1,
@@ -288,10 +297,10 @@ export class DamageFormulas {
         return DamageFormulas.getMagicMaxhit(entity, spellOverride);
     }
 
-    private static effectiveRangedStrength(player: Player, visibleLevelMultiplier?: number): number {
+    private static effectiveRangedStrength(player: Player, visibleLevelMultiplier?: number, damageSkill = Skill.RANGED): number {
         const prayerAdjusted = DamageFormulas.scalePercent(
             DamageFormulas.applyVisibleLevelMultiplier(
-                player.getSkillManager().getCurrentLevel(Skill.RANGED),
+                player.getSkillManager().getCurrentLevel(damageSkill),
                 visibleLevelMultiplier
             ),
             DamageFormulas.rangedStrengthPrayerPercent(player)
@@ -327,9 +336,11 @@ export class DamageFormulas {
 
     private static maximumRangeHitDpsCalc(player: Player, includeSpecial?: boolean) {
         const traits = CombatSpecial.activeTraitsFor(player);
-        let strengthBonus = player.getBonusManager().getOtherBonus()[BonusManager.RANGED_STRENGTH];
+        const meleeStrength = WeaponProfiles.usesMeleeStrength(player);
+        const strengthType = meleeStrength ? BonusManager.STRENGTH : BonusManager.RANGED_STRENGTH;
+        let strengthBonus = player.getBonusManager().getOtherBonus()[strengthType];
         let maxHit = DamageFormulas.scaleRatio(
-            DamageFormulas.effectiveRangedStrength(player, traits?.strengthLevelMultiplier) * (strengthBonus + 64) + 320,
+            DamageFormulas.effectiveRangedStrength(player, traits?.strengthLevelMultiplier, meleeStrength ? Skill.STRENGTH : Skill.RANGED) * (strengthBonus + 64) + 320,
             1,
             640
         );

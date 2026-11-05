@@ -14,15 +14,21 @@ const OrnamentKits = require("../plugins/items/OrnamentKits.plugin");
 const GracefulOutfit = require("../plugins/items/GracefulOutfit.plugin");
 const MakeOverMage = require("../plugins/npcs/MakeOverMage.plugin");
 
-let itemOnItem = null;
+const itemOnItemHandlers = [];
+function itemOnItem(event) {
+  event.usedItemSlot ??= event.player.getInventory().getItems().indexOf(event.usedItem);
+  event.usedWithItemSlot ??= event.player.getInventory().getItems().indexOf(event.usedWithItem);
+  for (const handler of itemOnItemHandlers) if (!event.handled) handler(event);
+}
 let itemAction = null;
 OrnamentKits.register({
   core: {
     GameConstants: { DEFINITIONS_DIRECTORY: path.join(__dirname, "..", "data", "definitions") },
     ItemIdentifiers: ItemIds,
     Barrows,
+    Item: require("../dist/game/model/Item").Item,
   },
-  onItemOnItem: (handler) => { itemOnItem = handler; },
+  onItemOnItem: (handler) => { itemOnItemHandlers.push(handler); },
   onItemAction: (handler) => { itemAction = handler; },
   log() {},
 });
@@ -32,6 +38,10 @@ function item(id, meta = null) {
     id,
     meta,
     getId() { return this.id; },
+    getAmount: () => 1,
+    isPresetItem: () => false,
+    isUntradeable: () => false,
+    isUnbankable: () => false,
     setId(next) { this.id = next; },
     getMeta() { return this.meta; },
     setMeta(next) { this.meta = next; return this; },
@@ -48,12 +58,16 @@ function createPlayer(items) {
     getEquipmentRefreshes: () => equipmentRefreshes,
     getInventoryRefreshes: () => inventoryRefreshes,
     getInventory: () => ({
+      getItems: () => items,
+      deleteAtSlot: (slot) => { items[slot] = item(-1); },
       deleteNumber: (id, amount) => {
         const index = items.findIndex((entry) => entry.getId() === id);
         if (index >= 0) items.splice(index, 1);
         void amount;
       },
       refreshItems: () => { inventoryRefreshes++; },
+      getAddableAmount: () => 1,
+      add: (kit) => { items.push(item(kit.getId())); },
     }),
     sendMessage: (message) => messages.push(message),
   };
@@ -61,7 +75,15 @@ function createPlayer(items) {
 
 test("the ornament table maps every cosmetic variant to its base", () => {
   const kits = OrnamentKits._test.loadKits();
-  assert.equal(kits.length, 101);
+  assert.equal(kits.length, 240);
+  // The Tombs of Amascut's challenge rewards (cache: osmumtens_fang_ornament_kit,
+  // elidinis_ward_ornament_kit, avas_assembler_ornament_kit).
+  const toa = (kit) => kits.find((entry) => entry.kit === kit);
+  assert.deepEqual([toa(27248).base, toa(27248).result], [26219, 27246]);
+  assert.deepEqual([toa(27255).base, toa(27255).result], [27251, 27253]);
+  assert.deepEqual([toa(27372).base, toa(27372).result], [22109, 27374]);
+  const holyScythe = kits.find((entry) => entry.name === "Holy ornament kit" && entry.base === 22325);
+  assert.deepEqual([holyScythe.kit, holyScythe.result, holyScythe.refund], [25742, 25736, true]);
   const runeDefender = kits.find((entry) => entry.name === "Rune defender ornament kit");
   assert.deepEqual([runeDefender.kit, runeDefender.base, runeDefender.result], [23227, 8850, 23230]);
   const dragonHelm = kits.find((entry) => entry.name === "Dragon full helm ornament kit");
@@ -74,13 +96,25 @@ test("the ornament table maps every cosmetic variant to its base", () => {
 
 test("cosmetic variants exist and carry their base item's bonuses and requirements", () => {
   const rows = new Map(JSON.parse(fs.readFileSync(path.join(__dirname, "..", "data", "definitions", "item-gameplay.json"), "utf8")).map((row) => [row.id, row]));
+  const cacheBackedItems = new Set([
+    26858, 26860, 26862, 26864, 26866, 26868, 26870, 26872, 26874,
+    26912, 26914, 26984, 26986, 26988, 26990, 26992, 26994,
+    28688, 30437, 30439, 30441, 33338, 33340, 33439, 33445,
+  ]);
+  assert.equal(rows.get(25378)?.requirements?.[0], 60, "Wiki: Dragon axe (or) needs 60 Attack");
+  assert.equal(rows.get(21031)?.bonuses?.[10], 42, "Wiki: Infernal harpoon has +42 melee strength");
+  assert.equal(rows.get(25916)?.requirements?.[4], 70, "Wiki: turquoise Dragon hunter crossbow needs 70 Ranged");
+  assert.equal(rows.get(25918)?.requirements?.[4], 70, "Wiki: black Dragon hunter crossbow needs 70 Ranged");
+  assert.deepEqual(rows.get(26710)?.requirements, [0, 0, 60, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    "Wiki: Dragon warhammer (or) requires Strength 60 and no Attack level");
   for (const entry of OrnamentKits._test.loadKits()) {
     const base = rows.get(entry.base);
-    assert.ok(base, `base ${entry.base} for ${entry.name}`);
+    assert.ok(base || cacheBackedItems.has(entry.base), `base ${entry.base} for ${entry.name}`);
     for (const id of [entry.result, entry.worn].filter(Boolean)) {
       const variant = rows.get(id);
+      // These newer variants are supplied by the item cache without fallback rows here.
+      if (!variant && cacheBackedItems.has(id)) continue;
       assert.ok(variant, `variant ${id} for ${entry.name}`);
-      // Echo/other cache-backed variants carry no fallback row; the cache supplies their stats.
       if (variant.bonuses == null || variant.requirements == null) continue;
       assert.deepEqual(variant.bonuses, base.bonuses, `${entry.name} bonuses`);
       assert.deepEqual(variant.requirements, base.requirements, `${entry.name} requirements`);
@@ -98,13 +132,13 @@ test("using a kit consumes it, transforms the base item and refreshes containers
   assert.equal(event.handled, true);
   assert.equal(defender.getId(), 23230);
   assert.deepEqual(defender.getMeta(), { barrows: { remaining: 500 } }, "degradation meta survives");
-  assert.equal(items.length, 1, "the kit is consumed");
+  assert.equal(items.filter(item => item.getId() > 0).length, 1, "the kit is consumed");
   assert.match(player.messages[0], /apply the rune defender ornament kit/);
   assert.ok(player.getInventoryRefreshes() > 0);
   assert.ok(player.getEquipmentRefreshes() > 0);
 });
 
-test("reverting swaps the id back without refunding the kit", () => {
+test("reverting a Treasure Trail kit item swaps the id back and returns the kit (Wiki: Rune defender (t))", () => {
   const ornamented = item(23230, { barrows: { remaining: 500 } });
   const items = [ornamented];
   const player = createPlayer(items);
@@ -113,14 +147,35 @@ test("reverting swaps the id back without refunding the kit", () => {
   assert.equal(event.handled, true);
   assert.equal(ornamented.getId(), 8850);
   assert.deepEqual(ornamented.getMeta(), { barrows: { remaining: 500 } });
-  assert.equal(items.length, 1, "the kit is not returned");
+  assert.deepEqual(items.map((entry) => entry.getId()), [8850, 23227], "the defender and its kit");
   assert.match(player.messages[0], /revert the rune defender ornament kit/);
+});
+
+test("dismantling a Theatre weapon gives its kit back, and refuses untouched when the kit can't fit", () => {
+  const holy = item(ItemIds.HOLY_GHRAZI_RAPIER);
+  const added = [];
+  let space = 0;
+  const player = createPlayer([holy]);
+  const inventory = player.getInventory();
+  player.getInventory = () => ({ ...inventory, getAddableAmount: () => space, add: (kit) => added.push(kit.getId()) });
+  const full = { player, item: holy, itemId: holy.getId(), option: "Dismantle", handled: false };
+  itemAction(full);
+  assert.equal(full.handled, true);
+  assert.equal(holy.getId(), ItemIds.HOLY_GHRAZI_RAPIER, "a full inventory leaves the rapier as it was");
+  assert.deepEqual(added, [], "and no kit is lost");
+  assert.match(player.messages.at(-1), /inventory space/);
+  space = 1;
+  const roomy = { player, item: holy, itemId: holy.getId(), option: "Dismantle", handled: false };
+  itemAction(roomy);
+  assert.equal(holy.getId(), ItemIds.GHRAZI_RAPIER);
+  assert.deepEqual(added, [ItemIds.HOLY_ORNAMENT_KIT]);
 });
 
 test("a kit applies to a degraded Barrows piece, and Echo Ahrim's reverts to its stage", () => {
   const kit = item(30451);
   const degraded = item(4857, { barrows: { remaining: 750 } });
-  const player = createPlayer([kit, degraded]);
+  const held = [kit, degraded];
+  const player = createPlayer(held);
   const apply = { player, usedItem: kit, usedWithItem: degraded, usedItemId: 30451, usedWithItemId: 4857, handled: false };
   itemOnItem(apply);
   assert.equal(apply.handled, true);
@@ -130,6 +185,8 @@ test("a kit applies to a degraded Barrows piece, and Echo Ahrim's reverts to its
   const revert = { player, item: degraded, itemId: 30525, option: "Revert", handled: false };
   itemAction(revert);
   assert.equal(revert.handled, true);
+  assert.deepEqual(held.map((entry) => entry.getId()).filter((id) => id === 30451), [30451],
+    "the Echo ahrim's kit comes back (Wiki: reverted any time, returning the item and kit)");
   assert.equal(degraded.getId(), Barrows.stageItemId(4708, 1), "plain Ahrim's hood 75");
   assert.deepEqual(degraded.getMeta(), { barrows: { remaining: 750 } });
 });
@@ -185,4 +242,69 @@ test("the makeover editor refuses to open while busy, in combat or in a dialogue
   assert.equal(MakeOverMage._test.canOpenMakeover(player, { inCombat: () => true }), false);
   assert.equal(MakeOverMage._test.canOpenMakeover({ ...player, getDialogueManager: () => ({ isActive: () => true }) }, combat), false);
   assert.equal(MakeOverMage._test.canOpenMakeover({ ...player, getPacketSender: () => ({ hasInterruptibleInterface: () => true }) }, combat), false);
+});
+
+test("the makeover interface previews styles and colours, keeps them on Confirm and restores them on close", () => {
+  const Makeover = require("../plugins/npcs/Makeover.plugin");
+  const { Appearance } = require("../dist/game/model/Appearance");
+  const ids = { makeover: 516, "makeover:item_area": (516 << 16) | 7, "makeover:colours": (516 << 16) | 24,
+    "makeover:select": (516 << 16) | 27, "makeover:select_and_close": (516 << 16) | 28,
+    "makeover:burger_menu_frame": (516 << 16) | 31 };
+  // Torso styles 0-2 as dbrows 100-102 (type a kits 18, 24, 105), 29 torso colours.
+  const rows = new Map([[100, 18], [101, 24], [102, 105]]);
+  const enums = new Map([[5495, new Map([[0, 100], [1, 101], [2, 102]])], [789, new Map(Array.from({ length: 29 }, (_, i) => [i, i]))]]);
+  const CacheDefinitions = {
+    getInterfaceId: (name) => ids[name], getComponentId: (name) => ids[name],
+    getVarbitId: () => 4130, getVarpId: (name) => (name === "makeover_colour" ? 3789 : 3788), getSpotanimId: () => 2372,
+    getEnumValues: (id) => enums.get(id) ?? new Map(),
+    getDbRow: (id) => ({ tableId: 65, int: () => rows.get(id) }),
+    getDbColumn: (table, column) => (column === "player_kit_id_type_a" ? 1 : 2),
+  };
+  const buttons = new Map();
+  let closed = null;
+  const tasks = [];
+  Makeover.register({
+    core: { CacheDefinitions, Appearance, Equipment: { HEAD_SLOT: 0 }, Graphic: class {},
+      Task: class { constructor() {} stop() { this.stopped = true; } }, TaskManager: { submit: (task) => tasks.push(task) } },
+    onNpcInteraction() {},
+    onNpcDialogueCondition() {},
+    onInterfaceActionButton: (uid, handler) => buttons.set(uid, handler),
+    onCustomEvent: (name, handler) => { if (name === "interface:closed") closed = handler; },
+  });
+  const sent = [];
+  const messages = [];
+  const look = [0, 3, 18, 26, 34, 38, 42, 14, 2, 14, 5, 4, 0];
+  const player = {
+    getAppearance: () => ({ isMale: () => true, getLook: () => look, setLook: (slot, value) => { look[slot] = value; },
+      setLookArray: (values) => values.forEach((value, slot) => { look[slot] = value; }) }),
+    getEquipment: () => ({ getItems: () => [] }),
+    sendMessage: (message) => messages.push(message),
+    getPacketSender: () => ({
+      sendConfig: (id, value) => sent.push(["varp", id, value]),
+      sendVarbit: (id, value) => sent.push(["varbit", id, value]),
+      sendInterface: (id) => sent.push(["open", id]),
+      sendInterfaceFlagsRange: (uid, from, to) => sent.push(["events", uid & 0xffff, from, to]),
+      sendInterfaceRemoval: () => closed({ player, interfaceId: 516 }),
+    }),
+  };
+
+  assert.equal(Makeover.openMakeover(player, Makeover.TYPES.TOP), true);
+  assert.deepEqual(sent.slice(0, 4), [["varp", 3789, 14], ["varbit", 4130, 3], ["varp", 3788, 0], ["open", 516]]);
+  assert.deepEqual(sent.find((row) => row[0] === "events" && row[1] === 7), ["events", 7, 0, 15]);
+  assert.deepEqual(sent.find((row) => row[0] === "events" && row[1] === 24), ["events", 24, 0, 58]);
+
+  buttons.get(ids["makeover:item_area"])({ player, slot: 10 });
+  buttons.get(ids["makeover:colours"])({ player, slot: 6 });
+  assert.equal(look[Appearance.CHEST], 105);
+  assert.equal(look[Appearance.TORSO_COLOUR], 3);
+  player.getPacketSender().sendInterfaceRemoval();
+  assert.equal(look[Appearance.CHEST], 18, "closing without Confirm puts the old top back");
+  assert.equal(look[Appearance.TORSO_COLOUR], 14);
+  assert.equal(tasks[0].stopped, true);
+
+  Makeover.openMakeover(player, Makeover.TYPES.TOP);
+  buttons.get(ids["makeover:item_area"])({ player, slot: 5 });
+  buttons.get(ids["makeover:select_and_close"])({ player, slot: 9 });
+  assert.equal(look[Appearance.CHEST], 24, "Confirm keeps the new top");
+  assert.deepEqual(messages, []);
 });

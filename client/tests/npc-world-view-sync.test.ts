@@ -11,7 +11,8 @@ const worldViewBase = (id: number) =>
     id === 3000 ? { x: 9600, y: 9600 } : id === 3001 ? { x: 9728, y: 9728 } : undefined;
 const decode = (packet: Uint8Array, state: NpcUpdateDecoder) =>
     state.decode(packet.subarray(14), {
-        large: packet[7] === 1,
+        large: (packet[7] & 1) !== 0,
+        crossFloor: (packet[7] & 2) !== 0,
         loopCycle: 1,
         clientCycle: 1,
         localTileX: 9610,
@@ -66,3 +67,15 @@ assert.equal(third.spawns.find((spawn) => spawn.npcId === 20)?.worldViewId, -1,
 assert.equal(third.spawns.find((spawn) => spawn.npcId === 20)?.tileX, 3204);
 
 console.log("npc world view sync: ok");
+
+// A nearby NPC on another floor preserves its actual floor and can change floors.
+const floorState = createNpcSyncState();
+const floorDecoder = new NpcUpdateDecoder();
+const floorViewer = { x: 3200, y: 3200, level: 1 };
+const floorNpc = { ...base, index: 40, typeId: 100, x: 3204, y: 3206, level: 0 };
+const floorPacket = () => encodeNpcSync(1, floorViewer, [floorNpc] as any, floorState, undefined, undefined, true);
+assert.equal(decode(floorPacket(), floorDecoder).spawns[0].level, 0);
+floorNpc.level = 2;
+assert.equal(decode(floorPacket(), floorDecoder).spawns[0].level, 2);
+const legacyState = createNpcSyncState();
+assert.equal(decode(encodeNpcSync(1, floorViewer, [floorNpc] as any, legacyState), new NpcUpdateDecoder()).spawns.length, 0);

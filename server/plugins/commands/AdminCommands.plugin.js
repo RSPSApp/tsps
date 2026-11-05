@@ -45,9 +45,6 @@ const ATTACK_RANGE_DEBUG_GRAPHIC = new Graphic(332, 0);
 const MAX_NPC_COMMAND_SPAWNS = 20;
 const INFINITE_HEALTH_ATTRIBUTE = "admin:infinite-health";
 const INFINITE_RUN_ENERGY_ATTRIBUTE = "admin:infinite-run-energy";
-const PRESERVE_UNLOCKED_ATTRIBUTE = "prayer:preserve-unlocked";
-const RIGOUR_UNLOCKED_ATTRIBUTE = "prayer:rigour-unlocked";
-const AUGURY_UNLOCKED_ATTRIBUTE = "prayer:augury-unlocked";
 const RUNE_IDS = [554, 555, 556, 557, 558, 559, 560, 561, 562, 563, 564, 565, 566, 9075, 21880, 28929];
 const FULL_RUN_ENERGY = 100;
 // Short forms ::setlevel takes that aren't the start of the skill's name (att, str, pray are).
@@ -479,15 +476,15 @@ function giveItemCommand(core, { player, parts }) {
   }
   const given = inventory.getAmount(id) - before;
   if (given <= 0) {
-    player.sendMessage(`${target.getUsername()}'s inventory is full.`);
+    player.sendMessage(`${target.getDisplayName()}'s inventory is full.`);
     return true;
   }
   const gift = `${given} x ${ItemDefinition.forId(id)?.getName?.() ?? "item"}`;
   if (target !== player) {
-    target.sendMessage(`${player.getUsername()} gave you ${gift}.`);
+    target.sendMessage(`${player.getDisplayName()} gave you ${gift}.`);
   }
   const fit = given < amount ? `; only ${given} of ${amount} fit` : "";
-  player.sendMessage(`Gave ${target.getUsername()} ${gift} (${id})${fit}.`);
+  player.sendMessage(`Gave ${target.getDisplayName()} ${gift} (${id})${fit}.`);
   return true;
 }
 
@@ -531,9 +528,9 @@ function setLevelCommand({ player, parts }) {
   WeaponInterfaceManager.assign(target);
   target.getUpdateFlag().flag(Flag.APPEARANCE);
   if (target !== player) {
-    target.sendMessage(`${player.getUsername()} set your ${skill.getName()} level to ${level}.`);
+    target.sendMessage(`${player.getDisplayName()} set your ${skill.getName()} level to ${level}.`);
   }
-  player.sendMessage(`Set ${target.getUsername()}'s ${skill.getName()} level to ${level}.`);
+  player.sendMessage(`Set ${target.getDisplayName()}'s ${skill.getName()} level to ${level}.`);
   return true;
 }
 
@@ -889,7 +886,7 @@ module.exports = {
       cancelGlowCycle(target);
       applyGlowState(target, glowPreset, glowIntensity);
 
-      const targetLabel = target === player ? "You" : target.getUsername();
+      const targetLabel = target === player ? "You" : target.getDisplayName();
       const presetLabel =
         Object.keys(GLOW_PRESETS).find((key) => GLOW_PRESETS[key] === glowPreset && key !== "none") ??
         String(glowPreset);
@@ -1539,17 +1536,9 @@ module.exports = {
     }, PlayerRights.ADMINISTRATOR, "Clear your inventory");
 
     api.registerCommand("unlockprayers", ({ player, parts }) => {
-      const type = parseIntArg(parts[1]);
-      if (type === 0) {
-        player.setAttribute(PRESERVE_UNLOCKED_ATTRIBUTE, true);
-      } else if (type === 1) {
-        player.setAttribute(RIGOUR_UNLOCKED_ATTRIBUTE, true);
-      } else if (type === 2) {
-        player.setAttribute(AUGURY_UNLOCKED_ATTRIBUTE, true);
-      }
-      player.getPacketSender().sendConfig(709, player.getAttribute(PRESERVE_UNLOCKED_ATTRIBUTE) === true ? 1 : 0);
-      player.getPacketSender().sendConfig(711, player.getAttribute(RIGOUR_UNLOCKED_ATTRIBUTE) === true ? 1 : 0);
-      player.getPacketSender().sendConfig(713, player.getAttribute(AUGURY_UNLOCKED_ATTRIBUTE) === true ? 1 : 0);
+      const { PrayerData } = api.core;
+      const prayer = [PrayerData.PRESERVE, PrayerData.RIGOUR, PrayerData.AUGURY][parseIntArg(parts[1])];
+      api.emitCustomEvent("prayer:unlock", { player, prayer });
       return true;
     }, PlayerRights.OWNER, "Unlock prayer");
 

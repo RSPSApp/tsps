@@ -96,7 +96,7 @@ function fakePlayer({ mining = 99 } = {}) {
     location: new Location(3816, 3808, 0), area: null, messages: [], spam: [], sounds: [], chats: [], boxes: [], anims: [], hits: [],
     varbits: new Map(), subs: [], xp: {}, songs: [], said: [], blocked: false, hp: 99,
     inventory: container(),
-    getIndex: () => id, getUsername: () => `Tester${id}`,
+    getIndex: () => id, getUsername: () => `Tester${id}`, getDisplayName: () => `Tester${id}`,
     isPlayer: () => true, isNpc: () => false, getAsPlayer: () => p, isRegistered: () => true,
     getLocation: () => p.location, moveTo(l) { p.location = l; }, setLocation(l) { p.location = l; },
     getArea: () => p.area, setArea(a) { p.area = a; },
@@ -417,6 +417,30 @@ test('the exit ladder: the HUD reset, Pete\'s line, out at (3816,3808), Mining X
   assert.deepEqual(lines(p.boxes.at(-1)), ["I'll give you a bit of minin' trainin' and I'll remember the contribution you've made."]);
   assert.equal(varbit(p, 'points'), 0);
   assert.equal(p.inventory.getAmount(21539), 0, 'the vessel stays behind');
+});
+
+test('shop points stop at the Wiki cap of 2^21 - 1 (2,097,151); that the excess is lost and the Mining XP still paid on it are inferred, the Wiki says neither', () => {
+  // Wiki (Volcanic Mine; Petrified Pete's Ore Shop): "The maximum amount of points that the player can have is 2^21-1."
+  const p = enter();
+  const game = Game.gameOf(p);
+  ticks(51);
+  p.setAttribute(Common.data.attributes.shopPoints, 2097000);
+  game.addPoints(p, 458);
+  click(p, Common.data.locs.exit, 1);
+  ticks(1);
+  assert.equal(p.getAttribute(Common.data.attributes.shopPoints), 2097151);
+  assert.equal(xpOf(p), Math.round((458 * 99) / 24.2), 'inferred: the reward XP is paid on every point earned, lost ones included');
+});
+
+test('shop points at the cap stay at the cap', () => {
+  const p = enter();
+  const game = Game.gameOf(p);
+  ticks(51);
+  p.setAttribute(Common.data.attributes.shopPoints, 2097151);
+  game.addPoints(p, 50);
+  click(p, Common.data.locs.exit, 1);
+  ticks(1);
+  assert.equal(p.getAttribute(Common.data.attributes.shopPoints), 2097151);
 });
 
 test('logging out leaves the game at the entrance with nothing', () => {

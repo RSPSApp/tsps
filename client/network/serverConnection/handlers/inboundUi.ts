@@ -1,3 +1,5 @@
+import { getCustomDefinitionKey } from "../../../custom/definitions/CustomDefinitionStore";
+import { applyClanChannelDelta, applyClanSettingsDelta } from "../../../common/social/Clans";
 import { ClientState } from "../../../game/ClientState";
 import {
     VARP_AREA_SOUNDS_VOLUME,
@@ -15,7 +17,7 @@ import { handleShopPayload } from "../domain/shop";
 import { handleSmithingPayload } from "../domain/smithing";
 import { emitPlayerSync, emitSkills } from "../domain/skills";
 import { handleTradePayload } from "../domain/trade";
-import { markChatTransmit, markItemDefinitionsChanged } from "../../../game/TransmitCycles";
+import { markChatTransmit, markItemDefinitionsChanged, markMiscTransmit } from "../../../game/TransmitCycles";
 import { CustomItemRegistry } from "../../../custom/items/CustomItemRegistry";
 import { getDefinitionArchiveKey } from "../../../custom/archives/ArchivedDefinitionStore";
 import { getClientCycle } from "../timing";
@@ -257,6 +259,23 @@ export function handleInboundUi(msg: any): boolean {
         }
         return true;
     }
+    if (
+        msg.type === "clan_settings" ||
+        msg.type === "clan_settings_delta" ||
+        msg.type === "clan_channel" ||
+        msg.type === "clan_channel_delta" ||
+        msg.type === "clan_var"
+    ) {
+        applyClanMessage(msg);
+        for (const cb of state.clanListeners) {
+            try {
+                cb(state.clans);
+            } catch (err) {
+                console.warn("clan listener error", err);
+            }
+        }
+        return true;
+    }
     if (msg.type === "gamemode_data") {
         const datasets = msg.payload?.datasets;
         if (datasets?.length === 1 && datasets[0].key === "worldMapPlayers") {
@@ -269,23 +288,25 @@ export function handleInboundUi(msg: any): boolean {
             const { loadFromPayload } = require("../../../common/gamemode/GamemodeContentStore");
             const itemRevision = CustomItemRegistry.revision;
             const archiveKey = getDefinitionArchiveKey();
+            const definitionsKey = getCustomDefinitionKey();
             loadFromPayload(msg.payload);
             const g: any = (typeof window !== "undefined" ? window : globalThis) as any;
             const mv = g?.__osrsClient;
             if (msg.payload?.datasets?.some((dataset: any) =>
                 dataset.key === "customItems" || dataset.key === "customModels" ||
-                dataset.key === "definitionArchives")) {
+                (dataset.key === "definitionArchives" || dataset.key === "customDefinitions"))) {
                 mv?.objTypeLoader?.clearCache();
                 mv?.objModelLoader?.clearCache();
-                if (datasets?.some((dataset: any) => dataset.key === "definitionArchives")) {
+                if (datasets?.some((dataset: any) => (dataset.key === "definitionArchives" || dataset.key === "customDefinitions"))) {
                     mv?.npcTypeLoader?.clearCache();
                     mv?.locTypeLoader?.clearCache();
+                    mv?.seqTypeLoader?.clearCache();
                     mv?.renderer?.invalidateDefinitionCaches();
                 }
                 mv?.workerPool?.runAll((worker: any) => worker.setCustomContent(msg.payload))
                     .catch((error: unknown) => console.error("Custom worker content failed", error));
             }
-            if (CustomItemRegistry.revision !== itemRevision || getDefinitionArchiveKey() !== archiveKey) {
+            if (CustomItemRegistry.revision !== itemRevision || getDefinitionArchiveKey() !== archiveKey || getCustomDefinitionKey() !== definitionsKey) {
                 markItemDefinitionsChanged();
             }
             if (mv && typeof mv.refreshGamemodeWorldLocs === "function") {
@@ -307,14 +328,33 @@ export function handleInboundUi(msg: any): boolean {
         const raw = Number(payload?.remainingCentis);
         const remainingCentis = Number.isFinite(raw) ? Math.max(0, Math.floor(raw)) : 0;
         state.lastSystemUpdate = { remainingCentis, receivedAtMs: Date.now() };
-        for (const cb of state.systemUpdateListeners) {
-            try {
-                cb({ remainingCentis });
-            } catch (err) {
-                console.warn("system update listener error", err);
-            }
-        }
+        // Start the native chatbox countdown; script 664 keeps it refreshed while active.
+        markMiscTransmit();
         return true;
     }
     return false;
+}
+
+function applyClanMessage(msg: any): void {
+    if (msg.type === "clan_var") {
+        state.clans.vars.set(msg.payload.id, msg.payload.value);
+        return;
+    }
+    const { clanType } = msg.payload;
+    const { settings, channels } = state.clans;
+    if (msg.type === "clan_settings") {
+        if (msg.payload.settings) settings.set(clanType, msg.payload.settings);
+        else settings.delete(clanType);
+        // %varclan is the player's own clan's: leaving takes it with them.
+        if (clanType === 0 && !msg.payload.settings) state.clans.vars.clear();
+    } else if (msg.type === "clan_settings_delta") {
+        const held = settings.get(clanType);
+        if (held) settings.set(clanType, applyClanSettingsDelta(held, msg.payload.updates));
+    } else if (msg.type === "clan_channel") {
+        if (msg.payload.channel) channels.set(clanType, msg.payload.channel);
+        else channels.delete(clanType);
+    } else {
+        const channel = applyClanChannelDelta(channels.get(clanType), msg.payload);
+        if (channel) channels.set(clanType, channel);
+    }
 }

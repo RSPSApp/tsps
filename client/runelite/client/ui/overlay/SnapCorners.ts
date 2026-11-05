@@ -23,6 +23,7 @@ export type HudFrame = {
     scaleY: number;
     /** Not the fixed-size layout. */
     resized: boolean;
+    combatStatus?: { right: number; top: number; rowHeight: number; mobile: boolean; scaleX: number; scaleY: number };
 };
 
 export const OriginX = { LEFT: "LEFT", CENTER: "CENTER", RIGHT: "RIGHT" } as const;
@@ -87,6 +88,12 @@ const CORNERS: CornerDef[] = [
         position: OverlayPosition.CANVAS_TOP_RIGHT,
         mode: ALIGNMENT_RIGHT | EXPAND_DOWN,
         point: ({ canvas }) => [canvas.w, 0],
+    },
+    {
+        position: OverlayPosition.BELOW_MINIMAP,
+        mode: ALIGNMENT_RIGHT | EXPAND_DOWN,
+        point: ({ combatStatus, hud, scaleX, scaleY }) =>
+            [combatStatus?.right ?? hud.x + hud.w - BORDER * scaleX, combatStatus?.top ?? (BORDER + MOUSEOVERTEXT_OFFSET) * scaleY],
     },
 ];
 

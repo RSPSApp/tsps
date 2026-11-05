@@ -13,6 +13,9 @@
  */
 const KINDS = /^(.*\bladder( top)?|stairs?|.*\bstaircase|steps|cellar stairs|trap ?door|manhole|rope|climbing rope|anchor rope|.*\bcave\b.*|cave opening|hole|.*\btunnel|.*\bcrevice|cracked wall|grotto|sewer entrance|smokey well|old ruin entrance|entrance|entry|crypt|.*\bentrance|.*\bdoors?|.*\bdoorway|passageway|.*\bgate)$/i;
 
+/** Sounds that are a fight's, not the loc's (ids, from loc-teleport-sync.json). */
+const IGNORED_SOUNDS = new Set(Object.keys(require("../plugins/world/data/loc-teleport-sync.json").ignoreSounds ?? {}).map(Number));
+
 /** Gameval names of content that only exists on Leagues worlds. */
 const LEAGUES_ONLY = /^league/;
 
@@ -164,7 +167,10 @@ function toEntry(entry, { display, option, sequenceId, gate, asked }) {
   }
   // Medians of an even number of attempts fall between ticks; ticks are whole.
   out.tick = Math.round(entry.teleport_tick);
-  if (entry.sounds?.length) out.sound = entry.sounds[0][0];
+  // The first sound that is not a fight's (loc-teleport-sync.json ignoreSounds): with a monster or a player fighting
+  // nearby, the first thing a capture hears around the climb is the fight.
+  const sound = (entry.sounds ?? []).map(([id]) => id).find((id) => !IGNORED_SOUNDS.has(id));
+  if (sound !== undefined) out.sound = sound;
   if (entry.fade) out.fade = true;
   if (gate?.requires) out.requires = gate.requires;
   if (gate?.mesbox) out.mesbox = gate.mesbox;

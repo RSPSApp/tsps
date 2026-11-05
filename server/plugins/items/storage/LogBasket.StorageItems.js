@@ -1,8 +1,9 @@
 /**
  * Log basket and forestry basket (https://oldschool.runescape.wiki/w/Log_basket;
  * docs/storage-items.md): 28 logs of any kind between them, carried or worn. Open, it takes the
- * logs a player chops. The forestry basket's Forestry kit sub-options and Dismantle are left
- * unhandled: tsps has no Forestry kit.
+ * logs a player chops. The forestry basket's Forestry kit sub-options are the kit's
+ * (ForestryKit.StorageItems); Dismantle takes it apart into its log basket, Forestry kit and
+ * sturdy harness (Wiki: Forestry basket), each keeping its contents.
  */
 const Storage = require("./Common.StorageItems");
 
@@ -19,12 +20,21 @@ const MESSAGE = {
   EMPTIED_TO_BANK: "You empty your basket into the bank.",
   /** Ours (not captured). */
   NO_LOGS: "You have no logs to put in the basket.",
+  /** Ours (not captured). */
+  NO_ROOM_TO_DISMANTLE: "You need two free inventory spaces to dismantle the basket.",
 };
 /** Sub-option ids, in the cache's order. */
 const BASKET_CHECK_EMPTY = 1;
 const FORESTRY_KIT = 1;
 const FORESTRY_EMPTY = 2;
 const FORESTRY_OPEN_CLOSE = 1;
+const FORESTRY_DISMANTLE = 2;
+/** What a forestry basket comes apart into, by gameval: the basket (as open or closed as it was), the kit and the harness. */
+const DISMANTLED = {
+  forestry_basket_closed: "log_basket_closed",
+  forestry_basket_open: "log_basket_open",
+};
+const DISMANTLE_PARTS = ["forestry_kit", "forestry_sturdy_harness"];
 
 let logs = null;
 
@@ -113,10 +123,25 @@ function forestryView(event) {
   else check(event);
 }
 
-/** Forestry basket Configure: Open/close; Dismantle needs the Forestry kit. */
+/** Forestry basket Configure: Open/close, or Dismantle. */
 function forestryConfigure(event) {
+  if (event.subOpId === FORESTRY_DISMANTLE) return dismantle(event);
   if (event.subOpId !== FORESTRY_OPEN_CLOSE) return false;
   toggle(event);
+}
+
+/** The basket becomes its log basket in place; the kit and harness need two free slots. */
+function dismantle({ player, item }) {
+  const { CacheDefinitions, Item } = Storage.core;
+  const into = Object.entries(DISMANTLED).find(([basket]) => CacheDefinitions.getObjId(basket) === item.getId())?.[1];
+  if (!into || !player.getInventory().getValidItems().includes(item)) return;
+  if (player.getInventory().getFreeSlots() < DISMANTLE_PARTS.length) {
+    player.sendMessage(MESSAGE.NO_ROOM_TO_DISMANTLE);
+    return;
+  }
+  item.setId(CacheDefinitions.getObjId(into));
+  for (const part of DISMANTLE_PARTS) player.getInventory().add(new Item(CacheDefinitions.getObjId(part), 1), false);
+  player.getInventory().refreshItems();
 }
 
 function useOnBasket(event) {

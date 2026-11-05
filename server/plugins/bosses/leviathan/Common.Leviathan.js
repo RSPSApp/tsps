@@ -103,8 +103,11 @@ function projectile(fight, style, flight, startup = true) {
   const { Projectile } = core;
   const mouth = mouthFor(fight.hazards.playerTile());
   fight.boss.performGraphic(graphic(`${style}Launch${startup ? 'Start' : ''}`));
+  // Recorded launch 30, landing on the impact tick. A one-tick flight can't land at 30 after a
+  // 30-cycle launch (the client drew it on the mouth), so it launches at once instead (#1862).
+  const launch = flight > 1 ? 30 : 0;
   new Projectile(fight.session.tile(mouth), Projectile.centreOf(fight.player), fight.player,
-    ids.gfx[style], 30, flight * 30, 137.5, 25, fight.session.area).withAngle(30).withProgress(124).sendProjectile();
+    ids.gfx[style], launch, flight * 30, 137.5, 25, fight.session.area).withAngle(30).withProgress(124).sendProjectile();
 }
 function tileProjectile(fight, target, flight, name) {
   // Ordinary footage distinguishes traveling rocks and cyan side orbs from

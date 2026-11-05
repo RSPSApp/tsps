@@ -188,7 +188,7 @@ function select(player, entry) {
   player.setAttribute(SELECTED_ATTRIBUTE, entry.key);
 }
 
-function openTeleports({ player, parts }) {
+function openTeleports({ player, parts = [] }) {
   if (parts[1]?.toLowerCase() === "last") {
     const entry = Destinations.byKey(recent(player)[0]);
     if (entry) teleport(player, entry);
@@ -243,7 +243,8 @@ module.exports = {
     api.persistAttribute(FAVOURITES_ATTRIBUTE, []);
     api.persistAttribute(RECENT_ATTRIBUTE, []);
     api.persistAttribute(SKIP_WILDERNESS_WARNING_ATTRIBUTE, false);
-    api.registerCommand("teleports", openTeleports, undefined, "Browse teleport destinations (optional search text, or 'last')");
+    api.registerCommand("teleports", openTeleports, undefined, "Browse teleport destinations (Ctrl+;, optional search text, or 'last')");
+    api.onCustomEvent("teleports:open", openTeleports);
     api.onInterfaceActionButton(TAB_UIDS, clickTab);
     api.onInterfaceActionButton(ROW_UIDS, clickRow);
     api.onInterfaceActionButton([uid(COMPONENT.TELEPORT_BUTTON), uid(COMPONENT.TELEPORT_LABEL)], clickTeleportButton);

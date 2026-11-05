@@ -1,6 +1,6 @@
 // TODO: ported from xrsps-typescript; untested.
 module.exports = function registerGraniteMaulSpecialAttack(api) {
-  const { Animation, CombatSpecial, Equipment, Graphic, GraphicHeight, ItemIdentifiers, MeleeCombatMethod, Sounds } = api.core;
+  const { Animation, CombatSpecial, Equipment, Graphic, GraphicHeight, ItemIdentifiers, MeleeCombatMethod, Sound, Sounds } = api.core;
 
   const STANDARD_DRAIN = 60;
   const ORNATE_DRAIN = 50;
@@ -21,7 +21,7 @@ module.exports = function registerGraniteMaulSpecialAttack(api) {
       drain(character);
       character.performAnimation(ANIMATION);
       character.performGraphic(GRAPHIC);
-      Sounds.sendSound(character, character.getAttackSound());
+      Sounds.sendSound(character, Sound.GRANITE_MAUL_SPECIAL);
     }
   }
 
@@ -47,6 +47,11 @@ module.exports = function registerGraniteMaulSpecialAttack(api) {
       damageMultiplier: 1,
       queuedAttack: true,
       bypassAttackDelay: true,
+      // Wiki: Quick Smash "does not give the player any attack cooldown", so the next
+      // attack may land on the following tick. One tick is the floor: it still cannot
+      // attack twice in the same cycle. A cooldown already running (an AGS hit just
+      // before) is kept, not shortened (CombatSpecial.activate extends it).
+      attackSpeedTicks: 1,
     },
     drainAmountByItemId: {
       [ItemIdentifiers.GRANITE_MAUL_5]: ORNATE_DRAIN,

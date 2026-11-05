@@ -265,7 +265,14 @@ test('MEP1 owner start hook checks all prerequisites and exposes its public requ
   assert.equal(lowRanged.quest.getStage(lowRanged.player), 0);
 });
 
-test('mandatory handler route reaches completion and transmits varp 517 above the cache threshold', () => {
+// Wire values (88f915abd, docs/quests/native-quest-state-a.md): varp 517 carries Quest Helper's native
+// mourning_quest phases, not the saved stage. nativeProgress maps saved 0..14 to
+// 0,2,3,3,3,4,5,5,5,6,6,6,7,8,9, so the native list stays in progress (8) until the real reward call at
+// saved 14, which sends the native complete value 9. The test used to expect the saved 14.
+const NATIVE_COMPLETE = 9;
+const NATIVE_BEFORE_REWARD = 8;
+
+test('mandatory handler route reaches completion and transmits varp 517 as the native phase, complete only at the reward', () => {
   const h = makeHarness();
   h.action('qEuEsp', N.ELUNED);
   h.give(I.BLOODY_MOURNER_TOP, 1);
@@ -374,11 +381,12 @@ test('mandatory handler route reaches completion and transmits varp 517 above th
   assert.equal(h.quest.getStage(h.player), 13);
   assert.equal(transcripts.findLast((entry) => entry.player === h.player)?.variant, 'the-mourners-plan');
 
+  assert.equal(h.configs.get(517), NATIVE_BEFORE_REWARD, 'saved 13 is still in progress natively');
   h.talk('Arianwyn', N.ARIANWYN);
   const beforeXp = h.xp.length;
   h.action('GT5Pn9', N.ARIANWYN);
   assert.equal(h.quest.getStage(h.player), 14);
-  assert.equal(h.configs.get(517), 14);
+  assert.equal(h.configs.get(517), NATIVE_COMPLETE);
   assert.equal(h.quest.isComplete(h.player), true);
   assert.deepEqual(h.xp.slice(beforeXp).sort(), [[core.Skill.HITPOINTS.getIndex(), 25000], [core.Skill.THIEVING.getIndex(), 40000]].sort());
   assert.equal(h.jingles.length, 1);
@@ -390,11 +398,11 @@ test('mandatory handler route reaches completion and transmits varp 517 above th
   assert.equal(h.xp.length, afterCompletion);
   assert.equal(h.attributes.get('quest.points'), points);
 
-  // Login replay sends the same canonical completion wire value.
+  // Login replay sends the same native completion wire value.
   h.configs.clear();
   h.login();
   runtime.sendQuestVarps({ player: h.player });
-  assert.equal(h.configs.get(517), 14);
+  assert.equal(h.configs.get(517), NATIVE_COMPLETE);
 });
 
 test('lost device and key recovery actions restore the mandatory HQ items', () => {

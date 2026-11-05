@@ -11,6 +11,13 @@
 const { PVP_LOADOUT_DEFINITIONS, isLoadoutAvailable } = require("./PvpLoadoutRegistry.PlayerBots");
 const { getPvpProfile } = require("./PvpProfileRegistry.PlayerBots");
 
+let SkillManager;
+
+/** Share the player calculation through api.core before bot loadouts are selected. */
+function initPvpTierLoadouts(api) {
+  SkillManager = api.core.SkillManager;
+}
+
 const TIER_OPTIONS = Object.freeze([
   ["Novice", "novice"],
   ["Intermediate", "intermediate"],
@@ -21,6 +28,7 @@ const TIER_PROFILE_IDS = Object.freeze({
   intermediate: "standard",
   veteran: "veteran",
 });
+// Bands describe actual combat levels, including any profile HP adjustment.
 const TIER_BANDS = Object.freeze({
   novice: Object.freeze({ min: 3, max: 80 }),
   intermediate: Object.freeze({ min: 81, max: 100 }),
@@ -29,14 +37,7 @@ const TIER_BANDS = Object.freeze({
 
 /** Archetype stat lines are [attack, defence, strength, hp, ranged, prayer, magic]. */
 function archetypeCombatLevel(stats) {
-  const [attack, defence, strength, hp, ranged, prayer, magic] = stats;
-  const base = Math.floor((defence + hp + Math.floor(prayer / 2)) * 0.2535) + 1;
-  const offence = Math.max(
-    (attack + strength) * 0.325,
-    Math.floor(ranged * 1.5) * 0.325,
-    Math.floor(magic * 1.5) * 0.325
-  );
-  return Math.min(126, Math.max(3, Math.floor(base + offence)));
+  return SkillManager.calculateCombatLevel(stats);
 }
 
 /**
@@ -127,6 +128,7 @@ function pickTierChoice(tier, { index = 0, style = null, build = null, band = TI
 }
 
 module.exports = {
+  initPvpTierLoadouts,
   TIER_OPTIONS,
   TIER_PROFILE_IDS,
   TIER_BANDS,

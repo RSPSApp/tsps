@@ -17,9 +17,9 @@
 //   step    frameStep - how the client advances the frames (-1 = follow the frame lengths).
 //   priority forcedPriority (attack animation is normally 5).
 //   standing SeqType.priority (opcode 10): -1 unset, which the client derives to 0 (steps are
-//           withheld while the animation plays) unless the seq carries masks - that is what
-//           makes an attack an animation stall. 1 means it drops the seq on a step, as skilling
-//           loops do. See the Wiki's Animation stall.
+//           withheld while the animation plays) unless the seq carries masks - that is the
+//           client half of a partial stall; the server keeps walking the true tile. 1 means it
+//           drops the seq on a step, as skilling loops do. See the Wiki's Animation stall.
 //   movement SeqType.precedenceAnimating (opcode 9): the same check when the actor was already
 //           moving when the animation started.
 //   masks    Opcode 3 / 17 entries, which flip the client's derived priority from 0 to 2.

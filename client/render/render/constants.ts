@@ -247,7 +247,7 @@ export function getMaxAnisotropy(mode: TextureFilterMode): number {
     }
 }
 
-export type BrowserQualityProfileKey = "desktop" | "mobile-touch" | "ios-safari";
+export type BrowserQualityProfileKey = "desktop" | "mobile-touch" | "ios-safari" | "low-end";
 
 export interface BrowserQualityProfile {
     key: BrowserQualityProfileKey;
@@ -311,6 +311,15 @@ export const IOS_SAFARI_QUALITY_PROFILE: BrowserQualityProfile = {
     overheadPrayerMaxEntries: 24,
 };
 
+export const LOW_END_QUALITY_PROFILE: BrowserQualityProfile = {
+    ...MOBILE_TOUCH_QUALITY_PROFILE,
+    key: "low-end",
+    label: "Low-end Device",
+    defaultSceneScale: 0.5,
+    renderDistanceCap: 12,
+    lodThresholdCap: 6,
+};
+
 function optimizeAssumingFlatsHaveSameFirstAndLastData(gl: WebGL2RenderingContext) {
     const epv = gl.getExtension("WEBGL_provoking_vertex");
     if (epv) {
@@ -369,6 +378,10 @@ export const RENDER_CONSTANTS = {
     LOC_RELOAD_FLUSH_DELAY_MS: 25,
     MOBILE_GAMEPLAY_UI_SCALE: 1.25,
     MOBILE_GAMEPLAY_UI_PHONE_EDGE: 390,
+    /** Narrowest portrait mobile gameframe, in layout px (fits the 519px chatbox). */
+    MOBILE_PORTRAIT_MIN_LAYOUT_WIDTH: 523,
+    /** Shortest portrait mobile gameframe: chat (165) + main modal (334) + bottom HUD (~300). */
+    MOBILE_PORTRAIT_MIN_LAYOUT_HEIGHT: 800,
     PLAYER_FOOTPRINT_RADIUS: (0.4 * 128) | 0,
     /**
      * Base hitsplat sprite/text scale before UI/render scale multiply: 1:1 on players and NPCs

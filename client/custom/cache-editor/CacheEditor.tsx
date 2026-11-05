@@ -6,7 +6,7 @@ import { LocModelType } from "../../rs/config/loctype/LocModelType";
 import {
     type AssetKind, type AssetListing, type AssetRow,
     type CacheDefinition, type CacheField, type CacheKind, type CacheLink,
-    assetFor, assetsPath, authoringBase, draftProblems, fieldsPath, inspectPath, kindsPath, labelRef, linksByField,
+    formatFieldValue, parseFieldValue, initialOverrides, assetFor, assetsPath, authoringBase, draftProblems, fieldsPath, inspectPath, kindsPath, labelRef, linksByField,
 } from "./CacheEditorModel";
 
 /**
@@ -49,22 +49,6 @@ const styles = {
 
 const label = (value: unknown) => (typeof value === "object" && value !== null ? JSON.stringify(value) : String(value));
 
-/** A value from a cell edit, as the field's type expects. */
-function parseValue(field: CacheField | null, raw: string): unknown {
-    const text = raw.trim();
-    if (!field) return text;
-    if (field.type === "boolean") return text === "true";
-    if (field.type === "int[]" || field.type === "number[]") {
-        if (!text) return [];
-        return text.split(",").map((part) => Number(part.trim())).filter((entry) => Number.isFinite(entry));
-    }
-    if (field.type === "int" || field.type === "number") {
-        const parsed = Number(text);
-        return Number.isFinite(parsed) ? Math.trunc(parsed) : raw;
-    }
-    return raw;
-}
-
 export function CacheEditor({ client }: { client?: OsrsClient }) {
     const [kinds, setKinds] = useState<CacheKind[]>([]);
     // Two axes: definitions (config archives) and assets (cache indices: models, sprites, textures).
@@ -95,7 +79,7 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
     const dragRef = useRef<{ x: number; y: number; yaw: number; pitch: number } | null>(null);
 
     // New element flow, and the element being edited.
-    const [creating, setCreating] = useState<{ kind: string; name: string; id: number; base: CacheDefinition | null } | null>(null);
+    const [creating, setCreating] = useState<{ kind: string; name: string; id: number; revision?: string; base: CacheDefinition | null } | null>(null);
     const [editing, setEditing] = useState<Editing | null>(null);
     const [editableFields, setEditableFields] = useState<CacheField[]>([]);
     const [cell, setCell] = useState<{ field: string; text: string } | null>(null);
@@ -186,6 +170,7 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
 
     /** Upload lives here, with the assets, because an asset is what an upload creates. */
     const upload = useCallback(async (file: File) => {
+        if (assetKind !== "model") { setError("Only model uploads are supported; sprites and textures can be browsed"); return; }
         if (!authoring) { setError("Uploading needs the local authoring service; start the server with CACHE_EDITOR_ENABLED=1"); return; }
         const data = await new Promise<string>((resolve, reject) => {
             const reader = new FileReader();
@@ -239,22 +224,26 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
     const nextId = useCallback(async (forKind: string) => {
         const total = kinds.find((entry) => entry.kind === forKind)?.count ?? 0;
         let next = Math.max(50000, total);
-        if (!authoring) return next;
+        if (!authoring) return { id: next };
+        let revision: string | undefined;
         try {
-            const document = await fetch(`${authoring}/definitions`).then((response) => response.json());
+            const response = await fetch(`${authoring}/definitions`);
+            if (!response.ok) throw new Error(`Could not read authoring document: ${response.status}`);
+            const document = await response.json();
+            revision = document?.revision;
             for (const row of document?.rows ?? []) {
                 if (row.kind === forKind && Number.isInteger(row.id)) next = Math.max(next, row.id + 1);
             }
         } catch {
             // No authoring service: the id is still unique against the cache.
         }
-        return next;
+        return { id: next, revision };
     }, [authoring, kinds]);
 
     const openCreate = useCallback(async (withBase: CacheDefinition | null) => {
         const forKind = withBase?.kind ?? kind;
         setError(null);
-        setCreating({ kind: forKind, name: withBase ? `${withBase.name ?? "element"} (copy)` : "", id: await nextId(forKind), base: withBase });
+        setCreating({ kind: forKind, name: withBase ? `${withBase.name ?? "element"} (copy)` : "", ...(await nextId(forKind)), base: withBase });
     }, [kind, nextId]);
 
     const create = useCallback(async () => {
@@ -266,9 +255,10 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
             kind: creating.kind,
             id: creating.id,
             baseId: creating.base?.id ?? -1,
+            revision: creating.revision,
             base: creating.base,
             name: creating.name,
-            overrides: {},
+            overrides: initialOverrides((fields?.fields ?? []) as CacheField[], creating.name),
         });
         setDefinition(null);
         setCreating(null);
@@ -294,11 +284,11 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
         const problems = draftProblems(row, editing.base ?? { kind: editing.kind, id: editing.id, exists: true, name: "", label: "" }, 0);
         if (problems.length) { setError(problems.join("; ")); return; }
         try {
-            const current = await fetch(`${authoring}/definitions`).then((response) => response.json());
+            if (!editing.revision) throw new Error("Reopen this draft after connecting to the local authoring service");
             const response = await fetch(`${authoring}/definitions`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ row, revision: current?.revision }),
+                body: JSON.stringify({ row, revision: editing.revision }),
             });
             const body = await response.json();
             if (!response.ok) throw new Error(body?.error ?? `save failed: ${response.status}`);
@@ -337,6 +327,10 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
     }, [frames, tab]);
 
     /** One editable row of the values table. */
+    const commitCell = (field: CacheField, text: string) => {
+        try { setValue(field.name, parseFieldValue(field, text)); setCell(null); setError(null); }
+        catch (error) { setError(error instanceof Error ? error.message : String(error)); }
+    };
     const renderValueCell = (field: CacheField) => {
         if (!editing) return label(shown?.values?.[field.name] ?? "");
         const value = editing.overrides[field.name] ?? editing.base?.values?.[field.name];
@@ -351,10 +345,10 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
                         onChange={(event) => setCell({ field: field.name, text: event.target.value })}
                         onKeyDown={(event) => {
                             if (event.key === "Escape") setCell(null);
-                            if (event.key === "Enter") { setValue(field.name, parseValue(field, cell.text)); setCell(null); }
+                            if (event.key === "Enter") { commitCell(field, cell.text); }
                         }}
                     />
-                    <button style={styles.input} onClick={() => { setValue(field.name, parseValue(field, cell.text)); setCell(null); }}>ok</button>
+                    <button style={styles.input} onClick={() => { commitCell(field, cell.text); }}>ok</button>
                     <button style={styles.input} onClick={() => setCell(null)}>×</button>
                 </span>
             );
@@ -363,7 +357,7 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
             <span
                 style={{ cursor: "text", borderBottom: "1px dotted #3a4150", color: changed ? "#8fd18f" : undefined }}
                 title={field.note ?? `click to edit ${field.name}`}
-                onClick={() => setCell({ field: field.name, text: value === undefined ? "" : Array.isArray(value) ? value.join(", ") : String(value) })}
+                onClick={() => setCell({ field: field.name, text: formatFieldValue(value) })}
             >
                 {value === undefined ? <em style={{ color: "#5d6675" }}>unset</em> : label(value)}
             </span>
@@ -394,7 +388,7 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
                                 value={uploadName}
                                 onChange={(event) => setUploadName(event.target.value)}
                             />
-                            <button style={styles.input} onClick={() => fileRef.current?.click()}>upload…</button>
+                            <button style={styles.input} disabled={assetKind !== "model"} title={assetKind === "model" ? "Upload a DAT model" : "Only model uploads are supported"} onClick={() => fileRef.current?.click()}>upload…</button>
                             <input
                                 ref={fileRef}
                                 type="file"

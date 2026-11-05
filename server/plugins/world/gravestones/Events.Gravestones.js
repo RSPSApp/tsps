@@ -4,11 +4,14 @@
  * What other plugins (Death's Office) ask of a player's death storage. The emitter reads the
  * answer back from the payload.
  *
+ * - `gravestones:makes-grave` { player, playerKill } -> makesGrave: whether this death makes
+ *   a grave (handled by Death.Gravestones); default false if the plugin is disabled.
  * - `gravestones:state` { player } -> grave ({ items, fee, officeFee } or null), office
  *   (120 slots of { id, amount, fee } or null), coffer, style, metDeath, inTutorial, ironman.
  * - `gravestones:expire` { player }: the grave collapses now (Death collecting it early).
  * - `gravestones:pay-fee` { player, amount, office } -> source ("coffer", "inventory", "bank" or
  *   null), message: the death-fee payment, Coffer first.
+ * - `gravestones:fee` { player, items } -> fee: what a grave of these { id, amount } would cost.
  * - `gravestones:office-take` { player, slot, count } -> taken: moves up to `count` of an office
  *   stack into the inventory, as far as it fits.
  * - `gravestones:coffer-adjust` { player, amount } -> ok: credits (or with a negative amount,
@@ -92,8 +95,13 @@ function tutorialEnd({ player }) {
   Timer.startCountdown(player);
 }
 
+function feeFor(request) {
+  request.fee = Fees.graveFee(request.items ?? [], Common.ironmanMode(request.player) != null);
+}
+
 function attach(api) {
   Common.bind(api);
+  api.onCustomEvent("gravestones:fee", feeFor);
   api.onCustomEvent("gravestones:state", state);
   api.onCustomEvent("gravestones:expire", expire);
   api.onCustomEvent("gravestones:pay-fee", payFee);

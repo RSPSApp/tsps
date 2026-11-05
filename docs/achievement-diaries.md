@@ -7,7 +7,15 @@ The diary framework lives in `server/plugins/achievements/diaries/`, and its dat
 - the reward lamps;
 - an admin command.
 
-**What's not here yet:** no task is wired to gameplay. Follow-up PRs make existing plugins complete tasks, one diary at a time, and add the reward items' effects.
+Gameplay integrations are added per action through `diary:task`. `Actions.AchievementDiaries.js`
+handles successful Varrock tea thefts, Lumbridge pickpockets and Draynor sewer Zombie kills;
+Runecrafting credits Sedridor's essence-mine teleport on its final travel tick.
+`WesternProvincesDiary.plugin.js` credits the Western Provinces tasks from the successful
+actions other plugins emit. Other content plugins also emit task completions directly; the
+catalogue alone does not wire an action.
+
+The Western tasks' Chocolate bomb uses Cooking's ordinary gnome-bowl recipe chain, and Prissy
+Scilla's protection credits from Farming's successful `farming:protected` event.
 
 ## Completing tasks from a plugin
 
@@ -99,7 +107,7 @@ Script 56 reads started and complete; script 2200 reads count, the total and rew
 **The claim conversations** come from each NPC's Wiki transcript, stored per tier in the data file. Claiming works like this:
 - **Which tier:** the lowest finished, unclaimed tier, as long as every lower tier is finished. Otherwise Talk-to plays the NPC's transcript as before.
 - **Skill requirement:** Ardougne's elite reward needs 91 Smithing, per its transcript.
-- **Reclaiming:** the transcript's "<NPC> gives you another …" line hands back the highest claimed tier's item, if the player owns none.
+- **Reclaiming:** the transcript's "<NPC> gives you another …" line hands back the highest claimed tier's item only while the player owns none of it in the inventory, worn or bank. Otherwise the NPC says "You don't need another … right now."
 
 ## Lamps and the xpreward interface
 
@@ -114,8 +122,10 @@ Every lamp (the genie's lamp and the diary lamps) uses OSRS's "Choose the stat y
 ## Unverified
 
 - **The NPC locations in the tier-complete box and the reminder.** Only Ardougne ("Two-pints at the Flying Horse Inn in Ardougne") and the Karamja, Morytania and Western reminders are captured; the rest follow the Wiki's description of where the NPC stands.
-- **Messages this server writes itself:**
+- **Server-written messages, not dialogue transcript lines:**
   - "You need 2 free inventory spaces to claim your reward."
+  - "You can no longer claim this reward."
   - "You don't need another … right now."
+  - "You don't have enough inventory space."
   - the diary lamps' message box, "You have been awarded … XP!" (the genie lamp's is captured).
 - **The task message's area name for the other diaries:** "… in the Kourend & Kebos area."

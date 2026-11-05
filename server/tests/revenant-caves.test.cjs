@@ -21,6 +21,15 @@ const SCROLL = 21802;
 const teleports = [];
 const groundItems = [];
 let prompt = null;
+const ruleCalls = [];
+const wildernessRules = {
+  process: (mobile) => ruleCalls.push(["process", mobile]),
+  postEnter: (mobile) => ruleCalls.push(["postEnter", mobile]),
+  postLeave: (mobile, logout) => ruleCalls.push(["postLeave", mobile, logout]),
+  canAttack: (attacker, target) => (ruleCalls.push(["canAttack", attacker, target]), true),
+  canTeleport: (player, limit) => (ruleCalls.push(["canTeleport", player, limit]), false),
+  npcAggressionTolerance: (player, npc) => (ruleCalls.push(["npcAggressionTolerance", player, npc]), true),
+};
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
@@ -38,6 +47,9 @@ before(async () => {
       },
       TaskManager: core.TaskManager,
       Task: core.Task,
+    },
+    emitCustomEvent: (name, request) => {
+      if (name === "wilderness:rules") request.rules = wildernessRules;
     },
     sendMultiChatboxPrompt: (player, title, ...pairs) => {
       const options = pairs.filter((entry) => typeof entry === "string");
@@ -294,4 +306,22 @@ test("the scroll's Config is found by name (rev 241: fourth slot, then Drop); th
   assert.equal(ItemActionPacketListener.isDropOption("", 5), true, "no option text: the drop slot");
   assert.equal(ItemActionPacketListener.isDropOption("uncharge", 5), false, "charged items' Uncharge reaches plugins");
   assert.equal(ItemActionPacketListener.isDropOption("discard", 5), true);
+});
+
+test("the caves' area runs the Wilderness rules, so bots and players in it can be attacked", () => {
+  const area = T.createCavesArea();
+  const attacker = player({ at: new Location(3200, 10100, 0) }).p;
+  const bot = player({ at: new Location(3201, 10100, 0) }).p;
+  ruleCalls.length = 0;
+
+  area.postEnter(attacker);
+  area.process(attacker);
+  assert.equal(area.canAttack(attacker, bot, null), true);
+  assert.equal(area.canTeleport(attacker, 20), false);
+  assert.equal(area.npcAggressionTolerance(attacker, null), true);
+  area.postLeave(attacker, false);
+
+  assert.deepEqual(ruleCalls.map(([name]) => name),
+    ["postEnter", "process", "canAttack", "canTeleport", "npcAggressionTolerance", "postLeave"]);
+  assert.equal(ruleCalls[2][2], bot);
 });

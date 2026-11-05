@@ -41,6 +41,7 @@ const ESSENCES = [
 ];
 const GUARDIAN_ESSENCE_TYPE = 4;
 const SOUND_INVENTORY_FULL = 2277;
+const BANK_FILL_OP = 9; // bankside's cache param-595 action: Fill.
 
 const POUCHES = [
   { key: "small", item: "rcu_pouch_small", level: 1, capacity: 3, varbit: "small_essence_pouch", typeVarbit: "small_essence_pouch_type" },
@@ -217,7 +218,15 @@ function fill(event) {
   state.type = kind.type;
   decay(player, pouch, state, moved);
   save(player, pouch, state);
+  // "runecrafting:pouch-filled" { player, itemId, amount }: essence put into the pouch.
+  if (moved > 0) pluginApi.emitCustomEvent("runecrafting:pouch-filled", { player, itemId: event.itemId, amount: moved });
   return true;
+}
+
+function fillFromBank(event) {
+  if (event.handled || event.op !== BANK_FILL_OP || !core.Bank.isOpen(event.player)) return;
+  if (event.player.getInventory().forSlot(event.slot) !== event.item) return;
+  event.handled = fill({ player: event.player, itemId: event.item.getId() });
 }
 
 function check(event) {
@@ -354,6 +363,7 @@ function attach(api) {
   core = api.core;
   pluginApi = api;
   api.onPlayerLogin(login);
+  api.onCustomEvent(core.Bank.INVENTORY_OP_EVENT, fillFromBank);
   api.onItemAction("Small pouch", { Fill: fill, Check: check, Empty: empty });
   api.onItemAction("Medium pouch", { Fill: fill, Check: check, Empty: empty });
   api.onItemAction("Large pouch", { Fill: fill, Check: check, Empty: empty });

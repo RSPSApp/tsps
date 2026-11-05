@@ -17,29 +17,40 @@
  * The crafting/door/Nazastarool progress lives in the persisted
  * "quest.shilo_village.mechanisms" bits:
  *   bit 0 read crumpled scroll, bit 1 found the bone lock, bit 2 table wood
- *   used, bits 7-8 bones placed, bits 9-11 Nazastarool form defeated.
+ *   used, bit 3 searched the palm trees, bits 7-8 bones placed, bits 9-11
+ *   Nazastarool form defeated.
+ *
+ * Rashiliyia's tomb doors are the cache's multilocs 34657 and 34673, on varbit 8180:
+ * 0 jungle plants, 1 carved doors, 2 hillside entrance. Captures 1444 and 1590 show 2 at login.
  *
  * Source: LostCityRS/Content scripts/quests/quest_zombiequeen (pinned in #196).
- * Gaps: no world object hot-swapping (rope on the fissure, opened doors) and no
+ * Gaps: no world object hot-swapping for opened doors and no
  * raft/waterfall/cave-in cinematic - the waterfall exit and Bervirius crawl
  * teleport straight to the next tile; Shilo's roaming undead and Rashiliyia's
  * timed summon are only spawned by the transcript's own action markers; the
  * locating crystal's leading "missing" export step aborts that transcript, so
  * its glow tiers are sent directly and the always-draw option is not offered;
- * reading the scrolls/notes plays their messages but the nested reference pages
- * are not opened; Trufitus is shared with Jungle Potion, so once this quest has
+ * the scrolls and notes show their text in the message scroll interface, which is
+ * inferred, as no capture shows them; Trufitus is shared with Jungle Potion, so once this quest has
  * started the plugin plays his Shilo variant itself from a Talk-to interaction
  * instead of relying on selector registration order; the requirements condition
  * only checks combat level.
  */
+const ObstacleRunner = require("../../skills/agility/ObstacleRunner.Agility");
+
 module.exports = function registerShiloVillageQuest(api) {
   const {
     Skill,
     Equipment,
     Location,
+    GameObject,
+    ObjectManager,
     ItemIdentifiers,
     NpcIdentifiers,
     ObjectIdentifiers,
+    TaskManager,
+    CountdownTask,
+    CacheDefinitions,
   } = api.core;
   const { registerQuest, startTranscript, refreshQuestList } = require("../QuestRuntime");
 
@@ -55,6 +66,7 @@ module.exports = function registerShiloVillageQuest(api) {
     NpcIdentifiers.NAZASTAROOL_3, // 5355 ghost
   ];
   const UNDEAD_ONE_ID = NpcIdentifiers.UNDEAD_ONE; // 5342
+  const YANNI = NpcIdentifiers.YANNI_SALIKA; // 5361
 
   const VARP_SHILO_VILLAGE = 116;
   const STAGE_STARTED = 1;
@@ -94,6 +106,7 @@ module.exports = function registerShiloVillageQuest(api) {
   const BERVIRIUS_NOTES = ItemIdentifiers.BERVIRIUS_NOTES; // 624
   const BRONZE_WIRE = ItemIdentifiers.BRONZE_WIRE; // 1794
   const CHISEL = ItemIdentifiers.CHISEL; // 1755
+  const COINS = ItemIdentifiers.COINS; // 995
   const SPADE = ItemIdentifiers.SPADE; // 952
   const ROPE = ItemIdentifiers.ROPE; // 954
   const BONES = ItemIdentifiers.BONES; // 526
@@ -104,7 +117,9 @@ module.exports = function registerShiloVillageQuest(api) {
   ]);
 
   const MOUND_OF_EARTH = ObjectIdentifiers.MOUND_OF_EARTH; // 2217
-  const FISSURE_IDS = new Set([ObjectIdentifiers.FISSURE, ObjectIdentifiers.FISSURE_2]); // 2218, 2219
+  const FISSURE = ObjectIdentifiers.FISSURE; // 2218
+  const ROPE_FISSURE = ObjectIdentifiers.FISSURE_2; // 2219
+  const FISSURE_IDS = new Set([FISSURE, ROPE_FISSURE]);
   const CAVE_IN = ObjectIdentifiers.CAVE_IN; // 2220
   const STRANGE_LOOKING_STONE = ObjectIdentifiers.STRANGE_LOOKING_STONE; // 2221
   const LOOSE_ROCKS = ObjectIdentifiers.LOOSE_ROCKS; // 2222
@@ -136,6 +151,67 @@ module.exports = function registerShiloVillageQuest(api) {
     ObjectIdentifiers.ANCIENT_METAL_GATE_2,
   ]); // 2255, 2256
   const TOMB_DOLMEN_RASHILIYIA = ObjectIdentifiers.TOMB_DOLMEN_2; // 2258
+  const HIDDEN_TOMB_DOOR_LOCS = new Set([34657, 34673]);
+  const VARBIT_TOMB_DOORS = 8180;
+  const TOMB_DOORS_HIDDEN = 0;
+  const TOMB_DOORS_CLOSED = 1;
+  const TOMB_DOORS_OPEN = 2;
+  const TOMB_ROCKS = ObjectIdentifiers.ROCKS_3; // 2257
+  /** Rashiliyia's tomb only: other "Rocks" may share the id. */
+  const TOMB_ROCKS_AREA = { minX: 2925, maxX: 2932, minY: 9509, maxY: 9517 };
+  /** The two tiles the cache's placements leave open at either end of the rocks. */
+  const ABOVE_TOMB_ROCKS_TILE = { x: 2929, y: 9515, z: 0 };
+  const BELOW_TOMB_ROCKS_TILE = { x: 2928, y: 9511, z: 0 };
+  const TOMB_ROCKS_MIDDLE_Y = 9512;
+
+  /**
+   * The Brimhaven-road cart (multiloc 2216 on the zombiequeen varp): "Look-at"/"Search" before the quest, and
+   * after it only "Climb over". Captured (rsprox 1102 ticks 13657-13659, road side to village): oploc2 on 2216 at
+   * 2877,2951, sequence 828 (delay 15), sounds 4035, 4033 (delay 13), 4034 (delay 19), then the next tick the line
+   * "You nimbly jump from one side of the cart to the other, and climb down again." and the teleport to 2876,2952,
+   * which is OUTSIDE the village's gate. The way back (2880,2952, transports.json) has no capture: the same sequence.
+   */
+  const BROKEN_CART_LOC = 2216;
+  const CART_MIDDLE_X = 2878;
+  const CART_INSIDE_TILE = { x: 2876, y: 2952, z: 0 };
+  const CART_OUTSIDE_TILE = { x: 2880, y: 2952, z: 0 };
+  const CART_LINE = "You nimbly jump from one side of the cart to the other, and climb down again.";
+  /**
+   * The village's gate, metal gates 2259/2260 at 2875 (rsprox 1102 ticks 13663-13666): oploc1 from 2876,2952, a
+   * step to 2875, then a step to 2874 with "You open the gates and make your way through into the village." and sound
+   * 71. After the quest only; leaving is the same walk the other way (inferred: no capture, no line).
+   */
+  const VILLAGE_GATE_IDS = new Set([2259, 2260]);
+  const VILLAGE_GATE_LINE = "You open the gates and make your way through into the village.";
+  const VILLAGE_GATE_SOUND = 71;
+  /** Where Mosol Rei's Follow lands the player, one step inside the gate (the Wiki says only "into the village"). */
+  const VILLAGE_INSIDE_TILE = { x: 2874, y: 2952, z: 0 };
+  /** Mosol Rei's two messages after "Yes, Ok, I'll go into the village!" (Wiki, Transcript:Mosol Rei). */
+  const MESSAGE_MOSOL_LEADS = "SfsaEg";
+  const MESSAGE_MOSOL_LEAVES = "uAQHgJ";
+  /** Rashiliyia's tomb rocks (#2643: "no animation going down"): the way down and up as a forced walk, one tile a tick. */
+  const ROCKS_TOP_TILE = [2929, 9515];
+  const ROCKS_BOTTOM_TILE = [2928, 9511];
+  const ROCKS_DOWN_PATH = [[2928, 9514], [2928, 9513], [2928, 9512], ROCKS_BOTTOM_TILE];
+  const ROCKS_UP_PATH = [[2928, 9512], [2928, 9513], [2929, 9514], ROCKS_TOP_TILE];
+  /**
+   * Cairn Isle's bridge (Wiki Cairn Isle: Agility 1, 10 XP, success chart low 75 high 250, a failure is three hits of
+   * floor(HP / 11), walking or running alike; rsprox 1102 tick 15955 and 75: "You manage to keep your balance on the
+   * bridge." as the runner crosses y 2979 at x 2779; capture 352 has those lines 20 ticks apart, also while shuttling
+   * on the bridge, which reads as a 20-tick timer). The bridge tiles are x 2776-2781 on y 2979. OURS, unknown to the
+   * Wiki and the captures: the failure line, where the player lands, and that a roll needs the player to have moved
+   * since the last one (standing still would be an AFK Agility farm; 352 does not show standing still).
+   */
+  const BRIDGE = { minX: 2776, maxX: 2781, y: 2979 };
+  const BRIDGE_LOW = 75;
+  const BRIDGE_HIGH = 250;
+  const BRIDGE_XP = 10;
+  const BRIDGE_REROLL_TICKS = 20;
+  const BRIDGE_KEEP_BALANCE = "You manage to keep your balance on the bridge.";
+  const BRIDGE_FALL = "You lose your balance and fall into the river!";
+  const BRIDGE_LANDING = { x: 2782, y: 2979, z: 0 };
+  const PRISM_SOLD_ATTRIBUTE = "quest.shilo_village.prism_sold";
+  const YANNI_PAGE = "Yanni Salika";
 
   const START_HOOK = "quest:shilo-village:start";
   const ACTION_RECEIVE_WAMPUM = "10Zz1R";
@@ -145,6 +221,11 @@ module.exports = function registerShiloVillageQuest(api) {
   const ACTION_SPAWN_UNDEAD = "vNDeU9";
   const ACTION_GATE_UNDEAD = "UTuQLV";
   const ACTION_COMPLETE = "l7zrz_";
+  const REFERENCE_READ_TATTERED = "WH07P-";
+  const REFERENCE_READ_CRUMPLED = "n7hNYR";
+  const REFERENCE_READ_NOTES_YELLOW = "7aG-WD";
+  const REFERENCE_READ_NOTES_WHITE = "0uSJB3";
+  const REFERENCE_READ_NOTES_ORANGE = "i8hwtu";
   const ACTION_NAZASTAROOL_SPAWN_1 = "KPnwZH";
   const ACTION_NAZASTAROOL_CONTINUES_1 = "1sBGNX";
   const ACTION_NAZASTAROOL_SPAWN_2 = "dKXOjT";
@@ -164,11 +245,17 @@ module.exports = function registerShiloVillageQuest(api) {
   const MECH_READ_CRUMPLED = 1 << 0;
   const MECH_FOUND_BONE_DOOR = 1 << 1;
   const MECH_USED_TABLE_WOOD = 1 << 2;
+  const MECH_SEARCHED_PALM = 1 << 3;
   const MECH_DEFEATED_1 = 1 << 9;
   const MECH_DEFEATED_2 = 1 << 10;
   const MECH_DEFEATED_3 = 1 << 11;
   const BONES_SHIFT = 7;
   const BONES_MASK = 0x3;
+
+  /** The cache places the 3x3 Mound of earth at 2921,2999 shape 10, rotation 0. */
+  const MOUND_TILE = { x: 2921, y: 2999, z: 0 };
+  const MOUND_TYPE = 10;
+  const MOUND_FACE = 0;
 
   /** Tomb of Rashiliyia surface centre (LostCity 0_45_48_36_20). */
   const TOMB_CENTER = { x: 2916, y: 3092 };
@@ -197,9 +284,63 @@ module.exports = function registerShiloVillageQuest(api) {
     [RASHILIYIA_CORPSE, "visiting-the-tomb-of-rashiliyia-using-rashiliyias-remains-on-trufitus"],
   ]);
 
+  /**
+   * What Yanni Salika pays for the quest's leftovers (Wiki: Shilo Village rewards and Transcript:Yanni Salika;
+   * the lines are the generated "using-antiques-on-yanni-*" variants). The black prism is a choice.
+   */
+  const YANNI_SALES = new Map([
+    [BONE_KEY, { price: 100, variant: "using-antiques-on-yanni-bone-key" }],
+    [CRUMPLED_SCROLL, { price: 100, variant: "using-antiques-on-yanni-crumpled-scroll" }],
+    [TATTERED_SCROLL, { price: 100, variant: "using-antiques-on-yanni-tattered-scroll" }],
+    [BERVIRIUS_NOTES, { price: 100, variant: "using-antiques-on-yanni-bervirius-notes" }],
+    [ItemIdentifiers.BERVIRIUS_NOTES_2, { price: 100, variant: "using-antiques-on-yanni-bervirius-notes" }],
+    [STONE_PLAQUE, { price: 100, variant: "using-antiques-on-yanni-stone-plaque" }],
+    [BEADS_OF_THE_DEAD, { price: 1000, variant: "using-antiques-on-yanni-beads-of-the-dead" }],
+    [ItemIdentifiers.BLACK_PRISM, { price: 5000, variant: "using-antiques-on-yanni-black-prism", asks: true }],
+  ]);
+  for (const id of LOCATING_CRYSTAL_IDS) {
+    YANNI_SALES.set(id, { price: 500, variant: "using-antiques-on-yanni-locating-crystal" });
+  }
+  /** The prism Yanni was shown and is waiting to be told Yes or No about, with the slot it came from. */
+  const pendingPrismSale = new Map();
+
+  /** The Wiki's transcripts; the wrapping and the choice of interface are ours. */
+  const SCROLLS = new Map([
+    [REFERENCE_READ_TATTERED, {
+      text: "Bervirius, son of King Danthalas, was killed in battle. His devout mother Rashiliyia was so heartbroken "
+        + "that she swore fealty to Zamorak if he would return her son to her. Bervirius returned as an undead "
+        + "creature and terrorized the King and Queen. Many guards died fighting the undead Bervirius. Eventually "
+        + "the undead Bervirius was set on fire and soon only the bones remained. His remains were taken far to the "
+        + "South, and then towards the setting sun to a tomb that is surrounded by and level with the sea. This is "
+        + "the only way to contain the spirits of witches and the undead.",
+    }],
+    [REFERENCE_READ_CRUMPLED, {
+      text: "Rashiliyia's rage went unchecked. She killed without mercy for revenge of her son's life. Like a spectre "
+        + "through the night she entered houses and one by one quietly strangled life from the occupants. It is said "
+        + "only a handful survived, protected by the necklace wards to keep the Witch Queen at bay.",
+    }],
+    [REFERENCE_READ_NOTES_YELLOW, {
+      text: "...and rest like your mother who is silent in the peace of her tomb far to the North of Ah Za Rhoon. Near "
+        + "the sea, and under the hills deep in the underground to watch all nature from the darkness of her final "
+        + "resting place.",
+    }],
+    [REFERENCE_READ_NOTES_WHITE, {
+      text: "...Rashiliyia did so love objects of beauty. Her tomb was adorned with crystals that glowed brightly when "
+        + "near to each other.",
+    }],
+    [REFERENCE_READ_NOTES_ORANGE, {
+      text: "...the sphere is activated when power of a spiritual nature is expended upon it, this can be very draining "
+        + "on the body...",
+    }],
+  ]);
+  const SCROLL_INTERFACE = "messagescroll"; // 220
+  const SCROLL_LINES = 15;
+  const SCROLL_LINE_WIDTH = 55;
+
   let quest;
   const nazastaroolByPlayer = new Map();
   const nazNarration = new Map();
+  const pendingLightByPlayer = new Map();
 
   const held = (player, itemId, amount = 1) => player.getInventory().getAmount(itemId) >= amount;
   const give = (player, itemId, amount = 1) => player.getInventory().adds(itemId, amount);
@@ -242,6 +383,7 @@ module.exports = function registerShiloVillageQuest(api) {
   }
 
   function scene(player, npcId, variant) {
+    pendingLightByPlayer.delete(player);
     startTranscript(api, player, npcId, PAGE, variant);
   }
 
@@ -270,6 +412,62 @@ module.exports = function registerShiloVillageQuest(api) {
 
   function teleport(player, tile) {
     player.moveTo(new Location(tile.x, tile.y, tile.z));
+  }
+
+  function ownedMoundObject(player) {
+    return ObjectManager.objectsAt(new Location(MOUND_TILE.x, MOUND_TILE.y, MOUND_TILE.z))
+      .find((object) => object.getOwner?.() === player && (object.getId() === FISSURE || object.getId() === ROPE_FISSURE));
+  }
+
+  function tombDoorState(player) {
+    if (quest.getStage(player) >= STAGE_UNLOCKED_RASHILIYIA_TOMB) return TOMB_DOORS_OPEN;
+    // A save from before the doors could be seen, which got as far as their lock, has searched.
+    return mechTest(player, MECH_SEARCHED_PALM) || mechTest(player, MECH_FOUND_BONE_DOOR)
+      ? TOMB_DOORS_CLOSED
+      : TOMB_DOORS_HIDDEN;
+  }
+
+  function syncTombDoors(player) {
+    player.getPacketSender().sendVarbit(VARBIT_TOMB_DOORS, tombDoorState(player));
+  }
+
+  function openScroll(player, { text }) {
+    const lines = [];
+    let line = "";
+    for (const word of text.split(" ")) {
+      if (line && line.length + 1 + word.length > SCROLL_LINE_WIDTH) {
+        lines.push(line);
+        line = word;
+      } else {
+        line = line ? `${line} ${word}` : word;
+      }
+    }
+    lines.push(line);
+    const sender = player.getPacketSender();
+    sender.sendInterface(CacheDefinitions.getInterfaceId(SCROLL_INTERFACE));
+    for (let index = 0; index < SCROLL_LINES; index++) {
+      sender.sendString(lines[index] ?? "", CacheDefinitions.getComponentId(`${SCROLL_INTERFACE}:messcroll${index + 1}`));
+    }
+  }
+
+  /** The saved stage decides which fissure (or none) this player sees after login. */
+  function ensureMoundObject(player) {
+    if (!player || !quest) return;
+    const stage = quest.getStage(player);
+    if (stage < STAGE_DUG_MOUND) return;
+    const wanted = stage >= STAGE_ROPED_MOUND ? ROPE_FISSURE : FISSURE;
+    const existing = ownedMoundObject(player);
+    if (existing?.getId() === wanted) return;
+    if (existing) ObjectManager.deregister(existing, true);
+    ObjectManager.register(
+      new GameObject(wanted, new Location(MOUND_TILE.x, MOUND_TILE.y, MOUND_TILE.z), MOUND_TYPE, MOUND_FACE, null).setOwner(player),
+      true
+    );
+  }
+
+  function clearMoundObject(player) {
+    const existing = ownedMoundObject(player);
+    if (existing) ObjectManager.deregister(existing, true);
   }
 
   function buildJournal(player, questHandle) {
@@ -377,8 +575,42 @@ module.exports = function registerShiloVillageQuest(api) {
   }
 
   /** The page's prose conditions, matched case-insensitively. */
-  function answerCondition({ player, text, stepId }) {
+  /** The six items Yanni's quote lists, by the transcript's condition wording. */
+  const YANNI_QUOTED = [
+    ["bone key", () => [BONE_KEY]],
+    ["stone-plaque", () => [STONE_PLAQUE]],
+    ["tattered scroll", () => [TATTERED_SCROLL]],
+    ["crumpled scroll", () => [CRUMPLED_SCROLL]],
+    ["locating crystal", () => [...LOCATING_CRYSTAL_IDS]],
+    ["beads of the dead", () => [BEADS_OF_THE_DEAD]],
+  ];
+
+  /** Yanni's standard dialogue conditions (Transcript:Yanni Salika); null when `value` is not one of them. */
+  function yanniCondition(player, value) {
+    // What he quotes is the six items the transcript lists, and only those he would really buy from this player (the
+    // same rule as showing him one): a prism before Zogre Flesh Eaters, a preset copy, or Bervirius' notes, which the
+    // transcript does not quote, leave him with nothing to quote.
+    const carries = (ids) => player.getInventory().getItems().some((item) => item && ids.includes(item.getId()) && yanniBuys(player, item));
+    const quoted = YANNI_QUOTED.filter(([, ids]) => carries(ids())).length;
+    if (value.includes("doesn't have an item yanni can buy")) return quoted === 0;
+    if (value.includes("only one of the above items")) return quoted === 1;
+    if (value.includes("more than one of the above items")) return quoted > 1;
+    if (value.includes("already has the beads of the dead in their inventory or bank")) {
+      return held(player, BEADS_OF_THE_DEAD) || bankedBeads(player) || player.getEquipment().getAmount?.(BEADS_OF_THE_DEAD) > 0;
+    }
+    if (value.includes("does not have the beads of the dead")) return !held(player, BEADS_OF_THE_DEAD);
+    for (const [name, ids] of YANNI_QUOTED) {
+      if (value.includes(`has the ${name} in their inventory`)) return carries(ids());
+    }
+    return null;
+  }
+
+  function answerCondition({ player, text, stepId, npcId }) {
     const value = String(text).toLowerCase();
+    if (npcId === YANNI) {
+      const yanni = yanniCondition(player, value);
+      if (yanni !== null) return yanni;
+    }
     if (value.includes("does not have all the requirements")) {
       const junglePotion = Number(player.getAttribute("quest.jungle_potion.stage")) || 0;
       return junglePotion < 12 || hpLevel(player) < 45;
@@ -426,16 +658,103 @@ module.exports = function registerShiloVillageQuest(api) {
    */
   function handleTrufitusTalk(event) {
     const { player } = event;
+    pendingLightByPlayer.delete(player);
     if (quest.getStage(player) < STAGE_STARTED) return false;
     event.handled = true;
     scene(player, TRUFITUS, trufitusVariant(player));
     return true;
   }
 
+  /**
+   * Yanni buys what the quest leaves over (Wiki): shown an item, he pays on the spot. The item is taken from the
+   * slot it was used from, and the coins are only paid when it is gone. The black prism waits for Yes.
+   */
+  function yannisScene(player, variant) {
+    pendingLightByPlayer.delete(player);
+    startTranscript(api, player, YANNI, YANNI_PAGE, variant);
+  }
+
+  /** Preset, untradeable and unbankable copies keep their restrictions, so he takes none. */
+  function restricted(item) {
+    const { Item } = api.core;
+    return item.isPresetItem?.() === true
+      || item.getMetaValue?.(Item.PRESET_META) === true
+      || item.getMetaValue?.(Item.UNTRADEABLE_META) === true
+      || item.getMetaValue?.(Item.UNBANKABLE_META) === true;
+  }
+
+  function questDone(player, key) {
+    const request = { player, key, complete: false };
+    api.emitCustomEvent("quest:is-complete", request);
+    return request.complete === true;
+  }
+
+  /**
+   * Wiki (Yanni Salika, Black prism): he buys "after the completion of Shilo Village", and the prism only "after the
+   * completion of Zogre Flesh Eaters" (selling it earlier would strand that quest). A second prism is refused. The
+   * refusal's wording is ours (his generated nothing-I-want line).
+   */
+  function yanniBuys(player, item) {
+    const sale = YANNI_SALES.get(item?.getId?.());
+    if (!sale || restricted(item) || !quest.isComplete(player)) return false;
+    return !sale.asks || questDone(player, "zogre_flesh_eaters");
+  }
+
+  function sellToYanni(event) {
+    const { player, itemId, slot, item } = event;
+    const sale = YANNI_SALES.get(itemId);
+    if (!yanniBuys(player, item)) return;
+    event.handled = true;
+    if (sale.asks) {
+      if (Number(player.getAttribute(PRISM_SOLD_ATTRIBUTE)) === 1) {
+        player.sendMessage("Sorry Bwana, you have nothing I am interested in.");
+        return;
+      }
+      pendingPrismSale.set(player, { itemId, slot, item });
+      yannisScene(player, sale.variant);
+      return;
+    }
+    if (paidFor(player, itemId, slot, item, sale.price)) yannisScene(player, sale.variant);
+  }
+
+  /** Wiki: once he has bought a prism "they will automatically take ALL prisms you own", carried or banked. */
+  function takeEveryPrism(player) {
+    const { Bank } = api.core;
+    take(player, ItemIdentifiers.BLACK_PRISM, player.getInventory().getAmount(ItemIdentifiers.BLACK_PRISM));
+    for (let tab = 0; tab < Bank.TOTAL_BANK_TABS; tab++) {
+      if (tab === Bank.BANK_SEARCH_TAB_INDEX) continue;
+      const bank = player.getBank(tab);
+      const amount = bank.getAmount(ItemIdentifiers.BLACK_PRISM);
+      if (amount > 0) bank.deleteNumber(ItemIdentifiers.BLACK_PRISM, amount);
+    }
+  }
+
+  /** Beads of the Dead anywhere in the bank, every tab. */
+  function bankedBeads(player) {
+    const { Bank } = api.core;
+    for (let tab = 0; tab < Bank.TOTAL_BANK_TABS; tab++) {
+      if (tab !== Bank.BANK_SEARCH_TAB_INDEX && player.getBank(tab).getAmount(BEADS_OF_THE_DEAD) > 0) return true;
+    }
+    return false;
+  }
+
+  function paidFor(player, itemId, slot, item, price) {
+    const inventory = player.getInventory();
+    if (inventory.getItems()[slot] !== item || item.getId() !== itemId) return false;
+    inventory.deleteAtSlot(slot, 1, true);
+    inventory.adds(COINS, price);
+    return true;
+  }
+
   function handleItemOnNpc(event) {
     const npcId = event.npcId ?? event.target?.getId?.();
+    if (npcId === YANNI) {
+      sellToYanni(event);
+      return;
+    }
     if (npcId !== TRUFITUS) return;
     const { player, itemId } = event;
+    pendingLightByPlayer.delete(player);
     event.handled = true;
     let variant = TRUFITUS_ITEM_VARIANTS.get(itemId);
     if (!variant && LOCATING_CRYSTAL_IDS.has(itemId)) {
@@ -519,7 +838,6 @@ module.exports = function registerShiloVillageQuest(api) {
     }
     if (option.includes("read") && itemId === CRUMPLED_SCROLL) {
       event.handled = true;
-      mechSet(player, MECH_READ_CRUMPLED, true);
       scene(player, TRUFITUS, "visiting-ah-za-rhoon-read-crumpled-scroll");
       return;
     }
@@ -580,8 +898,59 @@ module.exports = function registerShiloVillageQuest(api) {
     }
   }
 
+  /** After the quest the cart is "Climb over" (op 2): across to the other side of it. */
+  function climbCart(player) {
+    if (ObstacleRunner.isBusy(player)) return;
+    const landing = player.getLocation().getX() < CART_MIDDLE_X ? CART_OUTSIDE_TILE : CART_INSIDE_TILE;
+    ObstacleRunner.run({ player }, [
+      { anim: 828, delay: 15 },
+      { sound: 4035 },
+      { sound: 4033, delay: 13 },
+      { sound: 4034, delay: 19 },
+      { wait: 1 },
+      { msg: CART_LINE },
+      { tele: [landing.x, landing.y, landing.z] },
+      { anim: -1 },
+    ]);
+  }
+
+  /** The village's gate after the quest: through it, by the captured walk and line; out again is the same walk back. */
+  function passVillageGate(player, location) {
+    if (ObstacleRunner.isBusy(player)) return;
+    const { x, y } = location;
+    // One walk across, the line and sound on the tick the far tile is reached (1102 tick 13666). Two walks with the
+    // line between left the player standing on the gate's tile for a tick, and the first run put them back outside.
+    // From the road the engine's own route has already walked the player onto the gate's tile when this runs (the first
+    // run of #2643 read that as "inside" and walked them back out), so standing on it counts as the road side.
+    if (player.getLocation().getX() >= x) {
+      ObstacleRunner.run({ player }, [
+        { walk: [[x, y], [x - 1, y]], arrive: true },
+        { msg: VILLAGE_GATE_LINE },
+        { sound: VILLAGE_GATE_SOUND },
+      ]);
+      return;
+    }
+    ObstacleRunner.run({ player }, [{ walk: [[x, y], [x + 1, y]], arrive: true }, { sound: VILLAGE_GATE_SOUND }]);
+  }
+
+  /**
+   * The village's gates ask before the Doors plugin: it knows "Metal gate" by name and would open this one as a
+   * plain door, moving the player one tile (the first run of #2643 left them on 2875).
+   */
+  function handleVillageGate(event) {
+    if (!VILLAGE_GATE_IDS.has(event.objectId) || event.clickType !== 1 || !quest.isComplete(event.player)) return;
+    event.handled = true;
+    passVillageGate(event.player, event.location);
+  }
+
   function handleObjectInteraction(event) {
     const { objectId, player, clickType } = event;
+    if (objectId === BROKEN_CART_LOC) {
+      if (clickType !== 2 || !quest.isComplete(player)) return;
+      event.handled = true;
+      climbCart(player);
+      return;
+    }
     if (objectId === MOUND_OF_EARTH) {
       event.handled = true;
       handleMound(player, clickType);
@@ -653,7 +1022,20 @@ module.exports = function registerShiloVillageQuest(api) {
     }
     if (objectId === PALM_TREE) {
       event.handled = true;
+      mechSet(player, MECH_SEARCHED_PALM, true);
+      syncTombDoors(player);
       scene(player, TRUFITUS, "visiting-the-tomb-of-rashiliyia-search-palm-tree");
+      return;
+    }
+    if (HIDDEN_TOMB_DOOR_LOCS.has(objectId)) {
+      event.handled = true;
+      if (tombDoorState(player) === TOMB_DOORS_OPEN) teleport(player, RASHILIYIA_TOMB_TILE);
+      else if (tombDoorState(player) === TOMB_DOORS_CLOSED) handleCarvedDoors(player, clickType);
+      return;
+    }
+    if (objectId === TOMB_ROCKS && inTombRocks(event.location)) {
+      event.handled = true;
+      climbTombRocks(player);
       return;
     }
     if (CARVED_DOORS_IDS.has(objectId)) {
@@ -791,6 +1173,40 @@ module.exports = function registerShiloVillageQuest(api) {
     scene(player, TRUFITUS, "visiting-the-tomb-of-rashiliyia-search-carved-doors");
   }
 
+  function inTombRocks(location) {
+    return location && location.x >= TOMB_ROCKS_AREA.minX && location.x <= TOMB_ROCKS_AREA.maxX
+      && location.y >= TOMB_ROCKS_AREA.minY && location.y <= TOMB_ROCKS_AREA.maxY;
+  }
+
+  /**
+   * Wiki: without the Beads of the Dead "you will be unable to continue". The refusal's wording is ours,
+   * and not needing them once the quest is complete is inferred. The way down's lines are the transcript's;
+   * it has none for the way up.
+   */
+  /** A walk onto the rocks' end tile first, when the player was clicking from beside it. */
+  function walkToStart(player, [x, y]) {
+    const at = player.getLocation();
+    return at.getX() === x && at.getY() === y ? [] : [{ walk: [[x, y]] }];
+  }
+
+  function climbTombRocks(player) {
+    if (ObstacleRunner.isBusy(player)) return;
+    if (player.getLocation().getY() > TOMB_ROCKS_MIDDLE_Y) {
+      if (!quest.isComplete(player) && !wearingBeads(player)) {
+        player.sendMessage("You can't bring yourself to climb down there without some protection.");
+        return;
+      }
+      // A walk down the rocks, not a teleport (#2643: "no animation going down"); the transcript's lines follow.
+      ObstacleRunner.run({ player }, [
+        ...walkToStart(player, ROCKS_TOP_TILE),
+        { walk: ROCKS_DOWN_PATH },
+        { run: () => scene(player, TRUFITUS, "visiting-the-tomb-of-rashiliyia-climb-rocks") },
+      ]);
+      return;
+    }
+    ObstacleRunner.run({ player }, [...walkToStart(player, ROCKS_BOTTOM_TILE), { walk: ROCKS_UP_PATH }]);
+  }
+
   function handleTombExit(player, clickType) {
     if (clickType === 2) {
       scene(player, TRUFITUS, "visiting-the-tomb-of-rashiliyia-search-tomb-exit");
@@ -876,7 +1292,7 @@ module.exports = function registerShiloVillageQuest(api) {
 
   function handleItemOnObject(event) {
     const { player, itemId, objectId } = event;
-    if (itemId === SPADE && objectId === MOUND_OF_EARTH) {
+    if (itemId === SPADE && (objectId === MOUND_OF_EARTH || FISSURE_IDS.has(objectId))) {
       event.handled = true;
       digMound(player);
       return;
@@ -896,9 +1312,12 @@ module.exports = function registerShiloVillageQuest(api) {
       cutPlaque(player);
       return;
     }
-    if (itemId === BONE_KEY && CARVED_DOORS_IDS.has(objectId)) {
+    if (itemId === BONE_KEY && (CARVED_DOORS_IDS.has(objectId) || HIDDEN_TOMB_DOOR_LOCS.has(objectId))) {
+      const state = tombDoorState(player);
+      if (HIDDEN_TOMB_DOOR_LOCS.has(objectId) && state === TOMB_DOORS_HIDDEN) return;
       event.handled = true;
-      unlockCarvedDoors(player);
+      if (state === TOMB_DOORS_OPEN) teleport(player, RASHILIYIA_TOMB_TILE);
+      else unlockCarvedDoors(player);
       return;
     }
     if (itemId === BONE_KEY && TOMB_EXIT_IDS.has(objectId)) {
@@ -924,6 +1343,7 @@ module.exports = function registerShiloVillageQuest(api) {
       return;
     }
     advance(player, STAGE_DUG_MOUND);
+    ensureMoundObject(player);
     scene(player, TRUFITUS, "visiting-ah-za-rhoon-use-spade-on-mound-of-earth");
   }
 
@@ -932,11 +1352,11 @@ module.exports = function registerShiloVillageQuest(api) {
       player.sendMessage("You have already seen inside the fissure.");
       return;
     }
-    take(player, itemId);
-    advance(player, STAGE_LIT_MOUND);
+    if (quest.getStage(player) !== STAGE_DUG_MOUND || ownedMoundObject(player)?.getId() !== FISSURE) return;
     scene(player, TRUFITUS, itemId === ItemIdentifiers.LIT_BLACK_CANDLE
       ? "visiting-ah-za-rhoon-use-lit-black-candle-on-fissure"
       : "visiting-ah-za-rhoon-use-lit-candle-on-fissure");
+    pendingLightByPlayer.set(player, itemId);
   }
 
   function ropeFissure(player) {
@@ -951,6 +1371,7 @@ module.exports = function registerShiloVillageQuest(api) {
     }
     take(player, ROPE);
     advance(player, STAGE_ROPED_MOUND);
+    ensureMoundObject(player);
     scene(player, TRUFITUS, "visiting-ah-za-rhoon-use-rope-on-fissure");
   }
 
@@ -966,6 +1387,7 @@ module.exports = function registerShiloVillageQuest(api) {
   function unlockCarvedDoors(player) {
     mechSet(player, MECH_FOUND_BONE_DOOR, true);
     advance(player, STAGE_UNLOCKED_RASHILIYIA_TOMB);
+    syncTombDoors(player);
     scene(player, TRUFITUS, "visiting-the-tomb-of-rashiliyia-use-bone-key-on-carved-doors");
   }
 
@@ -1048,6 +1470,11 @@ module.exports = function registerShiloVillageQuest(api) {
   function handleAction(event) {
     const { player, stepId } = event;
     if (!player) return;
+    if (stepId === MESSAGE_MOSOL_LEAVES) {
+      // The transcript's "Mosol leaves you by the gate": the player is inside the village, Mosol is back out.
+      teleport(player, VILLAGE_INSIDE_TILE);
+      return;
+    }
     if (stepId === ACTION_RECEIVE_WAMPUM) {
       if (!held(player, WAMPUM_BELT)) give(player, WAMPUM_BELT);
       event.handled = true;
@@ -1072,6 +1499,14 @@ module.exports = function registerShiloVillageQuest(api) {
     if (stepId === ACTION_SPAWN_UNDEAD || stepId === ACTION_GATE_UNDEAD) {
       spawnUndead(player, 1 + Math.floor(Math.random() * 3));
       event.handled = true;
+      return;
+    }
+    if (SCROLLS.has(stepId)) {
+      if (stepId === REFERENCE_READ_CRUMPLED) mechSet(player, MECH_READ_CRUMPLED, true);
+      event.handled = true;
+      event.end = true;
+      // After the dialogue's own close, which would shut it too.
+      TaskManager.submit(new CountdownTask(player, 1, () => openScroll(player, SCROLLS.get(stepId))));
       return;
     }
     if (stepId === ACTION_COMPLETE) {
@@ -1099,10 +1534,59 @@ module.exports = function registerShiloVillageQuest(api) {
     }
   }
 
+  /** Follow (op 1) on the finished-quest Mosol Rei: the transcript's Yes, without the questions (Wiki wording). */
+  function handleMosolFollow(event) {
+    const { player } = event;
+    if (!quest.isComplete(player)) return false;
+    event.handled = true;
+    player.sendMessage("Mosol leads you into the village.");
+    player.sendMessage("Mosol leaves you by the gate and walks back out into the jungle.");
+    teleport(player, VILLAGE_INSIDE_TILE);
+    return true;
+  }
+
+  /**
+   * Rashiliyia's corpse is the ghost's drop only: the Wiki lists it as "Always" for Nazastarool without naming a form,
+   * and the generated table gives all three forms the same row. The corpse only appears once the third form is down.
+   */
+  function handleNazastaroolDrops(event) {
+    if (event.npcId !== NAZASTAROOL_FORMS[0] && event.npcId !== NAZASTAROOL_FORMS[1]) return;
+    if (!Array.isArray(event.drops)) return;
+    for (let i = event.drops.length - 1; i >= 0; i--) {
+      if (event.drops[i]?.itemId === RASHILIYIA_CORPSE) event.drops.splice(i, 1);
+    }
+  }
+
   function handleChoice(event) {
     const { player } = event;
+    if (player && event.npcId === YANNI && pendingPrismSale.has(player)) {
+      const sale = pendingPrismSale.get(player);
+      const option = String(event.option ?? "");
+      if (option.startsWith("Yes, I'll sell it for 5000")) {
+        pendingPrismSale.delete(player);
+        if (paidFor(player, sale.itemId, sale.slot, sale.item, YANNI_SALES.get(sale.itemId).price)) {
+          player.setAttribute(PRISM_SOLD_ATTRIBUTE, 1);
+          takeEveryPrism(player);
+        }
+      } else if (option.startsWith("No, I think I'll hold on it")) {
+        pendingPrismSale.delete(player);
+      }
+      return;
+    }
     if (!player || event.npcId !== TRUFITUS) return;
     const option = String(event.option ?? "");
+    const pendingLight = pendingLightByPlayer.get(player);
+    if (pendingLight !== undefined) {
+      pendingLightByPlayer.delete(player);
+      if (option === "Yes"
+        && quest.getStage(player) === STAGE_DUG_MOUND
+        && ownedMoundObject(player)?.getId() === FISSURE
+        && held(player, pendingLight)) {
+        take(player, pendingLight);
+        advance(player, STAGE_LIT_MOUND);
+      }
+      return;
+    }
     if (option.includes("I can think of nothing nicer")) {
       if (agilityLevel(player) < 32) {
         player.sendMessage("You need an Agility level of at least 32 to squeeze in there.");
@@ -1155,13 +1639,74 @@ module.exports = function registerShiloVillageQuest(api) {
   }
 
   function handleLogout({ player }) {
-    if (player) clearNazastarool(player);
+    if (!player) return;
+    clearNazastarool(player);
+    pendingLightByPlayer.delete(player);
+    pendingPrismSale.delete(player);
+    bridgeState.delete(player);
+    clearMoundObject(player);
   }
 
   function handleLogin({ player }) {
     if (!player) return;
     clearNazastarool(player);
+    pendingLightByPlayer.delete(player);
+    ensureMoundObject(player);
     refreshQuestList(player);
+  }
+
+  /** Wiki's success chance for a skill chart: (1 + floor(low * (99 - L) / 98 + high * (L - 1) / 98 + 0.5)) / 256. */
+  function bridgeChance(level) {
+    return Math.min(1, (1 + Math.floor((BRIDGE_LOW * (99 - level)) / 98 + (BRIDGE_HIGH * (level - 1)) / 98 + 0.5)) / 256);
+  }
+
+  /** Each player's last roll on the bridge: the tick, and the tile they stood on. */
+  const bridgeState = new Map();
+
+  /**
+   * A player on the Cairn Isle bridge rolls Agility every 20 ticks (capture 352 has the success line 20 ticks apart,
+   * shuttling on the bridge included), and only after moving since the last roll (ours: standing still would be an AFK
+   * farm). The last roll is kept until logout, not cleared on leaving, so stepping off and on does not pay. Success is the
+   * captured line and 10 XP; failure is three hits of floor(HP / 11), the fall line and landing being ours.
+   */
+  function rollOnBridge(player) {
+    if (ObstacleRunner.isBusy(player)) return;
+    const at = player.getLocation();
+    const tick = api.core.World.getProcessCycle();
+    const last = bridgeState.get(player);
+    if (last && (tick - last.tick < BRIDGE_REROLL_TICKS || last.x === at.getX())) return;
+    bridgeState.set(player, { tick, x: at.getX() });
+    if (Math.random() < bridgeChance(agilityLevel(player))) {
+      player.sendMessage(BRIDGE_KEEP_BALANCE);
+      player.getSkillManager().addExperiences(Skill.AGILITY, BRIDGE_XP);
+      return;
+    }
+    const hit = Math.floor(player.getHitpoints() / 11);
+    ObstacleRunner.run({ player }, [
+      { msg: BRIDGE_FALL },
+      { tele: [BRIDGE_LANDING.x, BRIDGE_LANDING.y, BRIDGE_LANDING.z] },
+      { hit },
+      { hit },
+      { hit },
+    ]);
+  }
+
+  /** The bridge's tiles, x 2776-2781 on y 2979: only the players standing there are asked. */
+  function createBridgeArea() {
+    return new (class CairnIsleBridge extends api.core.Area {
+      constructor() {
+        super([new api.core.Boundary(BRIDGE.minX, BRIDGE.maxX, BRIDGE.y, BRIDGE.y, 0)]);
+      }
+
+      process(mobile) {
+        if (mobile.isPlayer?.()) rollOnBridge(mobile);
+      }
+    })();
+  }
+
+  /** A closed chatbox cancels the pending light confirmation. */
+  function handleInterfaceClose({ player } = {}) {
+    if (player) pendingLightByPlayer.delete(player);
   }
 
   api.persistAttribute(MECH_ATTRIBUTE);
@@ -1180,7 +1725,11 @@ module.exports = function registerShiloVillageQuest(api) {
     onReward: grantReward,
   });
 
+  ObstacleRunner.init(api);
   api.onNpcInteraction("Trufitus", { "Talk-to": handleTrufitusTalk });
+  // The cache's complete form of Mosol Rei (8696) has Follow as its first option; we lead the player in.
+  api.onNpcInteraction("Mosol Rei", { Follow: handleMosolFollow });
+  api.onCustomEvent("npc-drops:roll", handleNazastaroolDrops);
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
@@ -1188,12 +1737,18 @@ module.exports = function registerShiloVillageQuest(api) {
   api.onCustomEvent("npc-dialogue:condition", handleCondition);
   api.onCustomEvent("npc-dialogue:line", handleNazastaroolLine);
   api.onCustomEvent("npc-dialogue:choice", handleChoice);
+  api.onCustomEvent("interface:close", handleInterfaceClose);
   api.onItemOnNpc(handleItemOnNpc);
   api.onItemOnItem(handleItemOnItem);
   api.onItemAction(handleItemAction);
   api.onItemOnObject(handleItemOnObject, { noted: false });
+  api.onBeforeObjectInteraction(handleVillageGate);
   api.onObjectInteraction(handleObjectInteraction);
   api.onNpcDeath(handleNpcDeath);
+  api.registerArea(createBridgeArea());
+  api.persistAttribute(PRISM_SOLD_ATTRIBUTE);
   api.onPlayerLogout(handleLogout);
   api.onPlayerLogin(handleLogin);
+  // After the login bootstrap, which clobbers shared varps; 8180 shares 1785 with My Arm's quest.
+  api.onCustomEvent("player:bootstrap-complete", ({ player }) => syncTombDoors(player));
 };

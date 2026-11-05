@@ -217,12 +217,12 @@ class InvocationSettings {
     return -1;
   }
 
-  /** Raid levels lost by missing the target time. */
+  /** Raid levels lost by missing the target time (Wiki's table). */
   timePenalty() {
-    if (this.isActive("WALK_FOR_IT")) return 10;
-    if (this.isActive("JOG_FOR_IT")) return 15;
-    if (this.isActive("RUN_FOR_IT")) return 20;
-    if (this.isActive("SPRINT_FOR_IT")) return 25;
+    if (this.isActive("WALK_FOR_IT")) return 20;
+    if (this.isActive("JOG_FOR_IT")) return 30;
+    if (this.isActive("RUN_FOR_IT")) return 40;
+    if (this.isActive("SPRINT_FOR_IT")) return 50;
     return 0;
   }
 

@@ -1,6 +1,6 @@
 /** Romeo & Juliet: captured handovers, potion effects and private scenes. See docs/f2p-varrock-parity.md. */
 module.exports = function registerRomeoAndJulietQuest(api) {
-  const { Animation, Graphic, Location, World, TaskManager, CountdownTask, TemplatedInstanceArea, DialogueChainBuilder, ActionDialogue, StatementDialogue, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
+  const { Animation, Graphic, PathFinder, Location, World, TaskManager, CountdownTask, TemplatedInstanceArea, DialogueChainBuilder, ActionDialogue, StatementDialogue, ItemIdentifiers, NpcIdentifiers } = api.core;
   const { registerQuest, startTranscript } = require("../QuestRuntime");
 
   const ROMEO_NPC_ID = NpcIdentifiers.ROMEO;
@@ -30,12 +30,6 @@ module.exports = function registerRomeoAndJulietQuest(api) {
   const JULIETS_MESSAGE_ITEM_ID = ItemIdentifiers.MESSAGE;
   const CADAVA_POTION_ITEM_ID = ItemIdentifiers.CADAVA_POTION;
 
-  const CADAVA_BUSH_LOC_IDS = new Set([
-    ObjectIdentifiers.CADAVA_BUSH,
-    ObjectIdentifiers.CADAVA_BUSH_2,
-    ObjectIdentifiers.CADAVA_BUSH_3,
-  ]);
-
   /** Message step ids from the "Romeo & Juliet" transcript. */
   const JULIET_GIVES_MESSAGE = "2xqCe8";
   const JULIET_GIVES_ANOTHER_MESSAGE = "KmL5hw";
@@ -52,11 +46,16 @@ module.exports = function registerRomeoAndJulietQuest(api) {
 
   const RJ = (variant) => ({ page: "Romeo & Juliet", variant });
   const held = (player, itemId) => player.getInventory().getAmount(itemId) > 0;
+  const handedOverBerries = (player) => Boolean(player.getAttribute(BERRIES_ATTRIBUTE));
+  /** Carried berries, or berries already handed over in a conversation that ended before the potion. */
+  const hasBerries = (player) => held(player, CADAVA_BERRIES_ITEM_ID) || handedOverBerries(player);
 
   const PHILLIPA_NPC_ID=NpcIdentifiers.PHILLIPA, DRAUL_NPC_ID=NpcIdentifiers.DRAUL_LEPTOC;
   const CONGREGATION_NPC_ID=5042; // cache congregation1
   const JULIET_VARBIT=1838; // romeo_juliet_in_crypt
   const MESSAGE_ATTRIBUTE="romeo-and-juliet:message-delivered";
+  /** Berries the Apothecary took at "You hand over the berries" but has not yet turned into a potion. */
+  const BERRIES_ATTRIBUTE="romeo-and-juliet:berries-handed-over";
   const POTION_VARIANT="delivering-the-potion-talking-to-juliet", CRYPT_VARIANT="rescuing-juliet-talking-to-romeo";
   const POTION_FIRST_VARIANT="making-the-cadava-potion-talking-to-the-apothecary", POTION_AGAIN_VARIANT=POTION_FIRST_VARIANT+"-again";
   const LOOK_VARIANT=POTION_AGAIN_VARIANT+"-look-at-the-potion", DRINK_VARIANT=POTION_AGAIN_VARIANT+"-drinking-the-potion-at-the-apothecary-s", OUTSIDE_VARIANT=POTION_AGAIN_VARIANT+"-attempting-to-drink-the-potion-elsewhere";
@@ -158,7 +157,7 @@ module.exports = function registerRomeoAndJulietQuest(api) {
     }
     if (stage >= STAGE_SPOKEN_TO_APOTHECARY) {
       const carriedPotion = held(player, CADAVA_POTION_ITEM_ID);
-      const carriedBerries = held(player, CADAVA_BERRIES_ITEM_ID);
+      const carriedBerries = hasBerries(player);
       return [
         ...romeoLines,
         "",
@@ -272,10 +271,10 @@ module.exports = function registerRomeoAndJulietQuest(api) {
     if (npcId === APOTHECARY_NPC_ID) {
       if (value.includes("has not started romeo & juliet")) return stage < STAGE_SPOKEN_TO_ROMEO;
       if (value.includes("has completed romeo & juliet")) return stage >= STAGE_COMPLETE;
-      if (value.includes("does not have cadava berries")) return !held(player, CADAVA_BERRIES_ITEM_ID);
-      if (value.includes("has cadava berries")) return held(player, CADAVA_BERRIES_ITEM_ID);
-      if (value.includes("without any cadava berries")) return !held(player, CADAVA_BERRIES_ITEM_ID);
-      if (value.includes("with some cadava berries")) return held(player, CADAVA_BERRIES_ITEM_ID);
+      if (value.includes("does not have cadava berries")) return !hasBerries(player);
+      if (value.includes("has cadava berries")) return hasBerries(player);
+      if (value.includes("without any cadava berries")) return !hasBerries(player);
+      if (value.includes("with some cadava berries")) return hasBerries(player);
       if (value.includes("with the cadava potion")) return held(player, CADAVA_POTION_ITEM_ID);
       if (value.includes("after giving juliet the cadava potion")) {
         return stage >= STAGE_JULIET_IN_CRYPT;
@@ -307,7 +306,11 @@ module.exports = function registerRomeoAndJulietQuest(api) {
       if(text==="Right...bottoms up!")current?.performAnimation(new Animation(3284));
       if(text==="Urk!")current?.performAnimation(new Animation(836));
       if(text==="What's all that screaming?") { actor(scene,DRAUL_NPC_ID,3158,3427);camera(player,scene,[3156,3421,425],[3157,3426,125],5); }
-      if(text==="Hi Romeo...I'm Phillipa!") {const cousin=actor(scene,PHILLIPA_NPC_ID,2331,4645);cousin?.getMovementQueue().addSteps(scene.sourceTile(2325,4644));}
+      // Straight queued steps cross the crypt's walls before reaching these scripted destinations.
+      if(text==="Hi Romeo...I'm Phillipa!") {
+        const cousin=actor(scene,PHILLIPA_NPC_ID,2331,4645),to=scene.sourceTile(2325,4644);
+        if(cousin)PathFinder.calculateWalkRoute(cousin,to.getX(),to.getY());
+      }
     };
     if(scene.kind==="crypt"&&text==="Oh, be quiet...")event.after=()=>{
       frozenDialogue(player);
@@ -322,7 +325,9 @@ module.exports = function registerRomeoAndJulietQuest(api) {
       later(scene,16,()=>resume(player,ROMEO_NPC_ID,CRYPT_VARIANT,text));
     };
     if(scene.kind==="crypt"&&text==="Ohhh, ok then...")event.after=()=>{
-      frozenDialogue(player);scene.actors.get(ROMEO_NPC_ID)?.getMovementQueue().addSteps(scene.sourceTile(2323,4643));
+      frozenDialogue(player);
+      const romeo=scene.actors.get(ROMEO_NPC_ID),to=scene.sourceTile(2323,4643);
+      if(romeo)PathFinder.calculateWalkRoute(romeo,to.getX(),to.getY());
       later(scene,1,()=>camera(player,scene,[2322,4639,300],[2328,4654,25]));
       later(scene,14,()=>resume(player,ROMEO_NPC_ID,CRYPT_VARIANT,text));
     };
@@ -369,7 +374,13 @@ module.exports = function registerRomeoAndJulietQuest(api) {
     }
 
     if (stepId === APOTHECARY_TAKES_BERRIES || stepId === APOTHECARY_TAKES_BERRIES_AGAIN) {
-      if (!held(player, CADAVA_BERRIES_ITEM_ID)) return;
+      // The berries leave the inventory with this box, as its text says. The saved attribute
+      // keeps them handed over if the conversation is closed before the potion is given.
+      if (!handedOverBerries(player)) {
+        if (!held(player, CADAVA_BERRIES_ITEM_ID)) return;
+        player.getInventory().deleteNumber(CADAVA_BERRIES_ITEM_ID,1);
+        player.setAttribute(BERRIES_ATTRIBUTE,1);
+      }
       berryHandover.add(player);mixed.delete(player);event.box={items:[CADAVA_BERRIES_ITEM_ID]};
       event.handled = true;
       event.end = false;
@@ -377,9 +388,17 @@ module.exports = function registerRomeoAndJulietQuest(api) {
     }
 
     if (stepId === APOTHECARY_GIVES_POTION || stepId === APOTHECARY_GIVES_POTION_AGAIN) {
-      if (!berryHandover.has(player) || !held(player,CADAVA_BERRIES_ITEM_ID)) {event.handled=true;event.end=true;return;}
+      if (!berryHandover.has(player) || !handedOverBerries(player)) {event.handled=true;event.end=true;return;}
+      // The slot the berries freed may have been filled since an interrupted hand-over:
+      // keep the saved hand-over so the player can make space and talk to him again.
+      if (player.getInventory().isFull()) {
+        berryHandover.delete(player);mixed.delete(player);
+        // shortcut: no capture of this case; wording follows Juliet's full-inventory message.
+        player.sendMessage("You need a free inventory space before the Apothecary can give you the potion.");
+        event.handled=true;event.end=true;return;
+      }
       {
-        player.getInventory().deleteNumber(CADAVA_BERRIES_ITEM_ID,1);berryHandover.delete(player);mixed.delete(player);
+        player.setAttribute(BERRIES_ATTRIBUTE,0);berryHandover.delete(player);mixed.delete(player);
         player.getInventory().adds(CADAVA_POTION_ITEM_ID, 1);
         event.box={items:[CADAVA_POTION_ITEM_ID]};
         if (quest.getStage(player) < STAGE_SPOKEN_TO_APOTHECARY) {
@@ -434,7 +453,9 @@ module.exports = function registerRomeoAndJulietQuest(api) {
     constructor(player,kind) {
       super(4,4);this.owner=player;this.kind=kind;this.origin=kind==="juliet"?[3144,3416,1]:[2320,4632,0];
       this.returnTile=kind==="juliet"?new Location(3157,3425,1):player.getLocation().clone();this.actors=new Map();
-      for(let x=0;x<4;x++)for(let y=0;y<4;y++)this.setChunk(this.origin[2],x,y,{sourceChunkX:this.origin[0]/8+x,sourceChunkY:this.origin[1]/8+y,sourcePlane:this.origin[2],rotation:0});
+      for(let plane=0;plane<=this.origin[2];plane++) {
+        for(let x=0;x<4;x++)for(let y=0;y<4;y++)this.setChunk(plane,x,y,{sourceChunkX:this.origin[0]/8+x,sourceChunkY:this.origin[1]/8+y,sourcePlane:plane,rotation:0});
+      }
     }
     sourceTile(x,y) { return this.tile(x-this.origin[0],y-this.origin[1],this.origin[2]); }
     canTeleport(){return false;} canAttack(){return false;}
@@ -540,20 +561,6 @@ module.exports = function registerRomeoAndJulietQuest(api) {
   }
   function restoreJuliet({player}) { player.getPacketSender().sendVarbit(JULIET_VARBIT,quest.isComplete(player)?2:quest.getStage(player)>=STAGE_JULIET_IN_CRYPT?1:0); }
 
-  // Pick Cadava berries from the bushes (reference locs 23625-23627).
-  function pickCadavaBerries(event) {
-    if (!CADAVA_BUSH_LOC_IDS.has(event.objectId)) return;
-    const action = String(event.definition?.getInteractions?.()?.[event.clickType - 1] ?? "").toLowerCase();
-    if (action !== "pick-from") return;
-    event.handled = true;
-    if (event.player.getInventory().isFull()) {
-      event.player.sendMessage("You do not have room for any Cadava berries.");
-      return;
-    }
-    event.player.getInventory().adds(CADAVA_BERRIES_ITEM_ID, 1);
-    event.player.sendMessage("You pick some Cadava berries.");
-  }
-
   quest = registerQuest(api, {
     key: "romeo_and_juliet",
     name: "Romeo & Juliet",
@@ -573,9 +580,9 @@ module.exports = function registerRomeoAndJulietQuest(api) {
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:line", handleDialogueLine);
   api.onCustomEvent("npc-dialogue:action", handleDialogueAction);
-  api.onObjectInteraction(pickCadavaBerries);
   api.onItemAction(handleItemAction);
   api.persistAttribute(MESSAGE_ATTRIBUTE,0);
+  api.persistAttribute(BERRIES_ATTRIBUTE,0);
   api.onPlayerLogin(restoreJuliet);
   api.onPlayerLogout(handleLogout);
 };

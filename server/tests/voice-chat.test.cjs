@@ -21,7 +21,7 @@ test('voice peers and signalling are scoped to participation, distance, plane an
   const players = new Map();
   const participant = (id, x = 3200, z = 0, area = null) => {
     const player = { id, x, y: 3200, z, area, packets: [],
-      getIndex() { return this.id; }, getUsername() { return `Player${id}`; },
+      getIndex() { return this.id; }, getUsername() { return `Player${id}`; }, getDisplayName() { return `Player${id}`; },
       getPrivateArea() { return this.area; },
       getLocation() { return { getX: () => this.x, getY: () => this.y, getZ: () => this.z }; },
       getLocalPlayers() { return [...players.values()].filter(other => other !== this); },

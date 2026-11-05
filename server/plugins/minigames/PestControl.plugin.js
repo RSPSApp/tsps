@@ -256,25 +256,31 @@ function clampActivity(value) {
   return Math.max(0, Math.min(MAX_ACTIVITY, value | 0));
 }
 
+// Shots land 5 cycles after launch plus 5 a tile (Defiler) or 10 (Torcher), and hit as they land:
+// a flat 62 -> 80 crossed the whole range at once and hit a tick before the launch.
+const PEST_PROJECTILE_DELAY = 62;
+const defilerEnd = (character, target) => Projectile.arrivalCycles(character, target, PEST_PROJECTILE_DELAY + 5, 5);
+const torcherEnd = (character, target) => Projectile.arrivalCycles(character, target, PEST_PROJECTILE_DELAY + 5, 10);
+
 class DefilerCombatMethod extends CombatMethod {
   type() { return CombatType.RANGED; }
   attackDistance() { return 6; }
-  hits(character, target) { return [new PendingHit(character, target, this, 1)]; }
+  hits(character, target) { return [new PendingHit(character, target, this, Projectile.ticksToLand(defilerEnd(character, target)))]; }
   start(character, target) {
     const animation = character.getAttackAnim?.();
     if (animation >= 0) character.performAnimation(new Animation(animation));
-    Projectile.createProjectile(character, target, 656, 62, 80, 35, 43).sendProjectile();
+    Projectile.createProjectile(character, target, 656, PEST_PROJECTILE_DELAY, defilerEnd(character, target), 35, 43).sendProjectile();
   }
 }
 
 class TorcherCombatMethod extends CombatMethod {
   type() { return CombatType.MAGIC; }
   attackDistance() { return 10; }
-  hits(character, target) { return [new PendingHit(character, target, this, 1)]; }
+  hits(character, target) { return [new PendingHit(character, target, this, Projectile.ticksToLand(torcherEnd(character, target)))]; }
   start(character, target) {
     const animation = character.getAttackAnim?.();
     if (animation >= 0) character.performAnimation(new Animation(animation));
-    Projectile.createProjectile(character, target, 647, 62, 80, 50, 43).sendProjectile();
+    Projectile.createProjectile(character, target, 647, PEST_PROJECTILE_DELAY, torcherEnd(character, target), 50, 43).sendProjectile();
   }
 }
 
@@ -878,6 +884,8 @@ class PestControlMatch {
       const state = this.players.get(player);
       if (won && state.activity >= MIN_REWARD_ACTIVITY) {
         const commendations = commendationsFor(player, this.boat.points);
+        // "pest-control:won" { player, boat }: a game won and rewarded (a league's "Complete a game of Novice Pest Control").
+        pluginApi.emitCustomEvent("pest-control:won", { player, boat: this.boat.key });
         setPoints(player, getPoints(player) + commendations);
         const coins = player.getSkillManager().getCombatLevel() * 10;
         player.getInventory().adds(ItemIdentifiers.COINS, coins);
@@ -1166,6 +1174,8 @@ module.exports = {
     moveBetweenAreas,
     adoptPendingBots,
     chooseDefenceTarget: Bots.chooseDefenceTarget,
+    DefilerCombatMethod,
+    TorcherCombatMethod,
     Bots,
     PestControlMatch,
     gateGroupKey,

@@ -1,6 +1,6 @@
 // TODO: ported from xrsps-typescript; untested.
 module.exports = function registerAbyssalBludgeonSpecialAttack(api) {
-  const { Animation, CombatSpecial, Graphic, ItemIdentifiers, MeleeCombatMethod, Priority, Skill, Sounds } = api.core;
+  const { Animation, CombatSpecial, Graphic, ItemIdentifiers, MeleeCombatMethod, Priority, Skill, Sound, Sounds } = api.core;
 
   const DRAIN = 50;
   const DAMAGE_PER_MISSING_PRAYER_POINT = 0.005;
@@ -27,7 +27,7 @@ module.exports = function registerAbyssalBludgeonSpecialAttack(api) {
       TRAITS.damageMultiplier = damageMultiplier;
 
       character.performAnimation(ANIMATION);
-      Sounds.sendSound(character, character.getAttackSound());
+      Sounds.playAreaSoundAt(character, Sound.GRANITE_MAUL_SPECIAL);
     }
 
     handleAfterHitEffects(hit) {

@@ -158,6 +158,11 @@ export class GroundItemMeshes {
         this.builtHashes.delete(mapId);
     }
 
+    /** The locs under this map's items were rebuilt: the next update rebuilds its items on them. */
+    onMapLocsRefreshed(mapId: number): void {
+        this.builtHashes.delete(mapId);
+    }
+
     /**
      * Port of updateGroundItemMeshes (draw3.ts): group stacks per map, hash, rebuild changed
      * maps, and return true while sparse models are still pending so the client retries.
@@ -267,8 +272,8 @@ export class GroundItemMeshes {
             }
         }
 
-        // Alpha batch switches pipeline; the main renderer already drew map/actor alpha, so
-        // ground-item alpha is drawn last with the alpha pipeline.
+        // Alpha batch switches pipeline; the main renderer already drew the maps' alpha, and
+        // draws the actors' alpha (loot beams, spot animations) after this.
         let alphaSet = false;
         for (const mesh of this.maps.values()) {
             if (mesh.alpha.ranges.length === 0) continue;

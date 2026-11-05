@@ -3,7 +3,13 @@ import type { SeqTypeLoader } from "../rs/config/seqtype/SeqTypeLoader";
 import { WidgetLoader } from "./WidgetLoader";
 import type { WidgetNode } from "./WidgetNode";
 import { runCs1 } from "./cs1/runCs1";
-import { layoutSingleWidget, layoutWidgets } from "./layout/WidgetLayout";
+import { layoutSingleWidget, layoutWidgets, setWidgetLayoutAdjuster, type WidgetLike } from "./layout/WidgetLayout";
+import {
+    isPortraitModeEnabled,
+    isPortraitViewport,
+    setMobilePortraitLayoutActive,
+} from "../game/plugins/portraitmode/PortraitLayout";
+import { adjustMobileHudWidget } from "../game/widgets/MobileHudLayout";
 
 export type { WidgetNode };
 
@@ -40,6 +46,12 @@ export interface InterfaceParent {
     // - 3: tab/sidemodal replacement (closed by IF_CLOSE)
     type: number;
     isModal?: boolean; // true if this interface captures all input
+    /**
+     * A main- or side-modal mount. OSRS lets a click on the world outside the
+     * mounted interface close it and still reach the world, unlike the chatbox
+     * modals (dialogues), which keep blocking input.
+     */
+    closeOnOutsideClick?: boolean;
 }
 
 /**
@@ -65,7 +77,8 @@ export const SCRIPT_LAYOUT = "script-layout";
 
 /** What a script's position, size and hide ops change on a widget. */
 function layoutInputs(w: WidgetNode): string {
-    return `${w.rawX},${w.rawY},${w.rawWidth},${w.rawHeight},${w.xPositionMode},${w.yPositionMode},${w.widthMode},${w.heightMode},${w.isHidden}`;
+    // Absolute-position ops also write x/y; a raw round-trip must not erase a layout adjustment.
+    return `${w.rawX},${w.rawY},${w.rawWidth},${w.rawHeight},${w.xPositionMode},${w.yPositionMode},${w.widthMode},${w.heightMode},${w.isHidden},${w.x},${w.y}`;
 }
 
 export class WidgetManager {
@@ -630,13 +643,19 @@ export class WidgetManager {
         }
     }
 
-    /**
-     * Update canvas dimensions used for root widget sizing
-     * @param width New width
-     * @param height New height
-     */
+    private readonly adjustMobileHud = (node: WidgetLike, width: number, height: number): void => {
+        adjustMobileHudWidget(node, width, height, this);
+    };
+
+    /** Update canvas dimensions used for root widget sizing. */
     resize(width: number, height: number): void {
-        const changed = this.canvasWidth !== width || this.canvasHeight !== height;
+        // Portrait Mode plugin: an upright phone rearranges the mobile gameframe (601).
+        const mobile = this.rootInterface === 601;
+        const portrait = mobile && isPortraitModeEnabled();
+        setWidgetLayoutAdjuster(mobile ? this.adjustMobileHud : null);
+        const portraitChanged = setMobilePortraitLayoutActive(portrait && isPortraitViewport(width, height));
+        const changed =
+            portraitChanged || this.canvasWidth !== width || this.canvasHeight !== height;
         this.canvasWidth = width;
         this.canvasHeight = height;
         if (changed) {
@@ -1800,10 +1819,14 @@ export class WidgetManager {
         this.interfaceParents.clear();
         this.groupToContainerUid.clear();
         this.timerWidgetPaths = undefined;
-        // Clear runtime widget flags overrides on major interface changes.
-        // Reinitialize widgetFlags when interface parents are refreshed.
-        this.widgetFlagsOverrides.clear();
-        this.widgetOpMaskOverrides.clear();
+        // Mounted interfaces keep their server flags when only the gameframe changes (e.g. an open bank).
+        const gameframes = [161, 164, 165, 548, 601];
+        if (gameframes.includes(this.rootInterface) && gameframes.includes(groupId)) {
+            this.clearWidgetFlagsOverridesForGroup(this.rootInterface);
+        } else {
+            this.widgetFlagsOverrides.clear();
+            this.widgetOpMaskOverrides.clear();
+        }
         this.widgetFlagsVersion++;
 
         // Mark all widgets dirty - major interface change requires full redraw
@@ -1811,6 +1834,8 @@ export class WidgetManager {
 
         this.rootInterface = groupId;
         this.pendingRootOnLoad = -1;
+        // Install the root's layout adjustment before its first mounted interface is laid out.
+        this.resize(this.canvasWidth, this.canvasHeight);
 
         const instance = this.getGroup(groupId);
         if (!instance) {
@@ -1903,8 +1928,14 @@ export class WidgetManager {
      * @param targetUid The widget UID to mount into
      * @param groupId The interface group to mount
      * @param type interface parent type (0=modal, 1=overlay, 3=tab/sidemodal replacement)
+     * @param closeOnOutsideClick a main/side modal, which a world click outside its content closes
      */
-    openSubInterface(targetUid: number, groupId: number, type: number = 0): void {
+    openSubInterface(
+        targetUid: number,
+        groupId: number,
+        type: number = 0,
+        closeOnOutsideClick: boolean = false,
+    ): void {
         const targetWidget = this.getWidgetByUid(targetUid);
         if (!targetWidget) {
             console.warn(
@@ -1932,7 +1963,7 @@ export class WidgetManager {
         }
 
         // Track the mounting
-        this.interfaceParents.set(targetUid, { group: groupId, type });
+        this.interfaceParents.set(targetUid, { group: groupId, type, closeOnOutsideClick });
         this.timerWidgetPaths = undefined;
         // PERF: Maintain reverse lookup for O(1) visibility checks
         this.groupToContainerUid.set(groupId, targetUid);

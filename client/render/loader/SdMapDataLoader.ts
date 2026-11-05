@@ -16,6 +16,7 @@ import { VarManager } from "../../rs/config/vartype/VarManager";
 import { getMapIndexFromTile, getMapSquareId } from "../../rs/map/MapFileIndex";
 import { Model } from "../../rs/model/Model";
 import { Scene } from "../../rs/scene/Scene";
+import { collectObjSurfaceHeights } from "../../rs/scene/ObjSurfaceHeights";
 import { LocLoadType } from "../../rs/scene/SceneBuilder";
 import { SceneTile } from "../../rs/scene/SceneTile";
 import { getIdFromTag } from "../../rs/scene/entity/EntityTag";
@@ -45,7 +46,7 @@ import {
 } from "../buffer/SceneBuffer";
 import { LocAnimatedGroup } from "../loc/LocAnimatedGroup";
 import { SceneLocEntity } from "../loc/SceneLocEntity";
-import { getSceneLocs, isDoorLocType, isLowDetail, isRoofLocModelType } from "../loc/SceneLocs";
+import { getSceneLocs, isDoorLoc, isDoorLocType, isLowDetail, isRoofLocModelType } from "../loc/SceneLocs";
 import { createNpcDatas } from "../npc/NpcData";
 import {
     type NpcInstance,
@@ -989,10 +990,23 @@ function addLocAnimationFrames(
         }
     }
 
+    let baseFrame: number | undefined;
+    if (seqType.frameStep <= 0) {
+        const model = locModelLoader.getModelAnimated(locType, entity.type, entity.rotation, -1, 0);
+        if (model) {
+            baseFrame = frames.length;
+            frames.push(sceneBuf.addModelAnimFrame(model, false, undefined, doubleSided, locType.id));
+            const alpha = sceneBuf.addModelAnimFrame(model, true, undefined, doubleSided, locType.id);
+            framesAlpha.push(alpha);
+            if (alpha[1] > 0) alphaFrameCount++;
+        }
+    }
+
     return {
         frames,
         framesAlpha: alphaFrameCount > 0 ? framesAlpha : undefined,
         frameStarts,
+        baseFrame,
     };
 }
 
@@ -1708,14 +1722,13 @@ export class SdMapDataLoader implements RenderDataLoader<SdMapLoaderInput, SdMap
                 }
             }
         }
+        // Split as addLocEntities draws them: a multiloc by the variant it shows.
+        const isDoorEntity = (loc: SceneLocEntity) =>
+            isDoorLoc(locTypeLoader.load(loc.interactId), varManager, locTypeLoader);
         const locEntities = shouldLoadDoorOnly
-            ? sceneLocs.locEntities.filter((loc) =>
-                  isDoorLocType(locTypeLoader.load(loc.interactId)),
-              )
+            ? sceneLocs.locEntities.filter(isDoorEntity)
             : shouldLoadLocOnly
-              ? sceneLocs.locEntities.filter(
-                    (loc) => !isDoorLocType(locTypeLoader.load(loc.interactId)),
-                )
+              ? sceneLocs.locEntities.filter((loc) => !isDoorEntity(loc))
               : sceneLocs.locEntities;
 
         // Create loc animated groups and add transformed locs
@@ -1828,7 +1841,8 @@ export class SdMapDataLoader implements RenderDataLoader<SdMapLoaderInput, SdMap
                     const typeRots: number[] = [];
                     const pushLoc = (id: number, flags: number): void => {
                         const locId = id | 0;
-                        if (!(locId > 0)) return;
+                        // Loc id 0 is a real loc (a multiloc, rebuilt when its varp changes).
+                        if (!(locId >= 0)) return;
                         const packedTypeRot =
                             ((((flags | 0) >> 6) & 0x3) << 6) | ((flags | 0) & 0x3f);
                         const packed = packedTypeRot & 0xff;
@@ -2210,7 +2224,10 @@ export class SdMapDataLoader implements RenderDataLoader<SdMapLoaderInput, SdMap
 
         if (mapProfileEnabled) console.timeEnd(`load map ${mapX},${mapY}`);
 
+        const objSurfaceHeights = collectObjSurfaceHeights(scene);
+
         const transferables = [
+            ...objSurfaceHeights.flat().map((buf) => buf.buffer),
             ...scene.tileRenderFlags.flat().map((buf) => buf.buffer),
             ...scene.tileOverlays.flat().map((buf) => buf.buffer),
             ...(sceneBuf.groundMaterials?.flat().map((column) => column.buffer) ?? []),
@@ -2322,6 +2339,7 @@ export class SdMapDataLoader implements RenderDataLoader<SdMapLoaderInput, SdMap
                 renderPosX,
                 renderPosY,
                 tileRenderFlags: scene.tileRenderFlags,
+                objSurfaceHeights,
                 tileOverlays: scene.tileOverlays,
                 groundMaterials: sceneBuf.groundMaterials,
                 groundColors: sceneBuf.groundColors,

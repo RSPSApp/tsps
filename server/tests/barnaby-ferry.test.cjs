@@ -6,19 +6,30 @@ const { Server } = require("../dist/Server");
 Server.installProductionPathResolver();
 
 const { Equipment } = require("../dist/game/model/container/impl/Equipment");
+const { Location } = require("../dist/game/model/Location");
 const { ItemIds } = require("../dist/util/IdEnums");
 
 const BarnabyFerry = require("../plugins/world/BarnabyFerry.plugin");
 
-const teleports = [];
+const voyages = [];
+let requirementsMet = true;
+let acceptsTravel = true;
 BarnabyFerry.register({
   core: {
+    Location,
     ItemIdentifiers: ItemIds,
     TeleportHandler: {
-      checkReqs: () => true,
-      teleport: (player, destination, type) => teleports.push({ destination, type }),
+      checkReqs: () => requirementsMet,
+      teleport: () => assert.fail("a ship must not use a spellbook teleport"),
     },
     TeleportType: { NORMAL: "NORMAL" },
+  },
+  emitCustomEvent(name, request) {
+    assert.equal(name, "ferries:travel");
+    if (acceptsTravel) {
+      voyages.push(request.route);
+      request.handled = true;
+    }
   },
   onNpcInteraction() {},
   onNpcDialogueVariant() {},
@@ -56,16 +67,15 @@ const brimhavenCaptain = {
 };
 
 test("a destination option sails there after payment", () => {
-  teleports.length = 0;
+  voyages.length = 0;
   const player = createPlayer();
   BarnabyFerry._test.sailToOption({ player, definition: brimhavenCaptain, clickType: 4 });
   assert.equal(player.balance, 70);
-  assert.equal(teleports.length, 1);
-  assert.equal(teleports[0].destination.getX(), 2916);
+  assert.deepEqual(voyages, ["barnaby-rimmington"]);
 
   const broke = createPlayer({ coins: 10 });
   BarnabyFerry._test.sailToOption({ player: broke, definition: brimhavenCaptain, clickType: 3 });
-  assert.equal(teleports.length, 1);
+  assert.equal(voyages.length, 1);
   assert.equal(broke.balance, 10);
 });
 
@@ -79,7 +89,7 @@ test("the Talk-to transcript is the captain's own dock", () => {
 });
 
 test("the Talk-to transcript checks the fare and sails on its boarding message", () => {
-  teleports.length = 0;
+  voyages.length = 0;
   const condition = (player) => BarnabyFerry._test.answerFareCondition({
     player, definition: brimhavenCaptain, text: "If the player does not have 30 coins:",
   });
@@ -92,5 +102,26 @@ test("the Talk-to transcript checks the fare and sails on its boarding message",
   BarnabyFerry._test.boardFromDialogue(event);
   assert.equal(event.handled, true);
   assert.equal(player.balance, 70);
-  assert.equal(teleports[0].destination.getX(), 2680);
+  assert.deepEqual(voyages, ["barnaby-ardougne"]);
+});
+
+test("refused requirements or an unavailable voyage never charge the fare", () => {
+  const player = createPlayer();
+  voyages.length = 0;
+  requirementsMet = false;
+  try {
+    BarnabyFerry._test.sailToOption({ player, definition: brimhavenCaptain, clickType: 3 });
+    assert.equal(player.balance, 100);
+    assert.deepEqual(voyages, []);
+  } finally {
+    requirementsMet = true;
+  }
+  acceptsTravel = false;
+  try {
+    BarnabyFerry._test.sailToOption({ player, definition: brimhavenCaptain, clickType: 3 });
+    assert.equal(player.balance, 100);
+    assert.deepEqual(player.messages, []);
+  } finally {
+    acceptsTravel = true;
+  }
 });

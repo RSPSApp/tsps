@@ -57,6 +57,50 @@ function powerUp(event) {
   return true;
 }
 
+const IDLE_FLOURISH_TICKS = 50;
+const IDLE_FLOURISH_SEQ = 9372;
+
+/**
+ * Between games the Guardian sleeps (rsprox captures): portal_guardian_sleep 3 ticks after "The
+ * Great Guardian successfully closed the rift!" and 1 tick after "The Great Guardian was
+ * defeated!" (a loss has no death animation of its own), then portal_guardian_sleep_loop every
+ * tick through the lobby, and portal_guardian_wakeup on the tick "The rift becomes active!".
+ */
+const SLEEP_LOOP_TICKS = 1;
+const SLEEP_AFTER = { won: 3, lost: 1 };
+/** The clock tick it fell asleep, or -1 while awake; the server starts in the lobby. */
+let asleepAt = 0;
+
+function guardianAnimation(name) {
+  const npc = Game.greatGuardian();
+  if (npc?.isRegistered()) npc.performAnimation(new (Shared.core().Animation)(Shared.seq(name)));
+}
+
+function fallAsleep({ won } = {}) {
+  Shared.later(won ? SLEEP_AFTER.won : SLEEP_AFTER.lost, () => {
+    if (Game.isRunning()) return;
+    asleepAt = Game.clock();
+    guardianAnimation("portal_guardian_sleep");
+  });
+}
+
+function wakeUp() {
+  asleepAt = -1;
+  guardianAnimation("portal_guardian_wakeup");
+}
+
+/** Capture 1840: the Guardian's idle flourish every 50 ticks while a game runs. */
+function idleFlourish() {
+  const clock = Game.clock();
+  if (asleepAt >= 0) {
+    if (clock > asleepAt && (clock - asleepAt) % SLEEP_LOOP_TICKS === 0) guardianAnimation("portal_guardian_sleep_loop");
+    return;
+  }
+  if (!Game.isRunning() || clock === 0 || clock % IDLE_FLOURISH_TICKS !== 0) return;
+  const npc = Game.greatGuardian();
+  if (npc?.isRegistered()) npc.performAnimation(new (Shared.core().Animation)(IDLE_FLOURISH_SEQ));
+}
+
 function feed(player, npc) {
   if (!player.isRegistered() || !Game.isPlaying(player) || resting()) return;
   Shared.animate(player, "human_runecraft_walkmerge");
@@ -103,5 +147,8 @@ module.exports = {
   attach(api) {
     api.onNpcInteraction("The Great Guardian", { "Power-up": powerUp });
     api.onNpcDialogueCondition(answerCondition);
+    Game.on("tick", idleFlourish);
+    Game.on("ended", fallAsleep);
+    Game.on("open", wakeUp);
   },
 };

@@ -1,0 +1,2 @@
+# Deploy secrets are reachable from these files; changes need the owner's review.
+/.github/ @tobywisener

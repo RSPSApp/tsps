@@ -4,7 +4,8 @@
  * The Death's Domain entrances near the respawn points, and the office's exit portal. As
  * captured (rsprox recordings 4266 and 1106): Enter kneels into the portal (human_pickupfloor,
  * delay 20) as it opens; the exit portal opens it without the kneel, and puts the player outside
- * the entrance they came in by (Civitas illa Fortis: 1653, 3135).
+ * the entrance they came in by (Civitas illa Fortis: 1653, 3135). `deaths-office:exit`
+ * { player, destination } lets a game mode answer with another tile before the portal opens.
  */
 const Common = require("./Common.DeathsOffice");
 const Instance = require("./Instance.DeathsOffice");
@@ -37,6 +38,13 @@ function exitOf(player) {
   return Common.location(row.exit);
 }
 
+/** The portal's destination, once any game mode has had its say. */
+function destinationOf(player) {
+  const query = { player, destination: exitOverride(player) ?? exitOf(player) };
+  Common.api().emitCustomEvent("deaths-office:exit", query);
+  return query.destination;
+}
+
 function enterOffice(event) {
   const row = entrances.get(event.objectId);
   if (!row) return false;
@@ -53,7 +61,7 @@ function enterOffice(event) {
 function useExitPortal({ player }) {
   if (!Instance.inOffice(player)) return false;
   if (exitGuard(player)) return true;
-  const destination = exitOverride(player) ?? exitOf(player);
+  const destination = destinationOf(player);
   Instance.throughPortal(player, () => {
     Instance.leave(player, destination);
     player.setAttribute(ENTRANCE_ATTRIBUTE, null);

@@ -158,7 +158,8 @@ export function registerStringOps(handlers: HandlerMap): void {
     // === Text formatting ===
     handlers.set(Opcodes.ESCAPE, (ctx) => {
         const str = ctx.stringStack[--ctx.stringStackSize] ?? "";
-        ctx.pushString(str.replace(/</g, "&lt;").replace(/>/g, "&gt;"));
+        // The client's escapeBrackets: <lt> and <gt>, which the fonts draw as < and >.
+        ctx.pushString(str.replace(/[<>]/g, (c: string) => (c === "<" ? "<lt>" : "<gt>")));
     });
 
     handlers.set(Opcodes.REMOVETAGS, (ctx) => {
@@ -167,20 +168,21 @@ export function registerStringOps(handlers: HandlerMap): void {
     });
 
     handlers.set(Opcodes.TEXT_GENDER, (ctx) => {
-        const first = ctx.stringStack[--ctx.stringStackSize] ?? "";
-        const second = ctx.stringStack[--ctx.stringStackSize] ?? "";
+        ctx.stringStackSize -= 2;
+        const first = ctx.stringStack[ctx.stringStackSize] ?? "";
+        const second = ctx.stringStack[ctx.stringStackSize + 1] ?? "";
         const gender = ctx.getPlayerGender?.();
         ctx.pushString(gender !== undefined && gender !== null && gender !== 0 ? second : first);
     });
 
     handlers.set(Opcodes.TEXT_GENDER3, (ctx) => {
         // 3-way gender text: pops male, female, neutral strings
-        // Returns based on player appearance (0=male, 1=female, 2+=neutral)
+        // Pronouns are independent of the body type used by TEXT_GENDER.
         ctx.stringStackSize -= 3;
         const male = ctx.stringStack[ctx.stringStackSize] ?? "";
         const female = ctx.stringStack[ctx.stringStackSize + 1] ?? "";
         const neutral = ctx.stringStack[ctx.stringStackSize + 2] ?? "";
-        const gender = ctx.getPlayerGender?.() ?? -1;
+        const gender = ctx.getPlayerPronouns?.() ?? ctx.getPlayerGender?.() ?? -1;
         switch (gender) {
             case 0:
                 ctx.pushString(male);
@@ -193,9 +195,9 @@ export function registerStringOps(handlers: HandlerMap): void {
         }
     });
 
-    // text_gender_get (4124): pushes current appearance gender mode, or -1 when unavailable.
+    // pronoun (4124): the appearance textGender byte, or -1 when unavailable.
     handlers.set(Opcodes.TEXT_GENDER_MODE, (ctx) => {
-        const gender = ctx.getPlayerGender?.();
+        const gender = ctx.getPlayerPronouns?.() ?? ctx.getPlayerGender?.();
         ctx.pushInt(gender === undefined || gender === null ? -1 : gender | 0);
     });
 
@@ -210,9 +212,10 @@ export function registerStringOps(handlers: HandlerMap): void {
         const days = ctx.intStack[--ctx.intStackSize];
         // date = (11745 + days) * 86400000 and format "d-MMM-yyyy".
         const date = new Date((11745 + days) * 86_400_000);
-        const day = date.getDate();
-        const month = MONTHS[date.getMonth()] ?? "Jan";
-        const year = date.getFullYear();
+        // A whole UTC day: local fields would show the day before behind UTC.
+        const day = date.getUTCDate();
+        const month = MONTHS[date.getUTCMonth()] ?? "Jan";
+        const year = date.getUTCFullYear();
         ctx.pushString(`${day}-${month}-${year}`);
     });
 

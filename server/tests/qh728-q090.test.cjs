@@ -87,7 +87,7 @@ function makePlayer(options = {}) {
       getMaxLevel: () => thieving,
       addExperiences: (_skill, amount) => xp.push(amount),
     }),
-    getUsername: () => 'queen-test',
+    getUsername: () => 'queen-test', getDisplayName: () => 'queen-test',
     getRights: () => 0,
     getPrivateArea: () => null,
     getPacketSender: () => sender,

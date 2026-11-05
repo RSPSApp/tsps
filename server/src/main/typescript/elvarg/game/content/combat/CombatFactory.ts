@@ -1,7 +1,6 @@
+import { CrossFloor } from "../../CrossFloor";
 import { CombatPosition } from "./CombatPosition";
 import { ItemAliases } from "../../model/ItemAliases";
-import { Sound } from "../../Sound";
-import { Sounds } from "../../Sounds";
 import { PrayerHandler } from "../PrayerHandler";
 import { Dueling, DuelRule, DuelState } from "../Duelling";
 import { WeaponInterfaces } from "./WeaponInterfaces";
@@ -13,6 +12,7 @@ import { HitMask } from "./hit/HitMask";
 import { PendingHit } from "./hit/PendingHit";
 import { CombatSpells } from "./magic/CombatSpells";
 import { ArceuusSpells } from "./magic/ArceuusSpells";
+import { Autocasting } from "./magic/Autocasting";
 import { CombatMethod } from "./method/CombatMethod";
 import { MagicCombatMethod } from "./method/impl/MagicCombatMethod";
 import { MeleeCombatMethod } from "./method/impl/MeleeCombatMethod";
@@ -157,7 +157,7 @@ export class CombatFactory {
                 return special.getCombatMethod();
             }
 
-            if (player.getCombat().getAutocastSpell() != null && player.getEquipment().hasStaffEquipped()) {
+            if (Autocasting.isActive(player)) {
                 return CombatFactory.MAGIC_COMBAT;
             }
 
@@ -237,6 +237,9 @@ export class CombatFactory {
         const rolled = { attacker: entity, target: victim, combatType: type, damage, minimum: range.minimum, maximum: range.maximum };
         PluginManager.emitCustomEvent("combat:hit-rolled", rolled);
         if (rolled.damage !== damage && Number.isFinite(rolled.damage)) damage = Math.max(0, Math.floor(rolled.damage));
+
+        // OSRS Project Rebalance (29 May 2024): successful player zeroes become ones before defences.
+        if (entity.isPlayer() && damage === 0 && range.maximum > 0) damage = 1;
 
         // Wiki (Ward of Arceuus): demons hit 10% less, that 10% rounded down first.
         if (entity.isNpc() && victim.isPlayer() && ArceuusSpells.hasWard(victim)) {
@@ -534,8 +537,8 @@ export class CombatFactory {
         const targetLocation = CombatPosition.location(target, attacker);
         if (
             CombatPosition.area(attacker, target) !== CombatPosition.area(target, attacker) ||
-            attackerLocation.getZ() !== targetLocation.getZ() ||
-            attackerLocation.getDistance(targetLocation) >= 40
+            (attackerLocation.getZ() !== targetLocation.getZ() && !CrossFloor.canCross(attackerLocation, targetLocation)) ||
+            CrossFloor.distance(attackerLocation, targetLocation) >= 40
         ) {
             return false;
         }
@@ -690,10 +693,20 @@ export class CombatFactory {
         )) {
             // An always-multi NPC (a boss's summoned minion) never ties up the one it fights: a
             // player a hellhound is biting may still attack its master in a singles lair.
+            // Free NPCs fighting each other (NpcRivalries) don't tie one up against a player
+            // either, or the single-combat Battlefront, where soldiers are always fighting the
+            // lizardmen, would keep every lizardman from players. An owned NPC (a thrall) still
+            // ties up what it fights.
+            const npcBrawl = (mobile: Mobile, by: Mobile | null) =>
+                by != null && by.isNpc() && by.getAsNpc().getOwner() == null && mobile.isNpc() &&
+                (attacker.isPlayer() || target.isPlayer());
             const lockedBy = (mobile: Mobile) => {
                 const by = mobile.getCombat().getAttacker();
-                return by != null && !(by.isNpc() && by.getAsNpc().isMultiCombat());
+                return by != null && !(by.isNpc() && by.getAsNpc().isMultiCombat()) && !npcBrawl(mobile, by);
             };
+            const hitQueueFree = (mobile: Mobile, except: Mobile) => mobile.isNpc() && except.isPlayer()
+                ? mobile.getCombat().getHitQueue().isEmptyButFreeNpcs(except)
+                : mobile.getCombat().getHitQueue().isEmpty(except);
             if (
                 ServerPerf.measurePhase("combat.process.can_attack.attacker_busy", () =>
                     (
@@ -711,7 +724,7 @@ export class CombatFactory {
             if (
                 ServerPerf.measurePhase("combat.process.can_attack.target_busy", () =>
                     (CombatFactory.isBeingAttacked(target) && target.getCombat().getAttacker() != attacker && lockedBy(target)) ||
-                    !target.getCombat().getHitQueue().isEmpty(attacker)
+                    !hitQueueFree(target, attacker)
                 )
             ) {
                 return CanAttackResponse.TARGET_IN_COMBAT;
@@ -972,14 +985,9 @@ export class CombatFactory {
         // Target-side player effects.
         if (target.isPlayer()) {
             const playerTarget = target.getAsPlayer();
-            if (resolvedHit.isAccurate() && damage > 0) {
-                Sounds.sendSound(playerTarget, Sound.PLAYER_GETTING_HIT);
-            } else {
-                Sounds.sendSound(playerTarget, Sound.DEFENCE_BLOCK);
-            }
-
             // Close interfaces while being hit (except developer rights).
-            if (playerTarget.getRights() != PlayerRights.DEVELOPER && playerTarget.busy()) {
+            if (playerTarget.getRights() != PlayerRights.DEVELOPER &&
+                (playerTarget.busy() || playerTarget.getPacketSender().hasInterruptibleInterface())) {
                 playerTarget.getPacketSender().sendInterfaceRemoval();
             }
 
@@ -1421,8 +1429,15 @@ export class CombatFactory {
             attacker.isPlayer() &&
             AreaManager.inMulti(attacker) &&
             AreaManager.inMulti(target);
+        // An NPC fighting another NPC (NpcRivalries) turns on a player who hits it.
+        const npcLeavesNpcFight =
+            target.isNpc() &&
+            attacker.isPlayer() &&
+            currentTarget != null &&
+            currentTarget.isNpc() &&
+            currentTarget.getAsNpc().getOwner() == null;
 
-        if (!hasActiveDifferentTarget || npcCanRetargetInMulti) {
+        if (!hasActiveDifferentTarget || npcCanRetargetInMulti || npcLeavesNpcFight) {
             let auto_ret = false;
             if (target.isPlayer()) {
                 // combat:no-retaliate: a player mid-action that ignores hits (chopping an Ent trunk).
@@ -1605,7 +1620,7 @@ export class CombatFactory {
         // BAD LOOP
         for (let d of rangedWeapon.getAmmunitionData()) {
             if (d == ammoData) {
-                if (ItemAliases.same(d.getItemId(), ammoSlotItem.getId())) {
+                if (Ammunition.getForItem(ammoSlotItem.getId()) === d) {
                     properReq = true;
                     break;
                 }
@@ -1655,10 +1670,9 @@ export class CombatFactory {
 
         if (
             rangedWeapon === RangedWeapon.WEBWEAVER_BOW ||
-            rangedWeapon === RangedWeapon.CRAWS_BOW ||
-            rangedWeapon === RangedWeapon.TONALZTICS_OF_RALOS
+            rangedWeapon === RangedWeapon.CRAWS_BOW
         ) {
-            // TODO: consume a revenant ether / charge; charge storage is not modelled yet.
+            // TODO: consume a revenant ether; charge storage is not modelled yet.
             return;
         }
 

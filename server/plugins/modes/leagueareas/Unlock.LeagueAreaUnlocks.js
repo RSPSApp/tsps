@@ -29,12 +29,41 @@ function login({ player, league }) {
   if (!rules) return;
   if (Common.unlocked(player).length === 0) {
     player.setAttribute(Common.AREAS_ATTRIBUTE, [...rules.defaults]);
+    // A new character begins where the league starts it (Demonic Pacts: Yama's Lair).
+    if (rules.start) player.moveTo(new Common.core.Location(rules.start.x, rules.start.y, rules.start.z ?? 0));
   }
+  // Every unlocked area's content once: the defaults' on a new character, and any a character made
+  // before it existed (or saved before an unlock's fourteen ticks ran) has not had yet.
+  for (const area of Common.unlocked(player)) completeAreaContent(player, league, area);
   if (!Regions.isOpenAt(league, player, player.getLocation())) {
     player.moveTo(require("./Enforcement.LeagueAreaUnlocks").home(league, player));
   }
   player.getPacketSender().sendVarbit(Common.data.varbits.lastViewed, 0);
   sendState(player, league);
+}
+
+/** The areas whose quests, diary tasks and Combat Achievements were completed (area ids). */
+const CONTENT_ATTRIBUTE = "league:area-content";
+
+function contentGiven(player) {
+  const value = player.getAttribute(CONTENT_ATTRIBUTE);
+  return Array.isArray(value) ? value.map(Number) : [];
+}
+
+/**
+ * What a league completes with an area (Demonic Pacts): its diary tasks (`diary:task`), its Combat
+ * Achievements (`combat-achievements:complete`) and its quests (LeagueMode's `league:complete-quests`).
+ */
+function completeAreaContent(player, type, areaId) {
+  const rules = Common.league(type);
+  if (!rules?.quests && !rules?.diaryTasks && !rules?.combatAchievements) return;
+  const given = contentGiven(player);
+  if (given.includes(areaId)) return;
+  player.setAttribute(CONTENT_ATTRIBUTE, [...given, areaId]);
+  for (const [diary, , task] of rules?.diaryTasks?.[areaId] ?? []) Common.api.emitCustomEvent("diary:task", { player, diary, task });
+  for (const task of rules?.combatAchievements?.[areaId] ?? []) Common.api.emitCustomEvent("combat-achievements:complete", { player, task });
+  const quests = rules?.quests?.[areaId];
+  if (Array.isArray(quests) && quests.length) Common.api.emitCustomEvent("league:complete-quests", { player, quests });
 }
 
 /** `league:content-rows`: the slots' task counts (script 3682 reads enum 5677's structs, param 1010). */
@@ -55,6 +84,9 @@ function refusal(player, type, areaId) {
   const next = Common.nextSlot(type, player);
   if (next === null) return "noMoreAreas";
   if (Common.tasks(player) < next.tasks) return "moreTasks";
+  // A league whose first pick is fixed (Demonic Pacts' Karamja): the slot after the defaults takes only it.
+  const { firstPick, defaults } = Common.league(type);
+  if (Number.isInteger(firstPick) && next.slot === defaults.length && area.id !== firstPick) return "firstPick";
   return null;
 }
 
@@ -65,7 +97,8 @@ function state(player, type, areaId) {
   switch (refusal(player, type, areaId)) {
     case null: return states.available;
     case "noMoreAreas": return states.full;
-    case "notInLeague": return states.message;
+    case "notInLeague":
+    case "firstPick": return states.message;
     default: return states.locked;
   }
 }
@@ -86,6 +119,7 @@ function complete(player, type, area, slot) {
   const { varbits, notifications } = Common.data;
   const sender = player.getPacketSender();
   sender.sendVarbit(varbits.selection[slot], area.id);
+  completeAreaContent(player, type, area.id);
   player.sendMessage(Common.message("unlocked", { colour: Common.colourHex(type), area: area.name }));
   require("./Interface.LeagueAreaUnlocks").open({ player });
   const popup = notifications.areaUnlocked;
@@ -131,6 +165,26 @@ function unlock(player, areaId) {
   return true;
 }
 
+/**
+ * Developer: every area the league offers, past its slots and tasks (`::areas all`, `::leagueunlock`),
+ * with each area's content and `league:area-unlocked`, but none of the presentation. The slot
+ * varbits show only the first slots' areas; the rest are open all the same. Returns the names added.
+ */
+function unlockAll(player) {
+  const type = Common.leagueOf(player);
+  if (type === null) return [];
+  const list = Common.unlocked(player);
+  const added = Common.league(type).areas.filter((id) => !list.includes(id));
+  for (const id of added) {
+    list.push(id);
+    player.setAttribute(Common.AREAS_ATTRIBUTE, [...list]);
+    Common.api.emitCustomEvent("league:area-unlocked", { player, league: type, area: id, slot: list.length - 1 });
+    completeAreaContent(player, type, id);
+  }
+  sendState(player, type);
+  return added.map((id) => Common.area(id).name);
+}
+
 /** An award that reaches the next slot's tasks shows the popup once (captures 227/00075, 00196). */
 function pointsChanged({ player, tasks, previousTasks }) {
   const type = Common.leagueOf(player);
@@ -173,6 +227,7 @@ function answerAreaAt(query) {
 
 module.exports = function attach(api) {
   api.persistAttribute(Common.AREAS_ATTRIBUTE, []);
+  api.persistAttribute(CONTENT_ATTRIBUTE, []);
   api.onCustomEvent("league:login", login);
   api.onCustomEvent("league:content-rows", contribute);
   api.onCustomEvent("league:points-changed", pointsChanged);
@@ -180,4 +235,4 @@ module.exports = function attach(api) {
   api.onCustomEvent("league:area-at", answerAreaAt);
 };
 
-Object.assign(module.exports, { unlock, refusal, state, sendState });
+Object.assign(module.exports, { unlock, unlockAll, refusal, state, sendState });

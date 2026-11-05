@@ -24,16 +24,17 @@ before(async () => {
 });
 
 function harness(name, page = null, options = {}) {
-  const hooks = {}, events = {}, tasks = [], npcs = [], removed = [], objects = [], deregistered = [], worldPlayers = [], areas = [], namedNpcs = new Map(), namedObjects = new Map();
+  const hooks = {}, events = {}, tasks = [], npcs = [], removed = [], objects = [], deregistered = [], worldPlayers = [], areas = [], namedNpcs = new Map(), namedObjects = new Map(), namedItemActions = new Map();
   const api = new Proxy({
     core: {
       ...core,
+      PathFinder: Object.assign(Object.create(core.PathFinder), { calculateWalkRoute: (npc, x, y) => npc.getMovementQueue().addSteps?.(new core.Location(x, y, npc.getLocation().getZ())) }),
       World: { ...core.World, getNpcs: () => npcs, getNpcsNear: () => npcs, getPlayers: () => worldPlayers },
       TaskManager: {
         submit(task) { task.setRunning(true); tasks.push(task); },
         cancelTasks(key) { tasks.filter(task => task.key === key).forEach(task => task.stop()); },
       },
-      MapObjects: options.realObjects ? core.MapObjects : { get: () => null },
+      MapObjects: options.realObjects ? core.MapObjects : { get: () => null, getType: () => null },
       ObjectManager: options.realObjects ? core.ObjectManager : {
         register(object) { if (!objects.includes(object)) objects.push(object); },
         deregister(object) { deregistered.push(object); const index = objects.indexOf(object); if (index >= 0) objects.splice(index, 1); },
@@ -42,11 +43,20 @@ function harness(name, page = null, options = {}) {
     persistAttribute: noop,
     registerArea: area => areas.push(area),
     onNpcInteraction: (target, actions) => namedNpcs.set(target, actions),
+    onItemAction: (target, actions) => {
+      if (typeof target === 'function') (hooks.onItemAction ??= []).push(target);
+      else namedItemActions.set(target, actions);
+    },
     onObjectInteraction: (target, actions) => { if (typeof target === 'function') (hooks.onObjectInteraction ??= []).push(target); else namedObjects.set(target, actions); },
     onCustomEvent: (key, fn) => (events[key] ??= []).push(fn),
     emitCustomEvent: (key, event) => (events[key] ?? []).forEach(fn => fn(event)),
     sendMultiChatboxPrompt(p, title, ...pairs) { p.prompt = { title, options: pairs.filter((_, i) => i % 2 === 0), pairs }; return true; },
     spawnNpc(definition) {
+      if (options.nativeNpcs) {
+        const npc = PluginManager.spawnNpc(definition);
+        if (npc) npcs.push(npc);
+        return npc;
+      }
       let location = new core.Location(definition.x, definition.y, definition.z), area = null;
       const npc = {
         ...definition, animations: [], graphics: [], getId: () => definition.id, getIndex: () => npc.index,
@@ -57,7 +67,7 @@ function harness(name, page = null, options = {}) {
         isNpc: () => true, isPlayer: () => false,
         getAsNpc: () => npc, isRegistered: () => !npc.removed, getOwner: () => definition.owner,
         setPositionToFace: noop, forceChat: noop, performAnimation: noop, performGraphic: noop,
-        getMovementQueue: () => ({ reset() { return this; }, hasPendingWork: () => false, addFirstStep: to => { location = to; } }),
+        getMovementQueue: () => ({ reset() { return this; }, hasPendingWork: () => false, addFirstStep: to => { location = to; }, addSteps: to => { npc.walkingTo = to; } }),
         setNpcTransformationId: id => { npc.transformedId = id; }, setCombatXpMultiplier: noop,
         setHitpoints: hp => { npc.hitpoints = hp; return npc; }, getHitpoints: () => npc.hitpoints ?? 2000,
         getCombat: () => ({ reset: noop }),
@@ -65,7 +75,7 @@ function harness(name, page = null, options = {}) {
       npcs.push(npc);
       return npc;
     },
-    removeNpc: npc => { npc.removed = true; removed.push(npc); },
+    removeNpc: npc => { if (options.nativeNpcs) PluginManager.removeNpc(npc); npc.removed = true; removed.push(npc); },
   }, { get: (target, key) => target[key] ?? ((...args) => (hooks[key] ??= []).push(args.find(x => typeof x === 'function'))) });
   require(`../plugins/quests/quests/${name}.Quest`)(api);
   PluginManager.emitNpcDialogueCondition = event => {
@@ -82,7 +92,7 @@ function harness(name, page = null, options = {}) {
     });
   }
   const h = {
-    api, hooks, events, tasks, npcs, removed, objects, deregistered, worldPlayers, areas, namedNpcs, namedObjects,
+    api, hooks, events, tasks, npcs, removed, objects, deregistered, worldPlayers, areas, namedNpcs, namedObjects, namedItemActions,
     login(player) { (hooks.onPlayerLogin ?? []).forEach(fn => fn({ player })); },
     logout(player) { (hooks.onPlayerLogout ?? []).forEach(fn => fn({ player })); },
     quest: runtime.getRegisteredQuests().at(-1),
@@ -143,6 +153,10 @@ function player() {
       const entry = [...items.entries()][slot];
       return entry && entry[1] > 0 ? { getId: () => entry[0], getAmount: () => entry[1] } : null;
     },
+    deleteAtSlot(slot, amount = 1) {
+      const entry = [...items.entries()][slot];
+      if (entry) items.set(entry[0], Math.max(0, entry[1] - amount));
+    },
   };
   const packet = new Proxy({
     sendConfig(id, value) { configs.set(id, value); return packet; },
@@ -168,7 +182,7 @@ function player() {
     getLocation: () => location, moveTo: to => { location = to; },
     getArea: () => area, getPrivateArea: () => area, setArea: value => { area = value; },
     getIndex: () => p.index, isPlayer: () => true, isNpc: () => false, getAsPlayer: () => p,
-    isRegistered: () => true, isPlayerBot: () => false, getUsername: () => 'Parity',
+    isRegistered: () => true, isPlayerBot: () => false, getUsername: () => 'Parity', getDisplayName: () => 'Parity',
     getAppearance: () => ({ isMale: () => true }), setPositionToFace: noop, forceChat: noop,
     performAnimation: noop, sendMessage: text => p.messages.push(text),
   };
@@ -362,6 +376,44 @@ test('Sins finale reaches 138 and grants the experience tome once', () => {
 });
 
 
+test('Sins tome mirrors the captured chapter varbits', () => {
+  const h = harness('SinsOfTheFather'), p = player();
+  h.quest.setStage(p, 138);
+  p.items.set(TOME_OF_EXPERIENCE, 1);
+  const tome = p.getInventory().get(0);
+  const inventoryGet = p.getInventory().get.bind(p.getInventory());
+  p.getInventory().get = slot => (slot === 0 ? tome : inventoryGet(slot));
+  h.events['xpreward:open'] = [event => event.onConfirm(core.Skill.THIEVING, 'Thieving')];
+  const read = () => h.namedItemActions.get('Tome of Experience').Read({
+    player: p, itemId: TOME_OF_EXPERIENCE, item: tome, slot: 0,
+  });
+
+  read();
+  assert.equal(p.varbits.get(10346), 1, 'capture 1637: first chapter is myq5_xp_reward 1');
+  assert.equal(p.varbits.get(14611), 0);
+  read();
+  assert.equal(p.varbits.get(10346), 2);
+  read();
+  assert.equal(p.varbits.get(10346), 3);
+  assert.equal(p.varbits.get(14611), 0);
+  read();
+  assert.equal(p.varbits.get(10346), 3);
+  assert.equal(p.varbits.get(14611), 1, 'capture 1637: fourth chapter starts myq5_bonus_xp_reward 1');
+  read();
+  assert.equal(p.varbits.get(14611), 2);
+  read();
+  assert.equal(p.varbits.get(14611), 3);
+  assert.equal(p.items.get(TOME_OF_EXPERIENCE), 0, 'the sixth chapter consumes the tome');
+
+  const restored = player();
+  h.quest.setStage(restored, 138);
+  restored.attrs.set('quest.sins_of_the_father.tome-chapters', 4);
+  h.hooks.onPlayerLogin[0]({ player: restored });
+  assert.equal(restored.varbits.get(10346), 3, 'login restores the first three chapters');
+  assert.equal(restored.varbits.get(14611), 1, 'login restores the bonus chapter');
+});
+
+
 test('Sins migrates every legacy overlapping stage once and leaves native saves alone', () => {
   const legacy = [
     [20, 6], [100, 36], [130, 54], [300, 138],
@@ -433,16 +485,153 @@ test('Children cell scene places captured actors, walks Itzla and recovers on re
   relog.attrs.set('quest.children_of_the_sun.stage', 18);
   relog.attrs.set('children-of-the-sun:schema', 2);
   h.hooks.onPlayerLogin[0]({ player: relog });
-  assert.ok(h.npcs.some(npc => npc.getId() === N.BANDIT_20 && !npc.removed), 'relogging in 18 restores the cell scene');
+  assert.ok(h.npcs.some(npc => npc.getId() === N.SERGEANT_TOBYN && !npc.removed && npc.getOwner() === relog), 'relogging in 18 restores an interactive roof Tobyn');
+  assert.ok(!h.npcs.some(npc => npc.getId() === N.BANDIT_20 && !npc.removed && npc.getOwner() === relog), 'login does not trap the player with non-interactive cutscene actors');
 
   h.action(p, N.SERGEANT_TOBYN, '4aa1xN');
   assert.equal(h.quest.getStage(p), 20);
-  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY(), p.getLocation().getZ()], [10172, 3399, 2]);
+  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY(), p.getLocation().getZ()], [3203, 3474, 2]);
   h.tick(1);
-  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY(), p.getLocation().getZ()], [3203, 3473, 2]);
+  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY(), p.getLocation().getZ()], [3203, 3474, 2]);
   assert.ok(!h.npcs.some(npc => npc.getId() === N.BANDIT_20 && !npc.removed && npc.getOwner?.() === p));
   h.action(p, N.SERGEANT_TOBYN, 'VS01WH');
   assert.equal(h.quest.getStage(p), 22);
+});
+
+test('Children interrupted final dialogue resumes through an interactive roof NPC at each saved checkpoint', t => {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { PlayerSession } = require('../dist/net/PlayerSession');
+  const nativeEvents = new WeakMap(), emit = PluginManager.emitCustomEvent;
+  t.mock.method(PluginManager, 'emitCustomEvent', (name, event) => {
+    if (name === 'interface:closed') return nativeEvents.get(event.player)?.emit(name, event);
+    return emit.call(PluginManager, name, event);
+  });
+  for (const checkpoint of [16, 18, 20, 22]) {
+    const frames = [], channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true,
+      send: frame => { frames.push(Buffer.from(frame)); return true; }, close() {}, onData() {}, onError() {}, onClose() {} };
+    const h = harness('ChildrenOfTheSun', 'Children of the Sun', { nativeNpcs: true });
+    let p = new Player(new PlayerSession(channel));
+    p.setIndex(nextIndex++); p.setUsername('ChildrenResume'); p.setRegistered(true);
+    p.manager = p.getDialogueManager();
+    nativeEvents.set(p, h);
+    t.after(() => { h.logout(p); p.closeInterruptibleInterfaces(); p.setRegistered(false); h.tasks.forEach(task => task.stop()); });
+    h.quest.setStage(p, 16);
+    p.moveTo(new core.Location(3203, 3474, 2));
+    h.login(p);
+    h.talk(p, N.SERGEANT_TOBYN);
+    h.continueUntil(p, () => h.quest.getStage(p) === checkpoint);
+    if (checkpoint !== 20) h.tick(2);
+    p.closeInterruptibleInterfaces(); // The ordinary walk handler uses this native close path.
+    assert.equal(p.manager.isActive(), false);
+    if (checkpoint !== 20) h.tick(1); // Normal page transitions settle before interruption recovery.
+    if (checkpoint === 20 || checkpoint === 22) {
+      const saved = [p.getAttribute('quest.children_of_the_sun.stage'), p.getAttribute('children-of-the-sun:schema')];
+      const oldActors = h.npcs.filter(npc => npc.getOwner() === p);
+      if (checkpoint === 22) p.moveTo(new core.Location(3210, 3424, 0));
+      require('../dist/game/model/areas/AreaManager').AreaManager.process(p);
+      const savedLocation = p.getLocation().clone();
+      h.logout(p);
+      p.setRegistered(false);
+      assert.ok(oldActors.every(npc => !npc.isRegistered()), 'logout removes the old scene actors');
+      p = new Player(new PlayerSession(channel));
+      p.setIndex(nextIndex++); p.setUsername('ChildrenResume'); p.setRegistered(true);
+      p.manager = p.getDialogueManager();
+      nativeEvents.set(p, h);
+      p.setAttribute('quest.children_of_the_sun.stage', saved[0]);
+      p.setAttribute('children-of-the-sun:schema', saved[1]);
+      p.moveTo(savedLocation);
+      h.login(p);
+      assert.equal(h.quest.getStage(p), checkpoint, 'login preserves the earned native checkpoint');
+      if (checkpoint === 20) assert.deepEqual([p.getLocation().getX(), p.getLocation().getY(), p.getLocation().getZ()], [3203, 3474, 2], 'immediate logout never saves a raw instance island tile');
+      assert.ok(h.npcs.some(npc => npc.getOwner() === p && npc.isRegistered()), 'login creates replacement quest actors');
+    }
+    if (checkpoint !== 20) p.moveTo(new core.Location(3203, 3474, 2));
+    const tobyn = h.npcs.find(npc => !npc.removed && npc.getOwner() === p && npc.getLocation().getZ() === 2
+      && [N.SERGEANT_TOBYN, N.SERGEANT_TOBYN_2].includes(npc.getId()));
+    assert.ok(tobyn, `a roof Tobyn survives interruption at ${checkpoint}`);
+    assert.ok(tobyn.getCurrentDefinition(p).getActions().some(action => /^talk-to$/i.test(action ?? '')),
+      `checkpoint ${checkpoint} Tobyn ${tobyn.getId()}/${tobyn.getContentId(p)} actions ${JSON.stringify(tobyn.getCurrentDefinition(p).getActions())}`);
+    h.talk(p, tobyn.getContentId(p));
+    h.continueUntil(p, () => h.quest.isComplete(p));
+    assert.equal(h.quest.getStage(p), 24, `checkpoint ${checkpoint} resumes to completion`);
+    assert.equal(p.getAttribute('quest.points'), 1);
+    assert.equal(p.getSession().flushPackets(), true);
+    assert.ok(frames.length > 0, 'the real packet sender presented the dialogue and quest completion');
+    if (checkpoint === 20) {
+      const legacy = new Player(new PlayerSession(channel));
+      legacy.setIndex(nextIndex++); legacy.setUsername('ChildrenLegacyExit'); legacy.setRegistered(true);
+      legacy.setAttribute('quest.children_of_the_sun.stage', 20);
+      legacy.setAttribute('children-of-the-sun:schema', 2);
+      legacy.moveTo(new core.Location(10172, 3399, 2));
+      t.after(() => { h.logout(legacy); legacy.setRegistered(false); });
+      h.login(legacy);
+      assert.equal(h.quest.getStage(legacy), 20, 'a previously stranded save retains its earned stage');
+      assert.deepEqual([legacy.getLocation().getX(), legacy.getLocation().getY(), legacy.getLocation().getZ()], [3203, 3474, 2]);
+      assert.equal(Number(legacy.getAttribute('quest.points') ?? 0), 0, 'login recovery grants no duplicate reward');
+    }
+  }
+});
+
+test('Children captured cell cutaways are personal and restore base scenery on exit, logout and login recovery', t => {
+  const { ObjectManager, MapObjects, ObjectDefinition, RegionManager, Location, World } = core;
+  ObjectDefinition.init();
+  const h = harness('ChildrenOfTheSun', null, { realObjects: true }), p = player(), other = player();
+  for (const who of [p, other]) {
+    who.getSession = () => ({ isTileInScene: () => true });
+    who.getRights = () => core.PlayerRights.NONE;
+  }
+  t.mock.method(World, 'forEachNetworkPlayer', callback => { callback(p); callback(other); });
+  t.after(() => h.logout(p));
+  const wall = new Location(3207, 3471, 2);
+  const original = MapObjects.getType(wall, 0, null);
+  assert.equal(original.getId(), 23818, 'native foreground wall from the captured cell');
+  const clipping = RegionManager.getClipping(wall.getX(), wall.getY(), wall.getZ(), null);
+  const removedBefore = [...World.getRemovedObjects()];
+  const owned = () => World.getObjects().filter(object => object.getOwner() === p);
+  const enter = () => {
+    h.quest.setStage(p, 16);
+    h.action(p, N.SERGEANT_TOBYN, 'D5boc3');
+    assert.equal(owned().length, 7);
+    assert.equal(MapObjects.getPrivateArea(p, 44066, wall).getId(), 44066);
+    assert.equal(MapObjects.getPrivateArea(other, 44066, wall), null, 'another player cannot resolve the cutaway');
+    h.tick(3);
+    assert.equal(owned().length, 8, 'the gate swings to its captured second position');
+    const gate = owned().find(object => object.getId() === 50053);
+    assert.deepEqual([gate.getLocation().getX(), gate.getLocation().getY(), gate.getFace()], [3205, 3472, 2]);
+    assert.equal(RegionManager.getClipping(wall.getX(), wall.getY(), wall.getZ(), null), clipping, 'personal scene never changes shared clipping');
+    assert.ok(!other.log.some(row => row[0] === 'sendObject' && row[1].getOwner() === p));
+    ObjectManager.onRegionChange(p, 3200, 3456);
+    assert.ok(p.log.some(row => row[0] === 'sendObject' && row[1].getOwner() === p), 'region reload replays the personal cutaways');
+  };
+  const restored = () => {
+    assert.equal(owned().length, 0);
+    assert.equal(MapObjects.getPrivateArea(p, 44066, wall), null);
+    assert.equal(MapObjects.getType(wall, 0, null), original);
+    assert.equal(RegionManager.getClipping(wall.getX(), wall.getY(), wall.getZ(), null), clipping);
+    assert.ok(p.log.some(row => row[0] === 'sendObject' && row[1] === original), 'base wall is explicitly restored to its owner');
+    assert.deepEqual(World.getRemovedObjects(), removedBefore, 'cleanup leaves no map-removal marker');
+    const replayStart = p.log.length;
+    ObjectManager.onRegionChange(p, 3200, 3456);
+    const replay = p.log.slice(replayStart);
+    assert.ok(!replay.some(row => ['sendObjectRemoval', 'sendObject'].includes(row[0]) && row[1].getOwner() === p), 'later region loads do not hide or replay removed scene objects');
+  };
+  enter();
+  h.action(p, N.SERGEANT_TOBYN, '4aa1xN'); restored();
+  enter(); h.logout(p); restored();
+  enter(); h.login(p); restored();
+  assert.equal(h.quest.getStage(p), 18, 'interruption recovery preserves earned stage');
+});
+
+test('Children deferred interface-close recovery does not cancel a newer cell scene', () => {
+  const h = harness('ChildrenOfTheSun'), p = player();
+  h.quest.setStage(p, 16);
+  h.action(p, N.SERGEANT_TOBYN, 'D5boc3');
+  h.emit('interface:closed', { player: p, interfaceId: 231 });
+  h.action(p, N.SERGEANT_TOBYN, 'D5boc3');
+  const current = h.npcs.findLast(npc => npc.getId() === N.BANDIT_20 && !npc.removed);
+  h.tick(1);
+  assert.equal(current.removed, undefined, 'a stale close belongs to the old scenery generation');
+  h.logout(p);
 });
 
 test('Sins trek requires the vine, axe, logs, three bridge repairs and crossing before juvinates', () => {
@@ -751,7 +940,7 @@ test('Sins stage-dependent route objects are per-player, not global', () => {
   assert.equal(doorOverlay(early, 38071).length, 1, 'the other player keeps their overlay');
 });
 
-test('Children replay sends the captured delegation, eavesdrop and roof cameras with resets', () => {
+test('Children replay sends the captured delegation, eavesdrop and cell cameras with resets', () => {
   const h = harness('ChildrenOfTheSun', 'Children of the Sun'), p = player();
   const moves = () => p.log.filter(row => row[0] === 'sendCameraMoveTo');
   const resets = () => p.log.filter(row => row[0] === 'sendCameraReset').length;
@@ -765,19 +954,22 @@ test('Children replay sends the captured delegation, eavesdrop and roof cameras 
 
   h.quest.setStage(p, 8);
   h.action(p, N.GUARD_185, 'V-D092');
-  h.tick(3);
-  assert.ok(moves().some(row => row[1] === 3252 && row[2] === 3396), 'eavesdrop camera');
+  h.tick(1);
+  assert.ok(moves().some(row => row[1] === 3252 && row[2] === 3396), 'mapped eavesdrop camera');
   const eavesdropResets = resets();
-  h.tick(18);
+  h.tick(30);
   assert.ok(resets() > eavesdropResets, 'eavesdrop camera resets');
 
   h.quest.setStage(p, 14);
   h.action(p, N.SERGEANT_TOBYN, 'PiLgte');
   h.tick(15);
-  assert.ok(moves().some(row => row[1] === 3207 && row[2] === 3471 && row[3] === 311), 'roof camera');
-  const roofResets = resets();
-  h.tick(25);
-  assert.ok(resets() > roofResets, 'roof camera resets');
+  assert.ok(!moves().some(row => row[1] === 3207 && row[2] === 3471), 'escorting to the roof does not start the cell camera');
+  h.action(p, N.SERGEANT_TOBYN, 'D5boc3');
+  h.tick(1);
+  assert.ok(moves().some(row => row[1] === 3207 && row[2] === 3471 && row[3] === 311), 'cell camera');
+  const cellResets = resets();
+  h.tick(34);
+  assert.ok(resets() > cellResets, 'cell camera resets');
 });
 
 test('Children camera timeline is cancelled and reset on logout', () => {
@@ -895,16 +1087,46 @@ test('Children tail follows the collision-valid captured route to the door and o
     h.hooks.onPlayerProcess[0]({ player: p });
     const after = guard();
     if (!after) break;
-    if (h.quest.getStage(p) === 8 && (after.getLocation().getX() !== 3258 || after.getLocation().getY() !== 3400)) finishedEarly = true;
+    if (h.quest.getStage(p) === 8 && (after.getLocation().getX() !== 3259 || after.getLocation().getY() !== 3400)) finishedEarly = true;
     if (h.quest.getStage(p) === 8) break;
   }
   assert.equal(h.quest.getStage(p), 8, 'tail completed (not stuck at 3248,3391)');
   assert.equal(finishedEarly, false, 'tail does not finish at an early tile');
-  assert.deepEqual([guard().getLocation().getX(), guard().getLocation().getY()], [3258, 3400], 'guard reaches the door approach');
+  assert.deepEqual([guard().getLocation().getX(), guard().getLocation().getY()], [3259, 3400], 'guard reaches the captured door approach');
 
   const door = { player: p, objectId: 50048, location: { x: 3259, y: 3400 }, handled: false };
   h.emit('door:toggle', door);
   assert.equal(door.handled, true, 'the bandit door cutscene is claimed after the real tail');
+});
+
+test('Children tail advances through native NPC movement without teleport recovery', t => {
+  const h = harness('ChildrenOfTheSun', 'Children of the Sun', { nativeNpcs: true }), p = player();
+  t.after(() => h.logout(p));
+  h.quest.setStage(p, 4);
+  h.action(p, N.ALINA, 'r2Pt3E');
+  const guard = h.npcs.find(npc => npc.getId() === N.GUARD_185);
+  assert.ok(guard);
+  const teleports = [];
+  let walkedTiles = 0;
+  const moveTo = guard.moveTo.bind(guard);
+  t.mock.method(guard, 'moveTo', to => {
+    teleports.push([guard.getLocation().getX(), guard.getLocation().getY(), to.getX(), to.getY()]);
+    return moveTo(to);
+  });
+  for (let tick = 0; tick < 700 && h.quest.getStage(p) === 6; tick++) {
+    // Placement flags clear after the native update pass, before the next world tick.
+    guard.setNeedsPlacement(false);
+    p.moveTo(guard.getLocation().clone().add(0, -10));
+    h.hooks.onPlayerProcess[0]({ player: p });
+    const before = guard.getLocation().clone();
+    guard.process();
+    if (!guard.getLocation().equals(before)) walkedTiles++;
+    guard.getUpdateFlag().reset();
+  }
+  assert.deepEqual(teleports, [], 'the guard walks rather than jumping when a queued step stalls');
+  assert.equal(walkedTiles, 86, 'the real mover follows the 86 walk steps in capture 1637');
+  assert.equal(h.quest.getStage(p), 8);
+  assert.deepEqual([guard.getLocation().getX(), guard.getLocation().getY()], [3259, 3400]);
 });
 
 

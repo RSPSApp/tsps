@@ -122,7 +122,7 @@ Superior slayer monster): an imbued heart (1/8), dust battlestaff (7/16) or mist
 table is equally likely; here each table is rolled on its own. Before the roll the plugin asks
 `drops:chance` { player, source: "superior-slayer-monster", rules } and a rule whose pattern
 matches one of a table's items multiplies that table's chance (a league's boosted drops,
-[server/docs/leagues.md](../server/docs/leagues.md)). Whether a task kill brings a superior at all
+[server/docs/leagues.md](https://github.com/RSPSApp/tsps/blob/main/server/docs/leagues.md)). Whether a task kill brings a superior at all
 is asked first on `slayer:superior-spawn` { player, npc, unlocked, chance }: Bigger and Badder's
 bit and 1 in 200, which a listener may unlock or shorten; the toggle-off always holds.
 
@@ -131,6 +131,7 @@ bit and 1 in 200, which a listener may unlock or shorten; the toggle-off always 
 - **Counting:** a kill counts when the monster counts for the task. Konar's kills must be in her
   area, and Krystilia's in the Wilderness.
 - **XP:** a monster's hitpoints in Slayer XP.
+- **Morytania Diary:** a completed Morytania Diary tier gives 2.5/5/7.5/10% (easy to elite) more Slayer XP for a task kill in the Slayer Tower (a kill the Slayer Master relic counts as on task too), with the legs worn or not: the Wiki lists it as a reward of its own, apart from the legs (it says "completed" on the Slayer changes and "claiming" on the legs page; completion is used, as for the Karamja Tokkul perk). The tower is the floors (Slayer area 9's first box), the basement (`SlayerTower.plugin.js` bounds, inferred to count) and the Grotesque Guardians' roof, so Dusk's 1,350 XP is boosted too. Stacking with Mortimer's XP modifier is not on the Wiki; they multiply. `MorytaniaDiary.Slayer.js`.
 - **Keys (Wiki: Brimstone key, Larran's key):** a kill that counts for a Konar task may drop a
   brimstone key, one for a Krystilia task a Larran's key, at a chance set by the monster's combat
   level (1 in 2,060 at level 1 up to 1 in 50 from level 350 for brimstone; 1 in 1,972 to 1 in 50
@@ -199,7 +200,7 @@ fail. The worktree client returned HTTP 200 on port 3149 and the game server lis
   Spria give none), times 5, 15, 25, 35 or 50 on every 10th, 50th, 100th, 250th or 1,000th task.
   Both numbers are asked first on `slayer:task-reward` { player, master, freeTasks, multiplier }
   (Mortimer's completions ask too): a listener may lower the free tasks or multiply the points
-  (a league's tier passive, [server/docs/leagues.md](../server/docs/leagues.md)).
+  (a league's tier passive, [server/docs/leagues.md](https://github.com/RSPSApp/tsps/blob/main/server/docs/leagues.md)).
 
 ### Other rules
 

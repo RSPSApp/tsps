@@ -12,6 +12,9 @@ const createGame = require('../plugins/minigames/castlewars/Game.CastleWars');
 const attachFlags = require('../plugins/minigames/castlewars/Flags.CastleWars');
 const attachDoors = require('../plugins/minigames/castlewars/Doors.CastleWars');
 const attachNavigation = require('../plugins/minigames/castlewars/Navigation.CastleWars');
+const attachAreas = require('../plugins/minigames/castlewars/Areas.CastleWars');
+let playerOption;
+let namedInteractions;
 let game, registry, objectHandler, routeHandlers, customHandlers, startup, equip, unequip;
 
 before(() => {
@@ -20,6 +23,7 @@ before(() => {
 });
 
 beforeEach(() => {
+  namedInteractions = new Map();
   routeHandlers = []; customHandlers = new Map(); startup = [];
   registry = {
     core,
@@ -27,7 +31,8 @@ beforeEach(() => {
     getObjectManager: () => ({ register() {}, deregister() {} }),
     getRegionManager: () => core.RegionManager, getWorld: () => core.World,
     getTaskManager: () => ({ submit() {}, cancelTasks() {} }),
-    onObjectInteraction: (...args) => { if (args.length === 1) objectHandler = args[0]; },
+    onObjectInteraction: (...args) => { if (args.length === 1) objectHandler = args[0]; else namedInteractions.set(args[0], args[1]); },
+    onPlayerOption: handler => { playerOption = handler; },
     onCanEquip: handler => { equip = handler; }, onCanUnequip: handler => { unequip = handler; },
     onObjectRoute: handler => routeHandlers.push(handler),
     onCustomEvent: (name, handler) => customHandlers.set(name, handler),
@@ -54,8 +59,8 @@ function player(team = game.TEAM.SARADOMIN, at = [2400, 3100, 0]) {
 
 function clickFlag(p, team, dropped = false) {
   const td = game.getTeamData(team);
-  const object = new core.GameObject(dropped ? td.droppedFlagObjectId : td.safeStandId,
-    td.standLocation, dropped ? 10 : td.standType, 0, null);
+  const object = dropped ? game.getDroppedFlagObject(team) :
+    new core.GameObject(td.safeStandId, td.standLocation, td.standType, 0, null);
   const event = { player: p, object, handled: false };
   objectHandler(event);
   assert.equal(event.handled, true);
@@ -166,6 +171,71 @@ test('own dropped standards return during the pickup action without a free hand 
   }
 });
 
+const CATAPULT_TILES = [
+  ['zamorak', [[2383, 3116], [2384, 3116], [2385, 3116], [2387, 3118], [2387, 3119]]],
+  ['saradomin', [[2412, 3088], [2412, 3089], [2414, 3091], [2415, 3091], [2416, 3091]]],
+];
+
+test('issue 1961: only a carrier dropping their own standard safes it on catapult tiles', () => {
+  for (const [, tiles] of CATAPULT_TILES) for (const [x, y] of tiles) {
+    for (const team of Object.values(game.TEAM)) {
+      for (const stripped of [false, true]) {
+        const owner = player(team, [x, y, 0]);
+        game.carryFlag(owner, team);
+        if (stripped) owner.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(-1, 0));
+        game.dropCarriedFlag(owner);
+        assert.equal(game.flagStatus[team], 0, `${team} own flag safes at ${x},${y}, stripped=${stripped}`);
+        assert.equal(game.getDroppedFlagObject(team), null);
+        assert.equal(game.getCarriedFlagTeam(owner), null);
+      }
+      const enemy = player(game.opposingTeam(team), [x, y, 0]);
+      game.carryFlag(enemy, team);
+      game.dropCarriedFlag(enemy);
+      assert.equal(game.flagStatus[team], 2, `${team} enemy-carried flag drops at ${x},${y}`);
+      assert.ok(game.getDroppedFlagObject(team).getLocation().equals(enemy.getLocation()));
+      game.restoreFlagToBase(team);
+    }
+  }
+});
+
+test('issue 1961: catapult drops return to their base owner or can be retaken by an attacker', () => {
+  for (const [baseTeam, tiles] of CATAPULT_TILES) for (const [x, y] of tiles) {
+    for (const flagTeam of Object.values(game.TEAM)) {
+      const attackerTeam = game.opposingTeam(flagTeam);
+      const carrier = player(attackerTeam, [x, y, 0]);
+      game.carryFlag(carrier, flagTeam);
+      game.dropCarriedFlag(carrier);
+      assert.equal(game.flagStatus[flagTeam], 2, 'a stolen flag stays dropped until pickup');
+      const attacker = player(attackerTeam, [x, y, 0]);
+      clickFlag(attacker, flagTeam, true);
+      assert.equal(game.getCarriedFlagTeam(attacker), flagTeam, 'an attacker can keep the dropped standard');
+      game.dropCarriedFlag(attacker);
+      // Pickup is allowed from beside the drop; its tile decides which base owns the corner.
+      const defender = player(flagTeam, [x + 1, y, 0]);
+      if (flagTeam === baseTeam) {
+        defender.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(core.ItemIdentifiers.RUNE_SCIMITAR));
+        for (let slot = 0; slot < 28; slot++) defender.getInventory().setItem(slot, new core.Item(core.ItemIdentifiers.BANDAGES));
+      }
+      clickFlag(defender, flagTeam, true);
+      assert.equal(game.flagStatus[flagTeam], flagTeam === baseTeam ? 0 : 1,
+        'only the flag owner at their own catapult returns it; the other flag can still be held');
+      assert.equal(game.getDroppedFlagObject(flagTeam), null);
+      game.clearWeaponSlot(defender);
+      game.restoreFlagToBase(flagTeam);
+    }
+  }
+});
+
+test('catapult flag returns do not extend to another plane or nearby deck tiles', () => {
+  for (const at of [[2383, 3116, 1], [2412, 3088, 1], [2383, 3118, 0], [2413, 3087, 0]]) {
+    const owner = player(game.TEAM.SARADOMIN, at);
+    game.carryFlag(owner, game.TEAM.SARADOMIN);
+    game.dropCarriedFlag(owner);
+    assert.equal(game.flagStatus[game.TEAM.SARADOMIN], 2, `${at} leaves the standard dropped`);
+    game.restoreFlagToBase(game.TEAM.SARADOMIN);
+  }
+});
+
 test('dropping both standards on one tile returns the dropper own standard and keeps the enemy drop', () => {
   const sara = player();
   const zam = player(game.TEAM.ZAMORAK);
@@ -216,6 +286,43 @@ test('both open large and side doors route to the original threshold on the play
   }
 });
 
+for (const state of ['open', 'closed']) {
+  test(`plane changes resync both castles' ${state} large doors on the ground floor`, (t) => {
+    attachDoors(registry, game);
+    const O = core.ObjectIdentifiers;
+    const closed = [
+      [O.LARGE_DOOR_24, 2426, 3088, 3], [O.LARGE_DOOR_25, 2427, 3088, 3],
+      [O.LARGE_DOOR_28, 2373, 3119, 1], [O.LARGE_DOOR_29, 2372, 3119, 1],
+    ];
+    const opened = [
+      [O.LARGE_DOOR_26, 2426, 3087, 0], [O.LARGE_DOOR_27, 2427, 3087, 0],
+      [O.LARGE_DOOR_30, 2373, 3120, 0], [O.LARGE_DOOR_31, 2372, 3120, 0],
+    ];
+    const objects = rows => rows.map(([id, x, y, face]) =>
+      new core.GameObject(id, new core.Location(x, y, 0), 0, face, null));
+    const standing = objects(state === 'open' ? opened : closed);
+    const absent = state === 'open' ? closed : opened;
+    t.mock.method(core.MapObjects, 'get', (id, location) =>
+      standing.find(object => object.getId() === id && object.getLocation().equals(location)) ?? null);
+    const p = player(game.TEAM.ZAMORAK, [2372, 3121, 2]);
+    const spawned = [], removed = [];
+    t.mock.method(p.getPacketSender(), 'sendObject', object => spawned.push(object));
+    t.mock.method(p.getPacketSender(), 'sendObjectRemoval', object => removed.push(object));
+    const process = () => game.inGameProcessors.forEach(handler => handler(p));
+    process();
+    assert.equal(spawned.length + removed.length, 0, 'the initial observation does not resend');
+
+    p.setLocation(new core.Location(2372, 3121, 0));
+    process();
+    assert.deepEqual(spawned, standing, 'resend the real world leaves, retaining their rotations');
+    assert.deepEqual(removed.map(object => [object.getId(), object.getLocation().getX(),
+      object.getLocation().getY(), object.getLocation().getZ(), object.getType()]),
+    absent.map(([id, x, y]) => [id, x, y, 0, 0]), 'remove stale leaves on plane zero, without touching upper walls');
+    process();
+    assert.equal(spawned.length + removed.length, 8, 'remaining on the same floor sends no duplicate update');
+  });
+}
+
 test('both starting-room trapdoors intercept generic door handling and descend immediately', () => {
   attachNavigation(registry, game);
   for (const [team, id, from, to] of [
@@ -230,17 +337,155 @@ test('both starting-room trapdoors intercept generic door handling and descend i
   }
 });
 
-test('only the requested staircase and inner-ladder rails are removed', (t) => {
+test('leaving either respawn room by ladder renews the idle allowance on return', (t) => {
+  attachAreas({
+    ...registry, registerArea() {}, onPlayerLogin() {}, onPlayerDeath() {}, onShouldDropItemsOnDeath() {},
+  }, game);
+  attachNavigation(registry, game);
+  const ejected = [];
+  t.mock.method(game, 'returnToLobby', p => ejected.push(p));
+  for (const [team, ladder, trapdoor, at] of [
+    [game.TEAM.SARADOMIN, core.ObjectIdentifiers.LADDER_63, core.ObjectIdentifiers.TRAPDOOR_16, [2429, 3074, 1]],
+    [game.TEAM.ZAMORAK, core.ObjectIdentifiers.LADDER_64, core.ObjectIdentifiers.TRAPDOOR_17, [2370, 3133, 1]],
+  ]) {
+    const p = player(team, at);
+    const texts = [];
+    const previousEjections = ejected.length;
+    t.mock.method(p.getPacketSender(), 'sendString', (text, uid) => texts.push([text, uid]));
+    p.setAttribute(game.IDLE_TICKS_KEY, 8);
+    game.gameArea.process(p);
+    assert.equal(p.getAttribute(game.IDLE_TICKS_KEY), 7, 'idling still consumes the current allowance');
+
+    const up = { player: p, object: new core.GameObject(ladder, new core.Location(...at), 10, 0, null), handled: false };
+    customHandlers.get('ladders:climb')(up);
+    assert.equal(up.handled, true);
+    assert.equal(game.getTeamData(team).respawnBounds.inside(p.getLocation()), false);
+    for (let tick = 0; tick < 8; tick++) game.gameArea.process(p);
+    assert.equal(p.getAttribute(game.IDLE_TICKS_KEY), 200, 'time outside renews rather than pauses the allowance');
+    assert.deepEqual(texts.at(-1), ['', game.data.EJECT_TEXT_UID[team]], 'the warning is hidden outside');
+    assert.equal(ejected.length, previousEjections, 'time outside cannot eject the player');
+
+    const down = { player: p, object: new core.GameObject(trapdoor, new core.Location(at[0], at[1], 2), 22, 0, null), handled: false };
+    customHandlers.get('door:toggle')(down);
+    assert.equal(down.handled, true);
+    assert.equal(game.getTeamData(team).respawnBounds.inside(p.getLocation()), true);
+    game.gameArea.process(p);
+    assert.deepEqual(texts.at(-1), ['You have 02:00 to leave the respawn room.', game.data.EJECT_TEXT_UID[team]]);
+    for (let tick = 0; tick < 198; tick++) game.gameArea.process(p);
+    assert.equal(p.getAttribute(game.IDLE_TICKS_KEY), 1);
+    assert.equal(ejected.length, previousEjections, 'a returned player receives the full two-minute allowance');
+    game.gameArea.process(p);
+    assert.equal(ejected.at(-1), p, 'uninterrupted idling still ejects at the deadline');
+    assert.equal(p.messages.at(-1), 'You idled too long in the respawn room.');
+  }
+});
+
+test('staircase battlements block the gaps while both castles retain their climb routes', (t) => {
   core.RegionManager.init();
   attachNavigation(registry, game);
   const objectAt = (x, y, type = 0) => core.MapObjects.getType(new core.Location(x, y, 1), type, null);
-  const outer = objectAt(2419, 3072);
+  const stairWalls = [];
+  for (const [x, y] of [[2380, 3127], [2419, 3080]]) {
+    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let shape = 0; shape <= 3; shape++) {
+      const object = objectAt(x + dx, y + dy, shape);
+      if (object) stairWalls.push(object);
+    }
+  }
+  assert.ok(stairWalls.length > 0, 'the actual cache supplies the stair enclosures');
   const removed = [];
-  t.mock.method(core.ObjectManager, 'deregister', object => removed.push(object));
+  const deregister = core.ObjectManager.deregister.bind(core.ObjectManager);
+  t.mock.method(core.ObjectManager, 'deregister', (object, update) => { removed.push(object); return deregister(object, update); });
   startup.at(-1)();
-  assert.equal(removed.length, 14);
-  assert.ok(removed.every(object => object.getLocation().getZ() === 1 && object.getType() <= 3));
-  assert.ok(removed.some(object => object.getLocation().equals(new core.Location(2419, 3080, 1))));
-  assert.ok(removed.some(object => object.getLocation().equals(new core.Location(2380, 3127, 1))));
-  assert.ok(!removed.includes(outer), 'the outer castle wall remains');
+  const { RsmodRouteFinding } = require('../dist/game/model/movement/path/RsmodRouteFinding');
+  const finder = new RsmodRouteFinding(core.RegionManager.getClipping.bind(core.RegionManager));
+  for (const [team, inside, gap, up, down, upperLanding, lowerLanding] of [
+    [game.TEAM.ZAMORAK, [2378, 3130, 1], [2380, 3123], [4418, 2380, 3127, 0], [4415, 2380, 3127, 1], [2379, 3127, 1], [2380, 3130, 0]],
+    [game.TEAM.SARADOMIN, [2421, 3077, 1], [2419, 3084], [4417, 2419, 3078, 0], [4415, 2419, 3080, 1], [2420, 3080, 1], [2419, 3077, 0]],
+  ]) {
+    assert.equal(finder.findRoute({ level: 1, srcX: inside[0], srcY: inside[1], srcSize: 1,
+      destX: gap[0], destY: gap[1], privateArea: null, moveNear: false }).success, false, 'the cache perimeter blocks walking into the empty space');
+    assert.equal(finder.findRoute({ level: 1, srcX: upperLanding[0], srcY: upperLanding[1], srcSize: 1,
+      destX: inside[0], destY: inside[1], privateArea: null, moveNear: false }).success, true, 'the upstairs landing remains connected to the castle');
+    for (const [at, source, destination] of [[up, lowerLanding, upperLanding], [down, inside, lowerLanding]]) for (const bot of [false, true]) {
+      const object = core.MapObjects.get(at[0], new core.Location(...at.slice(1)), null);
+      assert.ok(object, 'the cache staircase remains');
+      const definition = object.getDefinition(), p = player(team, source);
+      t.mock.method(p, 'isPlayerBot', () => bot);
+      core.PathFinder.calculateObjectRoute(p, object.getType() + 1, at[1], at[2], definition.getSizeX(), definition.getSizeY(), object.getFace(), definition.getBlockingMask());
+      const approach = p.getMovementQueue().getDestination() ?? p.getLocation();
+      p.moveTo(approach);
+      assert.equal(core.PathFinder.reachedObject(p, at[1], at[2], definition.getSizeX(), definition.getSizeY(), object.getFace(), object.getType(), definition.getBlockingMask()), true,
+        `the native ${bot ? 'bot' : 'player'} route reaches the intended stair face`);
+      const event = { player: p, object, handled: false };
+      customHandlers.get('ladders:climb')(event);
+      assert.equal(event.handled, true);
+      assert.ok(p.getLocation().equals(new core.Location(...destination)), 'climbing retains the existing landing');
+    }
+  }
+  for (const wall of stairWalls) assert.equal(core.MapObjects.get(wall.getId(), wall.getLocation(), null), wall, 'retain the cache wall geometry and collision');
+  assert.equal(removed.length, 4, 'only the separate inner-ladder rails are removed');
+});
+
+test('standards cannot enter either respawn room through barriers or fixed climbs', () => {
+  attachNavigation(registry, game);
+  for (const [team, barrierId, from, to] of [
+    [game.TEAM.ZAMORAK, core.ObjectIdentifiers.ENERGY_BARRIER_2, [2373, 3126, 1], [2373, 3127, 1]],
+    [game.TEAM.SARADOMIN, core.ObjectIdentifiers.ENERGY_BARRIER, [2422, 3076, 1], [2423, 3076, 1]],
+  ]) {
+    const p = player(team, from);
+    game.carryFlag(p, game.opposingTeam(team));
+    assert.equal(game.canEnterRespawn(p, new core.Location(...to)), false);
+    game.climbTo(p, to);
+    assert.deepEqual([p.getLocation().getX(), p.getLocation().getY(), p.getLocation().getZ()], from);
+    const object = new core.GameObject(barrierId, new core.Location(...to), 0, 0, null);
+    objectHandler({ player: p, object, handled: false });
+    assert.match(p.messages.at(-1), /standard.*respawn/);
+    assert.equal(game.canEnterRespawn(p, new core.Location(...from)), true, 'outside destinations stay usable');
+    game.restoreFlagToBase(game.opposingTeam(team));
+    game.clearWeaponSlot(p);
+    assert.equal(game.canEnterRespawn(p, new core.Location(...to)), true);
+  }
+});
+
+test('Take-from transfers only an adjacent teammate enemy standard after three minutes and resets the timer', (t) => {
+  t.mock.method(core.RegionManager, 'canMovestart', () => true);
+  const carrier = player(), taker = player(game.TEAM.SARADOMIN, [2401, 3100, 0]);
+  game.carryFlag(carrier, game.TEAM.ZAMORAK);
+  const take = () => playerOption({ player: taker, target: carrier, option: game.data.TAKE_FROM_OPTION_SLOT });
+  take();
+  assert.equal(game.getCarriedFlagTeam(carrier), game.TEAM.ZAMORAK);
+  game.flagHeldSince.set(carrier, Date.now() - 180001);
+  taker.setLocation(new core.Location(2402, 3100, 0)); take();
+  assert.equal(game.getCarriedFlagTeam(carrier), game.TEAM.ZAMORAK, 'distance is checked server-side');
+  taker.setLocation(new core.Location(2401, 3100, 0)); take();
+  assert.equal(game.getCarriedFlagTeam(carrier), null);
+  assert.equal(game.getCarriedFlagTeam(taker), game.TEAM.ZAMORAK);
+  assert.ok(Date.now() - game.flagHeldSince.get(taker) < 1000);
+});
+
+test('repeated stale side-door clicks cannot overwrite its closed leaf and a new match can reopen it', () => {
+  game.requirePlaying = () => true;
+  attachDoors(registry, game);
+  const swaps = []; game.swapObject = (...args) => swaps.push(args);
+  const p = player(game.TEAM.SARADOMIN, [2416, 3073, 0]);
+  const object = new core.GameObject(core.ObjectIdentifiers.DOOR_125, new core.Location(2415, 3073, 0), 0, 0, null);
+  const event = { player: p, object, objectId: object.getId() };
+  namedInteractions.get('Door').Unlock(event);
+  namedInteractions.get('Door').Unlock(event);
+  assert.equal(swaps.length, 1);
+  customHandlers.get('castlewars:reset')({});
+  namedInteractions.get('Door').Unlock(event);
+  assert.equal(swaps.length, 2, 'reset forgets the previous game open-door state');
+});
+
+test('the house Kick route leaves option 7 available outside a house', () => {
+  const api = PluginManager.createApi('CastleWarsHouseOptionTest');
+  const hooks = new Map();
+  const stub = new Proxy({ core, persistAttribute() {}, onCustomEvent: (name, fn) => hooks.set(name, fn),
+    getPluginConfig: (_key, fallback) => fallback }, { get: (target, name) => name in target ? target[name] : () => {} });
+  require('../plugins/skills/construction/Core.Construction').init(stub);
+  require('../plugins/skills/construction/House.Construction').attach(stub);
+  const route = { player: player(), target: player(), option: 7, handled: false };
+  hooks.get('player:option-route')(route);
+  assert.equal(route.handled, false, 'Castle Wars Take-from reaches its normal player-option handler');
 });

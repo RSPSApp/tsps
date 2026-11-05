@@ -24,7 +24,7 @@
  * side in the dialogue sets "lucien" and unlocks taking the staff.
  */
 module.exports = function registerTempleOfIkovQuest(api) {
-  const { Skill, ItemIdentifiers, NpcIdentifiers } = api.core;
+  const { Item, Skill, ItemIdentifiers, NpcIdentifiers } = api.core;
   const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
 
   const LUCIEN_NPC_IDS = new Set([
@@ -416,6 +416,12 @@ module.exports = function registerTempleOfIkovQuest(api) {
     }
     if (GUARDIAN_NPC_IDS.has(npcId) && stepId === TAKE_STAFF_ACTION_ID) {
       if (quest.getStage(player) < STAGE_HAS_STAFF) {
+        // Past this stage no one hands out another, so with no room it stays and talking again retries.
+        // Our wording. The floor won't do: an item there despawns, leaving the quest stuck.
+        if (player.getInventory().getAddableAmount(new Item(STAFF_OF_ARMADYL_ITEM_ID, 1)) < 1) {
+          player.sendMessage("You don't have enough inventory space.");
+          return;
+        }
         player.getInventory().adds(STAFF_OF_ARMADYL_ITEM_ID, 1);
         player.sendMessage("You take the Staff of Armadyl.");
         quest.setStage(player, STAGE_HAS_STAFF);

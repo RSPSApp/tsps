@@ -15,10 +15,13 @@
  *     cell, +22 overcharged, Runecraft XP 190/260;
  *   - otherwise "The weak cell is consumed as it <col=ff0000>recharges</col> the barrier.", sound
  *     5428, both energies +2/+5/+9 (weak/medium/strong), Runecraft XP 30/100/180 (250 overcharged).
- * - At the close every tile goes back to gotr_cell_tile_inactive and the barriers go.
+ * - At the close every tile goes back to gotr_cell_tile_inactive and the barriers go; players
+ *   build and strengthen barriers again straight away, through the grace and the lobby.
  * Wiki: placing gives 17/20/24/30 of both energies, recharging restores 10/25/50/100 health; a
  * barrier's NPC has the cache's 50/100/200/400 hitpoints; a destroyed barrier leaves a broken tile
  * that 12 guardian fragments repair for 25 of each energy; at 60% power every barrier takes 50.
+ * Wiki (13 November 2024): before the game begins an uncharged cell builds a weak barrier, and
+ * barriers built then give no experience. Energy before the open would be wiped by it, so none.
  */
 
 const Shared = require("./Shared.GuardiansOfTheRift");
@@ -54,7 +57,10 @@ const SURGE_DAMAGE = 50;
 /** Wiki: recharging a barrier at full health stops paying past this much a game. */
 const FULL_HEALTH_CAP = { xp: 2500, energy: 450 };
 
-const DROP_DESTROYS = [Shared.ITEM.UNCHARGED_CELL, ...Shared.ITEM.CELLS, ...Shared.ITEM.PORTAL_TALISMANS];
+/** The game's items with a Drop option (cache); fragments and stones have Destroy instead. */
+const DROP_DESTROYS = [Shared.ITEM.ESSENCE, Shared.ITEM.UNCHARGED_CELL, ...Shared.ITEM.CELLS, ...Shared.ITEM.PORTAL_TALISMANS];
+/** OSRS's heal hitsplat (Wiki: recharging shows one on the barrier). */
+const HEAL_SPLAT = 6;
 
 /** Each tile's state: tier 0 inactive, 1-4; broken; the barrier loc and NPC standing on it. */
 const tiles = TILES.map((tile) => ({ ...tile, tier: 0, broken: false, loc: null, npc: null }));
@@ -110,6 +116,13 @@ function raiseBarrier(tile) {
     }
   }
   tileLoc(tile);
+}
+
+/** A heal splat on the barrier's NPC, so its health bar shows what the cell did. */
+function showHeal(tile, amount) {
+  const { HitDamage, HitMask } = Shared.core();
+  if (!tile.npc?.isRegistered?.() || amount <= 0) return;
+  tile.npc.addTickHit(new HitDamage(amount, HitMask.GREEN).setSplatTypes(HEAL_SPLAT, HEAL_SPLAT));
 }
 
 function lowerBarrier(tile) {
@@ -204,6 +217,11 @@ function takeWeakCell({ player, objectId }) {
     player.getInventory().full();
     return true;
   }
+  // Wiki: one charged cell at a time. The refusal's wording is ours.
+  if (Shared.ITEM.CELLS.some((cell) => Shared.count(player, cell) > 0)) {
+    player.sendMessage("You can only carry one charged cell at a time.");
+    return true;
+  }
   player.getInventory().adds(Shared.obj(Shared.ITEM.CELLS[0]), 1);
   Shared.animate(player, "human_pickuptable_walkmerge");
   Shared.sound(player, SOUND.TAKE);
@@ -224,34 +242,47 @@ function takeChisel({ player, objectId }) {
 
 // ------------------------------------------------------------------ placing cells
 
+/** Before the game an uncharged cell builds a weak barrier on an inactive tile (Wiki). */
+function pregameCell(player, tile) {
+  if (Game.isRunning() || tile.tier !== 0 || Shared.count(player, Shared.ITEM.UNCHARGED_CELL) <= 0) return null;
+  return Shared.ITEM.UNCHARGED_CELL;
+}
+
 function placeCell(event) {
   const { player } = event;
   const tile = eventTile(event);
   if (!tile || !Shared.questComplete(player) || !Game.isPlaying(player)) return false;
-  const tier = bestCell(player);
-  if (tier === 0) {
+  let tier = bestCell(player);
+  const item = tier > 0 ? Shared.ITEM.CELLS[tier - 1] : pregameCell(player, tile);
+  if (!item) {
     Shared.itemStatement(player, Shared.ITEM.CELLS[0], "You need a charged cell to place on the tile.");
     return true;
   }
+  if (tier === 0) tier = 1;
   const inventory = player.getInventory();
-  inventory.delete(Shared.obj(Shared.ITEM.CELLS[tier - 1]), 1);
+  inventory.delete(Shared.obj(item), 1);
   inventory.refreshItems();
   Shared.animate(player, "human_pickupfloor");
   const cell = CELL[tier];
   if (tile.tier === 0) {
     tile.tier = tier;
     raiseBarrier(tile);
+    showHeal(tile, tile.npc?.getHitpoints?.() ?? 0);
     Shared.sound(player, SOUND.PLACE);
     reward(player, cell.place, cell.xp);
   } else if (tier > tile.tier) {
     tile.tier = tier;
+    const before = tile.npc?.getHitpoints?.() ?? 0;
     raiseBarrier(tile);
+    showHeal(tile, (tile.npc?.getHitpoints?.() ?? 0) - before);
     Shared.sound(player, SOUND.STRENGTHEN);
     player.sendMessage(`The ${cell.name} cell is consumed as it <col=ff0000>strengthens</col> the barrier.`);
     reward(player, cell.strengthen, cell.xp + STRENGTHEN_BONUS_XP);
   } else {
     const full = tile.npc && tile.npc.getHitpoints() >= tile.npc.getMaxHitpoints();
+    const before = tile.npc?.getHitpoints?.() ?? 0;
     tile.npc?.heal(cell.heal);
+    showHeal(tile, (tile.npc?.getHitpoints?.() ?? 0) - before);
     Shared.sound(player, SOUND.RECHARGE);
     player.sendMessage(`The ${cell.name} cell is consumed as it <col=ff0000>recharges</col> the barrier.`);
     if (full) rewardCapped(player, cell.recharge, cell.xp);
@@ -261,6 +292,7 @@ function placeCell(event) {
 }
 
 function reward(player, energy, xp) {
+  if (!Game.isRunning()) return;
   Game.addEnergy(player, "elemental", energy);
   Game.addEnergy(player, "catalytic", energy);
   Shared.addXp(player, "RUNECRAFTING", xp);
@@ -269,7 +301,7 @@ function reward(player, energy, xp) {
 /** Wiki: recharging a full barrier pays up to 2,500 XP and 450 energy a game. */
 function rewardCapped(player, energy, xp) {
   const state = Game.stateOf(player);
-  if (!state) return;
+  if (!state || !Game.isRunning()) return;
   state.fullRecharge ??= { xp: 0, energy: 0 };
   const paidEnergy = Math.max(0, Math.min(energy, FULL_HEALTH_CAP.energy - state.fullRecharge.energy));
   const paidXp = Math.max(0, Math.min(xp, FULL_HEALTH_CAP.xp - state.fullRecharge.xp));
@@ -286,8 +318,9 @@ function repair(event) {
   const { player } = event;
   const tile = eventTile(event);
   if (!tile || !tile.broken || !Game.isPlaying(player)) return false;
+  // rsprox capture (solo): a mesbox without enough fragments; with them, the game message below.
   if (Shared.count(player, Shared.ITEM.FRAGMENTS) < REPAIR_FRAGMENTS) {
-    Shared.itemStatement(player, Shared.ITEM.FRAGMENTS, `You need ${REPAIR_FRAGMENTS} guardian fragments to repair the cell tile.`);
+    Shared.statement(player, `It looks like you'll need ${REPAIR_FRAGMENTS} guardian fragments to repair this.`);
     return true;
   }
   player.getInventory().delete(Shared.obj(Shared.ITEM.FRAGMENTS), REPAIR_FRAGMENTS);
@@ -295,20 +328,26 @@ function repair(event) {
   Shared.animate(player, "human_pickupfloor");
   tile.broken = false;
   tileLoc(tile);
+  player.sendMessage("The magical power of the guardian essence restores the cell tile. It can now fit a charged cell again.");
   Game.addEnergy(player, "elemental", REPAIR_ENERGY);
   Game.addEnergy(player, "catalytic", REPAIR_ENERGY);
   return true;
 }
 
-/** Cells and talismans don't survive being dropped (rsprox captures). */
+/**
+ * Essence, cells and talismans don't survive being dropped (rsprox captures; Wiki: "The Guardian
+ * essence is destroyed as you drop it."). A stack goes whole; essence goes one at a time.
+ */
 function dropDestroys(event) {
-  const { player, itemId } = event;
+  const { player, itemId, slot } = event;
   const name = DROP_DESTROYS.find((item) => Shared.obj(item) === itemId);
   if (!name || Shared.count(player, name) <= 0) return;
   event.handled = true;
-  const amount = Shared.count(player, name);
-  player.getInventory().delete(itemId, amount);
-  player.getInventory().refreshItems();
+  const inventory = player.getInventory();
+  if (Shared.core().ItemDefinition.forId(itemId)?.isStackable?.()) inventory.delete(itemId, Shared.count(player, name));
+  else if (inventory.getItems()[slot]?.getId?.() === itemId) inventory.deleteAtSlot(slot, 1);
+  else inventory.delete(itemId, 1);
+  inventory.refreshItems();
   const itemName = Shared.core().ItemDefinition.forId(itemId).getName();
   Shared.spam(player, `The ${itemName} is destroyed as you drop it.`);
   Shared.sound(player, SOUND.DROP);

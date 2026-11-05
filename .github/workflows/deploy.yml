@@ -1,0 +1,96 @@
+name: Deploy
+
+# Every merge to main deploys the browser host (/host), the game client (/play) and
+# World 1 from the same commit, so all three speak the same protocol.
+# The build job runs repo code without deploy secrets; the deploy job holds them and
+# runs only the deployment scripts under .github/scripts/.
+on:
+    push:
+        branches: [main]
+    workflow_dispatch:
+
+permissions:
+    contents: read
+
+concurrency:
+    group: deploy
+    cancel-in-progress: false
+
+jobs:
+    build:
+        if: github.repository == 'RSPSApp/tsps' && github.ref == 'refs/heads/main'
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  path: tsps
+            # The host scripts expect tsps beside the website checkout (../../tsps from host/).
+            - uses: actions/checkout@v4
+              with:
+                  repository: tobywisener/rsps-website
+                  token: ${{ secrets.RSPS_WEBSITE_TOKEN }}
+                  path: rsps-website
+                  persist-credentials: false
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 22
+            - run: corepack enable
+            - uses: actions/cache@v4
+              with:
+                  path: tsps/server/caches
+                  key: osrs-cache-${{ hashFiles('tsps/server/target.txt') }}
+            - name: Install
+              run: |
+                  (cd tsps/server && yarn install --immutable)
+                  (cd tsps/client && yarn install --immutable)
+                  (cd rsps-website/host && corepack yarn@1.22.22 install --frozen-lockfile)
+            - name: Test cache publishing
+              run: |
+                  node --test tsps/server/tests/ensure-cache.test.cjs
+                  node --test tsps/.github/scripts/ftp-upload.test.mjs tsps/.github/scripts/web-deploy.test.mjs
+            - name: Build host
+              working-directory: rsps-website/host
+              run: |
+                  corepack yarn@1.22.22 typecheck
+                  corepack yarn@1.22.22 build
+                  # The snapshot build only warns when ensure-cache fails; refuse to ship without it.
+                  test -f build/browser-host/cache/main_file_cache.dat2
+            - name: Build client
+              working-directory: tsps/client
+              # CRA fails the build on warnings when CI is set.
+              run: CI=false corepack yarn run build
+            - name: Prepare web deployment
+              run: node tsps/.github/scripts/web-deploy.mjs prepare rsps-website/host/build tsps/client/build web "$GITHUB_SHA" "$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+            - uses: actions/upload-artifact@v4
+              with:
+                  name: web
+                  path: web
+                  include-hidden-files: true
+                  retention-days: 1
+
+    deploy:
+        needs: build
+        runs-on: ubuntu-latest
+        # Holds the restricted World 1 deployment key; restricted to main in the environment settings.
+        environment: production
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  sparse-checkout-cone-mode: false
+                  sparse-checkout: |
+                      /.github/scripts/
+                      /server/target.txt
+                  persist-credentials: false
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 22
+            - uses: actions/download-artifact@v4
+              with:
+                  name: web
+                  path: web
+            # The VPS helper verifies every staged file, publishes the web files,
+            # backs up/restarts World 1, checks the public cache, then announces the release.
+            - name: Upload changed files over SSH and deploy
+              env:
+                  VPS_DEPLOY_KEY: ${{ secrets.VPS_DEPLOY_KEY }}
+              run: sh .github/scripts/deploy-web.sh web "$GITHUB_SHA" "$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"

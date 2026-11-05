@@ -42,12 +42,20 @@ export interface WeaponCombatProfile {
     /** Scales the enchanted bolt effects' chance (the Ascension crossbows halve it). */
     boltEffectChanceMultiplier?: number;
     rangedDefenceType?: "light" | "standard" | "heavy";
+    /** Ranged accuracy/prayers/stance, with visible Strength and melee strength equipment. */
+    rangedDamageSource?: "melee_strength";
 }
 
 // OSRS projectile types (server projanim config): an arrow ends at delay + lengthAdjustment +
-// stepMultiplier * distance client cycles after the shot.
-const DEFAULT_PROJECTILE: ProjectileProfile = { delay: 41, lengthAdjustment: 5, stepMultiplier: 5, startHeight: 43, endHeight: 31 };
-const THROWN_PROJECTILE: ProjectileProfile = { delay: 32, lengthAdjustment: 0, stepMultiplier: 5, startHeight: 43, endHeight: 31 };
+// stepMultiplier * distance client cycles after the shot. Heights are quarter-tiles, which
+// PacketSender sends times four; the RSProx captures record the sent values, so arrows are
+// 163 -> 146, crossbows 155 -> 146, darts 142 -> 146 and javelins 155 -> 177.
+const DEFAULT_PROJECTILE: ProjectileProfile = { delay: 41, lengthAdjustment: 5, stepMultiplier: 5, startHeight: 40.75, endHeight: 36.5 };
+const THROWN_PROJECTILE: ProjectileProfile = { delay: 32, lengthAdjustment: 0, stepMultiplier: 5, startHeight: 40.75, endHeight: 36.5 };
+const DART_PROJECTILE: ProjectileProfile = { delay: 32, lengthAdjustment: 0, stepMultiplier: 5, startHeight: 35.5, endHeight: 36.5 };
+// RSProx captures (crossbowbolt_travel 27, dttd_bone_crossbowbolt_travel 696): every player bolt
+// flies at angle 5, progress 11.
+const CROSSBOW_PROJECTILE: ProjectileProfile = { delay: 41, lengthAdjustment: 5, stepMultiplier: 5, startHeight: 38.75, endHeight: 36.5, angle: 5, progress: 11 };
 /** Wiki (Attack range): Longrange reaches 2 tiles further, and no weapon reaches past 10. */
 const LONGRANGE_EXTRA_TILES = 2;
 const MAX_ATTACK_RANGE = 10;
@@ -80,6 +88,12 @@ export class WeaponProfiles {
 
     public static ranged(player: Player): WeaponCombatProfile {
         return this.get(player) ?? DEFAULT_RANGED;
+    }
+
+    public static usesMeleeStrength(player: Player): boolean {
+        // Scripted ranged attackers (boat cannons) can expose an empty equipment list.
+        const weapon = player.getEquipment().getItems()[Equipment.WEAPON_SLOT];
+        return weapon != null && this.get(player)?.rangedDamageSource === "melee_strength";
     }
 
     /**
@@ -178,7 +192,7 @@ export class WeaponProfiles {
             attackDistance: 7,
             longRangeFightType: FightType.CROSSBOW_LONGRANGE,
             hitDelays: [STANDARD_HIT],
-            projectiles: [{ delay: 41, lengthAdjustment: 5, stepMultiplier: 5, startHeight: 44, endHeight: 35 }],
+            projectiles: [CROSSBOW_PROJECTILE],
             fireSound: Sound.SHOOT_CROSSBOW,
             boltEffects: true,
         });
@@ -188,7 +202,7 @@ export class WeaponProfiles {
             attackDistance: 8,
             longRangeFightType: FightType.KARILS_CROSSBOW_LONGRANGE,
             hitDelays: [STANDARD_HIT],
-            projectiles: [{ delay: 41, lengthAdjustment: 5, stepMultiplier: 5, startHeight: 44, endHeight: 35 }],
+            projectiles: [CROSSBOW_PROJECTILE],
             fireSound: Sound.SHOOT_CROSSBOW,
         });
         this.add(WeaponInterfaces.BLOWPIPE, {
@@ -198,7 +212,7 @@ export class WeaponProfiles {
             attackDistance: 5,
             longRangeFightType: FightType.BLOWPIPE_LONGRANGE,
             hitDelays: [{ base: 1, distanceOffset: 0, divisor: 6 }],
-            projectiles: [{ delay: 32, lengthAdjustment: 0, stepMultiplier: 5, startHeight: 40, endHeight: 35 }],
+            projectiles: [{ delay: 32, lengthAdjustment: 0, stepMultiplier: 5, startHeight: 35.5, endHeight: 36.5 }],
             startGraphic: false,
             fireSound: Sound.THROW_DART,
         });
@@ -219,7 +233,7 @@ export class WeaponProfiles {
             attackDistance: 3,
             longRangeFightType: FightType.DART_LONGRANGE,
             hitDelays: [{ base: 1, distanceOffset: 0, divisor: 6 }],
-            projectiles: [THROWN_PROJECTILE],
+            projectiles: [DART_PROJECTILE],
             fireSound: Sound.THROW_DART,
         });
         this.add(WeaponInterfaces.JAVELIN, {
@@ -237,7 +251,7 @@ export class WeaponProfiles {
             attackDistance: 7,
             longRangeFightType: FightType.OBBY_RING_LONGRANGE,
             hitDelays: [{ base: 1, distanceOffset: 0, divisor: 6 }],
-            projectiles: [{ delay: 32, lengthAdjustment: 0, stepMultiplier: 5, startHeight: 43, endHeight: 31 }],
+            projectiles: [{ delay: 32, lengthAdjustment: 0, stepMultiplier: 5, startHeight: 40.75, endHeight: 36.5 }],
             fireSound: Sound.THROW_DART,
         });
         this.add(WeaponInterfaces.THROWNAXE, {
@@ -255,7 +269,10 @@ export class WeaponProfiles {
             attackDistance: 9,
             longRangeFightType: FightType.BALLISTA_LONGRANGE,
             hitDelays: [{ base: 2, distanceOffset: 1, divisor: 6 }],
-            projectiles: [{ delay: 41, lengthAdjustment: 5, stepMultiplier: 5, startHeight: 44, endHeight: 35 }],
+            // RSProx capture (silvthrill_javelin_travel 3806, recording 4288): start 42,
+            // end 44 + 3 a tile, angle 14, progress 120, heights 155 -> 177 (sent quarters).
+            // The hit delay above is that arrival (ceil((44 + 3d) / 30)).
+            projectiles: [{ delay: 42, lengthAdjustment: 2, stepMultiplier: 3, startHeight: 38.75, endHeight: 44.25, angle: 14, progress: 120 }],
             fireSound: Sound.SHOOT_CROSSBOW,
         });
         this.add(WeaponInterfaces.DARK_BOW, {
@@ -289,7 +306,6 @@ export class WeaponProfiles {
         this.register({
             itemIds: [ItemIdentifiers.TWISTED_BOW],
             attackAnimation: 426,
-            attackSpeed: 5,
             hitDelays: [STANDARD_HIT],
             projectiles: [DEFAULT_PROJECTILE],
             fireSound: Sound.SHOOT_ARROW,
@@ -304,7 +320,7 @@ export class WeaponProfiles {
             itemIds: [ItemIdentifiers.VENATOR_BOW, ItemIdentifiers.VENATOR_BOW_UNCHARGED_],
             longRangeFightType: FightType.SHORTBOW_LONGRANGE,
             hitDelays: [{ base: 0, distanceOffset: 23, divisor: 15 }],
-            projectiles: [{ delay: 31, lengthAdjustment: 15, stepMultiplier: 2, startHeight: 39, endHeight: 36, angle: 255, progress: 11 }],
+            projectiles: [{ delay: 31, lengthAdjustment: 15, stepMultiplier: 2, startHeight: 39, endHeight: 36.5, angle: 255, progress: 11 }],
             projectileId: 2291,
             launchGraphic: 2289,
             fireSound: Sound.VENATOR_BOW_SHOOT,
@@ -325,7 +341,7 @@ export class WeaponProfiles {
             attackSpeed: 6,
             longRangeFightType: FightType.CROSSBOW_LONGRANGE,
             hitDelays: [STANDARD_HIT],
-            projectiles: [{ delay: 41, lengthAdjustment: 5, stepMultiplier: 5, startHeight: 44, endHeight: 35 }],
+            projectiles: [CROSSBOW_PROJECTILE],
             fireSound: Sound.SHOOT_CROSSBOW,
             boltEffects: true,
         });
@@ -339,21 +355,15 @@ export class WeaponProfiles {
             attackDistance: 6,
             longRangeFightType: FightType.CROSSBOW_LONGRANGE,
             hitDelays: [STANDARD_HIT],
-            projectiles: [DEFAULT_PROJECTILE],
+            projectiles: [CROSSBOW_PROJECTILE],
             fireSound: Sound.SHOOT_CROSSBOW,
             boltEffects: true,
             // Wiki (Ascension crossbows): the chance to trigger enchanted bolt effects is reduced by 50%.
             boltEffectChanceMultiplier: 0.5,
         });
-        // Machetes, sickles and canes share the slash-sword/mace interfaces but swing one tick slower.
-        this.register({
-            itemIds: [975, 6313, 6315, 6317, 2961, 2963, 3899, 22433, 22435, 24693, 24695],
-            attackSpeed: 5,
-        });
-        this.register({
-            itemIds: [12373, 12374, 12375, 12376, 12377, 12378, 12379, 12380],
-            attackSpeed: 5,
-        });
+        // Machetes, sickles and canes need no entry here: the cache gives the gem machetes 4
+        // ticks and the rest 5, as the Wiki has them (docs/audits/weapons.md).
+
         // Wands (Wiki): the staff interface's styles at 4 ticks, a tick faster than staves; the cache has no speed for them.
         this.register({
             itemIds: [

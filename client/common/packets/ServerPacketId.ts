@@ -83,7 +83,6 @@ export const enum ServerPacketId {
     WIDGET_SET_ANGLE = 113, // IF_SETANGLE: model angle and zoom (112 went to IF_SETEVENTS_V2 on main)
     WIDGET_SET_ANIMATION = 114,
     WIDGET_SET_PLAYER_HEAD = 115,
-    WIDGET_SET_QUEST_LIST = 116,
     WIDGET_SET_MODEL = 117,
     WIDGET_SET_POSITION = 118,
     WIDGET_SET_COLOUR = 119,
@@ -95,6 +94,11 @@ export const enum ServerPacketId {
     FRIENDS_CHAT_UPDATE = 121,
     CHAT_FILTER_SETTINGS = 122,
     TRIGGER_ONDIALOGABORT = 123, // runs every interface's onDialogAbort, closing chatbox prompts
+    CLAN_SETTINGS_FULL = 124,
+    CLAN_CHANNEL_FULL = 125,
+    CLAN_CHANNEL_DELTA = 126,
+    CLAN_SETTINGS_DELTA = 127,
+    CLAN_VAR = 128, // id(2) + value(4): %varclan
 
     // ========================================
     // WORLD UPDATES (130-149)
@@ -114,6 +118,7 @@ export const enum ServerPacketId {
     REGION_REPLACEMENT = 144,
     SET_INTERACTION_MODE = 145, // OSRS set_interaction_mode: what tile/entity clicks do in a world
     RESET_INTERACTION_MODE = 146, // OSRS reset_interaction_mode: drops a world's own mode
+    REGION_REPLACEMENT_COMPRESSED = 147, // deflated REGION_REPLACEMENT payload; dense regions do not fit raw
 
     // ========================================
     // SHOP/TRADE (150-169)
@@ -203,7 +208,8 @@ export const SERVER_PACKET_LENGTHS: Record<ServerPacketId, number> = {
     [ServerPacketId.SKILLS_DELTA]: -1,
 
     [ServerPacketId.COMBAT_STATE]: -1,
-    [ServerPacketId.RUN_ENERGY]: 2, // percent(1) + running(1)
+    // percent(1) + running(1) + units(2) + weight kg(2 signed) + stamina ticks(2) + stamina active(2)
+    [ServerPacketId.RUN_ENERGY]: 10,
     [ServerPacketId.HITSPLAT]: -1,
     [ServerPacketId.SPOT_ANIM]: -1,
     [ServerPacketId.PROJECTILES]: -2,
@@ -234,12 +240,16 @@ export const SERVER_PACKET_LENGTHS: Record<ServerPacketId, number> = {
     [ServerPacketId.WIDGET_SET_FLAGS]: 8, // uid(4) + flags(4)
     [ServerPacketId.WIDGET_SET_ANIMATION]: 6, // uid(4) + animId(2)
     [ServerPacketId.WIDGET_SET_PLAYER_HEAD]: 4, // uid(4)
-    [ServerPacketId.WIDGET_SET_QUEST_LIST]: -2,
 
     [ServerPacketId.CHAT_MESSAGE]: -2, // var-short: tutorial/quest game messages exceed 255 bytes
     [ServerPacketId.FRIENDS_CHAT_UPDATE]: -2,
     [ServerPacketId.CHAT_FILTER_SETTINGS]: 3, // public(1) + private(1) + trade(1)
     [ServerPacketId.TRIGGER_ONDIALOGABORT]: 0,
+    [ServerPacketId.CLAN_SETTINGS_FULL]: -2,
+    [ServerPacketId.CLAN_CHANNEL_FULL]: -2,
+    [ServerPacketId.CLAN_CHANNEL_DELTA]: -2,
+    [ServerPacketId.CLAN_SETTINGS_DELTA]: -2,
+    [ServerPacketId.CLAN_VAR]: 6,
 
     [ServerPacketId.LOC_CHANGE]: -1,
     [ServerPacketId.LOC_ADD_CHANGE]: -1,
@@ -256,6 +266,7 @@ export const SERVER_PACKET_LENGTHS: Record<ServerPacketId, number> = {
     [ServerPacketId.REBUILD_WORLDENTITY]: -2,
     [ServerPacketId.WORLDENTITY_INFO]: -1, // count(1) + per-entity updates + new spawns
     [ServerPacketId.REGION_REPLACEMENT]: -2,
+    [ServerPacketId.REGION_REPLACEMENT_COMPRESSED]: -2, // regionId(2) + flags(1) + lengths(8) + deflated data
     [ServerPacketId.SET_INTERACTION_MODE]: 4, // worldId(2) + tileMode(1) + entityMode(1)
     [ServerPacketId.RESET_INTERACTION_MODE]: 2, // worldId(2)
 

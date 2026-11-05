@@ -16,6 +16,7 @@ const {
 } = require("../../src/main/typescript/elvarg/net/protocol/ClientProtocol");
 const { getWorldDefinition } = require("../../src/main/typescript/elvarg/game/definition/WorldDefinition");
 const { CacheDefinitions } = require("../../src/main/typescript/elvarg/game/cache/CacheDefinitions");
+const SettingVarpTransmit = require("./SettingVarpTransmit");
 
 const ROOT_INTERFACE = 161;
 const MAIN_MODAL_UID = (ROOT_INTERFACE << 16) | 16;
@@ -83,6 +84,7 @@ const GAMEFRAME_317_FIXED_OPTION = 4;
 const GAMEFRAME_317_VARP = 7995; // mirrors client/common/ui/gameframeLayout.ts
 const CLIENT_LAYOUT_317_ATTRIBUTE = "client-layout317";
 const DEFAULT_GAMEFRAME_ROOT = 161;
+const ORBS_PANE_UID = (ROOT_INTERFACE << 16) | 33;
 // world.json "gameframe" -> the dropdown option (enum 3509 index) it forces on login.
 const WORLD_GAMEFRAME_OPTIONS = {
   "modern-fixed": 0,
@@ -134,6 +136,8 @@ const SELECTED_SETTING_ATTRIBUTE = "settings:selected";
 // The values the player chose for the rows in data/settings.json, and the category shown
 // ({ "varbit:<id>": value, "varp:<id>": value }), restored on login as live does.
 const SETTINGS_VALUES_ATTRIBUTE = "settings:values";
+// The collection-log notification rows (85/171) share varp 2856 with "Enable precise timing" (82).
+const COLLECTION_LOG_NOTIFY_VARP = 2856;
 // Cache 241 settings structs3107..3755/4286/2735 and reader script6716.
 const QUEST_SETTINGS = { 214:13772, 215:13778, 216:13779, 217:13776, 218:13775, 219:13777, 220:13773, 221:13774, 222:13780, 223:13781, 239:13889, 240:13890 };
 const SETTINGS = { ...require("./data/settings.json").settings, ...Object.fromEntries(Object.entries(QUEST_SETTINGS).map(([id, varbit]) => [id, { varbit }])) };
@@ -148,6 +152,16 @@ const pendingQuestColours = new WeakMap();
 // Rows and dropdown options that may reach us (0..512). Search
 // results number rows across every category, so they run far past one category's length.
 const ALL_SETTINGS_LAST_SLOT = 511;
+// The settings list's rows, as live enables them (RSProx captures); a search lists more than 512.
+const ALL_SETTINGS_LAST_ROW = 538;
+// The All Settings window's volume sliders (scripts 9260, 9266, 9272, 9278) trigger the list's
+// row with the setting and the new volume; live gives the list the transmit-trigger event for it.
+const ALL_SETTINGS_VOLUME_VARPS = new Map([
+  [319, 3796], // master
+  [30, 168], // music
+  [31, 169], // sound effects
+  [32, 872], // area sounds
+]);
 
 const KEYBINDINGS_INTERFACE_ID = 121;
 const KEYBINDINGS_RESTORE_DEFAULTS = (KEYBINDINGS_INTERFACE_ID << 16) | 104;
@@ -299,7 +313,6 @@ function setSettingVar(player, key, value) {
   const [, id] = key.split(":");
   sendSettingVar(player, key, value);
   player.setAttribute(SETTINGS_VALUES_ATTRIBUTE, { ...savedSettings(player), [key]: value });
-  if (Object.values(QUEST_SETTINGS).some(varbit => key === `varbit:${varbit}`) || QUEST_COLOUR_VARPS.has(Number(id))) pluginApi?.emitCustomEvent("quest:list-refresh", { player });
 }
 
 function getSettingVar(player, row) {
@@ -311,6 +324,7 @@ function getSettingVar(player, row) {
 function toggleSetting(player, settingId) {
   const row = SETTINGS[settingId];
   if (!row || catalog().settings.get(settingId)?.type !== SETTING_TYPE_TOGGLE) return false;
+  if (consumeTransmittedSettingVarp(player, row)) return true;
   setSettingVar(player, varKey(row), getSettingVar(player, row) ? 0 : 1);
   if (row.script !== undefined) player.getPacketSender().sendClientScript(row.script);
   return true;
@@ -320,7 +334,11 @@ function toggleSetting(player, settingId) {
 function chooseSettingOption(player, settingId, option) {
   const row = SETTINGS[settingId];
   const setting = catalog().settings.get(settingId);
-  if (!row || setting?.type !== SETTING_TYPE_DROPDOWN || option < 0 || option >= setting.optionCount) return false;
+  if (setting?.type !== SETTING_TYPE_DROPDOWN || !Number.isInteger(option) || option < 0 || option >= setting.optionCount) return false;
+  const request = { player, settingId, option, handled: false };
+  pluginApi?.emitCustomEvent("settings:option-chosen", request);
+  if (request.handled) return true;
+  if (!row) return false;
   if (!row.options) {
     setSettingVar(player, varKey(row), option);
     if (row.script !== undefined) player.getPacketSender().sendClientScript(row.script);
@@ -352,7 +370,8 @@ function restoreSettings({ player }) {
  * is shown behind them; a toggle then flips. Other plugins own their settings first:
  * "settings:setting-clicked" { player, settingId, handled }.
  */
-function clickSetting({ player, slot }) {
+function clickSetting({ player, slot, argsData, scriptTrigger }) {
+  if (scriptTrigger === true) return releaseAllSettingsVolume(player, argsData);
   const settingId = Number.isInteger(slot) ? settingForRow(player, slot) : -1;
   if (settingId < 0) return false;
   selectSetting(player, settingId);
@@ -481,13 +500,29 @@ function applyGameframeLayout({ player, slot }) {
   if (!Number.isInteger(slot)) return false;
   const root = selectGameframeOption(player, slot - 1);
   if (root === undefined) return false;
+  sendGameframeLayout(player, root);
+  return true;
+}
+
+function sendGameframeLayout(player, root) {
   const sender = player.getPacketSender();
   syncGameframeVarbit(player);
   sender.sendRootInterface(root);
   for (const packet of encodeGameframeFlags(root)) {
     player.getSession().sendClientPacket(packet);
   }
-  return true;
+}
+
+function receiveGameframeLayout(event) {
+  if (event.channel !== "gameframe:layout") return;
+  event.handled = true;
+  const { player, data } = event;
+  if (typeof data?.mobile !== "boolean" || player.getAttribute(NATIVE_CLIENT_ATTRIBUTE) === true) return;
+  if (isMobileClient(player) === data.mobile) return;
+  player.setAttribute(MOBILE_CLIENT_ATTRIBUTE, data.mobile ? true : null);
+  const root = getGameframeRoot(player);
+  sendGameframeLayout(player, root);
+  player.getPacketSender().sendSubInterface(ORBS_PANE_UID, pluginApi.core.orbsGroupFor(root), 1);
 }
 
 function choosePlayerAttackOption({ player, slot }) {
@@ -505,7 +540,7 @@ function openAllSettings(player) {
   // The settings/controls are dynamic children created client-side; without
   // these transmit flags their ops never reach us. Op1 over the used slot range.
   sender.sendInterfaceFlagsRange(ALL_SETTINGS_CATEGORIES_CLICKZONE, 0, 15, TRANSMIT_OP1);
-  sender.sendInterfaceFlagsRange(ALL_SETTINGS_SETTINGS_CLICKZONE, 0, ALL_SETTINGS_LAST_SLOT, TRANSMIT_OP1);
+  sender.sendInterfaceFlagsRange(ALL_SETTINGS_SETTINGS_CLICKZONE, 0, ALL_SETTINGS_LAST_ROW, TRANSMIT_OP1 | TRANSMIT_TRIGGER);
   sender.sendInterfaceFlagsRange(ALL_SETTINGS_DROPDOWN_BUTTONS, 0, ALL_SETTINGS_LAST_SLOT, TRANSMIT_OP1);
   // It opens on the category shown last; live sends nothing for it.
   player.setAttribute("settings-view", sender.getVarbit(SETTINGS_CATEGORY_VARBIT));
@@ -577,17 +612,30 @@ function syncXpDrops({ player }) {
   player.getPacketSender().sendVarbit(XPDROPS_ENABLED_VARBIT, player.getAttribute(XPDROPS_ENABLED_ATTRIBUTE) === true ? 1 : 0);
 }
 
-/** The first script-trigger argument: an int as a zigzag varint. */
-function readIntArg(argsData) {
-  if (!argsData?.length) return undefined;
+/** Script-trigger arguments: ints, each a zigzag varint. */
+function readIntArgs(argsData) {
+  const values = [];
   let value = 0;
   let shift = 0;
-  for (const byte of argsData) {
+  for (const byte of argsData ?? []) {
     value |= (byte & 0x7f) << shift;
-    if ((byte & 0x80) === 0) return (value >>> 1) ^ -(value & 1);
     shift += 7;
+    if ((byte & 0x80) === 0) {
+      values.push((value >>> 1) ^ -(value & 1));
+      value = 0;
+      shift = 0;
+    }
   }
-  return undefined;
+  return values;
+}
+
+/** An All Settings volume slider released: its setting and the new volume. */
+function releaseAllSettingsVolume(player, argsData) {
+  const [settingId, volume] = readIntArgs(argsData);
+  const varpId = ALL_SETTINGS_VOLUME_VARPS.get(settingId);
+  if (varpId === undefined || volume === undefined) return false;
+  player.applyAudioSettingFromClient?.(varpId, volume);
+  return true;
 }
 
 function enableVolumeSliders(player) {
@@ -606,7 +654,7 @@ function enableVolumeSlidersOnTab({ player, group }) {
 
 function releaseVolumeSlider({ player, buttonId, argsData, scriptTrigger }) {
   if (scriptTrigger !== true) return false;
-  const volume = readIntArg(argsData);
+  const [volume] = readIntArgs(argsData);
   if (volume === undefined) return false;
   player.applyAudioSettingFromClient?.(VOLUME_SLIDER_VARPS.get(buttonId), volume);
   return true;
@@ -672,6 +720,35 @@ function chooseXpDropsSetupRow({ player, buttonId, slot }) {
   return true;
 }
 
+function settingVarpTick() {
+  return pluginApi?.core?.World?.getProcessCycle?.() ?? 0;
+}
+
+/** The client's local setting change already arrived as a whole-varp transmission. */
+function rememberSettingVarpTransmit(transmission) {
+  if (transmission.varpId !== COLLECTION_LOG_NOTIFY_VARP || !transmission.player) return;
+  SettingVarpTransmit.remember(transmission.player, transmission.varpId, transmission.value, settingVarpTick());
+}
+
+/** One listener for both the XP drops varps and the setting varps the client transmits. */
+function handleSettingsVarpTransmit(transmission) {
+  rememberSettingVarpTransmit(transmission);
+  transmitXpDropsSetup(transmission);
+}
+
+/**
+ * One row click sends both the local varp change and the row click. When the varp already carries
+ * the new value, save it instead of toggling it a second time.
+ */
+function consumeTransmittedSettingVarp(player, row) {
+  if (row.varp !== undefined || row.varbit === undefined) return false;
+  const { baseVar } = CacheDefinitions.getVarbit(row.varbit);
+  if (baseVar !== COLLECTION_LOG_NOTIFY_VARP) return false;
+  if (SettingVarpTransmit.take(player, baseVar, settingVarpTick()) === undefined) return false;
+  setSettingVar(player, varKey(row), getSettingVar(player, row));
+  return true;
+}
+
 /** The official client transmits a row click only once the server enables it, as live does. */
 function enableXpDropsSetupRows(player) {
   if (player.getAttribute(NATIVE_CLIENT_ATTRIBUTE) !== true) return;
@@ -716,7 +793,7 @@ module.exports = {
     api.onPlayerLogin(syncXpDrops);
     api.persistAttribute(XPDROPS_SETUP_ATTRIBUTE);
     api.onPlayerLogin(restoreXpDropsSetup);
-    api.onCustomEvent("player:varp-transmit", transmitXpDropsSetup);
+    api.onCustomEvent("player:varp-transmit", handleSettingsVarpTransmit);
     api.onInterfaceActionButton([...XPDROPS_SETUP_DROPDOWNS.keys()], chooseXpDropsSetupRow);
     api.onInterfaceActionButton([...VOLUME_SLIDER_VARPS.keys()], releaseVolumeSlider);
     api.onInterfaceActionButton([...VOLUME_MUTE_BUTTONS.keys()], toggleMute);
@@ -752,6 +829,7 @@ module.exports = {
     // dropdown panel's dynamic children, one per option (the row at child 0 is
     // the highlight rectangle), so the option index is slot - 1.
     api.onInterfaceActionButton(DISPLAY_LAYOUT_DROPDOWN, applyGameframeLayout);
+    api.onCustomEvent("network:plugin-message", receiveGameframeLayout);
     api.onInterfaceActionButton(ATTACK_PRIORITY_PLAYER_BUTTONS_UID, choosePlayerAttackOption);
     api.onInterfaceActionButton(ATTACK_PRIORITY_NPC_BUTTONS_UID, chooseNpcAttackOption);
 

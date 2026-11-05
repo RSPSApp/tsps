@@ -7,9 +7,10 @@
 const { boostSkill, restoreSkillToBaseWithFormula } = require("../../items/ConsumableEffects");
 
 const TAKE_FIVE_CLICK = 2;
-const SPECIAL_RESTORE_AT_ATTRIBUTE = "castlewars:special-restore-at";
-const SPECIAL_RESTORE_COOLDOWN_TICKS = 50;
 const POTION_AREA = "castle-wars";
+const SPELLBOOK_PARAM = 336;
+const LUNAR_SPELLBOOK_INDEX = 2;
+const CASTLE_WARS_POUCH_PARAM = 2259;
 
 let api;
 let core;
@@ -32,12 +33,6 @@ function giveSupply(player, itemId, amount, message) {
   player.sendMessage(message);
 }
 
-function chooseToolkitSupply(player) {
-  api.sendMultiChatboxPrompt(player, "Take a supply",
-    "Toolkit", () => giveSupply(player, core.ItemIdentifiers.TOOLKIT_2, 1, "You get a toolkit."),
-    "Special restore potion (4)", () => giveSupply(player, data.SPECIAL_RESTORE_DOSES[0], 1, "You get a Castlewars special restore potion."));
-}
-
 function takeSupply(event) {
   const { player, object, clickType } = event;
   const supply = data.SUPPLY_TABLES[object.getId()];
@@ -46,10 +41,6 @@ function takeSupply(event) {
   }
   event.handled = true;
   if (!game.requirePlaying(player)) return;
-  if (object.getId() === core.ObjectIdentifiers.TABLE_42) {
-    chooseToolkitSupply(player);
-    return;
-  }
   const [itemId, message] = supply;
   giveSupply(player, itemId, clickType === TAKE_FIVE_CLICK ? 5 : 1, message);
 }
@@ -58,13 +49,26 @@ function giveStartingPouch({ player }) {
   giveSupply(player, data.RUNE_POUCH, 1, "Your rune pouch supplies unlimited combat runes during Castle Wars.");
 }
 
-function supplyCombatRunes(event) {
-  if (game.isPlaying(event.player) && event.player.getInventory().contains(data.RUNE_POUCH) && suppliedSpells.get(event.spellbook)?.has(event.spellId)) {
-    event.bypass = true;
-  }
+function supplyRunes(event) {
+  if (!game.isPlaying(event.player) || !event.player.getInventory().contains(data.RUNE_POUCH)) return;
+  if (suppliedSpells.get(event.spellbook)?.has(event.spellId)) { event.bypass = true; return; }
+  if (event.spellbook !== core.MagicSpellbook.LUNAR) return;
+  // Existing spells use either their cache widget id or their spell-item id.
+  const name = core.CacheDefinitions.getSpellName(event.spellId, event.spellId);
+  const spell = name && core.CacheDefinitions.getSpellByName(name);
+  const params = spell && core.CacheDefinitions.getItem(spell.itemId).params;
+  if (params?.get(SPELLBOOK_PARAM) === LUNAR_SPELLBOOK_INDEX && params.get(CASTLE_WARS_POUCH_PARAM) === 1) event.bypass = true;
 }
 
-function noFreeMagicExperience(event) {
+function inActiveArena(player) {
+  return game.isPlaying(player) && player.getArea() === game.gameArea && game.inGameBounds(player.getLocation());
+}
+
+function noCombatExperience(event) {
+  if (inActiveArena(event.player) && event.player.getAttribute(data.COMBAT_XP_DISABLED_ATTRIBUTE) === true
+    && [core.Skill.ATTACK, core.Skill.STRENGTH, core.Skill.DEFENCE, core.Skill.RANGED, core.Skill.MAGIC, core.Skill.HITPOINTS].includes(event.skill)) {
+    event.allow = false;
+  }
   if (event.skill === core.Skill.MAGIC && game.isPlaying(event.player) && event.player.getInventory().contains(data.RUNE_POUCH)) {
     event.allow = false;
   }
@@ -81,32 +85,31 @@ function applyBrew(player) {
   api.emitCustomEvent("potions:apply-stamina", { player });
 }
 
-function applySpecialRestore(player) {
-  player.setSpecialPercentage(Math.min(100, player.getSpecialPercentage() + 25));
-  core.CombatSpecial.updateBar(player);
-  player.setAttribute(SPECIAL_RESTORE_AT_ATTRIBUTE, core.World.getProcessCycle() + SPECIAL_RESTORE_COOLDOWN_TICKS);
-}
-
 function registerSupplyPotions() {
+  for (const [copy, original] of data.AMMUNITION_ALIASES) core.ItemAliases.register(copy, original);
   api.emitCustomEvent("potions:register", { name: "Castlewars brew", chains: [data.BREW_DOSES], area: POTION_AREA, emptyItemId: null, effect: applyBrew });
-  api.emitCustomEvent("potions:register", { name: "Castlewars special restore", chains: [data.SPECIAL_RESTORE_DOSES], area: POTION_AREA, emptyItemId: null, effect: applySpecialRestore, shareable: false });
 }
 
 function allowSupplyPotions(event) {
   if (event.area === POTION_AREA) event.inside = game.isPlaying(event.player);
 }
 
-function validateSpecialRestore(event) {
-  if (!data.SPECIAL_RESTORE_DOSES.includes(event.itemId)) return;
-  const ticks = (event.player.getAttribute(SPECIAL_RESTORE_AT_ATTRIBUTE) ?? 0) - core.World.getProcessCycle();
-  if (ticks > 0) {
-    event.allowed = false;
-    event.message = `You must wait ${Math.ceil(ticks * 0.6)} seconds before drinking another special restore potion.`;
-  } else if (event.player.getSpecialPercentage() >= 100) {
-    event.allowed = false;
-    event.message = "Your special attack energy is already full.";
-  }
+/** Leave compatibility and projectile consumption to the ordinary dragon-ammunition path. */
+function restrictCastleWarsAmmo(event) {
+  if (!data.AMMUNITION_ALIASES.has(event.itemId) || inActiveArena(event.player)) return;
+  event.allowed = false;
+  if (!event.silent) event.player.sendMessage("You can only fire Castle Wars ammunition during a Castle Wars game.");
+  event.player.getCombat().reset();
 }
+
+function checkCastleWarsAmmo(player, _amount, silent) {
+  if (!core.Ammunition.firesFromAmmoSlot(player)) return null;
+  const permission = { player, itemId: player.getEquipment().get(core.Equipment.AMMUNITION_SLOT).getId(), silent, allowed: true };
+  restrictCastleWarsAmmo(permission);
+  return permission.allowed ? null : false;
+}
+
+function decrementCastleWarsAmmo() { return false; }
 
 /** A tap is mounted on a wall: use the cardinal tile in front, rather than reaching diagonally. */
 function routeToTap(event) {
@@ -135,10 +138,11 @@ module.exports = function attachCastleWarsSupplies(pluginApi, castleWars) {
   }
   api.onObjectInteraction(takeSupply);
   api.onObjectRoute(routeToTap);
-  api.onSpellRuneBypass(supplyCombatRunes);
-  api.onCanGainExperience(noFreeMagicExperience);
+  api.onSpellRuneBypass(supplyRunes);
+  api.onCanGainExperience(noCombatExperience);
+  api.registerRangedAmmoHandler({ checkAmmo: checkCastleWarsAmmo, decrementAmmo: decrementCastleWarsAmmo });
+  api.onCustomEvent("ranged:ammo-permission", restrictCastleWarsAmmo);
   api.onServerStartup(registerSupplyPotions);
   api.onCustomEvent("castlewars:started-player", giveStartingPouch);
   api.onCustomEvent("potions:area", allowSupplyPotions);
-  api.onCustomEvent("potions:validate-drink", validateSpecialRestore);
 };

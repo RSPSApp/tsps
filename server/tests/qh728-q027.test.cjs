@@ -8,7 +8,18 @@ Server.installProductionPathResolver();
 const { PluginManager } = require('../dist/plugins/PluginManager');
 const { DialogueManager } = require('../dist/game/model/dialogues/DialogueManager');
 const { getRegisteredQuests } = require('../plugins/quests/QuestRuntime');
-const core = PluginManager.getCoreApi();
+const realCore = PluginManager.getCoreApi();
+// Railing repairs run on a tick task; the test runs queued tasks itself.
+const queuedTasks = [];
+const core = { ...realCore, TaskManager: { submit: (task) => queuedTasks.push(task) } };
+function runQueuedTasks() {
+  while (queuedTasks.length) queuedTasks.shift().execute();
+}
+function withRandom(value, run) {
+  const random = Math.random;
+  Math.random = () => value;
+  try { return run(); } finally { Math.random = random; }
+}
 
 before(async () => {
   await require('../dist/game/cache/CachePipeline').CachePipeline.initialize(path.resolve(__dirname, '..'));
@@ -46,13 +57,22 @@ function playerFixture(inventory = inventoryFixture()) {
   const messages = [];
   const configs = new Map();
   const interfaces = [];
+  const models = new Map();
+  const interfaceAnimations = new Map();
   const xp = [];
+  const animations = [];
+  const chats = [];
+  const dialogueText = [];
+  const hits = [];
   let location = new core.Location(2567, 3460, 0);
   let manager;
   const sender = new Proxy({
     sendConfig(id, value) { configs.set(id, value); return sender; },
+    sendString(text) { dialogueText.push(text); return sender; },
     sendVarbit(id, value) { configs.set(id, value); return sender; },
     sendInterface(id) { interfaces.push(id); return sender; },
+    sendInterfaceRawModel(uid, model) { models.set(uid, model); return sender; },
+    sendInterfaceAnimation(uid, seq) { interfaceAnimations.set(uid, seq); return sender; },
     sendInterfaceRemoval() { interfaces.pop(); manager?.reset(); return sender; },
     getVarbit(id) { return configs.get(id) ?? 0; },
     closeSubInterface() { return sender; },
@@ -62,8 +82,18 @@ function playerFixture(inventory = inventoryFixture()) {
     messages,
     configs,
     interfaces,
+    models,
+    interfaceAnimations,
     xp,
-    getUsername: () => 'qh728-q027',
+    animations,
+    chats,
+    dialogueText,
+    hits,
+    getIndex: () => 1,
+    performAnimation(animation) { animations.push(animation.getId?.() ?? animation.id); },
+    forceChat(text) { chats.push(text); return player; },
+    getCombat: () => ({ getHitQueue: () => ({ addPendingDamage: (damage) => hits.push(...damage) }) }),
+    getUsername: () => 'qh728-q027', getDisplayName: () => 'qh728-q027',
     getAttribute: (key) => attributes.get(key),
     setAttribute(key, value) { attributes.set(key, value); },
     getInventory: () => inventory,
@@ -72,6 +102,7 @@ function playerFixture(inventory = inventoryFixture()) {
     moveTo(target) { location = target; },
     getDialogueManager: () => manager,
     getPacketSender: () => sender,
+    getInterfaceId: () => interfaces.at(-1) ?? -1,
     sendMessage: (message) => messages.push(message),
     isRegistered: () => true,
   };
@@ -87,11 +118,13 @@ function registerQuestPlugin() {
     itemOnObject: PluginManager.itemOnObjectHooks.length,
     interfaceActionClick: PluginManager.interfaceActionClickHooks.length,
     login: PluginManager.loginHooks.length,
+    npcInteraction: PluginManager.npcInteractionHooks.length,
   };
   const customEvents = new Set();
   const api = new Proxy({ core }, { get(target, key) {
     if (key in target) return target[key];
     if (key === 'persistAttribute') return () => {};
+    if (key === 'onNpcInteraction') return PluginManager.createApi('DwarfCannonTest').onNpcInteraction;
     if (key === 'onNpcDialogueVariant') return (handler) => PluginManager.npcDialogueVariantHooks.push({ pluginName: 'DwarfCannonTest', handler });
     if (key === 'onNpcDialogueCondition') return (handler) => PluginManager.npcDialogueConditionHooks.push({ pluginName: 'DwarfCannonTest', handler });
     if (key === 'onObjectInteraction') return (handler) => PluginManager.objectInteractionHooks.push({ pluginName: 'DwarfCannonTest', order: ++PluginManager.nextObjectHookOrder, handler });
@@ -117,6 +150,7 @@ function registerQuestPlugin() {
       PluginManager.itemOnObjectHooks.length = before.itemOnObject;
       PluginManager.interfaceActionClickHooks.length = before.interfaceActionClick;
       PluginManager.loginHooks.length = before.login;
+      PluginManager.npcInteractionHooks.length = before.npcInteraction;
       for (const eventName of customEvents) {
         const kept = (PluginManager.customEventHooks.get(eventName) ?? [])
           .filter((hook) => hook.pluginName !== 'DwarfCannonTest');
@@ -165,8 +199,24 @@ test('fresh stage 0 runs every mandatory Dwarf Cannon leg to the canonical varp 
     assert.equal(player.configs.get(0), 1, 'stage 1 is mirrored to canonical varp 0');
 
     const railingIds = [15590, 15591, 15592, 15593, 15594, 15595];
+    // fixing-the-railings-trying-to-fix-a-railing: a failed attempt keeps the railing.
+    assert.equal(object(player, railingIds[0], 'Inspect', { x: 0, y: 0, z: 0 }), true);
+    assert.deepEqual(player.messages.slice(-2), [
+      'This railing is broken and needs to be replaced.',
+      'You attempt to repalce the broken railing...',
+    ]);
+    assert.equal(player.animations.at(-1), 4190, 'mcannon_hammer_anim plays');
+    assert.equal(player.configs.get(2240), undefined, 'nothing is fixed before the animation ends');
+    withRandom(0.99, runQueuedTasks);
+    assert.equal(player.messages.at(-1), 'You wrench your back trying to handle the railings.');
+    assert.equal(player.chats.at(-1), 'Gah!');
+    assert.ok(player.hits.at(-1).getDamage() <= 2, 'a failure deals 0-2 damage');
+    assert.equal(inventory.getAmount(I.RAILING), 6, 'a failure keeps the railing');
+    assert.equal(player.configs.get(2240), undefined);
     for (const objectId of railingIds) {
       assert.equal(object(player, objectId, 'Inspect', { x: 0, y: 0, z: 0 }), true);
+      withRandom(0, runQueuedTasks);
+      assert.equal(player.messages.at(-1), 'This railing is now fixed.');
       if (objectId === railingIds[0]) {
         assert.equal(player.configs.get(2240), 1, 'the cache-backed fixed railing varbit changes');
         assert.equal(object(player, objectId, 'Inspect', { x: 0, y: 0, z: 0 }), true);
@@ -393,6 +443,56 @@ test('an existing inspected-cannon stage7 save can complete the registered repai
     assert.equal(quest.getStage(player), 8, 'legacy inspected state is repairable');
     assert.equal(player.configs.get(0), 8);
     assert.deepEqual(player.interfaces, []);
+  } finally { cleanup(); }
+});
+
+test('repair tools visibly select their native models and stale clicks cannot repair a closed interface', () => {
+  const { quest, cleanup } = registerQuestPlugin();
+  try {
+    const player = playerFixture(inventoryFixture(new Map([[core.ItemIdentifiers.TOOLKIT, 1]])));
+    quest.setStage(player, 6);
+    const click = child => PluginManager.emitInterfaceActionClick({ player,
+      buttonId: (409 << 16) | child, action: 1, handled: false });
+    assert.equal(click(3), false, 'cannot select a tool before opening the puzzle');
+    PluginManager.emitItemOnObject({ player, objectId: 15597,
+      itemId: core.ItemIdentifiers.TOOLKIT, handled: false });
+    assert.deepEqual([1, 2, 3].map(c => player.models.get((409 << 16) | c)), [15328, 15330, 15332]);
+    click(3);
+    assert.deepEqual([1, 2, 3].map(c => player.models.get((409 << 16) | c)), [15328, 15330, 15331]);
+    click(8);
+    assert.equal(player.configs.get(2239), 1);
+    assert.equal(player.interfaceAnimations.get((409 << 16) | 5), 3197);
+    click(2);
+    assert.equal(player.models.get((409 << 16) | 2), 15329);
+    click(7);
+    assert.equal(player.interfaceAnimations.get((409 << 16) | 5), 3199);
+    player.getPacketSender().sendInterfaceRemoval();
+    click(1); click(9);
+    assert.equal(quest.getStage(player), 6, 'closing the puzzle prevents delayed completion clicks');
+    PluginManager.emitItemOnObject({ player, objectId: 15597,
+      itemId: core.ItemIdentifiers.TOOLKIT, handled: false });
+    assert.equal(player.configs.get(2238), 0, 'reopening clears the prior repair state');
+    assert.equal(player.configs.get(2239), 0);
+    assert.equal(player.interfaceAnimations.get((409 << 16) | 5), 3196);
+    for (const c of [3, 8, 2, 7, 1, 9]) click(c);
+    assert.equal(quest.getStage(player), 8);
+    assert.equal(click(9), false, 'completion is not repeatable');
+  } finally { cleanup(); }
+});
+
+test('Lawgof repeats the Lollk rescue instructions after accepting the remains', () => {
+  const { quest, cleanup } = registerQuestPlugin();
+  try {
+    const player = playerFixture();
+    quest.setStage(player, 4);
+    const npc = core.NPC.create(core.NpcIdentifiers.CAPTAIN_LAWGOF, new core.Location(2567, 3460, 0));
+    assert.equal(PluginManager.emitNpcInteraction({ player, npc,
+      npcId: npc.getId(), definition: npc.getDefinition(), clickType: 1, handled: false }), true);
+    for (let i = 0; i < 20 && player.getDialogueManager().isActive(); i++) player.getDialogueManager().advance();
+    assert.equal(quest.getStage(player), 4);
+    assert.ok(player.dialogueText.join(' ').includes('Lollk'),
+      'the canonical rescue dialogue is played');
+    assert.ok(!player.dialogueText.join(' ').includes('any news from the watchman'));
   } finally { cleanup(); }
 });
 

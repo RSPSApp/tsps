@@ -35,7 +35,7 @@ class Gateway private constructor(
             // Cache directories are named osrs-<revision>_<date>.
             val revision = config.cacheDirectory.fileName.toString().substringAfter("osrs-").substringBefore('_').toInt()
             val context = GatewayContext(config, cache, huffman, revision)
-            val network = GatewayNetwork(config.gatewayPort, rsa, huffman, CacheJs5Provider(cache), GatewayConnections(context)).build()
+            val network = GatewayNetwork(config.bindHost, config.gatewayPort, rsa, huffman, CacheJs5Provider(cache), GatewayConnections(context)).build()
             UpdatePlayerModel.install(network)
             network.start()
             return Gateway(config, rsa, revision, network)

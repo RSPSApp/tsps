@@ -35,6 +35,13 @@ const STYLE_BY_NAME: Record<CombatStyleKind, FightStyle> = {
     CONTROLLED: FightStyle.CONTROLLED,
 };
 
+/**
+ * The last style slot chosen for each weapon category, as live: varp 43 (com_mode) goes back to a
+ * category's own style whenever its weapon returns, and stays through logout (rsprox 75, 86, 91,
+ * 1718, 1757, 3200, 3275). A category never chosen starts on its first style.
+ */
+export const COMBAT_STYLE_BY_CATEGORY_ATTRIBUTE = "combat:style-by-category";
+
 class FightTypeClass {
 
     private static readonly valuesList: FightTypeClass[] = [];

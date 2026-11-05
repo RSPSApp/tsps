@@ -66,13 +66,14 @@ export class ActiveRegionIndex {
         processCycle: number,
         nowMs: number,
         alsoAt?: (player: Player) => { getX(): number; getY(): number; getZ(): number } | undefined,
+        allPlanes = false,
     ): ActiveRegionSnapshot {
         const nextKeys = new Set<string>();
         const mark = (location: { getX(): number; getY(): number; getZ(): number }) => {
             const baseRegionX = location.getX() >> 6;
             const baseRegionY = location.getY() >> 6;
-            const z = location.getZ();
-            for (let dx = -this.radius; dx <= this.radius; dx++) {
+            const planes = allPlanes && location.getZ() >= 0 && location.getZ() < 4 ? [0, 1, 2, 3] : [location.getZ()];
+            for (const z of planes) for (let dx = -this.radius; dx <= this.radius; dx++) {
                 for (let dy = -this.radius; dy <= this.radius; dy++) {
                     const key = ActiveRegionIndex.getRegionKey(baseRegionX + dx, baseRegionY + dy, z);
                     nextKeys.add(key);

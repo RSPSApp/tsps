@@ -7,8 +7,19 @@
  * uncharging returns every rune. A successful hit has a 1/5 chance to deal 8
  * extra damage and heal the caster for half the damage dealt. Uncharged, it
  * cannot cast. Charging, checking and uncharging mirror Tumeken's shadow
- * (plugins/items/TumekensShadow.plugin.js); the cast reuses the trident
- * of the swamp's animations and graphics, which the Wiki does not specify.
+ * (plugins/items/TumekensShadow.plugin.js).
+ *
+ * The cast (rsprox 1696 ticks 640, 774, 778, 1063, 1073, 1413; 1698 ticks 4177, 4181, 4238, 4265): anim 1167,
+ * casting spotanim 1540 (cache sanguinesti_staff_casting) at height 92 and a private shadow_cast (178); the
+ * projectile 1539 (sanguinesti_staff_travel) leaves after 51 cycles at angle 16, progress 64, heights 23/15 (the
+ * quarter-height unit packets use) and ends 46 cycles plus 10 a tile later, a tile being the distance to the
+ * target's NEAREST tile (1696 ticks 774/778 from the east of the size-3 Balance Elemental end 86, 1063/1073 end 76,
+ * 640 from the west 106). Like the tridents it times its own impact, sent with the cast and delayed to the
+ * projectile's end: a hit is spotanim 1541 (sanguinesti_staff_impact) at height 60 (1696 ticks 640, 778, 1073;
+ * 1698 4181, 4238), a hit with the life-leech proc spotanim 1542 (sanguinesti_staff_heal) at height 92 (1698
+ * 4265; 1696 631, 1485, 1509), both with a range-10 area sound 1460, a miss spotanim 85 at height 124 and 227
+ * (1696 774, 1063; 1698 4177). The Holy Sanguinesti staff's own graphics (cache *_justiciar, 1899-1901) are not captured, so it
+ * casts with these too.
  */
 const MAX_CHARGES = 20000;
 const BLOOD_RUNES_PER_CHARGE = 2;
@@ -20,16 +31,22 @@ const ATTACK_SPEED = 4;
 const ATTACK_RANGE = 7;
 const LONGRANGE_EXTRA = 2;
 const CAST_ANIMATION = 1167;
-const CAST_GRAPHIC = { START: 665, PROJECTILE: 1040, END: 1042 };
+const CAST_GRAPHIC = { START: 1540, PROJECTILE: 1539, IMPACT: 1541, HEAL: 1542 };
+const CAST_SOUND = 178; // shadow_cast
+const IMPACT_SOUND = 1460; // contact_darkness_impact
+const SPLASH_GRAPHIC = 85; // cache failedspell_impact
+const SPLASH_SOUND = 227;
+const CAST_HEIGHT = 92;
+const IMPACT_HEIGHT = 60;
+const HEAL_HEIGHT = 92;
+const SPLASH_HEIGHT = 124;
+const PROJECTILE = { START: 51, BASE: 46, PER_TILE: 10, START_HEIGHT: 23, END_HEIGHT: 15, ANGLE: 16, PROGRESS: 64 };
+
+const { definePoweredStaff, restricted, plainAmount, takePlain, PRESET_TEXT, ticksFor } = require("./PoweredStaff");
 
 let core = null;
 let api = null;
-let chargedIds = new Set();
-let unchargedByCharged = new Map();
-let chargedByUncharged = new Map();
-let SangCombatMethod = null;
-/** Each caster's built-in spell: its max hit reads their Magic level. */
-const spells = new WeakMap();
+let staff = null;
 /** Hits whose life leech proc already rolled, to heal when they land. */
 const proccedHits = new WeakSet();
 
@@ -37,45 +54,74 @@ function ids() {
   return core.ItemIdentifiers;
 }
 
-function weaponOf(player) {
-  return player.getEquipment().getItems()[core.Equipment.WEAPON_SLOT] ?? null;
-}
-
 function isStaffId(id) {
-  const value = Number(id);
-  return chargedIds.has(value) || chargedByUncharged.has(value);
-}
-
-function wieldsStaff(player, chargedOnly = false) {
-  const id = Number(weaponOf(player)?.getId?.() ?? -1);
-  return chargedIds.has(id) || (!chargedOnly && chargedByUncharged.has(id));
+  return staff.isStaff(id);
 }
 
 function chargesOf(item) {
-  return Math.max(0, Math.min(MAX_CHARGES, Math.floor(Number(item?.getMetaValue?.(CHARGES_META_KEY)) || 0)));
+  return staff.chargesOf(item);
 }
 
 function baseMaxHit(player) {
   return Math.max(MIN_BASE_MAX_HIT, Math.floor(player.getSkillManager().getCurrentLevel(core.Skill.MAGIC) / 3));
 }
 
-function spellFor(player) {
-  let spell = spells.get(player);
-  if (spell) return spell;
-  const { CombatNormalSpell, Animation, Graphic, GraphicHeight, Projectile } = core;
-  spell = new CombatNormalSpell({
-    spellId: () => ids().SANGUINESTI_STAFF,
-    maximumHit: () => baseMaxHit(player),
+/** Tiles from the caster to the target's nearest tile (a large target is not measured to its south-west corner). */
+function edgeDistance(from, to) {
+  const at = from.getLocation(), corner = to.getLocation();
+  const size = Math.max(1, to.getSize?.() ?? 1);
+  const dx = Math.max(0, corner.getX() - at.getX(), at.getX() - (corner.getX() + size - 1));
+  const dy = Math.max(0, corner.getY() - at.getY(), at.getY() - (corner.getY() + size - 1));
+  return Math.max(dx, dy);
+}
+
+function projectileEnd(from, to) {
+  return PROJECTILE.BASE + Math.max(1, edgeDistance(from, to)) * PROJECTILE.PER_TILE;
+}
+
+function look({ Animation, Graphic, Projectile }) {
+  return {
     castAnimation: () => new Animation(CAST_ANIMATION),
-    startGraphic: () => new Graphic(CAST_GRAPHIC.START, GraphicHeight.HIGH),
-    castProjectile: (cast, castOn) =>
-      Projectile.createProjectile(cast, castOn, CAST_GRAPHIC.PROJECTILE, 0, 20, 43, 31),
-    endGraphic: () => new Graphic(CAST_GRAPHIC.END),
-    baseExperience: () => 0,
-    levelRequired: () => 1,
+    startGraphic: () => new Graphic(CAST_GRAPHIC.START, 0, CAST_HEIGHT),
+    castSound: () => CAST_SOUND,
+    castProjectile: (cast, castOn) => Projectile.createProjectile(cast, castOn, CAST_GRAPHIC.PROJECTILE, PROJECTILE.START,
+      projectileEnd(cast, castOn), PROJECTILE.START_HEIGHT, PROJECTILE.END_HEIGHT)
+      .withAngle(PROJECTILE.ANGLE).withProgress(PROJECTILE.PROGRESS),
+  };
+}
+
+/** Live sends the impact (or the splash) with the cast, delayed to the projectile's end. */
+function impact(attacker, target, accurate, hit) {
+  const end = projectileEnd(attacker, target);
+  // The life-leech proc (rolled in onHitCalc, before this) shows the heal spiral instead of the plain impact.
+  if (accurate && proccedHits.has(hit)) {
+    return { graphic: new core.Graphic(CAST_GRAPHIC.HEAL, end, HEAL_HEIGHT), areaSound: { id: IMPACT_SOUND, delay: end } };
+  }
+  return accurate
+    ? { graphic: new core.Graphic(CAST_GRAPHIC.IMPACT, end, IMPACT_HEIGHT), areaSound: { id: IMPACT_SOUND, delay: end } }
+    : { graphic: new core.Graphic(SPLASH_GRAPHIC, end, SPLASH_HEIGHT), areaSound: { id: SPLASH_SOUND, delay: end } };
+}
+
+function defineStaff() {
+  const I = ids();
+  return definePoweredStaff(api, {
+    name: "Sanguinesti staff",
+    chargesKey: CHARGES_META_KEY,
+    maxCharges: MAX_CHARGES,
+    pairs: [
+      [I.SANGUINESTI_STAFF, I.SANGUINESTI_STAFF_UNCHARGED_],
+      [I.HOLY_SANGUINESTI_STAFF, I.HOLY_SANGUINESTI_STAFF_UNCHARGED_],
+    ],
+    maxHit: baseMaxHit,
+    attackSpeed: ATTACK_SPEED,
+    range: ATTACK_RANGE,
+    spell: look,
+    hitDelay: (attacker, target) => ticksFor(projectileEnd(attacker, target)),
+    impact,
+    onHitCalc: applyLifeLeech,
+    noChargesMessage: "Your Sanguinesti staff has no charges! You need to charge it with blood runes.",
+    ranOutMessage: "Your Sanguinesti staff has run out of charges.",
   });
-  spells.set(player, spell);
-  return spell;
 }
 
 /** Wiki: a successful hit has a 1/5 chance to deal 8 more; the heal lands with the hit. */
@@ -96,111 +142,36 @@ function onHitResolved({ attacker, hit }) {
   attacker.heal?.(Math.floor(Number(hit.getTotalDamage?.() ?? 0) / 2));
 }
 
-/** Takes a charge; an emptied staff becomes the uncharged one. */
-function useCharge(player) {
-  const { Flag } = core;
-  const staff = weaponOf(player);
-  // Content may spare the charge (a league relic): the same question every powered staff asks.
-  const consume = { player, itemId: staff.getId(), skip: false };
-  api.emitCustomEvent("combat:consume-charge", consume);
-  if (consume.skip) return;
-  const left = chargesOf(staff) - 1;
-  staff.setMetaValue(CHARGES_META_KEY, Math.max(0, left));
-  if (left > 0) return;
-  staff.setId(unchargedByCharged.get(staff.getId()));
-  player.getEquipment().refreshItems();
-  player.getUpdateFlag().flag(Flag.APPEARANCE);
-  player.sendMessage("Your Sanguinesti staff has run out of charges.");
-}
-
-function sangMethod() {
-  if (SangCombatMethod) return SangCombatMethod;
-  const { MagicCombatMethod, PendingHit } = core;
-
-  SangCombatMethod = new (class extends MagicCombatMethod {
-    canAttack(character, target) {
-      const player = character.getAsPlayer();
-      if (!wieldsStaff(player, true) || chargesOf(weaponOf(player)) <= 0) {
-        player.sendMessage("Your Sanguinesti staff has no charges! You need to charge it with blood runes.");
-        player.getCombat().reset();
-        return false;
-      }
-      // Its built-in spell is the only one it casts, whatever is selected or autocast.
-      player.getCombat().setCastSpell(spellFor(player));
-      useCharge(player);
-      return true;
-    }
-
-    canPursue(character) {
-      const player = character.getAsPlayer();
-      return wieldsStaff(player, true) && chargesOf(weaponOf(player)) > 0;
-    }
-
-    hits(character, target) {
-      const spell = spellFor(character.getAsPlayer());
-      // Wiki (Hit delay): powered staves land as spells do, by distance.
-      const hit = new PendingHit(character, target, this, MagicCombatMethod.hitDelay(character, target, spell));
-      spell.onHitCalc(hit);
-      applyLifeLeech(hit);
-      return [hit];
-    }
-
-    attackSpeed() {
-      return ATTACK_SPEED;
-    }
-
-    attackDistance(character) {
-      const { FightStyle } = core;
-      // Longrange is the powered staff's defensive style.
-      return ATTACK_RANGE + (character.getFightType?.()?.getStyle?.() === FightStyle.DEFENSIVE ? LONGRANGE_EXTRA : 0);
-    }
-
-    /** Keeps attacking: the staff casts on its own, unlike a single manual cast. */
-    finished(character) {
-      const combat = character.getCombat();
-      combat.setPreviousCast(spellFor(character.getAsPlayer()));
-      combat.setCastSpell(null);
-    }
-  })();
-  return SangCombatMethod;
-}
-
-function resolveSang(attacker) {
-  if (!attacker?.isPlayer?.()) return null;
-  return wieldsStaff(attacker.getAsPlayer()) ? sangMethod() : null;
-}
-
-function setCharges(player, staff, value) {
-  const clamped = Math.max(0, Math.min(MAX_CHARGES, Math.floor(value)));
-  staff.setMetaValue(CHARGES_META_KEY, clamped);
-  if (clamped > 0) {
-    staff.setId(chargedByUncharged.get(staff.getId()) ?? staff.getId());
-  } else {
-    staff.setId(unchargedByCharged.get(staff.getId()) ?? staff.getId());
-  }
-  player.getInventory().refreshItems();
+function setCharges(player, item, value) {
+  staff.setCharges(item, value);
+  player.getInventory?.().refreshItems?.();
 }
 
 /** Two blood runes a charge, as many as the inventory affords (Wiki). */
 function chargeStaff(event) {
   const { player, usedItem, usedWithItem, usedItemId, usedWithItemId } = event;
-  const staff = isStaffId(usedItemId) ? usedItem : isStaffId(usedWithItemId) ? usedWithItem : null;
-  if (!staff) {
+  const held = isStaffId(usedItemId) ? usedItem : isStaffId(usedWithItemId) ? usedWithItem : null;
+  if (!held) {
     return;
   }
-  const otherId = Number(staff === usedItem ? usedWithItemId : usedItemId);
+  const otherId = Number(held === usedItem ? usedWithItemId : usedItemId);
   if (otherId !== ids().BLOOD_RUNE) {
     return;
   }
   const inventory = player.getInventory();
-  const current = chargesOf(staff);
+  if (restricted(held === usedItem ? usedWithItem : usedItem)) {
+    player.sendMessage(PRESET_TEXT);
+    event.handled = true;
+    return;
+  }
+  const current = chargesOf(held);
   if (current >= MAX_CHARGES) {
     player.sendMessage("Your Sanguinesti staff is already fully charged.");
     event.handled = true;
     return;
   }
   const affordable = Math.min(
-    Math.floor(inventory.getAmount(ids().BLOOD_RUNE) / BLOOD_RUNES_PER_CHARGE),
+    Math.floor(plainAmount(inventory, ids().BLOOD_RUNE) / BLOOD_RUNES_PER_CHARGE),
     MAX_CHARGES - current,
   );
   if (affordable < 1) {
@@ -208,8 +179,8 @@ function chargeStaff(event) {
     event.handled = true;
     return;
   }
-  inventory.deleteNumber(ids().BLOOD_RUNE, affordable * BLOOD_RUNES_PER_CHARGE);
-  setCharges(player, staff, current + affordable);
+  takePlain(inventory, ids().BLOOD_RUNE, affordable * BLOOD_RUNES_PER_CHARGE);
+  setCharges(player, held, current + affordable);
   player.sendMessage(`You apply ${affordable.toLocaleString()} charge${affordable === 1 ? "" : "s"} to your Sanguinesti staff.`);
   event.handled = true;
 }
@@ -229,12 +200,12 @@ function uncharge({ player, item }) {
   }
   const inventory = player.getInventory();
   const runeId = ids().BLOOD_RUNE;
-  const needed = inventory.contains(runeId) ? 0 : 1;
-  if (inventory.getFreeSlots() < needed) {
+  const refund = new Item(runeId, charges * BLOOD_RUNES_PER_CHARGE);
+  if (inventory.getAddableAmount(refund) < refund.getAmount()) {
     player.sendMessage("Your inventory is too full to hold the blood runes.");
     return true;
   }
-  inventory.addItem(new Item(runeId, charges * BLOOD_RUNES_PER_CHARGE));
+  inventory.addItem(refund);
   setCharges(player, item, 0);
   player.sendMessage(
     `You uncharge your Sanguinesti staff, regaining ${(charges * BLOOD_RUNES_PER_CHARGE).toLocaleString()} blood runes.`
@@ -248,26 +219,20 @@ module.exports = {
   register(pluginApi) {
     api = pluginApi;
     core = api.core;
-    const I = core.ItemIdentifiers;
-    unchargedByCharged = new Map([
-      [I.SANGUINESTI_STAFF, I.SANGUINESTI_STAFF_UNCHARGED_],
-      [I.HOLY_SANGUINESTI_STAFF, I.HOLY_SANGUINESTI_STAFF_UNCHARGED_],
-    ]);
-    chargedIds = new Set(unchargedByCharged.keys());
-    chargedByUncharged = new Map([...unchargedByCharged].map(([charged, uncharged]) => [uncharged, charged]));
+    staff = defineStaff();
 
     api.onItemAction("Sanguinesti staff", { Check: checkCharges, Uncharge: uncharge });
     api.onItemAction("Holy sanguinesti staff", { Check: checkCharges, Uncharge: uncharge });
     api.onItemOnItem(chargeStaff, { noted: false });
     api.onCombatHitResolved(onHitResolved);
-    api.registerCombatMethodResolver({ resolve: resolveSang });
+    api.registerCombatMethodResolver(staff.resolver);
   },
   _test: {
     chargesOf,
     setCharges,
     applyLifeLeech,
     onHitResolved,
-    useCharge,
+    useCharge: (player) => staff.useCharge(player),
     chargeStaff,
     checkCharges,
     uncharge,

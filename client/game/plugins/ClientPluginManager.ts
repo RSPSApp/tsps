@@ -9,6 +9,7 @@ import type { GLRenderer } from "../../widgets/gl/renderer";
 import type { ClickRegistry } from "../../widgets/gl/click-registry";
 import type { SimpleMenuEntry } from "../../ui/menu/MenuEngine";
 import type { MenuTransformContext } from "../../ui/menu/menuTransforms";
+import type { MenuActionData } from "../../ui/menu/menuEvents";
 import type { FontLoader } from "../../widgets/components/TextRenderer";
 import type { IndexedSprite } from "../../rs/sprite/IndexedSprite";
 import type { OverlayPosition } from "@runelite/client/ui/overlay/OverlayPosition";
@@ -86,6 +87,13 @@ export type WidgetOverlayDrawContext = {
     itemImage?(itemId: number, quantity: number, outline: number): HTMLCanvasElement | undefined;
     /** Where a movable overlay of this size (layout units) draws this frame; nothing while the HUD is hidden. */
     place(overlay: WidgetOverlay, width: number, height: number): OverlayPlacement | undefined;
+    /** Visible game canvas width in CSS pixels, for compact infobox wrapping. */
+    canvasCssWidth?: number;
+    /** Mobile gameframe growth relative to compact phone-sized controls. */
+    hudScale?: number;
+    /** HUD text scale on each canvas axis, including touch-display adjustments. */
+    overlayTextScale?(): { x: number; y: number };
+    inputScale?(): { x: number; y: number };
 };
 
 /**
@@ -117,12 +125,20 @@ export type NpcOutline = { ecsId: number; serverId: number; color: number; alpha
 /** A movable overlay's top left in device pixels, and the device pixels per layout unit. */
 export type OverlayPlacement = { x: number; y: number; scaleX: number; scaleY: number };
 
-/** UI drawn above the widgets and under the right-click menu (RuneLite's ABOVE_WIDGETS). */
+/** UI drawn above the widgets; overlays may opt into a specific menu-safe draw point. */
 export interface WidgetOverlay {
     /** Changes whenever the drawing would; a change redraws the UI. */
     signature(): string;
     /** Draws the overlay and returns the device rects it covered. */
     draw(context: WidgetOverlayDrawContext): { x: number; y: number; w: number; h: number }[];
+    /** Draw after widget content and tooltips, immediately before the context menu. */
+    drawBeforeMenu?: boolean;
+    /**
+     * The device rects the next draw will cover, when the overlay can tell before drawing. A
+     * changed overlay then redraws only those rects and the ones it covered before, instead
+     * of the whole UI; without it (or returning undefined) a change redraws everything.
+     */
+    coverage?(): { x: number; y: number; w: number; h: number }[] | undefined;
     /**
      * Draw just after the side-panel anchor widget instead of above the whole widget tree.
      * Used by overlays that sit over the side panel (status bars) so tooltips still win.
@@ -231,8 +247,21 @@ export interface ClientPlugin {
     onHitsplat?(event: HitsplatEventPayload): void;
     /** A health bar update arrived from the server. */
     onHealthBar?(event: HealthBarEvent): void;
+    /**
+     * Text is about to show over a player's head, their public chat or forced chat (RuneLite's
+     * OverheadTextChanged): return the text to show instead, or undefined to leave it. The chat
+     * history keeps the message as sent.
+     */
+    overheadChatText?(event: { name: string; text: string }): string | undefined;
+    /** A menu option is about to be dispatched (RuneLite's MenuOptionClicked); true consumes it. */
+    onMenuOptionClicked?(action: MenuActionData): boolean;
     /** A clientscript finished, nested calls included (RuneLite's ScriptPostFired). */
     onScriptFinished?(scriptId: number): void;
+    /**
+     * A clientscript is about to run, before pre-script listeners such as Bank Tags' (RuneLite's
+     * ScriptPreFired with a subscriber priority above theirs).
+     */
+    onScriptPreFired?(scriptId: number): void;
     /** A clientscript ran `runelite_callback`. */
     onScriptCallback?(event: ScriptCallbackEvent): void;
     /** A widget was dropped on another; return true to keep the drag from the server. */
@@ -439,8 +468,24 @@ export class ClientPluginManager {
         for (const plugin of this.plugins) plugin.onHealthBar?.(event);
     }
 
+    onMenuOptionClicked(action: MenuActionData): boolean {
+        return this.implementing("onMenuOptionClicked").some((plugin) => plugin.onMenuOptionClicked!(action) === true);
+    }
+
+    /** The overhead text after every plugin has had its say, each seeing the last one's text. */
+    overheadChatText(name: string, text: string): string {
+        for (const plugin of this.implementing("overheadChatText")) {
+            text = plugin.overheadChatText!({ name, text }) ?? text;
+        }
+        return text;
+    }
+
     onScriptFinished(scriptId: number): void {
         for (const plugin of this.implementing("onScriptFinished")) plugin.onScriptFinished!(scriptId);
+    }
+
+    onScriptPreFired(scriptId: number): void {
+        for (const plugin of this.implementing("onScriptPreFired")) plugin.onScriptPreFired!(scriptId);
     }
 
     onScriptCallback(event: ScriptCallbackEvent): void {

@@ -18,16 +18,45 @@ number.
 
 ## Boss drop rates
 
-`pluginConfig` `"NpcDrops:bossRareMultiplier"` makes bosses' rare drops that many times likelier.
+`pluginConfig` `"NpcDrops:bossRareMultiplier"` makes bosses' unique drops that many times likelier.
 `1` (or leaving it out) is the OSRS rate; at `2` a 1/512 unique is 1/256, at `3` 1/171, at `5`
-1/102. It covers every drop rarer than 1/100 that a boss rolls on its own: uniques, pets, jars,
-visages and clue scrolls. Common loot keeps its rate. Bosses are the NPCs the game cache marks
-as bosses. Raid chests (Chambers of Xeric, Theatre of Blood, Tombs of Amascut) and other
-reward chests are not affected.
+1/102. Eligible items are rarer than 1/10 and either listed in a unique section or in the cache's
+boss collection log (including rings, pets, jars and visages). Rarity alone does not qualify:
+ordinary supplies, equipment, clue scrolls and shared drop tables keep their rates.
+The Collection Log plugin does not need to be enabled. Ordinary loot keeps its rate:
+on the weighted main roll the boosted rows are rolled separately instead of taking chance from
+the rest of the table, so a very high multiplier can drop a rare alongside the main roll. Bosses
+are the NPCs the game cache marks as bosses, plus the few `npc-drop-overrides.json` lists
+because the cache omits their marker. Raid chests (Chambers of Xeric, Theatre of Blood, Tombs of
+Amascut) and other reward chests are not affected.
 
 ```json
 {
   "pluginConfig": { "NpcDrops:bossRareMultiplier": 2 }
+}
+```
+
+## Welcome screen message
+
+`pluginConfig` `"WelcomeScreen:messageOfTheWeek"` is the text on the scroll at the bottom of
+the welcome screen. It defaults to `Welcome to Old School RuneScape!`. The text can use the game's
+`<col=rrggbb>` and `<br>` tags. League worlds show their own league message instead.
+
+```json
+{
+  "pluginConfig": { "WelcomeScreen:messageOfTheWeek": "Double XP this weekend!<br>Have fun." }
+}
+```
+
+## Display names
+
+`pluginConfig` `"DisplayName:cooldownDays"` is how many days a player waits between
+[display name](display-names.md) changes (default `28`; `0` lets them change at any time).
+`"DisplayName:holdDays"` is how long a name given up stays held for its old owner (default `35`).
+
+```json
+{
+  "pluginConfig": { "DisplayName:cooldownDays": 7, "DisplayName:holdDays": 14 }
 }
 ```
 
@@ -78,8 +107,23 @@ default.
 | `FreezeTimer` | Sends the remaining freeze duration and spell information used by the client's freeze-timer overlay. |
 | `FriendsList` | Enables friends-list and friends-chat handling, including private messages, chat filters, and friends-chat channels. |
 | `GrandExchange` | Enables Grand Exchange offers, offer collection, and the item-price resource used by the exchange. |
+| `SideJournalDefaults` | Owns the journal tabs and custom Character Summary. Summary buttons follow the commands enabled for each player, and visible navigation buttons are centered with equal spacing. |
 | `IgnoreList` | No active feature is currently attached to this plugin. The client protocol does not yet send ignore-list add/remove actions, so enabling this switch alone does not make those controls work. |
 | `VengeanceTimer` | Keeps the client's 30-second Vengeance cooldown overlay in sync with the player's active cooldown. |
 
 These switches control whether a plugin is loaded; they are distinct from `pluginConfig`, which
 sets plugin-specific options such as `TutorialIsland:allowSkip`.
+
+Character Summary checks the registered `teleports`, `presets`, `commands`, and `lockxp`
+commands for its Teleports, Presets, Commands, and Combat XP controls. Their usual providers
+are `TeleportInterface`, `PvpMode`, `Commands`, and `PlayerCommands`. Disabling a provider
+through the host's plugin switches hides its button when the world loads that configuration.
+The summary also refreshes command access while open and rejects clicks on unavailable controls.
+Its layout and behavior live under `plugins/interface/sidejournaldefaults/`; it does not
+require the optional PvP statistics plugin to display.
+
+## PvP Arena worlds
+
+Ranked PvP Arena match finding (the Grouping tab's PvP Arena button, `DuelArena` plugin) is only
+available on designated worlds. Enable it with `"pluginConfig": { "DuelArena:pvpArenaWorld": true }`
+in `world.local.json` (default off). Legacy Duels are unaffected.

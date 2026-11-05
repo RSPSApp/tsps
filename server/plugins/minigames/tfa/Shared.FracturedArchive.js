@@ -394,7 +394,7 @@ function closeFade(player) {
 }
 
 function displayName(player) {
-  return player.getUsername();
+  return player.getDisplayName();
 }
 
 function random(min, max) {

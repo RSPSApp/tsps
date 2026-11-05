@@ -1,6 +1,6 @@
 // TODO: ported from xrsps-typescript; untested.
 module.exports = function registerZaryteCrossbowSpecialAttack(api) {
-  const { Animation, CombatFactory, CombatSpecial, ItemIdentifiers, PendingHit, Projectile, RangedCombatMethod, RangedWeapon, Sound, Sounds } = api.core;
+  const { Animation, CombatFactory, CombatPosition, CombatSpecial, ItemIdentifiers, PendingHit, Projectile, RangedCombatMethod, RangedWeapon, Sound, Sounds, WeaponProfiles } = api.core;
 
   const DRAIN = 75;
   const EVOKE_ACCURACY_MULTIPLIER = 2;
@@ -8,7 +8,12 @@ module.exports = function registerZaryteCrossbowSpecialAttack(api) {
 
   class ZaryteCrossbowCombatMethod extends RangedCombatMethod {
     hits(character, target) {
-      return [new PendingHit(character, target, this, 2)];
+      if (character.getLocation().getZ() === target.getLocation().getZ()) {
+        return [new PendingHit(character, target, this, 2)];
+      }
+      const distance = CombatPosition.projectileDistance(character, target);
+      const delay = RangedCombatMethod.playerHitDelays(character, target, distance)[0];
+      return [new PendingHit(character, target, this, Math.max(2, delay))];
     }
 
     canAttack(character, target) {
@@ -27,7 +32,27 @@ module.exports = function registerZaryteCrossbowSpecialAttack(api) {
       CombatSpecial.drain(player, DRAIN);
       player.performAnimation(ANIMATION);
       Sounds.sendSound(character, Sound.SHOOT_CROSSBOW);
-      Projectile.createProjectile(character, target, 301, 44, 35, 50, 70).sendProjectile();
+
+      // Evoke is a normal bolt shot with doubled accuracy: use the equipped bolt's travel
+      // spotanim on the crossbow's trajectory (44 + 5 a tile from 41). The old 301/44->35
+      // ended before it started, so the client clamped it to a single cycle at the player.
+      const profile = WeaponProfiles.ranged(player);
+      const shot = profile?.projectiles?.[0] ?? { delay: 41, lengthAdjustment: 5, stepMultiplier: 5, startHeight: 38.75, endHeight: 36.5, angle: 5, progress: 11 };
+      const distance = CombatPosition.projectileDistance(character, target);
+      const end = RangedCombatMethod.projectileEnd(shot, distance);
+      const ammo = player.getCombat().getAmmunition();
+      const projectile = Projectile.createProjectile(
+        character,
+        target,
+        profile?.projectileId ?? ammo?.getProjectileId() ?? 27,
+        shot.delay,
+        end,
+        shot.startHeight,
+        shot.endHeight,
+      );
+      if (shot.angle != null) projectile.withAngle(shot.angle);
+      if (shot.progress != null) projectile.withProgress(shot.progress);
+      projectile.sendProjectile();
       CombatFactory.decrementAmmo(player, target.getLocation(), 1);
     }
   }

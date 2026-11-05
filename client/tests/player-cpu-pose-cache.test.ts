@@ -4,7 +4,7 @@ import { PlayerPoseGeometry } from "../render/webgpu/actors/actorPlayers";
 import { Model } from "../rs/model/Model";
 
 const baseModel = new Model();
-baseModel.verticesCount = 4;
+baseModel.verticesCount = baseModel.usedVertexCount = 4;
 baseModel.verticesX = new Int32Array([0, 128, 0, 128]);
 baseModel.verticesY = new Int32Array([0, 0, -128, -128]);
 baseModel.verticesZ = new Int32Array(4);
@@ -43,6 +43,8 @@ assert.notDeepEqual(second.alphaVertices, alphaBefore, "the next CPU pose has di
 assert.equal(geometry.resolve(1, false), first, "the old CPU pose remains cached for a later GPU re-upload");
 assert.deepEqual(first.opaqueVertices, opaqueBefore, "a later pose cannot overwrite cached opaque bytes");
 assert.deepEqual(first.alphaVertices, alphaBefore, "a later pose cannot overwrite cached alpha bytes");
+assert.equal(first.logicalHeight, -first.bounds![1], "cached CPU geometry retains its animated model height");
+assert.equal(second.logicalHeight, -second.bounds![1]);
 console.log("CPU player pose cache snapshots passed");
 
 

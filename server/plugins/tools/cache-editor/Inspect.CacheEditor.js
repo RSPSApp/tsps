@@ -83,7 +83,7 @@ function countOf(core, kind) {
   switch (kind) {
     case "loc": return counts.objects;
     case "npc": return counts.npcs;
-    case "item": return counts.items;
+    case "item": return Math.max(counts.items, ...customItems(core).map(item => item.id + 1));
     default: return null;
   }
 }
@@ -104,7 +104,7 @@ function resolveId(core, kind, id) {
   return namesOf(core, kind)?.has?.(id) ? "known" : "unverified";
 }
 
-const values = (value) => (Array.isArray(value) ? value : [value]).filter((entry) => Number.isInteger(entry) && entry >= 0);
+const values = (value) => (Array.isArray(value) ? value.flat(Infinity) : [value]).filter((entry) => Number.isInteger(entry) && entry >= 0);
 
 /**
  * One cache entry: its values, every link it holds, and its multi-def, if any.

@@ -21,24 +21,32 @@
  * - Unclaimed loot is placed on the ground on leaving.
  * - Capes by Challenge Mode completions: Xeric's guard 100, warrior 500, sentinel 1,000,
  *   general 1,500, champion 2,000.
- * Not on the Wiki (to check against a capture): the reward interface (539: component 5 the items, 6 Bank-all, 8 Take-all, 10
- *   Discard-all; inventory 581), the chest light varbit 5456 (1 white, 2 purple), the messages
- *   ("Congratulations - your raid is complete! Duration: ", the completion counts, "Special
- *   loot:", the target time), the raid counts on the attributes.
+ * rsprox captures: the reward interface (539: component 5 the items; inventory 581), the
+ *   completion, count, "Special loot:" and target time messages word for word, jingle 152, and
+ *   varbit 5456 (raids_client_rewardindicator): 2 for a unique's finder (820, 843, 3282, 3285,
+ *   3389), 1 for common loot (the two CM runs). Varbit 5457 (raids_client_needsrewardbook) is
+ *   set as the chest opens and cleared as its interface closes (3389), not when loot is
+ *   claimed. The Challenge Timeboard's notice comes before the completion message (3389).
+ * Not on the Wiki or in a capture: components 6 Bank-all, 8 Take-all, 10 Discard-all, the raid
+ *   counts on the attributes.
  * Wiki-derived: a common amount is the table's maximum x points / 131,071 (at least 1).
  */
 
 const Shared = require("./Shared.ChambersOfXeric");
 const Raid = require("./RaidState.ChambersOfXeric");
+const Timeboard = require("./Timeboard.ChambersOfXeric");
 
 const INTERFACE = { REWARDS: 539, ITEMS: 5, BANK_ALL: 6, TAKE_ALL: 8, DISCARD_ALL: 10 };
 const INVENTORY = 581;
-const VARBIT = { LIGHT: 5456 };
+/** rsprox captures: 2 for a unique's finder (820, 843, 3282, 3285, 3389), 1 for common loot (the CM runs). */
 const LIGHT = { NONE: 0, WHITE: 1, PURPLE: 2 };
+/** rsprox captures: played with the completion message. */
+const COMPLETE_JINGLE = 152;
 const POINTS = { PER_PERCENT: 8676, CAP: 570000, COMMON_CAP: 131071, TARGET_BONUS: 5000 };
 const ITEM = { DARK_JOURNAL: 20899, OLMLET: 20851, KIT: 24670, DUST: 22386, TABLET: 21046, ELITE_CLUE: 12073 };
 const ATTR_TABLET = "cox:ancient-tablet";
 const ATTR_BEST = "cox:best-times";
+const RAID_NAME = "Chambers of Xeric";
 
 /** Weights: [Normal, Challenge Mode]. */
 const UNIQUES = [
@@ -152,31 +160,76 @@ function completed(raid) {
   const raiders = [...raid.players];
   const size = raid.scale;
   const inTime = raid.challenge && raid.duration <= targetTicks(size);
-  const time = Shared.formatTicks(raid.duration);
   for (const player of raiders) {
-    if (inTime) {
-      player.sendMessage("Your team beat the challenge target time and you earned an extra 5,000 points.");
-      raid.addPoints(player, POINTS.TARGET_BONUS);
-    }
-    Shared.raidMessage(player, `Congratulations - your raid is complete! Team size: ${size} Duration: <col=ff0000>${time}</col>`);
-    recordBest(player, raid, time);
+    if (!inTime) continue;
+    player.sendMessage("Your team beat the challenge target time and you earned an extra 5000 points.");
+    raid.addPoints(player, POINTS.TARGET_BONUS);
+  }
+  // rsprox 3389: the Timeboard notice comes after the target-time message, before the completion one.
+  Timeboard.record(raid);
+  for (const player of raiders) {
+    player.getPacketSender().sendJingle(COMPLETE_JINGLE, 0);
+    // rsprox captures 843, 3389, 820 (a new best) and the two CM runs (not), word for word, closing tags included.
+    const previous = recordBest(player, raid);
+    const best = previous == null ? " (new personal best)</col>" : ` Personal best: </col><col=ff0000>${Shared.formatTicks(previous, player)}</col>`;
+    Shared.raidNotice(player, `<col=ef20ff>Congratulations - your raid is complete!</col><br>Team size: <col=ff0000>${teamSize(size)}</col> Duration:</col> <col=ff0000>${Shared.formatTicks(raid.duration, player)}</col>${best}`);
     const attribute = raid.challenge ? Shared.ATTR.CHALLENGE_KILLS : Shared.ATTR.KILLS;
     const count = (Number(player.getAttribute(attribute)) || 0) + 1;
     player.setAttribute(attribute, count);
     player.sendMessage(`Your completed Chambers of Xeric${raid.challenge ? " Challenge Mode" : ""} count is: <col=ff0000>${count}</col>.`);
+    Shared.api().emitCustomEvent("diary:task", { player, diary: "kourend", task: "complete-a-raid-in-the-chambers-of-xeric" });
   }
   generate(raid, inTime);
 }
 
-/** Personal bests by mode and team size. */
-function recordBest(player, raid, time) {
-  const bests = { ...(player.getAttribute(ATTR_BEST) ?? {}) };
-  const key = `${raid.challenge ? "cm" : "normal"}:${raid.scale}`;
-  if (bests[key] == null || raid.duration < bests[key]) {
-    bests[key] = raid.duration;
-    player.setAttribute(ATTR_BEST, bests);
-    player.sendMessage(`New personal best: <col=ff0000>${time}</col>`);
+/** Team size as the completion message has it: "Solo", "24+ players" (captures); the rest by the Wiki's target-time bands. */
+function teamSize(size) {
+  if (size === 1) return "Solo";
+  if (size <= 10) return `${size} players`;
+  if (size <= 15) return "11-15 players";
+  if (size <= 23) return "16-23 players";
+  return "24+ players";
+}
+
+/**
+ * Cache script 2735: the shared category displays CM first (2048), then Normal (2941).
+ */
+function collectionLogCount(request) {
+  if (request?.category !== RAID_NAME) return;
+  request.count = Number(request.player.getAttribute(Shared.ATTR.CHALLENGE_KILLS)) || 0;
+  request.extraCounts = [Number(request.player.getAttribute(Shared.ATTR.KILLS)) || 0];
+}
+
+/**
+ * Bests saved before team-size names were used ("cm:3") move to theirs ("cm:3 players"),
+ * keeping the faster where two land on one name.
+ */
+function migrateBests(bests) {
+  const migrated = {};
+  for (const [key, ticks] of Object.entries(bests)) {
+    const old = /^(cm|normal):(\d+)$/.exec(key);
+    const name = old ? `${old[1]}:${teamSize(Number(old[2]))}` : key;
+    if (migrated[name] == null || ticks < migrated[name]) migrated[name] = ticks;
   }
+  return migrated;
+}
+
+/**
+ * Personal bests by mode and team size: the previous best in ticks, or null when this run is a
+ * new one. rsprox (Chambers of Xeric (Team Size: 3 players)): the clan broadcast names the size
+ * as the completion message does.
+ */
+function recordBest(player, raid) {
+  const bests = migrateBests(player.getAttribute(ATTR_BEST) ?? {});
+  const size = teamSize(raid.scale);
+  const key = `${raid.challenge ? "cm" : "normal"}:${size}`;
+  const previous = bests[key];
+  if (previous == null || raid.duration < previous) {
+    bests[key] = raid.duration;
+    Shared.api().emitCustomEvent("boss:personal-best", { player, boss: `${RAID_NAME}${raid.challenge ? " Challenge Mode" : ""} (Team Size: ${size})`, ticks: raid.duration });
+  }
+  player.setAttribute(ATTR_BEST, bests);
+  return previous == null || raid.duration < previous ? null : previous;
 }
 
 function generate(raid, inTime) {
@@ -218,19 +271,19 @@ function generate(raid, inTime) {
         special.push([name, ITEM.DUST]);
       }
     }
-    player.getPacketSender().sendVarbit(VARBIT.LIGHT, uniques.has(name) ? LIGHT.PURPLE : LIGHT.WHITE);
+    player.getPacketSender().sendVarbit(Shared.VARBIT.REWARD_LIGHT, uniques.has(name) ? LIGHT.PURPLE : LIGHT.WHITE);
   }
   if (special.length) {
     for (const player of raiders) {
       Shared.raidMessage(player, "Special loot:");
-      for (const [name, id] of special) player.sendMessage(`${Shared.displayName(named.get(name))} - <col=ff0000>${itemName(id)}</col>`);
+      for (const [name, id] of special) Shared.raidNotice(player, `<col=ef20ff>${Shared.displayName(named.get(name))} -</col> <col=ff0000>${itemName(id)}</col>`);
     }
   }
 }
 
 // ---------------------------------------------------------------- the chest
 
-/** raids_client_needsrewardbook: set as the chest is searched. */
+/** raids_client_needsrewardbook: set as the chest is searched, cleared as the rewards close. */
 const VARBIT_NEEDS_REWARD_BOOK = 5457;
 
 /** Pet ownership/delivery belongs to Pets, never the chest's bank/inventory/ground paths. */
@@ -247,11 +300,29 @@ function claimPetLoot(player, raid) {
   }
 }
 
+/**
+ * The chest's loot reaches the collection log when it is opened, as the Tombs' and Theatre's do.
+ * The Olmlet is left to the pet delivery (`npc-drops:roll`), which already logs it, so it is not
+ * counted twice. `loggedAmount` is marked, so reopening a part-claimed chest adds nothing.
+ */
+function logRewards(player, raid) {
+  const items = rewardsOf(raid).get(player.getUsername()) ?? [];
+  for (const entry of items) {
+    const seen = Math.min(entry.amount, Number(entry.loggedAmount) || 0);
+    const amount = entry.amount - seen;
+    if (amount > 0 && entry.id !== ITEM.OLMLET) {
+      Shared.api().emitCustomEvent("collection-log:obtain", { player, itemId: entry.id, amount });
+    }
+    entry.loggedAmount = entry.amount;
+  }
+}
+
 function openChest(event) {
   const { player } = event;
   const raid = Raid.raidOf(player);
   if (!raid) return false;
   claimPetLoot(player, raid);
+  logRewards(player, raid);
   const items = rewardsOf(raid).get(player.getUsername()) ?? [];
   if (items.length === 0) {
     Shared.statement(player, "The chest is empty.");
@@ -267,11 +338,20 @@ function openChest(event) {
   return true;
 }
 
+/**
+ * rsprox 3389: raids_client_needsrewardbook goes back to 0 as the rewards close, a tick before
+ * the interface is taken down; claiming an item leaves it set (5083 keeps it at 1).
+ */
+function chestClosed(event) {
+  if (event.interfaceId !== INTERFACE.REWARDS) return;
+  event.player.getPacketSender().sendVarbit(VARBIT_NEEDS_REWARD_BOOK, 0);
+}
+
 function refreshChest(player, raid) {
   const items = rewardsOf(raid).get(player.getUsername()) ?? [];
   player.getPacketSender().sendInventory(INVENTORY, Math.max(items.length, 9), items);
   player.getInventory().refreshItems();
-  if (items.length === 0) player.getPacketSender().sendVarbit(VARBIT.LIGHT, LIGHT.NONE);
+  if (items.length === 0) player.getPacketSender().sendVarbit(Shared.VARBIT.REWARD_LIGHT, LIGHT.NONE);
 }
 
 function takeItem(player, raid, index) {
@@ -282,16 +362,16 @@ function takeItem(player, raid, index) {
     claimPetLoot(player, raid);
     if (!items.includes(entry)) return true;
   }
-  const { Item, ItemDefinition } = Shared.core();
-  const stackable = ItemDefinition.forId(entry.id)?.isStackable?.() === true;
+  const { Item } = Shared.core();
   const inventory = player.getInventory();
-  const room = stackable ? inventory.contains(entry.id) || inventory.getFreeSlots() > 0 : inventory.getFreeSlots() >= entry.amount;
-  if (!room) {
+  const moved = inventory.getAddableAmount(new Item(entry.id, entry.amount));
+  if (moved <= 0) {
     player.sendMessage("You don't have enough inventory space.");
     return false;
   }
-  inventory.add(new Item(entry.id, entry.amount), true);
-  items.splice(index, 1);
+  inventory.add(new Item(entry.id, moved), true);
+  entry.amount -= moved;
+  if (entry.amount <= 0) items.splice(index, 1);
   if (entry.id === ITEM.TABLET) player.setAttribute(ATTR_TABLET, true);
   return true;
 }
@@ -330,10 +410,12 @@ function bankAll({ player }) {
   for (let index = items.length - 1; index >= 0; index--) {
     const entry = items[index];
     const bank = player.getBank(Bank.getTabForItem(player, entry.id));
-    if (bank.getFreeSlots() <= 0 && !bank.contains(entry.id)) continue;
-    bank.add(new Item(entry.id, entry.amount), false);
+    const banked = bank.getAddableAmount(new Item(entry.id, entry.amount));
+    if (banked <= 0) continue;
+    bank.add(new Item(entry.id, banked), false);
     if (entry.id === ITEM.TABLET) player.setAttribute(ATTR_TABLET, true);
-    items.splice(index, 1);
+    entry.amount -= banked;
+    if (entry.amount <= 0) items.splice(index, 1);
   }
   if (items.length) player.sendMessage("Not enough space in your bank.");
   refreshChest(player, raid);
@@ -399,7 +481,9 @@ module.exports = function registerCoxRewards(api) {
   api.persistAttribute(ATTR_BEST);
   Raid.onComplete(completed);
   Raid.onLeave(unclaimedLoot);
+  api.onCustomEvent("collection-log:category-count", collectionLogCount);
   api.onObjectInteraction("Ancient chest", { Search: openChest });
+  api.onCustomEvent("interface:closed", chestClosed);
   api.onInterfaceActionButton((INTERFACE.REWARDS << 16) | INTERFACE.ITEMS, clickReward);
   api.onInterfaceActionButton((INTERFACE.REWARDS << 16) | INTERFACE.TAKE_ALL, takeAll);
   api.onInterfaceActionButton((INTERFACE.REWARDS << 16) | INTERFACE.BANK_ALL, bankAll);
@@ -407,4 +491,4 @@ module.exports = function registerCoxRewards(api) {
   api.onNpcInteraction("Captain Rimor", { "Claim-cape": claimCape });
 };
 
-Object.assign(module.exports, { uniqueRolls, commonLoot, targetTicks, generate, completed, UNIQUES, COMMONS });
+Object.assign(module.exports, { uniqueRolls, commonLoot, targetTicks, teamSize, collectionLogCount, generate, completed, openChest, logRewards, chestClosed, clickReward, UNIQUES, COMMONS });

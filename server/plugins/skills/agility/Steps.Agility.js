@@ -45,8 +45,9 @@ function gapJump(destination, { face = null, land = Anim.LAND, settle = 1 } = {}
 function wallScramble(grab, top, dir) {
   return [
     { wait: 1 },
-    { move: grab, anim: Anim.JUMP_SHORT, delay: 20, speed: [25, 30], dir },
+    // The sound goes with the jump (rsprox 90, 1723, 3154); after the move it would land with the grab.
     { sound: WALL_JUMP_SOUND, delay: 20 },
+    { move: grab, anim: Anim.JUMP_SHORT, delay: 20, speed: [25, 30], dir },
     { anim: Anim.GRAB_LEDGE },
     { wait: 1 },
     { move: top, speed: [17, 26], dir },

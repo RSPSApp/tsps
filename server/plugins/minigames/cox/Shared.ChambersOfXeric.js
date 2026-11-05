@@ -36,6 +36,9 @@ const OBJECT = {
   ENTRANCE: 29777,
   /** The steps in the first room, back out to Mount Quidamortem. */
   STEPS: 29778,
+  /** The first room's bank chest, and as it is once the raid has begun. */
+  BANK_CHEST: 47420,
+  BANK_CHEST_SHUT: 47419,
   /** The gaps between rooms. */
   PASSAGE: 29789,
   /** The hole down at a floor's end, and the rope back up at the next floor's start. */
@@ -57,7 +60,6 @@ const INTERFACE = {
   PRIVATE_STORAGE: 271,
   SHARED_STORAGE: 550,
   REWARDS: 539,
-  FRIENDS_CHAT: 7,
 };
 
 const VARBIT = {
@@ -67,24 +69,36 @@ const VARBIT = {
   PREFERRED_SIZE: 5433,
   PREFERRED_COMBAT: 5426,
   PREFERRED_TOTAL: 5427,
+  /** rsprox captures 820, 843, 3389: the party's scale and map layout, as the page shows them. */
+  SCALING: 9539,
+  LAYOUT_POOL: 5408,
+  REMEMBER_SCALING: 9541,
+  REMEMBER_PARTY_TYPE: 3288,
   /** The in-raid tab: whether you lead it, how many are in, and the raid's stage. */
   TAB_LEADER: 5423,
   TAB_PLAYERS: 5424,
   STAGE: 5425,
-  /** The points overlay. */
+  /** The points overlay's team total (the personal score is VARP.PERSONAL_POINTS). */
   TOTAL_POINTS: 5431,
-  PERSONAL_POINTS: 5422,
+  /** The party tab's scaled size (shown above the real one) and highest combat level. */
+  SCALED_SIZE: 9540,
+  HIGHEST_COMBAT: 12285,
   /** The raid's timer in ticks, and the chat-channel tab's icon while raiding. */
   TIMER: 6386,
   TAB_ICON: 5432,
   TAB_ICON_2: 8168,
-  ENTERING: 5456,
+  /** raids_client_rewardindicator: the chest's light, cleared as a raider enters. */
+  REWARD_LIGHT: 5456,
+  /** option_precise_timing: durations with hundredths. */
+  PRECISE_TIMING: 11866,
 };
 
 const VARP = {
   /** The recruiting board: -1 when your chat-channel has no party, 0 when it has one. */
   BOARD_HAS_PARTY: 1427,
   RAID_STATE: 1431,
+  /** raids_playerscore: the points overlay's personal score. */
+  PERSONAL_POINTS: 4609,
 };
 
 const SCRIPT = {
@@ -112,7 +126,16 @@ const PARTY_SKILLS = [
   "WOODCUTTING", "FLETCHING", "SLAYER", "FARMING", "CONSTRUCTION", "HUNTER",
 ];
 
+/** rsprox captures: the party page's map layouts, in the order its menu and varbit have them. */
+const LAYOUT_POOL = { SMALL: 0, LARGE: 1, FULL: 2 };
+const LAYOUT_NAMES = ["Small", "Large", "Full"];
+
 const ATTR = {
+  /** What the player last set when making a party. */
+  LAST_SCALING: "cox:last-scaling",
+  LAST_LAYOUT: "cox:last-layout",
+  /** Adverts used today: { day, used }. */
+  ADVERTS: "cox:adverts",
   /** Has accepted the entrance's warning. */
   WARNED: "cox:warned",
   KILLS: "cox:kills",
@@ -123,7 +146,6 @@ const ATTR = {
 
 /** rsprox captures: the points overlay (513) opens on toplevel_osrs_stretch:overlay_atmosphere. */
 const OVERLAY_UID = (161 << 16) | 1;
-const CHAT_CHANNEL_TAB_UID = (161 << 16) | 83;
 const MAIN_MODAL_UID = (161 << 16) | 16;
 
 const EVENT = { OP1: 1 << 1, OP2: 1 << 2, OP3: 1 << 3, OP4: 1 << 4, OP5: 1 << 5, CONTINUE: 1 << 0 };
@@ -184,11 +206,13 @@ function repeat(key, ticks, action) {
   return task;
 }
 
+/** A message box; an array of pages is shown one page per "Click here to continue". */
 function statement(player, text) {
   const { DialogueChainBuilder, StatementDialogue, EndDialogue } = core();
+  const pages = Array.isArray(text) ? text : [text];
   player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
-    new StatementDialogue(0, text),
-    new EndDialogue(1),
+    ...pages.map((page, index) => new StatementDialogue(index, page)),
+    new EndDialogue(pages.length),
   ));
 }
 
@@ -199,9 +223,14 @@ function options(player, title, ...pairs) {
   api().sendMultiChatboxPrompt(player, title, ...args);
 }
 
-/** Pink game messages, as the raid sends them (not on the Wiki). */
+/** rsprox captures: the raid's announcements are friendschatnotification messages, not plain game ones. */
+function raidNotice(player, text) {
+  player.getPacketSender().sendTypedMessage(core().ChatType.FRIENDS_CHAT_NOTIFICATION, text);
+}
+
+/** Pink raid announcements (rsprox captures). */
 function raidMessage(player, text) {
-  player.sendMessage(`<col=ef20ff>${text}</col>`);
+  raidNotice(player, `<col=ef20ff>${text}</col>`);
 }
 
 /** The raid overlay's own fade: out, run `action` a tick later, then back in (not on the Wiki). */
@@ -421,6 +450,16 @@ function projectile(area, from, to, id, { delay = 0, duration = 30, perTile = 5,
   return Math.ceil(speed / 30);
 }
 
+/** Whether a tile shares an edge with an NPC's footprint: beside it, not under it nor on a corner. */
+function besideFootprint(npc, location, size = npc.getSize()) {
+  const at = npc.getLocation();
+  const x = location.getX() - at.getX();
+  const y = location.getY() - at.getY();
+  const inX = x >= 0 && x < size;
+  const inY = y >= 0 && y < size;
+  return (inX && (y === -1 || y === size)) || (inY && (x === -1 || x === size));
+}
+
 /** Moves an NPC in a straight line to a tile, whatever the map blocks there. */
 function walkStraight(npc, location) {
   npc.setFlag("movement:ignore-clipping");
@@ -526,25 +565,35 @@ function pickaxeOf(player) {
   return PICKAXES.find((pickaxe) => mining >= pickaxe.level && (has(player, pickaxe.id) || wielding(player, pickaxe.id))) ?? null;
 }
 
-function formatTicks(ticks) {
-  const seconds = Math.floor((Math.max(0, ticks) * 600) / 1000);
+function preciseTiming(player) {
+  return player?.getPacketSender?.()?.getVarbit?.(VARBIT.PRECISE_TIMING) === 1;
+}
+
+/**
+ * A duration as the raid prints it for `player`: "9:03" and "1:08:08" (rsprox 843, 820), or with
+ * precise timing on "7:52.80" (the CM runs, 3389).
+ */
+function formatTicks(ticks, player = null) {
+  const centis = Math.max(0, ticks) * 60;
+  const seconds = Math.floor(centis / 100);
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor(seconds / 60) % 60;
   const secs = seconds % 60;
   const pad = (value) => String(value).padStart(2, "0");
-  return hours > 0 ? `${pad(hours)}:${pad(minutes)}:${pad(secs)}` : `${pad(minutes)}:${pad(secs)}`;
+  const time = hours > 0 ? `${hours}:${pad(minutes)}:${pad(secs)}` : `${minutes}:${pad(secs)}`;
+  return preciseTiming(player) ? `${time}.${pad(centis % 100)}` : time;
 }
 
 function displayName(player) {
-  return player.getUsername();
+  return player.getDisplayName();
 }
 
 module.exports = {
   bind, core, api,
   OUTSIDE, MOUNT_QUIDAMORTEM, OBJECT, NPC, INTERFACE, VARBIT, VARP, SCRIPT, BOARD_ROWS, MAX_RAIDERS,
-  MAX_POINTS, PARTY_SKILLS, ATTR, OVERLAY_UID, CHAT_CHANNEL_TAB_UID, MAIN_MODAL_UID, EVENT,
-  isRaidItem, loc, inBox, onMount, cycle, later, repeat, statement, options, raidMessage, fadeMove, sound,
+  MAX_POINTS, PARTY_SKILLS, ATTR, OVERLAY_UID, MAIN_MODAL_UID, EVENT,
+  LAYOUT_POOL, LAYOUT_NAMES, isRaidItem, loc, inBox, onMount, cycle, later, repeat, statement, options, raidNotice, raidMessage, fadeMove, sound,
   channelOf, channelByKey, joinChannel, leaveChannel, formatTicks, displayName,
-  balanceWalk, crossFire, random, randomOf, shuffle, gfx, graphicAt, areaSound, healSplat, damage, isProtected, projectile, walkStraight, styleMethod, strike,
+  balanceWalk, crossFire, random, randomOf, shuffle, gfx, graphicAt, areaSound, healSplat, damage, isProtected, projectile, besideFootprint, walkStraight, styleMethod, strike,
   onObjectIds, replaceObject, action, stopAction, level, baseLevel, addXp, has, wielding, give, animate, axeOf, pickaxeOf, PICKAXES,
 };

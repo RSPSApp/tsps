@@ -9,6 +9,11 @@
  * (OSRS Wiki: Explosive potion, Castle Wars). The owning team's overlay shows each pair of
  * tunnels as clear or blocked (varbits 138/139).
  *
+ * Nothing may end up inside the rocks (issue 1929): barricades can't be set up on a patch, and a
+ * standard dropped on one goes home while either rock layer stands; once both are cleared it is
+ * placed on the inside floor corner just outside the patch (Game.CastleWars.js), so rocks never
+ * fall on a dropped one.
+ *
  * Cache locs: rocks at the four patches below, cave walls 4448 on the corners of each patch.
  * RSPS-only (Near-Reality): which team owns which patch and the clear/collapse messages.
  */
@@ -72,12 +77,16 @@ function miningInterval(pickaxe) {
   return request.ticks ?? pickaxe.attemptIntervalTicks;
 }
 
-function mineRocks({ player, object }) {
-  const patch = patchAtRocks(object);
+function mineRocks({ player, object }, collapse = false) {
+  const patch = collapse ? patchAtWall(object) : patchAtRocks(object);
   if (!patch) {
     return false;
   }
   if (!game.requirePlaying(player)) {
+    return true;
+  }
+  if (collapse && isBlocked(patch)) {
+    player.sendMessage("The tunnel is already blocked.");
     return true;
   }
   const pickaxe = bestPickaxe(player);
@@ -111,6 +120,11 @@ function mineRocks({ player, object }) {
       return;
     }
     if (--ticks > 0) return;
+    if (collapse) {
+      collapseTunnel(player, patch);
+      task.stop();
+      return;
+    }
     remaining = clearRocks(player, remaining, patch);
     if (!remaining) {
       task.stop();
@@ -145,12 +159,41 @@ function isBlocked(patch) {
   return [O.ROCKS_21, O.ROCKS_22].some((id) => core.MapObjects.get(id, at, null) != null);
 }
 
-function crushedBy(patch, player) {
-  const location = player.getLocation();
+function inPatch(patch, location) {
   const [x, y] = patch.rocks;
   return location.getZ() === 0
     && location.getX() >= x && location.getX() < x + PATCH_SIZE
     && location.getY() >= y && location.getY() < y + PATCH_SIZE;
+}
+
+function crushedBy(patch, player) {
+  return inPatch(patch, player.getLocation());
+}
+
+/** Whether a tile lies where a tunnel's rocks stand, or fall when it collapses. */
+function isRockTile(location) {
+  return patches().some((patch) => inPatch(patch, location));
+}
+
+/**
+ * The tile a standard dropped on a tunnel patch belongs on (issue 2355). Outside every footprint
+ * it stays where the carrier is. While either rock layer stands the standard goes home (null).
+ * A cleared 2x2 patch uses the inside floor corner in the patch's own orientation, keeping the
+ * carrier's across-axis tile. Evidence limits are in server/docs/castle-wars-flags.md.
+ */
+function flagDropTile(location) {
+  const patch = patches().find((candidate) => inPatch(candidate, location));
+  if (!patch) {
+    return location;
+  }
+  if (isBlocked(patch)) {
+    return null;
+  }
+  const [x, y, face] = patch.rocks;
+  // North-south (face 0) moves along y; east-west (face 1) moves along x.
+  return face === 0
+    ? new core.Location(location.getX(), location.getY() === y ? y - 1 : y + PATCH_SIZE, 0)
+    : new core.Location(location.getX() === x ? x - 1 : x + PATCH_SIZE, location.getY(), 0);
 }
 
 function collapseTunnel(player, patch, slot) {
@@ -158,7 +201,7 @@ function collapseTunnel(player, patch, slot) {
     player.sendMessage("The tunnel is already blocked.");
     return;
   }
-  player.getInventory().deleteAtSlot(slot, 1);
+  if (slot !== undefined) player.getInventory().deleteAtSlot(slot, 1);
   const [x, y, face] = patch.rocks;
   game.swapObject(null, new core.GameObject(core.ObjectIdentifiers.ROCKS_21, new core.Location(x, y, 0), 10, face, null));
   game.setTeamVar(patch.team, patch.varbit, 0);
@@ -168,16 +211,8 @@ function collapseTunnel(player, patch, slot) {
   }
 }
 
-function collapseWall({ player, object }) {
-  const patch = patchAtWall(object);
-  if (!patch) {
-    return false;
-  }
-  if (!game.requirePlaying(player)) {
-    return true;
-  }
-  player.sendMessage("Use an explosive potion on the cave wall to collapse the tunnel.");
-  return true;
+function collapseWall(event) {
+  return mineRocks(event, true);
 }
 
 function blastWall({ player, object, itemSlot }) {
@@ -196,6 +231,8 @@ module.exports = function attachCastleWarsTunnels(pluginApi, castleWars) {
   api = pluginApi;
   game = castleWars;
   core = api.core;
+  game.isTunnelRockTile = isRockTile;
+  game.tunnelFlagDropTile = flagDropTile;
   api.onObjectInteraction("Rocks", { Mine: mineRocks });
   api.onObjectInteraction("Cave wall", { Collapse: collapseWall });
   api.onItemOnObject("Explosive potion", "Rocks", blastRocks);

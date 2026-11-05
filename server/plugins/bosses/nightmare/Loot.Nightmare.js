@@ -44,7 +44,8 @@ function reward(fight, players) {
         return drop.itemId === ItemIdentifiers.BONES ? unique : true;
       });
     }
-    Common.api.emitCustomEvent("npc-drops:roll", { player, npc: fight.boss, npcId, drops, damagers: eligible });
+    // The kill is counted by the fight's own count(); this roll only logs the loot.
+    Common.api.emitCustomEvent("npc-drops:roll", { player, npc: fight.boss, npcId, drops, damagers: eligible, countKill: false });
     for (const drop of drops) {
       if (!Number.isInteger(drop.itemId) || drop.amount <= 0) continue;
       const noteId = ItemDefinition.forId(drop.itemId).getNoteId();

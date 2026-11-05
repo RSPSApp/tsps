@@ -26,6 +26,7 @@ const Strangle = require("./Strangle.Vardorvis");
 const CombatAchievements = require("./CombatAchievements.Vardorvis");
 
 const MELEE_PRAYER = "PROTECT_FROM_MELEE";
+const BOSS_NAME = "Vardorvis";
 
 class Fight {
   constructor(session, boss) {
@@ -55,6 +56,8 @@ class Fight {
     this.over = false;
     this.stopped = false;
     this.perfectKill = true;
+    this.axeEnrageTicks = 0;
+    this.leftAxeCentre = false;
   }
 
   /** Only damage actually taken during this fight can spoil its loot bonus. */
@@ -107,6 +110,7 @@ class Fight {
     if (this.stopped) return;
     Axes.process(this);
     if (this.engaged && this.alive()) this.fightTick();
+    CombatAchievements.tick(this);
     this.updateHud();
   }
 
@@ -255,6 +259,7 @@ class Fight {
     const best = Common.count(player, bestKey);
     if (!best || ticks < best) {
       player.setAttribute(bestKey, ticks);
+      Common.api.emitCustomEvent("boss:personal-best", { player, boss: `${awakened ? "Awakened " : ""}${BOSS_NAME}`, ticks });
       player.sendMessage(`Fight duration: <col=ff0000>${Common.formatTicks(ticks)}</col> (new personal best)`);
     } else {
       player.sendMessage(`Fight duration: <col=ff0000>${Common.formatTicks(ticks)}</col>. Personal best: ${Common.formatTicks(best)}`);

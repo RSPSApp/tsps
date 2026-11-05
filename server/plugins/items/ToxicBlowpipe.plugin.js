@@ -7,6 +7,18 @@ const TOXIC_BLOWPIPE_MAX_SCALES = 16383;
 const TOXIC_BLOWPIPE_MAX_DARTS = 16383;
 const TOXIC_BLOWPIPE_META_KEY = "toxic-blowpipe";
 
+// The native confirmdestroy chatbox: setup script 814 installs the mouse and 1/Y, 2/N listeners.
+const CONFIRM_GROUP_ID = 584;
+const CONFIRM_SETUP_SCRIPT = 814;
+const CONFIRM_BUTTON = CONFIRM_GROUP_ID << 16;
+// rsprox 1862/550 (a drygore blowpipe's Unload): "Are you sure you want to uncharge it?" /
+// "If you uncharge the blowpipe, all darts will fall out."
+const UNLOAD_QUESTION = "Are you sure you want to uncharge it?";
+const UNLOAD_WARNING = "If you uncharge the blowpipe, all darts will fall out.";
+// Wiki (Toxic blowpipe): uncharging returns the remaining darts and scales, and empties the pipe.
+const UNCHARGE_WARNING = "If you uncharge the blowpipe, all scales and darts will fall out.";
+const NO_SPACE = "You don't have enough free inventory space to do that.";
+
 const DART_RANGED_STRENGTHS = new Map([
   ["BRONZE_DART", 1],
   ["IRON_DART", 2],
@@ -28,11 +40,36 @@ function normalizeInt(value, fallback) {
 }
 
 function isToxicBlowpipeItemId(itemId) {
-  return itemId === core.ItemIdentifiers.TOXIC_BLOWPIPE_EMPTY_ || itemId === core.ItemIdentifiers.TOXIC_BLOWPIPE;
+  const I = core.ItemIdentifiers;
+  return itemId === I.TOXIC_BLOWPIPE_EMPTY_ || itemId === I.TOXIC_BLOWPIPE ||
+    itemId === I.BLAZING_BLOWPIPE_EMPTY_ || itemId === I.BLAZING_BLOWPIPE;
+}
+
+function isBlazingBlowpipeItemId(itemId) {
+  const I = core.ItemIdentifiers;
+  return itemId === I.BLAZING_BLOWPIPE_EMPTY_ || itemId === I.BLAZING_BLOWPIPE;
+}
+
+function isChargedBlowpipeItemId(itemId) {
+  const I = core.ItemIdentifiers;
+  return itemId === I.TOXIC_BLOWPIPE || itemId === I.BLAZING_BLOWPIPE;
 }
 
 function isToxicBlowpipeDartId(itemId) {
   return [...DART_RANGED_STRENGTHS.keys()].some((name) => core.ItemIdentifiers[name] === Number(itemId));
+}
+
+/** The ordinary attack's dart: the blowpipe's own profile, ending by the distance to the target's nearest tile. */
+function dartShot(player, target, projectileId) {
+  const shot = core.WeaponProfiles.ranged(player).projectiles?.[0]
+    ?? { delay: 32, lengthAdjustment: 0, stepMultiplier: 5, startHeight: 35.5, endHeight: 36.5 };
+  return {
+    id: projectileId,
+    delay: shot.delay,
+    end: core.RangedCombatMethod.projectileEnd(shot, core.CombatPosition.edgeDistance(player, target)),
+    startHeight: shot.startHeight,
+    endHeight: shot.endHeight,
+  };
 }
 
 function sanitizeMeta(raw) {
@@ -63,7 +100,11 @@ const BlowpipeState = {
       item.setMetaValue(TOXIC_BLOWPIPE_META_KEY, state);
     }
     if (item && isToxicBlowpipeItemId(item.getId())) {
-      item.setId(state.scales > 0 || state.dartAmount > 0 ? core.ItemIdentifiers.TOXIC_BLOWPIPE : core.ItemIdentifiers.TOXIC_BLOWPIPE_EMPTY_);
+      const charged = state.scales > 0 || state.dartAmount > 0;
+      const blazing = isBlazingBlowpipeItemId(item.getId());
+      item.setId(blazing
+        ? (charged ? core.ItemIdentifiers.BLAZING_BLOWPIPE : core.ItemIdentifiers.BLAZING_BLOWPIPE_EMPTY_)
+        : (charged ? core.ItemIdentifiers.TOXIC_BLOWPIPE : core.ItemIdentifiers.TOXIC_BLOWPIPE_EMPTY_));
     }
     return item;
   },
@@ -132,8 +173,8 @@ function getAmmoName(dartId) {
   return new core.Item(dartId).getDefinition()?.getName?.()?.toLowerCase?.() ?? "darts";
 }
 
-function canAddStack(inventory, itemId) {
-  return inventory.getFreeSlots() > 0 || inventory.contains(itemId);
+function canReturnDarts(inventory, itemId, amount) {
+  return inventory.getAddableAmount(new core.Item(itemId, amount)) >= amount;
 }
 
 function getItemContainer(player, item, preferredSlot = -1) {
@@ -217,7 +258,7 @@ function chargeDarts(player, blowpipeItem, blowpipeSlot, dartItem) {
     return;
   }
 
-  if (currentAmount > 0 && currentId !== dartId && !canAddStack(player.getInventory(), currentId)) {
+  if (currentAmount > 0 && currentId !== dartId && !canReturnDarts(player.getInventory(), currentId, currentAmount)) {
     player.sendMessage("You need more inventory space to swap the loaded darts.");
     return;
   }
@@ -236,52 +277,179 @@ function chargeDarts(player, blowpipeItem, blowpipeSlot, dartItem) {
   BlowpipeState.addDarts(blowpipeItem, dartId, add);
   refreshBlowpipeState(player, blowpipeItem, blowpipeSlot);
   player.sendMessage(`You load ${add} ${getAmmoName(dartId)} into the blowpipe.`);
+  // "toxic-blowpipe:darts-loaded" { player, itemId, amount }: those darts loaded into it.
+  pluginApi.emitCustomEvent("toxic-blowpipe:darts-loaded", { player, itemId: dartId, amount: add });
 }
 
-function unloadBlowpipe(player, blowpipeItem, slot) {
-  const { scales, dartId, dartAmount } = BlowpipeState.read(blowpipeItem);
+const pendingPrompts = new WeakMap();
 
-  if (scales <= 0 && dartAmount <= 0) {
-    player.sendMessage("Your blowpipe is already empty.");
-    return;
-  }
+function formatAmount(value) {
+  return Math.max(0, normalizeInt(value, 0)).toLocaleString("en-US");
+}
 
-  const inventory = player.getInventory();
-  let requiredSlots = 0;
-  if (scales > 0 && !inventory.contains(core.ItemIdentifiers.ZULRAHS_SCALES)) {
-    requiredSlots++;
-  }
-  if (dartAmount > 0 && !inventory.contains(dartId)) {
-    requiredSlots++;
-  }
-  if (inventory.getFreeSlots() < requiredSlots) {
-    player.sendMessage("You need more inventory space to unload the blowpipe.");
-    return;
-  }
+function getAmmoDisplayName(dartId) {
+  return new core.Item(dartId).getDefinition()?.getName?.() ?? "darts";
+}
 
+/**
+ * The pipe's Check line, as live prints it (rsprox 1637/4121): "Darts:
+ * <col=007f00>Iron dart x 1,687</col>. Scales: <col=007f00>794 (4.8%)</col>." Only the parts
+ * the pipe holds are printed (rsprox 1858: a drygore's darts alone).
+ */
+function checkBlowpipe({ player, item }) {
+  const { scales, dartId, dartAmount } = BlowpipeState.read(item);
+  const parts = [];
+  if (dartAmount > 0 && isToxicBlowpipeDartId(dartId)) {
+    parts.push(`Darts: <col=007f00>${getAmmoDisplayName(dartId)} x ${formatAmount(dartAmount)}</col>.`);
+  }
   if (scales > 0) {
-    inventory.add(new core.Item(core.ItemIdentifiers.ZULRAHS_SCALES, scales), true);
+    const percent = ((scales / TOXIC_BLOWPIPE_MAX_SCALES) * 100).toFixed(1);
+    parts.push(`Scales: <col=007f00>${formatAmount(scales)} (${percent}%)</col>.`);
+  }
+  if (parts.length) {
+    player.sendMessage(parts.join(" "));
+  }
+  return true;
+}
+
+/** Inventory.add merges only when both the item id and the metadata match. */
+function sameStack(held, item) {
+  return held.getId() === item.getId() &&
+    JSON.stringify(held.getMeta() ?? null) === JSON.stringify(item.getMeta() ?? null);
+}
+
+/**
+ * One slot per returned stack that has no matching stack to merge into. The id alone is not
+ * enough: a preset dart stack shares the id but not the metadata, so returned ordinary darts
+ * still need a slot of their own.
+ */
+function slotsNeeded(inventory, stacks) {
+  let needed = 0;
+  for (const [itemId, amount] of stacks) {
+    if (amount <= 0) {
+      continue;
+    }
+    const item = new core.Item(itemId, amount);
+    if (!inventory.getItems().some((held) => held && sameStack(held, item))) {
+      needed++;
+    }
+  }
+  return needed;
+}
+
+/** Whether the inventory can take every returned stack now: free slots and stack headroom. */
+function canReturnAll(inventory, stacks) {
+  if (inventory.getFreeSlots() < slotsNeeded(inventory, stacks)) {
+    return false;
+  }
+  return stacks.every(([itemId, amount]) =>
+    amount <= 0 || inventory.getAddableAmount(new core.Item(itemId, amount)) >= amount);
+}
+
+/** The stack Unload returns: the loaded darts. */
+function dartsToReturn(blowpipeItem) {
+  const { dartId, dartAmount } = BlowpipeState.read(blowpipeItem);
+  return dartAmount > 0 && isToxicBlowpipeDartId(dartId) ? [[dartId, dartAmount]] : [];
+}
+
+/** The stacks Uncharge returns: the scales and the loaded darts. */
+function everythingToReturn(blowpipeItem) {
+  const { scales, dartId, dartAmount } = BlowpipeState.read(blowpipeItem);
+  const stacks = [];
+  if (scales > 0) {
+    stacks.push([core.ItemIdentifiers.ZULRAHS_SCALES, scales]);
   }
   if (dartAmount > 0 && isToxicBlowpipeDartId(dartId)) {
-    inventory.add(new core.Item(dartId, dartAmount), true);
+    stacks.push([dartId, dartAmount]);
   }
-
-  BlowpipeState.clear(blowpipeItem);
-  refreshBlowpipeState(player, blowpipeItem, slot);
-  player.sendMessage("You unload your blowpipe.");
+  return stacks;
 }
 
-function sendStatus(player, blowpipeItem) {
-  const { scales, dartId, dartAmount } = BlowpipeState.read(blowpipeItem);
-  if (dartAmount <= 0 || !isToxicBlowpipeDartId(dartId)) {
-    player.sendMessage(
-      `Your Toxic blowpipe has ${scales} Zulrah scales and no darts loaded.`
-    );
-    return;
+/** Unload: the loaded darts go back, the scales stay and the pipe keeps its charged id. */
+function removeDarts(player, blowpipeItem, slot) {
+  const { dartId, dartAmount } = BlowpipeState.read(blowpipeItem);
+  if (dartAmount > 0 && isToxicBlowpipeDartId(dartId)) {
+    player.getInventory().add(new core.Item(dartId, dartAmount), true);
   }
-  player.sendMessage(
-    `Your Toxic blowpipe has ${scales} Zulrah scales and ${dartAmount} ${getAmmoName(dartId)} loaded.`
-  );
+  BlowpipeState.update(blowpipeItem, (state) => ({ ...state, dartId: -1, dartAmount: 0 }));
+  refreshBlowpipeState(player, blowpipeItem, slot);
+}
+
+/** Uncharge: both stacks come back and an emptied pipe becomes the tradeable empty item. */
+function removeEverything(player, blowpipeItem, slot) {
+  const { scales, dartId, dartAmount } = BlowpipeState.read(blowpipeItem);
+  if (scales > 0) {
+    player.getInventory().add(new core.Item(core.ItemIdentifiers.ZULRAHS_SCALES, scales), true);
+  }
+  if (dartAmount > 0 && isToxicBlowpipeDartId(dartId)) {
+    player.getInventory().add(new core.Item(dartId, dartAmount), true);
+  }
+  BlowpipeState.clear(blowpipeItem);
+  refreshBlowpipeState(player, blowpipeItem, slot);
+}
+
+function openConfirm(player, blowpipeItem, slot, warning, getStacks, apply) {
+  // The destroy confirmation shares group 584 and registers first: closing whatever prompt is
+  // open clears its pending item (sendInterfaceRemoval resets "destroy-item:pending"), so the
+  // player's Yes answers this prompt instead of destroying the item Destroy named.
+  player.getPacketSender().sendInterfaceRemoval();
+  pendingPrompts.set(player, { itemId: blowpipeItem.getId(), slot, getStacks, apply });
+  player
+    .getPacketSender()
+    .sendChatboxInterface(CONFIRM_GROUP_ID)
+    .sendClientScript(CONFIRM_SETUP_SCRIPT, blowpipeItem.getId(), blowpipeItem.getAmount(), UNLOAD_QUESTION, warning);
+}
+
+/** The chatbox resume's dynamic child is 1 for Yes and 0 for No. */
+function confirmPrompt({ player, action }) {
+  if (action !== 0 && action !== 1) return false;
+  const pending = pendingPrompts.get(player);
+  if (!pending || !player.getPacketSender().isChatboxInterface(CONFIRM_GROUP_ID)) return false;
+  pendingPrompts.delete(player);
+  player.getPacketSender().sendInterfaceRemoval();
+  if (action !== 1) return true;
+  const blowpipeItem = player.getInventory().getItems()[pending.slot];
+  if (blowpipeItem?.getId() === pending.itemId) {
+    // The inventory can fill up while the prompt is open (unequipping into the last slot), and
+    // add() would silently refuse: re-check the return as it stands now and keep the pipe loaded.
+    if (!canReturnAll(player.getInventory(), pending.getStacks(blowpipeItem))) {
+      player.sendMessage(NO_SPACE);
+    } else {
+      pending.apply(player, blowpipeItem);
+    }
+  }
+  return true;
+}
+
+/** The destroy confirmation shares group 584, so its prompt replaces any pending blowpipe one. */
+function forgetPrompt({ player }) {
+  pendingPrompts.delete(player);
+}
+
+function unloadBlowpipe({ player, item, slot }) {
+  const stacks = dartsToReturn(item);
+  if (stacks.length === 0) {
+    return true;
+  }
+  if (!canReturnAll(player.getInventory(), stacks)) {
+    player.sendMessage(NO_SPACE);
+    return true;
+  }
+  openConfirm(player, item, slot, UNLOAD_WARNING, dartsToReturn, (owner, blowpipeItem) => removeDarts(owner, blowpipeItem, slot));
+  return true;
+}
+
+function unchargeBlowpipe({ player, item, slot }) {
+  const { scales, dartAmount } = BlowpipeState.read(item);
+  if (scales <= 0 && dartAmount <= 0) {
+    return true;
+  }
+  if (!canReturnAll(player.getInventory(), everythingToReturn(item))) {
+    player.sendMessage(NO_SPACE);
+    return true;
+  }
+  openConfirm(player, item, slot, UNCHARGE_WARNING, everythingToReturn, (owner, blowpipeItem) => removeEverything(owner, blowpipeItem, slot));
+  return true;
 }
 
 function maybeConsumeLoadedDart(player, blowpipeItem) {
@@ -322,7 +490,7 @@ function combatMethod(special) {
       }
       const player = character.getAsPlayer();
       const blowpipeItem = BlowpipeState.equipped(player);
-      if (!blowpipeItem || blowpipeItem.getId() !== core.ItemIdentifiers.TOXIC_BLOWPIPE) {
+      if (!blowpipeItem || !isChargedBlowpipeItemId(blowpipeItem.getId())) {
         return false;
       }
       return isReady(player, blowpipeItem);
@@ -333,9 +501,7 @@ function combatMethod(special) {
       return character?.getFightType?.()?.isRapid?.() === true ? Math.max(1, baseSpeed - 1) : baseSpeed;
     }
     hits(character, target) {
-      const distance = character.getLocation().getDistance(target.getLocation());
-      // The blowpipe's own hit-delay profile, as RangedCombatMethod reads it.
-      const delay = core.WeaponProfiles.hitDelays(character.getAsPlayer(), distance)[0];
+      const delay = core.RangedCombatMethod.landingDelays(character, target)[0];
       return [new core.PendingHit(character, target, this, delay)];
     }
     start(character, target) {
@@ -351,14 +517,28 @@ function combatMethod(special) {
         player.getCombat().reset();
         return;
       }
-      const animation = character.getAttackAnim();
-      if (animation !== -1) {
-        character.performAnimation(new core.Animation(animation));
+      if (this.special) {
+        // TOXIC_BLOWPIPE_SPECIAL_UPDATED; the ordinary attack keeps the style's 5061.
+        character.performAnimation(new core.Animation(876));
+      } else {
+        const animation = character.getAttackAnim();
+        if (animation !== -1) {
+          character.performAnimation(new core.Animation(animation));
+        }
       }
-      core.Projectile.createProjectile(character, target, ammo.getProjectileId(), 40, 60, 40, 35)
-        .sendProjectile();
+      // The ordinary attack flies the profile's dart (rsprox 3279: starts at 32, ends 32 + 5 a tile of the distance
+      // to the nearest tile, heights 142 to 146 sent), so it ends with its hit. The special's own projectile was
+      // never captured and keeps its old fixed shape.
+      if (this.special) {
+        core.Projectile.createProjectile(character, target, ammo.getProjectileId(), 40, 60, 40, 35).sendProjectile();
+      } else {
+        const shot = dartShot(player, target, ammo.getProjectileId());
+        core.Projectile.createProjectile(character, target, shot.id, shot.delay, shot.end, shot.startHeight, shot.endHeight)
+          .sendProjectile();
+      }
       core.Sounds.sendSound(character, core.Sound.THROW_DART);
       if (this.special) {
+        core.Sounds.sendSound(character, core.Sound.TOXIC_BLOWPIPE_SPECIAL);
         const drainAmount = player.getCombatSpecial?.()?.getDrainAmount?.() ?? 50;
         core.CombatSpecial.drain(player, drainAmount);
       }
@@ -403,7 +583,7 @@ function combatMethod(special) {
 
 function rangedAmmoResolverResolve(player) {
   const blowpipeItem = BlowpipeState.equipped(player);
-  if (!blowpipeItem || blowpipeItem.getId() !== core.ItemIdentifiers.TOXIC_BLOWPIPE) {
+  if (!blowpipeItem || !isChargedBlowpipeItemId(blowpipeItem.getId())) {
     return null;
   }
   return BlowpipeState.ammo(blowpipeItem);
@@ -449,7 +629,7 @@ function rangedAmmoHandlerDecrementAmmo(player, pos, amount) {
 function bonusProviderApply(event) {
   const { player, bonuses } = event;
   const blowpipeItem = BlowpipeState.equipped(player);
-  if (!blowpipeItem || blowpipeItem.getId() !== core.ItemIdentifiers.TOXIC_BLOWPIPE) {
+  if (!blowpipeItem || !isChargedBlowpipeItemId(blowpipeItem.getId())) {
     return;
   }
   if (!isCharged(blowpipeItem)) {
@@ -470,7 +650,7 @@ function combatMethodResolverResolve(attacker) {
   }
   const player = attacker.getAsPlayer();
   const blowpipeItem = BlowpipeState.equipped(player);
-  if (!blowpipeItem || blowpipeItem.getId() !== core.ItemIdentifiers.TOXIC_BLOWPIPE) {
+  if (!blowpipeItem || !isChargedBlowpipeItemId(blowpipeItem.getId())) {
     return null;
   }
   if (player.isSpecialActivated?.() === true && player.getCombatSpecial?.()?.getId?.() === "toxic_blowpipe") {
@@ -501,26 +681,6 @@ function itemOnItem(event) {
   }
 }
 
-function itemAction(event) {
-  if (!isToxicBlowpipeItemId(event.itemId)) {
-    return;
-  }
-  if (event.clickType === 2) {
-    event.handled = true;
-    unloadBlowpipe(event.player, event.item, event.slot);
-    return;
-  }
-  if (event.clickType === 3) {
-    event.handled = true;
-    sendStatus(event.player, event.item);
-    return;
-  }
-  if (event.clickType === 4 && event.interfaceId === core.Equipment.INVENTORY_INTERFACE_ID) {
-    event.handled = true;
-    sendStatus(event.player, event.item);
-  }
-}
-
 function rememberDamage({ attacker, hit, damage }) {
   if (attacker?.isPlayer?.() && attacker.isSpecialActivated?.() && attacker.getCombatSpecial?.()?.getId() === "toxic_blowpipe") {
     uncappedDamage.set(hit, damage.getDamage());
@@ -533,12 +693,38 @@ module.exports = {
   register(api) {
     core = api.core;
     pluginApi = api;
+    // The ornament changes appearance only. Native ranged-weapon and profile lookups
+    // should see the corresponding charged or empty Toxic Blowpipe definition.
+    core.ItemAliases.register(core.ItemIdentifiers.BLAZING_BLOWPIPE, core.ItemIdentifiers.TOXIC_BLOWPIPE);
+    core.ItemAliases.register(core.ItemIdentifiers.BLAZING_BLOWPIPE_EMPTY_, core.ItemIdentifiers.TOXIC_BLOWPIPE_EMPTY_);
     api.onCombatHitDamage(rememberDamage);
     api.registerRangedAmmoResolver({ resolve: rangedAmmoResolverResolve });
     api.registerRangedAmmoHandler({ checkAmmo: rangedAmmoHandlerCheckAmmo, decrementAmmo: rangedAmmoHandlerDecrementAmmo });
     api.registerBonusProvider({ apply: bonusProviderApply });
     api.registerCombatMethodResolver({ resolve: combatMethodResolverResolve });
     api.onItemOnItem(itemOnItem);
-    api.onItemAction(itemAction);
+    api.onItemAction("Toxic blowpipe", {
+      Check: checkBlowpipe,
+      Unload: unloadBlowpipe,
+      Uncharge: unchargeBlowpipe,
+    });
+    api.onItemAction("Toxic blowpipe (empty)", {
+      Check: checkBlowpipe,
+      Unload: unloadBlowpipe,
+      Uncharge: unchargeBlowpipe,
+    });
+    api.onItemAction("Blazing blowpipe", {
+      Check: checkBlowpipe,
+      Unload: unloadBlowpipe,
+      Uncharge: unchargeBlowpipe,
+    });
+    api.onItemAction("Blazing blowpipe (empty)", {
+      Check: checkBlowpipe,
+      Unload: unloadBlowpipe,
+      Uncharge: unchargeBlowpipe,
+    });
+    api.onInterfaceActionButton(CONFIRM_BUTTON, confirmPrompt);
+    api.onCustomEvent("destroy-item:prompt", forgetPrompt);
   },
+  _test: { dartShot, BlowpipeState, checkBlowpipe, removeDarts, removeEverything, CONFIRM_GROUP_ID },
 };

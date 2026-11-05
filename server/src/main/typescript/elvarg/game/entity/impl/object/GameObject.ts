@@ -128,6 +128,32 @@ export class GameObject extends Entity {
         }
         return (definition.getSizeX() + definition.getSizeY()) - 1;
     }
+
+    /**
+     * Tiles (Chebyshev) from a location to the nearest tile of this loc's footprint, its sizes
+     * swapped by a quarter turn; Infinity on another plane. A 5x5 essence rock is next to a
+     * player on any of its 24 edge tiles, not only near its south-west corner.
+     */
+    public footprintDistance(from: Location): number {
+        const at = this.getLocation();
+        if (from.getZ() !== at.getZ()) return Number.POSITIVE_INFINITY;
+        const definition = this.getDefinition();
+        const sizeX = definition?.getSizeX() ?? 1;
+        const sizeY = definition?.getSizeY() ?? 1;
+        const turned = (this.face & 1) === 1;
+        const width = Math.max(1, turned ? sizeY : sizeX);
+        const length = Math.max(1, turned ? sizeX : sizeY);
+        const gap = (point: number, start: number, size: number) => Math.max(0, start - point, point - (start + size - 1));
+        return Math.max(gap(from.getX(), at.getX(), width), gap(from.getY(), at.getY(), length));
+    }
+
+    /** Whether a skilling action on this loc may continue from that tile (within 2 of its footprint). */
+    public isWithinInteractionDistance(from: Location): boolean {
+        return this.footprintDistance(from) <= GameObject.INTERACTION_DISTANCE;
+    }
+
+    private static readonly INTERACTION_DISTANCE = 2;
+
     equals(o: any): boolean {
         if (!(o instanceof GameObject))
             return false;

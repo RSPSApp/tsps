@@ -4,16 +4,38 @@
  * worktree's RSProx target follows its own ports.
  *
  * RSProx connects to the world whose host matches the jav_config's codebase, on the target's
- * `game_server_port` (the gateway's GATEWAY_PORT).
+ * `game_server_port` (the gateway's GATEWAY_PORT). The host is `PUBLIC_HOST` (an IP or domain name
+ * players reach this server at), or 127.0.0.1 when it isn't set.
  */
 export class GatewayTarget {
     public static readonly JAV_CONFIG_PATH = "/gateway/jav_config.ws";
     public static readonly WORLD_LIST_PATH = "/gateway/worldlist.ws";
 
-    private static readonly HOST = "127.0.0.1";
+    private static readonly DEFAULT_HOST = "127.0.0.1";
+    /** A bare host name or address: no scheme, port, path or spaces. */
+    private static readonly HOST_PATTERN = /^[A-Za-z0-9.-]+$/;
     private static readonly REVISION = 241;
     private static readonly WORLD_ID = 1;
     private static readonly WORLD_FLAG_MEMBERS = 0x1;
+
+    private static warnedHost: string | null = null;
+
+    /**
+     * The host the jav_config and world list give the client: `PUBLIC_HOST`, or 127.0.0.1. A value
+     * that isn't a bare host (a URL, say) is reported once and ignored.
+     */
+    public static host(): string {
+        const configured = process.env.PUBLIC_HOST?.trim();
+        if (!configured) return GatewayTarget.DEFAULT_HOST;
+        if (!GatewayTarget.HOST_PATTERN.test(configured)) {
+            if (GatewayTarget.warnedHost !== configured) {
+                GatewayTarget.warnedHost = configured;
+                console.warn(`[gateway] PUBLIC_HOST "${configured}" isn't a host name or IP address; using ${GatewayTarget.DEFAULT_HOST}`);
+            }
+            return GatewayTarget.DEFAULT_HOST;
+        }
+        return configured;
+    }
 
     /** The response for [url], or null when it isn't a gateway path. */
     public static resolve(url: string, websocketPort: number): { contentType: string; body: Buffer } | null {
@@ -29,10 +51,11 @@ export class GatewayTarget {
 
     /** Revision 241's jav_config keys, with the codebase and world list pointed here. */
     private static javConfig(websocketPort: number): string {
-        const worldList = `http://${GatewayTarget.HOST}:${websocketPort}${GatewayTarget.WORLD_LIST_PATH}`;
+        const host = GatewayTarget.host();
+        const worldList = `http://${host}:${websocketPort}${GatewayTarget.WORLD_LIST_PATH}`;
         return [
             "title=tsps",
-            `codebase=http://${GatewayTarget.HOST}/`,
+            `codebase=http://${host}/`,
             "cachedir=tsps",
             "storebase=0",
             "initial_jar=gamepack.jar",
@@ -80,7 +103,7 @@ export class GatewayTarget {
         const world = Buffer.concat([
             Buffer.from([GatewayTarget.WORLD_ID >> 8, GatewayTarget.WORLD_ID & 0xff]),
             Buffer.from([0, 0, 0, GatewayTarget.WORLD_FLAG_MEMBERS]),
-            Buffer.from(`${GatewayTarget.HOST}\0`, "latin1"),
+            Buffer.from(`${GatewayTarget.host()}\0`, "latin1"),
             Buffer.from("tsps\0", "latin1"),
             Buffer.from([0]),
             Buffer.from([0, 0]),

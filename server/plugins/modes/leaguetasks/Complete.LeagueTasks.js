@@ -2,8 +2,9 @@
  * Completing a task: the client's completion bit (script 9470 reads bit position % 32 of the
  * completion varps) goes out first, so the redraw LeaguePoints' points varp causes shows the
  * tick, then LeaguePoints awards the points (its varps and popup), then the captured game
- * message. Other plugins complete a task with `league:complete-task` { player, id }; the award
- * itself stays LeaguePoints' and is idempotent. Every points change re-syncs the bits from the
+ * message, then `league:task-completed` { player, league, id, pactTask } for what else it gives.
+ * Other plugins complete a task with `league:complete-task` { player, id }; the award itself stays
+ * LeaguePoints' and is idempotent. Every points change re-syncs the bits from the
  * saved tasks, whatever awarded them (an ad-hoc `::leaguetask` id has no bit).
  */
 const Common = require("./Common.LeagueTasks");
@@ -67,6 +68,8 @@ function complete(player, id, type = Common.leagueOf(player)) {
   player.sendMessage(Common.message("completed", {
     article: /^[aeiou]/.test(tier) ? "an" : "a", tier, colour: Common.colourOf(type), name: task.name,
   }));
+  // After the captured line: what a task's completion gives beyond its points (Demonic Pacts' pact point).
+  Common.api.emitCustomEvent("league:task-completed", { player, league: type, id: task.id, pactTask: task.pactTask === true });
   return true;
 }
 

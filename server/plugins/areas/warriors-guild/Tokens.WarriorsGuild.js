@@ -93,7 +93,7 @@ function fillBlanks(request) {
   request.text = String(request.text)
     .replace(/\[(?:number|amount|X)\] token\[s\]/g, `${amount} token${amount === 1 ? "" : "s"}`)
     .replace(/\[(?:number|amount|X)\]/g, String(amount))
-    .replace(/\[player name\]/gi, player.getUsername())
+    .replace(/\[player name\]/gi, player.getDisplayName())
     .replace(/\[Madam\/Sir\]/g, pick(player, "Sir", "Madam"))
     .replace(/\[(\w+)\/(\w+)\]/g, (match, first, second) => {
       // "[boy/lady]", "[he/she]", "[lad/lass]": the transcripts list the male form first.

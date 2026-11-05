@@ -12,6 +12,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { createHash } = require("node:crypto");
+const { deflateSync } = require("node:zlib");
 const Document = require("./Document.CacheEditor.cjs");
 
 const ASSET_KINDS = {
@@ -27,7 +28,7 @@ const kindOf = (kind) => {
 };
 
 function assetRoot(root) {
-    return path.join(root, "server", "data", "assets");
+    return path.join(root, "data", "assets");
 }
 
 function assetsPath(root) {
@@ -43,20 +44,28 @@ function assetsOf(root) {
  * Stores one uploaded file and appends its row. Returns the row, which is either the new one or the
  * existing one when the bytes are already known (content addressing by sha256).
  */
+function isCacheModel(bytes) {
+    if (bytes.length < 18) return false;
+    if (bytes[bytes.length - 2] === 255 && [255, 254, 253].includes(bytes[bytes.length - 1])) return true;
+    // The original 317 format has an 18-byte section directory, without a version marker.
+    const tail = bytes.length - 18;
+    const short = offset => (bytes[tail + offset] << 8) | bytes[tail + offset + 1];
+    const vertices = short(0), faces = short(2);
+    if (!vertices || !faces || [5, 7, 8, 9].some(offset => bytes[tail + offset] > 1)) return false;
+    const body = vertices + faces * 3 + bytes[tail + 4] * 6 + short(10) + short(12) + short(14) + short(16)
+        + (bytes[tail + 6] === 255 ? faces : 0) + (bytes[tail + 7] ? faces : 0)
+        + (bytes[tail + 8] ? faces : 0) + (bytes[tail + 5] ? faces : 0) + (bytes[tail + 9] ? vertices : 0);
+    return body === tail;
+}
+
 function addAsset(root, { kind, name, data }) {
+    if (kind !== "model") throw Object.assign(new Error("Only model uploads are supported; sprites and textures can be browsed"), { status: 400 });
     const entry = kindOf(kind);
     if (typeof data !== "string" || data.length === 0) throw Object.assign(new Error("Missing file data"), { status: 400 });
     const bytes = Buffer.from(data, "base64");
     if (bytes.length === 0) throw Object.assign(new Error("The file is empty"), { status: 400 });
     if (bytes.length > entry.maxBytes) throw Object.assign(new Error(`The file is ${bytes.length} bytes; the cap is ${entry.maxBytes}`), { status: 400 });
-    if (entry.magic) {
-        // A cache model ends with its version trailer: -1,-3 / -1,-2 / -1,-1.
-        const last = bytes[bytes.length - 1], before = bytes[bytes.length - 2];
-        const trailer = (before === 0xff ? -1 : before) * 1;
-        if (!(last === 0xff || last === 0xfe || last === 0xfd) || before !== 0xff) {
-            throw Object.assign(new Error("Not a cache model: the version trailer (-1,-3 / -1,-2 / -1,-1) is missing"), { status: 400 });
-        }
-    }
+    if (entry.magic && !isCacheModel(bytes)) throw Object.assign(new Error("Not a cache model: invalid legacy section directory or version trailer"), { status: 400 });
     const hash = createHash("sha256").update(bytes).digest("hex").slice(0, 32);
     const document = Document.read(root);
     const existing = (document.assets ?? []).find((row) => row.kind === kind && row.hash === hash);
@@ -66,6 +75,16 @@ function addAsset(root, { kind, name, data }) {
     let id = entry.start;
     while (taken.has(id)) id += 1;
 
+    if (kind === "model") {
+        const legacy = path.join(root, "data", "definitions", "custom-items.json");
+        if (fs.existsSync(legacy)) {
+            const items = JSON.parse(fs.readFileSync(legacy, "utf8"));
+            for (const item of Array.isArray(items) ? items : Object.values(items)) for (const key of Object.keys(item.models ?? {})) taken.add(Number(key));
+        }
+        while (taken.has(id)) id++;
+        const body = { gamemodeId: "server", datasets: [{ key: "customModels", rows: [{ id, data: bytes.toString("base64") }] }] };
+        if (deflateSync(Buffer.from(JSON.stringify(body))).length + 8 > 65535) throw Object.assign(new Error("Model exceeds the client transport budget; use a smaller model"), { status: 413 });
+    }
     const file = path.join(assetRoot(root), kind, `${hash}${entry.extension}`);
     fs.mkdirSync(path.dirname(file), { recursive: true });
     if (!fs.existsSync(file)) fs.writeFileSync(file, bytes, { flag: "wx" });
@@ -117,4 +136,4 @@ function assetNames(root) {
     return names;
 }
 
-module.exports = { ASSET_KINDS, kindOf, assetRoot, assetsPath, assetsOf, addAsset, renameAsset, readAsset, customModels, assetNames };
+module.exports = { isCacheModel, ASSET_KINDS, kindOf, assetRoot, assetsPath, assetsOf, addAsset, renameAsset, readAsset, customModels, assetNames };

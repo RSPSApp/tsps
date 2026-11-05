@@ -53,7 +53,7 @@ function playerWithRunes({ chaos = 2, earth = 5, freeSlots = 28 } = {}) {
   const varbits = new Map();
   const messages = [];
   const items = [];
-  const state = { amountAction: null, prompt: null, dialogue: null };
+  const state = { amountAction: null, prompt: null, dialogue: null, aborts: 0 };
   return {
     items, state,
     getEnteredAmountAction: () => state.amountAction,
@@ -61,7 +61,8 @@ function playerWithRunes({ chaos = 2, earth = 5, freeSlots = 28 } = {}) {
     getDialogueManager: () => ({ startDialogues: (builder) => { state.dialogue = builder.getDialogues().get(0); } }),
     messages,
     getInventory: () => ({
-      getItems: () => items,
+      getItems: () => [...items, ...[...runes].filter(([, amount]) => amount > 0).map(([id, amount]) => item(id, amount))],
+      getAddableAmount: (rune) => ((runes.get(rune.getId()) ?? 0) > 0 || freeSlots > 0 ? rune.getAmount() : 0),
       getAmount: (id) => runes.get(id) ?? 0,
       deleteNumber: (id, amount) => runes.set(id, Math.max(0, (runes.get(id) ?? 0) - amount)),
       contains: (id) => (runes.get(id) ?? 0) > 0,
@@ -73,6 +74,7 @@ function playerWithRunes({ chaos = 2, earth = 5, freeSlots = 28 } = {}) {
     getPacketSender: () => ({
       sendVarbit: (id, value) => varbits.set(id, value),
       sendEnterAmountPrompt: (title) => { state.prompt = title; },
+      abortInputPrompt: () => { state.aborts++; state.amountAction = null; },
       sendInterfaceRemoval() {},
     }),
     sendMessage: (message) => messages.push(message),
@@ -126,6 +128,8 @@ test("the sceptre uses its powered-staff spell, max-hit formula, speed and range
   assert.equal(built.state.castSpell.castAnimation().getId(), 10500);
   assert.equal(built.state.castSpell.startGraphic().getId(), 2567);
   assert.equal(built.state.castSpell.endGraphic().getId(), 2568);
+  // Its impact: `sound_area id=1460 range=10` at the target in 51 casts (capture 1885).
+  assert.equal(built.state.castSpell.impactSound()?.getId(), 1460);
   built.state.castSpell.startCast = () => {};
   method.start(built.player, { isPlayer: () => false });
   assert.equal(
@@ -395,6 +399,17 @@ test("busy varbit follows prompts and results and clears on cancellation (captur
   itemActions.get("Warped sceptre").Uncharge({ player, item: sceptre });
   assert.equal(player.varbits.get(12393), 1);
   customEvents.get("interface:close")({ player });
+  assert.equal(player.varbits.get(12393), 0);
+});
+
+test("walking away aborts the charge prompt; answering it does not", () => {
+  const { sceptre, player } = openCharge();
+  player.state.amountAction.execute(0);
+  assert.equal(player.state.aborts, 0);
+  itemActions.get("Warped sceptre (uncharged)").Charge({ player, item: sceptre });
+  customEvents.get("player:world-input")({ player });
+  assert.equal(player.state.aborts, 1);
+  assert.equal(player.state.amountAction, null);
   assert.equal(player.varbits.get(12393), 0);
 });
 

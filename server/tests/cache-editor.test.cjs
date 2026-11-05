@@ -235,7 +235,7 @@ const { deflateSync } = require("node:zlib");
 
 function scratchRoot() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "cache-editor-"));
-  fs.mkdirSync(path.join(root, "server", "data", "definitions"), { recursive: true });
+  fs.mkdirSync(path.join(root, "data", "definitions"), { recursive: true });
   return root;
 }
 
@@ -256,7 +256,7 @@ test("an overlay row is rejected when its links do not resolve", () => {
   assert.match(Document.audit(core, { ...ok, fields: { transforms: [objects + 5] } }).join(" "), /missing loc/);
   assert.match(Document.audit(core, { ...ok, fields: { transforms: [start] } }).join(" "), /points at itself/);
   assert.match(Document.audit(core, { ...ok, fields: { notAField: 1 } }).join(" "), /no field "notAField"/);
-  assert.match(Document.audit(core, { ...ok, fields: { seqId: [1, 2] } }).join(" "), /not a list/);
+  assert.match(Document.audit(core, { ...ok, fields: { seqId: [1, 2] } }).join(" "), /should be int/);
   assert.match(Document.audit(core, { ...ok, id: 5 }).join(" "), /overlay ids start at/);
   assert.match(Document.audit(core, { ...ok, baseId: 999999 }).join(" "), /baseId must be a cache id below/);
 });
@@ -271,12 +271,12 @@ test("saving writes the document atomically, checks the budget, and refuses stal
   const first = Document.save(core, root, { row });
   assert.equal(first.rows.length, 1);
   assert.equal(first.restartRequired, true);
-  assert.ok(fs.existsSync(path.join(root, "server/data/definitions", Document.DOCUMENT)));
+  assert.ok(fs.existsSync(path.join(root, "data/definitions", Document.DOCUMENT)));
 
   assert.throws(() => Document.save(core, root, { row: { ...row, id: start + 1 }, revision: "deadbeef" }), /changed since it was loaded/);
   const second = Document.save(core, root, { row: { ...row, id: start + 1 }, revision: first.revision });
   assert.deepEqual(second.rows.map((entry) => entry.id), [start, start + 1]);
-  assert.equal(fs.readdirSync(path.join(root, "server/data/definitions")).filter((name) => name.endsWith(".tmp")).length, 0, "no temp file is left behind");
+  assert.equal(fs.readdirSync(path.join(root, "data/definitions")).filter((name) => name.endsWith(".tmp")).length, 0, "no temp file is left behind");
 
   // A document that cannot fit the client transport is refused before it is written.
   // Unique text, so the check measures the real compressed size instead of a run of one character.
@@ -387,7 +387,7 @@ test("an uploaded model is stored once, named, and given an id above the cache",
   assert.equal(first.asset.name, "my_loc");
   assert.equal(first.asset.size, bytes.length);
   assert.match(first.asset.file, /^model\/[0-9a-f]{32}\.dat$/);
-  assert.ok(fs.existsSync(path.join(root, "server/data/assets", first.asset.file)));
+  assert.ok(fs.existsSync(path.join(root, "data/assets", first.asset.file)));
 
   // The same bytes again are the same asset, not a second row and not a second file.
   const again = Assets.addAsset(root, { kind: "model", name: "duplicate", data: bytes.toString("base64") });
@@ -419,6 +419,110 @@ test("an upload that is not a cache model is refused, with the reason", () => {
   huge[huge.length - 2] = 0xff;
   huge[huge.length - 1] = 0xfd;
   assert.throws(() => Assets.addAsset(root, { kind: "model", name: "x", data: huge.toString("base64") }), /cap is/);
-  // Sprites are images, not models: no trailer requirement.
-  assert.ok(Assets.addAsset(root, { kind: "sprite", name: "icon", data: "AAAA" }).asset);
+  // Non-model uploads have no runtime consumer and must not appear to succeed.
+  assert.throws(() => Assets.addAsset(root, { kind: "sprite", name: "icon", data: "AAAA" }), /Only model uploads/);
+});
+
+
+test("custom definitions keep their IDs, extend counts, preserve stock definitions and reject bad replacements atomically", () => {
+  const counts = CacheDefinitions.getBaseCounts();
+  const id = Math.max(50000, counts.objects);
+  const npc = CacheDefinitions.getNpc(1);
+  CacheDefinitions.registerCustomDefinitions([
+    { kind: "npc", id: 50000, baseId: 1, fields: { name: "Custom goblin" } },
+    { kind: "loc", id, baseId: 1, fields: { models: [[1, 2]], types: [10], params: { "1": "custom" } } },
+  ]);
+  assert.equal(CacheDefinitions.getNpc(50000).id, 50000);
+  assert.equal(CacheDefinitions.getObject(id).id, id);
+  assert.equal(CacheDefinitions.getCounts().npcs, 50001);
+  assert.equal(CacheDefinitions.getCounts().objects, id + 1);
+  assert.equal(CacheDefinitions.hasDefinition("npc", 49999), false);
+  assert.deepEqual(CacheDefinitions.getObject(id).models, [[1, 2]]);
+  assert.equal(CacheDefinitions.getObject(id).params.get(1), "custom");
+  assert.equal(CacheDefinitions.getNpc(1), npc);
+  assert.throws(() => CacheDefinitions.registerCustomDefinitions([{ kind: "npc", id: 1, baseId: 1, fields: {} }]));
+  assert.equal(CacheDefinitions.getNpc(50000).name, "Custom goblin");
+  CacheDefinitions.registerCustomDefinitions([]);
+  assert.deepEqual(CacheDefinitions.getCounts(), counts);
+});
+
+test("malformed fields are refused before reaching the runtime", () => {
+  const row = { kind: "npc", id: 50000, baseId: 1, fields: {} };
+  for (const fields of [{ modelIds: "bad" }, { combatLevel: 1.5 }, { actions: [{}] }, { size: 0 }]) assert.ok(Document.audit(core, { ...row, fields }).length);
+  const loc = { kind: "loc", id: Math.max(50000, CacheDefinitions.getBaseCounts().objects), baseId: 1, fields: { models: [[1, 2]], types: [10] } };
+  assert.deepEqual(Document.audit(core, loc), []);
+  assert.ok(Document.audit(core, { ...loc, fields: { models: [1, 2] } }).length);
+});
+
+test("login sends definitions and resets the client for an empty world", () => {
+  let login;
+  Catalog.register({ core, registerContentEndpoint() {}, onServerStartup() {}, onPlayerLogin(handler) { login = handler; } });
+  const sent = [];
+  const player = { getSession: () => ({}), getPacketSender: () => ({ sendContentData: (...args) => sent.push(args) }) };
+  CacheDefinitions.registerCustomDefinitions([{ kind: "npc", id: 50000, baseId: 1, fields: { name: "Custom goblin" } }]);
+  login({ player });
+  assert.equal(sent[0][1][0].key, "customDefinitions");
+  assert.equal(sent[0][1][0].rows[0].id, 50000);
+  CacheDefinitions.registerCustomDefinitions([]);
+  login({ player });
+  assert.deepEqual(sent[1][1][0].rows, []);
+});
+
+test("model uploads avoid custom item IDs and refuse oversized packets before saving", () => {
+  const root = scratchRoot();
+  fs.writeFileSync(path.join(root, "data/definitions/custom-items.json"), JSON.stringify([{ models: { "1000000": "custom/1.dat" } }]));
+  assert.equal(Assets.addAsset(root, { kind: "model", name: "new", data: modelBytes().toString("base64") }).asset.id, 1000001);
+  const noise = require("node:crypto").randomBytes(100000); noise[noise.length - 2] = 255; noise[noise.length - 1] = 253;
+  assert.throws(() => Assets.addAsset(root, { kind: "model", name: "large", data: noise.toString("base64") }), /budget/);
+  assert.equal(Assets.assetsOf(root).length, 1);
+});
+
+
+test("original 317 DAT models are accepted without a version marker, truncated sections are rejected", () => {
+  const bytes = Buffer.from([0,0,0,1,64,65,65,0,1, 0,3,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,3]);
+  assert.equal(Assets.isCacheModel(bytes), true);
+  const root = scratchRoot();
+  assert.equal(Assets.addAsset(root, { kind: "model", name: "Legacy model", data: bytes.toString("base64") }).asset.size, bytes.length);
+  assert.equal(Assets.isCacheModel(bytes.subarray(1)), false);
+  const bad = Buffer.from(bytes); bad[bad.length - 13] = 2;
+  assert.equal(Assets.isCacheModel(bad), false);
+});
+
+test("NPC morphs resolve custom targets through the overlay and detect cycles", () => {
+  CacheDefinitions.registerCustomDefinitions([
+    { kind: "npc", id: 50000, baseId: 1, fields: { transforms: [50001], transformVarbit: -1, transformVarp: -1 } },
+    { kind: "npc", id: 50001, baseId: 1, fields: { name: "Morphed goblin", transforms: undefined } },
+  ]);
+  const vars = { getVarp: () => 0, getVarbit: () => 0 };
+  assert.equal(CacheDefinitions.resolveNpc(50000, vars).id, 50001);
+  assert.equal(CacheDefinitions.resolveNpc(50000, vars).name, "Morphed goblin");
+  CacheDefinitions.registerCustomDefinitions([
+    { kind: "npc", id: 50000, baseId: 1, fields: { transforms: [50001] } },
+    { kind: "npc", id: 50001, baseId: 1, fields: { transforms: [50000] } },
+  ]);
+  assert.equal(CacheDefinitions.resolveNpc(50000, vars), undefined);
+  CacheDefinitions.registerCustomDefinitions([]);
+});
+
+test("custom item pipelines refuse collisions in either registration order atomically", () => {
+  const item = { id: 50000, baseItemId: 1, objType: { name: "Existing custom item" } };
+  CacheDefinitions.registerCustomItems([item]);
+  assert.ok(Document.audit(core, { kind: "item", id: 50000, baseId: 1, fields: { name: "collision" } }).some(problem => /custom-items/.test(problem)));
+  assert.throws(() => CacheDefinitions.registerCustomDefinitions([{ kind: "item", id: 50000, baseId: 1, fields: { name: "collision" } }]), /custom-items/);
+  assert.equal(CacheDefinitions.getItem(50000).name, "Existing custom item");
+  CacheDefinitions.registerCustomItems([]);
+  CacheDefinitions.registerCustomDefinitions([{ kind: "item", id: 50000, baseId: 1, fields: { name: "Overlay item" } }]);
+  assert.throws(() => CacheDefinitions.registerCustomItems([item]), /custom definition/);
+  assert.equal(CacheDefinitions.getCustomItems().length, 0);
+  assert.equal(CacheDefinitions.getItem(50000).name, "Overlay item");
+  CacheDefinitions.registerCustomDefinitions([]);
+});
+
+test("sequence inspection uses the current native decoder for every cache sequence", () => {
+  for (let id = 0; id < CacheDefinitions.getSeqCount(); id++) {
+    if (!CacheDefinitions.hasDefinition("seq", id)) continue;
+    const seq = CacheDefinitions.getSeq(id);
+    assert.deepEqual(Fields.readField("seq", seq, "frameDelays"), seq.frameLengths);
+    assert.deepEqual(Fields.readField("seq", seq, "interleaveLeave"), seq.masks);
+  }
 });

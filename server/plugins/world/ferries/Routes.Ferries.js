@@ -72,7 +72,11 @@ function answerEntrana({ player, definition, text }) {
 
 function sail(player, routeName) {
   if (routeName === ENTRANA_ROUTE) sailedToEntrana.add(player);
-  return Voyages.travel(player, routeName);
+  const started = Voyages.travel(player, routeName);
+  if (started && routeName === ENTRANA_ROUTE) {
+    Common.api.emitCustomEvent("entrana:boarded", { player, route: routeName });
+  }
+  return started;
 }
 
 /** Take-boat at Port Sarim: the monk's search, then the boat or his refusal. */
@@ -161,6 +165,24 @@ function transcriptStep(event) {
   sail(player, route);
 }
 
+/**
+ * A transcript's "If not already at X:" (ferries.json `here`, by NPC name): hidden where the
+ * ferryman standing at X is the one being talked to.
+ */
+function answerHere(event) {
+  const conditions = Common.data.here?.[definitionName(event)];
+  if (!conditions || !Object.hasOwn(conditions, event.text ?? "")) return undefined;
+  const gameval = Common.npcGameval(event.npc, event.npcId);
+  return gameval ? gameval !== conditions[event.text] : undefined;
+}
+
+/** Veos's ordinary Sarim menu remains usable when quest plugins are disabled. */
+function answerVeosMembership({ definition, text }) {
+  if (definition?.getName?.() !== "Veos") return null;
+  if (text === "If the player is on a free-to-play world:") return !Common.core.WorldDefinition.isMembersWorld();
+  return null;
+}
+
 function lineEntries(event) {
   return Common.data.lines.filter((entry) => entry.npc === definitionName(event));
 }
@@ -199,10 +221,12 @@ function attach(api) {
   api.onNpcInteraction(npcOption);
   api.onObjectInteraction(locOption);
   api.onNpcDialogueCondition(answerEntrana);
+  api.onNpcDialogueCondition(answerHere);
+  api.onNpcDialogueCondition(answerVeosMembership);
   api.onCustomEvent("npc-dialogue:action", transcriptStep);
   api.onCustomEvent("npc-dialogue:choice", rememberChoice);
   api.onCustomEvent("npc-dialogue:line", sailAfterLine);
   api.onCustomEvent("ferries:travel", travelEvent);
 }
 
-module.exports = { attach, npcOption, locOption, transcriptStep, answerEntrana, contraband, sailAfterLine, rememberChoice, travelEvent };
+module.exports = { attach, npcOption, locOption, transcriptStep, answerEntrana, answerHere, contraband, sailAfterLine, rememberChoice, travelEvent };

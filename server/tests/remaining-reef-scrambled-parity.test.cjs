@@ -103,7 +103,7 @@ function player() {
     getArea: () => area, getPrivateArea: () => area, setArea: value => { area = value; }, getIndex: () => p.index,
     isPlayer: () => true, isNpc: () => false, getAsPlayer: () => p, isRegistered: () => true,
     getCombat: () => ({ getHitQueue: () => ({ addPendingDamage: damage => { p.damage = damage; } }) }),
-    getUsername: () => 'Parity', getAppearance: () => ({ isMale: () => true }), setPositionToFace: noop, forceChat: noop,
+    getUsername: () => 'Parity', getDisplayName: () => 'Parity', getAppearance: () => ({ isMale: () => true }), setPositionToFace: noop, forceChat: noop,
     performAnimation: a => p.animations.push(a.getId()), sendMessage: text => p.messages.push(text),
   }; p.manager = new DialogueManager(p); return p;
 }
@@ -126,11 +126,14 @@ test('Scrambled starts only with requirements, follows captured stages 2/4/6/8, 
   const q = player(); h.talk(q, N.ALAN_2); h.continueToMenu(q); h.choose(q, 'Yes.');
   assert.equal(h.quest.getStage(q), 2);
   assert.ok(q.messages.some(text => text.includes("You've started a new quest")));
+  assert.equal(h.quest.completionJingleId, 154);
+  assert.equal(h.quest.completionMessageColor, '0ab0ff');
+  assert.equal(h.quest.scrollItemId, 30972);
   h.continueToMenu(q); h.choose(q, 'Of course!');
   assert.equal(h.quest.getStage(q), 4);
   h.action(q, N.ALAN_2, '2DUXLf');
   assert.equal(h.quest.getStage(q), 4);
-  assert.ok(q.log.some(row => row[0] === 'sendSubInterface' && row[2] === 174));
+  assert.ok(q.log.some(row => row[0] === 'mountSubInterface' && row[2] === 174));
   h.tick(2);
   assert.ok(q.log.some(row => row[0] === 'sendCameraMoveTo'));
   assert.ok(q.log.some(row => row[0] === 'sendCameraLookAt'));
@@ -248,6 +251,11 @@ test('Red Reef accepts the captured start, advances 4/6/8 through Finn, Katt and
   completeQuestEvent(h, 'troubled_tortugans');
   h.talk(p, N.ELDER_RALEY); h.continueToMenu(p); h.choose(p, 'Yes.');
   assert.equal(h.quest.getStage(p), 2);
+  assert.ok(p.messages.includes("You've started a new quest: <col=0ab0ff>The Red Reef</col>"),
+    'the captured start message is sent once');
+  assert.equal(h.quest.completionJingleId, 154);
+  assert.equal(h.quest.completionMessageColor, '0ab0ff');
+  assert.equal(h.quest.scrollItemId, 31405);
   const finn = N.FINN_2;
   h.talk(p, finn);
   assert.equal(h.quest.getStage(p), 4);

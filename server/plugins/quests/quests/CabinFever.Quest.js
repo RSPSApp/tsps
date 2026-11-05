@@ -57,13 +57,21 @@
  *    teleports, the lost-Book replacement and the 10,000-coin claim are.
  *  - Cache Fever rope/tinderbox floor piles convert to ordinary items on pickup;
  *    the lockers provide the remaining quest supplies.
- *    than through OSRS's item-selection interface.
+ *  - The five journal objectives are keyed off the canonical stage, and every
+ *    state-changing action, object and item handler checks that stage (and the
+ *    items the step consumes) before it can advance. A canister hit kills the
+ *    pirate in front of the cannon; its death is what counts the crew hit.
+ *  - The Book o' Piracy is granted once, readable, and replaceable from Bill
+ *    Teach after the quest. Quest supplies are removed on completion and on the
+ *    next login of an already-completed save, keeping rope, hammer, tinderbox and
+ *    swamp paste.
  */
 module.exports = function registerCabinFeverQuest(api) {
   const {
     CountdownTask,
     HitDamage,
     HitMask,
+    Item,
     ItemIdentifiers,
     Location,
     NpcIdentifiers,
@@ -72,7 +80,8 @@ module.exports = function registerCabinFeverQuest(api) {
     TaskManager,
     World,
   } = api.core;
-  const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
+  const { openBook, registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
+  const BOOK = require("../data/cabin-fever-book");
 
   const PAGE = "Cabin Fever";
   const BILL_PAGE = "Bill Teach";
@@ -97,6 +106,9 @@ module.exports = function registerCabinFeverQuest(api) {
     BILL_MOS_INN,
     BILL_MOS_SHIP,
   ]);
+  const MAMA = NpcIdentifiers.MAMA; // 4020, The Other Inn
+  const MAMA_2 = NpcIdentifiers.MAMA_2; // 4021
+  const MAMA_NPC_IDS = new Set([MAMA, MAMA_2]);
   const CF_PIRATE_BASE = 4043; // 4043-4052 are the battle ship pirates
   const CF_PIRATE_NPC_IDS = new Set(
     Array.from({ length: 10 }, (_, index) => CF_PIRATE_BASE + index)
@@ -209,8 +221,9 @@ module.exports = function registerCabinFeverQuest(api) {
   const CANNON_EXPLODED = 1;
   const CANNON_STRIPPED = 2;
   const CANNON_ARMED = 3;
-  const CANNON_AMMO_CANISTER = 1;
-  const CANNON_AMMO_BALL = 2;
+  // Cache transform/Quest Helper values: 1 is a cannonball, 2 is a canister.
+  const CANNON_AMMO_CANISTER = 2;
+  const CANNON_AMMO_BALL = 1;
 
   const STAGE_STARTED = 1;
   const STAGE_SAILING = 2;
@@ -221,6 +234,20 @@ module.exports = function registerCabinFeverQuest(api) {
   const STAGE_FIRE = 7;
   const STAGE_SINK = 8;
   const STAGE_COMPLETE = 9;
+
+  // The five journal objectives, in the only order the stages allow. `at` is the
+  // stage on which the objective is complete; the journal strikes it through.
+  const OBJECTIVES = [
+    { at: STAGE_LEAKS, text: "Take rope and a fuse below deck and destroy the enemy cannon." },
+    { at: STAGE_PLUNDER, text: "Repair the three holes in the Adventurous' hull." },
+    { at: STAGE_FIX_CANNON, text: "Steal ten loads of plunder from the enemy ship." },
+    { at: STAGE_SINK, text: "Hit the enemy pirates with canister shot." },
+    { at: STAGE_COMPLETE, text: "Sink the enemy ship with three cannonball hits." },
+  ];
+
+  // The canister round kills the level 57 pirate it hits (52 hitpoints).
+  const CANISTER_DAMAGE = 52;
+  const ENEMY_SHIP_BOUNDS = { minX: 1819, maxX: 1827, minY: 4824, maxY: 4843 };
 
   // Cache DB (table 0, column 19) completes Cabin Fever at varp 655 value 140.
   // Internal stages stay 0-9; this is the durable stage -> wire mapping.
@@ -257,6 +284,10 @@ module.exports = function registerCabinFeverQuest(api) {
   const PLUNDER_RESPAWN_TICKS = 25;
   const PIRATE_AGILITY = 42;
 
+  // The port-ship spawn row lives at 3713,3497 plane 1; NPCs are spawned when
+  // a player enters their region, not at server startup.
+  const PORT_SHIP_REGION = (58 << 8) | 54;
+  const PORT_SHIP_REGION_KEY = "1:58:54";
   const BATTLE_DECK = new Location(1815, 4837, 1); // beside Bill on the Adventurous
   const ENEMY_DECK = new Location(1823, 4836, 1); // beside the enemy powder barrel
   const MOS_LE_HARMLESS = new Location(3665, 2982, 0); // The Other Inn
@@ -279,6 +310,9 @@ module.exports = function registerCabinFeverQuest(api) {
   const plunderOutcome = new WeakMap();
   const fireOutcome = new WeakMap();
   const lootedAt = new WeakMap();
+  /** Pirate -> the player whose canister round is about to kill it. */
+  const cannonTargets = new WeakMap();
+  let lastPortShipBillCheck = -100;
 
   let quest;
 
@@ -288,6 +322,16 @@ module.exports = function registerCabinFeverQuest(api) {
 
   const held = (player, itemId, amount = 1) =>
     player.getInventory().getAmount(itemId) >= amount;
+
+  /** The clicked option, from the resolved definition (case-insensitive). */
+  function optionOf(event) {
+    return String(
+      event.option ??
+        event.definition?.getInteractions?.()?.[event.clickType - 1] ??
+        event.definition?.getActions?.()?.[event.clickType - 1] ??
+        ""
+    ).toLowerCase();
+  }
 
   function varbitValue(player, varbitId) {
     return player.getPacketSender().getVarbit(varbitId);
@@ -341,10 +385,26 @@ module.exports = function registerCabinFeverQuest(api) {
     return Number(player.getAttribute(CREW_HITS_ATTRIBUTE)) || 0;
   }
 
+  function setCrewHits(player, value) {
+    player.setAttribute(CREW_HITS_ATTRIBUTE, Math.max(0, value | 0));
+  }
+
   function giveSupply(player, itemId, amount) {
     const have = player.getInventory().getAmount(itemId);
     if (have >= amount) return false;
     player.getInventory().adds(itemId, amount - have);
+    return true;
+  }
+
+  /** The Book o' Piracy is a kept reward: grant it once, never stack copies. */
+  function giveBookOfPiracy(player) {
+    if (held(player, BOOK_O_PIRACY)) return false;
+    const inventory = player.getInventory();
+    if (inventory.getFreeSlots() < 1) {
+      inventory.forceAdd?.(player, new Item(BOOK_O_PIRACY, 1));
+      return true;
+    }
+    inventory.adds(BOOK_O_PIRACY, 1);
     return true;
   }
 
@@ -490,6 +550,100 @@ module.exports = function registerCabinFeverQuest(api) {
     return billVariant(npcId, player);
   }
 
+  /** The enemy pirates speak only while the sabotage/plunder chain is live. */
+  function talkToPirate(event) {
+    const { player, npcId } = event;
+    if (!player || !CF_PIRATE_NPC_IDS.has(npcId)) return false;
+    const variant = pirateVariant(npcId, player);
+    if (!variant || !startTranscript(api, player, npcId, PAGE, variant)) return false;
+    event.handled = true;
+    return true;
+  }
+
+  /** Mama's inn dialogue changes once Bill has given the player the book. */
+  function talkToMama(event) {
+    const { player, npcId } = event;
+    if (!player || !MAMA_NPC_IDS.has(npcId)) return false;
+    const variant = held(player, BOOK_O_PIRACY)
+      ? "standard-dialogue-with-book-o-piracy"
+      : "standard-dialogue-without-book-o-piracy";
+    if (!startTranscript(api, player, npcId, "Mama", variant)) return false;
+    event.handled = true;
+    return true;
+  }
+
+  function readBookOfPiracy(event) {
+    const { player, itemId } = event;
+    if (!player || itemId !== BOOK_O_PIRACY || !held(player, BOOK_O_PIRACY)) return false;
+    openBook(player, BOOK.title, BOOK.pages);
+    event.handled = true;
+    return true;
+  }
+
+  function inEnemyShipBounds(npc) {
+    const location = npc?.getLocation?.();
+    if (!location) return false;
+    const x = location.getX?.() ?? location.x;
+    const y = location.getY?.() ?? location.y;
+    const z = location.getZ?.() ?? location.z;
+    return (
+      (z === 0 || z === 1) &&
+      x >= ENEMY_SHIP_BOUNDS.minX &&
+      x <= ENEMY_SHIP_BOUNDS.maxX &&
+      y >= ENEMY_SHIP_BOUNDS.minY &&
+      y <= ENEMY_SHIP_BOUNDS.maxY
+    );
+  }
+
+  /** A living Cabin Fever pirate in front of the cannon. */
+  function canisterTarget(player) {
+    const npcs = World.getNpcs?.() ?? [];
+    for (const npc of npcs) {
+      if (!npc || cannonTargets.has(npc)) continue;
+      const id = npc.getId?.();
+      if (!CF_PIRATE_NPC_IDS.has(id)) continue;
+      if (npc.isRegistered?.() === false) continue;
+      if ((npc.getHitpoints?.() ?? 0) <= 0) continue;
+      if (!inEnemyShipBounds(npc)) continue;
+      return npc;
+    }
+    return null;
+  }
+
+  /**
+   * A canister hit kills the pirate it catches. The 52-damage hit is resolved by
+   * the NPC death task, which calls handleNpcDeath and records the crew hit.
+   * Returns false when no pirate is lined up (the wiki's rat still counts, so
+   * the caller records the hit directly in that case).
+   */
+  function hitPirateWithCanister(player) {
+    const target = canisterTarget(player);
+    if (!target) return false;
+    cannonTargets.set(target, player);
+    const combat = target.getCombat?.();
+    // Attribute the kill to the player, so the NPC death task still runs.
+    combat?.addDamage?.(player, CANISTER_DAMAGE);
+    const hit = new HitDamage(CANISTER_DAMAGE, HitMask.RED).setSource(player);
+    // Credit on impact, not on the death task two ticks later: a shooter who
+    // logs out during the death animation must still save the successful shot.
+    hit.onApplied(() => {
+      cannonTargets.delete(target);
+      if ((target.getHitpoints?.() ?? 0) > 0) return;
+      if (quest.getStage(player) !== STAGE_FIRE) return;
+      setCrewHits(player, crewHits(player) + 1);
+    });
+    combat?.getHitQueue?.().addPendingDamage?.([hit]);
+    return true;
+  }
+
+  function handleNpcDeath(event) {
+    const { npc } = event;
+    if (!npc) return;
+    // Impact already recorded the crew hit. Clear any marker so a pirate killed
+    // by something else cannot be mistaken for a canister kill.
+    cannonTargets.delete(npc);
+  }
+
   // ==========================================================================
   // Prose conditions
   // ==========================================================================
@@ -558,6 +712,7 @@ module.exports = function registerCabinFeverQuest(api) {
   function handleConditionChosen(event) {
     const { player, stepId } = event;
     if (!player || stepId !== "bstDB6") return;
+    if (quest.getStage(player) !== STAGE_FIX_CANNON) return;
     const extra = player.getInventory().getAmount(PLUNDER);
     if (extra > 0) player.getInventory().deleteNumber(PLUNDER, extra);
   }
@@ -581,18 +736,28 @@ module.exports = function registerCabinFeverQuest(api) {
     startTranscript(api, player, npcId, PAGE, "speaking-to-bill-teach-on-the-ship");
   }
 
+  /** The port-ship Bill, including the 4013 row that resolves to 4011. */
+  function isPortShipBill(event) {
+    if (event.npcId === BILL_PORT_SHIP) return true;
+    if (event.npcId !== BILL_PUB && event.npcId !== BILL_PORT_SHIP_ROW) return false;
+    const location = event.location ?? event.npc?.getLocation?.();
+    const x = location?.x ?? location?.getX?.();
+    const y = location?.y ?? location?.getY?.();
+    const z = location?.z ?? location?.getZ?.();
+    return z === 1 && x >= 3708 && x <= 3720 && y >= 3488 && y <= 3508;
+  }
+
   /**
    * Bill on the Adventurous at Port Phasmatys (4013) is not in the dialogue id
    * index, so NpcDialogues would fall back to his pre-quest page: play the
    * quest's ship variant here and claim the click.
    */
   function talkToBill(event) {
-    const { player, npcId } = event;
-    if (!BILL_NPC_IDS.has(npcId)) return false;
-    if (npcId !== BILL_PORT_SHIP) return false;
+    const { player } = event;
+    if (!BILL_NPC_IDS.has(event.npcId) || !isPortShipBill(event)) return false;
     const stage = quest.getStage(player);
     if (stage !== STAGE_STARTED && stage !== STAGE_SAILING) return false;
-    startShipTalk(player, npcId);
+    startShipTalk(player, BILL_SHIP);
     return true;
   }
 
@@ -625,9 +790,10 @@ module.exports = function registerCabinFeverQuest(api) {
   }
 
   function arriveOnBattleShip(player) {
-    if (quest.getStage(player) >= STAGE_CANNON) return;
+    if (quest.getStage(player) !== STAGE_SAILING) return;
     quest.setStage(player, STAGE_CANNON);
-    setVarbitValue(player, VARBIT_CANNON, CANNON_STRIPPED);
+    // The cutscene destroys the cannon: transform 1 is the broken (exploded) form.
+    setVarbitValue(player, VARBIT_CANNON, CANNON_EXPLODED);
     setVarbitValue(player, VARBIT_CANNON_CLEAN, 1);
     player.moveTo(BATTLE_DECK);
   }
@@ -637,26 +803,41 @@ module.exports = function registerCabinFeverQuest(api) {
   // ==========================================================================
 
   function blowUpEnemyCannon(player) {
+    if (quest.getStage(player) !== STAGE_CANNON) return false;
+    if (varbitValue(player, VARBIT_ENEMY_CANNON) !== 0) return false;
+    if (varbitValue(player, VARBIT_FUSE_1) !== 1 || varbitValue(player, VARBIT_FUSE_2) !== 1) {
+      return false;
+    }
     setVarbitValue(player, VARBIT_GUNPOWDER_BARREL, 1);
     setVarbitValue(player, VARBIT_ENEMY_CANNON, 1);
     setVarbitValue(player, VARBIT_FUSE_1, 0);
     setVarbitValue(player, VARBIT_FUSE_2, 0);
+    return true;
   }
 
   function finishQuest(player) {
+    if (quest.getStage(player) !== STAGE_SINK) return false;
+    if (varbitValue(player, VARBIT_HULL_HOLES) < 3) return false;
     if (!quest.isComplete(player)) quest.complete(player);
     setVarbitValue(player, VARBIT_GIVEN_BOOK, 1);
     player.moveTo(MOS_LE_HARMLESS);
+    return true;
   }
 
   function claimGold(player) {
+    if (!quest.isComplete(player)) return false;
+    if (varbitValue(player, VARBIT_GOLD) !== 0) return false;
     const inventory = player.getInventory();
     const before = inventory.getAmount(COINS);
     inventory.adds(COINS, 10000);
     // The claim is once-only, so it is only consumed when the coins landed:
     // a full inventory without a coins stack makes the add fail silently.
-    if (inventory.getAmount(COINS) - before < 10000) return;
+    if (inventory.getAmount(COINS) - before < 10000) {
+      player.sendMessage("You need a free inventory space for the coins.");
+      return false;
+    }
     setVarbitValue(player, VARBIT_GOLD, 1);
+    return true;
   }
 
   function handleAction(event) {
@@ -686,6 +867,8 @@ module.exports = function registerCabinFeverQuest(api) {
         player.sendMessage("You don't need a Ramrod right now.");
         return;
       case "7Zv7QG": // end-game cutscene begins
+        if (quest.getStage(player) !== STAGE_SINK) return;
+        if (varbitValue(player, VARBIT_HULL_HOLES) < 3) return;
         event.handled = true;
         whenIdle(player, () =>
           startTranscript(api, player, BILL_SHIP, PAGE, "end-of-quest-cutscene")
@@ -700,14 +883,17 @@ module.exports = function registerCabinFeverQuest(api) {
         claimGold(player);
         return;
       case "5mdRTN": // replacement Book o' Piracy
+        if (!quest.isComplete(player) || held(player, BOOK_O_PIRACY)) return;
         event.handled = true;
-        if (!held(player, BOOK_O_PIRACY)) player.getInventory().adds(BOOK_O_PIRACY, 1);
+        giveBookOfPiracy(player);
         return;
       case "ovllfq": // lift to Mos Le'Harmless
+        if (!quest.isComplete(player)) return;
         event.handled = true;
         player.moveTo(MOS_LE_HARMLESS);
         return;
       case "fvjsNS": // lift to Port Phasmatys
+        if (!quest.isComplete(player)) return;
         event.handled = true;
         player.moveTo(PORT_PHASMATYS);
         return;
@@ -733,6 +919,14 @@ module.exports = function registerCabinFeverQuest(api) {
     );
   }
 
+  /** The gangplank refuses a player who has not started the quest. */
+  function crossGangplank(event) {
+    if (event.objectId !== GANGPLANK_DOCK) return false;
+    if (quest.getStage(event.player) !== 0) return false;
+    handleGangplankClaim(event);
+    return event.handled === true;
+  }
+
   // ==========================================================================
   // Objects
   // ==========================================================================
@@ -754,6 +948,10 @@ module.exports = function registerCabinFeverQuest(api) {
       varbitValue(player, VARBIT_CANNON) === CANNON_EXPLODED ||
       varbitValue(player, VARBIT_CANNON) === CANNON_STRIPPED;
     if (stage >= STAGE_FIX_CANNON && broken && !held(player, CANNON_BARREL)) {
+      if (player.getInventory().getFreeSlots() < 1) {
+        player.sendMessage("You need a free inventory space for the cannon barrel.");
+        return;
+      }
       player.getInventory().adds(CANNON_BARREL, 1);
       playVariant(player, "fixing-up-the-cannon-taking-a-new-barrel-from-the-gun-locker");
       return;
@@ -791,36 +989,48 @@ module.exports = function registerCabinFeverQuest(api) {
   }
 
   function attachFuse(player) {
-    const stage = quest.getStage(player);
-    if (stage < STAGE_CANNON || stage >= STAGE_PLUNDER) return;
-    if (varbitValue(player, VARBIT_ENEMY_CANNON) !== 0) return;
-    if (varbitValue(player, VARBIT_FUSE_1) === 1) return;
+    if (quest.getStage(player) !== STAGE_CANNON) return false;
+    if (varbitValue(player, VARBIT_ENEMY_CANNON) !== 0) return false;
+    if (varbitValue(player, VARBIT_FUSE_1) === 1) return false;
+    if (!held(player, FUSE)) return false;
     player.getInventory().deleteNumber(FUSE, 1);
     setVarbitValue(player, VARBIT_FUSE_1, 1);
+    // Transform 2 is the barrel with the fuse attached; 1 is the explosion.
+    setVarbitValue(player, VARBIT_GUNPOWDER_BARREL, 2);
     playVariant(player, "dealing-with-the-cannon-using-fuse-on-the-barrel");
+    return true;
   }
 
   function lightFuse(player, itemId) {
-    if (varbitValue(player, VARBIT_FUSE_1) !== 1) return;
+    if (quest.getStage(player) !== STAGE_CANNON) return false;
+    if (varbitValue(player, VARBIT_FUSE_1) !== 1) return false;
+    if (varbitValue(player, VARBIT_FUSE_2) === 1) return false;
+    if (!TINDERBOXES.has(itemId) && !BULLSEYE_LANTERNS.has(itemId)) return false;
     if (BULLSEYE_LANTERNS.has(itemId)) {
       playVariant(
         player,
         "dealing-with-the-cannon-using-fuse-on-the-barrel-attempting-to-light-the-fuse-using-a-bullseye-lantern"
       );
-      return;
+      return true;
     }
     setVarbitValue(player, VARBIT_FUSE_2, 1);
     playVariant(player, "dealing-with-the-cannon-the-fuse-is-lit");
+    return true;
   }
 
   function lootPlunder(player, source) {
+    if (quest.getStage(player) !== STAGE_PLUNDER) return false;
     const now = World.getProcessCycle();
     const timestamps = lootedAt.get(player) ?? {};
     const looted = varbitValue(player, source.varbit) === 1;
     if (looted && now - (timestamps[source.varbit] ?? -Infinity) < PLUNDER_RESPAWN_TICKS) {
       plunderOutcome.set(player, "recently");
       playVariant(player, source.variant);
-      return;
+      return false;
+    }
+    if (player.getInventory().getFreeSlots() < source.amount) {
+      player.sendMessage("You do not have enough free inventory space for that.");
+      return false;
     }
     if (looted) setVarbitValue(player, source.varbit, 0);
     setVarbitValue(player, source.varbit, 1);
@@ -829,9 +1039,11 @@ module.exports = function registerCabinFeverQuest(api) {
     player.getInventory().adds(PLUNDER, source.amount);
     plunderOutcome.set(player, "found");
     playVariant(player, source.variant);
+    return true;
   }
 
   function storePlunder(player) {
+    if (quest.getStage(player) !== STAGE_PLUNDER) return false;
     const carried = player.getInventory().getAmount(PLUNDER);
     const stored = varbitValue(player, VARBIT_PLUNDER);
     if (stored >= 10) {
@@ -839,11 +1051,11 @@ module.exports = function registerCabinFeverQuest(api) {
         player,
         "time-to-plunder-counting-the-plunder-in-the-storage-attempting-to-plunder-more-after-filling-up-the-storage"
       );
-      return;
+      return false;
     }
     if (carried === 0) {
       playVariant(player, "time-to-plunder-storing-the-loot-in-the-storage");
-      return;
+      return false;
     }
     const space = 10 - stored;
     const amount = Math.min(carried, space);
@@ -851,48 +1063,59 @@ module.exports = function registerCabinFeverQuest(api) {
     setVarbitValue(player, VARBIT_PLUNDER, stored + amount);
     if (carried > space) {
       player.sendMessage("You deposit as much plunder as you can.");
-      return;
+      return true;
     }
     player.sendMessage(
       `You deposit ${amount} load${amount === 1 ? "" : "s"} of plunder in the chest.`
     );
+    return true;
   }
 
   function countPlunder(player) {
+    if (quest.getStage(player) < STAGE_PLUNDER) return false;
     const stored = varbitValue(player, VARBIT_PLUNDER);
     if (stored >= 10) {
       player.sendMessage("This chest is full of plunder.");
-      return;
+      return true;
     }
     player.sendMessage(`This chest has ${stored} loads of plunder inside.`);
+    return true;
+  }
+
+  function repairCannon(player) {
+    const stage = quest.getStage(player);
+    if (stage < STAGE_FIX_CANNON || stage >= STAGE_COMPLETE) return false;
+    const state = varbitValue(player, VARBIT_CANNON);
+    if (state !== CANNON_EXPLODED && state !== CANNON_STRIPPED) return false;
+    if (!held(player, CANNON_BARREL)) {
+      player.sendMessage("You need a cannon barrel to repair this cannon.");
+      return false;
+    }
+    player.getInventory().deleteNumber(CANNON_BARREL, 1);
+    setVarbitValue(player, VARBIT_CANNON, CANNON_EMPTY);
+    setVarbitValue(player, VARBIT_CANNON_CLEAN, 1);
+    setVarbitValue(player, VARBIT_CANNON_POWDER, 0);
+    setVarbitValue(player, VARBIT_CANNON_TAMP, 0);
+    setVarbitValue(player, VARBIT_CANNON_AMMO, 0);
+    setVarbitValue(player, VARBIT_CANNON_FUSE, 0);
+    playVariant(player, "fixing-up-the-cannon-using-a-new-barrel-on-the-cannon");
+    return true;
   }
 
   function handleCannonClick(player, option) {
-    const state = varbitValue(player, VARBIT_CANNON);
-    if (option === "repair") {
-      if (state !== CANNON_EXPLODED && state !== CANNON_STRIPPED) return;
-      if (!held(player, CANNON_BARREL)) {
-        player.sendMessage("You need a cannon barrel to repair this cannon.");
-        return;
-      }
-      player.getInventory().deleteNumber(CANNON_BARREL, 1);
-      setVarbitValue(player, VARBIT_CANNON, CANNON_EMPTY);
-      setVarbitValue(player, VARBIT_CANNON_CLEAN, 1);
-      setVarbitValue(player, VARBIT_CANNON_POWDER, 0);
-      setVarbitValue(player, VARBIT_CANNON_TAMP, 0);
-      setVarbitValue(player, VARBIT_CANNON_AMMO, 0);
-      setVarbitValue(player, VARBIT_CANNON_FUSE, 0);
-      playVariant(player, "fixing-up-the-cannon-using-a-new-barrel-on-the-cannon");
-      return;
-    }
+    const stage = quest.getStage(player);
+    if (stage < STAGE_CANNON || stage >= STAGE_COMPLETE) return false;
+    if (option === "repair") return repairCannon(player);
     if (option === "inspect") {
+      if (stage < STAGE_FIRE) return false;
       playVariant(
         player,
         "talking-to-bill-teach-again-before-firing-the-cannon-using-the-cannon-in-the-correct-order-inspecting-the-cannon"
       );
-      return;
+      return true;
     }
     if (option === "empty-out") {
+      if (stage !== STAGE_FIRE && stage !== STAGE_SINK) return false;
       setVarbitValue(player, VARBIT_CANNON_POWDER, 0);
       setVarbitValue(player, VARBIT_CANNON_TAMP, 0);
       setVarbitValue(player, VARBIT_CANNON_AMMO, 0);
@@ -902,9 +1125,14 @@ module.exports = function registerCabinFeverQuest(api) {
         player,
         "talking-to-bill-teach-again-before-firing-the-cannon-using-the-cannon-in-the-correct-order-cleaning-the-cannon"
       );
-      return;
+      return true;
     }
-    if (option === "fire!") fireCannon(player);
+    if (option === "fire!") {
+      if (stage !== STAGE_FIRE && stage !== STAGE_SINK) return false;
+      fireCannon(player);
+      return true;
+    }
+    return false;
   }
 
   function emptyCannonLoad(player, keepClean) {
@@ -917,7 +1145,9 @@ module.exports = function registerCabinFeverQuest(api) {
   }
 
   function fireCannon(player) {
-    if (varbitValue(player, VARBIT_CANNON) !== CANNON_ARMED) return;
+    const stage = quest.getStage(player);
+    if (stage !== STAGE_FIRE && stage !== STAGE_SINK) return false;
+    if (varbitValue(player, VARBIT_CANNON) !== CANNON_ARMED) return false;
     const powder = varbitValue(player, VARBIT_CANNON_POWDER);
     const tamp = varbitValue(player, VARBIT_CANNON_TAMP);
     const ammo = varbitValue(player, VARBIT_CANNON_AMMO);
@@ -930,15 +1160,18 @@ module.exports = function registerCabinFeverQuest(api) {
           ? "talking-to-bill-teach-again-before-firing-the-cannon-firing-the-cannon-firing-the-cannon-without-adding-powder-or-ammunition"
           : "talking-to-bill-teach-again-before-firing-the-cannon-firing-the-cannon-firing-the-cannon-without-adding-ammunition"
       );
-      return;
+      return true;
     }
+    // Canister rounds are the crew phase; cannonballs are the hull phase.
+    if (stage === STAGE_FIRE && ammo !== CANNON_AMMO_CANISTER) return false;
+    if (stage === STAGE_SINK && ammo !== CANNON_AMMO_BALL) return false;
     if (powder === 0) {
       emptyCannonLoad(player, true);
       playVariant(
         player,
         "talking-to-bill-teach-again-before-firing-the-cannon-firing-the-cannon-firing-the-cannon-without-adding-powder-or-ammunition"
       );
-      return;
+      return true;
     }
     if (clean === 0 || tamp === 0) {
       emptyCannonLoad(player, false);
@@ -948,64 +1181,67 @@ module.exports = function registerCabinFeverQuest(api) {
         player,
         "talking-to-bill-teach-again-before-firing-the-cannon-using-the-cannon-in-the-correct-order-blowing-up-the-cannon"
       );
-      return;
+      return true;
     }
     const hit = Math.random() < rangedHitChance(player);
     emptyCannonLoad(player, false);
     if (ammo === CANNON_AMMO_CANISTER) {
       fireOutcome.set(player, hit ? "hit" : "miss");
-      if (hit) player.setAttribute(CREW_HITS_ATTRIBUTE, crewHits(player) + 1);
+      if (hit) {
+        // The death task records the crew hit; with no pirate lined up the
+        // cannon still catches a rat, which the wiki counts as a pirate kill.
+        if (!hitPirateWithCanister(player)) setCrewHits(player, crewHits(player) + 1);
+      }
       playVariant(
         player,
         "talking-to-bill-teach-again-before-firing-the-cannon-firing-the-cannon"
       );
-      return;
+      return true;
     }
     if (!hit) {
       fireOutcome.set(player, "miss");
       playVariant(player, "sinking-the-enemy-ship-fire-at-will");
-      return;
+      return true;
     }
     const holes = varbitValue(player, VARBIT_HULL_HOLES) + 1;
     setVarbitValue(player, VARBIT_HULL_HOLES, holes);
     if (holes >= 3) {
       playVariant(player, "sinking-the-enemy-ship-after-the-third-and-final-hit");
-      return;
+      return true;
     }
     if (holes === 1) {
       fireOutcome.set(player, "hit");
       playVariant(player, "sinking-the-enemy-ship-fire-at-will");
-      return;
+      return true;
     }
     playVariant(player, "sinking-the-enemy-ship-shooting-at-the-hull-again");
+    return true;
   }
 
   function useOnCannon(player, itemId) {
+    const stage = quest.getStage(player);
+    if (stage < STAGE_CANNON || stage >= STAGE_COMPLETE) return false;
+    if (itemId === CANNON_BARREL) return repairCannon(player);
+    if (!held(player, itemId)) return false;
     const state = varbitValue(player, VARBIT_CANNON);
-    if (itemId === CANNON_BARREL) {
-      if (state !== CANNON_EXPLODED && state !== CANNON_STRIPPED) return;
-      player.getInventory().deleteNumber(CANNON_BARREL, 1);
-      setVarbitValue(player, VARBIT_CANNON, CANNON_EMPTY);
-      setVarbitValue(player, VARBIT_CANNON_CLEAN, 1);
-      playVariant(player, "fixing-up-the-cannon-using-a-new-barrel-on-the-cannon");
-      return;
-    }
-    if (state !== CANNON_EMPTY) return;
+    if (state !== CANNON_EMPTY) return false;
     if (itemId === GUNPOWDER) {
-      if (varbitValue(player, VARBIT_CANNON_POWDER) === 1) return;
+      if (stage !== STAGE_FIRE && stage !== STAGE_SINK) return false;
+      if (varbitValue(player, VARBIT_CANNON_POWDER) === 1) return false;
       player.getInventory().deleteNumber(GUNPOWDER, 1);
       setVarbitValue(player, VARBIT_CANNON_POWDER, 1);
       player.sendMessage("You pour the powder into the cannon.");
-      return;
+      return true;
     }
     if (itemId === RAMROD) {
+      if (stage !== STAGE_FIRE && stage !== STAGE_SINK) return false;
       if (varbitValue(player, VARBIT_CANNON_CLEAN) === 0) {
         setVarbitValue(player, VARBIT_CANNON_CLEAN, 1);
         playVariant(
           player,
           "talking-to-bill-teach-again-before-firing-the-cannon-using-the-cannon-in-the-correct-order-cleaning-the-cannon"
         );
-        return;
+        return true;
       }
       if (
         varbitValue(player, VARBIT_CANNON_POWDER) === 1 &&
@@ -1013,67 +1249,74 @@ module.exports = function registerCabinFeverQuest(api) {
       ) {
         setVarbitValue(player, VARBIT_CANNON_TAMP, 1);
         player.sendMessage("You shove the Ramrod into the cannon barrel.");
+        return true;
       }
-      return;
+      return false;
     }
-    if (itemId === CANISTER || itemId === CF_CANNON_BALL) {
-      if (varbitValue(player, VARBIT_CANNON_AMMO) !== 0) return;
-      player.getInventory().deleteNumber(itemId, 1);
-      setVarbitValue(
-        player,
-        VARBIT_CANNON_AMMO,
-        itemId === CANISTER ? CANNON_AMMO_CANISTER : CANNON_AMMO_BALL
-      );
-      player.sendMessage(
-        itemId === CANISTER
-          ? "You roll the canister round into the cannon."
-          : "You roll the cannonball into the cannon."
-      );
-      return;
+    if (itemId === CANISTER) {
+      if (stage !== STAGE_FIRE) return false;
+      if (varbitValue(player, VARBIT_CANNON_AMMO) !== 0) return false;
+      player.getInventory().deleteNumber(CANISTER, 1);
+      setVarbitValue(player, VARBIT_CANNON_AMMO, CANNON_AMMO_CANISTER);
+      player.sendMessage("You roll the canister round into the cannon.");
+      return true;
+    }
+    if (itemId === CF_CANNON_BALL) {
+      if (stage !== STAGE_SINK) return false;
+      if (varbitValue(player, VARBIT_CANNON_AMMO) !== 0) return false;
+      player.getInventory().deleteNumber(CF_CANNON_BALL, 1);
+      setVarbitValue(player, VARBIT_CANNON_AMMO, CANNON_AMMO_BALL);
+      player.sendMessage("You roll the cannonball into the cannon.");
+      return true;
     }
     if (itemId === STEEL_CANNONBALL) {
+      if (stage !== STAGE_FIRE && stage !== STAGE_SINK) return false;
       player.sendMessage("This cannonball is far too big.");
-      return;
+      return true;
     }
     if (itemId === FUSE) {
-      if (varbitValue(player, VARBIT_CANNON_FUSE) === 1) return;
+      if (stage !== STAGE_FIRE && stage !== STAGE_SINK) return false;
+      if (varbitValue(player, VARBIT_CANNON_FUSE) === 1) return false;
       player.getInventory().deleteNumber(FUSE, 1);
       setVarbitValue(player, VARBIT_CANNON_FUSE, 1);
       setVarbitValue(player, VARBIT_CANNON, CANNON_ARMED);
       player.sendMessage("You ready the cannon for firing.");
+      return true;
     }
+    return false;
   }
 
   function useOnHole(player, itemId, objectId) {
     const holeVarbit = HOLE_VARBIT_BY_OBJECT.get(objectId);
+    if (holeVarbit === undefined) return false;
     const stage = quest.getStage(player);
-    if (stage >= STAGE_LEAKS && stage < STAGE_PLUNDER) {
+    if (stage === STAGE_LEAKS) {
       const value = varbitValue(player, holeVarbit);
       if (REPAIR_PLANKS.has(itemId)) {
         if (value !== 0) {
           player.sendMessage("This hole has already been planked.");
-          return;
+          return true;
         }
         if (!held(player, HAMMER)) {
           playVariant(
             player,
             "sort-out-the-leaks-returning-to-battle-after-dealing-with-the-cannon-trying-to-repair-a-hole-without-a-hammer"
           );
-          return;
+          return true;
         }
         if (player.getInventory().getAmount(REPAIR_PLANK) + player.getInventory().getAmount(REPAIR_PLANK_ALT) < 2) {
           playVariant(
             player,
             "sort-out-the-leaks-returning-to-battle-after-dealing-with-the-cannon-trying-to-patch-a-hole-without-planks"
           );
-          return;
+          return true;
         }
         if (!held(player, TACKS, 10)) {
           playVariant(
             player,
             "sort-out-the-leaks-returning-to-battle-after-dealing-with-the-cannon-trying-to-patch-a-hole-without-tacks"
           );
-          return;
+          return true;
         }
         let remaining = 2;
         for (const plankId of [REPAIR_PLANK, REPAIR_PLANK_ALT]) {
@@ -1087,52 +1330,57 @@ module.exports = function registerCabinFeverQuest(api) {
         setVarbitValue(player, holeVarbit, 1);
         syncHoleCounters(player);
         playVariant(player, "sort-out-the-leaks-planking-up-a-hole");
-        return;
+        return true;
       }
       if (itemId === SWAMP_PASTE) {
         if (value === 0) {
           player.sendMessage("You need to nail planks over the hole first.");
-          return;
+          return true;
         }
         if (value !== 1) {
           player.sendMessage("This hole has already been waterproofed.");
-          return;
+          return true;
         }
         if (!held(player, SWAMP_PASTE)) {
           playVariant(
             player,
             "sort-out-the-leaks-planking-up-a-hole-trying-to-waterproof-a-hole-without-swamp-paste"
           );
-          return;
+          return true;
         }
         player.getInventory().deleteNumber(SWAMP_PASTE, 1);
         setVarbitValue(player, holeVarbit, 2);
         syncHoleCounters(player);
         playVariant(player, "sort-out-the-leaks-patching-up-a-hole");
+        return true;
       }
-      return;
+      return false;
     }
-    if (stage >= STAGE_CANNON && stage < STAGE_LEAKS && (REPAIR_PLANKS.has(itemId) || itemId === SWAMP_PASTE)) {
+    if (stage === STAGE_CANNON && (REPAIR_PLANKS.has(itemId) || itemId === SWAMP_PASTE)) {
       playVariant(
         player,
         "dealing-with-the-cannon-trying-to-fill-the-ship-hull-before-taking-out-the-cannon"
       );
+      return true;
     }
+    return false;
   }
 
   function swingToOtherShip(player, itemId) {
     const stage = quest.getStage(player);
-    if (stage < STAGE_CANNON || stage >= STAGE_COMPLETE) return;
-    if ((player.getLocation()?.getZ?.() ?? 0) < 2) return;
+    if (stage < STAGE_CANNON || stage >= STAGE_COMPLETE) return false;
+    if (!SWING_ROPES.has(itemId) || !held(player, itemId)) return false;
+    if ((player.getLocation()?.getZ?.() ?? 0) < 2) return false;
     if (player.getSkillManager().getMaxLevel(Skill.AGILITY) < PIRATE_AGILITY) {
       playVariant(player, "dealing-with-the-cannon-using-a-rope-swing-falling-on-a-rope-swing");
       player.setRunEnergy(0);
       player.getPacketSender().sendRunEnergy();
-      return;
+      return true;
     }
     const onOwnShip = (player.getLocation()?.getX?.() ?? 0) < 1819;
     player.getInventory().deleteNumber(itemId, 1);
     player.moveTo(onOwnShip ? ENEMY_DECK : BATTLE_DECK);
+    return true;
   }
 
   function handleGroundItemPickup(event) {
@@ -1155,24 +1403,25 @@ module.exports = function registerCabinFeverQuest(api) {
 
   function handleItemOnObject(event) {
     const { player, itemId, objectId } = event;
-    if (!player) return;
+    if (!player || event.handled) return false;
     if (HOLE_VARBIT_BY_OBJECT.has(objectId)) {
-      if (!REPAIR_PLANKS.has(itemId) && itemId !== SWAMP_PASTE) return;
+      if (!REPAIR_PLANKS.has(itemId) && itemId !== SWAMP_PASTE) return false;
+      if (!held(player, itemId)) return false;
       event.handled = true;
       useOnHole(player, itemId, objectId);
-      return;
+      return true;
     }
     if (SAIL_OBJECT_IDS.has(objectId)) {
-      if (!SWING_ROPES.has(itemId)) return;
+      if (!SWING_ROPES.has(itemId)) return false;
+      if (!swingToOtherShip(player, itemId)) return false;
       event.handled = true;
-      swingToOtherShip(player, itemId);
-      return;
+      return true;
     }
     if (objectId === ENEMY_POWDER_BARREL) {
       if (itemId === FUSE) {
+        if (!attachFuse(player)) return false;
         event.handled = true;
-        attachFuse(player);
-        return;
+        return true;
       }
       if (TINDERBOXES.has(itemId) || BULLSEYE_LANTERNS.has(itemId)) {
         event.handled = true;
@@ -1180,89 +1429,134 @@ module.exports = function registerCabinFeverQuest(api) {
           player,
           "dealing-with-the-cannon-using-fuse-on-the-barrel-attempting-to-light-the-barrel-instead-of-the-fuse"
         );
+        return true;
       }
-      return;
+      return false;
     }
     if (FUSE_OBJECT_IDS.has(objectId)) {
-      if (!TINDERBOXES.has(itemId) && !BULLSEYE_LANTERNS.has(itemId)) return;
+      if (!TINDERBOXES.has(itemId) && !BULLSEYE_LANTERNS.has(itemId)) return false;
+      if (!lightFuse(player, itemId)) return false;
       event.handled = true;
-      lightFuse(player, itemId);
-      return;
+      return true;
     }
     if (objectId === ADVENTUROUS_CANNON) {
-      if (!CANNON_ITEMS.has(itemId)) return;
+      if (!CANNON_ITEMS.has(itemId)) return false;
+      if (!useOnCannon(player, itemId)) return false;
       event.handled = true;
-      useOnCannon(player, itemId);
-      return;
+      return true;
     }
     if (objectId === PLUNDER_STORAGE && itemId === PLUNDER) {
+      if (!storePlunder(player)) return false;
       event.handled = true;
-      storePlunder(player);
+      return true;
     }
+    return false;
   }
 
   function handleObjectInteraction(event) {
     const { player, objectId } = event;
-    if (!player) return;
-    const option = String(event.definition?.getActions?.()?.[event.clickType - 1] ?? "").toLowerCase();
+    if (!player || event.handled) return false;
+    const option = optionOf(event);
     if (objectId === ADVENTUROUS_CANNON) {
       event.handled = true;
       handleCannonClick(player, option);
-      return;
+      return event.handled === true;
     }
     if (objectId === PLUNDER_STORAGE) {
+      if (option === "store-plunder") {
+        if (!storePlunder(player)) return false;
+      } else if (option === "count-plunder") {
+        if (!countPlunder(player)) return false;
+      } else {
+        return false;
+      }
       event.handled = true;
-      if (option === "store-plunder") storePlunder(player);
-      else if (option === "count-plunder") countPlunder(player);
-      return;
+      return true;
     }
     if (objectId === POWDER_BARREL || objectId === ENEMY_POWDER_BARREL) {
-      if (option !== "take-powder") return;
+      if (option !== "take-powder") return false;
+      if (quest.getStage(player) < STAGE_CANNON || quest.getStage(player) >= STAGE_COMPLETE) {
+        return false;
+      }
       event.handled = true;
       takePowder(player);
-      return;
+      return true;
     }
     if (objectId === REPAIR_LOCKER) {
-      if (option !== "open" && option !== "search") return;
+      if (option !== "open" && option !== "search") return false;
+      if (quest.getStage(player) < STAGE_CANNON || quest.getStage(player) >= STAGE_COMPLETE) {
+        return false;
+      }
       event.handled = true;
       openRepairLocker(player);
-      return;
+      return true;
     }
     if (objectId === GUN_LOCKER) {
-      if (option !== "open" && option !== "search") return;
+      if (option !== "open" && option !== "search") return false;
+      if (quest.getStage(player) < STAGE_CANNON || quest.getStage(player) >= STAGE_COMPLETE) {
+        return false;
+      }
       event.handled = true;
       openGunLocker(player);
-      return;
+      return true;
     }
     const source = PLUNDER_SOURCES.get(objectId);
     if (source) {
-      if (option !== "loot" && option !== "plunder" && option !== "ransack") return;
-      if (quest.getStage(player) !== STAGE_PLUNDER) return;
+      if (option !== "loot" && option !== "plunder" && option !== "ransack") return false;
+      if (quest.getStage(player) !== STAGE_PLUNDER) return false;
+      if (!lootPlunder(player, source)) {
+        event.handled = true;
+        return true;
+      }
       event.handled = true;
-      lootPlunder(player, source);
-      return;
+      return true;
     }
     if (objectId === CLIMBING_NET_UP) {
-      if (option !== "climb") return;
+      if (option !== "climb") return false;
       event.handled = true;
       player.moveTo((player.getLocation()?.getX?.() ?? 0) < 1819 ? WEST_YARDARM : EAST_YARDARM);
-      return;
+      return true;
     }
     if (objectId === CLIMBING_NET_DOWN) {
-      if (option !== "climb-down") return;
+      if (option !== "climb-down") return false;
       event.handled = true;
       player.moveTo((player.getLocation()?.getX?.() ?? 0) < 1819 ? WEST_NET_LANDING : EAST_NET_LANDING);
+      return true;
     }
+    return false;
+  }
+
+  /**
+   * Named object hooks run first and delegate to the id-based handler, so the
+   * transformed multi-locs still resolve through their visible name. Returning
+   * false leaves objects this quest does not own to the shared plugins.
+   */
+  function delegateObjectInteraction(event) {
+    return handleObjectInteraction(event);
+  }
+
+  function delegateItemOnObject(event) {
+    return handleItemOnObject(event);
   }
 
   // ==========================================================================
   // Journal and rewards
   // ==========================================================================
 
+  function objectiveLines(stage) {
+    return OBJECTIVES.map((objective, index) => {
+      const done = stage >= objective.at;
+      const text = `Objective ${index + 1}: ${objective.text}`;
+      return done ? `<str>${text}</str>` : text;
+    });
+  }
+
   function buildJournal(player, handle) {
     const stage = handle.getStage(player);
     if (stage >= STAGE_COMPLETE) {
       return [
+        ...objectiveLines(stage),
+        "",
         "<str>Bill Teach recruited me to help sail the Adventurous to</str>",
         "<str>Mos Le'Harmless, past the pirate captain who wanted to</str>",
         "<str>sink her. I destroyed the enemy cannon, patched the</str>",
@@ -1273,6 +1567,8 @@ module.exports = function registerCabinFeverQuest(api) {
     }
     if (stage >= STAGE_STARTED) {
       const lines = [
+        ...objectiveLines(stage),
+        "",
         "<str>Bill Teach recruited me to help sail the Adventurous to</str>",
         "<str>Mos Le'Harmless, past the pirate captain who wanted to</str>",
         "<str>sink her.</str>",
@@ -1306,6 +1602,8 @@ module.exports = function registerCabinFeverQuest(api) {
       return lines;
     }
     return [
+      ...objectiveLines(stage),
+      "",
       "I can start this quest by talking to <col=800000>Bill Teach</col>",
       "in <col=800000>The Green Ghost</col> in Port Phasmatys.",
     ];
@@ -1335,6 +1633,7 @@ module.exports = function registerCabinFeverQuest(api) {
     skills.addExperiences(Skill.SMITHING, 7000);
     skills.addExperiences(Skill.AGILITY, 7000);
     removeQuestSupplies(player);
+    giveBookOfPiracy(player);
   }
 
   // ==========================================================================
@@ -1371,10 +1670,26 @@ module.exports = function registerCabinFeverQuest(api) {
    * are loaded. A no-op once the row itself carries a working id.
    */
   function fixPortShipBill() {
-    const broken = World.getNpcs().search((npc) => npc?.getId?.() === BILL_PORT_SHIP_ROW);
+    // The 4013 spawn row transforms to 4011, so getId() no longer names it.
+    const npcs = World.getNpcs();
+    const broken = npcs.search((npc) => {
+      const id = npc?.getRealId?.() ?? npc?.getId?.();
+      return id === BILL_PORT_SHIP_ROW;
+    });
     if (!broken) return;
     const location = broken.getLocation();
+    const fixed = npcs.search((npc) => {
+      const id = npc?.getRealId?.() ?? npc?.getId?.();
+      if (id !== BILL_PORT_SHIP) return false;
+      const other = npc.getLocation();
+      return (
+        other.getZ() === location.getZ() &&
+        Math.abs(other.getX() - location.getX()) <= 2 &&
+        Math.abs(other.getY() - location.getY()) <= 2
+      );
+    });
     api.removeNpc(broken);
+    if (fixed) return;
     api.spawnNpc({
       id: BILL_PORT_SHIP,
       x: location.getX(),
@@ -1384,7 +1699,30 @@ module.exports = function registerCabinFeverQuest(api) {
     });
   }
 
+  function handleRegionLoaded({ regionId }) {
+    if (regionId === PORT_SHIP_REGION) fixPortShipBill();
+  }
+
+  function handleActiveRegionsUpdated(snapshot) {
+    if (!snapshot?.regionKeys?.includes(PORT_SHIP_REGION_KEY)) return;
+    if (snapshot.processCycle - lastPortShipBillCheck < 10) return;
+    lastPortShipBillCheck = snapshot.processCycle;
+    fixPortShipBill();
+  }
+
   function handleLogin({ player }) {
+    // Saves completed before the cleanup hook may still hold quest supplies.
+    if (quest.isComplete(player)) removeQuestSupplies(player);
+    // NPCs for the player's region are activated after the login hooks.
+    fixPortShipBill();
+    if (TaskManager && CountdownTask) {
+      TaskManager.submit(
+        new CountdownTask(player, 2, () => {
+          if (player.isRegistered?.() === false) return;
+          fixPortShipBill();
+        })
+      );
+    }
     refreshQuestList(player);
   }
 
@@ -1411,7 +1749,8 @@ module.exports = function registerCabinFeverQuest(api) {
       { skillId: Skill.SMITHING.getIndex(), amount: 7000, label: "Smithing" },
       { skillId: Skill.AGILITY.getIndex(), amount: 7000, label: "Agility" },
     ],
-    rewardItemId: BOOK_O_PIRACY,
+    // The book is granted by grantRewards so an existing copy is never duplicated.
+    scrollItemId: BOOK_O_PIRACY,
     rewardItemLabel: "Book o' Piracy",
     otherRewards: [
       "Access to Mos Le'Harmless",
@@ -1422,16 +1761,72 @@ module.exports = function registerCabinFeverQuest(api) {
   });
 
   api.onNpcInteraction("Bill Teach", { "Talk-to": talkToBill });
+  api.onNpcInteraction("Pirate", { "Talk-to": talkToPirate });
+  api.onNpcInteraction("Mama", { "Talk-to": talkToMama });
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:choice", handleChoice);
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onCustomEvent("npc-dialogue:condition", handleConditionChosen);
   api.onCustomEvent("ladders:climb", handleGangplankClaim);
+  api.onItemAction("Book o' Piracy", { Read: readBookOfPiracy });
+  // Named item uses run first; the id-based handler below stays the fallback
+  // for transformed objects and the nameless hull holes.
+  api.onItemOnObject("Rope", "Hoisted sail", delegateItemOnObject, { noted: false });
+  api.onItemOnObject("Rope", "Sail", delegateItemOnObject, { noted: false });
+  api.onItemOnObject("Fuse", "Powder Barrel", delegateItemOnObject, { noted: false });
+  api.onItemOnObject("Fuse", "Barrel", delegateItemOnObject, { noted: false });
+  api.onItemOnObject("Tinderbox", "Fuse", delegateItemOnObject, { noted: false });
+  api.onItemOnObject("Gunpowder", "Cannon", delegateItemOnObject, { noted: false });
+  api.onItemOnObject("Ramrod", "Cannon", delegateItemOnObject, { noted: false });
+  api.onItemOnObject("Canister", "Cannon", delegateItemOnObject, { noted: false });
+  api.onItemOnObject("Cannon ball", "Cannon", delegateItemOnObject, { noted: false });
+  api.onItemOnObject("Fuse", "Cannon", delegateItemOnObject, { noted: false });
+  api.onItemOnObject("Cannon barrel", "Cannon", delegateItemOnObject, { noted: false });
+  api.onItemOnObject("Cannon barrel", "Broken Cannon", delegateItemOnObject, { noted: false });
+  api.onItemOnObject("Plunder", "Plunder Storage", delegateItemOnObject, { noted: false });
   api.onItemOnObject(handleItemOnObject, { noted: false });
   api.onGroundItemPickup(handleGroundItemPickup);
+  api.onObjectInteraction("Gangplank", { Cross: crossGangplank });
+  api.onObjectInteraction("Repair Locker", {
+    Open: delegateObjectInteraction,
+    Search: delegateObjectInteraction,
+  });
+  api.onObjectInteraction("Gun Locker", {
+    Open: delegateObjectInteraction,
+    Search: delegateObjectInteraction,
+  });
+  api.onObjectInteraction("Powder Barrel", { "Take-powder": delegateObjectInteraction });
+  api.onObjectInteraction("Barrel", {
+    Ransack: delegateObjectInteraction,
+    "Take-powder": delegateObjectInteraction,
+  });
+  api.onObjectInteraction("Cannon", {
+    Inspect: delegateObjectInteraction,
+    "Empty-Out": delegateObjectInteraction,
+    "Fire!": delegateObjectInteraction,
+  });
+  api.onObjectInteraction("Broken Cannon", { Repair: delegateObjectInteraction });
+  api.onObjectInteraction("Crate", { Loot: delegateObjectInteraction });
+  api.onObjectInteraction("Closed chest", { Plunder: delegateObjectInteraction });
+  api.onObjectInteraction("Open chest", { Plunder: delegateObjectInteraction });
+  api.onObjectInteraction("Plunder Storage", {
+    "Count-plunder": delegateObjectInteraction,
+    "Store-plunder": delegateObjectInteraction,
+  });
+  api.onObjectInteraction("Climbing net", {
+    Climb: delegateObjectInteraction,
+    "Climb-down": delegateObjectInteraction,
+  });
+  api.onObjectInteraction("Climbing Net", {
+    Climb: delegateObjectInteraction,
+    "Climb-down": delegateObjectInteraction,
+  });
   api.onObjectInteraction(handleObjectInteraction);
+  api.onNpcDeath(handleNpcDeath);
   api.onPlayerLogin(handleLogin);
+  api.onRegionLoaded(handleRegionLoaded);
+  api.onActiveRegionsUpdated(handleActiveRegionsUpdated);
   api.onCustomEvent("player:bootstrap-complete", restoreVarps);
   api.onCustomEvent("quest:stage-changed", handleStageChanged);
   api.onServerStartup(fixPortShipBill);

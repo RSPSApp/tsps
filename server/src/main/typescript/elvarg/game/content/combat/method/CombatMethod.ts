@@ -1,6 +1,14 @@
 import { PendingHit } from "../hit/PendingHit";
+import { HitDamage } from "../hit/HitDamage";
 import { Mobile } from "../../../entity/impl/Mobile";
 import { CombatType } from "../CombatType";
+
+/** A multi-hit roll's earlier splats, for methods that project a later hit against changed stats. */
+export interface ProjectedDefenceContext {
+    readonly hitIndex: number;
+    readonly priorHits: readonly HitDamage[];
+    readonly combatType: CombatType;
+}
 
 export abstract class CombatMethod {
 
@@ -63,6 +71,16 @@ export abstract class CombatMethod {
      */
     public accuracyDefenceType(type: CombatType): CombatType {
         return type;
+    }
+
+    /**
+     * The effective Defence level a later splat should roll against when an earlier splat is
+     * expected to change the target's stats (Tonalztics' Division). Read-only: it must not
+     * mutate the target; the actual drain still happens on impact. Undefined keeps the usual
+     * cached roll.
+     */
+    public projectedDefenceLevel(_character: Mobile, _target: Mobile, _context: ProjectedDefenceContext): number | undefined {
+        return undefined;
     }
 
     public abstract type(): CombatType;

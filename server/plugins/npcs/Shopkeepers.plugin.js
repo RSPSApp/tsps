@@ -3,7 +3,7 @@ const path = require("path");
 const { GameConstants } = require("../../src/main/typescript/elvarg/game/GameConstants");
 const { ItemIdentifiers } = require("../../src/main/typescript/elvarg/util/ItemIdentifiers");
 
-const CLICK_FIELDS = ["firstClick", "secondClick", "thirdClick", "fourthClick"];
+const CLICK_FIELDS = ["firstClick", "secondClick", "thirdClick", "fourthClick", "fifthClick"];
 
 const ITEM_CURRENCY_ALIASES = {
   [ItemIdentifiers.AGILITY_ARENA_TICKET]: ["Agility arena ticket (discontinued)"],
@@ -42,7 +42,6 @@ const ITEM_CURRENCIES = [
 ];
 
 const POINT_CURRENCIES = [
-  "Abyssal pearls",
   "Bounty Hunter Points",
   "Deadman Points",
   "event points",
@@ -80,29 +79,137 @@ function registerPointCurrency(api, name, aliases = []) {
   return handler;
 }
 
-function shopkeepers() {
-  const file = path.join(GameConstants.DEFINITIONS_DIRECTORY, "shops.json");
-  const shops = JSON.parse(fs.readFileSync(file, "utf8"));
-  const bindings = new Map();
+function readShops(fileName) {
+  return JSON.parse(fs.readFileSync(path.join(GameConstants.DEFINITIONS_DIRECTORY, fileName), "utf8"));
+}
 
-  for (const shop of shops) {
-    for (const trader of shop?.npcInteractions ?? []) {
-      const slot = Number(trader?.optionSlot);
-      if (!Number.isInteger(slot) || slot < 1 || slot > CLICK_FIELDS.length) continue;
-      for (const npcId of trader?.npcIds ?? []) {
-        if (!Number.isInteger(npcId) || npcId < 0) continue;
-        const key = `${npcId}:${slot}`;
-        const previous = bindings.get(key);
-        bindings.set(key, previous === undefined ? shop.id : previous === shop.id ? previous : null);
-      }
+/** "npcId:slot" for each NPC option that opens this shop. */
+function traderKeys(shop) {
+  const keys = [];
+  for (const trader of shop?.npcInteractions ?? []) {
+    const slot = Number(trader?.optionSlot);
+    if (!Number.isInteger(slot) || slot < 1 || slot > CLICK_FIELDS.length) continue;
+    for (const npcId of trader?.npcIds ?? []) {
+      if (Number.isInteger(npcId) && npcId >= 0) keys.push(`${npcId}:${slot}`);
+    }
+  }
+  return keys;
+}
+
+/** The generated shops.json bindings, with an ambiguous option kept as null. */
+function defaultShopkeepers() {
+  const bindings = new Map();
+  for (const shop of readShops("shops.json")) {
+    for (const key of traderKeys(shop)) {
+      const previous = bindings.get(key);
+      bindings.set(key, previous === undefined ? shop.id : previous === shop.id ? previous : null);
     }
   }
   return bindings;
 }
 
+/** The world's explicit shop bindings, which keep their hard definition precedence. */
+function customShopkeepers() {
+  const bindings = new Map();
+  for (const shop of readShops("custom-shops.json")) {
+    for (const key of traderKeys(shop)) bindings.set(key, shop.id);
+  }
+  return bindings;
+}
+
+function shopkeepers() {
+  const bindings = defaultShopkeepers();
+  // A custom shop is the world's own choice, so it takes the option over whatever shops.json has there.
+  for (const [key, shopId] of customShopkeepers()) bindings.set(key, shopId);
+  return bindings;
+}
+
+/**
+ * NPC options that open more than one shops.json shop, by "npcId:slot": the shop names. These are
+ * versions of one wiki shop ("Daga's Scimitar Smithy (Default)" / "(Monkey Madness I)"), so
+ * they take no fixed binding; Trade picks one as dialogue does.
+ */
+function sharedTraders() {
+  const shops = new Map();
+  for (const shop of readShops("shops.json")) {
+    for (const key of traderKeys(shop)) shops.set(key, [...(shops.get(key) ?? []), shop]);
+  }
+  return new Map([...shops].filter(([, list]) => list.length > 1));
+}
+
+let pluginApi;
+let shared = null;
+let customBindings = new Map();
+let uniqueBindings = new Map();
+
+function openShop(event, shopId) {
+  if (!pluginApi.core.ShopManager.open(event.player, shopId, true)) return false;
+  event.handled = true;
+  return true;
+}
+
+/**
+ * Trade on an NPC with shop versions: "npc-dialogue:shop" picks the one the player's progress
+ * unlocks (QuestRuntime for "(After Contact!)"-style names), else the Default version, as an
+ * open_shop dialogue step does. With neither, the option stays unhandled.
+ */
+function tradeVersion(event) {
+  if (event.handled) return false;
+  shared ??= sharedTraders();
+  const shops = shared.get(`${event.npcId}:${event.clickType}`);
+  if (!shops) return false;
+  const names = shops.map((shop) => shop.name);
+  const request = { player: event.player, npcId: event.npcId, target: null, shops: names, shop: null };
+  pluginApi.emitCustomEvent("npc-dialogue:shop", request);
+  const chosen = shops.find((shop) => shop.name === (request.shop ?? names.find((name) => name.endsWith(" (Default)"))));
+  if (!chosen) return false;
+  return openShop(event, chosen.id);
+}
+
+/**
+ * The generated shops.json bindings are a fallback behind named owners such as Castle Wars'
+ * Lanthus, so they run in the post-name any-NPC hook list rather than as hard definitions.
+ * Custom shops stay hard definitions because they deliberately override both.
+ */
+function openDefaultShop(event) {
+  if (event.handled) return false;
+  const key = `${event.npcId}:${event.clickType}`;
+  if (customBindings.has(key)) return false;
+  if (shared.has(key)) return tradeVersion(event);
+  const shopId = uniqueBindings.get(key);
+  return shopId === undefined ? false : openShop(event, shopId);
+}
+
+/** The cache's exact action label for an option, e.g. Lanthus's fourth click is "Trade". */
+function actionLabel(npcId, slot) {
+  const actions = pluginApi.core.NpcDefinition.forId(npcId).getActions();
+  const label = actions?.[slot - 1];
+  return typeof label === "string" && label.length > 0 ? label : null;
+}
+
+function attachShopkeepers(api) {
+  const defaults = defaultShopkeepers();
+  customBindings = customShopkeepers();
+  uniqueBindings = new Map([...defaults].filter(([, shopId]) => shopId !== null));
+  shared = sharedTraders();
+  for (const [key, shopId] of customBindings) {
+    const [npcId, slot] = key.split(":").map(Number);
+    api.registerNpcInteraction(npcId, { [CLICK_FIELDS[slot - 1]]: { shopId } });
+  }
+  const actions = {};
+  for (const key of defaults.keys()) {
+    if (customBindings.has(key)) continue;
+    const [npcId, slot] = key.split(":").map(Number);
+    const label = actionLabel(npcId, slot);
+    if (label) actions[label] = openDefaultShop;
+  }
+  api.onAnyNpcInteraction(actions);
+}
+
 module.exports = {
   name: "Shopkeepers",
   register(api) {
+    pluginApi = api;
     for (const itemId of ITEM_CURRENCIES) {
       api.registerItemShopCurrency(itemId, {
         aliases: ITEM_CURRENCY_ALIASES[itemId],
@@ -112,13 +219,12 @@ module.exports = {
     for (const name of POINT_CURRENCIES) {
       registerPointCurrency(api, name);
     }
-    for (const [key, shopId] of shopkeepers()) {
-      if (shopId === null) continue;
-      const [npcId, slot] = key.split(":").map(Number);
-      api.registerNpcInteraction(npcId, { [CLICK_FIELDS[slot - 1]]: { shopId } });
-    }
+    attachShopkeepers(api);
   },
   registerPointCurrency,
+  shopkeepers,
+  sharedTraders,
+  tradeVersion,
   ITEM_CURRENCIES,
   ITEM_CURRENCY_ALIASES,
   POINT_CURRENCIES,

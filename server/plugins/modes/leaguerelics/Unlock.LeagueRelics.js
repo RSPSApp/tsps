@@ -10,17 +10,59 @@ function uid(group, child) {
   return (group << 16) | child;
 }
 
+/**
+ * The tiers' picks, and Reloaded's: its extra pick in its tier's selection_other varbit, else (while
+ * it is unused) the repick varbits of the tiers it may come from, which client script 3697 reads to
+ * mark them (rec 1135).
+ */
 function sendSelections(player) {
   const sender = player.getPacketSender();
   const picks = Common.chosen(player);
   Common.data.selectionVarbits.forEach((varbit, tier) => sender.sendVarbit(varbit, picks[tier] | 0));
+  const type = Common.leagueOf(player);
+  const extra = Common.reloadedPick(player, type, picks) ? player.getAttribute(Common.RELOADED_ATTRIBUTE) : null;
+  Common.data.selectionOtherVarbits.forEach((varbit, tier) => sender.sendVarbit(varbit, extra?.tier === tier ? extra.slot : 0));
+  sendRepick(player, type, !extra && holdsReloaded(type, picks));
   sender.sendVarbit(Common.data.lastViewedVarbit, 0);
 }
 
-/** The items a relic hands out, by id (names the cache no longer has are skipped; the data says which). */
+/** Whether the picks hold Reloaded itself, in a league that has it. */
+function holdsReloaded(type, picks) {
+  const effect = Common.data.effects.reloaded;
+  if (!effect || ![].concat(effect.league).includes(type)) return false;
+  return Common.catalog(type).tiers.some((entry, index) => entry.relics[picks[index] - 1]?.key === effect.key);
+}
+
+/** The repick varbits: 1 for each tier Reloaded's extra pick may come from while `open`, else 0. */
+function sendRepick(player, type, open) {
+  const effect = Common.data.effects.reloaded;
+  const tiers = open ? Common.reloadedTiers(effect, type) : [];
+  const sender = player.getPacketSender();
+  Common.data.repickVarbits.forEach((varbit, tier) => sender.sendVarbit(varbit, tiers.includes(tier) ? 1 : 0));
+}
+
+/** The items a relic hands out, by id: a name (names the cache no longer has are skipped; the data says which) or a cache id. */
 function grantedItems(relic) {
   const { ItemIdentifiers } = Common.core;
-  return (relic.grants ?? []).map((name) => ItemIdentifiers[name]).filter((id) => Number.isInteger(id));
+  return (relic.grants ?? []).map((name) => (Number.isInteger(name) ? name : ItemIdentifiers[name])).filter((id) => Number.isInteger(id));
+}
+
+/**
+ * Where an item relic may be unlocked: with the bank open, or (a cache-read league with a `tutor`,
+ * Demonic Pacts) within a bank or near its Leagues Tutor, as live says (237/01102). "Within a bank"
+ * is a bank loc or banker within the tutor data's `bankReach` (LeagueMode's `league:near-bank`);
+ * `reach` and `bankReach` are ours.
+ */
+function mayReceiveItems(player, type, bankOpen) {
+  if (bankOpen) return true;
+  const tutor = Common.cacheLeague(type)?.tutor;
+  if (!tutor) return false;
+  const bank = { player, distance: tutor.bankReach, near: false };
+  Common.api.emitCustomEvent("league:near-bank", bank);
+  if (bank.near) return true;
+  const here = player.getLocation();
+  return (player.getLocalNpcs?.() ?? []).some((npc) => npc.getDefinition?.()?.getName?.() === tutor.name
+    && npc.getLocation().getZ() === here.getZ() && npc.getLocation().isWithinDistance(here, tutor.reach));
 }
 
 /** The bank tabs that hold items (the search tab holds none). */
@@ -89,7 +131,7 @@ function refusal(player, type, tier, slot, bankOpen) {
   if (!relic) return "noSuchRelic";
   if (Common.chosen(player)[tier] !== undefined) return "alreadyChosen";
   if (Common.points(player) < Common.catalog(type).tiers[tier].cost) return "notEnoughPoints";
-  if (relic.requiresBank && grantedItems(relic).length > 0 && !bankOpen) return "needsBank";
+  if (relic.requiresBank && grantedItems(relic).length > 0 && !mayReceiveItems(player, type, bankOpen)) return "needsBank";
   if (!canDeliver(player, relic)) return "noRoom";
   return null;
 }
@@ -102,12 +144,45 @@ function grant(player, relic) {
   }
 }
 
-/** The captured unlock: the tier's selection varbit, the animation, the league's graphic, the modal closed, four sounds. */
-function present(player, type, tier) {
+/**
+ * What a cache-read league says after an unlock, as captured (237/01098): "Congratulations, you've
+ * unlocked a new Relic: ..." and, for each item it gave, the item box "You receive an Evil eye.".
+ */
+function announce(player, type, relic) {
+  const own = Common.cacheLeague(type)?.messages;
+  if (!own?.unlocked) return;
+  player.sendMessage(Common.message("unlocked", { relic: relic.name }, type));
+  const { ItemStatementDialogue, DialogueChainBuilder, ItemDefinition } = Common.core;
+  const items = grantedItems(relic);
+  if (items.length === 0 || !ItemStatementDialogue || !DialogueChainBuilder) return;
+  const chain = new DialogueChainBuilder();
+  items.forEach((id, index) => {
+    const name = ItemDefinition.forId(id)?.getName?.() ?? "";
+    const item = `${/^[aeiou]/i.test(name) ? "an" : "a"} ${name}`;
+    chain.add(new ItemStatementDialogue(index, id, Common.message("received", { item }, type)));
+  });
+  player.getDialogueManager?.()?.startDialogues?.(chain);
+}
+
+/**
+ * Reloaded just chosen (rec 1135): after the congratulations, "You can now pick another relic below
+ * tier seven!" and the repick varbits of the tiers its extra pick may come from set to 1.
+ */
+function offerRepick(player, type, tier) {
+  player.sendMessage(Common.message("reloadedRepick", { tier: tier + 1 }, type));
+  sendRepick(player, type, true);
+}
+
+/**
+ * The captured unlock: the selection varbit (the tier's, or for Reloaded's extra pick the tier's
+ * selection_other, rec 1135) set to the slot, the animation, the league's graphic, the modal
+ * closed, four sounds.
+ */
+function present(player, type, varbit, slot) {
   const { Animation, Graphic } = Common.core;
-  const { interface: ui, selectionVarbits } = Common.data;
+  const { interface: ui } = Common.data;
   const sender = player.getPacketSender();
-  sender.sendVarbit(selectionVarbits[tier], Common.chosen(player)[tier]);
+  sender.sendVarbit(varbit, slot);
   player.performAnimation(new Animation(ui.unlockAnimation));
   player.performGraphic(new Graphic(Common.league(type).unlockSpotanim, 0, ui.unlockGraphicHeight));
   sender.sendInterfaceRemoval();
@@ -128,13 +203,12 @@ function present(player, type, tier) {
 function reloadedRefusal(player, type, tier, slot, bankOpen) {
   const effect = Common.data.effects.reloaded;
   const picks = Common.chosen(player);
-  if (!effect || ![].concat(effect.league).includes(type) || picks[tier] === undefined) return null;
-  const holds = Common.catalog(type).tiers.some((entry, index) => entry.relics[picks[index] - 1]?.key === effect.key);
-  if (!holds || !effect.tiers.includes(tier) || player.getAttribute(Common.RELOADED_ATTRIBUTE)) return null;
+  if (picks[tier] === undefined || !holdsReloaded(type, picks)) return null;
+  if (!Common.reloadedTiers(effect, type).includes(tier) || player.getAttribute(Common.RELOADED_ATTRIBUTE)) return null;
   const relic = Common.relic(type, tier, slot);
   if (!relic) return "noSuchRelic";
   if (picks[tier] === slot) return "alreadyChosen";
-  if (relic.requiresBank && grantedItems(relic).length > 0 && !bankOpen) return "needsBank";
+  if (relic.requiresBank && grantedItems(relic).length > 0 && !mayReceiveItems(player, type, bankOpen)) return "needsBank";
   if (!canDeliver(player, relic)) return "noRoom";
   return "";
 }
@@ -144,26 +218,31 @@ function unlock(player, tier, slot, { bankOpen = Common.core.Bank.isOpen(player)
   const reloaded = reloadedRefusal(player, type, tier, slot, bankOpen);
   if (reloaded !== null) {
     if (reloaded) {
-      player.sendMessage(Common.message(reloaded));
+      player.sendMessage(Common.message(reloaded, {}, type));
       return false;
     }
+    // Live (rec 1135): the tier's selection_other set to the slot, the usual congratulations, the
+    // repick varbits cleared; the tier's own pick stays as it is.
     const extra = Common.relic(type, tier, slot);
     player.setAttribute(Common.RELOADED_ATTRIBUTE, { tier, slot });
-    present(player, type, tier);
+    present(player, type, Common.data.selectionOtherVarbits[tier], slot);
     grant(player, extra);
-    player.sendMessage(Common.message("reloadedChosen", { relic: extra.name }));
+    announce(player, type, extra);
+    sendRepick(player, type, false);
     Common.api.emitCustomEvent("league:relic-unlocked", { player, league: type, tier, slot, relic: extra.key, reloaded: true });
     return true;
   }
   const why = refusal(player, type, tier, slot, bankOpen);
   if (why) {
-    player.sendMessage(Common.message(why));
+    player.sendMessage(Common.message(why, {}, type));
     return false;
   }
   const relic = Common.relic(type, tier, slot);
   player.setAttribute(Common.RELICS_ATTRIBUTE, { ...Common.chosen(player), [tier]: slot });
-  present(player, type, tier);
+  present(player, type, Common.data.selectionVarbits[tier], slot);
   grant(player, relic);
+  announce(player, type, relic);
+  if (relic.key === Common.data.effects.reloaded?.key && holdsReloaded(type, Common.chosen(player))) offerRepick(player, type, tier);
   Common.api.emitCustomEvent("league:relic-unlocked", { player, league: type, tier, slot, relic: relic.key });
   return true;
 }
@@ -212,6 +291,18 @@ function answerRelics(query) {
   query.extra = type !== null && Common.reloadedPick(query.player) ? { ...query.player.getAttribute(Common.RELOADED_ATTRIBUTE) } : null;
 }
 
+/**
+ * Developer (`::relic reset`): no relics, Reloaded's extra pick forgotten, the selection varbits
+ * cleared, and `league:relics-reset` { player, league } for the effects that keep state (Abundance's
+ * boost). The relics' items stay where they are.
+ */
+function reset(player) {
+  player.setAttribute(Common.RELICS_ATTRIBUTE, {});
+  player.setAttribute(Common.RELOADED_ATTRIBUTE, null);
+  sendSelections(player);
+  Common.api.emitCustomEvent("league:relics-reset", { player, league: Common.leagueOf(player) });
+}
+
 module.exports = function attach(api) {
   api.persistAttribute(Common.RELICS_ATTRIBUTE, {});
   api.persistAttribute(Common.RELOADED_ATTRIBUTE, null);
@@ -223,5 +314,8 @@ module.exports = function attach(api) {
 };
 
 module.exports.unlock = unlock;
+module.exports.reset = reset;
 module.exports.refusal = refusal;
+module.exports.reloadedRefusal = reloadedRefusal;
 module.exports.uid = uid;
+module.exports.grantedItems = grantedItems;

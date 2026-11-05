@@ -1,6 +1,6 @@
 # Setup Guide
 
-Get xRSPS running locally in a few minutes.
+Get TSPS running locally.
 
 The repository contains **`client/`**, **`server/`**, and **`docs/`** packages. The root commands install and run the server and client for you.
 
@@ -9,7 +9,7 @@ The repository contains **`client/`**, **`server/`**, and **`docs/`** packages. 
 | Tool                                                | Version      | Why                                |
 | --------------------------------------------------- | ------------ | ---------------------------------- |
 | [Node.js](https://nodejs.org/)                      | v22.16+      | Runtime for both client and server |
-| [Yarn](https://classic.yarnpkg.com/en/docs/install) | v1 (Classic) | Package manager                    |
+| [Yarn](https://yarnpkg.com/) | 4.12.0 | Run the development commands below |
 | [Git](https://git-scm.com/)                         | Any recent   | Clone the repo                     |
 
 ::: tip Node Version
@@ -25,19 +25,21 @@ nvm use 22
 ## 1. Clone the Repository
 
 ```bash
-git clone https://github.com/xrsps/xrsps-typescript.git
-cd xrsps-typescript
+git clone https://github.com/RSPSApp/tsps.git
+cd tsps
 ```
 
 ## 2. Set Up the Server and Client
 
 ```bash
-yarn setup
+npm run setup
 ```
 
-This installs the root command runner, server dependencies, and client dependencies, downloads the required OSRS cache, then builds the collision cache.
+This installs the root command runner, server dependencies, and client dependencies using the pinned Yarn 4.12.0 through `npm exec`. Setup itself does not require a separate Yarn or Corepack installation. It does not download the game cache or build collision data.
 
 ## 3. Start the Server and Client
+
+The commands in this section require `yarn` on your PATH. Use Yarn 4.12.0, as pinned in the package manifests; `npm run setup` does not install a global `yarn` executable. Check `yarn --version` before continuing.
 
 ```bash
 yarn start
@@ -57,9 +59,7 @@ To start only the web client:
 yarn client
 ```
 
-::: info
-The collision build can take a few minutes during the initial `yarn setup`. It reads the game cache and writes collision data to `server/cache/collision/`.
-:::
+The first start downloads the game cache to `server/caches/` if needed. This can take time depending on your connection. The server indexes cache regions at startup and loads their terrain and collision as regions are needed; there is no separate collision-build command.
 
 ## Server Startup
 
@@ -67,19 +67,9 @@ The server will:
 
 1. Automatically download the OSRS cache if it hasn't been fetched yet (`server/caches/`)
 2. Load collision data, spells, and game scripts
-3. Start a WebSocket server on `0.0.0.0:43594`
+3. Start a WebSocket server (port `43594` by default, configured by `WEBSOCKET_PORT`)
 
 You should see log output confirming the server is ready.
-
-By default, the server runs the **vanilla** gamemode. To run a different gamemode:
-
-```bash
-# Environment variable
-GAMEMODE=leagues-v yarn start
-
-# Or set it in server/config.json
-{ "gamemode": "leagues-v" }
-```
 
 ## Client Startup
 
@@ -87,20 +77,7 @@ This launches the React dev server (usually on `http://localhost:3000`). Your br
 
 ## You're In
 
-Log in with a username and a password of 8 to 20 characters. The first successful login registers that username; later logins must use the same password.
-
-### Account registration and legacy characters
-
-New account registration is enabled by default. Set `ALLOW_ACCOUNT_REGISTRATION=false` when you want to stop new usernames from being registered.
-
-When upgrading a server that already has `player-state.json` character saves but no account passwords, temporarily start the server with:
-
-```bash
-cd server
-ALLOW_LEGACY_ACCOUNT_CLAIM=true yarn start
-```
-
-This lets each legacy username assign a password on its next login. Disable the option again after the migration window so another person cannot claim an unclaimed character name. Existing `accounts.json` password hashes are imported automatically and do not require this option.
+In the web client, log in with an available username and a password of 8 to 20 characters. The first successful login creates the account; later password logins must use its current password.
 
 ---
 
@@ -114,13 +91,9 @@ The cache is downloaded from the [OpenRS2 Archive](https://archive.openrs2.org/)
 - Delete the `server/caches/` folder and try again
 - The target cache version is defined in `server/target.txt`
 
-### `yarn build-collision` is slow
-
-This is expected on first run. Subsequent runs are fast because results are cached in `server/cache/collision/`.
-
 ### Port 43594 already in use
 
-Another instance of the server is likely running. Kill it or change the port in the server config.
+Check whether another instance is using the port. For multiple local branches, follow the [worktree guide](./worktrees.md) so the server and client use matching, separate ports.
 
 ### Client shows a blank screen
 
@@ -140,14 +113,14 @@ node -v
 
 ## Useful Commands
 
-Run the first three commands from the repository root. Package-specific maintenance commands can still be run from their package directory.
+Run these commands from the repository root. The Yarn commands require Yarn 4.12.0 on your PATH.
 
 | Command | Description |
 | ------- | ----------- |
-| `yarn setup` | Install the server and client and build collision data |
+| `npm run setup` | Install root, server and client dependencies using pinned Yarn |
 | `yarn start` | Start the game server and web client together |
 | `yarn server` | Start only the game server |
 | `yarn client` | Start only the web client |
-| `cd server && yarn ensure-cache` | Manually download the OSRS cache |
-| `cd client && yarn typecheck` | Typecheck the client |
-| `cd server && yarn typecheck` | Typecheck the server |
+| `yarn --cwd server ensure-cache` | Download the OSRS cache if needed |
+| `yarn --cwd client typecheck` | Typecheck the client |
+| `yarn --cwd server build` | Compile the server TypeScript |

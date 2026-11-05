@@ -57,6 +57,27 @@ function refusal(player) {
   return null;
 }
 
+/**
+ * Capture 1840: the barrier becomes gotr_barrier_noentry when the rift closes and goes back when
+ * the Portal Guardians close theirs.
+ */
+function setBarrierLoc(name) {
+  const { GameObject, ObjectManager } = Shared.core();
+  if (shownBarrier) ObjectManager.deregister(shownBarrier, true);
+  shownBarrier = new GameObject(Shared.loc(name), Shared.location({ x: 3613, y: 9483 }), 10, 0, null);
+  ObjectManager.register(shownBarrier, true);
+}
+
+function gameEnded() {
+  setBarrierLoc(Shared.LOC.BARRIER_FINISHING);
+}
+
+function riftsClosed() {
+  setBarrierLoc(Shared.LOC.BARRIER);
+}
+
+let shownBarrier = null;
+
 const BARRIERS = [Shared.LOC.BARRIER, Shared.LOC.BARRIER_CLOSED, Shared.LOC.BARRIER_FINISHING];
 
 function pass({ player, objectId }) {
@@ -108,6 +129,8 @@ function visualEffects({ player, objectId }) {
 
 module.exports = {
   attach(api) {
+    Game.on("ended", gameEnded);
+    Game.on("rifts-closed", riftsClosed);
     api.onObjectInteraction("Barrier", { Pass: pass, Peek: peek, "Quick-pass": pass, "Visual-effects": visualEffects });
   },
 };

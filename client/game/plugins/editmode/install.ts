@@ -44,21 +44,10 @@ import {
     type NpcSpawnRecord,
 } from "./hostProtocol/npcSpawnMessage";
 import {
-    NPC_INTERACTIONS_MESSAGE,
-    NPC_INTERACTIONS_REQUEST_MESSAGE,
-    type NpcInteractionsMessage,
-} from "./hostProtocol/npcInteractionsMessage";
-import { getNpcMenuOptions } from "../../menu/WorldMenuBuilder";
-import {
     WORLD_DEFINITION_MESSAGE,
     WORLD_DEFINITION_REQUEST_MESSAGE,
     type WorldDefinitionMessage,
 } from "./hostProtocol/worldDefinitionMessage";
-import {
-    SHOP_DEFINITIONS_MESSAGE,
-    SHOP_DEFINITIONS_REQUEST_MESSAGE,
-    type ShopDefinitionsMessage,
-} from "./hostProtocol/shopsMessage";
 import type { OsrsClient } from "../../OsrsClient";
 import { createBrowserEditModePluginPersistence } from "./BrowserEditModePluginPersistence";
 import { detectRectangularBuilding, type DetectedBuilding } from "./BuildingDetector";
@@ -77,7 +66,7 @@ import {
     type LocPlacementPreviewRenderer,
 } from "./LocPlacementPreviewOverlay";
 import { ModelImageCaptureOverlay } from "./ModelImageCaptureOverlay";
-import { buildAreaClipboard, buildRegionPack, parseRegionPack, buildObjectSpawnExport, objectSpawnEdits } from "./RegionPack";
+import { buildAreaClipboard, buildRegionPack, parseRegionPack, buildObjectSpawnExport, objectSpawnEdits, readRegionOverlays } from "./RegionPack";
 import {
     ZoneGroundOverlay,
     type ZoneGroundRect,
@@ -88,8 +77,6 @@ import type {
     EditModeEdit,
     EditModeSearchKind,
     EditModeSearchResult,
-    EditModeNpcInteractions,
-    EditModeShop,
     EditModeTile,
     EditModeWorldDefinition,
     EditModeWorldZone,
@@ -409,99 +396,6 @@ export function requestBrowserHostWorldDefinition(): Promise<EditModeWorldDefini
     });
 }
 
-export function parseBrowserHostShops(contents: string): EditModeShop[] {
-    const parsed: unknown = JSON.parse(contents);
-    if (!Array.isArray(parsed)) throw new Error("Browser host provided invalid shops.json");
-    return parsed.map((value, index) => {
-        if (!value || Array.isArray(value) || typeof value !== "object") {
-            throw new Error(`Shop ${index + 1} is invalid`);
-        }
-        const row = value as Record<string, unknown>;
-        const id = Number(row.id);
-        if (!Number.isInteger(id) || id < 0 || typeof row.name !== "string" || !Array.isArray(row.originalStock)) {
-            throw new Error(`Shop ${index + 1} is invalid`);
-        }
-        const originalStock = row.originalStock.map((entry, stockIndex) => {
-            if (!entry || Array.isArray(entry) || typeof entry !== "object") {
-                throw new Error(`Shop ${id} stock ${stockIndex + 1} is invalid`);
-            }
-            const stock = entry as Record<string, unknown>;
-            const itemId = Number(stock.id);
-            const amount = Number(stock.amount);
-            if (!Number.isInteger(itemId) || itemId <= 0 || !Number.isInteger(amount) || amount <= 0 || amount > 0x7fffffff) {
-                throw new Error(`Shop ${id} stock ${stockIndex + 1} is invalid`);
-            }
-            return { ...stock, id: itemId, amount };
-        });
-        return { ...row, id, name: row.name, originalStock };
-    });
-}
-
-export function parseBrowserHostNpcInteractions(contents: string): EditModeNpcInteractions {
-    const parsed: unknown = JSON.parse(contents);
-    if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") {
-        throw new Error("Browser host provided invalid npc-interactions.json");
-    }
-    for (const [npcId, interactions] of Object.entries(parsed)) {
-        if (!Number.isInteger(Number(npcId)) || Number(npcId) < 0 || !interactions || Array.isArray(interactions) || typeof interactions !== "object") {
-            throw new Error("Browser host provided invalid npc-interactions.json");
-        }
-    }
-    return parsed as EditModeNpcInteractions;
-}
-
-function requestBrowserHostShops(): Promise<EditModeShop[]> {
-    const host = browserHostWindow();
-    if (!host) return Promise.reject(new Error("Browser host is unavailable"));
-    const hostOrigin = browserHostOrigin();
-    return new Promise((resolve, reject) => {
-        const timeout = window.setTimeout(() => {
-            window.removeEventListener("message", onMessage);
-            reject(new Error("Browser host did not provide shops"));
-        }, 10_000);
-        const onMessage = (event: MessageEvent) => {
-            if (event.origin !== hostOrigin || event.source !== host) return;
-            const message = event.data as ShopDefinitionsMessage | undefined;
-            if (message?.type !== SHOP_DEFINITIONS_MESSAGE || typeof message.contents !== "string") return;
-            window.clearTimeout(timeout);
-            window.removeEventListener("message", onMessage);
-            try {
-                resolve(parseBrowserHostShops(message.contents));
-            } catch (error) {
-                reject(error);
-            }
-        };
-        window.addEventListener("message", onMessage);
-        host.postMessage({ type: SHOP_DEFINITIONS_REQUEST_MESSAGE }, hostOrigin);
-    });
-}
-
-function requestBrowserHostNpcInteractions(): Promise<EditModeNpcInteractions> {
-    const host = browserHostWindow();
-    if (!host) return Promise.reject(new Error("Browser host is unavailable"));
-    const hostOrigin = browserHostOrigin();
-    return new Promise((resolve, reject) => {
-        const timeout = window.setTimeout(() => {
-            window.removeEventListener("message", onMessage);
-            reject(new Error("Browser host did not provide NPC interactions"));
-        }, 10_000);
-        const onMessage = (event: MessageEvent) => {
-            if (event.origin !== hostOrigin || event.source !== host) return;
-            const message = event.data as NpcInteractionsMessage | undefined;
-            if (message?.type !== NPC_INTERACTIONS_MESSAGE || typeof message.contents !== "string") return;
-            window.clearTimeout(timeout);
-            window.removeEventListener("message", onMessage);
-            try {
-                resolve(parseBrowserHostNpcInteractions(message.contents));
-            } catch (error) {
-                reject(error);
-            }
-        };
-        window.addEventListener("message", onMessage);
-        host.postMessage({ type: NPC_INTERACTIONS_REQUEST_MESSAGE }, hostOrigin);
-    });
-}
-
 async function loadLocalEditorData(resource = ""): Promise<string> {
     const base = getContentApiBase();
     if (!base) throw new Error("Connect to a local development server to load editor data");
@@ -596,6 +490,8 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
     let zoneGroundOverlay: Pick<ZoneGroundOverlay, "setRects" | "invalidate"> | undefined;
     let zoneGroundManager: TerrainHost["overlayManager"];
     const editorRegionReplacements = new Map<number, EditorRegionReplacement>();
+    // Suppressions each editor delete created, so undo removes only its own.
+    const deletedLocOverrides = new Map<string, string[]>();
     let objectSpawns: ObjectSpawn[] | undefined = browserHostWindow() ? undefined : [];
     let objectSpawnPreviewPending = false;
     // Persisted NPC spawns are loaded per region in both modes: the browser
@@ -1818,7 +1714,23 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
         onLocDel: (tile, level, shape, rotation) => {
             const renderer = terrainHost(client);
             renderer?.pendingLocUpdates?.add(renderer.getMapIdForWorldTile(tile.x, tile.y));
+            const overrides = locOverrideStore(client);
+            const before = new Set(overrides?.keys());
             client.onLocDel(tile, level, shape, rotation);
+            const added = [...(overrides?.keys() ?? [])].filter((key) => !before.has(key));
+            if (added.length === 0) return;
+            const slot = `${tile.x},${tile.y},${level},${shape},${rotation}`;
+            deletedLocOverrides.set(slot, [...(deletedLocOverrides.get(slot) ?? []), ...added]);
+        },
+        restoreLoc: (tile, level, shape, rotation) => {
+            const renderer = terrainHost(client);
+            const slot = `${tile.x},${tile.y},${level},${shape},${rotation}`;
+            const keys = deletedLocOverrides.get(slot);
+            if (!renderer || !keys) return;
+            deletedLocOverrides.delete(slot);
+            const overrides = locOverrideStore(client);
+            for (const key of keys) overrides?.delete(key);
+            reloadTile(renderer, { tileX: tile.x, tileY: tile.y, plane: level });
         },
         getLocPlacementShape: (locId) => {
             const base = client.locTypeLoader.load(locId);
@@ -1839,13 +1751,7 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
             return filterIndex(await getNameIndex(kind, loader), query);
         },
         describeDefinition: (kind, id) => describeDefinition(client, kind, id),
-        loadShops: () => browserHostWindow() ? requestBrowserHostShops() : loadLocalEditorData("shops").then(parseBrowserHostShops),
-        loadNpcInteractions: () => browserHostWindow() ? requestBrowserHostNpcInteractions() : loadLocalEditorData("npc-interactions").then(parseBrowserHostNpcInteractions),
         loadPersistedNpcSpawnEdits,
-        getNpcMenuOptions: (npcTypeId) => {
-            const npc = client.npcTypeLoader?.load(npcTypeId);
-            return npc ? getNpcMenuOptions(npc) : [];
-        },
         isWaterOverlay: (id) => {
             const overlay = id > 0 ? client.loaderFactory?.getOverlayTypeLoader?.().load(id - 1) : undefined;
             return !!overlay && overlay.textureId !== 91 && isKnownWaterTextureId(overlay.textureId);
@@ -1948,8 +1854,19 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
         copyArea: (bounds, edits) => buildAreaClipboard(
             bounds,
             (tileX, tileY) => buildEditorRegionPack(client, { tileX, tileY, plane: 0 }, sceneEdits(edits), editorRegionReplacements).data,
-            client.loadedCache?.info.game === "oldschool" && (client.loadedCache?.info.revision ?? 0) >= 209,
+            hasWideTerrain(client),
         ),
+        getRegionOverlays: (regionId, edits) => {
+            try {
+                // Objects play no part in overlays, so their edits are left out of the pack.
+                const pack = buildEditorRegionPack(client, {
+                    tileX: (regionId >> 8) << 6, tileY: (regionId & 0xff) << 6, plane: 0,
+                }, edits, editorRegionReplacements, false);
+                return readRegionOverlays(parseRegionPack(pack.data).terrainData, hasWideTerrain(client));
+            } catch {
+                return undefined;
+            }
+        },
         markMapEditsSaved: (packs, spawns) => {
             for (const pack of packs) {
                 const parsed = parseRegionPack(pack.data);
@@ -2287,10 +2204,20 @@ function terrainHost(client: OsrsClient): TerrainHost | undefined {
     return renderer && renderer.terrainOverrides ? renderer : undefined;
 }
 
+/** Held by the renderer itself in both backends; WebGPU's interactionHost does not have it. */
+function locOverrideStore(client: OsrsClient): Map<string, unknown> | undefined {
+    return (client.renderer as unknown as { locOverrides?: Map<string, unknown> }).locOverrides;
+}
+
 function reloadTile(renderer: TerrainHost, tile: EditModeTile): void {
     const mapId = renderer.getMapIdForWorldTile(tile.tileX, tile.tileY);
     renderer.pendingLocUpdates?.add(mapId);
     renderer.scheduleLocReload(mapId >> 8, mapId & 0xff);
+}
+
+/** Revision 209 widened terrain values to two bytes. */
+function hasWideTerrain(client: OsrsClient): boolean {
+    return client.loadedCache?.info.game === "oldschool" && (client.loadedCache?.info.revision ?? 0) >= 209;
 }
 
 function buildEditorRegionPack(
@@ -2322,8 +2249,7 @@ function buildEditorRegionPack(
             objectData,
             terrainData,
             edits,
-            client.loadedCache?.info.game === "oldschool" &&
-                (client.loadedCache?.info.revision ?? 0) >= 209,
+            hasWideTerrain(client),
             includeObjectEdits,
         ),
     };

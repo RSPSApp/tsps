@@ -2,6 +2,7 @@ package gateway.down
 
 import gateway.tsps.TspsPacket
 import gateway.tsps.TspsServerPacket
+import net.rsprot.protocol.game.outgoing.clan.MessageClanChannel
 import net.rsprot.protocol.game.outgoing.friendchat.MessageFriendChannel
 import net.rsprot.protocol.game.outgoing.friendchat.UpdateFriendChatChannelFull.FriendChatEntry
 import net.rsprot.protocol.game.outgoing.friendchat.UpdateFriendChatChannelFullV2
@@ -17,6 +18,11 @@ import net.rsprot.protocol.message.OutgoingGameMessage
 /**
  * Friends, ignores and the friends chat. tsps sends all three as one full snapshot on every
  * change; OSRS has a packet for each, and the friends chat only needs sending when it changed.
+ *
+ * An entry's first byte (rsprot's `added`) is the rename flag: with it set, the client finds the
+ * entry under its previous name and renames it, instead of adding a second one beside it. tsps
+ * sends a previous name only while a renamed player's old display name is still held for them, so
+ * the flag is set exactly when there is one.
  */
 class Social(private val send: (OutgoingGameMessage) -> Unit) {
     private var loaded = false
@@ -57,12 +63,17 @@ class Social(private val send: (OutgoingGameMessage) -> Unit) {
                         val rank = reader.u8()
                         val online = reader.u8() != 0
                         if (online) {
-                            UpdateFriendList.OnlineFriend(false, name, previous, world, rank, 0, "", WORLD_NAME, 0, 0)
+                            UpdateFriendList.OnlineFriend(previous != null, name, previous, world, rank, 0, "", WORLD_NAME, 0, 0)
                         } else {
-                            UpdateFriendList.OfflineFriend(false, name, previous, rank, 0, "")
+                            UpdateFriendList.OfflineFriend(previous != null, name, previous, rank, 0, "")
                         }
                     }
-                val ignores = List(reader.u16()) { UpdateIgnoreList.AddedIgnoredEntry(reader.string(), reader.string().ifEmpty { null }, "", false) }
+                val ignores =
+                    List(reader.u16()) {
+                        val name = reader.string()
+                        val previous = reader.string().ifEmpty { null }
+                        UpdateIgnoreList.AddedIgnoredEntry(name, previous, "", previous != null)
+                    }
                 send(UpdateFriendList(friends))
                 send(UpdateIgnoreList(ignores))
                 if (!loaded) {
@@ -82,13 +93,15 @@ class Social(private val send: (OutgoingGameMessage) -> Unit) {
         return true
     }
 
-    /** Private and friends-chat lines from CHAT_MESSAGE; false when [chat] is neither. */
+    /** Private, friends-chat and clan lines from CHAT_MESSAGE; false when [chat] is none of them. */
     fun chat(chat: TspsChatMessage): Boolean {
         val name = chat.from.replace(ICON, "")
         when (chat.type) {
             PRIVATE_IN -> send(MessagePrivate(name, WORLD, ++messageCounter, chat.modIcon, chat.text))
             PRIVATE_OUT -> send(MessagePrivateEcho(name, chat.text))
             FRIENDS_CHAT -> send(MessageFriendChannel(name, chat.prefix, WORLD, ++messageCounter, chat.modIcon, chat.text))
+            CLAN_CHAT -> send(MessageClanChannel(OWN_CLAN, name, WORLD, ++messageCounter, chat.modIcon, chat.text))
+            GUEST_CLAN_CHAT -> send(MessageClanChannel(GUEST_CLAN, name, WORLD, ++messageCounter, chat.modIcon, chat.text))
             else -> return false
         }
         return true
@@ -98,6 +111,10 @@ class Social(private val send: (OutgoingGameMessage) -> Unit) {
         const val PRIVATE_IN = 3
         const val PRIVATE_OUT = 6
         const val FRIENDS_CHAT = 9
+        const val CLAN_CHAT = 41
+        const val GUEST_CLAN_CHAT = 44
+        const val OWN_CLAN = 0
+        const val GUEST_CLAN = -1
         const val WORLD = 1
         const val WORLD_NAME = "tsps"
         val ICON = Regex("""<img=\d+>""")

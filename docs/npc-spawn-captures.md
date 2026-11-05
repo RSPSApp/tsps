@@ -14,7 +14,8 @@ Each **site** is one NPC at one place, gathered across recordings from the game'
 - **`watched`:** how often it was in view for 20+ ticks without engaging a player.
 - **`still_share`:** how often it never left its tile.
 - **`facing`, `facing_share`:** the direction it stood facing, and how many sightings agree.
-- **`labels`:** followers, roaming NPCs, props, instances and special-world-only NPCs. These are never used to change a spawn.
+- **`range_p90`:** how far from the site 90% of its sightings were, in tiles (the larger axis).
+- **`labels`:** followers, roaming NPCs, props, instances and special-world-only NPCs. These are never used to change a spawn, except `unnamed`, which only says the NPC is a nameless multinpc parent (Aubury's `aubury_3op`).
 
 The file holds NPC data only, no player names.
 
@@ -30,7 +31,9 @@ yarn refine:npc-spawns --sites npc-sites.json --write   # change it
 2. **Stand still:** when the NPC stood still in at least 90% of 3+ watched sightings, the spawn gets `wanderRadius: 0`.
 3. **Facing:** when, standing still, more than half of the sightings agree on a facing that differs from what the spawn gets now (its own `direction`, else south, the default), the spawn gets that `direction`. A majority is enough because NPCs that serve players turn towards them, so sightings catch them turned: the Grand Exchange's north clerks face north in only 61–65% of them, and its west banker faces west in 79%.
 
-Options: `--min-watched`, `--min-facing` (default 0.5), `--reach`, `--only still|facing`, and `--spawns <file>` to refine another copy of the spawn file.
+4. **Wander range:** an NPC that walks and can't be attacked (no form offers Attack) gets its `range_p90` as `wanderRadius`, at least 1, when that's less than what it has now (the loader's default is 5). A monster's sightings include chasing players, so they don't measure its wander; and no radius is widened.
+
+Options: `--min-watched`, `--min-facing` (default 0.5), `--reach`, `--only still|facing|wander`, and `--spawns <file>` to refine another copy of the spawn file.
 
 **Directions** are in the spawn numbering, counted from south-west: 0 south-west, 1 south, 2 south-east, 3 west, 4 east, 5 north-west, 6 north, 7 north-east.
 
@@ -58,6 +61,10 @@ The soldiers drilling in Shayzien (the cache's `shayzien_exercise_*` NPCs) now s
 - **Why by hand:** the capture index counts an NPC facing another NPC as engaged, and drilling soldiers face whoever leads the drill. So it has no usable sightings of them, and `refine:npc-spawns` leaves them alone; a rerun doesn't undo this.
 - **The drilling itself** (the punches and kicks) is ambient behaviour, for a later feature.
 
+## Wander ranges
+
+Issue #1706: the Blue Moon Inn's bartender and Aubury walked out from behind the counter and out of the shop, on the default `wanderRadius` 5. Live they stay within 2 and 3 tiles (44 and 32 recordings). The wander step (4 above) ran with `--only wander` on 4,282 recordings: **1,598 spawns** got a tighter radius, all NPCs that can't be attacked: shopkeepers and bartenders, citizens, workers, squires, Trader Crewmembers, butterflies, sheep and so on. A second run changes nothing.
+
 **Not done yet:**
-- **measured wander radii** for NPCs that do wander (most roam 2–6 tiles; only clear differences from today's value would be worth a change);
+- **wander ranges for monsters**, which need sightings that leave out their fights;
 - **ambient lines and animations**, which need a small feature to play them.

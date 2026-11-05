@@ -8,6 +8,9 @@ import type { EnumTypeLoader } from "../../rs/config/enumtype/EnumTypeLoader";
  * mount table for every layout.
  */
 export const STANDARD_GAMEFRAME_ROOT = 161;
+/** Standard (161) children: the panes OSRS closes when you click outside them. */
+export const MAIN_MODAL_CHILD = 16;
+export const SIDE_MODAL_CHILD = 74;
 /** Stock mobile toplevel (toplevel_osm); see MOBILE_GAMEFRAME_ROOT on the server. */
 const MOBILE_GAMEFRAME_ROOT = 601;
 
@@ -67,4 +70,17 @@ export function loadGameframePaneRedirect(
         return undefined;
     }
     return root === MOBILE_GAMEFRAME_ROOT ? applyMobilePaneFallback(redirect) : redirect;
+}
+
+/**
+ * A main or side modal, which OSRS closes when a world click lands outside the
+ * mounted interface and still lets that click walk/interact. Chatbox modals
+ * (dialogues) and overlays keep blocking input instead.
+ */
+export function isCloseOnOutsideClickModalTarget(standardTargetUid: number, type: number): boolean {
+    const parentType = type | 0;
+    if (parentType !== 0 && parentType !== 3) return false;
+    if (((standardTargetUid >>> 16) & 0xffff) !== STANDARD_GAMEFRAME_ROOT) return false;
+    const child = standardTargetUid & 0xffff;
+    return child === MAIN_MODAL_CHILD || child === SIDE_MODAL_CHILD;
 }

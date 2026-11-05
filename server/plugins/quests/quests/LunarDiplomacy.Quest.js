@@ -68,9 +68,9 @@
  *  - The Pirate's Cove jinx symbols can be rubbed from any cannon/wallchart/chest/
  *    support/crate on either ship deck, one symbol per object; the wiki's exact
  *    five tiles are not enforced.
- *  - The "no Seal of Passage" teleport-off-Lunar-Isle rule, the boat cutscenes,
- *    the town-entry cutscene and the Astral Altar permission messages are not
- *    played.
+ *  - The "no Seal of Passage" teleport-off-Lunar-Isle rule, the boat cutscenes and
+ *    the town-entry cutscene are not played. The Astral Altar's permission
+ *    refusals and its post-quest Lunar/Standard spellbook toggle are handled.
  *  - Crew members the wiki gives no "before setting sail" variant fall back to
  *    their "after sailing in a circle" lines while the ship is still at
  *    Pirates' Cove.
@@ -82,20 +82,30 @@
  */
 module.exports = function registerLunarDiplomacyQuest(api) {
   const {
+    Animation,
     Equipment,
     ItemDefinition,
     ItemIdentifiers,
     Location,
+    MagicSpellbook,
     NpcIdentifiers,
     ObjectDefinition,
     ObjectIdentifiers,
     RegionManager,
     Skill,
+    Sound,
+    Sounds,
   } = api.core;
   const { registerQuest, startTranscript, loadTranscripts } = require("../QuestRuntime");
 
   const PAGE = "Lunar Diplomacy";
   const START_HOOK = "quest:lunar-diplomacy:start";
+  const PRAY_AT_ALTAR_ANIMATION = new Animation(645);
+  const LUNAR_SPELLS_ACTIVATED = "Lunar spells activated!";
+  const LUNAR_SPELLS_DEACTIVATED = "Lunar spells deactivated!";
+  // npc-drops.json gates A special tiara on this Wiki quest condition. The row is
+  // only eligible after Meteora has explained her headgear.
+  const TIARA_DROP_QUEST_KEY = "quest_lunardiplomacyafteraskingmeteoraaboutherheadgear";
 
   // ==========================================================================
   // Stages and varbits
@@ -243,6 +253,15 @@ module.exports = function registerLunarDiplomacyQuest(api) {
   const ETHEREAL_FLUKE_ID = NpcIdentifiers.ETHEREAL_FLUKE; // 783
   const ETHEREAL_MIMIC_ID = NpcIdentifiers.ETHEREAL_MIMIC; // 784
   const ME_IDS = new Set([NpcIdentifiers.ME, NpcIdentifiers.ME_2]); // 785/786
+  const SUQAH_IDS = new Set([
+    NpcIdentifiers.SUQAH, // 787
+    NpcIdentifiers.SUQAH_2, // 788
+    NpcIdentifiers.SUQAH_3, // 789
+    NpcIdentifiers.SUQAH_4, // 790
+    NpcIdentifiers.SUQAH_5, // 791
+    NpcIdentifiers.SUQAH_6, // 792
+    NpcIdentifiers.SUQAH_7, // 793
+  ]);
 
   const SEAL_OF_PASSAGE = ItemIdentifiers.SEAL_OF_PASSAGE; // 9083
   const EMERALD_LENS = ItemIdentifiers.EMERALD_LENS; // 9066
@@ -305,6 +324,16 @@ module.exports = function registerLunarDiplomacyQuest(api) {
   const CEREMONIAL_BRAZIER_MULTILOC = 17025; // nameless varbit-2430 multiloc -> 16810/16811
   const CEREMONIAL_BRAZIER_UNLIT = ObjectIdentifiers.CEREMONIAL_BRAZIER_3; // 16810
   const CEREMONIAL_BRAZIER_LIT = ObjectIdentifiers.CEREMONIAL_BRAZIER_4; // 16811
+  const CEREMONIAL_BRAZIER_IDS = new Set([
+    CEREMONIAL_BRAZIER_MULTILOC,
+    CEREMONIAL_BRAZIER_UNLIT,
+    CEREMONIAL_BRAZIER_LIT,
+    ObjectIdentifiers.CEREMONIAL_BRAZIER, // 16808
+    ObjectIdentifiers.CEREMONIAL_BRAZIER_2, // 16809
+  ]);
+  // The Astral Altar is on the surface, not behind a talisman: the quest grants
+  // Craft-rune and Pray permission, and Pray toggles the Lunar spellbook.
+  const ASTRAL_ALTAR = ObjectIdentifiers.ALTAR_57; // 34771
   const MY_LIFE = ObjectIdentifiers.MY_LIFE; // 16599
   const RING_FLOWERS = ObjectIdentifiers.FLOWERS_4; // 1196, the blue bloom at 2090,3877
   const WATER_SOURCE = ObjectIdentifiers.WATER_SOURCE; // 14998
@@ -417,14 +446,14 @@ module.exports = function registerLunarDiplomacyQuest(api) {
     ["BzXgp-", { item: LUNAR_RING, key: "ring" }],
   ]);
   const REPLACEMENT_ACTIONS = new Map([
-    ["rSaPSD", LUNAR_HELM],
-    ["2vyh9u", LUNAR_TORSO],
-    ["Hu6CJp", LUNAR_LEGS],
-    ["W84mby", LUNAR_GLOVES],
-    ["0pCQAg", LUNAR_BOOTS],
-    ["wRY0WN", LUNAR_CAPE],
-    ["lrDU0g", LUNAR_AMULET],
-    ["xQ1LfM", LUNAR_RING],
+    ["rSaPSD", { item: LUNAR_HELM, key: "helm" }],
+    ["2vyh9u", { item: LUNAR_TORSO, key: "torso" }],
+    ["Hu6CJp", { item: LUNAR_LEGS, key: "trousers" }],
+    ["W84mby", { item: LUNAR_GLOVES, key: "gloves" }],
+    ["0pCQAg", { item: LUNAR_BOOTS, key: "boots" }],
+    ["wRY0WN", { item: LUNAR_CAPE, key: "cape" }],
+    ["lrDU0g", { item: LUNAR_AMULET, key: "amulet" }],
+    ["xQ1LfM", { item: LUNAR_RING, key: "ring" }],
   ]);
   const SYMBOL_CONDITIONS = new Map([
     ["bV84hf", 0],
@@ -502,6 +531,24 @@ module.exports = function registerLunarDiplomacyQuest(api) {
   }
 
   const held = (player, itemId) => player.getInventory().getAmount(itemId) >= 1;
+
+  function stageBetween(player, min, max = Number.POSITIVE_INFINITY) {
+    const stage = stageOf(player);
+    return stage >= min && stage < max;
+  }
+
+  function hasFreeSlots(player, count = 1) {
+    return player.getInventory().getFreeSlots() >= count;
+  }
+
+  function isCeremonialBrazier(objectId) {
+    return CEREMONIAL_BRAZIER_IDS.has(objectId);
+  }
+
+  function reject(player, message) {
+    if (message) player.sendMessage(message);
+    return false;
+  }
 
   function questComplete(player, key) {
     const request = { player, key, complete: false };
@@ -1176,6 +1223,12 @@ module.exports = function registerLunarDiplomacyQuest(api) {
       return "obtaining-the-waking-sleep-potion-talking-to-the-oneiromancer-without-a-waking-sleep-vial";
     }
     if (stage >= STAGE_LUNAR_ISLE) {
+      // The Seal is the Moon Clan's permission to deal with outsiders. Do not
+      // advance the ceremony without it; Brundt replaces a lost seal.
+      if (!held(player, SEAL_OF_PASSAGE)) {
+        reject(player, "You need your Seal of Passage before the Oneiromancer will begin the ceremony.");
+        return "obtaining-the-waking-sleep-potion-talking-to-the-oneiromancer";
+      }
       setStage(player, STAGE_POTION_TASK);
       return "obtaining-the-waking-sleep-potion-talking-to-the-oneiromancer";
     }
@@ -1426,11 +1479,15 @@ module.exports = function registerLunarDiplomacyQuest(api) {
       case "DlGcHU":
         return player.getInventory().getFreeSlots() < 11;
       case "DP04RI":
-        return !held(player, LUNAR_STAFF);
+        return stageBetween(player, STAGE_KINDLING, STAGE_COMPLETE) && !held(player, LUNAR_STAFF);
       case "Jivpuw":
-        return !held(player, KINDLING) && !held(player, SOAKED_KINDLING);
+        return (
+          stageBetween(player, STAGE_KINDLING, STAGE_COMPLETE) &&
+          !held(player, KINDLING) &&
+          !held(player, SOAKED_KINDLING)
+        );
       case "2V5QKg":
-        return !held(player, WAKING_SLEEP_VIAL);
+        return stageBetween(player, STAGE_KINDLING, STAGE_COMPLETE) && !held(player, WAKING_SLEEP_VIAL);
       case "ecGB7P":
         return !isBrazierLit(player);
       case "3o6J8_":
@@ -1441,10 +1498,12 @@ module.exports = function registerLunarDiplomacyQuest(api) {
         break;
     }
     if (GIVEN_ITEMS.has(stepId)) {
+      if (stageOf(player) !== STAGE_STAFF_GIVEN) return false;
       const entry = GIVEN_ITEMS.get(stepId);
       return !oneiroGiven(player)[entry.key] && held(player, entry.item);
     }
     if (LOST_CONDITIONS.has(stepId)) {
+      if (!stageBetween(player, STAGE_KINDLING, STAGE_COMPLETE)) return false;
       const entry = LOST_CONDITIONS.get(stepId);
       return givenCount(player) === 8 && !held(player, entry.item);
     }
@@ -1479,39 +1538,45 @@ module.exports = function registerLunarDiplomacyQuest(api) {
         player.moveTo(RELLEKKA_DOCK);
         return;
       case "Arrr! Yar! Let's be on our way, yar!":
-        if (!LOKAR_IDS.has(npcId)) return;
+        if (!LOKAR_IDS.has(npcId) || stageOf(player) !== STAGE_SEAL) return;
+        if (!held(player, SEAL_OF_PASSAGE)) {
+          reject(player, "Lokar will not sail without a Seal of Passage. Ask Brundt for a replacement.");
+          return;
+        }
         sailToPiratesCove(player);
         return;
       case "Go now.":
-        if (!LOKAR_IDS.has(npcId)) return;
+        if (!LOKAR_IDS.has(npcId) || stageOf(player) < STAGE_SEAL || !held(player, SEAL_OF_PASSAGE)) return;
         player.moveTo(PIRATES_COVE_DOCKS);
         return;
       case "Perhaps it's the Navigator's fault?":
-        if (!BENTLEY_IDS.has(npcId)) return;
+        if (!BENTLEY_IDS.has(npcId) || stageOf(player) !== STAGE_JACK_HINT) return;
         setStage(player, STAGE_NAVIGATOR);
         return;
       case "Ok, let's go!":
-        if (npcId !== ETHEREAL_PERCEPTIVE_ID) return;
+        if (npcId !== ETHEREAL_PERCEPTIVE_ID || !inDream(player) || stageOf(player) < STAGE_DREAM) return;
         markStarted(player, "tree");
         return;
       case "Suppose I may as well have a go.":
-        if (npcId !== ETHEREAL_MIMIC_ID) return;
+        if (npcId !== ETHEREAL_MIMIC_ID || !inDream(player) || stageOf(player) < STAGE_DREAM) return;
         markStarted(player, "emote");
         return;
       case "Of course. I'm ready.":
-        if (!ETHEREAL_BEING_IDS.has(npcId)) return;
+        if (!ETHEREAL_BEING_IDS.has(npcId) || !inDream(player)) return;
+        if (stageOf(player) < STAGE_DREAM || stageOf(player) >= STAGE_FIGHT) return;
+        if (!allChallengesDone(player)) return;
         startFinalFight(player);
         return;
       case "That seems like a fair deal.":
-        if (npcId !== RIMAE_ID) return;
+        if (npcId !== RIMAE_ID || !stageBetween(player, STAGE_STAFF_GIVEN, STAGE_KINDLING)) return;
         tanHides(player);
         return;
       case "Jane Blud-Hagic-Maid":
-        if (npcId !== PAULINE_ID) return;
+        if (npcId !== PAULINE_ID || !stageBetween(player, STAGE_STAFF_GIVEN, STAGE_KINDLING)) return;
         giveCape(player);
         return;
       case "I'm looking for a ring.":
-        if (npcId !== SELENE_ID) return;
+        if (npcId !== SELENE_ID || !stageBetween(player, STAGE_STAFF_GIVEN, STAGE_KINDLING)) return;
         player.setAttribute(SELENE_INTRO_ATTRIBUTE, true);
         player.getPacketSender().sendVarbit(VARBIT_MONK_RING, 1);
         return;
@@ -1528,10 +1593,17 @@ module.exports = function registerLunarDiplomacyQuest(api) {
   }
 
   function tanHides(player) {
+    if (!stageBetween(player, STAGE_STAFF_GIVEN, STAGE_KINDLING)) return;
     const hides = player.getInventory().getAmount(SUQAH_HIDE);
-    if (hides === 0) return;
+    if (hides === 0) {
+      player.sendMessage("You have no Suqah hides for Rimae to tan.");
+      return;
+    }
     const cost = hides * 100;
-    if (player.getInventory().getAmount(COINS) < cost) return;
+    if (player.getInventory().getAmount(COINS) < cost) {
+      player.sendMessage(`Rimae needs ${cost} coins to tan ${hides} hide${hides === 1 ? "" : "s"}.`);
+      return;
+    }
     player.getInventory().deleteNumber(COINS, cost);
     player.getInventory().deleteNumber(SUQAH_HIDE, hides);
     player.getInventory().adds(SUQAH_LEATHER, hides);
@@ -1575,7 +1647,12 @@ module.exports = function registerLunarDiplomacyQuest(api) {
         ferry(player, "rellekka-lokar", RELLEKKA_DOCK);
         return;
       case "szE3tO":
-        if (!BENTLEY_IDS.has(npcId) || stageOf(player) < STAGE_LUNAR_ISLE || !inShipBox(npcLocation) || !nearTile(npcLocation, PIRATES_COVE_DOCKS, 40)) return;
+        if (!BENTLEY_IDS.has(npcId) || stageOf(player) < STAGE_LUNAR_ISLE) return;
+        if (!held(player, SEAL_OF_PASSAGE)) {
+          reject(player, "Captain Bentley will not sail without a Seal of Passage.");
+          return;
+        }
+        if (!inShipBox(npcLocation) || !nearTile(npcLocation, PIRATES_COVE_DOCKS, 40)) return;
         event.handled = true;
         ferry(player, "lunar-isle", LUNAR_ISLE_DOCKS);
         ensureBabaYaga(player);
@@ -1587,25 +1664,41 @@ module.exports = function registerLunarDiplomacyQuest(api) {
         ferry(player, "pirates-cove-bentley", PIRATES_COVE_DOCKS);
         return;
       case "jJ33Bh":
+        if (stageOf(player) !== STAGE_STARTED) return;
         event.handled = true;
         giveSeal(player);
-        setStage(player, STAGE_SEAL);
+        if (held(player, SEAL_OF_PASSAGE)) setStage(player, STAGE_SEAL);
         return;
-      case "-i30_x":
+      case "-i30_x": {
+        if (stageOf(player) !== STAGE_SUSPECT_BOY) return;
+        const missing = [EMERALD_LENS, LANTERN_FRAME].filter((itemId) => !held(player, itemId)).length;
+        if (missing > 0 && !hasFreeSlots(player, missing)) {
+          reject(player, "You need two free inventory spaces for the emerald lens and lantern frame.");
+          return;
+        }
         event.handled = true;
         giveLens(player);
         giveLanternFrame(player);
-        if (stageOf(player) < STAGE_SYMBOLS) setStage(player, STAGE_SYMBOLS);
+        if (
+          (held(player, EMERALD_LENS) || held(player, EMERALD_LANTERN) || held(player, EMERALD_LANTERN_LIT)) &&
+          (held(player, LANTERN_FRAME) || held(player, EMERALD_LANTERN) || held(player, EMERALD_LANTERN_LIT))
+        ) {
+          setStage(player, STAGE_SYMBOLS);
+        }
         return;
+      }
       case "YeWGnS":
+        if (!stageBetween(player, STAGE_SUSPECT_BOY, STAGE_LUNAR_ISLE)) return;
         event.handled = true;
         giveLens(player);
         return;
       case "7DnFjZ":
+        if (!stageBetween(player, STAGE_SUSPECT_BOY, STAGE_LUNAR_ISLE)) return;
         event.handled = true;
         giveLanternFrame(player);
         return;
       case "LjKMYd":
+        if (stageOf(player) !== STAGE_SAILED) return;
         event.handled = true;
         setStage(player, STAGE_CIRCLED);
         return;
@@ -1616,6 +1709,11 @@ module.exports = function registerLunarDiplomacyQuest(api) {
         event.handled = true;
         return;
       case "ML3CY4":
+        if (stageOf(player) !== STAGE_SYMBOLS_DONE) return;
+        if (!held(player, SEAL_OF_PASSAGE)) {
+          reject(player, "You need your Seal of Passage before you can land on Lunar Isle.");
+          return;
+        }
         event.handled = true;
         setStage(player, STAGE_LUNAR_ISLE);
         ferry(player, "lunar-isle", LUNAR_ISLE_DOCKS);
@@ -1624,14 +1722,15 @@ module.exports = function registerLunarDiplomacyQuest(api) {
         return;
       case "coPu8b":
         event.handled = true;
-        player.getInventory().deleteNumber(SOAKED_KINDLING, 1);
-        enterDream(player);
+        completeBrazierCeremony(player);
         return;
       case "EJZ-fm":
+        if (stageOf(player) < STAGE_DEFEATED) return;
         event.handled = true;
         leaveDream(player);
         return;
       case "YcUAR4":
+        if (!inDream(player) || stageOf(player) < STAGE_DREAM) return;
         event.handled = true;
         markChallenge(player, "race", true);
         event.steps = variantSteps("visiting-the-dream-world-winning-the-race");
@@ -1647,11 +1746,16 @@ module.exports = function registerLunarDiplomacyQuest(api) {
       default:
         break;
     }
-    if (REPLACEMENT_ACTIONS.has(stepId)) {
+    const replacement = REPLACEMENT_ACTIONS.get(stepId);
+    if (replacement) {
       event.handled = true;
-      const itemId = REPLACEMENT_ACTIONS.get(stepId);
-      if (player.getInventory().getFreeSlots() === 0) return;
-      player.getInventory().adds(itemId, 1);
+      if (!stageBetween(player, STAGE_KINDLING, STAGE_COMPLETE)) return;
+      if (!oneiroGiven(player)[replacement.key] || held(player, replacement.item)) return;
+      if (!hasFreeSlots(player)) {
+        reject(player, "You need a free inventory space for the replacement.");
+        return;
+      }
+      player.getInventory().adds(replacement.item, 1);
     }
   }
 
@@ -1661,6 +1765,7 @@ module.exports = function registerLunarDiplomacyQuest(api) {
     const text = String(event.text ?? "");
     const stage = stageOf(player);
     if (BRUNDT_IDS.has(npcId)) {
+      if (stage < STAGE_STARTED) return;
       if (text.startsWith("Then you had better take a replacement")) giveSeal(player);
       else if (text.startsWith("Ok, here you go.")) giveSeal(player);
       return;
@@ -1669,6 +1774,7 @@ module.exports = function registerLunarDiplomacyQuest(api) {
       // Both potion variants share the recipe line; the "-again" one has no vial line,
       // so grant from the recipe line too or a first talk that skipped the potion topic
       // soft-locks the vial. Flag only once the recipe has actually been heard.
+      if (stage < STAGE_POTION_TASK) return;
       if (text.startsWith("You'll also need a special vial") || text.startsWith("You'll need 1 guam leaf")) {
         player.setAttribute(BABA_INTRO_ATTRIBUTE, true);
         giveLunarVial(player);
@@ -1677,11 +1783,13 @@ module.exports = function registerLunarDiplomacyQuest(api) {
     }
     if (ONEIROMANCER_IDS.has(npcId)) {
       if (text.startsWith("Well done, I'll take that for safe keeping.") && stage === STAGE_POTION_TASK) {
+        if (!held(player, WAKING_SLEEP_VIAL)) return;
         player.getInventory().deleteNumber(WAKING_SLEEP_VIAL, 1);
         setStage(player, STAGE_POTION_GIVEN);
         return;
       }
       if (text.startsWith("Well done, pass it here.") && stage === STAGE_POTION_GIVEN) {
+        if (!held(player, LUNAR_STAFF)) return;
         player.getInventory().deleteNumber(LUNAR_STAFF, 1);
         setStage(player, STAGE_STAFF_GIVEN);
         return;
@@ -1691,20 +1799,26 @@ module.exports = function registerLunarDiplomacyQuest(api) {
         return;
       }
       if (text.startsWith("Well done! You must be rewarded for this great deed.") && stage >= STAGE_AWAKE) {
+        if (!held(player, SEAL_OF_PASSAGE)) {
+          reject(player, "You need your Seal of Passage before the Oneiromancer can complete the ceremony.");
+          return;
+        }
         if (!quest.isComplete(player)) quest.complete(player);
         return;
       }
       return;
     }
     if (npcId === METEORA_ID && text.startsWith("Sure, yeah, gimmie it yo.")) {
-      if (!held(player, SPECIAL_TIARA)) return;
+      if (!stageBetween(player, STAGE_STAFF_GIVEN, STAGE_KINDLING)) return;
+      if (!held(player, SPECIAL_TIARA) || held(player, LUNAR_AMULET)) return;
       player.getInventory().deleteNumber(SPECIAL_TIARA, 1);
       player.getInventory().adds(LUNAR_AMULET, 1);
       return;
     }
     if (npcId === ETHEREAL_PERCEPTIVE_ID && text.startsWith("We ow you gonna chop dem troys?")) {
+      if (!inDream(player) || stage < STAGE_DREAM) return;
       if (held(player, BRONZE_AXE) || hasAnyAxe(player)) return;
-      if (player.getInventory().getFreeSlots() === 0) return;
+      if (!hasFreeSlots(player)) return reject(player, "You need a free inventory space for the axe.");
       player.getInventory().adds(BRONZE_AXE, 1);
       return;
     }
@@ -1712,36 +1826,53 @@ module.exports = function registerLunarDiplomacyQuest(api) {
 
   function giveSeal(player) {
     if (held(player, SEAL_OF_PASSAGE)) return;
-    if (player.getInventory().getFreeSlots() === 0) return;
+    if (!hasFreeSlots(player)) {
+      reject(player, "You need a free inventory space for the Seal of Passage.");
+      return;
+    }
     player.getInventory().adds(SEAL_OF_PASSAGE, 1);
   }
 
   function giveLens(player) {
     if (held(player, EMERALD_LENS) || held(player, EMERALD_LANTERN) || held(player, EMERALD_LANTERN_LIT)) return;
-    if (player.getInventory().getFreeSlots() === 0) return;
+    if (!hasFreeSlots(player)) {
+      reject(player, "You need a free inventory space for the emerald lens.");
+      return;
+    }
     player.getInventory().adds(EMERALD_LENS, 1);
   }
 
   function giveLanternFrame(player) {
     if (held(player, LANTERN_FRAME) || held(player, EMERALD_LANTERN) || held(player, EMERALD_LANTERN_LIT)) return;
-    if (player.getInventory().getFreeSlots() === 0) return;
+    if (!hasFreeSlots(player)) {
+      reject(player, "You need a free inventory space for the lantern frame.");
+      return;
+    }
     player.getInventory().adds(LANTERN_FRAME, 1);
   }
 
   function giveLunarVial(player) {
     if (hasLunarVial(player) || held(player, WAKING_SLEEP_VIAL)) return;
-    if (player.getInventory().getFreeSlots() === 0) return;
+    if (!hasFreeSlots(player)) {
+      reject(player, "You need a free inventory space for the special vial.");
+      return;
+    }
     player.getInventory().adds(LUNAR_VIAL_EMPTY, 1);
   }
 
   function finishClothesHandIn(player) {
+    if (stageOf(player) !== STAGE_STAFF_GIVEN) return;
+    if (givenCount(player) !== 8) {
+      reject(player, "You still need to hand over all eight pieces of lunar clothing.");
+      return;
+    }
+    if (!hasFreeSlots(player, 11)) {
+      reject(player, "You need more inventory space to carry everything back.");
+      return;
+    }
     const given = oneiroGiven(player);
     for (const entry of GIVEN_ITEMS.values()) given[entry.key] = true;
     setOneiroGiven(player, given);
-    if (player.getInventory().getFreeSlots() < 11) {
-      player.sendMessage("You need more inventory space to carry everything back.");
-      return;
-    }
     for (const entry of GIVEN_ITEMS.values()) player.getInventory().adds(entry.item, 1);
     player.getInventory().adds(LUNAR_STAFF, 1);
     player.getInventory().adds(WAKING_SLEEP_VIAL, 1);
@@ -1753,6 +1884,7 @@ module.exports = function registerLunarDiplomacyQuest(api) {
   }
 
   function revealPendingSymbol(player) {
+    if (!stageBetween(player, STAGE_SYMBOLS, STAGE_LUNAR_ISLE)) return;
     const key = player.getAttribute(PENDING_SYMBOL_ATTRIBUTE);
     player.setAttribute(PENDING_SYMBOL_ATTRIBUTE, null);
     if (typeof key !== "string") return;
@@ -1791,34 +1923,39 @@ module.exports = function registerLunarDiplomacyQuest(api) {
       return;
     }
     if (GIVEN_ITEMS.has(stepId)) {
+      if (stageOf(player) !== STAGE_STAFF_GIVEN) return;
       const entry = GIVEN_ITEMS.get(stepId);
-      if (!held(player, entry.item)) return;
-      player.getInventory().deleteNumber(entry.item, 1);
       const given = oneiroGiven(player);
+      if (given[entry.key] || !held(player, entry.item)) return;
+      player.getInventory().deleteNumber(entry.item, 1);
       given[entry.key] = true;
       setOneiroGiven(player, given);
       player.getPacketSender().sendVarbit(entry.varbit, 1);
       return;
     }
     if (stepId === "DP04RI") {
+      if (!stageBetween(player, STAGE_KINDLING, STAGE_COMPLETE)) return;
       if (held(player, LUNAR_STAFF)) return;
-      if (player.getInventory().getFreeSlots() === 0) return;
+      if (!hasFreeSlots(player)) return reject(player, "You need a free inventory space for the lunar staff.");
       player.getInventory().adds(LUNAR_STAFF, 1);
       return;
     }
     if (stepId === "Jivpuw") {
+      if (!stageBetween(player, STAGE_KINDLING, STAGE_COMPLETE)) return;
       if (held(player, KINDLING) || held(player, SOAKED_KINDLING)) return;
-      if (player.getInventory().getFreeSlots() === 0) return;
+      if (!hasFreeSlots(player)) return reject(player, "You need a free inventory space for the kindling.");
       player.getInventory().adds(KINDLING, 1);
       return;
     }
     if (stepId === "2V5QKg") {
+      if (!stageBetween(player, STAGE_KINDLING, STAGE_COMPLETE)) return;
       if (held(player, WAKING_SLEEP_VIAL)) return;
-      if (player.getInventory().getFreeSlots() === 0) return;
+      if (!hasFreeSlots(player)) return reject(player, "You need a free inventory space for the waking sleep vial.");
       player.getInventory().adds(WAKING_SLEEP_VIAL, 1);
       return;
     }
     if (stepId === "eqgwkv") {
+      if (!inDream(player) || stageOf(player) < STAGE_DREAM) return;
       markChallenge(player, "emote", true);
     }
   }
@@ -1830,8 +1967,12 @@ module.exports = function registerLunarDiplomacyQuest(api) {
   function handleItemOnItem(event) {
     const { player, usedItemId, usedWithItemId } = event;
     const pair = new Set([usedItemId, usedWithItemId]);
+    const inLanternTask = stageBetween(player, STAGE_SUSPECT_BOY, STAGE_LUNAR_ISLE);
+    const inPotionTask = stageOf(player) >= STAGE_POTION_TASK;
+    const inClothesTask = stageBetween(player, STAGE_STAFF_GIVEN, STAGE_KINDLING);
+    const inCeremony = stageBetween(player, STAGE_KINDLING, STAGE_COMPLETE);
 
-    if (pair.has(EMERALD_LENS) && [...pair].some((id) => LANTERN_IDS.has(id) || id === EMERALD_LANTERN)) {
+    if (inLanternTask && pair.has(EMERALD_LENS) && [...pair].some((id) => LANTERN_IDS.has(id) || id === EMERALD_LANTERN)) {
       event.handled = true;
       if (!held(player, EMERALD_LENS)) return;
       const lantern = [...pair].find((id) => LANTERN_IDS.has(id) || id === EMERALD_LANTERN);
@@ -1847,7 +1988,7 @@ module.exports = function registerLunarDiplomacyQuest(api) {
       return;
     }
 
-    if (pair.has(TINDERBOX) && (pair.has(EMERALD_LANTERN) || pair.has(EMERALD_LANTERN_LIT))) {
+    if (inLanternTask && pair.has(TINDERBOX) && (pair.has(EMERALD_LANTERN) || pair.has(EMERALD_LANTERN_LIT))) {
       event.handled = true;
       if (!held(player, EMERALD_LANTERN)) {
         player.sendMessage("The emerald lantern is already lit.");
@@ -1859,7 +2000,7 @@ module.exports = function registerLunarDiplomacyQuest(api) {
       return;
     }
 
-    if (pair.has(GUAM_LEAF) && pair.has(LUNAR_VIAL_WATER)) {
+    if (inPotionTask && pair.has(GUAM_LEAF) && pair.has(LUNAR_VIAL_WATER)) {
       event.handled = true;
       if (!held(player, GUAM_LEAF) || !held(player, LUNAR_VIAL_WATER)) return;
       player.getInventory().deleteNumber(GUAM_LEAF, 1);
@@ -1868,7 +2009,7 @@ module.exports = function registerLunarDiplomacyQuest(api) {
       player.sendMessage("You add the guam leaf to the vial.");
       return;
     }
-    if (pair.has(MARRENTILL) && pair.has(GUAM_VIAL)) {
+    if (inPotionTask && pair.has(MARRENTILL) && pair.has(GUAM_VIAL)) {
       event.handled = true;
       if (!held(player, MARRENTILL) || !held(player, GUAM_VIAL)) return;
       player.getInventory().deleteNumber(MARRENTILL, 1);
@@ -1877,7 +2018,7 @@ module.exports = function registerLunarDiplomacyQuest(api) {
       player.sendMessage("You add the marrentill to the vial.");
       return;
     }
-    if (pair.has(PESTLE_AND_MORTAR) && pair.has(SUQAH_TOOTH)) {
+    if (inPotionTask && pair.has(PESTLE_AND_MORTAR) && pair.has(SUQAH_TOOTH)) {
       event.handled = true;
       if (!held(player, SUQAH_TOOTH)) return;
       player.getInventory().deleteNumber(SUQAH_TOOTH, 1);
@@ -1885,7 +2026,7 @@ module.exports = function registerLunarDiplomacyQuest(api) {
       player.sendMessage("You grind the suqah tooth to dust.");
       return;
     }
-    if (pair.has(GROUND_TOOTH) && pair.has(GUAM_MARR_VIAL)) {
+    if (inPotionTask && pair.has(GROUND_TOOTH) && pair.has(GUAM_MARR_VIAL)) {
       event.handled = true;
       if (!held(player, GROUND_TOOTH) || !held(player, GUAM_MARR_VIAL)) return;
       player.getInventory().deleteNumber(GROUND_TOOTH, 1);
@@ -1894,7 +2035,7 @@ module.exports = function registerLunarDiplomacyQuest(api) {
       player.sendMessage("You add the ground tooth to the vial. The waking sleep potion is ready.");
       return;
     }
-    if (pair.has(WAKING_SLEEP_VIAL) && pair.has(KINDLING)) {
+    if (inCeremony && pair.has(WAKING_SLEEP_VIAL) && pair.has(KINDLING)) {
       event.handled = true;
       if (!held(player, WAKING_SLEEP_VIAL) || !held(player, KINDLING)) return;
       player.getInventory().deleteNumber(WAKING_SLEEP_VIAL, 1);
@@ -1903,7 +2044,7 @@ module.exports = function registerLunarDiplomacyQuest(api) {
       player.sendMessage("You soak the kindling with the potion.");
       return;
     }
-    if (pair.has(NEEDLE) && pair.has(SUQAH_LEATHER)) {
+    if (inClothesTask && pair.has(NEEDLE) && pair.has(SUQAH_LEATHER)) {
       event.handled = true;
       openLeatherMenu(player);
       return;
@@ -1911,6 +2052,14 @@ module.exports = function registerLunarDiplomacyQuest(api) {
   }
 
   function openLeatherMenu(player) {
+    if (!stageBetween(player, STAGE_STAFF_GIVEN, STAGE_KINDLING)) {
+      player.sendMessage("You are not ready to make lunar clothing yet.");
+      return;
+    }
+    if (!held(player, NEEDLE) || !held(player, THREAD)) {
+      player.sendMessage("You need a needle and thread to craft lunar clothing.");
+      return;
+    }
     if (player.getInventory().getFreeSlots() === 0) {
       player.sendMessage("You need a free inventory space to craft lunar clothing.");
       return;
@@ -1938,22 +2087,121 @@ module.exports = function registerLunarDiplomacyQuest(api) {
     );
   }
 
+  /**
+   * The Waking Dream ceremony is the Moon Clan initiation: the brazier must be lit
+   * and the player must wear all nine lunar items before the soaked kindling opens
+   * the Dream World. Both the object click and the item-on-object path go through
+   * these guards, so a wrong stage or a missing item never changes state.
+   */
+  function lightCeremonialBrazier(player, objectId) {
+    if (stageOf(player) < STAGE_KINDLING) {
+      return reject(player, "You are not ready to take part in the Moon Clan ceremony yet.");
+    }
+    if (isBrazierLit(player) || objectId === CEREMONIAL_BRAZIER_LIT) {
+      return reject(player, "The brazier is already lit.");
+    }
+    if (!held(player, TINDERBOX)) return reject(player, "You need a tinderbox to light the brazier.");
+    player.setAttribute(BRAZIER_ATTRIBUTE, true);
+    player.getPacketSender().sendVarbit(VARBIT_BRAZIER_LIT, 1);
+    player.sendMessage("You light the ceremonial brazier.");
+    return true;
+  }
+
+  function completeBrazierCeremony(player) {
+    if (!stageBetween(player, STAGE_KINDLING, STAGE_COMPLETE)) return false;
+    if (!isBrazierLit(player)) return reject(player, "You need to light the brazier first.");
+    if (!wearingCeremonial(player)) {
+      return reject(player, "You need to wear all of the lunar ceremonial equipment and hold the lunar staff.");
+    }
+    if (!held(player, SOAKED_KINDLING)) return reject(player, "You need the soaked kindling.");
+    player.getInventory().deleteNumber(SOAKED_KINDLING, 1);
+    enterDream(player);
+    return true;
+  }
+
+  function handleCeremonialBrazier(event) {
+    const objectId = event.objectId ?? event.object?.getId?.();
+    if (!isCeremonialBrazier(objectId)) return false;
+    const option = String(event.option ?? "").toLowerCase();
+    if (option === "light") {
+      event.handled = true;
+      lightCeremonialBrazier(event.player, objectId);
+      return true;
+    }
+    if (option === "add-kindling" || option === "use-kindling" || option === "use") {
+      event.handled = true;
+      startTranscript(
+        api,
+        event.player,
+        NpcIdentifiers.ETHEREAL_BEING,
+        PAGE,
+        "visiting-the-dream-world-using-soaked-kindling-on-the-brazier"
+      );
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * The Astral Altar is the Lunar spellbook's attunement point. Before the quest it
+   * refuses both runecrafting and prayer; afterwards Pray toggles Lunar/Standard
+   * (Wiki: Astral Altar). Craft-rune stays with Runecrafting.plugin.js.
+   */
+  function handleAstralAltar(event) {
+    const objectId = event.objectId ?? event.object?.getId?.();
+    if (objectId !== ASTRAL_ALTAR) return false;
+    const player = event.player;
+    const option = String(event.option ?? "").toLowerCase();
+    if (!quest.isComplete(player)) {
+      if (option !== "craft-rune" && option !== "pray" && option !== "pray-at") return false;
+      event.handled = true;
+      startTranscript(
+        api,
+        player,
+        NpcIdentifiers.ONEIROMANCER,
+        PAGE,
+        option === "craft-rune"
+          ? "lunar-isle-trying-to-craft-a-rune-at-the-astral-altar"
+          : "lunar-isle-trying-to-pray-at-the-astral-altar"
+      );
+      return true;
+    }
+    if (option !== "pray" && option !== "pray-at") return false;
+    event.handled = true;
+    const wasLunar = player.getSpellbook?.() === MagicSpellbook.LUNAR;
+    const target = wasLunar ? MagicSpellbook.NORMAL : MagicSpellbook.LUNAR;
+    player.performAnimation?.(PRAY_AT_ALTAR_ANIMATION);
+    Sounds.sendSound(player, Sound.PRAYER_RECHARGE);
+    MagicSpellbook.changeSpellbook(player, target);
+    if (player.getSpellbook?.() !== target) return true;
+    player.sendMessage(wasLunar ? LUNAR_SPELLS_DEACTIVATED : LUNAR_SPELLS_ACTIVATED);
+    return true;
+  }
+
   function handleItemOnObject(event) {
     const { player, itemId } = event;
     const objectId = resolvedObjectId(event);
 
     if (itemId === SPADE && objectId === RING_FLOWERS && nearTile(event.location, RING_TILE, 2)) {
       event.handled = true;
-      startTranscript(api, player, SELENE_ID, PAGE, "obtaining-the-lunar-clothing-digging-up-the-lunar-ring");
-      if (player.getInventory().getFreeSlots() > 0 && !held(player, LUNAR_RING)) {
-        player.getInventory().adds(LUNAR_RING, 1);
+      if (!stageBetween(player, STAGE_STAFF_GIVEN, STAGE_KINDLING)) {
+        return reject(player, "You have no reason to dig up the Moon Clan's flowers.");
       }
+      if (held(player, LUNAR_RING) || oneiroGiven(player).ring) {
+        return reject(player, "You already have the lunar ring.");
+      }
+      if (!hasFreeSlots(player)) return reject(player, "You need a free inventory space for the lunar ring.");
+      startTranscript(api, player, SELENE_ID, PAGE, "obtaining-the-lunar-clothing-digging-up-the-lunar-ring");
+      player.getInventory().adds(LUNAR_RING, 1);
       return;
     }
 
     if (itemId === LUNAR_VIAL_EMPTY && (objectId === WATER_SOURCE || SINK_IDS.has(objectId))) {
       event.handled = true;
-      if (!held(player, LUNAR_VIAL_EMPTY)) return;
+      if (stageOf(player) < STAGE_POTION_TASK) {
+        return reject(player, "You have no reason to fill that vial yet.");
+      }
+      if (!held(player, LUNAR_VIAL_EMPTY)) return false;
       player.getInventory().deleteNumber(LUNAR_VIAL_EMPTY, 1);
       player.getInventory().adds(LUNAR_VIAL_WATER, 1);
       player.sendMessage("You fill the vial with water.");
@@ -1962,7 +2210,10 @@ module.exports = function registerLunarDiplomacyQuest(api) {
 
     if (itemId === LUNAR_ORE && ObjectDefinition.forId(objectId)?.getName?.() === "Furnace") {
       event.handled = true;
-      if (!held(player, LUNAR_ORE)) return;
+      if (stageOf(player) < STAGE_STAFF_GIVEN) {
+        return reject(player, "You are not ready to work lunar ore yet.");
+      }
+      if (!held(player, LUNAR_ORE)) return false;
       player.getInventory().deleteNumber(LUNAR_ORE, 1);
       player.getInventory().adds(LUNAR_BAR, 1);
       player.sendMessage("You smelt the lunar ore into a lunar bar.");
@@ -1973,19 +2224,16 @@ module.exports = function registerLunarDiplomacyQuest(api) {
     // lunar bar on an anvil is The Fremennik Exiles' V sigil hand-in.
     if (
       itemId === LUNAR_BAR &&
-      quest.isStarted(player) &&
-      !quest.isComplete(player) &&
+      stageBetween(player, STAGE_STAFF_GIVEN, STAGE_KINDLING) &&
       ObjectDefinition.forId(objectId)?.getName?.() === "Anvil"
     ) {
       event.handled = true;
-      if (!held(player, LUNAR_BAR)) return;
+      if (!held(player, LUNAR_BAR)) return false;
       if (!held(player, HAMMER)) {
-        player.sendMessage("You need a hammer to work the lunar bar.");
-        return;
+        return reject(player, "You need a hammer to work the lunar bar.");
       }
-      if (player.getInventory().getFreeSlots() === 0) {
-        player.sendMessage("You need a free inventory space for the helm.");
-        return;
+      if (!hasFreeSlots(player)) {
+        return reject(player, "You need a free inventory space for the helm.");
       }
       player.getInventory().deleteNumber(LUNAR_BAR, 1);
       player.getInventory().adds(LUNAR_HELM, 1);
@@ -1994,28 +2242,26 @@ module.exports = function registerLunarDiplomacyQuest(api) {
     }
 
     if (itemId === DRAMEN_STAFF || [LUNAR_STAFF_PT1, LUNAR_STAFF_PT2, LUNAR_STAFF_PT3].includes(itemId)) {
+      if (!stageBetween(player, STAGE_POTION_GIVEN, STAGE_KINDLING)) return false;
       const next = altarStaffResult(objectId, itemId);
-      if (!next) return;
+      if (!next) return false;
       event.handled = true;
       player.getInventory().deleteNumber(itemId, 1);
       player.getInventory().adds(next, 1);
       return;
     }
 
-    if (objectId === CEREMONIAL_BRAZIER_MULTILOC || objectId === CEREMONIAL_BRAZIER_UNLIT || objectId === CEREMONIAL_BRAZIER_LIT) {
+    if (isCeremonialBrazier(objectId)) {
       if (itemId === TINDERBOX) {
         event.handled = true;
-        if (isBrazierLit(player) || objectId === CEREMONIAL_BRAZIER_LIT) {
-          player.sendMessage("The brazier is already lit.");
-          return;
-        }
-        player.setAttribute(BRAZIER_ATTRIBUTE, true);
-        player.getPacketSender().sendVarbit(VARBIT_BRAZIER_LIT, 1);
-        player.sendMessage("You light the ceremonial brazier.");
+        lightCeremonialBrazier(player, objectId);
         return;
       }
       if (itemId === SOAKED_KINDLING) {
         event.handled = true;
+        if (!stageBetween(player, STAGE_KINDLING, STAGE_COMPLETE)) {
+          return reject(player, "You are not ready to take part in the Moon Clan ceremony yet.");
+        }
         startTranscript(api, player, NpcIdentifiers.ETHEREAL_BEING, PAGE, "visiting-the-dream-world-using-soaked-kindling-on-the-brazier");
         return;
       }
@@ -2046,10 +2292,14 @@ module.exports = function registerLunarDiplomacyQuest(api) {
   function mineStalagmite(event) {
     const { player } = event;
     if (!STALAGMITE_IDS.has(event.objectId)) return false;
-    if (stageOf(player) < STAGE_POTION_GIVEN) return false;
+    if (stageOf(player) < STAGE_STAFF_GIVEN) return false;
     event.handled = true;
     if (!hasAnyPickaxe(player)) {
       player.sendMessage("You need a pickaxe to mine the stalagmite.");
+      return true;
+    }
+    if (!hasFreeSlots(player)) {
+      player.sendMessage("You need a free inventory space for the lunar ore.");
       return true;
     }
     player.getInventory().adds(LUNAR_ORE, 1);
@@ -2060,7 +2310,7 @@ module.exports = function registerLunarDiplomacyQuest(api) {
   function readMyLife(event) {
     const { player } = event;
     if (event.objectId !== MY_LIFE) return false;
-    if (stageOf(player) < STAGE_DREAM) return false;
+    if (!inDream(player) || stageOf(player) < STAGE_DEFEATED) return false;
     event.handled = true;
     startTranscript(api, player, NpcIdentifiers.ETHEREAL_BEING, PAGE, "visiting-the-dream-world-reading-my-life");
     return true;
@@ -2139,7 +2389,11 @@ module.exports = function registerLunarDiplomacyQuest(api) {
   }
 
   function handleNpcDeath(event) {
-    if (!ME_IDS.has(event.npcId)) return;
+    const npcId = event.npcId ?? event.npc?.getId?.();
+    // Suqah loot is rolled by NpcDrops.plugin.js. Their deaths never advance the
+    // quest stage on their own; the tooth, hides and tiara are the objectives.
+    if (SUQAH_IDS.has(npcId)) return;
+    if (!ME_IDS.has(npcId)) return;
     const player = event.killer?.isPlayer?.() ? event.killer : null;
     if (!player) return;
     const tracked = bossNpcs.get(player);
@@ -2149,24 +2403,45 @@ module.exports = function registerLunarDiplomacyQuest(api) {
     setStage(player, STAGE_DEFEATED);
   }
 
+  /**
+   * npc-drops.json gates A special tiara behind "after asking Meteora about her
+   * headgear". Answering the row keeps the 1/2 Suqah pre-roll from dropping the
+   * tiara before the player has heard the clue, or a duplicate after they have
+   * already exchanged it.
+   */
+  function handleQuestItemDrop(event) {
+    if (event.itemId !== SPECIAL_TIARA || event.requirement?.key !== TIARA_DROP_QUEST_KEY) return;
+    const player = event.player;
+    event.allowed =
+      quest.isStarted(player) &&
+      !quest.isComplete(player) &&
+      stageBetween(player, STAGE_STAFF_GIVEN, STAGE_KINDLING) &&
+      player.getAttribute(METEORA_INTRO_ATTRIBUTE) === true &&
+      !held(player, SPECIAL_TIARA) &&
+      !held(player, LUNAR_AMULET) &&
+      !oneiroGiven(player).amulet;
+  }
+
   // ==========================================================================
   // Dream World
   // ==========================================================================
 
   function sailToPiratesCove(player) {
+    if (stageOf(player) !== STAGE_SEAL || !held(player, SEAL_OF_PASSAGE)) return;
     setStage(player, STAGE_SAILED);
     player.moveTo(PIRATES_COVE_DOCKS);
     ensureJack(player);
   }
 
   function enterDream(player) {
-    if (stageOf(player) < STAGE_KINDLING) return;
+    if (!stageBetween(player, STAGE_KINDLING, STAGE_COMPLETE)) return;
     setStage(player, STAGE_DREAM);
     player.moveTo(DREAM_ENTRY);
     spawnDreamNpcs(player);
   }
 
   function leaveDream(player) {
+    if (stageOf(player) < STAGE_DEFEATED) return;
     player.moveTo(DREAM_EXIT);
     if (stageOf(player) === STAGE_DEFEATED) setStage(player, STAGE_AWAKE);
     removeDreamNpcs(player);
@@ -2206,7 +2481,14 @@ module.exports = function registerLunarDiplomacyQuest(api) {
   }
 
   function startFinalFight(player) {
-    if (stageOf(player) < STAGE_FIGHT) setStage(player, STAGE_FIGHT);
+    const stage = stageOf(player);
+    if (!inDream(player) || stage < STAGE_DREAM || stage > STAGE_FIGHT) return;
+    if (stage < STAGE_FIGHT) {
+      if (!allChallengesDone(player)) return;
+      setStage(player, STAGE_FIGHT);
+    }
+    // Stage 165 also enters here from login reconciliation: the saved fight is
+    // restored even though the readiness dialogue may no longer be available.
     removeBoss(player);
     const npc = api.spawnNpc({
       id: NpcIdentifiers.ME,
@@ -2443,6 +2725,12 @@ module.exports = function registerLunarDiplomacyQuest(api) {
   api.onObjectInteraction("Stalagmites", { Mine: mineStalagmite });
   api.onObjectInteraction("My life", { Read: readMyLife });
   api.onObjectInteraction("Platform", { "Step-on": stepDreamPlatform });
+  api.onObjectInteraction(handleAstralAltar);
+  api.onObjectInteraction("Altar", { "Craft-rune": handleAstralAltar, Pray: handleAstralAltar, "Pray-at": handleAstralAltar });
+  api.onObjectInteraction(handleCeremonialBrazier);
+  api.onObjectInteraction("Ceremonial Brazier", { Light: handleCeremonialBrazier });
+  if (typeof api.onBeforeObjectInteraction === "function") api.onBeforeObjectInteraction(handleAstralAltar);
+  api.onCustomEvent("npc-drops:quest-item", handleQuestItemDrop);
   api.onNpcDeath(handleNpcDeath);
   api.onPlayerLogin(handleLogin);
   api.onCustomEvent("player:bootstrap-complete", handleBootstrap);

@@ -5,14 +5,23 @@ const { climb, balance } = require("../Steps.Agility");
 /** Shows the lap's shortcut portal (1-6), 0 hides it. RuneLite: PRIF_AGILITY_SHORTCUT_TRANSMIT. */
 const PORTAL_VARBIT = 9298;
 const PORTAL_ATTRIBUTE = "agility.prifddinas.portal";
+/**
+ * The six portal locs (prif_agility_shortcut_portal_1-6), each shown as the "Portal" (36240) while
+ * the varbit holds its number. A click names the placed loc (rsprox 1149: 36241, 36246).
+ */
+const PORTAL_LOCS = [36241, 36242, 36243, 36244, 36245, 36246];
+/** Portal XP: 819 tenths (rsprox 1149, at the Leagues' 16x); the Wiki rounds it to 82. */
+const PORTAL_XP = 81.9;
 
 /**
  * From the first dark hole on, the course is played in the copy of its rooftops south-west of
  * the city (1024 west, 2752 south), as live OSRS teleports there (rsprox capture 1149); the last
  * dark hole brings the player back up to the city.
  *
- * Each lap one portal may open. It appears after obstacle `after`, stands on `at`,
- * and drops the player at `exit`, continuing the lap as if obstacle `skipTo` was done.
+ * Each lap one portal opens (Wiki: one of six, at random). It appears as obstacle `after` is begun
+ * (rsprox 1149: portal 1 on the tick the ladder is climbed, portal 6 on the tick the third
+ * tightrope is), stands on `at`, and drops the player at `exit`, continuing the lap as if obstacle
+ * `skipTo` was done.
  */
 const PORTALS = [
   { after: 1, at: [3257, 6111, 2], exit: [3275, 6105, 2], skipTo: 2 },
@@ -28,14 +37,14 @@ function setPortal(player, portal) {
   player.getPacketSender().sendVarbit(PORTAL_VARBIT, portal);
 }
 
-/** Picks this lap's portal; it stays hidden until its obstacle has been crossed. */
+/** Picks this lap's portal; it stays hidden until its obstacle is begun. */
 function choosePortal(player) {
   player.setAttribute(PORTAL_ATTRIBUTE, 1 + Math.floor(Math.random() * PORTALS.length));
   player.getPacketSender().sendVarbit(PORTAL_VARBIT, 0);
   revealPortal(player, 1);
 }
 
-/** Opens this lap's portal once the obstacle before it has been crossed. */
+/** Opens this lap's portal as the obstacle before it is begun. */
 function revealPortal(player, index) {
   const portal = player.getAttribute(PORTAL_ATTRIBUTE) ?? 0;
   if (portal > 0 && PORTALS[portal - 1].after === index) {
@@ -48,18 +57,19 @@ function hidePortal(player) {
 }
 
 function portalAt({ obj }) {
-  return PORTALS.findIndex((portal) => portal.at[0] === obj.x && portal.at[1] === obj.y && portal.at[2] === obj.z);
+  return PORTAL_LOCS.indexOf(obj.id);
 }
 
+/** The ladder picks the lap's portal; every obstacle opens it when it's the one before it. */
 function obstacle(object, index, xp, route, steps, extra = {}) {
+  const reveal = index === 1 ? choosePortal : (player) => revealPortal(player, index);
   return {
     object,
     index,
     level: 75,
     xp,
     route,
-    steps,
-    onSuccess: (player) => revealPortal(player, index),
+    steps: [{ run: ({ player }) => reveal(player) }, ...steps],
     ...extra,
   };
 }
@@ -92,14 +102,15 @@ function darkHole(destination) {
 
 module.exports = {
   key: "prifddinas",
-  name: "Prifddinas Agility",
+  // As the lap count line names it: "Your Prifddinas Agility Course lap count is: ..." (rsprox 1149).
+  name: "Prifddinas Agility Course",
   helper: 18, // the Agility helper's course (enum 3507: "Prifddinas Agility Course")
-  lapXp: 1337,
+  // The Wiki's obstacles add up to the lap: the last dark hole's 1037.1 is the lap's bonus, and
+  // nothing more is paid with the lap count (rsprox 1149, both laps).
+  lapXp: 1285.2,
   petBase: 25146, // Giant squirrel base chance (Wiki)
   obstacles: [
-    obstacle(ObjectIds.LADDER_392, 1, 11.5, [3253, 6109, 0], climb([3255, 6109, 2]), {
-      onSuccess: choosePortal,
-    }),
+    obstacle(ObjectIds.LADDER_392, 1, 11.5, [3253, 6109, 0], climb([3255, 6109, 2])),
     obstacle(ObjectIds.TIGHTROPE_15, 2, 30.7, [3257, 6105, 2], balance([3272, 6105]), {
       render: Anim.BALANCE_WALK,
       fail: ropeFall([3263, 6105], "Ouch!!"),
@@ -166,19 +177,23 @@ module.exports = {
       onSuccess: hidePortal,
     }),
     {
-      object: ObjectIds.PORTAL_81,
+      object: PORTAL_LOCS,
       level: 75,
-      xp: 0,
+      xp: PORTAL_XP,
       precondition: (context) => {
         const portal = context.player.getAttribute(PORTAL_ATTRIBUTE) ?? 0;
         return portal > 0 && portalAt(context) === portal - 1 ? null : "The portal is not active.";
       },
+      // From the tile beside it: a turn to it, a step onto it, and through the tick after, with
+      // the line, the shard and the XP (rsprox 1149, portals 1 and 6).
       steps: (context) => {
         const portal = PORTALS[portalAt(context)];
-        return [{ walk: [portal.at] }, { wait: 1 }, { tele: portal.exit }];
+        return [{ face: portal.at }, { wait: 1 }, { walk: [portal.at] }, { tele: portal.exit }];
       },
       skipTo: (context) => PORTALS[portalAt(context)].skipTo,
       onSuccess: hidePortal,
+      // Every portal finds a crystal shard (Wiki, since its 1/3 became certain), as 237/01149 records it.
+      gives: { item: "CRYSTAL_SHARD", amount: 1, message: "You find a crystal shard on your way through the portal." },
     },
     {
       object: ObjectIds.LADDER_394,

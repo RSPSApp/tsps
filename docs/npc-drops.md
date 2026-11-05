@@ -12,11 +12,13 @@ Corrections that need logic (Zulrah's two rolls, the Mad Angel's supply batch, S
 
 Loot that depends on where or what the NPC was rather than its table is added by other plugins on `npc-drops:add` { player, npc, npcId, drops }, emitted straight after the roll and before `npc-drops:roll` (so the Collection Log and Ironman rules see it): the Catacombs of Kourend's totem pieces and shards, and Skotizo's totem table ([skotizo.md](skotizo.md)).
 
+Rows the Wiki limits to a place ("Only dropped in Ruins of Tapoyauik", "only dropped by giants not on the Giants' Plateau"; nine places from the Iorwerth Dungeon to Karamja) are read from the row's note and roll only when the NPC stands in that place's boxes in `plugins/npcs/data/drop-locations.json`; elsewhere the row is an empty slot, so the other rows keep their published rates. A test fails when a note names a place with no boxes.
+
 Tertiary drops can be made likelier per kill on `npc-drops:tertiary-chance` { player, npc, npcId, rules }, emitted once per kill before the tertiary rolls (only when the table has any): a listener pushes `{ pattern, multiplier }`, and each entry whose name matches is that many times as likely. An imbued ring of wealth adds ×2 for clue scrolls in the Wilderness; Mortimer's clue tasks add theirs ([slayer.md](slayer.md)).
 
-Any entry can be made likelier per kill on `npc-drops:chance` { player, npc, npcId, source, rules }, emitted once per roll before anything is rolled: a listener pushes `{ pattern, multiplier }` as above (`pattern` needs only a `test(name)`), and every entry whose name matches - pre-roll, main roll, separate rolls, tertiary - is that many times as likely. `source` is the NPC's name, or what a `npc-drops:roll-table` request passed as `source` (a chest has no NPC). In the weighted rolls the entry's weight is multiplied and the pool grows by what was added, so w/N becomes mw/(N + (m-1)w) and the other entries keep their weights (1/512 at 5x is 5/516); the boss rare multiplier below still stays out of the weighted rolls. A league's boosted drops answer this ([server/docs/leagues.md](../server/docs/leagues.md)); rollers outside NpcDrops (superior Slayer monsters' uniques, Treasure Trails caskets) ask the same shape as `drops:chance` { player, source, rules }.
+Any entry can be made likelier per kill on `npc-drops:chance` { player, npc, npcId, source, rules }, emitted once per roll before anything is rolled: a listener pushes `{ pattern, multiplier }` as above (`pattern` needs only a `test(name)`), and every entry whose name matches - pre-roll, main roll, separate rolls, tertiary - is that many times as likely. `source` is the NPC's name, or what a `npc-drops:roll-table` request passed as `source` (a chest has no NPC). In the weighted rolls the entry's weight is multiplied and the pool grows by what was added, so w/N becomes mw/(N + (m-1)w) and the other entries keep their weights (1/512 at 5x is 5/516); the boss rare multiplier below rolls those entries on their own instead. A league's boosted drops answer this ([server/docs/leagues.md](https://github.com/RSPSApp/tsps/blob/main/server/docs/leagues.md)); rollers outside NpcDrops (superior Slayer monsters' uniques, Treasure Trails caskets) ask the same shape as `drops:chance` { player, source, rules }.
 
-A boss's rare drops can be made likelier world-wide with `pluginConfig` `"NpcDrops:bossRareMultiplier"` ([world-configuration.md](world-configuration.md)). Tables of NPCs the cache marks as bosses (param 1361) get `boss: true` on load, and their pre-roll, separate and tertiary entries rarer than 1/100 roll that many times likelier, on top of any tertiary multiplier. The main weighted roll is left alone. Raid and other reward chests roll their own loot and are not affected.
+A boss's uniques can be made likelier world-wide with `pluginConfig` `"NpcDrops:bossRareMultiplier"` ([world-configuration.md](world-configuration.md)). Tables of NPCs the cache marks as bosses (param 1361), plus the bosses `npc-drop-overrides.json` lists under `bossNpcs`, get `boss: true` on load. An eligible row must be an individual item rarer than 1/10, and either be in a unique section or appear in the cache's boss collection-log tab (which includes rings, pets, jars and visages even when their drop sections are not called "Uniques"). Rarity or pre-roll placement alone never qualifies a row: ordinary supplies, equipment, clue scrolls and shared drop tables keep their rates. The cache lookup is independent of whether the Collection Log plugin is enabled. Eligible rows roll that many times likelier, on top of any tertiary multiplier. Pre-roll, separate and tertiary rows are rolled as before; a unique on the main weighted roll is rolled separately at its boosted chance, so ordinary main loot keeps its exact rate. Raid and other reward chests roll their own loot and are not affected.
 
 ## Regenerating
 
@@ -55,7 +57,21 @@ Verification for this import: TypeScript build and 26 focused integration tests 
 | `addNpcs` | NPC ids mapped to a table the dumper doesn't map them to | 110 variants and versions (Phosani's Nightmare, the Nightmare, Ghast, Kalphite Guardian, Slagilith…), added by hand in September |
 | `tables.<id>.addEntries` / `addTertiary` | entries added to a table | the Abyssal Sire's pet, the Abyssal orphan |
 | `tables.<id>.removeSections` | sections of a table left out of every roll | Yama's Contract section (what his contracts reward, not a normal kill) |
-| `subtables` | shared tables the dumper doesn't export | the uncommon seed table (Obor, Bryophyta) |
+| `subtables` | shared tables the dumper doesn't export | none: the uncommon seed table is in the dump since #1952 |
+
+## A world's own edits
+
+The browser host's **Content > NPC Drops** tab saves to `npc-drops-custom.json`, the same way spawn edits go to `npc-spawns-custom.json`. It holds only that world's changes, isn't in the repo, and is applied before the overrides, so tsps's own fixes keep reaching a world that has edited its drops. "Revert drops to default" removes the NPC's tables from it.
+
+| Key | Does |
+| --- | --- |
+| `tables.<id>.setEntries` | dump row rates (`weight`, `out_of`) and `quantity` changed, keyed `field:index` |
+| `tables.<id>.removeEntries` | dump rows removed, by `{ field, index }` |
+| `tables.<id>.addEntries` / `addTertiary` | rows added |
+
+Rows are addressed by their position in the dump, so regenerating `npc-drops.json` can move a world's edits onto different rows. `hits()` only rolls whole-number `out_of` values, so independent rows keep whole-number rates; main rows may use fractional weights.
+
+`quantity` is `[min, max]`, whole numbers from 1, with `min` equal to `max` for a fixed amount; anything else is ignored and the row keeps its quantity. It replaces the row's conditional amounts (`quantity_alternatives`), such as more ashes at a preferred location, so the edited amount applies on every kill. Non-stackable items land as one ground item each, so a large quantity on an unnoted item floods the tile.
 
 ## The 2026-10-07 refresh
 
@@ -63,3 +79,37 @@ The generated files were replaced by osrsreboxed-db's 2026-10-07 dump, with the 
 - **The same 3,201 NPCs** have drops, and the shared tables are identical.
 - **One NPC changed:** the Sailing manta ray (15221) rolled both the monster and the Sailing manta ray tables on every kill. It now rolls only the Sailing one.
 - **Noted drops: 120 → 3,068.** Everything the Wiki marks noted now drops noted, not just the hand-picked lists (Corp's resource drops were one). The Kalphite Queen's and the Mad Angel's noted lists in code are now redundant but harmless.
+
+## Goblin energy potions (#1706)
+
+Goblins dropped energy potions on about a third of kills. osrsreboxed-db had cached the Goblin page mid-way through the 19 August 2026 drop-table change, with its energy potions as "Common" and no rate, so each became an independent 1/8 roll (three on table 1, two on table 2). The current page has Energy potion(3) and Energy potion(4) at 3/128 each on table 1 and Energy potion(2) at 13/128 on table 2, all inside the 128 pool.
+
+Imported from osrsreboxed-db [`c70ad220e7`](https://github.com/Bandit-HaxUnit/osrsreboxed-db/commit/c70ad220e7) (branch `fix/goblin-drop-rarities`, built on `2fe648dd71`, the export imported before), which re-fetches the page and regenerates; the same fix for master is [RSPSApp/osrsreboxed-db#27](https://github.com/RSPSApp/osrsreboxed-db/pull/27). Only `goblin_drop_table1` and `goblin_drop_table2` change, apart from `meta.generated`; `npc-drop-subtables.json` is byte-identical, and two runs match. The dumper now warns when several rows of one section have only a word rarity; six other tables trip it (the corrupted Gauntlet monsters, the elite Black Knight, Molanisk's energy potions, Nex) and are left for a check against their pages.
+
+## Main-table roll counts (#1791)
+
+The Wiki's `DropsLine` and shared-table templates carry `rolls` separately from each row's chance. The dumper discarded it, leaving Crushing hands with one normal loot roll rather than three. [The parser/export fix](https://github.com/RSPSApp/osrsreboxed-db/pull/28) preserves a uniform main-table count, excluding guaranteed and tertiary drops. Mixed-count tables keep their previous behavior because a table-wide count would repeat one-off rows.
+
+This import is the entire output of pinned producer [`fbd9fa4e1af5cf55fa7f62589f2ff69917e8ebd7`](https://github.com/RSPSApp/osrsreboxed-db/commit/fbd9fa4e1af5cf55fa7f62589f2ff69917e8ebd7): the same source fixes backported onto `c70ad220e7`, whose unmodified generation is byte-identical to the previous TSPS import. Using current dumper master would also change 281 unrelated tables and NPC mappings; those changes are outside this import. No source inputs or generated output were patched.
+
+Two full generations with `SOURCE_DATE_EPOCH=1793491200 python3 -m scripts.drops.update --out <directory>` match byte for byte. The timestamp input pins `meta.generated` to 2026-11-01 UTC, making the same command reproducible on later build days; without it the dumper retains its current-date default. The imported `npc-drops.json` SHA-256 is `4d9d5e05824d39e755e55643b9c5e13c9c8aa8c9278937b85233b9a0c0fb5974`. Subtables (`011008df793196844a7eb29464ecae50ecd8801dda5f5a30fb46f250c833a689`) and unresolved items (`e40dbeb02cea7ed1513c931cd169679861a494f73372f57954e7bd980bba62ef`) are unchanged.
+
+Only 17 `rolls` fields change: 13 superior tables gain three rolls; Vorkath and Zulrah's two rolls already match their runtime corrections; the Ent table remains unmapped because its trunk owns the loot; scavenger beasts now get their two normal rolls plus bones directly from the table, replacing the CoX extra-roll hook. Native death tests cover Crushing hand loot and 550 Slayer XP on and off task, and the scavenger count. Rare superior uniques remain chance-based; the reported absence of superior loot remains unreproduced. The native path also grants 550 Slayer XP, with no XP behavior change in this fix.
+
+## The uncommon seed table (#1952)
+
+Lizardmen killed six times in a row dropped only bones. Nothing was wrong with the roller: the dumper had no mapping for `{{UncommonSeedDropTableInfo}}` / `{{UncommonSeedDropLines}}` and dropped the row without a warning, so the level 53 and 62 lizardmen and the brute lost their 15/87, 15/78 and 15/67 seed rolls and the empty part of the pool grew by 15 slots (bones only on 82% of level 53 kills instead of the Wiki's 64%). 54 monster tables use that template: moss giants, ice giants, ogres, trolls, Bryophyta and more. [The dumper fix](https://github.com/RSPSApp/osrsreboxed-db/pull/33) exports it as the shared table `uncommonSeed`, from the Drop table page, which retires the hand-made `subtables.uncommonSeed` override (Obor and Bryophyta's lairs keep using it by name). An uncommon seed access never suppresses a page's own listed seeds: `{{UncommonSeedDropLines}}` is that pool's listing, so rows beside it belong to other pools (the manta ray keeps its rare and tree-herb seed rolls, with its Yew, Magic and Redwood tree seeds).
+
+Restoring the roll overfilled pools whose rows give a members-world rate ("decreased to X in [[members]] worlds", "decreases to X on a [[members]] world", with `altrarity=X`): the dumper kept the free-to-play rate. The dump describes members worlds, so those 19 rows now roll the alternate rate, and the moss giant, ice warrior, skeleton, zombie, White Knight and wizard pools fill exactly 128 slots again.
+
+This import is the entire output of pinned producer [`682d17b97d05a2cb8b8e546fb45b7867dbab1af0`](https://github.com/BeefBeefs/osrsreboxed-db/commit/682d17b97d05a2cb8b8e546fb45b7867dbab1af0) (branch `fix/1952-uncommon-seed-table-pinned`): the same fix backported onto `fbd9fa4e`, whose unmodified generation reproduces the previous import byte for byte (`4d9d5e05…`, `011008df…`, `e40dbeb0…`). Exactly 66 tables change, plus the new `uncommonSeed` shared table and its name in `meta.shared_tables`; NPC mappings and every other table are unchanged. Two generations with `SOURCE_DATE_EPOCH=1793491200` match byte for byte: `npc-drops.json` `b30a24b7606d388edfe5c5249c5c0e0d733aa876d0fdbb9b1073523f2510186a`, subtables `a2a90b4467e86ad34afbe3788eda588ab1137a0f98d7a5a589cf0883b6684b12`, unresolved items unchanged.
+
+Not fixed here: the general seed table (`seed`) is imported as a flat list whose first eight allotment seeds already fill its 1,008 slots, so its herb, flower, bush and special seeds never drop. Current dumper master exports it with combat-level categories, which the roller doesn't read yet.
+
+### Shared named-footnote repair
+
+Pinned producer [b618aec953fb](https://github.com/RSPSApp/osrsreboxed-db/commit/b618aec953fbbdb1e661d4ed5228647ae2196baf) extends the import's `682d17b9` source with shared HTML, Refn and NamedRef drop-note resolution and a regression check. Explicitly referenced location notes apply to every referencing row, including all Karamja trading-stick rows and both Hill Giant weapon variants.
+
+Regenerated with `SOURCE_DATE_EPOCH=1793491200 python3 -m scripts.drops.update --out <output>` twice from unchanged pinned inputs. The unmodified pinned producer exactly reproduces the prior imported hashes; repaired outputs are byte-identical across runs. Imported `npc-drops.json` SHA-256: `8dc7ed00369a7afef0410a64d3fead9a0779d84e1ea2edab3ed19a9796fc48d8`. Subtables remain `a2a90b4467e86ad34afbe3788eda588ab1137a0f98d7a5a589cf0883b6684b12`. No generated output was edited manually.
+
+The shared-reference repair restores 214 note differences across 110 tables, including previously missing quest notes. NPC mappings, table IDs, rates, quantities, bonuses, roll counts and ordered-drop contracts are unchanged. These are source-attached notes recovered by the shared parser, rather than location-specific overrides.

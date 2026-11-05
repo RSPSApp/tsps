@@ -314,6 +314,7 @@ class ColosseumRun {
     Effects.tick(this);
     Hazards.tick(this);
     Sol.tick(this);
+    CombatAchievements.solTick(this);
     // Wiki: a wave cleared inside 40 seconds ends there; otherwise reinforcements arrive.
     if (this.npcs.size === 0) {
       this.completeWave();

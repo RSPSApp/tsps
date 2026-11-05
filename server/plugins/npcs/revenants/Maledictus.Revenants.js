@@ -268,7 +268,7 @@ function createMaledictus(api, core, { inCaves, surge }) {
   function announce(watchers, player, itemId, amount) {
     const name = core.ItemDefinition.forId(itemId).getName();
     const what = amount > 1 ? `${amount} x ${name}` : name;
-    const line = `<col=005f00>${player.getUsername()} received a drop: ${what}</col> <col=106f10>(${NAME})</col>`;
+    const line = `<col=005f00>${player.getDisplayName()} received a drop: ${what}</col> <col=106f10>(${NAME})</col>`;
     for (const watcher of watchers) watcher.sendMessage(line);
   }
 
@@ -279,6 +279,7 @@ function createMaledictus(api, core, { inCaves, surge }) {
     const where = player.getLocation().clone();
     if (stackable) core.ItemOnGroundManager.registerLocation(player, new core.Item(id, amount), where);
     else for (let i = 0; i < amount; i++) core.ItemOnGroundManager.registerLocation(player, new core.Item(id, 1), where);
+    api.emitCustomEvent("collection-log:obtain", { player, itemId, amount });
     announce(watchers, player, itemId, amount);
   }
 

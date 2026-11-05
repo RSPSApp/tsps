@@ -11,23 +11,29 @@ const core = PluginManager.getCoreApi();
 
 before(async () => {
   await require('../dist/game/cache/CachePipeline').CachePipeline.initialize(require('node:path').resolve(__dirname, '..'));
+  core.ObjectDefinition.init();
 });
 
-function register(moduleName, key) {
+function register(moduleName, key, coreOverrides = {}) {
   const hooks = new Map(), custom = new Map(), said = [];
   const add = (name, handler) => {
     if (!hooks.has(name)) hooks.set(name, []);
     hooks.get(name).push(handler);
   };
   const api = new Proxy({
-    core,
+    core: { ...core, ...coreOverrides },
     persistAttribute() {},
-    registerArea() {},
+    registerArea(area) { add("area", area); },
     onCustomEvent(name, handler) { if (!custom.has(name)) custom.set(name, []); custom.get(name).push(handler); },
     emitCustomEvent(name, payload) { for (const handler of custom.get(name) || []) handler(payload); },
     onNpcDialogueCondition(handler) { add('onNpcDialogueCondition', handler); },
     onItemOnObject(handler) { add('onItemOnObject', handler); },
-    onObjectInteraction(handler) { add('onObjectInteraction', handler); },
+    onObjectInteraction(target, actions) {
+      if (typeof target === 'function') return add('onObjectInteraction', target);
+      for (const [option, handler] of Object.entries(actions)) add('onObjectInteraction', (event) => {
+        if (event.definition?.getName() === target && event.option === option) return handler(event);
+      });
+    },
     sendMultiChatboxPrompt() {},
   }, {
     get(target, prop) {
@@ -77,7 +83,7 @@ function player() {
     getLocation: () => new core.Location(3228, 3369, 0),
     getPacketSender: () => new Proxy({}, { get: () => () => undefined }),
     getDialogueManager: () => manager,
-    getUsername: () => 'QuestTester',
+    getUsername: () => 'QuestTester', getDisplayName: () => 'QuestTester',
     getAppearance: () => ({ isMale: () => true }),
     getSkillManager: () => ({ getCombatLevel: () => 20 }),
     sendMessage: (message) => messages.push(message),
@@ -249,4 +255,95 @@ test('Black Knights completion rewards once even when the bag is full', () => {
   assert.equal(second, false);
   assert.equal(dropped.length, 1);
   assert.equal(quest.getStage(full.p), 4);
+});
+
+function statueRoom(layout) {
+  let tick = 0;
+  const tasks = [], packets = [], vars = new Map(), queue = { reset() { return this; }, setBlockMovement(value) { this.blocked = value; return this; } };
+  const h = register('RecruitmentDrive', 'recruitment_drive', {
+    CountdownTask: class { constructor(key, delay, run) { Object.assign(this, { key, due: tick + delay, run }); } },
+    TaskManager: { submit(task) { tasks.push(task); }, cancelTasks(key) { for (const task of tasks) if (task.key === key) task.cancelled = true; } },
+  });
+  const p = player();
+  let location = new core.Location(2457, 4981, 0);
+  p.getLocation = () => location;
+  p.moveTo = (next) => { location = next; };
+  p.getMovementQueue = () => queue;
+  const sender = new Proxy({
+    sendVarbit(id, value) { vars.set(id, value); packets.push(['varbit', id, value]); return sender; },
+    getVarbit(id) { return vars.get(id) || 0; },
+  }, { get: (target, method) => target[method] ?? ((...args) => { packets.push([method, ...args]); return sender; }) });
+  p.getPacketSender = () => sender;
+  h.quest.setStage(p, 2);
+  p.attributes.set('recruitment-drive:statue-layout', layout);
+  const area = h.hooks.get('area')[0];
+  const advance = (ticks) => {
+    for (let i = 0; i < ticks; i++) {
+      tick++;
+      for (const task of tasks.filter((t) => !t.cancelled && t.due <= tick)) { task.cancelled = true; task.run(); }
+    }
+  };
+  const touch = (id) => {
+    const definition = core.ObjectDefinition.forPlayer(id, p);
+    for (const handler of h.hooks.get('onObjectInteraction')) handler({ player: p, objectId: id, definition, option: 'Touch' });
+  };
+  return { ...h, p, area, advance, touch, vars, packets, queue };
+}
+
+test('Recruitment Drive: all twelve cache layouts hide one statue, fade, then accept only the restored statue', () => {
+  for (let layout = 1; layout <= 12; layout++) {
+    const h = statueRoom(layout);
+    h.area.postEnter(h.p);
+    assert.equal(h.vars.get(658), layout, 'the observation phase must select a missing-statue layout');
+    const ids = Array.from({ length: 12 }, (_, i) => 7290 + i);
+    const visible = ids.map((id) => core.ObjectDefinition.forPlayer(id, h.p)?.id).filter(Boolean);
+    assert.equal(visible.length, 11);
+    const answer = ids.map((id) => core.CacheDefinitions.getObject(id).transforms[0]).find((id) => !visible.includes(id));
+    h.touch(ids.find((id) => core.ObjectDefinition.forPlayer(id, h.p)));
+    assert.equal(h.p.attributes.get('quest.recruitment-drive.tests') || 0, 0, 'touching during observation cannot pass');
+    h.advance(25);
+    assert.equal(h.vars.get(658), layout, 'the full ten-second observation window must finish first');
+    h.advance(8);
+    assert.equal(h.vars.get(658), 0);
+    assert.equal(ids.filter((id) => core.ObjectDefinition.forPlayer(id, h.p)).length, 12);
+    assert.ok(h.packets.some(([name, , , , options]) => name === 'sendSubInterface' && options?.postScripts?.[0]?.scriptId === 948));
+    assert.equal(h.queue.blocked, false);
+    h.touch(ids.find((id) => core.ObjectDefinition.forPlayer(id, h.p)?.id === answer));
+    assert.equal(h.p.attributes.get('quest.recruitment-drive.tests') & 4, 4);
+    h.area.postLeave(h.p);
+  }
+});
+
+test('Recruitment Drive: another player, leaving, logout and relog cannot leak a statue transition', () => {
+  const first = statueRoom(1), second = statueRoom(2);
+  first.area.postEnter(first.p); second.area.postEnter(second.p);
+  first.advance(33);
+  assert.equal(first.vars.get(658), 0);
+  assert.equal(second.vars.get(658), 2, 'layout state is per player');
+  second.area.postLeave(second.p);
+  second.advance(100);
+  assert.equal(second.vars.get(658), 2, 'leaving cancels pending fades and reveals');
+  assert.equal(second.queue.blocked, false);
+  second.area.postEnter(second.p);
+  second.advance(33);
+  assert.equal(second.vars.get(658), 0, 're-entry restarts an interrupted observation');
+  second.hooks.get('onPlayerLogout')[0]({ player: second.p });
+  second.area.postEnter(second.p);
+  assert.equal(second.vars.get(658), 0, 'relog restores the revealed layout');
+  second.touch(7290);
+  second.advance(2);
+  assert.equal(second.p.attributes.get('quest.recruitment-drive.tests') || 0, 0);
+  assert.equal(second.p.attributes.get('quest.recruitment-drive.table-state'), 0, 'a wrong statue resets the attempt');
+  first.area.postLeave(first.p); second.area.postLeave(second.p);
+});
+
+test('Recruitment Drive statue room is outside the earlier registered Dondakan mine area', () => {
+  const mine = register('BetweenARock', 'between_a_rock').hooks.get('area')[0];
+  const room = statueRoom(1).area;
+  const boundaries = (area) => area.getBoundaries();
+  const contains = (area, x, y) => boundaries(area).some((b) => x >= b.getX() && x <= b.getX2() && y >= b.getY() && y <= b.getY2());
+  assert.equal(contains(mine, 2364, 4944), true);
+  assert.equal(contains(mine, 2375, 4952), true);
+  assert.equal(contains(mine, 2457, 4981), false);
+  assert.equal(contains(room, 2457, 4981), true);
 });

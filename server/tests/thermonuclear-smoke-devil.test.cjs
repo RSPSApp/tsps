@@ -32,6 +32,8 @@ const combatProviders = [];
 const hitRollHandlers = [];
 const objectHooks = {};
 let onTaskAnswer = () => false;
+let diaryStarted = () => false;
+let diaryDone = () => false;
 const api = new Proxy(
   {
     core,
@@ -44,6 +46,8 @@ const api = new Proxy(
     },
     emitCustomEvent: (name, event) => {
       if (name === "slayer:on-task") event.onTask = onTaskAnswer(event);
+      if (name === "diary:is-started") event.started = diaryStarted(event);
+      if (name === "diary:has-task") event.done = diaryDone(event);
     },
   },
   { get: (target, key) => target[key] ?? (() => {}) }
@@ -122,11 +126,28 @@ test("the combat method is the captured typeless magic style", () => {
   assert.equal(method.type(), core.CombatType.MAGIC);
   assert.equal(method.attackDistance(), 8);
   assert.equal(method.attackSpeed(), 2);
-  assert.equal(Common.HIT_DELAY_TICKS, 2);
   // Max hit 8 comes from the engine (monsters-complete via NpcDefinition), not the
   // plugin: the PendingHit it creates rolls 0-8. The data record must agree with it.
   assert.equal(NpcDefinition.forId(Common.BOSS_ID).getMaxHit(), 8);
   assert.equal(Common.DATA.combat.maxHit, NpcDefinition.forId(Common.BOSS_ID).getMaxHit());
+});
+
+test("the hit lands with the legacy-shape projectile at any range (#1862)", (t) => {
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const sent = [];
+  t.mock.method(core.Projectile.prototype, "sendProjectile", function () { sent.push(this); });
+  const boss = core.NPC.create(Common.BOSS_ID, new Location(2364, 9448, 0));
+  for (const tiles of [1, 8]) {
+    const at = core.Projectile.centreOf(boss);
+    const player = new Player(null, new Location(at.getX() + tiles, at.getY(), 0));
+    const method = new (Fight.methodClass())();
+    method.start(boss, player);
+    const shot = sent.at(-1);
+    // sendProjectile turns the legacy shape (0/20, 43/31) into 51 -> 46 + 10 a tile.
+    assert.deepEqual([shot.delay, shot.speed, shot.startHeight, shot.endHeight], [0, 20, 43, 31]);
+    const end = 46 + 10 * shot.start.getDistance(shot.end);
+    assert.equal(method.hits(boss, player)[0].getDelay(), Math.ceil(end / 30), `${tiles} tiles`);
+  }
 });
 
 test("protection prayers do not reduce the boss hit", () => {
@@ -167,6 +188,33 @@ test("the room refuses an attack off a smoke devil task", () => {
   onTaskAnswer = (request) => npcs.includes(request.npc);
   for (const npc of npcs) assert.equal(area.canAttack(player, npc), null);
   assert.equal(area.canAttack(player, { isNpc: () => false }), null);
+});
+
+test("the boss allows its one off-task Western diary kill at base 93 Slayer, only before the task is done", () => {
+  const area = areas[0];
+  let slayer = 93;
+  const player = {
+    isPlayer: () => true,
+    getAsPlayer: () => player,
+    getSkillManager: () => ({ getMaxLevel: () => slayer }),
+  };
+  const boss = { isNpc: () => true, getId: () => Common.BOSS_ID };
+  const minion = { isNpc: () => true, getId: () => Common.SMOKE_DEVIL_ID };
+  onTaskAnswer = () => false;
+  diaryStarted = () => false;
+  diaryDone = () => false;
+  assert.equal(area.canAttack(player, boss), false, "diary not started");
+  assert.equal(area.canAttack(player, minion), false, "the minions never get the exception");
+  diaryStarted = () => true;
+  assert.equal(area.canAttack(player, boss), null);
+  diaryDone = () => true;
+  assert.equal(area.canAttack(player, boss), false, "the diary task is already done");
+  diaryDone = () => false;
+  slayer = 92;
+  assert.equal(area.canAttack(player, boss), false, "boosted or under-level Slayer fails");
+  slayer = 93;
+  onTaskAnswer = (request) => request.npc === boss;
+  assert.equal(area.canAttack(player, boss), null, "a real smoke devil task still works");
 });
 
 test("smoke devils punish players without a mask", () => {

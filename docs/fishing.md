@@ -81,6 +81,21 @@ roll at the Wiki's tick lengths, so their timing is used; the others are used fo
   fish." and "You need at least level # Fishing to bait these fish." below the level.
   Tempoross uses the same full-inventory box.
 
+## Civitas illa Fortis park pond
+
+- **Spot:** `civitas_park_fishingspot_hmm` (NPC 13329, "Fishing spot", option Cast), stationary.
+  [Fishing spot (Civitas illa Fortis)](https://oldschool.runescape.wiki/w/Fishing_spot_(Civitas_illa_Fortis)):
+  a big fishing net, level 1, 7.5 XP a catch whatever it lands.
+- **Table (Wiki):** jade 1/100 and red topaz 1/505 first, else broken glass 3, old boot 2, big
+  fishing net 2, casket 2, house keys 1 (out of 10); a moon key loop half 1/1014 on top.
+- **rsprox (237/01098, 7 casts):** `human_largenet` every tick, "You cast out your net...",
+  catches 4-10 ticks apart ("You find some broken glass.", "You find a casket.", "You find a big
+  fishing net.", "You find some house keys."), and "This is the wrong size net for fishing here."
+  in the chat without the net. The other items' lines follow that pattern (ours); the catch rate
+  (21/256 a tick) is the recording's, the Wiki gives none.
+- **Not covered:** the Wiki's rare clue bottles (Fishing has no clue-bottle drop), and Rada's
+  blessing and spirit flakes, which the table's items do not take (they are not fish).
+
 ## Not covered
 
 - Which quest step unlocks karambwan fishing (Lubufu's apprenticeship in Tai Bwo Wannai Trio) is

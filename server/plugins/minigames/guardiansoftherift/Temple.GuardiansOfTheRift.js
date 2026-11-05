@@ -59,8 +59,11 @@ function login({ player }) {
   Shared.setVarbit(player, Shared.VARBIT.FINISHED_GAME, 0);
   Shared.setVarp(player, Shared.VARP.GAME_ID, 0);
   Shared.setVarbit(player, Shared.VARBIT.PORTAL_BOTTOM_VISIBLE, 0);
-  Shared.removeItems(player, Shared.GAME_ITEMS);
-  Shared.api().emitCustomEvent("runecrafting:remove-guardian-essence", { player });
+  // Temple of the Eye's tutorial uses the same items, and keeps them over a relog.
+  if (Shared.questComplete(player)) {
+    Shared.removeItems(player, Shared.GAME_ITEMS);
+    Shared.api().emitCustomEvent("runecrafting:remove-guardian-essence", { player });
+  }
   if (Shared.inGameSide(player.getLocation())) player.moveTo(Shared.location(Shared.LOBBY_TILE));
 }
 

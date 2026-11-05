@@ -4,6 +4,7 @@ import { GameConstants } from "../game/GameConstants";
 import { World } from "../game/World";
 import { Player } from "../game/entity/impl/player/Player";
 import { PlayerSave } from "../game/entity/impl/player/persistence/PlayerSave";
+import { DisplayNames } from "../game/entity/impl/player/DisplayNames";
 import { Appearance } from "../game/model/Appearance";
 import { Flag } from "../game/model/Flag";
 import { Location } from "../game/model/Location";
@@ -153,7 +154,34 @@ const CLOSE_ON_INTERFACE_CLOSE_ATTRIBUTE = "interface:close-on-interface-close";
 /** The combat tab (combat_interface) and its auto-retaliate and special attack buttons. */
 const COMBAT_INTERFACE = 593;
 const COMBAT_AUTO_RETALIATE_CHILD = 32;
-const COMBAT_SPECIAL_ATTACK_CHILD = 41;
+/**
+ * The combat tab's special attack bar. Rev 241 moved the visible bar to 57 (under 39); 41 is
+ * the older bar, now under a container the cache keeps hidden. 67 is the offhand bar.
+ */
+const COMBAT_SPECIAL_ATTACK_CHILDREN = new Set([41, 57]);
+/**
+ * The special-attack orb on the desktop and mobile HUDs. It only sends its native Use button:
+ * rev 241's CS2 predicts %sa_attack (varp 301) locally, so the button is what makes the server
+ * decide, as live does.
+ */
+const SPECIAL_ATTACK_ORB_COMPONENTS = [
+  "orbs:specbutton",
+  "orbs_nomap:specbutton",
+  "orbs_osm:specbutton",
+  "orbs_osm_nomap:specbutton",
+];
+let specialAttackOrbIds: Set<number> | undefined;
+
+function isSpecialAttackOrb(widgetId: number): boolean {
+  if (!CachePipeline.isInitialized()) return false;
+  specialAttackOrbIds ??= new Set(
+    SPECIAL_ATTACK_ORB_COMPONENTS
+      .map((name) => CacheDefinitions.getComponentId(name))
+      .filter((id): id is number => id !== null),
+  );
+  return specialAttackOrbIds.has(widgetId);
+}
+
 const WORLD_INTERACTIONS = new Set([
   "move",
   "teleport",
@@ -317,6 +345,11 @@ export class NetworkBuilder {
 
 export class ClientConnection {
   private static readonly pendingNames = new Set<string>();
+
+  /** Whether a login with this name is between its checks and entering the world. */
+  public static isLoginPending(name: string): boolean {
+    return ClientConnection.pendingNames.has(Misc.formatNameForProtocol(DisplayNames.key(name)));
+  }
   /**
    * A logged-in connection that sends nothing for this long is dead: the client pings every 5 s
    * while the server talks. A phone that sleeps or changes network never closes its socket (a
@@ -558,10 +591,12 @@ export class ClientConnection {
             if (target && LunarSpells.handleNpcTarget(this.player, target, spellName)) {
               continue;
             }
+            const selection = spellName ? CacheDefinitions.getSpellByName(spellName) : undefined;
             NPCOptionPacketListener.castSpell(
               this.player,
               packet.targetIndex,
-              this.resolveClientCombatSpellId(packet.spellWidget, packet.spellChild, packet.spellItemId)
+              this.resolveClientCombatSpellId(packet.spellWidget, packet.spellChild, packet.spellItemId),
+              spellName && selection ? { name: spellName, widgetId: selection.widgetId } : undefined
             );
           }
           continue;
@@ -646,6 +681,8 @@ export class ClientConnection {
             }
           }
           continue;
+        case "clan_chat":
+        case "clan_channel_action":
         case "friends_chat_action":
         case "private_message":
         case "chat_filter":
@@ -739,8 +776,12 @@ export class ClientConnection {
                   subOpId: actionPacket.subOpId,
                   handled: false,
                 });
-              if (!itemActionHandled) {
+              // Only op1 is Remove; ops 2+ are the item's worn options (Check, Activate...),
+              // which never take the item off, even when nothing handles them.
+              if (!itemActionHandled && actionPacket.buttonNum === 1) {
                 EquipPacketListener.unequip(this.player, equipmentSlot);
+              } else if (!itemActionHandled && item?.getId?.() > 0) {
+                this.player.sendMessage("Nothing interesting happens.");
               }
             } else if (Bank.handleWidgetAction(this.player, actionPacket)) {
               // Bank owns its cache-native widgets while the bank modal is open.
@@ -766,7 +807,9 @@ export class ClientConnection {
                 172,
                 this.player.autoRetaliateReturn() ? 0 : 1,
               );
-            } else if (actionPacket.groupId === COMBAT_INTERFACE && actionPacket.childId === COMBAT_SPECIAL_ATTACK_CHILD) {
+            } else if (actionPacket.groupId === COMBAT_INTERFACE && COMBAT_SPECIAL_ATTACK_CHILDREN.has(actionPacket.childId)) {
+              CombatSpecial.activate(this.player);
+            } else if (actionPacket.buttonNum === 1 && isSpecialAttackOrb(actionPacket.widgetId)) {
               CombatSpecial.activate(this.player);
             } else if (WeaponInterfaceManager.handleStyleButton(this.player, actionPacket.groupId, actionPacket.childId)) {
               BonusManager.update(this.player);
@@ -774,6 +817,8 @@ export class ClientConnection {
               this.player, actionPacket.groupId, actionPacket.childId, actionPacket.slot
             )) {
               // Cache-native combat autocast controls reuse the existing spell state.
+            } else if (LunarSpells.handleWidgetAction(this.player, actionPacket.groupId, actionPacket.childId)) {
+              // Monster Examine's stats (522) close back to the spellbook.
             } else if (this.emitSpellCast(actionPacket)) {
               // Plugins own the self-cast spells they register for, by cache spell name.
             } else if (SpellTeleports.handleSelf(
@@ -784,6 +829,7 @@ export class ClientConnection {
             } else if (LunarSpells.handleSelf(
               this.player,
               this.resolveSpellName(actionPacket.widgetId, actionPacket.groupId, actionPacket.childId, actionPacket.itemId),
+              actionPacket.buttonNum || actionPacket.opId || 1,
             )) {
               // Lunar self-casts and teleports are identified by their cache spell name.
             } else if (CombatSpells.handleSelf(
@@ -795,12 +841,12 @@ export class ClientConnection {
               this.player,
               EffectSpells.forSpellName(this.resolveSpellName(
                 actionPacket.widgetId, actionPacket.groupId, actionPacket.childId, actionPacket.itemId,
-              ))?.spellId() ?? actionPacket.itemId ?? -1,
+              ))?.spellId() ?? -1,
             )) {
               // Utility and self-cast spells are represented by their cache item id.
             } else if (ArceuusSpells.handleSpell(
               this.player,
-              CacheDefinitions.getSpellName(actionPacket.widgetId, actionPacket.itemId ?? -1),
+              this.resolveSpellName(actionPacket.widgetId, actionPacket.groupId, actionPacket.childId, actionPacket.itemId),
             )) {
               // Arceuus self-cast spells are identified by their cache spell name.
             } else if (actionPacket.groupId === MAIN_INVENTORY_GROUP_ID && actionPacket.itemId != null && actionPacket.slot != null &&
@@ -869,8 +915,8 @@ export class ClientConnection {
             } else if (packet.varpId === 173) {
               this.player.setRunning(packet.value !== 0 && this.player.getRunEnergy() > 0);
               this.player.getPacketSender().sendRunStatus();
-            } else if (packet.varpId === 301 && (packet.value !== 0) !== this.player.isSpecialActivated()) {
-              CombatSpecial.activate(this.player);
+              // "player:run-toggled" { player, running }: the run mode the player switched to.
+              PluginManager.emitCustomEvent("player:run-toggled", { player: this.player, running: this.player.isRunningReturn() });
             }
             this.player.applyAudioSettingFromClient(packet.varpId, packet.value);
           }
@@ -937,7 +983,8 @@ export class ClientConnection {
               this.player.getStatus() !== PlayerStatus.NONE ||
               this.player.getInterfaceId() >= 0 ||
               this.player.getDialogueManager().isActive() ||
-              this.player.getPacketSender().hasInterruptibleInterface();
+              this.player.getPacketSender().hasInterruptibleInterface() ||
+              this.player.getPacketSender().hasInputPrompt();
             if (hadSomethingOpen) {
               // IF_CLOSE is explicit: clear even interfaces that world interactions preserve.
               this.player.getPacketSender().closeInterruptibleInterfaces();
@@ -1131,6 +1178,24 @@ export class ClientConnection {
       return;
     }
 
+    // A new account can't take a name another account shows or still holds (DisplayNames).
+    if (!credentials) {
+      let owner: string | undefined;
+      try {
+        owner = DisplayNames.ownerOf(typedName);
+      } catch (error) {
+        console.error(`[login] failed to read display names for ${typedName}`, error);
+        this.releasePendingName();
+        this.failLogin(8, "The login server is busy.");
+        return;
+      }
+      if (owner !== undefined && owner !== DisplayNames.key(typedName)) {
+        this.releasePendingName();
+        this.failLogin(3, "That name is not available. Please choose another.");
+        return;
+      }
+    }
+
     // A remembered login only signs in to a character that exists (its tokens live in its own save).
     if (tokenLogin && !save) {
       this.releasePendingName();
@@ -1220,6 +1285,11 @@ export class ClientConnection {
     const player = new Player(session, GameConstants.DEFAULT_LOCATION.clone());
     session.setPlayer(player);
     player.setUsername(pending.username);
+    try {
+      player.setDisplayName(DisplayNames.nameOf(pending.username));
+    } catch (error) {
+      console.error(`[login] failed to read the display name of ${pending.username}`, error);
+    }
     player.setProfile(pending.profile);
     player.setLongUsername(Misc.stringToLongBigInt(pending.username));
     player.setHostAddress(this.channel.remoteAddress);
@@ -1362,6 +1432,7 @@ export class ClientConnection {
   }
 
   private resolveSpellName(widgetId: number, groupId: number, childId: number, itemId?: number): string | undefined {
+    if (!CacheDefinitions.isSpellWidgetGroup(groupId)) return undefined;
     const packed = (groupId << 16) | (childId & 0xffff);
     return CacheDefinitions.getSpellName(widgetId, itemId ?? -1) ??
       CacheDefinitions.getSpellName(packed, itemId ?? -1) ??
@@ -1371,20 +1442,36 @@ export class ClientConnection {
   private groundItemAction(packet: Extract<ReturnType<typeof decodeClientPackets>[number], { type: "ground_item_action" }>): void {
     const player = this.player!;
     const option = packet.option?.toLowerCase() ?? "";
+    const actions = CacheDefinitions.getItem(packet.itemId)?.groundActions ?? [];
     if (option === "examine") {
       const definition = ItemDefinition.forId(packet.itemId);
       player.sendMessage(definition.getExamine() || definition.getName());
-    } else if (option === "take" || (!option && (player.getPrivateArea() || packet.optionIndex === 3 || packet.optionIndex == null))) {
-      // A named option other than Take is the item's own, even in a private area (giant
-      // bones' "Bury" is their op3, where Take usually sits).
+      return;
+    }
+    if (option === "take") {
       PickupItemPacketListener.pickup(player, packet.itemId, packet.x, packet.y, packet.stackId);
-    } else {
-      // A named option (the agent MCP) is resolved to its op number, as the client sends it.
-      const named = option
-        ? CacheDefinitions.getItem(packet.itemId)?.groundActions?.findIndex((action) => action?.toLowerCase() === option) ?? -1
-        : -1;
+      return;
+    }
+
+    if (option) {
+      const namedIndex = actions.findIndex((action) => action?.toLowerCase() === option);
+      if (namedIndex < 0) return;
+      // The name must match the cache, and a supplied op number must agree with it.
+      const index = packet.optionIndex ?? namedIndex + 1;
+      if (index !== namedIndex + 1) return;
       SecondGroundItemOptionPacketListener.interact(
-        player, packet.itemId, packet.x, packet.y, packet.optionIndex ?? (named >= 0 ? named + 1 : 2)
+        player, packet.itemId, packet.x, packet.y, index
+      );
+    } else {
+      const index = packet.optionIndex ?? 3;
+      const action = actions[index - 1];
+      if (action?.toLowerCase() === "take" || (index === 3 && !action)) {
+        PickupItemPacketListener.pickup(player, packet.itemId, packet.x, packet.y, packet.stackId);
+        return;
+      }
+      if (!action) return;
+      SecondGroundItemOptionPacketListener.interact(
+        player, packet.itemId, packet.x, packet.y, index
       );
     }
   }
@@ -1411,6 +1498,7 @@ export class ClientConnection {
     const displayEquipment = player.getEquipment().getItems();
     return {
       gender: look[Appearance.GENDER] ?? 0,
+      pronouns: player.getAppearance().getPronouns(),
       colors: [
         look[Appearance.HAIR_COLOUR],
         look[Appearance.TORSO_COLOUR],

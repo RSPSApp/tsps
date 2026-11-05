@@ -11,12 +11,21 @@
  *   0 not started,
  *   10 Martin asked me to talk to five gardeners,
  *   20 five gardeners reported (Martin sends me to a fairy),
- *   30 Fairy Nuff gave me the symptoms list,
- *   40 Zandar Horfyre diagnosed the Queen,
- *   50 Malignius Mortifer taught me the recipe,
- *   60 the Nature Spirit enchanted my secateurs,
- *   70 the Tanglefoot is dead and I have the Queen's secateurs,
- *   80 complete.
+ *   30 the Fairy Godfather sent me to Fairy Nuff,
+ *   40 Fairy Nuff gave me the symptoms list,
+ *   50 Zandar Horfyre diagnosed the Queen,
+ *   60 Malignius Mortifer taught me the recipe,
+ *   70 the Nature Spirit enchanted my secateurs,
+ *   80 the Tanglefoot is dead and I have the Queen's secateurs,
+ *   90 complete.
+ *
+ * These are the cache's own progress values: its quest DB row completes at
+ * 90. Older saves used 30..80 for the stages after the Godfather conversation,
+ * so migrateStage moves them to 40..90 once; 0..20 are unchanged.
+ *
+ * Quest Helper's pinned FairytaleI.java likewise maps 20 Godfather, 30 Nuff,
+ * 40 Zandar, 50 Mortifer, 60 enchant, 70 kill and 80 finish:
+ * https://github.com/Zoinkwiz/quest-helper/blob/06da90f982518a093f2fe1c9cfac5547fa7053d3/src/main/java/com/questhelper/helpers/quests/fairytalei/FairytaleI.java
  *
  * Varbits sharing varp 671: 1804-1806 hold the three randomised nature items
  * (positions 1-31 in the wiki's ordered table); 1807 hides the throne Queen and
@@ -37,25 +46,46 @@
  *   branch.
  * - Fairy Nuff has no "I still have the list" variant; talking to her while
  *   holding it falls back to her standard-page dialogue.
- * - The grove's north-west chamber is sealed in the cache's static clipping, so
- *   the fight happens in the connected tunnel south of the entrance (the
- *   transcript's "appears in the grove" action teleports there).
- * - The Tanglefoot is spawned per player (it is absent from npc-spawns.json).
- *   Only magic secateurs damage it; the wiki's ring-of-recoil exception is not
- *   modelled, and normal secateurs have no Wield option, so enchanting consumes
- *   them from the inventory.
+ * - The lair's tunnel loops south of the entrance before doubling back north,
+ *   so the Tanglefoot waits at the north end (2375,4385, the tile inferred from
+ *   Quest Helper's kill step, among the baby tanglefootii). The cache clipping
+ *   is open there and the tunnel is connected from the real entrance. It is
+ *   spawned per player, as it is absent from npc-spawns.json. Only magic
+ *   secateurs damage it; the wiki's ring-of-recoil exception is not modelled,
+ *   and normal secateurs have no Wield option, so enchanting consumes them from
+ *   the inventory. Combat pursuit is leashed to the walled north chamber: the
+ *   cache map closes it at x2383 with one doorway, and leaving that chamber
+ *   drops the fight (a boss ever carried outside is put back at its spawn).
+ * - The blessing scene uses the cache's own sequence names
+ *   (human_fairy_kneel_and_offer, human_fairy_take_and_hold_up) and the
+ *   fairy_flower_enchant spotanim. No rsprox recording contains those ids, so
+ *   the order and timing come from the Wiki's own 58-frame animation capture;
+ *   the cache sequences carry no frame sounds and no recording supplies a
+ *   separate synth, so the scene is silent rather than guessing a sound id.
  * - The wiki prose is authored for the two dig and damage messages, which no
- *   transcript page carries.
+ *   transcript page carries. The grave has no click action: the capture-confirmed
+ *   native route is the spade's inventory Dig option (capture 3209), which plays
+ *   human_dig_long for four ticks before the skull appears. The existing
+ *   spade-on-grave handler is retained; that route was not captured.
  */
 module.exports = function registerFairytaleIGrowingPainsQuest(api) {
   const {
+    Animation,
+    CacheDefinitions,
+    ChatType,
+    CountdownTask,
     Equipment,
+    Graphic,
     ItemIdentifiers,
     Location,
     Misc,
     NpcIdentifiers,
     ObjectIdentifiers,
     Skill,
+    Sound,
+    Sounds,
+    Task,
+    TaskManager,
   } = api.core;
   const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
 
@@ -117,12 +147,19 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
 
   const STAGE_STARTED = 10;
   const STAGE_GARDENERS_REPORTED = 20;
-  const STAGE_HAS_SYMPTOMS_LIST = 30;
-  const STAGE_DIAGNOSED = 40;
-  const STAGE_HAS_RECIPE = 50;
-  const STAGE_HAS_MAGIC_SECATEURS = 60;
-  const STAGE_TANGLEFOOT_DEFEATED = 70;
-  const STAGE_COMPLETE = 80;
+  const STAGE_TALKED_TO_GODFATHER = 30;
+  const STAGE_HAS_SYMPTOMS_LIST = 40;
+  const STAGE_DIAGNOSED = 50;
+  const STAGE_HAS_RECIPE = 60;
+  const STAGE_HAS_MAGIC_SECATEURS = 70;
+  const STAGE_TANGLEFOOT_DEFEATED = 80;
+  const STAGE_COMPLETE = 90;
+
+  const STAGE_SCHEMA_ATTRIBUTE = "quest.fairytale-i-growing-pains:stage-schema";
+  const STAGE_SCHEMA = 1;
+  // Older saves numbered the post-Godfather stages 30..80; they are now 40..90.
+  const LEGACY_STAGE_VALUES = { 30: 40, 40: 50, 50: 60, 60: 70, 70: 80, 80: 90 };
+  const LEGACY_STAGE_COMPLETE = 80;
 
   const VARP_FAIRYTALE = 671;
   const VARBIT_FAIRYTALE_QUEST = 1803; // "fairy_farmers_quest", bits 0-6
@@ -145,6 +182,31 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
   const SPADE_ITEM_ID = ItemIdentifiers.SPADE; // 952
 
   const DRAYNOR_GRAVE_OBJECT_ID = ObjectIdentifiers.GRAVESTONE_8; // 12125 at 3106,3384
+  const DRAYNOR_GRAVE_TILE = new Location(3106, 3384, 0);
+  // Cache 241: human_dig_long 831 has eight frames, length 39, loops 99 and no
+  // frame sounds; capture 3209 sends its separate 1470 synth as loops=1/delay=0
+  // and loops=3/delay=25.
+  const HUMAN_DIG_LONG_SEQUENCE = 831;
+  const DRAYNOR_DIG_TICKS = 4;
+  const DRAYNOR_DIG_SOUND_ID = 1470;
+  const DRAYNOR_DIG_SOUND_DELAY = 25;
+  const DRAYNOR_DIG_SOUND_LOOPS = 3;
+  // Cache 241 sequence names: the player kneels and offers the secateurs
+  // (human_fairy_kneel_and_offer, 42 frames, length 360 = 12 ticks), the Nature
+  // Spirit takes and holds them up (human_fairy_take_and_hold_up, length 210 = 7
+  // ticks), and fairy_flower_enchant is the purple effect above the spirit. The
+  // Wiki's own animation capture (58 frames, 8.2s) shows that order: the player
+  // kneels throughout, the spirit raises the secateurs and the effect starts
+  // roughly a fifth of the way in, and both finish before the player stands.
+  const BLESSING_PLAYER_SEQUENCE = CacheDefinitions.getSeqId("human_fairy_kneel_and_offer") ?? 3256;
+  const BLESSING_SPIRIT_SEQUENCE = CacheDefinitions.getSeqId("human_fairy_take_and_hold_up") ?? 3257;
+  const BLESSING_EFFECT_ID = CacheDefinitions.getSpotanimId("fairy_flower_enchant") ?? 568;
+  const BLESSING_PLAYER_TICKS = 12; // sequence length 360 client cycles
+  const BLESSING_SPIRIT_START_TICKS = 2; // the effect appears about 1.2s into the kneel
+  const NUFF_HANDOVER_LINES = [
+    "I believe he now resides in the Dark Wizard's tower near Falador,",
+    "Well not to worry, I have a copy of it here.",
+  ];
   // 12004 is the static gap at 2397,4379; 11999 is the placed loc at 2399,4379
   // whose varbit-1803 transform is 12041 "A gap through the wall". Object click
   // events carry the placed id, and 11999 has no generated identifier.
@@ -204,32 +266,60 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
 
   const START_HOOK = "quest:fairytale-i-growing-pains:start";
   const GARDENER_QUESTION = "Are you a member of the Group of Advanced Gardeners?";
+  const GARDENER_REPORTED_ACTION = "fairytale-i-growing-pains:gardener-reported";
 
   const GATEKEEPER_REFUSAL_VARIANT =
     "gatekeeper-near-the-entrance-to-the-tanglefoot-s-lair-attempting-to-enter-the-shady-grove-without-magic-secateurs";
   const GATEKEEPER_AFTER_VARIANT =
     "gatekeeper-near-the-entrance-to-the-tanglefoot-s-lair-after-fairytale-i";
   const ZANDAR_VARIANT = "at-the-dark-wizard-s-tower-talking-to-zandar-horfyre";
+  const BLESSING_VARIANT = "in-the-nature-grotto-talking-to-the-nature-spirit";
 
-  // The tunnel south of the gap; the sealed north-west chamber is not simulated.
+  // The tunnel loops south of the gap and doubles back north to the Tanglefoot.
   const GROVE_ENTRY = { x: 2394, y: 4379, z: 0 };
   const GROVE_EXIT = { x: 2400, y: 4379, z: 0 };
-  const TANGLEFOOT_SPAWN = { x: 2395, y: 4358, z: 0 };
+  const TANGLEFOOT_SPAWN = { x: 2375, y: 4385, z: 0 };
   const GROVE_ZONE = {
-    minX: 2388,
-    maxX: 2396,
+    minX: 2368,
+    maxX: 2398,
     minY: 4354,
-    maxY: 4384,
+    maxY: 4399,
+    levels: [0],
+  };
+  // The Tanglefoot's own chamber, from the cache map: walls close it at x2383
+  // and around y4376, and its only opening is the doorway at 2382-2383,4377-4379.
+  // The boss spawns at 2375,4385 inside it; the corridor beyond the doorway is
+  // outside the room the wiki describes as the end of the tunnel.
+  const TANGLEFOOT_ROOM = {
+    minX: 2368,
+    maxX: 2382,
+    minY: 4377,
+    maxY: 4399,
     levels: [0],
   };
 
   let quest;
   const tanglefootByPlayer = new Map();
+  const draynorDigTasks = new Map();
+  const blessingScenes = new Map();
 
   const held = (player, itemId, amount = 1) => player.getInventory().getAmount(itemId) >= amount;
 
+  /** The magic secateurs are a weapon: a pair in the weapon slot is still the player's pair. */
+  const hasMagicSecateurs = (player) =>
+    held(player, MAGIC_SECATEURS_ITEM_ID) ||
+    player.getEquipment().get(Equipment.WEAPON_SLOT)?.getId?.() === MAGIC_SECATEURS_ITEM_ID;
+
   function advance(player, value) {
     if (quest.getStage(player) < value && !quest.isComplete(player)) quest.setStage(player, value);
+  }
+
+  /** Moves saves written before the Godfather stage existed onto the cache's values. */
+  function migrateStage({ player }) {
+    if (Number(player.getAttribute(STAGE_SCHEMA_ATTRIBUTE)) >= STAGE_SCHEMA) return;
+    const migrated = LEGACY_STAGE_VALUES[quest.getStage(player)];
+    player.setAttribute(STAGE_SCHEMA_ATTRIBUTE, STAGE_SCHEMA);
+    if (migrated !== undefined) quest.setStage(player, migrated);
   }
 
   function actionOf(event) {
@@ -269,6 +359,7 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
 
   function giveSymptomsList(player) {
     if (!held(player, SYMPTOMS_LIST_ITEM_ID)) player.getInventory().adds(SYMPTOMS_LIST_ITEM_ID, 1);
+    return held(player, SYMPTOMS_LIST_ITEM_ID);
   }
 
   function rollNatureItems(player) {
@@ -303,7 +394,45 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
     );
   }
 
-  /** The Tanglefoot exists only while the player on stage 60 is in its tunnel. */
+  function insideTanglefootRoom(location) {
+    if (!location || location.getZ() !== TANGLEFOOT_ROOM.levels[0]) return false;
+    return (
+      location.getX() >= TANGLEFOOT_ROOM.minX &&
+      location.getX() <= TANGLEFOOT_ROOM.maxX &&
+      location.getY() >= TANGLEFOOT_ROOM.minY &&
+      location.getY() <= TANGLEFOOT_ROOM.maxY
+    );
+  }
+
+  /**
+   * The Tanglefoot is an instance boss: it may chase anywhere inside its walled
+   * chamber, but a player who leaves the chamber ends the pursuit. Moving the
+   * boss back to its spawn is the instance reset if a step ever carries it out.
+   */
+  class TanglefootLeashTask extends Task {
+    constructor(player, npc) {
+      super(1, npc, false);
+      this.owner = player;
+      this.npc = npc;
+      this.home = npc.getSpawnPosition().clone();
+    }
+
+    execute() {
+      const { owner, npc } = this;
+      if (tanglefootByPlayer.get(owner) !== npc || npc.isRegistered?.() === false) {
+        this.stop();
+        return;
+      }
+      const playerInside = insideTanglefootRoom(owner.getLocation());
+      const npcInside = insideTanglefootRoom(npc.getLocation());
+      if (playerInside && npcInside) return;
+      npc.getCombat().reset();
+      npc.getMovementQueue().reset();
+      if (!npcInside) npc.moveTo(this.home.clone());
+    }
+  }
+
+  /** The Tanglefoot exists only while the player on stage 70 is in its tunnel. */
   function ensureTanglefoot(player) {
     if (quest.getStage(player) !== STAGE_HAS_MAGIC_SECATEURS) return;
     const existing = tanglefootByPlayer.get(player);
@@ -317,12 +446,23 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
       owner: player,
       ownerOnly: true,
     });
-    if (npc) tanglefootByPlayer.set(player, npc);
+    if (!npc) return;
+    // The chamber task replaces the default spawn-radius leash. Without this
+    // flag the generic seven-tile aggression range would stop the fight in the
+    // middle of the chamber; with it, the room boundary is the only leash.
+    npc.setFlag("combat:no-retreat");
+    tanglefootByPlayer.set(player, npc);
+    TaskManager.submit(new TanglefootLeashTask(player, npc));
   }
 
   function removeTanglefoot(player) {
     const npc = tanglefootByPlayer.get(player);
-    if (npc) api.removeNpc(npc);
+    if (npc) {
+      TaskManager.cancelTasks(npc);
+      npc.getCombat?.().reset();
+      npc.getMovementQueue?.().reset();
+      api.removeNpc(npc);
+    }
     tanglefootByPlayer.delete(player);
   }
 
@@ -351,12 +491,9 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
     if (stage >= STAGE_DIAGNOSED) return "after-fairytale-part-1";
     if (stage >= STAGE_HAS_SYMPTOMS_LIST) {
       if (held(player, SYMPTOMS_LIST_ITEM_ID)) return null;
-      giveSymptomsList(player);
       return "entering-zanaris-talking-to-fairy-nuff-again";
     }
     if (stage >= STAGE_GARDENERS_REPORTED) {
-      giveSymptomsList(player);
-      advance(player, STAGE_HAS_SYMPTOMS_LIST);
       return "entering-zanaris-talking-to-fairy-nuff";
     }
     return null;
@@ -392,7 +529,7 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
     if (
       stage >= STAGE_HAS_MAGIC_SECATEURS &&
       stage < STAGE_COMPLETE &&
-      !held(player, MAGIC_SECATEURS_ITEM_ID)
+      !hasMagicSecateurs(player)
     ) {
       return "in-the-nature-grotto-talking-to-the-nature-spirit-after-losing-the-secateurs";
     }
@@ -457,8 +594,16 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
   // Dialogue events
   // ==========================================================================
 
-  function handleDialogueChoice({ player, npcId, option }) {
-    if (option !== GARDENER_QUESTION) return;
+  function handleNuffDialogueLine(event) {
+    if (!FAIRY_NUFF_NPC_IDS.has(event.npcId) || !NUFF_HANDOVER_LINES.some(line => event.text.startsWith(line))) return;
+    event.after = () => {
+      const stage = quest.getStage(event.player);
+      if (stage < STAGE_GARDENERS_REPORTED || stage >= STAGE_DIAGNOSED) return;
+      if (giveSymptomsList(event.player)) advance(event.player, STAGE_HAS_SYMPTOMS_LIST);
+    };
+  }
+
+  function recordGardener({ player, npcId }) {
     if (quest.getStage(player) !== STAGE_STARTED) return;
     if (!GARDENER_NPC_IDS.has(npcId)) return;
     const asked = askedGardeners(player);
@@ -467,13 +612,29 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
     player.setAttribute(GARDENERS_ATTRIBUTE, asked.join(","));
   }
 
+  function handleDialogueLine(event) {
+    if (!event.pages?.some(({ page }) => page === PAGE)) return;
+    if (event.npcId === MALIGNIUS_NPC_ID && event.step?.speaker === "Malignius Mortifer") {
+      const items = requiredNatureItems(event.player);
+      if (items.length === 3) {
+        event.text = event.text.replace(/\[item\s*([123])\]/gi, (_, index) => items[Number(index) - 1].name);
+      }
+      return;
+    }
+    if (!GARDENER_NPC_IDS.has(event.npcId) && !INVALID_GARDENER_NPC_IDS.has(event.npcId)) return;
+    if (/^\[Gardener(?: #\d+)?\]$/.test(event.step?.speaker ?? "")) {
+      event.speakerName = event.definition.getName();
+    }
+  }
+
   function questIsComplete(player, key) {
     const request = { player, key, complete: undefined };
     api.emitCustomEvent("quest:is-complete", request);
     return request.complete === true;
   }
 
-  function handleStartHook({ player, npcId, hook }) {
+  function handleStartHook(event) {
+    const { player, npcId, hook } = event;
     if (npcId !== MARTIN_NPC_ID || hook !== START_HOOK) return;
     if (quest.getStage(player) === 0) {
       const missing = [
@@ -481,6 +642,7 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
         { key: "nature_spirit", name: "Nature Spirit" },
       ].filter((requirement) => !questIsComplete(player, requirement.key));
       if (missing.length > 0) {
+        event.end = true;
         for (const requirement of missing) {
           player.sendMessage(`You must complete ${requirement.name} to start this quest.`);
         }
@@ -489,6 +651,14 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
     }
     advance(player, STAGE_STARTED);
     sendProgressVarbits(player);
+  }
+
+  /** The "Where's the Fairy Queen?" answer is the step that sends the player to Nuff. */
+  function handleDialogueChoice({ player, npcId, option }) {
+    if (!FAIRY_GODFATHER_NPC_IDS.has(npcId)) return;
+    if (option !== "Where's the Fairy Queen?") return;
+    if (quest.getStage(player) !== STAGE_GARDENERS_REPORTED) return;
+    advance(player, STAGE_TALKED_TO_GODFATHER);
   }
 
   function handleConditionEvent({ player, npcId, stepId }) {
@@ -520,14 +690,120 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
       player.getInventory().deleteNumber(SECATEURS_ITEM_ID, 1);
       for (const id of ids) player.getInventory().deleteNumber(id, 1);
     }
-    if (!held(player, MAGIC_SECATEURS_ITEM_ID)) {
+    if (!hasMagicSecateurs(player)) {
       player.getInventory().adds(MAGIC_SECATEURS_ITEM_ID, 1);
     }
     advance(player, STAGE_HAS_MAGIC_SECATEURS);
   }
 
+  /** The lines after the enchant action, so the scene can finish before "It is done!". */
+  function stepsAfterBlessing(steps) {
+    for (let index = 0; index < steps.length; index++) {
+      const step = steps[index];
+      if (step?.type === "action" && step.id === ENCHANT_ACTION_ID) return steps.slice(index + 1);
+      if (Array.isArray(step?.steps)) {
+        const rest = stepsAfterBlessing(step.steps);
+        if (rest) return rest;
+      }
+    }
+    return null;
+  }
+
+  function cancelBlessing(player) {
+    const scene = blessingScenes.get(player);
+    if (!scene) return false;
+    blessingScenes.delete(player);
+    scene.task?.stop();
+    player.getMovementQueue().setBlockMovement(false);
+    if (player.getHitpoints() > 0 && !player.isDying
+      && player.getAnimation()?.getId() === BLESSING_PLAYER_SEQUENCE) {
+      player.performAnimation(Animation.DEFAULT_RESET_ANIMATION);
+    }
+    return true;
+  }
+
+  /**
+   * Runs the cache's blessing presentation: the player kneels and offers the
+   * secateurs for twelve ticks while the Nature Spirit takes and holds them up
+   * from tick two; the effect is the cache's fairy_flower_enchant spotanim. The
+   * items are consumed and the stage advances only when the scene finishes, so
+   * an interrupted scene leaves the player able to talk and try again.
+   */
+  class BlessingSceneTask extends Task {
+    constructor(scene) {
+      super(1, scene, false);
+      this.scene = scene;
+    }
+
+    execute() {
+      const { scene } = this;
+      const { player, npc } = scene;
+      if (blessingScenes.get(player) !== scene) {
+        this.stop();
+        return;
+      }
+      if (player.isRegistered?.() === false || player.getHitpoints() <= 0 || player.isDying
+        || !player.getLocation().equals(scene.start)) {
+        cancelBlessing(player);
+        return;
+      }
+      scene.ticks++;
+      if (!scene.spiritStarted && scene.ticks >= BLESSING_SPIRIT_START_TICKS) {
+        scene.spiritStarted = true;
+        npc?.performAnimation?.(new Animation(BLESSING_SPIRIT_SEQUENCE, 10));
+        player.getPacketSender().sendGraphic(new Graphic(BLESSING_EFFECT_ID),
+          (npc ?? player).getLocation());
+      }
+      if (scene.ticks >= BLESSING_PLAYER_TICKS) finishBlessing(scene);
+    }
+  }
+
+  function beginBlessing(player, event) {
+    cancelBlessing(player);
+    const npc = event.npc ?? [...(player.getLocalNpcs?.() ?? [])]
+      .find((candidate) => NATURE_SPIRIT_NPC_IDS.has(candidate.getContentId?.(player) ?? candidate.getId?.()));
+    const scene = {
+      player,
+      npc: npc ?? null,
+      npcId: event.npcId ?? NATURE_SPIRIT_NPC_ID,
+      start: player.getLocation().clone(),
+      ticks: 0,
+      spiritStarted: false,
+      task: null,
+    };
+    blessingScenes.set(player, scene);
+    player.getMovementQueue().reset().setBlockMovement(true);
+    player.performAnimation(new Animation(BLESSING_PLAYER_SEQUENCE, 10));
+    scene.task = new BlessingSceneTask(scene);
+    TaskManager.submit(scene.task);
+  }
+
+  function finishBlessing(scene) {
+    const { player, npcId } = scene;
+    if (blessingScenes.get(player) !== scene) return;
+    // Inventory actions can remove recipe items while the timed scene blocks walking.
+    if (quest.getStage(player) < STAGE_HAS_MAGIC_SECATEURS && !hasEnchantingItems(player)) {
+      cancelBlessing(player);
+      player.sendMessage("You no longer have all the materials needed to bless the secateurs.");
+      return;
+    }
+    blessingScenes.delete(player);
+    scene.task?.stop();
+    player.getMovementQueue().setBlockMovement(false);
+    enchantSecateurs(player);
+    // The lost-pair variant jumps to this same condition branch, so the shared
+    // normal variant is the stable source for the two closing lines.
+    startTranscript(api, player, npcId, PAGE, BLESSING_VARIANT,
+      (steps) => stepsAfterBlessing(steps) ?? []);
+  }
+
   function handleActionEvent(event) {
     const { player, npcId, stepId } = event;
+    if (event.action === GARDENER_REPORTED_ACTION) {
+      event.handled = true;
+      recordGardener(event);
+      return;
+    }
     if (stepId === GROVE_ENTER_ACTION_ID || stepId === GROVE_REENTER_ACTION_ID) {
       event.handled = true;
       player.moveTo(new Location(GROVE_ENTRY.x, GROVE_ENTRY.y, GROVE_ENTRY.z));
@@ -543,7 +819,8 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
     if (stepId === ENCHANT_ACTION_ID) {
       if (!NATURE_SPIRIT_NPC_IDS.has(npcId)) return;
       event.handled = true;
-      enchantSecateurs(player);
+      event.end = true;
+      beginBlessing(player, event);
       return;
     }
     if (stepId !== COMPLETE_ACTION_ID) return;
@@ -562,15 +839,6 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
   // World interactions
   // ==========================================================================
 
-  function gardenerVariant(player, npcId) {
-    const asked = askedGardeners(player);
-    if (asked.length >= 5) {
-      return "talking-to-the-gardeners-talking-to-other-gardeners-after-having-already-asked-five";
-    }
-    if (asked.includes(npcId)) return "talking-to-the-gardeners-if-the-player-has-already-talked-to-them";
-    return `talking-to-the-gardeners-gardener-${asked.length + 1}`;
-  }
-
   /** The gardeners are shared NPCs; only claim them for the gathering stage. */
   function handleNpcInteraction(event) {
     const { player, npcId } = event;
@@ -578,11 +846,28 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
     if (!isGardener && !INVALID_GARDENER_NPC_IDS.has(npcId)) return;
     if (actionOf(event) !== "talk-to") return;
     if (quest.getStage(player) !== STAGE_STARTED) return;
+    const asked = askedGardeners(player);
+    if (asked.length >= 5 || asked.includes(npcId)) return;
     event.handled = true;
     const variant = isGardener
-      ? gardenerVariant(player, npcId)
+      ? `talking-to-the-gardeners-gardener-${asked.length + 1}`
       : "talking-to-the-gardeners-invalid-gardener";
-    startTranscript(api, player, npcId, PAGE, variant);
+    startTranscript(api, player, npcId, PAGE, variant, gardenerMenu, event.npc);
+  }
+
+  function gardenerMenu(steps) {
+    return steps.map(step => step.type !== "choice" ? step : {
+      ...step,
+      options: step.options.map(option => {
+        if (option.text === GARDENER_QUESTION) {
+          return { ...option, steps: [...option.steps, { type: "action", action: GARDENER_REPORTED_ACTION }] };
+        }
+        if (option.text === "Would you look after my crops for me?") {
+          return { ...option, steps: [{ type: "action", action: "farming:gardener-protect" }] };
+        }
+        return option;
+      }),
+    });
   }
 
   function handleObjectInteraction(event) {
@@ -595,7 +880,7 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
       return;
     }
     const stage = quest.getStage(player);
-    if (stage < STAGE_HAS_MAGIC_SECATEURS || !held(player, MAGIC_SECATEURS_ITEM_ID)) {
+    if (stage < STAGE_HAS_MAGIC_SECATEURS || !hasMagicSecateurs(player)) {
       if (stage < STAGE_STARTED) {
         player.sendMessage("I'm afraid nobody is allowed in there.");
         return;
@@ -610,17 +895,104 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
     startTranscript(api, player, GATEKEEPER_NPC_ID, PAGE, variant);
   }
 
-  /** The Draynor skull is dug from the manor grave, quest or no quest. */
-  function handleSpadeOnGrave(event) {
-    if (event.itemId !== SPADE_ITEM_ID || event.objectId !== DRAYNOR_GRAVE_OBJECT_ID) return;
-    const { player } = event;
-    event.handled = true;
+  /**
+   * Ends the looping long-dig sequence when the pending dig finishes or is cancelled.
+   * The task is keyed by the player's index, so walking away stops it like any other
+   * interruptible interaction.
+   */
+  class DraynorDigTask extends CountdownTask {
+    constructor(player) {
+      super(player.getIndex(), DRAYNOR_DIG_TICKS, () => finishDraynorDig(player));
+      this.draynorPlayer = player;
+    }
+
+    onTick() {
+      if (this.isRunning() && (this.draynorPlayer.getSkill() !== this || !canContinueDraynorDig(this.draynorPlayer))) this.stop();
+    }
+
+    cancel() {
+      this.stop();
+    }
+
+    stop() {
+      const player = this.draynorPlayer;
+      const ownsActivity = player.getSkill() === this;
+      const digSequence = CacheDefinitions.getSeqId("human_dig_long") ?? HUMAN_DIG_LONG_SEQUENCE;
+      if (this.isRunning() && ownsActivity && player.getAnimation()?.getId() === digSequence && player.getHitpoints() > 0 && !player.isDying) {
+        player.performAnimation(Animation.DEFAULT_RESET_ANIMATION);
+      }
+      if (ownsActivity) player.setSkill(null);
+      if (draynorDigTasks.get(player) === this) draynorDigTasks.delete(player);
+      super.stop();
+    }
+  }
+
+  function canContinueDraynorDig(player) {
+    return player.isRegistered() && player.getHitpoints() > 0 && !player.isDying
+      && held(player, SPADE_ITEM_ID) && player.getLocation().isWithinDistance(DRAYNOR_GRAVE_TILE, 1)
+      && !!api.core.MapObjects.get(DRAYNOR_GRAVE_OBJECT_ID, DRAYNOR_GRAVE_TILE, player.getPrivateArea());
+  }
+
+  function cancelDraynorDig(player) {
+    const task = draynorDigTasks.get(player);
+    if (task) task.stop();
+    draynorDigTasks.delete(player);
+  }
+
+  function beginDraynorDig(player, sendOpeningSound) {
+    cancelDraynorDig(player);
+    if (!canContinueDraynorDig(player)) return true;
+    player.getSkillManager().stopSkillable();
+    const sequence = CacheDefinitions.getSeqId("human_dig_long") ?? HUMAN_DIG_LONG_SEQUENCE;
+    player.performAnimation(new Animation(sequence));
+    player.getPacketSender().sendTypedMessage(ChatType.SPAM, "You start digging...");
+    if (sendOpeningSound) {
+      Sounds.sendSound(player, new Sound(DRAYNOR_DIG_SOUND_ID, 1, 0, 1));
+    }
+    // The capture's second synth: three loops after 25 client cycles.
+    Sounds.sendSound(player, new Sound(DRAYNOR_DIG_SOUND_ID, 1, DRAYNOR_DIG_SOUND_DELAY, DRAYNOR_DIG_SOUND_LOOPS));
+    const task = new DraynorDigTask(player);
+    draynorDigTasks.set(player, task);
+    player.setSkill(task);
+    TaskManager.submit(task);
+    return true;
+  }
+
+  function finishDraynorDig(player) {
+    if (player.getSkill() !== draynorDigTasks.get(player) || !canContinueDraynorDig(player)) return;
     if (held(player, DRAYNOR_SKULL_ITEM_ID)) {
       player.sendMessage("You dig the grave but find nothing.");
       return;
     }
+    if (player.getBanks().some(bank => bank?.getAmount(DRAYNOR_SKULL_ITEM_ID) > 0)) {
+      player.sendMessage("I think I've already stored the skull in my bank.");
+      return;
+    }
+    if (player.getInventory().getFreeSlots() === 0) {
+      player.getInventory().full();
+      return;
+    }
     player.getInventory().adds(DRAYNOR_SKULL_ITEM_ID, 1);
-    player.sendMessage("You dig the grave and find a skull.");
+    player.sendMessage("You dig up a skull.");
+  }
+
+  /** The Draynor skull is dug from the manor grave, quest or no quest. */
+  function digDraynorGrave(player, sendOpeningSound = true) {
+    const at = player.getLocation();
+    if (!at.isWithinDistance(DRAYNOR_GRAVE_TILE, 1)) return false;
+    if (!api.core.MapObjects.get(DRAYNOR_GRAVE_OBJECT_ID, DRAYNOR_GRAVE_TILE, player.getPrivateArea())) return false;
+    return beginDraynorDig(player, sendOpeningSound);
+  }
+
+  function handleSpadeDig({ player }) {
+    // The shared Spade Dig handler has already sent the opening 1470/loops=1 sound.
+    return digDraynorGrave(player, false);
+  }
+
+  function handleSpadeOnGrave(event) {
+    if (event.itemId !== SPADE_ITEM_ID || event.objectId !== DRAYNOR_GRAVE_OBJECT_ID) return;
+    if (!Location.isSameTile(event.location, DRAYNOR_GRAVE_TILE)) return;
+    event.handled = digDraynorGrave(event.player);
   }
 
   /** Only magic secateurs can harm the Tanglefoot (wiki: no other weapon). */
@@ -652,21 +1024,27 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
   }
 
   function handleLogin({ player }) {
+    migrateStage({ player });
     refreshQuestList(player);
     sendProgressVarbits(player);
     if (insideGrove(player)) ensureTanglefoot(player);
   }
 
   function handleBootstrap({ player }) {
+    migrateStage({ player });
     sendProgressVarbits(player);
   }
 
   function handleLogout({ player }) {
     removeTanglefoot(player);
+    cancelDraynorDig(player);
+    cancelBlessing(player);
   }
 
   function handlePlayerDeath({ player }) {
     removeTanglefoot(player);
+    cancelDraynorDig(player);
+    cancelBlessing(player);
   }
 
   // ==========================================================================
@@ -725,6 +1103,13 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
         "<col=800000>Dark Wizards' Tower</col>.",
       ];
     }
+    if (stage >= STAGE_TALKED_TO_GODFATHER) {
+      return [
+        "The <col=800000>Fairy Godfather</col> told me the Queen is in an",
+        "enchanted sleep. I should speak to <col=800000>Fairy Nuff</col>",
+        "in Zanaris.",
+      ];
+    }
     if (stage >= STAGE_GARDENERS_REPORTED) {
       return [
         "The gardeners all blamed something different for the failing",
@@ -760,6 +1145,7 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
   api.persistAttribute(GARDENERS_ATTRIBUTE);
   api.persistAttribute(MALIGNIUS_ASKED_ATTRIBUTE);
   api.persistAttribute(NATURE_ITEMS_ATTRIBUTE);
+  api.persistAttribute(STAGE_SCHEMA_ATTRIBUTE, 0);
 
   quest = registerQuest(api, {
     key: "fairytale_i_growing_pains",
@@ -780,8 +1166,21 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
     onReward: grantReward,
   });
 
+  // League start-quest and quest-pack completion runs before the Quests plugin's
+  // login hooks (modes/ loads first). Until this save's one-shot migration has
+  // stamped the schema, an 80 is the old completed value, not the new Tanglefoot
+  // stage, so it must not be completed (and rewarded) a second time.
+  const isComplete = quest.isComplete.bind(quest);
+  quest.isComplete = (player) => {
+    if (!(Number(player.getAttribute(STAGE_SCHEMA_ATTRIBUTE)) >= STAGE_SCHEMA)
+      && quest.getStage(player) === LEGACY_STAGE_COMPLETE) return true;
+    return isComplete(player);
+  };
+
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
+  api.onCustomEvent("npc-dialogue:line", handleNuffDialogueLine);
+  api.onCustomEvent("npc-dialogue:line", handleDialogueLine);
   api.onCustomEvent("npc-dialogue:choice", handleDialogueChoice);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:condition", handleConditionEvent);
@@ -789,6 +1188,7 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
   api.onNpcInteraction(handleNpcInteraction);
   api.onObjectInteraction(handleObjectInteraction);
   api.onItemOnObject(handleSpadeOnGrave, { noted: false });
+  api.onItemAction("Spade", { Dig: handleSpadeDig });
   api.onNpcHitModify(handleNpcHitModify);
   api.onNpcDeath(handleNpcDeath);
   api.onZoneEnter(GROVE_ZONE, handleZoneEnter);

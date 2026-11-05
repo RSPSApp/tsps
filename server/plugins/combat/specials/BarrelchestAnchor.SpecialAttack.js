@@ -1,6 +1,6 @@
 // TODO: ported from xrsps-typescript; untested.
 function buildSpecial(core) {
-  const { Animation, CombatSpecial, Graphic, GraphicHeight, ItemIdentifiers, MeleeCombatMethod, Skill, Sounds } = core;
+  const { Animation, CombatSpecial, Graphic, GraphicHeight, ItemIdentifiers, MeleeCombatMethod, Skill, Sound, Sounds } = core;
 
   const DRAIN = 50;
   const DRAIN_FRACTION = 0.1;
@@ -33,7 +33,7 @@ function buildSpecial(core) {
       CombatSpecial.drain(character, DRAIN);
       character.performAnimation(ANIMATION);
       character.performGraphic(GRAPHIC);
-      Sounds.sendSound(character, character.getAttackSound());
+      Sounds.playAreaSoundAt(character, Sound.BARRELCHEST_ANCHOR_SPECIAL);
     }
 
     handleAfterHitEffects(hit) {

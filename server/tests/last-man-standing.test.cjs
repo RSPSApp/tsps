@@ -29,6 +29,7 @@ before(() => {
     core,
     getPluginConfig: (_key, fallback) => fallback,
     getSkillManager: () => require('../dist/game/content/skill/SkillManager').SkillManager,
+    emitCustomEvent() {},
   });
 });
 
@@ -335,6 +336,7 @@ test('a withdrawal fills only what the coin stack can hold, and the coffer keeps
     core,
     getPluginConfig: (_key, fallback) => fallback,
     getSkillManager: () => require('../dist/game/content/skill/SkillManager').SkillManager,
+    emitCustomEvent() {},
     ...extra,
   });
   initWith({ sendMultiChatboxPrompt: () => {} });
@@ -353,6 +355,36 @@ test('a withdrawal fills only what the coin stack can hold, and the coffer keeps
   withdrawing(5000);
   assert.equal(p.getInventory().getAmount(id('coins')), 2147483000, 'the stack has no room for a whole 1,000');
   assert.equal(Profile.coffer(p), 4000, 'nothing taken, nothing deducted');
+});
+
+test('Justine explains the win requirement and refuses tradeable purchases before a win', (t) => {
+  const Rewards = require('../plugins/minigames/lms/Rewards.LastManStanding');
+  const p = realPlayer(t);
+  let dialogue;
+  t.mock.method(p.getDialogueManager(), 'startDialogues', (chain) => { dialogue = chain; });
+  const event = { player: p, shopId: Rewards.SHOP_ID, allow: true };
+  Rewards.canShop(event);
+  assert.equal(event.allow, false, 'the native rewards interface replaces the generic shop');
+  assert.ok(dialogue, 'a player without a win gets the explanation first');
+  assert.match(dialogue.getDialogues().get(0).getText(), /browse.*win.*buy tradeable rewards/);
+  const interfaces = [];
+  t.mock.method(p.getPacketSender(), 'sendSubInterface', (...args) => interfaces.push(args));
+  dialogue.getDialogues().get(1).send(p);
+  assert.ok(interfaces.some(([, group]) => group === Common.interfaceId('br_reward_shop')), 'Continue opens the shop for browsing');
+
+  p.setAttribute(Common.POINTS_ATTRIBUTE, 10);
+  const slot = Common.data.shop.stock.findIndex((entry) => entry && entry[0] === 'rune_arrow');
+  Rewards.confirm({ player: p, slot });
+  assert.deepEqual(p.messages, [Common.message('tradeableNeedsWin')]);
+  assert.equal(Common.points(p), 10);
+  assert.equal(p.getInventory().getAmount(id('rune_arrow')), 0);
+
+  const untradeable = Common.data.shop.stock.findIndex((entry) => entry && entry[0] === 'br_deadman_body');
+  const entry = Common.data.shop.stock[untradeable];
+  p.setAttribute(Common.POINTS_ATTRIBUTE, entry[1]);
+  Rewards.confirm({ player: p, slot: untradeable });
+  assert.equal(Common.points(p), 0, 'untradeable rewards remain available without a win');
+  assert.equal(p.getInventory().getAmount(id(entry[0])), 1);
 });
 
 test('Justine\'s purchase: a stack that cannot take the whole set refuses it and keeps the points', (t) => {
@@ -385,4 +417,65 @@ test('Justine\'s purchase: the set is added in full when the stack has the room,
   entered.execute(1);
   assert.equal(Common.points(p), 7);
   assert.equal(p.getInventory().getAmount(id('rune_arrow')), 2147483300);
+});
+
+test("Justine's purchase records its own collection-log items only when it succeeds", (t) => {
+  const Rewards = require('../plugins/minigames/lms/Rewards.LastManStanding');
+  const CollectionLog = require('../plugins/achievements/CollectionLog.plugin');
+  const Progress = require('../plugins/achievements/collectionlog/Progress.CollectionLog');
+  const listeners = new Map();
+  const bus = new Proxy({
+    core,
+    persistAttribute() {},
+    onCustomEvent(name, handler) { listeners.set(name, [...(listeners.get(name) ?? []), handler]); },
+    emitCustomEvent(name, request) { for (const handler of listeners.get(name) ?? []) handler(request); },
+    getTaskManager: () => ({ submit() {} }),
+  }, { get: (target, key) => target[key] ?? (() => {}) });
+  Common.init(bus);
+  CollectionLog.register(bus);
+  t.after(() => Common.init({
+    core,
+    getPluginConfig: (_key, fallback) => fallback,
+    getSkillManager: () => require('../dist/game/content/skill/SkillManager').SkillManager,
+    emitCustomEvent() {},
+  }));
+
+  const p = realPlayer(t);
+  const entry = Common.data.shop.stock.find((row) => row && row[0] === 'br_deadman_body');
+  const slot = Common.data.shop.stock.indexOf(entry);
+  const itemId = id('br_deadman_body');
+  const boltEntry = Common.data.shop.stock.find((row) => row && row[0] === 'barrows_karil_ammo');
+  const boltSlot = Common.data.shop.stock.indexOf(boltEntry);
+  const boltId = id('barrows_karil_ammo');
+
+  p.setAttribute(Common.POINTS_ATTRIBUTE, boltEntry[1]);
+  Rewards.confirm({ player: p, slot: boltSlot });
+  assert.equal(Common.points(p), boltEntry[1], 'a tradeable reward without a win is refused');
+  assert.equal(Progress.obtained(p, boltId), 0, 'a denied purchase is not logged');
+
+  p.setAttribute(Common.POINTS_ATTRIBUTE, 0);
+  p.setAttribute(Common.ATTRIBUTES.wins, 1);
+  Rewards.confirm({ player: p, slot });
+  assert.equal(Progress.obtained(p, itemId), 0, 'no points: nothing delivered or logged');
+
+  p.setAttribute(Common.POINTS_ATTRIBUTE, entry[1]);
+  for (let i = 0; i < p.getInventory().capacity(); i++) p.getInventory().add(new core.Item(id('br_deadman_legs'), 1), false);
+  Rewards.confirm({ player: p, slot });
+  assert.equal(Common.points(p), entry[1], 'a full inventory costs no points');
+  assert.equal(Progress.obtained(p, itemId), 0, 'a refused purchase is not logged');
+
+  p.getInventory().resetItems();
+  Rewards.confirm({ player: p, slot });
+  assert.equal(Common.points(p), 0);
+  assert.equal(p.getInventory().getAmount(itemId), 1);
+  assert.equal(Progress.obtained(p, itemId), 1, 'the actual purchase path records the item once');
+
+  let entered;
+  t.mock.method(p, 'setEnteredAmountAction', (action) => { entered = action; });
+  p.setAttribute(Common.POINTS_ATTRIBUTE, boltEntry[1]);
+  Rewards.confirm({ player: p, slot: boltSlot });
+  entered.execute(1);
+  assert.equal(Common.points(p), 0);
+  assert.equal(p.getInventory().getAmount(boltId), 200, 'the set is delivered in full');
+  assert.equal(Progress.obtained(p, boltId), 0, 'Bolt racks belong to Barrows, not the LMS log');
 });

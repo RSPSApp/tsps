@@ -47,8 +47,8 @@ test('opening and finale eligibility follows server stages, rescue flags and pre
 });
 test('all ten routes have actual targets and echo the bounded protocol',()=>{
  for(const v of V){const f=fixture({stage:v==='START'?1:4});const r=f.run(v);assert.equal(r.protocol,1);assert.equal(r.questKey,f.request.questKey);assert.equal(r.session,f.request.session);assert.equal(r.sequence,1);assert.ok(r.activeStep.text.length);assert.ok(r.activeStep.targets.every(t=>t.kind==='tile'||Number.isInteger(t.id)));assert.deepEqual(r.diagnostics,[]);}
- const rescue=step({inventory:{DWARVEN_ROCK_CAKE_2:1}},'DWARF');
- assert.ok(rescue.targets.some(t=>t.id===N.MOUNTAIN_DWARF&&t.x===3236&&t.y===3219));
+ const rescue=step({inventory:{DWARVEN_ROCK_CAKE_2:1},location:[1867,5348,0]},'DWARF');
+ assert.ok(rescue.targets.some(t=>t.id===N.MOUNTAIN_DWARF&&t.x===1862&&t.y===5345));
 });
 test('renderer only reads its whitelist and is restart-safe; hidden Dave recipe stays private',()=>{
  const opts={attrs:{'evil-dave-state':3,'evil-dave-recipe':{red:3},'evil-dave-stew':{doses:{red:1}}},inventory:{SPICY_STEW:1}};
@@ -60,6 +60,14 @@ test('opening ingredients and dirty blast use actual item-on-item progression',(
  assert.match(step({stage:1,inventory:{FRUIT_BLAST:1,ASHES:1}},'START').id,/dirty-blast/);
  assert.match(step({stage:1,inventory:{DIRTY_BLAST:1,EYE_OF_NEWT:1,GREENMANS_ALE:1,ROTTEN_TOMATO:1}},'START').id,/handover/);
  assert.ok(step({stage:0,levels:{COOKING:1}},'START').requirements.some(r=>r.name==='Cooking 10'&&!r.met));
+});
+test('pending banquet guides first entry and keeps native progression before the frozen room',()=>{
+ const pending=fixture({stage:4,attrs:{'feast-pending':true}});
+ assert.equal(completionProjection(pending.player)[1850],2);
+ assert.equal(pending.run('START').activeStep.id,'opening-feast');
+ assert.equal(pending.run('START').activeStep.targets[0].id,12349);
+ assert.equal(completionProjection(fixture({stage:4}).player)[1850],3,'historical saves retain the frozen-room phase');
+ assert.equal(completionProjection(fixture({stage:4,flags:255}).player)[1850],4);
 });
 test('Dwarf branches use actual ale counters, bartender knowledge, cake dialogue and cooling',()=>{
  const cases=[[{},'dwarf-rohak'],[{'dwarf-state':16},'dwarf-ale'],[{'dwarf-state':4},'dwarf-drunk'],[{'dwarf-state':0x200},'dwarf-sober'],[{'dwarf-state':0x400},'dwarf-ingredients'],[{'dwarf-state':0x800},'dwarf-cake']];
@@ -104,7 +112,7 @@ test('finale follows actual persisted checkpoints and all six combat waves',()=>
  assert.equal(step({flags:255,attrs:{'culinaromancer-defeated':true}},'FINALE').id,'final-claim');
 });
 test('cooling uses the real server item-on-dwarf interaction with ice gloves',()=>{
- const s=step({inventory:{DWARVEN_ROCK_CAKE:1},equipment:{9:'ICE_GLOVES'}},'DWARF');
+ const s=step({inventory:{DWARVEN_ROCK_CAKE:1},equipment:{9:'ICE_GLOVES'},location:[1867,5348,0]},'DWARF');
  assert.match(s.text.join(' '),/use.*hot.*Mountain Dwarf/i);
  assert.ok(s.targets.some(t=>t.id===N.MOUNTAIN_DWARF));
 });
@@ -172,3 +180,14 @@ test('hidden stale quiz widgets cannot override the live ingredient task',()=>{
  assert.equal(step({snapshot:{widgets:[{id:1,hidden:true,text:'How many types of runes were there?'}]}},'LUMBRIDGE_GUIDE').id,'guide-enchant');
 });
 
+
+ test('relocated council targets guide outside players through the dining doors',()=>{
+  const outside=step({inventory:{DWARVEN_ROCK_CAKE_2:1}},'DWARF');
+  assert.ok(outside.targets.some(t=>t.kind==='object'&&t.ids.includes(12349)&&t.x===3213&&t.y===3221));
+  assert.match(outside.text.join(' '),/Enter the frozen dining room/);
+  const inside=step({location:[1867,5348,0]},'FINALE');
+  assert.ok(inside.targets.some(t=>t.kind==='npc'&&t.ids.includes(N.ARIS_3)&&t.x===1866&&t.y===5351));
+  assert.ok(inside.targets.filter(t=>t.kind==='npc').every(t=>t.x>=1862&&t.x<=1866&&t.y>=5343&&t.y<=5352));
+  const hot=step({location:[1867,5348,0],inventory:{DWARVEN_ROCK_CAKE:1}},'DWARF');
+  assert.ok(hot.targets.some(t=>t.id===N.MOUNTAIN_DWARF&&t.x===1862&&t.y===5345));
+ });

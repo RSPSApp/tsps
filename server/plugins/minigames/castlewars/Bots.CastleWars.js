@@ -24,6 +24,7 @@ const { PlayerRights } = require("../../../src/main/typescript/elvarg/game/model
 const { buildRoamingPvpMetadata } = require("../../bots/behaviours/pvp/PvpAssignment.PlayerBots");
 const { applyGeneratedPvpLoadout } = require("../../bots/behaviours/policies/PvpLoadoutPolicy.PlayerBots");
 const {
+  initPvpTierLoadouts,
   TIER_BANDS,
   TIER_PROFILE_IDS,
   pickTierChoice: pickSharedTierChoice,
@@ -95,6 +96,15 @@ const BANDAGE_CARRIER_REACH = 3;
 const TABLE_SCAN_RADIUS = 8;
 const CATAPULT_TARGET_RADIUS = 2;
 const CATAPULT_HOLD_RANGE = 9;
+// Practice defenders: how far they look for a target (the target must still be inside their
+// own castle), how long a route may keep asking the tools to clear one barricade, and the
+// scorer's short ranged burst before it goes back to scoring.
+const DEFENDER_BASE_RANGE = 16;
+const DEFENDER_HOLD_MS = 2200;
+const SCORER_ENGAGE_RANGE = 10;
+const PRACTICE_COMBAT_MS = 2500;
+const PRACTICE_COMBAT_COOLDOWN_MS = 6000;
+const SCORER_AMMO = 10000;
 
 /** Dedicated battlements bots keep the style of their post: a bow, or a barrage staff. */
 const ROLE_LOADOUTS = Object.freeze({
@@ -124,8 +134,8 @@ function chebyshevDistance(x1, y1, x2, y2) {
   return Math.max(Math.abs(x1 - x2), Math.abs(y1 - y2));
 }
 
-function walkStep(x, y, z) {
-  return { type: "walk", x, y, z };
+function walkStep(x, y, z, exact = false) {
+  return { type: "walk", x, y, z, exact };
 }
 
 function climbStep(from, to, reach = 1) {
@@ -196,13 +206,30 @@ function stepFloor(step) {
 }
 
 /** First step at or after `fromIndex` on this floor, or -1. Used to re-plan after a death or a skip. */
-function firstStepOnFloor(route, fromIndex, z) {
+function firstStepOnFloor(route, fromIndex, z, location = null) {
+  let first = -1;
+  let nearest = -1;
+  let nearestDistance = Infinity;
   for (let index = fromIndex; index < route.length; index += 1) {
-    if (stepFloor(route[index]) === z) {
-      return index;
+    if (stepFloor(route[index]) !== z) {
+      continue;
+    }
+    if (first < 0) {
+      first = index;
+    }
+    if (location) {
+      const step = route[index];
+      const points = step.type === "climb" ? [step.from]
+        : step.type === "barrier" || step.type === "door" ? [step.stand]
+        : step.type === "stones" ? step.ends : [[step.x, step.y]];
+      const distance = Math.min(...points.map(([x, y]) => chebyshevDistance(location.getX(), location.getY(), x, y)));
+      if (distance < nearestDistance) {
+        nearest = index;
+        nearestDistance = distance;
+      }
     }
   }
-  return -1;
+  return location && nearest >= 0 ? nearest : first;
 }
 
 /**
@@ -250,22 +277,17 @@ function buildRoutes(core, teams) {
   // Up the enemy castle's climb chains to its flag room: Saradomin's on the east side,
   // Zamorak's on the west, each starting on the ground floor by its outer wall.
   const saraFlagRoomUp = [
-    walkStep(2428, 3081, 1),
     climbStep([2428, 3081, 1], [2430, 3080, 2]),
-    walkStep(2425, 3074, 2),
     climbStep([2425, 3074, 2], [2426, 3074, 3]),
     walkStep(2429, 3074, 3),
   ];
   // From the floor-1 landing of Zamorak's own stairwell up to its flag room.
   const zamFlagRoomAscent = [
-    walkStep(2369, 3126, 1),
     climbStep([2369, 3126, 1], [2369, 3127, 2]),
-    walkStep(2374, 3131, 2),
     climbStep([2374, 3131, 2], [2373, 3133, 3]),
     walkStep(2370, 3133, 3),
   ];
   const zamFlagRoomUp = [
-    walkStep(2378, 3134, 0),
     climbStep([2378, 3134, 0], [2378, 3133, 1]),
     ...zamFlagRoomAscent,
   ];
@@ -289,6 +311,8 @@ function buildRoutes(core, teams) {
   const saraFlagOut = [
     ...saraThroughOwnDoor,
     ...islandBridgeEastToWest(),
+    walkStep(2385, 3134, 0),
+    doorStep([[O.DOOR_127, 2384, 3134, 0]], [2385, 3134, 0]),
     ...zamFlagRoomUp,
   ];
   // Saradomin: out of the start room to STAIRCASE_13, then over the island bridge to the
@@ -348,6 +372,8 @@ function buildRoutes(core, teams) {
   const zamFlagOut = [
     ...zamThroughOwnDoor,
     ...islandBridgeWestToEast(),
+    walkStep(2414, 3073, 0),
+    doorStep([[O.DOOR_125, 2415, 3073, 0]], [2414, 3073, 0]),
     walkStep(2421, 3073, 0),
     climbStep([2421, 3073, 0], [2421, 3074, 1]),
     ...saraFlagRoomUp,
@@ -404,6 +430,65 @@ function buildRoutes(core, teams) {
     climbStep([2379, 3132, 0], [2384, 3124, 0], 5),
   ];
 
+  // Defender chokepoint posts, spread by bot slot. The Zamorak tiles are the ones reported
+  // in #2361; Saradomin's are their castle-geometry counterparts (the map is rotated, not a
+  // straight coordinate flip), all verified walkable against the cache and reached by the
+  // castle's own stair chains below.
+  const zamDefenderPosts = [
+    [2369, 3129, 0], [2383, 3134, 0], [2380, 3130, 0],
+    [2372, 3126, 1], [2374, 3126, 1], [2374, 3125, 1], [2375, 3126, 1],
+    [2375, 3125, 1], [2376, 3126, 1], [2378, 3127, 1],
+    [2371, 3128, 2], [2374, 3130, 2], [2374, 3129, 2], [2375, 3130, 2],
+    [2373, 3133, 3],
+  ];
+  const saraDefenderPosts = [
+    [2430, 3078, 0], [2416, 3073, 0], [2419, 3077, 0],
+    [2427, 3081, 1], [2425, 3081, 1], [2425, 3082, 1], [2424, 3081, 1],
+    [2424, 3082, 1], [2423, 3081, 1], [2421, 3080, 1],
+    [2428, 3079, 2], [2425, 3077, 2], [2425, 3078, 2], [2424, 3077, 2],
+    [2426, 3074, 3],
+  ];
+  // The one-floor up/down links of each castle's own stair chain. Defenders travel from
+  // whatever floor they are on to the next post, instead of walking back to the spawn first.
+  const saraDefenderStairs = {
+    up: {
+      0: [climbStep([2419, 3078, 0], [2420, 3080, 1])],
+      1: [climbStep([2428, 3081, 1], [2430, 3080, 2])],
+      2: [climbStep([2425, 3074, 2], [2426, 3074, 3])],
+    },
+    down: {
+      1: [climbStep([2419, 3080, 1], [2419, 3077, 0])],
+      2: [climbStep([2430, 3081, 2], [2427, 3081, 1])],
+      3: [climbStep([2425, 3074, 3], [2425, 3077, 2])],
+    },
+  };
+  const zamDefenderStairs = {
+    up: {
+      0: [climbStep([2380, 3127, 0], [2379, 3127, 1])],
+      1: [climbStep([2369, 3126, 1], [2369, 3127, 2])],
+      2: [climbStep([2374, 3131, 2], [2373, 3133, 3])],
+    },
+    down: {
+      1: [climbStep([2380, 3127, 1], [2380, 3130, 0])],
+      2: [climbStep([2369, 3126, 2], [2372, 3126, 1])],
+      3: [climbStep([2374, 3133, 3], [2374, 3130, 2])],
+    },
+  };
+  // Enemy-castle loops for a scorer whose teammate already has the standard: one floor down
+  // and back up the enemy's own stairs, returning to the stand so scoring resumes promptly.
+  const saraEnemyCirculation = [
+    walkStep(2374, 3133, 3),
+    climbStep([2374, 3133, 3], [2374, 3130, 2]),
+    climbStep([2374, 3131, 2], [2373, 3133, 3]),
+    walkStep(2370, 3133, 3),
+  ];
+  const zamEnemyCirculation = [
+    walkStep(2425, 3074, 3),
+    climbStep([2425, 3074, 3], [2425, 3077, 2]),
+    climbStep([2425, 3074, 2], [2426, 3074, 3]),
+    walkStep(2429, 3074, 3),
+  ];
+
   return {
     [SARADOMIN]: {
       flagOut: saraFlagOut,
@@ -413,6 +498,8 @@ function buildRoutes(core, teams) {
       flagHome: [
         ...zamDescent,
         climbStep([2378, 3134, 1], [2378, 3133, 0]),
+        walkStep(2372, 3120, 0),
+        zamDoor([2372, 3120, 0]),
         ...islandBridgeWestToEast(),
         walkStep(2426, 3089, 0),
         saraDoor([2426, 3089, 0]),
@@ -421,6 +508,7 @@ function buildRoutes(core, teams) {
         ...saraGuardUp,
       ],
       guardUp: saraGuardUp,
+      carryInside: [climbStep([2419, 3078, 0], [2420, 3080, 1]), ...saraGuardUp],
       descent: saraDescent,
       // Carrying a standard recovered in the field: go straight to the own door and up to
       // the stand (the flag-room-anchored flagHome would send a field carrier the long way).
@@ -464,6 +552,10 @@ function buildRoutes(core, teams) {
         catapult: [2415, 3087, 0],
         catapultTile: [2413, 3088],
       },
+      defenderPosts: saraDefenderPosts,
+      defenderStairs: saraDefenderStairs,
+      defenderExit: saraSpawnBarrier,
+      enemyCirculation: saraEnemyCirculation,
       // The door this team attacks: Zamorak's large door (Doors.CastleWars.js leaves).
       door: {
         approach: [2371, 3118, 0],
@@ -480,8 +572,8 @@ function buildRoutes(core, teams) {
       flagHome: [
         ...saraDescent,
         climbStep([2419, 3080, 1], [2419, 3077, 0]),
-        walkStep(2426, 3089, 0),
-        saraDoor([2426, 3089, 0]),
+        walkStep(2426, 3087, 0),
+        saraDoor([2426, 3087, 0]),
         ...islandBridgeEastToWest(),
         walkStep(2372, 3118, 0),
         zamDoor([2372, 3118, 0]),
@@ -490,6 +582,7 @@ function buildRoutes(core, teams) {
         ...zamGuardUp,
       ],
       guardUp: zamGuardUp,
+      carryInside: [climbStep([2380, 3127, 0], [2379, 3127, 1]), ...zamGuardUp],
       descent: zamDescent,
       carryHome: [
         walkStep(2372, 3118, 0),
@@ -537,6 +630,10 @@ function buildRoutes(core, teams) {
           [O.LARGE_DOOR_25, 2427, 3088, 0],
         ],
       },
+      defenderPosts: zamDefenderPosts,
+      defenderStairs: zamDefenderStairs,
+      defenderExit: zamSpawnBarrier,
+      enemyCirculation: zamEnemyCirculation,
     },
   };
 }
@@ -706,8 +803,13 @@ function nearestEnemy(player, teamId, maxDistance, filter = null) {
 }
 
 /** An enemy flag carrier within range; they are the target that breaks the flag standoff. */
-function nearestEnemyCarrier(player, teamId, maxDistance) {
-  return nearestEnemy(player, teamId, maxDistance, (other) => Boolean(game.getCarriedFlagTeam(other)));
+function nearestEnemyCarrier(player, teamId, maxDistance, filter = null) {
+  return nearestEnemy(
+    player,
+    teamId,
+    maxDistance,
+    (other) => Boolean(game.getCarriedFlagTeam(other)) && (!filter || filter(other))
+  );
 }
 
 /** The current combat target when it is still a live enemy inside the role's leash. */
@@ -764,6 +866,13 @@ function attackEnemies(ctx, teamId, engageRange, anchor, leash) {
 
 // --- Route runner ------------------------------------------------------------------------
 
+/** Drop goal/clear state only when the route itself changes (or resets). */
+function clearPracticeRouteState(state) {
+  state.practiceGoal = null;
+  state.pendingClear = null;
+  state.clearBackoff = null;
+}
+
 function beginRoute(state, route) {
   state.route = route;
   state.cursor = 0;
@@ -773,6 +882,7 @@ function beginRoute(state, route) {
   state.stonePath = null;
   state.stoneIndex = 0;
   state.pendingStone = null;
+  clearPracticeRouteState(state);
 }
 
 function advanceRoute(state) {
@@ -782,6 +892,7 @@ function advanceRoute(state) {
   state.stonePath = null;
   state.stoneIndex = 0;
   state.pendingStone = null;
+  clearPracticeRouteState(state);
 }
 
 /**
@@ -796,25 +907,17 @@ function walkTowards(ctx, state, x, y) {
   return "running";
 }
 
-/** Climb one step: stand within its reach, then hand the destination to game.climbTo. */
+/** Use the normal object route so stairs cannot be climbed through their blocked sides. */
 function runClimbStep(ctx, state, step) {
-  const player = ctx.player;
-  const location = player.getLocation();
-  const movement = player.getMovementQueue();
-  const [fromX, fromY] = step.from;
-  const reach = step.reach ?? 1;
-  const atFrom = chebyshevDistance(location.getX(), location.getY(), fromX, fromY) <= reach;
-  if (!atFrom || movement.size() > 0) {
-    return walkTowards(ctx, state, fromX, fromY);
-  }
-  if (ctx.nowMs < state.nextClimbAt) {
-    return "running";
-  }
-  // climbTo carries an explicit destination, so the climb starts from wherever the bot
-  // stands next tick. It must not walk that tick - game.climbTo blocks movement anyway.
+  if (ctx.nowMs < state.nextClimbAt) return "running";
+  const [x, y, z] = step.from;
+  const id = Object.entries(game.data.CLIMB_ROUTES).find(([, pairs]) => pairs.some(([from, to]) =>
+    from.every((value, index) => value === step.from[index]) && to.every((value, index) => value === step.to[index])))?.[0];
+  const object = id && core.MapObjects.get(Number(id), new core.Location(x, y, z), null);
+  if (!object) return walkTowards(ctx, state, x, y);
   state.nextClimbAt = ctx.nowMs + CLIMB_COOLDOWN_MS;
   state.pendingClimb = { at: ctx.nowMs, to: step.to };
-  game.climbTo(player, step.to);
+  ctx.player.getMovementQueue().walkToObject(object, { execute: () => game.climbTo(ctx.player, step.to) });
   return "running";
 }
 
@@ -898,11 +1001,15 @@ function runDoorStep(ctx, state, step) {
   for (const [id, x, y, z] of step.leaves) {
     const object = core.MapObjects.get(id, new core.Location(x, y, z), null);
     if (object) {
+      if (ctx.nowMs < (state.nextDoorClickAt ?? 0)) return "running";
+      state.nextDoorClickAt = ctx.nowMs + DOOR_CLICK_INTERVAL_MS;
       if (process.env.CW_BOT_DEBUG === "1") {
         console.log(`[cw_bot] door_click ${player.getUsername?.()} leaf=${id}@${x},${y},${z} from=${location.getX()},${location.getY()}`);
       }
-      clickObject(player, object, openOptionIndex(object.getDefinition?.()));
-      break;
+      player.getMovementQueue().walkToObject(object, {
+        execute: () => clickObject(player, object, optionIndex(object.getDefinition?.(), "unlock", openOptionIndex(object.getDefinition?.()))),
+      });
+      return "running";
     }
   }
   advanceRoute(state);
@@ -950,11 +1057,62 @@ function runBarrierStep(ctx, state, step) {
 /** Land a step within one tile, or walk toward it. */
 function runWalkStep(ctx, state, step) {
   const location = ctx.player.getLocation();
-  if (chebyshevDistance(location.getX(), location.getY(), step.x, step.y) <= 1) {
+  const tolerance = step.exact ? 0 : 1;
+  if (chebyshevDistance(location.getX(), location.getY(), step.x, step.y) <= tolerance) {
     advanceRoute(state);
     return runRoute(ctx, state);
   }
   return walkTowards(ctx, state, step.x, step.y);
+}
+
+/**
+ * The tile the current route step is trying to reach, used by the practice tools to tell a
+ * forward obstruction from a side/behind one.
+ */
+function practiceGoalForStep(state, step) {
+  if (step.type === "climb") {
+    return [step.from[0], step.from[1], step.from[2]];
+  }
+  if (step.type === "barrier" || step.type === "door") {
+    return [step.stand[0], step.stand[1], step.stand[2]];
+  }
+  if (step.type === "stones") {
+    const target = state.stonePath?.[state.stoneIndex];
+    return target ? [target.x, target.y, target.z] : null;
+  }
+  return [step.x, step.y, step.z];
+}
+
+/**
+ * Clear a barricade that actually blocks the next route step. The tools pause the route
+ * while they wait out their reaction time, so walking resumes only once the way is open.
+ */
+function runPracticeClear(ctx, state, step) {
+  if (state.role !== ROLES.SCORER && state.role !== ROLES.DEFENDER) return "failure";
+  // Defenders only clear while moving to a post, never while holding one.
+  if (state.role === ROLES.DEFENDER && state.defenderPatrol !== true) return "failure";
+  const tools = game.practiceBots?.scorerTools;
+  if (typeof tools !== "function") return "failure";
+  const goal = practiceGoalForStep(state, step);
+  if (!goal) return "failure";
+  state.practiceGoal = goal;
+  return tools(ctx, state);
+}
+
+/** A running scorer drops a defensive barricade only when an enemy is close. */
+function runScorerDefence(ctx, state, step) {
+  if (state.role !== ROLES.SCORER || typeof game.practiceBots?.scorerDefence !== "function") {
+    return "failure";
+  }
+  // Only a walk step has a forward tile to leave a barricade behind; a climb or barrier
+  // interaction must not be interrupted. Carrying the standard does not forbid the tools.
+  if (step.type !== "walk") return "failure";
+  const teamId = game.getTeamId(ctx.player);
+  const target = nearestEnemyCarrier(ctx.player, teamId, SCORER_ENGAGE_RANGE)
+    ?? nearestEnemy(ctx.player, teamId, SCORER_ENGAGE_RANGE);
+  if (!target) return "failure";
+  state.practiceGoal = practiceGoalForStep(state, step);
+  return game.practiceBots.scorerDefence(ctx, state, target);
 }
 
 /**
@@ -980,6 +1138,7 @@ function runRoute(ctx, state) {
   }
   if (state.cursor >= route.length) {
     state.routeActive = false;
+    clearPracticeRouteState(state);
     return "done";
   }
   let step = route[state.cursor];
@@ -1003,8 +1162,10 @@ function runRoute(ctx, state) {
     return runRoute(ctx, state);
   }
   // Left behind on another floor (a respawn, a skip): resume at the next step on this floor.
+  // Pick the same-floor step nearest the bot so a field carrier is not sent to the wrong
+  // side of a castle whose route visits one floor twice.
   if (stepFloor(step) !== location.getZ()) {
-    const index = firstStepOnFloor(route, state.cursor, location.getZ());
+    const index = firstStepOnFloor(route, state.cursor, location.getZ(), location);
     if (index < 0) {
       state.routeActive = false;
       return "stuck";
@@ -1020,6 +1181,17 @@ function runRoute(ctx, state) {
     } else {
       return "running";
     }
+  }
+  // Clearing a forward barricade pauses the route for its reaction beat; a scorer also drops
+  // a defensive barricade when pursued, but both resume walking once the tools report done.
+  if (runPracticeClear(ctx, state, step) === "running") {
+    // Waiting on a barricade is progress, not a stuck route.
+    state.lastMovedAt = nowMs;
+    return "running";
+  }
+  if (runScorerDefence(ctx, state, step) === "running") {
+    state.lastMovedAt = nowMs;
+    return "running";
   }
   if (player.getMovementQueue().size() === 0 && nowMs - state.lastMovedAt > STUCK_TIMEOUT_MS) {
     if (process.env.CW_BOT_DEBUG === "1") {
@@ -1056,12 +1228,64 @@ function roleOf(player) {
  * loadout of the tier. Returns null for a bot without a tier (plain random PvP presets).
  */
 function pickTierChoice(player, role, tier) {
-  const style = role === ROLES.ARCHER ? "range" : role === ROLES.MAGE ? "magic" : null;
-  return pickSharedTierChoice(tier, { index: botNumber(player), style });
+  const style = role === ROLES.ARCHER ? "range" : (role === ROLES.MAGE || role === ROLES.DEFENDER) ? "magic" : null;
+  const maxed = player.getAttribute?.(game?.PRACTICE_MAXED_KEY) === true;
+  return pickSharedTierChoice(maxed ? "veteran" : tier, { index: botNumber(player), style });
+}
+
+function preparePracticeLoadout(player, state, teamId) {
+  if (state.role !== ROLES.SCORER && state.role !== ROLES.DEFENDER) return;
+  const I = core.ItemIdentifiers;
+  const E = core.Equipment;
+  const scorer = state.role === ROLES.SCORER;
+  player.getSkillManager().setMaxLevels(core.Skill.THIEVING, 99).setCurrentLevels(core.Skill.THIEVING, 99);
+  for (const [slot, id, amount = 1] of [
+    [E.HEAD_SLOT, scorer ? I.MASORI_MASK_F_ : I.ANCESTRAL_HAT],
+    [E.WEAPON_SLOT, scorer ? I.ZARYTE_CROSSBOW : I.KODAI_WAND],
+    [E.AMMUNITION_SLOT, scorer ? I.ONYX_BOLTS_E_ : -1, scorer ? SCORER_AMMO : 0],
+    [E.BODY_SLOT, scorer ? I.MASORI_BODY_F_ : I.ANCESTRAL_ROBE_TOP],
+    [E.LEG_SLOT, scorer ? I.MASORI_CHAPS_F_ : I.ANCESTRAL_ROBE_BOTTOM],
+    [E.SHIELD_SLOT, scorer ? I.SPECTRAL_SPIRIT_SHIELD : I.ELIDINIS_WARD_F_],
+    [E.AMULET_SLOT, scorer ? I.AMULET_OF_FURY : I.OCCULT_NECKLACE],
+    [E.HANDS_SLOT, scorer ? I.ZARYTE_VAMBRACES : I.TORMENTED_BRACELET],
+    [E.FEET_SLOT, scorer ? I.PEGASIAN_BOOTS : I.ETERNAL_BOOTS],
+    [E.RING_SLOT, scorer ? I.RING_OF_SUFFERING_I_ : I.MAGUS_RING_2],
+  ]) player.getEquipment().setItem(slot, new core.Item(id, amount));
+  // A generated preset fills every inventory slot with brews, switches and food; keep only
+  // the arena supplies so bandages and barricades actually fit.
+  const keep = new Set([
+    I.BANDAGES, I.EXPLOSIVE_POTION, I.BUCKET_OF_WATER, I.TINDERBOX, I.BARRICADE,
+    ...(scorer ? [] : [I.WATER_RUNE, I.BLOOD_RUNE, I.DEATH_RUNE]),
+  ]);
+  const inventory = player.getInventory();
+  for (const item of [...inventory.getItems()]) {
+    const itemId = item?.getId?.();
+    if (itemId > 0 && !keep.has(itemId)) {
+      inventory.deleteNumber(itemId, item.getAmount());
+    }
+  }
+  if (scorer) {
+    // A ranged loadout must not keep the defender's old autocast/spell selected.
+    player.getCombat().setCastSpell(null);
+    player.getCombat().setAutocastSpell(null);
+  } else {
+    player.setSpellbook(core.MagicSpellbook.ANCIENT);
+    game.practiceBots.supply(player, I.WATER_RUNE, 10000);
+    game.practiceBots.supply(player, I.BLOOD_RUNE, 10000);
+    game.practiceBots.supply(player, I.DEATH_RUNE, 10000);
+  }
+  game.practiceBots.supply(player, I.BANDAGES, 8);
+  game.practiceBots.supply(player, I.EXPLOSIVE_POTION, 4);
+  game.practiceBots.supply(player, I.BUCKET_OF_WATER, 2);
+  game.practiceBots.supply(player, I.TINDERBOX);
+  game.practiceBots.supply(player, I.BARRICADE, 3);
+  state.equipped = true;
+  state.colours = true;
+  game.equipTeamColours(player, teamId);
+  game.refreshPlayerAppearance(player, true);
 }
 
 function ensureLoadout(player, state, teamId, nowMs) {
-  if (game.practiceBots?.prepare(player, state, teamId)) return;
   if (state.equipped || nowMs < state.nextLoadoutAt) {
     return;
   }
@@ -1070,7 +1294,8 @@ function ensureLoadout(player, state, teamId, nowMs) {
   // weapon slot, which ensureFlagWeapon keeps clear until the flag is actually picked up.
   // A lobby-chosen combat tier pins the loadout+archetype to its level band; without one,
   // archers and mages draw their fixed archetypes so the battlements crew keeps its style.
-  const tier = player.getAttribute(game.BOT_TIER_KEY ?? DEFAULT_BOT_TIER_KEY);
+  const maxed = player.getAttribute(game.PRACTICE_MAXED_KEY) === true;
+  const tier = maxed ? "veteran" : player.getAttribute(game.BOT_TIER_KEY ?? DEFAULT_BOT_TIER_KEY);
   const tierChoice = pickTierChoice(player, state.role, tier);
   const forced = tierChoice ?? ROLE_LOADOUTS[state.role];
   const applied = applyGeneratedPvpLoadout(
@@ -1100,6 +1325,15 @@ function ensureLoadout(player, state, teamId, nowMs) {
     // Castle Wars food is the bandage table: the preset's sharks/karambwans would fill every
     // slot and leave no room to pick bandages up.
     stripFood(player);
+    if (maxed) {
+      const skills = player.getSkillManager();
+      for (const skill of [core.Skill.ATTACK, core.Skill.DEFENCE, core.Skill.STRENGTH, core.Skill.HITPOINTS,
+        core.Skill.RANGED, core.Skill.PRAYER, core.Skill.MAGIC, core.Skill.THIEVING]) {
+        skills.setExperiences(skill, core.SkillManager.getExperienceForLevel(99), false)
+          .setMaxLevels(skill, 99, false).setCurrentLevels(skill, 99);
+      }
+    }
+    preparePracticeLoadout(player, state, teamId);
   }
   // Team colours go on even while the preset is deferred (the bot is in combat), and go on
   // again after it lands so its helmet cannot cover the hood.
@@ -1107,8 +1341,8 @@ function ensureLoadout(player, state, teamId, nowMs) {
     state.colours = true;
     game.equipTeamColours(player, teamId);
   }
-  if (state.role === ROLES.FLAG) {
-    ensureFlagWeapon(player);
+  if (state.role === ROLES.FLAG || state.role === ROLES.SCORER) {
+    ensureFlagWeapon(player, state.role);
   }
 }
 
@@ -1306,14 +1540,78 @@ function bandageTeammate(ctx, state, teamId) {
   return "failure";
 }
 
-/** Capturing a flag needs an empty weapon slot; flag bots never carry one. */
-function ensureFlagWeapon(player) {
+/** Scorers keep the crossbow, shield and bolts ready until the flag stow clears both hands. */
+function ensureFlagWeapon(player, role = ROLES.FLAG) {
   if (game.getCarriedFlagTeam(player)) {
+    return;
+  }
+  if (role === ROLES.SCORER) {
+    const E = core.Equipment;
+    const I = core.ItemIdentifiers;
+    const equipment = player.getEquipment();
+    const inventory = player.getInventory();
+    let changed = false;
+    for (const [slot, id] of [
+      [E.WEAPON_SLOT, I.ZARYTE_CROSSBOW],
+      [E.SHIELD_SLOT, I.SPECTRAL_SPIRIT_SHIELD],
+    ]) {
+      if (equipment.getSlot(slot) === id) {
+        continue;
+      }
+      if (inventory.contains(id)) {
+        inventory.deleteNumber(id, 1);
+      }
+      equipment.setItem(slot, new core.Item(id, 1));
+      changed = true;
+    }
+    if (equipment.getSlot(E.AMMUNITION_SLOT) !== I.ONYX_BOLTS_E_) {
+      equipment.setItem(E.AMMUNITION_SLOT, new core.Item(I.ONYX_BOLTS_E_, SCORER_AMMO));
+      changed = true;
+    }
+    if (changed) {
+      player.getCombat().setCastSpell(null);
+      player.getCombat().setAutocastSpell(null);
+      game.refreshPlayerAppearance(player, true);
+    }
     return;
   }
   if (player.getEquipment().getSlot(core.Equipment.WEAPON_SLOT) > 0) {
     game.clearWeaponSlot(player);
   }
+}
+
+/** Replenishable arena supplies can make room; the native flag handler stows both hands. */
+function reserveFlagSpace(player) {
+  const inventory = player.getInventory();
+  const needed = [core.Equipment.WEAPON_SLOT, core.Equipment.SHIELD_SLOT]
+    .filter((slot) => player.getEquipment().getSlot(slot) > 0).length;
+  for (const id of [core.ItemIdentifiers.BANDAGES, core.ItemIdentifiers.EXPLOSIVE_POTION,
+    core.ItemIdentifiers.BUCKET_OF_WATER, core.ItemIdentifiers.BARRICADE]) {
+    while (inventory.getFreeSlots() < needed && inventory.contains(id)) {
+      inventory.deleteAtSlot(inventory.getSlotForItemId(id), 1);
+    }
+  }
+  return inventory.getFreeSlots() >= needed;
+}
+
+/** A loose own standard inside the castle is returned by the ordinary object interaction. */
+function recoverOwnFlag(ctx, state, teamId) {
+  const player = ctx.player;
+  if (game.flagStatus[teamId] !== 2 || !game.isInsideCastle(player, teamId)) return "failure";
+  const dropped = game.getDroppedFlagObject(teamId);
+  const location = dropped?.getLocation();
+  if (!location || location.getZ() !== player.getLocation().getZ()
+      || chebyshevDistance(location.getX(), location.getY(), player.getLocation().getX(), player.getLocation().getY()) > RECOVER_FLAG_RADIUS) return "failure";
+  if (ctx.nowMs >= (state.nextFlagClickAt ?? 0)) {
+    state.nextFlagClickAt = ctx.nowMs + FLAG_CLICK_INTERVAL_MS;
+    player.getCombat().reset();
+    player.getMovementQueue().walkToObject(dropped, {
+      execute: () => {
+        if (game.getDroppedFlagObject(teamId) === dropped) clickObject(player, dropped, 1);
+      },
+    });
+  }
+  return "running";
 }
 
 function findDoorObject(info) {
@@ -1501,6 +1799,236 @@ function guardPost(ctx, state, teamId) {
   return "running";
 }
 
+/**
+ * A route from the defender's current floor to a post, using the castle's own one-floor
+ * stair links. This works in both directions (including descending from the flag floor),
+ * unlike a spawn-anchored prefix.
+ */
+function defenderPostRoute(teamId, post, fromZ = post[2], fromLocation = null) {
+  const stairs = routes[teamId].defenderStairs;
+  const steps = [];
+  if (fromLocation && game.getTeamData(teamId).respawnBounds.inside(fromLocation)) {
+    steps.push(routes[teamId].defenderExit);
+  }
+  let z = fromZ;
+  while (z < post[2]) {
+    steps.push(...(stairs.up[z] ?? []));
+    z += 1;
+  }
+  while (z > post[2]) {
+    steps.push(...(stairs.down[z] ?? []));
+    z -= 1;
+  }
+  steps.push(walkStep(post[0], post[1], post[2], true));
+  return steps;
+}
+
+/** The choke point this bot slot starts on, spread so the whole squad does not stack. */
+function defenderPostFor(player, teamId) {
+  const posts = routes[teamId].defenderPosts;
+  return posts[variantIndex(player, posts.length)] ?? posts[0];
+}
+
+function barricadeOnPost(post) {
+  return Array.from(core.World.getNpcs()).some((npc) =>
+    game.isBarricade(npc) &&
+    npc.getLocation().getZ() === post[2] &&
+    npc.getLocation().getX() === post[0] &&
+    npc.getLocation().getY() === post[1]
+  );
+}
+
+/** True when another defender on this team already holds (or is standing on) the post. */
+function defenderPostCrowded(player, teamId, post) {
+  for (const other of game.gameArea.getPlayers()) {
+    if (other === player || game.getTeamId(other) !== teamId || roleOf(other) !== ROLES.DEFENDER) {
+      continue;
+    }
+    const location = other.getLocation();
+    if (
+      other.getPrivateArea?.() === player.getPrivateArea?.() &&
+      location.getZ() === post[2] && location.getX() === post[0] && location.getY() === post[1]
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/** Visit every floor even when the cap is full; occupied posts are checked from beside them. */
+function nextDefenderPost(player, teamId, state) {
+  const posts = routes[teamId].defenderPosts;
+  const start = state.defenderPostIndex ?? variantIndex(player, posts.length);
+  const defenders = game.gameArea.getPlayers().filter((other) => game.getTeamId(other) === teamId && roleOf(other) === ROLES.DEFENDER);
+  // A full squad keeps its assigned floors covered; a small squad circulates the whole base.
+  const homeFloor = defenders.length >= posts.length ? defenderPostFor(player, teamId)[2] : null;
+  let fallback = null;
+  for (let offset = 1; offset <= posts.length; offset += 1) {
+    const index = (start + offset) % posts.length;
+    const post = posts[index];
+    if (homeFloor !== null && post[2] !== homeFloor) continue;
+    fallback ??= { index, post };
+    if (!defenderPostCrowded(player, teamId, post)) return { index, post };
+  }
+  return fallback;
+}
+
+/** Defenders only fight enemies inside their own castle, carriers first. */
+function isDefenderBaseTarget(player, other, teamId) {
+  return game.isInsideCastle?.(other, teamId) === true
+    && other.getLocation().getZ() === player.getLocation().getZ();
+}
+
+function defenderTarget(player, teamId) {
+  const enemyCarrier = nearestEnemy(
+    player,
+    teamId,
+    DEFENDER_BASE_RANGE,
+    (other) => Boolean(game.getCarriedFlagTeam(other)) && isDefenderBaseTarget(player, other, teamId)
+  );
+  if (enemyCarrier) {
+    return enemyCarrier;
+  }
+  return nearestEnemy(player, teamId, DEFENDER_BASE_RANGE, (other) =>
+    isDefenderBaseTarget(player, other, teamId)
+  );
+}
+
+function defenderAttackAction(ctx, state, teamId) {
+  const player = ctx.player;
+  if (game.getTeamData(teamId).respawnBounds.inside(player.getLocation())) return "failure";
+  const current = player.getCombat().getTarget?.();
+  if (current && !isDefenderBaseTarget(player, current, teamId)) {
+    player.getCombat().reset();
+  }
+  const target = defenderTarget(player, teamId);
+  if (target && core.CombatFactory.canAttackPermission(player, target, false, core.CombatFactory.getMethod(player)) === core.CanAttackResponse.CAN_ATTACK) {
+    return practiceCombatTurn(ctx, state) ? game.practiceBots.defenderAttack(ctx, state, target) : "failure";
+  }
+  if (player.getCombat().getTarget?.()) {
+    player.getCombat().reset();
+  }
+  return "failure";
+}
+
+/** Pick the next post and start travelling there from the current floor. */
+function defenderMoveToNextPost(ctx, state, teamId) {
+  const player = ctx.player;
+  const location = player.getLocation();
+  const next = nextDefenderPost(player, teamId, state);
+  state.defenderPostIndex = next.index;
+  state.defenderPost = next.post;
+  state.practicePost = next.post;
+  state.defenderHoldUntil = 0;
+  beginRoute(state, defenderPostRoute(teamId, next.post, location.getZ(), location));
+  state.defenderPatrol = true;
+  const result = runRoute(ctx, state);
+  if (result === "done" || result === "stuck") {
+    state.route = null;
+    state.defenderPatrol = false;
+  }
+  return "running";
+}
+
+/** Move to the next choke point, hold it briefly, then continue the patrol. */
+function defenderPatrol(ctx, state, teamId) {
+  const player = ctx.player;
+  const posts = routes[teamId].defenderPosts;
+  const index = state.defenderPostIndex ?? variantIndex(player, posts.length);
+  const post = posts[index % posts.length];
+  state.defenderPostIndex = index % posts.length;
+  state.defenderPost = post;
+  state.practicePost = post;
+  const location = player.getLocation();
+  const [x, y, z] = post;
+  const atPost = location.getZ() === z && location.getX() === x && location.getY() === y;
+  const occupied = barricadeOnPost(post);
+  const holding =
+    atPost ||
+    (occupied &&
+      location.getZ() === z &&
+      chebyshevDistance(location.getX(), location.getY(), x, y) <= 1);
+
+  if (holding) {
+    state.route = null;
+    state.defenderPatrol = false;
+    if (!state.defenderHoldUntil) {
+      state.defenderHoldUntil = ctx.nowMs + DEFENDER_HOLD_MS;
+      return "running";
+    }
+    if (ctx.nowMs < state.defenderHoldUntil) {
+      return "running";
+    }
+    // Held long enough: pick the next useful post and travel there from this floor.
+    return defenderMoveToNextPost(ctx, state, teamId);
+  }
+
+  // Other defenders already cover crowded posts; a lone defender still visits every floor.
+  if (!state.route && defenderPostCrowded(player, teamId, post)) {
+    return defenderMoveToNextPost(ctx, state, teamId);
+  }
+
+  state.defenderHoldUntil = 0;
+  if (!state.route || state.defenderPatrol !== true) {
+    beginRoute(state, defenderPostRoute(teamId, post, location.getZ(), location));
+    state.defenderPatrol = true;
+  }
+  const result = runRoute(ctx, state);
+  if (result === "done" || result === "stuck") {
+    state.route = null;
+    state.defenderPatrol = false;
+  }
+  return "running";
+}
+
+/**
+ * Scorers take one short ranged burst at a nearby threat, then go back to scoring. Without
+ * the cooldown they parked in a fight and never picked the standard up again.
+ */
+function scorerCombat(ctx, state, teamId) {
+  const player = ctx.player;
+  if (game.getTeamData(teamId).respawnBounds.inside(player.getLocation())) return "failure";
+  if (game.getCarriedFlagTeam(player)) {
+    return "failure";
+  }
+  const target = nearestEnemyCarrier(player, teamId, SCORER_ENGAGE_RANGE)
+    ?? nearestEnemy(player, teamId, SCORER_ENGAGE_RANGE);
+  if (!target) {
+    state.practiceCombatUntil = 0;
+    if (player.getCombat().getTarget?.()) player.getCombat().reset();
+    return "failure";
+  }
+  return practiceCombatTurn(ctx, state) ? attackTarget(player, target) : "failure";
+}
+
+/** Both practice roles leave a gap between short fights to keep their route moving. */
+function practiceCombatTurn(ctx, state) {
+  if (state.practiceCombatUntil && ctx.nowMs >= state.practiceCombatUntil) {
+    ctx.player.getCombat().reset();
+    state.practiceCombatUntil = 0;
+  }
+  if (!state.practiceCombatUntil) {
+    if (ctx.nowMs < (state.nextPracticeCombatAt ?? 0)) return false;
+    state.practiceCombatUntil = ctx.nowMs + PRACTICE_COMBAT_MS;
+    state.nextPracticeCombatAt = ctx.nowMs + PRACTICE_COMBAT_COOLDOWN_MS;
+  }
+  return true;
+}
+
+function attackTarget(player, target) {
+  const permission = core.CombatFactory.canAttackPermission(
+    player,
+    target,
+    false,
+    core.CombatFactory.getMethod(player)
+  );
+  if (permission !== core.CanAttackResponse.CAN_ATTACK) {
+    return "failure";
+  }
+  player.getCombat().attack(target);
+  return "running";
+}
+
 /** True when a teammate stands on or next to the doorway; don't shut it on them. */
 function teammateNearDoor(player, teamId, clearTiles) {
   const location = player.getLocation();
@@ -1654,6 +2182,17 @@ function sideDoormanPost(ctx, state, teamId) {
 }
 
 /**
+ * Carrying a standard recovered in the enemy castle walks the enemy descent chain; one
+ * recovered in the field (or on our own side) goes straight to our door. Picking the wrong
+ * one sent field carriers back across the map to the enemy flag room first.
+ */
+function homeRouteFor(player, teamId) {
+  const enemyTeam = game.opposingTeam(teamId);
+  if (game.isInsideCastle(player, enemyTeam)) return routes[teamId].flagHome;
+  return game.isInsideCastle(player, teamId) ? routes[teamId].carryInside : routes[teamId].carryHome;
+}
+
+/**
  * The whole flag loop: out to the enemy standard, capture it (or pick a dropped one up),
  * carry it home along the map's own descent chains, score at the own stand, then walk back
  * down for the next run.
@@ -1672,7 +2211,7 @@ function flagCycle(ctx, state, teamId) {
       `[cw_bot] flag_probe ${player.getUsername?.()} mode=${state.flagMode} carried=${game.getCarriedFlagTeam(player) ?? "none"} ownFlag=${game.flagStatus[teamId]} enemyFlag=${game.flagStatus[enemyTeam]} route=${state.route ? "set" : "null"} cursor=${state.cursor} at=${player.getLocation().getX()},${player.getLocation().getY()},${player.getLocation().getZ()}`
     );
   }
-  ensureFlagWeapon(player);
+  ensureFlagWeapon(player, state.role);
   if (!state.flagMode) {
     state.flagMode = FLAG_MODE.OUT;
   }
@@ -1687,7 +2226,37 @@ function flagCycle(ctx, state, teamId) {
       }
       state.flagMode = FLAG_MODE.HOME;
       state.route = null;
+      state.flagCirculating = false;
       return "running";
+    }
+    // A teammate already has the enemy standard: escort them if they are on this floor, or
+    // circle the enemy castle's stairs until the stand offers a flag again. Never park on
+    // the stand doing nothing.
+    if (state.flagCirculating && game.flagStatus[enemyTeam] !== 1) {
+      state.flagCirculating = false;
+      state.route = null;
+    }
+    if (state.role === ROLES.SCORER && game.flagStatus[enemyTeam] === 1) {
+      const carrier = teamFlagCarrier(teamId);
+      const enemyStand = game.getTeamData(enemyTeam).standLocation;
+      const location = player.getLocation();
+      if (carrier && carrier !== player && location.getZ() === enemyStand.getZ()) {
+        if (escortFlagCarrier(ctx, state, teamId) === "running") {
+          state.route = null;
+          state.flagCirculating = false;
+          return "running";
+        }
+        state.flagCirculating = true;
+        if (!state.route) {
+          beginRoute(state, routes[teamId].enemyCirculation);
+        }
+        const waitResult = runRoute(ctx, state);
+        if (waitResult === "done" || waitResult === "stuck") {
+          state.route = null;
+          state.flagCirculating = false;
+        }
+        return "running";
+      }
     }
     if (!state.route) {
       beginRoute(state, routes[teamId].flagOut);
@@ -1701,7 +2270,7 @@ function flagCycle(ctx, state, teamId) {
         if (location.getZ() === dropLocation.getZ() && chebyshevDistance(location.getX(), location.getY(), dropLocation.getX(), dropLocation.getY()) <= 1) {
           if (nowMs >= state.nextStandClickAt) {
             state.nextStandClickAt = nowMs + FLAG_CLICK_INTERVAL_MS;
-            clickObject(player, ownDropped, 1);
+            if (reserveFlagSpace(player)) clickObject(player, ownDropped, 1);
           }
           return "running";
         }
@@ -1711,12 +2280,12 @@ function flagCycle(ctx, state, teamId) {
         state.nextStandClickAt = nowMs + STAND_RETRY_MS;
         if (game.flagStatus[enemyTeam] === 0) {
           const stand = findStandObject(enemyTeam);
-          if (stand) {
+          if (stand && reserveFlagSpace(player)) {
             clickObject(player, stand, 1);
           }
         } else if (game.flagStatus[enemyTeam] === 2) {
           const dropped = findDroppedFlag(enemyTeam);
-          if (dropped) {
+          if (dropped && reserveFlagSpace(player)) {
             clickObject(player, dropped, 1);
           }
         }
@@ -1738,7 +2307,7 @@ function flagCycle(ctx, state, teamId) {
       return "running";
     }
     if (!state.route) {
-      beginRoute(state, routes[teamId].flagHome);
+      beginRoute(state, homeRouteFor(player, teamId));
     }
     const result = runRoute(ctx, state);
     if (result === "done") {
@@ -1814,10 +2383,7 @@ function recoverEnemyFlag(ctx, state, teamId) {
   if (distance > 1) {
     return walkTowards(ctx, state, flagLocation.getX(), flagLocation.getY());
   }
-  // Capturing needs an empty weapon slot; the weapon is restored once the run is over.
-  if (player.getEquipment().getSlot(core.Equipment.WEAPON_SLOT) > 0) {
-    game.clearWeaponSlot(player);
-  }
+  if (!reserveFlagSpace(player)) return "failure";
   if (ctx.nowMs >= (state.nextFlagClickAt ?? 0)) {
     state.nextFlagClickAt = ctx.nowMs + FLAG_CLICK_INTERVAL_MS;
     clickObject(player, dropped, 1);
@@ -1836,7 +2402,7 @@ function carryEnemyFlagHome(ctx, state, teamId) {  const player = ctx.player;
     return "failure";
   }
   if (!state.route) {
-    beginRoute(state, routes[teamId].carryHome);
+    beginRoute(state, homeRouteFor(player, teamId));
   }
   const result = runRoute(ctx, state);
   if (result === "done") {
@@ -1966,22 +2532,32 @@ function variantIndex(player, length) {
 
 function createBotTree(role, state, teamId, player) {
   if (role === ROLES.SCORER) {
+    // Tools are driven from the route walk itself (with state.practiceGoal), so a barricade
+    // pauses progress instead of sitting above the whole tree waiting for a goal.
     return new SelectorNode([
-      new ActionNode((ctx) => game.practiceBots.scorerTools(ctx, state)),
       new ActionNode((ctx) => takeBandages(ctx, state, teamId)),
       new ActionNode((ctx) => bandageTeammate(ctx, state, teamId)),
+      new ActionNode((ctx) => scorerCombat(ctx, state, teamId)),
       new ActionNode((ctx) => flagCycle(ctx, state, teamId)),
     ]);
   }
   if (role === ROLES.DEFENDER) {
-    const target = () => nearestEnemyCarrier(player, teamId, 16) ?? nearestEnemy(player, teamId, 10);
+    // Slots start on different choke points and then cycle, so a full defender team spreads
+    // across the castle instead of stacking on the flag. Placement/lighting runs before the
+    // fight so combat cannot starve it; the tool itself is bounded.
+    const post = defenderPostFor(player, teamId);
+    state.defenderPostIndex = variantIndex(player, routes[teamId].defenderPosts.length);
+    state.defenderPost = post;
     return new SelectorNode([
       new ActionNode((ctx) => takeBandages(ctx, state, teamId)),
       new ActionNode((ctx) => bandageTeammate(ctx, state, teamId)),
-      new ActionNode((ctx) => game.practiceBots.defenderTools(ctx, state, target())),
-      new ActionNode((ctx) => game.practiceBots.defenderAttack(ctx, state, target())),
+      new ActionNode((ctx) => {
+        state.practicePost = state.defenderPost ?? post;
+        return game.practiceBots.defenderTools(ctx, state, defenderTarget(ctx.player, teamId));
+      }),
+      new ActionNode((ctx) => defenderAttackAction(ctx, state, teamId)),
       new ActionNode((ctx) => guardReturnFlag(ctx, state, teamId)),
-      new ActionNode((ctx) => guardPost(ctx, state, teamId)),
+      new ActionNode((ctx) => defenderPatrol(ctx, state, teamId)),
       new ActionNode(() => "running"),
     ]);
   }
@@ -2099,6 +2675,22 @@ function controllerFor(player, teamId, role, nowMs) {
     nextDoorClickAt: 0,
     outDone: false,
     raidDone: false,
+    // Practice roles: the route goal the tools clear toward, the assigned defender post,
+    // and the bounded scorer burst/defence timers.
+    practiceGoal: null,
+    practicePost: null,
+    pendingClear: null,
+    defenderBarricade: null,
+    defenderPatrol: false,
+    defenderPostIndex: null,
+    defenderHoldUntil: 0,
+    nextToolAt: 0,
+    nextBarricadeAt: 0,
+    practiceCombatUntil: 0,
+    nextPracticeCombatAt: 0,
+    nextDefencePlaceAt: 0,
+    scorerDefenceLight: null,
+    flagCirculating: false,
   };
   botStates.set(player, state);
   const controller = new BotController(
@@ -2106,7 +2698,10 @@ function controllerFor(player, teamId, role, nowMs) {
     startRoom.getX(),
     startRoom.getY(),
     startRoom.getZ(),
-    createBotTree(role, state, teamId, player)
+    new SelectorNode([
+      new ActionNode((ctx) => recoverOwnFlag(ctx, state, teamId)),
+      createBotTree(role, state, teamId, player),
+    ])
   );
   botControllers.set(player, controller);
   return controller;
@@ -2114,6 +2709,14 @@ function controllerFor(player, teamId, role, nowMs) {
 
 /** Forget any in-flight route, keeping the applied loadout. */
 function resetRouteState(state) {
+  state.nextLoadoutAt = 0;
+  state.nextWalkAt = 0;
+  state.nextClimbAt = 0;
+  state.nextDoorClickAt = 0;
+  state.nextBarrierAt = 0;
+  state.pendingBarrier = null;
+  state.defenderPost = null;
+  state.clearBackoff = null;
   state.route = null;
   state.cursor = 0;
   state.pendingClimb = null;
@@ -2128,6 +2731,20 @@ function resetRouteState(state) {
   state.raidDone = false;
   state.battlementOnDeck = false;
   state.attackFallback = false;
+  state.practiceGoal = null;
+  state.practicePost = null;
+  state.pendingClear = null;
+  state.defenderBarricade = null;
+  state.defenderPatrol = false;
+  state.defenderPostIndex = null;
+  state.defenderHoldUntil = 0;
+  state.nextToolAt = 0;
+  state.nextBarricadeAt = 0;
+  state.practiceCombatUntil = 0;
+  state.nextPracticeCombatAt = 0;
+  state.nextDefencePlaceAt = 0;
+  state.scorerDefenceLight = null;
+  state.flagCirculating = false;
 }
 
 function processBot(player) {
@@ -2156,9 +2773,9 @@ function processBot(player) {
     state.colours = false;
     return;
   }
-  if (game.getTeamData(teamId).respawnBounds.inside(player.getLocation())) {
-    resetRouteState(state);
-  }
+  const inSpawn = game.getTeamData(teamId).respawnBounds.inside(player.getLocation());
+  if (inSpawn && !state.inSpawn) resetRouteState(state);
+  state.inSpawn = inSpawn;
   ensureLoadout(player, state, teamId, nowMs);
   controller.tick(nowMs);
 }
@@ -2177,6 +2794,7 @@ module.exports = function attachCastleWarsBots(registry, castleWars) {
   api = registry;
   game = castleWars;
   core = api.core;
+  initPvpTierLoadouts(api);
   routes = buildRoutes(core, game.TEAM);
   // A dedicated task, not the area's inGameProcessors: the world strides idle player
   // bots (seconds between turns), far too slow for one-hop-per-tick route steps.
@@ -2246,6 +2864,27 @@ module.exports._test = {
   botNumber,
   variantIndex,
   pickTierChoice,
+  ensureLoadout,
+  preparePracticeLoadout,
+  ensureFlagWeapon,
+  flagCycle,
+  recoverEnemyFlag,
+  processBot,
+  homeRouteFor,
+  defenderPostFor,
+  defenderPostRoute,
+  nextDefenderPost,
+  defenderPostCrowded,
+  barricadeOnPost,
+  isDefenderBaseTarget,
+  defenderTarget,
+  defenderAttackAction,
+  defenderPatrol,
+  scorerCombat,
+  runScorerDefence,
+  runPracticeClear,
+  resetRouteState,
+  SCORER_AMMO,
   tierCombatLevel,
   TIER_BANDS,
   TIER_PROFILE_IDS,

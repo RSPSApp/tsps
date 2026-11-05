@@ -1,4 +1,4 @@
-import { sampleBridgeHeightForWorldTile } from "../scene/BridgeHeightSampler";
+import { sampleActorHeightForWorldTile, sampleBridgeHeightForWorldTile } from "../scene/BridgeHeightSampler";
 import { BridgePlaneStrategy } from "../scene/PlaneResolver";
 
 export interface Aabb {
@@ -240,7 +240,7 @@ export function buildNpcAabb(params: {
     const horizScale = Math.max(resizeX, resizeY);
     // Keep NPC click bounds tighter than a full tile to reduce false-positive hover hits.
     const half = Math.max(0.32, params.size * 0.42 * horizScale);
-    const hSample = sampleBridgeHeightForWorldTile(
+    const hSample = sampleActorHeightForWorldTile(
         params.mapManager,
         params.worldX,
         params.worldZ,
@@ -271,7 +271,7 @@ export function buildPlayerAabb(params: {
     const strategy =
         params.planeStrategy !== undefined ? params.planeStrategy : BridgePlaneStrategy.RENDER;
     const half = typeof params.half === "number" ? params.half : 0.6;
-    const hSample = sampleBridgeHeightForWorldTile(
+    const hSample = sampleActorHeightForWorldTile(
         params.mapManager,
         params.worldX,
         params.worldZ,

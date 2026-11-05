@@ -16,11 +16,12 @@
  * caught in any order. Durable completion stage 4 is sent as varp 76 value 6:
  * cache quest DB row 126 requires >= 6 for completion.
  *
- * Requirements: the cache quest row lists 31 Prayer, and the OSRS Wiki marks
- * Alfred Grimhand's Barcrawl as the only "[required to start]" requirement.
- * This server has no Barcrawl quest or attribute, so the start gate enforces
- * the 31 Prayer the cache lists (needed to reach the Monastery scorpion) and
- * plays the page's "without the requirements" branch when it is missing.
+ * Requirements: the OSRS Wiki marks Alfred Grimhand's Barcrawl as the only
+ * "[required to start]" requirement and 31 Prayer as "[not required to start]"
+ * (it is needed to enter the Monastery 1st floor, shared Doors/Ladders content
+ * this plugin does not own). The Barcrawl is answered through the quest runtime by
+ * name, so the start gate is enforced here; Prayer is still not treated as a
+ * substitute for it.
  *
  * Picking a scorpion up stings for 3 hitpoints (OSRS Wiki, "The first
  * scorpion"), and the post-quest battlestaff service uses the cache interface
@@ -121,6 +122,12 @@ module.exports = function registerScorpionCatcherQuest(api) {
   const enchanting = new WeakSet();
 
   const has = (player, itemId) => player.getInventory().getAmount(itemId) > 0;
+
+  function barcrawlComplete(player) {
+    const request = { player, name: "Alfred Grimhand's Barcrawl", complete: false };
+    api.emitCustomEvent("quest:is-complete", request);
+    return request.complete === true;
+  }
   const ownsAnyCage = (player) => CAGE_ITEM_IDS.some((itemId) => has(player, itemId));
   const ownsFullCage = (player) => has(player, FULL_CAGE);
 
@@ -139,7 +146,7 @@ module.exports = function registerScorpionCatcherQuest(api) {
         "I can start this quest by speaking to <col=800000>Thormac</col>",
         "in the <col=800000>Sorcerer's Tower</col> south-west of Catherby.",
         "",
-        "I need level 31 <col=800000>Prayer</col> to enter the Monastery upstairs.",
+        "I need to complete Alfred Grimhand's Barcrawl first.",
       ];
     }
     const lines = ["<str>Thormac asked me to recover his three Kharid scorpions.</str>", ""];
@@ -195,9 +202,7 @@ module.exports = function registerScorpionCatcherQuest(api) {
         return "finishing-up";
       }
       if (stage === 0) {
-        // Alfred Grimhand's Barcrawl has no server quest to read; the Prayer
-        // requirement is enforced here and by the start hook.
-        return meetsSkillRequirements(player)
+        return barcrawlComplete(player)
           ? "starting-off-with-the-requirements"
           : "starting-off-without-the-requirements";
       }
@@ -229,28 +234,9 @@ module.exports = function registerScorpionCatcherQuest(api) {
     return null;
   }
 
-  /** The cache quest row also lists 31 Prayer (needed to reach the monastery scorpion). */
-  const PRAYER_REQUIREMENT = 31;
-
-  function meetsSkillRequirements(player) {
-    return player.getSkillManager().getMaxLevel(Skill.PRAYER) >= PRAYER_REQUIREMENT;
-  }
-
-  function notifySkillRequirements(player) {
-    if (!meetsSkillRequirements(player)) {
-      player.sendMessage(
-        `You need a Prayer level of at least ${PRAYER_REQUIREMENT} to start this quest.`
-      );
-    }
-  }
-
   function handleStartHook({ player, npcId, hook }) {
     if (npcId !== THORMAC_NPC_ID || hook !== START_HOOK) return;
     if (quest.getStage(player) < STAGE_STARTED) {
-      if (!meetsSkillRequirements(player)) {
-        notifySkillRequirements(player);
-        return;
-      }
       if (!ownsAnyCage(player)) player.getInventory().adds(EMPTY_CAGE, 1);
       quest.setStage(player, STAGE_STARTED);
     }

@@ -3,14 +3,27 @@
  * finished is the kill - "Your Grotesque Guardians kill count is: N." (Combat Achievements counts
  * it, as it times the fight for its speed tasks), the fight's duration from the bell with the
  * personal best (rsprox), and 1,350 Slayer experience on task; the roof's
- * statues go back on their plinths, ready for the bell. Dawn gives nothing of her own.
+ * statues go back on their plinths, ready for the bell. Dawn gives nothing of her own. Dusk's
+ * kill rolls the drop table in data/grotesque-guardians.json (Wiki, Drops), including Noon.
  */
 const Common = require("./Common.GrotesqueGuardians");
+const BOSS_NAME = "Grotesque Guardians";
 
 function countedKills(player) {
   const request = { player, monster: Common.data.kill.monster };
   Common.api.emitCustomEvent("combat-achievements:count", request);
   return Number.isInteger(request.total) ? request.total : null;
+}
+
+/**
+ * Dusk's loot (Wiki, Drops): the table in data/grotesque-guardians.json through NpcDrops' roller,
+ * so weights, quantities and the Noon tertiary stay data. The pet goes through Pets' award.
+ */
+function rollDrops(player, npc) {
+  const drops = [];
+  Common.api.emitCustomEvent("npc-drops:roll-table", { player, npc, table: Common.data.drops, drops });
+  Common.api.emitCustomEvent("npc-drops:roll", { player, npc, npcId: npc.getId?.(), drops });
+  Common.api.emitCustomEvent("npc-drops:place", { player, drops, location: npc.getLocation() });
 }
 
 function guardianDeath({ npc, killer }) {
@@ -29,12 +42,14 @@ function guardianDeath({ npc, killer }) {
   if (!player?.isRegistered?.()) return;
   const own = (Number(player.getAttribute(Common.KILLS_ATTRIBUTE)) || 0) + 1;
   player.setAttribute(Common.KILLS_ATTRIBUTE, own);
+  rollDrops(player, npc);
   const lines = [Common.message("killCount", { kills: Math.max(own, countedKills(player) ?? 0) })];
   if (startedAt >= 0) {
     const ticks = Common.core.World.getProcessCycle() - startedAt;
     const previous = Number(player.getAttribute(Common.BEST_ATTRIBUTE)) || 0;
     const best = previous > 0 ? Math.min(previous, ticks) : ticks;
     player.setAttribute(Common.BEST_ATTRIBUTE, best);
+    if (!previous || ticks < previous) Common.api.emitCustomEvent("boss:personal-best", { player, boss: BOSS_NAME, ticks });
     lines.push(Common.message("duration", { time: Common.formatTicks(ticks), best: Common.formatTicks(best) }));
   }
   Common.later(1, () => lines.forEach((line) => player.sendMessage(line)));
@@ -62,4 +77,4 @@ function attach(api) {
   api.onCustomEvent("slayer:target-eligible", dawnKillEligible);
 }
 
-module.exports = { attach, guardianDeath, slayerXp, dawnKillEligible, countedKills };
+module.exports = { attach, guardianDeath, slayerXp, dawnKillEligible, countedKills, rollDrops };

@@ -1,6 +1,6 @@
 // TODO: ported from xrsps-typescript; untested.
 module.exports = function registerDragonHastaSpecialAttack(api) {
-  const { CombatSpecial, Graphic, ItemIdentifiers, MeleeCombatMethod } = api.core;
+  const { Animation, CombatSpecial, Graphic, ItemIdentifiers, MeleeCombatMethod, Sounds } = api.core;
 
   const MIN_DRAIN = 5;
   const IMPACT_GRAPHIC = new Graphic(2823);
@@ -8,6 +8,8 @@ module.exports = function registerDragonHastaSpecialAttack(api) {
   // Unleash consumes every available special-attack point (minimum 5%).
   // TODO: the dynamic +5% accuracy / +2.5% damage per energy step cannot be
   // expressed as static roll traits; only the static stab/anti-prayer parts are applied.
+  const SPECIAL_ANIMATION = new Animation(11171); // SPECIALATTACK_UNLEASH
+
   function unleashDrain(character) {
     const current = Math.max(0, Math.floor(character.getSpecialPercentage()));
     return Math.max(MIN_DRAIN, current);
@@ -17,7 +19,8 @@ module.exports = function registerDragonHastaSpecialAttack(api) {
     start(character, target) {
       // All the energy, not the special's cost: a cost cap (a league fragment) leaves it alone.
       CombatSpecial.drain(character, unleashDrain(character), false);
-      super.start(character, target);
+      character.performAnimation(SPECIAL_ANIMATION);
+      Sounds.sendSound(character, character.getAttackSound());
     }
 
     handleAfterHitEffects(hit) {

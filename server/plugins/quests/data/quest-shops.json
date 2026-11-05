@@ -1,0 +1,49 @@
+{
+  "_source": "OSRS Wiki shop and owner pages: each shop below won't trade, and each 'stock' item isn't sold, until the quest is complete ('started': once it is started). 'carrying' is an item the player must hold in the inventory or worn. Quests are matched by name through quest:is-complete / quest:is-started; a quest this server doesn't have leaves the shop open.",
+  "_messages": "Refusals are the Wiki's own lines (Transcript:<NPC>, 'Trying to trade'): 'npc' says 'lines', then 'statement' shows in a box; 'message' is a game message. A shop with neither gets the 'fallback' message, which is ours.",
+  "fallback": "You need to complete {quest} to trade here.",
+  "fallbackStarted": "You need to start {quest} to trade here.",
+  "shops": [
+    { "shops": ["Oziach (shop)"], "quest": "Dragon Slayer I", "npc": "OZIACH", "lines": ["I ain't got nothing to sell ye, adventurer. Leave me be!"] },
+    { "shops": ["Sigmund the Merchant (shop)"], "quest": "The Fremennik Trials", "npc": "SIGMUND_THE_MERCHANT", "lines": ["Hello outerlander. By the laws of our tribe, I am afraid I may not speak to you without the express permission of the chieftain."] },
+    { "shops": ["Skulgrimen's Battle Gear"], "quest": "The Fremennik Trials", "message": "Only Fremenniks may purchase weapons and armour here." },
+    { "shops": ["Yrsa's Accoutrements"], "quest": "The Fremennik Trials", "message": "Only Fremenniks may buy clothes here." },
+    { "shops": ["Fremennik Fish Monger"], "quest": "The Fremennik Trials", "message": "Only Fremenniks may purchase fish here." },
+    { "shops": ["Fremennik Fur Trader"], "quest": "The Fremennik Trials", "message": "Only Fremenniks may purchase furs here." },
+    { "shops": ["Rellekka Longhall Bar"], "quest": "The Fremennik Trials", "message": "Only Fremenniks may buy drinks here." },
+    { "shops": ["Ava's Odds and Ends"], "quest": "Animal Magnetism" },
+    { "shops": ["Arnold's Eclectic Supplies."], "quest": "Swan Song" },
+    { "shops": ["Aurel's Supplies"], "quest": "In Aid of the Myreque" },
+    { "shops": ["Blades by Urbi.", "Jamila's Craft Stall.", "Nathifa's Bake Stall.", "The Spice Is Right."], "quest": "Contact!" },
+    { "shops": ["Fairy Fixit's Fairy Enchantment"], "quest": "Fairytale II - Cure a Queen" },
+    { "shops": ["King Narnode's Royal Seed Pods"], "quest": "Monkey Madness II" },
+    { "shops": ["Oobapohk's Javelin Store"], "quest": "Monkey Madness II", "npc": "OOBAPOHK", "lines": ["Sorry, I'm currently out of javelins."] },
+    { "shops": ["Magic Guild Store (Runes and Staves)"], "quest": "The Hand in the Sand", "npc": "WIZARD_AKUTHA", "lines": ["I don't know if I can trust you with any of my supplies..."], "statement": "You must have completed The Hand in the Sand to use the Guild's shop." },
+    { "shops": ["Razmire Builders Merchants."], "quest": "Shades of Mort'ton" },
+    { "shops": ["Razmire General Store."], "quest": "Shades of Mort'ton", "started": true },
+    { "shops": ["Tamayu's Spear Stall (Default)", "Tiadeche's Karambwan Stall"], "quest": "Tai Bwo Wannai Trio" },
+    { "shops": ["The Lighthouse Store"], "quest": "Horror from the Deep" },
+    { "shops": ["Dal's General Ogre Supplies"], "quest": "Watchtower", "started": true },
+    { "shops": ["~ Uglug's stuffsies ~"], "quest": "Zogre Flesh Eaters", "started": true, "npc": "UGLUG_NAR", "lines": ["Me's not got no glug-glugs to sell, yous bring me da sickies glug-glug den me's open da stufsies for ya."] },
+    { "shops": ["Nardok's Bone Weapons"], "quest": "The Lost Tribe", "npc": "NARDOK", "lines": ["You ain't getting nuthin' off me, surface-dweller!"] },
+    { "shops": ["Smithing Smith's Shop."], "quest": "Cabin Fever", "carrying": "BOOK_O_PIRACY", "npc": "SMITH", "lines": ["Arr? Be ye wantin' te go on account with our gang o' fillibusters?"] },
+    { "shops": ["Two Feet Charley's Fish Shop."], "quest": "Cabin Fever", "started": true, "carrying": "BOOK_O_PIRACY", "npc": "CHARLEY", "lines": ["Arr? Be ye wantin' te go on account with our gang o' fillibusters?"] },
+    { "shops": ["Dodgy Mike's Second Hand Clothing."], "quest": "Cabin Fever", "started": true, "carrying": "BOOK_O_PIRACY", "npc": "MIKE", "lines": ["Arr? Be ye wantin' te go on account with our gang o' fillibusters?"] },
+    { "shops": ["Harpoon Joe's House of 'Rum'."], "quest": "Cabin Fever", "started": true, "carrying": "BOOK_O_PIRACY", "npc": "JOE_2", "lines": ["Arr? Be ye wantin' te go on account with our gang o' fillibusters?"] },
+    { "shops": ["The Other Inn."], "quest": "Cabin Fever", "started": true, "carrying": "BOOK_O_PIRACY", "npc": "MAMA", "lines": ["Arr? Be ye wantin' te go on account with our gang o' fillibusters?"] },
+    { "shops": ["Where Wyrmscraig's Wear Wares Were"], "quest": "Fallen From Grace", "message": "Sorry, reckon I won't be doing business with you. Not 'til Cormac trusts you, at least." },
+    { "shops": ["Initiate Temple Knight Armoury"], "quest": "Recruitment Drive" },
+    { "shops": ["Proselyte Temple Knight Armoury"], "quest": "The Slug Menace" },
+    { "shops": ["Emelio's Kebab Shop"], "quest": "Meat and Greet" }
+  ],
+  "stock": [
+    { "shop": "Quartermaster's Stores", "items": ["DRAGON_HALBERD"], "quest": "Regicide" },
+    { "shop": "The Big Heist Lodge", "items": ["BANDITS_BREW"], "quest": "Desert Treasure I" },
+    { "shop": "The Other Inn.", "items": ["BRAINDEATH_RUM"], "quest": "Cabin Fever" }
+  ],
+  "_versions": "Shop versions whose names don't name their quest: the version that applies, for npc-dialogue:shop (dialogue and Trade).",
+  "versions": [
+    { "shop": "Battle Runes (Post-miniquest)", "quest": "Enter the Abyss" },
+    { "shop": "Battle Runes (Pre-miniquest)", "before": "Enter the Abyss" }
+  ]
+}

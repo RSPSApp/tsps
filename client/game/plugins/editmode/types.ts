@@ -4,7 +4,7 @@ import type { ObjectSpawn } from "./hostProtocol/objectSpawnsMessage";
 export const LOC_SHAPE_NORMAL = 10;
 export const LOC_SHAPE_FLOOR_DECORATION = 22;
 
-export type EditModeTool = "select" | "place" | "delete" | "terrain" | "path" | "wall";
+export type EditModeTool = "select" | "place" | "delete" | "terrain" | "path" | "wall" | "fill";
 
 /** Reference editor fallback for a dirt path; overlay 2 is water in this cache. */
 export const DEFAULT_PATH_OVERLAY_ID = 1;
@@ -33,31 +33,6 @@ export interface EditModeOverlaySwatch {
     textureId?: number;
     name?: string;
 }
-
-export interface EditModeShopStock {
-    id: number;
-    amount: number;
-    [key: string]: unknown;
-}
-
-/** Server shop row; extra fields preserve restock and price settings on save. */
-export interface EditModeShop {
-    id: number;
-    name: string;
-    currency?: string;
-    originalStock: EditModeShopStock[];
-    [key: string]: unknown;
-}
-
-export interface EditModeNpcMenuOption {
-    option: string;
-    actionIndex: number;
-    opcode: number;
-    isAttack: boolean;
-}
-
-/** The on-disk npc-interactions.json object, keyed by NPC type id. */
-export type EditModeNpcInteractions = Record<string, Record<string, unknown>>;
 
 export type EditModeWorldZoneTag = string;
 
@@ -95,6 +70,13 @@ export interface EditModeTile {
     tileX: number;
     tileY: number;
     plane: number;
+}
+
+/** One region's floor overlays on every plane, indexed (plane * 64 + x) * 64 + y; overlay 0 is none. */
+export interface EditModeRegionOverlays {
+    overlays: Uint16Array;
+    shapes: Uint8Array;
+    rotations: Uint8Array;
 }
 
 export interface EditModeBuildingProfile {
@@ -149,6 +131,9 @@ export interface EditModePluginConfig {
     rotation: number;
     /** Floor overlay the terrain and path tools paint with. */
     overlayId: number;
+    /** Tile shape and rotation painted by the terrain tool and Paint overlay; 0 fills the tile. */
+    overlayShape: number;
+    overlayRotation: number;
     /** Height level edited by pointer, placement, and terrain tools. */
     heightLevel: number;
     /** Show every height level, or heightLevel and everything below it. */
@@ -267,17 +252,16 @@ export interface EditModeHost {
         rotation: number,
     ): void;
     onLocDel(tile: { x: number; y: number }, level: number, shape: number, rotation: number): void;
+    /** Brings back what onLocDel suppressed in this slot. */
+    restoreLoc?(tile: { x: number; y: number }, level: number, shape: number, rotation: number): void;
     getLocPlacementShape?(locId: number): number;
     getLocName(locId: number): string;
     getNpcName(npcTypeId: number): string;
     /** Name/id search over the cache; the index is built on first use. */
     search(kind: EditModeSearchKind, query: string): Promise<EditModeSearchResult[]>;
     describeDefinition?(kind: EditModeSearchKind, id: number): EditModeDefinitionSummary | undefined;
-    loadShops?(): Promise<EditModeShop[]>;
-    loadNpcInteractions?(): Promise<EditModeNpcInteractions>;
     /** Saved npc-spawns-custom.json records, converted to editor edits. */
     loadPersistedNpcSpawnEdits?(): Promise<EditModeEdit[]>;
-    getNpcMenuOptions?(npcTypeId: number): readonly EditModeNpcMenuOption[];
     /** Cache-backed overlay colours and textures for the terrain palette. */
     isWaterOverlay?(id: number): boolean;
     getOverlaySwatches?(): readonly EditModeOverlaySwatch[];
@@ -299,6 +283,8 @@ export interface EditModeHost {
     /** Samples terrain at an exact tile vertex; undefined when its map is unavailable. */
     getTerrainOverlay?(tile: EditModeTile): number | undefined;
     getTerrainHeight?(tile: EditModeTile): number | undefined;
+    /** Overlay, shape and rotation of every tile in a region with the edits applied; undefined when it is not loaded. */
+    getRegionOverlays?(regionId: number, edits: readonly EditModeEdit[]): EditModeRegionOverlays | undefined;
     /** Rebuilds edited map squares from their persisted base data. */
     refreshEditedRegions?(regionIds: readonly number[], edits: readonly EditModeEdit[]): void;
     /** Pulls server-side region replacements and object spawns into the scene. */

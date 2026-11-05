@@ -12,6 +12,7 @@
  * - super ranging and super magic: floor(level * 15/100) + 5, once;
  * - barrels (varbits nzone_potion_1-4, up to 255 doses each): Check, Take (doses into potions),
  *   Store (every dose of that potion carried).
+ * Leaving a dream resets every combat stat to normal (Wiki).
  * Not recorded: every line here but the empty barrel's, and the overload's hit timing.
  */
 const Common = require("./Common.NightmareZone");
@@ -125,12 +126,25 @@ function drinkOverload(player) {
 function endOverload(player, healed) {
   if (!overloads.delete(player)) return;
   setVarbit(player, OVERLOAD_ATTRIBUTE, "nzone_overload_potion_effects", 0);
+  resetBoosts(player);
+  if (healed) player.heal?.(potions().overload.heal);
+  player.sendMessage(Common.message("overloadEnds"));
+}
+
+/** Leaving a dream resets every boosted combat stat to its base (Wiki: "resets all stats to normal"). */
+function resetBoosts(player) {
   for (const skill of COMBAT_SKILLS) {
     const base = maxLevel(player, skill);
     if (level(player, skill) > base) player.getSkillManager().setCurrentLevel(Common.core.Skill[skill], base, true);
   }
-  if (healed) player.heal?.(potions().overload.heal);
-  player.sendMessage(Common.message("overloadEnds"));
+}
+
+/** Leaving a dream resets every combat stat to normal, boosts and drains alike (Wiki). */
+function resetAllStats(player) {
+  for (const skill of COMBAT_SKILLS) {
+    const base = maxLevel(player, skill);
+    if (level(player, skill) !== base) player.getSkillManager().setCurrentLevel(Common.core.Skill[skill], base, true);
+  }
 }
 
 /** Absorption takes monsters' damage first (not the player's own, which never comes this way). */
@@ -144,10 +158,11 @@ function absorb({ player, hit }) {
   setVarbit(player, ABSORB_ATTRIBUTE, "nzone_absorb_potion_effects", points - taken);
 }
 
-/** A dream's end: absorption is gone and an overload stops (Wiki: no carrying over). */
+/** A dream's end: absorption is gone, an overload stops and every boost is back to base (Wiki). */
 function dreamEnded(player) {
   setVarbit(player, ABSORB_ATTRIBUTE, "nzone_absorb_potion_effects", 0);
   endOverload(player, false);
+  resetAllStats(player);
 }
 
 // ---------------------------------------------------------------- barrels

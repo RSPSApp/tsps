@@ -175,6 +175,15 @@ the generic Ladders plugin's `ladders:climb`, which otherwise claims every Climb
 - **Scrying pool:** Scry offers the room's directed portals and the entrance, places the player
   at the destination with the captured overlay and "You view ...", and brings them back to the
   pool when they continue. The live game hides the scrying player; tsps has no hidden players.
+- **Garden plants:** furniture planted from a bagged plant (the `poh_sapling_*` objs: trees,
+  plants, flowers, hedges, the topiary bush and the Zen theme) waters in, as rsprox captures
+  show (rev 230-234, recordings 2856, 3267, 3275). The pick plays `farming_watering` with
+  spotanim 410 at height 92, takes one charge from a watering can or Gricoller's can (through
+  Farming's `farming:use-water`), plays synth 2446 and gives Farming experience equal to the
+  Construction experience (Wiki: Bagged plants). With no water: "You need a watering can with
+  water in order to plant garden plants." The menagerie's habitats water in too but give no
+  Farming experience (Wiki: Pet house). The hammer and saw are still asked for; the captures
+  don't show a planting without them.
 - **Cape hanger:** cape and hood mount as their `poh_mounted_*` loc; Take, Admire and, for the
   owner, the cape's options through `skillcape:operate` in the SkillCapes plugin. Untrimmed
   skillcapes show trimmed once the owner has two 99s (Wiki).

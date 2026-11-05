@@ -28,13 +28,28 @@ function register(api) {
   const { core } = api;
   // Apply the overlay document once at startup, so an authored row is live on the next boot without
   // an encoder or a cache repack. Load failures are reported, never silently ignored.
-  const root = path.resolve(__dirname, "../../../..");
+  const root = path.resolve(__dirname, "../../..");
+  let applied = 0;
+  try {
+      const document = Document.read(root);
+      const verdict = Document.check(core, document);
+      if (!verdict.ok) throw new Error(verdict.problems.join("; "));
+      // NPC/object spawn loaders run before startup hooks, so definitions must exist at registration.
+      applied = core.CacheDefinitions.registerCustomDefinitions(document.rows);
+  } catch (error) {
+      console.error("[cache-editor] overlay document not applied:", error.message);
+  }
   api.onServerStartup(() => {
     try {
-      const document = Document.read(root);
-      const applied = core.CacheDefinitions.registerCustomDefinitions(document.rows);
       const models = Assets.customModels(root);
-      if (models.length) core.CacheDefinitions.setCustomModels(models);
+      for (const model of models) {
+        if (core.encodeContentData("server", [{ key: "customModels", rows: [model] }]).length > 65535) throw new Error(`Model ${model.id} exceeds the transport budget`);
+      }
+      if (models.length) {
+        const oldModels = core.CacheDefinitions.getCustomModels();
+        if (models.some(model => oldModels.some(old => old.id === model.id && old.data !== model.data))) throw new Error("Custom model IDs collide with custom items");
+        core.CacheDefinitions.setCustomModels([...oldModels, ...models]);
+      }
       inspect.setAssetNames(Assets.assetNames(root));
       if (applied || models.length) console.log(`[cache-editor] applied ${applied} overlay definition(s), ${models.length} model asset(s)`);
     } catch (error) {
@@ -42,11 +57,11 @@ function register(api) {
     }
   });
 
-  // Uploaded models have to reach the browser the same way the item overlay's do.
+  // Every login replaces the client overlay, including an empty world.
   api.onPlayerLogin(({ player }) => {
-    const models = Assets.customModels(root);
-    if (!models.length || !player.getSession()) return;
-    for (const model of models) player.getPacketSender().sendContentData("server", [{ key: "customModels", rows: [model] }]);
+    const rows = core.CacheDefinitions.getCustomDefinitions();
+    if (!player.getSession()) return;
+    player.getPacketSender().sendContentData("server", [{ key: "customDefinitions", rows }]);
   });
   api.registerContentEndpoint("cache-kinds", () => ({ kinds: inspect.kinds(core) }));
   api.registerContentEndpoint("cache-inspect", (query) => inspect.describe(core, {

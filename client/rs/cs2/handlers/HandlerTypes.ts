@@ -250,6 +250,11 @@ export interface HandlerContext {
     // Optional - if not provided, clan ops return default values (empty/0/-1)
     clanSettings?: ClanSettings | null;
     clanChannel?: ClanChannel | null;
+    /** Which clan the commands above read: false the player's own, true the listened guest clan. */
+    selectClanSettings?: (listened: boolean) => void;
+    selectClanChannel?: (listened: boolean) => void;
+    /** %varclan values, as the server sends them. */
+    clanVars?: Map<number, number>;
 
     // Event context (for magic argument substitution)
     eventContext: EventContext;
@@ -287,6 +292,7 @@ export interface HandlerContext {
 
     // Player appearance
     getPlayerGender?: () => number;
+    getPlayerPronouns?: () => number;
 
     /** Minimap zoom and icon display state used by minimap CS2 opcodes. */
     getMinimapZoom?: () => number;
@@ -391,6 +397,7 @@ export interface HandlerContext {
 
     /** Dispatches a CS2 OPPLAYER action using a synced player name. */
     sendPlayerOption?: (playerName: string, option: number) => void;
+    openUrl?: (url: string, newWindow: boolean) => void;
 
     // Console output (for WRITECONSOLE opcode)
     writeConsole?: (text: string) => void;

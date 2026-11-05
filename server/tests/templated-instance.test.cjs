@@ -226,6 +226,27 @@ test('allocations do not overlap and are freed on destroy', () => {
   }
 });
 
+test('leaving a templated instance for a plain private area rebuilds the normal map (#2115)', () => {
+  const { sceneRebuildFor } = require('../dist/net/PlayerSession');
+  const { PrivateArea } = require('../dist/game/model/areas/impl/PrivateArea');
+  const instance = new TemplatedInstanceArea(1, 1);
+  const plain = new PrivateArea([]);
+  try {
+    // The Fractured Archive's Nexus (an instance) to Dreadnoth's room (the raid's plain area).
+    assert.equal(sceneRebuildFor(plain, instance, true), 'normal', 'the client leaves instance mode');
+    assert.equal(sceneRebuildFor(instance, plain, true), 'region');
+    assert.equal(sceneRebuildFor(instance, null, true), 'region');
+    assert.equal(sceneRebuildFor(null, instance, true), 'normal');
+    assert.equal(sceneRebuildFor(null, null, true), 'normal');
+    assert.equal(sceneRebuildFor(plain, null, true), null, 'a plain area on the cache map needs no rebuild');
+    assert.equal(sceneRebuildFor(plain, plain, true), null);
+    assert.equal(sceneRebuildFor(plain, instance, false), null, 'nothing changed, nothing sent');
+  } finally {
+    instance.destroy();
+    plain.destroy();
+  }
+});
+
 function rotateBlockTile(x, y, rotation, last) {
   switch (rotation & 3) {
     case 0: return [x, y];

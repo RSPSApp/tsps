@@ -294,7 +294,10 @@ export class NpcType extends Type {
         } else if (opcode === 100) {
             this.ambient = buffer.readByte();
         } else if (opcode === 101) {
-            this.contrast = buffer.readByte() * 5;
+            // The raw byte, as RuneLite's NpcLoader keeps it: the model is lit with
+            // contrast * 5 + 850 (NpcModelLoader), so scaling here too lit NPCs with a
+            // contrast 25 times over (Tempoross, -20, came out the wrong colour).
+            this.contrast = buffer.readByte();
         } else if (opcode === 102) {
             if (
                 (this.cacheInfo.game === "oldschool" && this.cacheInfo.revision < 210) ||

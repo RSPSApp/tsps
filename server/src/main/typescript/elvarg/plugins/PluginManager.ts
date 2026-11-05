@@ -1286,11 +1286,11 @@ export class PluginManager {
     return allowed ? true : null;
   }
 
-  public static emitCanTeleport(player: any, wildernessLevelLimit: number = 20, destination?: any): boolean | null {
+  public static emitCanTeleport(player: any, wildernessLevelLimit: number = 20, destination?: any, spellName?: string): boolean | null {
     if (PluginManager.canTeleportHooks.length === 0) {
       return null;
     }
-    const event: PluginCanTeleportEvent = { player, wildernessLevelLimit, destination, allow: null };
+    const event: PluginCanTeleportEvent = { player, wildernessLevelLimit, destination, spellName, allow: null };
     for (const hook of PluginManager.canTeleportHooks) {
       PluginManager.executeHook(hook, event, "can_teleport", "can_teleport");
       if (event.allow !== null) {
@@ -2378,9 +2378,11 @@ export class PluginManager {
       HitDamage: require(`${combat}/hit/HitDamage`).HitDamage,
       HitMask: require(`${combat}/hit/HitMask`).HitMask,
       RangedWeapon: require(`${combat}/ranged/RangedData`).RangedWeapon,
+      RangedWeaponType: require(`${combat}/ranged/RangedData`).RangedWeaponType,
       Ammunition: require(`${combat}/ranged/RangedData`).Ammunition,
       WeaponProfiles: require(`${combat}/WeaponProfile`).WeaponProfiles,
       FightStyle: require(`${combat}/FightStyle`).FightStyle,
+      FightType: require(`${combat}/FightType`).FightType,
       WeaponInterfaceManager: require(`${combat}/WeaponInterfaceManager`).WeaponInterfaceManager,
       PrayerHandler: require("../game/content/PrayerHandler").PrayerHandler,
       PrayerData: require("../game/content/PrayerHandler").PrayerData,
@@ -2399,8 +2401,10 @@ export class PluginManager {
       Priority: require(`${model}/Priority`).Priority,
       Projectile: require(`${model}/Projectile`).Projectile,
       Skill: require(`${model}/Skill`).Skill,
+      SkillManager: require("../game/content/skill/SkillManager").SkillManager,
       Item: require(`${model}/Item`).Item,
       Flag: require(`${model}/Flag`).Flag,
+      Appearance: require(`${model}/Appearance`).Appearance,
       Direction: require(`${model}/Direction`).Direction,
       Equipment: require(`${model}/container/impl/Equipment`).Equipment,
       Bank: require(`${model}/container/impl/Bank`).Bank,
@@ -2425,10 +2429,17 @@ export class PluginManager {
       Location: require(`${model}/Location`).Location,
       Mobile: require("../game/entity/impl/Mobile").Mobile,
       encodePluginMessage: require("../net/protocol/ClientProtocol").encodePluginMessage,
+      encodeChatMessage: require("../net/protocol/ClientProtocol").encodeChatMessage,
+      encodeClanSettingsFull: require("../net/protocol/ClientProtocol").encodeClanSettingsFull,
+      encodeClanChannelFull: require("../net/protocol/ClientProtocol").encodeClanChannelFull,
+      encodeClanChannelDelta: require("../net/protocol/ClientProtocol").encodeClanChannelDelta,
+      encodeClanSettingsDelta: require("../net/protocol/ClientProtocol").encodeClanSettingsDelta,
+      encodeClanVar: require("../net/protocol/ClientProtocol").encodeClanVar,
       MOBILE_CLIENT_ATTRIBUTE: require("../net/protocol/ClientProtocol").MOBILE_CLIENT_ATTRIBUTE,
       XPDROPS_ENABLED_ATTRIBUTE: require("../net/protocol/ClientProtocol").XPDROPS_ENABLED_ATTRIBUTE,
       encodeGameframeBootstrap: require("../net/protocol/ClientProtocol").encodeGameframeBootstrap,
       resolveGameframeRoot: require("../net/protocol/ClientProtocol").resolveGameframeRoot,
+      orbsGroupFor: require("../net/protocol/ClientProtocol").orbsGroupFor,
       encodeFinePosition: require("../net/protocol/ClientProtocol").encodeFinePosition,
       Boundary: require(`${model}/Boundary`).Boundary,
       PolygonalBoundary: require(`${model}/PolygonalBoundary`).PolygonalBoundary,
@@ -2441,6 +2452,7 @@ export class PluginManager {
         isEnabled: () => PluginManager.isPluginPerformanceProfilingEnabled(),
       }),
       World: require("../game/World").World,
+      DisplayNames: require("../game/entity/impl/player/DisplayNames").DisplayNames,
       BoatManager: require("../game/content/sailing/BoatManager").BoatManager,
       BOAT_VIEW_DISTANCE: require("../game/content/sailing/WorldEntitySync").BOAT_VIEW_DISTANCE,
       Sailing: require("../game/content/sailing/Sailing").Sailing,
@@ -2452,6 +2464,9 @@ export class PluginManager {
       LocModelType: require("../game/cache/codec/rs/config/loctype/LocModelType").LocModelType,
       MapObjects: require("../game/entity/impl/object/MapObjects").MapObjects,
       ItemOnGroundManager: require("../game/entity/impl/grounditem/ItemOnGroundManager").ItemOnGroundManager,
+      GroundItemOperationType: require("../game/entity/impl/grounditem/ItemOnGroundManager").OperationType,
+      ItemOnGround: require("../game/entity/impl/grounditem/ItemOnGround").ItemOnGround,
+      GroundItemState: require("../game/entity/impl/grounditem/ItemOnGround").State,
       ItemDefinition: require("../game/definition/ItemDefinition").ItemDefinition,
       EquipPacketListener: require("../net/packet/impl/EquipPacketListener").EquipPacketListener,
       PlayerDeathTask: require("../game/task/impl/PlayerDeath").PlayerDeathTask,
@@ -2475,6 +2490,7 @@ export class PluginManager {
       CombatSpells: require(`${combat}/magic/CombatSpells`).CombatSpells,
       Autocasting: require(`${combat}/magic/Autocasting`).Autocasting,
       NPC: require("../game/entity/impl/npc/NPC").NPC,
+      NpcSpawnDefinitionLoader: require("../game/definition/loader/impl/NpcSpawnDefinitionLoader").NpcSpawnDefinitionLoader,
       GameConstants: require("../game/GameConstants").GameConstants,
       Music: require("../game/Music").Music,
       // world.json accessors (isMembersWorld, isMembersArea, WORLD_SPAWN, zone boundaries).
@@ -2494,6 +2510,7 @@ export class PluginManager {
       PlayerRights: require("../game/model/rights/PlayerRights").PlayerRights,
       Server: require("../Server").Server,
       PluginManager: require("./PluginManager").PluginManager,
+      CustomInterfaceRegistry,
       ShopManager: require("../game/model/container/shop/ShopManager").ShopManager,
       ShopDefinition: require("../game/definition/ShopDefinition").ShopDefinition,
       MultiChatboxPrompt: require("../game/model/menu/MultiChatboxPrompt").MultiChatboxPrompt,
@@ -2558,6 +2575,7 @@ export class PluginManager {
         "secondClick",
         "thirdClick",
         "fourthClick",
+        "fifthClick",
       ] as const) {
         const action = definition[property];
         if (action === undefined) {
@@ -2618,7 +2636,8 @@ export class PluginManager {
         !normalized.firstClick &&
         !normalized.secondClick &&
         !normalized.thirdClick &&
-        !normalized.fourthClick
+        !normalized.fourthClick &&
+        !normalized.fifthClick
       ) {
         console.warn(
           `[plugins] ${pluginName} attempted empty NPC interaction definition registration`
@@ -4223,6 +4242,60 @@ export class PluginManager {
           );
         }
       },
+      replaceMapRegionData: (regionId, terrainData, objectData) => {
+        if (!Number.isInteger(regionId) || regionId < 0 || regionId > 0xffff ||
+          !(terrainData instanceof Uint8Array) || terrainData.length === 0 ||
+          (objectData !== null && !(objectData instanceof Uint8Array))) {
+          console.warn(`[plugins] ${pluginName} attempted invalid replaceMapRegionData regionId=${regionId}`);
+          return false;
+        }
+        const owner = MapRegionReplacementManager.getSource(regionId);
+        if (owner !== null && owner !== pluginName) {
+          // Never stack over another owner's map (a data/regions pack): restoring would lose it.
+          console.warn(`[plugins] ${pluginName} refused: region ${regionId} is replaced by ${owner}`);
+          return false;
+        }
+        try {
+          const result = MapRegionReplacementManager.replaceMapRegionData(regionId, terrainData, objectData, pluginName);
+          applyPluginRegionReplacement(pluginName, regionId, result);
+          return true;
+        } catch (err) {
+          console.error(`[plugins] ${pluginName} failed to replace map region ${regionId}`, err);
+          return false;
+        }
+      },
+      restoreMapRegion: (regionId) => {
+        // Only the plugin that replaced a region may hand it back.
+        if (MapRegionReplacementManager.getSource(regionId) !== pluginName) return false;
+        // Build the native map first: without one, keep the replacement so the server's
+        // clipping and every client still agree.
+        let packet;
+        try {
+          packet = MapRegionReplacementManager.nativeRegionPacket(regionId);
+        } catch (err) {
+          console.error(`[plugins] ${pluginName} could not encode native map region ${regionId}`, err);
+          return false;
+        }
+        if (!packet) {
+          console.warn(`[plugins] ${pluginName} kept region ${regionId}: the cache has no native map for it`);
+          return false;
+        }
+        MapRegionReplacementManager.removeMapRegion(regionId);
+        require("../game/collision/RegionManager").RegionManager.reloadRegion(regionId);
+        // Every connected client gets the native map; one failed send does not stop the rest.
+        let delivered = true;
+        const { World } = require("../game/World");
+        World.getPlayers()?.forEach?.((player: any) => {
+          if (!player || !World.isPlayerSessionConnected(player)) return;
+          try {
+            if (!MapRegionReplacementManager.sendRegionPacketToPlayer(player, packet)) delivered = false;
+          } catch (err) {
+            delivered = false;
+            console.error(`[plugins] ${pluginName} failed to send native map region ${regionId}`, err);
+          }
+        });
+        return delivered;
+      },
       registerDefinitionSource: (definitionType, source) => {
         try {
           DefinitionLoader.registerSource(definitionType, pluginName, source);
@@ -4338,6 +4411,10 @@ export class PluginManager {
         require("../game/content/combat/EquipmentEffects").registerCombatEffectiveLevelModifier(modifier),
       registerMeleeStrengthPercentModifier: (modifier) =>
         require("../game/content/combat/EquipmentEffects").registerMeleeStrengthPercentModifier(modifier),
+      registerMeleeStrengthBonusModifier: (modifier) =>
+        require("../game/content/combat/EquipmentEffects").registerMeleeStrengthBonusModifier(modifier),
+      registerRestingLevelModifier: (modifier) =>
+        require("../game/content/skill/SkillManager").SkillManager.registerRestingLevelModifier(modifier),
       registerMeleeHitModifier: (modifier) =>
         require("../game/content/combat/EquipmentEffects").registerMeleeHitModifier(
           modifier
@@ -4384,6 +4461,10 @@ export class PluginManager {
         ),
       registerRunEnergyDrainModifier: (modifier) =>
         require("../game/content/combat/EquipmentEffects").registerRunEnergyDrainModifier(
+          modifier
+        ),
+      registerRunEnergyStatusModifier: (modifier) =>
+        require("../game/content/combat/EquipmentEffects").registerRunEnergyStatusModifier(
           modifier
         ),
       registerSpecialEnergyRestoreModifier: (modifier) =>
@@ -4849,6 +4930,9 @@ export class PluginManager {
     resolver: PluginCombatMethodResolver
   ): void {
     PluginManager.combatMethodResolvers.push(resolver);
+    // Stable: weapon overrides first, each group in registration order.
+    PluginManager.combatMethodResolvers.sort((a, b) =>
+      Number(b.overridesWeapon === true) - Number(a.overridesWeapon === true));
   }
 
   private static registerNpcCombatMethodProviderInternal(

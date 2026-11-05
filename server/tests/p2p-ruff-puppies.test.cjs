@@ -76,7 +76,7 @@ function player(h, coins = 1000, full = false) {
   const p = {
     complete: true, attrs, items, vars, packets, messages, animations, inventory,
     getAttribute: key => attrs.get(key), setAttribute: (key, value) => attrs.set(key, value),
-    getUsername: () => 'PuppyTester', getIndex: () => index, isPlayerBot: () => false,
+    getUsername: () => 'PuppyTester', getDisplayName: () => 'PuppyTester', getIndex: () => index, isPlayerBot: () => false,
     getHitpoints: () => 99, getInventory: () => inventory, getBanks: () => [],
     getBank: () => ({ adds: () => true, contains: () => false }),
     getPacketSender: () => sender, getInterfaceId: () => main,

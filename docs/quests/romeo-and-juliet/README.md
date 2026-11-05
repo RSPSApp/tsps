@@ -21,6 +21,12 @@ Community-reported completion accepted for scheduling (skip full manual replay).
 
 ## Runs
 
+### 2026-11-02 — agent — Claude Opus 5.5
+
+- **Skipped:** No rsprox database capture covers the quest route. The only varp 144 change
+  (recording 3276) is the full varp resend after a reconnect, already at 100; Juliet, the
+  cadava potion and the quest dialogue appear in no recording. Not replayed.
+
 ### 2026-10-25 · community (thehardcorenoobs1234) · model not recorded
 
 - **Source:** community report ([#1257](https://github.com/RSPSApp/tsps/issues/1257)); moved here from its ledger on 2026-10-29. Proven against plugin hashes, not a commit, so a later plugin change is not flagged automatically.

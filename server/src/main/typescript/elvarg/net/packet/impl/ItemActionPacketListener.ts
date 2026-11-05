@@ -125,23 +125,6 @@ export class ItemActionPacketListener {
         player.sendMessage("You cannot use this in the Wilderness!");
         break;
 
-      case 2542:
-      case 2543:
-      case 2544:
-        if (player.busy()) {
-          player.sendMessage("You cannot do that right now.");
-          return true;
-        }
-        if (
-          (itemId == 2542 && player.getAttribute("prayer:preserve-unlocked") === true) ||
-          (itemId == 2543 && player.getAttribute("prayer:rigour-unlocked") === true) ||
-          (itemId == 2544 && player.getAttribute("prayer:augury-unlocked") === true)
-        ) {
-          player.sendMessage("You have already unlocked that prayer.");
-          return true;
-        }
-
-        break;
       case 2545:
         if (player.busy()) {
           player.sendMessage("You cannot do that right now.");

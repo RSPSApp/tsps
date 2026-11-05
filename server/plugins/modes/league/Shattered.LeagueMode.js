@@ -263,8 +263,8 @@ function renownCommand({ player, parts }) {
   const award = { player: target, amount, reason: "command" };
   awardRenown(award);
   player.sendMessage(award.awarded
-    ? data.messages.renownGranted.replace("{amount}", amount).replace("{name}", target.getUsername()).replace("{renown}", renownOf(target))
-    : data.messages.notShattered.replace("{name}", target.getUsername()));
+    ? data.messages.renownGranted.replace("{amount}", amount).replace("{name}", target.getDisplayName()).replace("{renown}", renownOf(target))
+    : data.messages.notShattered.replace("{name}", target.getDisplayName()));
   return true;
 }
 

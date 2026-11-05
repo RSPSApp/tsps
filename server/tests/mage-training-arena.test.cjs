@@ -10,15 +10,19 @@ const { Server } = require('../dist/Server');
 Server.installProductionPathResolver();
 const { PluginManager } = require('../dist/plugins/PluginManager');
 const { CachePipeline } = require('../dist/game/cache/CachePipeline');
+const { Player } = require('../dist/game/entity/impl/player/Player');
+const { PlayerSession } = require('../dist/net/PlayerSession');
 const core = PluginManager.getCoreApi();
+let realCasters = 0;
 
-let Common, Guardians, Lobby, Enchanting, Alchemists, Graveyard, Rewards, events, ironmanMode;
+let Common, Guardians, Lobby, Telekinetic, Enchanting, Alchemists, Graveyard, Rewards, events, ironmanMode, testApi;
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, '..'));
   Common = require('../plugins/minigames/magetrainingarena/Common.MageTrainingArena');
   Guardians = require('../plugins/minigames/magetrainingarena/Guardians.MageTrainingArena');
   Lobby = require('../plugins/minigames/magetrainingarena/Lobby.MageTrainingArena');
+  Telekinetic = require('../plugins/minigames/magetrainingarena/Telekinetic.MageTrainingArena');
   Enchanting = require('../plugins/minigames/magetrainingarena/Enchanting.MageTrainingArena');
   Alchemists = require('../plugins/minigames/magetrainingarena/Alchemists.MageTrainingArena');
   Graveyard = require('../plugins/minigames/magetrainingarena/Graveyard.MageTrainingArena');
@@ -34,10 +38,30 @@ before(async () => {
       if (name === 'ironman:mode') event.mode = ironmanMode;
     },
   }, { get: (target, key) => target[key] ?? (() => {}) });
+  testApi = api;
   Common.init(api);
 });
 
 const loc = (x, y, z = 0) => new core.Location(x, y, z);
+
+test('the native entrance doorway opens and crosses in both directions', () => {
+  core.RegionManager.init();
+  core.RegionManager.loadMapFiles(3363, 3299);
+  const door = core.MapObjects.get(core.CacheDefinitions.getLocId('magictraining_temple_door'), loc(3363, 3299), null);
+  assert.equal(door?.getDefinition().getActions()[0], 'Enter');
+  const api = PluginManager.createApi('MageTrainingArenaDoorTest');
+  Lobby.attach(api);
+  for (const [start, end] of [[3298, 3300], [3300, 3298]]) {
+    const player = new (require('../dist/game/entity/impl/player/Player').Player)(null, loc(3363, start));
+    player.getSession = () => ({ sendClientPacket: () => true });
+    const animations = [];
+    player.getPacketSender().sendObjectAnimation = (object, animation) => animations.push([object, animation.getId()]);
+    const handled = PluginManager.emitObjectInteraction({ player, object: door, objectId: door.getId(), definition: door.getDefinition(), clickType: 1, handled: false });
+    assert.equal(handled, true);
+    assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], [3363, end]);
+    assert.deepEqual(animations, [[door, core.CacheDefinitions.getSeqId('magictraining_light_door_open')]]);
+  }
+});
 
 function fakePlayer(x = 3363, y = 9644, z = 0) {
   let tile = loc(x, y, z);
@@ -46,8 +70,10 @@ function fakePlayer(x = 3363, y = 9644, z = 0) {
   const xp = [];
   const strings = new Map();
   const hidden = new Map();
+  const camera = [];
+  const scripts = [];
   const player = {
-    messages: [], attributes: {}, xp, strings, hidden, magic: 99, anims: 0,
+    messages: [], attributes: {}, xp, strings, hidden, camera, scripts, magic: 99, anims: 0, runEnergy: 100,
     getLocation: () => tile,
     moveTo: (to) => { tile = to; },
     isRegistered: () => true,
@@ -55,10 +81,16 @@ function fakePlayer(x = 3363, y = 9644, z = 0) {
     getAttribute: (k) => player.attributes[k],
     setAttribute: (k, v) => { player.attributes[k] = v; },
     getSkillManager: () => ({ getCurrentLevel: () => player.magic, addExperiences: (skill, amount) => xp.push(amount) }),
+    getRunEnergy: () => player.runEnergy,
+    setRunEnergy: (value) => { player.runEnergy = value; },
     getPacketSender: () => ({
-      sendSubInterface() {}, closeSubInterface() {}, sendSound() {},
+      sendSubInterface() {}, closeSubInterface() {}, sendSound() {}, sendSoundEffect() {}, sendRunEnergy() {},
+      sendClientScript: (...args) => scripts.push(args),
       sendString: (text, id) => strings.set(id, text),
       sendInterfaceDisplayState: (id, hide) => hidden.set(id, hide),
+      sendCameraLookAt: (x, y, height, motion) => camera.push({ mode: 'look', x, y, height, motion }),
+      sendCameraMoveTo: (x, y, height, motion) => camera.push({ mode: 'move', x, y, height, motion }),
+      sendCameraReset: () => camera.push({ mode: 'reset' }),
     }),
     getInventory: () => ({
       getAmount: (id) => items.get(id) ?? 0,
@@ -84,6 +116,35 @@ function fakePlayer(x = 3363, y = 9644, z = 0) {
   return player;
 }
 
+function fakeNpc(definition) {
+  let tile = loc(definition.x, definition.y, definition.z ?? 0);
+  let id = definition.id;
+  const moves = [];
+  return {
+    definition,
+    moves,
+    getLocation: () => tile,
+    getId: () => id,
+    moveTo: (to) => { tile = to; },
+    exactMove: (to, options) => { tile = to; moves.push({ to, options }); },
+    setNpcTransformationId: (next) => { id = next; },
+  };
+}
+
+function telekineticEvent(player, npc, overrides = {}) {
+  let runes = 0;
+  const event = {
+    player,
+    npc,
+    spellId: Telekinetic.TELEKINETIC_GRAB_SPELL_ID,
+    handled: false,
+    consumeRunes: () => { runes += 1; return true; },
+    runes: () => runes,
+    ...overrides,
+  };
+  return event;
+}
+
 test('every id resolves from the cache', () => {
   const { npcs, locs, items, interfaces } = Common.ids;
   assert.deepEqual([npcs.entranceGuardian, npcs.enchantmentGuardian, npcs.hat], [5978, 5981, 7512]);
@@ -92,6 +153,8 @@ test('every id resolves from the cache', () => {
   assert.deepEqual([items.hatDull, items.hatEnergised, items.hatFull], [6885, 6886, 6887]);
   assert.deepEqual([items.cube, items.cylinder, items.icosahedron, items.pentamid, items.orb, items.dragonstone], [6899, 6898, 6900, 6901, 6902, 6903]);
   assert.deepEqual([interfaces.lobby, interfaces.enchanting], [553, 195]);
+  assert.deepEqual([locs.telekineticPortal, locs.telekineticWalls, locs.telekineticFinish], [23673, 10755, 23672]);
+  assert.deepEqual([npcs.telekineticGuardian, npcs.mazeGuardian, npcs.mazeGuardianMoving, npcs.mazeGuardianComplete], [5979, 6777, 6778, 6779]);
 });
 
 test('Pizazz Points stop at each type\'s cap', () => {
@@ -178,6 +241,22 @@ test('each pile gives its shape, 1 in 32 a dragonstone; nothing with a full pack
   Enchanting.takeFromPile({ player, objectId: locs.cubePile }, () => 0.5);
   assert.equal(player.items.get(items.cube) ?? 0, 0);
   assert.equal(player.messages.at(-1), Common.message('inventoryFull'));
+});
+
+test('MTA level 1 and 2 enchants return to the spellbook only after a successful cast', () => {
+  for (const level of [1, 2]) {
+    for (const accepted of [false, true]) {
+      const player = fakePlayer();
+      const itemId = Common.ids.items.cube;
+      player.items.set(itemId, 1);
+      player.slots = [{ getId: () => itemId }];
+      const spell = { canCast: () => accepted, baseExperience: () => 17.5,
+        data: { animation: 719, graphic: 114, sound: 136 } };
+      Enchanting.enchantShape({ player, spell, spellName: `Lvl-${level} Enchant`, itemId, slot: 0 });
+      assert.deepEqual(player.scripts, accepted ? [[915, 6]] : []);
+      assert.equal(player.items.get(itemId), accepted ? 0 : 1);
+    }
+  }
 });
 
 test('enchant points: the spell level, doubled every 10th shape, +2 on the bonus shape, double for a dragonstone', () => {
@@ -272,6 +351,315 @@ test('the jewellery enchant spells offer other items to the arena before refusin
   const fs = require('node:fs');
   const source = fs.readFileSync(path.join(__dirname, '..', 'plugins', 'skills', 'Spells.EnchantJewellery.js'), 'utf8');
   assert.match(source, /emitCustomEvent\("magic:enchant-item"/);
+});
+
+// --- The Telekinetic Theatre
+
+test('the ten Telekinetic mazes keep the Wiki/capture starts, goals and arrivals', () => {
+  const mazes = Common.data.telekinetic.mazes;
+  assert.equal(mazes.length, 10);
+  assert.equal(new Set(mazes.map((maze) => maze.goal.join(','))).size, 10);
+  for (const maze of mazes) {
+    const [minX, maxX, minY, maxY] = maze.walls;
+    const [sx, sy, sz] = maze.start;
+    const [gx, gy, gz] = maze.goal;
+    const [ax, ay, az] = maze.arrive;
+    assert.ok(sx > minX && sx < maxX && sy > minY && sy < maxY, `start inside ${maze.walls}`);
+    assert.ok(gx >= minX + 1 && gx <= maxX - 1 && gy >= minY + 1 && gy <= maxY - 1, `goal inside ${maze.walls}`);
+    assert.equal(sz, gz);
+    assert.equal(az, gz);
+    assert.ok(Number.isInteger(ax) && Number.isInteger(ay));
+  }
+  const startFor = (goal) => mazes.find((maze) => maze.goal.join(',') === goal).start;
+  assert.deepEqual(startFor('3339,9683,2'), [3348, 9674, 2]);
+  assert.deepEqual(startFor('3347,9714,0'), [3343, 9705, 0]);
+  assert.deepEqual(startFor('3341,9708,1'), [3350, 9717, 1]);
+  assert.deepEqual(startFor('3353,9680,1'), [3351, 9684, 1]);
+  assert.deepEqual(startFor('3345,9718,2'), [3346, 9718, 2]);
+});
+
+test('the statue slides away from the caster until a maze wall stops it; a corner wastes the cast', () => {
+  core.RegionManager.init();
+  core.RegionManager.loadMapFiles(3328, 9664, false);
+  const maze = Common.data.telekinetic.mazes.find((entry) => entry.goal.join(',') === '3339,9683,2');
+  assert.deepEqual(Telekinetic.directionFor(loc(3340, 9684, 2), maze.walls), [0, 1]);
+  assert.deepEqual(Telekinetic.directionFor(loc(3338, 9678, 2), maze.walls), [-1, 0]);
+  assert.deepEqual(Telekinetic.directionFor(loc(3343, 9673, 2), maze.walls), [0, -1]);
+  assert.deepEqual(Telekinetic.directionFor(loc(3349, 9678, 2), maze.walls), [1, 0]);
+  assert.equal(Telekinetic.directionFor(loc(3338, 9684, 2), maze.walls), null, 'corner');
+
+  let at = loc(...maze.start);
+  for (const direction of [[0, 1], [-1, 0], [0, -1], [-1, 0], [0, 1], [-1, 0], [0, -1], [-1, 0], [0, 1]]) {
+    at = Telekinetic.slide(at, direction);
+  }
+  assert.deepEqual([at.getX(), at.getY(), at.getZ()], maze.goal);
+});
+
+test('the Telekinetic Teleport needs Magic 33, starts one session, and leaving clears it', () => {
+  const spawned = [];
+  const removed = [];
+  testApi.spawnNpc = (definition) => {
+    const npc = fakeNpc(definition);
+    spawned.push(npc);
+    return npc;
+  };
+  testApi.removeNpc = (npc) => removed.push(npc);
+  const player = fakePlayer(3363, 3318, 0);
+  player.magic = 32;
+  Telekinetic.enter(player);
+  assert.equal(player.messages.at(-1), Common.message('level', { level: 33, room: 'Telekinetic Theatre' }));
+  assert.equal(spawned.length, 0);
+
+  player.magic = 33;
+  const original = Math.random;
+  Math.random = () => 0;
+  try {
+    Telekinetic.enter(player);
+  } finally {
+    Math.random = original;
+  }
+  const maze = Common.data.telekinetic.mazes[0];
+  assert.equal(spawned.length, 1);
+  assert.deepEqual([spawned[0].getLocation().getX(), spawned[0].getLocation().getY(), spawned[0].getLocation().getZ()], maze.start);
+  assert.deepEqual([player.getLocation().getX(), player.getLocation().getY(), player.getLocation().getZ()], maze.arrive);
+  assert.equal(player.messages.at(-1), Common.message('telekineticEntered'));
+
+  Telekinetic.enter(player);
+  assert.equal(spawned.length, 1, 'a second entry joins the existing session');
+  Telekinetic.removeSession(player);
+  assert.equal(removed[0], spawned[0]);
+  assert.equal(Telekinetic.sessionOf(player), null);
+});
+
+test('Telekinetic Grab slides the guardian and a solved maze awards its points once', () => {
+  const spawned = [];
+  testApi.spawnNpc = (definition) => {
+    const npc = fakeNpc(definition);
+    spawned.push(npc);
+    return npc;
+  };
+  testApi.removeNpc = () => {};
+  const player = fakePlayer();
+  const session = Telekinetic.startSession(player, 8);
+  const npc = session.npc;
+  player.moveTo(loc(3340, 9684, 2));
+  const start = npc.getLocation();
+  const pending = [];
+  const originalLater = Common.later;
+  Common.later = (ticks, action) => pending.push({ ticks, action });
+  try {
+    const event = telekineticEvent(player, npc);
+    Telekinetic.castTelekinetic(event);
+    assert.equal(event.handled, true);
+    assert.equal(event.runes(), 1);
+    assert.equal(player.anims, 1);
+    assert.equal(npc.getId(), Common.ids.npcs.mazeGuardian, 'the guardian waits for the projectile');
+    assert.deepEqual([npc.getLocation().getX(), npc.getLocation().getY(), npc.getLocation().getZ()], [start.getX(), start.getY(), start.getZ()]);
+    assert.equal(pending[0].ticks, Telekinetic.GRAB_IMPACT_TICKS);
+    pending.shift().action();
+    assert.equal(npc.getId(), Common.ids.npcs.mazeGuardianMoving);
+    assert.deepEqual([npc.getLocation().getX(), npc.getLocation().getY(), npc.getLocation().getZ()], [3348, 9683, 2]);
+    const moveCycles = npc.moves.at(-1).options.endCycles;
+    const distance = Math.max(
+      Math.abs(npc.getLocation().getX() - start.getX()),
+      Math.abs(npc.getLocation().getY() - start.getY())
+    );
+    assert.equal(moveCycles, distance * Telekinetic.MAZE_MOVE_CYCLES_PER_TILE);
+    assert.equal(pending[0].ticks, Math.ceil(moveCycles / 30));
+    pending.shift().action();
+    assert.equal(npc.getId(), Common.ids.npcs.mazeGuardian);
+
+    player.moveTo(loc(3338, 9684, 2));
+    const corner = telekineticEvent(player, npc);
+    Telekinetic.castTelekinetic(corner);
+    assert.equal(corner.runes(), 1);
+    assert.equal(pending.length, 0, 'a corner cast does not move the statue');
+    assert.deepEqual([npc.getLocation().getX(), npc.getLocation().getY()], [3348, 9683]);
+
+    session.solved = true;
+    const again = telekineticEvent(player, npc);
+    Telekinetic.castTelekinetic(again);
+    assert.equal(again.handled, true);
+    assert.equal(again.runes(), 0, 'a finished maze does not consume another cast');
+  } finally {
+    Common.later = originalLater;
+    Telekinetic.removeSession(player);
+  }
+});
+
+test('each maze gives 2 points and 250 XP; every fifth gives the 8-point, rune and energy bonus', () => {
+  testApi.spawnNpc = (definition) => fakeNpc(definition);
+  testApi.removeNpc = () => {};
+  const player = fakePlayer();
+  const session = Telekinetic.startSession(player, 8);
+  Telekinetic.complete(session);
+  assert.equal(Common.points(player, 'telekinetic'), 2);
+  assert.deepEqual(player.xp, [250]);
+  assert.equal(player.strings.get(Telekinetic.pointsComponent()), '2');
+  assert.equal(player.strings.get(Telekinetic.streakComponent()), '1');
+  assert.equal(player.messages.at(-1), Common.message('mazeComplete', { points: 2 }));
+
+  for (let i = 0; i < 4; i++) Telekinetic.complete(session);
+  assert.equal(Common.points(player, 'telekinetic'), 18, 'five mazes plus the 8-point bonus');
+  assert.equal(player.xp.reduce((sum, value) => sum + value, 0), 2250);
+  assert.equal(player.items.get(Common.ids.items.law), 10);
+  assert.equal(player.getRunEnergy(), 100);
+  assert.equal(player.getAttribute(Telekinetic.STREAK_ATTRIBUTE), 0);
+  assert.equal(player.strings.get(Telekinetic.pointsComponent()), '18');
+  assert.equal(player.strings.get(Telekinetic.streakComponent()), '0');
+  assert.equal(player.messages.at(-1), Common.message('mazeBonus', { points: 8, runes: 10 }));
+  Telekinetic.removeSession(player);
+});
+
+test('Reset returns the statue and keeps the streak; New-maze moves to the next arena', () => {
+  const spawned = [];
+  const removed = [];
+  testApi.spawnNpc = (definition) => {
+    const npc = fakeNpc(definition);
+    spawned.push(npc);
+    return npc;
+  };
+  testApi.removeNpc = (npc) => removed.push(npc);
+  const player = fakePlayer();
+  const session = Telekinetic.startSession(player, 0);
+  const npc = session.npc;
+  player.setAttribute(Telekinetic.STREAK_ATTRIBUTE, 3);
+  Telekinetic.removeSession(player);
+  assert.equal(removed[0], npc);
+  assert.equal(player.getAttribute(Telekinetic.STREAK_ATTRIBUTE), 3, 'leaving keeps the streak');
+
+  const next = Telekinetic.startSession(player, 0);
+  player.moveTo(loc(3350, 9690, 0));
+  next.npc.moveTo(loc(3347, 9678, 0));
+  Telekinetic.reset({ player, npc: next.npc });
+  assert.deepEqual([next.npc.getLocation().getX(), next.npc.getLocation().getY(), next.npc.getLocation().getZ()], Common.data.telekinetic.mazes[0].start);
+  assert.equal(next.npc.getId(), Common.ids.npcs.mazeGuardian);
+
+  next.solved = true;
+  const before = spawned.length;
+  next.npc.setNpcTransformationId(Common.ids.npcs.mazeGuardianComplete);
+  const original = Math.random;
+  Math.random = () => 0;
+  try {
+    const event = {
+      player,
+      npc: next.npc,
+      npcId: Common.ids.npcs.mazeGuardianComplete,
+      clickType: 1,
+      definition: { getActions: () => [] },
+      handled: false,
+    };
+    Telekinetic.mazeGuardianAction(event);
+    assert.equal(event.handled, true, 'the completed guardian default action advances the maze');
+  } finally {
+    Math.random = original;
+  }
+  assert.equal(removed.at(-1), next.npc);
+  assert.equal(spawned.length, before + 1);
+  const following = Common.data.telekinetic.mazes[1];
+  assert.deepEqual([spawned.at(-1).getLocation().getX(), spawned.at(-1).getLocation().getY(), spawned.at(-1).getLocation().getZ()], following.start);
+  assert.deepEqual([player.getLocation().getX(), player.getLocation().getY(), player.getLocation().getZ()], following.arrive);
+  assert.equal(Telekinetic.sessionOf(player).mazeIndex, 1);
+  Telekinetic.removeSession(player);
+});
+
+test('Telekinetic Grab awards the live 43 XP, not the old effect-spell value', () => {
+  assert.equal(core.EffectSpells.TELEKINETIC_GRAB.baseExperience(), 43);
+});
+
+test('Observe, Reset and New-maze reach the Maze Guardian from outside its maze walls', () => {
+  const hooks = {};
+  const api = new Proxy({ core, persistAttribute: () => {} }, {
+    get: (target, key) => target[key] ?? ((handler) => { hooks[key] = handler; }),
+  });
+  Telekinetic.attach(api);
+  assert.equal(typeof hooks.onNpcRoute, 'function', 'the room registers a route override');
+
+  const route = (npcId) => {
+    const event = { player: fakePlayer(), npc: { getId: () => npcId }, npcId, range: 1, ignoreProjectileClip: false, handled: false };
+    hooks.onNpcRoute(event);
+    return event;
+  };
+
+  // Every maze room starts the player outside the walls, so a one-tile approach would stop short.
+  const furthest = Math.max(...Common.data.telekinetic.mazes.map(({ arrive: [ax, ay], start: [sx, sy] }) =>
+    Math.max(Math.abs(ax - sx), Math.abs(ay - sy))));
+  assert.ok(furthest > 1);
+  for (const npcId of [Common.ids.npcs.mazeGuardian, Common.ids.npcs.mazeGuardianComplete]) {
+    const event = route(npcId);
+    assert.ok(event.range > furthest, `guardian ${npcId} is reached from the furthest arrival tile`);
+    assert.equal(event.ignoreProjectileClip, true);
+  }
+  const other = route(Common.ids.npcs.telekineticGuardian);
+  assert.equal(other.range, 1, 'other NPCs keep the ordinary approach range');
+  assert.equal(other.ignoreProjectileClip, false);
+});
+
+test('Observe frames the active maze, not the one room the capture visited', () => {
+  testApi.spawnNpc = (definition) => fakeNpc(definition);
+  testApi.removeNpc = () => {};
+  const shot = (index) => {
+    const player = fakePlayer();
+    const session = Telekinetic.startSession(player, index);
+    assert.equal(Telekinetic.observe({ player, npc: session.npc }), true);
+    const calls = player.camera.slice();
+    Telekinetic.removeSession(player);
+    return {
+      maze: session.maze,
+      calls,
+      look: calls.find((call) => call.mode === 'look'),
+      move: calls.find((call) => call.mode === 'move'),
+    };
+  };
+
+  // The capture's only Observe is in maze 1: it looks at (3342,9716) from (3342,9717).
+  const captured = shot(1);
+  assert.deepEqual([captured.look.x, captured.look.y], [3342, 9716]);
+  assert.deepEqual([captured.move.x, captured.move.y, captured.move.height], [3342, 9717, 2275]);
+  assert.deepEqual(captured.calls.map((call) => call.mode), ['move', 'look'], 'the look angle comes from the new camera position');
+
+  const shots = Common.data.telekinetic.mazes.map((_, index) => shot(index));
+  for (const [index, { maze, look, move }] of shots.entries()) {
+    const [minX, maxX, , maxY] = maze.walls;
+    const x = Math.floor((minX + maxX) / 2);
+    assert.deepEqual([look.x, look.y], [x, maxY + 1], `maze ${index} looks at its own south edge`);
+    assert.deepEqual([move.x, move.y, move.height], [x, maxY + 2, 2275], `maze ${index} is viewed from its own south side`);
+  }
+
+  const near = shots[0];
+  const far = shots[6];
+  assert.ok(Math.abs(far.move.y - near.move.y) > 30, 'two distant mazes get different camera positions');
+  assert.notDeepEqual([near.move.x, near.move.y], [3342, 9717], 'maze 0 no longer uses maze 1 camera');
+  assert.notDeepEqual([far.move.x, far.move.y], [3342, 9717], 'maze 6 no longer uses maze 1 camera');
+});
+
+test('New-maze restores the camera Observe left overlooking the finished maze', () => {
+  testApi.spawnNpc = (definition) => fakeNpc(definition);
+  testApi.removeNpc = () => {};
+  const player = fakePlayer();
+  const session = Telekinetic.startSession(player, 0);
+  Telekinetic.observe({ player, npc: session.npc });
+  assert.equal(session.observed, true);
+  const observed = player.camera.length;
+  assert.equal(player.camera.at(-1).mode, 'look', 'Observe leaves the camera on the maze');
+
+  Telekinetic.complete(session);
+  const original = Math.random;
+  Math.random = () => 0;
+  try {
+    assert.equal(Telekinetic.newMaze({ player, npc: session.npc }), true);
+  } finally {
+    Math.random = original;
+  }
+
+  assert.equal(player.camera.length, observed + 1);
+  assert.equal(player.camera.at(-1).mode, 'reset', 'New-maze restores the player camera');
+  const next = Telekinetic.sessionOf(player);
+  assert.equal(next.mazeIndex, 1);
+  assert.equal(next.observed, false, 'the replacement session does not inherit the old camera state');
+  const reset = player.camera.length;
+  Telekinetic.removeSession(player);
+  assert.equal(player.camera.length, reset, 'the replacement has no stale camera to reset');
 });
 
 // --- The Alchemists' Playground
@@ -506,6 +894,240 @@ test('the chute: a point per 16 fruit (a peach is 2), at most 3 a deposit, 5 XP 
   assert.equal(Graveyard.depositFruit(fakePlayer(x, y, z)), null);
 });
 
+/**
+ * What the server sends the client, as captured in rsprox 1757 (rev 227, Creature Graveyard):
+ * synth_sound / sound_area / map_anim packets and the player's animations and graphics.
+ */
+function recordEffects(player) {
+  const effects = { sounds: [], areaSounds: [], graphics: [], animations: [], playerGraphics: [] };
+  const sender = player.getPacketSender();
+  player.getPacketSender = () => ({
+    ...sender,
+    sendSound: (id) => effects.sounds.push(id),
+    sendSoundEffect: (id) => effects.sounds.push(id),
+    sendAreaSound: (id, x, y, level, loops, delay, radius, attenuation) => effects.areaSounds.push({ id, x, y, level, loops, delay, radius, attenuation }),
+    sendGraphic: (graphic, location) => effects.graphics.push({ id: graphic.getId(), delay: graphic.getDelay(), x: location.getX(), y: location.getY(), z: location.getZ() }),
+  });
+  player.performAnimation = (animation) => effects.animations.push(animation.getId());
+  player.performGraphic = (graphic) => effects.playerGraphics.push(graphic.getId());
+  return effects;
+}
+
+function castBones(player, spellName) {
+  const Spell = core.Spell.prototype;
+  const original = Spell.canCast;
+  Spell.canCast = () => true;
+  try {
+    Graveyard.castBonesSpell({ player, spellName, handled: false });
+  } finally {
+    Spell.canCast = original;
+  }
+}
+
+test('both bones spells play sound 114 with their cast in the room (Wiki, List of sound IDs: bones_to_bananas_all)', () => {
+  const [x, y, z] = graveyardTile();
+  const peaches = fakePlayer(x, y, z);
+  const peachEffects = recordEffects(peaches);
+  peaches.setAttribute(Graveyard.PEACHES_UNLOCKED_ATTRIBUTE, true);
+  peaches.items.set(Common.ids.items.bones1, 2);
+  castBones(peaches, 'Bones to Peaches');
+  assert.equal(peaches.items.get(Common.ids.items.peach), 2);
+  assert.deepEqual(peachEffects.animations, [722], 'rsprox 1757: all 10 captured casts create peaches (obj 6883)');
+  assert.deepEqual(peachEffects.playerGraphics, [141]);
+  assert.deepEqual(peachEffects.sounds, [114], 'synth_sound 114 as the cast starts');
+  const bananas = fakePlayer(x, y, z);
+  const bananaEffects = recordEffects(bananas);
+  bananas.items.set(Common.ids.items.bones1, 2);
+  castBones(bananas, 'Bones to Bananas');
+  assert.equal(bananas.items.get(Common.ids.items.banana), 2);
+  assert.deepEqual(bananaEffects.sounds, [114], 'used for both spells, once a cast');
+  assert.deepEqual(bananaEffects.animations, [722]);
+});
+
+test('a bones spell cast in the room stays in the room, so the normal cast adds no second sound', () => {
+  const [x, y, z] = graveyardTile();
+  const player = fakePlayer(x, y, z);
+  recordEffects(player);
+  player.items.set(Common.ids.items.bones1, 1);
+  const Spell = core.Spell.prototype;
+  const original = Spell.canCast;
+  Spell.canCast = () => true;
+  const event = { player, spellName: 'Bones to Bananas', handled: false };
+  try {
+    Graveyard.castBonesSpell(event);
+  } finally {
+    Spell.canCast = original;
+  }
+  assert.equal(event.handled, true, 'emitSpellCast runs before EffectSpells.handleSpell, and a handled cast stops there');
+});
+
+function realCaster(t) {
+  const channel = {
+    kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true, send: () => true,
+    close() {}, onData() {}, onError() {}, onClose() {},
+  };
+  const player = new Player(new PlayerSession(channel));
+  player.setIndex(5600 + (realCasters++));
+  player.setUsername(`bonesqa${realCasters}`);
+  player.setRegistered(true);
+  player.needsPlacement = false;
+  player.getSkillManager().setMaxLevels(core.Skill.MAGIC, 99, false).setCurrentLevels(core.Skill.MAGIC, 99, false);
+  const sounds = [];
+  t.mock.method(player.getPacketSender(), 'sendSoundEffect', (id) => { sounds.push(id); return player.getPacketSender(); });
+  t.after(() => player.setRegistered(false));
+  return { player, sounds };
+}
+
+function giveRunes(player) {
+  for (const [id, amount] of [[561, 2], [555, 4], [557, 4]]) player.getInventory().add(new core.Item(id, amount), false);
+}
+
+for (const [name, fruit] of [['BONES_TO_BANANAS', 1963], ['BONES_TO_PEACHES', 6883]]) {
+  test(`the normal cast of ${name} plays sound 114 once, and none without bones`, (t) => {
+    const spell = core.EffectSpells[name];
+    const control = realCaster(t);
+    giveRunes(control.player);
+    core.EffectSpells.handleSpell(control.player, spell.spellId());
+    assert.deepEqual(control.sounds, [], 'control: no bones, no cast, no sound');
+
+    const { player, sounds } = realCaster(t);
+    giveRunes(player);
+    player.getInventory().add(new core.Item(526, 2), false);
+    core.EffectSpells.handleSpell(player, spell.spellId());
+    assert.equal(player.getInventory().getAmount(fruit), 2, 'the cast happened');
+    assert.deepEqual(sounds, [114], 'one sound for the cast, however many bones');
+  });
+}
+
+test('turning fruit in plays animation 832 and sound 1663; an empty chute plays neither', () => {
+  const [x, y, z] = graveyardTile();
+  const player = fakePlayer(x, y, z);
+  const effects = recordEffects(player);
+  Graveyard.depositFruit(player);
+  assert.deepEqual(effects.animations, []);
+  assert.deepEqual(effects.sounds, []);
+  player.items.set(Common.ids.items.banana, 20);
+  Graveyard.depositFruit(player);
+  assert.deepEqual(effects.animations, [832], 'rsprox 1757: sequence 832 on the deposit');
+  assert.deepEqual(effects.sounds, [1663], 'rsprox 1757: synth_sound 1663 on the deposit');
+});
+
+function enterGraveyard(player, tasks) {
+  player.isPlayer = () => true;
+  player.getAsPlayer = () => player;
+  const manager = Common.core.TaskManager;
+  const original = manager.submit;
+  manager.submit = (task) => tasks.push(task);
+  try {
+    new (Graveyard.defineArea())().postEnter(player);
+  } finally {
+    manager.submit = original;
+  }
+}
+
+/** Runs `action` while tasks the plugin submits (the landings) are collected into `tasks`. */
+function collecting(tasks, action) {
+  const manager = Common.core.TaskManager;
+  const original = manager.submit;
+  manager.submit = (task) => tasks.push(task);
+  try {
+    action();
+  } finally {
+    manager.submit = original;
+  }
+}
+
+test('every 10 ticks the room rains 40 bones (graphics 520-523) on open floor, with 4 area sounds 1661', () => {
+  core.RegionManager.init();
+  core.RegionManager.loadMapFiles(3363, 9637);
+  const observed = require('./fixtures/graveyard-bones-observed.json');
+  const [x, y, z] = graveyardTile();
+  const player = fakePlayer(x, y, z);
+  const effects = recordEffects(player);
+  const tasks = [];
+  enterGraveyard(player, tasks);
+  assert.equal(tasks.length, 1, 'one repeating task for the player in the room');
+  assert.equal(tasks[0].delay, 10, 'every 10 ticks');
+  const seen = new Set();
+  for (let pulse = 0; pulse < 600; pulse++) {
+    effects.graphics.length = 0;
+    effects.areaSounds.length = 0;
+    collecting([], () => tasks[0].execute());
+    assert.equal(effects.graphics.length, 40, `pulse ${pulse}: 40 map_anim`);
+    assert.equal(new Set(effects.graphics.map((g) => `${g.x},${g.y}`)).size, 40, 'on distinct tiles');
+    for (const g of effects.graphics) {
+      assert.ok(g.id >= 520 && g.id <= 523, `graphic ${g.id}`);
+      assert.equal(g.delay, 10);
+      assert.ok(g.x >= 3344 && g.x <= 3383 && g.y >= 9620 && g.y <= 9659 && g.z === 1, `${g.x},${g.y},${g.z}`);
+      assert.equal(core.RegionManager.blocked(loc(g.x, g.y, g.z), null), false, `rsprox 1757: none of its 580 tiles is blocked, but ${g.x},${g.y} is`);
+      seen.add(`${g.x},${g.y}`);
+    }
+    if (pulse === 0) {
+      assert.deepEqual(
+        effects.areaSounds.map((s) => [s.id, s.x, s.y, s.level, s.loops, s.radius, s.attenuation]),
+        [[1661, 3352, 9631, 1, 1, 20, 20], [1661, 3352, 9650, 1, 1, 20, 20], [1661, 3374, 9631, 1, 1, 20, 20], [1661, 3374, 9650, 1, 1, 20, 20]],
+        'rsprox 1757: sound_area 1661 at the four points of the room',
+      );
+    }
+  }
+  const missed = observed.filter(([ox, oy]) => !seen.has(`${ox},${oy}`));
+  assert.deepEqual(missed, [], 'every tile the capture shows a bone on can be hit');
+});
+
+test('re-entering or leaving ends the old storm, and a task of a player who left sends nothing', () => {
+  const [x, y, z] = graveyardTile();
+  const player = fakePlayer(x, y, z);
+  const effects = recordEffects(player);
+  const tasks = [];
+  enterGraveyard(player, tasks);
+  enterGraveyard(player, tasks);
+  assert.equal(tasks.length, 2);
+  collecting([], () => tasks[0].execute());
+  assert.equal(effects.graphics.length, 0, 'the first storm was replaced');
+  collecting([], () => tasks[1].execute());
+  assert.equal(effects.graphics.length, 40);
+  effects.graphics.length = 0;
+  new (Graveyard.defineArea())().postLeave(player, true);
+  collecting([], () => tasks[1].execute());
+  assert.equal(effects.graphics.length, 0, 'logging out stops it');
+  const moved = fakePlayer(x, y, z);
+  const movedEffects = recordEffects(moved);
+  const movedTasks = [];
+  enterGraveyard(moved, movedTasks);
+  moved.moveTo(loc(3200, 3200, 0));
+  collecting([], () => movedTasks[0].execute());
+  assert.equal(movedEffects.graphics.length, 0, 'out of the room it ends itself');
+});
+
+test('a bone hits for 2 three ticks after it appears if the player is still on its tile; stepping off dodges it', () => {
+  core.RegionManager.init();
+  core.RegionManager.loadMapFiles(3363, 9637);
+  const stand = loc(3363, 9639, 1);
+  for (const dodge of [false, true]) {
+    const player = fakePlayer(3363, 9639, 1);
+    const effects = recordEffects(player);
+    const hits = [];
+    player.getCombat = () => ({ getHitQueue: () => ({ addPendingDamage: (damage) => hits.push(...damage.map((d) => d.getDamage())) }) });
+    const tasks = [];
+    enterGraveyard(player, tasks);
+    const landings = [];
+    let found = false;
+    for (let pulse = 0; pulse < 5000 && !found; pulse++) {
+      effects.graphics.length = 0;
+      landings.length = 0;
+      collecting(landings, () => tasks[0].execute());
+      found = effects.graphics.some((g) => g.x === stand.getX() && g.y === stand.getY());
+    }
+    assert.ok(found, 'a bone lands on the tile');
+    assert.equal(landings.length, 1, 'one landing for the burst');
+    assert.equal(landings[0].delay, 3, 'three ticks later');
+    assert.deepEqual(hits, [], 'nothing before it lands');
+    if (dodge) player.moveTo(loc(3362, 9640, 1));
+    landings[0].execute();
+    assert.deepEqual(hits, dodge ? [] : [2], dodge ? 'dodged (rsprox 1757: 2 of 2)' : 'hit for 2 (rsprox 1757: 4 of 4)');
+  }
+});
+
 test('every Graveyard point earns a rune, given on leaving; logging out keeps the room\'s things', () => {
   const Area = Graveyard.defineArea();
   const area = new Area();
@@ -592,6 +1214,8 @@ test('wands are upgrades: each takes the tier before it', () => {
   assert.equal(Rewards.buy(player, slotOf(6910), 1), 1);
   assert.equal(player.items.get(6908), 0, 'the beginner wand is handed in');
   assert.equal(player.items.get(6910), 1);
+  assert.ok(events.some(([name, event]) => name === 'collection-log:obtain' && event.itemId === 6910 && event.amount === 1),
+    'the bought wand is credited to the collection log');
 });
 
 test('Bones to Peaches is a one-time unlock needing Magic 60, read by the Graveyard', () => {
@@ -604,6 +1228,8 @@ test('Bones to Peaches is a one-time unlock needing Magic 60, read by the Gravey
   assert.equal(Rewards.buy(player, slotOf(6926), 5), 1);
   assert.equal(player.getAttribute(Common.PEACHES_UNLOCKED_ATTRIBUTE), true);
   assert.equal(player.items.get(6926) ?? 0, 0, 'no item, an unlock');
+  assert.ok(events.some(([name, event]) => name === 'collection-log:obtain' && event.itemId === 6926 && event.amount === 1),
+    'the Bones to Peaches unlock is credited to the collection log');
   assert.equal(Rewards.buy(player, slotOf(6926), 1), 0);
   assert.equal(player.messages.at(-1), Common.message('shopAlreadyUnlocked'));
 });
@@ -691,9 +1317,7 @@ test('training-room deaths keep real gear and Hardcore status, clean room items 
     const roomItem = { enchanting: Common.ids.items.cube, alchemists: Common.ids.items.arenaCoins, graveyard: Common.ids.items.banana }[name];
     player.getInventory().adds(roomItem, 1);
     const task = new PlayerDeathTask(player);
-    task.execute();
-    task.execute();
-    task.execute();
+    for (let tick = 0; tick < 5; tick++) task.execute();
     assert.equal(deaths.get(player)?.itemsLost, false);
     assert.equal(Ironman.modeOf(player), 'hardcore');
     for (const id of carried) assert.equal(player.getInventory().getAmount(id), 100);

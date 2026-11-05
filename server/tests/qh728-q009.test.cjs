@@ -12,6 +12,7 @@ require('node:test').before(async () => {
     require('node:path').resolve(__dirname, '..'));
 });
 const { PluginManager } = require('../dist/plugins/PluginManager');
+const { HitQueue } = require('../dist/game/content/combat/hit/HitQueue');
 const runtime = require('../plugins/quests/QuestRuntime');
 const core = PluginManager.getCoreApi();
 const groundItemDefinitions = require('../data/definitions/ground-items.json');
@@ -26,12 +27,36 @@ function setup(completed = []) {
   transcripts.length = 0;
   const completedQuests = new Set(completed);
   const custom = new Map();
-  const hooks = { conditions: [], variants: [], npcActions: {}, object: [], itemOnObject: [], groundItemPickup: [] };
+  const hooks = {
+    conditions: [],
+    variants: [],
+    npcActions: new Map(),
+    object: [],
+    namedObjects: new Map(),
+    itemOnObject: [],
+    namedItemOnObject: [],
+    itemActions: new Map(),
+    npcDeath: [],
+    serverStartup: [],
+    regionLoaded: [],
+    activeRegions: [],
+    removedNpcs: [],
+    spawnedNpcs: [],
+    groundItemPickup: [],
+  };
   let tick = 0;
   const tasks = [];
+  const worldNpcs = [];
   const api = new Proxy({
     core: {
       ...core,
+      World: {
+        getNpcs: () => ({
+          [Symbol.iterator]: () => worldNpcs[Symbol.iterator](),
+          search: (predicate) => worldNpcs.find(predicate),
+        }),
+        getProcessCycle: () => tick,
+      },
       CountdownTask: class {
         constructor(player, ticks, run) { Object.assign(this, { player, ticks, run }); }
       },
@@ -44,9 +69,24 @@ function setup(completed = []) {
     persistAttribute() {},
     onNpcDialogueVariant(handler) { hooks.variants.push(handler); },
     onNpcDialogueCondition(handler) { hooks.conditions.push(handler); },
-    onNpcInteraction(_names, actions) { Object.assign(hooks.npcActions, actions); },
-    onObjectInteraction(handler) { hooks.object.push(handler); },
-    onItemOnObject(handler) { hooks.itemOnObject.push(handler); },
+    onNpcInteraction(names, actions) {
+      for (const name of [].concat(names)) hooks.npcActions.set(name, actions);
+    },
+    onObjectInteraction(nameOrHandler, actions) {
+      if (typeof nameOrHandler === 'function') hooks.object.push(nameOrHandler);
+      else hooks.namedObjects.set(nameOrHandler, actions);
+    },
+    onItemOnObject(...args) {
+      if (typeof args[0] === 'function') hooks.itemOnObject.push(args[0]);
+      else hooks.namedItemOnObject.push({ item: args[0], object: args[1], handler: args[2] });
+    },
+    onItemAction(name, actions) { hooks.itemActions.set(name, actions); },
+    onNpcDeath(handler) { hooks.npcDeath.push(handler); },
+    onServerStartup(handler) { hooks.serverStartup.push(handler); },
+    onRegionLoaded(handler) { hooks.regionLoaded.push(handler); },
+    onActiveRegionsUpdated(handler) { hooks.activeRegions.push(handler); },
+    removeNpc(npc) { hooks.removedNpcs.push(npc); },
+    spawnNpc(definition) { hooks.spawnedNpcs.push(definition); },
     onGroundItemPickup(handler) { hooks.groundItemPickup.push(handler); },
     onCustomEvent(name, handler) {
       const handlers = custom.get(name) ?? [];
@@ -126,13 +166,43 @@ function setup(completed = []) {
     hooks.groundItemPickup.forEach((handler) => handler(event));
     return event;
   };
-  const npcTalk = (npcId) => hooks.npcActions['Talk-to']({
+  const npcTalk = (npcId, name = 'Bill Teach', location = undefined) => hooks.npcActions.get(name)?.['Talk-to']({
     player,
     npcId,
     clickType: 1,
-    definition: { getName: () => 'Bill Teach', getActions: () => ['Talk-to'] },
+    location,
+    definition: { getName: () => name, getActions: () => ['Talk-to'] },
     handled: false,
   });
+  const namedObject = (name, objectId, option) => {
+    const event = {
+      player,
+      objectId,
+      clickType: 1,
+      definition: { getName: () => name, getActions: () => [option] },
+      handled: false,
+    };
+    hooks.namedObjects.get(name)?.[option]?.(event);
+    return event;
+  };
+  const itemAction = (name, option, itemId) => {
+    const event = { player, itemId, option, clickType: 1, handled: false };
+    hooks.itemActions.get(name)?.[option]?.(event);
+    return event;
+  };
+  const npcDeath = (npcId, npc) => {
+    const event = { player, killer: player, npc, npcId, location: npc?.getLocation?.(), remains: null };
+    hooks.npcDeath.forEach((handler) => handler(event));
+    return event;
+  };
+  const namedItemOnObject = (itemName, objectName, itemId, objectId) => {
+    const entry = hooks.namedItemOnObject.find(
+      (candidate) => candidate.item === itemName && candidate.object === objectName
+    );
+    const event = { player, itemId, objectId, handled: false };
+    entry?.handler?.(event);
+    return event;
+  };
   const advance = (steps = 3) => {
     for (let step = 0; step < steps; step++) {
       tick++;
@@ -147,7 +217,8 @@ function setup(completed = []) {
   const stage = () => quest.getStage(player);
   const lastTranscript = () => transcripts.at(-1);
   return {
-    quest, player, choose, action, condition, variant, object, itemOnObject, pickup, npcTalk, advance,
+    quest, player, choose, action, condition, variant, object, itemOnObject, pickup, npcTalk,
+    namedObject, namedItemOnObject, itemAction, npcDeath, hooks, worldNpcs, advance,
     complete: (key) => completedQuests.add(key),
     bootstrap: () => {
       emit('player:bootstrap-complete', {});
@@ -218,7 +289,7 @@ test('Cabin Fever completes from stage 0 through the real route handlers', () =>
     h.action('cabin-fever:arrive');
     assert.equal(h.stage(), 3);
     assert.equal(h.varp(655), 30, 'sabotage wire value');
-    assert.equal(h.varbit(1741), 2, 'the cannon arrives stripped');
+    assert.equal(h.varbit(1741), 1, 'the cannon arrives broken/exploded');
 
     // Sabotage supplies and the enemy cannon.
     h.object(O.REPAIR_LOCKER, 'Open');
@@ -234,6 +305,7 @@ test('Cabin Fever completes from stage 0 through the real route handlers', () =>
     assert.equal(h.count(I.ROPE), 3, 'one ordinary rope is used per swing');
     h.itemOnObject(I.FUSE, ENEMY_POWDER_BARREL);
     assert.equal(h.varbit(1761), 1, 'fuse attached');
+    assert.equal(h.varbit(1756), 2, 'the barrel shows its fuse-attached transform');
     h.itemOnObject(I.TINDERBOX, FUSE_1);
     h.action('jL6Wr9');
     assert.equal(h.varbit(1749), 1, 'enemy cannon destroyed');
@@ -380,6 +452,7 @@ test('completion removes quest supplies but leaves rope, hammer, tinderbox and s
   const h = setup(['pirates_treasure', 'rum_deal', 'priest_in_peril']);
   const I = core.ItemIdentifiers;
   h.quest.setStage(h.player, 8);
+  h.player.getPacketSender().sendVarbit(1750, 3);
   const inventory = h.player.getInventory();
   inventory.adds(I.ROPE, 1);
   inventory.adds(I.FUSE, 1);
@@ -464,4 +537,269 @@ test('permanent Cabin Fever floor piles return ordinary rope and tinderbox and r
   assert.equal(h.count(I.ROPE), 2, 'the permanent pile supports later loss recovery');
   assert.equal(h.pickup(I.TINDERBOX_3, 1814, 4825, 0).handled, true);
   assert.equal(h.count(I.TINDERBOX), 1, 'the hold pile gives an ordinary tinderbox');
+});
+
+test('Cabin Fever objectives cannot advance out of order', () => {
+  const h = setup(['pirates_treasure', 'rum_deal', 'priest_in_peril']);
+  const I = core.ItemIdentifiers;
+  const O = core.ObjectIdentifiers;
+  const CANNON = 11213;
+  const CHEST = 11230;
+  const HOLES = [11221, 11222, 11223];
+
+  // Stage 0: no cutscene action, fuse blast or completion can be forced.
+  h.action('cabin-fever:arrive');
+  assert.equal(h.stage(), 0);
+  h.action('jL6Wr9');
+  assert.equal(h.varbit(1749), 0);
+  h.action('7Zv7QG');
+  assert.equal(transcripts.length, 0);
+  h.action('V-4Bls');
+  assert.equal(h.stage(), 0);
+  assert.equal(h.quest.isComplete(h.player), false);
+
+  // Sailing only reaches the battle at stage 2.
+  h.quest.setStage(h.player, 2);
+  h.action('cabin-fever:arrive');
+  assert.equal(h.stage(), 3);
+
+  // Stage 3: the enemy cannon needs a lit fuse, and hull repairs wait for stage 4.
+  h.action('V-4Bls');
+  assert.equal(h.stage(), 3);
+  h.action('jL6Wr9');
+  assert.equal(h.varbit(1749), 0, 'the cannon cannot blow before the fuse is lit');
+  h.player.getInventory().adds(I.REPAIR_PLANK, 2);
+  h.player.getInventory().adds(I.TACKS, 10);
+  h.player.getInventory().adds(I.HAMMER, 1);
+  h.itemOnObject(I.REPAIR_PLANK, HOLES[0]);
+  assert.equal(h.varbit(1751), 0, 'holes cannot be planked during the cannon objective');
+
+  // Stage 4: no plunder and no cannon loading.
+  h.quest.setStage(h.player, 4);
+  h.object(CHEST, 'Plunder');
+  assert.equal(h.count(I.PLUNDER), 0);
+  h.player.getInventory().adds(I.PLUNDER, 1);
+  h.player.getInventory().adds(I.CANNON_BARREL, 1);
+  h.player.getPacketSender().sendVarbit(1741, 2);
+  h.itemOnObject(I.CANNON_BARREL, CANNON);
+  assert.equal(h.varbit(1741), 2, 'the barrel cannot be fitted before the cannon objective');
+  h.itemOnObject(I.PLUNDER, O.PLUNDER_STORAGE);
+  assert.equal(h.varbit(1752), 0, 'plunder cannot be stored before the plunder objective');
+
+  // Stage 6: repair works, loading does not.
+  h.quest.setStage(h.player, 6);
+  h.itemOnObject(I.CANNON_BARREL, CANNON);
+  assert.equal(h.varbit(1741), 0);
+  h.player.getInventory().adds(I.CANISTER, 1);
+  h.itemOnObject(I.CANISTER, CANNON);
+  assert.equal(h.varbit(1744), 0, 'canister cannot be loaded before the crew objective');
+
+  // Stage 7 uses canisters only; stage 8 uses cannonballs only.
+  h.quest.setStage(h.player, 7);
+  h.player.getInventory().adds(I.CANNON_BALL_2, 1);
+  h.itemOnObject(I.CANNON_BALL_2, CANNON);
+  assert.equal(h.varbit(1744), 0, 'cannonballs are not the crew objective');
+  h.itemOnObject(I.CANISTER, CANNON);
+  assert.equal(h.varbit(1744), 2);
+  h.quest.setStage(h.player, 8);
+  h.player.getInventory().adds(I.CANISTER, 1);
+  h.itemOnObject(I.CANISTER, CANNON);
+  assert.equal(h.varbit(1744), 2, 'canisters are not the hull objective');
+
+  // Completion still needs the three hull holes.
+  h.action('V-4Bls');
+  assert.equal(h.stage(), 8);
+  h.player.getPacketSender().sendVarbit(1750, 3);
+  h.action('V-4Bls');
+  assert.equal(h.stage(), 9);
+  assert.equal(h.quest.isComplete(h.player), true);
+});
+
+test('Cabin Fever named NPC, object, item and death handlers are wired', () => {
+  const h = setup(['pirates_treasure', 'rum_deal', 'priest_in_peril']);
+  const I = core.ItemIdentifiers;
+  const N = core.NpcIdentifiers;
+  const O = core.ObjectIdentifiers;
+
+  for (const name of ['Bill Teach', 'Pirate', 'Mama']) {
+    assert.ok(h.hooks.npcActions.has(name), `registered NPC ${name}`);
+  }
+  for (const name of ['Repair Locker', 'Gun Locker', 'Powder Barrel', 'Barrel', 'Cannon',
+    'Broken Cannon', 'Crate', 'Closed chest', 'Open chest', 'Plunder Storage',
+    'Climbing net', 'Climbing Net']) {
+    assert.ok(h.hooks.namedObjects.has(name), `registered object ${name}`);
+  }
+  assert.ok(h.hooks.namedItemOnObject.some((entry) => entry.item === 'Fuse' && entry.object === 'Powder Barrel'));
+  assert.ok(h.hooks.namedItemOnObject.some((entry) => entry.item === 'Rope' && entry.object === 'Hoisted sail'));
+  assert.ok(h.hooks.itemActions.has("Book o' Piracy"));
+  assert.equal(h.hooks.npcDeath.length, 1);
+
+  // Mama's page is selected by whether the Book o' Piracy is carried.
+  h.npcTalk(N.MAMA, 'Mama');
+  assert.equal(h.lastTranscript().page, 'Mama');
+  assert.equal(h.lastTranscript().variant, 'standard-dialogue-without-book-o-piracy');
+
+  // Pirates only speak while the battle chain is live.
+  const before = h.lastTranscript();
+  h.npcTalk(N.PIRATE_27, 'Pirate');
+  assert.equal(h.lastTranscript(), before, 'stage 0 pirates fall through to the shared dialogue runtime');
+  h.quest.setStage(h.player, 3);
+  h.npcTalk(N.PIRATE_27, 'Pirate');
+  assert.equal(h.lastTranscript().page, 'Cabin Fever');
+
+  // A 4013 spawn row that resolves to 4011 is still the port-ship Bill.
+  h.quest.setStage(h.player, 1);
+  h.npcTalk(N.BILL_TEACH, 'Bill Teach', { x: 3714, y: 3497, z: 1 });
+  assert.equal(h.lastTranscript().variant, 'speaking-to-bill-teach-on-the-ship');
+  h.quest.setStage(h.player, 3);
+
+  // Named object and item-on-object handlers delegate to the id-based route.
+  const locker = h.namedObject('Repair Locker', O.REPAIR_LOCKER, 'Open');
+  assert.equal(locker.handled, true);
+  assert.equal(h.count(I.ROPE), 4);
+  h.player.getInventory().adds(I.FUSE, 1);
+  const fuse = h.namedItemOnObject('Fuse', 'Powder Barrel', I.FUSE, 11237);
+  assert.equal(fuse.handled, true);
+  assert.equal(h.varbit(1761), 1, 'named fuse use attaches to the barrel');
+});
+
+test('the Book o\' Piracy is readable, recoverable once and cleaned up with the quest supplies', () => {
+  const originalOpenBook = runtime.openBook;
+  let opened = null;
+  runtime.openBook = (player, title, pages) => { opened = { player, title, pages }; };
+  const h = setup(['pirates_treasure', 'rum_deal', 'priest_in_peril']);
+  const I = core.ItemIdentifiers;
+  try {
+    h.quest.setStage(h.player, 9);
+    h.action('5mdRTN');
+    assert.equal(h.count(I.BOOK_O_PIRACY), 1, 'Bill replaces a lost book');
+    h.action('5mdRTN');
+    assert.equal(h.count(I.BOOK_O_PIRACY), 1, 'the replacement never stacks');
+
+    const read = h.itemAction("Book o' Piracy", 'Read', I.BOOK_O_PIRACY);
+    assert.equal(read.handled, true);
+    assert.equal(opened?.title, "The Little Book o' Piracy");
+    assert.ok(opened?.pages?.length > 0);
+
+    h.player.getInventory().deleteNumber(I.BOOK_O_PIRACY, 1);
+    h.setFullInventory(true);
+    h.action('5mdRTN');
+    assert.equal(h.count(I.BOOK_O_PIRACY), 0, 'a full bag leaves the replacement available');
+    h.setFullInventory(false);
+    h.action('5mdRTN');
+    assert.equal(h.count(I.BOOK_O_PIRACY), 1);
+  } finally {
+    runtime.openBook = originalOpenBook;
+  }
+
+  // Completion removes supplies but keeps the reward book.
+  const done = setup(['pirates_treasure', 'rum_deal', 'priest_in_peril']);
+  done.quest.setStage(done.player, 8);
+  done.player.getPacketSender().sendVarbit(1750, 3);
+  done.player.getInventory().adds(I.FUSE, 1);
+  done.player.getInventory().adds(I.GUNPOWDER, 1);
+  done.player.getInventory().adds(I.CANNON_BALL_2, 1);
+  done.player.getInventory().adds(I.PLUNDER, 1);
+  done.action('V-4Bls');
+  assert.equal(done.stage(), 9);
+  assert.equal(done.count(I.FUSE), 0);
+  assert.equal(done.count(I.GUNPOWDER), 0);
+  assert.equal(done.count(I.CANNON_BALL_2), 0);
+  assert.equal(done.count(I.PLUNDER), 0);
+  assert.equal(done.count(I.BOOK_O_PIRACY), 1);
+});
+
+test('a canister hit credits the crew before the death animation can be interrupted', () => {
+  const originalRandom = Math.random;
+  Math.random = () => 0;
+  try {
+    const h = setup(['pirates_treasure', 'rum_deal', 'priest_in_peril']);
+    const I = core.ItemIdentifiers;
+    const N = core.NpcIdentifiers;
+    const CANNON = 11213;
+    const CREW_HITS = 'cabin-fever:crew-hits';
+    let queue;
+    const pirate = {
+      hp: 52,
+      getId: () => N.PIRATE_27,
+      getRealId: () => N.PIRATE_27,
+      getLocation: () => new core.Location(1823, 4831, 0),
+      getHitpoints() { return this.hp; },
+      isRegistered: () => true,
+      isPlayer: () => false,
+      isNpc: () => true,
+      isUntargetable: () => false,
+      decrementHealth(hit) {
+        const lost = this.hp;
+        this.hp = 0;
+        hit.setHealthLost(lost);
+        return hit;
+      },
+      addTickHit() {},
+      getCombat: () => ({ addDamage() {}, getHitQueue: () => queue }),
+    };
+    queue = new HitQueue(pirate);
+    h.worldNpcs.push(pirate);
+    h.quest.setStage(h.player, 7);
+    h.player.getPacketSender().sendVarbit(1741, 0);
+    h.player.getPacketSender().sendVarbit(1746, 1);
+    h.player.getInventory().adds(I.RAMROD, 1);
+    h.player.getInventory().adds(I.GUNPOWDER, 1);
+    h.itemOnObject(I.GUNPOWDER, CANNON);
+    h.itemOnObject(I.RAMROD, CANNON);
+    h.player.getInventory().adds(I.CANISTER, 1);
+    h.itemOnObject(I.CANISTER, CANNON);
+    h.player.getInventory().adds(I.FUSE, 1);
+    h.itemOnObject(I.FUSE, CANNON);
+    h.object(CANNON, 'Fire!');
+    assert.equal(h.player.getAttribute(CREW_HITS) ?? 0, 0, 'the queued hit has not credited yet');
+
+    queue.process(1);
+    const savedCrewHits = h.player.getAttribute(CREW_HITS);
+    assert.equal(savedCrewHits, 1, 'credit is written when the lethal hit lands');
+
+    // Logout saves here, before the two-tick death task emits the NPC death.
+    h.player.isRegistered = () => false;
+    h.npcDeath(N.PIRATE_27, pirate);
+    assert.equal(pirate.hp, 0, 'the pirate still dies');
+    assert.equal(h.player.getAttribute(CREW_HITS), 1, 'the death event does not add a second credit');
+  } finally {
+    Math.random = originalRandom;
+  }
+});
+
+test('the port-ship Bill row is swapped to the talkable ship NPC', () => {
+  const h = setup(['pirates_treasure', 'rum_deal', 'priest_in_peril']);
+  const npc = {
+    getRealId: () => 4013,
+    getId: () => 4011,
+    getLocation: () => new core.Location(3713, 3497, 1),
+  };
+  h.worldNpcs.push(npc);
+  h.hooks.serverStartup.forEach((handler) => handler({ timestamp: Date.now() }));
+  assert.equal(h.hooks.removedNpcs.includes(npc), true, 'the transforming 4013 row is removed');
+  assert.ok(
+    h.hooks.spawnedNpcs.some((definition) =>
+      definition.id === 4014 && definition.x === 3713 && definition.y === 3497 && definition.z === 1
+    ),
+    'the 4014 ship Bill replaces it on the same tile'
+  );
+});
+
+test('the port-ship Bill fix runs when the ship region is activated, once', () => {
+  const h = setup(['pirates_treasure', 'rum_deal', 'priest_in_peril']);
+  const broken = {
+    getRealId: () => 4013,
+    getId: () => 4011,
+    getLocation: () => new core.Location(3713, 3497, 1),
+  };
+  const fixed = {
+    getRealId: () => 4014,
+    getId: () => 4014,
+    getLocation: () => new core.Location(3714, 3497, 1),
+  };
+  h.worldNpcs.push(broken, fixed);
+  h.hooks.regionLoaded.forEach((handler) => handler({ regionId: 14902 }));
+  assert.equal(h.hooks.removedNpcs.includes(broken), true, 'the broken row is removed on region load');
+  assert.equal(h.hooks.spawnedNpcs.length, 0, 'an existing 4014 nearby is reused');
 });

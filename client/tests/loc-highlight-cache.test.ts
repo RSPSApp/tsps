@@ -97,6 +97,19 @@ function fixture() {
     assert.notEqual(next, previous, "model loader replacement");
 }
 
+// A finished growth animation highlights its grown base pose.
+{
+    const f = fixture();
+    f.type().seqId = 1096;
+    f.map().locsAnimated.push({id: 1, x: 8 * 128 + 64, y: 8 * 128 + 64,
+        level: 0, frame: 0, seqType: undefined});
+    const load = f.loader.getModelAnimated;
+    let selectedSequence: number | undefined;
+    f.loader.getModelAnimated = (...args: any[]) => { selectedSequence = args[3]; return load(...args); };
+    assert.ok(buildLocModelHighlightParts(f.host, f.target));
+    assert.equal(selectedSequence, -1, "a finished growth highlight uses the grown base pose");
+}
+
 // Loading failures must be retried instead of being frozen into the cache.
 {
     const f = fixture();

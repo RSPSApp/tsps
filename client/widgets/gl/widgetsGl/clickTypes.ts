@@ -4,7 +4,6 @@ type WidgetClickMeta = {
     widget: Widget;
     option: string;
     target?: string;
-    hasDropAction: boolean;
     itemId?: number;
     slot?: number;
 };
@@ -24,6 +23,7 @@ type CachedClickTarget = {
     widgetUid?: number; // For OSRS-style visibility filtering during hit testing
     onDown?: (x?: number, y?: number, targetId?: string) => void;
     onClick?: (x?: number, y?: number, targetId?: string) => void;
+    requiresPress?: boolean; // See ClickTarget.requiresPress
     persist?: boolean; // If true, survives beginFrame() clearing
 };
 export type { WidgetClickMeta, CachedClickTarget };

@@ -32,6 +32,8 @@ const emitted = [];
 let inCombat = false;
 /** world.json pluginConfig "league:type": a Trailblazer Reloaded world, 5 while a Raging Echoes character is made. */
 let worldLeague = 4;
+/** The characters whose first grave's tutorial with Death is running. */
+const inDeathTutorial = new Set();
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
@@ -61,6 +63,7 @@ before(async () => {
     onInterfaceActionButton: (ids, handler) => {
       for (const id of [].concat(ids)) on(`button:${id}`)(handler);
     },
+    onObjectFirstClick: (id, handler) => (hooks[`object:${id}`] = handler),
     onCustomEvent: (name, handler) => (custom[name] = (custom[name] ?? []).concat(handler)),
     emitCustomEvent: (name, payload) => {
       emitted.push([name, payload]);
@@ -71,6 +74,9 @@ before(async () => {
   require("../plugins/modes/LeaguePoints.plugin").register(api);
   require("../plugins/modes/LeagueRelics.plugin").register(api);
   require("../plugins/modes/LeagueAreaUnlocks.plugin").register(api);
+  require("../plugins/areas/DeathsOffice.plugin").register(api);
+  // The Gravestones plugin's answer, as far as Death's Office asks it here.
+  api.onCustomEvent("gravestones:state", (state) => (state.inTutorial = inDeathTutorial.has(state.player)));
 });
 
 /** A real player whose packets are recorded; logged in as a new character of `profile`. */
@@ -159,7 +165,7 @@ test("a new league character starts with Misthalin and Karamja; a main character
 });
 
 test("login leaves leagues without area rules untouched, including saved area state after reload", () => {
-  for (const type of [1, 2, 3, 6]) {
+  for (const type of [1, 2, 3]) {
     for (const savedAreas of [null, [MISTHALIN, KARAMJA, ASGARNIA]]) {
       const name = `no-areas-${type}-${savedAreas ? "saved" : "new"}`;
       const player = character(name, "league", { login: false });
@@ -331,7 +337,7 @@ test("View Areas opens the interface as captured; an area's details show its sta
   assert.equal(args[0], MISTHALIN);
   assert.deepEqual(args.slice(1, 4), [uid(AREAS, 14), uid(AREAS, 39), uid(AREAS, 38)]);
   assert.equal(args[11], 1, "unlocked: the details offer Teleport");
-  assert.deepEqual(args.slice(12, 15), [uid(AREAS, 66), uid(AREAS, 65), uid(AREAS, 12)]);
+  assert.deepEqual(args.slice(12, 15), [uid(AREAS, 68), uid(AREAS, 67), uid(AREAS, 12)], "rev 237: league_tab_info_scrollbar, _content, confirm");
   assert.equal(args[23], "");
 
   viewArea(league, ASGARNIA);
@@ -350,10 +356,10 @@ test("View Areas opens the interface as captured; an area's details show its sta
   const forger = character("forger");
   completeTasks(forger, 60);
   assert.equal(viewArea(forger, ASGARNIA), false, "a shield click without View Areas is ignored");
-  assert.equal(hooks[`button:${uid(AREAS, 60)}`]({ player: forger }), false, "so is a confirm");
+  assert.equal(hooks[`button:${uid(AREAS, 62)}`]({ player: forger }), false, "so is a confirm");
   assert.deepEqual(forger.getAttribute("league:areas"), [1, 2]);
   openAreas(forger);
-  assert.equal(hooks[`button:${uid(AREAS, 60)}`]({ player: forger }), true);
+  assert.equal(hooks[`button:${uid(AREAS, 62)}`]({ player: forger }), true);
   assert.equal(forger.sent.messages.at(-1), "Select an area first.");
 });
 
@@ -361,7 +367,7 @@ test("a pick needs the next slot's tasks, then plays the captured unlock; at mos
   const league = character("picker");
   openAreas(league);
   viewArea(league, ASGARNIA);
-  const confirm = () => hooks[`button:${uid(AREAS, 60)}`]({ player: league });
+  const confirm = () => hooks[`button:${uid(AREAS, 62)}`]({ player: league });
 
   emitted.length = 0;
   completeTasks(league, 59);
@@ -448,10 +454,10 @@ test("the details' Teleport casts to an unlocked area's hub (the cache's coord),
   league.setRegistered(true);
   openAreas(league);
   viewArea(league, ASGARNIA);
-  assert.equal(hooks[`button:${uid(AREAS, 82)}`]({ player: league }), false, "locked: nothing happens");
+  assert.equal(hooks[`button:${uid(AREAS, 84)}`]({ player: league }), false, "locked: nothing happens");
   viewArea(league, KARAMJA);
   const start = league.getLocation().clone();
-  assert.equal(hooks[`button:${uid(AREAS, 82)}`]({ player: league }), true);
+  assert.equal(hooks[`button:${uid(AREAS, 84)}`]({ player: league }), true);
   assert.equal(league.sent.removals, 1, "the modal closes");
   for (let tick = 0; tick < 26; tick++) core.TaskManager.process();
   const landed = league.getLocation();
@@ -461,7 +467,7 @@ test("the details' Teleport casts to an unlocked area's hub (the cache's coord),
   inCombat = true;
   openAreas(league);
   viewArea(league, MISTHALIN);
-  assert.equal(hooks[`button:${uid(AREAS, 82)}`]({ player: league }), false);
+  assert.equal(hooks[`button:${uid(AREAS, 84)}`]({ player: league }), false);
   assert.equal(league.sent.messages.at(-1), "You can't teleport while in combat.");
   assert.equal(league.sent.removals, 1, "a refusal in combat keeps the interface open");
   inCombat = false;
@@ -474,7 +480,7 @@ test("the details' Teleport casts to an unlocked area's hub (the cache's coord),
   echoes.setRegistered(true);
   openAreas(echoes);
   viewArea(echoes, KARAMJA);
-  assert.equal(hooks[`button:${uid(AREAS, 82)}`]({ player: echoes }), true);
+  assert.equal(hooks[`button:${uid(AREAS, 84)}`]({ player: echoes }), true);
   const from = echoes.getLocation().clone();
   core.TaskManager.process();
   core.TaskManager.process();
@@ -485,6 +491,319 @@ test("the details' Teleport casts to an unlocked area's hub (the cache's coord),
   core.TaskManager.process();
   assert.ok(!echoes.getLocation().equals(from), "landed at +21");
   echoes.setRegistered(false);
+});
+
+test("Demonic Pacts: Varlamore to start, Misthalin shut but Zanaris and the Abyss open, Karamja first at 80 tasks, its own cast", () => {
+  worldLeague = 6;
+  const pacts = character("pactsareas");
+  worldLeague = 4;
+  assert.deepEqual(pacts.getAttribute("league:areas"), [VARLAMORE], "Varlamore, the only default");
+  assert.ok(pacts.getLocation().equals(at(1503, 5602)), "a new character begins in Yama's Lair, as recorded");
+  assert.deepEqual(SELECTION.map((varbit) => pacts.sent.varbits.get(varbit)), [VARLAMORE, 0, 0, 0, 0, 0]);
+  const open = (x, y) => query("league:area-at", { x, y, player: pacts });
+  assert.equal(open(3222, 3218).area, MISTHALIN, "Lumbridge is Misthalin's");
+  assert.equal(query("league:areas", { player: pacts }).next?.tasks, 80, "the cache's own thresholds");
+  assert.equal(areaAt(2412, 4434, { league: 6 }), null, "Zanaris is open from everywhere");
+  assert.equal(areaAt(3040, 4839, { league: 6 }), null, "and the Abyss");
+  assert.equal(areaAt(2412, 4434, { league: 5 }), MISTHALIN, "Raging Echoes keeps them Misthalin's");
+  assert.equal(areaAt(1150, 3420, { league: 6 }), VARLAMORE, "the Stranglewood counts as Varlamore");
+
+  openAreas(pacts);
+  completeTasks(pacts, 80);
+  viewArea(pacts, ASGARNIA);
+  let [, args] = pacts.sent.scripts.at(-1);
+  assert.deepEqual([args[11], args[23]], [3, "Your first new area must be Karamja."], "the first pick is Karamja's");
+  viewArea(pacts, MISTHALIN);
+  assert.equal(pacts.sent.scripts.at(-1)[1][11], 3, "Misthalin is no area of this league");
+  viewArea(pacts, KARAMJA);
+  assert.equal(pacts.sent.scripts.at(-1)[1][11], 2, "Karamja can be unlocked");
+  assert.equal(hooks[`button:${uid(AREAS, 62)}`]({ player: pacts }), true);
+  assert.equal(pacts.getAnimation()?.getId(), 8792, "trailblazer_league_area_unlock_emote");
+  assert.equal(pacts.getGraphic()?.getId(), core.CacheDefinitions.getSpotanimId("league_5_area_unlock_emote_spotanim_karamja"), "Raging Echoes' spotanim, as recorded");
+  for (let tick = 0; tick < 14; tick++) core.TaskManager.process();
+  assert.deepEqual(pacts.getAttribute("league:areas"), [VARLAMORE, KARAMJA]);
+  assert.equal(pacts.sent.varbits.get(SELECTION[1]), KARAMJA);
+  const startQuests = require("../plugins/modes/data/leagues.json").leagues["6"].startQuests;
+  const all = (name) => emitted.filter(([event, payload]) => event === name && payload.player === pacts).map(([, payload]) => payload);
+  // The league's automatic quests (Account's, every login) apart from the areas' own.
+  const isStart = (payload) => String(payload.quests) === String(startQuests);
+  const ours = (name) => all(name).filter((payload) => !isStart(payload));
+  assert.ok(all("league:complete-quests").some((payload) => isStart(payload) && payload.quests.includes("Druidic Ritual")), "the Wiki's automatic quests");
+  assert.ok(ours("combat-achievements:complete").some((payload) => payload.task === "Back to Our Roots"), "Varlamore's Combat Achievements at the start");
+  assert.ok(ours("diary:task").some((payload) => payload.diary === "karamja" && payload.task === "travel-to-port-sarim-via-the-dock-east-of-musa-p"), "Karamja's diary tasks on its unlock");
+  assert.deepEqual(ours("league:complete-quests").map((payload) => payload.quests[0]), ["Perilous Moons", "Shilo Village"], "Varlamore's quests at the start, then Karamja's");
+  hooks.onPlayerLogin({ player: pacts, username: "pactsareas", isNewAccount: false, profile: "league" });
+  assert.equal(ours("league:complete-quests").length, 2, "each area's content once, not again at the next login");
+  pacts.setAttribute("league:area-content", []);
+  hooks.onPlayerLogin({ player: pacts, username: "pactsareas", isNewAccount: false, profile: "league" });
+  assert.deepEqual(ours("league:complete-quests").slice(2).map((payload) => payload.quests[0]), ["Perilous Moons", "Shilo Village"], "a character saved before it existed gets its areas' content at login");
+
+  pacts.setRegistered(true);
+  openAreas(pacts);
+  viewArea(pacts, KARAMJA);
+  assert.equal(hooks[`button:${uid(AREAS, 84)}`]({ player: pacts }), true, "select_button teleports");
+  const from = pacts.getLocation().clone();
+  core.TaskManager.process();
+  core.TaskManager.process();
+  assert.equal(pacts.getAnimation()?.getId(), 13764, "leagues_6_home_teleport_player_01 at +1");
+  for (let tick = 2; tick < 23; tick++) core.TaskManager.process();
+  assert.ok(pacts.getLocation().equals(from), "still casting at +22");
+  core.TaskManager.process();
+  assert.ok(!pacts.getLocation().equals(from), "landed at +23");
+  pacts.setRegistered(false);
+});
+
+test("Yama's Lair's Glowing portal leads to Civitas through the recorded fade", () => {
+  worldLeague = 6;
+  const leaver = character("pactsleaver");
+  worldLeague = 4;
+  leaver.setRegistered(true);
+  const YamaExit = require("../plugins/modes/leagueareas/YamaExit.LeagueAreaUnlocks");
+  const portal = { getId: () => core.CacheDefinitions.getLocId("league_6_yama_exit") };
+  assert.equal(YamaExit.leave({ player: leaver, object: { getId: () => portal.getId() + 1 } }), false, "another loc of the name is not ours");
+  assert.equal(YamaExit.leave({ player: leaver, object: portal }), true);
+  assert.equal(leaver.getAnimation()?.getId(), core.CacheDefinitions.getSeqId("mahjarrat_human_disappear_01_noheld_quick"));
+  assert.equal(leaver.sent.varbits.get(12393), 1, "busy");
+  for (let tick = 0; tick < 3; tick++) core.TaskManager.process();
+  const there = leaver.getLocation();
+  assert.ok(Math.abs(there.getX() - 1666) <= 1 && Math.abs(there.getY() - 3136) <= 1, `Civitas at +3: ${there.getX()}, ${there.getY()}`);
+  for (let tick = 3; tick < 6; tick++) core.TaskManager.process();
+  assert.equal(leaver.sent.varbits.get(12393), 0, "busy cleared at +6");
+  const echoes = character("echoesleaver");
+  assert.equal(YamaExit.leave({ player: echoes, object: portal }), false, "only a Demonic Pacts character's");
+  leaver.setRegistered(false);
+});
+
+test("Yama's stepping stones: a jump a tick, the stone left on fire, a burn on a burning one, the count", () => {
+  const ObstacleRunner = require("../plugins/skills/agility/ObstacleRunner.Agility");
+  ObstacleRunner.init({ core, getTaskManager: () => core.TaskManager });
+  const YamaStones = require("../plugins/modes/leagueareas/YamaStones.LeagueAreaUnlocks");
+  // The map, as the server indexes it at start: the stones are the loc's placements in it.
+  if (core.RegionManager.regions.size === 0) core.RegionManager.init();
+  worldLeague = 6;
+  const jumper = character("stonejumper");
+  worldLeague = 4;
+  jumper.setRegistered(true);
+  const loc = core.CacheDefinitions.getLocId("league_6_yama_steppingstone");
+  const stone = (x, y) => ({ player: jumper, objectId: loc, object: { getId: () => loc, getLocation: () => at(x, y) } });
+  const ticks = (n) => { for (let i = 0; i < n; i++) core.TaskManager.process(); };
+  const agility = () => jumper.getSkillManager().getExperience(core.Skill.AGILITY);
+  const laps = () => emitted.filter(([name, payload]) => name === "agility:lap" && payload.player === jumper).map(([, payload]) => payload);
+
+  // From the shore, four tiles on (recorded from 1490, 5598).
+  jumper.moveTo(at(1490, 5598));
+  const route = { ...stone(1486, 5598), destination: { x: 1495, y: 5598, z: 0 } };
+  YamaStones.route(route);
+  assert.deepEqual(route.destination, { x: 1490, y: 5598, z: 0 }, "jumped to from where it stands");
+  assert.equal(YamaStones.jump(stone(1486, 5598)), true);
+  ticks(3);
+  assert.ok(jumper.getLocation().equals(at(1486, 5598)), "on the first stone");
+  const first = agility();
+  assert.ok(first > 0, "experience for a jump");
+  assert.equal(jumper.getAttribute("league:yama-stones"), 1);
+
+  // Too far between stones (four tiles): the engine's refusal.
+  assert.equal(YamaStones.jump(stone(1481, 5597)), true);
+  assert.equal(jumper.sent.messages.at(-1), "I can't reach that!");
+  assert.ok(jumper.getLocation().equals(at(1486, 5598)));
+
+  // On, then straight back to the stone just left: it burns, no experience, still counted.
+  YamaStones.jump(stone(1484, 5596));
+  ticks(3);
+  assert.ok(jumper.getLocation().equals(at(1484, 5596)));
+  const before = agility();
+  const queue = jumper.getCombat().getHitQueue();
+  const burns = [];
+  const addPending = queue.addPendingDamage.bind(queue);
+  queue.addPendingDamage = (hits) => (burns.push(...hits.map((each) => each.getDamage())), addPending(hits));
+  YamaStones.jump(stone(1486, 5598));
+  ticks(3);
+  assert.equal(jumper.sent.messages.at(-1), "The stone burns your feet as it was recently submurged in lava.");
+  assert.equal(agility(), before, "no experience off a burning stone");
+  assert.deepEqual(burns, [1], "the burn hits for 1, as recorded");
+  assert.equal(jumper.getAttribute("league:yama-stones"), 3, "a burning stone still counts");
+
+  // The fires go out after six ticks: back again is a clean jump.
+  ticks(7);
+  YamaStones.jump(stone(1484, 5596));
+  ticks(3);
+  assert.ok(agility() > before, "the fire has gone out");
+
+  // A stone a tick, as live: a jump lands at the start of the next tick, before that tick's
+  // click, so each click is from the stone just reached.
+  ticks(7);
+  jumper.sent.messages.length = 0;
+  YamaStones.jump(stone(1486, 5598));
+  const path = [[1484, 5596], [1481, 5597], [1479, 5599]];
+  const landings = [];
+  for (const [x, y] of path) {
+    ticks(1);
+    YamaStones.jump(stone(x, y));
+    landings.push(`${jumper.getLocation().getX()},${jumper.getLocation().getY()}`);
+  }
+  ticks(4);
+  assert.ok(!jumper.sent.messages.includes("I can't reach that!"), "each in reach of the stone just reached");
+  assert.ok(jumper.getLocation().equals(at(1479, 5599)), `the run of stones, landing on each: ${landings}`);
+
+  // Every tenth stone is announced; each is the course's lap for the tasks.
+  jumper.setAttribute("league:yama-stones", 9);
+  ticks(7);
+  YamaStones.jump(stone(1478, 5602));
+  ticks(3);
+  assert.equal(jumper.sent.messages.at(-1), "Your Yama's stepping stone count is: <col=ff0000>10</col>.");
+  assert.deepEqual({ course: laps().at(-1).course, laps: laps().at(-1).laps }, { course: "yama-stepping-stones", laps: 10 });
+
+  // Every stone the cache places is one, not just those the recording jumped on: the south row.
+  ticks(7);
+  jumper.moveTo(at(1508, 5580));
+  jumper.sent.messages.length = 0;
+  assert.equal(YamaStones.jump(stone(1511, 5579)), true);
+  ticks(3);
+  assert.ok(!jumper.sent.messages.includes("I can't reach that!"), "a stone jumps on to the next");
+  assert.ok(jumper.getLocation().equals(at(1511, 5579)), "on the south row's stone");
+
+  // Clicked from further off, the walk is to the shore beside the stone clicked, not a fixed entry.
+  const walkable = (x, y) => !core.RegionManager.blocked(at(x, y), null);
+  for (const [from, [sx, sy]] of [[[1503, 5577], [1511, 5579]], [[1503, 5590], [1529, 5599]], [[1500, 5600], [1480, 5592]]]) {
+    jumper.moveTo(at(...from));
+    const far = { ...stone(sx, sy), destination: { x: sx, y: sy, z: 0 } };
+    YamaStones.route(far);
+    const { x, y } = far.destination;
+    assert.ok(Math.max(Math.abs(x - sx), Math.abs(y - sy)) <= 4, `to ${x}, ${y}: in the shore's reach of ${sx}, ${sy}`);
+    assert.ok(walkable(x, y), `to ${x}, ${y}: a tile to stand on`);
+  }
+
+  const echoes = character("echoesjumper");
+  assert.equal(YamaStones.jump({ ...stone(1486, 5598), player: echoes }), false, "only a Demonic Pacts character's");
+  jumper.setRegistered(false);
+});
+
+test("Demonic Pacts' League Home Teleport: Civitas with the league's cast and its map graphics, Yama's Lair through the portal", () => {
+  worldLeague = 6;
+  const homer = character("pactshome");
+  worldLeague = 4;
+  homer.setRegistered(true);
+  const graphics = [];
+  const sendLocal = core.World.sendLocalGraphics;
+  core.World.sendLocalGraphics = (id, at) => graphics.push([id, at.getX(), at.getY()]);
+  try {
+    const cast = (opId) => hooks.onSpellCast({ player: homer, spellName: "League Home Teleport", spellWidget: uid(218, 5), spellItemId: -1, opId, handled: false });
+    homer.moveTo(at(3222, 3218));
+    cast(3);
+    core.TaskManager.process();
+    core.TaskManager.process();
+    assert.equal(homer.getAnimation()?.getId(), 13764, "leagues_6_home_teleport_player_01 at +1");
+    assert.deepEqual(graphics[0], [3755, 3222, 3218], "leagues_6_home_teleport_spotanim_01 on the tile");
+    for (let tick = 2; tick < 24; tick++) core.TaskManager.process();
+    const landed = homer.getLocation();
+    assert.ok(Math.abs(landed.getX() - 1666) <= 1 && Math.abs(landed.getY() - 3136) <= 1, `Civitas: ${landed.getX()}, ${landed.getY()}`);
+
+    graphics.length = 0;
+    cast(2);
+    assert.deepEqual(graphics[0].slice(0, 1), [3274], "the portal opens under the caster");
+    assert.equal(homer.sent.varbits.get(12393), 1, "busy");
+    for (let tick = 0; tick < 4; tick++) core.TaskManager.process();
+    const lair = homer.getLocation();
+    assert.ok(Math.abs(lair.getX() - 1502) <= 1 && Math.abs(lair.getY() - 5592) <= 1, `Yama's Lair: ${lair.getX()}, ${lair.getY()}`);
+    assert.equal(homer.getAnimation()?.getId(), 12152, "human_yama_portal_fall_on_face");
+    assert.equal(homer.sent.varbits.get(12393), 0);
+  } finally {
+    core.World.sendLocalGraphics = sendLocal;
+    homer.setRegistered(false);
+  }
+  const echoes = character("echoeshome");
+  const event = { player: echoes, spellName: "League Home Teleport", opId: 3, handled: false };
+  hooks.onSpellCast(event);
+  assert.equal(event.handled, false, "another league's character is not handled here");
+});
+
+/** A character in its copy of Death's Office, whose moves report their map square as World.onPlayerMoved does. */
+function inDeathsOffice(name, profile, league = 4) {
+  worldLeague = league;
+  const player = character(name, profile);
+  worldLeague = 4;
+  player.moveTo = function (destination) {
+    const previous = this.getLocation().clone();
+    Player.prototype.moveTo.call(this, destination);
+    const location = this.getLocation();
+    if ((previous.getX() >> 6) !== (location.getX() >> 6) || (previous.getY() >> 6) !== (location.getY() >> 6)) {
+      hooks.onPlayerMapSquareChange({ player: this, previous, location });
+    }
+    return this;
+  };
+  require("../plugins/areas/deathsoffice/Instance.DeathsOffice").enter(player, [3173, 5726, 0]);
+  return player;
+}
+
+/** The exit portal's click, and the two ticks to the move. */
+function leaveDeathsOffice(player) {
+  const Instance = require("../plugins/areas/deathsoffice/Instance.DeathsOffice");
+  assert.equal(Instance.inOffice(player), true, "in the office before the click");
+  player.sent.messages.length = 0;
+  assert.equal(hooks[`object:${core.CacheDefinitions.getLocId("death_office_exitportal")}`]({ player }), true);
+  core.TaskManager.process();
+  core.TaskManager.process();
+  assert.equal(Instance.inOffice(player), false, "the copy is gone");
+  assert.deepEqual(player.sent.messages, [], "the portal has nothing to refuse");
+  return player.getLocation();
+}
+
+test("Death's Office's exit portal: a locked destination leads to the league home, an open one is unchanged", () => {
+  const heardEverything = 31;
+  const Enforcement = require("../plugins/modes/leagueareas/Enforcement.LeagueAreaUnlocks");
+  const homeOf = (player, league) => Enforcement.home(league, player);
+  const spawn = core.WorldDefinition.WORLD_SPAWN;
+  assert.equal(areaAt(spawn.getX(), spawn.getY()), WILDERNESS, "(the tutorial's exit, the world's spawn, is locked for a new character)");
+
+  // The first death's tutorial leads to the respawn point: the respawn rule's league home here.
+  const tutorial = inDeathsOffice("tutorialexit");
+  inDeathTutorial.add(tutorial);
+  tutorial.setAttribute("deaths-office:tutorial-heard", heardEverything);
+  const afterTutorial = leaveDeathsOffice(tutorial);
+  inDeathTutorial.delete(tutorial);
+  assert.ok(afterTutorial.equals(homeOf(tutorial, 4)), `Trailblazer's home, not the office: ${afterTutorial}`);
+  assert.equal(areaAt(afterTutorial.getX(), afterTutorial.getY()), MISTHALIN);
+
+  // No entrance on record falls back to Lumbridge, which Demonic Pacts never opens.
+  const pacts = inDeathsOffice("pactsexit", "league", 6);
+  const fromLumbridge = leaveDeathsOffice(pacts);
+  assert.ok(fromLumbridge.equals(homeOf(pacts, 6)), `Demonic Pacts' home, not the office: ${fromLumbridge}`);
+  assert.equal(areaAt(fromLumbridge.getX(), fromLumbridge.getY(), { league: 6 }), VARLAMORE);
+
+  // Logged out inside: the new copy's portal behaves the same.
+  const relogged = inDeathsOffice("pactsrelog", "league", 6);
+  const Instance = require("../plugins/areas/deathsoffice/Instance.DeathsOffice");
+  Instance.leave(relogged, at(1653, 3135));
+  relogged.setAttribute("deaths-office:inside", true);
+  hooks.onPlayerLogin({ player: relogged, username: "pactsrelog", isNewAccount: false, profile: "league" });
+  assert.ok(leaveDeathsOffice(relogged).equals(homeOf(relogged, 6)), "home from the login's copy too");
+
+  // An entrance whose outside is locked (a saved character's old visit), until its area is unlocked.
+  const falador = [2976, 9737, 0];
+  const stale = inDeathsOffice("staleexit");
+  stale.setAttribute("deaths-office:entrance", "death_office_access_whitecoffin");
+  assert.ok(leaveDeathsOffice(stale).equals(homeOf(stale, 4)), "Falador's entrance is locked: home");
+
+  // Controls: an open destination is exactly what it was.
+  const unlocked = inDeathsOffice("openfalador");
+  unlocked.setAttribute("league:areas", [MISTHALIN, KARAMJA, ASGARNIA]);
+  unlocked.setAttribute("deaths-office:entrance", "death_office_access_whitecoffin");
+  assert.ok(leaveDeathsOffice(unlocked).equals(at(...falador)), "outside Falador's entrance once Asgarnia is unlocked");
+  assert.equal(unlocked.getAttribute("deaths-office:entrance"), null);
+
+  const lumbridge = inDeathsOffice("openlumbridge");
+  assert.ok(leaveDeathsOffice(lumbridge).equals(at(3238, 3194)), "no entrance on record: Lumbridge, open to Trailblazer");
+
+  const civitas = inDeathsOffice("opencivitas", "league", 6);
+  civitas.setAttribute("deaths-office:entrance", "civitas_death_entrance");
+  assert.ok(leaveDeathsOffice(civitas).equals(at(1653, 3135)), "Civitas's own entrance, as captured");
+
+  const main = inDeathsOffice("mainexit", "main");
+  inDeathTutorial.add(main);
+  main.setAttribute("deaths-office:tutorial-heard", heardEverything);
+  const mainExit = leaveDeathsOffice(main);
+  inDeathTutorial.delete(main);
+  assert.ok(mainExit.equals(spawn), "a main character's tutorial still leads to the world's spawn");
 });
 
 test("a reload restores the unlocks and their varbits", () => {

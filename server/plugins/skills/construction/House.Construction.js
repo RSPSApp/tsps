@@ -16,6 +16,7 @@ const JewelleryBox = require("./JewelleryBox.Construction");
 const Menu = require("./Menu.Construction");
 const Mounted = require("./Mounted.Construction");
 const SuperiorGarden = require("./SuperiorGarden.Construction");
+const GardenPlants = require("./GardenPlants.Construction");
 const Lectern = require("./Lectern.Construction");
 const Stairs = require("./Stairs.Construction");
 const Workshop = require("./Workshop.Construction");
@@ -26,6 +27,7 @@ const CombatRoom = require("./CombatRoom.Construction");
 const Dungeon = require("./Dungeon.Construction");
 const ThroneRoom = require("./ThroneRoom.Construction");
 const Menagerie = require("./Menagerie.Construction");
+const Decorations = require("./Decorations.Construction");
 const GamesRoom = require("./GamesRoom.Construction");
 const CombatRings = require("./CombatRings.Construction");
 const Tea = require("./Tea.Construction");
@@ -52,6 +54,11 @@ const BUILD_ANIMATION = Ids.seq("human_poh_build");
 const BUILD_SOUND = 938;
 // poh_portal_op: Yanille's portal once the Ardougne diary has changed it.
 const DIARY_PORTAL_ID = Ids.loc("poh_portal_op");
+const YANILLE_HOUSE_LOCATION_ID = 6;
+const YANILLE_HOUSE_PORTAL_ID = Estate.HOUSE_LOCATIONS.find(location => location.id === YANILLE_HOUSE_LOCATION_ID).portal;
+const YANILLE_HOUSE_PORTAL_LOCATION = { x: 2542, y: 3097, z: 0 };
+const YANILLE_HOUSE_PORTAL_FOOTPRINT = api.core.CacheDefinitions.getObject(YANILLE_HOUSE_PORTAL_ID);
+const ARDOUGNE_HARD_POH_TASK = "enter-your-poh-from-yanille";
 const HOUSE_PORTAL_IDS = [...Estate.HOUSE_LOCATIONS.map(location => location.portal), DIARY_PORTAL_ID];
 const EXIT_PORTAL_ID = Ids.loc("poh_exit_portal");
 const HOUSE_LOCKED_VARBIT = Ids.varbit("poh_house_locked");
@@ -166,7 +173,28 @@ function ownsHouse(request) {
   if (request?.player) request.owns = houseStateFor(request.player).owned !== false;
 }
 
-function enterHouse(player, buildingMode) {
+/**
+ * "construction:grant-house" { player, granted }: gives a starter house in Rimmington when the
+ * player has none (Daddy's Home). `granted` stays false if they already own one, so the caller
+ * can pay the Wiki's 1,000 coins instead.
+ */
+function grantHouse(request) {
+  if (!request?.player) return;
+  const house = houseStateFor(request.player);
+  if (house.owned !== false) {
+    request.granted = false;
+    return;
+  }
+  house.owned = true;
+  house.location = 1;
+  house.style = 0;
+  request.player.setAttribute(HOUSE_ATTRIBUTE, house);
+  syncHouseOptions(request.player);
+  request.granted = true;
+}
+
+function enterHouse(player, buildingMode, diaryEntryContext = null) {
+  const canCreditDiaryTask = isCurrentYanilleHouseEntry(player, diaryEntryContext);
   if (houseStateFor(player).owned === false) {
     player.sendMessage("You do not own a house. Speak to an Estate agent to buy one.");
     return false;
@@ -179,7 +207,7 @@ function enterHouse(player, buildingMode) {
   }
   if (buildingMode) {
     // The Bank PIN guards this (Wiki: Bank_PIN); a locked PIN asks first, then reopens it.
-    const pin = { player, feature: "poh-building-mode", resume: () => enterHouse(player, true) };
+    const pin = { player, feature: "poh-building-mode", resume: () => enterHouse(player, true, diaryEntryContext) };
     api.emitCustomEvent("bank-pin:guard", pin);
     if (pin.locked) return true;
   }
@@ -199,10 +227,14 @@ function enterHouse(player, buildingMode) {
     player.sendMessage("Unable to load your house.");
     return false;
   }
+  api.emitCustomEvent("combat:clear-burn", { target: player });
   player.getPacketSender().sendVarbit(HOUSE_LOCKED_VARBIT, house.save.locked ? 1 : 0);
   syncHouseOptions(player);
   syncKickOption(player);
   player.sendMessage(buildingMode ? "You enter your house in building mode." : "You enter your house.");
+  if (canCreditDiaryTask && house.owner === player && houseFor(player) === house) {
+    api.emitCustomEvent("diary:task", { player, diary: "ardougne", task: ARDOUGNE_HARD_POH_TASK });
+  }
   return true;
 }
 
@@ -212,10 +244,10 @@ function canVisitHouse(player, house) {
     && owner.getRelations().canReceivePrivateMessageFrom(player);
 }
 
-function visitHouse(player, name, location = nearbyHouseLocation(player)) {
+function visitHouse(player, name, location = nearbyHouseLocation(player), diaryEntryContext = null) {
   const owner = World.getPlayerByName(name.trim().replace(/_/g, " "));
   const house = owner && activeHouses.get(owner);
-  if (owner === player) { enterAtPortal(player, false, location); return; }
+  if (owner === player) { enterAtPortal(player, false, location, diaryEntryContext); return; }
   if (!house || Estate.houseLocation(house.save).id !== location || !canVisitHouse(player, house)) {
     player.sendMessage("That house is unavailable or its owner is not accepting guests.");
     return;
@@ -223,14 +255,16 @@ function visitHouse(player, name, location = nearbyHouseLocation(player)) {
   if (houseFor(player) === house) return;
   if (houseFor(player)) exitHouse(player);
   if (!house.enterHouse(player, false)) { exitHouse(player); return; }
+  api.emitCustomEvent("combat:clear-burn", { target: player });
   lastVisited.set(player, owner.getUsername());
   player.getPacketSender().sendVarbit(HOUSE_LOCKED_VARBIT, house.save.locked ? 1 : 0);
-  player.sendMessage("Welcome to " + owner.getUsername() + "'s house.");
+  player.sendMessage("Welcome to " + owner.getDisplayName() + "'s house.");
 }
 
-function promptVisit({ player, objectId }) {
+function promptVisit({ player, objectId, location: portalLocation, sourceLocation, object }) {
   const location = nearbyHouseLocation(player, objectId);
-  player.setEnteredSyntaxAction({ execute: (name) => visitHouse(player, name, location) });
+  const diaryEntryContext = yanilleHouseEntryContext(objectId, portalLocation, sourceLocation, object);
+  player.setEnteredSyntaxAction({ execute: (name) => visitHouse(player, name, location, diaryEntryContext) });
   player.getPacketSender().sendEnterInputPrompt("Whose house would you like to visit?");
   return true;
 }
@@ -557,6 +591,7 @@ function exitHouse(player) {
   if (house.owner === player) advertisedHouses.delete(house);
   player.getPacketSender().sendInterfaceRemoval();
   house.exitHouse(player, Estate.houseExit(house.save));
+  api.emitCustomEvent("combat:clear-burn", { target: player });
   syncHouseOptions(player);
   syncKickOption(player);
   return true;
@@ -573,8 +608,9 @@ function syncKickOption(player) {
 
 function kickGuest(event) {
   if (event.option !== HOUSE_KICK_OPTION) return;
-  event.handled = true;
   const house = houseFor(event.player);
+  if (!house) return;
+  event.handled = true;
   if (!house || house.isDestroyed() || house.owner !== event.player || event.target === event.player
     || houseFor(event.target) !== house || !house.getPlayers().includes(event.target)) return;
   exitHouse(event.target);
@@ -844,6 +880,8 @@ function getBuildMaterials(player, house, target, buildable) {
     return "That can only be built if the hotspot is empty.";
   }
   if (target && previous && existing !== previous) return "That can only be built by upgrading the previous piece of furniture.";
+  const plantRefusal = GardenPlants.refusal(player, buildable);
+  if (plantRefusal) return plantRefusal;
   const requiredItems = new Map();
   const listed = [];
   for (const material of buildable.materials) {
@@ -926,7 +964,7 @@ function buildFurniture(player, house, target, buildable) {
   if (houseFor(player) !== house || !isBuildingMode(player)) return;
   const materials = getBuildMaterials(player, house, target, buildable);
   if (!(materials instanceof Map)) return Menu.refuse(player, materials);
-  hammer(player, buildable.buildAnimationId);
+  if (!GardenPlants.animate(player, buildable)) hammer(player, buildable.buildAnimationId);
   const nails = buildable.materials.find(material => material.source === "NAILS")?.amount ?? 0;
   if (nails === 0) return completeFurniture(player, house, target, buildable, materials);
   let used = 0;
@@ -956,7 +994,9 @@ function buildFurniture(player, house, target, buildable) {
 function completeFurniture(player, house, target, buildable, materials) {
   useMaterials(player, buildable, materials);
   player.getSkillManager().addExperiences(Skill.CONSTRUCTION, buildable.experience);
+  GardenPlants.complete(player, buildable);
   house.setFurniture(target, buildable);
+  api.emitCustomEvent("construction:furniture-built", { player, buildable });
   // Keyed to the house, so a click straight after the build doesn't cancel the redraw.
   TaskManager.submit(new CountdownTask(house, 1, () => {
     if (houseFor(player) === house) rebuildHouse(player, house);
@@ -1212,23 +1252,73 @@ function nearbyHouseLocation(player, objectId) {
       < Math.hypot(nearest.x - position.getX(), nearest.y - position.getY()) ? location : nearest).id;
 }
 
-function enterAtPortal(player, buildingMode, location) {
+function yanilleHouseEntryContext(objectId, location, sourceLocation, object) {
+  const face = object?.getFace?.();
+  if (object?.getType?.() !== 10 || face !== 2
+    || YANILLE_HOUSE_PORTAL_FOOTPRINT.sizeX !== 5 || YANILLE_HOUSE_PORTAL_FOOTPRINT.sizeY !== 2) return null;
+  if (objectId !== YANILLE_HOUSE_PORTAL_ID
+    || location?.x !== YANILLE_HOUSE_PORTAL_LOCATION.x
+    || location?.y !== YANILLE_HOUSE_PORTAL_LOCATION.y
+    || location?.z !== YANILLE_HOUSE_PORTAL_LOCATION.z) return null;
+  const width = (face & 1) === 1 ? YANILLE_HOUSE_PORTAL_FOOTPRINT.sizeY : YANILLE_HOUSE_PORTAL_FOOTPRINT.sizeX;
+  const length = (face & 1) === 1 ? YANILLE_HOUSE_PORTAL_FOOTPRINT.sizeX : YANILLE_HOUSE_PORTAL_FOOTPRINT.sizeY;
+  if (!isHousePortalReachable(sourceLocation, location, width, length)) return null;
+  return {
+    yanillePortal: true,
+    objectId,
+    portalLocation: { ...location },
+    sourceLocation: { ...sourceLocation },
+    width,
+    length,
+  };
+}
+
+function isHousePortalReachable(sourceLocation, portalLocation, width, length) {
+  if (!sourceLocation || sourceLocation.z !== portalLocation.z) return false;
+  const insideFootprint = sourceLocation.x >= portalLocation.x && sourceLocation.x < portalLocation.x + width
+    && sourceLocation.y >= portalLocation.y && sourceLocation.y < portalLocation.y + length;
+  if (insideFootprint) return false;
+  const gap = (point, start, size) => Math.max(0, start - point, point - (start + size - 1));
+  return Math.max(gap(sourceLocation.x, portalLocation.x, width),
+    gap(sourceLocation.y, portalLocation.y, length)) <= 1;
+}
+
+function isCurrentYanilleHouseEntry(player, context) {
+  if (context?.yanillePortal !== true || context.objectId !== YANILLE_HOUSE_PORTAL_ID
+    || context.portalLocation?.x !== YANILLE_HOUSE_PORTAL_LOCATION.x
+    || context.portalLocation?.y !== YANILLE_HOUSE_PORTAL_LOCATION.y
+    || context.portalLocation?.z !== YANILLE_HOUSE_PORTAL_LOCATION.z
+    || Estate.houseLocation(houseStateFor(player)).id !== YANILLE_HOUSE_LOCATION_ID) return false;
+  const current = player.getLocation();
+  const original = context.sourceLocation;
+  return !!current && !!original
+    && current.getX() === original.x
+    && current.getY() === original.y
+    && current.getZ() === original.z
+    && isHousePortalReachable(original, context.portalLocation, context.width, context.length);
+}
+
+function enterAtPortal(player, buildingMode, location, diaryEntryContext) {
   if (Estate.houseLocation(houseStateFor(player)).id !== location) {
     player.sendMessage("Your house is not located here.");
     return true;
   }
-  enterHouse(player, buildingMode);
+  enterHouse(player, buildingMode, diaryEntryContext);
+  if (houseFor(player)) api.emitCustomEvent("poh:entered", { player, location });
   return true;
 }
 
-function enterDefaultHouse({ player, objectId }) {
-  return enterAtPortal(player, houseStateFor(player).defaultBuildingMode, nearbyHouseLocation(player, objectId));
+function enterDefaultHouse({ player, objectId, location, sourceLocation, object }) {
+  const diaryEntryContext = yanilleHouseEntryContext(objectId, location, sourceLocation, object);
+  return enterAtPortal(player, houseStateFor(player).defaultBuildingMode, nearbyHouseLocation(player, objectId), diaryEntryContext);
 }
-function enterNormalHouse({ player, objectId }) {
-  return enterAtPortal(player, false, nearbyHouseLocation(player, objectId));
+function enterNormalHouse({ player, objectId, location, sourceLocation, object }) {
+  const diaryEntryContext = yanilleHouseEntryContext(objectId, location, sourceLocation, object);
+  return enterAtPortal(player, false, nearbyHouseLocation(player, objectId), diaryEntryContext);
 }
-function enterBuildingHouse({ player, objectId }) {
-  return enterAtPortal(player, true, nearbyHouseLocation(player, objectId));
+function enterBuildingHouse({ player, objectId, location, sourceLocation, object }) {
+  const diaryEntryContext = yanilleHouseEntryContext(objectId, location, sourceLocation, object);
+  return enterAtPortal(player, true, nearbyHouseLocation(player, objectId), diaryEntryContext);
 }
 function leaveHouse({ player }) { return exitHouse(player); }
 function showAdvertisements({ player, objectId }) { viewAdvertisements(player, nearbyHouseLocation(player, objectId)); return true; }
@@ -1312,6 +1402,7 @@ function attach(api) {
   Dungeon.attachDungeon(api);
   ThroneRoom.attachThroneRoom(api);
   Menagerie.attachMenagerie(api);
+  Decorations.attachDecorations(api);
   GamesRoom.attachGamesRoom(api);
   CombatRings.attachCombatRings(api);
   Tea.attachTea(api);
@@ -1356,6 +1447,7 @@ function attach(api) {
   api.onCustomEvent("spell:teleport-arrival", houseTeleportArrival);
   api.onCustomEvent("construction:house-tablet", houseTablet);
   api.onCustomEvent("construction:owns-house", ownsHouse);
+  api.onCustomEvent("construction:grant-house", grantHouse);
   api.onSpellDisabled(refuseHouseVengeance);
   api.onPlayerLogin(loginHouse);
   api.onPlayerMapSquareChange(recordRegionVisit);

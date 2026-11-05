@@ -1,6 +1,6 @@
 import { OverlayPosition } from "@runelite/client/ui/overlay/OverlayPosition";
 import { skillIconSprite } from "../../../rs/skill/skillIcons";
-import { FONT_PLAIN_12 } from "../../../ui/fonts";
+import { overlayFont } from "@runelite/client/ui/overlay/OverlayFonts";
 import { drawTextGL } from "../../../widgets/components/TextRenderer";
 import type { OverlayMenuEntry, WidgetOverlay, WidgetOverlayDrawContext } from "../ClientPluginManager";
 import { skillColor } from "../xptracker/skillColor";
@@ -159,8 +159,11 @@ export class XpGlobesOverlay implements WidgetOverlay {
             glr.drawPolygon?.(circle, DARK_OVERLAY_COLOR);
             if (end > l.globe.currentXp) {
                 const text = `${Math.trunc(skillProgress(start, l.globe.currentXp, end))}%`;
-                drawTextGL(context.renderer, context.fontLoader, text, cx - 40 * at.sx, cy - 8 * at.sy, 80 * at.sx,
-                    16 * at.sy, FONT_PLAIN_12, WHITE, 1, 1, true, 1, undefined, at.sx, at.sy);
+                // A TOP_CENTER overlay: the interface font.
+                const font = overlayFont("interface");
+                const fx = at.sx * font.scale, fy = at.sy * font.scale;
+                drawTextGL(context.renderer, context.fontLoader, text, cx - 40 * fx, cy - 8 * fy, 80 * fx,
+                    16 * fy, font.id, WHITE, 1, 1, true, 1, undefined, fx, fy);
             }
         }
 
@@ -185,8 +188,12 @@ export class XpGlobesOverlay implements WidgetOverlay {
         });
         const glr: any = context.renderer;
         const at = this.lastPlace!;
+        // TooltipManager's tooltip: the tooltip font, its lines growing with it. The width stays.
+        const font = overlayFont("tooltip");
+        const lineHeight = Math.max(1, Math.round(LINE_HEIGHT * font.scale));
+        const fx = at.sx * font.scale, fy = at.sy * font.scale;
         const w = TOOLTIP_RECT_SIZE_X * at.sx;
-        const h = (TOOLTIP_BORDER * 2 + lines.length * LINE_HEIGHT) * at.sy;
+        const h = (TOOLTIP_BORDER * 2 + lines.length * lineHeight) * at.sy;
         const mouse = this.mouse();
         const canvasW = Number(glr.width) || Infinity;
         const x = Math.max(0, Math.min(mouse.x + 2, canvasW - w));
@@ -199,12 +206,12 @@ export class XpGlobesOverlay implements WidgetOverlay {
         const innerX = x + TOOLTIP_BORDER * at.sx;
         const innerW = w - 2 * TOOLTIP_BORDER * at.sx;
         lines.forEach((line, i) => {
-            const ly = y + (TOOLTIP_BORDER + i * LINE_HEIGHT) * at.sy;
-            const lh = LINE_HEIGHT * at.sy;
-            drawTextGL(context.renderer, context.fontLoader, line.left, innerX, ly, innerW, lh, FONT_PLAIN_12,
-                line.leftColor, 0, 1, true, 1, undefined, at.sx, at.sy);
-            drawTextGL(context.renderer, context.fontLoader, line.right, innerX, ly, innerW, lh, FONT_PLAIN_12,
-                WHITE, 2, 1, true, 1, undefined, at.sx, at.sy);
+            const ly = y + (TOOLTIP_BORDER + i * lineHeight) * at.sy;
+            const lh = lineHeight * at.sy;
+            drawTextGL(context.renderer, context.fontLoader, line.left, innerX, ly, innerW, lh, font.id,
+                line.leftColor, 0, 1, true, 1, undefined, fx, fy);
+            drawTextGL(context.renderer, context.fontLoader, line.right, innerX, ly, innerW, lh, font.id,
+                WHITE, 2, 1, true, 1, undefined, fx, fy);
         });
         return { x, y, w, h };
     }

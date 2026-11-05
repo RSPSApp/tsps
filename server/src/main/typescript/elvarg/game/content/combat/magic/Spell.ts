@@ -46,6 +46,19 @@ export abstract class Spell {
     abstract startCast(cast: Mobile, castOn: Mobile): void
     abstract baseExperience();
 
+    /**
+     * Whether the spell accepts this target. Combat spells override it; utility spells (Telekinetic
+     * Grab on the Theatre's guardian) cast on scripted NPCs by default.
+     */
+    public canCastOnTarget(cast: Mobile, target: Mobile): boolean {
+        return true;
+    }
+
+    /** The sound played on an accepted scripted cast; combat spells override it. */
+    public castSound(): any {
+        return null;
+    }
+
     /** Members-only on the standard spellbook; free-to-play worlds disable it (other books are all members). */
     public members = false;
 
@@ -57,8 +70,8 @@ export abstract class Spell {
         return MagicSpellbook.NORMAL;
     }
 
-    /** Extra per-spell cooldowns. */
-    protected getCastCooldown(): { attribute: string, duration: number } | null {
+    /** Extra per-spell cooldowns, for the casting player (content may shorten one per player). */
+    protected getCastCooldown(_player?: Player): { attribute: string, duration: number } | null {
         return null;
     }
 
@@ -157,7 +170,7 @@ export abstract class Spell {
         }
 
         const now = World.getProcessCycle();
-        const cooldown = this.getCastCooldown();
+        const cooldown = this.getCastCooldown(player);
         if ((this.usesSharedCastDelay() && Number(player.getAttribute(Spell.NEXT_CAST_AT) ?? 0) > now) ||
             (cooldown != null && Number(player.getAttribute(cooldown.attribute) ?? 0) > now)) {
             return false;

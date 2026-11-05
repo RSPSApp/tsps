@@ -100,7 +100,7 @@ export class BankTagsPlugin extends Plugin implements ClientPlugin, BankTagsServ
     private options = 0;
     private readonly unsubscribe: (() => void)[] = [];
     private listeningVm?: Cs2Vm;
-    private readonly onScriptPre = (id: number) => this.onScriptPreFired(id);
+    private readonly onScriptPre = (id: number) => this.handleScriptPre(id);
     private readonly onItemSearch = () => this.onGrandExchangeSearched();
 
     constructor(
@@ -219,7 +219,7 @@ export class BankTagsPlugin extends Plugin implements ClientPlugin, BankTagsServ
 
     // ------------------------------------------------------------------ events
 
-    private onScriptPreFired(scriptId: number): void {
+    private handleScriptPre(scriptId: number): void {
         if (!this.isStarted()) return;
         this.guard(`script ${scriptId}`, () => {
             this.tabInterface.onScriptPreFired(scriptId);

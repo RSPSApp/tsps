@@ -241,7 +241,10 @@ export async function doInstanceSceneBuild(host: WebGLOsrsRendererHost,
         playerMapY: number,
     ): Promise<void> {
 
-        // Only the latest build is applied: a newer rebuild (or loc rebuild) supersedes this one.
+        // A build is applied unless a newer one already was, or the instance it was built for
+        // is gone. Waiting for the latest instead starved the scene: a loc change every tick
+        // (Tempoross' cannons, crates and fires) started a newer build before each one finished,
+        // so none was drawn until the changes stopped.
         const build = ++host.instanceBuildSeq;
         const extraLocs = host.getInstanceExtraLocs(playerMapX, playerMapY);
 
@@ -273,7 +276,15 @@ export async function doInstanceSceneBuild(host: WebGLOsrsRendererHost,
             host.instanceBuildsInFlight--;
         }
 
-        if (build !== host.instanceBuildSeq || !host.instanceActive) return;
+        if (
+            build <= host.instanceAppliedBuild ||
+            !host.instanceActive ||
+            host.instanceTemplateChunks !== templateChunks ||
+            host.instanceRegionX !== regionX ||
+            host.instanceRegionY !== regionY
+        ) {
+            return;
+        }
 
         if (mapData) {
             console.log(
@@ -289,6 +300,7 @@ export async function doInstanceSceneBuild(host: WebGLOsrsRendererHost,
             host.pendingStreamMapsByGeneration.clear();
             // Bypass grid/generation checks — instance scenes are always valid
             host.pendingInstanceScene = mapData;
+            host.instanceAppliedBuild = build;
             host.mapsToLoad.push(mapData);
             // Register the map in MapManager so it isn't pruned
             host.mapManager.loadingMapIds.add(getMapSquareId(playerMapX, playerMapY));

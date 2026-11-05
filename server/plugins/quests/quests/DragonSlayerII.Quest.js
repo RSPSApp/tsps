@@ -2557,15 +2557,22 @@ module.exports = function registerDragonSlayerII(api) {
   }
   function feelLocatorOrb(event) {
     const { player: p } = event;
-    if (stage(p) < S.KEYS || stage(p) > S.FORGE || !has(p, I.LOCATOR_ORB) || (Number(p.getAttribute(ATTR_MORYTANIA)) || 0) < 5) return;
+    if (!has(p, I.LOCATOR_ORB)) return;
+    event.handled = true;
+    const queue = p.getCombat().getHitQueue();
+    // Multiple Feels can arrive before the queued self-damage lands.
+    const damage = Math.min(10, Math.max(0, p.getHitpoints() - queue.getQueuedDamage() - 1));
+    if (damage > 0) queue.addPendingDamage([new HitDamage(damage, HitMask.RED)]);
+    const target = p.getAttribute(ATTR_ORB_TARGET);
+    if (stage(p) < S.KEYS || stage(p) > S.FORGE || (Number(p.getAttribute(ATTR_MORYTANIA)) || 0) < 5 || !Array.isArray(target)) {
+      p.sendMessage("The locator orb is unstable and hurts you as you use it.");
+      return;
+    }
     const loc = p.getLocation();
-    const [x, y] = p.getAttribute(ATTR_ORB_TARGET);
+    const [x, y] = target;
     const dx = x - loc.getX(), dy = y - loc.getY();
     const directions = ["north", "north-east", "east", "south-east", "south", "south-west", "west", "north-west"];
     const direction = directions[((Math.round(Math.atan2(dx, dy) / (Math.PI / 4)) % 8) + 8) % 8];
-    const damage = Math.min(10, Math.max(0, p.getHitpoints() - 1));
-    event.handled = true;
-    if (damage > 0) p.getCombat().getHitQueue().addPendingDamage([new HitDamage(damage, HitMask.RED)]);
     p.sendMessage(Math.max(Math.abs(dx), Math.abs(dy)) <= 1
       ? "The locator orb pulses strongly. The key piece must be buried very close by."
       : `The locator orb glows and pulls you ${direction}. It shocks you as you use it.`);

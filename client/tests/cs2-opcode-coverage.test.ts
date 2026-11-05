@@ -36,3 +36,22 @@ test("every instruction in the cache's clientscripts has a handler", () => {
         `cache ${info.name}`,
     );
 });
+
+test("text-pronoun opcodes use the independent choice while body text still follows the body", () => {
+    const handlers = createHandlerMap();
+    for (const pronouns of [0, 1, 2]) {
+        const strings: string[] = [], ints: number[] = [];
+        const context: any = {
+            stringStack: ["He", "She", "They"], stringStackSize: 3,
+            getPlayerGender: () => 1, getPlayerPronouns: () => pronouns,
+            pushString: (value: string) => strings.push(value), pushInt: (value: number) => ints.push(value),
+        };
+        handlers.get(Opcodes.TEXT_GENDER3)!(context, 0, null);
+        handlers.get(Opcodes.TEXT_GENDER_MODE)!(context, 0, null);
+        assert.equal(strings[0], ["He", "She", "They"][pronouns]);
+        assert.equal(ints[0], pronouns);
+        context.stringStack = ["A", "B"]; context.stringStackSize = 2;
+        handlers.get(Opcodes.TEXT_GENDER)!(context, 0, null);
+        assert.equal(strings[1], "B");
+    }
+});

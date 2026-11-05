@@ -17,7 +17,9 @@ No native playthrough recorded; natural completion pending.
 
 ## Findings
 
-None recorded.
+Newest first. One line each, linked to its issue or PR when there is one.
+
+- **fixed** The stage was sent as feud_var unchanged, one step behind Quest Helper from 8 on, so after hiding behind the cactus the helper still said to hide. Stages now send Quest Helper's step numbers (`FEUD_VAR_BY_STAGE`). The cactus also plays its "feel a little silly" line outside the stake-out instead of doing nothing. [#1711](https://github.com/RSPSApp/tsps/issues/1711)
 
 ## Runs
 

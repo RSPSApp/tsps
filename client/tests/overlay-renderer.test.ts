@@ -1,5 +1,7 @@
 import { strict as assert } from "node:assert";
 
+import { TimersPlugin } from "../game/plugins/statustimer/TimersPlugin";
+import { mobileCombatTimerStyle } from "../game/widgets/MobileHudLayout";
 import { ConfigManager } from "@runelite/client/config/ConfigManager";
 import { OverlayPosition } from "@runelite/client/ui/overlay/OverlayPosition";
 import { OverlayRenderer } from "@runelite/client/ui/overlay/OverlayRenderer";
@@ -131,4 +133,46 @@ const at = next.placeOverlay(panel, PANEL_W, PANEL_H, canvas)!;
 assert.deepEqual([at.x, at.y], [5, 600 - 165 - 5 - PANEL_H], "above the chatbox, 5 in");
 
 renderer.stop();
+
+// Boosts/defence share the combat-status anchor below the minimap, independent of DPR.
+const boost: WidgetOverlay = { signature: () => "", draw: () => [],
+    movable: { name: "BoostsInfoBoxOverlay", position: OverlayPosition.BELOW_MINIMAP } };
+const timers = new TimersPlugin();
+timers.poison.sync(300, 1);
+timers.freeze.sync(300, 1);
+client.runeLite = { pluginManager: { getPlugin: () => timers } };
+for (const [width, height, dpr] of [[848, 720, 1], [640, 385, 2], [1200, 800, 1]]) {
+    canvas = { w: width * dpr, h: height * dpr };
+    layoutFor();
+    client.renderer = { canvas: { width: canvas.w, height: canvas.h, clientWidth: width, clientHeight: height } };
+    client.widgetManager.minimapWidget = widget((width - 185) * dpr, 5 * dpr, 170 * dpr, 160 * dpr);
+    client.widgetManager.minimapWidget.width = 170;
+    const placed = new OverlayRenderer(client, config).placeOverlay(boost, 28, 28, canvas)!;
+    assert.equal(placed.y, (173 + 58) * dpr, "Boosts always sit below the Wilderness and timer row");
+    assert.equal(placed.x + 28 * placed.scaleX, (width - 15) * dpr, "Boosts align with the full combat-status row");
+}
+// Mobile Boosts always start below the full native Wilderness panel, regardless of active timers.
+for (const [width, dpr] of [[844, 1], [375, 2], [708, 2]]) {
+    canvas = { w: width * dpr, h: 812 * dpr };
+    client.renderer.canvas = { width: canvas.w, height: canvas.h, clientWidth: width, clientHeight: 812 };
+    Object.assign(client.widgetManager, { rootInterface: 601, canvasWidth: width, canvasHeight: 812 });
+    widgets.set((601 << 16) | 1, widget(0, 0, canvas.w, canvas.h));
+    const mobile = new OverlayRenderer(client, config);
+    const at = mobile.placeOverlay(boost, 28, 28, canvas)!;
+    assert.equal(at.x, 8 * dpr, "Boosts align with the Wilderness indicator on their own row");
+    assert.equal(at.y, (173 + 54 + 4 * 1.25) * dpr);
+    assert.equal(at.scaleX, dpr * 1.25, "Boosts follow the same growth as mobile CSS timers");
+    mobile.widgetOverlay.draw(context);
+    const wrap = mobile.placeOverlay(boost, width / 1.25 - 16, 88, canvas)!;
+    assert.equal(wrap.x, 8 * dpr);
+    assert.equal(wrap.y, (173 + 54 + 4 * 1.25) * dpr, "wrapped Boosts clear the Wilderness level and range");
+    mobile.widgetOverlay.draw(context);
+    timers.setEnabledState(false);
+    const disabled = mobile.placeOverlay(boost, 28, 28, canvas)!;
+    assert.equal(disabled.x, at.x, "disabling timers keeps Boosts on their own row");
+    timers.setEnabledState(true);
+    assert.equal(disabled.y, at.y);
+    assert.ok(at.y >= (Number(mobileCombatTimerStyle(client, 0)!.top) + 28 * 1.25) * dpr,
+        "even a single Boosts counter clears the timers above");
+}
 console.log("overlay renderer test passed");

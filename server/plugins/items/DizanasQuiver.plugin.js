@@ -258,7 +258,7 @@ function uncharge({ player, item }) {
   if (stageOf(item?.getId?.()) !== "charged") return false;
   const amount = itemCharges(item);
   const inventory = player.getInventory();
-  if (amount > 0 && !inventory.contains(itemIdentifiers().SUNFIRE_SPLINTERS) && inventory.getFreeSlots() <= 0) {
+  if (amount > 0 && inventory.getAddableAmount(new (core().Item)(itemIdentifiers().SUNFIRE_SPLINTERS, amount)) < amount) {
     player.sendMessage("You don't have enough inventory space to do that.");
     return true;
   }
@@ -320,6 +320,13 @@ function itemOnItem(event) {
 
 // ------------------------------------------------------------------ the slot's options
 
+/** The quiver keeps only an id and an amount, so preset (restricted) ammo would come back plain. */
+function restrictedAmmo(player, worn) {
+  if (!worn || !(worn.isPresetItem() || worn.isUntradeable() || worn.isUnbankable())) return false;
+  player.sendMessage("Preset items cannot be used for this.");
+  return true;
+}
+
 function wornAmmo(player) {
   const item = player.getEquipment().getItems()[core().Equipment.AMMUNITION_SLOT];
   return item && item.getId() > 0 && item.getAmount() > 0 ? item : null;
@@ -345,6 +352,7 @@ function fill(player) {
     player.sendMessage("Dizana's quiver can only hold arrows or bolts.");
     return;
   }
+  if (restrictedAmmo(player, worn)) return;
   const ammo = stored(player);
   if (ammo && ammo.id !== worn.getId()) {
     player.sendMessage(`Your quiver already holds ${name(ammo.id)}.`);
@@ -363,6 +371,7 @@ function swap(player) {
     player.sendMessage("Dizana's quiver can only hold arrows or bolts.");
     return;
   }
+  if (restrictedAmmo(player, worn)) return;
   setWornAmmo(player, ammo);
   store(player, worn ? { id: worn.getId(), amount: worn.getAmount() } : null);
 }
@@ -371,12 +380,7 @@ function remove(player) {
   const ammo = stored(player);
   if (!ammo) return;
   const inventory = player.getInventory();
-  if (!inventory.contains(ammo.id) && inventory.getFreeSlots() <= 0) {
-    player.sendMessage("You don't have enough inventory space to do that.");
-    return;
-  }
-  const room = MAX_AMOUNT - inventory.getAmount(ammo.id);
-  const moved = Math.min(room, ammo.amount);
+  const moved = inventory.getAddableAmount(new (core().Item)(ammo.id, ammo.amount));
   if (moved <= 0) {
     player.sendMessage("You don't have enough inventory space to do that.");
     return;
@@ -472,7 +476,11 @@ function resolveAmmo(player) {
 
 function checkAmmo(player, amountRequired, silent) {
   if (!firedAmmunition(player)) return null;
-  if (stored(player).amount >= amountRequired) return true;
+  if (stored(player).amount >= amountRequired) {
+    const permission = { player, itemId: stored(player).id, silent, allowed: true };
+    pluginApi.emitCustomEvent("ranged:ammo-permission", permission);
+    return permission.allowed;
+  }
   if (!silent) player.sendMessage("You don't have the required amount of ammunition to fire that.");
   return false;
 }

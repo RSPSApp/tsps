@@ -65,7 +65,7 @@ function buildInterface() {
   };
 }
 
-function openCommands({ player, parts }) {
+function openCommands({ player, parts = [] }) {
   const sender = player.getPacketSender();
   const rows = pluginApi.getRegisteredCommands(player).map(({ command, description }, index) => ({
     id: index + 1, name: `::${command}${description ? ` - ${description}` : ""}`,
@@ -84,7 +84,8 @@ module.exports = {
   register(api) {
     pluginApi = api;
     api.registerCustomInterface(buildInterface());
-    api.registerCommand("commands", openCommands, undefined, "Search available commands (optional search text)");
+    api.registerCommand("commands", openCommands, undefined, "Search available commands (Ctrl+/, optional search text)");
+    api.onCustomEvent("commands:open", openCommands);
   },
   _test: { GROUP_ID, COMPONENT, uid },
 };

@@ -424,15 +424,17 @@ void main(){
         flipX = false,
         flipY = false,
         alpha = 1,
+        uOffset = 0,
+        vOffset = 0,
     ) {
         if (!tex?.tex) return;
 
         this.flushSolidBatch();
         // UV coordinates with flip support
-        const u0 = flipX ? uScale : 0;
-        const u1 = flipX ? 0 : uScale;
-        const v0 = flipY ? vScale : 0;
-        const v1 = flipY ? 0 : vScale;
+        const u0 = uOffset + (flipX ? uScale : 0);
+        const u1 = uOffset + (flipX ? 0 : uScale);
+        const v0 = vOffset + (flipY ? vScale : 0);
+        const v1 = vOffset + (flipY ? 0 : vScale);
         this.appendTextureQuad(
             tex,
             x,

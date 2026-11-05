@@ -132,10 +132,24 @@ export const forceMobileMode =
 // Debug UI (the Leva panel and its F-key shortcuts) only mounts with an
 // explicit ?debug flag, so players never see it.
 export const isDebugMode = urlParams?.has("debug") ?? false;
+export const showAllTimers = urlParams?.has("timers") ?? false;
 
 // Layout/mobile UI mode should only follow actual handheld/tablet platforms (plus overrides),
 // not generic touch-capable desktop hardware.
 export const isMobileMode = checkAndroid() || isIos || forceMobileMode;
+
+/**
+ * Layout follows the current browser/device platform, not the window size: a desktop
+ * client resized below the fixed gameframe still gets the desktop UI (#2471). Re-read
+ * the user agent each call so leaving device emulation restores the desktop layout
+ * without a reload; hardware/renderer defaults stay fixed at startup.
+ */
+export function prefersMobileGameframe(): boolean {
+    const agent = typeof navigator !== "undefined" ? navigator.userAgent : "";
+    const mobileBrowser = /Android|iPhone|iPad|iPod/i.test(agent) ||
+        (agent.includes("Macintosh") && navigator.maxTouchPoints > 1);
+    return forceMobileMode || mobileBrowser;
+}
 
 /**
  * Phones, tablets (including one on "desktop site": touch with a coarse main pointer) and iOS:
@@ -343,9 +357,11 @@ export function getCanvasCssSize(canvas: HTMLCanvasElement): { width: number; he
 export function getOrientation(): "portrait" | "landscape" {
     if (typeof window === "undefined") return "landscape";
 
+    // The forced size is already rotated when the app is turned sideways; unrotated (portrait
+    // mode) it is the upright viewport.
     const forcedLandscape = getForcedLandscapeViewportSize();
     if (forcedLandscape) {
-        return "landscape";
+        return forcedLandscape.width < forcedLandscape.height ? "portrait" : "landscape";
     }
 
     // Use visualViewport if available (more accurate on mobile with keyboard open)

@@ -1,5 +1,5 @@
 // OSRS Wiki: Dragon halberd, special attack (including the three-player PvP cap).
-function dragonHalberdSpecial({ Animation, CombatSpecial, Graphic, GraphicHeight, ItemIdentifiers, MeleeCombatMethod, Sounds }) {
+function dragonHalberdSpecial({ Animation, CombatSpecial, Graphic, GraphicHeight, ItemIdentifiers, MeleeCombatMethod, Sound, Sounds }) {
 
   const DRAIN = 30;
   const ANIMATION = new Animation(1203);
@@ -32,7 +32,7 @@ function dragonHalberdSpecial({ Animation, CombatSpecial, Graphic, GraphicHeight
       CombatSpecial.drain(character, DRAIN);
       character.performAnimation(ANIMATION);
       character.performGraphic(GRAPHIC);
-      Sounds.sendSound(character, character.getAttackSound());
+      Sounds.playAreaSoundAt(character, Sound.DRAGON_HALBERD_SPECIAL);
     }
   }
 

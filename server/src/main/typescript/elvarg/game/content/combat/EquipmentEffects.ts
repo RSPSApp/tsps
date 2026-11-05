@@ -9,8 +9,18 @@ export interface CombatEffectiveLevelContext {
 }
 export type CombatEffectiveLevelModifier = (entity: Mobile, level: number, context: CombatEffectiveLevelContext) => number;
 export type MeleeStrengthPercentModifier = (entity: Mobile, percent: number) => number;
-export type RunEnergyRestoreModifier = (entity: Mobile, delayMs: number) => number;
+export type MeleeStrengthBonusModifier = (entity: Mobile, strengthBonus: number) => number;
+/** Returns the energy units regained this tick (graceful raises them). */
+export type RunEnergyRestoreModifier = (entity: Mobile, units: number) => number;
 export type RunEnergyDrainModifier = (entity: Mobile, amount: number) => number;
+/** Fills in the run-energy status the client needs beyond the energy value itself. */
+export type RunEnergyStatusModifier = (entity: Mobile, status: RunEnergyStatus) => void;
+export interface RunEnergyStatus {
+    /** Ticks of stamina effect left, 0 when none. */
+    staminaTicks: number;
+    /** 1 while the stamina potion's effect is active (the client marks it active). */
+    staminaMultiplier: number;
+}
 export type SpecialEnergyRestoreModifier = (entity: Mobile, delayTicks: number) => number;
 export type SpecialEnergyCostModifier = (entity: Mobile, cost: number) => number;
 export interface IncomingDamageContext {
@@ -31,6 +41,7 @@ export type PrayerDrainRateModifier = (entity: Mobile, drainEffect: number) => n
 const meleeHitModifiers: HitModifier[] = [];
 const combatEffectiveLevelModifiers: CombatEffectiveLevelModifier[] = [];
 const meleeStrengthPercentModifiers: MeleeStrengthPercentModifier[] = [];
+const meleeStrengthBonusModifiers: MeleeStrengthBonusModifier[] = [];
 const rangedHitModifiers: HitModifier[] = [];
 const magicHitModifiers: HitModifier[] = [];
 const magicDamageBonusModifiers: HitModifier[] = [];
@@ -42,6 +53,7 @@ const magicAttackAccuracyModifiers: HitModifier[] = [];
 const magicDefenseModifiers: HitModifier[] = [];
 const runEnergyRestoreModifiers: RunEnergyRestoreModifier[] = [];
 const runEnergyDrainModifiers: RunEnergyDrainModifier[] = [];
+const runEnergyStatusModifiers: RunEnergyStatusModifier[] = [];
 const specialEnergyRestoreModifiers: SpecialEnergyRestoreModifier[] = [];
 const specialEnergyCostModifiers: SpecialEnergyCostModifier[] = [];
 const incomingDamageModifiers: IncomingDamageModifier[] = [];
@@ -80,6 +92,22 @@ export function applyMeleeStrengthPercentModifiers(entity: Mobile, percent: numb
     const next = modifier(entity, value);
     return Number.isFinite(next) ? next : value;
   }, percent);
+}
+
+/**
+ * Adds to the worn melee strength bonus as a max hit is worked out, before the max-hit formula
+ * (so special attacks' multipliers and the melee hit modifiers scale it, as they scale the worn
+ * bonus): for boosts the Wiki words as "melee strength is increased by".
+ */
+export function registerMeleeStrengthBonusModifier(modifier: MeleeStrengthBonusModifier): void {
+  if (typeof modifier === "function") meleeStrengthBonusModifiers.push(modifier);
+}
+
+export function applyMeleeStrengthBonusModifiers(entity: Mobile, strengthBonus: number): number {
+  return meleeStrengthBonusModifiers.reduce((value, modifier) => {
+    const next = modifier(entity, value);
+    return Number.isFinite(next) ? next : value;
+  }, strengthBonus);
 }
 
 export function applyCombatEffectiveLevelModifiers(entity: Mobile, level: number, context: CombatEffectiveLevelContext): number {
@@ -135,6 +163,12 @@ export function registerRunEnergyRestoreModifier(modifier: RunEnergyRestoreModif
 export function registerRunEnergyDrainModifier(modifier: RunEnergyDrainModifier): void {
   if (typeof modifier === "function") {
     runEnergyDrainModifiers.push(modifier);
+  }
+}
+
+export function registerRunEnergyStatusModifier(modifier: RunEnergyStatusModifier): void {
+  if (typeof modifier === "function") {
+    runEnergyStatusModifiers.push(modifier);
   }
 }
 
@@ -211,15 +245,23 @@ export function applyMagicDefenseModifiers(entity: Mobile, value: number): numbe
   return applyModifiers(magicDefenseModifiers, entity, value);
 }
 
-/** Milliseconds between run-energy points; modifiers divide by the restore-rate bonus. */
-export function applyRunEnergyRestoreModifiers(entity: Mobile, delayMs: number): number {
-  return runEnergyRestoreModifiers.reduce((delay, modifier) => {
-    const next = modifier(entity, delay);
-    return Number.isFinite(next) && next > 0 ? next : delay;
-  }, delayMs);
+/** Energy units regained per tick, after restore-rate modifiers (the graceful set raises it). */
+export function applyRunEnergyRestoreModifiers(entity: Mobile, units: number): number {
+  return runEnergyRestoreModifiers.reduce((value, modifier) => {
+    const next = modifier(entity, value);
+    return Number.isFinite(next) && next >= 0 ? next : value;
+  }, units);
 }
 
-/** Run energy spent for a movement step, after drain modifiers (the endurance ring skips 15%). */
+/** Run-energy status besides the value itself (the stamina effect's remaining time). */
+export function applyRunEnergyStatusModifiers(entity: Mobile, status: RunEnergyStatus): RunEnergyStatus {
+  for (const modifier of runEnergyStatusModifiers) {
+    modifier(entity, status);
+  }
+  return status;
+}
+
+/** Run energy spent for one running tick, after drain modifiers (the endurance ring scales it to 85%). */
 export function applyRunEnergyDrainModifiers(entity: Mobile, amount: number): number {
   return runEnergyDrainModifiers.reduce((value, modifier) => {
     const next = modifier(entity, value);

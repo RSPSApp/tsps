@@ -88,6 +88,8 @@ function setup(pluginPath) {
       hooks.custom.set(name, list);
     },
     emitCustomEvent(name, event) {
+      // Priest in Peril is a Shades of Mort'ton start requirement.
+      if (name === 'quest:is-complete' && event.key === 'priest_in_peril') event.complete = true;
       for (const fn of hooks.custom.get(name) ?? []) fn(event);
     },
   }, { get(target, key) { return target[key] ?? (() => {}); } });
@@ -131,6 +133,7 @@ function setup(pluginPath) {
     sendSong(id) { songs.push(id); return sender; },
     sendJingle(id) { songs.push(id); return sender; },
     sendSubInterface(uid, id, type, options) { subInterfaces.push(['open', uid, id, options]); return sender; },
+    mountSubInterface(uid, id, type, options) { subInterfaces.push(['open', uid, id, options]); return {}; },
     closeSubInterface(uid) { subInterfaces.push(['close', uid]); return sender; },
     sendInterface(id) { interfaces.push(id); return sender; },
     sendString(text, uid) { strings.set(uid, text); return sender; },

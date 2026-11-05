@@ -156,7 +156,7 @@ function player() {
     getSkillManager: () => ({ addExperiences: (skill, amount) => xp.push([skill.getIndex(), amount]) }),
     getLocation: () => location, moveTo: to => { location = to; },
     getAppearance: () => ({ isMale: () => true }),
-    getUsername: () => 'q075', sendMessage: value => messages.push(value),
+    getUsername: () => 'q075', getDisplayName: () => 'q075', sendMessage: value => messages.push(value),
     getCombat: () => ({ reset: noop }), getHitpoints: () => 99,
   };
   manager = new DialogueManager(p);

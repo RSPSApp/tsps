@@ -52,7 +52,7 @@ function buildMcpServer(core) {
   const ctx = createContext(core, server);
   require("./mcp/Session.AgentMcp")(ctx);
   require("./mcp/World.AgentMcp")(ctx);
-  require("./mcp/Travel.AgentMcp")(ctx);
+  require("./mcp/Travel.AgentMcp")(ctx, { areas: pluginApi.getAreaManager() });
   require("./mcp/Dialogue.AgentMcp")(ctx);
   require("./mcp/Edit.AgentMcp")(ctx);
   const build = require("./mcp/EditBuild.AgentMcp")(ctx);

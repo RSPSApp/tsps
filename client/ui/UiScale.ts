@@ -81,8 +81,10 @@ export function osrsInterfaceScalingPercentFromScale(scale: number): number {
     );
 }
 
-export function getOsrsInterfaceScalingPercent(): number {
-    return osrsInterfaceScalingPercentFromScale(getUiScale());
+export function getOsrsInterfaceScalingPercent(mobile = false): number {
+    // Native mobile login replaces values below its minimum with 400%; keep that out of saved preferences.
+    return normalizeOsrsInterfaceScalingPercent(osrsInterfaceScalingPercentFromScale(getUiScale()),
+        mobile ? OSRS_INTERFACE_SCALING_MIN_MOBILE_PERCENT : OSRS_INTERFACE_SCALING_MIN_DESKTOP_PERCENT);
 }
 
 export function getDefaultUiScale(): number {

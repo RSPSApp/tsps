@@ -113,7 +113,7 @@ function shift(house, balance, [axis, sign, amount], spell, caster) {
   if (impact) balance.npc.performGraphic(impact);
   balance.npc.setNpcTransformationId(shown(balance));
   if (balance.fire || balance.earth) return;
-  for (const occupant of house.getPlayers()) occupant.sendMessage(`${caster.getUsername()} has balanced the elements!`);
+  for (const occupant of house.getPlayers()) occupant.sendMessage(`${caster.getDisplayName()} has balanced the elements!`);
   Prizes.award(house, "balance", caster);
   TaskManager.submit(new CountdownTask(caster, 3, () => end(house, balance)));
 }

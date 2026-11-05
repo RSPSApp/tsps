@@ -97,6 +97,8 @@ module.exports = function registerDragonSlayerQuest(api) {
     crandorRope: ObjectIdentifiers.CLIMBING_ROPE_13,
     crandorWall: ObjectIdentifiers.WALL_161,
     crandorShortcut: ObjectIdentifiers.WALL_9,
+    // dragonsecretdoor_open: the leaf Doors puts up while the wall stands open (RSProx 2951).
+    crandorShortcutOpen: ObjectIdentifiers.WALL_156,
     melzarBasementLadder: ObjectIdentifiers.LADDER_21,
     melzarExitDoor: ObjectIdentifiers.EXIT_DOOR,
   };
@@ -115,8 +117,6 @@ module.exports = function registerDragonSlayerQuest(api) {
   ];
 
   const TILE = {
-    melzarInside: new Location(2933, 3248, 0),
-    melzarOutside: new Location(2942, 3248, 0),
     melzarBasementLadder: new Location(2932, 3240, 0),
     melzarBasement: new Location(2932, 9640, 0),
     crandor: new Location(2835, 3235, 0),
@@ -150,13 +150,13 @@ module.exports = function registerDragonSlayerQuest(api) {
   const ELVARG_INTRO_NPC_ID = 817;
   const SCENE_OVERLAY_UID = (161 << 16) | 1;
   const SCENE_INTERFACE = { journey: 299, route: 544, clouds: 543, elvarg: 545, fly: 546, fade: 174 };
+  /** Walk animation of Doors.plugin's GATE_WALK_ANIMATION. */
+  const DOOR_WALK_ANIMATION = 819;
+  const MELZAR_DOOR_LOCKED_SOUND = 2402;
   const ELVARG_BODY = 25202, ELVARG_HEADLESS = 25203;
   // Cache rev241: dragonsecretdoor 2606 is a shape-0 wall at 2836,9600 face3; the
   // Crandor side is north (walkable 2836,9601) and Karamja is south (2836,9598).
-  const SHORTCUT_TILE = new Location(2836, 9600, 0);
-  const SHORTCUT_NORTH = new Location(2836, 9601, 0);
-  const SHORTCUT_SOUTH = new Location(2836, 9598, 0);
-  const scenes = new WeakMap(), actions = new WeakMap(), pendingStart = new WeakSet();
+  const scenes = new WeakMap(), actions = new WeakMap(), doorWalks = new WeakMap(), pendingStart = new WeakSet();
   const saved = (player, key) => Number(player.getAttribute(key)) || 0;
   const askedAbout = (player, bit) => (saved(player, INSTRUCTIONS_ATTRIBUTE) & (1 << bit)) === 0;
   const completedQuest = (player, key) => getRegisteredQuests().find(entry => entry.key === key)?.isComplete?.(player) === true;
@@ -243,6 +243,12 @@ module.exports = function registerDragonSlayerQuest(api) {
   }
 
   function reward(player) {
+    // The head is optional proof; OSRS also removes banked heads on completion.
+    for (const container of [player.getInventory(), ...player.getBanks()]) {
+      if (container == null) continue;
+      const amount = container.getAmount(ITEM.elvargsHead);
+      if (amount > 0) container.deleteNumber(ITEM.elvargsHead, amount);
+    }
     player.getSkillManager().addExperiences(Skill.STRENGTH, 18650);
     player.getSkillManager().addExperiences(Skill.DEFENCE, 18650);
   }
@@ -405,6 +411,8 @@ module.exports = function registerDragonSlayerQuest(api) {
       if (player.getArea() === scene) scene.leave(player, true);
       else { TaskManager.cancelTasks(scene); scene.destroy(); scenes.delete(player); }
     }
+    const walk = doorWalks.get(player);
+    if (walk) { TaskManager.cancelTasks(walk); doorWalks.delete(player); }
     const token = actions.get(player);
     if (token) {
       TaskManager.cancelTasks(token); actions.delete(player);
@@ -443,8 +451,8 @@ module.exports = function registerDragonSlayerQuest(api) {
     }
     const scene = scenes.get(player);
     if (!(scene instanceof VoyageScene) || npcId !== NED_SCENE_ID) return;
-    if (request.speaker === "Cabin Boy Jenkins") request.speakerId = JENKINS_SCENE_ID;
-    else if (request.speaker === "Captain Ned") request.speakerId = NED_SCENE_ID;
+    if (request.step?.speaker === "Cabin Boy Jenkins") request.speakerId = JENKINS_SCENE_ID;
+    else if (request.step?.speaker === "Captain Ned") request.speakerId = NED_SCENE_ID;
     if (text.startsWith("Ah, it's good to feel")) request.before = () => {
       camera(player, scene, [2077, 5518, 100], [2069, 5517, 25], 232, true); camera(player, scene, [2074, 5516, 100], null, 1); player.getPacketSender().sendCameraShake(1, 0, 10, 8);
     };
@@ -765,10 +773,7 @@ module.exports = function registerDragonSlayerQuest(api) {
     const stage = quest.getStage(player);
 
     if (itemId === ITEM.mazeKey && objectId === LOC.melzarEntrance) {
-      const at = event.object?.getLocation?.();
-      if (at && player.getLocation().getX() < at.getX()) player.moveTo(TILE.melzarOutside.clone());
-      else if (stage >= STAGE_OZIACH) player.moveTo(TILE.melzarInside.clone());
-      event.handled = true;
+      handleMelzarEntranceClick(event);
       return;
     }
 
@@ -779,10 +784,13 @@ module.exports = function registerDragonSlayerQuest(api) {
         event.handled = true;
         return;
       }
-      player.getInventory().deleteNumber(itemId, 1);
-      player.sendMessage("The key disintegrates as it unlocks the door.");
-      crossMazeDoor(player, event.object, event.location);
       event.handled = true;
+      if (actions.has(player) || !hasItem(player, itemId)) return;
+      crossMazeDoor(player, event.object, event.location, () => {
+        if (!hasItem(player, itemId)) return false;
+        player.getInventory().deleteNumber(itemId, 1);
+        player.sendMessage("The key disintegrates as it unlocks the door.");
+      });
       return;
     }
 
@@ -824,7 +832,7 @@ module.exports = function registerDragonSlayerQuest(api) {
    * face (0 west, 1 south, 2 east, 3 north - the blocked edge) says which way
    * is through. A player already across the door is sent back the other way.
    */
-  function crossMazeDoor(player, object, location) {
+  function crossMazeDoor(player, object, location, onArrive) {
     const face = Number(object?.getFace?.() ?? 0) & 0x3;
     const pos = player.getLocation();
     if (face === 0 || face === 2) {
@@ -832,14 +840,44 @@ module.exports = function registerDragonSlayerQuest(api) {
       const acrossX = pos.getX() === location.x
         ? throughX
         : pos.getX() < location.x ? location.x + 1 : location.x - 1;
-      player.moveTo(new Location(acrossX, location.y, location.z));
+      walkAcross(player, new Location(acrossX, location.y, location.z), onArrive);
       return;
     }
     const throughY = face === 1 ? location.y + 1 : location.y - 1;
     const acrossY = pos.getY() === location.y
       ? throughY
       : pos.getY() < location.y ? location.y + 1 : location.y - 1;
-    player.moveTo(new Location(location.x, acrossY, location.z));
+    walkAcross(player, new Location(location.x, acrossY, location.z), onArrive);
+  }
+
+  /**
+   * Walk the player to the tile across a door instead of teleporting them. Same
+   * ForceMovement, walk animation (819) and pace (30 client cycles and one tick
+   * per tile) as Doors.plugin's pass-through gates (carryAcrossGate); callers
+   * supply the destination across the wall. onArrive (spending a key) runs only on
+   * landing, and returns false to refuse it. A walk cut short by logout, disconnect
+   * or death (which clear the force movement) changes nothing. Clicks and item
+   * actions are already refused while a force movement runs; this does not guard
+   * against a plugin calling moveTo on the player mid-walk.
+   */
+  function walkAcross(player, to, onArrive) {
+    if (actions.has(player) || doorWalks.has(player)) return;
+    const from = player.getLocation().clone();
+    const dx = to.getX() - from.getX(), dy = to.getY() - from.getY();
+    const direction = dy > 0 ? 0 : dx > 0 ? 1 : dy < 0 ? 2 : 3;
+    const ticks = Math.max(1, Math.abs(dx), Math.abs(dy));
+    const movement = new ForceMovement(from, new Location(dx, dy), 0, 30 * ticks, direction, DOOR_WALK_ANIMATION);
+    // Its own token: a short walk must not look like a cutscene or ship repair to the other actions.
+    const token = {}; doorWalks.set(player, token);
+    player.getMovementQueue().reset(); player.setForceMovement(movement);
+    later(token, ticks, () => {
+      if (doorWalks.get(player) !== token) return;
+      doorWalks.delete(player);
+      if (player.getForceMovement() !== movement) return;
+      player.setForceMovement(null);
+      if (onArrive && onArrive() === false) return;
+      player.moveTo(to);
+    });
   }
 
   function handleShipHoleClick(event) {
@@ -870,13 +908,14 @@ module.exports = function registerDragonSlayerQuest(api) {
 
   function crossMagicDoor(player, loc) {
     const px = player.getLocation().getX();
-    player.moveTo(new Location(px <= loc.x ? loc.x + 1 : loc.x - 1, loc.y, loc.z));
+    walkAcross(player, new Location(px <= loc.x ? loc.x + 1 : loc.x - 1, loc.y, loc.z));
   }
 
   function handleMagicDoorClick(event) {
     const { player } = event;
     event.handled = true;
     if (offerings(player) !== 15) { player.sendMessage("You can't see any way to open the door."); return; }
+    if (actions.has(player)) return;
     const at = plainLocation(event.location ?? event.object?.getLocation?.());
     if (at) crossMagicDoor(player, at);
   }
@@ -884,18 +923,21 @@ module.exports = function registerDragonSlayerQuest(api) {
   function handleMelzarEntranceClick(event) {
     const { player } = event;
     event.handled = true;
-    const at = event.object?.getLocation?.();
+    const at = plainLocation(event.location ?? event.object?.getLocation?.());
+    if (!at) return;
     // The same exterior door on the building's east side is the way out of the
     // north-east ladder room; the Exit doors themselves only lead into the maze.
-    if (at && player.getLocation().getX() < at.getX()) {
-      player.moveTo(TILE.melzarOutside.clone());
+    if (player.getLocation().getX() < at.x) {
+      crossMazeDoor(player, event.object, at);
       return;
     }
     if (quest.getStage(player) < STAGE_OZIACH || !hasItem(player, ITEM.mazeKey)) {
-      player.sendMessage("The door is locked.");
+      // RSProx 468 (ticks 6449 and 6732): this message and sound 2402 on the front door.
+      player.sendMessage("This door is securely locked.");
+      player.getPacketSender().sendSoundEffect(MELZAR_DOOR_LOCKED_SOUND, 1, 0);
       return;
     }
-    player.moveTo(TILE.melzarInside.clone());
+    crossMazeDoor(player, event.object, at);
   }
 
   function handleMazeDoorClick(event) {
@@ -905,16 +947,21 @@ module.exports = function registerDragonSlayerQuest(api) {
     event.handled = true;
     const key = MAZE_KEYS[doorIndex];
     if (!hasItem(player, key)) { player.sendMessage("The door is locked."); return; }
-    player.getInventory().deleteNumber(key, 1);
-    player.sendMessage("The key disintegrates as it unlocks the door.");
+    if (actions.has(player)) return;
     const at = plainLocation(event.location ?? event.object?.getLocation?.());
-    crossMazeDoor(player, event.object, at);
+    crossMazeDoor(player, event.object, at, () => {
+      if (!hasItem(player, key)) return false;
+      player.getInventory().deleteNumber(key, 1);
+      player.sendMessage("The key disintegrates as it unlocks the door.");
+    });
   }
 
   /** Doors.plugin claims Open first; these quest doors answer its door:toggle event. */
   function claimQuestDoor(request) {
     if (request.handled) return;
     const id = request.objectId ?? request.object?.getId?.();
+    // The open leaf is gated like the closed wall: Doors would otherwise carry anyone who clicks it.
+    if (id === LOC.crandorShortcutOpen) return handleCrandorShortcutClick(request);
     if (id !== LOC.crandorShortcut && id !== LOC.magicDoor && id !== LOC.melzarEntrance
       && id !== LOC.melzarExitDoor && !MAZE_DOORS.includes(id)) return;
     const option = request.option ?? request.definition?.getInteractions?.()[request.clickType - 1];
@@ -1018,6 +1065,11 @@ module.exports = function registerDragonSlayerQuest(api) {
     if (scenes.has(player) || actions.has(player)) return;
     const inLair = player.getLocation().getY() >= 6400;
     player.moveTo((inLair ? TILE.crandorSurface : TILE.crandorLair).clone());
+    // The Wiki's diary route: through the secret wall, past the demons, then this rope to the
+    // surface. Only a player who has opened the wall has come that way.
+    if (inLair && player.getAttribute(ATTR_SHORTCUT) === true) {
+      api.emitCustomEvent("dragon-slayer:crandor-visited", { player });
+    }
   }
 
   /** Crandor surface plus the dungeon north of the secret wall; the Karamja side is y<=9600. */
@@ -1047,16 +1099,14 @@ module.exports = function registerDragonSlayerQuest(api) {
     openCrandorShortcut(player);
   }
 
-  function crossCrandorShortcut(player) {
-    player.moveTo((player.getLocation().getY() > SHORTCUT_TILE.getY() ? SHORTCUT_SOUTH : SHORTCUT_NORTH).clone());
-  }
-
   function handleCrandorShortcutClick(event) {
     const { player } = event;
     event.handled = true;
     if (quest.getStage(player) < STAGE_CRANDOR) return;
     openCrandorShortcut(player);
-    crossCrandorShortcut(player);
+    api.emitCustomEvent("dragon-slayer:crandor-wall", { player });
+    // Doors swings the wall open as captured (RSProx 2951), walks the player across and shuts it.
+    if (event.object) api.emitCustomEvent("door:open", { player, object: event.object, handled: false });
   }
 
   function handleCrandorRopeClick(event) {
@@ -1127,7 +1177,8 @@ module.exports = function registerDragonSlayerQuest(api) {
         }
         killer.sendMessage("You cut off Elvarg's head as proof of your victory!");
         killer.getPacketSender().sendJingle(267, 0);
-        later(token, 3, () => { actions.delete(killer); killer.getMovementQueue().setBlockMovement(false); killer.setUntargetable(false); });
+        // Seq 6655 is 10.0 ticks in the cache (frame delays summed, 30 client ticks a tick): the player is held to its end. Cache length, ours.
+        later(token, 10, () => { actions.delete(killer); killer.getMovementQueue().setBlockMovement(false); killer.setUntargetable(false); });
       });
       return;
     }

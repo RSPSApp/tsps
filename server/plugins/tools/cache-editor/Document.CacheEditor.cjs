@@ -25,7 +25,7 @@ const TRANSPORT_BUDGET = 65535 - 8;
 const revision = (document) => createHash("sha256").update(JSON.stringify(document)).digest("hex").slice(0, 16);
 
 function documentPath(root) {
-  return path.join(root, "server", "data", "definitions", DOCUMENT);
+  return path.join(root, "data", "definitions", DOCUMENT);
 }
 
 function empty() {
@@ -58,7 +58,7 @@ function read(root) {
 }
 
 function cacheCount(core, kind) {
-  const counts = core.CacheDefinitions.getCounts();
+  const counts = core.CacheDefinitions.getBaseCounts?.() ?? core.CacheDefinitions.getCounts();
   switch (kind) {
     case "loc": return counts.objects;
     case "npc": return counts.npcs;
@@ -68,7 +68,7 @@ function cacheCount(core, kind) {
 }
 
 /** Everything wrong with one row, as sentences, so a save can refuse with a reason. */
-function auditRow(core, row, seen) {
+function auditRow(core, row, seen, known = new Set()) {
   const problems = [];
   const kind = row?.kind;
   if (!kind) return ["every row needs a kind"];
@@ -79,9 +79,10 @@ function auditRow(core, row, seen) {
     return [error.message];
   }
   const entry = Fields.KINDS[kind];
-  if (!Number.isInteger(row.id) || row.id < Math.max(OVERLAY_ID_START, total)) {
+  if (!Number.isInteger(row.id) || row.id < Math.max(OVERLAY_ID_START, total) || row.id >= 65535) {
     problems.push(`${kind} ${row.id}: overlay ids start at ${Math.max(OVERLAY_ID_START, total)} (cache has ${total})`);
   }
+  if (kind === "item" && core.CacheDefinitions.getCustomItems?.().some(item => item.id === row.id)) problems.push(`item ${row.id}: id already belongs to custom-items`);
   if (seen.has(`${kind}:${row.id}`)) problems.push(`${kind} ${row.id}: duplicate overlay id`);
   seen.add(`${kind}:${row.id}`);
   if (!Number.isInteger(row.baseId) || row.baseId < 0 || row.baseId >= total) {
@@ -97,21 +98,26 @@ function auditRow(core, row, seen) {
       problems.push(`${kind} ${row.id}: no field "${name}" on a ${kind}`);
       continue;
     }
-    const targets = (Array.isArray(value) ? value : [value]).filter((entry) => Number.isInteger(entry));
-    if (meta.ref) {
-      for (const target of targets) {
-        const state = Inspect.resolveId(core, meta.ref, target);
-        if (state === "missing") problems.push(`${kind} ${row.id}: ${name} points at missing ${meta.ref} ${target}`);
-        if (target === row.id && meta.ref === kind) problems.push(`${kind} ${row.id}: ${name} points at itself`);
-      }
+    const matches = (type, value) => {
+      if (type.endsWith("[]")) return Array.isArray(value) && value.every(entry => entry === null && name === "actions" || matches(type.slice(0, -2), entry));
+      if (type === "int") return Number.isInteger(value) && value >= -2147483648 && value <= 2147483647;
+      if (type === "number") return Number.isFinite(value);
+      if (type === "map") return value && typeof value === "object" && !Array.isArray(value) && Object.entries(value).every(([key, entry]) => /^\d+$/.test(key) && Number(key) <= 0xffffff && (typeof entry === "string" || Number.isInteger(entry)));
+      return typeof value === type;
+    };
+    if (!matches(meta.type, value)) {
+      problems.push(`${kind} ${row.id}: ${name} should be ${meta.type}`);
+      continue;
     }
-    if (Array.isArray(value) && !/(\[\])$/.test(meta.type)) {
-      problems.push(`${kind} ${row.id}: ${name} is a ${meta.type}, not a list`);
+    if (["size", "sizeX", "sizeY", "modelSizeX", "modelSizeY", "modelSizeHeight", "widthScale", "heightScale"].includes(name) && value < 1) problems.push(`${kind} ${row.id}: ${name} must be positive`);
+    if (name === "actions" && value.length > 5) problems.push(`${kind} ${row.id}: at most five actions are supported`);
+    const targets = meta.type === "map" ? Object.keys(value).map(Number) : (Array.isArray(value) ? value.flat(Infinity) : [value]);
+    if (meta.ref) for (const target of targets.filter(entry => Number.isInteger(entry) && entry !== -1)) {
+      const state = known.has(`${meta.ref}:${target}`) ? "known" : Inspect.resolveId(core, meta.ref, target);
+      if (state === "missing") problems.push(`${kind} ${row.id}: ${name} points at missing ${meta.ref} ${target}`);
+      if (target === row.id && meta.ref === kind) problems.push(`${kind} ${row.id}: ${name} points at itself`);
     }
-    if (!meta.ref && ["int", "boolean", "number", "string"].includes(meta.type)
-      && typeof value !== meta.type.replace("int", "number") && !(meta.type === "int" && Number.isInteger(value))) {
-      problems.push(`${kind} ${row.id}: ${name} should be a ${meta.type}`);
-    }
+
   }
   return problems;
 }
@@ -124,10 +130,18 @@ function audit(core, row) {
 function check(core, document) {
   const problems = [];
   const seen = new Set();
-  for (const row of document.rows) for (const problem of auditRow(core, row, seen)) problems.push(problem);
+  const known = new Set(document.rows.map(row => `${row?.kind}:${row?.id}`));
+  for (const row of document.rows) for (const problem of auditRow(core, row, seen, known)) problems.push(problem);
   if (!problems.length) {
     const bytes = deflateSync(Buffer.from(JSON.stringify({ gamemodeId: "server", datasets: [{ key: "customDefinitions", rows: document.rows }] })));
     if (bytes.length > TRANSPORT_BUDGET) problems.push(`definitions exceed the transport budget (${bytes.length} > ${TRANSPORT_BUDGET} bytes compressed)`);
+  }
+  for (const row of document.rows) {
+    for (const pair of [["recolorFrom", "recolorTo"], ["retextureFrom", "retextureTo"]]) {
+      const [from, to] = pair.map(key => row.fields?.[key]);
+      if ((from?.length ?? 0) !== (to?.length ?? 0)) problems.push(`${row.kind} ${row.id}: ${pair.join(" and ")} must have matching lengths`);
+    }
+    if (row.kind === "loc" && row.fields?.models && row.fields?.types && row.fields.models.length !== row.fields.types.length) problems.push(`loc ${row.id}: models and types must have matching groups`);
   }
   return { ok: problems.length === 0, problems };
 }

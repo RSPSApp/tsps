@@ -26,6 +26,15 @@ From a second capture of a player opening the map, boarding a boat, and sailing 
   - **Aboard:** boats move after the players, so the player is queued and a `BoatManager.onAfterTick` listener sends the boat's tile once it has moved.
 - `server/tests/world-map-position.test.cjs` replays both captures' ticks and checks the same sends.
 
+## Chunk regions
+
+From cache revision 241 a map area that is drawn from chunks (`WorldMapData1`) keeps one
+headerless geography file per destination region. Its chunks are written in the composite
+map's entry order, which is **not** the chunks' x/y order: the Stronghold of Security's four
+floors are listed that way, and reading the file in x/y order puts every chunk's tiles under
+the wrong chunk and scrambles the layout. Read the file in the order the area's composite map
+lists its chunks.
+
 ## Tile loading and recovery
 
 The minimap keeps its last rendered image and icon list when a streamed map update omits the

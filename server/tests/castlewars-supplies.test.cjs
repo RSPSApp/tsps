@@ -165,37 +165,6 @@ test('Castlewars brew uses normal potion cooldowns and restores stats, prayer an
   assert.equal(p.getInventory().getItems()[0].getId(), data.BREW_DOSES[1], 'shared potion cooldown prevents double drinking');
 });
 
-test('special restore from the toolkit table restores 25% per dose, at most once per 30 seconds', (t) => {
-  const { p, messages } = player(t);
-  let tick = 100;
-  t.mock.method(core.World, 'getProcessCycle', () => tick);
-  p.setSpecialPercentage(0);
-  table(p, core.ObjectIdentifiers.TABLE_42);
-  assert.equal(choices[2], 'Special restore potion (4)');
-  choices[3]();
-  assert.equal(p.getInventory().getItems()[0].getId(), data.SPECIAL_RESTORE_DOSES[0]);
-  drink(p, data.SPECIAL_RESTORE_DOSES[0]);
-  assert.equal(p.getSpecialPercentage(), 25);
-  assert.equal(p.getInventory().getItems()[0].getId(), data.SPECIAL_RESTORE_DOSES[1]);
-  p.getTimers().cancel(core.TimerKey.POTION);
-  tick += 49;
-  drink(p, data.SPECIAL_RESTORE_DOSES[1]);
-  assert.equal(p.getSpecialPercentage(), 25);
-  assert.match(messages.at(-1), /must wait/);
-  tick++;
-  drink(p, data.SPECIAL_RESTORE_DOSES[1]);
-  assert.equal(p.getSpecialPercentage(), 50);
-  p.getTimers().cancel(core.TimerKey.POTION);
-  tick += 50;
-  p.setSpecialPercentage(90);
-  drink(p, data.SPECIAL_RESTORE_DOSES[2]);
-  assert.equal(p.getSpecialPercentage(), 100);
-  p.getTimers().cancel(core.TimerKey.POTION);
-  tick += 50;
-  drink(p, data.SPECIAL_RESTORE_DOSES[3]);
-  assert.equal(p.getInventory().getItems()[0].getId(), data.SPECIAL_RESTORE_DOSES[3], 'a full bar does not consume the potion');
-});
-
 test('game-only potions refuse drinking outside Castle Wars and while stunned', (t) => {
   const { p } = player(t, false);
   p.getInventory().setItem(0, new core.Item(data.BREW_DOSES[0], 1));
@@ -239,9 +208,9 @@ test('bucket routing stands directly next to a Castle Wars tap', (t) => {
 });
 
 test('cleanup includes buckets and every potion dose; Lanthus and ground supplies use corrected canonical spawns', () => {
-  for (const id of [core.ItemIdentifiers.BUCKET, core.ItemIdentifiers.BUCKET_OF_WATER, ...data.BREW_DOSES, ...data.SPECIAL_RESTORE_DOSES]) {
+  for (const id of [core.ItemIdentifiers.BUCKET, core.ItemIdentifiers.BUCKET_OF_WATER, ...data.BREW_DOSES]) {
     assert.equal(data.CLEANUP_ITEM_IDS.has(id), true);
-    assert.equal(data.DEATH_REMOVE_ITEM_IDS.has(id), true);
+    assert.equal(data.DEATH_REMOVE_ITEM_IDS.has(id), false, 'supplies last until the player leaves the game');
   }
   const lanthus = require('../data/definitions/npc-spawns.json').filter((spawn) => spawn.name === 'Lanthus');
   assert.equal(lanthus.length, 1);
@@ -253,3 +222,129 @@ test('cleanup includes buckets and every potion dose; Lanthus and ground supplie
   assert.ok(tinderboxes.every((spawn) => spawn.respawn === 2));
   assert.deepEqual(data.ALTAR_SPAWNS, []);
 });
+
+for (const mode of ['free', 'outside', 'no-pouch', 'paid', 'law-instead-of-fire', 'low-magic', 'low-defence', 'wrong-book', 'magic-imbue']) {
+  test(`native Humidify and Castle Wars pouch requirements: ${mode}`, async t => {
+    const { PlayerSession } = require('../dist/net/PlayerSession');
+    const { ClientConnection } = require('../dist/net/NetworkBuilder');
+    const nativeApi = PluginManager.createApi('Castle Wars native pouch regression');
+    for (const [field, hook] of [['spellRuneBypassHooks', 'onSpellRuneBypass'], ['canGainExperienceHooks', 'onCanGainExperience']]) {
+      const previous = PluginManager[field];
+      PluginManager[field] = [];
+      t.after(() => { PluginManager[field] = previous; });
+      for (const handler of listeners.get(hook)) nativeApi[hook](handler);
+    }
+    const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true,
+      send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+    const p = new Player(new PlayerSession(channel), new core.Location(2426, 3081, 1));
+    p.setRegistered(true);
+    p.setSpellbook(mode === 'wrong-book' ? core.MagicSpellbook.NORMAL : core.MagicSpellbook.LUNAR);
+    for (const skill of [core.Skill.MAGIC, core.Skill.DEFENCE]) {
+      const level = mode === 'low-magic' && skill === core.Skill.MAGIC ? 67
+        : mode === 'low-defence' && skill === core.Skill.DEFENCE ? 39 : 99;
+      p.getSkillManager().setMaxLevels(skill, level, false).setCurrentLevel(skill, level, false);
+    }
+    if (!['outside', 'paid', 'law-instead-of-fire'].includes(mode)) playing.add(p);
+    const inventory = p.getInventory();
+    if (!['no-pouch', 'paid'].includes(mode)) inventory.adds(data.RUNE_POUCH, 1);
+    inventory.adds(core.ItemIdentifiers.BUCKET, 2);
+    if (mode === 'paid' || mode === 'law-instead-of-fire') {
+      inventory.adds(core.ItemIdentifiers.ASTRAL_RUNE, 1).adds(core.ItemIdentifiers.WATER_RUNE, 3)
+        .adds(mode === 'paid' ? core.ItemIdentifiers.FIRE_RUNE : core.ItemIdentifiers.LAW_RUNE, 1);
+    }
+    const spell = core.CacheDefinitions.getSpellByName(mode === 'magic-imbue' ? 'Magic Imbue' : 'Humidify');
+    const experience = p.getSkillManager().getExperience(core.Skill.MAGIC);
+    const connection = new ClientConnection(channel);
+    connection.player = p;
+    await connection.dispatch([{ type: 'widget_action', widgetId: spell.widgetId,
+      groupId: spell.widgetId >>> 16, childId: spell.widgetId & 65535, buttonNum: 1, itemId: spell.itemId }]);
+    connection.processTurnPackets();
+    const casts = mode === 'free' || mode === 'paid';
+    assert.equal(inventory.getAmount(core.ItemIdentifiers.BUCKET_OF_WATER), casts ? 2 : 0);
+    assert.equal(inventory.getAmount(core.ItemIdentifiers.BUCKET), casts ? 0 : 2);
+    if (casts) {
+      assert.equal(p.getAnimation().getId(), core.CacheDefinitions.getSeqId('dream_player_humidify_spell'));
+      assert.equal(p.getGraphic().getId(), core.CacheDefinitions.getSpotanimId('dream_humidify_spell_spotanim'));
+    } else {
+      assert.equal(p.getAnimation()?.getId() ?? -1, -1, 'a rejected cast cannot animate');
+    }
+    if (mode === 'free') assert.equal(p.getSkillManager().getExperience(core.Skill.MAGIC), experience, 'free pouch casts still grant no Magic XP');
+    if (mode === 'paid') {
+      for (const id of [core.ItemIdentifiers.ASTRAL_RUNE, core.ItemIdentifiers.WATER_RUNE, core.ItemIdentifiers.FIRE_RUNE]) {
+        assert.equal(inventory.getAmount(id), 0, 'normal Humidify consumes the cache rune cost');
+      }
+    }
+    if (mode === 'law-instead-of-fire') assert.equal(inventory.getAmount(core.ItemIdentifiers.LAW_RUNE), 1);
+    if (!['no-pouch', 'paid'].includes(mode)) assert.equal(inventory.getAmount(data.RUNE_POUCH), 1);
+  });
+}
+
+for (const name of ['Energy Transfer', 'Vengeance Other', 'Vengeance', 'Spellbook Swap']) {
+  for (const mode of ['pouch', 'paid', 'outside', 'no-pouch']) {
+    test(`native eligible Lunar pouch spell: ${name}, ${mode}`, async t => {
+      const { PlayerSession } = require('../dist/net/PlayerSession');
+      const { ClientConnection } = require('../dist/net/NetworkBuilder');
+      const nativeApi = PluginManager.createApi('Castle Wars Lunar pouch regression');
+      for (const [field, hook] of [['spellRuneBypassHooks', 'onSpellRuneBypass'], ['canGainExperienceHooks', 'onCanGainExperience']]) {
+        const previous = PluginManager[field];
+        PluginManager[field] = [];
+        t.after(() => { PluginManager[field] = previous; });
+        for (const handler of listeners.get(hook)) nativeApi[hook](handler);
+      }
+      const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true,
+        send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+      const p = new Player(new PlayerSession(channel), new core.Location(2426, 3081, 1));
+      const target = new Player(new PlayerSession(channel), new core.Location(2427, 3081, 1));
+      p.setRegistered(true);
+      p.setSpellbook(core.MagicSpellbook.LUNAR);
+      for (const skill of [core.Skill.MAGIC, core.Skill.DEFENCE]) {
+        p.getSkillManager().setMaxLevels(skill, 99, false).setCurrentLevel(skill, 99, false);
+      }
+      if (mode === 'pouch' || mode === 'no-pouch') playing.add(p);
+      if (mode === 'pouch' || mode === 'outside') p.getInventory().adds(data.RUNE_POUCH, 1);
+      const spell = core.CacheDefinitions.getSpellByName(name);
+      const params = core.CacheDefinitions.getItem(spell.itemId).params;
+      assert.equal(params.get(2259), 1, 'the actual cache marks this spell as pouch eligible');
+      const costs = [];
+      for (let param = 365; param <= 371; param += 2) {
+        if (params.get(param)) costs.push([params.get(param), params.get(param + 1)]);
+      }
+      if (mode === 'paid') for (const [id, amount] of costs) p.getInventory().adds(id, amount);
+      p.getSkillManager().setMaxLevels(core.Skill.HITPOINTS, 99, false).setCurrentLevel(core.Skill.HITPOINTS, 99, false);
+      p.setSpecialPercentage(100);
+      p.setRunEnergy(100);
+      target.setSpecialPercentage(0);
+      target.setRunEnergy(0);
+      t.mock.method(core.World, 'getPlayers', () => ({ get: index => index === 1 ? target : p,
+        forEach: fn => [p, target].forEach(fn) }));
+      const connection = new ClientConnection(channel);
+      connection.player = p;
+      const experience = p.getSkillManager().getExperience(core.Skill.MAGIC);
+      const targeted = name === 'Energy Transfer' || name === 'Vengeance Other';
+      await connection.dispatch([targeted
+        ? { type: 'spell_on_player', targetIndex: 1, spellWidget: spell.widgetId,
+          spellChild: spell.widgetId & 65535, spellItemId: spell.itemId }
+        : { type: 'widget_action', widgetId: spell.widgetId, groupId: spell.widgetId >>> 16,
+          childId: spell.widgetId & 65535, buttonNum: 1, itemId: spell.itemId }]);
+      connection.processTurnPackets();
+      const casts = mode === 'pouch' || mode === 'paid';
+      if (name === 'Energy Transfer') {
+        assert.equal(p.getSpecialPercentage(), casts ? 0 : 100);
+        assert.equal(target.getSpecialPercentage(), casts ? 100 : 0);
+        assert.equal(target.getRunEnergy(), casts ? 100 : 0);
+      } else if (name === 'Vengeance Other') {
+        assert.equal(target.hasVengeanceReturn(), casts);
+      } else if (name === 'Vengeance') {
+        assert.equal(p.hasVengeanceReturn(), casts);
+      } else {
+        assert.equal(p.getDialogueManager().isActive(), casts, 'Spellbook Swap opens its existing book chooser');
+      }
+      if (casts) {
+        assert.notEqual(p.getAnimation()?.getId() ?? -1, -1);
+        for (const [id] of costs) assert.equal(p.getInventory().getAmount(id), 0, 'paid casts consume the cache cost; pouch casts need no carried runes');
+      }
+      if (mode === 'pouch' || mode === 'outside') assert.equal(p.getInventory().getAmount(data.RUNE_POUCH), 1);
+      if (mode === 'pouch') assert.equal(p.getSkillManager().getExperience(core.Skill.MAGIC), experience);
+    });
+  }
+}

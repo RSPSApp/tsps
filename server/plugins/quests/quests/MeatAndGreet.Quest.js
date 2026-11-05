@@ -107,6 +107,7 @@ module.exports = function registerMeatAndGreetQuest(api) {
   const KEYPAD_SCRIPT = 7374;
   const KEYPAD_SCRIPT_ARGS = [(KEYPAD_INTERFACE << 16) | 6, (KEYPAD_INTERFACE << 16) | 5, 2, 5, 4, 6, 2];
   const SPICE_BOX_CODE = 2546;
+  const KEYPAD_CLOSE_SENTINEL = 2147483647;
   const UNLOCK_SOUND = 2419;
 
   // The wolf den: a private copy, the alpha and its exit, and the captured fades.
@@ -621,9 +622,11 @@ module.exports = function registerMeatAndGreetQuest(api) {
     }
   }
 
-  function handleStartHook({ player, npcId, hook }) {
+  function handleStartHook(event) {
+    const { player, npcId, hook } = event;
     if (npcId !== EMELIO_NPC_ID || hook !== START_HOOK || stage(player) !== 0) return;
     if (!isQuestComplete(player, CHILDREN_OF_THE_SUN_KEY)) {
+      event.end = true;
       player.sendMessage("You must complete Children of the Sun before starting this quest.");
       return;
     }
@@ -646,6 +649,8 @@ module.exports = function registerMeatAndGreetQuest(api) {
   function enterCode(player, value) {
     if (stage(player) !== STAGE_DELIVERIES || sub(player, "spice") !== 2) return;
     player.getPacketSender().sendInterfaceRemoval();
+    // The number pad's close button (number_pad_button_op_close) sends the max 32-bit int: just close.
+    if (Number(value) === KEYPAD_CLOSE_SENTINEL) return;
     // ponytail: a wrong code's reply is not recorded; the box just stays shut.
     if (Number(value) !== SPICE_BOX_CODE) {
       player.sendMessage("The box remains locked.");
@@ -675,10 +680,12 @@ module.exports = function registerMeatAndGreetQuest(api) {
     }
   }
 
+  /** A fade back in leaves the full-screen fade overlay mounted on 161:1 once the script has run (#2640). Take it down then, but only if it is still the interface mounted there: a ladder or transport that mounted something else in the meantime is not ours to close, and a later fade out is a new mount. */
   function fade(player, out) {
-    player.getPacketSender().sendSubInterface(FADE_UID, 174, 1, {
+    const mount = player.getPacketSender().mountSubInterface(FADE_UID, 174, 1, {
       postScripts: [{ scriptId: 948, args: out ? [0, 255, 0, 0, 50] : [0, 0, 0, 255, 50] }],
     });
+    if (!out) TaskManager.submit(new CountdownTask(player, 3, () => player.getPacketSender().closeSubInterfaceMount(mount)));
   }
 
   function controls(player, active, cutscene = false) {
@@ -690,7 +697,7 @@ module.exports = function registerMeatAndGreetQuest(api) {
 
   function hold(player) {
     player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
-      new ActionDialogue(0, { execute: () => StatementDialogue.send(player, "", false) })
+      new ActionDialogue(0, { execute: () => StatementDialogue.send(player, "", false) }, true)
     ));
   }
 

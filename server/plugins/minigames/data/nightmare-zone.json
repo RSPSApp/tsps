@@ -1,5 +1,6 @@
 {
   "_about": "Nightmare Zone (https://oldschool.runescape.wiki/w/Nightmare_Zone). Recorded: rsprox 234/03279 (the lobby: Dominic, the dream menus, the coffer, the barrels, the reward chest) and 224/01512 (a Practice dream started from the vial and left by the arena vial). Nothing inside a fight is recorded: bosses, points and the end of a dream follow the Wiki. Pages are [speaker, text, chathead animation].",
+  "_replays": "Local rsprox replay check: only 234/03279 (the lobby and its menus) is present. The 224/01512 dream start the arena data came from is not in this store, so the arena, spawn timing and power-up values are checked against the Wiki.",
   "lobby": {
     "_note": "The enclosure (the nzone_lobby overlay shows inside it) is estimated from the recorded coordinates where the overlay opened and closed; waking up lands by Dominic (224/01512 [252]).",
     "enclosure": [2600, 3113, 2607, 3118],
@@ -12,6 +13,8 @@
     "start": [2276, 4680, 0],
     "spawnBox": [2266, 4684, 2286, 4698],
     "firstSpawnTicks": 10,
+    "maxTicks": 36000,
+    "_limit": "The Wiki's 6-hour log: 36,000 ticks after entering, the dream ends and the player wakes by Dominic (nothing is left in the instance).",
     "_locs": "Added to the dream as it starts (224/01512 [242]): [name, tile, shape, rotation]. The recording also removes a loc at (2286,4680) (shape 10), not reproduced.",
     "locs": [
       ["rockslide_small", [2255, 4700, 0], 10, 0],
@@ -198,7 +201,7 @@
     "notStarted": [["npc", "You haven't started that dream I created for you. Can I help you with something?", 568]],
     "changeDream": [["player", "I want to change my dream.", 575], ["npc", "Okay, I've emptied the vial. I have not taken any money from you for that dream, since you never started it.", 568]]
   },
-  "_messages": "Recorded: welcome, nothing, cofferEmpty, cofferHolds, cofferTitle, depositPrompt, startDream, barrel, notComplete. Not recorded (wording mine): withdrawPrompt, noDream, notEnoughCoins, notEnoughQuests, cofferFull, dreamOver, onlyInDream, overloadLowHp, overloadActive, overloadEnds, barrelHolds, takePrompt, imbued, notEnoughPoints, noRoom, buyX, herbBoxLimit, herbBoxIronman, barrelFull. Recorded: imbuePrice (sent for a Slayer helmet with 0 points).",
+  "_messages": "Recorded: welcome, nothing, cofferEmpty, cofferHolds, cofferTitle, depositPrompt, startDream, barrel, notComplete. Not recorded (wording mine): withdrawPrompt, noDream, notEnoughCoins, notEnoughQuests, cofferFull, dreamOver, onlyInDream, noBank, overloadLowHp, overloadActive, overloadEnds, barrelHolds, takePrompt, imbued, notEnoughPoints, noRoom, buyX, herbBoxLimit, herbBoxIronman, barrelFull. Recorded: imbuePrice (sent for a Slayer helmet with 0 points).",
   "messages": {
     "welcome": "Welcome to the Nightmare Zone.",
     "nothing": "Nothing interesting happens.",
@@ -216,6 +219,7 @@
     "barrel": "This barrel contains {potion} potion that adventurers<br>have purchased from Dominic with their reward points.<br>You have no potion stored in here.",
     "notComplete": "<col=ff0000>not complete</col>",
     "onlyInDream": "You can only drink this potion while in the Nightmare Zone.",
+    "noBank": "You can't use a bank in the Nightmare Zone.",
     "overloadLowHp": "You need at least {hp} Hitpoints to survive the effects of the overload.",
     "overloadActive": "You are still under the effects of an overload.",
     "overloadEnds": "The effects of overload have worn off.",

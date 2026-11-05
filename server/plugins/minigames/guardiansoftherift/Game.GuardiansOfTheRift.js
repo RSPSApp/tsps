@@ -64,13 +64,6 @@ const EMPTY_LOBBY_HOLD = 50;
 const SURGE_PERCENT = 60;
 const SURGE_SOUND = 1465;
 const SURGE_SHAKE_TICKS = 2;
-/**
- * Pearls for a game (ours; the Wiki awards them through the Rewards Guardian's loot table).
- * Contribution points plus energy are the performance score; a player who did one valid thing
- * gets a pearl, and every 100 points adds another. A player who never contributed earns none.
- */
-const PEARL_SCORE_STEP = 100;
-const PEARL_MAX_PER_GAME = 100;
 /** "Closing the rift" jingle (rsprox captures). */
 const VICTORY_JINGLE = 292;
 
@@ -99,6 +92,11 @@ const game = {
   players: new Map(),
   /** Players with the HUD open: everyone in `players`. */
   riftGuardians: 0,
+  /**
+   * What each player has mined this game, by name: leaving and coming back doesn't reset the
+   * 250 that gives Mining XP.
+   */
+  mined: new Map(),
   /** How many adventurers were inside when the rift opened (Peek). */
   startingPlayers: 0,
   chargedAt: 0,
@@ -164,6 +162,14 @@ function portal() {
   return { direction: game.portal.direction, closesIn: game.portal.closesIn };
 }
 
+/**
+ * How many rift guardians can stand at once. rsprox captures: 2 solo, 10 on a busy world (Wiki:
+ * "Only ten rift guardians can be active at any time"). Between those, one more per player is ours.
+ */
+function riftGuardianCap() {
+  return Math.min(Shared.RIFT_GUARDIAN_CAP, Math.max(1, game.players.size) + 1);
+}
+
 function setRiftGuardians(count) {
   game.riftGuardians = Math.max(0, count);
 }
@@ -209,7 +215,6 @@ function addEnergy(player, type, amount) {
     return 0;
   }
   state[type] += gained;
-  state.participated = true;
   syncEnergy(player);
   return gained;
 }
@@ -225,36 +230,13 @@ function syncEnergy(player) {
 function freshState() {
   return {
     elemental: 0, catalytic: 0, mined: 0, gameId: 0,
-    /** This game's performance: the points each valid contribution adds. */
-    contribution: 0,
-    /** Set by any valid contribution or energy gain, never by simply standing in the game. */
-    participated: false,
     /** The close pays once, even if the event is delivered again. */
     closedPaid: false,
   };
 }
 
-/**
- * A valid contribution to the game, from the units that do the work (mining, assembling a
- * guardian, feeding the Great Guardian, charging a barrier, crafting at an altar). Only a
- * running game counts; the lobby, the closing grace and a spectator earn nothing.
- */
-function addContribution(player, points) {
-  const state = stateOf(player);
-  const amount = Math.max(0, Math.trunc(Number(points) || 0));
-  if (!state || amount <= 0 || !isRunning()) return false;
-  state.contribution += amount;
-  state.participated = true;
-  return true;
-}
-
-/** The pearls a closed game pays: participation first, then performance. */
-function pearlsFor(state) {
-  if (!state) return 0;
-  const performance = Math.max(0, state.contribution)
-    + Math.max(0, state.elemental) + Math.max(0, state.catalytic);
-  if (!state.participated && performance <= 0) return 0;
-  return Math.min(PEARL_MAX_PER_GAME, Math.max(1, Math.floor(performance / PEARL_SCORE_STEP)));
+function nameOf(player) {
+  return String(player.getUsername?.() ?? "").toLowerCase();
 }
 
 function newGameId() {
@@ -262,8 +244,8 @@ function newGameId() {
 }
 
 /** Wiki: fragments, essence and talismans can't leave a game; pouches give up guardian essence too. */
-function removeGameItems(player) {
-  Shared.removeItems(player, Shared.GAME_ITEMS);
+function removeGameItems(player, items = Shared.GAME_ITEMS) {
+  Shared.removeItems(player, items);
   Shared.api().emitCustomEvent("runecrafting:remove-guardian-essence", { player });
 }
 
@@ -272,11 +254,15 @@ function join(player) {
   if (game.players.has(player)) return;
   const state = freshState();
   game.players.set(player, state);
-  if (isRunning()) state.gameId = newGameId();
+  if (isRunning()) {
+    state.gameId = newGameId();
+    state.mined = game.mined.get(nameOf(player)) ?? 0;
+  }
   Shared.setVarbit(player, Shared.VARBIT.IS_PLAYING, 1);
   if (state.gameId) {
     Shared.setVarp(player, Shared.VARP.GAME_ID, state.gameId);
     Shared.setVarbit(player, Shared.VARBIT.FINISHED_GAME, 0);
+    Shared.setVarbit(player, Shared.VARBIT.MINING_COUNT, state.mined);
   }
   updateMaxPower();
   openHud(player);
@@ -286,6 +272,8 @@ function join(player) {
 /** Out through the barrier, away from the temple or logging out: the game's items go too. */
 function leave(player) {
   if (!game.players.has(player)) return;
+  const state = game.players.get(player);
+  if (state.mined > 0 && isRunning()) game.mined.set(nameOf(player), state.mined);
   game.players.delete(player);
   Shared.setVarp(player, Shared.VARP.GAME_ID, 0);
   Shared.setVarbit(player, Shared.VARBIT.IS_PLAYING, 0);
@@ -293,7 +281,7 @@ function leave(player) {
   Shared.setVarbit(player, Shared.VARBIT.ELEMENTAL_EARNED, 0);
   Shared.setVarbit(player, Shared.VARBIT.MINING_COUNT, 0);
   Shared.setVarbit(player, Shared.VARBIT.PORTAL_BOTTOM_VISIBLE, 0);
-  Shared.stopAction(player);
+  Shared.stopAction(player, true);
   removeGameItems(player);
   closeHud(player);
   updateMaxPower();
@@ -328,7 +316,7 @@ function sendHud(player) {
     closing ? 0 : game.power, game.maxPower,
     closing ? -1 : game.portal.direction,
     game.altars.elemental, game.altars.catalytic,
-    game.riftGuardians, Shared.RIFT_GUARDIAN_CAP,
+    game.riftGuardians, riftGuardianCap(),
     hudTimer(),
     portalOpen ? game.portal.closesIn : -1);
 }
@@ -363,9 +351,10 @@ function openRift() {
   updateMaxPower();
   game.power = Math.floor((game.maxPower * START_POWER_PERCENT) / 100);
   game.startingPlayers = game.players.size;
+  game.mined.clear();
   for (const [player, state] of game.players) {
     Object.assign(state, freshState(), { gameId: newGameId() });
-    removeGameItems(player);
+    removeGameItems(player, Shared.NEW_GAME_ITEMS);
     Shared.setVarp(player, Shared.VARP.GAME_ID, state.gameId);
     Shared.setVarbit(player, Shared.VARBIT.IS_PLAYING, 1);
     Shared.setVarbit(player, Shared.VARBIT.FINISHED_GAME, 0);
@@ -422,15 +411,19 @@ function closeRift() {
 }
 
 /**
- * Wiki: the game fails at 0% power. No capture has a loss, so the message is ours; the rift
- * closes as it would after a win, without the rewards.
+ * Wiki: the game fails at 0% power. rsprox captures (two solo losses): the defeat line and the
+ * Portal Guardians' 30 seconds on the same tick, the barriers gone and every cell tile inactive;
+ * the rift then closes as it would after a win, without the rewards.
  */
 function lose() {
   game.phase = PHASE.CLOSING;
   game.timer = TIMING.GRACE;
   closePortal();
-  message("<col=ef1020>The Great Guardian has been defeated. The rift remains open.</col>");
-  for (const player of game.players.keys()) Shared.setVarbit(player, Shared.VARBIT.FINISHED_GAME, 1);
+  for (const player of game.players.keys()) {
+    Shared.setVarbit(player, Shared.VARBIT.FINISHED_GAME, 1);
+    player.sendMessage("<col=ef1020>The Great Guardian was defeated!</col>");
+    player.sendMessage("The Portal Guardians will keep their rifts open for another 30 seconds.");
+  }
   emit("lost", {});
   emit("ended", { won: false });
   broadcastHud();
@@ -462,6 +455,8 @@ function rotateAltars() {
     changesIn: TIMING.ALTAR_ROTATION,
   };
   emit("altars", activeAltars());
+  // The HUD goes out every other tick; a change shouldn't wait a tick to show.
+  broadcastHud();
 }
 
 function openPortal() {
@@ -490,6 +485,14 @@ function tickPortal() {
 
 // ------------------------------------------------------------------ the loop
 
+/** The last game's stones and mining count go with the countdown's first line (rsprox captures). */
+function clearLastGame() {
+  for (const player of game.players.keys()) {
+    Shared.removeItems(player, Shared.STONES);
+    Shared.setVarbit(player, Shared.VARBIT.MINING_COUNT, 0);
+  }
+}
+
 /** With nobody inside the barrier the lobby waits at its 30 seconds: no game for an empty temple. */
 function tickLobby() {
   if (game.players.size === 0 && game.timer <= EMPTY_LOBBY_HOLD) {
@@ -498,6 +501,7 @@ function tickLobby() {
   }
   const line = COUNTDOWN.get(game.timer);
   if (line) message(line);
+  if (game.timer === EMPTY_LOBBY_HOLD) clearLastGame();
   if (--game.timer <= 0) openRift();
 }
 
@@ -571,9 +575,9 @@ function describe() {
 }
 
 module.exports = {
-  PHASE, TIMING, PORTAL_DIRECTIONS, PEARL_SCORE_STEP, PEARL_MAX_PER_GAME,
+  PHASE, TIMING, PORTAL_DIRECTIONS,
   on, phase, isRunning, altarsOpen, isPlaying, stateOf, players, powerPercent, activeAltars, portal,
-  setRiftGuardians, maxPowerFor, addPower, setPower, addEnergy, addContribution, pearlsFor, syncEnergy, join, leave,
+  setRiftGuardians, riftGuardianCap, maxPowerFor, addPower, setPower, addEnergy, syncEnergy, join, leave,
   openHud, closeHud, sendHud, message, greatGuardian, startingPlayers: () => game.startingPlayers,
   tick, start, skip, advanceTime, describe, clock: () => game.clock,
   _game: game,

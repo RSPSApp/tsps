@@ -13,6 +13,9 @@ const { PluginManager } = require('../dist/plugins/PluginManager');
 const { CachePipeline } = require('../dist/game/cache/CachePipeline');
 const { NpcDefinitionLoader } = require('../dist/game/definition/loader/impl/NpcDefinitionLoader');
 const { RegionManager } = require('../dist/game/collision/RegionManager');
+const { World } = require('../dist/game/World');
+const { CombatSpells } = require('../dist/game/content/combat/magic/CombatSpells');
+const { NPCOptionPacketListener } = require('../dist/net/packet/impl/NPCOptionPacketListener');
 const runtime = require('../plugins/quests/QuestRuntime');
 const core = PluginManager.getCoreApi();
 const noop = () => {};
@@ -73,6 +76,7 @@ function makePlayer() {
     getEquipment: () => ({ get: () => null }),
     getSkillManager: () => ({
       getCurrentLevel: skill => skills.get(skill) ?? 99,
+      getMaxLevel: skill => skills.get(skill) ?? 99,
       getCombatLevel: () => skills.get('combat') ?? 3,
       addExperiences: (skill, amount) => skills.set(skill, (skills.get(skill) ?? 0) + amount),
     }),
@@ -85,11 +89,12 @@ function makePlayer() {
     performAnimation: noop,
     sendMessage: text => messages.push(text),
     isRegistered: () => true,
+    isPlayerBot: () => false,
   };
 }
 
 function harness() {
-  const events = {}, variants = [], conditions = [], npcDeath = [], logins = [];
+  const events = {}, variants = [], conditions = [], npcDeath = [], logins = [], attackOptions = [], beforeDeath = [], areas = [];
   const objectActions = new Map(), npcActions = new Map();
   const objectManager = { deregistered: [], registered: [] };
   const testCore = Object.create(core);
@@ -112,14 +117,20 @@ function harness() {
     onObjectInteraction: (name, actions) => objectActions.set(name, actions),
     onNpcInteraction: (name, actions) => npcActions.set(name, actions),
     onNpcDeath: handler => npcDeath.push(handler),
+    onNpcAttackOption: handler => attackOptions.push(handler),
+    onNpcBeforeDeath: handler => beforeDeath.push(handler),
+    registerArea: area => areas.push(area),
+    onNpcsInteraction: (names, actions) => names.forEach(name => npcActions.set(name, actions)),
     onPlayerLogin: handler => logins.push(handler),
     onInterfaceActionButton: noop,
     onCustomEvent: (key, handler) => (events[key] ??= []).push(handler),
     emitCustomEvent: (key, event) => (events[key] ?? []).forEach(handler => handler(event)),
   }, { get: (target, key) => target[key] ?? noop });
+  // Denulth's start also needs Death Plateau, asked over quest:is-complete.
+  (events['quest:is-complete'] ??= []).push(event => { if (event.key === 'death_plateau') event.complete = true; });
   require('../plugins/quests/quests/TrollStronghold.Quest')(api);
   return {
-    events, variants, conditions, npcDeath, logins, objectActions, npcActions, objectManager,
+    events, variants, conditions, npcDeath, logins, objectActions, npcActions, objectManager, attackOptions, beforeDeath, areas,
     quest: runtime.getRegisteredQuests().at(-1),
   };
 }
@@ -158,6 +169,19 @@ function action(h, p, npcId, stepId) {
   return event;
 }
 
+/** The npc-drops:context answer for a Troll general kill: true when the prison key may drop. */
+function generalDropsKey(h, p) {
+  const context = { handledItemIds: new Set() };
+  h.events['npc-drops:context'].forEach(handler => handler({ player: p, npcId: K.TROLL_GENERAL, context }));
+  return !context.handledItemIds.has(I.PRISON_KEY);
+}
+
+function doorToggle(h, p, objectId) {
+  const request = { player: p, objectId, handled: false };
+  h.events['door:toggle'].forEach(handler => handler(request));
+  return request;
+}
+
 function variant(h, p, npcId) {
   return h.variants.at(-1)({ player: p, npcId });
 }
@@ -179,9 +203,11 @@ test('fresh stage 0 start and the complete synthetic stage graph to the canonica
   kill(h, p, K.DAD);
   assert.equal(h.quest.getStage(p), 20, 'Dad death');
 
+  assert.equal(generalDropsKey(h, p), true, 'the general drops the prison key');
   kill(h, p, K.TROLL_GENERAL);
-  assert.equal(h.quest.getStage(p), 30, 'Troll General gives the prison key');
-  assert.equal(p.items.get(I.PRISON_KEY), 1);
+  assert.equal(h.quest.getStage(p), 30, 'Troll General kill');
+  assert.equal(p.items.get(I.PRISON_KEY) ?? 0, 0, 'the key is on the floor, not handed over');
+  p.items.set(I.PRISON_KEY, 1);
 
   action(h, p, K.TWIG_2, 'UsQIS6');
   assert.equal(p.items.get(I.CELL_KEY_1), 1, 'Twig transcript key');
@@ -225,18 +251,109 @@ test('login replay sends the completion wire and restores the freed-Eadgar helpe
   assert.equal(h.quest.getStage(p), 50, 'login leaves the durable save intact');
 });
 
-test('arena gates and cave/stronghold handoffs are registered and scoped', () => {
+test('arena gates: the entrance lets the challenger in; the exit is closed until Dad is beaten', () => {
   const h = harness();
   const p = makePlayer();
+  h.quest.setStage(p, 10);
 
-  const arena = useObject(h, p, 'Arena Entrance', 'Open', O.ARENA_ENTRANCE_2, 2897, 3619);
-  assert.equal(arena.handled, true);
-  assert.equal(h.objectManager.deregistered.at(-1), O.ARENA_ENTRANCE_2);
-  assert.deepEqual(h.objectManager.registered.at(-1), { id: 3784, x: 2897, y: 3619, z: 0 });
+  p.setLocation(2896, 3619);
+  assert.equal(doorToggle(h, p, O.ARENA_ENTRANCE_2).handled, false, 'Doors opens the entrance');
+  p.setLocation(2916, 3628);
+  assert.equal(doorToggle(h, p, O.ARENA_EXIT).handled, true, 'Dad keeps the exit shut');
+  p.setLocation(2916, 3630);
+  assert.equal(doorToggle(h, p, O.ARENA_EXIT).handled, false, 'walking back in from the north is not stopped');
 
-  const exit = useObject(h, p, 'Arena Exit', 'Open', O.ARENA_EXIT_2, 2916, 3629);
-  assert.equal(exit.handled, true);
-  assert.deepEqual(h.objectManager.registered.at(-1), { id: 3787, x: 2916, y: 3629, z: 0 });
+  h.quest.setStage(p, 20);
+  p.setLocation(2916, 3628);
+  assert.equal(doorToggle(h, p, O.ARENA_EXIT).handled, false, 'after Dad surrenders the exit opens');
+});
+
+test('Dad surrenders instead of dying, then will not fight or talk', () => {
+  const h = harness();
+  const p = makePlayer();
+  h.quest.setStage(p, 10);
+  let reset = 0;
+  let hitpoints = 0;
+  p.getCombat = () => ({ reset: () => { reset++; }, getTarget: () => dad });
+  const dad = {
+    getId: () => K.DAD,
+    getMaxHitpoints: () => 120,
+    setHitpoints: value => { hitpoints = value; },
+    getCombat: () => ({ getKiller: () => p, reset: () => { reset++; }, clearDamageMap: noop }),
+  };
+  const event = { npc: dad, preventDeath: false };
+  h.beforeDeath.forEach(handler => handler(event));
+  assert.equal(event.preventDeath, true, 'Dad does not die');
+  assert.equal(hitpoints, 120, 'he is back on his feet for the next challenger');
+  assert.ok(reset >= 2, 'both sides stop fighting');
+  assert.equal(h.quest.getStage(p), 20, 'his surrender opens the way on');
+
+  const attack = { player: p, npcId: K.DAD, handled: false };
+  h.attackOptions.forEach(handler => handler(attack));
+  assert.equal(attack.handled, true);
+  assert.ok(p.messages.includes("You don't need to fight him again."));
+
+  assert.equal(h.npcActions.get('Dad')['Talk-to']({ player: p, npcId: K.DAD }), true);
+  assert.ok(p.messages.includes("He doesn't seem interested in talking right now."));
+});
+
+test('a combat spell on a surrendered Dad is refused like Attack (native spell route)', () => {
+  const h = harness();
+  const p = makePlayer();
+  const arena = h.areas.find(area => area.getName() === 'Troll arena');
+  assert.ok(arena, 'the quest registers the troll arena');
+  let cast = null;
+  Object.assign(p, {
+    getHitpoints: () => 99,
+    busy: () => false,
+    getArea: () => arena,
+    isPlayer: () => true,
+    getSize: () => 1,
+    getMovementQueue: () => ({ reset() {} }),
+    getCombat: () => ({ castSpellOn: (target, spell) => { cast = [target, spell]; } }),
+  });
+  const dad = {
+    getId: () => K.DAD,
+    isNpc: () => true,
+    isPlayer: () => false,
+    getContentId: () => K.DAD,
+    getSize: () => 3,
+    getLocation: () => new core.Location(2911, 3612, 0),
+    getPrivateArea: () => null,
+    getOwner: () => null,
+    getHitpoints: () => 120,
+    getCurrentDefinition: () => ({ isAttackable: () => true }),
+    getArea: () => arena,
+  };
+  p.setLocation(2909, 3612);
+  const spell = { canCastOnTarget: () => true };
+  const originalNpcs = World.getNpcs;
+  const originalSpell = CombatSpells.getCombatSpell;
+  World.getNpcs = () => ({ capacityReturn: () => 1, get: () => dad });
+  CombatSpells.getCombatSpell = () => spell;
+  try {
+    h.quest.setStage(p, 10);
+    assert.equal(NPCOptionPacketListener.castSpell(p, 0, 1), true, 'a challenger may still cast on Dad');
+    assert.deepEqual(cast, [dad, spell]);
+    assert.equal(arena.canAttack(p, dad), null);
+    assert.equal(arena.canAttack(dad, p), null, 'Dad may attack a challenger');
+
+    cast = null;
+    h.quest.setStage(p, 20);
+    assert.equal(NPCOptionPacketListener.castSpell(p, 0, 1), false, 'no spell once he has surrendered');
+    assert.equal(cast, null, 'the cast never reaches combat or the runes');
+    assert.ok(p.messages.includes("You don't need to fight him again."));
+    assert.equal(arena.canAttack(p, dad), false, 'the combat permission refuses every other route');
+    assert.equal(arena.canAttack(dad, p), null, 'Dad still fights new challengers');
+  } finally {
+    World.getNpcs = originalNpcs;
+    CombatSpells.getCombatSpell = originalSpell;
+  }
+});
+
+test('cave and stronghold handoffs are registered and scoped', () => {
+  const h = harness();
+  const p = makePlayer();
 
   const caveSouth = useObject(h, p, 'Cave Entrance', 'Enter', O.CAVE_ENTRANCE_22, 2903, 3644);
   assert.equal(caveSouth.handled, true);
@@ -261,37 +378,44 @@ test('arena gates and cave/stronghold handoffs are registered and scoped', () =>
   assert.equal(unrelated.handled, false, 'unrelated Exit loc is not claimed');
 });
 
+test('the prison back exit and the Secret Door', () => {
+  const h = harness();
+  const p = makePlayer();
+  h.quest.setStage(p, 40);
+
+  useObject(h, p, 'Exit', 'Open', O.EXIT, 2823, 10048);
+  assert.deepEqual(p.moves.at(-1), [2827, 3646, 0], 'out to the mountain pass');
+
+  const locked = useObject(h, p, 'Secret Door', 'Open', O.SECRET_DOOR, 2827, 3647, 0, 10, 1);
+  assert.equal(locked.handled, true);
+  assert.deepEqual(p.moves.at(-1), [2827, 3646, 0], 'no way in before the prisoners are free');
+
+  h.quest.setStage(p, 45);
+  useObject(h, p, 'Secret Door', 'Open', O.SECRET_DOOR, 2827, 3647, 0, 10, 1);
+  assert.deepEqual(p.moves.at(-1), [2824, 10050, 0], 'back into the prison');
+});
+
 test('prison door unlock needs the prison key and persists the unlock', () => {
   const h = harness();
   const p = makePlayer();
   h.quest.setStage(p, 30);
+  const opened = [];
+  (h.events['door:open'] ??= []).push(event => opened.push(event.object.getId()));
 
   const missing = useObject(h, p, 'Prison Door', 'Unlock', O.PRISON_DOOR_9, 2848, 10107, 1);
   assert.equal(missing.handled, true);
   assert.ok(p.messages.includes('You need a key to unlock this door.'));
-  assert.equal(h.objectManager.registered.length, 0);
+  assert.equal(opened.length, 0);
 
   p.items.set(I.PRISON_KEY, 1);
   const unlocked = useObject(h, p, 'Prison Door', 'Unlock', O.PRISON_DOOR_9, 2848, 10107, 1);
   assert.equal(unlocked.handled, true);
   assert.equal(p.attrs.get('troll-stronghold:prison-door-unlocked'), true);
-  assert.deepEqual(h.objectManager.registered.at(-1), { id: 3781, x: 2848, y: 10107, z: 1 });
-});
+  assert.deepEqual(opened, [O.PRISON_DOOR_9], 'Doors swings it open and steps the player through');
 
-test('full bag on the Troll General keeps the key step recoverable', () => {
-  const h = harness();
-  const p = makePlayer();
-  h.quest.setStage(p, 20);
-  p.setFull(true);
-
-  kill(h, p, K.TROLL_GENERAL);
-  assert.equal(p.items.get(I.PRISON_KEY) ?? 0, 0, 'no key with a full bag');
-  assert.equal(h.quest.getStage(p), 20, 'stage is not advanced past the missing key');
-
-  p.setFull(false);
-  kill(h, p, K.TROLL_GENERAL);
-  assert.equal(p.items.get(I.PRISON_KEY), 1, 'another general yields the key');
-  assert.equal(h.quest.getStage(p), 30);
+  p.items.delete(I.PRISON_KEY);
+  useObject(h, p, 'Prison Door', 'Unlock', O.PRISON_DOOR_9, 2848, 10107, 1);
+  assert.equal(opened.length, 2, 'once unlocked it needs no key');
 });
 
 test('combat warning uses combat level, and failed item insertion never charges coins', () => {
@@ -317,24 +441,29 @@ test('combat warning uses combat level, and failed item insertion never charges 
   assert.equal(p.items.get(I.LAW_TALISMAN), 1);
 });
 
-test('lost prison key is re-obtainable until the door is unlocked; early kills grant nothing', () => {
+test('a Troll general drops one prison key, only to a player still owed one', () => {
   const h = harness();
   const p = makePlayer();
   h.quest.setStage(p, 10);
+  assert.equal(generalDropsKey(h, p), false, 'no key before Dad is beaten');
   kill(h, p, K.TROLL_GENERAL);
-  assert.equal(p.items.get(I.PRISON_KEY) ?? 0, 0, 'general before Dad grants nothing');
   assert.equal(h.quest.getStage(p), 10);
 
-  h.quest.setStage(p, 30);
+  h.quest.setStage(p, 20);
+  assert.equal(generalDropsKey(h, p), true);
   p.items.set(I.PRISON_KEY, 1);
-  p.items.delete(I.PRISON_KEY);
+  assert.equal(generalDropsKey(h, p), false, 'not a second one while one is held');
   kill(h, p, K.TROLL_GENERAL);
-  assert.equal(p.items.get(I.PRISON_KEY), 1, 'lost key replaced');
+  assert.equal(p.items.get(I.PRISON_KEY), 1, 'the quest never adds one of its own');
 
-  p.attrs.set('troll-stronghold:prison-door-unlocked', true);
   p.items.delete(I.PRISON_KEY);
-  kill(h, p, K.TROLL_GENERAL);
-  assert.equal(p.items.get(I.PRISON_KEY) ?? 0, 0, 'unlocked door no longer needs a key');
+  assert.equal(generalDropsKey(h, p), true, 'a lost key drops again');
+  p.attrs.set('troll-stronghold:prison-door-unlocked', true);
+  assert.equal(generalDropsKey(h, p), false, 'the unlocked door needs no key');
+
+  p.attrs.delete('troll-stronghold:prison-door-unlocked');
+  h.quest.setStage(p, 50);
+  assert.equal(generalDropsKey(h, p), false, 'none after the quest');
 });
 
 test('early Twig/Berry kills and pickpockets do not leak cell keys', () => {
@@ -352,23 +481,25 @@ test('early Twig/Berry kills and pickpockets do not leak cell keys', () => {
   assert.equal(p.items.get(I.CELL_KEY_1), 1);
 });
 
-test('talking with both cell keys frees both prisoners and consumes only the cell keys', () => {
+test('cell doors free each player\'s own prisoners and lock again', () => {
   const h = harness();
-  const p = makePlayer();
-  h.quest.setStage(p, 30);
-  p.items.set(I.PRISON_KEY, 1);
-  p.items.set(I.CELL_KEY_1, 1);
-  p.items.set(I.CELL_KEY_2, 1);
+  const first = makePlayer();
+  const second = makePlayer();
+  for (const p of [first, second]) {
+    h.quest.setStage(p, 40);
+    p.items.set(I.CELL_KEY_1, 1);
+  }
+  assert.equal(variant(h, first, K.GODRIC), null, 'talking no longer frees anyone');
+  assert.equal(first.attrs.get('troll-stronghold:godric-freed'), undefined);
 
-  assert.equal(variant(h, p, K.GODRIC), 'entering-the-prison-freeing-eadgar-and-godric');
-  assert.equal(p.attrs.get('troll-stronghold:godric-freed'), true);
-  assert.equal(p.attrs.get('troll-stronghold:eadgar-freed'), true);
-  assert.equal(h.quest.getStage(p), 45);
-  assert.ok(p.varbits.some(([id, value]) => id === 0 && value === 1), 'the Eadgar-free QH flag is sent');
-  assert.ok(p.configs.some(([id, value]) => id === 317 && value === 40), 'both-free state uses QH exact varp value 40');
-  assert.equal(p.items.get(I.CELL_KEY_1) ?? 0, 0);
-  assert.equal(p.items.get(I.CELL_KEY_2) ?? 0, 0);
-  assert.equal(p.items.get(I.PRISON_KEY), 1, 'the prison key is not a cell key');
+  useObject(h, first, 'Cell Door', 'Unlock', O.CELL_DOOR_5, 2832, 10078);
+  assert.equal(first.attrs.get('troll-stronghold:godric-freed'), true);
+  assert.deepEqual(h.objectManager.registered.at(-1), { id: 3768, x: 2831, y: 10078, z: 0 }, 'the door swings into the cell');
+
+  const again = useObject(h, second, 'Cell Door', 'Unlock', O.CELL_DOOR_5, 2832, 10078);
+  assert.equal(again.handled, true);
+  assert.equal(second.attrs.get('troll-stronghold:godric-freed'), true, 'the next player frees Godric too');
+  assert.equal(second.items.get(I.CELL_KEY_1) ?? 0, 0);
 });
 
 test('post-quest speakers defer to their canonical pages and Dunstan re-sells the talisman', () => {

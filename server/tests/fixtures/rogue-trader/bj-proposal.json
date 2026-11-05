@@ -1,0 +1,160 @@
+[
+ {
+  "k": "say",
+  "t": 660,
+  "who": "Blackjack seller",
+  "text": "Hello. Could I interest you in a Blackjack?"
+ },
+ {
+  "k": "say",
+  "t": 661,
+  "who": "player",
+  "text": "Can I interest you in a proposal?"
+ },
+ {
+  "k": "say",
+  "t": 662,
+  "who": "Blackjack seller",
+  "text": "What are we talking about here? Nothing dodgy I hope. I don't like anything dodgy, I had enough of that sort of thing when the bandits and those rogue Menaphites were running things h"
+ },
+ {
+  "k": "say",
+  "t": 663,
+  "who": "Blackjack seller",
+  "text": "and left."
+ },
+ {
+  "k": "say",
+  "t": 664,
+  "who": "player",
+  "text": "No no nothing of the sort, a friend of mine Ali Morrisane, have you ever heard of him?"
+ },
+ {
+  "k": "say",
+  "t": 665,
+  "who": "Blackjack seller",
+  "text": "Have I what? He's my idol, he's the greatest salesman in all of Gielinor. Word has it that he even sold...."
+ },
+ {
+  "k": "say",
+  "t": 666,
+  "who": "player",
+  "text": "...yeah yeah, sand to the Bedabin. Hmpf!! I have heard that story more times than I care for.. Anyway he has a proposal for you...."
+ },
+ {
+  "k": "say",
+  "t": 667,
+  "who": "Blackjack seller",
+  "text": "I'm all ears. Does he want to take me on as an apprentice?"
+ },
+ {
+  "k": "say",
+  "t": 668,
+  "who": "player",
+  "text": "No no nothing of the sort."
+ },
+ {
+  "k": "say",
+  "t": 669,
+  "who": "Blackjack seller",
+  "text": "Oh...?"
+ },
+ {
+  "k": "say",
+  "t": 670,
+  "who": "player",
+  "text": "He sees quite a bit of potential in your product."
+ },
+ {
+  "k": "say",
+  "t": 671,
+  "who": "Blackjack seller",
+  "text": "The urchins of the town do too, they're always trying to steal my products."
+ },
+ {
+  "k": "say",
+  "t": 672,
+  "who": "player",
+  "text": "Yes, but Ali says if he were to stock your products he would need a larger variation of product."
+ },
+ {
+  "k": "say",
+  "t": 673,
+  "who": "Blackjack seller",
+  "text": "I don't know. I'm quite happy with the product that I'm making at the moment."
+ },
+ {
+  "k": "say",
+  "t": 674,
+  "who": "player",
+  "text": "Hmm.. Ali did voice some concerns about you. He said you were an over cautious individual and ..."
+ },
+ {
+  "k": "say",
+  "t": 675,
+  "who": "Blackjack seller",
+  "text": "He did?"
+ },
+ {
+  "k": "varbit",
+  "t": 676,
+  "id": 911,
+  "value": 2
+ },
+ {
+  "k": "say",
+  "t": 676,
+  "who": "player",
+  "text": "Look will you create a larger variety of blackjacks or not?"
+ },
+ {
+  "k": "say",
+  "t": 677,
+  "who": "Blackjack seller",
+  "text": "I don't know."
+ },
+ {
+  "k": "say",
+  "t": 678,
+  "who": "player",
+  "text": "What do I have to do to convince you that you should make a larger variety?"
+ },
+ {
+  "k": "say",
+  "t": 679,
+  "who": "Blackjack seller",
+  "text": "Well I suppose if you could demonstrate to me that they weren't up to the job."
+ },
+ {
+  "k": "menu",
+  "t": 680,
+  "title": "Select an option",
+  "options": [
+   "Hmm... I'll have to think of a cunning plan.",
+   "I bet you couldn't knock me out with your blackjack."
+  ]
+ },
+ {
+  "k": "pick",
+  "t": 683,
+  "n": 1
+ },
+ {
+  "k": "say",
+  "t": 683,
+  "who": "player",
+  "text": "Hmm... I'll have to think of a cunning plan."
+ },
+ {
+  "k": "say",
+  "t": 685,
+  "who": "Blackjack seller",
+  "text": "What was that?"
+ },
+ {
+  "k": "say",
+  "t": 686,
+  "who": "player",
+  "text": "What was what? Oh I must have been thinking out loud again, sorry."
+ }
+]

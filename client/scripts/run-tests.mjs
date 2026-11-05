@@ -2,15 +2,22 @@
 // New tests are picked up by their file name: there is no list to keep in sync.
 //   yarn test                 every test
 //   yarn test edit-mode npc   only tests whose file name contains one of the words
+//   CLIENT_TEST_TIMEOUT_MS=600000 yarn test   override the five-minute per-test limit
 import { spawnSync } from "node:child_process";
 import { readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+const timeoutMs = Number(process.env.CLIENT_TEST_TIMEOUT_MS ?? 300_000);
+if (!Number.isInteger(timeoutMs) || timeoutMs <= 0 || timeoutMs > 2_147_483_647) {
+    console.error("CLIENT_TEST_TIMEOUT_MS must be an integer between 1 and 2147483647 milliseconds");
+    process.exit(1);
+}
+
 const clientDir = join(dirname(fileURLToPath(import.meta.url)), "..");
 const testsDir = join(clientDir, "tests");
-// Run the CLI with Node directly: Windows .cmd shims require a shell.
-const tsx = fileURLToPath(import.meta.resolve("tsx/cli"));
+// Load TypeScript in the test process itself so a timeout kills the test, not a CLI wrapper.
+const tsx = import.meta.resolve("tsx");
 
 // Tests that are known to fail, each with the reason. Keep this short: a test belongs here only
 // until someone fixes it, and the summary lists every skipped test so none is forgotten.
@@ -32,7 +39,9 @@ for (const file of files) {
         continue;
     }
     const start = Date.now();
-    const result = spawnSync(process.execPath, [tsx, join("tests", file)], { cwd: clientDir, encoding: "utf8" });
+    const result = spawnSync(process.execPath, ["--import", tsx, join("tests", file)], {
+        cwd: clientDir, encoding: "utf8", timeout: timeoutMs, killSignal: "SIGKILL",
+    });
     const seconds = ((Date.now() - start) / 1000).toFixed(1);
     if (result.status === 0) {
         passed++;
@@ -40,6 +49,7 @@ for (const file of files) {
     } else {
         failed.push(file);
         console.log(`FAIL  ${file} (${seconds}s)`);
+        if (result.error?.code === "ETIMEDOUT") console.log(`      timed out after ${timeoutMs} ms`);
         const output = `${result.stdout ?? ""}${result.stderr ?? ""}${result.error ? String(result.error) : ""}`;
         console.log(output.trimEnd().replace(/^/gm, "      "));
     }

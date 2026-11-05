@@ -25,10 +25,12 @@ const DOOR_AUTO_CLOSE_TICKS = 500;
 // the open ids are not closed+1). Same trick works for NPCs/items via C.getNpc / C.getItem.
 const DOOR_NAMES = new Set([
   "Door", "Doors", "Large door", "Large doors", "Castle door", "Cell Door", "Cell door",
-  "Glass door", "Magic door", "Metal door", "Mind Door", "Mithril door", "Tent door", "Wall",
+  "Glass door", "Magic door", "Magic guild door", "Metal door", "Mind Door", "Mithril door", "Tent door", "Wall",
   "Gate", "Metal gate", "Doorway", "Tree Door", "Storeroom Door", "Ardougne Wall Door",
   "Vitur door", "Myrmel door", "Shadum door", "Jovkai door", "Chained door", "Trapdoor",
-  "Longhall door", "Prison door",
+  "Longhall door", "Prison door", "Arena Entrance", "Arena Exit",
+  // Pollnivneach curtains: closed 1533 "Open" -> open 1534 "Close" (closed id + 1, cache-derived).
+  "Curtain",
 ]);
 
 // Always name locs by their core.ObjectIdentifiers property (O.DOOR_358), never a raw id: the
@@ -44,11 +46,22 @@ const NAMELESS_DOOR_LEAF_IDS = Object.freeze({
   DOOR_48_OPEN: 2003, // closed O.DOOR_48 (2002); same models, cache-derived
   LARGE_DOOR_100_OPEN: 39252, // Sins of the Father Arboretum; capture 1637
   LARGE_DOOR_101_OPEN: 39254,
+  GUIDOR_GATE_LEFT_OPEN: 2052, // guidorgatelopen
+  GUIDOR_GATE_RIGHT_OPEN: 2053, // guidorgateropen
+  MORT_MYRE_GATE_LEFT_OPEN: 1574, // inacmetalgateopenr, capture 1638
+  MORT_MYRE_GATE_RIGHT_OPEN: 1573, // inacmetalgateopenl, capture 1638
+  ARENA_ENTRANCE_OPEN: 3784, // troll_stronghold_arena_entrance_inactive
+  ARENA_EXIT_OPEN: 3787, // troll_stronghold_arena_exit_inactive
+  PRISON_DOOR_9_OPEN: 3781, // troll_stronghold_prison_door_open, capture 740
+  GRUM_DOOR_OPEN: 1542, // Grum's Gold Exchange; capture 465
+  CRANDOR_SECRET_DOOR_OPEN: 25039, // dragonsecretdoor_open; capture 2951
+  INVISWALL: 38848, // actionless collision blocker; captures 2951 and 740
 });
 
-let SELF_OPENING_DOOR_IDS, SINGLE_DOOR_OPEN_IDS, COMPOSITE_DOOR_OPENINGS, WOODEN_GATES, WOODEN_GATE_BY_ID;
+let SELF_OPENING_DOOR_IDS, IN_PLACE_DOOR_IDS, OWN_TILE_DOOR_IDS, SINGLE_DOOR_OPEN_IDS, COMPOSITE_DOOR_OPENINGS, WOODEN_GATES, WOODEN_GATE_BY_ID;
 let DOUBLE_DOOR_ID_FAMILIES, DOUBLE_DOOR_FAMILY_IDS_BY_ID, DORGESH_CITY_DOOR_IDS;
 let SPECIAL_DOUBLE_DOOR_PAIRS, SPECIAL_DOUBLE_DOOR_PARTNER_IDS_BY_ID, SPECIAL_DOUBLE_DOOR_OPEN_IDS_BY_CLOSED_ID;
+let PASS_THROUGH_GATES;
 
 function defineDoorData({ ObjectIdentifiers: O }) {
   // Doors with no open variant in the cache: OSRS opens them by rotating the same loc
@@ -58,7 +71,9 @@ function defineDoorData({ ObjectIdentifiers: O }) {
   // door whose same-model "Close" locs (5245, 11617, 15205, 17115) all belong to other doors.
   // GATE_52 (Gnome Ball pitch and Tree Gnome Village): its same-model open variants (193, 2395)
   // are nameless with no actions and are never placed, so the pairing below cannot find them.
-  SELF_OPENING_DOOR_IDS = new Set([O.DOOR_223, O.DOOR_225, O.DOOR_226, O.DOOR_227, O.DOOR_228, O.DOOR_229, O.DOOR_230, O.DOOR_231, O.DOOR_358, O.GATE_52, O.WALL_9, O.DOOR_115, O.LARGE_DOOR_23,
+  SELF_OPENING_DOOR_IDS = new Set([O.DOOR_223, O.DOOR_225, O.DOOR_226, O.DOOR_227, O.DOOR_228, O.DOOR_229, O.DOOR_230, O.DOOR_231,
+    O.DOOR_283, // Ardougne Castle's lockpick door has no separate open loc in the cache.
+    O.DOOR_287, O.DOOR_358, O.GATE_52, O.WALL_9, O.DOOR_115, O.LARGE_DOOR_23,
     // The Blood Moon Rises crank-wheel house exit (61824) has no cache Close partner.
     O.DOOR_831,
     // The Vitur food-shop door (61838) also has no cache Close partner.
@@ -74,7 +89,8 @@ function defineDoorData({ ObjectIdentifiers: O }) {
     // actionless variant has no Close option, so it swings in place.
     O.GATE_270,
     O.GATE_327,
-    // The two Ardougne Wall Door loc variants swing open by rotating the same cache loc.
+    // West Ardougne's wall gate is a pass-through gate (PASS_THROUGH_GATES takes its clicks first);
+    // the ids stay listed so the catalog never pairs them by heuristics.
     O.ARDOUGNE_WALL_DOOR, O.ARDOUGNE_WALL_DOOR_2,
     // Ghorrock Prison's western gate has no separate open loc in the cache.
     O.GATE_282,
@@ -82,13 +98,20 @@ function defineDoorData({ ObjectIdentifiers: O }) {
     // uniquely named open partner; keep their IDs while swinging the panels.
     O.DOOR_99, O.GATE_57,
     // The Champions' Guild door (1805): its id+1 is an unrelated nameless loc.
-    O.DOOR_45]);
+    O.DOOR_45,
+    // Holy Grail: Merlin's workshop door in Camelot (24, merlinworkshop) and the Draynor Manor
+    // whistle-room door (22, whistledoor) are Open-only; their id+1 are a clock spindle and the
+    // sacks, and their same-model Close locs (1536, none for 22) belong to other doors.
+    O.DOOR_3, O.DOOR_4]);
   // Single doors the pairing below can't find: the open variant is not closedId + 1 (e.g. Large
   // door 1517 -> 1520, same models), or it has no "Close" (DOOR_181, the open Keldagrim door on
   // the way to the Blast Furnace, shares DOOR_180's model but offers no option). Witch's House's
   // interior doors (DOOR_499 closed -> DOOR_498 open) are inverted: the open "Close"-only leaf
   // carries the lower id, so the ascending scan never sees the pair.
   SINGLE_DOOR_OPEN_IDS = new Map([
+    // Generic trapdoors have distinct open models, two ids after their closed variants.
+    [O.TRAPDOOR_4, O.TRAPDOOR_6],
+    [O.TRAPDOOR_5, O.TRAPDOOR_7],
     [O.LARGE_DOOR_11, O.LARGE_DOOR_14],
     [O.DOOR_180, O.DOOR_181],
     [O.DOOR_499, O.DOOR_498],
@@ -99,9 +122,7 @@ function defineDoorData({ ObjectIdentifiers: O }) {
     [O.GATE_301, O.GATE_302],
     // The Lassar cistern gate opens into its actionless, same-model cache variant.
     [O.GATE_268, O.GATE_269],
-    // Tree Gnome Stronghold doors: 1967/1968 open into the cache's nameless 1969/1970.
-    [O.TREE_DOOR, 1969],
-    [O.TREE_DOOR_2, 1970],
+    // The Grand Tree's doors (O.TREE_DOOR, O.TREE_DOOR_2) open in place: GrandTree.plugin.js.
     // Troll Stronghold's cache has an action-less open loc 3811 with the same
     // model as closed 3810, so it cannot be paired by the normal action scan.
     [O.STOREROOM_DOOR, O.STOREROOM_DOOR + 1],
@@ -117,6 +138,19 @@ function defineDoorData({ ObjectIdentifiers: O }) {
     [O.LONGHALL_DOOR, O.LONGHALL_DOOR_3],
     [O.LONGHALL_DOOR_2, O.LONGHALL_DOOR_4],
   ]);
+
+  // Curtains do not swing: the open loc is a drawn-back curtain model (1534: 879/880 vs the
+  // closed 1533's 884/885) that replaces the closed one on the same tile with the same rotation.
+  // These floor trapdoors likewise replace their model in place.
+  IN_PLACE_DOOR_IDS = new Set([O.CURTAIN_3, O.TRAPDOOR_4, O.TRAPDOOR_5]);
+
+  // Doors that swing to the far side of their wall: the open leaf stays on the closed leaf's tile,
+  // turned a quarter, instead of stepping onto the next tile. buildDoorCatalog adds every door
+  // whose cache name ends in "_reverse"; these are the others. Jatizso's city gates (rsprox 75:
+  // 21403/21405 at 2413,3797 face 3 open as 21404/21406 face 2/0 on the same tiles).
+  // Yanille's south entrance door has blocked floor immediately west of the doorway, so its
+  // map-backed open pose turns on the closed tile instead of swinging into that wall.
+  OWN_TILE_DOOR_IDS = new Set([O.GATE_155, O.GATE_157, O.DOOR_287]);
 
   // Tree Gnome Stronghold main gate: one 5x2 loc (190, face 2) opens into two
   // nameless 2x2 leaves (191/192), leaving the centre tile clear.
@@ -302,6 +336,135 @@ function defineDoorData({ ObjectIdentifiers: O }) {
     [O.LARGE_DOOR_7, O.LARGE_DOOR_8],
     [O.LARGE_DOOR_9, O.LARGE_DOOR_10],
   ]);
+  // Gates that let the player through and shut behind them, never staying open. Each leaf is
+  // [id, x, y, z, face] of a shape-0 wall loc (a sixth entry names another shape, for a closed
+  // centrepiece); crossX/crossY is the boundary the player crosses. crossBetween [low, high] with
+  // crossRows is a gate more than one tile thick whose tiles the map blocks: the player is carried
+  // across, from the low side to the high side or back, along their own row.
+  PASS_THROUGH_GATES = Object.freeze([
+    // Guidor's gate, south-east Varrock (rsprox 1663, 3218, 3220): on Open the leaves swing to the
+    // south edges of the two tiles west, the player steps through, and the gate shuts two ticks
+    // later. Live also puts a solid inviswall where the closed leaves stood; it is left out, as
+    // the step here moves after it would be placed and the gate has nothing to guard.
+    Object.freeze({
+      closed: [[O.GATE_42, 3264, 3405, 0, 0], [O.GATE_43, 3264, 3406, 0, 0]],
+      opened: [
+        [NAMELESS_DOOR_LEAF_IDS.GUIDOR_GATE_LEFT_OPEN, 3263, 3405, 0, 3],
+        [NAMELESS_DOOR_LEAF_IDS.GUIDOR_GATE_RIGHT_OPEN, 3262, 3405, 0, 3],
+      ],
+      crossX: 3264,
+      closeTicks: 2,
+    }),
+    // West Ardougne's wall gate, four leaves over four tiles (x 2557-2558, y 3299-3300). The map's
+    // terrain sets the blocked-tile flag on all four tiles, open or closed, so a swapped loc can never
+    // make them walkable: the leaves swing open and the player is carried across the three tiles
+    // from x 2556 to 2559 (or back), then the leaves close. NOT CAPTURED (nothing in the RSProx
+    // archive shows this gate): the crossing, its timing and the open faces are inferred. The closed
+    // leaves are the map's shape-10 centrepieces; the open forms are the cache's 8740/8741 walls,
+    // each folded to the edge of its own row (south row face 3, north row face 1).
+    Object.freeze({
+      closed: [
+        [O.ARDOUGNE_WALL_DOOR_2, 2557, 3299, 0, 2, 10],
+        [O.ARDOUGNE_WALL_DOOR, 2558, 3299, 0, 0, 10],
+        [O.ARDOUGNE_WALL_DOOR, 2557, 3300, 0, 2, 10],
+        [O.ARDOUGNE_WALL_DOOR_2, 2558, 3300, 0, 0, 10],
+      ],
+      opened: [
+        [O.ARDOUGNE_WALL_DOOR_4, 2557, 3299, 0, 3, 0],
+        [O.ARDOUGNE_WALL_DOOR_3, 2558, 3299, 0, 3, 0],
+        [O.ARDOUGNE_WALL_DOOR_3, 2557, 3300, 0, 1, 0],
+        [O.ARDOUGNE_WALL_DOOR_4, 2558, 3300, 0, 1, 0],
+      ],
+      crossBetween: [2556, 2559],
+      crossRows: [3299, 3300],
+      closeTicks: 5,
+    }),
+    // Mort Myre: capture 1638 ticks 1014/1016. Both Open-only leaves close behind the player.
+    Object.freeze({
+      closed: [[O.GATE_73, 3443, 3458, 0, 3], [O.GATE_72, 3444, 3458, 0, 3]],
+      opened: [
+        [NAMELESS_DOOR_LEAF_IDS.MORT_MYRE_GATE_LEFT_OPEN, 3443, 3457, 0, 0],
+        [NAMELESS_DOOR_LEAF_IDS.MORT_MYRE_GATE_RIGHT_OPEN, 3444, 3457, 0, 2],
+      ],
+      crossY: 3458,
+      closeTicks: 2,
+      openSoundId: 71,
+    }),
+    // Troll arena entrance, west wall (Troll Stronghold). No capture: both leaves take the
+    // cache's one inactive leaf and swing out to the tile west, laid out like Mort Myre's.
+    Object.freeze({
+      closed: [[O.ARENA_ENTRANCE, 2897, 3618, 0, 0], [O.ARENA_ENTRANCE_2, 2897, 3619, 0, 0]],
+      opened: [
+        [NAMELESS_DOOR_LEAF_IDS.ARENA_ENTRANCE_OPEN, 2896, 3618, 0, 3],
+        [NAMELESS_DOOR_LEAF_IDS.ARENA_ENTRANCE_OPEN, 2896, 3619, 0, 1],
+      ],
+      crossX: 2897,
+      closeTicks: 2,
+    }),
+    // Troll arena exit, north wall. No capture; Mort Myre's layout, as above. Dad's check guards the
+    // click, so blockers keep the opening shut to ordinary walking and the opener is carried (carry).
+    // The blockers are inferred: the prison door's capture shows one on its doorway, and nothing shows
+    // this gate, so one on each leaf's own edge is our reading.
+    Object.freeze({
+      closed: [[O.ARENA_EXIT, 2916, 3629, 0, 3], [O.ARENA_EXIT_2, 2917, 3629, 0, 3]],
+      opened: [
+        [NAMELESS_DOOR_LEAF_IDS.ARENA_EXIT_OPEN, 2916, 3628, 0, 0],
+        [NAMELESS_DOOR_LEAF_IDS.ARENA_EXIT_OPEN, 2917, 3628, 0, 2],
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2916, 3629, 0, 3],
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2917, 3629, 0, 3],
+      ],
+      crossY: 3629,
+      carry: true,
+      closeTicks: 2,
+    }),
+    // Troll Stronghold prison door (capture 740 ticks 1470-1473): an "Unlock" loc the quest opens
+    // through door:open. The leaf swings to the tile west and shuts two ticks later. Live puts inviswall
+    // 38848 on the doorway for those ticks, so the opening stays shut to ordinary walking and following:
+    // the key-holding opener is carried over it (carry) and anyone else is stopped by the real clipping.
+    Object.freeze({
+      closed: [[O.PRISON_DOOR_9, 2848, 10107, 1, 0]],
+      opened: [
+        [NAMELESS_DOOR_LEAF_IDS.PRISON_DOOR_9_OPEN, 2847, 10107, 1, 1],
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2848, 10107, 1, 0],
+      ],
+      crossX: 2848,
+      carry: true,
+      closeTicks: 2,
+      openSoundId: 62,
+    }),
+    // Grum's Gold Exchange, Port Sarim (capture 465 ticks 9416-9421 in, 9476-9479 out): DOOR_5 has
+    // no Close partner. Open puts the open leaf on the north edge of the tile inside, the player
+    // steps through and the door shuts two ticks later. Live also puts loc 38848 on the door's
+    // own edge; it is left out as for Guidor's gate, because it blocks the step.
+    Object.freeze({
+      closed: [[O.DOOR_5, 3016, 3246, 0, 0]],
+      opened: [[NAMELESS_DOOR_LEAF_IDS.GRUM_DOOR_OPEN, 3015, 3246, 0, 1]],
+      crossX: 3016,
+      closeTicks: 2,
+      openSoundId: 62, // the door sound, as captured
+    }),
+    // Dragon Slayer's secret wall into Crandor's dungeon (capture 2951 ticks 85-89): the quest opens it
+    // through door:open once the shortcut is unlocked. The player walks 2836,9598 -> 9599 -> 9600 while
+    // dragonsecretdoor (2606, 2836,9600 rot 3) becomes dragonsecretdoor_open (25039, 2836,9599 rot 0)
+    // with sound 2410, and it shuts two ticks later. Sounds 400 and 2768 (delay 20) arrive in that same
+    // tick as a fight hit on the player, so they are unattributed and not played here. Live puts the
+    // actionless blocker 38848 on the doorway for those two ticks, so the opening is kept shut to
+    // ordinary walking and following: the quest-gated opener is carried over it by a forced movement
+    // (carry) and anyone else is stopped by the real clipping. Captured going north only; the way back
+    // south is the same wall in reverse. The wall is reachable only from the tiles beside it, so every
+    // crossing is one step.
+    Object.freeze({
+      closed: [[O.WALL_9, 2836, 9600, 0, 3]],
+      opened: [
+        [NAMELESS_DOOR_LEAF_IDS.CRANDOR_SECRET_DOOR_OPEN, 2836, 9599, 0, 0],
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2836, 9600, 0, 3],
+      ],
+      crossY: 9600,
+      carry: true,
+      closeTicks: 2,
+      openSoundId: 2410,
+    }),
+  ]);
   DOUBLE_DOOR_FAMILY_IDS_BY_ID = new Map(
     DOUBLE_DOOR_ID_FAMILIES.flatMap((familyIds) =>
       familyIds.map((id) => [id, familyIds])
@@ -342,10 +505,12 @@ const GATE_PARTNER_OFFSETS = Object.freeze([
 ]);
 
 let DOOR_CATALOG = null;
-// Leaves of same-model double doors found by buildDoorCatalog. They only act as a double door
-// where both leaves stand side by side, so a lone one stays a single door.
-const SAME_MODEL_DOUBLE_DOOR_IDS = new Set();
+// Leaves of double doors found by buildDoorCatalog. They only act as a double door where both
+// leaves stand side by side, so a lone one stays a single door.
+const CATALOG_DOUBLE_DOOR_IDS = new Set();
 const OPEN_OBJECT_STATES = new Map();
+/** Pass-through gates swung open right now, by anchor key. */
+const OPEN_PASS_THROUGH_GATES = new Set();
 const RUNTIME_DOUBLE_DOOR_RECORDS = [];
 const PRIVATE_AREA_IDS = new WeakMap();
 let nextPrivateAreaId = 0;
@@ -379,9 +544,16 @@ function buildDoorCatalog() {
     // Gameval names can identify the open leaf even when its id comes first
     // (canafis_door_ground_open / canafis_door_ground). Keep paired gates with
     // their family handler and require a matching, Close-only cache definition.
+    // A leaf of a same-model double door (fai_varrock_member_gatel/r 11766/11767) also has a
+    // gameval-named open loc; leave it to the pairing below, which registers both leaves.
     const namedOpenId = namedOpenLeaf(id);
     const namedOpen = namedOpenId == null ? null : core.CacheDefinitions.getObject(namedOpenId);
+    // "_reverse" doors open on their own tile: Ardougne's poshdoor_reverse 46863 at 2570,3271
+    // face 0 opens as 46864 face 1 on that tile (rsprox 3279 tick 6704), as do
+    // fortis_door_l_reverse 52600 (rsprox 1098) and pandemonium_door_reverse 58064 (rsprox 3457).
+    if (core.CacheDefinitions.getLocNames().get(id)?.endsWith("_reverse")) OWN_TILE_DOOR_IDS.add(id);
     if (
+      !isSameModelLeafPair(id, id + 1) && !isSameModelLeafPair(id - 1, id) &&
       !DOUBLE_DOOR_FAMILY_IDS_BY_ID.has(id) &&
       !DOUBLE_DOOR_FAMILY_IDS_BY_ID.has(namedOpenId) &&
       namedOpen?.name === def.name &&
@@ -403,22 +575,22 @@ function buildDoorCatalog() {
       }
       continue;
     }
-    // Some cache exports list both variants with only "Open" (the open door shares
-    // the same model and only differs by rotation). Pair consecutive same-model
-    // doors so they still open; see e.g. Varrock Palace door 32464/32465.
-    // Skip double-door leaves and already-paired ids so chains don't form.
-    // The same pair is also how the cache builds a double door's two leaves (11766/11767, the
-    // second mirrored), so it is registered as one too; see addSameModelDoubleDoor.
+    // Two consecutive same-model locs that both offer only "Open" are two closed doors, never a
+    // door and its open form: Varrock Palace's 32464 opens as 32464 again (rsprox 3220), and
+    // Ardougne's picklock1/picklock2 (11719/11720) stand on opposite walls of one house. Each
+    // swings open under its own id. Skip double-door leaves and already-paired ids so chains
+    // don't form. The same pair is also how the cache builds a double door's two leaves
+    // (11766/11767, the second mirrored), so it is registered as one too; see addSameModelDoubleDoor.
     if (
       hasAction(partner.actions, "open") &&
       !SELF_OPENING_DOOR_IDS.has(id + 1) &&
       JSON.stringify(partner.models) === JSON.stringify(def.models) &&
       !DOUBLE_DOOR_FAMILY_IDS_BY_ID.has(id) && !DOUBLE_DOOR_FAMILY_IDS_BY_ID.has(id + 1) &&
-      !openToClosed.has(id) &&
+      !openToClosed.has(id) && !closedToOpen.has(id) &&
       !closedToOpen.has(id + 1)
     ) {
-      closedToOpen.set(id, id + 1);
-      openToClosed.set(id + 1, id);
+      closedToOpen.set(id, id);
+      closedToOpen.set(id + 1, id + 1);
       sameModelPairs.push(id);
     }
     // An unused, actionless variant can sit between a door and its open loc: Varrock's
@@ -430,7 +602,7 @@ function buildDoorCatalog() {
       hasAction(skipped.actions, "close") && !hasAction(skipped.actions, "open") &&
       JSON.stringify(skipped.models) === JSON.stringify(def.models) &&
       !DOUBLE_DOOR_FAMILY_IDS_BY_ID.has(id) && !DOUBLE_DOOR_FAMILY_IDS_BY_ID.has(id + 2) &&
-      !openToClosed.has(id)
+      !openToClosed.has(id) && !closedToOpen.has(id)
     ) {
       closedToOpen.set(id, id + 2);
       openToClosed.set(id + 2, id);
@@ -462,7 +634,53 @@ function buildDoorCatalog() {
   for (const left of sameModelPairs) {
     if (!SINGLE_DOOR_OPEN_IDS.has(left) && !SINGLE_DOOR_OPEN_IDS.has(left + 1)) addSameModelDoubleDoor(left, left + 1);
   }
+  // Mirrored leaves that each have their own "Close" loc (w_ardougnedoubledoorl 2546 -> 2547,
+  // w_ardougnedoubledoorr 2548 -> 2549) are one double door too: paired as two single doors,
+  // both leaves turned the same way. Live opens them as a pair (rsprox 1694 tick 8364; also
+  // Yanille 17091/17093 in 3271, Camelot 25638/25640 and Seers' 25825/25827 in 1149).
+  for (const [closedId, openId] of closedToOpen) {
+    const partnerId = closedId + 2;
+    const family = [closedId, partnerId, openId, partnerId + 1];
+    if (
+      openId === closedId + 1 && closedToOpen.get(partnerId) === partnerId + 1 &&
+      !family.some((id) => DOUBLE_DOOR_FAMILY_IDS_BY_ID.has(id) || SINGLE_DOOR_OPEN_IDS.has(id)) &&
+      isMirroredLeafName(core.CacheDefinitions.getLocNames().get(closedId), core.CacheDefinitions.getLocNames().get(partnerId))
+    ) {
+      addCatalogDoubleDoor(closedId, partnerId, openId, partnerId + 1);
+    }
+  }
   return { closedToOpen, openToClosed };
+}
+
+// Two consecutive locs that are the closed leaves of one same-model double door: same name and
+// models, both offering only "Open", and each with a gameval-named open loc.
+function isSameModelLeafPair(a, b) {
+  const left = core.CacheDefinitions.getObject(a);
+  const right = core.CacheDefinitions.getObject(b);
+  if (!left || !right || left.name !== right.name) return false;
+  if (!Array.isArray(left.models) || left.models.length === 0) return false;
+  if (JSON.stringify(left.models) !== JSON.stringify(right.models)) return false;
+  const openOnly = (def) => hasAction(def.actions, "open") && !hasAction(def.actions, "close");
+  if (!openOnly(left) || !openOnly(right)) return false;
+  const names = core.CacheDefinitions.getLocNames();
+  return isMirroredLeafName(names.get(a), names.get(b)) && namedOpenLeaf(a) != null && namedOpenLeaf(b) != null;
+}
+
+// The two gameval names differ only by the leaf's side: gatel/gater, _left/_right, door/doorl,
+// face/face_mirr. Neighbouring variants (archeuus_door_double_left_green/_red) are not leaves.
+const LEAF_SIDE_SUFFIXES = new Set(["l|r", "left|right", "|l", "|r", "|_mirr", "|_mirror"]);
+function isMirroredLeafName(a, b) {
+  if (!a || !b || a === b) return false;
+  let start = 0;
+  while (start < a.length && start < b.length && a[start] === b[start]) start++;
+  let end = 0;
+  while (end < a.length - start && end < b.length - start && a[a.length - 1 - end] === b[b.length - 1 - end]) end++;
+  // Back the shared tail off a letter at a time: left_closed/right_closed share "t_closed".
+  for (; end >= 0; end--) {
+    const [x, y] = [a.slice(start, a.length - end), b.slice(start, b.length - end)].sort();
+    if (LEAF_SIDE_SUFFIXES.has(`${x}|${y}`)) return true;
+  }
+  return false;
 }
 
 // The open loc the cache's gameval names for a closed leaf (fai_varrock_member_gatel ->
@@ -484,10 +702,15 @@ function addSameModelDoubleDoor(a, b) {
   const openA = namedOpenLeaf(a);
   const openB = namedOpenLeaf(b);
   const [nextA, nextB] = openA != null && openB != null ? [openA, openB] : [a, b];
+  addCatalogDoubleDoor(a, b, nextA, nextB);
+}
+
+// Registers closed leaves a and b as one double door whose leaves open into nextA and nextB.
+function addCatalogDoubleDoor(a, b, nextA, nextB) {
   const family = [...new Set([a, b, nextA, nextB])];
   for (const id of family) {
     DOUBLE_DOOR_FAMILY_IDS_BY_ID.set(id, family);
-    SAME_MODEL_DOUBLE_DOOR_IDS.add(id);
+    CATALOG_DOUBLE_DOOR_IDS.add(id);
   }
   for (const [id, partner] of [[a, b], [b, a], [nextA, nextB], [nextB, nextA]]) {
     SPECIAL_DOUBLE_DOOR_PARTNER_IDS_BY_ID.set(id, [partner]);
@@ -898,9 +1121,10 @@ function handleMappedDoor(player, object, objectId, location) {
   const nextId = open ? closedId : openId;
   const type = Number(activeObject.getType?.() ?? activeObject.type ?? 0);
   const rotation = Number(activeObject.getFace?.() ?? activeObject.face ?? 0) & 0x3;
+  const inPlace = IN_PLACE_DOOR_IDS.has(closedId);
   const nextRotation = open ? ((rotation + 1) & 0x3) : rotation;
   const offsetIndex = type === 9 ? ((nextRotation + 1) & 0x3) : nextRotation;
-  const [dx, dy] = COORD_OFFSETS[offsetIndex] ?? [0, 0];
+  const [dx, dy] = inPlace || OWN_TILE_DOOR_IDS.has(closedId) ? [0, 0] : (COORD_OFFSETS[offsetIndex] ?? [0, 0]);
   const previousObject = activeObject;
   const nextObject = open && existingState?.closed?.[0]
     ? objectFromSnapshot(existingState.closed[0])
@@ -912,7 +1136,7 @@ function handleMappedDoor(player, object, objectId, location) {
         activeLocation.getZ?.() ?? activeLocation.z ?? 0
       ),
       type,
-      open ? ((rotation - 1) & 0x3) : ((rotation + 1) & 0x3),
+      inPlace ? rotation : open ? ((rotation - 1) & 0x3) : ((rotation + 1) & 0x3),
       privateArea
     );
 
@@ -988,7 +1212,7 @@ function ensureDynamicDoubleDoorRecords(object, objectId, location, privateArea 
     for (const partnerId of familyIds) {
       const partnerObject = core.MapObjects.get(partnerId, candidateLocation, privateArea)
         ?? privateArea?.resolveObject?.(partnerId, candidateLocation);
-      if (!partnerObject || !isSameModelLeafPartner(object, objectId, partnerObject)) {
+      if (!partnerObject || !isCatalogLeafPartner(object, objectId, partnerObject)) {
         continue;
       }
 
@@ -1013,9 +1237,9 @@ function ensureDynamicDoubleDoorRecords(object, objectId, location, privateArea 
   return null;
 }
 
-// A same-model leaf pairs only with a leaf in the same wall line, never with a lone open door.
-function isSameModelLeafPartner(object, objectId, partnerObject) {
-  if (!SAME_MODEL_DOUBLE_DOOR_IDS.has(objectId)) return true;
+// A catalog leaf pairs only with a leaf in the same wall line, never with a lone open door.
+function isCatalogLeafPartner(object, objectId, partnerObject) {
+  if (!CATALOG_DOUBLE_DOOR_IDS.has(objectId)) return true;
   return (Number(object.getFace?.() ?? object.face ?? 0) & 0x3) === (Number(partnerObject.getFace?.() ?? 0) & 0x3) &&
     Number(object.getType?.() ?? object.type ?? 0) === Number(partnerObject.getType?.() ?? 0);
 }
@@ -1055,11 +1279,11 @@ function resolveOpenedDoubleDoorId(record) {
   return SPECIAL_DOUBLE_DOOR_OPEN_IDS_BY_CLOSED_ID.get(record.originalId) ?? (record.originalId + 1);
 }
 
-// Swings one leaf of a double door: opening steps it a tile along its closed face and turns it
-// to openFaces[closed face], closing puts it back.
+// Swings one leaf of a double door: opening steps it a tile along its closed face (or keeps it on
+// its tile, see OWN_TILE_DOOR_IDS) and turns it to openFaces[closed face], closing puts it back.
 function toggleDoubleDoorLeaf(record, openFaces) {
   const closedPose = record.currentFace === record.originalFace;
-  const [dx, dy] = closedPose ? COORD_OFFSETS[record.originalFace] : [0, 0];
+  const [dx, dy] = closedPose && !OWN_TILE_DOOR_IDS.has(record.originalId) ? COORD_OFFSETS[record.originalFace] : [0, 0];
   if (record.x === record.originalX && record.y === record.originalY) {
     record.x += dx;
     record.y += dy;
@@ -1150,12 +1374,111 @@ function handleDoubleDoor(player, object, objectId, location) {
   return true;
 }
 
+function passThroughGateAt(objectId, x, y, z) {
+  return PASS_THROUGH_GATES.find((gate) =>
+    [...gate.closed, ...gate.opened].some(([id, gx, gy, gz]) => id === objectId && gx === x && gy === y && gz === z)) ?? null;
+}
+
+function wallLoc([id, x, y, z, face, shape = 0], privateArea) {
+  return new core.GameObject(id, cloneLocation(x, y, z), shape, face, privateArea);
+}
+
+function swapLocs(remove, add, privateArea) {
+  for (const leaf of remove) core.ObjectManager.deregister(wallLoc(leaf, privateArea), true);
+  for (const leaf of add) core.ObjectManager.register(wallLoc(leaf, privateArea), true);
+}
+
+const GATE_WALK_ANIMATION = 819;
+
+/** A thick gate whose tiles the map blocks: carry the player across it, on their own row, in both directions. */
+function carryAcrossGate(player, gate, y, z) {
+  const [low, high] = gate.crossBetween;
+  const here = player.getLocation();
+  const row = gate.crossRows.includes(here.getY()) ? here.getY() : y;
+  const eastward = here.getX() < (low + high) / 2;
+  const from = cloneLocation(eastward ? low : high, row, z);
+  if (Math.abs(here.getX() - from.getX()) > 1 || Math.abs(here.getY() - from.getY()) > 1) return;
+  if (!here.equals(from)) player.moveTo(from.clone());
+  const span = high - low;
+  core.TaskManager.submit(new core.ForceMovementTask(player, span,
+    new core.ForceMovement(from.clone(), new core.Location(eastward ? span : -span, 0, 0), 0, 30 * span,
+      eastward ? 1 : 3, GATE_WALK_ANIMATION)));
+}
+
+/**
+ * A gate that keeps a collision blocker on its doorway while open: the opener, standing on the tile beside
+ * it, is carried the one tile over (forced movement ignores the blocker); nobody else can walk across.
+ */
+function carryOneTile(player, gate, x, y, z) {
+  const here = player.getLocation();
+  const acrossX = gate.crossX != null;
+  if (acrossX ? here.getY() !== y : here.getX() !== x) return;
+  const cross = acrossX ? gate.crossX : gate.crossY;
+  const position = acrossX ? here.getX() : here.getY();
+  const delta = (position < cross ? cross : cross - 1) - position;
+  if (Math.abs(delta) !== 1) return;
+  const direction = acrossX ? (delta > 0 ? 1 : 3) : (delta > 0 ? 0 : 2);
+  core.TaskManager.submit(new core.ForceMovementTask(player, 1,
+    new core.ForceMovement(cloneLocation(here.getX(), here.getY(), z),
+      new core.Location(acrossX ? delta : 0, acrossX ? 0 : delta, 0), 0, 30, direction, GATE_WALK_ANIMATION)));
+}
+
+/** The player crosses on the clicked row or column, from whichever side they stand on. */
+function stepThroughGate(player, gate, x, y, z) {
+  if (gate.crossBetween) {
+    carryAcrossGate(player, gate, y, z);
+    return;
+  }
+  if (gate.carry) {
+    carryOneTile(player, gate, x, y, z);
+    return;
+  }
+  const destination = gate.crossX != null
+    ? cloneLocation(player.getLocation().getX() < gate.crossX ? gate.crossX : gate.crossX - 1, y, z)
+    : cloneLocation(x, player.getLocation().getY() < gate.crossY ? gate.crossY : gate.crossY - 1, z);
+  const queue = player.getMovementQueue();
+  queue.reset();
+  queue.addSteps(destination);
+}
+
+/** Opens a pass-through gate, steps the player across it and shuts it again (see PASS_THROUGH_GATES). */
+function handlePassThroughGate(player, objectId, location) {
+  const x = location?.getX?.() ?? location?.x;
+  const y = location?.getY?.() ?? location?.y;
+  const z = location?.getZ?.() ?? location?.z ?? 0;
+  const gate = passThroughGateAt(objectId, x, y, z);
+  if (!gate) return false;
+  const privateArea = player.getPrivateArea?.() ?? null;
+  const anchorKey = doorStateKey(`pass-through:${gate.closed[0].slice(1).join(",")}`, privateArea);
+  // Someone else's opening: step through it while it stands open.
+  if (OPEN_PASS_THROUGH_GATES.has(anchorKey)) {
+    stepThroughGate(player, gate, x, y, z);
+    return true;
+  }
+
+  swapLocs(gate.closed, gate.opened, privateArea);
+  OPEN_PASS_THROUGH_GATES.add(anchorKey);
+  // Captured: the opening sound only; the gate shuts silently (1636, 1663, 3220).
+  core.Sounds.sendSound(player, gate.openSoundId == null ? core.Sound.GATE_OPEN : new core.Sound(gate.openSoundId, 1, 0, 0));
+  stepThroughGate(player, gate, x, y, z);
+
+  const task = new core.Task(gate.closeTicks, anchorKey);
+  task.execute = () => {
+    task.stop();
+    OPEN_PASS_THROUGH_GATES.delete(anchorKey);
+    swapLocs(gate.opened, gate.closed, privateArea);
+  };
+  core.TaskManager.submit(task);
+  return true;
+}
+
 function toggleDoor({ player, object, objectId, definition, location, clickType }) {
   if (!player || !object || !location) return false;
   if (DORGESH_CITY_DOOR_IDS.has(objectId) || DORGESH_CITY_DOOR_IDS.has(definition?.id)) return false;
   const request = { player, object, objectId, definition, location, clickType, handled: false };
   api.emitCustomEvent("door:toggle", request);
   if (request.handled) return true;
+  if (handlePassThroughGate(player, objectId, location)) return true;
   if (handleCompositeDoor(player, object, objectId)) return true;
   if (handleWoodenGate(player, object, objectId, location)) return true;
   if (handleDoubleDoor(player, object, objectId, location)) return true;
@@ -1168,6 +1491,11 @@ function requestDoorOpen(event) {
   const objectId = event.object.getId();
   const location = event.object.getLocation();
   const definition = core.ObjectDefinition.forPlayer(objectId, event.player) ?? event.object.getDefinition();
+  // A pass-through gate may have no "Open" of its own (the troll prison door is "Unlock").
+  if (handlePassThroughGate(event.player, objectId, location)) {
+    event.handled = true;
+    return;
+  }
   const area = event.player.getPrivateArea?.() ?? null;
   const existing = [...OPEN_OBJECT_STATES.values()].some(state => state.current?.some(snapshot =>
     snapshot.id === objectId && locationKey(snapshot.location) === locationKey(location)
@@ -1182,12 +1510,47 @@ function requestDoorOpen(event) {
     location: { x: location.getX(), y: location.getY(), z: location.getZ() }, clickType });
 }
 
+// Read the shared world's current leaves without changing the door or its auto-close timer.
+function readDoorState(event) {
+  const requested = event.objects ?? [];
+  const current = new Set(requested);
+  for (const state of OPEN_OBJECT_STATES.values()) {
+    if (state.closed[0]?.privateArea) continue;
+    const replaced = requested.filter(object => state.closed.some(snapshot =>
+      (object.getPrivateArea() ?? null) === (snapshot.privateArea ?? null) &&
+      object.getId() === snapshot.id && object.getType() === snapshot.type && object.getFace() === snapshot.face &&
+      locationKey(object.getLocation()) === locationKey(snapshot.location)));
+    if (!replaced.length) continue;
+    for (const object of replaced) current.delete(object);
+    for (const snapshot of state.current) current.add(objectFromSnapshot(snapshot));
+  }
+  event.objects = [...current];
+}
+
 function routeWallDoor(event) {
   const name = event.definition?.getName?.() ?? "";
   if (event.object?.getType?.() !== 0 ||
     (!DOOR_NAMES.has(name) && !/\b(?:doors?|doorway|gates?)\b/i.test(name))) return;
-  // A straight wall door is used across its face, never from either end of the wall.
+  // A closed straight wall door is used across its face, never from either end of the wall.
+  // An open leaf stands across the doorway instead, and the tile inside the doorway is at its
+  // end, so it keeps ordinary wall reach: closing it from inside doesn't walk the player out.
+  if (isOpenLeaf(event.definition)) return;
+  // An open leaf of a pass-through gate keeps its Open option (it takes the click that carries the
+  // player across) but stands beside the doorway like any open leaf, so it keeps ordinary wall reach.
+  if (isPassThroughOpenLeaf(event.object)) return;
   event.blockAccessFlags = (event.blockAccessFlags ?? 0) | 0x5;
+}
+
+function isPassThroughOpenLeaf(object) {
+  const at = object?.getLocation?.();
+  if (!at) return false;
+  return PASS_THROUGH_GATES.some((gate) => gate.opened.some(([id, x, y, z]) =>
+    id === object.getId() && x === at.getX() && y === at.getY() && z === at.getZ()));
+}
+
+function isOpenLeaf(definition) {
+  const actions = definition?.getInteractions?.();
+  return hasAction(actions, "close") && !hasAction(actions, "open");
 }
 
 function registerWallDoorRoutes() {
@@ -1211,6 +1574,7 @@ module.exports = {
     api.onRegionLoaded(({ regionId }) => reapplyOpenDoorsForRegion(regionId));
     api.onServerStartup(registerWallDoorRoutes);
     api.onCustomEvent("door:open", requestDoorOpen);
+    api.onCustomEvent("door:state", readDoorState);
   },
   __internals: { OPEN_OBJECT_STATES, RUNTIME_DOUBLE_DOOR_RECORDS },
 };

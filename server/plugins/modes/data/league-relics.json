@@ -5,9 +5,12 @@
   "_iconStructs": "The cache's tier 7 enum (5709) holds only two relics, so its third slot borrows the first's icon.",
   "iconStructs": [[1722, 6441, 6445], [6443, 1124, 6440], [1121, 6439, 6450], [6446, 6452, 6448], [6437, 6444, 6447], [1132, 6449, 6451], [6453, 1127, 6453], [4726, 6438, 6454]],
   "selectionVarbits": [10049, 10050, 10051, 10052, 10053, 11696, 17301, 17302],
+  "_selectionOtherVarbits": "league_relic_selection_other_0-7 (rev 241 gamevals): Reloaded's extra pick, the slot in its tier, as client script 3697 reads it beside the tier's own selection (rec 1135: Eternal Sustenance as the extra tier 6 pick sets selection_other_5 to 2). league_relic_repick_0-7: 1 for each tier the unused extra pick may come from (rec 1135: repick_0-5 go to 1 when Reloaded is chosen and back to 0 on the extra pick).",
+  "selectionOtherVarbits": [17554, 17555, 17556, 17557, 17558, 17559, 17560, 17561],
+  "repickVarbits": [17562, 17563, 17564, 17565, 17566, 17567, 17568, 17569],
   "lastViewedVarbit": 10048,
   "interface": {
-    "_comment": "league_relics (655) and the league side panel's relics button (656:44), as captured (227/00070, 227/00075): open as the main modal with if_setevents on clickzones 655:22 slots 0-23 and league_menu_frame 655:6 slots 10-20; a clickzone sets league_relic_last_viewed (tier x 3 + slot) and runs 3193 (the panel's components, the state the captures show, the relic struct, the tier's passive struct) and 3181; confirm_text 655:50 unlocks: the selection varbit, human_relic_unlock 8524, the league's unlock spotanim at height 92, the modal closed, sounds 4215/4211/4213/4212 at 8/44/80/104.",
+    "_comment": "league_relics (655) and the league side panel's relics button (656:44), as captured (227/00070, 227/00075): open as the main modal with if_setevents on clickzones 655:22 slots 0-23 and league_menu_frame 655:6 slots 10-20; a clickzone sets league_relic_last_viewed (the slot, numbered by client script 3189 with one counter over every tier's relics: Demonic Pacts' two-relic tier 7 makes tier 8 slots 20-22, rec 1135) and runs 3193 (the panel's components, the state the captures show, the relic struct, the tier's passive struct) and 3181; confirm_text 655:50 unlocks: the selection varbit, human_relic_unlock 8524, the league's unlock spotanim at height 92, the modal closed, sounds 4215/4211/4213/4212 at 8/44/80/104.",
     "group": 655,
     "_modalSize": "Script 2524 (-1, -3), which live ran before opening the interface (227/00196), sizes the modal.",
     "modalSize": [2524, [-1, -3]],
@@ -16,13 +19,18 @@
     "clickzoneSlots": [0, 23],
     "menuFrame": 6,
     "menuFrameSlots": [10, 20],
-    "confirm": 50,
+    "_confirm": "Rev 227 (227/00070, 00075) unlocked on confirm_text 655:50; in this cache (241) and the Leagues VI recordings (237: 1098, 1107, 1135) only confirm_button 655:51 has an op, so the client sends that.",
+    "confirm": 51,
     "viewScript": 3193,
-    "viewScriptComponents": [14, 23, 27, 24, 43, 33, 38, 39, 44, 46, 12, 48, 49, 50, 51, 55, 56, 10],
-    "_viewScriptState": "The int argument of 3193 as sent in both captured slot clicks (227/00070 sub 9, 227/00075 sub 14), each on an affordable tier not yet chosen; what a locked or chosen tier gets was not captured.",
-    "viewScriptState": 2,
+    "_viewScript": "Script 3193 (league_relic_expanded_view) as the Leagues VI recordings run it (237: 1098, 1102, 1104): view_all 14, view_all_scrollbar 23, view_one 26, loading 24, icon 44, name 32, description_header 39, description 40, select_button 45, select_back 47, confirm 12, confirm_frame 49, confirm_text 50, confirm_button 51, confirm_cancel 52, passive_header 56, passive_description 57, relic_available_header 10, then the state, the relic struct, the tier's passive struct, the relic's description and the tier's passive text (the structs' params 880 and 1020).",
+    "viewScriptComponents": [14, 23, 26, 24, 44, 32, 39, 40, 45, 47, 12, 49, 50, 51, 52, 56, 57, 10],
+    "_viewStates": "The int argument of 3193: what the relic is to the viewer, as the client reads it (league_relic_expanded_view; league_relic_not_available 3194's lines): 1 the viewer's own relic (237/01104: 1 for the player's own Transmute, struct 6446), 4 another relic of a tier already chosen, 0 a tier the points don't reach, 2 one that may be chosen (227/00070, 00075), 5 a relic of a chosen tier that Reloaded's unused extra pick may take (rec 1135). 1 also unlocks the relic's effect toggles (league_relic_toggle_effect_click). 3 (\"previous tier first\") is never sent: the server lets tiers be chosen in any order.",
+    "viewStates": { "locked": 0, "unlocked": 1, "available": 2, "tierTaken": 4, "repick": 5 },
     "toggleScript": 3181,
-    "toggleScriptComponents": [7, 52],
+    "_toggleScript": "Script 3181 (league_points_progress_bar): progress_bar 655:7 and tooltip 655:53, false, true (rev 237).",
+    "toggleScriptComponents": [7, 53],
+    "_toggles": "toggles 655:38 takes IF_SCRIPT_TRIGGER (-1 to -1) at the open (rev 237); the relic effect toggles a click on it sends arrive as script triggers.",
+    "toggles": 38,
     "unlockAnimation": 8524,
     "unlockGraphicHeight": 92,
     "unlockSounds": [[4215, 8], [4211, 44], [4213, 80], [4212, 104]]
@@ -44,13 +52,14 @@
     "alreadyChosen": { "text": "You have already chosen a relic for that tier.", "source": "ours" },
     "needsBank": { "text": "You need to be in a bank to unlock this relic, as it gives you an item.", "source": "ours" },
     "noRoom": { "text": "You need room in your inventory or bank for this relic's items.", "source": "ours" },
-    "relicUsage": { "text": "Use ::relic <tier 1-8> <slot 1-3>.", "source": "ours" },
+    "relicUsage": { "text": "Use ::relic <tier 1-8> <slot 1-3>, or ::relic reset.", "source": "ours" },
     "relicList": { "text": "{league} relics: {relics}", "source": "ours" },
     "relicNone": { "text": "none chosen", "source": "ours" },
     "lastStandNoFood": { "text": "You cannot eat while making your last stand.", "source": "ours" },
     "echoToggle": { "text": "Your {tool} will now {mode}.", "source": "ours" },
-    "foragerFound": { "text": "Your forager's pouch finds some {herb}.", "source": "ours" },
-    "foragerHolds": { "text": "Your forager's pouch holds: {herbs}.", "source": "ours" },
+    "foragerFound": { "text": "You find a herb whilst gathering and stash it in your Forager's Pouch.", "source": "rsprox 237/01098 (spam); 'You find some herbs whilst gathering and stash them in your Forager's Pouch.' when one action finds several" },
+    "foragerHolds": { "text": "You look in your forager's pouch and see:", "source": "rsprox 237 (Check: this line, then one '{amount} x {herb}' line per herb)" },
+    "foragerHoldsHerb": { "text": "{amount} x {herb}", "source": "rsprox 237" },
     "foragerEmpty": { "text": "Your forager's pouch is empty.", "source": "ours" },
     "foragerFilled": { "text": "You put {amount} herbs into your forager's pouch.", "source": "ours" },
     "foragerNoRoom": { "text": "You don't have enough inventory space to withdraw that.", "source": "ours" },
@@ -65,6 +74,8 @@
     "areaLocked": { "text": "You haven't unlocked the area that leads to.", "source": "ours" },
     "noLastDestination": { "text": "You haven't teleported anywhere with it yet.", "source": "ours" },
     "noDestinations": { "text": "There is nowhere to teleport to.", "source": "ours" },
+    "questNeeded": { "text": "You need to complete {quest} to teleport there.", "source": "ours" },
+    "alacrityTitle": { "text": "Which area's shortcuts?", "source": "ours" },
     "fairyMushroomTitle": { "text": "Where would you like to go?", "source": "ours" },
     "fairyRingsTitle": { "text": "Which fairy ring?", "source": "ours" },
     "spiritTreesTitle": { "text": "Which spirit tree?", "source": "ours" },
@@ -89,7 +100,7 @@
     "bankersNoteFirst": { "text": "Use an item on the banker's note first.", "source": "ours (Wiki: an item must first be used on it)" },
     "bankersNoteToggleNote": { "text": "Activate will now note.", "source": "ours" },
     "bankersNoteToggleUnnote": { "text": "Activate will now unnote.", "source": "ours" },
-    "reloadedChosen": { "text": "Reloaded: you also have {relic}.", "source": "ours" },
+    "reloadedRepick": { "text": "You can now pick another relic below tier {tier}!", "source": "ours, after rec 1135's Demonic Pacts line (its own wording in demonicPacts' messages)" },
     "bankHeistTitle": { "text": "Which bank?", "source": "ours" }
   },
   "effects": {
@@ -112,7 +123,11 @@
     "brawlersResolve": { "league": 4, "key": "brawlers-resolve", "accuracyMultiplier": 1.5, "defenceMultiplier": 1.5, "doubleDamageChance": 0.1, "chargeSaveChance": 0.9, "immuneStatuses": ["poison", "venom", "dragonfire"] },
     "soulStealer": { "league": 4, "key": "soul-stealer", "minimumHitFraction": 0.1, "restoreChance": 0.5, "restoreFraction": 0.1 },
     "weaponMaster": { "league": 4, "key": "weapon-master", "minimumHitFraction": 0.2, "regenPercent": 30, "sacrificeHitpoints": 25 },
-    "executioner": { "league": 4, "key": "executioner", "items": ["SAGES_AXE", "SAGES_AXE_2"], "executeBelowFraction": 0.2, "attackDistance": 5, "longRangeDistance": 7 },
+    "executioner": {
+      "league": [4, 6], "key": "executioner", "items": ["SAGES_AXE", "SAGES_AXE_2"], "executeBelowFraction": 0.2, "attackDistance": 5, "longRangeFightType": "DART_LONGRANGE", "_longRange": "The axe takes the dart styles (item-gameplay.json); their Longrange adds 2 tiles: 7, and Demonic Pacts' 8 (Wiki).",
+      "_spared": "Demonic Pacts' axe 'will not work against Yama' (Wiki, cache text) 'or the Gemstone Crab' (Wiki, Sage's axe): no execute on an NPC of these names.", "spared": { "6": ["Yama", "Gemstone Crab"] },
+      "_reach": "Each league's axe reach where it differs from `attackDistance` (Wiki: Demonic Pacts' axe 'has an attack range of 6 tiles').", "reach": { "6": 6 }
+    },
     "specialist": { "league": 5, "key": "specialist", "cost": 20, "accuracyMultiplier": 2, "missRefundPercent": 10, "killRestorePercent": 15 },
     "lastStand": {
       "league": 5, "key": "last-stand", "aliases": ["last-stand-preview"],
@@ -120,11 +135,21 @@
       "skills": ["ATTACK", "STRENGTH", "DEFENCE", "RANGED", "MAGIC"]
     },
     "equilibrium": { "league": [4, 5], "key": "equilibrium", "bonusFraction": 0.1, "leastExperiencedFraction": 0.2 },
-    "_gatheringComment": "The gathering relics (docs/leagues.md). Wiki numbers unless marked ours: Trickster's and Animal Wrangler's faster box-trap lure (the trap's 5-tick look for prey halved to 2 ticks: the Wiki gives no figure); the Echo tools' toggles cycle through their modes with our messages; Power Miner's auto-smelt takes the furnace recipe whose main ore it is and waives its other ingredients (a copper ore alone makes a bronze bar; coal makes nothing), its four ores a rock are counted per rock for everyone who mines it and do not count mining gloves (not modelled here); a Fishing second chance lands the best fish the player can catch at the spot; Trickster's and Dodgy Deals' coins are multiplied as coin pouches; Corner Cutter's 25% is on the lap's completion bonus; the Sage's greaves of Trickster and Corner Cutter are not in this cache.",
-    "endlessHarvest": { "league": 4, "key": "endless-harvest", "skills": ["MINING", "WOODCUTTING", "FISHING"], "multiplier": 2 },
+    "_gatheringComment": "The gathering relics (docs/leagues.md). Wiki numbers unless marked ours: Trickster's and Animal Wrangler's faster box-trap lure (the trap's 5-tick look for prey halved to 2 ticks: the Wiki gives no figure); the Echo tools' toggles cycle through their modes with our messages; Power Miner's auto-smelt follows its smeltBars conversions and waives other ingredients (iron becomes steel without coal; coal stays coal), its four ores a rock are counted per rock for everyone who mines it and do not count mining gloves (not modelled here); a Fishing second chance lands the best fish the player can catch at the spot; Trickster's and Dodgy Deals' coins are multiplied as coin pouches; Corner Cutter's 25% is on the lap's completion bonus; the Sage's greaves of Trickster and Corner Cutter are not in this cache.",
+    "endlessHarvest": {
+      "league": [4, 6], "key": "endless-harvest", "skills": ["MINING", "WOODCUTTING", "FISHING"], "multiplier": 2,
+      "_demonicPacts": "Demonic Pacts' (Wiki, cache text): banking is the relic's toggle (cache row league_relic_endless_harvest_toggle_bank, on by default), and rocks and trees no longer deplete while the relic's owner gathers from them (ours: they stay standing for everyone, as Power Miner's rocks do).",
+      "bankToggle": { "6": "league_relic_endless_harvest_toggle_bank" }, "endlessLeagues": [6]
+    },
     "trickster": { "league": 4, "key": "trickster", "pouchLimitMultiplier": 3, "lootMultiplier": 2, "boxTrapMultiplier": 2, "boxTrapLureTicks": 2, "logsPerAction": 9 },
     "powerMiner": {
       "league": 5, "key": "power-miner", "tool": "ECHO_PICKAXE", "toolName": "Echo pickaxe", "secondChance": 0.5, "oresPerRock": 4,
+      "smeltBars": {
+        "COPPER_ORE": "BRONZE_BAR", "BLURITE_ORE": "BLURITE_BAR", "IRON_ORE": "STEEL_BAR",
+        "SILVER_ORE": "SILVER_BAR", "LEAD_ORE": "LEAD_BAR", "GOLD_ORE": "GOLD_BAR",
+        "MITHRIL_ORE": "MITHRIL_BAR", "ADAMANTITE_ORE": "ADAMANTITE_BAR", "RUNITE_ORE": "RUNITE_BAR",
+        "PERFECT_GOLD_ORE": "PERFECT_GOLD_BAR", "BUCKET_OF_SAND": "MOLTEN_GLASS"
+      },
       "modes": ["smelt and cut", "smelt", "cut", "off"], "modeText": { "smelt and cut": "smelt the ore and cut the gems you mine", "smelt": "smelt the ore you mine", "cut": "cut the gems you mine", "off": "leave what you mine as it is" }
     },
     "lumberjack": {
@@ -155,8 +180,11 @@
       "capped": { "arrows": 10, "bolts": 10, "tipped": 10, "darts": 10 }
     },
     "friendlyForager": {
-      "league": 5, "key": "friendly-forager", "tool": "FORAGERS_POUCH", "toolName": "Forager's pouch",
+      "league": [5, 6], "key": "friendly-forager", "tool": "FORAGERS_POUCH", "toolName": "Forager's pouch",
+      "_leagueBatch": "Demonic Pacts' pouch also makes every Herblore item at once (Wiki, cache text), up to 28 a cycle as the production relics.",
+      "leagueBatch": { "6": { "maxActions": 28, "batch": { "HERBLORE": ["clean", "mix"] } } },
       "cooldownTicks": 9, "levelRange": 25, "herbCap": 30, "secondarySaveChance": 0.9,
+      "leagueHerbCap": { "6": 100 }, "_leagueHerbCap": "Wiki, Forager's pouch (15 April 2026): Demonic Pacts' pouch holds 100 of each herb, as the silklined herb sack.",
       "triggers": ["mining:success", "woodcutting:success", "fishing:success", "hunter:success"],
       "_saving": "Wiki: the torstol potion (unf) of super combat potions and anti-venom+ is saved like a secondary; crystal dust (divine potions) never is.",
       "alsoSaved": ["torstolvial"], "neverSaved": ["prif_crystal_shard_crushed"]
@@ -208,15 +236,149 @@
       "freeItems": ["RUNE_POUCH", "HERB_SACK", "LOOTING_BAG"], "bonusKill": 100, "bonusXp": [1000, 15000]
     },
     "_itemsComment": "The item and teleport relics (docs/leagues.md). Wiki numbers unless marked ours: the menus' grouping and wording, the tool leprechauns named after their nearest fairy ring, the banker's note's default quantities (all) and its Toggle (Activate between noting and unnoting) are ours; Reloaded's extra pick comes from tiers 1-3 (tier indexes 0-2).",
-    "fairysFlight": { "league": [4, 5], "key": "fairys-flight", "toolName": "Fairy mushroom" },
+    "fairysFlight": { "league": [4, 5, 6], "key": "fairys-flight", "aliases": ["nature-s-accord"], "toolName": "Fairy mushroom" },
     "globetrotter": { "league": 4, "key": "globetrotter", "toolName": "Globetrotter pendant" },
     "bankersNote": { "league": [4, 5], "key": "bankers-note", "toolName": "Banker's note" },
     "clueCompass": { "league": 5, "key": "clue-compass", "toolName": "Clue compass" },
     "totalRecall": { "league": 5, "key": "total-recall", "toolName": "Crystal of Echoes" },
-    "grimoire": { "league": 5, "key": "grimoire" },
-    "bankHeist": { "league": 5, "key": "bank-heist", "toolName": "Banker's briefcase" },
-    "reloaded": { "league": 5, "key": "reloaded", "tiers": [0, 1, 2] },
-    "reloaded": { "league": 5, "key": "reloaded", "tiers": [0, 1, 2] },
+    "grimoire": { "league": [5, 6], "key": "grimoire", "_prayersLeagues": "Demonic Pacts' Grimoire also unlocks every prayer (Wiki, cache text): `prayer:unlocks-bypass`.", "prayersLeagues": [6] },
+    "bankHeist": { "league": [5, 6], "key": "bank-heist", "toolName": "Banker's briefcase" },
+    "reloaded": { "league": [5, 6], "key": "reloaded", "tiers": [0, 1, 2], "_leagueTiers": "Demonic Pacts' Reloaded is tier 7: any relic of tiers 1-6 (cache, Wiki).", "leagueTiers": { "6": [0, 1, 2, 3, 4, 5] } },
+    "_demonicPactsComment": "Demonic Pacts (league 6) relics (docs/leagues.md): the catalog is the cache's (struct 6436), so each relic's key is its cache name slugged; its item is the relic struct's param 2049 and is handed out in a bank or near the Leagues Tutor (237/01102). Numbers are the Wiki's and the cache's relic text unless marked ours.",
+    "demonicPacts": {
+      "league": 6, "cacheLeague": true, "relicItemParam": 2049,
+      "tutor": { "name": "Leagues Tutor", "reach": 10, "_reach": "ours: 'near the Leagues Tutor' (237/01102) gives no distance.", "bankReach": 4, "_bankReach": "'within a bank' (237/01102): a bank loc or banker within 4 tiles (LeagueMode's league:near-bank), ours. Live unlocked item relics 3 tiles from the Colosseum's bank tables (237/01098, Friendly Forager at 1780,3096) and next to Nemus Retreat's Bank buffalo (237/01098 Evil Eye at 1387,3309; 237/01102 Transmute at 1527,3292), but refused 2 tiles from the Nemus one (237/01098 at 1389,3309): live's bank is an area, not a distance, which the server has no data for." },
+      "toggles": { "table": "league_relic_effect_toggle", "varp": "league_relic_effect_toggle_1", "onColour": "229628", "offColour": "ff3045", "_source": "237/01104, 01106: the row's on or off message after the relic's name, green on, red off." },
+      "messages": {
+        "needsBank": "You must be within a bank or near the Leagues Tutor to unlock this as it gives you items.",
+        "unlocked": "Congratulations, you've unlocked a new Relic: <col=FE206A>{relic}</col>.",
+        "received": "You receive {item}.",
+        "reloadedRepick": "<col=FE206A>You can now pick another relic below tier seven!",
+        "collectAsk": "Do I have any League items to collect?",
+        "collectReceived": "You receive some items from the Tutor.",
+        "collectNothing": "You have no League items to collect.",
+        "collectFull": "You don't have enough inventory space for the rest of your League items.",
+        "_source": "237/01102 (needsBank), 237/01098 (unlocked, received), 1135 (reloadedRepick, after the congratulations for Reloaded), 1098 and 1107 (collectAsk, collectReceived: the Tutor's Collect-items); collectNothing and collectFull are ours (no recording has either)."
+      }
+    },
+    "barbarianGathering": {
+      "league": 6, "key": "barbarian-gathering", "skills": ["MINING", "WOODCUTTING", "FISHING"],
+      "secondChance": 0.5, "bonusXpFraction": 0.1, "bonusSkills": ["STRENGTH", "AGILITY"],
+      "handTools": { "WOODCUTTING": "CRYSTAL_AXE", "MINING": "CRYSTAL_PICKAXE" },
+      "_hands": "Bare hands fish as the spot's best tool (its crystal version where one exists) with no bait, and chop and mine as the crystal axe and pickaxe (Wiki), at any level and with no Agility requirement. They are no item: a task naming the tool is not done with them (ours)."
+    },
+    "abundance": {
+      "league": 6, "key": "abundance", "levelBoost": 10, "extraXp": 2, "coinsPerXp": 2,
+      "combatSkills": ["ATTACK", "STRENGTH", "DEFENCE", "RANGED", "MAGIC", "HITPOINTS", "PRAYER"],
+      "coinsToggle": "league_relic_abundance_toggle_coins_inv",
+      "_boost": "The +10 is a permanent, visible boost of the current level (233/246 Leagues VI recordings: every non-combat skill at base + 10, combat skills unboosted, kept through level-ups), with the resting level raised to match. Coins are paid on the experience as gained (after the rates), fractions carried to the next gain (ours)."
+    },
+    "hotfoot": {
+      "league": 6, "key": "hotfoot", "tool": "SEARING_BOOTS", "lapCount": 2, "lapXpMultiplier": 1.25,
+      "markChance": 0.33, "markCourses": ["draynor", "alkharid", "varrock", "canifis", "falador", "seers", "pollnivneach", "rellekka", "ardougne"],
+      "markLapCoins": 10000, "runXpBase": 10, "runXpLevelFraction": [2, 3], "runXpTicks": 10, "runStepTiles": 2, "_runXp": "Wiki, Searing boots: 10 + floor(Agility level x 2/3) Agility XP roughly every 10 ticks of running, a tick counting when the player moved 2 squares in it.", "courseItems": { "prifddinas": { "CRYSTAL_SHARD": 10 } }, "minigamePoints": { "brimhaven-agility-arena": 2 }, "_courseItems": "Wiki: 10x crystal shards from the Prifddinas Agility Course, 2x Agility arena tickets and vouchers (16 a pillar with the 8x minigame passive).",
+      "_marks": "The Wiki's 33% on the rooftop courses (Wiki, Rooftop Agility: these nine), in place of the course's own chance and its overlevel cut; the mark cooldown still runs (ours). A picked-up course mark finishes a lap of its course with 10,000 coins, whatever the footwear.",
+      "oreBars": { "IRON_ORE": "STEEL_BAR" },
+      "_processing": "With the boots worn, caught fish come cooked and mined ore smelted into its own bar, iron ore into a steel bar (oreBars), with the Cooking or Smithing XP (the Wiki gives none). 234/03285: 133 iron mined banked 133 steel bars with Smithing drops of 262/263 (a steel bar's 17.5 at 15x), mithril ore gave mithril bars and coal stayed coal. Whether coal is used up for the steel can't be seen; we take none (ours)."
+    },
+    "woodsman": {
+      "league": 6, "key": "woodsman", "maxActions": 28,
+      "batch": { "FLETCHING": ["logs", "shields", "stringing", "chisel", "arrows", "bolts", "tipped", "darts"] },
+      "capped": { "arrows": 10, "bolts": 10, "tipped": 10, "darts": 10 },
+      "trapMultiplier": 2, "lureTicks": 2, "_lureTicks": "ours, as Trickster: the trap's 5-tick look for prey every 2 ticks.",
+      "burnToggle": "league_relic_woodsman_toggle_burn", "bankToggle": "league_relic_woodsman_toggle_bank",
+      "rumourXpMultiplier": 2, "sackRollMultiplier": 2, "implingLootMultiplier": 2,
+      "_implings": "A jar's loot doubled and noted (Wiki); its clue rolls are not loot, and an item that neither stacks nor notes stays single (as the other noted-loot relics: ours). The sack's doubled rolls are its loot rolls, not its blueprint, kit and outfit rolls."
+    },
+    "connivingClues": {
+      "league": 6, "key": "conniving-clues", "clueOneIn": 15, "vesselMultiplier": 10, "waived": ["emote", "falo", "charlie"],
+      "_waived": "The cache's relic text names Emote, Falo and Charlie steps; the Wiki leaves Charlie out. The cache wins.",
+      "contractChance": 3, "contracts": { "beginner": [0, 2], "easy": [1, 4], "medium": [1, 5], "hard": [1, 7], "elite": [1, 9], "master": [1, 10] },
+      "scrollBoxOneIn": 4, "contract": "CLUE_CONTRACT", "contractName": "Clue contract"
+    },
+    "naturesAccord": { "league": 6, "key": "nature-s-accord", "seedSaveChance": 0.2, "yieldMultiplier": 10 },
+    "larcenist": { "league": 6, "key": "larcenist", "pouchLimitMultiplier": 10, "lootMultiplier": 10 },
+    "soulHarvest": {
+      "league": 6, "key": "soul-harvest", "shard": "SOUL_SHARD", "farmingXpPerShard": 4, "bonesToggle": "league_relic_soul_harvest_toggle_bones",
+      "_shards": "Bones: their blessed bone shards (Wiki, Blessed bone shards). Ashes have none there: ours, 0.8 of their burial XP, as the bones' shards run.",
+      "shards": {
+        "BONES": 4, "BURNT_BONES": 4, "WOLF_BONES": 4, "MONKEY_BONES": 4, "BAT_BONES": 5, "BIG_BONES": 12, "JOGRE_BONES": 12, "ZOGRE_BONES": 18,
+        "WYRMLING_BONES": 21, "BABYDRAGON_BONES": 24, "STRYKEWYRM_BONES": 37, "WYRM_BONES": 42, "SUN_KISSED_BONES": 45, "WYVERN_BONES": 58,
+        "DRAGON_BONES": 58, "DRAKE_BONES": 67, "FAYRG_BONES": 67, "LAVA_DRAGON_BONES": 68, "RAURG_BONES": 77, "FROST_DRAGON_BONES": 84,
+        "HYDRA_BONES": 93, "DAGANNOTH_BONES": 100, "OURG_BONES": 112, "SUPERIOR_DRAGON_BONES": 121,
+        "FIENDISH_ASHES": 8, "VILE_ASHES": 20, "MALICIOUS_ASHES": 52, "ABYSSAL_ASHES": 68, "INFERNAL_ASHES": 88
+      }
+    },
+    "eternalSustenance": { "league": 6, "key": "eternal-sustenance" },
+    "cullingSpree": {
+      "league": 6, "key": "culling-spree", "freeKinds": ["unlock", "extend", "cancel", "block"], "freeItems": ["RUNE_POUCH", "HERB_SACK", "LOOTING_BAG"],
+      "superiorClues": [1, 3], "superiorClue": "SCROLL_BOX_ELITE_", "_superiorClue": "The elite clues come as scroll boxes, as the tier-1 passive drops every clue (ours).",
+      "superiorAgainChance": 0.5, "helmet": "imbued"
+    },
+    "flowState": {
+      "league": 6, "key": "flow-state", "ticks": 2,
+      "_skills": "The skills paced (\"skills:action-interval\"), each to the loop kinds it covers, or true for all of them (Wiki, Flow_State_(Demonic_Pacts_League): smelting ores, smithing bars and making cannonballs; Wintertodt's roots and brazier lighting; Tempoross's fishing; the transmutation spells). Fishing's own spots ask `fishing:interval`; Tempoross's harpoons ask this as `tempoross`.",
+      "skills": {
+        "MINING": true, "WOODCUTTING": true, "COOKING": true, "FIREMAKING": true, "PRAYER": true, "FLETCHING": true,
+        "SMITHING": true, "CRAFTING": true, "FARMING": true, "MAGIC": true, "FISHING": ["tempoross"]
+      }
+    },
+    "evilEye": {
+      "league": 6, "key": "evil-eye", "toolName": "Evil eye",
+      "cast": { "tick": 1, "landTick": 5, "animation": "evil_eye_cast01", "graphic": "leagues_6_evil_eye", "lastVarp": "league_default_teleport_last_destination" },
+      "_cast": "237/04057 (ticks 2476-2481, 2546-2551, 2865-2870): the destination picked, evil_eye_cast01 and spotanim leagues_6_evil_eye the next tick, the move four ticks after it; varp league_default_teleport_last_destination takes the tile (58189278 = 3551,9694,0) as the cast starts. lockTick: ours, the cast's own tick.",
+      "_destinations": "plugins/modes/data/league-evil-eye.json: the Wiki's bosses and raids by area, each on a tile the server's own data gives (leaguerelics/EvilEye.LeagueRelics.js)."
+    },
+    "mapOfAlacrity": {
+      "league": 6, "key": "map-of-alacrity", "toolName": "Map of alacrity",
+      "cast": { "tick": 1, "landTick": 3, "animation": "hotfoot_grace_teleport", "graphic": "leagues_6_hotfoot" },
+      "_cast": "No recording of the map in use: inferred from the Wiki's video and the cache's names, hotfoot_grace_teleport (a 2-tick seq) with spotanim leagues_6_hotfoot on the pick's next tick, the move when the seq ends. lockTick: ours, the cast's own tick.",
+      "_shortcuts": "plugins/modes/data/league-map-of-alacrity.json: the Wiki map's shortcuts the server has, by area (leaguerelics/MapOfAlacrity.LeagueRelics.js)."
+    },
+    "flaskOfFervour": {
+      "league": 6, "key": "flask-of-fervour", "toolName": "Flask of fervour", "tool": "FLASK_OF_FERVOUR",
+      "cooldownTicks": 300, "cooldownCutPerTenDamage": 1, "_cooldownCut": "0.6s (one tick) off the cooldown for every 10 damage of one hit (Wiki).",
+      "explosions": 3, "explosionTicks": [1, 3, 5], "radius": 3, "prayerFraction": 0.6, "pvpPrayerFraction": 0.3, "immuneTicks": 4, "spared": ["Yama"],
+      "_explosionTicks": "237/01158: the impacts land 1, 3 and 5 ticks after the Activate tick.",
+      "impactDelays": [20, 30, 40], "_impactDelays": "237/01158: each explosion's impact map_anims, on the 8 lines out from the player's tile, at 1, 2 and 3 tiles with these client-cycle delays.",
+      "animation": "vengeance_spell_anim_nostalling", "graphic": "leagues_6_sigil_of_life", "impact": "leagues_6_sigil_of_life_impact", "sound": 165,
+      "cooldownVarp": "league_relic_flask_of_fervour_cooldown", "cooldownVarpOffset": 1, "_cooldownVarp": "237/01158 (Activate at map_clock 43048 and 44028: 43349 and 44329, the clock + 301; each cut lowers it by the ticks taken off).",
+      "messages": {
+        "used": "<col=FE206A>Your Flask of fervour unleashes its power. The Sigil has lost power for 3 minutes.",
+        "cooldown": "<col=FE206A>The Flask of fervour is on cooldown for another {seconds} seconds!",
+        "ready": "<col=FE206A>Flask of fervour is ready to use.",
+        "_source": "237/01164 (op Activate: the line, vengeance_spell_anim_nostalling, spotanim leagues_6_sigil_of_life, sound 165, the impact map_anims within 3 tiles)."
+      }
+    },
+    "transmute": {
+      "league": 6, "key": "transmute", "ledger": "TRANSMUTATION_LEDGER",
+      "_tiers": "The cache's `transmutation` table (225): each row's `tier_item` lists its tiers lowest first, each tier twice; its `name` titles the ledger's scroll.",
+      "table": "transmutation", "tierColumn": "tier_item", "nameColumn": "name",
+      "_spells": "The spellbook's transmute_upgrade (218:199) and transmute_downgrade (218:200), named by their spell objs; with the alchemy toggle off each is the alchemy spell it stands in for (237/01102: High Level Alchemy's own cast from 218:199).",
+      "spells": {
+        "Alchemic Divergence": { "step": 1, "alchemy": "High Level Alchemy", "animation": "transmutation_cast", "graphic": "league_6_transmutation_upgrade" },
+        "Alchemic Convergence": { "step": -1, "alchemy": "Low Level Alchemy", "animation": "transmutation_cast_downgrade", "graphic": "league_6_transmutation_downgrade" }
+      },
+      "perCast": 10, "xpPerItem": 10, "castTicks": 5,
+      "_cast": "Wiki: up to 10 a cast, 10 Magic XP an item, no level, 5 ticks, and no runes (Alchemic Divergence: cost None; 6 May 2026: 'correctly display as costing no runes'; the spell objs carry no rune params). 237/01102, 01106: a stack (noted or stackable) gives 10 and is cast on again every 5 ticks while its slot holds it, with the graphic alone; loose items convert up to 10 held, in place: holding 10 or fewer needs no free slot (237/01102: 10 uncut rubies, diamonds, opals and jade with none free, each converted in its own slots), holding more needs a free slot for each of the 10 (237/01102: the red no-room line at 11 held with 5 free, 15 with 1, 16 and 23 with none); a click during a cast waits for it.",
+      "alchemyToggle": "league_relic_transmutation_alchemy_toggle", "bankToggle": "league_relic_transmutation_bank_toggle",
+      "currentColour": "ff3045", "_currentColour": "The ledger's scroll marks the item's own tier in this red with ' (Current)' (Wiki: Transmutation_ledger_interface.png; the toggles' off colour).",
+      "messages": {
+        "nothing": "Nothing interesting happens.",
+        "lowest": "The spell has no effect as this is the lowest tier item for that type.",
+        "noRoom": "<col=ff3045>You do not have inventory space for anymore transmuted items of that type.",
+        "current": " (Current)",
+        "_source": "237/01102 (nothing, on a bronze bar; noRoom), 238/04211 (lowest: an item box showing the item cast on)."
+      }
+    },
+    "butlersBell": {
+      "league": 6, "key": "butler-s-bell",
+      "_data": "plugins/modes/data/league-butlers-bell.json: the jobs' weighted tables and the transcript's lines (leaguerelics/ButlersBell.LeagueRelics.js)."
+    },
+    "minion": {
+      "league": 6, "key": "minion",
+      "_data": "plugins/modes/data/league-minion.json: the Wiki's numbers and Zamorak items, each style's recorded looks (leaguerelics/Minion.LeagueRelics.js)."
+    },
     "arcaneGrimoire": {
       "item": "Arcane grimoire",
       "options": { "change": "Change Spellbook", "previous": "Previous Spellbook", "check": "Check Previous" },
@@ -236,7 +398,7 @@
     }
   },
   "leagues": {
-    "6": { "_comment": "Leagues VI - Demonic Pacts is the league this cache (rev 241) carries: its tiers, costs, passives and relics are read from the league struct (6436, enum 2670) and sent as nothing; no relic hands out an item, since the cache does not say which do.", "fromCache": true },
+    "6": { "_comment": "Leagues VI - Demonic Pacts is the league this cache (rev 241) carries: its tiers, costs, passives and relics are read from the league struct (6436, enum 2670) and sent as nothing; a relic's item is its struct's param 2049, and one with an item (param 1855) unlocks only in a bank or near the Leagues Tutor, as recorded (237/01102).", "fromCache": true },
     "4": {
       "tiers": [
         {

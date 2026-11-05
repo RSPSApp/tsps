@@ -17,16 +17,21 @@ module.exports = function registerIdesOfMilkQuest(api) {
     PrivateArea,
     GameObject,
     ObjectManager,
+    MapObjects,
     MeleeCombatMethod,
     PendingHit,
     Graphic,
     Task,
     TaskManager,
     ObjectIdentifiers,
+    RegionManager,
+    World,
   } = api.core;
   const { registerQuest, refreshQuestList, startTranscript, openBook } = require("../QuestRuntime");
 
   const PAGE = "The Ides of Milk";
+  const BRUTUS_MONSTER = "Brutus";
+  const BRUTUS_BEST_ATTRIBUTE = "ides-of-milk:brutus-best-ticks";
   const START_HOOK = "quest:the-ides-of-milk:start";
 
   const CASSIUS_NPC_ID = NpcIdentifiers.CASSIUS_2; // 15632
@@ -35,6 +40,7 @@ module.exports = function registerIdesOfMilkQuest(api) {
   const DUKE_NPC_ID = NpcIdentifiers.DUKE_HORACIO; // 815
   const BULL_NPC_ID = NpcIdentifiers.BULL; // 15625, the pre-reveal "Bull"
   const QUEST_BRUTUS_NPC_ID = NpcIdentifiers.BRUTUS; // cowboss, as captured in the quest
+  const DEMONIC_BRUTUS_NPC_ID = NpcIdentifiers.DEMONIC_BRUTUS; // 15628, post-quest hard version
   const MAPPED_BULL_NPC_ID = 15624; // cache cowboss_mapped, morphs on cowquest
 
   const SHELVES_OBJECT_ID = ObjectIdentifiers.SHELVES_180; // 60785, "Shelves" Search
@@ -44,6 +50,14 @@ module.exports = function registerIdesOfMilkQuest(api) {
     { id: ObjectIdentifiers.GATE_322, x: 3262, y: 3294 }, // 60763
   ];
   const BULL_GATE_OBJECT_IDS = new Set(BULL_GATE_LEAVES.map((leaf) => leaf.id));
+  // The actionless leaves that replace the field's gates while the fight owns it. Their
+  // `standing` ids identify the map gates whose current state is restored on exit.
+  const ARENA_GATES = [
+    { object: ObjectIdentifiers.GATE_321, standing: ObjectIdentifiers.GATE_319, x: 3263, y: 3294, face: 1 },
+    { object: ObjectIdentifiers.GATE_320, standing: ObjectIdentifiers.GATE_322, x: 3262, y: 3294, face: 1 },
+    { object: ObjectIdentifiers.GATE_323, standing: ObjectIdentifiers.GATE_20, x: 3253, y: 3267, face: 0 },
+    { object: ObjectIdentifiers.GATE_324, standing: ObjectIdentifiers.GATE_18, x: 3253, y: 3266, face: 0 },
+  ];
 
   const BOOK_ITEM_ID = ItemIdentifiers.THE_GROATS_PRINCIPLES; // 33126
   const FIRST_SAMPLE_ITEM_ID = ItemIdentifiers.MILK_SAMPLE; // 33128
@@ -51,6 +65,7 @@ module.exports = function registerIdesOfMilkQuest(api) {
   const COWBELL_AMULET_ITEM_ID = ItemIdentifiers.COWBELL_AMULET; // 33103
   const CHARGED_COWBELL_AMULET_ITEM_ID = ItemIdentifiers.COWBELL_AMULET_2; // 33104
   const MAGIC_LAMP_ITEM_ID = ItemIdentifiers.MAGIC_LAMP; // 33117
+  const ABYSSAL_POTATO_ITEM_ID = ItemIdentifiers.ABYSSAL_POTATO; // 33118
   const LAMP_XP = 1000;
 
   const VARP_COWQUEST = 5412; // "cowquest_main"
@@ -107,6 +122,7 @@ module.exports = function registerIdesOfMilkQuest(api) {
   const EXIT_GATE_IDS = new Set([ObjectIdentifiers.GATE_323, ObjectIdentifiers.GATE_324]);
   const ANIMATION = { eat: 829, cough: 11267, attack: 13783, charge: 13778, stomp: 13785, spawn: 13790 };
   const STOMP_GRAPHIC = { ground: 3588, bull: 3589 };
+  const KEEP_FACING_FLAG = "combat:keep-facing";
 
   class BullPen extends Area {
     constructor() { super([new Boundary(3259, 3268, 3294, 3301, 0)]); }
@@ -126,14 +142,22 @@ module.exports = function registerIdesOfMilkQuest(api) {
     return task;
   }
 
+  function currentWorldGates(standing) {
+    const state = { objects: standing };
+    api.emitCustomEvent("door:state", state);
+    return state.objects;
+  }
+
   class BullArena extends PrivateArea {
     constructor(player) {
       super([new Boundary(3240, 3268, 3265, 3301, 0)]);
       this.player = player;
       this.bull = null;
+      this.demonic = false;
       this.meleeRemaining = 3;
       this.nextSpecial = "charge";
       this.stompsRemaining = 0;
+      this.standingGates = [];
     }
     canAttack(attacker, target) {
       return (attacker === this.player && target === this.bull) || (attacker === this.bull && target === this.player);
@@ -141,6 +165,11 @@ module.exports = function registerIdesOfMilkQuest(api) {
     npcAggression(player, npc) { return player === this.player && npc === this.bull; }
     postLeave(mobile, logout) {
       if (mobile === this.player) {
+        const sender = mobile.getPacketSender();
+        // Replace the private identities before applying the world's current closed/open view.
+        for (const standing of this.standingGates) sender.sendObject(standing);
+        for (const standing of this.standingGates) sender.sendObjectRemoval(standing);
+        for (const object of currentWorldGates(this.standingGates)) sender.sendObject(object);
         TaskManager.cancelTasks(this);
         fightsByPlayer.delete(mobile);
         bullsByPlayer.delete(mobile);
@@ -163,14 +192,42 @@ module.exports = function registerIdesOfMilkQuest(api) {
       [cornerX, cornerY - dy], [cornerX, cornerY - 2 * dy]];
   }
 
+  function chargeDestination(npc, target) {
+    const at = npc.getLocation(), size = npc.getSize();
+    const deltaX = target.getX() - at.getX() - 1, deltaY = target.getY() - at.getY() - 1;
+    // The recording's charge is cardinal; choose the facing axis before the four-tile dash.
+    const dx = Math.abs(deltaX) > Math.abs(deltaY) ? Math.sign(deltaX) : 0;
+    const dy = dx ? 0 : Math.sign(deltaY) || 1;
+    const end = new Location(at.getX() + 4 * dx, at.getY() + 4 * dy, at.getZ());
+    // Keep the whole bull in its private field, including at the instance's southern edge.
+    if (!npc.getArea().getBoundaries().some(boundary => boundary.inside(end) &&
+        boundary.inside(end.transform(size - 1, size - 1)))) return null;
+    // Walls on the entering edge, including their diagonal corners; furniture may be crossed.
+    const wallMask = dx > 0 ? 0xc1 : dx < 0 ? 0x1c : dy > 0 ? 0x70 : 0x7;
+    for (let step = 1; step <= 4; step++) {
+      for (let offset = 0; offset < size; offset++) {
+        const x = at.getX() + step * dx + (dx > 0 ? size - 1 : 0) + (dy ? offset : 0);
+        const y = at.getY() + step * dy + (dy > 0 ? size - 1 : 0) + (dx ? offset : 0);
+        const clipping = RegionManager.getClipping(x, y, at.getZ(), npc.getArea());
+        if ((clipping & wallMask) !== 0 || ((clipping & 0x100) !== 0 &&
+            MapObjects.getType(new Location(x, y, at.getZ()), 9, npc.getArea()))) return null;
+      }
+    }
+    return end;
+  }
+
   class BrutusCombat extends MeleeCombatMethod {
-    attackDistance(npc) { return npc.getArea() instanceof BullArena ? 16 : super.attackDistance(npc); }
+    attackDistance(npc) {
+      return npc.getArea() instanceof BullArena && this.nextAttack(npc, npc.getCombat().getTarget())
+        ? 16 : super.attackDistance(npc);
+    }
     nextAttack(npc, player) {
       const arena = npc.getArea();
       if (!(arena instanceof BullArena) || !player) return null;
       const at = npc.getLocation(), target = player.getLocation();
       const distance = Math.max(at.getX() - target.getX(), target.getX() - at.getX() - 2, at.getY() - target.getY(), target.getY() - at.getY() - 2);
-      return arena.stompsRemaining > 0 ? "stomp" : distance > 1 ? "charge" : arena.meleeRemaining > 0 ? null : arena.nextSpecial;
+      const attack = arena.stompsRemaining > 0 ? "stomp" : distance > 1 ? "charge" : arena.meleeRemaining > 0 ? null : arena.nextSpecial;
+      return attack === "charge" && !chargeDestination(npc, target) ? (distance > 1 ? null : "stomp") : attack;
     }
     attackSpeed(npc) {
       return npc.getArea() instanceof BullArena ? (this.nextAttack(npc, npc.getCombat().getTarget()) ? 8 : 5) : super.attackSpeed(npc);
@@ -187,27 +244,35 @@ module.exports = function registerIdesOfMilkQuest(api) {
       }
       const charge = arena.special === "charge";
       const aimed = player.getLocation().clone();
+      const end = charge ? chargeDestination(npc, aimed) : null;
+      if (charge) npc.getMovementQueue().reset().setBlockMovement(true);
       if (!charge && arena.stompsRemaining === 0) {
-        arena.stompTiles = stompTiles(at, aimed);
         arena.stompsRemaining = quest.isComplete(player) ? 3 : 1 + Math.floor(Math.random() * 3);
       }
-      const tiles = arena.stompTiles;
+      // 4153 ticks 586/594/602: each snort aims again, then holds that footprint through impact.
+      const tiles = charge ? null : stompTiles(at, aimed);
       if (!charge) arena.stompsRemaining--;
       if (charge || arena.stompsRemaining === 0) {
         // shortcut: Wiki gives the 1–6 melee / 1–3 stomp ranges, not their distribution; verify with more fights.
         arena.meleeRemaining = quest.isComplete(player) ? 4 + Math.floor(Math.random() * 2) : 1 + Math.floor(Math.random() * 6);
         arena.nextSpecial = quest.isComplete(player) ? (charge ? "stomp" : "charge") : Math.random() < 0.5 ? "charge" : "stomp";
       }
+      npc.setFlag(KEEP_FACING_FLAG);
+      npc.setMobileInteraction(null);
       npc.setPositionToFace(aimed);
       npc.forceChat(charge ? "*growls*" : "*snorts*");
       npc.performAnimation(new Animation(charge ? ANIMATION.charge : ANIMATION.stomp, charge ? 60 : 30));
-      const deltaX = aimed.getX() - at.getX() - 1, deltaY = aimed.getY() - at.getY() - 1;
-      // The recording's charge is cardinal; choose the facing axis before the four-tile dash.
-      const dx = Math.abs(deltaX) > Math.abs(deltaY) ? Math.sign(deltaX) : 0;
-      const dy = dx ? 0 : Math.sign(deltaY) || 1;
-      const end = new Location(Math.max(3241, Math.min(3265, at.getX() + 4 * dx)),
-        Math.max(3266, Math.min(3293, at.getY() + 4 * dy)), 0);
-      later(arena, charge && quest.isComplete(player) ? 3 : 4, () => {
+      const windup = charge && quest.isComplete(player) ? 3 : 4;
+      arena.faceRecoveryTask?.stop();
+      // 4153 resumes entity tracking six ticks after a stomp, or after the two-tick charge glide.
+      arena.faceRecoveryTask = later(arena, charge ? windup + 2 : 6, () => {
+        npc.removeFlag(KEEP_FACING_FLAG);
+        npc.setPositionToFace(null);
+        if (charge) npc.getMovementQueue().setBlockMovement(false);
+        if (!arena.isDestroyed() && arena.bull === npc && npc.getArea() === arena && npc.getHitpoints() > 0 &&
+            player.getArea() === arena && npc.getCombat().getTarget() === player) npc.setMobileInteraction(player);
+      });
+      later(arena, windup, () => {
         if (arena.isDestroyed() || npc.getHitpoints() <= 0 || player.getArea() !== arena) return;
         const current = player.getLocation();
         const underBull = current.getX() >= at.getX() && current.getX() <= at.getX() + 2 &&
@@ -219,7 +284,11 @@ module.exports = function registerIdesOfMilkQuest(api) {
         if (!charge) {
           npc.performGraphic(new Graphic(STOMP_GRAPHIC.bull));
           for (const [x, y] of tiles) player.getPacketSender().sendGraphic(new Graphic(STOMP_GRAPHIC.ground), new Location(x, y, 0));
-        } else npc.moveTo(end);
+        } else {
+          npc.exactMove(end, { endCycles: 60 });
+          // The charge stays in this fight; placement would make combat discard its target.
+          npc.setNeedsPlacement(false);
+        }
         if (hit) {
           const hp = player.getSkillManager().getMaxLevel(Skill.HITPOINTS);
           // shortcut: quest scaling is documented as roughly 30–40%; capture low-level hits to establish exact rounding.
@@ -486,11 +555,19 @@ module.exports = function registerIdesOfMilkQuest(api) {
     if (quest.getStage(player) === 0) quest.setStage(player, STAGE_ACCEPTED);
   }
 
+  /** The transcript carries the recommendation box unconditionally; live only shows it under level 15. */
+  function warnBeforeStart(event) {
+    if (String(event.prompt).includes("Start The Ides of Milk quest") &&
+        (event.player.getSkillManager().getCombatLevel?.() ?? 15) < 15) {
+      event.warning = "Before starting this quest, be aware that your combat level is lower than the recommended level of 15.";
+    }
+  }
+
   /** The transcript's item/stage side effects, keyed by message/action id. */
   function handleAction(event) {
     const { player, stepId } = event;
     if (event.npcId && ![CASSIUS_NPC_ID, SETH_NPC_ID, GILLIE_NPC_ID, BULL_NPC_ID].includes(event.npcId)) return;
-    if (stepId === "bkgpn5" && (player.getSkillManager().getCombatLevel?.() ?? 15) >= 15) event.handled = true;
+    if (stepId === "bkgpn5") { event.handled = true; return; }
     if (stepId === "y7Vpgm") {
       grantItem(player, BOOK_ITEM_ID);
       event.box = { items: [BOOK_ITEM_ID] };
@@ -582,6 +659,8 @@ module.exports = function registerIdesOfMilkQuest(api) {
     arena.nextSpecial = quest.isComplete(arena.player) && Math.random() < 0.5 ? "stomp" : "charge";
     arena.stompsRemaining = 0;
     arena.respawnTask = null;
+    // ponytail: timed from the bull entering; live may start it at the first hit.
+    arena.startTick = World.getProcessCycle();
     arena.enter(npc);
     bullsByPlayer.set(arena.player, npc);
     npc.performAnimation(new Animation(ANIMATION.spawn));
@@ -604,11 +683,14 @@ module.exports = function registerIdesOfMilkQuest(api) {
       if (arena.isDestroyed() || fightsByPlayer.get(player) !== arena) return;
       player.moveTo(new Location(3262, 3294, 0));
       arena.enter(player);
-      for (const leaf of [
-        [ObjectIdentifiers.GATE_321, 3263, 3294, 1], [ObjectIdentifiers.GATE_320, 3262, 3294, 1],
-        [ObjectIdentifiers.GATE_323, 3253, 3267, 0], [ObjectIdentifiers.GATE_324, 3253, 3266, 0],
-      ]) {
-        ObjectManager.register(new GameObject(leaf[0], new Location(leaf[1], leaf[2], 0), 0, leaf[3], arena), true);
+      arena.standingGates = ARENA_GATES.map(gate => {
+        const location = new Location(gate.x, gate.y, 0);
+        return MapObjects.get(gate.standing, location, null)
+          ?? new GameObject(gate.standing, location, 0, gate.face, null);
+      });
+      for (const object of currentWorldGates(arena.standingGates)) sender.sendObjectRemoval(object);
+      for (const gate of ARENA_GATES) {
+        ObjectManager.register(new GameObject(gate.object, new Location(gate.x, gate.y, 0), 0, gate.face, arena), true);
       }
       spawnArenaBull(arena);
       if (!arena.bull) { leaveFight(player); return; }
@@ -647,13 +729,17 @@ module.exports = function registerIdesOfMilkQuest(api) {
     const player = arena.player;
     if (killer !== player) return;
     if (quest.isComplete(player)) {
+      if (!arena.demonic) countBrutusKill(player, World.getProcessCycle() - arena.startTick, true);
       arena.bull = null;
+      arena.demonic = false;
       bullsByPlayer.delete(player);
+      arena.detach(npc);
       api.removeNpc(npc);
       // Keep the field and its loot until the player leaves; Ring can bring the next bull early.
       arena.respawnTask = later(arena, npc.getDefinition().getRespawn(), () => spawnArenaBull(arena));
       return;
     }
+    countBrutusKill(player, 0, false);
     leaveFight(player);
     if (quest.getStage(player) === STAGE_BULL_TASK) {
       quest.setStage(player, STAGE_BRUTUS_DEAD);
@@ -662,12 +748,95 @@ module.exports = function registerIdesOfMilkQuest(api) {
     }
   }
 
+  /** A fight's length as the game prints it: m:ss.cc. */
+  function formatTicks(ticks) {
+    const centis = Math.round(ticks * 60);
+    const minutes = Math.floor(centis / 6000);
+    const seconds = Math.floor((centis % 6000) / 100);
+    return `${minutes}:${String(seconds).padStart(2, "0")}.${String(centis % 100).padStart(2, "0")}`;
+  }
+
+  /** The kill count and the fight's length against the personal best, before any task the kill finishes. */
+  function countBrutusKill(player, ticks, announced) {
+    api.emitCustomEvent("combat-achievements:kill", {
+      player,
+      monster: BRUTUS_MONSTER,
+      announce: announced && ((kills) => {
+        player.sendMessage(`Your Brutus kill count is: <col=ff0000>${kills}</col>.`);
+        const best = Number(player.getAttribute(BRUTUS_BEST_ATTRIBUTE)) || 0;
+        if (!best || ticks < best) {
+          player.setAttribute(BRUTUS_BEST_ATTRIBUTE, ticks);
+          api.emitCustomEvent("boss:personal-best", { player, boss: BRUTUS_MONSTER, ticks });
+          player.sendMessage(`Fight duration: <col=ff0000>${formatTicks(ticks)}</col> (new personal best)`);
+        } else {
+          player.sendMessage(`Fight duration: <col=ff0000>${formatTicks(ticks)}</col>. Personal best: ${formatTicks(best)}`);
+        }
+      }),
+    });
+  }
+
+  function answerBrutusBest(request) {
+    const best = Number(request.player.getAttribute(BRUTUS_BEST_ATTRIBUTE)) || 0;
+    if (request.monster === BRUTUS_MONSTER && best > 0) request.best = best;
+  }
+
   function ringForBull({ player }) {
     const arena = fightsByPlayer.get(player);
     if (arena && quest.isComplete(player) && !arena.bull && arena.respawnTask) {
       arena.respawnTask.stop();
       arena.respawnTask = later(arena, 13, () => spawnArenaBull(arena));
     }
+  }
+
+  function completeQuest(player, key) {
+    const request = { player, key, complete: false };
+    api.emitCustomEvent("quest:is-complete", request);
+    return request.complete === true;
+  }
+
+  /** Upgrade the player's post-quest Brutus; the Wiki's potato is consumed only on confirmation. */
+  function feedAbyssalPotato(event) {
+    const { player, itemId } = event;
+    const target = event.target ?? event.npc;
+    if (itemId !== ABYSSAL_POTATO_ITEM_ID || target?.getId?.() !== QUEST_BRUTUS_NPC_ID) return false;
+    event.handled = true;
+    const arena = fightsByPlayer.get(player);
+    if (!quest.isComplete(player) || !arena || arena.bull !== target || arena.demonic) {
+      player.sendMessage("You need to release Brutus in your own cow-field encounter after The Ides of Milk.");
+      return true;
+    }
+    if (!completeQuest(player, "desert_treasure_ii")) {
+      player.sendMessage("You need to complete Desert Treasure II before feeding an abyssal potato to Brutus.");
+      return true;
+    }
+    const inventory = player.getInventory();
+    if (inventory.getAmount(ABYSSAL_POTATO_ITEM_ID) < 1) return true;
+    api.sendMultiChatboxPrompt(player, "Feed the abyssal potato to Brutus and fight Demonic Brutus?", "Yes", () => {
+      if (fightsByPlayer.get(player) !== arena || arena.bull !== target || arena.demonic || !quest.isComplete(player)
+          || !completeQuest(player, "desert_treasure_ii") || inventory.getAmount(ABYSSAL_POTATO_ITEM_ID) < 1) return;
+      const at = target.getLocation().clone();
+      const demonic = api.spawnNpc({
+        id: DEMONIC_BRUTUS_NPC_ID,
+        x: at.getX(), y: at.getY(), z: at.getZ(),
+        wanderRadius: 0, owner: player, ownerOnly: true,
+      });
+      if (!demonic) {
+        player.sendMessage("Brutus cannot be transformed right now. Your abyssal potato was not used.");
+        return;
+      }
+      inventory.deleteNumber(ABYSSAL_POTATO_ITEM_ID, 1);
+      inventory.refreshItems?.();
+      arena.detach(target);
+      api.removeNpc(target);
+      demonic.__skipDefaultRespawn = true;
+      demonic.setCombatXpMultiplier(2);
+      arena.bull = demonic;
+      arena.demonic = true;
+      arena.startTick = World.getProcessCycle();
+      arena.enter(demonic);
+      bullsByPlayer.set(player, demonic);
+    }, "No", () => {});
+    return true;
   }
   /** The first sample's "that's not good milk" damage (never below 1 Hitpoint). */
   function damageFromSample(player) {
@@ -839,7 +1008,7 @@ module.exports = function registerIdesOfMilkQuest(api) {
   }
 
   function suppressQuestLoot(event) {
-    if (event.npc?.getArea?.() instanceof BullArena && quest.getStage(event.player) < STAGE_COMPLETE) event.drops.length = 0;
+    if (event.npc?.getArea?.() instanceof BullArena && quest.getStage(event.killer) < STAGE_COMPLETE) event.handled = true;
   }
 
   function handleLogin({ player }) {
@@ -860,6 +1029,7 @@ module.exports = function registerIdesOfMilkQuest(api) {
   api.persistAttribute(SETH_TALKED_ATTRIBUTE, 0);
   api.persistAttribute(GILLIE_TALKED_ATTRIBUTE, 0);
   api.persistAttribute(REWARD_ATTRIBUTE, 0);
+  api.persistAttribute(BRUTUS_BEST_ATTRIBUTE, 0);
   api.persistAttribute(LAMP_USED_ATTRIBUTE, 0);
 
   api.persistAttribute(STAGE_SCHEMA_ATTRIBUTE, 0);
@@ -888,15 +1058,18 @@ module.exports = function registerIdesOfMilkQuest(api) {
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:action", handleAction);
+  api.onCustomEvent("npc-dialogue:menu", warnBeforeStart);
   api.onCustomEvent("npc-dialogue:condition", handleConditionStep);
   api.onCustomEvent("npc-dialogue:line", handleDialogueLine);
   api.onCustomEvent("door:toggle", claimBullGate);
-  api.onCustomEvent("npc-drops:generated", suppressQuestLoot);
+  api.onCustomEvent("npc-drops:claim", suppressQuestLoot);
   api.onCustomEvent("ides-of-milk:cowbell-ring", ringForBull);
   api.onObjectInteraction(handleObjectInteraction);
   api.onItemAction(handleItemAction);
+  api.onItemOnNpc(feedAbyssalPotato);
   api.onNpcDeath(handleNpcDeath);
   api.registerNpcCombatMethodProvider([QUEST_BRUTUS_NPC_ID], BrutusCombat);
+  api.onCustomEvent("combat-achievements:personal-best", answerBrutusBest);
   api.onPlayerLogout(handleLogout);
   api.onPlayerLogin(handleLogin);
   require("./ides-of-milk/CowbellAmulet.Quest")(api);

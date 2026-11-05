@@ -238,10 +238,16 @@ export class MagicOnItemPacketListener {
    */
   private castAlchemy(player: any, spellId: number, slot: number, itemId: number, confirmed = false, source?: unknown): void {
     const inventory = player.getInventory();
-    const item = inventory.getItems()[slot];
-    if (!item || item.getId() !== itemId) {
+    const clickedItem = inventory.getItems()[slot];
+    if (!clickedItem || clickedItem.getId() !== itemId) {
       return;
     }
+    // Alchemy takes the first equivalent copy in inventory order. Keep custom-state and
+    // preset items separate, using the same ID/metadata matching as inventory stacking.
+    const meta = JSON.stringify(clickedItem.getMeta?.() ?? null);
+    const alchemySlot = inventory.getItems().findIndex((held: Item) => held?.getId() === itemId
+      && JSON.stringify(held.getMeta?.() ?? null) === meta);
+    const item = inventory.getItems()[alchemySlot];
     const isHighAlch = spellId === MagicOnItemPacketListener.HIGH_ALCH_SPELL_ID;
     const spell = isHighAlch ? EffectSpells.HIGH_ALCHEMY : EffectSpells.LOW_ALCHEMY;
     const requiredLevel = isHighAlch
@@ -266,6 +272,10 @@ export class MagicOnItemPacketListener {
       // Content may lower the level, waive the runes, keep the item or cast again on what is left (a league relic).
       requiredLevel, freeRunes: false, keepItem: false, recast: false };
     PluginManager.emitCustomEvent("magic:alchemy-policy", policy);
+    // Content may cast faster ("skills:action-interval", a league relic's 2-tick pace), from the pace the policy settled on.
+    const pace = { player, skill: Skill.MAGIC, kind: "alchemy", ticks: policy.castTicks };
+    PluginManager.emitCustomEvent("skills:action-interval", pace);
+    policy.castTicks = Math.max(1, pace.ticks | 0);
     if (player.getSkillManager().getCurrentLevel(Skill.MAGIC) < policy.requiredLevel) {
       player.sendMessage(`You need a Magic level of ${policy.requiredLevel} to cast this spell.`);
       return;
@@ -283,7 +293,7 @@ export class MagicOnItemPacketListener {
     ]);
     // Content can fund a cast through a validated alternative source. Resolve again
     // after a confirmation/queue; no payment is committed until the item is converted.
-    const payment = { player, item, itemId, slot, spellId, source, high: isHighAlch, coins: policy.coins,
+    const payment = { player, item, itemId, slot: alchemySlot, spellId, source, high: isHighAlch, coins: policy.coins,
       hasRunes: this.hasRunes(player, runes), allowed: source === undefined,
       free: false, experience, allowAnySpellbook: false, keepTab: false,
       validate: undefined as (() => boolean) | undefined,
@@ -312,21 +322,24 @@ export class MagicOnItemPacketListener {
       return;
     }
     if (!confirmed && policy.confirm) {
-      this.confirmUntradeableAlchemy(player, spellId, slot, itemId, definition.getName(), item, source);
+      this.confirmUntradeableAlchemy(player, spellId, slot, itemId, definition.getName(), clickedItem, source);
       return;
     }
     const now = World.getProcessCycle();
     const nextCast = Number(player.getAttribute(MagicOnItemPacketListener.ALCH_NEXT_CAST_ATTRIBUTE) ?? 0);
     if (now < nextCast) {
-      this.queueAlchemy(player, { spellId, slot, itemId, item, source }, nextCast - now);
+      this.queueAlchemy(player, { spellId, slot, itemId, item: clickedItem, source }, nextCast - now);
       return;
     }
 
-    // The clicked slot, not the first of that id: a preset-protected copy may sit earlier.
-    if (inventory.getItems()[slot] !== item || payment.validate?.() === false) return;
-    if (policy.keepItem !== true) inventory.deleteAtSlot(slot, 1);
+    if (inventory.getItems()[slot] !== clickedItem || inventory.getItems()[alchemySlot] !== item
+      || payment.validate?.() === false) return;
+    if (policy.keepItem !== true) inventory.deleteAtSlot(alchemySlot, 1);
     if (!payment.free) this.consumeRunes(player, runes);
     player.setAttribute(MagicOnItemPacketListener.ALCH_NEXT_CAST_ATTRIBUTE, now + policy.castTicks);
+    // "magic:item-spell-cast" { player, spell }: an alchemy cast on an item (a league's "Cast Low
+    // Level Alchemy"); combat casts report "magic:cast-committed" instead.
+    PluginManager.emitCustomEvent("magic:item-spell-cast", { player, spell });
 
     player.performAnimation(new Animation(isHighAlch
       ? MagicOnItemPacketListener.HIGH_ALCH_ANIMATION
@@ -334,7 +347,8 @@ export class MagicOnItemPacketListener {
     Sounds.sendSound(player, isHighAlch ? Sound.HIGH_ALCHEMY : Sound.LOW_ALCHEMY);
     if (policy.coins > 0) inventory.adds(ItemIdentifiers.COINS, policy.coins);
     payment.commit?.();
-    PluginManager.emitCustomEvent("magic:alchemy-completed", { player, itemId, spellId });
+    // `coins`: what the cast paid (a league's "Convert an item into at least 500 coins").
+    PluginManager.emitCustomEvent("magic:alchemy-completed", { player, itemId, spellId, coins: policy.coins });
     player.performGraphic(new Graphic(isHighAlch
       ? MagicOnItemPacketListener.HIGH_ALCH_GRAPHIC
       : MagicOnItemPacketListener.LOW_ALCH_GRAPHIC, GraphicHeight.HIGH));

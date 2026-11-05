@@ -146,7 +146,7 @@ void main() {
 
     // Projectiles are grounded against the height map in the shader,
     // then a ground-relative vertical offset is applied.
-    localPos.y -= getHeightInterp(tilePos, projInfo.plane);
+    localPos.y -= getActorHeightInterp(tilePos, projInfo.plane);
 
     // Apply CPU-provided ground-relative offset only.
     // Follow NPC/GFX convention: negative u_modelYOffset raises the model.

@@ -9,7 +9,8 @@
  *   +13 the hit: tethered players get "...the rope keeps you securely upright as the wave washes
  *   over you.", Tempoross is 10572 again with seq 8897, water splashes (1843) leave debris.
  * - lightning: "A strong wind blows as clouds roll in..." (red), a cloud shadow (41006) and
- *   sound 2186 under each strike; clouds grow at +6, charge at +11, strike at +15 (NPC 10581,
+ *   sound 2186 under each strike; clouds grow at +6, charge at +11, Tempoross casts
+ *   (`fsb_lightening_cast`) at +13, the clouds strike at +15 (NPC 10581,
  *   sound 4433) and at +16 each strike tile burns: Fire NPC 8643, spotanim 1840, loc 37582,
  *   sound 159. A fire spreads 40 ticks later with projectile 1839, twice at most.
  * - torrent: seq 8903, spotanim 1841 at Tempoross and projectile 1842 to a cannon, which is
@@ -17,6 +18,10 @@
  * The attacks first come ~49 ticks after Tempoross surfaces, then every 50-55 ticks, wave and
  * lightning in turn. Wiki: none at or below 10% energy; a wave puts out every fire; standing in a
  * fire costs items every 2 ticks; dousing gives 40 points.
+ *
+ * The fire's Douse has to be claimed through the attack-option hook: Royal Titans registers
+ * "Douse" with `registerNpcCombatOption`, so core routes every Douse click as an attack before
+ * NPC interaction hooks run (found in-game: the click produced CANT_ATTACK_IN_AREA).
  */
 
 const Shared = require("./Shared.Tempoross");
@@ -43,6 +48,10 @@ class Attacks {
     this.fires = new Map();
     this.pending = [];
     this.debris = [];
+    /** Bumped by every wave, so a spread still in the air when it lands doesn't light. */
+    this.waves = 0;
+    /** One damage pulse every two ticks, from the first fire (not the fight's tick parity). */
+    this.nextBurnAt = 0;
   }
 
   setUp() {}
@@ -106,7 +115,12 @@ class Attacks {
 
   waveHits() {
     const fight = this.fight;
-    if (fight.phase !== "surfaced") return;
+    if (fight.phase !== "surfaced") {
+      // Tempoross went under before the wave landed: no hit, but the overlay the warning
+      // opened has to close, or it stays up until the next wave hides it (#2692).
+      fight.forEachPlayer((player) => player.getPacketSender().sendClientScript(SCRIPT.WAVE_HIDE, F.waveOverlayHide));
+      return;
+    }
     fight.setBoss(fight.enraged ? NPC.BOSS_ENRAGED : NPC.BOSS);
     Shared.animate(fight.boss, ANIM.BOSS_SPAWN);
     for (const old of this.debris) this.cove.removeLoc(old);
@@ -126,6 +140,7 @@ class Attacks {
       loseItems(player, "wave");
     });
     fight.tethers.breakSites();
+    this.waves += 1;
     this.clearFires();
     this.at(F.untetherAfterWave, () => {
       for (const player of [...fight.tethers.tethered.keys()]) fight.tethers.untether(player);
@@ -137,7 +152,7 @@ class Attacks {
   lightning() {
     const fight = this.fight;
     this.cove.message(`<col=${Shared.RED}>A strong wind blows as clouds roll in...</col>`);
-    Shared.animate(fight.boss, ANIM.BOSS_LIGHTNING);
+    this.at(L.cast, () => Shared.animate(fight.boss, ANIM.BOSS_LIGHTNING));
     const strikes = this.strikeTiles(Shared.randomInt(...F.strikes));
     for (const tile of strikes) {
       const shadow = this.cove.placeLoc(LOC.LIGHTNING_SHADOW, tile);
@@ -228,6 +243,7 @@ class Attacks {
     this.clearFires();
     this.nextAttackAt = -1;
     this.nextTorrentAt = -1;
+    this.nextBurnAt = 0;
   }
 
   tickFires() {
@@ -243,9 +259,13 @@ class Attacks {
       this.cove.projectile(GFX.FIRE_SPREAD, this.cove.tile([fire.x, fire.y, 0]), this.cove.tile([...to, 0]), {
         cycles: 60, startHeight: 1, endHeight: 0, slope: 30,
       });
-      this.at(2, () => this.ignite(to, fire.spreads));
+      const wave = this.waves;
+      this.at(2, () => {
+        if (this.waves === wave) this.ignite(to, fire.spreads);
+      });
     }
-    if (now % F.fireBurnTicks !== 0) return;
+    if (now < this.nextBurnAt) return;
+    this.nextBurnAt = now + F.fireBurnTicks;
     this.fight.forEachPlayer((player) => {
       const [x, y] = this.cove.templateTile(player.getLocation());
       for (const fire of this.fires.values()) {
@@ -282,7 +302,10 @@ class Attacks {
     Shared.animate(fight.boss, ANIM.BOSS_TORRENT);
     const from = this.cove.tile([...DATA.cove.bossCentre, 0]);
     this.cove.mapGraphic(GFX.TORRENT_CAST, from);
-    this.cove.projectile(GFX.TORRENT, from, crate.cannonLoc.getLocation(), { cycles: 120, slope: 127 });
+    // The capture gives no heights for 1842. It leaves the boss's water pillar and falls to the
+    // cannon, so use the captured cannon shot's ends the other way round (90 at Tempoross to
+    // the deck). The 127 slope threw it high out of view.
+    this.cove.projectile(GFX.TORRENT, from, crate.cannonLoc.getLocation(), { cycles: 120, startHeight: 90, endHeight: 0 });
     this.at(F.torrentTicks, () => fight.cannons.disable(crate));
   }
 }
@@ -354,9 +377,9 @@ function douse(event) {
   const cove = coveOfNpc(npc);
   if (!cove) return false;
   if (coveOf(player) !== cove || !cove.fight) return true;
-  untetherFor(player);
   const fire = cove.fight.attacks.fireOf(npc);
   if (!fire) return true;
+  untetherFor(player);
   if (!player.getInventory().contains(ITEM.BUCKET_OF_WATER)) {
     player.sendMessage("You need a bucket of water to put out the fire.");
     return true;
@@ -374,8 +397,36 @@ function douse(event) {
   return true;
 }
 
+/** Wiki: a bucket of water used on the fire also puts it out. */
+function waterOnFire(event) {
+  if (event.itemId !== ITEM.BUCKET_OF_WATER) return;
+  const cove = coveOfNpc(event.target);
+  if (!cove?.fight?.attacks.fireOf(event.target)) return;
+  event.handled = true;
+  douse({ player: event.player, npc: event.target });
+}
+
+/**
+ * Royal Titans registers "Douse" with `registerNpcCombatOption`, so core routes our fire's
+ * Douse through the attack-option hook before any NPC interaction hook. Claim it here while
+ * the NPC is one of our fires; other Douse NPCs (the Titans) fall through.
+ */
+function fireCombatOption(event) {
+  if (event?.npc?.getId?.() !== NPC.FIRE) return;
+  const actions = event.npc.getCurrentDefinition?.(event.player)?.getActions?.() ?? [];
+  if (String(actions[event.clickType - 1] ?? "").toLowerCase() !== "douse") return;
+  if (!coveOfNpc(event.npc)?.fight?.attacks.fireOf(event.npc)) return;
+  event.handled = true;
+  untetherFor(event.player);
+  event.player.getMovementQueue().walkToEntity(event.npc, () => {
+    douse({ player: event.player, npc: event.npc });
+  }, 1, false, true);
+}
+
 function attachAttacks(api) {
   api.onNpcInteraction("<col=00ffff>Fire</col>", { Douse: douse });
+  api.onNpcAttackOption(fireCombatOption);
+  api.onItemOnNpc(waterOnFire);
 }
 
 module.exports = { Attacks, attachAttacks, loseItems };

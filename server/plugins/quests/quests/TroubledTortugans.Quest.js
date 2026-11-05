@@ -269,6 +269,11 @@ module.exports = function registerTroubledTortugansQuest(api) {
   // Quest areas.
   const ISLAND_ZONE = { minX: 2946, maxX: 2975, minY: 2588, maxY: 2625, levels: [0] };
   const PEARL_ZONE = { minX: 3338, maxX: 3378, minY: 2183, maxY: 2223, levels: [0] };
+  // The repair and bandage materials are private floor spawns. The default ground
+  // despawn (300 ticks) removed the two scutes near the west beach before they were
+  // collected in the audit run; they only came back on relog. Keep them for an hour,
+  // re-created on login and zone entry as before.
+  const QUEST_FLOOR_DESPAWN_TICKS = 6000;
 
   const ISLAND_TORTUGAN_SPAWN = { x: 2962, y: 2605, z: 0 }; // capture 3456
   const CONCH_DOCKS = { x: 3185, y: 2371, z: 0 };
@@ -583,6 +588,7 @@ module.exports = function registerTroubledTortugansQuest(api) {
     if (hook !== START_HOOK || !INJURED_TORTUGAN_NPC_IDS.has(npcId)) return;
     if (quest.getStage(player) === 0) {
       quest.setStage(player, STAGE_STARTED);
+      player.sendMessage("You've started a new quest: <col=0ab0ff>Troubled Tortugans</col>");
       ensureMaterialSpawns(player);
     }
   }
@@ -645,6 +651,12 @@ module.exports = function registerTroubledTortugansQuest(api) {
       if (before >= STAGE_KOREL_SENT && before < STAGE_RALEY_MET) quest.setStage(player, STAGE_RALEY_MET);
     }
     let stage = quest.getStage(player);
+    // Capture 3456 sets 4 on the closing player line of the opening conversation,
+    // before any bandages exist; making them (below) keeps the same value.
+    if (stage === STAGE_STARTED && text.startsWith("Right, you take it easy.")) {
+      quest.setStage(player, STAGE_BANDAGES_MADE);
+      stage = STAGE_BANDAGES_MADE;
+    }
     // The bandage conversation and the boat hand-off are two recorded steps.
     if (stage === STAGE_BANDAGES_USED && text.startsWith("Don't mention it.")) {
       quest.setStage(player, STAGE_FLOOPA_MET);
@@ -743,6 +755,8 @@ module.exports = function registerTroubledTortugansQuest(api) {
       return true;
     }
     player.performAnimation(new Animation(axe.animationId));
+    // Jatoba logs don't stack, so a full bag can't take another even when one is already held.
+    if (player.getInventory().isFull()) return true;
     player.getInventory().adds(JATOBA_LOGS_ITEM_ID, 1);
     player.sendMessage("You get some jatoba logs.");
     return true;
@@ -1341,7 +1355,9 @@ module.exports = function registerTroubledTortugansQuest(api) {
     for (const spawn of spawns) {
       const location = new Location(spawn.x, spawn.y, spawn.z);
       if (manager.getGroundItem(player.getUsername(), spawn.itemId, location, privateArea)) continue;
-      manager.registerLocation(player, new Item(spawn.itemId, 1), location);
+      manager.registerLocation(player, new Item(spawn.itemId, 1), location, privateArea, {
+        despawnDelay: QUEST_FLOOR_DESPAWN_TICKS,
+      });
     }
   }
 
@@ -1596,11 +1612,14 @@ module.exports = function registerTroubledTortugansQuest(api) {
     startedValue: STAGE_STARTED,
     completionValue: STAGE_COMPLETE,
     questPoints: 1,
+    completionJingleId: 152,
+    completionMessageColor: "0ab0ff",
+    scrollItemId: SEA_SHELL_ITEM_ID,
     xpRewards: [
       { skillId: Skill.SAILING.getIndex(), amount: SAILING_REWARD_XP, label: "Sailing" },
       { skillId: Skill.SLAYER.getIndex(), amount: SLAYER_REWARD_XP, label: "Slayer" },
     ],
-    otherRewards: ["Access to the Great Conch", "Ability to fight gryphons"],
+    otherRewards: ["Great Conch Access"],
     buildJournal,
     onReward: grantReward,
   });

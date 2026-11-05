@@ -8,6 +8,7 @@ import net.rsprox.protocol.game.outgoing.model.map.RebuildLoginV2
 import net.rsprox.protocol.game.outgoing.model.misc.client.ServerTickEnd
 import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.util.zip.CRC32
@@ -63,6 +64,19 @@ class M1LoginTest {
         }
     }
 
+    @Test
+    fun `logout gives the native client time to process Logout before disconnecting`() {
+        val name = LiveGateway.newAccount("gwlo")
+        LiveGateway.login(name).use { game ->
+            game.expect<ServerTickEnd>()
+            game.button(182, 8)
+            game.expect<net.rsprox.protocol.game.outgoing.model.logout.Logout>()
+            // Leave time to process Logout before EOF can trigger the connection-lost path.
+            assertFalse(game.disconnectsWithin(NATIVE_LOGOUT_PROCESSING_MS))
+            assertTrue(game.disconnectsWithin(LOGOUT_SETTLE_MS.toInt()))
+        }
+    }
+
     private companion object {
         const val CONFIG_ARCHIVE = 2
         const val VARBIT_GROUP = 14
@@ -71,5 +85,6 @@ class M1LoginTest {
         const val INVALID_USERNAME_OR_PASSWORD = 3
         const val DUPLICATE = 5
         const val LOGOUT_SETTLE_MS = 2_000L
+        const val NATIVE_LOGOUT_PROCESSING_MS = 50
     }
 }

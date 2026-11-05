@@ -1072,7 +1072,7 @@ module.exports = function registerThroneOfMiscellaniaQuest(api) {
       return;
     }
     if (text.includes("[Fremennik name]")) {
-      event.text = event.text.split("[Fremennik name]").join(player.getUsername?.() ?? "");
+      event.text = event.text.split("[Fremennik name]").join(player.getDisplayName?.() ?? "");
     }
     if (event.text.includes("[number]%")) {
       event.text = event.text.replace("[number]%", `${approvalPercent(player)}%`);

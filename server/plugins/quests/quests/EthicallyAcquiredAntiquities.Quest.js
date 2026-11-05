@@ -965,10 +965,12 @@ module.exports = function registerEthicallyAcquiredAntiquitiesQuest(api) {
     }
   }
 
+  /** A fade back in leaves the full-screen fade overlay mounted on 161:1 once the script has run (#2640). Take it down then, but only if it is still the interface mounted there: a ladder or transport that mounted something else in the meantime is not ours to close, and a later fade out is a new mount. */
   function fade(player, out) {
-    player.getPacketSender().sendSubInterface(OVERLAY_UID, FADE_INTERFACE, 1, {
+    const mount = player.getPacketSender().mountSubInterface(OVERLAY_UID, FADE_INTERFACE, 1, {
       postScripts: [{ scriptId: 948, args: out ? [0, 255, 0, 0, 50] : [0, 0, 0, 255, 50] }],
     });
+    if (!out) TaskManager.submit(new CountdownTask(player, 3, () => player.getPacketSender().closeSubInterfaceMount(mount)));
   }
 
   function controls(player, active) {
@@ -980,7 +982,7 @@ module.exports = function registerEthicallyAcquiredAntiquitiesQuest(api) {
   /** An empty chatbox the player cannot continue: the capture's held moments. */
   function hold(player) {
     player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
-      new ActionDialogue(0, { execute: () => StatementDialogue.send(player, "", false) })
+      new ActionDialogue(0, { execute: () => StatementDialogue.send(player, "", false) }, true)
     ));
   }
 

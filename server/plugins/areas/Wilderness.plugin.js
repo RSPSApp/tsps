@@ -114,7 +114,6 @@ const LEVEL_DIFFERENCE_MESSAGES = [
   "Your level difference is too great.",
   "You need to move deeper into the Wilderness.",
 ];
-const CLAN_CHAT_MESSAGES = ["You cannot attack a player who is in your clan chat."];
 
 function combatLevelOf(player) {
   const cached = combatLevels.get(player);
@@ -144,15 +143,20 @@ function wildernessLevelOf(player) {
 
 /**
  * Combat level range for an attack, i.e. the largest level difference that still allows
- * it. 0 means the pair isn't subject to the rule - one of them is outside the levelled
- * Wilderness, and whether they may fight at all is decided elsewhere. The range follows
- * the attacker's own Wilderness level: standing at level 0 (or on unlevelled PvP ground,
- * such as a PvP world's Edgeville) always permits +/-15 on a PvP world, and the target's
- * shallower level never shrinks it.
+ * it. On a normal world, 0 means neither player has a levelled constraint, and whether
+ * they may fight at all is decided elsewhere. Both players must
+ * be within range of each other, so the usable range is the shallower of their two
+ * Wilderness levels; standing deeper alone does not widen it. On a PvP world the flat
+ * +15 applies everywhere, and the shallower side still caps the total.
  */
-function wildernessAttackRange(attacker, _target) {
+function wildernessAttackRange(attacker, target) {
   const base = hasGlobalWorldTag("pvp") ? PVP_WORLD_ATTACK_RANGE : 0;
-  return base + wildernessLevelOf(attacker);
+  const attackerLevel = wildernessLevelOf(attacker);
+  const targetLevel = wildernessLevelOf(target);
+  const sharedLevel = Math.min(attackerLevel, targetLevel);
+  // Normal-world unlevelled PvP ground must not erase the other side's cap via the 0 sentinel.
+  // On a PvP world, that side has a real +/-15 range, so the minimum still applies.
+  return base + (base === 0 && sharedLevel === 0 ? Math.max(attackerLevel, targetLevel) : sharedLevel);
 }
 
 /**
@@ -479,10 +483,8 @@ function canAttack(attacker, target, method) {
     return attackerInWild || targetInWild ? false : null;
   }
 
-  if (shareClanChat(attacker, target)) {
-    sendThrottled(attacker, CLAN_CHAT_MESSAGES);
-    return false;
-  }
+  // Only bots: OSRS has no rule against attacking someone in your chat-channel.
+  if (attacker.isPlayerBot?.() && shareClanChat(attacker, target)) return false;
 
   if (!canAttackByWildernessLevel(attacker, target)) {
     sendThrottled(attacker, LEVEL_DIFFERENCE_MESSAGES);
@@ -691,6 +693,10 @@ module.exports = {
   name: "Wilderness",
   _test: { canAttack, webCutChance, webTool, webSlashAnimation, slashWeb, websBeingSlashed },
   register(api) {
+    require("./wilderness/Statistics.Wilderness")(api, isInWilderness);
+    require("./wilderness/Diary.Wilderness")(api);
+    require("./wilderness/FountainOfRune.Wilderness")(api);
+    require("./wilderness/DemonicRuins.Wilderness")(api);
     pluginApi = api;
     const state = createState();
 

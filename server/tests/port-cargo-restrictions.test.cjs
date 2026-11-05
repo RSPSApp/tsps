@@ -60,6 +60,13 @@ function objectOption(p, object, option) {
   }
 }
 function outside(p) { p.moveTo(new core.Location(3222, 3218, 0)); }
+function sarimLedger(p) {
+  core.RegionManager.loadMapFiles(3028, 3194);
+  p.moveTo(new core.Location(3028, 3193, 0)); // The cache table's accessible south side.
+  const object = core.ObjectManager.objectsAt(new core.Location(3028, 3194, 0)).find(object => object.getType() === 10);
+  assert.ok(object);
+  return object;
+}
 const warning = "You're leaving port with some cargo. If you do not return it, it will be confiscated by the shipwright wizard's autonomous tracking unit.";
 const confiscated = 'Your cargo has been confiscated by the S.W.A.T. team.';
 
@@ -125,6 +132,80 @@ test('quest startup installs both ledger multilocs so native actions follow actu
     assert.ok(core.ObjectDefinition.forPlayer(id, p).getInteractions().includes('Deposit-cargo'));
     common.putDown(p);
   }
+});
+
+test('Pandemonium source ledger returns the actual hand crate without a local boat, reward or progression', t => {
+  const p = player(t), table = sarimLedger(p);
+  const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(quest => quest.key === 'pandemonium');
+  p.setAttribute('pandemonium:stage-version', 2);
+  quest.setStage(p, 38);
+  const task = common.taskById(599);
+  common.setSlots(p, [null, null, { id: task.id, taken: 0, delivered: 0 }]);
+  const points = p.getAttribute('quest.points'), xp = p.getSkillManager().getExperience(core.Skill.SAILING);
+  assert.equal(p.getSailing().boats.length, 0);
+  objectOption(p, table, 'Take-cargo');
+  assert.equal(common.heldCrate(p), task.crate, 'real Sarim multiloc pickup reaches the shared cargo owner');
+  assert.equal(p.getAttribute(common.CARRIED_SLOT_ATTRIBUTE), 2);
+  assert.equal(p.getInventory().getAmount(task.crate), 0);
+  objectOption(p, table, 'Deposit-cargo');
+  assert.equal(common.heldCrate(p), undefined, 'the source table is a safe place to set down the crate');
+  assert.deepEqual(common.slots(p)[2], { id: task.id, taken: 0, delivered: 0 });
+  assert.equal(p.getAttribute(common.CARRIED_SLOT_ATTRIBUTE), -1);
+  assert.equal(p.getPacketSender().getVarbit(common.VARBIT.CARRYING_CARGO), 0);
+  assert.equal(p.getPacketSender().getVarbit(common.VARBIT.LAST_CARGO_TAKEN), 0);
+  objectOption(p, table, 'Deposit-cargo');
+  assert.deepEqual(common.slots(p)[2], { id: task.id, taken: 0, delivered: 0 }, 'a repeated deposit cannot decrement twice');
+  assert.equal(quest.getStage(p), 38);
+  assert.equal(p.getAttribute('quest.points'), points);
+  assert.equal(p.getSkillManager().getExperience(core.Skill.SAILING), xp);
+  objectOption(p, table, 'Take-cargo');
+  assert.equal(common.heldCrate(p), task.crate, 'the returned quest cargo is collectable again');
+  assert.equal(common.slots(p)[2].taken, 1);
+});
+
+test('source return preserves other task slots and cargo in the crew and hold', t => {
+  const p = player(t), table = sarimLedger(p);
+  const task = common.DATA.tasks.find(task => task.type === 'courier' && task.cargoPort === 'port_sarim' && task.amount >= 3);
+  assert.ok(task);
+  const other = { id: 599, taken: 1, delivered: 0 };
+  common.setSlots(p, [other, { id: task.id, taken: 2, delivered: 0 }]);
+  common.setCrewCargo(p, 1, { crate: task.crate, amount: 1, boatSlot: 0 });
+  const hold = [{ id: task.crate, amount: 1 }];
+  p.getSailing().boats.push({ slot: 0, cargo: hold });
+  common.carry(p, task.crate, 1);
+  objectOption(p, table, 'Deposit-cargo');
+  assert.equal(common.heldCrate(p), undefined);
+  assert.deepEqual(common.slots(p)[0], other);
+  assert.deepEqual(common.slots(p)[1], { id: task.id, taken: 1, delivered: 0 });
+  assert.deepEqual(common.crewCargo(p)[1], { crate: task.crate, amount: 1, boatSlot: 0 });
+  assert.deepEqual(p.getSailing().boats[0].cargo, hold);
+});
+
+test('a wrong port cannot accept a crate as a source return or delivery', t => {
+  const p = player(t), table = sarimLedger(p), task = common.taskById(31);
+  assert.notEqual(task.cargoPort, 'port_sarim');
+  assert.notEqual(task.destination, 'port_sarim');
+  carry(p, 0, task);
+  objectOption(p, table, 'Deposit-cargo');
+  assert.equal(common.heldCrate(p), task.crate);
+  assert.deepEqual(common.slots(p)[0], { id: task.id, taken: 1, delivered: 0 });
+  assert.equal(p.messages.at(-1), "This cargo isn't for delivery here.");
+});
+
+test('source return requires the exact carried slot to own an outstanding crate', async t => {
+  for (const state of ['missing-slot', 'foreign-slot', 'already-delivered']) await t.test(state, t => {
+    const p = player(t), table = sarimLedger(p), task = common.taskById(599);
+    carry(p, 0, task);
+    if (state === 'missing-slot') p.setAttribute(common.CARRIED_SLOT_ATTRIBUTE, -1);
+    else if (state === 'foreign-slot') {
+      common.setSlots(p, [{ id: task.id, taken: 1, delivered: 0 }, { id: 31, taken: 1, delivered: 0 }]);
+      p.setAttribute(common.CARRIED_SLOT_ATTRIBUTE, 1);
+    } else common.setSlots(p, [{ id: task.id, taken: 1, delivered: 1 }]);
+    const before = JSON.stringify(common.slots(p));
+    objectOption(p, table, 'Deposit-cargo');
+    assert.equal(common.heldCrate(p), task.crate);
+    assert.equal(JSON.stringify(common.slots(p)), before);
+  });
 });
 
 for (const [name, taskId, stage, nextStage] of [['Pandemonium', 599, 42, 44], ['Prying Times', 600, 5, 10]]) {

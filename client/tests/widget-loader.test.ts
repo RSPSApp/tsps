@@ -42,6 +42,19 @@ for (const child of [23, 24]) {
     assert.ok(shouldTransmitAction(widget.flags ?? 0, 0), "legacy button must reach its server handler");
 }
 
+// IF1 close buttons (buttonType 3, an interface's X sprite) offer Close. Dwarf Cannon's repair
+// interface has its X at 409:11; its tools (1-3) and parts (7-9) are buttonType 4 toggles.
+const cannon = new WidgetLoader(cache).loadWidgetGroup(409)!;
+const closeButton = cannon.widgets.get((409 << 16) | 11)!;
+assert.equal(closeButton.buttonType, 3, "409:11 is an IF1 close button");
+assert.deepEqual(closeButton.actions, ["Close"]);
+assert.ok(deriveMenuEntriesForWidget(closeButton).some(entry => entry.option === "Close"), "409:11 must offer Close");
+for (const child of [1, 2, 3, 7, 8, 9]) {
+    const toggle = cannon.widgets.get((409 << 16) | child)!;
+    assert.equal(toggle.buttonType, 4, `409:${child} is a toggle`);
+    assert.ok(deriveMenuEntriesForWidget(toggle).some(entry => entry.option === toggle.buttonText), `409:${child} keeps its ${toggle.buttonText} entry`);
+}
+
 // Exercise the plugin's actual flag packets against the current cache decoder:
 // using op2 flags on these op1 widgets used to leave only Cancel in the menu.
 const Events = require("../../server/plugins/npcs/random-events/Common.RandomEvents");
@@ -86,6 +99,10 @@ async function verifyEventWidgets() {
                 sendClientScript() { return this; },
                 sendString(text: string, uid: number) { manager.getWidgetByUid(uid)!.text = text; return this; },
                 sendItemOnInterfaces(uid: number, id: number) { manager.getWidgetByUid(uid)!.itemId = id; return this; },
+                sendInterfaceRawModel(uid: number, model: number) { manager.getWidgetByUid(uid)!.modelId = model; return this; },
+                sendGlobalGraphic() { return this; },
+                sendAreaSound() { return this; },
+                sendTypedMessage() { return this; },
                 sendInterfaceFlagsRange(uid: number, from: number, to: number, flags: number) {
                     for (let slot = from; slot <= to; slot++) manager.setWidgetFlagsByKey(uid, slot, flags);
                     return this;
@@ -97,6 +114,9 @@ async function verifyEventWidgets() {
         const dialogueManager = new DialogueManager(player);
         Events.initialize({
             core: { Location, DialogueChainBuilder, NpcDialogue, ActionDialogue, EndDialogue,
+                Graphic: require("../../server/dist/game/model/Graphic").Graphic,
+                NpcDefinition: require("../../server/dist/game/definition/NpcDefinition").NpcDefinition,
+                World: { forEachNetworkPlayer() {} },
                 NpcIdentifiers: require("../../server/dist/util/NpcIdentifiers").NpcIdentifiers,
                 ItemIdentifiers: require("../../server/dist/util/ItemIdentifiers").ItemIdentifiers,
                 MapObjects: { mapObjects: new Map(), getHash: () => 0 },

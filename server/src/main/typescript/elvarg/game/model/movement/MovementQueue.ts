@@ -99,11 +99,15 @@ export class MovementQueue {
      */
     private isMoving = false;
     private movedThisCycle = false;
+    /** True when the current cycle was spent running, so energy must not restore on it. */
+    private ranThisCycle = false;
     private externalMovementUntil = 0;
     private lastMoveCycle = -2;
     private blockedByDynamicOccupancy = false;
     private routeEvaluated = false;
     private alternativeRoute = false;
+    /** The next queued step may ignore a spell freeze, but no other movement lock. */
+    private forceOneStepThroughFreeze = false;
     private entityPursuit: (() => void) | null = null;
     /**
      * Set when a step toward the head checkpoint was rejected, plus whether an
@@ -214,6 +218,28 @@ export class MovementQueue {
     }
 
     /**
+     * Queues one collision-checked step through a spell freeze. Mithril seeds use this in OSRS
+     * PvP; stun, duel restrictions, placement and other movement locks still prevent the step.
+     */
+    public walkStepIgnoringFreeze(x: number, y: number): boolean {
+        if (!this.character.isPlayer() || Math.max(Math.abs(x), Math.abs(y)) !== 1
+            || (x !== 0 && y !== 0) || !this.getMobilityIgnoringFreeze().canMove()) {
+            return false;
+        }
+
+        const source = this.character.getLocation();
+        const destination = source.transform(x, y);
+        if (!this.checkDestination(destination) || !this.canWalkTo(destination, source)) {
+            return false;
+        }
+
+        this.reset();
+        this.forceOneStepThroughFreeze = true;
+        this.points.push(new Point(destination, Direction.fromDeltas(x, y)));
+        return true;
+    }
+
+    /**
          * Adds a step to this MovementQueue.
          *
          * @param x           The x coordinate of this step.
@@ -315,9 +341,10 @@ export class MovementQueue {
         if (this.player != null) {
             // Player related checks
 
-            // Wiki: Animation stall. A full stall holds the player still for the swing's
-            // animation. Deliberately silent: their click was not rejected, it is queued for
-            // the tick the animation releases (NetworkBuilder's stalled input).
+            // Wiki: Animation stall. Only a full stall holds the player still; a partial one is
+            // visual, so the server keeps walking their true tile underneath it. Deliberately
+            // silent: their click was not rejected, it is queued for the tick the stall releases
+            // (NetworkBuilder's stalled input).
             if (this.player.getCombat().isAnimationStalled()) {
                 return Mobility.ANIMATION_STALL;
             }
@@ -430,7 +457,13 @@ export class MovementQueue {
 
     public beginCycle(): void {
         this.movedThisCycle = false;
+        this.ranThisCycle = false;
         this.blockedByDynamicOccupancy = false;
+    }
+
+    /** The cycle just processed was spent running (a running tick spends energy). */
+    public didRunThisCycle(): boolean {
+        return this.ranThisCycle;
     }
 
     public didMoveThisCycle(): boolean {
@@ -509,7 +542,11 @@ export class MovementQueue {
             return;
         }
 
-        if (!this.getMobility().canMove()) {
+        const forceOneStepThroughFreeze = this.forceOneStepThroughFreeze;
+        this.forceOneStepThroughFreeze = false;
+        if (!(forceOneStepThroughFreeze
+            ? this.getMobilityIgnoringFreeze()
+            : this.getMobility()).canMove()) {
             this.isMoving = false;
             return;
         }
@@ -528,7 +565,7 @@ export class MovementQueue {
         const start = this.character.getLocation();
         let current = start;
         let previous = start;
-        let steps = this.isRunToggled() ? 2 : 1;
+        let steps = forceOneStepThroughFreeze ? 1 : this.isRunToggled() ? 2 : 1;
         let moved = false;
         this.stepBlocked = false;
         this.stepBlockedByEntity = false;
@@ -616,6 +653,19 @@ export class MovementQueue {
         }
         if (this.isDynamicallyOccupied(next)) {
             return false;
+        }
+        // The "full" flag is collision like a wall's: a diagonal step needs both tiles it
+        // cuts past free as well, so a player can't slip between two Castle Wars barricades
+        // (issue 1929). The NPC flag stays destination-only for NPCs.
+        const dx = next.getX() - source.getX();
+        const dy = next.getY() - source.getY();
+        if (this.character.isPlayer() && dx !== 0 && dy !== 0) {
+            const size = this.character.getSize();
+            const privateArea = this.character.getPrivateArea();
+            if (World.isPlayerBlockingNpcOnTile(source.transform(dx, 0), size, privateArea)
+                || World.isPlayerBlockingNpcOnTile(source.transform(0, dy), size, privateArea)) {
+                return false;
+            }
         }
         return true;
     }
@@ -716,18 +766,37 @@ export class MovementQueue {
         }
     }
 
+    /**
+     * Energy units one running tick costs (Wiki: Energy). Weight is clamped to 0-64 kg and the
+     * Agility level is the boosted one; a tick with less energy left only spends what remains.
+     */
+    public static runEnergyDrainUnits(p: Player): number {
+        const weight = Math.max(0, Math.min(64, p.getWeightKg()));
+        const agility = p.getSkillManager().getCurrentLevel(Skill.AGILITY);
+        const base = Math.floor((60 + Math.floor((67 * weight) / 64)) * (1 - agility / 300));
+        return Math.max(0, Math.floor(applyRunEnergyDrainModifiers(p, base)));
+    }
+
+    /** Energy units regained per tick not spent running, before the graceful set bonus. */
+    public static runEnergyRestoreUnits(p: Player): number {
+        const agility = p.getSkillManager().getCurrentLevel(Skill.AGILITY);
+        const base = Math.floor(agility / 10) + 15;
+        return Math.max(0, Math.floor(applyRunEnergyRestoreModifiers(p, base)));
+    }
+
     private drainRunEnergy() {
         const player = (this.character as Player);
         if (player.isPlayerBot?.() === true) {
-            if (player.getRunEnergy() !== 100) {
-                player.setRunEnergy(100);
+            if (player.getRunEnergyUnits() !== GameConstants.RUN_ENERGY_MAX_UNITS) {
+                player.setRunEnergyUnits(GameConstants.RUN_ENERGY_MAX_UNITS);
             }
             return;
         }
         if (this.isRunToggled()) {
-            player.setRunEnergy(player.getRunEnergy() - applyRunEnergyDrainModifiers(player, 1));
-            if (player.getRunEnergy() <= 0) {
-                player.setRunEnergy(0);
+            this.ranThisCycle = true;
+            player.setRunEnergyUnits(player.getRunEnergyUnits() - MovementQueue.runEnergyDrainUnits(player));
+            if (player.getRunEnergyUnits() <= 0) {
+                player.setRunEnergyUnits(0);
                 this.runOverride = null;
                 player.setRunning(false);
                 player.getPacketSender().sendRunStatus();
@@ -761,12 +830,8 @@ export class MovementQueue {
         packetSender.sendInteractionOption("null", 2, true);
     }
 
-    public static runEnergyRestoreDelay(p: Player) {
-        const delay = 1700 - (p.getSkillManager().getCurrentLevel(Skill.AGILITY) * 10);
-        return Math.max(1, Math.round(applyRunEnergyRestoreModifiers(p, delay)));
-    }
-
     public reset(clearDestination = true): MovementQueue {
+        this.forceOneStepThroughFreeze = false;
         this.externalMovementUntil = 0;
         this.runOverride = null;
         this.points.clear();
@@ -787,6 +852,7 @@ export class MovementQueue {
     public resetFollow() {
         this.character.setCombatFollowing(null);
         this.character.setFollowing(null);
+        this.character.setMobileInteraction?.(null);
         this.character.setPositionToFace(null);
     }
 
@@ -820,6 +886,8 @@ export class MovementQueue {
             return;
         }
 
+        const playerFollowingPlayer = this.character.isPlayer() && following.isPlayer();
+
         if (following.getPrivateArea() != this.character.getPrivateArea()) {
             if (this.tryTeleportPetToFollower(following)) {
                 return;
@@ -831,9 +899,23 @@ export class MovementQueue {
             return;
         }
 
-        // Keep parity with Java follow task behavior for generic following.
-        // For pets, OSRS-like behavior is to snap back to the owner when they
-        // get too far away.
+        // A leader who teleports (including going up or down a level) is gone: OSRS ends
+        // the follow there, rather than walking the follower to wherever the leader landed.
+        if (
+            playerFollowingPlayer &&
+            (following.getLocation().getZ() != this.character.getLocation().getZ() ||
+                following.getTeleportSerial() != this.character.getFollowedTeleportSerial())
+        ) {
+            this.character.setFollowing(null);
+            this.character.setMobileInteraction(null);
+            this.character.setPositionToFace(null);
+            this.reset();
+            return;
+        }
+
+        // Pets snap back to their owner when they fall behind. Every other follower keeps
+        // chasing: OSRS follow is a persistent interaction, so a player can follow another
+        // across the whole map and a leader outrunning the 15-tile view does not end it.
         const tooFarAway = !following
             .getLocation()
             .isWithinDistance(this.character.getLocation(), GameConstants.PET_FOLLOW_AUTO_TELEPORT_DISTANCE);
@@ -841,17 +923,7 @@ export class MovementQueue {
             return;
         }
 
-        // Keep parity with Java follow task behavior.
-        if (
-            following.isTeleportingReturn() ||
-            tooFarAway
-        ) {
-            if (this.tryTeleportPetToFollower(following)) {
-                return;
-            }
-            if (this.character.isPlayer() && following.isPlayer()) {
-                this.character.sendMessage(`Unable to find ${following.getAsPlayer().getUsername()}.`);
-            }
+        if (!playerFollowingPlayer && (following.isTeleportingReturn() || tooFarAway)) {
             this.character.setFollowing(null);
             this.character.setMobileInteraction(null);
             this.character.setPositionToFace(null);
@@ -1209,6 +1281,22 @@ export class MovementQueue {
         };
     }
 
+    /**
+     * Faces the middle of the loc's rotated footprint, as live does (a fine coord of
+     * x * 128 + width * 64): half-tile coords give the same angle from the player's tile.
+     * Forced, since live re-sends the angle on each click even when it has not changed.
+     */
+    private faceObjectCentre(routeSpec: ReturnType<MovementQueue["buildObjectRouteSpec"]>): void {
+        const rotated = (routeSpec.reachAngle & 1) === 1;
+        const width = Math.max(1, rotated ? routeSpec.reachLength : routeSpec.reachWidth);
+        const length = Math.max(1, rotated ? routeSpec.reachWidth : routeSpec.reachLength);
+        this.player.forcePositionToFace(new Location(
+            routeSpec.objectX + (width - 1) / 2,
+            routeSpec.objectY + (length - 1) / 2,
+            this.player.getLocation().getZ()
+        ));
+    }
+
     /** The reach check respects shape, rotation and access flags, from the player's own tile. */
     private reachesObject(object: GameObject, routeSpec: ReturnType<MovementQueue["buildObjectRouteSpec"]>): boolean {
         return PathFinder.reachedObject(
@@ -1320,6 +1408,7 @@ export class MovementQueue {
             return;
         }
         if (frozen) {
+            this.player.faceMobileBriefly(entity);
             this.player.sendMessage("I can't reach that!");
             return;
         }
@@ -1529,6 +1618,11 @@ export class MovementQueue {
         const blocking = frozen ? this.getMobilityIgnoringFreeze() : mobility;
         if (!blocking.canMove() || (frozen && !this.reachesObject(object, routeSpec))) {
             if (blocking.canMove()) {
+                // The click replaces what the player was doing (a fight), as any loc click does,
+                // and live still turns them to the loc's centre on every one (rsprox 2238: a
+                // frozen player's clicks on a 4x2 portal each send FaceAngle 1989).
+                this.walkToReset();
+                this.faceObjectCentre(routeSpec);
                 this.player.sendMessage("I can't reach that!");
             } else {
                 blocking.sendMessage(this.player);
@@ -1599,7 +1693,8 @@ export class MovementQueue {
                 }
                 this.pathX = this.player.getLocation().getX();
                 this.pathY = this.player.getLocation().getY();
-                this.player.setPositionToFace(new Location(objectX, objectY, this.player.getLocation().getZ()));
+                this.player.setPositionToFace(objectX === this.player.getLocation().getX() && objectY === this.player.getLocation().getY()
+                    ? null : new Location(objectX, objectY, this.player.getLocation().getZ()));
                 task.stop();
                 TaskManager.cancelTasks(this.player.getIndex());
                 action.execute();

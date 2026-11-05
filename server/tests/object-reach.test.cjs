@@ -598,7 +598,7 @@ test('ladder click waits for arrival before animating and changes plane one tick
 test('a frozen player climbs a ladder in reach, and gets "I can\'t reach that!" for one further away', (t) => {
   // Wiki (Freeze): freezes do not stop interacting with adjacent ladders or cave entrances.
   // rsprox 2238: a frozen player's clicks on an exit 14 tiles away answer "I can't reach that!".
-  const events = [], messages = [], timers = new Set([TimerKey.FREEZE]);
+  const events = [], messages = [], faces = [], timers = new Set([TimerKey.FREEZE]);
   let location = new Location(100, 99, 0);
   const noop = () => {};
   const player = {
@@ -612,7 +612,8 @@ test('a frozen player climbs a ladder in reach, and gets "I can\'t reach that!" 
     getTimers: () => ({ has: (key) => timers.has(key) }), getFollowing: () => null,
     getCombat: () => ({ setCastSpell: noop, reset: noop, isAnimationStalled: () => false }),
     getSkillManager: () => ({ stopSkillable: noop }),
-    setFollowing: noop, setCombatFollowing: noop, setPositionToFace: noop,
+    setFollowing: noop, setCombatFollowing: noop, setPositionToFace: (location) => faces.push(location),
+    forcePositionToFace: (location) => faces.push(location),
     setDirection: noop, setWalkingDirection: noop, setRunningDirection: noop,
     isRunningReturn: () => false, sendMessage: (message) => messages.push(message),
     performAnimation: (animation) => events.push(['anim', animation.getId()]),
@@ -653,11 +654,15 @@ test('a frozen player climbs a ladder in reach, and gets "I can\'t reach that!" 
 
   events.length = 0;
   location = new Location(100, 96, 0);
+  faces.length = 0;
   queue.walkToObject(new GameObject(132, new Location(100, 100, 0), 10, 0, null), { execute: climb });
   for (let n = 0; n < 4; n++) tick();
   assert.deepEqual(messages, ["I can't reach that!"]);
   assert.deepEqual(events, []);
   assert.equal(location.y, 96);
+  // rsprox 2238: each of those clicks still sends a FaceAngle towards the loc (issue #1944).
+  const face = faces.at(-1);
+  assert.deepEqual(face && [face.x, face.y, face.z], [100, 100, 0], 'an unreachable frozen object click turns the player to the loc');
   assert.equal(queue.points.length, 0, 'nothing is queued to walk once the freeze ends');
 
   // A stun on top of the freeze still stops the climb, even in reach.
@@ -728,4 +733,30 @@ test('an inventory item action cancels the queued object op but keeps the walk',
   tick();
   assert.equal(location.y, 99, 'the player walks on to the clicked object');
   assert.equal(events.includes('op'), false, 'the queued object op never runs');
+});
+
+test('a skilling loc keeps its action going from any side of its footprint (5x5 essence rock)', () => {
+  const originalForId = ObjectDefinition.forId;
+  ObjectDefinition.forId = () => ({ getSizeX: () => 5, getSizeY: () => 5 });
+  try {
+    // The north-west Rune Essence rock: south-west corner 2891,4847 (#1706).
+    const rock = new GameObject(34773, new Location(2891, 4847, 0), 10, 3, null);
+    assert.equal(rock.footprintDistance(new Location(2896, 4849, 0)), 1, 'east side');
+    assert.equal(rock.footprintDistance(new Location(2893, 4852, 0)), 1, 'north side');
+    assert.equal(rock.footprintDistance(new Location(2893, 4849, 0)), 0, 'inside');
+    assert.equal(rock.isWithinInteractionDistance(new Location(2896, 4849, 0)), true);
+    assert.equal(rock.isWithinInteractionDistance(new Location(2899, 4849, 0)), false);
+    assert.equal(rock.isWithinInteractionDistance(new Location(2896, 4849, 1)), false, 'another plane');
+  } finally {
+    ObjectDefinition.forId = originalForId;
+  }
+  const originalSizes = ObjectDefinition.forId;
+  ObjectDefinition.forId = () => ({ getSizeX: () => 1, getSizeY: () => 3 });
+  try {
+    const turned = new GameObject(1, new Location(100, 100, 0), 10, 1, null);
+    assert.equal(turned.footprintDistance(new Location(103, 100, 0)), 1, 'a quarter turn lays a 1x3 loc along x');
+    assert.equal(turned.footprintDistance(new Location(100, 102, 0)), 2);
+  } finally {
+    ObjectDefinition.forId = originalSizes;
+  }
 });

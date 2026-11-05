@@ -728,7 +728,12 @@ module.exports = function registerKingsRansomQuest(api) {
 
   function talkGossip(player, npcId, stage) {
     if (stage >= STAGE_COMPLETE) return play(player, npcId, "after-king-s-ransom", GOSSIP_PAGE) || true;
-    if (stage < STAGE_STARTED) return play(player, npcId, "strange-things-are-afoot-talking-to-gossip") || true;
+    if (stage < STAGE_STARTED) {
+      // This opening thanks the player for solving Lord Sinclair's murder; until
+      // Murder Mystery is complete, leave Gossip to that quest's own variants.
+      if (!isQuestComplete(player, "murder_mystery")) return false;
+      return play(player, npcId, "strange-things-are-afoot-talking-to-gossip") || true;
+    }
     if (stage < STAGE_INVESTIGATE) return play(player, npcId, "strange-things-are-afoot-talking-to-gossip-again") || true;
     if (stage < STAGE_EVIDENCE_SHOWN) {
       return play(player, npcId, "peril-at-the-end-house-talking-to-gossip-after-talking-to-the-guard") || true;
@@ -820,6 +825,7 @@ module.exports = function registerKingsRansomQuest(api) {
         player.getInventory().deleteNumber(BRONZE_MED_HELM_ITEM, 1);
         player.getInventory().deleteNumber(IRON_CHAINBODY_ITEM, 1);
         player.setAttribute(DISGUISE_ATTRIBUTE, true);
+        player.getPacketSender().sendVarbit(VARBIT_STAGE, quest.varbitValue(stage, player));
         return (
           play(player, CAMELOT_ARTHUR_ID, "infiltrating-the-black-knights-fortress-again-talking-to-king-arthur-with-a-spare-disguise") || true
         );
@@ -1473,6 +1479,9 @@ module.exports = function registerKingsRansomQuest(api) {
     varbitId: VARBIT_STAGE,
     startedValue: STAGE_STARTED,
     completionValue: STAGE_COMPLETE,
+    // Disguised Arthur has left the basement (85); the Camelot reward completes at 90.
+    varbitValue: (stage, player) => stage >= STAGE_COMPLETE ? 90
+      : stage === STAGE_FREED_ARTHUR && disguiseGiven(player) ? 85 : stage,
     questPoints: 1,
     xpRewards: [
       { skillId: Skill.DEFENCE.getIndex(), amount: 33000, label: "Defence" },

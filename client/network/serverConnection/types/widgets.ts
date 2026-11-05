@@ -35,6 +35,8 @@ export type WidgetServerPayload =
           action: "set_text";
           uid: number;
           text: string;
+          /** Explicit ownership survives cache scripts until released or the group unloads. */
+          serverOwned?: boolean;
       }
     | {
           action: "set_hidden";
@@ -109,13 +111,6 @@ export type WidgetServerPayload =
           itemId?: number;
           itemQuantity?: number;
           modelOrthog?: boolean;
-      }
-    | {
-          action: "set_quest_list";
-          groups: Array<{
-              title: string;
-              quests: Array<{ key: string; slot: number; displayName: string; status: number }>;
-          }>;
       };
 
 export type WidgetActionClientPayload = {

@@ -80,10 +80,8 @@ import {
   encodeWidgetSetAngle,
   encodeWidgetSetNpcHead,
   encodeWidgetSetPlayerHead,
-  encodeWidgetSetQuestList,
   encodeWidgetSetRoot,
   encodeWidgetSetText,
-  type QuestListGroup,
   type ScriptInventorySnapshot,
   MAIN_INVENTORY_GROUP_ID,
   MAIN_INVENTORY_SLOT_FLAGS,
@@ -98,6 +96,7 @@ import {
   WORLD_MAP_TARGET_UID,
 } from "../protocol/WorldMapProtocol";
 import { CacheDefinitions } from "../../game/cache/CacheDefinitions";
+import { applyRunEnergyStatusModifiers } from "../../game/content/combat/EquipmentEffects";
 const CHATBOX_MODAL_TARGET_UID = (162 << 16) | 568;
 const MAIN_MODAL_TARGET_UID = (161 << 16) | 16;
 /** The gameframe's side button click: selects the tab and runs its setup. */
@@ -307,12 +306,6 @@ export class PacketSender {
     return this.sendConfig(id, state);
   }
 
-  /** Populates the quest list (side journal); the client renders opcode 116. */
-  sendQuestList(groups: QuestListGroup[]): this {
-    this.player.getSession().sendClientPacket(encodeWidgetSetQuestList(groups));
-    return this;
-  }
-
   sendChatOptions(
     publicChat: number,
     privateChat: number,
@@ -323,9 +316,18 @@ export class PacketSender {
   }
 
   public sendRunEnergy(): this {
-    if (this.player.getSession().sendClientPacket(encodeRunEnergy(
-      this.player.getRunEnergy(), this.player.isRunningReturn()
-    ))) return this;
+    if (this.sendRunEnergyPacket()) return this;
+  }
+
+  /** The run orb packet: exact units, the carried weight and any stamina effect left. */
+  private sendRunEnergyPacket(): boolean {
+    const status = applyRunEnergyStatusModifiers(this.player, { staminaTicks: 0, staminaMultiplier: 0 });
+    return this.player.getSession().sendClientPacket(encodeRunEnergy(
+      this.player.getRunEnergyUnits(),
+      this.player.isRunningReturn(),
+      this.player.getWeightKg(),
+      status.staminaTicks
+    ));
   }
 
   sendQuickPrayersState(activated: boolean): this {
@@ -344,9 +346,7 @@ export class PacketSender {
   }
 
   sendRunStatus(): this {
-    if (this.player.getSession().sendClientPacket(encodeRunEnergy(
-      this.player.getRunEnergy(), this.player.isRunningReturn()
-    ))) return this;
+    if (this.sendRunEnergyPacket()) return this;
   }
 
   sendInterface(id: number): this {
@@ -393,6 +393,26 @@ export class PacketSender {
 
   public sendEnterInputPrompt(title: string): PacketSender {
     return this.sendClientScript(110, title, 0);
+  }
+
+  /** An amount or text action is armed: a chatbox prompt or item search, or a popup waiting on its answer. */
+  public hasInputPrompt(): boolean {
+    return !!(this.player.getEnteredAmountAction?.() || this.player.getEnteredSyntaxAction?.());
+  }
+
+  /**
+   * Drops an unanswered chatbox prompt and the action waiting on its answer. Capture (RSProx 960,
+   * rev 235): closing the GE over its item search sends trigger_ondialogabort first. It runs
+   * meslayer_ondialogabort (138), which closes the prompt without answering; meslayer_close (101)
+   * would resume a count prompt with 0.
+   */
+  public abortInputPrompt(): this {
+    if (this.hasInputPrompt()) {
+      this.player.getSession().sendClientPacket(encodeTriggerOnDialogAbort());
+    }
+    this.player.setEnteredAmountAction?.(null);
+    this.player.setEnteredSyntaxAction?.(null);
+    return this;
   }
 
   public sendExit(): PacketSender {
@@ -481,6 +501,16 @@ export class PacketSender {
     }
     this.rememberSubInterface((161 << 16) | tabId, interfaceId, 1);
     this.player.getSession().sendClientPacket(encodeWidgetOpenSub((161 << 16) | tabId, interfaceId));
+    return this;
+  }
+
+  /**
+   * Mounts `interfaceId` in the magic tab's slot (161:82) in place of the spellbook, as live does
+   * for Monster Examine's stats (522); `sendTabInterface(6, ...)` puts the spellbook back.
+   */
+  public sendMagicTabInterface(interfaceId: number): this {
+    this.rememberSubInterface((161 << 16) | 82, interfaceId, 1);
+    this.player.getSession().sendClientPacket(encodeWidgetOpenSub((161 << 16) | 82, interfaceId));
     return this;
   }
 
@@ -575,12 +605,13 @@ export class PacketSender {
       return this;
   }
 
-  public sendString(string: string, id: number): PacketSender {
+  /** Explicit ownership prevents browser cache scripts rewriting the widget; false releases it. */
+  public sendString(string: string, id: number, serverOwned?: boolean): PacketSender {
     const safeText = String(string ?? "");
-    if (!this.player.getFrameUpdater().shouldUpdate(safeText, id)) {
+    if (!this.player.getFrameUpdater().shouldUpdate(safeText, id, serverOwned)) {
       return this;
     }
-    this.player.getSession().sendClientPacket(encodeWidgetSetText(id, safeText));
+    this.player.getSession().sendClientPacket(encodeWidgetSetText(id, safeText, serverOwned));
     return this;
   }
 
@@ -742,7 +773,7 @@ export class PacketSender {
   sendPrivateMessage(target: any, message: Uint8Array, size: number): this {
     const text = Misc.ucFirst(Misc.textUnpack(Array.from(message), size).toLowerCase());
     this.player.getSession().sendClientPacket(encodeChatMessage(
-      "private_in", text, target?.getUsername?.() ?? "", "", target?.getIndex?.() ?? 0
+      "private_in", text, target?.getDisplayName?.() ?? "", "", target?.getIndex?.() ?? 0
     ));
     return this;
   }
@@ -777,13 +808,7 @@ export class PacketSender {
     // A no-op here can leave stale inventory context active client-side, which
     // affects default left-click item actions (e.g. "Drop" appearing as primary).
     this.player.setStatus?.(PlayerStatus.NONE);
-    // Capture: closing the bank under an unanswered "Enter amount:" sends trigger_ondialogabort
-    // first, so the client's meslayer_ondialogabort drops the prompt along with its answer.
-    if (this.player.getEnteredAmountAction?.()) {
-      this.player.getSession().sendClientPacket(encodeTriggerOnDialogAbort());
-    }
-    this.player.setEnteredAmountAction?.(null);
-    this.player.setEnteredSyntaxAction?.(null);
+    this.abortInputPrompt();
     this.player.getDialogueManager?.()?.reset?.();
     this.player.setAttribute?.("destroy-item:pending", -1);
     this.player.setInterfaceId?.(-1);
@@ -802,7 +827,8 @@ export class PacketSender {
   }
 
   /**
-   * "interface:closed" { player, interfaceId }: the player's main or chatbox interface closed, by any route
+   * "interface:closed" { player, interfaceId }: the player's main or chatbox interface, or a
+   * sub-interface closed by name (closeInterface), closed, by any route
    * (its own close, the client's IF_CLOSE, walking away), so content can undo what it set up.
    */
   private emitInterfaceClosed(interfaceId: number): void {
@@ -893,6 +919,8 @@ export class PacketSender {
     if (target) {
       this.subInterfaceTargets.delete(groupId);
       this.player.getSession().sendClientPacket(encodeWidgetCloseSub(target.targetUid));
+      // A sub-interface closed by name (an overlay such as a floater) closes "by any route" too.
+      this.emitInterfaceClosed(groupId);
     }
     return this;
   }
@@ -1113,6 +1141,14 @@ export class PacketSender {
 
     const targetIndex = this.resolveProjectileTargetIndex(lockon);
     const sourceIndex = source == null ? 0 : this.resolveProjectileTargetIndex(source);
+    // A projectile whose end is at or before its launch is drawn for one client cycle and
+    // vanishes on the caster (the reported "javelin appears on the player, then disappears").
+    // Never send that: fall back to a normal 5-cycles-a-tile flight when a caller passes one.
+    let endCycleOffset = Math.max(delay + 1, speed);
+    if (endCycleOffset <= delay + 1) {
+      const tiles = typeof start.getDistance === "function" ? start.getDistance(end) : 0;
+      endCycleOffset = delay + 5 + Math.max(0, tiles | 0) * 5;
+    }
     if (this.player.getSession().sendClientPacket(encodeProjectiles([{
       projectileId,
       source: { x: start.getX(), y: start.getY(), level: start.getZ?.() ?? 0 },
@@ -1122,7 +1158,7 @@ export class PacketSender {
       slope: angle,
       startPos: distanceOffset,
       startCycleOffset: delay,
-      endCycleOffset: Math.max(delay + 1, speed),
+      endCycleOffset,
       targetActor: PacketSender.projectileActor(targetIndex),
       sourceActor: PacketSender.projectileActor(sourceIndex),
     }]))) return this;
@@ -1244,7 +1280,7 @@ export class PacketSender {
     const lastItem = this.player.getAttribute?.(CREATION_MENU_LAST_ITEM_ATTRIBUTE);
     if (Number.isInteger(lastItem)) this.sendConfig(CREATION_MENU_LAST_ITEM_VARP, lastItem);
     this.sendInterfaceScript(2046, [
-      Number.isInteger(options.mode) ? options.mode : 13,
+      Number.isInteger(options.mode) ? options.mode : 0,
       [String(menu.getTitle() ?? "What would you like to make?"), ...names].join("|"),
       maxAmount,
       ...paddedIds,

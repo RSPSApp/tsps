@@ -32,6 +32,8 @@ const spawned = [];
 
 /** Chat-channels: key -> { members, ranks by username }. */
 const channels = new Map();
+/** Ironman modes by player: what the Ironman plugin's `ironman:mode` answers. */
+const modes = new Map();
 const RANKS = { Unranked: -1, Friend: 0, Recruit: 1, Corporal: 2, Sergeant: 3, Lieutenant: 4, Captain: 5, General: 6, Owner: 7 };
 
 function channelView(key) {
@@ -47,7 +49,10 @@ function fakeApi() {
   return {
     core: PluginManager.getCoreApi(),
     emitCustomEvent(name, payload) {
-      if (name === 'friends-chat:channel') {
+      if (name === 'side-channels:replace-chat-channel') {
+        payload.player.sideChannelGroup = payload.group;
+        payload.onMount?.();
+      } else if (name === 'friends-chat:channel') {
         const key = payload.key ?? [...channels].find(([, channel]) => channel.members.has(payload.player))?.[0];
         payload.channel = key ? channelView(key) : null;
         payload.ranks = RANKS;
@@ -56,6 +61,8 @@ function fakeApi() {
         payload.joined = true;
       } else if (name === 'friends-chat:leave') {
         for (const channel of channels.values()) channel.members.delete(payload.player);
+      } else if (name === 'ironman:mode') {
+        payload.mode = modes.get(payload.player) ?? 'none';
       }
     },
     sendMultiChatboxPrompt(player, title, ...args) { player.prompts.push({ title, args }); },
@@ -75,7 +82,7 @@ function fakePlayer(name, location = new Location(1234, 3566, 0)) {
   const p = {
     name, location, messages: [], scripts: [], interfaces: [], prompts: [], subs: [], statements: [],
     inventory: [],
-    getUsername: () => name,
+    getUsername: () => name, getDisplayName: () => name,
     getHitpoints: () => 99,
     getIndex: () => name.length,
     isPlayer: () => true,
@@ -104,13 +111,20 @@ function fakePlayer(name, location = new Location(1234, 3566, 0)) {
         sendVarbit: (id, value) => { varbits.set(id, value); return sender; },
         getVarbit: (id) => varbits.get(id) ?? 0,
         sendConfig: (id, value) => { varbits.set(`varp${id}`, value); return sender; },
+        sendTypedMessage: (type, text) => { p.messages.push(text); (p.typed ??= []).push([type, text]); return sender; },
+        sendSong: (id) => { (p.songs ??= []).push(id); return sender; },
+        sendJingle: (id) => { (p.jingles ??= []).push(id); return sender; },
         sendInterface: (id) => { p.interfaces.push(id); return sender; },
+        sendInterfaceSet: (id) => { p.interfaces.push(id); return sender; },
+        sendInterfaceDisplayState: () => sender,
+        sendString: () => sender,
         sendInterfaceRemoval: () => sender,
         sendSubInterface: (uid, id) => { p.subs.push([uid, id]); return sender; },
         closeSubInterface: (uid) => { p.subs.push([uid, -1]); return sender; },
         sendClientScript: (id, ...args) => { p.scripts.push([id, ...args]); return sender; },
         sendInterfaceFlagsRange: () => sender,
         sendSound: () => sender,
+        sendInventory: () => sender,
         sendAreaSound: () => sender,
         sendEnterAmountPrompt: () => sender,
         sendObjectAnimation: () => sender,
@@ -134,6 +148,9 @@ function fakeInventory(slots) {
     getAmount: (id) => slots.reduce((sum, item) => sum + (item?.getId() === id ? item.getAmount() : 0), 0),
     contains: (id) => slots.some((item) => item?.getId() === id),
     getFreeSlots: () => 28 - slots.filter(Boolean).length,
+    getAddableAmount: (item) => (stackable(item.getId())
+      ? (slots.some((entry) => entry?.getId() === item.getId()) || slots.filter(Boolean).length < 28 ? item.getAmount() : 0)
+      : Math.min(item.getAmount(), 28 - slots.filter(Boolean).length)),
     add(item) {
       if (stackable(item.getId())) {
         const slot = slots.findIndex((entry) => entry?.getId() === item.getId());
@@ -181,7 +198,8 @@ before(() => {
 // ------------------------------------------------------------------ layouts
 
 test('every layout pattern reads as two floors of rooms entered from a direction', () => {
-  assert.equal(Layout.PATTERNS.length, 26);
+  assert.equal(Layout.PATTERNS.length, 27);
+  assert.equal(Layout.LARGE_PATTERNS.length, 3);
   for (const { code, rooms } of Layout.PATTERNS) {
     assert.equal(rooms.length % 2, 0, code);
     const half = rooms.length / 2;
@@ -203,7 +221,8 @@ test('a normal raid: two floors, two puzzles, combat rooms from one rotation, al
     // Two puzzles are drawn; a layout with a third puzzle slot repeats any of the four there.
     assert.ok(puzzles.size <= (slots > 2 ? 3 : 2), 'two of the four puzzles');
     const combat = rooms.filter((room) => Layout.ROOMS[room].kind === 'combat');
-    assert.ok(Layout.BOSS_ROTATIONS.some((rotation) => {
+    // Captures run through a rotation either way round.
+    assert.ok(Layout.BOSS_ROTATIONS.flatMap((rotation) => [rotation, [...rotation].reverse()]).some((rotation) => {
       const start = rotation.indexOf(combat[0]);
       return combat.every((room, k) => rotation[(start + k) % rotation.length] === room);
     }), `combat rooms follow a rotation: ${combat}`);
@@ -275,15 +294,63 @@ test('parties: a chat-channel is needed, a Recruit makes it, Challenge Mode is t
   assert.ok(party);
   assert.ok(leader.interfaces.includes(Shared.INTERFACE.PARTY));
   const header = leader.scripts.find(([id]) => id === Shared.SCRIPT.PARTY_HEADER);
-  assert.deepEqual(header.slice(1), ['Raiding Party of Leader (2)', 2, 0, 99]);
+  assert.deepEqual(header.slice(1), ['Raiding Party of Leader (2)', 2, 0, 15]);
   const member = leader.scripts.find(([id]) => id === Shared.SCRIPT.PARTY_MEMBER);
   assert.equal(member[2].split('|').length, 4 + Shared.PARTY_SKILLS.length + 1);
-  Lobby.clickPartyButton({ player: leader, slot: 8 });
+  Lobby.clickPartyButton({ player: leader, slot: 9 });
   assert.equal(party.challenge, true);
   assert.equal(leader.varbits.get(Shared.VARBIT.CHALLENGE_MODE), 1);
+  assert.equal(leader.varbits.get(Shared.VARBIT.LAYOUT_POOL), Shared.LAYOUT_POOL.FULL, 'Challenge Mode is always the full layout');
   Lobby.clickPartyButton({ player: leader, slot: 1 });
   assert.ok(party.isAdvertised());
   Parties.clear();
+});
+
+test('map layouts: Small, Large and Full, with the hole each floor has on live', () => {
+  const large = Layout.forPool(Shared.LAYOUT_POOL.LARGE, false);
+  assert.ok(large.floors.every((floor) => floor.length === 8), 'eight rooms a floor');
+  const combat = large.floors.flat().filter((chunk) => Layout.ROOMS[chunk.room].kind === 'combat').length;
+  const puzzles = large.floors.flat().filter((chunk) => Layout.ROOMS[chunk.room].kind === 'puzzle').length;
+  assert.deepEqual([combat, puzzles], [5, 3], 'Wiki: five combat rooms and three puzzles');
+  const full = Layout.forPool(Shared.LAYOUT_POOL.FULL, false);
+  assert.equal(full.challenge, false);
+  assert.equal(full.floors.length, 3);
+  assert.equal(Layout.forPool(Shared.LAYOUT_POOL.SMALL, true).challenge, true, 'Challenge Mode is always the full layout');
+  const ends = (layout) => layout.floors.map((floor) => floor.find((chunk) => chunk.room === 'FLOOR_END_DOWNSTAIRS'));
+  assert.deepEqual(ends(large).map((chunk) => chunk.variant), [0, 1], 'hole 29734, then 29735 on the last floor');
+  assert.deepEqual(ends(full).map((chunk) => chunk.variant), [0, 0, 1]);
+  assert.equal(Layout.sourceOf(ends(full)[1]).chunkY, 640, 'the middle floor has hole 32542');
+  assert.equal(Layout.sourceOf(ends(full)[0]).chunkY, 644);
+});
+
+test('the party page: scaling, Challenge Mode and the map layout are slots 8, 9 and 10', () => {
+  Parties.clear();
+  const leader = fakePlayer('Scaler');
+  channelWith('Scaler', leader);
+  Lobby.makeParty(leader);
+  const party = Parties.partyOf(leader);
+  Lobby.clickPartyButton({ player: leader, slot: 10 });
+  assert.equal(leader.prompts.at(-1).title, 'How large of a layout to generate?');
+  leader.prompts.at(-1).args[3]();
+  assert.equal(party.layoutPool, Shared.LAYOUT_POOL.LARGE);
+  assert.equal(leader.varbits.get(Shared.VARBIT.LAYOUT_POOL), Shared.LAYOUT_POOL.LARGE);
+  assert.equal(leader.getAttribute(Shared.ATTR.LAST_LAYOUT), Shared.LAYOUT_POOL.LARGE, 'kept for the next party');
+  party.scaling = 50;
+  const raid = new RaidModule.Raid(party);
+  raid.players.add(leader);
+  assert.equal(raid.scale, 50, 'a raid scales to the party\'s scale');
+  party.scaling = 0;
+  assert.equal(raid.scale, 1);
+  raid.destroy();
+  Parties.clear();
+});
+
+test('team sizes and the completion message are as live has them', () => {
+  const Rewards = require('../plugins/minigames/cox/Rewards.ChambersOfXeric');
+  assert.equal(Rewards.teamSize(1), 'Solo');
+  assert.equal(Rewards.teamSize(3), '3 players');
+  assert.equal(Rewards.teamSize(50), '24+ players');
+  assert.equal(Shared.formatTicks(905), '9:03');
 });
 
 test('a raid: in, started by the leader, points, a safe death, and out', () => {
@@ -298,7 +365,7 @@ test('a raid: in, started by the leader, points, a safe death, and out', () => {
   ticks(3 + 2);
   assert.ok(raid.players.has(leader));
   assert.equal(raid.roomAt(leader.location)?.key, 'RAID_START');
-  assert.ok(leader.subs.some(([uid, id]) => uid === Shared.CHAT_CHANNEL_TAB_UID && id === Shared.INTERFACE.PARTY_TAB));
+  assert.equal(leader.sideChannelGroup, Shared.INTERFACE.PARTY_TAB);
 
   const passage = { getLocation: () => leader.location, getFace: () => 0 };
   assert.equal(raid.rooms[0].canPass(leader, passage), false, 'not past the first room before the start');
@@ -308,7 +375,7 @@ test('a raid: in, started by the leader, points, a safe death, and out', () => {
   assert.equal(raid.rooms[0].canPass(leader, passage), true);
 
   raid.addPoints(leader, 1000);
-  assert.equal(leader.varbits.get(Shared.VARBIT.PERSONAL_POINTS), 1000);
+  assert.equal(leader.varbits.get(`varp${Shared.VARP.PERSONAL_POINTS}`), 1000);
   raid.onDeath(leader);
   assert.equal(raid.pointsOf(leader), 600, 'a death costs 40%');
   assert.equal(raid.totalPoints, 600);
@@ -382,17 +449,16 @@ test('supplies: potion and food points go to their maker, more when someone else
     raid.original.add(player.getUsername());
     player.setAttribute(RaidModule.ATTR_RAID, raid);
   }
-  Supplies.recordMade(raid, Supplies.supplyKey(20996), brewer);
-  Supplies.drank({ player: drinker, itemId: 20995 });
+  const made = { [Supplies.META_MAKER]: 'Brewer' };
+  Supplies.drank({ player: drinker, itemId: 20995, meta: made });
   assert.equal(raid.pointsOf(brewer), 600, 'an overload (+) sip by someone else: 400 x 1.5');
-  Supplies.drank({ player: drinker, itemId: 20993 });
-  assert.equal(raid.pointsOf(brewer), 1200);
-  Supplies.drank({ player: drinker, itemId: 20993 });
-  assert.equal(raid.pointsOf(brewer), 1200, 'the finished gourd took its maker off the list');
+  Supplies.drank({ player: drinker, itemId: 20993, meta: made });
+  assert.equal(raid.pointsOf(brewer), 600, 'a re-sip while the last is working gives nothing');
+  Supplies.drank({ player: drinker, itemId: 20921 });
+  assert.equal(raid.pointsOf(brewer), 600, 'nobody made a potion with no maker');
 
-  Supplies.cooked({ player: brewer, itemId: 20868 });
-  Supplies.ate({ player: brewer, itemId: 20868, heal: 20 });
-  assert.equal(raid.pointsOf(brewer), 1200 + 4 + 8 * 6, 'a kyren fish eaten by its cook');
+  Supplies.ate({ player: brewer, itemId: 20868, heal: 20, meta: made });
+  assert.equal(raid.pointsOf(brewer), 600 + 4 + 8 * 6, 'a kyren fish eaten by its cook');
 
   const request = { player: drinker, area: 'chambers-of-xeric', inside: false };
   Supplies.potionArea(request);
@@ -415,6 +481,17 @@ test('scaling follows the Wiki DPS calculator (CM Tekton at 126 combat, 99 Hitpo
     }
   }
   assert.equal(Monsters.scale(7551, { size: 1, maxCombat: 126, maxHitpoints: 99 }).hitpoints, 800, 'the Olm head solo');
+});
+
+test('a Guardian hits 33 in Challenge Mode and 20 in Normal (Wiki), the rest as they were', () => {
+  const solo = { size: 1, maxCombat: 126, maxHitpoints: 99 };
+  assert.equal(Monsters.scale(7569, solo).maxHit, 20, 'Wiki: 20 Normal');
+  assert.equal(Monsters.scale(7569, { ...solo, challenge: true }).maxHit, 33, 'Wiki: 33 Challenge Mode');
+  // A guardian scaled by a party grows from 33, not from the 29 its Normal max hit would give.
+  assert.equal(Monsters.scale(7569, { ...solo, size: 3, challenge: true }).maxHit, 35);
+  // Other monsters' derived max hits are untouched.
+  assert.equal(Monsters.scale(7540, solo).maxHit, 52);
+  assert.equal(Monsters.scale(7540, { ...solo, challenge: true }).maxHit, 77);
 });
 
 test('the ice demon follows rsprox captures: the storm bar, the boulder flight, the burst pattern', () => {
@@ -530,7 +607,7 @@ test('a Challenge Mode raid loads every room without errors', () => {
   const leader = fakePlayer('Challenger');
   channelWith('Challenger', leader);
   Lobby.makeParty(leader);
-  Lobby.clickPartyButton({ player: leader, slot: 8 });
+  Lobby.clickPartyButton({ player: leader, slot: 9 });
   leader.setAttribute(Shared.ATTR.WARNED, true);
   Lobby.enterChambers({ player: leader });
   const raid = Parties.partyOf(leader).raid;
@@ -570,6 +647,8 @@ test('a Challenge Mode raid loads every room without errors', () => {
   ticks(12);
   assert.equal(vasa.state, 'special');
   ticks(1);
+  assert.equal(vasa.state, 'aiming');
+  for (let i = 0; i < 4 && vasa.state === 'aiming'; i++) ticks(1);
   assert.equal(vasa.state, 'walking');
   assert.ok(vasa.crystals.some(Boolean), 'a crystal is lit');
   assert.ok(spawned.some((npc) => npc.getId() === 7602), 'the corrupted scavenger');
@@ -584,6 +663,8 @@ test('a Challenge Mode raid loads every room without errors', () => {
   const guardian = spawned.find((npc) => npc.getId() === 7569);
   const Guardians = require('../plugins/minigames/cox/Guardians.ChambersOfXeric');
   assert.equal(guardian.getMaxHitpoints(), Guardians.guardianHitpoints(1, 90, true), 'Wiki: 151 x (1 + team/2) + mining x team, +50% CM');
+  assert.equal(Guardians.maxHitOf(guardian), Monsters.scale(7569, raid.scaling).maxHit, 'the shared scaling\'s max hit');
+  assert.equal(Monsters.scale(7569, raid.scaling).maxHit, 31, 'this raid\'s raider has 90 Hitpoints; maxed, 33');
   assert.ok(raid.olmRoom, 'the Olm\'s chamber has its room');
   assert.equal(raid.olmRoom.totalPhases, 3, 'solo: three claw phases, then the final stand');
   assert.equal(raid.roomAt(raid.map.olmTile(3232, 5734)), raid.olmRoom);
@@ -609,7 +690,18 @@ test('the Great Olm rises when the barrier is passed: head, claws and a power', 
   const olm = raid.olmRoom;
   leader.location = raid.map.olmTile(3232, 5740);
   olm.rise();
-  ticks(15);
+  // rsprox 3389: the parts come with the rising locs in their dormant forms (7551/7552/7550)
+  // and are transformed into the risen ones (7554/7555/7553) when the locs turn, 6 ticks in.
+  const head = olm.head;
+  assert.equal(head.getRealId(), 7551, 'the head spawns dormant');
+  assert.equal(head.getId(), 7551, 'with no Attack option to click');
+  // The test's bare NPC is not in a world's registry; the room transforms a registered one.
+  head.isRegistered = () => true;
+  ticks(1);
+  assert.equal(head.getNpcTransformationId(), -1, 'still dormant a tick in');
+  ticks(5);
+  assert.equal(head.getNpcTransformationId(), 7554, 'risen 6 ticks in');
+  ticks(9);
   assert.ok(spawned.some((npc) => npc.getId() === 7554), 'the head');
   assert.ok(spawned.some((npc) => npc.getId() === 7555) && spawned.some((npc) => npc.getId() === 7553), 'both claws');
   assert.ok([0, 1, 2].includes(olm.power), 'a power');
@@ -662,4 +754,229 @@ test('a completed raid: counts, the chest\'s loot for each raider', () => {
   assert.ok(loot.some((entry) => entry.id === 20899), 'the dark journal');
   assert.ok(winner.messages.some((text) => text.includes('count is')));
   raid.destroy();
+});
+
+test('the ancient chest reports its loot once, leaving the pet to the pet path', () => {
+  const Rewards = require('../plugins/minigames/cox/Rewards.ChambersOfXeric');
+  const events = [];
+  Shared.bind({
+    ...fakeApi(),
+    emitCustomEvent(name, payload) {
+      events.push({ name, ...payload });
+    },
+  });
+  try {
+    const party = new Parties.Party(fakePlayer('Logger'), { key: 'Logger' });
+    const raid = new RaidModule.Raid(party);
+    const logger = fakePlayer('Logger');
+    raid.players.add(logger);
+    raid.original.add('Logger');
+    logger.setAttribute(RaidModule.ATTR_RAID, raid);
+    raid.rewards = new Map([['Logger', [
+      { id: 21034, amount: 1 },
+      { id: 22386, amount: 1 },
+      { id: 20851, amount: 1 },
+      { id: 560, amount: 100 },
+    ]]]);
+    Rewards.openChest({ player: logger });
+    const obtained = events.filter((event) => event.name === 'collection-log:obtain').map((event) => [event.itemId, event.amount]);
+    assert.deepEqual(obtained, [[21034, 1], [22386, 1], [560, 100]], 'the chest\'s items, not the pet');
+    Rewards.openChest({ player: logger });
+    assert.equal(events.filter((event) => event.name === 'collection-log:obtain').length, 3, 'reopening adds nothing');
+    raid.destroy();
+  } finally {
+    Shared.bind(fakeApi());
+  }
+});
+
+test('the collection log keeps the player\'s completions separate by mode', () => {
+  const Rewards = require('../plugins/minigames/cox/Rewards.ChambersOfXeric');
+  const player = fakePlayer('Counted');
+  player.setAttribute(Shared.ATTR.KILLS, 3);
+  player.setAttribute(Shared.ATTR.CHALLENGE_KILLS, 2);
+  const request = { player, category: 'Chambers of Xeric' };
+  Rewards.collectionLogCount(request);
+  assert.equal(request.count, 2, 'the primary label is Challenge Mode');
+  assert.deepEqual(request.extraCounts, [3], 'Normal has its own label');
+  const other = { player, category: 'Tombs of Amascut' };
+  Rewards.collectionLogCount(other);
+  assert.equal(other.count, undefined, 'only its own category');
+});
+
+test('the two CM runs: precise timing, a best that stands, the common chest light, raid notices', (t) => {
+  const Rewards = require('../plugins/minigames/cox/Rewards.ChambersOfXeric');
+  const precise = fakePlayer('Precise');
+  precise.getPacketSender().sendVarbit(Shared.VARBIT.PRECISE_TIMING, 1);
+  assert.equal(Shared.formatTicks(788, precise), '7:52.80');
+  assert.equal(Shared.formatTicks(3111, precise), '31:06.60');
+  assert.equal(Shared.formatTicks(788), '7:52');
+
+  const party = new Parties.Party(fakePlayer('Steady'), { key: 'Steady' });
+  const raid = new RaidModule.Raid(party);
+  raid.stage = RaidModule.STAGE.STARTED;
+  raid.startCycle = 0;
+  const steady = fakePlayer('Steady');
+  steady.getBank = () => ({ contains: () => false });
+  // Saved before team sizes had names: "normal:1" is the Solo best.
+  steady.setAttribute('cox:best-times', { 'normal:1': 10 });
+  raid.players.add(steady);
+  raid.original.add('Steady');
+  steady.setAttribute(RaidModule.ATTR_RAID, raid);
+  raid.addPoints(steady, 20000);
+  t.mock.method(Math, 'random', () => 0.99);
+  t.mock.method(PluginManager.getCoreApi().World, 'getProcessCycle', () => 100);
+  raid.complete();
+  Rewards.completed(raid);
+  assert.deepEqual(steady.getAttribute('cox:best-times'), { 'normal:Solo': 10 }, 'the old key moves to its team size');
+  const done = steady.typed.find(([, text]) => text.includes('Congratulations'));
+  assert.equal(done[0], PluginManager.getCoreApi().ChatType.FRIENDS_CHAT_NOTIFICATION);
+  assert.ok(done[1].endsWith(' Personal best: </col><col=ff0000>0:06</col>'), done[1]);
+  assert.equal(steady.getPacketSender().getVarbit(Shared.VARBIT.REWARD_LIGHT), 1, 'common loot lights white (1)');
+  raid.destroy();
+});
+
+// ------------------------------------------------------------------ the remaining differences
+
+test("the chest's reward book varbit clears as the rewards close, not when loot is claimed", () => {
+  const Rewards = require('../plugins/minigames/cox/Rewards.ChambersOfXeric');
+  const party = new Parties.Party(fakePlayer('Looter'), { key: 'Looter' });
+  const raid = new RaidModule.Raid(party);
+  const looter = fakePlayer('Looter');
+  raid.players.add(looter);
+  raid.original.add('Looter');
+  looter.setAttribute(RaidModule.ATTR_RAID, raid);
+  raid.rewards = new Map([['Looter', [{ id: 560, amount: 10 }, { id: 565, amount: 10 }]]]);
+  Rewards.openChest({ player: looter });
+  assert.equal(looter.getPacketSender().getVarbit(5457), 1, 'raids_client_needsrewardbook as the chest opens');
+  // rsprox 3389: claiming leaves it set (5083), closing clears it (5109).
+  Rewards.clickReward({ player: looter, slot: 0, opId: 1 });
+  assert.equal(looter.getPacketSender().getVarbit(5457), 1, 'a claim leaves the book set');
+  Rewards.chestClosed({ player: looter, interfaceId: 507 });
+  assert.equal(looter.getPacketSender().getVarbit(5457), 1, 'another interface closing leaves it');
+  Rewards.chestClosed({ player: looter, interfaceId: Shared.INTERFACE.REWARDS });
+  assert.equal(looter.getPacketSender().getVarbit(5457), 0, 'the chest closing clears it');
+  raid.destroy();
+});
+
+test('the Challenge Timeboard keeps the five fastest Challenge Mode times and says so', (t) => {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const Rewards = require('../plugins/minigames/cox/Rewards.ChambersOfXeric');
+  const Timeboard = require('../plugins/minigames/cox/Timeboard.ChambersOfXeric');
+  const file = path.join(os.tmpdir(), `cox-timeboard-${process.pid}.json`);
+  fs.rmSync(file, { force: true });
+  Timeboard.setFile(file);
+
+  // rsprox 3389: "Your team has made it onto this world's Challenge Timeboard!".
+  assert.equal(Timeboard.MADE_IT, "<col=ef20ff>Your team has made it onto this world's Challenge Timeboard!</col>");
+  const record = (ticks, leader, size = 1) => {
+    const player = fakePlayer(leader);
+    const made = Timeboard.record({ challenge: true, duration: ticks, scale: size, party: { leader }, players: new Set([player]) });
+    return { made, player };
+  };
+  for (const [ticks, leader] of [[100, 'First'], [200, 'Second'], [300, 'Third'], [400, 'Fourth'], [500, 'Fifth']]) {
+    assert.equal(record(ticks, leader).made, true, `${leader} made the board`);
+  }
+  const sixth = record(600, 'Sixth');
+  assert.equal(sixth.made, false, 'a sixth slower time misses it');
+  assert.ok(!sixth.player.messages.some((text) => text === Timeboard.MADE_IT), 'and is told nothing');
+  const faster = record(50, 'Faster', 2);
+  assert.equal(faster.made, true, 'a faster time takes the fifth place');
+  assert.ok(faster.player.messages.includes(Timeboard.MADE_IT), 'and says so');
+  record(80, 'Two', 2);
+  const board = Timeboard.text();
+  assert.ok(board.includes('Faster') && board.includes('First') && !board.includes('Fifth'), board);
+  assert.ok(board.includes('1:00.00'), 'm:ss.cc as the Wiki prints it');
+  // The global bests are by team size; Solo keeps 100 ticks and team 2 its faster 50.
+  assert.ok(board.includes('Solo: 1:00.00'), board);
+  assert.ok(board.includes('2: 0:30.00'), board);
+  // Cache 229 clips its 80px text widget: every page keeps to four lines, and Read pages through them.
+  const pages = Timeboard.pages();
+  assert.ok(pages.length > 1, 'the board spans several pages');
+  for (const page of pages) assert.ok(page.split('<br>').length <= Timeboard.PAGE_LINES, page);
+  const reader = fakePlayer('Reader');
+  assert.equal(Timeboard.readBoard({ player: reader, objectId: Timeboard.LOC, option: 'Read' }), true);
+  const shown = [...reader.statements[0].getDialogues().values()].map((dialogue) => dialogue.getText?.()).filter(Boolean);
+  assert.deepEqual(shown, pages, 'one message box per page, in order');
+
+  // rsprox 3389: in the completion messages the notice comes after the target-time line and
+  // before "Congratulations".
+  const party = new Parties.Party(fakePlayer('Order'), { key: 'Order' });
+  party.challenge = true;
+  const raid = new RaidModule.Raid(party);
+  raid.stage = RaidModule.STAGE.STARTED;
+  raid.startCycle = 0;
+  const order = fakePlayer('Order');
+  order.getBank = () => ({ contains: () => false });
+  raid.players.add(order);
+  raid.original.add('Order');
+  order.setAttribute(RaidModule.ATTR_RAID, raid);
+  t.mock.method(PluginManager.getCoreApi().World, 'getProcessCycle', () => 100);
+  raid.complete();
+  Rewards.completed(raid);
+  const target = order.messages.findIndex((text) => text.includes('target time'));
+  const notice = order.messages.indexOf(Timeboard.MADE_IT);
+  const done = order.messages.findIndex((text) => text.includes('Congratulations'));
+  assert.ok(target >= 0 && notice > target && done > notice, `target ${target}, board ${notice}, done ${done}: ${order.messages.join(' | ')}`);
+  raid.destroy();
+
+  Timeboard.reset();
+  fs.rmSync(file, { force: true });
+});
+
+test("the Olm's lightning tells a blocked raider its own line, and only in its chamber", () => {
+  const Olm = require('../plugins/minigames/cox/Olm.ChambersOfXeric');
+  const { PrayerData } = PluginManager.getCoreApi();
+  const party = new Parties.Party(fakePlayer('Zapped'), { key: 'Zapped' });
+  const raid = new RaidModule.Raid(party);
+  raid.olmRoom = { inChamber: () => true };
+  const zapped = fakePlayer('Zapped');
+  zapped.setAttribute(RaidModule.ATTR_RAID, raid);
+  zapped.getCombat = () => ({ getPrayerBlockTimer: () => ({ finished: () => false }) });
+  // rsprox/live: not the engine's "You have been disabled..."
+  const event = { player: zapped, prayer: PrayerData.PROTECT_FROM_MAGIC, disabled: null };
+  Olm.prayerDisabled(event);
+  assert.equal(event.disabled, true);
+  assert.equal(event.message, "You've been injured and can't use that prayer!");
+  const notProtection = { player: zapped, prayer: PrayerData.PIETY, disabled: null };
+  Olm.prayerDisabled(notProtection);
+  assert.equal(notProtection.disabled, null, 'only the three protection prayers');
+  raid.olmRoom = { inChamber: () => false };
+  const outside = { player: zapped, prayer: PrayerData.PROTECT_FROM_MELEE, disabled: null };
+  Olm.prayerDisabled(outside);
+  assert.equal(outside.disabled, null, 'outside the chamber the engine keeps its line');
+  raid.olmRoom = { inChamber: () => true };
+  zapped.getCombat = () => ({ getPrayerBlockTimer: () => ({ finished: () => true }) });
+  const expired = { player: zapped, prayer: PrayerData.PROTECT_FROM_MELEE, disabled: null };
+  Olm.prayerDisabled(expired);
+  assert.equal(expired.disabled, null, 'an expired block does not refuse');
+  raid.destroy();
+});
+
+test('private storage drag-reorders, and an Ultimate Ironman cannot store in a unit', () => {  const player = fakePlayer('Dragger');
+  Storage.openPrivate(player, 30);
+  const items = Storage.privateItems(player);
+  for (const id of [560, 565, 566]) items.push({ id, amount: 1 });
+  const grid = (Shared.INTERFACE.PRIVATE_STORAGE << 16) | 6;
+  const drag = { player, packet: { sourceWidgetId: grid, targetWidgetId: grid, sourceSlot: 0, targetSlot: 2 }, handled: false };
+  Storage.dragPrivate(drag);
+  assert.equal(drag.handled, true);
+  assert.deepEqual(items.map((entry) => entry.id), [566, 565, 560], 'slots 0 and 2 swapped');
+  const empty = { player, packet: { sourceWidgetId: grid, targetWidgetId: grid, sourceSlot: 0, targetSlot: 5 }, handled: false };
+  Storage.dragPrivate(empty);
+  assert.deepEqual(items.map((entry) => entry.id), [565, 560, 566], 'a drop on an empty slot goes to the end');
+
+  // Wiki (Ultimate Ironman Mode, Storage restrictions): they can use the unit's menu but not store.
+  const ultimate = fakePlayer('Ultimate');
+  Storage.openPrivate(ultimate, 30);
+  give(ultimate, 560);
+  modes.set(ultimate, 'ultimate');
+  Storage.deposit(ultimate, 0, 1);
+  assert.equal(Storage.privateItems(ultimate).length, 0, 'nothing is stored');
+  assert.ok(ultimate.messages.some((text) => text.includes("can't store items")), 'and they are told');
+  modes.delete(ultimate);
+  Storage.deposit(ultimate, 0, 1);
+  assert.equal(Storage.privateItems(ultimate).length, 1, 'a normal account stores as before');
+  modes.clear();
 });

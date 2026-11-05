@@ -41,7 +41,7 @@ function fixture() {
   };
   const sender = new Proxy({}, { get: (_, name) => (...args) => (sent.push([name, ...args]), sender) });
   const skills = { level: 1, xp: 0, getCurrentLevel() { return this.level; }, addExperiences(skill, xp) { this.xp += xp; } };
-  const player = { getUsername: () => "Tester", getInventory: () => inventory, getSkillManager: () => skills, getEquipment: () => ({ getItems: () => worn }),
+  const player = { getUsername: () => "Tester", getDisplayName: () => "Tester", getInventory: () => inventory, getSkillManager: () => skills, getEquipment: () => ({ getItems: () => worn }),
     getPacketSender: () => sender, getLocation: () => position, getPrivateArea: () => null, isPlayer: () => true,
     getAttribute: key => attributes.get(key), setAttribute: (key, value) => attributes.set(key, value),
     sendMessage: message => sent.push(["message", message]), performAnimation: value => sent.push(["animation", value]),
@@ -124,10 +124,12 @@ test("hot/cold starts from Jorral and three-part steps draw their parts; the tar
   assert.deepEqual(rollable().filter(step => step.family === "cryptic").map(step => step.key).sort(),
     ["cluehelper_cryptic_master_falo_the_bard", "cluehelper_cryptic_master_jorral"]);
   assert.ok(rollable().some(step => step.key === "cluehelper_skillchallenge_master_25"), "the three-part step");
-  // Viggora (no Curse of the Empty Lord), Piles (no Resource Area fee) and Lovada (not spawned) are never parts.
-  assert.equal(data.parts.length, 27);
+  // Viggora (no Curse of the Empty Lord) is never a part. Piles stands behind the Resource Area's
+  // paid gate, and Lovada is spawned as her current-cache NPC, so both are.
+  assert.equal(data.parts.length, 29);
   assert.deepEqual(ofKind("cryptic").filter(step => !step.falo && !/_(jorral|watson)$/.test(step.key) && !data.parts.includes(step)).map(step => step.key).sort(),
-    ["cluehelper_cryptic_master_lovada", "cluehelper_cryptic_master_piles", "cluehelper_cryptic_master_viggora"]);
+    ["cluehelper_cryptic_master_viggora"]);
+  assert.ok(["piles", "lovada"].every(name => data.parts.some(step => step.key === `cluehelper_cryptic_master_${name}`)));
   for (const family of ["anagram", "coordinate", "emote"]) assert.ok(ofKind(family).every(step => rollable().includes(step)), family);
   for (const step of ofKind("skillchallenge").filter(entry => entry.target !== "none")) assert.equal(rollable().includes(step), Boolean(SKILL_CHALLENGES[step.key]), step.key);
 });
@@ -508,7 +510,7 @@ test("feeling the device tells the temperature against last time and hurts; with
   assert.equal(f.hits.length, 1);
   assert.ok(f.hits[0].getDamage() >= 3 && f.hits[0].getDamage() <= 8);
   for (const [x, said] of [[60, "The device is very hot, and warmer than last time."], [60, "The device is very hot, and the same temperature as last time."],
-    [600, "The device is ice cold, but colder than last time."], [2, "The device is visibly shaking, and warmer than last time."]]) {
+    [600, "The device is ice cold, but colder than last time."], [2, "The device is visibly shaking and burns to the touch. This must be the spot."]]) {
     f.sent.length = 0;
     f.player.setLocation(target.x + x, target.y, target.z);
     feel(f);
@@ -645,6 +647,17 @@ test("Robin says why he isn't impressed; the torn parts combine only all togethe
   assert.equal(f.state().completed, 2);
   assert.deepEqual(["trail_master_part1", "trail_master_part2", "trail_master_part3"].map(slotOf), [-1, -1, -1], "the parts are used");
   assert.equal(f.state().parts, undefined);
+});
+
+test("Piles in the Resource Area and Lovada in Lovakengj hand over their torn parts", () => {
+  for (const name of ["piles", "lovada"]) {
+    const f = masterFixture();
+    placeParts(f, [name, "biblia", "mage_of_zamorak"]);
+    assert.ok(part(name).npcIds.includes(core.NpcIdentifiers[name.toUpperCase()]), name);
+    Parts.talk(npcEvent(f, part(name))); f.finish();
+    assert.ok(f.items.some(item => item?.getId() === C.getObjId("trail_master_part1")), name);
+    assert.deepEqual(f.state().found, [true, false, false], name);
+  }
 });
 
 test("a lost torn part is found again by solving its part again, but not while it is carried or banked", () => {

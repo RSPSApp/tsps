@@ -126,3 +126,18 @@ test('orb startup and consecutive one-tick launches use the corresponding captur
   h.fight.orb('ranged', 5);
   assert.deepEqual(graphics, [2486,2484,2483,2482,2484]);
 });
+
+test('one-tick orbs are drawn as a flight landing on their impact tick (#1862)', t => {
+  const h = H.harness(t), sent = [];
+  h.fight.nextAttack = Infinity;
+  const sender = new Proxy({}, { get: (_, name) => name === 'sendProjectile' ? (...args) => sent.push(args) : () => sender });
+  h.p.getPacketSender = () => sender;
+  t.mock.method(h.core.World, 'forEachNetworkPlayer', callback => callback(h.p));
+  h.move([2075,6377]);
+  for (const flight of [1, 2, 5]) {
+    h.fight.orb('magic', flight);
+    const [end, delay] = [sent.at(-1)[3], sent.at(-1)[8]];
+    assert.ok(end > delay + 1, `flight ${flight} lands after it launches`);
+    assert.equal(Math.ceil(end / 30), flight, `flight ${flight} lands on its impact tick`);
+  }
+});

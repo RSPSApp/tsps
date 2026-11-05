@@ -55,7 +55,7 @@ Extrascripts support hot-reload during development. Set the `SCRIPT_HOT_RELOAD=1
 
 | Use case                                                 | System                        |
 | -------------------------------------------------------- | ----------------------------- |
-| Server-specific rules (XP rates, tutorials, progression) | [Gamemode](gamemodes.md)      |
+| Server-specific rules (XP rates, tutorials, progression) | [Plugins](https://github.com/RSPSApp/tsps/blob/main/server/docs/agents/plugins.md)      |
 | Universal tools (debug commands, admin utilities)        | Extrascript                   |
 | Content that only matters for one server type            | Gamemode `registerHandlers()` |
 | Content that should work on any server                   | Extrascript                   |

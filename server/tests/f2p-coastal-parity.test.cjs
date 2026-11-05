@@ -43,7 +43,11 @@ function register(name, key) {
         getNpcTransformationId: () => transform, setNpcTransformationId: (value) => { transform = value; },
         getArea: () => area, setArea: (value) => { area = value; },
         isPlayer: () => false, isNpc: () => true, getAsNpc: () => npc, getIndex: () => index,
-        getCombat: () => ({ reset() {}, attack() {} }), isRegistered: () => true, forceChat() {}, performAnimation() {}, performGraphic() {},
+        getCombat: () => ({ reset() {}, attack() {} }), isRegistered: () => true, forceChat() {},
+        // what the scene made this actor play, for the tests that care
+        animations: [], graphics: [],
+        performAnimation: (animation) => { npc.animations.push(animation.getId()); },
+        performGraphic: (graphic) => { npc.graphics.push(graphic.id); },
       };
       spawned.push(npc); return npc;
     },
@@ -224,17 +228,15 @@ test('Corsair captured independent investigations and spoken transitions reach w
   const q = register('CorsairCurse', 'the_corsair_curse'), p = player();
   const wire = () => q.quest.varbitValue(q.quest.getStage(p), p);
   reachLine(q, p, 7956, "Sure, I'll try to help with your curse."); assert.equal(wire(), 5);
+  // The cache's own ferry multis (corsair_ferry_rimmington 1064 at 2910,3226 and corsair_ferry_covedocks 7980 at
+  // 2574,2835) already turn into Captain Tock for this quest progress, so the plugin must not add a second one.
   const ferryId = core.NpcIdentifiers.CAPTAIN_TOCK_3;
   const ferries = () => q.spawned.filter(npc => npc.getId() === ferryId && !q.removed.includes(npc));
-  assert.equal(ferries().length, 1, 'accepting still spawns the travelling captain at Rimmington');
-  assert.equal(ferries()[0].definition.owner, p);
+  assert.equal(ferries().length, 0, 'accepting does not add a second captain at Rimmington');
   q.emit('npc-dialogue:action', { player: p, stepId: '9srM-C' }); assert.equal(wire(), 10);
+  assert.equal(ferries().length, 0, 'leaving for the ship does not add a second captain at Rimmington');
   q.emit('npc-dialogue:action', { player: p, stepId: 'GnY-u6' }); assert.equal(wire(), 15); q.tick(3);
-  assert.equal(ferries().length, 2, 'arrival still supplies both quest-owned ferry captains');
-  for (const ferry of ferries()) {
-    assert.equal(ferry.definition.wanderRadius, 0);
-    assert.equal(ferry.definition.ownerOnly, true);
-  }
+  assert.equal(ferries().length, 0, 'arriving does not add a second captain on the cove ship');
   reachLine(q, p, 7961, "Okay, it doesn't sound like you know what's behind the curse. Thanks.");
   assert.equal(p.attributes.get('quest.the_corsair_curse.navigator'), 1);
   reachLine(q, p, 7976, "I'd hoped I could use my amazing Thieving skills");
@@ -284,6 +286,22 @@ test('Corsair fire proof uses private scenery and actor, finishes50, and one pla
   assert.equal(q.quest.getStage(p), 6); q.tick(2); assert.ok(p.getPrivateArea()); assert.equal(q.quest.varbitValue(6,p),49);
   q.tick(26); assert.equal(q.quest.getStage(p),7); assert.equal(q.quest.varbitValue(7,p),50); assert.equal(p.getPrivateArea(),null);
   assert.ok(other.getLocation().equals(originalOther)); assert.equal(other.getPrivateArea(),null);
+});
+test('Corsair fire proof: Ithoi puts the fire out with Water Strike, not another spell', () => {
+  // The Wiki's transcript: "Ithoi casts Water Strike, extinguishing the fire, and returns to his hut."
+  // The reporter on #2410 saw a fire spell. Water Strike's own visuals are CombatSpells.WATER_STRIKE's:
+  // cast graphic 93, projectile 94.
+  const q = register('CorsairCurse', 'the_corsair_curse'), p = player(); q.quest.setStage(p, 6);
+  p.attributes.set('corsair-curse:proof-plan', true); p.items.set(590,1); p.moveTo(new core.Location(2532,2837,0));
+  q.call('onItemOnObject', { player: p, itemId: 590, objectId: 31724 });
+  q.tick(2 + 26);
+  const ithoi = q.spawned.find(npc => npc.getId() === core.NpcIdentifiers.ITHOI_THE_NAVIGATOR_2);
+  assert.ok(ithoi, 'Ithoi runs out of the hut');
+  assert.deepEqual(ithoi.animations, [711], 'with the spell-cast animation');
+  assert.deepEqual(ithoi.graphics, [93], 'and the Water Strike cast graphic');
+  const shots = p.packets.filter(row => row[0] === 'sendProjectile');
+  assert.equal(shots.length, 1, 'one spell is sent');
+  assert.equal(shots[0][5], 94, 'and it is the Water Strike projectile');
 });
 test('all five Corsair scenes send the complete captured camera track, exact rates and timed cuts',()=>{
   const q=register('CorsairCurse','the_corsair_curse'),p=player();
@@ -616,4 +634,43 @@ test('X Marks ending waits for its completion scroll close and resumes only once
   const lines=[...chains[0].getDialogues().values()].filter(e=>e.getText).map(e=>e.getText()).join(' ');
   assert.ok(lines.includes("Anyway, I'd best be getting back to Great Kourend."));
   q.emit('interface:closed',{player:p,interfaceId:153});assert.equal(chains.length,1);
+});
+
+
+test("Zembo only offers the canonical Barcrawl choice during native progress1", () => {
+  const q = register('PiratesTreasure', 'pirates_treasure'), p = player();
+  const option = require('../data/definitions/npc-dialogues.json').Zembo.steps[2].options[2];
+  const answer = q.hooks.get('onNpcDialogueCondition')[0];
+  for (const progress of [0, 1, 2, 3]) {
+    p.getPacketSender().sendVarbit(13714, progress);
+    assert.equal(answer({ player: p, npcId: core.NpcIdentifiers.ZEMBO, text: option.condition }), progress === 1);
+  }
+  assert.equal(answer({ player: p, npcId: core.NpcIdentifiers.LUTHAS, text: option.condition }), null, 'foreign NPC conditions remain unclaimed');
+  assert.equal(answer({ player: p, npcId: core.NpcIdentifiers.ZEMBO, text: 'Unrelated condition' }), null);
+});
+
+test("Wydin crate retrieves rum separately from bananas, retaining pending rum on a full bag", () => {
+  const q = register('PiratesTreasure', 'pirates_treasure'), p = player();
+  q.quest.setStage(p, 1);
+  p.attributes.set('pirates-treasure.employment', 2);
+  p.attributes.set('pirates-treasure.rum', 2);
+  p.getEquipment = () => ({ get: () => ({ getId: () => core.ItemIdentifiers.WHITE_APRON }) });
+  const search = () => q.call('onObjectInteraction', { player: p, objectId: core.ObjectIdentifiers.CRATE_14,
+    clickType: 1, definition: { getInteractions: () => ['Search'] } });
+  for (let i = 0; i < 28; i++) p.items.set(20000 + i, 1);
+  search();
+  assert.equal(p.attributes.get('pirates-treasure.rum'), 2);
+  assert.equal(p.items.get(core.ItemIdentifiers.KARAMJAN_RUM), undefined);
+  assert.equal(q.prompts.length, 0);
+  assert.equal(p.messages.at(-1), 'You need more inventory space.');
+  p.items.delete(20000);
+  search();
+  assert.equal(p.items.get(core.ItemIdentifiers.KARAMJAN_RUM), 1);
+  assert.equal(p.attributes.get('pirates-treasure.rum'), 0);
+  assert.equal(q.prompts.length, 0, 'rum retrieval must not also ask to take a banana');
+  assert.equal(p.messages.at(-1), 'You find your bottle of rum in amongst the bananas.');
+  search();
+  assert.equal(p.items.get(core.ItemIdentifiers.KARAMJAN_RUM), 1, 'repeat search cannot duplicate rum');
+  assert.equal(q.prompts.length, 1);
+  assert.equal(q.prompts[0].title, 'Do you want to take a banana?');
 });

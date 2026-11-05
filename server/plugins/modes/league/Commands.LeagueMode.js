@@ -2,7 +2,9 @@
  * Developer commands. `::league [player]` shows a character's league and points.
  * `::leaguetask <id> [points] [name]` completes a catalog task by its id (LeagueTasks answers
  * `league:complete-task`), or awards an ad-hoc task with the points given, through the real award
- * path (LeaguePoints).
+ * path (LeaguePoints). `::leagueunlock` gives a character everything a test needs at once: the
+ * points for every relic tier, every area, and pact points to the spending cap (each league unit
+ * answers `league:dev-unlock-all` { player, done } with its part).
  */
 const Common = require("./Common.LeagueMode");
 
@@ -57,8 +59,21 @@ function leagueTaskCommand({ player, parts }) {
   return true;
 }
 
+/** Every relic tier's points, every area and the pact points, from the units that own them. */
+function leagueUnlockCommand({ player }) {
+  if (Common.leagueOf(player) === null) {
+    player.sendMessage(Common.message("notLeague", { name: player.getDisplayName() }));
+    return true;
+  }
+  const request = { player, done: [] };
+  Common.api.emitCustomEvent("league:dev-unlock-all", request);
+  player.sendMessage(request.done.length ? `Unlocked: ${request.done.join("; ")}.` : "Nothing to unlock.");
+  return true;
+}
+
 module.exports = function attach(api) {
   const { PlayerRights } = api.core;
   api.registerCommand("league", leagueCommand, PlayerRights.DEVELOPER, "Show a character's league and League Points: ::league [player]");
+  api.registerCommand("leagueunlock", leagueUnlockCommand, PlayerRights.DEVELOPER, "Unlock every relic tier, area and pact point for testing: ::leagueunlock");
   api.registerCommand("leaguetask", leagueTaskCommand, PlayerRights.DEVELOPER, "Complete a league task by id, or award an ad-hoc one: ::leaguetask <id> [points] [name]");
 };

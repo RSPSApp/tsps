@@ -745,6 +745,28 @@ test("fishing spots roll on the Wiki's tick lengths after the captured first rol
   assert.equal(Fishing.pikeInterval(() => 0.5), 5);
 });
 
+test("a one-step walk stops fishing even after the route has drained", async () => {
+  const { core, fisher, amount, spot, start, ticks } = await fishingLoop();
+  const { ItemIdentifiers: I, NpcIdentifiers: N } = core;
+  await withRandom(0.02, async () => {
+    // FishingTask runs before player turns. A one-tile walk is a single step, so by the next
+    // pass the queue is empty and only the moving flag says the player walked away (#2449).
+    for (const walked of [false, true]) {
+      const lobster = fisher({ items: [[I.LOBSTER_POT]] });
+      let moving = false;
+      lobster.getMovementQueue = () => ({ size: () => 0, isMovings: () => moving });
+      start(lobster, spot(N.FISHING_SPOT_10, walked ? 21 : 20), "Cage");
+      ticks(1);
+      moving = walked;
+      ticks(1);
+      moving = false;
+      ticks(4);
+      assert.equal(amount(lobster, I.RAW_LOBSTER), walked ? 0 : 1, walked ? "the walk ends the session" : "control: the catch lands");
+      if (walked) assert.equal(lobster.animations.at(-1), 65535, "the walk resets the fishing animation");
+    }
+  });
+});
+
 test("karambwan vessels fish every 4 ticks and every attempt uses the karambwanji", async () => {
   const { core, Fishing, fisher, amount, spot, start, ticks } = await fishingLoop();
   const { ItemIdentifiers: I, NpcIdentifiers: N } = core;
@@ -819,4 +841,168 @@ test("Holy Lake karambwanji: floor(level / 5) + 1 a catch, shrimps only with roo
     Fishing.landCatch(crowded, TOOLS.KARAMBWANJI_NET, Fishing.findTool(crowded, TOOLS.KARAMBWANJI_NET), [FISH.KARAMBWANJI]);
     assert.equal(amount(crowded, I.RAW_KARAMBWANJI), 21);
   });
+});
+
+test("Civitas illa Fortis's park pond: Cast with a big net lands its table, 7.5 XP a catch; another net is the wrong size", async () => {
+  const { core, Fishing, fisher, amount, spot, start, ticks } = await fishingLoop();
+  const { ItemIdentifiers: I, NpcIdentifiers: N, NpcDefinition } = core;
+  const { TOOLS, FISH, rollTable, getSpotTool } = Fishing;
+  const pond = NpcDefinition.forId(N.FISHING_SPOT_101);
+  assert.equal(getSpotTool(N.FISHING_SPOT_101, pond, pond.getActions().indexOf("Cast") + 1), TOOLS.PARK_NET);
+
+  // 0.02 lands every roll, past the pre-rolls and the tertiary, on the first weighted item.
+  await withRandom(0.02, async () => {
+    const caster = fisher({ level: 1, items: [[I.BIG_FISHING_NET]] });
+    assert.equal(start(caster, spot(N.FISHING_SPOT_101, 9), "Cast"), true, "the fishing loop takes the park pond");
+    assert.deepEqual(caster.messages, ["You cast out your net..."]);
+    ticks(1);
+    assert.equal(amount(caster, I.BROKEN_GLASS_2), 1);
+    assert.equal(caster.messages.at(-1), "You find some broken glass.");
+    assert.equal(caster.xp, 7.5);
+    ticks(3);
+    assert.equal(amount(caster, I.BROKEN_GLASS_2), 4, "a roll a tick, and the spot never moves");
+    assert.ok(caster.animations.length >= 5 && caster.animations.every((id) => id === 620), "human_largenet each tick");
+
+    const wrong = fisher({ items: [[I.SMALL_FISHING_NET]] });
+    start(wrong, spot(N.FISHING_SPOT_101, 10), "Cast");
+    assert.deepEqual(wrong.messages, ["This is the wrong size net for fishing here."]);
+    assert.equal(wrong.statements.length, 0, "a chat line, not a box");
+  });
+
+  // The table: pre-rolls first, else the weights (glass 3, boot 2, net 2, casket 2, keys 1 of 10), a tertiary on top.
+  const rolls = (...values) => () => values.shift();
+  assert.deepEqual(rollTable(TOOLS.PARK_NET.table, rolls(0.005)), [FISH.PARK_JADE], "jade, 1/100");
+  assert.deepEqual(rollTable(TOOLS.PARK_NET.table, rolls(0.5, 0.001, 0.5)), [FISH.PARK_RED_TOPAZ]);
+  for (const [pick, fish] of [[0.29, FISH.PARK_BROKEN_GLASS], [0.31, FISH.PARK_OLD_BOOT], [0.55, FISH.PARK_BIG_FISHING_NET],
+    [0.75, FISH.PARK_CASKET], [0.95, FISH.PARK_HOUSE_KEYS]]) {
+    assert.deepEqual(rollTable(TOOLS.PARK_NET.table, rolls(0.5, 0.5, pick, 0.5)), [fish], `${pick}`);
+  }
+  assert.deepEqual(rollTable(TOOLS.PARK_NET.table, rolls(0.5, 0.5, 0.95, 0.0001)), [FISH.PARK_HOUSE_KEYS, FISH.PARK_LOOP_HALF]);
+  assert.equal(FISH.PARK_LOOP_HALF.experience, 0, "a tertiary gives no experience of its own");
+});
+
+test("Gita Prymes upgrades angler kit to spirit kit for 1,200 flakes, then both ways free", async () => {
+  const { CachePipeline } = require("../dist/game/cache/CachePipeline");
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  await CachePipeline.initialize(path.resolve(__dirname, ".."));
+  const core = PluginManager.getCoreApi();
+  const { ItemIdentifiers: I, NpcIdentifiers: N } = core;
+  const Angler = require("../plugins/skills/fishing/AnglerOutfit.Fishing");
+  const handlers = {};
+  const emitted = [];
+  Angler.attach({
+    core,
+    persistAttribute() {},
+    onItemOnNpc: (handler) => { handlers.item = handler; },
+    onNpcDialogueCondition: (handler) => { handlers.condition = handler; },
+    onCustomEvent: (name, handler) => { handlers[name] = handler; },
+    emitCustomEvent: (name, payload) => emitted.push({ name, payload }),
+  });
+
+  function player(items = [], paid = {}) {
+    const counts = new Map(items);
+    const attributes = new Map([[Angler._test.PAID_ATTRIBUTE, paid]]);
+    const messages = [];
+    return {
+      messages,
+      getInventory: () => ({
+        getAmount: (id) => counts.get(id) ?? 0,
+        deleteNumber: (id, amount) => counts.set(id, Math.max(0, (counts.get(id) ?? 0) - amount)),
+        adds: (id, amount) => counts.set(id, (counts.get(id) ?? 0) + amount),
+        refreshItems() {},
+      }),
+      getAttribute: (key) => attributes.get(key),
+      setAttribute: (key, value) => attributes.set(key, value),
+      sendMessage: (message) => messages.push(message),
+    };
+  }
+
+  const exchange = (p, itemId) => {
+    const event = { player: p, npcId: N.GITA_PRYMES, itemId, handled: false };
+    handlers.item(event);
+    return event;
+  };
+
+  const first = player([[I.ANGLER_HAT, 1], [I.SPIRIT_FLAKES, 1200]]);
+  assert.equal(exchange(first, I.ANGLER_HAT).handled, true);
+  assert.equal(first.getInventory().getAmount(I.ANGLER_HAT), 0);
+  assert.equal(first.getInventory().getAmount(I.SPIRIT_ANGLER_HEADBAND), 1);
+  assert.equal(first.getInventory().getAmount(I.SPIRIT_FLAKES), 0);
+  assert.deepEqual(first.messages, ["Gita Prymes exchanges your Angler hat for Spirit Angler kit."]);
+  assert.ok(emitted.some((event) => event.name === "collection-log:obtain"
+    && event.payload.itemId === I.SPIRIT_ANGLER_HEADBAND && event.payload.player === first));
+
+  // Converting back is free; upgrading again is free because that piece's fee is paid.
+  exchange(first, I.SPIRIT_ANGLER_HEADBAND);
+  assert.equal(first.getInventory().getAmount(I.ANGLER_HAT), 1);
+  assert.equal(first.messages.at(-1), "Gita Prymes exchanges your Spirit angler headband for regular Angler kit.");
+  emitted.length = 0;
+  exchange(first, I.ANGLER_HAT);
+  assert.equal(first.getInventory().getAmount(I.SPIRIT_ANGLER_HEADBAND), 1);
+  assert.equal(first.getInventory().getAmount(I.SPIRIT_FLAKES), 0, "the fee is paid once per piece");
+  assert.ok(emitted.some((event) => event.name === "collection-log:obtain" && event.payload.itemId === I.SPIRIT_ANGLER_HEADBAND));
+
+  const short = player([[I.ANGLER_TOP, 1], [I.SPIRIT_FLAKES, 1199]]);
+  exchange(short, I.ANGLER_TOP);
+  assert.equal(short.getInventory().getAmount(I.ANGLER_TOP), 1);
+  assert.equal(short.getInventory().getAmount(I.SPIRIT_FLAKES), 1199);
+  assert.equal(short.messages.at(-1), "Gita Prymes wants 1,200 spirit flakes to upgrade your Angler top. Spirit Angler kit gives the same Fishing XP bonus as the regular Angler kit. If you change it back later, you will not get your spirit flakes back.");
+
+  emitted.length = 0;
+  const wrong = player([[I.LOGS, 1]]);
+  assert.equal(exchange(wrong, I.LOGS).handled, true);
+  assert.equal(emitted.at(-1).name, "npc-dialogue:start");
+  assert.equal(emitted.at(-1).payload.variant, "if-given-anything-that-isn-t-an-angler-s-outfit-piece");
+
+  assert.equal(handlers.condition({ npcId: N.GITA_PRYMES, player: player(), stepId: Angler._test.CONDITIONS.NO_ANGLER }), true);
+  const unpaid = player([[I.ANGLER_BOOTS, 1]]);
+  assert.equal(handlers.condition({ npcId: N.GITA_PRYMES, player: unpaid, stepId: Angler._test.CONDITIONS.FIRST_UPGRADE }), true);
+  assert.equal(handlers.condition({ npcId: N.GITA_PRYMES, player: unpaid, stepId: Angler._test.CONDITIONS.ALREADY_UPGRADED }), false);
+  const paid = player([[I.ANGLER_BOOTS, 1]], { boots: true });
+  assert.equal(handlers.condition({ npcId: N.GITA_PRYMES, player: paid, stepId: Angler._test.CONDITIONS.FIRST_UPGRADE }), false);
+  assert.equal(handlers.condition({ npcId: N.GITA_PRYMES, player: paid, stepId: Angler._test.CONDITIONS.ALREADY_UPGRADED }), true);
+  const spirit = player([[I.SPIRIT_ANGLER_WADERS, 1]]);
+  assert.equal(handlers.condition({ npcId: N.GITA_PRYMES, player: spirit, stepId: Angler._test.CONDITIONS.NO_SPIRIT }), false);
+  assert.equal(handlers.condition({ npcId: N.GITA_PRYMES, player: spirit, stepId: Angler._test.CONDITIONS.HAS_SPIRIT }), true);
+
+  // Talking through the first-time branch exchanges the piece and fills the message's blank.
+  const talker = player([[I.ANGLER_TOP, 1], [I.SPIRIT_FLAKES, 1200]]);
+  handlers["npc-dialogue:condition"]({ npcId: N.GITA_PRYMES, player: talker, stepId: Angler._test.CONDITIONS.FIRST_UPGRADE });
+  const choice = { npcId: N.GITA_PRYMES, player: talker, option: "Proceed", end: false };
+  handlers["npc-dialogue:choice"](choice);
+  assert.equal(choice.end, false);
+  assert.equal(talker.getInventory().getAmount(I.SPIRIT_ANGLER_TOP), 1);
+  assert.equal(talker.getInventory().getAmount(I.SPIRIT_FLAKES), 0);
+  const message = { npcId: N.GITA_PRYMES, player: talker, kind: "message", stepId: "3sMFrS", step: { text: "Gita Prymes exchanges your [outfit piece] for Spirit Angler kit." } };
+  handlers["npc-dialogue:action"](message);
+  assert.equal(talker.messages.at(-1), "Gita Prymes exchanges your Angler top for Spirit Angler kit.");
+
+  // The warning messages before Proceed name the piece that will be converted.
+  const warned = player([[I.ANGLER_WADERS, 1]]);
+  const warning = { npcId: N.GITA_PRYMES, player: warned, kind: "message", stepId: "biLPTa", step: { text: "Gita Prymes wants 1,200 spirit flakes to upgrade your [outfit piece]. Spirit Angler kit gives the same Fishing XP bonus as the regular Angler kit. If you change it back later, you will not get your spirit flakes back." } };
+  handlers["npc-dialogue:action"](warning);
+  assert.equal(warned.messages.at(-1), "Gita Prymes wants 1,200 spirit flakes to upgrade your Angler waders. Spirit Angler kit gives the same Fishing XP bonus as the regular Angler kit. If you change it back later, you will not get your spirit flakes back.");
+  const paidWarning = player([[I.ANGLER_WADERS, 1]], { waders: true });
+  const paidMessage = { npcId: N.GITA_PRYMES, player: paidWarning, kind: "message", stepId: "y9-UMa", step: { text: "Gita Prymes will upgrade your [outfit piece] for free, as you have already paid the conversion fee. Spirit Angler kit gives the same Fishing XP bonus as the regular Angler kit." } };
+  handlers["npc-dialogue:action"](paidMessage);
+  assert.equal(paidWarning.messages.at(-1), "Gita Prymes will upgrade your Angler waders for free, as you have already paid the conversion fee. Spirit Angler kit gives the same Fishing XP bonus as the regular Angler kit.");
+
+  const talkerShort = player([[I.ANGLER_WADERS, 1], [I.SPIRIT_FLAKES, 1199]]);
+  handlers["npc-dialogue:condition"]({ npcId: N.GITA_PRYMES, player: talkerShort, stepId: Angler._test.CONDITIONS.FIRST_UPGRADE });
+  const shortChoice = { npcId: N.GITA_PRYMES, player: talkerShort, option: "Proceed", end: false };
+  handlers["npc-dialogue:choice"](shortChoice);
+  assert.equal(shortChoice.end, true, "the branch ends without exchanging when the flakes are short");
+  assert.equal(talkerShort.getInventory().getAmount(I.ANGLER_WADERS), 1);
+  // NpcDialogues reuses message leaves from the cached transcript between players.
+  const sharedStep = { type: "message", text: "Gita Prymes wants 1,200 spirit flakes to upgrade your [outfit piece]." };
+  const messageFor = p => ({ npcId: N.GITA_PRYMES, player: p, kind: "message", step: sharedStep, text: sharedStep.text });
+  const firstWarning = messageFor(player([[I.ANGLER_HAT, 1]]));
+  handlers["npc-dialogue:action"](firstWarning);
+  assert.equal(sharedStep.text, "Gita Prymes wants 1,200 spirit flakes to upgrade your [outfit piece].", "cached transcript is never personalized");
+  assert.equal(firstWarning.handled, true);
+  assert.equal(firstWarning.player.messages.at(-1), "Gita Prymes wants 1,200 spirit flakes to upgrade your Angler hat.");
+  const nextWarning = messageFor(player([[I.ANGLER_BOOTS, 1]]));
+  handlers["npc-dialogue:action"](nextWarning);
+  assert.equal(nextWarning.player.messages.at(-1), "Gita Prymes wants 1,200 spirit flakes to upgrade your Angler boots.");
+
 });

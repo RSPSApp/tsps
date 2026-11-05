@@ -102,6 +102,7 @@ function fakeInventory() {
     getFreeSlots: () => slots,
     contains: (id) => items.has(id),
     getAmount: (id) => items.get(id) ?? 0,
+    getAddableAmount: (item) => Math.min(item.getAmount(), 2147483647 - (items.get(item.getId()) ?? 0)),
     add(item) {
       if (!items.has(item.getId())) slots--;
       items.set(item.getId(), (items.get(item.getId()) ?? 0) + item.getAmount());

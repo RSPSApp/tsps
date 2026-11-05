@@ -7,6 +7,8 @@ module.exports = function registerPiratesTreasureQuest(api) {
   const WYDIN_NPC_ID = NpcIdentifiers.WYDIN;
   const LUTHAS_NPC_ID = NpcIdentifiers.LUTHAS;
   const BARTENDER_NPC_ID = NpcIdentifiers.BARTENDER_6;
+  const ZEMBO_NPC_ID = NpcIdentifiers.ZEMBO;
+  const BARCRAWL_PROGRESS_VARBIT = 13714; // Cache241: 0 unstarted, 1 during, >=2 complete.
   const GARDENER_NPC_ID = NpcIdentifiers.GARDENER_3;
   const CUSTOMS_OFFICER_IDS = new Set([
     NpcIdentifiers.CUSTOMS_OFFICER,
@@ -250,6 +252,10 @@ module.exports = function registerPiratesTreasureQuest(api) {
 
     if (SAIL_FARE_CONDITION_IDS.has(stepId)) {
       return player.getInventory().getAmount(COINS_ITEM_ID) < FARE;
+    }
+
+    if (npcId === ZEMBO_NPC_ID && value === "during alfred grimhand's barcrawl:") {
+      return player.getPacketSender().getVarbit(BARCRAWL_PROGRESS_VARBIT) === 1;
     }
 
     if (npcId === BARTENDER_NPC_ID) {
@@ -623,6 +629,9 @@ module.exports = function registerPiratesTreasureQuest(api) {
     player.getMovementQueue().setBlockMovement(false);
     player.setUntargetable(false);
     if (logout) return;
+    if (ship.destination.equals(PORT_SARIM_LANDING)) {
+      api.emitCustomEvent("ferries:arrived", { player, route: "musa-point-port-sarim" });
+    }
     const sender = player.getPacketSender();
     sender.sendTabInterface(0, 593);
     sender.sendTabInterface(5, 541);
@@ -713,9 +722,12 @@ module.exports = function registerPiratesTreasureQuest(api) {
     if (!isEmployed(player, 2)) { player.sendMessage("Wydin won't let you into the stock room."); return; }
     if (!wearingApron(player)) { player.sendMessage("You need to put your white apron on first."); return; }
     player.sendMessage("There are a lot of bananas in the crate.");
-    if (attr(player, RUM_ATTRIBUTE) >= 2 && giveItem(player, RUM_ITEM_ID)) {
-      setAttr(player, RUM_ATTRIBUTE, 0);
-      player.sendMessage("You find your bottle of rum in amongst the bananas.");
+    if (attr(player, RUM_ATTRIBUTE) >= 2) {
+      if (giveItem(player, RUM_ITEM_ID)) {
+        setAttr(player, RUM_ATTRIBUTE, 0);
+        player.sendMessage("You find your bottle of rum in amongst the bananas.");
+      }
+      return;
     }
     api.sendMultiChatboxPrompt(player, "Do you want to take a banana?", "Yes.", () => {
       if (player.getInventory().isFull()) { player.sendMessage("You need more inventory space."); return; }

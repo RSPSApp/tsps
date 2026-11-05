@@ -212,6 +212,7 @@ The rooms' set-up is covered by `server/tests/chambers-of-xeric.test.cjs`. A who
 - Challenge Mode within the Wiki's target time: +5,000 points each, the kit (1/75) and dust (1/400) rolls.
 - Uniques by the Wiki: 1% per 8,676 points, 570,000 a roll, the 2026 weights, the receiver by personal points (left raiders' uniques discarded), olmlet 1/53. Otherwise two different commons scaled by points (a third of herbs as seeds), the ancient tablet, elite clue 1/12; the dark journal if not banked.
 - The ancient chest opens interface 539 (Take, Take-all, Bank-all, Discard-all); unclaimed loot is placed on the ground on leaving. `raids_client_needsrewardbook` (varbit 5457) is set as the chest opens and cleared as the rewards close, not when the loot is claimed (rsprox 3389: it stays set after a claim).
+- Opening the chest logs its loot once (`loggedAmount`; the Olmlet is left to the pet path). The collection log's one Chambers of Xeric category (struct 507) shows Normal and Challenge Mode completions separately (cache script 2735: varps 2941 and 2048).
 - Captain Rimor's Claim-cape gives the cape for the Challenge Mode count.
 
 ## The Challenge Timeboard

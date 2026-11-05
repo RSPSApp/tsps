@@ -72,7 +72,11 @@ function answerEntrana({ player, definition, text }) {
 
 function sail(player, routeName) {
   if (routeName === ENTRANA_ROUTE) sailedToEntrana.add(player);
-  return Voyages.travel(player, routeName);
+  const started = Voyages.travel(player, routeName);
+  if (started && routeName === ENTRANA_ROUTE) {
+    Common.api.emitCustomEvent("entrana:boarded", { player, route: routeName });
+  }
+  return started;
 }
 
 /** Take-boat at Port Sarim: the monk's search, then the boat or his refusal. */

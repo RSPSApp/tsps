@@ -241,6 +241,25 @@ test("every general store buys items it doesn't stock and restocks its own", () 
   assert.equal(stockOf(GENERAL_STORE)[0][1], 3);
 });
 
+test("shop:keep-stock asked with selling on a sale: kept, the item is paid for and not added", (t) => {
+  const asked = [];
+  let keep = true;
+  t.mock.method(PluginManager, "emitCustomEvent", (name, request) => {
+    if (name !== "shop:keep-stock") return;
+    asked.push({ ...request, player: undefined });
+    request.keep = keep;
+  });
+  const player = openShop(0, GENERAL_STORE);
+  player.getInventory().add(new Item(STEEL_AXE_NOTE, 3), false);
+  sell(player, 0, "Sell 1");
+  assert.deepEqual(asked, [{ player: undefined, shopId: GENERAL_STORE, itemId: STEEL_AXE, amount: 1, keep: false, selling: true }]);
+  assert.equal(player.getInventory().getAmount(COINS), Math.floor(200 * 0.85), "paid");
+  assert.deepEqual(stockOf(GENERAL_STORE), [[BRONZE_AXE, 3]], "nothing added");
+  keep = false;
+  sell(player, 0, "Sell 1");
+  assert.deepEqual(stockOf(GENERAL_STORE), [[BRONZE_AXE, 3], [STEEL_AXE, 1]], "not kept: added as before");
+});
+
 test("the quantity buttons set what an item's left-click buys, and the choice is saved", () => {
   const player = openShop();
   const clickButton = (childId) => ShopManager.handleWidgetAction(player, {

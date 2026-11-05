@@ -10,9 +10,9 @@
  * tick - a fresh or respawned boss never gets stuck on the room's smoke devils.
  *
  * Wiki: the boss and the room's smoke devils can only be attacked on a smoke devil
- * task, so attacks here are refused unless slayer:on-task covers the target. The one
- * off-task kill for the Western Provinces Diary is not modelled: the diary task is not
- * wired to the boss yet.
+ * task, so attacks here are refused unless slayer:on-task covers the target. The boss
+ * alone also allows one off-task kill for the Western Provinces Diary once that diary is
+ * started, its Thermonuclear task is unfinished and the player has base 93 Slayer.
  */
 const Common = require("./Common.ThermonuclearSmokeDevil");
 
@@ -48,7 +48,10 @@ function areaClass() {
     /** Only a player whose task covers the room's monsters may attack them (Wiki). */
     canAttack(attacker, target) {
       if (!attacker?.isPlayer?.() || !target?.isNpc?.()) return null;
-      return Common.onTask(attacker.getAsPlayer(), target) ? null : false;
+      const player = attacker.getAsPlayer();
+      if (Common.onTask(player, target)) return null;
+      if (Common.isBoss(target) && Common.diaryOffTaskKillAllowed(player)) return null;
+      return false;
     }
   };
 }

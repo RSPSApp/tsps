@@ -3,10 +3,11 @@ import { EventBus } from "@runelite/client/eventbus/EventBus";
 import { ConfigManager } from "@runelite/client/config/ConfigManager";
 import { PluginManager } from "@runelite/client/plugins/PluginManager";
 import { CLIENT_TOKEN } from "@runelite/client/plugins/PluginInjector";
-import { GameTick, PluginMessage } from "@runelite/api/events";
+import { GameStateChanged, GameTick, PluginChanged, PluginMessage } from "@runelite/api/events";
 import { QuestHelperPlugin } from "../game/plugins/questhelper/QuestHelperPlugin";
 import { QuestHelperBankTab, quantityToStackSize } from "../game/plugins/questhelper/QuestHelperBankTab";
 import { QuestHelperGrandExchange } from "../game/plugins/questhelper/QuestHelperGrandExchange";
+import { GameState } from "@runelite/api/GameState";
 import type { HelperBankTab } from "../game/plugins/questhelper/QuestHelperProtocol";
 import type { BankTagsClient } from "../game/plugins/banktags/bankClient";
 import { Bankmain } from "../game/plugins/banktags/bankmain";
@@ -63,19 +64,27 @@ async function main() {
     assert.equal(routes.length, 1);
     assert.deepEqual([routes[0].name, routes[0].data], ["path", path.data], "posted as DetailedQuestStep.setShortestPath posts it");
 
+    // Shortest Path off when the step posted its route: enabling it later still shows that route.
+    const shortestPathPlugin: any = { getName: () => "Shortest Path" };
+    bus.post(new PluginChanged(shortestPathPlugin, true));
+    assert.equal(routes.length, 2, "the route is replayed for a plugin that starts after the step");
+    assert.deepEqual([routes[1].name, routes[1].data], ["path", path.data]);
+    bus.post(new PluginChanged(shortestPathPlugin, false));
+    assert.equal(routes.length, 2, "disabling it replays nothing");
+
     const bad = { ...path, namespace: "elsewhere" };
     assert.equal(plugin.getState().result?.pluginMessages?.length, 1);
     bus.post(new GameTick());
     request = requests.filter((r) => r.type === "evaluate").at(-1);
     bus.post(new PluginMessage("quest-helper", result(request, { pluginMessages: [bad] })));
-    assert.equal(routes.length, 1, "only shortestpath messages are accepted from the engine");
+    assert.equal(routes.length, 2, "only shortestpath messages are accepted from the engine");
 
     // Switching quest shuts the old steps down: the route is cleared (removeShortestPath).
     plugin.selectQuest("sheep");
-    assert.equal(routes.length, 2);
-    assert.equal(routes[1].name, "clear");
+    assert.equal(routes.length, 3);
+    assert.equal(routes[2].name, "clear");
     plugin.selectQuest("cook");
-    assert.equal(routes.length, 2, "nothing to clear");
+    assert.equal(routes.length, 3, "nothing to clear");
 
     // With the bank open, the engine is asked for the quest bank tab.
     bankOpen = true;
@@ -219,6 +228,22 @@ async function main() {
     } else {
         console.warn("chatbox message layer not in this cache build; button layout check skipped");
     }
+
+    // Logging out is removing the guide from the world: the route clears and cannot be replayed.
+    bankOpen = false;
+    await manager.setPluginEnabled(QuestHelperPlugin, true);
+    plugin.setConfig("useShortestPath", true);
+    plugin.selectQuest("cook");
+    bus.post(new GameTick());
+    request = requests.filter((r) => r.type === "evaluate").at(-1);
+    bus.post(new PluginMessage("quest-helper", result(request, { pluginMessages: [path] })));
+    assert.equal(routes.at(-1)?.name, "path");
+    bus.post(new GameStateChanged(GameState.LOGIN_SCREEN));
+    assert.equal(routes.at(-1)?.name, "clear", "logging out clears the route");
+    const afterLogout = routes.length;
+    bus.post(new PluginChanged(shortestPathPlugin, true));
+    assert.equal(routes.length, afterLogout, "a logged-out route is not replayed");
+    await manager.setPluginEnabled(QuestHelperPlugin, false);
 
     console.log("quest-helper-integrations tests passed");
 }

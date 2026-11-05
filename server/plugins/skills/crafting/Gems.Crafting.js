@@ -134,8 +134,15 @@ function cutAmethyst(player, recipe) {
   const { ItemIds: I, Item } = Shared.getCore();
   const inventory = player.getInventory();
   if (!inventory.contains(I.AMETHYST) || chiselOf(player) === null) return false;
+  const product = new Item(recipe.itemId, recipe.amount);
+  // With no stack to join, the amethyst's own slot takes the product.
+  const joins = inventory.getItems().some((item) => item.getId() === recipe.itemId && item.getAmount() > 0 && item.getMeta() == null);
+  if (joins && inventory.getAddableAmount(product) < recipe.amount) {
+    player.sendMessage("You don't have enough inventory space.");
+    return false;
+  }
   inventory.deleteNumber(I.AMETHYST, 1);
-  inventory.addItem(new Item(recipe.itemId, recipe.amount));
+  inventory.addItem(product);
   Shared.addCraftingXp(player, recipe.xp);
   Shared.produced(player, recipe.itemId, recipe.amount, recipe.xp, "amethyst");
   return true;

@@ -985,6 +985,7 @@ function completeFurniture(player, house, target, buildable, materials) {
   player.getSkillManager().addExperiences(Skill.CONSTRUCTION, buildable.experience);
   GardenPlants.complete(player, buildable);
   house.setFurniture(target, buildable);
+  api.emitCustomEvent("construction:furniture-built", { player, buildable });
   // Keyed to the house, so a click straight after the build doesn't cancel the redraw.
   TaskManager.submit(new CountdownTask(house, 1, () => {
     if (houseFor(player) === house) rebuildHouse(player, house);
@@ -1246,6 +1247,7 @@ function enterAtPortal(player, buildingMode, location) {
     return true;
   }
   enterHouse(player, buildingMode);
+  if (houseFor(player)) api.emitCustomEvent("poh:entered", { player, location });
   return true;
 }
 

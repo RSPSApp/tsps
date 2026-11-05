@@ -1,5 +1,5 @@
 import { createElement, type ReactNode } from "react";
-import { ChatMessage, ConfigChanged, GameStateChanged, PluginMessage } from "@runelite/api/events";
+import { ChatMessage, ConfigChanged, GameStateChanged, PluginChanged, PluginMessage } from "@runelite/api/events";
 import { GameState } from "@runelite/api/GameState";
 import { ConfigManager } from "@runelite/client/config/ConfigManager";
 import { EventBus } from "@runelite/client/eventbus/EventBus";
@@ -12,7 +12,7 @@ import { send } from "../../../network/serverConnection/connection/send";
 import { getLatestSkills, getLatestRunEnergy, subscribeBank } from "../../../network/ServerConnection";
 import type { OsrsClient } from "../../OsrsClient";
 import { ClientState } from "../../ClientState";
-import type { OrderedClientEvent, ReadonlyClientSnapshot } from "./QuestHelperProtocol";
+import type { HelperPluginMessage, OrderedClientEvent, ReadonlyClientSnapshot } from "./QuestHelperProtocol";
 import { ENGINE_CONFIG_KEYS, LEGACY_CONFIG_KEYS, QuestHelperConfig } from "./QuestHelperConfig";
 import type { LocOutline, NpcOutline, ScriptCallbackEvent, WidgetOverlay } from "../ClientPluginManager";
 import type { Cs2Vm } from "../../../rs/cs2/Cs2Vm";
@@ -52,6 +52,8 @@ export class QuestHelperPlugin extends Plugin {
     private readonly toolbar = inject(ClientToolbar);
     /** Whether the engine last asked Shortest Path for a route (so stopping can clear it). */
     private routeShown = false;
+    /** The route last shown, replayed when Shortest Path starts after the step posted it. */
+    private lastRoute?: HelperPluginMessage;
     /** QuestBankTab: the "quest-helper" bank tab. */
     private readonly bankTab = new QuestHelperBankTab(osrsBankTagsClient(this.client), {
         selectedQuestName: () => this.bankTabQuestName(),
@@ -315,12 +317,20 @@ export class QuestHelperPlugin extends Plugin {
         for (const message of this.getState().result?.pluginMessages ?? []) {
             this.eventBus.post(new PluginMessage(message.namespace, message.name, message.data));
             this.routeShown = message.name === "path";
+            this.lastRoute = message.name === "path" ? message : undefined;
         }
+    }
+    /** Shortest Path starts (or restarts) after a route was posted: the plugin message was delivered to nobody, so replay it. */
+    onPluginChanged(event: PluginChanged): void {
+        if (!event.isEnabled() || !this.routeShown || !this.lastRoute) return;
+        if (event.getPlugin()?.getName?.() !== "Shortest Path") return;
+        this.eventBus.post(new PluginMessage(this.lastRoute.namespace, this.lastRoute.name, this.lastRoute.data));
     }
     /** A route this helper asked for, cleared when its quest is closed (the engine isn't asked again). */
     private clearRoute(): void {
         if (!this.routeShown) return;
         this.routeShown = false;
+        this.lastRoute = undefined;
         this.eventBus.post(new PluginMessage("shortestpath", "clear"));
     }
     retry(): void { this.faulted = false; this.events.clear(); this.assembly.clear(); this.lastSent = 0; this.session.restart("Reconnecting to Quest Helper…"); }
@@ -502,7 +512,7 @@ export class QuestHelperPlugin extends Plugin {
     }
     private detachSources(): void { for (const cleanup of this.cleanupSources)
         cleanup(); this.cleanupSources = []; }
-    private clearRuntime(): void { setQuestWorldMapPoint(this.client, undefined, 0); this.detachSources(); this.events.clear(); this.assembly.clear(); this.highlights.clear(); this.navigation.clear(); this.snapshot = undefined; this.account = ""; this.knownBank = false; this.pendingSince = 0; this.lastSent = 0; this.requiredVarbits.clear(); this.itemDefinitionIds.clear(); this.objectDefinitionIds.clear(); this.npcDefinitionIds.clear(); }
+    private clearRuntime(): void { this.clearRoute(); setQuestWorldMapPoint(this.client, undefined, 0); this.detachSources(); this.events.clear(); this.assembly.clear(); this.highlights.clear(); this.navigation.clear(); this.snapshot = undefined; this.account = ""; this.knownBank = false; this.pendingSince = 0; this.lastSent = 0; this.requiredVarbits.clear(); this.itemDefinitionIds.clear(); this.objectDefinitionIds.clear(); this.npcDefinitionIds.clear(); }
     private refreshHighlights(): void {
         const state = this.getState();
         const config = this.getConfig();

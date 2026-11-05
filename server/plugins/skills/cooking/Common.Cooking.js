@@ -9,6 +9,7 @@ let api = null;
 let core = null;
 let cookablesByRaw = null;
 let recipesByIngredient = null;
+let recipesByProduct = null;
 let doughs = null;
 let wines = null;
 
@@ -25,7 +26,11 @@ function gameval(kind, name) {
   return id;
 }
 
-const obj = (name) => gameval("obj", name);
+/** An obj gameval name, or a numeric item id for items the cache names ambiguously. */
+const obj = (nameOrId) => typeof nameOrId === "number" ? nameOrId : gameval("obj", nameOrId);
+const ingredient = (entry) => Array.isArray(entry)
+  ? { id: obj(entry[0]), count: entry[1] }
+  : { id: obj(entry), count: 1 };
 
 function index() {
   if (cookablesByRaw) return;
@@ -36,15 +41,17 @@ function index() {
     }
   }
   recipesByIngredient = new Map();
+  recipesByProduct = new Map();
   for (const row of DATA.recipes) {
     const recipe = {
       ...row,
       productId: obj(row.product),
-      ingredients: row.ingredients.map((name) => ({ id: obj(name), count: 1 })),
-      returns: (row.returns ?? []).map((name) => ({ id: obj(name), count: 1 })),
+      ingredients: row.ingredients.map(ingredient),
+      returns: (row.returns ?? []).map(ingredient),
       xp: row.xp ?? 0,
-      timing: [1, 2],
+      timing: row.timing ?? [1, 2],
     };
+    recipesByProduct.set(recipe.productId, recipe);
     for (const { id } of recipe.ingredients) {
       if (!recipesByIngredient.has(id)) recipesByIngredient.set(id, []);
       recipesByIngredient.get(id).push(recipe);
@@ -74,6 +81,12 @@ function recipeWith(firstId, secondId) {
   index();
   return (recipesByIngredient.get(firstId) ?? []).find((recipe) =>
     recipe.ingredients.some(({ id }) => id === secondId) && firstId !== secondId) ?? null;
+}
+
+/** The item-on-item recipe that makes `productId`, or null. */
+function recipeForProduct(productId) {
+  index();
+  return recipesByProduct.get(productId) ?? null;
 }
 
 /** Flour, the waters it mixes with and the doughs they make ({ flourId, potId, waters, products }). */
@@ -149,7 +162,7 @@ function run(player, step) {
 }
 
 module.exports = {
-  init, gameval, cookables, recipeWith, doughData, wineData, level, actionsPerCycle, wearsCookingCape, withArticle,
+  init, gameval, cookables, recipeWith, recipeForProduct, doughData, wineData, level, actionsPerCycle, wearsCookingCape, withArticle,
   spam, mesbox, sendVarbit, addXp, run,
   get api() { return api; },
   get core() { return core; },

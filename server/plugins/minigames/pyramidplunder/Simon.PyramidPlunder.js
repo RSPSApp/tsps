@@ -140,6 +140,7 @@ function takeAll(player) {
     coins += amount * each;
   }
   owed.set(player, (owed.get(player) ?? 0) + coins);
+  if (coins > 0) Common.getApi().emitCustomEvent("pyramid-plunder:artefacts-sold", { player });
 }
 
 function takeOne(player) {
@@ -149,6 +150,7 @@ function takeOne(player) {
   if (!key || player.getInventory().getAmount(itemId) <= 0) return;
   player.getInventory().deleteNumber(itemId, 1);
   owed.set(player, (owed.get(player) ?? 0) + Common.DATA.artefacts[key].coins);
+  Common.getApi().emitCustomEvent("pyramid-plunder:artefacts-sold", { player });
 }
 
 function pay(request) {

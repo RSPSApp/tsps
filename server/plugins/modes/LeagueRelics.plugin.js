@@ -19,6 +19,7 @@ module.exports = {
     require("./leaguerelics/Catalog.LeagueRelics")(api);
     require("./leaguerelics/Interface.LeagueRelics")(api);
     require("./leaguerelics/Commands.LeagueRelics")(api);
+    require("./leaguerelics/Collect.LeagueRelics")(api);
     require("./leaguerelics/SuperiorSorcerer.LeagueRelics")(api);
     require("./leaguerelics/Berserker.LeagueRelics")(api);
     require("./leaguerelics/UndyingRetribution.LeagueRelics")(api);

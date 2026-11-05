@@ -137,7 +137,11 @@ function endRound() {
   for (const player of playersInPrison()) {
     Shared.stopAction(player);
     Shared.removeItems(player, Shared.FUEL_ITEMS);
-    reward(player, pointsOf(player));
+    const points = pointsOf(player);
+    reward(player, points);
+    if (points >= Shared.REWARD_POINTS) {
+      Shared.api()?.emitCustomEvent("diary:task", { player, diary: "kourend", task: "subdue-the-wintertodt" });
+    }
   }
   round.active = false;
   round.energy = 0;

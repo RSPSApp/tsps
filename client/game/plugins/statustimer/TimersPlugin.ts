@@ -1,6 +1,8 @@
 import { createElement, lazy, type ReactNode } from "react";
 import { Plugin, type PluginDescriptor } from "@runelite/client/plugins/Plugin";
-import type { ConfigManager } from "@runelite/client/config/ConfigManager";
+import { inject } from "@runelite/client/plugins/PluginInjector";
+import { TimersConfig } from "./TimersConfig";
+import { ConfigManager } from "@runelite/client/config/ConfigManager";
 import type { WebGLOsrsRendererHost } from "../../../render/render/hostInterface";
 import type { OverheadTextEntry } from "../../../ui/devoverlay/Overlay";
 import type { OsrsClient } from "../../OsrsClient";
@@ -49,6 +51,9 @@ export class TimersPlugin extends Plugin {
         ],
         configKey: "timersplugin",
     };
+
+    static config = TimersConfig;
+    readonly config = inject(ConfigManager).getConfig(TimersConfig);
 
     readonly poison = new StatusTimer();
     readonly freeze = new StatusTimer();
@@ -104,7 +109,7 @@ export class TimersPlugin extends Plugin {
         maxEntries: number,
         playerDefaultHeightTiles: number | undefined,
     ): void {
-        if (this.isEnabled())
+        if (this.isEnabled() && this.config.showAttackTimer())
             appendAttackTimerOverhead(
                 host,
                 index,

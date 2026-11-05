@@ -13,6 +13,7 @@ const Progress = require("../plugins/achievements/diaries/Progress.AchievementDi
 const Journal = require("../plugins/achievements/diaries/Journal.AchievementDiaries");
 const Rewards = require("../plugins/achievements/diaries/Rewards.AchievementDiaries");
 const Lamps = require("../plugins/achievements/diaries/Lamps.AchievementDiaries");
+const KourendDiary = require("../plugins/achievements/diaries/KourendKebosDiary.plugin");
 const CAPTURED = require("./fixtures/achievement-diary-journals.json").journals;
 
 const tasks = [];
@@ -144,6 +145,21 @@ test("as captured (Ardougne easy): message and count on the tick, started on the
   const all = { player };
   Diaries._test.onAllComplete(all);
   assert.equal(all.complete, false, "the other diaries are not done");
+});
+
+test("is-started and has-task answer for a diary task query", () => {
+  const player = createPlayer();
+  const started = { player, diary: "ardougne", started: null };
+  Diaries._test.onIsStarted(started);
+  assert.equal(started.started, false);
+  const before = { player, diary: "ardougne", task: ARDOUGNE.tiers.easy.tasks[0].key, done: null };
+  Diaries._test.onHasTask(before);
+  assert.equal(before.done, false);
+  Progress.completeTask(player, ARDOUGNE, ARDOUGNE.tiers.easy.tasks[0].key);
+  Diaries._test.onIsStarted(started);
+  assert.equal(started.started, true);
+  Diaries._test.onHasTask(before);
+  assert.equal(before.done, true);
 });
 
 test("migration merges valid legacy progress and survives a save round trip", () => {
@@ -349,6 +365,7 @@ test('diary tasks follow successful native gameplay actions', async t => {
   Diaries.register(api);
   require('../plugins/skills/Thieving.plugin').register(api);
   require('../plugins/skills/Runecrafting.plugin').register(api);
+  KourendDiary.register(api);
   t.mock.method(Math, 'random', () => 0);
   let index = 1000;
   t.after(() => { for (const npc of npcs) core.World.getNpcs().remove(npc); core.World.getRemoveNPCQueue().splice(0); });
@@ -384,6 +401,19 @@ test('diary tasks follow successful native gameplay actions', async t => {
     assert.equal(observed.at(-1).kind, 'stall');
     assert.equal(completed(player, 'varrock', TEA), true);
     assert.equal(player.getPacketSender().getVarbit(6319), 1);
+  });
+
+  await t.test('a Hosidius Fruit Stall theft credits the Kourend easy task, the castle stall does not', () => {
+    for (const [x, y, counts] of [[1767, 3597, true], [1633, 3662, false]]) {
+      const player = actor(x - 1, y);
+      const object = new core.GameObject(28823, new core.Location(x, y, 0), 10, 1, null);
+      assert.equal(object.getDefinition().getName(), 'Fruit Stall');
+      assert.equal(PluginManager.emitObjectInteraction({ player, object, objectId: object.getId(), location: { x, y, z: 0 }, clickType: 2, handled: false }), true);
+      assert.equal(completed(player, 'kourend', 'steal-from-a-hosidius-food-stall'), false);
+      advance();
+      assert.equal(completed(player, 'kourend', 'steal-from-a-hosidius-food-stall'), counts);
+      assert.equal(player.getPacketSender().getVarbit(7933), counts ? 1 : 0);
+    }
   });
 
   await t.test('both Man and Woman count on every Lumbridge castle floor', () => {

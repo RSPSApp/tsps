@@ -219,7 +219,6 @@ Scope is the pass `renderOpaquePass` + `renderTransparentPass` covers for terrai
   2048px shadow map, lights via `collectHdLights`, environment via
   `resolveHdEnvironmentForRegion`). The shadow map is read with v = 1 - y: WebGPU texture rows
   start at NDC y = +1, so a GL-style lookup mirrors every shadow.
-- Weather (the other plugin with WebGL render hooks) is not ported.
 
 ### Stage 5.6 — world entity decks (boats) (done)
 

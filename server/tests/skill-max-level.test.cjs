@@ -667,6 +667,17 @@ function feedbackPlayer(core) {
     deleteAtSlot(slot, n) { this.deleteNumber(this.get(slot).getId(), n); },
     addItem(item) { counts.set(item.getId(), (counts.get(item.getId()) ?? 0) + item.getAmount()); },
     isFull: () => false, getFreeSlots: () => 28,
+    // Mirrors ItemContainer.getAddableAmount, which Fletching asks before it starts a batch:
+    // a stack already held grows to the cap, a new stack needs a free slot, and a non-stackable
+    // item is bounded by the free slots.
+    getAddableAmount(item) {
+      const id = item.getId(), want = Math.max(0, Math.floor(item.getAmount()));
+      if (id < 0 || want <= 0) return 0;
+      if (!core.ItemDefinition.forId(id).isStackable()) return Math.min(want, inventory.getFreeSlots());
+      const held = counts.get(id) ?? 0;
+      if (held > 0) return Math.min(want, Math.max(0, 0x7fffffff - held));
+      return inventory.getFreeSlots() > 0 ? want : 0;
+    },
   };
   const sender = new Proxy({
     sendCreationMenu(value) { menu = value; return sender; },

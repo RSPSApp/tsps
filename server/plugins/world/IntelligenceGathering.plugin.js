@@ -215,7 +215,7 @@ function attach(pluginApi) {
   core = pluginApi.core;
   bossType = Math.random() < 0.5 ? BOSS_FEMALE : BOSS_MALE;
   pluginApi.onObjectInteraction("Information", { Check: checkBoard });
-  pluginApi.onPlayerAttack(playerAttack);
+  pluginApi.onPlayerDealtDamage(playerAttack);
   pluginApi.onNpcDialogueVariant(onDialogueVariant);
   pluginApi.onNpcDialogueCondition(answerCondition);
   pluginApi.onCustomEvent("npc-dialogue:line", onDialogueLine);

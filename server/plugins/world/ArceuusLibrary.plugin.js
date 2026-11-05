@@ -25,6 +25,13 @@
  */
 
 const LIBRARY = require("./data/arceuus-library.json");
+const SHELF_POINTS = new Map(LIBRARY.bookcases.map(([x, y, z, index]) => [index, `${x},${y},${z}`]));
+// The source lists some physical shelves twice; never place two different books on one shelf.
+const START_SLOTS = Array.from({ length: LIBRARY.bookcases.length }, (_, zero) => zero).filter((zero) => {
+  const occupied = LIBRARY.sequences[0].map((_, position) =>
+    SHELF_POINTS.get((zero + position * LIBRARY.step) % LIBRARY.bookcases.length));
+  return new Set(occupied).size === occupied.length;
+});
 
 const SAM = 7049;
 const PROFESSOR_GRACKLEBONE = 7048;
@@ -107,7 +114,7 @@ function clearRequest(player) {
 
 function resetArrangement(random = Math.random) {
   const sequence = LIBRARY.sequences[Math.floor(random() * LIBRARY.sequences.length)];
-  const zero = Math.floor(random() * LIBRARY.bookcases.length);
+  const zero = START_SLOTS[Math.floor(random() * START_SLOTS.length)];
   arrangement = { sequence, zero };
   const minutes = RESET_MIN_MINUTES + Math.floor(random() * (RESET_MAX_MINUTES - RESET_MIN_MINUTES + 1));
   nextResetAt = Date.now() + minutes * 60_000;
@@ -121,8 +128,9 @@ function bookAt(location) {
   const indices = bookcasesByPoint.get(`${at.x},${at.y},${at.z}`);
   if (!indices) return null;
   for (const index of indices) {
-    if (index % LIBRARY.step !== 0) continue;
-    const position = index / LIBRARY.step;
+    const offset = (index - arrangement.zero + LIBRARY.bookcases.length) % LIBRARY.bookcases.length;
+    if (offset % LIBRARY.step !== 0) continue;
+    const position = offset / LIBRARY.step;
     if (position < arrangement.sequence.length) return arrangement.sequence[position];
   }
   return null;

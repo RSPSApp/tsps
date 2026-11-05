@@ -22,6 +22,7 @@ let tasks;
 let spawned;
 let removed;
 let questStage;
+let attackRoll;
 
 const { TASKS } = Finish._test;
 const diary = Diaries && require("../plugins/achievements/diaries/Data.AchievementDiaries").BY_KEY.get("kourend");
@@ -49,6 +50,7 @@ before(async () => {
       listeners.set(name, entries);
     },
     emitCustomEvent: emit,
+    onPlayerDealtDamage(handler) { attackRoll = handler; },
     persistAttribute() {},
     getTaskManager: () => taskManager,
     spawnNpc(definition) {
@@ -60,7 +62,7 @@ before(async () => {
         getLocation: () => new core.Location(definition.x, definition.y, definition.z ?? 0),
         isDying: () => false,
         getHitpoints: () => 100,
-        getCombat: () => ({ setTarget() {} }),
+        getCombat: () => ({ setTarget(target) { npc.attackTarget = target; } }),
       };
       spawned.push(npc);
       return npc;
@@ -118,12 +120,7 @@ function withRandom(value, run) {
 }
 
 function craneObject(at) {
-  return {
-    getId: () => Crane._test.BROKEN,
-    getLocation: () => at,
-    getType: () => 10,
-    getFace: () => 1,
-  };
+  return new core.GameObject(Crane._test.BROKEN, at, 10, 1, null);
 }
 
 function resetCrane() {
@@ -287,4 +284,118 @@ test("the canonical gang boss drop is always Intelligence", () => {
   const entry = drops.tables.gang_boss.entries.find((row) => row.item_id === Ginea._test.INTELLIGENCE);
   assert.ok(entry);
   assert.equal(entry.always, true);
+});
+
+
+test("the randomized library origin moves books and wraps around the shelf list", () => {
+  const data = require("../plugins/world/data/arceuus-library.json");
+  let rolls = [0, 0, 0];
+  Library._test.resetArrangement(() => rolls.shift());
+  const before = data.bookcases.map(([x, y, z]) => Library._test.bookAt({ x, y, z }));
+  rolls = [0, 0.999999, 0];
+  Library._test.resetArrangement(() => rolls.shift());
+  assert.equal(Library._test.arrangement.zero, 352);
+  const after = data.bookcases.map(([x, y, z]) => Library._test.bookAt({ x, y, z }));
+  assert.notDeepEqual(after, before);
+  for (const [x, y, z, index] of data.bookcases) {
+    const offset = (index - 352 + data.bookcases.length) % data.bookcases.length;
+    if (offset === 0 || offset === data.step) {
+      assert.equal(Library._test.bookAt({ x, y, z }), Library._test.arrangement.sequence[offset / data.step]);
+    }
+  }
+});
+
+for (const missing of [2347, 960, 4819, "level"]) {
+  test(`a crane retry cannot pay after losing ${missing}`, (t) => {
+    resetCrane();
+    const player = fixture(t, [1817, 3727, 0]);
+    level99(player);
+    give(player, 2347);
+    give(player, 960, 3);
+    give(player, 4819, 18);
+    withRandom(0.99, () => Crane._test.repair({ player, object: craneObject(player.getLocation()), objectId: Crane._test.BROKEN }));
+    if (missing === "level") player.getSkillManager().setCurrentLevel(core.Skill.CRAFTING, 29, false);
+    else player.getInventory().deleteNumber(missing, player.getInventory().getAmount(missing));
+    withRandom(0, () => advance(10));
+    assert.equal(player.getSkillManager().getExperience(core.Skill.CRAFTING), 0);
+    assert.equal(done(player, TASKS.crane), false);
+    assert.equal(Crane._test.sessions.has(player), false);
+  });
+}
+
+test("a shared crane completion excludes a repairer who banked their supplies", (t) => {
+  resetCrane();
+  const actor = fixture(t, [1817, 3727, 0]);
+  const nearby = fixture(t, [1818, 3727, 0]);
+  for (const player of [actor, nearby]) {
+    level99(player);
+    give(player, 2347);
+    give(player, 960, 3);
+    give(player, 4819, 18);
+    withRandom(0.99, () => Crane._test.repair({ player, object: craneObject(player.getLocation()), objectId: Crane._test.BROKEN }));
+  }
+  nearby.getInventory().deleteNumber(960, 3);
+  withRandom(0, () => Crane._test.attempt(actor, Crane._test.sessions.get(actor), 10));
+  assert.equal(done(actor, TASKS.crane), true);
+  assert.equal(done(nearby, TASKS.crane), false);
+  assert.equal(nearby.getSkillManager().getExperience(core.Skill.CRAFTING), 0);
+  assert.equal(nearby.getInventory().getAmount(4819), 17);
+  assert.equal(Crane._test.sessions.has(nearby), false);
+});
+
+
+test("queuing a hit against a gang member makes the rest of the meeting retaliate", (t) => {
+  const player = fixture(t);
+  Ginea._test.despawn();
+  const start = Math.ceil(Date.now() / Ginea._test.SLOT_MS) * Ginea._test.SLOT_MS;
+  const meeting = Ginea._test.tick(start, () => 0);
+  const [target, ...others] = meeting.members;
+  assert.equal(typeof attackRoll, "function");
+  const { CombatFactory } = require("../dist/game/content/combat/CombatFactory");
+  const original = PluginManager.emitPlayerDealtDamage;
+  PluginManager.emitPlayerDealtDamage = attackRoll;
+  target.isUntargetable = () => false;
+  target.isNeedsPlacement = () => false;
+  target.isPlayer = () => false;
+  const queued = [];
+  const combat = target.getCombat();
+  combat.getHitQueue = () => ({ addPendingHit: (hit) => queued.push(hit) });
+  target.getCombat = () => combat;
+  const hit = {
+    getAttacker: () => player, getTarget: () => target,
+    capDamageToBudget() {}, rewardsExperience: () => false, getDelay: () => 0,
+  };
+  try { CombatFactory.addPendingHit(hit); } finally { PluginManager.emitPlayerDealtDamage = original; }
+  assert.deepEqual(queued, [hit]);
+  assert.ok(others.every((npc) => npc.attackTarget === player));
+  assert.equal(target.attackTarget, undefined);
+  Ginea._test.despawn();
+});
+
+
+test("the activity ids resolve to their cache names and actions", () => {
+  core.ObjectDefinition.init();
+  assert.equal(core.ObjectDefinition.forId(Crane._test.BROKEN).getName(), "Fishing Crane");
+  assert.ok(core.ObjectDefinition.forId(Crane._test.BROKEN).getActions().includes("Repair"));
+  assert.equal(core.ObjectDefinition.forId(Ginea._test.INFORMATION).getName(), "Information");
+  assert.ok(core.ObjectDefinition.forId(Ginea._test.INFORMATION).getActions().includes("Check"));
+  for (const [id, name] of [[Library._test.SAM, "Sam"], [Library._test.PROFESSOR_GRACKLEBONE, "Professor Gracklebone"], [Library._test.VILLIA, "Villia"], [Ginea._test.GINEA, "Captain Ginea"]]) {
+    assert.equal(core.NpcDefinition.forId(id).getName(), name);
+  }
+  for (const id of [...Ginea._test.GANGSTERS, ...Ginea._test.BOSS_FEMALE, ...Ginea._test.BOSS_MALE]) {
+    assert.match(core.NpcDefinition.forId(id).getName(), /Gangster|Gang boss/);
+  }
+});
+
+
+test("every randomized library layout makes all sixteen requested books reachable", () => {
+  const data = require("../plugins/world/data/arceuus-library.json");
+  for (let sequence = 0; sequence < data.sequences.length; sequence++) {
+    for (let origin = 0; origin < data.bookcases.length; origin++) {
+      const rolls = [sequence / data.sequences.length, origin / data.bookcases.length, 0];
+      Library._test.resetArrangement(() => rolls.shift());
+      const reachable = new Set(data.bookcases.map(([x, y, z]) => Library._test.bookAt({ x, y, z })).filter((id) => id != null));
+      assert.deepEqual(reachable, new Set(data.sequences[sequence]));
+    }
+  }
 });

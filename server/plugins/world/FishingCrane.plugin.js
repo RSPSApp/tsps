@@ -101,6 +101,30 @@ function cleanup(player) {
   lastAttempt.delete(player);
 }
 
+/** Recheck supplies when an automatic attempt or shared completion can award XP. */
+function supplies(player, selectedPlank) {
+  const { crafting, construction } = levels(player);
+  if (crafting < LEVEL || construction < LEVEL) {
+    player.sendMessage(MESSAGES.level);
+    return 0;
+  }
+  if (amount(player, HAMMERS) <= 0) {
+    player.sendMessage(MESSAGES.hammer);
+    return 0;
+  }
+  const plank = selectedPlank ?? plankType(player);
+  if (!plank || player.getInventory().getAmount(plank) < PLANKS_PER_REPAIR) {
+    player.sendMessage(MESSAGES.planks);
+    return 0;
+  }
+  if (amount(player, NAILS) < NAILS_PER_REPAIR) {
+    player.sendMessage(MESSAGES.nails);
+    return 0;
+  }
+
+  return plank;
+}
+
 function repair(event) {
   const { player, object } = event;
   if (event.objectId !== BROKEN || object?.getId?.() === REPAIRED) return false;
@@ -116,24 +140,8 @@ function repair(event) {
   }
   if (!session && last != null && now - last < RETRY_LOCK_TICKS) return true;
 
-  const { crafting, construction } = levels(player);
-  if (crafting < LEVEL || construction < LEVEL) {
-    player.sendMessage(MESSAGES.level);
-    return true;
-  }
-  if (amount(player, HAMMERS) <= 0) {
-    player.sendMessage(MESSAGES.hammer);
-    return true;
-  }
-  const plank = plankType(player);
-  if (!plank) {
-    player.sendMessage(MESSAGES.planks);
-    return true;
-  }
-  if (amount(player, NAILS) < NAILS_PER_REPAIR) {
-    player.sendMessage(MESSAGES.nails);
-    return true;
-  }
+  const plank = supplies(player);
+  if (!plank) return true;
 
   const started = {
     object,
@@ -153,6 +161,10 @@ function repair(event) {
 
 function attempt(player, session, now) {
   if (session.object?.getId?.() !== BROKEN) {
+    stopSession(player);
+    return;
+  }
+  if (!supplies(player, session.plank)) {
     stopSession(player);
     return;
   }
@@ -194,6 +206,10 @@ function complete(initiator, initiatorSession, now) {
   }
 
   for (const [player, session] of participants) {
+    if (!supplies(player, session.plank)) {
+      stopSession(player);
+      continue;
+    }
     const own = levels(player);
     take(player, [session.plank], PLANKS_PER_REPAIR);
     take(player, NAILS, NAILS_PER_REPAIR);

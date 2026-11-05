@@ -29,6 +29,8 @@ let I;
 let family;
 let OPEN_GEM_BAG;
 let next = 9800;
+const pickupPolicies = new WeakMap();
+const pickupEvents = new WeakMap();
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
@@ -41,6 +43,9 @@ before(async () => {
   core.RegionManager.loadMapFiles(...HOME);
   core.RegionManager.loadMapFiles(...WILDERNESS);
   PM.emitServerStartup({});
+  PM.createApi("GemPickupPolicyTest").onCustomEvent("ground-items:take", (event) => pickupPolicies.get(event.player)?.(event));
+  PM.createApi("GemPickupEventTest").onCustomEvent("ground-items:taken", (event) => pickupEvents.get(event.player)?.push({ amount: event.amount, discarded: event.discarded, source: event.source }));
+
 });
 after(() => PM.emitServerShutdown({}));
 
@@ -106,6 +111,58 @@ test("an open bag takes the player's own gem (control)", async (t) => {
   assert.equal(f.inv.getAmount(I.UNCUT_RUBY), 0);
   assert.equal(pile.isPendingRemoval(), true);
   assert.ok(f.messages.includes(STRAIGHT_IN), JSON.stringify(f.messages));
+});
+
+test("a denied ground take cannot put a gem in the bag", async (t) => {
+  const f = actor(t);
+  const pile = gemHere(t, f);
+  const events = [];
+  pickupEvents.set(f.p, events);
+  pickupPolicies.set(f.p, (event) => { event.allow = false; });
+  await take(f);
+  assert.equal(stored(f), 0);
+  assert.equal(f.inv.getAmount(I.UNCUT_RUBY), 0);
+  assert.equal(pile.isPendingRemoval(), false);
+  assert.deepEqual(events, []);
+});
+
+test("an allowed bag pickup emits the credited ground-item event once", async (t) => {
+  const f = actor(t);
+  const pile = gemHere(t, f);
+  const events = [];
+  pickupEvents.set(f.p, events);
+  await take(f);
+  assert.equal(stored(f), 1);
+  assert.equal(pile.isPendingRemoval(), true);
+  assert.deepEqual(events, [{ amount: 1, discarded: 0, source: "pickup" }]);
+});
+
+test("a gem with metadata follows ordinary pickup and keeps that metadata", async (t) => {
+  const f = actor(t);
+  const pile = gemHere(t, f);
+  pile.getItem().setMetaValue("gem-test:marker", 17);
+  await take(f);
+  assert.equal(stored(f), 0);
+  const held = f.inv.getValidItems().find((entry) => entry.getId() === I.UNCUT_RUBY);
+  assert.equal(held?.getMetaValue("gem-test:marker"), 17);
+  assert.equal(pile.isPendingRemoval(), true);
+});
+
+test("a nested pickup during the take policy cannot duplicate the gem", async (t) => {
+  const f = actor(t);
+  const pile = gemHere(t, f);
+  const events = [];
+  pickupEvents.set(f.p, events);
+  let calls = 0;
+  pickupPolicies.set(f.p, () => {
+    calls++;
+    if (calls === 1) core.ItemOnGroundManager.pickup(f.p, pile);
+  });
+  await take(f);
+  assert.equal(calls, 1);
+  assert.equal(stored(f), 1);
+  assert.equal(f.inv.getAmount(I.UNCUT_RUBY), 0);
+  assert.deepEqual(events, [{ amount: 1, discarded: 0, source: "pickup" }]);
 });
 
 test("an Ironman's open bag doesn't take another player's gem, and it stays on the ground", async (t) => {

@@ -750,7 +750,14 @@ function clearCrop(player, patch, state, crop) {
             // Wiki Tree_roots_(Farming): one more root every eight levels above planting,
             // capped at four; temporary boosts apply when the stump is dug.
             const roots = 1 + Math.min(3, Math.floor((player.getSkillManager().getCurrentLevel(core.Skill.FARMING) - crop.level) / 8));
-            if (!give(player, Data.itemId(`${crop.name} roots`), Math.max(1, roots))) return;
+            const amount = Math.max(1, roots);
+            const itemId = Data.itemId(`${crop.name} roots`);
+            if (!give(player, itemId, amount)) return;
+            core.PluginManager.emitCustomEvent("farming:roots", {
+                player, crop: crop.key, itemId, amount,
+                patch: { id: patch.id, x: patch.x, y: patch.y, z: patch.z },
+                patchKey: Data.patchKey(patch),
+            });
         }
         clearPatch(player, patch);
         spam(player, stump ? `You dig up the ${stump}.` : "You have successfully cleared this patch for new crops.");

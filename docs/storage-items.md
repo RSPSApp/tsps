@@ -32,7 +32,7 @@ Log basket, Tackle box). The open and closed variants are the same container (`C
 | Container | Holds | Fills itself | Used from it |
 | --- | --- | --- | --- |
 | Coal bag | 27 coal, 36 with the Smithing cape's perk (`skillcape:has-perk`) | open: mined coal | smelting, after the inventory's coal |
-| Gem bag | 60 of each uncut sapphire to dragonstone | open: picked-up gems, the gem stall, Shooting Star gems | - |
+| Gem bag | 60 of each uncut sapphire to dragonstone | open: picked-up gems, mined gems, the gem stall, pickpocketed gems, Shooting Star gems | - |
 | Fish barrel, fish sack barrel | 28 raw fish (no stackable fish) | open: caught fish | - |
 | Log basket, forestry basket | 28 logs or bark, carried or worn | open: chopped logs | - |
 | Forestry kit (and the kit in a forestry basket) | enum 817: bark, nature offerings, rations, secateurs attachment, leaves | carried or worn: Forestry bark and leaves | the Forestry Shop's bark |
@@ -46,7 +46,7 @@ Other plugins reach the containers only through custom events (owned by `Common.
 | Event | Payload | Emitted by |
 | --- | --- | --- |
 | `storage:room` | `{ player, itemId, room }` | Mining, Fishing, Woodcutting: a full inventory doesn't stop them while an open container has room |
-| `storage:gather` | `{ player, itemId, amount, stored }` | Mining, Fishing, Woodcutting, the sawmill, stall thieving, Shooting Stars: open containers take what fits, the rest goes to the inventory |
+| `storage:gather` | `{ player, itemId, amount, stored, announce? }` | Mining, Fishing, Woodcutting, the sawmill, stall thieving, pickpocketed gems, Shooting Stars: open containers take what fits, the rest goes to the inventory |
 | `storage:amount` | `{ player, itemId, amount }` | Smithing (smelting), Construction, Fishing (bait) |
 | `storage:take` | `{ player, itemId, amount, taken }` | the same, after the inventory's own items |
 
@@ -69,7 +69,7 @@ inventory option, even from the bank panel; it now leaves the bank panel's ops t
 | Container | Line | Source |
 | --- | --- | --- |
 | Coal bag | "The coal bag contains # pieces of coal." / "The coal bag is empty." / "The coal bag is now empty." / "The coal bag can hold only # pieces of coal." | parsed from live chat |
-| Gem bag | "You add the gems to your bag." / "You put it straight into your open gem bag." | Wiki |
+| Gem bag | "You just found a/an [gem]!" / "You put it straight into your open gem bag." / "You open your gem bag, ready to fill it." / "You close your gem bag." / "Sapphires: # / Emeralds: # / Rubies: #" / "Diamonds: # / Dragonstones: #" / "Only uncut gems can be stored in the bag." / "Your bag is too full to hold all your gems." / "You have nothing suitable for storing in the bag." | Wiki; Fill itself has no line |
 | Fish barrel | "The barrel is full. It may be emptied at a bank." | Wiki |
 | Log basket | "The basket is full." / "Your basket is empty." / "The basket is empty." / "You empty your basket." / "You empty as many logs as you can carry." / "You empty your basket into the bank." | parsed from live chat |
 | Tackle box | "The tackle box is now empty." | captured |

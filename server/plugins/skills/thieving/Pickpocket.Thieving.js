@@ -229,6 +229,17 @@ function rogueDoubleChance(player) {
 }
 
 /**
+ * Wiki (Gem bag): an open bag takes gems stolen from people too, TzHaar-Hur and Vyre among them.
+ * Transcript:Gem bag gives the find line first, and alone when the bag has no room (`announce`).
+ */
+function storedGems(player, id, amount) {
+  if (!String(core.ItemDefinition.forId(id)?.getName?.() ?? "").startsWith("Uncut ")) return 0;
+  const request = { player, itemId: id, amount, stored: 0, announce: true };
+  pluginApi.emitCustomEvent("storage:gather", request);
+  return request.stored;
+}
+
+/**
  * Hands the loot over: coins as the target's coin pouch; the rogue outfit may double it, and
  * content's `multiplier` (a league fragment's double loot) multiplies it again. Clues are never more.
  * What the inventory has no room for (a doubled pouch's coins, a doubled item) falls to the floor.
@@ -249,7 +260,8 @@ function giveLoot(player, target, loot, random = Math.random, multiplier = 1) {
       continue;
     }
     const total = clue ? amount : amount * times;
-    inventory.forceAdd(player, new core.Item(id, total));
+    const left = total - storedGems(player, id, total);
+    if (left > 0) inventory.forceAdd(player, new core.Item(id, left));
     given.push({ ...item, amount: total });
   }
   return given;

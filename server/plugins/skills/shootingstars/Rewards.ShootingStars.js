@@ -52,10 +52,11 @@ function rollGemTable(player, random = Math.random) {
   if (random() * chance >= 1) return false;
   const gemId = pickGem(random);
   if (gemId == null) return true;
-  // An open gem bag takes it first ("storage:gather"); otherwise it needs a free slot.
-  const request = { player, itemId: gemId, amount: 1, stored: 0 };
+  // An open gem bag takes it first ("storage:gather"), then a free slot. With neither, the floor:
+  // ours, no source covers it, but stardust stacks so mining goes on with a full inventory.
+  const request = { player, itemId: gemId, amount: 1, stored: 0, announce: true };
   Common.api.emitCustomEvent("storage:gather", request);
-  if (request.stored === 0 && player.getInventory().getFreeSlots() > 0) player.getInventory().adds(gemId, 1);
+  if (request.stored === 0) player.getInventory().forceAdd(player, new Common.core.Item(gemId, 1));
   return true;
 }
 

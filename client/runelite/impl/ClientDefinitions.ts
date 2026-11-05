@@ -5,6 +5,7 @@ import type { OsrsClient } from "../../game/OsrsClient";
 import type { EnumType } from "../../rs/config/enumtype/EnumType";
 import type { EnumTypeLoader } from "../../rs/config/enumtype/EnumTypeLoader";
 import type { LocType } from "../../rs/config/loctype/LocType";
+import { ObjStackability } from "../../rs/config/objtype/ObjStackability";
 import type { ObjType } from "../../rs/config/objtype/ObjType";
 
 /** RuneLite's ItemComposition over a cache ObjType. */
@@ -20,10 +21,11 @@ export function itemComposition(type: ObjType): ItemComposition {
             const value = type.params?.get(paramId | 0);
             return typeof value === "string" ? value : "";
         },
-        getLinkedNoteId: () => ((type as any).noteTemplate >= 0 ? (type as any).note : (type as any).note) ?? -1,
-        getNote: () => (type as any).noteTemplate ?? -1,
-        isStackable: () => (type as any).stackable === 1,
-        isMembers: () => (type as any).members === true,
+        // The cache's `note` is the other half of a note pair (unnoted <-> noted); `noteTemplate` marks a note.
+        getLinkedNoteId: () => (type.note >= 0 ? type.note : -1),
+        getNote: () => (type.noteTemplate >= 0 ? type.noteTemplate : -1),
+        isStackable: () => type.stackability === ObjStackability.ALWAYS,
+        isMembers: () => type.isMembers === true,
     };
 }
 

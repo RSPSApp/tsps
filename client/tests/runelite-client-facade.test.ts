@@ -41,7 +41,16 @@ assert.equal(lumbridge.distanceTo(new WorldPoint(3225, 3214, 0)), 4, "Chebyshev 
 assert.equal(lumbridge.distanceTo(new WorldPoint(3222, 3218, 1)), Number.MAX_SAFE_INTEGER, "another plane is unreachable");
 assert.ok(lumbridge.equals(new WorldPoint(3222, 3218, 0)));
 assert.ok(!lumbridge.equals(new WorldPoint(3222, 3219, 0)));
-assert.equal(WorldPoint.getMirrorPoint(lumbridge, true), lumbridge, "outside an instance a point is its own mirror");
+assert.equal(WorldPoint.getMirrorPoint(lumbridge, true), lumbridge, "a point outside Prifddinas is its own mirror");
+assert.equal(WorldPoint.getMirrorPoint(lumbridge, false), lumbridge);
+// RuneLite's mirror is the Prifddinas pair of regions: the real city (12894) and its overworld map copy (8755).
+const prif = new WorldPoint(3210, 6020, 0);
+assert.equal(prif.getRegionID(), 12894);
+const overworld = WorldPoint.getMirrorPoint(prif, true);
+assert.deepEqual([overworld.getX(), overworld.getY(), overworld.getPlane()], [2186, 3268, 0], "same offset in region 8755");
+assert.ok(WorldPoint.getMirrorPoint(overworld, false).equals(prif), "and back again");
+assert.equal(WorldPoint.getMirrorPoint(prif, false), prif, "the real city is not an overworld point");
+assert.deepEqual(WorldPoint.fromRegion(12850, 22, 50, 0), new WorldPoint(3222, 3250, 0), "3222 is 22 into region 12850's 64 tiles");
 
 // --- The stub engine ------------------------------------------------------------------------------
 const inventory = new Inventory(28);
@@ -80,6 +89,15 @@ assert.equal(facade.getItemDefinition(ItemID.TRAIL_CLUE_MASTER)!.getName(), "Clu
 assert.equal(facade.getItemDefinition(ItemID.TRAIL_CLUE_MASTER)!.getIntValue(ParamID.CLUE_SCROLL), -1);
 assert.equal(facade.getItemDefinition(ItemID.SPADE)!.getIntValue(ParamID.CLUE_SCROLL), -1, "a spade has no clue row");
 assert.equal(facade.getItemDefinition(-1), null);
+assert.equal(facade.getItemDefinition(ItemID.COINS)!.isStackable(), true, "coins always stack");
+assert.equal(facade.getItemDefinition(ItemID.SPADE)!.isStackable(), false);
+assert.equal(facade.getItemDefinition(4587)!.isMembers(), true, "a dragon scimitar is members");
+assert.equal(facade.getItemDefinition(ItemID.SPADE)!.isMembers(), false);
+const lobster = facade.getItemDefinition(379)!;
+assert.equal(lobster.getLinkedNoteId(), 380, "an unnoted item links to its note");
+assert.equal(lobster.getNote(), -1, "and is not itself a note");
+assert.equal(facade.getItemDefinition(380)!.getLinkedNoteId(), 379, "the note links back");
+assert.notEqual(facade.getItemDefinition(380)!.getNote(), -1, "a note has a note template");
 
 // --- Enums -----------------------------------------------------------------------------------------
 const runes = facade.getEnum(EnumID.RUNEPOUCH_RUNE)!;

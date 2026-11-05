@@ -30,13 +30,20 @@ export function bindContainerEvents(client: OsrsClient, post: (event: object) =>
     };
 }
 
-/** Posts WidgetLoaded from the widget manager's group loads. Returns the unbind function. */
+/**
+ * Posts WidgetLoaded for every interface open, as RuneLite does: the widget manager's group loads
+ * plus its re-mounts of a group that stayed loaded (a dialogue's next page). Returns the unbind function.
+ */
 export function bindWidgetEvents(client: OsrsClient, post: (event: object) => void): () => void {
-    const listeners = client.widgetManager?.groupLoadedListeners;
-    if (!listeners) return () => {};
+    const manager = client.widgetManager;
+    const loaded = manager?.groupLoadedListeners;
+    if (!loaded) return () => {};
+    const remounted = manager.groupRemountedListeners;
     const listener = (groupId: number) => post(new WidgetLoaded(groupId | 0));
-    listeners.add(listener);
+    loaded.add(listener);
+    remounted?.add(listener);
     return () => {
-        listeners.delete(listener);
+        loaded.delete(listener);
+        remounted?.delete(listener);
     };
 }

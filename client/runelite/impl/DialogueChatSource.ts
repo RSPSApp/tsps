@@ -25,6 +25,8 @@ export function bindDialogueChat(
     const manager = client.widgetManager;
     const listeners = manager?.groupLoadedListeners;
     if (!manager || !listeners) return () => {};
+    // A dialogue's next page re-mounts the same group without reloading it.
+    const remounted = manager.groupRemountedListeners;
 
     const pending = new Set<number>();
     const onGroupLoaded = (groupId: number) => {
@@ -48,9 +50,11 @@ export function bindDialogueChat(
     };
 
     listeners.add(onGroupLoaded);
+    remounted?.add(onGroupLoaded);
     const unsubscribeTick = subscribe(onTick);
     return () => {
         listeners.delete(onGroupLoaded);
+        remounted?.delete(onGroupLoaded);
         unsubscribeTick();
         pending.clear();
     };

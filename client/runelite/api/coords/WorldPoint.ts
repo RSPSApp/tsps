@@ -1,14 +1,10 @@
 import { ClientState } from "../../../game/ClientState";
 
-/** Tiles on a scene side and on a chunk side (RuneLite's Constants.SCENE_SIZE / CHUNK_SIZE). */
+/** Tiles on a scene side (RuneLite's Constants.SCENE_SIZE). */
 const SCENE_SIZE = 104;
-const CHUNK_SIZE = 8;
 
-/** The scene base the client last loaded, read live so a point can tell whether it is in the scene. */
-export interface SceneBaseSource {
-    getBaseX?(): number;
-    getBaseY?(): number;
-}
+/** RuneLite's REGION_MIRRORS: Prifddinas's real regions paired with their overworld map copies. */
+const REGION_MIRRORS = [12894, 8755, 12895, 8756, 13150, 9011, 13151, 9012];
 
 /** An absolute tile: x, y and plane (RuneLite's net.runelite.api.coords.WorldPoint). */
 export class WorldPoint {
@@ -75,39 +71,24 @@ export class WorldPoint {
         return this.x >= baseX && this.x < baseX + SCENE_SIZE && this.y >= baseY && this.y < baseY + SCENE_SIZE;
     }
 
-    /**
-     * The overworld tile an instance tile was copied from (RuneLite's getMirrorPoint). Outside an
-     * instance, or for a tile whose chunk has no template, the point itself.
-     */
-    static getMirrorPoint(point: WorldPoint, toOverworld: boolean): WorldPoint {
-        if (!toOverworld || !ClientState.inInstance) return point;
-        const chunks = ClientState.instanceTemplateChunks;
-        if (!chunks) return point;
-        const sceneX = point.x - ClientState.baseX, sceneY = point.y - ClientState.baseY;
-        if (sceneX < 0 || sceneY < 0 || sceneX >= SCENE_SIZE || sceneY >= SCENE_SIZE) return point;
-        const template = chunks[point.plane]?.[sceneX >> 3]?.[sceneY >> 3];
-        if (template === undefined || template === -1) return point;
-        const rotation = (template >> 1) & 0x3;
-        const templateChunkY = ((template >> 3) & 0x7ff) * CHUNK_SIZE;
-        const templateChunkX = ((template >> 14) & 0x3ff) * CHUNK_SIZE;
-        const templatePlane = (template >> 24) & 0x3;
-        const unrotated = new WorldPoint((sceneX & 7) + templateChunkX, (sceneY & 7) + templateChunkY, templatePlane);
-        return WorldPoint.rotate(unrotated, (4 - rotation) & 3);
+    /** The tile at an offset inside a 64x64 map region (RuneLite's fromRegion). */
+    static fromRegion(regionId: number, regionX: number, regionY: number, plane: number): WorldPoint {
+        return new WorldPoint(((regionId >>> 8) << 6) + regionX, ((regionId & 0xff) << 6) + regionY, plane);
     }
 
-    /** Rotates a tile within its 8x8 chunk by quarter turns (RuneLite's rotate). */
-    static rotate(point: WorldPoint, rotation: number): WorldPoint {
-        const chunkX = point.x & ~(CHUNK_SIZE - 1), chunkY = point.y & ~(CHUNK_SIZE - 1);
-        const x = point.x & (CHUNK_SIZE - 1), y = point.y & (CHUNK_SIZE - 1);
-        switch (rotation & 3) {
-            case 1:
-                return new WorldPoint(chunkX + y, chunkY + (CHUNK_SIZE - 1 - x), point.plane);
-            case 2:
-                return new WorldPoint(chunkX + (CHUNK_SIZE - 1 - x), chunkY + (CHUNK_SIZE - 1 - y), point.plane);
-            case 3:
-                return new WorldPoint(chunkX + (CHUNK_SIZE - 1 - y), chunkY + x, point.plane);
-            default:
-                return point;
+    /**
+     * RuneLite's getMirrorPoint: the same tile in the paired Prifddinas region (the real city and
+     * its overworld map copy are mirrors). `toOverworld` converts from the real region to the map
+     * copy; a tile outside the mirrored regions is returned unchanged.
+     */
+    static getMirrorPoint(point: WorldPoint, toOverworld: boolean): WorldPoint {
+        const region = point.getRegionID();
+        for (let i = 0; i < REGION_MIRRORS.length; i += 2) {
+            const real = REGION_MIRRORS[i], overworld = REGION_MIRRORS[i + 1];
+            if (region === (toOverworld ? real : overworld)) {
+                return WorldPoint.fromRegion(toOverworld ? overworld : real, point.getRegionX(), point.getRegionY(), point.plane);
+            }
         }
+        return point;
     }
 }

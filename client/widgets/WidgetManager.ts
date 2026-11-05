@@ -168,6 +168,12 @@ export class WidgetManager {
     private groupToContainerUid: Map<number, number> = new Map();
 
     readonly groupLoadedListeners = new Set<(groupId: number) => void>();
+    /**
+     * A sub-interface open of a group that was already loaded (the same dialogue group re-mounted
+     * for its next page). Together with `groupLoadedListeners` this is every interface open, as
+     * RuneLite's WidgetLoaded sees it.
+     */
+    readonly groupRemountedListeners = new Set<(groupId: number) => void>();
     readonly interfaceClosedListeners = new Set<(groupId: number, modalMode: number, unload: boolean) => void>();
 
     onLoadListener?: (scriptId: number, sourceWidget: WidgetNode) => void;
@@ -1955,6 +1961,7 @@ export class WidgetManager {
         // Close any existing interface mounted here. Reopening the same group keeps it loaded.
         const existing = this.interfaceParents.get(targetUid);
         this.closeSubInterface(targetUid, existing?.group !== groupId);
+        const wasLoaded = this.loadedGroups[groupId] === true;
 
         // Load the interface
         const instance = this.getGroup(groupId);
@@ -2050,6 +2057,9 @@ export class WidgetManager {
         // This is critical for OSRS - when sub-interfaces are mounted, the root interface's
         // onSubChange handler runs, which calls toplevel_sidebuttons_enable to show/hide tab icons
         this.triggerOnSubChange();
+
+        // An open that did not load the group (it stayed loaded, as a re-mounted dialogue page does).
+        if (wasLoaded) for (const listener of this.groupRemountedListeners) listener(groupId);
     }
 
     /**

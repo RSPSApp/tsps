@@ -14,6 +14,10 @@ const BREATH_SOUND = 3750;
 const BREATH_IMPACT_SOUND = 156;
 const BREATH_LAUNCH_CYCLES = [51, 56, 61, 66, 71, 75];
 const BREATH_END_CYCLES = [80, 85, 90, 95, 100, 105];
+/** Her footprint (cache size 4). */
+const ELVARG_SIZE = 4;
+/** Ticks she tries to get off a player under her. Ours: boxed in, she must not wait forever (#489). */
+const STEP_OFF_LIMIT_TICKS = 8;
 
 function outsideWall() {
   return new pluginApi.core.Location(2845, 9636, 0);
@@ -22,6 +26,26 @@ function outsideWall() {
 function insideLair(player) {
   const at = player.getLocation();
   return at.getZ() === 0 && at.getX() >= 2847 && at.getX() <= 2863 && at.getY() >= 9628 && at.getY() <= 9646;
+}
+
+function standsOver(npc, player) {
+  const at = npc.getLocation(), them = player.getLocation();
+  return at.getZ() === them.getZ() && them.getX() >= at.getX() && them.getX() < at.getX() + ELVARG_SIZE
+    && them.getY() >= at.getY() && them.getY() < at.getY() + ELVARG_SIZE;
+}
+
+/** The next tile on her shortest open way off the player under her, or null if boxed in. */
+function shortestStepOff(npc, player) {
+  const at = npc.getLocation(), them = player.getLocation();
+  const ways = [
+    [-1, 0, at.getX() + ELVARG_SIZE - them.getX()],
+    [1, 0, them.getX() - at.getX() + 1],
+    [0, -1, at.getY() + ELVARG_SIZE - them.getY()],
+    [0, 1, them.getY() - at.getY() + 1],
+  ];
+  const movement = npc.getMovementQueue();
+  const open = ways.filter(([x, y]) => movement.canWalkTo(at.transform(x, y))).sort((a, b) => a[2] - b[2]);
+  return open.length > 0 ? at.transform(open[0][0], open[0][1]) : null;
 }
 
 function createEncounter(player) {
@@ -33,11 +57,46 @@ function createEncounter(player) {
       this.npc = null;
       this.active = false;
       this.killed = false;
+      this.underTicks = 0;
+      this.steppingOff = false;
       this.pluginName = "Elvarg";
+    }
+    /**
+     * Wiki (Dragon Slayer I), stood under her: "it takes her a moment to move and hit you again". Large
+     * NPCs otherwise fight on over a target under them (#489), which she goes back to if she can't get
+     * clear. True while she's busy getting off the player, so combat is paused.
+     */
+    stepOff() {
+      const { npc, owner } = this;
+      if (!standsOver(npc, owner)) {
+        this.underTicks = 0;
+        this.stopSteppingOff();
+        return false;
+      }
+      if (++this.underTicks > STEP_OFF_LIMIT_TICKS) {
+        this.stopSteppingOff();
+        return false;
+      }
+      this.steppingOff = true;
+      // Scripted pauses her attacks; walking through entities lets her step while still over the player.
+      npc.setScriptedMovement(true);
+      npc.setFlag(pluginApi.core.NPC.WALK_THROUGH_ENTITIES_FLAG);
+      // As the core's step-aside: she waits for a player who is walking.
+      if (owner.getMovementQueue().size() > 0) return true;
+      const step = shortestStepOff(npc, owner);
+      if (step) npc.getMovementQueue().reset().addSteps(step);
+      return true;
+    }
+    stopSteppingOff() {
+      if (!this.steppingOff) return;
+      this.steppingOff = false;
+      this.npc.setScriptedMovement(false);
+      this.npc.setFlag(pluginApi.core.NPC.WALK_THROUGH_ENTITIES_FLAG, false);
     }
     process(mobile) {
       if (mobile !== this.owner || !this.active || this.killed || !insideLair(this.owner)) return;
       if (this.owner.getHitpoints() <= 0 || this.npc?.getHitpoints() <= 0 || !this.npc?.isRegistered()) return;
+      if (this.stepOff()) return;
       if (this.npc.getCombat().getTarget() !== this.owner) this.npc.getCombat().attack(this.owner);
     }
     canAttack(attacker, target) {
@@ -88,6 +147,7 @@ function leaveLair({ player }) {
 function elvargDied({ npc }) {
   const area = npc?.getArea();
   if (!area || area.npc !== npc || encounters.get(area.owner) !== area) return;
+  area.stopSteppingOff();
   area.killed = true;
   area.active = false;
   npc.__skipDefaultRespawn = true;

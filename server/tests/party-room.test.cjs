@@ -20,12 +20,15 @@ const { PluginManager: PM } = require('../dist/plugins/PluginManager');
 const { Player } = require('../dist/game/entity/impl/player/Player');
 const { PlayerSession } = require('../dist/net/PlayerSession');
 const { ClientConnection } = require('../dist/net/NetworkBuilder');
+const { decodeClientPackets } = require('../dist/net/protocol/ClientProtocol');
 
 let Room;
 let Store;
+let Knights;
 try {
   Room = require('../plugins/minigames/partyroom/Room.PartyRoom');
   Store = require('../plugins/minigames/partyroom/Store.PartyRoom');
+  Knights = require('../plugins/minigames/partyroom/Knights.PartyRoom');
 } catch {
   // The tests below say so, one by one, rather than the file failing to load.
 }
@@ -124,6 +127,21 @@ async function send(player, packet) {
 
 const widget = (group, child, extra = {}) => ({ type: 'widget_action', widgetId: (group << 16) | child, groupId: group, childId: child, buttonNum: OP_ALL, slot: 0, ...extra });
 const objectClick = (id, [x, y], clickType = 1) => ({ type: 'object_option', id, x, y, clickType });
+
+/** A native RESUME_PAUSEBUTTON, with the choice and widget encoded on the wire. */
+async function nativeChoice(player, choice, widgetId = (219 << 16) | 1) {
+  const frame = Buffer.alloc(7);
+  frame[0] = 62;
+  frame[1] = choice >>> 8;
+  frame[2] = (choice + 128) & 255;
+  frame.writeInt32BE(widgetId, 3);
+  const decoded = decodeClientPackets(frame);
+  assert.equal(decoded[0].childIndex, choice);
+  assert.equal(decoded[0].widgetId, widgetId);
+  await player.testConnection.dispatch(decoded, true);
+  player.testConnection.processTurnPackets();
+  await tick();
+}
 
 /** The chest's loc, put where RSProx saw it if the map doesn't already have that one. */
 function ensureObject(id, [x, y, z], face = 1) {
@@ -511,9 +529,15 @@ test('the lever, by packet: 1,000 coins, balloons the chest can be walked to, on
   const tile = LEVER_TILE;
   const puller = newPlayer('puller', new core.Location(3054, 3377, 0));
   await send(puller, objectClick(LEVER, tile));
+  assert.deepEqual(core.MultiChatboxPrompt.getPending(puller).options, [
+    'Balloon Bonanza (1,000 coins)', 'Nightly Dance (500 coins)', 'No action',
+  ]);
+  await nativeChoice(puller, 1);
   assert.equal(Room.balloonCount(), 0, 'no coins, no balloons');
   puller.getInventory().adds(COINS, 1500);
   await send(puller, objectClick(LEVER, tile));
+  assert.equal(puller.getInventory().getAmount(COINS), 1500, 'opening the menu costs nothing');
+  await nativeChoice(puller, 1);
   assert.equal(puller.getInventory().getAmount(COINS), 500, '1,000 coins taken');
   assert.ok(Room.balloonCount() > 0, 'balloons released');
   assert.ok(Room.balloonCount() <= 200);
@@ -521,7 +545,266 @@ test('the lever, by packet: 1,000 coins, balloons the chest can be walked to, on
   assert.ok(reachable.size > 0, 'the chest has somewhere to stand');
   for (const key of Room.balloonKeys()) assert.ok(reachable.has(key), `balloon ${key} can be walked to from the chest`);
   await send(puller, objectClick(LEVER, tile));
+  await nativeChoice(puller, 1);
   assert.equal(puller.getInventory().getAmount(COINS), 500, 'a second pull during the drop costs nothing');
+});
+
+test('cancelling the lever menu never charges or changes the chest', async () => {
+  present();
+  seed([{ id: WHIP, amount: 5 }]);
+  const puller = newPlayer('menuuser', new core.Location(3054, 3377, 0));
+  puller.getInventory().adds(COINS, 1500);
+  for (const choice of [3]) {
+    await send(puller, objectClick(LEVER, LEVER_TILE));
+    await nativeChoice(puller, choice);
+    assert.equal(puller.getInventory().getAmount(COINS), 1500);
+    assert.equal(Room.balloonCount(), 0);
+    assert.deepEqual(Store.chest(), [{ id: WHIP, amount: 5 }]);
+  }
+});
+
+test('the knight choice charges only for one shared performance, even with an empty chest', async () => {
+  present();
+  const first = newPlayer('knightfirst', new core.Location(3054, 3377, 0));
+  const second = newPlayer('knightsecond', new core.Location(3054, 3377, 0));
+  first.getInventory().adds(COINS, 499);
+  await send(first, objectClick(LEVER, LEVER_TILE));
+  await nativeChoice(first, 2);
+  assert.equal(first.getInventory().getAmount(COINS), 499);
+  assert.equal(Knights.performance(), null);
+  first.getInventory().adds(COINS, 1);
+  await send(first, objectClick(LEVER, LEVER_TILE));
+  await nativeChoice(first, 2);
+  const show = Knights.performance();
+  assert.ok(show, 'the performance started');
+  assert.equal(first.getInventory().getAmount(COINS), 0);
+  assert.equal(show.knights.length, 6);
+  for (const npc of show.knights) {
+    assert.equal(npc.getId(), 5793);
+    assert.equal(npc.isRegistered(), true);
+    assert.ok(npc.getOwner() == null, 'each knight is world-shared');
+  }
+  const sung = [];
+  show.knights[2].forceChat = (text) => sung.push(text);
+  PM.emitPlayerLogout({ player: first, username: first.getUsername() });
+  first.setRegistered(false); // The purchaser leaving must not end a world-shared performance.
+  second.getInventory().adds(COINS, 500);
+  await send(second, objectClick(LEVER, LEVER_TILE));
+  await nativeChoice(second, 2);
+  assert.equal(second.getInventory().getAmount(COINS), 500, 'already dancing costs nothing');
+  assert.equal(Knights.performance(), show);
+  for (let i = 0; i < 50; i++) core.TaskManager.process();
+  assert.equal(sung.length, 8, 'the generated knight song was played');
+  assert.equal(sung[0], "We're Knights of the Party Room");
+  assert.equal(Knights.performance(), null);
+  assert.ok(show.knights.every((npc) => !npc.isRegistered()), 'the knights all leave');
+  assert.deepEqual(Store.chest(), [], 'the dance does not require or change the chest');
+});
+
+test('a partial NPC registration failure returns every slot and does not charge', async (t) => {
+  present();
+  const player = newPlayer('knightcapacity', new core.Location(3054, 3377, 0));
+  player.getInventory().adds(COINS, 500);
+  const list = core.World.getNpcs();
+  const originalAdd = list.add.bind(list);
+  const before = list.sizeReturn();
+  let calls = 0;
+  t.mock.method(list, 'add', (npc) => ++calls === 3 ? false : originalAdd(npc));
+  await send(player, objectClick(LEVER, LEVER_TILE));
+  await nativeChoice(player, 2);
+  assert.equal(calls, 3);
+  assert.equal(list.sizeReturn(), before);
+  assert.equal(player.getInventory().getAmount(COINS), 500);
+  assert.equal(Knights.performance(), null);
+});
+
+test('an unavailable song cannot take payment or leave knights behind', async (t) => {
+  present();
+  const player = newPlayer('knightsongmissing', new core.Location(3054, 3377, 0));
+  player.getInventory().adds(COINS, 500);
+  const emit = PM.emitCustomEvent;
+  t.mock.method(PM, 'emitCustomEvent', (name, ...args) =>
+    name === 'npc-dialogue:start' ? undefined : emit.call(PM, name, ...args));
+  const before = core.World.getNpcs().sizeReturn();
+  await send(player, objectClick(LEVER, LEVER_TILE));
+  await nativeChoice(player, 2);
+  assert.equal(player.getInventory().getAmount(COINS), 500);
+  assert.equal(core.World.getNpcs().sizeReturn(), before);
+  assert.equal(Knights.performance(), null);
+});
+
+test('a failed payment restores only coins actually removed and cleans up the show', async (t) => {
+  present();
+  const player = newPlayer('knightpayfail', new core.Location(3054, 3377, 0));
+  const inventory = player.getInventory();
+  inventory.adds(COINS, 800);
+  const before = core.World.getNpcs().sizeReturn();
+  const refresh = inventory.refreshItems.bind(inventory);
+  let failed = false;
+  t.mock.method(inventory, 'refreshItems', () => {
+    if (!failed) { failed = true; throw new Error('refresh after debit'); }
+    return refresh();
+  });
+  assert.equal(Knights.start(player), false);
+  assert.equal(inventory.getAmount(COINS), 800, 'the actual debit is returned');
+  assert.equal(core.World.getNpcs().sizeReturn(), before);
+  assert.equal(Knights.performance(), null);
+  t.mock.method(inventory, 'deleted', () => { throw new Error('before debit'); });
+  assert.equal(Knights.start(player), false);
+  assert.equal(inventory.getAmount(COINS), 800, 'nothing was added when no coins were removed');
+  assert.equal(core.World.getNpcs().sizeReturn(), before);
+  assert.equal(Knights.performance(), null);
+});
+
+test('a payment failure restores each coin stack and its metadata even beside a full stack', (t) => {
+  present();
+  const player = newPlayer('knightmetacoins', new core.Location(3054, 3377, 0));
+  const inventory = player.getInventory();
+  inventory.setItem(0, new core.Item(COINS, 1000, { preset: true }));
+  inventory.setItem(1, new core.Item(COINS, 2147483647));
+  const before = inventory.getItems().slice(0, 2).map((item) => ({
+    id: item.getId(), amount: item.getAmount(), meta: item.getMeta(),
+  }));
+  const refresh = inventory.refreshItems.bind(inventory);
+  let failed = false;
+  t.mock.method(inventory, 'refreshItems', () => {
+    if (!failed) { failed = true; throw new Error('refresh after debit'); }
+    return refresh();
+  });
+  assert.equal(Knights.start(player), false);
+  assert.deepEqual(inventory.getItems().slice(0, 2).map((item) => ({
+    id: item.getId(), amount: item.getAmount(), meta: item.getMeta(),
+  })), before);
+  assert.equal(Knights.performance(), null);
+});
+
+test('cleanup retains ownership and retries after removals throw', (t) => {
+  present();
+  const player = newPlayer('knightcleanup', new core.Location(3054, 3377, 0));
+  player.getInventory().adds(COINS, 1000);
+  const list = core.World.getNpcs();
+  assert.equal(Knights.start(player), true);
+  const show = Knights.performance();
+  const other = new core.NPC(core.NpcIdentifiers.KNIGHT_2, new core.Location(3000, 3000, 0));
+  assert.equal(list.add(other), true);
+  const remove = list.remove.bind(list);
+  let beforeThrown = false;
+  let afterThrown = false;
+  t.mock.method(list, 'remove', (npc) => {
+    if (npc === show.knights[0] && !beforeThrown) { beforeThrown = true; throw new Error('before remove'); }
+    if (npc === show.knights[1] && !afterThrown) { afterThrown = true; remove(npc); throw new Error('after remove'); }
+    return remove(npc);
+  });
+  try {
+    Knights.reset();
+    assert.equal(Knights.performance(), show, 'unremoved actor still reserves the performance');
+    assert.equal(Knights.start(player), false, 'another performance cannot overlap');
+    assert.equal(player.getInventory().getAmount(COINS), 500);
+    for (let i = 0; i < 8; i++) core.TaskManager.process();
+    assert.equal(Knights.performance(), null);
+    assert.ok(show.knights.every((npc) => !npc.isRegistered()));
+    assert.equal(other.isRegistered(), true, 'unrelated NPC was not removed');
+  } finally {
+    remove(other);
+  }
+});
+
+test('a song error stops the show and cleans up all its NPCs', () => {
+  present();
+  const player = newPlayer('knightspeechfail', new core.Location(3054, 3377, 0));
+  player.getInventory().adds(COINS, 500);
+  assert.equal(Knights.start(player), true);
+  const show = Knights.performance();
+  show.knights[2].forceChat = () => { throw new Error('speech failure'); };
+  for (let i = 0; i < 8; i++) core.TaskManager.process();
+  assert.equal(Knights.performance(), null);
+  assert.ok(show.knights.every((npc) => !npc.isRegistered()));
+});
+
+test('a persistently unremovable knight keeps the performance reserved after bounded retries', (t) => {
+  present();
+  const player = newPlayer('knightstuck', new core.Location(3054, 3377, 0));
+  player.getInventory().adds(COINS, 1000);
+  const list = core.World.getNpcs();
+  assert.equal(Knights.start(player), true);
+  const show = Knights.performance();
+  const remove = list.remove.bind(list);
+  t.mock.method(list, 'remove', (npc) => {
+    if (npc === show.knights[0]) throw new Error('still unavailable');
+    return remove(npc);
+  });
+  Knights.reset();
+  for (let i = 0; i < 8; i++) core.TaskManager.process();
+  assert.equal(Knights.performance(), show, 'failed cleanup cannot release ownership');
+  assert.equal(Knights.start(player), false);
+  assert.equal(player.getInventory().getAmount(COINS), 500);
+  t.mock.restoreAll();
+  Knights.reset();
+  assert.equal(Knights.performance(), null, 'a later successful cleanup releases it');
+});
+
+test('knight Talk-to reaches the generated response while the performance continues', async () => {
+  present();
+  const player = newPlayer('knighttalk', new core.Location(3045, 3377, 0));
+  player.getInventory().adds(COINS, 500);
+  assert.equal(Knights.start(player), true);
+  const show = Knights.performance();
+  const messages = [];
+  const sendMessage = player.sendMessage.bind(player);
+  player.sendMessage = (text, ...args) => { messages.push(text); return sendMessage(text, ...args); };
+  await send(player, { type: 'npc_option', index: show.knights[2].getIndex(), clickType: 1 });
+  assert.ok(messages.some((text) => /too busy dancing/i.test(text)), 'the transcript sends the response in chat');
+  assert.equal(Knights.performance(), show);
+});
+
+test('Party Pete says the generated final line when present', () => {
+  present();
+  const player = newPlayer('knightpete', new core.Location(3054, 3377, 0));
+  player.getInventory().adds(COINS, 500);
+  const pete = new core.NPC(core.NpcIdentifiers.PARTY_PETE, new core.Location(3041, 3377, 0));
+  pete.__skipDefaultRespawn = true;
+  assert.equal(core.World.getNpcs().add(pete), true);
+  const lines = [];
+  pete.forceChat = (text) => lines.push(text);
+  try {
+    assert.equal(Knights.start(player), true);
+    for (let i = 0; i < 45; i++) core.TaskManager.process();
+    assert.deepEqual(lines, ['The party room is a silly place!']);
+    assert.equal(Knights.performance(), null);
+  } finally {
+    core.World.getNpcs().remove(pete);
+  }
+});
+
+test('native lever selection validates choice and cannot replay a completed or closed prompt', async () => {
+  present();
+  seed([{ id: WHIP, amount: 5 }]);
+  const puller = newPlayer('menureplay', new core.Location(3054, 3377, 0));
+  puller.getInventory().adds(COINS, 999);
+  await send(puller, objectClick(LEVER, LEVER_TILE));
+  await nativeChoice(puller, 0);
+  await nativeChoice(puller, 4);
+  await nativeChoice(puller, 1, (218 << 16) | 1);
+  await send(puller, widget(149, 0, { buttonNum: 1 }));
+  assert.ok(core.MultiChatboxPrompt.getPending(puller), 'unrelated input did not consume the prompt');
+  assert.equal(puller.getInventory().getAmount(COINS), 999);
+  await nativeChoice(puller, 1);
+  assert.equal(puller.getInventory().getAmount(COINS), 999, 'insufficient money is kept');
+  assert.equal(Room.balloonCount(), 0);
+  puller.getInventory().adds(COINS, 1);
+  await nativeChoice(puller, 1);
+  assert.equal(puller.getInventory().getAmount(COINS), 1000, 'a completed prompt cannot be replayed');
+  await send(puller, objectClick(LEVER, LEVER_TILE));
+  await send(puller, { type: 'interface_close' });
+  await nativeChoice(puller, 1);
+  assert.equal(puller.getInventory().getAmount(COINS), 1000, 'closing prevents a stale choice');
+  await send(puller, objectClick(LEVER, LEVER_TILE));
+  await nativeChoice(puller, 1);
+  assert.equal(puller.getInventory().getAmount(COINS), 0, 'exactly 1000 pays for one drop');
+  assert.ok(Room.balloonCount() > 0);
+  assert.deepEqual(Store.chest(), [{ id: WHIP, amount: 5 }], 'release does not consume chest items');
+  await nativeChoice(puller, 1);
+  assert.equal(puller.getInventory().getAmount(COINS), 0, 'a repeated choice cannot charge again');
 });
 
 test('the lever costs nothing when no balloon could land', (t) => {
@@ -533,6 +816,36 @@ test('the lever costs nothing when no balloon could land', (t) => {
   Room.pullLever({ player: puller });
   assert.equal(Room.balloonCount(), 0);
   assert.equal(puller.getInventory().getAmount(COINS), 1000, 'no coins taken for nothing');
+});
+
+test('the menu preserves payment when the chest is empty or no balloon can land', async (t) => {
+  present();
+  const puller = newPlayer('menunoland', new core.Location(3054, 3377, 0));
+  puller.getInventory().adds(COINS, 1000);
+  await send(puller, objectClick(LEVER, LEVER_TILE));
+  await nativeChoice(puller, 1);
+  assert.equal(puller.getInventory().getAmount(COINS), 1000, 'empty chest');
+  seed([{ id: WHIP, amount: 5 }]);
+  await send(puller, objectClick(LEVER, LEVER_TILE));
+  t.mock.method(core.RegionManager, 'blocked', () => true);
+  await nativeChoice(puller, 1);
+  assert.equal(puller.getInventory().getAmount(COINS), 1000, 'no landing tile');
+  assert.deepEqual(Store.chest(), [{ id: WHIP, amount: 5 }]);
+  assert.equal(Room.balloonCount(), 0);
+});
+
+test('a new native dialogue supersedes the lever prompt', async () => {
+  present();
+  seed([{ id: WHIP, amount: 5 }]);
+  const puller = newPlayer('menureplaced', new core.Location(3054, 3377, 0));
+  puller.getInventory().adds(COINS, 1000);
+  await send(puller, objectClick(LEVER, LEVER_TILE));
+  puller.getDialogueManager().startDialogues(new core.DialogueChainBuilder()
+    .add(new core.StatementDialogue(0, 'Another conversation.')));
+  await nativeChoice(puller, 1);
+  assert.equal(puller.getInventory().getAmount(COINS), 1000);
+  assert.equal(Room.balloonCount(), 0);
+  assert.deepEqual(Store.chest(), [{ id: WHIP, amount: 5 }]);
 });
 
 test('confirming tells the league task, once the chest has the items', async () => {

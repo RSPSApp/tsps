@@ -75,9 +75,11 @@ function createQuestScenes(api, { onEnd } = {}) {
   }
 
   function fade(player, out) {
-    player.getPacketSender().sendSubInterface(FADE_UID, FADE_INTERFACE, 1, {
+    const sender = player.getPacketSender();
+    const mount = sender.mountSubInterface(FADE_UID, FADE_INTERFACE, 1, {
       postScripts: [{ scriptId: FADE_SCRIPT, args: out ? [0, 255, 0, 0, FADE_CYCLES] : [0, 0, 0, 255, FADE_CYCLES] }],
     });
+    if (!out) TaskManager.submit(new CountdownTask(player, 3, () => sender.closeSubInterfaceMount(mount)));
   }
 
   function closeFade(player) {

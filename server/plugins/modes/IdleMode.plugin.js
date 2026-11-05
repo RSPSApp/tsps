@@ -6,7 +6,8 @@
  * out mid-session keeps going at the rate the player had, paid on the next login (Offline). When
  * the gathering stops, the character walks back to the same kind of tree, rock or spot nearby and
  * starts again (Auto). The same goes for fighting a kind of monster, eating and banking the loot
- * (Combat). Idle XP earns points that buy upgrades (Progression). `::idle` opens a screen with
+ * (Combat), and for making things from the bank: cooking, smithing, fletching (Production). Idle XP
+ * earns points that buy upgrades (Progression). `::idle` opens a screen with
  * all of it and the switches (Screen), and `::idle travel` teleports to an activity's site, where
  * the character starts by itself (Travel, TravelScreen). The first time an account is idle it gets
  * a starter kit, a welcome and the Idle screen (Onboarding); the journal tab's Idle button opens
@@ -25,6 +26,7 @@ module.exports = {
     require("./idle/Auto.IdleMode")(api);
     require("./idle/Progression.IdleMode")(api);
     require("./idle/Combat.IdleMode")(api);
+    require("./idle/Production.IdleMode")(api);
     require("./idle/Screen.IdleMode")(api);
     require("./idle/TravelScreen.IdleMode")(api);
     require("./idle/Onboarding.IdleMode")(api);

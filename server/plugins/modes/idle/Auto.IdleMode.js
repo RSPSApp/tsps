@@ -13,6 +13,7 @@
  */
 const Common = require("./Common.IdleMode");
 const Combat = require("./Combat.IdleMode");
+const Production = require("./Production.IdleMode");
 
 const { chebyshev } = Common;
 
@@ -95,15 +96,14 @@ function gathered(request) {
   const previous = player.getAttribute(TARGET_ATTRIBUTE);
   const keepAnchor = sameTarget(previous, click) && previous.anchor.z === location.getZ() &&
     chebyshev(location, previous.anchor) <= config().searchTiles;
-  player.setAttribute(TARGET_ATTRIBUTE, {
+  // One activity at a time: gathering now replaces idle combat's and production's targets.
+  Common.setActivity(player, TARGET_ATTRIBUTE, {
     skill: Common.skillKey(request.skill),
     kind: click.kind,
     name: click.name,
     option: click.option,
     anchor: keepAnchor ? previous.anchor : { x: location.getX(), y: location.getY(), z: location.getZ() },
   });
-  // One activity at a time: gathering now replaces idle combat's target.
-  player.setAttribute(Common.COMBAT_TARGET_ATTRIBUTE, null);
   tracked.add(player);
   Common.changed(player);
 }
@@ -263,6 +263,7 @@ function setAuto(player, enabled) {
     state.lastEntity = null;
     state.skips.clear();
     Combat.unpause(player);
+    Production.unpause(player);
   }
   Common.changed(player);
 }
@@ -272,8 +273,7 @@ function setAuto(player, enabled) {
  * unpaused (a travel to it). One activity at a time: idle combat's target goes.
  */
 function adopt(player, target) {
-  player.setAttribute(TARGET_ATTRIBUTE, target);
-  player.setAttribute(Common.COMBAT_TARGET_ATTRIBUTE, null);
+  Common.setActivity(player, TARGET_ATTRIBUTE, target);
   const state = stateOf(player);
   state.paused = null;
   state.failedAttempts = 0;

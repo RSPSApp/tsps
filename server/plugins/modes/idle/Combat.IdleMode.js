@@ -79,8 +79,7 @@ function otherClick({ player }) {
  * it). One activity at a time: the gathering target goes.
  */
 function adopt(player, target) {
-  player.setAttribute(TARGET_ATTRIBUTE, target);
-  player.setAttribute(Common.GATHER_TARGET_ATTRIBUTE, null);
+  Common.setActivity(player, TARGET_ATTRIBUTE, target);
   const state = stateOf(player);
   state.paused = null;
   state.failedAttempts = 0;
@@ -135,11 +134,10 @@ function killed(event) {
   const location = player.getLocation();
   const keepAnchor = previous?.name === name && previous.anchor.z === location.getZ() &&
     Common.chebyshev(location, previous.anchor) <= config().searchTiles;
-  player.setAttribute(TARGET_ATTRIBUTE, {
+  Common.setActivity(player, TARGET_ATTRIBUTE, {
     name,
     anchor: keepAnchor ? previous.anchor : { x: location.getX(), y: location.getY(), z: location.getZ() },
   });
-  player.setAttribute(Common.GATHER_TARGET_ATTRIBUTE, null);
   tracked.add(player);
   Common.changed(player);
 }

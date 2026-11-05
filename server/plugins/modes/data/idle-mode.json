@@ -503,5 +503,25 @@
       "You've been given an axe, a pickaxe, a fishing net, a sword and some food.",
       "Press Travel on the Idle screen to pick an activity. Reopen it any time with the Idle button in your journal tab, or ::idle."
     ]
+  },
+  "production": {
+    "_description": "Idle production (docs/idle-mode.md): the last thing an idle player made by hand (raw food on a range, a knife on logs, Smelt at a furnace, with the product picked) is the target, with the inventory they had then as the loadout. When it stops, the products go to the bank, the loadout is topped up from the bank, and the same use is repeated with the same product, all of it. Offline, it pays only as far as the bank's materials last.",
+    "enabled": true,
+    "skills": [
+      "COOKING",
+      "SMITHING",
+      "FLETCHING",
+      "CRAFTING",
+      "HERBLORE"
+    ],
+    "tickInterval": 2,
+    "restartAfterSeconds": 6,
+    "retrySeconds": 4,
+    "rememberClickSeconds": 60,
+    "searchTiles": 16,
+    "leashTiles": 24,
+    "maxFailedAttempts": 3,
+    "maxGapSeconds": 90,
+    "makeAll": 28
   }
 }

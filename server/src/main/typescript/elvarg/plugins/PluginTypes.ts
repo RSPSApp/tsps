@@ -1493,6 +1493,7 @@ export interface PluginCoreApi {
   PrayerHandler: any;
   PrayerData: any;
   ItemActionPacketListener: any;
+  UseItemPacketListener: any;
   /** Run shared item alchemy; plugins authorize opaque alternate payment sources via magic:alchemy-payment. */
   castAlchemy: (player: any, spellId: number | string, itemId: number, slot: number, source?: unknown) => boolean;
   ChatType: any;

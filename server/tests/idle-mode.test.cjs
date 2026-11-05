@@ -55,12 +55,17 @@ function fakeApi(config = {}) {
         teleport: (player, location, type) => { api.teleports.push({ player, x: location.getX(), y: location.getY(), z: location.getZ(), type }); },
       },
       WorldDefinition: { isMembersWorld: () => world.members },
+      UseItemPacketListener: {
+        itemOnObject: (player, interfaceType, objectId, itemId, slot, x, y) => api.uses.push({ kind: "item-object", player, objectId, itemId, slot, x, y }),
+        itemOnItem: (player, usedSlot, withSlot) => api.uses.push({ kind: "item-item", player, usedSlot, withSlot }),
+      },
       ItemActionPacketListener: { handleAction: (player, interfaceId, itemId, slot, clickType, option) => api.itemActions.push({ player, interfaceId, itemId, slot, clickType, option }) },
       TaskManager: { submit: (task) => world.tasks.push(task) },
     },
     interactions: [],
     interfaces: [],
     itemActions: [],
+    uses: [],
     teleports: [],
     persisted: {},
     getPluginConfig: (key, fallback) => (key in config ? config[key] : fallback),
@@ -72,6 +77,8 @@ function fakeApi(config = {}) {
     onBeforeNpcInteraction: (handler) => (handlers.events["before-npc"] ??= []).push(handler),
     onServerStartup: (handler) => (handlers.events.startup ??= []).push(handler),
     onNpcAttackOption: (handler) => (handlers.events["attack-option"] ??= []).push(handler),
+    onItemOnObject: (handler) => (handlers.events["item-on-object"] ??= []).push(handler),
+    onItemOnItem: (handler) => (handlers.events["item-on-item"] ??= []).push(handler),
     onCanLogout: (handler) => (handlers.events["can-logout"] ??= []).push(handler),
     registerCustomInterface: (definition) => { api.interfaces.push(definition); },
     onInterfaceActionButton: (ids, handler) => [ids].flat().forEach((id) => { handlers.buttons[id] = handler; }),
@@ -126,6 +133,12 @@ function fakePlayer({ bankSlots = 800 } = {}) {
     getFreeSlots: () => bankSlots - bank.size,
     contains: (id) => bank.has(id),
     add: (item) => bank.set(item.getId(), (bank.get(item.getId()) ?? 0) + item.getAmount()),
+    getAmount: (id) => bank.get(id) ?? 0,
+    deleteNumber: (id, amount) => {
+      const left = (bank.get(id) ?? 0) - amount;
+      if (left > 0) bank.set(id, left);
+      else bank.delete(id);
+    },
   };
   let self;
   let interfaceId = -1;
@@ -152,7 +165,10 @@ function fakePlayer({ bankSlots = 800 } = {}) {
     screen,
     getInterfaceId: () => interfaceId,
     setInterfaceId: (id) => { interfaceId = id; },
+    creationMenu: null,
+    getCreationMenu() { return this.creationMenu; },
     getPacketSender: () => ({
+      closeCreationMenu: () => { self.creationMenu = null; },
       sendSubInterface: (parent, groupId, type, options) => screen.opened.push({ parent, groupId, options }),
       sendString(text, id) { screen.texts.set(id, text); return this; },
       sendInterfaceDisplayState: (id, hidden) => screen.hidden.set(id, hidden),
@@ -165,6 +181,15 @@ function fakePlayer({ bankSlots = 800 } = {}) {
         getItems: () => items,
         getAddableAmount: (item) => (items.length < (this.inventorySlots ?? 28) ? item.getAmount() : 0),
         add: (item) => items.push(item),
+        getAmount: (id) => items.filter((item) => item.getId() === id).reduce((total, item) => total + item.getAmount(), 0),
+        deleteNumber: (id, amount) => {
+          for (const item of items.filter((entry) => entry.getId() === id)) {
+            const taken = Math.min(amount, item.amount);
+            item.amount -= taken;
+            amount -= taken;
+          }
+          items.splice(0, items.length, ...items.filter((item) => item.amount > 0));
+        },
       };
     },
     // Tests pass numbers; the server passes a Location, as the real Player.moveTo takes.
@@ -524,8 +549,8 @@ test("auto: a task looks at tracked players from server start, and logout forget
   const { tracked } = require(AUTO);
   assert.ok(tracked.has(player));
   api.emit("startup", {});
-  assert.equal(world.tasks.length, 2, "auto-resume and idle combat");
-  assert.deepEqual(world.tasks.map((task) => task.delay), [2, 2]);
+  assert.equal(world.tasks.length, 3, "auto-resume, idle combat and production");
+  assert.deepEqual(world.tasks.map((task) => task.delay), [2, 2, 2]);
   api.logout({ player });
   assert.equal(tracked.has(player), false);
   api.login({ player });
@@ -1260,4 +1285,151 @@ test("screens: every widget has its own id, and none runs into another's", () =>
   }
   const { COMPONENT } = require(SCREEN);
   assert.ok(COMPONENT.STATUS_LINE_START + 8 <= COMPONENT.IDLE_BUTTON, "the status lines end before the buttons");
+});
+
+const PRODUCTION = "../plugins/modes/idle/Production.IdleMode";
+const RAW_SHRIMPS = 317;
+const SHRIMPS = 315;
+const BURNT_SHRIMP = 323;
+
+/** An idle cook who used 27 raw shrimps on a range at (3201, 3200) and cooked the first one. */
+function cookingShrimps(t, { bankRaw = 100 } = {}) {
+  let now = 2_000_000;
+  t.mock.method(Date, "now", () => now);
+  const player = idlePlayer();
+  player.setAttribute("idle-mode:onboarded", true);
+  player.inventory = [new Item(RAW_SHRIMPS, 27)];
+  if (bankRaw) player.bank.set(RAW_SHRIMPS, bankRaw);
+  const range = fakeObject("Range", ["Cook"], 3201, 3200);
+  world.objects.push(range);
+  api.emit("item-on-object", { player, object: range, objectId: 1276, item: player.inventory[0], itemId: RAW_SHRIMPS, itemSlot: 0, interfaceType: 0, handled: false });
+  api.emit("skills:produced", { player, skill: Skill.COOKING, itemId: SHRIMPS, amount: 1, xp: 30, kind: "cook" });
+  return { player, range, advance: (ms) => (now += ms) };
+}
+
+test("production: a use by hand that made something becomes the target, with the inventory as the loadout", (t) => {
+  assert.equal(api.persisted["idle-mode:production-target"], null);
+  const { player } = cookingShrimps(t);
+  assert.deepEqual(player.getAttribute("idle-mode:production-target"), {
+    kind: "item-object", usedItemId: RAW_SHRIMPS, objectName: "Range", interfaceType: 0, loadout: { [RAW_SHRIMPS]: 27 },
+    skill: "COOKING", productId: SHRIMPS, anchor: { x: 3200, y: 3200, z: 0 },
+  });
+  assert.equal(player.getAttribute("idle-mode:auto-target"), null, "one activity at a time");
+  api.command(player, "idle");
+  assert.equal(screenText(player, require(SCREEN).COMPONENT.STATUS_LINE_START + 2), "Activity: Making logs", "the product's name");
+});
+
+test("production: when it stops, products to the bank, the loadout topped up, the same use and the same product", (t) => {
+  const { player, range, advance } = cookingShrimps(t);
+  const { work } = require(PRODUCTION);
+  advance(3000);
+  assert.equal(work(player, Date.now()), "producing");
+  // The batch is done: 20 cooked, 7 burnt, no raw left.
+  player.inventory = [new Item(SHRIMPS, 20), new Item(BURNT_SHRIMP, 7)];
+  advance(10_000);
+  assert.equal(work(player, Date.now()), "repeated");
+  assert.equal(player.bank.get(SHRIMPS), 20);
+  assert.equal(player.bank.get(BURNT_SHRIMP), 7);
+  assert.equal(player.bank.get(RAW_SHRIMPS), 73);
+  assert.equal(player.getInventory().getAmount(RAW_SHRIMPS), 27);
+  assert.deepEqual(api.uses.at(-1), { kind: "item-object", player, objectId: 1276, itemId: RAW_SHRIMPS, slot: 0, x: 3201, y: 3200 });
+  // The range's creation menu: the same product, all of it.
+  const picked = [];
+  player.creationMenu = { getItems: () => [SHRIMPS], execute: (itemId, amount) => picked.push([itemId, amount]) };
+  assert.equal(work(player, Date.now()), "chose");
+  assert.deepEqual(picked, [[SHRIMPS, 28]]);
+  assert.equal(player.creationMenu, null, "the menu closes");
+});
+
+test("production: out of materials in the bank, or tries that make nothing, pause it and say so", (t) => {
+  const { player, advance } = cookingShrimps(t, { bankRaw: 0 });
+  const { work } = require(PRODUCTION);
+  player.inventory = [new Item(SHRIMPS, 27)];
+  advance(10_000);
+  assert.equal(work(player, Date.now()), "paused");
+  assert.match(player.messages.pop(), /out of logs\. Bank some more/, "the fake names every item Logs");
+  api.command(player, "idle");
+  assert.equal(screenText(player, require(SCREEN).COMPONENT.STATUS_LINE_START + 1), "Auto-resume: Paused (out of materials)");
+  api.command(player, "idle auto on");
+
+  player.bank.set(RAW_SHRIMPS, 500);
+  const results = [];
+  for (let i = 0; i < 4; i++) {
+    advance(10_000);
+    results.push(work(player, Date.now()));
+  }
+  assert.deepEqual(results, ["repeated", "repeated", "repeated", "paused"], "three tries that make nothing");
+  assert.match(player.messages.at(-1), /can't make logs here/);
+});
+
+test("production: a knife on logs repeats item on item; gathering replaces it", (t) => {
+  t.mock.method(Date, "now", () => 3_000_000);
+  const KNIFE = 946;
+  const ARROW_SHAFT = 52;
+  const player = idlePlayer();
+  player.setAttribute("idle-mode:onboarded", true);
+  player.inventory = [new Item(KNIFE, 1), new Item(LOGS, 27)];
+  player.bank.set(LOGS, 50);
+  api.emit("item-on-item", { player, usedItemId: KNIFE, usedItemSlot: 0, usedWithItemId: LOGS, usedWithItemSlot: 1, handled: false });
+  api.emit("skills:produced", { player, skill: Skill.FLETCHING ?? Skill.COOKING, itemId: ARROW_SHAFT, amount: 15, xp: 5, kind: "arrow" });
+  const target = player.getAttribute("idle-mode:production-target");
+  assert.equal(target.kind, "item-item");
+  assert.deepEqual(target.loadout, { [KNIFE]: 1, [LOGS]: 27 });
+  player.inventory = [new Item(KNIFE, 1), new Item(ARROW_SHAFT, 405)];
+  const { work } = require(PRODUCTION);
+  t.mock.method(Date, "now", () => 3_100_000);
+  assert.equal(work(player, Date.now()), "repeated");
+  assert.equal(player.bank.get(ARROW_SHAFT), 405);
+  assert.equal(player.getInventory().getAmount(KNIFE), 1, "the tool stays");
+  assert.equal(player.getInventory().getAmount(LOGS), 27);
+  assert.equal(api.uses.at(-1).kind, "item-item");
+  // Chopping a tree now: gathering is the activity.
+  const willow = fakeObject("Willow tree", ["Chop down"], 3200, 3201);
+  api.emit("before-object", { player, object: willow, objectId: 1276, clickType: 1, handled: false });
+  chop(player);
+  assert.equal(player.getAttribute("idle-mode:production-target"), null);
+});
+
+test("production offline: pays at the rate made, using the bank's materials, only as far as they last", (t) => {
+  const { player, advance } = cookingShrimps(t, { bankRaw: 40 });
+  const { work } = require(PRODUCTION);
+  // Two minutes of cooking: a shrimp every 4 seconds, then a batch of 27 raw used up and restocked.
+  for (let i = 0; i < 30; i++) {
+    advance(4000);
+    api.emit("skills:produced", { player, skill: Skill.COOKING, itemId: SHRIMPS, amount: 1, xp: 30, kind: "cook" });
+  }
+  player.inventory = [new Item(SHRIMPS, 27)];
+  advance(7000);
+  work(player, Date.now());
+  assert.equal(player.bank.get(RAW_SHRIMPS), 13, "40 - 27 restocked");
+  api.logout({ player });
+  const away = player.getAttribute("idle-mode:away");
+  assert.deepEqual(away.consumed, { [RAW_SHRIMPS]: 27 });
+  assert.deepEqual(away.items, { [SHRIMPS]: 30 });
+  // An hour away would cook 900, but the bank holds 13 raw (and 27 in the pack, not the bank).
+  advance(3_600_000);
+  const cookedBefore = player.bank.get(SHRIMPS) ?? 0;
+  api.login({ player });
+  assert.equal(player.bank.get(RAW_SHRIMPS), undefined, "the bank's raw shrimps are used up");
+  assert.equal(player.bank.get(SHRIMPS) - cookedBefore, 14, "30 made per 27 used: 13 raw make 14");
+  assert.match(player.messages.join("\n"), /using 13 x Logs, until you ran out of logs/);
+});
+
+test("production: a menu listing what is used (cooking's raw food) or one entry is answered too; one it can't read is closed", (t) => {
+  const { player, advance } = cookingShrimps(t);
+  const { work } = require(PRODUCTION);
+  const answer = (items) => {
+    player.inventory = [new Item(SHRIMPS, 27)];
+    advance(10_000);
+    assert.equal(work(player, Date.now()), "repeated");
+    const picked = [];
+    player.creationMenu = { getItems: () => items, execute: (itemId, amount) => picked.push([itemId, amount]) };
+    const result = work(player, Date.now());
+    // Each answered batch made something, so the next is not a failed try.
+    api.emit("skills:produced", { player, skill: Skill.COOKING, itemId: SHRIMPS, amount: 1, xp: 30, kind: "cook" });
+    return { result, picked, open: player.creationMenu };
+  };
+  assert.deepEqual(answer([RAW_SHRIMPS, 999]), { result: "chose", picked: [[RAW_SHRIMPS, 28]], open: null });
+  assert.deepEqual(answer([777]), { result: "chose", picked: [[777, 28]], open: null });
+  assert.deepEqual(answer([777, 888]), { result: "unanswerable", picked: [], open: null });
 });

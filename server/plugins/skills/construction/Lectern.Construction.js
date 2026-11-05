@@ -2,7 +2,7 @@
 
 const {
   Animation, CacheDefinitions, DialogueChainBuilder, Item, ItemIdentifiers, ItemStatementDialogue, MagicSpellbook,
-  PluginManager, Skill, Sound, Sounds, Spell, Task, TaskManager, api,
+  PluginManager, Skill, Sound, Sounds, Spell, StatementDialogue, Task, TaskManager, api,
 } = require("./Core.Construction");
 const Ids = require("./Ids.Construction");
 const House = require("./House.Construction");
@@ -12,6 +12,13 @@ const LECTERN_DATA = require("./data/lectern.json");
 // list) and makexcrafting (the quantity). A tab click sets tablet_to_make (the tab's 1-based
 // slot); confirm closes the interface and makes one tablet every 4 ticks, the animation and
 // sound on the first tick and the tablet the tick after.
+//
+// The Arceuus lectern in the Ouditor's house (rsprox 235/03899) also sets tablet_spellbook 3 (the
+// client's Arceuus border, teletab_steelborder) before opening. Off the Arceuus spellbook a Study
+// says "You must be using the Arceuus spellbook to use this lectern." and shows a box "You must
+// have your mind occupied by the spells of the dead before using this lectern."; without essence,
+// a box with the block "You need some dark essence to use this lectern."; short of a rune, "You do
+// not have enough Mind Runes to cast this spell.". Neither refusal opens the interface.
 const TELETABS_INTERFACE = Ids.iface("teletabs_craft_if");
 const MAKE_BUTTONS = { 5: 1, 6: 5, 7: 10 };
 const MAKE_X = 8;
@@ -26,10 +33,18 @@ const CREATE_ANIMATION = Ids.seq("poh_create_magic_tablet");
 const CREATE_SOUND = new Sound(228, 1, 0, 0);
 const INTERVAL_TICKS = 4;
 const NO_CLAY = "You need some soft clay to use this lectern.";
-const NO_DARK_ESSENCE = "You need a dark essence block to use this lectern.";
-const WRONG_SPELLBOOK = "You need to be on the Arceuus spellbook to make that tablet.";
+const NO_DARK_ESSENCE = "You need some dark essence to use this lectern.";
+const WRONG_SPELLBOOK = "You must be using the Arceuus spellbook to use this lectern.";
+const WRONG_SPELLBOOK_BOX = "You must have your mind occupied by the spells of the dead before using this lectern.";
+const TABLET_SPELLBOOK_VARBIT = Ids.varbit("tablet_spellbook");
+// The client's tablet_spellbook values (teletab_steelborder): 0 for the house's lecterns, 3 for Arceuus.
+const TABLET_SPELLBOOKS = { ARCEUUS: 3 };
 const TABLET_ATTRIBUTE = "construction:lectern-tablet";
 const AMOUNT_ATTRIBUTE = "construction:lectern-amount";
+// Wiki (Lectern (Arceuus)): Create-last remembers the last tablet and quantity "when using the same
+// type of lectern", so the Arceuus lectern keeps its own.
+const ARCEUUS_TABLET_ATTRIBUTE = "construction:arceuus-lectern-tablet";
+const ARCEUUS_AMOUNT_ATTRIBUTE = "construction:arceuus-lectern-amount";
 
 const TABLETS = new Map(Object.entries(LECTERN_DATA.tablets).map(([id, tablet]) => [Number(id), {
   ...tablet,
@@ -41,7 +56,8 @@ function lecternAt(event) {
   const house = House.houseFor(event.player);
   const furniture = house?.getFurnitureAt(event.location, event.objectId, event.object?.getType() ?? 10);
   const enumId = furniture && LECTERN_DATA.lecterns[furniture.buildableKey];
-  if (enumId) return { enumId, tablets: [...CacheDefinitions.getEnumValues(enumId).values()], material: ItemIdentifiers.SOFT_CLAY, spellbook: null, runeSpellbook: MagicSpellbook.NORMAL };
+  if (enumId) return { enumId, tablets: [...CacheDefinitions.getEnumValues(enumId).values()], material: ItemIdentifiers.SOFT_CLAY, spellbook: null, runeSpellbook: MagicSpellbook.NORMAL,
+    tabletSpellbook: 0, tabletAttribute: TABLET_ATTRIBUTE, amountAttribute: AMOUNT_ATTRIBUTE };
   const world = LECTERN_DATA.worldLecterns?.[event.objectId];
   if (!world) return null;
   return {
@@ -50,6 +66,9 @@ function lecternAt(event) {
     material: ItemIdentifiers[world.material],
     spellbook: MagicSpellbook[world.spellbook],
     runeSpellbook: MagicSpellbook[world.spellbook],
+    tabletSpellbook: TABLET_SPELLBOOKS[world.spellbook] ?? 0,
+    tabletAttribute: ARCEUUS_TABLET_ATTRIBUTE,
+    amountAttribute: ARCEUUS_AMOUNT_ATTRIBUTE,
     world: true,
   };
 }
@@ -85,8 +104,8 @@ function chosenTablet(player, lectern) {
   return slot > 0 ? lectern.tablets[slot - 1] ?? null : null;
 }
 
-function setAmount(player, amount) {
-  player.setAttribute(AMOUNT_ATTRIBUTE, amount);
+function setAmount(player, lectern, amount) {
+  player.setAttribute(lectern.amountAttribute, amount);
   player.getPacketSender().sendConfig(MAKE_AMOUNT_VARP, amount);
 }
 
@@ -94,10 +113,12 @@ function study(event) {
   const lectern = lecternAt(event);
   if (!lectern) return false;
   const player = event.player;
+  if (refused(player, lectern)) return true;
   const sender = player.getPacketSender();
+  sender.sendVarbit(TABLET_SPELLBOOK_VARBIT, lectern.tabletSpellbook);
   sender.sendConfig(TELETAB_ENUM_VARP, lectern.enumId);
-  sender.sendVarbit(TABLET_VARBIT, player.getAttribute(TABLET_ATTRIBUTE) ?? 0);
-  sender.sendConfig(MAKE_AMOUNT_VARP, player.getAttribute(AMOUNT_ATTRIBUTE) ?? 1);
+  sender.sendVarbit(TABLET_VARBIT, player.getAttribute(lectern.tabletAttribute) ?? 0);
+  sender.sendConfig(MAKE_AMOUNT_VARP, player.getAttribute(lectern.amountAttribute) ?? 1);
   sender.sendInterface(TELETABS_INTERFACE);
   openLecterns.set(player, lectern);
   return true;
@@ -107,8 +128,9 @@ function createLast(event) {
   const lectern = lecternAt(event);
   if (!lectern) return false;
   const player = event.player;
-  player.getPacketSender().sendVarbit(TABLET_VARBIT, player.getAttribute(TABLET_ATTRIBUTE) ?? 0);
-  startMaking(player, lectern, player.getAttribute(AMOUNT_ATTRIBUTE) ?? 1);
+  if (refused(player, lectern)) return true;
+  player.getPacketSender().sendVarbit(TABLET_VARBIT, player.getAttribute(lectern.tabletAttribute) ?? 0);
+  startMaking(player, lectern, player.getAttribute(lectern.amountAttribute) ?? 1);
   return true;
 }
 
@@ -122,6 +144,33 @@ function wrongSpellbook(player, lectern) {
   if (!lectern.spellbook || player.getSpellbook() === lectern.spellbook) return false;
   player.sendMessage(WRONG_SPELLBOOK);
   return true;
+}
+
+/** A world lectern's own conditions for a Study or Create-last: the spellbook (a message and a box), then the essence. */
+function refused(player, lectern) {
+  if (!lectern.world) return false;
+  if (wrongSpellbook(player, lectern)) {
+    player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, WRONG_SPELLBOOK_BOX)));
+    return true;
+  }
+  if (!player.getInventory().contains(lectern.material)) {
+    missingMaterial(player, lectern);
+    return true;
+  }
+  return false;
+}
+
+/** The first rune neither the inventory nor a rune pouch covers, or null when there is none. */
+function missingRune(player, lectern, tablet) {
+  const shortfall = Spell.inventoryShortfall(player, runesNeeded(player, lectern, tablet, 1).map(({ id, amount }) => new Item(id, amount)));
+  if (shortfall.length === 0 || PluginManager.checkSpellRuneSource(player, shortfall)) return null;
+  return shortfall.find(rune => !PluginManager.checkSpellRuneSource(player, [rune])) ?? shortfall[0];
+}
+
+/** "You do not have enough Mind Runes to cast this spell." (the Arceuus lectern, as cast spells say it). */
+function missingRuneMessage(itemId) {
+  const name = CacheDefinitions.getItem(itemId)?.name ?? "rune";
+  return `You do not have enough ${name.replace(/\b\w/g, letter => letter.toUpperCase())}s to cast this spell.`;
 }
 
 function startMaking(player, lectern, amount) {
@@ -178,8 +227,9 @@ class TabletTask extends Task {
       player.sendMessage(`You need a Magic level of ${tablet.level} to make that tablet.`);
       return false;
     }
-    if (!hasRunes(player, lectern, tablet, 1)) {
-      player.sendMessage("You do not have enough runes to make that tablet.");
+    const missing = missingRune(player, lectern, tablet);
+    if (missing) {
+      player.sendMessage(lectern.world ? missingRuneMessage(missing.getId()) : "You do not have enough runes to make that tablet.");
       return false;
     }
     return true;
@@ -195,20 +245,20 @@ function interfaceClick(event) {
   const child = event.childId;
   if (child >= FIRST_TAB && child <= LAST_TAB && child - FIRST_TAB < lectern.tablets.length) {
     const slot = child - FIRST_TAB + 1;
-    player.setAttribute(TABLET_ATTRIBUTE, slot);
+    player.setAttribute(lectern.tabletAttribute, slot);
     player.getPacketSender().sendVarbit(TABLET_VARBIT, slot);
   } else if (MAKE_BUTTONS[child]) {
-    setAmount(player, MAKE_BUTTONS[child]);
+    setAmount(player, lectern, MAKE_BUTTONS[child]);
   } else if (child === MAKE_ALL || child === MAKE_X) {
     const tablet = TABLETS.get(chosenTablet(player, lectern));
     const most = tablet ? Math.max(1, makeable(player, lectern, tablet)) : 1;
-    if (child === MAKE_ALL) return setAmount(player, most);
+    if (child === MAKE_ALL) return setAmount(player, lectern, most);
     player.getPacketSender().sendConfig(MAKE_AMOUNT_VARP, 0).sendEnterAmountPrompt(`Enter amount: (1-${most})`);
-    player.setEnteredAmountAction({ execute: amount => setAmount(player, Math.max(1, Math.min(most, amount))) });
+    player.setEnteredAmountAction({ execute: amount => setAmount(player, lectern, Math.max(1, Math.min(most, amount))) });
   } else if (child === CONFIRM) {
     openLecterns.delete(player);
     player.getPacketSender().sendInterfaceRemoval();
-    startMaking(player, lectern, player.getAttribute(AMOUNT_ATTRIBUTE) ?? 1);
+    startMaking(player, lectern, player.getAttribute(lectern.amountAttribute) ?? 1);
   }
 }
 
@@ -219,9 +269,11 @@ function closeLectern({ player }) {
 function attachLecterns(api) {
   api.persistAttribute(TABLET_ATTRIBUTE, 0);
   api.persistAttribute(AMOUNT_ATTRIBUTE, 1);
+  api.persistAttribute(ARCEUUS_TABLET_ATTRIBUTE, 0);
+  api.persistAttribute(ARCEUUS_AMOUNT_ATTRIBUTE, 1);
   api.onObjectInteraction("Lectern", { Study: study, "Create-last": createLast });
   api.onInterfaceActionClick(interfaceClick);
   api.onCustomEvent("interface:close", closeLectern);
 }
 
-Object.assign(module.exports, { attachLecterns, _test: { lecternAt, startMaking, TABLETS, wrongSpellbook } });
+Object.assign(module.exports, { attachLecterns, _test: { lecternAt, startMaking, TABLETS, wrongSpellbook, study, createLast, interfaceClick } });

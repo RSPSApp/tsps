@@ -8,11 +8,11 @@ Audit date: 2026-11-04. The catalogue below covers 908 cluehelper rows from the 
 | Medium | 167 / 167 |
 | Hard | 186 / 186 |
 | Elite | 124 / 124 |
-| Master | 96 / 265 |
+| Master | 97 / 265 |
 
 Easy, medium, and hard have no cache rows suppressed by the current runtime checks. Elite is now complete after adding the content-backed kills described below. Master three-part cryptic trails have 29 safe part candidates. Two other candidate rows stay out of the part pool: Viggora depends on the absent Curse of the Empty Lord miniquest, and Watson's row is a correct exclusion (see "Correct exclusions" below).
 
-Elite Sherlock has 21 of 25 task rows wired; its four unsupported tasks are listed below. Master Sherlock has 24 of 26 actionable task rows wired; the two unsupported tasks are also listed below. The cache includes one additional internal helper row for combining the three cryptic parts, which is handled by the trail runtime rather than assigned as a Sherlock task.
+Elite Sherlock has 21 of 25 task rows wired; its four unsupported tasks are listed below. Master Sherlock has 25 of 26 actionable task rows wired; the unsupported task is also listed below. The cache includes one additional internal helper row for combining the three cryptic parts, which is handled by the trail runtime rather than assigned as a Sherlock task.
 
 ## Fixes in this audit
 
@@ -30,6 +30,7 @@ The RSProx recordings reviewed for this audit corroborate clue and Sherlock scro
 - Kill a Fiyr shade inside Mort'ton's shade catacombs: the world already spawns ten Fiyr Shadows (1285) in the catacombs, and Shades of Mort'ton raises each into its Fiyr Shade (1286) as the same NPC. The task counts a kill of either id inside the catacombs' map square (3456-3519, 9664-9727, plane 0), so a Temple Trekking shade does not count. [Fiyr Shade](https://oldschool.runescape.wiki/w/Fiyr_shade).
 - Piles: the Wiki's only extra condition is the Resource Area entry fee, which the gate now charges (`ResourceArea.plugin.js`). His part rolls again. [Piles](https://oldschool.runescape.wiki/w/Piles).
 - Lovada: her Lovakengj spawn at 1485,3834 used 6786, which the current cache makes a hidden Varlamore `vmq1` guard. `sync-npc-spawns.ts --repair-identities` (from the original infobox lines added to `tests/fixtures/npc-spawn-identity-wiki.json`) moved it to 12701, the cache's and the Wiki's Lovada, and her part rolls. A second row named Lovada at 1632,3678 (id 6787, also a `vmq1` form) has no Wiki or cache evidence and is left unchanged. [Lovada](https://oldschool.runescape.wiki/w/Lovada).
+- Create a Barrows teleport tablet: the tablet is made at the Arceuus lectern in the Ouditor's house (loc 28802, enum 2628), not a house lectern, which is why no house lectern enum lists it. #2548 added that lectern to `Lectern.Construction.js`; this task counts its `construction:tablet-made` event for a Barrows teleport. Its Study refusals, rune message, border varbit and own Create-last now follow rsprox 235/03899 and the Wiki. [Barrows teleport (tablet)](https://oldschool.runescape.wiki/w/Barrows_teleport_(tablet)), [Lectern (Arceuus)](https://oldschool.runescape.wiki/w/Lectern_(Arceuus)).
 
 ## Correct exclusions
 
@@ -44,7 +45,6 @@ These tasks remain excluded from assignment because the server does not implemen
 
 ### Master clue tasks
 
-- Create a Barrows teleport tablet: the active cache defines the item, but none of the lectern enums supplied to the client offers it. The current lectern interface is driven by those enums, so there is no selectable route to make it until the cache enum or client interface is extended. [Barrows Teleport](https://oldschool.runescape.wiki/w/Barrows_teleport).
 - Mix a ranging mix: the recipe is absent, and the Barbarian Herblore training unlock is not implemented. Keep it unassigned until both the recipe and its unlock are represented. [Ranging mix](https://oldschool.runescape.wiki/w/Ranging_mix_%281%29).
 
 ### Master three-part cryptic parts

@@ -87,5 +87,13 @@ node scripts/import-halloween-definitions.cjs --reference <reference-folder> --o
   restarts from its first question. Answered questions stay recorded.
 - The dropped chair does not check the Wiki's no-follower areas, and Spin has
   no player animation (none is sourced).
+- The three decorations are restored only while the archive is installed; a
+  picture, lamp or scarecrow kept past the window shows as the cache's retired
+  item until the next window (as the Christmas serving platter does).
+- A decoration or lantern counts as lost when it is not in the inventory,
+  equipment or bank. Items in a gravestone, Death's coffer or a looting bag are
+  not counted, so one lost on death can be replaced and later recovered.
+- The modules follow the Christmas dinner's layout (`seasonal/*.HalloweenEvents.js`,
+  data in `seasonal/data/`), not a folder named after the plugin.
 - Scape Scared plays on the login screen during Halloween events only; it has
   no in-game unlock, so the event changes no music.

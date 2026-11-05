@@ -3,10 +3,10 @@
 // Jagex cache2341 reference (29 October 2025, revision 235, inside the event
 // window). Never reads test fixtures or writes the active cache.
 //
-// The event's scenery, items and varbits still exist unchanged in the active
-// cache; only its temporary NPCs were retired and their ids reused. So the
-// bundle holds just those NPCs, and every other definition the event uses is
-// checked byte-for-byte against the active cache instead of being archived.
+// The event's scenery, reward items and varbits still exist in the active cache.
+// Its temporary NPCs were retired (their ids reused) and its three decorations
+// retired to Null, so the bundle holds those; every other definition the event
+// uses is checked against the active cache instead of being archived.
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');

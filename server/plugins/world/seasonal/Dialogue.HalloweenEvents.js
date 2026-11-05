@@ -54,9 +54,23 @@ function findStep(steps, id) {
   return undefined;
 }
 
+/**
+ * Seth's lost-picture branch (1Glkal): the dump nests the replacement inside
+ * "has all the other decorations" and leaves "continues" jumps without targets.
+ * Rebuilt from its own source steps: no space ends with Seth holding on to it;
+ * otherwise the all-decorations message (when it applies) and the replacement.
+ */
+function lostPicture(step) {
+  const [said, answer] = step.steps;
+  const all = findStep(step.steps, "pMyO2X"), full = findStep(step.steps, "UBDVQJ");
+  const message = findStep(all.steps, "tdDfyd"), receive = findStep(all.steps, "Nkt5y6"), hold = full.steps[0];
+  return { ...step, steps: [said, answer, { ...full, steps: [hold, { type: "end" }] }, { ...all, steps: [message] }, receive] };
+}
+
 /** Replaces each lost jump with its source branch's steps. */
 function restoreJumps(steps) {
   return steps.flatMap(step => {
+    if (step.id === "1Glkal") return [lostPicture(step)];
     const target = step.type === "jump" ? LOST_JUMPS[step.id] : undefined;
     if (target) {
       const branch = Object.values(SOURCE.variants).map(variant => findStep(variant, target)).find(Boolean);
@@ -84,7 +98,7 @@ function start(api, { player, npc, event, variant, role }) {
   return true;
 }
 
-function fredVariant(api, player, state) {
+function fredVariant(state) {
   switch (state.stage) {
     case STAGE.NEW: return "starting-off-talking-to-fred-the-farmer";
     case STAGE.STARTED: return "starting-off-talking-to-fred-after-starting-the-event";
@@ -97,9 +111,10 @@ function fredVariant(api, player, state) {
     default: return null;
   }
 }
-function sethVariant(state) {
+function sethVariant(api, player, state) {
   if (state.stage === STAGE.STARTED && !state.picture) return "starting-off-talking-to-seth-groats";
-  if (state.stage === STAGE.COLLECTING && !Progress.acquiredAll(state)) return "starting-off-talking-to-seth-again-after-receiving-the-picture-for-the-first-time";
+  const lostPicture = !Progress.owns(api, player, Progress.DECORATIONS.picture);
+  if (state.stage === STAGE.COLLECTING && (!Progress.acquiredAll(state) || lostPicture)) return "starting-off-talking-to-seth-again-after-receiving-the-picture-for-the-first-time";
   if (state.stage >= STAGE.COLLECTING && state.stage < STAGE.COMPLETE) return "returning-to-fred-with-the-decorations-talking-to-seth-groats-after-collecting-each-item";
   return null;
 }
@@ -124,22 +139,25 @@ function diangoVariant(state) {
 /** onBeforeNpcInteraction: Talk-to on an event NPC plays its stage's variant. */
 function interact(api, event) {
   const { player, npc } = event;
-  if (passthrough.delete(player) || !enabled) return;
+  if (passthrough.delete(player)) return;
   const definition = npc.getCurrentDefinition(player);
-  if (definition?.getActions()?.[event.clickType - 1]?.toLowerCase() !== "talk-to") return;
+  const role = Object.entries(NPCS).find(([symbol]) => api.core.CacheDefinitions.getNpcId(symbol) === definition?.getId())?.[1];
+  if (!role) return;
+  // Any click on an event NPC replaces its earlier conversation, so that one can
+  // no longer claim the ordinary menus that follow (Sarah's menu-less variant).
+  sessions.delete(player);
+  if (!enabled || definition.getActions()?.[event.clickType - 1]?.toLowerCase() !== "talk-to") return;
   // Death's Domain spawns a Death per player: an actor owned by someone else, or in
   // another instance, is not this player's conversation.
   const owner = npc.getOwner?.() ?? null;
   if ((owner && owner !== player) || (npc.getPrivateArea?.() ?? null) !== (player.getPrivateArea?.() ?? null)) return;
   if (!player.isRegistered() || player.getHitpoints() <= 0 || player.busy()) return;
-  const role = Object.entries(NPCS).find(([symbol]) => api.core.CacheDefinitions.getNpcId(symbol) === definition.getId())?.[1];
-  if (!role) return;
   const state = Progress.read(player);
   if (role === "fred" && state.stage === STAGE.COMPLETE) {
     if (Rewards.claimTradeables(api, player)) event.handled = true;
     return;
   }
-  const variant = role === "fred" ? fredVariant(api, player, state) : role === "seth" ? sethVariant(state)
+  const variant = role === "fred" ? fredVariant(state) : role === "seth" ? sethVariant(api, player, state)
     : role === "sarah" ? sarahVariant(state) : role === "death" ? deathVariant(state) : diangoVariant(state);
   if (variant && start(api, { player, npc, event, variant, role })) event.handled = true;
 }
@@ -174,13 +192,13 @@ function condition(api, event) {
     KoXrfh: Progress.acquiredAll(state) && !allInInventory, P2asCD: Progress.acquiredAll(state) && allInInventory,
     // Diango: the source labels both first-visit branches "not wearing"; ids disambiguate.
     "9NWeHn": !worn, _MxZad: worn, "5nwfqm": free === 0, gEabbC: !worn, uDxjdh: worn,
-    zjUzkT: !lanternLost, Qs3fH3: lanternLost, QzGoNG: free === 0,
+    zjUzkT: !lanternLost, Qs3fH3: lanternLost, QzGoNG: current.fullAtReplacement ?? free === 0,
     // Contest
     "4Sjcyo": !(worn && wielded), H4FTU9: worn && wielded, JO8VAw: !(worn && wielded), Xu40ur: worn && wielded,
     "n77zq-": !Rewards.canClaim(api, player),
   };
   if (Object.hasOwn(answers, event.stepId)) return answers[event.stepId];
-  // No guessed truth for an unimplemented source condition.
+  // Every condition on this page is answered above; an unknown one plays nothing.
   return false;
 }
 
@@ -252,8 +270,9 @@ function action(api, event) {
   const stop = () => { event.handled = true; event.end = true; };
   const receive = RECEIVE[event.stepId];
   if (receive) {
-    // The source also lets Diango's replacement run when full: give nothing then.
-    if (event.stepId === "Yvadoz" && freeSlots(player) === 0) { event.handled = true; return; }
+    // Diango's replacement runs before his no-space line: remember the space it saw.
+    if (event.stepId === "Yvadoz") current.fullAtReplacement = freeSlots(player) === 0;
+    if (event.stepId === "Yvadoz" && current.fullAtReplacement) { event.handled = true; return; }
     if (!give(api, player, receive.symbol)) return stop();
     Progress.update(api, player, receive.apply);
     event.handled = true;
@@ -270,7 +289,8 @@ function action(api, event) {
       event.handled = true;
       return;
     case "L9reaW": case "1_q8rU":
-      api.emitCustomEvent("holiday-rewards:open", { player });
+      // The chat's own close removes interfaces: open the retrieval list after it.
+      afterChat(api, player, () => api.emitCustomEvent("holiday-rewards:open", { player }));
       return stop();
     case "5shIok": { // A cutscene begins
       const request = { player, session: current };
@@ -284,19 +304,38 @@ function action(api, event) {
       Progress.update(api, player, state => state.stage === STAGE.LANTERN && (state.stage = STAGE.JUDGED, true));
       event.handled = true;
       return;
-    case "eC17__": // Event complete
-      if (!Rewards.claim(api, player)) return stop();
-      event.handled = true;
-      return;
-    case "sIAJwR": {
-      const missing = Rewards.requiredSlots(api, player) - freeSlots(player);
-      // Fills the source's "[1-9] free inventory [slot/slots]" placeholder.
-      player.sendMessage(`You need ${missing} free inventory slot${missing === 1 ? "" : "s"} to receive your Halloween event rewards.`);
+    case "eC17__": { // Event complete
+      const rewards = Rewards.claim(api, player);
+      if (!rewards) return stop();
+      afterChat(api, player, () => Rewards.show(api, player, rewards));
       event.handled = true;
       return;
     }
+    case "sIAJwR":
+      Rewards.refuse(api, player);
+      event.handled = true;
+      return;
     default:
   }
 }
 
-module.exports = { activate, active, clear, cancelAll, interact, condition, choice, line, action, messageText, start, sessions };
+/** Runs once this conversation has closed (its last step removes open interfaces). */
+function afterChat(api, player, run) {
+  const { Task, TaskManager } = api.core;
+  let waited = 0;
+  TaskManager.submit(new (class AfterHalloweenChat extends Task {
+    constructor() { super(1, player, false); }
+    execute() {
+      if (!player.isRegistered()) return this.stop();
+      if (player.getDialogueManager().getCurrent()) {
+        // Another conversation took over: do not open on top of it.
+        if (++waited >= 10) this.stop();
+        return;
+      }
+      this.stop();
+      run();
+    }
+  })());
+}
+
+module.exports = { activate, active, clear, cancelAll, interact, condition, choice, line, action, messageText, start };

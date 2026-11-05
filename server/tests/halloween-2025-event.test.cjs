@@ -50,8 +50,9 @@ function fixture(t, at = new core.Location(3189, 3274, 0)) {
   return { player, connection, messages };
 }
 
-/** The player-update sync is not run here: list the visible NPCs it would send. */
+/** The player-update tick is not run here: place a moved player and list the NPCs it would send. */
 function seeNearbyNpcs(player) {
+  player.needsPlacement = false;
   const local = player.getLocalNpcs();
   for (const npc of core.World.getNpcs()) {
     if (!npc?.isRegistered() || local.includes(npc) || !npc.isVisible?.()) continue;
@@ -92,6 +93,7 @@ async function talk(f, actor, choices) {
   // The player walks up to whoever they talk to.
   const at = actor.getLocation();
   f.player.setLocation(new core.Location(at.getX(), at.getY() + 1, at.getZ()));
+  seeNearbyNpcs(f.player);
   const handled = PM.emitNpcInteraction({ player: f.player, npc: actor, clickType: 1, option: 1 });
   assert.ok(handled, "Talk-to was handled");
   await converse(f, choices);
@@ -103,6 +105,9 @@ function tileObjects(x, y) {
   return [...(core.MapObjects.mapObjects.get(core.MapObjects.getHash(x, y, 0)) ?? []), ...core.ObjectManager.objectsAt(location)]
     .filter(object => object.getLocation().getX() === x && object.getLocation().getY() === y && !object.getPrivateArea());
 }
+
+function tick(count = 1) { for (let index = 0; index < count; index++) core.TaskManager.process(); }
+function interfaceOpen(f, name) { return f.player.getInterfaceId() === core.CacheDefinitions.getInterfaceId(name); }
 
 function item(symbol) { return Progress.itemId({ core }, symbol); }
 function stage(f) { return Progress.read(f.player).stage; }
@@ -177,10 +182,12 @@ test("the whole Spook-a-thon runs through native dialogue, once per account", as
   f.player.getEquipment().setItem(0, new core.Item(core.CacheDefinitions.getObjId("hw24_scarecrow"), 1));
   await talk(f, diango, [1]);
   assert.equal(stage(f), STAGE.DECORATED, "no lantern without three Halloween items");
+  tick(2);
+  assert.ok(interfaceOpen(f, "rareitems_diango"), "Diango's holiday items stay open after his conversation");
+  f.player.closeInterruptibleInterfaces();
   f.player.getEquipment().setItem(0, new core.Item(core.CacheDefinitions.getObjId("hw06_spooky_head"), 1));
   f.player.getEquipment().setItem(4, new core.Item(core.CacheDefinitions.getObjId("hw06_spooky_body"), 1));
   f.player.getEquipment().setItem(7, new core.Item(core.CacheDefinitions.getObjId("hw06_spooky_legs"), 1));
-  f.player.getInterfaceId?.() && f.player.closeInterruptibleInterfaces();
   await talk(f, diango, [1]);
   assert.equal(stage(f), STAGE.LANTERN);
   const lantern = item("hw25_pumpkin_lantern_reward");
@@ -198,6 +205,9 @@ test("the whole Spook-a-thon runs through native dialogue, once per account", as
   }
   assert.equal(f.player.getInventory().getAmount(core.CacheDefinitions.getObjId("cert_pumpkin")), 0, "no tradeables under 24 hours");
   assert.ok(f.messages.includes("You've completed the Halloween event: Spook-a-thon Decoration Contest"));
+  tick(2);
+  assert.ok(interfaceOpen(f, "eventscroll"), "the event-complete scroll stays open");
+  f.player.closeInterruptibleInterfaces();
 
   // Later, at 24 hours of play, Fred hands over the tradeables exactly once.
   lifetime = 86400;
@@ -231,12 +241,44 @@ test("declining the event question hands Talk-to back to the ordinary owner", as
   await converse(f);
 });
 
-test("outside the window the event neither routes Talk-to nor lets chairs be picked up", async t => {
+test("outside the window Fred's Talk-to is his ordinary conversation", async t => {
   setActive(false);
   const f = fixture(t);
   PM.emitNpcInteraction({ player: f.player, npc: npc("fred_the_farmer", 3189, 3273), clickType: 1, option: 1 });
+  assert.equal(MultiChatboxPrompt.getPending(f.player)?.title === "Ask about Halloween Event?", false);
   await converse(f);
   assert.equal(stage(f), STAGE.NEW);
+});
+
+test("Seth replaces a lost picture whether or not the other decorations are done", async t => {
+  setActive(true);
+  t.after(() => setActive(false));
+  const picture = item("hw25_spooky_painting");
+  for (const others of [false, true]) {
+    const f = fixture(t), seth = npc("favour_seth_groats", 3228, 3291);
+    setProgress(f, { stage: STAGE.COLLECTING, picture: true, chair: others, scarecrow: others, lamp: others });
+    for (let slot = 0; slot < 28; slot++) f.player.getInventory().setItem(slot, new core.Item(core.ItemIdentifiers.LOGS, 1));
+    await talk(f, seth, [1]);
+    assert.equal(f.player.getInventory().getAmount(picture), 0, "full: Seth holds on to it");
+    f.player.getInventory().resetItems();
+    await talk(f, seth, [1]);
+    assert.equal(f.player.getInventory().getAmount(picture), 1, `replaced (other decorations done: ${others})`);
+    assert.equal(f.messages.includes("You have acquired a spooky picture, a chair, scarecrow and wall lamp. You should return to Fred in Lumbridge."), others);
+  }
+});
+
+test("Diango's replacement lantern into the last slot plays no full-inventory line", async t => {
+  setActive(true);
+  t.after(() => setActive(false));
+  const f = fixture(t), diango = npc("aprilfoolshorsesalesman", 3081, 3247);
+  setProgress(f, { stage: STAGE.LANTERN, picture: true, chair: true, scarecrow: true, lamp: true, diangoIntro: true });
+  for (let slot = 0; slot < 27; slot++) f.player.getInventory().setItem(slot, new core.Item(core.ItemIdentifiers.LOGS, 1));
+  const lines = [];
+  const listener = PM.createApi("HalloweenLineProbe");
+  listener.onCustomEvent("npc-dialogue:line", event => lines.push(String(event.text)));
+  await talk(f, diango, [1]);
+  assert.equal(f.player.getInventory().getAmount(item("hw25_pumpkin_lantern_reward")), 1);
+  assert.ok(!lines.some(text => text.startsWith("Ah, but I see you don't have space")), lines.join(" | "));
 });
 
 /** Controlled setup: progress written directly to a later stage (the walkthrough test covers reaching it). */
@@ -324,4 +366,71 @@ test("the spooky chair is locked during the event, then follows and comes back",
   for (let tick = 0; tick < 21; tick++) core.TaskManager.process();
   assert.ok(f.messages.includes("The spooky chair doesn't feel wanted and returns to Diango in Draynor Village."));
   assert.ok((f.player.getAttribute("holiday-rewards:unlocked") ?? []).includes("hw25_chair_obj_reward"), "retrievable from Diango");
+});
+
+test("a chair taken back from Diango while another follows never makes two", async t => {
+  setActive(false);
+  const f = fixture(t), chair = item("hw25_chair_obj_reward");
+  setProgress(f, { stage: STAGE.COMPLETE });
+  f.player.setAttribute("holiday-rewards:unlocked", ["hw25_chair_obj_reward"]);
+  f.player.getInventory().setItem(0, new core.Item(chair, 1));
+  dropChair(f, chair);
+  assert.equal(f.player.getInventory().getAmount(chair), 0);
+  f.player.getInventory().add(new core.Item(chair, 1)); // Diango's retrieval: nothing owned, so it hands one out
+  for (let tick = 0; tick < 21; tick++) core.TaskManager.process();
+  assert.equal(f.player.getInventory().getAmount(chair), 1);
+  dropChair(f, chair);
+  f.player.getInventory().add(new core.Item(chair, 1));
+  PM.emitPlayerLogout({ player: f.player, username: f.player.getUsername() });
+  assert.equal(f.player.getInventory().getAmount(chair), 1, "logging out with one following keeps one");
+});
+
+test("a judging conversation closed early also ends the cutscene", async t => {
+  setActive(true);
+  t.after(() => setActive(false));
+  const f = fixture(t), fred = npc("fred_the_farmer", 3189, 3273);
+  setProgress(f, { stage: STAGE.LANTERN, briefed: true, picture: true, chair: true, scarecrow: true, lamp: true, quiz: 31 });
+  dressForContest(f);
+  assert.ok(PM.emitNpcInteraction({ player: f.player, npc: fred, clickType: 1, option: 1 }));
+  for (let step = 0; step < 4; step++) { seeNearbyNpcs(f.player); await resume(f, 1); }
+  const death = core.CacheDefinitions.getArchivedId("halloween-2025", "npc", "hw25_deadth_cs");
+  const actors = () => [...core.World.getNpcs()].filter(npc => npc?.getId() === death && npc.getOwner() === f.player).length;
+  assert.equal(actors(), 1, "the cutscene has started");
+  f.player.getDialogueManager().reset();
+  f.player.getPacketSender().sendInterfaceRemoval();
+  tick(4);
+  assert.equal(actors(), 0);
+  assert.equal(f.player.getMovementQueue().isMovementBlocked(), false);
+  assert.equal(stage(f), STAGE.LANTERN, "judging again later still works");
+});
+
+test("clicking another NPC mid-conversation leaves the event conversation intact", async t => {
+  setActive(true);
+  t.after(() => setActive(false));
+  const f = fixture(t), seth = npc("favour_seth_groats", 3228, 3291);
+  setProgress(f, { stage: STAGE.STARTED });
+  f.player.setLocation(new core.Location(3228, 3292, 0));
+  assert.ok(PM.emitNpcInteraction({ player: f.player, npc: seth, clickType: 1, option: 1 }));
+  await resume(f, 1);
+  PM.emitNpcInteraction({ player: f.player, npc: npc("cow", 3229, 3292), clickType: 2, option: 2 });
+  await converse(f);
+  assert.equal(stage(f), STAGE.COLLECTING);
+  assert.equal(f.player.getInventory().getAmount(item("hw25_spooky_painting")), 1);
+});
+
+test("rewards that stack onto held stacks are not counted as missing slots", async t => {
+  setActive(true);
+  t.after(() => setActive(false));
+  lifetime = 86400;
+  t.after(() => { lifetime = 0; });
+  const f = fixture(t), fred = npc("fred_the_farmer", 3189, 3273);
+  setProgress(f, { stage: STAGE.JUDGED, briefed: true, picture: true, chair: true, scarecrow: true, lamp: true, quiz: 31 });
+  dressForContest(f);
+  for (const [slot, symbol] of ["cert_pumpkin", "cert_halloweenmask_red", "cert_halloweenmask_green", "cert_halloweenmask_blue"].entries()) {
+    f.player.getInventory().setItem(slot, new core.Item(core.CacheDefinitions.getObjId(symbol), 1));
+  }
+  for (let slot = 4; slot < 25; slot++) f.player.getInventory().setItem(slot, new core.Item(core.ItemIdentifiers.LOGS, 1));
+  await talk(f, fred, [1]);
+  assert.equal(stage(f), STAGE.JUDGED);
+  assert.ok(f.messages.includes("You need 1 free inventory slot to receive your Halloween event rewards."), f.messages.slice(-2).join(" | "));
 });

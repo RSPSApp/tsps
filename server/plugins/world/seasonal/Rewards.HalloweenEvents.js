@@ -60,13 +60,29 @@ function canClaim(api, player) {
   return Progress.read(player).stage === STAGE.JUDGED && plan(api, player, completionRows(api, player)) !== null;
 }
 
-/** Free slots the completion needs right now (the source's "[1-9] free inventory slots"). */
-function requiredSlots(api, player) {
-  const list = completionRows(api, player), inventory = player.getInventory();
-  return list.filter(row => {
-    const stackable = api.core.CacheDefinitions.getItem(row.id)?.stackable ?? api.core.CacheDefinitions.getItem(row.id)?.isStackable?.();
-    return !(stackable && inventory.getAmount(row.id) > 0);
-  }).length;
+/**
+ * Free slots the rewards still need: the source's "[1-9] free inventory [slot/slots]".
+ * A reward that stacks onto a held stack needs none; one blocked by a stack at its
+ * cap is not a slot shortfall. Planned on a copy of the real inventory.
+ */
+function missingSlots(api, player, list) {
+  const copy = new api.core.Inventory(player).setItems(player.getInventory().getCopiedItems());
+  let missing = 0;
+  for (const row of list) {
+    const item = new api.core.Item(row.id, row.amount);
+    if (copy.getAddableAmount(item) === row.amount) { copy.add(item, false); continue; }
+    const stacks = api.core.ItemDefinition.forId(row.id)?.isStackable?.() && copy.getAmount(row.id) > 0;
+    if (!stacks) missing++;
+  }
+  return missing;
+}
+
+/** The refusal when the rewards do not fit: the slot count, or plain space when slots are not the cause. */
+function refuse(api, player, list = completionRows(api, player)) {
+  const missing = missingSlots(api, player, list);
+  player.sendMessage(missing > 0
+    ? `You need ${missing} free inventory slot${missing === 1 ? "" : "s"} to receive your Halloween event rewards.`
+    : "You don't have enough inventory space to receive your Halloween event rewards.");
 }
 
 function announce(api, player, list) {
@@ -89,8 +105,7 @@ function claim(api, player) {
   player.getInventory().refreshItems();
   Progress.update(api, player, next => next.stage === STAGE.JUDGED && (next.stage = STAGE.COMPLETE, next.tradeableClaimed = tradeables, true));
   announce(api, player, list);
-  show(api, player, list);
-  return true;
+  return list;
 }
 
 /** After completion, an account that has since reached 24 hours of play claims the tradeables from Fred. */
@@ -99,8 +114,7 @@ function claimTradeables(api, player) {
   if (state.stage !== STAGE.COMPLETE || state.tradeableClaimed || !eligibleForTradeables(api, player)) return false;
   const list = rows(api, player, { cosmetics: false, tradeables: true }), items = plan(api, player, list);
   if (!items) {
-    const missing = list.length - player.getInventory().getFreeSlots();
-    player.sendMessage(`You need ${missing} free inventory slot${missing === 1 ? "" : "s"} to receive your Halloween event rewards.`);
+    refuse(api, player, list);
     return true;
   }
   player.getInventory().setItems(items);
@@ -131,4 +145,4 @@ function close(api, event) {
   player.getPacketSender().sendInterfaceRemoval();
 }
 
-module.exports = { TITLE, eligibleForTradeables, unlockPrevious, canClaim, requiredSlots, claim, claimTradeables, show, close };
+module.exports = { TITLE, eligibleForTradeables, unlockPrevious, canClaim, refuse, claim, claimTradeables, show, close };

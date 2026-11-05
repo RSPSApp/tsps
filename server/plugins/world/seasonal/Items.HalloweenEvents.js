@@ -5,13 +5,24 @@
 const Progress = require("./Progress.HalloweenEvents");
 const scene = require("./data/halloween-2025-scene.json");
 const { STAGE } = Progress;
-// Cache dbrow table "synth" row halloween2025: hw25_chair_spin_01..05.
-const CHAIR_SPIN_SYNTHS = Object.freeze([10605, 10606, 10607, 10608, 10609]);
+// Cache dbtable "synth", row synth_halloween2025: its hw25_chair_spin_* sounds.
+const SYNTH_ROW = "synth_halloween2025", CHAIR_SPIN_PREFIX = "hw25_chair_spin_";
 // Wiki Spooky chair: a dropped chair returns after 20 ticks.
 const CHAIR_RETURN_TICKS = 20;
 const CHAIR_FOLLOWER = "hw25_chair_npc_reward";
 const followers = new Map();
-let qualifying;
+let qualifying, spinSounds;
+
+function chairSpinSounds(api) {
+  if (spinSounds) return spinSounds;
+  const cache = api.core.CacheDefinitions, table = cache.getDbTableId("synth"), row = cache.getDbRow(cache.getDbRowId(SYNTH_ROW));
+  const values = row?.column(cache.getDbColumn(table, "synth")) ?? [];
+  spinSounds = [];
+  for (let index = 0; index + 1 < values.length; index += 2) {
+    if (String(values[index]).startsWith(CHAIR_SPIN_PREFIX) && Number.isInteger(values[index + 1])) spinSounds.push(values[index + 1]);
+  }
+  return spinSounds;
+}
 
 function ids(api, symbols) {
   return symbols.map(symbol => api.core.CacheDefinitions.getObjId(symbol)).filter(id => id !== null);
@@ -84,8 +95,8 @@ function chairLocked(Dialogue, player) {
 
 function spinChair(api, Dialogue, { player }) {
   if (chairLocked(Dialogue, player)) return;
-  const sound = CHAIR_SPIN_SYNTHS[Math.floor(Math.random() * CHAIR_SPIN_SYNTHS.length)];
-  player.getPacketSender().sendSound(sound, 1, 0);
+  const sounds = chairSpinSounds(api);
+  if (sounds.length) player.getPacketSender().sendSound(sounds[Math.floor(Math.random() * sounds.length)], 1, 0);
 }
 
 function returnChair(api, player) {
@@ -95,6 +106,9 @@ function returnChair(api, player) {
   api.core.TaskManager.cancelTasks(record);
   if (record.npc.isRegistered()) api.removeNpc(record.npc);
   if (!player.isRegistered()) return;
+  // Diango may have handed out another chair meanwhile: one chair, as the Wiki says
+  // a player keeps when dropping several.
+  if (Progress.owns(api, player, Progress.DECORATIONS.chair)) return;
   const item = new api.core.Item(record.itemId, 1);
   if (player.getInventory().getAddableAmount(item) === 1) {
     player.getInventory().add(item);
@@ -136,9 +150,10 @@ function logout(api, { player }) {
   followers.delete(player);
   api.core.TaskManager.cancelTasks(record);
   if (record.npc.isRegistered()) api.removeNpc(record.npc);
+  if (Progress.owns(api, player, Progress.DECORATIONS.chair)) return;
   const item = new api.core.Item(record.itemId, 1);
   if (player.getInventory().getAddableAmount(item) === 1) player.getInventory().add(item);
   else api.emitCustomEvent("holiday-rewards:unlock", { player, items: [Progress.DECORATIONS.chair] });
 }
 
-module.exports = { qualifyingIds, wornHalloweenItems, lanternEquipped, handOver, pickUpChair, spinChair, dropChair, logout, CHAIR_RETURN_TICKS };
+module.exports = { qualifyingIds, wornHalloweenItems, lanternEquipped, handOver, pickUpChair, spinChair, dropChair, logout, chairSpinSounds, CHAIR_RETURN_TICKS };

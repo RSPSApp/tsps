@@ -28,7 +28,7 @@
  */
 module.exports = function registerTheGolemQuest(api) {
   const { Item, Location, Skill, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
-  const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
+  const { registerQuest, refreshQuestList, startTranscript, openBook } = require("../QuestRuntime");
 
   const PAGE = "The Golem";
   const VARP_THE_GOLEM = 437; // golem_quest
@@ -151,17 +151,28 @@ module.exports = function registerTheGolemQuest(api) {
   const SEEN_ATTRIBUTE = "quest.the_golem.seen_underground";
   const HEAD_OPEN_ATTRIBUTE = "quest.the_golem.head_open";
 
+  /** Interface 220's lines 1-15, as captured (rsprox 3333, tick 396). */
+  const LETTER_GROUP = 220;
   const LETTER_LINES = [
+    "",
+    "",
     "Dearest Varmen,",
     "I hope this finds you well. Here are the books you asked for.",
     "There has been an exciting development closer to home --",
-    "another city from the same period has been discovered east of Varrock,",
-    "and we are starting a huge excavation project here. I don't know if the",
-    "museum will be able to finance your expedition as well as this one, so I",
-    "fear your current trip will be the last.",
+    "another city from the same period has been discovered east",
+    "of Varrock, and we are starting a huge excavation project",
+    "here. I don't know if the museum will be able to finance your",
+    "expedition as well as this one, so I fear your current trip will be",
+    "the last.",
     "May Saradomin grant you a safe journey home.",
     "Your loving Elissa.",
+    "",
+    "",
+    "",
   ];
+  const NOTES_TITLE = "The Ruins of Uzer";
+  /** The book's 16 pages, as captured (rsprox 3232, ticks 1613-1621). */
+  const NOTES_PAGES = require("../data/the-golem-notes-book.json");
 
   let quest;
 
@@ -457,7 +468,7 @@ module.exports = function registerTheGolemQuest(api) {
     const option = String(event.option ?? "").toLowerCase();
     if (!option.includes("read")) return;
     if (event.itemId === LETTER_ITEM_ID) {
-      for (const line of LETTER_LINES) event.player.sendMessage(line);
+      showLetter(event.player);
       if (letterProgress(event.player) === 0) {
         event.player.setAttribute(LETTER_ATTRIBUTE, 1);
         setVarbit(event.player, VARBIT_GOLEM_B, 1);
@@ -465,14 +476,21 @@ module.exports = function registerTheGolemQuest(api) {
       event.handled = true;
       return;
     }
-    if (event.itemId === NOTES_ITEM_ID && letterProgress(event.player) >= 2) {
-      event.player.sendMessage("You read Varmen's notes. He describes the four statuettes in the temple.");
-      if (letterProgress(event.player) < 3) {
+    if (event.itemId === NOTES_ITEM_ID) {
+      openBook(event.player, NOTES_TITLE, NOTES_PAGES);
+      if (letterProgress(event.player) === 2) {
         event.player.setAttribute(LETTER_ATTRIBUTE, 3);
         setVarbit(event.player, VARBIT_GOLEM_B, 3);
       }
       event.handled = true;
     }
+  }
+
+  function showLetter(player) {
+    const sender = player.getPacketSender();
+    LETTER_LINES.forEach((line, index) => sender.sendString(line, (LETTER_GROUP << 16) | (index + 1)));
+    sender.sendInterfaceScript(2524, [-1, -1]);
+    sender.sendInterface(LETTER_GROUP);
   }
 
   function repairGolem(player, npcId) {

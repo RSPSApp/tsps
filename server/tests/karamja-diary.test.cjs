@@ -10,6 +10,7 @@ const Diaries = require("../plugins/achievements/AchievementDiaries.plugin");
 const DiaryData = require("../plugins/achievements/diaries/Data.AchievementDiaries");
 const Progress = require("../plugins/achievements/diaries/Progress.AchievementDiaries");
 const KaramjaDiary = require("../plugins/achievements/diaries/KaramjaDiary.plugin");
+const EliteTaskProgress = require("../plugins/achievements/diaries/ArdougneEliteTaskProgress.plugin");
 
 let core;
 let emit;
@@ -34,6 +35,7 @@ before(async () => {
   }, { get: (target, key) => key in target ? target[key] : () => {} });
   Progress(api);
   api.onCustomEvent("diary:task", Diaries._test.onTask);
+  EliteTaskProgress.register(api);
   KaramjaDiary.register(api);
   PluginManager.emitCustomEvent = emit;
 });
@@ -75,6 +77,24 @@ test("five plantation bananas count; other banana trees do not", () => {
   const apeTree = { getLocation: () => new core.Location(2700, 2700, 0) };
   for (let i = 0; i < 5; i++) emit("banana-tree:picked", { player: ape, object: apeTree });
   assert.equal(done(ape).has(T.BANANA_TASK), false);
+});
+
+test("a validated unfinished banana count interrupts Ardougne Elite progress", () => {
+  const [x, y] = at(T.BANANA_PLANTATION);
+  const player = playerAt(x, y);
+  const task = EliteTaskProgress._test.MANTA_TASK;
+  emit(EliteTaskProgress._test.STAGE_EVENT, { player, task, stage: "caught" });
+  const query = () => {
+    const request = { player, task };
+    emit(EliteTaskProgress._test.QUERY_EVENT, request);
+    return request.result;
+  };
+  assert.deepEqual(query(), { stage: "caught" });
+
+  emit("banana-tree:picked", { player, object: { getLocation: () => new core.Location(x, y, 0) } });
+  assert.equal(player.getAttribute("karamja-diary:bananas-picked"), 1);
+  assert.equal(done(player).has(T.BANANA_TASK), false);
+  assert.equal(query(), null);
 });
 
 test("five Karamja seaweed pickups count; another item or island does not", () => {

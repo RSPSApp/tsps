@@ -8,6 +8,7 @@ const { Player } = require('../dist/game/entity/impl/player/Player');
 let core, Progress, ardougne;
 const handlers = new Map();
 const completedEvents = [];
+const progressedEvents = [];
 const MANTA_TASK = 'catch-a-manta-ray-in-the-fishing-trawler-and-coo';
 const CROSSBOW_TASK = 'make-a-rune-crossbow-yourself-from-scratch-withi';
 
@@ -34,6 +35,7 @@ before(async () => {
     onPlayerDisconnect: (handler) => handlers.set('player:disconnect', [...(handlers.get('player:disconnect') ?? []), handler]),
   });
   handlers.set('diary:task-completed', [...(handlers.get('diary:task-completed') ?? []), (event) => completedEvents.push(event)]);
+  handlers.set('diary:task-progressed', [...(handlers.get('diary:task-progressed') ?? []), (event) => progressedEvents.push(event)]);
 });
 
 function player() {
@@ -115,6 +117,47 @@ test('accepted completion in another diary clears progress without affecting ano
   assert.equal(Progress.completeTask(staged, varrock, varrock.tiers.easy.tasks[0].key), true);
   assert.equal(query(staged, MANTA_TASK), null);
   assert.deepEqual(query(other, MANTA_TASK), { stage: 'caught' });
+});
+
+test('accepted progress in another diary resets only the matching player stage', () => {
+  const staged = player();
+  const other = player();
+  const varrock = require('../plugins/achievements/diaries/Data.AchievementDiaries').BY_KEY.get('varrock');
+  advance(staged, MANTA_TASK, 'caught');
+  advance(other, MANTA_TASK, 'caught');
+  const previousEvents = progressedEvents.length;
+  const task = varrock.tiers.easy.tasks[0].key;
+
+  assert.equal(Progress.notifyTaskProgress(staged, varrock, task), true);
+  assert.equal(progressedEvents.length, previousEvents + 1);
+  assert.deepEqual(progressedEvents.at(-1), { player: staged, diary: 'varrock', task });
+  assert.equal(query(staged, MANTA_TASK), null);
+  assert.deepEqual(query(other, MANTA_TASK), { stage: 'caught' });
+});
+
+test('same accepted partial task retains its stage while another task clears it', () => {
+  const staged = player();
+  const task = ardougne.tiers.elite.tasks.find(({ key }) => key === MANTA_TASK);
+  advance(staged, MANTA_TASK, 'caught');
+
+  assert.equal(Progress.notifyTaskProgress(staged, ardougne, MANTA_TASK), true);
+  assert.deepEqual(query(staged, MANTA_TASK), { stage: 'caught' });
+  assert.equal(Progress.notifyTaskProgress(staged, ardougne, CROSSBOW_TASK), true);
+  assert.equal(query(staged, MANTA_TASK), null);
+  assert.ok(task);
+});
+
+test('unknown, completed, and duplicate progress notifications are rejected', () => {
+  const staged = player();
+  const varrock = require('../plugins/achievements/diaries/Data.AchievementDiaries').BY_KEY.get('varrock');
+  const task = varrock.tiers.easy.tasks[0].key;
+  assert.equal(Progress.notifyTaskProgress(staged, varrock, 'unknown-task'), false);
+  assert.equal(Progress.notifyTaskProgress(staged, ardougne, MANTA_TASK), true);
+  assert.equal(Progress.completeTask(staged, varrock, task), true);
+  const before = progressedEvents.length;
+  assert.equal(Progress.notifyTaskProgress(staged, varrock, task), false);
+  assert.equal(progressedEvents.length, before);
+  assert.equal(Progress.notifyTaskProgress(null, varrock, task), false);
 });
 
 test('logout and disconnect clear only that player session', () => {

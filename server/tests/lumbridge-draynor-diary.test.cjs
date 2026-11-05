@@ -12,6 +12,7 @@ const DiaryPlugin = require("../plugins/achievements/diaries/LumbridgeDraynorDia
 const DiaryActions = require("../plugins/achievements/diaries/Actions.AchievementDiaries");
 const DiaryData = require("../plugins/achievements/diaries/Data.AchievementDiaries");
 const Progress = require("../plugins/achievements/diaries/Progress.AchievementDiaries");
+const EliteTaskProgress = require("../plugins/achievements/diaries/ArdougneEliteTaskProgress.plugin");
 
 let core;
 let emit;
@@ -37,6 +38,7 @@ before(async () => {
     onNpcDeath(handler) { deathHandlers.push(handler); },
   }, { get: (target, key) => key in target ? target[key] : () => {} });
   Progress(api);
+  EliteTaskProgress.register(api);
   api.onCustomEvent("diary:task", Diaries._test.onTask);
   DiaryActions(api);
   DiaryPlugin.register(api);
@@ -117,6 +119,25 @@ test("Lumbridge oak credit requires both a successful local chop and burn", (t) 
   emit("woodcutting:success", { player: elsewhere, logId: items.OAK_LOGS, location: new core.Location(3000, 3000, 0) });
   emit("firemaking:success", { player: elsewhere, itemId: items.OAK_LOGS });
   assert.equal(done(elsewhere, TASKS.oakLogs), false);
+});
+
+test("chopping a Lumbridge oak interrupts an unfinished Ardougne Elite task", (t) => {
+  const player = fixture(t, { at: [3220, 3220, 0] });
+  const task = EliteTaskProgress._test.MANTA_TASK;
+  const request = { player, task, stage: "caught" };
+  emit(EliteTaskProgress._test.STAGE_EVENT, request);
+  const query = () => {
+    const result = { player, task };
+    emit(EliteTaskProgress._test.QUERY_EVENT, result);
+    return result.result;
+  };
+  assert.deepEqual(query(), { stage: "caught" });
+
+  emit("woodcutting:success", {
+    player, logId: core.ItemIdentifiers.OAK_LOGS, location: new core.Location(3221, 3220, 0),
+  });
+  assert.equal(query(), null);
+  assert.equal(done(player, TASKS.oakLogs), false);
 });
 
 test("fish, cooking and mining credit only the required catch, output and area", (t) => {

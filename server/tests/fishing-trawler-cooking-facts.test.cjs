@@ -117,12 +117,19 @@ function cookScene({ burn = false, acceptOutput = true } = {}) {
   const events = [];
   const items = new Map([[mantaId, 1]]);
   const attributes = new Map();
+  let xp = 0;
   const location = new core.Location(3200, 3201, 0);
   const inventory = {
     getAmount: id => items.get(id) ?? 0,
+    getItems: () => [new core.Item(mantaId, 1)],
     deleteNumber(id, amount) { items.set(id, Math.max(0, this.getAmount(id) - amount)); },
+    getAddableAmount(item) {
+      return acceptOutput && this.getAmount(mantaId) === 0 ? item.getAmount() : 0;
+    },
     addItem(item) {
-      if (acceptOutput) items.set(item.getId(), this.getAmount(item.getId()) + item.getAmount());
+      if (acceptOutput || item.getId() === mantaId) {
+        items.set(item.getId(), this.getAmount(item.getId()) + item.getAmount());
+      }
     },
   };
   const player = {
@@ -130,7 +137,7 @@ function cookScene({ burn = false, acceptOutput = true } = {}) {
     getAttribute: key => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
     getPacketSender: () => ({ sendVarbit() {}, sendTypedMessage() {} }),
-    getSkillManager: () => ({ getCurrentLevel: () => 99, addExperiences() {} }),
+    getSkillManager: () => ({ getCurrentLevel: () => 99, addExperiences(_skill, amount) { xp += amount; } }),
   };
   CookingCommon.init({ core, emitCustomEvent(name, payload) {
     events.push([name, payload]);
@@ -139,7 +146,7 @@ function cookScene({ burn = false, acceptOutput = true } = {}) {
   } });
   const cookable = { raw: mantaId, cooked: cookedMantaId, burnt: -2, name: "manta ray", level: 1, stopBurn: 99, xp: 1 };
   Cooking._test.cookOne(player, { cookable, objectId: -1, location });
-  return { events, items, location };
+  return { events, items, location, get xp() { return xp; } };
 }
 
 test("successful cooking reports the granted output, raw fish and cooker location", () => {
@@ -164,4 +171,55 @@ test("burns and unaccepted cooked output do not report an obtained item", () => 
   const failedGrant = cookScene({ acceptOutput: false });
   assert.equal(failedGrant.events.some(([name]) => name === "items:obtained"), false);
   assert.equal(failedGrant.events.some(([name]) => name === "cooking:success"), false);
+  assert.equal(failedGrant.events.some(([name]) => name === "skills:produced"), false);
+  assert.equal(failedGrant.xp, 0);
+  assert.equal(failedGrant.items.get(mantaId), 1);
+  assert.equal(failedGrant.items.get(cookedMantaId) ?? 0, 0);
+});
+
+function realInventoryCook({ rejectOutput = false } = {}) {
+  const events = [];
+  const location = new core.Location(3200, 3201, 0);
+  const player = {
+    getUsername: () => "cooking-test",
+    getPacketSender: () => ({ sendItemContainer() {}, sendVarbit() {}, sendTypedMessage() {} }),
+    getInterfaceId: () => -1,
+    getSkillManager: () => ({ getCurrentLevel: () => 99, addExperiences() {} }),
+    getAttribute: () => undefined,
+    setAttribute() {},
+  };
+  const inventory = new core.Inventory(player);
+  const rawMeta = { preset: true, origin: { slot: 4 } };
+  inventory.setItem(0, new core.Item(mantaId, 1, rawMeta));
+  for (let slot = 1; slot < inventory.capacity(); slot++) {
+    inventory.setItem(slot, new core.Item(mantaId, 1));
+  }
+  if (rejectOutput) inventory.getAddableAmount = () => 0;
+  player.getInventory = () => inventory;
+  CookingCommon.init({ core, emitCustomEvent(name, payload) {
+    events.push([name, payload]);
+    if (name === "skillcape:has-perk") payload.result = false;
+    if (name === "cooking:burn") payload.burn = false;
+  } });
+  const cookable = { raw: mantaId, cooked: cookedMantaId, burnt: -2, name: "manta ray", level: 1, stopBurn: 99, xp: 1 };
+  Cooking._test.cookOne(player, { cookable, objectId: -1, location });
+  return { events, inventory, rawMeta };
+}
+
+test("a full real inventory frees the raw slot for cooked food", () => {
+  assert.equal(core.ItemDefinition.forId(cookedMantaId).isStackable(), false);
+  const f = realInventoryCook();
+  assert.equal(f.inventory.capacity(), 28);
+  assert.equal(f.inventory.getAmount(mantaId), 27);
+  assert.equal(f.inventory.getAmount(cookedMantaId), 1);
+  assert.equal(f.events.some(([name]) => name === "cooking:success"), true);
+});
+
+test("a rejected output restores the original raw item metadata in a real inventory", () => {
+  const f = realInventoryCook({ rejectOutput: true });
+  assert.equal(f.inventory.getAmount(mantaId), 28);
+  assert.equal(f.inventory.getAmount(cookedMantaId), 0);
+  assert.deepEqual(f.inventory.getItems().find(item => item.getId() === mantaId).getMeta(), f.rawMeta);
+  assert.equal(f.events.some(([name]) => name === "cooking:success"), false);
+  assert.equal(f.events.some(([name]) => name === "skills:produced"), false);
 });

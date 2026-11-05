@@ -251,6 +251,24 @@ test("a full inventory: a preset stack of a material does not count as making ro
   assert.deepEqual(await run(20), [0, 20, 10, 30], "nothing plain runs out, so nothing is taken");
 });
 
+test("a full inventory: capacity preview consumes the plain stack, not a larger preset stack", async (t) => {
+  const f = actor(t);
+  customPreset(f, [item(I.RUNITE_BOLTS, 20)]);
+  assert.equal(f.inv.getItems()[0].isPresetItem(), true, "the preset stack comes first");
+  put(f, item(I.RUNITE_BOLTS, 10), 1);
+  put(f, item(I.DRAGONSTONE_BOLT_TIPS, 10), 2);
+  fill(f);
+
+  await useOn(f, 2, 1);
+  if (f.p.getCreationMenu()) await create(f, I.DRAGONSTONE_BOLTS, 1);
+  ticks(5);
+
+  assert.deepEqual([plainOf(f, I.DRAGONSTONE_BOLTS), plainOf(f, I.RUNITE_BOLTS), presetOf(f, I.RUNITE_BOLTS)], [10, 0, 20]);
+  assert.equal(f.inv.getAmount(I.DRAGONSTONE_BOLT_TIPS), 0);
+  assert.equal(f.inv.getFreeSlots(), 1, "the consumed inputs free a slot for the product");
+  assert.ok(!f.messages.includes(SPACE_TEXT), "the batch fits after the plain stack is consumed");
+});
+
 // ------------------------------------------------------------------ preset materials
 
 test("preset bolts are not tipped into plain ones", async (t) => {

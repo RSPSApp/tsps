@@ -310,12 +310,16 @@ function cookTick(task) {
 function cookOne(player, session) {
   const { Item, Skill } = Common.core;
   const cookable = cookedResult(player, session.cookable);
-  player.getInventory().deleteNumber(session.cookable.raw, 1);
+  const inventory = player.getInventory();
   if (cookable.deliberate) {
+    inventory.deleteNumber(session.cookable.raw, 1);
     player.getInventory().addItem(new Item(cookable.cooked, 1));
     Common.spam(player, successMessage(cookable));
     return;
   }
+  const rawItem = inventory.getItems().find((item) => item?.getId() === session.cookable.raw);
+  const rawRestore = rawItem?.clone ? rawItem.clone().setAmount(1) : new Item(session.cookable.raw, 1);
+  inventory.deleteNumber(session.cookable.raw, 1);
   const burnRequest = {
     player,
     rawId: session.cookable.raw,
@@ -324,9 +328,18 @@ function cookOne(player, session) {
   };
   Common.api.emitCustomEvent("cooking:burn", burnRequest);
   if (!burnRequest.burn) {
-    const before = player.getInventory().getAmount(cookable.cooked);
-    player.getInventory().addItem(new Item(cookable.cooked, 1));
-    const amount = Math.max(0, player.getInventory().getAmount(cookable.cooked) - before);
+    const output = new Item(cookable.cooked, 1);
+    if (typeof inventory.getAddableAmount === "function" && inventory.getAddableAmount(output) === 0) {
+      inventory.addItem(rawRestore);
+      return;
+    }
+    const before = inventory.getAmount(cookable.cooked);
+    inventory.addItem(output);
+    const amount = Math.max(0, inventory.getAmount(cookable.cooked) - before);
+    if (amount === 0) {
+      inventory.addItem(rawRestore);
+      return;
+    }
     Common.spam(player, successMessage(cookable));
     countCook(player, false);
     if (amount > 0) {

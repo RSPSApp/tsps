@@ -324,7 +324,7 @@ function canGrantAfterConsumption(player, outputId, amount, plan) {
   if (typeof inventory.getCopiedItems !== "function" || typeof core.Inventory !== "function") return true;
   const preview = new core.Inventory(player).setItems(inventory.getCopiedItems());
   for (const input of plan) {
-    if (!input.virtual) preview.deleted(input.itemId, input.amount, false);
+    if (!input.virtual) takePlain(preview, input.itemId, input.amount);
   }
   const output = new core.Item(outputId, amount);
   return preview.getAddableAmount(output) >= amount;

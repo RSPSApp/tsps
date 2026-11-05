@@ -18,12 +18,26 @@ function recordStage({ player, task, stage } = {}) {
 
   const current = progressByPlayer.get(player);
   if (current?.task === task && current.stage === stage) return;
-  progressByPlayer.set(player, { task, stage });
+  progressByPlayer.set(player, { diary: "ardougne", task, stage });
 }
 
-function completedTask({ player } = {}) {
+function resetForOtherTask({ player, diary, task } = {}) {
   if (!activePlayer(player)) return;
-  progressByPlayer.delete(player);
+  const progress = progressByPlayer.get(player);
+  if (progress && (progress.diary !== diary || progress.task !== task)) progressByPlayer.delete(player);
+}
+
+function completedTask(event) {
+  const { player, diary, task } = event ?? {};
+  if (!activePlayer(player)) return;
+  const progress = progressByPlayer.get(player);
+  if (progress && (progress.diary !== diary || progress.task !== task || (diary === "ardougne" && TASKS.has(task)))) {
+    progressByPlayer.delete(player);
+  }
+}
+
+function progressedTask(event) {
+  resetForOtherTask(event);
 }
 
 /** A synchronous query returns only the requested player's requested task stage. */
@@ -74,8 +88,9 @@ module.exports = {
     api.onCustomEvent(QUERY_EVENT, registerStageQuery);
     api.onCustomEvent(CLEAR_EVENT, registerStageClear);
     api.onCustomEvent("diary:task-completed", registerCompletedTask);
+    api.onCustomEvent("diary:task-progressed", progressedTask);
     api.onPlayerLogout(registerLogout);
     api.onPlayerDisconnect(registerLogout);
   },
-  _test: { MANTA_TASK, CROSSBOW_TASK, STAGE_EVENT, QUERY_EVENT, CLEAR_EVENT, queryStage, clearStage, recordStage, completedTask, clearPlayer },
+  _test: { MANTA_TASK, CROSSBOW_TASK, STAGE_EVENT, QUERY_EVENT, CLEAR_EVENT, queryStage, clearStage, recordStage, completedTask, progressedTask, clearPlayer },
 };

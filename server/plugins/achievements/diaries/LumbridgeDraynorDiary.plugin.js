@@ -1,4 +1,6 @@
 const DIARY = "lumbridge";
+const DiaryProgress = require("./Progress.AchievementDiaries");
+const DIARY_DATA = require("./Data.AchievementDiaries").BY_KEY.get(DIARY);
 const ATTRIBUTES = {
   oakChopped: "achievement-diaries:lumbridge-oak-chopped",
   amuletStage: "achievement-diaries:lumbridge-power-amulet-stage",
@@ -116,7 +118,10 @@ function woodcut(event) {
   if (!eligible(player)) return;
   const at = location ?? player.getLocation?.();
   if (logId === item.OAK_LOGS && inSquare(at, 50, 50)) {
-    player.setAttribute(ATTRIBUTES.oakChopped, true);
+    if (player.getAttribute(ATTRIBUTES.oakChopped) !== true) {
+      player.setAttribute(ATTRIBUTES.oakChopped, true);
+      DiaryProgress.notifyTaskProgress(player, DIARY_DATA, TASKS.oakLogs);
+    }
   }
   if (logId === item.WILLOW_LOGS && inSquare(at, 48, 50)) complete(player, TASKS.willow);
   if (logId === item.MAGIC_LOGS && inside(at, AREAS.mageTrainingArena)) complete(player, TASKS.magicLogs);
@@ -164,9 +169,15 @@ function produced({ player, skill, itemId, kind } = {}) {
   if (itemId === item.COIF && inside(at, AREAS.cowPen)) complete(player, TASKS.coif);
   if (inside(at, AREAS.lumbridge) && skill === core.Skill.CRAFTING) {
     const stage = Number(player.getAttribute(ATTRIBUTES.amuletStage)) || 0;
-    if (itemId === item.DIAMOND_AMULET_U_) player.setAttribute(ATTRIBUTES.amuletStage, 1);
+    if (itemId === item.DIAMOND_AMULET_U_ && stage !== 1) {
+      player.setAttribute(ATTRIBUTES.amuletStage, 1);
+      DiaryProgress.notifyTaskProgress(player, DIARY_DATA, TASKS.amulet);
+    }
     else if (itemId === item.DIAMOND_AMULET && kind === "string" && stage >= 1) {
-      player.setAttribute(ATTRIBUTES.amuletStage, 2);
+      if (stage !== 2) {
+        player.setAttribute(ATTRIBUTES.amuletStage, 2);
+        DiaryProgress.notifyTaskProgress(player, DIARY_DATA, TASKS.amulet);
+      }
     }
   }
 }

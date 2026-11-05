@@ -354,6 +354,7 @@
       "unverified": "the barehanded climb's animation (no capture); the screen fade before the teleport (no step for it yet)",
       "requires": [
         {
+          "method": "grapple",
           "skills": {"agility":11,"strength":37,"ranged":19},
           "equipped": [
             {"slot":"weapon","name":"crossbow","message":"You need a crossbow equipped to do that."},
@@ -361,6 +362,7 @@
           ]
         },
         {
+          "method": "barehanded",
           "skills": {"agility":52},
           "steps": [
             {"face":{"object":[0,0]}},
@@ -391,6 +393,7 @@
       "unverified": "the barehanded climb's animation (no capture); the screen fade before the teleport (no step for it yet)",
       "requires": [
         {
+          "method": "grapple",
           "skills": {"agility":11,"strength":37,"ranged":19},
           "equipped": [
             {"slot":"weapon","name":"crossbow","message":"You need a crossbow equipped to do that."},
@@ -398,6 +401,7 @@
           ]
         },
         {
+          "method": "barehanded",
           "skills": {"agility":52},
           "steps": [
             {"face":{"object":[0,0]}},

@@ -750,7 +750,10 @@ function clearCrop(player, patch, state, crop) {
             // Wiki Tree_roots_(Farming): one more root every eight levels above planting,
             // capped at four; temporary boosts apply when the stump is dug.
             const roots = 1 + Math.min(3, Math.floor((player.getSkillManager().getCurrentLevel(core.Skill.FARMING) - crop.level) / 8));
-            if (!give(player, Data.itemId(`${crop.name} roots`), Math.max(1, roots))) return;
+            const amount = Math.max(1, roots);
+            const itemId = Data.itemId(`${crop.name} roots`);
+            if (!give(player, itemId, amount)) return;
+            core.PluginManager.emitCustomEvent("farming:roots", { player, crop: crop.key, patch, itemId, amount });
         }
         clearPatch(player, patch);
         spam(player, stump ? `You dig up the ${stump}.` : "You have successfully cleared this patch for new crops.");
@@ -907,6 +910,7 @@ function itemOnObject(event) {
     } else if (id === Data.itemId("Scarecrow") && patch.type === "FLOWER" && !state.crop && !state.weeds && !state.scarecrow) {
         if (!hasLevel(player, SCARECROW_LEVEL, "scarecrow")) return;
         player.getInventory().deleteNumber(id, 1); state.scarecrow = true;
+        core.PluginManager.emitCustomEvent("farming:scarecrow", { player, patch });
     } else if (id === Data.itemId("Plant pot")) fillPlantPot(player, patch, state, id);
     else player.sendMessage("Nothing interesting happens.");
     syncPatch(player, patch);

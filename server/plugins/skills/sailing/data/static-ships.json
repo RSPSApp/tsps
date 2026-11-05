@@ -272,6 +272,9 @@
       "sidepanelBoatType": 8113,
       "sidepanelFacilitySlots": 7,
       "anims": {
+        "sail": {
+          "cloth": { "down_to_full": 13383 }
+        },
         "helm": {
           "active": 13346,
           "loop": 13347,

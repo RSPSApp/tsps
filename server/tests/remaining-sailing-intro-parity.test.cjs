@@ -1287,3 +1287,76 @@ test('a supplied panel refuses foreign, unboarded and retired requests and ignor
   assert.equal(h.varbits.get(VARBIT.SIDEPANEL_PLAYER_AT_HELM), 1);
   assert.equal(h.sailing.boats.length, 0);
 });
+
+test('the supplied intro Sails Set emits its captured down-to-full transition', () => {
+  const h = setup();
+  const StaticShips = require('../plugins/skills/sailing/StaticShips.Sailing');
+  const { BoatManager } = h.core;
+  const { VARBIT } = sailingContent;
+  const sender = h.player.getPacketSender();
+  const oldObject = Object.getOwnPropertyDescriptor(sender, 'sendObject');
+  const oldAnimation = Object.getOwnPropertyDescriptor(sender, 'sendObjectAnimation');
+  const outputs = [];
+  // Observe production sender arguments in this quest helper, not encoded packets.
+  sender.sendObject = (loc) => {
+    outputs.push({ kind: 'object', id: loc.getId() });
+    return sender;
+  };
+  sender.sendObjectAnimation = (loc, animation) => {
+    const here = loc.getLocation();
+    outputs.push({ kind: 'animation', tuple: [loc.getId(), here.getX(), here.getY(), here.getZ(),
+      loc.getType(), loc.getFace(), animation.getId()] });
+    return sender;
+  };
+  try {
+    for (const stale of StaticShips.all()) StaticShips.dispose(stale);
+    const quest = load(h, 'Pandemonium.Quest.js');
+    h.action(h.core.NpcIdentifiers.WILL, 'BDfVg8');
+    quest.setStage(h.player, 8); // Post-briefing checkpoint, not a natural quest playthrough.
+    const ship = StaticShips.all().find(ship => ship.boat === BoatManager.getBoatAboard(h.player));
+    assert.ok(ship, 'the player is aboard the registered supplied ship');
+    const spec = BoatManager.getSpec(ship.boat);
+    const sail = spec.locs.find(loc => loc.id === 59553);
+    assert.ok(sail);
+    assert.deepEqual([sail.x, sail.y, sail.level, sail.shape, sail.rotation], [4, 4, 1, 10, 0]);
+    assert.equal(sail.sailCloth, true, 'the supplied Set target remains the cloth-tagged loc');
+    const definition = h.core.CacheDefinitions.getObject(59553);
+    assert.equal(definition.name, 'Sails');
+    assert.equal(definition.seqId, 13884, 'native default is separate from the explicit transition');
+    const options = definition.actions;
+    const setIndex = options.indexOf('Set');
+    assert.ok(setIndex >= 0, 'the actual cached definition exposes Set');
+    outputs.length = 0;
+    clickAction(h, 59553, definition.name, options, setIndex);
+    assert.deepEqual(outputs.filter(output => output.kind === 'animation'), [],
+      'pre-helm Set sends no loc animation');
+    assert.equal(quest.getStage(h.player), 8, 'pre-helm Set does not bypass the stage gate');
+
+    clickAction(h, 59620, 'Helm', ['Navigate', 'Escape'], 0);
+    assert.equal(quest.getStage(h.player), 10);
+    assert.equal(ship.boat.helmPlayerId, h.player.getIndex());
+    assert.equal(h.varbits.get(VARBIT.SIDEPANEL_BOAT_MOVE_MODE), 4, 'accepted helm starts down/moored');
+    outputs.length = 0; // Exclude the separate accepted-helm animation.
+    const set = clickAction(h, 59553, definition.name, options, setIndex);
+    assert.equal(set.handled, true, 'registered quest input accepted Set');
+    assert.equal(h.varbits.get(VARBIT.SIDEPANEL_BOAT_MOVE_MODE), 2, 'canonical Set reached FULL');
+    assert.equal(ship.boat.moveMode, 2);
+    assert.deepEqual(outputs.filter(output => output.kind === 'animation').map(output => output.tuple),
+      [[59553, ship.boat.deckBaseX + 4, ship.boat.deckBaseY + 4, 1, 10, 0, 13383]],
+      'supplied Set emits exactly its captured down-to-full transition');
+    const clothUpdate = outputs.findIndex(output => output.kind === 'object' && output.id === 59553);
+    const transition = outputs.findIndex(output => output.kind === 'animation');
+    assert.ok(clothUpdate >= 0 && clothUpdate < transition, 'cloth options update precedes its transition');
+    assert.equal(h.core.CacheDefinitions.getObject(59553).seqId, 13884,
+      'explicit transition does not rewrite the native default sequence');
+  } finally {
+    try {
+      for (const logout of h.hooks.logout) logout({ player: h.player });
+    } finally {
+      if (oldObject) Object.defineProperty(sender, 'sendObject', oldObject);
+      else delete sender.sendObject;
+      if (oldAnimation) Object.defineProperty(sender, 'sendObjectAnimation', oldAnimation);
+      else delete sender.sendObjectAnimation;
+    }
+  }
+});

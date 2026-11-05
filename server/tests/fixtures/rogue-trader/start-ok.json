@@ -1,0 +1,261 @@
+[
+ {
+  "k": "say",
+  "t": 13560,
+  "who": "Ali Morrisane",
+  "text": "Hello <player>. How's the adventuring going?"
+ },
+ {
+  "k": "say",
+  "t": 13562,
+  "who": "player",
+  "text": "Hi Ali. Not bad. How are you?"
+ },
+ {
+  "k": "say",
+  "t": 13564,
+  "who": "Ali Morrisane",
+  "text": "Still selling."
+ },
+ {
+  "k": "say",
+  "t": 13565,
+  "who": "player",
+  "text": "Anything interesting?"
+ },
+ {
+  "k": "say",
+  "t": 13566,
+  "who": "Ali Morrisane",
+  "text": "For you, always. As a matter of fact I have just acquired a fleet of magic carpets, which operate throughout the Kharidian desert."
+ },
+ {
+  "k": "say",
+  "t": 13567,
+  "who": "player",
+  "text": "Wow, that sounds great, how about your stall?"
+ },
+ {
+  "k": "say",
+  "t": 13568,
+  "who": "Ali Morrisane",
+  "text": "Trade is good, but I would like to expand and diversify, but it's proving a little more difficult than I initially thought."
+ },
+ {
+  "k": "say",
+  "t": 13569,
+  "who": "player",
+  "text": "How so?"
+ },
+ {
+  "k": "say",
+  "t": 13570,
+  "who": "Ali Morrisane",
+  "text": "I think the other merchants in this town are conspiring against me."
+ },
+ {
+  "k": "say",
+  "t": 13571,
+  "who": "player",
+  "text": "Oh come on! You're just being paranoid now."
+ },
+ {
+  "k": "say",
+  "t": 13572,
+  "who": "Ali Morrisane",
+  "text": "Well maybe I can't get any new suppliers then because I'm Pollnivnian."
+ },
+ {
+  "k": "say",
+  "t": 13573,
+  "who": "player",
+  "text": "You're what?"
+ },
+ {
+  "k": "say",
+  "t": 13574,
+  "who": "Ali Morrisane",
+  "text": "From Pollnivneach."
+ },
+ {
+  "k": "say",
+  "t": 13575,
+  "who": "player",
+  "text": "Maybe I could help you then?"
+ },
+ {
+  "k": "say",
+  "t": 13576,
+  "who": "Ali Morrisane",
+  "text": "Perhaps you could."
+ },
+ {
+  "k": "say",
+  "t": 13577,
+  "who": "Ali Morrisane",
+  "text": "I have an old friend - a cloth merchant Siamun, who lives in Sophanem - Do you know the place?"
+ },
+ {
+  "k": "say",
+  "t": 13577,
+  "who": "player",
+  "text": "Umm..... Images of cats and priests come to mind. Ah yes! There we go, it's the city of the dead South of Pollnivneach isn't it?"
+ },
+ {
+  "k": "say",
+  "t": 13578,
+  "who": "Ali Morrisane",
+  "text": "That's the one, well if you could convince him to supply me with some of his merchandise, I would be more than willing to sell them to the masses ...... for a small percentage of course."
+ },
+ {
+  "k": "varbit",
+  "t": 13579,
+  "id": 912,
+  "value": 1
+ },
+ {
+  "k": "menu",
+  "t": 13579,
+  "title": "Select an option",
+  "options": [
+   "So what's in this for me?",
+   "Ok I'll get on to it."
+  ]
+ },
+ {
+  "k": "pick",
+  "t": 13582,
+  "n": 2
+ },
+ {
+  "k": "say",
+  "t": 13582,
+  "who": "player",
+  "text": "Ok I'll get on to it."
+ },
+ {
+  "k": "say",
+  "t": 13583,
+  "who": "player",
+  "text": "Is there anyone else you want me to talk to on your behalf?"
+ },
+ {
+  "k": "say",
+  "t": 13584,
+  "who": "Ali Morrisane",
+  "text": "There's a blackjack seller in Pollnivneach, a cautious type of guy, not the usual entrepreneurial sort that I would normally deal with, but..."
+ },
+ {
+  "k": "say",
+  "t": 13585,
+  "who": "Ali Morrisane",
+  "text": "I think that he has a product with real potential..."
+ },
+ {
+  "k": "say",
+  "t": 13585,
+  "who": "player",
+  "text": "What? .... Blackjacks?"
+ },
+ {
+  "k": "say",
+  "t": 13586,
+  "who": "Ali Morrisane",
+  "text": "Yes, but at the moment the product isn't polished enough, if you could convince him to create a larger variety of weapon I would gladly stock his products."
+ },
+ {
+  "k": "varbit",
+  "t": 13587,
+  "id": 911,
+  "value": 1
+ },
+ {
+  "k": "menu",
+  "t": 13587,
+  "title": "Select an option",
+  "options": [
+   "So what's in this for me?",
+   "Ok I'll see what I can do."
+  ]
+ },
+ {
+  "k": "pick",
+  "t": 13589,
+  "n": 2
+ },
+ {
+  "k": "say",
+  "t": 13589,
+  "who": "player",
+  "text": "Ok I'll see what I can do."
+ },
+ {
+  "k": "say",
+  "t": 13590,
+  "who": "Ali Morrisane",
+  "text": "I think I need just one more product type, something magical ... now what could I stock that's magical, has large demand and a pretty good profit margin..."
+ },
+ {
+  "k": "say",
+  "t": 13591,
+  "who": "player",
+  "text": "How about runes?"
+ },
+ {
+  "k": "say",
+  "t": 13592,
+  "who": "Ali Morrisane",
+  "text": "Yes, that would be perfect, but who could I get that would supply? There really seems to be a gap in the market in the desert but I don't know anyone in that line of business."
+ },
+ {
+  "k": "say",
+  "t": 13593,
+  "who": "player",
+  "text": "Hang on, I know somebody called Aubury, decent fella. I helped him out a while back. Perhaps I could approach him about the idea."
+ },
+ {
+  "k": "say",
+  "t": 13594,
+  "who": "Ali Morrisane",
+  "text": "Oh yes, the rune seller from Varrock. That would be perfect. He's far enough away that he wouldn't end up competing with himself."
+ },
+ {
+  "k": "varbit",
+  "t": 13595,
+  "id": 913,
+  "value": 1
+ },
+ {
+  "k": "say",
+  "t": 13595,
+  "who": "player",
+  "text": "What do you mean?"
+ },
+ {
+  "k": "say",
+  "t": 13596,
+  "who": "Ali Morrisane",
+  "text": "Well the rune market is a limited one, if I were to sell his runes from a location nearby his shop, then I would take part of his market share so he would in fact not benefit from me sel"
+ },
+ {
+  "k": "say",
+  "t": 13597,
+  "who": "player",
+  "text": "Ah ha I think I know where this is going. So because you're located far enough away from him you will take up someone else's share in the market and Aubury will make more money as a result."
+ },
+ {
+  "k": "say",
+  "t": 13598,
+  "who": "Ali Morrisane",
+  "text": "Very well anticipated."
+ },
+ {
+  "k": "menu",
+  "t": 13599,
+  "title": "Select an option",
+  "options": [
+   "So what's in this for me?",
+   "Ok I'll see what I can do."
+  ]
+ }
+]

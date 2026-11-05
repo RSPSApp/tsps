@@ -1,0 +1,67 @@
+[
+ {
+  "k": "say",
+  "t": 1125,
+  "who": "Ali Morrisane",
+  "text": "Siamun's clothes seem to have really struck a chord with the locals in Al Kharid. Menaphite culture seems to be taking off here, rumour has it that one of Prince Ali's servants bought hi"
+ },
+ {
+  "k": "say",
+  "t": 1132,
+  "who": "player",
+  "text": "Wow, that sounds positive."
+ },
+ {
+  "k": "say",
+  "t": 1133,
+  "who": "Ali Morrisane",
+  "text": "Quite, if I don't say so myself. But in order to keep things fresh, the next time you're in Sophanem, could you ask that cranky old so-and-so Siamun to produce a new line of clothing?"
+ },
+ {
+  "k": "varbit",
+  "t": 1143,
+  "id": 915,
+  "value": 1
+ },
+ {
+  "k": "say",
+  "t": 1143,
+  "who": "player",
+  "text": "Sure, why not. The Sultan himself might even buy some of the new range."
+ },
+ {
+  "k": "say",
+  "t": 1145,
+  "who": "Ali Morrisane",
+  "text": "That would be the day."
+ },
+ {
+  "k": "menu",
+  "t": 1146,
+  "title": "Select an option",
+  "options": [
+   "I would like to have a look at your selection of blackjacks.",
+   "I would like to have a look at your selection of clothes.",
+   "I would like to have a look at your selection of runes.",
+   "I would like to have a look at your general stock.",
+   "I hear you're planning to expand your business here..."
+  ]
+ },
+ {
+  "k": "pick",
+  "t": 1156,
+  "n": 2
+ },
+ {
+  "k": "say",
+  "t": 1157,
+  "who": "Ali Morrisane",
+  "text": "Hang on a second while I get the garments."
+ },
+ {
+  "k": "varbit",
+  "t": 1158,
+  "id": 922,
+  "value": 5
+ }
+]

@@ -1,0 +1,39 @@
+[
+ {
+  "k": "menu",
+  "t": 508,
+  "title": "Select an option",
+  "options": [
+   "View runes.",
+   "View general stock."
+  ]
+ },
+ {
+  "k": "pick",
+  "t": 510,
+  "n": 1
+ },
+ {
+  "k": "menu",
+  "t": 510,
+  "title": "Select an option",
+  "options": [
+   "Try to open a small casket of runes",
+   "Try to open a large casket of runes",
+   "Buy elemental runes.",
+   "Buy other runes.",
+   "On second thoughts I don't really need any runes."
+  ]
+ },
+ {
+  "k": "pick",
+  "t": 512,
+  "n": 4
+ },
+ {
+  "k": "msg",
+  "t": 515,
+  "kind": "gamemessage",
+  "text": "Law rune: currently costs 300 coins."
+ }
+]

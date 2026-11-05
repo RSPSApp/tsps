@@ -1,0 +1,50 @@
+[
+ {
+  "k": "say",
+  "t": 1105,
+  "who": "Ali Morrisane",
+  "text": "Hello <player>. How's the adventuring going?"
+ },
+ {
+  "k": "say",
+  "t": 1106,
+  "who": "player",
+  "text": "Hi Ali. Not bad. How are you?"
+ },
+ {
+  "k": "say",
+  "t": 1107,
+  "who": "Ali Morrisane",
+  "text": "Still selling."
+ },
+ {
+  "k": "say",
+  "t": 1108,
+  "who": "Ali Morrisane",
+  "text": "Fantastic job on the blackjacks. I started getting the first batches of them a short time ago, and they've being flying off the shelves, although the demand seems to be dropping off a li"
+ },
+ {
+  "k": "say",
+  "t": 1116,
+  "who": "player",
+  "text": "Not too badly, I hope."
+ },
+ {
+  "k": "say",
+  "t": 1117,
+  "who": "Ali Morrisane",
+  "text": "No, no, they're still selling fine, but if you could perhaps convince the blackjack man to send a different variety the next time you see him, I would be more than happy."
+ },
+ {
+  "k": "varbit",
+  "t": 1124,
+  "id": 920,
+  "value": 1
+ },
+ {
+  "k": "say",
+  "t": 1124,
+  "who": "player",
+  "text": "I should like to have a look at them, at some stage."
+ }
+]

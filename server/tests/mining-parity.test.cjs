@@ -1202,6 +1202,34 @@ test("Cam Torum's oozing water (1105): two rocks a half, +15% while wet, then ea
   }
 });
 
+test("Cam Torum's water still finds a rock that is mined out when the mine is first scanned", () => {
+  const { MapObjects, GameObject } = core;
+  core.RegionManager.init();
+  harness();
+  const Water = require("../plugins/skills/mining/CalcifiedWater.Mining")._test;
+  core.RegionManager.loadMapFiles(Water.MINE.x, Water.MINE.y);
+  const hash = MapObjects.getHash(1502, 9537, 1);
+  const placed = MapObjects.mapObjects.get(hash);
+  const original = placed.find((object) => object.getId() === loc("varlamore_mining_rock02") || core.CacheDefinitions.getObject(object.getId())?.name === "Calcified rocks");
+  assert.ok(original, "a calcified rock at 1502,9537");
+  const rockId = original.getId();
+  const emptyId = loc(core.CacheDefinitions.getLocNames().get(rockId).replace(/rock(\d*)$/, "rock_empty$1"));
+  const emptied = new GameObject(emptyId, original.getLocation().clone(), original.getType(), original.getFace(), null);
+  MapObjects.mapObjects.set(hash, placed.map((object) => (object === original ? emptied : object)));
+  try {
+    const sites = Water.sites();
+    assert.equal(sites.length, 16, "the mined-out rock still counts as a site");
+    const site = sites.find((entry) => entry.getLocation().getX() === 1502 && entry.getLocation().getY() === 9537);
+    assert.equal(site.getId(), rockId, "as the rock its empty loc stands in for");
+    assert.equal(site.getFace(), original.getFace());
+  } finally {
+    MapObjects.mapObjects.set(hash, placed);
+  }
+  // Respawned, the rock can ooze again.
+  assert.ok(Water.sites().some((entry) => entry.getLocation().getX() === 1502 && entry.getLocation().getY() === 9537
+    && MapObjects.get(entry.getId(), entry.getLocation(), null)), "the respawned rock is standing at its site");
+});
+
 test("every loc named for mining in the cache has a handler (this plugin, or the content that owns it)", () => {
   // Rocks other plugins mine, by name: quests, minigames, bosses, stars, Motherlode.
   const elsewhere = new Set([

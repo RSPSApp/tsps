@@ -47,20 +47,41 @@ function tileKey(location) {
   return `${location.getX()},${location.getY()},${location.getZ()}`;
 }
 
-/** The mine's calcified rocks, as the cache's map places them: found once, the first time they're needed. */
+/** Mined-out loc id -> the calcified rock it stands in for, from Mining's `depletedRocks` (gameval names). */
+function rockForEmpty() {
+  const { CacheDefinitions } = core;
+  const map = new Map();
+  for (const [rockName, emptyName] of Object.entries(rock?.depletedRocks ?? {})) {
+    const rockId = CacheDefinitions.getLocId(rockName);
+    const emptyId = CacheDefinitions.getLocId(emptyName);
+    if (rockId != null && emptyId != null) map.set(emptyId, rockId);
+  }
+  return map;
+}
+
+/**
+ * The mine's calcified rocks, as the cache's map places them: found once, the first time they're needed.
+ * A rock mined out at that moment counts by its tile, as the rock its `_empty` loc stands in for, so it
+ * can still ooze once it respawns.
+ */
 function sites() {
   if (rockSites) return rockSites;
-  const { MapObjects, RegionManager, CacheDefinitions } = core;
+  const { MapObjects, RegionManager, CacheDefinitions, GameObject } = core;
   RegionManager.loadMapFiles(MINE.x, MINE.y);
   RegionManager.loadMapFiles(MINE.x2, MINE.y2);
+  const empties = rockForEmpty();
   // One rock a tile: a region's template copy can sit in the list beside the placed rock.
   const byTile = new Map();
   for (let x = MINE.x; x <= MINE.x2; x++) {
     for (let y = MINE.y; y <= MINE.y2; y++) {
       for (const object of MapObjects.mapObjects.get(MapObjects.getHash(x, y, MINE.z)) ?? []) {
-        if (object.getPrivateArea() == null && CacheDefinitions.getObject(object.getId())?.name === ROCK_NAME) {
-          const key = tileKey(object.getLocation());
-          if (!byTile.has(key)) byTile.set(key, MapObjects.get(object.getId(), object.getLocation(), null) ?? object);
+        if (object.getPrivateArea() != null) continue;
+        const key = tileKey(object.getLocation());
+        if (byTile.has(key)) continue;
+        if (CacheDefinitions.getObject(object.getId())?.name === ROCK_NAME) {
+          byTile.set(key, MapObjects.get(object.getId(), object.getLocation(), null) ?? object);
+        } else if (empties.has(object.getId())) {
+          byTile.set(key, new GameObject(empties.get(object.getId()), object.getLocation().clone(), object.getType(), object.getFace(), null));
         }
       }
     }

@@ -188,8 +188,33 @@ test('a successful grant records its Diango unlocks; an unknown name blocks the 
   t.mock.method(Date,'now',()=>START+1);start();
   require('../plugins/world/HolidayRewards.plugin.js').register(PM.createApi('HolidayRewards'));
   const p=rewardPlayer();
-  assert.equal(grant(p,{unlock:['win05_hat1','no_such_holiday_item']}).reason,'invalid');
+  assert.equal(grant(p,{unlock:['win05_hat1','no_such_holiday_item']}).reason,'unlock-refused');
   assert.equal(p.getInventory().getAmount(core.ItemIdentifiers.SANTA_HAT),0);assert.equal(completed(p),false);
   assert.equal(grant(p,{unlock:['win05_hat1']}).granted,true);
   assert.deepEqual(p.getAttribute('holiday-rewards:unlocked'),['win05_hat1']);
+});
+test('ids past the cache and amounts past the stack cap are invalid, not clamped',(t)=>{
+  t.mock.method(Date,'now',()=>START+1);start();const p=rewardPlayer();
+  const past=core.CacheDefinitions.getCounts().items;
+  assert.equal(grant(p,{rewards:[{itemId:past+5,amount:1}]}).reason,'invalid');
+  assert.equal(grant(p,{rewards:[{itemId:core.ItemIdentifiers.COINS,amount:3000000000}]}).reason,'invalid');
+  assert.equal(p.getInventory().getFreeSlots(),28);assert.equal(completed(p),false);
+});
+test('a plain stack beside a metadata stack of the same id is planned like add merges it',(t)=>{
+  t.mock.method(Date,'now',()=>START+1);start();const p=rewardPlayer(),inv=p.getInventory();
+  inv.setItem(0,new core.Item(core.ItemIdentifiers.COINS,2000000000).setMeta({x:1}));inv.setItem(1,new core.Item(core.ItemIdentifiers.COINS,1));
+  assert.equal(grant(p,{rewards:[{itemId:core.ItemIdentifiers.COINS,amount:200000000}]}).granted,true);
+  assert.equal(inv.getItems()[1].getAmount(),200000001);assert.equal(inv.getItems()[0].getAmount(),2000000000);
+});
+test('a grant nested inside the unlock listener is refused and the outer completion keeps every key',(t)=>{
+  t.mock.method(Date,'now',()=>START+1);start();const p=rewardPlayer();let nested=null,armed=true;
+  PM.createApi('NestedGrantTest').onCustomEvent('holiday-rewards:unlock',e=>{
+    if(!armed||e.player!==p)return;armed=false;e.accepted=true;
+    nested=grant(p,{completion:'other-2026',rewards:[{itemId:core.ItemIdentifiers.SANTA_HAT,amount:1}]});
+  });
+  const outer=grant(p,{unlock:['win05_hat1'],rewards:[{itemId:core.ItemIdentifiers.SANTA_HAT,amount:1}]});
+  assert.equal(nested.reason,'busy');assert.equal(outer.granted,true);
+  assert.equal(p.getInventory().getAmount(core.ItemIdentifiers.SANTA_HAT),1);
+  assert.equal(completed(p,'other-2026'),false);assert.equal(grant(p,{completion:'other-2026'}).granted,true);
+  assert.deepEqual(p.getAttribute('events:completions').sort(),['fixture-2026','other-2026']);
 });

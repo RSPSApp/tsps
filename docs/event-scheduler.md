@@ -29,11 +29,15 @@ reason, and activates no content. Dates are not extrapolated into future years.
   `{ player, eventKey, completion?, rewards: [{ itemId, amount }], unlock?: [cache obj names] }`.
   `completion` defaults to `eventKey`; give each annual run its own key (e.g. `christmas-2025`)
   so a later year is independent. The helper writes `granted` and `reason` back:
-  `inactive` (window closed or scheduler stopped), `already-complete`, `no-space` or `invalid`.
+  `inactive` (window closed or scheduler stopped), `already-complete`, `no-space`,
+  `unlock-refused` (an `unlock` name is not in Diango's catalogue), `busy` (a grant for the
+  same player is already running, e.g. from inside an unlock listener) or `invalid` (a
+  malformed request, an id outside the active cache, or an amount above the stack cap).
   It plans every item against the current inventory before changing anything (free slots,
   existing plain stacks and the stack cap), so a grant is all or nothing and a refusal never
   records the completion. `unlock` names (cache symbols such as `win05_hat1`) are passed to
   `holiday-rewards:unlock` for Diango's retrieval; an unknown name refuses the whole grant.
+  The helper does not check that the player is still online: a delayed caller must.
   Item ids come from the content plugin, never from the scheduler, and the content plugin
   chooses the player-facing message for each `reason`.
 - `events:completed` answers `{ player, completion }` with `completed`. Completions persist

@@ -6,6 +6,7 @@ const CHECK_INTERVAL_MS = 60_000;
 const COMPLETIONS_ATTRIBUTE = "events:completions";
 const COMPLETION_KEY = /^[a-z][a-z0-9-]*$/;
 const MAX_STACK = 2147483647;
+const granting = new WeakSet();
 const definitions = new Map();
 const overrides = new Map();
 const active = new Set();
@@ -141,10 +142,10 @@ function rewardItems(api, rewards) {
   const items = [];
   for (const reward of rewards) {
     const id = reward?.itemId, amount = reward?.amount ?? 1;
-    if (!Number.isInteger(id) || id <= 0 || !Number.isInteger(amount) || amount <= 0) return null;
-    const item = new api.core.Item(id, amount);
-    if (!item.getDefinition()) return null;
-    items.push(item);
+    // forId answers ids past the cache with a default definition, so bound them here.
+    if (!Number.isInteger(id) || id <= 0 || id >= api.core.CacheDefinitions.getCounts().items) return null;
+    if (!Number.isInteger(amount) || amount <= 0 || amount > MAX_STACK) return null;
+    items.push(new api.core.Item(id, amount));
   }
   return items;
 }
@@ -155,11 +156,12 @@ function fitsAll(inventory, items) {
   const stacks = new Map();
   for (const item of items) {
     if (item.getDefinition().isStackable()) {
-      const held = stacks.has(item.getId()) ? stacks.get(item.getId()) :
-        inventory.getItems().some(slot => slot && slot.getId() === item.getId() && slot.getAmount() > 0 && slot.getMeta() == null)
-          ? inventory.getAmount(item.getId()) : null;
+      // ItemContainer.add merges into the first stack with the same id and no metadata.
+      const plain = inventory.getItems().find(slot => slot && slot.getId() === item.getId() && slot.getAmount() > 0 &&
+        JSON.stringify(slot.getMeta() ?? null) === "null");
+      const held = stacks.has(item.getId()) ? stacks.get(item.getId()) : plain ? plain.getAmount() : null;
       if (held === null) {
-        if (free < 1) return false;
+        if (free < 1 || item.getAmount() > MAX_STACK) return false;
         free--;
         stacks.set(item.getId(), item.getAmount());
       } else {
@@ -177,6 +179,20 @@ function fitsAll(inventory, items) {
 function grantReward(api, request) {
   if (!request || typeof request !== "object") return;
   request.granted = false;
+  if (request.player && granting.has(request.player)) {
+    // A listener of the unlock below must not grant again against a stale plan.
+    request.reason = "busy";
+    return;
+  }
+  if (request.player) granting.add(request.player);
+  try {
+    grantOnce(api, request);
+  } finally {
+    if (request.player) granting.delete(request.player);
+  }
+}
+
+function grantOnce(api, request) {
   const {player} = request, key = completionKey(request);
   const items = rewardItems(api, request.rewards ?? []);
   const unlock = request.unlock ?? [];
@@ -188,8 +204,7 @@ function grantReward(api, request) {
     request.reason = "inactive";
     return;
   }
-  const done = completions(player);
-  if (done.includes(key)) {
+  if (completions(player).includes(key)) {
     request.reason = "already-complete";
     return;
   }
@@ -202,13 +217,13 @@ function grantReward(api, request) {
     const unlocking = {player, items: unlock, accepted: false};
     api.emitCustomEvent("holiday-rewards:unlock", unlocking);
     if (!unlocking.accepted) {
-      request.reason = "invalid";
+      request.reason = "unlock-refused";
       return;
     }
   }
   for (const item of items) inventory.add(item, false);
   inventory.refreshItems();
-  player.setAttribute(COMPLETIONS_ATTRIBUTE, [...done, key]);
+  player.setAttribute(COMPLETIONS_ATTRIBUTE, [...completions(player), key]);
   request.granted = true;
   request.reason = null;
 }

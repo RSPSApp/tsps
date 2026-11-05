@@ -39,10 +39,14 @@ const persistence = { gate: null, flushCalls: 0, requestSave() {}, flush() { thi
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, '..'));
-  PM.loadFromDirectory(path.resolve(__dirname, '../plugins'));
   core = PM.getCoreApi();
+  try {
+    PM.loadFromDirectory(path.resolve(__dirname, '../plugins'));
+  } finally {
+    // The loader may have installed SQLite even if a later plugin fails to load.
+    savedPersistence = core.GameConstants.PLAYER_PERSISTENCE;
+  }
   core.RegionManager.init();
-  savedPersistence = core.GameConstants.PLAYER_PERSISTENCE;
   core.GameConstants.PLAYER_PERSISTENCE = persistence;
 });
 

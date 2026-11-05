@@ -146,8 +146,23 @@ function near(player, npc) {
   return !npc?.getLocation || player.getLocation().isWithinDistance(npc.getLocation(), 5);
 }
 
+/** Preset, untradeable and unbankable copies keep their restrictions, as in Herblore's mixing. */
+function restricted(item) {
+  const { Item } = core;
+  return item.isPresetItem?.() === true
+    || item.getMetaValue?.(Item.PRESET_META) === true
+    || item.getMetaValue?.(Item.UNTRADEABLE_META) === true
+    || item.getMetaValue?.(Item.UNBANKABLE_META) === true;
+}
+
+/** The inventory slot of an attack mix(2) Otto may take, or -1. */
+function attackMixSlot(player) {
+  return player.getInventory().getItems().findIndex((item) =>
+    item?.getId() === core.ItemIdentifiers.ATTACK_MIX_2_ && item.getAmount() > 0 && !restricted(item));
+}
+
 function holdsAttackMix(player) {
-  return player.getInventory().contains(core.ItemIdentifiers.ATTACK_MIX_2_);
+  return attackMixSlot(player) >= 0;
 }
 
 /** The topics Otto offers for what the player has done so far. */
@@ -170,7 +185,7 @@ function topics(player, talk) {
 }
 
 function menu(player, talk) {
-  if (!near(player, talk.npc)) return;
+  if (!near(player, talk.npc)) { player.getPacketSender().sendInterfaceRemoval(); return; }
   ask(player, topics(player, talk));
 }
 
@@ -182,41 +197,44 @@ function afterTopic(player, talk) {
   ]);
 }
 
-/** The topic's transcript lines; `onReply`, if given, runs as Otto starts to answer. */
+/**
+ * The topic's transcript lines; `onReply`, if given, runs as Otto starts to answer. False, with
+ * the chatbox closed, when Otto has wandered off.
+ */
 function lesson(player, talk, variant, option, onReply = null) {
-  if (!near(player, talk.npc)) return;
+  if (!near(player, talk.npc)) { player.getPacketSender().sendInterfaceRemoval(); return false; }
   const found = topicLines(player, talk.npc, talk.npcId, variant, option);
   const lines = found.length ? found : [{ player: option }];
   const after = () => afterTopic(player, talk);
-  if (!onReply) { play(player, talk.npcId, lines, after); return; }
+  if (!onReply) { play(player, talk.npcId, lines, after); return true; }
   play(player, talk.npcId, lines.slice(0, 1), () => {
     onReply();
     play(player, talk.npcId, lines.slice(1), after);
   });
+  return true;
 }
 
 function rodLesson(player, talk) {
   const tasked = state(player).fishingRod === TASKED;
-  lesson(player, talk, tasked ? TRANSCRIPT.again : TRANSCRIPT.first, TOPIC.rod);
-  if (!tasked) setStage(player, "fishingRod", TASKED);
+  if (lesson(player, talk, tasked ? TRANSCRIPT.again : TRANSCRIPT.first, TOPIC.rod) && !tasked) setStage(player, "fishingRod", TASKED);
 }
 
 function rodDone(player, talk) {
-  setStage(player, "fishingRod", TOLD);
-  lesson(player, talk, TRANSCRIPT.fishing, TOPIC.rodDone);
+  if (lesson(player, talk, TRANSCRIPT.fishing, TOPIC.rodDone)) setStage(player, "fishingRod", TOLD);
 }
 
 function herbloreLesson(player, talk) {
   const asked = state(player).herblore >= TASKED;
-  lesson(player, talk, asked ? TRANSCRIPT.herbloreAgain : TRANSCRIPT.herblore, TOPIC.herblore);
-  if (!asked) setStage(player, "herblore", TASKED);
+  if (lesson(player, talk, asked ? TRANSCRIPT.herbloreAgain : TRANSCRIPT.herblore, TOPIC.herblore) && !asked) setStage(player, "herblore", TASKED);
 }
 
 /** rsprox recording 1533: the mix goes, and the section completes, as Otto thanks the player. */
 function herbloreDone(player, talk) {
   lesson(player, talk, TRANSCRIPT.herbloreDone, TOPIC.herbloreDone, () => {
-    if (state(player).herblore !== DONE || !holdsAttackMix(player)) return;
-    player.getInventory().deleteNumber(core.ItemIdentifiers.ATTACK_MIX_2_, 1);
+    const slot = attackMixSlot(player);
+    if (state(player).herblore !== DONE || slot < 0) return;
+    player.getInventory().deleteAtSlot(slot, 1, false);
+    player.getInventory().refreshItems();
     setStage(player, "herblore", TOLD);
   });
 }
@@ -288,7 +306,9 @@ function attach(pluginApi) {
 module.exports = {
   name: "BarbarianTraining",
   members: true,
-  dependsOn: ["NpcDialogues", "Farming"],
+  // TreasureTrails first: its before-hook answers clue steps that send the player to Otto (the
+  // medium anagram and hard cipher), which this Talk-to must not take over.
+  dependsOn: ["NpcDialogues", "Farming", "TreasureTrails"],
   register: attach,
   _test: { STATE_ATTRIBUTE, VARBITS, TOPIC, LEARNED, ROD_TAKEN, ROD_NO_SPACE, state, topics, topicLines, answerUnlock, talkToOtto,
     searchBed, caughtFish, madePotion, setStage },

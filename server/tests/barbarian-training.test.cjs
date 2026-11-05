@@ -267,3 +267,25 @@ test("a saved stage outside the varbit's range loads as not started", () => {
   who.setAttribute(T.STATE_ATTRIBUTE, { fishingRod: 7, herblore: "3" });
   assert.deepEqual(stages(who), { fishingRod: 0, herblore: 0 });
 });
+
+test("Otto out of reach: the topic closes the chatbox and the stage stays put", () => {
+  const who = player();
+  T.setStage(who, "fishingRod", 2);
+  const shown = talk(who);
+  who.getLocation = () => ({ isWithinDistance: () => false });
+  assert.deepEqual(pick(who, shown, T.TOPIC.rodDone).said, []);
+  assert.equal(stages(who).fishingRod, 2);
+});
+
+test("Otto takes only an attack mix that keeps no restriction", () => {
+  const who = player(["brutal_2dose1attack"]);
+  who.inv.getItems()[0].setMetaValue(core.Item.UNTRADEABLE_META, true);
+  T.setStage(who, "fishingRod", 3);
+  T.setStage(who, "herblore", 2);
+  assert.deepEqual(talk(who).options, [T.TOPIC.herblore, T.TOPIC.farming, T.TOPIC.leave]);
+  who.inv.addItem(new core.Item(obj("brutal_2dose1attack"), 1));
+  pick(who, talk(who), T.TOPIC.herbloreDone);
+  assert.equal(stages(who).herblore, 3);
+  assert.equal(who.inv.count("brutal_2dose1attack"), 1);
+  assert.equal(who.inv.getItems()[0].getMetaValue(core.Item.UNTRADEABLE_META), true, "the restricted copy stays");
+});

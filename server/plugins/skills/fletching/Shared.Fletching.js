@@ -25,6 +25,8 @@ const CREATION_ALL_SENTINEL = 28;
 const DEFAULT_MENU = "make";
 const DEFAULT_ANIMATION = "human_fletching";
 
+const PRESET_TEXT = "Preset items cannot be used for this.";
+
 let api = null;
 let core = null;
 let recipes = [];
@@ -231,12 +233,26 @@ function unlocked(player, recipe) {
   return true;
 }
 
+/** Preset (and other untradeable or unbankable) copies keep their restrictions, so they never convert. */
+function restricted(item) {
+  const { Item } = core;
+  return item.isPresetItem() || item.getMetaValue(Item.UNTRADEABLE_META) === true
+    || item.getMetaValue(Item.UNBANKABLE_META) === true;
+}
+
+/** How many of `id` a recipe can consume: the unrestricted copies. */
+function plainAmount(inventory, id) {
+  if (typeof inventory.getItems !== "function") return inventory.getAmount(id);
+  return inventory.getItems().reduce((total, item) =>
+    (item.getId() === id && !restricted(item) ? total + item.getAmount() : total), 0);
+}
+
 /** How many of a material the player can use, a virtual source's (the spool's) included. */
-function heldAmount(player, material) {
+function heldAmount(player, material, amountOf = plainAmount) {
   const inventory = player.getInventory();
   let total = 0;
   for (const id of material.ids) {
-    total += inventory.getAmount(id);
+    total += amountOf(inventory, id);
     const source = virtualMaterials.get(id);
     if (source) total += source.count(player);
   }
@@ -256,9 +272,16 @@ function hasTools(player, recipe) {
   return recipe.held.every((tool) => carries(player, tool.ids));
 }
 
+/** The order a material's ids are taken in: the clicked one, then data order. */
+function takeOrder(material, via) {
+  const clicked = triggerAliases.get(via) ?? via;
+  return material.ids.includes(clicked) ? [clicked, ...material.ids.filter((id) => id !== clicked)] : material.ids;
+}
+
 /**
- * Takes `amount` of a material, starting with the item the player clicked: the feather they used,
- * or the spool's bow strings when they used the spool. Other ids follow in data order.
+ * Plans taking a recipe's materials, starting with the item the player clicked: the feather they
+ * used, or the spool's bow strings when they used the spool. Other ids follow in data order. Preset
+ * (and other restricted) copies are never part of the plan.
  */
 function materialPlan(player, recipe, via) {
   const inventory = player.getInventory();
@@ -268,10 +291,8 @@ function materialPlan(player, recipe, via) {
   let complete = true;
   const sourceFirst = triggerAliases.has(via);
   for (const material of recipe.materials) {
-    const clicked = triggerAliases.get(via) ?? via;
-    const order = material.ids.includes(clicked) ? [clicked, ...material.ids.filter((id) => id !== clicked)] : material.ids;
     let remaining = material.amount;
-    for (const id of order) {
+    for (const id of takeOrder(material, via)) {
       const source = virtualMaterials.get(id);
       if (source && !virtualLeft.has(id)) virtualLeft.set(id, source.count(player));
       if (source && sourceFirst && remaining > 0) {
@@ -280,7 +301,7 @@ function materialPlan(player, recipe, via) {
         virtualLeft.set(id, (virtualLeft.get(id) ?? 0) - fromSource);
         remaining -= fromSource;
       }
-      if (!inventoryLeft.has(id)) inventoryLeft.set(id, inventory.getAmount(id));
+      if (!inventoryLeft.has(id)) inventoryLeft.set(id, plainAmount(inventory, id));
       const fromInventory = Math.min(remaining, inventoryLeft.get(id));
       if (fromInventory > 0) plan.push({ itemId: id, amount: fromInventory, virtual: false });
       inventoryLeft.set(id, inventoryLeft.get(id) - fromInventory);
@@ -309,12 +330,28 @@ function canGrantAfterConsumption(player, outputId, amount, plan) {
   return preview.getAddableAmount(output) >= amount;
 }
 
+/** Takes `amount` of `id` off the inventory's unrestricted copies, in slot order. */
+function takePlain(inventory, id, amount) {
+  let remaining = amount;
+  if (typeof inventory.deleteAtSlot !== "function" || typeof inventory.getItems !== "function") {
+    inventory.deleteNumber(id, remaining);
+    return amount;
+  }
+  inventory.getItems().forEach((item, slot) => {
+    if (remaining <= 0 || item.getId() !== id || restricted(item)) return;
+    const taken = Math.min(remaining, item.getAmount());
+    inventory.deleteAtSlot(slot, taken);
+    remaining -= taken;
+  });
+  return amount - remaining;
+}
+
 function consumePlan(player, plan) {
   const inventory = player.getInventory();
   const inputs = [];
   for (const entry of plan) {
     if (entry.virtual) virtualMaterials.get(entry.itemId).take(player, entry.amount);
-    else inventory.deleteNumber(entry.itemId, entry.amount);
+    else takePlain(inventory, entry.itemId, entry.amount);
     inputs.push({ itemId: entry.itemId, amount: entry.amount });
   }
   return inputs;
@@ -336,7 +373,9 @@ function makeBatch(player, recipe, via, provenance = null) {
   const amount = recipe.amountMax > recipe.amount
     ? recipe.amount + Math.floor(Math.random() * (recipe.amountMax - recipe.amount + 1))
     : recipe.amount;
-  if (!canGrantAfterConsumption(player, recipe.outputId, amount, plan.inputs)) {
+  // The batch must fit at its largest roll, or nothing is taken: a batch has fixed inputs, so it
+  // refuses rather than making part and losing the rest of the output.
+  if (!canGrantAfterConsumption(player, recipe.outputId, recipe.amountMax, plan.inputs)) {
     player.sendMessage("You don't have enough inventory space.");
     return false;
   }
@@ -519,7 +558,13 @@ function handlePair(player, usedId, usedWithId) {
   }
   const usable = choices.filter((recipe) => hasTools(player, recipe) && batchesAvailable(player, recipe) > 0);
   // An empty spool on an unstrung bow does nothing at all, not even "Nothing interesting happens."
-  if (usable.length === 0) return true;
+  if (usable.length === 0) {
+    const everyCopy = (inventory, id) => inventory.getAmount(id);
+    const onlyPreset = choices.some((recipe) => hasTools(player, recipe) && recipe.materials.every((material) =>
+      heldAmount(player, material, everyCopy) >= material.amount));
+    if (onlyPreset) player.sendMessage(PRESET_TEXT);
+    return true;
+  }
   const via = usedId;
   const provenance = { startLocation: locationSnapshot(player.getLocation()) };
 

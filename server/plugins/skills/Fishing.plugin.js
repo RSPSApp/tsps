@@ -749,7 +749,9 @@ class FishingTask extends Task {
         continue;
       }
 
-      if (player.getMovementQueue().size() > 0 || player.getForceMovement() != null) {
+      // Global tasks precede player turns; the last step may have drained the route.
+      const movement = player.getMovementQueue();
+      if (movement.size() > 0 || movement.isMovings?.() || player.getForceMovement() != null) {
         stopFishing(this.activeSessions, player);
         continue;
       }

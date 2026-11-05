@@ -731,6 +731,8 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
     context.currentMenu = menu;
     const notice = { player, npcId, definition, prompt: step.prompt || "Select an option", warning: null };
     api.emitCustomEvent("npc-dialogue:menu", notice);
+    // A plugin asked the question itself.
+    if (notice.handled) return;
     const warned = context.warnedMenus ??= new WeakSet();
     if (notice.warning && !warned.has(step)) {
       warned.add(step);

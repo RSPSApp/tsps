@@ -1,7 +1,9 @@
+import { showAllTimers } from "../../../common/utils/DeviceUtil";
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import type { OsrsClient } from "../../OsrsClient";
 import { VENGEANCE_TIME_LIMIT_VARBIT } from "../vengeancetimer/VengeanceTimer";
 import { VengeanceTimerOverlay } from "../vengeancetimer/VengeanceTimerOverlay";
+import { mobileCombatTimerStyle } from "../../widgets/MobileHudLayout";
 import type { TimersPlugin } from "./TimersPlugin";
 import {
     AntifireTimerOverlay,
@@ -62,6 +64,8 @@ export function TimersOverlay({
 
     if (!enabled || osrsClient.isOnLoginScreen()) return null;
     const now = Date.now();
+    const attackTicks = plugin.attackTimerTicks();
+    const attackStyle = mobileCombatTimerStyle(osrsClient, 6);
     return (
         <>
             <PoisonTimerOverlay osrsClient={osrsClient} plugin={plugin.poison} now={now} />
@@ -70,6 +74,12 @@ export function TimersOverlay({
             <TeleblockTimerOverlay osrsClient={osrsClient} plugin={plugin.teleblock} now={now} />
             <StaminaTimerOverlay osrsClient={osrsClient} plugin={plugin.stamina} now={now} />
             <VengeanceTimerOverlay osrsClient={osrsClient} plugin={plugin.vengeance} now={now} />
+            {(attackTicks > 0 || showAllTimers) && (
+                <div className={`status-timer-infobox attack-timer-infobox${attackStyle ? " mobile-combat-timer" : ""}`} style={attackStyle} title="Next attack (ticks)">
+                    <span className="status-timer-fallback">⚔</span>
+                    <span className="status-timer-seconds">{attackTicks}</span>
+                </div>
+            )}
         </>
     );
 }

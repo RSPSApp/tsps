@@ -5,13 +5,16 @@
  * From the sources: the cache's ops, the recipes, levels and XP, "any required component with
  * another" (Wiki, 3 June 2026) and mining gem rocks into an open one (Jagex's poll blog). Ours, with
  * no capture or transcript: every line here, that only mining fills an open one, and that an upgrade
- * keeps the store and comes out closed. That blog's "one of these at a time" isn't enforced.
+ * comes out closed. Jagex's release notes say upgrades retain stored gems and lower tiers cannot be
+ * acquired while a higher tier is owned. Equal-tier duplicates remain outside that stated rule.
  */
 const Storage = require("./Common.StorageItems");
 
 const NAMES = ["Gem pouch", "Open gem pouch", "Gem satchel", "Open gem satchel", "Gem tote", "Open gem tote"];
 const TOTE_NAMES = ["Gem tote", "Open gem tote"];
 const SATCHEL_NAMES = ["Gem satchel", "Open gem satchel"];
+const SACK_NAMES = ["Gem sack", "Open gem sack"];
+const TIERS = [["Gem pouch", "Open gem pouch"], SATCHEL_NAMES, TOTE_NAMES, SACK_NAMES];
 const POUCH_HOLDS = 5;
 const SATCHEL_HOLDS = 10;
 const TOTE_HOLDS = 20;
@@ -88,9 +91,9 @@ function recipes() {
   const { CacheDefinitions } = Storage.core;
   const id = (name) => CacheDefinitions.getObjId(name);
   return [
-    { level: 12, xp: 25, product: id("gem_pouch"), bolt: id("bolt_of_linen"), pouches: [] },
-    { level: 39, xp: 50, product: id("gem_satchel"), bolt: id("bolt_of_canvas"), pouches: [id("gem_pouch"), id("gem_pouch_open")] },
-    { level: 81, xp: 200, product: id("gem_tote"), bolt: id("bolt_of_cotton"), pouches: [id("gem_satchel"), id("gem_satchel_open")] },
+    { tier: 0, level: 12, xp: 25, product: id("gem_pouch"), bolt: id("bolt_of_linen"), pouches: [] },
+    { tier: 1, level: 39, xp: 50, product: id("gem_satchel"), bolt: id("bolt_of_canvas"), pouches: [id("gem_pouch"), id("gem_pouch_open")] },
+    { tier: 2, level: 81, xp: 200, product: id("gem_tote"), bolt: id("bolt_of_cotton"), pouches: [id("gem_satchel"), id("gem_satchel_open")] },
   ];
 }
 
@@ -138,6 +141,12 @@ function sew(event) {
   const missing = missingPart(player, recipe);
   if (missing !== null) {
     player.sendMessage(`You need ${Storage.itemName(missing).toLowerCase()} to make a ${name}.`);
+    return;
+  }
+  // The release notes disallow acquiring lower tiers, including when the higher one is banked.
+  // A gem bag is a separate sack ingredient, not a tier of this family.
+  if (TIERS.slice(recipe.tier + 1).some((names) => Storage.owns(player, { names }))) {
+    player.sendMessage("You already own a higher-tier gem container.");
     return;
   }
   if (!inventory.contains(I.COSTUME_NEEDLE)) inventory.deleteNumber(I.THREAD, 1);

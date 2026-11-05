@@ -1,10 +1,8 @@
 // Run after `yarn build`: node --test tests/gem-pouch.test.cjs
 //
-// The gem pouch (33384, open 33386) and satchel (33387, open 33389), by real packet. Cache: their
-// ops. Wiki (Gem pouch, Gem satchel, Gem containers): recipes, levels, XP, costume needle, 5 and 10 of
-// each semi-precious gem, and "any required component with another" since 3 June 2026. Jagex's poll
-// blog: "marginal convenience increases for mining Gem Rocks". Its "one of these at a time" isn't
-// enforced: a poll blog isn't enough to refuse a player.
+// Pouch, satchel and tote use decoded server dispatch. Cache supplies their actions; Wiki supplies
+// recipes and XP. Jagex's release notes say upgrades retain gems and a higher tier blocks lower tiers.
+// Mining gem-rock auto-storage follows the poll blog; equal-tier duplicates remain an assumption.
 // No capture shows them; no transcript page exists. Ours: every line here, that only mining fills
 // an open one, the contents staying through an upgrade, and the upgrade coming out closed.
 process.env.DISABLE_PLAYER_BOTS = "1";
@@ -241,6 +239,8 @@ test("higher tiers in inventory or bank prevent lower sewing without consuming a
   const cases = [
     { owned: ["gem_satchel", "gem_satchel_open"], parts: () => pouchParts(), product: "gem_pouch" },
     { owned: ["gem_tote", "gem_tote_open"], parts: () => satchelParts(), product: "gem_satchel" },
+    { owned: ["gem_sack", "gem_sack_open"], parts: () => pouchParts(), product: "gem_pouch" },
+    { owned: ["gem_sack", "gem_sack_open"], parts: () => satchelParts(), product: "gem_satchel" },
     { owned: ["gem_sack", "gem_sack_open"], parts: () => [I.NEEDLE, I.THREAD, I.SILK, id("bolt_of_cotton"), id("gem_satchel")], product: "gem_tote" },
   ];
   for (const row of cases) for (const name of row.owned) for (const banked of [false, true]) {

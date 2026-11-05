@@ -224,7 +224,7 @@ test("a tote upgrade needs 81 Crafting and keeps the satchel contents", async (t
   assert.deepEqual(parts().map((item) => has(low, item)), [1, 1, 1, 1, 1]);
   assert.equal(has(low, 33390), 0);
 
-  const f = actor(t, parts());
+  const f = actor(t, [...parts(), id("gem_bag")], 81);
   Storage.store(f.p, family, I.UNCUT_OPAL, 10);
   Storage.store(f.p, family, I.UNCUT_JADE, 3);
   const given = watchXp(t, f);
@@ -233,7 +233,36 @@ test("a tote upgrade needs 81 Crafting and keeps the satchel contents", async (t
   assert.equal(has(f, 33390), 1);
   assert.deepEqual(parts().map((item) => has(f, item)), [1, 0, 0, 0, 0]);
   assert.deepEqual(given, [200]);
+  assert.equal(has(f, id("gem_bag")), 1, "gem bag can coexist with the tote");
   assert.deepEqual([stored(f, I.UNCUT_OPAL), stored(f, I.UNCUT_JADE)], [10, 3]);
+});
+
+test("higher tiers in inventory or bank prevent lower sewing without consuming anything", async (t) => {
+  const cases = [
+    { owned: ["gem_satchel", "gem_satchel_open"], parts: () => pouchParts(), product: "gem_pouch" },
+    { owned: ["gem_tote", "gem_tote_open"], parts: () => satchelParts(), product: "gem_satchel" },
+    { owned: ["gem_sack", "gem_sack_open"], parts: () => [I.NEEDLE, I.THREAD, I.SILK, id("bolt_of_cotton"), id("gem_satchel")], product: "gem_tote" },
+  ];
+  for (const row of cases) for (const name of row.owned) for (const banked of [false, true]) {
+    const parts = row.parts();
+    const f = actor(t, banked ? parts : [...parts, id(name)]);
+    if (banked) f.p.getBank(0).add(new core.Item(id(name)), false);
+    Storage.store(f.p, family, I.UNCUT_OPAL, 3);
+    const given = watchXp(t, f);
+    // Shared-only inputs test recipe selection as well as the ownership check.
+    await use(f, I.THREAD, I.SILK);
+    assert.deepEqual(parts.map((item) => has(f, item)), parts.map(() => 1), `${name}, banked=${banked}`);
+    assert.equal(has(f, id(row.product)), 0);
+    assert.equal(banked ? f.p.getBank(0).getAmount(id(name)) : has(f, id(name)), 1);
+    assert.equal(stored(f, I.UNCUT_OPAL), 3);
+    assert.deepEqual(given, []);
+  }
+});
+
+test("shared sewing components can choose the tote recipe", async (t) => {
+  const f = actor(t, [I.NEEDLE, I.THREAD, I.SILK, id("bolt_of_cotton"), id("gem_satchel")], 81);
+  await use(f, I.SILK, I.THREAD);
+  assert.equal(has(f, id("gem_tote")), 1);
 });
 
 test("an open satchel upgrades to a closed tote without losing its gems", async (t) => {

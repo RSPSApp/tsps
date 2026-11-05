@@ -16,30 +16,38 @@
  * copies:
  *
  * - by default: skills, plus the items of the bank, inventory and equipment;
+ * - with --items-only: the items alone, leaving the skills as they are;
  * - with --progress: quests (stage-completed), achievement diaries (completed
  *   tiers) and combat achievements (individual task completions).
+ *
+ * The bank, inventory and equipment are replaced, not merged: whatever the
+ * character held on this server before is in the pre-import copy only.
  *
  * Skill XP lands as saved XP with levels derived from the OSRS XP table,
  * capped at 99: the server models no virtual levels beyond 99, and its own
  * formulas assume levels <= 99. The export's own levels and the full snapshot
  * stay in the provenance record under the "osrs-account-import:data" attribute.
  *
- * Items land as { id, amount } OSRS item ids; this server's definitions come
- * from the same OSRS snapshot (osrsreboxed), so ids are used verbatim. Item
- * ids the server does not recognize are reported in the dry-run output rather
- * than silently dropped. Bank tabs are rebuilt from the export's per-tab
+ * Items land as { id, amount } OSRS item ids; this server's item definitions
+ * come from the OSRS cache, so ids are used verbatim. The script does not load
+ * the cache, so it cannot check an id against it: bank entries the export
+ * itself could not name are listed in the dry-run output instead. Bank tabs
+ * are rebuilt from the export's per-tab
  * sizes (the BANK_TAB_1..9 varbits): the OSRS bank stores tab 1's items
  * first, then each later tab, and the main tab's items last - the same order
- * this server's own Bank.layout() walks - so the split is faithful. When the
- * sizes don't describe a clean split (no sum change, an empty gap before the
- * last tab, or nothing left for the main tab) everything collapses into tab
- * 0 instead, and the reason is reported and kept in the provenance attribute.
+ * this server's own Bank.layout() walks - so the split is faithful. A tab
+ * grows as items are added, and a save loads whole, so no tab is split up.
+ * When the sizes don't describe a clean split (missing, more than the bank
+ * holds, or an empty tab before a used one) everything collapses into tab 0
+ * instead, and the reason is reported and kept in the provenance attribute.
+ * A bank over Bank.MAX_SLOTS (1410) items is refused.
  *
  * Progress (--progress) notes:
  * - Quests: the export marks each quest FINISHED / IN_PROGRESS / NOT_STARTED.
  *   The importer maps the export's quest names onto the server's own quest
- *   plugins (plugins/quests/quests/*.Quest.js, parsed at runtime for their
- *   registered key/name/completionValue/questPoints) and writes the standard
+ *   plugins (plugins/quests/quests/*.Quest.js, each one run against a stub
+ *   api so its own registerQuest call hands over the key/name/completionValue/
+ *   questPoints the server uses) and writes the standard
  *   stage attribute ("quest.<key>.stage" = completionValue) plus a recomputed
  *   "quest.points". Per-quest post-completion sub-state (delivered-ingredient
  *   flags, unlocked shops, teleport unlocks) is NOT written - stage completion
@@ -67,7 +75,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
-import { createRequire } from "node:module";
+import Module, { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
 
@@ -81,12 +89,12 @@ const QUEST_POINTS_ATTRIBUTE = "quest.points"; // as QuestRuntime.js declares it
 const DIARIES_TASKS_ATTRIBUTE = "achievement-diaries:tasks";
 const DIARIES_REWARDS_ATTRIBUTE = "achievement-diaries:rewards";
 const CA_COMPLETED_ATTRIBUTE = "combat-achievements:completed";
-const CA_WORDS = 21; // as Data.CombatAchievements.js TASK_VARPS map(() => 0) default
 const MAX_SKILL_LEVEL = 99; // the server's getMaxAchievingLevel; virtual levels aren't modelled
 const OSRS_XP_CAP = 200_000_000;
 const MAX_INVENTORY_SLOTS = 28;
 const MAX_EQUIPMENT_SLOTS = 14;
-const CA_BITMAP_WORDS = 21;
+const CA_BITMAP_WORDS = 21; // as Data.CombatAchievements.js TASK_VARPS
+const BANK_MAX_SLOTS = 1410; // Bank.MAX_SLOTS
 
 /**
  * Skill order and names exactly as saved (Skill.ts `VALUES`). The exporter
@@ -227,99 +235,82 @@ function isRecipeForDisasterRow(id) {
 }
 
 // ---------------------------------------------------------------------------
-// Quest defs, scraped from the quest plugins at runtime.
+// Quest defs, read from the quest plugins' own registerQuest calls.
 // ---------------------------------------------------------------------------
 
-/** Prop -> value from canonical plugin area data (e.g. tutorial-island steps). */
-function loadAreaProps(pluginsDir) {
-  const map = new Map();
-  const dir = path.join(pluginsDir, "areas", "data");
-  if (!fs.existsSync(dir)) return map;
-  for (const file of fs.readdirSync(dir).filter((f) => f.endsWith(".json"))) {
-    let data = null;
-    try {
-      data = JSON.parse(fs.readFileSync(path.join(dir, file), "utf8"));
-    } catch {
-      continue; // not an object tree we can walk
-    }
-    const walk = (node) => {
-      if (Array.isArray(node)) {
-        for (const item of node) {
-          if (typeof item?.name === "string" && Number.isFinite(item?.value)) map.set(item.name, item.value);
-          walk(item);
-        }
-        return;
-      }
-      if (node && typeof node === "object") {
-        for (const [key, value] of Object.entries(node)) {
-          if (Number.isFinite(value)) map.set(key, value);
-          else walk(value);
-        }
-      }
-    };
-    walk(data);
-  }
-  return map;
-}
-
-/** Resolves simple identifier/number completionValue expressions. */
-function resolveExpr(expr, text, areaProps) {
-  const value = (token) => {
-    const t = token.trim().replace(/^\(|\)$/g, "");
-    if (/^\d+$/.test(t)) return Number(t);
-    if (t.startsWith("0x")) return parseInt(t, 16);
-    const parts = t.split(".");
-    const prop = parts[parts.length - 1];
-    const local = text.match(new RegExp(`${prop}\\s*:\\s*(\\d+)`)) ?? text.match(new RegExp(`${prop}\\s*=\\s*(\\d+)`));
-    if (local) return Number(local[1]);
-    return areaProps.has(prop) ? areaProps.get(prop) : NaN;
-  };
-  if (/^[\d.]+$/.test(expr.trim())) return Number(expr);
-  const bit = expr.match(/^\((.+)\)\s*(?:<<|>>)\s*\((.+)\)$/);
-  if (bit) {
-    const a = value(bit[1]);
-    const b = value(bit[2]);
-    if (!Number.isFinite(a) || !Number.isFinite(b)) return NaN;
-    return expr.includes("<<") ? a * 2 ** b : Math.floor(a / 2 ** b);
-  }
-  if (/^[\w$.]+$/.test(expr.trim())) return value(expr);
-  return NaN;
+/**
+ * A stand-in for the plugin api and for core modules: every property is another
+ * stand-in, every call returns one, and it reads as 0 where a number is wanted.
+ * Quest plugins only wire hooks while registering, so this lets each one run its
+ * register function far enough to call registerQuest without a running server.
+ */
+function standIn() {
+  return new Proxy(function standInTarget() {}, {
+    get: (_target, prop) => {
+      if (prop === Symbol.toPrimitive) return () => 0;
+      if (prop === "then") return undefined; // not a promise
+      return standIn();
+    },
+    apply: () => standIn(),
+    construct: () => standIn(),
+  });
 }
 
 /**
- * One entry per registerQuest def across plugins/quests/quests/*.Quest.js:
- * { key, name, completion, points, norm names } - the same values the runtime
- * itself registers, so "complete" means the value that plugin's own complete()
- * would set.
+ * One entry per quest plugin under plugins/quests/quests/*.Quest.js:
+ * { key, name, completion, points, file }. Each plugin's register function runs
+ * against a stand-in api with QuestRuntime.registerQuest swapped for a recorder,
+ * so the values are the ones that plugin itself registers (the same stage its
+ * own completion sets) rather than a reading of its source text. Requires of
+ * the TypeScript core are answered with stand-ins too, and both swaps are undone
+ * before returning. A plugin that fails to load, or a def without a usable
+ * completion value, is reported under `failed` and never imported.
  */
 function loadQuestDefs(serverDir, log) {
-  const pluginsDir = path.join(serverDir, "plugins");
-  const questDir = path.join(pluginsDir, "quests", "quests");
+  const questDir = path.join(serverDir, "plugins", "quests", "quests");
   if (!fs.existsSync(questDir)) throw new Error(`No quest plugins at ${questDir}`);
-  const areaProps = loadAreaProps(pluginsDir);
+  const questRuntime = require(path.join(serverDir, "plugins", "quests", "QuestRuntime.js"));
+  const recorded = [];
+  const originalRegisterQuest = questRuntime.registerQuest;
+  const originalLoad = Module._load;
+  questRuntime.registerQuest = (_api, def) => {
+    recorded.push(def);
+    return standIn();
+  };
+  Module._load = function loadWithStandIns(request, ...rest) {
+    if (String(request).replace(/\\/g, "/").includes("src/main/typescript")) return standIn();
+    return originalLoad.call(this, request, ...rest);
+  };
   const defs = [];
-  for (const file of fs.readdirSync(questDir).filter((f) => f.endsWith(".Quest.js"))) {
-    const text = fs.readFileSync(path.join(questDir, file), "utf8");
-    const chunks = text.split(/registerQuest\s*\(/).slice(1);
-    chunks.forEach((chunk, index) => {
-      const key = chunk.match(/key:\s*"([^"]+)"/)?.[1] ?? null;
-      if (!key) return;
-      const rawName = chunk.match(/name:\s*((?:"(?:\\.|[^"\\])*")|[^,}\n]+)/)?.[1] ?? null;
-      const name = rawName && rawName.startsWith('"') ? rawName.slice(1, -1) : rawName;
-      let completion = Number(chunk.match(/completionValue:\s*(\d+)\b/)?.[1] ?? NaN);
-      if (!Number.isFinite(completion)) {
-        const expr = text.match(/completionValue:\s*([^,}\n]+?)[,}\n]/)?.[1];
-        if (expr) {
-          const resolved = resolveExpr(expr, text, areaProps);
-          if (Number.isFinite(resolved)) completion = resolved;
-        }
+  const failed = [];
+  try {
+    for (const file of fs.readdirSync(questDir).filter((f) => f.endsWith(".Quest.js")).sort()) {
+      const before = recorded.length;
+      try {
+        const plugin = require(path.join(questDir, file));
+        const register = typeof plugin === "function" ? plugin : plugin?.register;
+        if (typeof register === "function") register(standIn());
+      } catch (error) {
+        failed.push(`${file}: ${String(error?.message ?? error).split("\n")[0]}`);
+        continue;
       }
-      const points = Number(chunk.match(/questPoints:\s*(\d+)\b/)?.[1] ?? NaN);
-      defs.push({ key, name, completion, points, file: path.basename(file) });
-    });
+      for (const def of recorded.slice(before)) {
+        const completion = def.completionValue ?? 2; // QuestRuntime's isComplete default
+        const points = def.questPoints ?? 0;
+        if (typeof def.key !== "string" || typeof def.name !== "string" || !Number.isInteger(completion) || completion <= 0 || !Number.isInteger(points)) {
+          failed.push(`${file}: no usable key/name/completionValue/questPoints`);
+          continue;
+        }
+        defs.push({ key: def.key, name: def.name, completion, points, file });
+      }
+    }
+  } finally {
+    questRuntime.registerQuest = originalRegisterQuest;
+    Module._load = originalLoad;
   }
   if (log) log(`Loaded ${defs.length} quest definition(s) from the quest plugins.`);
-  return defs;
+  for (const entry of failed) log?.(`  (quest plugin not read, its quest is never imported: ${entry})`);
+  return { defs, failed };
 }
 
 const norm = (s) => String(s ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -337,14 +328,21 @@ function questDefIndex(defs) {
 /**
  * Maps the export's quest states onto server defs:
  * `import` = finished quests with a known def and a resolvable completion value.
- * Everything else is reported: unbuilt quests, unresolved completions, the RFD
- * plugin (no flag import), and in-progress quests are left untouched.
+ * Everything else is reported: unbuilt quests, the RFD plugin (no flag
+ * import), and in-progress quests are left untouched. A quest plugin that
+ * could not be read stops the import, rather than reporting its quest as unbuilt.
  */
-function questImport(exportData, defs, currentAttributes, log) {
+function questImport(exportData, { defs, failed }, currentAttributes, log) {
+  if (failed.length > 0) {
+    throw new Error(
+      `${failed.length} quest plugin(s) could not be read, so their quests can't be imported:\n  ` +
+        failed.join("\n  ")
+    );
+  }
   const byNorm = questDefIndex(defs);
   const stageAttribute = (key) => `quest.${key}.stage`;
   const importStage = new Map(); // key -> { attribute, value, points, name }
-  const reported = { skippedRfd: [], unbuilt: [], unresolved: [], inProgress: [], notStarted: 0 };
+  const reported = { skippedRfd: [], unbuilt: [], inProgress: [], notStarted: 0 };
   for (const row of exportData.quests) {
     if (row.state === "NOT_STARTED") {
       reported.notStarted++;
@@ -368,22 +366,21 @@ function questImport(exportData, defs, currentAttributes, log) {
     importStage.set(def.key, {
       attribute: stageAttribute(def.key),
       value: finalStage,
-      points: Number.isFinite(def.points) ? def.points : 0,
+      points: def.points,
       name: def.name,
     });
   }
-  // quest.points over every quest complete after the import (imported or already
-  // complete on the server before it).
-  const completeKeys = new Set(importStage.keys());
-  for (const def of defs) {
-    const attribute = stageAttribute(def.key);
-    const existing = Number(currentAttributes?.[attribute]);
-    if (Number.isFinite(existing) && existing >= def.completion) completeKeys.add(def.key);
-  }
-  let questPoints = 0;
-  for (const key of completeKeys) {
+  // quest.points: the save's own total plus the points of each quest this import
+  // completes. Not recounted from stages: some quests award points outside their
+  // stage (Recipe for Disaster gives one per finished sub-quest through its own
+  // flags), and a recount would drop them.
+  const existingPoints = Number(currentAttributes?.[QUEST_POINTS_ATTRIBUTE]);
+  let questPoints = Number.isFinite(existingPoints) ? existingPoints : 0;
+  for (const [key, entry] of importStage) {
     const def = defs.find((d) => d.key === key);
-    if (def && Number.isFinite(def.points)) questPoints += def.points;
+    const existingStage = Number(currentAttributes?.[stageAttribute(key)]);
+    const alreadyComplete = Number.isFinite(existingStage) && existingStage >= def.completion;
+    if (!alreadyComplete) questPoints += entry.points;
   }
   return { importStage, pointsAttribute: { attribute: QUEST_POINTS_ATTRIBUTE, value: questPoints }, reported };
 }
@@ -532,92 +529,79 @@ function itemsFor(entries, maxSlots) {
   return { items, imported, skipped };
 }
 
-/** Bank items grouped by the export's slot order into one container list. */
+/**
+ * The bank in the export's slot order. `slots` is every slot the export lists,
+ * placeholders and other empty entries included: the tab sizes count them, so
+ * tab boundaries are measured in slots. `items` is just the real items, each
+ * tagged with its slot for the split. When any entry lacks a slot number the
+ * list order stands in for every entry's slot, so none can collide.
+ */
 function bankFor(entries) {
-  const ordered = (entries ?? [])
-    .filter((entry) => Number.isFinite(entry?.id) && entry.id > 0 && Number.isFinite(entry?.quantity) && entry.quantity > 0)
-    .sort((a, b) => a.slot - b.slot)
-    .map((entry) => ({ id: Number(entry.id), amount: Number(entry.quantity), meta: null }));
-  return { items: ordered, imported: ordered.length };
+  const list = entries ?? [];
+  const slotted = list.every((entry) => Number.isInteger(entry?.slot) && entry.slot >= 0);
+  const slots = list
+    .map((entry, index) => ({ entry, slot: slotted ? entry.slot : index }))
+    .sort((a, b) => a.slot - b.slot);
+  const items = slots
+    .filter(({ entry }) => Number.isInteger(entry?.id) && entry.id > 0 && Number.isInteger(entry?.quantity) && entry.quantity > 0)
+    .map(({ entry, slot }) => ({ slot, item: { id: entry.id, amount: entry.quantity, meta: null } }));
+  const slotCount = slots.length > 0 ? slots[slots.length - 1].slot + 1 : 0;
+  return { items, slotCount, imported: items.length };
 }
 
 /**
- * Splits the bank container (items in the OSRS bank's slot order) into tabs
- * using the export's per-tab sizes. The sizes read the game's BANK_TAB_1..9
- * varbits at snapshot time (io/kimpton's exporter, readBankTabSizes), and the
- * OSRS bank stores tab 1's items first, ..., the main tab's items last: this
- * server's own Bank.layout() (the bank container sent to the client) walks
- * [1, 2, ..., 9, 0] in exactly that order. Inv, so slots [0..size of tab 1)
- * are tab 1, the next block is tab 2, and everything after the last non-empty
- * sub-tab's block is the main tab (tab 0).
+ * Splits the bank into tabs using the export's per-tab sizes. The sizes read
+ * the game's BANK_TAB_1..9 varbits at snapshot time, and the OSRS bank stores
+ * tab 1's slots first, ..., the main tab's slots last: this server's own
+ * Bank.layout() (the bank container sent to the client) walks [1, 2, ..., 9, 0]
+ * in exactly that order. So slots [0..size of tab 1) are tab 1, the next block
+ * is tab 2, and every slot after the last sub-tab's block is the main tab (tab 0).
+ * Sizes count placeholders, so the split is by slot number. Placeholders are
+ * then dropped: the server's banks can hold them, but the export's placeholder
+ * entries would need mapping to this cache's placeholder ids, so the imported
+ * bank has none (a tab of placeholders alone disappears).
  *
- * Tabs must be a clean non-empty prefix (1..N present, then empty): the
- * server treats tabs as consecutive (Bank.getTabCount stops at the first
- * empty one), and the OSRS convention implies it for a real account too.
+ * Used tabs must come first (1..N, then empty ones), as the server treats tabs
+ * as consecutive (Bank.getTabCount stops at the first empty one) and OSRS
+ * itself collapses a gap. A tab grows as items are added and a save loads
+ * whole (PlayerSave applies banks with Bank.withoutLimit), so no tab is split.
  * Anything unusable falls back to the single main-tab import with a report.
  */
 function bankTabsFor(exportData, bank, log) {
   const sizes = (exportData.bankTabSizes ?? []).map(Number);
   const sizesSum = sizes.reduce((sum, size) => sum + size, 0);
-  const report = { sizes, sizesSum, used: false, reason: null, tabs: [] };
+  const report = { sizes, sizesSum, slotCount: bank.slotCount, used: false, reason: null, tabs: [] };
+  const allItems = bank.items.map(({ item }) => item);
   const usable =
     sizes.length >= 1 &&
     sizes.every((size) => Number.isInteger(size) && size >= 0) &&
     sizesSum > 0 &&
-    sizesSum < bank.items.length;
+    sizesSum <= bank.slotCount;
   const firstEmpty = sizes.findIndex((size) => size === 0);
   const cleanPrefix = firstEmpty === -1 || firstEmpty === sizes.filter((size) => size > 0).length;
   if (!usable) {
-    report.reason = "tab sizes unusable (missing, or they don't leave any item for the main tab)";
-    return { tabs: [{ tab: 0, items: bank.items }], report };
+    report.reason = `tab sizes unusable (missing, or ${sizesSum} slots of tabs in a bank of ${bank.slotCount})`;
+    return { tabs: [{ tab: 0, items: allItems }], report };
   }
   if (!cleanPrefix) {
-    report.reason = "tab sizes have an empty tab before empties end (server models consecutive tabs)";
-    return { tabs: [{ tab: 0, items: bank.items }], report };
+    report.reason = "tab sizes have an empty tab before a used one (the server models consecutive tabs)";
+    return { tabs: [{ tab: 0, items: allItems }], report };
   }
   const tabs = [];
-  let cursor = 0;
-  sizes.forEach((size, index) => {
-    if (size <= 0) return;
-    tabs.push({ tab: index + 1, items: bank.items.slice(cursor, cursor + size) });
-    cursor += size;
-  });
-
-  // The server caps every tab at 352 slots (Bank.capacity()); a flat main tab
-  // over that gets silently pruned to 352 on login. This account's main tab
-  // holds 516, so the overflow goes into the empty sub-tabs (8, then 9) that
-  // the account isn't using - they stay consecutive, so getTabCount stays valid.
-  const TAB_CAPACITY = 352;
-  let main = bank.items.slice(cursor);
-  report.mainBefore = main.length;
-  report.overflow = [];
-  const emptySubTabs = sizes
-    .map((size, index) => (size <= 0 ? index + 1 : 0))
-    .filter((tab) => tab > 0);
-  while (main.length > TAB_CAPACITY && emptySubTabs.length > 0) {
-    const overflowTab = emptySubTabs.shift();
-    const moved = main.slice(0, TAB_CAPACITY);
-    tabs.push({ tab: overflowTab, items: moved });
-    report.overflow.push({ tab: overflowTab, count: moved.length });
-    main = main.slice(TAB_CAPACITY);
+  let start = 0;
+  for (const size of sizes) {
+    if (size <= 0) continue;
+    const end = start + size;
+    const items = bank.items.filter(({ slot }) => slot >= start && slot < end).map(({ item }) => item);
+    // A tab of placeholders alone holds nothing here; the later tabs move up so
+    // they stay consecutive.
+    if (items.length > 0) tabs.push({ tab: tabs.length + 1, items });
+    start = end;
   }
-  if (main.length > TAB_CAPACITY) {
-    report.reason =
-      `main tab holds ${main.length} items but a tab holds at most ${TAB_CAPACITY} ` +
-      `and there is no empty sub-tab left to take the overflow`;
-    return { tabs: [{ tab: 0, items: bank.items }], report };
-  }
-  tabs.push({ tab: 0, items: main });
+  tabs.push({ tab: 0, items: bank.items.filter(({ slot }) => slot >= start).map(({ item }) => item) });
   report.used = true;
   report.tabs = tabs.map(({ tab, items }) => ({ tab, count: items.length }));
-  if (log) log(`Bank tabs from the export: sub-tabs [${sizes.filter((s) => s > 0).join(", ")}], main ${bank.items.length - cursor}.`);
-  if (report.overflow.length > 0) {
-    log(
-      `Main tab (${report.mainBefore} items) exceeds the server's 352-per-tab cap: ` +
-        report.overflow.map((entry) => `${entry.count} -> tab ${entry.tab}`).join(", ") +
-        `.`
-    );
-  }
+  if (log) log(`Bank tabs from the export: sub-tab slots [${sizes.filter((s) => s > 0).join(", ")}], main ${bank.slotCount - start} slot(s).`);
   return { tabs, report };
 }
 
@@ -640,7 +624,7 @@ function provenanceRecord(exportData, result, nowIso) {
         "the bank is split into tabs by the export's per-tab sizes (tab 1 first, main tab last, " +
         "as OSRS stores them); counts.bankTabsReport holds the layout actually applied; " +
         "quests imported stage-complete only (per-quest post-completion sub-state is not written); " +
-        "Recipe for Disaster rows untouched; claimed diary tiers, claimed combat achievement " +
+        "Recipe for Disaster rows untouched; completed diary tiers are marked claimed; claimed combat achievement " +
         "tiers and kill counts are not inferred",
       skills: exportData.skills,
       bankTabSizes: exportData.bankTabSizes,
@@ -759,6 +743,9 @@ export async function run(argv, { log = console.log, now = new Date() } = {}) {
 
   const skills = skillArraysFor(exportData.skills);
   const bank = bankFor(exportData.bank);
+  if (bank.imported > BANK_MAX_SLOTS) {
+    throw new Error(`The export's bank holds ${bank.imported} items; a bank here holds at most ${BANK_MAX_SLOTS}.`);
+  }
   const bankTabs = bankTabsFor(exportData, bank, log);
   const inventory = itemsFor(exportData.inventory, MAX_INVENTORY_SLOTS);
   const equipment = itemsFor(exportData.equipment, MAX_EQUIPMENT_SLOTS);
@@ -838,8 +825,9 @@ export async function run(argv, { log = console.log, now = new Date() } = {}) {
     log("");
     log(`Bank: ${counts.bankItems} item(s) in slot order${bankTabs.report.used ? ", split into tabs" : ", all into tab 0 (collapsed)"}.`);
     for (const entry of exportData.unknownBank.slice(0, 10)) {
-      log(`  (bank entry with no name: slot ${entry.slot} id ${entry.id})`);
+      log(`  (bank entry the export could not name: slot ${entry.slot} id ${entry.id})`);
     }
+    if (exportData.unknownBank.length > 10) log(`  ... and ${exportData.unknownBank.length - 10} more.`);
     if (bankTabs.report.used) {
       log(
         `Bank tabs rebuilt: ` +
@@ -851,10 +839,8 @@ export async function run(argv, { log = console.log, now = new Date() } = {}) {
     log("");
     log(`Inventory: ${counts.inventoryItems} item(s) of ${MAX_INVENTORY_SLOTS} slots.`);
     for (const line of describeContainerChange(save.inventory, inventory.items, "inventory")) log(line);
-    log(
-      `Equipment: ${counts.equipmentItems} item(s) of ${MAX_EQUIPMENT_SLOTS} slots ` +
-        `(the export stores these verbatim; empty here).`
-    );
+    log(`Equipment: ${counts.equipmentItems} item(s) of ${MAX_EQUIPMENT_SLOTS} slots.`);
+    for (const line of describeContainerChange(save.equipment, equipment.items, "equipment")) log(line);
     log("");
 
     if (args.progress && questResult) {

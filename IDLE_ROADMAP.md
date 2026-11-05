@@ -74,8 +74,11 @@ Uma moeda própria do jogo idle, separada dos pontos de melhoria.
 
 ## P1 - Conteúdo e equilíbrio
 
-- [ ] **Mais skills idle**: Cooking, Smithing, Fletching, Firemaking e Thieving em ciclo
-      automático (produção usando o que está no banco)
+- [x] **Produção idle**: Cooking, Smithing, Fletching, Crafting e Herblore em ciclo automático,
+      usando os materiais do banco (testado no jogo: cozinhar, fundir e fletching, online e offline)
+- [ ] **Locais de viagem para produção** (fogão e fornalha perto de banco, como Al Kharid)
+- [ ] **Firemaking e Thieving idle** (não passam pela janela de quantidade; precisam de um ciclo próprio)
+- [ ] **Smithing na bigorna** (a tela de forjar não é a janela de quantidade; ainda não é repetida)
 - [ ] **Mais locais de viagem**, incluindo áreas de membros
 - [ ] **Equilíbrio**: revisar taxas offline, limite de horas, preços das melhorias e quanto o
       jogador ganha por hora

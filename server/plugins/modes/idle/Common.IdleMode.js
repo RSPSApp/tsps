@@ -11,6 +11,10 @@ const ENABLED_ATTRIBUTE = "idle-mode:enabled";
 const GATHER_TARGET_ATTRIBUTE = "idle-mode:auto-target";
 /** Saved: what idle combat fights ({ name, anchor }, Combat). One of the two at a time. */
 const COMBAT_TARGET_ATTRIBUTE = "idle-mode:combat-target";
+/** Saved: what idle production makes ({ skill, kind, ..., productId, loadout, anchor }, Production). */
+const PRODUCTION_TARGET_ATTRIBUTE = "idle-mode:production-target";
+/** The three activities' targets: one at a time, so setting one clears the others. */
+const ACTIVITY_ATTRIBUTES = [GATHER_TARGET_ATTRIBUTE, COMBAT_TARGET_ATTRIBUTE, PRODUCTION_TARGET_ATTRIBUTE];
 /** Saved: false when the player turned auto-resume (gathering and combat) off. */
 const AUTO_ATTRIBUTE = "idle-mode:auto";
 /** Read by SkillLevelUp: true carries the player's actions on through a level-up, with no pop-up. */
@@ -98,7 +102,25 @@ function bank(player, itemId, amount) {
   return true;
 }
 
+/** How many of an item the bank holds (the tab it is in). */
+function bankAmount(player, itemId) {
+  return player.getBank(core.Bank.getTabForItem(player, itemId)).getAmount(itemId);
+}
+
+/** Takes up to `amount` of an item out of the bank; how many it took. */
+function bankTake(player, itemId, amount) {
+  const taken = Math.min(Math.max(0, amount), bankAmount(player, itemId));
+  if (taken > 0) player.getBank(core.Bank.getTabForItem(player, itemId)).deleteNumber(itemId, taken);
+  return taken;
+}
+
 /** The Skill's key in core.Skill ("WOODCUTTING"): what a save keeps, as a Skill is an object. */
+/** Sets one activity's target and clears the other two (one activity at a time). */
+function setActivity(player, attribute, target) {
+  for (const other of ACTIVITY_ATTRIBUTES) if (other !== attribute) player.setAttribute(other, null);
+  player.setAttribute(attribute, target);
+}
+
 function onChange(listener) {
   changeListeners.push(listener);
 }
@@ -125,6 +147,8 @@ module.exports = {
   ENABLED_ATTRIBUTE,
   GATHER_TARGET_ATTRIBUTE,
   COMBAT_TARGET_ATTRIBUTE,
+  PRODUCTION_TARGET_ATTRIBUTE,
+  setActivity,
   AUTO_ATTRIBUTE,
   NEW_ACCOUNTS_CONFIG,
   init,
@@ -140,6 +164,8 @@ module.exports = {
   free,
   bank,
   bankHasRoom,
+  bankAmount,
+  bankTake,
   skillKey,
   onChange,
   changed,

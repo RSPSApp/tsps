@@ -69,7 +69,7 @@ function addResult(session, result, now, xp, config) {
   const { activity, items } = result;
   const maxGapSeconds = result.maxGapSeconds ?? config.maxGapSeconds;
   if (!session || session.activity !== activity || now - session.lastAt > session.maxGapSeconds * 1000) {
-    return { activity, maxGapSeconds, firstAt: now, lastAt: now, firstXp: { ...xp }, lastXp: { ...xp }, items: {} };
+    return { activity, maxGapSeconds, firstAt: now, lastAt: now, firstXp: { ...xp }, lastXp: { ...xp }, items: {}, consumed: {} };
   }
   for (const [itemId, amount] of Object.entries(items)) {
     if (amount > 0) session.items[itemId] = (session.items[itemId] ?? 0) + amount;
@@ -91,17 +91,37 @@ function awayFromSession(session, now, config) {
     if (gained > 0) xp[key] = gained;
   }
   if (Object.keys(session.items).length === 0 && Object.keys(xp).length === 0) return null;
-  return { activity: session.activity, durationMs, xp, items: { ...session.items }, loggedOutAt: now };
+  const away = { activity: session.activity, durationMs, xp, items: { ...session.items }, loggedOutAt: now };
+  // Production's materials: what the session used, paid offline from the bank (Production).
+  if (Object.keys(session.consumed ?? {}).length > 0) away.consumed = { ...session.consumed };
+  return away;
 }
 
 /**
- * The time away paid at the session's rate: { elapsedMs, paidMs, xp, items }. `config.bonus` is an
- * extra share of the items (Bountiful Harvest's expected extras), with no XP.
+ * The time away paid at the session's rate: { elapsedMs, paidMs, xp, items, consumed, ranOut }.
+ * `config.bonus` is an extra share of the items (Bountiful Harvest's expected extras), with no XP.
+ * A session that used materials (`away.consumed`) is paid only as far as `config.stock` (what the
+ * bank holds of each) lasts: `consumed` is what to take, `ranOut` the item that ran out first.
  */
 function offlineReward(away, now, config) {
   const elapsedMs = Math.max(0, now - away.loggedOutAt);
-  const paidMs = Math.min(elapsedMs, config.capHours * 3600 * 1000);
-  const factor = away.durationMs > 0 ? (paidMs / away.durationMs) * config.efficiency : 0;
+  let paidMs = Math.min(elapsedMs, config.capHours * 3600 * 1000);
+  let factor = away.durationMs > 0 ? (paidMs / away.durationMs) * config.efficiency : 0;
+  let ranOut = null;
+  for (const [itemId, used] of Object.entries(away.consumed ?? {})) {
+    if (!(used > 0)) continue;
+    const lasts = (config.stock?.[itemId] ?? 0) / used;
+    if (lasts < factor) {
+      factor = lasts;
+      ranOut = Number(itemId);
+    }
+  }
+  if (ranOut !== null) paidMs = Math.min(paidMs, Math.floor((factor / config.efficiency) * away.durationMs));
+  const consumed = {};
+  for (const [itemId, used] of Object.entries(away.consumed ?? {})) {
+    const taken = Math.floor(used * factor);
+    if (taken > 0) consumed[itemId] = taken;
+  }
   const items = {};
   for (const [itemId, amount] of Object.entries(away.items)) {
     const earned = Math.floor(amount * factor * (1 + (config.bonus ?? 0)));
@@ -112,7 +132,7 @@ function offlineReward(away, now, config) {
     const earned = Math.floor(amount * factor);
     if (earned > 0) xp[key] = earned;
   }
-  return { elapsedMs, paidMs, xp, items };
+  return { elapsedMs, paidMs, xp, items, consumed, ranOut };
 }
 
 function formatDuration(ms) {
@@ -132,6 +152,19 @@ function xpNow(player, skills) {
     if (key) xp[key] = player.getSkillManager().getExperience(skill);
   }
   return xp;
+}
+
+/**
+ * Production's materials used since the last restock ({ itemId: amount }), for the session of
+ * `activity` being played; kept in the saved time away like the rest.
+ */
+function consume(player, activity, used) {
+  const session = sessions.get(player);
+  if (!session || session.activity !== activity) return;
+  for (const [itemId, amount] of Object.entries(used)) {
+    if (amount > 0) session.consumed[itemId] = (session.consumed[itemId] ?? 0) + amount;
+  }
+  player.setAttribute(AWAY_ATTRIBUTE, awayFromSession(session, Date.now(), Common.data.offline));
 }
 
 /**
@@ -176,8 +209,19 @@ function login({ player }) {
   const away = player.getAttribute(AWAY_ATTRIBUTE);
   if (!away) return;
   player.setAttribute(AWAY_ATTRIBUTE, null);
-  const config = { ...Common.data.offline, capHours: Progression.capHours(player), bonus: Progression.bountyChance(player) };
+  // Bountiful Harvest is gathering's; production pays what its materials in the bank allow.
+  const gathering = Common.idleSkill(Common.core.Skill[away.activity]);
+  const stock = {};
+  for (const itemId of Object.keys(away.consumed ?? {})) stock[itemId] = Common.bankAmount(player, Number(itemId));
+  const config = {
+    ...Common.data.offline, capHours: Progression.capHours(player), bonus: gathering ? Progression.bountyChance(player) : 0, stock,
+  };
   const reward = offlineReward(away, Date.now(), config);
+  const used = [];
+  for (const [itemId, amount] of Object.entries(reward.consumed)) {
+    Common.bankTake(player, Number(itemId), amount);
+    used.push(`${formatNumber(amount)} x ${Common.itemName(Number(itemId))}`);
+  }
   const gained = [];
   for (const [key, amount] of Object.entries(reward.xp)) {
     const skill = Common.core.Skill[key];
@@ -194,7 +238,12 @@ function login({ player }) {
   if (gained.length === 0 && banked.length === 0 && lost === 0) return;
   const capped = reward.paidMs < reward.elapsedMs ? ` (capped at ${config.capHours}h)` : "";
   player.sendMessage(`While you were away for ${formatDuration(reward.elapsedMs)}${capped}, you kept ${doing(away.activity)}:`);
-  const parts = [...gained, ...(banked.length ? [`${banked.join(", ")} to your bank`] : [])];
+  const parts = [
+    ...gained,
+    ...(banked.length ? [`${banked.join(", ")} to your bank`] : []),
+    ...(used.length ? [`using ${used.join(", ")}`] : []),
+  ];
+  if (reward.ranOut !== null) parts.push(`until you ran out of ${Common.itemName(reward.ranOut).toLowerCase()}`);
   if (parts.length) player.sendMessage(`${parts.join(", ")}.`);
   if (lost > 0) player.sendMessage(`Your bank was full: ${formatNumber(lost)} items were lost.`);
   player.setAttribute(LAST_AWAY_ATTRIBUTE,
@@ -220,6 +269,7 @@ module.exports.TOTALS_ATTRIBUTE = TOTALS_ATTRIBUTE;
 module.exports.totals = totals;
 module.exports.currentRate = currentRate;
 module.exports.onPaid = onPaid;
+module.exports.consume = consume;
 module.exports.addResult = addResult;
 module.exports.awayFromSession = awayFromSession;
 module.exports.offlineReward = offlineReward;

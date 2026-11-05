@@ -2387,6 +2387,8 @@ export class PluginManager {
       PrayerHandler: require("../game/content/PrayerHandler").PrayerHandler,
       PrayerData: require("../game/content/PrayerHandler").PrayerData,
       ItemActionPacketListener: require("../net/packet/impl/ItemActionPacketListener").ItemActionPacketListener,
+      // Item-on-item and item-on-object as a click sends them (Idle Mode's production repeats them).
+      UseItemPacketListener: require("../net/packet/impl/UseItemPacketListener").UseItemPacketListener,
       castAlchemy: (player, spellId, itemId, slot, source) => {
         const { MagicOnItemPacketListener } = require("../net/packet/impl/MagicOnItemPacketListener");
         const listener = new MagicOnItemPacketListener();

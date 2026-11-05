@@ -10,6 +10,7 @@
 const Common = require("./Common.IdleMode");
 const Auto = require("./Auto.IdleMode");
 const Combat = require("./Combat.IdleMode");
+const Production = require("./Production.IdleMode");
 const Offline = require("./Offline.IdleMode");
 const Progression = require("./Progression.IdleMode");
 const TravelScreen = require("./TravelScreen.IdleMode");
@@ -119,10 +120,12 @@ const isOpen = (player) => player.getInterfaceId?.() === GROUP_ID;
 
 function autoLine(player) {
   if (player.getAttribute(Common.AUTO_ATTRIBUTE) === false) return col(COLOUR.OFF, "Off");
-  const paused = player.getAttribute(Common.COMBAT_TARGET_ATTRIBUTE) ? Combat.pausedFor(player) : Auto.pausedFor(player);
+  const paused = player.getAttribute(Common.COMBAT_TARGET_ATTRIBUTE) ? Combat.pausedFor(player)
+    : player.getAttribute(Common.PRODUCTION_TARGET_ATTRIBUTE) ? Production.pausedFor(player) : Auto.pausedFor(player);
   if (paused === "click") return col(COLOUR.PAUSED, "Paused (you're doing something else)");
   if (paused === "stuck") return col(COLOUR.PAUSED, "Paused (it couldn't carry on)");
   if (paused === "logout") return col(COLOUR.PAUSED, "Paused (logging out)");
+  if (paused === "out") return col(COLOUR.PAUSED, "Paused (out of materials)");
   return col(COLOUR.ON, "On");
 }
 
@@ -132,6 +135,8 @@ function activityText(player) {
   if (fight) return `Fighting ${fight.name.toLowerCase()}s`;
   const gather = player.getAttribute(Common.GATHER_TARGET_ATTRIBUTE);
   if (gather) return `${gather.option} ${gather.name.toLowerCase()}`;
+  const make = player.getAttribute(Common.PRODUCTION_TARGET_ATTRIBUTE);
+  if (make) return `Making ${Common.itemName(make.productId).toLowerCase()}`;
   return null;
 }
 

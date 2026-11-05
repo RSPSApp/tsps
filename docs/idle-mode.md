@@ -121,6 +121,51 @@ While you were away for 1h 0m, you kept woodcutting:
 | `maxFailedAttempts` | `3` |
 | `skipSeconds` | `120` |
 
+## Idle production
+
+`server/plugins/modes/idle/Production.IdleMode.js`, settings in `"production"`. Cooking,
+Smithing, Fletching, Crafting and Herblore, through the skills' own flows, so no recipe is
+duplicated here:
+
+- **The target**: the last thing an idle player did by hand that made something
+  (`skills:produced`, one of `"skills"`) within `rememberClickSeconds`: an item used on an object
+  (raw food on a range, ore on a furnace), an item used on another (a knife on logs) or an
+  object's option (Smelt at a furnace), seen through `onItemOnObject`, `onItemOnItem` and
+  `onBeforeObjectInteraction`. With it: the product, where the player stood, and the **loadout**,
+  the inventory as it was (materials and tools). Saved as `idle-mode:production-target`. One
+  activity at a time (`Common.setActivity`): making something replaces the gathering or combat
+  target, and they replace it.
+- **The loop**: when a material has run out and nothing has been made for `restartAfterSeconds`
+  (mid-batch, when nothing has been made for `stalledSeconds`: smelting iron fails half the time),
+  the products go to the bank, each loadout item is topped up from the bank, and the use is
+  repeated as a click would (`UseItemPacketListener`, added to `api.core`, or
+  `emitObjectInteraction`). The creation menu it opens is answered with the same choice and
+  `makeAll`: the product when the menu lists products (fletching, smelting), the item used when
+  it lists what is used (cooking lists the raw food), or its only entry. A menu it can't read is
+  closed.
+- **Pauses**: out of a material in the bank too ("out of materials"), or `maxFailedAttempts`
+  tries in a row that make nothing, said once. `::idle auto on` lifts them.
+- **Offline**: each product is recorded like a gather, and each top-up adds what the last batch
+  used (`Offline.consume`) to the session's `consumed`. A login pays the time away at the rate
+  made, takes `consumed` in proportion from the bank, and stops where the first material runs out
+  ("until you ran out of raw shrimps"). Bountiful Harvest applies to gathering only.
+
+Checked in game: willow shortbows (u) from logs, lobsters on Al Kharid's range, iron bars at its
+furnace, online and two minutes offline. Not covered yet: smithing at an anvil (its interface is
+not the creation menu), firemaking and thieving.
+
+| Setting (`"production"`) | Default |
+| --- | --- |
+| `skills` | Cooking, Smithing, Fletching, Crafting, Herblore |
+| `restartAfterSeconds` | `6` |
+| `stalledSeconds` | `20` |
+| `retrySeconds` | `4` |
+| `rememberClickSeconds` | `60` |
+| `searchTiles` / `leashTiles` | `16` / `24` |
+| `maxFailedAttempts` | `3` |
+| `maxGapSeconds` | `90` |
+| `makeAll` | `28` |
+
 ## Idle combat
 
 `server/plugins/modes/idle/Combat.IdleMode.js`. Fighting works the same way as gathering:

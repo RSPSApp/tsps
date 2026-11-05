@@ -77,7 +77,11 @@ Na primeira vez que uma conta fica idle (conta nova num mundo idle, ou o primeir
 5. **Combate idle**: ataque e mate um monstro, e o personagem continua atacando os do mesmo tipo
    por perto. Ele come quando a vida fica abaixo de 50%, revida quando é atacado e manda os drops
    pro banco. Também conta para o progresso offline.
-6. **Viagem até a atividade**: na tela `::idle travel` (ou no botão Travel da tela idle), escolha
+6. **Produção idle** (Cooking, Smithing, Fletching, Crafting, Herblore): faça uma vez à mão
+   (cru no fogão, faca no tronco, minério na fornalha) e escolha o produto. O personagem continua
+   sozinho: guarda os produtos no banco, pega mais material do banco e repete, até o material
+   acabar. Offline, gasta o material do banco no mesmo ritmo.
+7. **Viagem até a atividade**: na tela `::idle travel` (ou no botão Travel da tela idle), escolha
    entre 21 locais (árvores, minas, pesca e monstros, de Lumbridge a Karamja). O personagem
    teleporta e já começa a trabalhar sozinho. Locais de coleta pedem o nível da skill.
 
@@ -110,6 +114,7 @@ O código idle fica em arquivos próprios (`server/plugins/modes/idle/`). Do pro
 poucos pontos foram mexidos, todos pequenos: `Fishing.plugin.js` ganhou um evento
 (`fishing:spot-stays`), `SkillLevelUp.plugin.js` passou a ler um atributo do jogador
 (`level-up:keep-actions`), o diário lateral (`sidejournaldefaults/Layout.SideJournalDefaults.js`)
-ganhou o botão Idle com botões um pouco mais estreitos (e o teste `character-summary` a posição
-nova), e `docs/world-configuration.md` ganhou uma seção. Assim os merges com o
+ganhou o botão Idle (botões um pouco mais estreitos, e o teste `character-summary` com a posição
+nova) e a seção Idle Information, o `api.core` ganhou o `UseItemPacketListener` (em
+`PluginManager.ts` e `PluginTypes.ts`), e `docs/world-configuration.md` ganhou uma seção. Assim os merges com o
 upstream ficam simples.

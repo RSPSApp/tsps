@@ -295,7 +295,11 @@ one attribute `league:statistics` (name -> value), sent at login and as each cha
 killed (`onPlayerDefeated`), damage dealt to NPCs and the highest hit (each hitsplat's `onApplied` as it lands, attached in
 `onCombatHitResolved`, so a cancelled projectile counts nothing),
 damage taken from NPCs (`onCombatHitResolved`), food (`food:eaten`), potions (`potions:drunk`),
-fish, ore and logs (`fishing:success`, `mining:success`, `woodcutting:success`). Stubbed at 0 for
+fish (`fishing:success`). Logs and ore (varps 4525 `tracking_logs_chopped`, 4526
+`tracking_ore_mined`) are not this unit's: Woodcutting and Mining count and send them on every
+world, one per log or ore kept (stardust through `mining:count-ore`; captures 237/01098, 01101,
+01102, 01104, 01105), so there is one writer. Its `league:statistics` answer reads them back with
+`woodcutting:logs-chopped` / `mining:ores-mined` (`{ player, count }`, data `skillCounters`). Stubbed at 0 for
 want of a source: echo bosses killed (none here), coins gained and lost, clues completed (no
 completion event), special attacks used (the special flag is cleared before the hit resolves) and
 the highest value item worn.

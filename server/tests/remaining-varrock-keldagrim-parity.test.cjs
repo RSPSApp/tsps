@@ -1124,7 +1124,9 @@ test('real Mining task yields normal Barronite deposit XP/message and canonical 
     });
     for (let i = 0; i < 20 && !p.items.get(I.BARRONITE_DEPOSIT); i++) h.tick(1);
     // Barronite keeps standing through its ores and runs out on its own 33-tick timer.
-    assert.equal(h.tasks.length, 1, 'mining task submitted, no respawn task yet');
+    // Mining also submits Cam Torum's water cycle (CalcifiedWater.Mining.js).
+    assert.ok(h.tasks.some(task => task.constructor.name === 'MiningTask'), 'mining task submitted');
+    assert.equal(h.tasks.filter(task => task.constructor.name === 'RockRespawnTask').length, 0, 'no respawn task yet');
     assert.equal(p.items.get(I.BARRONITE_DEPOSIT), 1);
     assert.equal(p.items.get(I.BARRONITE_SHARDS), undefined);
     assert.ok(p.log.some(([key, , text]) => key === 'sendTypedMessage' && text === 'You manage to mine a barronite deposit.'),

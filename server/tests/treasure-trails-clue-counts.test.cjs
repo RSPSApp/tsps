@@ -75,6 +75,18 @@ test("shared clue rewards show the total across all tiers, beginner included", (
   assert.equal(count(Beginner, { player: player(attributes), category: category.name, count: null }), 27);
 });
 
+test("shared clue counts work with either runtime alone or both runtimes", () => {
+  const attributes = { [attribute({ name: "easy" })]: 3 };
+  for (const handlers of [[Runtime], [Beginner], [Runtime, Beginner], [Beginner, Runtime]]) {
+    const api = new Proxy({ core: {}, emitCustomEvent(name, request) {
+      if (name === "collection-log:category-count") for (const handler of handlers) handler.categoryCount(request);
+    } }, { get(target, key) { return target[key] || (() => {}); } });
+    Progress(api);
+    assert.equal(Progress.categoryCount(player(attributes), SHARED), 3);
+    assert.equal(Progress.categoryCount(player(), SHARED), 0);
+  }
+});
+
 test("the old and unknown category names are left uncounted", () => {
   assert.equal(count(Runtime, { player: player({ [attribute({ name: "easy" })]: 4 }), category: "Treasure Trails (Easy)", count: null }), null);
   assert.equal(count(Beginner, { player: player({ [Beginner.COMPLETED_ATTRIBUTE]: 4 }), category: "Treasure Trails (Beginner)", count: null }), null);

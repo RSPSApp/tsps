@@ -93,7 +93,6 @@ module.exports = function registerCorsairCurseQuest(api) {
   const TOCK_START_TILE = { x: 3030, y: 3273, z: 0 };
   const RIMMINGTON_TILE = { x: 2910, y: 3226, z: 0 };
   const RIMMINGTON_LANDING = { x: 2911, y: 3226, z: 0 };
-  const COVE_TOCK_TILE = { x: 2574, y: 2836, z: 1 };
   const COVE_LANDING = { x: 2578, y: 2837, z: 1 };
   const ARSEN_TILE = { x: 2556, y: 2856, z: 1 };
   const COLIN_TILE = { x: 2559, y: 2856, z: 1 };
@@ -127,7 +126,6 @@ module.exports = function registerCorsairCurseQuest(api) {
   const TRAITOR_ARSEN = 1 << 1;
   const TRAITOR_COLIN = 1 << 2;
 
-  const npcsByPlayer = new Map();
   const scenes = new WeakMap();
   const fights = new WeakMap();
   const dolls = new WeakMap();
@@ -224,61 +222,6 @@ module.exports = function registerCorsairCurseQuest(api) {
 
   function advance(player, value) {
     if (quest.getStage(player) < value) quest.setStage(player, value);
-    ensureNpcs(player);
-  }
-
-  // ==========================================================================
-  // Spawned NPCs (owner-only; the crew exist in the world at every stage)
-  // ==========================================================================
-
-  function postColinTile(player) {
-    return near(player, RIMMINGTON_TILE, 24) ? RIMMINGTON_TILE : COVE_TOCK_TILE;
-  }
-
-  function desiredNpcs(player) {
-    const stage = quest.getStage(player);
-    if (stage <= STAGE_NOT_STARTED || stage >= STAGE_COMPLETE) return [];
-    // The cache's canonical multi-NPCs already supply the crew and post-quest
-    // captain. Only the travelling captain needs per-player locations.
-    const list = [{ key: "tock-rimmington", id: CAPTAIN_TOCK_FERRY, ...RIMMINGTON_TILE }];
-    if (stage >= STAGE_ARRIVED) list.push({ key: "tock-cove", id: CAPTAIN_TOCK_FERRY, ...COVE_TOCK_TILE });
-    return list;
-  }
-
-  function npcMatches(npc, want) {
-    const location = npc?.getLocation?.();
-    return npc?.getId?.() === want.id
-      && location?.getX?.() === want.x
-      && location?.getY?.() === want.y
-      && location?.getZ?.() === want.z;
-  }
-
-  /** Spawns, moves and removes this player's quest NPCs to match the stage. */
-  function ensureNpcs(player) {
-    if (!player || player.isPlayerBot?.() === true) return;
-    const tracked = npcsByPlayer.get(player) ?? new Map();
-    const desired = desiredNpcs(player);
-    const wanted = new Map(desired.map((entry) => [entry.key, entry]));
-    for (const [key, npc] of [...tracked]) {
-      if (wanted.has(key) && npcMatches(npc, wanted.get(key))) continue;
-      api.removeNpc(npc);
-      tracked.delete(key);
-    }
-    for (const want of desired) {
-      if (tracked.has(want.key)) continue;
-      const npc = api.spawnNpc({
-        id: want.id,
-        x: want.x,
-        y: want.y,
-        z: want.z,
-        wanderRadius: 0,
-        owner: player,
-        ownerOnly: true,
-      });
-      if (npc) tracked.set(want.key, npc);
-    }
-    if (tracked.size > 0) npcsByPlayer.set(player, tracked);
-    else npcsByPlayer.delete(player);
   }
 
   // ==========================================================================
@@ -292,7 +235,6 @@ module.exports = function registerCorsairCurseQuest(api) {
 
   function sailToRimmington(player) {
     moveTo(player, RIMMINGTON_LANDING);
-    ensureNpcs(player);
   }
 
   function handleTravel(event) {
@@ -566,7 +508,6 @@ module.exports = function registerCorsairCurseQuest(api) {
     if (stepId === ACTION_QUEST_COMPLETE) {
       if (quest.getStage(player) >= STAGE_KILLED && !quest.isComplete(player)) {
         quest.complete(player);
-        ensureNpcs(player);
       }
     }
   }
@@ -740,11 +681,6 @@ module.exports = function registerCorsairCurseQuest(api) {
     if (!player || event.npcId !== ITHOI_FIGHT) return;
     if (quest.getStage(player) !== STAGE_KILL_ORDER || fights.get(player)?.npc !== event.npc) return;
     clearFight(player);
-    const tracked = npcsByPlayer.get(player);
-    if (tracked) {
-      tracked.delete("ithoi");
-      if (tracked.size === 0) npcsByPlayer.delete(player);
-    }
     advance(player, STAGE_KILLED);
   }
 
@@ -1063,15 +999,11 @@ module.exports = function registerCorsairCurseQuest(api) {
     if (!player) return;
     refreshQuestList(player);
     sendProgress(player);
-    ensureNpcs(player);
   }
 
   function handleLogout({ player }) {
     if (!player) return;
     endScene(player); clearFight(player); removeDoll(player); TaskManager.cancelTasks(player);
-    const tracked = npcsByPlayer.get(player);
-    if (tracked) for (const npc of tracked.values()) api.removeNpc(npc);
-    npcsByPlayer.delete(player);
   }
 
   // ==========================================================================

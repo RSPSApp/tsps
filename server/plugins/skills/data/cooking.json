@@ -133,7 +133,7 @@
     {"product":"unfinished_summer_pie_2","level":95,"ingredients":["watermelon","unfinished_summer_pie_1"]},
     {"product":"uncooked_summer_pie","level":95,"ingredients":["cooking_apple","unfinished_summer_pie_2"]},
     {"product":"raw_gnomebowl","level":1,"ingredients":[["gianne_dough",1],["gnomebowl_mould",1]],"timing":[1,2]},
-    {"product":9563,"level":42,"xp":50,"ingredients":[["half_baked_bowl",1],["chocolate_bar",4],["equa_leaves",1]],"timing":[1,2]},
+    {"product":9563,"level":42,"xp":50,"ingredients":[["half_baked_bowl",1],["chocolate_bar",4],["equa_leaves",1]],"returns":["gnomebowl_mould"],"timing":[1,2]},
     {"product":"chocolate_bomb","level":1,"xp":110,"ingredients":[[9564,1],["chocolate_dust",1],["pot_of_cream",2]],"timing":[1,2]}
   ],
   "wines": [

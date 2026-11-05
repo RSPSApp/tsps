@@ -148,6 +148,9 @@ function fakePlayer() {
     getInventory: () => ({
       contains: (id) => inventory.has(id),
       getFreeSlots: () => p.freeSlots,
+      getAddableAmount: (item) => (item.getDefinition().isStackable()
+        ? (inventory.has(item.getId()) || p.freeSlots > 0 ? item.getAmount() : 0)
+        : Math.min(item.getAmount(), p.freeSlots)),
       add(item) { if (!inventory.has(item.getId())) p.freeSlots--; inventory.set(item.getId(), (inventory.get(item.getId()) ?? 0) + item.getAmount()); },
       refreshItems() {},
     }),

@@ -181,3 +181,35 @@ test("the arena, the summit and the mountainside hold the captured spawn tiles",
   assert.ok(!inArena(Shared.PRIVATE_LANDING));
   for (const segment of Shared.SEGMENTS) assert.ok(Shared.within(Shared.MOUNTAINSIDE_BOUNDS, ...segment.tile));
 });
+
+test("public and private fights leave aggression to the scripted attacks", (t) => {
+  new (require("../dist/game/definition/loader/impl/NpcDefinitionLoader").NpcDefinitionLoader)().load();
+  const { NpcAggression } = require("../dist/game/entity/impl/npc/NpcAggression");
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  let arena;
+  Area.attach(new Proxy({ core, registerArea: (area) => { arena = area; } }, {
+    get: (target, key) => target[key] ?? (() => {}),
+  }));
+  const player = new Player(null);
+  player.setRegistered(true);
+  player.setNeedsPlacement(false);
+  player.setLocation(new core.Location(Shared.HEAD_TILE[0] - 1, Shared.HEAD_TILE[1], 0));
+  const sender = new Proxy({}, { get: () => () => sender });
+  player.getPacketSender = () => sender;
+  // Use the real instance policy without allocating a map instance.
+  for (const area of [arena, Object.create(Area._test.InstanceArea.prototype)]) {
+    t.mock.method(player, "getArea", () => area);
+    for (const id of [Shared.NPC.HEAD, Shared.NPC.HEAD_SHIELDED, Shared.NPC.HEAD_DEFEATED, Shared.NPC.TAIL, Shared.NPC.BODY]) {
+      const npc = core.NPC.create(id, new core.Location(...Shared.HEAD_TILE, 0));
+      npc.setRegistered(true);
+      npc.setNeedsPlacement(false);
+      npc.setFlag("combat:no-retaliate");
+      npc.setMultiCombat(true);
+      npc.getMovementQueue().setBlockMovement(true);
+      t.mock.method(npc, "getArea", () => area);
+      assert.equal(npc.getCurrentDefinition().isAggressive(), true, `source aggression: ${id}`);
+      NpcAggression.runAggression(player, [npc]);
+      assert.equal(npc.getCombat().getTarget(), null, `${area.getName()}: ${id}`);
+    }
+  }
+});

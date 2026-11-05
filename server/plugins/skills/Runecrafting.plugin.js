@@ -62,6 +62,7 @@ const ABYSS_TELEPORT_STEP = "o8m7y6";
 const ESSENCE_TELEPORT_STEPS = new Set(["ILlRUH", "SvUvek", "PDYldg"]);
 const CROMPERTY_ESSENCE_TELEPORT_STEP = "EkCGKW";
 const ARDOUGNE_ESSENCE_TELEPORT_TASK = "have-wizard-cromperty-teleport-you-to-the-rune-e";
+const VARROCK_ESSENCE_TELEPORT_TASK = "have-aubury-teleport-you-to-the-essence-mine";
 /** The Rune Essence mine's exit portals (loc 34825, "Portal", Use). */
 const ESSENCE_MINE_PORTAL = 34825;
 /** Where the player stood when a wizard teleported them into the mine: the portals return there. */
@@ -676,6 +677,8 @@ function teleportToEssenceMine(player, wizard) {
       pluginApi.emitCustomEvent("diary:task", { player, diary: "ardougne", task: ARDOUGNE_ESSENCE_TELEPORT_TASK });
     } else if (wizardName === "Brimstail") {
       pluginApi.emitCustomEvent("runecrafting:brimstail-essence", { player });
+    } else if (wizardName === "Aubury") {
+      pluginApi.emitCustomEvent("diary:task", { player, diary: "varrock", task: VARROCK_ESSENCE_TELEPORT_TASK });
     }
   });
   if (wizard) {

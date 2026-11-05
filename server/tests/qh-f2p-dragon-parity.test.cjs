@@ -341,7 +341,8 @@ test('Dragon Slayer refuses ship repairs once the Karamja shortcut is known', ()
 
 test('the real Doors route walks the unlocked player in from the south through the captured wall while another player stays blocked', () => {
   const h = harness(true), unlocked = player(), locked = player();
-  const swaps = [], sounds = [];
+  const swaps = [], sounds = [], discoveries = [];
+  (h.events['dragon-slayer:crandor-wall'] ??= []).push(event => discoveries.push(event.player));
   const original = [core.ObjectManager.register, core.ObjectManager.deregister, core.Sounds.sendSound];
   core.ObjectManager.register = object => swaps.push(['register', object.getId(), object.getLocation().getX(), object.getLocation().getY()]);
   core.ObjectManager.deregister = object => swaps.push(['deregister', object.getId(), object.getLocation().getX(), object.getLocation().getY()]);
@@ -371,6 +372,7 @@ test('the real Doors route walks the unlocked player in from the south through t
     assert.deepEqual([carry.getStart().getX(), carry.getStart().getY(), carry.getEnd().getX(), carry.getEnd().getY()], [2836, 9599, 0, 1]);
     assert.deepEqual(swaps.splice(0), [['deregister', O.WALL_9, 2836, 9600], ['register', 25039, 2836, 9599], ['register', 38848, 2836, 9600]]);
     assert.deepEqual(sounds, [2410]);
+    assert.deepEqual(discoveries, [unlocked], 'eligible wall click also emits diary discovery');
     assert.equal(unlocked.attrs.get('dragon-slayer.shortcut'), true);
     assert.equal(h.objects.length, 0);
 
@@ -378,6 +380,7 @@ test('the real Doors route walks the unlocked player in from the south through t
     assert.deepEqual(locked.steps, [], 'the locked player is refused before Doors');
     assert.deepEqual(swaps, []);
     assert.equal(locked.attrs.get('dragon-slayer.shortcut'), undefined);
+    assert.deepEqual(discoveries, [unlocked], 'refused wall click never earns diary discovery');
   } finally {
     [core.ObjectManager.register, core.ObjectManager.deregister, core.Sounds.sendSound] = original;
   }
@@ -698,4 +701,19 @@ test('Dragon Slayer Ned selector defers to Prince Ali wig while preserving DS vo
   const inactive = player();
   setStages(inactive, 0, 20);
   assert.ok(isPrinceWig(pick(inactive)), 'inactive DS already defers to Prince wig');
+});
+
+
+test('Crandor diary route credits climbing from the dungeon to the surface only', () => {
+  const h = harness(), p = player();
+  const arrivals = [];
+  (h.events['dragon-slayer:crandor-visited'] ??= []).push(event => arrivals.push(event));
+  p.attrs.set('dragon-slayer.shortcut', true);
+  p.moveTo(new core.Location(2832, 9657, 0));
+  h.clicks.get(25213)({ player: p });
+  assert.ok(p.getLocation().getY() < 6400);
+  assert.equal(arrivals.length, 1);
+  h.clicks.get(25213)({ player: p });
+  assert.ok(p.getLocation().getY() >= 6400);
+  assert.equal(arrivals.length, 1);
 });

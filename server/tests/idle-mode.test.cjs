@@ -12,7 +12,7 @@ function skill(index) {
 }
 
 const Skill = {
-  ATTACK: skill(0), DEFENCE: skill(1), STRENGTH: skill(2), HITPOINTS: skill(3), RANGED: skill(4), MAGIC: skill(6),
+  ATTACK: skill(0), DEFENCE: skill(1), STRENGTH: skill(2), HITPOINTS: skill(3), RANGED: skill(4), PRAYER: skill(5), MAGIC: skill(6),
   COOKING: skill(7), WOODCUTTING: skill(8), SMITHING: skill(13), FISHING: skill(10), FIREMAKING: skill(11), MINING: skill(14), THIEVING: skill(17),
 };
 const SHARK = 385;
@@ -578,7 +578,7 @@ test("points: one per 250 idle-skill XP, carried over, online and offline", (t) 
   assert.equal(player.getAttribute("idle-mode:point-progress"), 100);
   api.emit("xp", { player, skill: Skill.WOODCUTTING, experience: 150 });
   assert.equal(player.getAttribute("idle-mode:points"), 3);
-  api.emit("xp", { player, skill: Skill.COOKING, experience: 10_000 });
+  api.emit("xp", { player, skill: Skill.PRAYER, experience: 10_000 });
   assert.equal(player.getAttribute("idle-mode:points"), 3, "not an idle skill");
   const normal = fakePlayer();
   api.emit("xp", { player: normal, skill: Skill.WOODCUTTING, experience: 10_000 });
@@ -591,6 +591,14 @@ test("points: one per 250 idle-skill XP, carried over, online and offline", (t) 
   now = 60_000;
   api.login({ player });
   assert.equal(player.getAttribute("idle-mode:points"), 5);
+  // Production's XP earns them too (Cooking here), and Quick Hands speeds its actions.
+  api.emit("xp", { player, skill: Skill.COOKING, experience: 1000 });
+  assert.equal(player.getAttribute("idle-mode:points"), 9);
+  player.setAttribute("idle-mode:upgrades", { "quick-hands": 5 });
+  t.mock.method(Math, "random", () => 0.1);
+  assert.equal(api.emit("skills:action-interval", { player, skill: Skill.COOKING, kind: "cook", ticks: 4 }).ticks, 3);
+  assert.equal(api.emit("skills:action-interval", { player, skill: Skill.PRAYER, kind: "offer", ticks: 4 }).ticks, 4, "not an idle skill");
+  assert.equal(api.emit("skills:action-interval", { player: normal, skill: Skill.COOKING, kind: "cook", ticks: 4 }).ticks, 4, "not idle");
 });
 
 test("shop: buying levels spends points, refuses when short or maxed", () => {

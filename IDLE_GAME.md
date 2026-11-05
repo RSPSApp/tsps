@@ -72,8 +72,8 @@ Na primeira vez que uma conta fica idle (conta nova num mundo idle, ou o primeir
    o resumo "While you were away...".
 3. **Retomada automática**: o último recurso em que você trabalhou vira o alvo. Quando a coleta
    para, o personagem anda até o mais próximo do mesmo tipo e recomeça.
-4. **Pontos e melhorias**: 1 ponto a cada 250 XP idle. As melhorias são Quick Hands
-   (ações mais rápidas), Long Dreams (mais horas offline) e Bountiful Harvest (recursos extras).
+4. **Pontos e melhorias**: 1 ponto a cada 250 XP idle (coleta, combate e produção). As melhorias são Quick Hands
+   (ações de coleta e produção mais rápidas), Long Dreams (mais horas offline) e Bountiful Harvest (recursos extras).
 5. **Combate idle**: ataque e mate um monstro, e o personagem continua atacando os do mesmo tipo
    por perto. Ele come quando a vida fica abaixo de 50%, revida quando é atacado e manda os drops
    pro banco. Também conta para o progresso offline.

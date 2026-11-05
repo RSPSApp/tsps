@@ -29,6 +29,7 @@ let skills = null;
 /** Called with a player whenever something the Idle screen shows changed (Screen). */
 const changeListeners = [];
 let combatSkills = null;
+let productionSkills = null;
 
 function init(pluginApi) {
   api = pluginApi;
@@ -36,6 +37,7 @@ function init(pluginApi) {
   data = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "data", "idle-mode.json"), "utf8"));
   skills = null;
   combatSkills = null;
+  productionSkills = null;
 }
 
 function isIdle(player) {
@@ -67,6 +69,12 @@ function combatSkillList() {
 
 function idleCombatSkill(skill) {
   return combatSkillList().includes(skill);
+}
+
+/** Whether `skill` (a core Skill) is one idle production makes with ("production" "skills"). */
+function idleProductionSkill(skill) {
+  if (!productionSkills) productionSkills = new Set(data.production.skills.map((name) => core.Skill[name]).filter((value) => value !== undefined));
+  return productionSkills.has(skill);
 }
 
 /** Auto-resume is on: Idle Mode, its data switch and the player's own (`::idle auto`). */
@@ -206,6 +214,7 @@ module.exports = {
   idleGather,
   combatSkillList,
   idleCombatSkill,
+  idleProductionSkill,
   autoOn,
   chebyshev,
   free,

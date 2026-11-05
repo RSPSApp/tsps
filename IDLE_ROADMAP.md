@@ -85,8 +85,9 @@ Uma moeda própria do jogo idle, separada dos pontos de melhoria.
 - [x] **Smithing na bigorna**: barra na bigorna e escolha o item; o personagem continua forjando
       com as barras do banco; local de viagem nas bigornas de Varrock (testado no jogo)
 - [ ] **Mais locais de viagem**, incluindo áreas de membros
-- [ ] **Equilíbrio**: revisar taxas offline, limite de horas, preços das melhorias e quanto o
-      jogador ganha por hora
+- [x] **Equilíbrio**: taxas medidas no jogo e economia de pontos revisadas (seção Balance em
+      `docs/idle-mode.md`). Produção agora dá pontos idle (e Quick Hands acelera a produção); o
+      progresso offline precisa de 2 minutos de amostra (antes 1)
 - [x] **Metas diárias**: 3 por dia (aba Goals), que pagam pontos idle e um bônus por completar
       todas; contam online e offline
 - [x] **Conquistas idle**: 5 trilhas com 3 níveis (Gatherer, Maker, Fighter, Patient, Dedicated),

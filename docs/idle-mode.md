@@ -96,7 +96,7 @@ While you were away for 1h 0m, you kept woodcutting:
 | Setting (`"offline"`) | Default |
 | --- | --- |
 | `enabled` | `true` |
-| `minSampleSeconds` | `60` |
+| `minSampleSeconds` | `120` |
 | `maxGapSeconds` | `60` |
 | `capHours` | `12` |
 | `efficiency` | `1` |
@@ -254,7 +254,8 @@ from the inventory and the bank, then "out of bronze bar".
 ## Points and upgrades
 
 `server/plugins/modes/idle/Progression.IdleMode.js`. An idle account earns an **idle point** per
-`xpPerPoint` (250) XP in the idle skills, online and offline (the offline XP lands through the
+`xpPerPoint` (250) XP in the idle skills, idle combat's (`combat.pointsFromXp`) and idle
+production's (`production.pointsFromXp`), online and offline (the offline XP lands through the
 same `onExperienceGained` hook). Saved as `idle-mode:points`, with the XP toward the next point in
 `idle-mode:point-progress`.
 
@@ -268,12 +269,44 @@ Bought levels are saved as `idle-mode:upgrades` `{ upgrade: level }`.
 
 | Upgrade | Each level | Costs | Hook |
 | --- | --- | --- | --- |
-| `quick-hands` (Quick Hands) | A 10% chance a chop, mine or catch roll comes a tick sooner (never under one tick). | 100, 250, 500, 1000, 2000 | `skills:action-interval` (kinds `chop`, `mine`), `fishing:interval` |
+| `quick-hands` (Quick Hands) | A 10% chance a chop, mine or catch roll, or an idle production skill's action, comes a tick sooner (never under one tick). | 100, 250, 500, 1000, 2000 | `skills:action-interval` (kinds `chop`, `mine`; any kind of a production skill), `fishing:interval` |
 | `long-dreams` (Long Dreams) | 3 more hours of offline progress. | 150, 400, 900, 2000 | the offline cap |
 | `bountiful-harvest` (Bountiful Harvest) | A 4% chance of an extra resource to the bank, without XP. Offline, the same expected share is added to the items. | 200, 500, 1000, 2000, 4000 | `storage:gather`, the offline items |
 
 The prices and effects are in `"progression"` in the data. Quick Hands' speed shows in the rate
 the offline progress measures, so it counts offline as well.
+
+## Balance
+
+Reviewed with the rates measured in game (agent MCP, a fresh account, normal gear) and the
+point economy. At 250 XP a point, the points an hour are the XP an hour / 250.
+
+| Activity (levels) | XP an hour | Idle points an hour |
+| --- | --- | --- |
+| Pickpocketing men (Thieving 1-5) | ~4,000 | ~16 |
+| Varrock tea stall (Thieving 5-7) | ~17,000 | ~68 |
+| East Ardougne baker's stall (Thieving 7-12) | ~46,000 | ~185 |
+| A line of fires, normal logs (Firemaking 15-21) | ~23,000 | ~90 |
+| Bronze daggers at an anvil, with restocks (Smithing 1-9) | ~14,000 | ~56 |
+
+- **Upgrades**: all 14 levels cost 15,000 points (3.75M XP): ~190 hours at 20k XP an hour, ~75 at
+  50k. With up to 24 hours a day paid (12 offline, 24 with Long Dreams), the first levels come in
+  the first hour or two and the last within one to two weeks. Kept as they are.
+- **Daily goals** pay ~70 points plus the 50 bonus, about an hour of points: worth logging in for,
+  not worth more than playing. Kept.
+- **Achievements** pay 8,500 points over all tiers, more than half the upgrades, spread over
+  weeks (Patient III is 720 hours idle). Kept.
+- **Changed: production earns points.** Cooking, Smithing, Fletching, Crafting, Herblore and
+  Firemaking XP earned nothing, so a player making things never got the upgrades; it now earns
+  like gathering (`production.pointsFromXp`), and Quick Hands speeds production's actions too.
+  Bountiful Harvest stays gathering's (an extra product would come with no materials).
+- **Changed: an offline sample needs 2 minutes** (`offline.minSampleSeconds` 60 -> 120). The rate
+  paid for up to 12 hours away was measured from as little as a minute: a lucky minute (a burst
+  of catches, two quick kills) paid out for hours.
+- **Stalls** run about twice the OSRS rate, as they stay stocked: the same as trees and rocks,
+  which don't deplete either. Kept with endless gathering; `thieving.keepStalls` turns it off.
+- **Offline efficiency** stays `1`: an idle character works the same with or without the player
+  watching, and the offline cap is what asks them to come back.
 
 ## First login
 

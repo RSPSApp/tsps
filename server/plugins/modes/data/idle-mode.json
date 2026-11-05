@@ -16,7 +16,7 @@
   "offline": {
     "_description": "A gathering session counts once it has run minSampleSeconds; a gap of more than maxGapSeconds between two gathers starts a new one. Time away is paid up to capHours at efficiency (1 = the rate the player had when they logged out).",
     "enabled": true,
-    "minSampleSeconds": 60,
+    "minSampleSeconds": 120,
     "maxGapSeconds": 60,
     "capHours": 12,
     "efficiency": 1,
@@ -41,7 +41,7 @@
     "upgrades": {
       "quick-hands": {
         "name": "Quick Hands",
-        "description": "each level: a 10% chance an action of the idle skills takes a tick less",
+        "description": "each level: a 10% chance a gathering or making action takes a tick less",
         "costs": [
           100,
           250,
@@ -720,6 +720,8 @@
       "HERBLORE",
       "FIREMAKING"
     ],
+    "_pointsFromXp": "Production XP earns idle points, as gathering's and combat's do.",
+    "pointsFromXp": true,
     "_verbs": "What the Idle screen and messages say the character does, by skill: [doing, do] (the rest are 'Making', 'make').",
     "verbs": {
       "FIREMAKING": [

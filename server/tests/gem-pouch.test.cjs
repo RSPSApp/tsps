@@ -1,12 +1,10 @@
 // Run after `yarn build`: node --test tests/gem-pouch.test.cjs
 //
-// The gem pouch (33384, open 33386) and satchel (33387, open 33389), by real packet. Cache: their
-// ops. Wiki (Gem pouch, Gem satchel, Gem containers): recipes, levels, XP, costume needle, 5 and 10 of
-// each semi-precious gem, and "any required component with another" since 3 June 2026. Jagex's poll
-// blog: "marginal convenience increases for mining Gem Rocks". Its "one of these at a time" isn't
-// enforced: a poll blog isn't enough to refuse a player.
+// Pouch, satchel and tote use decoded server dispatch. Cache supplies their actions; Wiki supplies
+// recipes and XP. Jagex's release notes say upgrades retain gems and a higher tier blocks lower tiers.
+// Mining gem-rock auto-storage follows the poll blog; equal-tier duplicates remain an assumption.
 // No capture shows them; no transcript page exists. Ours: every line here, that only mining fills
-// an open one, the contents staying through an upgrade, and the upgrade coming out closed.
+// an open one, and the upgrade coming out closed.
 process.env.DISABLE_PLAYER_BOTS = "1";
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -229,9 +227,82 @@ test("an open pouch upgrades too, and comes out closed", async (t) => {
   assert.equal(has(f, id("gem_pouch_open")), 0);
 });
 
+test("a tote upgrade needs 81 Crafting and keeps the satchel contents", async (t) => {
+  const parts = () => [I.NEEDLE, I.THREAD, I.SILK, id("bolt_of_cotton"), id("gem_satchel")];
+  const low = actor(t, parts(), 80);
+  await use(low, id("gem_satchel"), id("bolt_of_cotton"));
+  assert.deepEqual(parts().map((item) => has(low, item)), [1, 1, 1, 1, 1]);
+  assert.equal(has(low, 33390), 0);
+
+  const f = actor(t, [...parts(), id("gem_bag")], 81);
+  Storage.store(f.p, family, I.UNCUT_OPAL, 10);
+  Storage.store(f.p, family, I.UNCUT_JADE, 3);
+  const given = watchXp(t, f);
+  await use(f, id("gem_satchel"), id("bolt_of_cotton"));
+  assert.equal(id("gem_tote"), 33390);
+  assert.equal(has(f, 33390), 1);
+  assert.deepEqual(parts().map((item) => has(f, item)), [1, 0, 0, 0, 0]);
+  assert.deepEqual(given, [200]);
+  assert.equal(has(f, id("gem_bag")), 1, "gem bag can coexist with the tote");
+  assert.deepEqual([stored(f, I.UNCUT_OPAL), stored(f, I.UNCUT_JADE)], [10, 3]);
+});
+
+test("higher tiers in inventory or bank prevent lower sewing without consuming anything", async (t) => {
+  const cases = [
+    { owned: ["gem_satchel", "gem_satchel_open"], parts: () => pouchParts(), product: "gem_pouch" },
+    { owned: ["gem_tote", "gem_tote_open"], parts: () => satchelParts(), product: "gem_satchel" },
+    { owned: ["gem_sack", "gem_sack_open"], parts: () => pouchParts(), product: "gem_pouch" },
+    { owned: ["gem_sack", "gem_sack_open"], parts: () => satchelParts(), product: "gem_satchel" },
+    { owned: ["gem_sack", "gem_sack_open"], parts: () => [I.NEEDLE, I.THREAD, I.SILK, id("bolt_of_cotton"), id("gem_satchel")], product: "gem_tote" },
+  ];
+  for (const row of cases) for (const name of row.owned) for (const banked of [false, true]) {
+    const parts = row.parts();
+    const f = actor(t, banked ? parts : [...parts, id(name)]);
+    if (banked) f.p.getBank(0).add(new core.Item(id(name)), false);
+    Storage.store(f.p, family, I.UNCUT_OPAL, 3);
+    const given = watchXp(t, f);
+    // Shared-only inputs test recipe selection as well as the ownership check.
+    await use(f, I.THREAD, I.SILK);
+    assert.deepEqual(parts.map((item) => has(f, item)), parts.map(() => 1), `${name}, banked=${banked}`);
+    assert.equal(has(f, id(row.product)), 0);
+    assert.equal(banked ? f.p.getBank(0).getAmount(id(name)) : has(f, id(name)), 1);
+    assert.equal(stored(f, I.UNCUT_OPAL), 3);
+    assert.deepEqual(given, []);
+  }
+});
+
+test("shared sewing components can choose the tote recipe", async (t) => {
+  const f = actor(t, [I.NEEDLE, I.THREAD, I.SILK, id("bolt_of_cotton"), id("gem_satchel")], 81);
+  await use(f, I.SILK, I.THREAD);
+  assert.equal(has(f, id("gem_tote")), 1);
+});
+
+test("an open satchel upgrades to a closed tote without losing its gems", async (t) => {
+  const f = actor(t, [I.COSTUME_NEEDLE, I.SILK, id("bolt_of_cotton"), id("gem_satchel_open")]);
+  Storage.store(f.p, family, I.UNCUT_RED_TOPAZ, 7);
+  await use(f, id("gem_satchel_open"), id("bolt_of_cotton"));
+  assert.equal(has(f, 33390), 1);
+  assert.equal(has(f, id("gem_satchel_open")), 0);
+  assert.equal(stored(f, I.UNCUT_RED_TOPAZ), 7);
+});
+
+test("a tote holds 20 each and Empty conserves what fits", async (t) => {
+  const f = actor(t, [33390, ...Array(12).fill(I.UNCUT_OPAL), I.UNCUT_SAPPHIRE]);
+  Storage.store(f.p, family, I.UNCUT_OPAL, 10);
+  await click(f, 33390, "Fill");
+  assert.equal(stored(f, I.UNCUT_OPAL), 20);
+  assert.equal(has(f, I.UNCUT_OPAL), 2);
+  assert.equal(has(f, I.UNCUT_SAPPHIRE), 1);
+  await click(f, 33390, "Check");
+  assert.match(f.messages.at(-1), /Opal: 20/);
+  await click(f, 33390, "Empty");
+  assert.equal(has(f, I.UNCUT_OPAL) + stored(f, I.UNCUT_OPAL), 22);
+  assert.equal(stored(f, I.UNCUT_OPAL), 0);
+});
+
 // ------------------------------------------------------------------ Holding gems
 
-for (const [closed, open] of [["gem_pouch", "gem_pouch_open"], ["gem_satchel", "gem_satchel_open"]]) {
+for (const [closed, open] of [["gem_pouch", "gem_pouch_open"], ["gem_satchel", "gem_satchel_open"], ["gem_tote", "gem_tote_open"]]) {
   test(`${closed} opens and closes by click`, async (t) => {
     const f = actor(t, [id(closed)]);
     await click(f, id(closed), "Open");
@@ -305,6 +376,14 @@ async function mineOpal(t, f) {
 
 test("an open pouch takes a mined opal", async (t) => {
   const f = actor(t, [id("gem_pouch_open")]);
+  await mineOpal(t, f);
+  assert.equal(stored(f, I.UNCUT_OPAL), 1);
+  assert.equal(has(f, I.UNCUT_OPAL), 0);
+});
+
+test("an open tote takes a mined opal", async (t) => {
+  assert.equal(id("gem_tote_open"), 33392);
+  const f = actor(t, [33392]);
   await mineOpal(t, f);
   assert.equal(stored(f, I.UNCUT_OPAL), 1);
   assert.equal(has(f, I.UNCUT_OPAL), 0);

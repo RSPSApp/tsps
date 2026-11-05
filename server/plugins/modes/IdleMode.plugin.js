@@ -11,7 +11,7 @@
  * all of it and the switches (Screen), and `::idle travel` teleports to an activity's site, where
  * the character starts by itself (Travel, TravelScreen). The first time an account is idle it gets
  * a starter kit, a welcome and the Idle screen (Onboarding); the journal tab's Idle button opens
- * the screen too.
+ * the screen too. Three daily goals pay idle points (Goals).
  * Settings are plugins/modes/data/idle-mode.json.
  */
 const Common = require("./idle/Common.IdleMode");
@@ -27,6 +27,7 @@ module.exports = {
     require("./idle/Progression.IdleMode")(api);
     require("./idle/Combat.IdleMode")(api);
     require("./idle/Production.IdleMode")(api);
+    require("./idle/Goals.IdleMode")(api);
     require("./idle/Screen.IdleMode")(api);
     require("./idle/TravelScreen.IdleMode")(api);
     require("./idle/Onboarding.IdleMode")(api);

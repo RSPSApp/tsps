@@ -218,7 +218,7 @@ function fight(player, now) {
     combat.attack(attacker);
     return "retaliating";
   }
-  if (!Common.free(player)) return "busy";
+  if (!Common.readyToWork(player)) return "busy";
   const location = player.getLocation();
   if (location.getZ() !== target.anchor.z || Common.chebyshev(location, target.anchor) > config().leashTiles) return "away";
   if (now - state.lastAttemptAt < config().retrySeconds * 1000) return "waiting";

@@ -85,6 +85,24 @@ function free(player) {
   return !combat?.getTarget?.() && !combat?.getAttacker?.();
 }
 
+/** Idle Mode's own screens (Screen, TravelScreen add theirs): they don't stand in the way of work. */
+const IDLE_SCREENS = new Set();
+
+function registerScreen(groupId) {
+  IDLE_SCREENS.add(groupId);
+}
+
+/**
+ * Free to go back to work, as `free`, except that an open Idle screen is closed for it: the player
+ * may leave it open to watch, and a click on the world needs no interface open.
+ */
+function readyToWork(player) {
+  if (free(player)) return true;
+  if (!IDLE_SCREENS.has(player.getInterfaceId?.())) return false;
+  player.getPacketSender().sendInterfaceRemoval();
+  return free(player);
+}
+
 /** An idle player gathering one of the idle skills. */
 function idleGather(player, skill) {
   return isIdle(player) && idleSkill(skill);
@@ -162,6 +180,8 @@ module.exports = {
   autoOn,
   chebyshev,
   free,
+  registerScreen,
+  readyToWork,
   bank,
   bankHasRoom,
   bankAmount,

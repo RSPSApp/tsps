@@ -279,6 +279,7 @@ const TAB_UIDS = TABS.map((_, index) => uid(COMPONENT.TAB_START + index));
 
 module.exports = function attach(api) {
   api.registerCustomInterface(buildInterface());
+  Common.registerScreen(GROUP_ID);
   api.onInterfaceActionButton(ROW_UIDS, clickRow);
   api.onInterfaceActionButton([uid(COMPONENT.TRAVEL_BUTTON), uid(COMPONENT.TRAVEL_LABEL)], clickTravel);
   api.onInterfaceActionButton(TAB_UIDS, clickTab);

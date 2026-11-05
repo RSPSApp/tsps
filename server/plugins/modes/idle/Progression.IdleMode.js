@@ -63,6 +63,13 @@ function earn({ player, skill, experience }) {
   Common.changed(player);
 }
 
+/** Gives idle points (a daily goal's reward). */
+function addPoints(player, amount) {
+  if (!(amount > 0)) return;
+  player.setAttribute(POINTS_ATTRIBUTE, points(player) + amount);
+  Common.changed(player);
+}
+
 /** XP gained toward the next point. */
 function progress(player) {
   return Number(player.getAttribute(PROGRESS_ATTRIBUTE)) || 0;
@@ -147,5 +154,6 @@ module.exports.bountyChance = bountyChance;
 module.exports.points = points;
 module.exports.levelOf = levelOf;
 module.exports.progress = progress;
+module.exports.addPoints = addPoints;
 module.exports.upgradeRows = upgradeRows;
 module.exports.buy = buy;

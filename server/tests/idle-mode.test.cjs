@@ -1513,7 +1513,7 @@ test("screen tabs: Stats shows the totals and hides the Overview; Overview bring
   api.click(player, uid(COMPONENT.TAB_START));
   assert.equal(player.screen.hidden.get(uid(COMPONENT.STATUS_BOX)), false);
   assert.equal(player.screen.hidden.get(uid(COMPONENT.STATS_BOX)), true);
-  api.click(player, uid(COMPONENT.TAB_START + 2));
+  api.click(player, uid(COMPONENT.TAB_START + 3));
   assert.equal(player.getInterfaceId(), require(TRAVEL_SCREEN).GROUP_ID);
 });
 
@@ -1525,4 +1525,159 @@ test("screen tabs: a new account's Stats say nothing yet", () => {
   assert.equal(screenText(player, COMPONENT.SKILL_LINE_START), "Nothing yet");
   assert.equal(screenText(player, COMPONENT.ITEM_LINE_START), "Nothing yet");
   assert.equal(screenText(player, COMPONENT.SKILL_LINE_START + 1), "");
+});
+
+const GOALS = "../plugins/modes/idle/Goals.IdleMode";
+const DAY = 24 * 60 * 60 * 1000;
+
+/** Today's goals replaced by these (pool ids), for a test to steer. */
+function setGoals(player, ids, now = Date.now()) {
+  const { dayOf } = require(GOALS);
+  const daily = { day: dayOf(now), bonus: false, goals: ids.map(([id, target]) => ({ id, target, progress: 0, done: false })) };
+  player.setAttribute("idle-mode:daily", daily);
+  return daily;
+}
+
+test("goals: three a day, the same for a name all day, new ones the next day; the day turns at 03:00 UTC", (t) => {
+  const { today, dayOf, untilNextDay } = require(GOALS);
+  const at = Date.UTC(2026, 10, 5, 12, 0, 0);
+  const player = idlePlayer();
+  player.getUsername = () => "Goaltest";
+  const first = today(player, at);
+  assert.equal(first.goals.length, 3);
+  assert.equal(new Set(first.goals.map((goal) => goal.id)).size, 3, "three different goals");
+  assert.deepEqual(today(player, at + 3_600_000), first, "the same all day");
+  const other = idlePlayer();
+  other.getUsername = () => "Goaltest";
+  assert.deepEqual(today(other, at).goals.map((goal) => goal.id), first.goals.map((goal) => goal.id), "the same name, the same goals: no rerolls");
+  const next = today(player, at + DAY);
+  assert.equal(next.day, first.day + 1);
+  assert.equal(dayOf(Date.UTC(2026, 10, 5, 2, 59)), dayOf(Date.UTC(2026, 10, 4, 12, 0)), "before 03:00 UTC it is still yesterday");
+  assert.equal(untilNextDay(Date.UTC(2026, 10, 5, 2, 0)), 3_600_000);
+});
+
+test("goals: XP and gathering count, also offline; done pays points and says so; all three pay the bonus", (t) => {
+  let now = 5_000_000;
+  t.mock.method(Date, "now", () => now);
+  const player = idlePlayer();
+  player.setAttribute("idle-mode:onboarded", true);
+  setGoals(player, [["woodcutting-xp", 500], ["gather", 20], ["time", 2]]);
+  for (let i = 0; i <= 20; i++) {
+    chop(player);
+    now += 6000;
+  }
+  const daily = player.getAttribute("idle-mode:daily");
+  assert.deepEqual(daily.goals.map((goal) => goal.done), [true, true, true]);
+  assert.equal(daily.bonus, true);
+  const said = player.messages.join("\n");
+  assert.match(said, /Daily goal done:<\/col> Gain 500 Woodcutting XP\. \+25 idle points\./);
+  assert.match(said, /All of today's goals done!<\/col> \+50 idle points\./);
+  assert.equal(player.getAttribute("idle-mode:points"), 25 + 20 + 20 + 50, "the goals and the bonus (the fake chop's XP pays no points)");
+
+  // Offline time away counts as well.
+  setGoals(player, [["time", 60], ["woodcutting-xp", 1_000_000], ["make", 10]]);
+  api.logout({ player });
+  player.setAttribute("idle-mode:away", { activity: "WOODCUTTING", durationMs: 60_000, xp: { WOODCUTTING: 100 }, items: { [LOGS]: 10 }, loggedOutAt: now });
+  now += 3_600_000;
+  api.login({ player });
+  const after = player.getAttribute("idle-mode:daily").goals;
+  assert.equal(after[0].done, true, "an hour away does the 60 minutes");
+  assert.equal(after[1].progress, 6000, "offline XP counts");
+  assert.equal(after[2].progress, 0, "gathered items aren't made items");
+});
+
+test("goals: making and kills count by their own activities", (t) => {
+  const { player, advance } = cookingShrimps(t);
+  setGoals(player, [["make", 3], ["kills", 2], ["production-xp", 60]]);
+  for (let i = 0; i < 3; i++) {
+    advance(4000);
+    api.emit("skills:produced", { player, skill: Skill.COOKING, itemId: SHRIMPS, amount: 1, xp: 30, kind: "cook" });
+  }
+  let goals = player.getAttribute("idle-mode:daily").goals;
+  assert.equal(goals[0].progress, 3);
+  const fighter = idlePlayer();
+  setGoals(fighter, [["kills", 2]]);
+  const cow = fakeMonster("Cow", 3201, 3200);
+  api.emit("attack-option", { player: fighter, npc: cow, npcId: 2790, clickType: 2, handled: false });
+  api.emit("npc-drops:generated", { player: fighter, npc: cow, npcId: 2790, drops: [], handled: false });
+  api.emit("npc-drops:generated", { player: fighter, npc: fakeMonster("Goblin", 3201, 3200), npcId: 1, drops: [], handled: false });
+  api.emit("npc-drops:generated", { player: fighter, npc: cow, npcId: 2790, drops: [], handled: false });
+  goals = fighter.getAttribute("idle-mode:daily").goals;
+  assert.equal(goals[0].progress, 2, "the cows, not the goblin that came at it");
+  assert.equal(goals[0].done, true);
+});
+
+test("goals: bigger at higher levels; not for accounts that aren't idle", () => {
+  const { today } = require(GOALS);
+  const at = Date.UTC(2026, 10, 5, 12);
+  const strong = idlePlayer({ WOODCUTTING: 99, MINING: 99, FISHING: 99, ATTACK: 99, STRENGTH: 99, DEFENCE: 99, RANGED: 99, MAGIC: 99, HITPOINTS: 99, COOKING: 99 });
+  strong.combatLevel = 126;
+  strong.getUsername = () => "Strong";
+  const weak = idlePlayer({ WOODCUTTING: 1, MINING: 1, FISHING: 1, ATTACK: 1, STRENGTH: 1, DEFENCE: 1, RANGED: 1, MAGIC: 1, HITPOINTS: 10, COOKING: 1 });
+  weak.combatLevel = 3;
+  weak.getUsername = () => "Strong";
+  const big = today(strong, at).goals;
+  const small = today(weak, at).goals;
+  for (let i = 0; i < big.length; i++) {
+    if (["gather", "make", "time"].includes(big[i].id)) assert.equal(big[i].target, small[i].target);
+    else assert.ok(big[i].target > small[i].target, `${big[i].id}: ${big[i].target} > ${small[i].target}`);
+  }
+  const plain = fakePlayer();
+  setGoals(plain, [["woodcutting-xp", 10]]);
+  chop(plain);
+  chop(plain);
+  assert.equal(plain.getAttribute("idle-mode:daily").goals[0].progress, 0);
+});
+
+test("goals tab: today's goals with progress and reward, the bonus and the next day", (t) => {
+  const { COMPONENT, uid } = require(SCREEN);
+  const at = Date.UTC(2026, 10, 5, 20, 30);
+  t.mock.method(Date, "now", () => at);
+  const player = idlePlayer();
+  const daily = setGoals(player, [["woodcutting-xp", 2000], ["gather", 150], ["kills", 30]], at);
+  daily.goals[0].progress = 2000;
+  daily.goals[0].done = true;
+  daily.goals[1].progress = 42.7;
+  player.setAttribute("idle-mode:daily", daily);
+  api.command(player, "idle");
+  api.click(player, uid(COMPONENT.TAB_START + 2));
+  assert.equal(player.screen.hidden.get(uid(COMPONENT.GOALS_BOX)), false);
+  assert.equal(player.screen.hidden.get(uid(COMPONENT.STATS_BOX)), true);
+  assert.equal(screenText(player, COMPONENT.GOAL_START), "Done Gain 2,000 Woodcutting XP");
+  assert.equal(screenText(player, COMPONENT.GOAL_START + 3), "42 / 150 - reward 20 idle points");
+  assert.equal(screenText(player, COMPONENT.GOAL_START + 4), "Defeat 30 monsters");
+  assert.equal(screenText(player, COMPONENT.GOALS_BONUS), "Do all 3 for 50 more idle points (1/3 done).");
+  assert.equal(screenText(player, COMPONENT.GOALS_NEXT), "New goals in 6h 30m.");
+});
+
+test("goals: a login on a new day says the day's goals", (t) => {
+  const at = Date.UTC(2026, 10, 5, 12);
+  t.mock.method(Date, "now", () => at);
+  const player = idlePlayer();
+  player.setAttribute("idle-mode:onboarded", true);
+  player.getUsername = () => "Sayer";
+  api.login({ player });
+  assert.match(player.messages.at(-1), /Today's idle goals:<\/col> .+; .+; .+\./);
+  const said = player.messages.length;
+  api.login({ player });
+  assert.equal(player.messages.length, said, "the same day: not said again");
+});
+
+test("work: an open Idle screen is closed to go back to work; any other interface waits", (t) => {
+  const { GROUP_ID } = require(SCREEN);
+  const { player, advance } = cookingShrimps(t);
+  const { work } = require(PRODUCTION);
+  player.isBusy = true;
+  // busy() is true while an interface is open: the fake follows its interface id.
+  player.busy = function busy() { return this.getInterfaceId() > 0; };
+  api.command(player, "idle");
+  assert.equal(player.getInterfaceId(), GROUP_ID);
+  player.inventory = [new Item(SHRIMPS, 27)];
+  advance(10_000);
+  assert.equal(work(player, Date.now()), "repeated", "the Idle screen gave way");
+  assert.equal(player.getInterfaceId(), -1);
+  player.setInterfaceId(12);
+  player.inventory = [new Item(SHRIMPS, 27)];
+  advance(10_000);
+  assert.equal(work(player, Date.now()), "busy", "the bank (or anything else) is left alone");
 });

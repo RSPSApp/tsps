@@ -7,8 +7,8 @@ import net.rsprox.protocol.game.outgoing.model.interfaces.IfOpenTop
 import net.rsprox.protocol.game.outgoing.model.map.RebuildLoginV2
 import net.rsprox.protocol.game.outgoing.model.misc.client.ServerTickEnd
 import org.junit.jupiter.api.Assertions.assertArrayEquals
-import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.util.zip.CRC32
@@ -66,12 +66,12 @@ class M1LoginTest {
 
     @Test
     fun `logout gives the native client time to process Logout before disconnecting`() {
-        val name=LiveGateway.newAccount("gwlo")
-        LiveGateway.login(name).use {game ->
+        val name = LiveGateway.newAccount("gwlo")
+        LiveGateway.login(name).use { game ->
             game.expect<ServerTickEnd>()
-            game.button(182,8)
+            game.button(182, 8)
             game.expect<net.rsprox.protocol.game.outgoing.model.logout.Logout>()
-            // EOF immediately after Logout makes the native client take its connection-lost path.
+            // Leave time to process Logout before EOF can trigger the connection-lost path.
             assertFalse(game.disconnectsWithin(NATIVE_LOGOUT_PROCESSING_MS))
             assertTrue(game.disconnectsWithin(LOGOUT_SETTLE_MS.toInt()))
         }

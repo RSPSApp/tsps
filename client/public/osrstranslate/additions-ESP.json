@@ -21,6 +21,10 @@
   {
    "ref": "fork/feat/round2-messages-and-interfaces",
    "commit": "a63d4d7e9c0359b2af4587242cdbe722e13a7fa7"
+  },
+  {
+   "ref": "feat/mouseover-and-combat-labels",
+   "commit": "3a5930aff59bfa9dd57ebdebb4481322e2b76ff1"
   }
  ],
  "files": {
@@ -3093,7 +3097,11 @@
     "That item cannot be traded. Really cast Low Level Alchemy on it?": "Ese objeto no se puede intercambiar. ¿Lanzar Low Level Alchemy sobre él de todos modos?",
     "Cancel the alchemy spell.": "Cancelar el hechizo de alquimia.",
     "Proceed to cast High Level Alchemy on it.": "Proceder a lanzar High Level Alchemy sobre él.",
-    "Proceed to cast Low Level Alchemy on it.": "Proceder a lanzar Low Level Alchemy sobre él."
+    "Proceed to cast Low Level Alchemy on it.": "Proceder a lanzar Low Level Alchemy sobre él.",
+    "[option] / [number] more options": "[option] / [number] opciones más",
+    "+[number] option": "+[number] opción",
+    "+[number] options": "+[number] opciones",
+    "Combat Lvl: [number]": "Nivel de combate: [number]"
    },
    "fix": {
     "Nothing interesting happens.": [

@@ -21,6 +21,10 @@
   {
    "ref": "fork/feat/round2-messages-and-interfaces",
    "commit": "a63d4d7e9c0359b2af4587242cdbe722e13a7fa7"
+  },
+  {
+   "ref": "feat/mouseover-and-combat-labels",
+   "commit": "3a5930aff59bfa9dd57ebdebb4481322e2b76ff1"
   }
  ],
  "files": {
@@ -2516,7 +2520,11 @@
     "That item cannot be traded. Really cast Low Level Alchemy on it?": "Esse item não pode ser trocado. Lançar Low Level Alchemy nele mesmo assim?",
     "Cancel the alchemy spell.": "Cancelar o feitiço de alquimia.",
     "Proceed to cast High Level Alchemy on it.": "Prosseguir com High Level Alchemy nele.",
-    "Proceed to cast Low Level Alchemy on it.": "Prosseguir com Low Level Alchemy nele."
+    "Proceed to cast Low Level Alchemy on it.": "Prosseguir com Low Level Alchemy nele.",
+    "[option] / [number] more options": "[option] / mais [number] opções",
+    "+[number] option": "+[number] opção",
+    "+[number] options": "+[number] opções",
+    "Combat Lvl: [number]": "Nível de combate: [number]"
    },
    "fix": {
     "Nothing more than Zamorakian hearsay! They burnt the tower down and are now too cowardly to even admit it!": [

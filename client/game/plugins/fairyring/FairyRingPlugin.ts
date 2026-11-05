@@ -14,6 +14,7 @@ const DIAL_VARBITS = [3985, 3986, 3987] as const;
 export class FairyRingPlugin extends Plugin implements ClientPlugin {
     static descriptor: PluginDescriptor = {
         name: "Fairy Rings",
+        enabledByDefault: false,
         description: "Show the location of the fairy ring teleport",
         tags: ["teleportation"],
         configKey: "fairyringplugin",

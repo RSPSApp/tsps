@@ -148,6 +148,9 @@ function fakeInventory(slots) {
     getAmount: (id) => slots.reduce((sum, item) => sum + (item?.getId() === id ? item.getAmount() : 0), 0),
     contains: (id) => slots.some((item) => item?.getId() === id),
     getFreeSlots: () => 28 - slots.filter(Boolean).length,
+    getAddableAmount: (item) => (stackable(item.getId())
+      ? (slots.some((entry) => entry?.getId() === item.getId()) || slots.filter(Boolean).length < 28 ? item.getAmount() : 0)
+      : Math.min(item.getAmount(), 28 - slots.filter(Boolean).length)),
     add(item) {
       if (stackable(item.getId())) {
         const slot = slots.findIndex((entry) => entry?.getId() === item.getId());

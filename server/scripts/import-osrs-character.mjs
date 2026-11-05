@@ -25,8 +25,11 @@
  *
  * Skill XP lands as saved XP with levels derived from the OSRS XP table,
  * capped at 99: the server models no virtual levels beyond 99, and its own
- * formulas assume levels <= 99. The export's own levels and the full snapshot
- * stay in the provenance record under the "osrs-account-import:data" attribute.
+ * formulas assume levels <= 99. The export's own skills and a summary of the
+ * import go in a provenance record under the "osrs-account-import:data"
+ * attribute. No plugin registers that attribute as persistent, so the server
+ * drops it on the player's first save after login: from then on the record is
+ * kept only in the "account-exporter-import" copy in the save history.
  *
  * Items land as { id, amount } OSRS item ids; this server's item definitions
  * come from the OSRS cache, so ids are used verbatim. The script does not load
@@ -607,7 +610,9 @@ function bankTabsFor(exportData, bank, log) {
 
 /**
  * A compact summary of an import, stored whole under the
- * "osrs-account-import:data" attribute.
+ * "osrs-account-import:data" attribute. It lasts in the live save only until
+ * the player's first save after login (the attribute isn't persisted); the
+ * save history's "account-exporter-import" copy keeps it.
  */
 function provenanceRecord(exportData, result, nowIso) {
   return JSON.stringify(
@@ -926,7 +931,8 @@ export async function run(argv, { log = console.log, now = new Date() } = {}) {
     }
     log(`Imported ${exportData.rsn} into ${player.username}'s save.`);
     log(`Log in as ${exportData.rsn} and check the skills tab, bank, quest list, diaries and combat achievements;`);
-    log(`::snapshots lists the pre-import copy.`);
+    log(`::snapshots lists the pre-import copy. The import record (${IMPORT_ATTRIBUTE}) is dropped from`);
+    log(`the live save at the first login; the "${IMPORT_REASON}" history copy keeps it.`);
     return { applied: true, backup };
   } finally {
     database.close();

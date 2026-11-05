@@ -256,6 +256,10 @@ test('Dusk only takes melee; Dawn takes ranged or a halberd, never other melee',
   const ranged = fakeHit(player, core.CombatType.RANGED, [20]);
   Roof.guardianHit({ npc: dusk, hit: ranged });
   assert.equal(ranged.parts[0].getDamage(), 0);
+  const earth = fakeHit(player, core.CombatType.MAGIC, [20]);
+  earth.getSpell = () => core.CombatSpells.EARTH_STRIKE;
+  Roof.guardianHit({ npc: dusk, hit: earth });
+  assert.equal(earth.parts[0].getDamage(), 0, 'Earth spells do not bypass Dusk\'s Magic immunity');
   const melee = fakeHit(player, core.CombatType.MELEE, [20]);
   Roof.guardianHit({ npc: dusk, hit: melee });
   assert.equal(melee.parts[0].getDamage(), 20);

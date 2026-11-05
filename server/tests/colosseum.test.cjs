@@ -20,6 +20,7 @@ const Enemies = require('../plugins/minigames/colosseum/Enemies.Colosseum');
 const Effects = require('../plugins/minigames/colosseum/ModifierEffects.Colosseum');
 const Hazards = require('../plugins/minigames/colosseum/Hazards.Colosseum');
 const Sol = require('../plugins/minigames/colosseum/SolHeredit.Colosseum');
+const CombatAchievements = require('../plugins/minigames/colosseum/CombatAchievements.Colosseum');
 const Patterns = require('../plugins/minigames/colosseum/SolPatterns.Colosseum');
 const Scoreboard = require('../plugins/minigames/colosseum/Scoreboard.Colosseum');
 
@@ -787,6 +788,27 @@ function solRun(name = 'Challenger') {
   return { player, run, fight: run.solFight, sol };
 }
 
+test("Sol's weapon and footwork achievements track attacks and actual run steps", () => {
+  const { Equipment, ItemIdentifiers } = Shared.core();
+  const { player, run, fight, sol } = solRun();
+  const weaponSlot = Equipment.WEAPON_SLOT;
+  player.equipment[weaponSlot] = { getId: () => ItemIdentifiers.BRONZE_SPEAR };
+  CombatAchievements.solAttack({ player, target: sol });
+  assert.equal(fight.achievements.onlyAllowedWeapons, true, 'a spear is allowed');
+  player.equipment[weaponSlot] = { getId: () => ItemIdentifiers.BRONZE_SCIMITAR };
+  CombatAchievements.solAttack({ player, target: sol });
+  assert.equal(fight.achievements.onlyAllowedWeapons, false, 'an unlisted weapon fails the restriction');
+
+  let ranThisCycle = false;
+  player.getMovementQueue = () => ({ didRunThisCycle: () => ranThisCycle });
+  CombatAchievements.solTick(run);
+  assert.equal(fight.achievements.ran, false, 'walking does not count as running');
+  ranThisCycle = true;
+  CombatAchievements.solTick(run);
+  assert.equal(fight.achievements.ran, true, 'an actual run step fails the no-running task');
+  run.end('left');
+});
+
 test('wave 12: Sol greets by attempt, lands behind the barricade, and his death brings out the chest', () => {
   const player = fakePlayer('Twelve');
   const run = Run.start(player);
@@ -875,11 +897,13 @@ test('the triple attack: Protect from Melee too early is turned off and the blow
     player.prayers[melee] = true;
     ticks(1);
     assert.equal(player.damage.length, 0, 'prayed on the tick: blocked');
+    assert.equal(fight.achievements.perfectFootwork, true, 'a blocked hit does not fail the task');
     ticks(1);
     assert.equal(player.prayers[melee], false, 'still on before the next one: turned off');
     assert.ok(player.messages.includes("Sol Heredit doesn't take kindly to your eager prayer."));
     ticks(2);
     assert.deepEqual(player.damage, [25], 'the second blow lands');
+    assert.equal(fight.achievements.perfectFootwork, false, 'damage from Sol fails the task');
     run.end('left');
   } finally {
     PrayerHandler.deactivatePrayer = original;
@@ -903,6 +927,7 @@ test('the grapple: defending in time blocks it, on the last tick it is a perfect
   const roll = { attacker: player, target: sol, forceAccurate: false, forceMaxHit: false };
   Sol.parried(roll);
   assert.deepEqual([roll.forceAccurate, roll.forceMaxHit], [true, true]);
+  assert.equal(fight.achievements.perfectFootwork, true, 'a perfect parry takes no damage');
   const again = { attacker: player, target: sol, forceAccurate: false, forceMaxHit: false };
   Sol.parried(again);
   assert.equal(again.forceMaxHit, false, 'only the next blow');
@@ -915,6 +940,7 @@ test('the grapple: defending in time blocks it, on the last tick it is a perfect
   ticks(4);
   assert.equal(player.damage.length, 1);
   assert.ok(player.damage[0] >= 20 && player.damage[0] <= 45);
+  assert.equal(fight.achievements.perfectFootwork, false, 'a failed grapple parry takes damage');
   assert.match(player.messages.at(-1), /^Sol Heredit grabs hold of your \w+ and deals massive damage!$/);
   assert.ok(World.getProcessCycle() >= 0);
   run.end('left');

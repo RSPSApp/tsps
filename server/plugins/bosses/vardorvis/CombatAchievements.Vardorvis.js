@@ -13,6 +13,8 @@ const Common = require("./Common.Vardorvis");
 const MONSTER = "Vardorvis";
 const SPEED_TASKS = [["Vardorvis Speed-Trialist", 75], ["Vardorvis Speed-Chaser", 65], ["Vardorvis Speed-Runner", 55]];
 const SLEEPER = "Vardorvis Sleeper";
+const PERFECT_KILLS = 5;
+const AXE_SURVIVAL_TICKS = 300;
 
 /** Counts the kill; `announce(kills)` tells the player the count before any task finishes. */
 function killed(player, ownKills, announce) {
@@ -45,8 +47,22 @@ function judge(fight, ticks) {
     complete(SLEEPER);
     return;
   }
+  if (fight.perfectKill) {
+    fight.session.perfectKills = (fight.session.perfectKills ?? 0) + 1;
+    if (fight.session.perfectKills >= PERFECT_KILLS) complete("Perfect Vardorvis");
+  }
+  if (fight.axeEnrageTicks >= AXE_SURVIVAL_TICKS && !fight.leftAxeCentre) complete("Axe Enthusiast");
   if (onSlayerTask(player, fight.boss)) return;
   for (const [task, seconds] of SPEED_TASKS) if (ticks * 0.6 < seconds) complete(task);
+}
+
+/** Axe Enthusiast tracks the three-minute enrage while the player stays in the middle 5x5. */
+function tick(fight) {
+  if (fight.awakened || !fight.engaged || !fight.enraged) return;
+  const [x, y] = Common.siteTile(fight.session.area, fight.player.getLocation());
+  const [centreX, centreY] = Common.data.axes.centre;
+  if (Math.abs(x - centreX) > 2 || Math.abs(y - centreY) > 2) fight.leftAxeCentre = true;
+  fight.axeEnrageTicks++;
 }
 
 function answerKillCount({ player, counts }) {
@@ -65,4 +81,4 @@ function attachCombatAchievements(api) {
   api.onCustomEvent("combat-achievements:personal-best", answerPersonalBest);
 }
 
-module.exports = { attachCombatAchievements, killed, judge };
+module.exports = { attachCombatAchievements, killed, judge, tick };

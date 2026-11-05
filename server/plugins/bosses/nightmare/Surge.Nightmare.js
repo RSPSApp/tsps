@@ -39,7 +39,7 @@ function start(fight) {
       player.sendMessage(surge.message);
       Common.sounds(player, surge.sounds);
       const [x, y] = fight.dream.arenaTile(player.getLocation());
-      if (x >= minX && x <= maxX && y >= minY && y <= maxY) Common.damage(player, Common.randomInt(Math.ceil(max / 2), max));
+      if (x >= minX && x <= maxX && y >= minY && y <= maxY) Common.damage(player, Common.randomInt(Math.ceil(max / 2), max), fight);
     }
   });
   return surge.surgeTicks + Common.data.specials.after.surge;

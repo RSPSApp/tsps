@@ -451,8 +451,8 @@ module.exports = function registerDragonSlayerQuest(api) {
     }
     const scene = scenes.get(player);
     if (!(scene instanceof VoyageScene) || npcId !== NED_SCENE_ID) return;
-    if (request.speaker === "Cabin Boy Jenkins") request.speakerId = JENKINS_SCENE_ID;
-    else if (request.speaker === "Captain Ned") request.speakerId = NED_SCENE_ID;
+    if (request.step?.speaker === "Cabin Boy Jenkins") request.speakerId = JENKINS_SCENE_ID;
+    else if (request.step?.speaker === "Captain Ned") request.speakerId = NED_SCENE_ID;
     if (text.startsWith("Ah, it's good to feel")) request.before = () => {
       camera(player, scene, [2077, 5518, 100], [2069, 5517, 25], 232, true); camera(player, scene, [2074, 5516, 100], null, 1); player.getPacketSender().sendCameraShake(1, 0, 10, 8);
     };

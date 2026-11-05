@@ -885,7 +885,7 @@ module.exports = function registerTouristTrapQuest(api) {
   }
 
   function handleItemOnItem(event) {
-    const { player, itemId, otherItemId } = event;
+    const { player, usedItemId: itemId, usedWithItemId: otherItemId } = event;
     const isFeather = itemId === FEATHER_ITEM_ID || otherItemId === FEATHER_ITEM_ID;
     const isTip = itemId === PROTOTYPE_DART_TIP_ITEM_ID || otherItemId === PROTOTYPE_DART_TIP_ITEM_ID;
     if (!isFeather || !isTip) return;

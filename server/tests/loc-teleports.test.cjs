@@ -880,6 +880,37 @@ test("every Cam Torum squeeze door crosses straight to the opposite tile, from e
   }
 });
 
+test("a Cam Torum squeeze door says you squeeze through, as spam on the move's tick (#2449)", () => {
+  // Captured (226/1693 tick 1706; 237/1098, 1102, 1105, 1135): every crossing gets the spam
+  // "You manage to squeeze through the tiny door." on the teleport's tick, before the move.
+  for (const door of data.locs.filter((entry) => entry.id === 51005)) {
+    assert.equal(door.message, "You manage to squeeze through the tiny door.", `${door.x},${door.y}`);
+    assert.equal(door.messageType, "spam", `${door.x},${door.y}`);
+    assert.equal(requirementFor(door, decisions), null, "no gate decision, so a sync keeps the entry as it is");
+  }
+  const object = locAt(51005, 1431, 9567, 1);
+  const visit = explorer([1432, 9568, 1]);
+  const sender = visit.player.getPacketSender();
+  const said = new Proxy({}, {
+    get: (target, key) => key === "sendTypedMessage"
+      ? (type, text) => (visit.ticks[visit.ticks.length - 1].push(`message ${type} ${text}`), said)
+      : (...args) => (sender[key](...args), said),
+  });
+  visit.player.getPacketSender = () => said;
+  visit.player.sendMessage = (text) => visit.ticks[visit.ticks.length - 1].push(`message game ${text}`);
+  const event = { player: visit.player, object, objectId: object.getId(), clickType: 1, handled: false };
+  hooks.object(event);
+  assert.equal(event.handled, true);
+  runTicks(visit, 4);
+  assert.deepEqual(visit.ticks, [
+    [],
+    [],
+    ["anim 6103", "sound 2452"],
+    [`message ${core.ChatType.SPAM} You manage to squeeze through the tiny door.`, "move 1430,9568,1"],
+    [],
+  ]);
+});
+
 test("trapdoor swaps: each loc has its option, and becomes the other state", () => {
   const swaps = require("../plugins/world/data/loc-swaps.json").swaps;
   for (const swap of swaps) {

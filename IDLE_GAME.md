@@ -96,8 +96,8 @@ Na primeira vez que uma conta fica idle (conta nova num mundo idle, ou o primeir
    teleporta e já começa a trabalhar sozinho. Locais de coleta pedem o nível da skill.
 
 10. **Bosses idle**: na aba **Bosses** da viagem, o **Gemstone Crab** (qualquer nível: o personagem
-   ataca, minera a casca quando ele some e o segue até a próxima mina) e o **Scurrius** (combate
-   60). Nos bosses o personagem come antes e, sem comida, foge para Lumbridge em vez de morrer.
+   ataca, minera a casca quando ele some e o segue até a próxima mina), o **Scurrius** (combate
+   60) e a **Giant Mole** (combate 70: ele a persegue pelo covil quando ela cava). Nos bosses o personagem come antes e, sem comida, foge para Lumbridge em vez de morrer.
 9. **Ranking**: a aba **Ranks** da tela idle (e `::idle top xp|points|hours`) mostra os 10
    melhores em XP idle, pontos idle ganhos e horas idle, e a sua posição.
 

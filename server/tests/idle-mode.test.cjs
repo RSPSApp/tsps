@@ -2193,11 +2193,22 @@ test("bosses: a monster that burrows is let go, and fought again where it comes 
   // She comes up across the lair, still in its reach.
   mole.isVisible = () => true;
   mole.isUntargetable = () => false;
-  mole.at = { x: 1740, y: 5170, z: 0 };
-  mole.getLocation = () => new FakeLocation(1740, 5170, 0);
+  mole.at = { x: 1750, y: 5182, z: 0 };
+  mole.getLocation = () => new FakeLocation(1750, 5182, 0);
   now += 5000;
   assert.equal(fight(player, now), "attacking", "not left alone as if out of reach");
   assert.equal(player.combat.target, mole);
+  // Far across the lair: walked up to, then attacked.
+  assert.equal(fight(player, now), "fighting");
+  player.combat.target = null;
+  mole.at = { x: 1740, y: 5225, z: 0 };
+  mole.getLocation = () => new FakeLocation(1740, 5225, 0);
+  now += 5000;
+  assert.equal(fight(player, now), "approaching");
+  assert.equal(player.walks.at(-1), mole);
+  assert.equal(player.combat.target, mole, "attacked on arrival");
+  mole.at = { x: 1750, y: 5182, z: 0 };
+  mole.getLocation = () => new FakeLocation(1750, 5182, 0);
   // A fight that ends with her alive (she burrowed mid-fight and came up; the fight dropped): she was fought, so she is no monster out of reach.
   assert.equal(fight(player, now), "fighting");
   player.combat.target = null;
@@ -2211,6 +2222,14 @@ test("bosses: a monster that burrows is let go, and fought again where it comes 
     mole.isVisible = () => true;
     now += 5000;
     assert.equal(fight(player, now), "attacking", `burrow ${i + 1}`);
+  }
+  // Or the fight drops before a look sees her under (the server let go of her first): the same.
+  for (let i = 0; i < 8; i++) {
+    mole.hp -= 1;
+    assert.equal(fight(player, now), "fighting");
+    player.combat.target = null;
+    now += 5000;
+    assert.equal(fight(player, now), "attacking", `dropped fight ${i + 1}`);
   }
 });
 

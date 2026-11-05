@@ -101,6 +101,7 @@ Uma moeda própria do jogo idle, separada dos pontos de melhoria.
 - [x] Bosses idle: aba Bosses na viagem; Gemstone Crab (minera a casca e segue o caranguejo) e
       Scurrius; nível de combate exigido, come antes e foge quando a comida acaba; conquista e
       ranking de bosses
-- [ ] Giant Mole: depois de cavar ela volta ao spawn curada e não toma dano (bug do servidor)
+- [x] Giant Mole corrigida: depois de cavar ela fica onde saiu (antes voltava ao spawn curada e sem
+      tomar dano); local de viagem na aba Bosses
 - [ ] Testes automáticos rodando no GitHub em todo PR (CI)
 - [ ] Sincronizar com o projeto original de tempos em tempos (`git merge upstream/main`)

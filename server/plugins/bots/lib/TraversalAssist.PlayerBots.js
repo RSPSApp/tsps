@@ -100,7 +100,11 @@ function createTraversalAssist(api, options = {}) {
           continue;
         }
         const key = String(objectId);
-        regionData[key] = locations.map((entry) => [entry.lx, entry.ly, entry.z]);
+        // Scan order varies with how a region is read, so sort: a rescan of the same world then
+        // writes the same bytes, and the tracked dump stops churning.
+        regionData[key] = locations
+          .map((entry) => [entry.lx, entry.ly, entry.z])
+          .sort((a, b) => a[2] - b[2] || a[0] - b[0] || a[1] - b[1]);
       }
       if (Object.keys(regionData).length > 0) {
         regions[String(regionId)] = regionData;

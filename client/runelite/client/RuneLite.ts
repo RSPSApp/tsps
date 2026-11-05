@@ -18,6 +18,7 @@ import { EventBus } from "./eventbus/EventBus";
 import { PluginManager } from "./plugins/PluginManager";
 import { ClientToolbar } from "./ui/ClientToolbar";
 import { OverlayRenderer } from "./ui/overlay/OverlayRenderer";
+import { WorldMapPointManager } from "./ui/overlay/worldmap/WorldMapPointManager";
 import { bindOverlayFonts } from "./ui/overlay/OverlayFonts";
 import { CLIENT_TOKEN } from "./plugins/PluginInjector";
 import { CORE_PLUGINS, LEGACY_CONFIG_MIGRATIONS } from "./plugins";
@@ -48,6 +49,8 @@ export class RuneLite {
     readonly chatboxPanelManager: ChatboxPanelManager;
     /** Plugin options on widget menus (`inject(MenuManager)`). */
     readonly menuManager = new MenuManager();
+    /** Plugin markers on the world map (`inject(WorldMapPointManager)`); the world map draws them. */
+    readonly worldMapPointManager = new WorldMapPointManager();
 
     private constructor(
         private readonly client: OsrsClient,
@@ -97,6 +100,7 @@ export class RuneLite {
         injector.provide(CLIENT_TOKEN, this.client);
         injector.provide(ChatboxPanelManager, this.chatboxPanelManager);
         injector.provide(MenuManager, this.menuManager);
+        injector.provide(WorldMapPointManager, this.worldMapPointManager);
         this.eventBus.subscribe(GameStateChanged, (event) => this.chatboxPanelManager.onGameStateChanged(event));
         setManagedMenus((entries, context) => this.menuManager.apply(entries, context));
 

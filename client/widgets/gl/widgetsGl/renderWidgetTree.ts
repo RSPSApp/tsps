@@ -54,6 +54,20 @@ import { ps } from "./profilingState";
 import { FONT_VERDANA_11, FONT_VERDANA_13, FONT_VERDANA_15 } from "../../../ui/fonts";
 import type { WorldMapLabelDraw, WorldMapLabelMetrics } from "./worldMapLabels";
 import { hasSpriteOverride } from "../spriteOverrides";
+import type { WorldMapPoint } from "@runelite/client/ui/overlay/worldmap/WorldMapPoint";
+import { layoutWorldMapPoint } from "@runelite/client/ui/overlay/worldmap/worldMapLayout";
+
+/** Textures for RuneLite world map point images, one per canvas, created on first draw. */
+const worldMapPointTextureKeys = new WeakMap<HTMLCanvasElement, string>();
+let worldMapPointTextureCounter = 0;
+function worldMapPointTexture(glr: GLRenderer, image: HTMLCanvasElement): ReturnType<GLRenderer["getTexture"]> {
+    let key = worldMapPointTextureKeys.get(image);
+    if (!key) {
+        key = `rl-worldmap-point:${++worldMapPointTextureCounter}`;
+        worldMapPointTextureKeys.set(image, key);
+    }
+    return glr.getTexture(key) ?? glr.createTextureFromCanvas(key, image);
+}
 
 export type { WidgetNode };
 type Widget = WidgetNode;
@@ -1979,6 +1993,23 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                         glr.drawRect(px - half / 2, py - half / 2, half, half,
                             [((c >>> 16) & 0xff) / 255, ((c >>> 8) & 0xff) / 255, (c & 0xff) / 255, 1]);
                     }
+                }
+                // RuneLite WorldMapPoints with an image (the Clue Scroll marker): anchored on the tile,
+                // clamped to the map's edge when snapping; the point swaps its image on the transitions.
+                const imagePoints: WorldMapPoint[] = worldMapRenderHost?.runeLite?.worldMapPointManager?.getPoints?.() ?? [];
+                const mapBounds = { x, y, w: width, h: height };
+                for (const point of imagePoints) {
+                    const image = point.getImage();
+                    if (!image) continue;
+                    const tile = point.getWorldPoint();
+                    const displayPos = currentArea.position(tile.getPlane(), tile.getX(), tile.getY());
+                    if (!displayPos) continue;
+                    const at = projectDisplayToScreen(displayPos.x + 0.5, displayPos.y + 0.5);
+                    const placed = layoutWorldMapPoint(point, at, mapBounds, renderScale);
+                    if (!placed) continue;
+                    const drawnImage = point.getImage() ?? image;
+                    const texture = worldMapPointTexture(glr, drawnImage);
+                    if (texture) glr.drawTexture(texture, placed.x, placed.y, drawnImage.width * renderScale, drawnImage.height * renderScale);
                 }
                 osrsClient?.setWorldMapViewport?.({
                     x, y, width, height, displayX, displayY, pixelsPerTileX, pixelsPerTileY,

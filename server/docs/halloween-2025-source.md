@@ -49,7 +49,10 @@ node scripts/import-halloween-definitions.cjs --reference <reference-folder> --o
 
 ## Behaviour sources
 
-- **Steps, wording, conditions:** the transcript. Fred, Seth, Sarah, Death and
+- **Steps, wording, conditions:** the transcript, played as exported. Its two
+  "above" jumps (Diango's second visit, Fred's "I'm ready for the judgement!")
+  and Seth's lost-picture branch are resolved in osrsreboxed-db (navigation
+  anchors and a reviewed correction, commit `003b6024`) and imported from there. Fred, Seth, Sarah, Death and
   Diango keep their ordinary Talk-to when the event is off or when the player
   answers "No." to the event question.
 - **Rewards:** Wiki 2025 Halloween event. Grim reaper top, bottoms and gloves,

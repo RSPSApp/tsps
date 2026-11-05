@@ -16,9 +16,6 @@ const NPCS = Object.freeze({
 // Death's quiz: each correct answer sets its own hw25_death_qN_done bit.
 const QUIZ_ANSWERS = Object.freeze(["31st of October.", "Pumpkins.", "A coven.", "Dark wizards, south of Varrock.", "Trick or treat."]);
 const ENTRY_PROMPT_NO = "No.";
-// "Same as above" jumps whose target the dump lost: each continues as the named
-// condition branch elsewhere on this page (Diango's lantern hand-out, Fred's judging).
-const LOST_JUMPS = Object.freeze({ Kg0hmG: "_MxZad", kzB_xv: "H4FTU9" });
 const sessions = new WeakMap();
 const passthrough = new WeakSet();
 let enabled = false;
@@ -45,52 +42,12 @@ function messageText(stepId) {
   throw new Error("Missing Halloween transcript message " + stepId);
 }
 
-function findStep(steps, id) {
-  for (const step of steps ?? []) {
-    if (step.id === id) return step;
-    const found = findStep(step.steps, id) ?? (step.options ?? []).map(option => findStep(option.steps, id)).find(Boolean);
-    if (found) return found;
-  }
-  return undefined;
-}
-
-/**
- * Seth's lost-picture branch (1Glkal): the dump nests the replacement inside
- * "has all the other decorations" and leaves "continues" jumps without targets.
- * Rebuilt from its own source steps: no space ends with Seth holding on to it;
- * otherwise the all-decorations message (when it applies) and the replacement.
- */
-function lostPicture(step) {
-  const [said, answer] = step.steps;
-  const all = findStep(step.steps, "pMyO2X"), full = findStep(step.steps, "UBDVQJ");
-  const message = findStep(all.steps, "tdDfyd"), receive = findStep(all.steps, "Nkt5y6"), hold = full.steps[0];
-  return { ...step, steps: [said, answer, { ...full, steps: [hold, { type: "end" }] }, { ...all, steps: [message] }, receive] };
-}
-
-/** Replaces each lost jump with its source branch's steps. */
-function restoreJumps(steps) {
-  return steps.flatMap(step => {
-    if (step.id === "1Glkal") return [lostPicture(step)];
-    const target = step.type === "jump" ? LOST_JUMPS[step.id] : undefined;
-    if (target) {
-      const branch = Object.values(SOURCE.variants).map(variant => findStep(variant, target)).find(Boolean);
-      if (!branch) throw new Error("Missing Halloween transcript branch " + target);
-      return restoreJumps(branch.steps);
-    }
-    const copy = { ...step };
-    if (Array.isArray(step.steps)) copy.steps = restoreJumps(step.steps);
-    if (Array.isArray(step.options)) copy.options = step.options.map(option => Array.isArray(option.steps) ? { ...option, steps: restoreJumps(option.steps) } : option);
-    return [copy];
-  });
-}
-
 function start(api, { player, npc, event, variant, role }) {
   if (!enabled || !player.isRegistered() || !Array.isArray(SOURCE?.variants[variant])) return false;
   const previous = sessions.get(player);
   const session = { npc, event, variant, role };
   sessions.set(player, session);
-  const request = { player, npc, npcId: npc?.getCurrentDefinition(player)?.getId() ?? npc?.getId(), variant: { page: PAGE, variant }, exact: true,
-    select: restoreJumps };
+  const request = { player, npc, npcId: npc?.getCurrentDefinition(player)?.getId() ?? npc?.getId(), variant: { page: PAGE, variant }, exact: true };
   api.emitCustomEvent("npc-dialogue:start", request);
   if (!request.handled) { if (previous) sessions.set(player, previous); else sessions.delete(player); return false; }
   previous?.cancel?.();

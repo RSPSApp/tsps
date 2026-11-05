@@ -529,7 +529,14 @@ module.exports = function registerCorsairCurseQuest(api) {
         if (!doll) return;
         doll.__skipDefaultRespawn = true; dolls.set(player, doll);
         const path = [[2505,2840],[2506,2841],[2507,2842],[2508,2842],[2509,2841],[2509,2840],[2509,2839],[2509,2838],[2509,2839]];
-        path.forEach(([x,y], index) => later(player, index + 1, () => { if (dolls.get(player) === doll) doll.moveTo(new Location(x,y,0)); }));
+        // moveTo teleports and resets movement; queue each tile so the doll uses its walk sequence.
+        path.forEach(([x,y], index) => later(player, index + 1, () => {
+          if (dolls.get(player) !== doll) return;
+          const destination = new Location(x,y,0);
+          const movement = doll.getMovementQueue?.();
+          if (movement?.addSteps) movement.addSteps(destination);
+          else doll.moveTo(destination);
+        }));
         later(player, 10, () => removeDoll(player));
       });
     }

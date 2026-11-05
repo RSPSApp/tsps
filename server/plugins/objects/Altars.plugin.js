@@ -8,6 +8,10 @@ const { ObjectIds } = require("../../src/main/typescript/elvarg/util/IdEnums");
 const PRAY_AT_ALTAR_ANIMATION = new Animation(645);
 const EAST_ARDOUGNE_CHURCH_ALTAR = [2617, 3309, 0];
 const ARDOUGNE_ALTAR_TASK = "use-the-altar-in-east-ardougne-s-church";
+// The 1st floor (UK) altar of Varrock Palace (OSRS Wiki: Varrock Diary hard task 9).
+const VARROCK_PALACE_ALTAR = { x: 3208, y: 3494, z: 1 };
+const VARROCK_PALACE_ALTAR_TASK = "pray-at-the-altar-in-varrock-palace-with-smite-a";
+
 const JALDRAOCHT_ALTAR_ID = 6552;
 const JALDRAOCHT_ALTAR_TASK = "activate-ancient-magicks-at-the-altar-in-the-jal";
 
@@ -126,6 +130,17 @@ function prayerAltar({ player, object }) {
     });
   }
 
+  // Varrock hard: praying at the palace altar while Smite is active, restoration or not.
+  if (object && handled && object.getId() === ObjectIds.ALTAR) {
+    const location = object.getLocation();
+    const palace = VARROCK_PALACE_ALTAR;
+    if (location.getX() === palace.x && location.getY() === palace.y && location.getZ() === palace.z
+      && player.getPrivateArea?.() === null
+      && player.getPrayerActive?.()?.[core.PrayerHandler.SMITE] === true) {
+      api.emitCustomEvent("diary:task", { player, diary: "varrock", task: VARROCK_PALACE_ALTAR_TASK });
+    }
+  }
+
   if (object && prayerAfter > prayerBefore && object.getId() === ObjectIds.ALTAR) {
     const location = object.getLocation();
     const [x, y, z] = EAST_ARDOUGNE_CHURCH_ALTAR;
@@ -153,6 +168,16 @@ function prayAtChaosAltar({ player, objectId, location }) {
   const west = WESTERN_CHAOS_ALTAR;
   if (handled && location?.x === west.x && location?.y === west.y && location?.z === west.z) {
     api.emitCustomEvent("diary:task", { player, diary: "wilderness", task: "pray-at-the-chaos-altar-in-western-wilderness" });
+  }
+  return handled;
+}
+
+/** The Nature Grotto's altar: restores Prayer as altars do, and reports the restored points. */
+function natureAltar({ player }) {
+  const before = player.getSkillManager().getCurrentLevel(Skill.PRAYER);
+  const handled = handlePrayerAltar(player);
+  if (handled && player.getSkillManager().getCurrentLevel(Skill.PRAYER) > before) {
+    api.emitCustomEvent("altar:nature", { player });
   }
   return handled;
 }
@@ -193,6 +218,7 @@ module.exports = {
     pluginApi.onObjectInteraction("Dark Altar", { Venerate: darkAltar });
     pluginApi.onObjectInteraction("Altar", { "Pray-at": prayerAltar, Pray: prayerAltar });
     pluginApi.onObjectInteraction("Chaos altar", { "Pray-at": prayAtChaosAltar });
+    pluginApi.onObjectInteraction("Altar of nature", { "Pray-at": natureAltar });
     pluginApi.onObjectInteraction("Shrine", { "Pray-at": prayAtShrine });
     pluginApi.onObjectInteraction("Shrine of Ralos", { Bask: prayerAltar });
     pluginApi.onObjectInteraction("Altar of the Occult", {

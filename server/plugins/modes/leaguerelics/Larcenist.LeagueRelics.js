@@ -4,7 +4,9 @@
  * stall thefts repeat themselves, stalls never run out for the relic's owner, and what both give
  * is noted and multiplied by 10 (coins as ten pouches; an item that neither stacks nor notes, and
  * a clue, once: as the other Thieving relics). No guard (nor the stall's owner, whose shout sends
- * them) catches the relic's owner at a stall (`thieving:stall-watch`).
+ * them) catches the relic's owner at a stall (`thieving:stall-watch`). A repeating pickpocket
+ * follows the NPC as it wanders (Pickpocket.Thieving.js): recs 1104-1106 show an attempt every
+ * 2 ticks with no clicks, hundreds in a row, until a click or the coin pouch limit.
  * Not here: the tenfold Varlamore house valuables (house thieving is not on the server).
  */
 const Common = require("./Common.LeagueRelics");

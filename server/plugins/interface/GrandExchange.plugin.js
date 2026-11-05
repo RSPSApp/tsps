@@ -570,7 +570,8 @@ function collectionOutputId(baseId, amount, action, forceNotes = false) {
   const noteId = ItemDefinition.forId(baseId).getNoteId();
   const noteable = noteId >= 0 && ItemDefinition.forId(noteId).isNoted();
   if (!noteable || action === 3) return baseId;
-  if (forceNotes) return noteId;
+  // Collect-all notes a stack but not a single item: notes begin at two in a slot (rsprox 1521: one bought item arrives as the item).
+  if (forceNotes) return amount > 1 ? noteId : baseId;
   if (action === 2) return amount === 1 ? noteId : baseId;
   if (action === 1) return amount > 1 ? noteId : baseId;
   return baseId;
@@ -644,7 +645,7 @@ function abort(player, slot = viewing.get(player)) {
   sender.sendMessage("Abort request acknowledged. Please be aware that your offer may have already been completed.");
 }
 
-/** The Collect button (465:6, dynamic child 0): op 1 to the inventory (as notes), op 2 to the bank. */
+/** The Collect button (465:6, dynamic child 0): op 1 to the inventory (a slot of two or more as notes, a single item as the item), op 2 to the bank. */
 function collectAll(player, action) {
   const to = action === 2 ? 3 : 1;
   for (const slot of Object.keys(completedOffers(player)).map(Number)) collect(player, to, slot, to === 1);

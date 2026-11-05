@@ -465,8 +465,9 @@ test("a journal panel mounted directly also stops hidden summary updates", () =>
   assert.equal(f.click(p, Layout.COMPONENT.XP), false);
 });
 
-test("the actual Duel Arena policy excludes arena statistics and preserves both killstreaks", () => {
+test("the actual Duel Arena policy excludes arena statistics and preserves both killstreaks", async () => {
   require("../dist/Server").Server.installProductionPathResolver();
+  await require("../dist/game/cache/CachePipeline").CachePipeline.initialize(path.resolve(__dirname, ".."));
   const { PluginManager } = require("../dist/plugins/PluginManager");
   const core = PluginManager.getCoreApi();
   const f = fixture(), defeated = [];

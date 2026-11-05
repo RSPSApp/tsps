@@ -302,6 +302,59 @@ test("a tote holds 20 each and Empty conserves what fits", async (t) => {
 
 // Sack upgrade joins two per-player stores. The legacy duplicate refusal is our conservative
 // policy for states this server allowed, not a claim about a live-game message.
+for (const reason of ["level", "skin", "needle", "thread", "bag", "tote"]) {
+  test(`a sack recipe refused for ${reason} gives feedback and preserves its contents`, async (t) => {
+    const tote = id("gem_tote"), bag = id("gem_bag");
+    const parts = [I.NEEDLE, I.THREAD, I.IMMACULATE_MOLE_SKIN, tote, bag];
+    const missing = { skin: I.IMMACULATE_MOLE_SKIN, needle: I.NEEDLE, thread: I.THREAD, bag, tote }[reason];
+    const items = parts.filter((item) => item !== missing);
+    const pair = reason === "bag" ? [I.NEEDLE, tote] : reason === "tote" ? [I.NEEDLE, bag] : [bag, tote];
+    const message = {
+      level: /Crafting level of 81/i, skin: /need immaculate mole skin/i, needle: /need needle/i,
+      thread: /need thread/i, bag: /need gem bag/i, tote: /need gem tote/i,
+    }[reason];
+    const bagFamily = Storage.FAMILIES.get("gem-bag");
+    for (const reverse of [false, true]) {
+      const f = actor(t, items, reason === "level" ? 80 : 81);
+      Storage.store(f.p, family, I.UNCUT_OPAL, 4);
+      Storage.store(f.p, bagFamily, I.UNCUT_RUBY, 3);
+      const given = watchXp(t, f), before = parts.map((item) => has(f, item));
+      await use(f, ...(reverse ? [...pair].reverse() : pair));
+      assert.deepEqual(parts.map((item) => has(f, item)), before, `items, reverse=${reverse}`);
+      assert.equal(has(f, id("gem_sack")), 0);
+      assert.deepEqual([stored(f, I.UNCUT_OPAL), Storage.amountOf(f.p, bagFamily, I.UNCUT_RUBY)], [4, 3]);
+      assert.deepEqual(given, []);
+      assert.ok(f.messages.some((text) => message.test(text)), `reason=${reason} reverse=${reverse}: ${JSON.stringify(f.messages)}`);
+    }
+  });
+}
+
+test("an empty inventory gives sack Fill feedback", async (t) => {
+  const f = actor(t, [id("gem_sack")]);
+  await click(f, id("gem_sack"), "Fill");
+  assert.ok(f.messages.some((text) => /nothing suitable.*sack/i.test(text)), JSON.stringify(f.messages));
+});
+
+test("a full sack gives Fill feedback without consuming a gem", async (t) => {
+  const f = actor(t, [id("gem_sack"), I.UNCUT_OPAL]);
+  const sack = Storage.FAMILIES.get("gem-sack");
+  Storage.store(f.p, sack, I.UNCUT_OPAL, 60);
+  await click(f, id("gem_sack"), "Fill");
+  assert.equal(has(f, I.UNCUT_OPAL), 1);
+  assert.equal(Storage.amountOf(f.p, sack, I.UNCUT_OPAL), 60);
+  assert.ok(f.messages.some((text) => /sack.*full/i.test(text)), JSON.stringify(f.messages));
+});
+
+test("an empty sack gives Empty feedback in inventory and at the bank", async (t) => {
+  const f = actor(t, [id("gem_sack")]);
+  await click(f, id("gem_sack"), "Empty");
+  assert.match(f.messages.at(-1), /gem sack is empty/i);
+  const prior = f.messages.length;
+  Storage.FAMILIES.get("gem-sack").bankEmpty(f.p);
+  assert.equal(f.messages.length, prior + 1);
+  assert.match(f.messages.at(-1), /gem sack is empty/i);
+});
+
 test("upgrading tote and real gem bag to a sack conserves both stores", async (t) => {
   const tote = id("gem_tote");
   const bag = id("gem_bag");

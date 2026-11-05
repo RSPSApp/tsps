@@ -6,6 +6,7 @@ const { HitQueue } = require('../dist/game/content/combat/hit/HitQueue');
 const { HitDamage } = require('../dist/game/content/combat/hit/HitDamage');
 const { HitMask } = require('../dist/game/content/combat/hit/HitMask');
 const Common = require('../plugins/bosses/vardorvis/Common.Vardorvis');
+const CombatAchievements = require('../plugins/bosses/vardorvis/CombatAchievements.Vardorvis');
 const { Fight, attachFight } = require('../plugins/bosses/vardorvis/Fight.Vardorvis');
 const Axes = require('../plugins/bosses/vardorvis/Axes.Vardorvis');
 const Dash = require('../plugins/bosses/vardorvis/Dash.Vardorvis');
@@ -289,4 +290,61 @@ test('the next fight and other players do not inherit a failed kill grade', () =
     other.die();
     assert.equal(other.context().perfectKill, true);
     assert.equal(first.context({ npc: other.boss }).perfectKill, false);
+});
+
+test('Perfect Vardorvis counts five flawless kills in the same site session', () => {
+    const f = fixture();
+    const completed = [];
+    f.api.onCustomEvent('combat-achievements:complete', ({ task }) => completed.push(task));
+    const kill = { player: f.player, boss: f.boss, awakened: false, session: f.session, axeEnrageTicks: 0, leftAxeCentre: false };
+
+    for (let i = 1; i <= 4; i++) {
+        CombatAchievements.judge({ ...kill, perfectKill: true }, 100);
+        assert.equal(f.session.perfectKills, i);
+        assert.equal(completed.includes('Perfect Vardorvis'), false, 'four flawless kills are not enough');
+    }
+    CombatAchievements.judge({ ...kill, perfectKill: false }, 100);
+    assert.equal(f.session.perfectKills, 4, 'an imperfect kill does not advance the counter');
+    CombatAchievements.judge({ ...kill, perfectKill: true }, 100);
+    assert.equal(f.session.perfectKills, 5);
+    assert.equal(completed.includes('Perfect Vardorvis'), true);
+});
+
+test('Axe Enthusiast tracks 300 enrage ticks and fails after leaving the centre 5x5', () => {
+    const centre = (f) => {
+        const [x, y] = Common.data.axes.centre;
+        const { sourceChunkX, sourceChunkY } = Common.data.instance;
+        const area = f.session.area;
+        return new Location(area.getBaseX() + x - sourceChunkX * 8, area.getBaseY() + y - sourceChunkY * 8);
+    };
+    const completions = (f) => {
+        const tasks = [];
+        f.api.onCustomEvent('combat-achievements:complete', ({ task }) => tasks.push(task));
+        return tasks;
+    };
+
+    const stayed = fixture();
+    const stayedTasks = completions(stayed);
+    stayed.player.location = centre(stayed);
+    stayed.fight.engaged = true;
+    stayed.fight.enraged = true;
+    for (let i = 0; i < 300; i++) CombatAchievements.tick(stayed.fight);
+    assert.equal(stayed.fight.axeEnrageTicks, 300);
+    assert.equal(stayed.fight.leftAxeCentre, false);
+    CombatAchievements.judge(stayed.fight, 100);
+    assert.ok(stayedTasks.includes('Axe Enthusiast'));
+
+    const left = fixture();
+    const leftTasks = completions(left);
+    const middle = centre(left);
+    left.player.location = middle;
+    left.fight.engaged = true;
+    left.fight.enraged = true;
+    for (let i = 0; i < 299; i++) CombatAchievements.tick(left.fight);
+    left.player.location = new Location(middle.getX() + 3, middle.getY());
+    CombatAchievements.tick(left.fight);
+    assert.equal(left.fight.axeEnrageTicks, 300);
+    assert.equal(left.fight.leftAxeCentre, true);
+    CombatAchievements.judge(left.fight, 100);
+    assert.equal(leftTasks.includes('Axe Enthusiast'), false);
 });

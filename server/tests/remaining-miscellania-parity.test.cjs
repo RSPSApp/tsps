@@ -618,7 +618,7 @@ test('Royal Trouble: reading the diary marks one chapter per read', () => {
   h.quest.setStage(partial, 80);
   partial.items.set(I.BURNT_DIARY, 1);
   h.itemAction(partial, I.BURNT_DIARY);
-  assert.equal(partial.varbits.get(2141), 80, 'one diary page cannot skip to stage 100');
+  assert.equal(h.quest.getStage(partial), 80, 'one diary page cannot skip to stage 100');
   assert.equal(partial.varbits.get(2149), 1, 'the first read marks only diary chapter 1');
   assert.equal(partial.varbits.get(2150) ?? 0, 0, 'one page does not mark every diary chapter');
 

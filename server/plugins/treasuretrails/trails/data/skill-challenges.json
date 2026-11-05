@@ -15,6 +15,7 @@
   "cluehelper_skillchallenge_elite_14": {"event": "smithing:success", "match": {"itemId": {"item": ["MITHRIL_2H_SWORD"]}}},
   "cluehelper_skillchallenge_elite_15": {"event": "fishing:success", "match": {"itemId": {"item": ["RAW_SHARK"]}}},
   "cluehelper_skillchallenge_elite_16": {"event": "woodcutting:success", "match": {"logId": {"item": ["YEW_LOGS"]}}},
+  "cluehelper_skillchallenge_elite_17": {"event": "dorgesh-kaan-lamps:fixed", "match": {"itemId": {"item": ["LIGHT_ORB"]}}},
   "cluehelper_skillchallenge_elite_18": {"event": "firemaking:success", "match": {"itemId": {"item": ["YEW_LOGS"]}}},
   "cluehelper_skillchallenge_elite_19": {"event": "cooking:success", "match": {"itemId": {"item": ["SWORDFISH"]}}},
   "cluehelper_skillchallenge_elite_20": {"event": "runecrafting:success", "match": {"runeId": {"item": ["COSMIC_RUNE"]}, "amountPerEssence": {"min": 2}}},

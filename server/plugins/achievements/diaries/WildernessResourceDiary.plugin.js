@@ -1,8 +1,12 @@
 /**
  * Wilderness Diary tasks in the Resource Area (https://oldschool.runescape.wiki/w/Resource_Area, Wilderness
- * Diary): hard "Smith an Adamant scimitar", elite "Fish and Cook a Dark Crab" and elite "Cut and burn some
- * magic logs", each done inside the enclosure east of the Deserted Keep (Wiki map x 3174-3197, y 3924-3945;
+ * Diary): medium "Smith a Golden helmet", hard "Smith an Adamant scimitar", elite "Fish and Cook a Dark Crab"
+ * and elite "Cut and burn some magic logs", each done inside the enclosure east of the Deserted Keep (Wiki map x 3174-3197, y 3924-3945;
  * its gate is on the north side at 3184,3944-3945).
+ *
+ * The Golden helmet is made by Between a Rock's anvil handling (gold bars on any anvil, from the quest step where
+ * Dondakan wants the golden cannonball, also after the quest; the Wiki's "partial completion" names no step, so
+ * that bound is inferred) and arrives here as the same smithing:success event, with the helmet as the item.
  *
  * Each credit rides the activity's own success event (smithing:success, fishing:success, cooking:success,
  * woodcutting:success, firemaking:success) with the player in the area. The two-step tasks keep their first
@@ -22,6 +26,7 @@ const DIARY = "wilderness";
 const ATTRIBUTE = "wilderness-diary:resource-area";
 const AREA = { minX: 3174, maxX: 3197, minY: 3925, maxY: 3944 };
 const TASKS = {
+  helmet: "smith-a-golden-helmet-in-the-resource-area",
   scimitar: "smith-an-adamant-scimitar-in-the-resource-area",
   crab: "fish-and-cook-a-dark-crab-in-the-resource-area",
   logs: "cut-and-burn-some-magic-logs-in-the-resource-are",
@@ -48,7 +53,9 @@ function write(player, state) {
 }
 
 function smithed({ player, itemId }) {
-  if (itemId === api.core.ItemIdentifiers.ADAMANT_SCIMITAR && inArea(player)) credit(player, TASKS.scimitar);
+  if (!inArea(player)) return;
+  if (itemId === api.core.ItemIdentifiers.ADAMANT_SCIMITAR) credit(player, TASKS.scimitar);
+  else if (itemId === api.core.ItemIdentifiers.GOLD_HELMET) credit(player, TASKS.helmet);
 }
 
 function fished({ player, itemId }) {

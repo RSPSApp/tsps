@@ -119,6 +119,10 @@ function sew(event) {
   if (event.handled) return;
   const { player, usedItemId, usedWithItemId } = event;
   if (usedItemId === usedWithItemId) return;
+  // Jagex's 3 June 2026 update excludes needle and thread as a pair.
+  const { NEEDLE, THREAD } = Storage.core.ItemIdentifiers;
+  if ((usedItemId === NEEDLE && usedWithItemId === THREAD)
+    || (usedItemId === THREAD && usedWithItemId === NEEDLE)) return;
   const recipe = recipeFor(player, [usedItemId, usedWithItemId]);
   if (!recipe) return;
   event.handled = true;

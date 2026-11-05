@@ -14,8 +14,7 @@
 // grantFiremakingLogXp), so tending a campfire in the area credits it too. The Golden helmet's lighting
 // (Logs.Firemaking.js:725) names the helmet, not a log, and credits nothing here.
 // One real route: pay at the gate (ResourceArea.plugin.js), walk to the anvil, smith for real.
-// The fourth task, "Smith a rune scimitar from scratch", needs two Runite Golems killed and mined and has no
-// mining of a golem in the server yet; it is not credited here.
+// The fourth task, "Smith a rune scimitar from scratch", is in runite-golem.test.cjs.
 // Fixture seam: the producers' own success events (smithing:success from the anvil, fishing:success,
 // cooking:success, woodcutting:success, firemaking:success) are emitted by hand with the payloads those
 // producers send, through the real PluginManager into the real diary plugin and progress; a player's

@@ -141,6 +141,7 @@ function knockOut(event) {
   }
   const state = { remaining: 2 };
   unconscious.set(npc, state);
+  api.emitCustomEvent("thieving:blackjack-knockout", { player, npcId: event.npcId });
   npc.getMovementQueue().reset();
   npc.getTimers().registers(core.TimerKey.STUN, KNOCKOUT_TICKS);
   npc.getTimers().registers(core.TimerKey.ATTACK_IMMUNITY, KNOCKOUT_TICKS);

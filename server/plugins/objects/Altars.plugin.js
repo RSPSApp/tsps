@@ -111,6 +111,16 @@ function prayerAltar({ player, object }) {
   const prayerAfter = skillManager.getCurrentLevel(Skill.PRAYER);
 
   if (object && prayerAfter > prayerBefore) {
+    const location = object.getLocation();
+    // Content that credits praying by place (the Desert Diary's Sophanem altar) reads the gain.
+    api.emitCustomEvent("altars:prayed", {
+      player,
+      location: { x: location.getX(), y: location.getY(), z: location.getZ() },
+      restored: prayerAfter - prayerBefore,
+    });
+  }
+
+  if (object && prayerAfter > prayerBefore) {
     api.emitCustomEvent("prayer:restored-at-altar", {
       player,
       objectId: object.getId(),

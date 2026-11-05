@@ -1,5 +1,6 @@
 // Kalphite Queen encounter. Evidence: docs/kalphite-queen.md.
 let core;
+let api;
 let CRAWLING, AIRBORNE, KQ_IDS, KQ_WORKER;
 let KqWorker, WorkerDespawnTask, KalphiteQueenCombat, TransformTask, RevertTask;
 const rangedPrayerDrains = new WeakSet();
@@ -258,12 +259,19 @@ function attachSurfaceRope(event) {
   );
   core.TaskManager.submit(new core.TimedObjectReplacementTask(object, replacement, ROPE_LIFETIME_TICKS));
   player.moveTo(objectId === SURFACE_TUNNEL ? new core.Location(...LAIR_ENTRANCE) : new core.Location(...CHAMBER_ENTRANCE));
+  if (objectId === SURFACE_TUNNEL) enterHive(player);
   event.handled = true;
 }
 
 function enterLair({ player, object }) {
   if (object.getId() !== ROPE_TUNNEL) return false;
   player.moveTo(new core.Location(...LAIR_ENTRANCE));
+  enterHive(player);
+}
+
+/** The easy Desert Diary's "Enter the Kalphite Hive." */
+function enterHive(player) {
+  api.emitCustomEvent("diary:task", { player, diary: "desert", task: "enter-the-kalphite-hive" });
 }
 function climbRope({ player, object }) {
   const id = object.getId();
@@ -301,7 +309,8 @@ function combatAchievementsKillCount({ player, counts }) {
   if (kills > 0) counts["Kalphite Queen"] = kills;
 }
 
-function attach(api) {
+function attach(pluginApi) {
+  api = pluginApi;
   core = api.core;
   CRAWLING = core.NpcIdentifiers.KALPHITE_QUEEN_2;
   AIRBORNE = core.NpcIdentifiers.KALPHITE_QUEEN_3;

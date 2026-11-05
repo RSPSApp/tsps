@@ -360,6 +360,7 @@ const worker = {
             if (state && payload.datasets.some(dataset => dataset.key === "definitionArchives")) {
                 state.locTypeLoader.clearCache();
                 state.npcTypeLoader.clearCache();
+                state.seqTypeLoader.clearCache();
                 state.locModelLoader.clearCache();
                 state.npcModelLoader.clearCache();
                 state.worldMapTiles?.invalidate();

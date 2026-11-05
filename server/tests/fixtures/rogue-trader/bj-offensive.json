@@ -1,0 +1,200 @@
+[
+ {
+  "k": "say",
+  "t": 1198,
+  "who": "Blackjack seller",
+  "text": "Hello. Could I interest you in a Blackjack?"
+ },
+ {
+  "k": "say",
+  "t": 1200,
+  "who": "Blackjack seller",
+  "text": "Ah, it's you again <player>. Tell me how are the blackjack sales going?"
+ },
+ {
+  "k": "say",
+  "t": 1203,
+  "who": "player",
+  "text": "Not too bad, Ali was well impressed by the reaction and demand they had initially but he's a little concerned about how the sales have dropped off of recent."
+ },
+ {
+  "k": "say",
+  "t": 1204,
+  "who": "player",
+  "text": "Maybe you could produce a different range of products?"
+ },
+ {
+  "k": "say",
+  "t": 1206,
+  "who": "Blackjack seller",
+  "text": "I'm not too sure, I'm quite happy to stick with what I've got unless, I had a good reason to change."
+ },
+ {
+  "k": "menu",
+  "t": 1208,
+  "title": "Select an option",
+  "options": [
+   "I bet you couldn't knock me out with your blackjack.",
+   "Hmmm... I'll get back to you on this."
+  ]
+ },
+ {
+  "k": "pick",
+  "t": 1214,
+  "n": 1
+ },
+ {
+  "k": "say",
+  "t": 1214,
+  "who": "player",
+  "text": "I bet you couldn't knock me out with your blackjack."
+ },
+ {
+  "k": "say",
+  "t": 1215,
+  "who": "Blackjack seller",
+  "text": "I reckon I could."
+ },
+ {
+  "k": "say",
+  "t": 1216,
+  "who": "player",
+  "text": "I'll tell you what, if you can't knock me out with one blow, you should make better blackjacks."
+ },
+ {
+  "k": "say",
+  "t": 1217,
+  "who": "Blackjack seller",
+  "text": "Nah, I don't like the sounds of that. It leaves a lot up to chance."
+ },
+ {
+  "k": "say",
+  "t": 1218,
+  "who": "player",
+  "text": "Ok, ok, how about two blows to the head?"
+ },
+ {
+  "k": "say",
+  "t": 1219,
+  "who": "Blackjack seller",
+  "text": "Are you sure? I could possibly kill you?"
+ },
+ {
+  "k": "menu",
+  "t": 1220,
+  "title": "Select an option",
+  "options": [
+   "Umm... on second thoughts I might give it a skip.",
+   "I'm sure. No pain no gain. Grrr!"
+  ]
+ },
+ {
+  "k": "pick",
+  "t": 1222,
+  "n": 2
+ },
+ {
+  "k": "say",
+  "t": 1222,
+  "who": "player",
+  "text": "I'm sure. No pain no gain. Grr!!"
+ },
+ {
+  "k": "say",
+  "t": 1223,
+  "who": "Blackjack seller",
+  "text": "You adventurers are crazy."
+ },
+ {
+  "k": "say",
+  "t": 1228,
+  "who": "player",
+  "text": "Ow! Ha! You didn't knock me down."
+ },
+ {
+  "k": "menu",
+  "t": 1233,
+  "title": "Select an option",
+  "options": [
+   "Go again.",
+   "Chicken out."
+  ]
+ },
+ {
+  "k": "pick",
+  "t": 1236,
+  "n": 1
+ },
+ {
+  "k": "say",
+  "t": 1236,
+  "who": "Blackjack seller",
+  "text": "You really are truly mad."
+ },
+ {
+  "k": "say",
+  "t": 1237,
+  "who": "player",
+  "text": "Are you going to hit me again? I really want to get this over with."
+ },
+ {
+  "k": "say",
+  "t": 1241,
+  "who": "player",
+  "text": "Yeeeoouch.... that hurt! I'm still standing though, You can't knock me down."
+ },
+ {
+  "k": "varbit",
+  "t": 1246,
+  "id": 916,
+  "value": 1
+ },
+ {
+  "k": "say",
+  "t": 1246,
+  "who": "Blackjack seller",
+  "text": "Either your head is thicker than it looks or else I need to rework my blackjack."
+ },
+ {
+  "k": "say",
+  "t": 1249,
+  "who": "player",
+  "text": "Umm... definitely the blackjack. <col=0000ff>You just about fight off another bout of dizziness and <col=0000ff>nausea."
+ },
+ {
+  "k": "say",
+  "t": 1254,
+  "who": "Blackjack seller",
+  "text": "I suppose I'll just have to modify the blackjack so that it has a better attack."
+ },
+ {
+  "k": "say",
+  "t": 1256,
+  "who": "player",
+  "text": "Great, so I take it you will be supplying Ali Morrisane with the new variety of blackjack then?"
+ },
+ {
+  "k": "varbit",
+  "t": 1257,
+  "id": 916,
+  "value": 0
+ },
+ {
+  "k": "varbit",
+  "t": 1257,
+  "id": 920,
+  "value": 0
+ },
+ {
+  "k": "varbit",
+  "t": 1257,
+  "id": 911,
+  "value": 3
+ },
+ {
+  "k": "say",
+  "t": 1257,
+  "who": "Blackjack seller",
+  "text": "Yes, yes. I'll start shipping it by carpet as soon as the first batch is ready."
+ }
+]

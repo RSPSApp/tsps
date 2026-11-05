@@ -110,6 +110,32 @@ export class MapRegionReplacementManager {
     };
   }
 
+  /** Who installed a region's replacement (a .pack path, "agent-mcp", a plugin name). */
+  public static getSource(regionId: number): string | null {
+    return this.replacements.get(regionId)?.source ?? null;
+  }
+
+  /** Forget a runtime replacement; the caller reloads clipping and re-streams the native map. */
+  public static removeMapRegion(regionId: number): boolean {
+    return this.replacements.delete(regionId);
+  }
+
+  /**
+   * Clients keep a streamed replacement for the session, so restoring a region sends
+   * them its native cache map the same way (there is no separate "forget" packet).
+   * Null when the cache has no native map for the region.
+   */
+  public static nativeRegionPacket(regionId: number): RegionReplacementPacket | null {
+    const native = CacheMaps.getRegion(regionId);
+    return native ? regionReplacementPacket(regionId, true, native.terrainData, native.objectData ?? null) : null;
+  }
+
+  public static sendRegionPacketToPlayer(player: any, packet: RegionReplacementPacket): boolean {
+    const session = player?.getSession?.();
+    if (!session || typeof session.sendClientPacket !== "function") return false;
+    return session.sendClientPacket(encodeCachedRegionReplacement(packet, true));
+  }
+
   public static getRegionIds(): number[] {
     return Array.from(this.replacements.keys()).sort((a, b) => a - b);
   }

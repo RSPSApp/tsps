@@ -1,0 +1,94 @@
+[
+ {
+  "k": "say",
+  "t": 1357,
+  "who": "player",
+  "text": "Hello Siamun."
+ },
+ {
+  "k": "say",
+  "t": 1358,
+  "who": "Siamun",
+  "text": "Hello adventurer. How are sales going?"
+ },
+ {
+  "k": "say",
+  "t": 1359,
+  "who": "player",
+  "text": "Not too bad, Ali was well impressed by the reaction and demand they had initially but he's a little concerned about how the sales have dropped off of recent."
+ },
+ {
+  "k": "say",
+  "t": 1360,
+  "who": "Siamun",
+  "text": "Hmmm... Maybe I could produce a different range of products."
+ },
+ {
+  "k": "say",
+  "t": 1361,
+  "who": "Siamun",
+  "text": "I tell you what, get me 3 animal pelts of the same variety and I'll change the shipments around and whatever you do, don't bring me banknotes!"
+ },
+ {
+  "k": "menu",
+  "t": 1362,
+  "title": "Select an option",
+  "options": [
+   "What do you mean by animal pelt?",
+   "Ok, I'll get you the materials."
+  ]
+ },
+ {
+  "k": "pick",
+  "t": 1364,
+  "n": 2
+ },
+ {
+  "k": "say",
+  "t": 1364,
+  "who": "player",
+  "text": "Ok, I'll get you the materials."
+ },
+ {
+  "k": "say",
+  "t": 1365,
+  "who": "Siamun",
+  "text": "Unless you've got the materials on you?"
+ },
+ {
+  "k": "say",
+  "t": 1366,
+  "who": "player",
+  "text": "Yup, I've got what you want with me."
+ },
+ {
+  "k": "varbit",
+  "t": 1367,
+  "id": 912,
+  "value": 4
+ },
+ {
+  "k": "varbit",
+  "t": 1367,
+  "id": 915,
+  "value": 0
+ },
+ {
+  "k": "msg",
+  "t": 1367,
+  "kind": "mesbox",
+  "text": "You give the merchant the animal pelts."
+ },
+ {
+  "k": "say",
+  "t": 1368,
+  "who": "Siamun",
+  "text": "Thank you adventurer. I will get my goods up to that merchant thief Ali Morrisane as quickly as possible."
+ },
+ {
+  "k": "say",
+  "t": 1369,
+  "who": "player",
+  "text": "Think nothing of it. I'm looking forward to seeing what you've produced for the Al Kharid market."
+ }
+]

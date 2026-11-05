@@ -3,6 +3,7 @@
 // #2430: the crevice past the Jutting wall leads into the Wilderness God Wars Dungeon, as capture 1463 plays
 // it, and that is what credits the Wilderness Diary's "Enter the Wilderness Godwars Dungeon". The Wiki's task
 // needs 60 Agility or Strength, which the cave doesn't and this way in does; the point of credit is inferred.
+// The Strength way in is in wilderness-gwd-boulder.test.cjs.
 //
 // The way back out through the crevices is inferred: no capture uses them. Capture 1463's player left by an
 // amulet of glory, both times. Each is the reverse of a captured move, and they're tested here as that.
@@ -132,18 +133,4 @@ test("the cavern's crevice beside the landing goes back to the surface, without 
   t.diagnostic(`at ${at(f)}; animations ${f.animations}`);
   assert.deepEqual(at(f), SURFACE, "the reverse of the captured move");
   assert.equal(credited(f).length, 0, "leaving doesn't credit");
-});
-
-test("the Strength route's crevices aren't wired up, as their destinations aren't established", async (t) => {
-  const inner = actor(t, [3035, 10157, 0]);
-  await click(inner, { id: DUNGEON_EXIT.id, at: [3035, 10158] });
-  t.diagnostic(`inner crevice: at ${at(inner)}`);
-  assert.deepEqual(at(inner).slice(2), [0], "the dungeon's other crevice stays on its plane");
-  assert.equal(credited(inner).length, 0, "and doesn't credit");
-
-  const strength = actor(t, [3049, 10164, 3]);
-  await click(strength, { id: CREVICE.id, at: [3049, 10165] });
-  t.diagnostic(`strength crevice: at ${at(strength)}`);
-  assert.deepEqual(at(strength).slice(2), [3], "the cavern's other crevice stays on its plane");
-  assert.equal(credited(strength).length, 0, "and doesn't credit");
 });

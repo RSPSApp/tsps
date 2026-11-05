@@ -285,7 +285,9 @@ const STYLES = { ship_journey: shipJourney, longship, galleon, fade: fadeTrip, r
 function travel(player, routeName) {
   const trip = Common.route(routeName);
   if (!trip || !player || Common.travelling(player)) return false;
+  const from = player.getLocation().clone();
   STYLES[trip.style](player, trip);
+  Common.api.emitCustomEvent("ferries:departed", { player, route: routeName, from });
   return true;
 }
 

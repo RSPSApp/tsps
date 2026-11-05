@@ -340,6 +340,33 @@ test("a sack upgrade with another real gem bag refuses without changing items or
   assert.deepEqual(given, []);
 });
 
+test("a banked duplicate blocks sack upgrade without losing either store", async (t) => {
+  const tote = id("gem_tote");
+  const bag = id("gem_bag");
+  const f = actor(t, [I.NEEDLE, I.THREAD, I.IMMACULATE_MOLE_SKIN, tote, bag]);
+  f.p.getBank(0).add(new core.Item(id("gem_satchel")), false);
+  const bagFamily = Storage.FAMILIES.get("gem-bag");
+  Storage.store(f.p, family, I.UNCUT_OPAL, 4);
+  Storage.store(f.p, bagFamily, I.UNCUT_RUBY, 3);
+  await use(f, tote, bag);
+  assert.deepEqual([has(f, tote), has(f, bag), has(f, 33393)], [1, 1, 0]);
+  assert.deepEqual([stored(f, I.UNCUT_OPAL), Storage.amountOf(f.p, bagFamily, I.UNCUT_RUBY)], [4, 3]);
+  assert.equal(f.p.getBank(0).getAmount(id("gem_satchel")), 1);
+});
+
+test("sack destroy event clears only the last owned copy's store", (t) => {
+  const f = actor(t, [33393, 33393]);
+  const sack = Storage.FAMILIES.get("gem-sack");
+  assert.ok(sack);
+  Storage.store(f.p, sack, I.UNCUT_OPAL, 4);
+  f.inv.deleteNumber(33393, 1);
+  PM.emitCustomEvent("destroy-item:destroyed", { player: f.p, itemId: 33393 });
+  assert.equal(Storage.amountOf(f.p, sack, I.UNCUT_OPAL), 4);
+  f.inv.deleteNumber(33393, 1);
+  PM.emitCustomEvent("destroy-item:destroyed", { player: f.p, itemId: 33393 });
+  assert.equal(Storage.total(f.p, sack), 0);
+});
+
 test("an open sack takes a mined semi-precious gem", async (t) => {
   assert.equal(id("gem_sack_open"), 33395);
   const f = actor(t, [33395]);

@@ -103,5 +103,8 @@ Uma moeda própria do jogo idle, separada dos pontos de melhoria.
       ranking de bosses
 - [x] Giant Mole corrigida: depois de cavar ela fica onde saiu (antes voltava ao spawn curada e sem
       tomar dano); local de viagem na aba Bosses
-- [ ] Testes automáticos rodando no GitHub em todo PR (CI)
+- [x] Testes automáticos no GitHub em todo PR (`.github/workflows/server-tests.yml`): o job
+      **Idle Mode** precisa passar; o **Full suite** roda todos os testes e só informa
+- [ ] Corrigir as 68 falhas antigas da suíte completa (já falhavam antes do trabalho idle) e então
+      fazer o **Full suite** bloquear também
 - [ ] Sincronizar com o projeto original de tempos em tempos (`git merge upstream/main`)

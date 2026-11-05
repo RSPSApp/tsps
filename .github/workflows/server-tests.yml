@@ -1,0 +1,104 @@
+name: Server tests
+
+# The fork's own tests (the upstream workflows only run in RSPSApp/tsps). Two jobs:
+# - Idle Mode: the tests of what the idle game touches. Must pass.
+# - Full suite: every server test. It reports but does not fail the run while the suite has
+#   failures that predate the fork's work (68 on 2026-11-05, see IDLE_ROADMAP.md); once they are
+#   fixed, drop its continue-on-error so it blocks too.
+on:
+    pull_request:
+        paths: ['server/**', '.github/workflows/server-tests.yml']
+    push:
+        branches: [main]
+        paths: ['server/**', '.github/workflows/server-tests.yml']
+    workflow_dispatch:
+
+permissions:
+    contents: read
+
+concurrency:
+    group: server-tests-${{ github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    idle:
+        name: Idle Mode
+        if: github.repository != 'RSPSApp/tsps'
+        runs-on: ubuntu-latest
+        timeout-minutes: 45
+        defaults:
+            run:
+                working-directory: server
+        steps:
+            - uses: actions/checkout@v4
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 22
+            - run: corepack enable
+            - uses: actions/cache@v4
+              with:
+                  path: server/caches
+                  key: osrs-cache-${{ hashFiles('server/target.txt') }}
+            - run: yarn install --immutable
+            - run: yarn ensure-cache
+            - run: yarn build
+            - name: Idle Mode and the content it uses
+              run: >
+                  node --test
+                  tests/idle-mode.test.cjs
+                  tests/idle-travel-sites.test.cjs
+                  tests/smithing.test.cjs
+                  tests/firemaking.test.cjs
+                  tests/thieving-stalls.test.cjs
+                  tests/thieving-pickpocket.test.cjs
+                  tests/gemstone-crab.test.cjs
+                  tests/giant-mole.test.cjs
+                  tests/mcp-set-npc-hitpoints.test.cjs
+                  tests/below-ice-mountain-parity.test.cjs
+                  tests/p2p-varlamore-group-2-parity.test.cjs
+                  tests/tzhaar-fight-cave.test.cjs
+                  tests/league-fragments-gathering.test.cjs
+                  tests/league-fragments-skilling.test.cjs
+                  tests/skill-max-level.test.cjs
+
+    full:
+        name: Full suite (reports only)
+        if: github.repository != 'RSPSApp/tsps'
+        runs-on: ubuntu-latest
+        timeout-minutes: 120
+        continue-on-error: true
+        defaults:
+            run:
+                working-directory: server
+        steps:
+            - uses: actions/checkout@v4
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 22
+            - run: corepack enable
+            - uses: actions/cache@v4
+              with:
+                  path: server/caches
+                  key: osrs-cache-${{ hashFiles('server/target.txt') }}
+            - run: yarn install --immutable
+            - run: yarn ensure-cache
+            - run: yarn build
+            - name: Every server test
+              run: |
+                  set +e
+                  node --test --test-concurrency=4 tests/*.cjs > full-suite.log 2>&1
+                  status=$?
+                  {
+                      echo "## Server tests"
+                      grep -E "^# (tests|pass|fail)" full-suite.log | sed 's/^# /- /'
+                      echo
+                      echo "### Failing"
+                      grep -E "^not ok" full-suite.log | sed -E 's/^not ok [0-9]+ - /- /' | sort -u | head -150
+                  } >> "$GITHUB_STEP_SUMMARY"
+                  exit $status
+            - uses: actions/upload-artifact@v4
+              if: always()
+              with:
+                  name: full-suite-log
+                  path: server/full-suite.log
+                  retention-days: 14

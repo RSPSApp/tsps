@@ -120,8 +120,8 @@ function eagleArrived({ player, to }) {
   if (to[0] === 2520 && to[1] === 9325 && (to[2] ?? 0) === 0) done(player, TASK.feldipEagle);
 }
 
-function farmingChecked({ player, type, patch }) {
-  if (!active(player) || type !== "FRUIT_TREE" || !patch) return;
+function farmingChecked({ player, type, crop, patch }) {
+  if (!active(player) || type !== "FRUIT_TREE" || crop !== "PALM" || !patch) return;
   if (patch.x === LLETYA_PALM_PATCH.x && patch.y === LLETYA_PALM_PATCH.y && patch.z === LLETYA_PALM_PATCH.z) {
     done(player, TASK.lletyaPalm);
   }

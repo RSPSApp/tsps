@@ -75,3 +75,9 @@ test('every holiday style group the plugin opens is reachable from its first mem
  }
  assert.ok(opened>=20,`opened ${opened}`);
 });
+test('Carve clicked while the Colour chooser is open reopens on the face group',()=>{
+ const {p,container,slot}=player('hw24_reward_pumpkin_beige_ew');
+ assert.equal(op(p,container,slot,'Colour'),9);assert.equal(p.getInterfaceId(),chooser);
+ assert.equal(op(p,container,slot,'Carve'),18);assert.equal(p.getInterfaceId(),chooser);
+ select(p,1);assert.equal(container.getItems()[slot].getId(),obj('hw24_reward_pumpkin_beige_derp'));
+});

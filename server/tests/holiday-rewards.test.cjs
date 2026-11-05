@@ -161,3 +161,11 @@ test('holiday-rewards:used unlocks catalogue items only and the retrieval menu t
  assert.deepEqual(p.getAttribute('holiday-rewards:unlocked'),['win05_hat1']);assert.equal(messages.length,1);
  open(p);take(p);assert.equal(p.getInventory().getAmount(bobble),1);
 });
+test('an item that is its own Diango entry unlocks itself, not a family neighbour',()=>{
+ const {EquipPacketListener}=require('../dist/net/packet/impl/EquipPacketListener');
+ const c=core.CacheDefinitions,skeleton=c.getObjId('25th_anniversary_tabard_2');
+ const {p,messages}=fixture();p.getInventory().setItem(0,new core.Item(skeleton,1));
+ EquipPacketListener.equip(p,skeleton,0,core.Inventory.INTERFACE_ID);
+ assert.deepEqual(p.getAttribute('holiday-rewards:unlocked'),['25th_anniversary_tabard_2']);
+ assert.match(messages.join('\n'),/25th anniversary skeleton tabard/);
+});

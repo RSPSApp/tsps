@@ -63,10 +63,23 @@ function unlock(api, request) {
 }
 // Rev 232 recording 3200: wearing or playing with a holiday item you hold but never
 // unlocked registers it with Diango ("Check rank" on the same wreath does not).
+// An item is its own entry; an alternate style counts only when its family holds exactly
+// one entry (the 25th anniversary tabards share a family but are separate entries).
 function catalogueEntry(api, itemId) {
   const d=data(api);
-  for (const id of d.rows.values()) if (d.families.get(id).includes(itemId)) return id;
-  return null;
+  if (!d.entryOf) {
+    const owners=new Map();
+    for (const id of d.rows.values()) for (const member of d.families.get(id)) {
+      if (!owners.has(member)) owners.set(member,new Set());
+      owners.get(member).add(id);
+    }
+    d.entryOf=new Map();
+    for (const [member,entries] of owners) {
+      if (entries.has(member)) d.entryOf.set(member,member);
+      else if (entries.size===1) d.entryOf.set(member,[...entries][0]);
+    }
+  }
+  return d.entryOf.get(itemId) ?? null;
 }
 function used(api, {player, itemId}) {
   if (!player || !Number.isInteger(itemId)) return;

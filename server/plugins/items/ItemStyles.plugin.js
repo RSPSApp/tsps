@@ -14,10 +14,13 @@ let catalogue;
 // Rows not listed are always available. Greenman masks and Fractured Archive capes
 // read Forestry/Archive unlock procs this plugin does not own, so those groups are left out.
 const AVAILABILITY = {
-  hw22_treat_cauldron_1: p => cauldronStage(p) >= 1,
-  hw22_treat_cauldron_2: p => cauldronStage(p) >= 2,
-  hw22_treat_cauldron_3: p => cauldronStage(p) >= 3,
-  hw22_treat_cauldron_4: p => cauldronStage(p) >= 4,
+  // [proc,script2431] reads the client varc hw22_communitygoal_current_state_idx, which only
+  // clientscript 2430 sets during the 2022 event. Nothing here sends it, so the client draws
+  // these rows locked and the server keeps them locked to match.
+  hw22_treat_cauldron_1: () => false,
+  hw22_treat_cauldron_2: () => false,
+  hw22_treat_cauldron_3: () => false,
+  hw22_treat_cauldron_4: () => false,
   hw23_spiderhat_02: p => varbit(p, "hw23_reward_received_4") !== 0,
   hw23_spiderhat_03: p => varbit(p, "hw23_reward_received_5") !== 0,
   hw23_spiderhat_04: p => varbit(p, "hw23_reward_received_6") !== 0,
@@ -29,12 +32,6 @@ let core;
 function varbit(player, name) {
   const id = core.CacheDefinitions.getVarbitId(name);
   return id == null ? 0 : player.getPacketSender().getVarbit(id);
-}
-
-// [proc,script2431]: -1 means no community goal stage has been reached.
-function cauldronStage(player) {
-  const stage = varbit(player, "hw22_communitygoal_current_state_idx");
-  return stage === -1 ? -1 : stage;
 }
 
 function data() {
@@ -107,15 +104,19 @@ function open(event) {
   const option = optionAt(definition, worn, event);
   if (!STYLE_OPTIONS.has(option)) return;
   event.handled = true;
+  // Another modal, including this chooser for the item's other style option, gives way.
+  if (player.getInterfaceId() > 0) player.getPacketSender().sendInterfaceRemoval();
   if (player.busy()) return;
   // The n-th style option opens the n-th group the item belongs to: a pumpkin's Colour
-  // opens its colour group and Carve its face group (rev 226 recording 1686).
+  // opens its colour group and Carve its face group (rev 226 recording 1686). This relies on
+  // the cache listing a multi-group item's groups in its option order, true for every such item.
   const position = itemOptions(definition, worn).filter(name => STYLE_OPTIONS.has(name)).indexOf(option);
   const group = groups[Math.min(Math.max(position, 0), groups.length - 1)];
   const sender = player.getPacketSender();
   sender.sendConfig(d.objectVarp, item.getId());
   sender.sendInterface(d.interfaceId);
-  sender.sendInterfaceFlagsRange(d.entries, 0, d.groups.get(group).length - 1, 2);
+  // Rev 226 recording 1686: if_setevents start=0, end=<row count>, events=[OP1, OP10].
+  sender.sendInterfaceFlagsRange(d.entries, 0, d.groups.get(group).length, (1 << 1) | (1 << 10));
   sender.sendClientScript(ITEM_TRANSMOG_INIT_SCRIPT, group);
   sessions.set(player, { container, slot, item, id: item.getId(), amount: item.getAmount(),
     meta: JSON.stringify(item.getMeta()), group });

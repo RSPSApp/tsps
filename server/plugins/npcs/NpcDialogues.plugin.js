@@ -769,7 +769,7 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
           // The native option prompt is already closed; preserve any replacement UI.
           if (hook.end) return;
         }
-        const choice = { player, npc: event.npc, npcId, definition, option: option.text, stepId: option.id };
+        const choice = { player, npc: event.npc, npcId, definition, option: option.text, stepId: option.id, pages: context.pages };
         api.emitCustomEvent("npc-dialogue:choice", choice);
         if (choice.end) return;
         context.currentMenu = menu;
@@ -938,9 +938,10 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
         const lines = Misc.wrapText(formatted, 53);
         // A typed line spoken by someone other than the NPC being talked to (a
         // paired NPC talking to them, a cutscene actor) gets that speaker's head.
-        const speakerId = request.speakerId ?? (!isPlayer && typedLine && step.speaker && step.speaker !== definition.getName()
-          ? (context.speakerIdByName?.get(step.speaker) ?? definition.getId())
-          : definition.getId());
+        // An item's own transcript has no NPC; a named speaker still gets their head.
+        const speakerId = request.speakerId ?? (!isPlayer && typedLine && step.speaker && step.speaker !== definition?.getName()
+          ? (context.speakerIdByName?.get(step.speaker) ?? definition?.getId())
+          : definition?.getId());
         if (typeof request.before === "function") {
           chain.add(new ActionDialogue(index++, { execute: () => {
             const current = manager.getCurrent?.();
@@ -1262,7 +1263,34 @@ module.exports = {
      * `select(steps)` can narrow the variant to the steps that apply (a right-click shortcut).
      * A missing variant plays the NPC's default transcript unless `exact` is set.
      */
+    /**
+     * An item's own transcript (Haunted wine bottle, Magic egg ball): no NPC speaks it, so it
+     * is named by `variant: { page, variant }` alone. Only explicit-activation records play,
+     * which the dump gives every item transcript; an NPC conversation always needs its npcId.
+     */
+    const startPage = (request) => {
+      const { data, speakerIdByName } = load();
+      const { page, variant } = request.variant ?? {};
+      const record = typeof page === "string" && Object.hasOwn(data, page) ? data[page] : undefined;
+      if (!request.player || record?.activation !== "explicit") return;
+      const steps = record.variants ? record.variants[variant]
+        : variant === "standard-dialogue" ? record.steps : undefined;
+      const selected = typeof request.select === "function" && Array.isArray(steps) ? request.select(steps) : steps;
+      if (!selected?.length) return;
+      const pageOptions = collectPageOptions(record);
+      const context = {
+        player: request.player, pages: [{ page, variants: Object.keys(record.variants ?? { "standard-dialogue": steps }) }],
+        speakerIdByName, pageOptions: pageOptions.byText, pageOptionList: pageOptions.list,
+        pageLines: collectPageLines(record), pageMenuBefore: collectMenuBefore(record, variant),
+        pageInitialMenu: collectMenuBefore(record, variant, { initial: true }),
+      };
+      const event = { player: request.player, npc: null, npcId: null, definition: null, variant: request.variant, explicit: true };
+      request.cancel = startDialogue(api, event, selected, record.branches, context);
+      request.handled = true;
+    };
+
     api.onCustomEvent("npc-dialogue:start", (request) => {
+      if (request.npcId == null && typeof request.variant?.page === "string") return startPage(request);
       const definition = NpcDefinition.forId(request.npcId);
       if (!request.player || !definition) return;
       const event = { player: request.player, npc: request.npc, npcId: request.npcId, definition, variant: request.variant, explicit: true };

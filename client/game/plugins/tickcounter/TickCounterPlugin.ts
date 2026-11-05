@@ -51,10 +51,7 @@ export class TickCounterPlugin extends Plugin {
     }
 
     onGameStateChanged(event: GameStateChanged): void {
-        const state = event.getGameState();
-        if (state === GameState.LOGGING_IN || state === GameState.HOPPING || state === GameState.LOGIN_SCREEN) {
-            this.tick = 0;
-        }
+        if (event.getGameState() !== GameState.LOGGED_IN) this.tick = 0;
     }
 
     isLoggedIn(): boolean {
@@ -62,7 +59,8 @@ export class TickCounterPlugin extends Plugin {
     }
 
     getVisibleTick(): number | undefined {
-        return this.isStarted() && this.isLoggedIn() && this.tick > 0 ? this.tick : undefined;
+        if (!this.isStarted() || !this.isLoggedIn() || this.tick <= 0) return undefined;
+        return Math.min(this.tick, this.getTicksPerCycle());
     }
 
     getTicksPerCycle(): number {

@@ -63,6 +63,7 @@ const FAVOURITE_CODE_TEXT = 151;
 /** The favourites' remove stars; component 166 is not one. */
 const FAVOURITE_STARS = [161, 162, 163, 164, 165, 167, 168, 169, 170, 171];
 const MAX_FAVOURITES = 10;
+const LOG_FAVOURITE_OP = 2;
 
 const FLOWERS_GRAPHIC = 569;
 const VANISH_ANIMATION = 3265;
@@ -415,14 +416,18 @@ function confirmDial(player) {
   fairyTeleport(player, ring, configuredRing.get(player), true);
 }
 
-/** Travel log clicks: use a code, add or remove a favourite. */
-function logAction(player, childId, option) {
+/**
+ * Travel log clicks: use a code, add or remove a favourite. The text rows have op1 "Use code" and
+ * op2 "Add Favourite"/"Remove Favourite" (rev 241 fairyrings_log); the stars have only the favourite
+ * op. Decided from the op: IF_BUTTON packets carry no menu text.
+ */
+function logAction(player, childId, op) {
   const favourites = codeList(player, FAVOURITES_ATTRIBUTE);
   const favouriteSlot = childId >= FAVOURITE_TEXT && childId < FAVOURITE_TEXT + MAX_FAVOURITES
     ? childId - FAVOURITE_TEXT
     : FAVOURITE_STARS.indexOf(childId);
   if (favouriteSlot >= 0) {
-    if (/remove/i.test(option ?? "") || FAVOURITE_STARS.includes(childId)) {
+    if (op === LOG_FAVOURITE_OP || FAVOURITE_STARS.includes(childId)) {
       favourites.splice(favouriteSlot, 1);
       player.setAttribute(FAVOURITES_ATTRIBUTE, favourites.join(","));
       sendFavourites(player);
@@ -437,7 +442,7 @@ function logAction(player, childId, option) {
   }
   const ring = ringsByComponent.get(childId);
   if (!ring) return;
-  const adding = /favourite/i.test(option ?? "") || childId === ring.starComponent;
+  const adding = op === LOG_FAVOURITE_OP || childId === ring.starComponent;
   if (!adding) {
     setDials(player, ring.code);
     return;
@@ -467,7 +472,7 @@ function interfaceAction(event) {
     }
   } else if (groupId === LOG_INTERFACE) {
     event.handled = true;
-    logAction(player, childId, event.option);
+    logAction(player, childId, event.action ?? event.opId);
   } else if (groupId === WARNING_INTERFACE) {
     event.handled = true;
     if (childId === WARNING_DONT_ASK) {

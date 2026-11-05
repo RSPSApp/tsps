@@ -63,6 +63,11 @@ function data() {
       mouldId: Shared.itemId(type.mould),
       products: type.products.map(([item, level, xp]) => [Shared.itemId(item), level, xp]),
     })),
+    slayerRing: {
+      ...gold.slayerRing,
+      mouldId: Shared.itemId(gold.slayerRing.mould),
+      products: gold.slayerRing.products.map(([gem, item]) => [Shared.itemId(gem), Shared.itemId(item)]),
+    },
     goldQuantities: quantities(gold.quantities),
     silver: new Map(silver.products.map((product) => [product.component, {
       ...product,
@@ -143,16 +148,34 @@ function storeLastItem(player, buttonId) {
   if (Number.isInteger(value) && varbitId != null) player.getPacketSender().sendVarbit(varbitId, value);
 }
 
-function goldProduct(component) {
+function goldProduct(player, component) {
   const { ItemIds: I } = Shared.getCore();
-  const { goldTypes, goldGems } = data();
-  const type = goldTypes.find(({ firstComponent }) => component >= firstComponent && component < firstComponent + goldGems.length);
+  const { goldTypes, goldGems, slayerRing } = data();
+  if (component === slayerRing.component) return slayerRingProduct(player, slayerRing);
+  const type = goldTypes.find(({ components }) => components.includes(component));
   if (!type) return null;
-  const gemIndex = component - type.firstComponent;
+  const gemIndex = type.components.indexOf(component);
   const [itemId, level, xp] = type.products[gemIndex];
   const gemId = goldGems[gemIndex];
   return { itemId, level, xp, bar: I.GOLD_BAR, mouldId: type.mouldId,
     extra: gemId === null ? [] : [gemId], amount: 1 };
+}
+
+/** Ours: the Wiki gives no message for trying it without Ring bling. */
+const SLAYER_RING_LOCKED = "You need to unlock the ability to craft slayer rings from a Slayer master.";
+
+/** 446:16: the eternal ring when an eternal gem is carried, else the enchanted-gem ring; needs Ring bling. */
+function slayerRingProduct(player, slayerRing) {
+  const { ItemIds: I, CacheDefinitions } = Shared.getCore();
+  const varbit = CacheDefinitions.getVarbitId(slayerRing.unlockVarbit);
+  if (varbit == null || player.getPacketSender().getVarbit(varbit) !== 1) {
+    player.sendMessage(SLAYER_RING_LOCKED);
+    return null;
+  }
+  const inventory = player.getInventory();
+  const [gemId, itemId] = slayerRing.products.find(([gem]) => inventory.contains(gem)) ?? slayerRing.products.at(-1);
+  return { itemId, level: slayerRing.level, xp: slayerRing.xp, bar: I.GOLD_BAR, mouldId: slayerRing.mouldId,
+    extra: [gemId], amount: 1 };
 }
 
 function silverProduct(component) {
@@ -182,7 +205,7 @@ function handleJewelleryButton(event) {
     menu.amount = amount;
     player.getPacketSender().sendConfig(MAKE_QUANTITY_VARP, amount === 28 ? 0 : amount);
   } else {
-    const product = group === GOLD_CRAFTING_INTERFACE ? goldProduct(component) : silverProduct(component);
+    const product = group === GOLD_CRAFTING_INTERFACE ? goldProduct(player, component) : silverProduct(component);
     if (product) startFurnaceProduct(player, menu, product, buttonId);
   }
 }

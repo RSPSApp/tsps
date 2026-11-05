@@ -31,6 +31,7 @@ const DROP_CHANCE = 0.5; // ours: the Wiki gives a chance, not how much
 const BALLOON_AREA = { minX: 1752, maxX: 1772, minY: 5456, maxY: 5476 }; // ours: the main room, by the chest
 
 const PIANO_GROUP = 698;
+const PIANO_CLOSE = 45; // clan_piano:close_button, a static transmit op1 "Close" (rev 241)
 const PIANO_INIT_SCRIPT = 4321; // clan_hall_piano
 const PIANO_KEYS_ENUM = 3799;
 const PARAM_KEY_COMPONENT = 1236;
@@ -276,6 +277,10 @@ function clickPiano(event) {
   if (event.groupId !== PIANO_GROUP) return;
   event.handled = true;
   const { player, groupId, childId } = event;
+  if (childId === PIANO_CLOSE) {
+    player.getPacketSender().closeInterface(PIANO_GROUP);
+    return;
+  }
   if (pianists.get(player) !== true || !player.getPacketSender().isSubInterfaceOpen(PIANO_GROUP)) return;
   const note = noteFor((groupId << 16) | childId);
   const found = hallOf(player);

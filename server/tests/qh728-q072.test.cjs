@@ -320,6 +320,24 @@ test('an interrupted spice-box unlock resumes the canonical delivery line on ret
   }
 });
 
+test('the spice box number pad close button (max int) just closes, with no wrong-code line', () => {
+  const { h, player } = route();
+  try {
+    h.hook(EMELIO, 'quest:meat-and-greet:start');
+    h.line(EMELIO, "Okay, I guess I can go see where they've got to.");
+    h.line(SPICE_MERCHANT, 'Sure thing!');
+    h.action(SPICE_MERCHANT, 'gRONbi');
+    const before = player.messages.length;
+    player.enteredAmount.execute(2147483647);
+    assert.deepEqual(player.messages.slice(before), [], 'no "The box remains locked."');
+    assert.equal(player.varbits.get(11183), 2, 'still locked');
+    player.enteredAmount.execute(1234);
+    assert.equal(player.messages.at(-1), 'The box remains locked.', 'a real wrong code still says so');
+  } finally {
+    h.restore();
+  }
+});
+
 test('full mandatory Quest Helper route dispatches stage 0 to 26', () => {
   const { h, player } = route();
   try {

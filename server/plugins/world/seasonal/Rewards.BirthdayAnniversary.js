@@ -16,11 +16,7 @@ function slotsNeeded(api, player) {
   return Data.REWARDS.length + (inventory.getAmount(jugs(api).getId()) > 0 ? 0 : 1);
 }
 function missingSlots(api, player) { return Math.max(0, slotsNeeded(api, player) - player.getInventory().getFreeSlots()); }
-/**
- * Completing the event registers the cosmetics with Diango, whether or not the hand-out
- * fits: a full inventory that misses Wizard Gary before the window closes still has them.
- */
-function unlock(api, { player }) {
+function unlock(api, player) {
   const names = api.core.CacheDefinitions.getObjNames();
   const request = { player, items: items(api).map(item => names.get(item.getId())), accepted: false };
   api.emitCustomEvent("holiday-rewards:unlock", request);
@@ -34,7 +30,19 @@ function grant(api, { player }) {
   Progress.markRewarded(player);
   for (const item of all) inventory.addItem(item);
   Progress.advance(api, player, "rewarding", "complete");
+  unlock(api, player);
+}
+/**
+ * After the window, a player who finished but never had room for the hand-out keeps the
+ * cosmetics through Diango. The reward is then settled, so a reopened window cannot hand
+ * out a second set on top of Diango's (the jugs are not Diango items and are not reissued).
+ */
+function settle(api, { player }) {
+  if (!Progress.complete(player) || Progress.rewarded(player)) return;
+  Progress.markRewarded(player);
+  Progress.advance(api, player, "rewarding", "complete");
+  unlock(api, player);
 }
 function space(api, request) { request.needed = missingSlots(api, request.player); }
 
-module.exports = { unlock, grant, space, slotsNeeded, missingSlots };
+module.exports = { grant, settle, space, slotsNeeded, missingSlots };

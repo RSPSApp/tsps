@@ -205,7 +205,6 @@ function action(api, event) {
       return;
     case "14FDSe": // "You've completed the Birthday event..."
       Progress.markComplete(api, player);
-      api.emitCustomEvent("birthday-2026:unlock", { player });
       api.emitCustomEvent("birthday-2026:reward", { player });
       return;
     case "YBX0JZ": { // "You need [number] more free inventory slots..."

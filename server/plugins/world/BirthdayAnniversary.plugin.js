@@ -16,6 +16,7 @@ function closeEvent(api) {
   Dialogue.activate({ key: Data.EVENT_KEY, active: false });
   Dialogue.cancelAll(api);
   Sync.setActive(false);
+  for (const player of api.core.World.getPlayers()) if (player?.isRegistered()) Rewards.settle(api, { player });
   // Nobody may stand in the Realm while its squares go back to the blank native map.
   for (const player of api.core.World.getPlayers()) if (player?.isRegistered() && Scene.inRealm(player.getLocation())) Interactions.leaveRealm(api, { player });
   Actors.close(api);
@@ -39,6 +40,7 @@ function calendar(api, event) {
 }
 function shutdown(api) { calendar(api, { key: Data.EVENT_KEY, active: false }); }
 function login(api, { player }) {
+  if (!Scene.active()) Rewards.settle(api, { player });
   if (!Scene.active() && Scene.inRealm(player.getLocation())) Interactions.leaveRealm(api, { player });
   Sync.safeRefresh(api, { player });
 }
@@ -65,7 +67,6 @@ module.exports = {
     api.onCustomEvent("birthday-2026:changed", Sync.safeRefresh.bind(null, api));
     api.onCustomEvent("birthday-2026:strayed", Interactions.strayed.bind(null, api));
     api.onCustomEvent("birthday-2026:arrived", Interactions.arrived.bind(null, api));
-    api.onCustomEvent("birthday-2026:unlock", Rewards.unlock.bind(null, api));
     api.onCustomEvent("birthday-2026:reward", Rewards.grant.bind(null, api));
     api.onCustomEvent("birthday-2026:reward-space", Rewards.space.bind(null, api));
     api.onCanSpawnNpc(Actors.vetoNative.bind(null, api));

@@ -145,7 +145,9 @@ here; this is an approximation, not the exact OSRS formula.
   "Tempoross is drawing in water, prepare yourselves!"; +2 script 4068 (300); +13 the wave hits:
   tethered players get "...the rope keeps you securely upright as the wave washes over you."
   and 10 points, Tempoross is 10572 again with seq `fsb_spawn`, water splashes (1843) and debris
-  locs 41292-41295 appear. Untethering sends script 4069 (60).
+  locs 41292-41295 appear. Untethering sends script 4069 (60). If Tempoross submerges before
+  the hit, there is no hit, but everyone still gets 4069 so the overlay closes (no capture of
+  that case).
 - **Lightning:** "A strong wind blows as clouds roll in..." (red); a cloud's shadow
   (41006) shows below it; +13 Tempoross plays `fsb_lightening_cast` (8905); then fires (NPC 8643 "Fire" with loc 37582 on its 2x2) start.
 - **Surfacing:** the first rise plays `fsb_spawn` (8897); every rise after a submerge plays
@@ -191,7 +193,7 @@ here; this is an approximation, not the exact OSRS formula.
 | Standing in a fire | every 2 ticks: "You lose some <col=ff9e7a>fish</col> and a <col=ff9e7a>Bucket</col> to the fire." (the items lost named in that colour) |
 | Harpoon a spirit pool | "You start harpooning fish."; per scatter "The glowing fish scatter, shedding their magical scales.", +55 points |
 | A supply crate | "You take a Hammer from the crate." / "You take some Buckets from the crate." |
-| Fill-bucket at a pump | "You fill the bucket with water." |
+| Fill-bucket at a pump | one bucket a tick until none are empty, each with `human_pickuptable`, sound 4950 and "You fill the bucket with water." (captures 552, 1858) |
 | Points reach 2,000 | "You have earned enough points for a reward permit." |
 | Ferry (Sathwood) | fade, +4 teleport to (3148, 2842), "You ride the little boat south to the Ruins of Unkah.", jingle 171, sound 2163 |
 | Ferry (Nathwood) | +3 teleport to (3272, 3143), "You ride the little boat north to Al Kharid." |
@@ -238,8 +240,9 @@ cooks half the catch, so their fishing is quicker than on a normal world:
   if any; its message to a loader ("The surge of lightning arcs from the cannon into you...")
   is the Wiki's trivia line. Its 1842 projectile has no captured heights, so it flies from the
   boss's water-pillar height (90, the cannon shot's captured end) down to the deck; a loader is
-  stunned with the cache's generic `human_stunned`/`stunned` pair for the cannon's 24-tick
-  disable (both inferred).
+  stunned with `human_stunned` and the circling stars `stunned_thieving` (245, captured on the
+  struck cannon's cannoneer in 552) and held for the stars' 8 ticks (seq 1054), not the cannon's
+  24-tick disable. No capture shows a stunned player, so the length is inferred.
 - **Spirit pool damage:** 10-120 a scatter (the Wiki's maximum of 12, ten times over).
 - **Energy regeneration for a crew:** every captured fight is solo (35 a tick of 2683). Ours
   scales it with the maximum, so any crew gets the same 77 ticks; a flat 35 gave a crew of

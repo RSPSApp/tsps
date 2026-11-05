@@ -114,3 +114,24 @@ test("a server sequence steps only through the client cycles after the one it ar
         setClientCycleProvider(undefined);
     }
 });
+
+test("NPC movement uses the visible morph's sequences in WebGL and WebGPU", async () => {
+    const { resolveNpcMovementSequenceIds: webgl } = await import("../render/render/anim/npc");
+    const { resolveNpcMovementSequenceIds: webgpu } = await import("../render/webgpu/actors/actorPacking");
+    const normal = { getMovementSeqSet: () => ({ idle: 808, walk: 819 }) };
+    const colin = { getMovementSeqSet: () => ({ idle: 808, walk: 819 }) };
+    let visible: any = colin;
+    const base = { transforms: [7967], transform: () => visible, getMovementSeqSet: () => ({ idle: 808, walk: 808 }) };
+    const client = { npcTypeLoader: { load: (id: number) => id === 7980 ? base : normal }, varManager: {}, basTypeLoader: {} } as any;
+    const host = { osrsClient: client, getEffectiveNpcType: (id: number) => id === 7980 ? visible : normal } as any;
+    const ecs = { getNpcTypeId: () => 7980, getMovementOverrides: () => ({}), getPathLengthLike: () => 1, getCurrentStepRot: () => undefined } as any;
+    for (const resolve of [() => webgl(host, ecs, 1), () => webgpu(client, ecs, 1)]) {
+        assert.equal(resolve().movementSeqId, 819, "visible Colin walks using his own sequence");
+        visible = undefined;
+        assert.equal(resolve().movementSeqId, -1, "hidden morph has no sequence");
+        visible = colin;
+    }
+    ecs.getNpcTypeId = () => 5;
+    assert.equal(webgl(host, ecs, 1).movementSeqId, 819, "ordinary NPC remains unchanged");
+    assert.equal(webgpu(client, ecs, 1).movementSeqId, 819, "ordinary NPC remains unchanged");
+});

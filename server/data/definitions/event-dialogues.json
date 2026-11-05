@@ -9069,6 +9069,1062 @@
       ]
     }
   },
+  "2026 Easter event": {
+    "default": null,
+    "variants": {
+      "starting-the-event-talking-to-the-easter-bunny": [
+        {
+          "player": "Hello there, Easter Bunny. Is everything alright?"
+        },
+        {
+          "type": "line",
+          "speaker": "Easter Bunny",
+          "text": "Oh my, oh my!"
+        },
+        {
+          "player": "What's wrong?"
+        },
+        {
+          "type": "line",
+          "speaker": "Easter Bunny",
+          "text": "No, no. This can't be happening!"
+        },
+        {
+          "player": "Take a deep breath, calm down. Tell me what's wrong."
+        },
+        {
+          "type": "line",
+          "speaker": "Easter Bunny",
+          "text": "I thought for once everything would run as smooth as milk chocolate."
+        },
+        {
+          "type": "line",
+          "speaker": "Easter Bunny",
+          "text": "I had everything prepared! The eggs, the baskets - I even straightened my ears before I got here."
+        },
+        {
+          "player": "Straightened your ears? How would you even-"
+        },
+        {
+          "type": "line",
+          "speaker": "Easter Bunny",
+          "text": "And then disaster struck! I counted my eggs backwards, forwards, upside-down and up, but alas... One is missing."
+        },
+        {
+          "player": "Are you sure you brought the right amount?"
+        },
+        {
+          "type": "line",
+          "speaker": "Easter Bunny",
+          "text": "Absolutely! I have an entire year to plan for Easter. What do you think I do when I'm not here celebrating with you?"
+        },
+        {
+          "player": "Well, I suppose I never thought about that."
+        },
+        {
+          "type": "line",
+          "speaker": "Easter Bunny",
+          "text": "I'm at home, painting and counting eggs, of course! And tending to my chickens."
+        },
+        {
+          "type": "line",
+          "speaker": "Easter Bunny",
+          "text": "Oh, I can't stomach this. [player name], won't you help me find the missing egg?"
+        },
+        {
+          "type": "choice",
+          "prompt": "Start the Easter event?",
+          "options": [
+            {
+              "text": "Yes.",
+              "steps": [
+                {
+                  "type": "line",
+                  "speaker": "Easter Bunny",
+                  "text": "Thank you! Archibald left a note before he left. It may help you find him. It's on a table just over there."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Easter Bunny",
+                  "text": "He is a curious one. Whenever he hears of interesting places, he tends to want to go there."
+                },
+                {
+                  "player": "Archibald? You named the egg?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Easter Bunny",
+                  "text": "Of course. I name all my eggs. There's also Eggward, Eggon, Leggolas and Greggory, to name a few."
+                },
+                {
+                  "player": "And you teach them to write, too?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Easter Bunny",
+                  "text": "--The Easter Bunny winks at you.--"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Easter Bunny",
+                  "text": "Go on now, before he travels too far!"
+                },
+                {
+                  "player": "Guess I'm off to chase an egg."
+                }
+              ]
+            },
+            {
+              "text": "No.",
+              "steps": [
+                {
+                  "player": "I don't have time at the moment, sorry."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Easter Bunny",
+                  "text": "Oh Archibald, oh Archibald. Wheresoever art thou, Archibald?"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "starting-the-event-searching-the-note-on-a-table-before-starting-the-event": [
+        {
+          "player": "I should probably talk to the Easter Bunny before I take anything."
+        }
+      ],
+      "starting-the-event-searching-the-note-on-a-table-after-starting-the-event": [
+        {
+          "type": "condition",
+          "text": "If the player has no inventory space:",
+          "steps": [
+            {
+              "type": "message",
+              "text": "You don't have enough space to pick up the note.",
+              "id": "wPqvP1"
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "EDAN11"
+        },
+        {
+          "type": "message",
+          "text": "You pick up the note left by Archibald.",
+          "id": "j82ekL"
+        }
+      ],
+      "the-hunt-for-archibald-talking-to-the-easter-bunny-before-reading-the-notes": [
+        {
+          "type": "line",
+          "speaker": "Easter Bunny",
+          "text": "Did you have a look at the note?"
+        },
+        {
+          "player": "Not yet, no."
+        },
+        {
+          "type": "line",
+          "speaker": "Easter Bunny",
+          "text": "It's on a table just over there, you should take it and give it a read."
+        },
+        {
+          "player": "Ok!"
+        }
+      ],
+      "the-hunt-for-archibald-talking-to-the-easter-bunny-after-losing-the-notes": [
+        {
+          "player": "I lost the notes."
+        },
+        {
+          "type": "condition",
+          "text": "If the player has no inventory space:",
+          "steps": [
+            {
+              "type": "line",
+              "speaker": "Easter Bunny",
+              "text": "Thats okay, I made some copies but you'll need to make some space to be able to take them."
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "0B-vEh"
+        },
+        {
+          "type": "line",
+          "speaker": "Easter Bunny",
+          "text": "Thats okay, I made some copies so here you go."
+        }
+      ],
+      "the-hunt-for-archibald-talking-to-the-easter-bunny-after-picking-up-the-first-note": [
+        {
+          "player": "Can you help me understand where Archibald is?"
+        },
+        {
+          "type": "line",
+          "speaker": "Easter Bunny",
+          "text": "Certainly, let me see what Archibald has left you with..."
+        },
+        {
+          "type": "condition",
+          "text": "If the player has not read the note yet:",
+          "steps": [
+            {
+              "type": "line",
+              "speaker": "Easter Bunny",
+              "text": "You should read the note Archibald left you."
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "_xRQOL"
+        },
+        {
+          "type": "condition",
+          "text": "If the player has already read the note:",
+          "steps": [
+            {
+              "type": "line",
+              "speaker": "Easter Bunny",
+              "text": "It sounds like you must seek out a potion maker. Try in west Varrock."
+            }
+          ],
+          "id": "a54HiJ"
+        }
+      ],
+      "the-hunt-for-archibald-searching-the-apothecary-s-bookshelf": [
+        {
+          "type": "condition",
+          "text": "If the player does not have both hands free:",
+          "steps": [
+            {
+              "type": "message",
+              "text": "You need both hands free to catch Archibald.",
+              "id": "MDWzgu"
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "fmcDgK"
+        },
+        {
+          "type": "condition",
+          "text": "If the player has no inventory space:",
+          "steps": [
+            {
+              "type": "message",
+              "text": "You don't have enough space to pick up Archibald.",
+              "id": "xE7pY9"
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "aD8b2t"
+        },
+        {
+          "type": "message",
+          "text": "As you reach for Archibald, he tumbles away. You pick up the note he left behind.",
+          "id": "UW6vn2"
+        }
+      ],
+      "the-hunt-for-archibald-talking-to-the-easter-bunny-after-picking-up-the-second-note": [
+        {
+          "player": "Can you help me understand where Archibald is?"
+        },
+        {
+          "type": "line",
+          "speaker": "Easter Bunny",
+          "text": "Certainly, let me see what Archibald has left you with..."
+        },
+        {
+          "type": "condition",
+          "text": "If the player has not read the note yet:",
+          "steps": [
+            {
+              "type": "line",
+              "speaker": "Easter Bunny",
+              "text": "A bendy stick? Sounds like some sort of weapon. Try one of the shops near the centre of Varrock."
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "E993zC"
+        },
+        {
+          "type": "condition",
+          "text": "If the player has already read the note:",
+          "steps": [
+            {
+              "type": "line",
+              "speaker": "Easter Bunny",
+              "text": "Ah, an egg box. The solution is usually near where you found it. Try searching the Archery shop for clues."
+            }
+          ],
+          "id": "MFaVO8"
+        }
+      ],
+      "the-hunt-for-archibald-searching-lowe-s-stepladder": [
+        {
+          "type": "condition",
+          "text": "If the player does not have both hands free:",
+          "steps": [
+            {
+              "type": "message",
+              "text": "You need both hands free to catch Archibald.",
+              "id": "mj8pjn"
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "gTlt87"
+        },
+        {
+          "type": "condition",
+          "text": "If the player has no inventory space:",
+          "steps": [
+            {
+              "type": "message",
+              "text": "You don't have enough space to pick up Archibald.",
+              "id": "O7KaKG"
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "sgzsjm"
+        },
+        {
+          "type": "message",
+          "text": "You find a wooden egg that needs to be unlocked.",
+          "id": "1XnoZw"
+        }
+      ],
+      "the-hunt-for-archibald-opening-the-locked-egg-with-the-wrong-password": [
+        {
+          "type": "message",
+          "text": "That didn't seem to work.",
+          "id": "fjWH9D"
+        }
+      ],
+      "the-hunt-for-archibald-opening-the-locked-egg-with-the-correct-password": [
+        {
+          "type": "message",
+          "text": "You manage to open the egg and inside you find a note.",
+          "id": "WB09CY"
+        }
+      ],
+      "the-hunt-for-archibald-talking-to-the-easter-bunny-after-picking-up-the-third-note": [
+        {
+          "player": "Can you help me understand where Archibald is?"
+        },
+        {
+          "type": "line",
+          "speaker": "Easter Bunny",
+          "text": "Certainly, let me see what Archibald has left you with..."
+        },
+        {
+          "type": "condition",
+          "text": "If the player has not read the note yet:",
+          "steps": [
+            {
+              "type": "line",
+              "speaker": "Easter Bunny",
+              "text": "You should read the note Archibald left you. It came from the egg box in the Archery shop in west Varrock."
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "i1wBvQ"
+        },
+        {
+          "type": "condition",
+          "text": "If the player has already read the note:",
+          "steps": [
+            {
+              "type": "line",
+              "speaker": "Easter Bunny",
+              "text": "Archibald always liked a good view and the sound of church bells. I hear north east Varrock may be good."
+            }
+          ],
+          "id": "TXETO1"
+        }
+      ],
+      "the-hunt-for-archibald-searching-the-wall-on-top-of-the-varrock-church": [
+        {
+          "type": "condition",
+          "text": "If the player isn't holding the scribbled notes:",
+          "steps": [
+            {
+              "type": "message",
+              "text": "I should bring my notes with me incase I need them.",
+              "id": "qtKj7L"
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "VUri4t"
+        },
+        {
+          "type": "condition",
+          "text": "If the player is holding the scribbled notes:",
+          "steps": [
+            {
+              "player": "Aha, this time I got you."
+            },
+            {
+              "type": "action",
+              "text": "Archibald tips slowly off the wall",
+              "id": "wYl5d6"
+            },
+            {
+              "player": "Here we go again."
+            },
+            {
+              "type": "message",
+              "text": "You pick up the note left behind by Archibald after his escape.",
+              "id": "09C7NQ"
+            }
+          ],
+          "id": "RBfPN1"
+        }
+      ],
+      "the-hunt-for-archibald-talking-to-the-easter-bunny-after-picking-up-the-fourth-note": [
+        {
+          "player": "Can you help me understand where Archibald is?"
+        },
+        {
+          "type": "line",
+          "speaker": "Easter Bunny",
+          "text": "Certainly, let me see what Archibald has left you with..."
+        },
+        {
+          "type": "condition",
+          "text": "If the player has not read the note yet:",
+          "steps": [
+            {
+              "type": "line",
+              "speaker": "Easter Bunny",
+              "text": "You should read the note Archibald left you at the top of the church in north east Varrock."
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "gZHLu4"
+        },
+        {
+          "type": "condition",
+          "text": "If the player has already read the note:",
+          "steps": [
+            {
+              "type": "line",
+              "speaker": "Easter Bunny",
+              "text": "A shiny, pointy stick is likely another weapon. Try the shops in central Varrock."
+            }
+          ],
+          "id": "LJpoqH"
+        }
+      ],
+      "the-hunt-for-archibald-searching-the-varrock-swordshop-table": [
+        {
+          "type": "condition",
+          "text": "If the player does not have both hands free:",
+          "steps": [
+            {
+              "type": "message",
+              "text": "You need both hands free to catch Archibald.",
+              "id": "A0x326"
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "C_cK11"
+        },
+        {
+          "type": "condition",
+          "text": "If the player has no inventory space:",
+          "steps": [
+            {
+              "type": "message",
+              "text": "You don't have enough space to pick up Archibald.",
+              "id": "0sdO1e"
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "LwdRh3"
+        },
+        {
+          "type": "message",
+          "text": "You find Archibald, but before you could grab him, he tumbles away once more. You grab the note he left behind.",
+          "id": "jnLauK"
+        }
+      ],
+      "the-hunt-for-archibald-talking-to-the-easter-bunny-after-picking-up-the-fifth-note": [
+        {
+          "player": "Can you help me understand where Archibald is?"
+        },
+        {
+          "type": "line",
+          "speaker": "Easter Bunny",
+          "text": "Certainly, let me see what Archibald has left you with..."
+        },
+        {
+          "type": "condition",
+          "text": "If the player has not read the note yet:",
+          "steps": [
+            {
+              "type": "line",
+              "speaker": "Easter Bunny",
+              "text": "You should read the note Archibald left you at the sword shop in central Varrock."
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "yV80s1"
+        },
+        {
+          "type": "condition",
+          "text": "If the player has already read the note:",
+          "steps": [
+            {
+              "type": "line",
+              "speaker": "Easter Bunny",
+              "text": "Rumours say Zamorakians hang out in south east Varrock. Maybe try there?"
+            }
+          ],
+          "id": "V2MAD4"
+        }
+      ],
+      "the-hunt-for-archibald-searching-the-chair-in-the-zamorakian-chapel": [
+        {
+          "type": "condition",
+          "text": "If the player does not have both hands free:",
+          "steps": [
+            {
+              "type": "message",
+              "text": "You need both hands free to catch Archibald.",
+              "id": "MJQfN0"
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "OFDRyt"
+        },
+        {
+          "type": "condition",
+          "text": "If the player has no inventory space:",
+          "steps": [
+            {
+              "type": "message",
+              "text": "You don't have enough space to pick up Archibald.",
+              "id": "tdgu2h"
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "9TEDoH"
+        },
+        {
+          "type": "message",
+          "text": "You find Archibald, but he swiftly tumbles out of your hands. You spot an anagram he left behind and pick it up.",
+          "id": "SnYLyp"
+        }
+      ],
+      "the-hunt-for-archibald-talking-to-the-easter-bunny-after-picking-up-the-sixth-note": [
+        {
+          "player": "Can you help me understand where Archibald is?"
+        },
+        {
+          "type": "line",
+          "speaker": "Easter Bunny",
+          "text": "Certainly, let me see what Archibald has left you with..."
+        },
+        {
+          "type": "condition",
+          "text": "If the player has not read the note yet:",
+          "steps": [
+            {
+              "type": "line",
+              "speaker": "Easter Bunny",
+              "text": "You should read the note Archibald left you at the Zamorakian chapel in south east Varrock."
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "g061HE"
+        },
+        {
+          "type": "condition",
+          "text": "If the player has already read the note:",
+          "steps": [
+            {
+              "type": "line",
+              "speaker": "Easter Bunny",
+              "text": "An anagram, huh? I bet it's a location in Varrock. Probably an inn - that's where I would go."
+            }
+          ],
+          "id": "uNZhy1"
+        }
+      ],
+      "the-hunt-for-archibald-searching-the-bed-in-the-blue-moon-inn": [
+        {
+          "type": "condition",
+          "text": "If the player does not have both hands free:",
+          "steps": [
+            {
+              "type": "message",
+              "text": "You need both hands free to catch Archibald.",
+              "id": "WkXpJ8"
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "9HX24h"
+        },
+        {
+          "type": "condition",
+          "text": "If the player has no inventory space:",
+          "steps": [
+            {
+              "type": "message",
+              "text": "You don't have enough space to pick up Archibald.",
+              "id": "Z6GN9S"
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "GbsRSQ"
+        },
+        {
+          "type": "message",
+          "text": "You find a decoy egg.",
+          "id": "Pjjn96"
+        }
+      ],
+      "the-hunt-for-archibald-opening-the-decoy-egg": [
+        {
+          "type": "message",
+          "text": "You open the egg and inside you find a note.",
+          "id": "YdWi-2"
+        }
+      ],
+      "the-hunt-for-archibald-talking-to-the-easter-bunny-after-picking-up-the-seventh-note": [
+        {
+          "player": "Can you help me understand where Archibald is?"
+        },
+        {
+          "type": "line",
+          "speaker": "Easter Bunny",
+          "text": "Certainly, let me see what Archibald has left you with..."
+        },
+        {
+          "type": "condition",
+          "text": "If the player has not read the note yet:",
+          "steps": [
+            {
+              "type": "line",
+              "speaker": "Easter Bunny",
+              "text": "You should read the note Archibald left you at the Blue Moon Inn in the south of Varrock."
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "-_cFtE"
+        },
+        {
+          "type": "condition",
+          "text": "If the player has already read the note:",
+          "steps": [
+            {
+              "type": "line",
+              "speaker": "Easter Bunny",
+              "text": "There's only one king around these parts. He lives in Varrock Palace."
+            }
+          ],
+          "id": "shQA97"
+        }
+      ],
+      "the-hunt-for-archibald-searching-the-suit-of-armour-in-varrock-palace": [
+        {
+          "type": "condition",
+          "text": "If the player does not have both hands free:",
+          "steps": [
+            {
+              "type": "message",
+              "text": "You need both hands free to catch Archibald.",
+              "id": "pTmKWT"
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "xjvd4j"
+        },
+        {
+          "type": "condition",
+          "text": "If the player has no inventory space:",
+          "steps": [
+            {
+              "type": "message",
+              "text": "You don't have enough space to pick up Archibald.",
+              "id": "vS7iKP"
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "334xli"
+        },
+        {
+          "type": "message",
+          "text": "You find Archibald. You look away for a split second, but he's gone again. You grab the note he left behind.",
+          "id": "N62OqQ"
+        }
+      ],
+      "the-hunt-for-archibald-talking-to-the-easter-bunny-after-picking-up-the-eighth-note": [
+        {
+          "player": "Can you help me understand where Archibald is?"
+        },
+        {
+          "type": "line",
+          "speaker": "Easter Bunny",
+          "text": "Certainly, let me see what Archibald has left you with..."
+        },
+        {
+          "type": "condition",
+          "text": "If the player has not read the note yet:",
+          "steps": [
+            {
+              "type": "line",
+              "speaker": "Easter Bunny",
+              "text": "You should read the note Archibald left you at the throne room in Varrock Palace."
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "tCLQZW"
+        },
+        {
+          "type": "condition",
+          "text": "If the player has already read the note:",
+          "steps": [
+            {
+              "type": "line",
+              "speaker": "Easter Bunny",
+              "text": "I remember seeing a massive vault under the bank here in west Varrock."
+            }
+          ],
+          "id": "nD87uj"
+        }
+      ],
+      "the-hunt-for-archibald-catching-archibald-in-the-varrock-west-bank-basement": [
+        {
+          "type": "condition",
+          "text": "If the player does not have both hands free:",
+          "steps": [
+            {
+              "type": "message",
+              "text": "You need both hands free to catch Archibald.",
+              "id": "Z0bLU9"
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "rruHIZ"
+        },
+        {
+          "type": "condition",
+          "text": "If the player has no inventory space:",
+          "steps": [
+            {
+              "type": "message",
+              "text": "You don't have enough space to pick up Archibald.",
+              "id": "JGyJI7"
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "E9BEO9"
+        },
+        {
+          "player": "Got you! You're not getting away this time!"
+        }
+      ],
+      "the-hunt-for-archibald-talking-to-the-easter-bunny-after-finding-archibald-but-without-him-in-your-inventory": [
+        {
+          "type": "line",
+          "speaker": "Easter Bunny",
+          "text": "Did you find Archibald yet?"
+        },
+        {
+          "player": "Not yet."
+        }
+      ],
+      "the-hunt-for-archibald-talking-to-the-easter-bunny-with-archibald-in-your-inventory": [
+        {
+          "player": "I found the e- I mean, Archibald."
+        },
+        {
+          "type": "line",
+          "speaker": "Easter Bunny",
+          "text": "Amazing! Archibald, my beloved. Didn't I tell you not to go running off like that?"
+        },
+        {
+          "type": "line",
+          "speaker": "Archibald",
+          "text": "--Archibald appears to whisper something intangible to the Easter Bunny.--"
+        },
+        {
+          "type": "line",
+          "speaker": "Easter Bunny",
+          "text": "Really? Is that so?"
+        },
+        {
+          "type": "line",
+          "speaker": "Archibald",
+          "text": "--Archibald nods to the Easter Bunny.--"
+        },
+        {
+          "type": "line",
+          "speaker": "Easter Bunny",
+          "text": "Thank you for finding Archibald, [player name]!"
+        },
+        {
+          "type": "line",
+          "speaker": "Easter Bunny",
+          "text": "I have something fun for you."
+        },
+        {
+          "type": "condition",
+          "text": "If the player has insufficient inventory space:",
+          "steps": [
+            {
+              "type": "message",
+              "text": "You need [1/2] more free inventory [slot/slots] to receive your Easter event rewards.",
+              "id": "aKCOUt"
+            },
+            {
+              "type": "line",
+              "speaker": "Easter Bunny",
+              "text": "Come back when you have more space in your inventory."
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "Fi6u_n"
+        },
+        {
+          "type": "action",
+          "text": "Event completion screen pops up.",
+          "id": "FyFpyU"
+        },
+        {
+          "type": "line",
+          "speaker": "Easter Bunny",
+          "text": "Archibald enjoyed your adventure so much that he'd like to travel with you."
+        }
+      ],
+      "the-hunt-for-archibald-talking-to-the-easter-bunny-before-claiming-the-rewards": [
+        {
+          "type": "line",
+          "speaker": "Easter Bunny",
+          "text": "Thank you for finding Archibald, [player name]!"
+        },
+        {
+          "type": "jump",
+          "id": "r9vRBO",
+          "steps": [
+            {
+              "type": "call",
+              "branch": "jump-4d7b17ad91a6b2ba"
+            }
+          ]
+        }
+      ],
+      "post-event-talking-to-the-easter-bunny": [
+        {
+          "type": "line",
+          "speaker": "Easter Bunny",
+          "text": "Thank you again for finding Archibald, [player name]!"
+        },
+        {
+          "player": "You're very welcome."
+        },
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "What are you going to do now?",
+              "steps": [
+                {
+                  "player": "What are you going to do now?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Easter Bunny",
+                  "text": "My eggs and I are going to spread the Easter cheer to the fine city of Varrock."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Easter Bunny",
+                  "text": "Many people grow up without chocolate, you know. It's just not right."
+                },
+                {
+                  "player": "So true. What has the world come to?"
+                },
+                {
+                  "type": "jump",
+                  "reference": "other",
+                  "id": "xkiWUZ"
+                }
+              ]
+            },
+            {
+              "text": "Why did you decide to celebrate Easter in Varrock?",
+              "steps": [
+                {
+                  "player": "Why did you decide to celebrate Easter in Varrock?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Easter Bunny",
+                  "text": "All of Gielinor deserve to celebrate Easter. I figured Varrock is a particularly busy place."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Easter Bunny",
+                  "text": "By positioning myself here I maximise my CTPOTR."
+                },
+                {
+                  "player": "C.. T.. what?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Easter Bunny",
+                  "text": "CTPOTR. Chocolate to person over time ratio. You need to maximise your reach and minimise time spent, to optimise value."
+                },
+                {
+                  "player": "I see. I never realised how seriously you took this."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Easter Bunny",
+                  "text": "Of course. Easter only happens once a year. I have to make the most out of it."
+                },
+                {
+                  "type": "jump",
+                  "reference": "other",
+                  "id": "qW2LAv"
+                }
+              ]
+            },
+            {
+              "text": "Can you tell me more about the Easter eggs?",
+              "steps": [
+                {
+                  "player": "Can you tell me more about the Easter eggs?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Easter Bunny",
+                  "text": "The eggs are a family tradition. Hatching them, caring for them, watching them develop. This is the job of an Easter Bunny."
+                },
+                {
+                  "player": "Hold on. Are you saying there are more Easter bunnies?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Easter Bunny",
+                  "text": "Oh yes, my mother was one. And my father. And their parents before them."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Easter Bunny",
+                  "text": "Maybe one day you can become one too!"
+                },
+                {
+                  "player": "I'm more of an adventurer-type person, myself."
+                },
+                {
+                  "type": "jump",
+                  "reference": "other",
+                  "id": "U7eyQf"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "activation": "explicit",
+    "branches": {
+      "jump-4d7b17ad91a6b2ba": [
+        {
+          "type": "line",
+          "speaker": "Easter Bunny",
+          "text": "I have something fun for you."
+        },
+        {
+          "type": "condition",
+          "text": "If the player has insufficient inventory space:",
+          "steps": [
+            {
+              "type": "message",
+              "text": "You need [1/2] more free inventory [slot/slots] to receive your Easter event rewards.",
+              "id": "aKCOUt"
+            },
+            {
+              "type": "line",
+              "speaker": "Easter Bunny",
+              "text": "Come back when you have more space in your inventory."
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "Fi6u_n"
+        },
+        {
+          "type": "action",
+          "text": "Event completion screen pops up.",
+          "id": "FyFpyU"
+        },
+        {
+          "type": "line",
+          "speaker": "Easter Bunny",
+          "text": "Archibald enjoyed your adventure so much that he'd like to travel with you."
+        },
+        {
+          "type": "end"
+        }
+      ]
+    }
+  },
   "25th Anniversary event": {
     "default": "starting-off",
     "variants": {

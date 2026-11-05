@@ -7,5 +7,11 @@
       { "start": "2025-12-10T00:00:00Z", "end": "2026-01-07T00:00:00Z" },
       { "start": "2026-12-10T00:00:00Z", "end": "2027-01-07T00:00:00Z" }
     ]
+  },
+  {
+    "key": "easter-2026",
+    "enabled": true,
+    "source": "Wiki 2026 Easter event: 25 March to 23 April 2026. Easter's date moves each year, so no later window is guessed.",
+    "windows": [{ "start": "2026-03-25T00:00:00Z", "end": "2026-04-23T00:00:00Z" }]
   }
 ]

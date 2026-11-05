@@ -95,7 +95,9 @@ function met(event) {
 }
 
 function openFromDialogue(event) {
-  if (!isForester(event) || event.action !== "open_interface" || event.target !== "Forestry Shop") return;
+  // osrsreboxed-db exports the Forestry Shop as a named shop (open_shop); it is a native
+  // interface here, not a ShopDefinition, so the dialogue runtime hands the step on.
+  if (!isForester(event) || event.action !== "open_shop" || event.target !== "Forestry Shop") return;
   event.handled = true;
   event.end = true;
   const { player } = event;

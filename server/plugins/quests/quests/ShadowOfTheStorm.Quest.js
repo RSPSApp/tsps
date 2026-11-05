@@ -30,7 +30,7 @@
  * "Search" to their runtime definition (MCP sees it, a stock client cache does
  * not) and re-applies it after startup on login/bootstrap; the ritual page's
  * single 5-word menu is expanded into the captured five picks; the rug
- * merchant's sandstorm dialogue and reading the tome are not wired; "black"
+ * merchant's sandstorm dialogue is not wired; "black"
  * clothing is recognised by item name rather than an exhaustive list; the Tanya
  * portal-closing and summoning camera/shake/actor beats follow the capture
  * through QuestScenes, but not every cosmetic sound; cancelling the reward skill
@@ -62,7 +62,7 @@ module.exports = function registerShadowOfTheStormQuest(api) {
     StatementDialogue,
     TaskManager,
   } = api.core;
-  const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
+  const { registerQuest, refreshQuestList, startTranscript, startDialogue, openBook } = require("../QuestRuntime");
   const { createQuestScenes } = require("../QuestScenes");
 
   const PAGE = "Shadow of the Storm";
@@ -149,17 +149,34 @@ module.exports = function registerShadowOfTheStormQuest(api) {
   /** Every form of the sword: having any of them means Reen has nothing to replace. */
   const SILVERLIGHT_FORMS = [SILVERLIGHT_ITEM_ID, DYED_SILVERLIGHT_ITEM_ID, DARKLIGHT_ITEM_ID];
   /**
-   * Black mushroom ink dyes desert clothing (Wiki, Black mushroom ink). The message follows the
-   * captured goblin mail dye ("You dye the goblin mail black.", synth_sound 2392).
+   * Black mushroom ink's clothing recipes (Wiki, Black mushroom ink). The message follows the
+   * captured goblin mail dye ("You dye the goblin mail black.", synth_sound 2392); the name in it
+   * is ours for capes, robes and hats. Each recipe gives 2.5 Crafting XP. The Wiki is uneven on
+   * the vial: the Black cape page lists one back, the Wizard hat, Black robe and Black desert pages
+   * don't, and the captured goblin mail (rsprox 1694, tick 1001) has none. This follows each page.
    */
   const BLACK_DYEABLE_CLOTHING = new Map([
     [ItemIdentifiers.DESERT_SHIRT, { result: ItemIdentifiers.BLACK_DESERT_SHIRT, name: "desert shirt" }], // 1833 -> 6750
     [ItemIdentifiers.DESERT_ROBE, { result: ItemIdentifiers.BLACK_DESERT_ROBE, name: "desert robe" }], // 1835 -> 6752
+    ...[
+      ItemIdentifiers.GREEN_CAPE, ItemIdentifiers.RED_CAPE, ItemIdentifiers.BLUE_CAPE, ItemIdentifiers.ORANGE_CAPE,
+      ItemIdentifiers.PINK_CAPE, ItemIdentifiers.PURPLE_CAPE, ItemIdentifiers.YELLOW_CAPE,
+    ].map((cape) => [cape, { result: ItemIdentifiers.BLACK_CAPE, name: "cape", vial: true }]),
+    [ItemIdentifiers.BLUE_WIZARD_ROBE, { result: ItemIdentifiers.BLACK_ROBE, name: "robe" }],
+    [ItemIdentifiers.BLUE_WIZARD_HAT, { result: ItemIdentifiers.WIZARD_HAT, name: "hat" }],
   ]);
   const DYE_SOUND = 2392;
+  const DYE_CRAFTING_XP = 2.5;
   const DEMONIC_SIGIL_MOULD_ITEM_ID = ItemIdentifiers.DEMONIC_SIGIL_MOULD; // 6747
   const DEMONIC_SIGIL_ITEM_ID = ItemIdentifiers.DEMONIC_SIGIL; // 6748
   const DEMONIC_TOME_ITEM_ID = ItemIdentifiers.DEMONIC_TOME; // 6749
+  const TOME_TITLE = "The Confession of Ellemar";
+  const SEQ_READ_BOOK = 1350; // Rsprox 3333 tick 1976, as the book opens.
+  /**
+   * Spread 1 as captured (rsprox 3333, tick 1976). The rest is the Wiki's Transcript:Demonic tome
+   * wrapped to the same book, as no capture turns the page; the line breaks there are ours.
+   */
+  const TOME_PAGES = require("../data/shadow-of-the-storm-tome.json");
   const STRANGE_IMPLEMENT_ITEM_ID = ItemIdentifiers.STRANGE_IMPLEMENT; // 4619
   const BLACK_MUSHROOM_ITEM_ID = ItemIdentifiers.BLACK_MUSHROOM; // 4620
   const BLACK_DYE_ITEM_ID = ItemIdentifiers.BLACK_DYE; // 4622 "Black mushroom ink"
@@ -262,6 +279,13 @@ module.exports = function registerShadowOfTheStormQuest(api) {
     { key: "golem", id: NpcIdentifiers.CLAY_GOLEM_2, x: 2723, y: 4900 },
   ];
 
+  const CAST_SCATTER = {
+    reen: [2721, 4891], badden: [2722, 4896], dave: [2713, 4894],
+    jennifer: [2716, 4898], patrick: [2712, 4894], golem: [2726, 4896],
+  };
+  const CAST_SCATTER_TICKS = 10;
+  const CAST_WANDER_RADIUS = 8;
+
   // Capture 3333: the instanced throne room is a copy of source plane 2 with these
   // standing torches, fire remains and campsite beds placed into it (t2017, t2362).
   const AGRITH_PORTAL_CLOSING_OBJECT_ID = 10251;
@@ -303,6 +327,7 @@ module.exports = function registerShadowOfTheStormQuest(api) {
   const SEQ_GHOST_ATTACK = 5532; // ghost_update_normal_attack
   const SEQ_AGRITH_SUMMONED = 4623; // qip_ds_delrith_summoned
   const SEQ_DENATH_LEAVE = 2888; // denath_leave
+  const RUNAWAY_KEYS = ["dave", "eric", "tanya"];
   const SEQ_DEMON_CASTING = 69; // demon_casting
   const SEQ_DEMON_ATTACK_GREATER = 4679; // demon_update_attack_greater
   const GFX_RITUAL_SUMMON = 480;
@@ -312,6 +337,7 @@ module.exports = function registerShadowOfTheStormQuest(api) {
   // Fire Blast (cache CombatSpells.FIRE_BLAST), with Agrith-Naar's Wiki max hit of 10.
   const FIRE_BLAST = { anim: SEQ_DEMON_CASTING, projectile: 130, startGraphic: 129, endGraphic: 131,
     start: 0, end: 20, startHeight: 43, endHeight: 31, maxHit: 10 };
+  const TELEGRAB = { projectile: 143, graphic: 409, arrivalDelay: 46, castSound: 3006, hitSound: 3007, moveSound: 1851 };
   const AGRITH_MAX_HIT = 10;
   const AGRITH_ATTACK_SPEED = 4;
   const AGRITH_ATTACK_DISTANCE = 32;
@@ -389,6 +415,9 @@ module.exports = function registerShadowOfTheStormQuest(api) {
   const MSG_DYE_SLICE = "iGN0Yu";
   const MSG_ESCORT_THRONE = "SzrKim";
   const MSG_DAVE_RETURNS = "vzuhlL";
+  const MSG_KILL_WIPE = "JChGC-";
+  const MSG_KILL_POWER = "nTkAkp";
+  const FINAL_BLOW_TEXT = "As you strike the final blow, Silverlight is drenched with<br>Agrith-Naar's foul-smelling ichor!";
   const MSG_TANYA_KILLED = "iWR7Wz";
   const ACTION_RITUAL_ASSEMBLES = "FK8qAZ";
   const ACTION_MATTHEW_KILLED = "X9FA-a";
@@ -401,6 +430,8 @@ module.exports = function registerShadowOfTheStormQuest(api) {
   // ============================================================================
 
   let quest;
+  /** Rsprox 572: the wizards stay in the room after completion, until the player goes. */
+  const afterFightCast = new WeakSet();
   let itemOnGroundManager;
   const Scenes = createQuestScenes(api, { onEnd: handleSceneEnd });
 
@@ -487,6 +518,12 @@ module.exports = function registerShadowOfTheStormQuest(api) {
     return true;
   }
 
+  function inThroneRoom(player) {
+    const at = player.getLocation();
+    return THRONE_ZONE.levels.includes(at.getZ()) && at.getX() >= THRONE_ZONE.minX && at.getX() <= THRONE_ZONE.maxX
+      && at.getY() >= THRONE_ZONE.minY && at.getY() <= THRONE_ZONE.maxY;
+  }
+
   function chatboxOpen(player) {
     const prompt = api.core.MultiChatboxPrompt?.getPending?.(player) ?? null;
     return player.getDialogueManager?.()?.isActive?.() === true || prompt !== null;
@@ -547,7 +584,9 @@ module.exports = function registerShadowOfTheStormQuest(api) {
 
   function ensureWizardNpcs(player) {
     const stage = quest.getStage(player);
-    if (stage < STAGE_IN_GROUP || stage >= STAGE_COMPLETE) {
+    const staying = stage >= STAGE_COMPLETE && afterFightCast.has(player) && inThroneRoom(player);
+    if (stage < STAGE_IN_GROUP || (stage >= STAGE_COMPLETE && !staying)) {
+      afterFightCast.delete(player);
       removeAllWizards(player);
       return;
     }
@@ -574,7 +613,7 @@ module.exports = function registerShadowOfTheStormQuest(api) {
       const existing = tracked.get(spawn.key);
       if (existing && existing.isRegistered?.() !== false && existing.getPrivateArea?.()?.isDestroyed?.() !== true) {
         syncWizardArea(player, existing);
-        if (existing.__shadowLeaving !== true) {
+        if (existing.__shadowLeaving !== true && existing.__shadowScattered !== true) {
           existing.moveTo?.(new Location(spawn.x, spawn.y, 2));
           if (facingCenter) existing.setPositionToFace?.(center);
         }
@@ -688,7 +727,7 @@ module.exports = function registerShadowOfTheStormQuest(api) {
     Scenes.later(player, 1, () => {
       if (player.isRegistered?.() === false) return;
       if (Scenes.get(player)) return;
-      removeAllWizards(player);
+      if (!afterFightCast.has(player)) removeAllWizards(player);
       removeDemon(player);
     });
   }
@@ -1006,7 +1045,14 @@ module.exports = function registerShadowOfTheStormQuest(api) {
   function recruitEvilDave(player) {
     const bits = helperBits(player);
     if (bits & BIT_DAVE) return;
-    if (!giveItem(player, DEMONIC_SIGIL_ITEM_ID, "Evil Dave gives you Eric's demonic sigil.")) return;
+    if (player.getInventory().isFull()) {
+      // As captured (rsprox 3333, ticks 2168 and 2184-2192): he says so after his offer, and keeps the sigil.
+      afterDialogue(player, () => startDialogue(api, player, { npcId: NpcIdentifiers.EVIL_DAVE_2 }, [
+        { npc: ["But you'll need to free some inventory space first!"] },
+      ]));
+      return;
+    }
+    giveItem(player, DEMONIC_SIGIL_ITEM_ID, "Evil Dave gives you Eric's demonic sigil.");
     finishRecruit(player, bits | BIT_DAVE);
   }
 
@@ -1023,10 +1069,10 @@ module.exports = function registerShadowOfTheStormQuest(api) {
 
   function dropDenathsSigil(player) {
     // Capture 3333 t2104: Denath's sigil lands at 2720,4900 on the throne-room floor.
-    // World-owned so the closing-scene transition cannot destroy it before pickup.
+    // In the scene's area, so leaving loses it; the Wiki says to pick it up or make another one.
     const tile = new Location(2720, 4900, 2);
     if (itemOnGroundManager.getGroundItem(player.getUsername(), DEMONIC_SIGIL_ITEM_ID, tile)) return;
-    itemOnGroundManager.registerLocation(player, new Item(DEMONIC_SIGIL_ITEM_ID, 1), tile, null);
+    itemOnGroundManager.registerLocation(player, new Item(DEMONIC_SIGIL_ITEM_ID, 1), tile, player.getPrivateArea?.() ?? null);
   }
 
   function onFirstRitualComplete(player) {
@@ -1046,7 +1092,6 @@ module.exports = function registerShadowOfTheStormQuest(api) {
       });
     }
     setStage(player, STAGE_RITUAL_DONE);
-    dropDenathsSigil(player);
   }
 
   function inRitualCircle(player) {
@@ -1104,7 +1149,19 @@ module.exports = function registerShadowOfTheStormQuest(api) {
     cameraBeat(scene, 24, [2717, 4903, 250], [2719, 4902, 150], { rate: 1, rate2: 1 });
     cameraBeat(scene, 25, [2720, 4897, 350], [2719, 4902, 150]);
     Scenes.later(scene, 26, () => Scenes.camera(player, [2720, 4887, 350], [2719, 4902, 150], { rate: 1, rate2: 1 }));
-    Scenes.later(scene, 28, () => Scenes.end(player));
+    // Rsprox 3333 t2119-t2130: these three walk off and go; the rest stay until the player leaves.
+    Scenes.later(scene, 24, () => {
+      for (const key of RUNAWAY_KEYS) {
+        wizardNpcs.get(player)?.get(key)?.getMovementQueue?.().addFirstStep?.(new Location(2720, 4886, RITUAL_CENTER.z));
+      }
+    });
+    Scenes.later(scene, 28, () => {
+      Scenes.controls(player, false);
+      player.getPacketSender().sendCameraReset();
+    });
+    Scenes.later(scene, 35, () => {
+      for (const key of RUNAWAY_KEYS) removeWizard(player, key);
+    });
   }
 
   function startFirstIncantation(player) {
@@ -1136,6 +1193,8 @@ module.exports = function registerShadowOfTheStormQuest(api) {
     dressThroneRoom(scene);
     Scenes.camera(player, [2726, 4901, 550], [2720, 4900, 150]);
     setStage(player, STAGE_RITUAL);
+    ensureWizardNpcs(player);
+    player.setPositionToFace(new Location(RITUAL_CENTER.x, RITUAL_CENTER.y, RITUAL_CENTER.z));
     playRitualMenus(player, NpcIdentifiers.DENATH, FIRST_RITUAL_VARIANT, () =>
       resolveFirstIncantation(player)
     );
@@ -1159,6 +1218,7 @@ module.exports = function registerShadowOfTheStormQuest(api) {
     // t2362 still carries the closed first-ritual portal; t2455 restores 6282.
     scene.__shadowClosedPortal = phaseLoc(scene, { id: AGRITH_PORTAL_CLOSING_OBJECT_ID, x: 2719, y: 4883, face: 0 });
     ensureWizardNpcs(player);
+    player.setPositionToFace(new Location(RITUAL_CENTER.x, RITUAL_CENTER.y, RITUAL_CENTER.z));
     Scenes.camera(player, [2720, 4894, 550], [2720, 4900, 150]);
     playRitualMenus(player, NpcIdentifiers.MATTHEW, SECOND_RITUAL_VARIANT, () =>
       resolveSecondIncantation(player)
@@ -1217,8 +1277,8 @@ module.exports = function registerShadowOfTheStormQuest(api) {
       animateRitualCast(player, true);
       onFirstRitualComplete(player);
       startFirstRitualClosing(player);
+      dropDenathsSigil(player);
       playOutcome(player, NpcIdentifiers.DENATH, FIRST_RITUAL_VARIANT, COND_RITUAL_CORRECT);
-      afterDialogue(player, () => beginPortalClosing(player));
     } else {
       playOutcome(player, NpcIdentifiers.DENATH, FIRST_RITUAL_VARIANT, COND_RITUAL_WRONG);
       const scene = Scenes.get(player);
@@ -1279,6 +1339,24 @@ module.exports = function registerShadowOfTheStormQuest(api) {
       }
     }
     return [];
+  }
+
+  /**
+   * Rsprox 3333 t2475-t2483: as he attacks, the cast walk off to these tiles. Rsprox 572 t1385-t1420
+   * walks at the same moment, to other tiles, and both keep moving, so the wander after is ours.
+   */
+  function scatterCast(player) {
+    const tracked = wizardNpcs.get(player);
+    if (!tracked) return;
+    for (const [key, [x, y]] of Object.entries(CAST_SCATTER)) {
+      const npc = tracked.get(key);
+      if (!npc) continue;
+      npc.__shadowScattered = true;
+      api.core.PathFinder?.calculateWalkRoute(npc, x, y);
+      TaskManager.submit(new CountdownTask(player, CAST_SCATTER_TICKS, () => {
+        npc.getMovementCoordinator?.().setRadius(CAST_WANDER_RADIUS);
+      }));
+    }
   }
 
   function spawnAgrithNaar(player) {
@@ -1345,9 +1423,10 @@ module.exports = function registerShadowOfTheStormQuest(api) {
     // complete() sets the stage itself, so repair the sibling varbits here:
     // the post-quest Reen/Badden transforms need to come back.
     syncShadowVarbits(player);
+    afterFightCast.add(player);
     Scenes.end(player);
-    removeAllWizards(player);
     removeDemon(player);
+    ensureWizardNpcs(player);
   }
 
   function handleConditionEvent(event) {
@@ -1415,6 +1494,15 @@ module.exports = function registerShadowOfTheStormQuest(api) {
       event.handled = true;
       return;
     }
+    // Rsprox 572 lines 28126-28200: the sword's lines in object boxes, the next in a statement.
+    if (stepId === MSG_KILL_WIPE) {
+      event.box = { items: [DARKLIGHT_ITEM_ID] };
+      return;
+    }
+    if (stepId === MSG_KILL_POWER) {
+      event.box = { statement: true };
+      return;
+    }
     if (stepId === MSG_DYE_SLICE) {
       event.box = { items: [DYED_SILVERLIGHT_ITEM_ID] };
       return;
@@ -1458,6 +1546,7 @@ module.exports = function registerShadowOfTheStormQuest(api) {
     if (stepId === ACTION_DEMON_ATTACKS) {
       event.handled = true;
       spawnAgrithNaar(player);
+      scatterCast(player);
       return;
     }
     if (stepId === ACTION_GOLEM_REPROGRAMMED) {
@@ -1537,6 +1626,10 @@ module.exports = function registerShadowOfTheStormQuest(api) {
   function fillTranscriptText(event) {
     if (!event?.player || typeof event.text !== "string") return;
     if (!OWN_NPC_IDS.has(event.npcId)) return;
+    // By name alone her line finds 305, the Shayzien store's Jennifer. Rsprox 3333 has 905.
+    if (event.step?.speaker === "Jennifer" && !JENNIFER_NPC_IDS.has(event.npcId)) {
+      event.speakerId = NpcIdentifiers.JENNIFER_2;
+    }
     let text = event.text;
     if (text.includes("[player name]")) {
       text = text.replace(/\[player name\]/gi, String(event.player.getDisplayName()));
@@ -1554,6 +1647,11 @@ module.exports = function registerShadowOfTheStormQuest(api) {
         const pick = picks[Number(number) - 1];
         return pick === undefined ? match : INCANTATION_WORDS[pick] + (emphasis ?? "");
       });
+      // Rsprox 3333 t2067-t2089: the leader's own word goes overhead, with sequence 2879.
+      if (typeof event.step?.player === "string") {
+        event.player.forceChat(text);
+        event.player.performAnimation(new Animation(SEQ_SUMMON_START));
+      }
     }
     if (event.step?.speaker === "[Everyone]" && event.step.presentation === "overhead") {
       const stage = quest.getStage(event.player);
@@ -1641,6 +1739,12 @@ module.exports = function registerShadowOfTheStormQuest(api) {
    * Quest Helper highlights the inventory sigil for exactly this step.
    */
   function handleItemAction(event) {
+    if (event.itemId === DEMONIC_TOME_ITEM_ID && String(event.option ?? "").toLowerCase() === "read") {
+      event.handled = true;
+      event.player.performAnimation(new Animation(SEQ_READ_BOOK));
+      openBook(event.player, TOME_TITLE, TOME_PAGES);
+      return;
+    }
     if (event.itemId !== DEMONIC_SIGIL_ITEM_ID) return;
     if (!String(event.option ?? "").toLowerCase().includes("chant")) return;
     event.handled = true;
@@ -1657,11 +1761,13 @@ module.exports = function registerShadowOfTheStormQuest(api) {
   }
 
   function dyeClothing(player, clothingId) {
-    const { result, name } = BLACK_DYEABLE_CLOTHING.get(clothingId);
+    const { result, name, vial } = BLACK_DYEABLE_CLOTHING.get(clothingId);
     if (!hasItem(player, BLACK_DYE_ITEM_ID) || !hasItem(player, clothingId)) return;
     player.getInventory().deleteNumber(BLACK_DYE_ITEM_ID, 1);
     player.getInventory().deleteNumber(clothingId, 1);
     player.getInventory().adds(result, 1);
+    if (vial) player.getInventory().adds(ItemIdentifiers.VIAL, 1);
+    player.getSkillManager().addExperiences(Skill.CRAFTING, DYE_CRAFTING_XP);
     player.getPacketSender().sendSoundEffect(DYE_SOUND, 1, 0);
     player.sendMessage(`You dye the ${name} black.`);
   }
@@ -1722,18 +1828,29 @@ module.exports = function registerShadowOfTheStormQuest(api) {
   function handleObjectInteraction(event) {
     const { player, objectId, location } = event;
     const portalStage = quest.getStage(player);
-    if (objectId === PORTAL_ENTER_OBJECT_ID && portalStage >= STAGE_IN_GROUP && portalStage < STAGE_COMPLETE) {
+    if (objectId === PORTAL_ENTER_OBJECT_ID && portalStage >= STAGE_IN_GROUP) {
       event.handled = true;
       player.sendMessage("You step into the portal.");
       player.moveTo(new Location(2720, 4884, 2));
       ensureWizardNpcs(player);
       return;
     }
+    if (objectId === AGRITH_PORTAL_CLOSING_OBJECT_ID && portalStage === STAGE_RITUAL_DONE) {
+      event.handled = true;
+      beginPortalClosing(player);
+      return;
+    }
     // No upper bound: completion leaves the player on plane 2, so the exit must keep working.
     if (objectId === PORTAL_EXIT_OBJECT_ID && portalStage >= STAGE_IN_GROUP) {
       event.handled = true;
+      if (portalStage === STAGE_RITUAL_DONE && !(helperBits(player) & BIT_TANYA)) {
+        beginPortalClosing(player);
+        return;
+      }
       player.sendMessage("You step into the portal.");
       player.moveTo(new Location(2721, 4911, 0));
+      afterFightCast.delete(player);
+      removeAllWizards(player);
       return;
     }
     if (!KILN_OBJECT_IDS.has(objectId)) return;
@@ -1807,12 +1924,8 @@ module.exports = function registerShadowOfTheStormQuest(api) {
   function beginPortalClosing(player) {
     if (quest.getStage(player) !== STAGE_RITUAL_DONE) return;
     if (helperBits(player) & BIT_TANYA) return;
-    // Do not cut the first-ritual camera track if the player clicks through
-    // the outcome dialogue faster than the captured beats.
-    if (Scenes.get(player)?.name === "shadow-first-ritual-close") {
-      TaskManager.submit(new CountdownTask(player, 1, () => beginPortalClosing(player)));
-      return;
-    }
+    Scenes.end(player);
+    removeAllWizards(player);
     player.moveTo(new Location(2721, 4911, 0));
     const scene = Scenes.open(player, "shadow-tanya-death", [[2706, 2738, 4879, 4918, 0]]);
     const tanya = Scenes.actor(scene, 919, [2722, 4905, 0], [2722, 4904]);
@@ -1872,6 +1985,32 @@ module.exports = function registerShadowOfTheStormQuest(api) {
   }
 
   /**
+   * Rsprox 572 t1385-t1388: telegrab_cast_and_fire plays at him and projectile 143 flies, 3 ticks at
+   * that distance; telegrab_hit plays at the player, who then moves with spotanim 409 as golem_teleport
+   * plays at him. This uses the projectile's own arrival, which is 3 there and scales with distance.
+   */
+  function castTelegrab(npc, player) {
+    const from = npc.getLocation();
+    player.getPacketSender().sendAreaSound(TELEGRAB.castSound, from.getX(), from.getY(), from.getZ(), 1, 0, 10);
+    Projectile.createProjectile(
+      npc, player, TELEGRAB.projectile, FIRE_BLAST.start, FIRE_BLAST.end,
+      FIRE_BLAST.startHeight, FIRE_BLAST.endHeight
+    ).withAngle(16).withProgress(64).sendProjectile();
+    const ticks = Projectile.arrivalTicks(npc, player, TELEGRAB.arrivalDelay);
+    const tile = player.getLocation();
+    player.getPacketSender().sendAreaSound(TELEGRAB.hitSound, tile.getX(), tile.getY(), tile.getZ(), 1, ticks, 10);
+    TaskManager.submit(new CountdownTask(player, ticks, () => {
+      if (npc.getHitpoints?.() <= 0 || player.getHitpoints() <= 0) return;
+      // Ours: a player who has already walked into melee stays where they are. No capture shows it.
+      if (api.core.CombatRange.canReach(npc, api.core.CombatFactory.MELEE_COMBAT, player)) return;
+      if (!teleportPlayerAdjacent(npc, player)) return;
+      player.performGraphic?.(new Graphic(TELEGRAB.graphic));
+      const at = npc.getLocation();
+      player.getPacketSender().sendAreaSound(TELEGRAB.moveSound, at.getX(), at.getY(), at.getZ(), 1, 0, 10);
+    }));
+  }
+
+  /**
    * Agrith-Naar, per the Wiki: melee up close by default; Fire Blast out of range or
    * against Protect from Melee; and, out of range with Protect from Magic, a
    * Telekinetic Grab that pulls the player back into melee. The room is an instance
@@ -1912,7 +2051,7 @@ module.exports = function registerShadowOfTheStormQuest(api) {
       npc.performAnimation?.(new Animation(FIRE_BLAST.anim));
       if (!inMelee && protectMagic) {
         this.telekinetic = true;
-        teleportPlayerAdjacent(npc, target);
+        castTelegrab(npc, target);
         return;
       }
       npc.performGraphic?.(new Graphic(FIRE_BLAST.startGraphic, GraphicHeight.HIGH));
@@ -1958,7 +2097,13 @@ module.exports = function registerShadowOfTheStormQuest(api) {
     demonNpcs.delete(killer);
     convertSilverlightToDarklight(killer);
     setStage(killer, STAGE_KILLED);
-    startTranscript(api, killer, NpcIdentifiers.MATTHEW, PAGE, "summoning-agrith-naar-killing-agrith-naar");
+    // Rsprox 572 tick 1419: this line is not in the transcript, and comes first.
+    killer.getDialogueManager().startDialogues(new api.core.DialogueChainBuilder().add(
+      new api.core.ItemStatementDialogue(0, DARKLIGHT_ITEM_ID, FINAL_BLOW_TEXT),
+      new api.core.ActionDialogue(1, { execute: () => {
+        startTranscript(api, killer, NpcIdentifiers.MATTHEW, PAGE, "summoning-agrith-naar-killing-agrith-naar");
+      } }),
+    ));
   }
 
   // ============================================================================
@@ -1980,6 +2125,13 @@ module.exports = function registerShadowOfTheStormQuest(api) {
     ensureDemon(player);
     ensureWizardNpcs(player);
     ensureImplement(player);
+  }
+
+  /** Rsprox 572 t1452: the player leaves by teleport, and the cast that stayed goes then. */
+  function handleThroneZoneExit({ player }) {
+    if (!player || !afterFightCast.has(player)) return;
+    afterFightCast.delete(player);
+    removeAllWizards(player);
   }
 
   /** Re-tracks, or respawns, the fight after a relog. */
@@ -2209,6 +2361,7 @@ module.exports = function registerShadowOfTheStormQuest(api) {
   api.onNpcInteraction(handleNpcInteraction);
   api.onZoneEnter(UNDERGROUND_ZONE, handleZoneEnter);
   api.onZoneEnter(THRONE_ZONE, handleZoneEnter);
+  api.onZoneExit(THRONE_ZONE, handleThroneZoneExit);
   api.registerNpcCombatMethodProvider([NpcIdentifiers.AGRITH_NAAR], AgrithNaarCombat, { singleton: false });
   api.onNpcBeforeDeath(handleAgrithNaarBeforeDeath);
   api.onNpcDeath(handleAgrithNaarDeath);

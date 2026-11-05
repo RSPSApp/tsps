@@ -2,7 +2,7 @@
   "_sources": {
     "recorded": "Rev 232 recordings 3200 (WWF toys, Druidic wreath, Mask of balance) and 3215 (Zombie head Talk-At).",
     "cache": "Rev 241 osrs-dumps: sequence and spotanim names that hold the item or match its option; obj iop and worn param 451+ options.",
-    "wiki": "OSRS Wiki item pages: overhead text, the yo-yo SFX table and tree hugging titles."
+    "wiki": "OSRS Wiki item pages: overhead text, the yo-yo SFX table, tree hugging titles and the cat ears' Chase."
   },
   "animations": [
     { "items": ["wwf_toy_tiger"], "option": "Play-with", "seq": "human_play_wwf_tiger", "say": "Grrrr!", "unlocks": true, "source": "recorded (rev 232 recording 3200: overhead, sequence and first-use unlock)" },
@@ -30,7 +30,14 @@
     { "items": ["rubber_chicken"], "option": "Dance", "seq": "human_chicken_dance", "source": "cache seq; the wiki's jingle id could not be checked against the cache" },
     { "items": ["easter19_giant_egg"], "option": "Easter dance", "seq": "easter19_egg_emote_human", "spotanim": "easter19_egg_dance_spot", "unsafe": "Perhaps you should play with your egg somewhere safer.", "source": "cache seq/spotanim; wiki PvP refusal" },
     { "items": ["easter24_reward_book_easter"], "option": "Preach", "seq": "easter24_preach_seq", "say": "All eggs doth shine glory upon the world, A golden yolk, the finest shell. Easter's majesty, of this I now yell!", "source": "cache seq; wiki overhead (whether it is split over several ticks is unknown)" },
-    { "items": ["hw21_haunted_bottle"], "option": "Wake-ghost", "seq": "hw12_human_shake_bottle", "spotanim": "hw21_spotanim_shake_bottle", "say": "WooooOOoOoo", "source": "cache seq/spotanim, wiki overhead" }
+    { "items": ["hw21_haunted_bottle"], "option": "Wake-ghost", "seq": "hw12_human_shake_bottle", "spotanim": "hw21_spotanim_shake_bottle", "say": "WooooOOoOoo", "source": "cache seq/spotanim, wiki overhead" },
+    { "items": ["xmas16_snowglobe"], "option": "Shake", "seq": "xmas16_snowglobe_shake", "source": "cache seq (it holds the globe in the right hand); no recording or wiki detail, so no sound" }
+  ],
+  "mapanims": [
+    { "items": ["xmas16_snowglobe"], "option": "Snow", "spotanim": "druidicspirit_bloom_spotanim", "height": 150, "delays": [30, 15], "source": "recorded (rev 223 recording 1375, 4 of 4 clicks): on the player's tile, delay 30 on the click tick and delay 15 on the next; no sequence or message" }
+  ],
+  "chases": [
+    { "item": "osb7_reward_cat_ears", "option": "Chase", "npc": "hundred_dave_hellrat", "distance": 15, "to": "osb7_reward_hellcat_ears", "revert": "Revert", "source": "wiki (Cat ears, Hell cat ears): Chase while near Hell-Rats gives Hell cat ears; the 15-tile radius (NPC view distance), the silent refusal and Revert giving the cat ears back are inferences" }
   ],
   "swaps": [
     { "option": "Transform", "cycle": ["xmas19_shield_1", "xmas19_shield_2", "xmas19_shield_3"], "source": "wiki order green, red, blue" },

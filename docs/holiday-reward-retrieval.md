@@ -161,8 +161,8 @@ Not yet covered, and why:
 - Dialogue-driven options (Zombie head Question, Eek and Haunted bottle Talk-to, Magic egg
   ball, Treat cauldron Check, Santa's list Check, Secret santa present, Archibald Interact)
   need their Wiki transcripts imported as dialogue data rather than written into a plugin.
-- Placed items (Wintumber tree, Halloween scarecrow) and the Snow globe's Shake and Snow
-  need temporary or POH objects; Cat ears Chase needs Hell-Rat proximity rules.
+- The Halloween scarecrow's Change (colour and expression) and its crows, and its plant,
+  dig-up and no-space lines (see below).
 - Items from the years the annual event plugins implement (Christmas 2025, Halloween 2025
   and the chosen birthday event) are left to those plugins. The Easter 2026 plugin grants
   Archibald; his Interact and the Magic egg ball's Shake are dialogue items (above), and the
@@ -172,3 +172,51 @@ Seasonal rares get no in-game source here. In OSRS, the discontinued rares (part
 Halloween masks, Santa hat and the rest) are not obtainable in game. This server's only
 source is the custom `::shops` panel, which a world can switch off with
 `"CustomShops": false` in world.json.
+
+## Placed items and proximity options
+
+Placed decorations belong to Construction (`Decorations.Construction.js`, data in
+`plugins/skills/construction/data/holiday-decorations.json`), since house state lives there.
+
+- **Wintumber tree** (rev 230 recording 2923: 17 Plant and 5 Dig-up clicks in a house). Plant
+  plays `farming_trowel_dig`, turns to the faced tile and sends the spam line "You plant the
+  wintumber tree."; 3 ticks later the sequence resets, `gub_wintumber_tree_standard` (shape 10)
+  appears on that tile and the item goes. Dig-up plays `human_pickupfloor` with "You dig up the
+  wintumber tree."; 2 ticks later the tree goes and the item comes back. Outside the house or
+  indoors: "You can only plant the wintumber tree in the garden of your player-owned house.";
+  a faced tile that is blocked, a hotspot space, furnished or not outdoors: "There is no space
+  to place your tree here. Try a different location." (both recorded). The Wiki gives the rule
+  (any free non-hotspot space of an outdoor room), the non-owner line "You can't dig up the
+  owner's wintumber tree! How unfestive!" and that the tree blocks walking (cache blockwalk).
+- **Halloween scarecrow**: Plant, Dig-up and Rotate-clockwise/anticlockwise (cache options).
+  The Halloween 2024 update places it "just like the Wintumber Tree", so it uses the same flow,
+  sequences and ticks. Only its garden refusal is recorded (rev 226 recording 1686); its other
+  lines have no source and are left out, so its no-space and dig-up are silent.
+- The recording sets `gublinch_tree_x/z/planted` (the scarecrow has `hw24_scarecrow_x/z/planted/rot`),
+  so a planted decoration stays in the house. It is saved in `construction:holiday-decorations`
+  as a tile of the house grid and drawn on every rebuild as an extra object with its clipping;
+  removing it removes the clipping exactly. The varbit values are not sent: their coordinate
+  encoding does not match a fixed house origin in the recording.
+- A decoration whose tile stops being a free outdoor space (its room removed, moved or replaced)
+  is forgotten on the next rebuild. While planted it counts as owned (the `construction:planted`
+  event), so Diango does not hand out another; once forgotten, Diango replaces it as a lost item.
+  Planting reports `holiday-rewards:used`, as Wear and Play-with do, so that replacement is
+  always unlocked (an inference: no recording shows a first plant).
+- Walking away (or any action that resets the walk queue) within the delay cancels Plant or
+  Dig-up; the item and the decoration stay as they were.
+- Inferences: the tree goes on the tile in the player's facing direction (recording: the planted
+  tile is the one the player walked towards; the Wiki says the faced tile must be empty for the
+  scarecrow); the recorded rotations vary (0, 2, 3) without a visible rule, so it is random; the
+  scarecrow's default look is the cache's first variant (`hw24_scarecrow_beige_ew_poh`); a full
+  inventory refuses Dig-up with the server's usual inventory-full message.
+- **Snow globe**: Shake plays the cache's `xmas16_snowglobe_shake` (it holds the globe). Snow
+  (rev 223 recording 1375, 4 of 4 clicks) sends `druidicspirit_bloom_spotanim` on the player's
+  tile at height 150, delay 30 on the click tick and delay 15 on the next, to everyone nearby,
+  with no sequence or message. No Shake sound is known.
+- **Cat ears**: Chase, held or worn, turns them into Hell cat ears while near a Hell-Rat
+  (Wiki); Hell-Rats only live in Evil Dave's members basement, which matches the Wiki's note
+  that F2P has no way to do it. Nothing gives the distance, a message or an animation: a Hell-Rat
+  within 15 tiles (the NPC view distance) counts as near, and with none the option does nothing.
+  Hell cat ears' Revert turns them back into Cat ears (the option's name; not described).
+
+Tests: `node --test tests/holiday-placed-items.test.cjs` from `server/` after a build.

@@ -19,7 +19,7 @@ const VARP = {
   TAB_COUNT: [4613, 4615, 4617, 4619, 4621],
   TAB_MAX: [4614, 4616, 4618, 4620, 4622],
   RECENT_ITEM: 4623,
-  CATEGORY_COUNT: 2048,
+  CATEGORY_COUNTS: [2048, 2941, 2942],
 };
 const NOTIFY_VARBIT = 11959;
 const NOTIFY_VARP = 2856;
@@ -57,10 +57,23 @@ function uniqueCount(player, inTab = null) {
 }
 
 /** A category's count: a plugin that keeps one answers, otherwise the log's own tally. */
-function categoryCount(player, category) {
+function categoryCounts(player, category) {
   const request = { player, category: category.name, struct: category.struct, count: null };
   pluginApi?.emitCustomEvent("collection-log:category-count", request);
-  return Number.isFinite(request.count) ? request.count : Number(counts(player)[category.struct]) || 0;
+  return [
+    Number.isFinite(request.count) ? request.count : Number(counts(player)[category.struct]) || 0,
+    ...[0, 1].map((index) => Number.isFinite(request.extraCounts?.[index]) ? request.extraCounts[index] : 0),
+  ];
+}
+
+function categoryCount(player, category) {
+  return categoryCounts(player, category)[0];
+}
+
+/** Cache script 2735 reads up to three mode counters; clear unused ones on every category. */
+function sendCategoryCounts(player, category) {
+  const values = categoryCounts(player, category);
+  VARP.CATEGORY_COUNTS.forEach((varp, index) => player.getPacketSender().sendConfig(varp, values[index]));
 }
 
 function addCategoryCount(player, category, amount = 1) {
@@ -227,6 +240,6 @@ module.exports = function attachProgress(api) {
 Object.assign(module.exports, {
   VARP, ITEMS_ATTRIBUTE, COUNTS_ATTRIBUTE, RECENT_ATTRIBUTE, NOTIFY_ATTRIBUTE,
   NOTIFY_VARBIT, NOTIFY_VARP,
-  today, items, obtained, uniqueCount, categoryCount, addCategoryCount, setCategoryCount,
+  today, items, obtained, uniqueCount, categoryCount, sendCategoryCounts, addCategoryCount, setCategoryCount,
   obtain, restore, reset,
 });

@@ -1885,6 +1885,21 @@ test("Minion: the whistle's Rules set the cache's varbits (saved, sent at login)
   Minion().minions.set(player, minion);
   Minion().tick(player, minion);
   assert.equal(following, null, "stays put");
+
+  // A fight that ends mid-pursuit (#2509 review): following is already null, but a route to the old target's
+  // tile is queued and the pursuit attribute set. With Follow off it must stop there, not walk on.
+  const attributes = new Map([["league:minion-pursuit", new core.Location(3205, 3205, 0)]]);
+  let resets = 0;
+  Object.assign(npc, {
+    getAttribute: (key) => attributes.get(key) ?? null,
+    setAttribute: (key, value) => attributes.set(key, value),
+    getMovementQueue: () => ({ reset() { resets++; } }),
+  });
+  Minion().tick(player, minion);
+  assert.equal(resets, 1, "the stale route is dropped");
+  assert.equal(attributes.get("league:minion-pursuit"), null, "and the pursuit with it");
+  Minion().tick(player, minion);
+  assert.equal(resets, 1, "an idle minion isn't reset every tick");
   rules(1);
   Minion().tick(player, minion);
   assert.equal(following, player, "Follow on: after its owner again");

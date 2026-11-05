@@ -186,9 +186,11 @@ function follow(minion, player) {
   const npc = minion.npc;
   if (!ruleOn(player, "follow") && npc.getLocation?.()?.getZ?.() === player.getLocation().getZ()
     && npc.calculateDistance(player) <= DATA.followLeash) {
-    if (npc.getFollowing() != null) {
+    // A pursuit left over from a fight that ended is dropped too, as approach() does once in reach.
+    if (npc.getFollowing() != null || npc.getAttribute(PURSUIT_ATTRIBUTE) != null) {
       npc.setFollowing(null);
       npc.getMovementQueue().reset();
+      npc.setAttribute(PURSUIT_ATTRIBUTE, null);
     }
     return;
   }

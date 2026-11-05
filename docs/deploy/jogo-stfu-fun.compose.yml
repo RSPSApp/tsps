@@ -1,0 +1,73 @@
+# The idle game at jogo.stfu.fun.
+#
+# Two containers behind the Traefik that already owns :80 and :443 on this host.
+# The game's own HTTP server accepts the WebSocket upgrade on any path and answers
+# /api/ itself, so the split is by matcher, not by subdomain:
+#
+#   Upgrade: websocket  -> jogo-server   (the game socket)
+#   /api/...            -> jogo-server   (cache-derived JSON the client reads)
+#   everything else     -> jogo-web      (the built client and /caches/)
+#
+# Both are memory-capped: this box has no swap and runs the D2K site, the Discord
+# bot and n8n, so a runaway build or leak here must die alone.
+
+services:
+  jogo-server:
+    image: node:22-bookworm-slim
+    container_name: jogo-server
+    restart: unless-stopped
+    working_dir: /app/server
+    command: ["node", "../scripts/run-with-env.mjs", "-", "./dist/Server.js"]
+    volumes:
+      - ./tsps:/app
+    environment:
+      - NODE_ENV=production
+    mem_limit: 2g
+    networks:
+      - holyia_default
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=holyia_default
+      - traefik.http.services.jogo-server.loadbalancer.server.port=43594
+      # The game socket. Highest priority: the upgrade must never reach the static server.
+      - traefik.http.routers.jogo-ws.entrypoints=websecure
+      - traefik.http.routers.jogo-ws.rule=Host(`jogo.stfu.fun`) && Header(`Upgrade`, `websocket`)
+      - traefik.http.routers.jogo-ws.priority=100
+      - traefik.http.routers.jogo-ws.tls.certresolver=letsencrypt
+      - traefik.http.routers.jogo-ws.service=jogo-server
+      # The read-only content API the interfaces are backed by.
+      - traefik.http.routers.jogo-api.entrypoints=websecure
+      - traefik.http.routers.jogo-api.rule=Host(`jogo.stfu.fun`) && PathPrefix(`/api/`)
+      - traefik.http.routers.jogo-api.priority=90
+      - traefik.http.routers.jogo-api.tls.certresolver=letsencrypt
+      - traefik.http.routers.jogo-api.service=jogo-server
+
+  jogo-web:
+    image: node:22-bookworm-slim
+    container_name: jogo-web
+    restart: unless-stopped
+    working_dir: /app/client
+    command: ["node", "scripts/serve-build.mjs"]
+    volumes:
+      - ./tsps:/app:ro
+    environment:
+      - PORT=3000
+      - HOST=0.0.0.0
+      # /caches/ is not inside the build, so point it at the cache ensure-cache filled.
+      - CACHE_DIR=/app/server/caches
+    mem_limit: 256m
+    networks:
+      - holyia_default
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=holyia_default
+      - traefik.http.services.jogo-web.loadbalancer.server.port=3000
+      - traefik.http.routers.jogo-web.entrypoints=websecure
+      - traefik.http.routers.jogo-web.rule=Host(`jogo.stfu.fun`)
+      - traefik.http.routers.jogo-web.priority=10
+      - traefik.http.routers.jogo-web.tls.certresolver=letsencrypt
+      - traefik.http.routers.jogo-web.service=jogo-web
+
+networks:
+  holyia_default:
+    external: true

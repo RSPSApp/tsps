@@ -111,8 +111,7 @@ test('a free-world lever opens the knight choice and preserves payment on refusa
   assert.equal(core.NpcDefinition.forId(5793).isMembers(), false, 'actual server definition permits the NPC');
   assert.equal(world.isMembersArea(3043, 3378), false, 'the proposed performance is in configured free land');
   const lever = new core.Location(3054, 3378, 0);
-  assert.ok(core.ObjectManager.objectsAt(lever).some((object) => object.getId() === 26194),
-    'the map lever is present before interaction');
+  assert.ok(core.MapObjects.get(26194, lever, null), 'the map lever is present before interaction');
   assert.deepEqual(Store.chest(), [], 'the dance begins with an empty chest');
   t.after(() => Room.reset());
 

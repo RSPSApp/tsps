@@ -471,22 +471,15 @@ async function main() {
         }
         if (new URLSearchParams(location.search).has("timers")) {
           const count = () => document.querySelectorAll(".status-timer-infobox, .vengeance-timer-infobox").length;
-          const attackCount = () => {
-            const output = [];
-            plugin.appendLocalPlayerOverheads({ osrsClient: { playerEcs: {
-              getWorldViewId: () => -1, getX: () => 128, getY: () => 128, getLevel: () => 0,
-            } }, acquireOverheadTextEntry: () => ({}), makeActorGroupKey: () => 1, mapOverheadColor: () => 0xffff00,
-              resolvePlayerLogicalHeightTiles: () => 2 }, 0, output, 10, 2);
-            return output.length;
-          };
+          const attackCount = () => document.querySelectorAll(".attack-timer-infobox").length;
           await pm.setPluginEnabled(plugin, false);
           await new Promise(resolve => setTimeout(resolve, 300));
           if (count() !== 0 || attackCount() !== 0) throw new Error("disabled Timers must hide everything even with ?timers");
           if (c.runeLite.configManager.getConfiguration("runelite", "timersplugin") !== "false") throw new Error("timer switch was not saved");
           await pm.setPluginEnabled(plugin, true);
           await new Promise(resolve => setTimeout(resolve, 500));
-          if (count() !== 6 || attackCount() !== 1) throw new Error("enabled Timers must preview all six infoboxes and attack overhead");
-          return { disabledInfoboxes: 0, disabledAttack: 0, enabledInfoboxes: 6, enabledAttack: 1 };
+          if (count() !== 7 || attackCount() !== 1) throw new Error("enabled Timers must preview all seven infoboxes, including combat");
+          return { disabledInfoboxes: 0, disabledAttack: 0, enabledInfoboxes: 7, enabledAttack: 1 };
         }
         await pm.setPluginEnabled(plugin, true);
         return { enabled: true };
@@ -660,7 +653,7 @@ async function main() {
           const previews = [...document.querySelectorAll(".status-timer-infobox, .vengeance-timer-infobox")]
             .sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left);
           if (new URLSearchParams(location.search).has("timers")) {
-            if (previews.length !== 6) throw new Error("enabled ?timers preview must show all six infoboxes");
+            if (previews.length !== 7) throw new Error("enabled ?timers preview must show all seven infoboxes");
             let right = pvp.x + pvp.width;
             for (const preview of previews) {
               const box = preview.getBoundingClientRect();

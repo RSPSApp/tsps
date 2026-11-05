@@ -2,6 +2,12 @@
 const Storage = require("./Common.StorageItems");
 const NAMES = ["Gem sack", "Open gem sack"];
 const PER_GEM = 60;
+// Sack-specific feedback is server wording; no sack transcript is retained.
+const MESSAGE = {
+  NO_GEMS: "You have nothing suitable for storing in the sack.",
+  FULL: "Your sack is too full to hold all your gems.",
+  EMPTY: "The gem sack is empty.",
+};
 let gems;
 function gemIds() {
   gems ??= [...Storage.idsOf([...Storage.DATA.semiPreciousGems, ...Storage.DATA.gems])];
@@ -13,17 +19,25 @@ const family = {
   room: (_player, id, held) => PER_GEM - (held.find((entry) => entry.id === id)?.amount ?? 0),
   gathers: (player, event) => Storage.hasOpen(player, family)
     && (Storage.FAMILIES.get("gem-bag").accepts(event.itemId) || event.skill === Storage.core.Skill.MINING),
-  bankEmpty: (player) => Storage.emptyToBank(player, family),
+  bankEmpty: emptyToBank,
 };
 function fill({ player }) {
-  for (const id of Storage.inventoryIds(player).filter(family.accepts)) Storage.fillFrom(player, family, id);
+  const held = Storage.inventoryIds(player).filter(family.accepts);
+  if (!held.length) { player.sendMessage(MESSAGE.NO_GEMS); return; }
+  const moved = held.reduce((sum, id) => sum + Storage.fillFrom(player, family, id), 0);
+  if (moved === 0) player.sendMessage(MESSAGE.FULL);
 }
 function check({ player }) {
   player.sendMessage(gemIds().map((id) => `${Storage.itemName(id)}: ${Storage.amountOf(player, family, id)}`).join(" / "));
 }
 function empty({ player }) {
-  if (Storage.core.Bank.isOpen(player)) return family.bankEmpty(player);
+  if (Storage.core.Bank.isOpen(player)) return emptyToBank(player);
+  if (Storage.total(player, family) === 0) { player.sendMessage(MESSAGE.EMPTY); return; }
   Storage.emptyToInventory(player, family);
+}
+function emptyToBank(player) {
+  if (Storage.total(player, family) === 0) { player.sendMessage(MESSAGE.EMPTY); return; }
+  Storage.emptyToBank(player, family);
 }
 function toggle({ player, item }) { Storage.toggle(player, family, item); }
 
@@ -74,8 +88,18 @@ function sew(event) {
   const tote = totes.find((id) => inv.contains(id));
   const bag = bags.find((id) => inv.contains(id));
   const costume = inv.contains(I.COSTUME_NEEDLE);
-  if (player.getSkillManager().getCurrentLevel(Skill.CRAFTING) < 81 || tote == null || bag == null
-    || !inv.contains(I.IMMACULATE_MOLE_SKIN) || (!costume && (!inv.contains(I.NEEDLE) || !inv.contains(I.THREAD)))) return;
+  if (player.getSkillManager().getCurrentLevel(Skill.CRAFTING) < 81) {
+    player.sendMessage("You need a Crafting level of 81 to make a gem sack.");
+    return;
+  }
+  const missing = tote == null ? "gem tote" : bag == null ? "gem bag"
+    : !inv.contains(I.IMMACULATE_MOLE_SKIN) ? "immaculate mole skin"
+    : !costume && !inv.contains(I.NEEDLE) ? "needle"
+    : !costume && !inv.contains(I.THREAD) ? "thread" : null;
+  if (missing) {
+    player.sendMessage(`You need ${missing} to make a gem sack.`);
+    return;
+  }
   const bagFamily = Storage.FAMILIES.get("gem-bag");
   const pouchFamily = Storage.FAMILIES.get("gem-pouch");
   const bagContents = checkedContents(player, bagFamily);

@@ -216,7 +216,7 @@ test('native final Table Serve enforces source capacity and calendar closure can
   assert.equal(cook.getLocation().equals(start),false,'the real chef walks rather than teleporting to the table');
   assert.equal(player.getPrivateArea(),null);assert.equal(completedArea.isDestroyed(),true);assert.equal(cook.isRegistered(),false);
   assert.equal(player.getMovementQueue().isMovementBlocked(),false);assert.equal(player.isUntargetable(),false);
-  assert.equal(player.getInventory().getAmount(32928),1);assert.equal(player.getInventory().getAmount(1039),2);
+  assert.equal(player.getInventory().getAmount(32928),1);assert.equal(player.getInventory().getAmount(13174),2);
   assert.equal(player.getInventory().getAmount(Progress.platterId(api)),0);
   assert.equal(player.getAttribute('holiday-rewards:unlocked').length,69);
   assert.equal(cook.getId(),c.CacheDefinitions.getArchivedId('christmas-2025','npc','xmas25_cutscene_chef_no_plate'));
@@ -514,6 +514,19 @@ test('calendar transitions route through the real plugin and preserve archives i
   assert.equal(Scene.active(),false);assert.deepEqual(c.CacheDefinitions.getDefinitionArchiveBundles(),[other]);install([]);
 });
 
+test('the shipped events.json window opens the dinner on 10 December and closes it on 7 January',t=>{
+  // Real EventScheduler, real data/events.json and its owned clock task; only Date.now is mocked.
+  require('../plugins/world/EventScheduler.plugin').register(PM.createApi('EventScheduler'));
+  let now=Date.parse('2026-12-09T23:59:59Z');t.mock.method(Date,'now',()=>now);
+  const clock=()=>{const task=[...c.TaskManager.pendingTasks.toArray(),...c.TaskManager.activeTasks].find(k=>k.key==='event-scheduler:clock'&&k.isRunning());assert.ok(task,'scheduler owns one clock');task.execute();};
+  t.after(()=>{PM.emitServerShutdown({timestamp:now});assert.equal(Scene.active(),false);});
+  PM.emitServerStartup({timestamp:now});assert.equal(Scene.active(),false,'closed the second before the window');
+  now=Date.parse('2026-12-10T00:00:00Z');clock();assert.equal(Scene.active(),true,'opens at the window start');
+  const q={key:'christmas-2025',active:null};PM.emitCustomEvent('events:status',q);assert.equal(q.active,true);
+  now=Date.parse('2027-01-06T23:59:59Z');clock();assert.equal(Scene.active(),true);
+  now=Date.parse('2027-01-07T00:00:00Z');clock();assert.equal(Scene.active(),false,'closes at the window end');
+  assert.deepEqual(c.CacheDefinitions.getDefinitionArchiveBundles(),[],'no archive left installed after the window');
+});
 test('real per-player morph owners expose only the appropriate table and bar operations',t=>{
   const Progress=require('../plugins/world/seasonal/Progress.ChristmasDinner');
   const {Player}=require('../dist/game/entity/impl/player/Player');

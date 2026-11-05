@@ -513,9 +513,9 @@ module.exports = function registerWatchtowerQuest(api) {
     return quest.getStage(player) >= STAGE_READ_SCROLL;
   }
 
-  function watchtowerTeleportBeforeCast(event) {
-    if (event.name?.trim().toLowerCase() !== "watchtower teleport" || hasReadSpellScroll(event.player)) return;
-    event.allowed = false;
+  function canCastWatchtowerTeleport(event) {
+    if (event.spellName?.trim().toLowerCase() !== "watchtower teleport" || hasReadSpellScroll(event.player)) return;
+    event.allow = false;
     event.player?.sendMessage?.("You need to read the Watchtower spell scroll before casting this spell.");
   }
 
@@ -1748,7 +1748,7 @@ module.exports = function registerWatchtowerQuest(api) {
 
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
-  api.onCustomEvent("spell:teleport-before-cast", watchtowerTeleportBeforeCast);
+  api.onCanTeleport(canCastWatchtowerTeleport);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onCustomEvent("npc-dialogue:condition", handleCondition);

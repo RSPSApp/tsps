@@ -7,6 +7,8 @@
  * (the Wiki's notes): the Rellekka tiara and the Dagannoth Kings.
  */
 const Common = require("../../bosses/godwars/Common.GodWars");
+const DiaryProgress = require("./Progress.AchievementDiaries");
+const DIARY_DATA = require("./Data.AchievementDiaries").BY_KEY.get("fremennik");
 
 const DIARY = "fremennik";
 const FREMENNIK_TRIALS = "fremennik_trials";
@@ -96,6 +98,7 @@ function increment(player, attribute, need, task) {
   const total = (Number(player.getAttribute(attribute)) || 0) + 1;
   player.setAttribute(attribute, Math.min(total, need));
   if (total >= need) complete(player, task);
+  else DiaryProgress.notifyTaskProgress(player, DIARY_DATA, task);
 }
 
 function onShopOpened({ player, shopId }) {
@@ -138,11 +141,14 @@ function onNpcDeath({ killer, npc }) {
 
 function recordKing(player, id) {
   const kings = new Set(player.getAttribute(KINGS_ATTRIBUTE) ?? []);
+  const previousSize = kings.size;
   kings.add(KING_TASKS[id]);
   player.setAttribute(KINGS_ATTRIBUTE, [...kings]);
   if (kings.size === KING_IDS.size) {
     player.setAttribute(KINGS_ATTRIBUTE, []);
     complete(player, "kill-each-of-the-dagannoth-kings");
+  } else if (kings.size !== previousSize) {
+    DiaryProgress.notifyTaskProgress(player, DIARY_DATA, "kill-each-of-the-dagannoth-kings");
   }
 }
 
@@ -152,8 +158,10 @@ function onGroundItemsTaken(event) {
   if (!active(player) || itemId !== api.core.ItemIdentifiers.SNAPE_GRASS) return;
   if (!inBox(groundItem?.getPosition?.(), WATERBIRTH)) return;
   const total = (Number(player.getAttribute(SNAPE_GRASS_ATTRIBUTE)) || 0) + amount;
+  const previous = Number(player.getAttribute(SNAPE_GRASS_ATTRIBUTE)) || 0;
   player.setAttribute(SNAPE_GRASS_ATTRIBUTE, Math.min(total, 5));
   if (total >= 5) complete(player, "collect-5-snape-grass-on-waterbirth-island");
+  else if (total > previous) DiaryProgress.notifyTaskProgress(player, DIARY_DATA, "collect-5-snape-grass-on-waterbirth-island");
 }
 
 function onMiningSuccess({ player, itemId }) {
@@ -161,7 +169,10 @@ function onMiningSuccess({ player, itemId }) {
   const I = api.core.ItemIdentifiers;
   const location = player.getLocation();
   if (itemId === I.SILVER_ORE && inBox(location, RELLEKKA) && questComplete(player, FREMENNIK_TRIALS)) {
-    player.setAttribute(TIARA_STAGE_ATTRIBUTE, 1);
+    if (player.getAttribute(TIARA_STAGE_ATTRIBUTE) !== 1) {
+      player.setAttribute(TIARA_STAGE_ATTRIBUTE, 1);
+      DiaryProgress.notifyTaskProgress(player, DIARY_DATA, "craft-a-tiara-from-scratch-in-rellekka");
+    }
   } else if (itemId === I.COAL && inBox(location, RELLEKKA) && questComplete(player, FREMENNIK_TRIALS)) {
     complete(player, "mine-some-coal-in-rellekka");
   } else if (itemId === I.GOLD_ORE && inBox(location, ARZINIAN_MINE)) {
@@ -176,6 +187,7 @@ function onSmeltingSuccess({ player, itemId }) {
   if (!active(player) || itemId !== api.core.ItemIdentifiers.SILVER_BAR) return;
   if (player.getAttribute(TIARA_STAGE_ATTRIBUTE) === 1 && inBox(player.getLocation(), RELLEKKA_FURNACE)) {
     player.setAttribute(TIARA_STAGE_ATTRIBUTE, 2);
+    DiaryProgress.notifyTaskProgress(player, DIARY_DATA, "craft-a-tiara-from-scratch-in-rellekka");
   }
 }
 
@@ -194,7 +206,10 @@ function onCraftingMade({ player, itemId }) {
 
 function onWoodcuttingSuccess({ player, itemId }) {
   if (!active(player) || itemId !== api.core.ItemIdentifiers.OAK_LOGS) return;
-  if (inBox(player.getLocation(), FREMENNIK_PROVINCE)) player.setAttribute(OAK_CHOPPED_ATTRIBUTE, true);
+  if (inBox(player.getLocation(), FREMENNIK_PROVINCE) && player.getAttribute(OAK_CHOPPED_ATTRIBUTE) !== true) {
+    player.setAttribute(OAK_CHOPPED_ATTRIBUTE, true);
+    DiaryProgress.notifyTaskProgress(player, DIARY_DATA, "chop-and-burn-some-oak-logs-in-the-fremennik-pro");
+  }
 }
 
 function onFiremakingSuccess({ player, itemId }) {
@@ -303,10 +318,13 @@ function onRunecraftingSuccess({ player, runeId, rolls, amountPerEssence }) {
 function onGodWarsKill({ player, npcId, faction }) {
   if (!active(player) || GENERAL_BY_FACTION[faction] !== npcId) return;
   const generals = new Set(player.getAttribute(GENERALS_ATTRIBUTE) ?? []);
+  const previousSize = generals.size;
   generals.add(faction);
   player.setAttribute(GENERALS_ATTRIBUTE, [...generals]);
   if (generals.size === Object.keys(GENERAL_BY_FACTION).length) {
     complete(player, "kill-the-generals-of-armadyl-bandos-saradomin-an");
+  } else if (generals.size !== previousSize) {
+    DiaryProgress.notifyTaskProgress(player, DIARY_DATA, "kill-the-generals-of-armadyl-bandos-saradomin-an");
   }
 }
 

@@ -172,8 +172,7 @@ function produced({ player, skill, itemId, kind } = {}) {
     if (itemId === item.DIAMOND_AMULET_U_ && stage !== 1) {
       player.setAttribute(ATTRIBUTES.amuletStage, 1);
       DiaryProgress.notifyTaskProgress(player, DIARY_DATA, TASKS.amulet);
-    }
-    else if (itemId === item.DIAMOND_AMULET && kind === "string" && stage >= 1) {
+    } else if (itemId === item.DIAMOND_AMULET && kind === "string" && stage >= 1) {
       if (stage !== 2) {
         player.setAttribute(ATTRIBUTES.amuletStage, 2);
         DiaryProgress.notifyTaskProgress(player, DIARY_DATA, TASKS.amulet);

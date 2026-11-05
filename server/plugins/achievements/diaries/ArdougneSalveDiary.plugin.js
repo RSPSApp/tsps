@@ -13,8 +13,8 @@ function completedSalveImbue({ player, baseItemId, imbuedItemId } = {}, api) {
   api.emitCustomEvent("diary:task", { player, diary: DIARY, task: TASK });
 }
 
-function equippedSalve({ player, itemId, slot } = {}, api) {
-  if (!isActivePlayer(player)) return;
+function equippedSalve({ player, equipped, itemId, slot } = {}, api) {
+  if (equipped !== true || !isActivePlayer(player)) return;
   const ids = api.core.ItemIdentifiers;
   if (slot !== api.core.Equipment.AMULET_SLOT || ![ids.SALVE_AMULET_I_, ids.SALVE_AMULET_EI_].includes(itemId)) return;
   api.emitCustomEvent("diary:task", { player, diary: DIARY, task: TASK });
@@ -24,7 +24,7 @@ function onSalveImbued(api, event) {
   completedSalveImbue(event, api);
 }
 
-function onEquipped(api, event) {
+function onEquipmentChanged(api, event) {
   equippedSalve(event, api);
 }
 
@@ -34,7 +34,7 @@ module.exports = {
   dependsOn: ["AchievementDiaries"],
   register(api) {
     api.onCustomEvent("nightmare-zone:imbued", onSalveImbued.bind(null, api));
-    api.onCustomEvent("equipment:equipped", onEquipped.bind(null, api));
+    api.onCustomEvent("equipment:changed", onEquipmentChanged.bind(null, api));
   },
   _test: { isActivePlayer, completedSalveImbue, equippedSalve, TASK },
 };

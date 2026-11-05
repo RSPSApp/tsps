@@ -112,7 +112,8 @@ function announceTierComplete(player, diary, tier) {
 
 /** Emits progress only for a valid, unfinished task after its owner changes task state. */
 function notifyTaskProgress(player, diary, taskKey) {
-  if (player?.isRegistered?.() !== true || !tierOfTask(diary, taskKey) || doneTasks(player, diary).has(taskKey)) return false;
+  if (!api || typeof player?.getAttribute !== "function" || player.isRegistered?.() !== true
+    || !tierOfTask(diary, taskKey) || doneTasks(player, diary).has(taskKey)) return false;
   api.emitCustomEvent("diary:task-progressed", { player, diary: diary.key, task: taskKey });
   return true;
 }

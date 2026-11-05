@@ -12,6 +12,7 @@ let Progress;
 let diary;
 let quest;
 let dispatch;
+let canTeleport;
 
 before(async () => {
   await CachePipeline.initialize(require("node:path").resolve(__dirname, ".."));
@@ -31,6 +32,7 @@ before(async () => {
     emitCustomEvent: dispatch,
     onSpellCast(handler) { spellCast = handler; },
     onInterfaceActionClick(handler) { interfaceAction = handler; },
+    onCanTeleport(handler) { canTeleport = handler; },
   }, { get: (target, key) => key in target ? target[key] : () => {} });
 
   Progress = require("../plugins/achievements/diaries/Progress.AchievementDiaries");
@@ -43,6 +45,11 @@ before(async () => {
   quest = require("../plugins/quests/QuestRuntime").getRegisteredQuests().find(({ key }) => key === "watchtower");
   assert.ok(quest, "Watchtower registered with QuestRuntime");
   PluginManager.emitCustomEvent = dispatch;
+  PluginManager.emitCanTeleport = (player, wildernessLevelLimit, destination, spellName) => {
+    const event = { player, wildernessLevelLimit, destination, spellName, allow: null };
+    canTeleport(event);
+    return event.allow;
+  };
 });
 
 function fixture(t, { stage = 14, runes = true, hitpoints = 10 } = {}) {
@@ -95,16 +102,12 @@ test("the quest gate does not depend on the diary plugin", (t) => {
   const diaryPlugin = require("../plugins/achievements/diaries/ArdougneWatchtowerDiary.plugin");
   assert.equal(diaryPlugin._test.beforeCast, undefined);
   const player = fixture(t, { stage: 12 });
-  const request = { player, name: "watchtower teleport", allowed: true };
-  dispatch("spell:teleport-before-cast", request);
-  assert.equal(request.allowed, false);
+  assert.equal(PluginManager.emitCanTeleport(player, 20, null, "watchtower teleport"), false);
   assert.equal(player.getInventory().getAmount(563), 2);
   assert.equal(player.getInventory().getAmount(557), 2);
 
   player.setAttribute("quest.watchtower.stage", 14);
-  const unlocked = { player, name: "watchtower teleport", allowed: true };
-  dispatch("spell:teleport-before-cast", unlocked);
-  assert.equal(unlocked.allowed, true);
+  assert.equal(PluginManager.emitCanTeleport(player, 20, null, "watchtower teleport"), null);
 });
 
 test("only reading the spell scroll unlocks both cast paths, before rune consumption", (t) => {

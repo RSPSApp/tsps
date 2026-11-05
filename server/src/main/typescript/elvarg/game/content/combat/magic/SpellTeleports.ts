@@ -28,12 +28,9 @@ class TeleportSpell extends Spell {
     getSpellbook(): MagicSpellbook { return this.data.spellbook; }
 
     cast(player: Player, name: string, destination: Location = this.data.destination): boolean {
-        if (!TeleportHandler.checkReqs(player, destination) || !this.canCast(player, false)) {
+        if (!TeleportHandler.checkReqs(player, destination, 20, name) || !this.canCast(player, false)) {
             return true;
         }
-        const request = { player, name, allowed: true };
-        PluginManager.emitCustomEvent("spell:teleport-before-cast", request);
-        if (!request.allowed) return true;
         if (!this.canCast(player, true)) {
             return true;
         }

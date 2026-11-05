@@ -1286,11 +1286,11 @@ export class PluginManager {
     return allowed ? true : null;
   }
 
-  public static emitCanTeleport(player: any, wildernessLevelLimit: number = 20, destination?: any): boolean | null {
+  public static emitCanTeleport(player: any, wildernessLevelLimit: number = 20, destination?: any, spellName?: string): boolean | null {
     if (PluginManager.canTeleportHooks.length === 0) {
       return null;
     }
-    const event: PluginCanTeleportEvent = { player, wildernessLevelLimit, destination, allow: null };
+    const event: PluginCanTeleportEvent = { player, wildernessLevelLimit, destination, spellName, allow: null };
     for (const hook of PluginManager.canTeleportHooks) {
       PluginManager.executeHook(hook, event, "can_teleport", "can_teleport");
       if (event.allow !== null) {

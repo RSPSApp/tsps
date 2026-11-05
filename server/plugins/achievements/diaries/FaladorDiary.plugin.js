@@ -7,6 +7,8 @@
  * (`yarn dump:loc`), NPC/locations from npc-spawns.json and the OSRS Wiki.
  */
 const DIARY = "falador";
+const DiaryProgress = require("./Progress.AchievementDiaries");
+const DIARY_DATA = require("./Data.AchievementDiaries").BY_KEY.get(DIARY);
 
 const TASK = {
   westernWall: "climb-over-the-western-falador-wall",
@@ -191,7 +193,10 @@ function onRunecraftingSuccess({ player, runeId, rolls, amountPerEssence }) {
 
 function onWoodcuttingSuccess({ player, logId }) {
   if (!WILLOW_LOG_IDS.has(logId) || !inZone(player.getLocation(), TAVERLEY)) return;
-  player.setAttribute(WILLOW_CHOP_ATTRIBUTE, Date.now());
+  const choppedAt = Date.now();
+  const previous = Number(player.getAttribute(WILLOW_CHOP_ATTRIBUTE) ?? 0);
+  player.setAttribute(WILLOW_CHOP_ATTRIBUTE, choppedAt);
+  if (!previous) DiaryProgress.notifyTaskProgress(player, DIARY_DATA, TASK.willow);
 }
 
 function onFiremakingSuccess({ player, itemId }) {

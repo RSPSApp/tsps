@@ -9,6 +9,8 @@
  * NPC's tile or the player's tile, never a bare command or admin completion.
  */
 const DIARY = "kourend";
+const DIARY_DATA = require("./Data.AchievementDiaries").BY_KEY.get(DIARY);
+const DiaryProgress = require("./Progress.AchievementDiaries");
 const ANGLER_CAUGHT_ATTRIBUTE = "kourend-kebos:anglerfish-caught";
 
 const MOUNT_KARUULM_MINE = { minX: 1265, maxX: 1295, minY: 3800, maxY: 3825, z: 0 };
@@ -92,7 +94,10 @@ function fished({ player, itemId }) {
   if (itemId === api.core.ItemIdentifiers.RAW_TROUT && within(player.getLocation?.(), RIVER_MOLCH)) {
     complete(player, "fish-a-trout-from-the-river-molch");
   }
-  if (itemId === api.core.ItemIdentifiers.RAW_ANGLERFISH) player.setAttribute(ANGLER_CAUGHT_ATTRIBUTE, true);
+  if (itemId === api.core.ItemIdentifiers.RAW_ANGLERFISH && player.getAttribute(ANGLER_CAUGHT_ATTRIBUTE) !== true) {
+    player.setAttribute(ANGLER_CAUGHT_ATTRIBUTE, true);
+    DiaryProgress.notifyTaskProgress(player, DIARY_DATA, "catch-an-anglerfish-and-cook-it-whilst-in-great");
+  }
 }
 
 function cooked({ player, itemId }) {

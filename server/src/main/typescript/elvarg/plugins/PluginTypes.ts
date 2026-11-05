@@ -296,6 +296,8 @@ export interface PluginCanTeleportEvent {
   wildernessLevelLimit?: number;
   /** Where the teleport lands, when the caller knows it. */
   destination?: any;
+  /** Name of the spell, when the teleport comes from a spell cast. */
+  spellName?: string;
   allow: boolean | null;
 }
 

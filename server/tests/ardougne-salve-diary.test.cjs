@@ -48,17 +48,21 @@ function completed(player) {
   return Progress.doneTasks(player, diaryData).has(diary._test.TASK);
 }
 
-test('only the NMZ Salve item ids count when worn', (t) => {
+test('the real equip path credits only NMZ Salve item ids', (t) => {
   const ids = core.ItemIdentifiers;
+  const { EquipPacketListener } = require('../dist/net/packet/impl/EquipPacketListener');
+  t.mock.method(PluginManager, 'emitCustomEvent', (name, event) => api.emitCustomEvent(name, event));
   for (const id of [ids.SALVE_AMULET_I_, ids.SALVE_AMULET_EI_]) {
     const p = player(t);
-    api.emitCustomEvent('equipment:equipped', { player: p, itemId: id, slot: core.Equipment.AMULET_SLOT });
+    p.getInventory().setItem(0, new Item(id, 1));
+    EquipPacketListener.equip(p, id, 0, core.Inventory.INTERFACE_ID);
     assert.equal(completed(p), true, `NMZ item ${id} counts`);
   }
 
   for (const id of [ids.SALVE_AMULET_I__3, ids.SALVE_AMULET_EI__3, ids.SALVE_AMULET_I__5, ids.SALVE_AMULET_EI__5]) {
     const p = player(t);
-    api.emitCustomEvent('equipment:equipped', { player: p, itemId: id, slot: core.Equipment.AMULET_SLOT });
+    p.getInventory().setItem(0, new Item(id, 1));
+    EquipPacketListener.equip(p, id, 0, core.Inventory.INTERFACE_ID);
     assert.equal(completed(p), false, `non-NMZ item ${id} does not count`);
   }
 });
@@ -66,12 +70,52 @@ test('only the NMZ Salve item ids count when worn', (t) => {
 test('equipment refreshes and wrong equipment slots do not count', (t) => {
   const p = player(t);
   api.emitCustomEvent('equipment:changed', { player: p });
-  api.emitCustomEvent('equipment:equipped', {
+  api.emitCustomEvent('equipment:changed', {
     player: p,
+    equipped: true,
     itemId: core.ItemIdentifiers.SALVE_AMULET_EI_,
     slot: core.Equipment.RING_SLOT,
   });
   assert.equal(completed(p), false);
+});
+
+test('equipping a second copy of the same Salve item counts', (t) => {
+  t.mock.method(PluginManager, 'emitCustomEvent', (name, event) => api.emitCustomEvent(name, event));
+  const { EquipPacketListener } = require('../dist/net/packet/impl/EquipPacketListener');
+  const id = core.ItemIdentifiers.SALVE_AMULET_EI_;
+  const p = player(t);
+  p.getEquipment().setItem(core.Equipment.AMULET_SLOT, new Item(id, 1));
+  p.getInventory().setItem(0, new Item(id, 1));
+
+  EquipPacketListener.equip(p, id, 0, core.Inventory.INTERFACE_ID);
+
+  assert.equal(completed(p), true);
+});
+
+test('ordinary equipment refreshes and equipment restores carry no equip metadata', (t) => {
+  t.mock.method(PluginManager, 'emitCustomEvent', (name, event) => api.emitCustomEvent(name, event));
+  const p = player(t);
+  let event;
+  const listener = ({ player: eventPlayer, ...change }) => { if (eventPlayer === p) event = change; };
+  api.onCustomEvent('equipment:changed', listener);
+  p.getEquipment().refreshItems();
+  assert.deepEqual(event, {});
+  const { EquipPacketListener } = require('../dist/net/packet/impl/EquipPacketListener');
+  p.getInventory().setItem(0, new Item(core.ItemIdentifiers.SALVE_AMULET_EI_, 1));
+  const sendItemContainer = p.getPacketSender().sendItemContainer;
+  let reentered = false;
+  t.mock.method(p.getPacketSender(), 'sendItemContainer', function (...args) {
+    if (!reentered) {
+      reentered = true;
+      p.getEquipment().setItem(core.Equipment.AMULET_SLOT, new Item(core.ItemIdentifiers.SALVE_AMULET_I_, 1));
+      p.getEquipment().refreshItems();
+    }
+    return sendItemContainer.apply(this, args);
+  });
+  EquipPacketListener.equip(p, core.ItemIdentifiers.SALVE_AMULET_EI_, 0, core.Inventory.INTERFACE_ID);
+  assert.equal(event.equipped, true);
+  assert.equal(event.itemId, core.ItemIdentifiers.SALVE_AMULET_EI_);
+  assert.equal(event.slot, core.Equipment.AMULET_SLOT);
 });
 
 test('an NMZ imbue event credits the diary once for living registered players only', (t) => {

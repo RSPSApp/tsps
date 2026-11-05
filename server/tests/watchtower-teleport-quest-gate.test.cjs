@@ -7,6 +7,7 @@ const { Player } = require("../dist/game/entity/impl/player/Player");
 
 let core;
 let spellCast;
+let canTeleport;
 
 before(async () => {
   await CachePipeline.initialize(require("node:path").resolve(__dirname, ".."));
@@ -25,11 +26,17 @@ before(async () => {
     },
     emitCustomEvent: dispatch,
     onSpellCast(handler) { spellCast = handler; },
+    onCanTeleport(handler) { canTeleport = handler; },
   }, { get: (target, key) => key in target ? target[key] : () => {} });
 
   require("../plugins/quests/quests/Watchtower.Quest")(api);
   require("../plugins/combat/SpellTeleports.plugin").register(api);
   PluginManager.emitCustomEvent = dispatch;
+  PluginManager.emitCanTeleport = (player, wildernessLevelLimit, destination, spellName) => {
+    const event = { player, wildernessLevelLimit, destination, spellName, allow: null };
+    canTeleport(event);
+    return event.allow;
+  };
 });
 
 function fixture(t, stage) {
@@ -52,11 +59,13 @@ function fixture(t, stage) {
   return player;
 }
 
-test("the quest plugin blocks a completed quest before scroll-read without the diary plugin", (t) => {
-  const player = fixture(t, 12);
-  spellCast({ player, spellName: "watchtower teleport", handled: false });
-  assert.equal(player.getInventory().getAmount(563), 2);
-  assert.equal(player.getInventory().getAmount(557), 2);
+test("the quest plugin blocks Watchtower Teleport before consuming runes", (t) => {
+  for (const stage of [11, 12]) {
+    const player = fixture(t, stage);
+    spellCast({ player, spellName: "watchtower teleport", handled: false });
+    assert.equal(player.getInventory().getAmount(563), 2);
+    assert.equal(player.getInventory().getAmount(557), 2);
+  }
 });
 
 test("reading the scroll unlocks the spell without the diary plugin", (t) => {
@@ -64,4 +73,10 @@ test("reading the scroll unlocks the spell without the diary plugin", (t) => {
   spellCast({ player, spellName: "watchtower teleport", handled: false });
   assert.equal(player.getInventory().getAmount(563), 0);
   assert.equal(player.getInventory().getAmount(557), 0);
+});
+
+test("the Watchtower gate ignores other teleports and events without a spell name", (t) => {
+  const player = fixture(t, 12);
+  assert.equal(PluginManager.emitCanTeleport(player, 20, new core.Location(2549, 3112, 2), "varrock teleport"), null);
+  assert.equal(PluginManager.emitCanTeleport(player, 20, new core.Location(2549, 3112, 2)), null);
 });

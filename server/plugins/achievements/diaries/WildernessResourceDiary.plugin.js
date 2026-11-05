@@ -23,6 +23,8 @@
  * (Logs.Firemaking.js:584 -> :151). The gate and its fee are in areas/ResourceArea.plugin.js.
  */
 const DIARY = "wilderness";
+const DiaryProgress = require("./Progress.AchievementDiaries");
+const DIARY_DATA = require("./Data.AchievementDiaries").BY_KEY.get(DIARY);
 const ATTRIBUTE = "wilderness-diary:resource-area";
 const AREA = { minX: 3174, maxX: 3197, minY: 3925, maxY: 3944 };
 const TASKS = {
@@ -60,7 +62,10 @@ function smithed({ player, itemId }) {
 
 function fished({ player, itemId }) {
   if (itemId !== api.core.ItemIdentifiers.RAW_DARK_CRAB || !inArea(player)) return;
-  write(player, { ...read(player), crab: true });
+  const state = read(player);
+  if (state.crab) return;
+  write(player, { ...state, crab: true });
+  DiaryProgress.notifyTaskProgress(player, DIARY_DATA, TASKS.crab);
 }
 
 function cooked({ player, itemId }) {
@@ -72,7 +77,10 @@ function cooked({ player, itemId }) {
 
 function chopped({ player, logId, logAmount }) {
   if (logId !== api.core.ItemIdentifiers.MAGIC_LOGS || !(logAmount > 0) || !inArea(player)) return;
-  write(player, { ...read(player), cut: true });
+  const state = read(player);
+  if (state.cut) return;
+  write(player, { ...state, cut: true });
+  DiaryProgress.notifyTaskProgress(player, DIARY_DATA, TASKS.logs);
 }
 
 function burnt({ player, itemId }) {

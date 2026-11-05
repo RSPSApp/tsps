@@ -10,6 +10,8 @@
  * the shade pyre's wood). Those emits describe the action, not the diary.
  */
 const DIARY = "morytania";
+const DiaryProgress = require("./Progress.AchievementDiaries");
+const DIARY_DATA = require("./Data.AchievementDiaries").BY_KEY.get(DIARY);
 const MAHOGANY_ATTRIBUTE = "morytania-diary:mahogany-chopped";
 
 /** Skill requirement for the Morytania advanced spike chain (Wiki). */
@@ -139,7 +141,10 @@ function chopped({ player, logId, logAmount }) {
   const I = api.core.ItemIdentifiers;
   if (logId === I.BARK) emit(player, "obtain-some-bark-from-a-hollow-tree");
   if (logId === I.MAHOGANY_LOGS && inside(at(player), MOS_LE_HARMLESS)) {
-    player.setAttribute(MAHOGANY_ATTRIBUTE, true);
+    if (player.getAttribute(MAHOGANY_ATTRIBUTE) !== true) {
+      player.setAttribute(MAHOGANY_ATTRIBUTE, true);
+      DiaryProgress.notifyTaskProgress(player, DIARY_DATA, "chop-and-burn-some-mahogany-logs-on-mos-le-harml");
+    }
   }
 }
 

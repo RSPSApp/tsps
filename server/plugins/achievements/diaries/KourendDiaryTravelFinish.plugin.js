@@ -15,6 +15,8 @@
  * Wiki: https://oldschool.runescape.wiki/w/Kourend_%26_Kebos_Diary
  */
 const DIARY = "kourend";
+const DIARY_DATA = require("./Data.AchievementDiaries").BY_KEY.get(DIARY);
+const DiaryProgress = require("./Progress.AchievementDiaries");
 const BOAT_TASK = "take-a-boat-to-land-s-end";
 const SPELLBOOK_TASK = "switch-to-the-necromancy-spellbook-at-tyss";
 const FARMING_GUILD_TASK = "enter-the-farming-guild";
@@ -57,6 +59,7 @@ function memoirs({ player, city }) {
   seen.add(city);
   player.setAttribute(CITIES_ATTRIBUTE, [...seen]);
   if (MEMOIRS_CITIES.every((name) => seen.has(name))) credit(player, MEMOIRS_TASK);
+  else DiaryProgress.notifyTaskProgress(player, DIARY_DATA, MEMOIRS_TASK);
 }
 
 function xericsTalisman({ player, destination }) {

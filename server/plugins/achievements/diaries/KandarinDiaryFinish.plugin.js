@@ -15,6 +15,8 @@
  */
 
 const DIARY = "kandarin";
+const DiaryProgress = require("./Progress.AchievementDiaries");
+const DIARY_DATA = require("./Data.AchievementDiaries").BY_KEY.get(DIARY);
 
 const TASK = {
   candle: "buy-a-candle-from-the-chandler-in-catherby",
@@ -275,8 +277,13 @@ function fishingSuccess({ player, itemId }) {
   const at = player.getLocation();
   if (!inBox(at, CATHERBY)) return;
   const s = state(player);
-  if (itemId === RAW_BASS) s.bass = true;
-  else if (itemId === RAW_SHARK) s.sharks = (s.sharks ?? 0) + 1;
+  if (itemId === RAW_BASS && !s.bass) {
+    s.bass = true;
+    DiaryProgress.notifyTaskProgress(player, DIARY_DATA, TASK.bass);
+  } else if (itemId === RAW_SHARK && (s.sharks ?? 0) < SHARKS_REQUIRED) {
+    s.sharks = (s.sharks ?? 0) + 1;
+    DiaryProgress.notifyTaskProgress(player, DIARY_DATA, TASK.sharks);
+  }
 }
 
 function cookingSuccess({ player, itemId }) {
@@ -294,13 +301,17 @@ function cookingSuccess({ player, itemId }) {
       delete s.sharks;
       delete s.sharkCooks;
       credit(player, TASK.sharks);
-    }
+    } else DiaryProgress.notifyTaskProgress(player, DIARY_DATA, TASK.sharks);
   }
 }
 
 function woodcuttingSuccess({ player, logId }) {
   if (!active(player) || logId !== YEW_LOGS || !inBox(player.getLocation(), SEERS_VILLAGE)) return;
-  state(player).yewLogs = true;
+  const s = state(player);
+  if (!s.yewLogs) {
+    s.yewLogs = true;
+    DiaryProgress.notifyTaskProgress(player, DIARY_DATA, TASK.yewLongbow);
+  }
 }
 
 function fletchingMade({ player, itemId }) {
@@ -308,6 +319,7 @@ function fletchingMade({ player, itemId }) {
   const s = state(player);
   if (itemId === YEW_LONGBOW_U && s.yewLogs) {
     s.yewUnstrung = true;
+    DiaryProgress.notifyTaskProgress(player, DIARY_DATA, TASK.yewLongbow);
   } else if (itemId === YEW_LONGBOW && s.yewUnstrung) {
     delete s.yewLogs;
     delete s.yewUnstrung;
@@ -322,7 +334,10 @@ function herbloreMade({ player, itemId }) {
   if (!inArea) return;
   const s = state(player);
   if (itemId === IRIT_POTION_UNF) {
-    s.iritUnfinished = true;
+    if (!s.iritUnfinished) {
+      s.iritUnfinished = true;
+      DiaryProgress.notifyTaskProgress(player, DIARY_DATA, TASK.superAntipoison);
+    }
   } else if (itemId === SUPERANTIPOISON_3 && s.iritUnfinished) {
     delete s.iritUnfinished;
     credit(player, TASK.superAntipoison);
@@ -402,7 +417,12 @@ function blackboardRead({ player, objectId, handled }) {
 }
 
 function graniteBodyBought({ player }) {
-  if (active(player)) state(player).graniteBought = true;
+  if (!active(player)) return;
+  const s = state(player);
+  if (!s.graniteBought) {
+    s.graniteBought = true;
+    DiaryProgress.notifyTaskProgress(player, DIARY_DATA, TASK.graniteBody);
+  }
 }
 
 function equipmentChanged({ player }) {

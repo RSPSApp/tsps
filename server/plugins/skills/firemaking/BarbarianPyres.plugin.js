@@ -9,8 +9,10 @@
  * an axe and logs build the ship, bones go on it, then a tinderbox or bow lights it. Magic
  * logs need 85 Crafting and 85 Firemaking (75.9 Crafting, 303.8 Firemaking experience).
  *
- * The diary task credits when chewed bones are placed on a magic-log pyre boat. The item
- * reward from the peaceful spirit is not modelled here.
+ * The diary task credits when chewed bones are placed on a magic-log pyre boat. Mangled bones
+ * spawn a ferocious barbarian spirit after the pyre begins to float (Wiki: Elite pyre clue and
+ * Ferocious barbarian spirit); it expires after roughly 3 minutes.
+ * The item reward from the peaceful spirit is not modelled here.
  */
 
 const PYRE_SITE = 25286;
@@ -23,6 +25,7 @@ const PYRE_FLOATING = 25293;
 const CHEWED_BONES = 11338;
 const MANGLED_BONES = 11337;
 const TINDERBOX = 590;
+const FEROCIOUS_SPIRIT_LIFETIME_TICKS = 300;
 
 /** Wiki Table/Pyre ships: logs -> { craft, firemaking, craftXp, firemakingXp }. */
 const PYRE_LOGS = new Map([
@@ -47,6 +50,8 @@ let api;
 let core;
 /** Tile key -> { player, logsId, bonesId, object }. */
 const pyres = new Map();
+/** One-off pyre spirits disappear after about three minutes. */
+const spirits = new Map();
 
 const tileKey = (object) => `${object.getLocation().getX()},${object.getLocation().getY()},${object.getLocation().getZ()}`;
 
@@ -96,6 +101,35 @@ function disconnected({ player }) {
   for (const [key, use] of pyres) {
     if (use.player === player) resetPyre(key, use);
   }
+}
+
+function forgetSpirit(player, npc) {
+  const owned = spirits.get(player);
+  if (!owned) return;
+  owned.delete(npc);
+  if (owned.size === 0) spirits.delete(player);
+}
+
+function spawnFerociousSpirit(player, object) {
+  if (!player.isRegistered?.()) return;
+  const npc = api.spawnNpc({
+    id: core.NpcIdentifiers.FEROCIOUS_BARBARIAN_SPIRIT,
+    x: object.getLocation().getX(), y: object.getLocation().getY(), z: object.getLocation().getZ(),
+    // Keep the public-world encounter visible to nearby players, while owner suppresses the
+    // ordinary world-spawn respawn path for this one-off plugin spawn.
+    owner: player, wanderRadius: 0,
+  });
+  if (!npc) return;
+  if (!spirits.has(player)) spirits.set(player, new Set());
+  spirits.get(player).add(npc);
+  core.TaskManager.submit(new (class extends core.Task {
+    constructor() { super(FEROCIOUS_SPIRIT_LIFETIME_TICKS); }
+    execute() {
+      if (npc.isRegistered?.()) api.removeNpc(npc);
+      forgetSpirit(player, npc);
+      this.stop();
+    }
+  })());
 }
 
 function near(object, player) {
@@ -197,6 +231,7 @@ function itemOnPyre(event) {
         } else if (!this.floating) {
           use.object = swap(use.object, PYRE_FLOATING);
           this.floating = true;
+          if (use.bonesId === MANGLED_BONES) spawnFerociousSpirit(use.player, use.object);
         } else {
           resetPyre(key, use);
           this.stop();

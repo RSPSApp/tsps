@@ -105,6 +105,10 @@ Uma moeda própria do jogo idle, separada dos pontos de melhoria.
       tomar dano); local de viagem na aba Bosses
 - [x] Testes automáticos no GitHub em todo PR (`.github/workflows/server-tests.yml`): o job
       **Idle Mode** precisa passar; o **Full suite** roda todos os testes e só informa
-- [ ] Corrigir as 68 falhas antigas da suíte completa (já falhavam antes do trabalho idle) e então
-      fazer o **Full suite** bloquear também
-- [ ] Sincronizar com o projeto original de tempos em tempos (`git merge upstream/main`)
+- [ ] Corrigir as 84 falhas antigas da suíte completa (já falhavam antes do trabalho idle; nenhuma
+      é do modo idle) e então fazer o **Full suite** bloquear também
+- [x] Sincronizar com o projeto original (`git merge upstream/main`, PR #21, 05/11/2026): 225
+      commits sem conflito, o fake de inventário dos testes ganhou `getAddableAmount` porque o
+      Fletching novo o chama. A suíte completa foi de 13.587 testes / 68 falhas para 14.161 / 84 —
+      o upstream consertou 20 falhas antigas e trouxe 17 novas, todas de conteúdo dele
+- [ ] Voltar a sincronizar de tempos em tempos

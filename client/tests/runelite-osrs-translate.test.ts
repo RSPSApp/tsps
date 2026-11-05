@@ -65,12 +65,15 @@ const general = new Map([
     ["You have [number] [item].", "Você tem [number] [item]."],
     ["[player], hello!", "[player], olá!"],
     ["[a]", "match everything"], // only placeholders: skipped
+    ["[Vampyre name].", "[Vampyre name]"], // pt-BR's real key: punctuation alone, skipped too
     ["Same [x] text", "Same [x] text"], // identity template: skipped
     ["Plain key", "Chave simples"],
 ]);
 const patterns = compileRegexTranslations(general);
 assert.deepEqual(patterns.map((p) => p.translation), ["Você tem [number] moedas.", "Você tem [number] [item].", "[player], olá!"],
-    "most static text first; identity and all-placeholder keys skipped");
+    "most static text first; identity, all-placeholder and punctuation-only keys skipped");
+assert.equal(new TranslationDomain(general, true).translate("Welcome to my shop."), null,
+    "an untranslated sentence keeps its full stop (punctuation-only keys match nothing)");
 assert.equal(findRegexTranslation(patterns, "You have 5 coins."), "Você tem 5 moedas.", "the more specific key wins");
 assert.equal(findRegexTranslation(patterns, "You have 2 logs."), "Você tem 2 logs.");
 assert.equal(findRegexTranslation(patterns, "Zezima, hello!"), "Zezima, olá!", "a leading placeholder");

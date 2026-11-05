@@ -96,7 +96,11 @@ export function compileRegexTranslations(source: ReadonlyMap<string, string>): P
     for (const [key, translation] of source) {
         if (!PLACEHOLDER_ONE.test(key) || isIdentityTemplate(key, translation)) continue;
         const specificity = staticTextLength(key);
-        if (specificity === 0) continue;
+        // Keys with no words of their own match nearly any text. Upstream skips only keys of
+        // placeholders alone; pt-BR's "[Vampyre name]." -> "[Vampyre name]" also matches every
+        // untranslated sentence ending in a full stop and drops the stop, so punctuation alone
+        // is not enough either.
+        if (specificity === 0 || !LETTER.test(key.replace(PLACEHOLDER, ""))) continue;
         const pattern = key.split(PLACEHOLDER).map(escapeRegExp).join("(.+?)");
         entries.push({ key, pattern: new RegExp(`^${pattern}$`, "s"), translation, specificity });
     }

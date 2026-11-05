@@ -955,31 +955,35 @@ test("screen: ::idle opens it, a server-defined interface with the frame's title
   const opened = player.screen.opened.at(-1);
   assert.equal(opened.groupId, GROUP_ID);
   assert.deepEqual(opened.options.postScripts[0].args[1], "Idle Mode");
-  assert.equal(screenText(player, COMPONENT.STATUS_LINE_START), "Idle Mode: Off");
-  assert.equal(screenText(player, COMPONENT.STATUS_LINE_START + 1), "Auto-resume: needs Idle Mode");
+  assert.equal(screenText(player, COMPONENT.HERO_EYEBROW), "IDLE MODE OFF");
+  assert.equal(screenText(player, COMPONENT.HERO_ACTIVITY), "Press Start idle to begin");
+  assert.equal(screenText(player, COMPONENT.HERO_AUTO), "Auto-resume needs Idle Mode");
   assert.equal(screenText(player, COMPONENT.IDLE_LABEL), "Start idle");
 });
 
-test("screen: the status lines follow the account", (t) => {
-  const { COMPONENT } = require(SCREEN);
+test("screen: the hero strip and the progress panel follow the account", (t) => {
+  const { COMPONENT, uid, NEXT_PIPS } = require(SCREEN);
   const { player } = choppingWillow(t);
   player.setAttribute("idle-mode:points", 1234);
   player.setAttribute("idle-mode:point-progress", 80);
   player.setAttribute("idle-mode:upgrades", { "long-dreams": 1 });
   player.setAttribute("idle-mode:last-away", "1h 0m woodcutting: 15,000 Woodcutting XP, 600 x Logs to your bank.");
   api.command(player, "idle");
-  const lines = Array.from({ length: 8 }, (_, line) => screenText(player, COMPONENT.STATUS_LINE_START + line));
-  assert.deepEqual(lines, [
-    "Idle Mode: On",
-    "Auto-resume: On",
-    "Activity: Chop down willow tree",
-    "XP per hour: -",
-    "Idle points: 1,234",
-    "Next point: 80 / 250 XP",
-    "Offline: up to 15h at 100%",
-    "Last time away: 1h 0m woodcutting: 15,000 Woodcutting XP, 600 x Logs to your bank.",
-  ]);
+  // The state is in the eyebrow and the edge's colour, so the big line is only ever the work.
+  assert.equal(screenText(player, COMPONENT.HERO_EYEBROW), "WORKING ON");
+  assert.equal(screenText(player, COMPONENT.HERO_ACTIVITY), "Chop down willow tree");
+  assert.equal(screenText(player, COMPONENT.HERO_AUTO), "Auto-resume: On");
+  assert.equal(screenText(player, COMPONENT.HERO_RATE), "- XP/h");
+  assert.equal(player.screen.hidden.get(uid(COMPONENT.HERO_EDGE_GOOD)), false, "a green edge while it works");
+  assert.equal(player.screen.hidden.get(uid(COMPONENT.HERO_EDGE_BAD)), true);
+  assert.equal(screenText(player, COMPONENT.PROGRESS_POINTS), "1,234 idle points");
+  assert.equal(screenText(player, COMPONENT.NEXT_VALUE), "80 / 250 XP");
+  assert.equal(screenText(player, COMPONENT.PROGRESS_OFFLINE), "Offline pays 100% for up to 15h");
+  assert.equal(screenText(player, COMPONENT.PROGRESS_AWAY), "Last time away: 1h 0m woodcutting: 15,000 Woodcutting XP, 600 x Logs to your bank.");
   assert.equal(screenText(player, COMPONENT.AUTO_LABEL), "Stop auto");
+  // 80 of 250 XP is just under a third: six of the twenty pips lit, and the seventh dark.
+  const lit = Array.from({ length: NEXT_PIPS }, (_, pip) => player.screen.hidden.get(uid(COMPONENT.NEXT_PIP_START + pip)) === false);
+  assert.deepEqual([lit.filter(Boolean).length, lit.indexOf(false)], [6, 6]);
 });
 
 test("screen: the switches turn Idle Mode and auto-resume on and off, and it redraws", () => {
@@ -988,11 +992,12 @@ test("screen: the switches turn Idle Mode and auto-resume on and off, and it red
   api.command(player, "idle");
   api.click(player, uid(COMPONENT.IDLE_BUTTON));
   assert.equal(player.getAttribute("idle-mode:enabled"), true);
-  assert.equal(screenText(player, COMPONENT.STATUS_LINE_START), "Idle Mode: On");
+  assert.equal(screenText(player, COMPONENT.HERO_EYEBROW), "IDLE MODE ON");
+  assert.equal(screenText(player, COMPONENT.HERO_ACTIVITY), "Nothing chosen yet");
   assert.equal(screenText(player, COMPONENT.IDLE_LABEL), "Stop idle");
   api.click(player, uid(COMPONENT.AUTO_LABEL));
   assert.equal(player.getAttribute("idle-mode:auto"), false);
-  assert.equal(screenText(player, COMPONENT.STATUS_LINE_START + 1), "Auto-resume: Off");
+  assert.equal(screenText(player, COMPONENT.HERO_AUTO), "Auto-resume: Off");
   api.click(player, uid(COMPONENT.AUTO_BUTTON));
   assert.equal(player.getAttribute("idle-mode:auto"), true);
   // A closed screen ignores its buttons.
@@ -1008,12 +1013,14 @@ test("screen: upgrades show level, price and Buy; buying spends points and redra
   player.setAttribute("idle-mode:points", 120);
   player.setAttribute("idle-mode:upgrades", { "bountiful-harvest": 5 });
   api.command(player, "idle");
-  assert.equal(screenText(player, COMPONENT.POINTS), "You have 120 idle points");
+  assert.equal(screenText(player, COMPONENT.UPGRADES_POINTS), "120 to spend");
   assert.equal(screenText(player, slotComponent(0, SLOT.NAME)), "Quick Hands 0/5");
-  assert.match(screenText(player, slotComponent(0, SLOT.DESCRIPTION)), /^Each level: a 10% chance/);
-  assert.equal(screenText(player, slotComponent(0, SLOT.PRICE)), "Next: 100 points");
-  assert.equal(screenText(player, slotComponent(1, SLOT.PRICE)), "Next: 150 points");
-  assert.equal(screenText(player, slotComponent(2, SLOT.PRICE)), "Max level");
+  // The panel shows the short form; ::idle upgrades still prints the long sentence.
+  assert.equal(screenText(player, slotComponent(0, SLOT.DESCRIPTION)), "10% chance to save a tick");
+  assert.equal(screenText(player, slotComponent(0, SLOT.PRICE)), "100 points");
+  assert.equal(screenText(player, slotComponent(1, SLOT.PRICE)), "150 points - 30 to go", "and how far off you are");
+  assert.equal(screenText(player, slotComponent(2, SLOT.PRICE)), "Every level bought");
+  assert.equal(player.screen.hidden.get(uid(slotComponent(1, SLOT.BUY_BUTTON))), true, "no Buy you cannot afford");
   assert.equal(player.screen.hidden.get(uid(slotComponent(2, SLOT.BUY_BUTTON))), true, "no Buy at max level");
   const { GROUP_ID } = require(SCREEN);
   const widgets = api.interfaces.find((entry) => entry.groupId === GROUP_ID).widgets.map((widget) => widget.uid);
@@ -1021,8 +1028,11 @@ test("screen: upgrades show level, price and Buy; buying spends points and redra
 
   api.click(player, uid(slotComponent(0, SLOT.BUY_BUTTON)));
   assert.equal(player.messages.pop(), "Quick Hands is now level 1.");
-  assert.equal(screenText(player, COMPONENT.POINTS), "You have 20 idle points");
+  assert.equal(screenText(player, COMPONENT.UPGRADES_POINTS), "20 to spend");
   assert.equal(screenText(player, slotComponent(0, SLOT.NAME)), "Quick Hands 1/5");
+  // One pip per level the upgrade has, the first lit now.
+  assert.equal(player.screen.hidden.get(uid(slotComponent(0, SLOT.PIP_START))), false);
+  assert.equal(player.screen.hidden.get(uid(slotComponent(0, SLOT.PIP_START + 1))), true);
   api.click(player, uid(slotComponent(1, SLOT.BUY_LABEL)));
   assert.match(player.messages.pop(), /Long Dreams level 1 costs 150 points; you have 20/);
 });
@@ -1032,13 +1042,15 @@ test("screen: it redraws while open as points come in, and a pause shows", (t) =
   const { player, advance } = choppingWillow(t);
   api.command(player, "idle");
   api.emit("xp", { player, skill: Skill.WOODCUTTING, experience: 300 });
-  assert.equal(screenText(player, COMPONENT.STATUS_LINE_START + 4), "Idle points: 1");
-  assert.equal(screenText(player, COMPONENT.POINTS), "You have 1 idle point");
+  assert.equal(screenText(player, COMPONENT.PROGRESS_POINTS), "1 idle point");
+  assert.equal(screenText(player, COMPONENT.UPGRADES_POINTS), "1 to spend");
   api.emit("before-object", { player, object: fakeObject("Bank booth", ["Bank"], 3205, 3205), objectId: 1, clickType: 1, handled: false });
-  assert.equal(screenText(player, COMPONENT.STATUS_LINE_START + 1), "Auto-resume: Paused (you're doing something else)");
+  assert.equal(screenText(player, COMPONENT.HERO_AUTO), "Auto-resume: Paused (you're doing something else)");
+  assert.equal(screenText(player, COMPONENT.HERO_EYEBROW), "STOPPED ON", "the eyebrow carries the state");
   advance(1000);
   chop(player);
-  assert.equal(screenText(player, COMPONENT.STATUS_LINE_START + 1), "Auto-resume: On");
+  assert.equal(screenText(player, COMPONENT.HERO_AUTO), "Auto-resume: On");
+  assert.equal(screenText(player, COMPONENT.HERO_EYEBROW), "WORKING ON");
 });
 
 const TRAVEL = "../plugins/modes/idle/Travel.IdleMode";
@@ -1162,7 +1174,11 @@ test("idle screen: its Travel button opens the travel screen", () => {
   const { COMPONENT, uid } = require(SCREEN);
   const player = idlePlayer();
   api.command(player, "idle");
-  assert.equal(screenText(player, COMPONENT.TRAVEL_LABEL), "Travel");
+  // A label that never changes lives in the widget itself, so no packet carries it.
+  const { GROUP_ID } = require(SCREEN);
+  const travel = api.interfaces.find((entry) => entry.groupId === GROUP_ID).widgets
+    .find((widget) => widget.uid === uid(COMPONENT.TRAVEL_LABEL));
+  assert.equal(travel.text, "Change activity");
   api.click(player, uid(COMPONENT.TRAVEL_BUTTON));
   assert.equal(player.getInterfaceId(), require(TRAVEL_SCREEN).GROUP_ID);
 });
@@ -1226,7 +1242,7 @@ test("journal: the Idle button's idle:open opens the Idle screen", () => {
   const player = idlePlayer();
   api.emit("idle:open", { player });
   assert.equal(player.getInterfaceId(), GROUP_ID);
-  assert.equal(screenText(player, COMPONENT.STATUS_LINE_START + 2), "Activity: None yet: press Travel");
+  assert.equal(screenText(player, COMPONENT.HERO_ACTIVITY), "Nothing chosen yet");
 });
 
 test("offline: a server restart (a save, no logout) still pays the time away on the next login", (t) => {
@@ -1264,7 +1280,7 @@ test("panel: XP per hour from the session played, totals of time idle, and the j
     if (i < 20) now += 6000;
   }
   api.command(player, "idle");
-  assert.equal(screenText(player, COMPONENT.STATUS_LINE_START + 3), "XP per hour: 15,000");
+  assert.equal(screenText(player, COMPONENT.HERO_RATE), "15,000 XP/h");
   assert.deepEqual(player.getAttribute("idle-mode:totals"), {
     workedMs: 120_000, offlineMs: 0, xp: 500, items: 20, bySkill: { WOODCUTTING: 500 }, byItem: { [LOGS]: 20 },
   });
@@ -1323,8 +1339,16 @@ test("screens: every widget has its own id, and none runs into another's", () =>
     const uids = definition.widgets.map((widget) => widget.uid);
     assert.equal(new Set(uids).size, uids.length, `group ${definition.groupId} repeats a widget id`);
   }
-  const { COMPONENT } = require(SCREEN);
-  assert.ok(COMPONENT.STATUS_LINE_START + 8 <= COMPONENT.IDLE_BUTTON, "the status lines end before the buttons");
+  // Every component of the Idle screen is placed by hand, so nothing may stick out of the frame.
+  const { GROUP_ID } = require(SCREEN);
+  const idle = api.interfaces.find((entry) => entry.groupId === GROUP_ID);
+  for (const widget of idle.widgets) {
+    if (widget.widthMode === 1 || widget.heightMode === 1) continue;
+    assert.ok(widget.rawX >= 0 && widget.rawX + widget.rawWidth <= 494,
+      `component ${widget.fileId} runs off the frame: x ${widget.rawX}..${widget.rawX + widget.rawWidth}`);
+    assert.ok(widget.rawY >= 0 && widget.rawY + widget.rawHeight <= 316,
+      `component ${widget.fileId} runs off the frame: y ${widget.rawY}..${widget.rawY + widget.rawHeight}`);
+  }
 });
 
 const PRODUCTION = "../plugins/modes/idle/Production.IdleMode";
@@ -1356,7 +1380,7 @@ test("production: a use by hand that made something becomes the target, with the
   });
   assert.equal(player.getAttribute("idle-mode:auto-target"), null, "one activity at a time");
   api.command(player, "idle");
-  assert.equal(screenText(player, require(SCREEN).COMPONENT.STATUS_LINE_START + 2), "Activity: Making logs", "the product's name");
+  assert.equal(screenText(player, require(SCREEN).COMPONENT.HERO_ACTIVITY), "Making logs", "the product's name");
 });
 
 test("production: when it stops, products to the bank, the loadout topped up, the same use and the same product", (t) => {
@@ -1389,7 +1413,7 @@ test("production: out of materials in the bank, or tries that make nothing, paus
   assert.equal(work(player, Date.now()), "paused");
   assert.match(player.messages.pop(), /out of logs\. Bank some more/, "the fake names every item Logs");
   api.command(player, "idle");
-  assert.equal(screenText(player, require(SCREEN).COMPONENT.STATUS_LINE_START + 1), "Auto-resume: Paused (out of materials)");
+  assert.equal(screenText(player, require(SCREEN).COMPONENT.HERO_AUTO), "Auto-resume: Paused (out of materials)");
   api.command(player, "idle auto on");
 
   player.bank.set(RAW_SHRIMPS, 500);
@@ -1519,7 +1543,7 @@ test("travel screen: a Making tab lists the production sites, and opens on them 
 });
 
 test("screen tabs: Stats shows the totals and hides the Overview; Overview brings it back; Travel opens travel", (t) => {
-  const { COMPONENT, uid } = require(SCREEN);
+  const { COMPONENT, uid, ROW, TILE, rowComponent, tileComponent } = require(SCREEN);
   let now = 1_000_000;
   t.mock.method(Date, "now", () => now);
   const player = idlePlayer();
@@ -1533,34 +1557,40 @@ test("screen tabs: Stats shows the totals and hides the Overview; Overview bring
   });
   api.command(player, "idle");
   assert.equal(player.screen.hidden.get(uid(COMPONENT.STATS_BOX)), true, "Overview first");
-  assert.equal(player.screen.hidden.get(uid(COMPONENT.STATUS_BOX)), false);
+  assert.equal(player.screen.hidden.get(uid(COMPONENT.PROGRESS_BOX)), false);
   api.click(player, uid(COMPONENT.TAB_LABEL_START + 1));
   assert.equal(player.screen.hidden.get(uid(COMPONENT.STATS_BOX)), false);
-  assert.equal(player.screen.hidden.get(uid(COMPONENT.STATUS_BOX)), true);
+  assert.equal(player.screen.hidden.get(uid(COMPONENT.PROGRESS_BOX)), true);
   assert.equal(player.screen.hidden.get(uid(require(SCREEN).slotComponent(0, require(SCREEN).SLOT.BUY_BUTTON))), true);
-  assert.deepEqual([0, 1].map((line) => screenText(player, COMPONENT.SKILL_LINE_START + line)), ["Mining: 900 XP", "Woodcutting: 250 XP"]);
-  assert.deepEqual([0, 1].map((line) => screenText(player, COMPONENT.ITEM_LINE_START + line)), ["Logs: 10", "Yew logs: 3"]);
-  assert.equal(screenText(player, COMPONENT.STATS_TIME), "Time idle: 1m playing, 1h 0m away");
+  // The two times and the XP they bought, as the three tiles.
+  assert.deepEqual([0, 1, 2].map((tile) => [screenText(player, tileComponent(tile, TILE.VALUE)), screenText(player, tileComponent(tile, TILE.LABEL))]),
+    [["1m", "idle playing"], ["1h 0m", "away"], ["1,150", "XP gained"]]);
+  assert.deepEqual([0, 1].map((line) => [screenText(player, rowComponent(COMPONENT.STATS_SKILL_START, line, ROW.NAME)), screenText(player, rowComponent(COMPONENT.STATS_SKILL_START, line, ROW.VALUE))]),
+    [["Mining", "900"], ["Woodcutting", "250"]]);
+  assert.deepEqual([0, 1].map((line) => [screenText(player, rowComponent(COMPONENT.STATS_ITEM_START, line, ROW.NAME)), screenText(player, rowComponent(COMPONENT.STATS_ITEM_START, line, ROW.VALUE))]),
+    [["Logs", "10"], ["Yew logs", "3"]]);
   assert.equal(screenText(player, COMPONENT.TAB_LABEL_START + 1), "Stats", "the active tab is white");
   assert.match(player.screen.texts.get(uid(COMPONENT.TAB_LABEL_START + 1)), /<col=ffffff>/);
+  assert.equal(player.screen.hidden.get(uid(COMPONENT.TAB_RULE_START + 1)), false, "and carries the accent rule");
+  assert.equal(player.screen.hidden.get(uid(COMPONENT.TAB_RULE_START)), true);
   // Points coming in redraw the Stats tab, not the hidden Overview.
   api.emit("xp", { player, skill: Skill.WOODCUTTING, experience: 300 });
-  assert.equal(player.screen.hidden.get(uid(COMPONENT.STATUS_BOX)), true);
+  assert.equal(player.screen.hidden.get(uid(COMPONENT.PROGRESS_BOX)), true);
   api.click(player, uid(COMPONENT.TAB_START));
-  assert.equal(player.screen.hidden.get(uid(COMPONENT.STATUS_BOX)), false);
+  assert.equal(player.screen.hidden.get(uid(COMPONENT.PROGRESS_BOX)), false);
   assert.equal(player.screen.hidden.get(uid(COMPONENT.STATS_BOX)), true);
   api.click(player, uid(COMPONENT.TAB_START + 5));
   assert.equal(player.getInterfaceId(), require(TRAVEL_SCREEN).GROUP_ID);
 });
 
 test("screen tabs: a new account's Stats say nothing yet", () => {
-  const { COMPONENT, uid } = require(SCREEN);
+  const { COMPONENT, uid, ROW, rowComponent } = require(SCREEN);
   const player = idlePlayer();
   api.command(player, "idle");
   api.click(player, uid(COMPONENT.TAB_START + 1));
-  assert.equal(screenText(player, COMPONENT.SKILL_LINE_START), "Nothing yet");
-  assert.equal(screenText(player, COMPONENT.ITEM_LINE_START), "Nothing yet");
-  assert.equal(screenText(player, COMPONENT.SKILL_LINE_START + 1), "");
+  assert.equal(screenText(player, rowComponent(COMPONENT.STATS_SKILL_START, 0, ROW.NAME)), "Nothing yet");
+  assert.equal(screenText(player, rowComponent(COMPONENT.STATS_ITEM_START, 0, ROW.NAME)), "Nothing yet");
+  assert.equal(screenText(player, rowComponent(COMPONENT.STATS_SKILL_START, 1, ROW.NAME)), "");
 });
 
 const GOALS = "../plugins/modes/idle/Goals.IdleMode";
@@ -1666,7 +1696,7 @@ test("goals: bigger at higher levels; not for accounts that aren't idle", () => 
 });
 
 test("goals tab: today's goals with progress and reward, the bonus and the next day", (t) => {
-  const { COMPONENT, uid } = require(SCREEN);
+  const { COMPONENT, uid, GOAL, GOAL_PIPS, goalComponent } = require(SCREEN);
   const at = Date.UTC(2026, 10, 5, 20, 30);
   t.mock.method(Date, "now", () => at);
   const player = idlePlayer();
@@ -1679,11 +1709,25 @@ test("goals tab: today's goals with progress and reward, the bonus and the next 
   api.click(player, uid(COMPONENT.TAB_START + 2));
   assert.equal(player.screen.hidden.get(uid(COMPONENT.GOALS_BOX)), false);
   assert.equal(player.screen.hidden.get(uid(COMPONENT.STATS_BOX)), true);
-  assert.equal(screenText(player, COMPONENT.GOAL_START), "Done Gain 2,000 Woodcutting XP");
-  assert.equal(screenText(player, COMPONENT.GOAL_START + 3), "42 / 150 - reward 20 idle points");
-  assert.equal(screenText(player, COMPONENT.GOAL_START + 4), "Defeat 30 monsters");
-  assert.equal(screenText(player, COMPONENT.GOALS_BONUS), "Do all 3 for 50 more idle points (1/3 done).");
-  assert.equal(screenText(player, COMPONENT.GOALS_NEXT), "New goals in 6h 30m.");
+  assert.equal(screenText(player, goalComponent(0, GOAL.TEXT)), "Gain 2,000 Woodcutting XP");
+  // Done is the green marker down the row's edge, not the word "Done" inside the text.
+  assert.equal(player.screen.hidden.get(uid(goalComponent(0, GOAL.EDGE_DONE))), false);
+  assert.equal(player.screen.hidden.get(uid(goalComponent(0, GOAL.EDGE_OPEN))), true);
+  assert.equal(player.screen.hidden.get(uid(goalComponent(0, GOAL.PIP_START + GOAL_PIPS - 1))), false, "a full bar");
+  assert.equal(screenText(player, goalComponent(1, GOAL.VALUE)), "42 / 150");
+  assert.equal(screenText(player, goalComponent(1, GOAL.REWARD)), "+20 points");
+  assert.equal(player.screen.hidden.get(uid(goalComponent(1, GOAL.EDGE_DONE))), true);
+  // 42 of 150 is two of the ten pips.
+  assert.equal(player.screen.hidden.get(uid(goalComponent(1, GOAL.PIP_START + 1))), false);
+  assert.equal(player.screen.hidden.get(uid(goalComponent(1, GOAL.PIP_START + 2))), true);
+  assert.equal(screenText(player, goalComponent(2, GOAL.TEXT)), "Defeat 30 monsters");
+  // The data gives three goals a day, so the tab builds three rows and no empty fourth.
+  const { GROUP_ID, goalLayout } = require(SCREEN);
+  assert.equal(goalLayout().slots, 3);
+  const built = api.interfaces.find((entry) => entry.groupId === GROUP_ID).widgets.map((w) => w.uid);
+  assert.ok(!built.includes(uid(goalComponent(3, GOAL.TEXT))), "no row for a goal the day never has");
+  assert.equal(screenText(player, COMPONENT.BONUS_TEXT), "All 3 done pays 50 extra points");
+  assert.equal(screenText(player, COMPONENT.GOALS_NEXT), "New goals in 6h 30m");
 });
 
 test("goals: a login on a new day says the day's goals", (t) => {
@@ -1773,18 +1817,28 @@ test("achievements: gathering, making, time, kills and daily goals count toward 
 });
 
 test("feats tab: each track's tier and the next tier's progress", () => {
-  const { COMPONENT, uid } = require(SCREEN);
+  const { COMPONENT, uid, FEAT, featComponent } = require(SCREEN);
   const player = idlePlayer();
   player.setAttribute("idle-mode:records", { counts: { gathered: 1234, made: 60000, hours: 30 }, tiers: { gatherer: 1, maker: 3, patient: 1 } });
   api.command(player, "idle");
   api.click(player, uid(COMPONENT.TAB_START + 3));
   assert.equal(player.screen.hidden.get(uid(COMPONENT.FEATS_BOX)), false);
-  assert.equal(screenText(player, COMPONENT.FEAT_START), "Gatherer I");
-  assert.equal(screenText(player, COMPONENT.FEAT_START + 1), "Gatherer II: 1,234 / 10,000 resources gathered - reward 250 idle points");
-  assert.equal(screenText(player, COMPONENT.FEAT_START + 2), "Done Maker III");
-  assert.equal(screenText(player, COMPONENT.FEAT_START + 3), "Every tier done: 60,000 items made");
-  assert.equal(screenText(player, COMPONENT.FEAT_START + 4), "Fighter (not yet)");
-  assert.equal(screenText(player, COMPONENT.FEAT_START + 7), "Patient II: 30 / 168 hours idle - reward 500 idle points");
+  assert.equal(screenText(player, COMPONENT.FEATS_SUB), "5 of 18 tiers earned");
+  // The tier earned is the lit chips; the text is the track and what comes next.
+  assert.equal(screenText(player, featComponent(0, FEAT.TITLE)), "Gatherer");
+  assert.equal(screenText(player, featComponent(0, FEAT.NEXT)), "Next: Gatherer II");
+  assert.equal(screenText(player, featComponent(0, FEAT.VALUE)), "1,234 / 10,000");
+  assert.deepEqual([0, 1, 2].map((tier) => player.screen.hidden.get(uid(featComponent(0, FEAT.CHIP_START + tier)))),
+    [false, true, true], "one of three tiers");
+  assert.equal(screenText(player, featComponent(1, FEAT.TITLE)), "Maker");
+  assert.equal(screenText(player, featComponent(1, FEAT.NEXT)), "Every tier done");
+  assert.equal(screenText(player, featComponent(1, FEAT.VALUE)), "60,000 items made");
+  assert.deepEqual([0, 1, 2].map((tier) => player.screen.hidden.get(uid(featComponent(1, FEAT.CHIP_START + tier)))),
+    [false, false, false], "every tier");
+  assert.equal(screenText(player, featComponent(2, FEAT.TITLE)), "Fighter");
+  assert.equal(player.screen.hidden.get(uid(featComponent(2, FEAT.CHIP_START))), true, "no tier yet");
+  assert.equal(screenText(player, featComponent(3, FEAT.NEXT)), "Next: Patient II");
+  assert.equal(screenText(player, featComponent(3, FEAT.VALUE)), "30 / 168");
 });
 
 test("work: an Idle screen stays open when there is nothing to do (out of materials, no target in reach)", (t) => {
@@ -1870,7 +1924,7 @@ test("firemaking: logs used on a fire tend it, the campfire it becomes is the sa
   assert.equal(target.skill, "FIREMAKING");
   assert.equal(target.objectName, "Fire");
   api.command(player, "idle");
-  assert.equal(screenText(player, require(SCREEN).COMPONENT.STATUS_LINE_START + 2), "Activity: Burning logs");
+  assert.equal(screenText(player, require(SCREEN).COMPONENT.HERO_ACTIVITY), "Burning logs");
   // Fed, the fire is a Forester's Campfire now; the logs are all burnt.
   world.objects = [fakeObject("Forester's Campfire", [], 3201, 3200)];
   player.inventory = [];
@@ -2035,7 +2089,7 @@ test("hiscores: kept current as the screen's data changes, saved to the file and
 });
 
 test("hiscores: ::idle top and the Ranks tab", () => {
-  const { COMPONENT, uid } = require(SCREEN);
+  const { COMPONENT, uid, RANK, rankComponent } = require(SCREEN);
   const bob = rankedPlayer("Bob", { xp: 90_000, points: 100, hours: 30 });
   require(HISCORES).update(bob);
   const alice = rankedPlayer("Alice", { xp: 5_000, points: 300, hours: 2 });
@@ -2045,12 +2099,19 @@ test("hiscores: ::idle top and the Ranks tab", () => {
   api.click(alice, uid(COMPONENT.TAB_START + 4));
   assert.equal(alice.screen.hidden.get(uid(COMPONENT.RANKS_BOX)), false);
   assert.equal(screenText(alice, COMPONENT.RANKS_TITLE), "Idle hiscores: Idle XP");
-  assert.equal(screenText(alice, COMPONENT.RANK_ROW_START), "1. Bob");
-  assert.equal(screenText(alice, COMPONENT.RANK_ROW_START + 1), "90,000 XP");
-  assert.equal(alice.screen.texts.get(uid(COMPONENT.RANK_ROW_START + 2)), "<col=00ff00>2. Alice</col>", "your own row stands out");
+  assert.equal(screenText(alice, COMPONENT.RANK_HEAD_VALUE), "XP");
+  assert.deepEqual([RANK.PLACE, RANK.NAME, RANK.VALUE].map((part) => screenText(alice, rankComponent(0, part))),
+    ["1", "Bob", "90,000 XP"]);
+  assert.equal(screenText(alice, rankComponent(1, RANK.NAME)), "Alice");
+  assert.equal(alice.screen.hidden.get(uid(rankComponent(1, RANK.MINE))), false, "your own row stands out");
+  assert.equal(alice.screen.hidden.get(uid(rankComponent(0, RANK.MINE))), true);
+  assert.equal(alice.screen.hidden.get(uid(COMPONENT.RANK_BUTTON_RULE_START)), false, "the category you are on");
   api.click(alice, uid(COMPONENT.RANK_BUTTON_START + 2));
   assert.equal(screenText(alice, COMPONENT.RANKS_TITLE), "Idle hiscores: Hours idle");
-  assert.equal(screenText(alice, COMPONENT.RANK_ROW_START + 1), "30 hours");
+  assert.equal(screenText(alice, COMPONENT.RANK_HEAD_VALUE), "Hours");
+  assert.equal(alice.screen.hidden.get(uid(COMPONENT.RANK_BUTTON_RULE_START + 2)), false);
+  assert.equal(alice.screen.hidden.get(uid(COMPONENT.RANK_BUTTON_RULE_START)), true);
+  assert.equal(screenText(alice, rankComponent(0, RANK.VALUE)), "30 hours");
   assert.equal(screenText(alice, COMPONENT.RANK_YOU), "You are #2 of 2: 2.0 hours.");
 });
 

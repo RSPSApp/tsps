@@ -42,6 +42,7 @@
       "quick-hands": {
         "name": "Quick Hands",
         "description": "each level: a 10% chance a gathering or making action takes a tick less",
+        "short": "10% chance to save a tick",
         "costs": [
           100,
           250,
@@ -54,6 +55,7 @@
       "long-dreams": {
         "name": "Long Dreams",
         "description": "each level: 3 more hours of offline progress",
+        "short": "3 more offline hours",
         "costs": [
           150,
           400,
@@ -65,6 +67,7 @@
       "bountiful-harvest": {
         "name": "Bountiful Harvest",
         "description": "each level: a 4% chance of an extra resource, online and offline",
+        "short": "4% chance of an extra resource",
         "costs": [
           200,
           500,

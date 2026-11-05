@@ -55,6 +55,12 @@ Uma interface própria e sempre à mão, para o jogador nunca precisar digitar c
       totais de XP e itens já são guardados (`idle-mode:totals`)
 - [x] **Estatísticas, parte 2**: aba Stats com XP por skill, itens por tipo e tempo idle jogando
       e fora (os totais por skill e item contam a partir desta versão)
+- [x] **Redesenho das seis abas** (PR #25, 05/11/2026): cada aba passa a ter uma coisa em
+      destaque e todo número que é fração virou barra. Overview ganhou uma faixa com o que o
+      personagem está fazendo (estado na sobrancelha e na cor da borda, auto-resume e XP/h ao
+      lado); teto offline e última ausência viraram rodapé. Como nenhum pacote redimensiona nem
+      recolore um componente, barra = trilho escuro com pips que acendem, e troca de cor =
+      retângulos empilhados. Os redesenhos agora só enviam o que mudou
 - [ ] **Versão mobile** conferida (o cliente já é responsivo; validar as telas idle no celular)
 
 ## P1 - Loja de Idle Coins

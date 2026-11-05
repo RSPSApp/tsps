@@ -100,6 +100,15 @@ function lines(player) {
       progress: next === undefined
         ? `Every tier done: ${number(count)} ${track.unit}`
         : `${tierName(track, tier + 1)}: ${number(Math.min(count, next))} / ${number(next)} ${track.unit} - reward ${number(track.points[tier] ?? 0)} idle points`,
+      // The same thing as numbers, for a screen that draws a bar rather than printing the line.
+      name: track.name,
+      unit: track.unit,
+      tier,
+      tiers: track.tiers.length,
+      count,
+      next: next ?? null,
+      nextName: next === undefined ? null : tierName(track, tier + 1),
+      points: next === undefined ? 0 : (track.points[tier] ?? 0),
     };
   });
 }

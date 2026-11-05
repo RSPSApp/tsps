@@ -102,7 +102,8 @@ function progress(player) {
 function upgradeRows(player) {
   return Object.entries(config().upgrades).map(([id, entry]) => {
     const level = levelOf(player, id);
-    return { id, name: entry.name, description: entry.description, level, maxLevel: entry.costs.length, cost: entry.costs[level] ?? null };
+    // `short` is the panel's line; `description` is the long one ::idle upgrades prints.
+    return { id, name: entry.name, description: entry.description, short: entry.short ?? entry.description, level, maxLevel: entry.costs.length, cost: entry.costs[level] ?? null };
   });
 }
 

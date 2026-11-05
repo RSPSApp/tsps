@@ -308,8 +308,13 @@ where it comes up, one it fought is never taken for one out of reach, a fight wi
 lost for `stalledFightSeconds` (`30`) is dropped and looked for again, and its own clicks
 (`Common.act`) don't pause it.
 
-Not on the list: the **Giant Mole**. On this server, after burrowing across the lair she walks
-back to her spawn healed to full and can't be hit on the way, for any player.
+- **Giant Mole** (combat 70, members): her whole lair is in reach (`searchTiles` 45). She burrows
+  and comes up across it: the character lets her go while she is under, walks up to where she
+  comes up (a fight doesn't take from 40 tiles off) and fights her there. `GiantMole.plugin.js`
+  makes where she comes up her home (`setSpawnPosition`) and sets `combat:no-retreat`: before, her
+  movement coordinator walked her back to her first spawn, untargetable, and the walk home
+  healed her to full, for any player. Checked in game: killed by a maxed character in rune,
+  followed through several burrows, then fled to Lumbridge out of food.
 
 ## Hiscores
 

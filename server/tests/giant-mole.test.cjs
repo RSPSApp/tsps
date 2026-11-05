@@ -163,6 +163,26 @@ test('resurfacing restores targetability and moves to a different spot', t => {
   assert.equal(s.npc.getLocation().equals(old), false);
 });
 
+test('resurfaced far from her spawn, she stays to fight: no walk home, no healing on the way', t => {
+  const s = scene(t, 80);
+  s.attack(0);
+  s.step(1);
+  for (let i = 0; i < 4; i++) {
+    for (const task of [...s.tasks]) if (task.isRunning()) task.tick();
+    s.advance(i + 2);
+  }
+  const spot = s.npc.getLocation().clone();
+  assert.ok(spot.getDistance(new core.Location(1759, 5189, 0)) > 10, 'she came up across the lair');
+  assert.ok(spot.equals(s.npc.getSpawnPosition()), 'where she came up is her home now');
+  assert.equal(s.npc.hasFlag('combat:no-retreat'), true, 'moved by her burrows, not by chasing');
+  // Her movement coordinator, which walked her back to the first spawn (healing all the way).
+  const coordinator = s.npc.getMovementCoordinator();
+  coordinator.updateCoordinator();
+  const { CoordinateState } = require('../dist/game/entity/impl/npc/NPCMovementCoordinator');
+  assert.equal(coordinator.getCoordinateState(), CoordinateState.HOME);
+  assert.equal(s.npc.getHitpoints(), 80, 'no regeneration from retreating');
+});
+
 test('the Wiki respawn of 16 ticks is applied to the Mole on startup', t => {
   const s = scene(t);
   s.hooks.onServerStartup();

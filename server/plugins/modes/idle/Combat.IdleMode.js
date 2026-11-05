@@ -269,6 +269,8 @@ function fight(player, now) {
   if (location.getZ() !== target.anchor.z || Common.chebyshev(location, target.anchor) > leashTiles(target)) return "away";
   if (now - state.lastAttemptAt < config().retrySeconds * 1000) return "waiting";
   // The last one attacked is alive and not being fought: the attack never took (out of reach).
+  // The last attack took (she burrowed off mid-fight, the Giant Mole): no try that went nowhere.
+  if (state.lastNpcFought) state.failedAttempts = 0;
   if (!state.lastNpcFought && state.lastNpc?.getHitpoints?.() > 0 && state.lastNpc.isRegistered?.() !== false && !hidden(state.lastNpc)) {
     state.skips.set(state.lastNpc, now + config().skipSeconds * 1000);
   }
@@ -285,6 +287,12 @@ function fight(player, now) {
   state.lastAttemptAt = now;
   state.lastNpc = npc;
   state.lastNpcFought = false;
+  // Far across a big lair, a fight doesn't take from here: walk up to it first.
+  const distance = Common.chebyshev(location, { x: npc.getLocation().getX(), y: npc.getLocation().getY() });
+  if (distance > config().searchTiles) {
+    player.getMovementQueue().walkToEntity(npc, () => combat.attack(npc));
+    return "approaching";
+  }
   combat.attack(npc);
   return "attacking";
 }

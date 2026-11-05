@@ -14,6 +14,8 @@
  */
 
 const BURIED_ATTRIBUTE = "giant-mole:buried";
+/** She is moved about her lair by her burrows, not by chasing: she never gives up a fight to go home. */
+const NO_RETREAT_FLAG = "combat:no-retreat";
 const BURROW_TICKS = 4; // ponytail: eyeballed; tune against live if she reads fast/slow
 const BURROW_HP_FLOOR = 10;
 const BURROW_MIN_FRACTION = 0.05;
@@ -85,6 +87,7 @@ function startBurrow(core, npc) {
   const { Animation, Graphic, Task, TaskManager } = core;
   const token = {};
   npc.setAttribute(BURIED_ATTRIBUTE, token);
+  npc.setFlag(NO_RETREAT_FLAG);
   npc.getCombat().reset();
   npc.performAnimation(new Animation(BURROW_DOWN_ANIMATION_ID));
   npc.performGraphic(new Graphic(MUD_CLOUD_GRAPHIC_ID));
@@ -112,6 +115,9 @@ function emerge(core, npc, token) {
   const spot = pickBurrowLocation(core, npc.getLocation());
   if (spot) {
     npc.moveTo(spot);
+    // Where she came up is her home now: her movement coordinator would otherwise walk her back
+    // to where she first spawned, untargetable and healing all the way (NPC.setSpawnPosition).
+    npc.setSpawnPosition(spot);
   }
   npc.performAnimation(new Animation(BURROW_UP_ANIMATION_ID));
   npc.performGraphic(new Graphic(MUD_HOLE_UP_GRAPHIC_ID));

@@ -592,6 +592,30 @@
         "retreatBelowPercent": 40
       },
       {
+        "id": "giant-mole",
+        "name": "Giant Mole",
+        "place": "Falador mole lair (members)",
+        "skill": "COMBAT",
+        "kind": "npc",
+        "target": "Giant Mole",
+        "option": "Attack",
+        "tile": [
+          1760,
+          5190,
+          0
+        ],
+        "level": 70,
+        "icon": 7416,
+        "tool": "Good gear and plenty of food",
+        "members": true,
+        "boss": true,
+        "searchTiles": 45,
+        "leashTiles": 50,
+        "tip": "She burrows across the lair; your character finds her again.",
+        "eatBelowPercent": 70,
+        "retreatBelowPercent": 40
+      },
+      {
         "id": "al-kharid-range",
         "name": "Cooking range",
         "place": "Al Kharid, by the bank",

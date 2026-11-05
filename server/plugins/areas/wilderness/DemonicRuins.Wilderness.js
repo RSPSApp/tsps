@@ -10,6 +10,16 @@ const playersInArea = new WeakMap();
 
 let api;
 let core;
+let wildernessRules;
+
+function rules() {
+  if (!wildernessRules) {
+    const request = { rules: null };
+    api.emitCustomEvent("wilderness:rules", request);
+    wildernessRules = request.rules;
+  }
+  return wildernessRules;
+}
 
 function playerFor(mobile) {
   return mobile?.isPlayer?.() ? mobile.getAsPlayer() : null;
@@ -26,6 +36,7 @@ function leaveRuins(mobile) {
 }
 
 function processRuins(mobile) {
+  rules()?.process(mobile);
   const player = playerFor(mobile);
   if (!player) return;
   if (player.getPrivateArea?.() != null) {
@@ -59,16 +70,30 @@ function processRuins(mobile) {
 function createRuinsArea() {
   class DemonicRuinsArea extends core.Area {
     postEnter(mobile) {
+      rules()?.postEnter(mobile);
       const player = playerFor(mobile);
       if (player) enterRuins(player);
     }
 
-    postLeave(mobile) {
+    postLeave(mobile, logout) {
+      rules()?.postLeave(mobile, logout);
       leaveRuins(mobile);
     }
 
     process(mobile) {
       processRuins(mobile);
+    }
+
+    canAttack(attacker, target, method) {
+      return rules()?.canAttack(attacker, target, method) ?? null;
+    }
+
+    canTeleport(player, wildernessLevelLimit) {
+      return rules()?.canTeleport(player, wildernessLevelLimit) ?? null;
+    }
+
+    npcAggressionTolerance(player, npc) {
+      return rules()?.npcAggressionTolerance(player, npc) ?? null;
     }
   }
 
@@ -80,7 +105,8 @@ function createRuinsArea() {
 module.exports = function attachDemonicRuins(pluginApi) {
   api = pluginApi;
   core = api.core;
+  wildernessRules = null;
   api.registerArea(createRuinsArea());
 };
 
-Object.assign(module.exports, { AREA, processRuins });
+Object.assign(module.exports, { AREA, processRuins, rules });

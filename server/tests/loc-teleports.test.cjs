@@ -95,6 +95,27 @@ test("an entry keeps the captured move, with whole ticks and a destination per s
   assert.deepEqual(stairs.sides, [{ from: [3, 3, 0], to: [1, 2, 1] }, { from: [9, 9, 0], to: [5, 6, 1] }]);
 });
 
+// The sync records the first sound a capture heard around the climb, and with a fight nearby that is the fight's
+// (#2595: a hurt sound on stairs). loc-teleport-sync.json's ignoreSounds lists the Wiki-named attack, hit, block and
+// weapon sounds; toEntry skips them and takes the first sound that is not one, or none.
+test("an entry skips a fight's sound and takes the first one that is not (loc-teleport-sync.json ignoreSounds)", () => {
+  const entry = (sounds) => toEntry(captured({ sounds }), { display: "Ladder", option: "Climb" });
+  assert.equal(entry([[1615, 2], [2454, 3]]).sound, 2454, "dagannoth_attack, then the climbing loop");
+  assert.equal(entry([[519, 1], [2454, 3]]).sound, 2454, "human_hit_2, then the climbing loop");
+  assert.equal(entry([[2454, 1], [1615, 2]]).sound, 2454, "the first non-fight sound still wins");
+  assert.equal("sound" in entry([[1615, 2]]), false, "only a fight's sound: silent");
+  assert.equal("sound" in entry([[400, 0], [2958, 1], [2811, 1]]), false, "demon_attack and the hits around it: silent");
+});
+
+test("no entry carries a sound the sync ignores, and every ignored sound says what it is", () => {
+  const ignored = decisions.ignoreSounds ?? {};
+  assert.ok(Object.keys(ignored).length >= 30, "the ignore list exists");
+  for (const [id, name] of Object.entries(ignored)) assert.match(String(name), /\w/, `sound ${id} has its Wiki name`);
+  const carrying = data.locs.filter((entry) => entry.sound !== undefined && Object.hasOwn(ignored, String(entry.sound)))
+    .map((entry) => `${entry.name} ${entry.x},${entry.y} ${entry.sound} ${ignored[entry.sound]}`);
+  assert.deepEqual(carrying, [], "these entries play a fight's sound");
+});
+
 test("every entry is a placed loc with that option in the rev 241 cache, once per tile and option", () => {
   const keys = new Set();
   for (const entry of data.locs) {

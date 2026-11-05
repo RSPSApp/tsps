@@ -654,7 +654,8 @@ class MiningTask extends Task {
       }
 
       const pickaxe = findBestPickaxe(player);
-      if (!pickaxe || getMiningLevel(player) < state.rock.level) {
+      if (!pickaxe || getMiningLevel(player) < state.rock.level
+        || (state.rock.requiresBreathingFilter && !wearsBreathingFilter(player))) {
         stopMining(this.activeSessions, player);
         continue;
       }

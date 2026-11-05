@@ -46,21 +46,25 @@ function dig(event) {
     player.sendMessage(NO_SPACE);
     return true;
   }
+  TaskManager.cancelTasks(player.getIndex());
   player.performAnimation(new core.Animation(DIG_ANIMATION));
   core.Sounds.sendSound(player, new core.Sound(DIG_SOUND, 1, 0, 0));
   TaskManager.submit(new (class extends Task {
     constructor() {
-      super(DIG_TICKS);
+      super(DIG_TICKS, player.getIndex());
       this.player = player;
     }
     execute() {
       this.stop();
-      if (!this.player.isRegistered()) return;
+      if (!this.player.isRegistered() || this.player.getHitpoints() <= 0 || this.player.isDyingReturn()
+        || !hasSpade(this.player) || this.player.getPrivateArea() !== object.getPrivateArea()
+        || !object.isWithinInteractionDistance(this.player.getLocation())) return;
       if (this.player.getInventory().isFull()) {
         this.player.sendMessage(NO_SPACE);
         return;
       }
-      const count = amount(this.player);
+      const count = this.player.getInventory().getAddableAmount(new core.Item(core.ItemIdentifiers.SALTPETRE, amount(this.player)));
+      if (count <= 0) return;
       this.player.getInventory().adds(core.ItemIdentifiers.SALTPETRE, count);
       this.player.sendMessage("You dig up some saltpetre.");
       api.emitCustomEvent("mining:saltpetre", { player: this.player, amount: count });

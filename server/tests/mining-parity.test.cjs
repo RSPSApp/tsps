@@ -1103,3 +1103,23 @@ test("every loc named for mining in the cache has a handler (this plugin, or the
   }
   assert.deepEqual([...missing], []);
 });
+
+
+test("sulphur mining stops when the breathing filter is removed before the roll", () => {
+  const h = harness();
+  const player = createPlayer();
+  let filtered = true;
+  player.getEquipment = () => ({ get: () => ({ getId: () => filtered ? core.ItemIdentifiers.GAS_MASK : -1 }), getItems: () => [] });
+  const { restore } = mineRock(h, player, "Volcanic sulphur", 28496);
+  try {
+    assert.equal(Mining.isMiningActive(player), true);
+    h.tick();
+    filtered = false;
+    h.tick(20);
+    assert.equal(Mining.isMiningActive(player), false);
+    assert.equal(player.added.length, 0);
+    assert.equal(player.xp.length, 0);
+  } finally {
+    restore();
+  }
+});

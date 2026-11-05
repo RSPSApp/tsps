@@ -4,11 +4,12 @@
  * - Mine some Volcanic Sulphur (medium), from a successful sulphur rock.
  * - Create an Ape Atoll teleport tablet (elite), from the Arceuus lectern.
  * - Create your own Battlestaff from scratch within the Farming Guild (elite), from fletching
- *   celastrus bark into a battlestaff inside the guild's planting area.
+ *   bark harvested from the player's own celastrus tree into a battlestaff inside the guild.
  *
  * The Sand Crab (easy) credit stays in DormantNpcs, which owns the crab pair and its area check.
  */
 const DIARY = "kourend";
+const CELASTRUS_HARVESTED_ATTRIBUTE = "kourend:celastrus-harvested";
 const TASKS = {
   saltpetre: "dig-up-some-saltpetre",
   sulphur: "mine-some-volcanic-sulphur",
@@ -50,8 +51,17 @@ function tabletMade({ player, itemId }) {
   if (itemId === item.APE_ATOLL_TELEPORT) complete(player, TASKS.apeAtollTablet);
 }
 
+function harvested({ player, crop, patch, itemId, amount }) {
+  if (!eligible(player) || crop !== "CELASTRUS" || itemId !== item.CELASTRUS_BARK || !(amount > 0)) return;
+  if (patch?.z === 0 && patch.x >= FARMING_GUILD[0] && patch.x <= FARMING_GUILD[1]
+    && patch.y >= FARMING_GUILD[2] && patch.y <= FARMING_GUILD[3]) {
+    player.setAttribute(CELASTRUS_HARVESTED_ATTRIBUTE, true);
+  }
+}
+
 function fletched({ player, itemId }) {
-  if (itemId === item.BATTLESTAFF && inside(player?.getLocation?.(), FARMING_GUILD)) complete(player, TASKS.battlestaff);
+  if (itemId === item.BATTLESTAFF && player.getAttribute(CELASTRUS_HARVESTED_ATTRIBUTE) === true
+    && inside(player?.getLocation?.(), FARMING_GUILD)) complete(player, TASKS.battlestaff);
 }
 
 module.exports = {
@@ -61,6 +71,8 @@ module.exports = {
   register(pluginApi) {
     api = pluginApi;
     item = pluginApi.core.ItemIdentifiers;
+    api.persistAttribute(CELASTRUS_HARVESTED_ATTRIBUTE, false);
+    api.onCustomEvent("farming:harvested", harvested);
     api.onCustomEvent("mining:saltpetre", saltpetreDug);
     api.onCustomEvent("mining:success", mined);
     api.onCustomEvent("construction:tablet-made", tabletMade);

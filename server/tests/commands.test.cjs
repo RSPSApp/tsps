@@ -67,4 +67,8 @@ test("commands sends its live permitted rows and optional prefill over the game 
   run(["commands"]);
   assert.equal(p.texts.get(uid(COMPONENT.SEARCH_INPUT)), "");
   assert.ok(JSON.parse(p.texts.get(uid(COMPONENT.DATA))).some(({ name }) => name.startsWith("::later - ")));
+  p.texts.clear();
+  api.emitCustomEvent("commands:open", { player: p });
+  assert.equal(p.texts.get(uid(COMPONENT.SEARCH_INPUT)), "");
+  assert.ok(JSON.parse(p.texts.get(uid(COMPONENT.DATA))).some(({ name }) => name.startsWith("::later - ")));
 });

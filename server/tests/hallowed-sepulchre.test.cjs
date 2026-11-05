@@ -15,6 +15,7 @@ const { TaskManager } = require('../dist/game/task/TaskManager');
 const { Location } = require('../dist/game/model/Location');
 
 let Common, Run, hooks;
+const collectionObtains = [];
 
 /** Whether the test player has done Sins of the Father (the Sepulchre's quest). */
 let questDone = true;
@@ -36,6 +37,7 @@ before(() => {
     sendMultiChatboxPrompt: (player, title, ...args) => hooks.prompts.push({ player, title, args }),
     emitCustomEvent: (name, request) => {
       if (name === 'quest:is-complete' && request.key === 'sins_of_the_father') request.complete = questDone;
+      if (name === 'collection-log:obtain') collectionObtains.push(request);
     },
     spawnNpc: ({ id, x, y, z }) => fakeNpc(id, new Location(x, y, z)),
     removeNpc: (npc) => { npc.registered = false; hooks.removed.push(npc); },
@@ -49,6 +51,7 @@ let random;
 beforeEach(() => {
   random = Math.random;
   hooks.prompts.length = 0;
+  collectionObtains.length = 0;
 });
 
 /** A trap NPC: where it is, its glides and seqs. */
@@ -339,6 +342,8 @@ test('a coffin: the picklock, the disarm with Thieving XP, the lid, then the Wik
   ticks(2);
   Math.random = random;
   assert.equal(p.inventory.getAmount(24711), 1, 'floor 1: one Hallowed mark');
+  assert.ok(collectionObtains.some((event) => event.player === p && event.itemId === 24711 && event.amount === 1),
+    'the mark is credited to the collection log');
   assert.ok(p.messages.includes('<col=005f00>Tester received a drop: Hallowed mark</col>'));
   assert.equal(varbit(p, 'hallowed_current_floor_looted'), 1);
   click(p, 39544, 1, coffin);

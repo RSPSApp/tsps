@@ -9,6 +9,7 @@ const { PluginManager } = require('../dist/plugins/PluginManager');
 const { ItemIdentifiers: I } = require('../dist/util/ItemIdentifiers');
 const { Item } = require('../dist/game/model/Item');
 const { Equipment } = require('../dist/game/model/container/impl/Equipment');
+const { Location } = require('../dist/game/model/Location');
 const { FightType } = require('../dist/game/content/combat/FightType');
 
 const Sanguinesti = require('../plugins/items/SanguinestiStaff.plugin');
@@ -71,6 +72,9 @@ function chargeInventory({ runes = 0, freeSlots = 28 } = {}) {
         refreshItems: () => {},
         contains: (id) => id === I.BLOOD_RUNE && inventory.runes > 0,
         getFreeSlots: () => freeSlots,
+        getItems: () => (inventory.runes > 0 ? [new Item(I.BLOOD_RUNE, inventory.runes)] : []),
+        deleteAtSlot: (_slot, amount) => { inventory.runes -= amount; },
+        getAddableAmount: (item) => (inventory.runes > 0 || freeSlots > 0 ? item.getAmount() : 0),
         addItem: (item) => inventory.added.push(item),
     };
     return inventory;
@@ -97,6 +101,26 @@ test('the built-in spell is floor(Magic / 3), never below 6, at 4 ticks (Wiki)',
 
     assert.equal(method.canAttack(built.player, NPC), true);
     assert.equal(built.castSpell.maximumHit(), 33, '99 Magic');
+
+    // The cast as captured (RSProx 1696 ticks 640, 774, 778, 1063, 1073, 1413; 1698 ticks 4177, 4181, 4238, 4265):
+    // anim 1167, spotanim 1540 at height 92, a private shadow_cast 178, and projectile 1539 leaving after 51 cycles,
+    // angle 16, progress 64, start/end height 23/15 (the quarter-height unit packets use), landing 46 + 10 a tile
+    // later, a tile being the distance to the target's NEAREST tile (the Balance Elemental is size 3: 1696 ticks
+    // 774 and 778 from the east end 86, 1063 and 1073 from the east end 76, 640 from the west ends 106).
+    const spell = built.castSpell;
+    assert.equal(spell.castAnimation().getId(), 1167);
+    assert.deepEqual([spell.startGraphic().getId(), spell.startGraphic().getHeight?.() ?? spell.startGraphic().height], [1540, 92]);
+    assert.equal(spell.castSound()?.getId(), 178);
+    const at = (x, y, size = 1) => ({ getLocation: () => new Location(x, y, 0), getSize: () => size, getPrivateArea: () => null });
+    const projectile = spell.castProjectile(at(3200, 3200), at(3204, 3200));
+    assert.deepEqual(
+        [projectile.projectileId, projectile.delay, projectile.speed, projectile.angle, projectile.progress, projectile.startHeight, projectile.endHeight],
+        [1539, 51, 86, 16, 64, 23, 15], 'a size-1 target four tiles away');
+    // 1696 tick 778 / 774: a size-3 target whose south-west tile is 6 tiles west of the caster is 4 tiles from its
+    // nearest tile, end 86; tick 1063 / 1073: 5 from the south-west tile, 3 from the nearest, end 76.
+    assert.equal(spell.castProjectile(at(3206, 3200), at(3200, 3200, 3)).speed, 86, 'from the east of a size-3 target');
+    assert.equal(spell.castProjectile(at(3205, 3200), at(3200, 3200, 3)).speed, 76, 'one tile closer');
+    assert.equal(spell.castProjectile(at(3194, 3200), at(3200, 3200, 3)).speed, 106, 'from the west, 6 tiles (tick 640)');
     assert.equal(Sanguinesti._test.baseMaxHit(playerWithStaff({ magic: 82 }).player), 27);
     assert.equal(Sanguinesti._test.baseMaxHit(playerWithStaff({ magic: 0 }).player), 6, 'the floor is 6');
 });

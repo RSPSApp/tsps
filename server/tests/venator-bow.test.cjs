@@ -71,6 +71,7 @@ VenatorBow.register({
     core: {
         Equipment,
         ItemIdentifiers,
+        ItemAliases: { register: () => {} },
         RangedCombatMethod,
         PendingHit,
         Flag: { APPEARANCE: 0 },

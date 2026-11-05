@@ -23,6 +23,7 @@ const Call = require("./pets/Call.Pets");
 const CatchUp = require("./pets/CatchUp.Pets");
 const Dialogue = require("./pets/Dialogue.Pets");
 const RiftGuardian = require("./pets/RiftGuardian.Pets");
+const TombsOfAmascut = require("./pets/TombsOfAmascut.Pets");
 
 const CURRENT_PET_ATTRIBUTE = "pets:current";
 /** The item of the follower the player logged out with; re-summoned on login. */
@@ -74,19 +75,19 @@ const PETS = [
   { enumName: "LIL_NYLO", petId: NpcIdentifiers.LIL_NYLO_2, morphId: NpcIdentifiers.LIL_SOT_2, itemId: ItemIdentifiers.LIL_NYLO, familyItemId: ItemIdentifiers.LIL_ZIK, dialogue: -1, morphUnlock: SANGUINE_DUST_UNLOCK },
   { enumName: "LIL_SOT", petId: NpcIdentifiers.LIL_SOT_2, morphId: NpcIdentifiers.LIL_XARP_2, itemId: ItemIdentifiers.LIL_SOT, familyItemId: ItemIdentifiers.LIL_ZIK, dialogue: -1, morphUnlock: SANGUINE_DUST_UNLOCK },
   { enumName: "LIL_XARP", petId: NpcIdentifiers.LIL_XARP_2, morphId: NpcIdentifiers.LIL_ZIK_2, itemId: ItemIdentifiers.LIL_XARP, familyItemId: ItemIdentifiers.LIL_ZIK, dialogue: -1, morphUnlock: SANGUINE_DUST_UNLOCK },
-  // Tombs of Amascut: each form uses its boss remnant (Wiki, Metamorphosis).
-  { enumName: "TUMEKENS_GUARDIAN", petId: 11812, morphId: 11813, itemId: 27352, dialogue: -1 },
-  { enumName: "ELIDINIS_GUARDIAN", petId: 11813, morphId: 11849, itemId: 27352, dialogue: -1,
-    morphUnlock: { itemId: ItemIdentifiers.ANCIENT_REMNANT, consume: true, name: "an ancient remnant" } },
-  { enumName: "ZEBO", petId: 11849, morphId: 11848, itemId: 27352, dialogue: -1,
-    morphUnlock: { itemId: ItemIdentifiers.REMNANT_OF_ZEBAK, consume: true, name: "a remnant of Zebak" } },
-  { enumName: "KEPHRITI", petId: 11848, morphId: 11847, itemId: 27352, dialogue: -1,
-    morphUnlock: { itemId: ItemIdentifiers.REMNANT_OF_KEPHRI, consume: true, name: "a remnant of Kephri" } },
-  { enumName: "BABI", petId: 11847, morphId: 11846, itemId: 27352, dialogue: -1,
-    morphUnlock: { itemId: ItemIdentifiers.REMNANT_OF_BA_BA, consume: true, name: "a remnant of Ba-Ba" } },
-  { enumName: "AKKHITO", petId: 11846, morphId: 11850, itemId: 27352, dialogue: -1,
-    morphUnlock: { itemId: ItemIdentifiers.REMNANT_OF_AKKHA, consume: true, name: "a remnant of Akkha" } },
-  { enumName: "TUMEKENS_DAMAGED_GUARDIAN", petId: 11850, morphId: 11812, itemId: 27352, dialogue: -1 },
+  // Tombs of Amascut: the eight guardian forms share one item. Their Metamorphosis is a menu, not a cycle
+  // (pets/TombsOfAmascut.Pets.js, rsprox 1757 ticks 26423-26425), so none has a morphId here.
+  { enumName: "TUMEKENS_GUARDIAN", petId: 11812, morphId: 0, itemId: 27352, dialogue: -1 },
+  { enumName: "ELIDINIS_GUARDIAN", petId: 11813, morphId: 0, itemId: 27352, dialogue: -1 },
+  { enumName: "ZEBO", petId: 11849, morphId: 0, itemId: 27352, dialogue: -1 },
+  { enumName: "KEPHRITI", petId: 11848, morphId: 0, itemId: 27352, dialogue: -1 },
+  { enumName: "BABI", petId: 11847, morphId: 0, itemId: 27352, dialogue: -1 },
+  { enumName: "AKKHITO", petId: 11846, morphId: 0, itemId: 27352, dialogue: -1 },
+  { enumName: "TUMEKENS_DAMAGED_GUARDIAN", petId: 11850, morphId: 0, itemId: 27352, dialogue: -1 },
+  { enumName: "ELIDINIS_DAMAGED_GUARDIAN", petId: 11851, morphId: 0, itemId: 27352, dialogue: -1 },
+  // The Fractured Archive: Orion and Orion (robed) share one family and collection log slot.
+  { enumName: "ORION", petId: NpcIdentifiers.ORION, houseNpcId: NpcIdentifiers.ORION_3, morphId: NpcIdentifiers.ORION_2, itemId: ItemIdentifiers.ORION, familyItemId: ItemIdentifiers.ORION, dialogue: -1 },
+  { enumName: "ORION_ROBED", petId: NpcIdentifiers.ORION_2, houseNpcId: NpcIdentifiers.ORION_4, morphId: NpcIdentifiers.ORION, itemId: ItemIdentifiers.ORION_3, familyItemId: ItemIdentifiers.ORION, dialogue: -1 },
   { enumName: "SMOL_HEREDIT", petId: NpcIdentifiers.SMOL_HEREDIT_2, morphId: 0, itemId: 28960, dialogue: -1, mainDrop: true },
   { enumName: "NEXLING", petId: NpcIdentifiers.NEXLING_2, houseNpcId: NpcIdentifiers.NEXLING, morphId: 0, itemId: 26348, dialogue: -1 },
   { enumName: "VORKI", petId: NpcIdentifiers.VORKI_2, houseNpcId: NpcIdentifiers.VORKI, morphId: 0, itemId: 21992, dialogue: -1 },
@@ -1971,6 +1972,8 @@ module.exports = {
     api.onPlayerDeath(onCatOwnerDeath);
     RiftGuardian.attach(api, {pets: PETS, skill: Skill.RUNECRAFTING, world: World, currentAttribute: CURRENT_PET_ATTRIBUTE,
       activeAttribute: ACTIVE_PET_ATTRIBUTE, lastAttribute: LAST_PET_ATTRIBUTE, getPetByNpcId, setStoredVariant, recordOwnership, syncFollowerIndex});
+    TombsOfAmascut.attach(api, {world: World, currentAttribute: CURRENT_PET_ATTRIBUTE, activeAttribute: ACTIVE_PET_ATTRIBUTE,
+      lastAttribute: LAST_PET_ATTRIBUTE, getPetByNpcId, setStoredVariant});
 
     api.log("registered", {
       pets: PETS.length,

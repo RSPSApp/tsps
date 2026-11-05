@@ -125,6 +125,14 @@
     "varbit": "falador_shield_recharge",
     "spotanim": "elysian_shield_defend_spotanim"
   },
+  "zaffBattlestaves": {
+    "loc": "fai_varrock_battlestaff_barrel_multi",
+    "item": "cert_battlestaff",
+    "price": 7000,
+    "perDay": [15, 30, 60, 120],
+    "varbit": "zaff_last_claimed",
+    "seq": "human_pickuptable"
+  },
   "explorersRing": {
     "objs": ["lumbridge_ring_easy", "lumbridge_ring_medium", "lumbridge_ring_hard", "lumbridge_ring_elite"],
     "energyPercent": [50, 50, 50, 100],
@@ -132,5 +140,21 @@
     "energyVarbit": "lumbridge_energy_restore",
     "alchemyPerDay": 30,
     "alchemyVarbit": "lumbridge_free_alchs"
+  },
+  "flaxKeeper": {
+    "npc": "Flax keeper",
+    "diary": "kandarin",
+    "perDay": [30, 60, 120, 250]
+  },
+  "robin": {
+    "npc": "Robin",
+    "diary": "morytania",
+    "perDay": [
+      0,
+      13,
+      26,
+      39
+    ],
+    "varbit": 4543
   }
 }

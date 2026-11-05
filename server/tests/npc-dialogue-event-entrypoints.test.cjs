@@ -1374,12 +1374,116 @@ test('Fairytale I Tanglefoot lair gate and Nature Spirit treat wielded magic sec
   player.getInventory().deleteNumber(MAGIC_SECATEURS, 1);
   player.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(MAGIC_SECATEURS));
   assert.match(enter(), /^I've received orders to let you through/, 'wielded secateurs let the player in');
-  const enchant = () => PM.emitCustomEvent('npc-dialogue:action', { player, npcId: core.NpcIdentifiers.NATURE_SPIRIT, stepId: 'JQyqMZ', handled: false });
+  const enchant = () => {
+    const action = { player, npcId: core.NpcIdentifiers.NATURE_SPIRIT, stepId: 'JQyqMZ', handled: false };
+    PM.emitCustomEvent('npc-dialogue:action', action);
+    assert.equal(action.handled, true);
+    assert.equal(action.end, true, 'the blessing closes the chat while the scene plays');
+    for (let n = 0; n < 12; n++) core.TaskManager.process();
+  };
   enchant();
   assert.equal(player.getInventory().getAmount(MAGIC_SECATEURS), 0, 'a wielded pair is not duplicated by the Nature Spirit');
   player.getEquipment().setItem(core.Equipment.WEAPON_SLOT, null);
   enchant();
   assert.equal(player.getInventory().getAmount(MAGIC_SECATEURS), 1, 'a lost pair is still replaced');
+});
+
+test('Fairytale I Nature Spirit blessing scene runs before the items are consumed', async t => {
+  const f = fixture(t), { player } = f;
+  const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(entry => entry.key === 'fairytale_i_growing_pains');
+  const { SECATEURS, MAGIC_SECATEURS, WHITE_BERRIES, MORT_MYRE_PEAR, MORT_MYRE_STEM } = core.ItemIdentifiers;
+  quest.setStage(player, 60);
+  player.setAttribute(NATURE_ITEMS_ATTRIBUTE, '1,2,3');
+  player.getInventory().add(new core.Item(SECATEURS));
+  for (const id of [WHITE_BERRIES, MORT_MYRE_PEAR, MORT_MYRE_STEM]) player.getInventory().add(new core.Item(id));
+  const npc = core.NPC.create(core.NpcIdentifiers.NATURE_SPIRIT, new core.Location(3441, 9738, 1));
+  const graphics = [], sender = player.getPacketSender(), sendGraphic = sender.sendGraphic.bind(sender);
+  sender.sendGraphic = (graphic, location) => {
+    graphics.push([graphic.getId(), location.getX(), location.getY(), location.getZ()]);
+    return sendGraphic(graphic, location);
+  };
+  const action = { player, npc, npcId: npc.getId(), stepId: 'JQyqMZ', handled: false,
+    pages: [{ page: 'Fairytale I - Growing Pains', variants: ['in-the-nature-grotto-talking-to-the-nature-spirit'] }] };
+  PM.emitCustomEvent('npc-dialogue:action', action);
+  assert.equal(action.handled, true);
+  assert.equal(action.end, true, 'the chat closes while the scene plays');
+  assert.equal(player.getAnimation()?.getId(), core.CacheDefinitions.getSeqId('human_fairy_kneel_and_offer'),
+    'the player kneels and offers the secateurs');
+  assert.equal(player.getMovementQueue().isMovementBlocked(), true);
+  assert.equal(player.getInventory().getAmount(MAGIC_SECATEURS), 0);
+  assert.equal(quest.getStage(player), 60);
+  for (let n = 0; n < 11; n++) core.TaskManager.process();
+  assert.deepEqual(graphics, [[core.CacheDefinitions.getSpotanimId('fairy_flower_enchant'), 3441, 9738, 1]],
+    'the cache flower-enchant effect plays above the Nature Spirit');
+  assert.equal(npc.getAnimation()?.getId(), core.CacheDefinitions.getSeqId('human_fairy_take_and_hold_up'),
+    'the Nature Spirit takes and holds the secateurs up');
+  assert.equal(player.getInventory().getAmount(SECATEURS), 1, 'materials survive the scene');
+  assert.equal(player.getInventory().getAmount(MAGIC_SECATEURS), 0);
+  assert.equal(quest.getStage(player), 60);
+  core.TaskManager.process();
+  assert.equal(player.getInventory().getAmount(SECATEURS), 0);
+  for (const id of [WHITE_BERRIES, MORT_MYRE_PEAR, MORT_MYRE_STEM]) {
+    assert.equal(player.getInventory().getAmount(id), 0, 'the blessing consumes the saved recipe');
+  }
+  assert.equal(player.getInventory().getAmount(MAGIC_SECATEURS), 1);
+  assert.equal(quest.getStage(player), 70);
+  assert.equal(player.getMovementQueue().isMovementBlocked(), false);
+  assert.match(player.getDialogueManager().getCurrent()?.getText() ?? '', /^It is done!/);
+  await nextLine(f);
+  assert.match(player.getDialogueManager().getCurrent()?.getText() ?? '', /^Farewell,/);
+});
+
+test('Fairytale I blessing cancellation leaves the materials and stage untouched', t => {
+  const f = fixture(t), { player } = f;
+  const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(entry => entry.key === 'fairytale_i_growing_pains');
+  const { SECATEURS, MAGIC_SECATEURS, WHITE_BERRIES, MORT_MYRE_PEAR, MORT_MYRE_STEM } = core.ItemIdentifiers;
+  quest.setStage(player, 60);
+  player.setAttribute(NATURE_ITEMS_ATTRIBUTE, '1,2,3');
+  player.getInventory().add(new core.Item(SECATEURS));
+  for (const id of [WHITE_BERRIES, MORT_MYRE_PEAR, MORT_MYRE_STEM]) player.getInventory().add(new core.Item(id));
+  const npc = core.NPC.create(core.NpcIdentifiers.NATURE_SPIRIT, new core.Location(3441, 9738, 1));
+  const action = { player, npc, npcId: npc.getId(), stepId: 'JQyqMZ', handled: false };
+  PM.emitCustomEvent('npc-dialogue:action', action);
+  for (let n = 0; n < 3; n++) core.TaskManager.process();
+  player.setLocation(new core.Location(3442, 9738, 1));
+  core.TaskManager.process();
+  assert.equal(player.getInventory().getAmount(SECATEURS), 1, 'walking away does not consume the secateurs');
+  assert.equal(player.getInventory().getAmount(MAGIC_SECATEURS), 0);
+  assert.equal(quest.getStage(player), 60);
+  assert.equal(player.getMovementQueue().isMovementBlocked(), false);
+  assert.equal(player.getAnimation()?.getId(), core.Animation.DEFAULT_RESET_ANIMATION.getId());
+});
+
+test('Fairytale I Tanglefoot combat pursuit stops at its chamber doorway', t => {
+  core.RegionManager.init();
+  core.RegionManager.loadMapFiles(2394, 4379);
+  const f = fixture(t), { player } = f;
+  const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(entry => entry.key === 'fairytale_i_growing_pains');
+  player.setLocation(new core.Location(2375, 4384, 0));
+  quest.setStage(player, 70);
+  PM.emitPlayerProcess({ player });
+  const boss = [...core.World.getNpcs()].find(npc => npc?.getId?.() === core.NpcIdentifiers.TANGLEFOOT
+    && npc.getOwner?.() === player);
+  assert.ok(boss, 'entering the grove spawns the owner Tanglefoot');
+  t.after(() => {
+    core.TaskManager.cancelTasks(boss);
+    core.World.getNpcs().remove(boss);
+  });
+  assert.equal(boss.hasFlag('combat:no-retreat'), true, 'the chamber is the leash, not the generic spawn radius');
+  boss.getCombat().attack(player);
+  core.TaskManager.process();
+  assert.equal(boss.getCombat().getTarget(), player, 'the fight can pursue anywhere inside the chamber');
+  player.setLocation(new core.Location(2383, 4377, 0));
+  core.TaskManager.process();
+  assert.equal(boss.getCombat().getTarget() ?? null, null, 'leaving the chamber drops the pursuit');
+  player.setLocation(new core.Location(2375, 4384, 0));
+  boss.getCombat().attack(player);
+  core.TaskManager.process();
+  boss.setLocation(new core.Location(2390, 4379, 0));
+  core.TaskManager.process();
+  const at = boss.getLocation();
+  assert.deepEqual([at.getX(), at.getY(), at.getZ()], [2375, 4385, 0],
+    'a boss that ever leaves the chamber is returned to its spawn');
 });
 
 // The banquet uses real Player/NPC/PrivateArea/TaskManager and native object,
@@ -2868,4 +2972,224 @@ test('Pandemonium stage-eight acknowledgement and stale menu cannot replace the 
   const ship = await f.operate('helm');
   assert.equal(f.quest.getStage(f.player), 10);
   assert.equal(ship.boat.helmPlayerId, f.player.getIndex());
+});
+
+
+for (const droppedName of ['SECATEURS', 'WHITE_BERRIES']) {
+  test(`Fairytale I blessing rechecks materials after native Drop of ${droppedName}`, async t => {
+    const f = fixture(t), { player } = f;
+    const messages = [];
+    t.mock.method(player, 'sendMessage', text => messages.push(text));
+    const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(q => q.key === 'fairytale_i_growing_pains');
+    quest.setStage(player, 60);
+    player.setAttribute(NATURE_ITEMS_ATTRIBUTE, '1,2,3');
+    const ids = ['SECATEURS', 'WHITE_BERRIES', 'MORT_MYRE_PEAR', 'MORT_MYRE_STEM'].map(name => core.ItemIdentifiers[name]);
+    player.setLocation(new core.Location(3441, 9737, 1));
+    for (const id of ids) player.getInventory().add(new core.Item(id));
+    player.getEquipment().setItem(core.Equipment.AMULET_SLOT, new core.Item(core.ItemIdentifiers.GHOSTSPEAK_AMULET));
+    const npc = core.NPC.create(core.NpcIdentifiers.NATURE_SPIRIT, new core.Location(3441, 9738, 1));
+    const start = { player, npc, npcId: npc.getId(), variant: {
+      page: 'Fairytale I - Growing Pains', variant: 'in-the-nature-grotto-talking-to-the-nature-spirit',
+    }, exact: true };
+    PM.emitCustomEvent('npc-dialogue:start', start);
+    assert.equal(start.handled, true);
+    for (let n = 0; n < 20 && !player.getMovementQueue().isMovementBlocked(); n++) await nextLine(f);
+    assert.equal(player.getMovementQueue().isMovementBlocked(), true);
+    core.TaskManager.process();
+    const droppedId = core.ItemIdentifiers[droppedName];
+    const slot = player.getInventory().getItems().findIndex(item => item?.getId() === droppedId);
+    await f.connection.dispatch([{ type: 'inventory_action', widgetId: 3214,
+      itemId: droppedId, slot, option: 'Drop', optionIndex: 5 }]);
+    f.connection.processTurnPackets();
+    assert.equal(player.getInventory().getAmount(droppedId), 0, 'the real inventory packet drops the item');
+    for (let n = 0; n < 12; n++) core.TaskManager.process();
+    assert.equal(quest.getStage(player), 60, 'missing materials cannot advance the initial blessing');
+    assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.MAGIC_SECATEURS), 0);
+    for (const id of ids.filter(id => id !== droppedId)) {
+      assert.equal(player.getInventory().getAmount(id), 1, 'remaining materials are not consumed');
+    }
+    assert.equal(player.getMovementQueue().isMovementBlocked(), false);
+    assert.match(messages.at(-1), /materials/);
+  });
+}
+
+function amikRoutingFixture(t, frozen = false) {
+  const f = fixture(t), { player } = f;
+  core.RegionManager.init();
+  const quests = require('../plugins/quests/QuestRuntime').getRegisteredQuests();
+  f.quest = key => { const quest = quests.find(q => q.key === key); assert.ok(quest, key); return quest; };
+  for (const key of ['black_knights_fortress', 'druidic_ritual']) {
+    const quest = f.quest(key); quest.setStage(player, quest.completionValue);
+  }
+  f.quest('recipe_for_disaster').setStage(player, 4);
+  player.setAttribute(RFD_FEAST_SEEN, true);
+  player.setAttribute(RFD_FEAST_PENDING, false);
+  player.setAttribute('quest.points', 5);
+  // Castle coordinates are Sir Amik's canonical npc-spawns.json entry.
+  const tile = frozen ? new core.Location(1865, 5345, 0) : new core.Location(2960, 3336, 2);
+  player.setLocation(new core.Location(tile.getX() + 1, tile.getY(), tile.getZ()));
+  player.setNeedsPlacement(false);
+  const id = frozen ? core.NpcIdentifiers.SIR_AMIK_VARZE_3 : core.NpcIdentifiers.SIR_AMIK_VARZE_4;
+  if (frozen) {
+    t.after(() => {
+      const owned = [...core.World.getNpcs(), ...core.World.getAddNPCQueue()].filter(npc => npc.getOwner() === player);
+      for (const npc of owned) {
+        const index = npc.getIndex(); PM.removeNpc(npc);
+        assert.notEqual(core.World.getNpcs().get(index), npc);
+        assert.equal(npc.isRegistered(), false);
+        assert.ok(!core.World.getAddNPCQueue().includes(npc));
+      }
+    });
+    PM.emitCustomEvent('player:bootstrap-complete', { player });
+    f.npc = [...core.World.getNpcs()].find(npc => npc.getOwner() === player && npc.getId() === id);
+    assert.ok(f.npc, 'real RFD bootstrap spawns the frozen council actor');
+    assert.equal(core.World.getNpcs().get(f.npc.getIndex()), f.npc);
+  } else {
+    f.npc = core.NPC.create(id, tile);
+    const spawnedAmik = f.npc;
+    t.after(() => {
+      const index = spawnedAmik.getIndex();
+      core.World.getNpcs().remove(spawnedAmik);
+      assert.notEqual(core.World.getNpcs().get(index), spawnedAmik);
+      assert.equal(spawnedAmik.isRegistered(), false);
+    });
+    assert.equal(core.World.getNpcs().add(spawnedAmik), true);
+    assert.equal(core.World.getNpcs().get(spawnedAmik.getIndex()), spawnedAmik);
+  }
+  f.operated = [];
+  const operatedHooks = PM.customEventHooks.get('npc:operated') ?? [];
+  const operatedStart = operatedHooks.length;
+  t.after(() => PM.customEventHooks.get('npc:operated')?.splice(operatedStart));
+  PM.createApi('AmikRoutingTest').onCustomEvent('npc:operated', event => {
+    if (event.player === player) f.operated.push({ npcId: event.npcId, option: event.option });
+  });
+  f.messages = [];
+  const send = player.sendMessage;
+  t.mock.method(player, 'sendMessage', function(message) { f.messages.push(message); return send.call(this, message); });
+  f.talk = async () => {
+    player.closeInterruptibleInterfaces();
+    const operatedBefore = f.operated.length;
+    const actions = f.npc.getCurrentDefinition(player).getActions();
+    const clickType = (actions.includes('Talk-to') ? actions.indexOf('Talk-to') : actions.indexOf('Inspect')) + 1;
+    assert.ok(clickType > 0, 'canonical actor has Talk-to or Inspect');
+    await f.connection.dispatch([{ type: 'npc_option', index: f.npc.getIndex(), clickType }]);
+    f.connection.processTurnPackets();
+    for (let n = 0; n < 4; n++) {
+      core.TaskManager.processWalkTo(player.getIndex());
+      player.getMovementQueue().beginCycle(); player.getMovementQueue().process(); core.TaskManager.process();
+    }
+    assert.equal(f.operated.length, operatedBefore + 1, JSON.stringify({
+      checkpoint: 'native NPC operation reached', player: player.getLocation(), npc: f.npc.getLocation(),
+      contentId: f.npc.getContentId(player), messages: f.messages,
+      current: player.getDialogueManager().getCurrent()?.getText(), pending: MultiChatboxPrompt.getPending(player),
+    }));
+  };
+  return f;
+}
+
+test('castle Sir Amik starts Recruitment Drive after the RFD opening without Legends requirements', async t => {
+  const f = amikRoutingFixture(t), { player } = f;
+  const before = rfdSavedProgress(player);
+  await f.talk();
+  for (let n = 0; n < 16 && !MultiChatboxPrompt.getPending(player) && player.getDialogueManager().getCurrent(); n++) await nextLine(f);
+  assert.equal(MultiChatboxPrompt.getPending(player)?.title, 'Start the Recruitment Drive quest?', JSON.stringify({ messages: f.messages, current: player.getDialogueManager().getCurrent()?.getText(), operated: f.operated }));
+  assert.ok(!f.messages.some(text => text.includes("Legends' Quest")), 'no unrelated rescue refusal');
+  await choose(f, 1);
+  for (let n = 0; n < 12 && player.getDialogueManager().getCurrent(); n++) await nextLine(f);
+  assert.equal(f.quest('recruitment_drive').getStage(player), 1);
+  assert.equal(f.quest('legends_quest').getStage(player), 0);
+  assert.equal(rfdSavedProgress(player), before, 'the rescue, points and inventory are unchanged');
+  await f.talk();
+  const lines = [];
+  for (let n = 0; n < 10 && player.getDialogueManager().getCurrent(); n++) {
+    lines.push(player.getDialogueManager().getCurrent().getText()); await nextLine(f);
+  }
+  // wrapText retains trailing spaces and the runner joins lines with another space.
+  const expected = 'No, I am afraid not. I suggest you go meet Sir Tiffy in Falador Park, he will be expecting you.';
+  assert.ok(lines.some(text => text.replace(/\s+/g, ' ').trim() === expected), JSON.stringify({
+    checkpoint: 'started Recruitment route remains available', lines,
+    pending: MultiChatboxPrompt.getPending(player), operated: f.operated, messages: f.messages,
+  }));
+});
+
+test('frozen Sir Amik keeps the RFD Legends prerequisite refusal', async t => {
+  const f = amikRoutingFixture(t, true), { player } = f;
+  const before = rfdSavedProgress(player);
+  await f.talk();
+  assert.ok(f.messages.includes("You need 107 quest points, the Legends' Quest prerequisites and access to the Kharazi Jungle before helping Sir Amik."));
+  assert.equal(f.quest('recruitment_drive').getStage(player), 0);
+  assert.equal(rfdSavedProgress(player), before);
+});
+
+test('eligible frozen Sir Amik retains RFD rescue guidance', async t => {
+  const f = amikRoutingFixture(t, true), { player } = f;
+  for (const key of ['family_crest', 'heroes_quest', 'lost_city', 'merlins_crystal', 'shield_of_arrav',
+    'dragon_slayer_i', 'shilo_village', 'jungle_potion', 'druidic_ritual', 'underground_pass',
+    'biohazard', 'plague_city', 'waterfall_quest']) {
+    const quest = f.quest(key); quest.setStage(player, quest.completionValue);
+  }
+  f.quest('legends_quest').setStage(player, 5);
+  player.setAttribute('quest.points', 107);
+  const before = rfdSavedProgress(player);
+  await f.talk();
+  assert.ok(f.messages.includes('Speak to Aris about freeing Sir Amik Varze to learn the next step.'));
+  assert.ok(!f.messages.some(text => text.includes("Legends' Quest")));
+  assert.equal(f.quest('recruitment_drive').getStage(player), 0);
+  assert.equal(rfdSavedProgress(player), before);
+});
+
+test('castle Sir Amik transcript selector defers RFD to Recruitment Drive after the opening', t => {
+  const f = amikRoutingFixture(t), { player, npc } = f;
+  const index = require('../data/definitions/npc-dialogue-index.json');
+  const pages = index[npc.getId()].map(entry => ({ ...entry, page: entry.page.replace(/^Transcript:/, '') }));
+  const choice = PM.emitNpcDialogueVariant({ player, npc, npcId: npc.getId(), definition: npc.getCurrentDefinition(player), pages });
+  assert.deepEqual(choice, { page: 'Recruitment Drive', variant: 'starting-out-talking-to-sir-amik-varze' });
+});
+
+test('castle Sir Amik still offers Black Knights Fortress after the RFD opening', async t => {
+  const f = amikRoutingFixture(t), { player } = f;
+  f.quest('black_knights_fortress').setStage(player, 0);
+  player.setAttribute('quest.points', 12);
+  await f.talk();
+  for (let n = 0; n < 24 && !MultiChatboxPrompt.getPending(player) && player.getDialogueManager().getCurrent(); n++) await nextLine(f);
+  for (const option of ['I seek a quest!', 'I laugh in the face of danger!']) {
+    const selected = MultiChatboxPrompt.getPending(player)?.options.indexOf(option) ?? -1;
+    assert.ok(selected >= 0, JSON.stringify({ option, pending: MultiChatboxPrompt.getPending(player), messages: f.messages, operated: f.operated }));
+    await choose(f, selected + 1);
+    for (let n = 0; n < 24 && !MultiChatboxPrompt.getPending(player) && player.getDialogueManager().getCurrent(); n++) await nextLine(f);
+  }
+  assert.equal(MultiChatboxPrompt.getPending(player)?.title, "Start the Black Knights' Fortress quest?", JSON.stringify({ messages: f.messages, current: player.getDialogueManager().getCurrent()?.getText(), operated: f.operated }));
+  assert.equal(f.quest('recruitment_drive').getStage(player), 0);
+  assert.ok(!f.messages.some(text => text.includes("Legends' Quest")));
+});
+
+test('Legends guard still refuses an ineligible player after the RFD opening', async t => {
+  const f = amikRoutingFixture(t), { player } = f;
+  const amik = f.npc;
+  const guard = core.NPC.create(core.NpcIdentifiers.LEGENDS_GUARD, new core.Location(2728, 3348));
+  t.after(() => {
+    const index = guard.getIndex();
+    core.World.getNpcs().remove(guard);
+    assert.notEqual(core.World.getNpcs().get(index), guard);
+    assert.equal(guard.isRegistered(), false);
+    f.npc = amik;
+  });
+  assert.equal(core.World.getNpcs().add(guard), true);
+  assert.equal(core.World.getNpcs().get(guard.getIndex()), guard);
+  f.npc = guard;
+  player.setLocation(new core.Location(2729, 3348)); player.setNeedsPlacement(false);
+  const before = rfdSavedProgress(player);
+  await f.talk();
+  for (const option of ['How do I get in here?', 'Can I speak to someone in charge?', 'Can I go on the quest?']) {
+    for (let n = 0; n < 20 && !MultiChatboxPrompt.getPending(player) && player.getDialogueManager().getCurrent(); n++) await nextLine(f);
+    const selected = MultiChatboxPrompt.getPending(player)?.options.indexOf(option) ?? -1;
+    assert.ok(selected >= 0, option); await choose(f, selected + 1);
+  }
+  const lines = [];
+  for (let n = 0; n < 20 && !MultiChatboxPrompt.getPending(player) && player.getDialogueManager().getCurrent(); n++) {
+    lines.push(player.getDialogueManager().getCurrent().getText()); await nextLine(f);
+  }
+  assert.ok(lines.some(text => text.startsWith("I'm very sorry but you need to complete more quests")), 'actual Legends requirements refusal remains');
+  assert.equal(f.quest('legends_quest').getStage(player), 0);
+  assert.equal(rfdSavedProgress(player), before);
 });

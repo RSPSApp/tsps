@@ -247,10 +247,10 @@ module.exports = function registerIdesOfMilkQuest(api) {
       const end = charge ? chargeDestination(npc, aimed) : null;
       if (charge) npc.getMovementQueue().reset().setBlockMovement(true);
       if (!charge && arena.stompsRemaining === 0) {
-        arena.stompTiles = stompTiles(at, aimed);
         arena.stompsRemaining = quest.isComplete(player) ? 3 : 1 + Math.floor(Math.random() * 3);
       }
-      const tiles = arena.stompTiles;
+      // 4153 ticks 586/594/602: each snort aims again, then holds that footprint through impact.
+      const tiles = charge ? null : stompTiles(at, aimed);
       if (!charge) arena.stompsRemaining--;
       if (charge || arena.stompsRemaining === 0) {
         // shortcut: Wiki gives the 1–6 melee / 1–3 stomp ranges, not their distribution; verify with more fights.

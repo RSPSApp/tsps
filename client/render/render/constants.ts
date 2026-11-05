@@ -247,7 +247,7 @@ export function getMaxAnisotropy(mode: TextureFilterMode): number {
     }
 }
 
-export type BrowserQualityProfileKey = "desktop" | "mobile-touch" | "ios-safari";
+export type BrowserQualityProfileKey = "desktop" | "mobile-touch" | "ios-safari" | "low-end";
 
 export interface BrowserQualityProfile {
     key: BrowserQualityProfileKey;
@@ -309,6 +309,15 @@ export const IOS_SAFARI_QUALITY_PROFILE: BrowserQualityProfile = {
     healthBarMaxEntries: 72,
     overheadTextMaxEntries: 32,
     overheadPrayerMaxEntries: 24,
+};
+
+export const LOW_END_QUALITY_PROFILE: BrowserQualityProfile = {
+    ...MOBILE_TOUCH_QUALITY_PROFILE,
+    key: "low-end",
+    label: "Low-end Device",
+    defaultSceneScale: 0.5,
+    renderDistanceCap: 12,
+    lodThresholdCap: 6,
 };
 
 function optimizeAssumingFlatsHaveSameFirstAndLastData(gl: WebGL2RenderingContext) {

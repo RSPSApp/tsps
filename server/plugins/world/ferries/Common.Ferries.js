@@ -33,6 +33,11 @@ function end(player) {
   trips.delete(player);
 }
 
+/** A trip has landed: the route name, after the move (diary/content listeners). */
+function arrived(player, routeName) {
+  if (api) api.emitCustomEvent("ferries:arrived", { player, route: routeName });
+}
+
 function toLocation([x, y, z]) {
   return new core.Location(x, y, z ?? 0);
 }
@@ -104,7 +109,7 @@ function conditionSteps(steps, text) {
 }
 
 module.exports = {
-  init, route, travelling, begin, end, toLocation, later, passes, npcGameval, locGameval, speaker, playTranscript,
+  init, route, travelling, begin, end, arrived, toLocation, later, passes, npcGameval, locGameval, speaker, playTranscript,
   conditionSteps, trips,
   get api() { return api; },
   get core() { return core; },

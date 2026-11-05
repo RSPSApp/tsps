@@ -2,8 +2,10 @@
  * The League Summary's statistics (data.statistics): the tracking varps its rows read, counted
  * from what the server's hooks see for a league character and sent at login and as they change.
  * Kills (NPCs; bosses by the cache's boss param, as NpcDrops reads it), deaths, players killed,
- * damage dealt to and taken from NPCs, the highest hit, food, potions, logs, fish and ore. Rows
- * the server has no source for stay 0 (data.statistics._comment). Other plugins ask
+ * damage dealt to and taken from NPCs, the highest hit, food, potions and fish. Rows the server
+ * has no source for stay 0 (data.statistics._comment). The logs and ore rows read varps the skills
+ * own (data.statistics.skillCounters): Woodcutting and Mining count and send them on every world, so
+ * this unit only reads them back for its answer and never writes them. Other plugins ask
  *
  *   api.emitCustomEvent("league:statistics", { player })  -> counters (name -> value)
  */
@@ -107,9 +109,23 @@ function login({ player }) {
   for (const name of [...Object.keys(varps), ...Object.keys(varbits)]) sendCounter(player, name, Number(current[name]) || 0);
 }
 
+/** A skill-owned counter, from the skill that sends its varp ({ player, count } queries). */
+function skillCounter(player, event) {
+  const query = { player, count: 0 };
+  Common.api.emitCustomEvent(event, query);
+  return Number(query.count) || 0;
+}
+
 function answer(query) {
   if (!query?.player || !Common.isLeagueProfile(query.player)) return;
-  query.counters = { ...counters(query.player) };
+  // The skill's count stands in for any this unit kept before it stopped counting them.
+  const result = { ...counters(query.player) };
+  for (const [name, event] of Object.entries(statistics().skillCounters)) {
+    const count = skillCounter(query.player, event);
+    if (count > 0) result[name] = count;
+    else delete result[name];
+  }
+  query.counters = result;
 }
 
 module.exports = function attach(api) {
@@ -123,8 +139,6 @@ module.exports = function attach(api) {
   api.onCustomEvent("food:eaten", counted("foodEaten"));
   api.onCustomEvent("potions:drunk", counted("potionsSipped"));
   api.onCustomEvent("fishing:success", fishCaught);
-  api.onCustomEvent("mining:success", counted("oreMined"));
-  api.onCustomEvent("woodcutting:success", counted("logsChopped"));
 };
 
 module.exports.counters = counters;

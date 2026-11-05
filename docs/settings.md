@@ -37,6 +37,8 @@ The client only reports the click. The server sets the variable and sends it bac
 | Chat timestamps (dropdown: Off, On (Server time), On (Local time)) | 119 | varbit 12384 `settings_chat_timestamps` = option, then script 4586 `settings_chat_timestamps`; a fresh account starts Off (live sends 1, server time, at login in 532 of 540 rsprox recordings) |
 | Enable precise timing | 82 | varbit 11866 `option_precise_timing` |
 | Combat Achievement Tasks - Repeat completion | 160 | varbit 12456 |
+| Collection log - New addition notification | 85 | varbit 11959 bit 0 (owned by the collection log plugin) |
+| Collection log - New addition popup | 171 | varbit 11959 bit 1 (owned by the collection log plugin) |
 | Player Trade options | 312 | varbit 6580 `tradeoption_disabled` |
 | Player Report options | 372 | varbit 1334 `rightclick_report_abuse_disabled` |
 | Side panel can be closed by the hotkeys | 54 | varbit 4611 `hotkey_cannot_close_sidepanel` |

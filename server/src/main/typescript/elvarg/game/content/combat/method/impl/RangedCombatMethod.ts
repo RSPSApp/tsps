@@ -35,10 +35,22 @@ export class RangedCombatMethod extends CombatMethod {
         return undefined;
     }
 
+    /**
+     * Ticks until each shot of a player's attack lands. Wiki (Hit delay): the distance is edge to edge,
+     * to the target's nearest tile, in the weapon's own formula (bows 1 + (3 + d) / 6, thrown weapons
+     * 1 + d / 6, ...).
+     */
+    public static landingDelays(character: Mobile, target: Mobile): number[] {
+        return RangedCombatMethod.playerHitDelays(
+            character,
+            target,
+            CombatPosition.edgeDistance(character, target),
+        );
+    }
+
     hits(character: Mobile, target: Mobile): PendingHit[] {
-        const distance = CombatPosition.projectileDistance(character, target);
         const delays = character.isPlayer()
-            ? RangedCombatMethod.playerHitDelays(character, target, distance)
+            ? RangedCombatMethod.landingDelays(character, target)
             : [RangedCombatMethod.npcHitDelay(character, target)];
         return delays.map((delay) => new PendingHit(character, target, this, delay));
     }
@@ -121,9 +133,9 @@ export class RangedCombatMethod extends CombatMethod {
         }
 
         const projectiles = profile?.projectiles ?? [RangedCombatMethod.DEFAULT_PLAYER_PROJECTILE];
-        const distance = CombatPosition.projectileDistance(character, target);
+        const distance = CombatPosition.edgeDistance(character, target);
         const processingOrder = target.isNpc() ? 1 : 0;
-        const hitDelays = RangedCombatMethod.playerHitDelays(character, target, distance)
+        const hitDelays = RangedCombatMethod.landingDelays(character, target)
             .map((ticks) => ticks + processingOrder);
         for (let index = 0; index < projectiles.length; index++) {
             const projectile = projectiles[index];

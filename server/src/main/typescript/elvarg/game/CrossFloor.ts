@@ -26,7 +26,16 @@ export class CrossFloor {
     }
     static visible(viewer: Location, target: Location, range: number): boolean {
         const sameFloor = viewer.getZ() === target.getZ();
-        const crossFloorVisible = CrossFloor.enabled() && viewer.getZ() >= 0 && viewer.getZ() < 4 && target.getZ() >= 0 && target.getZ() < 4;
+        const crossFloorVisible = CrossFloor.enabled() && viewer.getZ() >= 0 && viewer.getZ() < 4 &&
+            target.getZ() >= 0 && target.getZ() < 4;
         return (sameFloor || crossFloorVisible) && CrossFloor.distance(viewer, target) <= range;
+    }
+
+    /** Projectiles may render across floors when enabled; actor visibility additionally checks line of sight and roofs. */
+    static projectileVisible(viewer: Location, target: Location, range: number): boolean {
+        const sameFloor = viewer.getZ() === target.getZ();
+        const crossFloorProjectile = CrossFloor.enabled() && viewer.getZ() >= 0 && viewer.getZ() < 4 &&
+            target.getZ() >= 0 && target.getZ() < 4;
+        return (sameFloor || crossFloorProjectile) && CrossFloor.distance(viewer, target) <= range;
     }
 }

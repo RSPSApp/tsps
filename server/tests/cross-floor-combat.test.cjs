@@ -16,6 +16,7 @@ test('cross-floor ranged and magic honor the option, range and collision; melee 
   t.after(() => { for (const [key, value] of Object.entries(original)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; } });
   t.mock.method(PluginManager, 'emitCombatAttackDistance', data => data.distance);
   const clipping = t.mock.method(RegionManager, 'canProjectileAttackBounds', () => true);
+  t.mock.method(RegionManager, 'getRegion', () => ({ isUnderRoof: () => false }));
   const archer = actor(3200, 3200, 1), target = actor(3204, 3200, 0);
   const method = type => ({ type: () => type, attackDistance: () => 6 });
   delete process.env.CROSS_FLOOR_VISIBILITY_AND_COMBAT;
@@ -33,20 +34,38 @@ test('cross-floor ranged and magic honor the option, range and collision; melee 
   assert.equal(CombatRange.canReach(archer, method(CombatType.MAGIC), target), false);
 });
 
-test('cross-floor combat routes toward a same-floor attack-range destination', t => {
+test('cross-floor actor visibility is enabled by horizontal range and the visibility option', t => {
+  const { CrossFloor } = require('../dist/game/CrossFloor');
+  const previous = process.env.CROSS_FLOOR_VISIBILITY;
+  t.after(() => { if (previous === undefined) delete process.env.CROSS_FLOOR_VISIBILITY; else process.env.CROSS_FLOOR_VISIBILITY = previous; });
+  process.env.CROSS_FLOOR_VISIBILITY = '1';
+  const viewer = new Location(3200, 3200, 0);
+  const upper = new Location(3204, 3200, 1);
+  assert.equal(CrossFloor.visible(viewer, upper, 15), true);
+  assert.equal(CrossFloor.visible(viewer, new Location(3216, 3200, 1), 15), false, 'out-of-range actors stay hidden');
+  process.env.CROSS_FLOOR_VISIBILITY = '0';
+  assert.equal(CrossFloor.visible(viewer, upper, 15), false, 'the option still controls cross-floor visibility');
+  assert.equal(CrossFloor.projectileVisible(viewer, upper, 15), false);
+  assert.equal(CrossFloor.projectileVisible(viewer, upper, 15), true,
+    'projectile delivery remains enabled even when actor sight is blocked');
+});
+
+test('cross-floor combat searches reachable clear-shot tiles on the attacker floor', t => {
   const { PathFinder } = require('../dist/game/model/movement/path/PathFinder');
   const previous = process.env.CROSS_FLOOR_COMBAT;
   t.after(() => { if (previous === undefined) delete process.env.CROSS_FLOOR_COMBAT; else process.env.CROSS_FLOOR_COMBAT = previous; });
   process.env.CROSS_FLOOR_COMBAT = '1';
-  const calls = [];
-  t.mock.method(PathFinder, 'calculateEntityRoute', (...args) => calls.push(args));
+  t.mock.method(RegionManager, 'canProjectileAttackBounds', () => true);
+  let destinations;
+  t.mock.method(PathFinder, 'calculateRouteToAny', (_attacker, candidates) => { destinations = candidates; return 1; });
   const attacker = actor(3200, 3200, 1);
-  attacker.getMovementQueue = () => ({ hasRoute: () => true });
   const target = actor(3210, 3200, 0);
   const ranged = { type: () => CombatType.RANGED, attackDistance: () => 6 };
   assert.equal(CombatRange.route(attacker, ranged, target), true);
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0][2], 6, 'the route goal covers the ranged attack distance');
+  assert.ok(destinations.length > 0);
+  assert.ok(destinations.every(tile => tile.getZ() === 1), "destinations stay on the attacker's floor");
+  assert.ok(destinations.every(tile => Math.max(Math.abs(tile.getX() - 3210), Math.abs(tile.getY() - 3200)) <= 6),
+    'destinations remain within the attack range');
 });
 
 test('cross-floor combat falls back to an ordinary approach when its range route is blocked', t => {
@@ -56,7 +75,9 @@ test('cross-floor combat falls back to an ordinary approach when its range route
   process.env.CROSS_FLOOR_COMBAT = '1';
   let hasRoute = false;
   const calls = [];
-  t.mock.method(PathFinder, 'calculateEntityRoute', (...args) => { calls.push(args); hasRoute = calls.length === 2; });
+  t.mock.method(RegionManager, 'canProjectileAttackBounds', () => true);
+  t.mock.method(PathFinder, 'calculateRouteToAny', () => 0);
+  t.mock.method(PathFinder, 'calculateEntityRoute', (...args) => { calls.push(args); hasRoute = calls.length === 2; return calls.length === 1 ? 0 : 1; });
   const attacker = actor(3200, 3200, 1);
   attacker.getMovementQueue = () => ({ hasRoute: () => hasRoute });
   const target = actor(3210, 3200, 0);

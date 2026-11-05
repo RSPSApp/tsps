@@ -86,9 +86,24 @@ test("Tumeken's shadow: its own spell, the x3 (x4 in the tombs) passive and char
   assert.equal(castSpell.maximumHit(), 34);
   // The cast as captured: sound 6410, the projectile at angle 32 and progress 40, heights sent x4.
   assert.equal(castSpell.castSound().getId(), 6410);
+  // Its impact: `sound_area id=1460 range=10` at the target in 672 casts (captures 1846, 1885, 3285, 3299, 3340).
+  assert.equal(castSpell.impactSound()?.getId(), 1460);
   const at = (x, y) => ({ getLocation: () => new Location(x, y, 0), getSize: () => 1, getPrivateArea: () => null });
   const projectile = castSpell.castProjectile(at(3200, 3200), at(3204, 3200));
   assert.deepEqual([projectile.angle, projectile.progress, projectile.startHeight, projectile.endHeight], [32, 40, 62, 31]);
+  // Its end cycle is 72 + 10 a tile, a tile being the distance to the target's NEAREST tile (rsprox 3299, rev 234,
+  // Theatre of Blood Nylocas): Vasilias (size 4, south-west tile 3295,4248) from 3295,4252 ends at 82 where its
+  // south-west tile is 4 away (112); a big Nylocas (size 2, 3293,4243) from 3294,4245 at 82 (SW: 92) and from
+  // 3293,4248 to 3298,4243 at 122; size-1 Nylocas at 6 and 8 tiles at 132 and 152.
+  const sized = (x, y, size) => ({ getLocation: () => new Location(x, y, 0), getSize: () => size, getPrivateArea: () => null });
+  const ends = [
+    [sized(3295, 4252, 1), sized(3295, 4248, 4), 82],
+    [sized(3294, 4245, 1), sized(3293, 4243, 2), 82],
+    [sized(3293, 4248, 1), sized(3298, 4243, 2), 122],
+    [sized(3292, 4246, 1), sized(3291, 4252, 1), 132],
+    [sized(3292, 4246, 1), sized(3300, 4252, 1), 152],
+  ];
+  assert.deepEqual(ends.map(([from, to]) => castSpell.castProjectile(from, to).speed), ends.map(([, , end]) => end));
   assert.equal(staff.getMetaValue(Shadow.CHARGES_KEY), 1);
   assert.equal(method.canAttack(player, npc), true);
   assert.equal(staff.getId(), I.TUMEKENS_SHADOW_UNCHARGED_, 'the last charge leaves it uncharged');

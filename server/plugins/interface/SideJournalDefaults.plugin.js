@@ -1,3 +1,5 @@
+const attachSummary = require("./sidejournaldefaults/Summary.SideJournalDefaults");
+
 // Mirrors constants from client/common/ui/sideJournal.ts and
 // client/common/ui/accountSummary.ts. These can't be imported directly
 // (server plugins run as plain JS and don't cross into the client TS
@@ -17,6 +19,11 @@ const VARBIT_SIDE_JOURNAL_SELECTED_TAB = 8168;
 const SIDE_JOURNAL_CHARACTER_SUMMARY_TAB = 0;
 const SIDE_JOURNAL_QUEST_TAB = 1;
 const SIDE_JOURNAL_ACHIEVEMENT_DIARY_TAB = 2;
+const DEFAULT_CONTENT_GROUP_BY_TAB = {
+  [SIDE_JOURNAL_CHARACTER_SUMMARY_TAB]: INTERFACE_CHARACTER_SUMMARY_ID,
+  [SIDE_JOURNAL_QUEST_TAB]: INTERFACE_QUEST_LIST_ID,
+  [SIDE_JOURNAL_ACHIEVEMENT_DIARY_TAB]: INTERFACE_ACHIEVEMENT_DIARY_ID,
+};
 
 const SIDE_JOURNAL_SUMMARY_ICON_UID = (SIDE_JOURNAL_GROUP_ID << 16) | 2;
 const SIDE_JOURNAL_QUEST_ICON_UID = (SIDE_JOURNAL_GROUP_ID << 16) | 10;
@@ -58,6 +65,9 @@ const sessionStartByPlayer = new WeakMap();
 let pluginApi;
 
 function mountSideJournalContent(player, groupId, tabIndex) {
+  const content = { player, groupId, tabIndex };
+  pluginApi?.emitCustomEvent("side-journal:resolve-content", content);
+  groupId = content.groupId;
   // As captured (rsprox 3276): the time goes first, the summary opens on it.
   if (groupId === INTERFACE_CHARACTER_SUMMARY_ID) sendPlayTime(player);
   player.getPacketSender().sendSubInterface(SIDE_JOURNAL_TAB_CONTAINER_UID, groupId);
@@ -65,8 +75,8 @@ function mountSideJournalContent(player, groupId, tabIndex) {
   // Other journal content (the Leagues tab) learns its panel was replaced.
   pluginApi?.emitCustomEvent("journal:tab-mounted", { player, groupId, tabIndex });
   if (groupId === INTERFACE_QUEST_LIST_ID) {
-    // The client renders the quest list only while 399 is mounted and purges the
-    // row flags on unmount, so the quest runtime repopulates on every open.
+    // Native CS2 builds the rows. Interface unmount purges their server event flags,
+    // so the quest runtime reapplies canonical quest events on every open.
     pluginApi?.emitCustomEvent("quest:list-refresh", { player });
   }
   if (groupId === INTERFACE_ACHIEVEMENT_DIARY_ID) {
@@ -91,6 +101,19 @@ function mountRequested(event) {
   if (!player || !validGroup || !validTab) return;
   mountSideJournalContent(player, groupId, tabIndex);
   event.mounted = true;
+}
+
+// Welcome's Play button rebuilds the gameframe with the cache's default mounts.
+// Restore the selected journal through the same resolver used by normal tab clicks.
+function restoreSelectedJournal({ player }) {
+  if (player.isPlayerBot?.()) return;
+  const tabIndex = player.getPacketSender().getVarbit(VARBIT_SIDE_JOURNAL_SELECTED_TAB);
+  const groupId = DEFAULT_CONTENT_GROUP_BY_TAB[tabIndex];
+  if (groupId !== undefined) mountSideJournalContent(player, groupId, tabIndex);
+}
+
+function gameframeTabMounted({ player, group }) {
+  if (group === SIDE_JOURNAL_GROUP_ID) restoreSelectedJournal({ player });
 }
 
 /** Milliseconds online: the saved total plus this session. */
@@ -165,11 +188,52 @@ function stopPlayTime({ player }) {
   sessionStartByPlayer.delete(player);
 }
 
+const JOURNAL_TAB_BUTTONS = [SIDE_JOURNAL_SUMMARY_ICON_UID, SIDE_JOURNAL_QUEST_ICON_UID, SIDE_JOURNAL_DIARY_ICON_UID];
+
+function journalTabClicked({ player, buttonId }) {
+  const tabIndex = JOURNAL_TAB_BUTTONS.indexOf(buttonId);
+  if (tabIndex < 0) return false;
+  mountSideJournalContent(player, DEFAULT_CONTENT_GROUP_BY_TAB[tabIndex], tabIndex);
+  return true;
+}
+
+function journalMenuClicked({ player, opId }) {
+  const tabIndex = [OP_CHARACTER_SUMMARY, OP_QUEST_LIST, OP_ACHIEVEMENT_DIARIES].indexOf(opId);
+  if (tabIndex < 0) return false;
+  mountSideJournalContent(player, DEFAULT_CONTENT_GROUP_BY_TAB[tabIndex], tabIndex);
+  return true;
+}
+
+function nativeSummaryClicked({ player, slot }) {
+  switch (slot) {
+    case ROW_QUESTS:
+      mountSideJournalContent(player, INTERFACE_QUEST_LIST_ID, SIDE_JOURNAL_QUEST_TAB);
+      return true;
+    case ROW_ACHIEVEMENTS:
+      mountSideJournalContent(player, INTERFACE_ACHIEVEMENT_DIARY_ID, SIDE_JOURNAL_ACHIEVEMENT_DIARY_TAB);
+      return true;
+    case ROW_COLLECTION_LOG:
+      pluginApi.emitCustomEvent("collection-log:open", { player });
+      return true;
+    case ROW_PLAYTIME:
+      togglePlayTime(player);
+      return true;
+    case ROW_COMBAT_TASKS:
+      pluginApi.emitCustomEvent("combat-achievements:open", { player });
+      return true;
+    default:
+      return false;
+  }
+}
+
 module.exports = {
   name: "SideJournalDefaults",
   register(api) {
     pluginApi = api;
     api.onCustomEvent("side-journal:mount", mountRequested);
+    api.onCustomEvent("gameframe:ready", restoreSelectedJournal);
+    api.onCustomEvent("gameframe:tab-mounted", gameframeTabMounted);
+    api.onCustomEvent("player:bootstrap-complete", restoreSelectedJournal);
     api.onCustomEvent("account:play-time", queryPlayTime);
     api.persistAttribute(PLAY_TIME_ATTRIBUTE, 0);
     api.persistAttribute(PLAY_TIME_DISPLAY_ATTRIBUTE, false);
@@ -177,65 +241,11 @@ module.exports = {
     api.onPlayerLogin(startPlayTime);
     api.onPlayerLogout(stopPlayTime);
 
-    api.onInterfaceActionButton(
-      [SIDE_JOURNAL_SUMMARY_ICON_UID, SIDE_JOURNAL_QUEST_ICON_UID, SIDE_JOURNAL_DIARY_ICON_UID],
-      ({ player, buttonId }) => {
-        switch (buttonId) {
-          case SIDE_JOURNAL_SUMMARY_ICON_UID:
-            mountSideJournalContent(player, INTERFACE_CHARACTER_SUMMARY_ID, SIDE_JOURNAL_CHARACTER_SUMMARY_TAB);
-            return true;
-          case SIDE_JOURNAL_QUEST_ICON_UID:
-            mountSideJournalContent(player, INTERFACE_QUEST_LIST_ID, SIDE_JOURNAL_QUEST_TAB);
-            return true;
-          case SIDE_JOURNAL_DIARY_ICON_UID:
-            mountSideJournalContent(player, INTERFACE_ACHIEVEMENT_DIARY_ID, SIDE_JOURNAL_ACHIEVEMENT_DIARY_TAB);
-            return true;
-          default:
-            return false;
-        }
-      }
-    );
-
-    api.onInterfaceActionButton(QUEST_TAB_ICON_UID, ({ player, opId }) => {
-      switch (opId) {
-        case OP_CHARACTER_SUMMARY:
-          mountSideJournalContent(player, INTERFACE_CHARACTER_SUMMARY_ID, SIDE_JOURNAL_CHARACTER_SUMMARY_TAB);
-          return true;
-        case OP_QUEST_LIST:
-          mountSideJournalContent(player, INTERFACE_QUEST_LIST_ID, SIDE_JOURNAL_QUEST_TAB);
-          return true;
-        case OP_ACHIEVEMENT_DIARIES:
-          mountSideJournalContent(player, INTERFACE_ACHIEVEMENT_DIARY_ID, SIDE_JOURNAL_ACHIEVEMENT_DIARY_TAB);
-          return true;
-        default:
-          return false;
-      }
-    });
-
-    api.onInterfaceActionButton(ACCOUNT_SUMMARY_ENTRY_LIST_UID, ({ player, slot }) => {
-      switch (slot) {
-        case ROW_QUESTS:
-          mountSideJournalContent(player, INTERFACE_QUEST_LIST_ID, SIDE_JOURNAL_QUEST_TAB);
-          return true;
-        case ROW_ACHIEVEMENTS:
-          mountSideJournalContent(player, INTERFACE_ACHIEVEMENT_DIARY_ID, SIDE_JOURNAL_ACHIEVEMENT_DIARY_TAB);
-          return true;
-        case ROW_COLLECTION_LOG:
-          // The collection log plugin owns the log (plugins/achievements/collectionlog/).
-          pluginApi?.emitCustomEvent("collection-log:open", { player });
-          return true;
-        case ROW_PLAYTIME:
-          togglePlayTime(player);
-          return true;
-        case ROW_COMBAT_TASKS:
-          // Combat Achievements own their screens (plugins/achievements/combatachievements/).
-          pluginApi?.emitCustomEvent("combat-achievements:open", { player });
-          return true;
-        default:
-          return false;
-      }
-    });
+    api.onInterfaceActionButton(JOURNAL_TAB_BUTTONS, journalTabClicked);
+    api.onInterfaceActionButton(QUEST_TAB_ICON_UID, journalMenuClicked);
+    api.onInterfaceActionButton(ACCOUNT_SUMMARY_ENTRY_LIST_UID, nativeSummaryClicked);
 
     api.log("registered");
+    attachSummary.persistCombatXpChoice(api);
   },
 };

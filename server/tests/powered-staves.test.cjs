@@ -51,13 +51,15 @@ function player({ weapon = null, magic = 99, items = {}, at = new Location(3200,
     isNpc: () => false,
     getAsPlayer: () => self,
     getLocation: () => at,
-    getEquipment: () => ({ getItems: () => equipment, refreshItems() {} }),
+    getEquipment: () => ({ get: (slot) => equipment[slot], getItems: () => equipment, refreshItems() {} }),
     getInventory: () => ({
-      getItems: () => inventoryItems,
+      getItems: () => [...inventoryItems, ...[...amounts].filter(([, amount]) => amount > 0).map(([id, amount]) => new Item(id, amount))],
+      deleteAtSlot(slot, amount) { this.deleteNumber(this.getItems()[slot].getId(), amount); },
       getAmount: (id) => amounts.get(id) ?? 0,
       deleteNumber: (id, amount) => amounts.set(id, Math.max(0, (amounts.get(id) ?? 0) - amount)),
       contains: (id) => (amounts.get(id) ?? 0) > 0,
       getFreeSlots: () => 28,
+      getAddableAmount: (item) => item.getAmount(),
       addItem: (item) => amounts.set(item.getId(), (amounts.get(item.getId()) ?? 0) + item.getAmount()),
       refreshItems() {},
     }),
@@ -115,6 +117,31 @@ test("tridents attack with their built-in spell; the max hit follows Magic (Wiki
   assert.equal(Trident._test.maxHit(seasRecipe, player({ magic: 1 })), 1, "never below 1");
   assert.equal(Trident._test.maxHit(swampRecipe, player({ magic: 99 })), 31, "floor(99 / 3) - 2");
   assert.equal(Trident._test.maxHit(swampRecipe, player({ magic: 1 })), 4, "never below 4");
+});
+
+// A target bigger than one tile is measured to its nearest tile, not its south-west corner. Same fault
+// #2568 fixed for the Sanguinesti staff: the end cycle, and so the tick the hit lands, came out late.
+const sized = (x, y, size) => ({ getLocation: () => new Location(x, y, 0), getSize: () => size, getPrivateArea: () => null });
+
+test("a trident's projectile ends at the target's nearest tile (rsprox 4152, rev 238, giant lobster)", () => {
+  // Nine seas-trident casts at a size-2 giant lobster (south-west tile 2846,8939) from 2845,8941/8940: the
+  // projectile (1252) ends at cycle 56, one tile, where the south-west tile is two away (66).
+  assert.equal(Trident._test.projectileEnd(sized(2845, 8941, 1), sized(2846, 8939, 2)), 56);
+  assert.equal(Trident._test.projectileEnd(sized(2845, 8940, 1), sized(2846, 8939, 2)), 56);
+  // Larger targets, from any side; a caster beside or inside the footprint still counts one tile.
+  assert.equal(Trident._test.projectileEnd(sized(3200, 3200, 1), sized(3204, 3200, 3)), 46 + 10 * 4, "east of a size-3 target 4 tiles from its edge");
+  assert.equal(Trident._test.projectileEnd(sized(3208, 3201, 1), sized(3200, 3200, 3)), 46 + 10 * 6, "6 from the east edge, not 8");
+  assert.equal(Trident._test.projectileEnd(sized(3201, 3201, 1), sized(3200, 3200, 3)), 56, "inside the footprint is at least one tile");
+});
+
+test("the Eye of Ayak's projectile ends at the target's nearest tile (rsprox 3431, rev 235, Tombs of Amascut)", () => {
+  // Ends 51 + 5 a tile past the first. Zebak (size 9, south-west 3918,5404) from 3933,5408 ends at 81: 7 tiles
+  // from its edge, not 15 from the corner (121). Baba (5) from 3818,5412 to 3815,5406 ends at 56; the Warden (5)
+  // from 3936,5162 to 3934,5152 at 76; a size-1 baboon shaman 5 tiles away at 71.
+  assert.equal(EyeOfAyak._test.projectileEnd(sized(3933, 5408, 1), sized(3918, 5404, 9)), 81);
+  assert.equal(EyeOfAyak._test.projectileEnd(sized(3818, 5412, 1), sized(3815, 5406, 5)), 56);
+  assert.equal(EyeOfAyak._test.projectileEnd(sized(3936, 5162, 1), sized(3934, 5152, 5)), 76);
+  assert.equal(EyeOfAyak._test.projectileEnd(sized(3807, 5282, 1), sized(3812, 5283, 1)), 71, "a size-1 target is unchanged");
 });
 
 test("trident projectiles end 46 + 10 a tile, and the hit lands as they arrive (rsprox)", () => {

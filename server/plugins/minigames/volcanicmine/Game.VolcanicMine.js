@@ -191,7 +191,7 @@ class Game {
       const attribute = data.attributes.shopPoints;
       const award = { player, minigame: "volcanic-mine", points };
       Common.api.emitCustomEvent("minigame:points", award);
-      player.setAttribute(attribute, (Number(player.getAttribute(attribute)) || 0) + award.points);
+      player.setAttribute(attribute, Math.min(data.points.balanceCap, (Number(player.getAttribute(attribute)) || 0) + award.points));
       Common.chat(player, [["npc", Common.message("reward")]]);
       this.leaving.delete(player);
     });

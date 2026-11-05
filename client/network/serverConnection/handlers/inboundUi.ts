@@ -16,7 +16,7 @@ import { handleShopPayload } from "../domain/shop";
 import { handleSmithingPayload } from "../domain/smithing";
 import { emitPlayerSync, emitSkills } from "../domain/skills";
 import { handleTradePayload } from "../domain/trade";
-import { markChatTransmit, markItemDefinitionsChanged } from "../../../game/TransmitCycles";
+import { markChatTransmit, markItemDefinitionsChanged, markMiscTransmit } from "../../../game/TransmitCycles";
 import { CustomItemRegistry } from "../../../custom/items/CustomItemRegistry";
 import { getDefinitionArchiveKey } from "../../../custom/archives/ArchivedDefinitionStore";
 import { getClientCycle } from "../timing";
@@ -325,13 +325,8 @@ export function handleInboundUi(msg: any): boolean {
         const raw = Number(payload?.remainingCentis);
         const remainingCentis = Number.isFinite(raw) ? Math.max(0, Math.floor(raw)) : 0;
         state.lastSystemUpdate = { remainingCentis, receivedAtMs: Date.now() };
-        for (const cb of state.systemUpdateListeners) {
-            try {
-                cb({ remainingCentis });
-            } catch (err) {
-                console.warn("system update listener error", err);
-            }
-        }
+        // Start the native chatbox countdown; script 664 keeps it refreshed while active.
+        markMiscTransmit();
         return true;
     }
     return false;

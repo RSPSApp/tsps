@@ -381,8 +381,8 @@ function carriedTeamOf(player) {
   return null;
 }
 
-/** Put the dropped standard on the floor where the player stands. */
-function placeDroppedFlag(flagTeam, player) {
+/** Put the dropped standard on its final tile: the player's, or a cleared tunnel's floor corner. */
+function placeDroppedFlag(flagTeam, player, dropLocation) {
   // One standard per team: remove whatever drop a previous life left behind, so repeated
   // deaths in the same spot cannot stack flag objects.
   removeDroppedFlagObject(flagTeam);
@@ -390,7 +390,7 @@ function placeDroppedFlag(flagTeam, player) {
   const otherDrop = droppedFlagObjects[otherTeam];
   // The client has one scenery slot per tile. Returning the dropper's own standard
   // keeps the enemy standard available instead of hiding one beneath the other.
-  if (otherDrop?.getLocation().equals(player.getLocation())) {
+  if (otherDrop?.getLocation().equals(dropLocation)) {
     const ownTeam = getTeamId(player);
     restoreFlagToBase(ownTeam, "overlap");
     if (flagTeam === ownTeam) return;
@@ -398,12 +398,12 @@ function placeDroppedFlag(flagTeam, player) {
   flagStatus[flagTeam] = 2;
   flagCarriers[flagTeam] = null;
   if (process.env.CW_BOT_DEBUG === "1") {
-    const tile = getLocationTile(player);
+    const tile = getLocationTile(dropLocation);
     console.log(`[cw_flag] drop ${flagTeam} by ${player.getUsername?.()} at ${tile.x},${tile.y},${tile.z}`);
   }
   const dropped = new core.GameObject(
     getTeamData(flagTeam).droppedFlagObjectId,
-    player.getLocation().clone(),
+    dropLocation.clone(),
     10,
     0,
     player.getPrivateArea()
@@ -432,7 +432,7 @@ function clearStrayDroppedFlags() {
   droppedFlagObjects[data.TEAM.ZAMORAK] = null;
 }
 
-/** Stones and rocks return any flag; catapult corners only return the carrier's own flag. */
+/** Stones and blocked rock patches return any flag; catapult corners return the carrier's own. */
 function dropCarriedFlag(player) {
   // The equipment is authoritative for live carries; the tracked carrier covers deaths
   // whose item processing stripped the banner before this ran (bot deaths are handled
@@ -448,14 +448,21 @@ function dropCarriedFlag(player) {
   clearWeaponSlot(player);
   const tile = getLocationTile(player);
   // RuneHQ: "if you die on the stepping stones or under the rockslide, it will return to your
-  // base." The rockslide covers a tunnel's rock tiles, fallen or mined away (issue 1929).
+  // base." The rockslide returns the flag while either rock layer stands; a cleared patch
+  // drops it on the inside floor corner just outside the footprint (issues 1929, 2355).
   if (tile && (isSteppingStone(tile)
-    || (carriedFlagTeam === getTeamId(player) && catapultReturnTeam(player))
-    || game.isTunnelRockTile?.(player.getLocation()))) {
+    || (carriedFlagTeam === getTeamId(player) && catapultReturnTeam(player)))) {
     restoreFlagToBase(carriedFlagTeam, "returns");
     return;
   }
-  placeDroppedFlag(carriedFlagTeam, player);
+  const dropLocation = game.tunnelFlagDropTile
+    ? game.tunnelFlagDropTile(player.getLocation())
+    : player.getLocation();
+  if (dropLocation === null) {
+    restoreFlagToBase(carriedFlagTeam, "returns");
+    return;
+  }
+  placeDroppedFlag(carriedFlagTeam, player, dropLocation);
 }
 
 // --- Barricades --------------------------------------------------------------------------
@@ -463,6 +470,7 @@ function dropCarriedFlag(player) {
 function trackBarricade(npc, teamId) {
   npc.castleWarsTeam = teamId;
   npc.setFlag(core.NPC.BLOCKS_PLAYERS_FLAG);
+  npc.setFlag(core.NPC.BLOCKS_PROJECTILES_FLAG);
   barricades.add(npc);
 }
 
@@ -479,6 +487,7 @@ function releaseBarricade(npc) {
     return;
   }
   npc.removeFlag(core.NPC.BLOCKS_PLAYERS_FLAG);
+  npc.removeFlag(core.NPC.BLOCKS_PROJECTILES_FLAG);
 }
 
 function removeBarricade(npc) {

@@ -6,6 +6,7 @@ import net.rsprot.buffer.extensions.toJagByteBuf
 import net.rsprot.compression.HuffmanCodec
 import net.rsprot.crypto.cipher.IsaacRandom
 import net.rsprot.protocol.message.IncomingMessage
+import net.rsprot.protocol.game.incoming.prot.GameClientProt
 import net.rsprox.cache.api.Cache
 import net.rsprox.cache.api.CacheProvider
 import net.rsprox.cache.api.type.GameVal
@@ -192,6 +193,13 @@ class HeadlessClient(private val host: String, private val port: Int) {
                     p4Alt1((interfaceId shl 16) or componentId)
                 }.buffer.let { it.array().copyOf(it.writerIndex()) },
             )
+
+        /** Native object-search answer (cache RESUME_OBJDIALOG); RSProt's decoder reads g2. */
+        fun resumeObject(obj: Int) = sendFixed(GameClientProt.RESUME_P_OBJDIALOG.opcode,
+            Unpooled.buffer().toJagByteBuf().apply { p2(obj) }.buffer.let { it.array().copyOf(it.writerIndex()) })
+
+        fun resumeCount(count: Int) = sendFixed(GameClientProt.RESUME_P_COUNTDIALOG.opcode,
+            Unpooled.buffer().toJagByteBuf().apply { p4(count) }.buffer.let { it.array().copyOf(it.writerIndex()) })
 
         /** IF_BUTTONT: the selected component (a spell, or an item's Use) on a target component's slot. */
         fun buttonT(selected: Int, selectedSub: Int, selectedObj: Int, target: Int, targetSub: Int, targetObj: Int) =

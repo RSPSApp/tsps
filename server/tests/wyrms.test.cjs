@@ -39,11 +39,11 @@ before(async () => {
 
 const providerFor = (id) => providers.find((entry) => entry.ids.includes(id)).ctor;
 
-function mobile(id, x, y, size = 1) {
+function mobile(id, x, y, size = 1, z = 0) {
   const shown = [];
   return {
     shown,
-    getLocation: () => new Location(x, y, 0),
+    getLocation: () => new Location(x, y, z),
     getSize: () => size,
     getCurrentDefinition: () => real.NpcDefinition.forId(id),
     performAnimation: (animation) => shown.push(`anim ${animation.getId()}`),
@@ -102,6 +102,17 @@ test("a wyrm's magic hits as its projectile lands, at each range (#1862)", () =>
     assert.equal(sent[0][4], end, "launched at 51, landing 46 + 10 a tile");
     assert.equal(method.hits(wyrm, target)[0].delay, ticks, `${x - 10} tiles out: the tick it lands`);
   }
+});
+
+test("a wyrm's magic timing stays finite across floors and matches the horizontal shot distance", () => {
+  const Method = providerFor(8611);
+  const wyrm = mobile(8611, 10, 10, 3, 0);
+  const target = mobile(0, 14, 10, 1, 1);
+  const method = new Method();
+  sent.length = 0;
+  method.start(wyrm, target);
+  assert.equal(sent[0][4], 86, "46 base cycles plus four horizontal tiles");
+  assert.equal(method.hits(wyrm, target)[0].delay, 3, "the hit waits for the finite projectile flight");
 });
 
 test("a wyrmling only melees, up to 5", () => {

@@ -55,7 +55,7 @@
     "debris": [[3055, 2832], [3060, 2861]]
   },
   "fight": {
-    "$comment": "Energy and essence are ten times the Wiki's (captured HUD). Per player: Wiki, from 2,600/2,500 solo to 1,800/1,700 each with 40 (solo captured 2683/2492).",
+    "$comment": "Energy and essence are ten times the Wiki's (captured HUD). Per-player contribution is the Wiki/Mod Squid approximation quoted in issue #2455 (2,600->1,800 energy and 2,500->1,700 essence each, linearly with player count), anchored at the captures' solo max 2683/2492. This is an approximation, not the exact OSRS formula.",
     "energyPerPlayer": { "solo": 2683, "full": 1800 },
     "essencePerPlayer": { "solo": 2492, "full": 1700 },
     "introBar": { "from": 130, "to": 240, "step": 2 },

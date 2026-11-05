@@ -1,5 +1,5 @@
 // OSRS Wiki: https://oldschool.runescape.wiki/w/Warped_sceptre
-const { definePoweredStaff } = require("./PoweredStaff");
+const { definePoweredStaff, refundsFit } = require("./PoweredStaff");
 
 const MAX_CHARGES = 20000;
 const CHAOS_RUNES_PER_CHARGE = 2;
@@ -13,6 +13,7 @@ const CAST_PROJECTILE_GRAPHIC = 2569; // client gameval SpotanimID.VFX_WARPED_SC
 const CAST_IMPACT_GRAPHIC = 2568; // client gameval SpotanimID.VFX_WARPED_SCEPTRE_PROJECTILE_IMPACT
 const CHARGES_WARPED_SCEPTRE_QUANTITY_VARBIT = 16155; // client gameval VarbitID.CHARGES_WARPED_SCEPTRE_QUANTITY
 const BUSY_VARBIT = 12393; // cache gameval busy
+const IMPACT_SOUND = 1460; // capture 1885: `sound_area id=1460 range=10` at the target in 51 casts
 const MAGIC_LEVEL_REQUIRED = 62; // OSRS Wiki item page
 
 let core = null;
@@ -63,6 +64,7 @@ function look({ Animation, Graphic, GraphicHeight, Projectile }) {
     castProjectile: (cast, castOn) =>
       Projectile.createProjectile(cast, castOn, CAST_PROJECTILE_GRAPHIC, 0, 20, 43, 31),
     endGraphic: () => new Graphic(CAST_IMPACT_GRAPHIC),
+    impactSound: () => IMPACT_SOUND,
   };
 }
 
@@ -198,12 +200,12 @@ function chargeWithRunes(event) {
   event.handled = chargeSceptre(player, sceptre);
 }
 
-function hasRefundSpace(player) {
-  const inventory = player.getInventory();
-  const neededSlots =
-    (inventory.contains(ItemIdentifiers.CHAOS_RUNE) ? 0 : 1) +
-    (inventory.contains(ItemIdentifiers.EARTH_RUNE) ? 0 : 1);
-  if (inventory.getFreeSlots() >= neededSlots) return true;
+function hasRefundSpace(player, amount) {
+  const refunds = [
+    new core.Item(ItemIdentifiers.CHAOS_RUNE, amount * CHAOS_RUNES_PER_CHARGE),
+    new core.Item(ItemIdentifiers.EARTH_RUNE, amount * EARTH_RUNES_PER_CHARGE),
+  ];
+  if (refundsFit(player.getInventory(), refunds)) return true;
   player.sendMessage("You don't have enough inventory space for the runes gained from uncharging your warped sceptre.");
   return false;
 }
@@ -211,7 +213,7 @@ function hasRefundSpace(player) {
 function refundCharges(player, item) {
   const inventory = player.getInventory();
   const amount = charges(item);
-  if (!inventory.getItems().includes(item) || amount <= 0 || !hasRefundSpace(player)) return;
+  if (!inventory.getItems().includes(item) || amount <= 0 || !hasRefundSpace(player, amount)) return;
   inventory.addItem(new core.Item(ItemIdentifiers.CHAOS_RUNE, amount * CHAOS_RUNES_PER_CHARGE));
   inventory.addItem(new core.Item(ItemIdentifiers.EARTH_RUNE, amount * EARTH_RUNES_PER_CHARGE));
   item.setId(unchargedByCharged.get(item.getId()));
@@ -222,7 +224,7 @@ function refundCharges(player, item) {
 }
 
 function uncharge({ player, item }) {
-  if (charges(item) <= 0 || !hasRefundSpace(player)) return true;
+  if (charges(item) <= 0 || !hasRefundSpace(player, charges(item))) return true;
   const { DialogueChainBuilder, OptionDialogue } = core;
   player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
     new OptionDialogue(0, {

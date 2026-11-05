@@ -187,11 +187,23 @@ function isDropQuantity(quantity) {
 
 /**
  * A world's own edits, saved by the browser host's NPC Drops tab to npc-drops-custom.json and
- * absent everywhere else. Rows are addressed by their position in the dump, so this runs before
- * applyOverrides changes the arrays.
+ * absent everywhere else. New saves replace complete tables by name; old index-based saves
+ * remain supported. Both run before applyOverrides changes the arrays.
  */
 function applyCustomDrops(dump, custom) {
   for (const [tableId, edits] of Object.entries(custom.tables ?? {})) {
+    if (edits?.replacement !== undefined) {
+      const table = edits.replacement;
+      if (!table || typeof table !== "object" || Array.isArray(table) ||
+          ["entries", "tertiary"].some(field => table[field] !== undefined &&
+            (!Array.isArray(table[field]) || table[field].some(row => !row || typeof row !== "object" || Array.isArray(row))))) {
+        console.error(`[NpcDrops] invalid saved table '${tableId}'; using the default`);
+        continue;
+      }
+      // Clone: runtime corrections must never mutate the world's saved definition.
+      dump.tables[tableId] = structuredClone(table);
+      continue;
+    }
     const table = dump.tables[tableId];
     if (!table) {
       console.error(`[NpcDrops] npc-drops-custom.json changes unknown table '${tableId}'`);
@@ -751,13 +763,18 @@ function rollOnce(table, entries, player, first = true, context = null, rules = 
   const main = [];
   const boostedMain = [];
   const separateGroups = new Map();
+  const preRollGroups = new Map();
   let preRollHit = false;
 
   for (const entry of entries) {
     if (entry.always) {
       continue;
     } else if (entry.pre_roll) {
-      if (!preRollHit && hits(entry, entryMultiplier(table, entry, rules))) {
+      if (entry.roll_group) {
+        const group = preRollGroups.get(entry.roll_group) || [];
+        group.push(entry);
+        preRollGroups.set(entry.roll_group, group);
+      } else if (!preRollHit && hits(entry, entryMultiplier(table, entry, rules))) {
         drops.push(...resolveEntry(entry, player, context));
         preRollHit = true;
       }
@@ -774,6 +791,31 @@ function rollOnce(table, entries, player, first = true, context = null, rules = 
       if (rareMultiplier(table, entry) > 1) boostedMain.push(entry);
       else main.push(entry);
     }
+  }
+
+  // A weighted pre-roll group: one access roll, then exactly one weighted item.
+  // A hit replaces the main roll, like the source's "1/585 chance of hitting the
+  // sigil drop table" (Corporeal Beast).
+  for (const group of preRollGroups.values()) {
+    if (preRollHit) break;
+    const first = group[0];
+    const accessOutOf = Number(first.group_access_out_of);
+    const accessWeight = Number(first.group_access_weight);
+    if (!(accessOutOf > 0) || !(accessWeight > 0)) continue;
+    // Boost the marginal rarity, not merely the choice after gaining access.
+    // A uniform boost must increase access while preserving the group's ratios.
+    const weighted = group.map((entry) => ({
+      ...entry,
+      weight: entry.weight * entryMultiplier(table, {
+        ...entry, out_of: Number(entry.out_of) * accessOutOf / accessWeight,
+      }, rules),
+    }));
+    const totalWeight = weighted.reduce((sum, entry) => sum + entry.weight, 0);
+    const boostedAccess = accessWeight * totalWeight / Number(first.out_of);
+    if (Math.random() * accessOutOf >= Math.min(accessOutOf, boostedAccess)) continue;
+    preRollHit = true;
+    const entry = rollWeighted(weighted, totalWeight, []);
+    if (entry) drops.push(...resolveEntry(entry, player, context));
   }
 
   for (const group of separateGroups.values()) {

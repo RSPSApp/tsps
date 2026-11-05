@@ -20,6 +20,7 @@ let Common, Lobby, Match, Avatars, Control, Souls, Death, Supplies, Bots, Reward
 const scoreboardDir = require('node:fs').mkdtempSync(require('node:path').join(require('node:os').tmpdir(), 'soul-wars-scoreboard-'));
 const online = [];
 const walks = [];
+const obtains = [];
 let config = {};
 
 /** Name hooks run in turn until one takes the click, as the plugin manager does. */
@@ -53,7 +54,7 @@ before(() => {
     onPlayerLogin() {},
     onPlayerLogout() {},
     onCustomEvent: (name, fn) => { const events = (hooks.events ??= {}); const prior = events[name]; events[name] = prior ? (e) => { prior(e); fn(e); } : fn; },
-    emitCustomEvent() {},
+    emitCustomEvent(name, event) { if (name === 'collection-log:obtain') obtains.push(event); },
     onCanShop: (fn) => { hooks.canShop = fn; },
     onInterfaceActionButton: (ids, fn) => { for (const id of [].concat(ids)) (hooks.buttons ??= new Map()).set(id, fn); },
     sendMultiChatboxPrompt: (player, title, ...args) => hooks.prompts.push({ player, title, args }),
@@ -87,6 +88,7 @@ beforeEach(() => {
   online.length = 0;
   config = {};
   hooks.prompts.length = 0;
+  obtains.length = 0;
   ticks(2);
 });
 
@@ -99,6 +101,7 @@ function container(capacity = 28) {
     contains: (id) => slots.some((s) => s.id === id && s.amount > 0),
     getAmount: (id) => slots.filter((s) => s.id === id).reduce((sum, s) => sum + s.amount, 0),
     getFreeSlots: () => capacity - slots.filter((s) => s.amount > 0).length,
+    getAddableAmount: (item) => Math.min(item.getAmount(), 2147483647 - slots.filter((s) => s.id === item.getId()).reduce((sum, s) => sum + s.amount, 0)),
     getValidItems: () => slots.filter((s) => s.amount > 0).map((s) => ({ getId: () => s.id, getAmount: () => s.amount })),
     getItems: () => slots.map((s) => (s.amount > 0 ? { getId: () => s.id, getAmount: () => s.amount, getMeta: () => s.meta ?? null } : null)),
     setItem(slot, item) { slots[slot] = { id: item.getId(), amount: item.getAmount(), meta: item.getMeta?.() ?? null }; },
@@ -868,6 +871,11 @@ test('other rewards: Buy 1 of a blighted sack gives its batch; the Soul cape wan
   button('confirm_other')({ player: p, slot: 0 });
   assert.equal(zealTokens(p), 2990, 'Prayer 60 refused');
   assert.equal(p.inventory.getAmount(25346), 0);
+  p.getSkillManager = () => ({ getMaxLevel: () => 70, getCurrentLevel: () => 70 });
+  button('other_rewards')({ player: p, slot: 1, opId: 1 });
+  button('confirm_other')({ player: p, slot: 0 });
+  assert.equal(p.inventory.getAmount(25346), 1);
+  assert.deepEqual(obtains.map((event) => [event.player, event.itemId, event.amount]).filter(([, id]) => id === 25346), [[p, 25346, 1]]);
 });
 
 // ------------------------------------------------------------------ tutorial

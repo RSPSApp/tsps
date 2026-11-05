@@ -17,6 +17,7 @@ before(async () => {
     hooks = {};
     Patches.attach(new Proxy({}, { get: (_, name) => (...args) => {
         if (['onObjectInteraction', 'onItemOnObject'].includes(name)) hooks[name] = args[0];
+        if (name === 'onInterfaceActionClick' && args[0].name === 'farmingOptionClick') hooks[name] = args[0];
     } }));
 });
 const ticks = (n) => { for (let i = 0; i < n; i++) Patches.tick(); };
@@ -30,7 +31,7 @@ function fixture(t, type, items = []) {
     player.busy = () => false; player.getClickDelay().elapsedTime = () => true;
     player.getSkillManager().setCurrentLevel(core.Skill.FARMING, 99, false);
     t.mock.method(core.MapObjects, 'get', () => null);
-    const patch = Data.CACHE.patches.find(p => p.type === type);
+    const patch = typeof type === 'string' ? Data.CACHE.patches.find(p => p.type === type) : type;
     player.moveTo(new core.Location(patch.x, patch.y, patch.z));
     for (const name of items) player.getInventory().add(new core.Item(Data.itemId(name)), false);
     const state = Patches.stateFor(player, patch);
@@ -89,6 +90,116 @@ test('a sapling is dug in and named the next tick; hardwood saplings are "the pl
         assert.deepEqual(f.said, [['spam', line]], sapling);
         assert.equal(f.player.getInventory().getAmount(Data.itemId('Plant pot')), 1, sapling);
     }
+});
+
+test('a Varrock tree patch captured by RSProx accepts a yew sapling', t => {
+    // Recording 127 (rev 227): OpLocT(id=8391, x=3192, z=3230, selectedObj=5373).
+    const patch = Data.CACHE.patches.find(p => p.id === 8391 && p.x === 3192 && p.y === 3230 && p.z === 0);
+    assert.ok(patch, 'captured tree patch is present in the Farming patch table');
+    const f = fixture(t, patch, ['Rake', 'Spade', 'Yew sapling']);
+    f.state.weeds = 3;
+    f.click('Rake');
+    ticks(14);
+    assert.equal(f.state.weeds, 0, 'raking makes the initially weedy tree patch plantable');
+    f.use('Yew sapling');
+    ticks(1);
+    assert.equal(f.state.crop, 'YEW');
+    assert.deepEqual(f.said, [['spam', 'You plant the yew sapling in the tree patch.']]);
+});
+
+test('planting XP waits until a harvest or check-health event', t => {
+    const f = fixture(t, 'FLOWER', ['Seed dibber', 'Marigold seed', 'Spade']);
+    const xp = [];
+    t.mock.method(f.player.getSkillManager(), 'addExperiences', (skill, amount) => xp.push([skill, amount]));
+    f.use('Marigold seed');
+    ticks(3);
+    assert.deepEqual(xp, []);
+    Object.assign(f.state, { stage: Data.CROPS.get('MARIGOLD').stages, status: 'grown', lives: 1,
+        nextAt: Number.MAX_SAFE_INTEGER, plantExperiencePending: true });
+    t.mock.method(core.ObjectDefinition, 'forPlayer', () => ({ getInteractions: () => ['Pick'] }));
+    hooks.onObjectInteraction({ player: f.player, object: { getId: () => f.patch.id },
+        location: { x: f.patch.x, y: f.patch.y, z: f.patch.z }, clickType: 1 });
+    ticks(3);
+    assert.deepEqual(xp.map(([, amount]) => amount), [Data.CROPS.get('MARIGOLD').harvest, Data.CROPS.get('MARIGOLD').plant]);
+});
+
+test('checking a tree awards pending planting XP with its health-check XP', t => {
+    const f = fixture(t, 'TREE');
+    const crop = Data.CROPS.get('YEW'), xp = [];
+    t.mock.method(f.player.getSkillManager(), 'addExperiences', (skill, amount) => xp.push([skill, amount]));
+    Object.assign(f.state, { crop: crop.key, stage: crop.stages, status: 'grown', lives: 0,
+        checked: false, plantExperiencePending: true, nextAt: Number.MAX_SAFE_INTEGER });
+    f.click('Check-health');
+    assert.deepEqual(xp.map(([, amount]) => amount), [crop.check, crop.plant]);
+    assert.equal(f.state.plantExperiencePending, false);
+});
+
+test('a persisted herb without the new XP flag gets its deferred planting XP at harvest', t => {
+    const patch = Data.CACHE.patches.find(p => p.type === 'HERB' && (p.x !== 2826 || p.y !== 3694));
+    const f = fixture(t, patch);
+    const crop = Data.CROPS.get('GUAM'), xp = [];
+    Object.assign(f.state, { crop: crop.key, stage: crop.stages, status: 'grown', checked: false,
+        lives: 1, nextAt: Number.MAX_SAFE_INTEGER });
+    delete f.state.plantExperiencePending;
+    t.mock.method(f.player.getSkillManager(), 'addExperiences', (skill, amount) => xp.push([skill, amount]));
+    t.mock.method(Math, 'random', () => 0.999999);
+    assert.equal(Patches.harvest(f.player, f.patch), false, 'the last herb pick clears the crop');
+    assert.deepEqual(xp.map(([, amount]) => amount), [crop.harvest, crop.plant]);
+    assert.equal(f.state.plantExperiencePending, false);
+});
+
+test('legacy non-herbs and explicit false do not receive planting XP twice', t => {
+    const nonHerb = fixture(t, 'ALLOTMENT');
+    Object.assign(nonHerb.state, { crop: 'POTATO' });
+    delete nonHerb.state.plantExperiencePending;
+    const xp = [];
+    t.mock.method(nonHerb.player.getSkillManager(), 'addExperiences', (skill, amount) => xp.push(amount));
+    assert.equal(Patches.awardPendingPlantExperience(nonHerb.player, nonHerb.patch, nonHerb.state), false);
+    assert.deepEqual(xp, []);
+
+    const paid = fixture(t, 'HERB');
+    Object.assign(paid.state, { crop: 'GUAM', plantExperiencePending: false });
+    t.mock.method(paid.player.getSkillManager(), 'addExperiences', (skill, amount) => xp.push(amount));
+    assert.equal(Patches.awardPendingPlantExperience(paid.player, paid.patch, paid.state), false);
+    assert.deepEqual(xp, []);
+});
+
+test('single-crop patches reject early clearing; multi-crop patches allow it without XP', t => {
+    const unique = fixture(t, 'MUSHROOM', ['Spade']);
+    const uniqueCrop = Data.CROPS.get('MUSHROOM');
+    Object.assign(unique.state, { crop: uniqueCrop.key, stage: 1, status: 'growing', plantExperiencePending: true });
+    unique.use('Spade');
+    assert.deepEqual(unique.said, [['game', 'You cannot dig up a healthy crop while it is growing in this patch.']]);
+    assert.equal(unique.state.crop, 'MUSHROOM');
+
+    const multi = fixture(t, 'ALLOTMENT', ['Spade']);
+    Object.assign(multi.state, { crop: 'POTATO', stage: 1, status: 'growing', plantExperiencePending: true });
+    const xp = [];
+    t.mock.method(multi.player.getSkillManager(), 'addExperiences', (skill, amount) => xp.push([skill, amount]));
+    multi.use('Spade');
+    assert.ok(multi.player.getDialogueManager().getCurrent() instanceof core.OptionDialogue);
+    hooks.onInterfaceActionClick({ player: multi.player, buttonId: core.OptionDialogue.OPTIONS_WIDGET_ID, action: 1 });
+    ticks(5);
+    assert.equal(Patches.stateFor(multi.player, multi.patch).crop, undefined);
+    assert.deepEqual(xp, [], 'clearing a healthy immature crop gives no planting XP');
+});
+
+test('a healthy herb can be cleared early at the unlocked Troll Stronghold patch', t => {
+    const patch = Data.CACHE.patches.find(p => p.type === 'HERB' && p.x === 2826 && p.y === 3694 && p.z === 0);
+    assert.ok(patch, 'the normal Troll Stronghold herb patch is present');
+    const f = fixture(t, patch, ['Spade']);
+    t.mock.method(core.PluginManager, 'emitCustomEvent', (name, request) => {
+        if (name === 'quest:is-complete' && request.key === 'my_arms_big_adventure') request.complete = true;
+    });
+    Object.assign(f.state, { crop: 'GUAM', stage: 1, status: 'growing', plantExperiencePending: true });
+    const xp = [];
+    t.mock.method(f.player.getSkillManager(), 'addExperiences', (skill, amount) => xp.push(amount));
+    f.use('Spade');
+    assert.ok(f.player.getDialogueManager().getCurrent() instanceof core.OptionDialogue);
+    hooks.onInterfaceActionClick({ player: f.player, buttonId: core.OptionDialogue.OPTIONS_WIDGET_ID, action: 1 });
+    ticks(5);
+    assert.equal(Patches.stateFor(f.player, patch).crop, undefined);
+    assert.deepEqual(xp, [], 'clearing a healthy immature herb gives no planting XP');
 });
 
 test('a sapling in the wrong patch names the patch it belongs in', t => {
@@ -173,7 +284,10 @@ test('a healthy tree is examined for disease on the spam channel', t => {
 
 test('digging up a dead crop digs twice and clears the patch five ticks after the click', t => {
     const f = fixture(t, 'HERB', ['Spade']);
-    Object.assign(f.state, { crop: 'GUAM', stage: 2, status: 'dead', nextAt: Number.MAX_SAFE_INTEGER });
+    const xp = [];
+    t.mock.method(f.player.getSkillManager(), 'addExperiences', (skill, amount) => xp.push([skill, amount]));
+    Object.assign(f.state, { crop: 'GUAM', stage: 2, status: 'dead', plantExperiencePending: true,
+        nextAt: Number.MAX_SAFE_INTEGER });
     f.click('Clear');
     assert.deepEqual(f.said, [['spam', 'You start digging the farming patch...']]);
     ticks(3);
@@ -183,6 +297,7 @@ test('digging up a dead crop digs twice and clears the patch five ticks after th
     ticks(1);
     assert.equal(Patches.stateFor(f.player, f.patch).crop, undefined);
     assert.deepEqual(f.said.at(-1), ['spam', 'You have successfully cleared this patch for new crops.']);
+    assert.deepEqual(xp.map(([, amount]) => amount), [Data.CROPS.get('GUAM').plant]);
 });
 
 test('a missing rake names the farming patch', t => {

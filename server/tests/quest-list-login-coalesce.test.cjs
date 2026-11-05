@@ -7,7 +7,12 @@ const { test } = require('node:test');
 
 const hooks = { login: [], custom: new Map(), logout: [] };
 const api = new Proxy({
-  core: {},
+  core: { CacheDefinitions: {
+    getDbColumns: () => ['id', 'displayname'],
+    getDbColumn: (_table, name) => name,
+    getDbTableRows: () => [[16, 'Test Quest One'], [55, 'Test Quest Two']].map(([id, name], i) =>
+      ({id: 3000+i, column: key => key === 'id' ? [id] : key === 'displayname' ? [name] : []})),
+  } },
   persistAttribute() {},
   onPlayerLogin: (handler) => hooks.login.push(handler),
   onPlayerLogout: (handler) => hooks.logout.push(handler),
@@ -24,9 +29,10 @@ runtime.registerQuest(api, { key: 'test_quest_two', name: 'Test Quest Two', varp
 
 function fakePlayer() {
   const attributes = new Map();
-  const sent = { lists: 0 };
+  const sent = { lists: 0, events: [] };
   const sender = new Proxy({
-    sendQuestList: () => { sent.lists++; return sender; },
+    sendConfig: (id) => { if (id === 101) sent.lists++; return sender; },
+    sendInterfaceFlagsRange: (...args) => { sent.events.push(args); return sender; },
     getVarbit: () => 0,
     getVarp: () => 0,
   }, { get: (target, key) => target[key] ?? (() => sender) });
@@ -42,6 +48,7 @@ function fakePlayer() {
 
 function login(player, refreshesDuringLogin) {
   for (const handler of hooks.login) handler({ player });
+  player.sent.lists = 0; // Ignore the independent character-summary header send.
   for (let i = 0; i < refreshesDuringLogin; i++) runtime.refreshQuestList(player);
 }
 
@@ -66,4 +73,19 @@ test('a login with no refreshes sends no extra list', () => {
   login(player, 0);
   api.emitCustomEvent('player:bootstrap-complete', { player });
   assert.equal(player.sent.lists, 0);
+});
+
+
+test('native row events coalesce once at login and reapply only when the tab remounts', () => {
+  const player = fakePlayer();
+  login(player, 20);
+  assert.equal(player.sent.events.length, 0);
+  api.emitCustomEvent('player:bootstrap-complete', { player });
+  const events = player.sent.events.slice();
+  assert.equal(events.length, 1, 'one captured native range enables OP1–5');
+  runtime.refreshQuestList(player);
+  runtime.refreshQuestList(player);
+  assert.deepEqual(player.sent.events, events, 'stage/stat updates do not repeat stable events');
+  api.emitCustomEvent('quest:list-refresh', { player });
+  assert.equal(player.sent.events.length, 2, 'a remount reapplies the native events');
 });

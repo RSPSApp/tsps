@@ -3,13 +3,12 @@
 const { randomUUID } = require("node:crypto");
 const Catalogue = require("./Catalogue.TreasureTrails");
 const Dialogue = require("./Dialogue.TreasureTrails");
-const { TIERS } = require("./Tiers.TreasureTrails");
+const { TIERS, META_PREFIX, completedAttribute, sharedCompletedCount } = require("./Tiers.TreasureTrails");
 const SKILL_CHALLENGES = require("./data/skill-challenges.json");
 const NPC_SPAWNS = require("../../../data/definitions/npc-spawns.json");
 const MASTER_PARTS = require("./data/master-parts.json");
 // A three-part master step's torn parts, as the cache names them.
 const TORN_PARTS = ["trail_master_part1", "trail_master_part2", "trail_master_part3"];
-const META_PREFIX = "treasure-trails:";
 // The clue helper names a target tile but no area. Emote steps accept the beginner
 // runtime's usual radius around it; music steps need the player near Cecilia's bridge.
 const EMOTE_RADIUS = 3;
@@ -28,7 +27,9 @@ const pick = (entries, random = Math.random) => entries[Math.floor(random() * en
 const location = entity => ({ x: entity.getLocation().getX(), y: entity.getLocation().getY(), z: entity.getLocation().getZ() });
 const distance = (a, b) => a.z === b.z ? Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y)) : Infinity;
 const metaKey = tier => META_PREFIX + tier.name;
-const completedAttribute = tier => `${META_PREFIX}${tier.name}-completed`;
+// The cache's collection log categories and the label its script 2735 gives each count.
+const clueCategoryName = tier => `${tier.label} Treasure Trails`;
+const rareClueCategoryName = tier => `${tier.label} Treasure Trails (Rare)`;
 
 function data(tier) {
   if (!catalogues.has(tier.name)) catalogues.set(tier.name, loadCatalogue(tier));
@@ -47,15 +48,22 @@ function loadCatalogue(tier) {
 }
 
 let spawned = null;
-/** NPC ids with a world spawn (npc-spawns.json names them by id or by NpcIdentifiers key). */
+/** NPC ids with a static or plugin-backed world spawn. */
 function worldSpawned() {
-  spawned ??= new Set(NPC_SPAWNS.map(entry => entry.id ?? core.NpcIdentifiers[entry.key]).filter(Number.isInteger));
+  spawned ??= new Set([
+    ...NPC_SPAWNS.map(entry => entry.id ?? core.NpcIdentifiers[entry.key]),
+    // These are spawned by their actual game content: a mangled-bone pyre, The Heart of Darkness,
+    // and the Shellbane Gryphon cave. They are not ordinary npc-spawns.json entries.
+    core.NpcIdentifiers.FEROCIOUS_BARBARIAN_SPIRIT,
+    core.NpcIdentifiers.FROST_NAGUA_3,
+    core.NpcIdentifiers.SHELLBANE_GRYPHON,
+  ].filter(Number.isInteger));
   return spawned;
 }
 
 /**
- * Steps this server can finish: a kill step needs one of its NPCs in the world (no pyre-ship
- * spirit or quest-only shellbane gryphon), and Sherlock needs a task the server can detect.
+ * Steps this server can finish: a kill step needs one of its NPCs to be spawned by world data or
+ * an implemented game feature, and Sherlock needs a task the server can detect.
  */
 function rollable(catalogue, step) {
   if (step.target === "kill") return step.npcIds.some(id => worldSpawned().has(id));
@@ -641,7 +649,11 @@ function restore({ player }) {
 }
 
 function categoryCount(request) {
-  const tier = TIERS.find(entry => new RegExp(`^Treasure Trails \\(${entry.label}\\)$`, "i").test(request.category));
+  if (request.category === "Shared Treasure Trail Rewards") {
+    request.count = sharedCompletedCount(request.player);
+    return;
+  }
+  const tier = TIERS.find(entry => request.category === clueCategoryName(entry) || request.category === rareClueCategoryName(entry));
   if (tier) request.count = Number(request.player.getAttribute(completedAttribute(tier))) || 0;
 }
 

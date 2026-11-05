@@ -34,7 +34,7 @@
  * player has the gate key.
  */
 module.exports = function registerZogreFleshEatersQuest(api) {
-  const { Skill, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
+  const { Skill, Item, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
   const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
 
   const PAGE = "Zogre Flesh Eaters";
@@ -595,8 +595,9 @@ module.exports = function registerZogreFleshEatersQuest(api) {
         setFlag(player, DECLINED_ATTRIBUTE, false);
         if (quest.getStage(player) < STAGE_STARTED) {
           quest.setStage(player, STAGE_STARTED);
-          give(player, COOKED_CHOMPY, 3);
-          give(player, SUPER_RESTORE_3, 2);
+          // Transcript:Zogre_Flesh_Eaters: "Goes to ground with full inventory".
+          player.getInventory().forceAdd(player, new Item(COOKED_CHOMPY, 3));
+          player.getInventory().forceAdd(player, new Item(SUPER_RESTORE_3, 2));
         }
         return;
       case "uZirGH":

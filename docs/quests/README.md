@@ -5,7 +5,7 @@ Every quest the server registers, with the latest result recorded in its page he
 test a quest is in [server/docs/agents/quest-testing.md](https://github.com/RSPSApp/tsps/blob/main/server/docs/agents/quest-testing.md);
 how to record the result is in [_template/README.md](_template/README.md).
 
-191 quests · ✅ passed: 28 · ⚠️ passed with issues: 15 · 🔄 in progress: 11 · ❌ failed: 1 · 🔁 needs recheck: 28 · untested: 108
+191 quests · ✅ passed: 28 · ⚠️ passed with issues: 17 · 🔄 in progress: 11 · ❌ failed: 1 · 🔁 needs recheck: 28 · untested: 106
 
 "Needs recheck" means the quest's plugin has changed since the commit its result was proven on.
 
@@ -64,8 +64,8 @@ how to record the result is in [_template/README.md](_template/README.md).
 | Enter the Abyss | untested |  |  |  |  |
 | [Ernest the Chicken](ernest-the-chicken/README.md) | ⚠️ passed with issues | 2026-11-02 | agent | DeepSeek V4.1 Flash | 1 |
 | [Ethically Acquired Antiquities](ethically-acquired-antiquities/README.md) | untested |  |  |  |  |
-| Fairytale I - Growing Pains | untested |  |  |  |  |
-| [Fairytale II - Cure a Queen](fairytale-ii-cure-a-queen/README.md) | untested |  |  |  |  |
+| [Fairytale I - Growing Pains](fairytale-i-growing-pains/README.md) | ⚠️ passed with issues | 2026-11-04 | Codex headless MCP |  | 1 |
+| [Fairytale II - Cure a Queen](fairytale-ii-cure-a-queen/README.md) | ⚠️ passed with issues | 2026-11-04 | Codex headless MCP |  | 2 |
 | [Fallen From Grace](fallen-from-grace/README.md) | 🔁 needs recheck | 2026-10-30 | agent | claude-haiku-5-5 | 8 |
 | Family Crest | untested |  |  |  |  |
 | [Fight Arena](fight-arena/README.md) | ✅ passed | 2026-10-23 | agent |  |  |

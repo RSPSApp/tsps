@@ -21,7 +21,8 @@ export class PlayerDeathTask extends Task {
     private killer: Player | undefined;
     private loseItems = true;
     private itemsToKeep: Item[] = [];
-    private ticks = 2;
+    // rsprox 426, 1084, 1085 and 2508: respawn four ticks after animation 836 starts.
+    private ticks = 4;
     /** False when a plugin says "Oh dear, you are dead!" itself (onPlayerBeforeDeath's announce). */
     private announce: boolean;
 
@@ -116,7 +117,7 @@ export class PlayerDeathTask extends Task {
                     break;
                 }
 
-                case 2: {
+                case 4: {
                     if (this.player.isPlayerBot && this.player.isPlayerBot()) {
                         (this.player as any).getCombatInteraction?.().handleDying?.(this.killer);
                     }
@@ -139,7 +140,11 @@ export class PlayerDeathTask extends Task {
                     this.player.getPacketSender().sendInterfaceRemoval();
 
                     // Send death message..
-                    if (this.announce) this.player.sendMessage("Oh dear, you are dead!");
+                    if (this.announce) {
+                        this.player.sendMessage("Oh dear, you are dead!");
+                        // RSProx 4028/4037: ordinary deaths play jingle 90 with the death message.
+                        this.player.getPacketSender().sendJingle(90);
+                    }
 
                     // Perform death animation..
                     this.player.performAnimation(new Animation(836));

@@ -1,3 +1,4 @@
+import { openClientUrl } from "../common/openUrl";
 import { LISTENED_CLAN_TYPE, OWN_CLAN_TYPE } from "../common/social/Clans";
 import type { MinimapGeometry, SceneGeometry } from "./scene/SceneGeometry";
 import { vec3 } from "gl-matrix";
@@ -9,7 +10,6 @@ import { directionToDelta } from "../common/Direction";
 import { ChatMessageType } from "../common/chat/ChatMessageType";
 import type { ProjectileLaunch } from "../common/projectiles/ProjectileLaunch";
 import { buildSelectedSpellPayload } from "../common/spells/selectedSpellPayload";
-import type { QuestListWidgetGroup } from "../common/ui/questList";
 import {
     INTERFACE_ACHIEVEMENT_DIARY_ID,
     INTERFACE_QUEST_LIST_ID,
@@ -226,7 +226,6 @@ import { markWidgetInteractionDirty } from "../widgets/WidgetInteraction";
 import { WidgetManager } from "../widgets/WidgetManager";
 import { WidgetSessionManager } from "../widgets/WidgetSessionManager";
 import { runWidgetJsOp } from "../widgets/custom/dynamicWidgets";
-import { applyQuestListWidgetGroups, questListPreferences } from "../widgets/custom/questList";
 import { cleanupInterfaceClickTargets, cleanupWidgetClickTarget } from "../widgets/gl/widgets-gl";
 import { layoutWidgets } from "../widgets/layout/WidgetLayout";
 import { sanitizeText } from "../widgets/menu/utils";
@@ -450,6 +449,10 @@ const SCRIPT_HIGHLIGHT_TEXTBOX_DEFAULT = 2465;
 // Chatbox search: its title says whether this one is a spawn search, and 138 closes it.
 const SCRIPT_CHATBOX_SEARCH = 750;
 const SCRIPT_CHATBOX_SEARCH_CLOSE = 138;
+// chatbox:meslayerinput (44) and its container (39). A server-run search (GE, bank) opens the
+// soft keyboard outside the touch that started it, which iOS refuses; tapping the text line is
+// the trusted gesture that brings it back.
+const CHATBOX_INPUT_UIDS: ReadonlySet<number> = new Set([(162 << 16) | 39, (162 << 16) | 44]);
 
 // Use shared OSRS rotation scale
 
@@ -463,7 +466,6 @@ const LOGOUT_WORLD_SWITCHER_UID = (182 << 16) | 3;
 const LOGOUT_STONE_UIDS = new Set([(161 << 16) | 46, (164 << 16) | 34, (548 << 16) | 51]);
 
 export class OsrsClient {
-    private serverQuestListGroups: QuestListWidgetGroup[] | undefined;
     private static readonly CLIENT_TICK_MS = 20;
     // Maximum amount of client-tick backlog (in ms) we will attempt to simulate.
     // This avoids multi-second/minute "catch-up" after sleep/throttling while still allowing
@@ -1982,6 +1984,7 @@ export class OsrsClient {
             },
             resolveChatPlayerName: (scriptId: number) =>
                 self.resolveChatPlayerNameForScript(scriptId | 0),
+            openUrl: openClientUrl,
             sendPlayerOption: (playerName: string, option: number) => {
                 const normalizedName = playerName.trim().toLowerCase();
                 const tradeTarget = self.tradeRequestTargetsByName.get(normalizedName);
@@ -2382,6 +2385,10 @@ export class OsrsClient {
                 if (widgetManager.isEffectivelyHidden((widget?.uid ?? 0) | 0)) continue;
                 if (keyboardButtons.widgetShowsKeyboard(widget)) {
                     this.mobileChatKeyboard.show();
+                    return;
+                }
+                if (CHATBOX_INPUT_UIDS.has((widget?.uid ?? 0) | 0)) {
+                    this.mobileChatKeyboard.showFromGesture();
                     return;
                 }
             }
@@ -2996,16 +3003,6 @@ export class OsrsClient {
                         : undefined;
                     this.widgetManager.invalidateWidgetRender(w);
                 }
-            } else if (payload?.action === "set_quest_list") {
-                if (this.widgetManager && Array.isArray(payload.groups)) {
-                    this.serverQuestListGroups = payload.groups as QuestListWidgetGroup[];
-                    applyQuestListWidgetGroups(
-                        this.widgetManager,
-                        payload.groups as QuestListWidgetGroup[],
-                        questListPreferences(this.varManager),
-                    );
-                    markWidgetsLoaded();
-                }
             } else if (payload?.action === "set_flags") {
                 // Set widget flags override (enables/disables click permissions)
                 const uid = Number(payload.uid) | 0;
@@ -3230,12 +3227,20 @@ export class OsrsClient {
                     try {
                         if (!this.soundEffectSystem) return;
                         const hasPosition = payload.x !== undefined && payload.y !== undefined;
+                        if (hasPosition && payload.radius !== undefined) {
+                            this.updateSoundListener();
+                            // Native receipt admission uses pathX/Y[0], before drawing catches up.
+                            const tile = this.getCameraTargetPosition() ? undefined : this.getControlledPlayerMovementTile();
+                            if (!this.soundEffectSystem.isAreaSoundInRange(
+                                payload.x!, payload.y!, payload.radius, tile?.tileX, tile?.tileY,
+                            )) return;
+                        }
                         // Wire loops: n = play n times; skip if zero
                         const wireLoops = payload.loops !== undefined ? payload.loops | 0 : 1;
                         if (wireLoops <= 0) return;
                         // Radius in tiles -> scene units (128 per tile)
                         const radiusScene =
-                            payload.radius !== undefined && payload.radius > 0
+                            hasPosition && payload.radius !== undefined
                                 ? (payload.radius | 0) * 128
                                 : undefined;
                         this.soundEffectSystem.playSoundEffect(payload.soundId, {
@@ -6711,9 +6716,6 @@ export class OsrsClient {
             this.combatOptions.initVarDefaults();
 
             this.varManager.onVarpChange = (varpId, _oldValue, newValue) => {
-                if (varpId >= 3408 && varpId <= 3412 && this.serverQuestListGroups && this.widgetManager) {
-                    applyQuestListWidgetGroups(this.widgetManager, this.serverQuestListGroups, questListPreferences(this.varManager));
-                }
                 // Server-backed stockmarket fields are separate from cache pending-offer varps.
                 if (varpId >= 7900 && varpId < 7900 + 8 * 7) markStockTransmit();
                 if (this.cs2Vm?.isRunning()) {

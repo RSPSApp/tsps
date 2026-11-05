@@ -104,6 +104,12 @@ function bankedStacks(tabs, itemId) {
 function bankFits(player, tabs, wine, good, bad) {
   const holds = (id) => bankedStacks(tabs, id).length > 0;
   const newStacks = (good > 0 && !holds(wine.wineId) ? 1 : 0) + (bad > 0 && !holds(wine.badId) ? 1 : 0);
+  // An existing output stack still needs room for the entire banked result.
+  for (const [id, amount] of [[wine.wineId, good], [wine.badId, bad]]) {
+    if (amount <= 0) continue;
+    const [held] = bankedStacks(tabs, id);
+    if (held && held.tab.getAddableAmount(new Common.core.Item(id, amount)) < amount) return false;
+  }
   return newStacks <= bankedStacks(tabs, wine.unfermentedId).length + Common.core.Bank.freeSlots(player);
 }
 

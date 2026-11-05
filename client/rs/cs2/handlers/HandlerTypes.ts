@@ -397,6 +397,7 @@ export interface HandlerContext {
 
     /** Dispatches a CS2 OPPLAYER action using a synced player name. */
     sendPlayerOption?: (playerName: string, option: number) => void;
+    openUrl?: (url: string, newWindow: boolean) => void;
 
     // Console output (for WRITECONSOLE opcode)
     writeConsole?: (text: string) => void;

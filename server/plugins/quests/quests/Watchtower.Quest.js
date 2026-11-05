@@ -35,6 +35,13 @@ module.exports = function registerWatchtowerQuest(api) {
   const { Skill, Location, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
   const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
 
+  const ObstacleRunner = require("../../skills/agility/ObstacleRunner.Agility");
+  ObstacleRunner.init(api);
+
+  const ROPE_THROW_ANIMATION = 775;
+  const ROPE_SWING_ANIMATION = 751;
+  const ROPE_SWING_OBJECT_ANIMATION = 497;
+  const ROPE_SWING_SOUND = 2494;
   const PAGE = "Watchtower";
 
   const VARP_WATCHTOWER = 212;
@@ -1245,9 +1252,62 @@ module.exports = function registerWatchtowerQuest(api) {
     startTranscript(api, player, WIZARD_ID, PAGE, "entering-the-enclave-mining-the-rock-of-dalgroth");
   }
 
+  /** rsprox 3271 ticks 3913–3918: the rope is lost on the west-bank crossing. */
+  function crossGrewRiver(event, entering) {
+    const { player, object } = event;
+    if (!object) return;
+    const at = object.getLocation();
+    const x = entering ? 2499 : 2511, y = entering ? 3087 : 3090;
+    if (at.getX() !== x || at.getY() !== y || at.getZ() !== 0) return;
+    event.handled = true;
+    const from = player.getLocation();
+    if (ObstacleRunner.isBusy(player) || from.getZ() !== 0 ||
+        (entering ? from.getX() > 2501 : from.getY() > 3092)) return;
+    if (entering && !held(player, ItemIdentifiers.ROPE)) return;
+    const start = entering ? [2501, 3087] : [2511, 3092];
+    if (Math.max(Math.abs(from.getX() - start[0]), Math.abs(from.getY() - start[1])) > 3) return;
+    // shortcut: return endpoints use the cache orientation and sister swing in capture 348; verify with an exit capture.
+    const end = entering ? [2505, 3087] : [2511, 3096];
+    const roped = new api.core.GameObject(ObjectIdentifiers.ROPESWING_10, at.clone(), object.getType(), object.getFace(), player.getPrivateArea());
+    let task;
+    let ropeConsumed = false;
+    const steps = [{ walk: [start], arrive: true }, { faceDir: entering ? "east" : "north" }];
+    if (entering) steps.push(
+      { msg: "You tie the rope to the tree..." }, { anim: ROPE_THROW_ANIMATION }, { wait: 1 },
+      { run: () => {
+        if (!held(player, ItemIdentifiers.ROPE)) { task.stop(); return; }
+        remove(player, ItemIdentifiers.ROPE);
+        ropeConsumed = true;
+        player.getPacketSender().sendObject(roped);
+      } },
+      { wait: 1 }
+    );
+    steps.push(
+      { objAnim: ROPE_SWING_OBJECT_ANIMATION },
+      { move: end, anim: ROPE_SWING_ANIMATION, delay: 20, speed: [45, 70], ticks: 0 },
+      { wait: 1 }, { msg: "You skillfully swing across." }, { sound: ROPE_SWING_SOUND },
+      { wait: 2 }, { tele: end }
+    );
+    task = ObstacleRunner.run({ player, object: entering ? roped : object }, steps, {
+      onFinish: (completed) => {
+        if (!entering) return;
+        // Logout fast-forwards movement without executing the delayed payment step.
+        if (completed && !ropeConsumed) {
+          if (held(player, ItemIdentifiers.ROPE)) remove(player, ItemIdentifiers.ROPE);
+          else player.moveTo(new Location(start[0], start[1], 0));
+        }
+        player.getPacketSender().sendObject(object);
+      },
+    });
+  }
+
   function handleObjectInteraction(event) {
     const { player, objectId } = event;
     if (!player) return;
+    if (objectId === ObjectIdentifiers.ROPESWING_9 && (event.option === "Swing-on" || event.clickType === 1)) {
+      crossGrewRiver(event, false);
+      return;
+    }
     if (BUSH_IDS.has(objectId)) {
       event.handled = true;
       searchBush(player, objectId);
@@ -1577,6 +1637,10 @@ module.exports = function registerWatchtowerQuest(api) {
   function handleItemOnObject(event) {
     const { player, itemId, objectId } = event;
     if (!player) return;
+    if (objectId === ObjectIdentifiers.BRANCH && itemId === ItemIdentifiers.ROPE) {
+      crossGrewRiver(event, true);
+      return;
+    }
     if (objectId === CHEST_ID && itemId === TOBANS_KEY) {
       event.handled = true;
       startTranscript(api, player, TOBAN_ID, PAGE, "ogre-investigations-toban-looting-toban-s-chest");
@@ -1659,6 +1723,8 @@ module.exports = function registerWatchtowerQuest(api) {
     varpId: VARP_WATCHTOWER,
     startedValue: STAGE_STARTED,
     completionValue: STAGE_COMPLETE,
+    // The saved completion is 12; cache state 13 is complete, and 14 keeps the scroll-read phase.
+    varpValue: stage => stage === STAGE_COMPLETE ? 13 : stage,
     questPoints: 4,
     xpRewards: [{ skillId: Skill.MAGIC.getIndex(), amount: 15250, label: "Magic" }],
     rewardItemId: SPELL_SCROLL,

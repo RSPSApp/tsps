@@ -1,6 +1,8 @@
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const {before, test} = require("node:test");
+// The bots spawn on load, which keeps the process alive after the tests, and nothing here needs them.
+process.env.DISABLE_PLAYER_BOTS = "1";
 require("../dist/Server").Server.installProductionPathResolver();
 const {CachePipeline} = require("../dist/game/cache/CachePipeline");
 const {PluginManager: PM} = require("../dist/plugins/PluginManager");
@@ -237,5 +239,74 @@ test("native item-on-ring prompt accepts, cancels and cannot resume after logout
     if(mode==="logout")PM.emitPlayerLogout({player:f.p,username:f.p.getUsername()});
     await resume(f,(219<<16)|1,mode==="cancel"?2:1);
     assert.equal(used(f),mode==="accept"?1:0,mode);
+  }
+});
+
+// Gateway IF_BUTTONT reaches this native widget_target route. The clicked copy remains
+// a valid target while successive casts consume equivalent copies from earlier slots.
+test("both alchemy spells take equivalent copies in inventory order through native packets", async t => {
+  for (const name of ["High Level Alchemy", "Low Level Alchemy"]) {
+    const f = actor(t), inv = f.p.getInventory(), itemId = id("bronze_dagger");
+    inv.add(new core.Item(core.ItemIdentifiers.NATURE_RUNE, 20), false);
+    inv.add(new core.Item(core.ItemIdentifiers.FIRE_RUNE, 100), false);
+    inv.add(new core.Item(itemId, 3), false);
+    const slots = inv.getItems().flatMap((item, slot) => item.getId() === itemId ? [slot] : []);
+    const clicked = inv.forSlot(slots[2]), spell = core.CacheDefinitions.getSpellByName(name);
+    const before = inv.getAmount(core.ItemIdentifiers.NATURE_RUNE);
+    for (const consumed of slots) {
+      f.p.setAttribute("magic:alchemy-next-cast", 0);
+      await f.c.dispatch([{ type: "widget_target", sourceWidgetId: spell.widgetId,
+        sourceItemId: spell.itemId, sourceSlot: -1, targetWidgetId: uid("inventory:items"),
+        targetSlot: slots[2], targetItemId: itemId }]);
+      f.c.processTurnPackets();
+      assert.notEqual(inv.forSlot(consumed).getId(), itemId, name + " consumes the earliest remaining slot");
+      if (consumed !== slots[2]) assert.equal(inv.forSlot(slots[2]), clicked, "clicked copy survives earlier casts");
+    }
+    assert.equal(inv.getAmount(core.ItemIdentifiers.NATURE_RUNE), before - 3, "one payment per item");
+  }
+});
+
+test("alchemy keeps different item state separate and gives ring hooks the consumed slot", async t => {
+  const f = actor(t), inv = f.p.getInventory(), itemId = id("bronze_dagger");
+  const charged = new core.Item(itemId).setMetaValue("test:charges", 5);
+  inv.add(charged, false); await f.open();
+  inv.add(new core.Item(itemId, 2), false);
+  const slots = inv.getItems().flatMap((item, slot) => item.getId() === itemId ? [slot] : []);
+  const clicked = inv.forSlot(slots[2]);
+  await cast(f, { slot: slots[2], itemId });
+  assert.equal(used(f), 1);
+  assert.equal(inv.forSlot(slots[0]).getMetaValue("test:charges"), 5);
+  assert.notEqual(inv.forSlot(slots[1]).getId(), itemId, "earliest matching state is consumed");
+  assert.equal(inv.forSlot(slots[2]), clicked);
+  const arrows = id("rune_arrow"), earlier = 6, later = 7;
+  inv.setItem(earlier, new core.Item(arrows, 2));
+  inv.setItem(later, new core.Item(arrows, 5));
+  f.p.setAttribute("magic:alchemy-next-cast", 0);
+  await cast(f, { slot: later, itemId: arrows });
+  assert.equal(inv.forSlot(earlier).getAmount(), 1, "quantity does not distinguish otherwise equivalent split stacks");
+  assert.equal(inv.forSlot(later).getAmount(), 5);
+  assert.equal(used(f), 2, "the ring pays exactly once for the selected stack");
+});
+
+test("queued and confirmed duplicate alchemy still rejects replacement of the clicked copy", async t => {
+  for (const pending of ["queue", "confirmation"]) {
+    const f = actor(t), inv = f.p.getInventory(), itemId = pending === "queue" ? id("bronze_dagger") : core.ItemIdentifiers.FIRE_CAPE;
+    inv.add(new core.Item(itemId, 2), false); await f.open();
+    const slots = inv.getItems().flatMap((item, slot) => item.getId() === itemId ? [slot] : []);
+    const tasks = [];
+    if (pending === "queue") {
+      t.mock.method(core.World, "getProcessCycle", () => 1000);
+      f.p.setAttribute("magic:alchemy-next-cast", 1005);
+      t.mock.method(core.TaskManager, "submit", task => tasks.push(task));
+    }
+    await cast(f, { slot: slots[1], itemId });
+    inv.setItem(slots[1], new core.Item(itemId));
+    if (pending === "queue") {
+      t.mock.method(core.World, "getProcessCycle", () => 1005); tasks[0].execute();
+    } else {
+      await resume(f, 193 << 16, 1); await resume(f, (219 << 16) | 1, 1);
+    }
+    assert.equal(used(f), 0, pending + " cannot spend a charge");
+    assert.equal(inv.getAmount(itemId), 2, pending + " cannot consume either copy");
   }
 });

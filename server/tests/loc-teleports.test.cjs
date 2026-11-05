@@ -848,6 +848,69 @@ test("Lletya's north and south tree passes cross the western wall from either si
   }
 });
 
+test("every Cam Torum squeeze door crosses straight to the opposite tile, from either side (#2449)", () => {
+  // Captured (237/1098, 1102, 1105, 1135; 226/1693): the player keeps the row or column they
+  // clicked from. Doors without a capture take the same rule from their cache rotation.
+  const doors = data.locs.filter((entry) => entry.id === 51005);
+  // The cache places the door at ten tiles; the one at 1465,9582 opens onto solid map and is left out.
+  assert.equal(doors.length, 9, "every placement of the door with a walkable far side");
+  assert.ok(!doors.some((door) => door.x === 1465 && door.y === 9582));
+  // The 2x1 door turned a quarter (rotation 1 or 3) is one tile wide and crossed east-west.
+  const mirror = (from, door, face) => {
+    const [x, y, z] = from;
+    return face % 2 === 1 ? [2 * door.x - x, y, z] : [x, 2 * door.y - y, z];
+  };
+  for (const door of doors) {
+    const object = locAt(door.id, door.x, door.y, door.z);
+    assert.equal(door.sides.length, 4, `${door.x},${door.y} has a side for each of its two tiles, both ways`);
+    for (const side of door.sides) {
+      assert.deepEqual(side.to, mirror(side.from, door, object.getFace()), `${door.x},${door.y}: ${side.from} crosses straight over`);
+      for (const [x, y, z] of [side.from, side.to]) {
+        assert.equal(core.RegionManager.getClipping(x, y, z, null) & 0x200100, 0, `${x},${y} beside ${door.x},${door.y} is walkable`);
+      }
+      assert.ok(object.isWithinInteractionDistance(new core.Location(...side.from)), `${side.from} reaches the door at ${door.x},${door.y}`);
+      const visit = explorer(side.from);
+      const event = { player: visit.player, object, objectId: object.getId(), clickType: 1, handled: false };
+      hooks.object(event);
+      assert.equal(event.handled, true);
+      runTicks(visit, 4);
+      const at = visit.player.getLocation();
+      assert.deepEqual([at.getX(), at.getY(), at.getZ()], side.to, `${door.x},${door.y} from ${side.from}`);
+    }
+  }
+});
+
+test("a Cam Torum squeeze door says you squeeze through, as spam on the move's tick (#2449)", () => {
+  // Captured (226/1693 tick 1706; 237/1098, 1102, 1105, 1135): every crossing gets the spam
+  // "You manage to squeeze through the tiny door." on the teleport's tick, before the move.
+  for (const door of data.locs.filter((entry) => entry.id === 51005)) {
+    assert.equal(door.message, "You manage to squeeze through the tiny door.", `${door.x},${door.y}`);
+    assert.equal(door.messageType, "spam", `${door.x},${door.y}`);
+    assert.equal(requirementFor(door, decisions), null, "no gate decision, so a sync keeps the entry as it is");
+  }
+  const object = locAt(51005, 1431, 9567, 1);
+  const visit = explorer([1432, 9568, 1]);
+  const sender = visit.player.getPacketSender();
+  const said = new Proxy({}, {
+    get: (target, key) => key === "sendTypedMessage"
+      ? (type, text) => (visit.ticks[visit.ticks.length - 1].push(`message ${type} ${text}`), said)
+      : (...args) => (sender[key](...args), said),
+  });
+  visit.player.getPacketSender = () => said;
+  visit.player.sendMessage = (text) => visit.ticks[visit.ticks.length - 1].push(`message game ${text}`);
+  const event = { player: visit.player, object, objectId: object.getId(), clickType: 1, handled: false };
+  hooks.object(event);
+  assert.equal(event.handled, true);
+  runTicks(visit, 4);
+  assert.deepEqual(visit.ticks, [
+    [],
+    [],
+    ["anim 6103", "sound 2452"],
+    [`message ${core.ChatType.SPAM} You manage to squeeze through the tiny door.`, "move 1430,9568,1"],
+    [],
+  ]);
+});
+
 test("trapdoor swaps: each loc has its option, and becomes the other state", () => {
   const swaps = require("../plugins/world/data/loc-swaps.json").swaps;
   for (const swap of swaps) {

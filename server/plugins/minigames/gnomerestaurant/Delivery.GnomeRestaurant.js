@@ -16,10 +16,12 @@ const DATA = require("./data/gnome-restaurant-orders.json");
 const PREMADE_IDS = new Set(DATA.premadeIds);
 const DISH_IDS = new Set([...DATA.items.hard.map((item) => item.id), ...PREMADE_IDS]);
 
+let api;
 let core;
 let COINS_ID;
 
 function init(pluginApi) {
+  api = pluginApi;
   core = pluginApi.core;
   COINS_ID = core.ItemIdentifiers.COINS;
 }
@@ -64,7 +66,12 @@ function giveTip(player, session) {
     return;
   }
   const reward = rollHardReward(session.npcName);
-  for (const item of reward.items) inventory.adds(item.id, item.amount);
+  for (const item of reward.items) {
+    const before = inventory.getAmount(item.id);
+    inventory.adds(item.id, item.amount);
+    const credited = Math.max(0, inventory.getAmount(item.id) - before);
+    if (credited > 0) api.emitCustomEvent("collection-log:obtain", { player, itemId: item.id, amount: credited });
+  }
   player.sendMessage("You are given a tip for your delivery.");
 }
 
@@ -103,6 +110,7 @@ function deliver(event) {
   event.player.sendMessage(`You hand over your delivery of ${session.itemName} to ${session.npcName}.`);
   giveTip(event.player, session);
   if (tokens > 0) event.player.sendMessage("You've earned a reward token for your deliveries!");
+  api.emitCustomEvent?.("gnome-restaurant:delivered", { player: event.player, tier: session.tier });
 }
 
 function attach(pluginApi) {

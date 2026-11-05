@@ -168,10 +168,17 @@ function returnItems({ player, interfaceId }) {
   if (interfaceId !== PRICE_CHECKER_INTERFACE_ID || !priceChecker) {
     return;
   }
+  // Closing can't be refused and the checker isn't saved, so what doesn't fit goes on the floor.
+  const inventory = player.getInventory();
+  let dropped = false;
   for (const item of priceChecker.getValidItems()) {
-    priceChecker.switchItems(player.getInventory(), item.clone(), false, false);
+    const returned = item.clone();
+    dropped ||= inventory.getAddableAmount(returned) < returned.getAmount();
+    priceChecker.deleteAtSlot(priceChecker.getItems().indexOf(item), returned.getAmount(), false);
+    inventory.forceAdd(player, returned);
   }
-  player.getInventory().refreshItems();
+  inventory.refreshItems();
+  if (dropped) player.sendMessage("Your inventory is full, so your items from the price checker have been placed on the ground.");
 }
 
 function getPriceChecker(player) {

@@ -1,0 +1,83 @@
+#!/usr/bin/env python3
+"""List worktrees whose PR has merged and that are safe to remove; --yes removes them.
+
+    scripts/agents/prune-worktrees          # dry run: what would go, and what is held back
+    scripts/agents/prune-worktrees --yes    # remove the safe ones with scripts/wt rm
+
+Safe means: the branch's PR is merged, there are no uncommitted tracked changes, no commits
+beyond the merged head, and the worktree's game port is not listening. A running server is
+someone's session (AGENTS.md: never stop another worktree's server), so it is held back.
+"""
+import json
+import pathlib
+import socket
+import subprocess
+import sys
+
+REPO = "RSPSApp/tsps"
+
+
+def run(*args, cwd=None):
+    result = subprocess.run(args, capture_output=True, text=True, cwd=cwd)
+    return result.stdout.strip() if result.returncode == 0 else None
+
+
+def env_of(worktree, key):
+    try:
+        lines = (pathlib.Path(worktree) / ".env").read_text().splitlines()
+    except OSError:
+        return None
+    values = [line.split("=", 1)[1] for line in lines if line.startswith(key + "=")]
+    return values[-1] if values else None
+
+
+def listening(port):
+    with socket.socket() as sock:
+        sock.settimeout(0.3)
+        return sock.connect_ex(("127.0.0.1", int(port))) == 0
+
+
+def main():
+    merged = {}
+    for pr in json.loads(run("gh", "pr", "list", "--repo", REPO, "--state", "merged", "--limit", "1000",
+                             "--json", "headRefName,headRefOid,number") or "[]"):
+        merged.setdefault(pr["headRefName"], pr)
+    main_dir = run("git", "rev-parse", "--path-format=absolute", "--git-common-dir")
+    main_dir = str(pathlib.Path(main_dir).parent)
+    worktree = branch = None
+    pairs = []
+    for line in (run("git", "worktree", "list", "--porcelain") or "").splitlines():
+        if line.startswith("worktree "):
+            worktree, branch = line[9:], None
+        elif line.startswith("branch refs/heads/"):
+            pairs.append((worktree, line[18:]))
+    safe, held = [], []
+    for worktree, branch in pairs:
+        if worktree == main_dir or branch not in merged:
+            continue
+        pr = merged[branch]
+        dirty = run("git", "status", "--porcelain", "--untracked-files=no", cwd=worktree)
+        extra = run("git", "rev-list", "--count", f"{pr['headRefOid']}..HEAD", cwd=worktree)
+        port = env_of(worktree, "WEBSOCKET_PORT")
+        running = bool(port) and listening(port)
+        row = f"{branch} (PR #{pr['number']}) {worktree}"
+        if dirty == "" and extra == "0" and not running:
+            safe.append((branch, row))
+        else:
+            reasons = [r for r, bad in (("uncommitted changes", dirty != ""),
+                                        (f"{extra} commits beyond the merge", extra != "0"),
+                                        ("server running", running)) if bad]
+            held.append(f"{row}: {', '.join(reasons)}")
+    for _, row in safe:
+        print(f"safe   {row}")
+    for row in held:
+        print(f"held   {row}")
+    if "--yes" in sys.argv:
+        wt = str(pathlib.Path(main_dir) / "scripts" / "wt")
+        for branch, row in safe:
+            ok = subprocess.run([wt, "rm", branch], capture_output=True).returncode == 0
+            print(f"{'removed' if ok else 'FAILED '} {row}")
+
+
+if __name__ == "__main__":
+    main()

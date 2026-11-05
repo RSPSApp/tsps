@@ -89,7 +89,7 @@ Cheats used in those runs: infinite health (so one player in Ba-Ba's pit with Mi
 - Wardens: entomb's timing; divine sounds; failed-siphon damage; rock damage; the Kephri phantom's Aerial bonus; ring lightning; clearing attack delay on skulls; Zebak's style flip, Vigilant's and the special's chances.
 - Points: puzzle completion points (Scabaras 300, Apmeken 450, Crondis 400). Lobby: the shroud menu, the sack's dialogue, the cavity's text.
 
-**Not built:** Metamorphosis into a remnant's forms (the unlock is); the first-raid freed gods and captured gods in the rooms; per-viewer corruption tint.
+**Not built:** the first-raid freed gods and captured gods in the rooms; per-viewer corruption tint.
 
 ## NPC animations
 
@@ -181,6 +181,7 @@ The first version was written without access to the Wiki or the cache, so it fol
 - **Ghosts:** a ghost's inventory and worn equipment tabs close until it's revived (from OpenRune).
 - **Raid items:** logging in outside a raid strips raid supplies.
 - **The chest:** the unique chance and weights, the pet, the Thread of Elidinis, the four keris jewels and the elite clue now use the Wiki's rates.
+- **Collection log:** the loot is logged when the chest or sarcophagus is opened; the one Tombs of Amascut category (struct 4378) shows Entry, Normal and Expert completions separately (cache script 2735: varps 2941, 2048 and 2942).
 - **The sarcophagus (Wiki):**
   - A unique turns the flames around Osmumten's sarcophagus purple, and its finder opens the sarcophagus to reveal it. Their chest has no common rolls; its tertiaries still drop.
   - The cache drives the vault from one varbit, `TOA_VAULT_SARCOPHAGUS` (14373). It switches the sarcophagus (46220: closed 44825, or purple with Open 44826), the floor glow (46222) and the barrier (46221).

@@ -31,6 +31,7 @@ const COUNT_INPUT_MODE = 7;
 
 const MESSAGE = {
   CANT_HOLD: "The pouch can't hold that.",
+  PRESET: "Preset items cannot be used for this.",
   EMPTY: "Your pouch is empty.",
   CANT_EMPTY: "It was not possible to empty the pouch.",
   /** Ours (not captured). */
@@ -168,9 +169,8 @@ function spend(player, runeId, amount) {
 // ------------------------------------------------------------------ inventory and bank
 
 /** Whether `amount` of a stackable rune fits in the inventory. */
-function inventoryFits(player, runeId) {
-  const inventory = player.getInventory();
-  return inventory.getFreeSlots() > 0 || inventory.getAmount(runeId) > 0;
+function inventoryFits(player, runeId, amount) {
+  return player.getInventory().getAddableAmount(new core.Item(runeId, amount)) >= amount;
 }
 
 function addToInventory(player, runeId, amount) {
@@ -179,20 +179,76 @@ function addToInventory(player, runeId, amount) {
   inventory.refreshItems();
 }
 
+/** Pouch storage is ID/quantity only, so item-specific state must remain on its item. */
+/** How many of `runeId` can go in the pouch: its storage keeps no metadata, so only plain stacks. */
+function plainInInventory(player, runeId) {
+  return player.getInventory().getItems().reduce((total, item) =>
+    (item?.getId() === runeId && isPlainRune(item) ? total + item.getAmount() : total), 0);
+}
+
+function isPlainRune(item) {
+  return item && isRune(item.getId()) && Object.keys(item.getMeta?.() ?? {}).length === 0;
+}
+
+function realBanks(player) {
+  return player.getBanks().filter((bank, index) => bank && index !== core.Bank.BANK_SEARCH_TAB_INDEX);
+}
+
+function plainAmount(container, runeId) {
+  return container.getItems().reduce((sum, item) => sum +
+    (item?.getId() === runeId && isPlainRune(item) ? Math.max(0, item.getAmount()) : 0), 0);
+}
+
 function bankTab(player, runeId) {
-  return player.getBank(core.Bank.getTabForItem(player, runeId));
+  return realBanks(player).find(bank => plainAmount(bank, runeId) > 0)
+    ?? player.getBank(core.Bank.getTabForItem(player, runeId));
 }
 
 function bankAmount(player, runeId) {
-  return bankTab(player, runeId).getAmount(runeId);
+  return realBanks(player).reduce((sum, bank) => sum + plainAmount(bank, runeId), 0);
 }
 
+/** Returns the actual accepted amount: a full bank or stack limit can refuse a return. */
 function addToBank(player, runeId, amount) {
+  const before = bankAmount(player, runeId);
   bankTab(player, runeId).add(new core.Item(runeId, amount), false);
+  const moved = Math.max(0, bankAmount(player, runeId) - before);
+  if (moved && player.isSearchingBank()) core.Bank.addToBankSearch(player, new core.Item(runeId, moved), false);
+  return moved;
 }
 
+function takeFromInventory(player, runeId, amount) {
+  if (!(amount > 0)) return 0;
+  const inventory = player.getInventory();
+  let left = amount;
+  for (const item of [...inventory.getItems()]) {
+    if (!(left > 0) || item?.getId() !== runeId || !isPlainRune(item)) continue;
+    const taken = Math.min(left, item.getAmount());
+    if (!(taken > 0)) continue;
+    inventory.deleteAtSlot(inventory.getItems().indexOf(item), taken, false);
+    left -= taken;
+  }
+  return amount - left;
+}
+
+/** Exact eligible stacks across real tabs; search snapshots are never a source of runes. */
 function takeFromBank(player, runeId, amount) {
-  bankTab(player, runeId).delete(runeId, amount);
+  if (!(amount > 0)) return 0;
+  let left = amount;
+  for (const bank of realBanks(player)) {
+    const before = left;
+    for (const item of [...bank.getItems()]) {
+      if (!(left > 0) || item?.getId() !== runeId || !isPlainRune(item)) continue;
+      const taken = Math.min(left, item.getAmount());
+      if (!(taken > 0)) continue;
+      bank.deleteItemContainer(new core.Item(runeId, taken), bank.getItems().indexOf(item), false, player.getInventory());
+      if (player.isSearchingBank()) core.Bank.removeFromBankSearch(player, new core.Item(runeId, taken), false);
+      left -= taken;
+    }
+    if (left !== before) bank.sortItems();
+    if (!(left > 0)) break;
+  }
+  return amount - left;
 }
 
 /** Redraws the open bank after runes moved in or out of it. */
@@ -306,10 +362,13 @@ module.exports = {
   take,
   spend,
   inventoryFits,
+  plainInInventory,
   addToInventory,
+  isPlainRune,
   bankAmount,
   addToBank,
   takeFromBank,
+  takeFromInventory,
   refreshBank,
   setVarbit,
   sendSlots,

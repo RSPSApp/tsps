@@ -13,8 +13,8 @@
  * in the sibling varp 518 "mourning_quest_bits" as varbits 797/798-810/9149-9156;
  * Part II's stage is varbit 1103 over varp 574, which this plugin never writes.
  *
- * Stages (varp 517):
- *   1  STARTED       Eluned took you to Lletya and Arianwyn explained the task
+ * Durable stages (nativeProgress maps these onto the real varp 517 phases):
+ *   1  STARTED       Eluned's introduction; go to Arianwyn
  *   2  DISGUISE      the Arandar mourner is dead and its outfit is loose
  *   3  CLEANED       Tegid's soap and a bucket of water cleaned the top
  *   4  TROUSERS      Oronwen repaired the trousers (2 silk + bear fur)
@@ -256,6 +256,8 @@ module.exports = function registerMourningsEndPartIQuest(api) {
   const GNOME_PARCELS_ATTRIBUTE = "quest.mournings_end_part_i.gnome-parcels";
   const SHEEP_ATTRIBUTE = "quest.mournings_end_part_i.sheep";
   const STORES_ATTRIBUTE = "quest.mournings_end_part_i.stores";
+  const BRIEFED_ATTRIBUTE = "mournings-end-part-i:briefed";
+  const BRIEFING_END_LINE = "Alright, I'll see what I can do.";
   const TEGID_ATTRIBUTE = "quest.mournings_end_part_i.tegid";
 
   const SHEEP_BIT_BY_COLOUR = new Map([
@@ -629,6 +631,19 @@ module.exports = function registerMourningsEndPartIQuest(api) {
       default:
         return;
     }
+  }
+
+  function handleDialogueLine(event) {
+    const { player, npcId, step, text } = event;
+    if ((!ARIANWYN_IDS.has(npcId) && !ELUNED_IDS.has(npcId))
+      || step?.player !== BRIEFING_END_LINE || text !== BRIEFING_END_LINE
+      || quest.getStage(player) !== STAGE_STARTED) return;
+    event.after = () => {
+      if (quest.getStage(player) !== STAGE_STARTED) return;
+      player.setAttribute(BRIEFED_ATTRIBUTE, true);
+      player.getPacketSender().sendConfig(VARP_MOURNINGS_END_PART_I,
+        nativeProgress(STAGE_STARTED, player));
+    };
   }
 
   function repairTrousers(player) {
@@ -1392,6 +1407,7 @@ module.exports = function registerMourningsEndPartIQuest(api) {
   function handleStageChanged(event) {
     if (!event || event.key !== "mournings_end_part_i" || !event.player) return;
     if (event.stage === 0) {
+      event.player.setAttribute(BRIEFED_ATTRIBUTE, false);
       event.player.setAttribute(GNOME_STATE_ATTRIBUTE, 0);
       event.player.setAttribute(GNOME_PARCELS_ATTRIBUTE, 0);
       event.player.setAttribute(SHEEP_ATTRIBUTE, 0);
@@ -1412,11 +1428,21 @@ module.exports = function registerMourningsEndPartIQuest(api) {
   api.persistAttribute(SHEEP_ATTRIBUTE);
   api.persistAttribute(STORES_ATTRIBUTE);
   api.persistAttribute(TEGID_ATTRIBUTE);
+  api.persistAttribute(BRIEFED_ATTRIBUTE, false);
+
+  // QH 06da90's mourning_quest phases: disguise 3, assignment 4, sheep 5, poison 6,
+  // secret 7, report 8, complete 9. Preserve compact saved phases used by these handlers.
+  function nativeProgress(stage, player) {
+    if (stage === STAGE_STARTED && player.getAttribute(BRIEFED_ATTRIBUTE) === true) return 3;
+    const phases = [0, 2, 3, 3, 3, 4, 5, 5, 5, 6, 6, 6, 7, 8, 9];
+    return phases[Math.max(0, Math.min(stage | 0, STAGE_COMPLETE))];
+  }
 
   quest = registerQuest(api, {
     key: "mournings_end_part_i",
     name: "Mourning's End Part I",
     varpId: VARP_MOURNINGS_END_PART_I,
+    varpValue: nativeProgress,
     startedValue: STAGE_STARTED,
     completionValue: STAGE_COMPLETE,
     questPoints: 2,
@@ -1441,6 +1467,7 @@ module.exports = function registerMourningsEndPartIQuest(api) {
   api.onNpcInteraction("Tegid", { "Talk-to": talkToTegid });
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onCustomEvent("npc-dialogue:choice", handleChoice);
+  api.onCustomEvent("npc-dialogue:line", handleDialogueLine);
   api.onCustomEvent("npc-dialogue:hook", handleDialogueHook);
   api.onCustomEvent("mournings-end-part-i:start-requirements", answerStartRequirementQuery);
   api.onItemOnItem(handleItemOnItem);

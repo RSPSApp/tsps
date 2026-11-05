@@ -45,8 +45,10 @@ Crop levels, planting/harvest/check-health XP and seed counts are the Wiki's
 held as explicit rows in `Data.Farming.js`. Planting reads the player's current
 Farming level (so boosts count) and refuses a lower level with
 `You need level <n> Farming to plant that.` before taking a seed or touching
-the patch. Herbs defer their planting XP until the final pick, as the Wiki
-describes.
+the patch. Planting XP is deferred for every crop until its health check or
+until the patch clears after harvest; clearing a dead crop awards that pending
+planting XP. Early spade clearing is enabled only when a patch can grow more
+than one crop species, matching the June 2026 Wiki update.
 
 Growth is part of the server's one-tick Farming task. `Model.nextGrowth`
 aligns every stage to the Wiki's fixed 5/10/20/40/80/160/320/640-minute cycle
@@ -70,7 +72,9 @@ stops for 40 minutes), not twice its normal cycle.
 
 ## Fidelity limits
 
-This is **not a verified 1:1 implementation**. In particular:
+This is **not a verified 1:1 implementation**. The patch planting, harvest,
+health-check XP timing, early-clearing rules and named herb transforms were
+audited against the current Wiki/cache for issue #2360. In particular:
 
 - Disease, compost, watering, yield, Kronos and barbarian rates live in
   `Data.Farming.js`'s `FORMULAS` table, not inside the model. Published rates

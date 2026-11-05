@@ -53,6 +53,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
   const START_HOOK = "quest:recipe-for-disaster:start";
   const VARP_RFD = 678;
   const VARBIT_RFD = 1850;
+  const SUBQUESTS_COMPLETED_VARBIT = 13987; // native subquests_completed_count
   const VARBIT_OGRE_BOAT = 1908;
   const RESCUE_QUEST_VARBITS = new Map([
     [1, [1892, 60]], // Mountain Dwarf
@@ -238,9 +239,6 @@ module.exports = function registerRecipeForDisasterQuest(api) {
   }
   function syncRescueQuestVarbits(player) {
     player.getPacketSender().sendVarbit(VARBIT_RFD, mainQuestValue(stage(player), player));
-    for (const [flag, [varbitId, completedValue]] of RESCUE_QUEST_VARBITS) {
-      if (hasFlag(player, flag)) player.getPacketSender().sendVarbit(varbitId, completedValue);
-    }
     syncDwarfQuestVarbits(player);
     syncGoblinQuestVarbits(player);
     syncDaveQuestVarbits(player);
@@ -249,9 +247,15 @@ module.exports = function registerRecipeForDisasterQuest(api) {
     syncSkrachQuestVarbits(player);
     syncAmikQuestVarbits(player);
     syncAwowogeiQuestVarbits(player);
+    const sender = player.getPacketSender();
+    const main = mainQuestValue(stage(player), player);
+    const completedRescues = [...RESCUE_QUEST_VARBITS.values()]
+      .filter(([varbitId, completedValue]) => (sender.getVarbit?.(varbitId) ?? 0) >= completedValue).length;
+    // Native RFD children include Another Cook's Quest (state 2) and the final battle (5).
+    sender.sendVarbit(SUBQUESTS_COMPLETED_VARBIT, completedRescues + (main >= 2 ? 1 : 0) + (main >= STAGE_COMPLETE ? 1 : 0));
   }
   function pirateQuestStage(player) {
-    if (hasFlag(player, 4)) return 110;
+    if (quest.isComplete(player) || hasFlag(player, 4)) return 110;
     const state = pirateState(player);
     const legacy = state & 8 ? 70 : state & 4 ? 40 : state & 2 ? 30 : state & 1 ? 10 : 0;
     return Math.max(Number(player.getAttribute(PIRATE_STAGE_ATTRIBUTE)) || 0, legacy);
@@ -314,7 +318,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
     }
   }
   function guideQuestStage(player) {
-    if (hasFlag(player, 8)) return 5;
+    if (quest.isComplete(player) || hasFlag(player, 8)) return 5;
     const state = Number(player.getAttribute(GUIDE_STATE_ATTRIBUTE)) || 0;
     const legacy = (state & 7) === 7 ? 3 : state !== 0 ? 2 : 0;
     return Math.max(Number(player.getAttribute(GUIDE_STAGE_ATTRIBUTE)) || 0, legacy);
@@ -342,7 +346,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
     if (TRAIBORN_IDS.has(npcId) && text?.includes("Bring me the basic ingredients")) setGuideStage(player, 2);
   }
   function dwarfQuestStage(player) {
-    if (hasFlag(player, 1)) return 60;
+    if (quest.isComplete(player) || hasFlag(player, 1)) return 60;
     const saved = Number(player.getAttribute(DWARF_STAGE_ATTRIBUTE)) || 0;
     const state = dwarfState(player);
     const legacy = state & 0x800 ? 50 : state & 0x400 ? 40 : state & 0x200 ? 30
@@ -356,7 +360,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
     player.getPacketSender().sendVarbit(1893, state & 7);
   }
   function goblinQuestStage(player) {
-    if (hasFlag(player, 2)) return 40;
+    if (quest.isComplete(player) || hasFlag(player, 2)) return 40;
     const saved = Number(player.getAttribute(GOBLIN_STAGE_ATTRIBUTE)) || 0;
     const state = goblinState(player);
     const legacy = state & GOBLIN_SLOP_RECEIVED ? 35 : state & 2 ? 15 : 0;
@@ -373,7 +377,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
     syncGoblinQuestVarbits(player);
   }
   function daveQuestStage(player) {
-    if (hasFlag(player, 16)) return 5;
+    if (quest.isComplete(player) || hasFlag(player, 16)) return 5;
     const saved = Number(player.getAttribute(DAVE_STAGE_ATTRIBUTE)) || 0;
     const state = Number(player.getAttribute(DAVE_STATE_ATTRIBUTE)) || 0;
     const legacy = state & 4 ? 4 : state & 2 ? 2 : state & 1 ? 1 : 0;
@@ -522,7 +526,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
   }
   function skrachState(player) { return Number(player.getAttribute(SKRACH_STATE_ATTRIBUTE)) || 0; }
   function skrachQuestStage(player) {
-    if (hasFlag(player, 32)) return 170;
+    if (quest.isComplete(player) || hasFlag(player, 32)) return 170;
     const state = skrachState(player);
     const legacy = state & 16 ? 80 : state & 8 ? 90 : state & 4 ? 60 : state & 2 ? 50 : state & 1 ? 20 : 0;
     return Math.max(Number(player.getAttribute(SKRACH_STAGE_ATTRIBUTE)) || 0, legacy);
@@ -766,7 +770,8 @@ module.exports = function registerRecipeForDisasterQuest(api) {
       if (has(player, ItemIdentifiers.MUDSKIPPER_HIDE)) return { page: PIRATE_PAGE, variant: "underwater-bringing-nung-the-mudskipper-hides" };
       return { page: PIRATE_PAGE, variant: hides >= 5 ? "underwater-talking-to-nung-again-2" : "underwater-talking-to-nung" };
     }
-    if (COUNCIL_IDS.has(npcId) && stage(player) >= STAGE_OPENING_COMPLETE) {
+    if (COUNCIL_IDS.has(npcId) && inZone(player, DINING_DIMENSION)
+      && stage(player) >= STAGE_OPENING_COMPLETE) {
       const rescue = RESCUES.find(({ ids }) => ids.includes(npcId));
       if (rescue && pages.some((entry) => entry.page === rescue.page)) {
         if (!hasFlag(player, rescue.flag)) {
@@ -1488,7 +1493,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
 
   function handleCouncilInteraction(event) {
     const { player, npcId } = event;
-    if (stage(player) < STAGE_OPENING_COMPLETE) return false;
+    if (!inZone(player, DINING_DIMENSION) || stage(player) < STAGE_OPENING_COMPLETE) return false;
     const option = event.definition?.getActions?.()?.[event.clickType - 1];
     if (option !== "Talk-to" && option !== "Inspect") return false;
     const rescue = RESCUES.find((entry) => entry.ids.includes(npcId));
@@ -2685,7 +2690,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
   }
 
   function amikQuestStage(player) {
-    if (hasFlag(player, 64)) return 20;
+    if (quest.isComplete(player) || hasFlag(player, 64)) return 20;
     return Number(player.getAttribute(AMIK_STAGE_ATTRIBUTE)) || 0;
   }
   function syncAmikQuestVarbits(player) {
@@ -2700,7 +2705,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
   }
 
   function awowogeiQuestStage(player) {
-    if (hasFlag(player, 128)) return 50;
+    if (quest.isComplete(player) || hasFlag(player, 128)) return 50;
     const state = awowogeiState(player);
     const saved = Number(player.getAttribute(AWOWOGEI_STAGE_ATTRIBUTE)) || 0;
     const legacy = state & 48 ? 15 : 0;
@@ -3408,7 +3413,10 @@ module.exports = function registerRecipeForDisasterQuest(api) {
   }
 
   function handleStageChanged({ player, key }) {
-    if (key === QUEST) syncSkrachSpitRoast(player);
+    if (key === QUEST) {
+      syncSkrachSpitRoast(player);
+      syncRescueQuestVarbits(player);
+    }
   }
 
   function handleLogout({ player }) {

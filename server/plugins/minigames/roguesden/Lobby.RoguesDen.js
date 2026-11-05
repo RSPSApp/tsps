@@ -56,7 +56,8 @@ function enterMaze(event) {
 function startEntry(player) {
   const run = Run.runOf(player) ?? Run.start(player);
   if (!Common.hasItem(player, Common.itemIds.mysticJewel)) Common.give(player, Common.itemIds.mysticJewel, 1);
-  const [x, y, z] = [3056, 4992, 1];
+  // The doorway at 3056,4991 sits in the wall row y=4992; y=4993 is the first walkable tile.
+  const [x, y, z] = [3056, 4993, 1];
   player.moveTo(location(x, y, z));
   run.prev = player.getLocation().clone();
 }

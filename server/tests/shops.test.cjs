@@ -241,6 +241,25 @@ test("every general store buys items it doesn't stock and restocks its own", () 
   assert.equal(stockOf(GENERAL_STORE)[0][1], 3);
 });
 
+test("shop:keep-stock asked with selling on a sale: kept, the item is paid for and not added", (t) => {
+  const asked = [];
+  let keep = true;
+  t.mock.method(PluginManager, "emitCustomEvent", (name, request) => {
+    if (name !== "shop:keep-stock") return;
+    asked.push({ ...request, player: undefined });
+    request.keep = keep;
+  });
+  const player = openShop(0, GENERAL_STORE);
+  player.getInventory().add(new Item(STEEL_AXE_NOTE, 3), false);
+  sell(player, 0, "Sell 1");
+  assert.deepEqual(asked, [{ player: undefined, shopId: GENERAL_STORE, itemId: STEEL_AXE, amount: 1, keep: false, selling: true }]);
+  assert.equal(player.getInventory().getAmount(COINS), Math.floor(200 * 0.85), "paid");
+  assert.deepEqual(stockOf(GENERAL_STORE), [[BRONZE_AXE, 3]], "nothing added");
+  keep = false;
+  sell(player, 0, "Sell 1");
+  assert.deepEqual(stockOf(GENERAL_STORE), [[BRONZE_AXE, 3], [STEEL_AXE, 1]], "not kept: added as before");
+});
+
 test("the quantity buttons set what an item's left-click buys, and the choice is saved", () => {
   const player = openShop();
   const clickButton = (childId) => ShopManager.handleWidgetAction(player, {
@@ -283,22 +302,45 @@ test("a currency with a unit uses OSRS's wording: costs, buy-back and too few", 
 });
 
 
+function fallbackActions(labels) {
+  let actions;
+  const opened = [];
+  const api = {
+    core: {
+      ShopManager: { open: (_player, shopId) => { opened.push(shopId); return true; } },
+      NpcDefinition: { forId: (npcId) => ({ getActions: () => labels[npcId] ?? [] }) },
+    },
+    registerItemShopCurrency() {}, registerShopCurrency() {}, persistAttribute() {}, registerNpcInteraction() {},
+    onAnyNpcInteraction: (next) => { actions = next; },
+    onNpcInteraction: () => { throw new Error("default shop bindings must not use pre-named hooks"); },
+    emitCustomEvent() {},
+  };
+  return { api, opened, actions: () => actions };
+}
+
 test("Trade on an NPC with shop versions opens the version the player's progress unlocks", () => {
   const Shopkeepers = require("../plugins/npcs/Shopkeepers.plugin");
   const shops = require("../data/definitions/shops.json");
   const nameOf = (id) => shops.find((shop) => shop.id === id).name;
-  const opened = [];
-  let picked = null;
-  let handler;
-  const api = {
-    core: { ShopManager: { open: (player, shopId) => opened.push(shopId) } },
-    registerItemShopCurrency() {}, registerShopCurrency() {}, persistAttribute() {}, registerNpcInteraction() {},
-    onNpcInteraction: (fn) => { handler = fn; },
-    emitCustomEvent: (name, request) => { if (name === "npc-dialogue:shop") request.shop = picked; },
+  const labels = {
+    3837: [null, null, "Trade"],
+    5250: [null, null, "Trade"],
+    822: [null, null, "Trade"],
+    4280: ["Talk-to", null, "Trade"],
   };
+  const { api, opened, actions } = fallbackActions(labels);
+  let picked = null;
+  api.emitCustomEvent = (name, request) => { if (name === "npc-dialogue:shop") request.shop = picked; };
   Shopkeepers.register(api);
   assert.ok([...Shopkeepers.sharedTraders().get("3837:3")].length >= 2, "Baba Yaga's Trade is shared by two versions");
-  const trade = (npcId, clickType = 3) => { const event = { player: {}, npcId, clickType, handled: false }; handler(event); return event.handled; };
+  const trade = (npcId, clickType = 3) => {
+    const label = labels[npcId]?.[clickType - 1];
+    const handler = label && actions()?.[label];
+    if (!handler) return false;
+    const event = { player: {}, npcId, clickType, handled: false };
+    handler(event);
+    return event.handled;
+  };
 
   picked = "Baba Yaga's Magic Shop. (After Lunar Diplomacy)";
   assert.equal(trade(3837), true);
@@ -307,7 +349,8 @@ test("Trade on an NPC with shop versions opens the version the player's progress
   assert.equal(trade(5250), true, "no version applies: Daga's Default shop");
   assert.equal(nameOf(opened.pop()), "Daga's Scimitar Smithy (Default)");
   assert.equal(trade(3837), false, "no version and no Default: Baba Yaga stays shut");
-  assert.equal(trade(822), false, "an NPC with one shop keeps its fixed binding");
+  assert.equal(trade(822), true, "an NPC with one shop uses the ordinary fallback");
+  assert.equal(nameOf(opened.pop()), "Oziach (shop)");
   assert.equal(opened.length, 0);
 
   assert.equal(trade(4280), true, "Ned's Trade opens his default rope shop");
@@ -333,6 +376,166 @@ test("a custom shop's npcInteractions bind its NPC, over shops.json on the same 
   });
   assert.deepEqual([...shopkeepers()], [["1:3", 100], ["2:3", null], ["3:3", 7], ["4:1", 8]],
     "shops.json keeps its bindings and ambiguity; custom shops add theirs; an out-of-range slot is ignored");
+});
+
+function mockShopFiles(t, defaults, custom = []) {
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const readFileSync = fs.readFileSync;
+  t.mock.method(fs, "readFileSync", (file, ...args) => {
+    const name = path.basename(String(file));
+    if (name === "shops.json") return JSON.stringify(defaults);
+    if (name === "custom-shops.json") return JSON.stringify(custom);
+    return readFileSync(file, ...args);
+  });
+}
+
+function trader(id, npcId, optionSlot, name = `Shop ${id}`) {
+  return { id, name, npcInteractions: [{ npcIds: [npcId], optionSlot }] };
+}
+
+test("generated defaults are a post-name fallback behind custom hard bindings", (t) => {
+  const Shopkeepers = require("../plugins/npcs/Shopkeepers.plugin");
+  mockShopFiles(t, [
+    trader(100, 1, 3),
+    trader(101, 2, 4, "Version (Default)"),
+    trader(102, 2, 4, "Version (Other)"),
+    trader(103, 3, 2, "Customized (Default)"),
+    trader(104, 4, 5),
+    trader(105, 7, 3, "No Default A"),
+    trader(106, 7, 3, "No Default B"),
+  ], [trader(103, 3, 2, "Custom shop"), trader(8, 5, 1, "Other custom shop")]);
+  const labels = {
+    1: [null, null, "Trade"],
+    2: [null, null, null, "Trade"],
+    3: [null, "Buy"],
+    4: [null, null, null, null, "Trade-Co-op"],
+    7: [null, null, "Trade"],
+    99: [null, null, "Trade"],
+  };
+  const hard = [];
+  const opened = [];
+  let actions;
+  let picked = null;
+  Shopkeepers.register({
+    core: {
+      ShopManager: { open: (_player, shopId) => { opened.push(shopId); return true; } },
+      NpcDefinition: { forId: (npcId) => ({ getActions: () => labels[npcId] ?? [] }) },
+    },
+    registerItemShopCurrency() {}, registerShopCurrency() {}, persistAttribute() {},
+    registerNpcInteraction: (npcId, definition) => hard.push([npcId, definition]),
+    onAnyNpcInteraction: (next) => { actions = next; },
+    onNpcInteraction: () => { throw new Error("defaults must not use pre-named hooks"); },
+    emitCustomEvent: (name, request) => { if (name === "npc-dialogue:shop") request.shop = picked; },
+  });
+  const fire = (npcId, clickType) => {
+    const label = labels[npcId]?.[clickType - 1];
+    const handler = label && actions?.[label];
+    if (!handler) return { handled: false, result: false };
+    const event = { player: {}, npcId, clickType, handled: false };
+    const result = handler(event);
+    return { handled: event.handled, result };
+  };
+
+  assert.deepEqual(hard, [
+    [3, { secondClick: { shopId: 103 } }],
+    [5, { firstClick: { shopId: 8 } }],
+  ], "only custom shops keep hard definitions, and they override the generated option");
+  assert.equal(actions.Buy, undefined, "a custom option is not also a generated fallback");
+  assert.equal(fire(1, 3).handled, true, "an ordinary generated shop still opens");
+  assert.deepEqual(opened.splice(0), [100]);
+  assert.equal(fire(4, 5).handled, true, "the fallback uses the cache's non-Trade label");
+  assert.deepEqual(opened.splice(0), [104]);
+  assert.equal(fire(2, 4).handled, true, "a shared option opens its Default version");
+  assert.deepEqual(opened.splice(0), [101]);
+  picked = "Version (Other)";
+  assert.equal(fire(2, 4).handled, true);
+  assert.deepEqual(opened.splice(0), [102]);
+  picked = null;
+  assert.deepEqual(fire(7, 3), { handled: false, result: false }, "no chosen version stays unhandled");
+  assert.deepEqual(fire(99, 3), { handled: false, result: false }, "an unbound NPC returns false explicitly");
+  assert.deepEqual(opened, []);
+});
+
+test("native named owners beat the post-name fallback in either registration order", (t) => {
+  const { NpcDefinition } = require("../dist/game/definition/NpcDefinition");
+  const Shopkeepers = require("../plugins/npcs/Shopkeepers.plugin");
+  mockShopFiles(t, [trader(200, 9101, 3), trader(201, 9102, 3), trader(202, 9103, 3),
+    trader(203, 9104, 3, "Shared (Default)"), trader(204, 9104, 3, "Shared (Unlocked)")]);
+  const labels = {
+    9101: [null, null, "Trade"],
+    9102: [null, null, "Trade"],
+    9103: [null, null, "Trade"],
+    9104: [null, null, "Trade"],
+    9105: [null, null, "Trade"],
+  };
+  t.mock.method(NpcDefinition, "forId", (npcId) => ({ getActions: () => labels[npcId] ?? [] }));
+  const opened = [];
+  const native = [];
+  const hooks = PluginManager.npcInteractionHooks.length;
+  const fallbackHooks = PluginManager.npcAnyInteractionHooks.length;
+  t.after(() => {
+    PluginManager.npcInteractionHooks.length = hooks;
+    PluginManager.npcAnyInteractionHooks.length = fallbackHooks;
+  });
+  t.mock.method(ShopManager, "open", (_player, shopId) => { opened.push(shopId); return true; });
+
+  PluginManager.createApi("NativeOwnerBefore").onNpcInteraction("Owner Before", {
+    Trade: (event) => { native.push("before"); event.handled = true; },
+  });
+  Shopkeepers.register(PluginManager.createApi("ShopkeepersFallbackDispatch"));
+  PluginManager.createApi("NativeOwnerAfter").onNpcInteraction("Owner After", {
+    Trade: (event) => { native.push("after"); event.handled = true; },
+  });
+  PluginManager.createApi("LaterGenericOwner").onAnyNpcInteraction({
+    Trade: (event) => {
+      if (event.npcId !== 9105) return false;
+      native.push("generic");
+    },
+  });
+
+  const dispatch = (npcId, name) => {
+    const definition = { getName: () => name, getActions: () => labels[npcId] };
+    const npc = { getCurrentDefinition: () => definition };
+    return PluginManager.emitNpcInteraction({ player: {}, npc, definition, npcId, clickType: 3, handled: false });
+  };
+
+  assert.equal(dispatch(9101, "Owner Before"), true);
+  assert.deepEqual(native, ["before"], "an owner registered before Shopkeepers still wins");
+  assert.equal(dispatch(9102, "Owner After"), true);
+  assert.deepEqual(native, ["before", "after"], "an owner registered after Shopkeepers wins too");
+  assert.equal(dispatch(9104, "Owner Before"), true);
+  assert.equal(dispatch(9104, "Owner After"), true);
+  assert.deepEqual(native, ["before", "after", "before", "after"], "shared versions also yield to named owners in either order");
+  assert.deepEqual(opened, []);
+  assert.equal(dispatch(9103, "Ordinary Shopkeeper"), true);
+  assert.deepEqual(opened, [202], "an unowned generated shop still opens through the fallback");
+  assert.equal(dispatch(9104, "Ordinary Shopkeeper"), true);
+  assert.deepEqual(opened, [202, 203], "an unowned shared shop retains its Default version");
+  assert.equal(dispatch(9105, "Other Trade NPC"), true);
+  assert.equal(native.at(-1), "generic", "an unbound Trade remains available to later generic owners");
+});
+
+test("custom shop definitions loaded by the production loader take precedence", (t) => {
+  const Shopkeepers = require("../plugins/npcs/Shopkeepers.plugin");
+  mockShopFiles(t, [trader(300, 20, 3)], [trader(400, 20, 3, "Custom shop")]);
+  const opened = [];
+  t.mock.method(ShopManager, "open", (_player, shopId) => { opened.push(shopId); return true; });
+  const { NpcInteractionDefinition } = require("../dist/game/definition/NpcInteractionDefinition");
+  const { NpcInteractionDefinitionLoader } = require("../dist/game/definition/loader/impl/NpcInteractionDefinitionLoader");
+  const { NpcInteractionManager } = require("../dist/game/entity/impl/npc/NpcInteractionManager");
+  const previous = NpcInteractionDefinition.all();
+  t.mock.method(console, "debug", () => {});
+  try {
+    Shopkeepers.register(PluginManager.createApi("ShopkeepersCustomBindingTest"));
+    new NpcInteractionDefinitionLoader().load();
+    const definition = NpcInteractionDefinition.forNpcId(20);
+    assert.equal(definition.getThirdClick().args.shopId, 400, "the custom shop is the hard definition");
+    assert.equal(NpcInteractionManager.handle({}, { getContentId: () => 20 }, 0, 3), true);
+    assert.deepEqual(opened, [400]);
+  } finally {
+    NpcInteractionDefinition.replace(previous);
+  }
 });
 
 const CustomShops = require("../plugins/interface/CustomShops.plugin");

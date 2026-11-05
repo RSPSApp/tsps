@@ -146,6 +146,7 @@ function endGame(winner) {
   state.phase = "idle";
   if (!winner) return;
   state.champion = winner.getDisplayName();
+  api.emitCustomEvent("fight-pits:champion", { player: winner });
   if (state.defeatedLevels > 0) winner.getInventory().adds(Items.TOKKUL, state.defeatedLevels);
   champions.add(winner);
   winner.setSkullTimer(CHAMPION_SKULL_TICKS);
@@ -196,6 +197,7 @@ function enterPit({ player }) {
   present.add(player);
   shown.delete(player);
   player.getPacketSender().sendSubInterface(OVERLAY_HUD_UID, OVERLAY, 1);
+  api.emitCustomEvent("fight-pits:entered", { player });
 }
 
 function leavePit({ player }) {

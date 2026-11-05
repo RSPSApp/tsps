@@ -1360,7 +1360,9 @@ module.exports = function registerTheBloodMoonRises(api) {
         : `A wall of blood surges from the ${direction}. Run straight toward it and cross its path by four tiles.`);
     }
     // Wiki: the player must dodge 3–5 lunges by stepping back onto the sparkling side.
-    // shortcut: use three lunges and a two-tick response window until a First Blood capture calibrates timing.
+    // shortcut: three lunges, within the Wiki's 3-5. rsprox 4288 times the rest: the telegraph, the strike 3 ticks
+    // on, the next telegraph 3-4 ticks after it. Live counts only a roll on the strike's own tick and catches a step
+    // a tick before, the Wiki's "tick perfect"; here any step onto the tile before the strike counts.
     processFirstBloodLunges(fight, player, boss, now) {
       if (fight.warning === "first-blood-lunge" && fight.impactAt && now >= fight.impactAt) {
         const loc = player.getLocation();
@@ -1381,7 +1383,7 @@ module.exports = function registerTheBloodMoonRises(api) {
           boss.setFlag?.("combat:no-retaliate", false);
           boss.getCombat?.()?.attack?.(player);
           player.sendMessage("After three clean lunges, Lowerniel turns his attention to you. You can now strike him.");
-        } else fight.nextAttackAt = now + 2;
+        } else fight.nextAttackAt = now + 3;
         return;
       }
       if (fight.impactAt || now < fight.nextAttackAt) return;
@@ -1422,7 +1424,7 @@ module.exports = function registerTheBloodMoonRises(api) {
       fight.markedX = playerLoc.getX();
       fight.markedY = playerLoc.getY();
       fight.warning = "first-blood-lunge";
-      fight.impactAt = now + 2;
+      fight.impactAt = now + 3;
       this.animate(fight, FINAL_DRAKAN_ANIM.thrustTelegraph);
       const direction = `${dy < 0 ? "south" : dy > 0 ? "north" : ""}${dx && dy ? "-" : ""}${dx < 0 ? "west" : dx > 0 ? "east" : ""}`;
       if (boss.getHitpoints() > 2900) {
@@ -1806,10 +1808,12 @@ module.exports = function registerTheBloodMoonRises(api) {
   function handleFirstBloodHit(event) {
     const npc = event?.npc;
     const hit = event?.hit;
-    const attacker = event?.attacker;
+    const attacker = hit?.getAttacker?.();
     const fight = npc && drakanEncounters.get(npc.getArea?.());
     if (!fight || fight.mode !== "first-blood" || fight.ending || !hit) return;
     if (npc !== fight.boss) {
+      // Ours: rsprox 4288 shows his hits landing on Vanescula and her apparently healed back. Keeping them at
+      // zero keeps her up without modelling that.
       if (!fight.damageUnlocked && fight.allies?.includes(npc) && attacker === fight.boss) {
         for (const part of hit.getHits?.() ?? []) part.setDamage(0);
         hit.updateTotalDamage?.();

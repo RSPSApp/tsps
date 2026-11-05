@@ -1592,8 +1592,8 @@ test('Fremennik Trials: Peer offers and performs his bank spell when talked to a
   const moved = [];
   const items = [new h.core.Item(I.COINS, 5)];
   const container = (list) => ({
-    getValidItems: () => list.slice(), refreshItems() {}, getAmount: () => 0,
-    switchItems(_to, item) { moved.push(item.getId()); list.splice(list.findIndex((entry) => entry.getId() === item.getId()), 1); },
+    getItems: () => list, getValidItems: () => list.slice(), refreshItems() {}, getAmount: () => 0,
+    switchItem(_to, item, _sort, slot) { moved.push(item.getId()); list.splice(slot, 1); },
   });
   Object.assign(h.player, {
     getInventory: () => container(items), getEquipment: () => container([]),

@@ -53,7 +53,15 @@
  *   spawned per player, as it is absent from npc-spawns.json. Only magic
  *   secateurs damage it; the wiki's ring-of-recoil exception is not modelled,
  *   and normal secateurs have no Wield option, so enchanting consumes them from
- *   the inventory.
+ *   the inventory. Combat pursuit is leashed to the walled north chamber: the
+ *   cache map closes it at x2383 with one doorway, and leaving that chamber
+ *   drops the fight (a boss ever carried outside is put back at its spawn).
+ * - The blessing scene uses the cache's own sequence names
+ *   (human_fairy_kneel_and_offer, human_fairy_take_and_hold_up) and the
+ *   fairy_flower_enchant spotanim. No rsprox recording contains those ids, so
+ *   the order and timing come from the Wiki's own 58-frame animation capture;
+ *   the cache sequences carry no frame sounds and no recording supplies a
+ *   separate synth, so the scene is silent rather than guessing a sound id.
  * - The wiki prose is authored for the two dig and damage messages, which no
  *   transcript page carries. The grave has no click action: the capture-confirmed
  *   native route is the spade's inventory Dig option (capture 3209), which plays
@@ -67,6 +75,7 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
     ChatType,
     CountdownTask,
     Equipment,
+    Graphic,
     ItemIdentifiers,
     Location,
     Misc,
@@ -75,6 +84,7 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
     Skill,
     Sound,
     Sounds,
+    Task,
     TaskManager,
   } = api.core;
   const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
@@ -181,6 +191,18 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
   const DRAYNOR_DIG_SOUND_ID = 1470;
   const DRAYNOR_DIG_SOUND_DELAY = 25;
   const DRAYNOR_DIG_SOUND_LOOPS = 3;
+  // Cache 241 sequence names: the player kneels and offers the secateurs
+  // (human_fairy_kneel_and_offer, 42 frames, length 360 = 12 ticks), the Nature
+  // Spirit takes and holds them up (human_fairy_take_and_hold_up, length 210 = 7
+  // ticks), and fairy_flower_enchant is the purple effect above the spirit. The
+  // Wiki's own animation capture (58 frames, 8.2s) shows that order: the player
+  // kneels throughout, the spirit raises the secateurs and the effect starts
+  // roughly a fifth of the way in, and both finish before the player stands.
+  const BLESSING_PLAYER_SEQUENCE = CacheDefinitions.getSeqId("human_fairy_kneel_and_offer") ?? 3256;
+  const BLESSING_SPIRIT_SEQUENCE = CacheDefinitions.getSeqId("human_fairy_take_and_hold_up") ?? 3257;
+  const BLESSING_EFFECT_ID = CacheDefinitions.getSpotanimId("fairy_flower_enchant") ?? 568;
+  const BLESSING_PLAYER_TICKS = 12; // sequence length 360 client cycles
+  const BLESSING_SPIRIT_START_TICKS = 2; // the effect appears about 1.2s into the kneel
   const NUFF_HANDOVER_LINES = [
     "I believe he now resides in the Dark Wizard's tower near Falador,",
     "Well not to worry, I have a copy of it here.",
@@ -251,6 +273,7 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
   const GATEKEEPER_AFTER_VARIANT =
     "gatekeeper-near-the-entrance-to-the-tanglefoot-s-lair-after-fairytale-i";
   const ZANDAR_VARIANT = "at-the-dark-wizard-s-tower-talking-to-zandar-horfyre";
+  const BLESSING_VARIANT = "in-the-nature-grotto-talking-to-the-nature-spirit";
 
   // The tunnel loops south of the gap and doubles back north to the Tanglefoot.
   const GROVE_ENTRY = { x: 2394, y: 4379, z: 0 };
@@ -263,10 +286,22 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
     maxY: 4399,
     levels: [0],
   };
+  // The Tanglefoot's own chamber, from the cache map: walls close it at x2383
+  // and around y4376, and its only opening is the doorway at 2382-2383,4377-4379.
+  // The boss spawns at 2375,4385 inside it; the corridor beyond the doorway is
+  // outside the room the wiki describes as the end of the tunnel.
+  const TANGLEFOOT_ROOM = {
+    minX: 2368,
+    maxX: 2382,
+    minY: 4377,
+    maxY: 4399,
+    levels: [0],
+  };
 
   let quest;
   const tanglefootByPlayer = new Map();
   const draynorDigTasks = new Map();
+  const blessingScenes = new Map();
 
   const held = (player, itemId, amount = 1) => player.getInventory().getAmount(itemId) >= amount;
 
@@ -359,6 +394,44 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
     );
   }
 
+  function insideTanglefootRoom(location) {
+    if (!location || location.getZ() !== TANGLEFOOT_ROOM.levels[0]) return false;
+    return (
+      location.getX() >= TANGLEFOOT_ROOM.minX &&
+      location.getX() <= TANGLEFOOT_ROOM.maxX &&
+      location.getY() >= TANGLEFOOT_ROOM.minY &&
+      location.getY() <= TANGLEFOOT_ROOM.maxY
+    );
+  }
+
+  /**
+   * The Tanglefoot is an instance boss: it may chase anywhere inside its walled
+   * chamber, but a player who leaves the chamber ends the pursuit. Moving the
+   * boss back to its spawn is the instance reset if a step ever carries it out.
+   */
+  class TanglefootLeashTask extends Task {
+    constructor(player, npc) {
+      super(1, npc, false);
+      this.owner = player;
+      this.npc = npc;
+      this.home = npc.getSpawnPosition().clone();
+    }
+
+    execute() {
+      const { owner, npc } = this;
+      if (tanglefootByPlayer.get(owner) !== npc || npc.isRegistered?.() === false) {
+        this.stop();
+        return;
+      }
+      const playerInside = insideTanglefootRoom(owner.getLocation());
+      const npcInside = insideTanglefootRoom(npc.getLocation());
+      if (playerInside && npcInside) return;
+      npc.getCombat().reset();
+      npc.getMovementQueue().reset();
+      if (!npcInside) npc.moveTo(this.home.clone());
+    }
+  }
+
   /** The Tanglefoot exists only while the player on stage 70 is in its tunnel. */
   function ensureTanglefoot(player) {
     if (quest.getStage(player) !== STAGE_HAS_MAGIC_SECATEURS) return;
@@ -373,12 +446,23 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
       owner: player,
       ownerOnly: true,
     });
-    if (npc) tanglefootByPlayer.set(player, npc);
+    if (!npc) return;
+    // The chamber task replaces the default spawn-radius leash. Without this
+    // flag the generic seven-tile aggression range would stop the fight in the
+    // middle of the chamber; with it, the room boundary is the only leash.
+    npc.setFlag("combat:no-retreat");
+    tanglefootByPlayer.set(player, npc);
+    TaskManager.submit(new TanglefootLeashTask(player, npc));
   }
 
   function removeTanglefoot(player) {
     const npc = tanglefootByPlayer.get(player);
-    if (npc) api.removeNpc(npc);
+    if (npc) {
+      TaskManager.cancelTasks(npc);
+      npc.getCombat?.().reset();
+      npc.getMovementQueue?.().reset();
+      api.removeNpc(npc);
+    }
     tanglefootByPlayer.delete(player);
   }
 
@@ -612,6 +696,107 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
     advance(player, STAGE_HAS_MAGIC_SECATEURS);
   }
 
+  /** The lines after the enchant action, so the scene can finish before "It is done!". */
+  function stepsAfterBlessing(steps) {
+    for (let index = 0; index < steps.length; index++) {
+      const step = steps[index];
+      if (step?.type === "action" && step.id === ENCHANT_ACTION_ID) return steps.slice(index + 1);
+      if (Array.isArray(step?.steps)) {
+        const rest = stepsAfterBlessing(step.steps);
+        if (rest) return rest;
+      }
+    }
+    return null;
+  }
+
+  function cancelBlessing(player) {
+    const scene = blessingScenes.get(player);
+    if (!scene) return false;
+    blessingScenes.delete(player);
+    scene.task?.stop();
+    player.getMovementQueue().setBlockMovement(false);
+    if (player.getHitpoints() > 0 && !player.isDying
+      && player.getAnimation()?.getId() === BLESSING_PLAYER_SEQUENCE) {
+      player.performAnimation(Animation.DEFAULT_RESET_ANIMATION);
+    }
+    return true;
+  }
+
+  /**
+   * Runs the cache's blessing presentation: the player kneels and offers the
+   * secateurs for twelve ticks while the Nature Spirit takes and holds them up
+   * from tick two; the effect is the cache's fairy_flower_enchant spotanim. The
+   * items are consumed and the stage advances only when the scene finishes, so
+   * an interrupted scene leaves the player able to talk and try again.
+   */
+  class BlessingSceneTask extends Task {
+    constructor(scene) {
+      super(1, scene, false);
+      this.scene = scene;
+    }
+
+    execute() {
+      const { scene } = this;
+      const { player, npc } = scene;
+      if (blessingScenes.get(player) !== scene) {
+        this.stop();
+        return;
+      }
+      if (player.isRegistered?.() === false || player.getHitpoints() <= 0 || player.isDying
+        || !player.getLocation().equals(scene.start)) {
+        cancelBlessing(player);
+        return;
+      }
+      scene.ticks++;
+      if (!scene.spiritStarted && scene.ticks >= BLESSING_SPIRIT_START_TICKS) {
+        scene.spiritStarted = true;
+        npc?.performAnimation?.(new Animation(BLESSING_SPIRIT_SEQUENCE, 10));
+        player.getPacketSender().sendGraphic(new Graphic(BLESSING_EFFECT_ID),
+          (npc ?? player).getLocation());
+      }
+      if (scene.ticks >= BLESSING_PLAYER_TICKS) finishBlessing(scene);
+    }
+  }
+
+  function beginBlessing(player, event) {
+    cancelBlessing(player);
+    const npc = event.npc ?? [...(player.getLocalNpcs?.() ?? [])]
+      .find((candidate) => NATURE_SPIRIT_NPC_IDS.has(candidate.getContentId?.(player) ?? candidate.getId?.()));
+    const scene = {
+      player,
+      npc: npc ?? null,
+      npcId: event.npcId ?? NATURE_SPIRIT_NPC_ID,
+      start: player.getLocation().clone(),
+      ticks: 0,
+      spiritStarted: false,
+      task: null,
+    };
+    blessingScenes.set(player, scene);
+    player.getMovementQueue().reset().setBlockMovement(true);
+    player.performAnimation(new Animation(BLESSING_PLAYER_SEQUENCE, 10));
+    scene.task = new BlessingSceneTask(scene);
+    TaskManager.submit(scene.task);
+  }
+
+  function finishBlessing(scene) {
+    const { player, npcId } = scene;
+    if (blessingScenes.get(player) !== scene) return;
+    // Inventory actions can remove recipe items while the timed scene blocks walking.
+    if (quest.getStage(player) < STAGE_HAS_MAGIC_SECATEURS && !hasEnchantingItems(player)) {
+      cancelBlessing(player);
+      player.sendMessage("You no longer have all the materials needed to bless the secateurs.");
+      return;
+    }
+    blessingScenes.delete(player);
+    scene.task?.stop();
+    player.getMovementQueue().setBlockMovement(false);
+    enchantSecateurs(player);
+    // The lost-pair variant jumps to this same condition branch, so the shared
+    // normal variant is the stable source for the two closing lines.
+    startTranscript(api, player, npcId, PAGE, BLESSING_VARIANT,
+      (steps) => stepsAfterBlessing(steps) ?? []);
+  }
+
   function handleActionEvent(event) {
     const { player, npcId, stepId } = event;
     if (event.action === GARDENER_REPORTED_ACTION) {
@@ -634,7 +819,8 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
     if (stepId === ENCHANT_ACTION_ID) {
       if (!NATURE_SPIRIT_NPC_IDS.has(npcId)) return;
       event.handled = true;
-      enchantSecateurs(player);
+      event.end = true;
+      beginBlessing(player, event);
       return;
     }
     if (stepId !== COMPLETE_ACTION_ID) return;
@@ -852,11 +1038,13 @@ module.exports = function registerFairytaleIGrowingPainsQuest(api) {
   function handleLogout({ player }) {
     removeTanglefoot(player);
     cancelDraynorDig(player);
+    cancelBlessing(player);
   }
 
   function handlePlayerDeath({ player }) {
     removeTanglefoot(player);
     cancelDraynorDig(player);
+    cancelBlessing(player);
   }
 
   // ==========================================================================

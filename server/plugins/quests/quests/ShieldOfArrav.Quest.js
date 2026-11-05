@@ -981,6 +981,8 @@ module.exports = function registerShieldOfArravQuest(api) {
     key: "shield_of_arrav",
     name: "Shield of Arrav",
     varpId: VARP_SHIELD_OF_ARRAV,
+    varbitId: SHIELDOFARRAV_VARBIT,
+    varbitValue: stage => stage >= STAGE_COMPLETE ? 2 : stage >= STAGE_STARTED ? 1 : 0,
     varpValue: (stage, player) => phoenixProgress(player),
     startedValue: STAGE_STARTED,
     completionValue: STAGE_COMPLETE,

@@ -1,0 +1,45 @@
+{
+  "_sources": {
+    "recorded": "Rev 232 recordings 3200 (WWF toys, Druidic wreath, Mask of balance) and 3215 (Zombie head Talk-At).",
+    "cache": "Rev 241 osrs-dumps: sequence and spotanim names that hold the item or match its option; obj iop and worn param 451+ options.",
+    "wiki": "OSRS Wiki item pages: overhead text, the yo-yo SFX table and tree hugging titles."
+  },
+  "animations": [
+    { "items": ["wwf_toy_tiger"], "option": "Play-with", "seq": "human_play_wwf_tiger", "say": "Grrrr!", "unlocks": true, "source": "recorded" },
+    { "items": ["wwf_toy_lion"], "option": "Play-with", "seq": "human_play_wwf_lion", "say": "Grrrr!", "unlocks": true, "source": "recorded" },
+    { "items": ["wwf_toy_snow_leopard"], "option": "Play-with", "seq": "human_play_wwf_snow_leopard", "say": "Grrrr!", "unlocks": true, "source": "recorded" },
+    { "items": ["wwf_toy_amur_leopard"], "option": "Play-with", "seq": "human_play_wwf_amur_leopard", "say": "Grrrr!", "unlocks": true, "source": "recorded" },
+    { "items": ["trick_or_treat_head"], "option": "Talk-At", "seq": "hamlet_head_all", "say": "Alas!", "unlocks": true, "source": "recorded" },
+    { "items": ["trick_or_treat_head"], "option": "Display", "say": "Mwuhahahaha!", "source": "wiki; no sequence is known" },
+    { "items": ["xmas_yoyo"], "option": "Play", "seq": "yoyo_updown", "sound": 2261, "unlocks": true, "source": "cache seq, wiki SFX yoyo1" },
+    { "items": ["xmas_yoyo"], "option": "Loop", "seq": "yoyo_roundworld", "sound": 2262, "source": "cache seq, wiki SFX yoyo2" },
+    { "items": ["xmas_yoyo"], "option": "Walk", "seq": "yoyo_walkdog", "sound": 2263, "source": "cache seq, wiki SFX yoyo3" },
+    { "items": ["xmas_yoyo"], "option": "Crazy", "seq": "yoyo_advanced", "sound": 2264, "source": "cache seq, wiki SFX yoyo4" },
+    { "items": ["win05_marionette_complete_red_alive"], "option": "Jump", "seq": "human_marionette_jump", "spotanim": "win05_marionette_jump_red", "unlocks": true, "source": "cache" },
+    { "items": ["win05_marionette_complete_red_alive"], "option": "Walk", "seq": "human_marionette_walk", "spotanim": "win05_marionette_walk_red", "source": "cache" },
+    { "items": ["win05_marionette_complete_red_alive"], "option": "Bow", "seq": "human_marionette_bow", "spotanim": "win05_marionette_bow_red", "source": "cache" },
+    { "items": ["win05_marionette_complete_red_alive"], "option": "Dance", "seq": "human_marionette_dance", "spotanim": "win05_marionette_dance_red", "source": "cache" },
+    { "items": ["win05_marionette_complete_blue_alive"], "option": "Jump", "seq": "human_marionette_jump", "spotanim": "win05_marionette_jump_blue", "unlocks": true, "source": "cache" },
+    { "items": ["win05_marionette_complete_blue_alive"], "option": "Walk", "seq": "human_marionette_walk", "spotanim": "win05_marionette_walk_blue", "source": "cache" },
+    { "items": ["win05_marionette_complete_blue_alive"], "option": "Bow", "seq": "human_marionette_bow", "spotanim": "win05_marionette_bow_blue", "source": "cache" },
+    { "items": ["win05_marionette_complete_blue_alive"], "option": "Dance", "seq": "human_marionette_dance", "spotanim": "win05_marionette_dance_blue", "source": "cache" },
+    { "items": ["win05_marionette_complete_green_alive"], "option": "Jump", "seq": "human_marionette_jump", "spotanim": "win05_marionette_jump_green", "unlocks": true, "source": "cache" },
+    { "items": ["win05_marionette_complete_green_alive"], "option": "Walk", "seq": "human_marionette_walk", "spotanim": "win05_marionette_walk_green", "source": "cache" },
+    { "items": ["win05_marionette_complete_green_alive"], "option": "Bow", "seq": "human_marionette_bow", "spotanim": "win05_marionette_bow_green", "source": "cache" },
+    { "items": ["win05_marionette_complete_green_alive"], "option": "Dance", "seq": "human_marionette_dance", "spotanim": "win05_marionette_dance_green", "source": "cache" },
+    { "items": ["rubber_chicken"], "option": "Dance", "seq": "human_chicken_dance", "source": "cache seq; the wiki's jingle id could not be checked against the cache" },
+    { "items": ["hw21_haunted_bottle"], "option": "Wake-ghost", "seq": "hw12_human_shake_bottle", "spotanim": "hw21_spotanim_shake_bottle", "say": "WooooOOoOoo", "source": "cache seq/spotanim, wiki overhead" }
+  ],
+  "swaps": [
+    { "option": "Transform", "cycle": ["xmas19_shield_1", "xmas19_shield_2", "xmas19_shield_3"], "source": "wiki order green, red, blue" },
+    { "option": "Reverse", "cycle": ["hw21_ugly_jumper01", "hw21_ugly_jumper02"], "source": "cache pair" }
+  ],
+  "ranks": {
+    "items": ["wreath", "summer2015_mask"],
+    "options": ["Check rank", "Check Rank"],
+    "varbit": "summer_trees_hugged",
+    "message": "Your tree hugging title is: <col=6f0000>",
+    "titles": [[0, "What's a tree?"], [15, "Tree Cuddler"], [30, "BARKing Mad"], [55, "Tree Hugger"], [75, "At One With Trees"]],
+    "source": "recorded message (3200); wiki title thresholds"
+  }
+}

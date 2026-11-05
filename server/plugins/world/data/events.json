@@ -9,6 +9,12 @@
     ]
   },
   {
+    "key": "easter-2026",
+    "enabled": true,
+    "source": "Wiki 2026 Easter event: 25 March to 23 April 2026. Easter's date moves each year, so no later window is guessed.",
+    "windows": [{ "start": "2026-03-25T00:00:00Z", "end": "2026-04-23T00:00:00Z" }]
+  },
+  {
     "key": "halloween-2025",
     "enabled": true,
     "source": "Wiki 2025 Halloween event: 15 October to 5 November 2025; times are the OpenRS2 cache timestamps bracketing the event (caches 2327 and 2349). The 2026 window re-runs it on the same calendar dates.",

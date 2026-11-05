@@ -1,0 +1,1149 @@
+{
+  "source": {
+    "url": "https://archive.openrs2.org/caches/runescape/2509",
+    "revision": 237,
+    "symbolCommit": "9b30ba07a0580fac3f76299f9e9eef2b646caa61",
+    "symbolFiles": [
+      {
+        "name": "dump.dbrow",
+        "size": 3827926,
+        "sha256": "5C5427D34694E0F16AE6CA5A2B561F590CEF24DDBB913FC0A557C734F4536272"
+      },
+      {
+        "name": "dump.loc",
+        "size": 13161394,
+        "sha256": "AC5AC9F2A3392700F92447740A082B8E5D265D04A79A237972CC5D6F7CEDB7D8"
+      },
+      {
+        "name": "dump.npc",
+        "size": 7038081,
+        "sha256": "CC4F70A908655BC53E66F80985271894BBD1673E64F07E7A7F20912BD890DBA7"
+      },
+      {
+        "name": "dump.obj",
+        "size": 8694220,
+        "sha256": "5B1A8DC466C1612E4C3CFF464230F2B9C5F4F3433D53AC8AA69A3267B3157272"
+      },
+      {
+        "name": "dump.varbit",
+        "size": 1819502,
+        "sha256": "73C4EFF374B19455B8E79C9EB64AA49382A7A1E329442ECCAF2DC71F66ADFB53"
+      }
+    ],
+    "files": [
+      {
+        "file": "2-10.dat",
+        "bytes": 651129,
+        "sha256": "0cd978132900a16b6ae60af819e7fee935d0895b376974d875f3f8573108ba42"
+      },
+      {
+        "file": "2-12.dat",
+        "bytes": 253916,
+        "sha256": "f22cc54bb7e5aa4e8f082ac591b27b9f9037f1b8477d08d91dd45c4937b731de"
+      },
+      {
+        "file": "2-14.dat",
+        "bytes": 47847,
+        "sha256": "eaf4237059566d8449f8a529364104428e5b060f28994a5ed38535059fdefe00"
+      },
+      {
+        "file": "2-38.dat",
+        "bytes": 330449,
+        "sha256": "03bb38d34f6afb03e87419ef5fbd2f8c08496e39738c991cbbe0e4dcf064632b"
+      },
+      {
+        "file": "2-6.dat",
+        "bytes": 582536,
+        "sha256": "88e402dc5e0e21087197bb6b73f502cbd02b26ffdb297f130214d40637cf482f"
+      },
+      {
+        "file": "2-9.dat",
+        "bytes": 392066,
+        "sha256": "80a4be2dc09fdcae0d3c300dba4ec09fecd18154f396e0d58f81da08e52cba8e"
+      },
+      {
+        "file": "255-2.dat",
+        "bytes": 1281,
+        "sha256": "62c1a3c2eccd60ae0e46061cdf120cac3a03e1c9bf5d068ca36afb34f3e29df5"
+      },
+      {
+        "file": "255-5.dat",
+        "bytes": 26323,
+        "sha256": "25ebf9bcbd16f4323792b7303e39a5d4e8d52cd00727808d1e0e470b90b365da"
+      },
+      {
+        "file": "255-7.dat",
+        "bytes": 502168,
+        "sha256": "330199d6d22544330072a27a4a3c9164aed21966b3ceb73191ba3104c9067be8"
+      },
+      {
+        "file": "5-12596.dat",
+        "bytes": 9269,
+        "sha256": "f95035419201d6bc2a20f5494a22207512e08c8eb318a9c05ee26891e934fca1"
+      },
+      {
+        "file": "5-12597.dat",
+        "bytes": 13154,
+        "sha256": "090bae5b33a1e0062392121641ff64772f6b31a9f81e0b3bc6911854d4dc20c9"
+      },
+      {
+        "file": "5-12598.dat",
+        "bytes": 10998,
+        "sha256": "6aa971f298d640dd3454841b0393d31a1a88f748615c3d989a04112b0ed31227"
+      },
+      {
+        "file": "5-12852.dat",
+        "bytes": 11248,
+        "sha256": "6054076b18a0fa4e467a0f5c09a999cf4a0a0e2b41f2f794eb4cb5e8d0f1825e"
+      },
+      {
+        "file": "5-12853.dat",
+        "bytes": 14214,
+        "sha256": "3851d7f322bc2d841cf5fa7a1ecc40c8b4c507db52bc91ee4ecea2d39dc926a5"
+      },
+      {
+        "file": "5-12854.dat",
+        "bytes": 12687,
+        "sha256": "6387a0eda89f725fd7ab8faf66b40f1926bb3a8ea78bdbb932e7cb9cee27a332"
+      },
+      {
+        "file": "5-13108.dat",
+        "bytes": 10897,
+        "sha256": "568c396d6305548af233ccf437ace8a95401829ad585ae767158b59f9f80fe77"
+      },
+      {
+        "file": "5-13109.dat",
+        "bytes": 10774,
+        "sha256": "9a81a943dda81962f315b45de48fc47f051105b0871ba70225fe03c814e6a2a5"
+      },
+      {
+        "file": "5-13110.dat",
+        "bytes": 11288,
+        "sha256": "5567aa5a55a02c2aabde1d2909dbea95f178d0d7e3438ba4a361261e492bfd52"
+      }
+    ]
+  },
+  "bundle": {
+    "id": "easter-2026",
+    "targetCache": {
+      "name": "osrs-241_2026-10-20",
+      "game": "oldschool",
+      "revision": 241
+    },
+    "sourceCache": {
+      "name": "osrs-237_2026-04-01",
+      "game": "oldschool",
+      "environment": "live",
+      "revision": 237,
+      "timestamp": "2026-04-01T10:45:07Z",
+      "size": 0
+    },
+    "definitions": [
+      {
+        "kind": "npc",
+        "sourceId": 15578,
+        "symbol": "easter26_easter_bunny",
+        "dataBase64": "XwAADitjDStkDAFnAABjHlRhbGstdG8AH2hpZGRlbgACRWFzdGVyIEJ1bm55AD0BAACscz4BAACAwwA=",
+        "crc": 1101159437,
+        "id": 16772
+      },
+      {
+        "kind": "npc",
+        "sourceId": 15579,
+        "symbol": "easter26_egg_last_spot",
+        "dataBase64": "ZwAAXQ4wEw0wE18AAWpLHv//Af//PNwA",
+        "crc": 838921463,
+        "id": 16773
+      },
+      {
+        "kind": "npc",
+        "sourceId": 15580,
+        "symbol": "easter26_egg_last_spot_found",
+        "dataBase64": "XwAADjATDTATDAFnAAAeQ2F0Y2gAH2hpZGRlbgACQXJjaGliYWxkAD0BAAAPDz4BAADqdQA=",
+        "crc": 1281872835,
+        "id": 16774
+      },
+      {
+        "kind": "npc",
+        "sourceId": 15581,
+        "symbol": "easter26_egg_church_cutscene",
+        "dataBase64": "XwAADgbxDQbxDAFnAAAeQ2F0Y2gAH2hpZGRlbgACQXJjaGliYWxkAD0BAADqiD4BAADqdQA=",
+        "crc": 957772055,
+        "id": 16775
+      }
+    ]
+  },
+  "placements": [
+    {
+      "symbol": "easter23_daffodil_scatter03",
+      "id": 60726,
+      "x": 3155,
+      "y": 3453,
+      "z": 0,
+      "shape": 22,
+      "rotation": 0,
+      "replaces": []
+    },
+    {
+      "symbol": "easter23_daffodil_scatter03",
+      "id": 60726,
+      "x": 3157,
+      "y": 3450,
+      "z": 0,
+      "shape": 22,
+      "rotation": 0,
+      "replaces": [
+        {
+          "symbol": "short_grass_dark_3",
+          "id": 6819,
+          "shape": 22,
+          "rotation": 0
+        }
+      ]
+    },
+    {
+      "symbol": "easter23_daffodil_scatter03",
+      "id": 60726,
+      "x": 3157,
+      "y": 3454,
+      "z": 0,
+      "shape": 22,
+      "rotation": 3,
+      "replaces": []
+    },
+    {
+      "symbol": "easter23_daffodil_scatter03",
+      "id": 60726,
+      "x": 3158,
+      "y": 3451,
+      "z": 0,
+      "shape": 22,
+      "rotation": 0,
+      "replaces": []
+    },
+    {
+      "symbol": "easter23_daffodil_scatter01",
+      "id": 60724,
+      "x": 3158,
+      "y": 3453,
+      "z": 0,
+      "shape": 22,
+      "rotation": 2,
+      "replaces": [
+        {
+          "symbol": "short_grass_dark_2",
+          "id": 6818,
+          "shape": 22,
+          "rotation": 0
+        }
+      ]
+    },
+    {
+      "symbol": "easter23_easter_eggs02",
+      "id": 60730,
+      "x": 3158,
+      "y": 3455,
+      "z": 0,
+      "shape": 10,
+      "rotation": 0,
+      "replaces": []
+    },
+    {
+      "symbol": "easter23_daffodil_scatter03",
+      "id": 60726,
+      "x": 3159,
+      "y": 3450,
+      "z": 0,
+      "shape": 22,
+      "rotation": 0,
+      "replaces": [
+        {
+          "symbol": "short_grass_dark_1",
+          "id": 6817,
+          "shape": 22,
+          "rotation": 2
+        }
+      ]
+    },
+    {
+      "symbol": "easter23_daffodil_scatter02",
+      "id": 60725,
+      "x": 3159,
+      "y": 3451,
+      "z": 0,
+      "shape": 22,
+      "rotation": 2,
+      "replaces": []
+    },
+    {
+      "symbol": "easter23_bunting01_post01_variant01",
+      "id": 60734,
+      "x": 3159,
+      "y": 3453,
+      "z": 0,
+      "shape": 3,
+      "rotation": 0,
+      "replaces": []
+    },
+    {
+      "symbol": "easter23_daffodil_scatter03",
+      "id": 60726,
+      "x": 3159,
+      "y": 3453,
+      "z": 0,
+      "shape": 22,
+      "rotation": 1,
+      "replaces": [
+        {
+          "symbol": "short_grass_dark_2",
+          "id": 6818,
+          "shape": 22,
+          "rotation": 1
+        }
+      ]
+    },
+    {
+      "symbol": "easter23_daffodil_scatter02",
+      "id": 60725,
+      "x": 3160,
+      "y": 3449,
+      "z": 0,
+      "shape": 22,
+      "rotation": 3,
+      "replaces": [
+        {
+          "symbol": "short_grass_dark_1",
+          "id": 6817,
+          "shape": 22,
+          "rotation": 1
+        }
+      ]
+    },
+    {
+      "symbol": "easter23_daffodil_scatter03",
+      "id": 60726,
+      "x": 3160,
+      "y": 3451,
+      "z": 0,
+      "shape": 22,
+      "rotation": 2,
+      "replaces": [
+        {
+          "symbol": "short_grass_dark_3",
+          "id": 6819,
+          "shape": 22,
+          "rotation": 3
+        }
+      ]
+    },
+    {
+      "symbol": "easter26_first_clue",
+      "id": 60736,
+      "x": 3161,
+      "y": 3455,
+      "z": 0,
+      "shape": 11,
+      "rotation": 0,
+      "replaces": []
+    },
+    {
+      "symbol": "easter23_bunting01_post01_variant04",
+      "id": 60733,
+      "x": 3162,
+      "y": 3453,
+      "z": 0,
+      "shape": 3,
+      "rotation": 2,
+      "replaces": []
+    },
+    {
+      "symbol": "easter23_easter_eggs01",
+      "id": 60729,
+      "x": 3162,
+      "y": 3453,
+      "z": 0,
+      "shape": 11,
+      "rotation": 0,
+      "replaces": []
+    },
+    {
+      "symbol": "easter23_easter_eggs02",
+      "id": 60730,
+      "x": 3162,
+      "y": 3455,
+      "z": 0,
+      "shape": 10,
+      "rotation": 0,
+      "replaces": []
+    },
+    {
+      "symbol": "easter23_daffodil_scatter03",
+      "id": 60726,
+      "x": 3163,
+      "y": 3452,
+      "z": 0,
+      "shape": 22,
+      "rotation": 1,
+      "replaces": [
+        {
+          "symbol": "short_grass_dark_3",
+          "id": 6819,
+          "shape": 22,
+          "rotation": 1
+        }
+      ]
+    },
+    {
+      "symbol": "easter23_daffodil_scatter01",
+      "id": 60724,
+      "x": 3163,
+      "y": 3453,
+      "z": 0,
+      "shape": 22,
+      "rotation": 3,
+      "replaces": [
+        {
+          "symbol": "short_grass_dark_2",
+          "id": 6818,
+          "shape": 22,
+          "rotation": 1
+        }
+      ]
+    },
+    {
+      "symbol": "easter23_daffodil_scatter03",
+      "id": 60726,
+      "x": 3163,
+      "y": 3454,
+      "z": 0,
+      "shape": 22,
+      "rotation": 3,
+      "replaces": []
+    },
+    {
+      "symbol": "easter23_daffodil_scatter03",
+      "id": 60726,
+      "x": 3164,
+      "y": 3453,
+      "z": 0,
+      "shape": 22,
+      "rotation": 3,
+      "replaces": [
+        {
+          "symbol": "broken_twig",
+          "id": 1247,
+          "shape": 22,
+          "rotation": 1
+        }
+      ]
+    },
+    {
+      "symbol": "easter23_daffodil_scatter03",
+      "id": 60726,
+      "x": 3164,
+      "y": 3454,
+      "z": 0,
+      "shape": 22,
+      "rotation": 3,
+      "replaces": []
+    },
+    {
+      "symbol": "easter23_daffodil_scatter03",
+      "id": 60726,
+      "x": 3165,
+      "y": 3454,
+      "z": 0,
+      "shape": 22,
+      "rotation": 2,
+      "replaces": [
+        {
+          "symbol": "short_grass_dark_1",
+          "id": 6817,
+          "shape": 22,
+          "rotation": 3
+        }
+      ]
+    },
+    {
+      "symbol": "easter23_daffodil_scatter03",
+      "id": 60726,
+      "x": 3168,
+      "y": 3449,
+      "z": 0,
+      "shape": 22,
+      "rotation": 0,
+      "replaces": []
+    },
+    {
+      "symbol": "easter23_daffodil_scatter03",
+      "id": 60726,
+      "x": 3169,
+      "y": 3449,
+      "z": 0,
+      "shape": 22,
+      "rotation": 1,
+      "replaces": []
+    },
+    {
+      "symbol": "easter23_daffodil_scatter02",
+      "id": 60725,
+      "x": 3169,
+      "y": 3450,
+      "z": 0,
+      "shape": 22,
+      "rotation": 1,
+      "replaces": [
+        {
+          "symbol": "short_grass_dark_4",
+          "id": 6835,
+          "shape": 22,
+          "rotation": 2
+        }
+      ]
+    },
+    {
+      "symbol": "easter23_daffodil_scatter03",
+      "id": 60726,
+      "x": 3169,
+      "y": 3454,
+      "z": 0,
+      "shape": 22,
+      "rotation": 1,
+      "replaces": []
+    },
+    {
+      "symbol": "easter23_daffodil_scatter03",
+      "id": 60726,
+      "x": 3170,
+      "y": 3449,
+      "z": 0,
+      "shape": 22,
+      "rotation": 3,
+      "replaces": []
+    },
+    {
+      "symbol": "easter23_daffodil_scatter01",
+      "id": 60724,
+      "x": 3170,
+      "y": 3450,
+      "z": 0,
+      "shape": 22,
+      "rotation": 2,
+      "replaces": []
+    },
+    {
+      "symbol": "easter23_daffodil_scatter03",
+      "id": 60726,
+      "x": 3170,
+      "y": 3451,
+      "z": 0,
+      "shape": 22,
+      "rotation": 1,
+      "replaces": [
+        {
+          "symbol": "short_grass_dark_4",
+          "id": 6835,
+          "shape": 22,
+          "rotation": 2
+        }
+      ]
+    },
+    {
+      "symbol": "easter23_daffodil_scatter01",
+      "id": 60724,
+      "x": 3170,
+      "y": 3455,
+      "z": 0,
+      "shape": 22,
+      "rotation": 0,
+      "replaces": []
+    },
+    {
+      "symbol": "easter23_daffodil_scatter03",
+      "id": 60726,
+      "x": 3171,
+      "y": 3448,
+      "z": 0,
+      "shape": 22,
+      "rotation": 0,
+      "replaces": []
+    },
+    {
+      "symbol": "easter23_daffodil_scatter01",
+      "id": 60724,
+      "x": 3171,
+      "y": 3449,
+      "z": 0,
+      "shape": 22,
+      "rotation": 1,
+      "replaces": []
+    },
+    {
+      "symbol": "easter23_daffodil_scatter02",
+      "id": 60725,
+      "x": 3171,
+      "y": 3451,
+      "z": 0,
+      "shape": 22,
+      "rotation": 0,
+      "replaces": [
+        {
+          "symbol": "short_grass_dark_4",
+          "id": 6835,
+          "shape": 22,
+          "rotation": 3
+        }
+      ]
+    },
+    {
+      "symbol": "easter23_daffodil_scatter01",
+      "id": 60724,
+      "x": 3171,
+      "y": 3452,
+      "z": 0,
+      "shape": 22,
+      "rotation": 3,
+      "replaces": [
+        {
+          "symbol": "short_grass_dark_1",
+          "id": 6817,
+          "shape": 22,
+          "rotation": 3
+        }
+      ]
+    },
+    {
+      "symbol": "easter23_bunting01_post01_variant01",
+      "id": 60734,
+      "x": 3171,
+      "y": 3455,
+      "z": 0,
+      "shape": 3,
+      "rotation": 3,
+      "replaces": []
+    },
+    {
+      "symbol": "easter23_daffodil_scatter03",
+      "id": 60726,
+      "x": 3171,
+      "y": 3455,
+      "z": 0,
+      "shape": 22,
+      "rotation": 2,
+      "replaces": []
+    },
+    {
+      "symbol": "easter23_daffodil_edge01",
+      "id": 60723,
+      "x": 3172,
+      "y": 3448,
+      "z": 0,
+      "shape": 22,
+      "rotation": 2,
+      "replaces": []
+    },
+    {
+      "symbol": "easter23_daffodil_scatter03",
+      "id": 60726,
+      "x": 3172,
+      "y": 3451,
+      "z": 0,
+      "shape": 22,
+      "rotation": 3,
+      "replaces": [
+        {
+          "symbol": "short_grass_dark_1",
+          "id": 6817,
+          "shape": 22,
+          "rotation": 0
+        }
+      ]
+    },
+    {
+      "symbol": "easter23_daffodil_scatter03",
+      "id": 60726,
+      "x": 3172,
+      "y": 3453,
+      "z": 0,
+      "shape": 22,
+      "rotation": 2,
+      "replaces": []
+    },
+    {
+      "symbol": "fai_varrock_chemisty_shelves1_easter26",
+      "id": 60739,
+      "x": 3198,
+      "y": 3406,
+      "z": 0,
+      "shape": 10,
+      "rotation": 2,
+      "replaces": [
+        {
+          "symbol": "fai_varrock_chemisty_shelves1",
+          "id": 2712,
+          "shape": 10,
+          "rotation": 2
+        }
+      ]
+    },
+    {
+      "symbol": "fai_varrock_sword_table_easter26",
+      "id": 60828,
+      "x": 3207,
+      "y": 3403,
+      "z": 0,
+      "shape": 10,
+      "rotation": 0,
+      "replaces": [
+        {
+          "symbol": "fai_varrock_sword_table",
+          "id": 2783,
+          "shape": 10,
+          "rotation": 0
+        }
+      ]
+    },
+    {
+      "symbol": "fai_varrock_suitofarmour_easter26",
+      "id": 60837,
+      "x": 3224,
+      "y": 3475,
+      "z": 0,
+      "shape": 10,
+      "rotation": 1,
+      "replaces": [
+        {
+          "symbol": "fai_varrock_suitofarmour",
+          "id": 5554,
+          "shape": 10,
+          "rotation": 1
+        }
+      ]
+    },
+    {
+      "symbol": "fai_varrock_posh_chair2_easter26",
+      "id": 60831,
+      "x": 3253,
+      "y": 3385,
+      "z": 0,
+      "shape": 10,
+      "rotation": 3,
+      "replaces": [
+        {
+          "symbol": "fai_varrock_posh_chair2",
+          "id": 7433,
+          "shape": 10,
+          "rotation": 3
+        }
+      ]
+    },
+    {
+      "symbol": "easter23_bunting01_post01_variant04",
+      "id": 60733,
+      "x": 3159,
+      "y": 3453,
+      "z": 1,
+      "shape": 0,
+      "rotation": 1,
+      "replaces": []
+    },
+    {
+      "symbol": "easter23_bunting01_middle01_variant01",
+      "id": 60735,
+      "x": 3160,
+      "y": 3453,
+      "z": 1,
+      "shape": 0,
+      "rotation": 1,
+      "replaces": []
+    },
+    {
+      "symbol": "easter23_bunting01_middle01_variant01",
+      "id": 60735,
+      "x": 3161,
+      "y": 3453,
+      "z": 1,
+      "shape": 0,
+      "rotation": 1,
+      "replaces": []
+    },
+    {
+      "symbol": "easter23_bunting01_post01_variant01",
+      "id": 60734,
+      "x": 3162,
+      "y": 3453,
+      "z": 1,
+      "shape": 0,
+      "rotation": 1,
+      "replaces": []
+    },
+    {
+      "symbol": "easter23_bunting01_post01_variant04",
+      "id": 60733,
+      "x": 3171,
+      "y": 3455,
+      "z": 1,
+      "shape": 0,
+      "rotation": 0,
+      "replaces": []
+    },
+    {
+      "symbol": "fai_varrock_single_bed_easter26",
+      "id": 60834,
+      "x": 3231,
+      "y": 3401,
+      "z": 1,
+      "shape": 10,
+      "rotation": 0,
+      "replaces": [
+        {
+          "symbol": "fai_varrock_single_bed",
+          "id": 7190,
+          "shape": 10,
+          "rotation": 0
+        }
+      ]
+    },
+    {
+      "symbol": "fai_varrock_stepladders_easter26",
+      "id": 60742,
+      "x": 3231,
+      "y": 3423,
+      "z": 1,
+      "shape": 10,
+      "rotation": 1,
+      "replaces": [
+        {
+          "symbol": "fai_varrock_stepladders",
+          "id": 3024,
+          "shape": 10,
+          "rotation": 1
+        }
+      ]
+    },
+    {
+      "symbol": "fai_varrock_castle_battlement_easter26",
+      "id": 60825,
+      "x": 3256,
+      "y": 3483,
+      "z": 3,
+      "shape": 0,
+      "rotation": 1,
+      "replaces": [
+        {
+          "symbol": "fai_varrock_castle_battlement",
+          "id": 23775,
+          "shape": 0,
+          "rotation": 1
+        }
+      ]
+    }
+  ],
+  "lockRow": {
+    "symbol": "combination_lock_dataset_alphabetic_easter26",
+    "sourceId": 13320,
+    "tableId": 35,
+    "columns": {
+      "0": [
+        4
+      ],
+      "1": [
+        4
+      ],
+      "2": [
+        0
+      ],
+      "3": [
+        2336,
+        2334,
+        2333,
+        2335
+      ],
+      "4": [
+        1
+      ]
+    },
+    "crc": 657148375
+  },
+  "live": {
+    "loc": [
+      {
+        "symbol": "easter26_first_clue",
+        "id": 60736,
+        "sourceCrc": 4182961785
+      },
+      {
+        "symbol": "easter26_first_clue_with_clue",
+        "id": 60737,
+        "sourceCrc": 4075642662
+      },
+      {
+        "symbol": "easter26_first_clue_without_clue",
+        "id": 60738,
+        "sourceCrc": 1691063314
+      },
+      {
+        "symbol": "fai_varrock_chemisty_shelves1_easter26",
+        "id": 60739,
+        "sourceCrc": 2030713739
+      },
+      {
+        "symbol": "fai_varrock_stepladders_easter26",
+        "id": 60742,
+        "sourceCrc": 4041720494
+      },
+      {
+        "symbol": "fai_varrock_castle_battlement_easter26",
+        "id": 60825,
+        "sourceCrc": 860351249
+      },
+      {
+        "symbol": "fai_varrock_sword_table_easter26",
+        "id": 60828,
+        "sourceCrc": 2978864670
+      },
+      {
+        "symbol": "fai_varrock_posh_chair2_easter26",
+        "id": 60831,
+        "sourceCrc": 2715646228
+      },
+      {
+        "symbol": "fai_varrock_single_bed_easter26",
+        "id": 60834,
+        "sourceCrc": 4248764287
+      },
+      {
+        "symbol": "fai_varrock_suitofarmour_easter26",
+        "id": 60837,
+        "sourceCrc": 2399195202
+      }
+    ],
+    "obj": [
+      {
+        "symbol": "easter26_clue_stack",
+        "id": 33146,
+        "sourceCrc": 3274541285,
+        "currentCrc": 3998068826
+      },
+      {
+        "symbol": "easter26_second_location_egg_box",
+        "id": 33147,
+        "sourceCrc": 299449256,
+        "currentCrc": 2371384494
+      },
+      {
+        "symbol": "easter26_sixth_location_egg_box",
+        "id": 33148,
+        "sourceCrc": 299449256,
+        "currentCrc": 2371384494
+      },
+      {
+        "symbol": "easter26_runaway_egg",
+        "id": 33149,
+        "sourceCrc": 746485516,
+        "currentCrc": 1252980224
+      },
+      {
+        "symbol": "placeholder_easter26_runaway_egg",
+        "id": 33150,
+        "sourceCrc": 465679784
+      },
+      {
+        "symbol": "easter26_egg_companion",
+        "id": 33151,
+        "sourceCrc": 680291376,
+        "currentCrc": 354011644
+      },
+      {
+        "symbol": "placeholder_easter26_egg_companion",
+        "id": 33152,
+        "sourceCrc": 1627514568
+      },
+      {
+        "symbol": "easter26_egg_companion02",
+        "id": 33153,
+        "sourceCrc": 3590081805,
+        "currentCrc": 2847152266
+      },
+      {
+        "symbol": "placeholder_easter26_egg_companion02",
+        "id": 33154,
+        "sourceCrc": 2516912372
+      },
+      {
+        "symbol": "easter26_egg_companion03",
+        "id": 33155,
+        "sourceCrc": 3158750106,
+        "currentCrc": 814650648
+      },
+      {
+        "symbol": "placeholder_easter26_egg_companion03",
+        "id": 33156,
+        "sourceCrc": 3972357012
+      },
+      {
+        "symbol": "easter26_egg_companion04",
+        "id": 33157,
+        "sourceCrc": 920425133,
+        "currentCrc": 1820411760
+      },
+      {
+        "symbol": "placeholder_easter26_egg_companion04",
+        "id": 33158,
+        "sourceCrc": 1669705268
+      },
+      {
+        "symbol": "easter26_egg_companion05",
+        "id": 33159,
+        "sourceCrc": 1185597124,
+        "currentCrc": 2309382345
+      },
+      {
+        "symbol": "placeholder_easter26_egg_companion05",
+        "id": 33160,
+        "sourceCrc": 424017236
+      },
+      {
+        "symbol": "easter26_egg_companion06",
+        "id": 33161,
+        "sourceCrc": 2441517636,
+        "currentCrc": 2163286771
+      },
+      {
+        "symbol": "placeholder_easter26_egg_companion06",
+        "id": 33162,
+        "sourceCrc": 2792702773
+      },
+      {
+        "symbol": "easter26_egg_companion07",
+        "id": 33163,
+        "sourceCrc": 798170384,
+        "currentCrc": 460428050
+      },
+      {
+        "symbol": "placeholder_easter26_egg_companion07",
+        "id": 33164,
+        "sourceCrc": 3702853717
+      }
+    ]
+  },
+  "varbits": [
+    {
+      "symbol": "easter26_hunt_tracking",
+      "id": 19214,
+      "baseVar": 5476,
+      "startBit": 0,
+      "endBit": 5
+    },
+    {
+      "symbol": "easter26_hunt_loc1",
+      "id": 19216,
+      "baseVar": 5476,
+      "startBit": 6,
+      "endBit": 6
+    },
+    {
+      "symbol": "easter26_hunt_loc2",
+      "id": 19218,
+      "baseVar": 5476,
+      "startBit": 7,
+      "endBit": 7
+    },
+    {
+      "symbol": "easter26_hunt_loc3",
+      "id": 19220,
+      "baseVar": 5476,
+      "startBit": 8,
+      "endBit": 8
+    },
+    {
+      "symbol": "easter26_hunt_loc4",
+      "id": 19222,
+      "baseVar": 5476,
+      "startBit": 9,
+      "endBit": 9
+    },
+    {
+      "symbol": "easter26_hunt_loc5",
+      "id": 19224,
+      "baseVar": 5476,
+      "startBit": 10,
+      "endBit": 10
+    },
+    {
+      "symbol": "easter26_hunt_loc6",
+      "id": 19226,
+      "baseVar": 5476,
+      "startBit": 11,
+      "endBit": 11
+    },
+    {
+      "symbol": "easter26_hunt_loc7",
+      "id": 19228,
+      "baseVar": 5476,
+      "startBit": 12,
+      "endBit": 12
+    },
+    {
+      "symbol": "easter26_hunt_loc8",
+      "id": 19230,
+      "baseVar": 5476,
+      "startBit": 13,
+      "endBit": 13
+    },
+    {
+      "symbol": "easter26_egg_box_state",
+      "id": 19232,
+      "baseVar": 5476,
+      "startBit": 14,
+      "endBit": 14
+    },
+    {
+      "symbol": "easter26_first_clue_picked",
+      "id": 20228,
+      "baseVar": 5476,
+      "startBit": 15,
+      "endBit": 15
+    }
+  ],
+  "sequences": [
+    {
+      "id": 1777,
+      "sha256": "4f7dd6323fe3e48d2df943bf6bddd5eaff2c6813c0f38fa7e8b7bcea856c3b88"
+    },
+    {
+      "id": 11107,
+      "sha256": "f1aebeee8b286ca680a124ad99b794a9c6a2d5750622f6a242a0fc647a83e84d"
+    },
+    {
+      "id": 11108,
+      "sha256": "69c19a2b4f5c6bf0c94b2fcbe32c6ffdf860274ee0302c750499d321f74750ba"
+    },
+    {
+      "id": 12307,
+      "sha256": "cb040c33ac0b669a1b99b64b3f4bf844cf373fed67822ab90ecfe3b24799d194"
+    }
+  ],
+  "models": [
+    {
+      "id": 3855,
+      "crc": 3650081276
+    },
+    {
+      "id": 32963,
+      "crc": 1122399587
+    },
+    {
+      "id": 44147,
+      "crc": 1842220426
+    },
+    {
+      "id": 60021,
+      "crc": 1858843202
+    },
+    {
+      "id": 60040,
+      "crc": 3858106594
+    }
+  ]
+}

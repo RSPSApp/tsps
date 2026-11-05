@@ -192,6 +192,7 @@
     {"name": "Sea turtle", "heal": 21},
     {"name": "Shark", "heal": 20},
     {"name": "Shrimps", "heal": 3},
+    {"name": "Slice of birthday cake", "heal": 3, "area": "birthday-event"},
     {"name": "Sliced banana", "heal": 2},
     {"name": "Sliced red banana", "heal": 5},
     {"name": "Smelly kebab", "heal": 0, "combo": true, "message": "You eat the smelly kebab. It tastes... unusual."},

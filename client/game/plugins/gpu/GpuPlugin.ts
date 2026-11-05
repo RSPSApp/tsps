@@ -20,6 +20,8 @@ export interface GpuSettings {
     autoFogDepth: boolean;
     autoFogDepthFactor: number;
     fogDepth: number;
+    /** These are the user's choices, so the mobile profile's distance caps must not lower them. */
+    overrideDeviceCaps: boolean;
 }
 
 const MSAA_SAMPLES: Readonly<Record<string, number>> = {
@@ -52,6 +54,7 @@ export function resolveGpuSettings(config: {
         autoFogDepth: config.autoFog,
         autoFogDepthFactor: clamp(config.fogStart, 0, 100) / 100,
         fogDepth: clamp(config.manualFogStart, 0, 400),
+        overrideDeviceCaps: true,
     };
 }
 
@@ -87,6 +90,7 @@ export class GpuPlugin extends Plugin {
         if (this.configManager.getConfiguration(GpuConfig.group, "brightness") !== undefined) {
             this.client.applyScreenBrightness(this.configManager.getConfig(GpuConfig).brightness());
         }
+        this.applySkyColor();
     }
 
     onConfigChanged(event: ConfigChanged): void {
@@ -95,6 +99,16 @@ export class GpuPlugin extends Plugin {
         if (event.getKey() === "brightness") {
             this.client.applyScreenBrightness(this.configManager.getConfig(GpuConfig).brightness());
         }
+        if (event.getKey() === "skyColor") this.applySkyColor();
+    }
+
+    private applySkyColor(): void {
+        if (this.configManager.getConfiguration(GpuConfig.group, "skyColor") === undefined) return;
+        const color = this.configManager.getConfig(GpuConfig).skyColor() >>> 0;
+        const renderer = this.client.renderer as {
+            setSkyColor?: (r: number, g: number, b: number) => void;
+        };
+        renderer.setSkyColor?.((color >>> 16) & 0xff, (color >>> 8) & 0xff, color & 0xff);
     }
 
     /** The settings to apply, or undefined while the plugin is off. */

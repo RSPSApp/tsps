@@ -21,6 +21,7 @@ export class LowEndDevicePlugin extends Plugin {
         autoFogDepth: true,
         autoFogDepthFactor: 0.7,
         fogDepth: 0,
+        overrideDeviceCaps: false,
     };
 
     override setEnabledState(enabled: boolean): void {

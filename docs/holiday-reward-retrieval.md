@@ -144,8 +144,12 @@ from the inventory or the worn tab (cache worn options, params 451+).
   marionettes in their colour, Rubber chicken Dance, Haunted wine bottle Wake-ghost, the
   Zombie head's Display overhead (no sequence is known), the gingerbread shield's
   green/red/blue Transform cycle and the ugly jumper's Reverse.
-- The first option of a toy (Play-with, Play, Jump, Talk-At) also reports
-  `holiday-rewards:used`, the recorded first-use unlock.
+- Only the WWF toys' Play-with reports `holiday-rewards:used`, the recorded first-use
+  unlock; other toys unlock through Diango's normal routes until a recording shows theirs.
+- Overheads have a 6-tick per-player cooldown: recording 3200 replays the tiger's sequence
+  on every click but says "Grrrr!" about every 6 ticks. Check rank logs the recorded mesbox
+  chat line and shows the message box with its line break. Inventory clicks are accepted
+  from both the native `inventory:items` component and the legacy inventory id.
 
 Not yet covered, and why:
 - Sounds and timing for everything not recorded; the rubber chicken's Wiki jingle id could

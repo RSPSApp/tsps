@@ -22,17 +22,20 @@ function player(symbol,worn=false){
  const slot=worn?(c.getItem(id).equipSlot ?? core.Equipment.SHIELD_SLOT):0;
  container.setItem(slot,new core.Item(id,1));return {p,container,slot,log};
 }
-function click(p,container,slot,option){
+function click(p,container,slot,option,native=true){
  const id=container.getItems()[slot].getId(),def=c.getItem(id),worn=container===p.getEquipment();
  const clickType=worn?2+Array.from({length:5},(_,i)=>def.params?.get?.(451+i)).indexOf(option):def.inventoryActions.indexOf(option)+1;
  assert.ok(clickType>=1,`${def.name} has ${option}`);
- return Items.handleAction(p,worn?core.Equipment.INVENTORY_INTERFACE_ID:core.Inventory.INTERFACE_ID,id,slot,clickType);
+ const inv=native?c.getComponentId('inventory:items'):core.Inventory.INTERFACE_ID;
+ return Items.handleAction(p,worn?core.Equipment.INVENTORY_INTERFACE_ID:inv,id,slot,clickType);
 }
-test('a WWF toy plays its recorded sequence and overhead, and its first play unlocks it at Diango',()=>{
+test('a WWF toy plays its recorded sequence and overhead, and its first play unlocks it at Diango',(t)=>{
+ let now=1e9;t.mock.method(Date,'now',()=>now);
  const {p,container,slot,log}=player('wwf_toy_tiger');
- click(p,container,slot,'Play-with');click(p,container,slot,'Play-with');
+ click(p,container,slot,'Play-with');now+=600;click(p,container,slot,'Play-with',false);
  assert.deepEqual(log.anims,[c.getSeqId('human_play_wwf_tiger'),c.getSeqId('human_play_wwf_tiger')]);
- assert.deepEqual(log.says,['Grrrr!','Grrrr!']);
+ assert.deepEqual(log.says,['Grrrr!'],'the overhead waits 6 ticks, as recorded');
+ now+=6*600;click(p,container,slot,'Play-with');assert.equal(log.says.length,2);
  assert.deepEqual(p.getAttribute('holiday-rewards:unlocked'),['wwf_toy_tiger']);
  assert.deepEqual(log.messages,["You've unlocked a holiday item: <col=ef1020>Tiger toy</col>"]);
 });
@@ -50,12 +53,15 @@ test('the gingerbread shield cycles green, red, blue in the inventory and while 
  assert.equal(worn.container.getItems()[worn.slot].getId(),c.getObjId('xmas19_shield_2'));
 });
 test('Check rank shows the recorded title line for the saved hug count',()=>{
- const {p,container,slot}=player('wreath');const shown=[];
+ const {p,container,slot}=player('wreath');const shown=[],typed=[];
+ const sender=p.getPacketSender(),send=sender.sendTypedMessage.bind(sender);
+ sender.sendTypedMessage=(type,m,...r)=>{typed.push([type,m]);return send(type,m,...r);};
  const dm=p.getDialogueManager(),start=dm.startDialogues.bind(dm);
  dm.startDialogues=chain=>{shown.push(require('node:util').inspect(chain,{depth:6}));return start(chain);};
  click(p,container,slot,'Check rank');
  p.getPacketSender().sendVarbit(c.getVarbitId('summer_trees_hugged'),55);click(p,container,slot,'Check rank');
- assert.match(shown[0],/Your tree hugging title is: <col=6f0000>What's a tree\?/);
+ assert.match(shown[0],/Your tree hugging title is:<br><col=6f0000>What's a tree\?/);
+ assert.deepEqual(typed[0],[115,"Your tree hugging title is: <col=6f0000>What's a tree?"]);
  assert.match(shown[1],/Tree Hugger/);
 });
 test('every data entry resolves in the active cache and names a real option on its item',()=>{

@@ -6,6 +6,12 @@
 const toys = require("./data/holiday-toys.json");
 // PluginManager's worn option convention: worn ops are obj params 451.. from click 2.
 const WORN_OPTION_PARAM = 451, FIRST_WORN_OPTION_CLICK = 2;
+// Chat type the recording's message_game type=mesbox line uses (as Guests.Clans does).
+const MESBOX_CHAT_TYPE = 115;
+// Rev 232 recording 3200: a WWF toy clicked every tick replays its sequence each time but
+// says "Grrrr!" about every 6 ticks, so overheads have a 6-tick per-player cooldown.
+const SAY_COOLDOWN_TICKS = 6;
+const lastSay = new WeakMap();
 let core;
 let actions;
 
@@ -15,10 +21,12 @@ function resolve(name, lookup, what) {
   return id;
 }
 
-function table() {
+// Built once at startup into a local map, so a missing cache name fails loudly at boot
+// rather than leaving a half-built table behind.
+function build() {
   if (actions) return actions;
-  actions = new Map();
-  const add = (itemId, option, action) => actions.set(`${itemId}:${option}`, action);
+  const built = new Map();
+  const add = (itemId, option, action) => built.set(`${itemId}:${option}`, action);
   for (const entry of toys.animations) {
     const action = {
       kind: "animation",
@@ -34,7 +42,12 @@ function table() {
   }
   const rank = { kind: "rank", varbit: resolve(toys.ranks.varbit, "getVarbitId", "varbit") };
   for (const item of toys.ranks.items) for (const option of toys.ranks.options) add(resolve(item, "getObjId", "item"), option, rank);
+  actions = built;
   return actions;
+}
+
+function startup() {
+  build();
 }
 
 function optionOf(event, worn) {
@@ -56,7 +69,13 @@ function animate(player, action) {
   if (action.seq != null) player.performAnimation(new core.Animation(action.seq));
   if (action.spotanim != null) player.performGraphic(new core.Graphic(action.spotanim));
   if (action.sound != null) player.getPacketSender().sendSound(action.sound, 1, 0);
-  if (action.say) player.forceChat(action.say);
+  if (action.say) {
+    const now = Date.now(), gap = SAY_COOLDOWN_TICKS * core.GameConstants.GAME_ENGINE_PROCESSING_CYCLE_RATE;
+    if (!lastSay.has(player) || now - lastSay.get(player) >= gap) {
+      lastSay.set(player, now);
+      player.forceChat(action.say);
+    }
+  }
 }
 
 function swap(player, container, item, to) {
@@ -72,9 +91,12 @@ function useToy(api, event) {
   const { player, item, slot } = event;
   if (!item || !player) return;
   const worn = event.interfaceId === core.Equipment.INVENTORY_INTERFACE_ID;
-  const container = worn ? player.getEquipment() : event.interfaceId === core.Inventory.INTERFACE_ID ? player.getInventory() : null;
+  // The native client sends the packed inventory:items component, the legacy one 3214.
+  const inventory = event.interfaceId === core.Inventory.INTERFACE_ID ||
+    event.interfaceId === core.CacheDefinitions.getComponentId("inventory:items");
+  const container = worn ? player.getEquipment() : inventory ? player.getInventory() : null;
   if (!container || container.getItems()[slot] !== item || item.getId() !== event.itemId) return;
-  const action = table().get(`${event.itemId}:${optionOf(event, worn)}`);
+  const action = build().get(`${event.itemId}:${optionOf(event, worn)}`);
   if (!action) return;
   event.handled = true;
   if (player.getHitpoints() <= 0 || player.getStatus() !== core.PlayerStatus.NONE || player.isTeleportingReturn()) return;
@@ -84,9 +106,12 @@ function useToy(api, event) {
     if (action.unlocks) api.emitCustomEvent("holiday-rewards:used", { player, itemId: event.itemId });
   } else if (action.kind === "swap") swap(player, container, item, action.to);
   else {
+    // Rev 232 recording 3200: a mesbox chat line, then the message box with a line break.
+    const title = rankTitle(player, action);
+    player.getPacketSender().sendTypedMessage(MESBOX_CHAT_TYPE, `${toys.ranks.message} <col=6f0000>${title}`);
     const { DialogueChainBuilder, StatementDialogue } = core;
     player.getDialogueManager().startDialogues(new DialogueChainBuilder()
-      .add(new StatementDialogue(0, `${toys.ranks.message}${rankTitle(player, action)}`)));
+      .add(new StatementDialogue(0, `${toys.ranks.message}<br><col=6f0000>${title}`)));
   }
 }
 
@@ -100,6 +125,7 @@ module.exports = {
   name: "HolidayToys",
   register(api) {
     core = api.core;
+    api.onServerStartup(startup);
     api.onItemAction("Snow globe", { "Look at": lookAtSnowGlobe.bind(null, api) });
     api.onItemAction(useToy.bind(null, api));
   },

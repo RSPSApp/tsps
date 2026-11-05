@@ -1444,3 +1444,36 @@ test("production: mid-batch (materials left) it waits for a stall, not the short
   advance(15_000);
   assert.equal(work(player, Date.now()), "repeated", "25s: stalled, so it restarts");
 });
+
+test("travel: a production site takes you there; a production target that suits it carries on there", (t) => {
+  const { player } = cookingShrimps(t);
+  api.command(player, "idle go al-kharid-range");
+  assert.deepEqual(api.teleports.at(-1), { player, x: 3272, y: 3180, z: 0, type: "normal" });
+  // Cooking on a "Range": it suits, and carries on at Al Kharid's.
+  assert.deepEqual(player.getAttribute("idle-mode:production-target").anchor, { x: 3272, y: 3180, z: 0 });
+  assert.match(player.messages.pop(), /carries on making logs here/);
+  // A furnace doesn't suit cooking: the player is told what to do, and nothing drags them back.
+  api.command(player, "idle go al-kharid-furnace");
+  assert.equal(player.getAttribute("idle-mode:production-target"), null);
+  assert.match(player.messages.pop(), /Use an ore on the furnace and pick the bar/);
+  // Gathering first: a production site clears it.
+  const gatherer = idlePlayer();
+  gatherer.setAttribute("idle-mode:auto-target", { skill: "WOODCUTTING", kind: "object", name: "Tree", option: "Chop down", anchor: { x: 1, y: 1, z: 0 } });
+  api.command(gatherer, "idle go al-kharid-crafting");
+  assert.equal(gatherer.getAttribute("idle-mode:auto-target"), null);
+});
+
+test("travel screen: a Making tab lists the production sites, and opens on them while making", (t) => {
+  const { COMPONENT, uid } = require(TRAVEL_SCREEN);
+  const { player } = cookingShrimps(t);
+  api.command(player, "idle travel");
+  const layout = JSON.parse(player.screen.texts.get(uid(COMPONENT.LAYOUT)));
+  assert.equal(layout.active, 5, "the Making tab");
+  const rows = JSON.parse(player.screen.texts.get(uid(COMPONENT.DATA)));
+  const making = layout.tabs[5].map((id) => rows.find((row) => row.id === id).name);
+  assert.deepEqual(making, ["Cooking range", "Cooking range", "Furnace", "Furnace", "Fletching, crafting, herblore"]);
+  const range = rows.find((row) => row.name === "Cooking range");
+  assert.equal(range.detail, " - Al Kharid, by the bank");
+  assert.equal(range.panel.level, "Cooking: <col=00ff00>any level</col>");
+  assert.match(range.panel.description, /Use a raw fish on the range/);
+});

@@ -100,7 +100,7 @@
     "skipSeconds": 120
   },
   "travel": {
-    "_description": "Idle travel (docs/idle-mode.md): an idle player picks a site from ::idle travel and teleports to its tile, which becomes the activity's anchor; auto-resume then walks to the nearest target there and starts. Tiles are free tiles checked against the cache map, with the targets within auto-resume's or idle combat's searchTiles (server/tests/idle-travel-sites.test.cjs). level: the skill level needed (gathering) or the combat level advised (combat); icon: the item shown in the list.",
+    "_description": "Idle travel (docs/idle-mode.md): an idle player picks a site from ::idle travel and teleports to its tile, which becomes the activity's anchor; auto-resume then walks to the nearest target there and starts. Tiles are free tiles checked against the cache map, with the targets within auto-resume's or idle combat's searchTiles (server/tests/idle-travel-sites.test.cjs). level: the skill level needed (gathering) or the combat level advised (combat); icon: the item shown in the list. Production sites (kind station or anywhere) only take you there: the first item made by hand there sets what is made (or a production target of the same skill moves there).",
     "teleportType": "NORMAL",
     "sites": [
       {
@@ -460,6 +460,96 @@
         "level": 30,
         "icon": 532,
         "tool": "A weapon and plenty of food"
+      },
+      {
+        "id": "al-kharid-range",
+        "name": "Cooking range",
+        "place": "Al Kharid, by the bank",
+        "skill": "COOKING",
+        "kind": "station",
+        "target": "Range",
+        "option": "Cook",
+        "tile": [
+          3272,
+          3180,
+          0
+        ],
+        "level": 1,
+        "icon": 379,
+        "tool": "Raw food in your bank",
+        "tip": "Use a raw fish on the range and pick what to cook: your character keeps cooking from your bank."
+      },
+      {
+        "id": "catherby-range",
+        "name": "Cooking range",
+        "place": "Catherby, by the bank",
+        "skill": "COOKING",
+        "kind": "station",
+        "target": "Range",
+        "option": "Cook",
+        "tile": [
+          2817,
+          3443,
+          0
+        ],
+        "level": 1,
+        "icon": 379,
+        "tool": "Raw food in your bank",
+        "members": true,
+        "tip": "Use a raw fish on the range and pick what to cook: your character keeps cooking from your bank."
+      },
+      {
+        "id": "al-kharid-furnace",
+        "name": "Furnace",
+        "place": "Al Kharid, by the bank",
+        "skill": "SMITHING",
+        "kind": "station",
+        "target": "Furnace",
+        "option": "Smelt",
+        "tile": [
+          3274,
+          3186,
+          0
+        ],
+        "level": 1,
+        "icon": 2351,
+        "tool": "Ore in your bank",
+        "tip": "Use an ore on the furnace and pick the bar: your character keeps smelting from your bank."
+      },
+      {
+        "id": "edgeville-furnace",
+        "name": "Furnace",
+        "place": "Edgeville, by the bank",
+        "skill": "SMITHING",
+        "kind": "station",
+        "target": "Furnace",
+        "option": "Smelt",
+        "tile": [
+          3108,
+          3499,
+          0
+        ],
+        "level": 1,
+        "icon": 2351,
+        "tool": "Ore in your bank",
+        "members": true,
+        "tip": "Use an ore on the furnace and pick the bar: your character keeps smelting from your bank."
+      },
+      {
+        "id": "al-kharid-crafting",
+        "name": "Fletching, crafting, herblore",
+        "place": "Al Kharid bank",
+        "skill": "FLETCHING",
+        "kind": "anywhere",
+        "tile": [
+          3269,
+          3167,
+          0
+        ],
+        "level": 1,
+        "icon": 946,
+        "tool": "A knife, needle or herbs, and materials in your bank",
+        "tip": "Make one by hand (a knife on logs, a needle on leather, a herb in a vial) and pick the product: your character keeps making it from your bank."
       }
     ]
   },

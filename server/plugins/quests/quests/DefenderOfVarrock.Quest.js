@@ -99,6 +99,11 @@ module.exports = function registerDefenderOfVarrockQuest(api) {
   const VARBIT_ELIAS_VIS = 9658; // "elias_white_vis" placeholder transform
   const VARBIT_TRAIL = [9659, 9660, 9661, 9662, 9663, 9664]; // dov_hunting_trail_1-6
   const VARBIT_READ_CENSUS = 9668; // "dov_read_census"
+  const VARBIT_CENSUS_PAGE = 9667; // "dov_censuspage", bits 19-21
+  const CENSUS_INTERFACE = 245; // Cache group 245: Citizen's Name / Profession
+  const CENSUS_NEXT_PAGE_BUTTON = (CENSUS_INTERFACE << 16) | 9; // "Next page"
+  const CENSUS_PAGES = 5;
+  const CENSUS_PAGE_ATTRIBUTE = "quest.defender_of_varrock.census-page";
 
   const STAGE_STARTED = 2;
   const STAGE_FOLLOWING = 4;
@@ -728,6 +733,7 @@ module.exports = function registerDefenderOfVarrockQuest(api) {
     ensureBottleSource(player);
     syncElias(player);
     sendTrailVarbits(player);
+    syncCensusPage(player);
     refreshQuestList(player);
   }
 
@@ -743,6 +749,7 @@ module.exports = function registerDefenderOfVarrockQuest(api) {
 
   function handleStageChanged(event) {
     if (event.key !== "defender_of_varrock" || !event.player) return;
+    if (!questActive(event.player)) syncCensusPage(event.player);
     syncElias(event.player);
   }
 
@@ -1593,8 +1600,32 @@ module.exports = function registerDefenderOfVarrockQuest(api) {
     if (!player) return;
     event.handled = true;
     if (!questActive(player)) return;
-    player.getPacketSender().sendVarbit(VARBIT_READ_CENSUS, 1);
+    const sender = player.getPacketSender();
+    sender.sendVarbit(VARBIT_READ_CENSUS, 1);
+    sender.sendVarbit(VARBIT_CENSUS_PAGE, censusPage(player));
+    sender.sendInterface(CENSUS_INTERFACE);
     if (stageOf(player) >= STAGE_LIST) ensureStage(player, STAGE_CANDIDATES);
+  }
+
+  function censusPage(player) {
+    return Math.max(0, Math.min(CENSUS_PAGES, Number(player.getAttribute(CENSUS_PAGE_ATTRIBUTE)) || 0));
+  }
+
+  function syncCensusPage(player) {
+    if (!questActive(player)) player.setAttribute(CENSUS_PAGE_ATTRIBUTE, 0);
+    player.getPacketSender().sendVarbit(VARBIT_CENSUS_PAGE, censusPage(player));
+  }
+
+  /** Capture 1636: each "Next page" advances dov_censuspage 1-5. */
+  function handleCensusPage(event) {
+    const { player } = event;
+    if (!player || (event.buttonId >> 16) !== CENSUS_INTERFACE) return;
+    event.handled = true;
+    if (!questActive(player)) return;
+    const page = censusPage(player);
+    if (page >= CENSUS_PAGES) return;
+    player.setAttribute(CENSUS_PAGE_ATTRIBUTE, page + 1);
+    player.getPacketSender().sendVarbit(VARBIT_CENSUS_PAGE, page + 1);
   }
 
   function handleScrolls(event) {
@@ -1661,6 +1692,7 @@ module.exports = function registerDefenderOfVarrockQuest(api) {
   api.persistAttribute(KEY_ATTRIBUTE);
   api.persistAttribute(DESCENDANT_ATTRIBUTE);
   api.persistAttribute(SCHEMA_ATTRIBUTE, 0);
+  api.persistAttribute(CENSUS_PAGE_ATTRIBUTE, 0);
   for (const bit of VARBIT_TRAIL) api.persistAttribute(`quest.defender_of_varrock.trail.${bit}`);
 
   quest = registerQuest(api, {
@@ -1705,6 +1737,7 @@ module.exports = function registerDefenderOfVarrockQuest(api) {
   api.onNpcInteraction("Romeo", { "Talk-to": talkToRomeo });
   api.onNpcInteraction("Curator Haig Halen", { "Talk-to": talkToHaig });
   api.onObjectInteraction(handleObjectInteraction);
+  api.onInterfaceActionButton(CENSUS_NEXT_PAGE_BUTTON, handleCensusPage);
   api.onCustomEvent("door:toggle", claimGateToggle);
   api.onItemOnObject(handleItemOnObject);
   api.onItemOnItem(handleItemOnItem);

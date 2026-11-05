@@ -766,7 +766,12 @@ function runSteps(api, player, context, steps) {
     return;
   }
   if (step.exec) {
-    step.exec(player, context);
+    const result = step.exec(player, context);
+    if (step.stopOnFalse && result === false) {
+      player.getDialogueManager().reset();
+      player.getPacketSender().sendInterfaceRemoval();
+      return;
+    }
     // A terminal exec owns its own UI (starts the next conversation, opens a
     // reward scroll, ...), so never force-close the interface after it.
     if (rest.length > 0) runSteps(api, player, context, rest);

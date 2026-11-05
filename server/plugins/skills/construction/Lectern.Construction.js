@@ -2,7 +2,7 @@
 
 const {
   Animation, CacheDefinitions, DialogueChainBuilder, Item, ItemIdentifiers, ItemStatementDialogue, MagicSpellbook,
-  PluginManager, Skill, Sound, Sounds, Spell, Task, TaskManager,
+  PluginManager, Skill, Sound, Sounds, Spell, Task, TaskManager, api,
 } = require("./Core.Construction");
 const Ids = require("./Ids.Construction");
 const House = require("./House.Construction");
@@ -26,6 +26,8 @@ const CREATE_ANIMATION = Ids.seq("poh_create_magic_tablet");
 const CREATE_SOUND = new Sound(228, 1, 0, 0);
 const INTERVAL_TICKS = 4;
 const NO_CLAY = "You need some soft clay to use this lectern.";
+const NO_DARK_ESSENCE = "You need a dark essence block to use this lectern.";
+const WRONG_SPELLBOOK = "You need to be on the Arceuus spellbook to make that tablet.";
 const TABLET_ATTRIBUTE = "construction:lectern-tablet";
 const AMOUNT_ATTRIBUTE = "construction:lectern-amount";
 
@@ -39,32 +41,42 @@ function lecternAt(event) {
   const house = House.houseFor(event.player);
   const furniture = house?.getFurnitureAt(event.location, event.objectId, event.object?.getType() ?? 10);
   const enumId = furniture && LECTERN_DATA.lecterns[furniture.buildableKey];
-  return enumId ? { enumId, tablets: [...CacheDefinitions.getEnumValues(enumId).values()] } : null;
+  if (enumId) return { enumId, tablets: [...CacheDefinitions.getEnumValues(enumId).values()], material: ItemIdentifiers.SOFT_CLAY, spellbook: null, runeSpellbook: MagicSpellbook.NORMAL };
+  const world = LECTERN_DATA.worldLecterns?.[event.objectId];
+  if (!world) return null;
+  return {
+    enumId: world.enumId,
+    tablets: [...CacheDefinitions.getEnumValues(world.enumId).values()],
+    material: ItemIdentifiers[world.material],
+    spellbook: MagicSpellbook[world.spellbook],
+    runeSpellbook: MagicSpellbook[world.spellbook],
+    world: true,
+  };
 }
 
 /** The runes a tablet still needs from the inventory or a rune pouch once staves are counted. */
-function runesNeeded(player, tablet, count) {
+function runesNeeded(player, lectern, tablet, count) {
   return tablet.runes
-    .filter(([id]) => PluginManager.emitSpellRuneBypass(player, MagicSpellbook.NORMAL, -1, id) !== true)
+    .filter(([id]) => PluginManager.emitSpellRuneBypass(player, lectern.runeSpellbook, -1, id) !== true)
     .map(([id, amount]) => ({ id, amount: amount * count }));
 }
 
-function hasRunes(player, tablet, count) {
-  const shortfall = Spell.inventoryShortfall(player, runesNeeded(player, tablet, count).map(({ id, amount }) => new Item(id, amount)));
+function hasRunes(player, lectern, tablet, count) {
+  const shortfall = Spell.inventoryShortfall(player, runesNeeded(player, lectern, tablet, count).map(({ id, amount }) => new Item(id, amount)));
   return shortfall.length === 0 || PluginManager.checkSpellRuneSource(player, shortfall);
 }
 
-function takeRunes(player, tablet) {
-  const runes = runesNeeded(player, tablet, 1).map(({ id, amount }) => new Item(id, amount));
+function takeRunes(player, lectern, tablet) {
+  const runes = runesNeeded(player, lectern, tablet, 1).map(({ id, amount }) => new Item(id, amount));
   const shortfall = Spell.inventoryShortfall(player, runes);
   for (const rune of runes) player.getInventory().delete(rune.getId(), Math.min(rune.getAmount(), player.getInventory().getAmount(rune.getId())));
   if (shortfall.length) PluginManager.consumeSpellRuneSource(player, shortfall);
 }
 
-/** How many of `tablet` the player could make now (soft clay and runes). */
-function makeable(player, tablet) {
-  let count = player.getInventory().getAmount(ItemIdentifiers.SOFT_CLAY);
-  while (count > 0 && !hasRunes(player, tablet, count)) count--;
+/** How many of `tablet` the player could make now (the lectern's clay substitute and runes). */
+function makeable(player, lectern, tablet) {
+  let count = player.getInventory().getAmount(lectern.material);
+  while (count > 0 && !hasRunes(player, lectern, tablet, count)) count--;
   return count;
 }
 
@@ -100,22 +112,36 @@ function createLast(event) {
   return true;
 }
 
+function missingMaterial(player, lectern) {
+  const text = lectern.material === ItemIdentifiers.DARK_ESSENCE_BLOCK ? NO_DARK_ESSENCE : NO_CLAY;
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
+    new ItemStatementDialogue(0, lectern.material, text)));
+}
+
+function wrongSpellbook(player, lectern) {
+  if (!lectern.spellbook || player.getSpellbook() === lectern.spellbook) return false;
+  player.sendMessage(WRONG_SPELLBOOK);
+  return true;
+}
+
 function startMaking(player, lectern, amount) {
   const itemId = chosenTablet(player, lectern);
   const tablet = TABLETS.get(itemId);
   if (!tablet || amount < 1) return;
-  if (!player.getInventory().contains(ItemIdentifiers.SOFT_CLAY)) {
-    player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new ItemStatementDialogue(0, ItemIdentifiers.SOFT_CLAY, NO_CLAY)));
+  if (wrongSpellbook(player, lectern)) return;
+  if (!player.getInventory().contains(lectern.material)) {
+    missingMaterial(player, lectern);
     return;
   }
-  TaskManager.submit(new TabletTask(player, itemId, tablet, amount));
+  TaskManager.submit(new TabletTask(player, lectern, itemId, tablet, amount));
 }
 
 /** One tablet every INTERVAL_TICKS; keyed to the player, so their next walk or click stops it. */
 class TabletTask extends Task {
-  constructor(player, itemId, tablet, amount) {
+  constructor(player, lectern, itemId, tablet, amount) {
     super(1, player.getIndex(), true);
     this.player = player;
+    this.lectern = lectern;
     this.itemId = itemId;
     this.tablet = tablet;
     this.remaining = amount;
@@ -123,34 +149,36 @@ class TabletTask extends Task {
   }
 
   execute() {
-    const { player, tablet } = this;
-    if (!player.isRegistered() || !House.houseFor(player)) return this.stop();
+    const { player, lectern, tablet } = this;
+    if (!player.isRegistered() || (!lectern.world && !House.houseFor(player))) return this.stop();
     if (this.step % INTERVAL_TICKS === 0) {
       if (!this.canMake()) return this.stop();
       player.performAnimation(new Animation(CREATE_ANIMATION));
       Sounds.sendSound(player, CREATE_SOUND);
     } else if (this.step % INTERVAL_TICKS === 1) {
       if (!this.canMake()) return this.stop();
-      player.getInventory().delete(ItemIdentifiers.SOFT_CLAY, 1);
-      takeRunes(player, tablet);
+      player.getInventory().delete(lectern.material, 1);
+      takeRunes(player, lectern, tablet);
       player.getInventory().adds(this.itemId, 1);
       player.getSkillManager().addExperiences(Skill.MAGIC, tablet.experience);
+      api.emitCustomEvent("construction:tablet-made", { player, itemId: this.itemId, amount: 1, lectern: lectern.world ? "arceuus" : "house" });
       if (--this.remaining <= 0) return this.stop();
     }
     this.step++;
   }
 
   canMake() {
-    const { player, tablet } = this;
-    if (!player.getInventory().contains(ItemIdentifiers.SOFT_CLAY)) {
-      player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new ItemStatementDialogue(0, ItemIdentifiers.SOFT_CLAY, NO_CLAY)));
+    const { player, lectern, tablet } = this;
+    if (wrongSpellbook(player, lectern)) return false;
+    if (!player.getInventory().contains(lectern.material)) {
+      missingMaterial(player, lectern);
       return false;
     }
     if (player.getSkillManager().getCurrentLevel(Skill.MAGIC) < tablet.level) {
       player.sendMessage(`You need a Magic level of ${tablet.level} to make that tablet.`);
       return false;
     }
-    if (!hasRunes(player, tablet, 1)) {
+    if (!hasRunes(player, lectern, tablet, 1)) {
       player.sendMessage("You do not have enough runes to make that tablet.");
       return false;
     }
@@ -162,7 +190,7 @@ function interfaceClick(event) {
   if (event.groupId !== TELETABS_INTERFACE) return;
   const player = event.player;
   const lectern = openLecterns.get(player);
-  if (!lectern || !House.houseFor(player)) return;
+  if (!lectern) return;
   event.handled = true;
   const child = event.childId;
   if (child >= FIRST_TAB && child <= LAST_TAB && child - FIRST_TAB < lectern.tablets.length) {
@@ -173,7 +201,7 @@ function interfaceClick(event) {
     setAmount(player, MAKE_BUTTONS[child]);
   } else if (child === MAKE_ALL || child === MAKE_X) {
     const tablet = TABLETS.get(chosenTablet(player, lectern));
-    const most = tablet ? Math.max(1, makeable(player, tablet)) : 1;
+    const most = tablet ? Math.max(1, makeable(player, lectern, tablet)) : 1;
     if (child === MAKE_ALL) return setAmount(player, most);
     player.getPacketSender().sendConfig(MAKE_AMOUNT_VARP, 0).sendEnterAmountPrompt(`Enter amount: (1-${most})`);
     player.setEnteredAmountAction({ execute: amount => setAmount(player, Math.max(1, Math.min(most, amount))) });
@@ -196,4 +224,4 @@ function attachLecterns(api) {
   api.onCustomEvent("interface:close", closeLectern);
 }
 
-Object.assign(module.exports, { attachLecterns });
+Object.assign(module.exports, { attachLecterns, _test: { lecternAt, startMaking, TABLETS, wrongSpellbook } });

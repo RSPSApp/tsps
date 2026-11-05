@@ -43,6 +43,11 @@ const RUNE_MYSTERIES_COMPLETE_STAGE = 6;
 const ENTER_THE_ABYSS_KEY = "enter_the_abyss";
 const ABYSS_LOCKED_MESSAGE = "You need to complete Enter the Abyss before you can enter the Abyss.";
 const ABYSS_OBSTACLE_XP = 25;
+const SINS_OF_THE_FATHER_KEY = "sins_of_the_father";
+/** Ours: no capture shows the rift refused for the quest; the Wiki gives only the rule. */
+const BLOOD_RIFT_LOCKED_MESSAGE = "You need to complete Sins of the Father before you can use this rift.";
+/** rsprox 1636, Exit-through (Kourend) by a player who hasn't unlocked it. */
+const BLOOD_RIFT_KOUREND_TEXT = "The rift cannot find the true Blood Altar. However, if you bring a<br>sample of the Dark Altar's power to the rift, the Dark Altar can<br>redirect the rift to the place in Arceuus where it focuses the Blood<br>Altar's energy.";
 const ABYSS_SKULL_SECONDS = 10 * 60;
 /**
  * The Ourania Altar (Wiki: Ourania Altar) binds pure and daeyalt essence into a random rune each,
@@ -867,7 +872,8 @@ function abyssObstacleChance(player, obstacle) {
 }
 
 function handleAbyssObstacle(event) {
-  const obstacle = ABYSS_OBSTACLES.get(event.objectId);
+  // The map places a multiloc at each gap in the ring; the definition is the obstacle it shows this player.
+  const obstacle = ABYSS_OBSTACLES.get(event.definition?.id ?? event.objectId);
   if (!obstacle) {
     return false;
   }
@@ -906,11 +912,35 @@ function handleExitPortal(event) {
   return true;
 }
 
+/**
+ * rsprox 1636: Exit-through lands at 3226,4831; Exit-through (Kourend) gives a message box. Varbit 13783
+ * swaps which slot each is in, so this goes by the label. The Wiki's unlock for the Kourend side, dark
+ * essence used on the rift, isn't implemented, so that side always refuses.
+ */
+function handleBloodRift(event) {
+  const { player } = event;
+  if (String(event.option ?? "").toLowerCase().includes("kourend")) {
+    const { DialogueChainBuilder, StatementDialogue } = pluginApi.core;
+    player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, BLOOD_RIFT_KOUREND_TEXT)));
+    return true;
+  }
+  const request = { player, key: SINS_OF_THE_FATHER_KEY, complete: false };
+  pluginApi.emitCustomEvent("quest:is-complete", request);
+  if (request.complete !== true) {
+    player.sendMessage(BLOOD_RIFT_LOCKED_MESSAGE);
+    return true;
+  }
+  requestTeleport(player, new Location(3226, 4831, 0));
+  return true;
+}
+
 function handleEnterRift(event) {
-  const runeId = RIFT_RUNES.get(event.objectId);
+  // The blood rift is a multiloc on the map; the others are plain.
+  const runeId = RIFT_RUNES.get(event.definition?.id ?? event.objectId);
   if (!runeId) {
     return false;
   }
+  if (runeId === ItemIdentifiers.BLOOD_RUNE) return handleBloodRift(event);
   const destination = ALTAR_DESTINATIONS.get(runeId);
   if (destination) {
     const { player } = event;

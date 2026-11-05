@@ -249,7 +249,9 @@ function describe(player) {
   const fight = player.getAttribute(Common.COMBAT_TARGET_ATTRIBUTE);
   const state = player.getAttribute(AUTO_ATTRIBUTE) === false ? "off" : "on";
   if (fight) return `Auto-resume is ${state}: fight the nearest ${fight.name.toLowerCase()} here.`;
-  if (!target) return `Auto-resume is ${state}. Start gathering or fighting and your character will keep at it.`;
+  const make = player.getAttribute(Common.PRODUCTION_TARGET_ATTRIBUTE);
+  if (make) return `Auto-resume is ${state}: make ${Common.itemName(make.productId).toLowerCase()} from your bank here.`;
+  if (!target) return `Auto-resume is ${state}. Start gathering, fighting or making something and your character will keep at it.`;
   return `Auto-resume is ${state}: ${target.option.toLowerCase()} the nearest ${target.name.toLowerCase()} here.`;
 }
 

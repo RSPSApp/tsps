@@ -1433,3 +1433,14 @@ test("production: a menu listing what is used (cooking's raw food) or one entry 
   assert.deepEqual(answer([777]), { result: "chose", picked: [[777, 28]], open: null });
   assert.deepEqual(answer([777, 888]), { result: "unanswerable", picked: [], open: null });
 });
+
+test("production: mid-batch (materials left) it waits for a stall, not the short restart", (t) => {
+  const { player, advance } = cookingShrimps(t);
+  const { work } = require(PRODUCTION);
+  // 20 raw shrimps left: a run of failed tries (burnt, an impure ore) makes nothing for a while.
+  player.inventory = [new Item(RAW_SHRIMPS, 20), new Item(SHRIMPS, 7)];
+  advance(10_000);
+  assert.equal(work(player, Date.now()), "producing", "10s without a product, materials left: still the batch");
+  advance(15_000);
+  assert.equal(work(player, Date.now()), "repeated", "25s: stalled, so it restarts");
+});

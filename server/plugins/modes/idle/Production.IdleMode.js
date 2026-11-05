@@ -8,7 +8,8 @@
  * - the product they picked from the creation menu;
  * - the inventory they had when they did it, as the loadout (materials and tools), and where.
  *
- * When nothing has been made for `restartAfterSeconds`, the products go to the bank, the loadout
+ * When a material has run out and nothing has been made for `restartAfterSeconds` (or, mid-batch,
+ * nothing for `stalledSeconds`: smelting iron fails half the time), the products go to the bank, the loadout
  * is topped up from the bank, and the same use is repeated as a click would (UseItemPacketListener,
  * emitObjectInteraction), with the same product picked from the menu, all of it. What each
  * top-up used is counted for the offline progress, which then pays only as far as the bank's
@@ -247,8 +248,12 @@ function work(player, now) {
       return answer;
     }
   }
-  const { restartAfterSeconds, retrySeconds, leashTiles, maxFailedAttempts } = config();
-  if (now - state.lastProducedAt < restartAfterSeconds * 1000 || now - state.lastAttemptAt < retrySeconds * 1000) return "producing";
+  const { restartAfterSeconds, stalledSeconds, retrySeconds, leashTiles, maxFailedAttempts } = config();
+  // A batch still has its materials: let it run (failed tries make nothing) unless it stalls.
+  const inventory = player.getInventory();
+  const drained = Object.keys(target.loadout).some((itemId) => inventory.getAmount(Number(itemId)) <= 0);
+  const waitSeconds = drained ? restartAfterSeconds : stalledSeconds;
+  if (now - state.lastProducedAt < waitSeconds * 1000 || now - state.lastAttemptAt < retrySeconds * 1000) return "producing";
   if (!Common.free(player)) return "busy";
   const location = player.getLocation();
   if (location.getZ() !== target.anchor.z || Common.chebyshev(location, target.anchor) > leashTiles) return "away";

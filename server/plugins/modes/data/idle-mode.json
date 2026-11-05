@@ -522,6 +522,7 @@
     "leashTiles": 24,
     "maxFailedAttempts": 3,
     "maxGapSeconds": 90,
-    "makeAll": 28
+    "makeAll": 28,
+    "stalledSeconds": 20
   }
 }

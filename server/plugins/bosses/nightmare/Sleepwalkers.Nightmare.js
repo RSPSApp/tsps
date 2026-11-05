@@ -73,7 +73,7 @@ function blast(fight, state) {
     }
   });
   fight.at(sleepwalkers.impactTicks + sleepwalkers.hitTicks, () => {
-    for (const player of fight.players()) Common.damage(player, blastDamage(absorbed, spawned));
+    for (const player of fight.players()) Common.damage(player, blastDamage(absorbed, spawned), fight, true);
   });
 }
 
@@ -89,10 +89,11 @@ function absorb(fight, npc) {
   if (!npc.isRegistered() || npc.getHitpoints() <= 0) return;
   npc.performAnimation(Common.animation(Common.data.sleepwalkers.absorbAnim));
   const desperate = npc.__nightmareWalker?.desperate;
+  require("./CombatAchievements.Nightmare").sleepwalkerReached(fight, desperate === true);
   if (fight.sleepwalkState && !desperate) fight.sleepwalkState.absorbed++;
   if (desperate) {
     const { desperation } = Common.data.sleepwalkers;
-    for (const player of fight.players()) Common.damage(player, desperation.damage);
+    for (const player of fight.players()) Common.damage(player, desperation.damage, fight);
   }
   fight.at(2, () => npc.isRegistered() && Common.api.removeNpc(npc));
 }

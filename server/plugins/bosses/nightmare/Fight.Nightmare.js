@@ -18,6 +18,7 @@ const Specials = require("./Specials.Nightmare");
 const Totems = require("./Totems.Nightmare");
 const Sleepwalkers = require("./Sleepwalkers.Nightmare");
 const Loot = require("./Loot.Nightmare");
+const CombatAchievements = require("./CombatAchievements.Nightmare");
 
 /** Who she has in her sights: the highest of each player's five defence bonuses, then level (Wiki). */
 function defenceScore(player) {
@@ -392,6 +393,10 @@ class Fight {
     if (this.stage === "dead") return;
     const { kill, npcs } = Common.data;
     this.stage = "dead";
+    if (this.phosani && [...this.minions].some((npc) => npc.isRegistered?.() && npc.getHitpoints() > 0 &&
+        (npc.__nightmareHusk || npc.__nightmareParasite))) {
+      CombatAchievements.crushHourFailed(this);
+    }
     Specials.interrupt(this);
     Sleepwalkers.clear(this);
     this.boss.getCombat().reset?.();
@@ -454,6 +459,7 @@ class Fight {
     }
     const monster = this.phosani ? "Phosani's Nightmare" : "The Nightmare";
     Common.api.emitCustomEvent("combat-achievements:kill", { player, monster, count: kills });
+    CombatAchievements.judge(this, player);
     Common.api.emitCustomEvent("collection-log:count", { player, category: "The Nightmare" });
   }
 
@@ -472,6 +478,7 @@ class Fight {
     this.shield = 0;
     this.boss.moveTo(this.dream.tile(Common.data.arena.centre));
     for (const totem of this.totems) totem.charge = 0;
+    CombatAchievements.reset(this);
   }
 
   // ------------------------------------------------------------------ the dream's doors
@@ -594,8 +601,20 @@ function crushOnMinions(event) {
 function modifyHit({ npc, hit }) {
   const fight = fightOf(npc);
   if (!fight) return;
+  if (fight.phosani && hit.isAccurate?.() && (npc.__nightmareHusk || npc.__nightmareParasite) &&
+      hit.getTotalDamage() < npc.getHitpoints()) {
+    CombatAchievements.crushHourFailed(fight);
+  }
   if (npc === fight.boss) fight.hitBoss(hit);
   else if (Number.isInteger(npc.__nightmareTotem)) Totems.hit(fight, npc, hit);
+}
+
+/** Phosani's perfection task allows damage from husks and weakened parasites. */
+function hitResolved({ attacker, target, hit }) {
+  const fight = fightOf(attacker);
+  if (!fight?.phosani || !target?.isPlayer?.()) return;
+  const allowed = Boolean(attacker.__nightmareHusk || attacker.__nightmareParasite?.weak === true);
+  if (!allowed) CombatAchievements.damageTaken(fight, target.getAsPlayer(), hit?.getTotalDamage?.() ?? 0);
 }
 
 /** Totems are charged only while they're ready; the blast form can't be touched. */
@@ -641,9 +660,10 @@ function attachFight(api) {
   for (const id of minions) api.registerNpcCombatMethodProvider(id, minion);
   api.registerNpcCombatOption("Charge");
   api.onNpcHitModify(modifyHit);
+  api.onCombatHitResolved(hitResolved);
   api.onCombatHitRoll(crushOnMinions);
   api.onCanAttack(canAttack);
   api.onNpcInteraction("Phosani's Nightmare", { Disturb: disturbBody });
 }
 
-module.exports = { attachFight, open, fightOf, disturbBody, shieldFor, Fight };
+module.exports = { attachFight, open, fightOf, disturbBody, shieldFor, hitResolved, Fight };

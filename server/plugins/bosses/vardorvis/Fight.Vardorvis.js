@@ -56,6 +56,8 @@ class Fight {
     this.over = false;
     this.stopped = false;
     this.perfectKill = true;
+    this.axeEnrageTicks = 0;
+    this.leftAxeCentre = false;
   }
 
   /** Only damage actually taken during this fight can spoil its loot bonus. */
@@ -108,6 +110,7 @@ class Fight {
     if (this.stopped) return;
     Axes.process(this);
     if (this.engaged && this.alive()) this.fightTick();
+    CombatAchievements.tick(this);
     this.updateHud();
   }
 

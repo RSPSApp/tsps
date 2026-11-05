@@ -61,7 +61,7 @@ function burst(fight, player, state) {
   player.sendMessage(state.weak ? parasite.burstWeak : parasite.burstFull);
   player.performGraphic(Common.graphic(state.weak ? parasite.vomitWeak : parasite.vomit));
   Common.sounds(player, parasite.burstSounds);
-  Common.damage(player, Common.randomInt(...range));
+  Common.damage(player, Common.randomInt(...range), fight, state.weak);
   const ids = fight.phosani ? npcs.phosani : npcs;
   const id = state.weak ? ids.parasiteWeak : ids.parasite;
   const npc = fight.dream.spawn(id, [...fight.dream.arenaTile(player.getLocation()), Common.data.arena.plane]);

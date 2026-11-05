@@ -163,9 +163,12 @@ function strike(npc, player, style, maxHit, delay, { accurate = false, prayed = 
 }
 
 /** Damage no prayer or armour stops (claws, flowers, a blast, a parasite bursting out). */
-function damage(target, amount) {
+function damage(target, amount, fight = null, allowedForPerfect = false) {
   const { HitDamage, HitMask } = core;
   const value = Math.max(0, Math.floor(amount));
+  if (fight?.phosani && !allowedForPerfect) {
+    require("./CombatAchievements.Nightmare").damageTaken(fight, target, value);
+  }
   target.getCombat().getHitQueue().addPendingDamage([new HitDamage(value, value > 0 ? HitMask.RED : HitMask.BLUE)]);
 }
 

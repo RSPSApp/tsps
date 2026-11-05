@@ -12,8 +12,8 @@
  * - the Roof Exit (Escape / Quick-escape) takes the player down with a fade, 3 ticks after the
  *   click; a teleport, death or logging out ends the copy, and a player logging out on the roof
  *   comes back by the entrance;
- * - weapons: Dusk only takes melee, Dawn only ranged, magic or a halberd's melee; neither can be
- *   hurt while the fight says so (Fight.GrotesqueGuardians.js).
+ * - weapons: Dusk takes melee or Earth spells, Dawn takes ranged, magic or a halberd's melee;
+ *   neither can be hurt while the fight says so (Fight.GrotesqueGuardians.js).
  */
 const Common = require("./Common.GrotesqueGuardians");
 const { Fight } = require("./Fight.GrotesqueGuardians");
@@ -289,7 +289,13 @@ function isHalberd(player) {
   return Boolean(WeaponInterfaces) && player.getWeapon?.() === WeaponInterfaces.HALBERD;
 }
 
-/** Dusk: melee only; Dawn: ranged, magic or a halberd; neither while the fight protects it. */
+function isEarthSpell(spell) {
+  const { CombatSpells } = Common.core;
+  return spell != null && [CombatSpells.EARTH_STRIKE, CombatSpells.EARTH_BOLT, CombatSpells.EARTH_BLAST,
+    CombatSpells.EARTH_WAVE, CombatSpells.EARTH_SURGE].includes(spell);
+}
+
+/** Dusk: melee or Earth spells; Dawn: ranged, magic or a halberd; neither while protected. */
 function guardianHit({ npc, hit }) {
   const dusk = Common.isDusk(npc);
   const dawn = Common.isDawn(npc);
@@ -301,7 +307,8 @@ function guardianHit({ npc, hit }) {
   let blocked = !fight || !fight.vulnerable(npc);
   if (attacker?.isPlayer?.()) {
     const player = attacker.getAsPlayer();
-    if (dusk && type !== CombatType.MELEE) blocked = true;
+    const earthMagic = type === CombatType.MAGIC && isEarthSpell(hit.getSpell?.());
+    if (dusk && type !== CombatType.MELEE && !earthMagic) blocked = true;
     if (dawn && type === CombatType.MELEE && !isHalberd(player)) blocked = true;
   }
   const parts = hit.getHits?.() ?? [];

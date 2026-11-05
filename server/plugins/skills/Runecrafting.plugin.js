@@ -443,13 +443,28 @@ function handleCraftRunes(event) {
   }
 
   const amountPerEssence = runeMultiplier(level, runeData);
-  let craftedEssence = 0;
+  const inventory = player.getInventory();
+  const preview = new pluginApi.core.Inventory(player).setItems(inventory.getCopiedItems());
+  const plan = [];
   for (const essenceId of essenceIds) {
-    // All of one essence at once: a stack (soul shards) frees its slot for the runes as essence does.
-    const count = player.getInventory().getAmount(essenceId);
+    // Simulate each complete input stack in order: its freed slot can hold the runes.
+    const count = preview.getAmount(essenceId);
     if (count <= 0) continue;
-    player.getInventory().deleteNumber(essenceId, count);
-    player.getInventory().addItem(new Item(runeData.runeId, count * amountPerEssence));
+    preview.deleted(essenceId, count, false);
+    const output = new Item(runeData.runeId, count * amountPerEssence);
+    if (preview.getAddableAmount(output) < output.getAmount()) {
+      inventory.full();
+      event.handled = true;
+      return true;
+    }
+    preview.add(output, false);
+    plan.push({ essenceId, count, output });
+  }
+
+  let craftedEssence = 0;
+  for (const { essenceId, count, output } of plan) {
+    inventory.deleteNumber(essenceId, count);
+    inventory.addItem(output);
     craftedEssence += count;
   }
 

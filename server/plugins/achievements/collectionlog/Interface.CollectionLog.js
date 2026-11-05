@@ -86,7 +86,7 @@ function sendTabFlags(player, tab) {
 
 function showCategory(player, tab, category) {
   const sender = player.getPacketSender();
-  sender.sendConfig(Progress.VARP.CATEGORY_COUNT, Progress.categoryCount(player, category));
+  Progress.sendCategoryCounts(player, category);
   sender.sendVarbit(LAST_CATEGORY_VARBIT, category.key);
   player.setAttribute(CATEGORY_ATTRIBUTE, category.key);
   draw(player, tab, category);
@@ -105,7 +105,7 @@ function open(player, categoryName = null) {
   // The floater is an overlay: replacing the main modal must be explicit.
   sender.sendInterfaceRemoval();
   sender.sendVarbit(LAST_TAB_VARBIT, tab.index);
-  sender.sendConfig(Progress.VARP.CATEGORY_COUNT, Progress.categoryCount(player, category));
+  Progress.sendCategoryCounts(player, category);
   sender.sendVarbit(LAST_CATEGORY_VARBIT, category.key);
   sender.sendSubInterface(FLOATER_UID, COLLECTION, OVERLAY);
   sender.sendInterfaceFlagsRange(uid(COLLECTION, BURGER), 10, 12, OP1);
@@ -128,7 +128,7 @@ function selectTab(player, index) {
   player.setAttribute(TAB_ATTRIBUTE, tab.index);
   const category = tab.categories[0];
   const sender = player.getPacketSender();
-  sender.sendConfig(Progress.VARP.CATEGORY_COUNT, Progress.categoryCount(player, category));
+  Progress.sendCategoryCounts(player, category);
   sender.sendVarbit(LAST_CATEGORY_VARBIT, category.key);
   sender.sendVarbit(LAST_TAB_VARBIT, tab.index);
   player.setAttribute(CATEGORY_ATTRIBUTE, category.key);

@@ -147,11 +147,41 @@ test("as captured (Zulrah): the count, the category, the obtained items packed f
   Interface.click({ player, buttonId: (621 << 16) | 11, slot: zulrah.key });
   assert.deepEqual(player.log, [
     "varp 2048=1",
+    "varp 2941=0",
+    "varp 2942=0",
     `varbit 6906=${zulrah.key}`,
     `inv [[0,${ZULRAH_SCALES},109]] of ${Data.load().maxCategorySize}`,
     `script 7797 [0,${(621 << 16) | 10},${(621 << 16) | 11},${(621 << 16) | 12},${(621 << 16) | 13},471,${zulrah.key}]`,
   ]);
   customEvents.delete("collection-log:category-count");
+});
+
+test("raid categories send each cache mode counter before drawing and clear unused counts", () => {
+  const cox = require("../plugins/minigames/cox/Rewards.ChambersOfXeric").collectionLogCount;
+  const toa = require("../plugins/minigames/toa/Raid.TombsOfAmascut").collectionLogCount;
+  customEvents.set("collection-log:category-count", [cox, toa]);
+  try {
+    const player = createPlayer();
+    player.setAttribute("cox:kills", 3);
+    player.setAttribute("cox:challenge-kills", 2);
+    player.setAttribute("toa:completions", { entry: 4, normal: 5, expert: 6 });
+    const check = (category, expected) => {
+      player.log.length = 0;
+      Interface.open(player, category);
+      assert.deepEqual(player.log.filter((line) => /^varp (2048|2941|2942)=/.test(line)), expected);
+      assert.ok(player.log.indexOf(expected[2]) < player.log.findIndex((line) => line.startsWith("script 7797")),
+        "all mode counts reach the cache before it draws");
+    };
+    check("Tombs of Amascut", ["varp 2048=5", "varp 2941=4", "varp 2942=6"]);
+    check("Chambers of Xeric", ["varp 2048=2", "varp 2941=3", "varp 2942=0"]);
+    check("Zulrah", ["varp 2048=0", "varp 2941=0", "varp 2942=0"]);
+    const fresh = createPlayer();
+    Interface.open(fresh, "Tombs of Amascut");
+    assert.deepEqual(fresh.log.filter((line) => /^varp (2048|2941|2942)=/.test(line)),
+      ["varp 2048=0", "varp 2941=0", "varp 2942=0"], "new players start with zero in every mode");
+  } finally {
+    customEvents.delete("collection-log:category-count");
+  }
 });
 
 test("empty latest items are -1 (the overview's script skips them; 0 would be Dwarf remains)", () => {
@@ -164,7 +194,7 @@ test("empty latest items are -1 (the overview's script skips them; 0 would be Dw
 test("as captured: switching tab resets to its first category and enables its rows", () => {
   const player = createPlayer();
   Interface.click({ player, buttonId: (621 << 16) | 7 });
-  assert.deepEqual(player.log.slice(0, 4), ["varp 2048=0", "varbit 6906=0", "varbit 6905=3", "flags 621:27 0-21"]);
+  assert.deepEqual(player.log.slice(0, 6), ["varp 2048=0", "varp 2941=0", "varp 2942=0", "varbit 6906=0", "varbit 6905=3", "flags 621:27 0-21"]);
   assert.equal(player.log.at(-1).startsWith("script 7797 [3,"), true);
 });
 
@@ -391,6 +421,10 @@ test("reward-shop purchases log quantities, but unrelated shops and resold stock
   emit("shop:purchase", { ...purchase, shopName: "General Store" });
   emit("shop:purchase", { ...purchase, originalStock: false });
   assert.equal(Progress.obtained(player, CARPENTERS_BOOTS), 3);
+  emit("shop:purchase", {
+    player, shopName: "Petrified Pete's Ore Shop", itemId: 21697, amount: 1, originalStock: true,
+  });
+  assert.equal(Progress.obtained(player, 21697), 1, "the Volcanic Mine reward shop already credits");
 });
 
 test("every configured reward shop exists in canonical shop data", () => {

@@ -23,6 +23,7 @@ const RADIUS = 32;
 export class MultiLinesPlugin extends Plugin {
     static descriptor: PluginDescriptor = {
         name: "Multi-Lines",
+        enabledByDefault: false,
         description: "Draws the borders of multicombat areas and the Wilderness level lines",
         tags: ["multicombat", "pvp", "wilderness", "overlay", "minimap"],
         configKey: "multiindicatorsplugin",

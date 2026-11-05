@@ -30,6 +30,8 @@ let pluginApi;
 const DRINK_ANIMATION = new Animation(829);
 const DEFAULT_EMPTY_ITEM = ItemIds.VIAL;
 const NO_EMPTY_ITEM = -1;
+/** Barcrawl reward: the guard's automatic vial-smashing toggle (barbarian guard). */
+const AUTO_SMASH_VIALS_VARBIT = 5668;
 const STAMINA_DURATION_MS = 2 * 60 * 1000;
 const DIVINE_DURATION_MS = 5 * 60 * 1000;
 const OVERLOAD_DURATION_MS = 5 * 60 * 1000;
@@ -1373,11 +1375,17 @@ function handlePotionDrink(player, itemId, slot) {
   Sounds.sendSound(player, Sound.DRINK);
 
   const meta = inventory.getItems()[slot]?.getMeta();
-  inventory.setItem(slot, new Item(entry.replacementId, entry.replacementId === NO_EMPTY_ITEM ? 0 : 1, meta)).refreshItems();
+  const smashVial = entry.replacementId === ItemIds.VIAL
+    && entry.replacementId === entry.potion.emptyItemId
+    && player.getPacketSender().getVarbit?.(AUTO_SMASH_VIALS_VARBIT) === 1;
+  const replacement = smashVial ? NO_EMPTY_ITEM : entry.replacementId;
+  inventory.setItem(slot, new Item(replacement, replacement === NO_EMPTY_ITEM ? 0 : 1, meta)).refreshItems();
   entry.potion.effect(player);
 
   if (entry.potion.drink?.messages) {
     for (const message of entry.potion.drink.messages(itemId)) player.sendMessage(message);
+  } else if (smashVial) {
+    player.sendMessage("You quickly smash the empty vial using the trick a Barbarian taught you.");
   } else if (entry.replacementId === entry.potion.emptyItemId) {
     player.sendMessage(entry.potion.area === "chambers-of-xeric"
       ? "You have finished your potion. The gourd vial disintegrates."

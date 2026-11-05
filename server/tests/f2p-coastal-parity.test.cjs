@@ -43,7 +43,11 @@ function register(name, key) {
         getNpcTransformationId: () => transform, setNpcTransformationId: (value) => { transform = value; },
         getArea: () => area, setArea: (value) => { area = value; },
         isPlayer: () => false, isNpc: () => true, getAsNpc: () => npc, getIndex: () => index,
-        getCombat: () => ({ reset() {}, attack() {} }), isRegistered: () => true, forceChat() {}, performAnimation() {}, performGraphic() {},
+        getCombat: () => ({ reset() {}, attack() {} }), isRegistered: () => true, forceChat() {},
+        // what the scene made this actor play, for the tests that care
+        animations: [], graphics: [],
+        performAnimation: (animation) => { npc.animations.push(animation.getId()); },
+        performGraphic: (graphic) => { npc.graphics.push(graphic.id); },
       };
       spawned.push(npc); return npc;
     },
@@ -284,6 +288,22 @@ test('Corsair fire proof uses private scenery and actor, finishes50, and one pla
   assert.equal(q.quest.getStage(p), 6); q.tick(2); assert.ok(p.getPrivateArea()); assert.equal(q.quest.varbitValue(6,p),49);
   q.tick(26); assert.equal(q.quest.getStage(p),7); assert.equal(q.quest.varbitValue(7,p),50); assert.equal(p.getPrivateArea(),null);
   assert.ok(other.getLocation().equals(originalOther)); assert.equal(other.getPrivateArea(),null);
+});
+test('Corsair fire proof: Ithoi puts the fire out with Water Strike, not another spell', () => {
+  // The Wiki's transcript: "Ithoi casts Water Strike, extinguishing the fire, and returns to his hut."
+  // The reporter on #2410 saw a fire spell. Water Strike's own visuals are CombatSpells.WATER_STRIKE's:
+  // cast graphic 93, projectile 94.
+  const q = register('CorsairCurse', 'the_corsair_curse'), p = player(); q.quest.setStage(p, 6);
+  p.attributes.set('corsair-curse:proof-plan', true); p.items.set(590,1); p.moveTo(new core.Location(2532,2837,0));
+  q.call('onItemOnObject', { player: p, itemId: 590, objectId: 31724 });
+  q.tick(2 + 26);
+  const ithoi = q.spawned.find(npc => npc.getId() === core.NpcIdentifiers.ITHOI_THE_NAVIGATOR_2);
+  assert.ok(ithoi, 'Ithoi runs out of the hut');
+  assert.deepEqual(ithoi.animations, [711], 'with the spell-cast animation');
+  assert.deepEqual(ithoi.graphics, [93], 'and the Water Strike cast graphic');
+  const shots = p.packets.filter(row => row[0] === 'sendProjectile');
+  assert.equal(shots.length, 1, 'one spell is sent');
+  assert.equal(shots[0][5], 94, 'and it is the Water Strike projectile');
 });
 test('all five Corsair scenes send the complete captured camera track, exact rates and timed cuts',()=>{
   const q=register('CorsairCurse','the_corsair_curse'),p=player();

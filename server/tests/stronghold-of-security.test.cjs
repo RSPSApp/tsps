@@ -73,7 +73,11 @@ function createPlayer({ x = 2040, y = 5244, combat = 3, free = 28 } = {}) {
     sendMessage: (message) => log.push(message),
     performAnimation: (animation) => log.push(`anim ${animation.getId()}`),
     getMovementQueue: () => ({ reset() {}, setBlockMovement() {} }),
-    getInventory: () => ({ adds: (id, amount) => inventory.push([id, amount]), getFreeSlots: () => free }),
+    getInventory: () => ({
+      adds: (id, amount) => inventory.push([id, amount]),
+      getFreeSlots: () => free,
+      getAddableAmount: (item) => (free > 0 || inventory.some(([id]) => id === item.getId()) ? item.getAmount() : 0),
+    }),
     getSkillManager: () => ({
       getCombatLevel: () => combat,
       getMaxLevel: () => 99,

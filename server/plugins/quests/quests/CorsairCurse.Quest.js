@@ -898,8 +898,9 @@ module.exports = function registerCorsairCurseQuest(api) {
         scene.enter(ithoi); ithoi.forceChat("Arrr... uh-oh!");
         for (const [tick, x, y] of [[1,2530,2833],[2,2532,2833],[3,2532,2835],[4,2532,2836]]) later(scene, tick, () => ithoi.moveTo(new Location(x, y, 0)));
         later(scene, 8, () => {
-          ithoi.forceChat("Arrr!"); ithoi.performAnimation(new Animation(711)); ithoi.performGraphic(new Graphic(120, 92));
-          player.getPacketSender().sendProjectile(ithoi.getLocation(), new Location(2530, 2837, 0), 0, 90, 127, 43, 31, null, 51);
+          ithoi.forceChat("Arrr!"); ithoi.performAnimation(new Animation(711)); ithoi.performGraphic(new Graphic(93, 92));
+          // Water Strike (the Wiki transcript: "Ithoi casts Water Strike"): cast graphic 93, projectile 94, as CombatSpells.WATER_STRIKE.
+          player.getPacketSender().sendProjectile(ithoi.getLocation(), new Location(2530, 2837, 0), 0, 90, 94, 43, 31, null, 51);
           placeDriftwood(player, WET_DRIFTWOOD_OBJECT);
         });
       });

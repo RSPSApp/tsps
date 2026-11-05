@@ -445,29 +445,57 @@ test('stunTicks lasts exactly its ticks; stun in seconds is unchanged', () => {
     assert.deepEqual(shown, ['graphic 348/100', "You've been stunned!", 'graphic 245/124'], 'defaults unchanged; options replace them');
 });
 
-test("a repeat asked for after the outcome is the player's action: walking cancels it, and it checks the place again", (t) => {
+test("a relic's repeat follows the NPC as it wanders: the player walks up to it and tries again, every 2 ticks", (t) => {
     const original = Math.random;
     Math.random = () => 0;
     repeatAgain = true;
     t.after(() => { Math.random = original; repeatAgain = false; });
-    let at = { x: 3200, y: 3200, z: 0 };
-    const place = () => ({ getX: () => at.x, getY: () => at.y, getZ: () => at.z, getDistance: () => 1 });
     const who = player({ level: 1 });
-    who.getLocation = place;
-    const target = { ...npc(), getLocation: () => ({ ...place(), getDistance: () => 1 }) };
+    const walks = [];
+    who.getMovementQueue = () => ({ reset: () => {}, walkToEntity: (entity, runnable) => walks.push({ entity, runnable }) });
+    const target = npc();
+    who.setMobileInteraction(target);
     submitted.length = 0;
+    log.length = 0;
     Thieving._test.pickpocket({ player: who, npc: target, npcId: 0, definition: { getName: () => 'Man' } });
     submitted[0].execute();
+    assert.equal(who.getInteractingMobile(), target, 'it keeps facing the NPC for the next attempt (recs 1104-1106)');
     const repeat = submitted[1];
     assert.ok(repeat, 'the repeat waits a tick');
-    assert.equal(repeat.key, who.getIndex(), "keyed by the player's index, which MovementQueue.walkToReset cancels");
-    // The player walked off before it fired: it checks again and does nothing.
-    at = { x: 3201, y: 3200, z: 0 };
+    assert.equal(repeat.key, who.getIndex(), "keyed by the player's index, which any click (MovementQueue.walkToReset) cancels");
+    // The NPC stepped away meanwhile: no same-tile check, the player walks to it.
+    repeat.execute();
+    assert.equal(walks.length, 1);
+    assert.equal(walks[0].entity, target, 'walks to the NPC wherever it is now');
     log.length = 0;
     submitted.length = 0;
-    repeat.execute();
-    assert.deepEqual(log, [], 'no new pickpocket from the old place');
+    walks[0].runnable();
+    assert.deepEqual(log, ["spam: You attempt to pick the man's pocket."], 'tries again on arrival');
+    assert.equal(submitted.length, 1, 'and its outcome follows a tick later');
+    // The pouch limit ends the chain with its message.
+    submitted[0].execute();
+    const limit = player({ level: 1, inventory: { [DATA.targets.find((x) => x.key === 'man').coinPouch.id]: 28 } });
+    log.length = 0;
+    submitted.length = 0;
+    Thieving._test.pickpocket({ player: limit, npc: target, npcId: 0, definition: { getName: () => 'Man' }, repeat: true });
+    assert.deepEqual(log, ['You need to empty your coin pouches before you can continue pickpocketing.']);
     assert.equal(submitted.length, 0);
+});
+
+test("a click between a relic's attempt and its outcome ends the chain: no repeat pulls the player back", (t) => {
+    const original = Math.random;
+    Math.random = () => 0;
+    repeatAgain = true;
+    t.after(() => { Math.random = original; repeatAgain = false; });
+    const who = player({ level: 1 });
+    const target = npc();
+    who.setMobileInteraction(target);
+    submitted.length = 0;
+    Thieving._test.pickpocket({ player: who, npc: target, npcId: 0, definition: { getName: () => 'Man' } });
+    // Walk clicked meanwhile: walkToReset cancels the player's keyed tasks and clears the interaction.
+    who.setMobileInteraction(null);
+    submitted[0].execute();
+    assert.equal(submitted.length, 1, 'the pending attempt resolves, but no repeat is scheduled');
 });
 
 test('names as the rsprox captures show them: the Master Farmer, Martin, the H.A.M. man and woman, the Menaphite, the Bandit', (t) => {

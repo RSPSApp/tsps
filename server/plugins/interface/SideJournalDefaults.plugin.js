@@ -246,6 +246,6 @@ module.exports = {
     api.onInterfaceActionButton(ACCOUNT_SUMMARY_ENTRY_LIST_UID, nativeSummaryClicked);
 
     api.log("registered");
-    attachSummary(api);
+    attachSummary.persistCombatXpChoice(api);
   },
 };

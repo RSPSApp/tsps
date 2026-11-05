@@ -7,6 +7,8 @@ const Estate = require("./Estate.Construction");
 const House = require("./House.Construction");
 const Menu = require("./Menu.Construction");
 
+const VARROCK_ESTATE_AGENT = { x: 3240, y: 3476, z: 0 };
+const VARROCK_FANCY_STONE_TASK = "have-the-varrock-estate-agent-decorate-your-hous";
 const KOUREND_VISITED_VARBIT = Ids.varbit("zeah_playerhasvisited");
 const VARLAMORE_VISITED_VARBIT = Ids.varbit("varlamore_visited");
 const SONG_OF_THE_ELVES_VARBIT = Ids.varbit("sote");
@@ -210,6 +212,19 @@ function changeHouse(event, kind, index) {
     lines.push({ npc: "Your house has been redecorated." });
   }
   saveHouse(player);
+  if (kind === "style" && choice.name === "Fancy stone" && event.npc?.getLocation) {
+    const agent = event.npc.getLocation();
+    if (agent.getZ() === VARROCK_ESTATE_AGENT.z
+      && Math.abs(agent.getX() - VARROCK_ESTATE_AGENT.x) <= 4
+      && Math.abs(agent.getY() - VARROCK_ESTATE_AGENT.y) <= 4) {
+      api.emitCustomEvent("diary:task", { player, diary: "varrock", task: VARROCK_FANCY_STONE_TASK });
+    }
+  }
+  if (kind === "style") {
+    api.emitCustomEvent("construction:house-redecorated", {
+      player, style: choice.name, npc: event.npc, location: event.npc?.getLocation?.(),
+    });
+  }
   const chain = new DialogueChainBuilder();
   lines.forEach((line, step) => chain.add(line.npc ? new NpcDialogue(step, event.npcId, line.npc) : new StatementDialogue(step, line.statement)));
   chain.add(new EndDialogue(lines.length));

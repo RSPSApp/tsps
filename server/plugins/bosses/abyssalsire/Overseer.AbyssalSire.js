@@ -185,6 +185,12 @@ function harvested(player) {
 function present(player) {
   const { overseer } = Common.data;
   if (lore(player) === LORE.GIVEN && !player.getAttribute(Common.BLUDGEON_GIVEN_ATTRIBUTE)) {
+    // He holds the components, so with no room he keeps the weapon for the next talk. Our wording.
+    if (player.getInventory().getAddableAmount(new Common.core.Item(overseer.bludgeon, 1)) < 1) {
+      player.sendMessage("You don't have enough inventory space.");
+      player.getPacketSender().sendInterfaceRemoval();
+      return;
+    }
     player.setAttribute(Common.BLUDGEON_GIVEN_ATTRIBUTE, true);
     player.getInventory().adds(overseer.bludgeon, 1);
   }

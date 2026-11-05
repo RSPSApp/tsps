@@ -105,7 +105,7 @@ function process(fight) {
       const under = here.getX() >= body.minX && here.getX() <= body.maxX && here.getY() >= body.minY && here.getY() <= body.maxY;
       if (!set.tiles.has(`${x},${y}`) && !under) continue;
       const amount = fight.phosani ? Common.randomInt(...claws.phosaniHit) : Common.randomInt(Math.ceil(claws.maxHit * 0.6), claws.maxHit);
-      Common.damage(player, amount);
+      Common.damage(player, amount, fight);
     }
   }
 }

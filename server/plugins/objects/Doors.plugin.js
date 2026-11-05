@@ -25,7 +25,7 @@ const DOOR_AUTO_CLOSE_TICKS = 500;
 // the open ids are not closed+1). Same trick works for NPCs/items via C.getNpc / C.getItem.
 const DOOR_NAMES = new Set([
   "Door", "Doors", "Large door", "Large doors", "Castle door", "Cell Door", "Cell door",
-  "Glass door", "Magic door", "Metal door", "Mind Door", "Mithril door", "Tent door", "Wall",
+  "Glass door", "Magic door", "Magic guild door", "Metal door", "Mind Door", "Mithril door", "Tent door", "Wall",
   "Gate", "Metal gate", "Doorway", "Tree Door", "Storeroom Door", "Ardougne Wall Door",
   "Vitur door", "Myrmel door", "Shadum door", "Jovkai door", "Chained door", "Trapdoor",
   "Longhall door", "Prison door", "Arena Entrance", "Arena Exit",
@@ -71,7 +71,9 @@ function defineDoorData({ ObjectIdentifiers: O }) {
   // door whose same-model "Close" locs (5245, 11617, 15205, 17115) all belong to other doors.
   // GATE_52 (Gnome Ball pitch and Tree Gnome Village): its same-model open variants (193, 2395)
   // are nameless with no actions and are never placed, so the pairing below cannot find them.
-  SELF_OPENING_DOOR_IDS = new Set([O.DOOR_223, O.DOOR_225, O.DOOR_226, O.DOOR_227, O.DOOR_228, O.DOOR_229, O.DOOR_230, O.DOOR_231, O.DOOR_358, O.GATE_52, O.WALL_9, O.DOOR_115, O.LARGE_DOOR_23,
+  SELF_OPENING_DOOR_IDS = new Set([O.DOOR_223, O.DOOR_225, O.DOOR_226, O.DOOR_227, O.DOOR_228, O.DOOR_229, O.DOOR_230, O.DOOR_231,
+    O.DOOR_283, // Ardougne Castle's lockpick door has no separate open loc in the cache.
+    O.DOOR_287, O.DOOR_358, O.GATE_52, O.WALL_9, O.DOOR_115, O.LARGE_DOOR_23,
     // The Blood Moon Rises crank-wheel house exit (61824) has no cache Close partner.
     O.DOOR_831,
     // The Vitur food-shop door (61838) also has no cache Close partner.
@@ -146,7 +148,9 @@ function defineDoorData({ ObjectIdentifiers: O }) {
   // turned a quarter, instead of stepping onto the next tile. buildDoorCatalog adds every door
   // whose cache name ends in "_reverse"; these are the others. Jatizso's city gates (rsprox 75:
   // 21403/21405 at 2413,3797 face 3 open as 21404/21406 face 2/0 on the same tiles).
-  OWN_TILE_DOOR_IDS = new Set([O.GATE_155, O.GATE_157]);
+  // Yanille's south entrance door has blocked floor immediately west of the doorway, so its
+  // map-backed open pose turns on the closed tile instead of swinging into that wall.
+  OWN_TILE_DOOR_IDS = new Set([O.GATE_155, O.GATE_157, O.DOOR_287]);
 
   // Tree Gnome Stronghold main gate: one 5x2 loc (190, face 2) opens into two
   // nameless 2x2 leaves (191/192), leaving the centre tile clear.

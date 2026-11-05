@@ -88,6 +88,7 @@ function empty({ player, slot }) {
         refilling.add(player);
         player.performAnimation(core.Animation.DEFAULT_RESET_ANIMATION);
         player.moveTo(destination);
+        Common.api.emitCustomEvent("ectophial:arrived", { player });
         Common.spam(player, "...and the world changes around you.");
       } else if (tick === KNEEL_TICK) {
         kneel(player, true);

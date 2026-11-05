@@ -40,6 +40,9 @@ const CURRENCY_OVERRIDES = {
 const EXCLUDED = new Set([
   "Void Knights' Reward Options (! colspan)",
   "Void Knights' Reward Options (! rowspan)",
+  // A historical Bounty Hunter page: its Emblem Trader IDs already open the
+  // current Bounty Hunter shops, and its "Points" currency is not a live one.
+  "Bounty Hunter Shop (historical)",
 ]);
 
 // Wiki shops a tsps plugin serves instead, so shops.json must not carry them.
@@ -53,6 +56,8 @@ const REPLACED_BY_PLUGIN = {
   // currencies held as raid/quest state, not in shops.json.
   "Alliance Supplies": "the Fractured Archive Quartermaster (omnishop row tfa_midraid_supplies_shop)",
   "Theatre of Blood Supplies": "the Theatre of Blood supply chests (interface 405, enums 1952/1953)",
+  // The Friendly Forester's shop is the Forestry plugin's Omnishop, not a shops.json row.
+  "Forestry Shop": "the Friendly Forester's Omnishop (Forestry)",
   "Useful Supplies": "The Blood Moon Rises Castle Drakan chest (omnishop row 16873)",
 };
 
@@ -77,6 +82,10 @@ const UNBOUND = new Set([
 // NPC bindings that differ from the Wiki's shop owners: { optionSlot: [ids] }
 // to add, [ids] to drop from every slot.
 const NPC_OVERRIDES = {
+  // The shared "Farming Supplies" shop page has no single owner ("owner = No"),
+  // so the exporter cannot bind the gardeners. These are the cache-verified
+  // gardener NPCs whose fifth option is Trade.
+  "Farming Supplies": { add: { 5: [310, 2663, 2664, 2665, 2666, 2667, 2669, 2670, 2671, 2672, 2673, 2674, 2675, 2676, 2677, 2678, 2679, 2680, 2681, 2682, 2683, 2684, 2685, 2686, 2687, 2688, 2689, 6814, 6921, 7754, 7755, 7756, 7758, 8533, 8534, 8535, 8536, 8537, 8629, 9138, 11957, 12766, 12936, 14030, 14514, 14515, 14516, 15064, 15065] } },
   // Felix's Trade opens the Guardians of the Rift Omnishop; only the Temple of
   // the Eye quest copies of him keep this shop.
   "Temple Supplies": { remove: [11404] },

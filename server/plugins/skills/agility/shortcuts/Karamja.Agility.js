@@ -1,5 +1,5 @@
 const { Anim } = require("../Constants.Agility");
-const { hops } = require("./Builders.Agility");
+const { hops, between, ShortcutAnim } = require("./Builders.Agility");
 
 /** Karamja shortcut scripts (agility-shortcuts.json). */
 module.exports = {
@@ -29,6 +29,24 @@ module.exports = {
       },
     };
   },
+
+  /**
+   * The Strong Tree's grapple across the two channels between Musa Point (north) and the
+   * Harpie bug swarms (south). The tree sits on the island between them, so the player
+   * grapples to the island, walks across it, then grapples again. The pair is chosen by
+   * which side of the tree the player is on.
+   */
+  karamjaStrongTree: ({ islandY, north, south }) => between({
+    ends: (context) => (context.pos.y >= islandY ? north : south),
+    cross: (from, to, context) => [
+      { face: [context.obj.x, context.obj.y] },
+      { anim: ShortcutAnim.FIRE_GRAPPLE },
+      { gfx: ShortcutAnim.GRAPPLE_GRAPHIC },
+      { wait: 6 },
+      { anim: -1 },
+      { tele: to },
+    ],
+  }),
 
   /** Karamja: the vines between the north and south of the island. */
   karamjaVines: ({ splitY, north, south }) => ({

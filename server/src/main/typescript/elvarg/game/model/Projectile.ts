@@ -1,4 +1,5 @@
 import { Location } from "./Location";
+import { CrossFloor } from "../CrossFloor";
 import { World } from '../World';
 import { Mobile } from "../entity/impl/Mobile";
 import { PrivateArea } from "./areas/impl/PrivateArea";
@@ -68,7 +69,11 @@ export class Projectile {
      * cross a boss's whole range as fast as it crosses one tile, which reads as teleporting.
      */
     public static arrivalCycles(from: Mobile | Location, to: Mobile | Location, delay: number = 40, perTile: number = 10): number {
-        return delay + Projectile.locationOf(from).getDistance(Projectile.locationOf(to)) * perTile;
+        return delay + Projectile.flightDistance(
+            Projectile.locationOf(from),
+            Projectile.locationOf(to),
+            typeof (to as Mobile)?.getLocation === "function" ? to as Mobile : undefined,
+        ) * perTile;
     }
 
     /**
@@ -93,6 +98,21 @@ export class Projectile {
      * sendProjectile: launched at 51 and landing at 46 + 10 per tile.
      */
     public static readonly LEGACY_MAGIC_END_BASE = 46;
+
+    /**
+     * Horizontal tiles a projectile flies to the nearest tile of the target, ignoring floor delta.
+     * The end point is the target's centre tile (rsprox: magic projectiles land against a large target's
+     * nearest tile, not its south-west corner).
+     */
+    public static flightDistance(start: Location, end: Location, victim?: Mobile | null): number {
+        const size = Math.max(1, victim?.getSize?.() ?? 1);
+        const offset = (size - 1) >> 1;
+        const west = end.getX() - offset;
+        const south = end.getY() - offset;
+        const dx = Math.max(0, west - start.getX(), start.getX() - (west + size - 1));
+        const dy = Math.max(0, south - start.getY(), start.getY() - (south + size - 1));
+        return Math.max(dx, dy);
+    }
 
     private static locationOf(at: Mobile | Location): Location {
         return at instanceof Location ? at : Projectile.centreOf(at);
@@ -163,7 +183,7 @@ export class Projectile {
             this.startHeight === 43 &&
             this.endHeight === 31
         ) {
-            const distance = this.start.getDistance(this.end);
+            const distance = Projectile.flightDistance(this.start, this.end, this.lockon);
             resolvedDelay = 51;
             resolvedSpeed = Projectile.LEGACY_MAGIC_END_BASE + distance * 10;
         }
@@ -185,14 +205,14 @@ export class Projectile {
             const viewer = sameArea ? player.getLocation() : BoatManager.rootLocation(player);
             // Seen as far as NPCs are: an area that widens that shows their projectiles too.
             const range = Math.max(15, player.getNpcViewDistance?.() ?? 15);
-            if (!this.start.isViewableFromWithin(viewer, range)) {
+            if (!CrossFloor.projectileVisible(viewer, this.start, range)) {
                 skippedView++;
                 return;
             }
             if (
                 this.lockon &&
                 typeof this.lockon.getLocation === "function" &&
-                !(sameArea ? this.lockon.getLocation() : BoatManager.rootLocation(this.lockon)).isViewableFromWithin(viewer, range)
+                !CrossFloor.projectileVisible(viewer, sameArea ? this.lockon.getLocation() : BoatManager.rootLocation(this.lockon), range)
             ) {
                 skippedTargetView++;
                 return;

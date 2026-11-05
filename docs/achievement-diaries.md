@@ -107,7 +107,7 @@ Script 56 reads started and complete; script 2200 reads count, the total and rew
 **The claim conversations** come from each NPC's Wiki transcript, stored per tier in the data file. Claiming works like this:
 - **Which tier:** the lowest finished, unclaimed tier, as long as every lower tier is finished. Otherwise Talk-to plays the NPC's transcript as before.
 - **Skill requirement:** Ardougne's elite reward needs 91 Smithing, per its transcript.
-- **Reclaiming:** the transcript's "<NPC> gives you another …" line gives another copy of the highest claimed tier's item. Players can claim multiple copies from diary taskmasters, as noted in [Jagex's 24 March 2016 update](https://oldschool.runescape.wiki/w/Update:White_%26_Black_Graceful).
+- **Reclaiming:** the transcript's "<NPC> gives you another …" line hands back the highest claimed tier's item only while the player owns none of it in the inventory, worn or bank. Otherwise the NPC says "You don't need another … right now."
 
 ## Lamps and the xpreward interface
 

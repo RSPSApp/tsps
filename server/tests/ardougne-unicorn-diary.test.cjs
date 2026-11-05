@@ -28,6 +28,7 @@ before(async () => {
   FairyRings.register({
     core: game,
     persistAttribute() {},
+    onCanAttack() {},
     onObjectInteraction() {},
     onInterfaceActionClick() {},
     onCustomEvent() {},

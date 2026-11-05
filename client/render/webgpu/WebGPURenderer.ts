@@ -158,6 +158,7 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
     private readonly sceneBuilds = new Map<AbortController, { current: () => boolean; mapId?: number }>();
 
     private skyColor = new Float32Array([0, 0, 0]);
+    private skyColorOverride = false;
     private sceneHslOverride = new Float32Array([-1, -1, -1, 0]);
     private cameraPosUni = new Float32Array(2);
     readonly playerPosUni = new Float32Array(2);
@@ -832,7 +833,21 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
         this.ui?.registerMinimapData(mapData);
     }
 
+    clearSkyColorOverride(): void {
+        this.skyColorOverride = false;
+    }
+
+    setSkyColor(r: number, g: number, b: number, explicit = false): void {
+        const unchanged = [r, g, b].every((value, i) => Math.round(value) === Math.round(this.skyColor[i] * 255));
+        if (unchanged && !explicit) return;
+        this.skyColorOverride = true;
+        this.skyColor[0] = r / 255;
+        this.skyColor[1] = g / 255;
+        this.skyColor[2] = b / 255;
+    }
+
     private updateSkyColor(deltaFrames: number = 1): void {
+        if (this.skyColorOverride) return;
         const playerX = this.playerPosUni[0];
         const playerZ = this.playerPosUni[1];
         // In an instance, the region its template chunk was copied from (environmentAt).

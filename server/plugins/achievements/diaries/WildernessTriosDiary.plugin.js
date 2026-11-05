@@ -67,6 +67,7 @@ function rewarded({ player, npc, npcId }) {
     return;
   }
   write(player, state);
+  Progress.notifyTaskProgress(player, BY_KEY.get(DIARY), TRIOS[boss.trio].task);
 }
 
 /** Any task newly completed in this diary, a trio's own included, resets both trios. */

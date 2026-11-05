@@ -17,17 +17,21 @@
  * The crafting/door/Nazastarool progress lives in the persisted
  * "quest.shilo_village.mechanisms" bits:
  *   bit 0 read crumpled scroll, bit 1 found the bone lock, bit 2 table wood
- *   used, bits 7-8 bones placed, bits 9-11 Nazastarool form defeated.
+ *   used, bit 3 searched the palm trees, bits 7-8 bones placed, bits 9-11
+ *   Nazastarool form defeated.
+ *
+ * Rashiliyia's tomb doors are the cache's multilocs 34657 and 34673, on varbit 8180:
+ * 0 jungle plants, 1 carved doors, 2 hillside entrance. Captures 1444 and 1590 show 2 at login.
  *
  * Source: LostCityRS/Content scripts/quests/quest_zombiequeen (pinned in #196).
- * Gaps: no world object hot-swapping (rope on the fissure, opened doors) and no
+ * Gaps: no world object hot-swapping for opened doors and no
  * raft/waterfall/cave-in cinematic - the waterfall exit and Bervirius crawl
  * teleport straight to the next tile; Shilo's roaming undead and Rashiliyia's
  * timed summon are only spawned by the transcript's own action markers; the
  * locating crystal's leading "missing" export step aborts that transcript, so
  * its glow tiers are sent directly and the always-draw option is not offered;
- * reading the scrolls/notes plays their messages but the nested reference pages
- * are not opened; Trufitus is shared with Jungle Potion, so once this quest has
+ * the scrolls and notes show their text in the message scroll interface, which is
+ * inferred, as no capture shows them; Trufitus is shared with Jungle Potion, so once this quest has
  * started the plugin plays his Shilo variant itself from a Talk-to interaction
  * instead of relying on selector registration order; the requirements condition
  * only checks combat level.
@@ -37,9 +41,14 @@ module.exports = function registerShiloVillageQuest(api) {
     Skill,
     Equipment,
     Location,
+    GameObject,
+    ObjectManager,
     ItemIdentifiers,
     NpcIdentifiers,
     ObjectIdentifiers,
+    TaskManager,
+    CountdownTask,
+    CacheDefinitions,
   } = api.core;
   const { registerQuest, startTranscript, refreshQuestList } = require("../QuestRuntime");
 
@@ -104,7 +113,9 @@ module.exports = function registerShiloVillageQuest(api) {
   ]);
 
   const MOUND_OF_EARTH = ObjectIdentifiers.MOUND_OF_EARTH; // 2217
-  const FISSURE_IDS = new Set([ObjectIdentifiers.FISSURE, ObjectIdentifiers.FISSURE_2]); // 2218, 2219
+  const FISSURE = ObjectIdentifiers.FISSURE; // 2218
+  const ROPE_FISSURE = ObjectIdentifiers.FISSURE_2; // 2219
+  const FISSURE_IDS = new Set([FISSURE, ROPE_FISSURE]);
   const CAVE_IN = ObjectIdentifiers.CAVE_IN; // 2220
   const STRANGE_LOOKING_STONE = ObjectIdentifiers.STRANGE_LOOKING_STONE; // 2221
   const LOOSE_ROCKS = ObjectIdentifiers.LOOSE_ROCKS; // 2222
@@ -136,6 +147,18 @@ module.exports = function registerShiloVillageQuest(api) {
     ObjectIdentifiers.ANCIENT_METAL_GATE_2,
   ]); // 2255, 2256
   const TOMB_DOLMEN_RASHILIYIA = ObjectIdentifiers.TOMB_DOLMEN_2; // 2258
+  const HIDDEN_TOMB_DOOR_LOCS = new Set([34657, 34673]);
+  const VARBIT_TOMB_DOORS = 8180;
+  const TOMB_DOORS_HIDDEN = 0;
+  const TOMB_DOORS_CLOSED = 1;
+  const TOMB_DOORS_OPEN = 2;
+  const TOMB_ROCKS = ObjectIdentifiers.ROCKS_3; // 2257
+  /** Rashiliyia's tomb only: other "Rocks" may share the id. */
+  const TOMB_ROCKS_AREA = { minX: 2925, maxX: 2932, minY: 9509, maxY: 9517 };
+  /** The two tiles the cache's placements leave open at either end of the rocks. */
+  const ABOVE_TOMB_ROCKS_TILE = { x: 2929, y: 9515, z: 0 };
+  const BELOW_TOMB_ROCKS_TILE = { x: 2928, y: 9511, z: 0 };
+  const TOMB_ROCKS_MIDDLE_Y = 9512;
 
   const START_HOOK = "quest:shilo-village:start";
   const ACTION_RECEIVE_WAMPUM = "10Zz1R";
@@ -145,6 +168,11 @@ module.exports = function registerShiloVillageQuest(api) {
   const ACTION_SPAWN_UNDEAD = "vNDeU9";
   const ACTION_GATE_UNDEAD = "UTuQLV";
   const ACTION_COMPLETE = "l7zrz_";
+  const REFERENCE_READ_TATTERED = "WH07P-";
+  const REFERENCE_READ_CRUMPLED = "n7hNYR";
+  const REFERENCE_READ_NOTES_YELLOW = "7aG-WD";
+  const REFERENCE_READ_NOTES_WHITE = "0uSJB3";
+  const REFERENCE_READ_NOTES_ORANGE = "i8hwtu";
   const ACTION_NAZASTAROOL_SPAWN_1 = "KPnwZH";
   const ACTION_NAZASTAROOL_CONTINUES_1 = "1sBGNX";
   const ACTION_NAZASTAROOL_SPAWN_2 = "dKXOjT";
@@ -164,11 +192,17 @@ module.exports = function registerShiloVillageQuest(api) {
   const MECH_READ_CRUMPLED = 1 << 0;
   const MECH_FOUND_BONE_DOOR = 1 << 1;
   const MECH_USED_TABLE_WOOD = 1 << 2;
+  const MECH_SEARCHED_PALM = 1 << 3;
   const MECH_DEFEATED_1 = 1 << 9;
   const MECH_DEFEATED_2 = 1 << 10;
   const MECH_DEFEATED_3 = 1 << 11;
   const BONES_SHIFT = 7;
   const BONES_MASK = 0x3;
+
+  /** The cache places the 3x3 Mound of earth at 2921,2999 shape 10, rotation 0. */
+  const MOUND_TILE = { x: 2921, y: 2999, z: 0 };
+  const MOUND_TYPE = 10;
+  const MOUND_FACE = 0;
 
   /** Tomb of Rashiliyia surface centre (LostCity 0_45_48_36_20). */
   const TOMB_CENTER = { x: 2916, y: 3092 };
@@ -197,9 +231,43 @@ module.exports = function registerShiloVillageQuest(api) {
     [RASHILIYIA_CORPSE, "visiting-the-tomb-of-rashiliyia-using-rashiliyias-remains-on-trufitus"],
   ]);
 
+  /** The Wiki's transcripts; the wrapping and the choice of interface are ours. */
+  const SCROLLS = new Map([
+    [REFERENCE_READ_TATTERED, {
+      text: "Bervirius, son of King Danthalas, was killed in battle. His devout mother Rashiliyia was so heartbroken "
+        + "that she swore fealty to Zamorak if he would return her son to her. Bervirius returned as an undead "
+        + "creature and terrorized the King and Queen. Many guards died fighting the undead Bervirius. Eventually "
+        + "the undead Bervirius was set on fire and soon only the bones remained. His remains were taken far to the "
+        + "South, and then towards the setting sun to a tomb that is surrounded by and level with the sea. This is "
+        + "the only way to contain the spirits of witches and the undead.",
+    }],
+    [REFERENCE_READ_CRUMPLED, {
+      text: "Rashiliyia's rage went unchecked. She killed without mercy for revenge of her son's life. Like a spectre "
+        + "through the night she entered houses and one by one quietly strangled life from the occupants. It is said "
+        + "only a handful survived, protected by the necklace wards to keep the Witch Queen at bay.",
+    }],
+    [REFERENCE_READ_NOTES_YELLOW, {
+      text: "...and rest like your mother who is silent in the peace of her tomb far to the North of Ah Za Rhoon. Near "
+        + "the sea, and under the hills deep in the underground to watch all nature from the darkness of her final "
+        + "resting place.",
+    }],
+    [REFERENCE_READ_NOTES_WHITE, {
+      text: "...Rashiliyia did so love objects of beauty. Her tomb was adorned with crystals that glowed brightly when "
+        + "near to each other.",
+    }],
+    [REFERENCE_READ_NOTES_ORANGE, {
+      text: "...the sphere is activated when power of a spiritual nature is expended upon it, this can be very draining "
+        + "on the body...",
+    }],
+  ]);
+  const SCROLL_INTERFACE = "messagescroll"; // 220
+  const SCROLL_LINES = 15;
+  const SCROLL_LINE_WIDTH = 55;
+
   let quest;
   const nazastaroolByPlayer = new Map();
   const nazNarration = new Map();
+  const pendingLightByPlayer = new Map();
 
   const held = (player, itemId, amount = 1) => player.getInventory().getAmount(itemId) >= amount;
   const give = (player, itemId, amount = 1) => player.getInventory().adds(itemId, amount);
@@ -242,6 +310,7 @@ module.exports = function registerShiloVillageQuest(api) {
   }
 
   function scene(player, npcId, variant) {
+    pendingLightByPlayer.delete(player);
     startTranscript(api, player, npcId, PAGE, variant);
   }
 
@@ -270,6 +339,62 @@ module.exports = function registerShiloVillageQuest(api) {
 
   function teleport(player, tile) {
     player.moveTo(new Location(tile.x, tile.y, tile.z));
+  }
+
+  function ownedMoundObject(player) {
+    return ObjectManager.objectsAt(new Location(MOUND_TILE.x, MOUND_TILE.y, MOUND_TILE.z))
+      .find((object) => object.getOwner?.() === player && (object.getId() === FISSURE || object.getId() === ROPE_FISSURE));
+  }
+
+  function tombDoorState(player) {
+    if (quest.getStage(player) >= STAGE_UNLOCKED_RASHILIYIA_TOMB) return TOMB_DOORS_OPEN;
+    // A save from before the doors could be seen, which got as far as their lock, has searched.
+    return mechTest(player, MECH_SEARCHED_PALM) || mechTest(player, MECH_FOUND_BONE_DOOR)
+      ? TOMB_DOORS_CLOSED
+      : TOMB_DOORS_HIDDEN;
+  }
+
+  function syncTombDoors(player) {
+    player.getPacketSender().sendVarbit(VARBIT_TOMB_DOORS, tombDoorState(player));
+  }
+
+  function openScroll(player, { text }) {
+    const lines = [];
+    let line = "";
+    for (const word of text.split(" ")) {
+      if (line && line.length + 1 + word.length > SCROLL_LINE_WIDTH) {
+        lines.push(line);
+        line = word;
+      } else {
+        line = line ? `${line} ${word}` : word;
+      }
+    }
+    lines.push(line);
+    const sender = player.getPacketSender();
+    sender.sendInterface(CacheDefinitions.getInterfaceId(SCROLL_INTERFACE));
+    for (let index = 0; index < SCROLL_LINES; index++) {
+      sender.sendString(lines[index] ?? "", CacheDefinitions.getComponentId(`${SCROLL_INTERFACE}:messcroll${index + 1}`));
+    }
+  }
+
+  /** The saved stage decides which fissure (or none) this player sees after login. */
+  function ensureMoundObject(player) {
+    if (!player || !quest) return;
+    const stage = quest.getStage(player);
+    if (stage < STAGE_DUG_MOUND) return;
+    const wanted = stage >= STAGE_ROPED_MOUND ? ROPE_FISSURE : FISSURE;
+    const existing = ownedMoundObject(player);
+    if (existing?.getId() === wanted) return;
+    if (existing) ObjectManager.deregister(existing, true);
+    ObjectManager.register(
+      new GameObject(wanted, new Location(MOUND_TILE.x, MOUND_TILE.y, MOUND_TILE.z), MOUND_TYPE, MOUND_FACE, null).setOwner(player),
+      true
+    );
+  }
+
+  function clearMoundObject(player) {
+    const existing = ownedMoundObject(player);
+    if (existing) ObjectManager.deregister(existing, true);
   }
 
   function buildJournal(player, questHandle) {
@@ -426,6 +551,7 @@ module.exports = function registerShiloVillageQuest(api) {
    */
   function handleTrufitusTalk(event) {
     const { player } = event;
+    pendingLightByPlayer.delete(player);
     if (quest.getStage(player) < STAGE_STARTED) return false;
     event.handled = true;
     scene(player, TRUFITUS, trufitusVariant(player));
@@ -436,6 +562,7 @@ module.exports = function registerShiloVillageQuest(api) {
     const npcId = event.npcId ?? event.target?.getId?.();
     if (npcId !== TRUFITUS) return;
     const { player, itemId } = event;
+    pendingLightByPlayer.delete(player);
     event.handled = true;
     let variant = TRUFITUS_ITEM_VARIANTS.get(itemId);
     if (!variant && LOCATING_CRYSTAL_IDS.has(itemId)) {
@@ -519,7 +646,6 @@ module.exports = function registerShiloVillageQuest(api) {
     }
     if (option.includes("read") && itemId === CRUMPLED_SCROLL) {
       event.handled = true;
-      mechSet(player, MECH_READ_CRUMPLED, true);
       scene(player, TRUFITUS, "visiting-ah-za-rhoon-read-crumpled-scroll");
       return;
     }
@@ -653,7 +779,20 @@ module.exports = function registerShiloVillageQuest(api) {
     }
     if (objectId === PALM_TREE) {
       event.handled = true;
+      mechSet(player, MECH_SEARCHED_PALM, true);
+      syncTombDoors(player);
       scene(player, TRUFITUS, "visiting-the-tomb-of-rashiliyia-search-palm-tree");
+      return;
+    }
+    if (HIDDEN_TOMB_DOOR_LOCS.has(objectId)) {
+      event.handled = true;
+      if (tombDoorState(player) === TOMB_DOORS_OPEN) teleport(player, RASHILIYIA_TOMB_TILE);
+      else if (tombDoorState(player) === TOMB_DOORS_CLOSED) handleCarvedDoors(player, clickType);
+      return;
+    }
+    if (objectId === TOMB_ROCKS && inTombRocks(event.location)) {
+      event.handled = true;
+      climbTombRocks(player);
       return;
     }
     if (CARVED_DOORS_IDS.has(objectId)) {
@@ -791,6 +930,29 @@ module.exports = function registerShiloVillageQuest(api) {
     scene(player, TRUFITUS, "visiting-the-tomb-of-rashiliyia-search-carved-doors");
   }
 
+  function inTombRocks(location) {
+    return location && location.x >= TOMB_ROCKS_AREA.minX && location.x <= TOMB_ROCKS_AREA.maxX
+      && location.y >= TOMB_ROCKS_AREA.minY && location.y <= TOMB_ROCKS_AREA.maxY;
+  }
+
+  /**
+   * Wiki: without the Beads of the Dead "you will be unable to continue". The refusal's wording is ours,
+   * and not needing them once the quest is complete is inferred. The way down's lines are the transcript's;
+   * it has none for the way up.
+   */
+  function climbTombRocks(player) {
+    if (player.getLocation().getY() > TOMB_ROCKS_MIDDLE_Y) {
+      if (!quest.isComplete(player) && !wearingBeads(player)) {
+        player.sendMessage("You can't bring yourself to climb down there without some protection.");
+        return;
+      }
+      teleport(player, BELOW_TOMB_ROCKS_TILE);
+      scene(player, TRUFITUS, "visiting-the-tomb-of-rashiliyia-climb-rocks");
+      return;
+    }
+    teleport(player, ABOVE_TOMB_ROCKS_TILE);
+  }
+
   function handleTombExit(player, clickType) {
     if (clickType === 2) {
       scene(player, TRUFITUS, "visiting-the-tomb-of-rashiliyia-search-tomb-exit");
@@ -876,7 +1038,7 @@ module.exports = function registerShiloVillageQuest(api) {
 
   function handleItemOnObject(event) {
     const { player, itemId, objectId } = event;
-    if (itemId === SPADE && objectId === MOUND_OF_EARTH) {
+    if (itemId === SPADE && (objectId === MOUND_OF_EARTH || FISSURE_IDS.has(objectId))) {
       event.handled = true;
       digMound(player);
       return;
@@ -896,9 +1058,12 @@ module.exports = function registerShiloVillageQuest(api) {
       cutPlaque(player);
       return;
     }
-    if (itemId === BONE_KEY && CARVED_DOORS_IDS.has(objectId)) {
+    if (itemId === BONE_KEY && (CARVED_DOORS_IDS.has(objectId) || HIDDEN_TOMB_DOOR_LOCS.has(objectId))) {
+      const state = tombDoorState(player);
+      if (HIDDEN_TOMB_DOOR_LOCS.has(objectId) && state === TOMB_DOORS_HIDDEN) return;
       event.handled = true;
-      unlockCarvedDoors(player);
+      if (state === TOMB_DOORS_OPEN) teleport(player, RASHILIYIA_TOMB_TILE);
+      else unlockCarvedDoors(player);
       return;
     }
     if (itemId === BONE_KEY && TOMB_EXIT_IDS.has(objectId)) {
@@ -924,6 +1089,7 @@ module.exports = function registerShiloVillageQuest(api) {
       return;
     }
     advance(player, STAGE_DUG_MOUND);
+    ensureMoundObject(player);
     scene(player, TRUFITUS, "visiting-ah-za-rhoon-use-spade-on-mound-of-earth");
   }
 
@@ -932,11 +1098,11 @@ module.exports = function registerShiloVillageQuest(api) {
       player.sendMessage("You have already seen inside the fissure.");
       return;
     }
-    take(player, itemId);
-    advance(player, STAGE_LIT_MOUND);
+    if (quest.getStage(player) !== STAGE_DUG_MOUND || ownedMoundObject(player)?.getId() !== FISSURE) return;
     scene(player, TRUFITUS, itemId === ItemIdentifiers.LIT_BLACK_CANDLE
       ? "visiting-ah-za-rhoon-use-lit-black-candle-on-fissure"
       : "visiting-ah-za-rhoon-use-lit-candle-on-fissure");
+    pendingLightByPlayer.set(player, itemId);
   }
 
   function ropeFissure(player) {
@@ -951,6 +1117,7 @@ module.exports = function registerShiloVillageQuest(api) {
     }
     take(player, ROPE);
     advance(player, STAGE_ROPED_MOUND);
+    ensureMoundObject(player);
     scene(player, TRUFITUS, "visiting-ah-za-rhoon-use-rope-on-fissure");
   }
 
@@ -966,6 +1133,7 @@ module.exports = function registerShiloVillageQuest(api) {
   function unlockCarvedDoors(player) {
     mechSet(player, MECH_FOUND_BONE_DOOR, true);
     advance(player, STAGE_UNLOCKED_RASHILIYIA_TOMB);
+    syncTombDoors(player);
     scene(player, TRUFITUS, "visiting-the-tomb-of-rashiliyia-use-bone-key-on-carved-doors");
   }
 
@@ -1074,6 +1242,14 @@ module.exports = function registerShiloVillageQuest(api) {
       event.handled = true;
       return;
     }
+    if (SCROLLS.has(stepId)) {
+      if (stepId === REFERENCE_READ_CRUMPLED) mechSet(player, MECH_READ_CRUMPLED, true);
+      event.handled = true;
+      event.end = true;
+      // After the dialogue's own close, which would shut it too.
+      TaskManager.submit(new CountdownTask(player, 1, () => openScroll(player, SCROLLS.get(stepId))));
+      return;
+    }
     if (stepId === ACTION_COMPLETE) {
       if (!quest.isComplete(player)) {
         take(player, RASHILIYIA_CORPSE);
@@ -1103,6 +1279,18 @@ module.exports = function registerShiloVillageQuest(api) {
     const { player } = event;
     if (!player || event.npcId !== TRUFITUS) return;
     const option = String(event.option ?? "");
+    const pendingLight = pendingLightByPlayer.get(player);
+    if (pendingLight !== undefined) {
+      pendingLightByPlayer.delete(player);
+      if (option === "Yes"
+        && quest.getStage(player) === STAGE_DUG_MOUND
+        && ownedMoundObject(player)?.getId() === FISSURE
+        && held(player, pendingLight)) {
+        take(player, pendingLight);
+        advance(player, STAGE_LIT_MOUND);
+      }
+      return;
+    }
     if (option.includes("I can think of nothing nicer")) {
       if (agilityLevel(player) < 32) {
         player.sendMessage("You need an Agility level of at least 32 to squeeze in there.");
@@ -1155,13 +1343,23 @@ module.exports = function registerShiloVillageQuest(api) {
   }
 
   function handleLogout({ player }) {
-    if (player) clearNazastarool(player);
+    if (!player) return;
+    clearNazastarool(player);
+    pendingLightByPlayer.delete(player);
+    clearMoundObject(player);
   }
 
   function handleLogin({ player }) {
     if (!player) return;
     clearNazastarool(player);
+    pendingLightByPlayer.delete(player);
+    ensureMoundObject(player);
     refreshQuestList(player);
+  }
+
+  /** A closed chatbox cancels the pending light confirmation. */
+  function handleInterfaceClose({ player } = {}) {
+    if (player) pendingLightByPlayer.delete(player);
   }
 
   api.persistAttribute(MECH_ATTRIBUTE);
@@ -1188,6 +1386,7 @@ module.exports = function registerShiloVillageQuest(api) {
   api.onCustomEvent("npc-dialogue:condition", handleCondition);
   api.onCustomEvent("npc-dialogue:line", handleNazastaroolLine);
   api.onCustomEvent("npc-dialogue:choice", handleChoice);
+  api.onCustomEvent("interface:close", handleInterfaceClose);
   api.onItemOnNpc(handleItemOnNpc);
   api.onItemOnItem(handleItemOnItem);
   api.onItemAction(handleItemAction);
@@ -1196,4 +1395,6 @@ module.exports = function registerShiloVillageQuest(api) {
   api.onNpcDeath(handleNpcDeath);
   api.onPlayerLogout(handleLogout);
   api.onPlayerLogin(handleLogin);
+  // After the login bootstrap, which clobbers shared varps; 8180 shares 1785 with My Arm's quest.
+  api.onCustomEvent("player:bootstrap-complete", ({ player }) => syncTombDoors(player));
 };

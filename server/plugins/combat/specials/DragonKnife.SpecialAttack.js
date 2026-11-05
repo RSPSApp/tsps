@@ -1,5 +1,5 @@
 module.exports = function registerDragonKnifeSpecialAttack(api) {
-  const { Animation, CombatFactory, CombatSpecial, Equipment, ItemIdentifiers, PendingHit, Projectile, RangedCombatMethod, Sound, Sounds, WeaponProfiles } = api.core;
+  const { Animation, CombatFactory, CombatPosition, CombatSpecial, Equipment, ItemIdentifiers, PendingHit, Projectile, RangedCombatMethod, Sound, Sounds } = api.core;
 
   const DRAIN = 25;
   const SPECIAL_AMMO_COST = 2;
@@ -8,8 +8,7 @@ module.exports = function registerDragonKnifeSpecialAttack(api) {
 
   class DragonKnifeCombatMethod extends RangedCombatMethod {
     hits(character, target) {
-      const distance = character.getLocation().getDistance(target.getLocation());
-      const hitDelay = WeaponProfiles.hitDelays(character.getAsPlayer(), distance)[0];
+      const hitDelay = RangedCombatMethod.playerHitDelays(character, target, CombatPosition.projectileDistance(character, target))[0];
       return [
         new PendingHit(character, target, this, hitDelay),
         new PendingHit(character, target, this, hitDelay),

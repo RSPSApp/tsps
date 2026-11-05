@@ -181,6 +181,7 @@ function land(run) {
     npc, phase: 0, forced: "spear", last: null, second: false, specialCooldown: 0,
     crystals: [], laserCooldown: LASER.minCooldown, enragedSandIn: SAND.enragedEvery, grapple: null,
     maxHitUntil: -1, triple: null,
+    achievements: { onlyAllowedWeapons: true, ran: false, perfectFootwork: true },
   };
   say(run.solFight, line(PHASES[0].variant));
   run.stage = "wave";
@@ -202,7 +203,12 @@ function removeSeat(run) {
 
 function hurtIfOn(run, tiles, max) {
   const at = tileOf(run.player);
-  if (tiles.some((tile) => sameTile(tile, at))) run.hurt(randomInclusive(1, max + Effects.maxHitBonus(run)), "RED", true);
+  if (tiles.some((tile) => sameTile(tile, at))) hurtBySolAttack(run, randomInclusive(1, max + Effects.maxHitBonus(run)));
+}
+
+function hurtBySolAttack(run, amount) {
+  if (amount > 0 && run.solFight?.achievements) run.solFight.achievements.perfectFootwork = false;
+  run.hurt(amount, "RED", true);
 }
 
 function smoke(run, tiles, delay) {
@@ -252,7 +258,7 @@ function triple(run, fight) {
     }
     Shared.later(run, at, () => {
       if (run.stage !== "wave" || fight.npc.getHitpoints() <= 0) return;
-      if (state.early || !praying()) run.hurt(damage[index] + Effects.maxHitBonus(run), "RED", true);
+      if (state.early || !praying()) hurtBySolAttack(run, damage[index] + Effects.maxHitBonus(run));
     });
   });
   fight.last = null;
@@ -288,7 +294,7 @@ function resolveGrapple(run, fight) {
   const item = player.getEquipment?.().getItems?.()[grip.slot];
   const worn = item && item.getId() >= 0;
   const name = worn ? item.getDefinition?.()?.getName?.() ?? grip.part : grip.part;
-  run.hurt(randomInclusive(GRAPPLE.minDamage, GRAPPLE.maxDamage) + Effects.maxHitBonus(run), "RED", true);
+  hurtBySolAttack(run, randomInclusive(GRAPPLE.minDamage, GRAPPLE.maxDamage) + Effects.maxHitBonus(run));
   player.sendMessage(`Sol Heredit grabs hold of your ${name} and deals massive damage!`);
   if (worn) tearOff(player, grip.slot);
 }

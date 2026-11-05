@@ -249,7 +249,7 @@ function checkCharges(api, { player, item }) {
 
 function createMethod(api) {
   const core = api.core;
-  const { PendingHit, RangedCombatMethod, WeaponProfiles } = core;
+  const { PendingHit, RangedCombatMethod } = core;
   return new (class TonalzticsOfRalosCombatMethod extends RangedCombatMethod {
     start(character, target) {
       if (character.isPlayer()) {
@@ -271,8 +271,8 @@ function createMethod(api) {
     hits(character, target) {
       const player = character.getAsPlayer();
       const charged = isShotCharged(api, player);
-      const distance = character.getLocation().getDistance(target.getLocation());
-      const hitDelay = WeaponProfiles.hitDelays(player, distance)[0];
+      const distance = api.core.CombatPosition.projectileDistance(character, target);
+      const hitDelay = api.core.RangedCombatMethod.playerHitDelays(character, target, distance)[0];
       return [new PendingHit(character, target, this, { delay: hitDelay, hitAmount: charged ? 2 : 1 })];
     }
   })();

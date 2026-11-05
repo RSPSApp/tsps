@@ -2,7 +2,7 @@
 
 const { randomUUID } = require("node:crypto");
 const Data = require("./Data.BeginnerTreasureTrails");
-const { TIERS, completedAttribute } = require("../trails/Tiers.TreasureTrails");
+const { TIERS, completedAttribute, sharedCompletedCount } = require("../trails/Tiers.TreasureTrails");
 const TRAIL_META = "treasure-trails:beginner";
 const COMPLETED_ATTRIBUTE = completedAttribute({ name: "beginner" });
 const COUNT_VARBIT_NAME = "collection_clues_beginner_completed";
@@ -245,8 +245,7 @@ function restore({ player }) {
 function categoryCount(request) {
   // This saved-count query must also work on free worlds, where members trails do not load.
   if (request.category === "Shared Treasure Trail Rewards") {
-    const beginner = Number(request.player.getAttribute(COMPLETED_ATTRIBUTE)) || 0;
-    request.count = TIERS.reduce((sum, tier) => sum + (Number(request.player.getAttribute(completedAttribute(tier))) || 0), beginner);
+    request.count = sharedCompletedCount(request.player);
     return;
   }
   if (request.category === CATEGORY_NAME) request.count = Number(request.player.getAttribute(COMPLETED_ATTRIBUTE)) || 0;

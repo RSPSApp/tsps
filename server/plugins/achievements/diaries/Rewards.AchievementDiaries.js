@@ -52,9 +52,17 @@ function claimedHighestTier(player, diary) {
   return [...TIERS].reverse().find((tier) => claimed.has(tier)) ?? null;
 }
 
+/** Another copy is handed back only while the player owns none in the inventory, worn or bank. */
+function owns(player, itemId) {
+  const searchTab = pluginApi?.core?.Bank?.BANK_SEARCH_TAB_INDEX;
+  return player.getInventory().contains(itemId)
+    || (player.getEquipment?.().contains?.(itemId) ?? false)
+    || (player.getBanks?.() ?? []).some((bank, tab) => tab !== searchTab && bank?.contains?.(itemId));
+}
+
 function giveAnotherCloak(player, diary) {
   const tier = claimedHighestTier(player, diary);
-  if (!tier) {
+  if (!tier || owns(player, diary.tiers[tier].rewardItems[0])) {
     player.sendMessage(`You don't need another ${diary.itemNoun} right now.`);
     return false;
   }
@@ -97,7 +105,7 @@ function talkTo(event) {
   return true;
 }
 
-/** "<NPC> gives you another ...": another copy of the highest claimed tier's item. */
+/** "<NPC> gives you another ...": the highest claimed tier's item, when none is owned. */
 function reclaim(action) {
   if (action.kind !== "message" || !/gives you (another|some more)/i.test(String(action.text ?? ""))) return;
   const diary = BY_NPC.get(action.definition?.getName?.());
@@ -116,4 +124,4 @@ module.exports = function attachRewards(api) {
   api.onCustomEvent("npc-dialogue:action", reclaim);
 };
 
-Object.assign(module.exports, { claimableTier, talkTo, reclaim });
+Object.assign(module.exports, { claimableTier, talkTo, reclaim, owns });

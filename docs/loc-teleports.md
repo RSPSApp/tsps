@@ -27,7 +27,7 @@ The capture index lists every loc option that moved the player, per loc and clic
 python3 rsprox_index.py loc-teleports --out loc-teleports.json
 ```
 
-Per loc: the destinations (and the tile the player clicked from, for locs used from either side), the tick of the move, the player's animation, sounds, whether the screen faded, the messages of attempts that didn't move anyone, a dialogue choice on the way, and labels for instances, boats, agility shortcuts and Leagues or event worlds. Ticks count from the player arriving at the loc.
+Per loc: the destinations (and the tile the player clicked from, for locs used from either side), the tick of the move, the player's animation, sounds (the first one that is not a fight's: `ignoreSounds` in `loc-teleport-sync.json` lists the attack, hit, block and weapon sounds the sync skips, as a monster fighting nearby is the first thing a capture hears), whether the screen faded, the messages of attempts that didn't move anyone, a dialogue choice on the way, and labels for instances, boats, agility shortcuts and Leagues or event worlds. Ticks count from the player arriving at the loc.
 
 ## The sync
 

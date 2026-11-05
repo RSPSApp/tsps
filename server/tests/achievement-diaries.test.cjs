@@ -6,6 +6,7 @@ const path = require("node:path");
 const { Server } = require("../dist/Server");
 Server.installProductionPathResolver();
 
+const { PlayerSave } = require("../dist/game/entity/impl/player/persistence/PlayerSave");
 const QuestRuntime = require("../plugins/quests/QuestRuntime");
 const Diaries = require("../plugins/achievements/AchievementDiaries.plugin");
 const Data = require("../plugins/achievements/diaries/Data.AchievementDiaries");
@@ -13,10 +14,15 @@ const Progress = require("../plugins/achievements/diaries/Progress.AchievementDi
 const Journal = require("../plugins/achievements/diaries/Journal.AchievementDiaries");
 const Rewards = require("../plugins/achievements/diaries/Rewards.AchievementDiaries");
 const Lamps = require("../plugins/achievements/diaries/Lamps.AchievementDiaries");
+const KourendDiary = require("../plugins/achievements/diaries/KourendKebosDiary.plugin");
 const CAPTURED = require("./fixtures/achievement-diary-journals.json").journals;
 
 const tasks = [];
 const xpRewards = [];
+const saveEvents = [];
+const tierCompleteEvents = [];
+const acceptedTasks = [];
+const customHandlers = new Map();
 const SKILLS = ["Attack", "Smithing"].map((name) => ({ getName: () => name }));
 Diaries.register(new Proxy({
   core: {
@@ -29,8 +35,20 @@ Diaries.register(new Proxy({
     Bank: require("../dist/game/model/container/impl/Bank").Bank,
   },
   getTaskManager: () => ({ submit: (task) => { task.setRunning(true); tasks.push(task); } }),
-  emitCustomEvent: (name, request) => { if (name === "xpreward:open") xpRewards.push(request); },
+  emitCustomEvent: (name, request) => {
+    if (name === "xpreward:open") xpRewards.push(request);
+    if (name === "persistence:save") saveEvents.push(request);
+    if (name === "diary:tier-complete") tierCompleteEvents.push(request);
+    for (const handler of customHandlers.get(name) ?? []) handler(request);
+  },
+  onCustomEvent: (name, handler) => {
+    const handlers = customHandlers.get(name) ?? [];
+    handlers.push(handler);
+    customHandlers.set(name, handlers);
+  },
+  persistAttribute: (...args) => PlayerSave.persistAttribute(...args),
 }, { get: (target, key) => target[key] ?? (() => {}) }));
+customHandlers.set("diary:task-completed", [event => acceptedTasks.push(event)]);
 
 const dialogues = [];
 let deferDialogue = false;
@@ -177,6 +195,98 @@ test("tier notices keep their delay and varbit without replacing dialogue or sur
   assert.equal(claimed.log.some((line) => line === "varbit 4458=1"), true, "the delayed completion varbit still arrives");
   assert.equal(claimed.log.some((line) => line.startsWith("mesbox")), false, "a claimed tier has no stale notice");
   activeDialogue = false;
+});
+
+test("accepted task events report new progress once and preserve player and diary identity", async () => {
+  const ardougne = createPlayer();
+  const start = acceptedTasks.length;
+  const task = ARDOUGNE.tiers.elite.tasks[0].key;
+  const results = await Promise.all(Array.from({ length: 12 }, () => Promise.resolve().then(
+    () => Progress.completeTask(ardougne, ARDOUGNE, task),
+  )));
+  assert.equal(results.filter(Boolean).length, 1, "only one request wins the task");
+  assert.equal(Progress.completeTask(ardougne, ARDOUGNE, "not-a-diary-task"), false, "unknown tasks are denied");
+  assert.equal(Progress.completeTask(ardougne, ARDOUGNE, task), false, "a duplicate request is denied");
+  assert.deepEqual(acceptedTasks.slice(start).map(({ player, diary, task: acceptedTask, tier }) => [
+    player, diary, acceptedTask, tier,
+  ]), [[ardougne, "ardougne", task, "elite"]]);
+
+  const falador = createPlayer();
+  const faladorDiary = Data.BY_KEY.get("falador");
+  const faladorTask = faladorDiary.tiers.easy.tasks[0].key;
+  Progress.completeTask(falador, faladorDiary, faladorTask);
+  assert.equal(Progress.doneTasks(ardougne, faladorDiary).has(faladorTask), false, "players do not share progress");
+  assert.equal(Progress.doneTasks(falador, ARDOUGNE).has(task), false, "diaries do not share progress");
+  assert.equal(acceptedTasks.at(-1).player, falador);
+  assert.equal(acceptedTasks.at(-1).diary, "falador");
+
+  const serialized = JSON.parse(JSON.stringify(ardougne.getAttribute(Progress.TASKS_ATTRIBUTE)));
+  const reloaded = createPlayer();
+  reloaded.setAttribute(Progress.TASKS_ATTRIBUTE, serialized);
+  assert.equal(Progress.doneTasks(reloaded, ARDOUGNE).has(task), true, "accepted progress survives attribute serialization");
+  assert.equal(acceptedTasks.length, start + 2, "denied and duplicate requests do not create progress events");
+});
+
+test("a synchronous accepted-progress listener cannot double-count tier completion", () => {
+  const player = createPlayer();
+  const easy = ARDOUGNE.tiers.easy.tasks;
+  for (const task of easy.slice(0, -2)) Progress.completeTask(player, ARDOUGNE, task.key);
+  player.log.length = 0;
+  tasks.length = 0;
+  saveEvents.length = 0;
+  tierCompleteEvents.length = 0;
+  const before = acceptedTasks.length;
+  const lastTask = easy.at(-1).key;
+  const triggerTask = easy.at(-2).key;
+  const nestedCompletion = ({ player: current, task }) => {
+    if (current === player && task === triggerTask) Progress.completeTask(player, ARDOUGNE, lastTask);
+  };
+  const handlers = customHandlers.get("diary:task-completed");
+  handlers.push(nestedCompletion);
+
+  try {
+    Progress.completeTask(player, ARDOUGNE, triggerTask);
+  } finally {
+    handlers.splice(handlers.indexOf(nestedCompletion), 1);
+  }
+
+  const countVarbit = ARDOUGNE.tiers.easy.countVarbit;
+  assert.deepEqual(player.log.filter((line) => line.startsWith(`varbit ${countVarbit}=`)), [
+    `varbit ${countVarbit}=9`, `varbit ${countVarbit}=10`,
+  ]);
+  assert.equal(player.log.filter((line) => line.includes("You have completed an easy task")).length, 2);
+  assert.equal(saveEvents.filter(({ reason }) => reason === "diary-tier-completion").length, 1);
+  assert.equal(tasks.length, 1, "only one congratulations task is scheduled");
+  assert.deepEqual(acceptedTasks.slice(before).map(({ task }) => task), [triggerTask, lastTask]);
+
+  for (let tick = 0; tick < 3; tick++) tasks[0].tick();
+  assert.equal(player.log.filter((line) => line.startsWith("mesbox")).length, 1);
+  assert.equal(player.log.filter((line) => line === `varbit ${ARDOUGNE.tiers.easy.completeVarbit}=1`).length, 1);
+  assert.equal(tierCompleteEvents.length, 1);
+});
+
+test("accepted diary progress survives a PlayerSave logout and reload", () => {
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const core = PluginManager.getCoreApi();
+  const makePlayer = (username) => {
+    const player = new Player(null, new core.Location(3200, 3200, 0));
+    player.setUsername(username);
+    player.setRegistered(true);
+    player.getSession = () => ({ sendClientPacket: () => true, write() {} });
+    player.sendMessage = () => {};
+    return player;
+  };
+  const player = makePlayer("diary-save-roundtrip");
+  const task = ARDOUGNE.tiers.elite.tasks[0].key;
+  assert.equal(Progress.completeTask(player, ARDOUGNE, task), true);
+  const save = PlayerSave.fromPlayer(player);
+  PluginManager.emitPlayerLogout({ player, username: player.getUsername() });
+  const reloaded = makePlayer("diary-save-roundtrip");
+  save.applyToPlayer(reloaded);
+  Progress.restore({ player: reloaded });
+  PluginManager.emitPlayerLogin({ player: reloaded, username: reloaded.getUsername(), isNewAccount: false });
+  assert.equal(Progress.doneTasks(reloaded, ARDOUGNE).has(task), true);
 });
 
 test("is-started and has-task answer for a diary task query", () => {
@@ -341,8 +451,17 @@ test("claiming rechecks space at the reward step and reclaims another highest-ti
   Rewards.reclaim(action);
   assert.equal(action.handled, true);
   assert.deepEqual(player.inventory, [13122], "the highest claimed tier's cloak");
+  player.log.length = 0;
   Rewards.reclaim({ ...action });
-  assert.deepEqual(player.inventory, [13122, 13122], "another cloak is available while one is owned");
+  assert.deepEqual(player.inventory, [13122], "not while one is owned");
+  assert.deepEqual(player.log, ["You don't need another Ardougne cloak right now."]);
+
+  const lowerOwned = createPlayer();
+  Progress.claimTier(lowerOwned, ARDOUGNE, "easy");
+  Progress.claimTier(lowerOwned, ARDOUGNE, "medium");
+  lowerOwned.inventory.push(13121);
+  Rewards.reclaim({ ...action, player: lowerOwned });
+  assert.deepEqual(lowerOwned.inventory, [13121, 13122], "owning a lower tier's copy does not block the highest tier's");
 
   const tiered = createPlayer();
   Progress.claimTier(tiered, ARDOUGNE, "easy");
@@ -350,7 +469,7 @@ test("claiming rechecks space at the reward step and reclaims another highest-ti
   tiered.getEquipment = () => ({ contains: (id) => id === 13122 });
   tiered.getBanks = () => [{ contains: (id) => id === 13122 }];
   Rewards.reclaim({ ...action, player: tiered });
-  assert.deepEqual(tiered.inventory, [13122], "worn and banked copies do not block reclaim");
+  assert.deepEqual(tiered.inventory, [], "worn and banked copies block reclaim");
 });
 
 test("lamps: the xpreward interface, offering skills at the lamp's level, and the Wiki's experience", () => {
@@ -423,6 +542,7 @@ test('diary tasks follow successful native gameplay actions', async t => {
   Diaries.register(api);
   require('../plugins/skills/Thieving.plugin').register(api);
   require('../plugins/skills/Runecrafting.plugin').register(api);
+  KourendDiary.register(api);
   t.mock.method(Math, 'random', () => 0);
   let index = 1000;
   t.after(() => { for (const npc of npcs) core.World.getNpcs().remove(npc); core.World.getRemoveNPCQueue().splice(0); });
@@ -458,6 +578,19 @@ test('diary tasks follow successful native gameplay actions', async t => {
     assert.equal(observed.at(-1).kind, 'stall');
     assert.equal(completed(player, 'varrock', TEA), true);
     assert.equal(player.getPacketSender().getVarbit(6319), 1);
+  });
+
+  await t.test('a Hosidius Fruit Stall theft credits the Kourend easy task, the castle stall does not', () => {
+    for (const [x, y, counts] of [[1767, 3597, true], [1633, 3662, false]]) {
+      const player = actor(x - 1, y);
+      const object = new core.GameObject(28823, new core.Location(x, y, 0), 10, 1, null);
+      assert.equal(object.getDefinition().getName(), 'Fruit Stall');
+      assert.equal(PluginManager.emitObjectInteraction({ player, object, objectId: object.getId(), location: { x, y, z: 0 }, clickType: 2, handled: false }), true);
+      assert.equal(completed(player, 'kourend', 'steal-from-a-hosidius-food-stall'), false);
+      advance();
+      assert.equal(completed(player, 'kourend', 'steal-from-a-hosidius-food-stall'), counts);
+      assert.equal(player.getPacketSender().getVarbit(7933), counts ? 1 : 0);
+    }
   });
 
   await t.test('both Man and Woman count on every Lumbridge castle floor', () => {

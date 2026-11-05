@@ -382,7 +382,7 @@ function createTraversalAssist(api, options = {}) {
       if (!initialized) {
         schedulePersistentIndexInitialization(INIT_RETRY_BACKOFF_MS);
       }
-    }, normalizedDelay);
+    }, normalizedDelay).unref?.();
   }
 
   function ensureRegionsLoaded(regionIds) {

@@ -130,7 +130,15 @@ function announceTierComplete(player, diary, tier, generation) {
   ));
 }
 
-/** Marks a task done; false when it already was (or is unknown). */
+/** Emits progress only for a valid, unfinished task after its owner changes task state. */
+function notifyTaskProgress(player, diary, taskKey) {
+  if (!api || typeof player?.getAttribute !== "function" || player.isRegistered?.() !== true
+    || !tierOfTask(diary, taskKey) || doneTasks(player, diary).has(taskKey)) return false;
+  api.emitCustomEvent("diary:task-progressed", { player, diary: diary.key, task: taskKey });
+  return true;
+}
+
+/** Returns false for unknown or completed tasks; emits `diary:task-completed` after normal updates. */
 function completeTask(player, diary, taskKey) {
   const tier = tierOfTask(diary, taskKey);
   if (!tier) return false;
@@ -151,6 +159,7 @@ function completeTask(player, diary, taskKey) {
       execute() { this.stop(); announceTierComplete(player, diary, tier, generation); }
     })());
   }
+  api.emitCustomEvent("diary:task-completed", { player, diary: diary.key, task: taskKey, tier });
   return true;
 }
 
@@ -182,5 +191,5 @@ module.exports = function attachProgress(pluginApi) {
 
 Object.assign(module.exports, {
   TASKS_ATTRIBUTE, REWARDS_ATTRIBUTE, doneTasks, claimedTiers, tierCount, isTierComplete, isStarted,
-  completeTask, claimTier, resetTiers, restore, sendDiary, tierGeneration,
+  notifyTaskProgress, completeTask, claimTier, resetTiers, restore, sendDiary, tierGeneration,
 });

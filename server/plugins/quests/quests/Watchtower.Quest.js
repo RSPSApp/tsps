@@ -509,6 +509,16 @@ module.exports = function registerWatchtowerQuest(api) {
     ];
   }
 
+  function hasReadSpellScroll(player) {
+    return quest.getStage(player) >= STAGE_READ_SCROLL;
+  }
+
+  function canCastWatchtowerTeleport(event) {
+    if (event.spellName?.trim().toLowerCase() !== "watchtower teleport" || hasReadSpellScroll(event.player)) return;
+    event.allow = false;
+    event.player?.sendMessage?.("You need to read the Watchtower spell scroll before casting this spell.");
+  }
+
   function grantReward(player) {
     player.getSkillManager().addExperiences(Skill.MAGIC, 15250);
     player.getInventory().adds(COINS, 5000);
@@ -843,10 +853,10 @@ module.exports = function registerWatchtowerQuest(api) {
     }
 
     if (value.includes("if the player has read the spell scroll")) {
-      return quest.getStage(player) >= STAGE_READ_SCROLL;
+      return hasReadSpellScroll(player);
     }
     if (value.includes("if the player has not read the spell scroll")) {
-      return quest.getStage(player) < STAGE_READ_SCROLL;
+      return !hasReadSpellScroll(player);
     }
     if (value.includes("if the player lost the spell scroll")) {
       return !has(SPELL_SCROLL) && !bank(SPELL_SCROLL);
@@ -1738,6 +1748,7 @@ module.exports = function registerWatchtowerQuest(api) {
 
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
+  api.onCanTeleport(canCastWatchtowerTeleport);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onCustomEvent("npc-dialogue:condition", handleCondition);

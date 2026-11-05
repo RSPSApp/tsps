@@ -251,6 +251,7 @@ function keep(player, state) {
   state.saved = [...player.getAppearance().getLook()];
   const message = APPLIED_MESSAGES[state.type];
   if (message) player.sendMessage(message);
+  api.emitCustomEvent("makeover:applied", { player, type: state.type });
 }
 
 /** makeover:select ("Apply"): keep the preview, stay open. */

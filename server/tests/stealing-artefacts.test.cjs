@@ -20,7 +20,8 @@ const ARTEFACTS = [
 ];
 const KHALED = core.NpcIdentifiers.CAPTAIN_KHALED;
 const T = StealingArtefacts._test;
-T.bind({ core });
+const events = [];
+T.bind({ core, emitCustomEvent: (name, event) => events.push({ name, event }) });
 
 function player({ thieving = 99, items = {}, attributes = {} } = {}) {
   const attrs = new Map(Object.entries(attributes));
@@ -110,6 +111,7 @@ test("the rolls: 1/5 artefact, six houses, 500-1,000 coins", () => {
 });
 
 test("handing the artefact in pays 500-1,000 coins and 40 x level exactly once", () => {
+  events.length = 0;
   const p = player({ thieving: 60 });
   T.assignTask(p, T.HOUSES[0]);
   T.giveArtefact(p, ARTEFACTS[3]);
@@ -122,6 +124,8 @@ test("handing the artefact in pays 500-1,000 coins and 40 x level exactly once",
   assert.equal(artefactsHeld(p), 0);
   assert.equal(T.taskOf(p), null);
   assert.equal(T.failedOf(p), false);
+  assert.deepEqual(events.map((entry) => entry.name), ["stealing-artefacts:handed-in"]);
+  assert.equal(events[0].event.coins, 500);
 
   assert.equal(T.handIn(p, () => 0), 0, "nothing left to hand in");
   assert.equal(p.inventory.get(995), 500);

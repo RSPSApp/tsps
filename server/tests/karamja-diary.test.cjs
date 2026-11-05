@@ -10,6 +10,7 @@ const Diaries = require("../plugins/achievements/AchievementDiaries.plugin");
 const DiaryData = require("../plugins/achievements/diaries/Data.AchievementDiaries");
 const Progress = require("../plugins/achievements/diaries/Progress.AchievementDiaries");
 const KaramjaDiary = require("../plugins/achievements/diaries/KaramjaDiary.plugin");
+const EliteTaskProgress = require("../plugins/achievements/diaries/ArdougneEliteTaskProgress.plugin");
 
 let core;
 let emit;
@@ -34,6 +35,7 @@ before(async () => {
   }, { get: (target, key) => key in target ? target[key] : () => {} });
   Progress(api);
   api.onCustomEvent("diary:task", Diaries._test.onTask);
+  EliteTaskProgress.register(api);
   KaramjaDiary.register(api);
   PluginManager.emitCustomEvent = emit;
 });
@@ -75,6 +77,24 @@ test("five plantation bananas count; other banana trees do not", () => {
   const apeTree = { getLocation: () => new core.Location(2700, 2700, 0) };
   for (let i = 0; i < 5; i++) emit("banana-tree:picked", { player: ape, object: apeTree });
   assert.equal(done(ape).has(T.BANANA_TASK), false);
+});
+
+test("a validated unfinished banana count interrupts Ardougne Elite progress", () => {
+  const [x, y] = at(T.BANANA_PLANTATION);
+  const player = playerAt(x, y);
+  const task = EliteTaskProgress._test.MANTA_TASK;
+  emit(EliteTaskProgress._test.STAGE_EVENT, { player, task, stage: "caught" });
+  const query = () => {
+    const request = { player, task };
+    emit(EliteTaskProgress._test.QUERY_EVENT, request);
+    return request.result;
+  };
+  assert.deepEqual(query(), { stage: "caught" });
+
+  emit("banana-tree:picked", { player, object: { getLocation: () => new core.Location(x, y, 0) } });
+  assert.equal(player.getAttribute("karamja-diary:bananas-picked"), 1);
+  assert.equal(done(player).has(T.BANANA_TASK), false);
+  assert.equal(query(), null);
 });
 
 test("five Karamja seaweed pickups count; another item or island does not", () => {
@@ -173,10 +193,10 @@ test("Horseshoe mine antivenom, Mor Ul Rek cape, graahk and Shilo Slayer master"
   assert.ok(done(hunter).has("trap-a-horned-graahk"));
 
   const slayer = playerAt(3000, 3000);
-  emit("slayer:assignment", { player: slayer, master: "Duradel" });
+  emit("slayer:task-assigned", { player: slayer, master: 5 });
   assert.ok(done(slayer).has("be-assigned-a-slayer-task-by-the-slayer-master-i"));
   const wrong = playerAt(3000, 3000);
-  emit("slayer:assignment", { player: wrong, master: "Vannaka" });
+  emit("slayer:task-assigned", { player: wrong, master: 3 });
   assert.equal(done(wrong).has("be-assigned-a-slayer-task-by-the-slayer-master-i"), false);
 });
 
@@ -203,10 +223,10 @@ test("shortcuts, ferries, glider, charter, Fight Pits and Tai Bwo Wannai favour"
   assert.ok(done(player).has("use-the-rope-swing-to-travel-to-the-small-island"));
   assert.ok(done(player).has("explore-cairn-island-to-the-west-of-karamja"));
 
-  emit("ferries:travel", { player, route: "barnaby-ardougne" });
+  emit("ferries:departed", { player, route: "barnaby-ardougne", from: new core.Location(2773, 3229, 0) });
   assert.ok(done(player).has("travel-to-ardougne-via-the-port-near-brimhaven"));
   const other = playerAt(3000, 3000);
-  emit("ferries:travel", { player: other, route: "barnaby-rimmington" });
+  emit("ferries:departed", { player: other, route: "barnaby-rimmington", from: new core.Location(2773, 3229, 0) });
   assert.equal(done(other).has("travel-to-ardougne-via-the-port-near-brimhaven"), false);
 
   emit("gnome-gliders:arrived", { player, destination: { index: 1, area: "Karamja" } });
@@ -225,4 +245,25 @@ test("shortcuts, ferries, glider, charter, Fight Pits and Tai Bwo Wannai favour"
   const less = playerAt(3000, 3000);
   emit("tai-bwo-wannai-cleanup:favour-gained", { player: less, percentage: 99 });
   assert.equal(done(less).has("earn-100-favour-in-the-village-of-tai-bwo-wannai"), false);
+});
+
+// Dialogue requests can be refused or report an existing task; only actual assignment counts.
+test("Slayer assignment requests do not credit a refused or existing task", () => {
+  const player = playerAt(2869, 2982);
+  for (const master of ["Duradel", "Kuradal"]) {
+    emit("slayer:assignment", { player, master, line: "You are not yet experienced enough." });
+    assert.equal(done(player).has("be-assigned-a-slayer-task-by-the-slayer-master-i"), false);
+  }
+  emit("slayer:task-assigned", { player, master: 5 });
+  assert.ok(done(player).has("be-assigned-a-slayer-task-by-the-slayer-master-i"));
+});
+
+test("only accepted Brimhaven departures count for the Ardougne ferry task", () => {
+  const player = playerAt(2773, 3229);
+  emit("ferries:travel", { player, route: "barnaby-ardougne", handled: false });
+  assert.equal(done(player).has("travel-to-ardougne-via-the-port-near-brimhaven"), false);
+  emit("ferries:departed", { player, route: "barnaby-ardougne", from: new core.Location(2916, 3225, 0) });
+  assert.equal(done(player).has("travel-to-ardougne-via-the-port-near-brimhaven"), false);
+  emit("ferries:departed", { player, route: "barnaby-ardougne", from: new core.Location(2773, 3229, 0) });
+  assert.ok(done(player).has("travel-to-ardougne-via-the-port-near-brimhaven"));
 });

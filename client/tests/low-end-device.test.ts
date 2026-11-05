@@ -44,7 +44,7 @@ async function main(): Promise<void> {
     assert.equal(clientPlugins.gpuSettings()?.fpsLimit, 30);
     assert.equal(clientPlugins.gpuSettings()?.msaaSamples, 0);
     assert.equal(clientPlugins.gpuSettings()?.fxaa, false);
-    assert.equal(hd.hdEnabled(), false, "HD is suppressed without changing its switch");
+    assert.equal(hd.hdEnabled(), true, "an explicitly enabled HD plugin keeps working");
     assert.equal(hd.isEnabled(), true);
     assert.equal(getSceneResolutionScale(host), 0.5);
     assert.equal(resolveEffectiveRenderDistanceTiles(host, frame), 12);

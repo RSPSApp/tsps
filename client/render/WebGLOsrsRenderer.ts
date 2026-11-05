@@ -1736,8 +1736,12 @@ export class WebGLOsrsRenderer extends GameRenderer<WebGLMapSquare> {
         return render.setMaxLevel(this, maxLevel);
     }
 
-    setSkyColor(r: number, g: number, b: number) {
-        return render.setSkyColor(this, r, g, b);
+    clearSkyColorOverride(): void {
+        this.skyColorOverride = false;
+    }
+
+    setSkyColor(r: number, g: number, b: number, explicit = false) {
+        return render.setSkyColor(this, r, g, b, explicit);
     }
 
     setSceneHslOverride(hue: number, sat: number, lum: number, amount: number): void {

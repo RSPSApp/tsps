@@ -104,6 +104,33 @@ const doorToggle = (h, p, objectId, clickType = 1, interactions = ['Open']) => {
   return request;
 };
 
+function melzarFrontDoor() {
+  const door = MapObjects.get(O.DOOR_91, new core.Location(2941, 3248, 0), null);
+  assert.ok(door, 'real exterior Door 2595 at 2941,3248');
+  assert.equal(door.getType(), 0, 'the current native front door is a straight wall');
+  assert.equal(door.getFace(), 0, 'the current native front door blocks its west edge');
+  return door;
+}
+
+function melzarFrontRequest(h, p, door, via = 'click') {
+  const event = { player: p, object: door, objectId: O.DOOR_91,
+    definition: door.getDefinition(), location: door.getLocation(), clickType: 1, handled: false };
+  if (via === 'use') { event.itemId = I.MAZE_KEY; h.hooks.onItemOnObject[0](event); }
+  else if (via === 'toggle') h.emit('door:toggle', event);
+  else h.clicks.get(O.DOOR_91)(event);
+  return event;
+}
+
+function finishMelzarWalk(p) {
+  assert.ok(p.getForceMovement() instanceof core.ForceMovement, 'the native door walk must start');
+  for (let turn = 0; turn < 8 && p.getForceMovement(); turn++) core.TaskManager.process();
+  assert.equal(p.getForceMovement(), null, 'the existing door-walk task must complete within the bound');
+}
+
+function cleanMelzarPlayer(t, h, p) {
+  t.after(() => { for (const cleanup of h.hooks.onPlayerLogout ?? []) cleanup({ player: p }); });
+}
+
 function player() {
   const attrs = new Map(), items = new Map(), varbits = new Map(), messages = [], sounds = [];
   let location = new core.Location(3210, 3220, 0), privateArea = null, movementBlocked = false, forceMovement = null;
@@ -264,20 +291,30 @@ test('Dragon Slayer keeps the shared Crandor wall blocked for another player unt
   assert.equal(h.objects.length, 0);
 });
 
-test('Dragon Slayer claims the Doors toggle so the maze and magic doors still require their unlocks', () => {
+test('Dragon Slayer claims the Doors toggle so the maze and magic doors still require their unlocks', (t) => {
   const h = harness(), p = player();
+  cleanMelzarPlayer(t, h, p);
   h.quest.setStage(p, 2);
 
   let request = doorToggle(h, p, O.MAGIC_DOOR_6);
   assert.equal(request.handled, true);
   assert.match(p.messages.at(-1), /can't see any way to open the door/);
 
-  request = doorToggle(h, p, O.DOOR_91);
+  const frontDoor = melzarFrontDoor();
+  p.moveTo(new core.Location(2942, 3248, 0));
+  request = melzarFrontRequest(h, p, frontDoor, 'toggle');
   assert.equal(request.handled, true);
-  assert.notDeepEqual([p.getLocation().getX(), p.getLocation().getY()], [2933, 3248]);
+  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [2942, 3248]);
+  assert.equal(p.getForceMovement(), null, 'the locked front door does not start a crossing');
   p.items.set(I.MAZE_KEY, 1);
-  request = doorToggle(h, p, O.DOOR_91);
-  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [2933, 3248]);
+  request = melzarFrontRequest(h, p, frontDoor, 'toggle');
+  assert.equal(request.handled, true);
+  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [2942, 3248],
+    'the valid key starts a walk rather than an immediate move');
+  finishMelzarWalk(p);
+  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [2940, 3248]);
+  assert.equal(p.items.get(I.MAZE_KEY), 1, 'the reusable front-door key is not spent');
+  assert.equal(h.quest.getStage(p), 2);
 
   request = doorToggle(h, p, O.RED_DOOR);
   assert.equal(request.handled, true);
@@ -341,7 +378,8 @@ test('Dragon Slayer refuses ship repairs once the Karamja shortcut is known', ()
 
 test('the real Doors route walks the unlocked player in from the south through the captured wall while another player stays blocked', () => {
   const h = harness(true), unlocked = player(), locked = player();
-  const swaps = [], sounds = [];
+  const swaps = [], sounds = [], discoveries = [];
+  (h.events['dragon-slayer:crandor-wall'] ??= []).push(event => discoveries.push(event.player));
   const original = [core.ObjectManager.register, core.ObjectManager.deregister, core.Sounds.sendSound];
   core.ObjectManager.register = object => swaps.push(['register', object.getId(), object.getLocation().getX(), object.getLocation().getY()]);
   core.ObjectManager.deregister = object => swaps.push(['deregister', object.getId(), object.getLocation().getX(), object.getLocation().getY()]);
@@ -371,6 +409,7 @@ test('the real Doors route walks the unlocked player in from the south through t
     assert.deepEqual([carry.getStart().getX(), carry.getStart().getY(), carry.getEnd().getX(), carry.getEnd().getY()], [2836, 9599, 0, 1]);
     assert.deepEqual(swaps.splice(0), [['deregister', O.WALL_9, 2836, 9600], ['register', 25039, 2836, 9599], ['register', 38848, 2836, 9600]]);
     assert.deepEqual(sounds, [2410]);
+    assert.deepEqual(discoveries, [unlocked], 'eligible wall click also emits diary discovery');
     assert.equal(unlocked.attrs.get('dragon-slayer.shortcut'), true);
     assert.equal(h.objects.length, 0);
 
@@ -378,6 +417,7 @@ test('the real Doors route walks the unlocked player in from the south through t
     assert.deepEqual(locked.steps, [], 'the locked player is refused before Doors');
     assert.deepEqual(swaps, []);
     assert.equal(locked.attrs.get('dragon-slayer.shortcut'), undefined);
+    assert.deepEqual(discoveries, [unlocked], 'refused wall click never earns diary discovery');
   } finally {
     [core.ObjectManager.register, core.ObjectManager.deregister, core.Sounds.sendSound] = original;
   }
@@ -594,36 +634,42 @@ test('Dragon Slayer routes Melzar FUNLADDERTOP 2605 into the real basement and k
     'no generic Exit door handler exists outside the four cache placements');
 });
 
-test('Dragon Slayer leaves the Melzar ladder room through the east exterior door', () => {
+test('Dragon Slayer walks through the Melzar front door in both directions and keeps it locked without the key', (t) => {
   const h = harness();
-  const door = MapObjects.get(O.DOOR_91, new core.Location(2941, 3248, 0), null);
-  assert.ok(door, 'real exterior Door 2595 at 2941,3248');
-  const click = (p) => {
-    const event = {
-      player: p, object: door, objectId: O.DOOR_91, definition: door.getDefinition(),
-      location: door.getLocation(), clickType: 1, handled: false,
-    };
-    h.clicks.get(O.DOOR_91)(event);
-    return event;
-  };
+  const door = melzarFrontDoor();
+  const click = p => melzarFrontRequest(h, p, door);
 
   // The ladder from the basement chest lands in the north-east room, west of
   // this door; the Exit doors only lead into the maze, so this is the way out.
   const leaving = player();
+  cleanMelzarPlayer(t, h, leaving);
   leaving.moveTo(new core.Location(2940, 3248, 0));
+  const leavingStage = h.quest.getStage(leaving);
   assert.equal(click(leaving).handled, true);
+  assert.deepEqual([leaving.getLocation().getX(), leaving.getLocation().getY()], [2940, 3248],
+    'the keyless ladder-room exit starts with a walk');
+  finishMelzarWalk(leaving);
   assert.deepEqual([leaving.getLocation().getX(), leaving.getLocation().getY(), leaving.getLocation().getZ()],
     [2942, 3248, 0], 'the ladder room exits to the building east side');
+  assert.equal(leaving.getInventory().getAmount(I.MAZE_KEY), 0);
+  assert.equal(h.quest.getStage(leaving), leavingStage);
 
   const entering = player();
+  cleanMelzarPlayer(t, h, entering);
   h.quest.setStage(entering, 2);
   entering.items.set(I.MAZE_KEY, 1);
   entering.moveTo(new core.Location(2942, 3248, 0));
   assert.equal(click(entering).handled, true);
+  assert.deepEqual([entering.getLocation().getX(), entering.getLocation().getY()], [2942, 3248],
+    'the valid-key entry does not teleport into the building');
+  finishMelzarWalk(entering);
   assert.deepEqual([entering.getLocation().getX(), entering.getLocation().getY()],
-    [2933, 3248], 'the exterior side with the maze key still enters the maze');
+    [2940, 3248], 'the exterior side with the maze key reaches the tile across the real door');
+  assert.equal(entering.items.get(I.MAZE_KEY), 1);
+  assert.equal(h.quest.getStage(entering), 2);
 
   const locked = player();
+  cleanMelzarPlayer(t, h, locked);
   locked.moveTo(new core.Location(2942, 3248, 0));
   assert.equal(click(locked).handled, true);
   assert.deepEqual([locked.getLocation().getX(), locked.getLocation().getY()], [2942, 3248],
@@ -631,6 +677,65 @@ test('Dragon Slayer leaves the Melzar ladder room through the east exterior door
   // RSProx 468 ticks 6449-6450 and 6732-6733: "This door is securely locked." with sound 2402.
   assert.deepEqual(locked.messages, ['This door is securely locked.']);
   assert.deepEqual(locked.sounds, [2402]);
+  assert.equal(locked.getForceMovement(), null);
+  assert.equal(locked.getInventory().getAmount(I.MAZE_KEY), 0);
+  assert.equal(h.quest.getStage(locked), 0);
+});
+
+test('Melzar front-key item use walks across the real wall even when standing on its tile', (t) => {
+  const h = harness(), door = melzarFrontDoor();
+  for (const startX of [2942, 2941]) {
+    const p = player(); cleanMelzarPlayer(t, h, p);
+    h.quest.setStage(p, 2); p.items.set(I.MAZE_KEY, 1);
+    p.moveTo(new core.Location(startX, 3248, 0));
+    melzarFrontRequest(h, p, door, 'use');
+    assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [startX, 3248],
+      'item-on-door input does not teleport before its movement task');
+    finishMelzarWalk(p);
+    assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [2940, 3248]);
+    assert.equal(p.items.get(I.MAZE_KEY), 1);
+    assert.equal(h.quest.getStage(p), 2);
+  }
+});
+
+test('Melzar front door keeps the stage and actual inventory key gates for click and item use', (t) => {
+  const h = harness(), door = melzarFrontDoor();
+  for (const via of ['click', 'use']) for (const [stage, keys] of [[0, 1], [2, 0]]) {
+    const p = player(); cleanMelzarPlayer(t, h, p);
+    h.quest.setStage(p, stage); if (keys) p.items.set(I.MAZE_KEY, keys);
+    p.moveTo(new core.Location(2942, 3248, 0));
+    melzarFrontRequest(h, p, door, via);
+    assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [2942, 3248]);
+    assert.equal(p.getForceMovement(), null, 'failed entry gates never start a crossing');
+    assert.equal(p.getInventory().getAmount(I.MAZE_KEY), keys);
+    assert.equal(h.quest.getStage(p), stage);
+  }
+});
+
+test('Melzar front walks keep one movement token and allow retry after logout cancellation', (t) => {
+  const h = harness(), door = melzarFrontDoor();
+  for (const via of ['click', 'use']) {
+    const p = player(); cleanMelzarPlayer(t, h, p);
+    h.quest.setStage(p, 2); p.items.set(I.MAZE_KEY, 1);
+    p.moveTo(new core.Location(2942, 3248, 0));
+    melzarFrontRequest(h, p, door, via);
+    const first = p.getForceMovement();
+    assert.ok(first instanceof core.ForceMovement);
+    melzarFrontRequest(h, p, door, via);
+    assert.equal(p.getForceMovement(), first, 'a repeated input cannot arm another movement');
+    for (const cleanup of h.hooks.onPlayerLogout ?? []) cleanup({ player: p });
+    for (let turn = 0; turn < 8; turn++) core.TaskManager.process();
+    assert.equal(p.getForceMovement(), null);
+    assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [2942, 3248]);
+    assert.equal(p.items.get(I.MAZE_KEY), 1);
+    assert.equal(h.quest.getStage(p), 2);
+    melzarFrontRequest(h, p, door, via);
+    assert.notEqual(p.getForceMovement(), first, 'a fresh input gets a new movement after cancellation');
+    finishMelzarWalk(p);
+    assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [2940, 3248]);
+    assert.equal(p.items.get(I.MAZE_KEY), 1);
+    assert.equal(h.quest.getStage(p), 2);
+  }
 });
 
 test('Dragon Slayer Ned selector defers to Prince Ali wig while preserving DS voyage', () => {
@@ -698,4 +803,19 @@ test('Dragon Slayer Ned selector defers to Prince Ali wig while preserving DS vo
   const inactive = player();
   setStages(inactive, 0, 20);
   assert.ok(isPrinceWig(pick(inactive)), 'inactive DS already defers to Prince wig');
+});
+
+
+test('Crandor diary route credits climbing from the dungeon to the surface only', () => {
+  const h = harness(), p = player();
+  const arrivals = [];
+  (h.events['dragon-slayer:crandor-visited'] ??= []).push(event => arrivals.push(event));
+  p.attrs.set('dragon-slayer.shortcut', true);
+  p.moveTo(new core.Location(2832, 9657, 0));
+  h.clicks.get(25213)({ player: p });
+  assert.ok(p.getLocation().getY() < 6400);
+  assert.equal(arrivals.length, 1);
+  h.clicks.get(25213)({ player: p });
+  assert.ok(p.getLocation().getY() >= 6400);
+  assert.equal(arrivals.length, 1);
 });

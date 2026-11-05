@@ -8,11 +8,13 @@ import { Mobile } from "../../../../entity/impl/Mobile";
 import { Animation } from "../../../../model/Animation";
 import { Graphic } from "../../../../model/Graphic";
 import { Projectile } from "../../../../model/Projectile";
+import { CrossFloor } from "../../../../CrossFloor";
 import { Sound } from "../../../../Sound";
 import { Sounds } from "../../../../Sounds";
 import { WeaponProfiles } from "../../WeaponProfile";
 import type { ProjectileProfile } from "../../WeaponProfile";
 export class RangedCombatMethod extends CombatMethod {
+    private static readonly DEFAULT_PLAYER_PROJECTILE: ProjectileProfile = { delay: 41, lengthAdjustment: 5, stepMultiplier: 5, startHeight: 43, endHeight: 31 };
     /** Bronze arrow; used when an npc has no projectile configured. */
     private static readonly DEFAULT_NPC_PROJECTILE = 10;
     /**
@@ -33,12 +35,39 @@ export class RangedCombatMethod extends CombatMethod {
         return undefined;
     }
 
+    /**
+     * Ticks until each shot of a player's attack lands. Wiki (Hit delay): the distance is edge to edge,
+     * to the target's nearest tile, in the weapon's own formula (bows 1 + (3 + d) / 6, thrown weapons
+     * 1 + d / 6, ...).
+     */
+    public static landingDelays(character: Mobile, target: Mobile): number[] {
+        return RangedCombatMethod.playerHitDelays(
+            character,
+            target,
+            CombatPosition.edgeDistance(character, target),
+        );
+    }
+
     hits(character: Mobile, target: Mobile): PendingHit[] {
-        const distance = CombatPosition.distance(character, target);
         const delays = character.isPlayer()
-            ? WeaponProfiles.hitDelays(character.getAsPlayer(), distance)
+            ? RangedCombatMethod.landingDelays(character, target)
             : [RangedCombatMethod.npcHitDelay(character, target)];
         return delays.map((delay) => new PendingHit(character, target, this, delay));
+    }
+
+    /** On another floor, keep the splat from resolving before its slower cross-floor shot lands. */
+    public static playerHitDelays(character: Mobile, target: Mobile, distance: number): number[] {
+        const player = character.getAsPlayer();
+        const delays = WeaponProfiles.hitDelays(player, distance);
+        const from = CombatPosition.location(character, target);
+        const to = CombatPosition.location(target, character);
+        if (!CrossFloor.canCross(from, to) || from.getZ() === to.getZ()) return delays;
+
+        const profile = WeaponProfiles.ranged(player);
+        const projectiles = profile?.projectiles ?? [RangedCombatMethod.DEFAULT_PLAYER_PROJECTILE];
+        const arrivals = projectiles.map((projectile) =>
+            Projectile.ticksToLand(RangedCombatMethod.projectileEnd(projectile, distance)));
+        return delays.map((delay, index) => Math.max(delay, arrivals[Math.min(index, arrivals.length - 1)] ?? delay));
     }
 
     /** Ticks until an NPC's shot lands, so its hit shows when the arrow arrives. */
@@ -103,10 +132,10 @@ export class RangedCombatMethod extends CombatMethod {
             return;
         }
 
-        const projectiles = profile?.projectiles ?? [{ delay: 41, lengthAdjustment: 5, stepMultiplier: 5, startHeight: 43, endHeight: 31 }];
-        const distance = CombatPosition.distance(character, target);
+        const projectiles = profile?.projectiles ?? [RangedCombatMethod.DEFAULT_PLAYER_PROJECTILE];
+        const distance = CombatPosition.edgeDistance(character, target);
         const processingOrder = target.isNpc() ? 1 : 0;
-        const hitDelays = WeaponProfiles.hitDelays(character.getAsPlayer(), distance)
+        const hitDelays = RangedCombatMethod.landingDelays(character, target)
             .map((ticks) => ticks + processingOrder);
         for (let index = 0; index < projectiles.length; index++) {
             const projectile = projectiles[index];

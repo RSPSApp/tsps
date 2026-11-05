@@ -44,7 +44,7 @@ function beside(npc, target) {
 
 function travelCycles(npc, target) {
   const { delay, length, perTile } = data().projectile;
-  return delay + length + npc.getLocation().getDistance(target.getLocation()) * perTile;
+  return delay + length + core().CombatPosition.projectileDistance(npc, target) * perTile;
 }
 
 /** The combat method for one family; the provider makes one per attack, so it keeps no state between attacks. */

@@ -196,7 +196,7 @@ export class Player extends Mobile {
     public banks: Bank[] = Array(Bank.TOTAL_BANK_TABS).fill(null); // last index is for bank searches
     private searchingBank = false;
     private searchSyntax = "";
-    private fightType = FightType.UNARMED_KICK;
+    private fightType = FightType.UNARMED_PUNCH;
     public weapon: WeaponInterfaces = WeaponInterfaces.UNARMED;
     private autoRetaliate = true;
     private audioSettings: Record<number, number> = { ...DEFAULT_AUDIO_SETTINGS };
@@ -247,8 +247,10 @@ export class Player extends Mobile {
         PrayerHandler.deactivatePrayers(this);
         this.getEquipment().refreshItems();
         this.getInventory().refreshItems();
+        // Every level back to where it rests: the base, raised by a plugin's permanent boost
+        // (SkillManager.registerRestingLevelModifier), so a death keeps such a boost.
         for (let skill of Skill.values())
-            this.getSkillManager().setCurrentLevels(skill, this.getSkillManager().getMaxLevel(skill));
+            this.getSkillManager().setCurrentLevels(skill, this.getSkillManager().getRestingLevel(skill));
         this.setRunEnergy(100);
         this.getPacketSender().sendRunEnergy();
         this.getMovementQueue().setBlockMovement(false).reset();
@@ -290,13 +292,13 @@ export class Player extends Mobile {
     }
 
     public getAttackAnim(target?: Mobile): number {
-        const fightType = FightType.resolve(this.getFightType()) ?? FightType.UNARMED_KICK;
+        const fightType = FightType.resolve(this.getFightType()) ?? FightType.UNARMED_PUNCH;
         const againstNpc = target?.isNpc?.() === true;
         return WeaponProfiles.attackAnimation(this, fightType.getAnimationAgainst(againstNpc), againstNpc);
     }
 
     public getAttackSound(): Sound {
-        const fightType = FightType.resolve(this.getFightType()) ?? FightType.UNARMED_KICK;
+        const fightType = FightType.resolve(this.getFightType()) ?? FightType.UNARMED_PUNCH;
         return WeaponProfiles.get(this)?.attackSound ?? fightType.getAttackSound();
     }
 
@@ -1510,7 +1512,7 @@ export class Player extends Mobile {
             }
         }
 
-        this.fightType = FightType.UNARMED_KICK;
+        this.fightType = FightType.UNARMED_PUNCH;
         return this.fightType;
     }
 

@@ -10,6 +10,8 @@
  * by other workers.
  */
 const DIARY = "karamja";
+const DIARY_DATA = require("./Data.AchievementDiaries").BY_KEY.get(DIARY);
+const DiaryProgress = require("./Progress.AchievementDiaries");
 
 const BANANAS = 5;
 const SEAWEED = 5;
@@ -23,6 +25,8 @@ const BANANA_PLANTATION = { minX: 2880, maxX: 2950, minY: 3140, maxY: 3178 };
 const BANANA_FISHING_SPOTS = { minX: 2900, maxX: 2950, minY: 3170, maxY: 3195 };
 /** North Brimhaven mine, the Wiki's "north-west peninsula" and "horse shoe mine". */
 const NORTH_BRIMHAVEN_MINE = { minX: 2690, maxX: 2770, minY: 3180, maxY: 3260 };
+/** Brimhaven dock, including Barnaby's wandering tiles around 2773,3229. */
+const BRIMHAVEN_DOCK = { minX: 2760, maxX: 2785, minY: 3215, maxY: 3240 };
 /** The Pothole dungeon's jogre spawns (2825-2836, 9499-9526). */
 const POTHOLE_DUNGEON = { minX: 2800, maxX: 2870, minY: 9470, maxY: 9570 };
 /** The Shaman Caves' death wing spawns (2796-2811, 9292-9308). */
@@ -37,7 +41,8 @@ const MOR_UL_REK = { minX: 2368, maxX: 2559, minY: 5056, maxY: 5183 };
 const KARAMJA = { minX: 2600, maxX: 3050, minY: 2850, maxY: 3350 };
 
 const METAL_DRAGONS = new Set(["Bronze dragon", "Iron dragon", "Steel dragon"]);
-const SHILO_SLAYER_MASTERS = new Set(["Duradel", "Kuradal"]);
+/** Duradel/Kuradal: slayer_master_task.master_id (skills/data/slayer-masters.json). */
+const SHILO_SLAYER_MASTER = 5;
 const CAIRN_SHORTCUTS = new Set([
   "Rock slide (Cairn Isle, heading east)",
   "Rock slide (Cairn Isle, heading west)",
@@ -67,6 +72,7 @@ function count(player, attribute, target, task) {
   const total = (Number(player.getAttribute(attribute)) || 0) + 1;
   player.setAttribute(attribute, Math.min(total, target));
   if (total >= target) complete(player, task);
+  else DiaryProgress.notifyTaskProgress(player, DIARY_DATA, task);
 }
 
 /** Picks are counted from the tree's tile, so Ape Atoll's plantation cannot count. */
@@ -139,7 +145,7 @@ function trapped({ player, npcId }) {
 }
 
 function slayerAssigned({ player, master }) {
-  if (SHILO_SLAYER_MASTERS.has(master)) complete(player, "be-assigned-a-slayer-task-by-the-slayer-master-i");
+  if (master === SHILO_SLAYER_MASTER) complete(player, "be-assigned-a-slayer-task-by-the-slayer-master-i");
 }
 
 function npcKilled({ killer, npc, location }) {
@@ -156,8 +162,8 @@ function obstacle({ player, shortcut }) {
   if (shortcut === MOSS_GIANT_ISLAND_SHORTCUT) complete(player, "use-the-rope-swing-to-travel-to-the-small-island");
 }
 
-function ferried({ player, route }) {
-  if (route === "barnaby-ardougne") complete(player, "travel-to-ardougne-via-the-port-near-brimhaven");
+function ferried({ player, route, from }) {
+  if (route === "barnaby-ardougne" && inBox(from, BRIMHAVEN_DOCK)) complete(player, "travel-to-ardougne-via-the-port-near-brimhaven");
 }
 
 function glided({ player, destination }) {
@@ -207,9 +213,9 @@ module.exports = {
     api.onCustomEvent("food:eaten", eaten);
     api.onCustomEvent("equipment:changed", equipmentChanged);
     api.onCustomEvent("hunter:success", trapped);
-    api.onCustomEvent("slayer:assignment", slayerAssigned);
+    api.onCustomEvent("slayer:task-assigned", slayerAssigned);
     api.onCustomEvent("agility:obstacle", obstacle);
-    api.onCustomEvent("ferries:travel", ferried);
+    api.onCustomEvent("ferries:departed", ferried);
     api.onCustomEvent("gnome-gliders:arrived", glided);
     api.onCustomEvent("charter-ships:arrived", chartered);
     api.onCustomEvent("fight-pits:entered", fightPitEntered);

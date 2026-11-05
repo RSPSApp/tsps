@@ -11,6 +11,7 @@ const core = PluginManager.getCoreApi();
 before(() => CachePipeline.initialize(path.resolve(__dirname, '..')));
 const Western = require('../plugins/achievements/diaries/WesternProvincesDiary.plugin');
 const Data = require('../plugins/achievements/diaries/Data.AchievementDiaries');
+const Progress = require('../plugins/achievements/diaries/Progress.AchievementDiaries');
 
 const events = [];
 const custom = new Map();
@@ -21,6 +22,7 @@ const api = new Proxy({
   onCustomEvent: (name, handler) => custom.set(name, [...(custom.get(name) ?? []), handler]),
   onNpcDeath: (handler) => deaths.push(handler),
 }, { get: (target, key) => target[key] ?? (() => {}) });
+Progress(api);
 Western.register(api);
 
 const fire = (name, payload) => { for (const handler of custom.get(name) ?? []) handler(payload); };
@@ -111,13 +113,14 @@ test('travel credits the Gnome Stronghold spirit tree, the Feldip glider and the
   assert.deepEqual(tasks(), []);
 });
 
-test('the Lletya fruit-tree health check credits the palm task; another patch does not', () => {
+test('only a palm-tree health check in Lletya credits the palm task', () => {
   reset();
   const who = player();
-  fire('farming:check-health', { player: who, type: 'FRUIT_TREE', patch: { x: 2346, y: 3161, z: 0 } });
+  fire('farming:check-health', { player: who, type: 'FRUIT_TREE', crop: 'PALM', patch: { x: 2346, y: 3161, z: 0 } });
   assert.deepEqual(tasks(), [T.lletyaPalm]);
   reset();
-  fire('farming:check-health', { player: who, type: 'FRUIT_TREE', patch: { x: 2800, y: 3400, z: 0 } });
+  fire('farming:check-health', { player: who, type: 'FRUIT_TREE', crop: 'APPLE', patch: { x: 2346, y: 3161, z: 0 } });
+  fire('farming:check-health', { player: who, type: 'FRUIT_TREE', crop: 'PALM', patch: { x: 2800, y: 3400, z: 0 } });
   fire('farming:check-health', { player: who, type: 'TREE', patch: { x: 2346, y: 3161, z: 0 } });
   assert.deepEqual(tasks(), []);
 });
@@ -353,6 +356,7 @@ test('only a newly completed diary task resets the pending Ape Atoll chop; repea
     persistAttribute() {},
     getTaskManager: () => ({ submit() {} }),
   }, { get: (target, key) => target[key] ?? (() => {}) });
+  Progress(bus);
   // Production order: AchievementDiaries (whose onTask sets `completed`) before the Western listener.
   handlers.set('diary:task', [Diaries._test.onTask, (event) => emitted.push({ ...event })]);
   Western.register(bus);

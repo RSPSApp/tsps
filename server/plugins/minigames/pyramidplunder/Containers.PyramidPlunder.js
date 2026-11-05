@@ -294,6 +294,8 @@ function lidOff(player, run, lid, random) {
   run.pushing = false;
   if (!Common.claim(run, "sarcophagus")) return;
   const room = run.room;
+  // A room's sarcophagus opened (the Desert Diary's first-room task).
+  Common.getApi()?.emitCustomEvent?.("pyramid-plunder:sarcophagus-opened", { player, room });
   Common.send(player, v.sarcophagus, SARCOPHAGUS.OPENING);
   animate(player, Common.ids().anim.lidOff);
   Common.areaSound(player, Common.ids().sound.lidArea, lid);

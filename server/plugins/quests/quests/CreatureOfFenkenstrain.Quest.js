@@ -664,8 +664,17 @@ module.exports = function registerCreatureOfFenkenstrainQuest(api) {
     }
     player.sendMessage("You start digging...");
     const grave = quest.getStage(player) >= STAGE_BODY_PARTS ? nearestGravePart(location) : null;
-    if (!grave || partFound(player, grave.bit)) {
+    // Goes by what is held and handed in, so a part lost to a drop can be dug again. No capture: ours.
+    const heldAlready = grave?.bit === 1
+      ? held(player, ItemIdentifiers.DECAPITATED_HEAD) || held(player, ItemIdentifiers.DECAPITATED_HEAD_2)
+      : !!grave && held(player, grave.itemId);
+    if (!grave || heldAlready || hasBit(player, PARTS_GIVEN_ATTRIBUTE, grave.bit)) {
       player.sendMessage("...but the grave is empty.");
+      return;
+    }
+    if (player.getInventory().getFreeSlots() < 1) {
+      // No capture of this: the wording is ours.
+      player.sendMessage("You don't have enough inventory space for what you've found.");
       return;
     }
     setBit(player, PARTS_FOUND_ATTRIBUTE, grave.bit);

@@ -203,7 +203,9 @@ function buyOther({ player, slot }) {
   const count = quantity * (enumOf("otherBatch").get(item) ?? 1);
   const inventory = player.getInventory();
   const stackable = Common.core.ItemDefinition.forId(item)?.isStackable?.() === true;
-  const room = stackable ? (inventory.contains(item) || inventory.getFreeSlots() > 0) : inventory.getFreeSlots() >= count;
+  const room = stackable
+    ? (inventory.contains(item) ? inventory.getAddableAmount(new Common.core.Item(item, count)) >= count : inventory.getFreeSlots() > 0)
+    : inventory.getFreeSlots() >= count;
   if (!room) return refuse(player, message("noRoom"));
   Common.addVarp(player, "zeal_tokens", -cost);
   const before = inventory.getAmount(item);

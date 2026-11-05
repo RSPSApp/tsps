@@ -1,5 +1,7 @@
 import { strict as assert } from "node:assert";
 
+import { setAttackTimer, clearAttackTimer } from "../game/plugins/attacktimer/attackTimerState";
+import { getCurrentTick } from "../network/serverConnection/timing";
 import { TimersPlugin } from "../game/plugins/statustimer/TimersPlugin";
 import { StatusTimer } from "../game/plugins/statustimer/StatusTimer";
 import { mobileCombatTimerStyle, mobileHudScale } from "../game/widgets/MobileHudLayout";
@@ -20,6 +22,7 @@ assert.equal(plugin.getState().active, false);
 
 const timers = new TimersPlugin();
 const now = Date.now();
+setAttackTimer(4, getCurrentTick());
 for (const timer of [timers.poison, timers.freeze, timers.antifire, timers.teleblock, timers.stamina]) timer.sync(300, 1, now);
 timers.vengeance.syncCooldownVarbit(1, now);
 const runeLite = { pluginManager: { getPlugin: () => timers } };
@@ -34,7 +37,7 @@ for (const [width, height, cssW, cssH, portrait] of [
         renderer: { canvas: { clientWidth: cssW, clientHeight: cssH } },
     } as any;
     let previousRight = (8 + 64) * cssW / width;
-    for (let slot = 0; slot < 6; slot++) {
+    for (let slot = 0; slot < 7; slot++) {
         const style = mobileCombatTimerStyle(client, slot)!;
         assert.equal(style.width, 26, "base size stays compact; transform follows mobile gameframe growth");
         assert.equal(style.height, 26);
@@ -59,7 +62,7 @@ for (const [cssW, cssH, dpr, scale] of [[848, 720, 1, 1], [640, 385, 2, 1], [144
         renderer: { canvas: { width: cssW * dpr, height: cssH * dpr, clientWidth: cssW, clientHeight: cssH } },
     } as any;
     let previousLeft = cssW;
-    for (let slot = 0; slot < 6; slot++) {
+    for (let slot = 0; slot < 7; slot++) {
         const style = mobileCombatTimerStyle(client, slot)!;
         assert.equal(style.top, (5 + 160 + 8) * scale, "desktop timers follow the minimap when resized or scaled");
         assert.ok(Number(style.left) + 28 <= previousLeft, "desktop timers have separate slots left of the Wilderness indicator");
@@ -77,4 +80,5 @@ timers.poison.sync(0, 0);
 assert.equal(Number(mobileCombatTimerStyle(packed, 1)!.left), Number(before.left) - 30 * 1.25, "inactive timers leave no gaps");
 timers.setEnabledState(false);
 assert.equal(timers.visibleInfoboxCount(), 0, "disabled timers reserve no space beside Boosts");
+clearAttackTimer();
 console.log("status timer plugin smoke test passed");

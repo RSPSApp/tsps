@@ -247,7 +247,12 @@ let api;
 
 function load(config) {
   process.env.IDLE_HISCORES_FILE = path.join(HISCORES_DIR, `hiscores-${Math.random().toString(36).slice(2)}.json`);
-  for (const key of Object.keys(require.cache)) if (key.includes("/plugins/modes/")) delete require.cache[key];
+  // A require.cache key is a path in the platform's own separator, so the match normalises it:
+  // on Windows nothing matched, and the plugins kept their state (idle points above all) from
+  // one test to the next.
+  for (const key of Object.keys(require.cache)) {
+    if (key.split(path.sep).join("/").includes("/plugins/modes/")) delete require.cache[key];
+  }
   api = fakeApi(config);
   world.objects = [];
   world.npcs = [];

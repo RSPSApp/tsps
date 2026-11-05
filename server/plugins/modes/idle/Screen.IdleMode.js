@@ -219,7 +219,7 @@ function activityText(player) {
   const gather = player.getAttribute(Common.GATHER_TARGET_ATTRIBUTE);
   if (gather) return `${gather.option} ${gather.name.toLowerCase()}`;
   const make = player.getAttribute(Common.PRODUCTION_TARGET_ATTRIBUTE);
-  if (make) return `Making ${Common.itemName(make.productId).toLowerCase()}`;
+  if (make) return Production.doing(make);
   return null;
 }
 

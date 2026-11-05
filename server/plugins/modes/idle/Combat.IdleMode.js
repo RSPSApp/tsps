@@ -142,29 +142,6 @@ function killed(event) {
   Common.changed(player);
 }
 
-/** The first food in the inventory: its slot, id and the "Eat" option's click. */
-function findFood(player) {
-  const items = player.getInventory().getItems();
-  for (let slot = 0; slot < items.length; slot++) {
-    const itemId = items[slot]?.getId?.();
-    if (!Number.isInteger(itemId) || itemId < 0) continue;
-    const actions = Common.core.CacheDefinitions.getItem(itemId)?.inventoryActions ?? [];
-    const index = actions.findIndex((action) => typeof action === "string" && action.toLowerCase() === "eat");
-    if (index >= 0) return { slot, itemId, clickType: index + 1 };
-  }
-  return null;
-}
-
-function eat(player, food) {
-  const { ItemActionPacketListener, Inventory } = Common.core;
-  ItemActionPacketListener.handleAction(player, Inventory.INTERFACE_ID, food.itemId, food.slot, food.clickType, "Eat");
-}
-
-function hitpointsPercent(player) {
-  const max = player.getSkillManager().getMaxLevel(Common.core.Skill.HITPOINTS);
-  return max > 0 ? (player.getHitpoints() * 100) / max : 100;
-}
-
 /** A monster this player may attack: alive, not fought by another player, and allowed. */
 function attackable(player, npc) {
   if (npc.isRegistered?.() === false || !(npc.getHitpoints?.() > 0)) return false;
@@ -197,11 +174,11 @@ function fight(player, now) {
   if (!target || !active(player)) return "off";
   const state = stateOf(player);
   if (state.paused) return "paused";
-  const hp = hitpointsPercent(player);
+  const hp = Common.hitpointsPercent(player);
   if (hp < config().eatBelowPercent) {
-    const food = findFood(player);
+    const food = Common.findFood(player);
     if (food) {
-      eat(player, food);
+      Common.eat(player, food);
       return "ate";
     }
     if (hp < config().stopBelowPercent) {

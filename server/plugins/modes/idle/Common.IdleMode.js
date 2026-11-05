@@ -138,7 +138,6 @@ function bankTake(player, itemId, amount) {
   return taken;
 }
 
-/** The Skill's key in core.Skill ("WOODCUTTING"): what a save keeps, as a Skill is an object. */
 /** Sets one activity's target and clears the other two (one activity at a time). */
 function setActivity(player, attribute, target) {
   for (const other of ACTIVITY_ATTRIBUTES) if (other !== attribute) player.setAttribute(other, null);
@@ -154,6 +153,7 @@ function changed(player) {
   for (const listener of changeListeners) listener(player);
 }
 
+/** The Skill's key in core.Skill ("WOODCUTTING"): what a save keeps, as a Skill is an object. */
 function skillKey(skill) {
   return Object.keys(core.Skill).find((key) => core.Skill[key] === skill) ?? null;
 }
@@ -161,6 +161,29 @@ function skillKey(skill) {
 function skillName(skill) {
   const key = typeof skill === "string" ? skill : skillKey(skill);
   return key ? key.charAt(0) + key.slice(1).toLowerCase() : "Skill";
+}
+
+/** The first food in the inventory: its slot, id and the "Eat" option's click. */
+function findFood(player) {
+  const items = player.getInventory().getItems();
+  for (let slot = 0; slot < items.length; slot++) {
+    const itemId = items[slot]?.getId?.();
+    if (!Number.isInteger(itemId) || itemId < 0) continue;
+    const actions = core.CacheDefinitions.getItem(itemId)?.inventoryActions ?? [];
+    const index = actions.findIndex((action) => typeof action === "string" && action.toLowerCase() === "eat");
+    if (index >= 0) return { slot, itemId, clickType: index + 1 };
+  }
+  return null;
+}
+
+/** Eats `food` (from `findFood`) as its click would. */
+function eat(player, food) {
+  core.ItemActionPacketListener.handleAction(player, core.Inventory.INTERFACE_ID, food.itemId, food.slot, food.clickType, "Eat");
+}
+
+function hitpointsPercent(player) {
+  const max = player.getSkillManager().getMaxLevel(core.Skill.HITPOINTS);
+  return max > 0 ? (player.getHitpoints() * 100) / max : 100;
 }
 
 function itemName(itemId) {
@@ -198,6 +221,9 @@ module.exports = {
   changed,
   skillName,
   itemName,
+  findFood,
+  eat,
+  hitpointsPercent,
   get api() { return api; },
   get core() { return core; },
   get data() { return data; },

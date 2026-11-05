@@ -14,6 +14,7 @@
 const Common = require("./Common.IdleMode");
 const Combat = require("./Combat.IdleMode");
 const Production = require("./Production.IdleMode");
+const Thieving = require("./Thieving.IdleMode");
 
 const { chebyshev } = Common;
 
@@ -106,6 +107,14 @@ function gathered(request) {
   });
   tracked.add(player);
   Common.changed(player);
+}
+
+/** `thieving:done`: a pickpocket that failed (a stun) was still work, not a try that went nowhere. */
+function stolen({ player, succeeded }) {
+  if (succeeded || !Common.idleGather(player, Common.core.Skill.THIEVING) || !player.getAttribute(TARGET_ATTRIBUTE)) return;
+  const state = stateOf(player);
+  state.lastGatherAt = Date.now();
+  state.failedAttempts = 0;
 }
 
 function optionIndex(options, option) {
@@ -209,6 +218,11 @@ function resume(player, now) {
       return "paused";
     }
   }
+  // A pickpocket can hurt: eat first, or wait to heal with no food left.
+  if (target.skill === "THIEVING" && target.kind === "npc") {
+    const health = Thieving.health(player);
+    if (health !== "ok") return health;
+  }
   const usable = (entity) => !(state.skips.get(entity) > now);
   const entity = target.kind === "npc" ? findNpc(player, target, usable) : findObject(player, target, usable);
   if (!entity) return "none";
@@ -251,7 +265,7 @@ function describe(player) {
   const state = player.getAttribute(AUTO_ATTRIBUTE) === false ? "off" : "on";
   if (fight) return `Auto-resume is ${state}: fight the nearest ${fight.name.toLowerCase()} here.`;
   const make = player.getAttribute(Common.PRODUCTION_TARGET_ATTRIBUTE);
-  if (make) return `Auto-resume is ${state}: make ${Common.itemName(make.productId).toLowerCase()} from your bank here.`;
+  if (make) return `Auto-resume is ${state}: ${Production.doing(make).toLowerCase()} from your bank here.`;
   if (!target) return `Auto-resume is ${state}. Start gathering, fighting or making something and your character will keep at it.`;
   return `Auto-resume is ${state}: ${target.option.toLowerCase()} the nearest ${target.name.toLowerCase()} here.`;
 }
@@ -320,6 +334,7 @@ module.exports = function attach(api) {
   api.onBeforeNpcInteraction(observeNpc);
   api.onNpcAttackOption(observeAttack);
   api.onCustomEvent("storage:gather", gathered);
+  api.onCustomEvent("thieving:done", stolen);
   api.onPlayerLogin(login);
   api.onPlayerLogout(logout);
   api.onServerStartup(startTask);

@@ -27,9 +27,14 @@ function login({ player, isNewAccount }) {
   Onboarding.start(player, { fromLogin: true });
 }
 
+/** "a, b and c". */
+function listed(words) {
+  return words.length > 1 ? `${words.slice(0, -1).join(", ")} and ${words.at(-1)}` : words.join("");
+}
+
 function describe(player) {
   return Common.isIdle(player)
-    ? "Idle Mode is on: woodcutting, mining and fishing never stop, and keep going while you are logged out."
+    ? `Idle Mode is on: ${listed(Common.data.skills.map((key) => Common.skillName(key).toLowerCase()))} never stop, and keep going while you are logged out.`
     : "Idle Mode is off. Type ::idle on to turn it on.";
 }
 

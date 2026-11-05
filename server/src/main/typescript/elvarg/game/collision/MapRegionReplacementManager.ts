@@ -123,13 +123,16 @@ export class MapRegionReplacementManager {
   /**
    * Clients keep a streamed replacement for the session, so restoring a region sends
    * them its native cache map the same way (there is no separate "forget" packet).
+   * Null when the cache has no native map for the region.
    */
-  public static sendNativeRegionToPlayer(player: any, regionId: number): boolean {
+  public static nativeRegionPacket(regionId: number): RegionReplacementPacket | null {
+    const native = CacheMaps.getRegion(regionId);
+    return native ? regionReplacementPacket(regionId, true, native.terrainData, native.objectData ?? null) : null;
+  }
+
+  public static sendRegionPacketToPlayer(player: any, packet: RegionReplacementPacket): boolean {
     const session = player?.getSession?.();
     if (!session || typeof session.sendClientPacket !== "function") return false;
-    const native = CacheMaps.getRegion(regionId);
-    if (!native) return false;
-    const packet = regionReplacementPacket(regionId, true, native.terrainData, native.objectData ?? null);
     return session.sendClientPacket(encodeCachedRegionReplacement(packet, true));
   }
 

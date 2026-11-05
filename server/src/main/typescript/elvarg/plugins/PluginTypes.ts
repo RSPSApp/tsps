@@ -1257,7 +1257,11 @@ export interface PluginApi {
    * clipping and stream it to connected players. Returns false when it was refused.
    */
   replaceMapRegionData(regionId: number, terrainData: Uint8Array, objectData: Uint8Array | null): boolean;
-  /** Drop this plugin's runtime replacement: native clipping returns and connected clients get the native map. */
+  /**
+   * Drop this plugin's runtime replacement: native clipping returns and connected clients get
+   * the native map. False when it was refused (another owner, no native map: the replacement is
+   * kept) or when a connected client could not be sent the native map.
+   */
   restoreMapRegion(regionId: number): boolean;
   registerDefinitionSource(
     definitionType: string,

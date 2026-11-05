@@ -20,7 +20,10 @@ const { PvpJumpKilledTargetNode } = require("../../behaviours/nodes/pvp/PvpJumpK
 const { PvpVengeanceNode } = require("../../behaviours/nodes/pvp/PvpVengeanceNode.PlayerBots");
 const { ReplenishAfterKillNode } = require("../../behaviours/nodes/pvp/ReplenishAfterKillNode.PlayerBots");
 const { PvpValidateEngagementNode } = require("../../behaviours/nodes/pvp/PvpValidateEngagementNode.PlayerBots");
-const { applyGeneratedPvpLoadout } = require("../../behaviours/policies/PvpLoadoutPolicy.PlayerBots");
+const {
+  applyGeneratedPvpLoadout,
+  needsLoadoutRestore,
+} = require("../../behaviours/policies/PvpLoadoutPolicy.PlayerBots");
 const { pickPvpOpponent } = require("../../behaviours/policies/PvpTargetSelectionPolicy.PlayerBots");
 const {
   scheduleCombatAction,
@@ -1351,11 +1354,9 @@ class PvpController {
     if ((player.getHitpoints?.() ?? 0) <= 0 || player.isDyingReturn?.() === true) {
       return false;
     }
-    const hasEquipment = player
-      .getEquipment?.()
-      .getItems?.()
-      .some((item) => item?.getId?.() > 0);
-    if (hasEquipment && !state.pvp.loadoutPending) {
+    // Armour alone is not a kit: a bot that lost its weapon must re-gear too, or the
+    // partial set stays forever (only "wearing nothing" used to count as missing).
+    if (!needsLoadoutRestore(player) && !state.pvp.loadoutPending) {
       return false;
     }
     const applied = applyGeneratedPvpLoadout(player, state, { api: this.api });

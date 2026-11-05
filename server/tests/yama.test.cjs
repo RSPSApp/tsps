@@ -7,6 +7,7 @@ const Common = require("../plugins/bosses/yama/Common.Yama");
 const VALUES = { 4151: 1_500_000, 11832: 15_000_000, 385: 200, 6585: 300_000 };
 const hooks = { variants: [], custom: {}, npc: {}, login: [], item: {} };
 let ironmanMode = "none";
+let aKingdomDividedComplete = false;
 
 const fakeApi = {
   core: {
@@ -23,6 +24,7 @@ const fakeApi = {
   },
   emitCustomEvent(name, payload) {
     if (name === "ironman:mode") payload.mode = ironmanMode;
+    if (name === "quest:is-complete" && payload.key === "a_kingdom_divided") payload.complete = aKingdomDividedComplete;
     for (const handler of hooks.custom[name] ?? []) handler(payload);
   },
   onNpcInteraction(name, actions) { hooks.npc[name] = actions; },
@@ -50,6 +52,7 @@ function fakePlayer(attributes = {}) {
     varbits,
     getAttribute: (key) => store.get(key),
     setAttribute: (key, value) => store.set(key, value),
+    sendMessage(text) { this.message = text; },
     getPacketSender: () => ({ sendVarbit: (id, value) => varbits.set(id, value) }),
   };
 }
@@ -70,6 +73,18 @@ test("the Voice plays its first talk until the player has met it, then the short
   fakeApi.emitCustomEvent("npc-dialogue:choice", { player, npcId: 14183, option: "Stay." });
   assert.equal(player.varbits.get(16284), 2);
   assert.equal(variantFor(player, 14185), "standard-dialogue-subsequent-times");
+});
+
+test("Yama's domain requires A Kingdom Divided", () => {
+  const Domain = require("../plugins/bosses/yama/Domain.Yama");
+  const player = fakePlayer();
+  aKingdomDividedComplete = false;
+  assert.equal(Domain.canEnter(player), false);
+  assert.equal(Domain.enter(player), false);
+  assert.match(player.message, /complete A Kingdom Divided/i);
+  aKingdomDividedComplete = true;
+  assert.equal(Domain.canEnter(player), true);
+  aKingdomDividedComplete = false;
 });
 
 test("the Voice holds a death's items for the gravestone's fee, discounted for Yama's first 10 kills", () => {

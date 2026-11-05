@@ -68,9 +68,11 @@ function dismiss(player) {
 
 /** Moves up to `amount` of a slot into the bank. */
 function bankSlot(player, slot, amount) {
-  const taken = Pouch.take(player, slot, amount);
-  if (!taken) return;
-  Pouch.addToBank(player, taken.id, taken.amount);
+  const entry = Pouch.slots(player)[slot];
+  if (!entry) return 0;
+  const moved = Pouch.addToBank(player, entry.id, Math.min(amount, entry.amount));
+  if (moved > 0) Pouch.take(player, slot, moved);
+  return moved;
 }
 
 /** Every slot into the bank: the pouch's own op9 in the bank, and "Bank all" in the view. */
@@ -79,9 +81,11 @@ function bankAll(player) {
     player.sendMessage(Pouch.MESSAGE.EMPTY);
     return;
   }
+  let unbanked = false;
   Pouch.slots(player).forEach((entry, slot) => {
-    if (entry) bankSlot(player, slot, entry.amount);
+    if (entry && bankSlot(player, slot, entry.amount) < entry.amount) unbanked = true;
   });
+  if (unbanked) player.sendMessage(Pouch.MESSAGE.CANT_EMPTY);
   Pouch.refreshBank(player);
 }
 
@@ -135,6 +139,43 @@ function click(event) {
   else if (Number.isInteger(event.slot)) clickPouchSlot(player, event);
 }
 
+/** A bank withdrawal targets the pouch while its native side view is selected. */
+function bankItemOp(event) {
+  const { player, item, tab, slot, op, option } = event;
+  if (!viewing(player) || !Pouch.isRune(item.getId())) return;
+  event.handled = true;
+  const { Bank, Item } = Pouch.core;
+  const sender = player.getPacketSender();
+  const pouch = player.getInventory().getItems().find(held => held.getId() === sender.getVarp(Bank.VIEW_CONTAINER_OBJ_VARP)
+    && held.getAmount() > 0 && Pouch.isPouch(held));
+  const bank = player.getBank(tab), runeId = item.getId();
+  const valid = () => viewing(player) && pouch && player.getInventory().getItems().includes(pouch)
+    && sender.getVarp(Bank.VIEW_CONTAINER_OBJ_VARP) === pouch.getId()
+    && VIEW_BY_SLOTS[Pouch.slotCount(player, pouch)] === sender.getVarbit(Bank.VIEW_CONTAINER_VARBIT)
+    && bank.forSlot(slot) === item && item.getId() === runeId && item.getAmount() > 0;
+  function fill(amount) {
+    if (!valid() || !(amount > 0)) return;
+    // Pouch storage has no item metadata: never strip a custom/protected bank stack's state.
+    if (!Pouch.isPlainRune(item)) { player.sendMessage(Pouch.MESSAGE.CANT_HOLD); return; }
+    const moved = Pouch.store(player, runeId, Math.min(amount, item.getAmount()), Pouch.slotCount(player, pouch));
+    if (!moved) { player.sendMessage(Pouch.MESSAGE.CANT_HOLD); return; }
+    // The carried pouch is a withdrawal destination; retain normal bank placeholder semantics.
+    bank.deleteItemContainer(new Item(runeId, moved), slot, false, player.getInventory());
+    if (player.isSearchingBank()) Bank.removeFromBankSearch(player, new Item(runeId, moved), false);
+    bank.sortItems();
+    Pouch.refreshBank(player);
+  }
+  if (!valid()) return;
+  if (Bank.asksAmount("withdraw", op, option, player.getBankCustomQuantity(), player.getBankQuantityMode())) {
+    Pouch.askAmount(player, AMOUNT_PROMPT, { execute(amount) {
+      if (!valid()) return;
+      player.setBankCustomQuantity(amount);
+      sender.sendVarbit(BANK_X_VARBIT, amount);
+      fill(amount);
+    }});
+  } else fill(Bank.actionAmount("withdraw", op, option, item.getAmount(), player.getBankCustomQuantity(), player.getBankQuantityMode()));
+}
+
 /** Closing the bank closes a pouch view or loadout prompt left open in the chatbox. */
 function closed({ player, interfaceId }) {
   if (interfaceId === Pouch.core.Bank.MAIN_INTERFACE_ID) Pouch.closePrompt(player);
@@ -142,6 +183,7 @@ function closed({ player, interfaceId }) {
 
 module.exports = function attach(api) {
   api.onCustomEvent(Pouch.core.Bank.INVENTORY_OP_EVENT, inventoryOp);
+  api.onCustomEvent(Pouch.core.Bank.ITEM_OP_EVENT, bankItemOp);
   api.onCustomEvent("interface:closed", closed);
   api.onInterfaceActionClick(click);
 };

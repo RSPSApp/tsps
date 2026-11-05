@@ -85,13 +85,16 @@ test("blowpipe attack speed applies the Rapid style reduction in PvM and PvP", (
 
 /** The plugin's name-keyed item actions and the confirmdestroy button, as registered. */
 function registeredHooks() {
-  const hooks = { actions: null, confirm: null, buttonId: -1 };
+  const hooks = { actions: null, actionsByItem: new Map(), confirm: null, buttonId: -1 };
   const api = new Proxy({}, {
     get: (_, name) => {
       if (name === "core") return require("../dist/plugins/PluginManager").PluginManager.getCoreApi();
       if (name === "onItemAction") return (itemName, actions) => {
-        hooks.itemName = itemName;
-        hooks.actions = actions;
+        hooks.actionsByItem.set(itemName, actions);
+        if (itemName === "Toxic blowpipe") {
+          hooks.itemName = itemName;
+          hooks.actions = actions;
+        }
       };
       if (name === "onInterfaceActionButton") return (buttonId, handler) => {
         hooks.buttonId = buttonId;
@@ -227,6 +230,15 @@ test("only the pipe's cache options are hooked, so right-click Wield cannot unlo
   const hooks = registeredHooks();
   assert.equal(hooks.itemName, "Toxic blowpipe");
   assert.deepEqual(Object.keys(hooks.actions).sort(), ["Check", "Uncharge", "Unload"]);
+  assert.deepEqual([...hooks.actionsByItem.keys()].sort(), [
+    "Blazing blowpipe",
+    "Blazing blowpipe (empty)",
+    "Toxic blowpipe",
+    "Toxic blowpipe (empty)",
+  ]);
+  for (const actions of hooks.actionsByItem.values()) {
+    assert.deepEqual(Object.keys(actions).sort(), ["Check", "Uncharge", "Unload"]);
+  }
   assert.equal(hooks.buttonId, 584 << 16);
 });
 

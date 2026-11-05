@@ -1,5 +1,5 @@
 // OSRS Wiki: https://oldschool.runescape.wiki/w/Warped_sceptre
-const { definePoweredStaff } = require("./PoweredStaff");
+const { definePoweredStaff, refundsFit } = require("./PoweredStaff");
 
 const MAX_CHARGES = 20000;
 const CHAOS_RUNES_PER_CHARGE = 2;
@@ -198,12 +198,12 @@ function chargeWithRunes(event) {
   event.handled = chargeSceptre(player, sceptre);
 }
 
-function hasRefundSpace(player) {
-  const inventory = player.getInventory();
-  const neededSlots =
-    (inventory.contains(ItemIdentifiers.CHAOS_RUNE) ? 0 : 1) +
-    (inventory.contains(ItemIdentifiers.EARTH_RUNE) ? 0 : 1);
-  if (inventory.getFreeSlots() >= neededSlots) return true;
+function hasRefundSpace(player, amount) {
+  const refunds = [
+    new core.Item(ItemIdentifiers.CHAOS_RUNE, amount * CHAOS_RUNES_PER_CHARGE),
+    new core.Item(ItemIdentifiers.EARTH_RUNE, amount * EARTH_RUNES_PER_CHARGE),
+  ];
+  if (refundsFit(player.getInventory(), refunds)) return true;
   player.sendMessage("You don't have enough inventory space for the runes gained from uncharging your warped sceptre.");
   return false;
 }
@@ -211,7 +211,7 @@ function hasRefundSpace(player) {
 function refundCharges(player, item) {
   const inventory = player.getInventory();
   const amount = charges(item);
-  if (!inventory.getItems().includes(item) || amount <= 0 || !hasRefundSpace(player)) return;
+  if (!inventory.getItems().includes(item) || amount <= 0 || !hasRefundSpace(player, amount)) return;
   inventory.addItem(new core.Item(ItemIdentifiers.CHAOS_RUNE, amount * CHAOS_RUNES_PER_CHARGE));
   inventory.addItem(new core.Item(ItemIdentifiers.EARTH_RUNE, amount * EARTH_RUNES_PER_CHARGE));
   item.setId(unchargedByCharged.get(item.getId()));
@@ -222,7 +222,7 @@ function refundCharges(player, item) {
 }
 
 function uncharge({ player, item }) {
-  if (charges(item) <= 0 || !hasRefundSpace(player)) return true;
+  if (charges(item) <= 0 || !hasRefundSpace(player, charges(item))) return true;
   const { DialogueChainBuilder, OptionDialogue } = core;
   player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
     new OptionDialogue(0, {

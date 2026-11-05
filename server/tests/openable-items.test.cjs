@@ -19,6 +19,21 @@ const persisted = [];
 
 const AIR_RUNE = 556;
 const BONES = 526;
+const MAX_STACK = 0x7fffffff;
+const CRATE = 30690;
+const CRATE_TABLE = [
+  { item: "BLIGHTED_MANTA_RAY", amount: [15, 25], noted: true },
+  { item: "BLIGHTED_ANGLERFISH", amount: [25, 35], noted: true },
+  { item: "BLIGHTED_KARAMBWAN", amount: [35, 45], noted: true },
+  { item: "BLIGHTED_SUPER_RESTORE_4_", amount: [4, 4], noted: true },
+  { item: "BLIGHTED_ANCIENT_ICE_SACK", amount: [10, 15] },
+  { item: "BLIGHTED_VENGEANCE_SACK", amount: [20, 30] },
+  { item: "CASTLE_WARS_ARROW", amount: [75, 105] },
+  { item: "CASTLE_WARS_BOLTS", amount: [75, 105] },
+  { item: "RUNE_ARROW", amount: [175, 225] },
+  { item: "RUNE_JAVELIN", amount: [100, 120] },
+  { item: "CASTLE_WARS_TICKET", amount: [2, 2] },
+];
 
 before(() => {
   CachePipeline.initialize(path.resolve(__dirname, ".."));
@@ -54,6 +69,27 @@ function playerWith(id, { fill = false, amount = 1 } = {}) {
 }
 
 const open = (player, id) => ItemActionPacketListener.handleFirstAction(player, Inventory.INTERFACE_ID, id, 7, "Open");
+
+const withRandom = (value, action) => {
+  const random = Math.random;
+  Math.random = typeof value === "function" ? value : () => value;
+  try {
+    return action();
+  } finally {
+    Math.random = random;
+  }
+};
+
+const scriptedRandom = (values) => {
+  let index = 0;
+  return () => values[index++] ?? 0;
+};
+
+const crateRewardId = ({ item, noted }) => {
+  const id = ItemIdentifiers[item];
+  const note = noted ? ItemDefinition.forId(id).getNoteId() : -1;
+  return note >= 0 ? note : id;
+};
 
 function idsNamed(name) {
   const ids = [];
@@ -157,6 +193,116 @@ test("loot containers consume themselves and give only their table's items", () 
   }
 });
 
+test("castle wars supply crate is one whitelisted row opening only id 30690", () => {
+  const row = DATA.loot.find((container) => container.name === "Castle wars supply crate");
+  assert.ok(row, "the crate has no openable-items row");
+  assert.deepEqual(row.items, ["CASTLE_WARS_SUPPLY_CRATE"]);
+  assert.equal(ItemIdentifiers.CASTLE_WARS_SUPPLY_CRATE, CRATE);
+  const other = playerWith(30691);
+  assert.equal(open(other, 30691), false);
+  assert.equal(other.getInventory().getAmount(30691), 1);
+});
+
+test("castle wars supply crate gives three rolls at every entry's amount endpoints", () => {
+  for (let index = 0; index < CRATE_TABLE.length; index++) {
+    const entry = CRATE_TABLE[index];
+    const roll = (index + 0.5) / CRATE_TABLE.length;
+    for (const pick of [0, 0.9999999999]) {
+      const player = playerWith(CRATE);
+      withRandom(scriptedRandom([roll, roll, roll, pick, pick, pick]), () => open(player, CRATE));
+      const expected = crateRewardId(entry);
+      const each = pick === 0 ? entry.amount[0] : entry.amount[1];
+      assert.equal(player.getInventory().getAmount(CRATE), 0, `${entry.item} left the crate`);
+      assert.equal(player.getInventory().getAmount(expected), each * 3, `${entry.item} at ${each}`);
+      assert.equal(player.getInventory().getValidItems().length, 1, `${entry.item} took extra slots`);
+      if (entry.noted) assert.equal(ItemDefinition.forId(expected).isNoted(), true, `${entry.item} wasn't noted`);
+    }
+  }
+});
+
+function crateWithStack(id, amount, free = 2) {
+  const player = playerWith(CRATE, { fill: true });
+  for (let slot = 0; slot <= free; slot++) player.getInventory().setItem(slot, new Item(-1, 0));
+  player.getInventory().setItem(0, new Item(id, amount));
+  return player;
+}
+
+test("an existing container's duplicate rolled stack at the integer limit refuses safely", () => {
+  const player = playerWith(25342, { fill: true }); // Spoils of War, three rolls.
+  for (let slot = 0; slot <= 2; slot++) player.getInventory().setItem(slot, new Item(-1, 0));
+  player.getInventory().setItem(0, new Item(24590, MAX_STACK - 30));
+  const inventory = player.getInventory();
+  const dropped = [];
+  inventory.forceAdd = (who, item) => dropped.push([item.getId(), item.getAmount()]);
+  const roll = 7.5 / 9; // Blighted manta ray, 15 each: 45 into a stack that can take 30.
+  withRandom(scriptedRandom([roll, roll, roll, 0, 0, 0]), () => open(player, 25342));
+  assert.equal(inventory.getAmount(25342), 1, "the container was consumed");
+  assert.equal(inventory.getAmount(24590), MAX_STACK - 30);
+  assert.deepEqual(dropped, [], "a reward was dropped");
+});
+
+test("a duplicate rolled stack at the integer limit refuses without consuming the crate", () => {
+  const existing = MAX_STACK - 30;
+  const player = crateWithStack(24590, existing); // 3 x 15 blighted manta ray = 45.
+  const inventory = player.getInventory();
+  const dropped = [];
+  inventory.forceAdd = (who, item) => dropped.push([item.getId(), item.getAmount()]);
+  withRandom(0, () => open(player, CRATE));
+  assert.equal(inventory.getAmount(CRATE), 1, "the crate was consumed");
+  assert.equal(inventory.getAmount(24590), existing, "the existing stack changed");
+  assert.deepEqual(dropped, [], "a reward was dropped");
+  assert.deepEqual(player.sounds, []);
+  assert.match(player.messages.at(-1), /enough inventory space/);
+});
+
+test("distinct rolled stacks near the integer limit also refuse and keep the crate", () => {
+  const player = crateWithStack(ItemIdentifiers.RUNE_ARROW, MAX_STACK - 100, 6);
+  player.getInventory().setItem(1, new Item(ItemIdentifiers.RUNE_JAVELIN, MAX_STACK - 50));
+  player.getInventory().setItem(2, new Item(ItemIdentifiers.CASTLE_WARS_TICKET, MAX_STACK - 1));
+  const inventory = player.getInventory();
+  const dropped = [];
+  inventory.forceAdd = (who, item) => dropped.push([item.getId(), item.getAmount()]);
+  const rolls = [8.5 / 11, 9.5 / 11, 10.5 / 11, 0, 0, 0]; // Rune arrows, javelins and tickets.
+  withRandom(scriptedRandom(rolls), () => open(player, CRATE));
+  assert.equal(inventory.getAmount(CRATE), 1, "the crate was consumed");
+  assert.equal(inventory.getAmount(ItemIdentifiers.RUNE_ARROW), MAX_STACK - 100);
+  assert.equal(inventory.getAmount(ItemIdentifiers.RUNE_JAVELIN), MAX_STACK - 50);
+  assert.equal(inventory.getAmount(ItemIdentifiers.CASTLE_WARS_TICKET), MAX_STACK - 1);
+  assert.deepEqual(dropped, [], "a reward was dropped");
+});
+
+test("a stack refusal doesn't use the dossier's rite guarantee", () => {
+  const player = playerWith(30803, { fill: true });
+  for (let slot = 0; slot < 3; slot++) player.getInventory().setItem(slot, new Item(-1, 0));
+  player.getInventory().setItem(0, new Item(SCROLLS, MAX_STACK - 17));
+  player.setAttribute("yama:success-count", 100);
+  openDossier(player, FIRST_ROLL);
+  assert.equal(player.getInventory().getAmount(30803), 1, "the dossier was consumed");
+  assert.equal(player.getAttribute(RITE_RECEIVED_ATTRIBUTE), undefined, "the guarantee was used");
+  assert.equal(player.getInventory().getAmount(RITE), 0);
+  assert.equal(player.getInventory().getAmount(SCROLLS), MAX_STACK - 17);
+  assert.match(player.messages.at(-1), /enough inventory space/);
+});
+
+test("Entrana refuses the castle wars supply crate without consuming it", () => {
+  const player = playerWith(CRATE);
+  player.location = { getX: () => 2834, getY: () => 3335 };
+  const held = player.getInventory().forSlot(7);
+  open(player, CRATE);
+  assert.equal(player.getInventory().forSlot(7), held);
+  assert.deepEqual(player.messages, ["You can't open this on Entrana."]);
+});
+
+test("a stale crate reference opens nothing", () => {
+  const player = playerWith(CRATE);
+  const stale = player.getInventory().forSlot(7);
+  player.getInventory().setItem(7, new Item(BONES, 1));
+  PluginManager.emitItemAction({ player, interfaceId: Inventory.INTERFACE_ID, item: stale, itemId: CRATE, slot: 7, clickType: 1, handled: false });
+  assert.equal(player.getInventory().getAmount(CRATE), 0);
+  assert.equal(player.getInventory().getAmount(BONES), 1);
+  assert.deepEqual(player.messages, []);
+});
+
 test("a bag full of gems always gives 40 noted gems; a hunter kit gives one of each tool", () => {
   for (let i = 0; i < 20; i++) {
     const player = playerWith(19473);
@@ -254,8 +400,8 @@ const fullExceptSlot7 = (id, free = 0) => {
   for (let slot = 27; slot > 27 - free; slot--) player.getInventory().setItem(slot, new Item(-1, 0)); // Never slot 7.
   return player;
 };
-const need = { Casket: 1, Oyster: 1, "Bag full of gems": 6, "Hallowed sack": 11, "Spoils of War": 3, "Hunter kit": 9, Dossier: 3 };
-const ids = { Casket: 405, Oyster: 407, "Bag full of gems": 19473, "Hallowed sack": 24946, "Spoils of War": 25342, "Hunter kit": 11159, Dossier: 30803 };
+const need = { Casket: 1, Oyster: 1, "Bag full of gems": 6, "Hallowed sack": 11, "Spoils of War": 3, "Hunter kit": 9, Dossier: 3, "Castle wars supply crate": 3 };
+const ids = { Casket: 405, Oyster: 407, "Bag full of gems": 19473, "Hallowed sack": 24946, "Spoils of War": 25342, "Hunter kit": 11159, Dossier: 30803, "Castle wars supply crate": 30690 };
 
 test("full bag: single-slot loot opens into its own slot with nothing left over", () => {
   for (const id of [405, 407]) {

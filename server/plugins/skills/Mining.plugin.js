@@ -611,7 +611,9 @@ class MiningTask extends Task {
         this.activeSessions.delete(player);
         continue;
       }
-      if (player.getMovementQueue().size() > 0 || player.getForceMovement() != null) {
+      // Global tasks precede player turns; the last step may have drained the route.
+      const movement = player.getMovementQueue();
+      if (movement.size() > 0 || movement.isMovings?.() || player.getForceMovement() != null) {
         stopMining(this.activeSessions, player);
         continue;
       }

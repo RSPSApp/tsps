@@ -3,7 +3,7 @@
 // value), style and attack type; animation, sound, rapid and interface
 // metadata are server-owned and preserved.
 //
-//   yarn dump:item-combat-styles
+//   yarn dump:item-combat-styles [--check]
 //
 // Needs the cache in server/caches - run `yarn ensure-cache` first.
 import * as fs from "fs";
@@ -140,9 +140,16 @@ async function main() {
             "animation, sound, rapid and interface metadata are preserved by the dump.",
         cache: (CachePipeline as any).getActive?.()?.name ?? data.cache,
     };
-    fs.writeFileSync(outPath, serialize(output));
+    const serialized = serialize(output);
+    if (process.argv.includes("--check")) {
+        if (fs.readFileSync(outPath, "utf8") !== serialized) {
+            throw new Error(`${outPath} is out of date; run yarn dump:item-combat-styles`);
+        }
+    } else {
+        fs.writeFileSync(outPath, serialized);
+    }
     console.log(
-        `wrote ${outPath}: ${Object.keys(output.fightTypes).length} fight types, ` +
+        `${process.argv.includes("--check") ? "checked" : "wrote"} ${outPath}: ${Object.keys(output.fightTypes).length} fight types, ` +
             `${Object.keys(output.weaponInterfaces).length} interfaces`,
     );
     for (const warning of warnings) console.warn(`WARN ${warning}`);

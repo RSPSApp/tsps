@@ -2,14 +2,6 @@
 
 Server rules and plugin conventions are in [server/AGENTS.md](server/AGENTS.md).
 
-## GitHub identity
-
-Run agent commits, pushes and GitHub mutations through `rsps-shell` as `nharrison93`.
-Verify `gh api user --jq .login` before mutations. Commit with
-`-c user.name=nharrison93 -c user.email=nharrison93@proton.me`.
-Use HTTPS pushes with `gh auth git-credential` and verify the credential account;
-the default GitHub SSH key can authenticate as `tobywisener` even inside `rsps-shell`.
-
 ## Generated data
 
 Manual modifications to `npc-dialogues.json` or **any generated JSON dumped from
@@ -38,3 +30,8 @@ checkout.
   and what to look at.
 - **New worktrees:** `scripts/wt new <branch>`, not plain `git worktree add`; it writes the
   ports and copies `node_modules`.
+
+## Working through issues
+
+To fix GitHub issues unattended (claim, fix, verify in game, PR, next), follow
+[docs/bug-loop.md](docs/bug-loop.md). Its helpers are in `scripts/agents/`.

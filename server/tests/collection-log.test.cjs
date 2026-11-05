@@ -27,6 +27,7 @@ const fakeApi = new Proxy({
   emitCustomEvent: (name, request) => (customEvents.get(name) ?? []).forEach((handler) => handler(request)),
   core: {
     Task: require("../dist/game/task/Task").Task,
+    World: { getProcessCycle: () => 0 },
     CacheDefinitions: require("../dist/game/cache/CacheDefinitions").CacheDefinitions,
     Sound: require("../dist/game/Sound").Sound,
     Sounds,
@@ -43,13 +44,26 @@ before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
 });
 
+const { CacheDefinitions } = require("../dist/game/cache/CacheDefinitions");
+
 function createPlayer() {
   const log = [];
   const attributes = new Map();
+  const varps = new Map();
   const sender = {
-    sendConfig: (id, value) => { log.push(`varp ${id}=${value}`); return sender; },
-    sendVarbit: (id, value) => { log.push(`varbit ${id}=${value}`); return sender; },
-    getVarbit: () => 0,
+    sendConfig: (id, value) => { varps.set(id, value | 0); log.push(`varp ${id}=${value}`); return sender; },
+    sendVarbit: (id, value) => {
+      const { baseVar, startBit, endBit } = CacheDefinitions.getVarbit(id);
+      const mask = ((1 << (endBit - startBit + 1)) - 1) << startBit;
+      varps.set(baseVar, ((varps.get(baseVar) ?? 0) & ~mask) | ((value << startBit) & mask));
+      log.push(`varbit ${id}=${value}`);
+      return sender;
+    },
+    getVarp: (id) => varps.get(id) ?? 0,
+    getVarbit: (id) => {
+      const { baseVar, startBit, endBit } = CacheDefinitions.getVarbit(id);
+      return (sender.getVarp(baseVar) >> startBit) & ((1 << (endBit - startBit + 1)) - 1);
+    },
     sendInterfaceRemoval: () => sender,
     sendSubInterface: (target, group, type) => { log.push(`open ${target >>> 16}:${target & 0xffff} ${group} ${type}`); return sender; },
     closeSubInterface: (target) => { log.push(`close ${target >>> 16}:${target & 0xffff}`); return sender; },
@@ -133,11 +147,41 @@ test("as captured (Zulrah): the count, the category, the obtained items packed f
   Interface.click({ player, buttonId: (621 << 16) | 11, slot: zulrah.key });
   assert.deepEqual(player.log, [
     "varp 2048=1",
+    "varp 2941=0",
+    "varp 2942=0",
     `varbit 6906=${zulrah.key}`,
     `inv [[0,${ZULRAH_SCALES},109]] of ${Data.load().maxCategorySize}`,
     `script 7797 [0,${(621 << 16) | 10},${(621 << 16) | 11},${(621 << 16) | 12},${(621 << 16) | 13},471,${zulrah.key}]`,
   ]);
   customEvents.delete("collection-log:category-count");
+});
+
+test("raid categories send each cache mode counter before drawing and clear unused counts", () => {
+  const cox = require("../plugins/minigames/cox/Rewards.ChambersOfXeric").collectionLogCount;
+  const toa = require("../plugins/minigames/toa/Raid.TombsOfAmascut").collectionLogCount;
+  customEvents.set("collection-log:category-count", [cox, toa]);
+  try {
+    const player = createPlayer();
+    player.setAttribute("cox:kills", 3);
+    player.setAttribute("cox:challenge-kills", 2);
+    player.setAttribute("toa:completions", { entry: 4, normal: 5, expert: 6 });
+    const check = (category, expected) => {
+      player.log.length = 0;
+      Interface.open(player, category);
+      assert.deepEqual(player.log.filter((line) => /^varp (2048|2941|2942)=/.test(line)), expected);
+      assert.ok(player.log.indexOf(expected[2]) < player.log.findIndex((line) => line.startsWith("script 7797")),
+        "all mode counts reach the cache before it draws");
+    };
+    check("Tombs of Amascut", ["varp 2048=5", "varp 2941=4", "varp 2942=6"]);
+    check("Chambers of Xeric", ["varp 2048=2", "varp 2941=3", "varp 2942=0"]);
+    check("Zulrah", ["varp 2048=0", "varp 2941=0", "varp 2942=0"]);
+    const fresh = createPlayer();
+    Interface.open(fresh, "Tombs of Amascut");
+    assert.deepEqual(fresh.log.filter((line) => /^varp (2048|2941|2942)=/.test(line)),
+      ["varp 2048=0", "varp 2941=0", "varp 2942=0"], "new players start with zero in every mode");
+  } finally {
+    customEvents.delete("collection-log:category-count");
+  }
 });
 
 test("empty latest items are -1 (the overview's script skips them; 0 would be Dwarf remains)", () => {
@@ -150,7 +194,7 @@ test("empty latest items are -1 (the overview's script skips them; 0 would be Dw
 test("as captured: switching tab resets to its first category and enables its rows", () => {
   const player = createPlayer();
   Interface.click({ player, buttonId: (621 << 16) | 7 });
-  assert.deepEqual(player.log.slice(0, 4), ["varp 2048=0", "varbit 6906=0", "varbit 6905=3", "flags 621:27 0-21"]);
+  assert.deepEqual(player.log.slice(0, 6), ["varp 2048=0", "varp 2941=0", "varp 2942=0", "varbit 6906=0", "varbit 6905=3", "flags 621:27 0-21"]);
   assert.equal(player.log.at(-1).startsWith("script 7797 [3,"), true);
 });
 
@@ -204,6 +248,50 @@ test("loot counts once every roll handler is done, and kills tally their categor
   assert.equal(Progress.categoryCount(player, named(0, "Zulrah")), 1);
 });
 
+test("combined boss categories tally their category for every NPC in the group", async () => {
+  const player = createPlayer();
+  const npc = (name) => ({ getDefinition: () => ({ getName: () => name }) });
+  const rolls = [
+    "Dagannoth Rex", "Dagannoth Prime", "Dagannoth Supreme",
+    "Callisto", "Artio",
+    "Venenatis", "Spindel",
+    "Vet'ion", "Calvar'ion",
+    "Dusk",
+  ];
+  for (const name of rolls) Clog._test.onLoot({ player, drops: [], npc: npc(name) });
+  await Promise.resolve();
+  assert.equal(Progress.categoryCount(player, named(0, "Dagannoth Kings")), 3);
+  assert.equal(Progress.categoryCount(player, named(0, "Callisto and Artio")), 2);
+  assert.equal(Progress.categoryCount(player, named(0, "Venenatis and Spindel")), 2);
+  assert.equal(Progress.categoryCount(player, named(0, "Vet'ion and Calvar'ion")), 2);
+  assert.equal(Progress.categoryCount(player, named(0, "Grotesque Guardians")), 1);
+  assert.equal(Progress.categoryCount(player, named(0, "Zulrah")), 0, "no other category is touched");
+});
+
+test("an extra loot roll logs its items without tallying a second kill", async () => {
+  const player = createPlayer();
+  const npc = { getDefinition: () => ({ getName: () => "Araxxor" }) };
+  Clog._test.onLoot({ player, drops: [{ itemId: TANZANITE_FANG, amount: 1 }], npc });
+  await Promise.resolve();
+  assert.equal(Progress.categoryCount(player, named(0, "Araxxor")), 1);
+  Clog._test.onLoot({ player, drops: [{ itemId: ZULRAH_SCALES, amount: 1 }], npc, countKill: false });
+  await Promise.resolve();
+  assert.equal(Progress.categoryCount(player, named(0, "Araxxor")), 1, "the pet/Nid roll is not a kill");
+  assert.equal(Progress.obtained(player, ZULRAH_SCALES), 1, "but its item is still logged");
+});
+
+test("Nex and The Nightmare count one kill when the authoritative count and loot roll both fire", async () => {
+  const player = createPlayer();
+  const npc = (name) => ({ getDefinition: () => ({ getName: () => name }) });
+  for (const [category, name] of [["Nex", "Nex"], ["The Nightmare", "The Nightmare"]]) {
+    Clog._test.onCount({ player, category });
+    Clog._test.onLoot({ player, drops: [], npc: npc(name), countKill: false });
+  }
+  await Promise.resolve();
+  assert.equal(Progress.categoryCount(player, named(0, "Nex")), 1);
+  assert.equal(Progress.categoryCount(player, named(0, "The Nightmare")), 1);
+});
+
 test("login sends what is set; ::clog obtains, counts and resets", () => {
   const player = createPlayer();
   Progress.restore({ player });
@@ -220,12 +308,106 @@ test("login sends what is set; ::clog obtains, counts and resets", () => {
   assert.equal(player.log.at(-1), '"bronze bar" is not in the collection log.');
 });
 
+test("the notification preference treats Off as chosen, not unset, and restores it on login", () => {
+  const player = createPlayer();
+  player.setAttribute(Progress.NOTIFY_ATTRIBUTE, 0);
+  Progress.restore({ player });
+  assert.ok(player.log.includes(`varbit ${Progress.NOTIFY_VARBIT}=0`), "Off is sent back, not replaced by the default");
+  player.log.length = 0;
+  sounds.length = 0;
+  assert.equal(Progress.obtain(player, CARPENTERS_BOOTS, 1), true);
+  assert.deepEqual(player.log, ["varp 4848=1"], "Off: no chat message and no popup");
+  assert.deepEqual(sounds, [], "Off: no jingle");
+});
+
+test("chat, popup and both each announce exactly their configured feedback", () => {
+  for (const [setting, message, popup] of [[1, true, false], [2, false, true], [3, true, true]]) {
+    const player = createPlayer();
+    player.setAttribute(Progress.NOTIFY_ATTRIBUTE, setting);
+    sounds.length = 0;
+    Progress.obtain(player, CARPENTERS_BOOTS, 1);
+    assert.equal(player.log.some((line) => line.startsWith("New item added")), message, `chat for ${setting}`);
+    assert.equal(player.log.some((line) => line.startsWith("open 161:13")), popup, `popup for ${setting}`);
+    assert.equal(sounds.length, popup ? 1 : 0, `jingle for ${setting}`);
+  }
+});
+
+test("All Settings rows 85 and 171 toggle the chat and popup bits in varbit 11959", () => {
+  const player = createPlayer();
+  player.setAttribute(Progress.NOTIFY_ATTRIBUTE, 0);
+  player.getPacketSender().sendVarbit(11866, 1); // precise timing, another bit of varp 2856
+  const click = (settingId) => {
+    const request = { player, settingId, handled: false };
+    emit("settings:setting-clicked", request);
+    assert.equal(request.handled, true, `setting ${settingId} is owned by the collection log`);
+    return player.getAttribute(Progress.NOTIFY_ATTRIBUTE);
+  };
+  assert.equal(click(85), 1, "chat on");
+  assert.ok(player.log.includes(`varbit ${Progress.NOTIFY_VARBIT}=1`));
+  assert.equal(click(171), 3, "popup on too");
+  assert.equal(click(85), 2, "chat off, popup on");
+  assert.equal(click(171), 0, "both off");
+  assert.equal(player.getPacketSender().getVarbit(11866), 1, "the other settings in varp 2856 are untouched");
+});
+
+test("one real click's varp transmission and setting click apply once, not twice", () => {
+  const player = createPlayer();
+  player.setAttribute(Progress.NOTIFY_ATTRIBUTE, 3);
+  const transmission = { player, varpId: Progress.NOTIFY_VARP, value: 2 << 16, handled: false };
+  emit("player:varp-transmit", transmission);
+  const clicked = { player, settingId: 85, handled: false };
+  emit("settings:setting-clicked", clicked);
+  assert.equal(transmission.handled, true);
+  assert.equal(clicked.handled, true);
+  assert.equal(player.getAttribute(Progress.NOTIFY_ATTRIBUTE), 2, "not toggled back to 3");
+
+  const player2 = createPlayer();
+  player2.setAttribute(Progress.NOTIFY_ATTRIBUTE, 3);
+  const clickedFirst = { player: player2, settingId: 85, handled: false };
+  emit("settings:setting-clicked", clickedFirst);
+  emit("player:varp-transmit", { player: player2, varpId: Progress.NOTIFY_VARP, value: 2 << 16, handled: false });
+  assert.equal(player2.getAttribute(Progress.NOTIFY_ATTRIBUTE), 2, "either packet order ends on the client's value");
+});
+
+test("a transmitted varp 2856 keeps the notification bits and every unrelated shared bit", () => {
+  const player = createPlayer();
+  const { startBit, endBit } = CacheDefinitions.getVarbit(Progress.NOTIFY_VARBIT);
+  const notifyMask = ((1 << (endBit - startBit + 1)) - 1) << startBit;
+  const unrelated = (1 << 0) | (1 << 31);
+  const value = unrelated | (2 << startBit);
+  const transmission = { player, varpId: Progress.NOTIFY_VARP, value, handled: false };
+  emit("player:varp-transmit", transmission);
+  assert.equal(transmission.handled, true);
+  assert.equal(player.getAttribute(Progress.NOTIFY_ATTRIBUTE), 2, "popup only");
+  assert.ok(player.log.includes(`varp ${Progress.NOTIFY_VARP}=${value}`), "the whole shared varp is kept in step");
+  player.log.length = 0;
+  Progress.restore({ player });
+  assert.ok(player.log.includes(`varbit ${Progress.NOTIFY_VARBIT}=2`));
+  assert.equal(player.getPacketSender().getVarp(Progress.NOTIFY_VARP) & ~notifyMask, unrelated, "unrelated bits survive restore");
+
+  const other = { player, varpId: 1234, value, handled: false };
+  emit("player:varp-transmit", other);
+  assert.equal(other.handled, false, "other varps are left alone");
+});
+
 test("pets report through the event", () => {
   const player = createPlayer();
   emit("collection-log:obtain", { player, itemId: 13181, ensure: true, silent: true });
   emit("collection-log:obtain", { player, itemId: 13181, ensure: true, silent: false });
   assert.equal(Progress.obtained(player, 13181), 1);
   assert.ok(!player.log.some((line) => line.startsWith("New item")), "silent, and ensured only once");
+});
+
+test("an optional category only records that category's items, and unscoped events are unchanged", () => {
+  const player = createPlayer();
+  emit("collection-log:obtain", { player, itemId: TANZANITE_FANG, amount: 1, category: "Zulrah" });
+  assert.equal(Progress.obtained(player, TANZANITE_FANG), 1, "matching category");
+  emit("collection-log:obtain", { player, itemId: ZULRAH_SCALES, amount: 1, category: "Barrows Chests" });
+  assert.equal(Progress.obtained(player, ZULRAH_SCALES), 0, "mismatched category");
+  emit("collection-log:obtain", { player, itemId: ZULRAH_SCALES, amount: 1, category: "No such category" });
+  assert.equal(Progress.obtained(player, ZULRAH_SCALES), 0, "unknown category");
+  emit("collection-log:obtain", { player, itemId: ZULRAH_SCALES, amount: 2 });
+  assert.equal(Progress.obtained(player, ZULRAH_SCALES), 2, "unscoped existing callers unchanged");
 });
 
 test("reward-shop purchases log quantities, but unrelated shops and resold stock do not", () => {
@@ -239,6 +421,10 @@ test("reward-shop purchases log quantities, but unrelated shops and resold stock
   emit("shop:purchase", { ...purchase, shopName: "General Store" });
   emit("shop:purchase", { ...purchase, originalStock: false });
   assert.equal(Progress.obtained(player, CARPENTERS_BOOTS), 3);
+  emit("shop:purchase", {
+    player, shopName: "Petrified Pete's Ore Shop", itemId: 21697, amount: 1, originalStock: true,
+  });
+  assert.equal(Progress.obtained(player, 21697), 1, "the Volcanic Mine reward shop already credits");
 });
 
 test("every configured reward shop exists in canonical shop data", () => {
@@ -361,4 +547,78 @@ test("a newly earned item is told as collection-log:new-item, by any route, and 
   Progress.obtain(player, CARPENTERS_BOOTS, 1);
   assert.deepEqual(heard, [CARPENTERS_BOOTS], "once, when it's new");
   customEvents.set("collection-log:new-item", listeners);
+});
+
+test("imported Corp sigils use one weighted access and still reach the log", async (t) => {
+  const { _test, __internals } = require("../plugins/npcs/NpcDrops.plugin");
+  _test.loadDrops();
+  const corp = _test.tablesByNpc.get(319)[0];
+  const sigils = corp.entries.filter((entry) => [12819, 12823, 12827].includes(entry.item_id));
+  assert.deepEqual(
+    sigils.map((entry) => [entry.item_id, entry.weight, entry.out_of, entry.roll_group, entry.group_access_weight, entry.group_access_out_of]),
+    [
+      [12823, 3, 7, "Sigils", 1, 585],
+      [12827, 3, 7, "Sigils", 1, 585],
+      [12819, 1, 7, "Sigils", 1, 585],
+    ],
+  );
+  const sequence = (...values) => { let index = 0; return () => values[index++] ?? 0; };
+  const dropPlayer = createPlayer();
+  dropPlayer.getEquipment = () => ({ get: () => null, getItems: () => [] });
+
+  // Access hits, then the weighted pick lands on each source weight in turn.
+  for (const [roll, itemId] of [[0, 12823], [3 / 7, 12827], [6 / 7, 12819]]) {
+    t.mock.method(Math, "random", sequence(0, roll));
+    const rolled = __internals.rollOnce(corp, sigils, dropPlayer, true, null, []);
+    assert.deepEqual(rolled.map((drop) => drop.itemId), [itemId]);
+  }
+
+  // A sigil hit replaces the main roll; tertiary rolls are still made.
+  t.mock.method(Math, "random", () => 0);
+  const hit = __internals.rollTable(corp, dropPlayer, null);
+  const hitSigils = hit.filter((drop) => [12819, 12823, 12827].includes(drop.itemId));
+  assert.equal(hitSigils.length, 1, "exactly one sigil per kill");
+  assert.ok(!hit.some((drop) => drop.itemId === 4091), "main loot is replaced on a sigil hit");
+  assert.ok(hit.some((drop) => corp.tertiary.some((entry) => entry.item_id === drop.itemId)), "tertiary rows still roll");
+
+  // A miss keeps the ordinary main roll and reaches no sigil.
+  t.mock.method(Math, "random", sequence(0.5, 0));
+  const miss = __internals.rollTable(corp, dropPlayer, null);
+  assert.ok(!miss.some((drop) => [12819, 12823, 12827].includes(drop.itemId)));
+  assert.ok(miss.some((drop) => drop.itemId === 4091), "main loot is retained on a miss");
+
+  // Always and tertiary rows survive a conditional access hit.
+  const synthetic = {
+    entries: [
+      { item_id: 526, name: "Bones", quantity: [1, 1], always: true },
+      ...sigils,
+      { item_id: 4091, name: "Mystic robe top", quantity: [1, 1], weight: 1, out_of: 512 },
+    ],
+    main_max_roll: 512,
+    tertiary: [{ item_id: 995, name: "Coins", quantity: [1, 1], weight: 1, out_of: 2 }],
+  };
+  t.mock.method(Math, "random", () => 0);
+  const syntheticHit = __internals.rollTable(synthetic, dropPlayer, null);
+  assert.equal(syntheticHit.filter((drop) => [12819, 12823, 12827].includes(drop.itemId)).length, 1);
+  assert.ok(syntheticHit.some((drop) => drop.itemId === 526), "always drop preserved");
+  assert.ok(syntheticHit.some((drop) => drop.itemId === 995), "tertiary drop preserved");
+  assert.ok(!syntheticHit.some((drop) => drop.itemId === 4091), "main replaced on a group hit");
+
+  const corpLog = createPlayer();
+  Clog._test.onLoot({ player: corpLog, drops: hitSigils, npc: { getDefinition: () => ({ getName: () => "Corporeal Beast" }) } });
+  await Promise.resolve();
+  assert.equal(Progress.obtained(corpLog, hitSigils[0].itemId), 1);
+
+  const branda = _test.tablesByNpc.get(12596)[0];
+  const amulet = branda.entries.find((entry) => entry.name === "Giantsoul amulet");
+  assert.equal(amulet.item_id, 30637);
+  assert.equal(amulet.out_of, 16);
+  t.mock.method(Math, "random", () => 0);
+  const royal = __internals.rollOnce(branda, [amulet], createPlayer(), true, null, []);
+  assert.deepEqual(royal.map((drop) => drop.itemId), [30637]);
+  const royalLog = createPlayer();
+  Clog._test.onLoot({ player: royalLog, drops: royal, npc: { getDefinition: () => ({ getName: () => "Branda the Fire Queen" }) } });
+  await Promise.resolve();
+  assert.equal(Progress.obtained(royalLog, 30637), 1);
+  assert.equal(Progress.obtained(royalLog, 30638), 0);
 });

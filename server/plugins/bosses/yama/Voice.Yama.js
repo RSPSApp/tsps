@@ -4,7 +4,7 @@
  *   plays the Wiki's first-time transcript and sets it to 2 (Talk-to, Travel, Join) as its menu
  *   comes up; later talks play the short one;
  * - "Enter Yama's domain." and Travel take the player into the domain (Domain.Yama).
- * Open access: A Kingdom Divided isn't asked for (docs/yama.md).
+ * Access requires A Kingdom Divided (Yama Wiki; Domain.Yama checks it before entry).
  *
  * OSRS keeps what a challenger drops in a gravestone by the Voice. tsps has no gravestones, so the
  * Voice holds it, as Zul-Gwenwynig does at Zulrah; Talk-to hands it back for the gravestone's fee

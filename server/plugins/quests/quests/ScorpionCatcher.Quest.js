@@ -19,9 +19,9 @@
  * Requirements: the OSRS Wiki marks Alfred Grimhand's Barcrawl as the only
  * "[required to start]" requirement and 31 Prayer as "[not required to start]"
  * (it is needed to enter the Monastery 1st floor, shared Doors/Ladders content
- * this plugin does not own). This server has no Barcrawl quest or attribute, so
- * the start gate cannot be enforced here and the quest is offered as it comes;
- * Prayer is therefore not used as a substitute for the missing requirement.
+ * this plugin does not own). The Barcrawl is answered through the quest runtime by
+ * name, so the start gate is enforced here; Prayer is still not treated as a
+ * substitute for it.
  *
  * Picking a scorpion up stings for 3 hitpoints (OSRS Wiki, "The first
  * scorpion"), and the post-quest battlestaff service uses the cache interface
@@ -122,6 +122,12 @@ module.exports = function registerScorpionCatcherQuest(api) {
   const enchanting = new WeakSet();
 
   const has = (player, itemId) => player.getInventory().getAmount(itemId) > 0;
+
+  function barcrawlComplete(player) {
+    const request = { player, name: "Alfred Grimhand's Barcrawl", complete: false };
+    api.emitCustomEvent("quest:is-complete", request);
+    return request.complete === true;
+  }
   const ownsAnyCage = (player) => CAGE_ITEM_IDS.some((itemId) => has(player, itemId));
   const ownsFullCage = (player) => has(player, FULL_CAGE);
 
@@ -140,7 +146,7 @@ module.exports = function registerScorpionCatcherQuest(api) {
         "I can start this quest by speaking to <col=800000>Thormac</col>",
         "in the <col=800000>Sorcerer's Tower</col> south-west of Catherby.",
         "",
-        "I need level 31 <col=800000>Prayer</col> to enter the Monastery upstairs.",
+        "I need to complete Alfred Grimhand's Barcrawl first.",
       ];
     }
     const lines = ["<str>Thormac asked me to recover his three Kharid scorpions.</str>", ""];
@@ -196,10 +202,9 @@ module.exports = function registerScorpionCatcherQuest(api) {
         return "finishing-up";
       }
       if (stage === 0) {
-        // The only start requirement is Alfred Grimhand's Barcrawl, which this
-        // server has no quest or attribute for, so the quest is offered as it
-        // comes rather than refused on a requirement that cannot be read.
-        return "starting-off-with-the-requirements";
+        return barcrawlComplete(player)
+          ? "starting-off-with-the-requirements"
+          : "starting-off-without-the-requirements";
       }
       return "starting-off-subsequent-dialogue";
     }

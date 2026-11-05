@@ -352,7 +352,22 @@ course's `marks` block:
   stones fail only on the third stone, as captured in 449 (back to 3002,3963 for HP / 5 + 1). The
   rope and log fall into the pit for 3/20 of HP + 1 ("You slip and fall into the pit below." /
   "...onto the spikes below."); their landings (3005,10357 and 3000,10345) and timing are guesses.
-- **Not done:** the gate's ridge lines and the exit prompt after paying (shortcut entries).
+- **Entrance and exit** (449, 450): the south door `balancegate52a` and the north gate leaves open as
+  a two-tick loc swap, not an animation - an `inviswall` (38848) takes the threshold while the open
+  leaf (1548; 1573/1574 for the gates) stands on the tile behind it, then the closed loc returns.
+  The start line is spam, "You go through the gate and try to edge over the ridge..."; entering ends
+  with "You skillfully balance across the ridge..." and leaving with "...along the ridge...". The
+  exit route opens the south door behind the player as they cross it.
+- **Pipe:** sequence 749 (`human_doublepipesqueeze`, both hands empty in the cache) for each crawl;
+  the sequence's 30-cycle start delay and the exact-move start are the same cycle, as in the
+  native client, so equipped hands render until the crawl begins and the squeeze's empty hands
+  take over on the tick it moves into the pipe. Recording 449 sends the sequence twice, on the
+  two crawl ticks, with no extra sequence on the unseen middle tick (the unseen tick is a
+  teleport, not a third squeeze).
+- **Tickets:** a lap only marks the dispenser's ticket as available; the item itself comes from the
+  dispenser's Tag, as in 449 ("You received ... a Wilderness agility ticket ...").
+- **Not done:** the exit prompt after paying, and the warning before a new lap loses an unclaimed
+  ticket/reward (shortcut entries).
 
 ## Brimhaven Agility Arena
 

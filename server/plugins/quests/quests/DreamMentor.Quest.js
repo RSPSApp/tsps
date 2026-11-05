@@ -9,10 +9,11 @@
  * dream fight.
  *
  * Stage varbit 3618 "dream_prog" (varp 1003, bits 0-5; lookup-gameval.ts
- * dream_prog). Values are chosen so the cache's own NPC transforms work:
+ * dream_prog). Durable stages below are translated by nativeProgress; native 24
+ * includes the fight, native 26 awaits the reward, and native 28 is complete:
  *   0 not started, 2 helping the fallen man, 6 his name is Cyrisus (both first
  *   thresholds met), 16 armour requested ('Bird's-Eye' Jack appears at the
- *   Lunar bank: NPC 6126 transforms to 3472 at even dream_prog 16-30), 18
+ *   Lunar bank: NPC 6126 transforms to 3472 at even dream_prog 16-28), 18
  *   dressed, 20 fear revealed / meet the Oneiromancer, 22 plan agreed + dream
  *   vial given, 24 dream potion made, 26 inside the dream, 28 the fears are
  *   conquered, 30 complete. Odd values are unused.
@@ -1263,11 +1264,23 @@ module.exports = function registerDreamMentorQuest(api) {
 
   persistDreamAttributes();
 
+  // QH 06da90: native 4 is feeding, 24 includes the potion and all dream fights,
+  // 26 returns to the Oneiromancer, and cache DB 28 completes. Saved 26/28/30 keep
+  // their encounter/reward meanings; no native completion is published before reward.
+  function nativeProgress(stage) {
+    stage |= 0;
+    if (stage >= STAGE_COMPLETE) return 28;
+    if (stage >= STAGE_DEFEATED) return 26;
+    if (stage >= STAGE_POTION) return 24;
+    return stage === STAGE_STARTED ? 4 : stage;
+  }
+
   quest = registerQuest(api, {
     key: "dream_mentor",
     name: "Dream Mentor",
     varpId: 1003,
     varbitId: VARBIT_STAGE,
+    varbitValue: nativeProgress,
     startedValue: STAGE_STARTED,
     completionValue: STAGE_COMPLETE,
     questPoints: 2,

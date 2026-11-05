@@ -791,3 +791,17 @@ test('Dawn\'s and enraged Dusk\'s ranged hits land with well-formed projectiles 
   assert.equal(Combat.flightEnd('ranged', 2), 45);
   assert.equal(Combat.flightEnd('ranged', 3), 60);
 });
+
+test("Dawn's death never rolls drops or tallies a kill; only Dusk's death does", () => {
+  const dawn = fakeGuardian(Common.ids.npcs.dawnPhase1, 1701, 4573);
+  const dusk = fakeGuardian(Common.ids.npcs.duskPhase4, 1689, 4573);
+  const player = fakePlayer();
+  dropEvents = [];
+  Kills.guardianDeath({ npc: dawn, killer: player });
+  assert.equal(dropEvents.length, 0, "Dawn's death is not the kill and gives nothing");
+  assert.equal(player.getAttribute(Common.KILLS_ATTRIBUTE), undefined);
+  Kills.guardianDeath({ npc: dusk, killer: player });
+  assert.deepEqual(dropEvents.map((event) => event.name), ['npc-drops:roll-table', 'npc-drops:roll', 'npc-drops:place']);
+  assert.equal(player.getAttribute(Common.KILLS_ATTRIBUTE), 1, "only Dusk's death counts the kill");
+  flush();
+});

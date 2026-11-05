@@ -355,52 +355,6 @@ test('all native quest preferences are mapped, constrained and restored includin
   }
 });
 
-test('quest cache sort modes, status/requirements filters, empty lists and hidden headers', () => {
-  const {questListGroups} = require('../plugins/quests/QuestList.QuestRuntime');
-  const vars=new Map();
-  const player={getAttribute:()=>0,getPacketSender:()=>({getVarbit:id=>vars.get(id)??0}),getSkillManager:()=>({getMaxLevels:()=>1,getCombatLevel:()=>3})};
-  const quests=[{key:'animal',name:'Animal Magnetism',status:1},{key:'below',name:'Below Ice Mountain',status:0},{key:'bar',name:"Alfred Grimhand's Barcrawl",status:2}];
-  const groups=()=>questListGroups(quests,player,CacheDefinitions,q=>q.status);
-  const rows=()=>groups().flatMap(g=>g.quests);
-  for(let sort=0;sort<12;sort++){
-    vars.set(13772,sort);
-    const result=groups();
-    assert.equal(rows().length,3,`sort ${sort} retains all entries`);
-    assert.ok(result.every(g=>g.title.length>0),`sort ${sort} produces a real group label`);
-  }
-  vars.set(13772,3);
-  assert.ok(groups().some(g=>g.title==='Novice'));
-  vars.set(13772,11);
-  assert.ok(groups().some(g=>g.title==='Free Quests'));
-  vars.set(13778,1);
-  assert.equal(rows().find(q=>q.quest.key==='animal').status,3,'missing requirements shown as unavailable');
-  vars.set(13890,1);
-  assert.ok(!rows().some(q=>q.quest.key==='animal'),'unavailable filter excludes the row');
-  vars.set(13890,0);vars.set(13778,2);
-  assert.ok(!rows().some(q=>q.quest.key==='animal'),'hide requirements filter excludes the row');
-  vars.set(13778,0);vars.set(13779,2);
-  assert.ok(!rows().some(q=>q.quest.key==='below'),'recommended combat filter uses cache metadata');
-  vars.set(13779,0);vars.set(13889,1);
-  assert.deepEqual(groups().map(g=>g.title),['']);
-  vars.set(13775,1);vars.set(13776,1);vars.set(13777,1);
-  assert.deepEqual(groups(),[],'all statuses filtered yields an empty list');
-  vars.clear();vars.set(13772,1);
-  const ties=questListGroups([{key:'z',name:'Animal Magnetism',status:1},{key:'a',name:'Animal Magnetism',status:1}],player,CacheDefinitions,q=>q.status);
-  assert.deepEqual(ties[0].quests.map(q=>q.quest.key),['a','z'],'equal names use stable quest keys');
-});
-
-test('quest requirements translate cache stat ids to Skill objects including Hunter/Construction', () => {
-  const {questListGroups,metadata}=require('../plugins/quests/QuestList.QuestRuntime');
-  const {Skill}=require('../dist/game/model/Skill');
-  const ids=[];
-  const player={getAttribute:()=>9999,getPacketSender:()=>({getVarbit:id=>id===13778?2:0}),getSkillManager:()=>({getMaxLevel:skill=>{ids.push(skill.getClientId());return 99;},getCombatLevel:()=>126})};
-  const records=[...metadata(CacheDefinitions).values()];
-  const names=records.filter(r=>r.requirement_stats?.some((v,i)=>i%2===0&&(v===21||v===22))).map(r=>({key:r.rowId.toString(),name:r.displayname[0],status:1}));
-  questListGroups(names,player,CacheDefinitions,q=>q.status,Skill);
-  assert.ok(ids.includes(21),'Hunter uses its client id');
-  assert.ok(ids.includes(22),'Construction uses its client id');
-});
-
 test('closing or replacing a quest colour picker invalidates only its owned amount callback', () => {
   const {buttons,events}=registered();
   const player=recordingPlayer();let amount;

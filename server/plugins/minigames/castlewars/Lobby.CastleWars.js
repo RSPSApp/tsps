@@ -222,6 +222,18 @@ function useCastleWarsPortal(event) {
   }
 }
 
+/** The cache keeps its Disable-XP label; this prompt also restores previously disabled gains. */
+function toggleCombatExperience({ player }) {
+  const disabled = player.getAttribute(data.COMBAT_XP_DISABLED_ATTRIBUTE) === true;
+  api.sendMultiChatboxPrompt(player, `${disabled ? "Enable" : "Disable"} combat XP during Castle Wars?`,
+    "Yes", () => {
+      if ((player.getAttribute(data.COMBAT_XP_DISABLED_ATTRIBUTE) === true) !== disabled) return;
+      player.setAttribute(data.COMBAT_XP_DISABLED_ATTRIBUTE, !disabled);
+      player.sendMessage(`Combat XP is now ${disabled ? "enabled" : "disabled"} during Castle Wars.`);
+    },
+    "Cancel", () => {});
+}
+
 module.exports = function attachCastleWarsLobby(registry, castleWars) {
   api = registry;
   game = castleWars;
@@ -232,7 +244,8 @@ module.exports = function attachCastleWarsLobby(registry, castleWars) {
   game.PRACTICE_MAXED_KEY = PRACTICE_MAXED_ATTRIBUTE;
   game.joinFromLobby = joinWaitingRoom;
   registry.onObjectInteraction(useCastleWarsPortal);
-  registry.onNpcInteraction("Lanthus", { Trade: RewardShop.open });
+  registry.persistAttribute?.(data.COMBAT_XP_DISABLED_ATTRIBUTE, false);
+  registry.onNpcInteraction("Lanthus", { Trade: RewardShop.open, "Disable-XP": toggleCombatExperience });
 };
 
 module.exports._test = { chooseTeam, seedsBots, SEED_BOTS_CONFIG_KEY, BOT_TIER_OPTIONS };

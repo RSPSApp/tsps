@@ -451,6 +451,15 @@ function takeMark(event) {
   }
 }
 
+/** A ground mark actually credited to the inventory (after ground-item policies and stack limits). */
+function creditMarkTaken({ player, groundItem, itemId, amount }) {
+  if (!player || !groundItem || itemId !== core.ItemIds.MARK_OF_GRACE || !(amount > 0)) return;
+  if (!isCourseMark(groundItem)) return;
+  const position = groundItem.getPosition();
+  if (!position || !courseOfMark({ x: position.getX(), y: position.getY(), z: position.getZ() })) return;
+  pluginApi.emitCustomEvent("collection-log:obtain", { player, itemId, amount });
+}
+
 /**
  * An obstacle's own find (`gives`: { item (an ItemIdentifiers name), amount, message }, Prifddinas's portal shard): its line,
  * then the item to the inventory, the floor for what has no room. Content may change the amount
@@ -560,6 +569,13 @@ function unmet(player, requirement) {
     const request = { player, diary: key, tier, complete: null };
     pluginApi.emitCustomEvent("diary:is-complete", request);
     if (request.complete === false) return message;
+  }
+  if (requirement.slayerTask) {
+    const request = { player, task: null };
+    pluginApi.emitCustomEvent("slayer:current-task", request);
+    const taskName = String(request.task?.name ?? "").toLowerCase();
+    const accepted = [].concat(requirement.slayerTask).some((name) => taskName.includes(String(name).toLowerCase()));
+    if (!accepted) return requirement.slayerTaskMessage ?? "You need an appropriate Slayer task to attempt this.";
   }
   return null;
 }
@@ -780,6 +796,7 @@ module.exports = {
     api.onPlayerLogout(pauseMarksOnLogout);
     api.onPlayerLogin(resumeMarksOnLogin);
     api.onGroundItemPickup(takeMark);
+    api.onCustomEvent("ground-items:taken", creditMarkTaken);
 
     api.log("registered", {
       courses: COURSES.length,

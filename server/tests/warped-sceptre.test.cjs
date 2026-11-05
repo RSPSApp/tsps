@@ -61,7 +61,8 @@ function playerWithRunes({ chaos = 2, earth = 5, freeSlots = 28 } = {}) {
     getDialogueManager: () => ({ startDialogues: (builder) => { state.dialogue = builder.getDialogues().get(0); } }),
     messages,
     getInventory: () => ({
-      getItems: () => items,
+      getItems: () => [...items, ...[...runes].filter(([, amount]) => amount > 0).map(([id, amount]) => item(id, amount))],
+      getAddableAmount: (rune) => ((runes.get(rune.getId()) ?? 0) > 0 || freeSlots > 0 ? rune.getAmount() : 0),
       getAmount: (id) => runes.get(id) ?? 0,
       deleteNumber: (id, amount) => runes.set(id, Math.max(0, (runes.get(id) ?? 0) - amount)),
       contains: (id) => (runes.get(id) ?? 0) > 0,

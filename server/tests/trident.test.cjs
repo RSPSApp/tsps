@@ -24,7 +24,8 @@ function makePlayer(trident, resources = {}) {
   const amounts = new Map(Object.entries(resources).map(([id, amount]) => [Number(id), amount]));
   const messages = [];
   const inventory = {
-    getItems: () => items,
+    getItems: () => [...items, ...[...amounts].filter(([, amount]) => amount > 0).map(([id, amount]) => new Item(id, amount))],
+    deleteAtSlot(slot, amount) { this.deleteNumber(this.getItems()[slot].getId(), amount); },
     getAmount: (id) => amounts.get(id) ?? 0,
     deleteNumber(id, amount) {
       amounts.set(id, Math.max(0, this.getAmount(id) - amount));
@@ -32,6 +33,7 @@ function makePlayer(trident, resources = {}) {
     },
     contains: (id) => (amounts.get(id) ?? 0) > 0,
     getFreeSlots: () => 28,
+    getAddableAmount: (item) => item.getAmount(),
     addItem(item) {
       amounts.set(item.getId(), this.getAmount(item.getId()) + item.getAmount());
     },

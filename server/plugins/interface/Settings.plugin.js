@@ -16,6 +16,7 @@ const {
 } = require("../../src/main/typescript/elvarg/net/protocol/ClientProtocol");
 const { getWorldDefinition } = require("../../src/main/typescript/elvarg/game/definition/WorldDefinition");
 const { CacheDefinitions } = require("../../src/main/typescript/elvarg/game/cache/CacheDefinitions");
+const SettingVarpTransmit = require("./SettingVarpTransmit");
 
 const ROOT_INTERFACE = 161;
 const MAIN_MODAL_UID = (ROOT_INTERFACE << 16) | 16;
@@ -135,6 +136,8 @@ const SELECTED_SETTING_ATTRIBUTE = "settings:selected";
 // The values the player chose for the rows in data/settings.json, and the category shown
 // ({ "varbit:<id>": value, "varp:<id>": value }), restored on login as live does.
 const SETTINGS_VALUES_ATTRIBUTE = "settings:values";
+// The collection-log notification rows (85/171) share varp 2856 with "Enable precise timing" (82).
+const COLLECTION_LOG_NOTIFY_VARP = 2856;
 // Cache 241 settings structs3107..3755/4286/2735 and reader script6716.
 const QUEST_SETTINGS = { 214:13772, 215:13778, 216:13779, 217:13776, 218:13775, 219:13777, 220:13773, 221:13774, 222:13780, 223:13781, 239:13889, 240:13890 };
 const SETTINGS = { ...require("./data/settings.json").settings, ...Object.fromEntries(Object.entries(QUEST_SETTINGS).map(([id, varbit]) => [id, { varbit }])) };
@@ -310,7 +313,6 @@ function setSettingVar(player, key, value) {
   const [, id] = key.split(":");
   sendSettingVar(player, key, value);
   player.setAttribute(SETTINGS_VALUES_ATTRIBUTE, { ...savedSettings(player), [key]: value });
-  if (Object.values(QUEST_SETTINGS).some(varbit => key === `varbit:${varbit}`) || QUEST_COLOUR_VARPS.has(Number(id))) pluginApi?.emitCustomEvent("quest:list-refresh", { player });
 }
 
 function getSettingVar(player, row) {
@@ -322,6 +324,7 @@ function getSettingVar(player, row) {
 function toggleSetting(player, settingId) {
   const row = SETTINGS[settingId];
   if (!row || catalog().settings.get(settingId)?.type !== SETTING_TYPE_TOGGLE) return false;
+  if (consumeTransmittedSettingVarp(player, row)) return true;
   setSettingVar(player, varKey(row), getSettingVar(player, row) ? 0 : 1);
   if (row.script !== undefined) player.getPacketSender().sendClientScript(row.script);
   return true;
@@ -717,6 +720,35 @@ function chooseXpDropsSetupRow({ player, buttonId, slot }) {
   return true;
 }
 
+function settingVarpTick() {
+  return pluginApi?.core?.World?.getProcessCycle?.() ?? 0;
+}
+
+/** The client's local setting change already arrived as a whole-varp transmission. */
+function rememberSettingVarpTransmit(transmission) {
+  if (transmission.varpId !== COLLECTION_LOG_NOTIFY_VARP || !transmission.player) return;
+  SettingVarpTransmit.remember(transmission.player, transmission.varpId, transmission.value, settingVarpTick());
+}
+
+/** One listener for both the XP drops varps and the setting varps the client transmits. */
+function handleSettingsVarpTransmit(transmission) {
+  rememberSettingVarpTransmit(transmission);
+  transmitXpDropsSetup(transmission);
+}
+
+/**
+ * One row click sends both the local varp change and the row click. When the varp already carries
+ * the new value, save it instead of toggling it a second time.
+ */
+function consumeTransmittedSettingVarp(player, row) {
+  if (row.varp !== undefined || row.varbit === undefined) return false;
+  const { baseVar } = CacheDefinitions.getVarbit(row.varbit);
+  if (baseVar !== COLLECTION_LOG_NOTIFY_VARP) return false;
+  if (SettingVarpTransmit.take(player, baseVar, settingVarpTick()) === undefined) return false;
+  setSettingVar(player, varKey(row), getSettingVar(player, row));
+  return true;
+}
+
 /** The official client transmits a row click only once the server enables it, as live does. */
 function enableXpDropsSetupRows(player) {
   if (player.getAttribute(NATIVE_CLIENT_ATTRIBUTE) !== true) return;
@@ -761,7 +793,7 @@ module.exports = {
     api.onPlayerLogin(syncXpDrops);
     api.persistAttribute(XPDROPS_SETUP_ATTRIBUTE);
     api.onPlayerLogin(restoreXpDropsSetup);
-    api.onCustomEvent("player:varp-transmit", transmitXpDropsSetup);
+    api.onCustomEvent("player:varp-transmit", handleSettingsVarpTransmit);
     api.onInterfaceActionButton([...XPDROPS_SETUP_DROPDOWNS.keys()], chooseXpDropsSetupRow);
     api.onInterfaceActionButton([...VOLUME_SLIDER_VARPS.keys()], releaseVolumeSlider);
     api.onInterfaceActionButton([...VOLUME_MUTE_BUTTONS.keys()], toggleMute);

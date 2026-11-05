@@ -173,6 +173,17 @@ export class SoundEffectSystem {
         this.listenerZ = z;
     }
 
+    /** SOUND_AREA admission is an inclusive tile box; playback later applies its distance fade. */
+    isAreaSoundInRange(
+        x: number, y: number, radius: number,
+        listenerTileX = Math.floor(this.listenerX / 128),
+        listenerTileY = Math.floor(this.listenerY / 128),
+    ): boolean {
+        const range = radius + 1;
+        return Math.abs(listenerTileX - x) <= range
+            && Math.abs(listenerTileY - y) <= range;
+    }
+
     setVolume(volume: number): void {
         const previous = this.masterVolume;
         this.masterVolume = Math.max(0, Math.min(1, volume));
@@ -398,6 +409,8 @@ export class SoundEffectSystem {
     playSoundEffect(soundId: number, options: PlaySoundOptions = {}): void {
         if (this.disposed) return;
         const pending = { soundId, options: { ...options }, consumed: false };
+        // Sequence emitters reuse scratch coordinates; delayed sounds retain their emitted source.
+        if (pending.options.position) pending.options.position = { ...pending.options.position };
         for (const listener of this.beforePlayListeners) listener(pending);
         if (!pending.consumed) this.playSoundEffectInternal(pending.soundId, pending.options, 0);
     }

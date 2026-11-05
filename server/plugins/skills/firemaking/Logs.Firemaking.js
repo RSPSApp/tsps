@@ -673,6 +673,30 @@ function handleItemOnItem(event, activeSessions) {
   player.getPacketSender().sendInterfaceRemoval();
   player.getSkillManager()?.stopSkillable?.();
 
+  const helmetId = usedItemId === TINDERBOX_ID ? usedWithItemId
+    : usedWithItemId === TINDERBOX_ID ? usedItemId : -1;
+  if (helmetId === ItemIds.MINING_HELMET) {
+    event.handled = true;
+    if (getFiremakingLevel(player) < 65) {
+      player.sendMessage("You need a Firemaking level of at least 65 to light a mining helmet.");
+      return;
+    }
+    const inventory = player.getInventory();
+    const slot = inventory.getItems().findIndex((item) => item?.getId() === helmetId);
+    if (slot < 0) return;
+    inventory.setItem(slot, new Item(ItemIds.MINING_HELMET_2, 1));
+    inventory.refreshItems();
+    player.sendMessage("You light your mining helmet.");
+    pluginApi.emitCustomEvent("firemaking:success", {
+      player,
+      skill: Skill.FIREMAKING,
+      itemId: helmetId,
+      resultId: ItemIds.MINING_HELMET_2,
+      activity: "mining-helmet",
+    });
+    return;
+  }
+
   let logId = -1;
   if (usedItemId === TINDERBOX_ID) {
     logId = usedWithItemId;

@@ -76,8 +76,10 @@ function itemTaken({ player, itemId, amount, groundItem }) {
   const at = groundItem.getPosition();
   if (!inWilderness(at.getX(), at.getY())) return;
   const total = (Number(player.getAttribute(EGGS.attribute)) || 0) + amount;
-  player.setAttribute(EGGS.attribute, Math.min(total, EGGS.count));
-  if (total >= EGGS.count) done(player, EGGS);
+  const collected = Math.min(total, EGGS.count);
+  player.setAttribute(EGGS.attribute, collected);
+  if (collected >= EGGS.count) done(player, EGGS);
+  else player.sendMessage(`You have collected ${collected} of ${EGGS.count} Red spiders' eggs from the Wilderness.`);
 }
 
 function capeOf(player) {

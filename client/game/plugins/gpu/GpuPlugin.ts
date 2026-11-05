@@ -1,7 +1,8 @@
 import { ConfigChanged } from "@runelite/api/events";
 import { ConfigManager } from "@runelite/client/config/ConfigManager";
 import { Plugin, type PluginDescriptor } from "@runelite/client/plugins/Plugin";
-import { inject } from "@runelite/client/plugins/PluginInjector";
+import { CLIENT_TOKEN, inject } from "@runelite/client/plugins/PluginInjector";
+import type { OsrsClient } from "../../OsrsClient";
 import { AntiAliasingMode, GpuConfig, MAX_DRAW_DISTANCE, MIN_DRAW_DISTANCE } from "./GpuConfig";
 
 /** What the renderers apply while the plugin is on. */
@@ -15,6 +16,10 @@ export interface GpuSettings {
     fpsLimit: number;
     /** The shaders' u_colorBanding: 255 is smooth, lower rounds colours into fewer steps. */
     colorBanding: number;
+    /** Fog start follows the draw distance (autoFogDepthFactor) or sits at fogDepth tiles. */
+    autoFogDepth: boolean;
+    autoFogDepthFactor: number;
+    fogDepth: number;
 }
 
 const MSAA_SAMPLES: Readonly<Record<string, number>> = {
@@ -33,6 +38,9 @@ export function resolveGpuSettings(config: {
     drawDistance: number;
     fpsLimit: number;
     colorBanding: number;
+    autoFog: boolean;
+    fogStart: number;
+    manualFogStart: number;
 }): GpuSettings {
     return {
         msaaSamples: MSAA_SAMPLES[config.antiAliasingMode] ?? 0,
@@ -41,6 +49,9 @@ export function resolveGpuSettings(config: {
         fpsLimit: clamp(config.fpsLimit | 0, 0, 1000),
         // The same mapping as the dev panel's Color Banding slider.
         colorBanding: 255 - clamp(config.colorBanding | 0, 0, 100) * 2,
+        autoFogDepth: config.autoFog,
+        autoFogDepthFactor: clamp(config.fogStart, 0, 100) / 100,
+        fogDepth: clamp(config.manualFogStart, 0, 400),
     };
 }
 
@@ -62,6 +73,7 @@ export class GpuPlugin extends Plugin {
     static config = GpuConfig;
 
     private readonly configManager = inject(ConfigManager);
+    private readonly client = inject<OsrsClient>(CLIENT_TOKEN);
     private current: GpuSettings;
 
     constructor() {
@@ -72,10 +84,17 @@ export class GpuPlugin extends Plugin {
     /** Config events only reach a started plugin, so pick up changes made while it was off. */
     protected override async startUp(): Promise<void> {
         this.current = this.readConfig();
+        if (this.configManager.getConfiguration(GpuConfig.group, "brightness") !== undefined) {
+            this.client.applyScreenBrightness(this.configManager.getConfig(GpuConfig).brightness());
+        }
     }
 
     onConfigChanged(event: ConfigChanged): void {
-        if (event.getGroup() === GpuConfig.group) this.current = this.readConfig();
+        if (event.getGroup() !== GpuConfig.group) return;
+        this.current = this.readConfig();
+        if (event.getKey() === "brightness") {
+            this.client.applyScreenBrightness(this.configManager.getConfig(GpuConfig).brightness());
+        }
     }
 
     /** The settings to apply, or undefined while the plugin is off. */
@@ -90,6 +109,9 @@ export class GpuPlugin extends Plugin {
             drawDistance: config.drawDistance(),
             fpsLimit: config.fpsLimit(),
             colorBanding: config.colorBanding(),
+            autoFog: config.autoFog(),
+            fogStart: config.fogStart(),
+            manualFogStart: config.manualFogStart(),
         });
     }
 }

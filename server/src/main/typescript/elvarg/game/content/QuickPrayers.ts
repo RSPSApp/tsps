@@ -1,3 +1,5 @@
+import { Sound } from "../Sound";
+import { Sounds } from "../Sounds";
 import { CacheDefinitions } from "../cache/CacheDefinitions";
 import { Player } from "../entity/impl/player/Player";
 import { Skill } from "../model/Skill";
@@ -305,7 +307,9 @@ export class QuickPrayers {
             return;
         }
         if (this.enabled) {
-            QuickPrayers.PRAYER_HANDLER.deactivatePrayers(this.player);
+            // Raw3277: one off synth for the whole preset, then each activation when re-enabled.
+            QuickPrayers.PRAYER_HANDLER.deactivatePrayers(this.player, false);
+            Sounds.sendSound(this.player, Sound.PRAYER_TURN_OFF);
             this.player.getPacketSender().sendVarbit(QuickPrayers.PRAYER_ALL_ACTIVE_VARBIT, 0);
             this.enabled = false;
         } else {
@@ -318,7 +322,7 @@ export class QuickPrayers {
                 QuickPrayers.canUse(this.player, blocked, true);
                 this.enabled = false;
             } else {
-                QuickPrayers.PRAYER_HANDLER.deactivatePrayers(this.player);
+                QuickPrayers.PRAYER_HANDLER.deactivatePrayers(this.player, false);
                 this.player.getPacketSender().sendVarbit(
                     QuickPrayers.PRAYER_ALL_ACTIVE_VARBIT,
                     this.selectedPrayerMask(),

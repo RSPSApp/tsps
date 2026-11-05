@@ -2274,41 +2274,6 @@ export function encodeWidgetSetAnimation(uid: number, animationId: number): Buff
   return encodeServerPacket(ServerPacketId.WIDGET_SET_ANIMATION, payload);
 }
 
-export type QuestListEntry = {
-  slot: number;
-  status: number;
-  key: string;
-  displayName: string;
-};
-
-export type QuestListGroup = {
-  title: string;
-  quests: QuestListEntry[];
-};
-
-/** Mirrors the client's WIDGET_SET_QUEST_LIST decoder (ServerBinaryDecoder.ts). */
-export function encodeWidgetSetQuestList(groups: readonly QuestListGroup[]): Buffer {
-  const parts: Buffer[] = [];
-  const groupCount = Buffer.alloc(2);
-  groupCount.writeUInt16BE(groups.length & 0xffff);
-  parts.push(groupCount);
-  for (const group of groups) {
-    parts.push(string(group.title));
-    const questCount = Buffer.alloc(2);
-    questCount.writeUInt16BE(group.quests.length & 0xffff);
-    parts.push(questCount);
-    for (const quest of group.quests) {
-      const slot = Buffer.alloc(2);
-      slot.writeUInt16BE(quest.slot & 0xffff);
-      parts.push(slot);
-      parts.push(Buffer.from([quest.status & 0xff]));
-      parts.push(string(quest.key));
-      parts.push(string(quest.displayName));
-    }
-  }
-  return encodeServerPacket(ServerPacketId.WIDGET_SET_QUEST_LIST, Buffer.concat(parts));
-}
-
 export type ScriptInventorySnapshot = {
   capacity: number;
   slots: Array<{ slot: number; itemId: number; quantity: number }>;

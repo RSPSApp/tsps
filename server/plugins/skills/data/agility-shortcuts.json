@@ -8,9 +8,7 @@
       "level": 52,
       "route": [2998,3916,0],
       "render": "BALANCE_WALK",
-      "steps": [
-        {"walk":[[2998,3931]]}
-      ]
+      "script": "wildernessRidgeIn"
     },
     {
       "name": "Wilderness Agility Course gate (back to the door)",
@@ -18,9 +16,7 @@
       "level": 1,
       "route": [2998,3931,0],
       "render": "BALANCE_WALK",
-      "steps": [
-        {"walk":[[2998,3916]]}
-      ]
+      "script": "wildernessRidgeOut"
     },
     {
       "name": "Barbarian Outpost pipe",
@@ -354,6 +350,7 @@
       "unverified": "the barehanded climb's animation (no capture); the screen fade before the teleport (no step for it yet)",
       "requires": [
         {
+          "method": "grapple",
           "skills": {"agility":11,"strength":37,"ranged":19},
           "equipped": [
             {"slot":"weapon","name":"crossbow","message":"You need a crossbow equipped to do that."},
@@ -361,6 +358,7 @@
           ]
         },
         {
+          "method": "barehanded",
           "skills": {"agility":52},
           "steps": [
             {"face":{"object":[0,0]}},
@@ -391,6 +389,7 @@
       "unverified": "the barehanded climb's animation (no capture); the screen fade before the teleport (no step for it yet)",
       "requires": [
         {
+          "method": "grapple",
           "skills": {"agility":11,"strength":37,"ranged":19},
           "equipped": [
             {"slot":"weapon","name":"crossbow","message":"You need a crossbow equipped to do that."},
@@ -398,6 +397,7 @@
           ]
         },
         {
+          "method": "barehanded",
           "skills": {"agility":52},
           "steps": [
             {"face":{"object":[0,0]}},
@@ -2507,6 +2507,7 @@
       "unverified": "the grapple's steps and both ends (no capture; ends from the map)",
       "requires": [
         {
+          "method":"grapple",
           "skills": {"agility":8,"strength":8,"ranged":19},
           "equipped": [
             {"slot":"weapon","name":"crossbow","message":"You need a crossbow equipped to do that."},
@@ -2514,6 +2515,7 @@
           ]
         },
         {
+          "method":"barehanded",
           "skills": {"agility":48},
           "cross": [
             {"move":"to","anim":"CLIMB_ROCKS","speed":[0,210],"ticks":7},
@@ -4061,6 +4063,14 @@
       "name": "Araxxor lair web tunnel (in)",
       "object": 54161,
       "level": 1,
+      "requires": [
+        {
+          "skills": {"slayer": 92},
+          "quest": {"key": "priest_in_peril", "message": "You need to complete Priest in Peril before entering Morytania."},
+          "slayerTask": ["araxyte", "spider"],
+          "slayerTaskMessage": "You need to be assigned an araxyte or spider Slayer task to enter Araxxor's lair."
+        }
+      ],
       "render": "LONG_CRAWL",
       "steps": [
         {"sound":2454},

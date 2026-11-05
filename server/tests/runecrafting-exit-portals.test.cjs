@@ -551,3 +551,204 @@ test("entering the Chaos altar by its ruins (tiara or talisman) or the Abyss rif
   assert.equal(handlers["Air rift:Exit-through"]({ player: visitor(), objectId: ObjectIdentifiers.AIR_RIFT }), true);
   assert.deepEqual(diary(), [], "another altar's rift");
 });
+
+// Wiki: Runecraft#Multiple_runes (revision 15386331). These use the fixture's
+// current-level stub; they do not simulate obtaining a boost from food or relics.
+for (const [level, runes] of [[77, 3], [78, 4], [103, 4], [104, 5]]) {
+  test(`the Earth Altar crafts ${runes} runes per essence at current Runecraft level ${level}`, () => {
+    const player = crafter(level, [[ItemIdentifiers.PURE_ESSENCE, 1]]);
+
+    assert.equal(craft(player, ObjectIdentifiers.ALTAR_36), true);
+    assert.equal(amount(player, ItemIdentifiers.EARTH_RUNE), runes, `earth runes at current level ${level}`);
+    assert.equal(amount(player, ItemIdentifiers.PURE_ESSENCE), 0, "the essence is consumed");
+    assert.deepEqual(player.xp, [6.5], "XP is per essence, not per rune");
+  });
+}
+
+// Ordinary Earth crafting: conserve carried materials at the signed stack limit.
+// This reuses the registered-callback fixture's real Inventory/Item, not a native Player/wire.
+{
+  const MAX_EARTH_STACK = 2147483647;
+  const cases = [
+    { name: "roomy", beforeRunes: 50, maxCredit: 10, expectedCredit: 10, expectedDebit: 5 },
+    { name: "exact fit", beforeRunes: MAX_EARTH_STACK - 10, maxCredit: 10, expectedCredit: 10, expectedDebit: 5 },
+    { name: "two runes of headroom", beforeRunes: MAX_EARTH_STACK - 2, maxCredit: 2 },
+    { name: "no headroom", beforeRunes: MAX_EARTH_STACK, maxCredit: 0, expectedCredit: 0, expectedDebit: 0 },
+  ];
+  for (const row of cases) {
+    test(`ordinary Earth stack conservation: ${row.name}`, () => {
+      const essence = Array.from({ length: 5 }, () => [ItemIdentifiers.RUNE_ESSENCE, 1]);
+      const player = crafter(26, [[ItemIdentifiers.EARTH_RUNE, row.beforeRunes], ...essence]);
+      const inventory = player.inventory;
+      assert.equal(new Item(ItemIdentifiers.EARTH_RUNE, 1).getDefinition().isStackable(), true,
+        "prerequisite: real Earth rune definition is stackable");
+      assert.equal(new Item(ItemIdentifiers.RUNE_ESSENCE, 1).getDefinition().isStackable(), false,
+        "prerequisite: real rune essence definition is nonstackable");
+      assert.equal(amount(player, ItemIdentifiers.EARTH_RUNE), row.beforeRunes, "prerequisite: exact carried destination");
+      assert.equal(amount(player, ItemIdentifiers.RUNE_ESSENCE), 5, "prerequisite: five essence");
+      const materialSlots = inventory.getItems().filter(item => item.getId() === ItemIdentifiers.RUNE_ESSENCE);
+      assert.equal(materialSlots.length, 5, "prerequisite: five separate essence slots, not a fabricated stack");
+      for (const item of materialSlots) {
+        assert.equal(item.getAmount(), 1);
+        assert.equal(item.getMeta(), null, "prerequisite: ordinary plain essence");
+      }
+      const destination = inventory.getItems().filter(item => item.getId() === ItemIdentifiers.EARTH_RUNE);
+      assert.equal(destination.length, 1);
+      assert.equal(destination[0].getMeta(), null, "prerequisite: ordinary matching destination metadata");
+      assert.deepEqual(player.xp, [], "prerequisite: fresh raw XP collector");
+
+      assert.equal(craft(player, ObjectIdentifiers.ALTAR_36), true, "registered ordinary altar callback handles the craft");
+      const afterRunes = amount(player, ItemIdentifiers.EARTH_RUNE);
+      const debit = 5 - amount(player, ItemIdentifiers.RUNE_ESSENCE);
+      const credit = afterRunes - row.beforeRunes;
+      assert.ok(Number.isInteger(debit) && debit >= 0 && debit <= 5, "literal bounded essence debit");
+      assert.ok(Number.isInteger(credit) && credit >= 0 && credit <= row.maxCredit, "literal bounded carried rune credit");
+      assert.ok(afterRunes <= MAX_EARTH_STACK, "signed destination limit remains intact");
+      if (row.expectedCredit !== undefined) {
+        assert.equal(credit, row.expectedCredit, "literal control rune credit");
+        assert.equal(debit, row.expectedDebit, "literal control essence debit");
+      }
+      // Level26 independently means two Earth runes per essence; do not ask the production multiplier helper.
+      assert.equal(credit, debit * 2, "actual carried rune credit equals consumed essence times literal multiplier2");
+      const rawXp = player.xp.reduce((total, value) => total + value, 0);
+      assert.equal(rawXp, debit * 6.5, "raw base XP request equals actually consumed essence times6.5");
+    });
+  }
+}
+
+// Capacity planning compatibility: actual Inventory semantics, registered callback, raw XP requests.
+{
+  const MAX = 2147483647;
+  function fillers(count) {
+    assert.equal(new Item(ItemIdentifiers.BRONZE_AXE, 1).getDefinition().isStackable(), false,
+      "prerequisite: real filler definition is nonstackable");
+    return Array.from({ length: count }, () => [ItemIdentifiers.BRONZE_AXE, 1]);
+  }
+  function rawXp(player) { return player.xp.reduce((sum, value) => sum + value, 0); }
+  function successCount(player) {
+    return emitted.filter(([name, payload]) => name === "runecrafting:success" && payload.player === player).length;
+  }
+  function snapshot(inventory) {
+    return inventory.getItems().map(item => ({ item, id: item.getId(), amount: item.getAmount(), meta: JSON.stringify(item.getMeta()) }));
+  }
+  function unchanged(inventory, before) {
+    inventory.getItems().forEach((item, slot) => {
+      assert.equal(item, before[slot].item, `untouched item identity at slot ${slot}`);
+      assert.equal(item.getId(), before[slot].id);
+      assert.equal(item.getAmount(), before[slot].amount);
+      assert.equal(JSON.stringify(item.getMeta()), before[slot].meta);
+    });
+  }
+  function noCraftEffects(player) {
+    assert.equal(rawXp(player), 0, "rejected whole action requests no XP");
+    assert.equal(successCount(player), 0, "rejected whole action emits no success/pet roll");
+    assert.equal(player.log.some(value => /^(graphic|animation) /.test(value)), false);
+  }
+
+  test("ordinary capacity: consuming the last essence frees a rune slot in a full bag", () => {
+    const player = crafter(26, [...fillers(27), [ItemIdentifiers.RUNE_ESSENCE, 1]]);
+    const before = snapshot(player.inventory);
+    assert.equal(player.inventory.getItems().filter(item => item.getId() >= 0).length, 28);
+    assert.equal(amount(player, ItemIdentifiers.EARTH_RUNE), 0);
+    assert.equal(craft(player, ObjectIdentifiers.ALTAR_36), true);
+    assert.equal(amount(player, ItemIdentifiers.RUNE_ESSENCE), 0);
+    assert.equal(amount(player, ItemIdentifiers.EARTH_RUNE), 2);
+    assert.equal(rawXp(player), 6.5);
+    assert.equal(successCount(player), 1);
+    for (let slot = 0; slot < 27; slot++) assert.equal(player.inventory.getItems()[slot], before[slot].item);
+  });
+
+  test("ordinary capacity: complete real stackable soul-shard removal frees its one slot", () => {
+    const shard = ItemIdentifiers.SOUL_SHARD;
+    assert.ok(Number.isInteger(shard), "prerequisite: canonical soul-shard identifier");
+    assert.equal(new Item(shard, 1).getDefinition().isStackable(), true,
+      "prerequisite: real soul-shard stackability");
+    const player = crafter(26, [...fillers(27), [shard, 5]]);
+    const before = snapshot(player.inventory);
+    const name = "runecrafting:essence";
+    const hadHooks = PluginManager.customEventHooks.has(name);
+    const prior = PluginManager.customEventHooks.get(name);
+    const saved = prior?.slice();
+    let requested = 0;
+    try {
+      PluginManager.createApi("RunecraftingCapacityTest").onCustomEvent(name, request => {
+        if (request.player === player) { requested++; request.pure.push(shard); }
+      });
+      assert.equal(craft(player, ObjectIdentifiers.ALTAR_36), true);
+      assert.equal(requested, 1, "registered provider contributes to this one ordinary bind");
+      assert.equal(amount(player, shard), 0);
+      assert.equal(amount(player, ItemIdentifiers.EARTH_RUNE), 10);
+      assert.equal(rawXp(player), 32.5);
+      assert.equal(successCount(player), 1);
+      for (let slot = 0; slot < 27; slot++) assert.equal(player.inventory.getItems()[slot], before[slot].item);
+    } finally {
+      if (hadHooks) {
+        prior.splice(0, prior.length, ...saved);
+        PluginManager.customEventHooks.set(name, prior);
+      } else PluginManager.customEventHooks.delete(name);
+    }
+  });
+
+  test("ordinary capacity: mixed essence keeps debit-credit order and plans cumulative output", () => {
+    const inputs = [[ItemIdentifiers.RUNE_ESSENCE, 1], [ItemIdentifiers.RUNE_ESSENCE, 1],
+      ...Array.from({ length: 3 }, () => [ItemIdentifiers.PURE_ESSENCE, 1])];
+    const player = crafter(26, [[ItemIdentifiers.EARTH_RUNE, 50], ...inputs]);
+    const inventory = player.inventory;
+    const trace = [];
+    const descriptors = new Map(["deleteNumber", "addItem"].map(key => [key, Object.getOwnPropertyDescriptor(inventory, key)]));
+    const remove = inventory.deleteNumber;
+    const add = inventory.addItem;
+    try {
+      Object.defineProperty(inventory, "deleteNumber", { configurable: true, writable: true, value: function (id, count) {
+        assert.equal(this, inventory); trace.push(["debit", id, count]); return remove.call(this, id, count);
+      } });
+      Object.defineProperty(inventory, "addItem", { configurable: true, writable: true, value: function (item) {
+        assert.equal(this, inventory); trace.push(["credit", item.getId(), item.getAmount()]); return add.call(this, item);
+      } });
+      assert.equal(craft(player, ObjectIdentifiers.ALTAR_36), true);
+    } finally {
+      for (const [key, descriptor] of descriptors) {
+        if (descriptor) Object.defineProperty(inventory, key, descriptor); else delete inventory[key];
+      }
+    }
+    assert.deepEqual(trace, [["debit", ItemIdentifiers.RUNE_ESSENCE, 2], ["credit", ItemIdentifiers.EARTH_RUNE, 4],
+      ["debit", ItemIdentifiers.PURE_ESSENCE, 3], ["credit", ItemIdentifiers.EARTH_RUNE, 6]]);
+    assert.equal(amount(player, ItemIdentifiers.EARTH_RUNE), 60);
+    assert.equal(amount(player, ItemIdentifiers.RUNE_ESSENCE), 0);
+    assert.equal(amount(player, ItemIdentifiers.PURE_ESSENCE), 0);
+    assert.equal(rawXp(player), 32.5);
+
+    const blocked = crafter(26, [[ItemIdentifiers.EARTH_RUNE, MAX - 6], ...inputs]);
+    const before = snapshot(blocked.inventory);
+    assert.equal(craft(blocked, ObjectIdentifiers.ALTAR_36), true);
+    unchanged(blocked.inventory, before);
+    noCraftEffects(blocked);
+  });
+
+  test("ordinary capacity: a different-metadata full stack does not block a newly freed plain slot", () => {
+    const player = crafter(26, [[ItemIdentifiers.EARTH_RUNE, MAX], ...fillers(26), [ItemIdentifiers.RUNE_ESSENCE, 1]]);
+    const tagged = new Item(ItemIdentifiers.EARTH_RUNE, MAX, { capacityControl: "untouched" });
+    player.inventory.setItem(0, tagged);
+    const before = snapshot(player.inventory);
+    assert.equal(craft(player, ObjectIdentifiers.ALTAR_36), true);
+    const plain = player.inventory.getItems().filter(item => item.getId() === ItemIdentifiers.EARTH_RUNE && item.getMeta() === null);
+    assert.equal(plain.length, 1);
+    assert.equal(plain[0].getAmount(), 2, "plain output uses the essence slot, not the tagged full stack");
+    assert.equal(player.inventory.getItems()[0], tagged);
+    assert.equal(tagged.getAmount(), MAX);
+    assert.deepEqual(tagged.getMeta(), { capacityControl: "untouched" });
+    for (let slot = 1; slot < 27; slot++) assert.equal(player.inventory.getItems()[slot], before[slot].item);
+    assert.equal(amount(player, ItemIdentifiers.RUNE_ESSENCE), 0);
+    assert.equal(rawXp(player), 6.5);
+  });
+
+  test("ordinary capacity: other-metadata headroom cannot rescue a matching stack overflow", () => {
+    const player = crafter(26, [[ItemIdentifiers.EARTH_RUNE, MAX - 2], [ItemIdentifiers.EARTH_RUNE, 1],
+      ...Array.from({ length: 5 }, () => [ItemIdentifiers.RUNE_ESSENCE, 1])]);
+    player.inventory.setItem(1, new Item(ItemIdentifiers.EARTH_RUNE, 1, { capacityControl: "other" }));
+    const before = snapshot(player.inventory);
+    assert.equal(craft(player, ObjectIdentifiers.ALTAR_36), true);
+    unchanged(player.inventory, before);
+    noCraftEffects(player);
+  });
+}

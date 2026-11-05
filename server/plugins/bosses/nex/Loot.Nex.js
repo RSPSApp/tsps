@@ -81,7 +81,8 @@ function reward(fight, players, where) {
   const damagers = players.filter((player) => (fight.contribution.get(player) ?? 0) > 0);
   for (const entry of rollLoot(fight.contribution, players)) {
     const { player } = entry;
-    const request = { player, npc: fight.boss, npcId: Common.data.npcs.nex, drops: entry.drops, damagers };
+    // The kill is counted by the fight's own count(); this roll only logs the loot.
+    const request = { player, npc: fight.boss, npcId: Common.data.npcs.nex, drops: entry.drops, damagers, countKill: false };
     Common.api.emitCustomEvent("npc-drops:roll", request);
     for (const drop of request.drops) {
       if (!Number.isInteger(drop.itemId) || drop.amount <= 0) continue;

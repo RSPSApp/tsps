@@ -7,7 +7,7 @@ module.exports = function registerMorrigansJavelinSpecialAttack(api) {
   const BLEED_FRACTION = 0.75;
   const BLEED_CHUNK = 10;
   const BLEED_INTERVAL_TICKS = 1;
-  const ANIMATION = new Animation(806);
+  const ANIMATION = new Animation(11467); // WEAPON_MORRIGANS_JAVELIN_SPECIAL01
   const BLEED_TASK_KEY_ATTRIBUTE = "combat:bleed:task-key";
   const JAVELIN_ITEM_IDS = [
     ItemIdentifiers.MORRIGANS_JAVELIN,

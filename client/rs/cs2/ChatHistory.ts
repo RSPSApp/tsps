@@ -110,7 +110,7 @@ export class ChatHistoryStore {
             type,
             from,
             prefix,
-            text,
+            text: text ?? "",
             timestamp: Date.now(),
             cycle: getClientClock() | 0,
             isFromFriend,

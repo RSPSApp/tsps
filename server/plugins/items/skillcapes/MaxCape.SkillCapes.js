@@ -10,13 +10,16 @@
  *   Boost), and worn Home, Crafting Guild, Guild Teleports, Skilling Areas and POH Portals.
  * - Combining: one of the listed capes used on it, with the max hood carried ("You need your max
  *   cape hood to be able to combine those."), makes the combined cape and hood. A knife takes a
- *   combined cape apart again into the max cape and the original item.
+ *   combined cape apart again into the max cape and the original item. Preset (untradeable,
+ *   unbankable) copies never combine: refused at the prompt, and only unrestricted instances are
+ *   consumed at Yes.
  */
 const Capes = require("./Common.SkillCapes");
 const Teleports = require("./Teleports.SkillCapes");
 const Options = require("./Options.SkillCapes");
 
 const MAC = "Mac";
+const PRESET_TEXT = "Preset items cannot be used for this.";
 const MAC_HAS_CAPE_VARIANT = "standard-dialogue-if-the-player-has-a-max-cape-in-their-inventory";
 const MAC_NO_CAPE_VARIANT = "standard-dialogue-if-the-player-does-not-have-a-max-cape-in-their-bank-or-inventory";
 const MAC_HOOD_VARIANT = "using-items-on-mac-using-any-max-hood-variant-on-mac";
@@ -116,11 +119,25 @@ function buyMaxCape(player) {
   return true;
 }
 
-/** Sells the first max cape carried (and its hood, if carried) back for 80%. */
-function sellBack(player) {
-  const cape = maxCapeInInventory(player);
+/** Whether the coins and any item inside the cape all fit, once the cape and hood have gone. */
+function sellBackFits(inventory, cape) {
+  const { Item, ItemIdentifiers } = Capes.core;
+  const hasCoins = inventory.contains(ItemIdentifiers.COINS);
+  if (hasCoins && inventory.getAddableAmount(new Item(ItemIdentifiers.COINS, Capes.MAX.sellBack)) < Capes.MAX.sellBack) return false;
+  const freed = 1 + (inventory.contains(hoodFor(cape)) ? 1 : 0);
+  const needed = (Capes.COMBINED_BY_CAPE.has(cape) ? 1 : 0) + (hasCoins ? 0 : 1);
+  return inventory.getFreeSlots() + freed >= needed;
+}
+
+/** Sells a carried max cape (and its hood, if carried) back for 80%: the first one, unless named. */
+function sellBack(player, cape = maxCapeInInventory(player)) {
   if (cape === null) return false;
   const inventory = player.getInventory();
+  if (!inventory.contains(cape)) return false;
+  if (!sellBackFits(inventory, cape)) {
+    player.sendMessage("You don't have enough room for what Mac would give you.");
+    return false;
+  }
   const hood = hoodFor(cape);
   const combined = Capes.COMBINED_BY_CAPE.get(cape);
   inventory.deleteNumber(cape, 1);
@@ -174,7 +191,7 @@ function macAction(event) {
       event.end = true;
     }
   } else if (/You sell your cape (?:and hood )?back to Mac/i.test(text)) {
-    sellBack(player);
+    if (!sellBack(player)) event.end = true;
     event.handled = true;
   } else if (/which max hood variant/i.test(text)) {
     event.handled = true;
@@ -183,20 +200,40 @@ function macAction(event) {
   }
 }
 
-function sellPrompt(player) {
+function sellPrompt(player, cape) {
   const price = Capes.core.Misc.insertCommasToNumber(String(Capes.MAX.sellBack));
-  api.sendMultiChatboxPrompt(player, "Sell your max cape and hood back?",
+  const name = Capes.isMaxCape(cape) ? "max cape" : Capes.itemName(cape);
+  api.sendMultiChatboxPrompt(player, `Sell your ${name} and hood back?`,
     `Yes - receive ${price} coins.`, () => {
-      if (sellBack(player)) Capes.messageBox(player, "You sell your cape and hood back to Mac.");
+      const hood = hoodFor(cape);
+      const hadHood = player.getInventory().contains(hood);
+      if (sellBack(player, cape)) showSale(player, cape, hadHood ? hood : null);
     },
     "No, I've changed my mind.", () => {});
+}
+
+/** Live shows the cape and hood sold (RSProx 3146); the box with no hood is ours, in the transcript's words. */
+function showSale(player, cape, hood) {
+  const { DialogueChainBuilder, DoubleItemStatementDialogue, ItemStatementDialogue } = Capes.core;
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(hood === null
+    ? new ItemStatementDialogue(0, cape, "You sell your cape back to Mac.")
+    : new DoubleItemStatementDialogue(0, cape, hood, "You sell your cape and hood back to Mac.")));
+}
+
+/** The transcript's question keeps a dump placeholder, and live asks the same one both ways (RSProx 3146). */
+function askSaleByTalking(notice) {
+  if (!isMac(notice) || !/\[max cape variant\]/.test(notice.prompt)) return;
+  const cape = maxCapeInInventory(notice.player);
+  if (cape === null) return;
+  notice.handled = true;
+  sellPrompt(notice.player, cape);
 }
 
 function itemOnMac(event) {
   if (Capes.core.CacheDefinitions.getNpc(event.npcId)?.name !== MAC) return;
   if (isAnyMaxCape(event.itemId)) {
     event.handled = true;
-    sellPrompt(event.player);
+    sellPrompt(event.player, event.itemId);
   } else if (event.itemId === Capes.MAX.hood || [...Capes.COMBINED_BY_CAPE.values()].some((c) => c.hood === event.itemId)) {
     event.handled = true;
     Capes.playTranscript(event.player, event.target, MAC_HOOD_VARIANT);
@@ -275,12 +312,25 @@ function maxCapeOption(event) {
 
 // --- Combining and disassembling ------------------------------------------------------------
 
+/** Preset (and other untradeable or unbankable) copies keep their restrictions, so they never convert. */
+function restricted(item) {
+  const { Item } = Capes.core;
+  return !!item && (item.isPresetItem?.() === true
+    || item.getMetaValue?.(Item.PRESET_META) === true
+    || item.getMetaValue?.(Item.UNTRADEABLE_META) === true
+    || item.getMetaValue?.(Item.UNBANKABLE_META) === true);
+}
+
+/** The slot of an unrestricted copy of the item: the instance that is actually consumed. */
+function plainSlot(inventory, itemId) {
+  return inventory.getItems().findIndex((item) => item && item.getId() === itemId && !restricted(item));
+}
+
 function combine(player, combined) {
   const inventory = player.getInventory();
-  if (!inventory.contains(Capes.MAX.cape) || !inventory.contains(combined.item) || !inventory.contains(Capes.MAX.hood)) return;
-  inventory.deleteNumber(Capes.MAX.cape, 1);
-  inventory.deleteNumber(Capes.MAX.hood, 1);
-  inventory.deleteNumber(combined.item, 1);
+  const slots = [Capes.MAX.cape, Capes.MAX.hood, combined.item].map((id) => plainSlot(inventory, id));
+  if (slots.some((slot) => slot < 0)) return;
+  for (const slot of slots) inventory.deleteAtSlot(slot, 1);
   inventory.adds(combined.cape, 1);
   inventory.adds(combined.hood, 1);
   const chain = new Capes.core.DialogueChainBuilder();
@@ -289,7 +339,7 @@ function combine(player, combined) {
 }
 
 function combineOnUse(event) {
-  const { player, usedItemId, usedWithItemId } = event;
+  const { player, usedItem, usedWithItem, usedItemId, usedWithItemId } = event;
   const other = usedItemId === Capes.MAX.cape ? usedWithItemId : usedWithItemId === Capes.MAX.cape ? usedItemId : null;
   if (other === null) return;
   if (other === Capes.objId(Capes.DATA.combinedNotBlessed)) {
@@ -300,6 +350,10 @@ function combineOnUse(event) {
   const combined = Capes.COMBINED_BY_ITEM.get(other);
   if (!combined) return;
   event.handled = true;
+  if (restricted(usedItem) || restricted(usedWithItem)) {
+    player.sendMessage(PRESET_TEXT);
+    return;
+  }
   if (!player.getInventory().contains(Capes.MAX.hood)) {
     player.sendMessage("You need your max cape hood to be able to combine those.");
     return;
@@ -319,6 +373,11 @@ function combineOnUse(event) {
 function disassemble(player, combined) {
   const inventory = player.getInventory();
   if (!inventory.contains(combined.cape)) return;
+  // The max cape takes the combined cape's slot, and the item needs another.
+  if (inventory.getFreeSlots() < 1) {
+    player.sendMessage("You don't have enough inventory space to disassemble that.");
+    return;
+  }
   const name = Capes.itemName(combined.cape);
   inventory.deleteNumber(combined.cape, 1);
   inventory.adds(Capes.MAX.cape, 1);
@@ -358,6 +417,7 @@ module.exports = function attachMaxCape(pluginApi) {
   api.onNpcDialogueCondition(macCondition);
   api.onCustomEvent("npc-dialogue:line", macLine);
   api.onCustomEvent("npc-dialogue:action", macAction);
+  api.onCustomEvent("npc-dialogue:menu", askSaleByTalking);
   api.onItemOnNpc(itemOnMac);
   api.onItemAction(maxCapeOption);
   // A mounted cape (house cape hanger) runs its option as the item would: { player, itemId, option }.

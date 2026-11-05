@@ -540,6 +540,15 @@ function attach(api) {
   }
 }
 
+/** Monsters cannot attack a player standing in the centre of a fairy ring (Wiki: Fairy ring). */
+function protectRingCentre(event) {
+  const { attacker, target } = event ?? {};
+  if (!attacker?.isNpc?.() || !target?.isPlayer?.()) return;
+  const location = target.getLocation?.();
+  if (!location) return;
+  if ([...rings.values()].some((ring) => ring.destination?.equals?.(location))) event.allow = false;
+}
+
 /** The rings' options, as the cache names them (op 3 is a plain "Last-destination", not a multiloc). */
 function ringOptions() {
   return { Zanaris: zanaris, Configure: openDial, "Last-destination": lastDestination, Use: useExitRing };
@@ -574,6 +583,7 @@ module.exports = {
     api.persistAttribute(LAST_CODE_ATTRIBUTE);
     api.persistAttribute(USED_CODES_ATTRIBUTE);
     api.persistAttribute(FAVOURITES_ATTRIBUTE);
+    api.onCanAttack(protectRingCentre);
     api.onObjectInteraction("Fairy ring", ringOptions());
     api.onInterfaceActionClick(interfaceAction);
     api.onCustomEvent("interface:closed", interfaceClosed);

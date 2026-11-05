@@ -175,6 +175,35 @@ test("a nested pickup during the take policy cannot take the same seed twice", a
   assert.deepEqual(events, [{ amount: 5, discarded: 0, source: "pickup" }]);
 });
 
+test("a take policy can reduce credit and discard a bounded quantity", async (t) => {
+  const f = actor(t, "Open seed box");
+  drop(f, I.POTATO_SEED, 5);
+  const events = [];
+  pickupEvents.set(f.p, events);
+  pickupPolicies.set(f.p, (event) => {
+    if (event.amount === 5) { event.amount = 2; event.discard = 1; }
+  });
+  await take(f, I.POTATO_SEED);
+  tick(f, 2);
+  assert.equal(inBox(f, I.POTATO_SEED), 2);
+  assert.equal(f.inv.getAmount(I.POTATO_SEED), 2);
+  assert.deepEqual(events, [{ amount: 2, discarded: 1, source: "pickup" }, { amount: 2, discarded: 0, source: "pickup" }]);
+});
+
+test("a take policy changing the floor item cancels the seed-box transfer", async (t) => {
+  const f = actor(t, "Open seed box");
+  const ground = drop(f, I.POTATO_SEED, 5);
+  const events = [];
+  pickupEvents.set(f.p, events);
+  pickupPolicies.set(f.p, () => ground.getItem().setAmount(4));
+  await take(f, I.POTATO_SEED);
+  tick(f, 2);
+  assert.equal(inBox(f, I.POTATO_SEED), 0);
+  assert.equal(f.inv.getAmount(I.POTATO_SEED), 0);
+  assert.equal(ground.getItem().getAmount(), 4);
+  assert.deepEqual(events, []);
+});
+
 test("metadata-bearing seeds follow the ordinary pickup path", async (t) => {
   const f = actor(t, "Open seed box");
   const item = new core.Item(I.POTATO_SEED, 3);

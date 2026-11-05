@@ -30783,5 +30783,8 @@
   {"level":0,"name":"Chris","x":3382,"y":3270,"id":11674,"source":"wiki"},
   {"level":0,"name":"Duel Guide","x":3367,"y":3268,"id":11673,"source":"wiki"},
   {"level":0,"name":"Arena Guard Joby","x":3325,"y":3254,"id":11670,"source":"wiki"},
-  {"level":0,"name":"Arena Guard Yon","x":3314,"y":3235,"id":11667,"source":"wiki"}
+  {"level":0,"name":"Arena Guard Yon","x":3314,"y":3235,"id":11667,"source":"wiki"},
+  {"level":0,"name":"Poison gas cloud","x":1428,"y":3878,"id":7070,"wanderRadius":4,"source":"wiki"},
+  {"level":0,"name":"Poison gas cloud","x":1437,"y":3878,"id":7070,"wanderRadius":4,"source":"wiki"},
+  {"level":0,"name":"Poison gas cloud","x":1448,"y":3867,"id":7070,"wanderRadius":4,"source":"wiki"}
 ]

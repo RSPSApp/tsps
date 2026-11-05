@@ -63,6 +63,7 @@ function give(player, drops) {
     } else {
       player.getInventory().adds(id, amount);
     }
+    Common.api.emitCustomEvent("collection-log:obtain", { player, itemId: id, amount });
     const name = CacheDefinitions.getItem(id)?.name ?? "item";
     const text = amount > 1 ? `${amount} x ${name}` : name;
     player.sendMessage(Common.message("drop", { name: player.getDisplayName(), item: text }));

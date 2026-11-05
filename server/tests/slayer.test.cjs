@@ -420,11 +420,16 @@ test("slayer:grant-points and slayer:current-task", () => {
   const player = createPlayer();
   handlers.events.get("slayer:grant-points")[0]({ player, points: 30 });
   assert.equal(varbit(player, "slayer_points"), 30);
+  const noTask = { player, task: null };
+  handlers.events.get("slayer:current-task")[0](noTask);
+  assert.equal(noTask.task, null);
+  assert.equal(noTask.points, 30, "points are available even without a current task");
   giveTask(player, 8, Data.get().taskById.get(Data.npcTaskId(npcNamed("Kalphite Worker").getId())).displayName, 5);
   const request = { player, task: null };
   handlers.events.get("slayer:current-task")[0](request);
   assert.equal(request.task.master, 8);
   assert.equal(request.task.name, "kalphites");
+  assert.equal(request.points, 30);
 });
 
 test("every Slayer data name is a cache NPC", () => {
@@ -1100,4 +1105,89 @@ test("native superior deaths keep three normal rolls and 550 XP; CoX scavengers 
   assert.equal(scavenger.drops.filter(([id]) => id === core.ItemIdentifiers.BONES).length, 1);
   assert.equal(scavenger.drops.filter(([id]) => id !== core.ItemIdentifiers.BONES).length, 2,
     "the canonical two-roll table replaces CoX's extra-roll workaround");
+});
+
+/**
+ * An earlier test registers Slayer again on the real plugin api, which points the units' events at
+ * the real bus; the diary and Guardians handlers these tests need are in this file's table, so
+ * point the units back at it.
+ */
+function useTestEvents() {
+  const events = { core, emitCustomEvent: (name, payload) => { for (const fn of handlers.events.get(name) ?? []) fn(payload); } };
+  Tasks.init(events);
+  require("../plugins/skills/slayer/MorytaniaDiary.Slayer").init(events);
+}
+
+test("the Morytania Diary adds 2.5/5/7.5/10% Slayer XP for an on-task kill in the Slayer Tower, whatever legs are worn (Wiki: Morytania Diary)", () => {
+  const I = core.ItemIdentifiers;
+  const Diaries = require("../plugins/achievements/diaries/Data.AchievementDiaries");
+  const { onIsComplete } = require("../plugins/achievements/AchievementDiaries.plugin")._test;
+  handlers.events.set("diary:is-complete", [onIsComplete]);
+  useTestEvents();
+  const morytania = Diaries.BY_KEY.get("morytania");
+  const at = (x, y, z = 0) => ({ getX: () => x, getY: () => y, getZ: () => z });
+  assert.equal([...Data.get().areas.values()].find((area) => area.id === 9).name, "Slayer Tower");
+  /** The Slayer XP of one bloodveld kill on a Bloodveld task, with the diary done up to `tier` (or not at all) and `legs` worn (or none). */
+  function killAt(where, tier = null, legs = null) {
+    const player = createPlayer();
+    const items = Array.from({ length: 14 }, () => new core.Item(-1));
+    if (legs !== null) items[core.Equipment.LEG_SLOT] = new core.Item(legs);
+    player.getEquipment = () => ({ get: (slot) => items[slot], getItems: () => items });
+    const done = tier === null ? [] : Diaries.TIERS.slice(0, Diaries.TIERS.indexOf(tier) + 1).flatMap((each) => morytania.tiers[each].tasks.map((task) => task.key));
+    player.setAttribute("achievement-diaries:tasks", { morytania: done });
+    giveTask(player, 5, "Bloodveld", 10);
+    const bloodveld = npcNamed("Bloodveld", where);
+    kill(player, bloodveld);
+    assert.equal(varp(player, "slayer_count"), 9, "the kill counted");
+    return { xp: player.xp.map(([, amount]) => amount), hitpoints: bloodveld.getDefinition().getHitpoints() };
+  }
+  const tiers = [["easy", 1.025], ["medium", 1.05], ["hard", 1.075], ["elite", 1.1]];
+  const inside = [
+    ["the ground floor", at(3420, 3560)], ["an upper floor", at(3420, 3560, 2)], ["the basement", at(3412, 9950, 3)],
+    ["the basement's southern spawn", at(3405, 9929, 3)], ["the basement's far spawn", at(3440, 9928, 3)],
+    ["the basement's west edge", at(3392, 9950, 3)], ["the basement's south edge", at(3412, 9920, 3)],
+  ];
+  for (const [tier, multiplier] of tiers) {
+    for (const legs of [null, I.RUNE_PLATELEGS]) {
+      for (const [place, where] of inside) {
+        const result = killAt(where, tier, legs);
+        assert.deepEqual(result.xp, [result.hitpoints * multiplier], `${tier} diary, ${legs ?? "no"} legs, ${place}`);
+      }
+      const outside = killAt(at(3200, 3200), tier, legs);
+      assert.deepEqual(outside.xp, [outside.hitpoints], `${tier} diary outside the tower`);
+      const beyond = killAt(at(3405, 9919, 3), tier, legs);
+      assert.deepEqual(beyond.xp, [beyond.hitpoints], `${tier} diary south of the basement`);
+    }
+  }
+  // The perk is the diary's, not the legs': legs without the diary give nothing.
+  for (const legs of [null, I.MORYTANIA_LEGS_4]) {
+    const result = killAt(at(3420, 3560), null, legs);
+    assert.deepEqual(result.xp, [result.hitpoints], `no diary, ${legs ?? "no"} legs`);
+  }
+  const partial = killAt(at(3420, 3560), "easy", I.MORYTANIA_LEGS_4);
+  assert.deepEqual(partial.xp, [partial.hitpoints * 1.025], "the tier done, not the legs, sets the bonus");
+});
+
+test("the Morytania Diary's Slayer XP also lifts Dusk's 1,350 on the Slayer Tower roof (Wiki: Grotesque Guardians)", () => {
+  const Common = require("../plugins/bosses/grotesqueguardians/Common.GrotesqueGuardians");
+  const Kills = require("../plugins/bosses/grotesqueguardians/Kills.GrotesqueGuardians");
+  const Diaries = require("../plugins/achievements/diaries/Data.AchievementDiaries");
+  const { onIsComplete } = require("../plugins/achievements/AchievementDiaries.plugin")._test;
+  Common.init({ core });
+  handlers.events.set("diary:is-complete", [onIsComplete]);
+  handlers.events.set("slayer:task-kill", [...(handlers.events.get("slayer:task-kill") ?? []), Kills.slayerXp]);
+  useTestEvents();
+  // Dusk and Dawn are a Boss task's sub-task (slayer-masters.json "bosses").
+  const bossId = [...Data.get().bossNames].find(([, names]) => names.has("Dusk"))?.[0];
+  assert.ok(bossId, "the Boss task has Dusk");
+  const morytania = Diaries.BY_KEY.get("morytania");
+  for (const [tier, multiplier] of [["easy", 1.025], ["elite", 1.1]]) {
+    const player = createPlayer();
+    player.setAttribute("achievement-diaries:tasks", { morytania: Diaries.TIERS.slice(0, Diaries.TIERS.indexOf(tier) + 1).flatMap((each) => morytania.tiers[each].tasks.map((entry) => entry.key)) });
+    giveTask(player, 5, Data.get().taskById.get(Data.BOSS_TASK_ID).displayName, 5);
+    setVarbit(player, "slayer_target_bossid", bossId);
+    kill(player, npc(Common.ids.npcs.duskPhase4, { getX: () => 1697, getY: () => 4570, getZ: () => 0 }));
+    assert.equal(varp(player, "slayer_count"), 4, "Dusk counted");
+    assert.deepEqual(player.xp.map(([, amount]) => amount), [1350 * multiplier], `${tier} diary on the roof`);
+  }
 });

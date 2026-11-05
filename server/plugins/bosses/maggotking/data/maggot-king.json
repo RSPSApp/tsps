@@ -1,0 +1,10 @@
+{
+  "questKey": "the_blood_moon_rises",
+  "entrance": [2677, 7851, 0],
+  "outside": [2677, 7851, 0],
+  "sourceMin": [2888, 7832, 0],
+  "instanceChunks": [5, 2],
+  "arrival": [2911, 7836, 0],
+  "bossSpawn": [2909, 7838, 0],
+  "exit": { "id": 61994, "tile": [2912, 7833, 0] }
+}

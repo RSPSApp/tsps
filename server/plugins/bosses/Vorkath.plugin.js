@@ -13,11 +13,13 @@ const Area = require("./vorkath/Area.Vorkath");
 const Hud = require("./vorkath/Hud.Vorkath");
 const CombatAchievements = require("./vorkath/CombatAchievements.Vorkath");
 const Retrieval = require("./vorkath/Retrieval.Vorkath");
+const { initDragonfireProtectionCoreAccess } = require("../combat/DragonfireProtection");
 
 module.exports = {
   name: "Vorkath",
   members: true,
   register(api) {
+    initDragonfireProtectionCoreAccess(api);
     Wake.attach(api);
     Combat.attach(api);
     Specials.attach(api);

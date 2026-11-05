@@ -555,6 +555,9 @@ test("a finished Twilight's Promise unlocks Renu at login, and an unfinished one
   const unfinished = createPlayer();
   Renu.unlockOnLogin({ player: unfinished });
   assert.equal(Common.renuUnlocked(unfinished), false);
+  assert.equal(unfinished.varbit("quetzal_auburnvalley"), 0, "a whistle user has no Renu to repair");
+  assert.equal(unfinished.varp("quetzals_unlocked"), 0);
+  assert.equal(unfinished.getAttribute(Common.VARPS_ATTRIBUTE), undefined, "an unfinished quest saves nothing");
   completeQuests = new Set(["twilights_promise"]);
   const finished = createPlayer({ varps: { quetzals_unlocked: 1 << site("Cam Torum Entrance").id } });
   Renu.unlockOnLogin({ player: finished });
@@ -563,6 +566,53 @@ test("a finished Twilight's Promise unlocks Renu at login, and an unfinished one
   assert.equal(finished.varbit("quetzal_teomat"), 1);
   assert.equal(finished.varbit("quetzal_camtorum"), 1, "a built site shows too");
   assert.equal(finished.varbit("quetzal_kastori"), 0, "an unbuilt one doesn't");
+  completeQuests = new Set();
+});
+
+test("an existing Renu owner's missing automatic sites are repaired at login, and nothing else moves", () => {
+  completeQuests = new Set();
+  const teomat = site("The Teomat");
+  const camTorum = site("Cam Torum Entrance");
+  const kastori = site("Kastori");
+  const auburnvale = site("Auburnvale");
+  const aldarin = site("Aldarin");
+  const built = (1 << camTorum.id) | (1 << site("Outer Fortis").id);
+  const player = createPlayer({
+    varbits: {
+      quetzal_base_appearance: 3,
+      quetzal_fortis: 1,
+      quetzal_teomat: 4,
+      quetzal_camtorum: 2,
+      quetzal_auburnvalley: 0,
+      quetzal_last_destination: aldarin.id,
+    },
+    varps: { quetzals_unlocked: built },
+  });
+
+  Renu.unlockOnLogin({ player });
+  assert.equal(auburnvale.autoUnlocked, true);
+  assert.equal(player.varbit("quetzal_auburnvalley"), 3, "the missing automatic site shows Renu's colour");
+  for (const entry of Common.landingSites()) {
+    if (entry.autoUnlocked) assert.notEqual(player.varbit(Common.SITE_VARBITS[entry.id]), 0, `${entry.name} is visible`);
+  }
+  assert.equal(player.varbit("quetzal_fortis"), 1, "Fortis keeps her feed state");
+  assert.equal(teomat.autoUnlocked, true);
+  assert.equal(player.varbit("quetzal_teomat"), 4, "an existing colour is not replaced");
+  assert.equal(player.varbit("quetzal_camtorum"), 2, "a built site keeps its colour");
+  assert.equal(player.varbit("quetzal_kastori"), 0, "an unbuilt site stays hidden");
+  assert.equal(kastori.autoUnlocked, false);
+  assert.equal(player.varp("quetzals_unlocked"), built, "the built bitmap is untouched");
+  assert.equal(player.varbit("quetzal_last_destination"), aldarin.id, "the last destination is untouched");
+  const snapshot = player.getAttribute(Common.VARPS_ATTRIBUTE);
+  assert.ok(snapshot, "the repair is saved through the quetzal snapshot");
+  assert.equal(snapshot[varpId("quetzals_unlocked")], built);
+
+  const saved = { keep: true };
+  player.setAttribute(Common.VARPS_ATTRIBUTE, saved);
+  Renu.unlockOnLogin({ player });
+  assert.equal(player.getAttribute(Common.VARPS_ATTRIBUTE), saved, "a second login with nothing missing saves nothing");
+  assert.equal(player.varbit("quetzal_auburnvalley"), 3);
+  assert.equal(player.varbit("quetzal_fortis"), 1);
   completeQuests = new Set();
 });
 
@@ -612,5 +662,151 @@ test("Primio's introduction and visit flags survive native saves without rewindi
   } finally {
     Common.init(api);
     completeQuests = new Set();
+  }
+});
+
+test("native saved Renu owners can fly to Auburnvale and use its published bird to return; locked Varrock refuses", async (t) => {
+  const core = PluginManager.getCoreApi();
+  const { NpcDefinitionLoader } = require("../dist/game/definition/loader/impl/NpcDefinitionLoader");
+  const { NpcSpawnDefinitionLoader } = require("../dist/game/definition/loader/impl/NpcSpawnDefinitionLoader");
+  const { PlayerSession } = require("../dist/net/PlayerSession");
+  const { ClientConnection } = require("../dist/net/NetworkBuilder");
+  const { decodeClientPackets } = require("../dist/net/protocol/ClientProtocol");
+  new NpcDefinitionLoader().load();
+  core.RegionManager.init();
+  for (const [x, y] of [[1697, 3140], [1411, 3361], [3281, 3413]]) core.RegionManager.loadMapFiles(x, y);
+  const nativeApi = PluginManager.createApi("Quetzal native return regression");
+  require("../plugins/npcs/NpcSpawns.plugin").register(nativeApi);
+  Quetzals.register(nativeApi);
+  require("../plugins/modes/league/Common.LeagueMode").init(nativeApi);
+  require("../plugins/modes/league/Account.LeagueMode")(nativeApi);
+  require("../plugins/modes/LeagueAreaUnlocks.plugin").register(nativeApi);
+  require("../plugins/quests/quests/ChildrenOfTheSun.Quest")(nativeApi);
+  const league = require("../plugins/modes/leagueareas/Common.LeagueAreaUnlocks");
+  const loader = new NpcSpawnDefinitionLoader();
+  loader.load();
+  const channel = { kind: "test", binaryTransport: true, remoteAddress: "127.0.0.1", isOpen: () => true,
+    send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+  const session = new PlayerSession(channel);
+  let player = new Player(session, new Location(1697, 3140));
+  session.setPlayer(player);
+  Renu.unlock({ player });
+  Common.setVarbits(player, { quetzal_base_appearance: 3, quetzal_auburnvalley: 0 });
+  const save = PlayerSave.fromPlayer(player);
+  save.attributes = JSON.parse(JSON.stringify(save.attributes));
+  player = new Player(session);
+  session.setPlayer(player);
+  save.applyToPlayer(player);
+  player.setUsername("quetzal-return-native");
+  player.setAttribute(require("../plugins/bots/runtime/PersistenceConstants.PlayerBots").ATTR_SKIP_PERSISTENCE, true);
+  // World registration/sync without account-file lifecycle or opening a socket.
+  t.mock.method(player, "onAdd", () => {});
+  t.mock.method(player, "onRemove", () => {});
+  const messages = [];
+  const send = player.sendMessage.bind(player);
+  t.mock.method(player, "sendMessage", text => { messages.push(text); return send(text); });
+  const tick = (count = 1) => {
+    for (let i = 0; i < count; i++) core.World.process();
+    session.flushPackets();
+  };
+  const connection = new ClientConnection(channel);
+  connection.player = player;
+  const input = async (raw) => { await connection.handle(raw); connection.processTurnPackets(); };
+  const npcPacket = npc => Buffer.from([76, 0, npc.getIndex() >>> 8, (npc.getIndex() + 128) & 255]);
+  const travel = async (npc) => {
+    assert.equal(npc.getCurrentDefinition(player).getActions()[0], "Travel");
+    const raw = npcPacket(npc);
+    assert.deepEqual(decodeClientPackets(raw), [{ type: "npc_option", index: npc.getIndex(), clickType: 1 }]);
+    await input(raw);
+    tick();
+    assert.equal(player.getInterfaceId(), 874);
+  };
+  const select = async (siteId) => {
+    const raw = Buffer.alloc(9);
+    raw[0] = 23; // Native IF_BUTTON1, with the cache table's site slot.
+    raw.writeUInt32BE(icons("quetzal_menu"), 1);
+    raw.writeUInt16BE(Common.landingSites().findIndex(entry => entry.id === siteId), 5);
+    raw.writeUInt16BE(65535, 7);
+    await input(raw);
+  };
+  try {
+    assert.equal(core.World.getPlayers().add(player), true);
+    player.setNeedsPlacement(false);
+    player.setRunning(false);
+    assert.equal(Common.varbit(player, "quetzal_auburnvalley"), 0, "the loaded save predates the site");
+    PluginManager.emitPlayerLogin({ player, username: player.getUsername() });
+    assert.equal(Common.varbit(player, "quetzal_auburnvalley"), 3, "real login restores the owner's colour");
+    tick(3);
+    const fortis = core.World.getNpcsNear(player.getLocation(), 15).find(npc => npc.getId() === 13355);
+    assert.ok(fortis);
+    await travel(fortis);
+    await select(13);
+    await select(13); // Duplicate input cannot schedule a second flight.
+    tick(7);
+    assert.deepEqual(at(player.getLocation()), [1411, 3361, 0]);
+    const birds = [...core.World.getNpcs()].filter(npc => npc.getId() === 14690);
+    assert.equal(birds.length, 1, "the canonical source activates the captured return bird");
+    const bird = birds[0];
+    assert.deepEqual(at(bird.getLocation()), [1410, 3362, 0]);
+    assert.equal(player.getLocalNpcs().filter(npc => npc.getId() === 14690).length, 1, "World sync publishes the bird");
+    assert.equal(bird.getCurrentDefinition(player).getId(), 13352, "the cache resolves the saved colour");
+    assert.equal(Renu.flying(player), false);
+    await travel(bird);
+    await select(1);
+    tick(7);
+    assert.deepEqual(at(player.getLocation()), [1697, 3140, 0]);
+    assert.equal(Common.varbit(player, "quetzal_last_destination"), 1);
+    assert.equal(Common.varbit(player, "busy"), 0);
+    assert.equal(player.getMovementQueue().isMovementBlocked(), false);
+
+    // Varrock belongs to Primio's route; its existing league guard already sends the refusal.
+    player.moveTo(new Location(1702, 3142));
+    tick(2);
+    player.setProfile("league");
+    player.setAttribute("league:type", 6);
+    player.setAttribute(league.AREAS_ATTRIBUTE, [league.areaByName("Varlamore").id]);
+    player.setAttribute("quest.children_of_the_sun.stage", 24);
+    player.getPacketSender().sendVarbit(varbitId("varlamore_visited"), 1);
+    const primio = core.World.getNpcsNear(player.getLocation(), 15).find(npc => npc.getId() === 12889);
+    assert.ok(primio);
+    await input(npcPacket(primio));
+    tick(8);
+    assert.ok(messages.includes("You haven't unlocked that area yet."));
+    assert.deepEqual(at(player.getLocation()), [1702, 3142, 0]);
+    assert.equal(Renu.flying(player), false);
+    assert.equal(Common.varbit(player, "busy"), 0);
+  } finally {
+    PluginManager.emitPlayerLogout({ player, username: player.getUsername() });
+    core.TaskManager.cancelTasks(player);
+    core.TaskManager.cancelTasks(player.getIndex());
+    if (player.isRegistered()) core.World.getPlayers().remove(player);
+    loader.applyToWorld([]);
+    Common.init(api);
+  }
+});
+
+test("every site's Renu stands on its landing site, facing the way the site does (#2449)", () => {
+  // rsprox (226, 237): each site's quetzal_<site> NPC is added on its landing-site loc's tile.
+  const { RegionManager } = require("../dist/game/collision/RegionManager");
+  const { MapObjects } = require("../dist/game/entity/impl/object/MapObjects");
+  const spawns = require("../data/definitions/npc-spawns.json");
+  RegionManager.init();
+  const npcNames = CacheDefinitions.getNpcNames();
+  const locIds = [CacheDefinitions.getLocId("quetzal_landing_site_built")];
+  for (const [id, name] of CacheDefinitions.getLocNames()) if (/^quetzal_landing_site_(?!built|unbuilt)/.test(name)) locIds.push(id);
+  // Spawn directions (docs/npc-spawn-captures.md) for a loc's rotation: south, west, north, east.
+  const facing = [1, 3, 6, 4];
+  for (const varbit of Object.values(Common.SITE_VARBITS)) {
+    const npc = [...npcNames].find(([, name]) => name === varbit)?.[0];
+    assert.ok(npc !== undefined, `${varbit} is an NPC`);
+    assert.equal(CacheDefinitions.getNpc(npc).transformVarbit, varbitId(varbit));
+    const placed = spawns.filter((spawn) => spawn.id === npc);
+    assert.equal(placed.length, 1, `${varbit} spawns once`);
+    const [spawn] = placed;
+    assert.equal(spawn.wanderRadius, 0);
+    RegionManager.loadMapFiles(spawn.x, spawn.y);
+    const loc = locIds.map((id) => MapObjects.get(id, new Location(spawn.x, spawn.y, spawn.level), null)).find(Boolean);
+    assert.ok(loc, `${varbit} at ${spawn.x},${spawn.y} stands on a landing site`);
+    assert.equal(spawn.direction ?? 1, facing[loc.getFace()], `${varbit} faces as its landing site`);
   }
 });

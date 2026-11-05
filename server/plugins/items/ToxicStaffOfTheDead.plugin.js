@@ -134,13 +134,14 @@ function uncharge({ player, item }) {
     player.sendMessage("Your toxic staff has no scales to remove.");
     return true;
   }
-  if (player.getInventory().getFreeSlots() < 1) {
+  const refund = new Item(zulrahScalesId, left);
+  if (player.getInventory().getAddableAmount(refund) < left) {
     player.sendMessage("You need a free inventory slot to uncharge your toxic staff.");
     return true;
   }
   item.setId(unchargedByCharged.get(item.getId()) ?? item.getId());
   item.setMetaValue(CHARGES_META_KEY, undefined);
-  player.getInventory().addItem(new Item(zulrahScalesId, left));
+  player.getInventory().addItem(refund);
   refresh(player);
   player.sendMessage(`You remove ${left} scales from your toxic staff.`);
   return true;

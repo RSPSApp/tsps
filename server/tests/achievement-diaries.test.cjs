@@ -146,6 +146,21 @@ test("as captured (Ardougne easy): message and count on the tick, started on the
   assert.equal(all.complete, false, "the other diaries are not done");
 });
 
+test("is-started and has-task answer for a diary task query", () => {
+  const player = createPlayer();
+  const started = { player, diary: "ardougne", started: null };
+  Diaries._test.onIsStarted(started);
+  assert.equal(started.started, false);
+  const before = { player, diary: "ardougne", task: ARDOUGNE.tiers.easy.tasks[0].key, done: null };
+  Diaries._test.onHasTask(before);
+  assert.equal(before.done, false);
+  Progress.completeTask(player, ARDOUGNE, ARDOUGNE.tiers.easy.tasks[0].key);
+  Diaries._test.onIsStarted(started);
+  assert.equal(started.started, true);
+  Diaries._test.onHasTask(before);
+  assert.equal(before.done, true);
+});
+
 test("migration merges valid legacy progress and survives a save round trip", () => {
   const player = createPlayer();
   const easy = ARDOUGNE.tiers.easy.tasks.map((task) => task.key);

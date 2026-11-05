@@ -48,6 +48,7 @@ const OFFER_ILLIQUID_MAX_MS = 5 * 60_000;
 const OFFER_GUIDE_DELAY = 0.1;
 const OFFER_PRICE_SENSITIVITY = 50;
 const MAX = 0x7fffffff;
+const PRESET_TEXT = "Preset items cannot be used for this.";
 const COINS = ItemIdentifiers.COINS;
 const PLATINUM_TOKEN = ItemIdentifiers.PLATINUM_TOKEN;
 // OSRS Wiki Update:GE_Improvements:_Beyond_Max_Cash: payment mixes coins and platinum tokens,
@@ -522,11 +523,25 @@ function confirm(player, offer) {
       return;
     }
   } else {
-    result.deleted(inputId, inputAmount, false);
-    if (result.getAmount(inputId) !== inventory.getAmount(inputId) - inputAmount) {
+    // An offer's input comes from one stack; a delete by id would run on into the next.
+    const plain = (item) => item.getId() === inputId && item.getAmount() > 0 && !restricted(item);
+    const firstStack = inventory.getItems().find(plain);
+    const plainTotal = inventory.getItems().filter(plain).reduce((sum, item) => sum + item.getAmount(), 0);
+    if (!firstStack || plainTotal < inputAmount && !ItemDefinition.forId(inputId).isStackable()) {
+      sender.sendMessage(PRESET_TEXT);
+      return;
+    }
+    if (ItemDefinition.forId(inputId).isStackable() && firstStack.getAmount() < inputAmount) {
       sender.sendMessage("Trade one item stack at a time.");
       return;
     }
+    let left = inputAmount;
+    result.getItems().forEach((item, slot) => {
+      if (left <= 0 || !plain(item)) return;
+      const taken = Math.min(left, item.getAmount());
+      result.deleteAtSlot(slot, taken, false);
+      left -= taken;
+    });
   }
   inventory.setItems(result.getItems()).refreshItems();
   const delay = fillDelayMs(offer);
@@ -727,6 +742,11 @@ function handleCollectionButton({ player, buttonId, slot, action }) {
   return true;
 }
 
+/** Preset (and other untradeable or unbankable) copies never sell. */
+function restricted(item) {
+  return item.isPresetItem() || item.isUntradeable() || item.isUnbankable();
+}
+
 function handleInventoryItem(event) {
   // The cache has used both 467:0 and the normal inventory id for this
   // mounted panel. The item/slot validation is the reliable discriminator.
@@ -735,6 +755,10 @@ function handleInventoryItem(event) {
   if (item?.getId() === event.itemId && validItem(event.itemId)) {
     if (!exchangeable(event.itemId)) {
       event.player.sendMessage("That item can't be traded on the Grand Exchange.");
+      return true;
+    }
+    if (restricted(item)) {
+      event.player.sendMessage(PRESET_TEXT);
       return true;
     }
     start(event.player, true, offers.get(event.player)?.slot ?? 0, event.itemId);

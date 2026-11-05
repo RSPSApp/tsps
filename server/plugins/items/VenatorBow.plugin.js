@@ -36,12 +36,26 @@ let core;
 let pluginApi;
 let bowId = -1;
 let unchargedId = -1;
+let echoBowId = -1;
+let echoUnchargedId = -1;
 let shardId = -1;
 let essenceId = -1;
 let venatorMethod = null;
 
 function isBow(id) {
-  return id === bowId || id === unchargedId;
+  return id === bowId || id === unchargedId || id === echoBowId || id === echoUnchargedId;
+}
+
+function isEchoBow(id) {
+  return id === echoBowId || id === echoUnchargedId;
+}
+
+function chargedBowId(item) {
+  return isEchoBow(item?.getId?.()) ? echoBowId : bowId;
+}
+
+function unchargedBowId(item) {
+  return isEchoBow(item?.getId?.()) ? echoUnchargedId : unchargedId;
 }
 
 function charges(item) {
@@ -52,8 +66,9 @@ function charges(item) {
 /** Stores the charges and swaps between the charged and uncharged bow to match. */
 function setCharges(item, amount) {
   const left = Math.max(0, Math.min(MAX_CHARGES, Math.floor(amount)));
+  const echo = isEchoBow(item.getId());
   item.setMetaValue(CHARGE_META_KEY, left > 0 ? left : undefined);
-  item.setId(left > 0 ? bowId : unchargedId);
+  item.setId(left > 0 ? (echo ? echoBowId : bowId) : (echo ? echoUnchargedId : unchargedId));
 }
 
 function format(amount) {
@@ -196,7 +211,7 @@ function ricochet(player, primary, method, primaryDelay) {
 /** One charge per attack; at zero the bow reverts to its uncharged form. */
 function spendCharge(player) {
   const item = player.getEquipment().get(core.Equipment.WEAPON_SLOT);
-  if (item?.getId?.() !== bowId) return;
+  if (!item || ![bowId, echoBowId].includes(item.getId())) return;
   // Content may spare the charge (a league relic): the question every charged weapon asks.
   const consume = { player, itemId: item.getId(), skip: false };
   pluginApi.emitCustomEvent("combat:consume-charge", consume);
@@ -230,7 +245,7 @@ function createMethod() {
 function resolveVenatorBow(attacker) {
   if (!attacker?.isPlayer?.()) return null;
   const weapon = attacker.getAsPlayer().getEquipment().get(core.Equipment.WEAPON_SLOT);
-  if (weapon?.getId?.() !== bowId || charges(weapon) <= 0) return null;
+  if (!weapon || ![bowId, echoBowId].includes(weapon.getId()) || charges(weapon) <= 0) return null;
   venatorMethod ??= createMethod();
   return venatorMethod;
 }
@@ -256,7 +271,7 @@ function charge(event) {
       inventory.deleteNumber(essenceId, used);
       setCharges(bow, charges(bow) + used);
       refresh(player);
-      itemStatement(player, bowId,
+      itemStatement(player, chargedBowId(bow),
         `You use ${format(used)} ancient essence to charge your venator bow. It now has <col=ff0000>${format(charges(bow))}</col> charges.`);
     },
   });
@@ -275,14 +290,15 @@ function uncharge({ player, item }) {
   if (!inventory.getItems().includes(item)) return false;
   const amount = charges(item);
   if (amount <= 0) return true;
-  if (!inventory.contains(essenceId) && inventory.getFreeSlots() <= 0) {
+  const refund = new core.Item(essenceId, amount);
+  if (inventory.getAddableAmount(refund) < amount) {
     player.sendMessage("You don't have enough inventory space to uncharge your venator bow.");
     return true;
   }
   setCharges(item, 0);
-  inventory.add(new core.Item(essenceId, amount));
+  inventory.add(refund);
   refresh(player);
-  itemStatement(player, unchargedId, `You uncharge your venator bow, regaining ${format(amount)} ancient essence.`);
+  itemStatement(player, unchargedBowId(item), `You uncharge your venator bow, regaining ${format(amount)} ancient essence.`);
   return true;
 }
 
@@ -375,13 +391,24 @@ module.exports = {
     pluginApi = api;
     bowId = core.ItemIdentifiers.VENATOR_BOW;
     unchargedId = core.ItemIdentifiers.VENATOR_BOW_UNCHARGED_;
+    echoBowId = core.ItemIdentifiers.ECHO_VENATOR_BOW;
+    echoUnchargedId = core.ItemIdentifiers.ECHO_VENATOR_BOW_UNCHARGED_;
+    // Echo is cosmetic: let the native ranged registry and item profile resolve through
+    // the matching charged/uncharged Venator Bow definitions.
+    core.ItemAliases.register(echoBowId, bowId);
+    core.ItemAliases.register(echoUnchargedId, unchargedId);
     shardId = core.ItemIdentifiers.VENATOR_SHARD;
     essenceId = core.ItemIdentifiers.ANCIENT_ESSENCE;
     api.registerCombatMethodResolver({ resolve: resolveVenatorBow });
     api.onItemAction("Venator bow", { Check: check, Uncharge: uncharge });
+    api.onItemAction("Venator bow (uncharged)", { Check: check, Uncharge: uncharge });
+    api.onItemAction("Echo venator bow", { Check: check, Uncharge: uncharge });
+    api.onItemAction("Echo venator bow (uncharged)", { Check: check, Uncharge: uncharge });
     api.onItemAction("Venator shard", { Combine: combineShards });
     api.onItemOnItem("Ancient essence", "Venator bow", charge, { noted: false });
     api.onItemOnItem("Ancient essence", "Venator bow (uncharged)", charge, { noted: false });
+    api.onItemOnItem("Ancient essence", "Echo venator bow", charge, { noted: false });
+    api.onItemOnItem("Ancient essence", "Echo venator bow (uncharged)", charge, { noted: false });
     api.onCustomEvent(core.Bank.ITEM_OP_EVENT, bankItemOp);
   },
   _test: {

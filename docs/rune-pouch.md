@@ -83,6 +83,12 @@ The pouch's other ops:
 
 These reach the plugin through the `bank:inventory-op` custom event, which `Bank.ts` sends before it deposits.
 
+**Filling from the bank (Wiki):** while this view is open, withdrawing a rune from the bank
+fills the pouch directly, up to its available slot capacity. It uses the normal bank quantity
+buttons and Withdraw-X prompt, including search results and non-main tabs. The exact selected
+bank stack and carried pouch must still exist when a delayed amount is answered. The normal
+withdrawal deletion path preserves bank placeholders. Non-runes retain their normal bank behavior.
+
 **In the view, a rune's ops** bank it:
 
 | Op | Banks |
@@ -105,6 +111,10 @@ Ten loadouts, a–j, each a rune and a limit per pouch slot. They're saved as th
 2. The slot's limit is cleared and the rune set.
 3. The server asks "<Rune>: Set a quantity limit? (1 - 15,999, or 0 for no limit)".
 
+Cache script 4877 answers the rune search with `RESUME_OBJDIALOG`; the native Gateway forwards
+its revision-241 `ResumePObjDialog` ID through the same existing item-selection input route as
+the browser. This is separate from the following count answer.
+
 **The varbits:**
 - `rune_pouch_loadout_<letter>_rune<N>` holds the rune, as an enum 982 key, and `rune_pouch_loadout_<letter>_cap<N>` the limit.
 - Some of these are split by the cache into `_bitsa`/`_bitsb`/`_bitsc` parts. The low bits go in the first part (captured for `a_rune1`/`a_rune2`). The split caps follow the same order.
@@ -115,6 +125,13 @@ Ten loadouts, a–j, each a rune and a limit per pouch slot. They're saved as th
 3. The message:
    - short of a limit: "Your pouch could not find sufficient runes.";
    - otherwise: "Loading pouch load-out N...".
+
+**Transfer integrity:** pouch storage contains only rune IDs and quantities, so loadouts and
+bank-direct filling leave metadata-bearing/custom/protected rune stacks untouched. Loading
+counts the amount the bank actually accepts before removing old pouch contents. If a full bank
+or stack limit refuses a return, unaccepted runes remain in the pouch and loading stops; any
+accepted runes remain in the bank. Normal short-availability loads still fill what is available.
+These are server conservation guards; the exact full-bank refusal sequence was not captured.
 
 **Ours:**
 - With no limit, only finding none of the rune counts as short.

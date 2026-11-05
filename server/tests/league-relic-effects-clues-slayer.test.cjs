@@ -367,6 +367,37 @@ test("Bloodthirsty: superiors 1 in 25, a quarter bloodthirsty; points and six (n
   assert.equal(offered(withMortimer), false, "Mortimer's tasks are chosen in person");
 });
 
+test("Slayer Master: the Morytania Diary's Slayer XP also lifts a Slayer Tower kill with no task, and the count stays (Wiki: Morytania Diary)", () => {
+  const Diaries = require("../plugins/achievements/diaries/Data.AchievementDiaries");
+  const { onIsComplete } = require("../plugins/achievements/AchievementDiaries.plugin")._test;
+  custom["diary:is-complete"] = [onIsComplete];
+  const who = cases(SLAYER_MASTER, 5);
+  const elite = Diaries.TIERS.flatMap((tier) => Diaries.BY_KEY.get("morytania").tiers[tier].tasks.map((task) => task.key));
+  for (const player of [who.relic, ...others(who)]) {
+    player.setAttribute("achievement-diaries:tasks", { morytania: elite });
+    player.isPlayer = () => true;
+  }
+  const bloodveld = npcOf("Bloodveld");
+  const tower = new Location(3420, 3560, 0);
+  const inTower = { ...bloodveld, getLocation: () => tower };
+  const base = bloodveld.getDefinition().getHitpoints();
+  assert.equal(emit("slayer:on-task", { player: who.relic, npc: inTower, onTask: false }).onTask, true, "on task through the relic");
+  // The relic character holds a Turael task, which Bloodvelds do not count for.
+  const turael = [...require("../plugins/skills/slayer/Data.Slayer").get().masters.values()].find((master) => master.names.includes("Turael"));
+  Tasks.assign(who.relic, turael);
+  const task = Tasks.current(who.relic);
+  hooks.onNpcDeath({ killer: who.relic, npc: inTower });
+  assert.equal(slayerXp(who.relic), base * 1.1, "the elite diary's 10% on the off-task kill");
+  assert.equal(Tasks.current(who.relic).count, task.count, "the task's count does not fall");
+  const before = slayerXp(who.relic);
+  hooks.onNpcDeath({ killer: who.relic, npc: bloodveld });
+  assert.equal(slayerXp(who.relic) - before, base, "outside the tower, no bonus");
+  for (const player of others(who)) {
+    hooks.onNpcDeath({ killer: player, npc: inTower });
+    assert.equal(slayerXp(player), 0, `${player.getUsername()} gets none`);
+  }
+});
+
 test("Slayer Master: every Slayer monster on task (XP, no count), free rewards, a bonus on the 100th kill of each", () => {
   const who = cases(SLAYER_MASTER, 5);
   const demon = npcOf("Abyssal demon");

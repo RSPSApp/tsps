@@ -54,6 +54,18 @@ api.registerNpcInteraction([506, 512], {
 
 Use `onNpcInteraction` for stateful or otherwise scripted interactions.
 
+## Custom shops
+
+`data/definitions/custom-shops.json` holds the shops behind `::shops` and the host
+editor's custom shops. Each record can set:
+
+- `name` and `currency` (`COINS` when omitted; other keys are registered by plugins).
+- `stockAmount`, the default amount for `originalStock` rows that omit `amount`.
+- `defaultRestockTicks`, how often one item restocks or destocks (one tick is 0.6s).
+- `originalStock` rows with `id`, optional `amount`, `restockTicks` and `price`.
+- `prices`, an item-ID map of overrides; `-1` or a missing entry uses the item's default price.
+- `npcInteractions`, the NPC options that open the shop.
+
 ## Custom items without cache packing
 
 Add records to `data/definitions/custom-items.json`. Each record has a stable
@@ -74,6 +86,31 @@ Set `objType.model` for inventory/ground rendering and `maleModel`/`femaleModel`
 for equipment. Clear inherited secondary models and recolours when replacing
 the entire model. Inventory framing (`zoom2d`, angles and offsets) and wearable
 offsets remain configurable for calibration.
+
+Dialogue helmets use separate native head models, not the wearable body models.
+In an existing helmet record, keep its `id`, `baseItemId` and other properties;
+for example, add the following head assets and `objType` fields (the `.dat`
+files are your own models under `data/models`):
+
+```json
+"models": {
+  "1000100": "my-helmet/male-chathead.dat",
+  "1000101": "my-helmet/female-chathead.dat"
+},
+"objType": {
+  "name": "My helmet",
+  "maleHeadModel": 1000100,
+  "maleHeadModel2": -1,
+  "femaleHeadModel": 1000101,
+  "femaleHeadModel2": -1
+}
+```
+
+`maleHeadModel2` and `femaleHeadModel2` are optional secondary head parts;
+`-1` clears an inherited secondary part. Use head geometry suited to dialogue,
+and choose unused external model IDs for your assets. These fields already use
+the normal custom-item delivery and native chathead renderer; no cache packing
+or additional JSON field is needed.
 
 Restart the server and reconnect after editing. Definitions and compressed
 model bytes are delivered before the initial appearance/inventory updates;

@@ -13,14 +13,18 @@ function useRuneOnPouch(event) {
   const rune = pouch === usedItem ? usedWithItem : usedItem;
   if (!pouch || !Pouch.isRune(rune?.getId?.())) return;
   event.handled = true;
+  if (!Pouch.isPlainRune(rune)) {
+    player.sendMessage(Pouch.MESSAGE.PRESET);
+    return;
+  }
   const runeId = rune.getId();
   const inventory = player.getInventory();
-  const moved = Pouch.store(player, runeId, inventory.getAmount(runeId));
+  const moved = Pouch.store(player, runeId, Pouch.plainInInventory(player, runeId));
   if (moved <= 0) {
     player.sendMessage(Pouch.MESSAGE.CANT_HOLD);
     return;
   }
-  inventory.deleteNumber(runeId, moved);
+  Pouch.takeFromInventory(player, runeId, moved);
   inventory.refreshItems();
 }
 
@@ -41,7 +45,7 @@ function empty({ player }) {
   let stuck = false;
   Pouch.slots(player).forEach((entry, slot) => {
     if (!entry) return;
-    if (!Pouch.inventoryFits(player, entry.id)) {
+    if (!Pouch.inventoryFits(player, entry.id, entry.amount)) {
       stuck = true;
       return;
     }

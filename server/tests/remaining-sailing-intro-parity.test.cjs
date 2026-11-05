@@ -966,3 +966,82 @@ test('Pandemonium cancels departed ship cameras and offers boarding again from t
     for (const logout of h.hooks.logout) logout({ player: h.player });
   }
 });
+
+
+test('Pandemonium save/load resumes the required boarding briefing without granting the helm', () => {
+  const h = setup();
+  const StaticShips = require('../plugins/skills/sailing/StaticShips.Sailing');
+  const { BoatManager } = require('../dist/game/content/sailing/BoatManager');
+  for (const stale of StaticShips.all()) StaticShips.dispose(stale);
+  const quest = load(h, 'Pandemonium.Quest.js');
+  const lines = [];
+  h.api.onCustomEvent('npc-dialogue:line', event => lines.push(event.text));
+  try {
+    h.action(h.core.NpcIdentifiers.WILL, 'BDfVg8');
+    for (const logout of h.hooks.logout) logout({ player: h.player });
+    h.relog(h.saveState());
+    const ship = StaticShips.all()[0];
+    assert.equal(BoatManager.getBoatAboard(h.player), ship.boat);
+    h.tickOnce(); h.tickOnce();
+    assert.ok(lines.includes('Lovely! The open sea!'), 'login resumes the authored briefing');
+    assert.equal(quest.getStage(h.player), 6, 'showing instructions does not complete them');
+    assert.equal(clickAction(h, 59620, 'Helm', ['Navigate', 'Escape'], 0).handled, false);
+    h.emit('npc-dialogue:line', { npcId: h.core.NpcIdentifiers.WILL,
+      text: 'Over to you, [player name]! Take the helm when ready.', step: { speaker: 'Anne' },
+      pages: [{ page: 'Pandemonium', variants: ['at-the-boat-talking-to-anne-or-will'] }] }).before();
+    assert.equal(quest.getStage(h.player), 8);
+    for (const logout of h.hooks.logout) logout({ player: h.player });
+    h.relog(h.saveState());
+    const count = lines.length;
+    h.tickOnce(); h.tickOnce();
+    assert.equal(lines.length, count, 'a completed briefing is not replayed on stage 8 login');
+    assert.equal(clickAction(h, 59620, 'Helm', ['Navigate', 'Escape'], 0).handled, true);
+    assert.equal(quest.getStage(h.player), 10);
+  } finally {
+    for (const logout of h.hooks.logout) logout({ player: h.player });
+  }
+});
+
+test('Pandemonium persists the earned tutorial helm and sails through real save/load', () => {
+  const h = setup();
+  const StaticShips = require('../plugins/skills/sailing/StaticShips.Sailing');
+  for (const stale of StaticShips.all()) StaticShips.dispose(stale);
+  const quest = load(h, 'Pandemonium.Quest.js');
+  try {
+    h.action(h.core.NpcIdentifiers.WILL, 'BDfVg8');
+    quest.setStage(h.player, 8);
+    clickAction(h, 59620, 'Helm', ['Navigate', 'Escape'], 0);
+    const helmSave = h.saveState();
+    assert.equal(helmSave['pandemonium:tutorial-helm'], true);
+    assert.equal(helmSave['pandemonium:tutorial-sails'], false);
+    for (const logout of h.hooks.logout) logout({ player: h.player });
+    h.relog(helmSave);
+    assert.equal(StaticShips.all()[0].boat.helmPlayerId, h.player.getIndex());
+    assert.equal(StaticShips.all()[0].boat.moveMode, 0);
+    clickAction(h, 59553, 'Sails', h.core.CacheDefinitions.getObject(59553).actions, 1);
+    assert.equal(StaticShips.all()[0].boat.moveMode, 2, 'the earned helm permits raising sails after login');
+    const sailSave = h.saveState();
+    assert.equal(sailSave['pandemonium:tutorial-sails'], true);
+    for (const logout of h.hooks.logout) logout({ player: h.player });
+    h.relog(sailSave);
+    assert.equal(quest.getStage(h.player), 10, 'recovery does not skip the voyage');
+    assert.equal(StaticShips.all()[0].boat.helmPlayerId, h.player.getIndex());
+    assert.equal(StaticShips.all()[0].boat.moveMode, 2, 'the already-started voyage resumes');
+    const legacySave = { ...sailSave };
+    delete legacySave['pandemonium:tutorial-helm'];
+    delete legacySave['pandemonium:tutorial-sails'];
+    for (const logout of h.hooks.logout) logout({ player: h.player });
+    h.relog(legacySave);
+    assert.equal(quest.getStage(h.player), 10);
+    assert.notEqual(StaticShips.all()[0].boat.helmPlayerId, h.player.getIndex(), 'missing legacy flags do not infer helm ownership');
+    assert.equal(StaticShips.all()[0].boat.moveMode, 0, 'a missing old sails flag does not infer a voyage');
+    clickAction(h, 59553, 'Sails', h.core.CacheDefinitions.getObject(59553).actions, 1);
+    assert.equal(h.messages.at(-1), 'You need to take the helm before raising the sails.');
+    assert.equal(clickAction(h, 59620, 'Helm', ['Navigate', 'Escape'], 0).handled, true, 'an old stage 10 save can legitimately retake the helm');
+    clickAction(h, 59553, 'Sails', h.core.CacheDefinitions.getObject(59553).actions, 1);
+    assert.equal(StaticShips.all()[0].boat.moveMode, 2);
+    assert.equal(quest.getStage(h.player), 10, 're-navigation retains earned quest progress');
+  } finally {
+    for (const logout of h.hooks.logout) logout({ player: h.player });
+  }
+});

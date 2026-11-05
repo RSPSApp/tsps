@@ -8,6 +8,7 @@ import {
     DEFAULT_SCREEN_WIDTH,
 } from "../../../game/ClientState";
 import { getClientClock } from "../../../game/TransmitCycles";
+import { getRebootTimer } from "../../../network/serverConnection/timing";
 import { getSafeAreaBounds } from "../../../common/utils/DeviceUtil";
 import { isMobileClient, reportedClientType } from "../ClientType";
 import { VARBIT_ROOF_REMOVAL } from "../../../common/vars";
@@ -249,7 +250,7 @@ export function registerClientOps(handlers: HandlerMap): void {
     });
 
     handlers.set(Opcodes.REBOOTTIMER, (ctx) => {
-        ctx.pushInt(-1);
+        ctx.pushInt(getRebootTimer());
     });
 
     handlers.set(Opcodes.PLAYERMOD, (ctx) => {
@@ -1621,8 +1622,9 @@ export function registerClientOps(handlers: HandlerMap): void {
     });
 
     handlers.set(Opcodes.OPENURL, (ctx) => {
-        ctx.intStackSize--; // pop internal
-        ctx.stringStackSize--; // pop url
+        const newWindow = ctx.intStack[--ctx.intStackSize] === 1;
+        const url = String(ctx.stringStack[--ctx.stringStackSize] ?? "");
+        ctx.openUrl?.(url, newWindow);
     });
 
     // bug_report(template, string, string)

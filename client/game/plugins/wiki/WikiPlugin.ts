@@ -1,3 +1,4 @@
+import { openClientUrl } from "../../../common/openUrl";
 import { CA_TASKS, STATS } from "@runelite/api/gameval/InterfaceID";
 import type { ConfigChanged } from "@runelite/api/events";
 import { ConfigManager } from "@runelite/client/config/ConfigManager";
@@ -91,7 +92,7 @@ export class WikiPlugin extends Plugin {
     private readonly chatbox?: ChatboxPanelManager;
     /** LinkBrowser.browse. */
     browse: (url: string) => void = (url) => {
-        window.open(url, "_blank", "noopener,noreferrer");
+        openClientUrl(url);
     };
 
     constructor(client?: OsrsClient, chatbox?: ChatboxPanelManager) {

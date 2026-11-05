@@ -1,0 +1,23 @@
+#!/bin/sh
+# Call this worktree's agent MCP from any shell, for agents without MCP support.
+# See server/docs/agents/testing.md for the tools. The server must run with AGENT_MCP=1.
+#
+#   scripts/agents/mcp --list                                # tools and their input schemas
+#   scripts/agents/mcp login '{"username":"t1","password":"pw12345"}'
+#   scripts/agents/mcp command '{"player":"t1","text":"tele 3222 3218 0"}'
+#
+# The port is AGENT_MCP_PORT from this worktree's .env (49700 in the main checkout).
+set -eu
+root=$(git rev-parse --show-toplevel)
+port=$(sed -n 's/^AGENT_MCP_PORT=//p' "$root/.env" 2>/dev/null | tail -1)
+port=${AGENT_MCP_PORT:-${port:-49700}}
+tool=${1:?usage: scripts/agents/mcp <tool> '<json args>' | --list}
+if [ "$tool" = "--list" ]; then
+  body='{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+else
+  body=$(printf '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"%s","arguments":%s}}' "$tool" "${2:-{\}}")
+fi
+out=$(curl -sS -X POST "http://127.0.0.1:$port/mcp" -H 'content-type: application/json' \
+  -H 'accept: application/json, text/event-stream' -d "$body") ||
+  { echo "mcp: no agent MCP on port $port (start the server with AGENT_MCP=1)" >&2; exit 1; }
+printf '%s\n' "$out" | sed -n 's/^data: //p'

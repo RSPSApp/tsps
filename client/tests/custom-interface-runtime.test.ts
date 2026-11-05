@@ -200,6 +200,7 @@ async function main(): Promise<void> {
     Commands.register({
         registerCustomInterface: (definition: any) => { commandsDefinition = definition; },
         registerCommand() {},
+        onCustomEvent() {},
     });
     setCustomInterface(commandsDefinition);
     for (const widget of commandsDefinition.widgets) {

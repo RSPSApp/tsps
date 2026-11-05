@@ -100,10 +100,20 @@ function check({ player, item }) {
   return true;
 }
 
+/** The inventory can fill while the prompt is open, so Yes asks again. */
+function refundFits(inventory, circlet) {
+  const refund = new core.Item(waterRuneId, charges(circlet) * RUNES_PER_CHARGE);
+  return inventory.getAddableAmount(refund) >= refund.getAmount();
+}
+
 function uncharge(player, circlet) {
   const inventory = player.getInventory();
   const amount = charges(circlet);
   if (!inventory.getItems().includes(circlet) || amount <= 0) return;
+  if (!refundFits(inventory, circlet)) {
+    statement(player, "You don't have enough room to uncharge your circlet.");
+    return;
+  }
   setCharges(circlet, 0);
   inventory.add(new core.Item(waterRuneId, amount * RUNES_PER_CHARGE));
   inventory.refreshItems();
@@ -114,7 +124,7 @@ function uncharge(player, circlet) {
 /** Captures (rsprox): a full inventory is refused at once; otherwise "Yes." / "No." first. */
 function confirmUncharge({ player, item }) {
   const inventory = player.getInventory();
-  if (!inventory.contains(waterRuneId) && inventory.getFreeSlots() <= 0) {
+  if (!refundFits(inventory, item)) {
     statement(player, "You don't have enough room to uncharge your circlet.");
     return true;
   }

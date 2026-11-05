@@ -8,6 +8,9 @@
  * golden cannonball, the gold helmet and assembled schematic, the shot into
  * Dondakan's mine and the Arzinian Avatar fight.
  *
+ * The stage numbers below are durable plugin stages. nativeProgress maps them to
+ * the native cache phases; see docs/quests/native-quest-state-a.md.
+ *
  * Stage varbit: 299 "dwarfrock_quest" (varp 433 "dwarfrock_main", bits 0-7).
  * Evidence: cache varbit dump (scripts/lookup-gameval.ts) names 299
  * dwarfrock_quest on varp 433; the spawned Dondakan (npc 6262) is a varbit-299
@@ -947,6 +950,7 @@ module.exports = function registerBetweenARockQuest(api) {
     if (activeAvatars.get(killer) === event.npc) activeAvatars.delete(killer);
     if (stageOf(killer) === STAGE_MINE && !avatarKilled(killer)) {
       killer.setAttribute(AVATAR_KILLED_ATTRIBUTE, true);
+      killer.getPacketSender().sendVarbit(VARBIT_STAGE, nativeProgress(stageOf(killer), killer));
       exitMine(killer);
     }
   }
@@ -1116,11 +1120,21 @@ module.exports = function registerBetweenARockQuest(api) {
   api.persistAttribute(AVATAR_KILLED_ATTRIBUTE);
   api.persistAttribute(MINE_TICKS_ATTRIBUTE, 0);
 
+  // QH 06da90: 90 fights the Avatar, 100 returns to Dondakan; cache DB completes at 110.
+  // Durable stage 100 already means the reward was paid, so old saves keep that meaning.
+  function nativeProgress(stage, player) {
+    stage |= 0;
+    if (stage >= STAGE_COMPLETE) return 110;
+    if (stage === STAGE_MINE && avatarKilled(player)) return 100;
+    return stage;
+  }
+
   quest = registerQuest(api, {
     key: "between_a_rock",
     name: "Between a Rock...",
     varpId: VARP_DWARFROCK,
     varbitId: VARBIT_STAGE,
+    varbitValue: nativeProgress,
     startedValue: STAGE_STARTED,
     completionValue: STAGE_COMPLETE,
     questPoints: 2,

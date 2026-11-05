@@ -1,6 +1,6 @@
 "use strict";
 
-const { api, Animation, CacheDefinitions, CountdownTask, DialogueChainBuilder, ItemStatementDialogue, ActionDialogue, NpcDialogue, Skill, TaskManager } = require("./Core.Construction");
+const { api, Animation, CacheDefinitions, CountdownTask, DialogueChainBuilder, ItemStatementDialogue, ActionDialogue, NpcDialogue, PlayerDialogue, OptionDialogue, EndDialogue, Skill, TaskManager } = require("./Core.Construction");
 const Ids = require("./Ids.Construction");
 const House = require("./House.Construction");
 
@@ -62,6 +62,8 @@ const DISPLAYS = {
 };
 const MOUNTED_ATTRIBUTE = "construction:trophies";
 const KURASK = Ids.npc("slayer_kursk_1"); // the chathead
+const KQ_HEAD_NPC = Ids.npc("kalphite_queen"); // the chathead
+const KQ_HEAD_TASK = "speak-to-the-kq-head-in-your-poh";
 // Furniture of the old trophy system (one piece per trophy), by the trophy it showed.
 const OLD_TROPHIES = {
   CRAWLING_HAND: 0, COCKATRICE_HEAD: 1, BASILISK_HEAD: 2, KURASK_HEAD: 3, ABYSSAL_DEMON_HEAD: 4, KBD_HEADS: 5,
@@ -223,12 +225,53 @@ function install(player, found, trophy, withCombat) {
   }));
 }
 
-/** Talk-to on a mounted kurask head (rsprox captures). */
 function talkTo(event) {
   const found = displayAt(event);
-  if (byKey.get(found?.furniture.trophy)?.name !== "Kurask head") return false;
-  event.player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new NpcDialogue(0, KURASK, "I KILL YOU!!!")));
-  return true;
+  const trophy = byKey.get(found?.furniture.trophy);
+  if (trophy?.name === "Kurask head") {
+    event.player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new NpcDialogue(0, KURASK, "I KILL YOU!!!")));
+    return true;
+  }
+  if (trophy?.name === "KQ head") {
+    talkToKqHead(event.player, found.house);
+    return true;
+  }
+  return false;
+}
+
+/** The mounted KQ head's transcript: the owner is threatened, a guest is answered with the owner's kill. */
+function talkToKqHead(player, house) {
+  const chain = new DialogueChainBuilder();
+  if (house.owner === player) {
+    api.emitCustomEvent("diary:task", { player, diary: "desert", task: KQ_HEAD_TASK });
+    chain
+      .add(new NpcDialogue(0, KQ_HEAD_NPC, "Soft-thing! How dare you approach the queen of the kalphite?"))
+      .add(new PlayerDialogue(1, "I killed you, remember?"))
+      .add(new NpcDialogue(2, KQ_HEAD_NPC, "Yes, you killed this queen, but by now another will have risen up! One kalphite may die but the hive goes on!"))
+      .add(new NpcDialogue(3, KQ_HEAD_NPC, "The kalphite race grows stronger every day, and our young feed on the blood of the soft-things that invade from above!"))
+      .add(new NpcDialogue(4, KQ_HEAD_NPC, "Someday we will overrun the world again and all soft creatures will die. But we will reserve the worst fate for those who have killed a queen and hung her head in their house."))
+      .add(new NpcDialogue(5, KQ_HEAD_NPC, "We will lay our eggs in your brain and you will not die until it explodes and a million kalphite emerge to make a grand hive of all the world!"))
+      .add(new OptionDialogue(6, {
+        executeOption(option) {
+          const brave = Number(option) === 1;
+          player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
+            new PlayerDialogue(0, brave ? "You don't scare me!" : "Please don't kill me!"),
+            new NpcDialogue(1, KQ_HEAD_NPC, brave
+              ? "Your pitiful misplaced confidence is irrelevant. You will all die!"
+              : "Ha ha ha! It is too late for pleading now, pathetic mammal! Your fate is sealed!"),
+            new EndDialogue(2),
+          ));
+        },
+      }, "You don't scare me!", "Please don't kill me!"));
+  } else {
+    const owner = house.owner.getDisplayName();
+    chain
+      .add(new NpcDialogue(0, KQ_HEAD_NPC, "Soft-thing! How dare you approach the queen of the kalphite?"))
+      .add(new PlayerDialogue(1, `${owner} killed you! I can do what I like.`))
+      .add(new NpcDialogue(2, KQ_HEAD_NPC, `${owner} killed me but you could not. My successor will be as strong as me. Come down to meet her, she is unafraid.`))
+      .add(new EndDialogue(3));
+  }
+  player.getDialogueManager().startDialogues(chain);
 }
 
 function attachTrophies(api) {
@@ -241,4 +284,4 @@ function attachTrophies(api) {
   api.onCustomEvent("interface:close", ({ player }) => openFor.delete(player));
 }
 
-Object.assign(module.exports, { attachTrophies, refreshDisplays, MOUNTED_ATTRIBUTE });
+Object.assign(module.exports, { attachTrophies, refreshDisplays, MOUNTED_ATTRIBUTE, _test: { talkTo, talkToKqHead, byKey } });

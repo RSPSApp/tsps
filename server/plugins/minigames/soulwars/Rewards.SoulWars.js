@@ -206,9 +206,12 @@ function buyOther({ player, slot }) {
   const room = stackable ? (inventory.contains(item) || inventory.getFreeSlots() > 0) : inventory.getFreeSlots() >= count;
   if (!room) return refuse(player, message("noRoom"));
   Common.addVarp(player, "zeal_tokens", -cost);
+  const before = inventory.getAmount(item);
   if (stackable) inventory.add(new Common.core.Item(item, count), false);
   else for (let i = 0; i < count; i++) inventory.add(new Common.core.Item(item, 1), false);
   inventory.refreshItems?.();
+  const credited = Math.max(0, inventory.getAmount(item) - before);
+  if (credited > 0) Common.api.emitCustomEvent("collection-log:obtain", { player, itemId: item, amount: credited });
   player.sendMessage(message("bought", { name: lineName(name), cost }));
   synth(player, "bought");
   choiceOf(player).quantity = 1;

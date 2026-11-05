@@ -254,4 +254,37 @@ function isPoweredStaffSpell(spell) {
   return spell?.[POWERED_STAFF_SPELL] === true;
 }
 
-module.exports = { definePoweredStaff, distance, ticksFor, isPoweredStaffSpell, LONGRANGE_EXTRA, IMPACT_SOUND_RANGE };
+/** Whether every refund fits at once: a new stack takes a slot of its own, and a matching one needs room. */
+function refundsFit(inventory, refunds) {
+  const meta = (item) => JSON.stringify(item.getMeta?.() ?? null);
+  const newStacks = refunds.filter((refund) => !inventory.getItems().some((held) =>
+    held?.getId() === refund.getId() && meta(held) === meta(refund))).length;
+  return newStacks <= inventory.getFreeSlots() &&
+    refunds.every((refund) => inventory.getAddableAmount(refund) >= refund.getAmount());
+}
+
+const PRESET_TEXT = "Preset items cannot be used for this.";
+
+/** Preset (and other untradeable or unbankable) copies keep their restrictions, so they never pay for charges. */
+function restricted(item) {
+  return !!item && (item.isPresetItem?.() === true || item.isUntradeable?.() === true || item.isUnbankable?.() === true);
+}
+
+/** How many of `id` can pay for a charge: the unrestricted copies. */
+function plainAmount(inventory, id) {
+  return inventory.getItems().reduce((total, item) =>
+    (item?.getId() === id && !restricted(item) ? total + item.getAmount() : total), 0);
+}
+
+/** Takes `amount` of `id` from its unrestricted copies, leaving any restricted one alone. */
+function takePlain(inventory, id, amount) {
+  let left = amount;
+  inventory.getItems().forEach((item, slot) => {
+    if (left <= 0 || item?.getId() !== id || restricted(item)) return;
+    const taken = Math.min(left, item.getAmount());
+    inventory.deleteAtSlot(slot, taken);
+    left -= taken;
+  });
+}
+
+module.exports = { definePoweredStaff, refundsFit, restricted, plainAmount, takePlain, PRESET_TEXT, distance, ticksFor, isPoweredStaffSpell, LONGRANGE_EXTRA, IMPACT_SOUND_RANGE };

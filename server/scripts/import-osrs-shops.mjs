@@ -209,20 +209,24 @@ function originalStock(name, items) {
     .map(({ entry }) => entry);
 }
 
-function npcInteractions(name, owners) {
+function npcInteractions(name, owners, shopsByNpc) {
   if (UNBOUND.has(name)) return [];
   const override = NPC_OVERRIDES[name] ?? {};
   const removed = new Set(override.remove ?? []);
   const bySlot = new Map();
   for (const owner of owners ?? []) {
-    if (owner.option_source !== "click") continue;
-    const slot = Number(owner.option_slot);
-    if (!Number.isInteger(slot) || slot < 1) continue;
-    const ids = bySlot.get(slot) ?? new Set();
     for (const id of owner.npc_ids ?? []) {
-      if (Number.isInteger(id) && id >= 0 && !removed.has(id)) ids.add(id);
+      const npcShop = shopsByNpc
+        ? shopsByNpc[String(id)]?.shops?.find((shop) => shop.shop_name === name)
+        : owner;
+      if (npcShop?.option_source !== "click") continue;
+      const slot = Number(npcShop.option_slot);
+      if (!Number.isInteger(slot) || slot < 1) continue;
+      if (!Number.isInteger(id) || id < 0 || removed.has(id)) continue;
+      const ids = bySlot.get(slot) ?? new Set();
+      ids.add(id);
+      bySlot.set(slot, ids);
     }
-    bySlot.set(slot, ids);
   }
   for (const [slot, ids] of Object.entries(override.add ?? {})) {
     const set = bySlot.get(Number(slot)) ?? new Set();
@@ -256,12 +260,14 @@ function serialize(value) {
 function main() {
   const { docs, check } = parseArgs(process.argv.slice(2));
   const itemsByShopFile = path.join(docs, "shops-items-by-shop.json");
+  const shopsByNpcFile = path.join(docs, "shops-by-npc.json");
   if (!fs.existsSync(itemsByShopFile)) {
     console.error(`osrsreboxed shop dump not found: ${itemsByShopFile}`);
     process.exit(1);
   }
 
   const byShop = readJson(itemsByShopFile);
+  const shopsByNpc = fs.existsSync(shopsByNpcFile) ? readJson(shopsByNpcFile) : null;
   const existing = readJson(shopsFile);
 
   const idByName = new Map();
@@ -285,7 +291,7 @@ function main() {
       currency,
       originalStock: originalStock(name, record.items),
       ...(SHOP_PRICES[name] ? { prices: new Map(SHOP_PRICES[name]) } : {}),
-      npcInteractions: npcInteractions(name, record.owners),
+      npcInteractions: npcInteractions(name, record.owners, shopsByNpc),
     });
   }
 

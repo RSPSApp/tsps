@@ -90,10 +90,15 @@ export class Sound {
     public static WEAPON_UNARMED_PUNCH = new Sound(2566, 1, 0, 0)
     public static WEAPON_UNARMED_KICK = new Sound(2565, 1, 0, 0)
     public static WEAPON_DHAROK_GREATAXE = new Sound(1321, 1, 0, 0)
+    public static WEAPON_DHAROK_GREATAXE_CRUSH = new Sound(1316, 1, 0, 0)
     public static WEAPON_VERAC_FLAIL = new Sound(1335, 1, 0, 0)
     public static WEAPON_GUTHAN_WARSPEAR = Sound.WEAPON_SPEAR_STAB
     public static WEAPON_TORAG_HAMMER = new Sound(1332, 1, 0, 0)
     public static WEAPON_GRANITE_MAUL = Sound.WEAPON_WARHAMMER
+
+    // Vengeance area sounds (raw captures1685 and2796, radius10, immediate).
+    public static VENGEANCE = new Sound(2907, 1, 0, 0)
+    public static VENGEANCE_OTHER = new Sound(2908, 1, 0, 0)
 
     // Special attack
 
@@ -144,6 +149,7 @@ export class Sound {
     public static readonly TOXIC_BLOWPIPE_SPECIAL = new Sound(800, 1, 32, 0)
     /** Dark bow: the double release, then the dragon or shadow arrow (rsprox recording 273). */
     public static readonly DARK_BOW_DOUBLEFIRE = new Sound(3731, 1, 0, 0)
+    public static readonly DARK_BOW_IMPACT = new Sound(3737, 1, 0, 0)
     public static readonly DARK_BOW_DRAGON_SPECIAL = new Sound(3733, 1, 0, 0)
     public static readonly DARK_BOW_SHADOW_SPECIAL = new Sound(3736, 1, 0, 0)
     /** Emberlight's three-part special attack (rsprox recording 3333). */
@@ -199,7 +205,19 @@ export class Sound {
     public static GEM_CUTTING = new Sound(2586, 1, 0, 0)
     public static SMITHING = new Sound(3790, 1, 0, 0)
     public static SMELTING = new Sound(2725, 1, 0, 0)
-    public static PRAYER_DEPLETED = new Sound(2663, 1, 0, 0)
+    public static PRAYER_DEPLETED = new Sound(2672, 1, 0, 0)
+    public static PRAYER_SHARP_EYE = new Sound(2685, 1, 0, 0)
+    public static PRAYER_MYSTIC_WILL = new Sound(2670, 1, 0, 0)
+    public static PRAYER_PROTECT_ITEM = new Sound(1982, 1, 0, 0)
+    public static PRAYER_HAWK_EYE = new Sound(2666, 1, 0, 0)
+    public static PRAYER_MYSTIC_LORE = new Sound(2668, 1, 0, 0)
+    public static PRAYER_EAGLE_EYE = new Sound(2665, 1, 0, 0)
+    public static PRAYER_MYSTIC_MIGHT = new Sound(2669, 1, 0, 0)
+    public static PRAYER_RETRIBUTION = new Sound(2682, 1, 0, 0)
+    public static PRAYER_REDEMPTION = new Sound(2680, 1, 0, 0)
+    public static PRAYER_SMITE = new Sound(2686, 1, 0, 0)
+    public static PRAYER_CHIVALRY = new Sound(3826, 1, 0, 0)
+    public static PRAYER_PIETY = new Sound(3825, 1, 0, 0)
     public static PRAYER_PROTECT_MELEE = new Sound(2676, 1, 0, 0)
     public static PRAYER_SUPERHUMAN_STRENGTH = new Sound(2689, 1, 0, 0)
     public static PRAYER_TURN_OFF = new Sound(2663, 1, 0, 0)

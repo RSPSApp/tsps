@@ -15,7 +15,7 @@
  * so quest plugins load in a plain `node dist/Server.js` process too.
  */
 
-// Side journal quest list (client/common/ui/sideJournal.ts + questList.ts).
+// Native side-journal quest list: cache CS2 owns rows, headers, sorting and filters.
 const QUEST_LIST_GROUP = 399;
 const QUEST_LIST_ENTRY_UID = (QUEST_LIST_GROUP << 16) | 7;
 // The "Quest Points"/"Completed" header lines are rendered by cache CS2 scripts
@@ -23,7 +23,8 @@ const QUEST_LIST_ENTRY_UID = (QUEST_LIST_GROUP << 16) | 7;
 const QUEST_POINTS_TOTAL_VARBIT = 1782; // "Quest Points: X/<total>"
 const QUESTS_COMPLETED_VARBIT = 6347; // "Completed: <n>/<total>"
 const QUESTS_TOTAL_VARBIT = 11877;
-const QUEST_LIST_ENTRY_FLAGS = 0x7e;
+const MINIQUESTS_COMPLETED_VARBIT = 14162;
+const QUEST_LIST_ENTRY_FLAGS = 0x3e; // Native OP1–5 (RSProx4267); Pin journal/OP6 is dormant.
 
 // Quest journal overlay (xrsps client/common/ui constants).
 const JOURNAL_GROUP = 119;
@@ -83,13 +84,9 @@ const QUEST_POINTS_ATTRIBUTE = "quest.points";
 const EXPERIENCE_WITHHELD_ATTRIBUTE = "quest.experience-withheld";
 
 // Client quest list statuses.
-const STATUS_IN_PROGRESS = 0;
-const STATUS_NOT_STARTED = 1;
-const STATUS_COMPLETE = 2;
-
-const { questListGroups, questMetadata } = require("./QuestList.QuestRuntime");
+const { metadata, questMetadata, nativeQuestIndex, questRowById } = require("./QuestList.QuestRuntime");
 const quests = [];
-const sentQuestSlots = new WeakMap();
+const sentQuestEvents = new WeakMap();
 const openBooks = new WeakMap();
 const BOOK_GROUP = 392;
 const BOOK_CLOSE = (BOOK_GROUP << 16) | 7;
@@ -114,56 +111,19 @@ function stageAttribute(questKey) {
   return `quest.${questKey}.stage`;
 }
 
-function orderedQuests() {
-  return quests.slice().sort((a, b) => a.name.localeCompare(b.name));
-}
 
 // ============================================================================
 // Quest list / journal / completion widgets
 // ============================================================================
 
-/**
- * Assigns list slots: each group's title occupies the row before its quests
- * (the client draws the title at firstQuestSlot - 1). Returns the groups for the
- * packet, the slot -> quest map for journal clicks, and the quest-slot ranges
- * that carry the "Read journal:" flags.
- */
-function questRows(player) {
-  const groups = [];
-  const slotQuests = [];
-  const ranges = [];
-  let slot = 0;
-  for (const group of questListGroups(quests, player, coreApi?.CacheDefinitions, questStatus, coreApi?.Skill)) {
-    if (group.title) { slotQuests[slot] = null; slot++; }
-    const start = slot;
-    const entries = group.quests.map(({ quest, status }) => {
-      const row = {
-        slot,
-        status,
-        key: quest.key,
-        displayName: quest.name,
-      };
-      slotQuests[slot] = quest;
-      slot++;
-      return row;
-    });
-    groups.push({ title: group.title, quests: entries });
-    ranges.push([start, slot - 1]);
-  }
-  return { groups, slotQuests, ranges };
-}
-
-function sendQuestList(player) {
-  const { groups, ranges, slotQuests } = questRows(player);
-  const previous = sentQuestSlots.get(player);
-  sentQuestSlots.set(player, slotQuests);
-  const packet = player.getPacketSender();
-  if (previous?.length) packet.sendInterfaceFlagsRange(QUEST_LIST_ENTRY_UID, 0, previous.length - 1, 0);
-  packet.sendQuestList(groups);
-  for (const [start, end] of ranges) {
-    if (end >= start) {
-      packet.sendInterfaceFlagsRange(QUEST_LIST_ENTRY_UID, start, end, QUEST_LIST_ENTRY_FLAGS);
-    }
+/** Native quest children are stable cache identities. Reapply events when 399 remounts. */
+function sendQuestList(player, forceEvents = false) {
+  const ids = [...metadata(coreApi?.CacheDefinitions).values()].map(row => row.id?.[0]).filter(Number.isInteger);
+  const max = Math.max(-1, ...ids);
+  const previous = sentQuestEvents.get(player);
+  if (max >= 0 && (forceEvents || previous !== max)) {
+    player.getPacketSender().sendInterfaceFlagsRange(QUEST_LIST_ENTRY_UID, 0, max, QUEST_LIST_ENTRY_FLAGS);
+    sentQuestEvents.set(player, max);
   }
   sendQuestHeaderStats(player);
 }
@@ -174,12 +134,22 @@ function sendQuestList(player) {
  * (1356/5995/3310) from these varps; interface text writes are overwritten.
  */
 function sendQuestHeaderStats(player) {
-  const list = orderedQuests();
+  const all = [...metadata(coreApi?.CacheDefinitions).values()].filter(row => row.release_type?.[0] !== 0);
+  const main = all.filter(row => (row.type?.[0] ?? 0) === 0 && !row.parent_quest?.length);
   const packet = player.getPacketSender();
+  const completed = type => quests.filter(quest => {
+    const row = questMetadata(quest, coreApi?.CacheDefinitions);
+    const value = quest.varbitId !== undefined ? packet.getVarbit?.(quest.varbitId) : packet.getVarp?.(quest.varpId);
+    const end = row?.endstate?.[0];
+    return row && (row.type?.[0] ?? 0) === type && !row.parent_quest?.length
+      && Number.isInteger(value) && Number.isInteger(end) && end >= 0 && value >= end;
+  }).length;
+  // Earned QP remains the saved gameplay value. Native maximum/counts describe the cache list.
   packet.sendConfig(QUEST_POINTS_VARP, Number(player.getAttribute(QUEST_POINTS_ATTRIBUTE)) || 0);
-  packet.sendVarbit(QUEST_POINTS_TOTAL_VARBIT, list.reduce((sum, quest) => sum + (quest.questPoints || 0), 0));
-  packet.sendVarbit(QUESTS_COMPLETED_VARBIT, list.filter((quest) => questStatus(quest, player) === STATUS_COMPLETE).length);
-  packet.sendVarbit(QUESTS_TOTAL_VARBIT, list.length);
+  packet.sendVarbit(QUEST_POINTS_TOTAL_VARBIT, all.reduce((sum, row) => sum + Number(row.questpoints?.[0] ?? 0), 0));
+  packet.sendVarbit(QUESTS_COMPLETED_VARBIT, completed(0));
+  packet.sendVarbit(QUESTS_TOTAL_VARBIT, main.length);
+  packet.sendVarbit(MINIQUESTS_COMPLETED_VARBIT, completed(1));
 }
 
 /**
@@ -190,12 +160,12 @@ function sendQuestHeaderStats(player) {
 const loginQuestLists = new WeakMap();
 
 /** Sends the quest list and its row flags; call when the quest tab (re)mounts. */
-function refreshQuestList(player) {
+function refreshQuestList(player, forceEvents = false) {
   if (loginQuestLists.has(player)) {
     loginQuestLists.set(player, true);
     return;
   }
-  sendQuestList(player);
+  sendQuestList(player, forceEvents);
 }
 
 /** Login started: hold quest list refreshes until the bootstrap completes. */
@@ -207,12 +177,15 @@ function holdLoginQuestList({ player }) {
 function sendLoginQuestList({ player }) {
   const requested = loginQuestLists.get(player);
   loginQuestLists.delete(player);
-  if (requested) sendQuestList(player);
+  // Restore post-bootstrap quest varps before deriving native completion counts.
+  sendQuestVarps({ player });
+  if (requested) sendQuestList(player, true);
 }
 
 /** A login that ends before its bootstrap leaves no hold behind. */
 function releaseLoginQuestList({ player }) {
   loginQuestLists.delete(player);
+  sentQuestEvents.delete(player);
 }
 
 function refreshQuestRequirements({ player }) {
@@ -226,21 +199,54 @@ function refreshQuestRequirements({ player }) {
  * bound to player:bootstrap-complete to re-send the real stages.
  */
 
-function questStatus(quest, player) {
-  if (quest.isComplete(player)) return STATUS_COMPLETE;
-  if (quest.isStarted(player)) return STATUS_IN_PROGRESS;
-  return STATUS_NOT_STARTED;
-}
 
 function journalLines(quest, player) {
   return typeof quest.buildJournal === "function" ? quest.buildJournal(player, quest) : [];
 }
 
-function openJournalBySlot(player, slot) {
-  // Quest rows sit in the same slots questRows() sent, after each letter header.
-  const quest = (sentQuestSlots.get(player) ?? questRows(player).slotQuests)[slot | 0];
+function openJournalById(player, id) {
+  const quest = nativeQuestIndex(quests, coreApi?.CacheDefinitions).get(id);
   if (quest) openJournal(player, quest);
 }
+
+/** Native row ops and identities, shared unchanged by the browser and Gateway. */
+function questListAction({ player, slot, opId, action }) {
+  const op = opId ?? action ?? 2;
+  if (op < 1 || op > 5) return; // Pin journal is not enabled by live OP1–5 events.
+  const row = questRowById(slot, coreApi?.CacheDefinitions);
+  if (!row || row.release_type?.[0] === 0) return;
+  if (op === 3) {
+    showQuestStartOnMap(player, row);
+    return;
+  }
+  if (op === 4 || op === 5) {
+    // RSProx3072: OP5 -> wiki_lookup("Search", "", "", "", "<name>/Quick guide").
+    const name = String(row.displayname?.[0] ?? "");
+    if (name) player.getPacketSender().sendInterfaceScript(3300, ["Search", "", "", "", name + (op === 5 ? "/Quick guide" : "")]);
+    return;
+  }
+  const quest = nativeQuestIndex(quests, coreApi?.CacheDefinitions).get(slot);
+  let start = START_TEXT[row.displayname?.[0]];
+  if (op === 1 && !start && quest) {
+    // View info always uses the unstarted journal, without changing the saved stage.
+    const view = new Proxy(player, {
+      get(target, key) {
+        if (key === "getAttribute") return name => name === stageAttribute(quest.key) ? 0 : target.getAttribute(name);
+        const value = Reflect.get(target, key, target);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    start = startSentence(row, journalLines(quest, view));
+  }
+  if (op === 1 && start) {
+    openOverview(player, { name: row.displayname[0] }, row, start);
+  } else if (quest) {
+    openJournal(player, quest);
+  } else if (start) {
+    openOverview(player, { name: row.displayname[0] }, row, start);
+  }
+}
+
 
 /**
  * A journal line as live OSRS sends it: navy text, with each highlight returning to navy rather
@@ -289,13 +295,16 @@ function openOverview(player, quest, row, start) {
 }
 
 /** "Show on Map" in the overview: the world map, with the quest's start point marked. */
-function showStartOnMap({ player, slot }) {
-  const row = openOverviews.get(player);
+function showQuestStartOnMap(player, row) {
   const start = row?.startcoord?.[0];
-  if (slot !== OVERVIEW_SHOW_ON_MAP_SLOT || start === undefined) return;
+  if (!Number.isInteger(start) || start < 0) return;
   const packet = player.getPacketSender();
   if (!packet.isWorldMapOpen()) packet.toggleWorldMap();
   packet.sendInterfaceScript(SCRIPT_WORLD_MAP_MARK, [WORLD_MAP_NOCLICK, start, row.mapelement?.[0] ?? -1]);
+}
+
+function showStartOnMap({ player, slot }) {
+  if (slot === OVERVIEW_SHOW_ON_MAP_SLOT) showQuestStartOnMap(player, openOverviews.get(player));
 }
 
 /**
@@ -469,9 +478,7 @@ function registerQuestWidgets(api) {
   });
 
   // "Read journal:" on a quest list row.
-  api.onInterfaceActionButton([QUEST_LIST_ENTRY_UID], (event) => {
-    openJournalBySlot(event.player, event.slot);
-  });
+  api.onInterfaceActionButton([QUEST_LIST_ENTRY_UID], questListAction);
   // Journal close / switch-view.
   api.onInterfaceActionButton(
     [(JOURNAL_GROUP << 16) | JOURNAL_CLOSE_CHILD, (JOURNAL_GROUP << 16) | JOURNAL_SWITCH_CHILD],
@@ -485,7 +492,7 @@ function registerQuestWidgets(api) {
     event.player.getPacketSender().sendInterfaceRemoval()
   );
   // SideJournalDefaults asks for the list when it mounts the quest tab.
-  api.onCustomEvent("quest:list-refresh", ({ player }) => refreshQuestList(player));
+  api.onCustomEvent("quest:list-refresh", ({ player }) => refreshQuestList(player, true));
   api.onPlayerLevelUp?.(refreshQuestRequirements);
   api.onCustomEvent("quest:is-complete", answerIsComplete);
   api.onCustomEvent("quest:is-started", answerIsStarted);
@@ -498,10 +505,6 @@ function registerQuestWidgets(api) {
   // The character summary shows the same header stats without opening the list.
   api.onPlayerLogin(({ player }) => sendQuestHeaderStats(player));
   api.onPlayerLogin(sendQuestVarps);
-  // The login bootstrap's sendTabInterface(6) runs after the login hooks and
-  // re-sends the all-spells-unlocked varps, clobbering quest varps that share
-  // storage with cache transforms (e.g. Drezel's 302). Re-send ours afterwards.
-  api.onCustomEvent("player:bootstrap-complete", ({ player }) => sendQuestVarps({ player }));
 }
 
 /**
@@ -679,9 +682,9 @@ function registerQuest(api, def) {
       } else {
         player.getPacketSender().sendConfig(def.varpId, quest.varpValue(value | 0, player));
       }
-      refreshQuestList(player);
-      // Quests whose progress shows in more than their varp (a varbit the cache reads) follow it.
+      // Quests whose progress shows in more than their varp publish their native state first.
       api.emitCustomEvent?.("quest:stage-changed", { player, key: def.key, stage: value | 0 });
+      refreshQuestList(player);
     },
     isStarted(player) {
       return quest.getStage(player) >= (def.startedValue ?? 1);
@@ -820,7 +823,7 @@ function loadTranscripts(api) {
  * `select` can narrow the variant's steps (e.g. skip a wiki continuation tail); `npc`, the
  * NPC talked to, reaches the dialogue events (for its animations).
  */
-function startTranscript(api, player, npcId, page, variant, select, npc = null) {
+function startTranscript(api, player, npcId, page, variant, select, npc = null, { scoped = false } = {}) {
   const data = loadTranscripts(api);
   const record = data?.[page];
   const raw = record?.variants?.[variant];
@@ -834,7 +837,8 @@ function startTranscript(api, player, npcId, page, variant, select, npc = null) 
     transcriptSpeakers = speakerIdIndex(index, api.core.NpcDefinition);
   }
   const definition = api.core.NpcDefinition.forId(npcId);
-  const event = { player, npcId, npc, definition };
+  // Timed scenes can retain the existing named-playback ownership token across Continues.
+  const event = { player, npcId, npc, definition, explicit: scoped };
   const options = collectPageOptions(record);
   const context = { player, npc, npcId, definition, pages: [{ page, variants: [variant] }], speakerIdByName: transcriptSpeakers,
     pageOptions: options.byText, pageOptionList: options.list, pageLines: collectPageLines(record),
@@ -859,7 +863,7 @@ module.exports = {
   sendQuestVarps,
   refreshQuestList,
   openJournal,
-  openJournalBySlot,
+  openJournalById,
   startDialogue,
   startTranscript,
   loadTranscripts,

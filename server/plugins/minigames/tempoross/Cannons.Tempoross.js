@@ -81,6 +81,7 @@ class Cannons {
     const cannon = crate.cannonLoc;
     if (!ammo || !cannon || !this.fight.boss) return;
     const mirrored = crate.data.side === "east";
+    crate.cannoneer?.setPositionToFace(cannon.getLocation());
     this.cove.locAnim(cannon, mirrored ? ANIM.CANNON_FIRING_MIRROR : ANIM.CANNON_FIRING);
     const muzzle = this.cove.tile([...crate.data.muzzle, 0]);
     const target = this.cove.tile([...DATA.cove.bossCentre, 0]);
@@ -112,6 +113,7 @@ class Cannons {
       if (player.__temporossLoading === crate && Shared.actionOf(player) === "load") {
         Shared.stopAction(player);
         player.sendMessage("The surge of lightning arcs from the cannon into you...");
+        stun(player);
       }
     }
     return index;
@@ -121,6 +123,21 @@ class Cannons {
     crate.disabledUntil = -1;
     crate.cannonLoc = this.cove.replaceLoc(crate.cannonLoc, crate.data.cannon);
   }
+}
+
+/**
+ * The zap the torrent leaves on a loader: the cache's generic stun animation and graphic.
+ * The Wiki gives no separate player-stun length, so this keeps them still for the same
+ * window the cannon is disabled (inferred from the attack's 24-tick disable).
+ */
+function stun(player) {
+  Shared.animate(player, ANIM.STUNNED);
+  Shared.graphic(player, GFX.STUNNED);
+  player.getMovementQueue().reset();
+  player.getMovementQueue().setBlockMovement(true);
+  Shared.later(player, F.torrentDisabledTicks, () => {
+    if (player.isRegistered()) player.getMovementQueue().setBlockMovement(false);
+  });
 }
 
 // ------------------------------------------------------------------ filling
@@ -155,7 +172,6 @@ function fill(event) {
   }
   player.setPositionToFace(npc.getLocation());
   player.sendMessage("You start loading harpoonfish into the cannon.");
-  player.__temporossLoading = crate;
   Shared.startAction(player, "load", (ticks) => {
     if (fight.result || fight.cannons.disabled(crate)) return false;
     if (ticks % DATA.ticks.load !== 1) return true;
@@ -164,6 +180,7 @@ function fill(event) {
     load(player, fight, crate, fishId);
     return nextFish(player) !== null;
   });
+  player.__temporossLoading = crate;
   return true;
 }
 

@@ -378,6 +378,15 @@ function buildGeneratedPreset(player, state) {
   };
 }
 
+/** True when a PvP bot has nothing on, or is wearing armour but no weapon. */
+function needsLoadoutRestore(player) {
+  const items = player?.getEquipment?.()?.getItems?.() ?? [];
+  if (!items.some((item) => (item?.getId?.() ?? 0) > 0)) {
+    return true;
+  }
+  return !((items[Equipment.WEAPON_SLOT]?.getId?.() ?? 0) > 0);
+}
+
 /** True when the bot wears nothing: a regear cannot disturb any fight. */
 function hasNoEquipment(player) {
   const worn = player.getEquipment?.()?.getItems?.() ?? [];
@@ -487,5 +496,6 @@ function applyGeneratedPvpLoadout(player, state, options = {}) {
 
 module.exports = {
   applyGeneratedPvpLoadout,
+  needsLoadoutRestore,
   __testing: { buildGeneratedPreset, matchesHotspotCombatBand },
 };

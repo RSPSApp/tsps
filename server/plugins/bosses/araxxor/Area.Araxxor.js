@@ -21,6 +21,12 @@ const Specials = require("./Specials.Araxxor");
 const CombatAchievements = require("./CombatAchievements.Araxxor");
 
 const ATTR_AREA = "araxxor:instance-area";
+const ACCESS_MESSAGES = Object.freeze({
+  slayer: "You need a Slayer level of at least 92 to enter Araxxor's lair.",
+  quest: "You need to complete Priest in Peril before entering Morytania.",
+  task: "You need to be assigned an araxyte or spider Slayer task to enter Araxxor's lair.",
+});
+const OUTSIDE_TILE = Object.freeze([3658, 9815, 0]);
 
 let api = null;
 let core = null;
@@ -38,6 +44,20 @@ function insideLair(location) {
   const x = location.getX();
   const y = location.getY();
   return x >= Shared.LAIR.minX && x <= Shared.LAIR.maxX && y >= Shared.LAIR.minY && y <= Shared.LAIR.maxY;
+}
+
+function entryReason(player) {
+  const slayer = core.Skill.SLAYER;
+  const slayerLevel = Number(player.getSkillManager?.().getCurrentLevel?.(slayer) ?? 1);
+  if (!Number.isFinite(slayerLevel) || slayerLevel < 92) return ACCESS_MESSAGES.slayer;
+  const quest = { player, key: "priest_in_peril", complete: null };
+  api.emitCustomEvent("quest:is-complete", quest);
+  if (quest.complete !== true) return ACCESS_MESSAGES.quest;
+  const task = { player, task: null };
+  api.emitCustomEvent("slayer:current-task", task);
+  const name = String(task.task?.name ?? "").toLowerCase();
+  if (!name.includes("araxyte") && !name.includes("spider")) return ACCESS_MESSAGES.task;
+  return null;
 }
 
 /** The spiders of the fight: only the instance they belong to may attack them. */
@@ -246,6 +266,12 @@ function ensureEncounter(player, area) {
  */
 function enterInstance(player) {
   if (!insideLair(player.getLocation?.())) return;
+  const refusal = entryReason(player);
+  if (refusal) {
+    player.sendMessage(refusal);
+    player.moveTo(new core.Location(...OUTSIDE_TILE));
+    return false;
+  }
   let area = areaOf(player);
   if (!area) {
     area = new AraxxorPrivateArea(player.getUsername?.());
@@ -253,6 +279,7 @@ function enterInstance(player) {
   }
   if (player.getArea?.() !== area) area.enter(player);
   ensureEncounter(player, area);
+  return true;
 }
 
 function attach(pluginApi) {
@@ -272,5 +299,5 @@ module.exports = {
   destroyArea,
   enterInstance,
   isLairNpc,
-  _test: { insideLair },
+  _test: { insideLair, entryReason },
 };

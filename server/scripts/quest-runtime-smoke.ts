@@ -1,6 +1,6 @@
 import * as assert from "node:assert/strict";
 
-const { registerQuest, openJournalBySlot } = require("../plugins/quests/QuestRuntime.js");
+const { registerQuest, openJournalById } = require("../plugins/quests/QuestRuntime.js");
 
 const attributes = new Map<string, unknown>();
 const questPreferences = new Map<number, number>([[13772, 1]]);
@@ -42,7 +42,16 @@ const player = {
 };
 
 const persisted: string[] = [];
+const nativeRows = [
+    ["Test Quest", 42], ["Alpha Quest", 16], ["The Beta Quest", 55],
+    ...Array.from({length: 250}, (_, i) => [`Zz Quest ${i}`, 1000 + i]),
+].map(([name, id], i) => ({ id: i + 3000, column: (column: string) => column === "id" ? [id] : column === "displayname" ? [name] : [] }));
 const api = {
+    core: { CacheDefinitions: {
+        getDbColumns: () => ["id", "displayname"],
+        getDbColumn: (_table: number, name: string) => name,
+        getDbTableRows: () => nativeRows,
+    } },
     persistAttribute: (key: string) => persisted.push(key),
     onInterfaceActionButton: () => {},
     onCustomEvent: () => {},
@@ -85,34 +94,17 @@ assert.ok(sent.interfaces.includes(153), "opens the completion scroll");
 assert.ok(sent.items.some(([uid, item]) => uid === ((153 << 16) | 5) && item === 1891), "scroll shows the reward item");
 assert.equal(quest.complete(player), false, "completing twice is a no-op");
 
-const groups = sent.questLists.at(-1);
-assert.equal(groups[0].quests[0].key, "test_quest");
-assert.equal(groups[0].quests[0].status, 2, "quest list shows complete");
-assert.equal(groups[0].quests[0].displayName, "Test Quest");
-
-// A group title occupies the row before its quests (slot 0 is the "T" header),
-// so the journal lookup must index the produced slot map, not slot - 1.
+// A native child is the cache id, independent of visual order or a group header.
 const journalTitleUid = (119 << 16) | 5;
 sent.strings.length = 0;
-openJournalBySlot(player, 1);
-assert.ok(
-    sent.strings.some(([text, uid]) => uid === journalTitleUid && text.includes("Test Quest")),
-    "slot 1 opens the first quest's journal"
-);
-assert.ok(
-    sent.strings.some(([text, uid]) => uid === ((119 << 16) | 11) && text === "<col=000080>line one"),
-    "journal lines are navy, as live OSRS sends them"
-);
+openJournalById(player, 42);
+assert.ok(sent.strings.some(([text, uid]) => uid === journalTitleUid && text.includes("Test Quest")));
+assert.ok(sent.strings.some(([text, uid]) => uid === ((119 << 16) | 11) && text === "<col=000080>line one"));
 sent.strings.length = 0;
-openJournalBySlot(player, 0);
-assert.equal(
-    sent.strings.filter(([, uid]) => uid === journalTitleUid).length,
-    0,
-    "the header slot opens no journal"
-);
+openJournalById(player, 0);
+assert.equal(sent.strings.length, 0, "an unmapped native id opens no journal");
 
-// The list groups by leading letter, ignoring a leading "The", and each group
-// gets its own header row.
+// Native identities survive registration order, sorting and filtering.
 registerQuest(api, {
     key: "alpha_quest", name: "Alpha Quest", varpId: 30,
     startedValue: 1, completionValue: 2, questPoints: 1, buildJournal: () => [],
@@ -122,20 +114,10 @@ registerQuest(api, {
     startedValue: 1, completionValue: 2, questPoints: 1, buildJournal: () => [],
 });
 require("../plugins/quests/QuestRuntime").refreshQuestList(player);
-const grouped = sent.questLists.at(-1);
-assert.deepEqual(
-    grouped.map((group: any) => group.title),
-    ["A", "B", "T"],
-    "quest list is grouped by leading letter (The ignored)"
-);
-assert.equal(grouped[0].quests[0].slot, 1, "Alpha Quest follows its A header");
-assert.equal(grouped[1].quests[0].slot, 3, "The Beta Quest follows its B header");
+assert.equal(sent.questLists.length, 0, "the server no longer sends custom list rows");
 sent.strings.length = 0;
-openJournalBySlot(player, 3);
-assert.ok(
-    sent.strings.some(([text, uid]) => uid === journalTitleUid && text.includes("The Beta Quest")),
-    "a later group's slot opens the right journal"
-);
+openJournalById(player, 55);
+assert.ok(sent.strings.some(([text, uid]) => uid === journalTitleUid && text.includes("The Beta Quest")));
 
 // Every quest row gets its "Read journal:" flags, however long the list (#625).
 for (let i = 0; i < 250; i++) {
@@ -144,33 +126,17 @@ for (let i = 0; i < 250; i++) {
         startedValue: 1, completionValue: 2, questPoints: 0, buildJournal: () => [],
     });
 }
-sent.flagRanges.length = 0;
 require("../plugins/quests/QuestRuntime").refreshQuestList(player);
-const lastSlot = Math.max(...sent.questLists.at(-1).flatMap((group: any) => group.quests.map((q: any) => q.slot)));
-assert.ok(lastSlot > 199, "list extends past slot 199");
-assert.ok(
-    sent.flagRanges.some(([uid, from, to]) => uid === ((399 << 16) | 7) && from <= lastSlot && lastSlot <= to),
-    "the last quest row gets its journal flags"
-);
-
-// Click mapping belongs to the snapshot rendered on the client, even if a preference
-// has changed before a refresh packet is sent.
+const lastId = 1249;
+assert.ok(sent.flagRanges.some(([uid, from, to]) => uid === ((399 << 16) | 7) && from <= lastId && lastId <= to),
+    "canonical identities above 199 get journal events");
 questPreferences.set(13889, 1);
-sent.strings.length = 0;
-openJournalBySlot(player, 3);
-assert.ok(sent.strings.some(([text, uid]) => uid === journalTitleUid && text.includes("The Beta Quest")));
-require("../plugins/quests/QuestRuntime").refreshQuestList(player);
-const withoutHeaders = sent.questLists.at(-1);
-assert.equal(withoutHeaders[0].title, "");
-assert.equal(withoutHeaders[0].quests[0].slot, 0);
-sent.strings.length = 0;
-openJournalBySlot(player, 0);
-assert.ok(sent.strings.some(([text, uid]) => uid === journalTitleUid && text.includes("Alpha Quest")));
 questPreferences.set(13776, 1);
 questPreferences.set(13777, 1);
 require("../plugins/quests/QuestRuntime").refreshQuestList(player);
-assert.deepEqual(sent.questLists.at(-1), []);
 sent.strings.length = 0;
-openJournalBySlot(player, 0);
-assert.equal(sent.strings.length, 0, "filtered entries cannot open stale journals");
+openJournalById(player, 55);
+assert.ok(sent.strings.some(([text, uid]) => uid === journalTitleUid && text.includes("The Beta Quest")),
+    "native identity does not depend on client sorting or filtering");
+assert.equal(sent.questLists.length, 0);
 console.info("quest runtime smoke passed");

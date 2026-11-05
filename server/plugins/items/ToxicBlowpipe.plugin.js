@@ -40,7 +40,19 @@ function normalizeInt(value, fallback) {
 }
 
 function isToxicBlowpipeItemId(itemId) {
-  return itemId === core.ItemIdentifiers.TOXIC_BLOWPIPE_EMPTY_ || itemId === core.ItemIdentifiers.TOXIC_BLOWPIPE;
+  const I = core.ItemIdentifiers;
+  return itemId === I.TOXIC_BLOWPIPE_EMPTY_ || itemId === I.TOXIC_BLOWPIPE ||
+    itemId === I.BLAZING_BLOWPIPE_EMPTY_ || itemId === I.BLAZING_BLOWPIPE;
+}
+
+function isBlazingBlowpipeItemId(itemId) {
+  const I = core.ItemIdentifiers;
+  return itemId === I.BLAZING_BLOWPIPE_EMPTY_ || itemId === I.BLAZING_BLOWPIPE;
+}
+
+function isChargedBlowpipeItemId(itemId) {
+  const I = core.ItemIdentifiers;
+  return itemId === I.TOXIC_BLOWPIPE || itemId === I.BLAZING_BLOWPIPE;
 }
 
 function isToxicBlowpipeDartId(itemId) {
@@ -75,7 +87,11 @@ const BlowpipeState = {
       item.setMetaValue(TOXIC_BLOWPIPE_META_KEY, state);
     }
     if (item && isToxicBlowpipeItemId(item.getId())) {
-      item.setId(state.scales > 0 || state.dartAmount > 0 ? core.ItemIdentifiers.TOXIC_BLOWPIPE : core.ItemIdentifiers.TOXIC_BLOWPIPE_EMPTY_);
+      const charged = state.scales > 0 || state.dartAmount > 0;
+      const blazing = isBlazingBlowpipeItemId(item.getId());
+      item.setId(blazing
+        ? (charged ? core.ItemIdentifiers.BLAZING_BLOWPIPE : core.ItemIdentifiers.BLAZING_BLOWPIPE_EMPTY_)
+        : (charged ? core.ItemIdentifiers.TOXIC_BLOWPIPE : core.ItemIdentifiers.TOXIC_BLOWPIPE_EMPTY_));
     }
     return item;
   },
@@ -144,8 +160,8 @@ function getAmmoName(dartId) {
   return new core.Item(dartId).getDefinition()?.getName?.()?.toLowerCase?.() ?? "darts";
 }
 
-function canAddStack(inventory, itemId) {
-  return inventory.getFreeSlots() > 0 || inventory.contains(itemId);
+function canReturnDarts(inventory, itemId, amount) {
+  return inventory.getAddableAmount(new core.Item(itemId, amount)) >= amount;
 }
 
 function getItemContainer(player, item, preferredSlot = -1) {
@@ -229,7 +245,7 @@ function chargeDarts(player, blowpipeItem, blowpipeSlot, dartItem) {
     return;
   }
 
-  if (currentAmount > 0 && currentId !== dartId && !canAddStack(player.getInventory(), currentId)) {
+  if (currentAmount > 0 && currentId !== dartId && !canReturnDarts(player.getInventory(), currentId, currentAmount)) {
     player.sendMessage("You need more inventory space to swap the loaded darts.");
     return;
   }
@@ -461,7 +477,7 @@ function combatMethod(special) {
       }
       const player = character.getAsPlayer();
       const blowpipeItem = BlowpipeState.equipped(player);
-      if (!blowpipeItem || blowpipeItem.getId() !== core.ItemIdentifiers.TOXIC_BLOWPIPE) {
+      if (!blowpipeItem || !isChargedBlowpipeItemId(blowpipeItem.getId())) {
         return false;
       }
       return isReady(player, blowpipeItem);
@@ -490,9 +506,14 @@ function combatMethod(special) {
         player.getCombat().reset();
         return;
       }
-      const animation = character.getAttackAnim();
-      if (animation !== -1) {
-        character.performAnimation(new core.Animation(animation));
+      if (this.special) {
+        // TOXIC_BLOWPIPE_SPECIAL_UPDATED; the ordinary attack keeps the style's 5061.
+        character.performAnimation(new core.Animation(876));
+      } else {
+        const animation = character.getAttackAnim();
+        if (animation !== -1) {
+          character.performAnimation(new core.Animation(animation));
+        }
       }
       core.Projectile.createProjectile(character, target, ammo.getProjectileId(), 40, 60, 40, 35)
         .sendProjectile();
@@ -543,7 +564,7 @@ function combatMethod(special) {
 
 function rangedAmmoResolverResolve(player) {
   const blowpipeItem = BlowpipeState.equipped(player);
-  if (!blowpipeItem || blowpipeItem.getId() !== core.ItemIdentifiers.TOXIC_BLOWPIPE) {
+  if (!blowpipeItem || !isChargedBlowpipeItemId(blowpipeItem.getId())) {
     return null;
   }
   return BlowpipeState.ammo(blowpipeItem);
@@ -589,7 +610,7 @@ function rangedAmmoHandlerDecrementAmmo(player, pos, amount) {
 function bonusProviderApply(event) {
   const { player, bonuses } = event;
   const blowpipeItem = BlowpipeState.equipped(player);
-  if (!blowpipeItem || blowpipeItem.getId() !== core.ItemIdentifiers.TOXIC_BLOWPIPE) {
+  if (!blowpipeItem || !isChargedBlowpipeItemId(blowpipeItem.getId())) {
     return;
   }
   if (!isCharged(blowpipeItem)) {
@@ -610,7 +631,7 @@ function combatMethodResolverResolve(attacker) {
   }
   const player = attacker.getAsPlayer();
   const blowpipeItem = BlowpipeState.equipped(player);
-  if (!blowpipeItem || blowpipeItem.getId() !== core.ItemIdentifiers.TOXIC_BLOWPIPE) {
+  if (!blowpipeItem || !isChargedBlowpipeItemId(blowpipeItem.getId())) {
     return null;
   }
   if (player.isSpecialActivated?.() === true && player.getCombatSpecial?.()?.getId?.() === "toxic_blowpipe") {
@@ -653,6 +674,10 @@ module.exports = {
   register(api) {
     core = api.core;
     pluginApi = api;
+    // The ornament changes appearance only. Native ranged-weapon and profile lookups
+    // should see the corresponding charged or empty Toxic Blowpipe definition.
+    core.ItemAliases.register(core.ItemIdentifiers.BLAZING_BLOWPIPE, core.ItemIdentifiers.TOXIC_BLOWPIPE);
+    core.ItemAliases.register(core.ItemIdentifiers.BLAZING_BLOWPIPE_EMPTY_, core.ItemIdentifiers.TOXIC_BLOWPIPE_EMPTY_);
     api.onCombatHitDamage(rememberDamage);
     api.registerRangedAmmoResolver({ resolve: rangedAmmoResolverResolve });
     api.registerRangedAmmoHandler({ checkAmmo: rangedAmmoHandlerCheckAmmo, decrementAmmo: rangedAmmoHandlerDecrementAmmo });
@@ -660,6 +685,21 @@ module.exports = {
     api.registerCombatMethodResolver({ resolve: combatMethodResolverResolve });
     api.onItemOnItem(itemOnItem);
     api.onItemAction("Toxic blowpipe", {
+      Check: checkBlowpipe,
+      Unload: unloadBlowpipe,
+      Uncharge: unchargeBlowpipe,
+    });
+    api.onItemAction("Toxic blowpipe (empty)", {
+      Check: checkBlowpipe,
+      Unload: unloadBlowpipe,
+      Uncharge: unchargeBlowpipe,
+    });
+    api.onItemAction("Blazing blowpipe", {
+      Check: checkBlowpipe,
+      Unload: unloadBlowpipe,
+      Uncharge: unchargeBlowpipe,
+    });
+    api.onItemAction("Blazing blowpipe (empty)", {
       Check: checkBlowpipe,
       Unload: unloadBlowpipe,
       Uncharge: unchargeBlowpipe,

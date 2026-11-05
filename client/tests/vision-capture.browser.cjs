@@ -9,7 +9,7 @@
 //   [--animation-smoothing on|off] [--check-animation-smoothing 1]
 //   [--check-mobile-keyboard 1] (use --url with ?mobile=1)
 //   [--check-mobile-combat-hud 1] (mobile client in Wilderness; checks rotation and captures each layout)
-//   [--check-responsive-gameframe 1] (desktop login, narrow/portrait/desktop switches without reloading)
+//   [--check-responsive-gameframe 1] (desktop login, narrow/portrait windows keep the desktop layout)
 //   [--check-responsive-mobile-start 1] (phone-emulated login, disable emulation, then repeat resize switches)
 // VISION_CHROME_FLAGS is an optional JSON array for software rendering in CI.
 // --url defaults to this worktree's client (PORT in the root .env, see
@@ -420,7 +420,9 @@ async function main() {
         summary.mobileStart = { initialRoot, phoneRootAtDesktopSize: phoneRoot, desktopAfterDisablingEmulation: root, chat };
       }
       summary.responsiveGameframe = [];
-      for (const [width, height, root] of [[667, 375, 601], [375, 812, 601], [1280, 800, desktopRoot]]) {
+      // A small desktop window must keep the desktop gameframe (#2471); only phone
+      // emulation above changes the layout.
+      for (const [width, height, root] of [[667, 375, desktopRoot], [375, 812, desktopRoot], [656, 495, desktopRoot], [1280, 800, desktopRoot]]) {
         await cdp.send("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: 1, mobile: false });
         const layout = await waitFor(cdp, deadline, () => cdp.evaluate(`(() => {
           const c = ${CLIENT_JS}, m = c.widgetManager;

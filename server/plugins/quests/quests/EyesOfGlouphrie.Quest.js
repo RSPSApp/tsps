@@ -7,6 +7,9 @@
  * condition answers, the room inspection and machine interactions, the crystal-disc
  * value puzzle, the evil-creature hunt and the completion reward.
  *
+ * The stage numbers below are durable plugin stages. nativeProgress maps them to
+ * the native cache phases; see docs/quests/native-quest-state-a.md.
+ *
  * Stages (varp 844 "eyeglo_var1"; the stage itself is varbit 2497 "eyeglo_quest" bits
  * 0-5, so the varp's sabotage/panel/eye sibling bits are left alone): 1 started,
  * 2 sent to Hazelmere, 3 violet pentagon received, 4 machine sabotaged, 5 told to
@@ -573,6 +576,7 @@ module.exports = function registerEyesOfGlouphrieQuest(api) {
     }
     if (choice === "phew ive got that machine working now what do i need to do now") {
       setBit(player, BIT_SPOKE_AFTER_ACTIVATION);
+      player.getPacketSender().sendVarbit(VARBIT_EYEGLO_QUEST, nativeProgress(stage, player));
     }
   }
 
@@ -757,6 +761,7 @@ module.exports = function registerEyesOfGlouphrieQuest(api) {
     player.getInventory().deleteNumber(CRYSTAL_SAW_SEED_ITEM_ID, 1);
     player.getInventory().adds(CRYSTAL_SAW_ITEM_ID, 1);
     player.sendMessage("You sing to the crystal seed and it forms into a crystal saw.");
+    api.emitCustomEvent("crystal-saw:made", { player });
   }
 
   function inspectPanel(event) {
@@ -973,11 +978,21 @@ module.exports = function registerEyesOfGlouphrieQuest(api) {
     despawnSpies(player);
   }
 
+  // QH 06da90's eyeglo_quest phases; cache DB completes at 60.
+  // Activation (36) and Brimstail's follow-up (40) share one durable stage plus its saved flag.
+  function nativeProgress(stage, player) {
+    stage |= 0;
+    if (stage === STAGE_OPERATIONAL && hasBit(player, BIT_SPOKE_AFTER_ACTIVATION)) return 40;
+    const phases = [0, 1, 5, 15, 20, 20, 20, 25, 27, 35, 36, 50, 60];
+    return phases[Math.max(0, Math.min(stage, STAGE_COMPLETE))];
+  }
+
   quest = registerQuest(api, {
     key: "the_eyes_of_glouphrie",
     name: "The Eyes of Glouphrie",
     varpId: VARP_EYEGLO,
     varbitId: VARBIT_EYEGLO_QUEST,
+    varbitValue: nativeProgress,
     startedValue: STAGE_STARTED,
     completionValue: STAGE_COMPLETE,
     questPoints: 2,

@@ -9,6 +9,9 @@
  * three feather puzzles (winches, tracking kebbit, birdseed feeders), the stone
  * door, the giant eagle walk-past, the ferret tutorial and the Charlie hand-in.
  *
+ * The stage numbers below are durable plugin stages. nativeProgress maps them to
+ * the native cache phases; see docs/quests/native-quest-state-a.md.
+ *
  * Stages (varbit 2780 "eaglepeak_quest", varp 934, bits 0-5; cache evidence:
  * `lookup-gameval.ts varbit eaglepeak` -> "2780 eaglepeak_quest varp=934 bits=0-5"):
  *   1 accepted the search for Nickolaus (Charlie),
@@ -1216,11 +1219,19 @@ module.exports = function registerEaglesPeakQuest(api) {
     if (player) clearOwnedNpcs(player);
   }
 
+  // Native eaglepeak_quest phases from QH 06da90; cache DB endstate is 40.
+  // Keep the compact durable stages used by dialogue, puzzles and existing saves.
+  function nativeProgress(stage) {
+    const phases = [0, 5, 10, 15, 15, 20, 25, 35, 40];
+    return phases[Math.max(0, Math.min(stage, STAGE_COMPLETE))];
+  }
+
   quest = registerQuest(api, {
     key: "eagles_peak",
     name: "Eagles' Peak",
     varpId: VARP_EAGLES_PEAK,
     varbitId: VARBIT_EAGLES_PEAK_STAGE,
+    varbitValue: nativeProgress,
     startedValue: STAGE_STARTED,
     completionValue: STAGE_COMPLETE,
     questPoints: 2,

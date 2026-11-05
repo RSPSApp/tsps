@@ -17,7 +17,8 @@
 const MEMOIRS_ID = 21760;
 const XERIC_TALISMAN_ID = 13393;
 const XERIC_TALISMAN_INERT_ID = 13392;
-const MEMOIRS_CHARGES_META = "kharedst-memoirs:charges";
+const MEMOIRS_CHARGES_ATTRIBUTE = "kharedst-memoirs:charges";
+const MEMOIRS_CHARGED_PAGES_ATTRIBUTE = "kharedst-memoirs:charged-pages";
 const XERIC_CHARGES_META = "xerics-talisman:charges";
 const MEMOIRS_PAGES_ATTRIBUTE = "kharedst-memoirs:added-pages";
 const MEMOIRS_MAX_CHARGES = 100;
@@ -28,12 +29,12 @@ const WORN_OPTION_PARAM = 451;
 const FIRST_WORN_OPTION_CLICK = 2;
 
 /**
- * The five memoir pages. The last two are added here because their quests reward the page but
- * never wire it onto the book; the first three are owned by their quest plugins.
+ * The five memoir pages. Three pages are added here because their quests reward the page but
+ * never wire it onto the book; Hosidius and Arceuus are owned by their quest plugins.
  */
 const MEMOIRS_PAGES = [
   { key: "hosidius", label: "Lunch by the Lancalliums", itemId: 21762, varbit: "kourend_diary_hos_teleport", tile: [1713, 3612, 0], own: false },
-  { key: "piscarilius", label: "The Fisher's Flute", itemId: 21764, varbit: "kourend_diary_pisc_teleport", tile: [1802, 3748, 0], own: false },
+  { key: "piscarilius", label: "The Fisher's Flute", itemId: 21764, varbit: "kourend_diary_pisc_teleport", tile: [1802, 3748, 0], own: true },
   { key: "shayzien", label: "History and Hearsay", itemId: 21766, varbit: "kourend_diary_shay_teleport", tile: [1478, 3576, 0], own: true },
   { key: "lovakengj", label: "Jewellery of Jubilation", itemId: 21768, varbit: "kourend_diary_lova_teleport", tile: [1544, 3762, 0], own: true },
   { key: "arceuus", label: "A Dark Disposition", itemId: 21770, varbit: "kourend_diary_arc_teleport", tile: [1680, 3746, 0], own: false },
@@ -82,15 +83,19 @@ function memoirsItem(event) {
   return event.usedItemId === MEMOIRS_ID ? event.usedItem : event.usedWithItem;
 }
 
-function memoirCharges(player, item) {
-  const saved = Number(item.getMetaValue(MEMOIRS_CHARGES_META));
-  if (Number.isFinite(saved) && saved >= 0) return saved;
-  return Math.min(MEMOIRS_MAX_CHARGES, unlockedCities(player).length * 20);
+function memoirCharges(player, _item) {
+  const saved = Number(player.getAttribute(MEMOIRS_CHARGES_ATTRIBUTE));
+  const pages = unlockedCities(player).length;
+  if (!Number.isFinite(saved) || saved < 0) return pages * 20;
+  // Quest-owned page handlers only set their varbit; grant their new capacity once.
+  const chargedPages = Number(player.getAttribute(MEMOIRS_CHARGED_PAGES_ATTRIBUTE) ?? pages);
+  return Math.min(MEMOIRS_MAX_CHARGES, saved + Math.max(0, pages - chargedPages) * 20);
 }
 
 function setMemoirCharges(player, item, amount) {
   const charges = Math.max(0, Math.min(MEMOIRS_MAX_CHARGES, amount));
-  item.setMetaValue(MEMOIRS_CHARGES_META, charges);
+  player.setAttribute(MEMOIRS_CHARGES_ATTRIBUTE, charges);
+  player.setAttribute(MEMOIRS_CHARGED_PAGES_ATTRIBUTE, unlockedCities(player).length);
   player.getInventory().refreshItems();
   player.getEquipment().refreshItems();
   return charges;
@@ -105,8 +110,8 @@ function teleport(player, item, page) {
   }
   const target = new core.Location(...page.tile);
   if (!core.TeleportHandler.checkReqs(player, target, WILDERNESS_LEVEL)) return false;
+  setMemoirCharges(player, item, charges - 1);
   core.TeleportHandler.teleport(player, target, core.TeleportType.NORMAL, false, () => {
-    setMemoirCharges(player, item, charges - 1);
     api.emitCustomEvent("kharedst:teleported", { player, city: page.key });
   });
   return true;
@@ -143,7 +148,7 @@ function memoirsAction(event) {
   }
 }
 
-/** History and Hearsay / Jewellery of Jubilation: rewarded by their quests, never wired on. */
+/** These pages are rewarded by their quests but have no quest-owned attachment handler. */
 function addPage(event) {
   if (event.handled) return;
   const { player, usedItemId, usedWithItemId } = event;
@@ -210,8 +215,9 @@ function teleportWithTalisman(player, item, destination) {
   }
   const target = new core.Location(...destination.tile);
   if (!core.TeleportHandler.checkReqs(player, target, WILDERNESS_LEVEL)) return false;
+  // Spend before starting: Uncharge or equipping during the animation can move/change the item.
+  setXericCharges(player, item, charges - 1);
   core.TeleportHandler.teleport(player, target, xericTeleportType(), false, () => {
-    setXericCharges(player, item, charges - 1);
     api.emitCustomEvent("xerics-talisman:teleported", { player, destination: destination.key });
   });
   return true;
@@ -307,6 +313,8 @@ module.exports = {
   register(pluginApi) {
     api = pluginApi;
     core = pluginApi.core;
+    api.persistAttribute(MEMOIRS_CHARGES_ATTRIBUTE, -1);
+    api.persistAttribute(MEMOIRS_CHARGED_PAGES_ATTRIBUTE, 0);
     api.persistAttribute(MEMOIRS_PAGES_ATTRIBUTE, {});
     api.onItemAction(onItemAction);
     api.onItemOnItem(addPage, { noted: false });

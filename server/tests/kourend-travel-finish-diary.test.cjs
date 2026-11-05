@@ -209,3 +209,49 @@ test("inactive players do not earn travel tasks", async () => {
   assert.equal(done(player, Finish._test.MEMOIRS_TASK), false);
   assert.equal(done(player, Finish._test.XERIC_TASK), false);
 });
+
+
+test("Fisher's Flute attaches through the native item-on-item hook", async () => {
+  await setup();
+  const player = actor();
+  const inventory = player.getInventory();
+  inventory.adds(Travel._test.MEMOIRS_ID, 1);
+  inventory.adds(core.ItemIdentifiers.THE_FISHERS_FLUTE, 1);
+  const memoirs = inventory.getItems().find((item) => item?.getId() === Travel._test.MEMOIRS_ID);
+  const page = inventory.getItems().find((item) => item?.getId() === core.ItemIdentifiers.THE_FISHERS_FLUTE);
+  assert.equal(PluginManager.emitItemOnItem({ player, usedItem: page, usedItemId: page.getId(),
+    usedWithItem: memoirs, usedWithItemId: memoirs.getId(), handled: false }), true);
+  assert.equal(Travel._test.memoirPageUnlocked(player, Travel._test.MEMOIRS_PAGES[1]), true);
+  assert.equal(inventory.getAmount(core.ItemIdentifiers.THE_FISHERS_FLUTE), 0);
+});
+
+test("a quest-owned memoir page adds its charges after the book was used", async () => {
+  await setup();
+  const player = actor();
+  const memoirs = new core.Item(Travel._test.MEMOIRS_ID, 1);
+  setPage(player, Travel._test.MEMOIRS_PAGES[2].varbit);
+  Travel._test.setMemoirCharges(player, memoirs, 0);
+  setPage(player, Travel._test.MEMOIRS_PAGES[0].varbit);
+  assert.equal(Travel._test.memoirCharges(player, memoirs), 20);
+  Travel._test.setMemoirCharges(player, memoirs, 19);
+  assert.equal(Travel._test.memoirCharges(player, memoirs), 19, "grant each page only once");
+  const replacement = new core.Item(Travel._test.MEMOIRS_ID, 1);
+  assert.equal(Travel._test.memoirCharges(player, replacement), 19, "reclaiming the book retains its charges");
+});
+
+test("uncharging during a talisman teleport cannot duplicate fangs on landing", async (t) => {
+  await setup();
+  const player = actor();
+  player.getInventory().adds(Travel._test.XERIC_TALISMAN_ID, 1);
+  const item = player.getInventory().getItems().find((entry) => entry?.getId() === Travel._test.XERIC_TALISMAN_ID);
+  Travel._test.setXericCharges(player, item, 10);
+  let land;
+  t.mock.method(core.TeleportHandler, "checkReqs", () => true);
+  t.mock.method(core.TeleportHandler, "teleport", (_player, _target, _type, _warn, onArrival) => { land = onArrival; });
+  const heart = Travel._test.XERIC_DESTINATIONS.find((destination) => destination.key === "heart");
+  assert.equal(Travel._test.teleportWithTalisman(player, item, heart), true);
+  Travel._test.talismanAction({ player, item, itemId: item.getId(), option: "Uncharge" });
+  land();
+  assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.LIZARDMAN_FANG)
+    + Travel._test.xericCharges(item), 9);
+});

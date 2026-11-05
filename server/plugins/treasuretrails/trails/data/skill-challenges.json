@@ -3,6 +3,7 @@
   "cluehelper_skillchallenge_elite_1": {"event": "magic:enchanted", "match": {"itemId": {"item": ["DRAGONSTONE_RING", "DRAGON_NECKLACE", "DRAGONSTONE_AMULET", "DRAGONSTONE_BRACELET"]}}},
   "cluehelper_skillchallenge_elite_2": {"event": "runecrafting:success", "match": {"runeId": {"item": ["NATURE_RUNE"]}}},
   "cluehelper_skillchallenge_elite_3": {"event": "fishing:success", "match": {"itemId": {"item": ["MOTTLED_EEL"]}}},
+  "cluehelper_skillchallenge_elite_4": {"event": "skullball:goal", "match": {"course": "werewolf-skullball"}},
   "cluehelper_skillchallenge_elite_5": {"event": "agility:lap", "match": {"course": "ape-atoll"}},
   "cluehelper_skillchallenge_elite_6": {"event": "herblore:made", "match": {"itemId": {"item": ["SUPER_DEFENCE_1_", "SUPER_DEFENCE_2_", "SUPER_DEFENCE_3_", "SUPER_DEFENCE_4_"]}}},
   "cluehelper_skillchallenge_elite_7": {"event": "thieving:success", "match": {"method": "chest", "target": "Ardougne Castle chest"}},

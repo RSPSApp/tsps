@@ -33,6 +33,7 @@ Log basket, Tackle box). The open and closed variants are the same container (`C
 | --- | --- | --- | --- |
 | Coal bag | 27 coal, 36 with the Smithing cape's perk (`skillcape:has-perk`) | open: mined coal | smelting, after the inventory's coal |
 | Gem bag | 60 of each uncut sapphire to dragonstone | open: picked-up gems, the gem stall, Shooting Star gems | - |
+| Gem pouch, gem satchel | 5 and 10 of each uncut opal, jade and red topaz | open: mined gems only | - |
 | Fish barrel, fish sack barrel | 28 raw fish (no stackable fish) | open: caught fish | - |
 | Log basket, forestry basket | 28 logs or bark, carried or worn | open: chopped logs | - |
 | Forestry kit (and the kit in a forestry basket) | enum 817: bark, nature offerings, rations, secateurs attachment, leaves | carried or worn: Forestry bark and leaves | the Forestry Shop's bark |

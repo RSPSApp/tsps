@@ -139,7 +139,10 @@ from the inventory or the worn tab (cache worn options, params 451+).
 - Recorded (rev 232 recordings 3200 and 3215): the four WWF toys' Play-with (own sequence,
   "Grrrr!"), the Zombie head's Talk-At (`hamlet_head_all`, "Alas!"), and Check rank on the
   Druidic wreath and Mask of balance ("Your tree hugging title is: <col=6f0000>..." from
-  `summer_trees_hugged` and the Wiki's 0/15/30/55/75 hug titles).
+  `summer_trees_hugged` and the Wiki's 0/15/30/55/75 hug titles). Tree hugging itself
+  belonged to the 2014 and 2015 Midsummer events and is not implemented, so nothing writes
+  or saves that varbit: Check rank always shows "What's a tree?", as OSRS does for a player
+  with no hugs.
 - Cache names plus the Wiki: yo-yo Play/Loop/Walk/Crazy with the Wiki's yoyo1-4 sounds,
   marionettes in their colour, Rubber chicken Dance, Haunted wine bottle Wake-ghost, the
   Zombie head's Display overhead (no sequence is known), the gingerbread shield's

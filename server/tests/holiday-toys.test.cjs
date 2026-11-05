@@ -52,7 +52,7 @@ test('the gingerbread shield cycles green, red, blue in the inventory and while 
  const worn=player('xmas19_shield_1',true);click(worn.p,worn.container,worn.slot,'Transform');
  assert.equal(worn.container.getItems()[worn.slot].getId(),c.getObjId('xmas19_shield_2'));
 });
-test('Check rank shows the recorded title line for the saved hug count',()=>{
+test('Check rank shows the recorded title line for the current hug count varbit',()=>{
  const {p,container,slot}=player('wreath');const shown=[],typed=[];
  const sender=p.getPacketSender(),send=sender.sendTypedMessage.bind(sender);
  sender.sendTypedMessage=(type,m,...r)=>{typed.push([type,m]);return send(type,m,...r);};

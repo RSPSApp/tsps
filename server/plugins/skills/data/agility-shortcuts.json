@@ -4098,6 +4098,31 @@
       "script": "arceuusLibraryRailing",
       "unverified": "the jump-down animation and duration (no RSProx capture)",
       "note": "OSRS Wiki: top floor railing requires 62 Agility; locs 28373/28374 and placements from cache; landing tiles follow the rail face"
+    },
+    {
+      "name": "Strong Tree (Karamja)",
+      "object": 17074,
+      "at": [2873,3134,0],
+      "option": "Grapple",
+      "level": 53,
+      "xp": 0,
+      "script": "karamjaStrongTree",
+      "params": {
+        "islandY": 3134,
+        "north": [[2874,3142,0],[2874,3136,0]],
+        "south": [[2874,3127,0],[2874,3133,0]]
+      },
+      "requires": [
+        {
+          "method": "grapple",
+          "skills": {"agility": 53, "strength": 21, "ranged": 42},
+          "equipped": [
+            {"slot": "weapon", "name": "crossbow", "message": "You need a crossbow equipped to do that."},
+            {"slot": "ammunition", "ids": [9419], "message": "You need a mithril grapple tipped bolt with a rope to do that."}
+          ]
+        }
+      ],
+      "note": "OSRS Wiki: Strong Tree (Karamja) grapple, 53 Agility/21 Strength/42 Ranged. Object 17074 at 2873,3134 (yarn dump:loc); the two channels' ends are the cache map's walkable shore/island tiles."
     }
   ]
 }

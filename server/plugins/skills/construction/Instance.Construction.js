@@ -8,6 +8,7 @@ const Servants = require("./Servants.Construction");
 const House = require("./House.Construction");
 const Dungeon = require("./Dungeon.Construction");
 const Menagerie = require("./Menagerie.Construction");
+const Decorations = require("./Decorations.Construction");
 const GamesRoom = require("./GamesRoom.Construction");
 const Trophies = require("./Trophies.Construction");
 const CombatRings = require("./CombatRings.Construction");
@@ -479,6 +480,7 @@ class PlayerHouseInstance extends PrivateArea {
     if (!buildingMode) this.refreshDoors();
     Dungeon.refreshMonsters(this);
     Menagerie.refreshPets(this);
+    Decorations.refresh(this);
     GamesRoom.resetGames(this);
     return sent;
   }
@@ -535,11 +537,17 @@ class PlayerHouseInstance extends PrivateArea {
       .filter(hotspot => hotspot.sourceChunkX === template.sourceChunkX && hotspot.sourceChunkY === template.sourceChunkY)
       .map(hotspot => {
         const local = this.rotatedFootprint(hotspot.localX, hotspot.localY, hotspot.id, hotspot.face, room.rotation);
+        const definition = CacheDefinitions.getObject(hotspot.id);
+        const sizes = [definition.sizeX ?? 1, definition.sizeY ?? 1];
+        // The footprint turns with the hotspot's face and again with the room.
+        const turned = ((hotspot.face + room.rotation) & 1) === 1;
         return {
           id: hotspot.id,
           x: this.allocation.baseX + (gridOffset + position.x) * 8 + local.x,
           y: this.allocation.baseY + (gridOffset + position.y) * 8 + local.y,
           plane: position.plane,
+          width: turned ? sizes[1] : sizes[0],
+          length: turned ? sizes[0] : sizes[1],
         };
       });
   }

@@ -223,6 +223,12 @@
       "variants": [
         "preparations-for-rescue-talking-to-aggie"
       ]
+    },
+    {
+      "page": "Transcript:Secret santa present",
+      "variants": [
+        "unlocking-green-talking-to-aggie"
+      ]
     }
   ],
   "121": [
@@ -267,6 +273,12 @@
       "page": "Transcript:Prince Ali Rescue/Historical",
       "variants": [
         "preparations-for-rescue-talking-to-aggie"
+      ]
+    },
+    {
+      "page": "Transcript:Secret santa present",
+      "variants": [
+        "unlocking-green-talking-to-aggie"
       ]
     }
   ],
@@ -13376,6 +13388,12 @@
         "talking-to-malignius-mortifer",
         "talking-to-malignius-mortifer-talking-to-malignius-again-before-getting-the-skull",
         "talking-to-malignius-mortifer-talking-to-malignius-again-after-learning-how-to-kill-the-tanglefoot"
+      ]
+    },
+    {
+      "page": "Transcript:Secret santa present",
+      "variants": [
+        "unlocking-gold-talking-to-malignius-mortifer"
       ]
     },
     {
@@ -52253,6 +52271,12 @@
       "variants": [
         "standard-dialogue",
         "standard-dialogue-overhead-dialogue"
+      ]
+    },
+    {
+      "page": "Transcript:Secret santa present",
+      "variants": [
+        "unlocking-black-talking-to-benny"
       ]
     }
   ],
@@ -93419,6 +93443,12 @@
       "page": "Transcript:One Small Favour",
       "variants": [
         "the-various-favours-are-asked-asking-brian-to-sharpen-the-axe-using-the-blunt-axe-on-bob-optional"
+      ]
+    },
+    {
+      "page": "Transcript:Secret santa present",
+      "variants": [
+        "unlocking-blue-talking-to-bob"
       ]
     },
     {

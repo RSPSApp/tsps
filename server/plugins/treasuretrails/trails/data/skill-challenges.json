@@ -41,6 +41,7 @@
   "cluehelper_skillchallenge_master_12": {"event": "thieving:success", "match": {"method": "stall", "stall": ["Gem stall", "Gem Stall"]}, "area": {"x": [2600, 2700], "y": [3280, 3330]}},
   "cluehelper_skillchallenge_master_13": {"event": "thieving:success", "match": {"method": "pickpocket", "target": "elf"}},
   "cluehelper_skillchallenge_master_14": {"event": "runecrafting:success", "match": {"runeId": {"item": ["BLOOD_RUNE"]}}},
+  "cluehelper_skillchallenge_master_15": {"event": "herblore:made", "match": {"itemId": {"item": ["RANGING_MIX_2_"]}}},
   "cluehelper_skillchallenge_master_16": {"event": "fletching:made", "match": {"itemId": {"item": ["RUNE_DART"]}}},
   "cluehelper_skillchallenge_master_19": {"event": "npc-death", "match": {"npcId": {"npc": ["LIZARDMAN_SHAMAN", "LIZARDMAN_SHAMAN_2", "LIZARDMAN_SHAMAN_3", "LIZARDMAN_SHAMAN_4", "LIZARDMAN_SHAMAN_5", "LIZARDMAN_SHAMAN_6", "LIZARDMAN_SHAMAN_7"]}}},
   "cluehelper_skillchallenge_master_3": {"event": "construction:tablet-made", "match": {"itemId": {"item": ["BARROWS_TELEPORT"]}}},

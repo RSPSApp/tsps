@@ -1741,7 +1741,7 @@ test("Agility Pyramid blocks slide out over two ticks, wait two, and slide back:
   assert.deepEqual([north.npc, north.home, north.dir], [5787, [3366, 2845, 3], [0, 1]]);
 });
 
-test("course pipes replay the squeeze with every crawl, so no weapon shows on the way", () => {
+test("course pipes replay the squeeze with every crawl", () => {
   const SQUEEZE_PIPE = 749; // human_doublepipesqueeze: both hands empty
   const pipes = [
     ["gnome", ObjectIds.OBSTACLE_PIPE_10, { x: 2484, y: 3430, z: 0 }],
@@ -1762,12 +1762,19 @@ test("course pipes replay the squeeze with every crawl, so no weapon shows on th
   assert.deepEqual(route, [3940, 3947, 3950]);
 
   // rsprox 449 sends SEQUENCE 749 exactly twice, on the two crawl ticks; the unseen middle tick
-  // has no sequence, and the client keeps the sequence's hand override through its start delay.
+  // has no sequence.
   const steps = wildy.steps({ player: null, obj: null, pos: { x: 3004, y: 3937, z: 0 } });
   assert.equal(steps.filter((step) => step.anim === SQUEEZE_PIPE).length, 2);
   const gap = steps.findIndex((step) => step.tele);
   assert.notEqual(gap, -1);
   assert.equal(steps[gap + 1].anim, undefined, "no third sequence on the unseen tick");
+
+  // rsprox 449: each crawl's 30-cycle sequence delay and its exact-move start are the same cycle,
+  // so the client's native hand-override gate empties the hands exactly as the crawl begins.
+  for (const move of steps.filter((step) => step.anim === SQUEEZE_PIPE)) {
+    assert.equal(move.delay, 30);
+    assert.deepEqual(move.speed, [30, 126]);
+  }
 });
 
 test("Wilderness ridge door: opening the south door and the north gates swaps the captured locs for two ticks (rsprox 449/450)", () => {

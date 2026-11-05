@@ -131,7 +131,7 @@ export class PlayerPoseGeometry {
         let app = pe.getAppearance(pid);
         if (!app) return undefined;
         try {
-            app = withActionSeqHandItems(app, this.client.seqTypeLoader.load(actionSeqId), actionSeqId);
+            app = withActionSeqHandItems(app, this.client.seqTypeLoader.load(actionSeqId), actionSeqId, actionDelay);
         } catch {}
 
         const base = this.baseForAppearance(app);

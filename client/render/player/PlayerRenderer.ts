@@ -2327,6 +2327,7 @@ export class PlayerRenderer {
                         app,
                         this.renderer.osrsClient.seqTypeLoader.load(actionSeqId | 0),
                         actionSeqId,
+                        actionDelay,
                         forcedSeq !== undefined,
                     );
                 } catch {}
@@ -2668,6 +2669,7 @@ export class PlayerRenderer {
                             app,
                             this.renderer.osrsClient.seqTypeLoader.load(actionSeqId | 0),
                             actionSeqId,
+                            actionDelay,
                             forcedSeq !== undefined,
                         );
                     } catch {}

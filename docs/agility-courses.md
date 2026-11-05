@@ -359,9 +359,11 @@ course's `marks` block:
   with "You skillfully balance across the ridge..." and leaving with "...along the ridge...". The
   exit route opens the south door behind the player as they cross it.
 - **Pipe:** sequence 749 (`human_doublepipesqueeze`, both hands empty in the cache) for each crawl;
-  the client applies a sequence's hand overrides from the tick it is set, including its 30-cycle
-  start delay, so a held weapon is hidden as the player enters the pipe (449 sends the sequence
-  twice, on the two crawl ticks, with no extra sequence on the unseen middle tick).
+  the sequence's 30-cycle start delay and the exact-move start are the same cycle, as in the
+  native client, so equipped hands render until the crawl begins and the squeeze's empty hands
+  take over on the tick it moves into the pipe. Recording 449 sends the sequence twice, on the
+  two crawl ticks, with no extra sequence on the unseen middle tick (the unseen tick is a
+  teleport, not a third squeeze).
 - **Tickets:** a lap only marks the dispenser's ticket as available; the item itself comes from the
   dispenser's Tag, as in 449 ("You received ... a Wilderness agility ticket ...").
 - **Not done:** the exit prompt after paying, and the warning before a new lap loses an unclaimed

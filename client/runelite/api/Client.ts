@@ -84,6 +84,8 @@ export interface Client {
     getNpcDefinition(id: number): NPCComposition | null;
     /** Every server NPC in the scene, one wrapper each, in store order. */
     getNpcs(): NPC[];
+    /** The NPC with a server index (RuneLite's getCachedNPCs()[index]), or null when none is in the scene. */
+    getNpcByIndex(index: number): NPC | null;
     /** The plane the player is on, 0-3. */
     getPlane(): number;
     /** The mouse on the canvas in pixels, or (-1, -1) when unknown. */

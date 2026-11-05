@@ -81,9 +81,10 @@ export class RuneLite {
         this.widgetSources.bind();
     }
 
-    /** Posts a CommandExecuted event; returns true when a subscriber consumed it. */
-    postCommandExecuted(command: string): void {
-        this.eventBus.post(new CommandExecuted(command));
+    /** Posts a CommandExecuted for a "::" chat line: the first word is the command, the rest its arguments. */
+    postCommandExecuted(line: string): void {
+        const [command, ...args] = line.trim().split(/\s+/);
+        if (command) this.eventBus.post(new CommandExecuted(command, args));
     }
 
     postClientTick(): void {

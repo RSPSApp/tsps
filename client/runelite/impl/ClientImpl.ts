@@ -109,6 +109,12 @@ export class ClientImpl implements Client {
         return out;
     }
 
+    getNpcByIndex(index: number): NPC | null {
+        const npcs = this.osrsClient.npcEcs;
+        if (!npcs || !(index > 0) || npcs.getEcsIdForServer(index) === undefined) return null;
+        return this.npc(index);
+    }
+
     getVarpValue(varpId: number): number {
         return this.osrsClient.varManager?.getVarp(varpId) ?? 0;
     }

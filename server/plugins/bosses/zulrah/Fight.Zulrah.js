@@ -5,18 +5,18 @@
  *
  * Wiki ("Zulrah", "Zulrah/Strategies"):
  * - Zulrah rises once the player continues the boat dialogue or does anything else.
- * - It attacks every 3 ticks, up to 41: green form with Ranged, blue form with Magic and
- *   sometimes Ranged (Magic much more often), and the "Jad" phase alternating the two. Damage
- *   is rolled as the attack starts, and an attack that lands envenoms even through prayer.
+ * - It attacks every 3 ticks, up to 41: green form with Ranged (after 3 minutes it may switch
+ *   unpredictably between Ranged and Magic), blue form with Magic and sometimes Ranged (Magic
+ *   much more often), and the "Jad" phase alternating the two. Damage is rolled as the attack
+ *   starts, and an attack that lands envenoms even through prayer.
  * - The red form stares at the player's tile, then whips its tail there: 20-30 typeless damage
  *   and a stun, avoided by moving two tiles away. It does this twice.
  * - Between phases it dives and resurfaces, maybe in another form and place; it cannot be
  *   attacked while under.
- * Near-Reality (no capture here): the animations, projectiles and their timings; when each
- * step starts (3 ticks after the last); the dive (resurfacing 3 ticks after diving, acting 4
- * after that); the tail's two swings (aimed at ticks 0 and 9, striking at 5 and 15), the
- * tiles beside the pillars it cannot reach and the knock-back; 3 in 10 blue-form attacks
- * being Ranged.
+ * RSProx #820 confirms spawn/attack/rise animations 5071/5069/5073 and cloud projectile 1045.
+ * Near-Reality still supplies the unverified timings; tail tiles/knock-back; and the blue
+ * form's 3-in-10 Ranged share. The Wiki gives no ratio for the long-fight green style mix, so
+ * the uniform choice below is an explicit inference.
  */
 
 const Shared = require("./Shared.Zulrah");
@@ -29,6 +29,8 @@ const STEP_TICKS = 3;
 const FIRST_STEP_TICKS = 9;
 const INTERACT_AFTER_RISE = 4;
 const DIVE_TICKS = 3;
+/** Three minutes of game time; after this, green-form attacks may use either style (Wiki). */
+const LONG_FIGHT_TICKS = 300;
 /**
  * Resurfacing teleports Zulrah, and a teleported NPC is left out of every player's view for
  * that tick, so the rise is played on the next one, when it is back: 1 + 3 = 4 ticks to act.
@@ -36,6 +38,8 @@ const DIVE_TICKS = 3;
 const RESURFACE_TICKS = 1;
 const RISE_TO_ACT_TICKS = 3;
 const BLUE_RANGED_CHANCE = 0.3;
+/** Wiki says the long-fight style is unpredictable but gives no ratio; uniform is inferred. */
+const LONG_GREEN_RANGED_CHANCE = 0.5;
 const FORM_ID = { green: Shared.NPC.GREEN, red: Shared.NPC.RED, blue: Shared.NPC.BLUE };
 
 const ANIM = { ATTACK: 5069, SPAWN: 5071, DIVE: 5072, RISE: 5073, TAIL_LEFT: 5806, TAIL_RIGHT: 5807, KNOCKBACK: 1157 };
@@ -267,7 +271,15 @@ class ZulrahFight {
   }
 
   expand([kind, ...args]) {
-    if (kind === "ranged") return Array.from({ length: args[0] }, () => () => this.attack("ranged"));
+    if (kind === "ranged") {
+      return Array.from({ length: args[0] }, () => () => {
+        const longFightMix = this.phase?.form === "green" && this.duration() >= LONG_FIGHT_TICKS;
+        const style = longFightMix
+          ? (this.random() < LONG_GREEN_RANGED_CHANCE ? "ranged" : "magic")
+          : "ranged";
+        return this.attack(style);
+      });
+    }
     if (kind === "magic") {
       return Array.from({ length: args[0] }, () => () => this.attack(this.random() < BLUE_RANGED_CHANCE ? "ranged" : "magic"));
     }

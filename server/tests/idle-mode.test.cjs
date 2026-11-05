@@ -1513,7 +1513,7 @@ test("screen tabs: Stats shows the totals and hides the Overview; Overview bring
   api.click(player, uid(COMPONENT.TAB_START));
   assert.equal(player.screen.hidden.get(uid(COMPONENT.STATUS_BOX)), false);
   assert.equal(player.screen.hidden.get(uid(COMPONENT.STATS_BOX)), true);
-  api.click(player, uid(COMPONENT.TAB_START + 3));
+  api.click(player, uid(COMPONENT.TAB_START + 4));
   assert.equal(player.getInterfaceId(), require(TRAVEL_SCREEN).GROUP_ID);
 });
 
@@ -1680,4 +1680,85 @@ test("work: an open Idle screen is closed to go back to work; any other interfac
   player.inventory = [new Item(SHRIMPS, 27)];
   advance(10_000);
   assert.equal(work(player, Date.now()), "busy", "the bank (or anything else) is left alone");
+});
+
+const ACHIEVEMENTS = "../plugins/modes/idle/Achievements.IdleMode";
+
+test("achievements: tiers paid once as the counts grow, several at once after a long time away", (t) => {
+  let now = 9_000_000;
+  t.mock.method(Date, "now", () => now);
+  const player = idlePlayer();
+  player.setAttribute("idle-mode:onboarded", true);
+  assert.equal(api.persisted["idle-mode:records"], null);
+  const { add } = require(ACHIEVEMENTS);
+  add(player, { gathered: 999 });
+  assert.equal(player.getAttribute("idle-mode:records").tiers.gatherer, 0);
+  add(player, { gathered: 1 });
+  assert.equal(player.getAttribute("idle-mode:records").tiers.gatherer, 1);
+  assert.match(player.messages.pop(), /Achievement unlocked:<\/col> Gatherer I \(1,000 resources gathered\)\. \+50 idle points\./);
+  add(player, { gathered: 200_000 });
+  assert.equal(player.getAttribute("idle-mode:records").tiers.gatherer, 3, "II and III at once");
+  assert.equal(player.getAttribute("idle-mode:points"), 50 + 250 + 1000);
+  add(player, { gathered: 1_000_000 });
+  assert.equal(player.getAttribute("idle-mode:points"), 1300, "no more tiers: nothing more paid");
+});
+
+test("achievements: gathering, making, time, kills and daily goals count toward their tracks", (t) => {
+  let now = 9_000_000;
+  t.mock.method(Date, "now", () => now);
+  const player = idlePlayer();
+  player.setAttribute("idle-mode:onboarded", true);
+  for (let i = 0; i <= 10; i++) {
+    chop(player);
+    now += 6000;
+  }
+  let counts = player.getAttribute("idle-mode:records").counts;
+  assert.equal(counts.gathered, 10);
+  assert.ok(Math.abs(counts.hours - 60_000 / 3600000) < 1e-9, "a minute");
+  // An hour away counts toward Patient.
+  api.logout({ player });
+  player.setAttribute("idle-mode:away", { activity: "WOODCUTTING", durationMs: 60_000, xp: { WOODCUTTING: 100 }, items: { [LOGS]: 10 }, loggedOutAt: now });
+  now += 3_600_000;
+  api.login({ player });
+  counts = player.getAttribute("idle-mode:records").counts;
+  assert.ok(counts.hours > 1);
+  assert.equal(counts.gathered, 10 + 600);
+
+  const fighter = idlePlayer();
+  const cow = fakeMonster("Cow", 3201, 3200);
+  api.emit("attack-option", { player: fighter, npc: cow, npcId: 2790, clickType: 2, handled: false });
+  api.emit("npc-drops:generated", { player: fighter, npc: cow, npcId: 2790, drops: [], handled: false });
+  assert.equal(fighter.getAttribute("idle-mode:records").counts.kills, 1);
+
+  setGoals(fighter, [["kills", 2]]);
+  api.emit("npc-drops:generated", { player: fighter, npc: cow, npcId: 2790, drops: [], handled: false });
+  api.emit("npc-drops:generated", { player: fighter, npc: cow, npcId: 2790, drops: [], handled: false });
+  assert.equal(fighter.getAttribute("idle-mode:records").counts.goals, 1, "a daily goal done");
+});
+
+test("feats tab: each track's tier and the next tier's progress", () => {
+  const { COMPONENT, uid } = require(SCREEN);
+  const player = idlePlayer();
+  player.setAttribute("idle-mode:records", { counts: { gathered: 1234, made: 60000, hours: 30 }, tiers: { gatherer: 1, maker: 3, patient: 1 } });
+  api.command(player, "idle");
+  api.click(player, uid(COMPONENT.TAB_START + 3));
+  assert.equal(player.screen.hidden.get(uid(COMPONENT.FEATS_BOX)), false);
+  assert.equal(screenText(player, COMPONENT.FEAT_START), "Gatherer I");
+  assert.equal(screenText(player, COMPONENT.FEAT_START + 1), "Gatherer II: 1,234 / 10,000 resources gathered - reward 250 idle points");
+  assert.equal(screenText(player, COMPONENT.FEAT_START + 2), "Done Maker III");
+  assert.equal(screenText(player, COMPONENT.FEAT_START + 3), "Every tier done: 60,000 items made");
+  assert.equal(screenText(player, COMPONENT.FEAT_START + 4), "Fighter (not yet)");
+  assert.equal(screenText(player, COMPONENT.FEAT_START + 7), "Patient II: 30 / 168 hours idle - reward 500 idle points");
+});
+
+test("work: an Idle screen stays open when there is nothing to do (out of materials, no target in reach)", (t) => {
+  const { GROUP_ID } = require(SCREEN);
+  const { player, advance } = cookingShrimps(t, { bankRaw: 0 });
+  const { work } = require(PRODUCTION);
+  player.busy = function busy() { return this.getInterfaceId() > 0; };
+  api.command(player, "idle");
+  player.inventory = [new Item(SHRIMPS, 27)];
+  advance(10_000);
+  assert.equal(work(player, Date.now()), "paused");
+  assert.equal(player.getInterfaceId(), GROUP_ID, "out of materials: the screen stays");
 });

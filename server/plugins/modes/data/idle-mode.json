@@ -712,5 +712,91 @@
         "text": "Work idle for {amount} minutes"
       }
     ]
+  },
+  "achievements": {
+    "_description": "Idle achievements (docs/idle-mode.md): permanent milestones in tracks of tiers. Each tier reached pays its points in idle points, once. Counts: gathered and made items and the time idle come from the offline progress's totals (playing and away), kills of idle combat's target online, daily goals done.",
+    "enabled": true,
+    "tracks": [
+      {
+        "id": "gatherer",
+        "name": "Gatherer",
+        "counts": "gathered",
+        "unit": "resources gathered",
+        "tiers": [
+          1000,
+          10000,
+          100000
+        ],
+        "points": [
+          50,
+          250,
+          1000
+        ]
+      },
+      {
+        "id": "maker",
+        "name": "Maker",
+        "counts": "made",
+        "unit": "items made",
+        "tiers": [
+          500,
+          5000,
+          50000
+        ],
+        "points": [
+          50,
+          250,
+          1000
+        ]
+      },
+      {
+        "id": "fighter",
+        "name": "Fighter",
+        "counts": "kills",
+        "unit": "monsters defeated",
+        "tiers": [
+          100,
+          1000,
+          10000
+        ],
+        "points": [
+          50,
+          250,
+          1000
+        ]
+      },
+      {
+        "id": "patient",
+        "name": "Patient",
+        "counts": "hours",
+        "unit": "hours idle",
+        "tiers": [
+          24,
+          168,
+          720
+        ],
+        "points": [
+          100,
+          500,
+          2000
+        ]
+      },
+      {
+        "id": "dedicated",
+        "name": "Dedicated",
+        "counts": "goals",
+        "unit": "daily goals done",
+        "tiers": [
+          10,
+          50,
+          200
+        ],
+        "points": [
+          100,
+          400,
+          1500
+        ]
+      }
+    ]
   }
 }

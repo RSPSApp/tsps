@@ -1,7 +1,8 @@
 /**
  * The Idle screen (`::idle`): a server-defined interface (docs/agents/interfaces.md), so it needs
  * no client change. Tabs across the top: Overview (below), Stats (the totals: XP by skill, items
- * by kind, time idle playing and away), Goals (today's goals) and Travel (the travel screen). On the left, the account's status: Idle Mode and auto-resume (each with a
+ * by kind, time idle playing and away), Goals (today's goals), Feats (achievements) and Travel
+ * (the travel screen). On the left, the account's status: Idle Mode and auto-resume (each with a
  * button to switch it), what the character is doing, the idle points and the next one, the offline
  * cap, and what the last time away paid, with the XP per hour; a third button opens the travel screen. On the right,
  * the upgrades: each one's level, what it
@@ -16,6 +17,7 @@ const Offline = require("./Offline.IdleMode");
 const Progression = require("./Progression.IdleMode");
 const TravelScreen = require("./TravelScreen.IdleMode");
 const Goals = require("./Goals.IdleMode");
+const Achievements = require("./Achievements.IdleMode");
 
 const { FLAG_OP1, TYPE_RECTANGLE, TYPE_TEXT, createWidgetGroup } = require("../../interface/widgetGroup");
 
@@ -34,15 +36,19 @@ const COMPONENT = {
   UPGRADES_BOX: 16, UPGRADES_TITLE: 17, POINTS: 18,
   // Each upgrade slot: its name, description, price, and Buy button and label.
   SLOT_START: 20, SLOT_STRIDE: 5,
-  // The tabs across the top: Overview, Stats, Travel (buttons, then their labels).
-  TAB_START: 52, TAB_LABEL_START: 56,
+  // The tabs across the top: Overview, Stats, Goals, Feats, Travel (buttons, and their labels).
+  TAB_START: 52, TAB_LABEL_START: 120,
   // The Stats tab: a panel of the totals, hidden until it is picked.
   STATS_BOX: 60, STATS_TITLE: 61, SKILLS_HEADER: 62, ITEMS_HEADER: 63, STATS_TIME: 64, SKILL_LINE_START: 65, ITEM_LINE_START: 75,
   // The Goals tab: a row per daily goal (its text and its progress), the bonus, the next day.
   GOALS_BOX: 86, GOALS_TITLE: 87, GOAL_START: 88, GOAL_STRIDE: 2, GOALS_BONUS: 98, GOALS_NEXT: 99,
+  // The Feats tab: a row per achievement track (its tier, then the next tier's progress).
+  FEATS_BOX: 100, FEATS_TITLE: 101, FEAT_START: 102, FEAT_STRIDE: 2,
 };
-const TABS = ["Overview", "Stats", "Goals", "Travel"];
-const TAB = { OVERVIEW: 0, STATS: 1, GOALS: 2, TRAVEL: 3 };
+const TABS = ["Overview", "Stats", "Goals", "Feats", "Travel"];
+const TAB = { OVERVIEW: 0, STATS: 1, GOALS: 2, FEATS: 3, TRAVEL: 4 };
+/** Achievement tracks the Feats tab has room for (FEAT_START + 2 per track stays below 120). */
+const MAX_FEATS = 6;
 /** Rows the Goals tab has room for (GOAL_START + 2 per goal stays below GOALS_BONUS). */
 const MAX_GOALS = 5;
 const STATS_LINES = 10;
@@ -156,8 +162,20 @@ function addGoals(add, root) {
   add(COMPONENT.GOALS_NEXT, root, text(x + 8, y + height - 24, width - 16, 18, { textColor: 0xb8ab94, yTextAlignment: 1, ...hidden }));
 }
 
+function addFeats(add, root) {
+  const { x, y, width, height } = FULL;
+  const hidden = { hidden: true, isHidden: true };
+  add(COMPONENT.FEATS_BOX, root, box(x, y, width, height, hidden));
+  add(COMPONENT.FEATS_TITLE, root, text(x + 8, y + 4, width - 16, 20, { text: "Achievements", fontId: 496, textColor: 0xff981f, yTextAlignment: 1, ...hidden }));
+  for (let feat = 0; feat < MAX_FEATS; feat++) {
+    const top = y + 28 + feat * 35;
+    add(COMPONENT.FEAT_START + feat * COMPONENT.FEAT_STRIDE, root, text(x + 8, top, width - 16, 16, { yTextAlignment: 1, ...hidden }));
+    add(COMPONENT.FEAT_START + feat * COMPONENT.FEAT_STRIDE + 1, root, text(x + 20, top + 16, width - 28, 16, { textColor: 0xb8ab94, yTextAlignment: 1, ...hidden }));
+  }
+}
+
 /** The uids each content tab shows: filled as the interface is built. */
-const TAB_UIDS = { [TAB.OVERVIEW]: [], [TAB.STATS]: [], [TAB.GOALS]: [] };
+const TAB_UIDS = { [TAB.OVERVIEW]: [], [TAB.STATS]: [], [TAB.GOALS]: [], [TAB.FEATS]: [] };
 
 function buildInterface() {
   const { widgets, add } = createWidgetGroup(GROUP_ID);
@@ -177,6 +195,7 @@ function buildInterface() {
   addUpgrades(into(TAB_UIDS[TAB.OVERVIEW]), root);
   addStats(into(TAB_UIDS[TAB.STATS]), root);
   addGoals(into(TAB_UIDS[TAB.GOALS]), root);
+  addFeats(into(TAB_UIDS[TAB.FEATS]), root);
   return { groupId: GROUP_ID, widgets };
 }
 
@@ -318,7 +337,18 @@ function sendGoals(player) {
   sender.sendString(next, uid(COMPONENT.GOALS_NEXT));
 }
 
-/** player -> the content tab shown (Overview, Stats or Goals). */
+function sendFeats(player) {
+  const sender = player.getPacketSender();
+  const rows = Achievements.lines(player).slice(0, MAX_FEATS);
+  for (let feat = 0; feat < MAX_FEATS; feat++) {
+    const row = rows[feat];
+    const title = !row ? "" : row.done ? `${col(COLOUR.ON, "Done")} ${row.title}` : row.title;
+    sender.sendString(title, uid(COMPONENT.FEAT_START + feat * COMPONENT.FEAT_STRIDE));
+    sender.sendString(row?.progress ?? "", uid(COMPONENT.FEAT_START + feat * COMPONENT.FEAT_STRIDE + 1));
+  }
+}
+
+/** player -> the content tab shown (Overview, Stats, Goals or Feats). */
 const tabs = new Map();
 
 function redraw(player) {
@@ -329,6 +359,10 @@ function redraw(player) {
   }
   if (tabs.get(player) === TAB.GOALS) {
     sendGoals(player);
+    return;
+  }
+  if (tabs.get(player) === TAB.FEATS) {
+    sendFeats(player);
     return;
   }
   sendStatus(player);

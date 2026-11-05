@@ -83,6 +83,13 @@ function describe(goal) {
   return entry ? entry.text.replace("{amount}", Math.floor(goal.target).toLocaleString("en-US")) : goal.id;
 }
 
+/** Called with (player) for every daily goal done (Achievements counts them). */
+const doneListeners = [];
+
+function onGoalDone(listener) {
+  doneListeners.push(listener);
+}
+
 /** Adds progress to today's goals of `type` (`matches` picks among them); pays the ones done. */
 function advance(player, type, amountFor) {
   if (!config().enabled || !Common.isIdle(player)) return;
@@ -99,6 +106,7 @@ function advance(player, type, amountFor) {
     if (done) {
       Progression.addPoints(player, entry.points);
       player.sendMessage(`<col=ff981f>Daily goal done:</col> ${describe(goal)}. +${entry.points} idle points.`);
+      for (const listener of doneListeners) listener(player);
     }
     return { ...goal, progress, done };
   });
@@ -165,6 +173,7 @@ module.exports = function attach(api) {
 
 module.exports.DAILY_ATTRIBUTE = DAILY_ATTRIBUTE;
 module.exports.today = today;
+module.exports.onGoalDone = onGoalDone;
 module.exports.lines = lines;
 module.exports.dayOf = dayOf;
 module.exports.untilNextDay = untilNextDay;

@@ -218,7 +218,7 @@ function fight(player, now) {
     combat.attack(attacker);
     return "retaliating";
   }
-  if (!Common.readyToWork(player)) return "busy";
+  if (!Common.mayWork(player)) return "busy";
   const location = player.getLocation();
   if (location.getZ() !== target.anchor.z || Common.chebyshev(location, target.anchor) > config().leashTiles) return "away";
   if (now - state.lastAttemptAt < config().retrySeconds * 1000) return "waiting";
@@ -235,6 +235,7 @@ function fight(player, now) {
     player.sendMessage(`Idle combat has paused: your character can't get a fight with a ${target.name.toLowerCase()}. Kill one to restart it.`);
     return "paused";
   }
+  if (!Common.readyToWork(player)) return "busy";
   state.lastAttemptAt = now;
   state.lastNpc = npc;
   combat.attack(npc);

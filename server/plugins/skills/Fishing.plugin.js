@@ -103,7 +103,7 @@ class FishingTool {
     id, level, animation, loopAnimation = animation, fish, variants, bait = [], worn = [], quest = null, multi = false,
     requires = [], interval = FISHING_ACTION_INTERVAL_TICKS, firstRoll = null, animateOnRoll = true, unboostable = false, spot = null,
     vessel = null, stationary = false, startMessage = "You begin to fish..", followMessage = null, missMessage = null,
-    noToolStatement = null, noBaitStatement = null, levelStatement = null,
+    noToolStatement = null, noBaitStatement = null, levelStatement = null, barehand = false,
   }) {
     this.id = id;
     this.level = level;
@@ -129,6 +129,7 @@ class FishingTool {
     this.noToolStatement = noToolStatement;
     this.noBaitStatement = noBaitStatement;
     this.levelStatement = levelStatement;
+    this.barehand = barehand;
   }
 }
 
@@ -195,6 +196,11 @@ const FISH = Object.freeze({
   SWORDFISH: new Fish({ id: ItemIds.RAW_SWORDFISH, level: 50, rolls: [[4, 48]], xp: 100, caught: "a raw swordfish", petBase: 257770 }),
   SHARK: new Fish({
     id: ItemIds.RAW_SHARK, level: 76, rolls: [[3, 40]], xp: 110, caught: "a shark", petBase: 82243, message: () => "You catch a shark!",
+  }),
+  // Wiki (Barbarian Training#Barehanded fishing): barehand shark gives 11 Strength XP too.
+  SHARK_BAREHAND: new Fish({
+    id: ItemIds.RAW_SHARK, level: 76, rolls: [[3, 40]], xp: 110, caught: "a shark", petBase: 82243,
+    message: () => "You catch a shark!", extraXp: [[Skill.STRENGTH, 11]],
   }),
 
   // Big net: charts from the Wiki (Fishing spot (big net, harpoon)); lines from rsprox captures
@@ -276,6 +282,15 @@ const TOOLS = Object.freeze({
   SHARK_HARPOON: new FishingTool({
     id: ItemIds.HARPOON, level: 76, animation: ANIM.HARPOON, fish: [FISH.SHARK], variants: HARPOONS,
     interval: NET_CAGE_HARPOON_INTERVAL_TICKS, ...HARPOON,
+  }),
+  // Wiki (Barbarian Training#Barehanded fishing): barehand shark needs 96 Fishing and 76
+  // Strength, 110 Fishing XP and 11 Strength XP. The cache has no barehand fishing sequence,
+  // so the harpoon animation is reused; the empty ids variant means "no tool, bare hands".
+  BAREHAND_SHARK: new FishingTool({
+    id: ItemIds.HARPOON, level: 96, animation: ANIM.HARPOON, fish: [FISH.SHARK_BAREHAND],
+    variants: [{ ids: [], level: 96, bonus: 100, barehand: true }], requires: [[Skill.STRENGTH, 76]],
+    interval: NET_CAGE_HARPOON_INTERVAL_TICKS, barehand: true,
+    startMessage: START_HARPOON, levelStatement: (level) => `You need to be at least level ${level} Fishing to catch sharks with your bare hands.`,
   }),
   LOBSTER_POT: new FishingTool({
     id: ItemIds.LOBSTER_POT, level: 40, animation: ANIM.CAGE, fish: [FISH.LOBSTER], interval: NET_CAGE_HARPOON_INTERVAL_TICKS,
@@ -427,12 +442,20 @@ function spotTools(npcId, definition) {
   return found;
 }
 
-function getSpotTool(npcId, definition, clickType) {
+function getSpotTool(npcId, definition, clickType, player = null) {
   const actions = definition?.getActions?.() ?? [];
   const option = actions[clickType - 1];
   const tools = SPOT_TOOLS_BY_NPC.get(npcId) ??
     SPOT_TOOLS_BY_OPTIONS.get(actions.filter(Boolean).join("/"));
-  return option ? tools?.[option] : undefined;
+  const tool = option ? tools?.[option] : undefined;
+  // No harpoon carried or wielded: the harpoon option falls back to Barbarian barehanding.
+  if (tool === TOOLS.SHARK_HARPOON && player && !hasHarpoon(player)) return TOOLS.BAREHAND_SHARK;
+  return tool;
+}
+
+function hasHarpoon(player) {
+  const has = (id) => player.getInventory().contains(id) || player.getEquipment?.()?.contains(id);
+  return HARPOONS.some((variant) => variant.ids.some(has));
 }
 
 function getFishingLevel(player) {
@@ -462,7 +485,7 @@ function questAllows(player, name) {
 function findTool(player, tool) {
   const level = getFishingLevel(player);
   const has = (id) => player.getInventory().contains(id) || player.getEquipment?.()?.contains(id);
-  const found = tool.variants.find((variant) => variant.level <= level && variant.ids.some(has)) ?? null;
+  const found = tool.variants.find((variant) => variant.level <= level && (variant.ids.length === 0 || variant.ids.some(has))) ?? null;
   if (found) return found;
   // Content may stand in for the tool ("fishing:tool", a league relic's harpoon that fishes as any of them).
   const request = { player, variants: tool.variants, variant: null };
@@ -687,7 +710,7 @@ function landCatch(player, tool, variant, caught) {
   let stop = false;
   for (const fish of new Set(landed.map((entry) => entry.fish))) {
     if (fish.junk) continue;
-    const event = { player, skill: Skill.FISHING, itemId: fish.id, petBase: fish.petBase, stop: false };
+    const event = { player, skill: Skill.FISHING, itemId: fish.id, petBase: fish.petBase, barehand: variant.barehand === true, stop: false };
     pluginApi.emitCustomEvent("fishing:success", event);
     if (event.stop) stop = true;
   }
@@ -860,7 +883,7 @@ module.exports = {
 
     // Returning false leaves spots this plugin doesn't fish (aerial...) to others.
     function startFishingInteraction(event) {
-      const tool = getSpotTool(event.npcId, event.definition, event.clickType);
+      const tool = getSpotTool(event.npcId, event.definition, event.clickType, event.player);
       return tool ? startFishing(event.player, event.npc, tool, activeSessions) : false;
     }
     const actions = Object.fromEntries(FISHING_SPOT_OPTIONS.map((option) => [option, startFishingInteraction]));
@@ -882,6 +905,7 @@ module.exports = {
   rollCatch,
   findTool,
   getSpotTool,
+  hasHarpoon,
   spotTools,
   isFishingActive,
   FISHING_SPOT_NAMES,

@@ -134,6 +134,13 @@ function questDone(player, requirement) {
   return answer !== false;
 }
 
+/** The player's stage in a quest (`quest:get-stage`), or null when no quest answers. */
+function questStage(player, key) {
+  const request = { player, key, stage: null };
+  api.emitCustomEvent("quest:get-stage", request);
+  return typeof request.stage === "number" ? request.stage : null;
+}
+
 /** Herblore needs Druidic Ritual; says so and returns false without it. */
 function canUseHerblore(player) {
   if (questDone(player, "druidic_ritual")) return true;
@@ -193,7 +200,7 @@ function answerHerbs(request) {
 
 module.exports = {
   MIX_ANIMATION, MIX_SOUND,
-  init, gameval, herbFor, grindFor, recipesWith, repeatMessage, answerClean, answerUnfinished, answerHerbs, level, actionsPerCycle, questDone, canUseHerblore,
+  init, gameval, herbFor, grindFor, recipesWith, repeatMessage, answerClean, answerUnfinished, answerHerbs, level, actionsPerCycle, questDone, questStage, canUseHerblore,
   wearsHerbloreCape, spam, mesbox, animate, sound, addXp, run,
   get api() { return api; },
   get core() { return core; },

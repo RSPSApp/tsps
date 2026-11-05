@@ -206,6 +206,7 @@ function onAction(event) {
 function bind(registry) {
   api = registry;
   core = registry.core;
+  api.persistAttribute(CREST_ATTRIBUTE);
   api.onNpcDialogueCondition(onCondition);
   api.onCustomEvent("npc-dialogue:line", onLine);
   api.onCustomEvent("npc-dialogue:choice", onChoice);

@@ -19638,6 +19638,8 @@ test('RFD council interactions read requirements through the SkillManager before
     getSkillManager: () => ({ getCurrentLevel: () => 99 }),
     getPacketSender: () => packetSender,
     getInventory: () => ({ getAmount: () => 0, getFreeSlots: () => 27 }),
+    // In the dining room: outside it the council isn't frozen and this handler stands aside.
+    getLocation: () => new api.core.Location(1860, 5348, 0),
     sendMessage: (message) => messages.push(message),
   };
   quest.setStage(player, 4);

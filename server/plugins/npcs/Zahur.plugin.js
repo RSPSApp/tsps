@@ -59,6 +59,8 @@ function cleanAll(player, npcId) {
     cleaned += count;
   }
   say(player, npcId, cleaned === 0 ? "I didn't find anything that I could clean." : "There, all done.");
+  // The easy Desert Diary's "Have the Nardah Herbalist clean a Herb for you" (talking to her).
+  if (cleaned > 0) api.emitCustomEvent("diary:task", { player, diary: "desert", task: "have-the-nardah-herbalist-clean-a-herb-for-you" });
 }
 
 function cleanHerbs(event) {

@@ -84,6 +84,7 @@ before(async () => {
     registerMeleeDefenseModifier() {},
     registerMagicDefenseModifier() {},
     registerWeaponProfile() {},
+    registerRestingLevelModifier: (modifier) => require("../dist/game/content/skill/SkillManager").SkillManager.registerRestingLevelModifier(modifier),
     registerRangedAmmoHandler() {},
     onItemAction: (name, actions) => itemActions.set(name, { ...itemActions.get(name), ...actions }),
     sendMultiChatboxPrompt: (player, title, ...flat) => {
@@ -126,9 +127,16 @@ function character(name, profile, picks = {}, leagueType = DP) {
   player.setProfile(profile);
   player.setLocation(new Location(3200, 3200, 0));
   player.setRegistered(true);
-  const sent = { messages: [], configs: new Map() };
+  const sent = { messages: [], configs: new Map(), scripts: [], interfaces: [], flags: [] };
+  const record = {
+    sendConfig: (id, value) => sent.configs.set(id, value),
+    sendClientScript: (id, ...args) => sent.scripts.push({ id, args }),
+    sendInterface: (id) => (sent.interfaces.push(id), player.setInterfaceId(id)),
+    sendInterfaceRemoval: () => player.setInterfaceId(-1),
+    sendInterfaceFlagsRange: (uid, from, to, flags) => sent.flags.push({ uid, from, to, flags }),
+  };
   const sender = new Proxy({}, {
-    get: (target, key) => (key === "sendConfig" ? (id, value) => (sent.configs.set(id, value), sender) : () => sender),
+    get: (target, key) => (key in record ? (...args) => (record[key](...args), sender) : () => sender),
   });
   player.getPacketSender = () => sender;
   player.sendMessage = (text) => sent.messages.push(text);
@@ -270,11 +278,38 @@ test("Barbarian Gathering: a second 50% chance, 10% Strength and Agility XP, and
   }
 });
 
-test("Abundance: +10 to non-combat skills, 2 more XP a drop, and 2 coins an XP to the inventory (the bank when toggled)", () => {
+test("Abundance: a visible +10 to non-combat skills, 2 more XP a drop, and 2 coins an XP to the inventory (the bank when toggled)", () => {
   const who = cases(ABUNDANCE);
-  const boost = (player, skill) => emit("skills:level-boost", { player, skill, boost: 0 }).boost;
-  assert.equal(boost(who.relic, Skill.COOKING), 10);
-  assert.equal(boost(who.relic, Skill.ATTACK), 0, "combat skills are not boosted");
+  const skills = (player) => player.getSkillManager();
+  const current = (player, skill) => skills(player).getCurrentLevel(skill);
+  // 233/246 Leagues VI recordings: every non-combat skill at base + 10, combat skills unboosted.
+  for (const skill of [Skill.COOKING, Skill.SLAYER, Skill.SAILING]) {
+    assert.equal(current(who.relic, skill), skills(who.relic).getMaxLevel(skill) + 10, `${skill.getName()} at base + 10 from login`);
+    assert.equal(skills(who.relic).getRestingLevel(skill), skills(who.relic).getMaxLevel(skill) + 10, "decay and restoration settle there");
+  }
+  for (const skill of [Skill.ATTACK, Skill.HITPOINTS, Skill.PRAYER]) {
+    assert.equal(current(who.relic, skill), skills(who.relic).getMaxLevel(skill), `${skill.getName()} is not boosted`);
+    assert.equal(skills(who.relic).getRestingLevel(skill), skills(who.relic).getMaxLevel(skill));
+  }
+  assert.equal(emit("skills:level-boost", { player: who.relic, skill: Skill.COOKING, boost: 0 }).boost, 0, "nothing more on a skill's check: it reads the boosted level");
+  emit("league:login", { player: who.relic, league: DP });
+  assert.equal(current(who.relic, Skill.COOKING), skills(who.relic).getMaxLevel(Skill.COOKING) + 10, "a relog adds nothing twice");
+  const late = character("abundance-late", "league");
+  assert.equal(current(late, Skill.FISHING), 1);
+  late.setAttribute("league:relics", { ...ABUNDANCE });
+  emit("league:relic-unlocked", { player: late, league: DP, tier: 0, slot: 3, relic: "abundance" });
+  assert.equal(current(late, Skill.FISHING), 11, "the unlock raises it at once");
+  assert.equal(current(late, Skill.STRENGTH), 1);
+  skills(late).addExperience(Skill.FISHING, 83 - xp(late, Skill.FISHING));
+  assert.equal(skills(late).getMaxLevel(Skill.FISHING), 2);
+  assert.equal(current(late, Skill.FISHING), 12, "a level-up keeps the boost");
+  // A death (PlayerDeath -> resetAttributes) sets every level back to where it rests, the boost kept.
+  skills(late).setCurrentLevel(Skill.FISHING, 5, false);
+  late.resetAttributes();
+  assert.equal(current(late, Skill.FISHING), 12, "a death keeps the boost (resting level, not base)");
+  assert.equal(current(late, Skill.STRENGTH), 1, "an unboosted skill goes back to its base");
+  emit("league:login", { player: late, league: DP });
+  assert.equal(current(late, Skill.FISHING), 12, "and a relog after it adds nothing twice");
   const before = xp(who.relic, Skill.COOKING);
   emit("skills:experience-gained", { player: who.relic, skill: Skill.COOKING, experience: 10.5, multiplied: true });
   assert.ok(xp(who.relic, Skill.COOKING) >= before + 2, "2 more XP");
@@ -283,7 +318,8 @@ test("Abundance: +10 to non-combat skills, 2 more XP a drop, and 2 coins an XP t
   emit("skills:experience-gained", { player: who.relic, skill: Skill.COOKING, experience: 5, multiplied: true });
   assert.equal(banked(who.relic, I.COINS), 10, "toggled off: the bank");
   for (const player of others(who)) {
-    assert.equal(boost(player, Skill.COOKING), 0);
+    assert.equal(current(player, Skill.COOKING), skills(player).getMaxLevel(Skill.COOKING));
+    assert.equal(skills(player).getRestingLevel(Skill.COOKING), skills(player).getMaxLevel(Skill.COOKING));
     emit("skills:experience-gained", { player, skill: Skill.COOKING, experience: 10, multiplied: true });
     assert.equal(player.getInventory().getAmount(I.COINS), 0);
   }
@@ -316,6 +352,67 @@ test("Hotfoot: the worn boots cook fish and smelt ore (banked by Endless Harvest
   }
   // Raging Echoes' slot is Corner Cutter, whose Agility also never fails.
   for (const player of [who.without, who.main]) assert.equal(emit("agility:roll", { player, success: false }).success, false);
+});
+
+test("Hotfoot and Endless Harvest on a Cam Torum calcified rock (#2507): shards and deposits mined, no bar, banked twice", () => {
+  const { MapObjects } = require("../dist/game/entity/impl/object/MapObjects");
+  const { GameObject } = require("../dist/game/entity/impl/object/GameObject");
+  // The real Mining plugin on this test's event bus, so the relics hear its storage:gather and storage:room.
+  const tasks = [];
+  const interactions = new Map();
+  const miningApi = new Proxy({
+    core,
+    getTaskManager: () => ({ submit(task) { task.setRunning(true); tasks.push(task); } }),
+    getObjectManager: () => ({ register() {}, deregister() {} }),
+    onObjectInteraction: (name, actions) => interactions.set(name, actions),
+    onCustomEvent: (name, handler) => (custom[name] = (custom[name] ?? []).concat(handler)),
+    emitCustomEvent: emit,
+  }, { get: (target, key) => (key in target ? target[key] : () => {}) });
+  const Mining = require("../plugins/skills/Mining.plugin");
+  Mining.register(miningApi);
+  const miningTask = tasks.find((task) => task.constructor.name === "MiningTask");
+  // Clue geodes roll on every ore (their own plugin's chances); left out so the scripted rolls stay the ore's.
+  const successHandlers = custom["mining:success"];
+  custom["mining:success"] = [];
+
+  const player = character("cam-torum", "league", { ...HOTFOOT, ...ENDLESS_HARVEST });
+  player.setLocation(new Location(1498, 9540, 1));
+  player.getSkillManager().setMaxLevel(Skill.MINING, 61);
+  player.getSkillManager().setCurrentLevel(Skill.MINING, 61);
+  player.getEquipment().set(core.Equipment.FEET_SLOT, new core.Item(I.SEARING_BOOTS, 1));
+  player.getInventory().adds(I.RUNE_PICKAXE, 1);
+  const rock = new GameObject(core.CacheDefinitions.getLocId("varlamore_mining_rock"), new Location(1497, 9540, 1), 10, 0, null);
+  const originalGet = MapObjects.get;
+  MapObjects.get = (id) => (id === rock.getId() ? rock : null);
+  // Roll 1: no gem, a hit, shards, three of them; roll 2: a calcified deposit; then one shard a roll.
+  const rolls = [0, 0, 0, 0.99, 0, 0, 0.995];
+  Math.random = () => (rolls.length ? rolls.shift() : 0);
+  const miningXp = xp(player, Skill.MINING);
+  try {
+    const event = { player, object: rock, definition: { getName: () => "Calcified rocks" } };
+    interactions.get("Calcified rocks").Mine(event);
+    assert.equal(event.handled, true, "the rock is mineable with both relics");
+    assert.equal(Mining.isMiningActive(player), true);
+    for (let tick = 0; tick < 2; tick++) miningTask.tick();
+    assert.equal(banked(player, I.BLESSED_BONE_SHARDS), 6, "three shards, doubled and banked");
+    assert.equal(player.getInventory().getAmount(I.BLESSED_BONE_SHARDS), 0, "nothing left to the inventory");
+    assert.equal(xp(player, Skill.SMITHING), 0, "shards have no bar: Hotfoot leaves them");
+    const firstXp = xp(player, Skill.MINING) - miningXp;
+    assert.ok(firstXp > 0, "the ore and its extra pay Mining XP");
+    for (let tick = 0; tick < 3; tick++) miningTask.tick();
+    assert.equal(banked(player, I.CALCIFIED_DEPOSIT), 2, "a deposit, doubled and banked");
+    assert.equal(player.getInventory().getAmount(I.CALCIFIED_DEPOSIT), 0);
+    assert.equal(xp(player, Skill.SMITHING), 0, "a deposit has no bar either");
+    assert.equal(Mining.isMiningActive(player), true, "still mining");
+    // Past the rock's 117-tick countdown: Demonic Pacts' Endless Harvest keeps it standing, and mining goes on.
+    for (let tick = 0; tick < 120; tick++) miningTask.tick();
+    assert.equal(Mining.isMiningActive(player), true, "the rock stands under Endless Harvest");
+    assert.ok(banked(player, I.BLESSED_BONE_SHARDS) > 6 + 2 * 35, "a shard a roll, doubled, throughout");
+    assert.equal(player.getInventory().getAmount(I.BLESSED_BONE_SHARDS), 0);
+  } finally {
+    MapObjects.get = originalGet;
+    custom["mining:success"] = successHandlers;
+  }
 });
 
 test("Friendly Forager (Demonic Pacts): Herblore all at once; Raging Echoes' keeps its one at a time", () => {
@@ -1055,18 +1152,27 @@ function click(player, itemId, option, { subOp = null, worn = false } = {}) {
   return { event, handled: result !== false && event.handled === true };
 }
 
-/** The player's latest menu, paged through ("More...") until `label` is on it, then picked. */
+const MENU_SCRIPT = 217;
+
+/** The player's open menu interface (187, script `menu`): { title, labels (struck kept), numbered }, or null. */
+function menuOf(player) {
+  if (player.getInterfaceId() !== core.CacheDefinitions.getInterfaceId("menu")) return null;
+  const script = player.sent.scripts.filter((sent) => sent.id === MENU_SCRIPT).at(-1);
+  if (!script) return null;
+  const [title, labels, numbered] = script.args;
+  return { title, labels: labels.split("|"), numbered };
+}
+
+/** Picks `label` (plain or struck through) on the open menu: menu:lj_layer1's pause button, its index the sub. */
 function pick(player, label) {
-  for (let page = 0; page < 20; page++) {
-    const menu = prompts.filter((prompt) => prompt.player === player).at(-1);
-    assert.ok(menu, `a menu with ${label}`);
-    const entry = menu.entries.find(([text]) => text === label);
-    if (entry) return entry[1]();
-    const more = menu.entries.find(([text]) => text === "More...");
-    assert.ok(more, `${label} on the menu "${menu.title}"`);
-    more[1]();
-  }
-  assert.fail(`${label} never listed`);
+  const menu = menuOf(player);
+  assert.ok(menu, `a menu with ${label}`);
+  const index = menu.labels.findIndex((text) => text === label || text === `<str>${label}</str>`);
+  assert.ok(index >= 0, `${label} on the menu "${menu.title}": ${menu.labels.join(", ")}`);
+  const buttonId = core.CacheDefinitions.getComponentId("menu:lj_layer1");
+  const event = { player, buttonId, groupId: buttonId >>> 16, childId: buttonId & 0xffff, action: index, handled: false };
+  hooks.onInterfaceActionClick(event);
+  assert.equal(event.handled, true, "the menu's pick");
 }
 
 /** Runs the game's ticks until the player stands on (x, y, z), at most `limit`; the ticks taken. */
@@ -1127,8 +1233,17 @@ test("Evil Eye: Teleport's area submenu, carried or worn, lists its destinations
   const target = varlamore.destinations.at(-1);
   withLeague({}, () => {
     assert.equal(click(player, I.EVIL_EYE, "Teleport", { subOp: EVIL_EYE_DATA.areas.indexOf(varlamore) }).handled, true);
-    assert.equal(prompts.at(-1).title, "Varlamore");
+    // Live's menu interface (237/01104): its title, live's labels in live's order, Back, numbered.
+    const menuId = core.CacheDefinitions.getInterfaceId("menu");
+    assert.equal(player.sent.interfaces.at(-1), menuId);
+    assert.deepEqual(player.sent.flags.at(-1), { uid: core.CacheDefinitions.getComponentId("menu:lj_layer1"), from: 0, to: 512, flags: 1 }, "pause buttons on menu:lj_layer1 0-512");
+    assert.deepEqual(menuOf(player), {
+      title: "Evil Eye teleports - Varlamore",
+      labels: ["Abyssal Sire", "Amoxliatl", "Doom of Mokhaiotl", "Fortis Colosseum", "Hueycoatl", "Moons of peril (Blood)", "Moons of peril (Blue)", "Moons of peril (Eclipse)", "Vardorvis", "Back"],
+      numbered: 1,
+    });
     pick(player, target.name);
+    assert.equal(menuOf(player), null, "the menu closes on a pick");
     const lastVarp = core.CacheDefinitions.getVarpId("league_default_teleport_last_destination");
     assert.equal(player.sent.configs.get(lastVarp), (target.x << 14) | target.y, "the tile, packed as live sends it");
     core.TaskManager.process();
@@ -1145,11 +1260,19 @@ test("Evil Eye: Teleport's area submenu, carried or worn, lists its destinations
     // Worn: the same submenu from the equipment tab (the item's params), and a plain click lists the areas.
     relocate(player, new Location(3200, 3200, 0));
     assert.equal(click(player, I.EVIL_EYE, "Teleport", { subOp: EVIL_EYE_DATA.areas.indexOf(varlamore), worn: true }).handled, true);
-    assert.equal(prompts.at(-1).title, "Varlamore");
+    assert.equal(menuOf(player).title, "Evil Eye teleports - Varlamore");
     click(player, I.EVIL_EYE, "Teleport");
-    assert.equal(prompts.at(-1).title, Common.message("evilEyeTitle"));
+    assert.deepEqual(menuOf(player), {
+      title: "Select a region",
+      labels: ["Asgarnia", "Kharidian Desert", "Fremennik Province", "Kandarin", "Karamja", "Great Kourend", "Morytania", "Tirannwn", "Varlamore", "Wilderness"],
+      numbered: 1,
+    }, "live's regions (237/01133)");
     pick(player, "Varlamore");
-    assert.equal(prompts.at(-1).title, "Varlamore");
+    assert.equal(menuOf(player).title, "Evil Eye teleports - Varlamore");
+    pick(player, "Back");
+    assert.equal(menuOf(player).title, "Select a region", "Back to the regions");
+    pick(player, "Morytania");
+    assert.deepEqual(menuOf(player).labels, ["Araxxor", "Barrows Chest", "Barrows Surface", "Grotesque Guardians", "The Nightmare", "Theatre of blood", "Back"], "237/01107");
   });
   const fresh = character("fresh-eye", "league", EVIL_EYE);
   assert.equal(click(fresh, I.EVIL_EYE, "Last-destination").handled, true);
@@ -1163,6 +1286,17 @@ test("Evil Eye: a destination in an area not unlocked is refused, from the menu 
   withLeague({ unlocked: [varlamore.area] }, () => {
     click(player, I.EVIL_EYE, "Teleport", { subOp: EVIL_EYE_DATA.areas.indexOf(asgarnia) });
     assert.equal(player.sent.messages.at(-1), Common.message("areaLocked"));
+    // The regions: those not unlocked struck through (237/01133); picking one is refused.
+    click(player, I.EVIL_EYE, "Teleport");
+    assert.deepEqual(menuOf(player).labels, EVIL_EYE_DATA.areas.map((entry) => {
+      const name = entry.region ?? entry.name;
+      return entry === varlamore ? name : `<str>${name}</str>`;
+    }));
+    const messages = player.sent.messages.length;
+    pick(player, "Asgarnia");
+    assert.equal(player.sent.messages.length, messages + 1);
+    assert.equal(player.sent.messages.at(-1), Common.message("areaLocked"));
+    assert.equal(menuOf(player), null, "the menu closes");
     player.setAttribute("league:last-destination:evil-eye", { label: asgarnia.destinations[0].name, x: 0, y: 0, z: 0 });
     const before = player.getLocation().clone();
     click(player, I.EVIL_EYE, "Last-destination");
@@ -1195,35 +1329,38 @@ test("Evil Eye and Map of Alacrity: from above level 20 of the Wilderness, where
   }
 });
 
-test("Map of Alacrity: Read lists an area's shortcuts; one above the Agility level, or behind the Wiki's quest, is refused", () => {
+test("Map of Alacrity: Read lists an area's shortcuts in the menu interface; no Agility level needed, a shortcut behind the Wiki's quest is refused", () => {
   const player = character("alacrity", "league", MAP_OF_ALACRITY);
   const kandarin = area(ALACRITY_DATA, "Kandarin");
   const target = kandarin.destinations.find((destination) => destination.level > 1);
   const skills = player.getSkillManager();
-  skills.setCurrentLevel(Skill.AGILITY, target.level - 1).setMaxLevel(Skill.AGILITY, target.level - 1);
+  // Wiki: "teleporting to a shortcut does not require you to have the Agility level to use it".
+  skills.setCurrentLevel(Skill.AGILITY, 1).setMaxLevel(Skill.AGILITY, 1);
   withLeague({}, () => {
     assert.equal(click(player, I.MAP_OF_ALACRITY, "Read", { subOp: ALACRITY_DATA.areas.indexOf(kandarin) }).handled, true);
-    const before = player.getLocation().clone();
+    assert.deepEqual(menuOf(player), { title: "Kandarin", labels: [...kandarin.destinations.map((destination) => destination.name), "Back"], numbered: 1 });
+    const messages = player.sent.messages.length;
     pick(player, target.name);
-    assert.equal(player.sent.messages.at(-1), Common.message("agilityTooLow", { level: target.level }));
-    for (let tick = 0; tick < 30; tick++) core.TaskManager.process();
-    assert.ok(player.getLocation().equals(before), "stayed");
-
-    skills.setCurrentLevel(Skill.AGILITY, target.level).setMaxLevel(Skill.AGILITY, target.level);
-    click(player, I.MAP_OF_ALACRITY, "Read", { subOp: ALACRITY_DATA.areas.indexOf(kandarin) });
-    pick(player, target.name);
-    assert.ok(ticksTo(player, target) > 0, `landed on ${target.name}`);
+    assert.equal(player.sent.messages.length, messages, `no refusal: ${player.sent.messages.slice(messages)}`);
+    assert.ok(ticksTo(player, target) > 0, `landed on ${target.name} at Agility 1`);
     relocate(player, new Location(3200, 3200, 0));
     click(player, I.MAP_OF_ALACRITY, "Last-destination");
     assert.ok(ticksTo(player, target) > 0, "Last-destination");
+
+    click(player, I.MAP_OF_ALACRITY, "Read");
+    assert.deepEqual(menuOf(player), { title: Common.message("alacrityTitle"), labels: ALACRITY_DATA.areas.map((entry) => entry.name), numbered: 1 });
 
     const varlamore = area(ALACRITY_DATA, "Varlamore");
     const behindQuest = varlamore.destinations.find((destination) => destination.quest);
     skills.setCurrentLevel(Skill.AGILITY, 99).setMaxLevel(Skill.AGILITY, 99);
     custom["quest:is-complete"] = [(query) => { if (query.name === behindQuest.quest) query.complete = false; }];
     click(player, I.MAP_OF_ALACRITY, "Read", { subOp: ALACRITY_DATA.areas.indexOf(varlamore) });
+    assert.ok(menuOf(player).labels.includes(`<str>${behindQuest.name}</str>`), "struck through");
+    const before = player.getLocation().clone();
     pick(player, behindQuest.name);
     assert.equal(player.sent.messages.at(-1), Common.message("questNeeded", { quest: behindQuest.quest }));
+    for (let tick = 0; tick < 30; tick++) core.TaskManager.process();
+    assert.ok(player.getLocation().equals(before), "stayed");
   });
 });
 
@@ -1231,10 +1368,9 @@ test("Evil Eye and Map of Alacrity: nothing for a character without the relic, a
   for (const [picks, itemId, option] of [[EVIL_EYE, I.EVIL_EYE, "Teleport"], [MAP_OF_ALACRITY, I.MAP_OF_ALACRITY, "Read"]]) {
     const who = cases(picks);
     for (const player of others(who)) {
-      const count = prompts.length;
       assert.equal(click(player, itemId, option, { subOp: 0 }).handled, false, "on to the game's own");
       assert.equal(click(player, itemId, "Last-destination").handled, false);
-      assert.equal(prompts.length, count, "no menu");
+      assert.equal(menuOf(player), null, "no menu");
     }
   }
 });

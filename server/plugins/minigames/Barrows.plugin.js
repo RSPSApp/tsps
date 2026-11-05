@@ -597,6 +597,7 @@ function searchChest(player, clickType) {
   }
   randomiseLayout(run);
   syncTunnels(player, run);
+  pluginApi.emitCustomEvent("barrows:chest-looted", { player });
   showRewards(player, rewards);
   sender.sendMessage(`You've looted ${run.chests} Barrows chests. The tunnels begin to collapse!`);
   combatAchievementsAtChest(player, run);

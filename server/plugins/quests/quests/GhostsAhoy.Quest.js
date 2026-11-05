@@ -940,6 +940,7 @@ module.exports = function registerGhostsAhoyQuest(api) {
     }
     player.sendMessage("After a long boat trip you arrive at Dragontooth Island.");
     player.moveTo(new Location(DRAGONTOOTH_LANDING.x, DRAGONTOOTH_LANDING.y, DRAGONTOOTH_LANDING.z));
+    api.emitCustomEvent("diary:task", { player, diary: "morytania", task: "travel-to-dragontooth-isle" });
   }
 
   function spawnGiantLobster(player) {

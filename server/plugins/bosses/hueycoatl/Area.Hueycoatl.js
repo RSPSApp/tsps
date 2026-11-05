@@ -100,6 +100,11 @@ function defineAreas() {
       return true;
     }
 
+    // The fight script owns every attack; source aggression must not start native combat.
+    npcAggression() {
+      return false;
+    }
+
     postEnter(mobile) {
       if (mobile.isPlayer()) arrived(publicSession, mobile.getAsPlayer());
     }
@@ -126,6 +131,11 @@ function defineAreas() {
 
     isMulti() {
       return true;
+    }
+
+    // The fight script owns every attack; source aggression must not start native combat.
+    npcAggression() {
+      return false;
     }
 
     postLeave(mobile, logout) {
@@ -458,4 +468,4 @@ function attach(pluginApi) {
   api.onCustomEvent("gravestones:grave-location", graveAtCamp);
 }
 
-module.exports = { attach, world, TAALA_INTRO_ATTRIBUTE, campSession, _test: { PEEK_LINES } };
+module.exports = { attach, world, TAALA_INTRO_ATTRIBUTE, campSession, _test: { PEEK_LINES, get InstanceArea() { return InstanceArea; } } };

@@ -68,8 +68,10 @@
       "bossesKilled": 4510, "echoBossesKilled": 4511, "coinsGained": 4512, "coinsLost": 4513,
       "damageDealt": 4514, "cluesCompleted": 4515, "damageTaken": 4516, "deaths": 4517,
       "foodEaten": 4518, "potionsSipped": 4519, "highestValueWorn": 4520, "npcsKilled": 4521,
-      "playersKilled": 4522, "specialAttacks": 4524, "logsChopped": 4525, "oreMined": 4526, "fishCaught": 4527
+      "playersKilled": 4522, "specialAttacks": 4524, "fishCaught": 4527
     },
+    "_skillCounters": "The logs and ore rows read tracking_logs_chopped (4525) and tracking_ore_mined (4526), which Woodcutting and Mining own on every world: one per log kept, one per ore, stardust or blessed bone shard kept (Leagues VI captures 237/01098 and 01104: +1 a log; 01102: +1 an iron ore; 01101: +4 for four stardust; 01105: +2/+3 for two/three shards), sent at login when above 0 (01102: 0 -> 739 on login) and persisted with the account. This unit never writes them; its answer asks each skill (event -> { player, count }).",
+    "skillCounters": { "logsChopped": "woodcutting:logs-chopped", "oreMined": "mining:ores-mined" },
     "varbits": { "highestHit": 11561 },
     "_bossParam": "The NPC param the cache sets on bosses (plugins/npcs/NpcDrops.plugin.js uses the same).",
     "bossParam": 1361
@@ -221,7 +223,7 @@
       ],
       "_startQuests": "Wiki Demonic_Pacts_League, Auto-completed quests: completed for every character, with no experience (live's new character has only its starting levels, 237/01098). Listed dependents first: league:complete-quests completes the list in reverse, requirements first.",
       "startQuests": ["Twilight's Promise", "Perilous Moons", "Children of the Sun", "Desert Treasure II - The Fallen Empire", "Fairytale II - Cure a Queen", "Fairytale I - Growing Pains", "Lost City", "Nature Spirit", "Priest in Peril", "The Restless Ghost", "Eagles' Peak", "Elemental Workshop I", "Dragon Slayer I", "Druidic Ritual", "Rune Mysteries", "Learning the Ropes"],
-      "_shopStock": "Leagues VI's news posts (Get Ready For Leagues VI, Launches Today) and the Wiki's Demonic Pacts guides: most shop stock will not deplete. Every league buy recorded (39 shops, 600+ buys in 237/01098, 01102, 01135, 04054 and more) left the stock as it was; the only drops were on main-game worlds (237/04012, 238/04155, 238/04249). Which shops are the 'most' exceptions is not recorded, so none are made. Stock players sold to a shop still goes as it is bought (ours: the guides still sell to the lowest-stock shops for the best price).",
+      "_shopStock": "Leagues VI's news posts (Get Ready For Leagues VI, Launches Today) and the Wiki's Demonic Pacts guides: most shop stock will not deplete. Every league buy recorded (39 shops, 600+ buys in 237/01098, 01102, 01135, 04054 and more) left the stock as it was; the only drops were on main-game worlds (237/04012, 238/04155, 238/04249). Which shops are the 'most' exceptions is not recorded, so none are made. A league character's sale adds nothing either (`shop:keep-stock` with `selling`): 237/01102 sold 21 sapphires to Toci's Gem Store, whose stock stayed 3, and the 10 general-store opens in the Leagues VI recordings show only base stock. Stock main characters sold still goes as it is bought.",
       "shopStock": { "keep": true },
       "_passives": "The tier structs' passive text in the rev 241 cache (struct 6436's tier enum, param 1020), as the relic interface shows it: tier 1 boosted drops x2, farming ticks every minute, minigame points x4, no run energy drain, clue scrolls as scroll boxes with saved step progress; tier 3 combat skills (Hitpoints and Prayer included) x1.5, Bigger and Badder free, Slayer task points x5 from the first task, superiors 1/50; tier 4 drops x5, minigame points x8. docs/leagues.md (Tier passives) lists the two left out.",
       "passives": {

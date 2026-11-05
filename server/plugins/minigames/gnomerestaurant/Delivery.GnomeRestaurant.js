@@ -110,6 +110,7 @@ function deliver(event) {
   event.player.sendMessage(`You hand over your delivery of ${session.itemName} to ${session.npcName}.`);
   giveTip(event.player, session);
   if (tokens > 0) event.player.sendMessage("You've earned a reward token for your deliveries!");
+  api.emitCustomEvent?.("gnome-restaurant:delivered", { player: event.player, tier: session.tier });
 }
 
 function attach(pluginApi) {

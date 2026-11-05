@@ -142,7 +142,7 @@ function castMinigameTeleport(event) {
   player.getPacketSender().sendVarbit(BUSY_VARBIT, 1).sendInterface(MINIGAMES_INTERFACE);
 }
 
-function teleportTo(player, x, y) {
+function teleportTo(player, x, y, minigameName) {
   const destination = new core.Location(x, y, 0);
   if (!core.TeleportHandler.checkReqs(player, destination)) {
     player.getPacketSender().sendVarbit(BUSY_VARBIT, 0);
@@ -152,7 +152,13 @@ function teleportTo(player, x, y) {
     const minute = dateMinutes();
     player.setAttribute(LAST_MINIGAME_TELEPORT_ATTRIBUTE, minute);
     player.getPacketSender().sendConfig(LAST_MINIGAME_TELEPORT_VARP, minute);
+    if (minigameName) pluginApi.emitCustomEvent("minigame-teleport:arrived", { player, minigame: minigameName });
   });
+}
+
+/** The minigames data key of an entry, for the arrival event (Pest Control's diary task). */
+function minigameName(entry) {
+  return Object.entries(minigames).find(([, candidate]) => candidate === entry)?.[0];
 }
 
 function chooseMinigame(event) {
@@ -171,7 +177,7 @@ function chooseMinigame(event) {
     return;
   }
   if (!minigame.choices) {
-    teleportTo(player, minigame.x, minigame.y);
+    teleportTo(player, minigame.x, minigame.y, minigameName(minigame));
     return;
   }
   // Rat Pits: which pit, in the chatbox; busy stays set until the choice.

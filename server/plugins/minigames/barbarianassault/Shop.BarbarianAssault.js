@@ -8,6 +8,9 @@ const SHOP_ID = 1427;
 const SHOP_NAME = "Barbarian Assault Reward Shop";
 const SHOP_STOCK_AMOUNT = 100;
 const QUEEN_ITEMS = new Map(data.SHOP_STOCK.filter((entry) => entry.queen).map((entry) => [entry.id, entry]));
+/** The one reward not bought with honour points (Wiki: Granite body). */
+const GRANITE_BODY_ID = 10564;
+const GRANITE_BODY_COST = 95000;
 
 let api = null;
 
@@ -55,6 +58,32 @@ function levelPrompt(player) {
   api.sendMultiChatboxPrompt(player, `Commander Connad: ${pointsLine(player)}. Which role will you upgrade?`, ...options);
 }
 
+/** Wiki: Commander Connad sells the granite body for 95,000 coins, once the Queen is defeated. */
+function buyGraniteBody({ player }) {
+  if (!Points.queenKilled(player)) {
+    player.sendMessage("You need to defeat the Penance Queen before buying a granite body.");
+    return;
+  }
+  const inventory = player.getInventory();
+  if (inventory.contains(GRANITE_BODY_ID)) {
+    player.sendMessage("You already have a granite body.");
+    return;
+  }
+  const coins = api.core.ItemIdentifiers.COINS;
+  if (inventory.getAmount(coins) < GRANITE_BODY_COST) {
+    player.sendMessage(`You need ${GRANITE_BODY_COST.toLocaleString("en-US")} coins for a granite body.`);
+    return;
+  }
+  if (inventory.getFreeSlots() < 1) {
+    player.sendMessage("You need a free inventory slot for the granite body.");
+    return;
+  }
+  inventory.delete(coins, GRANITE_BODY_COST);
+  inventory.adds(GRANITE_BODY_ID, 1);
+  api.emitCustomEvent?.("barbarian-assault:granite-body-bought", { player });
+  player.sendMessage("Commander Connad sells you a granite body.");
+}
+
 function commanderTalk({ player }) {
   if (Lobby.inQueue(player)) {
     Lobby.status(player);
@@ -68,6 +97,7 @@ function commanderTalk({ player }) {
       checkPoints({ player });
       commanderTalk({ player });
     },
+    "Buy a granite body (95,000 coins)", () => buyGraniteBody({ player }),
     "High gamble", () => Points.highGamblePrompt(player),
     "Cancel", () => {},
   );
@@ -99,5 +129,6 @@ function attach(pluginApi) {
 }
 
 module.exports = {
-  SHOP_ID, commanderTalk, levelPrompt, checkPoints, buyLimit, purchase, attach, shopSource,
+  SHOP_ID, GRANITE_BODY_ID, GRANITE_BODY_COST,
+  commanderTalk, levelPrompt, checkPoints, buyLimit, purchase, buyGraniteBody, attach, shopSource,
 };

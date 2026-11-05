@@ -26,6 +26,7 @@ const HIGH_CHANCE = 0.99;
 const POURED_DOSES = [["BUCKET_OF_WATER", "BUCKET", 4], ["BOWL_OF_WATER", "BOWL", 3], ["JUG_OF_WATER", "JUG", 2], ["VIAL_OF_WATER", "VIAL", 1]];
 
 let core;
+let api;
 /** Waterskin ids by doses, 0 to 4. */
 let WATERSKINS = [];
 let POURS = new Map();
@@ -96,6 +97,7 @@ function finishCut(player, cactus, dryId, animation) {
   inventory.setItem(slot, new Item(WATERSKINS[dosesOf(inventory.getItems()[slot].getId()) + 1], 1)).refreshItems();
   player.getPacketSender().sendSoundEffect(FILL_SOUND, 1, 0);
   player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, "You top up your skin with water from the cactus.");
+  api.emitCustomEvent("diary:task", { player, diary: "desert", task: "cut-a-desert-cactus-open-to-fill-a-waterskin" });
 }
 
 function cutCactus({ player, object }) {
@@ -142,7 +144,8 @@ module.exports = {
   name: "Waterskins",
   members: true,
   _test: { cutChance, emptiestSkinSlot, FULL_CACTUS_TO_DRY },
-  register(api) {
+  register(pluginApi) {
+    api = pluginApi;
     core = api.core;
     defineItems(core);
     api.onObjectInteraction("Kharidian cactus (Healthy)", { Cut: cutCactus });

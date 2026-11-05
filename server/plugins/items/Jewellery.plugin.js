@@ -129,7 +129,10 @@ function teleport(player, item, destination) {
     return;
   }
   const castId = item.getId();
-  TeleportHandler.teleport(player, target, TeleportType.NORMAL, false, () => useCharge(player, item, castId));
+  TeleportHandler.teleport(player, target, TeleportType.NORMAL, false, () => {
+    useCharge(player, item, castId);
+    pluginApi.emitCustomEvent("jewellery:teleport-arrival", { player, key: piece.key, label: destination.label });
+  });
 }
 
 /** Whether the player has reached a Fortis Colosseum Glory title (the Colosseum plugin answers). */

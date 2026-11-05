@@ -30,9 +30,13 @@ import {
     translateSpecialText,
 } from "./TranslationLookup";
 import { loadReleaseFiles, TranslationRepository } from "./TranslationRepository";
-import { INTERFACE_ROUTES, TranslationState, type Area, type InterfaceRoute } from "./TranslationState";
+import { COMPONENT_ROUTES, routeDomains, routeFor, TranslationState, type Area, type InterfaceRoute } from "./TranslationState";
 import { workerLoadFiles } from "./workerLoadFiles";
 import { applyAdditions, fetchAdditions, type LoadAdditions } from "./additions";
+import { SKILL_GUIDE_BODY_SCRIPT, translateGuideBody } from "./skillGuide";
+import { TranslationCoverage } from "./coverage";
+import { CHATBOX } from "@runelite/api/gameval/InterfaceID";
+import type { Cs2Vm } from "../../../rs/cs2/Cs2Vm";
 
 /** Upstream re-reads the manifest hourly. */
 const UPDATE_INTERVAL_MS = 60 * 60 * 1000;
@@ -110,6 +114,8 @@ export class OsrsTranslatePlugin extends Plugin {
     private generation = 0;
     private timer: ReturnType<typeof setInterval> | undefined;
     private readonly menuText = (option: string) => this.translateMenuOption(option);
+    /** The `::translatecoverage` developer counter; records nothing until switched on. */
+    readonly coverage = new TranslationCoverage();
 
     constructor(deps: {
         configManager?: ConfigManager;
@@ -215,6 +221,7 @@ export class OsrsTranslatePlugin extends Plugin {
             case "gameMessages": return this.config.enableGameMessages() !== false;
             case "welcome": return this.config.enableWelcome() !== false;
             case "settings": return this.config.enableSettings() !== false;
+            case "sidePanels": return this.config.enableSidePanels() !== false;
         }
     }
 
@@ -298,18 +305,30 @@ export class OsrsTranslatePlugin extends Plugin {
         const [prefix, lookup] = splitQuestHelperPrefix(clean);
         const special = translateSpecialText(lookup, groupId === WELCOME_SCREEN, this.state.welcome.exact);
         if (special !== null) return preserveStartTags(original) + prefix + special;
-        const domain = this.state[route.domain];
-        if (domain.values.has(lookup)) return null;
+        const domains = routeDomains(route);
+        if (domains.some((name) => this.state[name].values.has(lookup))) return null;
         const rich = splitQuestHelperPrefix(richLookupText(original))[1];
-        let translation = domain.translate(lookup, rich);
-        if (translation === null) return null;
-        if (route.domain === "gameMessage") translation = normalizeChatOverlayTags(translation);
-        return preserveStartTags(original) + prefix + translation;
+        for (const name of domains) {
+            let translation = this.state[name].translate(lookup, rich);
+            if (translation === null) continue;
+            if (name === "gameMessage") translation = normalizeChatOverlayTags(translation);
+            return preserveStartTags(original) + prefix + translation;
+        }
+        return null;
     }
 
     widgetDisplayText(event: WidgetTextEvent): WidgetDisplayText | undefined {
+        const result = this.displayText(event);
+        // Chat lines are counted where they are built; of the chatbox, only its tabs count here.
+        if (this.coverage.enabled && this.isStarted() && (event.groupId !== CHATBOX || COMPONENT_ROUTES.has((event.uid ?? -1) >>> 0))) {
+            this.coverage.record(`interface ${event.groupId}`, event.text, result?.text);
+        }
+        return result;
+    }
+
+    private displayText(event: WidgetTextEvent): WidgetDisplayText | undefined {
         if (!this.isStarted() || this.state.isEmpty) return undefined;
-        const route = INTERFACE_ROUTES.get(event.groupId);
+        const route = routeFor(event);
         if (!route || !this.areaEnabled(route.area)) return undefined;
         if (route.joinLines) {
             // A line that is part of a sentence spread over several components shows its share
@@ -324,8 +343,29 @@ export class OsrsTranslatePlugin extends Plugin {
         return lineHeight === undefined ? { text } : { text, lineHeight };
     }
 
+    /**
+     * The skill guide's paragraphs: script 9183 lays a body out one component per word, so the
+     * body is translated as it starts (its argument is still on the stack) and the game wraps the
+     * translation itself. Upstream can't translate these; it sees only single words.
+     */
+    onScriptPreFired(scriptId: number, vm?: Cs2Vm): void {
+        if (scriptId !== SKILL_GUIDE_BODY_SCRIPT || !vm || !this.isStarted() || this.state.isEmpty) return;
+        if (!this.areaEnabled("skillGuide")) return;
+        const slot = vm.stringStackSize - 1;
+        const body = vm.stringStack[slot];
+        if (typeof body !== "string" || !body) return;
+        const translated = translateGuideBody(body, (text) => this.state.skills.translate(text) ?? this.state.general.translate(text));
+        if (translated !== body) vm.stringStack[slot] = translated;
+    }
+
     /** Menu options only, from the menu dictionary (upstream never translates targets). */
     translateMenuOption(option: string): string | undefined {
+        const result = this.menuOption(option);
+        if (this.coverage.enabled && this.isStarted()) this.coverage.record("menu", option, result);
+        return result;
+    }
+
+    private menuOption(option: string): string | undefined {
         if (!this.isStarted() || this.config.enableMenuEntries() === false) return undefined;
         const clean = option.replace(TAG, "").trim();
         if (!clean) return undefined;
@@ -338,7 +378,9 @@ export class OsrsTranslatePlugin extends Plugin {
         if (!this.isStarted() || this.config.enableOverhead() === false) return undefined;
         const clean = normalizeLookupText(cleanText(text));
         if (clean.length <= 3) return undefined;
-        return this.state.overhead.translate(clean) ?? undefined;
+        const translation = this.state.overhead.translate(clean) ?? undefined;
+        this.coverage.record("overhead", text, translation);
+        return translation;
     }
 
     /**
@@ -358,7 +400,42 @@ export class OsrsTranslatePlugin extends Plugin {
         const message = vm.stringStack[slot];
         if (typeof message !== "string") return;
         const translated = this.translateChatMessage(message);
+        this.coverage.record("chat", message, translated);
         if (translated !== null) vm.stringStack[slot] = translated;
+    }
+
+    /**
+     * `::translatecoverage on|off|report|reset`: the developer counter. It records what the
+     * plugin is asked to translate while on; `report` prints the share translated and lists the
+     * English that remains in the console (and `window.__osrsTranslateCoverage`).
+     */
+    handleClientCommand(command: string): boolean {
+        const [name, action = "report"] = command.trim().split(/\s+/);
+        if (name.toLowerCase() !== "translatecoverage") return false;
+        const say = (text: string) => this.history.addMessage("game", `[OSRS Translate] ${text}`);
+        switch (action.toLowerCase()) {
+            case "on":
+                this.coverage.enabled = true;
+                this.host.refresh();
+                say(this.isStarted() ? "coverage counter on" : "coverage counter on (turn the plugin on to record)");
+                break;
+            case "off":
+                this.coverage.enabled = false;
+                say("coverage counter off");
+                break;
+            case "reset":
+                this.coverage.reset();
+                say("coverage counter reset");
+                break;
+            default: {
+                const report = this.coverage.report();
+                say(`${report.translated} of ${report.seen} texts seen translated (${report.percent}%)`);
+                const table = report.untranslated.map((entry) => ({ where: entry.where, text: entry.text, count: entry.count }));
+                (globalThis as { __osrsTranslateCoverage?: unknown }).__osrsTranslateCoverage = { ...report, untranslated: table };
+                console.table(table.slice(0, 200));
+            }
+        }
+        return true;
     }
 
     /** OsrsTranslatePlugin.onChatMessage's lookup, keeping Chat Filter's " (n)" and a highlight's colour. */

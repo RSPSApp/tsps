@@ -76,6 +76,10 @@ const ITEM_LABELS: Record<string, Labels> = {
         PORTUGUESE_BRAZIL: pt("Traduzir clue scrolls", "Traduz o texto dos pergaminhos de pistas"),
         SPANISH: es("Traducir clue scrolls", "Traduce el texto de los pergaminos de pistas"),
     },
+    enableSidePanels: {
+        PORTUGUESE_BRAZIL: pt("Traduzir painéis laterais", "Traduz a lista de quests, o resumo do personagem, as dicas de feitiços e orações, as abas do chat e outros painéis"),
+        SPANISH: es("Traducir paneles laterales", "Traduce la lista de misiones, el resumen del personaje, las descripciones de hechizos y plegarias, las pestañas del chat y otros paneles"),
+    },
     enableTextWrapFix: {
         PORTUGUESE_BRAZIL: pt("Espaçamento entre linhas", "Ajusta automaticamente a altura das linhas quando o texto traduzido é maior"),
         SPANISH: es("Espaciado entre líneas", "Ajusta automáticamente la altura de las líneas cuando el texto traducido es más largo"),
@@ -135,6 +139,7 @@ export const OsrsTranslateConfig = ConfigGroup(
         enableWelcome: toggle("enableWelcome", STATIC, 8),
         enableSettings: toggle("enableSettings", STATIC, 9),
         enableClueScrolls: toggle("enableClueScrolls", STATIC, 10),
+        enableSidePanels: toggle("enableSidePanels", STATIC, 11),
         enableTextWrapFix: toggle("enableTextWrapFix", VISUAL, 0),
         manifestUrl: ConfigItem<string>({
             keyName: "manifestUrl",

@@ -132,6 +132,11 @@ export type WidgetTextEvent = {
     /** The component's uid (group << 16 | child). */
     readonly uid?: number;
     /**
+     * The uid of the component it sits in. Text a script creates (cc_create) has a made-up uid,
+     * so its container is what identifies it.
+     */
+    readonly parentUid?: number;
+    /**
      * The text of the component `offset` children away in the same group, or undefined when
      * there is none: journals put one line in each component, so a sentence can span several.
      */
@@ -301,7 +306,8 @@ export interface ClientPlugin {
      * A clientscript is about to run, before pre-script listeners such as Bank Tags' (RuneLite's
      * ScriptPreFired with a subscriber priority above theirs).
      */
-    onScriptPreFired?(scriptId: number): void;
+    /** `vm` is set when the script was invoked by another and its arguments are still on the stacks. */
+    onScriptPreFired?(scriptId: number, vm?: Cs2Vm): void;
     /** A clientscript ran `runelite_callback`. */
     onScriptCallback?(event: ScriptCallbackEvent): void;
     /** A widget was dropped on another; return true to keep the drag from the server. */
@@ -554,8 +560,8 @@ export class ClientPluginManager {
         for (const plugin of this.implementing("onScriptFinished")) plugin.onScriptFinished!(scriptId);
     }
 
-    onScriptPreFired(scriptId: number): void {
-        for (const plugin of this.implementing("onScriptPreFired")) plugin.onScriptPreFired!(scriptId);
+    onScriptPreFired(scriptId: number, vm?: Cs2Vm): void {
+        for (const plugin of this.implementing("onScriptPreFired")) plugin.onScriptPreFired!(scriptId, vm);
     }
 
     onScriptCallback(event: ScriptCallbackEvent): void {

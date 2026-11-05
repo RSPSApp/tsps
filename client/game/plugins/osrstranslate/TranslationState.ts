@@ -69,22 +69,35 @@ export type Area =
     | "menuInterfaces"
     | "gameMessages"
     | "welcome"
-    | "settings";
+    | "settings"
+    | "sidePanels";
+
+export type Domain = keyof Pick<
+    TranslationState,
+    "general" | "skills" | "quests" | "items" | "menu" | "gameMessage" | "welcome" | "settings"
+>;
 
 export interface InterfaceRoute {
     readonly area: Area;
-    readonly domain: keyof Pick<
-        TranslationState,
-        "general" | "skills" | "quests" | "items" | "menu" | "gameMessage" | "welcome" | "settings"
-    >;
+    /** The dictionary upstream reads for this interface. */
+    readonly domain: Domain;
+    /** Further dictionaries to try, in order, when the first has no entry. */
+    readonly fallback?: readonly Domain[];
     /** The server pre-wraps this text and picks its line height from the English line count. */
     readonly dialogue?: boolean;
     /** One line per component (journals, books): a sentence may span the next few. */
     readonly joinLines?: boolean;
 }
 
-const route = (area: Area, domain: InterfaceRoute["domain"], dialogue = false): InterfaceRoute => ({ area, domain, dialogue });
-const lines = (area: Area, domain: InterfaceRoute["domain"]): InterfaceRoute => ({ area, domain, joinLines: true });
+/** The dictionaries a route reads, in order. */
+export function routeDomains(route: InterfaceRoute): readonly Domain[] {
+    return route.fallback ? [route.domain, ...route.fallback] : [route.domain];
+}
+
+const route = (area: Area, domain: Domain, dialogue = false): InterfaceRoute => ({ area, domain, dialogue });
+const lines = (area: Area, domain: Domain): InterfaceRoute => ({ area, domain, joinLines: true });
+const panel = (domain: Domain, ...fallback: Domain[]): InterfaceRoute => ({ area: "sidePanels", domain, fallback });
+const uid = (group: number, child: number): number => ((group << 16) | child) >>> 0;
 
 /**
  * Interfaces upstream translates, by group id. Any other group (the chatbox, friends, private
@@ -125,4 +138,47 @@ export const INTERFACE_ROUTES: ReadonlyMap<number, InterfaceRoute> = new Map([
     [InterfaceID.SETTINGS, route("settings", "settings")],
     [InterfaceID.BANKPIN_KEYPAD, route("settings", "settings")],
     [InterfaceID.TOPLEVEL_OSRS_STRETCH, route("settings", "settings")],
+    // Beyond upstream: side panels, each reading the dictionaries their text is filed in. Panels
+    // that show player names (friends, ignore, the character summary's title) skip the general
+    // dictionary, whose many one-word keys could match a name.
+    [InterfaceID.QUESTLIST, panel("quests", "menu", "general")],
+    [InterfaceID.ACCOUNT_SUMMARY_SIDEPANEL, panel("menu", "settings")],
+    [InterfaceID.SETTINGS_SIDE, panel("settings", "menu")],
+    [InterfaceID.COMBAT_INTERFACE, panel("menu", "general", "settings")],
+    [InterfaceID.FRIENDS, panel("menu", "settings")],
+    [InterfaceID.IGNORE, panel("menu", "settings")],
+    [InterfaceID.LOGOUT, panel("menu", "general", "settings")],
+    [InterfaceID.MUSIC, panel("menu", "general", "settings")],
+    [InterfaceID.WORNITEMS, panel("menu", "general", "settings")],
 ]);
+
+/**
+ * Single components routed in a group that is otherwise left alone: the chatbox's tab labels and
+ * their status lines (its chat lines, input and search prompts must never be rewritten).
+ */
+export const COMPONENT_ROUTES: ReadonlyMap<number, InterfaceRoute> = new Map(
+    [6, 9, 10, 13, 14, 17, 18, 21, 22, 25, 26, 29, 30, 33].map((child) => [uid(InterfaceID.CHATBOX, child), panel("menu", "settings", "general")]),
+);
+
+/**
+ * Text that scripts create inside a container, routed by that container: the toplevel mouseover
+ * layers (prayer, skill and orb tooltips; the "/ N more options" label) in each layout, and the
+ * spellbook's tooltip box. Without this, 161's text would be read from the settings dictionary.
+ */
+export const PARENT_ROUTES: ReadonlyMap<number, InterfaceRoute> = new Map(
+    [
+        uid(InterfaceID.TOPLEVEL_OSRS_STRETCH, 37),
+        uid(InterfaceID.TOPLEVEL, 5),
+        uid(InterfaceID.TOPLEVEL_PRE_EOC, 69),
+        uid(InterfaceID.TOPLEVEL_DISPLAY, 36),
+        uid(InterfaceID.TOPLEVEL_OSM, 132),
+        uid(InterfaceID.MAGIC_SPELLBOOK, 210),
+    ].map((parent) => [parent, panel("general", "menu", "skills")]),
+);
+
+/** The route for a drawn component: its own, its container's, or its interface's. */
+export function routeFor(event: { uid?: number; parentUid?: number; groupId: number }): InterfaceRoute | undefined {
+    return (event.uid !== undefined ? COMPONENT_ROUTES.get(event.uid >>> 0) : undefined)
+        ?? (event.parentUid !== undefined ? PARENT_ROUTES.get(event.parentUid >>> 0) : undefined)
+        ?? INTERFACE_ROUTES.get(event.groupId);
+}

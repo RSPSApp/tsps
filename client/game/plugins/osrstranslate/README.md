@@ -49,8 +49,18 @@ Only the drawn text changes. The original rewrites widget text, menu entries and
 and then undoes that for other plugins (it translates a clicked option back before Menu Entry
 Swapper and examine plugins see it). Here the client's data stays as the game sent it:
 
-- Interface text is replaced as it is drawn (`widgetDisplayText`), by interface group. Groups the
-  original doesn't cover, such as the chatbox, friends list and chat input, are never touched.
+- Interface text is replaced as it is drawn (`widgetDisplayText`). A text is routed by its own
+  component, then by the component it sits in, then by its interface group:
+  - components: the chatbox's tab labels and their On/Off lines, and nothing else in the chatbox
+    (chat lines, input and search prompts are never touched);
+  - containers: the toplevel mouseover layers (prayer, skill and orb tooltips, "/ N more
+    options") and the spellbook's tooltip box, whose text scripts create;
+  - groups: the original's interfaces, plus (setting "Traduzir painéis laterais") the quest list,
+    character summary, settings side tab, combat options, friends, ignore, logout, music and
+    worn equipment panels.
+  Each route reads one or more dictionaries in order. Panels that show player names (friends,
+  ignore, the character summary) never read the general dictionary, whose one-word keys could
+  match a name.
 - Menu options are replaced where the menu and mouseover text are drawn
   (`ui/menu/menuOptionDisplayText.ts`). Clicks, Menu Entry Swapper and the server see English.
 - Game messages are replaced in RuneLite's `chatMessageBuilding` chatbox callback, before the
@@ -63,6 +73,15 @@ Dialogue arrives from the server already wrapped at 53 characters, with a line h
 for the English line count. The plugin joins the lines to find the translation, and when the
 translation needs more lines than fit, it draws with a smaller line height ("Espaçamento entre
 linhas"; the original sets a fixed 18).
+
+## Measuring coverage
+
+`::translatecoverage on` starts a developer counter; `::translatecoverage report` prints the share
+of distinct texts translated and lists the English that remains in the browser console (and in
+`window.__osrsTranslateCoverage`); `reset` and `off` do what they say. It counts what the plugin
+is asked about: interface text, menu options, game messages and NPC overhead text. Menu targets,
+world map labels, other plugins' overlays, React panels and the login screen never pass the
+plugin, so they aren't counted.
 
 ## Not the same as the original
 
@@ -82,8 +101,12 @@ linhas"; the original sets a fixed 18).
   key its translation is wrapped and shared out over those lines. A shorter translation leaves
   the spare lines blank.
 - The skill guide (skill_guide_v2) lays its paragraphs out one word per component, so the
-  dictionaries' paragraph entries never match; only its title, tabs and side list translate.
-  The original has the same limit.
+  original can't translate them. Here the guide's body is translated as script 9183 starts, while
+  its argument is still on the stack (`onScriptPreFired` gets the VM for scripts invoked by
+  another), and the game lays the translation out itself: it wraps, sizes the scroll area and
+  never overlaps. A translated paragraph keeps its links (still clickable) but moves them to its
+  end, and drops highlight tags. The words' components then hold the translation; only the guide
+  reads them.
 - A placeholder is filled from the game's coloured text where it matches, so a music unlock
   keeps its red track name (the original loses the colour).
 - The settings panel follows the chosen language, as the original's does, including the

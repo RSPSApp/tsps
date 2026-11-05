@@ -3475,6 +3475,7 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                         lineHeight: (w.lineHeight as number) | 0,
                         font: resolvedFont,
                         uid,
+                        parentUid: typeof w.parentUid === "number" && w.parentUid >= 0 ? w.parentUid : undefined,
                         siblingText: (offset: number) => {
                             const child = (uid & 0xffff) + offset;
                             if (child < 0 || child > 0xffff) return undefined;

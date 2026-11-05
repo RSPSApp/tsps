@@ -17,6 +17,7 @@ import { chatHistory } from "../rs/cs2/ChatHistory";
 import { menuOptionDisplayText } from "../ui/menu/menuOptionDisplayText";
 import { OsrsTranslateConfig } from "../game/plugins/osrstranslate/OsrsTranslateConfig";
 import { fitLineHeight, OsrsTranslatePlugin } from "../game/plugins/osrstranslate/OsrsTranslatePlugin";
+import { translateGuideBody } from "../game/plugins/osrstranslate/skillGuide";
 import {
     cleanText,
     compileRegexTranslations,
@@ -129,6 +130,48 @@ assert.equal(fitLineHeight(lines(4), 380, 67, 20, font), 15, "four lines where t
 assert.equal(fitLineHeight(lines(5), 380, 67, 16, font), 15, "five lines can't fit: the font's own line height");
 assert.equal(fitLineHeight("Short.", 380, 67, 0, font), undefined);
 
+// --- Skill guide bodies (script 9183's argument), the real Attack guide's markup -----------------
+const ATTACK_GUIDE_P1 = "Your Attack level determines your accuracy with melee weapons and unlocks the ability to wield increasingly powerful weapons. Use the tabs on the left to see what level is required to equip certain equipment.";
+const ATTACK_GUIDE_P2 = "To level your Attack skill, attack enemies with a melee weapon that has an Accurate or Controlled attack style. Attack styles can be selected in the ||side_panel:0::300::Combat Options panel||. The tooltip for each attack style shows the style name, type of damage and the skill XP attacking with that style gives.";
+const ATTACK_GUIDE_P3 = "Melee Attack Styles deal either Stab, Slash or Crush damage as shown in the tooltip.";
+const attackBody = [ATTACK_GUIDE_P1, ATTACK_GUIDE_P2, ATTACK_GUIDE_P3].join("||::p||");
+const guideKeys = new Map([
+    [ATTACK_GUIDE_P1, "P1 traduzido."],
+    ["To level your Attack skill, attack enemies with a melee weapon that has an Accurate or Controlled attack style. Attack styles can be selected in the Combat Options panel. The tooltip for each attack style shows the style name, type of damage and the skill XP attacking with that style gives.", "P2 traduzido."],
+    ["Combat Options panel", "Painel de opções de combate"],
+]);
+assert.equal(
+    translateGuideBody(attackBody, (text) => guideKeys.get(text) ?? null),
+    `P1 traduzido.||::p||P2 traduzido. ||side_panel:0::300::Painel de opções de combate||::p||${ATTACK_GUIDE_P3}`,
+    "paragraphs translated whole, the link kept clickable after its paragraph, an untranslated paragraph unchanged",
+);
+assert.equal(translateGuideBody(attackBody, () => null), attackBody, "nothing translated: the body is untouched");
+// Two links in one paragraph (the guide's shop sentence) keep a space segment between them.
+assert.equal(
+    translateGuideBody("Weapons are sold at the ||::131::Sword Shop|| and the ||::132::Scimitar Shop||.", (text) => (text === "Weapons are sold at the Sword Shop and the Scimitar Shop." ? "Armas à venda." : null)),
+    "Armas à venda. ||::131::Sword Shop|| ||::132::Scimitar Shop",
+    "shop links (\"::icon::text\") are links, not tags",
+);
+// A lead-in link ("Strength:") stays in front of its translated paragraph.
+assert.equal(
+    translateGuideBody("||skill:2::5::Strength:::|| While Attack increases your accuracy, Strength increases your damage.", (text) => (text === "While Attack increases your accuracy, Strength increases your damage." ? "Strength aumenta o dano." : null)),
+    "||skill:2::5::Strength:::|| Strength aumenta o dano.",
+);
+assert.equal(translateGuideBody("a ||tab:5::::Crossbows tab|| here", (text) => (text === "Crossbows tab" ? "Aba de bestas" : text === "a Crossbows tab here" ? "x" : null)), "x ||tab:5::::Aba de bestas");
+// The dictionaries hold the guide's sentences one by one, as the live ones do.
+const sentenceKeys = new Map([
+    ["Your Attack level determines your accuracy with melee weapons and unlocks the ability to wield increasingly powerful weapons.", "Tu nivel de Attack determina tu precisión."],
+    ["To level your Attack skill, attack enemies with a melee weapon that has an Accurate or Controlled attack style.", "Para subir Attack, ataca con un estilo Accurate o Controlled."],
+]);
+assert.equal(
+    translateGuideBody(attackBody, (text) => sentenceKeys.get(text) ?? null).split("||::p||").slice(0, 2).join("||::p||"),
+    "Tu nivel de Attack determina tu precisión. Use the tabs on the left to see what level is required to equip certain equipment." +
+        "||::p||Para subir Attack, ataca con un estilo Accurate o Controlled. Attack styles can be selected in the Combat Options panel. " +
+        "The tooltip for each attack style shows the style name, type of damage and the skill XP attacking with that style gives. " +
+        "||side_panel:0::300::Combat Options panel",
+    "sentence by sentence when the paragraph isn't a key; a sentence with no key stays English",
+);
+
 async function main(): Promise<void> {
     // --- Repository: manifest, hashes, cache ---------------------------------------------------------
     const DICTIONARIES: Record<string, Record<string, Record<string, string>>> = {
@@ -139,8 +182,16 @@ async function main(): Promise<void> {
                 "Yes please.": "Sim, por favor.",
                 "A wrongly translated line.": "Uma linha Nothing.",
                 "You have [number] coins.": "Você tem [number] moedas.",
+                "Level 1 Thick Skin Increases your defence by 5%.": "Nível 1<br>Thick Skin<br>Aumenta sua defesa em 5%.",
             },
-            "translations_menu.json": { "Talk-to": "Falar-com", "Walk here": "Andar aqui", "Choose Option": "Escolha a opção" },
+            "translations_menu.json": {
+                "Talk-to": "Falar-com", "Walk here": "Andar aqui", "Choose Option": "Escolha a opção",
+                "Report": "Denunciar", "Combat Level:": "Nível de combate:",
+            },
+            "translations_skills.json": {
+                [ATTACK_GUIDE_P1]: "Seu nível de Attack determina sua precisão.",
+                "Combat Options panel": "Painel de opções de combate",
+            },
             "translations_overhead.json": { "I need your help, [player]!": "Preciso da sua ajuda, [player]!" },
             "translations_game_message.json": {
                 "Nothing interesting happens.": "Nada de interessante acontece.",
@@ -303,7 +354,8 @@ async function main(): Promise<void> {
     const long = hooks.widgetDisplayText({ groupId: InterfaceID.CHAT_LEFT, text: "You have 5 coins.", width: 60, height: 67, lineHeight: 28, font });
     assert.ok(long && long.lineHeight !== undefined && long.lineHeight < 28, "wrapped onto more lines: the line height shrinks");
     assert.equal(dialogue("Hello, what are you doing here?", InterfaceID.CHATBOX), undefined, "the chatbox and chat input are never rewritten");
-    assert.equal(dialogue("Hello, what are you doing here?", InterfaceID.FRIENDS), undefined, "nor any interface upstream doesn't cover");
+    assert.equal(dialogue("Hello, what are you doing here?", InterfaceID.STATS), undefined, "nor any interface that isn't routed");
+    assert.equal(dialogue("Hello, what are you doing here?", InterfaceID.FRIENDS), undefined, "the friends list never reads the general dictionary (player names)");
     assert.deepEqual(dialogue("<col=0000ff>[1] Yes please.", InterfaceID.CHATMENU), { text: "<col=0000ff>[1] Sim, por favor." },
         "Quest Helper's option number and colour are kept");
     // Journals: one line per component, so a task wrapped over two lines is joined back.
@@ -331,6 +383,54 @@ async function main(): Promise<void> {
     assert.equal(journalLine(2, edited), undefined, "the first line changed: the old share is not reused");
     assert.equal(dialogue("<col=000000>mine.", InterfaceID.CHAT_LEFT), undefined, "only journals join lines");
     assert.deepEqual(dialogue("Settings", InterfaceID.SETTINGS), { text: "Configuracoes" });
+
+    // Routing beyond upstream: a component, then its container, then its interface.
+    const component = (groupId: number, text: string, uid?: number, parentUid?: number) =>
+        hooks.widgetDisplayText({ groupId, text, width: 200, height: 40, lineHeight: 0, font, uid, parentUid })?.text;
+    assert.equal(component(InterfaceID.CHATBOX, "Report", (InterfaceID.CHATBOX << 16) | 33), "Denunciar", "a chat tab label");
+    assert.equal(component(InterfaceID.CHATBOX, "Report", (InterfaceID.CHATBOX << 16) | 50), undefined, "the rest of the chatbox stays as typed");
+    const mouseover = (InterfaceID.TOPLEVEL_OSRS_STRETCH << 16) | 37;
+    assert.equal(component(InterfaceID.TOPLEVEL_OSRS_STRETCH, "Level 1<br>Thick Skin<br>Increases your defence by 5%.", 0x8001, mouseover),
+        "Nível 1<br>Thick Skin<br>Aumenta sua defesa em 5%.", "a prayer tooltip, by its container");
+    assert.equal(component(InterfaceID.TOPLEVEL_OSRS_STRETCH, "Settings", 0x8002, mouseover), undefined,
+        "tooltips don't read the settings dictionary that the rest of 161 uses");
+    assert.equal(component(InterfaceID.TOPLEVEL_OSRS_STRETCH, "Settings"), "Configuracoes");
+    assert.equal(component(InterfaceID.ACCOUNT_SUMMARY_SIDEPANEL, "Combat Level:", 0x8003, (InterfaceID.ACCOUNT_SUMMARY_SIDEPANEL << 16) | 3),
+        "Nível de combate:", "a side panel");
+    configManager.setConfigValue(OsrsTranslateConfig, "enableSidePanels", false);
+    assert.equal(component(InterfaceID.CHATBOX, "Report", (InterfaceID.CHATBOX << 16) | 33), undefined, "side panels toggle");
+    configManager.setConfigValue(OsrsTranslateConfig, "enableSidePanels", true);
+
+    // The skill guide: script 9183's body is translated while still on the stack, only when
+    // invoked from another script (a top-level run gives no vm).
+    const guideVm: any = { stringStack: ["layer name", attackBody], stringStackSize: 2 };
+    hooks.onScriptPreFired(9183, guideVm);
+    assert.ok(guideVm.stringStack[1].startsWith("Seu nível de Attack determina sua precisão.||::p||"), "the body is translated in place");
+    assert.equal(guideVm.stringStack[0], "layer name");
+    hooks.onScriptPreFired(9183);
+    const otherVm: any = { stringStack: [attackBody], stringStackSize: 1 };
+    hooks.onScriptPreFired(9152, otherVm);
+    assert.equal(otherVm.stringStack[0], attackBody, "other scripts are left alone");
+
+    // The coverage counter: off until asked, then counts what the plugin sees.
+    assert.equal(plugin.coverage.enabled, false);
+    component(InterfaceID.STATS, "Total level: 33");
+    assert.equal(plugin.coverage.report().seen, 0, "nothing recorded while off");
+    assert.equal(hooks.handleClientCommand("translatecoverage on"), true, "the command is the plugin's, not the server's");
+    component(InterfaceID.STATS, "Total level: 33");
+    component(InterfaceID.STATS, "Total level: 33");
+    dialogue("Hello, what are you<br>doing here?");
+    component(InterfaceID.CHATBOX, "Olá, o que você está fazendo aqui?", (InterfaceID.CHATBOX << 16) | 60);
+    const counted = plugin.coverage.report();
+    assert.equal(counted.seen, 2, "one entry per text and place; chat lines in the chatbox aren't counted twice");
+    assert.equal(counted.translated, 1);
+    assert.equal(counted.percent, 50);
+    assert.deepEqual(counted.untranslated.map((entry) => [entry.text, entry.count]), [["Total level: 33", 2]]);
+    hooks.handleClientCommand("translatecoverage report");
+    assert.ok((globalThis as any).__osrsTranslateCoverage?.untranslated?.length === 1);
+    hooks.handleClientCommand("translatecoverage reset");
+    hooks.handleClientCommand("translatecoverage off");
+    assert.equal(plugin.coverage.report().seen, 0);
     assert.equal(dialogue("Olá, o que você está fazendo aqui?"), undefined, "already translated text is left");
 
     // Menus: options only, through the shared display transform.

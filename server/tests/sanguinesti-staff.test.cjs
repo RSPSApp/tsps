@@ -71,6 +71,8 @@ function chargeInventory({ runes = 0, freeSlots = 28 } = {}) {
         refreshItems: () => {},
         contains: (id) => id === I.BLOOD_RUNE && inventory.runes > 0,
         getFreeSlots: () => freeSlots,
+        getItems: () => (inventory.runes > 0 ? [new Item(I.BLOOD_RUNE, inventory.runes)] : []),
+        deleteAtSlot: (_slot, amount) => { inventory.runes -= amount; },
         getAddableAmount: (item) => (inventory.runes > 0 || freeSlots > 0 ? item.getAmount() : 0),
         addItem: (item) => inventory.added.push(item),
     };

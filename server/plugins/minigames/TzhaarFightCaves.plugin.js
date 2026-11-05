@@ -274,6 +274,7 @@ function rescueGroundItems(player, area) {
 
 function enterCave({ player }) {
   startRun(player, 1, core.Misc.getRandom(SPAWN_CYCLE.length - 1), ENTRY);
+  api.emitCustomEvent("fight-caves:entered", { player });
   say(player, "You're on your own now JalYt, prepare to fight for your life!");
   return true;
 }

@@ -354,3 +354,87 @@ test("Commune and the Ring of life toggle can be answered, and No changes nothin
   await answer(commune, YES);
   assert.equal(commune.p.getAttribute(Capes.JUNK_OFF_ATTRIBUTE), true, "Yes stops the gathering");
 });
+
+/** Talk-to through the real transcript up to the question about selling, and no further. */
+async function talkToSaleQuestion(f) {
+  await send(f, { type: "npc_option", index: f.mac.getIndex(), clickType: 1 });
+  drain(f);
+  for (let i = 0; i < 30 && !/^sell your/i.test(pending(f)?.title ?? ""); i++) {
+    const prompt = pending(f);
+    if (prompt) {
+      const index = prompt.options.findIndex((option) => /sell my max cape/i.test(option));
+      assert.ok(index >= 0, `an option to sell in: ${prompt.options.join(" | ")}`);
+      await answer(f, index + 1);
+    } else {
+      assert.ok(f.p.getDialogueManager().isActive(), "the conversation is still going");
+      await continueChat(f);
+    }
+    drain(f);
+  }
+}
+
+function assertSaleBox(f, firstItemId, secondItemId) {
+  const box = f.p.getDialogueManager().getCurrent();
+  assert.ok(box, "a box follows the sale");
+  assert.equal(box.firstItemId, firstItemId, "the cape sold");
+  assert.equal(box.secondItemId, secondItemId, "and its hood");
+  assert.equal(box.text, "You sell your cape and hood back to Mac.");
+  assert.ok(f.p.getPacketSender().isChatboxInterface(11), "objectbox_double, as captured");
+}
+
+test("Talk-to asks as captured, with no placeholder and coins in the option", async (t) => {
+  const f = actor(t);
+  f.inv.setItem(0, plain(Capes.MAX.cape));
+  await talkToSaleQuestion(f);
+  const price = Capes.MAX.sellBack.toLocaleString("en-US");
+  assert.deepEqual(pending(f), {
+    title: "Sell your max cape and hood back?",
+    options: [`Yes - receive ${price} coins.`, "No, I've changed my mind."],
+  });
+
+  const variant = actor(t);
+  variant.inv.setItem(0, plain(infernal().cape));
+  await talkToSaleQuestion(variant);
+  assert.doesNotMatch(pending(variant).title, /\[/, "a variant has no placeholder either");
+  assert.match(pending(variant).title, /infernal/i);
+
+  const no = actor(t);
+  no.inv.setItem(0, plain(Capes.MAX.cape));
+  await talkToSaleQuestion(no);
+  await answer(no, NO);
+  assert.equal(no.inv.getAmount(Capes.MAX.cape), 1, "No keeps the cape");
+  assert.equal(owned(no, I.COINS), 0);
+});
+
+test("the sale shows the cape and hood box as captured, by either route", async (t) => {
+  const used = actor(t);
+  used.inv.setItem(0, plain(Capes.MAX.cape));
+  used.inv.setItem(1, plain(Capes.MAX.hood));
+  await useOnMac(used, 0);
+  await answer(used, YES);
+  assert.equal(owned(used, I.COINS), Capes.MAX.sellBack, "control: sold");
+  assertSaleBox(used, Capes.MAX.cape, Capes.MAX.hood);
+
+  const talked = actor(t);
+  talked.inv.setItem(0, plain(Capes.MAX.cape));
+  talked.inv.setItem(1, plain(Capes.MAX.hood));
+  await talkToSaleQuestion(talked);
+  await answer(talked, YES);
+  assert.equal(owned(talked, I.COINS), Capes.MAX.sellBack, "sold by talking");
+  assertSaleBox(talked, Capes.MAX.cape, Capes.MAX.hood);
+
+  const noHood = actor(t);
+  noHood.inv.setItem(0, plain(Capes.MAX.cape));
+  await useOnMac(noHood, 0);
+  await answer(noHood, YES);
+  const box = noHood.p.getDialogueManager().getCurrent();
+  assert.equal(box?.text, "You sell your cape back to Mac.", "with no hood the transcript has its own line");
+  assert.equal(owned(noHood, I.COINS), Capes.MAX.sellBack);
+
+  const refused = actor(t);
+  refused.inv.setItem(0, plain(infernal().cape));
+  fillTo(refused, 0);
+  await useOnMac(refused, 0);
+  await answer(refused, YES);
+  assert.equal(refused.p.getDialogueManager().getCurrent() ?? null, null, "no box for a refused sale");
+});

@@ -68,6 +68,18 @@ function onTask(player, npc) {
   return request.onTask === true;
 }
 
+/** Wiki: one off-task boss kill is allowed once the Western diary is started, before its task is done, at base 93 Slayer. */
+function diaryOffTaskKillAllowed(player) {
+  const slayer = player?.getSkillManager?.()?.getMaxLevel?.(core.Skill.SLAYER) ?? 0;
+  if (slayer < 93) return false;
+  const started = { player, diary: "western", started: false };
+  api.emitCustomEvent("diary:is-started", started);
+  if (started.started !== true) return false;
+  const task = { player, diary: "western", task: "kill-the-thermonuclear-smoke-devil-col-800000-do", done: false };
+  api.emitCustomEvent("diary:has-task", task);
+  return task.done !== true;
+}
+
 /** Players fighting in the same room as `npc`: in the lair and alive. */
 function playersInRoom(npc) {
   const area = npc.getPrivateArea?.() ?? null;
@@ -80,7 +92,7 @@ module.exports = {
   LAIR, OUTSIDE_TILE, INSIDE_TILE,
   ANIM_ATTACK, PROJECTILE_ID, IMPACT_ID, ATTACK_SOUND,
   ATTACK_SPEED, ATTACK_DISTANCE,
-  init, location, within, inLair, isBoss, onTask, playersInRoom,
+  init, location, within, inLair, isBoss, onTask, diaryOffTaskKillAllowed, playersInRoom,
   get api() { return api; },
   get core() { return core; },
 };

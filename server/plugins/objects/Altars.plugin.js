@@ -8,6 +8,10 @@ const { ObjectIds } = require("../../src/main/typescript/elvarg/util/IdEnums");
 const PRAY_AT_ALTAR_ANIMATION = new Animation(645);
 const EAST_ARDOUGNE_CHURCH_ALTAR = [2617, 3309, 0];
 const ARDOUGNE_ALTAR_TASK = "use-the-altar-in-east-ardougne-s-church";
+// The 1st floor (UK) altar of Varrock Palace (OSRS Wiki: Varrock Diary hard task 9).
+const VARROCK_PALACE_ALTAR = { x: 3208, y: 3494, z: 1 };
+const VARROCK_PALACE_ALTAR_TASK = "pray-at-the-altar-in-varrock-palace-with-smite-a";
+
 const JALDRAOCHT_ALTAR_ID = 6552;
 const JALDRAOCHT_ALTAR_TASK = "activate-ancient-magicks-at-the-altar-in-the-jal";
 const KOUREND_CASTLE_ALTAR = { id: 18258, x: 1617, y: 3672, z: 2 };
@@ -116,6 +120,17 @@ function prayerAltar({ player, object }) {
       prayerBefore,
       prayerAfter,
     });
+  }
+
+  // Varrock hard: praying at the palace altar while Smite is active, restoration or not.
+  if (object && handled && object.getId() === ObjectIds.ALTAR) {
+    const location = object.getLocation();
+    const palace = VARROCK_PALACE_ALTAR;
+    if (location.getX() === palace.x && location.getY() === palace.y && location.getZ() === palace.z
+      && player.getPrivateArea?.() === null
+      && player.getPrayerActive?.()?.[core.PrayerHandler.SMITE] === true) {
+      api.emitCustomEvent("diary:task", { player, diary: "varrock", task: VARROCK_PALACE_ALTAR_TASK });
+    }
   }
 
   if (object && prayerAfter > prayerBefore && player.getPrivateArea() === null) {

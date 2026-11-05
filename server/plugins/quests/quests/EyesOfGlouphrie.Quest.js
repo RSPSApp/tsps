@@ -761,6 +761,7 @@ module.exports = function registerEyesOfGlouphrieQuest(api) {
     player.getInventory().deleteNumber(CRYSTAL_SAW_SEED_ITEM_ID, 1);
     player.getInventory().adds(CRYSTAL_SAW_ITEM_ID, 1);
     player.sendMessage("You sing to the crystal seed and it forms into a crystal saw.");
+    api.emitCustomEvent("crystal-saw:made", { player });
   }
 
   function inspectPanel(event) {

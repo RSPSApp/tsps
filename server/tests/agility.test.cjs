@@ -1438,6 +1438,9 @@ test("Wilderness Agility dispenser (Wiki): a paid lap started without Tag resets
   }, { get: (target, key) => (key in target ? target[key] : () => {}) }));
   const answers = ["agility:lap", "agility:obstacle-start"];
   for (const name of answers) hooks.answers[name] = listeners[name];
+  const random = Math.random;
+  // The Wilderness obstacles can fail even at 99; this is about the dispenser, so the laps pass.
+  Math.random = () => 0;
   try {
     const course = COURSES.find((entry) => entry.key === "wilderness");
     const player = createPlayer(3004, 3937, 0);
@@ -1452,6 +1455,7 @@ test("Wilderness Agility dispenser (Wiki): a paid lap started without Tag resets
     assert.equal(player.getAttribute(Dispenser.ATTRIBUTES.deposit), 1, "the payment stays");
     assert.equal(varbit("wildy_agility_token_available"), 1, "this lap's own ticket");
   } finally {
+    Math.random = random;
     for (const name of answers) delete hooks.answers[name];
   }
 });
@@ -1737,7 +1741,7 @@ test("Agility Pyramid blocks slide out over two ticks, wait two, and slide back:
   assert.deepEqual([north.npc, north.home, north.dir], [5787, [3366, 2845, 3], [0, 1]]);
 });
 
-test("course pipes replay the squeeze with every crawl, so no weapon shows on the way", () => {
+test("course pipes replay the squeeze with every crawl", () => {
   const SQUEEZE_PIPE = 749; // human_doublepipesqueeze: both hands empty
   const pipes = [
     ["gnome", ObjectIds.OBSTACLE_PIPE_10, { x: 2484, y: 3430, z: 0 }],
@@ -1756,4 +1760,85 @@ test("course pipes replay the squeeze with every crawl, so no weapon shows on th
   const wildy = COURSES.find((entry) => entry.key === "wilderness").obstacles.find((entry) => entry.object === ObjectIds.OBSTACLE_PIPE_9);
   const route = wildy.steps({ player: null, obj: null, pos: { x: 3004, y: 3937, z: 0 } }).filter((step) => step.move || step.tele).map((step) => (step.move ?? step.tele)[1]);
   assert.deepEqual(route, [3940, 3947, 3950]);
+
+  // rsprox 449 sends SEQUENCE 749 exactly twice, on the two crawl ticks; the unseen middle tick
+  // has no sequence.
+  const steps = wildy.steps({ player: null, obj: null, pos: { x: 3004, y: 3937, z: 0 } });
+  assert.equal(steps.filter((step) => step.anim === SQUEEZE_PIPE).length, 2);
+  const gap = steps.findIndex((step) => step.tele);
+  assert.notEqual(gap, -1);
+  assert.equal(steps[gap + 1].anim, undefined, "no third sequence on the unseen tick");
+
+  // rsprox 449: each crawl's 30-cycle sequence delay and its exact-move start are the same cycle,
+  // so the client's native hand-override gate empties the hands exactly as the crawl begins.
+  for (const move of steps.filter((step) => step.anim === SQUEEZE_PIPE)) {
+    assert.equal(move.delay, 30);
+    assert.deepEqual(move.speed, [30, 126]);
+  }
+});
+
+test("Wilderness ridge door: opening the south door and the north gates swaps the captured locs for two ticks (rsprox 449/450)", () => {
+  const { RIDGE, openRidgeDoor, openRidgeGates } = require("../plugins/skills/agility/shortcuts/Wilderness.Agility")._test;
+  const events = [];
+  const placed = new Map();
+  const key = (id, tile) => `${id}:${tile[0]},${tile[1]},${tile[2]}`;
+  const place = (id, tile) => placed.set(key(id, tile), {
+    getId: () => id,
+    getLocation: () => new Location(tile[0], tile[1], tile[2]),
+  });
+  place(RIDGE.door, RIDGE.doorTile);
+  place(RIDGE.gateLeft, RIDGE.gateLeftTile);
+  place(RIDGE.gateRight, RIDGE.gateRightTile);
+  const core = {
+    Location,
+    GameObject: class {
+      constructor(id, location, type, face) { this.id = id; this.location = location; this.face = face; }
+      getId() { return this.id; }
+      getLocation() { return this.location; }
+    },
+    MapObjects: { get: (id, location) => placed.get(key(id, [location.getX(), location.getY(), location.getZ()])) ?? null },
+    ObjectManager: {
+      register: (object) => events.push(["register", object.getId()]),
+      deregister: (object) => events.push(["deregister", object.getId()]),
+    },
+    Task: class { constructor(delay, key) { this.delay = delay; this.key = key; } stop() { this.stopped = true; } },
+    TaskManager: { submit: (task) => events.push(["task", task]) },
+  };
+  const context = { core, player: { getPrivateArea: () => null } };
+
+  assert.equal(openRidgeDoor(context), true);
+  assert.deepEqual(events.slice(0, 3), [
+    ["deregister", RIDGE.door], ["register", RIDGE.invisWall], ["register", RIDGE.prisonDoorOpen],
+  ]);
+  assert.equal(events[3][0], "task");
+  const doorTask = events[3][1];
+  assert.equal(doorTask.delay, 2);
+  events.length = 0;
+  doorTask.execute();
+  assert.deepEqual(events, [
+    ["deregister", RIDGE.invisWall], ["deregister", RIDGE.prisonDoorOpen], ["register", RIDGE.door],
+  ]);
+
+  events.length = 0;
+  assert.equal(openRidgeGates(context), true);
+  assert.deepEqual(events.filter(([kind]) => kind !== "task"), [
+    ["deregister", RIDGE.gateLeft], ["deregister", RIDGE.gateRight],
+    ["register", RIDGE.invisWall], ["register", RIDGE.invisWall],
+    ["register", RIDGE.gateOpenLeft], ["register", RIDGE.gateOpenRight],
+  ]);
+
+  // A missing gate leaf leaves every closed loc in place: no partial swap.
+  placed.delete(key(RIDGE.gateRight, RIDGE.gateRightTile));
+  events.length = 0;
+  assert.equal(openRidgeGates(context), false);
+  assert.deepEqual(events, []);
+
+  const enter = require("../plugins/skills/agility/shortcuts/Wilderness.Agility").wildernessRidgeIn();
+  assert.deepEqual(enter.end, { spam: RIDGE.endIn });
+  assert.deepEqual(enter.steps[0], { msg: { spam: RIDGE.start } });
+  assert.deepEqual(enter.steps[2], { walk: [[2998, 3931]] });
+  const leave = require("../plugins/skills/agility/shortcuts/Wilderness.Agility").wildernessRidgeOut();
+  assert.deepEqual(leave.end, { spam: RIDGE.endOut });
+  assert.deepEqual(leave.steps[2], { walk: [[2998, 3918]] });
+  assert.deepEqual(leave.steps[4], { walk: [[2998, 3916]] });
 });

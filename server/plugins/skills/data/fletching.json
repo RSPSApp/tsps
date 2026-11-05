@@ -36,7 +36,8 @@
   "diaryTasks": [
     { "diary": "western", "task": "fletch-an-oak-shortbow-in-the-gnome-stronghold", "items": ["OAK_SHORTBOW"], "areas": [[2370, 2500, 3380, 3520]] },
     { "diary": "western", "task": "fletch-a-magic-longbow-in-tirannwn", "items": ["MAGIC_LONGBOW"], "areas": [[2140, 2370, 3060, 3330], [3200, 3330, 5950, 6150]] },
-    { "diary": "desert", "task": "fletch-some-dragon-darts-at-the-bedabin-camp", "items": ["DRAGON_DART"], "areas": [[3160, 3190, 3020, 3055]] }
+    { "diary": "desert", "task": "fletch-some-dragon-darts-at-the-bedabin-camp", "items": ["DRAGON_DART"], "areas": [[3160, 3190, 3020, 3055]] },
+    { "diary": "kandarin", "task": "string-a-maple-shortbow-in-seers-village-bank", "items": ["MAPLE_SHORTBOW"], "areas": [[2718, 2734, 3487, 3495]] }
   ],
   "recipes": [
     { "group": "logs", "output": "ARROW_SHAFT", "amount": 15, "level": 1, "xp": 5, "message": "You carefully cut the wood into {amount} arrow shafts.", "materials": [["LOGS", 1]] },

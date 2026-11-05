@@ -76,6 +76,9 @@ function fakeContainer(capacity) {
     getAmount: (id) => items.filter((item) => item.getId() === id).reduce((sum, item) => sum + item.getAmount(), 0),
     contains: (id) => items.some((item) => item.getId() === id),
     getFreeSlots: () => items.filter((item) => item.getId() <= 0).length,
+    getAddableAmount: (item) => (item.getDefinition().isStackable()
+      ? (items.some((other) => other.getId() === item.getId()) || items.filter((other) => other.getId() <= 0).length > 0 ? item.getAmount() : 0)
+      : Math.min(item.getAmount(), items.filter((other) => other.getId() <= 0).length)),
     delete(id, amount) {
       const slot = items.findIndex((item) => item.getId() === id);
       if (slot >= 0) items[slot] = items[slot].getAmount() > amount ? new Item(id, items[slot].getAmount() - amount) : new Item(-1, 0);

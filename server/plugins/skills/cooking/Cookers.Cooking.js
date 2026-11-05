@@ -200,7 +200,7 @@ function startCooking(player, object, cookable, sessions = activeSessions, amoun
     objectId: object.getId(),
     location: object.getLocation().clone(),
     privateArea: object.getPrivateArea(),
-    nextCookTick: (cookingTask?.cycle ?? 0) + FIRST_COOK_TICKS,
+    nextCookTick: (cookingTask?.cycle ?? 0) + (cookable.firstCookTicks ?? FIRST_COOK_TICKS),
     cooked: 0,
     remaining: amount,
   });
@@ -270,7 +270,9 @@ function cookTick(task) {
       continue;
     }
 
-    if (player.getMovementQueue().size() > 0 || player.getForceMovement() != null) {
+    // Global tasks precede player turns; the last step may have drained the route.
+    const movement = player.getMovementQueue();
+    if (movement.size() > 0 || movement.isMovings?.() || player.getForceMovement() != null) {
       stopCooking(player);
       continue;
     }

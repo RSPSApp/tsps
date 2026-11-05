@@ -18291,6 +18291,26 @@
       "immune_poison": false,
       "immune_venom": true
     },
+    "14710": {
+      "name": "Demonic larva",
+      "immune_poison": false,
+      "immune_venom": false
+    },
+    "14711": {
+      "name": "Demonic range larva",
+      "immune_poison": false,
+      "immune_venom": false
+    },
+    "14712": {
+      "name": "Demonic magic larva",
+      "immune_poison": false,
+      "immune_venom": false
+    },
+    "14713": {
+      "name": "Demonic melee larva",
+      "immune_poison": false,
+      "immune_venom": false
+    },
     "14716": {
       "name": "Guard",
       "immune_poison": false,
@@ -18335,6 +18355,16 @@
       "name": "Gemstone Crab",
       "immune_poison": true,
       "immune_venom": true
+    },
+    "14788": {
+      "name": "Giant demonic range larva",
+      "immune_poison": false,
+      "immune_venom": false
+    },
+    "14789": {
+      "name": "Giant demonic magic larva",
+      "immune_poison": false,
+      "immune_venom": false
     },
     "14814": {
       "name": "Revenant imp",

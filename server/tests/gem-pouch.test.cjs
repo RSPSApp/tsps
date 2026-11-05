@@ -236,6 +236,15 @@ test("a tote upgrade needs 81 Crafting and keeps the satchel contents", async (t
   assert.deepEqual([stored(f, I.UNCUT_OPAL), stored(f, I.UNCUT_JADE)], [10, 3]);
 });
 
+test("an open satchel upgrades to a closed tote without losing its gems", async (t) => {
+  const f = actor(t, [I.COSTUME_NEEDLE, I.SILK, id("bolt_of_cotton"), id("gem_satchel_open")]);
+  Storage.store(f.p, family, I.UNCUT_RED_TOPAZ, 7);
+  await use(f, id("gem_satchel_open"), id("bolt_of_cotton"));
+  assert.equal(has(f, 33390), 1);
+  assert.equal(has(f, id("gem_satchel_open")), 0);
+  assert.equal(stored(f, I.UNCUT_RED_TOPAZ), 7);
+});
+
 test("a tote holds 20 each and Empty conserves what fits", async (t) => {
   const f = actor(t, [33390, ...Array(12).fill(I.UNCUT_OPAL), I.UNCUT_SAPPHIRE]);
   Storage.store(f.p, family, I.UNCUT_OPAL, 10);
@@ -326,6 +335,14 @@ async function mineOpal(t, f) {
 
 test("an open pouch takes a mined opal", async (t) => {
   const f = actor(t, [id("gem_pouch_open")]);
+  await mineOpal(t, f);
+  assert.equal(stored(f, I.UNCUT_OPAL), 1);
+  assert.equal(has(f, I.UNCUT_OPAL), 0);
+});
+
+test("an open tote takes a mined opal", async (t) => {
+  assert.equal(id("gem_tote_open"), 33392);
+  const f = actor(t, [33392]);
   await mineOpal(t, f);
   assert.equal(stored(f, I.UNCUT_OPAL), 1);
   assert.equal(has(f, I.UNCUT_OPAL), 0);

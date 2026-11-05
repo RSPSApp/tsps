@@ -1,0 +1,51 @@
+{
+  "source": "Jagex cache2392 revision235 l50_53 has no floor decorations on this row; the active revision241 blue pub rug extends one tile farther north upstairs.",
+  "musicSource": "Wiki 2025 Christmas event unlocks All the Trimmings on entering the Blue Moon Inn; original zMOOL1CZhhk16.4s shows the fresh unlock before the Cook conversation. Building/cellar bounds follow the original room geometry, not a recorded server music polygon; exact edge timing remains uncalibrated.",
+  "musicBounds": [[3218,3233,3393,3403,0],[3218,3233,3393,3403,1],[3231,3242,9796,9807,0]],
+  "actorSource": "Seat positions are inferred from the original table anchors and vacated native chair slots, consistent with Wiki Stool (2025 Christmas event). Wiki 2025 Christmas event lists nine queued guests and the original cache has nine successive morph parents. Original zMOOL1CZhhk16.4s shows the front inside the pub with the line extending through its west doorway then turning north outside. Provisional queue tiles/facing follow that layout; exact server spawn coordinates still need calibration and are not from RSProx.",
+  "actors": [
+    { "symbol": "xmas25_table_npc_1", "role": "seat", "table": 0, "x": 3220, "y": 3402, "z": 0, "face": "SOUTH" },
+    { "symbol": "xmas25_table_npc_2", "role": "seat", "table": 1, "x": 3221, "y": 3402, "z": 0, "face": "SOUTH" },
+    { "symbol": "xmas25_table_npc_3", "role": "seat", "table": 2, "x": 3221, "y": 3397, "z": 0, "face": "NORTH" },
+    { "symbol": "xmas25_table_npc_4", "role": "seat", "table": 3, "x": 3220, "y": 3397, "z": 0, "face": "NORTH" },
+    { "symbol": "xmas25_queue_npc_1", "role": "queue", "x": 3219, "y": 3395, "z": 0, "face": "EAST" },
+    { "symbol": "xmas25_queue_npc_2", "role": "queue", "x": 3218, "y": 3395, "z": 0, "face": "EAST" },
+    { "symbol": "xmas25_queue_npc_3", "role": "queue", "x": 3217, "y": 3395, "z": 0, "face": "EAST" },
+    { "symbol": "xmas25_queue_npc_4", "role": "queue", "x": 3216, "y": 3395, "z": 0, "face": "EAST" },
+    { "symbol": "xmas25_queue_npc_5", "role": "queue", "x": 3215, "y": 3395, "z": 0, "face": "EAST" },
+    { "symbol": "xmas25_queue_npc_6", "role": "queue", "x": 3215, "y": 3396, "z": 0, "face": "SOUTH" },
+    { "symbol": "xmas25_queue_npc_7", "role": "queue", "x": 3215, "y": 3397, "z": 0, "face": "SOUTH" },
+    { "symbol": "xmas25_queue_npc_8", "role": "queue", "x": 3215, "y": 3398, "z": 0, "face": "SOUTH" },
+    { "symbol": "xmas25_queue_npc_9", "role": "queue", "x": 3215, "y": 3399, "z": 0, "face": "SOUTH" },
+    { "symbol": "xmas25_puffin", "role": "decoration", "x": 3230, "y": 3407, "z": 0, "face": "SOUTH" }
+  ],
+  "puffinSource": "Wiki Puffin (2025 Christmas event), revision15208003, original map pin3230,3407. Facing is inferred; no interaction option is added.",
+  "cutsceneActorSource": "Original zMOOL1CZhhk6:11/6:20 shows the pub cast; models and animations are original archived cutscene NPCs. Exact tiles/facing here remain inferred from the video/room geometry and require further calibration, not RSProx evidence. Freddie cries outside the source puffin cell;3230,3404 is south of its actual wall.",
+  "cutsceneActors": [
+    { "symbol": "xmas25_cutscene_bartender", "x": 3226, "y": 3399, "z": 0, "face": "WEST" },
+    { "symbol": "xmas25_cutscene_woman1", "x": 3223, "y": 3395, "z": 0, "face": "NORTH" },
+    { "symbol": "xmas25_cutscene_jonny", "x": 3219, "y": 3395, "z": 0, "face": "NORTH" },
+    { "symbol": "xmas25_cutscene_dr_harlow", "x": 3224, "y": 3400, "z": 0, "face": "EAST" },
+    { "symbol": "xmas25_cutscene_barbarian", "x": 3224, "y": 3402, "z": 0, "face": "WEST" },
+    { "symbol": "xmas25_cutscene_freddie", "x": 3230, "y": 3404, "z": 0, "face": "NORTH", "animation": "emote_cry_loop" }
+  ],
+  "cameraSource": "Original zMOOL1CZhhk6:11 looks towards the bar, then6:16-6:23 towards the player's table. These provisional camera tiles/heights approximate those shots; exact motion/ticks still need source calibration.",
+  "camera": {
+    "bar": { "from": [3221, 3398, 400], "at": [3226, 3398, 150] },
+    "delivery": {
+      "north": { "from": [3224, 3397, 400], "at": [3221, 3401, 150] },
+      "south": { "from": [3224, 3402, 400], "at": [3221, 3398, 150] }
+    }
+  },
+  "vacantSceneryTiles": [
+    { "symbol": "fai_varrock_rugcorner", "x": 3219, "y": 3401, "z": 1, "shape": 22, "rotation": 0 },
+    { "symbol": "fai_varrock_rugside", "x": 3220, "y": 3401, "z": 1, "shape": 22, "rotation": 0 },
+    { "symbol": "fai_varrock_rugside", "x": 3221, "y": 3401, "z": 1, "shape": 22, "rotation": 0 },
+    { "symbol": "fai_varrock_rugcorner", "x": 3222, "y": 3401, "z": 1, "shape": 22, "rotation": 1 },
+    { "symbol": "fai_varrock_blue_inn_barstool_tall", "x": 3220, "y": 3402, "z": 0, "shape": 10, "rotation": 3 },
+    { "symbol": "fai_varrock_blue_inn_barstool_tall", "x": 3221, "y": 3402, "z": 0, "shape": 10, "rotation": 2 },
+    { "symbol": "fai_varrock_blue_inn_barstool", "x": 3221, "y": 3397, "z": 0, "shape": 10, "rotation": 0 },
+    { "symbol": "fai_varrock_blue_inn_barstool", "x": 3220, "y": 3397, "z": 0, "shape": 10, "rotation": 0 },
+    { "symbol": "fai_varrock_blue_inn_barstool", "x": 3221, "y": 3399, "z": 0, "shape": 10, "rotation": 0 }
+  ]
+}

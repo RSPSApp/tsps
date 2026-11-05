@@ -1,32 +1,20 @@
 [
   {
+    "key": "christmas-2025",
+    "enabled": true,
+    "source": "Wiki 2025 Christmas event: 10 December 2025 to 7 January 2026. The 2026 window re-runs it on the same calendar dates.",
+    "windows": [
+      { "start": "2025-12-10T00:00:00Z", "end": "2026-01-07T00:00:00Z" },
+      { "start": "2026-12-10T00:00:00Z", "end": "2027-01-07T00:00:00Z" }
+    ]
+  },
+  {
     "key": "halloween-2025",
     "enabled": true,
+    "source": "Wiki 2025 Halloween event: 15 October to 5 November 2025; times are the OpenRS2 cache timestamps bracketing the event (caches 2327 and 2349). The 2026 window re-runs it on the same calendar dates.",
     "windows": [
-      {
-        "start": "2025-10-15T10:15:00Z",
-        "end": "2025-11-05T11:15:00Z"
-      },
-      {
-        "start": "2026-10-15T10:15:00Z",
-        "end": "2026-11-05T11:15:00Z"
-      },
-      {
-        "start": "2027-10-15T10:15:00Z",
-        "end": "2027-11-05T11:15:00Z"
-      },
-      {
-        "start": "2028-10-15T10:15:00Z",
-        "end": "2028-11-05T11:15:00Z"
-      },
-      {
-        "start": "2029-10-15T10:15:00Z",
-        "end": "2029-11-05T11:15:00Z"
-      },
-      {
-        "start": "2030-10-15T10:15:00Z",
-        "end": "2030-11-05T11:15:00Z"
-      }
+      { "start": "2025-10-15T10:15:00Z", "end": "2025-11-05T11:15:00Z" },
+      { "start": "2026-10-15T10:15:00Z", "end": "2026-11-05T11:15:00Z" }
     ]
   }
 ]

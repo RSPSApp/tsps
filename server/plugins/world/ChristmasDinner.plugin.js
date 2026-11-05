@@ -13,6 +13,9 @@ const Rewards=require('./seasonal/Rewards.ChristmasDinner');
 const Music=require('./seasonal/Music.ChristmasDinner');
 const Snow=require('./seasonal/Snow.ChristmasDinner');
 
+// Set by our own shutdown hook. Shutdown hooks run in plugin load (path) order,
+// so world/ChristmasDinner sets it before world/EventScheduler's stop() emits
+// events:active false; that close must not take platters from the save.
 let shuttingDown=false;
 
 function calendar(api,event){

@@ -142,3 +142,83 @@ test("fire damage pulses every 2 ticks and hits everyone standing in it", () => 
   assert.equal(players[1].messages.length, 2, "the second player in the same 2x2 fire");
   assert.match(players[0].messages[0], /You lose .* to the fire\./);
 });
+
+const { Cove } = require("../plugins/minigames/tempoross/Cove.Tempoross");
+const { attachAttacks } = require("../plugins/minigames/tempoross/Attacks.Tempoross");
+const { attachCannons } = require("../plugins/minigames/tempoross/Cannons.Tempoross");
+
+function actionPlayer() {
+  const tasks = [];
+  Shared.bind({ core: {
+    Animation: class {},
+    Task: class { stop() {} },
+    TaskManager: { submit: (task) => tasks.push(task) },
+  } });
+  const cove = Object.create(Cove.prototype);
+  cove.players = new Set();
+  cove.crew = 0;
+  cove.area = { enter() {} };
+  cove.tile = (tile) => tile;
+  const sender = { sendVarbit() {}, sendSound() { return sender; } };
+  const location = { equals: () => true };
+  let used = 0;
+  let route = null;
+  const inventory = {
+    contains: () => true,
+    getItems: () => [{ getId: () => Shared.ITEM.RAW }],
+    delete() { used++; }, adds() {}, refreshItems() {},
+  };
+  const player = {
+    moveTo() {}, setAttribute() {}, getPacketSender: () => sender,
+    getLocation: () => location, isRegistered: () => true,
+    performAnimation() {}, setPositionToFace() {}, sendMessage() {}, getInventory: () => inventory,
+    getMovementQueue: () => ({ walkToEntity(npc, action, ...options) { route = { npc, action, options }; } }),
+  };
+  cove.arrive(player, 0);
+  cove.fight = { tethers: { untether() {} } };
+  return { player, cove, tasks, used: () => used, route: () => route };
+}
+
+test("Douse combat option waits for reaching the fire and rechecks it on arrival", () => {
+  const fixture = actionPlayer();
+  const { player, cove } = fixture;
+  let fire = {};
+  let points = 0;
+  cove.fight.attacks = { fireOf: () => fire, extinguish() { fire = null; } };
+  cove.fight.addPoints = () => points++;
+  const npc = {
+    __temporossCove: cove, getId: () => Shared.NPC.FIRE,
+    getCurrentDefinition: () => ({ getActions: () => ["Douse"] }),
+    getLocation: () => ({}),
+  };
+  let handler;
+  attachAttacks({ onNpcInteraction() {}, onItemOnNpc() {}, onNpcAttackOption(hook) { handler = hook; } });
+  const event = { player, npc, clickType: 1, handled: false };
+  handler(event);
+  assert.equal(event.handled, true);
+  assert.equal(fixture.used(), 0, "distant click must not consume water");
+  assert.equal(points, 0);
+  assert.equal(fixture.route().npc, npc);
+  assert.deepEqual(fixture.route().options, [1, false, true]);
+  fixture.route().action();
+  assert.equal(fixture.used(), 1);
+  assert.equal(points, 1);
+  fixture.route().action();
+  assert.equal(fixture.used(), 1, "a fire removed while approaching cannot be doused again");
+});
+
+test("restarting Fill retains the new cannon marker for torrent targeting", () => {
+  const { player, cove } = actionPlayer();
+  const crate = {};
+  cove.fight.cannons = { crateOf: () => crate, disabled: () => false };
+  const npc = { __temporossCove: cove, getLocation: () => ({}) };
+  let fill;
+  attachCannons({ onNpcInteraction(_name, hooks) { fill = hooks.Fill; } });
+  fill({ player, npc });
+  assert.equal(player.__temporossLoading, crate);
+  fill({ player, npc });
+  assert.equal(Shared.actionOf(player), "load");
+  assert.equal(player.__temporossLoading, crate);
+  Shared.stopAction(player);
+  assert.equal(player.__temporossLoading, null);
+});

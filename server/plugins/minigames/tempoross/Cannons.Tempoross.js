@@ -172,7 +172,6 @@ function fill(event) {
   }
   player.setPositionToFace(npc.getLocation());
   player.sendMessage("You start loading harpoonfish into the cannon.");
-  player.__temporossLoading = crate;
   Shared.startAction(player, "load", (ticks) => {
     if (fight.result || fight.cannons.disabled(crate)) return false;
     if (ticks % DATA.ticks.load !== 1) return true;
@@ -181,6 +180,7 @@ function fill(event) {
     load(player, fight, crate, fishId);
     return nextFish(player) !== null;
   });
+  player.__temporossLoading = crate;
   return true;
 }
 

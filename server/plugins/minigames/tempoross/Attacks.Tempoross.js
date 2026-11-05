@@ -412,7 +412,10 @@ function fireCombatOption(event) {
   if (String(actions[event.clickType - 1] ?? "").toLowerCase() !== "douse") return;
   if (!coveOfNpc(event.npc)?.fight?.attacks.fireOf(event.npc)) return;
   event.handled = true;
-  douse({ player: event.player, npc: event.npc });
+  untetherFor(event.player);
+  event.player.getMovementQueue().walkToEntity(event.npc, () => {
+    douse({ player: event.player, npc: event.npc });
+  }, 1, false, true);
 }
 
 function attachAttacks(api) {

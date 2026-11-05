@@ -217,9 +217,42 @@ test("an open pouch upgrades too, and comes out closed", async (t) => {
   assert.equal(has(f, id("gem_pouch_open")), 0);
 });
 
+test("a tote upgrade needs 81 Crafting and keeps the satchel contents", async (t) => {
+  const parts = () => [I.NEEDLE, I.THREAD, I.SILK, id("bolt_of_cotton"), id("gem_satchel")];
+  const low = actor(t, parts(), 80);
+  await use(low, id("gem_satchel"), id("bolt_of_cotton"));
+  assert.deepEqual(parts().map((item) => has(low, item)), [1, 1, 1, 1, 1]);
+  assert.equal(has(low, 33390), 0);
+
+  const f = actor(t, parts());
+  Storage.store(f.p, family, I.UNCUT_OPAL, 10);
+  Storage.store(f.p, family, I.UNCUT_JADE, 3);
+  const given = watchXp(t, f);
+  await use(f, id("gem_satchel"), id("bolt_of_cotton"));
+  assert.equal(id("gem_tote"), 33390);
+  assert.equal(has(f, 33390), 1);
+  assert.deepEqual(parts().map((item) => has(f, item)), [1, 0, 0, 0, 0]);
+  assert.deepEqual(given, [200]);
+  assert.deepEqual([stored(f, I.UNCUT_OPAL), stored(f, I.UNCUT_JADE)], [10, 3]);
+});
+
+test("a tote holds 20 each and Empty conserves what fits", async (t) => {
+  const f = actor(t, [33390, ...Array(12).fill(I.UNCUT_OPAL), I.UNCUT_SAPPHIRE]);
+  Storage.store(f.p, family, I.UNCUT_OPAL, 10);
+  await click(f, 33390, "Fill");
+  assert.equal(stored(f, I.UNCUT_OPAL), 20);
+  assert.equal(has(f, I.UNCUT_OPAL), 2);
+  assert.equal(has(f, I.UNCUT_SAPPHIRE), 1);
+  await click(f, 33390, "Check");
+  assert.match(f.messages.at(-1), /Opal: 20/);
+  await click(f, 33390, "Empty");
+  assert.equal(has(f, I.UNCUT_OPAL) + stored(f, I.UNCUT_OPAL), 22);
+  assert.equal(stored(f, I.UNCUT_OPAL), 0);
+});
+
 // ------------------------------------------------------------------ Holding gems
 
-for (const [closed, open] of [["gem_pouch", "gem_pouch_open"], ["gem_satchel", "gem_satchel_open"]]) {
+for (const [closed, open] of [["gem_pouch", "gem_pouch_open"], ["gem_satchel", "gem_satchel_open"], ["gem_tote", "gem_tote_open"]]) {
   test(`${closed} opens and closes by click`, async (t) => {
     const f = actor(t, [id(closed)]);
     await click(f, id(closed), "Open");

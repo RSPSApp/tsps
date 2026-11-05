@@ -361,16 +361,16 @@ function takeItem(player, raid, index) {
     claimPetLoot(player, raid);
     if (!items.includes(entry)) return true;
   }
-  const { Item, ItemDefinition } = Shared.core();
-  const stackable = ItemDefinition.forId(entry.id)?.isStackable?.() === true;
+  const { Item } = Shared.core();
   const inventory = player.getInventory();
-  const room = stackable ? inventory.contains(entry.id) || inventory.getFreeSlots() > 0 : inventory.getFreeSlots() >= entry.amount;
-  if (!room) {
+  const moved = inventory.getAddableAmount(new Item(entry.id, entry.amount));
+  if (moved <= 0) {
     player.sendMessage("You don't have enough inventory space.");
     return false;
   }
-  inventory.add(new Item(entry.id, entry.amount), true);
-  items.splice(index, 1);
+  inventory.add(new Item(entry.id, moved), true);
+  entry.amount -= moved;
+  if (entry.amount <= 0) items.splice(index, 1);
   if (entry.id === ITEM.TABLET) player.setAttribute(ATTR_TABLET, true);
   return true;
 }
@@ -409,10 +409,12 @@ function bankAll({ player }) {
   for (let index = items.length - 1; index >= 0; index--) {
     const entry = items[index];
     const bank = player.getBank(Bank.getTabForItem(player, entry.id));
-    if (bank.getFreeSlots() <= 0 && !bank.contains(entry.id)) continue;
-    bank.add(new Item(entry.id, entry.amount), false);
+    const banked = bank.getAddableAmount(new Item(entry.id, entry.amount));
+    if (banked <= 0) continue;
+    bank.add(new Item(entry.id, banked), false);
     if (entry.id === ITEM.TABLET) player.setAttribute(ATTR_TABLET, true);
-    items.splice(index, 1);
+    entry.amount -= banked;
+    if (entry.amount <= 0) items.splice(index, 1);
   }
   if (items.length) player.sendMessage("Not enough space in your bank.");
   refreshChest(player, raid);

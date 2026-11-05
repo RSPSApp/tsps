@@ -12,7 +12,7 @@ Audit date: 2026-11-04. The catalogue below covers 908 cluehelper rows from the 
 
 Easy, medium, and hard have no cache rows suppressed by the current runtime checks. Elite is now complete after adding the content-backed kills described below. Master three-part cryptic trails have 29 safe part candidates. Two other candidate rows stay out of the part pool: Viggora depends on the absent Curse of the Empty Lord miniquest, and Watson's row is a correct exclusion (see "Correct exclusions" below).
 
-Elite Sherlock has 23 of 25 task rows wired; its two unsupported tasks are listed below.
+Elite Sherlock has 24 of 25 task rows wired; its one unsupported task is listed below.
 
 Master Sherlock has 25 of 26 actionable task rows wired; the unsupported task is also listed below. The cache includes one additional internal helper row for combining the three cryptic parts, which is handled by the trail runtime rather than assigned as a Sherlock task.
 
@@ -43,7 +43,9 @@ The RSProx recordings reviewed for this audit corroborate clue and Sherlock scro
 
 ### Elite Sherlock challenge scrolls
 
-These tasks remain excluded from assignment because the server does not implement the underlying action: fix a magical lamp in Dorgesh-Kaan, and score a goal in Skullball. Making a light orb does not complete the separate magical-lamp repair task.
+Scoring a goal in Skullball remains excluded from assignment because the server does not implement Werewolf Skullball.
+
+Fixing a magical lamp in Dorgesh-Kaan is wired to the broken lamps (`plugins/areas/DorgeshKaanLamps.plugin.js`): each player has ten broken lamps of the city's 64, and fixing one with a light orb emits `dorgesh-kaan-lamps:fixed`. Making a light orb does not complete this separate repair task. [Lamp (Dorgesh-Kaan)](https://oldschool.runescape.wiki/w/Lamp_(Dorgesh-Kaan)).
 
 Mining nickel and stealing from a chest in Ardougne Castle are wired now that their actions exist: nickel rocks emit `mining:success` with the nickel ore, and the Ardougne Castle chests emit `thieving:success` with method `chest`. [Sherlock/Elite](https://oldschool.runescape.wiki/w/Sherlock/Elite).
 

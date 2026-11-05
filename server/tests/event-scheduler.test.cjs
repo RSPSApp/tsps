@@ -134,3 +134,62 @@ test('reentrant Owner close and shutdown reach every subscriber in start/stop or
     assert.equal(status(),false);assert.equal(lateNpc,null);
   }
 });
+
+function rewardPlayer() {
+  const p=new Player(null);p.setUsername('holidayqa');p.getSession=()=>({sendClientPacket:()=>true});p.sendMessage=()=>{};return p;
+}
+function grant(p,extra={}) {
+  const q={player:p,eventKey:'fixture',completion:'fixture-2026',rewards:[{itemId:core.ItemIdentifiers.SANTA_HAT,amount:1},{itemId:core.ItemIdentifiers.COINS,amount:5}],...extra};
+  PM.emitCustomEvent('events:grant-reward',q);return q;
+}
+function completed(p,completion='fixture-2026') {const q={player:p,completion};PM.emitCustomEvent('events:completed',q);return q.completed;}
+test('grant-reward gives every item once per completion key on a real inventory',(t)=>{
+  t.mock.method(Date,'now',()=>START+1);start();const p=rewardPlayer();
+  assert.equal(completed(p),false);
+  const first=grant(p);assert.equal(first.granted,true);assert.equal(first.reason,null);
+  assert.equal(p.getInventory().getAmount(core.ItemIdentifiers.SANTA_HAT),1);assert.equal(p.getInventory().getAmount(core.ItemIdentifiers.COINS),5);
+  const again=grant(p);assert.equal(again.granted,false);assert.equal(again.reason,'already-complete');
+  assert.equal(p.getInventory().getAmount(core.ItemIdentifiers.SANTA_HAT),1);assert.equal(completed(p),true);
+  assert.equal(grant(p,{completion:'fixture-2027'}).granted,true,'a different year is independent');
+});
+test('grant-reward refuses outside the window or when stopped and records nothing',(t)=>{
+  let now=START-1;t.mock.method(Date,'now',()=>now);start();const p=rewardPlayer();
+  assert.equal(grant(p).reason,'inactive');now=START+1;command('forceevent fixture auto');
+  stop();assert.equal(grant(p).reason,'inactive');
+  assert.equal(p.getInventory().getFreeSlots(),28);assert.equal(completed(p),false);
+});
+test('a full inventory or capped stack keeps the completion and grants nothing',(t)=>{
+  t.mock.method(Date,'now',()=>START+1);start();const p=rewardPlayer(),inv=p.getInventory();
+  for(let i=0;i<27;i++)inv.setItem(i,new core.Item(core.ItemIdentifiers.LOGS,1));
+  // One free slot: the hat fits, the coins would need a second slot.
+  const q=grant(p);assert.equal(q.granted,false);assert.equal(q.reason,'no-space');
+  assert.equal(inv.getAmount(core.ItemIdentifiers.SANTA_HAT),0);assert.equal(completed(p),false);
+  inv.setItem(26,new core.Item(core.ItemIdentifiers.COINS,2147483647-4));
+  assert.equal(grant(p,{rewards:[{itemId:core.ItemIdentifiers.COINS,amount:5}]}).reason,'no-space','stack cap');
+  assert.equal(grant(p,{rewards:[{itemId:core.ItemIdentifiers.COINS,amount:4}]}).granted,true,'exactly the room left');
+  assert.equal(inv.getAmount(core.ItemIdentifiers.COINS),2147483647);
+});
+test('invalid requests and bad Diango unlocks are rejected without side effects',(t)=>{
+  t.mock.method(Date,'now',()=>START+1);start();const p=rewardPlayer();
+  for(const extra of [{rewards:[{itemId:0,amount:1}]},{rewards:[{itemId:core.ItemIdentifiers.SANTA_HAT,amount:0}]},{completion:'Bad Key'},{eventKey:undefined}])
+    assert.equal(grant(p,extra).reason,'invalid');
+  assert.equal(p.getInventory().getFreeSlots(),28);assert.equal(completed(p),false);
+});
+test('completions survive a real save and reload',(t)=>{
+  t.mock.method(Date,'now',()=>START+1);start();const p=rewardPlayer();grant(p);
+  const Json=require('../plugins/persistence/JsonPlayerPersistence.plugin'),codec=new Json.JsonPlayerPersistence();
+  Json.register(PM.createApi('JsonPlayerPersistence'));
+  const {PlayerSave}=require('../dist/game/entity/impl/player/persistence/PlayerSave');
+  const saved=JSON.parse(JSON.stringify(PlayerSave.fromPlayer(p),codec.replacer.bind(codec)),codec.reviver.bind(codec));
+  const restored=rewardPlayer();codec.hydratePlayerSave(saved).applyToPlayer(restored);
+  assert.equal(completed(restored),true);assert.equal(grant(restored).reason,'already-complete');
+});
+test('a successful grant records its Diango unlocks; an unknown name blocks the whole grant',(t)=>{
+  t.mock.method(Date,'now',()=>START+1);start();
+  require('../plugins/world/HolidayRewards.plugin.js').register(PM.createApi('HolidayRewards'));
+  const p=rewardPlayer();
+  assert.equal(grant(p,{unlock:['win05_hat1','no_such_holiday_item']}).reason,'invalid');
+  assert.equal(p.getInventory().getAmount(core.ItemIdentifiers.SANTA_HAT),0);assert.equal(completed(p),false);
+  assert.equal(grant(p,{unlock:['win05_hat1']}).granted,true);
+  assert.deepEqual(p.getAttribute('holiday-rewards:unlocked'),['win05_hat1']);
+});

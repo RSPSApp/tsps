@@ -3,6 +3,9 @@
 const configuredEvents = require("./data/events.json");
 const TASK_KEY = "event-scheduler:clock";
 const CHECK_INTERVAL_MS = 60_000;
+const COMPLETIONS_ATTRIBUTE = "events:completions";
+const COMPLETION_KEY = /^[a-z][a-z0-9-]*$/;
+const MAX_STACK = 2147483647;
 const definitions = new Map();
 const overrides = new Map();
 const active = new Set();
@@ -117,6 +120,99 @@ function answerStatus(request) {
   if (request && typeof request === "object") request.active = running && active.has(request.key);
 }
 
+function completions(player) {
+  const value = player.getAttribute(COMPLETIONS_ATTRIBUTE);
+  return Array.isArray(value) ? value.filter(key => typeof key === "string") : [];
+}
+
+function completionKey(request) {
+  const key = request.completion ?? request.eventKey;
+  return typeof key === "string" && COMPLETION_KEY.test(key) ? key : null;
+}
+
+function answerCompleted(request) {
+  if (!request?.player) return;
+  const key = completionKey(request);
+  request.completed = key !== null && completions(request.player).includes(key);
+}
+
+function rewardItems(api, rewards) {
+  if (!Array.isArray(rewards)) return null;
+  const items = [];
+  for (const reward of rewards) {
+    const id = reward?.itemId, amount = reward?.amount ?? 1;
+    if (!Number.isInteger(id) || id <= 0 || !Number.isInteger(amount) || amount <= 0) return null;
+    const item = new api.core.Item(id, amount);
+    if (!item.getDefinition()) return null;
+    items.push(item);
+  }
+  return items;
+}
+
+// Plans every reward against one copy of the inventory so a grant is all or nothing.
+function fitsAll(inventory, items) {
+  let free = inventory.getFreeSlots();
+  const stacks = new Map();
+  for (const item of items) {
+    if (item.getDefinition().isStackable()) {
+      const held = stacks.has(item.getId()) ? stacks.get(item.getId()) :
+        inventory.getItems().some(slot => slot && slot.getId() === item.getId() && slot.getAmount() > 0 && slot.getMeta() == null)
+          ? inventory.getAmount(item.getId()) : null;
+      if (held === null) {
+        if (free < 1) return false;
+        free--;
+        stacks.set(item.getId(), item.getAmount());
+      } else {
+        if (held + item.getAmount() > MAX_STACK) return false;
+        stacks.set(item.getId(), held + item.getAmount());
+      }
+    } else {
+      if (free < item.getAmount()) return false;
+      free -= item.getAmount();
+    }
+  }
+  return true;
+}
+
+function grantReward(api, request) {
+  if (!request || typeof request !== "object") return;
+  request.granted = false;
+  const {player} = request, key = completionKey(request);
+  const items = rewardItems(api, request.rewards ?? []);
+  const unlock = request.unlock ?? [];
+  if (!player || typeof request.eventKey !== "string" || key === null || !items || !Array.isArray(unlock)) {
+    request.reason = "invalid";
+    return;
+  }
+  if (!(running && active.has(request.eventKey))) {
+    request.reason = "inactive";
+    return;
+  }
+  const done = completions(player);
+  if (done.includes(key)) {
+    request.reason = "already-complete";
+    return;
+  }
+  const inventory = player.getInventory();
+  if (!fitsAll(inventory, items)) {
+    request.reason = "no-space";
+    return;
+  }
+  if (unlock.length) {
+    const unlocking = {player, items: unlock, accepted: false};
+    api.emitCustomEvent("holiday-rewards:unlock", unlocking);
+    if (!unlocking.accepted) {
+      request.reason = "invalid";
+      return;
+    }
+  }
+  for (const item of items) inventory.add(item, false);
+  inventory.refreshItems();
+  player.setAttribute(COMPLETIONS_ATTRIBUTE, [...done, key]);
+  request.granted = true;
+  request.reason = null;
+}
+
 function forceEvent(api, { player, parts }) {
   if (!running) {
     player.sendMessage("The event scheduler is not running.");
@@ -149,7 +245,10 @@ module.exports = {
   register(api) {
     api.onServerStartup(start.bind(null, api));
     api.onServerShutdown(stop.bind(null, api));
+    api.persistAttribute(COMPLETIONS_ATTRIBUTE, []);
     api.onCustomEvent("events:status", answerStatus);
+    api.onCustomEvent("events:completed", answerCompleted);
+    api.onCustomEvent("events:grant-reward", grantReward.bind(null, api));
     api.registerCommand("forceevent", forceEvent.bind(null, api), api.core.PlayerRights.OWNER,
       "Override a configured holiday window for testing; reset restores the calendar");
   },

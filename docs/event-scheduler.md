@@ -1,7 +1,8 @@
 # Holiday event scheduler
 
 The reusable scheduler is the foundation of the Holiday & seasonal events tracker section.
-It does not implement an annual activity or distribute rewards. `plugins/world/data/events.json`
+It does not implement an annual activity; content plugins grant their own rewards through
+the shared helper below. `plugins/world/data/events.json`
 is deliberately empty until a sourced activity supplies a real year-specific window.
 
 ## Configuration and contract
@@ -24,6 +25,19 @@ reason, and activates no content. Dates are not extrapolated into future years.
   independently idempotent and tested through their own failure/cleanup paths.
 - `events:status` uses a request `{ key, active: false }`; the scheduler writes its answer to
   `active`. Unknown keys and a stopped scheduler are inactive. No internal Set/Map escapes.
+- `events:grant-reward` is the shared once-per-account reward helper. Content sends
+  `{ player, eventKey, completion?, rewards: [{ itemId, amount }], unlock?: [cache obj names] }`.
+  `completion` defaults to `eventKey`; give each annual run its own key (e.g. `christmas-2025`)
+  so a later year is independent. The helper writes `granted` and `reason` back:
+  `inactive` (window closed or scheduler stopped), `already-complete`, `no-space` or `invalid`.
+  It plans every item against the current inventory before changing anything (free slots,
+  existing plain stacks and the stack cap), so a grant is all or nothing and a refusal never
+  records the completion. `unlock` names (cache symbols such as `win05_hat1`) are passed to
+  `holiday-rewards:unlock` for Diango's retrieval; an unknown name refuses the whole grant.
+  Item ids come from the content plugin, never from the scheduler, and the content plugin
+  chooses the player-facing message for each `reason`.
+- `events:completed` answers `{ player, completion }` with `completed`. Completions persist
+  in the `events:completions` player attribute as an array of keys.
 - Owner-only `::forceevent <key> [on|off|auto]` overrides a window for testing (default on).
   `::forceevent reset` restores all configured windows. Overrides are local to this process
   and disappear on shutdown; no player saves or rights are changed. Invalid commands do

@@ -1,6 +1,5 @@
 {
   "plugins": { "TutorialIsland": false },
-  "pluginConfig": { "quests:equipment-requirements": true },
   "description": "",
   "experienceMultiplier": 1,
   "spawn": {

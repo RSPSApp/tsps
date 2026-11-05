@@ -8,7 +8,7 @@
  * complete the <quest> quest first."
  *
  * world.json pluginConfig `"quests:equipment-requirements": false` disables the check;
- * it defaults to false when the Quests plugin is active, independently of PvP mode.
+ * it defaults to true when the Quests plugin is active, independently of PvP mode.
  *
  * Not gated:
  *  - player bots, which gear up from loadouts rather than quests;
@@ -56,7 +56,7 @@ function refusalMessages(itemId, entry) {
 
 /** quest:can-equip { player, item, allow, messages }: eligibility only, without equip actions. */
 function checkEquipment(event) {
-  if (pluginApi.getPluginConfig(EQUIPMENT_REQUIREMENTS_CONFIG, false) === false) return;
+  if (pluginApi.getPluginConfig(EQUIPMENT_REQUIREMENTS_CONFIG, true) === false) return;
   const { player, item } = event;
   const itemId = item?.getId?.();
   const entry = requirements().get(itemId);

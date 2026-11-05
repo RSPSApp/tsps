@@ -332,7 +332,9 @@ test("going deeper: an axe and level 10; a roll every 2 ticks, then through, and
   tick(p);
   assert.ok(vineAt(), "still standing after one tick");
   tick(p);
-  assert.deepEqual(messages, ["You try to chop through the vines.", "You hack your way through the vines."]);
+  assert.deepEqual(messages.slice(0, 2), ["You try to chop through the vines.", "You hack your way through the vines."]);
+  // The entrance vine is the Karamja medium diary's "chop the vines" task (#2424).
+  assert.match(messages[2], /Well done! You have completed a medium task in the Karamja area/);
   assert.equal(vineAt(), null, "cut, for everyone");
   tick(p);
   assert.ok(vineAt(), "back a tick later");

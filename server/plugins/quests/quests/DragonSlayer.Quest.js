@@ -1069,6 +1069,11 @@ module.exports = function registerDragonSlayerQuest(api) {
     if (scenes.has(player) || actions.has(player)) return;
     const inLair = player.getLocation().getY() >= 6400;
     player.moveTo((inLair ? TILE.crandorSurface : TILE.crandorLair).clone());
+    // The Wiki's diary route: through the secret wall, past the demons, then this rope to the
+    // surface. Only a player who has opened the wall has come that way.
+    if (inLair && player.getAttribute(ATTR_SHORTCUT) === true) {
+      api.emitCustomEvent("dragon-slayer:crandor-visited", { player });
+    }
   }
 
   /** Crandor surface plus the dungeon north of the secret wall; the Karamja side is y<=9600. */
@@ -1103,6 +1108,7 @@ module.exports = function registerDragonSlayerQuest(api) {
     event.handled = true;
     if (quest.getStage(player) < STAGE_CRANDOR) return;
     openCrandorShortcut(player);
+    api.emitCustomEvent("dragon-slayer:crandor-wall", { player });
     // Doors swings the wall open as captured (RSProx 2951), walks the player across and shuts it.
     if (event.object) api.emitCustomEvent("door:open", { player, object: event.object, handled: false });
   }

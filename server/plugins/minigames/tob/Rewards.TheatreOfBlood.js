@@ -358,20 +358,19 @@ function bankFor(player, id) {
 function take(player, entry, destination) {
   // Also protect a saved pet reached through a transfer click without reopening the UI.
   if (entry.id === Shared.core().ItemIdentifiers.LIL_ZIK && claimPetLoot(player).has(entry)) return entry.amount;
-  const { Item, ItemDefinition } = Shared.core();
+  const { Item } = Shared.core();
   if (destination === "bank") {
     const bank = bankFor(player, entry.id);
-    if (!bank) {
+    const banked = bank ? bank.getAddableAmount(new Item(entry.id, entry.amount)) : 0;
+    if (banked <= 0) {
       player.sendMessage("You need more space in your bank.");
       return 0;
     }
-    bank.add(new Item(entry.id, entry.amount), false);
-    return entry.amount;
+    bank.add(new Item(entry.id, banked), false);
+    return banked;
   }
   const inventory = player.getInventory();
-  const stackable = ItemDefinition.forId(entry.id)?.isStackable?.() === true || ItemDefinition.forId(entry.id)?.isNoted?.() === true;
-  const moved = stackable ? (inventory.contains(entry.id) || inventory.getFreeSlots() > 0 ? entry.amount : 0)
-    : Math.min(entry.amount, inventory.getFreeSlots());
+  const moved = inventory.getAddableAmount(new Item(entry.id, entry.amount));
   if (moved <= 0) {
     player.sendMessage("You don't have enough inventory space.");
     return 0;

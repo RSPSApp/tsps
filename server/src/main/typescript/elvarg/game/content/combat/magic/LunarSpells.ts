@@ -153,7 +153,8 @@ class LunarTeleport extends LunarSpell {
     constructor(name: string, readonly teleport: TeleportData) { super(name, { ...teleport, cast: null }); }
     castTeleport(player: Player): boolean {
         if (!TeleportHandler.checkReqs(player, this.teleport.destination)) return true;
-        return this.cast(player, () => TeleportHandler.teleport(player, this.teleport.destination, TeleportType.LUNAR, false));
+        return this.cast(player, () => TeleportHandler.teleport(player, this.teleport.destination, TeleportType.LUNAR, false,
+            () => PluginManager.emitCustomEvent("spell:teleport-arrival", { player, name: this.name })));
     }
 }
 
@@ -260,7 +261,8 @@ export class LunarSpells {
     private static castGroupTeleport(player: Player, spell: LunarTeleport): boolean {
         if (!TeleportHandler.checkReqs(player, spell.teleport.destination)) return true;
         return spell.cast(player, () => {
-            TeleportHandler.teleport(player, spell.teleport.destination, TeleportType.LUNAR, false);
+            TeleportHandler.teleport(player, spell.teleport.destination, TeleportType.LUNAR, false,
+                () => PluginManager.emitCustomEvent("spell:teleport-arrival", { player, name: spell.name }));
             this.forNearbyPlayers(player, 1, target => {
                 if (TeleportHandler.checkReqs(target, spell.teleport.destination)) {
                     TeleportHandler.teleport(target, spell.teleport.destination, TeleportType.LUNAR, false);
@@ -619,9 +621,16 @@ export class LunarSpells {
             log.setId(plank[0]);
             inventory.refreshItems();
             player.getSkillManager().addExperiences(Skill.MAGIC, spell.baseExperience());
+            PluginManager.emitCustomEvent("magic:plank-make", { player, logId, plankId: plank[0] });
             return inventory.contains(logId);
         };
-        if (make()) this.repeat(player, PLANK_TICKS, make, undefined, PLANK_FIRST_REPEAT_TICKS);
+        if (make()) {
+            this.repeat(player, PLANK_TICKS, make,
+                () => PluginManager.emitCustomEvent("magic:plank-make-end", { player }),
+                PLANK_FIRST_REPEAT_TICKS);
+        } else {
+            PluginManager.emitCustomEvent("magic:plank-make-end", { player });
+        }
         return true;
     }
 

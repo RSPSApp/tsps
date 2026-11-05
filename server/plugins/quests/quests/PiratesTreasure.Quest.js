@@ -629,6 +629,9 @@ module.exports = function registerPiratesTreasureQuest(api) {
     player.getMovementQueue().setBlockMovement(false);
     player.setUntargetable(false);
     if (logout) return;
+    if (ship.destination.equals(PORT_SARIM_LANDING)) {
+      api.emitCustomEvent("ferries:arrived", { player, route: "musa-point-port-sarim" });
+    }
     const sender = player.getPacketSender();
     sender.sendTabInterface(0, 593);
     sender.sendTabInterface(5, 541);

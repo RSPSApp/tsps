@@ -117,9 +117,12 @@ function useOnBag(event) {
 function pickup(event) {
   const { player, groundItem } = event;
   const item = groundItem.getItem();
-  if (!Storage.hasOpen(player, family) || !family.accepts(item.getId())) return;
+  if (!family.accepts(item.getId())) return;
+  const sack = Storage.FAMILIES.get("gem-sack");
+  const target = Storage.hasOpen(player, family) ? family : sack && Storage.hasOpen(player, sack) ? sack : null;
+  if (!target) return;
   // Uncut gems don't stack, so a pickup is one gem: it goes in whole or not at all.
-  if (family.room(player, item.getId(), Storage.contents(player, family)) < item.getAmount()) return;
+  if (target.room(player, item.getId(), Storage.contents(player, target)) < item.getAmount()) return;
   // Hooks stop at the first handled one, and this one runs before the Ironman rule: so ask it.
   const request = { player, groundItem, allow: true };
   Storage.api.emitCustomEvent("ground-item:can-store", request);
@@ -127,7 +130,7 @@ function pickup(event) {
     event.handled = true;
     return;
   }
-  Storage.store(player, family, item.getId(), item.getAmount());
+  Storage.store(player, target, item.getId(), item.getAmount());
   Storage.core.ItemOnGroundManager.deregister(groundItem);
   player.getLastItemPickup().reset();
   player.sendMessage(STRAIGHT_IN);

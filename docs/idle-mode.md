@@ -262,7 +262,7 @@ the 190-wide panel.
 ## Totals, the journal panel and the return screen
 
 - **Totals** (`Offline.IdleMode.js`), saved as `idle-mode:totals`
-  `{ workedMs, offlineMs, xp, items }`: each result that carries a session on adds the time since
+  `{ workedMs, offlineMs, xp, items, bySkill: { skill: xp }, byItem: { itemId: amount } }`: each result that carries a session on adds the time since
   the last one, its XP and its items; a login's time-away payout adds the time paid, XP and items.
   `Offline.currentRate(player)` is the XP per hour of the session being played (none until it has
   run `minSampleSeconds`, or once it is older than its gap).
@@ -274,6 +274,16 @@ the 190-wide panel.
   (`welcome-screen:shown`), when the player presses Play (`gameframe:ready`).
 
 ![The journal's Idle Information](images/idle-journal-panel.png)
+
+## The Idle screen's tabs
+
+Tabs across the top of the Idle screen: **Overview** (the status and upgrades below), **Stats**
+and **Travel** (the travel screen). Stats is a full-width panel of the totals: the XP gained per
+skill and the items gathered or made per kind (the top ten of each, biggest first), and the time
+idle, playing and away. Switching tabs shows one set of components and hides the other
+(`sendInterfaceDisplayState`); while Stats is shown, a change redraws Stats only.
+
+![The Stats tab](images/idle-stats.png)
 
 ## The Idle screen
 

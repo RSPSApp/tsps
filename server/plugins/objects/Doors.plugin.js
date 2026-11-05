@@ -55,7 +55,7 @@ const NAMELESS_DOOR_LEAF_IDS = Object.freeze({
   PRISON_DOOR_9_OPEN: 3781, // troll_stronghold_prison_door_open, capture 740
   GRUM_DOOR_OPEN: 1542, // Grum's Gold Exchange; capture 465
   CRANDOR_SECRET_DOOR_OPEN: 25039, // dragonsecretdoor_open; capture 2951
-  INVISWALL: 38848, // actionless collision blocker; capture 2951
+  INVISWALL: 38848, // actionless collision blocker; captures 2951 and 740
 });
 
 let SELF_OPENING_DOOR_IDS, IN_PLACE_DOOR_IDS, OWN_TILE_DOOR_IDS, SINGLE_DOOR_OPEN_IDS, COMPOSITE_DOOR_OPENINGS, WOODEN_GATES, WOODEN_GATE_BY_ID;
@@ -397,23 +397,34 @@ function defineDoorData({ ObjectIdentifiers: O }) {
       crossX: 2897,
       closeTicks: 2,
     }),
-    // Troll arena exit, north wall. No capture; Mort Myre's layout, as above.
+    // Troll arena exit, north wall. No capture; Mort Myre's layout, as above. Dad's check guards the
+    // click, so blockers keep the opening shut to ordinary walking and the opener is carried (carry).
+    // The blockers are inferred: the prison door's capture shows one on its doorway, and nothing shows
+    // this gate, so one on each leaf's own edge is our reading.
     Object.freeze({
       closed: [[O.ARENA_EXIT, 2916, 3629, 0, 3], [O.ARENA_EXIT_2, 2917, 3629, 0, 3]],
       opened: [
         [NAMELESS_DOOR_LEAF_IDS.ARENA_EXIT_OPEN, 2916, 3628, 0, 0],
         [NAMELESS_DOOR_LEAF_IDS.ARENA_EXIT_OPEN, 2917, 3628, 0, 2],
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2916, 3629, 0, 3],
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2917, 3629, 0, 3],
       ],
       crossY: 3629,
+      carry: true,
       closeTicks: 2,
     }),
     // Troll Stronghold prison door (capture 740 ticks 1470-1473): an "Unlock" loc the quest opens
-    // through door:open. The leaf swings to the tile west and shuts two ticks later; the inviswall
-    // live puts on the doorway is left out, as for Guidor's gate.
+    // through door:open. The leaf swings to the tile west and shuts two ticks later. Live puts inviswall
+    // 38848 on the doorway for those ticks, so the opening stays shut to ordinary walking and following:
+    // the key-holding opener is carried over it (carry) and anyone else is stopped by the real clipping.
     Object.freeze({
       closed: [[O.PRISON_DOOR_9, 2848, 10107, 1, 0]],
-      opened: [[NAMELESS_DOOR_LEAF_IDS.PRISON_DOOR_9_OPEN, 2847, 10107, 1, 1]],
+      opened: [
+        [NAMELESS_DOOR_LEAF_IDS.PRISON_DOOR_9_OPEN, 2847, 10107, 1, 1],
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2848, 10107, 1, 0],
+      ],
       crossX: 2848,
+      carry: true,
       closeTicks: 2,
       openSoundId: 62,
     }),
@@ -1394,15 +1405,18 @@ function carryAcrossGate(player, gate, y, z) {
  * A gate that keeps a collision blocker on its doorway while open: the opener, standing on the tile beside
  * it, is carried the one tile over (forced movement ignores the blocker); nobody else can walk across.
  */
-function carryOneTile(player, gate, x, z) {
+function carryOneTile(player, gate, x, y, z) {
   const here = player.getLocation();
-  if (gate.crossY == null || here.getX() !== x) return;
-  const to = here.getY() < gate.crossY ? gate.crossY : gate.crossY - 1;
-  const dy = to - here.getY();
-  if (Math.abs(dy) !== 1) return;
+  const acrossX = gate.crossX != null;
+  if (acrossX ? here.getY() !== y : here.getX() !== x) return;
+  const cross = acrossX ? gate.crossX : gate.crossY;
+  const position = acrossX ? here.getX() : here.getY();
+  const delta = (position < cross ? cross : cross - 1) - position;
+  if (Math.abs(delta) !== 1) return;
+  const direction = acrossX ? (delta > 0 ? 1 : 3) : (delta > 0 ? 0 : 2);
   core.TaskManager.submit(new core.ForceMovementTask(player, 1,
-    new core.ForceMovement(cloneLocation(x, here.getY(), z), new core.Location(0, dy, 0), 0, 30,
-      dy > 0 ? 0 : 2, GATE_WALK_ANIMATION)));
+    new core.ForceMovement(cloneLocation(here.getX(), here.getY(), z),
+      new core.Location(acrossX ? delta : 0, acrossX ? 0 : delta, 0), 0, 30, direction, GATE_WALK_ANIMATION)));
 }
 
 /** The player crosses on the clicked row or column, from whichever side they stand on. */
@@ -1412,7 +1426,7 @@ function stepThroughGate(player, gate, x, y, z) {
     return;
   }
   if (gate.carry) {
-    carryOneTile(player, gate, x, z);
+    carryOneTile(player, gate, x, y, z);
     return;
   }
   const destination = gate.crossX != null

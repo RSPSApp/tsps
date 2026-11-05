@@ -863,13 +863,24 @@ function mineExtraOre(player, rock, outcome) {
 }
 
 /**
- * tracking_ore_mined counts every ore kept, essence too (rsprox captures 70, 3027), and each blessed bone
- * shard (1105: +3 for three); the client reads it for the Mining tab.
+ * tracking_ore_mined counts every ore kept, essence too (rsprox captures 70, 3027), each blessed bone
+ * shard (1105: +3 for three) and each stardust (237/01101: +4 for four); the client reads it for the
+ * Mining tab and the league summary's ore row. This plugin is its only writer.
  */
 function countOre(player, amount = 1) {
   const mined = (player.getAttribute(ORE_MINED_ATTRIBUTE) ?? 0) + amount;
   player.setAttribute(ORE_MINED_ATTRIBUTE, mined);
   player.getPacketSender().sendConfig(pluginApi.core.CacheDefinitions.getVarpId(ORE_MINED_VARP), mined);
+}
+
+/** Ore kept outside a rock session ("mining:count-ore", a shooting star's stardust) counts the same. */
+function countKeptOre({ player, amount }) {
+  if (amount > 0) countOre(player, amount);
+}
+
+/** The counter for whoever shows it ("mining:ores-mined", the league summary's ore row). */
+function answerOresMined(query) {
+  query.count = query.player?.getAttribute(ORE_MINED_ATTRIBUTE) ?? 0;
 }
 
 function sendOresMined({ player }) {
@@ -940,6 +951,8 @@ module.exports = {
     api.onCustomEvent("mining:roll-interval", answerRollInterval);
     api.persistAttribute(ORE_MINED_ATTRIBUTE, 0);
     api.onPlayerLogin(sendOresMined);
+    api.onCustomEvent("mining:count-ore", countKeptOre);
+    api.onCustomEvent("mining:ores-mined", answerOresMined);
     api.onObjectInteraction("Rocks", { Mine: mineDepletedRock });
     for (const name of EMPTY_ROCK_NAMES) api.onObjectInteraction(name, { Mine: mineDepletedRock });
 

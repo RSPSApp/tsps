@@ -353,6 +353,20 @@ test("the ore counter is sent again on login", () => {
   assert.deepEqual(player.packets.configs, [[ORE_MINED_VARP, 7]]);
 });
 
+test("Mining is tracking_ore_mined's one writer: stardust counts through it, and it answers the count", () => {
+  const h = harness();
+  const player = createPlayer();
+  player.setAttribute("mining:ores-mined", 23);
+  // Leagues VI capture 237/01101: four stardust from one star roll, tracking_ore_mined 23 -> 27.
+  h.events["mining:count-ore"]({ player, amount: 4 });
+  assert.deepEqual(player.packets.configs, [[ORE_MINED_VARP, 27]]);
+  h.events["mining:count-ore"]({ player, amount: 0 });
+  assert.equal(player.packets.configs.length, 1, "nothing kept, nothing sent");
+  const asked = { player, count: 0 };
+  h.events["mining:ores-mined"](asked);
+  assert.equal(asked.count, 27, "the league summary reads Mining's count");
+});
+
 test("each pickaxe swings its own animation", () => {
   // human_mining_<pickaxe> sequences, as recorded (black 90, crystal 3276, dragon 561, infernal 1634, steel 69, mithril 1098).
   const expected = {

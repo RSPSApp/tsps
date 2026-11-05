@@ -34,7 +34,7 @@ Sem isso, cada jogador liga o modo com `::idle on`.
 | Comando | O que faz |
 | --- | --- |
 | botão **Idle** na aba do diário | Abre a tela do modo idle, sem digitar nada |
-| `::idle` | Abre a tela do modo idle: status, pontos, melhorias e botões |
+| `::idle` | Abre a tela do modo idle, com abas: Overview (status, pontos, melhorias), Stats (XP por skill, itens, tempo idle) e Travel |
 | `::idle status` | Diz no chat se o modo idle está ligado |
 | `::idle on` / `::idle off` | Liga ou desliga o modo idle da conta |
 | `::idle auto` | Mostra o que o personagem vai retomar sozinho |

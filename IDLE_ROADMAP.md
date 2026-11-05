@@ -49,10 +49,12 @@ Uma interface própria e sempre à mão, para o jogador nunca precisar digitar c
 - [ ] **Painel na tela de jogo** (sobreposto, sem abrir a aba do diário), se o diário não bastar
 - [x] **Tela ao logar com ganhos offline**: abre sozinha depois do Play, com o resumo da última vez
       fora
-- [ ] **Abas na tela idle**: Status, Melhorias, Viagem, Loja e Estatísticas, numa só janela
+- [x] **Abas na tela idle**: Overview (status e melhorias), Stats e Travel; a aba **Loja** entra
+      junto com a loja de Idle Coins
 - [x] **Estatísticas, parte 1**: XP por hora da sessão e tempo idle total (online + offline);
       totais de XP e itens já são guardados (`idle-mode:totals`)
-- [ ] **Estatísticas, parte 2**: uma aba que mostre os totais por skill e por item
+- [x] **Estatísticas, parte 2**: aba Stats com XP por skill, itens por tipo e tempo idle jogando
+      e fora (os totais por skill e item contam a partir desta versão)
 - [ ] **Versão mobile** conferida (o cliente já é responsivo; validar as telas idle no celular)
 
 ## P1 - Loja de Idle Coins

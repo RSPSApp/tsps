@@ -21,7 +21,8 @@ const LAST_AWAY_ATTRIBUTE = "idle-mode:last-away";
 
 /**
  * Saved: what idle play has added up to, for the Idle screen and the journal:
- * { workedMs (time spent gathering or fighting online), offlineMs (time away paid), xp, items }.
+ * { workedMs (time spent gathering or fighting online), offlineMs (time away paid), xp, items,
+ * bySkill: { skillKey: xp }, byItem: { itemId: amount } }.
  */
 const TOTALS_ATTRIBUTE = "idle-mode:totals";
 
@@ -37,14 +38,24 @@ function onPaid(listener) {
 const sum = (values) => Object.values(values ?? {}).reduce((total, value) => total + (Number(value) || 0), 0);
 
 function totals(player) {
-  return { workedMs: 0, offlineMs: 0, xp: 0, items: 0, ...(player.getAttribute(TOTALS_ATTRIBUTE) ?? {}) };
+  const saved = player.getAttribute(TOTALS_ATTRIBUTE) ?? {};
+  return { workedMs: 0, offlineMs: 0, xp: 0, items: 0, ...saved, bySkill: { ...saved.bySkill }, byItem: { ...saved.byItem } };
 }
 
-function addTotals(player, { workedMs = 0, offlineMs = 0, xp = 0, items = 0 }) {
+function addInto(target, values) {
+  for (const [key, value] of Object.entries(values ?? {})) {
+    if (value > 0) target[key] = (target[key] ?? 0) + value;
+  }
+}
+
+/** Adds to the totals: time, and the XP by skill ({ skillKey: xp }) and items ({ itemId: n }). */
+function addTotals(player, { workedMs = 0, offlineMs = 0, xp = {}, items = {} }) {
   const current = totals(player);
+  addInto(current.bySkill, xp);
+  addInto(current.byItem, items);
   player.setAttribute(TOTALS_ATTRIBUTE, {
     workedMs: current.workedMs + workedMs, offlineMs: current.offlineMs + offlineMs,
-    xp: current.xp + xp, items: current.items + items,
+    xp: current.xp + sum(xp), items: current.items + sum(items), bySkill: current.bySkill, byItem: current.byItem,
   });
 }
 
@@ -178,11 +189,15 @@ function record(player, activity, skills, items, maxGapSeconds) {
   const now = Date.now();
   const previous = sessions.get(player);
   const previousAt = previous?.lastAt;
-  const previousXp = sum(previous?.lastXp);
+  const previousXp = { ...previous?.lastXp };
   const session = addResult(previous, { activity, items, maxGapSeconds }, now, xpNow(player, skills), config);
   sessions.set(player, session);
   // A result that carries the session on: the time since the last one is time worked.
-  if (session === previous) addTotals(player, { workedMs: now - previousAt, xp: Math.max(0, sum(session.lastXp) - previousXp), items: sum(items) });
+  if (session === previous) {
+    const gained = {};
+    for (const [key, total] of Object.entries(session.lastXp)) gained[key] = total - (previousXp[key] ?? total);
+    addTotals(player, { workedMs: now - previousAt, xp: gained, items });
+  }
   // Kept current while playing, so any save carries it: the server's shutdown save (which logs
   // no one out) and the periodic autosave before a crash pay the time away on the next login.
   player.setAttribute(AWAY_ATTRIBUTE, awayFromSession(session, now, config));
@@ -248,7 +263,7 @@ function login({ player }) {
   if (lost > 0) player.sendMessage(`Your bank was full: ${formatNumber(lost)} items were lost.`);
   player.setAttribute(LAST_AWAY_ATTRIBUTE,
     `${formatDuration(reward.elapsedMs)}${capped} ${doing(away.activity)}: ${parts.join(", ") || "nothing"}${lost > 0 ? ` (${formatNumber(lost)} lost, bank full)` : ""}.`);
-  addTotals(player, { offlineMs: reward.paidMs, xp: sum(reward.xp), items: sum(reward.items) });
+  addTotals(player, { offlineMs: reward.paidMs, xp: reward.xp, items: reward.items });
   Common.changed(player);
   for (const listener of paidListeners) listener(player, reward);
 }

@@ -1,6 +1,7 @@
 /**
  * The Idle screen (`::idle`): a server-defined interface (docs/agents/interfaces.md), so it needs
- * no client change. On the left, the account's status: Idle Mode and auto-resume (each with a
+ * no client change. Tabs across the top: Overview (below), Stats (the totals: XP by skill, items
+ * by kind, time idle playing and away) and Travel (the travel screen). On the left, the account's status: Idle Mode and auto-resume (each with a
  * button to switch it), what the character is doing, the idle points and the next one, the offline
  * cap, and what the last time away paid, with the XP per hour; a third button opens the travel screen. On the right,
  * the upgrades: each one's level, what it
@@ -32,11 +33,19 @@ const COMPONENT = {
   UPGRADES_BOX: 16, UPGRADES_TITLE: 17, POINTS: 18,
   // Each upgrade slot: its name, description, price, and Buy button and label.
   SLOT_START: 20, SLOT_STRIDE: 5,
+  // The tabs across the top: Overview, Stats, Travel (buttons, then their labels).
+  TAB_START: 52, TAB_LABEL_START: 56,
+  // The Stats tab: a panel of the totals, hidden until it is picked.
+  STATS_BOX: 60, STATS_TITLE: 61, SKILLS_HEADER: 62, ITEMS_HEADER: 63, STATS_TIME: 64, SKILL_LINE_START: 65, ITEM_LINE_START: 75,
 };
+const TABS = ["Overview", "Stats", "Travel"];
+const TAB = { OVERVIEW: 0, STATS: 1, TRAVEL: 2 };
+const STATS_LINES = 10;
 const SLOT = { NAME: 0, DESCRIPTION: 1, PRICE: 2, BUY_BUTTON: 3, BUY_LABEL: 4 };
-const LEFT = { x: 18, y: 36, width: 226, height: 264 };
-const RIGHT = { x: 252, y: 36, width: 224, height: 264 };
-const LINE_HEIGHT = 24;
+const LEFT = { x: 18, y: 58, width: 226, height: 242 };
+const RIGHT = { x: 252, y: 58, width: 224, height: 242 };
+const FULL = { x: 18, y: 58, width: 458, height: 242 };
+const LINE_HEIGHT = 22;
 const SLOTS_TOP = 46;
 const MAX_SLOT_HEIGHT = 72;
 const COLOUR = { ON: "00ff00", OFF: "ff5f5f", PAUSED: "ffb83f", VALUE: "ffffff", DIM: "8f7f66" };
@@ -65,13 +74,13 @@ function addStatus(add, root) {
   add(COMPONENT.STATUS_TITLE, root, text(x + 8, y + 4, width - 16, 20, { text: "Status", fontId: 496, textColor: 0xff981f, yTextAlignment: 1 }));
   for (let line = 0; line < STATUS_LINES; line++) {
     // The last line, the time away, has room to wrap above the buttons.
-    const lineHeight = line === STATUS_LINES - 1 ? 36 : LINE_HEIGHT - 2;
-    add(COMPONENT.STATUS_LINE_START + line, root, text(x + 8, y + 28 + line * LINE_HEIGHT, width - 16, lineHeight, {
+    const lineHeight = line === STATUS_LINES - 1 ? 34 : LINE_HEIGHT - 2;
+    add(COMPONENT.STATUS_LINE_START + line, root, text(x + 8, y + 26 + line * LINE_HEIGHT, width - 16, lineHeight, {
       yTextAlignment: line === STATUS_LINES - 1 ? 0 : 1,
     }));
   }
   const buttonWidth = Math.floor((width - 32) / 3);
-  const buttonY = y + height - 30;
+  const buttonY = y + height - 28;
   const buttonX = (index) => x + 8 + index * (buttonWidth + 8);
   add(COMPONENT.IDLE_BUTTON, root, button(buttonX(0), buttonY, buttonWidth, 24, "Switch"));
   add(COMPONENT.IDLE_LABEL, root, buttonLabel(buttonX(0), buttonY, buttonWidth, 24));
@@ -104,15 +113,51 @@ function addUpgrades(add, root) {
   }
 }
 
+function addTabs(add, root) {
+  TABS.forEach((label, index) => {
+    const x = 18 + index * 64;
+    add(COMPONENT.TAB_START + index, root, box(x, 32, 60, 20, { color: 0x2b241b, mouseOverColor: 0x3a3125, actions: ["Open"], flags: FLAG_OP1 }));
+    add(COMPONENT.TAB_LABEL_START + index, root, text(x, 32, 60, 20, { text: label, textColor: 0xffd27f, xTextAlignment: 1, yTextAlignment: 1 }));
+  });
+}
+
+function addStats(add, root) {
+  const { x, y, width, height } = FULL;
+  const hidden = { hidden: true, isHidden: true };
+  const column = (width - 24) / 2;
+  add(COMPONENT.STATS_BOX, root, box(x, y, width, height, hidden));
+  add(COMPONENT.STATS_TITLE, root, text(x + 8, y + 4, width - 16, 20, { text: "Statistics", fontId: 496, textColor: 0xff981f, yTextAlignment: 1, ...hidden }));
+  add(COMPONENT.SKILLS_HEADER, root, text(x + 8, y + 26, column, 18, { text: "XP gained", textColor: 0xffd27f, yTextAlignment: 1, ...hidden }));
+  add(COMPONENT.ITEMS_HEADER, root, text(x + 16 + column, y + 26, column, 18, { text: "Items gathered and made", textColor: 0xffd27f, yTextAlignment: 1, ...hidden }));
+  for (let line = 0; line < STATS_LINES; line++) {
+    const top = y + 46 + line * 17;
+    add(COMPONENT.SKILL_LINE_START + line, root, text(x + 8, top, column, 16, { yTextAlignment: 1, ...hidden }));
+    add(COMPONENT.ITEM_LINE_START + line, root, text(x + 16 + column, top, column, 16, { yTextAlignment: 1, ...hidden }));
+  }
+  add(COMPONENT.STATS_TIME, root, text(x + 8, y + height - 24, width - 16, 18, { yTextAlignment: 1, ...hidden }));
+}
+
+/** The uids each content tab shows: filled as the interface is built. */
+const TAB_UIDS = { [TAB.OVERVIEW]: [], [TAB.STATS]: [] };
+
 function buildInterface() {
   const { widgets, add } = createWidgetGroup(GROUP_ID);
+  const into = (list) => (component, parent, definition) => {
+    const id = add(component, parent, definition);
+    list.push(id);
+    return id;
+  };
+  TAB_UIDS[TAB.OVERVIEW].length = 0;
+  TAB_UIDS[TAB.STATS].length = 0;
   const root = add(COMPONENT.ROOT, -1, {
     rawWidth: 18, rawHeight: 18, widthMode: 1, heightMode: 1,
     width: 494, height: 316, xPositionMode: 1, yPositionMode: 1,
   });
   add(COMPONENT.FRAME, root, { widthMode: 1, heightMode: 1, width: 494, height: 316 });
-  addStatus(add, root);
-  addUpgrades(add, root);
+  addTabs(add, root);
+  addStatus(into(TAB_UIDS[TAB.OVERVIEW]), root);
+  addUpgrades(into(TAB_UIDS[TAB.OVERVIEW]), root);
+  addStats(into(TAB_UIDS[TAB.STATS]), root);
   return { groupId: GROUP_ID, widgets };
 }
 
@@ -197,19 +242,75 @@ function sendUpgrades(player) {
   });
 }
 
+/** A total's lines, biggest first: "Woodcutting: 12,345 XP". */
+function topLines(values, label, suffix) {
+  return Object.entries(values ?? {})
+    .filter(([, amount]) => amount > 0)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, STATS_LINES)
+    .map(([key, amount]) => `${label(key)}: ${col(COLOUR.VALUE, number(amount))}${suffix}`);
+}
+
+/** The Stats tab: XP by skill, items by kind, and time idle online and offline. */
+function statsLines(player) {
+  const totals = Offline.totals(player);
+  return {
+    skills: topLines(totals.bySkill, (key) => Common.skillName(key), " XP"),
+    items: topLines(totals.byItem, (itemId) => Common.itemName(Number(itemId)), ""),
+    time: `Time idle: ${col(COLOUR.VALUE, Offline.formatDuration(totals.workedMs))} playing, ${col(COLOUR.VALUE, Offline.formatDuration(totals.offlineMs))} away`,
+  };
+}
+
+function sendStats(player) {
+  const sender = player.getPacketSender();
+  const { skills, items, time } = statsLines(player);
+  for (let line = 0; line < STATS_LINES; line++) {
+    sender.sendString(skills[line] ?? (line === 0 ? col(COLOUR.DIM, "Nothing yet") : ""), uid(COMPONENT.SKILL_LINE_START + line));
+    sender.sendString(items[line] ?? (line === 0 ? col(COLOUR.DIM, "Nothing yet") : ""), uid(COMPONENT.ITEM_LINE_START + line));
+  }
+  sender.sendString(time, uid(COMPONENT.STATS_TIME));
+}
+
+/** player -> the content tab shown (Overview or Stats). */
+const tabs = new Map();
+
 function redraw(player) {
   if (!isOpen(player)) return;
+  if (tabs.get(player) === TAB.STATS) {
+    sendStats(player);
+    return;
+  }
   sendStatus(player);
   sendUpgrades(player);
 }
 
-/** Opens the Idle screen. */
+/** Shows one content tab's components and hides the other's, then fills it. */
+function showTab(player, tab) {
+  tabs.set(player, tab);
+  const sender = player.getPacketSender();
+  for (const [index, uids] of Object.entries(TAB_UIDS)) {
+    for (const id of uids) sender.sendInterfaceDisplayState(id, Number(index) !== tab);
+  }
+  TABS.forEach((label, index) => sender.sendString(index === tab ? col(COLOUR.VALUE, label) : label, uid(COMPONENT.TAB_LABEL_START + index)));
+  redraw(player);
+}
+
+/** Opens the Idle screen, on its Overview. */
 function open(player) {
   player.setInterfaceId(GROUP_ID);
   player.getPacketSender().sendSubInterface(MAIN_MODAL_UID, GROUP_ID, 0, {
     postScripts: [{ scriptId: FRAME_TITLE_SCRIPT, args: [uid(COMPONENT.FRAME), TITLE] }],
   });
-  redraw(player);
+  showTab(player, TAB.OVERVIEW);
+}
+
+/** The tabs: Overview and Stats switch the content; Travel opens the travel screen. */
+function clickTab({ player, buttonId }) {
+  if (!isOpen(player)) return false;
+  const index = TABS.findIndex((_, tab) => buttonId === uid(COMPONENT.TAB_START + tab) || buttonId === uid(COMPONENT.TAB_LABEL_START + tab));
+  if (index === TAB.TRAVEL) TravelScreen.open(player);
+  else if (index >= 0) showTab(player, index);
+  return true;
 }
 
 function switchIdle({ player }) {
@@ -274,6 +375,7 @@ function gameframeReady({ player }) {
 function forgetReturn({ player }) {
   returning.delete(player);
   atWelcome.delete(player);
+  tabs.delete(player);
 }
 
 /** `idle:open`: the Idle button in the journal tab (SideJournalDefaults). */
@@ -312,6 +414,7 @@ module.exports = function attach(api) {
   api.onInterfaceActionButton([uid(COMPONENT.IDLE_BUTTON), uid(COMPONENT.IDLE_LABEL)], switchIdle);
   api.onInterfaceActionButton([uid(COMPONENT.AUTO_BUTTON), uid(COMPONENT.AUTO_LABEL)], switchAuto);
   api.onInterfaceActionButton([uid(COMPONENT.TRAVEL_BUTTON), uid(COMPONENT.TRAVEL_LABEL)], travelButton);
+  api.onInterfaceActionButton(TABS.flatMap((_, tab) => [uid(COMPONENT.TAB_START + tab), uid(COMPONENT.TAB_LABEL_START + tab)]), clickTab);
   api.onCustomEvent("idle:open", openFromJournal);
   api.onCustomEvent("idle:summary", journalSummary);
   api.onCustomEvent("welcome-screen:shown", welcomeShown);
@@ -329,4 +432,6 @@ module.exports.uid = uid;
 module.exports.slotComponent = slotComponent;
 module.exports.open = open;
 module.exports.statusLines = statusLines;
+module.exports.statsLines = statsLines;
+module.exports.TAB = TAB;
 module.exports.buildInterface = buildInterface;

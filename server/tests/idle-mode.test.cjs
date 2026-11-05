@@ -1229,7 +1229,9 @@ test("panel: XP per hour from the session played, totals of time idle, and the j
   }
   api.command(player, "idle");
   assert.equal(screenText(player, COMPONENT.STATUS_LINE_START + 3), "XP per hour: 15,000");
-  assert.deepEqual(player.getAttribute("idle-mode:totals"), { workedMs: 120_000, offlineMs: 0, xp: 500, items: 20 });
+  assert.deepEqual(player.getAttribute("idle-mode:totals"), {
+    workedMs: 120_000, offlineMs: 0, xp: 500, items: 20, bySkill: { WOODCUTTING: 500 }, byItem: { [LOGS]: 20 },
+  });
   const request = api.emit("idle:summary", { player, summary: null });
   assert.deepEqual(request.summary, { idleMode: "On", idleActivity: "None yet", idleXpRate: "15,000", idlePoints: 0, idleTime: "2m" });
   // Stopped for longer than the gap: no rate to show.
@@ -1243,6 +1245,8 @@ test("panel: XP per hour from the session played, totals of time idle, and the j
   const totals = player.getAttribute("idle-mode:totals");
   assert.equal(totals.offlineMs, 3_600_000);
   assert.equal(totals.items, 20 + 600);
+  assert.deepEqual(totals.byItem, { [LOGS]: 620 });
+  assert.equal(totals.bySkill.WOODCUTTING, 500 + 6000);
   assert.equal(api.emit("idle:summary", { player, summary: null }).summary.idleTime, "1h 2m");
 });
 
@@ -1476,4 +1480,49 @@ test("travel screen: a Making tab lists the production sites, and opens on them 
   assert.equal(range.detail, " - Al Kharid, by the bank");
   assert.equal(range.panel.level, "Cooking: <col=00ff00>any level</col>");
   assert.match(range.panel.description, /Use a raw fish on the range/);
+});
+
+test("screen tabs: Stats shows the totals and hides the Overview; Overview brings it back; Travel opens travel", (t) => {
+  const { COMPONENT, uid } = require(SCREEN);
+  let now = 1_000_000;
+  t.mock.method(Date, "now", () => now);
+  const player = idlePlayer();
+  player.setAttribute("idle-mode:onboarded", true);
+  for (let i = 0; i <= 10; i++) {
+    chop(player);
+    now += 6000;
+  }
+  player.setAttribute("idle-mode:totals", {
+    ...player.getAttribute("idle-mode:totals"), offlineMs: 3_600_000, bySkill: { WOODCUTTING: 250, MINING: 900 }, byItem: { [LOGS]: 10, [YEW_LOGS]: 3 },
+  });
+  api.command(player, "idle");
+  assert.equal(player.screen.hidden.get(uid(COMPONENT.STATS_BOX)), true, "Overview first");
+  assert.equal(player.screen.hidden.get(uid(COMPONENT.STATUS_BOX)), false);
+  api.click(player, uid(COMPONENT.TAB_LABEL_START + 1));
+  assert.equal(player.screen.hidden.get(uid(COMPONENT.STATS_BOX)), false);
+  assert.equal(player.screen.hidden.get(uid(COMPONENT.STATUS_BOX)), true);
+  assert.equal(player.screen.hidden.get(uid(require(SCREEN).slotComponent(0, require(SCREEN).SLOT.BUY_BUTTON))), true);
+  assert.deepEqual([0, 1].map((line) => screenText(player, COMPONENT.SKILL_LINE_START + line)), ["Mining: 900 XP", "Woodcutting: 250 XP"]);
+  assert.deepEqual([0, 1].map((line) => screenText(player, COMPONENT.ITEM_LINE_START + line)), ["Logs: 10", "Yew logs: 3"]);
+  assert.equal(screenText(player, COMPONENT.STATS_TIME), "Time idle: 1m playing, 1h 0m away");
+  assert.equal(screenText(player, COMPONENT.TAB_LABEL_START + 1), "Stats", "the active tab is white");
+  assert.match(player.screen.texts.get(uid(COMPONENT.TAB_LABEL_START + 1)), /<col=ffffff>/);
+  // Points coming in redraw the Stats tab, not the hidden Overview.
+  api.emit("xp", { player, skill: Skill.WOODCUTTING, experience: 300 });
+  assert.equal(player.screen.hidden.get(uid(COMPONENT.STATUS_BOX)), true);
+  api.click(player, uid(COMPONENT.TAB_START));
+  assert.equal(player.screen.hidden.get(uid(COMPONENT.STATUS_BOX)), false);
+  assert.equal(player.screen.hidden.get(uid(COMPONENT.STATS_BOX)), true);
+  api.click(player, uid(COMPONENT.TAB_START + 2));
+  assert.equal(player.getInterfaceId(), require(TRAVEL_SCREEN).GROUP_ID);
+});
+
+test("screen tabs: a new account's Stats say nothing yet", () => {
+  const { COMPONENT, uid } = require(SCREEN);
+  const player = idlePlayer();
+  api.command(player, "idle");
+  api.click(player, uid(COMPONENT.TAB_START + 1));
+  assert.equal(screenText(player, COMPONENT.SKILL_LINE_START), "Nothing yet");
+  assert.equal(screenText(player, COMPONENT.ITEM_LINE_START), "Nothing yet");
+  assert.equal(screenText(player, COMPONENT.SKILL_LINE_START + 1), "");
 });

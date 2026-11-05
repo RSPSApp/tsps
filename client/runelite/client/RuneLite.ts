@@ -24,6 +24,7 @@ import { CORE_PLUGINS, LEGACY_CONFIG_MIGRATIONS } from "./plugins";
 import { toRuneLiteGameState } from "../impl/GameStateMapping";
 import { bindNpcEvents } from "../impl/NpcEventSource";
 import { bindContainerEvents, bindWidgetEvents } from "../impl/ContainerEventSource";
+import { bindDialogueChat } from "../impl/DialogueChatSource";
 import { runLegacyConfigMigrations } from "../impl/LegacyConfigMigration";
 import { migrateTileMarkersConfig } from "../../game/plugins/tilemarkers/migrateTileMarkers";
 import { migrateTimersConfig } from "../../game/plugins/statustimer/TimersPlugin";
@@ -118,6 +119,8 @@ export class RuneLite {
         // ItemContainerChanged from the backpack and worn equipment; WidgetLoaded from group loads.
         bindContainerEvents(this.client, (event) => this.eventBus.post(event));
         bindWidgetEvents(this.client, (event) => this.eventBus.post(event));
+        // NPC and player dialogue pages as DIALOG chat messages ("<name>|<text>"), as RuneLite sees them.
+        bindDialogueChat(this.client, (event) => this.eventBus.post(event));
 
         // state.tickListeners fire after the tick's packets are applied.
         subscribeTick(() => this.eventBus.post(new GameTick()));

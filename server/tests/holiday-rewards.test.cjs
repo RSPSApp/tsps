@@ -139,3 +139,25 @@ test('successful native Take leaves script474 to hide in place, without rebuildi
  assert.ok(packets.every(packet=>!packet.subarray(0,1).equals(prefix)),'take emits no fresh client initialization script');
  assert.equal(p.getInventory().getAmount(bobble),1);
 });
+
+test('wearing a never-unlocked holiday item registers it with Diango once, with the recorded message',()=>{
+ const {EquipPacketListener}=require('../dist/net/packet/impl/EquipPacketListener');
+ const {p,messages}=fixture();const wreath=core.CacheDefinitions.getObjId('wreath');
+ p.getInventory().setItem(0,new core.Item(wreath,1));
+ assert.equal(PM.emitItemAction({player:p,interfaceId:core.Inventory.INTERFACE_ID,item:p.getInventory().getItems()[0],itemId:wreath,slot:0,clickType:3,option:'Check rank',handled:false})||true,true);
+ assert.deepEqual(p.getAttribute('holiday-rewards:unlocked')??[],[],'Check rank does not unlock');
+ EquipPacketListener.equip(p,wreath,0,core.Inventory.INTERFACE_ID);
+ assert.deepEqual(p.getAttribute('holiday-rewards:unlocked'),['wreath']);
+ assert.deepEqual(messages.filter(m=>m.startsWith("You've unlocked")),["You've unlocked a holiday item: <col=ef1020>Druidic wreath</col>"]);
+ EquipPacketListener.unequip(p,core.CacheDefinitions.getItem(wreath).equipSlot ?? 0);
+ EquipPacketListener.equip(p,wreath,p.getInventory().getSlotForItemId(wreath),core.Inventory.INTERFACE_ID);
+ assert.equal(messages.filter(m=>m.startsWith("You've unlocked")).length,1,'no repeat message');
+});
+test('holiday-rewards:used unlocks catalogue items only and the retrieval menu then offers them',()=>{
+ const {p,messages}=fixture();
+ PM.emitCustomEvent('holiday-rewards:used',{player:p,itemId:core.ItemIdentifiers.COINS});
+ assert.deepEqual(p.getAttribute('holiday-rewards:unlocked')??[],[]);
+ PM.emitCustomEvent('holiday-rewards:used',{player:p,itemId:bobble});
+ assert.deepEqual(p.getAttribute('holiday-rewards:unlocked'),['win05_hat1']);assert.equal(messages.length,1);
+ open(p);take(p);assert.equal(p.getInventory().getAmount(bobble),1);
+});

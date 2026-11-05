@@ -93,3 +93,34 @@ Final feature/bank/PIN/bank-space tests:126/126 pass. Final-source full server s
 10,003 pass,6 fail of10,009,0 cancelled,446.37seconds. All six reproduce on untouched
 base b6edd9b4a: Belladonna protective harvest, three Farming/Leagues cases, Barronite
 task count and bone-burying messages. The full suite is not claimed green.
+
+## Unlocking a held item by using it
+
+Rev 232 recording 3200 shows a player at Diango wearing or playing with holiday items
+they held but had never unlocked. Each first Wear or Play-with sent
+`You've unlocked a holiday item: <col=ef1020>Tiger toy</col>` (the cache name) and the
+item then counted for retrieval; "Check rank" on the Druidic wreath sent no unlock until
+it was worn. HolidayRewards follows that: a real equip (`equipment:changed` with
+`equipped: true`) unlocks the catalogue entry, and item handlers whose use counts emit
+`holiday-rewards:used { player, itemId }`. Alternate styles unlock the catalogue entry of
+their cache family (the same item_transmog/costume-room links that decide ownership); the
+recording only shows base items, so that part is an inference from the shared family.
+
+## Native style chooser (ItemStyles)
+
+`plugins/items/ItemStyles.plugin.js` replaces the Present box hat's single-item chooser.
+Any item in the cache `item_transmog` table whose inventory or worn option is Change,
+Change-style, Colour, Carve or Paint opens interface `item_transmog` for its group, with
+`%item_transmog_active_obj` set and script 6857. An item in two groups (the 2024
+Halloween pumpkins) opens its first group from its first style option and its second from
+the second: rev 226 recording 1686 shows Colour opening group 9 and Carve group 23.
+Selecting a row replaces the item in its own slot, keeps amount and metadata, and sends
+`You change the style of your <name before the change>.` (same recording).
+
+The server repeats the client's availability proc (`[proc,script6854]`): treat cauldron
+rows need the 2022 community-goal stage, spider hat rows need their 2023 reward varbits.
+The greenman mask and Fractured Archive cape groups depend on Forestry and Archive unlocks
+this plugin does not own, so they are not opened here.
+
+Tests: `node --test tests/item-styles.test.cjs tests/present-box-hat.test.cjs
+tests/holiday-rewards.test.cjs` from `server/` after a build.

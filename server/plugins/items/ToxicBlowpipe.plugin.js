@@ -501,8 +501,7 @@ function combatMethod(special) {
       return character?.getFightType?.()?.isRapid?.() === true ? Math.max(1, baseSpeed - 1) : baseSpeed;
     }
     hits(character, target) {
-      const distance = core.CombatPosition.projectileDistance(character, target);
-      const delay = core.RangedCombatMethod.playerHitDelays(character, target, distance)[0];
+      const delay = core.RangedCombatMethod.landingDelays(character, target)[0];
       return [new core.PendingHit(character, target, this, delay)];
     }
     start(character, target) {

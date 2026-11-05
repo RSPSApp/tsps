@@ -42,12 +42,13 @@ test('cross-floor actor visibility is enabled by horizontal range and the visibi
   const viewer = new Location(3200, 3200, 0);
   const upper = new Location(3204, 3200, 1);
   assert.equal(CrossFloor.visible(viewer, upper, 15), true);
+  assert.equal(CrossFloor.projectileVisible(viewer, upper, 15), true,
+    'projectiles follow the cross-floor visibility option');
   assert.equal(CrossFloor.visible(viewer, new Location(3216, 3200, 1), 15), false, 'out-of-range actors stay hidden');
   process.env.CROSS_FLOOR_VISIBILITY = '0';
   assert.equal(CrossFloor.visible(viewer, upper, 15), false, 'the option still controls cross-floor visibility');
-  assert.equal(CrossFloor.projectileVisible(viewer, upper, 15), false);
-  assert.equal(CrossFloor.projectileVisible(viewer, upper, 15), true,
-    'projectile delivery remains enabled even when actor sight is blocked');
+  assert.equal(CrossFloor.projectileVisible(viewer, upper, 15), false,
+    'cross-floor projectiles are hidden when actor visibility is disabled');
 });
 
 test('cross-floor combat searches reachable clear-shot tiles on the attacker floor', t => {
@@ -68,24 +69,22 @@ test('cross-floor combat searches reachable clear-shot tiles on the attacker flo
     'destinations remain within the attack range');
 });
 
-test('cross-floor combat falls back to an ordinary approach when its range route is blocked', t => {
+test('cross-floor combat stops when no clear-shot tile is reachable instead of routing without line of sight', t => {
   const { PathFinder } = require('../dist/game/model/movement/path/PathFinder');
   const previous = process.env.CROSS_FLOOR_COMBAT;
   t.after(() => { if (previous === undefined) delete process.env.CROSS_FLOOR_COMBAT; else process.env.CROSS_FLOOR_COMBAT = previous; });
   process.env.CROSS_FLOOR_COMBAT = '1';
-  let hasRoute = false;
-  const calls = [];
+  let candidateSearches = 0;
+  let genericApproaches = 0;
   t.mock.method(RegionManager, 'canProjectileAttackBounds', () => true);
-  t.mock.method(PathFinder, 'calculateRouteToAny', () => 0);
-  t.mock.method(PathFinder, 'calculateEntityRoute', (...args) => { calls.push(args); hasRoute = calls.length === 2; return calls.length === 1 ? 0 : 1; });
+  t.mock.method(PathFinder, 'calculateRouteToAny', () => { candidateSearches++; return 0; });
+  t.mock.method(PathFinder, 'calculateEntityRoute', () => { genericApproaches++; return 1; });
   const attacker = actor(3200, 3200, 1);
-  attacker.getMovementQueue = () => ({ hasRoute: () => hasRoute });
   const target = actor(3210, 3200, 0);
   const ranged = { type: () => CombatType.RANGED, attackDistance: () => 6 };
-  assert.equal(CombatRange.route(attacker, ranged, target), true);
-  assert.equal(calls.length, 2);
-  assert.equal(calls[0][2], 6);
-  assert.equal(calls[1].length, 2, 'the fallback uses the ordinary same-plane approach route');
+  assert.equal(CombatRange.route(attacker, ranged, target), false);
+  assert.ok(candidateSearches > 1, 'searches beyond the nearest blocked firing positions');
+  assert.equal(genericApproaches, 0, 'does not send the player to an endpoint with no guaranteed shot');
 });
 
 test('cross-floor combat falls back when a zero-step range route cannot clear projectile clipping', t => {

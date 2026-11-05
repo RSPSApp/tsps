@@ -91,8 +91,8 @@ function buildDarkBowSpecialAttack(core) {
           Projectile.createProjectile(player, target, id, 41, end, 40, 36)
             .withAngle(angle).withProgress(11).sendProjectile();
         }
-        // Raw273: both dragon-arrow impacts are queued at launch, at their projectile end cycles.
-        if (dragon) Sounds.playAreaSoundAt(target, new Sound(Sound.DARK_BOW_IMPACT.getId(), 1, end, 0), 10);
+        // Raw273 confirms dragon timing; the Wiki sound table assigns 3737 to both special impacts.
+        Sounds.playAreaSoundAt(target, new Sound(Sound.DARK_BOW_IMPACT.getId(), 1, end, 0), 10);
       }
       target.performGraphic(new Graphic(dragon ? DRAGON_IMPACT : SHADOW_IMPACT, flights[1].end, GRAPHIC_HEIGHT));
       CombatFactory.decrementAmmo(player, target.getLocation(), HIT_COUNT);

@@ -424,16 +424,19 @@ before(async () => {
   require('../plugins/items/ItemDefinitionLoader.plugin').register({ log() {},onPlayerLogin() {},registerContentEndpoint() {} });
 });
 
-test('raw Dark Bow dragon impacts are queued once per arrow at the original target tile', () => {
+test('raw Dark Bow dragon and shadow impacts are queued once per arrow at the original target tile', () => {
   const { Location }=core;
-  for (const [npc,distance,ends] of [[true,9,[91,145]],[false,3,[64,85]]]) {
-    const archer=fakePlayer({weapon:I.DARK_BOW,ammo:Ammunition.DRAGON_ARROW,rangedWeapon:RangedWeapon.DARK_BOW,special:'dark_bow'});
+  for (const [npc,distance,ends,ammo] of [
+    [true,9,[91,145],Ammunition.DRAGON_ARROW],
+    [false,3,[64,85],Ammunition.RUNE_ARROW],
+  ]) {
+    const archer=fakePlayer({weapon:I.DARK_BOW,ammo,rangedWeapon:RangedWeapon.DARK_BOW,special:'dark_bow'});
     archer.getLocation=()=>new Location(3005,3309+distance);
     let location=new Location(3005,3309);
     const victim={getLocation:()=>location,isNpc:()=>npc,performGraphic() {}};
     areaSounds.length=0;synthSounds.length=0;
     CombatSpecial.getById('dark_bow').getCombatMethod().start(archer,victim);
-    assert.deepEqual(synthSounds.map(s=>s.id),[3731,3733],'private activation contract from attacker273 is retained');
+    assert.deepEqual(synthSounds.map(s=>s.id),ammo===Ammunition.DRAGON_ARROW?[3731,3733]:[3731,3736],'private activation contract from attacker273 is retained');
     assert.deepEqual(areaSounds.map(s=>[s.soundId,s.delay,s.radius,s.x,s.y]),ends.map(delay=>[3737,delay,10,3005,3309]),npc?'raw273 tick497':'raw2510 tick940');
     location=new Location(3010,3310);
     assert.ok(areaSounds.every(s=>s.x===3005&&s.y===3309),'scheduled impact locations are independent of later target movement/removal');

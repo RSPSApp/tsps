@@ -231,16 +231,6 @@ test('scythe queue caps a corrupted victim across every hit before awarding XP',
 test('OSRS minimum player hit clamps successful zeroes without rerolling or changing XP rates', t => {
   const { Misc } = require('../dist/util/Misc');
   const { HitMask } = require('../dist/game/content/combat/hit/HitMask');
-  let minimumHit;
-  require('../plugins/world/PlayerMinimumHit.plugin').register({
-    onCustomEvent(name, handler) {
-      assert.equal(name, 'combat:hit-rolled');
-      minimumHit = handler;
-    },
-  });
-  t.mock.method(PluginManager, 'emitCustomEvent', (name, event) => {
-    if (name === 'combat:hit-rolled') minimumHit(event);
-  });
   t.mock.method(core.DamageFormulas, 'sourceMaxHit', () => 3);
   t.mock.method(core.DamageFormulas, 'sourceHitBounds', () => ({ minimum: 0, maximum: 3 }));
   let selected = 0;
@@ -271,9 +261,15 @@ test('OSRS minimum player hit clamps successful zeroes without rerolling or chan
   assert.equal(makeHit().getTotalDamage(), 0, 'failed accuracy stays a miss');
   const npc = { isPlayer: () => false, isNpc: () => true };
   assert.equal(CombatFactory.rollHitDamage(npc, victim, CombatType.MELEE, false, undefined, false, false).getDamage(), 0, 'NPC zeroes are unchanged');
-  const zeroBound = { attacker: source, damage: 0, maximum: 0 };
-  minimumHit(zeroBound);
-  assert.equal(zeroBound.damage, 0, 'explicit zero-damage bounds remain zero');
+  const zeroBound = { minimumMultiplier: 0, maximumMultiplier: 0 };
+  assert.equal(CombatFactory.rollHitDamage(source, victim, CombatType.MELEE, false, zeroBound, false, false).getDamage(), 0,
+    'explicit zero-damage bounds remain zero');
+  selected = 1;
+  t.mock.method(PluginManager, 'emitCustomEvent', (name, event) => {
+    if (name === 'combat:hit-rolled') event.damage = 0;
+  });
+  assert.equal(CombatFactory.rollHitDamage(source, victim, CombatType.MELEE, false, undefined, false, false).getDamage(), 1,
+    'clamp after plugin roll modifiers too');
 
   t.mock.method(core.PrayerHandler, 'isActivated', () => true);
   assert.equal(CombatFactory.rollHitDamage(source, victim, CombatType.MELEE, false, undefined, false, true).getDamage(), 0,

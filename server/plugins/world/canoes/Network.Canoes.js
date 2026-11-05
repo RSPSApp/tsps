@@ -270,7 +270,7 @@ function arrive(player, from, to, type) {
   core.TaskManager.submit(new core.CountdownTask({}, 3, () => {
     if (player.isRegistered()) player.getPacketSender().sendObjectRemoval(sinking);
   }));
-  if (from.id === 1 && to.id === 4 && type.id === 4) api.emitCustomEvent("diary:task", { player, diary: "lumbridge-draynor", task: "travel-from-lumbridge-to-edgeville-on-a-waka-can" });
+  if (from.id === 1 && to.id === 4 && type.id === 4) api.emitCustomEvent("diary:task", { player, diary: "lumbridge", task: "travel-from-lumbridge-to-edgeville-on-a-waka-can" });
 }
 
 /** One drifting piece of river scenery; see RIDE_SCENERY. */

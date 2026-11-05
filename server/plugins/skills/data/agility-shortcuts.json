@@ -2507,6 +2507,7 @@
       "unverified": "the grapple's steps and both ends (no capture; ends from the map)",
       "requires": [
         {
+          "method":"grapple",
           "skills": {"agility":8,"strength":8,"ranged":19},
           "equipped": [
             {"slot":"weapon","name":"crossbow","message":"You need a crossbow equipped to do that."},
@@ -2514,6 +2515,7 @@
           ]
         },
         {
+          "method":"barehanded",
           "skills": {"agility":48},
           "cross": [
             {"move":"to","anim":"CLIMB_ROCKS","speed":[0,210],"ticks":7},

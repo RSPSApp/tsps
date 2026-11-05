@@ -1229,6 +1229,7 @@ function processWoodcuttingTick(activeSessions, currentTick) {
         petBase: state.tree.petBase,
         petRolled: petRoll.handled,
         logId: state.tree.logId,
+        location: state.location,
         // Resource-count consumers distinguish a felling omission from the successful action.
         logAmount: felling.skipLog ? 0 : 1,
         axeId: state.axe?.id ?? null,

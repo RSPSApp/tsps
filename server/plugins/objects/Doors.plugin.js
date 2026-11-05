@@ -54,6 +54,8 @@ const NAMELESS_DOOR_LEAF_IDS = Object.freeze({
   ARENA_EXIT_OPEN: 3787, // troll_stronghold_arena_exit_inactive
   PRISON_DOOR_9_OPEN: 3781, // troll_stronghold_prison_door_open, capture 740
   GRUM_DOOR_OPEN: 1542, // Grum's Gold Exchange; capture 465
+  CRANDOR_SECRET_DOOR_OPEN: 25039, // dragonsecretdoor_open; capture 2951
+  INVISWALL: 38848, // actionless collision blocker; capture 2951
 });
 
 let SELF_OPENING_DOOR_IDS, IN_PLACE_DOOR_IDS, OWN_TILE_DOOR_IDS, SINGLE_DOOR_OPEN_IDS, COMPOSITE_DOOR_OPENINGS, WOODEN_GATES, WOODEN_GATE_BY_ID;
@@ -425,6 +427,27 @@ function defineDoorData({ ObjectIdentifiers: O }) {
       crossX: 3016,
       closeTicks: 2,
       openSoundId: 62, // the door sound, as captured
+    }),
+    // Dragon Slayer's secret wall into Crandor's dungeon (capture 2951 ticks 85-89): the quest opens it
+    // through door:open once the shortcut is unlocked. The player walks 2836,9598 -> 9599 -> 9600 while
+    // dragonsecretdoor (2606, 2836,9600 rot 3) becomes dragonsecretdoor_open (25039, 2836,9599 rot 0)
+    // with sound 2410, and it shuts two ticks later. Sounds 400 and 2768 (delay 20) arrive in that same
+    // tick as a fight hit on the player, so they are unattributed and not played here. Live puts the
+    // actionless blocker 38848 on the doorway for those two ticks, so the opening is kept shut to
+    // ordinary walking and following: the quest-gated opener is carried over it by a forced movement
+    // (carry) and anyone else is stopped by the real clipping. Captured going north only; the way back
+    // south is the same wall in reverse. The wall is reachable only from the tiles beside it, so every
+    // crossing is one step.
+    Object.freeze({
+      closed: [[O.WALL_9, 2836, 9600, 0, 3]],
+      opened: [
+        [NAMELESS_DOOR_LEAF_IDS.CRANDOR_SECRET_DOOR_OPEN, 2836, 9599, 0, 0],
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2836, 9600, 0, 3],
+      ],
+      crossY: 9600,
+      carry: true,
+      closeTicks: 2,
+      openSoundId: 2410,
     }),
   ]);
   DOUBLE_DOOR_FAMILY_IDS_BY_ID = new Map(
@@ -1367,10 +1390,29 @@ function carryAcrossGate(player, gate, y, z) {
       eastward ? 1 : 3, GATE_WALK_ANIMATION)));
 }
 
+/**
+ * A gate that keeps a collision blocker on its doorway while open: the opener, standing on the tile beside
+ * it, is carried the one tile over (forced movement ignores the blocker); nobody else can walk across.
+ */
+function carryOneTile(player, gate, x, z) {
+  const here = player.getLocation();
+  if (gate.crossY == null || here.getX() !== x) return;
+  const to = here.getY() < gate.crossY ? gate.crossY : gate.crossY - 1;
+  const dy = to - here.getY();
+  if (Math.abs(dy) !== 1) return;
+  core.TaskManager.submit(new core.ForceMovementTask(player, 1,
+    new core.ForceMovement(cloneLocation(x, here.getY(), z), new core.Location(0, dy, 0), 0, 30,
+      dy > 0 ? 0 : 2, GATE_WALK_ANIMATION)));
+}
+
 /** The player crosses on the clicked row or column, from whichever side they stand on. */
 function stepThroughGate(player, gate, x, y, z) {
   if (gate.crossBetween) {
     carryAcrossGate(player, gate, y, z);
+    return;
+  }
+  if (gate.carry) {
+    carryOneTile(player, gate, x, z);
     return;
   }
   const destination = gate.crossX != null

@@ -202,8 +202,12 @@ withdrawals and full inventories. Source: [Herb sack](https://oldschool.runescap
 
 An open sack also takes grimy herbs picked up from the ground and herbs harvested from a herbiboar,
 as it does from patches, whole or not at all for a pickup and per herb for a harvest, while it has room
-(30 of each type here; the silklined 100 is not modelled). A closed sack takes none. Wiki: "will automatically
+(30 of each type here, 100 in a silklined sack). A closed sack takes none. Wiki: "will automatically
 store any grimy herbs that are picked up", "provided there is space for it". No message is shown, as none is documented.
+
+A pristine spider silk (Sarachnis's) used on a herb sack makes it a silklined herb sack, which stores 100 of each grimy herb
+and otherwise works the same, open or closed. The upgrade has no cost or level requirement (Wiki: [Silklined herb sack](https://oldschool.runescape.wiki/w/Silklined_herb_sack)).
+Assumed, as no source says: the herbs already in the sack are kept, an open sack stays open, and no message is shown.
 
 The four South Falador allotment/flower/herb patches award 10% extra Farming XP
 after the Medium Falador Diary, queried through canonical diary progress. The

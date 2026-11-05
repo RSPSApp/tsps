@@ -206,6 +206,11 @@ function kick(event, option) {
   if ((dx !== 0) === (dy !== 0) || from.getDistance(at) > 1) return true;
   player.performAnimation(new core.Animation(core.CacheDefinitions.getSeqId(KICK)));
   game.motion = { direction: [dx, dy], left: DISTANCE[option] };
+  // Show-Goal moved the arrow to the goal; the next kick puts it back on the ball.
+  if (game.showingGoal) {
+    game.showingGoal = false;
+    player.getPacketSender().sendEntityHint(npc);
+  }
   return true;
 }
 
@@ -218,6 +223,7 @@ function showGoal({ player, npc }) {
   const game = games.get(player);
   if (!game || game.npc !== npc) return true;
   const [x, y] = goalAt(game.scored);
+  game.showingGoal = true;
   player.getPacketSender().sendPositionalHint(new core.Location(x, y, DATA.arena.z));
   return true;
 }

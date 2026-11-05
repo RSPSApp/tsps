@@ -164,6 +164,12 @@ test("Show-Goal points the arrow at the next goal", t => {
   play(player, "Show-Goal", [at(player)[0], at(player)[1] - 1]);
   const hint = sent.filter(([name]) => name === "sendPositionalHint").at(-1)[1];
   assert.deepEqual([hint.getX(), hint.getY()], [DATA.goals[6][0], DATA.goals[6][1]]);
+  // The next kick puts the arrow back on the ball.
+  const arrows = () => sent.filter(([name]) => name === "sendEntityHint").length;
+  const before = arrows();
+  play(player, "Tap", [at(player)[0], at(player)[1] - 1]);
+  assert.equal(arrows(), before + 1);
+  assert.equal(sent.filter(([name]) => name === "sendEntityHint").at(-1)[1], ball(player));
 });
 
 test("the final goal is the first goal again: XP by time, the scoreboard, and the ball goes", t => {

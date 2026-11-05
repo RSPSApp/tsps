@@ -92,8 +92,14 @@ function boatStatsForRow(typeRowId) {
     const optionId = row.column(columns.list)[0];
     if (typeof optionId !== "number") return undefined;
     const option = CacheDefinitions.getDbRow(optionId);
-    const statsId = option?.int(columns.stats, -1);
-    const stats = statsId >= 0 ? CacheDefinitions.getDbRow(statsId) : undefined;
+    if (!option) return undefined;
+    const statsId = option.int(columns.stats, -1);
+    // Like partStats, an existing option can have no stats reference.
+    if (statsId < 0) {
+      parts.push(undefined);
+      continue;
+    }
+    const stats = CacheDefinitions.getDbRow(statsId);
     if (!stats) return undefined;
     parts.push(stats);
   }

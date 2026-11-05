@@ -1,6 +1,6 @@
 import type { NPC } from "@runelite/api/Client";
 import { WorldPoint } from "@runelite/api/coords/WorldPoint";
-import { clearHintArrow, hintArrow, setHintArrowNpc, setHintArrowTile } from "../../game/HintArrow";
+import { clearHintArrow as clearEngineHintArrow, getHintArrowRevision, hintArrow, setHintArrowNpc, setHintArrowTile } from "../../game/HintArrow";
 
 /** RuneLite's HintArrowType values, as `hintArrow.type` encodes them. */
 const HINT_NPC = 1;
@@ -9,16 +9,25 @@ const HINT_NPC = 1;
 const TILE_HINT_HEIGHT = 100;
 const TILE_HINT_CENTRE = 2;
 
+/** The engine's arrow revision when a plugin last set the arrow; -1 when a plugin owns none. */
+let ownRevision = -1;
+
 /** `Client.setHintArrow(npc | WorldPoint)`: an NPC hint by server index, or a tile hint at its centre. */
 export function setHintArrow(target: NPC | WorldPoint): void {
     if (target instanceof WorldPoint) {
         setHintArrowTile(target.getX(), target.getY(), TILE_HINT_HEIGHT, (TILE_HINT_CENTRE << 2) | (target.getPlane() & 3));
-        return;
+    } else {
+        setHintArrowNpc(target.getIndex());
     }
-    setHintArrowNpc(target.getIndex());
+    ownRevision = getHintArrowRevision();
 }
 
-export { clearHintArrow };
+/** `Client.clearHintArrow()`: clears the arrow a plugin set; an arrow the server sent since is left alone. */
+export function clearHintArrow(): void {
+    if (ownRevision === -1 || getHintArrowRevision() !== ownRevision) return;
+    clearEngineHintArrow();
+    ownRevision = -1;
+}
 
 /** The server index of the hinted NPC, or -1 when the hint is not an NPC hint. */
 export function hintArrowNpcIndex(): number {

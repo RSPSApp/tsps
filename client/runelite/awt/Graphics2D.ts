@@ -34,7 +34,7 @@ export interface Graphics2D {
 }
 
 export type RecordedRect = { x: number; y: number; width: number; height: number; color: number };
-export type RecordedString = { text: string; x: number; y: number; color: number };
+export type RecordedString = { text: string; x: number; y: number; color: number; font: FontHandle };
 export type RecordedShape = { kind: "draw" | "fill"; shape: Shape; color: number; strokeWidth: number };
 export type RecordedImage = { image: HTMLCanvasElement; x: number; y: number };
 
@@ -87,32 +87,74 @@ export class RecordingGraphics2D implements Graphics2D {
         return this.color.getRGB() >>> 0;
     }
 
+    /** Everything drawn, in order, so a frame can be replayed onto another Graphics2D. */
+    private readonly commands: Array<(target: Graphics2D) => void> = [];
+
     drawString(text: string, x: number, y: number): void {
-        this.strings.push({ text, x, y, color: this.argb() });
+        this.strings.push({ text, x, y, color: this.argb(), font: this.font });
+        const { color, font } = this;
+        this.commands.push((target) => {
+            target.setFont(font);
+            target.setColor(color);
+            target.drawString(text, x, y);
+        });
     }
 
     fillRect(x: number, y: number, width: number, height: number): void {
         this.rects.push({ x, y, width, height, color: this.argb() });
+        const { color } = this;
+        this.commands.push((target) => {
+            target.setColor(color);
+            target.fillRect(x, y, width, height);
+        });
     }
 
     drawRect(x: number, y: number, width: number, height: number): void {
         this.rects.push({ x, y, width, height, color: this.argb() });
+        const { color, stroke } = this;
+        this.commands.push((target) => {
+            target.setColor(color);
+            target.setStroke(stroke);
+            target.drawRect(x, y, width, height);
+        });
     }
 
     fillOval(x: number, y: number, width: number, height: number): void {
         this.ovals.push({ x, y, width, height, color: this.argb() });
+        const { color } = this;
+        this.commands.push((target) => {
+            target.setColor(color);
+            target.fillOval(x, y, width, height);
+        });
     }
 
     draw(shape: Shape): void {
         this.shapes.push({ kind: "draw", shape, color: this.argb(), strokeWidth: this.stroke });
+        const { color, stroke } = this;
+        this.commands.push((target) => {
+            target.setColor(color);
+            target.setStroke(stroke);
+            target.draw(shape);
+        });
     }
 
     fill(shape: Shape): void {
         this.shapes.push({ kind: "fill", shape, color: this.argb(), strokeWidth: this.stroke });
+        const { color } = this;
+        this.commands.push((target) => {
+            target.setColor(color);
+            target.fill(shape);
+        });
     }
 
     drawImage(image: HTMLCanvasElement, x: number, y: number): void {
         this.images.push({ image, x, y });
+        this.commands.push((target) => target.drawImage(image, x, y));
+    }
+
+    /** Draws everything recorded onto another Graphics2D, in order. */
+    replay(target: Graphics2D): void {
+        for (const command of this.commands) command(target);
     }
 
     /** A stable description of everything recorded, for overlay signatures. */

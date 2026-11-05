@@ -364,6 +364,7 @@ import { isPauseButtonWidget, setMenuObjTypeLookup } from "../widgets/menu/utils
 import { INVENTORY } from "../runelite/api/gameval/InterfaceID";
 import { RenderDataWorkerPool } from "./worker/RenderDataWorkerPool";
 import { WorldMapController, type WorldMapRenderedIcon } from "./worldMap/WorldMapController";
+import type { PluginWorldMapPointEntry, RenderedWorldMapPoint } from "@runelite/client/ui/overlay/worldmap/worldMapLayout";
 import type { WorldMapViewport } from "./worldMap/WorldMapTypes";
 import { WorldViewManager } from "./worldview/WorldViewManager";
 
@@ -493,6 +494,8 @@ export class OsrsClient {
             });
     }
 
+    /** Plugin markers on the world map (Quest Helper's step, RuneLite points via the WorldMapPointManager); the world map draws them. */
+    pluginWorldMapPoints?: PluginWorldMapPointEntry[];
     inputManager: InputManager = new InputManager();
     camera: Camera = new Camera(3242, -26, 3202, 245, 1862);
 
@@ -4107,6 +4110,10 @@ export class OsrsClient {
 
     setRenderedWorldMapIcons(icons: WorldMapRenderedIcon[]): void {
         this.worldMap.setRenderedWorldMapIcons(icons);
+    }
+
+    setRenderedWorldMapPoints(points: RenderedWorldMapPoint[]): void {
+        this.worldMap.setRenderedWorldMapPoints(points);
     }
 
     getWorldMapMenuEntriesAt(screenX: number, screenY: number): SimpleMenuEntry[] {

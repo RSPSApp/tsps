@@ -89,16 +89,16 @@ export abstract class OverlayPanel implements WidgetOverlay {
     }
 
     draw(context: WidgetOverlayDrawContext): DrawnRect[] {
-        // Measure with the real fonts, place, then draw at the placement's scale.
+        // Render once with the real fonts into a recording, place the panel, then replay the
+        // recording at the placement's origin and scale.
         const metricsSource = new GLGraphics2D(context, { x: 0, y: 0, scaleX: 1, scaleY: 1 }, "interface");
-        const measuring = new RecordingGraphics2D(metricsSource.getFontMetrics(), (font) => metricsSource.getFontMetrics(font));
-        measuring.setFont(metricsSource.getFont());
-        const size = this.render(measuring);
+        const recording = new RecordingGraphics2D(metricsSource.getFontMetrics(), (font) => metricsSource.getFontMetrics(font));
+        recording.setFont(metricsSource.getFont());
+        const size = this.render(recording);
         if (!size || size.width <= 0 || size.height <= 0) return [];
         const at = context.place(this, size.width, size.height);
         if (!at) return [];
-        const graphics = new GLGraphics2D(context, { x: at.x, y: at.y, scaleX: at.scaleX, scaleY: at.scaleY }, "interface");
-        this.render(graphics);
+        recording.replay(new GLGraphics2D(context, { x: at.x, y: at.y, scaleX: at.scaleX, scaleY: at.scaleY }, "interface"));
         return [{ x: at.x, y: at.y, w: size.width * at.scaleX, h: size.height * at.scaleY }];
     }
 }

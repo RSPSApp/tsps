@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import { ChatMessage, WidgetLoaded } from "@runelite/api/events";
-import { bindWidgetEvents } from "../runelite/impl/ContainerEventSource";
+import { bindWhenWidgetManagerReady, bindWidgetEvents } from "../runelite/impl/ContainerEventSource";
 import { bindDialogueChat } from "../runelite/impl/DialogueChatSource";
 import { WidgetManager } from "../widgets/WidgetManager";
 
@@ -80,5 +80,40 @@ setText(6, "After close");
 tick();
 assert.equal(loaded.filter((g) => g === CHAT_LEFT).length, 4, "load and open of one IF_OPENSUB count once");
 assert.equal(dialog.length, 4);
+
+// --- Binding before the widget manager exists ---------------------------------------------------------
+// RuneLite.load() runs from the OsrsClient constructor; the widget manager is created later in the
+// async init. The sources must wait for it (on client ticks) instead of binding to nothing.
+{
+    const late: any = {};
+    const ticks = new Set<() => void>();
+    const onClientTick = (fn: () => void) => {
+        ticks.add(fn);
+        return () => ticks.delete(fn);
+    };
+    const lateLoaded: number[] = [];
+    const unbindLate = bindWhenWidgetManagerReady(late, (c) => bindWidgetEvents(c, (e) => {
+        if (e instanceof WidgetLoaded) lateLoaded.push(e.getGroupId());
+    }), onClientTick);
+    assert.equal(ticks.size, 1, "no widget manager yet: waiting on client ticks");
+    for (const t of ticks) t();
+    assert.equal(ticks.size, 1, "still waiting");
+    late.widgetManager = manager;
+    const before = manager.groupLoadedListeners.size;
+    for (const t of ticks) t();
+    assert.equal(ticks.size, 0, "bound: the tick subscription is released");
+    assert.equal(manager.groupLoadedListeners.size, before + 1, "the listener is on the real manager");
+    manager.closeSubInterface(HOST, true);
+    manager.openSubInterface(HOST, CHAT_LEFT, 0);
+    assert.deepEqual(lateLoaded, [CHAT_LEFT], "and sees the next open");
+    unbindLate();
+    assert.equal(manager.groupLoadedListeners.size, before);
+
+    const never: any = {};
+    const unbindNever = bindWhenWidgetManagerReady(never, () => () => {}, onClientTick);
+    assert.equal(ticks.size, 1);
+    unbindNever();
+    assert.equal(ticks.size, 0, "unbinding while waiting releases the tick subscription");
+}
 
 console.log("runelite-widget-open-events: ok");

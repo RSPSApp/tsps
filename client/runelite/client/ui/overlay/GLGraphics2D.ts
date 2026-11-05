@@ -3,6 +3,7 @@ import type { FontHandle, FontMetrics, Graphics2D } from "@runelite/awt/Graphics
 import { Rectangle, type Shape, shapePoints } from "@runelite/awt/Shapes";
 import { drawTextGL } from "../../../../widgets/components/TextRenderer";
 import type { WidgetOverlayDrawContext } from "../../../../game/plugins/ClientPluginManager";
+import { CanvasTextureCache } from "./CanvasTextureCache";
 import { boldFont, overlayFont, type OverlayFont, type OverlayFontSlot } from "./OverlayFonts";
 
 /** The line height of the client's overlay fonts at 16pt, as QuestHelper's panel uses it. */
@@ -19,8 +20,8 @@ export type DrawnRect = { x: number; y: number; w: number; h: number };
  */
 export type GraphicsFrame = { x: number; y: number; scaleX: number; scaleY: number };
 
-let textureCounter = 0;
-const textureKeys = new WeakMap<HTMLCanvasElement, string>();
+/** Textures for the canvases overlays draw, bounded and shared by every GLGraphics2D. */
+const textures = new CanvasTextureCache(256);
 
 /**
  * java.awt.Graphics2D over the client's GL overlay context. Fonts are the overlay font slots
@@ -159,12 +160,8 @@ export class GLGraphics2D implements Graphics2D {
 
     drawImage(image: HTMLCanvasElement, x: number, y: number): void {
         const glr = this.renderer();
-        let key = textureKeys.get(image);
-        if (!key) {
-            key = `rl-g2d:${++textureCounter}`;
-            textureKeys.set(image, key);
-        }
-        const texture = glr.getTexture?.(key) ?? glr.createTextureFromCanvas?.(key, image);
+        if (!glr.createTextureFromCanvas) return;
+        const texture = textures.texture(glr, image);
         if (!texture) return;
         const w = image.width * this.frame.scaleX, h = image.height * this.frame.scaleY;
         glr.drawTexture(texture, this.dx(x), this.dy(y), w, h);

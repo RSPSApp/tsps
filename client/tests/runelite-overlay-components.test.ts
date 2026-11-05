@@ -1,7 +1,9 @@
 import { strict as assert } from "node:assert";
 import { Color } from "@runelite/awt/Color";
 import { Polygon, Rectangle } from "@runelite/awt/Shapes";
-import { RecordingGraphics2D } from "@runelite/awt/Graphics2D";
+import { type Graphics2D, RecordingGraphics2D } from "@runelite/awt/Graphics2D";
+import { CanvasTextureCache } from "@runelite/client/ui/overlay/CanvasTextureCache";
+import { OverlayPanel } from "@runelite/client/ui/overlay/OverlayPanel";
 import { ComponentConstants } from "@runelite/client/ui/overlay/components/ComponentConstants";
 import { LineComponent } from "@runelite/client/ui/overlay/components/LineComponent";
 import { PanelComponent } from "@runelite/client/ui/overlay/components/PanelComponent";
@@ -100,6 +102,78 @@ assert.equal(ComponentConstants.STANDARD_BORDER, 4);
     assert.equal(drawn[0].color, Color.CYAN.getRGB() >>> 0);
     assert.equal(drawn[1].kind, "fill");
     assert.equal(drawn[1].color, new Color(0, 0, 0, 50).getRGB() >>> 0, "RuneLite's default fill");
+}
+
+// --- Textures for drawn canvases are bounded, oldest first ------------------------------------------
+{
+    const created: string[] = [];
+    const deleted: string[] = [];
+    const textures = new Map<string, object>();
+    const glr: any = {
+        getTexture: (key: string) => textures.get(key),
+        createTextureFromCanvas: (key: string, _canvas: HTMLCanvasElement) => {
+            const texture = { key };
+            textures.set(key, texture);
+            created.push(key);
+            return texture;
+        },
+        deleteTexture: (key: string) => {
+            deleted.push(key);
+            return textures.delete(key);
+        },
+    };
+    const cache = new CanvasTextureCache(3);
+    const canvases = Array.from({ length: 5 }, (_, i) => ({ width: i + 1, height: 1 }) as HTMLCanvasElement);
+    const first = cache.texture(glr, canvases[0]);
+    assert.equal(cache.texture(glr, canvases[0]), first, "the same canvas reuses its texture");
+    assert.equal(created.length, 1);
+    cache.texture(glr, canvases[1]);
+    cache.texture(glr, canvases[2]);
+    assert.equal(deleted.length, 0, "three fit");
+    cache.texture(glr, canvases[3]);
+    assert.deepEqual(deleted, [created[0]], "a fourth evicts the oldest");
+    assert.notEqual(cache.texture(glr, canvases[0]), first, "the evicted canvas gets a new texture");
+    cache.clear(glr);
+    assert.equal(textures.size, 0, "clear deletes every texture it made");
+}
+
+// --- A panel overlay renders its content twice a frame: once for the signature, once to draw ---------
+{
+    let renders = 0;
+    class CountingPanel extends OverlayPanel {
+        constructor() {
+            super("CountingPanel");
+        }
+        render(graphics: Graphics2D) {
+            renders++;
+            this.panelComponent.getChildren().push(TitleComponent.builder().text("Count").build());
+            this.panelComponent.getChildren().push(LineComponent.builder().left("Left").right("Right").build());
+            return super.render(graphics);
+        }
+    }
+    const calls: string[] = [];
+    const glr: any = {
+        drawRect: () => calls.push("rect"),
+        drawPolygon: () => calls.push("polygon"),
+        drawPolyline: () => calls.push("polyline"),
+        drawTexture: () => calls.push("texture"),
+        getTexture: () => undefined,
+        createTextureFromCanvas: () => ({}),
+    };
+    const context: any = {
+        renderer: glr,
+        fontLoader: () => undefined,
+        sprite: () => undefined,
+        place: () => ({ x: 10, y: 20, scaleX: 1, scaleY: 1 }),
+    };
+    const panel = new CountingPanel();
+    panel.signature();
+    assert.equal(renders, 1);
+    const rects = panel.draw(context);
+    assert.equal(renders, 2, "draw renders once and replays the recording at the placement");
+    assert.equal(rects.length, 1);
+    assert.deepEqual([rects[0].x, rects[0].y], [10, 20]);
+    assert.ok(calls.includes("polygon"), "the background fill reached the renderer");
 }
 
 console.log("runelite-overlay-components: ok");

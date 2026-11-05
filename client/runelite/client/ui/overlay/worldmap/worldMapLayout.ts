@@ -1,7 +1,51 @@
 import type { WorldMapPoint } from "./WorldMapPoint";
+import type { WorldMapPointManager } from "./WorldMapPointManager";
 
 export type MapBounds = { x: number; y: number; w: number; h: number };
 export type PointLayout = { x: number; y: number; snapped: boolean };
+
+/** The owner tag RuneLite points carry in the client's plugin-point list. */
+export const RUNELITE_POINT_OWNER = "runelite";
+
+/**
+ * An entry in the client's `pluginWorldMapPoints` (the list Quest Helper also writes): the tile,
+ * a colour for a plain square, edge snapping, and for RuneLite points the WorldMapPoint itself,
+ * whose image, anchor, name and jump-on-click the world map reads.
+ */
+export type PluginWorldMapPointEntry = {
+    x: number;
+    y: number;
+    plane: number;
+    color: number;
+    snapToEdge: boolean;
+    texture?: string;
+    owner: string;
+    point?: WorldMapPoint;
+};
+
+/** Rewrites the RuneLite entries of the client's plugin-point list from the manager; other owners' entries stay. */
+export function syncWorldMapPoints(client: { pluginWorldMapPoints?: PluginWorldMapPointEntry[] }, manager: WorldMapPointManager): void {
+    const others = (client.pluginWorldMapPoints ?? []).filter((entry) => entry.owner !== RUNELITE_POINT_OWNER);
+    const ours: PluginWorldMapPointEntry[] = manager.getPoints().map((point) => {
+        const tile = point.getWorldPoint();
+        return { x: tile.getX(), y: tile.getY(), plane: tile.getPlane(), color: 0xffffff, snapToEdge: point.isSnapToEdge(), owner: RUNELITE_POINT_OWNER, point };
+    });
+    client.pluginWorldMapPoints = [...others, ...ours];
+}
+
+/** Where a RuneLite point drew this frame, for its tooltip and click-to-jump. */
+export type RenderedWorldMapPoint = { x0: number; y0: number; x1: number; y1: number; point: WorldMapPoint };
+
+/** The topmost rendered point under a map position; with `jumpOnly`, only one that jumps on click. */
+export function renderedWorldMapPointAt(rendered: readonly RenderedWorldMapPoint[], x: number, y: number, jumpOnly = false): WorldMapPoint | null {
+    for (let i = rendered.length - 1; i >= 0; i--) {
+        const r = rendered[i];
+        if (x < r.x0 || x > r.x1 || y < r.y0 || y > r.y1) continue;
+        if (jumpOnly && !r.point.isJumpOnClick()) continue;
+        return r.point;
+    }
+    return null;
+}
 
 /** The size a point without an image takes on the map. */
 const DEFAULT_SIZE = 16;

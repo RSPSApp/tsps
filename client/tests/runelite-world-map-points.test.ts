@@ -2,7 +2,7 @@ import { strict as assert } from "node:assert";
 import { WorldPoint } from "@runelite/api/coords/WorldPoint";
 import { WorldMapPoint } from "@runelite/client/ui/overlay/worldmap/WorldMapPoint";
 import { WorldMapPointManager } from "@runelite/client/ui/overlay/worldmap/WorldMapPointManager";
-import { layoutWorldMapPoint } from "@runelite/client/ui/overlay/worldmap/worldMapLayout";
+import { layoutWorldMapPoint, type RenderedWorldMapPoint, renderedWorldMapPointAt, syncWorldMapPoints } from "@runelite/client/ui/overlay/worldmap/worldMapLayout";
 
 // RuneLite's WorldMapPoint and WorldMapPointManager: plugin markers the world map draws, with an
 // image anchored at an image point, snapped to the map's edge when off-screen (swapping to the
@@ -81,5 +81,36 @@ assert.equal(layoutWorldMapPoint(point, { x: 700, y: -20 }, bounds), null);
 // --- An unanchored image is centred ---------------------------------------------------------------------
 const plain = new WorldMapPoint(new WorldPoint(1, 1, 0), image);
 assert.deepEqual(layoutWorldMapPoint(plain, { x: 250, y: 150 }, bounds), { x: 250 - 16, y: 150 - 19, snapped: false }, "centred: half the width and height, truncated");
+
+// --- One world map path: the manager's points join the client's plugin points ----------------------
+{
+    const client: any = { pluginWorldMapPoints: [{ x: 1, y: 2, plane: 0, color: 0xff0000, snapToEdge: true, owner: "questhelper" }] };
+    const synced = new WorldMapPointManager(() => syncWorldMapPoints(client, synced));
+    const marker = new WorldMapPoint(new WorldPoint(3222, 3218, 0), image);
+    marker.setName("Clue Scroll");
+    marker.setJumpOnClick(true);
+    marker.setSnapToEdge(true);
+    synced.add(marker);
+    assert.equal(client.pluginWorldMapPoints.length, 2, "beside Quest Helper's point");
+    const entry = client.pluginWorldMapPoints.find((p: any) => p.owner === "runelite");
+    assert.deepEqual([entry.x, entry.y, entry.plane, entry.snapToEdge], [3222, 3218, 0, true]);
+    assert.equal(entry.point, marker, "the entry carries the point for its image and hooks");
+    synced.remove(marker);
+    assert.equal(client.pluginWorldMapPoints.length, 1, "removed: Quest Helper's point stays");
+    assert.equal(client.pluginWorldMapPoints[0].owner, "questhelper");
+}
+
+// --- Hit bounds for the tooltip and click-to-jump -----------------------------------------------------
+{
+    const marker = new WorldMapPoint(new WorldPoint(3222, 3218, 0), image);
+    marker.setName("Clue Scroll");
+    marker.setJumpOnClick(true);
+    const rendered: RenderedWorldMapPoint[] = [{ x0: 100, y0: 50, x1: 132, y1: 89, point: marker }];
+    assert.equal(renderedWorldMapPointAt(rendered, 110, 60), marker);
+    assert.equal(renderedWorldMapPointAt(rendered, 133, 60), null, "just outside");
+    const noJump = new WorldMapPoint(new WorldPoint(1, 1, 0), image);
+    assert.equal(renderedWorldMapPointAt([{ x0: 0, y0: 0, x1: 10, y1: 10, point: noJump }], 5, 5, true), null, "a point that does not jump is not a click target");
+    assert.equal(renderedWorldMapPointAt([{ x0: 0, y0: 0, x1: 10, y1: 10, point: noJump }], 5, 5), noJump, "but it still has a tooltip");
+}
 
 console.log("runelite-world-map-points: ok");

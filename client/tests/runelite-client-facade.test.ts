@@ -10,7 +10,7 @@ import * as InventoryID from "@runelite/api/gameval/InventoryID";
 import * as ItemID from "@runelite/api/gameval/ItemID";
 import { ClientState } from "../game/ClientState";
 import { NpcEcs } from "../game/ecs/NpcEcs";
-import { hintArrow } from "../game/HintArrow";
+import { clearHintArrow, hintArrow, setHintArrowTile } from "../game/HintArrow";
 import { CacheSystem } from "../rs/cache/CacheSystem";
 import { getCacheLoaderFactory } from "../rs/cache/loader/CacheLoaderFactory";
 import { VarManager } from "../rs/config/vartype/VarManager";
@@ -199,6 +199,15 @@ assert.equal(facade.getHintArrowNpc()!.getIndex(), 42);
 facade.clearHintArrow();
 assert.equal(hintArrow.type, 0);
 assert.equal(facade.getHintArrowNpc(), null);
+// A hint the server set (the engine's own call) is not this plugin layer's to clear.
+setHintArrowTile(3300, 3300, 100, 2 << 2);
+facade.clearHintArrow();
+assert.equal(hintArrow.type, 2, "the server's arrow stays");
+facade.setHintArrow(new WorldPoint(3301, 3301, 0));
+assert.equal(hintArrow.x, 3301, "a plugin arrow replaces it");
+facade.clearHintArrow();
+assert.equal(hintArrow.type, 0, "and is cleared again");
+clearHintArrow();
 
 // --- isInScene -----------------------------------------------------------------------------------------
 ClientState.baseX = 3200;

@@ -3,6 +3,7 @@ import { isServerConnected } from "../../network/ServerConnection";
 import { packWorldMapCoord } from "../../rs/map/WorldMapArea";
 import { getVisibleWidgetSurfaceReason } from "../../widgets/gl/widgets-gl";
 import type { WorldMapStateHolder } from "./WorldMapTypes";
+import { renderedWorldMapPointAt } from "@runelite/client/ui/overlay/worldmap/worldMapLayout";
 
 export type WorldMapInputDeps = {
     isWidgetEffectivelyHidden: (uid: number) => boolean;
@@ -111,6 +112,21 @@ function sendWorldMapClick(coord: { plane: number; x: number; y: number }): void
     queuePacket(pkt);
 }
 
+/**
+ * A click on a RuneLite point that jumps on click (RuneLite's WorldMapOverlay): the map recentres on
+ * the point's target, or its tile, on the next frame. False when no such point is under the mouse.
+ */
+function jumpToWorldMapPoint(state: WorldMapStateHolder, mouseX: number, mouseY: number): boolean {
+    const point = renderedWorldMapPointAt(state.renderedWorldMapPoints ?? [], mouseX, mouseY, true);
+    if (!point) return false;
+    const target = point.getTarget() ?? point.getWorldPoint();
+    const position = state.worldMapState.currentArea?.position(target.getPlane(), target.getX(), target.getY());
+    if (!position) return true;
+    state.pendingWorldMapDragDisplayX = position.x | 0;
+    state.pendingWorldMapDragDisplayY = position.y | 0;
+    return true;
+}
+
 export function handleWorldMapDragInput(
     state: WorldMapStateHolder,
     deps: WorldMapInputDeps,
@@ -146,8 +162,10 @@ export function handleWorldMapDragInput(
                 deltaY >= -25 &&
                 deltaY <= 25
             ) {
-                const coord = resolveWorldMapClickCoord(state, clickHit, mouseX | 0, mouseY | 0);
-                if (coord) sendWorldMapClick(coord);
+                if (!jumpToWorldMapPoint(state, mouseX | 0, mouseY | 0)) {
+                    const coord = resolveWorldMapClickCoord(state, clickHit, mouseX | 0, mouseY | 0);
+                    if (coord) sendWorldMapClick(coord);
+                }
             }
             resetWorldMapClick(state);
         }

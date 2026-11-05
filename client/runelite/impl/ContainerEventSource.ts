@@ -31,10 +31,34 @@ export function bindContainerEvents(client: OsrsClient, post: (event: object) =>
 }
 
 /**
+ * Binds a widget-manager source once the widget manager exists. `RuneLite.load()` runs from the
+ * OsrsClient constructor, and the widget manager is created later in the async init, so a source
+ * that needs it waits on client ticks until it appears. Returns the unbind function, which also
+ * cancels the wait.
+ */
+export function bindWhenWidgetManagerReady(
+    client: Pick<OsrsClient, "widgetManager">,
+    bind: (client: Pick<OsrsClient, "widgetManager">) => () => void,
+    onClientTick: (tick: () => void) => () => void,
+): () => void {
+    if (client.widgetManager) return bind(client);
+    let unbind: (() => void) | undefined;
+    const stopWaiting = onClientTick(() => {
+        if (!client.widgetManager) return;
+        stopWaiting();
+        unbind = bind(client);
+    });
+    return () => {
+        stopWaiting();
+        unbind?.();
+    };
+}
+
+/**
  * Posts WidgetLoaded for every interface open, as RuneLite does: the widget manager's group loads
  * plus its re-mounts of a group that stayed loaded (a dialogue's next page). Returns the unbind function.
  */
-export function bindWidgetEvents(client: OsrsClient, post: (event: object) => void): () => void {
+export function bindWidgetEvents(client: Pick<OsrsClient, "widgetManager">, post: (event: object) => void): () => void {
     const manager = client.widgetManager;
     const loaded = manager?.groupLoadedListeners;
     if (!loaded) return () => {};

@@ -54,20 +54,12 @@ import { ps } from "./profilingState";
 import { FONT_VERDANA_11, FONT_VERDANA_13, FONT_VERDANA_15 } from "../../../ui/fonts";
 import type { WorldMapLabelDraw, WorldMapLabelMetrics } from "./worldMapLabels";
 import { hasSpriteOverride } from "../spriteOverrides";
-import type { WorldMapPoint } from "@runelite/client/ui/overlay/worldmap/WorldMapPoint";
-import { layoutWorldMapPoint } from "@runelite/client/ui/overlay/worldmap/worldMapLayout";
+import { layoutWorldMapPoint, type PluginWorldMapPointEntry, type RenderedWorldMapPoint, renderedWorldMapPointAt } from "@runelite/client/ui/overlay/worldmap/worldMapLayout";
+import { CanvasTextureCache } from "@runelite/client/ui/overlay/CanvasTextureCache";
+import { overlayFont } from "@runelite/client/ui/overlay/OverlayFonts";
 
-/** Textures for RuneLite world map point images, one per canvas, created on first draw. */
-const worldMapPointTextureKeys = new WeakMap<HTMLCanvasElement, string>();
-let worldMapPointTextureCounter = 0;
-function worldMapPointTexture(glr: GLRenderer, image: HTMLCanvasElement): ReturnType<GLRenderer["getTexture"]> {
-    let key = worldMapPointTextureKeys.get(image);
-    if (!key) {
-        key = `rl-worldmap-point:${++worldMapPointTextureCounter}`;
-        worldMapPointTextureKeys.set(image, key);
-    }
-    return glr.getTexture(key) ?? glr.createTextureFromCanvas(key, image);
-}
+/** Textures for RuneLite world map point images, one per canvas, bounded. */
+const worldMapPointTextures = new CanvasTextureCache(64);
 
 export type { WidgetNode };
 type Widget = WidgetNode;
@@ -1974,13 +1966,31 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                     glr.drawRect(dot.x - dotSize / 2, dot.y - dotSize / 2, dotSize, dotSize,
                         isBot ? [1, 1, 1, 1] : [1, 1, 0, 1]);
                 }
-                // Plugin WorldMapPoints (e.g. Quest Helper's step location), edge-snapped when asked.
-                const pluginPoints: any[] = worldMapRenderHost?.pluginWorldMapPoints ?? [];
+                // Plugin WorldMapPoints (Quest Helper's step location, RuneLite plugins' markers),
+                // edge-snapped when asked. A RuneLite point draws its own image anchored on the tile
+                // (RuneLite's WorldMapOverlay), swaps it on the edge transitions, and is remembered
+                // for its tooltip and click-to-jump.
+                const pluginPoints: PluginWorldMapPointEntry[] = worldMapRenderHost?.pluginWorldMapPoints ?? [];
                 const pointSize = 16 * renderScale;
+                const mapBounds = { x, y, w: width, h: height };
+                const renderedPoints: RenderedWorldMapPoint[] = [];
                 for (const point of pluginPoints) {
                     const displayPos = currentArea.position(point.plane, point.x, point.y);
                     if (!displayPos) continue;
                     const at = projectDisplayToScreen(displayPos.x + 0.5, displayPos.y + 0.5);
+                    const rlPoint = point.point;
+                    if (rlPoint) {
+                        const placed = layoutWorldMapPoint(rlPoint, at, mapBounds, renderScale);
+                        if (!placed) continue;
+                        const image = rlPoint.getImage();
+                        const w = (image ? image.width : 16) * renderScale;
+                        const h = (image ? image.height : 16) * renderScale;
+                        const texture = image ? worldMapPointTextures.texture(glr, image) : undefined;
+                        if (texture) glr.drawTexture(texture, placed.x, placed.y, w, h);
+                        else glr.drawRect(placed.x + w / 4, placed.y + h / 4, w / 2, h / 2, [1, 1, 1, 1]);
+                        renderedPoints.push({ x0: placed.x, y0: placed.y, x1: placed.x + w, y1: placed.y + h, point: rlPoint });
+                        continue;
+                    }
                     const inside = at.x >= x && at.y >= y && at.x <= x + width && at.y <= y + height;
                     if (!inside && !point.snapToEdge) continue;
                     const half = pointSize / 2;
@@ -1994,22 +2004,23 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                             [((c >>> 16) & 0xff) / 255, ((c >>> 8) & 0xff) / 255, (c & 0xff) / 255, 1]);
                     }
                 }
-                // RuneLite WorldMapPoints with an image (the Clue Scroll marker): anchored on the tile,
-                // clamped to the map's edge when snapping; the point swaps its image on the transitions.
-                const imagePoints: WorldMapPoint[] = worldMapRenderHost?.runeLite?.worldMapPointManager?.getPoints?.() ?? [];
-                const mapBounds = { x, y, w: width, h: height };
-                for (const point of imagePoints) {
-                    const image = point.getImage();
-                    if (!image) continue;
-                    const tile = point.getWorldPoint();
-                    const displayPos = currentArea.position(tile.getPlane(), tile.getX(), tile.getY());
-                    if (!displayPos) continue;
-                    const at = projectDisplayToScreen(displayPos.x + 0.5, displayPos.y + 0.5);
-                    const placed = layoutWorldMapPoint(point, at, mapBounds, renderScale);
-                    if (!placed) continue;
-                    const drawnImage = point.getImage() ?? image;
-                    const texture = worldMapPointTexture(glr, drawnImage);
-                    if (texture) glr.drawTexture(texture, placed.x, placed.y, drawnImage.width * renderScale, drawnImage.height * renderScale);
+                osrsClient?.setRenderedWorldMapPoints?.(renderedPoints);
+                // The name of the RuneLite point under the mouse, as RuneLite's tooltip shows it.
+                const mouseX = worldMapRenderHost?.inputManager?.mouseX ?? -1;
+                const mouseY = worldMapRenderHost?.inputManager?.mouseY ?? -1;
+                const hovered = renderedWorldMapPointAt(renderedPoints, mouseX, mouseY);
+                const hoveredName = hovered?.getName();
+                if (hoveredName) {
+                    const font = overlayFont("tooltip");
+                    const bitmap = opts.fontLoader(font.id);
+                    const pad = 4 * renderScale;
+                    const textW = (bitmap ? bitmap.measure(hoveredName) : hoveredName.length * 6) * renderScale * font.scale;
+                    const textH = 16 * renderScale * font.scale;
+                    const boxW = textW + 2 * pad, boxH = textH + 2 * pad;
+                    const boxX = Math.min(mouseX, x + width - boxW);
+                    const boxY = Math.min(mouseY + 24 * renderScale, y + height - boxH);
+                    glr.drawRect(boxX, boxY, boxW, boxH, [70 / 255, 61 / 255, 50 / 255, 156 / 255]);
+                    drawTextGL(hoveredName, boxX + pad, boxY + pad, textW, textH, font.id, 0xffffff, 0, 1);
                 }
                 osrsClient?.setWorldMapViewport?.({
                     x, y, width, height, displayX, displayY, pixelsPerTileX, pixelsPerTileY,

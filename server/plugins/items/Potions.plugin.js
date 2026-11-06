@@ -164,7 +164,8 @@ function applyPrayerRestore(player, isSuperRestore) {
 function restorePrayer(player, flat, percent) {
   const max = getMaxLevel(player, Skill.PRAYER);
   const restored = Math.floor(flat + max * percent);
-  getSkillManager(player).increaseCurrentLevel(Skill.PRAYER, restored, max);
+  const cap = Math.max(max, getCurrentLevel(player, Skill.PRAYER));
+  getSkillManager(player).increaseCurrentLevel(Skill.PRAYER, restored, cap);
   Sounds.sendSound(player, Sound.PRAYER_RECHARGE);
 }
 

@@ -301,6 +301,10 @@ export function registerSpotAnimation(host: WebGLOsrsRendererHost, event: Player
     
 }
 
+export function clearNpcSpotAnimations(host: WebGLOsrsRendererHost, serverId: number): void {
+    host.gfxManager?.removeActorInstances("npc", serverId);
+}
+
 export function registerNpcSpotAnimation(host: WebGLOsrsRendererHost, event: {
         npcServerId: number;
         spotId: number;

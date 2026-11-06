@@ -1,4 +1,6 @@
 import { CrossFloor } from "../game/CrossFloor";
+import { NpcSpecificEffects } from "./NpcSpecificEffects";
+import type { NPC } from "../game/entity/impl/npc/NPC";
 import { PluginManager } from "../plugins/PluginManager";
 import { MAX_GAME_MESSAGE_BYTES } from "./BinaryChannel";
 import { BoatManager } from "../game/content/sailing/BoatManager";
@@ -104,6 +106,11 @@ export class PlayerSession {
   private hasReplayedScene = false;
   private playerSyncState?: PlayerSyncState;
   private npcSyncState: NpcSyncState = createNpcSyncState();
+  private readonly npcSpecificEffects = new NpcSpecificEffects();
+
+  public queueNpcSpecificEffect(npc: NPC, packet: Buffer): void {
+    if (this.player && this.isBinaryChannelOpen()) this.npcSpecificEffects.queue(npc, packet);
+  }
   private appearanceCache = new Map<number, { player: Player; payload: Buffer }>();
   private lastMusicRegion = -1;
   private lastMusicTrack = -1;
@@ -154,6 +161,7 @@ export class PlayerSession {
   // }
 
   public setPlayer(player: Player) {
+    if (this.player !== player) this.npcSpecificEffects.clear();
     this.player = player;
   }
 
@@ -229,6 +237,7 @@ export class PlayerSession {
    * Live first sets clicks back to walking, as the client keeps interaction modes (rsprox).
    */
   public logout(): void {
+    this.npcSpecificEffects.clear();
     this.sendClientPacket(encodeWalkInteractionMode());
     this.sendClientPacket(encodeHideNpcOps(false));
     this.sendClientPacket(encodeHideObjOps(false));
@@ -262,6 +271,8 @@ export class PlayerSession {
   }
 
   private flushClient(tick: number): void {
+    // Discard undeliverable one-shots, including disconnected and out-of-view actors.
+    const specificEffects = this.npcSpecificEffects.take();
     const player = this.player;
     if (!player || !this.isBinaryChannelOpen()) return;
     if (this.getBufferedAmount() >= NetworkConstants.OUTBOUND_WS_BUFFER_CRITICAL_BYTES) {
@@ -490,6 +501,17 @@ export class PlayerSession {
       return true;
     });
     if (!syncSent) return;
+
+    // Both clients must know the actor before applying its viewer-specific effects.
+    // Keep object identity as well as index: a removed NPC's replacement inherits nothing.
+    const visibleNpcs = new Set(player.getLocalNpcs());
+    const sentIndices = new Set(this.npcSyncState.indices);
+    for (const effect of specificEffects) {
+      if (visibleNpcs.has(effect.npc) && effect.npc.isRegistered()
+        && effect.npc.getIndex() === effect.index && sentIndices.has(effect.index)) {
+        if (!this.sendClientPacket(effect.packet)) return;
+      }
+    }
 
     if (!initialSync && sceneChanged) {
       ObjectManager.onRegionChange(player, this.sceneBaseX, this.sceneBaseY);

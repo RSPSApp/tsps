@@ -1287,6 +1287,10 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
         this.actors?.registerNpcSpotAnimation(event);
     }
 
+    override clearNpcSpotAnimations(serverId: number): void {
+        this.actors?.clearNpcSpotAnimations(serverId);
+    }
+
     override registerWorldSpotAnimation(event: WorldSpotAnimationEvent): number | undefined {
         return this.actors?.registerWorldSpotAnimation(event);
     }

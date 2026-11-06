@@ -76,6 +76,43 @@ function withdrawHouseItem(player, house, furniture, id) {
   const stored = furniture.storage;
   if (!stored || !(stored[id] > 0)) return false;
   const inventory = player.getInventory();
+  const mode = { player, mode: "none" };
+  api.emitCustomEvent("ironman:mode", mode);
+  if (mode.mode === "ultimate") {
+    const representative = storageItems(furniture).get(id);
+    const members = numericEnum(SET_MEMBERS_ENUM);
+    if (members.has(representative)) {
+      const set = [...numericEnum(members.get(representative)).values()];
+      const alternates = numericEnum(ALTERNATES_ENUM), alternateSets = numericEnum(ALTERNATE_SETS_ENUM);
+      // Sets with alternatives or stackable members need their own verified transfer rules.
+      if (new Set(set).size === set.length && set.every(member =>
+        !alternates.has(member) && !alternateSets.has(member) && !ItemDefinition.forId(member).isStackable())) {
+        if (!set.every(member => stored[member] > 0)) {
+          player.sendMessage("You need the complete set to withdraw it.");
+          return false;
+        }
+        if (inventory.getFreeSlots() < set.length) {
+          player.sendMessage("Not enough space in your inventory.");
+          return false;
+        }
+        // Nonstackable additions do not mutate existing item objects; retain them on rollback.
+        const beforeItems = inventory.getItems().slice();
+        for (const member of set) {
+          const before = inventory.getAmount(member);
+          inventory.add(new Item(member, 1), false);
+          if (inventory.getAmount(member) !== before + 1) {
+            inventory.setItems(beforeItems);
+            inventory.refreshItems();
+            return false;
+          }
+        }
+        for (const member of set) if (--stored[member] === 0) delete stored[member];
+        player.setAttribute(Data.HOUSE_ATTRIBUTE, house.save);
+        inventory.refreshItems();
+        return true;
+      }
+    }
+  }
   if (inventory.getFreeSlots() === 0 && !(ItemDefinition.forId(id).isStackable() && inventory.contains(id))) { player.sendMessage("Not enough space in your inventory."); return false; }
   const before = inventory.getAmount(id);
   inventory.addItem(new Item(id, 1));

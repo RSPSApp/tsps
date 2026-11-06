@@ -495,12 +495,15 @@ class AhrimCombat extends MagicCombatMethod {
   }
 }
 
-function rollRewards(run) {
+function rollRewards(run, runeBonus) {
   const potential = Math.min(1000, run.points) + run.killed.length * 2;
   if (potential === 0) return [];
   const equipment = run.killed.flatMap((index) => EQUIPMENT.slice(index * 4, index * 4 + 4));
   const rewards = new Map();
-  const add = (id, amount) => rewards.set(id, (rewards.get(id) ?? 0) + amount);
+  const runeIds = [Items.MIND_RUNE, Items.CHAOS_RUNE, Items.DEATH_RUNE, Items.BLOOD_RUNE];
+  // Apply the diary bonus per integer roll; odd amounts round down as a server convention.
+  const add = (id, amount) => rewards.set(id, (rewards.get(id) ?? 0)
+    + (runeBonus && runeIds.includes(id) ? Math.floor(amount * 1.5) : amount));
   for (let i = 0; i <= run.killed.length; i++) {
     if (equipment.length && randomInt(1, 450 - 58 * run.killed.length) === 1) {
       const index = randomInt(0, equipment.length - 1);
@@ -588,7 +591,9 @@ function searchChest(player, clickType) {
     }
     return;
   }
-  const rewards = rollRewards(run);
+  const diary = { player, diary: "morytania", tier: "hard", complete: false };
+  pluginApi.emitCustomEvent("diary:is-complete", diary);
+  const rewards = rollRewards(run, diary.complete === true);
   run.chests++;
   run.looted = true;
   for (const item of rewards) {

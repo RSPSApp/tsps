@@ -1,0 +1,175 @@
+/*
+ * The chatbox, in the same language as the rest: 2px bevel, hard edges, warm browns, gold accent.
+ * Dark on purpose — the parchment it replaces is the brightest thing on screen, in the corner you
+ * look at least.
+ */
+.gc {
+    position: absolute;
+    /* Sized and placed to cover the canvas chatbox underneath, tab strip included: measured
+       against the running client rather than guessed. */
+    left: 0;
+    bottom: 0;
+    z-index: 25;
+    display: flex;
+    flex-direction: column;
+    width: 519px;
+    max-width: 100%;
+    font: 12.5px/1.45 ui-sans-serif, system-ui, sans-serif;
+    color: #e8ded0;
+    background: #211b16;
+    border: 2px solid #120e0b;
+    box-shadow: inset 2px 2px 0 #54432c, inset -2px -2px 0 #120e0b, 0 4px 14px rgba(0, 0, 0, 0.5);
+    pointer-events: auto;
+}
+
+/* ---------- channel tabs ---------- */
+.gc__tabs {
+    display: flex;
+    background: #1a1510;
+    border-bottom: 2px solid #120e0b;
+}
+
+.gc__tab {
+    position: relative;
+    padding: 6px 11px;
+    font: 700 11px ui-sans-serif, system-ui, sans-serif;
+    color: #8a7f6c;
+    background: none;
+    border: 0;
+    border-right: 1px solid #140f0b;
+    cursor: pointer;
+}
+
+.gc__tab:hover {
+    color: #cbbfa8;
+}
+
+.gc__tab.is-on {
+    color: #ffb02e;
+    background: #211b16;
+    box-shadow: inset 0 -3px 0 #ffb02e;
+}
+
+.gc__unread {
+    margin-left: 6px;
+    padding: 0 4px;
+    font-size: 9.5px;
+    font-weight: 800;
+    color: #2a1c00;
+    background: #ffb02e;
+}
+
+.gc__fold {
+    margin-left: auto;
+    padding: 6px 10px;
+    font: 700 11px ui-sans-serif, system-ui, sans-serif;
+    color: #8a7f6c;
+    background: none;
+    border: 0;
+    cursor: pointer;
+}
+
+.gc__fold:hover {
+    color: #ffb02e;
+}
+
+.gc__tab:focus-visible,
+.gc__fold:focus-visible {
+    outline: 2px solid #ffb02e;
+    outline-offset: -2px;
+}
+
+/* ---------- the log ---------- */
+.gc__log {
+    height: 118px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 7px 9px;
+}
+
+.gc.is-collapsed .gc__log {
+    display: none;
+}
+
+.gc__log::-webkit-scrollbar {
+    width: 8px;
+}
+
+.gc__log::-webkit-scrollbar-track {
+    background: #140f0b;
+}
+
+.gc__log::-webkit-scrollbar-thumb {
+    background: #3b2f20;
+    border: 1px solid #120e0b;
+}
+
+.gc__empty {
+    margin: 0;
+    color: #6d6757;
+}
+
+.gc__line {
+    display: flex;
+    gap: 7px;
+    margin: 0 0 2px;
+}
+
+/* A log you come back to after hours needs the hour. */
+.gc__time {
+    flex: none;
+    font-size: 11px;
+    color: #5f5444;
+    font-variant-numeric: tabular-nums;
+}
+
+.gc__who {
+    flex: none;
+    font-weight: 700;
+    color: #7fb6e8;
+}
+
+.gc__text {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.gc__line.is-game .gc__text { color: #cbbfa8; }
+.gc__line.is-public .gc__text { color: #e8ded0; }
+.gc__line.is-private .gc__text { color: #b9a6e0; }
+.gc__line.is-milestone .gc__text { color: #ffb02e; }
+
+/* ---------- the input ---------- */
+.gc__input {
+    display: flex;
+    margin: 0 7px 7px;
+}
+
+.gc__input input {
+    width: 100%;
+    padding: 7px 9px;
+    font: 12.5px ui-sans-serif, system-ui, sans-serif;
+    color: #e8ded0;
+    background: #14100c;
+    border: 2px solid #2f2619;
+    box-shadow: inset 2px 2px 0 #0a0806, inset -2px -2px 0 #322719;
+}
+
+.gc__input input::placeholder {
+    color: #5f5444;
+}
+
+.gc__input input:focus {
+    outline: none;
+    border-color: #ffb02e;
+}
+
+@media (max-width: 760px) {
+    .gc {
+        width: 100%;
+    }
+
+    .gc__log {
+        height: 96px;
+    }
+}

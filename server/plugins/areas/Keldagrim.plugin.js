@@ -21,7 +21,10 @@ const FERRY_MESSAGE = "The dwarf ferries you across the river.";
 const NO_FARE_CONDITION = "If the player doesn't have 2 coins:";
 /** The transcript's [Charm] crossings, which are free. */
 const CHARM_CROSSINGS = new Set(["d9TbkS", "PJ6RxL"]);
-const CITY_ZONE = { minX: 2790, maxX: 2940, minY: 10100, maxY: 10215, levels: [0] };
+/** The city's music regions (Tale of Keldagrim, Land of the Dwarves); the entrance mine and the
+ * boatman's dock south of the river are "Time to Mine", not the city. */
+const CITY_ZONE_EAST = { minX: 2880, maxX: 2943, minY: 10112, maxY: 10239, levels: [0] };
+const CITY_ZONE_WEST = { minX: 2816, maxX: 2879, minY: 10177, maxY: 10239, levels: [0] };
 
 let core;
 let pluginApi;
@@ -132,7 +135,8 @@ module.exports = {
     api.onObjectInteraction("Tunnel", { Enter: goThrough });
     api.onObjectInteraction("Cave entrance", { "Go-through": goThrough });
     api.onObjectInteraction("Entrance", { "Go-through": goThrough });
-    api.onZoneEnter(CITY_ZONE, markKeldagrimVisited);
+    api.onZoneEnter(CITY_ZONE_EAST, markKeldagrimVisited);
+    api.onZoneEnter(CITY_ZONE_WEST, markKeldagrimVisited);
     api.onObjectInteraction("Stairs", { "Climb-up": climbStairsUp, "Climb-down": climbStairsDown });
     api.onNpcInteraction("Dwarven Ferryman", { Travel: travel });
     api.onNpcDialogueVariant(ferrymanVariant);

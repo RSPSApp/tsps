@@ -28,6 +28,40 @@ test("the Rellekka tunnel and cave passage reach the Dwarven Boatman without The
     "the cave passage reaches the boatman, who starts the quest and takes the player into the city");
 });
 
+test("only the city, not the boatman's entrance-mine dock, marks Keldagrim visited", () => {
+  const zones = [];
+  const entered = [];
+  Keldagrim.register({
+    core,
+    onObjectInteraction() {},
+    onZoneEnter(zone, handler) { zones.push([zone, handler]); },
+    onNpcInteraction() {},
+    onNpcDialogueVariant() {},
+    onNpcDialogueCondition() {},
+    onCustomEvent() {},
+    emitCustomEvent(name, payload) { if (name === "keldagrim:entered-city") entered.push(payload); },
+  });
+  const inside = (zone, x, y) => x >= zone.minX && x <= zone.maxX && y >= zone.minY && y <= zone.maxY
+    && zone.levels.includes(0);
+  const enter = (x, y) => {
+    let fired = 0;
+    for (const [zone, handler] of zones) {
+      if (!inside(zone, x, y)) continue;
+      handler({ player: {} });
+      fired++;
+    }
+    return fired;
+  };
+
+  assert.equal(enter(2838, 10124), 0, "the boatman's dock is the entrance mine, not Keldagrim");
+  assert.equal(enter(2827, 10214), 1, "the boat ride's Black Guard HQ landing is Keldagrim");
+  assert.equal(enter(2930, 10193), 1, "the Blast Furnace is Keldagrim");
+  assert.equal(enter(2872, 10176), 0,
+    "the ferry-side house north of the river is reachable without the quest, so it is not Keldagrim");
+  assert.equal(enter(2840, 10190), 1, "the city's west half is Keldagrim");
+  assert.equal(entered.length, 3);
+});
+
 test("the ferrymen's Travel takes the 2-coin fare, one coin as the transcript's exception, and refuses with none", () => {
   const starts = [];
   Keldagrim._test.init({ core, emitCustomEvent(name, request) { if (name === "npc-dialogue:start") { starts.push(request); request.handled = true; } } });

@@ -378,6 +378,10 @@ test('Hazeel valves prompt both directions, keep state on Do nothing, and drive 
   h.object(p, O.RAFT, 'Board', { x: 2606, y: 9693, z: 0 });
   assert.deepEqual([p.loc.getX(), p.loc.getY()], [2568, 9681]);
   assert.equal(p.messages.at(-1), 'The raft flows back to the cave entrance.');
+
+  for (const [x, y] of [[2578, 9687], [2593, 9694], [2616, 9725], [2600, 9711], [2606, 9692], [2568, 9681]]) {
+    assert.equal(RegionManager.blocked(new core.Location(x, y, 0), null), false, `raft landing ${x},${y} is walkable`);
+  }
 });
 
 test('Hazeel side: full-bag poison handout is recoverable from Clivet', () => {

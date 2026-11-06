@@ -5,7 +5,7 @@
  * "can't store" and "no space" refusals), 4242 (drink, one dose of each potion per click).
  *
  * Not built yet: Open and the bank loadout interface (no capture of the interface), Empty, filling
- * from the bank, reordering, and the bank-only restriction (no capture of the rule's refusal message).
+ * from the bank, and reordering.
  */
 const Potions = require("./Potions.plugin");
 
@@ -29,6 +29,8 @@ const MESSAGE = {
   FULL: (name) => `Your chugging barrel doesn't have space to store any more ${name}.`,
   FILLED: (doses, name) => `Your chugging barrel has been filled with ${doses} ${doses === 1 ? "dose" : "doses"} of ${name}.`,
   DRINK: (name) => `You drink some of your ${name}.`,
+  /** Captured (4236): using a barrel away from a bank. */
+  NEAR_BANK: "You must be near a bank to use that barrel.",
   /** Captured (4236): the warning shown before dismantling a barrel that still holds potions. */
   DISMANTLE_WARNING: "Are you sure you want to disassemble the barrel?<br>The potions stored will be lost.",
 };
@@ -42,6 +44,17 @@ function contents(player) {
 
 function save(player, next) {
   player.setAttribute(CONTENTS_ATTRIBUTE, next);
+}
+
+function nearBank(player) {
+  const query = { player, near: false };
+  api.emitCustomEvent("league:near-bank", query);
+  return query.near === true;
+}
+
+function isBarrelAtSlot(player, item, slot) {
+  return Number.isInteger(slot) && player.getInventory().getItems()[slot] === item &&
+    item?.getId?.() === core.ItemIdentifiers.CHUGGING_BARREL;
 }
 
 /** "Prayer potion(4)" -> "Prayer potion". */
@@ -65,7 +78,8 @@ function assemble({ player, item }) {
   player.sendMessage(MESSAGE.ASSEMBLE);
 }
 
-function dismantle({ player, item }) {
+function dismantle({ player, item, slot }) {
+  if (!isBarrelAtSlot(player, item, slot)) return;
   const next = () => {
     setItem(player, item, core.ItemIdentifiers.CHUGGING_BARREL_DISASSEMBLED_);
     player.performAnimation(new core.Animation(ASSEMBLE_ANIMATION));
@@ -77,36 +91,76 @@ function dismantle({ player, item }) {
   }
   player.getPacketSender().sendInterfaceRemoval();
   api.sendMultiChatboxPrompt(player, MESSAGE.DISMANTLE_WARNING, "Yes.", () => {
+    if (!isBarrelAtSlot(player, item, slot)) return;
     save(player, {});
     next();
   });
 }
 
 function drink({ player }) {
+  if (!nearBank(player)) {
+    player.sendMessage(MESSAGE.NEAR_BANK);
+    return;
+  }
   const stored = contents(player);
   const potions = Object.entries(stored).slice(0, POTION_TYPES);
   if (potions.length === 0) {
     player.sendMessage(MESSAGE.NO_POTIONS);
     return;
   }
+  const timerRefusal = Potions.drinkTimerRefusal(player);
+  if (timerRefusal) {
+    if (timerRefusal.message) player.sendMessage(timerRefusal.message);
+    return;
+  }
+  const drinks = potions.map(([key, store]) => ({ key, store, dose: Potions.doseOf(store.itemId) }))
+    .filter(({ dose }) => dose);
+  for (const { store, dose } of drinks) {
+    const refusal = Potions.drinkRefusal(player, dose.entry);
+    if (refusal) {
+      player.sendMessage(refusal);
+      return;
+    }
+  }
+  if (drinks.length === 0) {
+    player.sendMessage(MESSAGE.NO_POTIONS);
+    return;
+  }
+  const timers = player.getTimers();
+  timers.extendOrRegister(core.TimerKey.POTION, 3);
+  timers.extendOrRegister(core.TimerKey.FOOD, 3);
   player.performAnimation(new core.Animation(DRINK_ANIMATION));
-  for (const [key, store] of potions) {
-    const dose = Potions.doseOf(store.itemId);
-    if (!dose) continue;
+  for (const { key, store, dose } of drinks) {
     dose.potion.effect(player);
     player.sendMessage(MESSAGE.DRINK(store.name));
+    api.emitCustomEvent("potions:drunk", {
+      player,
+      itemId: store.itemId,
+      name: dose.potion.name,
+      meta: store.meta ?? null,
+    });
     if (store.doses - 1 > 0) stored[key] = { ...store, doses: store.doses - 1 };
     else delete stored[key];
   }
   save(player, stored);
 }
 
-function fill(player, item) {
+function fill(player, item, slot) {
+  if (!nearBank(player)) {
+    player.sendMessage(MESSAGE.NEAR_BANK);
+    return;
+  }
   const dose = Potions.doseOf(item.getId());
   if (!dose) {
     player.sendMessage(MESSAGE.CANNOT_STORE);
     return;
   }
+  if (dose.potion.area || dose.potion.requiresFoodPermission || dose.potion.name === "Hunting mix") {
+    player.sendMessage(MESSAGE.CANNOT_STORE);
+    return;
+  }
+  const inventory = player.getInventory();
+  if (!Number.isInteger(slot) || inventory.getItems()[slot] !== item || item.getAmount?.() !== 1) return;
   const key = dose.potion.name;
   const stored = contents(player);
   const current = stored[key]?.doses ?? 0;
@@ -118,21 +172,27 @@ function fill(player, item) {
     player.sendMessage(MESSAGE.FULL(oneDoseName(item)));
     return;
   }
-  stored[key] = { itemId: item.getId(), name: baseName(item).toLowerCase(), doses: current + dose.doses };
+  stored[key] = {
+    itemId: item.getId(),
+    name: baseName(item).toLowerCase(),
+    doses: current + dose.doses,
+    meta: item.getMeta?.() ?? null,
+  };
   save(player, stored);
-  const inventory = player.getInventory();
-  const slot = inventory.getItems().findIndex((candidate) => candidate?.getId?.() === item.getId());
   const replacement = dose.emptyItemId;
-  inventory.setItem(slot, new core.Item(replacement, replacement === -1 ? 0 : 1)).refreshItems();
+  inventory.setItem(slot, new core.Item(replacement, replacement === -1 ? 0 : 1, item.getMeta?.())).refreshItems();
   player.sendMessage(MESSAGE.FILLED(dose.doses, oneDoseName(item)));
 }
 
 function useOnBarrel(event) {
   const { player, usedItem, usedWithItem } = event;
-  const barrel = usedItem?.getId?.() === core.ItemIdentifiers.CHUGGING_BARREL ? usedItem : usedWithItem?.getId?.() === core.ItemIdentifiers.CHUGGING_BARREL ? usedWithItem : null;
-  if (!barrel) return;
+  const barrelFirst = usedItem?.getId?.() === core.ItemIdentifiers.CHUGGING_BARREL;
+  const barrelSecond = usedWithItem?.getId?.() === core.ItemIdentifiers.CHUGGING_BARREL;
+  if (!barrelFirst && !barrelSecond) return;
   event.handled = true;
-  fill(player, barrel === usedItem ? usedWithItem : usedItem);
+  const item = barrelFirst ? usedWithItem : usedItem;
+  const slot = barrelFirst ? event.usedWithItemSlot : event.usedItemSlot;
+  fill(player, item, slot);
 }
 
 module.exports = {

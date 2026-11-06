@@ -420,9 +420,6 @@ module.exports = function registerLostTribeQuest(api) {
             : contact < 2
               ? "meeting-the-lost-tribe-informing-duke-horacio-sigmund"
               : "property-recovery-talking-to-the-duke-again";
-      if (variant === "resolving-tensions-returning-the-silverware") {
-        player.getInventory().deleteNumber(ItemIdentifiers.SILVERWARE, 1);
-      }
     } else if (stage === STAGE_TREATY || stage === STAGE_ESCORTED) {
       variant = "resolving-tensions-returning-the-silverware-talking-to-duke-horacio-again";
     } else {
@@ -680,15 +677,21 @@ module.exports = function registerLostTribeQuest(api) {
       return;
     }
     if (stepId === SILVERWARE_FOUND_ACTION_ID) {
-      if (getHam(player) < 2) {
+      if (quest.getStage(player) === STAGE_MISTAG && getContact(player) >= 2) {
         if (!held(player, ItemIdentifiers.SILVERWARE) && !giveItem(player, ItemIdentifiers.SILVERWARE)) return;
         setHam(player, 2);
       }
       return;
     }
     if (stepId === TREATY_SIGNED_ACTION_ID) {
-      if (quest.getStage(player) === STAGE_MISTAG) {
-        if (!held(player, ItemIdentifiers.PEACE_TREATY) && !giveItem(player, ItemIdentifiers.PEACE_TREATY)) return;
+      if (quest.getStage(player) === STAGE_MISTAG && held(player, ItemIdentifiers.SILVERWARE)) {
+        // Opening or cancelling the conversation is not a hand-in. Exchange only when signed;
+        // the silverware's slot also makes room for the treaty in a full inventory.
+        player.getInventory().deleteNumber(ItemIdentifiers.SILVERWARE, 1);
+        if (!held(player, ItemIdentifiers.PEACE_TREATY) && !giveItem(player, ItemIdentifiers.PEACE_TREATY)) {
+          giveItem(player, ItemIdentifiers.SILVERWARE);
+          return;
+        }
         quest.setStage(player, STAGE_TREATY);
       }
       return;
@@ -783,7 +786,10 @@ module.exports = function registerLostTribeQuest(api) {
 
   function searchHamCrate(event) {
     const { player } = event;
-    if (getHam(player) >= 2) {
+    // Older saves may have lost the silverware when merely opening the Duke's dialogue.
+    // Until the treaty stage, the original search is also the lost-item recovery path.
+    const banked = (player.getBanks?.() ?? []).some(bank => (bank?.getAmount(ItemIdentifiers.SILVERWARE) ?? 0) > 0);
+    if (getHam(player) >= 2 && (held(player, ItemIdentifiers.SILVERWARE) || banked || quest.getStage(player) !== STAGE_MISTAG)) {
       event.handled = true;
       player.sendMessage("You have already taken the silverware.");
       return;

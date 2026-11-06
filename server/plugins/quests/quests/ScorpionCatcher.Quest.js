@@ -59,6 +59,8 @@ module.exports = function registerScorpionCatcherQuest(api) {
   const ENCHANT_TARGET = "Thormac's battlestaff enchanting";
   /** OSRS Wiki (Battlestaff): 40,000 coins; 30,000/20,000 with the Hard/Elite Kandarin diaries. */
   const ENCHANT_PRICE = 40000;
+  const HARD_ENCHANT_PRICE = 30000;
+  const ELITE_ENCHANT_PRICE = 20000;
   const COINS = ItemIdentifiers.COINS;
   /** The interface's "Enchant" buttons, one per elemental battlestaff (cache script 330). */
   const ENCHANT_STAFF_BY_BUTTON = new Map([
@@ -283,6 +285,15 @@ module.exports = function registerScorpionCatcherQuest(api) {
     });
   }
 
+  function enchantPrice(player) {
+    const request = { player, diary: "kandarin", tier: "elite", complete: false };
+    api.emitCustomEvent("diary:is-complete", request);
+    if (request.complete) return ELITE_ENCHANT_PRICE;
+    request.tier = "hard";
+    api.emitCustomEvent("diary:is-complete", request);
+    return request.complete ? HARD_ENCHANT_PRICE : ENCHANT_PRICE;
+  }
+
   /** "Enchant" on one of the interface's battlestaff buttons. */
   function handleEnchantClick(event) {
     const { player } = event;
@@ -298,12 +309,13 @@ module.exports = function registerScorpionCatcherQuest(api) {
       player.sendMessage("You do not have that battlestaff.");
       return;
     }
-    if (inventory.getAmount(COINS) < ENCHANT_PRICE) {
+    const price = enchantPrice(player);
+    if (inventory.getAmount(COINS) < price) {
       player.sendMessage("You do not have enough coins to pay for that.");
       return;
     }
     inventory.deleteNumber(staff, 1);
-    inventory.deleteNumber(COINS, ENCHANT_PRICE);
+    inventory.deleteNumber(COINS, price);
     inventory.adds(MYSTIC_STAFF_BY_BATTLESTAFF.get(staff), 1);
     player.sendMessage("Thormac enchants your battlestaff into a mystic staff.");
   }

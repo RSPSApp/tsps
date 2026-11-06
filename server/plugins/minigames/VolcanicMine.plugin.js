@@ -6,6 +6,7 @@
  * ./volcanicmine/, the hazards (lava beasts, earthquakes, meteors) and Pete's item retrieval among them.
  */
 const Common = require("./volcanicmine/Common.VolcanicMine");
+const Capacity = require("./volcanicmine/Capacity.VolcanicMine");
 
 module.exports = {
   name: "VolcanicMine",
@@ -14,6 +15,11 @@ module.exports = {
     Common.init(api);
     require("./volcanicmine/Game.VolcanicMine").attachGame(api);
     require("./volcanicmine/Entry.VolcanicMine").attachEntry(api);
+    api.persistAttribute(Capacity.CAPACITY_ATTRIBUTE, false);
+    api.onCustomEvent("shop:buy-limit", Capacity.limitCapacityPurchase);
+    api.onCustomEvent("shop:delivery", Capacity.captureCapacityDelivery);
+    api.onCustomEvent("shop:purchase", Capacity.purchaseCapacity);
+    api.onCustomEvent("shop:opened", Capacity.explainCapacityShop);
     require("./volcanicmine/Mine.VolcanicMine").attachMine(api);
     require("./volcanicmine/Boulder.VolcanicMine").attachBoulder(api);
     require("./volcanicmine/Hazards.VolcanicMine").attachHazards(api);

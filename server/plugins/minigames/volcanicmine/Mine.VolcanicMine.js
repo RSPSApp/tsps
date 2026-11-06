@@ -6,6 +6,7 @@
  */
 const Common = require("./Common.VolcanicMine");
 const Game = require("./Game.VolcanicMine");
+const Capacity = require("./Capacity.VolcanicMine");
 
 /**
  * Clearing a blockage (recorded, rsprox 1858): the swing line and animation the tick after the
@@ -290,7 +291,7 @@ function throwWater(event) {
   const left = throws - 1;
   player.setAttribute("volcanic-mine:throws", left);
   // Recorded: the count on throws 1, 6, 11, 16... (35, 30, 25, 20 left).
-  if ((data.water.throws - left) % 5 === 1) player.sendMessage(Common.message("throwsLeft", { n: left }));
+  if ((Number(player.getAttribute(Capacity.INITIAL_THROWS_ATTRIBUTE) ?? data.water.throws) - left) % 5 === 1) player.sendMessage(Common.message("throwsLeft", { n: left }));
   game.addPoints(player, data.points.throw);
   return true;
 }

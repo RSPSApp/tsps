@@ -680,7 +680,7 @@ export class ShopManager {
         }
 
         // Content may hand the purchase over as another item ("shop:delivery", a league relic's noted purchases).
-        const delivery = { player, shopId: shop.definition.getId(), currency: shop.definition.getCurrency(), itemId, deliverId: itemId };
+        const delivery = { player, shopId: shop.definition.getId(), currency: shop.definition.getCurrency(), itemId, deliverId: itemId, captureDelivery: false };
         PluginManager.emitCustomEvent("shop:delivery", delivery);
         const deliverId = Number.isInteger(delivery.deliverId) && delivery.deliverId > 0 ? delivery.deliverId : itemId;
         const delivered = ItemDefinition.forId(deliverId);
@@ -708,11 +708,16 @@ export class ShopManager {
             shop.definition.getCurrency(),
             removed * price
         );
+        // Opt-in receipt for one nonstackable item: retain the actual newly filled slot and object.
+        const deliveredSlot = delivery.captureDelivery && removed === 1 && !delivered.isStackable?.()
+            ? inventory.getEmptySlot() : -1;
         inventory.adds(deliverId, removed);
+        const deliveredItem = deliveredSlot >= 0 ? inventory.getItems()[deliveredSlot] : null;
         PluginManager.emitCustomEvent("shop:purchase", {
             player, shopId: shop.definition.getId(), shopName: shop.definition.getName(),
             itemId, amount: removed, originalStock: (shop.originalAmounts.get(itemId) ?? 0) > 0,
             currency: shop.definition.getCurrency(),
+            ...(delivery.captureDelivery ? { deliverId, deliveredSlot, deliveredItem } : {}),
         });
         Sounds.sendSound(player, Sound.PICK_UP_ITEM);
         this.refresh(shop.definition.getId());

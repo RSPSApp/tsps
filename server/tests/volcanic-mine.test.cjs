@@ -26,6 +26,7 @@ before(() => {
   const api = {
     core,
     persistAttribute() {},
+    onCustomEvent() {},
     onObjectClick: (ids, click, handler) => { for (const k of key(ids, click)) hooks.objects.set(k, handler); },
     onNpcClick: (ids, click, handler) => { for (const k of key(ids, click)) hooks.npcs.set(k, handler); },
     onItemAction: (name, actions) => { hooks.items[name] = actions; },

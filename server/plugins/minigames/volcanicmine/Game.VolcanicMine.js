@@ -10,6 +10,7 @@
  * - The exit ladder pays: Mining XP for the game's points and the points for Pete's shop.
  */
 const Common = require("./Common.VolcanicMine");
+const Capacity = require("./Capacity.VolcanicMine");
 
 const CHUNK = 8;
 const VENTS = ["A", "B", "C"];
@@ -127,7 +128,9 @@ class Game {
     this.capPoints.set(player, 0);
     player.getInventory().adds(data.items.vessel, 1);
     player.setAttribute("volcanic-mine:vessel", true);
-    player.setAttribute("volcanic-mine:throws", data.water.throws);
+    const capacity = player.getAttribute(Capacity.CAPACITY_ATTRIBUTE) ? data.water.upgradedThrows : data.water.throws;
+    player.setAttribute("volcanic-mine:throws", capacity);
+    player.setAttribute(Capacity.INITIAL_THROWS_ATTRIBUTE, capacity);
     player.sendMessage(Common.message("vessel"));
     player.sendMessage(Common.message("dormant"));
     if (!player.getAttribute(data.attributes.visited)) {
@@ -205,6 +208,7 @@ class Game {
     this.capPoints.delete(player);
     player.setAttribute(data.attributes.return, null);
     player.setAttribute("volcanic-mine:throws", null);
+    player.setAttribute(Capacity.INITIAL_THROWS_ATTRIBUTE, null);
     for (const name of ["chambers", "players", "stability", "ventA", "ventB", "ventC", "progress", "points"]) Common.varbit(player, name, 0);
     Common.closeHud(player);
     removeGameItems(player);

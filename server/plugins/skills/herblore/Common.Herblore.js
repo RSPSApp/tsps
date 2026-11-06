@@ -47,7 +47,7 @@ function index() {
   unfinishedByHerb = new Map();
   grindsByItem = new Map();
   for (const row of DATA.grinding) {
-    grindsByItem.set(gameval("obj", row.item), { ...row, itemId: gameval("obj", row.item), productId: gameval("obj", row.product), amount: row.amount ?? [1, 1] });
+    grindsByItem.set(gameval("obj", row.item), { ...row, itemId: gameval("obj", row.item), productId: gameval("obj", row.product), amount: row.amount ?? [1, 1], alternateToolId: row.alternateTool ? gameval("obj", row.alternateTool) : null });
   }
   const vialOfWater = gameval("obj", "vial_water");
   for (const row of DATA.recipes) {

@@ -207,7 +207,7 @@
   ],
   "grinding": [
     {"item": "unicorn_horn", "product": "unicorn_horn_dust", "message": "You grind the unicorn horn to dust."},
-    {"item": "chocolate_bar", "product": "chocolate_dust", "message": "You grind the chocolate to dust."},
+    {"item": "chocolate_bar", "product": "chocolate_dust", "alternateTool": "knife", "message": "You grind the chocolate to dust."},
     {"item": "bird_nest_empty", "product": "crushed_bird_nest", "message": "You grind the bird's nest down."},
     {"item": "blue_dragon_scale", "product": "dragon_scale_dust", "message": "You grind down the blue dragon scale."},
     {"item": "desert_goat_horn", "product": "ground_desert_goat_horn", "message": "You grind the goat's horn into dust."},

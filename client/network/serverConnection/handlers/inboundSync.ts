@@ -41,6 +41,10 @@ import { applyGroundItemsDelta, cloneGroundItemsPayload } from "../utils/groundI
 import { sanitizeBankSlotMessage, sanitizeInventorySlotMessage, sanitizeSpellResult } from "../utils/sanitize";
 
 export function handleInboundSync(msg: any): boolean {
+    if (msg.type === "npc_specific_effect") {
+        for (const cb of state.npcSpecificEffectListeners) cb(msg.payload);
+        return true;
+    }
     if (msg.type === "rebuild_region") {
         ClientState.inInstance = true;
         ClientState.instanceTemplateChunks = msg.payload.templateChunks;

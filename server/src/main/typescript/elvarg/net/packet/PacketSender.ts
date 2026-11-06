@@ -14,12 +14,16 @@ import { Skill } from "../../game/model/Skill";
 import { Location } from "../../game/model/Location";
 import { BoatManager } from "../../game/content/sailing/BoatManager";
 import { Graphic } from "../../game/model/Graphic";
+import type { Animation } from "../../game/model/Animation";
+import type { NPC } from "../../game/entity/impl/npc/NPC";
 import { World } from "../../game/World";
 import { DonatorRights } from "../../game/model/rights/DonatorRights";
 import { InterfaceLayoutRegistry } from "../../game/definition/InterfaceLayoutDefinition";
 import { Misc } from "../../util/Misc";
 import {
   encodeBankSnapshot,
+  encodeNpcAnimationSpecific,
+  encodeNpcSpotAnimationSpecific,
   encodeChatMessage,
   type ChatStyle,
   encodeCollectionLogSnapshot,
@@ -173,6 +177,19 @@ export interface SubInterfaceMount {
 const WORN_INVENTORY_ID = 94;
 
 export class PacketSender {
+  /** A sequence for this viewer alone; it never changes the shared NPC update flags. */
+  sendNpcAnimationSpecific(npc: NPC, animation: Animation): this {
+    this.player.getSession()?.queueNpcSpecificEffect(npc,
+      encodeNpcAnimationSpecific(npc.getIndex(), animation.getId(), animation.getDelay()));
+    return this;
+  }
+
+  /** A spotanim in this viewer's actor slot; id -1 clears that slot. */
+  sendNpcSpotAnimationSpecific(npc: NPC, graphic: Graphic, slot = 0): this {
+    this.player.getSession()?.queueNpcSpecificEffect(npc,
+      encodeNpcSpotAnimationSpecific(npc.getIndex(), graphic.getId(), slot, graphic.getHeight(), graphic.getDelay()));
+    return this;
+  }
   private groundItemSerial = 0;
   private readonly varps = new Map<number, number>();
   /** The spell unlock states go out with the session's first spellbook mount only. */

@@ -8,14 +8,14 @@ Status:
 - **Done:**
   - building, carving and decorating at all eight sites, with the Fletching level per wood, run energy and Construction xp;
   - the ents' visit every 80 ticks: offerings, durability, collapse and new spirits;
-  - the spirit NPCs at each site;
+  - the spirit NPCs at each site, with per-viewer spawn/despawn sequences and slot-2 spot effects;
   - claiming and inspecting offerings;
   - Rummage, Hasty-rummage and Inspect on Vale offerings, with the loot table, research points and collection log;
   - the Vale Totems miniquest (Ranulph and Isadora): the intro, the build/carve/decorate lessons, the captured wrong-animal warning, the scripted 100-offering visit and the Sacraments of Ent Folk reward. The minigame's other sites stay closed until it is complete;
   - `::entvisit` for testing.
 - **Not done:**
   - the ents walking their route, ent trails (double offerings and +15% xp for four actions, `ent_totems_trail_*`), and admiring beautiful scenery for run energy;
-  - the durability leaves above a totem (a head icon on `ent_totems_site_icon`) and the spirits' spawn and despawn animations;
+  - the durability leaves above a totem (a head icon on `ent_totems_site_icon`);
   - Ranulph's Vale Research Exchange (research points to spend);
   - the fletching knife's faster actions, the Carpenter's outfit bonus, ent seeds and the clue nests;
   - filterable ("spam") chat messages, which the server doesn't support yet.
@@ -30,6 +30,7 @@ Status:
 | `Offerings.ValeTotems.js` | The offerings pile (Claim, Inspect) and the Vale offerings item (Rummage, Hasty-rummage, Inspect). |
 | `Loot.ValeTotems.js` | One roll of the rummage loot table. |
 | `Ents.ValeTotems.js` | The 80-tick visit cycle and the spirit NPC spawns. |
+| `Spirits.ValeTotems.js` | References to the actual shared spirit NPCs and effects sent to one viewer. |
 | `Commands.ValeTotems.js` | `::entvisit`. |
 
 The miniquest lives with the other quests in `server/plugins/quests/quests/ValeTotems.Quest.js`; it owns Ranulph's and Isadora's conversations, the three chat varbits and the site-1 gate.
@@ -90,6 +91,9 @@ Not represented from the transcript: the ent cutscene (played as dialogue, with 
 - **Ent visits:** every 80 ticks every site is visited at once.
   - A fully carved totem gets its offerings and loses a point of durability. At 0 it collapses, with every site varbit back to 0, on the same visit.
   - A site with no totem gets three new spirits. A built totem, carved or not, keeps its spirits.
+- **Spirit transitions:** RSProx 232/03127 ticks 253/255, 237/01108 ticks 6608/6610 and 237/04054 ticks 5099/5101 show removed species' despawn sequence followed by a slot-2 spot effect, then introduced species' spawn pair two ticks later. Retained species receive neither effect. The detailed 234/03285 ticks 8114/8116 update `animal_1..3` before despawn, keep the old visibility mask for two ticks, then update `multianimal_*_1` before spawn. The cache names the buffalo's sequence family `bison`. These recordings are from the special worlds identified above; this adds their visual contract without changing visit rates or rewards.
+  - Effects belong to one viewer and never change the shared NPC animation/graphic flags. They are queued after NPC sync and discarded when the NPC is absent from that viewer's local list; they are not replayed on later entry or login.
+  - The live visibility mask is transient during those two ticks. Saved snapshots always contain the final selected species and mask. Logout settles that mask and stops its timer. A superseding developer-triggered reroll stops the previous timer and restores a reselected despawning actor; that recovery is a defensive lifecycle choice, not a recorded gameplay sequence.
 - **Offerings per visit:** the Wiki's table, the wood's base plus an amount per decoration: oak, willow and maple 2 + 2, yew 3 + 2.5 (rounded down), magic and redwood 3 + 3. Recorded visits matched it for oak, maple, yew and magic.
 - **Claim:** a tick after arriving, `human_pickupfloor` with sound 2582 and "You collect 40 offerings.". **Inspect:** "There are ten offerings here." (mesbox).
 - **Rummage:**
@@ -112,5 +116,6 @@ These are not in the captures or the Wiki:
 
 - `node --test server/tests/vale-totems.test.cjs` (after `yarn build`) covers building, carving, decorating, visits, claiming and rummaging.
 - `node --test server/tests/vale-totems-quest.test.cjs` covers the quest registration, the site gate, the intro, the two lessons, the scripted 100 offerings and completion.
+- `node --test server/tests/vale-totems-specific-effects.test.cjs` uses real Player, PlayerSession, PacketSender, cache varbits, TaskManager and the startup hook's actual NPC spawns. Only transport output and RNG are controlled. It checks the two-tick visibility boundary, packet order/slot/species, a second viewer, saved-state restoration on a fresh player during the transition, logout cancellation and a superseding reroll. The older Vale tests use lightweight player fixtures and supplement this coverage.
 - With the agent MCP: teleport to site 3 (`tele 1386 3276 0`), give oak logs, a knife and four oak shortbows (u), then `object_option` Build, Carve and Decorate on loc 57028 at 1385, 3274. `::entvisit` runs a visit at once. The minigame now requires the miniquest, so complete it first or set stage 70.
 - Miniquest by hand: talk to Ranulph at 1366, 3367, build at 1370, 3375, carve the three nearby spirits, decorate with four oak items, talk again, claim the 100 offerings and talk once more. The `::entvisit` command is not needed for the scripted offering.

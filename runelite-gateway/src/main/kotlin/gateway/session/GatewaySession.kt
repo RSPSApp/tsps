@@ -10,6 +10,7 @@ import gateway.down.Items
 import gateway.down.StockMarket
 import gateway.down.MapRebuild
 import gateway.down.NpcSync
+import gateway.down.NpcSpecificEffects
 import gateway.down.PlayerSync
 import gateway.down.Social
 import gateway.down.Trade
@@ -33,6 +34,7 @@ import net.rsprot.protocol.game.outgoing.misc.player.MessageGame
 import net.rsprot.protocol.game.outgoing.misc.player.SetMapFlagV2
 import net.rsprot.protocol.game.outgoing.misc.player.UpdateRunEnergy
 import net.rsprot.protocol.game.outgoing.misc.player.SetPlayerOp
+import net.rsprot.protocol.game.outgoing.worldentity.SetActiveWorldV2
 import net.rsprot.protocol.loginprot.incoming.util.AuthenticationType
 import net.rsprot.protocol.loginprot.incoming.util.LoginBlock
 import net.rsprot.protocol.loginprot.outgoing.LoginResponse
@@ -96,6 +98,22 @@ class GatewaySession(
     private val players = PlayerSync()
     private val npcs = NpcSync { index -> boats.deck(index)?.let { it.baseX to it.baseZ } }
     private var mirror: EntityMirror? = null
+    private var rootActiveWorld = SetActiveWorldV2.getRoot(0)
+    private val npcSpecificEffects = NpcSpecificEffects(
+        { index ->
+            val npc = npcs.npcs[index]
+            if (npc == null || (npc.onDeck && boats.deckAt(npc.x, npc.z) == null)) null else mirror?.npcIndex(index)
+        },
+        ::send,
+        { session?.flush() },
+        { index ->
+            npcs.npcs[index]?.takeIf { it.onDeck }?.let { npc ->
+                boats.deckAt(npc.x, npc.z)?.let { deck ->
+                    SetActiveWorldV2(SetActiveWorldV2.DynamicWorldType(deck.worldId, EntityWorld.DECK_LEVEL)) to rootActiveWorld
+                }
+            }
+        },
+    )
     /** The player's level in the main world; on a deck, the one they boarded from. */
     private var level = 0
 
@@ -234,6 +252,9 @@ class GatewaySession(
                 val frame = npcs.decode(packet)
                 mirror?.applyNpcs(frame, level)
                 if (state == State.IN_GAME) endTick()
+            }
+            TspsServerPacket.NPC_ANIM_SPECIFIC, TspsServerPacket.NPC_SPOTANIM_SPECIFIC -> {
+                if (state == State.IN_GAME) npcSpecificEffects.handle(packet)
             }
             TspsServerPacket.REBUILD_WORLDENTITY -> boats.onRebuild(packet)
             TspsServerPacket.WORLDENTITY_INFO -> boats.onInfo(packet, level)
@@ -412,6 +433,7 @@ class GatewaySession(
         mirror?.discardOthersPackets()
         val packets = self.getPackets()
         val root = packets.rootWorldInfoPackets
+        rootActiveWorld = root.activeWorld
         // A failed info packet leaves the client's entity state behind for good (rsprot says to
         // kick the player), so it ends the session with the reason.
         for (result in listOf(root.worldEntityInfo, root.playerInfo, root.npcInfo) + packets.activeWorlds.map { it.npcInfo }) {

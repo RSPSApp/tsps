@@ -727,6 +727,18 @@ export function decodeServerPacket(data: Uint8Array | ArrayBuffer): DecodedServe
             };
         }
 
+        case ServerPacketId.NPC_ANIM_SPECIFIC: {
+            const index = reader.readShort();
+            const id = reader.readShort();
+            return { type: "npc_specific_effect", payload: { kind: "animation", index, id: id === 65535 ? -1 : id, delay: reader.readByte() } };
+        }
+        case ServerPacketId.NPC_SPOTANIM_SPECIFIC: {
+            const index = reader.readShort();
+            const id = reader.readShort();
+            return { type: "npc_specific_effect", payload: { kind: "spot", index, id: id === 65535 ? -1 : id,
+                slot: reader.readByte(), height: reader.readShort(), delay: reader.readShort() } };
+        }
+
         case ServerPacketId.INVENTORY_SNAPSHOT: {
             const count = reader.readShort();
             const slots: any[] = [];

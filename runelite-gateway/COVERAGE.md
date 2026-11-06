@@ -21,6 +21,7 @@ sessions, so the browser wire format doesn't change.
 | 21 NPC_INFO | NPC_INFO | mapped | 3, 8 | tsps's remove-and-re-add (jump, type change) becomes a teleport/setId of the same avatar; rsprot's own range culling is off, tsps decides visibility. Model customisation: tsps's per-slot overrides are applied to the type's models from the cache (an empty list resets). Tint: tsps sends NPC tint (mask 0x100) as it does for players. Hit delays and exact-move pass through |
 | 22 ANIM | — | dropped | 1 | base anims are in appearance |
 | 23 MOVEMENT_POSITION | — | dropped | 2 | sub-tile movement has no OSRS form |
+| 24 / 25 NPC_ANIM_SPECIFIC / NPC_SPOTANIM_SPECIFIC | NPC_ANIM_SPECIFIC / NPC_SPOTANIM_SPECIFIC | mapped | — | observer-local one-shot effects after NPC info; delay, height, slot and reset sentinel pass through. Unknown targets are discarded. Deck NPCs select their session world and restore the root before flushing |
 | 40 / 41 / 44 VARP_SMALL / LARGE / LONG | VARP_SMALL / LARGE / LONG | mapped | 4 | ids ≥ the cache varp count (5996) dropped |
 | 42 VARBIT | VARP_SMALL / LARGE | mapped | 4 | written into the session's varp mirror from the cache varbit definition |
 | 50 / 51 INVENTORY_SNAPSHOT / SLOT | UPDATE_INV_FULL / PARTIAL (93) | mapped | 5 | |

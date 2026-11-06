@@ -131,6 +131,31 @@ export function encodeFinePosition(position: FinePositionView): Buffer {
   return encodeServerPacket(ServerPacketId.MOVEMENT_POSITION, finePositionPayload(position));
 }
 
+function effectInteger(name: string, value: number, min: number, max: number): number {
+  if (!Number.isInteger(value) || value < min || value > max) throw new RangeError(`${name} outside ${min}..${max}`);
+  return value;
+}
+
+/** A one-shot sequence for one viewer; -1 clears the NPC's current sequence. */
+export function encodeNpcAnimationSpecific(index: number, id: number, delay = 0): Buffer {
+  const out = Buffer.alloc(5);
+  out.writeUInt16BE(effectInteger("NPC index", index, 0, 65534), 0);
+  out.writeUInt16BE(effectInteger("sequence", id, -1, 65534) & 65535, 2);
+  out[4] = effectInteger("sequence delay", delay, 0, 255);
+  return encodeServerPacket(ServerPacketId.NPC_ANIM_SPECIFIC, out);
+}
+
+/** Actor spot effects use independent slots; -1 clears only the requested slot. */
+export function encodeNpcSpotAnimationSpecific(index: number, id: number, slot = 0, height = 0, delay = 0): Buffer {
+  const out = Buffer.alloc(9);
+  out.writeUInt16BE(effectInteger("NPC index", index, 0, 65534), 0);
+  out.writeUInt16BE(effectInteger("spotanim", id, -1, 65534) & 65535, 2);
+  out[4] = effectInteger("spotanim slot", slot, 0, 255);
+  out.writeUInt16BE(effectInteger("spotanim height", height, 0, 65535), 5);
+  out.writeUInt16BE(effectInteger("spotanim delay", delay, 0, 65535), 7);
+  return encodeServerPacket(ServerPacketId.NPC_SPOTANIM_SPECIFIC, out);
+}
+
 export type PlayerSyncState = {
   flags: Uint8Array;
   active: Uint16Array;

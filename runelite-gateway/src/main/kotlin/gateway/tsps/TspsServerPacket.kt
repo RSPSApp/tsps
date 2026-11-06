@@ -18,6 +18,8 @@ object TspsServerPacket {
     const val NPC_INFO = 21
     const val ANIM = 22
     const val MOVEMENT_POSITION = 23
+    const val NPC_ANIM_SPECIFIC = 24
+    const val NPC_SPOTANIM_SPECIFIC = 25
     const val VARP_SMALL = 40
     const val VARP_LARGE = 41
     const val VARBIT = 42
@@ -119,6 +121,8 @@ object TspsServerPacket {
             PATH_RESPONSE to -1,
             PLAYER_SYNC to -2,
             MOVEMENT_POSITION to 18,
+            NPC_ANIM_SPECIFIC to 5,
+            NPC_SPOTANIM_SPECIFIC to 9,
             NPC_INFO to -2,
             ANIM to 22,
             VARP_SMALL to 3,

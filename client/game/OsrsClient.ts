@@ -1,4 +1,6 @@
 import { openClientUrl } from "../common/openUrl";
+import { applyNpcSpecificEffect } from "./sync/NpcSpecificEffects";
+import { createNpcEcs } from "./ecs/createNpcEcs";
 import { LISTENED_CLAN_TYPE, OWN_CLAN_TYPE } from "../common/social/Clans";
 import type { MinimapGeometry, SceneGeometry } from "./scene/SceneGeometry";
 import { vec3 } from "gl-matrix";
@@ -92,6 +94,7 @@ import {
     subscribeInventory,
     subscribeNotifications,
     subscribeNpcInfo,
+    subscribeNpcSpecificEffects,
     subscribePlayJingle,
     subscribePlaySong,
     subscribePlayerSync,
@@ -863,7 +866,7 @@ export class OsrsClient {
     // Appearance is server-driven; no client defaults.
 
     // ECS stores
-    npcEcs: NpcEcs = new NpcEcs();
+    npcEcs: NpcEcs = createNpcEcs(() => this.renderer);
     /** The active renderer's scene geometry, for plugins drawing over the scene in 2D. */
     sceneGeometry?: SceneGeometry;
     /** The minimap as last drawn, for plugins marking it. */
@@ -1054,6 +1057,7 @@ export class OsrsClient {
     private handleWidgetPayload?: (payload: any) => void;
     private heldWidgetProperties = new HeldWidgetProperties();
     private unsubscribeNpcInfo?: () => void;
+    private unsubscribeNpcSpecificEffects?: () => void;
     private unsubscribeCombat?: () => void;
     private unsubscribePlayerSync?: () => void;
     private unsubscribeSpot?: () => void;
@@ -3179,6 +3183,9 @@ export class OsrsClient {
             } catch (err) {
                 console.warn("[OsrsClient] npc_info error", err);
             }
+        });
+        this.unsubscribeNpcSpecificEffects = subscribeNpcSpecificEffects(effect => {
+            applyNpcSpecificEffect(this.npcEcs, this.renderer, effect, getClientCycle());
         });
         // Subscribe to server-side GFX (spot) messages and forward to renderer
         try {
@@ -8666,6 +8673,7 @@ export class OsrsClient {
             ...this.serverSubscriptions.splice(0),
             this.unsubscribeWidgetEvents,
             this.unsubscribeNpcInfo,
+            this.unsubscribeNpcSpecificEffects,
             this.unsubscribeCombat,
             this.unsubscribePlayerSync,
             this.unsubscribeSpot,

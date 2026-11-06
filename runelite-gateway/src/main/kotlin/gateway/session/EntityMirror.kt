@@ -31,6 +31,9 @@ class EntityMirror(
     private val npcs = HashMap<Int, NpcAvatar>()
     private val npcTypeIds = HashMap<Int, Int>()
 
+    /** EntityWorld allocates the explicit tsps index; an untracked/released NPC has no target. */
+    fun npcIndex(index: Int): Int? = index.takeIf { it in npcs }
+
     /** Public chat from CHAT_MESSAGE, by speaker, waiting for this tick's player sync. */
     private val pendingChat = HashMap<Int, PublicChat>()
 

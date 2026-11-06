@@ -13,7 +13,6 @@ import {
     PICKER_BUTTON_Y,
     PICKER_FIELD_Y,
     PICKER_LEFT_BUTTON_DX,
-    PICKER_LIST_MESSAGE_Y,
     PICKER_MESSAGE_Y,
     PICKER_NO_SAVE_TEXT,
     PICKER_PROMPT_Y,
@@ -345,7 +344,14 @@ export function drawCharacterSelect(host: LoginRendererHost, ctx: RenderContext,
     const centerX = host.loginBoxX + 180;
     const small = host.fontPlain11 ?? host.fontPlain12;
 
-    drawCenteredText(host, ctx, host.fontBold12, "Choose your character", centerX, PICKER_TITLE_Y, 0xffff00, true);
+    // In the list the title line carries the server's refusal or the wait: the rows fill the box.
+    if (state.pickerMode === "list" && state.pickerMessage) {
+        drawCenteredText(host, ctx, host.fontPlain12, state.pickerMessage, centerX, PICKER_TITLE_Y, 0xff0000, true);
+    } else if (state.pickerMode === "list" && state.pickerBusy) {
+        drawCenteredText(host, ctx, host.fontBold12, "Please wait...", centerX, PICKER_TITLE_Y, 0xffffff, true);
+    } else {
+        drawCenteredText(host, ctx, host.fontBold12, "Choose your character", centerX, PICKER_TITLE_Y, 0xffff00, true);
+    }
 
     if (state.pickerMode === "list") {
         const rows = getPickerRowCount(state);
@@ -368,28 +374,22 @@ export function drawCharacterSelect(host: LoginRendererHost, ctx: RenderContext,
                 if (usable) {
                     drawText(host, ctx, host.fontBold12, "New character", rowX + 6, nameY, 0xc8c8c8, true);
                 } else {
-                    drawCenteredText(host, ctx, small, PICKER_NO_SAVE_TEXT, centerX, nameY, 0x808080, true);
+                    drawCenteredText(host, ctx, small, PICKER_NO_SAVE_TEXT, centerX, nameY, 0xc0c0c0, true);
                 }
                 continue;
             }
             const color = i === state.selectedCharacter ? 0xffff00 : 0xffffff;
             const stats = `Cmb ${character.combatLevel} · Total ${character.totalLevel}`;
             const right = rowX + PICKER_ROW_W - 6;
-            const statsW = measureText(host, small, stats);
+            const statsW = measureText(host, host.fontPlain12, stats);
             drawText(host, ctx, host.fontBold12, ellipsis(host, character.name, PICKER_ROW_W - statsW - 18), rowX + 6, nameY, color, true);
             if (twoLines) {
-                drawText(host, ctx, small, stats, right - statsW, ry + 10, 0xffffff, true);
+                drawText(host, ctx, host.fontPlain12, stats, right - statsW, ry + 11, 0xffffff, true);
                 const played = formatPlayedAgo(character.lastPlayedAt);
-                drawText(host, ctx, small, played, right - measureText(host, small, played), ry + 20, 0xb0b0b0, true);
+                drawText(host, ctx, small, played, right - measureText(host, small, played), ry + 22, 0xd0d0d0, true);
             } else {
-                drawText(host, ctx, small, stats, right - statsW, nameY, 0xffffff, true);
+                drawText(host, ctx, host.fontPlain12, stats, right - statsW, nameY, 0xffffff, true);
             }
-        }
-
-        if (state.pickerMessage) {
-            drawCenteredText(host, ctx, host.fontPlain12, state.pickerMessage, centerX, PICKER_LIST_MESSAGE_Y, 0xff0000, true);
-        } else if (state.pickerBusy) {
-            drawCenteredText(host, ctx, host.fontPlain12, "Please wait...", centerX, PICKER_LIST_MESSAGE_Y, 0xffffff, true);
         }
 
         drawButton(host, ctx, host.loginBoxX + PICKER_LEFT_BUTTON_DX, PICKER_BUTTON_Y, "Play");

@@ -8,11 +8,21 @@ import { LoginState } from "../game/login/LoginState";
 import { handleKeyInput, getCharacterSelectEnterAction } from "../game/login/renderer/input/keyboard";
 import { handleCharacterSelectClick } from "../game/login/renderer/input/mouseHandlers";
 import {
+    getPickerRowHeight,
     PICKER_BUTTON_Y,
     PICKER_ROW_H,
     PICKER_ROWS_Y,
     PICKER_SIGN_OUT_Y,
+    PICKER_TITLE_Y,
 } from "../game/login/renderer/layout/geometry";
+
+// Rows are tall enough for the stats and last-played lines, and three characters plus the New
+// row end above the titlebuttons (about 40 tall, centred on PICKER_BUTTON_Y) and below the title.
+assert.equal(PICKER_ROW_H, 25);
+assert.equal(getPickerRowHeight(4), PICKER_ROW_H);
+assert.ok(PICKER_ROWS_Y > PICKER_TITLE_Y + 3);
+assert.ok(PICKER_ROWS_Y + 4 * PICKER_ROW_H <= PICKER_BUTTON_Y - 20);
+assert.ok(getPickerRowHeight(5) < PICKER_ROW_H, "more rows share the area and drop the second line");
 import { LOGIN_FLAG_CHARACTER_SELECT, LOGIN_FLAG_TOKEN } from "../network/serverConnection/constants";
 
 const store = new Map<string, string>();

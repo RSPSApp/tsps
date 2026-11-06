@@ -273,11 +273,15 @@ export function getRememberedPlayBounds(host: LoginRendererHost) {
  * prompt and a name field, and the buttons for Create or Delete and Cancel.
  */
 export const PICKER_TITLE_Y = 192;
-export const PICKER_ROWS_Y = 202;
-/** Row height up to four rows; more rows share PICKER_ROWS_AREA_H. */
-export const PICKER_ROW_H = 22;
+export const PICKER_ROWS_Y = 198;
+/**
+ * Row height up to four rows (three characters and the New row), tall enough for the stats and
+ * the last-played line; more rows share PICKER_ROWS_AREA_H and keep only the stats. Four rows end
+ * at 298, above the titlebuttons centred on PICKER_BUTTON_Y.
+ */
+export const PICKER_ROW_H = 25;
 export const PICKER_ROW_W = 320;
-export const PICKER_ROWS_AREA_H = 88;
+export const PICKER_ROWS_AREA_H = 100;
 /** Centre of the Play / Create / Delete (left) and Delete / Cancel (right) titlebuttons. */
 export const PICKER_BUTTON_Y = 322;
 export const PICKER_LEFT_BUTTON_DX = 100;
@@ -290,8 +294,6 @@ export const PICKER_SIGN_OUT_HALF_H = 8;
 export const PICKER_PROMPT_Y = PICKER_ROWS_Y + 20;
 export const PICKER_FIELD_Y = PICKER_ROWS_Y + 45;
 export const PICKER_MESSAGE_Y = PICKER_ROWS_Y + 70;
-/** The server's message in list mode, between the rows and the buttons. */
-export const PICKER_LIST_MESSAGE_Y = PICKER_ROWS_Y + PICKER_ROWS_AREA_H + 8;
 export const PICKER_MAX_NAME_LENGTH = 12;
 export const PICKER_NO_SAVE_TEXT = "Enter the world once with your first character";
 

@@ -14,6 +14,7 @@
 
 const Shared = require("./Shared.Mimic");
 const Lair = require("./Lair.Mimic");
+const Retrieval = require("./Retrieval.Mimic");
 
 const OPTED_IN_ATTRIBUTE = "mimic:opted-in";
 
@@ -210,6 +211,10 @@ function foundYou(api, player) {
 /** Search / presenting the casket all open the same transcript. */
 function talk(api, player) {
   if (!Shared.alive(player)) return false;
+  if (Retrieval.held(player)) {
+    Retrieval.open(player);
+    return true;
+  }
   if (hasCasket(player)) {
     foundYou(api, player);
     return true;

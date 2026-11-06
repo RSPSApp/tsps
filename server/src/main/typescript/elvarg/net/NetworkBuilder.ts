@@ -277,6 +277,12 @@ function isBanned(name: string): boolean {
   return PlayerPunishment.banned(name);
 }
 
+/** Whether this account's primary is banned: a banned primary bans the whole account. */
+function isPrimaryBanned(account: string): boolean {
+  const primary = account ? Accounts.primaryOf(account) : undefined;
+  return !!primary && isBanned(primary);
+}
+
 /** Whether `username` is one of `DEV_USERNAME`'s accounts (comma-separated). */
 export function isConfiguredDeveloperUsername(username: string): boolean {
   const name = username.toLowerCase();
@@ -1420,6 +1426,19 @@ export class ClientConnection {
       this.send(encodeCharacterResult(false, 10, "That character has been disabled."));
       return;
     }
+    // A ban on the primary landing while the account is on the picker covers every character.
+    let primaryBanned: boolean;
+    try {
+      primaryBanned = isPrimaryBanned(pending.account);
+    } catch (error) {
+      console.error(`[login] failed to read the account of ${pending.account}`, error);
+      this.send(encodeCharacterResult(false, 8, "The login server is busy."));
+      return;
+    }
+    if (primaryBanned) {
+      this.send(encodeCharacterResult(false, 10, "Your account has been disabled."));
+      return;
+    }
     const characterKey = pendingKey(character.name);
     if (
       World.getPlayerByName(character.name) ||
@@ -1471,7 +1490,7 @@ export class ClientConnection {
       const primary = Accounts.primaryOf(pending.account);
       const persistence = GameConstants.PLAYER_PERSISTENCE;
       // A banned primary bans the account (login refuses it too); a ban landing mid-picker stops creation.
-      if (primary && isBanned(primary)) {
+      if (isPrimaryBanned(pending.account)) {
         this.send(encodeCharacterResult(false, 10, "Your account has been disabled."));
         return;
       }
@@ -1614,6 +1633,21 @@ export class ClientConnection {
     }
     const pending = this.pending;
     if (PlayerPunishment.banned(pending.username)) {
+      this.releasePendingName();
+      this.failLogin(4, "Your account has been disabled.");
+      return;
+    }
+    // A banned primary bans the account, also when the ban lands after login.
+    let primaryBanned: boolean;
+    try {
+      primaryBanned = isPrimaryBanned(pending.account);
+    } catch (error) {
+      console.error(`[login] failed to read the account of ${pending.account}`, error);
+      this.releasePendingName();
+      this.failLogin(8, "The login server is busy.");
+      return;
+    }
+    if (primaryBanned) {
       this.releasePendingName();
       this.failLogin(4, "Your account has been disabled.");
       return;

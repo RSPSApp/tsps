@@ -77,7 +77,7 @@ In the browser, the picker preselects the typed character if it isn't the primar
 
 `::characters <name>` (developer rank) lists the characters of the account that owns `<name>`, primary first, with when each last played. It prints `No account owns that name.` for an unknown name.
 
-`::releasename <name>` (developer rank) frees a deleted character's name: anyone can then log in with it or create it. It replies `Released <name> (deleted by <account>). The name can be used again.`, or `No deleted character had that name.` Whatever stayed keyed by the name (its display names, clan rank, bans and mutes) goes to whoever takes it next, so clear those first if they matter.
+`::releasename <name>` (administrator rank) frees a deleted character's name: anyone can then log in with it or create it. It replies `Released <name> (deleted by <account>). The name can be used again.`, or `No deleted character had that name.` Whatever stayed keyed by the name (its display names, clan rank, bans and mutes) goes to whoever takes it next, so clear those first if they matter.
 
 ## More
 

@@ -55,6 +55,11 @@ module.exports = {
       api.core.PlayerRights.DEVELOPER,
       "List an account's characters"
     );
-    api.registerCommand("releasename", (event) => releaseName(api, event), api.core.PlayerRights.DEVELOPER, "Free a deleted character's name");
+    api.registerCommand(
+      "releasename",
+      (event) => releaseName(api, event),
+      api.core.PlayerRights.ADMINISTRATOR,
+      "Free a deleted character's name"
+    );
   },
 };

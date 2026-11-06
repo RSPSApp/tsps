@@ -312,7 +312,7 @@ and is unaffected.
 ### Admin
 
 `::characters <name>` (developer rank) prints the account's characters with last played times,
-through `api.core.Accounts`. Read-only. `::releasename <name>` (developer rank) removes a
+through `api.core.Accounts`. Read-only. `::releasename <name>` (administrator rank) removes a
 tombstone through `Accounts.releaseDeleted`, so the name can be taken again (with whatever is
 still keyed by it).
 

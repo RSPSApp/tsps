@@ -76,11 +76,11 @@ test("::releasename frees a deleted character's name and reports the outcome", (
   const { Accounts } = core;
   Accounts.addCharacter("hero", "Gone Guy", 4000);
   Accounts.removeCharacter("hero", "Gone Guy", 5000);
-  const dev = login(Rights.DEVELOPER);
-  CommandPacketListener.execute(dev, "releasename gone_guy");
-  CommandPacketListener.execute(dev, "releasename Gone Guy");
-  CommandPacketListener.execute(dev, "releasename");
-  assert.deepEqual(dev.messages, [
+  const admin = login(Rights.ADMINISTRATOR);
+  CommandPacketListener.execute(admin, "releasename gone_guy");
+  CommandPacketListener.execute(admin, "releasename Gone Guy");
+  CommandPacketListener.execute(admin, "releasename");
+  assert.deepEqual(admin.messages, [
     "Released Gone Guy (deleted by hero). The name can be used again.",
     "No deleted character had that name.",
     "Usage: ::releasename <name>",
@@ -88,12 +88,12 @@ test("::releasename frees a deleted character's name and reports the outcome", (
   assert.equal(Accounts.isDeleted("gone guy"), false);
 });
 
-test("::releasename is developer-only", () => {
+test("::releasename is administrator rank: a moderator is refused", () => {
   const { Accounts } = core;
   Accounts.addCharacter("hero", "Kept Guy", 4000);
   Accounts.removeCharacter("hero", "Kept Guy", 5000);
-  const admin = login(Rights.ADMINISTRATOR);
-  CommandPacketListener.execute(admin, "releasename Kept Guy");
-  assert.deepEqual(admin.messages, ["You do not have permission to use this command."]);
+  const moderator = login(Rights.MODERATOR);
+  CommandPacketListener.execute(moderator, "releasename Kept Guy");
+  assert.deepEqual(moderator.messages, ["You do not have permission to use this command."]);
   assert.equal(Accounts.isDeleted("kept guy"), true);
 });

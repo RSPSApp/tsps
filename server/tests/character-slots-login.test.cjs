@@ -426,6 +426,27 @@ test('a banned primary bans the whole account: alt logins and creation are refus
   assert.equal((await login('Alt', 'pw', 0)).success, true, 'lifting the ban lets the account back in');
 });
 
+test('a primary banned while on the picker refuses selecting an alt and entering the world', async (t) => {
+  seedSave('Zezima', { passwordHash: hashOf('pw') });
+  Accounts.ensure('Zezima', 1);
+  Accounts.addCharacter('zezima', 'Alt', 2);
+  seedSave('Alt');
+  const { channel, connection } = await connect('Zezima', 'pw', LOGIN_FLAG_CHARACTER_SELECT);
+  await select(connection, 'Alt');
+  assert.deepEqual(lastResult(channel), { ok: true, code: 0, message: '' }, 'Alt is chosen before the ban');
+
+  t.mock.method(PlayerPunishment, 'banned', (name) => name.toLowerCase() === 'zezima');
+  await select(connection, 'Alt');
+  assert.deepEqual(lastResult(channel), { ok: false, code: 10, message: 'Your account has been disabled.' });
+
+  // The handshake would enter Alt, chosen before the ban: the account-wide ban refuses it.
+  const logins = await handshake(t, connection, 'Zezima');
+  assert.ok(connection.getPlayer() === undefined, 'nothing entered the world');
+  assert.equal(logins.length, 0, 'no login event');
+  assert.deepEqual(packetsOf(channel, LOGIN_RESPONSE).map(decodeResponse).at(-1).code, 4);
+  assert.equal(net.ClientConnection.pendingNames.size, 0, 'the names are released');
+});
+
 test('one account online at a time, whichever character', async (t) => {
   seedSave('Zezima', { passwordHash: hashOf('pw') });
   Accounts.ensure('Zezima', 1);

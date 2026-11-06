@@ -2,12 +2,12 @@
 quest: Priest in Peril
 key: priest_in_peril
 status: passed-with-issues
-tested: 2026-11-06
+tested: 2026-11-01
 tester: agent
-model: claude-sonnet-5-5
-commit: 58cd261da
+model: claude-opus-5-5
+commit: 2b3988c563db
 cache: osrs-241_2026-10-20
-start: checkpoint
+start: fresh
 travel: travel_to
 ---
 
@@ -18,7 +18,9 @@ mausoleum half (monuments, key swap, well, cell gate, blessing, coffin) did not 
 this run and was added from the Wiki transcripts. Varp 302 now carries live OSRS's values,
 and the run checked them after every step. Follow-up runs on fresh accounts checked the
 before-quest rules, the gate, the guardian and the fixes made after the first run. What stays
-open is outside the quest's code or has no source to settle it.
+open is outside the quest's code or has no source to settle it. The 2026-11-06 entry under
+Runs is a focused check of unmerged changes, not a quest run, so the status block above still
+records the 2026-11-01 run; the quest needs a whole run on the merged code.
 
 ## Findings
 
@@ -26,12 +28,20 @@ Newest first.
 
 - **fixed (live capture)** The temple's Monks of Zamorak only punched. Two rev 241 RSProx
   recordings (2026-10-17 and 2026-11-02) show them casting too: 3484 Weaken and Curse, 3485
-  Weaken and Confuse, 3486 Fire Bolt, with casts 11426/11424/11428 or 9144, projectiles
-  106/103/109/127 and "You feel weakened." on a landing Weaken/Confuse/Curse (strength 63 to
-  59 and 28 to 26, attack 27 to 25, defence 1 to 0: 5% plus 1). The quest registers a combat
-  method for the six monk ids that mixes punches and these casts. The **cast share is an
-  estimate** (about 1 in 5 swings; 1 in 2 for the hooded monk), not measured. Checked in a
-  headless run: casts happen and Weaken drained strength with the message.
+  Weaken and Confuse, 3486 Fire Bolt (a small sample: 3, 5 and 2 casts), with casts
+  11426/11424/11428 or 9144, projectiles 106/103/109/127 launched at cycle 44/61/51/51, cast
+  graphics at height 92 and impacts at 124. Every cast was from the next tile: Weaken's
+  projectile ends at cycle 60 and lands 2 ticks after the cast, Confuse, Curse and Fire Bolt end
+  at 90 and land after 3. A splash and a landed Weaken/Confuse/Curse show no hitsplat. A landed
+  one says "You feel weakened." and drains 5% plus 1 (strength 63 to 59 and 28 to 26, attack 27
+  to 25, defence 1 to 0; rounding 5% up fits the same numbers). The quest registers a combat
+  method for the six monk ids that mixes punches and these casts, with all of the above. Fire
+  Bolt hits up to 5, the Monk of Zamorak (Paterdomus) infobox's max hit (one captured hit, 4).
+  **Not from the captures:** the cast share is the captured share of swings (3 of 26, 5 of 20,
+  2 of 4), a small sample, not a measured rate; a monk picks evenly between its two spells; an
+  already lowered skill is left alone, as the standard curses do (every captured drain started
+  from a full level). Only Weaken landing was seen in a headless run (on the first version of
+  this change); the timing, splat and Fire Bolt changes are unit-tested only.
 - **fixed (live capture)** The hooded monk's golden-key drop tells the killer
   "Untradeable drop: Golden key", as live does.
 - **checked, unchanged (live capture)** Varp 302 (1-8, 10, 11-60, 61), the knock, trapdoor,
@@ -39,10 +49,14 @@ Newest first.
   recordings. "Mysterious Voice 2" and "Drevil" come from the Wiki transcript's own speakers.
 - **fixed (live capture)** Mausoleum gates 3444 and 3445 now swing in the inactive leaf 3446
   on the tile beyond (3405,9894 and 3432,9897), let the player through and are back two ticks
-  later, as in the 2026-11-02 recording. Live also puts `inviswall` (38848) on the gate tile for
-  those ticks; that is left out, as for the other pass-through gates in Doors, because it would
-  block the step. Checked in-game from the monument side (the gate came back, the player
-  crossed). Covered by `tests/wooden-gate.test.cjs`.
+  later with sound 69 on opening, as in both recordings (2026-10-17 tick 1117, 2026-11-02 ticks
+  11016, 11664 and 11708-11710). The quest's golden-key rule still runs first and keeps the
+  first gate shut without the key. Covered by `tests/wooden-gate.test.cjs`. Checked in-game from
+  the monument side for 3444 only.
+- **open (Doors)** Live replaces the gate leaf with `inviswall` (38848) on the gate tile while
+  the gate stands open. Doors leaves it out, as for the other pass-through gates, because it
+  would block the player's own step; so for those 2 ticks the gate tile has no wall and anyone
+  else can walk through it.
 - **fixed (live capture)** The two voices behind the temple door now wear the monks' chat heads
   the recording shows: "Mysterious Voice" 3484, "Mysterious Voice 2" 3486 (the plugin used one
   head, 12240, for both). Unit-tested; the head itself was not seen in a client.
@@ -118,7 +132,8 @@ Newest first. A rerun adds an entry; it never rewrites an older one.
 
 ### 2026-11-06 · agent · claude-sonnet-5-5
 
-- **Start:** a focused check, not a whole-quest run (so the status block says `checkpoint`).
+- **Start:** a focused check of this branch's unmerged changes, not a whole-quest run, so the
+  status block keeps the 2026-11-01 run.
   Two fresh headless accounts; neither had the quest started at the time of the monk fights
   (varp 302 = 0), which is enough for the monks to attack. Placement used `::tele` to the
   temple yard (3411,3488) and, for the knock, beside the large door.
@@ -132,7 +147,7 @@ Newest first. A rerun adds an entry; it never rewrites an older one.
 - **Result:** monks 3484, 3485 and 3486 each cast (server log counts), Weaken drained
   Strength with "You feel weakened." once seen over several fights. The knock at stage 0
   gave "You knock at the door..." then "Doesn't seem like anyone's home.". The plugin test
-  file passes (16 tests), including new ones for the monk spells, the 5% plus 1 drain and the
+  file passes (17 tests), including new ones for the monk spells, the 5% plus 1 drain and the
   key-drop message.
 - **Also checked:** gate 3444 from the monument side (opened, player crossed to 3405,9895,
   the gate returned); `travel_to` up both temple stairs (see Findings). A third account was
@@ -142,6 +157,10 @@ Newest first. A rerun adds an entry; it never rewrites an older one.
 - **Not checked:** Confuse and Curse landing in-game (only unit-tested), Fire Bolt damage
   numbers, the cast share against live (estimated), the key-drop message in-game, a relog, the
   chat heads in a client, gate 3445 in-game (unit-tested only).
+- **Changed after this run:** a review against the recordings found the monks' Confuse, Curse
+  and Fire Bolt landing a tick early, invented projectile end cycles, 0 hitsplats on splashes
+  and curses, Fire Bolt's 12 max hit and a 1 in 5 cast share; these were fixed from the
+  captures and the Wiki (see Findings) and are unit-tested only. Nothing in this run covers them.
 
 ### 2026-11-01 (second follow-up) · agent · claude-opus-5-5
 

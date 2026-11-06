@@ -5,7 +5,7 @@ Every quest the server registers, with the latest result recorded in its page he
 test a quest is in [server/docs/agents/quest-testing.md](https://github.com/RSPSApp/tsps/blob/main/server/docs/agents/quest-testing.md);
 how to record the result is in [_template/README.md](_template/README.md).
 
-191 quests · ✅ passed: 28 · ⚠️ passed with issues: 16 · 🔄 in progress: 11 · ❌ failed: 1 · 🔁 needs recheck: 27 · untested: 108
+191 quests · ✅ passed: 28 · ⚠️ passed with issues: 15 · 🔄 in progress: 11 · ❌ failed: 1 · 🔁 needs recheck: 28 · untested: 108
 
 "Needs recheck" means the quest's plugin has changed since the commit its result was proven on.
 
@@ -116,7 +116,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | Perilous Moons | untested |  |  |  |  |
 | [Pirate's Treasure](pirates-treasure/README.md) | ✅ passed | 2026-10-25 | community |  |  |
 | Plague City | untested |  |  |  |  |
-| [Priest in Peril](priest-in-peril/README.md) | ⚠️ passed with issues | 2026-11-06 | agent | claude-sonnet-5-5 | 1 |
+| [Priest in Peril](priest-in-peril/README.md) | 🔁 needs recheck | 2026-11-01 | agent | claude-opus-5-5 | 1 |
 | [Prince Ali Rescue](prince-ali-rescue/README.md) | ⚠️ passed with issues | 2026-10-29 | agent | grok-4.7 | 1 |
 | [Prying Times](prying-times/README.md) | untested |  |  |  |  |
 | [Rag and Bone Man I](rag-and-bone-man-i/README.md) | untested |  |  |  |  |

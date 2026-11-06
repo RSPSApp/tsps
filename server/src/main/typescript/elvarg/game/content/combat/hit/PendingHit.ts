@@ -255,6 +255,17 @@ export class PendingHit {
         this.updateTotalDamage();
     }
 
+    /**
+     * Lands with no hitsplat: the hit still resolves on its tick (after-hit effects, retaliation),
+     * but no damage, not even a 0, is shown. For casts that splash or only drain, which live
+     * shows without a splat.
+     */
+    public withoutHitsplat(): PendingHit {
+        this.hits = [];
+        this.updateTotalDamage();
+        return this;
+    }
+
     public setHandleAfterHitEffects(handleAfterHitEffects: boolean): PendingHit {
         this.handleAfterHitEffects = handleAfterHitEffects;
         return this;

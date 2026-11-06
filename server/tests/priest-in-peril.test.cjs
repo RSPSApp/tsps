@@ -615,13 +615,14 @@ test('the temple monks punch, and now and then cast the spells the captures show
   const h = harness();
   const { ids, ctor } = h.combatProviders.at(-1);
   assert.deepEqual([...ids].sort((a, b) => a - b), [3484, 3485, 3486, 16271, 16272, 16273]);
+  let accurate = true;
   const run = (npcId, roll) => {
     const method = new ctor();
     const log = [];
     let cast = null;
     method.melee.start = () => log.push('melee');
     method.magic.start = () => log.push('magic');
-    method.magic.hits = () => [{ setTotalDamage: (v) => log.push(`damage ${v}`) }];
+    method.magic.hits = () => [{ isAccurate: () => accurate, withoutHitsplat: () => log.push('no splat') }];
     const npc = { getId: () => npcId, getCombat: () => ({ setCastSpell: (s) => { cast = s; }, getSelectedSpell: () => cast }) };
     const original = Math.random;
     Math.random = () => roll;
@@ -629,6 +630,8 @@ test('the temple monks punch, and now and then cast the spells the captures show
     return { method, npc, log, cast: () => cast };
   };
   assert.deepEqual(run(3484, 0.9).log, ['melee'], 'most swings are punches');
+  assert.deepEqual(run(3484, 0.12).log, ['melee'], '3484 casts about 3 swings in 26');
+  assert.deepEqual(run(3485, 0.24).log, ['magic'], '3485 casts about 5 swings in 20');
   assert.equal(run(3484, 0.9).method.attackDistance(), 1);
 
   // 3485 casts Weaken or Confuse; Weaken is the first entry.
@@ -650,7 +653,7 @@ test('the temple monks punch, and now and then cast the spells the captures show
   assert.deepEqual(lines, ['You feel weakened.']);
   weaken.cast().spellEffect({}, target);
   assert.equal(levels.get(core.Skill.STRENGTH), 59, 'an already weakened skill is not lowered again');
-  assert.deepEqual(weaken.method.hits(weaken.npc, target) && weaken.log.slice(1), ['damage 0'], 'a curse deals no damage');
+  assert.deepEqual(weaken.method.hits(weaken.npc, target) && weaken.log.slice(1), ['no splat'], 'a landed curse shows no hitsplat');
 
   maximum = 28;
   levels.set(core.Skill.STRENGTH, 28);
@@ -662,7 +665,42 @@ test('the temple monks punch, and now and then cast the spells the captures show
   assert.deepEqual(bolt.log, ['magic']);
   assert.equal(bolt.cast().spellEffect === core.CombatSpells.FIRE_BOLT.spellEffect, true, 'Fire Bolt keeps its own effect');
   bolt.method.hits(bolt.npc, target);
-  assert.deepEqual(bolt.log, ['magic'], 'its damage is left alone');
+  assert.deepEqual(bolt.log, ['magic'], 'a landed Fire Bolt keeps its hitsplat');
+  assert.equal(bolt.cast().maximumHit(), 5, 'the Wiki infobox max hit, not the spell\'s 12');
+  accurate = false;
+  bolt.method.hits(bolt.npc, target);
+  assert.deepEqual(bolt.log, ['magic', 'no splat'], 'a splash shows no hitsplat');
+  accurate = true;
+});
+
+test('the monks\' spells fly and land on the captured cycles and ticks', () => {
+  const h = harness();
+  const { ctor } = h.combatProviders.at(-1);
+  // [npc, roll picking the spell, projectile, launch, end, cast gfx, impact gfx, hit delay]
+  const cases = [
+    [3485, 0, 106, 44, 60, 105, 107, 2],
+    [3485, 0.99, 103, 61, 90, 102, 104, 3],
+    [3484, 0.99, 109, 51, 90, 108, 110, 3],
+    [3486, 0, 127, 51, 90, 126, 128, 3],
+  ];
+  for (const [npcId, pick, projectile, launch, end, castGfx, impactGfx, delay] of cases) {
+    const method = new ctor();
+    let cast = null;
+    method.magic.start = () => {};
+    const npc = { getId: () => npcId, getCombat: () => ({ setCastSpell: (s) => { cast = s; }, getSelectedSpell: () => cast }) };
+    const rolls = [0, pick];
+    const original = Math.random;
+    Math.random = () => rolls.shift();
+    try { method.start(npc, {}); } finally { Math.random = original; }
+    const original2 = core.Projectile.createProjectile;
+    let sent;
+    core.Projectile.createProjectile = (...args) => { sent = args.slice(2); return {}; };
+    try { cast.castProjectile({}, {}); } finally { core.Projectile.createProjectile = original2; }
+    assert.deepEqual(sent, [projectile, launch, end, 43, 31], `projectile ${projectile}`);
+    assert.equal(cast.hitDelay(), delay, `projectile ${projectile} lands after ${delay} ticks`);
+    assert.deepEqual([cast.startGraphic().getId(), cast.startGraphic().height], [castGfx, 92]);
+    assert.deepEqual([cast.endGraphic().getId(), cast.endGraphic().height], [impactGfx, 124]);
+  }
 });
 
 test('the two voices behind the temple door wear the monks\' chat heads, as captured', () => {

@@ -2061,6 +2061,23 @@ test('the Priest in Peril mausoleum gates swing in the captured leaf, let the pl
     [3445, [3431, 9897], [3432, 9897], [3432, 9897], [3431, 9897]],
   ];
   try {
+    // The quest's key rule (door:toggle) runs first: a gate it keeps locked never swings.
+    {
+      const steps = [];
+      const object = MapObjects.get(3444, new Location(3405, 9895, 0), null);
+      const player = { getPrivateArea: () => null, getLocation: () => new Location(3405, 9895, 0),
+        getMovementQueue: () => ({ reset() {}, addSteps: tile => steps.push([tile.getX(), tile.getY()]) }) };
+      h.setDoorToggleHandler(request => { request.handled = true; });
+      const sounds = h.sounds.length;
+      assert.equal(h.handlers.get('Gate').Open({ player, object, objectId: 3444,
+        definition: object.getDefinition(), location: object.getLocation(), clickType: 1 }), true);
+      h.setDoorToggleHandler(null);
+      assert.deepEqual(steps, [], 'a locked gate lets nobody through');
+      assert.equal(h.sounds.length, sounds, 'and makes no gate sound');
+      assert.ok(MapObjects.get(3444, new Location(3405, 9895, 0), null), 'the gate stays shut');
+      assert.ok(!MapObjects.get(3446, new Location(3405, 9894, 0), null), 'no leaf swings in');
+      assert.equal(h.submitted.length, 0, 'nothing to close');
+    }
     for (const [id, [gx, gy], [lx, ly], [px, py], step] of cases) {
       const steps = [];
       const object = MapObjects.get(id, new Location(gx, gy, 0), null);
@@ -2070,10 +2087,11 @@ test('the Priest in Peril mausoleum gates swing in the captured leaf, let the pl
       assert.equal(h.handlers.get('Gate').Open({ player, object, objectId: id,
         definition: object.getDefinition(), location: object.getLocation(), clickType: 1 }), true);
       assert.deepEqual(steps, [step]);
+      assert.equal(h.sounds.at(-1)[1].getId(), 69, 'the captured opening sound');
       assert.ok(MapObjects.get(3446, new Location(lx, ly, 0), null), 'the inactive leaf 3446 swings in');
       assert.ok(!MapObjects.get(id, new Location(gx, gy, 0), null), 'the gate leaf is out while open');
       const task = h.submitted.at(-1);
-      assert.equal(task.delay ?? 2, 2, 'it shuts two ticks later');
+      assert.equal(task.delay, 2, 'it shuts two ticks later');
       task.execute();
       assert.ok(MapObjects.get(id, new Location(gx, gy, 0), null), 'the gate is back');
       assert.ok(!MapObjects.get(3446, new Location(lx, ly, 0), null), 'the inactive leaf is gone');

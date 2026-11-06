@@ -197,7 +197,7 @@ export class PlayerDeathTask extends Task {
                 item,
                 kept: itemsToKeep.includes(item),
                 location: position,
-                shouldDropItems: true,
+                shouldDropItems: !PlayerDeathTask.keepsEverything(player),
                 dropEligible,
                 suppressDefaultDrop: false,
                 handled: false,

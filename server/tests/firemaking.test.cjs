@@ -245,7 +245,8 @@ async function campfireHarness(t) {
     }),
     getWorld: () => ({ getObjects: () => [...objects] }),
     onCustomEvent() {}, emitCustomEvent() {}, emitFiremakingBlocked: () => false,
-    onPlayerDisconnect: h => hooks.disconnect = h, onItemOnGroundItem() {}, onGroundItemClick() {},
+    onPlayerDisconnect: h => hooks.disconnect = h, onItemOnGroundItem() {},
+    onGroundItemClick: (_ids, _type, h) => hooks.groundLight = h,
     onItemOnItem: h => hooks.combine = h,
     onItemOnObject: (item, _object, h) => hooks.use = h ?? item,
     onObjectInteraction: (name, actions) => { hooks[name] = actions; },
@@ -291,7 +292,7 @@ async function campfireHarness(t) {
     core.MapObjects.mapObjects = oldMapObjects;
     Math.random = oldRandom;
   });
-  return { core, I, O, inventory, loc, player, hooks, objects, ashes, animations, messages, graphics,
+  return { core, I, O, inventory, loc, player, hooks, objects, ground, ashes, animations, messages, graphics,
     tick, useLog, menu: () => menu, xp: () => xp, chain: () => chain,
     light() {
       hooks.combine({ player, usedItemId: I.TINDERBOX, usedWithItemId: I.LOGS });
@@ -446,6 +447,20 @@ test("the player steps off the log with the animation reset, and the fire catche
   assert.equal(faces.length, 1, 'the player turns back to the fire with it');
   assert.ok(faces[0].target.equals(h.loc));
   assert.equal(h.messages.at(-1), 'The fire catches and the logs begin to burn.');
+});
+
+test("lighting an adjacent ground log uses the player's admitted position", async t => {
+  const h = await campfireHarness(t);
+  const tile = h.loc.clone().addX(1);
+  h.ground.push({ item: new core.Item(h.I.LOGS, 1), loc: tile });
+  const event = { player: h.player, groundItemId: h.I.LOGS,
+    location: { x: tile.getX(), y: tile.getY(), z: tile.getZ() }, handled: false };
+  h.hooks.groundLight(event);
+  assert.equal(event.handled, true, "adjacent ground log admitted");
+  h.tick(4);
+  assert.equal(h.ground.length, 0, "ground log consumed");
+  assert.equal(h.objects.size, 1, "fire catches");
+  assert.equal(h.xp(), 40);
 });
 
 test("Barbarian Firemaking accepts ordinary bows and rejects the Wiki's excluded bows", async () => {

@@ -1,3 +1,4 @@
+import { CustomDefinitionLoader } from "../../../custom/definitions/CustomDefinitionStore";
 import { CustomObjTypeLoader } from "../../../custom/items/CustomObjTypeLoader";
 import { CustomNpcTypeLoader } from "../../../custom/npcs/CustomNpcTypeLoader";
 import { createDefinitionArchiveView } from "../../../custom/archives/ArchivedDefinitionStore";
@@ -120,12 +121,12 @@ export class Dat2CacheLoaderFactory implements CacheLoaderFactory {
             }),
         });
         return this.archivedLoaders = {
-            npc: new ArchivedTypeLoader(native.npc, NpcType,
-                id => view().getSource("npc", id), () => view().getCount("npc")),
-            loc: new ArchivedTypeLoader(native.loc, LocType,
-                id => view().getSource("loc", id), () => view().getCount("loc")),
-            obj: new ArchivedTypeLoader(native.obj, ObjType,
-                id => view().getSource("obj", id), () => view().getCount("obj")),
+            npc: new CustomDefinitionLoader(new ArchivedTypeLoader(native.npc, NpcType,
+                id => view().getSource("npc", id), () => view().getCount("npc")), "npc"),
+            loc: new CustomDefinitionLoader(new ArchivedTypeLoader(native.loc, LocType,
+                id => view().getSource("loc", id), () => view().getCount("loc")), "loc"),
+            obj: new CustomDefinitionLoader(new ArchivedTypeLoader(native.obj, ObjType,
+                id => view().getSource("obj", id), () => view().getCount("obj")), "item"),
             // Retired event animations whose ids were recycled are appended here.
             // Archived sequences are only ever appended: native ids skip the archive view
             // (this loader runs per animated actor per frame).

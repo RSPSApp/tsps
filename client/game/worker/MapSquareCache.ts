@@ -1,3 +1,4 @@
+import { getCustomDefinitionKey } from "../../custom/definitions/CustomDefinitionStore";
 import type { CacheInfo } from "../../rs/cache/CacheInfo";
 import type { SdMapData } from "../../render/loader/SdMapData";
 import type { SdMapLoaderInput } from "../../render/loader/SdMapLoaderInput";
@@ -92,6 +93,7 @@ export function cacheKey(info: CacheInfo, input: SdMapLoaderInput, npcsHash: str
         input.smoothTerrain,
         input.minimizeDrawCalls,
         input.loadNpcs ? npcsHash : "",
+        ...(getCustomDefinitionKey() ? [`customDefinitions:${getCustomDefinitionKey()}`] : []),
         ...(definitionArchiveKey ? [`definitionArchives:${definitionArchiveKey}`] : []),
         // Only when on, so squares cached before this option keep their keys.
         ...(input.smoothLocAnimations ? [`smoothLocAnimations:${input.smoothLocAnimationSteps ?? 4}`] : []),

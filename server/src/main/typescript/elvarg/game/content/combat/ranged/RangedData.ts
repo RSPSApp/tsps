@@ -435,8 +435,8 @@ export class RangedWeapon {
     /** Weapons with exactly one ammo entry are self-ammo (thrown / charge bows). */
     private static selfAmmoByWeapon: Map<number, Ammunition> = new Map<number, Ammunition>();
 
-    public static readonly LONGBOW = new RangedWeapon([839], [Ammunition.BRONZE_ARROW], RangedWeaponType.LONGBOW)
-    public static readonly SHORTBOW = new RangedWeapon([841], [Ammunition.BRONZE_ARROW], RangedWeaponType.SHORTBOW)
+    public static readonly LONGBOW = new RangedWeapon([839], [Ammunition.BRONZE_ARROW, Ammunition.IRON_ARROW], RangedWeaponType.LONGBOW)
+    public static readonly SHORTBOW = new RangedWeapon([841], [Ammunition.BRONZE_ARROW, Ammunition.IRON_ARROW], RangedWeaponType.SHORTBOW)
     public static readonly TRAINING_BOW = new RangedWeapon([ItemIdentifiers.TRAINING_BOW], [Ammunition.TRAINING_ARROWS], RangedWeaponType.SHORTBOW)
     public static readonly OAK_LONGBOW = new RangedWeapon([845], [Ammunition.BRONZE_ARROW, Ammunition.IRON_ARROW, Ammunition.STEEL_ARROW], RangedWeaponType.LONGBOW)
     public static readonly OAK_SHORTBOW = new RangedWeapon([843], [Ammunition.BRONZE_ARROW, Ammunition.IRON_ARROW, Ammunition.STEEL_ARROW], RangedWeaponType.SHORTBOW)

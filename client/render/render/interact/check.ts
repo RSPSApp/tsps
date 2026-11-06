@@ -1152,9 +1152,8 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
                         });
                     }
                 } else if (interactType === InteractType.NPC) {
-                    // SceneRaycaster encodes players as InteractType.NPC with a high interactId offset.
-                    const PLAYER_INTERACT_BASE = 0x8000;
-                    if (interactId >= PLAYER_INTERACT_BASE) {
+                    // Player hits carry their ECS index; custom NPC IDs can also exceed 0x8000.
+                    if (hit.playerEcsIndex != null) {
                         const ecsIndex = hit.playerEcsIndex;
                         if (ecsIndex == null) continue;
                         const firstNpcs: number[] = [];

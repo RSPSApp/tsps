@@ -200,9 +200,7 @@ function inventoryIds(player) {
 
 /** How many of `id` the inventory has room for. */
 function inventoryRoom(player, id) {
-  const inventory = player.getInventory();
-  if (isStackable(id)) return inventory.contains(id) || inventory.getFreeSlots() > 0 ? Number.MAX_SAFE_INTEGER : 0;
-  return inventory.getFreeSlots();
+  return player.getInventory().getAddableAmount(new core.Item(id, Number.MAX_SAFE_INTEGER));
 }
 
 /**

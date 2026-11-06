@@ -69,6 +69,7 @@ function player({ smithing = 99, items = {}, hands = -1 } = {}) {
       getAmount: (id) => inventory.get(id) ?? 0,
       contains: (id) => (inventory.get(id) ?? 0) > 0,
       getFreeSlots: () => 28 - [...inventory.values()].reduce((sum, n) => sum + n, 0),
+      getAddableAmount: (item) => Math.min(item.getAmount(), Math.max(0, 28 - [...inventory.values()].reduce((sum, n) => sum + n, 0))),
       deleteNumber: (id, n) => inventory.set(id, inventory.get(id) - n),
       addItem: (item) => inventory.set(item.getId(), (inventory.get(item.getId()) ?? 0) + item.getAmount()),
       add: (item) => inventory.set(item.getId(), (inventory.get(item.getId()) ?? 0) + item.getAmount()),

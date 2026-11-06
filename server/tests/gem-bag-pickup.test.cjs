@@ -512,3 +512,245 @@ test("log basket bank-empty feedback matches what moved", async (t) => {
     });
   }
 });
+
+test("tackle box inventory withdrawals conserve bait at stack limits", async (t) => {
+  const { MAX_STACK_AMOUNT } = require("../dist/game/model/container/StackType");
+  const TackleBox = require("../plugins/items/storage/TackleBox.StorageItems");
+  const tackle = Storage.FAMILIES.get("tackle-box");
+  const boxId = core.CacheDefinitions.getObjId("tackle_box"), feather = I.FEATHER;
+  const mainId = core.CacheDefinitions.getInterfaceId("tackle_box_main");
+  const sideId = core.CacheDefinitions.getInterfaceId("tackle_box_side");
+  const inventoryWidget = core.CacheDefinitions.getComponentId("inventory:items");
+  const grid = core.CacheDefinitions.getComponentId("tackle_box_main:items");
+  const allButton = core.CacheDefinitions.getComponentId("tackle_box_main:all");
+  const quantityVarbit = core.CacheDefinitions.getVarbitId("ii_elnock_storage_selectedquantity");
+  const containerId = core.CacheDefinitions.getInventoryId("tackle_box");
+  assert.equal(containerId, 651);
+  assert.equal(boxId, I.TACKLE_BOX);
+  assert.equal(core.CacheDefinitions.getItem(boxId).name, TackleBox.NAME);
+  assert.equal(core.CacheDefinitions.getObjId("feather"), feather);
+  assert.equal(core.ItemDefinition.forId(feather).isStackable(), true);
+  assert.equal(core.ItemDefinition.forId(feather).isNoted(), false);
+  assert.ok(tackle && tackle.accepts(feather) && TackleBox.baitIds().has(feather));
+  assert.equal(mainId, 683); assert.equal(sideId, 684);
+  assert.equal(grid, (mainId << 16) | 11); assert.equal(allButton, (mainId << 16) | 7);
+  assert.equal(quantityVarbit, 11795);
+  for (const route of ["selected All", "inventory Empty"]) {
+    for (const mode of ["room", "exact", "near", "full"]) {
+      await t.test(`${route} with ${mode} headroom`, async (t) => {
+        const f = actor(t, HOME, false), p = f.p, sender = p.getPacketSender();
+        assert.ok(p.getUsername().length <= 12);
+        p.setLongUsername(core.Misc.stringToLongBigInt(p.getUsername()));
+        assert.notEqual(p.getLongUsername(), 0n);
+        assert.equal(p.isRegistered(), true);
+        assert.equal(p.isNeedsPlacement(), false);
+        assert.equal(p.getLocation().getZ(), 0);
+        assert.equal(p.getPrivateArea(), null);
+        const send = async (packet) => { await f.c.dispatch([packet]); f.c.processTurnPackets(); };
+        const initialGround = new Set(core.World.getItems());
+        t.after(() => {
+          p.closeInterruptibleInterfaces();
+          for (const ground of [...core.World.getItems()]) {
+            if (!initialGround.has(ground) && ground.getOwner() === p.getUsername()) {
+              core.ItemOnGroundManager.deregister(ground);
+              const index = core.World.getItems().indexOf(ground);
+              if (index >= 0) core.World.getItems().splice(index, 1);
+            }
+          }
+        });
+        f.inv.add(new core.Item(boxId), false).add(new core.Item(feather, 2), true);
+        const box = f.inv.getItems()[f.inv.getSlotForItemId(boxId)];
+        assert.equal(Storage.familyOf(box), tackle);
+        assert.equal(Storage.amountOf(p, tackle, feather), 0);
+        assert.equal(core.Bank.isOpen(p), false);
+        const actions = [], clicks = [], emptied = [];
+        const emitItem = PM.emitItemAction.bind(PM);
+        t.mock.method(PM, "emitItemAction", (event) => {
+          const result = emitItem(event);
+          if (event.player === p && event.itemId === boxId)
+            actions.push({ option: event.option, item: event.item === box, handled: event.handled });
+          return result;
+        });
+        const emitClick = PM.emitInterfaceActionClick.bind(PM);
+        t.mock.method(PM, "emitInterfaceActionClick", (event) => {
+          const result = emitClick(event);
+          if (event.player === p && event.groupId === mainId)
+            clicks.push({ child: event.childId, slot: event.slot, action: event.action, handled: event.handled });
+          return result;
+        });
+        const empty = Storage.emptyToInventory.bind(Storage);
+        t.mock.method(Storage, "emptyToInventory", (player, family) => {
+          if (player === p) emptied.push(
+            family.key === tackle.key
+            && Storage.attributeOf(family) === Storage.attributeOf(tackle)
+            && Storage.FAMILIES.get(family.key) === tackle);
+          return empty(player, family);
+        });
+        const gridFlags = [];
+        const sendFlags = sender.sendInterfaceFlagsRange.bind(sender);
+        t.mock.method(sender, "sendInterfaceFlagsRange", (...args) => {
+          if (args[0] === grid) gridFlags.push(args);
+          return sendFlags(...args);
+        });
+        let currentContainer;
+        const sendScript = sender.sendInterfaceScript.bind(sender);
+        t.mock.method(sender, "sendInterfaceScript", (...args) => {
+          const result = sendScript(...args);
+          if (args[4]?.[containerId]) currentContainer = args[4][containerId];
+          return result;
+        });
+        const itemAction = async (option) => {
+          const index = core.CacheDefinitions.getItem(boxId).inventoryActions.indexOf(option);
+          assert.ok(index >= 0, "actual cache inventory action " + option);
+          await send({ type: "inventory_action", widgetId: inventoryWidget,
+            itemId: boxId, slot: f.inv.getItems().indexOf(box), option, optionIndex: index + 1 });
+          assert.deepEqual(actions.at(-1), { option, item: true, handled: true });
+        };
+        await itemAction("Fill");
+        assert.deepEqual(Storage.contents(p, tackle), [{ id: feather, amount: 2 }]);
+        assert.deepEqual(p.getAttribute(Storage.attributeOf(tackle)), [[feather, 2]]);
+        assert.equal(f.inv.getAmount(feather), 0, "real Fill moved both ordinary feathers into storage");
+        const initial = mode === "room" ? 99 : MAX_STACK_AMOUNT - (mode === "exact" ? 3 : mode === "near" ? 2 : 1);
+        f.inv.add(new core.Item(feather, initial), true);
+        const featherStack = f.inv.getItems()[f.inv.getSlotForItemId(feather)];
+        assert.equal(featherStack.isPresetItem(), false);
+        assert.equal(featherStack.getMeta() ?? null, null);
+        const ownedFloor = () => core.World.getItems().filter((ground) => !ground.isPendingRemoval()
+          && ground.getOwner() === p.getUsername());
+        const owned = (id) => f.inv.getAmount(id) + p.getEquipment().getAmount(id)
+          + p.getBanks().reduce((sum, bank, tab) => sum
+            + (bank && tab !== core.Bank.BANK_SEARCH_TAB_INDEX ? bank.getAmount(id) : 0), 0)
+          + ownedFloor().reduce((sum, ground) => sum + (ground.getItem().getId() === id ? ground.getItem().getAmount() : 0), 0);
+        const state = () => ({ owned: owned(feather), stored: [...Storage.FAMILIES.values()]
+          .reduce((sum, target) => sum + Storage.amountOf(p, target, feather), 0), tackle: Storage.amountOf(p, tackle, feather),
+          inventory: f.inv.getAmount(feather), floor: ownedFloor().filter((ground) => ground.getItem().getId() === feather)
+            .reduce((sum, ground) => sum + ground.getItem().getAmount(), 0),
+          headroom: f.inv.getAddableAmount(new core.Item(feather, 2)), freeSlots: f.inv.getFreeSlots() });
+        const total = (value) => value.owned + value.stored;
+        const pile = core.ItemOnGroundManager.registers(p, new core.Item(feather));
+        assert.equal(pile.getPosition().equals(p.getLocation()), true);
+        assert.equal(core.ItemOnGroundManager.canSee(p, pile), true);
+        assert.equal(state().floor, 1);
+        const beforeTake = state(), events = [];
+        pickupEvents.set(p, events);
+        assert.equal(p.getLastItemPickup().elapsedTime(300), true);
+        await send({ type: "ground_item_action", itemId: feather, stackId: pile.getId(),
+          x: p.getLocation().getX(), y: p.getLocation().getY(), option: "Take" });
+        assert.deepEqual(events, [{ amount: 1, discarded: 0, source: "pickup" }]);
+        assert.equal(pile.isPendingRemoval(), true);
+        assert.equal(state().floor, 0);
+        assert.equal(total(state()), total(beforeTake));
+        assert.equal(f.inv.getAmount(feather), initial + 1);
+        assert.equal(featherStack.getMeta() ?? null, null);
+        assert.equal(f.inv.getItems().includes(box), true);
+        assert.equal(Storage.amountOf(p, tackle, feather), 2);
+        const xp = () => core.Skill.values().map((skill) => p.getSkillManager().getExperience(skill));
+        const items = (container) => container.getValidItems().filter((entry) => entry.getId() !== feather)
+          .map((entry) => [entry.getId(), entry.getAmount(), JSON.stringify(entry.getMeta() ?? null)]);
+        const other = () => ({ inventory: items(f.inv), equipment: items(p.getEquipment()),
+          banks: p.getBanks().map((bank, tab) => bank && tab !== core.Bank.BANK_SEARCH_TAB_INDEX ? items(bank) : null),
+          floor: ownedFloor().filter((ground) => ground.getItem().getId() !== feather)
+            .map((ground) => [ground.getItem().getId(), ground.getItem().getAmount()]),
+          stored: [...Storage.FAMILIES.values()].map((target) => [target.key,
+            Storage.contents(p, target).filter((entry) => entry.id !== feather)]) });
+        const before = state(), beforeOther = other(), beforeXp = xp();
+        assert.equal(before.stored, 2); assert.equal(before.tackle, 2);
+        assert.equal(before.freeSlots, 26);
+        assert.equal(before.headroom, mode === "near" ? 1 : mode === "full" ? 0 : 2);
+        assert.equal(core.Bank.isOpen(p), false);
+        if (route === "selected All") {
+          await itemAction("View");
+          assert.equal(p.getInterfaceId(), mainId);
+          const main = sender.subInterfaceTargets.get(mainId), side = sender.subInterfaceTargets.get(sideId);
+          assert.ok(main && side && Object.isFrozen(main) && Object.isFrozen(side));
+          assert.equal(main.type, 0); assert.equal(side.type, 3);
+          assert.equal(sender.getSubInterfaceAt(main.targetUid), main);
+          assert.equal(sender.getSubInterfaceAt(side.targetUid), side);
+          assert.ok(currentContainer && currentContainer.capacity === TackleBox.CAPACITY);
+          assert.equal(gridFlags.length, 1);
+          assert.deepEqual(gridFlags[0].slice(0, 3), [grid, 0, TackleBox.CAPACITY - 1]);
+          assert.equal((gridFlags[0][3] & (1 << 1)) !== 0, true, "current main grid enables op1");
+          const rendered = currentContainer;
+          assert.deepEqual(rendered.slots[0], { slot: 0, itemId: feather, quantity: 2 });
+          assert.equal(rendered.slots.slice(1).every((slot) => slot.itemId === -1 && slot.quantity === 0), true);
+          const selected = Storage.contents(p, tackle)[0];
+          assert.deepEqual(selected, { id: feather, amount: 2 });
+          await send({ type: "widget_action", widgetId: allButton, groupId: mainId,
+            childId: allButton & 0xffff, buttonNum: 1 });
+          assert.equal(sender.getVarbit(quantityVarbit), 2);
+          assert.equal(p.getAttribute("storage-items:tackle-box-quantity"), 2);
+          assert.equal(currentContainer, rendered);
+          assert.equal(sender.getSubInterfaceAt(main.targetUid), main);
+          assert.deepEqual(Storage.contents(p, tackle)[0], selected);
+          const start = clicks.length;
+          await send({ type: "widget_action", widgetId: grid, groupId: mainId,
+            childId: grid & 0xffff, buttonNum: 1, slot: 0, itemId: feather });
+          assert.deepEqual(clicks.slice(start), [{ child: 11, slot: 0, action: 1, handled: true }]);
+          assert.deepEqual(emptied, []);
+        } else {
+          const start = actions.length;
+          await itemAction("Empty");
+          assert.deepEqual(actions.slice(start), [{ option: "Empty", item: true, handled: true }]);
+          assert.deepEqual(emptied, [true], "ordinary Empty reached the real inventory consumer once");
+        }
+        const after = state();
+        assert.equal(total(after), total(before), "stored and all owned feathers remain conserved: "
+          + JSON.stringify({ route, mode, before, after }));
+        assert.ok(after.tackle >= 0 && after.tackle <= 2);
+        assert.equal(after.owned - before.owned, before.stored - after.stored);
+        if (mode === "room" || mode === "exact") {
+          assert.equal(after.tackle, 0);
+          assert.equal(after.inventory, before.inventory + 2);
+        }
+        assert.equal(owned(boxId), 1);
+        assert.equal(f.inv.getItems().includes(box), true);
+        assert.deepEqual(other(), beforeOther);
+        assert.deepEqual(xp(), beforeXp);
+      });
+    }
+  }
+});
+
+
+test("inventory withdrawal capacity respects preset metadata", async (t) => {
+  const { Presetable } = require("../dist/game/content/presets/Presetable");
+  const { MagicSpellbook } = require("../dist/game/model/MagicSpellbook");
+  const { MAX_STACK_AMOUNT } = require("../dist/game/model/container/StackType");
+  const Presets = require("../plugins/modes/pvp/Presets.PvpMode");
+  if (!Presets.isEnabled()) {
+    t.skip("preset items are unavailable when PvP mode is disabled");
+    return;
+  }
+  for (const freeSlots of [0, 1]) {
+    await t.test(`${freeSlots} free slots with a marked same-id stack`, (t) => {
+      const f = actor(t, HOME, false);
+      const rune = I.FIRE_RUNE;
+      assert.equal(core.ItemDefinition.forId(rune).isStackable(), true);
+      assert.equal(core.ItemDefinition.forId(I.RAKE).isStackable(), false);
+      assert.equal(Presets.isEnabled(), true);
+      const preset = new Presetable("room", [new core.Item(rune, 10)], [],
+        [99, 99, 99, 99, 99, 99, 99], MagicSpellbook.NORMAL, false);
+      assert.equal(Presets.applyPreset(f.p, preset), true);
+      const tagged = f.inv.getValidItems().find((held) => held.getId() === rune);
+      assert.ok(tagged);
+      assert.equal(tagged.getAmount(), 10);
+      assert.equal(tagged.getMetaValue(core.Item.PRESET_META), true);
+      assert.equal(tagged.getMetaValue(core.Item.UNTRADEABLE_META), true);
+      assert.equal(tagged.getMetaValue(core.Item.UNBANKABLE_META), true);
+      const markedMeta = JSON.stringify(tagged.getMeta());
+      const fill = f.inv.getFreeSlots() - freeSlots;
+      for (let i = 0; i < fill; i++) f.inv.add(new core.Item(I.RAKE), false);
+      assert.equal(f.inv.getFreeSlots(), freeSlots);
+      const room = Storage.inventoryRoom(f.p, rune);
+      assert.equal(room, freeSlots ? MAX_STACK_AMOUNT : 0);
+      if (freeSlots) {
+        f.inv.add(new core.Item(rune, 2), false);
+        const plain = f.inv.getValidItems().find((held) => held.getId() === rune && held.getMeta() === null);
+        assert.ok(plain);
+        assert.equal(plain.getAmount(), 2);
+      }
+      assert.equal(tagged.getAmount(), 10);
+      assert.equal(JSON.stringify(tagged.getMeta()), markedMeta);
+    });
+  }
+});

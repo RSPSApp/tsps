@@ -93,9 +93,9 @@ function actor(t, ring = false, activatedRingHistory = ring) {
   assert.notEqual(xpGate.allow, false); assert.equal(xpGate.multiplier, 1, "Cooking XP gate allows the unmodified reward");
   return { player, npc, quest, connection };
 }
-async function send(f, packet) {
+async function send(f, packet, turns=4) {
   await f.connection.dispatch([packet]);
-  for (let i=0;i<4;i++) {
+  for (let i=0;i<turns;i++) {
     f.player.resetUpdating(); core.TaskManager.process(); f.connection.processTurnPackets();
     const movement = f.player.getMovementQueue(); movement.beginCycle(); movement.processEntityPursuit();
     if (movement.hasPendingWork()) movement.process(); core.TaskManager.processWalkTo(f.player.getIndex());
@@ -119,7 +119,7 @@ async function toPickerOrComplete(f) {
   }
   assert.fail("finish dialogue did not resolve");
 }
-async function pick(f, n) { await send(f,{type:"dialogue_continue",widgetId:core.OptionDialogue.OPTIONS_WIDGET_ID,childIndex:n}); }
+async function pick(f, n, turns=4) { await send(f,{type:"dialogue_continue",widgetId:core.OptionDialogue.OPTIONS_WIDGET_ID,childIndex:n},turns); }
 function observeScroll(t, f) {
   const sender = f.player.getPacketSender(), calls = [];
   const send = sender.sendItemOnInterfaces.bind(sender);
@@ -286,4 +286,48 @@ test("deferred completion scrolls show each player's actual random kitten", t =>
   assert.equal(a.player.getInventory().getAmount(aKitten),1);
   assert.equal(b.player.getInventory().getAmount(bKitten),1);
   assert.equal(kittens(a),1); assert.equal(kittens(b),1);
+});
+
+test("distinct chosen kittens stay with their own delayed completion scroll",async t=>{
+  const a=actor(t,true), b=actor(t,true), first=observeScroll(t,a), second=observeScroll(t,b);
+  const cooking=core.Skill.COOKING, xp=core.SkillManager.getExperienceForLevel(50);
+  assert.ok(core.SkillManager.getExperienceForLevel(51)-xp>1525);
+  for (const f of [a,b]) {
+    f.player.getSkillManager().setExperiences(cooking,xp,false);
+    f.player.getSkillManager().setMaxLevels(cooking,50,false).setCurrentLevel(cooking,50,false);
+    assert.equal(f.player.getSkillManager().getMaxLevel(cooking),50);
+  }
+  const beforeA=snapshot(a), beforeB=snapshot(b);
+  await talk(a); const menuA=await toPickerOrComplete(a); assert.ok(menuA instanceof core.OptionDialogue);
+  await talk(b); const menuB=await toPickerOrComplete(b); assert.ok(menuB instanceof core.OptionDialogue);
+  const black=menuA.getOptions().indexOf("Black")+1, white=menuB.getOptions().indexOf("White")+1;
+  assert.ok(black>0 && white>0);
+  // One native turn delivers the decoded choice after task processing, before the next task tick.
+  await pick(a,black,1);
+  assert.equal(a.quest.isComplete(a.player),true);
+  assert.equal(a.player.getInventory().getAmount(core.ItemIdentifiers.PET_KITTEN_4),1);
+  assert.deepEqual(first,[],"first completion has not yet sent its scroll");
+  assertReward(beforeA,snapshot(a));
+  const held=new core.OptionDialogue(0,{executeOption() {}},"Continue later");
+  a.player.getDialogueManager().startDialogues(new core.DialogueChainBuilder().add(held));
+  assert.equal(a.player.getDialogueManager().getCurrent(),held);
+  assert.equal(a.player.getPacketSender().getChatboxGroupId(),219);
+  await pick(b,white);
+  assert.equal(b.quest.isComplete(b.player),true);
+  assert.equal(b.player.getInventory().getAmount(core.ItemIdentifiers.PET_KITTEN_2),1);
+  assertReward(beforeB,snapshot(b));
+  assert.equal(a.player.getDialogueManager().getCurrent(),held);
+  assert.equal(a.player.getPacketSender().getChatboxGroupId(),219);
+  assert.deepEqual(first,[],"open first dialogue holds its scroll");
+  assert.deepEqual(second,[[core.ItemIdentifiers.PET_KITTEN_2,1]]);
+  a.player.closeInterruptibleInterfaces();
+  assert.equal(a.player.getDialogueManager().isActive(),false);
+  for(let i=0;i<4;i++) core.TaskManager.process();
+  assert.deepEqual(first,[[core.ItemIdentifiers.PET_KITTEN_4,1]]);
+  assert.deepEqual(second,[[core.ItemIdentifiers.PET_KITTEN_2,1]]);
+  const afterA=snapshot(a), afterB=snapshot(b);
+  await pick(a,black); await pick(b,white);
+  assert.deepEqual(snapshot(a),afterA); assert.deepEqual(snapshot(b),afterB);
+  assert.deepEqual(first,[[core.ItemIdentifiers.PET_KITTEN_4,1]]);
+  assert.deepEqual(second,[[core.ItemIdentifiers.PET_KITTEN_2,1]]);
 });

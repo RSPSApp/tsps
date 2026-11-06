@@ -117,7 +117,7 @@ function healTeammate(event) {
   if (!game || itemId !== Common.data.items.bandages) return;
   event.handled = true;
   if (game.over || player === target || Match.gameOf(target) !== game
-      || !game.teamOf(player) || game.teamOf(player) !== game.teamOf(target)) return;
+      || !game.teamOf(player) || !game.teamOf(target)) return;
   const world = Common.core.World;
   if (!player.isRegistered() || !target.isRegistered()
       || world.getPlayers().get(player.getIndex()) !== player || world.getPlayers().get(target.getIndex()) !== target
@@ -128,10 +128,18 @@ function healTeammate(event) {
   const inventory = player.getInventory();
   if (!Number.isInteger(slot) || slot < 0 || slot >= inventory.capacity()
       || inventory.getItems()[slot] !== item || item.getId() !== itemId || item.getAmount() <= 0) return;
+  // TSPS wording, following the server's opposing-team refusal convention.
+  if (game.teamOf(player) !== game.teamOf(target)) {
+    player.sendMessage("You can't bandage an opposing player.");
+    return;
+  }
   const max = Common.maxLevel(target, "HITPOINTS");
   const hp = target.getHitpoints();
   // TSPS policy: don't spend a bandage on a teammate with no health, energy or poison to restore.
-  if (hp >= max && target.getRunEnergy() >= 100 && target.getPoisonDamage() <= 0) return;
+  if (hp >= max && target.getRunEnergy() >= 100 && target.getPoisonDamage() <= 0) {
+    player.sendMessage(`${target.getDisplayName()} does not currently need bandaging.`);
+    return;
+  }
   inventory.deleteAtSlot(slot, 1);
   if (hp < max) target.setHitpoints(Math.min(max, hp + 1 + Math.floor(max * 0.15)));
   target.setRunEnergy(100);

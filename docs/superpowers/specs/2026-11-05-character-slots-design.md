@@ -182,7 +182,8 @@ Server to client (only when the flag was set):
 - `CHARACTER_RESULT` (new id, variable-byte): `u8 ok`, `u8 code`, `string message`. Codes: 1 name
   taken, 2 invalid name, 3 slot limit reached, 4 unknown character, 5 primary cannot be deleted,
   6 confirmation did not match, 7 character online, 8 storage error, 9 primary has not entered
-  the world yet, 10 character banned (a `CHARACTER_SELECT` of a banned character).
+  the world yet, 10 character banned (a `CHARACTER_SELECT` of a banned character, or a
+  `CHARACTER_CREATE` on an account whose primary is banned).
 
 Client to server, accepted only between login OK and handshake (added to `IMMEDIATE_PACKETS`,
 refused with `CHARACTER_RESULT` code 4 otherwise):
@@ -241,8 +242,14 @@ its name; its doc comment says "no save existed for this character".
 
 `Bans.txt` stays per name. `login()` checks the ban list for the typed name as today, and
 `CHARACTER_SELECT` (and the default pick at handshake) checks the chosen character's name; either
-hit refuses with the existing code 4 path. Mutes stay per character. Banning every character of an
-account is a one-line follow-up for `::ban` once `api.core.Accounts` exists; not in this PR.
+hit refuses with the existing code 4 path. The default character is never a banned one.
+
+A banned primary bans the whole account (my call, the conservative reading): once `login()` has
+resolved the primary, it refuses with code 4 ("Your account has been disabled.") when the primary
+is banned, whichever character's name was typed, and `CHARACTER_CREATE` refuses with code 10 when
+the primary is banned (a ban that lands while the account sits on the picker). Banning an alt
+bans only that alt. Mutes stay per character. Banning every character of an account from `::ban`
+is a follow-up; not in this PR.
 
 ### League worlds
 

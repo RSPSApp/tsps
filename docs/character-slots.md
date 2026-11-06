@@ -47,6 +47,13 @@ The first character has the account's login name. It is the primary character.
 - It cannot be deleted. The picker greys out Delete for it.
 - A second character can only be made after the primary has entered the world once.
 
+## Bans
+
+Bans in `Bans.txt` are per character name, with one rule for the account:
+
+- **A banned primary bans the whole account.** Logging in with any of its characters' names is refused with "Your account has been disabled.", and no new character can be made.
+- A banned alt only stops that character. The account can still log in and play its other characters; the picker refuses to select the banned one and never preselects it.
+
 ## Deleting a character
 
 - Delete asks the player to type the character's name. A different name cancels it.

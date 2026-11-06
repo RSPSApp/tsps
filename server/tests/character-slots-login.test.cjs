@@ -402,6 +402,30 @@ test('an account whose every character is banned is refused', async (t) => {
   assert.equal(net.ClientConnection.pendingNames.size, 0);
 });
 
+test('a banned primary bans the whole account: alt logins and creation are refused', async (t) => {
+  seedSave('Zezima', { passwordHash: hashOf('pw') });
+  Accounts.ensure('Zezima', 1);
+  Accounts.addCharacter('zezima', 'Alt', 2);
+  seedSave('Alt');
+  // Banned after this login reached the picker: creating is refused too.
+  const c = await connect('Zezima', 'pw', LOGIN_FLAG_CHARACTER_SELECT);
+  const banned = t.mock.method(PlayerPunishment, 'banned', (name) => name.toLowerCase() === 'zezima');
+  await create(c, 'New Alt');
+  assert.deepEqual(lastResult(c.channel), { ok: false, code: 10, message: 'Your account has been disabled.' });
+  assert.deepEqual(Accounts.charactersOf('zezima').map((e) => e.name), ['Zezima', 'Alt']);
+  c.connection.cleanup('socket_close');
+  net.ClientConnection.pendingNames.clear();
+
+  for (const flags of [0, LOGIN_FLAG_CHARACTER_SELECT]) {
+    const { response, channel } = await connect('Alt', 'pw', flags);
+    net.ClientConnection.pendingNames.clear();
+    assert.deepEqual([response.success, response.code, response.error], [false, 4, 'Your account has been disabled.']);
+    assert.equal(packetsOf(channel, CHARACTER_LIST).length, 0);
+  }
+  banned.mock.restore();
+  assert.equal((await login('Alt', 'pw', 0)).success, true, 'lifting the ban lets the account back in');
+});
+
 test('one account online at a time, whichever character', async (t) => {
   seedSave('Zezima', { passwordHash: hashOf('pw') });
   Accounts.ensure('Zezima', 1);

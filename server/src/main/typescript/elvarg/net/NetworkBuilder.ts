@@ -1218,6 +1218,11 @@ export class ClientConnection {
       this.failLogin(3, "That name belonged to a deleted character and can't be used again.");
       return;
     }
+    // A banned primary bans the whole account, whichever of its characters' names was typed.
+    if (isBanned(primaryName)) {
+      this.failLogin(4, "Your account has been disabled.");
+      return;
+    }
     // One account online at a time, whichever of its characters.
     const accountKeys = accountNames.map(pendingKey);
     const accountKey = pendingKey(account);
@@ -1465,6 +1470,11 @@ export class ClientConnection {
     try {
       const primary = Accounts.primaryOf(pending.account);
       const persistence = GameConstants.PLAYER_PERSISTENCE;
+      // A banned primary bans the account (login refuses it too); a ban landing mid-picker stops creation.
+      if (primary && isBanned(primary)) {
+        this.send(encodeCharacterResult(false, 10, "Your account has been disabled."));
+        return;
+      }
       if (!primary || !(persistence.exists(primary, MAIN_PROFILE) || persistence.exists(primary, LEAGUE_PROFILE))) {
         this.send(encodeCharacterResult(false, 9, "Enter the world once with your first character."));
         return;

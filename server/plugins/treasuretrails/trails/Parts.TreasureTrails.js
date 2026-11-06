@@ -6,7 +6,9 @@
 // (part 1, 2 or 3 by its place on the clue); combining all three with the clue gives the next step.
 // Some parts ask more of the player (data/master-parts.json): Robin, Ghommal and Wizard Cromperty
 // want strong gear, Abbot Langley a negative prayer bonus, the Monk of Entrana a weapon or armour
-// worn as one tries to sail, the Mage of Zamorak and Juna three god items, Sir Vyvin white plate.
+// worn as one tries to sail, the Mage of Zamorak and Juna three god items, Sir Vyvin white plate,
+// and Viggora a ring of visibility and ghostspeak, with Curse of the Empty Lord up to him and at the
+// spot of the player's own ghost sequence (asked of the miniquest through its requirementEvent).
 const Runtime = require("./Runtime.TreasureTrails");
 const Dialogue = require("./Dialogue.TreasureTrails");
 const { byName } = require("./Tiers.TreasureTrails");
@@ -78,9 +80,14 @@ function wornIds(player) {
 }
 
 /** Whether the player meets a part's condition (data/master-parts.json, or its cache outfit). */
-function meets(player, step) {
+function meets(player, step, npc = null) {
   const rule = Runtime.MASTER_PARTS.conditions[step.key];
   if (!rule) return true;
+  if (rule.requirementEvent) {
+    const request = { player, npc, ready: false, here: false };
+    api.emitCustomEvent(rule.requirementEvent, request);
+    if (request.ready !== true || request.here !== true) return false;
+  }
   if (rule.attack || rule.other) {
     core.BonusManager.update(player);
     const bonuses = player.getBonusManager();
@@ -153,10 +160,11 @@ function talk(event) {
   const { player, npcId, npc } = event;
   const definition = event.definition ?? npc.getCurrentDefinition?.(player);
   const option = definition?.getActions?.()[event.clickType - 1];
-  if (option !== "Talk-to" && option !== "Take-boat") return;
+  // The mysterious ghosts (Viggora) spell it "Talk-To" in the cache.
+  if (!["talk-to", "take-boat"].includes(String(option ?? "").toLowerCase())) return;
   const found = openPart(player, step => step.target === "npc" && step.npcIds.includes(npcId));
   if (!found) return;
-  if (!meets(player, found.step)) {
+  if (!meets(player, found.step, npc)) {
     // Robin says why; the others carry on as they normally would.
     const rule = Runtime.MASTER_PARTS.conditions[found.step.key];
     if (!rule?.fail) return;

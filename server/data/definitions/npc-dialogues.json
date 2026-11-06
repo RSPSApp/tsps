@@ -218772,6 +218772,2720 @@
       ]
     }
   },
+  "Curse of the Empty Lord": {
+    "default": null,
+    "variants": {
+      "talking-to-any-mysterious-ghost-without-a-ghostspeak-amulet": [
+        {
+          "player": "Hello there."
+        },
+        {
+          "type": "line",
+          "speaker": "Mysterious ghost",
+          "text": "Wooo? Woooo woo woooooo wooooo woooowooo wooo woooooo woo!"
+        },
+        {
+          "type": "random",
+          "options": [
+            {
+              "text": "Dialogue 1",
+              "steps": [
+                {
+                  "player": "Yeah, I heard about that, ha-ha-ha!"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Woo! WOO WOOOOO WOOWOOWOO WOO WOOOOO!"
+                },
+                {
+                  "player": "With a MACKEREL? Ouch!"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Wooowoowoooooo.... Woowoowoo? Woooo, wooowoo wooowooowooo!"
+                },
+                {
+                  "player": "Well, it was fun. Let's do it again sometime."
+                }
+              ]
+            },
+            {
+              "text": "Dialogue 2",
+              "steps": [
+                {
+                  "player": "Hey, don't think you can talk to me like that!"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Woo! WOO WOOOOO WOOWOOWOO WOO WOOOOO!"
+                },
+                {
+                  "player": "Are you threatening me?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Wooowoowoooooo.... Woowoowoo? Woooo, wooowoo wooowooowooo!"
+                },
+                {
+                  "player": "Just because you're already dead, doesn't mean I can't find a way to hurt you ghosty!"
+                }
+              ]
+            },
+            {
+              "text": "Dialogue 3",
+              "steps": [
+                {
+                  "player": "Why, thank you very much!"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Woo! WOO WOOOOO WOOWOOWOO WOO WOOOOO!"
+                },
+                {
+                  "player": "I know, but what are you going to do?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Wooowoowoooooo.... Woowoowoo? Woooo, wooowoo wooowooowooo!"
+                },
+                {
+                  "player": "Well, I guess that's always true in the long run. See you around, weird invisible dead person!"
+                }
+              ]
+            },
+            {
+              "text": "Dialogue 4",
+              "steps": [
+                {
+                  "player": "We get signal!"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Woo! WOO WOOOOO WOOWOOWOO WOO WOOOOO!"
+                },
+                {
+                  "player": "Somebody set up us the bomb!"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Wooowoowoooooo.... Woowoowoo? Woooo, wooowoo wooowooowooo!"
+                },
+                {
+                  "player": "You have no chance to survive make your time."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Woo?"
+                },
+                {
+                  "player": "All your base are belong to us."
+                }
+              ]
+            },
+            {
+              "text": "Dialogue 5",
+              "steps": [
+                {
+                  "player": "No, I've never been there in my life and CERTAINLY didn't steal anything when I was!"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Woo! WOO WOOOOO WOOWOOWOO WOO WOOOOO!"
+                },
+                {
+                  "player": "Are you calling me a liar?!?! I have never stolen a thing in my life, and I resent the implication that I am the kind of morally depraved individual that would steal someone else's hard earned"
+                },
+                {
+                  "player": "money from their very pockets!"
+                },
+                {
+                  "player": "Or cakes. Or fur. Repeatedly. For long periods at a time."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Wooowoowoooooo.... Woowoowoo? Woooo, wooowoo wooowooowooo!"
+                },
+                {
+                  "player": "Well if you are going to take that attitude, then I have nothing further to say on the matter, and bid you good day!"
+                }
+              ]
+            },
+            {
+              "text": "Dialogue 6",
+              "steps": [
+                {
+                  "player": "Yeah, I don't want to brag, but seriously: I am SOOOO rich...."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Woo! WOO WOOOOO WOOWOOWOO WOO WOOOOO!"
+                },
+                {
+                  "player": "Yeah, I know they say money doesn't bring you happiness, but sometimes I just like to open my bank account and look at all of the stuff I own and just think to myself:"
+                },
+                {
+                  "player": "Wow. I am soooooo rich."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Wooowoowoooooo.... Woowoowoo? Woooo, wooowoo wooowooowooo!"
+                },
+                {
+                  "player": "Well, us rich alive people don't want to waste all day spending time with you poor dead people, because I'm just sooooo rich I have to go now, and very possibly make myself even richer."
+                },
+                {
+                  "player": "See ya around ghosty!"
+                }
+              ]
+            },
+            {
+              "text": "Dialogue 7",
+              "steps": [
+                {
+                  "player": "You don't say?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Woo! WOO WOOOOO WOOWOOWOO WOO WOOOOO!"
+                },
+                {
+                  "player": "You don't say!"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Wooowoowoooooo.... Woowoowoo? Woooo, wooowoo wooowooowooo!"
+                },
+                {
+                  "player": "Well, I guess you didn't say."
+                }
+              ]
+            },
+            {
+              "text": "Dialogue 8",
+              "steps": [
+                {
+                  "player": "Yeah it's not bad, but I prefer cooked chicken."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Woo! WOO WOOOOO WOOWOOWOO WOO WOOOOO!"
+                },
+                {
+                  "player": "Maybe, but nothing beats a home cooked pie!"
+                },
+                {
+                  "player": "Man, I love pie!"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Wooowoowoooooo.... Woowoowoo? Woooo, wooowoo wooowooowooo!"
+                },
+                {
+                  "player": "You don't say? I never knew that. Well, I must be going, see you around."
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "talking-to-any-mysterious-ghost-in-the-wrong-location": [
+        {
+          "type": "random",
+          "options": [
+            {
+              "text": "Dialogue 1",
+              "steps": [
+                {
+                  "player": "Hello there."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Hello."
+                },
+                {
+                  "player": "So you're a ghost, huh?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Apparently."
+                },
+                {
+                  "player": "In which case I only have one thing to say to you:"
+                },
+                {
+                  "player": "Woooo! Woowooooowoo, wooo WOOOOOOOOOOO woowoo woowoowoo woo!"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "...what?"
+                },
+                {
+                  "player": "Guess you don't have the amulet of humanspeak, huh?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "...huh?"
+                },
+                {
+                  "player": "Yeah, that's right. WOO! WOOOWOOO WOO WOOOOWOO! Got no comeback for that, have you?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "You are very strange..."
+                }
+              ]
+            },
+            {
+              "text": "Dialogue 2",
+              "steps": [
+                {
+                  "player": "Hello there."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Mortal... Take heed of my example, and waste not your life, lest you may suffer the same fate as myself..."
+                },
+                {
+                  "player": "Huh? You mean someone did this to you?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "You have ascertained the truth in my words..."
+                },
+                {
+                  "player": "So who did it to you? And why?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Events of moons past, I remember not clearly..."
+                },
+                {
+                  "player": "Fine help you are then."
+                }
+              ]
+            },
+            {
+              "text": "Dialogue 3",
+              "steps": [
+                {
+                  "player": "Hello there."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Please... Leave me to my fate. I have been here so long that I scarce remember aught else..."
+                },
+                {
+                  "player": "Uh.... huh."
+                }
+              ]
+            },
+            {
+              "text": "Dialogue 4",
+              "steps": [
+                {
+                  "player": "Hello there."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "You can see me?"
+                },
+                {
+                  "player": "Uh... yes?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "And you understand my words?"
+                },
+                {
+                  "player": "Well, most of them..."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "This is incredible! How can such a thing have come to pass?"
+                },
+                {
+                  "player": "What can I say? I'm a professional."
+                }
+              ]
+            },
+            {
+              "text": "Dialogue 5",
+              "steps": [
+                {
+                  "player": "Hello there."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Hello back at you."
+                },
+                {
+                  "player": "So what's a nice ghost like you doing in a place like this?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "I suppose you think that's funny?"
+                },
+                {
+                  "player": "Well... Mildly amusing I guess."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "I don't think I want to talk to you anymore."
+                }
+              ]
+            },
+            {
+              "text": "Dialogue 6",
+              "steps": [
+                {
+                  "player": "Hello there."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Hello stranger."
+                },
+                {
+                  "player": "So.... Invisible ghost haunting the same place for thousands of years, huh?"
+                },
+                {
+                  "player": "That's got to be a pretty rubbish way to spend your life. Er, death."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "You have no idea..."
+                },
+                {
+                  "player": "Well, bad luck and all that. See ya around!"
+                }
+              ]
+            },
+            {
+              "text": "Dialogue 7",
+              "steps": [
+                {
+                  "player": "Hello there."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Hello stranger. It is rare indeed that I meet one who can see my presence, let alone one who can understand my words."
+                },
+                {
+                  "player": "Soooo.... Is it fun being a ghost?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Does it look like fun to you?"
+                },
+                {
+                  "player": "Erm... Well, yes actually."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Then you are a fool, and I will waste no more words upon you."
+                },
+                {
+                  "player": "What, not even 'goodbye'?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": ""
+                },
+                {
+                  "player": "Sheesh, what a grouch. You'd think you'd have more of a sense of humour being dead and all."
+                }
+              ]
+            },
+            {
+              "text": "Dialogue 8",
+              "steps": [
+                {
+                  "player": "Hello there."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "The endless tragedy of fate... Why must you torment me so?"
+                },
+                {
+                  "player": "Alright, alright, calm down, calm down. All I said was 'hello'!"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "talking-to-valdez": [
+        {
+          "player": "Hello."
+        },
+        {
+          "type": "line",
+          "speaker": "Mysterious ghost",
+          "text": "H-hello!"
+        },
+        {
+          "player": "So what's up?"
+        },
+        {
+          "type": "line",
+          "speaker": "Mysterious ghost",
+          "text": "I cannot believe it! You can see me? You understand my words?"
+        },
+        {
+          "player": "Sure can. So why are you hanging around here?"
+        },
+        {
+          "type": "line",
+          "speaker": "Mysterious ghost",
+          "text": "My tale is one of woe... No doubt you will have little interest in hearing it..."
+        },
+        {
+          "type": "line",
+          "speaker": "Mysterious ghost",
+          "text": "Though it has been so many moons since last I had company in this endless non-life..."
+        },
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Tell me your story",
+              "steps": [
+                {
+                  "player": "Well, actually I would like to know what happened to you to turn you into an invisible ghost."
+                },
+                {
+                  "player": "If only so I can make sure it doesn't happen to me..."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "My name is Valdez. I served my Lord Saradomin faithfully for many years, as an explorer of this strange land we had been brought to."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "I remember the day this curse fell upon me clearly... I had just discovered a huge temple, hidden below the ground, of one of Saradomin's compatriots."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "I am unsure who had built it, or why they had left it seemingly abandoned, but inside I located a great treasure..."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "It was the godstaff of Armadyl. Oh, how I rue my choice that day!"
+                },
+                {
+                  "player": "Choice?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Aye, stranger. I chose that day to take it so that my Lord Saradomin's power and prestige could be increased by its possession."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "A god-weapon! Do you have any comprehension of the difficulty and rarity in obtaining such a thing?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "To find such an artefact of power just lying around, it is almost incomprehensible..."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "So it was there in that deserted temple that I made my choice. I took the staff, and left that temple for Entrana immediately."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "This was the cause of my cursed state."
+                },
+                {
+                  "player": "What, you mean you gave it to Saradomin and in return he cursed you???"
+                },
+                {
+                  "player": "Seems kind of ungrateful if you ask me..."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "No stranger, you misunderstand completely... Firstly my gracious Lord would never treat anyone in such a manner; If he felt it was beyond my bounds as a mere mortal"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "to hold such an artefact, he would simply have commanded me to return it to whence I had claimed it, and I being eternally loyal would have obeyed without question..."
+                },
+                {
+                  "player": "And secondly?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "And secondly, I never managed to pass the artefact on to my Lord..."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "The vile thief Rennard accosted me as I made my way to Entrana, and after defeating me with a sneak attack, plundered the staff from my person, and left me for dead..."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "I do not know what became of the staff, but I can feel in my very bones that whatever its final fate was, it is somehow related to this curse upon me..."
+                },
+                {
+                  "player": "Wow. Tough break."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "I am sorry to bore you with my tale stranger, please allow me to compound my rudeness by asking you for one favour, small to perform?"
+                },
+                {
+                  "player": "Eh, I won't make any promises, but if it's nothing too annoying I guess I can help you out."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Many thanks stranger, this existence tortures me..."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "I need you to find Rennard and if he has the staff yet reclaim it, or find out what hideous deed he performed to curse me so!"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "I have nothing I may offer you save this piece of clothing, please take it as payment..."
+                },
+                {
+                  "player": "Where can I find this Rennard then?"
+                },
+                {
+                  "type": "condition",
+                  "text": "If Rennard is in the Wilderness Bandit Camp:",
+                  "steps": [
+                    {
+                      "type": "call",
+                      "branch": "eyw_7T"
+                    }
+                  ],
+                  "id": "5zsOYU"
+                },
+                {
+                  "type": "condition",
+                  "text": "If Rennard is near the Pirates' Hideout:",
+                  "steps": [
+                    {
+                      "type": "call",
+                      "branch": "YWKMJW"
+                    }
+                  ],
+                  "id": "Y8aQz9"
+                },
+                {
+                  "type": "condition",
+                  "text": "If Rennard is in The Big Heist Lodge:",
+                  "steps": [
+                    {
+                      "type": "call",
+                      "branch": "KdjW8L"
+                    }
+                  ],
+                  "id": "VEHl6r"
+                }
+              ]
+            },
+            {
+              "text": "Goodbye then",
+              "steps": [
+                {
+                  "type": "call",
+                  "branch": "blvcOJ"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "talking-to-valdez-talking-to-valdez-again": [
+        {
+          "type": "line",
+          "speaker": "Mysterious ghost",
+          "text": "Thank you for hearing my tale... It has been so lonely here..."
+        },
+        {
+          "player": "Can you remind me where to find the thief Rennard who caused this curse to befall you again?"
+        },
+        {
+          "type": "line",
+          "speaker": "Mysterious ghost",
+          "text": "Of course..."
+        },
+        {
+          "type": "condition",
+          "text": "If Rennard is in the Wilderness Bandit Camp:",
+          "steps": [
+            {
+              "type": "call",
+              "branch": "eyw_7T"
+            }
+          ],
+          "id": "iK_sIu"
+        },
+        {
+          "type": "condition",
+          "text": "If Rennard is near the Pirates' Hideout:",
+          "steps": [
+            {
+              "type": "call",
+              "branch": "YWKMJW"
+            }
+          ],
+          "id": "wxwZz5"
+        },
+        {
+          "type": "condition",
+          "text": "If Rennard is in The Big Heist Lodge:",
+          "steps": [
+            {
+              "type": "call",
+              "branch": "KdjW8L"
+            }
+          ],
+          "id": "9Cl6hQ"
+        }
+      ],
+      "talking-to-rennard": [
+        {
+          "player": "Hello. You must be Rennard."
+        },
+        {
+          "type": "line",
+          "speaker": "Mysterious ghost",
+          "text": "What be this? You both see me and hear me, and also know my name?"
+        },
+        {
+          "type": "line",
+          "speaker": "Mysterious ghost",
+          "text": "Tell me what devilry brings you here, and be quick about it afore I gut you like a fish!"
+        },
+        {
+          "player": "Well, apart from the fact I ain't scared of no ghost, I am here because I have spoken to Valdez."
+        },
+        {
+          "type": "line",
+          "speaker": "Mysterious ghost",
+          "text": "Valdez? Who be that? Some foul necromancer?"
+        },
+        {
+          "player": "No, he was a ghost I met near Glarial's tomb."
+        },
+        {
+          "player": "He seems convinced that the artefact you stole from him is responsible for him becoming cursed to be an invisible ghost."
+        },
+        {
+          "player": "Seems like he might be onto something too, given the state of you."
+        },
+        {
+          "type": "line",
+          "speaker": "Mysterious ghost",
+          "text": "A curse ye say... Aye, that makes sense..."
+        },
+        {
+          "type": "line",
+          "speaker": "Mysterious ghost",
+          "text": "And there was I thinking my fate be the fault of the thieving and murdering I spent me life a-doing..."
+        },
+        {
+          "type": "line",
+          "speaker": "Mysterious ghost",
+          "text": "So it all began the day I stole that staff, ye say? Aye, that be a story I have never told another soul..."
+        },
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Tell me your story",
+              "steps": [
+                {
+                  "player": "Why don't you tell me what happened? I might be able to help..."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Well, I was making me merry way along, having just pulled off a glorious jewellery heist from a bunch of stinking dwarves..."
+                },
+                {
+                  "player": "Hey, that's no way to talk about dwarves! Some of my best friends are short!"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Ah, yer misunderstand me [lad/lass], I wasn't generalising about the whole dwarf species, I had just stolen a bundle of jewels from a very specific group of dwarves who happened to have an odious stench about them!"
+                },
+                {
+                  "player": "Oh. Well I guess that's okay then. Please continue."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Well, as I headed on me merry way, hoping the foul odours that lingered in me nostrils would soon pass, I see in front of me this explorer fella, all decked out in in his fine clothing, and carrying some long package"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "bundled in rags."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "So I says to meself, 'Rennard', I says, 'Rennard, why would some fella all dressed in his finery be carrying something wrapped in dirty rags?'."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "So I thinks to meself a little more, 'Rennard', I thinks, 'Rennard, maybe that fella has something valuable in there, and he covered it in dirty rags so it don't look so valuable'."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "So I coshed this fella round the back of his head with me bag of jewels, picked up his package and was on me merry way afore he comes to."
+                },
+                {
+                  "player": "So what happened then?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Well, I makes me way to the closest tavern I knew of that catered to my sort of people..."
+                },
+                {
+                  "player": "You mean thieves?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Right ye are, so I makes me way to the nearest friendly tavern, and unwraps the bundle to see what it had inside."
+                },
+                {
+                  "player": "The Staff of Armadyl?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Was it? Ah, I never knew that..."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Anysways, I unwraps this staff, and sees it be a god- weapon; I may be just a common thief, but I recognises a weapon not made by mortal hands when I sees one."
+                },
+                {
+                  "player": "So what did you do then?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Well, I knew such a weapon would be of great value to..."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Now that's funny. Can't remember his name, now. The powerful god, lived in the North-east. Took the Mahjarrat away from under Icthlarin's"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "control."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Anyway, I hired me a messenger to go off and let him know I had something I was prepared to sell that I thought he'd be interested in..."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Now WHY can't I remember his name? Very odd that..."
+                },
+                {
+                  "player": "So you sold the staff to this god you can't remember?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Well, that's the other funny thing... He never showed up, he sent some General or other instead."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Hmmm... You know... Thinking back on that, I'm getting the feeling that messenger did a little doublecross of his own, and took"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "me message to the wrong fella."
+                },
+                {
+                  "player": "So what was this General's name?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "His name was Zamorak. I remember thinking at the time it was odd, because the fella was a mighty powerful warrior, but was never fully trusted by..."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "WHY can't I remember his name???"
+                },
+                {
+                  "player": "So you suspect the messenger might have taken the message to the wrong person? So you think it was an accident or deliberate?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Well that I can't tell ya, but if something happened to get me cursed, it's likely the messenger would know what more than me."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "His name was Kharrim, and if he caused me to be stuck like this, I'm gonna fillet him like a dog, ghost or no!"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "I tell ye what, you've given me much to think about so I'd like to offer yer a gift; Here, take these, they were the gloves I stole me first cake with, they might bring yer some luck."
+                },
+                {
+                  "player": "Where can I find this Kharrim then?"
+                },
+                {
+                  "type": "condition",
+                  "text": "If Kharrim is in the Chaos Temple (church):",
+                  "steps": [
+                    {
+                      "type": "call",
+                      "branch": "FCLS7D"
+                    }
+                  ],
+                  "id": "zxOJIJ"
+                },
+                {
+                  "type": "condition",
+                  "text": "If Kharrim is in the Graveyard of Shadows:",
+                  "steps": [
+                    {
+                      "type": "call",
+                      "branch": "vWIkPX"
+                    }
+                  ],
+                  "id": "bABsDO"
+                },
+                {
+                  "type": "condition",
+                  "text": "If Kharrim is in the Lava Maze:",
+                  "steps": [
+                    {
+                      "type": "call",
+                      "branch": "nPSeth"
+                    }
+                  ],
+                  "id": "7J1fNQ"
+                }
+              ]
+            },
+            {
+              "text": "Goodbye then",
+              "steps": [
+                {
+                  "type": "call",
+                  "branch": "blvcOJ"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "talking-to-rennard-talking-to-rennard-again": [
+        {
+          "player": "Hello again Rennard."
+        },
+        {
+          "type": "line",
+          "speaker": "Mysterious ghost",
+          "text": "Ah, it be you again! What can I do fer ya?"
+        },
+        {
+          "player": "Can you tell me where I can find Kharrim again?"
+        },
+        {
+          "type": "condition",
+          "text": "If Kharrim is in the Chaos Temple (church):",
+          "steps": [
+            {
+              "type": "call",
+              "branch": "FCLS7D"
+            }
+          ],
+          "id": "FJ9fCU"
+        },
+        {
+          "type": "condition",
+          "text": "If Kharrim is in the Graveyard of Shadows:",
+          "steps": [
+            {
+              "type": "call",
+              "branch": "vWIkPX"
+            }
+          ],
+          "id": "-_COwr"
+        },
+        {
+          "type": "condition",
+          "text": "If Kharrim is in the Lava Maze:",
+          "steps": [
+            {
+              "type": "call",
+              "branch": "nPSeth"
+            }
+          ],
+          "id": "UYhF1q"
+        }
+      ],
+      "talking-to-kharrim": [
+        {
+          "player": "Hello. So you must be Kharrim the messenger."
+        },
+        {
+          "type": "line",
+          "speaker": "Mysterious ghost",
+          "text": "How do you know my name, stranger?"
+        },
+        {
+          "player": "Well now... I had a very interesting chat with Rennard the thief."
+        },
+        {
+          "player": "It seems you redirected his message regarding a certain god-weapon for your own ends."
+        },
+        {
+          "type": "line",
+          "speaker": "Mysterious ghost",
+          "text": "So THAT is what this is about... I should have known the deal was too good to have no repercussions..."
+        },
+        {
+          "player": "It seems as though you might be responsible for this curse that has befallen you by not delivering Rennard's message to the correct person."
+        },
+        {
+          "type": "line",
+          "speaker": "Mysterious ghost",
+          "text": "Ha! That is not a truthful assessment of the story... You might think differently if you had heard my side of events."
+        },
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Tell me your story",
+              "steps": [
+                {
+                  "player": "Please let me hear your side of the story then..."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Well, if you have spoken to Rennard, then you will know that he had somehow managed to obtain a very valuable weapon, and was looking for buyers."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "What he probably didn't tell you, was that he met me in a drunken stupor in some smoke filled tavern, and I offered to arrange a purchaser for his item, in exchange for a small finders fee."
+                },
+                {
+                  "player": "So you knew what the staff was?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "The god-staff of Armadyl? Well, of course I did."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Honestly, you would have to be pretty slow-witted to not recognise a legendary artefact such as that."
+                },
+                {
+                  "player": "Wait, I don't understand, Rennard said that he had a buyer already in mind, and that you diverted his message to a General Zamorak instead?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Ha! Here is a word of advice for you adventurer; Never trust the words of a drunk."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Whatever he might have thought he was doing with it, in the end all that happened was he left me to arrange a purchaser for the item."
+                },
+                {
+                  "player": "So you thought you would offer it to General Zamorak?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Ah yes, Lord Zamorak. He was merely a mortal back then, you know?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Yet I could see great things in store for him even then. He had a kind of brilliant ruthlessness... And that special kind of vicious streak you see so rarely..."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Well anyway, when given the task of selling a weapon forged by the very gods themselves, I naturally thought of Zamorak as a potential buyer."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "I was a messenger in his employ anyway, so it was a mere trifle to find him and deliver the news, and I knew of his particular interest in armour and weaponry of all kinds."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Yes, he was always quite the connoisseur when it came to weaponry..."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "But I digress. I let Lord Zamorak know that there was some drunken fool with an artefact of incredible power that could probably be bought off with a few jewels and trinkets,"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "and he escorted me to the tavern and made the purchase there and then."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "It was a satisfactory deal all around, I got a share of the sale price from Rennard, and I greatly increased my prestige amongst Zamorak and his followers."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "But maybe... Perhaps the events that followed were responsible for my cursed state..."
+                },
+                {
+                  "player": "Events that followed?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "I can not tell you of them precisely, for I myself was not there to witness them."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "I am after all, simply a messenger. When... 'it' happened, I was busy elsewhere delivering a message from Zamorak to the rest of his Mahjarrat ilk."
+                },
+                {
+                  "player": "When 'it' happened? What was 'it'?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "As I have explained, I was not there, and I do not know what Zamorak did with the staff, but whatever it was resulted in his banishment by the other gods for many years."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "The very strange thing was that Saradomin must have known about it, whatever it was, before it even happened..."
+                },
+                {
+                  "player": "Really? Why do you say that?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Well, it was the contents of the message I was returning to Zamorak;"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Lucien seemed quite certain that there was a spy for Saradomin somewhere amongst his followers named Lennissa."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "If whatever happened to the staff caused this curse to befall me, then it is certain that she too would have been afflicted, because she would have been in the very heart of the action."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Hmmm...."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "You have given me much to think on adventurer. I would like to reward you with my sturdy messenger boots, may they aid you in your travels."
+                },
+                {
+                  "player": "But where can I find this Lennissa?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Ah yes, the whereabouts of the treacherous Lennissa..."
+                },
+                {
+                  "type": "condition",
+                  "text": "If Lennissa is in the Tree Gnome Stronghold:",
+                  "steps": [
+                    {
+                      "type": "call",
+                      "branch": "pIpbuL"
+                    }
+                  ],
+                  "id": "6ihfYN"
+                },
+                {
+                  "type": "condition",
+                  "text": "If Lennissa is in the Entrana church:",
+                  "steps": [
+                    {
+                      "type": "call",
+                      "branch": "WBDQro"
+                    }
+                  ],
+                  "id": "O5o4S0"
+                },
+                {
+                  "type": "condition",
+                  "text": "If Lennissa is in Port Sarim:",
+                  "steps": [
+                    {
+                      "type": "call",
+                      "branch": "IPDMTM"
+                    }
+                  ],
+                  "id": "f29nXp"
+                }
+              ]
+            },
+            {
+              "text": "Goodbye then",
+              "steps": [
+                {
+                  "type": "call",
+                  "branch": "blvcOJ"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "talking-to-kharrim-talking-to-kharrim-again": [
+        {
+          "player": "Hello again Kharrim."
+        },
+        {
+          "player": "Can you remind me where to find Lennissa?"
+        },
+        {
+          "type": "line",
+          "speaker": "Mysterious ghost",
+          "text": "Ah yes, the whereabouts of the treacherous Lennissa..."
+        },
+        {
+          "type": "condition",
+          "text": "If Lennissa is in the Tree Gnome Stronghold:",
+          "steps": [
+            {
+              "type": "call",
+              "branch": "pIpbuL"
+            }
+          ],
+          "id": "KvMZZm"
+        },
+        {
+          "type": "condition",
+          "text": "If Lennissa is in the Entrana church:",
+          "steps": [
+            {
+              "type": "call",
+              "branch": "WBDQro"
+            }
+          ],
+          "id": "M9_fir"
+        },
+        {
+          "type": "condition",
+          "text": "If Lennissa is in Port Sarim:",
+          "steps": [
+            {
+              "type": "call",
+              "branch": "IPDMTM"
+            }
+          ],
+          "id": "pV4i-w"
+        }
+      ],
+      "talking-to-lennissa": [
+        {
+          "player": "Hello. You would be Lennissa, I take it?"
+        },
+        {
+          "type": "line",
+          "speaker": "Mysterious ghost",
+          "text": "Who are you? Where did you hear that name? How comes it that you can see and speak to me?"
+        },
+        {
+          "player": "Well, a ghost called Kharrim directed me towards you."
+        },
+        {
+          "type": "line",
+          "speaker": "Mysterious ghost",
+          "text": "So that weasel Kharrim has been blighted by this curse too?"
+        },
+        {
+          "type": "line",
+          "speaker": "Mysterious ghost",
+          "text": "Ha, a good thing too. If anybody deserved such a fate it would be one such as him."
+        },
+        {
+          "player": "I guess you didn't get along then?"
+        },
+        {
+          "type": "line",
+          "speaker": "Mysterious ghost",
+          "text": "No, evil scum such as he should never have been allowed to walk this world."
+        },
+        {
+          "type": "line",
+          "speaker": "Mysterious ghost",
+          "text": "What lies has he told you to come here? Have you come to try and kill me?"
+        },
+        {
+          "player": "Well, I'm not sure I could if I tried, but that is not why I have come to you."
+        },
+        {
+          "type": "line",
+          "speaker": "Mysterious ghost",
+          "text": "Then speak, and speak well, for I may yet be dead, but am still a danger to those who cross me."
+        },
+        {
+          "player": "Actually, I'm trying to work out why all of you invisible ghosts seem to have been cursed."
+        },
+        {
+          "player": "I'm not sure how exactly, but the trail seems to have led me to you..."
+        },
+        {
+          "type": "line",
+          "speaker": "Mysterious ghost",
+          "text": "That makes no sense... I served Saradomin faithfully my entire life, then all of a sudden I find myself reduced to this state!"
+        },
+        {
+          "player": "Well, it seems as though that may have been the cause..."
+        },
+        {
+          "type": "line",
+          "speaker": "Mysterious ghost",
+          "text": "What? Explain yourself."
+        },
+        {
+          "player": "As I understand it, it was something to do with the Staff of Armadyl, and your refusal to tell Saradomin that it had been stolen..."
+        },
+        {
+          "type": "line",
+          "speaker": "Mysterious ghost",
+          "text": "What? But... But that is not how it happened at all!"
+        },
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Tell me your story",
+              "steps": [
+                {
+                  "player": "Then please, go ahead and tell me the events of that day in your own words..."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Let me see... I had been working as a spy for my Lord Saradomin, amongst the forces of... the Empty Lord."
+                },
+                {
+                  "player": "'The Empty Lord'? Who is that?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "I will not give you his name, for to do so would give him power here."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Let us just say that he was a fearsome deity, whose strength was greater than all the gods we knew of on this realm at the time."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "It is probably worth mentioning that at this time we had no knowledge of the mysterious nature god Guthix."
+                },
+                {
+                  "player": "So he was stronger than Saradomin?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "As Saradomin was, yes. As Saradomin is now? Who can say?"
+                },
+                {
+                  "player": "I see... Please, continue."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "As I say, I was working as a spy within the very camp of my Lord's enemies."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "I knew that should I have been caught, I risked being killed upon the spot, but my combat skills were always formidable, and if truth be told, there was a fair amount of dissent amongst... 'his' followers anyway."
+                },
+                {
+                  "player": "How do you mean 'dissent'?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Ah, to not understand this, you must have led a sheltered life..."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Let me tell you this: Evil will always breed more evil, and will never be satisfied with what it has."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "The Empty Lord chose to ally himself with the dark creatures of this world, fully aware that their own natures would cause them to rally against his rule, and take every opportunity they could to betray him."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "This has always been the nature of evil. Perhaps he thought his power could prevent such treachery?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "This allowed me freedom amongst their camp, for it was always easy to point the finger of suspicion at some unsuspecting necromancer or foolish Mahjarrat if it seemed as though my activities had been discovered."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Similarly, should I ever be caught in the act of my sabotage, it was all too easy to bribe whoever found me or persuade them into believing it was just some minor treachery of my own, rather than my work for my"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Lord Saradomin."
+                },
+                {
+                  "player": "Okay... Well, that makes sense, but I don't understand what the Staff of Armadyl had to do with this...?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "As I have told you, the Empty Lord was extremely powerful, but not so powerful that he could rule over the other deities of this world without opposition."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Should he have made a move against any other god, then he could still have been easily brought down by the combined efforts of the others."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "The theft of Armadyl's staff changed this however."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "If he had taken possession of this god-weapon, then his power would have been so great that he could have overthrown all on this world, and made it into his own image!"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "I could not allow such a thing to happen!"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "I went immediately to my comrade Dhalak, the mage, and told him that a message had come to the lair offering this weapon for sale!"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "I knew that as soon as my Lord Saradomin heard this, he would contact Armadyl to inform them of the theft, and the matter would have been resolved quickly and discreetly."
+                },
+                {
+                  "player": "So you passed this information to Dhalak instead of taking it to Saradomin yourself?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "To my eternal shame, I indeed failed my Lord Saradomin..."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "I could not risk taking the message directly, for I feared my disguise had been uncovered."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Lucien particularly had been taking an unhealthy interest in my activities, and I had a gut feeling that to make any obvious moves against the Empty Lord would have been my undoing."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "But Dhalak was a noble man! I cannot believe that he would not have taken my message immediately to Lord Saradomin!"
+                },
+                {
+                  "player": "Well, it seems like he didn't, but I don't know why not..."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Please adventurer, discover what foul fate must have befallen him for him to have neglected his duty!"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "I have not much to offer as reward, but for these spare robes I wore while on assignment..."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Please find him and discover why I am cursed like this!"
+                },
+                {
+                  "player": "Where would I be able to find this Dhalak then?"
+                },
+                {
+                  "type": "condition",
+                  "text": "If Dhalak is in the Falador Party Room:",
+                  "steps": [
+                    {
+                      "type": "call",
+                      "branch": "lFjVwU"
+                    }
+                  ],
+                  "id": "oA5mdn"
+                },
+                {
+                  "type": "condition",
+                  "text": "If Dhalak is in the Wizards' Tower:",
+                  "steps": [
+                    {
+                      "type": "call",
+                      "branch": "n0UAA5"
+                    }
+                  ],
+                  "id": "Q2TC8O"
+                },
+                {
+                  "type": "condition",
+                  "text": "If Dhalak is in the Edgeville Monastery:",
+                  "steps": [
+                    {
+                      "type": "call",
+                      "branch": "6cY_Cq"
+                    }
+                  ],
+                  "id": "EHyF71"
+                }
+              ]
+            },
+            {
+              "text": "Goodbye then",
+              "steps": [
+                {
+                  "type": "call",
+                  "branch": "blvcOJ"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "talking-to-lennissa-talking-to-lennissa-again": [
+        {
+          "player": "Hello Lennissa. Can you remind me where to find Dhalak?"
+        },
+        {
+          "type": "condition",
+          "text": "If Dhalak is in the Falador Party Room:",
+          "steps": [
+            {
+              "type": "call",
+              "branch": "lFjVwU"
+            }
+          ],
+          "id": "_h4ssm"
+        },
+        {
+          "type": "condition",
+          "text": "If Dhalak is in the Wizards' Tower:",
+          "steps": [
+            {
+              "type": "call",
+              "branch": "n0UAA5"
+            }
+          ],
+          "id": "-lIZNL"
+        },
+        {
+          "type": "condition",
+          "text": "If Dhalak is in the Edgeville Monastery:",
+          "steps": [
+            {
+              "type": "call",
+              "branch": "6cY_Cq"
+            }
+          ],
+          "id": "Bv4fUU"
+        }
+      ],
+      "talking-to-dhalak": [
+        {
+          "player": "Hello Dhalak."
+        },
+        {
+          "type": "line",
+          "speaker": "Mysterious ghost",
+          "text": "You see my form, hear my words, and know my name, yet your face I recognise not..."
+        },
+        {
+          "type": "line",
+          "speaker": "Mysterious ghost",
+          "text": "Be you some mighty sorcerer to bind me so?"
+        },
+        {
+          "type": "condition",
+          "text": "If the player does not have level 99 Magic:",
+          "steps": [
+            {
+              "player": "Um... Well, not really..."
+            }
+          ],
+          "id": "XeFSm5"
+        },
+        {
+          "type": "condition",
+          "text": "If the player has level 99 Magic:",
+          "steps": [
+            {
+              "player": "Well, I don't mean to brag, but I guess I am with my level 99 magic..."
+            }
+          ],
+          "id": "KaVo1K"
+        },
+        {
+          "player": "But that is besides the point. It is not I who has trapped you here as a ghost."
+        },
+        {
+          "type": "line",
+          "speaker": "Mysterious ghost",
+          "text": "Then how comes it to be that you know my name stranger?"
+        },
+        {
+          "player": "Lennissa told me about you, and where to find you?"
+        },
+        {
+          "type": "line",
+          "speaker": "Mysterious ghost",
+          "text": "Lennissa? Oh that poor sweet girl... Has my foolishness cursed her as well as myself???"
+        },
+        {
+          "player": "Your foolishness?"
+        },
+        {
+          "type": "line",
+          "speaker": "Mysterious ghost",
+          "text": "The story shames me stranger, I wouldst rather keep it unto myself."
+        },
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Tell me your story",
+              "steps": [
+                {
+                  "player": "Look, I don't want to force you into telling me, but perhaps sharing it with someone might relieve your guilt?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Aye... Perhaps it might at that."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "So what has Lennissa told you of the events of the day this curse befell me?"
+                },
+                {
+                  "player": "Well, she told me that she was working as an undercover agent of Saradomin amongst the followers of some 'Empty Lord', and when news of the theft of a god-weapon reached her, she passed the message on to"
+                },
+                {
+                  "player": "you instead of taking it to Saradomin because she was scared her cover might be blown."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Aye, that is a fair account of events..."
+                },
+                {
+                  "player": "But I don't understand why you didn't take her message to Saradomin?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Stranger, my foolishness was a result of my respect for Saradomin, not as a result of any attempted treachery!"
+                },
+                {
+                  "player": "So why didn't you pass on Lennissa's message? As I understand it something happened with that staff that could have been avoided if you had passed her message on!"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "(sigh) I know not what occurred with that god-weapon, but I have my suspicions..."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Let me explain myself. I was Lennissa's immediate superior, and I was often her contact for missions."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Because of this role, I had access to a larger picture of what was happening than she herself did, and I was not only well aware that her presence amongst the enemy camp had been detected, but I was also well aware that"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "there was a growing faction amongst them who were plotting to overthrow their master."
+                },
+                {
+                  "player": "Their master being...?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "That I will not tell you. I will tempt the fates no more than I already have done."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "But anyway, it had come to my attention that the Mahjarrat who had been liberated from the control of Icthlarin did not much appreciate one form of slavery to another, and under the leadership of the mighty"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Zamorak were making plans to overthrow their master and take his power for themselves."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Now, as powerful, long-lived and evil as they were, they were still just mortal, and I made the decision that it would be of benefit to my Lord Saradomin for his mightiest rival to be distracted by such internal conflicts."
+                },
+                {
+                  "player": "So that is why you decided not to pass the report from Lennissa on?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Yes, but my guilt is more than simply inaction..."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "I knew that with such a weapon, Zamorak would be capable of launching an attack that could actually stand a chance of success, but I also knew that he would never be able to get a chance to use it in a battle for"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "being a god-weapon its very presence would have sung out to their leader."
+                },
+                {
+                  "player": "I'm guessing you did something about that, then?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Indeed I did. To my eternal shame, I decided that I would assist Zamorak and his henchmen in their battle, by secretly casting a spell of concealment upon the staff so that"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "they might use it secretly against their master."
+                },
+                {
+                  "player": "So Zamorak knew about this?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "No, nobody except myself, and now you, knew that I cast such a spell...."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Had I known what a threat to my Lord Saradomin Zamorak would later become, I wouldst have taken the message to Saradomin immediately! Alas, it is all too easy to see your mistakes after you"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "have made them..."
+                },
+                {
+                  "player": "I'm confused. What exactly happened with this staff anyway? And why have all these various random people been cursed because of it?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "I cannot answer your question with anything other than my own suppositions, but I do know of one who might be able to, and if any man deserved to be cursed for their actions that day, it was he!"
+                },
+                {
+                  "player": "Who are you speaking of?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "His name was Viggora. He was an evil man, brutal and vicious, and deadly with a blade."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "He was one of the few humans Zamorak allowed to rise to a position of power amongst his rebels, possibly because he imitated those same qualities of Zamorak."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "If anyone knows what Zamorak did with that god- weapon to have caused this curse to have befallen us, it would have been he, for he would have been fighting on Zamorak's very right hand side in their rebellion."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Please, if this curse can be lifted, find Viggora and find out what he has wrought upon us! I have no wealth nor magic to aid you, but take my hood as reward;"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "it has served me well these centuries past, and may bring you luck."
+                },
+                {
+                  "player": "Where would you suggest I look for Viggora?"
+                },
+                {
+                  "type": "condition",
+                  "text": "If Viggora is in the Rogues' Castle:",
+                  "steps": [
+                    {
+                      "type": "call",
+                      "branch": "5qsBJ_"
+                    }
+                  ],
+                  "id": "s8thQq"
+                },
+                {
+                  "type": "condition",
+                  "text": "If Viggora is in the Slayer Tower:",
+                  "steps": [
+                    {
+                      "type": "call",
+                      "branch": "LxDOIr"
+                    }
+                  ],
+                  "id": "AhoxUw"
+                },
+                {
+                  "type": "condition",
+                  "text": "If Viggora is in the Edgeville Dungeon:",
+                  "steps": [
+                    {
+                      "type": "call",
+                      "branch": "_i0i1E"
+                    }
+                  ],
+                  "id": "A91bYr"
+                }
+              ]
+            },
+            {
+              "text": "Goodbye then",
+              "steps": [
+                {
+                  "type": "call",
+                  "branch": "blvcOJ"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "talking-to-dhalak-talking-to-dhalak-again": [
+        {
+          "player": "Dhalak, where can I find the swordsman Viggora?"
+        },
+        {
+          "type": "condition",
+          "text": "If Viggora is in the Rogues' Castle:",
+          "steps": [
+            {
+              "type": "call",
+              "branch": "5qsBJ_"
+            }
+          ],
+          "id": "wBZiCp"
+        },
+        {
+          "type": "condition",
+          "text": "If Viggora is in the Slayer Tower:",
+          "steps": [
+            {
+              "type": "call",
+              "branch": "LxDOIr"
+            }
+          ],
+          "id": "M1SkM6"
+        },
+        {
+          "type": "condition",
+          "text": "If Viggora is in the Edgeville Dungeon:",
+          "steps": [
+            {
+              "type": "call",
+              "branch": "_i0i1E"
+            }
+          ],
+          "id": "J5BOt9"
+        }
+      ],
+      "talking-to-viggora": [
+        {
+          "player": "So... You must be the infamous Viggora."
+        },
+        {
+          "type": "line",
+          "speaker": "Mysterious ghost",
+          "text": "Hold thy tongue varlet! Speak fast, how come you to find me here, and how doth you understand mine speech?"
+        },
+        {
+          "player": "You want me to hold my tongue and tell you how I found you?"
+        },
+        {
+          "type": "line",
+          "speaker": "Mysterious ghost",
+          "text": "Cease thy chatter and respond to my demand!"
+        },
+        {
+          "player": "Cease my chatter AND respond to your demand?"
+        },
+        {
+          "type": "line",
+          "speaker": "Mysterious ghost",
+          "text": "I warn thee knave, this curse upon me hath not improved my temper, these centuries past..."
+        },
+        {
+          "player": "Well, it's actually about that curse that I have come to speak to you."
+        },
+        {
+          "type": "line",
+          "speaker": "Mysterious ghost",
+          "text": "Oh, be that so? Then forgive my swift anger, and speak to me of how you plan to break this curse."
+        },
+        {
+          "player": "Erm... I didn't actually mention anything about breaking the curse..."
+        },
+        {
+          "type": "line",
+          "speaker": "Mysterious ghost",
+          "text": "Then what lets you dare speak to me?"
+        },
+        {
+          "player": "Well, I heard of your name from a mage called Dhalak, and I'm trying to find out what exactly caused the curse to befall him, and you as well apparently."
+        },
+        {
+          "type": "line",
+          "speaker": "Mysterious ghost",
+          "text": "Ha! So the weak-willed mage was cursed along with me?"
+        },
+        {
+          "type": "line",
+          "speaker": "Mysterious ghost",
+          "text": "Well now, that is an interesting turn of events... Then am I to assume that Valdez, Rennard, Kharrim and Lennissa were also cursed along with me?"
+        },
+        {
+          "player": "...How did you know that?"
+        },
+        {
+          "type": "line",
+          "speaker": "Mysterious ghost",
+          "text": "Ha ha ha! Oh, the curse cut deeper than I had previously thought!"
+        },
+        {
+          "type": "line",
+          "speaker": "Mysterious ghost",
+          "text": "Stranger, this news has brought me a ray of sunshine in an otherwise dreary millennium! Please, ask any question you wish!"
+        },
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Tell me your story",
+              "steps": [
+                {
+                  "player": "Erm... Thanks, I think. So what exactly happened on that day you were all cursed?"
+                },
+                {
+                  "player": "I know that Valdez discovered the Staff of Armadyl, was robbed by Rennard, who then sent Kharrim to tell Zamorak of it."
+                },
+                {
+                  "player": "Meanwhile Lennissa heard of the sale, and informed Dhalak who placed an enchantment upon it so that its power would be hidden."
+                },
+                {
+                  "player": "I still don't know what happened with the staff to cause this curse, or what you had to do with it though..."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Well stranger, rest yourself awhile, and I will recount a tale of the events of that day, for I was one of the few actually there when it happened..."
+                },
+                {
+                  "player": "When what happened?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "When my Lord Zamorak first got his taste of godhood!"
+                },
+                {
+                  "player": "Wow. Sounds like quite the dinner party anecdote."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "You can take the snide venom out of your voice whelp, you came to me; 'twas not the other way round."
+                },
+                {
+                  "player": "Okay, okay. Please continue."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Well now, let us see... As you may have heard tell, my affiliation lay with General Zamorak, a mighty warrior of the Mahjarrat tribe, and my skill on the battlefield had quickly brought"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "me to his attention."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "So pleased was he with my bloodlust that he promoted me on the battlefield once to serve in his honour guard, and let me tell you, this was a rare honour indeed, for I was the only human chosen to take such a position."
+                },
+                {
+                  "player": "Really?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Oh yes, the dragon riders, Mahjarrat, demons and vampyre warriors made up the bulk of the force, but I wager I was their equal in all ways of combat."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Ha, when I think of someone like Lucien struggling to lift a blade, in some ways I was even their better!"
+                },
+                {
+                  "player": "Please continue."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Well anyway... Myself and the rest of Zamoraks honour guard were formulating stratagems in our battle-tent, when that sneaky messenger Kharrim came in offering to sell us"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "the god-staff of Armadyl!"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Naturally, we suspected that this was some trick by our Lord to test our loyalty..."
+                },
+                {
+                  "player": "Yes, who was your lord? Everyone has been very evasive about that..."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Quiet fool, all things in their course; You are disrupting my train of thought!"
+                },
+                {
+                  "player": "Sorry..."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Well anyway, we thought it was too good to be true, yet when we visited this scummy tavern we were amazed to discover there was no trick, no test of loyalty, no hidden trap:"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Somehow this fool had actually managed to obtain the god-staff of Armadyl!"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Its power was incredible, you could almost feel the energies crackling around it in the air!"
+                },
+                {
+                  "player": "So what happened then?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Well, with such a weapon, the plans we had been developing for a rebellion against our lord could finally be put into action, but we knew that we would have to act swiftly, before he heard that we had a weapon"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "capable of defeating him, and we would have to act decisively, for even amongst our group there were still those loyal to the lord - such as that pathetic fool Azzanadra."
+                },
+                {
+                  "player": "So JUST WHO WAS this lord you speak of?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "And I tell thee again, I will say when it is appropriate, now do not disrupt my tale!"
+                },
+                {
+                  "player": "Okay, carry on then..."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "So anyway, Lord Zamorak and his most trusted compatriots, namely myself, Hazeel, Drakan, Thammaron and Zemouregal made plans to overthrow our lord using the god-weapon, and by pledging"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "allegiance to Zamorak as our master, were each to be given a large piece of land as our own in return."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "We decided to move immediately, before anyone got cold feet, or any other parties could interfere in our work, and made haste towards the castle where our Lord lived."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "If Lucien had not been otherwise occupied, he would have probably accompanied us with his magicks, but it turned out the foolish Dhalak had made his involvement unnecessary with some spells of his own allowing us to"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "get close enough to the castle with the staff without the Empty Lord being able to sense its presence."
+                },
+                {
+                  "player": "So your lord was the one that cursed you?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "I am coming to that... So anyway, we made our way to the castle, under the pretense that we had war plans against Saradomin and the other deities to discuss."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "As usual, our lord was guarded well, but this was why Zamorak had brought his most trusted fighters with him."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "While we distracted the Empty Lord with our feints and attacks, and kept his bodyguards busy, Lord Zamorak outflanked him, unsheathed the staff and plunged it into his back!"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Ah, it was a glorious sight... At that moment I was reminded for whom I fought, and why General Zamorak had earned his nickname 'the scourge' upon the battlefield..."
+                },
+                {
+                  "player": "And the next thing you know you were cursed?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "No, it was not quite that simple... The Empty Lord turned away from our battle, eyes burning with hatred, and towards Zamorak instead. Seeing this, we all fought with extra vigour, so that"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "General Zamorak would not face our lord alone, but we were outnumbered by many hundreds of warriors and demons, and could not reach him to assist him!"
+                },
+                {
+                  "player": "So what then?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Why, it was the Empty Lord versus Zamorak, in single combat! And the sight of the battle will be with me forever more..."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "The Empty Lord was a powerful god, stronger than any of the others awake at that time, possibly even as strong as Guthix is, and Zamorak was but a mortal: A Mahjarrat warrior all the same, with all of the"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "strength and power that that entails, but mortal nonetheless, but to see him fight, you would not think of him as a 'mere' anything..."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "He was war itself! Flurry after flurry of blows he rained upon the Empty Lord, and the very castle walls shook and quivered with their power, but the Empty Lord would not fall!"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Even with the weapon of a god embedded in his back, he fought on, and with each blow our victory seemed less and less certain..."
+                },
+                {
+                  "player": "So what then?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Well, then a miracle happened. Or luck. Or natural justice."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "You can call it what you want, but as the Empty Lords hands wrapped tightly around Zamorak's throat, Lord Zamorak, kicking and screaming defiantly and radiant in his anger until the very last, plunged towards the"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Empty Lord, who seemed to lose his footing slightly, and fell in such a way so that the staff plunged deeper into his body, but also impaled Lord Zamorak with it at the same time..."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "And then..."
+                },
+                {
+                  "player": "And then what?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "And then nothing. There was a sudden flash of bright light, and then a sudden blink of cold darkness, and it was over."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Zamorak stood over the Empty Lord who was slowly... fading from existence... And as he faded, it seemed as though... It almost seemed as though Zamorak became more real,"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "more solid than he had been before..."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "And as the Empty Lord faded from this world completely, I heard his voice, almost a whisper upon the wind, cursing all who had helped Zamorak in his victory, which as you now tell me seems to have been all who"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "were responsible for the staff ending up in Zamorak's hands at the castle."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "As I heard it, I saw that I too was fading, just as the Empty Lord had, and I called to my brethren for their assistance, but they could no longer hear my words, nor see my form."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "It was then that the other gods appeared and banished Zamorak from the world completely for daring to kill one of their kind, although as it turned out it didn't quite work out that way for them, when he returned"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "stronger than ever, a god himself."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "But the god wars were another story entirely..."
+                },
+                {
+                  "player": "But... I don't understand... If it was Zamorak who used the weapon, then why was it only you who were cursed?"
+                },
+                {
+                  "player": "And the other people who were cursed, why them? Why not the other Mahjarrat for example?"
+                },
+                {
+                  "player": "And just who was this 'Empty Lord' you keep speaking of?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Well, in my life I was nothing but a warrior. I had no hidden knowledge, I didn't especially care about the gods or their magics, and I certainly didn't respect them."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Now in my... I suppose this is my death. I am but a shade on the wind, unnoticed by all who pass me, until today anyway, and the only answer I can give you is that the others who were with me, the"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Mahjarrats and the Vampyre, they were beings of magic."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "It runs through their very veins, and ebbs through their bones."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Who knows why the curse fell as it did? Perhaps as a mere human I was more susceptible to it, when they were not. Perhaps they too are cursed, but their life spans are so"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "long that it will be millennia before they feel it upon them. Perhaps because it did not affect them, it extended backwards through time, to the moment the staff was"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "taken from its rightful place, and all who had known of its theft were cursed too. Perhaps there are others also cursed, who played no part in this tale, and were merely unlucky enough to be"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "in the wrong place at the wrong time..."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "I don't know. Things do not always happen for a reason, just as tales do not always end with all of the loose ends neatly tied up and all answers supplied."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "I have simply told you the events I was witness to, for I can do no more."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "You have cheered me no end to let me know that this curse that has afflicted me has not left me alone here, in this void between worlds."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Perhaps I will hunt down these others who have also been cursed as I was, but I feel I must reward you for your efforts; Here, take my cloak, it is drenched in the blood of a"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "thousand foes, and may bring you luck in battle."
+                },
+                {
+                  "player": "So how can I break this curse?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Who knows? If it was the death curse of the Empty Lord, there may be no way to break it."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "If it was not his death curse, and he is still alive but not on this world, then the only way to break it may be to bring him back here;"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "But I would rather stay cursed than suffer under his rule again..."
+                },
+                {
+                  "player": "But WHO was this 'Empty Lord'? WHAT was his NAME?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "You do not know? You have not guessed yet?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "He was Zaros."
+                }
+              ]
+            },
+            {
+              "text": "Goodbye then",
+              "steps": [
+                {
+                  "type": "call",
+                  "branch": "blvcOJ"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "talking-to-viggora-talking-to-viggora-again": [
+        {
+          "player": "Hello."
+        },
+        {
+          "type": "line",
+          "speaker": "Mysterious ghost",
+          "text": "Hello yourself."
+        },
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Talk about Viggora's story.",
+              "steps": [
+                {
+                  "player": "I really liked your little story. Can you tell me another one?"
+                },
+                {
+                  "player": "Preferably something with a big fight and lots of explosions!"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "...You are a very strange young [man/woman]."
+                }
+              ]
+            },
+            {
+              "text": "Ask for more ghostly robes.",
+              "steps": [
+                {
+                  "player": "Could I have more of those ghostly robes you gave me?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "It seems as though the curse that keeps me here extends to my very clothing... which piece do you want?"
+                },
+                {
+                  "type": "action",
+                  "action": "open_interface",
+                  "target": "Ghostly robes reclaim interface",
+                  "id": "PN9bVb"
+                },
+                {
+                  "type": "action",
+                  "action": "receive",
+                  "text": "the requested piece(s) of ghostly robes",
+                  "id": "2_jyBj"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mysterious ghost",
+                  "text": "Here you go."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "branches": {
+      "eyw_7T": [
+        {
+          "type": "line",
+          "speaker": "Mysterious ghost",
+          "text": "Ah, the infamous Rennard... The last I had heard of that vile thief, he had joined a group of bandits in an evil land to the North-east of here, where they had made their home living outside of"
+        },
+        {
+          "type": "line",
+          "speaker": "Mysterious ghost",
+          "text": "the reach of the authorities that pursued them..."
+        },
+        {
+          "player": "Okay, well I'll try and find him for you then."
+        },
+        {
+          "type": "end"
+        }
+      ],
+      "YWKMJW": [
+        {
+          "type": "line",
+          "speaker": "Mysterious ghost",
+          "text": "Ah, the infamous Rennard... The last I had heard of him, he had sought passage on a ship crewed by none but the most dastardly lowly pirates..."
+        },
+        {
+          "type": "line",
+          "speaker": "Mysterious ghost",
+          "text": "I also heard that this ship had been caught in a violent storm, and stranded upon rocks, where the pirates then made their home..."
+        },
+        {
+          "player": "Okay, well I'll try and find him for you then."
+        },
+        {
+          "type": "end"
+        }
+      ],
+      "KdjW8L": [
+        {
+          "type": "line",
+          "speaker": "Mysterious ghost",
+          "text": "Ah, the infamous Rennard... The last I had heard of that vile thief, he had joined a group of bandits in a barren land to the South-east of here, where they prey upon the unsuspecting visitors to"
+        },
+        {
+          "type": "line",
+          "speaker": "Mysterious ghost",
+          "text": "the desert awaiting the return of their dark master..."
+        },
+        {
+          "player": "Okay, well I'll try and find him for you then."
+        }
+      ],
+      "blvcOJ": [
+        {
+          "player": "Well, that's all fascinating, but I just don't particularly care. Bye-bye."
+        }
+      ],
+      "FCLS7D": [
+        {
+          "type": "line",
+          "speaker": "Mysterious ghost",
+          "text": "Kharrim the messenger... Well, he was always a devoted follower of old General Zamorak, and if I remember rightly Zamorak set up a small base in an old temple near Dareeyak..."
+        },
+        {
+          "type": "line",
+          "speaker": "Mysterious ghost",
+          "text": "You might want to check around there."
+        },
+        {
+          "player": "Okay, well I'll try and find him for you then."
+        },
+        {
+          "type": "end"
+        }
+      ],
+      "vWIkPX": [
+        {
+          "type": "line",
+          "speaker": "Mysterious ghost",
+          "text": "Kharrim the messenger... Last I'd heard of him, he'd headed off to Carrallagar to seek his fortune. Ya might want to check around there somewhere."
+        },
+        {
+          "player": "Okay, well I'll try and find him for you then."
+        },
+        {
+          "type": "end"
+        }
+      ],
+      "nPSeth": [
+        {
+          "type": "line",
+          "speaker": "Mysterious ghost",
+          "text": "Kharrim the messenger... The last I'd heard of that weasel he was claiming he'd found some underground deposit of runite ore guarded by demons and dragons."
+        },
+        {
+          "type": "line",
+          "speaker": "Mysterious ghost",
+          "text": "I suspect he was pulling some scam or other, but if you know of such a place, that might be a good place to start checking."
+        },
+        {
+          "player": "Okay, well I'll try and find him for you then."
+        }
+      ],
+      "pIpbuL": [
+        {
+          "type": "line",
+          "speaker": "Mysterious ghost",
+          "text": "Well, we knew little about her or she would have been caught and exposed as a traitor and a spy, but Lucien did mention that he had evidence that she was a great fan of ball games..."
+        },
+        {
+          "player": "Okay, well I'll try and find her for you then."
+        },
+        {
+          "type": "end"
+        }
+      ],
+      "WBDQro": [
+        {
+          "type": "line",
+          "speaker": "Mysterious ghost",
+          "text": "Well, she was always sickeningly obedient to Saradomin, so I would expect her to have run to some great place of worship of him if she was affected by the curse to try and gain his blessing."
+        },
+        {
+          "player": "Okay, well I'll try and find her for you then."
+        },
+        {
+          "type": "end"
+        }
+      ],
+      "IPDMTM": [
+        {
+          "type": "line",
+          "speaker": "Mysterious ghost",
+          "text": "According to Lucien's intelligence report, she had been uncovered as a spy by her constant use of ships to ferry information..."
+        },
+        {
+          "type": "line",
+          "speaker": "Mysterious ghost",
+          "text": "It is entirely possible she would be located somewhere coastal to this day!"
+        },
+        {
+          "player": "Okay, well I'll try and find her for you then."
+        }
+      ],
+      "lFjVwU": [
+        {
+          "type": "line",
+          "speaker": "Mysterious ghost",
+          "text": "Dhalak? I know not where, but he would try and make the most of his situation if he has been cursed, and find a place to lift his spirits!"
+        },
+        {
+          "player": "Okay, well I'll try and find him for you then."
+        },
+        {
+          "type": "end"
+        }
+      ],
+      "n0UAA5": [
+        {
+          "type": "line",
+          "speaker": "Mysterious ghost",
+          "text": "Dhalak? Well, he was always a knowlegeable mage, so if this curse has befallen him as well, I would suspect he would be researching how to free himself of it."
+        },
+        {
+          "type": "line",
+          "speaker": "Mysterious ghost",
+          "text": "I would look for a library to find him if I were you."
+        },
+        {
+          "player": "Okay, well I'll try and find him for you then."
+        },
+        {
+          "type": "end"
+        }
+      ],
+      "6cY_Cq": [
+        {
+          "type": "line",
+          "speaker": "Mysterious ghost",
+          "text": "Dhalak? He was always a loyal follower of Saradomin... I think he would have found an altar to Saradomin so that he may pray for this curse to be lifted."
+        },
+        {
+          "player": "Okay, well I'll try and find him for you then."
+        }
+      ],
+      "5qsBJ_": [
+        {
+          "type": "line",
+          "speaker": "Mysterious ghost",
+          "text": "Ah, the evil swordsman Viggora... A rogue like him would probably flock to his own kind."
+        },
+        {
+          "player": "Okay, well I'll try and find him for you then."
+        },
+        {
+          "type": "end"
+        }
+      ],
+      "LxDOIr": [
+        {
+          "type": "line",
+          "speaker": "Mysterious ghost",
+          "text": "Ah, the evil swordsman Viggora... Perhaps he has returned to his castle in the dark lands?"
+        },
+        {
+          "player": "Okay, well I'll try and find him for you then."
+        },
+        {
+          "type": "end"
+        }
+      ],
+      "_i0i1E": [
+        {
+          "type": "line",
+          "speaker": "Mysterious ghost",
+          "text": "Ah, the evil swordsman Viggora... Paddewwa was where he fought many battles, perhaps he has returned to one of his old haunts?"
+        },
+        {
+          "player": "Okay, well I'll try and find him for you then."
+        }
+      ]
+    }
+  },
   "Curufin": {
     "default": "standard-dialogue",
     "variants": {

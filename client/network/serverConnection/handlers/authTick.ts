@@ -3,7 +3,7 @@ import { clearHintArrow, setHintArrowNpc, setHintArrowPlayer,
     setHintArrowWorldEntity, setHintArrowTile } from "../../../game/HintArrow";
 import { clearAttackTimer, setAttackTimer } from "../../../game/plugins/attacktimer/attackTimerState";
 import { loadItemPrices } from "../domain/itemPrices";
-import { LOGIN_FLAG_TOKEN } from "../constants";
+import { LOGIN_FLAG_CHARACTER_SELECT, LOGIN_FLAG_TOKEN } from "../constants";
 import { state } from "../state";
 
 export function handleAuthTickMessage(msg: any): boolean {
@@ -26,7 +26,9 @@ export function handleAuthTickMessage(msg: any): boolean {
         if (msg.payload.success && msg.payload.loginToken) {
             // The token just used (or the password) is spent; a resumed session logs in with this.
             state.sessionPassword = msg.payload.loginToken;
-            state.sessionLoginFlags = LOGIN_FLAG_TOKEN;
+            // Keeps asking for the character list, so a reconnect re-enters the same character.
+            state.sessionLoginFlags =
+                LOGIN_FLAG_TOKEN | (state.sessionLoginFlags & LOGIN_FLAG_CHARACTER_SELECT);
         }
         if (msg.payload.success) {
             clearHintArrow();

@@ -133,8 +133,9 @@ export class WebgpuUiPresentation {
                 const { loginState } = osrsClient;
                 this.mobileLoginInput.sync(
                     isMobileMode &&
-                        loginState.loginIndex === LoginIndex.LOGIN_FORM &&
-                        loginState.virtualKeyboardVisible &&
+                        ((loginState.loginIndex === LoginIndex.LOGIN_FORM && loginState.virtualKeyboardVisible) ||
+                            (loginState.loginIndex === LoginIndex.CHARACTER_SELECT &&
+                                loginState.pickerMode !== "list")) &&
                         inputManager.isTouch,
                 );
                 if (action === "connect") {
@@ -175,6 +176,7 @@ export class WebgpuUiPresentation {
             (inputManager.mouseY - metrics.renderOffsetY) / metrics.renderScaleY,
         );
         loginState.hoveredServerIndex = loginRenderer.computeHoveredServerIndex(loginState);
+        loginState.hoveredCharacter = loginRenderer.computeHoveredCharacter(loginState);
 
         if (editorLoading) {
             loginRenderer.drawInitial(loginState, layoutW, layoutH, layoutW, layoutH);

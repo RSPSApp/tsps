@@ -28,6 +28,7 @@ import {
     handleWelcomeDisplayNameClick,
     handleBannedClick,
     handleOkMessageClick,
+    handleCharacterSelectClick,
     isButtonHit,
 } from "./mouseHandlers";
 
@@ -212,8 +213,13 @@ export function handleMouseClick(
             return handleServerListClick(host, state, x, y);
         }
 
-        // Server list button (bottom left, replaces world select button)
-        if (gameState >= GameState.LOGIN_SCREEN && host.worldSelectButtonSprite) {
+        // Server list button (bottom left, replaces world select button); not while the open
+        // connection waits on the character picker.
+        if (
+            gameState >= GameState.LOGIN_SCREEN &&
+            state.loginIndex !== LoginIndex.CHARACTER_SELECT &&
+            host.worldSelectButtonSprite
+        ) {
             const buttonPos = getServerListButtonPosition(host);
             const buttonW = host.worldSelectButtonSprite.subWidth || 100;
             const buttonH = host.worldSelectButtonSprite.subHeight || 35;
@@ -263,6 +269,8 @@ export function handleMouseClick(
                 return handleBannedClick(host, content.x, content.y);
             case LoginIndex.OK_MESSAGE:
                 return handleOkMessageClick(host, content.x, content.y);
+            case LoginIndex.CHARACTER_SELECT:
+                return handleCharacterSelectClick(host, state, content.x, content.y);
             default:
                 return undefined;
         }

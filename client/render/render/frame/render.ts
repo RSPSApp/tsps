@@ -395,10 +395,13 @@ export function render(host: WebGLOsrsRendererHost, time: number, deltaTime: num
                         inputManager.saveClickY,
                         inputManager.clickMode3,
                     );
+                    const clickedLoginState = host.osrsClient.loginState;
                     const shouldRefocusMobileLoginInput =
                         isMobileMode &&
-                        host.osrsClient.loginState.loginIndex === LoginIndex.LOGIN_FORM &&
-                        host.osrsClient.loginState.virtualKeyboardVisible &&
+                        ((clickedLoginState.loginIndex === LoginIndex.LOGIN_FORM &&
+                            clickedLoginState.virtualKeyboardVisible) ||
+                            (clickedLoginState.loginIndex === LoginIndex.CHARACTER_SELECT &&
+                                clickedLoginState.pickerMode !== "list")) &&
                         inputManager.isTouch;
                     if (shouldRefocusMobileLoginInput) {
                         host.syncMobileLoginInput(true);

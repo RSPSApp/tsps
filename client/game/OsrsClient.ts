@@ -129,9 +129,17 @@ import type {
 import {
     sendEmote as netSendEmote,
     sendBankCustomQuantity,
+    LOGIN_FLAG_CHARACTER_SELECT,
     LOGIN_FLAG_REMEMBER,
     LOGIN_FLAG_TOKEN,
+    disposeServerConnection,
     forgetRememberedLogin,
+    getSessionCharacter,
+    getSessionLoginFlags,
+    sendCharacterCreate,
+    sendCharacterDelete,
+    sendCharacterSelect,
+    sendHandshake,
     sendLogin,
     sendInteractStop,
     sendLogout,
@@ -294,6 +302,9 @@ import {
     shouldFadeOutLoginMusicForTransition,
     shouldStartScheduledLoginMusic,
 } from "./login";
+import { CharacterListWait } from "./login/characterListWait";
+import { getCharacterSelectEnterAction } from "./login/renderer/input/keyboard";
+import type { CharacterListPayload } from "../network/packet/ServerBinaryDecoder";
 import { NpcMovementSync } from "./movement/NpcMovementSync";
 import { ContinuousMovement, type ContinuousMovementRefusal } from "./movement/ContinuousMovement";
 import { PlayerMovementSync } from "./movement/PlayerMovementSync";
@@ -853,6 +864,10 @@ export class OsrsClient {
     private clientTickLastNowMs: number = 0;
     private clientTickAccumulatedMs: number = 0;
     private loginMusicStartTimer?: ReturnType<typeof setTimeout>;
+    /** Holds the handshake after an accepted login until the character list arrives (or not). */
+    private readonly characterListWait = new CharacterListWait();
+    /** What the last character request was, to read the server's CHARACTER_RESULT by. */
+    private pendingCharacterRequest?: { kind: "select" | "create" | "delete"; name: string };
 
     // Appearance is server-driven; no client defaults.
 
@@ -5435,7 +5450,7 @@ export class OsrsClient {
             ? this.loginState.getRememberedLogin()
             : undefined;
         if (remembered) {
-            sendLogin(remembered.username, remembered.token, revision, LOGIN_FLAG_TOKEN);
+            sendLogin(remembered.username, remembered.token, revision, LOGIN_FLAG_TOKEN | LOGIN_FLAG_CHARACTER_SELECT);
             return;
         }
         this.loginState.loginWithToken = false;
@@ -5444,12 +5459,18 @@ export class OsrsClient {
             this.loginState.username.trim(),
             this.loginState.password,
             revision,
-            this.loginState.rememberUsername ? LOGIN_FLAG_REMEMBER : 0,
+            (this.loginState.rememberUsername ? LOGIN_FLAG_REMEMBER : 0) | LOGIN_FLAG_CHARACTER_SELECT,
         );
     }
 
     /** Enter on the login screen: Play for the remembered account, else Login on the form. */
     submitLoginFromKeyboard(): void {
+        if (this.loginState.loginIndex === LoginIndex.CHARACTER_SELECT) {
+            if (this.gameState === GameState.CONNECTING) {
+                this.processLoginAction(getCharacterSelectEnterAction(this.loginState));
+            }
+            return;
+        }
         if (this.gameState === GameState.CONNECTING) return;
         if (this.loginState.loginIndex === LoginIndex.WELCOME_DISPLAY_NAME) {
             if (this.processLoginAction(LoginActions.PLAY) === "connect") this.sendLoginRequest();
@@ -5483,6 +5504,65 @@ export class OsrsClient {
     }
 
     /**
+     * After an accepted login: a server with character slots answers with its character list,
+     * which shows the picker (or re-selects on a reconnect); one without them never does, so the
+     * handshake goes as before once CharacterListWait gives up on it.
+     */
+    awaitCharacterList(sendFallbackHandshake: () => void): void {
+        this.pendingCharacterRequest = undefined;
+        this.characterListWait.onLoginAccepted(getSessionLoginFlags(), sendFallbackHandshake);
+    }
+
+    /** CHARACTER_LIST: the picker for a login in progress, else a reconnect's re-select. */
+    onCharacterList(payload: CharacterListPayload): void {
+        this.characterListWait.onCharacterList();
+        if (this.gameState === GameState.CONNECTING) {
+            const state = this.loginState;
+            const refresh = state.loginIndex === LoginIndex.CHARACTER_SELECT;
+            const previous = refresh ? state.characters[state.selectedCharacter]?.name : undefined;
+            const created = this.pendingCharacterRequest?.kind === "create" ? this.pendingCharacterRequest.name : undefined;
+            state.showCharacterSelect(payload);
+            // A refreshed list keeps the row the player was on, or moves to the one just made.
+            const keep = payload.characters.findIndex(
+                (c) => c.name.toLowerCase() === (created ?? previous ?? "").toLowerCase(),
+            );
+            if (refresh && keep >= 0) state.selectedCharacter = keep;
+            this.pendingCharacterRequest = undefined;
+            return;
+        }
+        // A list on the login screen is from a connection the player has left.
+        if (this.isOnLoginScreen()) return;
+        const name = getSessionCharacter() ?? payload.characters[payload.defaultIndex]?.name;
+        if (!name) return;
+        this.pendingCharacterRequest = { kind: "select", name };
+        sendCharacterSelect(name);
+    }
+
+    /** CHARACTER_RESULT for the last select, create or delete. */
+    onCharacterResult(result: { ok: boolean; code: number; message: string }): void {
+        const state = this.loginState;
+        const request = this.pendingCharacterRequest;
+        state.pickerBusy = false;
+        if (!result.ok) {
+            this.pendingCharacterRequest = undefined;
+            state.pickerMessage = result.message || "That isn't possible right now.";
+            return;
+        }
+        state.pickerMessage = "";
+        if (request?.kind === "select") {
+            this.pendingCharacterRequest = undefined;
+            // Stays busy until the handshake puts the player in the world.
+            state.pickerBusy = true;
+            sendHandshake(request.name);
+            return;
+        }
+        // Create or delete: the character list that follows refreshes the rows.
+        state.pickerMode = "list";
+        state.pickerInput = "";
+        state.virtualKeyboardVisible = false;
+    }
+
+    /**
      * Update the game state and handle transitions.
      * Handles game state transitions with cleanup/setup logic.
      *
@@ -5507,8 +5587,18 @@ export class OsrsClient {
             this.resetWorld(false);
         }
 
+        if (newState !== GameState.CONNECTING) {
+            this.characterListWait.cancel();
+        }
+
         // Setup new state
         if (newState === GameState.LOGIN_SCREEN) {
+            if (this.loginState.loginIndex === LoginIndex.CHARACTER_SELECT) {
+                // The picker's connection is gone: back to the form, or the Play screen.
+                this.loginState.loginWithToken = false;
+                this.loginState.promptCredentials(true);
+                this.loginState.password = "";
+            }
             this.loginState.showRememberedLogin();
             this.loginState.networkState = 0;
             // Reset loading tracker on return to login
@@ -5947,6 +6037,80 @@ export class OsrsClient {
                 this.loginState.loginIndex = LoginIndex.WELCOME;
                 return undefined;
             }
+
+            case "select_character":
+                if (action.index >= 0 && action.index < this.loginState.characters.length) {
+                    this.loginState.selectedCharacter = action.index;
+                    this.loginState.pickerMessage = "";
+                }
+                return undefined;
+
+            case "play_character": {
+                const state = this.loginState;
+                const character = state.characters[state.selectedCharacter];
+                if (state.pickerBusy || !character || this.gameState !== GameState.CONNECTING) return undefined;
+                state.pickerBusy = true;
+                state.pickerMessage = "";
+                this.pendingCharacterRequest = { kind: "select", name: character.name };
+                sendCharacterSelect(character.name);
+                return undefined;
+            }
+
+            case "new_character":
+                if (this.loginState.pickerBusy || !this.loginState.canCreateCharacter()) return undefined;
+                this.loginState.pickerMode = "create";
+                this.loginState.pickerInput = "";
+                this.loginState.pickerMessage = "";
+                return undefined;
+
+            case "delete_character": {
+                const character = this.loginState.characters[this.loginState.selectedCharacter];
+                if (this.loginState.pickerBusy || !character || character.primary) return undefined;
+                this.loginState.pickerMode = "delete";
+                this.loginState.pickerInput = "";
+                this.loginState.pickerMessage = "";
+                return undefined;
+            }
+
+            case "submit_picker_input": {
+                const state = this.loginState;
+                const input = state.pickerInput.trim();
+                if (state.pickerBusy || state.pickerMode === "list" || this.gameState !== GameState.CONNECTING) {
+                    return undefined;
+                }
+                if (input.length === 0) {
+                    state.pickerMessage = "Please enter a name.";
+                    return undefined;
+                }
+                if (state.pickerMode === "create") {
+                    this.pendingCharacterRequest = { kind: "create", name: input };
+                    sendCharacterCreate(input);
+                } else {
+                    const character = state.characters[state.selectedCharacter];
+                    if (!character) return undefined;
+                    this.pendingCharacterRequest = { kind: "delete", name: character.name };
+                    sendCharacterDelete(character.name, input);
+                }
+                state.pickerBusy = true;
+                state.pickerMessage = "";
+                return undefined;
+            }
+
+            case "cancel_picker_input":
+                this.loginState.pickerMode = "list";
+                this.loginState.pickerInput = "";
+                this.loginState.pickerMessage = "";
+                this.loginState.virtualKeyboardVisible = false;
+                return undefined;
+
+            case "sign_out_picker":
+                // Drops the connection the picker holds open; the remembered login stays.
+                this.characterListWait.cancel();
+                this.pendingCharacterRequest = undefined;
+                suppressReconnection();
+                disposeServerConnection("character select sign out");
+                this.updateGameState(GameState.LOGIN_SCREEN);
+                return undefined;
 
             case "cancel":
                 this.loginState.loginIndex = LoginIndex.WELCOME;

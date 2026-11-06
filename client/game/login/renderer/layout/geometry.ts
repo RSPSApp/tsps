@@ -265,3 +265,44 @@ export function getRememberedPlayBounds(host: LoginRendererHost) {
     const centerX = host.loginBoxX + 180;
     return { x: centerX - Math.floor(width / 2), y: REMEMBERED_PLAY_Y - Math.floor(height / 2), width, height };
 }
+
+/**
+ * Character picker, shown after a login with character select: a title, one flat row per
+ * character (plus a New character row while there is room), Play and Delete under them and a
+ * Sign out link at the bottom. Typing a new name or a delete confirmation swaps the rows for a
+ * prompt and a name field, and the buttons for Create or Delete and Cancel.
+ */
+export const PICKER_TITLE_Y = 192;
+export const PICKER_ROWS_Y = 202;
+/** Row height up to four rows; more rows share PICKER_ROWS_AREA_H. */
+export const PICKER_ROW_H = 22;
+export const PICKER_ROW_W = 320;
+export const PICKER_ROWS_AREA_H = 88;
+/** Centre of the Play / Create / Delete (left) and Delete / Cancel (right) titlebuttons. */
+export const PICKER_BUTTON_Y = 322;
+export const PICKER_LEFT_BUTTON_DX = 100;
+export const PICKER_RIGHT_BUTTON_DX = 260;
+export const PICKER_SIGN_OUT_Y = 356;
+export const PICKER_SIGN_OUT_TEXT = "Sign out";
+export const PICKER_SIGN_OUT_HALF_W = 40;
+export const PICKER_SIGN_OUT_HALF_H = 8;
+/** Baselines of the prompt, the name field and the server's message while typing. */
+export const PICKER_PROMPT_Y = PICKER_ROWS_Y + 20;
+export const PICKER_FIELD_Y = PICKER_ROWS_Y + 45;
+export const PICKER_MESSAGE_Y = PICKER_ROWS_Y + 70;
+/** The server's message in list mode, between the rows and the buttons. */
+export const PICKER_LIST_MESSAGE_Y = PICKER_ROWS_Y + PICKER_ROWS_AREA_H + 8;
+export const PICKER_MAX_NAME_LENGTH = 12;
+export const PICKER_NO_SAVE_TEXT = "Enter the world once with your first character";
+
+export function getPickerRowX(host: { loginBoxX: number }): number {
+    return host.loginBoxX + 20;
+}
+
+export function getPickerRowCount(state: { characters: unknown[]; maxCharacters: number }): number {
+    return state.characters.length + (state.characters.length < state.maxCharacters ? 1 : 0);
+}
+
+export function getPickerRowHeight(rows: number): number {
+    return rows <= 4 ? PICKER_ROW_H : Math.floor(PICKER_ROWS_AREA_H / rows);
+}

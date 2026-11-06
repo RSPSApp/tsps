@@ -1,4 +1,4 @@
-import { GameState } from "../../GameState";
+import { GameState, LoginIndex } from "../../GameState";
 import type { LoginState } from "../../LoginState";
 import type { LoginRendererHost } from "../host";
 import { getCanvas, getContext, isCaretVisible } from "../canvas";
@@ -39,7 +39,9 @@ export function computeTitleStateHash(
             state.worldId
         }|${width}|${height}|${layoutWidth}|${layoutHeight}|${skipFire}|${host.worldSortOption}|${
             host.worldSortDirection
-        }|${isCaretVisible(host)}|${getViewportTransformStateHash(host)}|${getTitleAssetStateHash(host)}`;
+        }|${isCaretVisible(host)}|${getViewportTransformStateHash(host)}|${getTitleAssetStateHash(host)}|${
+            state.loginIndex === LoginIndex.CHARACTER_SELECT ? state.pickerHash() : ""
+        }`;
     
 }
 

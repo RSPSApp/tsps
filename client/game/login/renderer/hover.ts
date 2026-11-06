@@ -3,6 +3,9 @@ import type { LoginRendererHost } from "./host";
 import { toLayoutPoint } from "./layout/config";
 import { getGridLayout, getSortedWorlds, findHoveredWorld } from "./world/worldData";
 import { SERVER_LIST_PANEL_WIDTH } from "./constants";
+import { LoginIndex } from "../GameState";
+import { toContentPoint } from "./layout/geometry";
+import { getCharacterRowAt } from "./input/mouseHandlers";
 
 export function computeHoveredWorldIndex(host: LoginRendererHost, state: LoginState, _width: number, _height: number) {
 
@@ -54,4 +57,11 @@ export function setMousePosition(host: LoginRendererHost, x: number, y: number) 
         host.mouseX = mapped.x;
         host.mouseY = mapped.y;
     
+}
+
+/** The character picker row under the mouse, or -1. */
+export function computeHoveredCharacter(host: LoginRendererHost, state: LoginState): number {
+    if (state.loginIndex !== LoginIndex.CHARACTER_SELECT || state.serverListOpen) return -1;
+    const point = toContentPoint(host, host.mouseX, host.mouseY);
+    return getCharacterRowAt(host, state, point.x, point.y);
 }

@@ -19,6 +19,7 @@ import {
     drawWelcomeDisplayName,
     drawTerms,
     drawMustAcceptTerms,
+    drawCharacterSelect,
 } from "./loginScreensSecondary";
 import {
     drawBanned,
@@ -92,6 +93,9 @@ export function drawLoginScreenToCtx(host: LoginRendererHost, ctx: RenderContext
                     break;
                 case LoginIndex.WORLD_HOP_WARNING:
                     drawWorldHopWarning(host, ctx, state);
+                    break;
+                case LoginIndex.CHARACTER_SELECT:
+                    drawCharacterSelect(host, ctx, state);
                     break;
             }
         });

@@ -188,6 +188,10 @@ export class LoginRenderer implements LoginRendererHost {
     computeHoveredServerIndex(state: LoginState): number {
         return hover.computeHoveredServerIndex(this, state);
     }
+
+    computeHoveredCharacter(state: LoginState): number {
+        return hover.computeHoveredCharacter(this, state);
+    }
     setMousePosition(x: number, y: number): void {
         hover.setMousePosition(this, x, y);
     }

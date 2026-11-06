@@ -20,6 +20,21 @@ function start() {
  * Native customization dies with local NPC removal. Re-send from saved varps on entry,
  * after NPC info registered the invisible site actor, rather than persisting an override.
  */
+function frameOf(player, site) {
+  const totem = State.totem(player, site);
+  return totem.carved && totem.decay > 0 ? totem.decay - 1 : -1;
+}
+
+/** Send the leaf if it differs from what this player was last sent; record what is now shown. */
+function show(player, npc, site, shownNow) {
+  const frame = frameOf(player, site);
+  const signature = `${npc.getIndex()}:${frame}`;
+  if (shownNow.get(npc) !== signature) {
+    player.getPacketSender().sendNpcHeadIconSpecific(npc, 0, frame < 0 ? -1 : archive, frame);
+  }
+  shownNow.set(npc, signature);
+}
+
 function sync({ player, npcs }) {
   if (player.isPlayerBot?.() === true) return;
   const previous = shown.get(player);
@@ -27,14 +42,26 @@ function sync({ player, npcs }) {
   for (const npc of npcs) {
     const site = sites.get(npc);
     if (site == null) continue;
-    const totem = State.totem(player, site);
-    const frame = totem.carved && totem.decay > 0 ? totem.decay - 1 : -1;
-    const signature = `${npc.getIndex()}:${frame}`;
-    current.set(npc, signature);
-    if (previous?.get(npc) === signature) continue;
-    player.getPacketSender().sendNpcHeadIconSpecific(npc, 0, frame < 0 ? -1 : archive, frame);
+    if (previous?.has(npc)) current.set(npc, previous.get(npc));
+    show(player, npc, site, current);
   }
   shown.set(player, current);
+}
+
+/**
+ * Visit and collapse change a leaf during the tick, before the flush takes the queued effects,
+ * so queue the change now (RSProx234/03276 sends the decay varbit and the leaf in the same
+ * tick). Only sites this player was already sent are touched; a site that is out of view, or
+ * not yet synced, is left to sync(), which sends it on entry. Carve stays on sync(): it arrives
+ * one tick after its varbit.
+ */
+function refresh(player) {
+  const current = shown.get(player);
+  if (current == null) return;
+  for (const npc of player.getLocalNpcs()) {
+    const site = sites.get(npc);
+    if (site != null && current.has(npc)) show(player, npc, site, current);
+  }
 }
 
 function leave({ player }) {
@@ -47,4 +74,4 @@ function attach(api) {
   api.onPlayerLogout(leave);
 }
 
-module.exports = { attach };
+module.exports = { attach, refresh };

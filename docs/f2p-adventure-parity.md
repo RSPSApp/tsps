@@ -22,9 +22,11 @@ Selecting a conversation no longer starts Oziach's challenge, discovers the Orac
 
 Boarding the ship does not skip Ned's departure dialogue. The voyage displays the native ship-journey299, route544, clouds543 and flying-dragon545/546 interfaces, then copies the sailing scene into a private instance with Captain Ned824 and Jenkins826. Camera changes follow dialogue, while the two fire volleys use projectile1155, fire objects25155/25156 and the recorded panic/death animations. The crash restores the real beach, clears repair flags and advances176 to8. First descent plays the private20tick Elvarg introduction with817. Crossing the low wall uses the recorded839 exact move and hands control to the canonical Elvarg area.
 
-Elvarg's death creates body25202. The client advances to9 one tick later; head removal plays6654 at+5, then6655 with headless body25203 and proof11279 at+11. Killing the dragon grants no Quest points or quest XP. Returning to Oziach grants2QP and18650Strength/DefenceXP once, with head11279 and jingle152 on the scroll. Completed legacy saves retain their existing completion status.
+Elvarg's death creates body25202. The client advances to9 one tick later, when the player is walked to the tile west of her head (facing it at+4); head removal plays6654 at+5, then6655 with headless body25203 and proof11279 at+11 (rev242 ticks 3606-3617). Killing the dragon grants no Quest points or quest XP. Returning to Oziach grants2QP and18650Strength/DefenceXP once, with head11279 and jingle152 on the scroll. Completed legacy saves retain their existing completion status.
 
 **Database capture coverage (2026-11-02):** no submission covers the quest route. The archive has the completed journal text (1581), Oziach's clue-scroll dialogue, post-quest Crandor visits and unrelated Melzar sightings, so this quest is skipped until a route capture exists.
+
+**Route capture (2026-11-06):** a user-supplied revision 242 recording (`20261106T101002`) covers the whole route from the Guildmaster to Oziach's hand-in. What it changed and what it leaves unverified is in [docs/quests/dragon-slayer-i/README.md](quests/dragon-slayer-i/README.md); Elvarg's part is in [elvarg-parity.md](elvarg-parity.md).
 
 References: [Dragon Slayer I](https://oldschool.runescape.wiki/w/Dragon_Slayer_I), [Elvarg](https://oldschool.runescape.wiki/w/Elvarg).
 

@@ -181,7 +181,7 @@ module.exports = function registerDragonSlayerQuest(api) {
   const DUKE_SHIELD_STEPS = new Set(["KoKING", "LnbjYr", "if_uB3", "igRDii", "emj6I8"]);
   const CHEST_OPEN_ANIMATION = 536, CHEST_OPEN_SOUND = 52, CHEST_CLOSE_SOUND = 51;
   /**
-   * The map chests' transcripts (rev242 capture ticks 1422-1435 and 2694-2706): the Oracle chest's
+   * The map chests' transcripts (rev242 capture ticks 1421-1435 and 2693-2709): the Oracle chest's
    * lid inscription plays as it opens, and the open chest's "You find a map piece in the chest."
    * is an item box as it shuts again.
    */

@@ -197,7 +197,7 @@ test('Dragon Slayer hands over the maze key and the anti-dragon shield in item b
   }
 });
 
-test('Dragon Slayer map chests open first, then give the map in an item box as they shut (rev242 ticks 1422-1435, 2694-2706)', () => {
+test('Dragon Slayer map chests open first, then give the map in an item box as they shut (rev242 ticks 1421-1435, 2693-2709)', () => {
   const O = core.ObjectIdentifiers, h = harness('DragonSlayer'), p = player();
   h.quest.setStage(p, 2); p.attrs.set('dragon-slayer.oracle', 3);
   const chest = (id, x, y) => new core.GameObject(id, new core.Location(x, y, 0), 10, 3, null);

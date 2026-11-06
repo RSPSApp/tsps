@@ -26,7 +26,7 @@ function grandExchangeOffer(request) {
   if (!Common.isIron(request.player)) return;
   if (request.sell || request.itemId !== Common.core.ItemIdentifiers.OLD_SCHOOL_BOND || request.quantity !== 1) {
     request.accepted = false;
-    request.player.sendMessage("Ironmen can only buy one bond per Grand Exchange offer.");
+    request.player.sendMessage(Common.message("grandExchange"));
   }
 }
 

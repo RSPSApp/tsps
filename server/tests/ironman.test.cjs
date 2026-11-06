@@ -237,9 +237,11 @@ test("Ironmen may only place single-bond buy offers", () => {
       [core.ItemIdentifiers.COINS, false, 1, false],
       [core.ItemIdentifiers.COINS, true, 1, false],
     ]) {
+      player.messages.length = 0;
       const request = { player, itemId, sell, quantity, accepted: true };
       custom["ge:offer-confirmed"](request);
       assert.equal(request.accepted, allowed, `${mode}: ${itemId}/${sell}/${quantity}`);
+      assert.deepEqual(player.messages, allowed ? [] : ["Ironmen can only buy one bond per Grand Exchange offer."]);
     }
     const priorVeto = { player, itemId: core.ItemIdentifiers.OLD_SCHOOL_BOND, sell: false, quantity: 1, accepted: false };
     custom["ge:offer-confirmed"](priorVeto);

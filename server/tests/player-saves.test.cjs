@@ -501,6 +501,54 @@ test("deleting right after a save still in flight leaves nothing behind", async 
   assert.equal(persistence.exists("Racer"), false);
 });
 
+test("a delete answers for its own write: another player's failed save doesn't fail it", async () => {
+  const bystander = player("Bystander");
+  setGold(bystander, 1);
+  persistence.save(bystander, "logout");
+  const doomed = player("Doomed Three");
+  setGold(doomed, 1);
+  persistence.save(doomed, "logout");
+  await persistence.flush();
+  const quiet = console.error;
+  console.error = () => {};
+  try {
+    // An unrelated save the writer refuses (as in the Hank test) is still reported by flush.
+    persistence.enqueue("bystander", [{ kind: "row", json: "{\"position\":{}}" }]);
+    await persistence.delete("Doomed Three");
+    assert.equal(persistence.findSave.get("doomed_three"), undefined, "the delete was committed");
+    await assert.rejects(persistence.flush(), /Refusing to save bystander/);
+  } finally {
+    console.error = quiet;
+  }
+  persistence.save(bystander, "logout");
+  await persistence.flush();
+});
+
+test("a delete whose own write fails rejects and keeps the save", async () => {
+  const p = player("Doomed Four");
+  setGold(p, 4);
+  persistence.save(p, "logout");
+  await persistence.flush();
+  const writer = persistence.writer;
+  const post = writer.postMessage.bind(writer);
+  // A row that fails validation in the same message makes the writer roll the delete back.
+  writer.postMessage = (message) => post(message.writes.some((write) => write.kind === "delete")
+    ? { ...message, writes: [...message.writes, { kind: "row", json: "{\"position\":{}}" }] }
+    : message);
+  const quiet = console.error;
+  console.error = () => {};
+  try {
+    await assert.rejects(persistence.delete("Doomed Four"), /Refusing to save doomed_four/);
+  } finally {
+    writer.postMessage = post;
+    console.error = quiet;
+  }
+  assert.equal(persistence.exists("Doomed Four"), true, "the save is still there");
+  assert.equal(await savedGold("Doomed Four").catch(() => null), null, "flush reports the failed write");
+  persistence.save(p, "logout");
+  assert.equal(await savedGold("Doomed Four"), 4);
+});
+
 test("JSON backend deletes the file, even one still queued; Null backend ignores delete", async () => {
   const p = player("Json Doomed");
   jsonPersistence.save(p);

@@ -518,7 +518,9 @@ function drinkPermissionRefusal(player, entry) {
 }
 
 function drinkCanUseRefusal(player, entry) {
-  if (entry.potion.canUse && !entry.potion.canUse(player)) return "You need more than 50 Hitpoints to drink this potion.";
+  if (entry.potion.canUse && !entry.potion.canUse(player)) {
+    return entry.potion.canUseMessage ?? "You need more than 50 Hitpoints to drink this potion.";
+  }
   return null;
 }
 
@@ -546,6 +548,7 @@ function registerPotion(definition) {
     name: definition.name,
     effect: definition.effect,
     canUse: typeof definition.canUse === "function" ? definition.canUse : null,
+    canUseMessage: definition.canUseMessage ?? null,
     area: definition.area ?? null,
     requiresFoodPermission: Boolean(definition.requiresFoodPermission),
     shareable: definition.shareable !== false,
@@ -1069,32 +1072,40 @@ registerPotion({
   chains: [doseChain("MOONLIGHT_POTION_4_", "MOONLIGHT_POTION_3_", "MOONLIGHT_POTION_2_", "MOONLIGHT_POTION_1_")],
   effect: applyMoonlightPotion,
 });
-registerPotion({
+function registerDivinePotion(definition) {
+  registerPotion({
+    ...definition,
+    canUse: (player) => getCurrentLevel(player, Skill.HITPOINTS) > 10,
+    canUseMessage: "You need more than 10 hitpoints to survive the power of a divine potion.",
+  });
+}
+
+registerDivinePotion({
   name: "Divine super attack potion",
   chains: [doseChain("DIVINE_SUPER_ATTACK_POTION_4_", "DIVINE_SUPER_ATTACK_POTION_3_", "DIVINE_SUPER_ATTACK_POTION_2_", "DIVINE_SUPER_ATTACK_POTION_1_")],
   effect: (player) => applyDivine(player, (p) => boostSkill(p, Skill.ATTACK, 5, 0.15), [Skill.ATTACK]),
 });
-registerPotion({
+registerDivinePotion({
   name: "Divine super strength potion",
   chains: [doseChain("DIVINE_SUPER_STRENGTH_POTION_4_", "DIVINE_SUPER_STRENGTH_POTION_3_", "DIVINE_SUPER_STRENGTH_POTION_2_", "DIVINE_SUPER_STRENGTH_POTION_1_")],
   effect: (player) => applyDivine(player, (p) => boostSkill(p, Skill.STRENGTH, 5, 0.15), [Skill.STRENGTH]),
 });
-registerPotion({
+registerDivinePotion({
   name: "Divine super defence potion",
   chains: [doseChain("DIVINE_SUPER_DEFENCE_POTION_4_", "DIVINE_SUPER_DEFENCE_POTION_3_", "DIVINE_SUPER_DEFENCE_POTION_2_", "DIVINE_SUPER_DEFENCE_POTION_1_")],
   effect: (player) => applyDivine(player, (p) => boostSkill(p, Skill.DEFENCE, 5, 0.15), [Skill.DEFENCE]),
 });
-registerPotion({
+registerDivinePotion({
   name: "Divine ranging potion",
   chains: [doseChain("DIVINE_RANGING_POTION_4_", "DIVINE_RANGING_POTION_3_", "DIVINE_RANGING_POTION_2_", "DIVINE_RANGING_POTION_1_")],
   effect: (player) => applyDivine(player, (p) => boostSkill(p, Skill.RANGED, 4, 0.1), [Skill.RANGED]),
 });
-registerPotion({
+registerDivinePotion({
   name: "Divine magic potion",
   chains: [doseChain("DIVINE_MAGIC_POTION_4_", "DIVINE_MAGIC_POTION_3_", "DIVINE_MAGIC_POTION_2_", "DIVINE_MAGIC_POTION_1_")],
   effect: (player) => applyDivine(player, (p) => boostSkill(p, Skill.MAGIC, 4, 0), [Skill.MAGIC]),
 });
-registerPotion({
+registerDivinePotion({
   name: "Divine bastion potion",
   chains: [doseChain("DIVINE_BASTION_POTION_4_", "DIVINE_BASTION_POTION_3_", "DIVINE_BASTION_POTION_2_", "DIVINE_BASTION_POTION_1_")],
   effect: (player) =>
@@ -1107,7 +1118,7 @@ registerPotion({
       [Skill.RANGED, Skill.DEFENCE]
     ),
 });
-registerPotion({
+registerDivinePotion({
   name: "Divine battlemage potion",
   chains: [doseChain("DIVINE_BATTLEMAGE_POTION_4_", "DIVINE_BATTLEMAGE_POTION_3_", "DIVINE_BATTLEMAGE_POTION_2_", "DIVINE_BATTLEMAGE_POTION_1_")],
   effect: (player) =>
@@ -1120,7 +1131,7 @@ registerPotion({
       [Skill.MAGIC, Skill.DEFENCE]
     ),
 });
-registerPotion({
+registerDivinePotion({
   name: "Divine super combat potion",
   chains: [doseChain("DIVINE_SUPER_COMBAT_POTION_4_", "DIVINE_SUPER_COMBAT_POTION_3_", "DIVINE_SUPER_COMBAT_POTION_2_", "DIVINE_SUPER_COMBAT_POTION_1_")],
   effect: (player) =>
@@ -1158,9 +1169,16 @@ registerPotion({
   effect: applyMenaphiteRemedy,
 });
 
+// Relicym's balm can be drunk for the Nightmare parasite. Player disease itself is not modelled.
+registerPotion({
+  name: "Relicym's balm",
+  chains: [doseChain("RELICYMS_BALM_4_", "RELICYMS_BALM_3_", "RELICYMS_BALM_2_", "RELICYMS_BALM_1_")],
+  effect: () => {},
+});
+
 // ---------------------------------------------------------------- barbarian mixes of the potions above
 // Wiki (Barbarian Training's mix table): a mix drinks as its potion and heals 3 or 6 per dose.
-// Relicym's and magic essence mixes are left out: their potions have no drink here yet.
+// Relicym's and magic essence mixes are left out; their mix effects are not implemented.
 
 /** A mix drinking as the registered potion `potionName` (or `effect`), healing `healAmount` per dose. */
 function registerMix(name, potionName, healAmount, twoDose, oneDose, effect) {
@@ -1171,6 +1189,7 @@ function registerMix(name, potionName, healAmount, twoDose, oneDose, effect) {
     chains: [doseChain(twoDose, oneDose)],
     requiresFoodPermission: true,
     canUse: potion.canUse ?? undefined,
+    canUseMessage: potion.canUseMessage ?? undefined,
     area: potion.area ?? undefined,
     effect: applyMix(effect ?? potion.effect, healAmount),
   });
@@ -1292,6 +1311,14 @@ function staminaStatus(entity, status) {
   }
 }
 
+/** Remember drains as they happen, before the player's next restoration phase. */
+function noteDivineDrain({ player, skill, previous, current }) {
+  const state = player?.getAttribute(ATTR_DIVINE_STATE);
+  if (!(current < previous) || !(state?.endsAt > Date.now()) || !Array.isArray(state.targets)) return;
+  const entry = state.targets.find((target) => target?.skillIndex === skill?.getIndex());
+  if (entry && current < entry.target) entry.target = current;
+}
+
 function processDivine(player) {
   const state = player.getAttribute(ATTR_DIVINE_STATE);
   if (!state || !Array.isArray(state.targets)) {
@@ -1313,7 +1340,11 @@ function processDivine(player) {
   for (const entry of state.targets) {
     const skill = Skill.values()[entry?.skillIndex];
     if (skill) {
-      setCurrentLevel(player, skill, entry.target);
+      const current = getCurrentLevel(player, skill);
+      if (current !== entry.target) {
+        // Drains, restoration and later boosts change the level being maintained.
+        entry.target = current;
+      }
     }
   }
 }
@@ -1648,8 +1679,31 @@ const CURE_POTIONS = new Map([
  * Consumption still uses the ordinary drink handler and its restrictions.
  */
 function cureFromHealthOrb({ player }) {
-  if (!player || (!player.isPoisoned?.() && !player.isVenomed?.())) return;
+  if (!player) return;
+  const poisoned = player.isPoisoned?.() || player.isVenomed?.();
+  const parasite = { player, active: false };
+  pluginApi.emitCustomEvent("nightmare:parasite-orb-eligible", parasite);
   const items = player.getInventory().getItems();
+  if (parasite.active) {
+    // Wiki: Relicym's balm is preferred to Sanfew when weakening a parasite.
+    let selected = null;
+    for (let slot = 0; slot < items.length; slot++) {
+      const itemId = items[slot]?.getId?.() ?? -1;
+      const entry = POTION_BY_ITEM_ID.get(itemId);
+      if (!entry || pluginApi.core.ItemDefinition.forId(itemId).isNoted()) continue;
+      const priority = entry.potion.name === "Relicym's balm" ? 2 : entry.potion.name === "Sanfew serum" ? 1 : 0;
+      if (!priority) continue;
+      if (!selected || priority > selected.priority ||
+          (entry.potion === selected.entry.potion && entry.doses < selected.entry.doses)) {
+        selected = { entry, priority, itemId, slot };
+      }
+    }
+    if (selected) {
+      handlePotionDrink(player, selected.itemId, selected.slot);
+      return;
+    }
+  }
+  if (!poisoned) return;
   let selected = null;
   for (let slot = 0; slot < items.length; slot++) {
     const itemId = items[slot]?.getId?.() ?? -1;
@@ -1737,6 +1791,7 @@ module.exports = {
       return handlePotionDrink(player, itemId, slot);
     });
     api.onInterfaceActionButton(componentIds(api, HEALTH_ORB_CURE_COMPONENTS), cureFromHealthOrb);
+    api.onCustomEvent("skills:current-level-changed", noteDivineDrain);
 
     api.onPlayerProcess(({ player }) => {
       if (player?.isPlayerBot?.()) {

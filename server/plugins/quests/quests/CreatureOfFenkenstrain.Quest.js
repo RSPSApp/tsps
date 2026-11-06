@@ -31,6 +31,8 @@ module.exports = function registerCreatureOfFenkenstrainQuest(api) {
   const {
     Skill,
     Equipment,
+    Inventory,
+    Item,
     ItemIdentifiers,
     NpcIdentifiers,
     ObjectIdentifiers,
@@ -585,12 +587,22 @@ module.exports = function registerCreatureOfFenkenstrainQuest(api) {
       case HEAD_RECEIVE_ACTION_ID:
         grant(ItemIdentifiers.DECAPITATED_HEAD);
         return;
-      case BRAIN_RECEIVE_ACTION_ID:
-        if (player.getInventory().getAmount(ItemIdentifiers.COINS) >= 50) {
-          player.getInventory().deleteNumber(ItemIdentifiers.COINS, 50);
-          grant(ItemIdentifiers.PICKLED_BRAIN);
+      case BRAIN_RECEIVE_ACTION_ID: {
+        const inventory = player.getInventory();
+        if (inventory.getAmount(ItemIdentifiers.COINS) < 50) return;
+        // Paying can free a slot, so check the inventory after the same deletion on a copy.
+        const plan = new Inventory(player).setItems(inventory.getCopiedItems());
+        plan.deleted(ItemIdentifiers.COINS, 50, false);
+        if (plan.getAddableAmount(new Item(ItemIdentifiers.PICKLED_BRAIN, 1)) < 1) {
+          player.sendMessage("You don't have enough inventory space.");
+          event.handled = true;
+          event.end = true;
+          return;
         }
+        inventory.deleteNumber(ItemIdentifiers.COINS, 50);
+        grant(ItemIdentifiers.PICKLED_BRAIN);
         return;
+      }
       case HEAD_WITH_BRAIN_ACTION_ID:
         grant(ItemIdentifiers.DECAPITATED_HEAD_2);
         return;

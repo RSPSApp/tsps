@@ -13,6 +13,7 @@ import net.rsprot.protocol.game.outgoing.misc.player.UpdateStockMarketSlotV2
 import net.rsprot.protocol.game.outgoing.specific.ObjAddSpecific
 import net.rsprot.protocol.game.outgoing.specific.ObjCountSpecific
 import net.rsprot.protocol.game.outgoing.specific.ObjDelSpecific
+import net.rsprot.protocol.game.outgoing.specific.ObjEnabledOpsSpecific
 import net.rsprot.protocol.message.OutgoingGameMessage
 
 /**
@@ -63,10 +64,16 @@ class Items(
                     }
                 full(SHOP, SHOP_SIZE, stock)
             }
-            TspsServerPacket.SHOP_CLOSE -> send(UpdateInvStopTransmit(SHOP))
+            TspsServerPacket.INVENTORY_STOP_TRANSMIT -> stop(reader.u16())
+            TspsServerPacket.SHOP_CLOSE -> stop(SHOP)
             else -> return false
         }
         return true
+    }
+
+    private fun stop(inventory: Int) {
+        inventories.remove(inventory)
+        send(UpdateInvStopTransmit(inventory))
     }
 
     /** How many of [item] the main inventory holds. */
@@ -161,7 +168,7 @@ class Items(
  * scene, replacing any retained stacks when the scene rebuilds.
  */
 class GroundItems(private val send: (OutgoingGameMessage) -> Unit) {
-    private class Stack(
+    private data class Stack(
         val item: Int,
         val quantity: Int,
         val x: Int,
@@ -171,6 +178,7 @@ class GroundItems(private val send: (OutgoingGameMessage) -> Unit) {
         val expires: Int,
         val ownership: Int,
         val private: Boolean,
+        val enabledOps: Byte,
     )
 
     private val stacks = HashMap<Int, Stack>()
@@ -201,39 +209,59 @@ class GroundItems(private val send: (OutgoingGameMessage) -> Unit) {
             TspsServerPacket.GROUND_ITEMS -> {
                 reader.i32() // serial
                 val snapshot = List(reader.u16()) { stack(reader) }.toMap()
-                for (id in stacks.keys - snapshot.keys) remove(id)
-                snapshot.forEach(::upsert)
+                reconcile(snapshot)
             }
             TspsServerPacket.GROUND_ITEMS_DELTA -> {
                 reader.i32()
-                List(reader.u16()) { stack(reader) }.forEach { (id, stack) -> upsert(id, stack) }
-                repeat(reader.u16()) { remove(reader.i32()) }
+                val next = HashMap(stacks)
+                List(reader.u16()) { stack(reader) }.forEach { (id, stack) -> next[id] = stack }
+                repeat(reader.u16()) { next.remove(reader.i32()) }
+                reconcile(next)
             }
             else -> return false
         }
         return true
     }
 
-    private fun upsert(id: Int, stack: Stack) {
-        val old = stacks.put(id, stack)
-        if (old == null || id !in shown) {
-            show(id, stack)
-        } else if (old.item == stack.item && old.x == stack.x && old.z == stack.z && old.level == stack.level) {
-            if (old.quantity != stack.quantity) send(ObjCountSpecific(stack.item, old.quantity, stack.quantity, stack.level, stack.x, stack.z))
-        } else {
-            send(ObjDelSpecific(old.item, old.quantity, old.level, old.x, old.z))
-            shown.remove(id)
-            show(id, stack)
-        }
-    }
+    private data class TileItem(val item: Int, val level: Int, val x: Int, val z: Int)
 
-    private fun remove(id: Int) {
-        val stack = stacks.remove(id) ?: return
-        if (shown.remove(id)) send(ObjDelSpecific(stack.item, stack.quantity, stack.level, stack.x, stack.z))
+    private fun Stack.key() = TileItem(item, level, x, z)
+
+    private fun inScene(stack: Stack) = stack.x - sceneX in 0 until SCENE_SIZE && stack.z - sceneZ in 0 until SCENE_SIZE
+
+    /** Native flag updates match the first item id on a tile; deletes/counts also use quantity,
+     * never tsps's stack id. Rebuild ambiguous groups atomically so an identical neighbouring
+     * stack cannot inherit the changed stack's flags, including after removing one of them. */
+    private fun reconcile(next: Map<Int, Stack>) {
+        val before = stacks.entries.filter { it.key in shown }.groupBy { it.value.key() }
+        val after = next.entries.filter { inScene(it.value) }.groupBy { it.value.key() }
+        for (key in before.keys + after.keys) {
+            val old = before[key].orEmpty().sortedBy { it.key }
+            val current = after[key].orEmpty().sortedBy { it.key }
+            if (old.map { it.key to it.value } == current.map { it.key to it.value }) continue
+            if (old.size == 1 && current.size == 1 && old[0].key == current[0].key) {
+                val previous = old[0].value
+                val stack = current[0].value
+                if (previous.quantity != stack.quantity) send(ObjCountSpecific(stack.item, previous.quantity, stack.quantity, stack.level, stack.x, stack.z))
+                if (previous.enabledOps != stack.enabledOps) send(ObjEnabledOpsSpecific(stack.item, stack.enabledOps, stack.level, stack.x, stack.z))
+            } else {
+                for ((id, stack) in old) {
+                    send(ObjDelSpecific(stack.item, stack.quantity, stack.level, stack.x, stack.z))
+                    shown.remove(id)
+                }
+                for ((id, stack) in current) show(id, stack)
+            }
+        }
+        stacks.clear()
+        stacks.putAll(next)
+        // A stack id may move between groups in this batch. Derive the final visible set
+        // after all groups, so removing its old tile cannot erase its newly shown tile.
+        shown.clear()
+        shown.addAll(next.filterValues(::inScene).keys)
     }
 
     private fun show(id: Int, stack: Stack) {
-        if (stack.x - sceneX !in 0 until SCENE_SIZE || stack.z - sceneZ !in 0 until SCENE_SIZE) return
+        if (!inScene(stack)) return
         shown += id
         send(
             ObjAddSpecific(
@@ -242,7 +270,7 @@ class GroundItems(private val send: (OutgoingGameMessage) -> Unit) {
                 stack.level,
                 stack.x,
                 stack.z,
-                ALL_OPS,
+                stack.enabledOps,
                 timeUntilPublic = (stack.privateUntil - tick).coerceAtLeast(0),
                 timeUntilDespawn = (stack.expires - tick).coerceAtLeast(0),
                 ownershipType = stack.ownership,
@@ -251,7 +279,7 @@ class GroundItems(private val send: (OutgoingGameMessage) -> Unit) {
         )
     }
 
-    /** One `encodeGroundItem`: i32 id, u16 item, i32 qty, u16 x, u16 z, u8 level, i32 created, private until, expires, owner, u8 private, u8 ownership. */
+    /** One `encodeGroundItem`: i32 id, u16 item, i32 qty, u16 x, u16 z, u8 level, i32 created, private until, expires, owner, u8 private, u8 ownership, u8 enabled ops. */
     private fun stack(reader: TspsReader): Pair<Int, Stack> {
         val id = reader.i32()
         val item = reader.u16()
@@ -265,13 +293,13 @@ class GroundItems(private val send: (OutgoingGameMessage) -> Unit) {
         reader.i32() // owner
         val private = reader.u8() != 0
         val ownership = reader.u8()
-        return id to Stack(item, quantity, x, z, level, privateUntil, expires, ownership, private)
+        val enabledOps = (reader.u8() and 0x1F).toByte()
+        return id to Stack(item, quantity, x, z, level, privateUntil, expires, ownership, private, enabledOps)
     }
 
     private companion object {
         const val SCENE_RADIUS_ZONES = 6
         const val SCENE_SIZE = 104
-        const val ALL_OPS: Byte = 0x1F
     }
 }
 

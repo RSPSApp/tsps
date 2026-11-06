@@ -139,7 +139,8 @@ function valueText(label, entries) {
 }
 
 function sendContents(player, bag) {
-  player.getPacketSender().sendInventory(BAG_INVENTORY, BAG_SIZE, bagItems(bag));
+  player.getPacketSender().sendInventory(BAG_INVENTORY, BAG_SIZE, bagItems(bag),
+    core.Bank.isOpen(player) ? core.Bank.MAIN_INTERFACE_ID : BAG_INTERFACE);
 }
 
 /** The total line and the per-slot prices of what the open view shows, as live sends after each change. */

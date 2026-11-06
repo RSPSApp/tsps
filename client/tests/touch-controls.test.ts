@@ -318,8 +318,8 @@ const refusal = (fromX: number, fromY: number, toX: number, toY: number): Contin
 // Standing on ground items lists every stack's options, the last to land first; Take goes by stack.
 {
     const stacks = [
-        { id: 1, itemId: 526, quantity: 1, tile: { x: 40, y: 40, level: 0 } },
-        { id: 2, itemId: 995, quantity: 250, tile: { x: 40, y: 40, level: 0 } },
+        { id: 1, itemId: 526, quantity: 1, enabledOps: 31, tile: { x: 40, y: 40, level: 0 } },
+        { id: 2, itemId: 995, quantity: 250, enabledOps: 31, tile: { x: 40, y: 40, level: 0 } },
     ];
     const objTypes: Record<number, { name: string; groundActions: (string | null)[] }> = {
         526: { name: "Bones", groundActions: [null, null, "Take", null, null] },
@@ -356,6 +356,10 @@ const refusal = (fromX: number, fromY: number, toX: number, toY: number): Contin
     version++;
     plugin.onClientTick();
     assert.equal(plugin.getUiState().action?.options.length, 2, "shown again, the pile's button returns");
+    stacks[1].enabledOps = 0; version++; plugin.onClientTick();
+    assert.deepEqual(plugin.getUiState().action?.options.map(o => o.target), ["Bones"]);
+    stacks[1].enabledOps = 31; version++; plugin.onClientTick();
+    assert.equal(plugin.getUiState().action?.options.length, 2);
     stacks.splice(1, 1);
     version++;
     plugin.onClientTick();

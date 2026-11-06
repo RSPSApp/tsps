@@ -102,6 +102,8 @@ function container(entries = {}, full = false) {
         forceAdd: (player, item) => { const id = item.getId(), n = item.getAmount(); amounts.set(id, (amounts.get(id) ?? 0) + n); log.push(`add ${NAMES.get(id) ?? id} x${n}`); },
         delete: (id, n) => amounts.set(id, (amounts.get(id) ?? 0) - n),
         getItems: () => [...amounts].filter(([, n]) => n > 0).map(([id, n]) => ({ getId: () => id, getAmount: () => n })),
+        // Room for anything, unless `full`: then only onto a stack already held.
+        getAddableAmount: (item) => (!full || (amounts.get(item.getId()) ?? 0) > 0 ? item.getAmount() : 0),
     };
 }
 

@@ -1,3 +1,4 @@
+import { CacheDefinitions } from "../../../cache/CacheDefinitions";
 import { MAX_STACK_AMOUNT } from "../../../model/container/StackType";
 import { ItemDefinition } from "../../../definition/ItemDefinition";
 import { Sounds } from "../../../Sounds";
@@ -144,6 +145,8 @@ export class ItemOnGroundManager {
                 continue;
             }
 
+            if (!item_.hasSameOperationPolicy(item)) continue;
+
             // Stacks from different owners never merge, private or public: ownership decides
             // who may take the item (an Ironman may only take its own), so one player's drop
             // must not join another player's stack.
@@ -174,6 +177,29 @@ export class ItemOnGroundManager {
         ItemOnGroundManager.perform(item, OperationType.DELETE);
     }
 
+    /** Resolve Take from cache slots; giant bones use op4 instead of op3. */
+    public static takeOperation(itemId: number): number {
+        const actions = CacheDefinitions.getItem(itemId)?.groundActions ?? [];
+        const index = actions.findIndex(action => action?.toLowerCase() === "take");
+        return index >= 0 ? index + 1 : !actions[2] ? 3 : 0;
+    }
+
+    /** Browser clicks name the exact stack. Native clicks cannot distinguish same-id piles. */
+    public static getOperableGroundItem(player: Player, itemId: number, position: Location, operation: number, stackId?: number): ItemOnGround | null {
+        const matches = (item: ItemOnGround) => item.getItem().getId() === itemId
+            && Location.isSameTile(item.getPosition(), position) && this.canOperate(player, item, operation);
+        if (stackId != null) {
+            const item = this.getGroundItemById(stackId, player);
+            return item && matches(item) ? item : null;
+        }
+        return World.getItems().find(matches) ?? null;
+    }
+
+    public static canOperate(player: Player, groundItem: ItemOnGround, operation: number): boolean {
+        return World.getItems().includes(groundItem) && groundItem.getPosition().getZ() === player.getLocation().getZ() && this.canSee(player, groundItem)
+            && groundItem.isOperationEnabled(player, operation);
+    }
+
     public static pickup(player: Player, groundItem: ItemOnGround): void {
         if (!World.getItems().includes(groundItem) || groundItem.isPendingRemoval() || groundItem.getPrivateArea() !== player.getPrivateArea()) {
             return;
@@ -188,7 +214,7 @@ export class ItemOnGroundManager {
             return;
         }
 
-        if (!this.canInteract(player, groundItem)) return;
+        if (!this.canOperate(player, groundItem, this.takeOperation(itemId))) return;
         if (PluginManager.emitGroundItemPickup({
             player,
             groundItem,
@@ -288,9 +314,10 @@ export class ItemOnGroundManager {
 
     /** `goesGlobal: false` keeps the stack owner-only; `despawnDelay` replaces {@link DESPAWN_DELAY}; `public` shows it to everyone at once. */
     public static registerLocation(player: Player, item: Item, position: Location, privateArea = player.getPrivateArea(),
-        options: { goesGlobal?: boolean; despawnDelay?: number; public?: boolean } = {}): ItemOnGround {
+        options: { goesGlobal?: boolean; despawnDelay?: number; public?: boolean; enabledOps?: number } = {}): ItemOnGround {
         let i = new ItemOnGround(options.public ? State.SEEN_BY_EVERYONE : State.SEEN_BY_PLAYER, player.getUsername(), position, item, options.goesGlobal ?? true,
             -1, privateArea);
+        if (options.enabledOps != null) i.setEnabledOps(options.enabledOps);
         if (options.despawnDelay != null) i.setDespawnDelay(options.despawnDelay);
         this.register(i);
         return i;
@@ -379,7 +406,8 @@ export class ItemOnGroundManager {
     /** Picking up stays same-floor; telegrab may reach visible lower floors within its 10-tile range. */
     public static canInteract(player: Player, item: ItemOnGround, source: "pickup" | "telegrab" = "pickup"): boolean {
         if (!item) return false;
-        if (source === "pickup" && item.getPosition().getZ() !== player.getLocation().getZ()) return false;
+        if (source === "pickup" && (item.getPosition().getZ() !== player.getLocation().getZ()
+            || !item.isOperationEnabled(player, this.takeOperation(item.getItem().getId())))) return false;
         const reach = source === "telegrab" && item.getPosition().getZ() !== player.getLocation().getZ() ? 10 : 64;
         return CrossFloor.visible(player.getLocation(), item.getPosition(), reach) &&
             this.canSee(player, item);

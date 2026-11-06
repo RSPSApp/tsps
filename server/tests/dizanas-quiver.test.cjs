@@ -534,3 +534,28 @@ for (const outcome of ['break', 'drop']) {
     });
   }
 }
+
+// Partial removal and another pending shot leave the selected stack in place.
+for (const change of ['partial removal', 'another shot']) {
+  test(`in-flight quiver shot after ${change} still consumes its selected stack`, (t) => {
+    const player = fakePlayer({ ammo: [I.DRAGON_ARROW, 3] });
+    click(player, 2);
+    const selected = player.getAttribute(Quiver.ATTRIBUTE);
+    const tasks = [];
+    t.mock.method(core.TaskManager, 'submit', (task) => { tasks.push(task); });
+    t.mock.method(Misc, 'getRandom', () => 10); // Both shots break.
+    assert.equal(PluginManager.decrementRangedAmmo(player, null, 1, 3), true);
+    if (change === 'partial removal') {
+      t.mock.method(player.getInventory(), 'getAddableAmount', () => 1);
+      click(player, 1);
+      assert.equal(player.getInventory().getAmount(I.DRAGON_ARROW), 1);
+    } else {
+      assert.equal(PluginManager.decrementRangedAmmo(player, null, 1, 3), true);
+      tasks[1].execute();
+    }
+    assert.equal(player.getAttribute(Quiver.ATTRIBUTE), selected);
+    assert.deepEqual(Quiver.stored(player), { id: I.DRAGON_ARROW, amount: 2 });
+    tasks[0].execute();
+    assert.deepEqual(Quiver.stored(player), { id: I.DRAGON_ARROW, amount: 1 });
+  });
+}

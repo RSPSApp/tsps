@@ -233,6 +233,24 @@ test("claims made before EventScheduler kept completions are imported on login",
   assert.deepEqual(g.player.getAttribute("events:completions"), ["halloween-2025"], "unclaimed tradeables stay claimable");
 });
 
+test("a rolled-back save whose completions are recorded settles its progress and Fred talks normally", t => {
+  setActive(true);
+  t.after(() => setActive(false));
+  lifetime = 86400;
+  const f = fixture(t), Rewards = require("../plugins/world/seasonal/Rewards.HalloweenEvents");
+  for (const completion of ["halloween-2025", "halloween-2025-tradeables"]) {
+    PM.emitCustomEvent("events:record-completion", { player: f.player, completion });
+  }
+  setProgress(f, { stage: STAGE.JUDGED });
+  assert.equal(Rewards.claim(PM.createApi("HalloweenRollback"), f.player), false);
+  assert.equal(stage(f), STAGE.COMPLETE);
+  assert.equal(Progress.read(f.player).tradeableClaimed, true, "the recorded tradeables are settled too");
+  setProgress(f, { stage: STAGE.COMPLETE });
+  assert.equal(Rewards.claimTradeables(PM.createApi("HalloweenRollback"), f.player), false, "Fred falls through to his normal dialogue");
+  assert.equal(Progress.read(f.player).tradeableClaimed, true);
+  assert.equal(f.player.getInventory().getAmount(core.CacheDefinitions.getObjId("cert_pumpkin")), 0, "nothing is handed over twice");
+});
+
 test("a full inventory keeps the decoration with Seth and the stage unchanged", async t => {
   setActive(true);
   t.after(() => setActive(false));

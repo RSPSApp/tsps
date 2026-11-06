@@ -33,7 +33,15 @@ function grant(api, { player }) {
   const request = { player, eventKey: Data.EVENT_KEY, completion: Data.EVENT_KEY,
     rewards: all.map(item => ({ itemId: item.getId(), amount: item.getAmount() })) };
   api.emitCustomEvent("events:grant-reward", request);
-  if (request.granted !== true) return;
+  if (request.granted !== true) {
+    // The completion is recorded but the progress is not (a rolled-back save): the rewards were
+    // already given, so settle the progress rather than leave Gary holding a second set.
+    if (request.reason === "already-complete") {
+      Progress.markRewarded(player);
+      Progress.advance(api, player, "rewarding", "complete");
+    }
+    return;
+  }
   Progress.markRewarded(player);
   Progress.advance(api, player, "rewarding", "complete");
   unlock(api, player);

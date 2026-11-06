@@ -71,7 +71,12 @@ function claim(api, player) {
     take: [{ itemId: itemId(api, RUNAWAY), amount: 1 }], unlock: [...UNLOCKS],
   };
   api.emitCustomEvent("events:grant-reward", grant);
-  if (grant.granted !== true) return false;
+  if (grant.granted !== true) {
+    // The completion is recorded but the progress is not (a rolled-back save): the rewards were
+    // already given, so settle the progress rather than leave the hunt stuck at the catch.
+    if (grant.reason === "already-complete") Progress.write(api, player, { ...Progress.read(player), complete: true });
+    return false;
+  }
   const state = Progress.read(player);
   state.complete = true;
   Progress.write(api, player, state);

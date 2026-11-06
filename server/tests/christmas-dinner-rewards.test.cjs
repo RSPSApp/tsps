@@ -106,4 +106,5 @@ test('a dinner completed before EventScheduler kept completions is imported on l
   p.setAttribute(Progress.PROGRESS_ATTRIBUTE,{...Progress.read(p),phase:'ready'});
   const before=snapshot(p);assert.equal(Rewards.claim(api,p,Progress.read(p).revision),false);
   assert.deepEqual(snapshot(p),before);assert.equal(p.getInventory().getAmount(platter),1,'a refused grant keeps the platter');
+  assert.equal(Progress.read(p).phase,'complete','the recorded completion settles the rolled-back progress');
 });

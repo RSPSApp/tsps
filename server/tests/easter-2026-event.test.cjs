@@ -156,6 +156,7 @@ test("a hunt finished before EventScheduler kept completions is imported on logi
   assert.equal(Rewards.claim(PM.createApi("EasterLegacy"), p), false);
   assert.equal(count(p, "easter26_egg_companion"), 0);
   assert.equal(count(p, "easter26_runaway_egg"), 1);
+  assert.equal(state(p).complete, true, "the recorded completion settles the rolled-back progress");
   window(false);
 });
 

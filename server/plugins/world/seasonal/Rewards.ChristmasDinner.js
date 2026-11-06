@@ -92,7 +92,12 @@ function claim(api,player,revision){
     rewards:next.rewards.map(row=>({itemId:row.id,amount:row.amount})),
     take:[{itemId:Progress.platterId(api),amount:1}],unlock:[...UNLOCKS]};
   api.emitCustomEvent('events:grant-reward',grant);
-  if(grant.granted!==true)return false;
+  if(grant.granted!==true){
+    // The completion is recorded but the progress is not (a rolled-back save): the rewards were
+    // already given, so settle the progress rather than leave the dinner claimable forever.
+    if(grant.reason==='already-complete')Progress.complete(api,player,revision);
+    return false;
+  }
   if(!Progress.complete(api,player,revision))throw new Error('Christmas completion changed during synchronous reward commit');
   for(const row of next.rewards.slice(0,COSMETICS.length))
     player.sendMessage("You've received a holiday item: <col=e00a19>"+api.core.CacheDefinitions.getItem(row.id).name);

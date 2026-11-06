@@ -152,6 +152,17 @@ test('a save rewarded before EventScheduler kept completions is imported on logi
   assert.equal(p.getInventory().getAmount(I._25TH_ANNIVERSARY_HELMET), 0);
 });
 
+test('a rolled-back save whose completion is recorded settles its progress instead of granting again', (t) => {
+  setActive(true);
+  t.after(() => setActive(null));
+  const { p } = fixture('bdayrollback');
+  Progress.markComplete(api, p);
+  api.emitCustomEvent('events:record-completion', { player: p, completion: Data.EVENT_KEY });
+  Rewards.grant(api, { player: p });
+  assert.equal(p.getInventory().getAmount(core.ItemIdentifiers._25TH_ANNIVERSARY_HELMET), 0);
+  assert.equal(Progress.rewarded(p), true);
+});
+
 test('a full inventory at the reward step: Diango keeps the cosmetics after the window, with no second set', () => {
   const { p } = fixture('bdaydiango');
   const names = core.CacheDefinitions.getObjNames(), inventory = p.getInventory(), I = core.ItemIdentifiers;

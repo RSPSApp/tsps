@@ -97,7 +97,12 @@ function grant(api, player, completion, list, unlock = []) {
   const request = { player, eventKey: Progress.BUNDLE, completion, unlock,
     rewards: list.map(row => ({ itemId: row.id, amount: row.amount })) };
   api.emitCustomEvent("events:grant-reward", request);
-  return request.granted === true;
+  return request;
+}
+function completed(api, player, completion) {
+  const request = { player, completion };
+  api.emitCustomEvent("events:completed", request);
+  return request.completed === true;
 }
 function record(api, player, completion) {
   api.emitCustomEvent("events:record-completion", { player, completion });
@@ -118,7 +123,16 @@ function claim(api, player) {
   if (!plan(api, player, list)) return false;
   // EventScheduler's grant re-plans on the live inventory, unlocks Diango's catalogue (the
   // whole unlock is validated first) and records the once-per-account completion in one commit.
-  if (!grant(api, player, COMPLETION, list, [...eventRewards])) return false;
+  const result = grant(api, player, COMPLETION, list, [...eventRewards]);
+  if (!result.granted) {
+    // The completion is recorded but the progress is not (a rolled-back save): the rewards
+    // were already given, so settle the progress rather than leave the claim stuck at judging.
+    if (result.reason === "already-complete") {
+      const claimed = completed(api, player, TRADEABLES_COMPLETION);
+      Progress.update(api, player, next => next.stage === STAGE.JUDGED && (next.stage = STAGE.COMPLETE, next.tradeableClaimed = claimed, true));
+    }
+    return false;
+  }
   Progress.update(api, player, next => next.stage === STAGE.JUDGED && (next.stage = STAGE.COMPLETE, next.tradeableClaimed = tradeables, true));
   if (tradeables) record(api, player, TRADEABLES_COMPLETION);
   announce(api, player, list);
@@ -134,7 +148,12 @@ function claimTradeables(api, player) {
     refuse(api, player, list);
     return true;
   }
-  if (!grant(api, player, TRADEABLES_COMPLETION, list)) return true;
+  const result = grant(api, player, TRADEABLES_COMPLETION, list);
+  if (!result.granted) {
+    // Already handed over on a rolled-back save: record it, then let Fred talk normally.
+    if (result.reason === "already-complete") Progress.update(api, player, next => !next.tradeableClaimed && (next.tradeableClaimed = true));
+    return false;
+  }
   Progress.update(api, player, next => !next.tradeableClaimed && (next.tradeableClaimed = true));
   return true;
 }

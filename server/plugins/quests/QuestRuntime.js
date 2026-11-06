@@ -209,21 +209,6 @@ function openJournalById(player, id) {
   if (quest) openJournal(player, quest);
 }
 
-/**
- * Whether the quest list's "Read journal" opens anything for this quest table id (the cache's
- * `id` column): a released quest that tsps defines, or one it has start text for.
- */
-function hasQuestJournal(id) {
-  const row = questRowById(id, coreApi?.CacheDefinitions);
-  if (!row || row.release_type?.[0] === 0) return false;
-  return nativeQuestIndex(quests, coreApi?.CacheDefinitions).has(id) || Boolean(START_TEXT[row.displayname?.[0]]);
-}
-
-/** The quest list's "Read journal" by quest table id, for other interfaces that link to a quest. */
-function openQuestJournal(player, id) {
-  questListAction({ player, slot: id, opId: 2 });
-}
-
 /** Native row ops and identities, shared unchanged by the browser and Gateway. */
 function questListAction({ player, slot, opId, action }) {
   const op = opId ?? action ?? 2;
@@ -884,8 +869,6 @@ module.exports = {
   refreshQuestList,
   openJournal,
   openJournalById,
-  hasQuestJournal,
-  openQuestJournal,
   startDialogue,
   startTranscript,
   loadTranscripts,

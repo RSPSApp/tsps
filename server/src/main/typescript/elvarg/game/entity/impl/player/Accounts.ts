@@ -75,6 +75,11 @@ export class Accounts {
                     : [],
             });
         }
+        // A missing list is a file from before tombstones; a present one that isn't an object would otherwise load
+        // as none (or as junk) and the next save() would release the reserved names.
+        if ("deleted" in saved && (!saved.deleted || typeof saved.deleted !== "object" || Array.isArray(saved.deleted))) {
+            throw Accounts.unreadable(this.file(), new Error("\"deleted\" is not an object"));
+        }
         for (const [nameKey, tombstone] of Object.entries<any>(saved.deleted ?? {})) {
             deleted.set(this.key(nameKey), {
                 name: String(tombstone?.name ?? nameKey),

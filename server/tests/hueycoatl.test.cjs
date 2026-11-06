@@ -299,7 +299,12 @@ test("private Hueycoatl fees follow the current Hard Combat Achievement threshol
   function actor(name, coins) {
     const wire = channel(), player = new Player(new PlayerSession(wire));
     const result = { player, client: null }; actors.push(result);
-    player.setUsername(name); player.setAttribute("bot-skip-persistence", true);
+    player.setUsername(name);
+    // Mirror the real login path: setUsername alone does not initialize the
+    // base-37 identity used by the native friends list.
+    player.setLongUsername(core.Misc.stringToLongBigInt(name));
+    assert.notEqual(player.getLongUsername(), 0n, "native actor has a login-format identity");
+    player.setAttribute("bot-skip-persistence", true);
     player.setLocation(new Location(1524, 3295, 0));
     assert.equal(World.getPlayers().add(player), true, "native player joins World");
     player.needsPlacement = false;
@@ -381,6 +386,7 @@ test("private Hueycoatl fees follow the current Hard Combat Achievement threshol
   assert.equal([...Shared.sessions].some((session) => session.owner === poor.player), false);
 
   const guest = actor("hueyguest", 12345);
+  assert.notEqual(guest.player.getLongUsername(), host.player.getLongUsername(), "friends have distinct identities");
   host.player.getRelations().addFriend(guest.player.getLongUsername());
   assert.equal(host.player.getRelations().isFriendWith(guest.player.getUsername()), true);
   await openFlag(guest); await choose(guest, JOIN);

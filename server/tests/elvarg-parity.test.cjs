@@ -114,7 +114,9 @@ test('captured breath launches six fireblasts, delayed impact, shield message an
   assert.equal(hit.config.delay, 3); assert.equal(hit.config.rollAccuracy, false); assert.equal(hit.total, 10);
   assert.equal(h.player.messages[0], 'Your shield absorbs most of the dragon fire.'); assert.equal(h.player.levels.get(core.Skill.PRAYER), 18);
   assert.equal(h.projectiles.length, 6);
-  assert.deepEqual(h.projectiles.map(p => p.args.slice(2, 7)), [[130, 51, 80, 70, 109], [130, 56, 85, 70, 109], [130, 61, 90, 70, 109], [130, 66, 95, 70, 109], [130, 71, 100, 70, 109], [130, 75, 105, 70, 109]]);
+  // Heights are passed a quarter of the captured packet values (70, 70-109): sendProjectile sends them x4.
+  assert.deepEqual(h.projectiles.map(p => p.args.slice(2, 7)), [[130, 51, 80, 70 / 4, 109 / 4], [130, 56, 85, 70 / 4, 109 / 4], [130, 61, 90, 70 / 4, 109 / 4], [130, 66, 95, 70 / 4, 109 / 4], [130, 71, 100, 70 / 4, 109 / 4], [130, 75, 105, 70 / 4, 109 / 4]]);
+  assert.ok(h.projectiles.every(p => p.args[5] * 4 === 70 && p.args[6] * 4 === 109), 'the packet carries the captured heights');
   assert.ok(h.projectiles.every(p => p.progress === 200 && p.angle === 23));
   assert.deepEqual([h.player.graphics[0].id, h.player.graphics[0].delay, h.player.graphics[0].height], [131, 80, 90]);
   assert.deepEqual(h.areaSounds.map(sound => [sound[0], sound[5]]), [[3750, 0], [156, 80]]);

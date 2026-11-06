@@ -14,6 +14,14 @@ const BREATH_SOUND = 3750;
 const BREATH_IMPACT_SOUND = 156;
 const BREATH_LAUNCH_CYCLES = [51, 56, 61, 66, 71, 75];
 /**
+ * The breath's heights as captured (start 70, end 70-109 in the packet). Projectile heights are
+ * sent at four times the value passed (PacketSender.sendProjectile), so they are passed a quarter:
+ * passing the packet values put the fire four times too high, over the player's head.
+ */
+const PROJECTILE_HEIGHT_SCALE = 4;
+const BREATH_START_HEIGHT = 70;
+const BREATH_END_HEIGHTS = [70, 109];
+/**
  * The six projectiles land 60 + 10 cycles a tile after the breath, 5 apart, measured from her centre
  * tile (rev242 capture ticks 3489-3600: 90 at 3 tiles, 110 at 5, 140 at 8, 160 at 10); the impact
  * graphic waits for the first. The older capture's fixed 80-105 is the 2-tile case.
@@ -254,7 +262,8 @@ function breathe(character, target) {
   const arrival = breathArrival(character, target);
   for (let i = 0; i < BREATH_LAUNCH_CYCLES.length; i++) {
     Projectile.createProjectile(character, target, BREATH_PROJECTILE,
-      BREATH_LAUNCH_CYCLES[i], arrival + i * BREATH_END_STAGGER_CYCLES, 70, Misc.randomInclusive(70, 109))
+      BREATH_LAUNCH_CYCLES[i], arrival + i * BREATH_END_STAGGER_CYCLES,
+      BREATH_START_HEIGHT / PROJECTILE_HEIGHT_SCALE, Misc.randomInclusive(...BREATH_END_HEIGHTS) / PROJECTILE_HEIGHT_SCALE)
       .withAngle(Misc.randomInclusive(8, 23)).withProgress(200).sendProjectile();
   }
   target.performGraphic(new Graphic(BREATH_IMPACT, arrival, 90));

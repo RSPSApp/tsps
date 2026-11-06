@@ -157,6 +157,17 @@ export function encodeNpcSpotAnimationSpecific(index: number, id: number, slot =
   return encodeServerPacket(ServerPacketId.NPC_SPOTANIM_SPECIFIC, out);
 }
 
+/** Replace one of this viewer's eight head-icon slots; -1 clears that slot. */
+export function encodeNpcHeadIconSpecific(index: number, slot: number, archive: number, frame: number): Buffer {
+  const out = Buffer.alloc(7);
+  out.writeUInt16BE(effectInteger("NPC index", index, 0, 65534), 0);
+  out[2] = effectInteger("head icon slot", slot, 0, 7);
+  out.writeUInt16BE(effectInteger("head icon archive", archive, -1, 65535) & 65535, 3);
+  // The native client reads the frame as a signed short; 65535 is its clear sentinel.
+  out.writeUInt16BE(effectInteger("head icon frame", frame, -1, 32767) & 65535, 5);
+  return encodeServerPacket(ServerPacketId.NPC_HEADICON_SPECIFIC, out);
+}
+
 export type PlayerSyncState = {
   flags: Uint8Array;
   active: Uint16Array;

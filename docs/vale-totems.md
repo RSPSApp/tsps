@@ -9,13 +9,13 @@ Status:
   - building, carving and decorating at all eight sites, with the Fletching level per wood, run energy and Construction xp;
   - the ents' visit every 80 ticks: offerings, durability, collapse and new spirits;
   - the spirit NPCs at each site, with per-viewer spawn/despawn sequences and slot-2 spot effects;
+  - the durability leaves above a carved totem, sent to each viewer's invisible site NPC;
   - claiming and inspecting offerings;
   - Rummage, Hasty-rummage and Inspect on Vale offerings, with the loot table, research points and collection log;
   - the Vale Totems miniquest (Ranulph and Isadora): the intro, the build/carve/decorate lessons, the captured wrong-animal warning, the scripted 100-offering visit and the Sacraments of Ent Folk reward. The minigame's other sites stay closed until it is complete;
   - `::entvisit` for testing.
 - **Not done:**
   - the ents walking their route, ent trails (double offerings and +15% xp for four actions, `ent_totems_trail_*`), and admiring beautiful scenery for run energy;
-  - the durability leaves above a totem (a head icon on `ent_totems_site_icon`);
   - Ranulph's Vale Research Exchange (research points to spend);
   - the fletching knife's faster actions, the Carpenter's outfit bonus, ent seeds and the clue nests;
   - filterable ("spam") chat messages, which the server doesn't support yet.
@@ -31,6 +31,7 @@ Status:
 | `Loot.ValeTotems.js` | One roll of the rummage loot table. |
 | `Ents.ValeTotems.js` | The 80-tick visit cycle and the spirit NPC spawns. |
 | `Spirits.ValeTotems.js` | References to the actual shared spirit NPCs and effects sent to one viewer. |
+| `Icons.ValeTotems.js` | Invisible site NPCs and viewer-specific durability leaves derived from saved site state. |
 | `Commands.ValeTotems.js` | `::entvisit`. |
 
 The miniquest lives with the other quests in `server/plugins/quests/quests/ValeTotems.Quest.js`; it owns Ranulph's and Isadora's conversations, the three chat varbits and the site-1 gate.
@@ -52,6 +53,10 @@ A player's state is the client's own varps, which the cache's multilocs and mult
 | `site_N_multianimal_a..e_1` | 1 shows that spirit's NPC (`ent_totems_site_N_animal_X_1`). |
 
 The sites' base locs are `ent_totems_site_N_base` (57016 + 6 × (N − 1)), with the offerings loc beside it. Sites 2 and 6 were never clicked in the captures; their tiles are the Wiki's two remaining Totem site locations.
+
+Durability leaves use `npc_headicon_specific` on slot 0 of `ent_totems_site_icon`, with sprite archive `headicons_et` and frame `site_N_decay - 1`. In recording **234/03276**, site 7 finishes carving at tick 5968 with durability 6; tick 5969 sets frame 5. Visits at ticks 6041 through 6361 count down through frames 4 to 0, and collapse at tick 6441 clears the slot with 65535/65535. The [Wiki](https://oldschool.runescape.wiki/w/Vale_totems#Ents_visits) establishes the durability mechanic; the recording establishes frame selection and packet ordering. These are Leagues captures; regular-world leaf rendering has not been independently captured here.
+
+The generic viewer-only packet changes one of eight icon slots after NPC info. It leaves other slots and shared NPC prayer icons alone. Native clients ignore unknown NPC indices and discard customization when the actor leaves local view; later global head-icon updates replace it. The content unit listens to `network:npc-sync`, containing the actual objects encoded for that viewer, and queues changed leaves for the next sync. On re-entry or fresh login it derives the current leaves from saved varps. It stores no persistent icon override and does not replay the old frame.
 
 ## Miniquest
 
@@ -117,5 +122,6 @@ These are not in the captures or the Wiki:
 - `node --test server/tests/vale-totems.test.cjs` (after `yarn build`) covers building, carving, decorating, visits, claiming and rummaging.
 - `node --test server/tests/vale-totems-quest.test.cjs` covers the quest registration, the site gate, the intro, the two lessons, the scripted 100 offerings and completion.
 - `node --test server/tests/vale-totems-specific-effects.test.cjs` uses real Player, PlayerSession, PacketSender, cache varbits, TaskManager and the startup hook's actual NPC spawns. Only transport output and RNG are controlled. It checks the two-tick visibility boundary, packet order/slot/species, a second viewer, saved-state restoration on a fresh player during the transition, logout cancellation and a superseding reroll. The older Vale tests use lightweight player fixtures and supplement this coverage.
+- `server/tests/npc-specific-headicons.test.cjs` and `server/tests/vale-totems-headicons.test.cjs` cover real sessions and startup NPCs, viewer isolation, stale queued actors, slot boundaries, durability/visits/collapse, view removal/re-entry and saved-state login. Browser tests cover cache slots, global replacement, map removal and same-frame NPC continuation; gateway tests round-trip actual native bytes through the revision-241 decoder.
 - With the agent MCP: teleport to site 3 (`tele 1386 3276 0`), give oak logs, a knife and four oak shortbows (u), then `object_option` Build, Carve and Decorate on loc 57028 at 1385, 3274. `::entvisit` runs a visit at once. The minigame now requires the miniquest, so complete it first or set stage 70.
 - Miniquest by hand: talk to Ranulph at 1366, 3367, build at 1370, 3375, carve the three nearby spirits, decorate with four oak items, talk again, claim the 100 offerings and talk once more. The `::entvisit` command is not needed for the scripted offering.

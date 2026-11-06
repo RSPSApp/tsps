@@ -28,6 +28,7 @@ function fakeApi() {
     onPlayerLogout() {},
     onPlayerMapSquareChange() {},
     onServerStartup() {},
+    onCustomEvent() {},
     registerCommand() {},
     spawnNpc() {},
     onObjectInteraction: (name, actions) => { hooks.objects[name] = actions; },

@@ -14,7 +14,7 @@ export function applyNpcSpecificEffect(
     if (ecsId === undefined) return;
     if (effect.kind === "animation") {
         ecs.handleServerSequence(ecsId, effect.id, effect.delay, clientCycle);
-    } else {
+    } else if (effect.kind === "spot") {
         renderer?.registerNpcSpotAnimation({ npcServerId: effect.index, spotId: effect.id,
             slot: effect.slot, height: effect.height, startCycle: clientCycle + effect.delay });
         notifyActorGraphic({ type: "npc", serverId: effect.index, graphic: effect.id });

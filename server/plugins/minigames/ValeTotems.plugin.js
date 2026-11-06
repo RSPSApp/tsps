@@ -12,6 +12,7 @@ const UNITS = [
   require("./valetotems/Totems.ValeTotems"),
   require("./valetotems/Offerings.ValeTotems"),
   require("./valetotems/Ents.ValeTotems"),
+  require("./valetotems/Icons.ValeTotems"),
   require("./valetotems/Commands.ValeTotems"),
 ];
 

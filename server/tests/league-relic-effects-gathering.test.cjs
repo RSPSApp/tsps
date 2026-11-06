@@ -313,6 +313,27 @@ test("Power Miner: with the pickaxe, a second chance, four ores a rock, ore bank
   assert.equal(banked(who.other, I.STEEL_BAR), 0);
 });
 
+test("Power Miner counts rock attempts already kept by mining gloves", () => {
+  const who = cases(POWER_MINER, 5, "ECHO_PICKAXE");
+  for (const gloveHeld of [[false, false, false, false], [true, false, false, false],
+    [true, true, false, false], [true, true, true, false]]) {
+    const object = {};
+    const outcomes = gloveHeld.map(handled => emit("mining:deplete-rock", {
+      player: who.relic, object, rock: "Iron rocks", handled,
+    }).handled);
+    assert.deepEqual(outcomes, [true, true, true, false], "the fourth ore still exhausts the rock");
+  }
+  const shared = {};
+  const deplete = (player, handled = false) => emit("mining:deplete-rock", {
+    player, object: shared, rock: "Iron rocks", handled,
+  }).handled;
+  assert.equal(deplete(who.relic), true);
+  assert.equal(deplete(who.relic), true);
+  assert.equal(deplete(who.without, true), true, "another miner's glove saved the same rock");
+  assert.equal(deplete(who.relic), true, "that saved rock retained its relic count");
+  assert.equal(deplete(who.relic), false);
+});
+
 test("Power Miner: carried or wielded Echo pickaxes smelt steel at Smithing 1 without coal and award steel XP", () => {
   for (const wielded of [false, true]) {
     const player = cases(POWER_MINER, 5, "ECHO_PICKAXE").relic;

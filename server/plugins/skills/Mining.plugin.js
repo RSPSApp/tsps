@@ -267,6 +267,14 @@ const ACTIVE_MINERS = new Set();
 const ROLL_READY_TICKS = new Map();
 // Ore taken so far from rocks that give several before going (`yield`), by the standing rock.
 const ROCK_YIELDS = new WeakMap();
+// Saves belong to the standing rock and are cleared when it is exhausted. Tracking the
+// saves already used also bounds the effect if miners change gloves or share a rock.
+const ROCK_GLOVE_SAVES = new WeakMap();
+const GLOVE_STANDARD_ROCKS = new Set([
+  "Copper rocks", "Tin rocks", "Iron rocks", "Silver rocks", "Lead rocks", "Coal rocks", "Gold rocks",
+]);
+const GLOVE_SUPERIOR_ROCKS = new Set(["Mithril rocks", "Adamantite rocks"]);
+const GLOVE_EXPERT_ROCKS = new Set(["Sandstone rocks", "Sunstone rocks", "Runite rocks", "Amethyst crystals"]);
 // Ticks left on a rock that runs out on a timer (`depletionTicks`), by the standing rock; it counts
 // down on the ticks someone mines it.
 const ROCK_TIMERS = new WeakMap();
@@ -302,6 +310,28 @@ function rockHolds(rockObject, rock) {
   if (holds) ROCK_YIELDS.set(rockObject, taken);
   else ROCK_YIELDS.delete(rockObject);
   return holds;
+}
+
+/** Extra successful gathers allowed by the gloves actually worn at this rock. */
+function gloveSaves(player, rock) {
+  if (!pluginApi.core.WorldDefinition.isMembersWorld()) return 0;
+  const hands = player.getEquipment().getItems()[Equipment.HANDS_SLOT];
+  const tier = hands?.getId() === ItemIdentifiers.MINING_GLOVES ? 1
+    : hands?.getId() === ItemIdentifiers.SUPERIOR_MINING_GLOVES ? 2
+      : hands?.getId() === ItemIdentifiers.EXPERT_MINING_GLOVES ? 3 : 0;
+  if (GLOVE_STANDARD_ROCKS.has(rock.objectName)) return tier;
+  if (GLOVE_SUPERIOR_ROCKS.has(rock.objectName)) return Math.max(0, tier - 1);
+  return tier === 3 && GLOVE_EXPERT_ROCKS.has(rock.objectName) ? 1 : 0;
+}
+
+/** Spend one save only after the rock's ordinary yield has run out. */
+function gloveHolds(player, rockObject, rock) {
+  const saved = ROCK_GLOVE_SAVES.get(rockObject) ?? { used: 0, baseExhausted: false };
+  if (saved.used >= gloveSaves(player, rock)) return false;
+  saved.used++;
+  saved.baseExhausted = true;
+  ROCK_GLOVE_SAVES.set(rockObject, saved);
+  return true;
 }
 
 class RockRespawnTask extends Task {
@@ -477,8 +507,8 @@ function nextStageId(rockObject, rock) {
 }
 
 /** Depletes the rock unless content keeps it standing ("mining:deplete-rock", a league relic's four ores a rock); true when it went. */
-function depleteRock(player, rockObject, rock) {
-  const event = { player, object: rockObject, rock: rock.objectName, handled: false };
+function depleteRock(player, rockObject, rock, heldByGloves = false) {
+  const event = { player, object: rockObject, rock: rock.objectName, handled: heldByGloves };
   pluginApi.emitCustomEvent("mining:deplete-rock", event);
   if (event.handled) return false;
   // A staged rock grows back whole, from whichever stage it was mined out.
@@ -516,6 +546,7 @@ function minersKeepStanding(rockObject, rock) {
 function exhaustRock(rockObject, rock, viewers, whole = rockObject) {
   ROCK_TIMERS.delete(rockObject);
   ROCK_YIELDS.delete(rockObject);
+  ROCK_GLOVE_SAVES.delete(rockObject);
   const depleted = replaceRock(rockObject, depletedRockId(rockObject.getId(), rock));
   if (rock.depletionSound) {
     const at = depleted.getLocation();
@@ -830,8 +861,11 @@ class MiningTask extends Task {
         state.objectId = replaceRock(rockObject, nextStage).getId();
         continue;
       }
-      if (rockHolds(rockObject, state.rock)) continue;
-      if (!depleteRock(player, rockObject, state.rock)) continue;
+      // A saved finite-yield rock has already spent its normal yield; do not draw a
+      // fresh Amethyst yield until the rock really depletes and respawns.
+      if (!ROCK_GLOVE_SAVES.get(rockObject)?.baseExhausted && rockHolds(rockObject, state.rock)) continue;
+      const heldByGloves = gloveHolds(player, rockObject, state.rock);
+      if (!depleteRock(player, rockObject, state.rock, heldByGloves)) continue;
       stopMining(this.activeSessions, player);
     }
   }

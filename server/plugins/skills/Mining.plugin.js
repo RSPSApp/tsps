@@ -11,6 +11,7 @@ const CrystalPickaxe = require("./mining/CrystalPickaxe.Mining");
 const ClueGeodes = require("./mining/ClueGeodes.Mining");
 const CalcifiedWater = require("./mining/CalcifiedWater.Mining");
 const Saltpetre = require("./mining/Saltpetre.Mining");
+const VarrockArmour = require("./mining/VarrockArmour.Mining");
 const { pauseForLevelUp, actionInterval } = require("./SkillActions");
 
 // rsprox recordings: a mined-out rock becomes "rocks1"/"rocks2" (the digit of the rock's own gameval,
@@ -898,9 +899,14 @@ function inventoryBlocks(player, oreId) {
 function giveOre(player, oreId, amount, xp = 0) {
   const request = { player, itemId: oreId, amount, stored: 0, skill: Skill.MINING, xp };
   pluginApi.emitCustomEvent("storage:gather", request);
-  if (amount > request.stored) {
-    player.getInventory().adds(oreId, amount - request.stored);
-  }
+  // `stored` counts requested units even if a listener transforms or doubles output.
+  const stored = Number.isFinite(request.stored) ? Math.max(0, Math.min(amount, request.stored)) : 0;
+  const remaining = amount - stored;
+  if (remaining <= 0) return stored;
+  const item = new pluginApi.core.Item(oreId, remaining);
+  const accepted = Math.min(remaining, player.getInventory().getAddableAmount(item));
+  if (accepted > 0) player.getInventory().add(item.clone().setAmount(accepted), true);
+  return stored + accepted;
 }
 
 /** Storage resolves first; a winning pet can take room reserved for the remaining ore. */
@@ -919,7 +925,7 @@ function deliverOre(player, ore) {
 }
 
 /**
- * "mining:extra-ore": a mining enhancer (the charged celestial ring) may grant a second ore with
+ * "mining:extra-ore": mining enhancers may each grant an extra ore with
  * its experience, and its own `message`. Without room for it, neither is given (Wiki, Mod Ash).
  * A sandstone or granite piece is doubled at its own size (Wiki Sandstone rocks; rsprox capture
  * 3165: "Your cape allows you to mine an additional ore.", two 1kg pieces, two counts).
@@ -930,15 +936,14 @@ function mineExtraOre(player, rock, outcome) {
   }
   const oreId = outcome?.itemId ?? rock.oreId;
   const xp = outcome?.xp ?? rock.xp;
-  const request = { player, oreId, rockLevel: rock.level, extra: false, message: null };
+  const request = { player, oreId, rockLevel: rock.level, bonuses: [] };
   pluginApi.emitCustomEvent("mining:extra-ore", request);
-  if (!request.extra || inventoryBlocks(player, oreId)) {
-    return;
+  for (const bonus of request.bonuses) {
+    if (inventoryBlocks(player, oreId) || giveOre(player, oreId, 1, xp) !== 1) break;
+    if (bonus.message) spam(player, bonus.message);
+    countOre(player);
+    player.getSkillManager().addExperiences(Skill.MINING, xp);
   }
-  if (request.message) spam(player, request.message);
-  giveOre(player, oreId, 1, xp);
-  countOre(player);
-  player.getSkillManager().addExperiences(Skill.MINING, xp);
 }
 
 /**
@@ -1072,6 +1077,7 @@ module.exports = {
     ClueGeodes.attach(api);
     CalcifiedWater.attach(api, ROCK_BY_NAME.get(CalcifiedWater.ROCK_NAME), exhaustRock, minersKeepStanding);
     Saltpetre.attach(api);
+    VarrockArmour.attach(api);
 
     api.log("registered", {
       rocks: ROCKS.length,

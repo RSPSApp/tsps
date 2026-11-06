@@ -357,7 +357,7 @@ const worker = {
             if (statePromise !== workerStatePromise) return;
             loadFromPayload(payload);
             state?.objTypeLoader.clearCache();
-            if (state && payload.datasets.some(dataset => dataset.key === "definitionArchives")) {
+            if (state && payload.datasets.some(dataset => dataset.key === "definitionArchives" || dataset.key === "customDefinitions")) {
                 state.locTypeLoader.clearCache();
                 state.npcTypeLoader.clearCache();
                 state.seqTypeLoader.clearCache();

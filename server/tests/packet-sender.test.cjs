@@ -57,6 +57,26 @@ test('sendSystemUpdate emits the SYSTEM_UPDATE packet (opcode 220, big-endian se
   assert.deepEqual(Buffer.from(frames[0]), Buffer.from([220, 0, 0, 0, 125]));
 });
 
+test('sendHideNpcOps emits opcode 148 with the native global boolean', () => {
+  const frames = [];
+  const fake = Object.assign(Object.create(PacketSender.prototype), {
+    player: { getSession: () => ({ sendClientPacket: (frame) => { frames.push(Buffer.from(frame)); return true; } }) },
+  });
+  assert.equal(fake.sendHideNpcOps(true), fake);
+  assert.equal(fake.sendHideNpcOps(false), fake);
+  assert.deepEqual(frames, [Buffer.from([148, 1]), Buffer.from([148, 0])]);
+});
+
+test('sendHideObjOps emits opcode 149 with the native global ground-item boolean', () => {
+  const frames = [];
+  const fake = Object.assign(Object.create(PacketSender.prototype), {
+    player: { getSession: () => ({ sendClientPacket: (frame) => { frames.push(Buffer.from(frame)); return true; } }) },
+  });
+  assert.equal(fake.sendHideObjOps(true), fake);
+  assert.equal(fake.sendHideObjOps(false), fake);
+  assert.deepEqual(frames, [Buffer.from([149, 1]), Buffer.from([149, 0])]);
+});
+
 test('sendTab runs toplevel_sidebutton_switch (script 915) rather than writing a 1-byte opcode 106', () => {
   // 106 is WIDGET_SET_HIDDEN (uid + hidden, five bytes), so the old one-byte packet was
   // dropped by the encoder and the tab never switched: quick-prayer setup, alchemy's return

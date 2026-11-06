@@ -5,12 +5,12 @@
  *
  * Wiki: https://oldschool.runescape.wiki/w/Mess
  *
- * The Wiki only says that serving a dish lowers its appreciation bar and raises the other
- * two, and that the bars recover over time; it does not publish the numbers. The values in
- * APPRECIATION are a parity approximation: a bar is tenths of a percent (30.0 - 100.0%),
- * serving a dish costs it 15.0% and gives the other two 5.0% each, and every 30 ticks all
- * three recover 1.0%. The client's own HUD (interface 235) reads inventory 173's counts for
- * the three dish items, so the bars are driven entirely by sendInventory.
+ * The Wiki says serving a dish lowers its appreciation bar and raises the other two; it does
+ * not establish the numerical changes or the bars' idle direction and timing. APPRECIATION
+ * retains a TSPS approximation: a bar is tenths of a percent (30.0 - 100.0%), serving a dish
+ * costs it 15.0% and gives the other two 5.0% each, and every 30 ticks all three recover 1.0%.
+ * The client's HUD (interface 235) reads inventory 173's counts for the three dish items, so
+ * the bars are driven entirely by sendInventory.
  */
 
 const state = { api: null, core: null };
@@ -111,19 +111,26 @@ const APPRECIATION = Object.freeze({
   DECAY_GAIN: 10,
 });
 
-/** player -> { appreciation: { pie, pizza, stew } }, alive only while they are in the Mess. */
+/** The normal Mess is shared by this server's World, independently of its current visitors. */
+const worldSession = { appreciation: Object.fromEntries(DISH_KEYS.map((key) => [key, APPRECIATION.START])) };
+/** Active HUD viewers; all see the same world session. */
 const sessions = new Map();
 
 let decayTask = null;
 
 function sessionOf(player, create = true) {
-  let session = sessions.get(player);
-  if (!session && create) {
-    session = { appreciation: {} };
-    for (const key of DISH_KEYS) session.appreciation[key] = APPRECIATION.START;
-    sessions.set(player, session);
-  }
-  return session ?? null;
+  return sessions.get(player) ?? (create ? worldSession : null);
+}
+
+function watch(player) {
+  sessions.set(player, worldSession);
+  return worldSession;
+}
+
+function inMess(player) {
+  const at = player.getLocation?.();
+  return !!at && at.getZ() === 0 && at.getX() >= MESS_ZONE.minX && at.getX() <= MESS_ZONE.maxX &&
+    at.getY() >= MESS_ZONE.minY && at.getY() <= MESS_ZONE.maxY;
 }
 
 function level(player) {
@@ -153,6 +160,17 @@ function syncHud(player, session = sessionOf(player)) {
   player.getPacketSender().sendInventory(HUD.INVENTORY, items.length, items);
 }
 
+/** Send changes only to live players still in the Mess; drop stale subscriptions. */
+function syncViewers(session = worldSession, except = null) {
+  for (const player of sessions.keys()) {
+    if ((typeof player.isRegistered === "function" && !player.isRegistered()) || !inMess(player)) {
+      sessions.delete(player);
+      continue;
+    }
+    if (player !== except) syncHud(player, session);
+  }
+}
+
 function openHud(player, session = sessionOf(player)) {
   player.getPacketSender().sendSubInterface(HUD.OVERLAY_UID, HUD.INTERFACE, 1);
   syncHud(player, session);
@@ -163,9 +181,9 @@ function closeHud(player) {
 }
 
 /**
- * Logging out, or leaving the Mess: no servery item survives and the bars reset next visit
- * (the Wiki is silent on both; the Ewesey transcript only blocks taking ingredients out of
- * the kitchen while unqualified).
+ * Logging out, or leaving the Mess: remove the viewer and servery items. World appreciation
+ * persists when a visitor leaves (the Wiki is silent on item cleanup; the Ewesey transcript
+ * only blocks taking ingredients out of the kitchen while unqualified).
  */
 function cleanUp(player) {
   sessions.delete(player);
@@ -182,18 +200,12 @@ function forget(player) {
   sessions.delete(player);
 }
 
-/** Every DECAY_TICKS all three bars recover a little, served or not. */
+/** Apply the existing approximate recovery once to the World, even without viewers. */
 function decayTick() {
-  for (const [player, session] of sessions) {
-    if (typeof player.isRegistered === "function" && !player.isRegistered()) {
-      sessions.delete(player);
-      continue;
-    }
-    for (const key of DISH_KEYS) {
-      session.appreciation[key] = Math.min(APPRECIATION.MAX, session.appreciation[key] + APPRECIATION.DECAY_GAIN);
-    }
-    syncHud(player, session);
+  for (const key of DISH_KEYS) {
+    worldSession.appreciation[key] = Math.min(APPRECIATION.MAX, worldSession.appreciation[key] + APPRECIATION.DECAY_GAIN);
   }
+  syncViewers(worldSession);
 }
 
 /** A repeating task, as GauntletShared.repeat does it. */
@@ -230,11 +242,14 @@ module.exports = {
   MESS_ZONE,
   APPRECIATION,
   sessions,
+  worldSession,
   sessionOf,
+  watch,
   level,
   xpFor,
   applyServe,
   syncHud,
+  syncViewers,
   openHud,
   closeHud,
   cleanUp,

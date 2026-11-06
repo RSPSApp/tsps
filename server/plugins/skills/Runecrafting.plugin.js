@@ -405,22 +405,36 @@ function craftOurania(player) {
 
   const weights = ouraniaWeights(player.getSkillManager().getCurrentLevel(Skill.RUNECRAFTING));
   const diary = ardougneMediumComplete(player);
+  // Roll and simulate the whole batch before spending essence, including diary bonus runes.
+  const preview = new pluginApi.core.Inventory(player).setItems(inventory.getCopiedItems());
+  const plan = [];
+  for (const essence of OURANIA_ESSENCE) {
+    while (preview.contains(essence.id)) {
+      preview.deleted(essence.id, 1, false);
+      const rune = rollOuraniaRune(weights);
+      const amount = diary && Math.random() * 100 < rune.extraChance ? 2 : 1;
+      const output = new Item(rune.runeId, amount);
+      if (preview.getAddableAmount(output) < amount) {
+        inventory.full();
+        return;
+      }
+      preview.add(output, false);
+      plan.push({ essence, rune, amount });
+    }
+  }
+
   /** The essence each rune was crafted from, for the rift guardian's rolls. */
   const crafted = new Map();
   let xp = 0;
-  for (const essence of OURANIA_ESSENCE) {
-    while (inventory.contains(essence.id)) {
-      inventory.deleteNumber(essence.id, 1);
-      const rune = rollOuraniaRune(weights);
-      const amount = diary && Math.random() * 100 < rune.extraChance ? 2 : 1;
-      inventory.addItem(new Item(rune.runeId, amount));
-      xp += rune.xp * essence.xpScale;
-      const entry = crafted.get(rune) ?? { essence: 0, runeAmount: 0, essenceIds: new Set() };
-      entry.essence++;
-      entry.runeAmount += amount;
-      entry.essenceIds.add(essence.id);
-      crafted.set(rune, entry);
-    }
+  for (const { essence, rune, amount } of plan) {
+    inventory.deleteNumber(essence.id, 1);
+    inventory.addItem(new Item(rune.runeId, amount));
+    xp += rune.xp * essence.xpScale;
+    const entry = crafted.get(rune) ?? { essence: 0, runeAmount: 0, essenceIds: new Set() };
+    entry.essence++;
+    entry.runeAmount += amount;
+    entry.essenceIds.add(essence.id);
+    crafted.set(rune, entry);
   }
 
   player.performGraphic(CRAFT_RUNES_GRAPHIC);

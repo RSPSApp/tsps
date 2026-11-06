@@ -52,6 +52,7 @@
     "test:spell-quest-gate": "tsx tests/spell-quest-gate.test.ts",
     "test:webrtc-world-list": "tsx tests/webrtc-world-list.test.ts",
     "test:content-api": "tsx tests/content-api.test.ts",
+    "test:cache-editor": "tsx tests/cache-editor-page.test.ts",
     "test:voice-chat": "tsx tests/voice-chat-plugin.test.ts",
     "test:hd": "tsx tests/hd-plugin.test.ts",
     "test:scene-viewport": "node tests/scene-viewport-clipping.browser.cjs",

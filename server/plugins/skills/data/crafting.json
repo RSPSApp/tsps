@@ -1592,5 +1592,24 @@
         "xp": 137.5
       }
     ]
+  },
+  "snelms": {
+    "$comment": "https://oldschool.runescape.wiki/w/Snelm - a chisel on a blamish snail shell, level 15 Crafting, 32.5 XP, 2 ticks. Round shells make round snelms; pointed shells (_3) make pointed snelms. There is no pointed bark shell or pointed broken bark snelm in the cache.",
+    "level": 15,
+    "xp": 32.5,
+    "ticks": 2,
+    "seq": 890,
+    "seqName": "human_opalcutting",
+    "recipes": [
+      {"shell": "BLAMISH_MYRE_SHELL", "item": "MYRE_SNELM"},
+      {"shell": "BLAMISH_RED_SHELL", "item": "BLOODNTAR_SNELM"},
+      {"shell": "BLAMISH_OCHRE_SHELL", "item": "OCHRE_SNELM"},
+      {"shell": "BLAMISH_BLUE_SHELL", "item": "BRUISE_BLUE_SNELM"},
+      {"shell": "BLAMISH_BARK_SHELL", "item": "BROKEN_BARK_SNELM"},
+      {"shell": "BLAMISH_MYRE_SHELL_3", "item": "POINTED_MYRE_SNELM"},
+      {"shell": "BLAMISH_RED_SHELL_3", "item": "POINTED_BLOODNTAR_SNELM"},
+      {"shell": "BLAMISH_OCHRE_SHELL_3", "item": "POINTED_OCHRE_SNELM"},
+      {"shell": "BLAMISH_BLUE_SHELL_3", "item": "POINTED_BRUISE_BLUE_SNELM"}
+    ]
   }
 }

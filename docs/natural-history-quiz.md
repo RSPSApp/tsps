@@ -51,8 +51,18 @@ Not in the capture:
   same question then shows again (assumed: the Wiki says there is no penalty).
 - A finished case's plaque shows the display without the quiz.
 
-## Not done
+## Besides the quiz
 
-- `if_setrotatespeed` on the models: tsps has no such packet yet, so the models stand still.
-- The museum's `vm_kudos` HUD overlay, which the capture closes on Study and reopens on an
-  answer.
+- Quiz models use the native `IF_SETROTATESPEED` packet. rsprox 1723 sends it for
+  `vm_natural_history` (533) components 2, 3, 7-12 and 17-20 with `xSpeed=0`, `ySpeed=5`
+  each time a case opens; components 4-6 (dragon) and 13-16 (seaslugs) got no rotate
+  packet in the capture, so they stay still rather than being spun by guess.
+- The `vm_kudos` HUD (532) is mounted in `toplevel:overlay_hud` while a player is inside the
+  museum, and right-clicking the Information booth's "Check Kudos" opens the cache's
+  `vm_kudos_info` list (600).
+- Study on the Digsite (528) and timeline (534) display cases shows the case's world model,
+  display number and Wiki description (`server/plugins/world/data/museum-displays.json`).
+  Where the same object id changes text after a Historian Minas report, the entry carries
+  Wiki `variants` keyed by the saved report (and Hazeel Cult's side): case 7 after Hazeel
+  Cult with Hazeel, case 16 after Curse of the Empty Lord, case 17 after Observatory Quest,
+  case 23 after In Aid of the Myreque and case 28 after Temple of Ikov.

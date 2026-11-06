@@ -4,7 +4,12 @@ const CHEST_ID = 11739;
 const CHEST_TILES = new Set(["2588,3291,1", "2588,3302,1"]);
 const THIEVING_LEVEL = 72;
 const THIEVING_XP = 500;
-const WITCHAVEN_DUNGEON_ENTRANCE = { x: 2696, y: 3283, z: 0 };
+// Cache revision 241 places the "Old ruin entrance" (18270) on 2696,3283,0, which is clipped
+// (getClipping 148770), so teleporting onto it leaves the player inside the scenery. Land on the
+// walkable tile immediately east instead. The Wiki confirms the trap sends the player to the
+// Witchaven Dungeon entrance but has no map of the exact OSRS landing tile (its talk page asks
+// for one), so the precise tile remains an approximation.
+const WITCHAVEN_DUNGEON_ENTRANCE = { x: 2697, y: 3283, z: 0 };
 
 // Wiki pages report both 240 and 500 seconds, and do not establish whether both chests share a
 // timer or each player has a timer. CHEST_COOLDOWN_MS is the server's adjustable policy setting.

@@ -54,6 +54,8 @@ function createPvpBehaviorState() {
     lastFoodAt: 0,
     f2pFoodPending: false,
     f2pFoodPendingHp: null,
+    /** A one-tick bite is due to be followed by a second food next tick. */
+    f2pComboPending: false,
     lastBrewAt: 0,
     lastComboEatAt: 0,
     lastVengeanceAt: 0,
@@ -134,6 +136,7 @@ function clearPvpBehaviorState(state) {
   state.pvp.lastFoodAt = 0;
   state.pvp.f2pFoodPending = false;
   state.pvp.f2pFoodPendingHp = null;
+  state.pvp.f2pComboPending = false;
   state.pvp.lastBrewAt = 0;
   state.pvp.lastComboEatAt = 0;
   state.pvp.lastVengeanceAt = 0;
@@ -399,9 +402,17 @@ function isTeleblocked(player) {
   return player?.getCombat?.()?.getTeleblockTimer?.()?.finished?.() === false;
 }
 
+/**
+ * F2P bots eat higher than their old flat 24. EatFoodActionNode's pending gate makes them take one
+ * more hit before eating, and an F2P max hit is around 21 (rune 2h, ~90 Strength), so crossing at 24
+ * could leave a bot eating at 3 HP — the "healing too low" report. Crossing at 36 puts the same wait
+ * on roughly 23 HP for an average hit and no lower than 15 for a max one.
+ */
+const F2P_EAT_THRESHOLD = 36;
+
 function computeEatThreshold(maxHp, eatAtHpRatio, isF2p) {
   return isF2p
-    ? Math.min(24, Math.max(1, maxHp - 1))
+    ? Math.min(F2P_EAT_THRESHOLD, Math.max(1, maxHp - 1))
     : Math.max(1, Math.ceil(maxHp * eatAtHpRatio));
 }
 

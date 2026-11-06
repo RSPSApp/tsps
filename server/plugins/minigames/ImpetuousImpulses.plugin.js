@@ -42,6 +42,9 @@ module.exports = {
     cancel: Wheat.cancel,
     TIERS: Wheat.TIERS,
     pushes: Wheat.pushes,
+    xpEnabled: Wheat.xpEnabled,
+    setXpEnabled: Wheat.setXpEnabled,
+    WHEAT_XP_ATTRIBUTE: Wheat.WHEAT_XP_ATTRIBUTE,
     roaming: Roaming,
   },
   register(api) {

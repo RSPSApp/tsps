@@ -50,6 +50,57 @@ function currentFurniture(event) {
   return furniture && STORAGE_ENUMS[furniture.hotspotKey] ? { house, furniture } : null;
 }
 
+function playerMode(player) {
+  const mode = { player, mode: "none" };
+  api.emitCustomEvent("ironman:mode", mode);
+  return mode.mode;
+}
+
+function isUltimate(player) { return playerMode(player) === "ultimate"; }
+
+function positionOf(player) {
+  const location = player.getLocation();
+  return [location.getX(), location.getY(), location.getZ()];
+}
+
+function sameContext(event, context, position) {
+  const current = currentFurniture(event), now = positionOf(event.player);
+  return current?.house === context.house && current.furniture === context.furniture
+    && context.house.owner === event.player && !context.house.isDestroyed()
+    && now.every((coordinate, index) => coordinate === position[index]);
+}
+
+function inventorySnapshot(inventory) {
+  return inventory.getItems().map(item => item && ({ item, id: item.getId(), amount: item.getAmount(), meta: JSON.stringify(item.getMeta() ?? null) }));
+}
+
+function sameInventory(inventory, snapshot) {
+  const items = inventory.getItems();
+  return items.length === snapshot.length && snapshot.every((entry, index) => entry
+    ? items[index] === entry.item && items[index].getId() === entry.id
+      && items[index].getAmount() === entry.amount && JSON.stringify(items[index].getMeta() ?? null) === entry.meta
+    : !items[index]);
+}
+
+function warnsOnDeposit(furniture, item) {
+  if (!item || item.getId() <= 0 || item.getAmount() < 1 || item.getMeta()
+    || (furniture.storage?.[item.getId()] ?? 0) > 0) return false;
+  const representative = storageItems(furniture).get(item.getId()), members = numericEnum(SET_MEMBERS_ENUM);
+  return members.has(representative) && numericEnum(members.get(representative)).size > 1;
+}
+
+function confirmDeposit(event, context, position, inventory, apply) {
+  const player = event.player, snapshot = inventorySnapshot(inventory);
+  // The confirmation text and bulk trigger are this server's approximation.
+  api.sendMultiChatboxPrompt(player, "Some sets must be complete to withdraw. Continue?", "Deposit", () => {
+    if (!sameContext(event, context, position) || !isUltimate(player) || !sameInventory(inventory, snapshot)) return;
+    const pin = { player, feature: "poh-costume-room", resume: () => {} };
+    api.emitCustomEvent("bank-pin:guard", pin);
+    if (pin.locked || !sameContext(event, context, position) || !isUltimate(player) || !sameInventory(inventory, snapshot)) return;
+    apply();
+  }, "Cancel", () => {});
+}
+
 function depositHouseItem(player, house, furniture, slot) {
   if (house.owner !== player || player.getPrivateArea() !== house || !house.save.rooms.flat(2).some(room => Object.values(room?.furnitureByLocation ?? {}).includes(furniture))) return false;
   const inventory = player.getInventory();
@@ -57,15 +108,36 @@ function depositHouseItem(player, house, furniture, slot) {
   if (!item || item.getId() <= 0 || item.getAmount() < 1 || item.getMeta()) return false;
   const allowed = storageItems(furniture), set = allowed.get(item.getId());
   if (set == null) return false;
-  const stored = furniture.storage ??= {};
+  const stored = furniture.storage ?? {};
   const countsTowardLimit = (representative) => furniture.hotspotKey !== "CAPE_RACK"
     || (numericEnum(SET_MEMBERS_ENUM).has(representative) && [...numericEnum(numericEnum(SET_MEMBERS_ENUM).get(representative)).values()].some(id => ItemDefinition.forId(id).getName().toLowerCase().includes("hood")));
   const used = new Set(Object.keys(stored).filter(id => stored[Number(id)] > 0).map(id => allowed.get(Number(id))).filter(id => id != null && countsTowardLimit(id)));
   if (countsTowardLimit(set) && !used.has(set) && used.size >= capacity(furniture)) { player.sendMessage("Upgrade this furniture to store more sets."); return false; }
+  if (isUltimate(player)) {
+    const id = item.getId();
+    if ((stored[id] ?? 0) > 0) return false;
+    const beforeItems = inventory.getItems().slice(), beforeValues = inventory.getCopiedItems(), beforeTotal = inventory.getAmount(id);
+    inventory.deleteAtSlot(slot, 1, false);
+    if (inventory.getAmount(id) !== beforeTotal - 1) {
+      for (let index = 0; index < beforeItems.length; index++) {
+        const value = beforeValues[index];
+        beforeItems[index].setId(value.getId()).setAmount(value.getAmount()).setMeta(value.getMeta());
+      }
+      inventory.setItems(beforeItems);
+      inventory.refreshItems();
+      return false;
+    }
+    furniture.storage ??= stored;
+    stored[id] = 1;
+    player.setAttribute(Data.HOUSE_ATTRIBUTE, house.save);
+    inventory.refreshItems();
+    return true;
+  }
   const amount = item.getAmount();
   if (!Number.isSafeInteger((stored[item.getId()] ?? 0) + amount)) return false;
   const id = item.getId();
   inventory.deleteAtSlot(slot, amount);
+  furniture.storage ??= stored;
   stored[id] = (stored[id] ?? 0) + amount;
   player.setAttribute(Data.HOUSE_ATTRIBUTE, house.save);
   return true;
@@ -76,6 +148,43 @@ function withdrawHouseItem(player, house, furniture, id) {
   const stored = furniture.storage;
   if (!stored || !(stored[id] > 0)) return false;
   const inventory = player.getInventory();
+  const mode = { player, mode: "none" };
+  api.emitCustomEvent("ironman:mode", mode);
+  if (mode.mode === "ultimate") {
+    const representative = storageItems(furniture).get(id);
+    const members = numericEnum(SET_MEMBERS_ENUM);
+    if (members.has(representative)) {
+      const set = [...numericEnum(members.get(representative)).values()];
+      const alternates = numericEnum(ALTERNATES_ENUM), alternateSets = numericEnum(ALTERNATE_SETS_ENUM);
+      // Sets with alternatives or stackable members need their own verified transfer rules.
+      if (new Set(set).size === set.length && set.every(member =>
+        !alternates.has(member) && !alternateSets.has(member) && !ItemDefinition.forId(member).isStackable())) {
+        if (!set.every(member => stored[member] > 0)) {
+          player.sendMessage("You need the complete set to withdraw it.");
+          return false;
+        }
+        if (inventory.getFreeSlots() < set.length) {
+          player.sendMessage("Not enough space in your inventory.");
+          return false;
+        }
+        // Nonstackable additions do not mutate existing item objects; retain them on rollback.
+        const beforeItems = inventory.getItems().slice();
+        for (const member of set) {
+          const before = inventory.getAmount(member);
+          inventory.add(new Item(member, 1), false);
+          if (inventory.getAmount(member) !== before + 1) {
+            inventory.setItems(beforeItems);
+            inventory.refreshItems();
+            return false;
+          }
+        }
+        for (const member of set) if (--stored[member] === 0) delete stored[member];
+        player.setAttribute(Data.HOUSE_ATTRIBUTE, house.save);
+        inventory.refreshItems();
+        return true;
+      }
+    }
+  }
   if (inventory.getFreeSlots() === 0 && !(ItemDefinition.forId(id).isStackable() && inventory.contains(id))) { player.sendMessage("Not enough space in your inventory."); return false; }
   const before = inventory.getAmount(id);
   inventory.addItem(new Item(id, 1));
@@ -106,14 +215,23 @@ function openHouseStorage(event) {
   if (!context) return false;
   const { house, furniture } = context;
   if (house.owner !== event.player) { listStorage(event); return true; }
-  const { player } = event;
+  const { player } = event, position = positionOf(event.player), initialMode = playerMode(event.player);
   // The Bank PIN guards this (Wiki: Bank_PIN); a locked PIN asks first, then reopens it.
-  const pin = { player, feature: "poh-costume-room", resume: () => openHouseStorage(event) };
+  const pin = { player, feature: "poh-costume-room", resume: () => {
+    if (sameContext(event, context, position) && playerMode(player) === initialMode) openHouseStorage(event);
+  } };
   api.emitCustomEvent("bank-pin:guard", pin);
-  if (pin.locked) return true;
+  if (pin.locked || playerMode(player) !== initialMode || !sameContext(event, context, position)) return true;
   api.sendMultiChatboxPrompt(event.player, "Costume storage", "Deposit inventory", () => {
-    for (let slot = 0; slot < 28; slot++) depositHouseItem(event.player, house, furniture, slot);
-    event.player.sendMessage("Stored eligible costume items. Use an item on the furniture to deposit it individually.");
+    if (!sameContext(event, context, position) || playerMode(player) !== initialMode) return;
+    const inventory = player.getInventory();
+    const apply = () => {
+      for (let slot = 0; slot < 28; slot++) depositHouseItem(player, house, furniture, slot);
+      player.sendMessage("Stored eligible costume items. Use an item on the furniture to deposit it individually.");
+    };
+    if (isUltimate(player) && inventory.getItems().some(item => warnsOnDeposit(furniture, item))) {
+      confirmDeposit(event, context, position, inventory, apply);
+    } else apply();
   }, "Withdraw items", () => listStorage(event), "Cancel", () => {});
   return true;
 }
@@ -123,10 +241,24 @@ function storeItemOnFurniture(event) {
   if (!context) return false;
   const { player } = event;
   if (context.house.owner !== player) { player.sendMessage("You cannot store that item here."); return true; }
+  const inventory = player.getInventory(), item = inventory.getItems()[event.itemSlot], position = positionOf(player), initialMode = playerMode(player);
+  if (!item || (event.item && event.item !== item) || (event.itemId != null && event.itemId !== item.getId())) {
+    player.sendMessage("You cannot store that item here.");
+    return true;
+  }
+  const beforePin = inventorySnapshot(inventory);
   // The Bank PIN guards this (Wiki: Bank_PIN); a locked PIN asks first, then reopens it.
-  const pin = { player, feature: "poh-costume-room", resume: () => storeItemOnFurniture(event) };
+  const pin = { player, feature: "poh-costume-room", resume: () => {
+    if (sameContext(event, context, position) && playerMode(player) === initialMode && sameInventory(inventory, beforePin)) storeItemOnFurniture(event);
+  } };
   api.emitCustomEvent("bank-pin:guard", pin);
-  if (pin.locked) return true;
+  if (pin.locked || playerMode(player) !== initialMode || !sameContext(event, context, position) || !sameInventory(inventory, beforePin)) return true;
+  if (isUltimate(player) && warnsOnDeposit(context.furniture, item)) {
+    confirmDeposit(event, context, position, inventory, () => {
+      if (!depositHouseItem(player, context.house, context.furniture, event.itemSlot)) player.sendMessage("You cannot store that item here.");
+    });
+    return true;
+  }
   if (!depositHouseItem(event.player, context.house, context.furniture, event.itemSlot)) event.player.sendMessage("You cannot store that item here.");
   return true;
 }

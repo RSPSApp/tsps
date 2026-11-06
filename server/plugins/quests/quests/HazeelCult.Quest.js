@@ -71,8 +71,19 @@ module.exports = function registerHazeelCultQuest(api) {
   const HIDDEN_ROOM_EXIT_TILE = { x: 2571, y: 3270, z: 1 };
   const HIDDEN_LADDER_TOP_TILE = { x: 2573, y: 3271, z: 2 };
   const HIDEOUT_TILE = { x: 2606, y: 9692, z: 0 };
-  const HIDEOUT_RAFT_TILE = { x: 2606, y: 9693, z: 0 };
+  const CAVE_RAFT_TILE = { x: 2567, y: 9679, z: 0 };
   const RAFT_RETURN_TILE = { x: 2568, y: 9681, z: 0 };
+  // Island landings from the original Hazeel Cult flow. The current transcript
+  // labels three correct valves "fourth" and four correct "third", so counts 3
+  // and 4 use those islands rather than the earlier 2004 third/fourth order.
+  // The 2004 third-island tile (2599,9712) is blocked in this cache; the
+  // walkable landing east of the raft is (2600,9711).
+  const RAFT_STOPS = {
+    1: { name: "first", tile: { x: 2578, y: 9687, z: 0 } },
+    2: { name: "second", tile: { x: 2593, y: 9694, z: 0 } },
+    3: { name: "fourth", tile: { x: 2616, y: 9725, z: 0 } },
+    4: { name: "third", tile: { x: 2600, y: 9711, z: 0 } },
+  };
   // Capture 1694 tick [6564]: cave 2852 lands beside the raft at (2570,9682),
   // not the disconnected Clock Tower landing (2584,9633).
   const SEWER_LANDING = { x: 2570, y: 9682, z: 0 };
@@ -128,7 +139,13 @@ module.exports = function registerHazeelCultQuest(api) {
   const STAGE_COMPLETE = 9;
 
   const SIDE_ATTR = "quest.hazeel_cult.side";
-  const VALVES_ATTR = "quest.hazeel_cult.valves";
+  // One bit per sewervalve1..5: 1 = right, 0 = left. The native start has
+  // sewervalve3 right and the rest left; the target is right, right, left,
+  // right, right (OSRS Wiki Quick guide and Quest Helper's ObjectIDs).
+  const VALVES_ATTR = "quest.hazeel_cult.valve-directions";
+  const VALVE_RIGHT = 1;
+  const VALVE_INITIAL = 1 << 2;
+  const VALVE_TARGET = (1 << 0) | (1 << 1) | (1 << 3) | (1 << 4);
 
   const POISON = ItemIdentifiers.POISON;
   const ARMOUR = ItemIdentifiers.CARNILLEAN_ARMOUR;
@@ -689,41 +706,66 @@ module.exports = function registerHazeelCultQuest(api) {
     player.sendMessage("Inside the chest you find the Carnillean family armour.");
   }
 
+  function correctValves(value) {
+    let correct = 0;
+    while (correct < VALVE_IDS.length
+      && ((value >> correct) & 1) === ((VALVE_TARGET >> correct) & 1)) correct++;
+    return correct;
+  }
+
+  function objectTileOf(event) {
+    const point = event.object?.getLocation?.() ?? event.location;
+    if (!point) return null;
+    return typeof point.getX === "function"
+      ? { x: point.getX(), y: point.getY(), z: point.getZ() }
+      : point;
+  }
+
   function handleValve(event) {
     const index = VALVE_IDS.indexOf(event.objectId);
     if (index === -1) return;
     const { player } = event;
-    const value = attr(player, VALVES_ATTR) ^ (1 << index);
-    setAttr(player, VALVES_ATTR, value);
-    player.sendMessage("Beneath your feet you hear the sudden sound of rushing water.");
+    const right = ((attr(player, VALVES_ATTR) >> index) & 1) === VALVE_RIGHT;
+    const direction = right ? "right" : "left";
+    const turn = right ? "left" : "right";
+    api.sendMultiChatboxPrompt(
+      player,
+      `The valve is currently turned to the ${direction}.`,
+      `Turn it to the ${turn}.`,
+      () => {
+        const value = attr(player, VALVES_ATTR);
+        setAttr(player, VALVES_ATTR, right ? value & ~(1 << index) : value | (1 << index));
+        player.sendMessage(`You turn the valve to the ${turn}. Beneath your feet you hear the sudden sound of rushing water.`);
+      },
+      "Do nothing.",
+      () => player.sendMessage("You leave the valve alone.")
+    );
     event.handled = true;
   }
 
   function handleRaft(event) {
     if (event.objectId !== RAFT_ID) return;
     const { player } = event;
-    if (quest.getStage(player) < STAGE_CHOSEN_SIDE) {
-      player.sendMessage("Clivet stops you from using the raft.");
+    const tile = objectTileOf(event);
+    const atCave = tile && tile.x === CAVE_RAFT_TILE.x && tile.y === CAVE_RAFT_TILE.y
+      && (tile.z ?? 0) === CAVE_RAFT_TILE.z;
+    if (!atCave) {
+      player.moveTo(new Location(RAFT_RETURN_TILE.x, RAFT_RETURN_TILE.y, RAFT_RETURN_TILE.z));
+      player.sendMessage("The raft flows back to the cave entrance.");
       event.handled = true;
       return;
     }
-    const value = attr(player, VALVES_ATTR);
-    let correct = 0;
-    while (correct < 5 && (value & (1 << correct)) !== 0) correct++;
-    if (correct < 5) {
-      player.sendMessage("The current is flowing against the raft. It will not move.");
-      event.handled = true;
-      return;
+    const correct = correctValves(attr(player, VALVES_ATTR));
+    if (correct === 0) {
+      player.sendMessage("The current is flowing against the raft. It won't move.");
+    } else if (correct === VALVE_IDS.length) {
+      player.moveTo(new Location(HIDEOUT_TILE.x, HIDEOUT_TILE.y, HIDEOUT_TILE.z));
+      player.sendMessage("The raft washes up the sewer until it reaches the end of the passage.");
+    } else {
+      const stop = RAFT_STOPS[correct];
+      player.moveTo(new Location(stop.tile.x, stop.tile.y, stop.tile.z));
+      player.sendMessage(`The raft washes up the sewer and stops at the ${stop.name} island. You'll need to find the right combination of the five sewer valves above if you want to go further.`);
     }
-    const location = player.getLocation();
-    const atHideout =
-      Math.max(
-        Math.abs(location.getX() - HIDEOUT_RAFT_TILE.x),
-        Math.abs(location.getY() - HIDEOUT_RAFT_TILE.y)
-      ) <= 2;
-    const destination = atHideout ? RAFT_RETURN_TILE : HIDEOUT_TILE;
-    player.moveTo(new Location(destination.x, destination.y, destination.z));
-    player.sendMessage("The raft carries you past the islands to the end of the sewer passage.");
     event.handled = true;
   }
 
@@ -867,7 +909,7 @@ module.exports = function registerHazeelCultQuest(api) {
   api.persistAttribute(MARK_GIVEN_ATTRIBUTE, false);
   api.persistAttribute(ALOMONE_HOSTILE_ATTRIBUTE, false);
   api.persistAttribute(SIDE_ATTR);
-  api.persistAttribute(VALVES_ATTR);
+  api.persistAttribute(VALVES_ATTR, VALVE_INITIAL);
 
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);

@@ -2,6 +2,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ChunkedPluginMessageAssembler = exports.MAX_PLUGIN_CHUNKS = exports.PLUGIN_CHUNK_PAYLOAD_CHARS = exports.MAX_COMPRESSED_PLUGIN_BYTES = exports.MAX_CHUNKED_PLUGIN_BYTES = void 0;
+exports.encodeBase64 = encodeBase64;
 exports.encodeChunkedPluginMessage = encodeChunkedPluginMessage;
 /** Bounded UTF-8 JSON framing inside the existing 16KiB plugin packet codec. */
 const zlib = require('node:zlib');
@@ -19,11 +20,19 @@ function record(value) {
 function session(value) {
     return typeof value === "string" && /^[A-Za-z0-9_.:-]{1,128}$/.test(value);
 }
+/** Base64 of raw bytes, built a block at a time: a byte-by-byte string append is quadratic on phones. */
 function encodeBase64(bytes) {
-    let binary = "";
-    for (const byte of bytes)
-        binary += String.fromCharCode(byte);
-    return btoa(binary);
+    const parts = [];
+    for (let i = 0; i < bytes.length; i += 0x2000)
+        parts.push(String.fromCharCode.apply(null, bytes.subarray(i, i + 0x2000)));
+    return btoa(parts.join(""));
+}
+function decodeBase64(text) {
+    const binary = atob(text);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++)
+        bytes[i] = binary.charCodeAt(i);
+    return bytes;
 }
 function encodeChunkedPluginMessage(data) {
     if (!record(data) || !session(data.session))
@@ -96,10 +105,9 @@ class ChunkedPluginMessageAssembler {
         let joined = "";
         for (let i = 0; i < current.total; i++)
             joined += current.parts.get(i);
-        const binary = atob(joined);
-        if (binary.length > exports.MAX_COMPRESSED_PLUGIN_BYTES)
+        let bytes = decodeBase64(joined);
+        if (bytes.length > exports.MAX_COMPRESSED_PLUGIN_BYTES)
             throw new Error("Plugin assembly exceeds byte limit");
-        let bytes = Uint8Array.from(binary, char => char.charCodeAt(0));
         if (current.encoding === 'deflate-base64-json') {
             const inflater = new pako.Inflate({ chunkSize: 16384 });
             let length = 0;

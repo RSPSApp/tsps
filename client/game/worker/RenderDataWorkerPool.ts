@@ -1,3 +1,4 @@
+import { getCustomDefinitions } from "../../custom/definitions/CustomDefinitionStore";
 import { ModuleThread, Pool, spawn } from "threads";
 import { QueuedTask } from "threads/dist/master/pool";
 import { WorkerDescriptor } from "threads/dist/master/pool-types";
@@ -75,6 +76,7 @@ export class RenderDataWorkerPool {
                 return w.setCustomContent({ gamemodeId: "custom-items", datasets: [
                     { key: "customItems", rows: Array.from(CustomItemRegistry.getAll(), (item) => item.definition) },
                     { key: "customModels", rows: CustomModelRegistry.getAll() },
+                    { key: "customDefinitions", rows: getCustomDefinitions() },
                 ] });
             });
         }
@@ -179,6 +181,7 @@ export class RenderDataWorkerPool {
             const payload = { gamemodeId: "custom-items", datasets: [
                 { key: "customItems", rows: Array.from(CustomItemRegistry.getAll(), item => item.definition) },
                 { key: "customModels", rows: CustomModelRegistry.getAll() },
+                    { key: "customDefinitions", rows: getCustomDefinitions() },
             ] };
             this.npcPoseContentReady = this.runAll(worker => worker.setCustomContent(payload))
                 .catch(error => { this.npcPoseModelsRevision = -1; throw error; });

@@ -103,9 +103,9 @@ function withdraw(player, noted) {
     return;
   }
   const amount = noted
-    ? stored
+    ? inventory.getAddableAmount(new core.Item(notedBowString(), stored))
     : Math.min(stored, inventory.getFreeSlots());
-  if (amount <= 0 || (noted && inventory.getFreeSlots() <= 0 && !inventory.contains(notedBowString()))) {
+  if (amount <= 0) {
     player.sendMessage("You don't have enough inventory space.");
     return;
   }

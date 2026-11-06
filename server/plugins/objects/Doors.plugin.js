@@ -7,6 +7,10 @@ let core;
 // 300 seconds (500 ticks @ 600ms/tick). Cross-checked against rsmod/OpenRune-Server
 // (DoorConstants.DURATION = 500) and a from-scratch OSRS-parity server (DOOR_AUTO_CLOSE_TICKS).
 const DOOR_AUTO_CLOSE_TICKS = 500;
+/** MovementQueue.IGNORE_CLIPPING_FLAG: the flagged mobile's steps go on whatever the map blocks. */
+const IGNORE_CLIPPING_FLAG = "movement:ignore-clipping";
+/** A walkOver opener keeps the flag until they are across, and no longer than this. */
+const WALK_OVER_MAX_TICKS = 2;
 
 // Single-door closed/open pairs are discovered from this server's own cache instead of a
 // hand-picked ID list: OSRS models every plain door as two consecutive loc ids where the
@@ -54,6 +58,7 @@ const NAMELESS_DOOR_LEAF_IDS = Object.freeze({
   ARENA_EXIT_OPEN: 3787, // troll_stronghold_arena_exit_inactive
   PRISON_DOOR_9_OPEN: 3781, // troll_stronghold_prison_door_open, capture 740
   GRUM_DOOR_OPEN: 1542, // Grum's Gold Exchange; capture 465
+  PIP_MAUSOLEUM_GATE_OPEN: 3446, // inacpip_underground_door; Priest in Peril capture 2026-11-02
   CRANDOR_SECRET_DOOR_OPEN: 25039, // dragonsecretdoor_open; capture 2951
   INVISWALL: 38848, // actionless collision blocker; captures 2951 and 740
 });
@@ -442,6 +447,35 @@ function defineDoorData({ ObjectIdentifiers: O }) {
       crossX: 3016,
       closeTicks: 2,
       openSoundId: 62, // the door sound, as captured
+    }),
+    // Priest in Peril mausoleum gates (RSProx recordings 2026-10-17 tick 1117, 2026-11-02 ticks
+    // 11016, 11664-11666 and 11708-11710): Open swaps the gate for INVISWALL on its own tile and
+    // the one inactive leaf on the tile beyond, the player steps through, and the gate is back two
+    // ticks later. The opener crosses with an ordinary walk (no exactmove in either recording), so
+    // they walk over the blocker (walkOver) instead of being carried; anyone else is stopped by it,
+    // which keeps the first gate's golden-key lock. The quest's key rule runs before this
+    // (door:toggle).
+    Object.freeze({
+      closed: [[O.GATE_70, 3405, 9895, 0, 3]],
+      opened: [
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 3405, 9895, 0, 3],
+        [NAMELESS_DOOR_LEAF_IDS.PIP_MAUSOLEUM_GATE_OPEN, 3405, 9894, 0, 0],
+      ],
+      crossY: 9895,
+      walkOver: true,
+      closeTicks: 2,
+      openSoundId: 69,
+    }),
+    Object.freeze({
+      closed: [[O.GATE_71, 3431, 9897, 0, 2]],
+      opened: [
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 3431, 9897, 0, 2],
+        [NAMELESS_DOOR_LEAF_IDS.PIP_MAUSOLEUM_GATE_OPEN, 3432, 9897, 0, 3],
+      ],
+      crossX: 3432,
+      walkOver: true,
+      closeTicks: 2,
+      openSoundId: 69,
     }),
     // Dragon Slayer's secret wall into Crandor's dungeon (capture 2951 ticks 85-89): the quest opens it
     // through door:open once the shortcut is unlocked. The player walks 2836,9598 -> 9599 -> 9600 while
@@ -1423,6 +1457,42 @@ function carryOneTile(player, gate, x, y, z) {
       new core.Location(acrossX ? delta : 0, acrossX ? 0 : delta, 0), 0, 30, direction, GATE_WALK_ANIMATION)));
 }
 
+/** Players walking over a walkOver gate's blocker, with whether they had the flag before. */
+const WALKING_OVER = new WeakMap();
+
+function endWalkOver(player, token) {
+  const state = WALKING_OVER.get(player);
+  if (!state || (token && state.token !== token)) return;
+  WALKING_OVER.delete(player);
+  if (!state.previous) player.removeFlag?.(IGNORE_CLIPPING_FLAG);
+}
+
+/**
+ * A gate that keeps a blocker on its doorway while open, crossed with an ordinary walk: the opener's
+ * one step ignores clipping and the flag ends once they are across (at most WALK_OVER_MAX_TICKS),
+ * so the blocker stops everyone else and no forced movement is sent.
+ */
+function walkOverGate(player, destination) {
+  endWalkOver(player);
+  const token = {};
+  WALKING_OVER.set(player, { token, previous: player.hasFlag?.(IGNORE_CLIPPING_FLAG) === true });
+  player.setFlag?.(IGNORE_CLIPPING_FLAG, true);
+  const queue = player.getMovementQueue();
+  queue.reset();
+  queue.addSteps(destination);
+  let ticks = WALK_OVER_MAX_TICKS;
+  const task = new core.Task(1, false);
+  task.execute = () => {
+    const here = player.getLocation();
+    const across = here.getX() === destination.getX() && here.getY() === destination.getY();
+    if (across || --ticks <= 0 || (queue.size?.() ?? 0) === 0) {
+      task.stop();
+      endWalkOver(player, token);
+    }
+  };
+  core.TaskManager.submit(task);
+}
+
 /** The player crosses on the clicked row or column, from whichever side they stand on. */
 function stepThroughGate(player, gate, x, y, z) {
   if (gate.crossBetween) {
@@ -1436,6 +1506,10 @@ function stepThroughGate(player, gate, x, y, z) {
   const destination = gate.crossX != null
     ? cloneLocation(player.getLocation().getX() < gate.crossX ? gate.crossX : gate.crossX - 1, y, z)
     : cloneLocation(x, player.getLocation().getY() < gate.crossY ? gate.crossY : gate.crossY - 1, z);
+  if (gate.walkOver) {
+    walkOverGate(player, destination);
+    return;
+  }
   const queue = player.getMovementQueue();
   queue.reset();
   queue.addSteps(destination);

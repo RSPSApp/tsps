@@ -396,7 +396,7 @@ for (const [name, backend] of persistenceBackends) {
   test(`${name}: missing or invalid saved combat styles retain the safe default`, () => {
     for (const fightType of [undefined, null, {}, "UNARMED_BLOCK", { animation: -123456 }]) {
       const save = backend.hydratePlayerSave({ fightType });
-      assert.equal(save.getFightType(), FightType.UNARMED_KICK);
+      assert.equal(save.getFightType(), FightType.UNARMED_PUNCH);
     }
   });
 }
@@ -430,7 +430,7 @@ for (const [name, backend] of persistenceBackends) {
       assert.equal(loggedIn.getPacketSender().getVarp(43), fightType.getChildId());
       for (const invalid of [undefined, null, {}, { animation: -123456 }]) {
         const invalidSave = backend.hydratePlayerSave({ ...save, fightType: invalid });
-        assert.equal(invalidSave.getFightType(), FightType.UNARMED_KICK, "invalid styles keep the safe fallback with equipment too");
+        assert.equal(invalidSave.getFightType(), FightType.UNARMED_PUNCH, "invalid styles keep the safe fallback with equipment too");
       }
     }
   });

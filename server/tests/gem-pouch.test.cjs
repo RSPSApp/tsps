@@ -300,6 +300,279 @@ test("a tote holds 20 each and Empty conserves what fits", async (t) => {
   assert.equal(stored(f, I.UNCUT_OPAL), 0);
 });
 
+// Sack upgrade joins two per-player stores. The legacy duplicate refusal is our conservative
+// policy for states this server allowed, not a claim about a live-game message.
+for (const reason of ["level", "skin", "needle", "thread", "bag", "tote"]) {
+  test(`a sack recipe refused for ${reason} gives feedback and preserves its contents`, async (t) => {
+    const tote = id("gem_tote"), bag = id("gem_bag");
+    const parts = [I.NEEDLE, I.THREAD, I.IMMACULATE_MOLE_SKIN, tote, bag];
+    const missing = { skin: I.IMMACULATE_MOLE_SKIN, needle: I.NEEDLE, thread: I.THREAD, bag, tote }[reason];
+    const items = parts.filter((item) => item !== missing);
+    const pair = reason === "bag" ? [I.NEEDLE, tote] : reason === "tote" ? [I.NEEDLE, bag] : [bag, tote];
+    const message = {
+      level: /Crafting level of 81/i, skin: /need immaculate mole skin/i, needle: /need needle/i,
+      thread: /need thread/i, bag: /need gem bag/i, tote: /need gem tote/i,
+    }[reason];
+    const bagFamily = Storage.FAMILIES.get("gem-bag");
+    for (const reverse of [false, true]) {
+      const f = actor(t, items, reason === "level" ? 80 : 81);
+      Storage.store(f.p, family, I.UNCUT_OPAL, 4);
+      Storage.store(f.p, bagFamily, I.UNCUT_RUBY, 3);
+      const given = watchXp(t, f), before = parts.map((item) => has(f, item));
+      await use(f, ...(reverse ? [...pair].reverse() : pair));
+      assert.deepEqual(parts.map((item) => has(f, item)), before, `items, reverse=${reverse}`);
+      assert.equal(has(f, id("gem_sack")), 0);
+      assert.deepEqual([stored(f, I.UNCUT_OPAL), Storage.amountOf(f.p, bagFamily, I.UNCUT_RUBY)], [4, 3]);
+      assert.deepEqual(given, []);
+      assert.ok(f.messages.some((text) => message.test(text)), `reason=${reason} reverse=${reverse}: ${JSON.stringify(f.messages)}`);
+    }
+  });
+}
+
+test("an empty inventory gives sack Fill feedback", async (t) => {
+  const f = actor(t, [id("gem_sack")]);
+  await click(f, id("gem_sack"), "Fill");
+  assert.ok(f.messages.some((text) => /nothing suitable.*sack/i.test(text)), JSON.stringify(f.messages));
+});
+
+test("a full sack gives Fill feedback without consuming a gem", async (t) => {
+  const f = actor(t, [id("gem_sack"), I.UNCUT_OPAL]);
+  const sack = Storage.FAMILIES.get("gem-sack");
+  Storage.store(f.p, sack, I.UNCUT_OPAL, 60);
+  await click(f, id("gem_sack"), "Fill");
+  assert.equal(has(f, I.UNCUT_OPAL), 1);
+  assert.equal(Storage.amountOf(f.p, sack, I.UNCUT_OPAL), 60);
+  assert.ok(f.messages.some((text) => /sack.*full/i.test(text)), JSON.stringify(f.messages));
+});
+
+test("an empty sack gives Empty feedback in inventory and at the bank", async (t) => {
+  const f = actor(t, [id("gem_sack")]);
+  await click(f, id("gem_sack"), "Empty");
+  assert.match(f.messages.at(-1), /gem sack is empty/i);
+  const prior = f.messages.length;
+  Storage.FAMILIES.get("gem-sack").bankEmpty(f.p);
+  assert.equal(f.messages.length, prior + 1);
+  assert.match(f.messages.at(-1), /gem sack is empty/i);
+});
+
+test("upgrading tote and real gem bag to a sack conserves both stores", async (t) => {
+  const tote = id("gem_tote");
+  const bag = id("gem_bag");
+  const f = actor(t, [I.NEEDLE, I.THREAD, I.IMMACULATE_MOLE_SKIN, tote, bag], 81);
+  const bagFamily = Storage.FAMILIES.get("gem-bag");
+  Storage.store(f.p, family, I.UNCUT_OPAL, 4);
+  Storage.store(f.p, bagFamily, I.UNCUT_RUBY, 3);
+  const given = watchXp(t, f);
+  await use(f, tote, bag);
+  assert.equal(id("gem_sack"), 33393);
+  assert.equal(has(f, 33393), 1);
+  assert.deepEqual([tote, bag, I.THREAD, I.IMMACULATE_MOLE_SKIN].map((item) => has(f, item)), [0, 0, 0, 0]);
+  assert.equal(has(f, I.NEEDLE), 1);
+  assert.deepEqual(given, [300]);
+  assert.equal(f.messages.filter((text) => text === "You sew a gem sack.").length, 1);
+  const sack = Storage.FAMILIES.get("gem-sack");
+  assert.ok(sack);
+  assert.deepEqual([Storage.amountOf(f.p, sack, I.UNCUT_OPAL), Storage.amountOf(f.p, sack, I.UNCUT_RUBY)], [4, 3]);
+  assert.equal(Storage.total(f.p, family) + Storage.total(f.p, bagFamily), 0);
+  await click(f, 33393, "Check");
+  await click(f, 33393, "Empty");
+  assert.deepEqual([has(f, I.UNCUT_OPAL), has(f, I.UNCUT_RUBY)], [4, 3]);
+  assert.equal(Storage.total(f.p, sack), 0);
+});
+
+test("sack Check labels gems consistently with the pouch", async (t) => {
+  const f = actor(t, [id("gem_sack")]);
+  Storage.store(f.p, Storage.FAMILIES.get("gem-sack"), I.UNCUT_OPAL, 4);
+  await click(f, id("gem_sack"), "Check");
+  assert.match(f.messages.at(-1), /Opal: 4/);
+  assert.doesNotMatch(f.messages.at(-1), /Uncut /);
+});
+
+test("a sack upgrade with another real gem bag refuses without changing items or stores", async (t) => {
+  const tote = id("gem_tote");
+  const bag = id("gem_bag");
+  const f = actor(t, [I.NEEDLE, I.THREAD, I.IMMACULATE_MOLE_SKIN, tote, bag, bag]);
+  const bagFamily = Storage.FAMILIES.get("gem-bag");
+  Storage.store(f.p, family, I.UNCUT_OPAL, 4);
+  Storage.store(f.p, bagFamily, I.UNCUT_RUBY, 3);
+  const given = watchXp(t, f);
+  await use(f, bag, tote);
+  assert.deepEqual([has(f, tote), has(f, bag), has(f, I.THREAD), has(f, I.IMMACULATE_MOLE_SKIN), has(f, 33393)], [1, 2, 1, 1, 0]);
+  assert.deepEqual([stored(f, I.UNCUT_OPAL), Storage.amountOf(f.p, bagFamily, I.UNCUT_RUBY)], [4, 3]);
+  assert.deepEqual(given, []);
+});
+
+test("a banked duplicate blocks sack upgrade without losing either store", async (t) => {
+  const tote = id("gem_tote");
+  const bag = id("gem_bag");
+  const f = actor(t, [I.NEEDLE, I.THREAD, I.IMMACULATE_MOLE_SKIN, tote, bag]);
+  f.p.getBank(0).add(new core.Item(id("gem_satchel")), false);
+  const bagFamily = Storage.FAMILIES.get("gem-bag");
+  Storage.store(f.p, family, I.UNCUT_OPAL, 4);
+  Storage.store(f.p, bagFamily, I.UNCUT_RUBY, 3);
+  await use(f, tote, bag);
+  assert.deepEqual([has(f, tote), has(f, bag), has(f, 33393)], [1, 1, 0]);
+  assert.deepEqual([stored(f, I.UNCUT_OPAL), Storage.amountOf(f.p, bagFamily, I.UNCUT_RUBY)], [4, 3]);
+  assert.equal(f.p.getBank(0).getAmount(id("gem_satchel")), 1);
+});
+
+test("banked or equipped duplicate real bags block upgrade and preserve inputs", async (t) => {
+  const tote = id("gem_tote");
+  const bag = id("gem_bag");
+  const bagFamily = Storage.FAMILIES.get("gem-bag");
+  for (const where of ["bank", "equipment"]) {
+    const f = actor(t, [I.NEEDLE, I.THREAD, I.IMMACULATE_MOLE_SKIN, tote, bag]);
+    if (where === "bank") f.p.getBank(0).add(new core.Item(bag), false);
+    else f.p.getEquipment().setItem(core.Equipment.HEAD_SLOT, new core.Item(bag));
+    Storage.store(f.p, family, I.UNCUT_OPAL, 4);
+    Storage.store(f.p, bagFamily, I.UNCUT_RUBY, 3);
+    const given = watchXp(t, f);
+    await use(f, tote, bag);
+    assert.deepEqual([has(f, tote), has(f, bag), has(f, I.THREAD), has(f, I.IMMACULATE_MOLE_SKIN), has(f, 33393)], [1, 1, 1, 1, 0]);
+    assert.deepEqual([stored(f, I.UNCUT_OPAL), Storage.amountOf(f.p, bagFamily, I.UNCUT_RUBY)], [4, 3]);
+    assert.deepEqual(given, []);
+  }
+});
+
+test("sack destroy event clears only the last owned copy's store", (t) => {
+  const f = actor(t, [33393, 33393]);
+  const sack = Storage.FAMILIES.get("gem-sack");
+  assert.ok(sack);
+  Storage.store(f.p, sack, I.UNCUT_OPAL, 4);
+  f.inv.deleteNumber(33393, 1);
+  PM.emitCustomEvent("destroy-item:destroyed", { player: f.p, itemId: 33393 });
+  assert.equal(Storage.amountOf(f.p, sack, I.UNCUT_OPAL), 4);
+  f.inv.deleteNumber(33393, 1);
+  PM.emitCustomEvent("destroy-item:destroyed", { player: f.p, itemId: 33393 });
+  assert.equal(Storage.total(f.p, sack), 0);
+});
+
+test("sack ingredients route in either direction and incomplete recipes leave items intact", async (t) => {
+  const tote = id("gem_tote");
+  const bag = id("gem_bag");
+  for (const component of [I.NEEDLE, I.THREAD]) for (const reverse of [false, true]) {
+    const f = actor(t, [I.NEEDLE, I.THREAD, I.IMMACULATE_MOLE_SKIN, tote, bag]);
+    await use(f, ...(reverse ? [tote, component] : [component, tote]));
+    assert.equal(has(f, 33393), 1, `component=${component} reverse=${reverse}`);
+    const missing = actor(t, [I.NEEDLE, I.THREAD, tote]);
+    await use(missing, ...(reverse ? [tote, component] : [component, tote]));
+    assert.deepEqual([has(missing, tote), has(missing, I.THREAD), has(missing, 33393)], [1, 1, 0]);
+  }
+});
+
+test("invalid saved source records block upgrade without changing either raw store or items", async (t) => {
+  const tote = id("gem_tote");
+  const bag = id("gem_bag");
+  const cases = ["invalid", [[]], [[1.5, 1]], [[I.UNCUT_OPAL, 1], [I.UNCUT_OPAL, 2]], [[I.UNCUT_RUBY, 1]], [[I.UNCUT_OPAL, 1.5]], [[I.UNCUT_OPAL, 61]]];
+  for (const raw of cases) {
+    const f = actor(t, [I.NEEDLE, I.THREAD, I.IMMACULATE_MOLE_SKIN, tote, bag]);
+    f.p.setAttribute("storage-items:gem-pouch", raw);
+    f.p.setAttribute("storage-items:gem-bag", [[I.UNCUT_RUBY, 3]]);
+    const given = watchXp(t, f);
+    await use(f, tote, bag);
+    assert.deepEqual(f.p.getAttribute("storage-items:gem-pouch"), raw);
+    assert.deepEqual(f.p.getAttribute("storage-items:gem-bag"), [[I.UNCUT_RUBY, 3]]);
+    assert.deepEqual([has(f, tote), has(f, bag), has(f, I.THREAD), has(f, I.IMMACULATE_MOLE_SKIN), has(f, 33393)], [1, 1, 1, 1, 0]);
+    assert.deepEqual(given, []);
+  }
+});
+
+test("an unowned sack store joins both lower stores and can be emptied", async (t) => {
+  const tote = id("gem_tote"), bag = id("gem_bag"), sack = Storage.FAMILIES.get("gem-sack");
+  const f = actor(t, [I.NEEDLE, I.THREAD, I.IMMACULATE_MOLE_SKIN, tote, bag]);
+  f.p.setAttribute("storage-items:gem-sack", [[I.UNCUT_OPAL, 2], [I.UNCUT_RUBY, 5], [I.UNCUT_JADE, 1]]);
+  f.p.setAttribute("storage-items:gem-pouch", [[I.UNCUT_OPAL, 4]]);
+  f.p.setAttribute("storage-items:gem-bag", [[I.UNCUT_RUBY, 3]]);
+  const given = watchXp(t, f);
+  await use(f, tote, bag);
+  assert.equal(has(f, id("gem_sack")), 1);
+  assert.deepEqual([I.UNCUT_OPAL, I.UNCUT_RUBY, I.UNCUT_JADE].map((item) => Storage.amountOf(f.p, sack, item)), [6, 8, 1]);
+  assert.equal(Storage.total(f.p, family) + Storage.total(f.p, Storage.FAMILIES.get("gem-bag")), 0);
+  assert.deepEqual(given, [300]);
+  await click(f, id("gem_sack"), "Empty");
+  assert.deepEqual([I.UNCUT_OPAL, I.UNCUT_RUBY, I.UNCUT_JADE].map((item) => has(f, item)), [6, 8, 1]);
+  assert.equal(Storage.total(f.p, sack), 0);
+});
+
+test("orphaned contents merge at capacity and refuse overflow without mutation", async (t) => {
+  const tote = id("gem_tote"), bag = id("gem_bag"), sack = Storage.FAMILIES.get("gem-sack");
+  for (const amount of [58, 59]) {
+    const f = actor(t, [I.NEEDLE, I.THREAD, I.IMMACULATE_MOLE_SKIN, tote, bag]);
+    const orphan = [[I.UNCUT_OPAL, 2]], pouch = [[I.UNCUT_OPAL, amount]], gems = [[I.UNCUT_RUBY, 3]];
+    f.p.setAttribute("storage-items:gem-sack", orphan);
+    f.p.setAttribute("storage-items:gem-pouch", pouch);
+    f.p.setAttribute("storage-items:gem-bag", gems);
+    const given = watchXp(t, f);
+    await use(f, tote, bag);
+    if (amount === 58) {
+      assert.equal(has(f, id("gem_sack")), 1);
+      assert.equal(Storage.amountOf(f.p, sack, I.UNCUT_OPAL), 60);
+      assert.equal(Storage.amountOf(f.p, sack, I.UNCUT_RUBY), 3);
+      assert.deepEqual(given, [300]);
+    } else {
+      assert.deepEqual([has(f, tote), has(f, bag), has(f, I.THREAD), has(f, I.IMMACULATE_MOLE_SKIN), has(f, id("gem_sack"))], [1, 1, 1, 1, 0]);
+      assert.deepEqual(f.p.getAttribute("storage-items:gem-sack"), orphan);
+      assert.deepEqual(f.p.getAttribute("storage-items:gem-pouch"), pouch);
+      assert.deepEqual(f.p.getAttribute("storage-items:gem-bag"), gems);
+      assert.deepEqual(given, []);
+    }
+  }
+});
+
+test("owned sack variants block upgrade without mutation", async (t) => {
+  const tote = id("gem_tote");
+  const bag = id("gem_bag");
+  for (const variant of [33393, 33395]) for (const where of ["inventory", "bank"]) {
+    const f = actor(t, [I.NEEDLE, I.THREAD, I.IMMACULATE_MOLE_SKIN, tote, bag]);
+    if (where === "bank") f.p.getBank(0).add(new core.Item(variant), false);
+    else f.inv.add(new core.Item(variant), false);
+    const before = f.p.getAttribute("storage-items:gem-sack");
+    const given = watchXp(t, f);
+    await use(f, tote, bag);
+    assert.deepEqual([has(f, tote), has(f, bag), has(f, I.THREAD), has(f, I.IMMACULATE_MOLE_SKIN)], [1, 1, 1, 1]);
+    assert.deepEqual(f.p.getAttribute("storage-items:gem-sack"), before);
+    assert.deepEqual(given, []);
+  }
+});
+
+test("invalid orphaned sack records refuse without changing any store or item", async (t) => {
+  const tote = id("gem_tote"), bag = id("gem_bag");
+  for (const raw of ["invalid", [[I.UNCUT_OPAL, 1], [I.UNCUT_OPAL, 2]], [[I.UNCUT_OPAL, 61]], [[I.RAKE, 1]]]) {
+    const f = actor(t, [I.NEEDLE, I.THREAD, I.IMMACULATE_MOLE_SKIN, tote, bag]);
+    f.p.setAttribute("storage-items:gem-sack", raw);
+    f.p.setAttribute("storage-items:gem-pouch", [[I.UNCUT_OPAL, 4]]);
+    f.p.setAttribute("storage-items:gem-bag", [[I.UNCUT_RUBY, 3]]);
+    const given = watchXp(t, f);
+    await use(f, tote, bag);
+    assert.deepEqual(f.p.getAttribute("storage-items:gem-sack"), raw);
+    assert.deepEqual(f.p.getAttribute("storage-items:gem-pouch"), [[I.UNCUT_OPAL, 4]]);
+    assert.deepEqual(f.p.getAttribute("storage-items:gem-bag"), [[I.UNCUT_RUBY, 3]]);
+    assert.deepEqual([has(f, tote), has(f, bag), has(f, I.THREAD), has(f, I.IMMACULATE_MOLE_SKIN)], [1, 1, 1, 1]);
+    assert.deepEqual(given, []);
+  }
+});
+
+test("sack caps each gem class at 60 and keeps the extra in inventory", async (t) => {
+  const f = actor(t, [33393, I.UNCUT_OPAL, I.UNCUT_OPAL, I.UNCUT_RUBY, I.UNCUT_RUBY]);
+  const sack = Storage.FAMILIES.get("gem-sack");
+  assert.ok(sack);
+  Storage.store(f.p, sack, I.UNCUT_OPAL, 59);
+  Storage.store(f.p, sack, I.UNCUT_RUBY, 59);
+  await click(f, 33393, "Fill");
+  assert.deepEqual([Storage.amountOf(f.p, sack, I.UNCUT_OPAL), Storage.amountOf(f.p, sack, I.UNCUT_RUBY)], [60, 60]);
+  assert.deepEqual([has(f, I.UNCUT_OPAL), has(f, I.UNCUT_RUBY)], [1, 1]);
+});
+
+test("an open sack takes a mined semi-precious gem", async (t) => {
+  assert.equal(id("gem_sack_open"), 33395);
+  const f = actor(t, [33395]);
+  await mineOpal(t, f);
+  const sack = Storage.FAMILIES.get("gem-sack");
+  assert.ok(sack);
+  assert.equal(Storage.amountOf(f.p, sack, I.UNCUT_OPAL), 1);
+  assert.equal(has(f, I.UNCUT_OPAL), 0);
+});
+
 // ------------------------------------------------------------------ Holding gems
 
 for (const [closed, open] of [["gem_pouch", "gem_pouch_open"], ["gem_satchel", "gem_satchel_open"], ["gem_tote", "gem_tote_open"]]) {

@@ -988,6 +988,23 @@ export function decodeServerPacket(data: Uint8Array | ArrayBuffer): DecodedServe
                 },
             };
 
+        case ServerPacketId.WIDGET_SET_ROTATE_SPEED: {
+            // IF_SETROTATESPEED: uid, then y (yaw) speed in the high short and x in the low,
+            // both signed graphics-cycle deltas (recording 1723).
+            const uid = reader.readInt();
+            const packed = reader.readInt();
+            const signed = (value: number) => (value > 0x7fff ? value - 0x10000 : value);
+            return {
+                type: "widget",
+                payload: {
+                    action: "set_rotate_speed",
+                    uid,
+                    speedX: signed(packed & 0xffff),
+                    speedY: signed((packed >>> 16) & 0xffff),
+                },
+            };
+        }
+
         case ServerPacketId.WIDGET_SET_POSITION:
             return {
                 type: "widget",
@@ -1689,6 +1706,14 @@ export function decodeServerPacket(data: Uint8Array | ArrayBuffer): DecodedServe
 
         case ServerPacketId.RESET_INTERACTION_MODE: {
             return { type: "reset_interaction_mode", payload: { worldId: reader.readSignedShort() } };
+        }
+
+        case ServerPacketId.HIDE_NPC_OPS: {
+            return { type: "hide_npc_ops", payload: { hidden: (reader.readByte() & 0xff) !== 0 } };
+        }
+
+        case ServerPacketId.HIDE_OBJ_OPS: {
+            return { type: "hide_obj_ops", payload: { hidden: (reader.readByte() & 0xff) !== 0 } };
         }
 
         case ServerPacketId.LOC_ANIM: {

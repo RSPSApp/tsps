@@ -105,6 +105,13 @@ export type WidgetServerPayload =
           zoom: number;
       }
     | {
+          /** IF_SETROTATESPEED: the model's x and y rotation speeds per graphics cycle. */
+          action: "set_rotate_speed";
+          uid: number;
+          speedX: number;
+          speedY: number;
+      }
+    | {
           action: "set_model";
           uid: number;
           modelId?: number;

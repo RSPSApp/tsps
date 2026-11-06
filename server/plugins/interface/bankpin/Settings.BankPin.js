@@ -16,6 +16,8 @@ const OPEN_TARGET = "Bank PIN";
 /** The can-bank check's sources (Bank.open, and the deposit boxes). */
 const OPEN_SOURCE = "open";
 const DEPOSIT_BOX_SOURCE = "deposit-box";
+// Ultimate Seed Vault refusal checks can-bank before the vault's separate PIN guard.
+const SEED_VAULT_SOURCE = "seed-vault";
 
 function days(player) {
   return Common.fill(Common.data.texts.days, { days: Common.delayDays(player) });
@@ -195,7 +197,7 @@ function onAction(event) {
  */
 function canBank(event) {
   const { player, source } = event;
-  if (source === DEPOSIT_BOX_SOURCE || Common.core.Bank.isOpen(player)) return;
+  if (source === DEPOSIT_BOX_SOURCE || source === SEED_VAULT_SOURCE || Common.core.Bank.isOpen(player)) return;
   Common.settle(player);
   if (!Common.hasPin(player) || Common.isUnlocked(player)) return;
   event.allow = false;

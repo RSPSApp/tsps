@@ -347,6 +347,7 @@ test("confirming destroy re-checks the drop policy and refuses an untradeable bo
 
   let destroyPolicy;
   let yesHandler;
+  const destroyEvents = [];
   const emitItemDropPolicy = (event) => {
     for (const hook of [destroyPolicy, ...handlers.dropPolicy]) hook(event);
     return event.handled === true;
@@ -354,7 +355,8 @@ test("confirming destroy re-checks the drop policy and refuses an untradeable bo
   delete require.cache[require.resolve("../plugins/interface/DestroyItem.plugin")];
   require("../plugins/interface/DestroyItem.plugin").register({
     core: { PluginManager: { emitItemDropPolicy } },
-    registerCustomInterface() {},
+    onCustomEvent() {},
+    emitCustomEvent: (name) => destroyEvents.push(name),
     onItemDropPolicy: (handler) => {
       destroyPolicy = handler;
     },
@@ -398,6 +400,7 @@ test("confirming destroy re-checks the drop policy and refuses an untradeable bo
 
   yesHandler({ player, action: 1 });
   assert.equal(deleted, 0, "the confirmed destroy must not delete the bond");
+  assert.deepEqual(destroyEvents, ["destroy-item:prompt"], "the prompt opens but no destruction event is emitted");
   assert.ok(player.messages.some((message) => message.includes("cannot be dropped or destroyed")));
 });
 

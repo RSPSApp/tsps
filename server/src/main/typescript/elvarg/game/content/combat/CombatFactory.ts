@@ -1320,31 +1320,39 @@ export class CombatFactory {
             return;
         }
 
-        // Player bots should behave as players so we don't check them here...
-
-        // We've probably already been skulled by this player.
-        const targetHasDamagedAttacker = target.getCombat().damageMapContains(attacker);
-        const attackerHasDamagedTarget = attacker.getCombat().damageMapContains(target);
-        if (targetHasDamagedAttacker || attackerHasDamagedTarget) {
-            return;
-        }
-
-        if (
-            target.getCombat().getAttacker() != null &&
-            target.getCombat().getAttacker() == attacker
-        ) {
-            return;
-        }
-
-        if (
-            attacker.getCombat().getAttacker() != null &&
-            attacker.getCombat().getAttacker() == target
-        ) {
+        if (!CombatFactory.wouldSkull(attacker, target)) {
             return;
         }
 
         // Wiki: a white skull lasts 30 minutes after attacking a player.
         CombatFactory.skull(attacker, SkullType.WHITE_SKULL, CombatFactory.PVP_SKULL_SECONDS);
+    }
+
+    /**
+     * Whether attacking `target` now would give `attacker` a skull. An already-skulled attacker
+     * only has their timer extended, and retaliation or a fight already underway never skulls.
+     */
+    public static wouldSkull(attacker: Player, target: Player): boolean {
+        if (!Wilderness.isIn(attacker) || !Wilderness.isIn(target) || attacker.isSkulled()) {
+            return false;
+        }
+
+        // Player bots should behave as players so we don't check them here...
+
+        // We've probably already been skulled by this player.
+        if (target.getCombat().damageMapContains(attacker) || attacker.getCombat().damageMapContains(target)) {
+            return false;
+        }
+
+        if (target.getCombat().getAttacker() == attacker) {
+            return false;
+        }
+
+        if (attacker.getCombat().getAttacker() == target) {
+            return false;
+        }
+
+        return true;
     }
 
     public static readonly PVP_SKULL_SECONDS = 30 * 60;

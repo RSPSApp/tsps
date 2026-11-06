@@ -284,14 +284,31 @@ function castAlternate(event) {
   }
 }
 
+/** The standard spell requires the Awowogei rescue; the Arceuus spell and tablet are separate. */
+function mayCastApeAtoll(player, name) {
+  if (name !== "ape atoll teleport" || player.getSpellbook() !== core.MagicSpellbook.NORMAL) return true;
+  const rescue = { player, rescue: "king-awowogei", complete: false };
+  pluginApi.emitCustomEvent("recipe-for-disaster:rescue-status", rescue);
+  if (rescue.complete) return true;
+  // Older completed RFD saves may not have each individual rescue bit.
+  const quest = { player, key: "recipe_for_disaster", complete: false };
+  pluginApi.emitCustomEvent("quest:is-complete", quest);
+  if (quest.complete) return true;
+  // TSPS fallback wording: the exact retail refusal has not been established.
+  player.sendMessage("You must free King Awowogei before casting this spell.");
+  return false;
+}
+
 /** A standard spellbook teleport, on a tile of its landing square; anything else is left to the usual cast. */
 function castStandard(event, name) {
+  if (!mayCastApeAtoll(event.player, name)) { event.handled = true; return; }
   const centre = standardCentre(name);
   if (centre && core.SpellTeleports.handleSelf(event.player, name, landing(centre))) event.handled = true;
 }
 
 function castSpell(event) {
   const name = spellName(event)?.trim().toLowerCase();
+  if (!mayCastApeAtoll(event.player, name)) { event.handled = true; return; }
   const destination = landing(standardCentre(name));
   if (core.SpellTeleports.handleSelf(event.player, name, destination)) {
     event.handled = true;

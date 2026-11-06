@@ -386,7 +386,9 @@ test('poison stuns the core until it hops again, and only once', () => {
 
 function shieldMaker({ prayer = 99, smithing = 99, items = [] } = {}) {
   const { Skill } = PluginManager.getCoreApi();
-  const slots = items.map((id) => ({ id }));
+  // Each slot reads like an Item: the shields are converted in place with setId.
+  const slot = (id) => ({ id, getId() { return this.id; }, setId(next) { this.id = next; } });
+  const slots = items.map(slot);
   const p = fakePlayer();
   p.xp = 0;
   p.boxes = [];
@@ -398,9 +400,10 @@ function shieldMaker({ prayer = 99, smithing = 99, items = [] } = {}) {
   p.getInventory = () => ({
     slots,
     contains: (id) => slots.some((slot) => slot.id === id),
-    setItem: (slot, item) => { slots[slot] = { id: item.getId() }; },
+    getItems: () => slots,
+    setItem: (index, item) => { slots[index] = slot(item.getId()); },
     deleteNumber: (id) => { const slot = slots.find((s) => s.id === id); if (slot) slot.id = -1; },
-    adds: (id) => slots.push({ id }),
+    adds: (id) => slots.push(slot(id)),
     refreshItems() {},
   });
   p.getDialogueManager = () => ({ startDialogues: (chain) => p.boxes.push(chain) });

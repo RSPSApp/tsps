@@ -50,7 +50,8 @@ function bless({ player, usedItem, usedItemSlot, usedWithItem, usedWithItemSlot 
   const elixirSlot = shieldSlot === usedItemSlot ? usedWithItemSlot : usedItemSlot;
   const inventory = player.getInventory();
   inventory.setItem(elixirSlot, new Item(-1, 0));
-  inventory.setItem(shieldSlot, new Item(ITEM.BLESSED_SPIRIT_SHIELD, 1));
+  // Converted in place, as items/SpiritShields does, so the shield keeps its meta: a preset copy stays one.
+  inventory.getItems()[shieldSlot].setId(ITEM.BLESSED_SPIRIT_SHIELD);
   inventory.refreshItems();
   itemBox(player, ITEM.BLESSED_SPIRIT_SHIELD, "The spirit shield glows an eerie holy glow.");
   return true;
@@ -76,8 +77,9 @@ function attach({ player, itemId }) {
     return true;
   }
   inventory.deleteNumber(itemId, 1);
-  inventory.deleteNumber(ITEM.BLESSED_SPIRIT_SHIELD, 1);
-  inventory.adds(shield, 1);
+  // Converted in place, so the shield keeps its meta: a preset (untradeable) blessed shield must not come out
+  // as a plain, tradeable spirit shield.
+  inventory.getItems().find((held) => held?.getId() === ITEM.BLESSED_SPIRIT_SHIELD).setId(shield);
   inventory.refreshItems();
   skills.addExperience(Skill.SMITHING, ATTACH_XP);
   itemBox(player, shield, "You attach the sigil to the blessed spirit shield.");

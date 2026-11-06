@@ -1185,6 +1185,10 @@ module.exports = function registerNatureSpiritQuest(api) {
     return true;
   }
 
+  function prayAtNatureAltarRequest(request) {
+    if (prayAtNatureAltar(request)) request.handled = true;
+  }
+
   function handleLogin({ player }) {
     if (quest.isComplete(player) && inGrotto(player)
       && player.getLocation().getZ() === 0) {
@@ -1253,9 +1257,8 @@ module.exports = function registerNatureSpiritQuest(api) {
   api.onGroundItemPickup(handleWashingBowlPickup);
   api.onObjectInteraction(handleGrotto);
   api.onObjectInteraction(handleBloomPick);
-  api.onCustomEvent("altar:nature-quest-prayer", (request) => {
-    if (prayAtNatureAltar(request)) request.handled = true;
-  });
+  api.onCustomEvent("altar:nature-quest-prayer", prayAtNatureAltarRequest);
+  // Fallback when the generic Altars plugin is disabled.
   api.onObjectInteraction("Altar of nature", { "Pray-at": prayAtNatureAltar });
   api.onPlayerLogin(handleLogin);
   api.onPlayerLogout(handleLogout);

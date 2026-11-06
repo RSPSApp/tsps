@@ -326,3 +326,114 @@ test("Grish's supplies: in the bag with room, and what doesn't fit goes to the g
   assert.equal(partial.inv.getAmount(I.COOKED_CHOMPY), 1, "what fits goes in the bag");
   assert.deepEqual([groundAmount(partial, I.COOKED_CHOMPY), groundAmount(partial, I.SUPER_RESTORE_3_)], [2, 2], "the rest on the ground");
 });
+
+
+// Fixed-package NPC sale: payment/first-purchase credit may not outpace delivered feathers.
+test('native Fycie first purchase conserves its fixed feather package at stack limits', async t => {
+  const {MAX_STACK_AMOUNT: CAP} = require('../dist/game/model/container/StackType');
+  const {SkillManager} = require('../dist/game/content/skill/SkillManager');
+  const q = quest('big_chompy_bird_hunting'), FLAG = 'big-chompy-bird-hunting:fycie-feathers-bought';
+  const FEATHER = I.FEATHER, COINS = I.COINS, R = I.RAKE;
+  const normalize = value => String(value ?? '').replace(/\s+/g, ' ').trim();
+  const priceChoice = "Ok, I'll give you 50 bright pretties.";
+  assert.equal(FEATHER,314); assert.equal(core.ItemDefinition.forId(FEATHER).isStackable(),true); assert.equal(q.startedValue,5);
+  for (const mode of ['room', 'exact headroom', 'poor wallet', 'physical full', 'capped stack', 'ten stack spaces']) await t.test(mode, async child => {
+    const f = actor(child), p = f.p, inv = f.inv;
+    for (const [s, level] of [[core.Skill.RANGED,30],[core.Skill.COOKING,30],[core.Skill.FLETCHING,5]]) {
+      p.getSkillManager().setExperience(s,SkillManager.getExperienceForLevel(level));
+      p.getSkillManager().setMaxLevels(s,level,false).setCurrentLevels(s,level,false);
+    }
+    q.setStage(p,q.startedValue); assert.equal(q.getStage(p),5);
+    assert.equal(p.getAttribute(FLAG) ?? 0,0,'ordinary never-purchased claim, no credit injected');
+    PM.emitPlayerLogin({player:p,username:p.getUsername()}); p.closeInterruptibleInterfaces();
+    inv.add(new core.Item(COINS,mode === 'poor wallet' ? 49 : 100),false);
+    const headroom = mode === 'capped stack' ? 0 : mode === 'ten stack spaces' ? 10 : mode === 'exact headroom' ? 25 : null;
+    if (headroom !== null) inv.add(new core.Item(FEATHER,CAP-headroom-1),false);
+    if (mode === 'physical full') fill(f);
+    const npc = core.NPC.create(N.FYCIE,new core.Location(HOME[0]+1,HOME[1],0));
+    assert.equal(core.World.getNpcs().add(npc),true); assert.equal(npc.getCurrentDefinition(p).getName(),'Fycie');
+    child.after(() => {
+      p.closeInterruptibleInterfaces(); PM.emitPlayerDisconnect({player:p,username:p.getUsername()});
+      core.TaskManager.cancelTasks(p); core.World.getNpcs().remove(npc);
+      for (const g of core.World.getItems().filter(g => g.getOwner() === p.getUsername())) ItemOnGroundManager.deregister(g);
+    });
+    const stores = id => ({inventory:inv.getAmount(id),equipment:p.getEquipment().getAmount(id),
+      bank:p.getBanks().reduce((n,b,tab) => n+(b && tab !== core.Bank.BANK_SEARCH_TAB_INDEX ? b.getAmount(id) : 0),0),
+      floor:core.World.getItems().filter(g => !g.isPendingRemoval() && g.getOwner() === p.getUsername()
+        && g.getPrivateArea() === p.getPrivateArea() && g.getItem().getId() === id).reduce((n,g) => n+g.getItem().getAmount(),0)});
+    const owned = row => Object.values(row).reduce((n,a) => n+a,0);
+    const snapshot = () => ({coins:stores(COINS),feathers:stores(FEATHER),rake:stores(R),stage:q.getStage(p),claim:p.getAttribute(FLAG) ?? 0,
+      xp:core.Skill.values().map(s => p.getSkillManager().getExperience(s))});
+    let phases = 0;
+    const turn = () => {
+      assert.ok(++phases <= 120,'bounded native task/input/movement budget'); p.resetUpdating();
+      core.World.processCycle = (core.World.processCycle+1) & 0x7fffffff; core.TaskManager.process();
+      f.c.processTurnPackets(); const movement = p.getMovementQueue(); movement.beginCycle(); movement.processEntityPursuit();
+      if (movement.hasPendingWork()) movement.process(); core.TaskManager.processWalkTo(p.getIndex());
+    };
+    const input = async packet => { await f.c.dispatch([packet]); turn(); };
+    if (headroom !== null) {
+      const at = p.getLocation(); ItemOnGroundManager.registerLocation(p,new core.Item(FEATHER),at.clone());
+      assert.equal(stores(FEATHER).floor,1);
+      await input({type:'ground_item_action',itemId:FEATHER,x:at.getX(),y:at.getY(),option:'Take',optionIndex:3});
+      for (let n=0; stores(FEATHER).floor && n<4; n++) turn();
+      assert.equal(inv.getAmount(FEATHER),CAP-headroom,'real owned Take fills the declared ordinary feather stack'); assert.equal(stores(FEATHER).floor,0);
+      const held = inv.getItems().find(item => item.getId() === FEATHER);
+      assert.deepEqual(held.getMeta(),new core.Item(FEATHER).getMeta(),'same ordinary metadata as the real sale output');
+    }
+    const expectedSpace = mode === 'physical full' ? 0 : headroom === null ? 25 : Math.min(25,headroom);
+    assert.equal(inv.getAddableAmount(new core.Item(FEATHER,25)),expectedSpace,'observed native capacity, not a stub');
+    assert.equal(inv.getFreeSlots(),mode === 'physical full' ? 0 : headroom === null ? 27 : 26);
+    const before = snapshot(), actions = [], choices = [], originalEmit = PM.emitCustomEvent.bind(PM);
+    child.mock.method(PM,'emitCustomEvent',(...args) => {
+      const [name,event] = args;
+      if (name === 'npc-dialogue:action' && event?.player === p && event.stepId === 'EA27SG') {
+        assert.equal(event.npcId,N.FYCIE); assert.equal(event.npc,npc); assert.equal(event.kind,'message'); actions.push(event.stepId);
+      }
+      if (name === 'npc-dialogue:choice' && event?.player === p && normalize(event.option) === normalize(priceChoice)) {
+        assert.equal(event.npcId,N.FYCIE); assert.equal(event.npc,npc); choices.push(event.option);
+      }
+      return originalEmit(...args);
+    });
+    const manager = p.getDialogueManager(), sender = p.getPacketSender(), seen = [];
+    const speech = async () => {
+      const current = manager.getCurrent(), group = sender.getChatboxGroupId();
+      assert.ok(current instanceof core.NpcDialogue || current instanceof core.PlayerDialogue,'actual imported speech entry required');
+      assert.equal(group,current instanceof core.NpcDialogue ? 231 : 217); assert.equal(manager.getOwner(),undefined);
+      if (current instanceof core.NpcDialogue) assert.equal(current.getNpcId(),N.FYCIE);
+      const mount = sender.subInterfaceTargets.get(group); assert.ok(mount); assert.equal(sender.getSubInterfaceAt(mount.targetUid),mount);
+      seen.push(normalize(current.getText())); await input({type:'dialogue_continue',widgetId:(group<<16)|5,childIndex:-1});
+    };
+    const talkType = npc.getCurrentDefinition(p).getActions().indexOf('Talk-to')+1; assert.ok(talkType>0);
+    await input({type:'npc_option',index:npc.getIndex(),clickType:talkType});
+    for (let n=0; !core.MultiChatboxPrompt.getPending(p) && n<12; n++) await speech();
+    assert.equal(seen[0],normalize("Hey you Creature, I know's what you is You's a 'uman!"));
+    const prompt = core.MultiChatboxPrompt.getPending(p); assert.ok(prompt); assert.equal(manager.isActive(),false); assert.equal(manager.getOwner(),undefined);
+    assert.equal(normalize(prompt.title),normalize('Select an option'));
+    assert.deepEqual(prompt.options.map(normalize),[priceChoice,"Er, sorry, I can't give you that many..."].map(normalize));
+    assert.equal(sender.getChatboxGroupId(),219); const menuMount = sender.subInterfaceTargets.get(219);
+    assert.ok(menuMount); assert.equal(sender.getSubInterfaceAt(menuMount.targetUid),menuMount); assert.deepEqual(snapshot(),before);
+    await input({type:'dialogue_continue',widgetId:core.MultiChatboxPrompt.OPTIONS_WIDGET_ID,childIndex:prompt.options.map(normalize).indexOf(normalize(priceChoice))+1});
+    for (let n=0; manager.isActive() && n<8; n++) await speech();
+    assert.equal(manager.isActive(),false); assert.equal(core.MultiChatboxPrompt.getPending(p),null);
+    const after = snapshot(), paid = owned(before.coins)-owned(after.coins), credit = owned(after.feathers)-owned(before.feathers);
+    const refused = mode === 'poor wallet' || mode === 'physical full';
+    assert.equal(choices.length,1,'the real ordinary price choice was accepted once');
+    if (mode === 'capped stack' || mode === 'ten stack spaces') assert.ok(actions.length <= 1,'canonical preflight refusal may protect the real choice');
+    else assert.equal(actions.length,refused ? 0 : 1,'actual EA27SG agrees with ordinary native quote conditions');
+    if (mode === 'capped stack' || mode === 'ten stack spaces') {
+      assert.ok(paid === 50 && credit === 25 || paid === 0 && credit === 0,
+        JSON.stringify({rule:'fixed package must deliver25 across all stores if50 is charged, or refuse atomically',mode,paid,credit,actionCount:actions.length,before,after}));
+    } else { assert.equal(paid,refused ? 0 : 50); assert.equal(credit,refused ? 0 : 25); }
+    assert.equal(after.claim,paid === 50 ? 1 : 0,'a refusal retains the unconsumed first-purchase claim');
+    assert.equal(after.stage,before.stage); assert.deepEqual(after.rake,before.rake); assert.deepEqual(after.xp,before.xp);
+    if (paid === 0) assert.deepEqual(after,before,'safe refusal preserves exact inputs and claim');
+    if (mode === 'room') {
+      assert.equal(inv.getAmount(COINS),50,'the second price remains affordable in the actual wallet');
+      await input({type:'npc_option',index:npc.getIndex(),clickType:talkType});
+      assert.ok(manager.getCurrent() instanceof core.NpcDialogue); assert.equal(manager.getCurrent().getNpcId(),N.FYCIE);
+      assert.equal(normalize(manager.getCurrent().getText()),normalize("I's sorry creature, I don't got no more flufsies! But I got lots of bright pretties! Hope you's get da stabbers for Dad soonly!"));
+      await speech(); assert.deepEqual(snapshot(),after,'actual postpurchase variant cannot take the remaining affordable50 coins');
+    }
+  });
+});

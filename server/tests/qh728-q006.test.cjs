@@ -41,6 +41,8 @@ function player(items = [], attrs = [], levels = {}) {
       contains: id => (inventory.get(id) ?? 0) > 0,
       isFull: () => Boolean(p.inventoryFull),
       getFreeSlots: () => p.inventoryFull ? 0 : 28,
+      getAddableAmount: item => p.inventoryFull && !(inventory.get(item.getId()) > 0) ? 0
+        : Math.min(item.getAmount(), 0x7fffffff - (inventory.get(item.getId()) ?? 0)),
       getItems: () => [],
       getValidItems: () => [],
       adds: (id, amount) => inventory.set(id, (inventory.get(id) ?? 0) + amount),

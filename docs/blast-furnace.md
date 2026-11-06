@@ -133,3 +133,12 @@ machinery estimates listed above. This change retains the existing travel durati
 Regressions cover full-dispenser refusal and collection recovery, pending-load capacity,
 delayed pot counters, coal-only logout loss, mixed-load persistence and resumption without
 duplication, the empty/refusal messages, take-menu parameters and water-cooling feedback.
+
+## Smithing catalyst
+
+A carried Smithing catalyst is consumed for each coal bar produced and doubles that bar's
+Smithing XP. Blast Furnace's existing reduced coal requirement is unchanged. If fewer catalysts
+are carried than coal bars are made, the server applies them in its existing recipe order; this
+allocation order and the precise retail inventory/belt reservation lifecycle are not established
+by the source. Non-coal bars do not consume catalysts. See the [Smithing catalyst](https://oldschool.runescape.wiki/w/Smithing_catalyst)
+and [Giants' Foundry update](https://oldschool.runescape.wiki/w/Update:Giants%27_Foundry).

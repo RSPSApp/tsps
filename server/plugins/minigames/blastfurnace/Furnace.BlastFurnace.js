@@ -474,9 +474,13 @@ function smelt(player) {
     const room = BAR_LIMIT - (state.bars[bar.barId] ?? 0);
     const count = Math.min(room, ...bar.ingredients.map(([id, amount]) => Math.floor((state.ores[id] ?? 0) / amount)));
     if (count <= 0) continue;
+    // Catalyst is consumed for coal bars actually made, after the dispenser limit.
+    const inventory = player.getInventory();
+    const catalyst = usesCoal(bar) ? Math.min(count, inventory.getAmount(core.ItemIdentifiers.SMITHING_CATALYST)) : 0;
+    if (catalyst) inventory.deleteNumber(core.ItemIdentifiers.SMITHING_CATALYST, catalyst);
     for (const [id, amount] of bar.ingredients) state.ores[id] -= amount * count;
     state.bars[bar.barId] = (state.bars[bar.barId] ?? 0) + count;
-    player.getSkillManager().addExperiences(core.Skill.SMITHING, barXp(player, bar) * count);
+    player.getSkillManager().addExperiences(core.Skill.SMITHING, barXp(player, bar) * (count + catalyst));
     made = true;
   }
   if (!made) return;

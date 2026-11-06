@@ -76,11 +76,13 @@ module.exports = function registerHazeelCultQuest(api) {
   // Island landings from the original Hazeel Cult flow. The current transcript
   // labels three correct valves "fourth" and four correct "third", so counts 3
   // and 4 use those islands rather than the earlier 2004 third/fourth order.
+  // The 2004 third-island tile (2599,9712) is blocked in this cache; the
+  // walkable landing east of the raft is (2600,9711).
   const RAFT_STOPS = {
     1: { name: "first", tile: { x: 2578, y: 9687, z: 0 } },
     2: { name: "second", tile: { x: 2593, y: 9694, z: 0 } },
     3: { name: "fourth", tile: { x: 2616, y: 9725, z: 0 } },
-    4: { name: "third", tile: { x: 2599, y: 9712, z: 0 } },
+    4: { name: "third", tile: { x: 2600, y: 9711, z: 0 } },
   };
   // Capture 1694 tick [6564]: cave 2852 lands beside the raft at (2570,9682),
   // not the disconnected Clock Tower landing (2584,9633).

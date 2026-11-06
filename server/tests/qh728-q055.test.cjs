@@ -368,7 +368,7 @@ test('Hazeel valves prompt both directions, keep state on Do nothing, and drive 
   assert.deepEqual([p.loc.getX(), p.loc.getY()], [2616, 9725]);
   assert.match(p.messages.at(-1), /stops at the fourth island\./);
   board(11);
-  assert.deepEqual([p.loc.getX(), p.loc.getY()], [2599, 9712]);
+  assert.deepEqual([p.loc.getX(), p.loc.getY()], [2600, 9711]);
   assert.match(p.messages.at(-1), /stops at the third island\./);
   board(27);
   assert.deepEqual([p.loc.getX(), p.loc.getY()], [2606, 9692]);

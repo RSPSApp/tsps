@@ -179,6 +179,9 @@ module.exports = function registerDragonSlayerQuest(api) {
    * which other quests' Duke conversations still reach.
    */
   const MELZAR_KEY_STEP = "xUz7Ja";
+  const GUILDMASTER_MAP_QUESTION = "Where can I find a map to Crandor?";
+  const GUILDMASTER_RETELL = "What's so special about this dragon?";
+  const MAP_PIECE_QUESTIONS = ["Where is Melzar's map piece?", "Where is Thalzar's map piece?", "Where is Lozar's map piece?"];
   /** "Study" on each map piece (rev242 capture ticks 2942-2948): its transcript line, in an item box showing it. */
   const MAP_STUDY = [
     { item: ITEM.mapMelzar, variant: "melzar-s-map-piece-studying-melzar-s-map-part", step: "wjI3Hx" },
@@ -723,6 +726,26 @@ module.exports = function registerDragonSlayerQuest(api) {
   // ============================================================================
   // Hooks / choices / chosen conditions that carry state
   // ============================================================================
+
+  /**
+   * The Guildmaster's "shows other options" after an answer (rev242 capture ticks 1141-1756) is not
+   * the menu the question came from: after a map piece it is the other two pieces then the ship, the
+   * breath and "Okay, I'll get going!"; after the ship or the breath, the outer questions but that
+   * one. "What's so special about this dragon?" never comes back.
+   */
+  function guildmasterOtherOptions(notice) {
+    if (notice.npcId !== GUILDMASTER_NPC_ID || notice.via !== "other" || !notice.chosen) return;
+    const options = notice.history.flatMap((menu) => menu.step?.options ?? []);
+    const outer = notice.history.find((menu) =>
+      (menu.step?.options ?? []).some((option) => option.text === GUILDMASTER_MAP_QUESTION))?.step.options;
+    if (!outer) return;
+    const piece = (text) => options.find((option) => option.text === text);
+    const pieces = MAP_PIECE_QUESTIONS.includes(notice.chosen)
+      ? MAP_PIECE_QUESTIONS.filter((text) => text !== notice.chosen).map(piece).filter(Boolean) : [];
+    const topics = outer.filter((option) => option.text !== GUILDMASTER_RETELL && option.text !== notice.chosen
+      && !(pieces.length && option.text === GUILDMASTER_MAP_QUESTION));
+    notice.options = [...pieces, ...topics];
+  }
 
   function handleStartHook({ player, npcId, hook }) {
     if (hook !== START_HOOK || npcId !== GUILDMASTER_NPC_ID) return;
@@ -1553,6 +1576,7 @@ module.exports = function registerDragonSlayerQuest(api) {
   api.onPlayerLogout(cleanup);
   api.onPlayerDisconnect(cleanup);
   api.onCustomEvent("npc-dialogue:action", handleDialogueAction);
+  api.onCustomEvent("npc-dialogue:menu", guildmasterOtherOptions);
   api.onItemOnItem(handleItemOnItem);
   api.onItemOnObject(handleItemOnObject);
   api.onObjectFirstClick(LOC.shipHole, handleShipHoleClick);

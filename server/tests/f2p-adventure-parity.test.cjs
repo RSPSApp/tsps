@@ -198,6 +198,26 @@ test('Dragon Slayer hands over the maze key and the anti-dragon shield in item b
   }
 });
 
+test("Dragon Slayer's Guildmaster offers the captured follow-up menus after each answer (rev242 ticks 1141-1756)", () => {
+  const h = harness('DragonSlayer'), p = player(); h.quest.setStage(p, 2); p.attrs.set('quest.points', 32);
+  const MELZAR = "Where is Melzar's map piece?", THALZAR = "Where is Thalzar's map piece?", LOZAR = "Where is Lozar's map piece?";
+  const MAP = 'Where can I find a map to Crandor?', SHIP = 'What kind of ship do I need?';
+  const BREATH = "How can I protect myself from the dragon's breath?", OKAY = "Okay, I'll get going!";
+  const ask = (option, expected) => {
+    h.choose(p, option); continueToMenu(h, p);
+    assert.deepEqual(p.prompt.options, expected, `after ${option}`);
+  };
+  h.talk(p, N.GUILDMASTER); continueToMenu(h, p);
+  ask('I talked to Oziach...', [MAP, SHIP, BREATH, "What's so special about this dragon?", OKAY]);
+  ask(MAP, [MELZAR, THALZAR, LOZAR]);
+  ask(MELZAR, [THALZAR, LOZAR, SHIP, BREATH, OKAY]);
+  ask(LOZAR, [MELZAR, THALZAR, SHIP, BREATH, OKAY]);
+  ask(SHIP, [MAP, BREATH, OKAY]);
+  ask(BREATH, [MAP, SHIP, OKAY]);
+  ask(MAP, [MELZAR, THALZAR, LOZAR]);
+  ask(THALZAR, [MELZAR, LOZAR, SHIP, BREATH, OKAY]);
+});
+
 test('Dragon Slayer map pieces can be studied: their transcript line in an item box (rev242 ticks 2942-2948)', () => {
   const h = harness('DragonSlayer'), p = player();
   const study = h.itemActions.get('Map part')?.Study;

@@ -415,8 +415,9 @@ Built and checked with the agent MCP:
 - **The reward room:** claiming, the loot, withdrawing and banking, the kill count, Eyatlalli's
   sacrifice and essence.
 
-Left for later: the armour and weapon set effects (Bloodrager with the dual macuahuitl, Frostweaver,
-Eclipse), in their own PR.
+Bloodrager: the dual macuahuitl rolls two splats with the maximum divided between them; a missed first ordinary splat makes the second miss. Each accurate splat with the full Blood Moon set (including broken armour) has a 33% chance to bring the next attack one tick earlier, capped at one tick per attack. Blood Infusion rolls each splat independently with 25% more accuracy and maximum hit and guarantees that effect if either is accurate. The engine uses one tick between splats for both NPC and player targets; player-target spacing follows the general equipment description and is not capture-verified. The effect is evaluated when the attack is launched; exact retail proc timing has not been captured here.
+
+Left for later: the Frostweaver and Eclipse armour and weapon set effects.
 
 ## Open questions
 

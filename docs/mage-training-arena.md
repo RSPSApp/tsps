@@ -31,7 +31,7 @@ records the sources and the parts that are implemented; the code is
 | Telekinetic Theatre | Magic 33 | 2 Telekinetic points + 250 XP per maze; every fifth: 8 points, 1,000 XP, 10 law runes, full run energy | Implemented |
 | Enchanting Chamber | Magic 7 | Enchantment points by spell level, doubled on every tenth shape and for dragonstones; orbs pay runes on leaving | Implemented |
 | Alchemists' Playground | Magic 21, no coins carried | Alchemist points per 100 arena coins; 10 real coins per 100 and 2 XP per coin | Implemented |
-| Creature Graveyard | Magic 15 | Graveyard points per 16 fruit; runes on leaving | Implemented; falling-bone damage is not modelled |
+| Creature Graveyard | Magic 15 | Graveyard points per 16 fruit; runes on leaving | Implemented |
 
 ## Telekinetic Theatre
 
@@ -65,6 +65,6 @@ The room HUD is cache interface 198: component 6 is the Telekinetic point total 
   post-8-May-2024 values (Telekinetic/Graveyard 8,000, Alchemist 16,000, Enchantment 32,000).
 - The Progress hat brightens at 300 of every type and is full at 600.
 - Death in a room keeps real items and Hardcore status, removes room-only items and returns the
-  player to the hall.
+  player to the hall. A Creature Graveyard death also costs 10 Graveyard points (down to zero).
 - Enchanting, Alchemy and Graveyard keep their room items and progress over a logout; the
   Telekinetic Theatre does not.

@@ -49,8 +49,9 @@
     "32": ["Shellbane gryphon"],
     "33": ["Maggot King"]
   },
-  "_taskNpcs": "Tasks the cache gives no NPCs of their own: their monsters carry their parent task's id in NPC param 50 (fever spiders and araxytes count as Spiders, brine rats as Rats, metal dragons each as their own colour). The NPC names that count for them, by task id (Wiki, each task's page).",
+  "_taskNpcs": "Named task matches beyond NPC param 50: sub-tasks whose monsters carry their parent task's id, plus substitutes that also count for another task. Names by task id (Wiki, each task's page).",
   "taskNpcs": {
+    "30": ["Skotizo"],
     "69": ["Fever spider"],
     "84": ["Brine rat"],
     "97": ["TzTok-Jad"],

@@ -14,6 +14,7 @@ const Common = require("./Common.Skotizo");
 const { Fight } = require("./Fight.Skotizo");
 
 const CHUNK = 8;
+const CATACOMBS_SLAYER_AREA_ID = 1;
 /** player -> their lair while they are in it. */
 const sessions = new Map();
 
@@ -223,11 +224,22 @@ function recoverOnLogin({ player }) {
   player.moveTo(Common.toLocation(Common.DATA.exit.tile));
 }
 
+/** The active lair is part of the Catacombs for Konar's selected-area rule (Wiki). */
+function slayerTaskArea(request) {
+  if (request?.area?.id !== CATACOMBS_SLAYER_AREA_ID) return;
+  const session = sessionOfNpc(request.npc);
+  if (!session || session.ended || sessionOf(request.player) !== session || session.area.isDestroyed()) return;
+  if (request.player.getPrivateArea() !== session.area || !session.area.hasMember(request.player)) return;
+  if (session.fight?.boss !== request.npc || request.npc.getPrivateArea() !== session.area) return;
+  if (session.inArena(request.location)) request.allowed = true;
+}
+
 function attachLair(api) {
   api.persistAttribute(Common.INSIDE_ATTRIBUTE);
   api.onItemOnObject("Dark totem", "Altar", useTotem, { noted: false });
   api.onObjectInteraction("Portal", { Use: usePortal });
   api.onPlayerLogin(recoverOnLogin);
+  api.onCustomEvent("slayer:task-area-match", slayerTaskArea);
 }
 
 module.exports = { attachLair, sessionOf, sessionOfNpc, arrive };

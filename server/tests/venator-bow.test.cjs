@@ -478,15 +478,6 @@ test('bank Configure-Charges conserves Venator essence when refund space is limi
         assert.equal(heldBow.getId(), ids.VENATOR_BOW);
         assert.equal(VenatorBow._test.charges(heldBow), 100, 'real charging producer');
         assert.equal(owned(essence), (1000) - 100);
-        const replenished = 0;
-        if (replenished) {
-            const at = player.getLocation();
-            native.ItemOnGroundManager.registerLocation(player, new native.Item(essence, replenished), at.clone());
-            assert.equal(floor(essence), replenished);
-            await send({ type: 'ground_item_action', itemId: essence, x: at.getX(), y: at.getY(), option: 'Take', optionIndex: 3 });
-            for (let wait = 0; wait < 4 && floor(essence) > 0; wait++) turn();
-            assert.equal(floor(essence), 0, 'native pickup credited the full lawful top-up');
-        }
         player.closeInterruptibleInterfaces();
         player.getBank(0).open(); assert.equal(Bank.isOpen(player), true);
         Bank.deposits(player, ids.VENATOR_BOW, inventory.getSlotForItemId(ids.VENATOR_BOW), 1);

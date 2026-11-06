@@ -430,8 +430,16 @@ function pick(player, patch) {
 }
 
 function mockScenery(t) {
-  t.mock.property(require("../plugins/skills/farming/Core.Farming"), "MapObjects", { get: () => null });
-  t.mock.property(require("../plugins/skills/farming/Core.Farming"), "ObjectDefinition", { forPlayer: () => ({ getInteractions: () => ["Pick"], getName: () => "Herb patch" }) });
+  const farmingCore = require("../plugins/skills/farming/Core.Farming");
+  const originals = ["MapObjects", "ObjectDefinition"].map((key) => [key, Object.getOwnPropertyDescriptor(farmingCore, key)]);
+  t.after(() => {
+    for (const [key, descriptor] of originals) {
+      if (descriptor) Object.defineProperty(farmingCore, key, descriptor);
+      else delete farmingCore[key];
+    }
+  });
+  farmingCore.MapObjects = { get: () => null };
+  farmingCore.ObjectDefinition = { forPlayer: () => ({ getInteractions: () => ["Pick"], getName: () => "Herb patch" }) };
   t.mock.method(require("../plugins/skills/farming/Services.Farming"), "cropRewards", () => {});
 }
 

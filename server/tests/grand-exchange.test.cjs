@@ -30,6 +30,10 @@ const {
   recordLimit,
   setMarketData,
   LIMITS_ATTRIBUTE,
+  HISTORY_ATTRIBUTE,
+  HISTORY_LIMIT,
+  tradeHistory,
+  recordHistory,
   LIMIT_WINDOW_MS,
   OFFERS_ATTRIBUTE,
 } = plugin._test;
@@ -345,9 +349,11 @@ test('an unlimited item never runs out', () => {
 function exchange(t, config = {}, realSender = null) {
   const hooks = {};
   const buttons = [];
+  const calls = [];
   const messages = [];
   const timers = [];
   const sender = realSender ?? new Proxy({}, { get: (_, key) => (...args) => {
+    calls.push({ name: key, args });
     if (key === 'sendMessage') messages.push(args[0]);
     return sender;
   } });
@@ -393,7 +399,7 @@ function exchange(t, config = {}, realSender = null) {
     click(30);
     return p.getAttribute(OFFERS_ATTRIBUTE)[slot];
   };
-  return { p, inventory, place, click, hooks, messages, timers };
+  return { p, inventory, place, click, hooks, buttons, calls, messages, timers };
 }
 
 test('maxTradeDelay overrides volume and price caps for newly placed buys and sells', t => {
@@ -486,7 +492,54 @@ test('offers with saved completion times still finish after relogging', t => {
   assert.equal(offer.finished, true);
 });
 
-test('register persists both attributes', () => {
+test('completed trades are recorded once in bounded newest-first history', () => {
+  const p = player();
+  p.setAttribute(HISTORY_ATTRIBUTE, []);
+  const offer = {
+    itemId: PRICED,
+    sell: true,
+    quantity: 3,
+    total: 270,
+    completedAt: 123_456,
+    finished: true,
+  };
+
+  assert.equal(recordHistory(p, offer), true);
+  assert.deepEqual(tradeHistory(p), [{
+    itemId: PRICED,
+    sell: true,
+    quantity: 3,
+    total: 270,
+    completedAt: 123_456,
+  }]);
+  assert.equal(recordHistory(p, offer), false);
+  assert.equal(recordHistory(p, { ...offer, historyRecorded: false, aborted: true }), false);
+
+  for (let i = 0; i <= HISTORY_LIMIT; i++) {
+    recordHistory(p, { ...offer, itemId: PRICED + i, completedAt: 200_000 + i, historyRecorded: false });
+  }
+  assert.equal(tradeHistory(p).length, HISTORY_LIMIT);
+  assert.equal(tradeHistory(p)[0].itemId, PRICED + HISTORY_LIMIT);
+});
+
+test('History button opens and populates the captured history interface', t => {
+  const { p, calls, click } = exchange(t);
+  p.setAttribute(HISTORY_ATTRIBUTE, [{
+    itemId: PRICED,
+    sell: true,
+    quantity: 3,
+    total: 270,
+    completedAt: Date.now(),
+  }]);
+  click(3);
+  assert.deepEqual(calls.find(({ name }) => name === 'sendSubInterface').args, [(161 << 16) | 16, 383, 0]);
+  const scripts = calls.filter(({ name }) => name === 'sendClientScript').map(({ args }) => args);
+  assert.deepEqual(scripts.map(([scriptId]) => scriptId), [2524, 1644, 1645, 1646]);
+  assert.deepEqual(scripts[2], [1645, 0, PRICED, 1, 3, 270, 0]);
+  assert.deepEqual(calls.find(({ name }) => name === 'sendInterfaceFlagsRange').args, [(383 << 16) | 3, 0, 234, 1026]);
+});
+
+test('register persists offers, limits, and history', () => {
   const persisted = new Map();
   const api = new Proxy({}, {
     get: (_, key) => key === 'persistAttribute'
@@ -494,9 +547,10 @@ test('register persists both attributes', () => {
       : () => {},
   });
   plugin.register(api);
-  assert.deepEqual([...persisted.keys()], [OFFERS_ATTRIBUTE, LIMITS_ATTRIBUTE]);
+  assert.deepEqual([...persisted.keys()], [OFFERS_ATTRIBUTE, LIMITS_ATTRIBUTE, HISTORY_ATTRIBUTE]);
   assert.deepEqual(persisted.get(OFFERS_ATTRIBUTE), {});
   assert.deepEqual(persisted.get(LIMITS_ATTRIBUTE), {});
+  assert.deepEqual(persisted.get(HISTORY_ATTRIBUTE), []);
 });
 
 setMarketData(market);

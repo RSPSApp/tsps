@@ -907,6 +907,7 @@ module.exports = {
     recordLimit,
     LIMITS_ATTRIBUTE,
     HISTORY_ATTRIBUTE,
+    HISTORY_LIMIT,
     tradeHistory,
     recordHistory,
     LIMIT_WINDOW_MS,

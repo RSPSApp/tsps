@@ -484,7 +484,12 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
     return [...near].find((npc) => RANTZ_NPC_IDS.has(npc?.getId?.()));
   }
 
-  function removeFirstChompyActor(player) {
+  /**
+   * Ends Rantz's claim on the demonstration bird. The bird is not removed: it stays the player's
+   * hunted chompy and can be killed with the ogre bow if it is still there when the bow is given
+   * (Wiki: "If you're quick getting the bow, the already spawned chompy bird can be killed").
+   */
+  function releaseDemonstrationChompy(player) {
     const hunt = FIRST_HUNTS.get(player);
     if (!hunt?.npc) return;
     FIRST_CHOMPY.delete(hunt.npc);
@@ -494,7 +499,7 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
   function cancelFirstHunt(player) {
     const hunt = FIRST_HUNTS.get(player);
     if (hunt) api.core.TaskManager.cancelTasks(hunt.key);
-    removeFirstChompyActor(player);
+    releaseDemonstrationChompy(player);
     FIRST_HUNTS.delete(player);
     player.getPacketSender?.().sendCameraReset?.();
   }
@@ -522,7 +527,7 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
         if (FIRST_HUNTS.get(player) !== hunt || quest.getStage(player) !== STAGE_CHOMPY_MISSED) return;
         player.sendMessage("Rantz keeps missing the chompy bird...");
         rantz?.forceChat?.("Grrr...de'ese arrows are rubbish.");
-        removeFirstChompyActor(player);
+        releaseDemonstrationChompy(player);
         player.getPacketSender?.().sendCameraReset?.();
         api.core.TaskManager.submit(new api.core.CountdownTask(key, HUNT_SETTLE_TICKS, () => {
           if (FIRST_HUNTS.get(player) !== hunt) return;

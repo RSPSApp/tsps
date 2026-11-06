@@ -69,7 +69,7 @@ module.exports = function createChompyHunt(api, callbacks = {}) {
   }
 
   function doubleChance(player) {
-    for (const [tier, chance] of [["elite", 1], ["hard", 0.5], ["medium", 0.5], ["easy", 0.25]]) {
+    for (const [tier, chance] of [["elite", 1], ["medium", 0.5], ["easy", 0.25]]) {
       const request = { player, diary: "western", tier, claimed: false };
       api.emitCustomEvent("diary:is-reward-claimed", request);
       if (request.claimed === true) return chance;

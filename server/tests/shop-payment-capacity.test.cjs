@@ -78,7 +78,14 @@ test('Pete sells one saved vessel capacity upgrade through the registered shop',
     }
     assert.deepEqual(errors,[], 'no caught plugin, persistence or cleanup errors');
   });
-  console.error=(...args)=>{ errors.push(args.map(String).join(' ')); oldError.apply(console,args); };
+  console.error=(...args)=>{
+    const message=args.map(String).join(' ');
+    // Node may emit this documented SQLite warning while the real persistence backend loads.
+    // Forward it, but continue to treat every other console error as a failure through cleanup.
+    const sqliteWarning=/^\(node:\d+\) ExperimentalWarning: SQLite is an experimental feature and might change at any time(?:\r?\n\(Use `node --trace-warnings \.\.\.` to show where the warning was created\))?$/;
+    if(!sqliteWarning.test(message)) errors.push(message);
+    oldError.apply(console,args);
+  };
   saver = new JsonPlayerPersistence();
   const requests=[], writes=[];
   const requestSave=saver.requestSave.bind(saver), enqueue=saver.enqueueSerializedWrite.bind(saver);

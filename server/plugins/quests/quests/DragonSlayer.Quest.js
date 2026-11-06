@@ -179,6 +179,12 @@ module.exports = function registerDragonSlayerQuest(api) {
    * which other quests' Duke conversations still reach.
    */
   const MELZAR_KEY_STEP = "xUz7Ja";
+  /** "Study" on each map piece (rev242 capture ticks 2942-2948): its transcript line, in an item box showing it. */
+  const MAP_STUDY = [
+    { item: ITEM.mapMelzar, variant: "melzar-s-map-piece-studying-melzar-s-map-part", step: "wjI3Hx" },
+    { item: ITEM.mapOracle, variant: "thalzar-s-map-piece-studying-thalzar-s-map-part", step: "Vk_HYB" },
+    { item: ITEM.mapWormbrain, variant: "lozar-s-map-piece-studying-lozar-s-map-part", step: "2JFb8u" },
+  ];
   const DUKE_SHIELD_VARIANT = "protection-from-a-dragon-s-breath-talking-to-duke-horacio";
   const DUKE_SHIELD_STEPS = new Set(["KoKING", "LnbjYr", "if_uB3", "igRDii", "emj6I8"]);
   const CHEST_OPEN_ANIMATION = 536, CHEST_OPEN_SOUND = 52, CHEST_CLOSE_SOUND = 51;
@@ -757,6 +763,8 @@ module.exports = function registerDragonSlayerQuest(api) {
     }
 
     if (handleMapChestStep(event)) return;
+    const studied = MAP_STUDY.find(piece => piece.step === stepId);
+    if (studied) { event.box = { items: [studied.item] }; return; }
 
     // The hand-overs are item boxes showing what is given (rev242 capture ticks 1756 and 2808).
     const handOver = npcId === GUILDMASTER_NPC_ID && stepId === MELZAR_KEY_STEP ? ITEM.mazeKey
@@ -1083,6 +1091,12 @@ module.exports = function registerDragonSlayerQuest(api) {
     if (option !== "Climb-down") return;
     request.handled = true;
     api.emitCustomEvent("ladders:climbDown", { player: request.player, destination: TILE.melzarBasement.clone() });
+  }
+
+  function studyMapPiece(event) {
+    const piece = MAP_STUDY.find(entry => entry.item === event.itemId);
+    if (!piece) return false;
+    startTranscript(api, event.player, 0, PAGE, piece.variant);
   }
 
   /** The chest a player last opened or searched, for the transcript steps that finish it (replaced, never a lock). */
@@ -1551,6 +1565,7 @@ module.exports = function registerDragonSlayerQuest(api) {
   api.onObjectFirstClick(LOC.melzarEntrance, handleMelzarEntranceClick);
   api.onObjectFirstClick(LOC.melzarExitDoor, handleMelzarExitDoorClick);
   api.onObjectFirstClick(MAZE_DOORS, handleMazeDoorClick);
+  api.onItemAction("Map part", { Study: studyMapPiece });
   api.onObjectFirstClick(LOC.oracleChestShut, handleOracleChestOpen);
   api.onObjectFirstClick(LOC.oracleChestOpen, handleOracleChestSearch);
   api.onObjectFirstClick(LOC.melzarChestShut, handleMelzarChestOpen);

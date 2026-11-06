@@ -16,7 +16,7 @@ const noop = () => {};
 before(async () => { await CachePipeline.initialize(path.resolve(__dirname, '..')); new NpcDefinitionLoader().load(); });
 
 function harness(name) {
-  const hooks = {}, events = {}, tasks = [], npcs = [], removed = [], objects = [], ground = [], clicks = new Map();
+  const hooks = {}, events = {}, tasks = [], npcs = [], removed = [], objects = [], ground = [], clicks = new Map(), itemActions = new Map();
   const objectManager = {register: object => objects.push(object), deregister: object => { const i=objects.indexOf(object); if(i>=0)objects.splice(i,1); }};
   const api = new Proxy({ core: { ...core, World: { ...core.World, getNpcsNear: () => npcs }, TaskManager: {
     submit(task) { task.setRunning(true); tasks.push(task); },
@@ -25,6 +25,7 @@ function harness(name) {
     getObjectManager: () => objectManager,
     getItemOnGroundManager: () => ({ registerLocation: (...args) => ground.push(args) }),
     onObjectFirstClick: (ids, fn) => [].concat(ids).forEach(id => clicks.set(id, fn)),
+    onItemAction: (name, actions) => { if (typeof name === 'string') itemActions.set(name, { ...(itemActions.get(name) ?? {}), ...actions }); },
     persistAttribute: noop,
     onCustomEvent: (key, fn) => (events[key] ??= []).push(fn),
     emitCustomEvent: (key, event) => (events[key] ?? []).forEach(fn => fn(event)),
@@ -47,7 +48,7 @@ function harness(name) {
     for (const fn of hooks.onNpcDialogueCondition ?? []) { const answer = fn(event); if (answer !== null && answer !== undefined) return answer; }
     return null;
   };
-  const h = { api, hooks, events, tasks, npcs, removed, objects, ground, clicks, quest: runtime.getRegisteredQuests().at(-1),
+  const h = { api, hooks, events, tasks, npcs, removed, objects, ground, clicks, itemActions, quest: runtime.getRegisteredQuests().at(-1),
     emit: (name, event) => (events[name] ?? []).forEach(fn => fn(event)),
     line(p, npcId, text) { const event = { player: p, npcId, text }; h.emit('npc-dialogue:line', event); return event; },
     action(p, npcId, stepId) { const event = { player: p, npcId, stepId }; h.emit('npc-dialogue:action', event); return event; },
@@ -194,6 +195,23 @@ test('Dragon Slayer hands over the maze key and the anti-dragon shield in item b
     assert.deepEqual(event.box, { items: [item] });
     h.action(p, npcId, stepId);
     assert.equal(p.items.get(item), 1, 'only one');
+  }
+});
+
+test('Dragon Slayer map pieces can be studied: their transcript line in an item box (rev242 ticks 2942-2948)', () => {
+  const h = harness('DragonSlayer'), p = player();
+  const study = h.itemActions.get('Map part')?.Study;
+  assert.ok(study, 'Map part has a Study action');
+  for (const [item, start] of [
+    [I.MAP_PART, "This is a piece of map that you found in Melzar's Maze."],
+    [I.MAP_PART_3, 'This is a piece of map that you found in a secret chest in the Dwarven Mine.'],
+    [I.MAP_PART_2, 'This is a piece of map that you got from Wormbrain, the goblin thief.'],
+  ]) {
+    p.log.length = 0;
+    study({ player: p, itemId: item, option: 'Study' });
+    assert.ok(p.text.startsWith(start), p.text);
+    assert.ok(p.log.some(row => row[0] === 'sendItemOnInterfaces' && row[2] === item), 'an item box showing the piece');
+    p.manager.advance();
   }
 });
 

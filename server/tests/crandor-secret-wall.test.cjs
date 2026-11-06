@@ -239,6 +239,7 @@ test("the Champions' Guild door is a pass-through door: the open leaf south, wal
   new ObjectActionPacketListener().executeAction(player, DOOR, 3191, 3363, 1);
   assert.ok(until(() => locAt(23637, 3191, 3362) !== null, 6), "championdoor_open is on the tile south");
   assert.ok(until(() => at(player)[1] === 3362, 8), "walked into the guild");
+  assert.ok(player.getDialogueManager().getCurrent(), "the Guildmaster's greeting is open as they walk in (tick 971)");
   settle();
   assert.equal(locAt(23637, 3191, 3362), null, "the door shuts again");
   assert.ok(locAt(DOOR, 3191, 3363), "the closed door is back");

@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 
 import { CHARACTER_LIST_WAIT_MS, CharacterListWait } from "../game/login/characterListWait";
-import { LoginIndex } from "../game/login/GameState";
+import { decideCharacterList, decideCharacterResult, leaveRefusedReconnect } from "../game/login/characterFlow";
+import { GameState, LoginIndex } from "../game/login/GameState";
 import { LoginActions } from "../game/login/LoginAction";
 import { LoginState } from "../game/login/LoginState";
 import { handleKeyInput, getCharacterSelectEnterAction } from "../game/login/renderer/input/keyboard";
@@ -125,5 +126,47 @@ assert.equal(handshakes, 1);
 wait.onLoginAccepted(LOGIN_FLAG_TOKEN, () => handshakes++);
 assert.equal(handshakes, 2);
 assert.equal(pending, undefined);
+
+// CHARACTER_LIST: the list a login waited for shows the picker; strays are ignored.
+const list = (gameState: GameState, loginIndex: LoginIndex, expected: boolean, sessionCharacter: string | null = null) =>
+    decideCharacterList({ gameState, loginIndex, expected, sessionCharacter });
+assert.equal(list(GameState.CONNECTING, LoginIndex.LOGIN_FORM, true), "show_picker");
+assert.equal(list(GameState.CONNECTING, LoginIndex.CHARACTER_SELECT, false), "show_picker", "the refresh after a create");
+assert.equal(list(GameState.CONNECTING, LoginIndex.LOGIN_FORM, false), "ignore", "late, after the fallback handshake");
+assert.equal(list(GameState.LOADING_GAME, LoginIndex.LOGIN_FORM, false), "ignore", "late, after the fallback handshake");
+assert.equal(list(GameState.LOGGED_IN, LoginIndex.CHARACTER_SELECT, false, "Zezima"), "ignore", "in game");
+assert.equal(list(GameState.LOGGED_IN, LoginIndex.CHARACTER_SELECT, true, "Zezima"), "ignore", "in game");
+assert.equal(list(GameState.LOGIN_SCREEN, LoginIndex.WELCOME, true), "ignore");
+assert.equal(list(GameState.CONNECTION_LOST, LoginIndex.CHARACTER_SELECT, true, "Zezalt"), "reselect");
+assert.equal(list(GameState.CONNECTION_LOST, LoginIndex.CHARACTER_SELECT, false, "Zezalt"), "ignore");
+assert.equal(
+    list(GameState.CONNECTION_LOST, LoginIndex.CHARACTER_SELECT, true, null),
+    "reopen_picker",
+    "dropped while choosing: the picker again, no select sent",
+);
+
+// CHARACTER_RESULT: matched to the request it answers.
+const result = (pending: "select" | "create" | "delete" | undefined, ok: boolean, gameState = GameState.CONNECTING) =>
+    decideCharacterResult({ pending, ok, gameState });
+assert.equal(result(undefined, true), "ignore", "no request pending");
+assert.equal(result(undefined, false, GameState.CONNECTION_LOST), "ignore");
+assert.equal(result("select", true), "handshake");
+assert.equal(result("select", true, GameState.CONNECTION_LOST), "handshake");
+assert.equal(result("create", true), "back_to_list");
+assert.equal(result("delete", false), "show_message");
+assert.equal(result("select", false), "show_message");
+assert.equal(result("select", false, GameState.CONNECTION_LOST), "abandon_reconnect");
+
+// A refused reconnect select drops the connection for good and shows why on Try again.
+const calls: string[] = [];
+const refused = new LoginState();
+refused.loginIndex = LoginIndex.CHARACTER_SELECT;
+leaveRefusedReconnect(refused, "That character is already logged in.", {
+    suppressReconnection: () => calls.push("suppress"),
+    disposeServerConnection: () => calls.push("dispose"),
+});
+assert.deepEqual(calls, ["suppress", "dispose"]);
+assert.equal(refused.loginIndex, LoginIndex.TRY_AGAIN);
+assert.equal(refused.response1, "That character is already logged in.");
 
 console.log("Character picker test passed");

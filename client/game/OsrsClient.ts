@@ -303,6 +303,7 @@ import {
     shouldStartScheduledLoginMusic,
 } from "./login";
 import { CharacterListWait } from "./login/characterListWait";
+import { decideCharacterList, decideCharacterResult, leaveRefusedReconnect } from "./login/characterFlow";
 import { getCharacterSelectEnterAction } from "./login/renderer/input/keyboard";
 import type { CharacterListPayload } from "../network/packet/ServerBinaryDecoder";
 import { NpcMovementSync } from "./movement/NpcMovementSync";
@@ -5515,51 +5516,72 @@ export class OsrsClient {
 
     /** CHARACTER_LIST: the picker for a login in progress, else a reconnect's re-select. */
     onCharacterList(payload: CharacterListPayload): void {
-        this.characterListWait.onCharacterList();
-        if (this.gameState === GameState.CONNECTING) {
-            const state = this.loginState;
-            const refresh = state.loginIndex === LoginIndex.CHARACTER_SELECT;
-            const previous = refresh ? state.characters[state.selectedCharacter]?.name : undefined;
-            const created = this.pendingCharacterRequest?.kind === "create" ? this.pendingCharacterRequest.name : undefined;
-            state.showCharacterSelect(payload);
-            // A refreshed list keeps the row the player was on, or moves to the one just made.
-            const keep = payload.characters.findIndex(
-                (c) => c.name.toLowerCase() === (created ?? previous ?? "").toLowerCase(),
-            );
-            if (refresh && keep >= 0) state.selectedCharacter = keep;
-            this.pendingCharacterRequest = undefined;
+        const expected = this.characterListWait.onCharacterList();
+        const state = this.loginState;
+        const decision = decideCharacterList({
+            gameState: this.gameState,
+            loginIndex: state.loginIndex,
+            expected,
+            sessionCharacter: getSessionCharacter(),
+        });
+        if (decision === "ignore") return;
+        if (decision === "reselect") {
+            const name = getSessionCharacter() ?? payload.characters[payload.defaultIndex]?.name;
+            if (!name) return;
+            this.pendingCharacterRequest = { kind: "select", name };
+            sendCharacterSelect(name);
             return;
         }
-        // A list on the login screen is from a connection the player has left.
-        if (this.isOnLoginScreen()) return;
-        const name = getSessionCharacter() ?? payload.characters[payload.defaultIndex]?.name;
-        if (!name) return;
-        this.pendingCharacterRequest = { kind: "select", name };
-        sendCharacterSelect(name);
+        if (decision === "reopen_picker") {
+            this.pendingCharacterRequest = undefined;
+            state.showCharacterSelect(payload);
+            this.updateGameState(GameState.CONNECTING);
+            return;
+        }
+        const refresh = state.loginIndex === LoginIndex.CHARACTER_SELECT;
+        const previous = refresh ? state.characters[state.selectedCharacter]?.name : undefined;
+        const created = this.pendingCharacterRequest?.kind === "create" ? this.pendingCharacterRequest.name : undefined;
+        state.showCharacterSelect(payload);
+        // A refreshed list keeps the row the player was on, or moves to the one just made.
+        const keep = payload.characters.findIndex(
+            (c) => c.name.toLowerCase() === (created ?? previous ?? "").toLowerCase(),
+        );
+        if (refresh && keep >= 0) state.selectedCharacter = keep;
+        this.pendingCharacterRequest = undefined;
     }
 
     /** CHARACTER_RESULT for the last select, create or delete. */
     onCharacterResult(result: { ok: boolean; code: number; message: string }): void {
         const state = this.loginState;
         const request = this.pendingCharacterRequest;
+        const decision = decideCharacterResult({ pending: request?.kind, ok: result.ok, gameState: this.gameState });
+        if (decision === "ignore" || !request) return;
         state.pickerBusy = false;
-        if (!result.ok) {
-            this.pendingCharacterRequest = undefined;
-            state.pickerMessage = result.message || "That isn't possible right now.";
-            return;
+        switch (decision) {
+            case "abandon_reconnect":
+                this.pendingCharacterRequest = undefined;
+                leaveRefusedReconnect(state, result.message, { suppressReconnection, disposeServerConnection });
+                this.updateGameState(GameState.LOGIN_SCREEN);
+                return;
+            case "show_message":
+                this.pendingCharacterRequest = undefined;
+                state.pickerMessage = result.message || "That isn't possible right now.";
+                return;
+            case "handshake":
+                this.pendingCharacterRequest = undefined;
+                state.pickerMessage = "";
+                // Stays busy until the handshake puts the player in the world.
+                state.pickerBusy = true;
+                sendHandshake(request.name);
+                return;
+            case "back_to_list":
+                // The character list that follows refreshes the rows (and clears the request).
+                state.pickerMessage = "";
+                state.pickerMode = "list";
+                state.pickerInput = "";
+                state.virtualKeyboardVisible = false;
+                return;
         }
-        state.pickerMessage = "";
-        if (request?.kind === "select") {
-            this.pendingCharacterRequest = undefined;
-            // Stays busy until the handshake puts the player in the world.
-            state.pickerBusy = true;
-            sendHandshake(request.name);
-            return;
-        }
-        // Create or delete: the character list that follows refreshes the rows.
-        state.pickerMode = "list";
-        state.pickerInput = "";
-        state.virtualKeyboardVisible = false;
     }
 
     /**

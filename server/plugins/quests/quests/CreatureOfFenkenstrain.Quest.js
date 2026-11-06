@@ -590,7 +590,7 @@ module.exports = function registerCreatureOfFenkenstrainQuest(api) {
       case BRAIN_RECEIVE_ACTION_ID: {
         const inventory = player.getInventory();
         if (inventory.getAmount(ItemIdentifiers.COINS) < 50) return;
-        // A brain can arrive while the choice is open; never charge for one that will not be added.
+        // Recheck held items at the action before charging for a brain.
         if (held(player, ItemIdentifiers.PICKLED_BRAIN) || held(player, ItemIdentifiers.DECAPITATED_HEAD_2)) {
           event.handled = true;
           event.end = true;
@@ -600,6 +600,7 @@ module.exports = function registerCreatureOfFenkenstrainQuest(api) {
         const plan = new Inventory(player).setItems(inventory.getCopiedItems());
         plan.deleted(ItemIdentifiers.COINS, 50, false);
         if (plan.getAddableAmount(new Item(ItemIdentifiers.PICKLED_BRAIN, 1)) < 1) {
+          // No full-inventory capture: the refusal wording is ours.
           player.sendMessage("You don't have enough inventory space.");
           event.handled = true;
           event.end = true;

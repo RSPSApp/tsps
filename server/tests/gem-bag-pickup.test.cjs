@@ -447,3 +447,68 @@ test("emptying a gem bag into the bank preserves gems at stack limits", async (t
     });
   }
 });
+
+test("log basket bank-empty feedback matches what moved", async (t) => {
+  const { MAX_STACK_AMOUNT } = require("../dist/game/model/container/StackType");
+  const Bank = core.Bank, basketId = core.CacheDefinitions.getObjId("log_basket_open");
+  const basketFamily = Storage.FAMILIES.get("log-basket");
+  assert.equal(core.CacheDefinitions.getItem(basketId).params?.get(595), "Empty");
+  assert.equal(core.CacheDefinitions.getItem(basketId).inventoryActions[0], "Fill");
+  for (const mode of ["empty", "room", "exact", "near", "full", "near-bark", "full-bark"]) {
+    await t.test(mode, async (t) => {
+      const f = actor(t, HOME, false), bank = f.p.getBank(0);
+      const logs = mode.endsWith("-bark") ? I.BARK : I.LOGS;
+      if (mode.endsWith("-bark")) assert.equal(core.CacheDefinitions.getItem(logs).name, "Bark");
+      f.inv.add(new core.Item(basketId), true);
+      const basket = f.inv.getItems()[f.inv.getSlotForItemId(basketId)];
+      t.after(() => f.p.closeInterruptibleInterfaces());
+      const send = async (packet) => { await f.c.dispatch([packet]); f.c.processTurnPackets(); };
+      if (mode !== "empty") {
+        f.inv.add(new core.Item(logs), false).add(new core.Item(logs), true);
+        await send({ type: "inventory_action", widgetId: (149 << 16),
+          slot: f.inv.getItems().indexOf(basket), itemId: basketId, option: "Fill" });
+        assert.equal(Storage.amountOf(f.p, basketFamily, logs), 2, "native Fill stored both logs");
+        assert.equal(f.inv.getAmount(logs), 0);
+        const headroom = mode === "exact" ? 2 : mode.startsWith("near") ? 1 : 0;
+        const initialBank = mode === "room" ? 100 : MAX_STACK_AMOUNT - headroom - 1;
+        bank.add(new core.Item(logs, initialBank), false);
+        f.inv.add(new core.Item(logs), true);
+        bank.open();
+        assert.equal(Bank.isOpen(f.p), true);
+        await send({ type: "widget_action", widgetId: (Bank.SIDE_INTERFACE_ID << 16) | 3,
+          groupId: Bank.SIDE_INTERFACE_ID, childId: 3, buttonNum: 2,
+          slot: f.inv.getSlotForItemId(logs), itemId: logs, option: "Deposit-1" });
+        assert.equal(bank.getAmount(logs), initialBank + 1);
+        assert.equal(bank.getAddableAmount(new core.Item(logs, 2)), mode === "room" ? 2 : headroom);
+      } else {
+        bank.open();
+        assert.equal(Bank.isOpen(f.p), true);
+      }
+      const beforeBank = bank.getAmount(logs), beforeStored = Storage.amountOf(f.p, basketFamily, logs);
+      const ops = [], emit = PM.emitCustomEvent.bind(PM);
+      t.mock.method(PM, "emitCustomEvent", (name, event) => {
+        const result = emit(name, event);
+        if (name === Bank.INVENTORY_OP_EVENT && event.player === f.p && event.op === 9) {
+          ops.push({ item: event.item === basket, handled: event.handled });
+        }
+        return result;
+      });
+      const beforeMessages = f.messages.length;
+      await send({ type: "widget_action", widgetId: (Bank.SIDE_INTERFACE_ID << 16) | 3,
+        groupId: Bank.SIDE_INTERFACE_ID, childId: 3, buttonNum: 9,
+        slot: f.inv.getItems().indexOf(basket), itemId: basketId, option: "Empty" });
+      assert.deepEqual(ops, [{ item: true, handled: true }]);
+      const afterBank = bank.getAmount(logs), afterStored = Storage.amountOf(f.p, basketFamily, logs);
+      assert.equal(afterBank + afterStored + f.inv.getAmount(logs), beforeBank + beforeStored);
+      const moved = mode === "empty" || mode.startsWith("full") ? 0 : mode.startsWith("near") ? 1 : 2;
+      assert.equal(afterBank - beforeBank, moved);
+      assert.equal(afterStored, beforeStored - moved);
+      assert.equal(f.inv.getAmount(basketId), 1);
+      const expected = mode === "empty" ? "Your basket is empty."
+        : mode.startsWith("near") ? "You empty some of your basket's contents into the bank."
+        : mode.startsWith("full") ? "Your bank cannot hold the remaining contents of your basket."
+        : "You empty your basket into the bank.";
+      assert.deepEqual(f.messages.slice(beforeMessages), [expected]);
+    });
+  }
+});

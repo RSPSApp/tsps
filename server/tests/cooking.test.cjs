@@ -777,6 +777,109 @@ test('Brutus t-bone steaks cook on native ranges and fires with the correct leve
         diagnostic('autocook and menu both complete normally after their real approach'));
     }
   });
+  await t.test('manual raw karambwan re-use on each tick cooks one per tick (Wiki 1-tick Cooking)', t => {
+    const rawK = obj('tbwt_raw_karambwan'), cookedK = obj('tbwt_cooked_karambwan');
+    for (const object of [range, fire]) {
+      const f = actor(t, 99, object, rawK, 8), { p } = f;
+      p.setAttribute('quest.tai_bwo_wannai_trio.tinsay', 8);
+      const inventory = p.getInventory();
+      const yields = [];
+      for (let turn = 0; turn < 7; turn++) {
+        cookingTurn(p, () => {
+          const carried = inventory.getAmount(rawK);
+          assert.equal(use(p, object, rawK), true);
+          if (carried > 1) p.getCreationMenu().execute(rawK, carried);
+        });
+        yields.push({ raw: inventory.getAmount(rawK), cooked: inventory.getAmount(cookedK), xp: xpGained(f) });
+      }
+      // The first karambwan keeps its ordinary two-tick delay; re-using the
+      // cooker on later ticks then cooks the next one each tick.
+      assert.deepEqual(yields.slice(0, 2), [
+        { raw: 8, cooked: 0, xp: 0 },
+        { raw: 8, cooked: 0, xp: 0 },
+      ], object.getDefinition().getName());
+      for (let i = 2; i < yields.length; i++) {
+        assert.deepEqual(yields[i], {
+          raw: 8 - (i - 1), cooked: i - 1, xp: 190 * (i - 1),
+        }, object.getDefinition().getName() + ': one raw karambwan per tick from the first cook');
+      }
+    }
+  });
+  await t.test('same-tick karambwan doubleclicks preserve the first delay and never cook twice per tick', t => {
+    const rawK = obj('tbwt_raw_karambwan'), cookedK = obj('tbwt_cooked_karambwan');
+    const f = actor(t, 99, fire, rawK, 4), { p } = f;
+    p.setAttribute('quest.tai_bwo_wannai_trio.tinsay', 8);
+    const inventory = p.getInventory();
+    const doubleClick = () => {
+      for (let click = 0; click < 2; click++) {
+        const carried = inventory.getAmount(rawK);
+        if (!carried) return;
+        assert.equal(use(p, fire, rawK), true);
+        if (carried > 1) p.getCreationMenu().execute(rawK, carried);
+      }
+    };
+    doubleClick();
+    assert.equal(inventory.getAmount(cookedK), 0);
+    for (let pass = 1; pass <= 6; pass++) {
+      cookingTurn(p, doubleClick);
+      const done = Math.min(4, Math.max(0, pass - 1));
+      assert.equal(inventory.getAmount(cookedK), done, 'at most one cook per global tick after initial delay');
+      assert.equal(inventory.getAmount(rawK), 4 - done);
+      assert.equal(xpGained(f), done * 190);
+    }
+    assert.equal(Cooking.isCookingActive(p), false, 'depletion stops the session');
+  });
+  await t.test('queued karambwan retains the ordinary 2/3/4-tick cadence without manual repeats', t => {
+    const rawK = obj('tbwt_raw_karambwan'), cookedK = obj('tbwt_cooked_karambwan');
+    const f = actor(t, 99, range, rawK, 4), { p } = f;
+    p.setAttribute('quest.tai_bwo_wannai_trio.tinsay', 8);
+    assert.equal(use(p, range, rawK), true);
+    p.getCreationMenu().execute(rawK, 4);
+    for (const done of [0, 1, 1, 1, 2, 2, 2, 2, 3]) {
+      cookingTurn(p);
+      assert.equal(p.getInventory().getAmount(cookedK), done);
+      assert.equal(p.getInventory().getAmount(rawK), 4 - done);
+      assert.equal(xpGained(f), done * 190);
+    }
+  });
+  for (const cancel of ['walk', 'disconnect']) {
+    await t.test('manual karambwan pending cook is cancelled by ' + cancel, t => {
+      const rawK = obj('tbwt_raw_karambwan'), cookedK = obj('tbwt_cooked_karambwan');
+      const f = actor(t, 99, range, rawK, 4), { p } = f;
+      p.setAttribute('quest.tai_bwo_wannai_trio.tinsay', 8);
+      assert.equal(use(p, range, rawK), true);
+      p.getCreationMenu().execute(rawK, 4);
+      cookingTurn(p);
+      cookingTurn(p, () => {
+        assert.equal(use(p, range, rawK), true);
+        p.getCreationMenu().execute(rawK, 3);
+        if (cancel === 'walk') p.getMovementQueue().requestWalk(p.getLocation().clone().add(-1, 0), false);
+        else PluginManager.emitPlayerDisconnect({ player: p, username: p.getUsername() });
+      });
+      assert.equal(p.getInventory().getAmount(cookedK), 1);
+      if (cancel === 'walk') assert.equal(p.getMovementQueue().isMovings(), true, 'accepted one-step walk actually moved');
+      if (cancel === 'walk') assert.equal(range.isWithinInteractionDistance(p.getLocation()), true,
+        'the walk remains within cooking range so movement itself cancels');
+      for (let i = 0; i < 4; i++) cookingTurn(p);
+      assert.equal(p.getInventory().getAmount(cookedK), 1, 'no pending accelerated cook after cancellation');
+      assert.equal(p.getInventory().getAmount(rawK), 3);
+      assert.equal(xpGained(f), 190);
+      assert.equal(Cooking.isCookingActive(p), false);
+    });
+  }
+  await t.test('ordinary fish re-use keeps its queued timing, not the karambwan 1-tick slice', t => {
+    const f = actor(t, 99, range, raw, 8), { p } = f;
+    const inventory = p.getInventory();
+    for (let turn = 0; turn < 7; turn++) {
+      cookingTurn(p, () => {
+        const carried = inventory.getAmount(raw);
+        assert.equal(use(p, range), true);
+        if (carried > 1) p.getCreationMenu().execute(raw, carried);
+      });
+    }
+    assert.equal(inventory.getAmount(cooked), 0,
+      'the supported 1-tick slice covers raw karambwan only; ordinary fish re-use is unchanged');
+  });
 });
 
 

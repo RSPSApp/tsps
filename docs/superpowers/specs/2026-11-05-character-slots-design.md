@@ -114,8 +114,10 @@ modelled on `DisplayNames`: an in-memory map backed by one JSON file, `data/save
 
 Order of `characters` is slot order; index 0 is the primary. A reverse index (character key to
 account key) is rebuilt on load. The record is created lazily: the first time an existing login
-name authenticates after this ships, an account with that one character is written. There is no
-migration step and nothing to run for hosts.
+name authenticates after this ships, an account with that one character is written. A brand-new
+name (no save) is written only when it first enters the world (`enterWorld`); until then its one
+character exists in memory, so a login that never enters claims no name. There is no migration
+step and nothing to run for hosts.
 
 `lastPlayedAt` updates on `enterWorld`. Exposed to plugins as `api.core.Accounts` (read-only
 queries: `accountOf(name)`, `charactersOf(accountKey)`).
@@ -170,7 +172,7 @@ Server to client (only when the flag was set):
 - `CHARACTER_RESULT` (new id, variable-byte): `u8 ok`, `u8 code`, `string message`. Codes: 1 name
   taken, 2 invalid name, 3 slot limit reached, 4 unknown character, 5 primary cannot be deleted,
   6 confirmation did not match, 7 character online, 8 storage error, 9 primary has not entered
-  the world yet.
+  the world yet, 10 character banned (a `CHARACTER_SELECT` of a banned character).
 
 Client to server, accepted only between login OK and handshake (added to `IMMEDIATE_PACKETS`,
 refused with `CHARACTER_RESULT` code 4 otherwise):
@@ -209,7 +211,8 @@ database access; there is no in-game restore of a deleted character.
 ### Configuration
 
 `pluginConfig["characters:maxPerAccount"]`, integer, default **3**, read through
-`PluginManager.getPluginConfig`. A value of 1 disables creation and the picker still shows (one
+`PluginManager.getPluginConfig`, rounded down and clamped to 1..6 (the picker draws six legible
+rows); a non-numeric value falls back to 3. A value of 1 disables creation and the picker still shows (one
 card, Play). Documented in `world.local.json`'s `_help` block and in a new `docs/character-slots.md`.
 
 ### New character entry

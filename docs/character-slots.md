@@ -8,6 +8,7 @@ One login can own several characters on a server. The characters belong to that 
 - Logging out returns to the login screen. To switch characters: log out, log in, pick.
 - Typing a character's name at the login screen works too. The password is the account's, and that character is preselected.
 - Only one character of an account can be online at a time.
+- A login left on the picker for 5 minutes is disconnected, which frees its characters for another login.
 - Each character is an ordinary player with its own name, save, friends and bank. Characters do not share items or coins.
 
 ## Configuring the number of slots
@@ -18,13 +19,13 @@ Set `characters:maxPerAccount` in `world.local.json` under `pluginConfig`:
 "pluginConfig": { "characters:maxPerAccount": 3 }
 ```
 
-- The default is 3. Values are rounded and kept between 1 and 20.
+- The default is 3. Values are rounded down and kept between 1 and 6, the most rows the picker can show. A value that is not a number falls back to 3.
 - 1 turns creation off. The picker still shows the one character with Play.
 - The in-browser host (IndexedDB saves) keeps no account file between reloads, so it always has 1.
 
 ## Where accounts live
 
-Accounts are in `data/saves/accounts.json`. Set `TSPS_ACCOUNTS_FILE` to use another path. The file lists each account's characters in slot order, with when each was created and last played. It is created the first time an existing player logs in; there is nothing to migrate.
+Accounts are in `data/saves/accounts.json`. Set `TSPS_ACCOUNTS_FILE` to use another path. The file lists each account's characters in slot order, with when each was created and last played. A player who already has a save gets an account the first time they log in; a new name gets one when it first enters the world, so a login that never enters claims nothing. There is nothing to migrate.
 
 Run one server process per data directory, as for the saves themselves.
 
@@ -45,7 +46,7 @@ The first character has the account's login name. It is the primary character.
 
 ## Native RuneLite, bots and the agent MCP
 
-These clients have no picker. They enter the character that played last, or the primary if none has.
+These clients have no picker. They enter the character that played last, or the primary if none has. If the login name typed is a non-primary character's, they enter that character instead.
 
 ## Command
 

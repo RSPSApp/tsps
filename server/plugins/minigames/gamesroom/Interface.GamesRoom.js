@@ -102,7 +102,11 @@ function drawBoard(player, match) {
   // Use the one-shot builder rather than interface_inv_init (149): its transmit
   // listener could restore placeholders after the object swaps. Board state is
   // owned by the match; this display inventory never touches carried items.
-  const slots = Array.from({ length: board.length }, (_, slot) => ({ slot, itemId: placeholder, quantity: 1 }));
+  // Runeversi uses static square controls below these graphics. Starting its
+  // display slots empty makes proc154 clear their ops/onOp; object swaps only
+  // set models. Even occupied graphics must pass clicks through (their native
+  // 36px bounds overlap adjacent 32px squares). Draughts needs its slot ops.
+  const slots = match.game === "runeversi" ? [] : Array.from({ length: board.length }, (_, slot) => ({ slot, itemId: placeholder, quantity: 1 }));
   sender.sendInterfaceScript(INVENTORY_UPDATE_SCRIPT,
     [boardUid, inventory, info.width, info.height, 0, -1,
       info.squareInput ? "Select square" : "", "", "", "", "", "", "", "", ""],

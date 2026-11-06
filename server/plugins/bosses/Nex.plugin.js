@@ -10,6 +10,7 @@ const Chamber = require("./nex/Chamber.Nex");
 const Prison = require("./nex/Prison.Nex");
 const Instance = require("./nex/Instance.Nex");
 const Fight = require("./nex/Fight.Nex");
+const Loot = require("./nex/Loot.Nex");
 const Specials = require("./nex/Specials.Nex");
 const Mages = require("./nex/Mages.Nex");
 const Reclaim = require("./nex/Reclaim.Nex");
@@ -28,6 +29,7 @@ module.exports = {
     Prison.attachPrison(api);
     Instance.attachInstance(api);
     Fight.attachFight(api);
+    Loot.attach(api);
     Specials.attachSpecials(api);
     Mages.attachMages(api);
     Reclaim.attachReclaim(api);

@@ -118,6 +118,7 @@ function serve(player, itemId) {
   Shared.applyServe(session, dish);
   player.getSkillManager().addExperiences(Shared.core().Skill.COOKING, xp);
   Shared.syncHud(player, session);
+  Shared.syncViewers(session, player);
   player.sendMessage(`You serve the ${dish.name}.`);
   return true;
 }
@@ -196,7 +197,7 @@ function eweseyCondition({ npcId, player, text }) {
 // --- The Mess's HUD and cleanup.
 
 function enterMess({ player }) {
-  Shared.openHud(player, Shared.sessionOf(player));
+  Shared.openHud(player, Shared.watch(player));
 }
 
 function leaveMess({ player }) {

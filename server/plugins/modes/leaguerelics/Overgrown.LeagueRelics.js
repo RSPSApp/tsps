@@ -3,8 +3,7 @@
  * Leprechaun's vault opens the seed vault anywhere, crops never die (a diseased one waits for a
  * cure), and planting has a 75% chance to keep the seed, with live's message. The relic's other
  * perks need only the relic, not the vault carried (Wiki).
- * Not here: the automatic harvest and replanting of a grown patch from the vault's seeds, which
- * needs a Farming replant path (pets, Hespori and contract rules, compost memory) of its own.
+ * Farming owns the bounded automatic herb cycle; this unit answers whether the relic is active.
  */
 const Common = require("./Common.LeagueRelics");
 
@@ -31,10 +30,15 @@ function open({ player }) {
   api.emitCustomEvent("farming:open-seed-vault", { player, opened: false });
 }
 
+function automatic(rules) {
+  if (active(rules.player)) rules.enabled = true;
+}
+
 module.exports = function attach(pluginApi) {
   api = pluginApi;
   core = api.core;
   effect = Common.data.effects.overgrown;
   api.onCustomEvent("farming:plant-rules", planting);
+  api.onCustomEvent("farming:auto-harvest-rules", automatic);
   api.onItemAction(effect.toolName, { Open: open });
 };

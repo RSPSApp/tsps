@@ -51,6 +51,7 @@ import {
     VARP_OPTION_RUN,
     VARP_SOUND_EFFECTS_VOLUME,
 } from "../common/vars";
+import { brandedTitle } from "../config/brand";
 
 import {
     getDefaultServerAddress,
@@ -1299,7 +1300,7 @@ export class OsrsClient {
             widgetManager.invalidateWidgetRender(widgetManager.getGroupRoot(INVENTORY), "shift");
         };
         if (editMode) {
-            document.title = "Edit Mode - RSPS.app";
+            document.title = brandedTitle("Edit Mode");
             this.loadEditModePlugin();
         }
         // If cache is provided, initialize immediately

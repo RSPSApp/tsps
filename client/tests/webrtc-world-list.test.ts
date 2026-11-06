@@ -13,6 +13,19 @@ assert.deepEqual(getWebRtcRelayConfig(), {
     iceServers: [{ urls: "stun:stun.rsps.app:3478" }],
 });
 
+// A world that is only itself: discovery off, so the list is what the build configures and
+// nothing else. discoverRelayWorlds already answers [] without a relay, which is what makes
+// turning it off enough.
+const beforeOff = process.env.REACT_APP_WEBRTC_SIGNAL_URL;
+for (const value of ["off", "none", "false", "0", "disabled", "OFF"]) {
+    process.env.REACT_APP_WEBRTC_SIGNAL_URL = value;
+    assert.equal(getWebRtcRelayConfig(), undefined, `discovery is off for ${value}`);
+}
+process.env.REACT_APP_WEBRTC_SIGNAL_URL = "ws://relay.example:8787";
+assert.equal(getWebRtcRelayConfig()?.signalUrl, "ws://relay.example:8787", "a real url still works");
+if (beforeOff === undefined) delete process.env.REACT_APP_WEBRTC_SIGNAL_URL;
+else process.env.REACT_APP_WEBRTC_SIGNAL_URL = beforeOff;
+
 const previousPublicUrl = process.env.PUBLIC_URL;
 process.env.PUBLIC_URL = "/play";
 assert.equal(getServerListUrl(), "/play/servers.json");

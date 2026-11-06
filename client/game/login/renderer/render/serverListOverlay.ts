@@ -6,6 +6,8 @@ import {
     SERVER_LIST_PLAYERS_COLUMN_START,
 } from "../constants";
 import { drawGradientRect, drawButton, drawCenteredText, drawText, ellipsis } from "./drawUtils";
+import { getWebRtcRelayConfig } from "../../../../config/clientEnv";
+import { DEFAULT_DIRECTORY_NAME } from "../../../../config/brand";
 
 export function drawServerListOverlay(host: LoginRendererHost, ctx: RenderContext, state: LoginState) {
 
@@ -139,15 +141,18 @@ export function drawServerListOverlay(host: LoginRendererHost, ctx: RenderContex
 
         ctx.restore();
 
-        // Discord notice
-        drawCenteredText(host, 
-            ctx,
-            host.fontPlain12!,
-            "Register on RSPS.app to publish your own world",
-            panelX + panelW / 2,
-            panelY - 8,
-            0xaaaaaa,
-        );
+        // Only worth saying while the shared directory is on: it is what the line advertises.
+        // A build that lists its own world alone (REACT_APP_WEBRTC_SIGNAL_URL=off) drops it.
+        if (getWebRtcRelayConfig()) {
+            drawCenteredText(host,
+                ctx,
+                host.fontPlain12!,
+                `Register on ${DEFAULT_DIRECTORY_NAME} to publish your own world`,
+                panelX + panelW / 2,
+                panelY - 8,
+                0xaaaaaa,
+            );
+        }
 
         // Buttons below the panel
         drawButton(host, ctx, panelX + panelW / 2 - 80, panelY + panelH + 30, "Refresh");

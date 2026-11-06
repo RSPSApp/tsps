@@ -22,6 +22,7 @@ import {
 } from "../preferences/ClientPreferences";
 import { readLocalStorageJson, removeLocalStorageItem } from "../../common/utils/localStorage";
 import { LoginIndex } from "./GameState";
+import { brandedTitle } from "../../config/brand";
 
 const STORAGE_KEY_IOS_PWA_LOGIN_STATE = "osrs:iosPwaLoginState";
 const IOS_PWA_LOGIN_STATE_VERSION = 2;
@@ -339,7 +340,7 @@ export class LoginState {
         this.currentServerName = name;
         // Edit mode keeps its own title (OsrsClient sets it).
         if (typeof document === "undefined" || isMapEditorUrl()) return;
-        document.title = name.trim() ? `${name.trim()} - RSPS.app` : "RSPS.app";
+        document.title = brandedTitle(name);
     }
 
     /** Whether the current server uses secure WebSocket */

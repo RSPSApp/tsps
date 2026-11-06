@@ -4,6 +4,9 @@
  * (`process.env.REACT_APP_FOO`). Dynamic `process.env[key]` is left undefined.
  */
 
+/** Values that mean "turn this off" in an environment variable. */
+const OFF = new Set(["off", "none", "false", "0", "disabled"]);
+
 function read(value: string | undefined): string | undefined {
     // Strip BOM + whitespace; Windows/PowerShell env writes often include U+FEFF.
     const trimmed = value?.replace(/^\uFEFF/, "").trim();
@@ -252,13 +255,22 @@ export function getBrowserHostWorldConfig(): BrowserHostWorldConfig | undefined 
     return { ...getPublicWebRtcRelayConfig(), worldId };
 }
 
-/** Public relay directory used to discover WebRTC worlds. */
+/**
+ * Public relay directory used to discover WebRTC worlds, or nothing when the build opts out.
+ *
+ * A build that is one world and only its own sets `REACT_APP_WEBRTC_SIGNAL_URL=off`: the server
+ * list then shows what the build configures and nothing else, instead of also listing every world
+ * published on the shared directory. Voice chat has its own fallback to the public relay, so
+ * turning discovery off does not take voice with it.
+ */
 export function getWebRtcRelayConfig(): WebRtcRelayConfig | undefined {
     if (typeof window !== "undefined" && (isBrowserHostClient() || worldIdFromPath())) {
         return getPublicWebRtcRelayConfig();
     }
 
-    const signalUrl = read(process.env.REACT_APP_WEBRTC_SIGNAL_URL) ?? DEFAULT_WEBRTC_SIGNAL_URL;
+    const configured = read(process.env.REACT_APP_WEBRTC_SIGNAL_URL);
+    if (configured && OFF.has(configured.toLowerCase())) return undefined;
+    const signalUrl = configured ?? DEFAULT_WEBRTC_SIGNAL_URL;
 
     const rawIceServers = read(process.env.REACT_APP_WEBRTC_ICE_SERVERS);
     if (!rawIceServers) return { signalUrl, iceServers: DEFAULT_WEBRTC_ICE_SERVERS };

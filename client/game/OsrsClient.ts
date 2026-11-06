@@ -5441,6 +5441,26 @@ export class OsrsClient {
         );
     }
 
+    /**
+     * Signs in from the HTML login screen: the same path the canvas form takes, with the fields
+     * already filled. Returns the client-side complaint when the credentials cannot be tried, so
+     * the form can say it in its own words instead of the canvas drawing it underneath.
+     */
+    loginFromForm(username: string, password: string, remember: boolean): string | undefined {
+        if (this.gameState === GameState.CONNECTING) return undefined;
+        const state = this.loginState;
+        state.username = username;
+        state.password = password;
+        state.rememberUsername = remember;
+        state.loginIndex = LoginIndex.LOGIN_FORM;
+        state.loginWithToken = false;
+        const complaint = state.getCredentialValidationMessage();
+        if (complaint !== undefined) return complaint;
+        this.updateGameState(GameState.CONNECTING);
+        this.sendLoginRequest();
+        return undefined;
+    }
+
     /** Enter on the login screen: Play for the remembered account, else Login on the form. */
     submitLoginFromKeyboard(): void {
         if (this.gameState === GameState.CONNECTING) return;

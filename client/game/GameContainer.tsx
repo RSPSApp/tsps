@@ -1,4 +1,4 @@
-import { Suspense, useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { Suspense, lazy, useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { RenderStatsOverlay } from "../components/RenderStatsOverlay";
 import { OsrsLoadingBar } from "../components/OsrsLoadingBar";
@@ -23,6 +23,8 @@ import {
     isPortraitLeftHanded, subscribePortraitHandedness, PORTRAIT_COMPONENTS,
 } from "./plugins/portraitmode/PortraitLayout";
 import { FirstPersonPlugin } from "./plugins/firstperson/FirstPersonPlugin";
+
+const LoginScreen = lazy(() => import("./login/html/LoginScreen").then((m) => ({ default: m.LoginScreen })));
 
 interface OsrsContainerProps {
     osrsClient: OsrsClient;
@@ -396,6 +398,11 @@ export function GameContainer({ osrsClient }: OsrsContainerProps): JSX.Element {
                 <div className="game-canvas-shell">
                     <div className="game-canvas-stage">
                         {loadingBarOverlay}
+
+                        {/* The login page, over the canvas login that still owns the protocol. */}
+                        <Suspense fallback={null}>
+                            <LoginScreen osrsClient={osrsClient} />
+                        </Suspense>
 
                         {!hideUi && osrsClient.isLoggedIn() && <ControlsHelp
                             configManager={osrsClient.runeLite.configManager}

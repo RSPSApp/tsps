@@ -1,0 +1,371 @@
+/*
+ * The login page. Same language as the Idle screen inside the game and the HUD strip: a 2px
+ * bevel, hard edges, no rounding, warm browns with gold. Nothing here is rounded or blurred on
+ * purpose — the pixel look comes from the hard edge.
+ */
+.osi-login {
+    position: absolute;
+    inset: 0;
+    z-index: 40;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: #07080c;
+    color: #eae3d2;
+    font: 16px/1.6 ui-sans-serif, system-ui, sans-serif;
+}
+
+.osi-login__plate {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    image-rendering: pixelated;
+}
+
+/* The wings fall away so the text and the panel have somewhere quiet to sit. */
+.osi-login__wash {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+
+.osi-login__wash--left {
+    background: linear-gradient(90deg, rgba(5, 7, 11, 0.92) 0%, rgba(5, 7, 11, 0.76) 26%, rgba(5, 7, 11, 0.34) 40%, rgba(5, 7, 11, 0) 54%);
+}
+
+.osi-login__wash--right {
+    background: linear-gradient(270deg, rgba(5, 7, 11, 0.9) 0%, rgba(5, 7, 11, 0.7) 24%, rgba(5, 7, 11, 0.3) 38%, rgba(5, 7, 11, 0) 50%);
+}
+
+/* ---------- top bar ---------- */
+.osi-login__bar {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 9px 14px;
+    background: linear-gradient(#141826, #0d1019);
+    border-bottom: 3px solid #000;
+}
+
+.osi-login__crest {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 46px;
+    height: 46px;
+    font-weight: 800;
+    font-size: 15px;
+    color: #f5c13a;
+    background: #1d2234;
+    border: 3px solid #c8901c;
+    box-shadow: inset 2px 2px 0 #3a4360, inset -2px -2px 0 #0a0c12;
+}
+
+.osi-login__lock {
+    line-height: 1.1;
+    min-width: 0;
+}
+
+.osi-login__lock b {
+    display: block;
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: 0.03em;
+    color: #fff;
+    text-shadow: 0 3px 0 #000;
+    white-space: nowrap;
+}
+
+.osi-login__lock span {
+    display: block;
+    margin-top: 2px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    color: #7f8aa8;
+}
+
+.osi-login__spacer {
+    flex: 1;
+}
+
+.osi-login__langs {
+    display: flex;
+    flex: none;
+}
+
+.osi-login__lang {
+    padding: 8px 11px;
+    margin-left: -2px;
+    font: 700 12px/1 ui-sans-serif, system-ui, sans-serif;
+    letter-spacing: 0.06em;
+    color: #8e9ab5;
+    background: #161b29;
+    border: 2px solid #2c3550;
+    box-shadow: inset 2px 2px 0 #2f3952, inset -2px -2px 0 #0b0e16;
+    cursor: pointer;
+}
+
+.osi-login__lang:first-child {
+    margin-left: 0;
+}
+
+.osi-login__lang.is-on {
+    color: #2a1c00;
+    background: linear-gradient(#ffd45e, #e0a222);
+    border-color: #8a6210;
+    box-shadow: inset 2px 2px 0 #fff0b8, inset -2px -2px 0 #9c6f12;
+}
+
+.osi-login__lang:focus-visible {
+    outline: 3px solid #ffd45e;
+    outline-offset: 2px;
+}
+
+/* ---------- columns ---------- */
+.osi-login__cols {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    flex: 1;
+    gap: 24px;
+    padding: 26px 24px 22px;
+    min-height: 0;
+    overflow: auto;
+}
+
+.osi-login__pitch {
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.osi-login__eyebrow {
+    align-self: flex-start;
+    padding: 5px 10px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    color: #0f1a0a;
+    background: #f5c13a;
+    box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.6);
+}
+
+.osi-login__head {
+    margin: 16px 0 0;
+    font-weight: 800;
+    line-height: 0.98;
+}
+
+.osi-login__head span {
+    display: block;
+    font-size: clamp(30px, 5.2vw, 60px);
+}
+
+.osi-login__h1 { color: #5fb8f0; text-shadow: 0 4px 0 #14456b, 0 7px 0 #000; }
+.osi-login__h2 { color: #ef6b3a; text-shadow: 0 4px 0 #78260d, 0 7px 0 #000; }
+.osi-login__h3 { color: #f5c13a; text-shadow: 0 4px 0 #7a550d, 0 7px 0 #000; }
+.osi-login__h4 {
+    color: #fff;
+    text-shadow: 0 4px 0 #3b4258, 0 7px 0 #000;
+    font-size: clamp(24px, 4.1vw, 48px) !important;
+}
+
+.osi-login__tiles {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin: auto 0 0;
+    padding: 22px 0 0;
+    list-style: none;
+}
+
+.osi-login__tile {
+    padding: 9px 13px;
+    background: rgba(10, 13, 9, 0.86);
+    border: 2px solid #39402c;
+    box-shadow: inset 2px 2px 0 #4e573a, inset -2px -2px 0 #0a0c08;
+}
+
+.osi-login__tile b {
+    display: block;
+    font-size: 20px;
+    font-weight: 800;
+    line-height: 1;
+    color: #fff;
+}
+
+.osi-login__tile span {
+    display: block;
+    margin-top: 3px;
+    max-width: 11ch;
+    font-size: 11px;
+    line-height: 1.25;
+    color: #9a937f;
+}
+
+/* ---------- the panel ---------- */
+.osi-login__frame {
+    flex: 0 0 390px;
+    align-self: center;
+    padding: 11px;
+    background: #7a5429;
+    border: 3px solid #3a2612;
+    box-shadow: inset 3px 3px 0 #a87b42, inset -3px -3px 0 #27180a, 0 10px 28px rgba(0, 0, 0, 0.6);
+}
+
+.osi-login__pane {
+    display: flex;
+    flex-direction: column;
+    padding: 18px 18px 16px;
+    background: #17201a;
+    border: 3px solid #0d130e;
+    box-shadow: inset 2px 2px 0 #2d3b2c, inset -2px -2px 0 #080c08;
+}
+
+.osi-login__kicker {
+    margin: 0;
+    text-align: center;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    color: #f5c13a;
+}
+
+.osi-login__title {
+    margin: 5px 0 3px;
+    text-align: center;
+    font-size: 30px;
+    font-weight: 800;
+    color: #fff;
+    text-shadow: 0 3px 0 #0d2a0d, 0 5px 0 #000;
+}
+
+.osi-login__sub {
+    margin: 0 0 16px;
+    text-align: center;
+    font-size: 13px;
+    color: #9fb08f;
+}
+
+.osi-login__label {
+    margin: 0 0 6px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.13em;
+    color: #8fa383;
+}
+
+.osi-login__input {
+    width: 100%;
+    padding: 12px 13px;
+    margin: 0 0 13px;
+    font: 16px ui-sans-serif, system-ui, sans-serif;
+    color: #eae3d2;
+    background: #10180f;
+    border: 2px solid #2f4a2c;
+    box-shadow: inset 2px 2px 0 #0a1009, inset -2px -2px 0 #2b3a28;
+}
+
+.osi-login__input:focus {
+    outline: none;
+    border-color: #f5c13a;
+}
+
+.osi-login__input:disabled {
+    opacity: 0.6;
+}
+
+.osi-login__remember {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 14px;
+    font-size: 13px;
+    color: #9fb08f;
+    cursor: pointer;
+}
+
+.osi-login__error {
+    margin: 0 0 12px;
+    padding: 9px 11px;
+    font-size: 13px;
+    color: #ffd9d4;
+    background: #3a1712;
+    border: 2px solid #7a2a1e;
+    box-shadow: inset 2px 2px 0 #5c2016, inset -2px -2px 0 #1d0a07;
+}
+
+.osi-login__go {
+    width: 100%;
+    padding: 15px;
+    font: 800 19px ui-sans-serif, system-ui, sans-serif;
+    letter-spacing: 0.04em;
+    color: #2a1c00;
+    background: linear-gradient(#ffd45e, #e0a222);
+    border: 3px solid #8a6210;
+    box-shadow: inset 3px 3px 0 #fff0b8, inset -3px -3px 0 #9c6f12;
+    cursor: pointer;
+}
+
+.osi-login__go:disabled {
+    cursor: default;
+    filter: saturate(0.5) brightness(0.8);
+}
+
+.osi-login__go:focus-visible {
+    outline: 3px solid #fff0b8;
+    outline-offset: 3px;
+}
+
+.osi-login__help {
+    margin: 11px 0 0;
+    text-align: center;
+    font-size: 12px;
+    color: #7f8c74;
+}
+
+/* The panel goes under the pitch when there is no room beside it. */
+@media (max-width: 980px) {
+    .osi-login__cols {
+        flex-direction: column;
+        gap: 18px;
+    }
+
+    .osi-login__frame {
+        flex: none;
+        align-self: stretch;
+    }
+
+    .osi-login__tiles {
+        margin-top: 18px;
+        padding-top: 0;
+    }
+
+    .osi-login__wash--left {
+        background: linear-gradient(180deg, rgba(5, 7, 11, 0.9), rgba(5, 7, 11, 0.8));
+    }
+
+    .osi-login__wash--right {
+        background: none;
+    }
+}
+
+/* Short and wide, which is most of the game's own window: drop the pitch and keep the panel. */
+@media (max-height: 520px) {
+    .osi-login__head,
+    .osi-login__eyebrow,
+    .osi-login__tiles {
+        display: none;
+    }
+
+    .osi-login__frame {
+        flex: 0 0 390px;
+        margin: 0 auto;
+    }
+}

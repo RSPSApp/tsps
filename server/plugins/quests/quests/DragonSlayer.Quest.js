@@ -215,6 +215,7 @@ module.exports = function registerDragonSlayerQuest(api) {
     melzar: { variant: "melzar-s-map-piece-searching-the-chest", found: "Cql70f" },
   };
   const ORACLE_LID_STEPS = new Set(["kMeD2O", "a4P9BG", "BHT54J", MAP_CHESTS.oracle.lidLast]);
+  const CRASH_LANDING = { x: 2849, y: 3238 };
   const HEAD_CUT_SOUND = 3744, HEAD_OFF_SOUND = 3745, SILENCE_TRACK = 147;
   const HEAD_CUT_WALK_TICKS = 3, HEAD_CUT_WALK_MAX_TILES = 10;
   /** The lair's west edge (east of the low wall) and Elvarg's footprint (cache size 4). */
@@ -458,6 +459,10 @@ module.exports = function registerDragonSlayerQuest(api) {
         sceneFire(scene, FIRE_LARGE, 2064, 5516);
         for (let i = 0; i < 5; i++) fireAt(scene, [2057 + i * 3, 5522], [2063 + i, 5518], i * 30);
       });
+      // rev242 ticks 3270-3271: the player hops to plane 2 on the same tile and back the next tick, which
+      // takes Ned and Jenkins out of view and re-adds them (Jenkins on his new tile).
+      later(scene, 1, () => player.moveTo(scene.sourceTile(2066, 5516, 2)));
+      later(scene, 2, () => player.moveTo(scene.sourceTile(2066, 5516, 1)));
       later(scene, 4, () => player.setPositionToFace(scene.sourceTile(2062, 5518))); // rev242 tick 3273
       later(scene, 5, () => scene.jenkins?.performAnimation(new Animation(6649, 6)));
       later(scene, 7, () => { scene.jenkins?.performAnimation(new Animation(836)); player.getPacketSender().sendSoundEffect(513, 1, 0).sendSoundEffect(512, 1, 0); });
@@ -469,7 +474,8 @@ module.exports = function registerDragonSlayerQuest(api) {
       player.getPacketSender().sendCameraShake(0, 20).sendSoundEffect(3742, 1, 0); StatementDialogue.send(player, "<col=800000>CRASH!", false); fade(player, true);
       later(scene, 3, () => { scene.cameraReleased = true; player.getPacketSender().sendCameraReset(); });
       later(scene, 4, () => {
-        scene.returnTile = new Location(2852, 3238, 0); scene.leave(player, false); player.moveTo(scene.returnTile);
+        // rev242 tick 3339: the beach landing, where the player stays (and the camera looks) until released.
+        scene.returnTile = new Location(CRASH_LANDING.x, CRASH_LANDING.y, 0); scene.leave(player, false); player.moveTo(scene.returnTile);
         quest.setStage(player, STAGE_CRANDOR); syncState({player});
         player.getMovementQueue().setBlockMovement(true); player.setUntargetable(true); player.performAnimation(new Animation(4191));
         camera(player, null, [2854, 3241, 300], [2849, 3238, 200]); fade(player, false);

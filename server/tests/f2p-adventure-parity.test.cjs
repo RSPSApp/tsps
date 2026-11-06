@@ -156,7 +156,7 @@ test('Dragon Slayer sails through the private fire and crash sequence, then coll
   p.manager.advance();assert.ok(p.log.some(entry=>entry[0]==='sendSubInterface'&&entry[2]===545));h.tick(1);assert.equal(p.text,'Did you see that?');
   p.manager.advance();p.manager.advance();p.manager.advance();h.tick(4);assert.equal(p.text,"It's the dragon!");
   p.manager.advance();assert.ok(p.log.some(entry=>entry[0]==='sendSubInterface'&&entry[2]===546));h.tick(9);assert.equal(p.text,"We're going to sink!");p.manager.advance();p.manager.advance();p.manager.advance();h.tick(4);assert.equal(h.quest.getStage(p),9);assert.equal(p.configs.get(176),8);h.tick(5);assert.equal(p.blocked,false);
-  assert.deepEqual([p.getLocation().getX(),p.getLocation().getY()],[2852,3238]);assert.equal(p.getArea(),null);
+  assert.deepEqual([p.getLocation().getX(),p.getLocation().getY()],[2849,3238],'the captured beach landing (rev242 tick 3339)');assert.equal(p.getArea(),null);
   p.moveTo(new core.Location(2849,9638,0));const npc={getLocation:()=>new core.Location(2853,9637,0)};h.hooks.onNpcDeath[0]({killer:p,npcId:8033,npc});
   h.tick(1);assert.equal(p.configs.get(176),9);assert.equal(p.items.get(I.ELVARGS_HEAD),undefined);assert.equal(h.quest.isComplete(p),false);
   // rev242 capture ticks 3606-3617: walked to the tile west of her head, facing it, then the cut.
@@ -400,7 +400,12 @@ test('Dragon Slayer replays captured camera commands in order, with dialogue-tri
   assert.deepEqual(line("Looks like there's a storm coming up, cap'n."), [shot('sendCameraLookAt', 2064, 5520, 300, 232), shot('sendCameraMoveTo', 2074, 5525, 1500, 232), shot('sendCameraMoveTo', 2064, 5525, 1500, 1)]);
   p.log.length = 0; h.action(p, N.CAPTAIN_NED, '1XD38w');
   assert.deepEqual(directed(), [shot('sendCameraMoveTo', 2072, 5517, 300, 232), shot('sendCameraLookAt', 2062, 5515, 100, 232), shot('sendCameraMoveTo', 2072, 5520, 300, 1)]);
-  h.tick(4); p.log.length = 0; h.action(p, N.CAPTAIN_NED, '07qPBA'); h.tick(2); assert.equal(directed().length, 0);
+  h.tick(4); p.log.length = 0; h.action(p, N.CAPTAIN_NED, '07qPBA');
+  // rev242 ticks 3270-3271: plane 2 on the same tile for one tick, then back.
+  const hopFrom = p.getLocation();
+  h.tick(1); assert.deepEqual([p.getLocation().getX(), p.getLocation().getY(), p.getLocation().getZ()], [hopFrom.getX(), hopFrom.getY(), 2]);
+  h.tick(1); assert.deepEqual([p.getLocation().getX(), p.getLocation().getY(), p.getLocation().getZ()], [hopFrom.getX(), hopFrom.getY(), 1]);
+  assert.equal(directed().length, 0);
   h.tick(1); assert.deepEqual(directed(), [shot('sendCameraMoveTo', 2068, 5518, 300, 232), shot('sendCameraLookAt', 2062, 5518, 100, 232), shot('sendCameraMoveTo', 2074, 5526, 300, 1)]);
   h.tick(6); assert.deepEqual(directed().slice(3), [shot('sendCameraMoveTo', 2074, 5526, 600, 232), shot('sendCameraLookAt', 2066, 5517, 100, 232), shot('sendCameraMoveTo', 2064, 5518, 400, 1)]);
   assert.deepEqual(line("We're going to crash!"), [shot('sendCameraMoveTo', 2064, 5518, 400, 2)]);

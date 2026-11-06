@@ -88,6 +88,9 @@ Community-reported completion accepted for scheduling (skip full manual replay).
   the open chest. Search gives "You find a map piece in the chest." in an item box as it shuts. Close shuts it.
 - **Voyage and lair** (ticks 3158-3440):
   - On the ship the player stands at 2066,5516 and faces each speaker, the fire, the fly-past and the land.
+  - During the fly-past the player hops to plane 2 on the same tile and back the next tick (ticks 3270-3271),
+    which takes Ned and Jenkins out of view and back. The crash lands the player at 2849,3238 (tick 3339),
+    where they stay until released.
   - In the intro the player waits out of shot. Elvarg faces west, seven footsteps sound and she walks five
     tiles. The entrance lands on 2833,9658.
 - **Elvarg** (ticks 3445-3627):

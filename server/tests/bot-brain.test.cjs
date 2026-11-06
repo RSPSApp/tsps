@@ -2809,3 +2809,50 @@ test('regional culling waits for an incoming ranged hit before the first attacke
   t.mock.timers.tick(30000);
   assert.equal(logouts, 1, 'culling resumes after the incoming hit is gone');
 });
+
+test('regional roamers in the Revenant Caves spawn only where the player can walk to them (#2834)', (t) => {
+  let seed = 2834;
+  t.mock.method(Math, 'random', () => ((seed = Math.imul(seed, 1664525) + 1013904223 >>> 0) / 2 ** 32));
+  const { createBotRegistry } = require('../plugins/bots/runtime/Registry.PlayerBots');
+  const { RegionManager } = require('../dist/game/collision/RegionManager');
+  const { RsmodRouteFinding } = require('../dist/game/model/movement/path/RsmodRouteFinding');
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  RegionManager.init();
+  RegionManager.loadMapFiles(3226, 10140);
+  const route = new RsmodRouteFinding((x, y, z, area) => RegionManager.getClipping(x, y, z, area));
+  const walkable = (x, y) => {
+    const path = route.findRoute({ level: 0, srcX: x, srcY: y, srcSize: 1, destX: 3226, destY: 10140, privateArea: null, moveNear: false });
+    return path.success && !path.alternative;
+  };
+  assert.equal(RegionManager.blocked(new Location(3249, 10120), null), false, 'the cave void is not flagged');
+  assert.equal(walkable(3249, 10120), false, 'so it is only unreachable');
+  const human = nativeFollowCombatPlayer(t, 'rev-cave-human', new Location(3226, 10140));
+  human.setPlayerBot(false);
+  let regionsUpdated;
+  const snapshot = { regions: [{ key: '0:50:158', regionX: 50, regionY: 158, z: 0 }] };
+  const registry = createBotRegistry({
+    botApi: { getRegionManager: () => RegionManager, log() {}, core: {
+      DisplayNames: { refusal: () => null }, RsmodRouteFinding,
+      World: { getPlayers: () => [human], getAddPlayerQueue: () => [] },
+    } },
+    botCount: 0, wildernessRoamerBotCount: 16, wildernessActiveRegionBotsPerRegion: 16,
+    spawn: new Location(3222, 3218), behaviorMode: { PVP: 'pvp' },
+    worldGetPlayerByName: () => null,
+    createBotPlayer: (name, location) => nativeFollowCombatPlayer(t, name, location),
+    createInitialState: () => ({ pvp: {} }), applyInitialPvpLoadout: () => true,
+    emitPlayerLogin() {}, ensureBehaviorTaskStarted() {},
+    randomInRange: (min, max) => min + Math.floor(Math.random() * (max - min + 1)),
+    onActiveRegionsUpdated: (handler) => { regionsUpdated = handler; },
+    getActiveRegionSnapshot: () => snapshot,
+  });
+  registry.scheduleInitialSpawn();
+  regionsUpdated(snapshot);
+  t.mock.timers.tick(60000);
+  const caveRoamers = registry.entries.filter(({ state }) => state.roaming.roamBounds?.minY >= 6400);
+  assert.ok(caveRoamers.length > 0, 'regional roamers still spawn in the caves');
+  assert.ok(registry.entries.some(({ player }) => player.getLocation().getY() < 6400), 'persistent surface hotspots remain populated');
+  for (const { player } of caveRoamers) {
+    const at = player.getLocation();
+    assert.ok(walkable(at.getX(), at.getY()), `${player.getUsername()} at ${at.getX()},${at.getY()} is reachable`);
+  }
+});

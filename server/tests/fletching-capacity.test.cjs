@@ -494,3 +494,36 @@ test("emptying a bow string spool as notes conserves strings at the stack limit"
     });
   }
 });
+
+
+test("emptying a spool as unnoted strings keeps the remainder stored", async t => {
+  const Spool = require("../plugins/skills/fletching/Spool.Fletching");
+  const f = actor(t), p = f.p, inventory = f.inv;
+  const spoolId = I.BOW_STRING_SPOOL, stringId = I.BOW_STRING;
+  const noteId = core.ItemDefinition.forId(stringId).getNoteId();
+  const capacity = Spool.CAPACITY_BY_SPARES[0];
+  put(f, item(spoolId), 0);
+  put(f, item(noteId, capacity), 1);
+  inventory.refreshItems();
+  t.after(() => { p.closeInterruptibleInterfaces(); core.TaskManager.cancelTasks(p); });
+  const action = async option => {
+    const index = core.CacheDefinitions.getItem(spoolId).inventoryActions.indexOf(option);
+    assert.ok(index >= 0);
+    await send(f, { type: "inventory_action", widgetId: core.Inventory.INTERFACE_ID,
+      itemId: spoolId, slot: 0, optionIndex: index + 1, option });
+  };
+  await action("Fill");
+  assert.equal(p.getAttribute(Spool.CHARGES_ATTRIBUTE), capacity);
+  assert.equal(inventory.getAmount(noteId), 0);
+  const free = inventory.getFreeSlots();
+  assert.equal(free, inventory.capacity() - 1);
+  await action("Empty");
+  const prompt = p.getDialogueManager().getCurrent();
+  assert.ok(prompt instanceof core.OptionDialogue);
+  assert.equal(prompt.getOptions()[0], "Take them as bow strings.");
+  await send(f, { type: "dialogue_continue", widgetId: core.OptionDialogue.OPTIONS_WIDGET_ID, childIndex: 1 });
+  assert.equal(p.getDialogueManager().isActive(), false);
+  assert.equal(inventory.getAmount(stringId), free);
+  assert.equal(p.getAttribute(Spool.CHARGES_ATTRIBUTE), capacity - free);
+  assert.equal(inventory.getAmount(stringId) + p.getAttribute(Spool.CHARGES_ATTRIBUTE), capacity);
+});

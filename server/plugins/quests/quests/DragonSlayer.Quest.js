@@ -1,6 +1,6 @@
 /** Dragon Slayer I: revision240 RSProx stages, offerings, voyage and Elvarg proof. See docs/f2p-adventure-parity.md. */
 module.exports = function registerDragonSlayerQuest(api) {
-  const { Skill, Item, Location, Animation, Graphic, GameObject, ForceMovement, TaskManager, CountdownTask, TemplatedInstanceArea, DialogueChainBuilder, ActionDialogue, StatementDialogue, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
+  const { Skill, Item, Location, Animation, Graphic, GameObject, ForceMovement, TaskManager, CountdownTask, TemplatedInstanceArea, DialogueChainBuilder, Area, Boundary, ActionDialogue, ItemStatementDialogue, StatementDialogue, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
   const { registerQuest, startTranscript, getRegisteredQuests } = require("../QuestRuntime");
 
   const GUILDMASTER_NPC_ID = NpcIdentifiers.GUILDMASTER;
@@ -62,6 +62,7 @@ module.exports = function registerDragonSlayerQuest(api) {
     magentaKey: ItemIdentifiers.KEY_7,
     greenKey: ItemIdentifiers.KEY_8,
     elvargsHead: ItemIdentifiers.ELVARGS_HEAD,
+    agilityClimb: ItemIdentifiers.AGILITY_CLIMB,
   };
 
   const MAP_PIECES = [ITEM.mapMelzar, ITEM.mapWormbrain, ITEM.mapOracle];
@@ -97,6 +98,8 @@ module.exports = function registerDragonSlayerQuest(api) {
     crandorRope: ObjectIdentifiers.CLIMBING_ROPE_13,
     crandorWall: ObjectIdentifiers.WALL_161,
     crandorShortcut: ObjectIdentifiers.WALL_9,
+    // Rocks south of the volcano hole: bottom at 2832,3248, top at 2832,3251 (rev241 cache).
+    crandorRocks: [ObjectIdentifiers.ROCKS_152, ObjectIdentifiers.ROCKS_153],
     melzarBasementLadder: ObjectIdentifiers.LADDER_21,
     melzarExitDoor: ObjectIdentifiers.EXIT_DOOR,
   };
@@ -124,6 +127,10 @@ module.exports = function registerDragonSlayerQuest(api) {
     crandorSurface: new Location(2833, 3256, 0),
   };
 
+  /** Melzar's Maze plays "The Maze" on all three floors (rev242 capture); the map's own region track is Emperor. */
+  const MELZAR_MAZE_TRACK = 365;
+  const MELZAR_MAZE_BOUNDS = { minX: 2921, maxX: 2940, minY: 3238, maxY: 3259, floors: [0, 1, 2] };
+
   const ATTR_ORACLE = "dragon-slayer.oracle";
   const ATTR_NED_ASKED = "dragon-slayer.ned-asked";
   const ATTR_OZIACH_CONGRATS = "dragon-slayer.oziach-congrats";
@@ -140,6 +147,8 @@ module.exports = function registerDragonSlayerQuest(api) {
   /** Guildmaster follow-up answers; set means the question has not been asked yet. */
   const INSTRUCTION = { melzar: 0, oracle: 1, wormbrain: 2, ship: 3, shield: 4 };
   const SHORTCUT_VARBIT = 3741;
+  const CRANDOR_ROCKS_AGILITY = 84;
+  const CRANDOR_ROCKS_BOTTOM_Y = 3248;
   const PRINCE_ALI_KEY = "prince_ali_rescue";
   const PRINCE_STAGE_WIG = 20;
   const PRINCE_STAGE_SAVED = 100;
@@ -581,6 +590,7 @@ module.exports = function registerDragonSlayerQuest(api) {
         );
       }
       if (value.includes("does not have the key")) return !hasItem(player, ITEM.mazeKey);
+      if (value.includes("free inventory space")) return !hasItem(player, ITEM.mazeKey) && player.getInventory().isFull();
       if (value.includes("key in their key ring")) return false;
       if (value.includes("key in their inventory or bank")) return hasItem(player, ITEM.mazeKey);
       return null;
@@ -895,6 +905,7 @@ module.exports = function registerDragonSlayerQuest(api) {
       player.sendMessage("The door is locked.");
       return;
     }
+    player.sendMessage("You use the key and the door opens.");
     player.moveTo(TILE.melzarInside.clone());
   }
 
@@ -1055,8 +1066,25 @@ module.exports = function registerDragonSlayerQuest(api) {
     const { player } = event;
     event.handled = true;
     if (quest.getStage(player) < STAGE_CRANDOR) return;
+    if (player.getAttribute(ATTR_SHORTCUT) !== true) {
+      player.sendMessage("You found a secret door.<br>You remember where the secret door is for future reference.");
+    }
     openCrandorShortcut(player);
     crossCrandorShortcut(player);
+  }
+
+  /** Crandor rocks: 84 Agility, no XP (Wiki Rocks (Crandor)); both rocks give the same refusal. */
+  function handleCrandorRocksClick(event) {
+    const { player } = event;
+    if (scenes.has(player) || actions.has(player)) return;
+    if (player.getSkillManager().getCurrentLevel(Skill.AGILITY) < CRANDOR_ROCKS_AGILITY) {
+      player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new ItemStatementDialogue(0, ITEM.agilityClimb,
+        `You need an Agility level of at least ${CRANDOR_ROCKS_AGILITY} to climb up these rocks.`)));
+      return;
+    }
+    const x = player.getLocation().getX();
+    const fromBottom = player.getLocation().getY() <= CRANDOR_ROCKS_BOTTOM_Y;
+    player.moveTo(new Location(x, fromBottom ? CRANDOR_ROCKS_BOTTOM_Y + 4 : CRANDOR_ROCKS_BOTTOM_Y - 1, 0));
   }
 
   function handleCrandorRopeClick(event) {
@@ -1081,6 +1109,7 @@ module.exports = function registerDragonSlayerQuest(api) {
     const entering = player.getLocation().getX() < 2846;
     if (entering && quest.getStage(player) < STAGE_OZIACH) { player.sendMessage("You have no reason to enter the dragon's lair."); return; }
     if (entering && !saved(player, ELVARG_KILLED_ATTRIBUTE)) api.emitCustomEvent("elvarg:enter", {player, handled:false, aggressive:false});
+    player.sendMessage("You climb over the low wall.");
     const start = new Location(entering ? 2845 : 2847, 9636, 0), end = new Location(entering ? 2847 : 2845, 9636, 0);
     const token = {}; actions.set(player, token);
     player.moveTo(start); player.getMovementQueue().reset().setBlockMovement(true);
@@ -1204,6 +1233,14 @@ module.exports = function registerDragonSlayerQuest(api) {
   });
 
   for (const key of [OFFERINGS_ATTRIBUTE, INSTRUCTIONS_ATTRIBUTE, NED_KNOWS_ATTRIBUTE, ELVARG_SEEN_ATTRIBUTE, ELVARG_KILLED_ATTRIBUTE, EXPLAINED_ATTRIBUTE]) api.persistAttribute(key, 0);
+  class MelzarMazeArea extends Area {
+    constructor() {
+      const { minX, maxX, minY, maxY, floors } = MELZAR_MAZE_BOUNDS;
+      super(floors.map((z) => new Boundary(minX, maxX, minY, maxY, z)));
+    }
+    getMusicTrack() { return MELZAR_MAZE_TRACK; }
+  }
+  api.registerArea(new MelzarMazeArea());
   api.persistAttribute(ATTR_ORACLE, 0);
   api.persistAttribute(ATTR_NED_ASKED);
   api.persistAttribute(ATTR_OZIACH_CONGRATS);
@@ -1237,5 +1274,6 @@ module.exports = function registerDragonSlayerQuest(api) {
   api.onObjectFirstClick(LOC.crandorRope, handleCrandorRopeClick);
   api.onObjectFirstClick(LOC.crandorWall, handleCrandorWallClick);
   api.onObjectFirstClick(LOC.crandorShortcut, handleCrandorShortcutClick);
+  api.onObjectFirstClick(LOC.crandorRocks, handleCrandorRocksClick);
   api.onNpcDeath(handleNpcDeath);
 };

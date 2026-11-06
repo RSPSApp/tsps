@@ -6,9 +6,34 @@ body:
   - type: textarea
     id: description
     attributes:
-      label: What went wrong?
-      description: What happened, and what did you expect? Steps to make it happen again help most.
-      placeholder: The door won't open when I click it…
+      label: What happened?
+      description: Describe the observed behavior in the game.
+      placeholder: I changed my character's appearance, but the selection reset after logging in.
+    validations:
+      required: true
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: Expected behavior
+      description: What should happen instead? State the correct behavior plainly, and name where it comes from (an rsprox log, the OSRS Wiki, a cache/source reference, or another concrete mechanics source).
+      placeholder: The appearance selection should persist after logging in, as another body type already does.
+    validations:
+      required: true
+  - type: textarea
+    id: steps-to-reproduce
+    attributes:
+      label: Steps to reproduce
+      description: List the exact steps, including where you were and which item, NPC or object you used.
+      placeholder: "1. Open the appearance interface.\n2. Change the selection.\n3. Log out and back in.\n4. The selection has reset."
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence / mechanics source
+      description: Cite the support for the expected behavior. For example an rsprox capture or log (https://rsprox.net/database), an OSRS Wiki page, a cache loc/item/CS2 reference, code path or another concrete mechanics source. For an obvious defect, a concrete reproduction or source reference is enough; an rsprox recording is not required if none exists.
+      placeholder: A link to an rsprox capture or log, an OSRS Wiki page, or a cache/code/mechanics reference that shows the expected behavior.
+      render: text
     validations:
       required: true
   - type: textarea

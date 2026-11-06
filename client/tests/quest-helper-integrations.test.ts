@@ -17,6 +17,7 @@ import { createScriptEvent } from "../rs/cs2/Cs2Vm";
 import { state as network } from "../network/serverConnection/state";
 import { parsePluginMessage } from "../common/network/PluginMessage";
 import { createCacheVm } from "../scripts/cache/cs2-sweep";
+import { retainedInventory } from "../game/sync/InventoryStopTransmit";
 
 async function main() {
     // --- Use 'Shortest Path' plugin: the engine's messages reach the Shortest Path plugin ---------
@@ -27,11 +28,12 @@ async function main() {
     const bus = new EventBus(), config = new ConfigManager(bus), manager = new PluginManager(bus, config);
     let bankOpen = false;
     const player: any = { getIndexForServerId: () => 0, getLevel: () => 0, getAnimActionSeqId: () => -1, getAnimMovementSeqId: () => -1, getRotation: () => 0, getInteractionIndex: () => -1 };
+    const bankStore = new Inventory(1410);
     const client: any = {
         stateMachine: { getState: () => 30 }, localPlayerName: "A", getControlledPlayerMovementTile: () => ({ tileX: 3200, tileY: 3200 }), controlledPlayerServerId: 1,
         playerEcs: player, tileHighlightManager: new TileHighlightManager(),
         varManager: { values: new Int32Array(1), customVarbits: new Map(), varbitLoader: { load: () => undefined }, varpChangeListeners: new Set() },
-        inventory: new Inventory(), equipment: new Inventory(14), bankInventory: new Inventory(1410),
+        inventory: new Inventory(), equipment: new Inventory(14), bankInventory: bankStore, lastKnownBank: retainedInventory(bankStore),
         npcEcs: { forEachActive: () => {}, mutationListeners: new Set() }, renderer: { getLocIdsAtTileAllLevels: () => [], canvas: { width: 765, height: 503 } },
         groundItems: { getAllStacks: () => [], mutationListeners: new Set() },
         widgetManager: {

@@ -1380,6 +1380,16 @@ export function encodeInventorySnapshot(slots: Array<{ slot: number; itemId: num
   ]));
 }
 
+/** UPDATE_INV_STOPTRANSMIT clears client data only, never authoritative item storage. */
+export function encodeInventoryStopTransmit(inventoryId: number): Buffer {
+  if (!Number.isInteger(inventoryId) || inventoryId < 0 || inventoryId > 0xffff) {
+    throw new RangeError("inventoryId must be an unsigned short");
+  }
+  const body = Buffer.alloc(2);
+  body.writeUInt16BE(inventoryId);
+  return encodeServerPacket(ServerPacketId.INVENTORY_STOP_TRANSMIT, body);
+}
+
 export function encodeInventorySlot(slot: number, itemId: number, quantity: number): Buffer {
   return encodeServerPacket(ServerPacketId.INVENTORY_SLOT, encodeItemSlot(slot, itemId, quantity));
 }

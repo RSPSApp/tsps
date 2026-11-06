@@ -156,6 +156,7 @@ test('chatbox replacement, explicit close and interface removal notify their pre
   const fake = Object.assign(Object.create(PacketSender.prototype), {
     chatboxGroupId: -1,
     subInterfaceTargets: new Map(),
+    inventoryOwners: new Map(),
     player: {
       getSession: () => ({ sendClientPacket: () => true }),
       getFrameUpdater: () => ({ clearGroup() {} }),

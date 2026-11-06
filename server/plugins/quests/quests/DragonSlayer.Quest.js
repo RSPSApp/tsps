@@ -120,7 +120,8 @@ module.exports = function registerDragonSlayerQuest(api) {
     melzarBasementLadder: new Location(2932, 3240, 0),
     melzarBasement: new Location(2932, 9640, 0),
     crandor: new Location(2835, 3235, 0),
-    crandorLair: new Location(2833, 9656, 0),
+    // Where the ruin entrance lands in the lair (rev242 capture tick 3436, after the intro).
+    crandorLair: new Location(2833, 9658, 0),
     crandorSurface: new Location(2833, 3256, 0),
   };
 
@@ -157,6 +158,8 @@ module.exports = function registerDragonSlayerQuest(api) {
   /** Guildmaster follow-up answers; set means the question has not been asked yet. */
   const INSTRUCTION = { melzar: 0, oracle: 1, wormbrain: 2, ship: 3, shield: 4 };
   const SHORTCUT_VARBIT = 3741;
+  /** The low wall's usual row into Elvarg's chamber. */
+  const CRANDOR_WALL_Y = 9636;
   const PRINCE_ALI_KEY = "prince_ali_rescue";
   const PRINCE_STAGE_WIG = 20;
   const PRINCE_STAGE_SAVED = 100;
@@ -165,6 +168,10 @@ module.exports = function registerDragonSlayerQuest(api) {
   const NED_SCENE_ID = 824, JENKINS_SCENE_ID = 826;
   const FIRE_SMALL = 25156, FIRE_LARGE = 25155, FIREBALL = 1155, FIRE_IMPACT_GRAPHIC = 1154;
   const ELVARG_INTRO_NPC_ID = 817;
+  const ELVARG_FOOTSTEP_SOUND = 3753;
+  const HEAD_CUT_SOUND = 3744, HEAD_OFF_SOUND = 3745, SILENCE_TRACK = 147;
+  const HEAD_CUT_WALK_TICKS = 3, HEAD_CUT_WALK_MAX_TILES = 10;
+  const ELVARG_INTRO_FOOTSTEPS = 7;
   const SCENE_OVERLAY_UID = (161 << 16) | 1;
   const SCENE_INTERFACE = { journey: 299, route: 544, clouds: 543, elvarg: 545, fly: 546, fade: 174 };
   /** Walk animation of Doors.plugin's GATE_WALK_ANIMATION. */
@@ -349,7 +356,9 @@ module.exports = function registerDragonSlayerQuest(api) {
     });
     later(scene, 14, () => player.getPacketSender().sendInterface(SCENE_INTERFACE.route));
     later(scene, 20, () => {
-      player.moveTo(scene.sourceTile(2067, 5517)); scene.enter(player);
+      // rev242 capture tick 3158: the player stands south of Ned the whole voyage, facing east at first.
+      player.moveTo(scene.sourceTile(2066, 5516)); scene.enter(player);
+      player.setPositionToFace(scene.sourceTile(2067, 5516));
       scene.ned = sceneActor(scene, NED_SCENE_ID, 2066, 5517);
       scene.jenkins = sceneActor(scene, JENKINS_SCENE_ID, 2063, 5518);
       player.getPacketSender().sendInterfaceRemoval(); fade(player, false);
@@ -384,6 +393,7 @@ module.exports = function registerDragonSlayerQuest(api) {
       player.getPacketSender().sendSoundEffect(3750, 1, 0);
       camera(player, scene, [2072, 5517, 300], [2062, 5515, 100]);
       camera(player, scene, [2072, 5520, 300], null, 1);
+      later(scene, 1, () => player.setPositionToFace(scene.sourceTile(2062, 5515))); // rev242 tick 3228
       for (const [from, to, delay] of [[[2076, 5526], [2065, 5516], 0], [[2073, 5526], [2064, 5516], 30], [[2078, 5526], [2063, 5516], 60]]) fireAt(scene, from, to, delay);
       later(scene, 2, () => { scene.ned?.performAnimation(new Animation(2105)); scene.jenkins?.performAnimation(new Animation(4280)); });
       for (let i = 0; i < 3; i++) later(scene, 2 + i, () => sceneFire(scene, FIRE_SMALL, 2065 - i, 5516));
@@ -401,6 +411,7 @@ module.exports = function registerDragonSlayerQuest(api) {
         sceneFire(scene, FIRE_LARGE, 2064, 5516);
         for (let i = 0; i < 5; i++) fireAt(scene, [2057 + i * 3, 5522], [2063 + i, 5518], i * 30);
       });
+      later(scene, 4, () => player.setPositionToFace(scene.sourceTile(2062, 5518))); // rev242 tick 3273
       later(scene, 5, () => scene.jenkins?.performAnimation(new Animation(6649, 6)));
       later(scene, 7, () => { scene.jenkins?.performAnimation(new Animation(836)); player.getPacketSender().sendSoundEffect(513, 1, 0).sendSoundEffect(512, 1, 0); });
       for (let i = 0; i < 5; i++) later(scene, 4 + i, () => sceneFire(scene, FIRE_SMALL, 2063 + i, 5518));
@@ -480,6 +491,19 @@ module.exports = function registerDragonSlayerQuest(api) {
     };
     if (text === "We're going to sink!") request.before = () => { camera(player, scene, [2074, 5526, 600], [2066, 5517, 100]); camera(player, scene, [2064, 5518, 400], null, 1); player.getPacketSender().sendCameraShake(1, 0, 10, 8); };
     if (text === "We're going to crash!") request.before = () => camera(player, scene, [2064, 5518, 400], null, 2);
+    const face = voyageFacing(scene, request.step, text);
+    if (face) {
+      const before = request.before;
+      request.before = () => { player.setPositionToFace(face); before?.(); };
+    }
+  }
+
+  /** rev242 capture ticks 3159-3333: the player turns to Ned or Jenkins as each speaks, and to the land ahead. */
+  function voyageFacing(scene, step, text) {
+    if (step?.speaker === "Captain Ned") return scene.ned?.getLocation().clone();
+    if (step?.speaker === "Cabin Boy Jenkins") return scene.jenkins?.getLocation().clone();
+    if (text === "Look! Land ahead!") return scene.sourceTile(2072, 5517);
+    return null;
   }
 
   // ============================================================================
@@ -878,13 +902,17 @@ module.exports = function registerDragonSlayerQuest(api) {
    * actions are already refused while a force movement runs; this does not guard
    * against a plugin calling moveTo on the player mid-walk.
    */
+  /** ForceMovement's facing (0 north, 1 east, 2 south, 3 west) for a walk by dx, dy. */
+  function walkDirection(dx, dy) {
+    return dy > 0 ? 0 : dx > 0 ? 1 : dy < 0 ? 2 : 3;
+  }
+
   function walkAcross(player, to, onArrive) {
     if (actions.has(player) || doorWalks.has(player)) return;
     const from = player.getLocation().clone();
     const dx = to.getX() - from.getX(), dy = to.getY() - from.getY();
-    const direction = dy > 0 ? 0 : dx > 0 ? 1 : dy < 0 ? 2 : 3;
     const ticks = Math.max(1, Math.abs(dx), Math.abs(dy));
-    const movement = new ForceMovement(from, new Location(dx, dy), 0, 30 * ticks, direction, DOOR_WALK_ANIMATION);
+    const movement = new ForceMovement(from, new Location(dx, dy), 0, 30 * ticks, walkDirection(dx, dy), DOOR_WALK_ANIMATION);
     // Its own token: a short walk must not look like a cutscene or ship repair to the other actions.
     const token = {}; doorWalks.set(player, token);
     player.getMovementQueue().reset(); player.setForceMovement(movement);
@@ -1056,11 +1084,19 @@ module.exports = function registerDragonSlayerQuest(api) {
     const scene = new VoyageScene(player, true); scene.returnTile = TILE.crandorLair.clone(); scenes.set(player, scene);
     freeze(player); fade(player, true); player.getPacketSender().sendVarbit(6719, 2).sendVarbit(542, 1);
     for (let axis = 0; axis < 5; axis++) player.getPacketSender().sendCameraShake(axis, 0);
+    // rev242 capture ticks 3420-3440: the player waits out of shot in the scene's south-west corner (+3);
+    // Elvarg appears facing west (+4), seven footsteps sound (+9) and she walks five tiles west (+10..+14).
+    later(scene, 3, () => { player.moveTo(scene.sourceTile(2840, 9624)); scene.enter(player); });
     later(scene, 4, () => {
-      player.moveTo(scene.sourceTile(2833, 9656)); scene.enter(player); sceneActor(scene, ELVARG_INTRO_NPC_ID, 2854, 9638);
+      scene.elvarg = sceneActor(scene, ELVARG_INTRO_NPC_ID, 2854, 9638);
+      scene.elvarg?.setPositionToFace(scene.sourceTile(2840, 9639));
       camera(player, scene, [2848, 9639, 475], [2856, 9650, 150], 232, true); fade(player, false);
     });
     later(scene, 7, () => camera(player, scene, [2848, 9639, 250], [2866, 9640, 150], 2, true));
+    later(scene, 9, () => {
+      for (let step = 1; step <= ELVARG_INTRO_FOOTSTEPS; step++) player.getPacketSender().sendSoundEffect(ELVARG_FOOTSTEP_SOUND, 1, 25 * step);
+      scene.elvarg?.getMovementQueue().addSteps(scene.sourceTile(2849, 9638));
+    });
     later(scene, 13, () => fade(player, true));
     later(scene, 16, () => {
       scene.cameraReleased = true;
@@ -1158,11 +1194,17 @@ module.exports = function registerDragonSlayerQuest(api) {
     if (entering && !saved(player, ELVARG_KILLED_ATTRIBUTE)) api.emitCustomEvent("elvarg:enter", {player, handled:false, aggressive:false});
     // rev242 capture ticks 3488, 3493, 3547: every crossing, on the filterable spam channel.
     player.getPacketSender().sendTypedMessage(ChatType.SPAM, "You climb over the low wall.");
-    const start = new Location(entering ? 2845 : 2847, 9636, 0), end = new Location(entering ? 2847 : 2845, 9636, 0);
+    // The wall is two tiles long (rev242: clicked at 2846,9636 and 2846,9635); cross on the clicked row.
+    const y = plainLocation(event.location ?? event.object?.getLocation?.())?.y ?? CRANDOR_WALL_Y;
+    const start = new Location(entering ? 2845 : 2847, y, 0), end = new Location(entering ? 2847 : 2845, y, 0);
     const token = {}; actions.set(player, token);
     player.moveTo(start); player.getMovementQueue().reset().setBlockMovement(true);
     const movement = new ForceMovement(start, new Location(end.getX() - start.getX(), 0), 30, 94, entering ? 1 : 3, 839);
     player.setForceMovement(movement); player.performAnimation(new Animation(839, 30));
+    // Live moves the player as the jump starts, and Elvarg breathes the next tick (rev242 ticks 3488-3489).
+    if (entering && !saved(player, ELVARG_KILLED_ATTRIBUTE)) later(token, 1, () => {
+      if (actions.get(player) === token) api.emitCustomEvent("elvarg:enter", {player, handled:false, aggressive:true, entering:true});
+    });
     later(token, 4, () => {
       if (actions.get(player) !== token) return;
       actions.delete(player); player.setForceMovement(null); player.moveTo(end); player.getMovementQueue().setBlockMovement(false);
@@ -1260,10 +1302,22 @@ module.exports = function registerDragonSlayerQuest(api) {
       const token = {}; actions.set(killer, token);
       killer.setAttribute(ELVARG_KILLED_ATTRIBUTE, 1);
       killer.getMovementQueue().reset().setBlockMovement(true); killer.setUntargetable(true);
+      // rev242 capture ticks 3606-3617 (this event is her removal, 5 ticks after the death animation): the
+      // player is walked in one move to the tile west of her head (+1), turns to it (+4) and cuts (+5).
+      const cutTile = new Location(at.getX() - 1, at.getY() + 1, at.getZ());
       later(token, 1, () => {
         killer.getPacketSender().sendConfig(VARP_DRAGON_SLAYER, 9);
+        if (actions.get(killer) === token) walkToHeadCut(killer, cutTile);
       });
-      later(token, 5, () => { if (actions.get(killer) === token) { killer.moveTo(new Location(at.getX(), at.getY() - 1, at.getZ())); killer.performAnimation(new Animation(6654)); } });
+      later(token, 4, () => {
+        if (actions.get(killer) !== token) return;
+        landHeadCut(killer, cutTile); killer.setPositionToFace(new Location(at.getX(), at.getY() + 1, at.getZ()));
+      });
+      later(token, 5, () => {
+        if (actions.get(killer) !== token) return;
+        landHeadCut(killer, cutTile);
+        killer.performAnimation(new Animation(6654)); killer.getPacketSender().sendSoundEffect(HEAD_CUT_SOUND, 1, 35);
+      });
       later(token, 11, () => {
         if (actions.get(killer) !== token) return;
         api.getObjectManager().deregister(body, true);
@@ -1275,7 +1329,7 @@ module.exports = function registerDragonSlayerQuest(api) {
           else giveItem(killer, ITEM.elvargsHead);
         }
         killer.sendMessage("You cut off Elvarg's head as proof of your victory!");
-        killer.getPacketSender().sendJingle(267, 0);
+        killer.getPacketSender().sendSoundEffect(HEAD_OFF_SOUND, 1, 0).sendSong(SILENCE_TRACK).sendJingle(267, 0);
         // Seq 6655 is 10.0 ticks in the cache (frame delays summed, 30 client ticks a tick): the player is held to its end. Cache length, ours.
         later(token, 10, () => { actions.delete(killer); killer.getMovementQueue().setBlockMovement(false); killer.setUntargetable(false); });
       });
@@ -1289,6 +1343,27 @@ module.exports = function registerDragonSlayerQuest(api) {
       }
       return;
     }
+  }
+
+  /**
+   * The door walks' ForceMovement and walk animation, from wherever the kill left them. The capture's
+   * 3 tiles took the 3 ticks before the turn; a longer way is fitted into those ticks, and one
+   * beyond HEAD_CUT_WALK_MAX_TILES or off the plane is left to landHeadCut (ours).
+   */
+  function walkToHeadCut(player, to) {
+    const from = player.getLocation().clone();
+    const dx = to.getX() - from.getX(), dy = to.getY() - from.getY();
+    const tiles = Math.max(Math.abs(dx), Math.abs(dy));
+    if (tiles === 0 || tiles > HEAD_CUT_WALK_MAX_TILES || from.getZ() !== to.getZ()) return;
+    const ticks = Math.min(tiles, HEAD_CUT_WALK_TICKS);
+    player.setForceMovement(new ForceMovement(from, new Location(dx, dy), 0, 30 * ticks, walkDirection(dx, dy), DOOR_WALK_ANIMATION));
+  }
+
+  /** Puts the player on the cutting tile once the walk is played out (or cut short by a long one). */
+  function landHeadCut(player, to) {
+    if (player.getForceMovement()) player.setForceMovement(null);
+    const at = player.getLocation();
+    if (at.getX() !== to.getX() || at.getY() !== to.getY() || at.getZ() !== to.getZ()) player.moveTo(to.clone());
   }
 
   function repairShip(player) {

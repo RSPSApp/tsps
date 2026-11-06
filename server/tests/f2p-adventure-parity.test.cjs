@@ -138,22 +138,33 @@ test('Dragon Slayer deposits Oracle offerings individually and repairs ship only
 
 test('Dragon Slayer sails through the private fire and crash sequence, then collects the head before returning to Oziach', () => {
   const h=harness('DragonSlayer'),p=player();h.quest.setStage(p,8);p.moveTo(new core.Location(3048,3207,1));
+  const faces=[];p.setPositionToFace=at=>faces.push([at.getX(),at.getY()]);
   h.action(p,N.CAPTAIN_NED,'1nn6tK');h.tick(20);assert.ok(p.getArea() instanceof core.TemplatedInstanceArea);assert.match(p.text,/salt spray/);
+  // rev242 capture ticks 3158-3333: south of Ned the whole voyage, facing east, then each speaker in turn.
+  const scene=p.getArea(),tile=(x,y)=>{const at=scene.sourceTile(x,y);return [at.getX(),at.getY()];};
+  assert.deepEqual([p.getLocation().getX(),p.getLocation().getY()],tile(2066,5516));
+  assert.deepEqual(faces.slice(0,2),[tile(2067,5516),tile(2066,5517)],'east on arrival, then Ned as he speaks');
   h.continueUntil(p,()=>p.text==='Clouds surround the ship.');
   assert.ok(p.log.some(entry=>entry[0]==='sendSubInterface'&&entry[2]===543));
   const stormShotCount = p.log.filter(row => /sendCamera(MoveTo|LookAt)/.test(row[0])).length;
   h.tick(4); assert.equal(p.text, 'Clouds surround the ship.');
   assert.equal(p.log.filter(row => /sendCamera(MoveTo|LookAt)/.test(row[0])).length, stormShotCount);
-  h.tick(1); assert.match(p.text, /Looks like there's a storm/);
+  h.tick(1); assert.match(p.text, /Looks like there's a storm/); assert.deepEqual(faces.at(-1),tile(2063,5518),'Jenkins as he speaks');
   assert.equal(p.log.filter(row => /sendCamera(MoveTo|LookAt)/.test(row[0])).length, stormShotCount + 3);
   p.manager.advance(); assert.equal(p.text, 'Oh, well. The weather had been so good up until now.');
   p.manager.advance();assert.ok(p.log.some(entry=>entry[0]==='sendSubInterface'&&entry[2]===545));h.tick(1);assert.equal(p.text,'Did you see that?');
   p.manager.advance();p.manager.advance();p.manager.advance();h.tick(4);assert.equal(p.text,"It's the dragon!");
   p.manager.advance();assert.ok(p.log.some(entry=>entry[0]==='sendSubInterface'&&entry[2]===546));h.tick(9);assert.equal(p.text,"We're going to sink!");p.manager.advance();p.manager.advance();p.manager.advance();h.tick(4);assert.equal(h.quest.getStage(p),9);assert.equal(p.configs.get(176),8);h.tick(5);assert.equal(p.blocked,false);
   assert.deepEqual([p.getLocation().getX(),p.getLocation().getY()],[2852,3238]);assert.equal(p.getArea(),null);
-  const npc={getLocation:()=>new core.Location(2853,9637,0)};h.hooks.onNpcDeath[0]({killer:p,npcId:8033,npc});
+  p.moveTo(new core.Location(2849,9638,0));const npc={getLocation:()=>new core.Location(2853,9637,0)};h.hooks.onNpcDeath[0]({killer:p,npcId:8033,npc});
   h.tick(1);assert.equal(p.configs.get(176),9);assert.equal(p.items.get(I.ELVARGS_HEAD),undefined);assert.equal(h.quest.isComplete(p),false);
-  h.tick(10);assert.equal(p.items.get(I.ELVARGS_HEAD),1);assert.ok(p.animations.includes(6654));assert.ok(p.animations.includes(6655));h.tick(3);
+  // rev242 capture ticks 3606-3617: walked to the tile west of her head, facing it, then the cut.
+  assert.ok(p.forceMovement,'walked there, not teleported');assert.deepEqual([p.getLocation().getX(),p.getLocation().getY()],[2849,9638]);
+  h.tick(3);assert.deepEqual([p.getLocation().getX(),p.getLocation().getY()],[2852,9638]);assert.deepEqual(faces.at(-1),[2853,9638]);
+  assert.equal(p.forceMovement,null);assert.ok(!p.animations.includes(6654));
+  h.tick(1);assert.ok(p.animations.includes(6654));assert.ok(p.log.some(row=>row[0]==='sendSoundEffect'&&row[1]===3744&&row[3]===35));
+  h.tick(6);assert.equal(p.items.get(I.ELVARGS_HEAD),1);
+  assert.ok(p.log.some(row=>row[0]==='sendSoundEffect'&&row[1]===3745));assert.ok(p.log.some(row=>row[0]==='sendSong'&&row[1]===147));assert.ok(p.animations.includes(6654));assert.ok(p.animations.includes(6655));h.tick(3);
   // seq 6655 is 10.0 ticks in the cache (sum of its frame delays, 300 client ticks), so the player stays held to its end: free at tick 21, not 14 (cache length, ours)
   assert.equal(p.blocked,true,'still in the head-cut animation 3 ticks after it started');h.tick(6);assert.equal(p.blocked,true);h.tick(1);assert.equal(p.blocked,false);
   h.talk(p,N.OZIACH);h.continueUntil(p,()=>h.quest.isComplete(p));assert.equal(p.items.get(I.ELVARGS_HEAD),0);assert.equal(p.attrs.get('quest.points'),2);assert.deepEqual(p.xp,[[core.Skill.STRENGTH.getIndex(),18650],[core.Skill.DEFENCE.getIndex(),18650]]);
@@ -301,6 +312,9 @@ test('Elvarg introduction uses both recorded shots and releases the camera only 
   const h = harness('DragonSlayer'), p = player(); h.quest.setStage(p, 9);
   h.clicks.get(core.ObjectIdentifiers.HOLE_40)({ player: p });
   h.tick(3); assert.equal(p.log.filter(row => /sendCamera(MoveTo|LookAt)/.test(row[0])).length, 0);
+  // rev242 capture tick 3423 (+3): the player waits out of shot in the scene's south-west corner.
+  const corner = p.getArea().sourceTile(2840, 9624);
+  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [corner.getX(), corner.getY()]);
   h.tick(1); const area = p.getArea(), origin = area.sourceTile(2816, 9600);
   const directed = () => p.log.filter(row => /sendCamera(MoveTo|LookAt)/.test(row[0])).map(([kind, x, y, height, options]) =>
     [kind, x - origin.getX() + 2816, y - origin.getY() + 9600, height, options]);
@@ -312,8 +326,11 @@ test('Elvarg introduction uses both recorded shots and releases the camera only 
     ['sendCameraLookAt', 2866, 9640, 150, { rate: 2, rate2: 2, heightRelative: false }],
     ['sendCameraMoveTo', 2848, 9639, 250, { rate: 2, rate2: 2, heightRelative: false }],
   ]);
-  h.tick(8); assert.ok(p.getArea(), 'private scene remains active through tick fifteen');
+  h.tick(2); assert.deepEqual(p.log.filter(row => row[0] === 'sendSoundEffect' && row[1] === 3753).map(row => row[3]), [25, 50, 75, 100, 125, 150, 175],
+    'seven footsteps at +9 (rev242 tick 3429)');
+  h.tick(6); assert.ok(p.getArea(), 'private scene remains active through tick fifteen');
   h.tick(1); assert.equal(p.getArea(), null, 'return teleport stays at captured tick sixteen');
+  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [2833, 9658], 'the ruin entrance landing (rev242 tick 3436)');
   assert.deepEqual(p.log.filter(row => row[0] === 'sendCameraTranslate'), [['sendCameraTranslate', 2816 - origin.getX(), 9600 - origin.getY()]]);
   assert.equal(p.blocked, true);
   const returnedAt = p.getLocation();

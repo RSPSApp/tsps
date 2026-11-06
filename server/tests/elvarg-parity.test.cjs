@@ -106,7 +106,8 @@ test('wall leave preserves its destination while disconnect/relogin recover outs
 
 test('captured breath launches six fireblasts, delayed impact, shield message and Prayer drain', () => {
   const h = setup(); h.protection(true, false); h.roll('max');
-  const npc = h.actor(2852, 9637), Method = h.provider().ctor, method = new Method();
+  // Two tiles from her centre tile (2847,9636) to the player at 2845,9636: the older capture's case.
+  const npc = h.actor(2846, 9635), Method = h.provider().ctor, method = new Method();
   assert.equal(method.type(), core.CombatType.MAGIC); method.start(npc, h.player);
   const [hit] = method.hits(npc, h.player);
   assert.equal(npc.animations[0].id, 81); assert.equal(method.attackSpeed(), 4); assert.equal(method.attackDistance(), 8);
@@ -117,6 +118,55 @@ test('captured breath launches six fireblasts, delayed impact, shield message an
   assert.ok(h.projectiles.every(p => p.progress === 200 && p.angle === 23));
   assert.deepEqual([h.player.graphics[0].id, h.player.graphics[0].delay, h.player.graphics[0].height], [131, 80, 90]);
   assert.deepEqual(h.areaSounds.map(sound => [sound[0], sound[5]]), [[3750, 0], [156, 80]]);
+});
+
+test('breath timing scales with the distance from her centre tile (rev242 ticks 3552-3571)', () => {
+  for (const [sw, player, end, hitTicks] of [
+    [[2856, 9639], [2847, 9635], 160, 5],
+    [[2854, 9637], [2847, 9635], 140, 4],
+    [[2851, 9635], [2847, 9635], 110, 3],
+  ]) {
+    const h = setup(); h.protection(true, false); h.roll('max');
+    h.player.moveTo(new core.Location(...player, 0));
+    const npc = h.actor(...sw), method = new (h.provider().ctor)();
+    method.start(npc, h.player);
+    assert.deepEqual(h.projectiles.map(p => p.args.slice(3, 5)), [51, 56, 61, 66, 71, 75].map((launch, i) => [launch, end + 5 * i]));
+    assert.equal(h.player.graphics[0].delay, end, 'the impact waits for the first projectile');
+    assert.deepEqual(h.areaSounds.map(sound => [sound[0], sound[5]]), [[3750, 0], [156, end]]);
+    assert.equal(method.hits(npc, h.player)[0].config.delay, hitTicks);
+  }
+});
+
+test('Elvarg breathes from the jump in, then watches from the lair edge after the player climbs out (rev242 ticks 3488-3507)', () => {
+  const h = setup(), player = h.player;
+  const { npc } = h.emit('elvarg:enter', player, { aggressive: false }), area = player.getArea();
+  const steps = [];
+  let faced = null;
+  npc.getMovementQueue = () => ({ size: () => 0, addSteps: to => steps.push([to.getX(), to.getY()]) });
+  npc.setPositionToFace = at => { faced = at; };
+  area.process(player);
+  assert.deepEqual(steps, [], 'no watching before she has been fought');
+
+  // Mid-jump, still on the outside tile: she may attack already.
+  h.emit('elvarg:enter', player, { aggressive: true, entering: true });
+  assert.equal(npc.getCombat().getTarget(), player);
+  assert.equal(area.canAttack(npc, player), null);
+  player.moveTo(new core.Location(2847, 9636, 0)); h.emit('elvarg:enter', player, { aggressive: true });
+  assert.equal(area.canAttack(npc, player), null);
+
+  // Back over the wall: the encounter stays, she stands down and comes to the edge level with the player.
+  player.moveTo(new core.Location(2845, 9635, 0)); h.emit('elvarg:leave', player);
+  assert.equal(player.getArea(), area); assert.equal(area.isDestroyed(), false); assert.deepEqual(h.removed, []);
+  assert.equal(npc.getCombat().getTarget(), null);
+  assert.equal(area.canAttack(npc, player), false, 'never over the wall');
+  area.process(player);
+  assert.deepEqual(steps, [[2847, 9635]]);
+  assert.deepEqual(position({ getLocation: () => faced }), [2845, 9635, 0]);
+  assert.equal(npc.getCombat().getTarget(), null);
+
+  // Climbing back in finds the same Elvarg.
+  h.emit('elvarg:enter', player, { aggressive: true, entering: true });
+  assert.equal(h.spawned.length, 1); assert.equal(npc.getCombat().getTarget(), player);
 });
 
 test('dragonfire protection matrix and floor Prayer drain match the quest dragon', () => {

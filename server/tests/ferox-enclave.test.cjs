@@ -231,8 +231,8 @@ function enclaveWorld(t) {
     onCustomEvent(name, handler) { custom.set(name, [...(custom.get(name) ?? []), handler]); },
     emitCustomEvent(name, event) { for (const handler of custom.get(name) ?? []) handler(event); },
     onServerStartup(handler) { startup.push(handler); },
-    onCanAttack(handler) { global.attack.push(handler); },
-    onPlayerProcess(handler) { global.process.push(handler); },
+    onCanAttack(handler) { if (name === 'FeroxEnclave') global.attack.push(handler); },
+    onPlayerProcess(handler) { if (name === 'FeroxEnclave') global.process.push(handler); },
   }, { get(target, name) { return target[name] ?? (() => {}); } });
   require('../plugins/areas/Wilderness.plugin').register(apiFor('Wilderness'));
   FeroxPlugin.register(apiFor('FeroxEnclave'));
@@ -472,7 +472,7 @@ test("free-for-all: the exit portal a tick later; the Mysterious Portal is unava
 });
 
 
-// Draft to append to ferox-enclave.test.cjs. Native name/action dispatch, not network walk routing.
+// Native name/action dispatch, not network walk routing.
 const { describe, after } = require('node:test');
 describe('Castle Wars lobby return (native dispatch)', () => {
   const { Player } = require('../dist/game/entity/impl/player/Player');

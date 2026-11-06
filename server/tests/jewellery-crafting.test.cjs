@@ -391,6 +391,7 @@ test('Charge Air Orb on the Obelisk of Air uses one unpowered orb per cast and t
 // Native furnace route and selected World phases; no direct recipe/session admission helper.
 test("native gold jewellery stops a pending conversion after a drained one-step walk", async t => {
   process.env.DISABLE_PLAYER_BOTS = "1";
+  const path = require("node:path");
   const { Player } = require("../dist/game/entity/impl/player/Player");
   const { PlayerSession } = require("../dist/net/PlayerSession");
   const { ClientConnection } = require("../dist/net/NetworkBuilder");

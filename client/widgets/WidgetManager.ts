@@ -519,6 +519,18 @@ export class WidgetManager {
             if (((w.type ?? 0) | 0) !== 6) continue;
             const groupId = typeof w.groupId === "number" ? w.groupId | 0 : ((w.uid ?? 0) >>> 16) & 0xffff;
             if (!openGroups.has(groupId)) continue;
+
+            // IF_SETROTATESPEED rotates the model whether or not it has a sequence. Recording
+            // 1723 packs the yaw speed in the high short and the x (pitch) speed in the low.
+            const rotationSpeed = (w.modelRotationSpeed ?? 0) | 0;
+            if (rotationSpeed !== 0) {
+                const speedY = rotationSpeed >> 16;
+                const speedX = (rotationSpeed << 16) >> 16;
+                w.rotationY = ((w.rotationY ?? 0) + speedY * delta) & 2047;
+                w.rotationX = ((w.rotationX ?? 0) + speedX * delta) & 2047;
+                this.invalidateWidgetRender(w, "widget-model-rotation");
+            }
+
             const seqId0 = (w.sequenceId ?? -1) | 0;
             const seqId2 = (w.sequenceId2 ?? -1) | 0;
             if (seqId0 === -1 && seqId2 === -1) continue;

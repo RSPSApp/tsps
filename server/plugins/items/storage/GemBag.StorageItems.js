@@ -149,7 +149,8 @@ function pickup(event) {
     manager.deregister(groundItem);
     Storage.api.emitCustomEvent("ground-items:taken", { player, groundItem, source: "pickup", itemId, amount: 1, discarded: 0 });
     player.getLastItemPickup().reset();
-    player.sendMessage(STRAIGHT_IN);
+    // Sack wording follows the bag's message; no sack transcript is retained.
+    player.sendMessage(target === family ? STRAIGHT_IN : "You put it straight into your open gem sack.");
   } finally {
     pickupItems.delete(groundItem);
     pickupPlayers.delete(player);

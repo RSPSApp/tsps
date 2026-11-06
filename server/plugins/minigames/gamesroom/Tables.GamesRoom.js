@@ -70,7 +70,7 @@ function allocate(game, plane) {
       release();
       throw error;
     }
-    return { table, stools, seats: stools.map(stool => stool.getLocation().clone()), release };
+    return { table, playingTable: replacements[0], stools, seats: stools.map(stool => stool.getLocation().clone()), release };
   }
   return null;
 }

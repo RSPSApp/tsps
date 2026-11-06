@@ -98,6 +98,9 @@ const IDLE_SCREENS = new Set();
 
 function registerScreen(groupId) {
   IDLE_SCREENS.add(groupId);
+  // Being hit closes the player's interfaces (CombatFactory). These screens are what the player
+  // watches while the character fights, so they are exempt; everything else still closes.
+  core?.CombatInterfacePolicy?.keepOpenInCombat?.(groupId);
 }
 
 /** Free to go back to work, or only an Idle screen in the way (checked before anything is done). */
@@ -105,14 +108,25 @@ function mayWork(player) {
   return free(player) || IDLE_SCREENS.has(player.getInterfaceId?.());
 }
 
+/** What stands in the way of work besides an open Idle screen. */
+function blockedBesidesScreen(player) {
+  if (player.getMovementQueue().size() > 0) return true;
+  const combat = player.getCombat?.();
+  return Boolean(combat?.getTarget?.() || combat?.getAttacker?.());
+}
+
 /**
  * Free to go back to work, as `free`, except that an open Idle screen is closed for it: the player
  * may leave it open to watch, and a click on the world needs no interface open. Called right
  * before acting, so the screen only closes when there is work to do.
+ *
+ * Closing it only ever helps when the screen is the one thing in the way. Mid-fight it is not, so
+ * closing it there bought nothing and shut the screen every time the next monster was picked.
  */
 function readyToWork(player) {
   if (free(player)) return true;
   if (!IDLE_SCREENS.has(player.getInterfaceId?.())) return false;
+  if (blockedBesidesScreen(player)) return false;
   player.getPacketSender().sendInterfaceRemoval();
   return free(player);
 }

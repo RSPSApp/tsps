@@ -52,6 +52,10 @@ function fakeApi(config = {}) {
       Task: class { constructor(delay) { this.delay = delay; } stop() { this.stopped = true; } },
       CanAttackResponse: { CAN_ATTACK: "can" },
       CombatFactory: { getMethod: () => "melee", canAttackPermission: (player, npc) => (npc.protectedFrom === player ? "no" : "can") },
+      CombatInterfacePolicy: {
+        keepOpenInCombat: (groupId) => api.combatProofInterfaces.add(groupId),
+        survivesCombat: (groupId) => api.combatProofInterfaces.has(groupId),
+      },
       CacheDefinitions: { getItem: (id) => ({ inventoryActions: id === SHARK ? ["Eat", null, null, null, "Drop"] : [null, null, null, null, "Drop"] }) },
       Inventory: { INTERFACE_ID: 3214 },
       TeleportType: { NORMAL: "normal", ANCIENT: "ancient" },
@@ -81,6 +85,7 @@ function fakeApi(config = {}) {
     itemActions: [],
     uses: [],
     teleports: [],
+    combatProofInterfaces: new Set(),
     persisted: {},
     getPluginConfig: (key, fallback) => (key in config ? config[key] : fallback),
     persistAttribute: (key, value) => { api.persisted[key] = value; },
@@ -1051,6 +1056,36 @@ test("screen: it redraws while open as points come in, and a pause shows", (t) =
   chop(player);
   assert.equal(screenText(player, COMPONENT.HERO_AUTO), "Auto-resume: On");
   assert.equal(screenText(player, COMPONENT.HERO_EYEBROW), "WORKING ON");
+});
+
+const COMMON = "../plugins/modes/idle/Common.IdleMode";
+
+test("screen: a fight leaves the Idle screen alone", () => {
+  const { GROUP_ID } = require(SCREEN);
+  const { readyToWork } = require(COMMON);
+  const player = idlePlayer();
+  api.command(player, "idle");
+  assert.equal(player.getInterfaceId(), GROUP_ID);
+
+  // Taking a hit closes interfaces (CombatFactory), so the screens say they are the exception.
+  assert.ok(api.combatProofInterfaces.has(GROUP_ID), "the Idle screen survives being hit");
+  assert.ok(api.combatProofInterfaces.has(require(TRAVEL_SCREEN).GROUP_ID), "and so does Travel");
+
+  // Mid-fight, closing the screen cannot free him, so the work must not close it for nothing.
+  player.isBusy = true;
+  player.combat = { getTarget: () => ({ name: "Chicken" }), getAttacker: () => null };
+  assert.equal(readyToWork(player), false);
+  assert.equal(player.getInterfaceId(), GROUP_ID, "the screen stayed open through the fight");
+
+  // A monster hitting him counts the same, even with no target of his own.
+  player.combat = { getTarget: () => null, getAttacker: () => ({ name: "Chicken" }) };
+  assert.equal(readyToWork(player), false);
+  assert.equal(player.getInterfaceId(), GROUP_ID);
+
+  // Out of the fight the screen is the one thing in the way, so it still closes for the work.
+  player.combat = { getTarget: () => null, getAttacker: () => null };
+  readyToWork(player);
+  assert.equal(player.getInterfaceId(), -1);
 });
 
 const TRAVEL = "../plugins/modes/idle/Travel.IdleMode";

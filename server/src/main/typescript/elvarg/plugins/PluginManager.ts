@@ -2361,6 +2361,7 @@ export class PluginManager {
       CombatMethod: require(`${combat}/method/CombatMethod`).CombatMethod,
       CombatSpecial: require(`${combat}/CombatSpecial`).CombatSpecial,
       CombatFactory: require(`${combat}/CombatFactory`).CombatFactory,
+      CombatInterfacePolicy: require(`${combat}/CombatInterfacePolicy`).CombatInterfacePolicy,
       BonusManager: require(`${model}/equipment/BonusManager`).BonusManager,
       WeaponInterfaces: require(`${combat}/WeaponInterfaces`).WeaponInterfaces,
       Barrows: require(`${combat}/Barrows`).Barrows,

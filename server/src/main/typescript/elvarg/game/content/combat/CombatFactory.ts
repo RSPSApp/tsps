@@ -43,6 +43,7 @@ import { NpcIdentifiers } from "../../../util/NpcIdentifiers";
 import { RandomGen } from "../../../util/RandomGen";
 import { TimerKey } from "../../../util/timers/TimerKey";
 import { CombatType } from "./CombatType";
+import { CombatInterfacePolicy } from "./CombatInterfacePolicy";
 import { CombatSpecial } from "./CombatSpecial";
 import { resolveSpecialAttackType } from "./WeaponSpecialTraits";
 import { CombatPoisonData } from "../../task/impl/CombatPoisonEffect";
@@ -981,8 +982,10 @@ export class CombatFactory {
         // Target-side player effects.
         if (target.isPlayer()) {
             const playerTarget = target.getAsPlayer();
-            // Close interfaces while being hit (except developer rights).
+            // Close interfaces while being hit (except developer rights, and the screens a game
+            // mode registered to survive a fight: CombatInterfacePolicy).
             if (playerTarget.getRights() != PlayerRights.DEVELOPER &&
+                !CombatInterfacePolicy.survivesCombat(playerTarget.getInterfaceId()) &&
                 (playerTarget.busy() || playerTarget.getPacketSender().hasInterruptibleInterface())) {
                 playerTarget.getPacketSender().sendInterfaceRemoval();
             }

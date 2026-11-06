@@ -1469,6 +1469,7 @@ export interface PluginCoreApi {
   CombatMethod: any;
   CombatSpecial: any;
   CombatFactory: any;
+  CombatInterfacePolicy: typeof import("../game/content/combat/CombatInterfacePolicy").CombatInterfacePolicy;
   BonusManager: any;
   WeaponInterfaces: any;
   Barrows: any;

@@ -387,7 +387,7 @@ test('stage 0 to completion: cave, bellows, toads, bow, chompy, ingredients and 
     assert.equal(quest.getStage(p), 25, 'showing the toad tells you where to place it');
     reset();
 
-    hooks.onItemAction[0]({ player: p, itemId: I.BLOATED_TOAD, option: 'Release', handled: false });
+    hooks.onItemAction[0]({ player: p, itemId: I.BLOATED_TOAD, option: 'Drop', handled: false });
     assert.equal(quest.getStage(p), 30, 'first toad places the bait and waits for a chompy');
     assert.equal(p.items.get(I.BLOATED_TOAD), 1);
     const firstChompy = spawned.at(-1);
@@ -411,7 +411,7 @@ test('stage 0 to completion: cave, bellows, toads, bow, chompy, ingredients and 
     assert.equal(p.items.get(I.OGRE_BOW), 1, 'Rantz hands over the ogre bow');
     reset();
 
-    hooks.onItemAction[0]({ player: p, itemId: I.BLOATED_TOAD, option: 'Release', handled: false });
+    hooks.onItemAction[0]({ player: p, itemId: I.BLOATED_TOAD, option: 'Drop', handled: false });
     assert.equal(spawned.at(-1).id, core.NpcIdentifiers.CHOMPY_BIRD, 'second toad attracts a chompy');
     assert.equal(p.items.get(I.BLOATED_TOAD), 0);
 
@@ -679,7 +679,7 @@ test('post-quest hat trade grants one threshold hat and cooked chompy hand-in is
   assert.equal(p.items.get(I.COOKED_CHOMPY), 0, 'the cooked chompy is handed over');
 
   p.items.set(I.BLOATED_TOAD, 1);
-  h.hooks.onItemAction[0]({ player: p, itemId: I.BLOATED_TOAD, option: 'Release', handled: false });
+  h.hooks.onItemAction[0]({ player: p, itemId: I.BLOATED_TOAD, option: 'Drop', handled: false });
   const postQuestChompy = h.spawned.at(-1);
   assert.equal(postQuestChompy.id, core.NpcIdentifiers.CHOMPY_BIRD, 'post-quest toad still attracts a chompy');
   assert.equal(p.items.get(I.BLOATED_TOAD), 0);
@@ -774,7 +774,7 @@ test('full inventory cannot lose the bow, reclaim coins, a toad charge or a carc
   const pluck = dialoguePlayer([[I.BLOATED_TOAD, 1]]);
   pluckHarness.quest.setStage(pluck, 50);
   pluck.moveTo(new core.Location(2634, 2966, 0));
-  releaseToad(pluckHarness, pluck);
+  dropToad(pluckHarness, pluck);
   pluckHarness.hooks.onNpcDeath[0]({ killer: pluck, npcId: core.NpcIdentifiers.CHOMPY_BIRD,
     npc: pluckHarness.spawned.at(-1), location: { x: 2635, y: 2966, z: 0 } });
   pluck.inventoryFull = true;
@@ -800,16 +800,16 @@ test('replacement removes the prior chompy and raw/seasoned loss can be recovere
   const h = questHarness();
   const p = dialoguePlayer([[I.BLOATED_TOAD, 2]]);
   h.quest.setStage(p, 45);
-  h.hooks.onItemAction[0]({ player: p, itemId: I.BLOATED_TOAD, option: 'Release', handled: false });
+  h.hooks.onItemAction[0]({ player: p, itemId: I.BLOATED_TOAD, option: 'Drop', handled: false });
   const first = h.spawned.at(-1);
-  h.hooks.onItemAction[0]({ player: p, itemId: I.BLOATED_TOAD, option: 'Release', handled: false });
+  h.hooks.onItemAction[0]({ player: p, itemId: I.BLOATED_TOAD, option: 'Drop', handled: false });
   assert.ok(h.removed.includes(first), 'the previous quest chompy is removed on replacement');
   assert.notEqual(h.spawned.at(-1), first);
 
   const rawHarness = questHarness();
   const raw = dialoguePlayer([[I.BLOATED_TOAD, 1]]);
   rawHarness.quest.setStage(raw, 50);
-  rawHarness.hooks.onItemAction[0]({ player: raw, itemId: I.BLOATED_TOAD, option: 'Release', handled: false });
+  rawHarness.hooks.onItemAction[0]({ player: raw, itemId: I.BLOATED_TOAD, option: 'Drop', handled: false });
   assert.equal(rawHarness.quest.getStage(raw), 50, 'raw loss can re-bait at stage 50');
   const recoveryChompy = rawHarness.spawned.at(-1);
   assert.equal(recoveryChompy.id, core.NpcIdentifiers.CHOMPY_BIRD);
@@ -853,9 +853,9 @@ test('swamp bubbles only accept an actual bellows item', () => {
   assert.equal(p.items.get(I.OGRE_BELLOWS_3_), 1);
 });
 
-function releaseToad(h, p) {
+function dropToad(h, p) {
   h.hooks.onItemAction[0]({ player: p, itemId: core.ItemIdentifiers.BLOATED_TOAD,
-    option: 'Release', handled: false });
+    option: 'Drop', handled: false });
 }
 
 // Source handler-contract test: fixture stage/items, real timer/task interleavings.
@@ -864,7 +864,7 @@ test('first-hunt timers are identity-bound, cancellable and cannot write after l
   const success = questHarness();
   const settled = dialoguePlayer([[I.BLOATED_TOAD, 1]]);
   success.quest.setStage(settled, 25);
-  releaseToad(success, settled);
+  dropToad(success, settled);
   tickTasks(success, 5);
   assert.equal(success.quest.getStage(settled), 35);
   tickTasks(success, 2);
@@ -874,7 +874,7 @@ test('first-hunt timers are identity-bound, cancellable and cannot write after l
   const logout = questHarness();
   const gone = dialoguePlayer([[I.BLOATED_TOAD, 1]]);
   logout.quest.setStage(gone, 25);
-  releaseToad(logout, gone);
+  dropToad(logout, gone);
   tickTasks(logout, 5);
   tickTasks(logout, 2);
   assert.equal(logout.quest.getStage(gone), 35);
@@ -887,7 +887,7 @@ test('first-hunt timers are identity-bound, cancellable and cannot write after l
   const detached = questHarness();
   const unregistered = dialoguePlayer([[I.BLOATED_TOAD, 1]]);
   detached.quest.setStage(unregistered, 25);
-  releaseToad(detached, unregistered);
+  dropToad(detached, unregistered);
   tickTasks(detached, 5);
   tickTasks(detached, 2);
   unregistered.isRegistered = () => false;
@@ -897,10 +897,10 @@ test('first-hunt timers are identity-bound, cancellable and cannot write after l
   const replaced = questHarness();
   const again = dialoguePlayer([[I.BLOATED_TOAD, 2]]);
   replaced.quest.setStage(again, 25);
-  releaseToad(replaced, again);
+  dropToad(replaced, again);
   tickTasks(replaced, 5);
   tickTasks(replaced, 2);
-  releaseToad(replaced, again);
+  dropToad(replaced, again);
   assert.equal(replaced.quest.getStage(again), 30, 'replacement restarts the hunt');
   tickTasks(replaced, 3);
   assert.equal(replaced.quest.getStage(again), 30, 'old settle cannot fire after replacement');
@@ -931,7 +931,7 @@ test('canAttack policy only gates the tracked chompy, not other owner-only quest
   quest.setStage(p, 45);
   assert.equal(PluginManager.emitItemAction({
     player: p, item: new core.Item(I.BLOATED_TOAD, 1), itemId: I.BLOATED_TOAD,
-    slot: 0, clickType: 1, option: 'Release', handled: false,
+    slot: 0, clickType: 1, option: 'Drop', handled: false,
   }), true);
   const chompy = [...World.getNpcs()].find(npc => npc.getId?.() === core.NpcIdentifiers.CHOMPY_BIRD
     && npc.getOwner?.() === p);

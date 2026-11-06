@@ -235,6 +235,9 @@ function roomComplete(raid) {
 }
 function leave(raid, teleport=true) {
   RAIDS.delete(raid.player);
+  // The bandages are the Theatre's own supplies (Wiki: neither tradeable nor bankable): they stay behind.
+  const bandages=raid.player.getInventory().getAmount(core.ItemIdentifiers.BANDAGES_4);
+  if(bandages>0)raid.player.getInventory().delete(core.ItemIdentifiers.BANDAGES_4,bandages);
   clearRoom(raid);
   raid.player.getMovementQueue().setBlockMovement(false);
   raid.player.getArea()?.leave(raid.player,false);

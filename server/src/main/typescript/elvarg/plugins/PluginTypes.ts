@@ -1570,6 +1570,7 @@ export interface PluginCoreApi {
   };
   World: any;
   DisplayNames: any;
+  Accounts: any;
   BoatManager: any;
   Sailing: any;
   BOAT_VIEW_DISTANCE: number;

@@ -140,11 +140,9 @@ export class PlayerDesignController {
             const len = (palette.length | 0) >>> 0;
             if (len <= 0) return false;
             let v = (colors[idx] ?? 0) | 0;
-            for (let i = 0; i < len; i++) {
-                v = (v + (dir === 1 ? 1 : -1) + len) % len;
-                // restrict skin palette (index 4) to < 8
-                if (idx !== 4 || v < 8) break;
-            }
+            // Every palette entry is offered, skin's unlockable colours (8-12: green, black,
+            // white, blue, purple) included.
+            v = (v + (dir === 1 ? 1 : -1) + len) % len;
             colors[idx] = v | 0;
             return true;
         };

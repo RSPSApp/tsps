@@ -1,4 +1,7 @@
-// Source-only diagnostic fixture. Run solely through a qualified clienttest route.
+// Discovered by client yarn test; directly run with yarn tsx tests/player-transform-chathead.test.ts.
+// Requires the named revision 241 native cache and its models in server/caches.
+// Whole production AST seams avoid unrelated UI/bootstrap imports; changes to those
+// declarations or cache revision/head models require updating and reviewing this fixture.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -235,7 +238,12 @@ test('native dialogue head uses transformed NPC geometry and restores player app
     const glr: any = new Proxy({ canvas, width: 800, height: 600,
         gl: new Proxy({}, { get: () => noop }),
         createTextureFromCanvas(key: string, image: any) { const tex = { signature: image.signature }; textures.set(key, tex); return tex; },
-        updateTextureFromCanvas(key: string, image: any) { const tex = { signature: image.signature }; textures.set(key, tex); return tex; },
+        updateTextureFromCanvas(key: string, image: any) {
+            const tex = textures.get(key) ?? { signature: image.signature };
+            tex.signature = image.signature;
+            textures.set(key, tex);
+            return tex;
+        },
         getTexture(key: string) { return textures.get(key); },
         drawTexture(tex: any) { draws.push(tex.signature); },
     }, { get: (obj, key) => (obj as any)[key] ?? noop });
@@ -282,10 +290,25 @@ test('native dialogue head uses transformed NPC geometry and restores player app
     assert.equal(draw(transformed), gnocci.expectedHash, 'visible morph restores its head');
     assert.equal(draw(ordinaryApp), ordinaryHash, 'normal head restored after morph');
     assert.equal(draw(ordinaryApp, true), ordinaryHash);
+    calls = sinkCalls;
+    assert.equal(draw(ordinaryApp, true), ordinaryHash);
+    assert.equal(sinkCalls, calls, 'unchanged animated ordinary head reuses its memo');
     assert.equal(draw(recolorApp, true), recolorHash, 'same animated frame observes recolor');
+    assert.equal(sinkCalls, calls + 1, 'changed animated appearance reaches the model consumer');
+    calls = sinkCalls;
+    assert.equal(draw(recolorApp, true), recolorHash);
+    assert.equal(sinkCalls, calls, 'recolored animated head reuses its memo');
+    calls = sinkCalls;
     assert.equal(draw(transformed, true), gnocci.expectedHash);
+    assert.equal(sinkCalls, calls + 1, 'animated transformed head reaches the model consumer');
     vars.setVarp(varp, 1);
     assert.equal(draw(transformed, true), bugs.expectedHash, 'same animated frame observes morph');
+    assert.equal(sinkCalls, calls + 2, 'changed morph bypasses animated memo');
+    assert.equal(draw(recolorApp, true), recolorHash, 'returning to the same ordinary appearance redraws overwritten texture');
+    assert.equal(sinkCalls, calls + 3, 'ordinary head reaches consumer after dynamic texture overwrite');
+    calls = sinkCalls;
+    assert.equal(draw(recolorApp, true), recolorHash);
+    assert.equal(sinkCalls, calls, 'restored ordinary head reuses its new memo');
     } finally {
         try {
             ecsForCleanup?.reset();

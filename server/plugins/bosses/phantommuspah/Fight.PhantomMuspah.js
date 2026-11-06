@@ -21,6 +21,8 @@ const Shield = require("./Shield.PhantomMuspah");
 const { SpikeField } = require("./Spikes.PhantomMuspah");
 
 const OTHER_FORM = { ranged: "melee", melee: "ranged" };
+/** Wiki: Defence reductions cannot take this encounter below 125. */
+const DEFENCE_FLOOR = 125;
 /** A special or a switch waits this long after an attack, so they don't cut it short. */
 const ACTION_GAP_TICKS = 2;
 /** Form switches are at least this far apart (captured: never closer, even under Leagues damage). */
@@ -88,6 +90,7 @@ class Fight {
     const muspah = Common.api.spawnNpc({ id: npcs[this.form], x: at.getX(), y: at.getY(), z: at.getZ(), owner: this.player, wanderRadius: 0 });
     if (!muspah) return;
     this.muspah = muspah;
+    muspah.setStatMinimumLevel(Common.core.Skill.DEFENCE, DEFENCE_FLOOR);
     muspah.__skipDefaultRespawn = true;
     muspah.__muspahFight = this;
     muspah.setFlag("combat:freezable", true);

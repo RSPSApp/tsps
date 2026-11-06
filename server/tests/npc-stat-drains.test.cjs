@@ -165,3 +165,30 @@ test('enabling immunity clears previous drains and disabling it restores normal 
   value.setDefenceLevel(60);
   assert.equal(value.getDefenceLevel(), 60);
 });
+
+// A floor is encounter-owned and only affects later writes/previews, not already stored drains.
+test('NPC minimum levels affect only this instance and future writes and previews', () => {
+  cycle = 0;
+  const boss = npc([100, 100, 200, 100, 100]), ordinary = npc([100, 100, 200, 100, 100]);
+  boss.setCurrentLevels(Skill.DEFENCE, 40);
+  boss.setStatMinimumLevel(Skill.DEFENCE, 125);
+  assert.equal(boss.getDefenceLevel(), 40, 'configuring the floor is not retroactive');
+  assert.equal(boss.previewCurrentLevel(Skill.DEFENCE, 20), 125);
+  assert.equal(boss.getDefenceLevel(), 40, 'preview is non-mutating');
+  boss.setCurrentLevels(Skill.DEFENCE, 20);
+  assert.equal(boss.getDefenceLevel(), 125);
+  ordinary.setCurrentLevels(Skill.DEFENCE, 20);
+  assert.equal(ordinary.getDefenceLevel(), 20, 'another NPC retains the zero default');
+  boss.setCurrentLevels(Skill.ATTACK, 0);
+  assert.equal(boss.getCurrentLevel(Skill.ATTACK), 0, 'other skills keep their default');
+  assert.throws(() => boss.setStatMinimumLevel(Skill.DEFENCE, -1), RangeError);
+  assert.throws(() => boss.setStatMinimumLevel(Skill.DEFENCE, Infinity), RangeError);
+  boss.setStatMinimumLevel(Skill.DEFENCE, 250);
+  assert.equal(boss.previewCurrentLevel(Skill.DEFENCE, 1), 200, 'the definition base remains the maximum');
+  boss.setStatDrainImmune(true);
+  assert.equal(boss.previewCurrentLevel(Skill.DEFENCE, 1), 200, 'immunity retains precedence');
+  boss.setStatDrainImmune(false);
+  boss.setStatMinimumLevel(Skill.DEFENCE, null);
+  boss.setCurrentLevels(Skill.DEFENCE, 20);
+  assert.equal(boss.getDefenceLevel(), 20, 'clearing the floor restores ordinary draining');
+});

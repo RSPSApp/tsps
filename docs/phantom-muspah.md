@@ -124,6 +124,8 @@ it and the centre, heading away from it; they step a tile a tick until the arena
 them, then play seq 9948 and go. A cloud on the player's tile hits for up to 20. capture (the
 clouds); Wiki (20).
 
+The Muspah's Defence cannot be reduced below 125; reductions persist across forms until the shield rises and restores it to 200 (Wiki).
+
 ## The shockwave and the shield
 
 Below 127 hitpoints, at its next attack: the purple message and seq 9928 with spot 2332, the
@@ -216,7 +218,6 @@ How it all looks (graphics, the overlay, spikes rising and moving) is left to pl
 
 - Sergeant Raymond's warning at the crevice.
 - Enchanted sapphire bolts and corruption spells draining the shield.
-- The defence drain floor (125) and its reset when the shield goes up.
 - Combat Achievements counts the kill from the Muspah's death, so its task messages come before
   the kill count (live sends the kill count first). Counting it by event instead would lose the
   speed and other tasks derived from the fight.

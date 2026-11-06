@@ -175,6 +175,8 @@ export class NPC extends Mobile {
     private combatXpMultiplier: number = 1;
     private readonly drainedLevels = new Map<Skill, { level: number; cycle: number }>();
     private statDrainImmune = false;
+    /** Optional encounter-owned minimum combat levels; the default remains zero. */
+    private statMinimumLevels = new Map<Skill, number>();
     private static readonly STAT_RESTORE_TICKS = 100;
     /** Ticks per level a drained stat comes back; a boss can restore faster (the Corporeal Beast). */
     private statRestoreTicks = NPC.STAT_RESTORE_TICKS;
@@ -536,7 +538,8 @@ export class NPC extends Mobile {
         if (!Number.isFinite(level)) throw new RangeError("Invalid NPC combat level");
         const base = this.getMaxLevel(skill);
         if (this.statDrainImmune && level < base) return base;
-        return Math.max(0, Math.min(base, Math.floor(level)));
+        const minimum = Math.min(base, this.statMinimumLevels?.get(skill) ?? 0);
+        return Math.max(minimum, Math.min(base, Math.floor(level)));
     }
 
     public setCurrentLevels(skill: Skill, level: number): void {
@@ -548,6 +551,17 @@ export class NPC extends Mobile {
         level = this.previewCurrentLevel(skill, level);
         if (level === base) this.drainedLevels.delete(skill);
         else this.drainedLevels.set(skill, { level, cycle });
+    }
+
+    /** Set a floor for future writes and previews on this NPC, or clear it with null. */
+    public setStatMinimumLevel(skill: Skill, minimum: number | null): void {
+        this.getMaxLevel(skill); // validate the skill
+        if (minimum !== null && (!Number.isFinite(minimum) || minimum < 0)) {
+            throw new RangeError("Invalid NPC minimum combat level");
+        }
+        this.statMinimumLevels ??= new Map<Skill, number>();
+        if (minimum === null) this.statMinimumLevels.delete(skill);
+        else this.statMinimumLevels.set(skill, Math.floor(minimum));
     }
 
     /** Encounter-owned immunity; never changes another NPC or its shared definition. */

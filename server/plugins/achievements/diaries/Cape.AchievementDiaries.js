@@ -19,7 +19,7 @@ function ownsCape(player) {
   const capeIds = [items.ACHIEVEMENT_DIARY_CAPE, items.ACHIEVEMENT_DIARY_CAPE_T_];
   const searchTab = pluginApi.core.Bank.BANK_SEARCH_TAB_INDEX;
   return capeIds.some(id => player.getInventory().contains(id)
-    || player.getBanks().some((bank, tab) => tab !== searchTab && bank?.contains(id)));
+    || player.getBanks().some((bank, tab) => tab !== searchTab && bank?.getAmount(id) > 0));
 }
 
 function variant(event) {

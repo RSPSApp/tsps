@@ -532,6 +532,13 @@ module.exports = function registerLunarDiplomacyQuest(api) {
 
   const held = (player, itemId) => player.getInventory().getAmount(itemId) >= 1;
 
+  /** Carried, worn or banked: a piece still owned anywhere is not lost, so it is not replaced. */
+  function owned(player, itemId) {
+    const searchTab = api.core.Bank?.BANK_SEARCH_TAB_INDEX;
+    return held(player, itemId) || (player.getEquipment?.()?.contains?.(itemId) ?? false)
+      || (player.getBanks?.() ?? []).some((bank, tab) => tab !== searchTab && bank?.contains?.(itemId));
+  }
+
   function stageBetween(player, min, max = Number.POSITIVE_INFINITY) {
     const stage = stageOf(player);
     return stage >= min && stage < max;
@@ -1505,7 +1512,7 @@ module.exports = function registerLunarDiplomacyQuest(api) {
     if (LOST_CONDITIONS.has(stepId)) {
       if (!stageBetween(player, STAGE_KINDLING, STAGE_COMPLETE)) return false;
       const entry = LOST_CONDITIONS.get(stepId);
-      return givenCount(player) === 8 && !held(player, entry.item);
+      return givenCount(player) === 8 && !owned(player, entry.item);
     }
     if (SYMBOL_CONDITIONS.has(stepId)) {
       return symbolCount(player) === SYMBOL_CONDITIONS.get(stepId);
@@ -1750,7 +1757,7 @@ module.exports = function registerLunarDiplomacyQuest(api) {
     if (replacement) {
       event.handled = true;
       if (!stageBetween(player, STAGE_KINDLING, STAGE_COMPLETE)) return;
-      if (!oneiroGiven(player)[replacement.key] || held(player, replacement.item)) return;
+      if (!oneiroGiven(player)[replacement.key] || owned(player, replacement.item)) return;
       if (!hasFreeSlots(player)) {
         reject(player, "You need a free inventory space for the replacement.");
         return;

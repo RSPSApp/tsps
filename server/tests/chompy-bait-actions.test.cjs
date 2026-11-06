@@ -77,7 +77,9 @@ test("native Drop places quest bait instead of opening Destroy", async t => {
   assert.equal(quest.getStage(f.player), 30);
   assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.BLOATED_TOAD), 0);
   assert.equal(f.player.getAttribute("destroy-item:pending"), undefined);
-  assert.equal(birds(f).length, 1);
+  assert.equal(birds(f).length, 0, "placing bait must not guarantee an instant bird");
+  assert.equal([...core.World.getNpcs()].filter(npc => npc?.getOwner?.() === f.player
+    && npc.getId() === core.NpcIdentifiers.BLOATED_TOAD).length, 1, "bait is a real placed toad");
 });
 
 test("Rantz's real dialogue sends the bait hint and Drop clears it", async t => {
@@ -125,6 +127,9 @@ test("Drop refusals keep the item and post-bow Drop still attracts a huntable ch
   const f = actor(t, 45);
   await inventory(f, "Drop");
   assert.equal(quest.getStage(f.player), 45);
+  assert.equal(birds(f).length, 0);
+  t.mock.method(Math, "random", () => 0);
+  for (let i = 0; i < 25; i++) core.TaskManager.process();
   assert.equal(birds(f).length, 1);
   assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.BLOATED_TOAD), 0);
   await inventory(f, "Drop");
@@ -159,4 +164,26 @@ test("saved placement progress restores the hint on login and repeats the placem
   assert.deepEqual(restored.hints, [["clearHintArrow"]]);
   quest.setStage(restored.player, 45);
   assert.equal(restored.hints.length, 1, "later stages do not clear another system's arrow again");
+});
+
+test("native repeated Drop preserves the second toad and failed bait restores the quest hint", async t => {
+  const f = actor(t, 25, 2);
+  await inventory(f, "Drop");
+  await inventory(f, "Drop", 1);
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.BLOATED_TOAD), 1);
+  t.mock.method(Math, "random", () => 0.2);
+  for (let i = 0; i < 100; i++) core.TaskManager.process();
+  assert.equal(birds(f).length, 0);
+  assert.equal(quest.getStage(f.player), 25);
+  assert.equal(f.hints.at(-1)?.[0], "sendPositionalHint");
+});
+
+test("login recovers interrupted waiting and demonstration stages to placement", t => {
+  for (const stage of [30, 35]) {
+    const f = actor(t, stage, 0);
+    PM.emitPlayerLogin({ player: f.player, username: f.player.getUsername() });
+    PM.emitCustomEvent("player:bootstrap-complete", { player: f.player });
+    assert.equal(quest.getStage(f.player), 25);
+    assert.equal(f.hints.at(-1)?.[0], "sendPositionalHint");
+  }
 });

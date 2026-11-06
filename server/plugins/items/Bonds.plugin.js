@@ -219,10 +219,18 @@ function convertHeldBonds(container, count) {
     }
     const amount = item.getAmount();
     const converted = Math.min(remaining, amount);
+    const { Item } = pluginApi.core;
     if (converted === amount) {
-      container.setItem(slot, new pluginApi.core.Item(UNTRADEABLE_BOND, amount));
-      remaining -= converted;
+      container.setItem(slot, new Item(UNTRADEABLE_BOND, amount));
+    } else {
+      // A bank stacks bonds: a bought one collected onto bonds already banked is split off that stack.
+      // With no room for the untradeable stack it stays as it was, rather than vanishing.
+      const split = new Item(UNTRADEABLE_BOND, converted);
+      if (container.getAddableAmount(split) < converted) continue;
+      container.setItem(slot, new Item(TRADEABLE_BOND, amount - converted));
+      container.add(split, false);
     }
+    remaining -= converted;
   }
   container.refreshItems();
 }

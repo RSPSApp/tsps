@@ -69,6 +69,7 @@ module.exports = function registerGertrudesCatQuest(api) {
     ItemIdentifiers.PET_KITTEN_6];
   const RING_OF_CHAROS_A = ItemIdentifiers.RING_OF_CHAROS_A_;
   const chosenKittens = new WeakMap();
+  const scrollKittens = new WeakMap();
   const initialMenus = new WeakMap();
 
   /** Fluffs' quest flavour: talking is the same throughout, the hiss hint moves by stage. */
@@ -128,7 +129,7 @@ module.exports = function registerGertrudesCatQuest(api) {
     return ["I can start this quest by talking to <col=800000>Gertrude</col> in her house just west of <col=800000>Varrock</col>."];
   }
 
-  function grantReward(player) {
+  function grantReward(player, _quest, options = {}) {
     player.getSkillManager().addExperiences(Skill.COOKING, 1525);
     // The wiki's completion hand-out also includes the cake and stew the scroll advertises.
     player.getInventory().adds(CHOCOLATE_CAKE_ITEM_ID, 1);
@@ -138,6 +139,13 @@ module.exports = function registerGertrudesCatQuest(api) {
     const inventory = player.getInventory();
     if (inventory.isFull()) inventory.forceAdd(player, new api.core.Item(kitten, 1));
     else inventory.adds(kitten, 1);
+    if (options.scroll !== false) scrollKittens.set(player, kitten);
+  }
+
+  function scrollKitten(player) {
+    const kitten = scrollKittens.get(player);
+    scrollKittens.delete(player);
+    return kitten;
   }
 
   function gertrudeVariant(stage) {
@@ -251,8 +259,16 @@ module.exports = function registerGertrudesCatQuest(api) {
           const request = { player, opened: false, cancel, choose: (kitten) => {
             if (initialMenus.get(player) !== token) return;
             initialMenus.delete(player);
-            if (quest.isComplete(player) || quest.getStage(player) !== STAGE_RESCUED || !wearingRing()) return;
-            if (player.getInventory().getFreeSlots() < 3 || !KITTEN_ITEMS.includes(kitten)) return;
+            if (quest.isComplete(player) || quest.getStage(player) !== STAGE_RESCUED) return;
+            if (!wearingRing()) {
+              player.sendMessage("Wear your Ring of Charos(a) to choose a kitten. Talk to Gertrude again.");
+              return;
+            }
+            if (player.getInventory().getFreeSlots() < 3) {
+              player.sendMessage("You need three free inventory slots to receive Gertrude's rewards.");
+              return;
+            }
+            if (!KITTEN_ITEMS.includes(kitten)) return;
             chosenKittens.set(player, kitten);
             try { quest.complete(player); } finally { chosenKittens.delete(player); }
           } };
@@ -456,7 +472,7 @@ module.exports = function registerGertrudesCatQuest(api) {
     completionValue: STAGE_COMPLETE,
     questPoints: 1,
     xpRewards: [{ skillId: Skill.COOKING.getIndex(), amount: 1525, label: "Cooking" }],
-    scrollItemId: ItemIdentifiers.PET_KITTEN,
+    scrollItemId: scrollKitten,
     rewardItemLabel: "A pet kitten",
     otherRewards: ["A chocolate cake and a bowl of stew", "The ability to raise cats"],
     buildJournal,

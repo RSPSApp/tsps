@@ -273,3 +273,37 @@ test('Black Knights sabotage sends the recorded tick-ten camera and restores it 
     { key: 'sendCameraReset', args: [] }, { key: 'sendCameraUnlock', args: [false] }, { key: 'sendCameraReset', args: [] },
   ]);
 });
+
+test('Black Knights journal at stages 2 and 3 is the captured rev 240 text', () => {
+  const h = setup('BlackKnightsFortress');
+  const journal = stage => { h.quest.setStage(h.player, stage); return h.quest.buildJournal(h.player, h.quest); };
+  const struck = [
+    "<str>Sir Amik Varze asked me to investigate the Black Knights'",
+    "<str>Fortress. I sneaked inside disguised as a Guard.",
+  ];
+  assert.deepEqual(journal(2), [...struck,
+    "I eavesdropped on a Witch and the Black Knight Captain and",
+    "discovered that their <col=800000>invincibility potion</col> can be destroyed",
+    "with a normal <col=800000>cabbage</col>.",
+  ]);
+  assert.deepEqual(journal(3), [...struck,
+    "<str>I eavesdropped on a Witch and the Black Knight Captain and",
+    "<str>discovered that their invincibility potion could be destroyed",
+    "<str>with a normal cabbage.",
+    "Now that I have sabotaged the witch's potion, I can claim my",
+    "<col=800000>reward</col> from <col=800000>Sir Amik Varze</col> in <col=800000>Falador Castle</col>.",
+  ]);
+});
+
+test('Black Knights sabotage plays the captured throw, noise, splash, track and meow sounds', () => {
+  const h = setup('BlackKnightsFortress'); h.quest.setStage(h.player, 2); h.inventory.set(I.CABBAGE, 1);
+  const sounds = () => h.packets.filter(row => row.key === 'sendSound').map(row => row.args[0]);
+  h.action(N.WITCH_5, 'lUsX9u'); assert.deepEqual(sounds(), [1420]);
+  h.runAt(8); h.runAt(40); assert.deepEqual(sounds(), [1420, 1414]);
+  h.action(N.WITCH_5, 'Ug7RZ1'); h.runAt(2); assert.deepEqual(sounds(), [1420, 1414, 1416]);
+  h.line(N.WITCH_5, 'My potion!').before();
+  assert.deepEqual(h.packets.filter(row => row.key === 'sendSong').map(row => row.args), [[374, { fadeOutDelay: 0, fadeOutSpeed: 0, fadeInDelay: 0, fadeInSpeed: 0 }]]);
+  h.line(N.WITCH_5, 'Meow!').after();
+  const area = h.player.getPrivateArea(), cat = area.sourceTile(3027, 3507);
+  assert.deepEqual(h.packets.filter(row => row.key === 'sendAreaSound').map(row => row.args), [[333, cat.getX(), cat.getY(), 0, 1]]);
+});

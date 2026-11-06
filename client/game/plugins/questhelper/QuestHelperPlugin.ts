@@ -437,6 +437,7 @@ export class QuestHelperPlugin extends Plugin {
             return;
         if (!this.getState().selected) {
             // No quest: the session only polls the catalog by tick (QuestHelperSession); the scene isn't read.
+            this.events.clear();
             this.session.update(account, { tick: this.tick } as ReadonlyClientSnapshot);
             this.refreshHighlights();
             return;

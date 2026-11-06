@@ -58,9 +58,9 @@ function ticks(count) {
   }
 }
 
-function entryRaid(f) {
+function entryRaid(f, mode = "entry") {
   const party = Parties.create(f.p);
-  party.mode = "entry";
+  party.mode = mode;
   const raid = Raid.begin(f.p);
   raid.enter(f.p);
   ticks(3);
@@ -89,7 +89,7 @@ test("a bandage carried outside the Theatre heals and boosts nothing", async (t)
   const f = actor(t, [3222, 3218]);
   f.p.getInventory().setItem(0, new core.Item(BANDAGES, 1));
   await heal(f);
-  assert.deepEqual(f.messages, ["You can only use these bandages in the Theatre of Blood."]);
+  assert.deepEqual(f.messages, ["You can only use these bandages in an Entry Mode raid."]);
   assert.equal(f.skills.getCurrentLevel(core.Skill.HITPOINTS), 50);
   assert.equal(f.skills.getCurrentLevel(core.Skill.STRENGTH), 99);
   assert.equal(f.skills.getCurrentLevel(core.Skill.RANGED), 99);
@@ -104,5 +104,30 @@ test("inside an Entry Mode raid a bandage still heals and boosts", async (t) => 
   assert.equal(f.skills.getCurrentLevel(core.Skill.HITPOINTS), 70);
   assert.equal(f.skills.getCurrentLevel(core.Skill.STRENGTH), 99 + Math.floor(99 * 0.15) + 4);
   assert.equal(f.p.getInventory().getAmount(BANDAGES), Supplies.BANDAGES_PER_CHEST - 1);
+  raid.dispose();
+});
+
+test("logging out of an Entry raid and back in after it ended leaves the bandages behind", (t) => {
+  const f = actor(t, [3667, 3219]);
+  const raid = entryRaid(f);
+  Supplies.takeBandages(f.p, raid.member(f.p), { key: "maiden", raid });
+  assert.equal(f.p.getInventory().getAmount(BANDAGES), Supplies.BANDAGES_PER_CHEST);
+  raid.onLogout(f.p); // the raid's own logout handling: alone, so the raid ends
+  assert.equal(raid.over || Raid.byId(raid.id) == null || raid.players.length === 0, true);
+  PM.emitPlayerLogin({ player: f.p, username: f.p.getUsername() });
+  ticks(2);
+  assert.equal(Raid.raidOf(f.p) ?? null, null, "not back in a raid");
+  assert.equal(f.p.getInventory().getAmount(BANDAGES), 0);
+});
+
+test("a bandage brought into a Normal Mode raid heals nothing", async (t) => {
+  const f = actor(t, [3667, 3219]);
+  const raid = entryRaid(f, "normal");
+  assert.equal(raid.isEntry, false);
+  f.p.getInventory().setItem(27, new core.Item(BANDAGES, 1));
+  await heal(f);
+  assert.ok(f.messages.includes("You can only use these bandages in an Entry Mode raid."));
+  assert.equal(f.skills.getCurrentLevel(core.Skill.HITPOINTS), 50);
+  assert.equal(f.p.getInventory().getAmount(BANDAGES), 1);
   raid.dispose();
 });

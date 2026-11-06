@@ -33,8 +33,8 @@ const SUCCESS_COUNT_ATTRIBUTE = "cooking:success-count";
 const BUSY_VARBIT = "busy";
 
 /**
- * Cooked meat and cooked chicken can be burnt on purpose. Keep them apart from the
- * cookables so content that cooks raw food leaves them alone.
+ * Wiki (Burnt chicken: https://oldschool.runescape.wiki/w/Burnt_chicken): cooked meat and
+ * chicken can be burnt on purpose. Keep them apart from the raw-food cookables.
  */
 const DELIBERATE_BURN = { name: "meat", level: 1, xp: 0, stopBurn: 1, deliberate: true, message: "You deliberately burn the nicely cooked meat." };
 
@@ -44,7 +44,7 @@ function deliberateBurnFor(itemId) {
     return { ...DELIBERATE_BURN, raw: ItemIds.COOKED_MEAT, cooked: ItemIds.BURNT_MEAT, burnt: ItemIds.BURNT_MEAT };
   }
   if (itemId === ItemIds.COOKED_CHICKEN) {
-    return { ...DELIBERATE_BURN, name: "chicken", message: "You deliberately burn the chicken.",
+    return { ...DELIBERATE_BURN, name: "chicken", message: "You deliberately burn the nicely cooked chicken.",
       raw: ItemIds.COOKED_CHICKEN, cooked: ItemIds.BURNT_CHICKEN, burnt: ItemIds.BURNT_CHICKEN };
   }
   return undefined;

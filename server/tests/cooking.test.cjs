@@ -1118,8 +1118,18 @@ test('cooked chicken and cooked meat can be deliberately burned on a live fire',
   assert.equal(inventory.getAmount(I.COOKED_CHICKEN), 1, 'native raw chicken produced cooked chicken');
   assert.equal(inventory.getAmount(I.BURNT_CHICKEN), 0);
   turn();
+  const chickenXp = skills.getExperience(core.Skill.COOKING);
+  const sender = p.getPacketSender(), sendTypedMessage = sender.sendTypedMessage;
+  const chickenMessages = [];
+  t.mock.method(sender, 'sendTypedMessage', function (type, text, ...rest) {
+    if (type === core.ChatType.SPAM) chickenMessages.push(text);
+    return sendTypedMessage.call(this, type, text, ...rest);
+  });
   await useFire(I.COOKED_CHICKEN);
   awaitOutput(I.BURNT_CHICKEN);
   assert.deepEqual([inventory.getAmount(I.COOKED_CHICKEN), inventory.getAmount(I.BURNT_CHICKEN)], [0, 1],
     'cooked chicken used on a fire becomes burnt chicken');
+  assert.equal(skills.getExperience(core.Skill.COOKING), chickenXp, 'deliberately burnt chicken awards no Cooking XP');
+  assert.equal(chickenMessages.filter(text => text === 'You deliberately burn the nicely cooked chicken.').length, 1,
+    'the chicken burn message is sent on the spam channel');
 });

@@ -567,7 +567,7 @@ test("cache-derived room restrictions match closed walkable components and canno
   }
 });
 
-// Exercise pickup through the registered handler with real setup and inventory state.
+// Exercise pickup through the canonical handler with real setup and inventory state.
 for (const headroom of [null, 30, 1, 0]) {
   test(`owner pickup conserves loaded ammo at stack headroom ${headroom}`, (t) => {
     const MAX = 0x7fffffff, p = gunner({steel: 30}), cannon = built(p), inv = p.getInventory();

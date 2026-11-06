@@ -119,6 +119,22 @@ function recoverBoat({ player, npc, definition }) {
   openBoatSelection(player, MODE.RECOVER, dock, (slot) => recoverSlot(player, dock, slot));
 }
 
+/** The Wiki transcript's "I'd like to recover a boat." step opens the selection for this target. */
+const RECOVER_TARGET = "Recover Boat";
+
+/**
+ * The Recover-boat dialogue step. Its NPC option is not on every shipwright's definition (the
+ * spawned Junior Jim offers Talk-to alone), so on those the dialogue is the only route to it.
+ * One tick late: the interface opens once the dialogue has closed, as Destroy.Shipwright does.
+ */
+function recoverFromDialogue(event) {
+  if (event.action !== "open_interface" || event.target !== RECOVER_TARGET) return;
+  event.handled = true;
+  event.end = true;
+  const quote = { player: event.player, npc: event.npc, definition: event.definition };
+  later(event.player, 1, () => recoverBoat(quote));
+}
+
 module.exports = {
   name: "SailingShipwright",
   members: true,
@@ -127,6 +143,7 @@ module.exports = {
     pluginApi = api;
     BoatShop.bind(api);
     require("./shipwright/Destroy.Shipwright")(api);
+    api.onCustomEvent("npc-dialogue:action", recoverFromDialogue);
     api.onCustomEvent("omnishop:describe", BoatShop.describe);
     api.onCustomEvent("omnishop:can-buy", BoatShop.canBuy);
     api.onCustomEvent("omnishop:purchase", BoatShop.deliver);

@@ -20,7 +20,6 @@ const Shared = require("./Shared.CorporealBeast");
 
 const PASSAGE_WIDTH = 3;
 const PET_ATTRIBUTE = "pets:current";
-const IRONMAN_ROOM_COMBAT_LEVEL = 90;
 
 function playersInRoom() {
   const { World } = Shared.core();
@@ -39,12 +38,18 @@ function enterCave({ player, objectId }) {
     player.sendMessage("You cannot enter the cave while in combat.");
     return true;
   }
-  const mode = { player, mode: "none" };
-  Shared.api().emitCustomEvent("ironman:mode", mode);
-  const room = mode.mode !== "none" && player.getSkillManager().getCombatLevel() >= IRONMAN_ROOM_COMBAT_LEVEL
-    ? "ironman" : "normal";
-  player.moveTo(Shared.loc(Shared.shifted(Shared.CAVE_ARRIVAL, room)));
+  player.moveTo(Shared.loc(Shared.shifted(Shared.CAVE_ARRIVAL, Shared.roomFor(player))));
   return true;
+}
+
+/** Resolve a northern-copy teleport anchor, or the server teleport panel's lobby. */
+function teleportDestination(request) {
+  if (!request?.player) return;
+  const anchor = Array.isArray(request.tile)
+    ? { x: request.tile[0], y: request.tile[1], z: request.tile[2] ?? 0 }
+    : Shared.LOBBY;
+  const tile = Shared.shifted(anchor, Shared.roomFor(request.player));
+  request.tile = [tile.x, tile.y, tile.z];
 }
 
 function exitCave({ player, objectId }) {
@@ -93,6 +98,7 @@ module.exports = function registerCorporealBeastLair(api) {
   api.onObjectInteraction("Cave", { Enter: enterCave });
   api.onObjectInteraction("Cave exit", { Exit: exitCave });
   api.onObjectInteraction("Passage", { "Go-through": goThrough, Peek: peek });
+  api.onCustomEvent("corporeal:teleport-destination", teleportDestination);
   for (const room of Shared.ROOM_AREAS) {
     api.onZoneEnter(room, showOverlay);
     api.onZoneExit(room, hideOverlay);

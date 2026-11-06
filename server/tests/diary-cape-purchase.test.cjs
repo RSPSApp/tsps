@@ -152,7 +152,7 @@ async function drain(f) {
   for (let i = 0; i < 40; i++) {
     if (core.MultiChatboxPrompt.getPending(f.p) || !f.p.getDialogueManager().getCurrent()) return;
     const text = f.p.getDialogueManager().getCurrent().getText?.();
-    if (text) f.history.push(Array.isArray(text) ? text.join(" ") : String(text));
+    if (text) f.history.push((Array.isArray(text) ? text.join(" ") : String(text)).replace(/\s+/g, " ").trim());
     await resume(f);
   }
   assert.fail("conversation did not finish");
@@ -231,7 +231,7 @@ test("exact payment does not make one pre-payment free slot sufficient", async t
   const before = inventoryState(f.p);
   talk(f); await choose(f, CAPE_OPTION); await drain(f);
   assert.equal(core.MultiChatboxPrompt.getPending(f.p), null);
-  assert.ok(f.history.some(text => text.includes("free up some space")));
+  assert.ok(f.history.some(text => text.includes("free up some space")), `unexpected dialogue: ${JSON.stringify(f.history)}`);
   assert.equal(amount(f.p, core.ItemIdentifiers.COINS), 99000);
   assert.equal(amount(f.p, core.ItemIdentifiers.ACHIEVEMENT_DIARY_CAPE), 0);
   assert.equal(amount(f.p, core.ItemIdentifiers.ACHIEVEMENT_DIARY_HOOD), 0);

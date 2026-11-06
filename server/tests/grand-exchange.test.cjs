@@ -220,6 +220,8 @@ define(SLOW);
 market[SLOW] = { volume: 900 };
 const PRICED = 2006;
 define(PRICED, { getGrandExchangeValue: () => 100, getGrandExchangeSellValue: () => 90 });
+const HISTORY_BUY = 2007;
+define(HISTORY_BUY, { getGrandExchangeValue: () => 150 });
 market[PRICED] = { volume: 1440 };
 const ILLIQUID = 2003;
 const BROKEN_VOLUME = 2004;
@@ -352,6 +354,11 @@ function exchange(t, config = {}, realSender = null) {
   const calls = [];
   const messages = [];
   const timers = [];
+  const customEvents = new Map();
+  const emitEvent = (eventName, payload) => {
+    for (const handler of customEvents.get(eventName) ?? []) handler(payload);
+  };
+  let interfaceId = 465;
   const sender = realSender ?? new Proxy({}, { get: (_, key) => (...args) => {
     calls.push({ name: key, args });
     if (key === 'sendMessage') messages.push(args[0]);
@@ -360,7 +367,11 @@ function exchange(t, config = {}, realSender = null) {
   const p = {
     ...player(),
     getUsername: () => 'ge-test',
-    getInterfaceId: () => 465,
+    getInterfaceId: () => interfaceId,
+    setInterfaceId: id => { interfaceId = id; },
+    busy: () => false,
+    getMovementQueue: () => ({ reset() {} }),
+    getSkillManager: () => ({ stopSkillable() {} }),
     getPacketSender: () => sender,
     sendMessage: message => messages.push(message),
     setEnteredAmountAction: action => { p.amountAction = action; },
@@ -378,11 +389,22 @@ function exchange(t, config = {}, realSender = null) {
   plugin.register(new Proxy({
     core: { WorldDefinition: { isMembersWorld: () => true } },
     getPluginConfig: (key, defaultValue) => Object.hasOwn(config, key) ? config[key] : defaultValue,
+    emitCustomEvent: emitEvent,
+    onCustomEvent: (eventName, handler) => {
+      const handlers = customEvents.get(eventName) ?? [];
+      handlers.push(handler);
+      customEvents.set(eventName, handlers);
+    },
     onInterfaceActionButton: (ids, handler) => buttons.push({ ids, handler }),
   }, { get: (api, key) => api[key] ?? (handler => { hooks[key] = handler; }) }));
 
   const click = (child, slot = 0) => {
     const buttonId = (465 << 16) | child;
+    const { handler } = buttons.find(({ ids }) => Array.isArray(ids) && ids.includes(buttonId));
+    handler({ player: p, buttonId, slot, action: 1 });
+  };
+  const historyClick = (child, slot = 0) => {
+    const buttonId = (383 << 16) | child;
     const { handler } = buttons.find(({ ids }) => Array.isArray(ids) && ids.includes(buttonId));
     handler({ player: p, buttonId, slot, action: 1 });
   };
@@ -399,7 +421,7 @@ function exchange(t, config = {}, realSender = null) {
     click(30);
     return p.getAttribute(OFFERS_ATTRIBUTE)[slot];
   };
-  return { p, inventory, place, click, hooks, buttons, calls, messages, timers };
+  return { p, inventory, place, click, historyClick, emitEvent, hooks, buttons, calls, messages, timers };
 }
 
 test('maxTradeDelay overrides volume and price caps for newly placed buys and sells', t => {
@@ -510,6 +532,7 @@ test('completed trades are recorded once in bounded newest-first history', () =>
     sell: true,
     quantity: 3,
     total: 270,
+    tax: 3,
     completedAt: 123_456,
   }]);
   assert.equal(recordHistory(p, offer), false);
@@ -523,20 +546,62 @@ test('completed trades are recorded once in bounded newest-first history', () =>
 });
 
 test('History button opens and populates the captured history interface', t => {
-  const { p, calls, click } = exchange(t);
+  const { p, calls, click, hooks } = exchange(t);
   p.setAttribute(HISTORY_ATTRIBUTE, [{
     itemId: PRICED,
     sell: true,
     quantity: 3,
     total: 270,
+    tax: 3,
     completedAt: Date.now(),
   }]);
   click(3);
   assert.deepEqual(calls.find(({ name }) => name === 'sendSubInterface').args, [(161 << 16) | 16, 383, 0]);
   const scripts = calls.filter(({ name }) => name === 'sendClientScript').map(({ args }) => args);
-  assert.deepEqual(scripts.map(([scriptId]) => scriptId), [2524, 1644, 1645, 1646]);
-  assert.deepEqual(scripts[2], [1645, 0, PRICED, 1, 3, 270, 0]);
+  assert.deepEqual(scripts.map(([scriptId]) => scriptId), [2524, 1644, 1646]);
+  assert.deepEqual(calls.find(({ name, args }) => name === 'sendInterfaceScript' && args[0] === 1645).args,
+    [1645, [0, PRICED, 1, 3, 270n, 3n]]);
   assert.deepEqual(calls.find(({ name }) => name === 'sendInterfaceFlagsRange').args, [(383 << 16) | 3, 0, 234, 1026]);
+
+  const callCount = calls.length;
+  click(4); // A click on the covered offer screen must not change its state.
+  assert.equal(calls.length, callCount);
+  assert.equal(hooks.onItemFirstAction({ player: p, itemId: PRICED, slot: 0 }), true);
+  assert.equal(calls.length, callCount);
+});
+
+test('History Exchange button returns to the offers screen', t => {
+  const { p, click, historyClick, calls } = exchange(t);
+  click(3);
+  historyClick(2);
+
+  assert.equal(p.getInterfaceId(), 465);
+  assert.ok(calls.some(({ name }) => name === 'sendInterfaceRemoval'));
+  assert.ok(calls.some(({ name, args }) => name === 'sendSubInterface' && args[1] === 465));
+});
+
+test('closing the History overlay re-enables the offers panel', t => {
+  const { p, inventory, click, emitEvent, hooks, calls } = exchange(t);
+  inventory.add(new Item(PRICED, 1), false);
+  click(3);
+  const callCount = calls.length;
+
+  emitEvent('interface:closed', { player: p, interfaceId: 383 });
+  assert.equal(hooks.onItemFirstAction({ player: p, itemId: PRICED, slot: 0 }), true);
+  assert.ok(calls.length > callCount);
+});
+
+test('History Buy-offer action starts a buy for the selected row', t => {
+  const { p, click, historyClick, calls } = exchange(t);
+  p.setAttribute(HISTORY_ATTRIBUTE, [
+    { itemId: PRICED, sell: true, quantity: 3, total: 270, tax: 3 },
+    { itemId: HISTORY_BUY, sell: false, quantity: 1, total: 150, tax: 0 },
+  ]);
+  click(3);
+  historyClick(3, 6); // second row: six dynamic children per entry
+
+  assert.equal(p.getInterfaceId(), 465);
+  assert.ok(calls.some(({ name, args }) => name === 'sendConfig' && args[0] === 1151 && args[1] === HISTORY_BUY));
 });
 
 test('register persists offers, limits, and history', () => {

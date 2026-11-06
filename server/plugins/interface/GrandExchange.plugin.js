@@ -125,6 +125,7 @@ const offers = new WeakMap();
 const completionTimers = new WeakMap();
 const viewing = new WeakMap();
 const searching = new WeakSet();
+const historyOpen = new WeakSet();
 let pluginApi;
 let marketData;
 
@@ -291,7 +292,7 @@ function recordHistory(player, offer) {
 
   const completedAt = Number(offer.completedAt) || Number(offer.completesAt) || Date.now();
   const history = tradeHistory(player);
-  history.unshift({ itemId, sell: Boolean(offer.sell), quantity, total, completedAt });
+  history.unshift({ itemId, sell: Boolean(offer.sell), quantity, total, tax: tax(offer), completedAt });
   history.length = Math.min(history.length, HISTORY_LIMIT);
   offer.historyRecorded = true;
   return true;
@@ -445,16 +446,17 @@ function home(player) {
 
 function showHistory(player) {
   const sender = player.getPacketSender();
+  historyOpen.add(player);
   sender.sendClientScript(2524, -1, -1)
     .sendSubInterface(MAIN_MODAL, GE_HISTORY, 0)
     .sendClientScript(GE_HISTORY_RESET_SCRIPT);
-  const now = Date.now();
   for (const [index, entry] of tradeHistory(player).slice(0, HISTORY_LIMIT).entries()) {
-    const completedAt = Number(entry.completedAt) || now;
-    const minutesAgo = Math.max(0, Math.floor((now - completedAt) / 60_000));
-    // Script 1645 fills a GE history row: index, item, buy/sell, quantity, total price, minutes ago.
-    sender.sendClientScript(GE_HISTORY_ENTRY_SCRIPT, index, entry.itemId, entry.sell ? 1 : 0,
-      entry.quantity, entry.total, minutesAgo);
+    // Script 1645 takes four ints followed by the gross total and tax as longs.
+    const total = Number(entry.total);
+    const fee = Number(entry.tax) || 0;
+    sender.sendInterfaceScript(GE_HISTORY_ENTRY_SCRIPT, [index, entry.itemId, entry.sell ? 1 : 0,
+      entry.quantity, BigInt(Number.isSafeInteger(total) && total >= 0 ? total : 0),
+      BigInt(Number.isSafeInteger(fee) && fee >= 0 ? fee : 0)]);
   }
   sender.sendClientScript(GE_HISTORY_REFRESH_SCRIPT)
     .sendInterfaceFlagsRange((GE_HISTORY << 16) | 3, 0, 234, 1026);
@@ -722,7 +724,10 @@ function openGrandExchange({ player }) {
   const pin = { player, feature: "grand-exchange", resume: () => openGrandExchange({ player }) };
   pluginApi.emitCustomEvent("bank-pin:guard", pin);
   if (pin.locked) return true;
-  if ([GE, GE_COLLECT].includes(player.getInterfaceId())) player.getPacketSender().sendInterfaceRemoval();
+  if ([GE, GE_COLLECT].includes(player.getInterfaceId())) {
+    player.getPacketSender().sendInterfaceRemoval();
+    historyOpen.delete(player);
+  }
   if (player.busy()) {
     player.sendMessage("Finish what you are doing before opening the Grand Exchange.");
     return true;
@@ -811,6 +816,7 @@ function handleInventoryItem(event) {
   // The cache has used both 467:0 and the normal inventory id for this
   // mounted panel. The item/slot validation is the reliable discriminator.
   if (event.player.getInterfaceId() !== GE) return false;
+  if (historyOpen.has(event.player)) return true;
   const item = event.player.getInventory().getItems()[event.slot];
   if (item?.getId() === event.itemId && validItem(event.itemId)) {
     if (!exchangeable(event.itemId)) {
@@ -829,6 +835,7 @@ function handleInventoryItem(event) {
 
 function handleExchangeButton({ player, buttonId, slot, action }) {
   if (player.getInterfaceId() !== GE) return true;
+  if (historyOpen.has(player)) return true;
   if (buttonId === uid(24) && action >= 1 && action <= 3) { collect(player, action); return true; }
   // Child 1 of 465:6 is Repeat Offer (script 793), not handled here.
   if (buttonId === uid(6) && slot === 0 && (action === 1 || action === 2)) { collectAll(player, action); return true; }
@@ -885,9 +892,30 @@ function handleExchangeButton({ player, buttonId, slot, action }) {
   return true;
 }
 
+function handleHistoryButton({ player, buttonId, slot, action }) {
+  if (!historyOpen.has(player) || action !== 1) return true;
+  if (buttonId === historyUid(2)) {
+    openGrandExchange({ player });
+    return true;
+  }
+  if (buttonId !== historyUid(3) || !Number.isInteger(slot) || slot < 0) return true;
+
+  // Script 1645 creates six dynamic children per history row; the widget action
+  // slot is the child index within that list.
+  const entry = tradeHistory(player)[Math.floor(slot / 6)];
+  if (!entry || !exchangeable(Number(entry.itemId))) return true;
+  openGrandExchange({ player });
+  if (!historyOpen.has(player) && player.getInterfaceId() === GE) {
+    start(player, false, 0, Number(entry.itemId));
+  }
+  return true;
+}
+
 const COLLECTION_BUTTONS = Array.from({ length: 10 }, (_, i) => collectUid(i + 3));
 // Child 34 is the offer setup panel; its quantity and price controls are dynamic children (slot 1-13).
 const EXCHANGE_BUTTONS = [uid(3), uid(4), uid(6), uid(23), uid(24), uid(26), uid(30), uid(34), ...Array.from({ length: 8 }, (_, i) => uid(i + 7))];
+const historyUid = (child) => (GE_HISTORY << 16) | child;
+const HISTORY_BUTTONS = [historyUid(2), historyUid(3)];
 
 module.exports = {
   name: "GrandExchange",
@@ -926,9 +954,11 @@ module.exports = {
     api.onPlayerLogin(restoreCompletedOffers);
     api.onPlayerProcess(({ player }) => {
       if (searching.has(player) && player.getInterfaceId() !== GE) closeSearch(player);
+      if (historyOpen.has(player) && player.getInterfaceId() !== GE) historyOpen.delete(player);
     });
     api.onPlayerLogout(({ player }) => {
       searching.delete(player);
+      historyOpen.delete(player);
       for (const timer of completionTimers.get(player) ?? []) clearTimeout(timer);
       completionTimers.delete(player);
     });
@@ -958,5 +988,9 @@ module.exports = {
     api.onItemFirstAction(handleInventoryItem);
     api.onInterfaceActionButton(SIDE_ITEMS, (event) => event.action === 1 && handleInventoryItem(event));
     api.onInterfaceActionButton(EXCHANGE_BUTTONS, handleExchangeButton);
+    api.onInterfaceActionButton(HISTORY_BUTTONS, handleHistoryButton);
+    api.onCustomEvent("interface:closed", ({ player, interfaceId }) => {
+      if (interfaceId === GE_HISTORY) historyOpen.delete(player);
+    });
   },
 };

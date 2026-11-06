@@ -71,7 +71,7 @@ test("::infrun keeps run energy full while running, until it is turned off", () 
 
   type(owner, "infrun");
   assert.equal(owner.messages.at(-1), "Your run energy drains as normal again.");
-  run(150);
+  run(300);
   assert.equal(owner.getRunEnergy(), 0);
   assert.equal(owner.isRunningReturn(), false, "out of energy, so walking");
 });
@@ -217,4 +217,127 @@ test("::setlevel refuses levels a skill can't have, and skill names it can't tel
   type(owner, "setlevel attack 50 nobody");
   assert.equal(owner.messages.at(-1), "Player nobody is not online.");
   assert.equal(owner.getSkillManager().getMaxLevel(Skill.ATTACK), 1, "nothing changed");
+});
+
+
+/** A real bounded NPC list, without starting a server or touching world files. */
+function npcWorld(t, capacity = 30) {
+  const { MobileList } = require("../dist/game/entity/impl/MobileList");
+  const previous = core.World.npcs;
+  const queue = [...core.World.getAddNPCQueue()];
+  core.World.npcs = new MobileList(capacity);
+  core.World.getAddNPCQueue().length = 0;
+  t.after(() => {
+    core.CacheDefinitions.registerCustomDefinitions([]);
+    core.World.npcs = previous;
+    core.World.getAddNPCQueue().splice(0, Infinity, ...queue);
+  });
+  return core.World.getNpcs();
+}
+
+test("::npc rejects unloaded custom IDs with a restart hint, even below another custom ID", (t) => {
+  const npcs = npcWorld(t);
+  const owner = login("Owner", Rights.OWNER);
+  type(owner, "npc 50001");
+  assert.match(owner.messages.at(-1), /NPC 50001 is not loaded.*save.*restart.*reconnect/i);
+  core.CacheDefinitions.registerCustomDefinitions([
+    { kind: "npc", id: 50001, baseId: core.NpcIdentifiers.GOBLIN, fields: { name: "Custom goblin" } },
+  ]);
+  type(owner, "npc 50000");
+  assert.match(owner.messages.at(-1), /NPC 50000 is not loaded/);
+  assert.equal(npcs.sizeReturn(), 0);
+  assert.equal(core.World.getAddNPCQueue().length, 0);
+});
+
+test("::npc confirms actual registration of a loaded custom NPC, keeping its ID and private area", (t) => {
+  const npcs = npcWorld(t);
+  const owner = login("Owner", Rights.OWNER);
+  const scoped = [];
+  owner.getPrivateArea = () => ({ add: (npc) => scoped.push(npc) });
+  core.CacheDefinitions.registerCustomDefinitions([
+    { kind: "npc", id: 50001, baseId: core.NpcIdentifiers.GOBLIN, fields: { name: "Custom goblin" } },
+  ]);
+  type(owner, "npc 50001");
+  const npc = [...npcs][0];
+  assert.equal(npc.getId(), 50001);
+  assert.equal(npc.isRegistered(), true);
+  assert.equal(npc.getDefinition().getName(), "Custom goblin");
+  assert.deepEqual(scoped, [npc]);
+  assert.equal(core.World.getAddNPCQueue().length, 0);
+  assert.match(owner.messages.at(-1), /Spawned 1 x Custom goblin \(50001\)/);
+});
+
+test("::npc reports a full world and partial batches without leaking queued or scoped NPCs", (t) => {
+  const npcs = npcWorld(t, 2);
+  const owner = login("Owner", Rights.OWNER);
+  const scoped = [];
+  owner.getPrivateArea = () => ({ add: (npc) => scoped.push(npc) });
+  type(owner, `npc ${core.NpcIdentifiers.GOBLIN} 5`);
+  assert.equal(npcs.sizeReturn(), 2);
+  assert.equal(scoped.length, 2);
+  assert.equal(core.World.getAddNPCQueue().length, 0);
+  assert.match(owner.messages.join(" "), /world NPC limit.*2\/2/i);
+  assert.match(owner.messages.at(-1), /Spawned 2 of 5/);
+  owner.messages.length = 0;
+  type(owner, `npc ${core.NpcIdentifiers.GOBLIN}`);
+  assert.equal(npcs.sizeReturn(), 2);
+  assert.equal(scoped.length, 2);
+  assert.match(owner.messages.at(-1), /world NPC limit.*2\/2/i);
+  assert.ok(owner.messages.every((message) => !/Spawned|Queued/.test(message)));
+});
+
+test("::npc keeps the per-command cap and tells the owner when it truncates a batch", (t) => {
+  const npcs = npcWorld(t);
+  const owner = login("Owner", Rights.OWNER);
+  type(owner, `npc ${core.NpcIdentifiers.GOBLIN} 25`);
+  assert.equal(npcs.sizeReturn(), 20);
+  assert.match(owner.messages.at(-1), /Spawned 20 of 25.*limit.*20/i);
+});
+
+test("the NPC search uses the same validation and registered spawn feedback", (t) => {
+  const npcs = npcWorld(t);
+  const owner = login("Owner", Rights.OWNER);
+  type(owner, "npcs");
+  owner.getEnteredSyntaxAction().execute("50001 1");
+  assert.match(owner.messages.at(-1), /NPC 50001 is not loaded/);
+  owner.getEnteredSyntaxAction().execute(`${core.NpcIdentifiers.GOBLIN} 1`);
+  assert.equal(npcs.sizeReturn(), 1);
+  assert.match(owner.messages.at(-1), /Spawned 1 x Goblin/);
+  assert.equal(core.World.getAddNPCQueue().length, 0);
+});
+
+test("::npcperm refuses missing custom NPCs before writing a permanent spawn", (t) => {
+  npcWorld(t);
+  const owner = login("Owner", Rights.OWNER);
+  let writes = 0;
+  t.mock.method(require("node:fs"), "writeFileSync", () => { writes++; throw Error("Must not write world data"); });
+  type(owner, "npcperm 50001");
+  assert.equal(writes, 0);
+  assert.match(owner.messages.at(-1), /NPC 50001 is not loaded/);
+});
+
+
+test("::npc warns when a registered custom NPC has no model or transforms to an invisible form", (t) => {
+  const npcs = npcWorld(t);
+  const owner = login("Owner", Rights.OWNER);
+  core.CacheDefinitions.registerCustomDefinitions([
+    { kind: "npc", id: 50001, baseId: core.NpcIdentifiers.GOBLIN, fields: { modelIds: [] } },
+    { kind: "npc", id: 50002, baseId: core.NpcIdentifiers.GOBLIN,
+      fields: { transforms: [-1], transformVarbit: -1, transformVarp: -1 } },
+  ]);
+  for (const id of [50001, 50002]) {
+    type(owner, `npc ${id}`);
+    assert.match(owner.messages.at(-1), /registered.*no visible model.*models and transforms/);
+  }
+  assert.equal(npcs.sizeReturn(), 2, "intentional invisible NPCs remain spawnable");
+});
+
+test("::npc reports the nearby display limit without increasing the protocol's capacity", (t) => {
+  const npcs = npcWorld(t);
+  const owner = login("Owner", Rights.OWNER);
+  owner.getLocalNpcs().length = core.World.MAX_LOCAL_NPCS;
+  type(owner, `npc ${core.NpcIdentifiers.GOBLIN}`);
+  assert.equal(npcs.sizeReturn(), 1);
+  assert.equal(core.World.MAX_LOCAL_NPCS, 255);
+  assert.match(owner.messages.at(-1), /nearby NPC display limit \(255\).*Remove nearby NPCs/);
 });

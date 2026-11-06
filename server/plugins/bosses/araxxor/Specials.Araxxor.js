@@ -25,7 +25,6 @@ const SPECIAL_ANIMATION = Object.freeze({ ball: 11476, splatter: 11478, drip: 11
 const BALL_ANIMATION = 11491;
 const BALL_BURST_ANIMATION = 11492;
 
-const WALKABLE_MASK = 0x1280100;
 
 let api = null;
 let core = null;
@@ -66,7 +65,7 @@ function getFight(npc) {
 }
 
 function isWalkable(x, y) {
-  return (core.RegionManager.getClipping(x, y, 0, null) & WALKABLE_MASK) === 0;
+  return (core.RegionManager.getClipping(x, y, 0, null) & core.RegionManager.BLOCKED_MASK) === 0;
 }
 
 /**

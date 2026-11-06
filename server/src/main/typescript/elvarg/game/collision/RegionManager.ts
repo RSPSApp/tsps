@@ -31,6 +31,12 @@ export class RegionManager {
     public static BLOCKED_TILE = 0x200000;
     public static UNLOADED_TILE = 0x1000000;
     public static OCEAN_TILE = 2097152;
+    /**
+     * The flags that fill a tile for walking, as blocked() reads them: a solid loc (0x100), a
+     * blocking floor decoration (0x40000), UNKNOWN, BLOCKED_TILE and UNLOADED_TILE. Plugins
+     * testing whether a tile can be stood on use this rather than their own copy.
+     */
+    public static BLOCKED_MASK = 0x12c0100;
 
     public static regions: Map<number, Region> = new Map<number, Region>();
     private static loadingRegions: Set<number> = new Set<number>();
@@ -539,7 +545,7 @@ export class RegionManager {
 
     // Floor decorations (0x40000) block steps just like locs and terrain, as in the route finder.
     public static blocked(pos: Location, privateArea: PrivateArea) {
-        return (RegionManager.getClipping(pos.getX(), pos.getY(), pos.getZ(), privateArea) & 0x12c0100) !== 0;
+        return (RegionManager.getClipping(pos.getX(), pos.getY(), pos.getZ(), privateArea) & RegionManager.BLOCKED_MASK) !== 0;
     }
 
     public static blockedNorth(pos: Location, privateArea: PrivateArea) {

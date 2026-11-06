@@ -8269,13 +8269,13 @@ test('Desert Treasure II vault cache has blocked Ketla clone lanes and nearby cl
   const blockedTile = area.tile(32, 46, 0);
   const clearButOccluded = area.tile(35, 46, 0);
   const replacement = area.tile(35, 44, 0);
-  assert.notEqual(RegionManager.getClipping(blockedTile.getX(), blockedTile.getY(), 0, area) & 0x1280100, 0,
+  assert.notEqual(RegionManager.getClipping(blockedTile.getX(), blockedTile.getY(), 0, area) & RegionManager.BLOCKED_MASK, 0,
     'the original southern cardinal clone tile is blocked by the copied vault floor');
-  assert.equal(RegionManager.getClipping(clearButOccluded.getX(), clearButOccluded.getY(), 0, area) & 0x1280100, 0,
+  assert.equal(RegionManager.getClipping(clearButOccluded.getX(), clearButOccluded.getY(), 0, area) & RegionManager.BLOCKED_MASK, 0,
     'the original diagonal clone tile is walkable');
   assert.equal(RegionManager.canProjectileAttackBounds(ketla, clearButOccluded, 1, 1, 1, 1, area), false,
     'the original diagonal clone tile is hidden from Ketla by the copied vault geometry');
-  assert.equal(RegionManager.getClipping(replacement.getX(), replacement.getY(), 0, area) & 0x1280100, 0);
+  assert.equal(RegionManager.getClipping(replacement.getX(), replacement.getY(), 0, area) & RegionManager.BLOCKED_MASK, 0);
   assert.equal(RegionManager.canProjectileAttackBounds(ketla, replacement, 1, 1, 1, 1, area), true,
     'the nearby replacement tile is clear and has a projectile line');
 });
@@ -8550,7 +8550,7 @@ test('Desert Treasure II final wights expose their distinct smoke, clone, vial a
     assert.equal(ordinaryNpcRoll.bypassProtectionPrayer, false, 'other NPCs do not inherit the clone prayer rule');
     assert.ok(clones.every(clone => !((clone.location.x === 8227 && clone.location.y === 1646)
       || (clone.location.x === 8224 && clone.location.y === 1646))), 'clones avoid floor-blocked or projectile-blocked cache cover points');
-    assert.ok(clones.every(clone => (core.RegionManager.getClipping(clone.location.x, clone.location.y, 0, area) & 0x1280100) === 0
+    assert.ok(clones.every(clone => (core.RegionManager.getClipping(clone.location.x, clone.location.y, 0, area) & core.RegionManager.BLOCKED_MASK) === 0
       && core.RegionManager.canProjectileAttackBounds(current.getLocation(), clone.location, 1, 1, 1, 1, area)),
     'each placed clone occupies clear floor with a projectile path from Ketla');
     ketlaCombat.start(current, p);

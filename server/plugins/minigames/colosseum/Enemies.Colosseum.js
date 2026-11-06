@@ -292,7 +292,7 @@ function offsetOf(npc) {
 
 function open(run, x, y) {
   const { RegionManager } = Shared.core();
-  return (RegionManager.getClipping(x, y, 0, run.area) & 0x1280100) === 0;
+  return (RegionManager.getClipping(x, y, 0, run.area) & RegionManager.BLOCKED_MASK) === 0;
 }
 
 /**

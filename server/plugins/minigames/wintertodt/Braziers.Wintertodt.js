@@ -35,8 +35,6 @@ const XP = { LIGHT: 6, FIX: 4, ROOT: 3, KINDLING: 3.8 };
 /** The house's location varbit; 0 means no house (Construction). */
 const VARBIT_HOUSE_LOCATION = 2187;
 const BRAZIER_IDS = [Shared.OBJECT.BRAZIER_UNLIT, Shared.OBJECT.BRAZIER_BROKEN, Shared.OBJECT.BRAZIER_LIT];
-/** Floor that can't be stood on: a blocking loc or blocked ground. */
-const BLOCKED_FLOOR = 0x100 | 0x200000;
 const BRAZIER_SIZE = 3;
 
 const approachTiles = new Map();
@@ -52,7 +50,7 @@ function approachesOf(index) {
       const sideX = x === bx - 1 || x === bx + BRAZIER_SIZE;
       const sideY = y === by - 1 || y === by + BRAZIER_SIZE;
       if (sideX === sideY) continue;
-      if ((RegionManager.getClipping(x, y, 0, null) & BLOCKED_FLOOR) === 0) tiles.push({ x, y });
+      if ((RegionManager.getClipping(x, y, 0, null) & RegionManager.BLOCKED_MASK) === 0) tiles.push({ x, y });
     }
   }
   approachTiles.set(index, tiles);

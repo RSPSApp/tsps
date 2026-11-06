@@ -29,7 +29,6 @@ const SPAWN_EXPLOSION_GFX = 1460;
 
 const SPAWN_KILLED_MESSAGE = "<col=229628>You become unfrozen as you kill the spawn.</col>";
 const FROZEN_MESSAGE = "<col=ff3045>You have been frozen!</col>";
-const WALKABLE_MASK = 0x1280100;
 
 let api = null;
 let core = null;
@@ -66,7 +65,7 @@ function getFight(npc) {
 }
 
 function isWalkable(x, y) {
-  return (core.RegionManager.getClipping(x, y, 0, null) & WALKABLE_MASK) === 0;
+  return (core.RegionManager.getClipping(x, y, 0, null) & core.RegionManager.BLOCKED_MASK) === 0;
 }
 
 function poolKey(x, y) {

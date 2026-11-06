@@ -195,7 +195,7 @@ test('dragon, crystal and noxious halberds reach Zulrah across the actual swamp 
       for (let x = spawn.x - 2; x <= spawn.x + 6; x++) {
         for (let y = spawn.y - 2; y <= spawn.y + 6; y++) {
           const distance = Math.max(0, spawn.x - x, x - (spawn.x + 4), spawn.y - y, y - (spawn.y + 4));
-          if (distance < 1 || distance > 2 || (RegionManager.getClipping(x, y, 0, null) & 0x1280100) !== 0) continue;
+          if (distance < 1 || distance > 2 || (RegionManager.getClipping(x, y, 0, null) & RegionManager.BLOCKED_MASK) !== 0) continue;
           const player = meleePlayer(id, x, y);
           assert.equal(method.attackDistance(player), 2, `${id} has halberd reach`);
           assert.equal(CombatRange.canReach(player, method, zulrah), true, `${id}, ${name}, tile ${x},${y}`);
@@ -292,7 +292,7 @@ test('the fight opens, runs a rotation, closes it and picks the next', () => {
 });
 
 test('every cloud and snakeling reaches the shrine island', () => {
-  const walkable = (x, y) => (RegionManager.getClipping(x, y, 0, null) & 0x1280100) === 0;
+  const walkable = (x, y) => (RegionManager.getClipping(x, y, 0, null) & RegionManager.BLOCKED_MASK) === 0;
   const touches = (x, y) => [-1, 0, 1].some((dx) => [-1, 0, 1].some((dy) => walkable(x + dx, y + dy)));
   const phases = [Rotations.OPENING, Rotations.CLOSING, ...Rotations.ROTATIONS.flat()];
   for (const phase of phases) {
@@ -317,7 +317,7 @@ test('Zulrah can see the island from each of its four places', () => {
     let total = 0;
     for (let x = 2262; x <= 2274; x++) {
       for (let y = 3068; y <= 3078; y++) {
-        if ((RegionManager.getClipping(x, y, 0, null) & 0x1280100) !== 0) continue;
+        if ((RegionManager.getClipping(x, y, 0, null) & RegionManager.BLOCKED_MASK) !== 0) continue;
         total++;
         const player = { getLocation: () => new Location(x, y, 0), isPlayer: () => true, getSize: () => 1, getPrivateArea: () => null };
         if (RegionManager.canProjectileAttackTarget(zulrah, player)) seen++;
@@ -411,7 +411,7 @@ test('the tail throws the player back, away from Zulrah and onto the island', ()
   player.location = new Location(2268, 3069, 0);
   const destination = fight.knockbackTile(player);
   assert.ok(destination.getY() < 3069, 'pushed south, away from Zulrah');
-  assert.ok((RegionManager.getClipping(destination.getX(), destination.getY(), 0, null) & 0x1280100) === 0, 'onto the island');
+  assert.ok((RegionManager.getClipping(destination.getX(), destination.getY(), 0, null) & RegionManager.BLOCKED_MASK) === 0, 'onto the island');
   fight.end();
 });
 

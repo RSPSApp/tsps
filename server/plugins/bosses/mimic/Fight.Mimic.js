@@ -35,8 +35,6 @@ const VOLLEY_GAP_MAX = 4;
 function drawVolleyGap() {
   return VOLLEY_GAP_MIN + Math.floor(Math.random() * (VOLLEY_GAP_MAX - VOLLEY_GAP_MIN + 1));
 }
-/** Blocked-tile flags, as Kraken's loot placement reads them. */
-const WALKABLE_MASK = 0x1280100;
 
 let methodInstance = null;
 
@@ -150,7 +148,7 @@ function pickTiles(boss, target) {
     if (!inArena(tile)) continue;
     if (tiles.some((t) => t.equals?.(tile) || (t.getX() === tile.getX() && t.getY() === tile.getY()))) continue;
     if (overlapsBoss(boss, tile)) continue;
-    if ((RegionManager.getClipping(tile.getX(), tile.getY(), z, null) & WALKABLE_MASK) !== 0) continue;
+    if ((RegionManager.getClipping(tile.getX(), tile.getY(), z, null) & RegionManager.BLOCKED_MASK) !== 0) continue;
     try {
       if (!RegionManager.canProjectileAttack(boss, boss.getLocation(), tile)) continue;
     } catch {

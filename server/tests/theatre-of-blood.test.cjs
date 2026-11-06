@@ -212,7 +212,7 @@ beforeEach(() => {
 test('every room\'s arrival tile is open floor', () => {
   for (const room of Object.values(Shared.ROOMS)) {
     const { x, y, z } = room.entrance;
-    assert.equal(RegionManager.getClipping(x, y, z) & 0x1280100, 0, `${room.key} ${x},${y},${z}`);
+    assert.equal(RegionManager.getClipping(x, y, z) & RegionManager.BLOCKED_MASK, 0, `${room.key} ${x},${y},${z}`);
     for (const jail of room.jails) assert.ok(Shared.inTheatre(Shared.loc(jail, jail.z ?? z)), `${room.key} jail ${jail.x},${jail.y}`);
   }
 });

@@ -288,3 +288,94 @@ test("from a global preset: emptying one of Dharok's brews gives a preset vial",
   assert.equal(presetOf(f, I.VIAL), 1);
   assert.equal(plainOf(f, I.VIAL), 0);
 });
+
+
+// These use the registered player, real timer repository and decoded inventory action above.
+function prepareHitpoints(f, current) {
+  const { SkillManager } = require("../dist/game/content/skill/SkillManager");
+  const hp = core.Skill.HITPOINTS;
+  const skills = f.p.getSkillManager();
+  const xp = SkillManager.getExperienceForLevel(99);
+  for (const name of SKILLS) {
+    skills.setExperience(core.Skill[name], xp);
+    assert.equal(skills.getMaxLevel(core.Skill[name]), 99);
+    assert.equal(skills.getCurrentLevel(core.Skill[name]), 99);
+    assert.equal(skills.getExperience(core.Skill[name]), xp);
+  }
+  skills.setExperience(hp, xp);
+  skills.setMaxLevel(hp, 99);
+  skills.setCurrentLevel(hp, current, false);
+  assert.equal(skills.getExperience(hp), xp);
+  assert.equal(skills.getMaxLevel(hp), 99);
+  assert.equal(f.p.getHitpoints(), current);
+  assert.equal(f.p.getTimers().has(core.TimerKey.POTION), false);
+  return xp;
+}
+
+function plainDrink(f, slot, id) {
+  assert.equal(core.CacheDefinitions.getItem(id).inventoryActions[0], "Drink");
+  assert.equal(core.ItemDefinition.forId(id).isNoted(), false);
+  const held = put(f, item(id), slot);
+  assert.equal(held.getAmount(), 1);
+  assert.equal(held.getMeta(), null);
+}
+
+async function produceOverheal(f) {
+  const xp = prepareHitpoints(f, 99);
+  plainDrink(f, 0, I.SARADOMIN_BREW_4_);
+  await browserOp(f, 0, "Drink");
+  assert.equal(f.inv.getItems()[0].getId(), I.SARADOMIN_BREW_3_);
+  assert.equal(f.p.getHitpoints(), 115);
+  assert.equal(f.p.getTimers().has(core.TimerKey.POTION), true);
+  for (let tick = 0; tick < 3; tick++) f.p.getTimers().process();
+  assert.equal(f.p.getTimers().has(core.TimerKey.POTION), false);
+  assert.equal(f.p.getHitpoints(), 115);
+  assert.equal(f.p.getSkillManager().getExperience(core.Skill.HITPOINTS), xp);
+  return xp;
+}
+
+test("an ordinary healing mix does not lower a brew's existing overheal", async t => {
+  const f = actor(t);
+  const xp = await produceOverheal(f);
+  f.p.setRunEnergy(50);
+  plainDrink(f, 1, I.ENERGY_MIX_2_);
+  assert.equal(f.inv.getItems()[1].getId(), 11453);
+  assert.equal(f.p.getRunEnergy(), 50);
+  assert.equal(f.p.getHitpoints(), 115);
+  await browserOp(f, 1, "Drink");
+  assert.equal(f.p.getHitpoints(), 115, "healing must preserve the existing overheal");
+  assert.equal(f.inv.getItems()[1].getId(), 11455);
+  assert.equal(f.inv.getItems()[1].getMeta(), null);
+  assert.equal(f.p.getRunEnergy(), 65);
+  assert.equal(f.p.getSkillManager().getExperience(core.Skill.HITPOINTS), xp);
+});
+
+for (const [start, expected] of [[90, 93], [99, 99]]) {
+  test(`ordinary healing mix from ${start} Hitpoints`, async t => {
+    const f = actor(t);
+    const xp = prepareHitpoints(f, start);
+    f.p.setRunEnergy(50);
+    plainDrink(f, 0, I.ENERGY_MIX_2_);
+    await browserOp(f, 0, "Drink");
+    assert.equal(f.p.getHitpoints(), expected);
+    assert.equal(f.inv.getItems()[0].getId(), 11455);
+    assert.equal(f.p.getRunEnergy(), 65);
+    assert.equal(f.p.getSkillManager().getExperience(core.Skill.HITPOINTS), xp);
+  });
+}
+
+test("ordinary food preserves a brew's existing overheal", async t => {
+  const f = actor(t);
+  const xp = await produceOverheal(f);
+  const shark = I.SHARK;
+  assert.equal(core.CacheDefinitions.getItem(shark).inventoryActions[0], "Eat");
+  assert.equal(core.ItemDefinition.forId(shark).isNoted(), false);
+  put(f, item(shark), 1);
+  assert.equal(f.inv.getItems()[1].getMeta(), null);
+  assert.equal(f.p.getTimers().has(core.TimerKey.FOOD), false);
+  assert.equal(f.p.getHitpoints(), 115);
+  await browserOp(f, 1, "Eat");
+  assert.equal(f.p.getHitpoints(), 115);
+  assert.notEqual(f.inv.getItems()[1]?.getId(), shark);
+  assert.equal(f.p.getSkillManager().getExperience(core.Skill.HITPOINTS), xp);
+});

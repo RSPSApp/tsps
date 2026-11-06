@@ -108,7 +108,7 @@ function setCurrentLevel(player, skill, level) {
 function heal(player, amount, extraCap = 0) {
   const current = getCurrentLevel(player, Skill.HITPOINTS);
   const baseMax = getMaxLevel(player, Skill.HITPOINTS);
-  const max = baseMax + Math.max(0, extraCap);
+  const max = Math.max(current, baseMax + Math.max(0, extraCap));
   player.setHitpoints(clamp(current + amount, 0, max));
 }
 

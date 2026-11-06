@@ -2533,7 +2533,7 @@
       "requires": [
         {
           "method":"grapple",
-          "skills": {"agility":8,"strength":8,"ranged":19},
+          "skills": {"agility":8,"strength":19,"ranged":37},
           "equipped": [
             {"slot":"weapon","name":"crossbow","message":"You need a crossbow equipped to do that."},
             {"slot":"ammunition","ids":[9419],"message":"You need a mithril grapple tipped bolt with a rope to do that."}

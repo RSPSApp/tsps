@@ -38,6 +38,8 @@ function buildSpecial(api) {
       }
       skillManager.setCurrentLevels(skill, currentLevel - amount);
       remainingDrain -= amount;
+      // Spill only after the current stat actually reaches zero (an encounter may have a floor).
+      if (!target.isPlayer() && remainingDrain > 0 && skillManager.getCurrentLevel(skill) > 0) break;
     }
   }
 

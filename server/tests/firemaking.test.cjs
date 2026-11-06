@@ -511,3 +511,65 @@ test("bow firemaking stays members-only while ordinary firemaking works on free 
   h.light();
   assert.equal(h.xp(), 40);
 });
+
+// Private source-only candidate: accepted native phase seam from jewellery/smithing discovery.
+test("native manual walk cancels lighting before the roll while automatic success step still commits", async t => {
+  process.env.DISABLE_PLAYER_BOTS = "1";
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const { PlayerSession } = require("../dist/net/PlayerSession");
+  const { ClientConnection } = require("../dist/net/NetworkBuilder");
+  PluginManager.loadFromDirectory(path.resolve(__dirname, "../plugins"));
+  core.RegionManager.init(); core.RegionManager.loadMapFiles(3226,3218);
+  PluginManager.emitServerStartup({});
+  t.after(() => PluginManager.emitServerShutdown({}));
+  const Firemaking = require("../plugins/skills/Firemaking.plugin");
+  const I=core.ItemIdentifiers, fireId=core.ObjectIdentifiers.FIRE_23;
+  let index=1840;
+  for (const mode of ["normal-auto-step", "manual-before-roll"]) await t.test(mode, async t => {
+    const channel={kind:"test",remoteAddress:"127.0.0.1",isOpen:()=>true,send:()=>true,close(){},onData(){},onError(){},onClose(){}};
+    const p=new Player(new PlayerSession(channel));p.setIndex(index++);p.setUsername("firewalk"+index);p.setRegistered(true);
+    p.setLocation(new core.Location(3226,3218,0));p.needsPlacement=false;
+    p.getSkillManager().setCurrentLevel(core.Skill.FIREMAKING,99,false);
+    const c=new ClientConnection(channel);c.player=p;
+    const anchor=p.getLocation().clone(), gains=[], rows=[], animations=[];
+    const ownedGround=()=>core.World.getItems().filter(g=>!g.isPendingRemoval()&&g.getOwner()===p.getUsername()&&g.getPrivateArea()===p.getPrivateArea());
+    const total=id=>p.getInventory().getAmount(id)+ownedGround().filter(g=>g.getItem().getId()===id).reduce((n,g)=>n+g.getItem().getAmount(),0);
+    const fires=()=>core.ObjectManager.objectsAt(anchor).filter(o=>o.getId()===fireId&&o.getPrivateArea()===p.getPrivateArea());
+    t.after(()=>{
+      PluginManager.emitPlayerDisconnect({player:p,username:p.getUsername()});
+      PluginManager.emitPlayerLogout({player:p,username:p.getUsername()});
+      p.setRegistered(false);core.TaskManager.cancelTasks(p.getIndex());core.TaskManager.cancelTasks(p);
+      for(const g of ownedGround())core.ItemOnGroundManager.deregister(g);
+      for(const o of fires())core.ObjectManager.deregister(o,true);
+    });
+    for(const id of [I.LOGS,I.TINDERBOX])p.getInventory().add(new core.Item(id,1),false);
+    const skills=p.getSkillManager(),add=skills.addExperiences.bind(skills);
+    t.mock.method(skills,"addExperiences",(skill,xp)=>{if(skill===core.Skill.FIREMAKING)gains.push(xp);return add(skill,xp);});
+    const animate=p.performAnimation.bind(p);
+    t.mock.method(p,"performAnimation",animation=>{const result=animate(animation);animations.push({id:animation?.getId(),accepted:p.getAnimation()===animation});return result;});
+    let turns=0;
+    const snapshot=label=>{const q=p.getMovementQueue();const row={mode,label,turns,epoch:core.World.getProcessCycle(),position:[p.getLocation().getX(),p.getLocation().getY()],queue:q.size(),didMove:q.didMoveThisCycle(),stall:p.getCombat().getAnimationStallTicks(),active:Firemaking.isFiremakingActive(p),inventoryLogs:p.getInventory().getAmount(I.LOGS),allLogs:total(I.LOGS),tinderbox:total(I.TINDERBOX),fires:fires().length,gains:[...gains]};rows.push(row);console.log("FIREMAKING_WALK_PRECONDITION "+JSON.stringify(row));return row;};
+    const turn=()=>{assert.ok(++turns<=16,"bounded phase budget");p.resetUpdating();core.World.processCycle=(core.World.processCycle+1)&0x7fffffff;core.TaskManager.process();c.processTurnPackets();const q=p.getMovementQueue();q.beginCycle();q.processEntityPursuit();if(q.hasPendingWork())q.process();core.TaskManager.processWalkTo(p.getIndex());};
+    assert.equal(fires().length,0);assert.equal(total(I.LOGS),1);
+    await c.dispatch([{type:"inventory_use_on",itemId:I.TINDERBOX,slot:p.getInventory().getSlotForItemId(I.TINDERBOX),target:{kind:"inventory",id:I.LOGS,slot:p.getInventory().getSlotForItemId(I.LOGS)}}]);
+    turn();snapshot("accepted-attempt");
+    assert.equal(Firemaking.isFiremakingActive(p),true,"native item combination admitted lighting");
+    assert.ok(animations.some(a=>a.id===733&&a.accepted),"actual opening animation accepted");
+    assert.equal(p.getInventory().getAmount(I.LOGS),0);assert.equal(total(I.LOGS),1,"owned ground intermediate");
+    assert.equal(fires().length,0);assert.deepEqual(gains,[]);assert.equal(p.getCombat().isAnimationStalled(),false);
+    if(mode==="manual-before-roll") {
+      await c.dispatch([{type:"move",worldX:3225,worldY:3217,modifierFlags:0,run:false}]);
+      turn();snapshot("manual-step-drained-before-roll");
+      assert.deepEqual([p.getLocation().getX(),p.getLocation().getY()],[3225,3217]);
+      assert.equal(p.getMovementQueue().size(),0);assert.equal(p.getMovementQueue().didMoveThisCycle(),true);
+      assert.equal(fires().length,0);assert.deepEqual(gains,[]);assert.equal(total(I.LOGS),1);
+    }
+    for(let n=0;n<6;n++)turn();
+    const end=snapshot("completion-window");console.log("FIREMAKING_WALK_OBSERVATION "+JSON.stringify({rows,animations}));
+    const cancelled=mode==="manual-before-roll";
+    assert.deepEqual(gains,cancelled?[]:[40],"pending firemaking XP after manual walk: "+JSON.stringify(end));
+    assert.equal(total(I.LOGS),cancelled?1:0);assert.equal(total(I.TINDERBOX),1);assert.equal(fires().length,cancelled?0:1);
+    assert.equal(Firemaking.isFiremakingActive(p),false);
+    if(!cancelled)assert.equal(p.getLocation().equals(anchor),false,"genuine automatic step must remain a successful control");
+  });
+});

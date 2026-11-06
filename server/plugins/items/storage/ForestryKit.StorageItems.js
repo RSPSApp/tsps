@@ -16,7 +16,7 @@
  * taken to follow the same scheme (not captured).
  *
  * Not done: the clothes and cape pouches (the Lumberjack and Forestry outfits and the
- * Woodcutting cape the cache also lists need one installed), and the rations' run energy.
+ * Woodcutting cape the cache also lists need one installed), and the rations' run-energy effect with felling axes.
  */
 const Storage = require("./Common.StorageItems");
 

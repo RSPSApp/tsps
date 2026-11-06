@@ -28,9 +28,41 @@ export function IdleHudOverlay() {
     const [state, setState] = useState<IdleState | null>(getIdleState());
     useEffect(() => subscribeIdleState(setState), []);
 
-    // Nothing to say until the server has pushed a state, and nothing to show when idle is off:
-    // the HUD is for watching work happen, and there is no work.
-    if (!state?.idle) return null;
+    // Nothing to say until the server has pushed a state at all.
+    if (!state) return null;
+
+    // Idle off: no work to report, but there still has to be a way back in. Hiding the strip
+    // entirely left the command and the journal button as the only doors, which is the problem
+    // the strip exists to solve.
+    if (!state.idle) {
+        return (
+            <div className="idle-hud idle-hud--off">
+                <span className="idle-hud__edge" aria-hidden="true" />
+                <button
+                    type="button"
+                    className="idle-hud__body"
+                    onClick={() => sendChat("::idle", "public", 0)}
+                    title="Abrir a tela do Idle"
+                >
+                    <span className="idle-hud__line">
+                        <span className="idle-hud__activity">Idle Mode desligado</span>
+                    </span>
+                    <span className="idle-hud__line idle-hud__line--small">
+                        <span>abrir a tela do Idle</span>
+                    </span>
+                </button>
+                <button
+                    type="button"
+                    className="idle-hud__start"
+                    onClick={() => sendChat("::idle on", "public", 0)}
+                    title="Ligar o Idle Mode"
+                    aria-label="Ligar o Idle Mode"
+                >
+                    <span aria-hidden="true">▶</span>
+                </button>
+            </div>
+        );
+    }
 
     const stopped = state.paused !== null || !state.auto;
     const note = state.paused ? PAUSED[state.paused] ?? "parado" : !state.auto ? "retomada automática desligada" : null;

@@ -143,3 +143,38 @@
         transition: none;
     }
 }
+
+/* Idle off: the strip stays, dimmed, because it is the way back in. */
+.idle-hud--off {
+    min-width: 0;
+    opacity: 0.88;
+}
+
+.idle-hud--off .idle-hud__edge {
+    background: #5e5747;
+}
+
+.idle-hud--off .idle-hud__activity {
+    color: #cfc6b4;
+}
+
+.idle-hud__start {
+    flex: none;
+    width: 30px;
+    font: 700 11px/1 ui-sans-serif, system-ui, sans-serif;
+    color: #bfe3a8;
+    background: #1f3318;
+    border: 0;
+    border-left: 2px solid #120e0b;
+    cursor: pointer;
+}
+
+.idle-hud__start:hover {
+    color: #fff;
+    background: #2d4a22;
+}
+
+.idle-hud__start:focus-visible {
+    outline: 2px solid #ffb02e;
+    outline-offset: -2px;
+}

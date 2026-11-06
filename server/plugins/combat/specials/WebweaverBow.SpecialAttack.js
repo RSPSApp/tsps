@@ -6,7 +6,6 @@ module.exports = function registerWebweaverBowSpecialAttack(api) {
   const SPECIAL_ANIMATION = new Animation(9964);
   const SPECIAL_VFX = new Graphic(2354);
   const IMPACT_GRAPHIC = new Graphic(2355);
-  const HIT_COUNT = 4;
   const POISON_POTENCY = 4;
 
   class WebweaverBowCombatMethod extends RangedCombatMethod {
@@ -51,11 +50,9 @@ module.exports = function registerWebweaverBowSpecialAttack(api) {
     drainAmount: DRAIN,
     strengthMultiplier: 1,
     accuracyMultiplier: 1,
-    // TODO: the Wilderness PvM passive (1.5x accuracy and damage) is target-tile
-    // dependent and cannot be varied by static core traits; only the base Swarm
-    // multipliers are registered.
+    // The target-dependent Wilderness passive is supplied by WebweaverBow.plugin.js.
     traits: {
-      hitCount: HIT_COUNT,
+      hitCount: 1,
       accuracyMultiplier: 2,
       accuracyMultiplierStages: [2],
       damageMultiplier: 0.4,

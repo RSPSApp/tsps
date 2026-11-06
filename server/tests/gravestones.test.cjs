@@ -85,6 +85,36 @@ function death(player, items, { killer = null, x = 3222, y = 3218 } = {}) {
 
 const graveOf = (player) => player.getAttribute("gravestones:grave");
 
+test("a charged Webweaver lost in PvM keeps its ether metadata through the normal grave and Office", (t) => {
+  const Bow = require("../plugins/items/WebweaverBow.plugin");
+  Bow.register({
+    core, emitCustomEvent() {}, onItemOnItem() {}, onItemAction() {},
+    registerRangedAmmoHandler() {}, registerRangedCombatModifier() {}, onPlayerDeathItemDrop() {},
+  });
+  const { PlayerDeathTask } = require("../dist/game/task/impl/PlayerDeath");
+  t.mock.method(PluginManager, "emitPlayerDeathItemDrop", (event) => { Bow._test.deathItemDrop(event); return false; });
+  t.mock.method(PluginManager, "emitPlayerDeathDrops", (event) => hooks.onPlayerDeathDrops(event));
+  t.mock.method(core.ItemOnGroundManager, "registerLocation", () => assert.fail("ether must not also drop on the floor"));
+  const player = account("webweaver-grave");
+  player.setLocation(new core.Location(3090, 3600, 0));
+  player.setSkullTimer(100);
+  const bow = new core.Item(core.ItemIdentifiers.WEBWEAVER_BOW, 1, { [Bow._test.CHARGES_META]: 50 });
+  player.getInventory().addItem(bow);
+  assert.deepEqual(PlayerDeathTask.dropItems(player, null, player.getLocation()), []);
+  const held = graveOf(player);
+  assert.equal(held.items.length, 1);
+  assert.equal(held.items[0].id, bow.getId());
+  assert.equal(held.items[0].meta[Bow._test.CHARGES_META], 50);
+  player.setAttribute("gravestones:grave", JSON.parse(JSON.stringify(held)));
+  custom["gravestones:expire"]({ player });
+  const query = { player };
+  custom["gravestones:state"](query);
+  assert.equal(query.office.length, 1);
+  assert.equal(query.office[0].id, bow.getId());
+  assert.equal(query.office[0].meta[Bow._test.CHARGES_META], 50);
+  assert.equal(query.grave, null);
+});
+
 test('an encounter grave discount survives persistence and does not discount the Office', t => {
   const Grave = require('../plugins/world/gravestones/Grave.Gravestones');
   const player = account('discounted');

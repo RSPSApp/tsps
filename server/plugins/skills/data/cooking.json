@@ -1,5 +1,6 @@
 {
   "cookables": [
+    {"raw":"seaweed","cooked":"soda_ash","burnt":"soda_ash","level":1,"xp":0,"stopBurn":1,"name":"seaweed","article":"some"},
     {"raw":"raw_beef","cooked":"cooked_meat","burnt":"burnt_meat","level":1,"xp":30,"lumbridgeStopBurn":31,"stopBurn":34,"name":"meat","message":"You cook a piece of meat."},
     {"raw":"raw_rat_meat","cooked":"cooked_meat","burnt":"burnt_meat","level":1,"xp":30,"lumbridgeStopBurn":31,"stopBurn":34,"name":"meat","message":"You cook a piece of meat."},
     {"raw":"raw_chicken","cooked":"cooked_chicken","burnt":"burnt_chicken","level":1,"xp":30,"lumbridgeStopBurn":31,"stopBurn":34,"name":"chicken"},

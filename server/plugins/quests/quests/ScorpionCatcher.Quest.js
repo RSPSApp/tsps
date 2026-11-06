@@ -55,6 +55,7 @@ module.exports = function registerScorpionCatcherQuest(api) {
 
   /** Cache interface "thormac": "What would you like to enchant?". */
   const ENCHANT_INTERFACE = 332;
+  const MAIN_MODAL_TARGET_UID = (161 << 16) | 16;
   /** The transcript's target name for that interface. */
   const ENCHANT_TARGET = "Thormac's battlestaff enchanting";
   /** OSRS Wiki (Battlestaff): 40,000 coins; 30,000/20,000 with the Hard/Elite Kandarin diaries. */
@@ -281,7 +282,13 @@ module.exports = function registerScorpionCatcherQuest(api) {
     // an interface opened now. Open Thormac's screen once that close has finished.
     later(player, 1, () => {
       if (!enchanting.has(player) || !quest.isComplete(player)) return;
-      player.getPacketSender().sendInterface(ENCHANT_INTERFACE);
+      const sender = player.getPacketSender();
+      // A newer main interface takes priority over this deferred optional service.
+      if (sender.getSubInterfaceAt(MAIN_MODAL_TARGET_UID)) {
+        enchanting.delete(player);
+        return;
+      }
+      sender.sendInterface(ENCHANT_INTERFACE);
     });
   }
 

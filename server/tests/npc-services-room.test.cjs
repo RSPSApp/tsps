@@ -291,3 +291,102 @@ test("Mawnis: too few coins is no sale, and the transcript doesn't say he handed
   await buyHelm(t, f, HELM_PRICE - 1, { questDone: false });
   assertRefused(f, HELM_PRICE - 1, NO_COINS);
 });
+
+
+test('deferred Thormac enchanting preserves a newer native main shop', async t => {
+  const {ShopDefinitionLoader} = require('../dist/game/definition/loader/impl/ShopDefinitionLoader');
+  assert.equal(new ShopDefinitionLoader().load(), true); core.ShopManager.initialize();
+  const quest = QuestRuntime.getRegisteredQuests().find(q => q.key === 'scorpion_catcher'); assert.ok(quest);
+  const ENCHANT = core.CacheDefinitions.getInterfaceId('thormac'); assert.equal(ENCHANT, 332);
+  const terminalText = "Yes, it'll cost you [20,000 / 30,000 / 40,000] coins for the materials needed though. Which sort of staff did you want enchanting?";
+  for (const mode of ['stationary enchant and close', 'direct shop', 'logout before deferred open', 'newer shop']) await t.test(mode, async child => {
+    const f = actor(child), p = f.p, inv = f.inv;
+    quest.setStage(p, quest.completionValue); assert.equal(quest.isComplete(p), true);
+    assert.equal(p.getPacketSender().getVarp(76), 6, 'canonical saved completed quest, not natural quest completion here');
+    PM.emitPlayerLogin({player:p, username:p.getUsername()}); p.closeInterruptibleInterfaces();
+    const kandarin = {player:p, diary:'kandarin', tier:'hard', complete:null}; PM.emitCustomEvent('diary:is-complete', kandarin);
+    assert.equal(kandarin.complete, false, 'ordinary fee control has no Kandarin discount');
+    inv.add(plain(I.COINS, 80000), false); inv.add(plain(I.AIR_BATTLESTAFF), false); inv.add(plain(I.AIR_BATTLESTAFF), false);
+    const npc = core.NPC.create(core.NpcIdentifiers.THORMAC, new core.Location(HOME[0] + 1, HOME[1], 0));
+    const shopNpc = core.NPC.create(core.NpcIdentifiers.LOWE, new core.Location(HOME[0], HOME[1] + 1, 0));
+    for (const n of [npc, shopNpc]) assert.equal(core.World.getNpcs().add(n), true);
+    assert.equal(npc.getCurrentDefinition(p).getName(), 'Thormac'); assert.equal(shopNpc.getCurrentDefinition(p).getName(), 'Lowe');
+    child.after(() => {
+      p.closeInterruptibleInterfaces(); PM.emitPlayerDisconnect({player:p, username:p.getUsername()});
+      core.TaskManager.cancelTasks(p); for (const n of [npc, shopNpc]) core.World.getNpcs().remove(n);
+      for (const g of core.World.getItems().filter(g => g.getOwner() === p.getUsername())) core.ItemOnGroundManager.deregister(g);
+    });
+    const stores = id => ({inventory:inv.getAmount(id), equipment:p.getEquipment().getAmount(id),
+      bank:p.getBanks().reduce((n,b,tab) => n + (b && tab !== core.Bank.BANK_SEARCH_TAB_INDEX ? b.getAmount(id) : 0), 0),
+      floor:core.World.getItems().filter(g => !g.isPendingRemoval() && g.getOwner() === p.getUsername()
+        && g.getPrivateArea() === p.getPrivateArea() && g.getItem().getId() === id).reduce((n,g) => n + g.getItem().getAmount(), 0)});
+    const owned = id => Object.values(stores(id)).reduce((n,a) => n + a, 0);
+    const resources = () => ({coins:stores(I.COINS), staff:stores(I.AIR_BATTLESTAFF), mystic:stores(I.MYSTIC_AIR_STAFF),
+      experience:core.Skill.values().map(skill => p.getSkillManager().getExperience(skill))});
+    const initial = resources(), sender = p.getPacketSender(), manager = p.getDialogueManager();
+    const unchanged = () => assert.deepEqual(resources(), initial, 'opening/replacing services takes no fee, item or XP');
+    let turns = 0;
+    const turn = () => {
+      assert.ok(++turns <= 28, 'bounded native task/input/movement phase budget'); p.resetUpdating();
+      core.World.processCycle = (core.World.processCycle + 1) & 0x7fffffff; core.TaskManager.process();
+      f.c.processTurnPackets(); const q = p.getMovementQueue(); q.beginCycle(); q.processEntityPursuit();
+      if (q.hasPendingWork()) q.process(); core.TaskManager.processWalkTo(p.getIndex());
+    };
+    const input = async (...packets) => { await f.c.dispatch(packets); turn(); };
+    const op = (n, label) => { const clickType = n.getCurrentDefinition(p).getActions().indexOf(label) + 1;
+      assert.ok(clickType > 0, label); return {type:'npc_option', index:n.getIndex(), clickType}; };
+    const line = () => {
+      const current = manager.getCurrent(), group = sender.getChatboxGroupId();
+      assert.ok(current instanceof core.NpcDialogue || current instanceof core.PlayerDialogue);
+      assert.ok(group === 231 || group === 217); const mount = sender.subInterfaceTargets.get(group);
+      assert.ok(mount); assert.equal(sender.getSubInterfaceAt(mount.targetUid), mount);
+      assert.equal(manager.getOwner(), undefined); return {current, group};
+    };
+    const resume = () => ({type:'dialogue_continue', widgetId:(line().group << 16) | 5, childIndex:-1});
+    const shopMount = () => {
+      assert.equal(p.getInterfaceId(), 300); assert.equal(core.ShopManager.getOpenShop(p)?.name, "Lowe's Archery Emporium");
+      const mount = sender.subInterfaceTargets.get(300); assert.ok(mount);
+      assert.equal(sender.getSubInterfaceAt((161 << 16) | 16), mount); return mount;
+    };
+    if (mode === 'direct shop') { await input(op(shopNpc, 'Trade')); const mount = shopMount(); unchanged(); turn();
+      assert.equal(sender.getSubInterfaceAt(mount.targetUid), mount); unchanged(); return; }
+    await input(op(npc, 'Talk-to'));
+    for (let n = 0; n < 5 && !core.MultiChatboxPrompt.getPending(p); n++) await input(resume());
+    const prompt = core.MultiChatboxPrompt.getPending(p); assert.ok(prompt); assert.equal(manager.isActive(), false);
+    const choice = prompt.options.indexOf("You said you'd enchant my battlestaff for me.") + 1; assert.ok(choice > 0);
+    await input({type:'dialogue_continue', widgetId:core.MultiChatboxPrompt.OPTIONS_WIDGET_ID, childIndex:choice});
+    for (let n = 0; n < 4 && !/Which sort of staff did you want enchanting\?/.test((manager.getCurrent()?.getText?.() ?? '').replace(/\s+/g, ' ').trim()); n++) await input(resume());
+    const terminal = line(); assert.ok(terminal.current instanceof core.NpcDialogue); assert.equal(terminal.group, 231);
+    assert.equal(terminal.current.getText().replace(/\s+/g, ' ').trim(), terminalText);
+    assert.equal(p.getInterfaceId(), -1); assert.equal(sender.isSubInterfaceOpen(ENCHANT), false); unchanged();
+    const queued = [], submit = core.TaskManager.submit.bind(core.TaskManager);
+    child.mock.method(core.TaskManager, 'submit', task => {
+      if (task.constructor === core.CountdownTask && task.key === p && task.getDelay() === 1) queued.push(task);
+      return submit(task);
+    });
+    // The real input queue drains both actions before the next global task phase.
+    await input(resume(), ...(mode === 'newer shop' ? [op(shopNpc, 'Trade')] : []));
+    assert.equal(queued.length, 1, 'yTpo85 produces one real player-object CountdownTask');
+    assert.equal(queued[0].key, p); assert.equal(queued[0].isImmediate(), false); assert.equal(queued[0].isRunning(), true);
+    assert.equal(sender.isSubInterfaceOpen(ENCHANT), false, 'the deferred open has not run'); unchanged();
+    if (mode === 'logout before deferred open') {
+      // Invoke the real production logout lifecycle, not a fabricated cancelTasks call or false flag.
+      // Its caller's full World removal/socket handshake is outside this selected-phase fixture.
+      p.onLogout(); assert.equal(queued[0].isStopped(), true, 'canonical logout cancels the exact raw-player-key task');
+      turn(); assert.equal(sender.isSubInterfaceOpen(ENCHANT), false); assert.equal(manager.isActive(), false); unchanged(); return;
+    }
+    if (mode === 'newer shop') {
+      const newer = shopMount(); assert.equal(queued[0].isRunning(), true, 'new NPC input did not cancel the raw-player-key request');
+      turn(); const details = JSON.stringify({interface:p.getInterfaceId(), enchantMounted:sender.isSubInterfaceOpen(ENCHANT), resources:resources()});
+      // First target: an old optional service cannot replace the exact newer main-modal lifetime.
+      assert.equal(sender.getSubInterfaceAt(newer.targetUid), newer, 'newer shop mount must survive: ' + details);
+      assert.equal(p.getInterfaceId(), 300); assert.equal(sender.isSubInterfaceOpen(ENCHANT), false); unchanged(); return;
+    }
+    turn(); assert.equal(p.getInterfaceId(), ENCHANT); assert.equal(sender.isSubInterfaceOpen(ENCHANT), true); unchanged();
+    const enchant = {type:'widget_action', widgetId:(ENCHANT << 16) | 4, groupId:ENCHANT, childId:4, buttonNum:1, opId:1, slot:-1, itemId:-1};
+    await input(enchant); assert.equal(owned(I.COINS), 40000); assert.equal(owned(I.AIR_BATTLESTAFF), 1); assert.equal(owned(I.MYSTIC_AIR_STAFF), 1);
+    assert.deepEqual(resources().experience, initial.experience);
+    await input({type:'interface_close'}); assert.equal(p.getInterfaceId(), -1); assert.equal(sender.isSubInterfaceOpen(ENCHANT), false);
+    const closed = resources(); await input(enchant); assert.deepEqual(resources(), closed, 'only closing332 ends the admitted service; stale clicks cannot bill another staff');
+  });
+});

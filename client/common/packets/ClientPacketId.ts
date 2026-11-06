@@ -17,6 +17,12 @@ export const enum ClientPacketId {
     PLUGIN_MESSAGE = 205,
     /** Forget a remembered login: username + token. Sent on its own socket from the login screen. */
     LOGIN_FORGET = 207,
+    /** Pick which character to play: name. */
+    CHARACTER_SELECT = 206,
+    /** Create a character: name. */
+    CHARACTER_CREATE = 208,
+    /** Delete a character: name + the name typed to confirm. */
+    CHARACTER_DELETE = 209,
 
     // ========================================
     // MOVEMENT (210-219)
@@ -98,6 +104,9 @@ export const CLIENT_PACKET_LENGTHS: Record<ClientPacketId, number> = {
     [ClientPacketId.PLUGIN_MESSAGE]: -2,
     [ClientPacketId.LOGIN]: -2, // username + password (variable)
     [ClientPacketId.LOGIN_FORGET]: -1, // username + token (variable)
+    [ClientPacketId.CHARACTER_SELECT]: -1, // name (variable)
+    [ClientPacketId.CHARACTER_CREATE]: -1, // name (variable)
+    [ClientPacketId.CHARACTER_DELETE]: -1, // name + confirmName (variable)
 
     [ClientPacketId.WALK]: 5, // x(2) + y(2) + flags(1)
     [ClientPacketId.FACE]: -1,

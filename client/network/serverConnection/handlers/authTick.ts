@@ -44,6 +44,26 @@ export function handleAuthTickMessage(msg: any): boolean {
         }
         return true;
     }
+    if (msg.type === "character_list") {
+        for (const cb of state.characterListListeners) {
+            try {
+                cb(msg.payload);
+            } catch (e) {
+                console.warn("[ws] character list listener error:", e);
+            }
+        }
+        return true;
+    }
+    if (msg.type === "character_result") {
+        for (const cb of state.characterResultListeners) {
+            try {
+                cb(msg.payload);
+            } catch (e) {
+                console.warn("[ws] character result listener error:", e);
+            }
+        }
+        return true;
+    }
     if (msg.type === "logout_response") {
         console.log(`[ws] logout_response success=${msg.payload.success}`);
         for (const cb of state.logoutResponseListeners) {

@@ -1,3 +1,4 @@
+import type { CharacterListPayload } from "../packet/ServerBinaryDecoder";
 import type { ClanState } from "../../common/social/Clans";
 import { PlayerSyncContext } from "../../game/sync/PlayerSyncContext";
 import { PlayerUpdateDecoder } from "../../game/sync/PlayerUpdateDecoder";
@@ -83,6 +84,8 @@ export const state = {
     sessionRevision: 0,
     /** LOGIN_FLAG_* for the session's credentials (a token after "Stay logged in"). */
     sessionLoginFlags: 0,
+    /** The character picked on the select screen; the re-login after a drop selects it again. */
+    sessionCharacter: null as string | null,
     currentTick: 0,
     serverTickMs: 600,
     serverClockOffsetMs: 0,
@@ -161,6 +164,8 @@ export const state = {
     loginResponseListeners: new Set<
         (info: { success: boolean; error?: string; displayName?: string; loginToken?: string }) => void
     >(),
+    characterListListeners: new Set<(payload: CharacterListPayload) => void>(),
+    characterResultListeners: new Set<(payload: { ok: boolean; code: number; message: string }) => void>(),
     logoutResponseListeners: new Set<(info: { success: boolean; reason?: string }) => void>(),
     handshakeListeners: new Set<
         (info: {

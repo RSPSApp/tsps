@@ -23,5 +23,7 @@ export const KEEPALIVE_INTERVAL_MS = 5000;
 export const LOGIN_FLAG_REMEMBER = 1;
 /** LOGIN packet flags: the password field holds that token. */
 export const LOGIN_FLAG_TOKEN = 2;
+/** LOGIN packet flags: send the character list after login instead of entering the game. */
+export const LOGIN_FLAG_CHARACTER_SELECT = 4;
 export const RECONNECT_DELAY_MAX_MS = 1000;
 export const RECONNECT_MAX_ATTEMPTS = 1;

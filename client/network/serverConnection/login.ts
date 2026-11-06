@@ -6,6 +6,7 @@ import { state } from "./state";
 import type { GameSocket } from "./connection/GameSocket";
 import { resolveServerTransport } from "./outgoing/connectionInfo";
 import { encodeClientMessage } from "../packet/ClientBinaryEncoder";
+import type { CharacterListPayload } from "../packet/ServerBinaryDecoder";
 
 export function setAutoSendHandshake(auto: boolean): void {
     state.autoSendHandshake = auto;
@@ -22,6 +23,31 @@ export function subscribeLoginResponse(
 ): () => void {
     state.loginResponseListeners.add(cb);
     return () => state.loginResponseListeners.delete(cb);
+}
+
+export function subscribeCharacterList(cb: (p: CharacterListPayload) => void): () => void {
+    state.characterListListeners.add(cb);
+    return () => state.characterListListeners.delete(cb);
+}
+
+export function subscribeCharacterResult(
+    cb: (p: { ok: boolean; code: number; message: string }) => void,
+): () => void {
+    state.characterResultListeners.add(cb);
+    return () => state.characterResultListeners.delete(cb);
+}
+
+export function sendCharacterSelect(name: string): void {
+    state.sessionCharacter = name;
+    send({ type: "character_select", payload: { name } });
+}
+
+export function sendCharacterCreate(name: string): void {
+    send({ type: "character_create", payload: { name } });
+}
+
+export function sendCharacterDelete(name: string, confirmName: string): void {
+    send({ type: "character_delete", payload: { name, confirmName } });
 }
 
 /**

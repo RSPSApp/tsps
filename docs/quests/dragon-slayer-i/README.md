@@ -75,6 +75,27 @@ Community-reported completion accepted for scheduling (skip full manual replay).
   - After the player climbs back out she stands down and watches from the lair's west edge.
   - The head cut walks the player to the tile west of her head, facing it, with sounds 3744/3745 and the
     silence track.
+- **From the user's RuneLite test (second pass):**
+  - **Doors:** the Champions' Guild door (ticks 969-973) and Melzar's front, colour and exit doors (ticks
+    2070-2688) are pass-through doors. Open puts the invisible blocker on the doorway and the door's open
+    leaf beside it (sound 46 for the guild, 62 for the maze); the player walks across and the door shuts two
+    ticks later. Before this, the guild door swung and stayed open, and the maze slid the player through a
+    closed door. A maze key is spent as its door opens. A door without its key says "This door is securely
+    locked." The Guildmaster greets players as they come in (tick 971).
+  - **The Guildmaster's follow-up menus** after each answer are the captured ones (ticks 1141-1756), through
+    an `options` hook on NpcDialogues' menu notice. Before this, the player was stuck in the three map-piece
+    questions.
+  - **Study on the map pieces** shows the piece's transcript line in an item box (ticks 2942-2948).
+  - **The Lady Lumbridge's ladder** goes down into the hold (3048,9640,1; tick 2917), where the hole is and
+    where Quest Helper's repair step looks. It used to go to the dock under the ship.
+  - **Elvarg's fire** lands on the player: the captured heights were passed unscaled, and the projectile
+    encoder multiplies heights by 4.
+  - **Quest Helper in the maze:** its `melzarsMaze` zone covers plane 0 only. On the upper floors it shows
+    the Melzar steps only once the player holds the other two map pieces and has asked all five questions.
+    This is Quest Helper's own logic, and the same on live. The landing after the rat-room ladder matches
+    the capture (2927,3256,1).
+  - **"Can I have a quest?" ending the first time:** not reproduced through the agent MCP on a fresh account
+    with 32 Quest Points (the level warning, then the start menu).
 - **Live check** (own MCP port 39821; Windows holds 49821 under WSL2; checkpoint accounts set with `::quest`
   and `::tele`, not a fresh run):
   - The rocks at 1 Agility show the item box once, and at 84 climb both ways.

@@ -171,3 +171,117 @@ test("3b. Gianne jnr.'s Captain Dalbur: delivery step (2547) is not answered by 
   assert.notEqual(askCondition(f, 2547, 'Captain Dalbur:'), false, 'not forced to false by our handler');
   assert.equal(askCondition(f, 2547, 'Captain Dalbur:'), null, 'and nothing else answers it either');
 });
+
+
+// Keep the completed named page's next-tick stock opening from replacing a newer main.
+test('Ali clothing stock deferral preserves a newer native shop', async t => {
+  const PM = require('../dist/plugins/PluginManager').PluginManager;
+  const {ShopDefinitionLoader} = require('../dist/game/definition/loader/impl/ShopDefinitionLoader');
+  // Match GameBuilder's boot pair after legacy cleanup and before any new per-player shops.
+  assert.equal(new ShopDefinitionLoader().load(),true);
+  core.ShopManager.initialize();
+  assert.equal(core.ShopDefinition.forId(1221)?.getName(),"Lowe's Archery Emporium");
+  assert.equal(core.ShopManager.hasShop(1221),true,'canonical static Lowe runtime is initialized');
+  const MAIN = (161 << 16) | 16, CLOTHES = 'I would like to have a look at your selection of clothes.';
+  const clean = H.clean, terminalText = 'Hang on a second while I get the garments.';
+  for (const mode of ['stationary clothes', 'direct shop', 'newer shop']) await t.test(mode, async child => {
+    const f = H.actor(child), p = f.p, sender = p.getPacketSender(), manager = p.getDialogueManager();
+    // This existing helper's replay spy cannot prove a real main mount. The same restoration is
+    // used above by the casket purchase test; all other helper/startup/legacy checks stay intact.
+    assert.equal(typeof core.ShopManager.open.mock?.restore, 'function'); core.ShopManager.open.mock.restore();
+    const stores = id => ({ inventory:p.getInventory().getAmount(id), equipment:p.getEquipment().getAmount(id),
+      bank:p.getBanks().reduce((n,b,tab) => n + (b && tab !== core.Bank.BANK_SEARCH_TAB_INDEX ? b.getAmount(id) : 0), 0),
+      floor:core.World.getItems().filter(g => !g.isPendingRemoval() && g.getOwner() === p.getUsername()
+        && g.getPrivateArea() === p.getPrivateArea() && g.getItem().getId() === id).reduce((n,g) => n + g.getItem().getAmount(), 0) });
+    const resources = () => ({ coins:stores(core.ItemIdentifiers.COINS), dyes:stores(core.ItemIdentifiers.BLUE_DYE),
+      helperRewards:[core.ItemIdentifiers.DESERT_DISGUISE,core.ItemIdentifiers.CATSPEAK_AMULET,core.ItemIdentifiers.AIR_TALISMAN].map(stores),
+      experience:core.Skill.values().map(skill => p.getSkillManager().getExperience(skill)) });
+    const initial = resources(); assert.deepEqual(initial.coins,{inventory:500,equipment:0,bank:0,floor:0},'The Feud helper completion grants 499 coins plus its generic one-coin reward');
+    assert.deepEqual(initial.helperRewards,[1,1,1].map(inventory => ({inventory,equipment:0,bank:0,floor:0})),'retain the helper disguise, catspeak amulet and air talisman');
+    assert.equal(Object.values(initial.dyes).reduce((n,v) => n+v,0), 0);
+    for (let i=0;i<3;i++) p.getInventory().add(new core.Item(core.ItemIdentifiers.BLUE_DYE,1),false);
+    assert.equal(p.getInventory().getAmount(core.ItemIdentifiers.BLUE_DYE),3);
+    // Saved quest completion still grants its items and invokes XP callbacks; preserve the actual resulting XP snapshot.
+    for (const name of ['The Feud', "Icthlarin's Little Helper", 'Rune Mysteries']) assert.equal(H.Quests().questNamed(name).isComplete(p),true);
+    assert.equal(Number(state(f)?.clothes)||0,0,'no injected stock unlock');
+    await H.talk(f); const first = await H.read(f);
+    assert.deepEqual(first.pending?.options,["So what's in this for me?","Ok I'll get on to it."]);
+    assert.equal(state(f).clothes,1,'ordinary Ali introduction actually assigns the errand');
+    const siamun = siamunNear(f), lowe = core.NPC.create(core.NpcIdentifiers.LOWE,new core.Location(3303,3212,0));
+    assert.equal(core.World.getNpcs().add(lowe),true);
+    child.after(() => {
+      p.closeInterruptibleInterfaces(); PM.emitPlayerDisconnect({player:p,username:p.getUsername()});
+      core.TaskManager.cancelTasks(p);
+      for (const n of [siamun,lowe]) { n.setRegistered(false); core.World.getNpcs().remove(n); }
+      for (const g of core.World.getItems().filter(g => g.getOwner() === p.getUsername())) core.ItemOnGroundManager.deregister(g);
+    });
+    await H.talkTo(f,siamun); const materials = await H.read(f);
+    assert.deepEqual(materials.pending?.options,['What do you mean by animal pelt?',"Ok, I'll get you the materials."]);
+    await H.choose(f,materials.pending.options.map(clean).indexOf("Ok, I'll get you the materials.")+1); await H.read(f);
+    assert.equal(state(f).clothes,3,'real Siamun hand-in unlocks Menaphite stock');
+    assert.deepEqual(resources(),initial,'the declared three dyes were consumed, no fee/output/XP was invented');
+    backAtAli(f); await H.talk(f); const visit = await H.read(f);
+    assert.equal(state(f).clothes,3); assert.equal(state(f).garments,1);
+    assert.deepEqual(visit.pending,{title:'Select an option',options:[CLOTHES,'I would like to have a look at your general stock.','Who did you want me to talk to again?']});
+    assert.equal(manager.getOwner(),undefined,'MultiChatboxPrompt resets the native manager');
+    const menuOwner = sender.getChatboxOwner(); assert.ok(menuOwner && Object.isFrozen(menuOwner),'explicit named Ali page owns the chatbox');
+    const menuMount = sender.subInterfaceTargets.get(219); assert.ok(menuMount); assert.equal(sender.getSubInterfaceAt(menuMount.targetUid),menuMount);
+    const steady = resources(), unchanged = () => assert.deepEqual(resources(),steady,'stock viewing preserves all declared stores and every skill XP');
+    let turns=0;
+    const turn = () => {
+      assert.ok(++turns <= 12,'bounded native input/task/movement phases'); p.resetUpdating();
+      core.World.processCycle=(core.World.processCycle+1)&0x7fffffff; core.TaskManager.process();
+      f.c.processTurnPackets(); const q=p.getMovementQueue(); q.beginCycle(); q.processEntityPursuit();
+      if (q.hasPendingWork()) q.process(); core.TaskManager.processWalkTo(p.getIndex());
+    };
+    const input = async (...packets) => { await f.c.dispatch(packets); turn(); };
+    const trade = () => {
+      assert.equal(core.ShopManager.hasShop(1221),true,'static Lowe runtime remains available before the genuine NPC Trade');
+      const actions=lowe.getCurrentDefinition(p).getActions(), clickType=actions.indexOf('Trade')+1;
+      assert.ok(clickType>0,JSON.stringify({npc:lowe.getId(),actions})); return {type:'npc_option',index:lowe.getIndex(),clickType}; };
+    const shop = name => {
+      assert.equal(p.getInterfaceId(),300,JSON.stringify({staticShopReady:core.ShopManager.hasShop(1221),npcId:lowe.getContentId(p),npcRegistered:lowe.isRegistered(),npcCurrent:core.World.getNpcs().get(lowe.getIndex())===lowe,playerBusy:p.busy(),movementPending:p.getMovementQueue().hasPendingWork()}));
+      assert.equal(core.ShopManager.getOpenShop(p)?.name,name);
+      const mount=sender.subInterfaceTargets.get(300); assert.ok(mount); assert.equal(sender.getSubInterfaceAt(MAIN),mount);
+      return {mount,id:core.ShopManager.activeShopByPlayer.get(p)};
+    };
+    if (mode === 'direct shop') {
+      await input(trade()); const newer=shop("Lowe's Archery Emporium"); unchanged(); turn();
+      assert.equal(sender.getSubInterfaceAt(MAIN),newer.mount); assert.equal(core.ShopManager.activeShopByPlayer.get(p),newer.id); unchanged(); return;
+    }
+    await input({type:'dialogue_continue',widgetId:H.MultiChatboxPrompt.OPTIONS_WIDGET_ID,childIndex:visit.pending.options.map(clean).indexOf(CLOTHES)+1});
+    const current=manager.getCurrent(), group=sender.getChatboxGroupId();
+    assert.ok(current instanceof core.NpcDialogue,JSON.stringify({type:current?.constructor?.name,text:current?.getText?.(),group}));
+    assert.equal(group,231); assert.equal(clean(current.getText()),terminalText);
+    assert.equal(manager.getOwner(),menuOwner); assert.equal(sender.getChatboxOwner(),menuOwner);
+    const terminalMount=sender.subInterfaceTargets.get(group); assert.ok(terminalMount); assert.equal(sender.getSubInterfaceAt(terminalMount.targetUid),terminalMount);
+    assert.equal(p.getInterfaceId(),-1); unchanged();
+    const queued=[],actions=[],submit=core.TaskManager.submit.bind(core.TaskManager),emit=PM.emitCustomEvent.bind(PM); let inStockAction=false;
+    child.mock.method(PM,'emitCustomEvent',(name,event) => {
+      if (name!=='npc-dialogue:action' || event?.npcId!==3533 || event?.stepId!=='ckDN2A') return emit(name,event);
+      inStockAction=true;
+      try { return emit(name,event); }
+      finally { inStockAction=false; actions.push({npc:event.npc,action:event.action,target:event.target,handled:event.handled,end:event.end}); }
+    });
+    child.mock.method(core.TaskManager,'submit',task => { if(inStockAction) queued.push(task); return submit(task); });
+    // Both genuine packets drain in this player's input phase before the next global task phase.
+    await input({type:'dialogue_continue',widgetId:(group<<16)|5,childIndex:-1},...(mode==='newer shop'?[trade()]:[]));
+    assert.equal(actions.length,1); assert.equal(actions[0].npc,f.npc); assert.equal(actions[0].action,'open_interface');
+    assert.ok(actions[0].target.startsWith("Ali's Discount Wares.#Clothing")); assert.equal(actions[0].handled,true); assert.equal(actions[0].end,true);
+    assert.equal(queued.length,1,'the actual stock action produces exactly one deferred task');
+    assert.equal(queued[0].key,core.Task.DEFAULT_KEY,'null constructor key resolves to canonical DEFAULT_KEY');
+    assert.equal(queued[0].pluginName,'RogueTrader'); assert.equal(queued[0].getDelay(),1); assert.equal(queued[0].isImmediate(),false); assert.equal(queued[0].isRunning(),true);
+    assert.equal(p.isRegistered(),true); assert.equal(manager.isActive(),false); unchanged();
+    if (mode==='stationary clothes') {
+      assert.equal(core.ShopManager.getOpenShop(p),null); turn(); assert.equal(queued[0].isStopped(),true);
+      const opened=shop("Ali's Discount wares."); assert.equal(opened.id,700000+p.getIndex()*8+4); assert.equal(state(f).stallvar,5); unchanged(); return;
+    }
+    const newer=shop("Lowe's Archery Emporium"); assert.equal(queued[0].isRunning(),true); unchanged(); turn();
+    assert.equal(queued[0].isStopped(),true,'the old callback phase actually executed');
+    const diagnostic=JSON.stringify({interface:p.getInterfaceId(),activeShop:core.ShopManager.activeShopByPlayer.get(p),shop:core.ShopManager.getOpenShop(p)?.name,resources:resources()});
+    // First behavior target; same group300 alone cannot distinguish the two shop lifetimes.
+    assert.equal(sender.getSubInterfaceAt(MAIN),newer.mount,'newer native shop mount must survive: '+diagnostic);
+    assert.equal(core.ShopManager.activeShopByPlayer.get(p),newer.id); assert.equal(core.ShopManager.getOpenShop(p)?.name,"Lowe's Archery Emporium");
+    assert.equal(p.getInterfaceId(),300); unchanged();
+  });
+});

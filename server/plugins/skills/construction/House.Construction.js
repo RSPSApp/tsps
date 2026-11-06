@@ -242,7 +242,7 @@ function canVisitHouse(player, house) {
   const owner = house.owner;
   const mode = { player, mode: "none" };
   api.emitCustomEvent("ironman:mode", mode);
-  return !["ironman", "ultimate", "hardcore"].includes(mode.mode)
+  return (owner === player || !["ironman", "ultimate", "hardcore"].includes(mode.mode))
     && !!owner && !house.isDestroyed() && !house.buildingMode && !house.save.locked
     && owner.getRelations().canReceivePrivateMessageFrom(player);
 }

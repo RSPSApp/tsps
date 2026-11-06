@@ -384,3 +384,77 @@ test("owned-cape free hood requires space at the handout", async t => {
   assert.deepEqual(inventoryState(f.p), before);
   assert.ok(!f.messages.some(text => String(text).includes("Twiggy hands you another hood")));
 });
+
+function withdrawLeavingPlaceholder(f, id) {
+  const bank = f.p.getBank(0);
+  f.p.setPlaceholders(true);
+  assert.ok(core.ItemDefinition.forId(id).getPlaceholderId() >= 0, "the active cache supports a cape placeholder");
+  bank.adds(id, 1);
+  bank.open();
+  assert.equal(core.Bank.isOpen(f.p), true, "real bank is open before withdrawal");
+  const slot = bank.getSlotForItemId(id);
+  assert.ok(slot >= 0);
+  core.Bank.withdraw(f.p, id, slot, 1, 0);
+  assert.equal(f.p.getInventory().getAmount(id), 1, "the real bank withdrawal delivered the cape");
+  assert.equal(bank.getItems()[slot].getId(), id, "withdrawal retained the original cape ID");
+  assert.equal(bank.getItems()[slot].getAmount(), 0, "withdrawal produced a zero-amount placeholder");
+  assert.equal(bank.contains(id), true, "contains includes that row");
+  assert.equal(bank.getAmount(id), 0, "the bank contains no actual cape");
+  f.p.getInventory().deleteNumber(id, 1); // The withdrawn cape is subsequently lost.
+  for (const cape of [core.ItemIdentifiers.ACHIEVEMENT_DIARY_CAPE, core.ItemIdentifiers.ACHIEVEMENT_DIARY_CAPE_T_]) {
+    assert.equal(f.p.getInventory().getAmount(cape), 0);
+    assert.equal(f.p.getEquipment().getAmount(cape), 0);
+  }
+  f.p.closeInterruptibleInterfaces();
+  assert.equal(core.Bank.isOpen(f.p), false, "Twiggy is reached after closing the bank");
+  return bank;
+}
+
+test("a real zero-amount cape placeholder does not select the owned conversation", async t => {
+  for (const id of [core.ItemIdentifiers.ACHIEVEMENT_DIARY_CAPE, core.ItemIdentifiers.ACHIEVEMENT_DIARY_CAPE_T_]) {
+    const f = actor(t); qualify(f.p);
+    const bank = withdrawLeavingPlaceholder(f, id);
+    const before = inventoryState(f.p);
+    talk(f);
+    const pending = await menu(f, CAPE_OPTION);
+    assert.ok(!pending.options.includes("Hood"));
+    assert.equal(bank.contains(id), true);
+    assert.equal(bank.getAmount(id), 0);
+    assert.deepEqual(inventoryState(f.p), before);
+  }
+});
+
+test("a real banked cape still selects the owned conversation beside another placeholder", async t => {
+  const f = actor(t); qualify(f.p);
+  const empty = core.ItemIdentifiers.ACHIEVEMENT_DIARY_CAPE;
+  const held = core.ItemIdentifiers.ACHIEVEMENT_DIARY_CAPE_T_;
+  const bank = withdrawLeavingPlaceholder(f, empty);
+  f.p.getBank(1).adds(held, 1);
+  assert.equal(bank.contains(empty), true);
+  assert.equal(bank.getAmount(empty), 0);
+  assert.equal(f.p.getBank(1).getAmount(held), 1);
+  talk(f); await choose(f, "Hood"); await drain(f);
+  assert.equal(amount(f.p, core.ItemIdentifiers.ACHIEVEMENT_DIARY_HOOD), 1);
+  assert.equal(f.p.getBank(1).getAmount(held), 1);
+  assert.equal(bank.getAmount(empty), 0);
+});
+
+test("an owned-hood handout is refused if the banked cape becomes a placeholder", async t => {
+  const f = actor(t); qualify(f.p);
+  const id = core.ItemIdentifiers.ACHIEVEMENT_DIARY_CAPE, bank = f.p.getBank(0);
+  bank.adds(id, 1);
+  assert.equal(bank.getAmount(id), 1);
+  talk(f); await choose(f, "Hood");
+  await line(f, "Most certainly, and free of charge!");
+  // Simulate an intervening ownership change while the existing dialogue is open.
+  const slot = bank.getSlotForItemId(id);
+  assert.ok(slot >= 0);
+  bank.getItems()[slot].setAmount(0);
+  assert.equal(bank.contains(id), true);
+  assert.equal(bank.getAmount(id), 0);
+  const before = inventoryState(f.p);
+  await drain(f);
+  assert.equal(amount(f.p, core.ItemIdentifiers.ACHIEVEMENT_DIARY_HOOD), 0);
+  assert.deepEqual(inventoryState(f.p), before);
+  assert.ok(!f.messages.some(text => String(text).includes("Twiggy hands you another hood")));
+});

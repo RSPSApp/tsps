@@ -16,7 +16,7 @@ const OPEN_TARGET = "Bank PIN";
 /** The can-bank check's sources (Bank.open, and the deposit boxes). */
 const OPEN_SOURCE = "open";
 const DEPOSIT_BOX_SOURCE = "deposit-box";
-// The Seed Vault performs its own resumable PIN guard after the can-bank check.
+// Ultimate Seed Vault refusal checks can-bank before the vault's separate PIN guard.
 const SEED_VAULT_SOURCE = "seed-vault";
 
 function days(player) {

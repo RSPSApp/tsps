@@ -48,6 +48,7 @@ Each rule comes from the rsprox capture database (https://rsprox.net/database) o
 | A warning when attacking an npc another player damaged (once per npc) | all | "As an Ironman, you might not receive kill-credit for this monster." (captured) |
 | Loot from a player an Ironman kills is the fallen player's (Wiki: Ironmen can't take PvP loot) | all | none |
 | No combat experience from fighting players (Wiki) | all | none |
+| No entering another player's house (Wiki); own house remains available | all | Existing house-unavailable message *(ours)* |
 | Shops sell only their own stock, never what players sold to them (Wiki) | all | "As an Ironman, you can only buy the shop's own stock." *(ours)* |
 | No Grand Exchange (Wiki) | all | "As an Ironman, you cannot use the Grand Exchange." *(ours)* |
 | No presets: this server's PvP loadouts hand out items. Covers `::presets`, the interface, and the automatic opening after a death, which is skipped quietly | all | "As an Ironman, you cannot use presets." *(ours)* |
@@ -91,7 +92,6 @@ Generic additions for these rules:
 - **A bank PIN** when choosing a mode, as OSRS asks for one.
 - **Bonds:** Ironmen may trade bonds and buy them through their own Grand Exchange interface.
 - **Other limits:**
-  - entering other players' houses;
   - Nightmare Zone group dreams;
   - the group-boss loot exceptions (raids, Wintertodt, Nex…);
   - the many Ultimate storage limits (seed vault, looting bag on PvP worlds, the POH costume room…).

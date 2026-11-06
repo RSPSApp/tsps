@@ -28,7 +28,9 @@ before(async () => {
 });
 after(() => PM.emitServerShutdown({}));
 
-function setActive(active) { PM.emitCustomEvent("events:active", { key: "halloween-2025", active }); }
+// Through the real scheduler: the rewards go through events:grant-reward, which trusts only its window.
+const { setWindow } = require("./helpers/event-window.cjs");
+function setActive(active) { setWindow(PM, "halloween-2025", active); }
 
 function fixture(t, at = new core.Location(3189, 3274, 0)) {
   const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
@@ -217,6 +219,18 @@ test("the whole Spook-a-thon runs through native dialogue, once per account", as
   await converse(f);
   assert.equal(f.player.getInventory().getAmount(core.CacheDefinitions.getObjId("cert_pumpkin")), 2, "never twice");
   assert.equal(f.player.getInventory().getAmount(core.CacheDefinitions.getObjId("hw25_grim_reaper_top")), 1, "no re-award");
+  assert.deepEqual(f.player.getAttribute("events:completions"), ["halloween-2025", "halloween-2025-tradeables"]);
+});
+
+test("claims made before EventScheduler kept completions are imported on login", t => {
+  const f = fixture(t), Rewards = require("../plugins/world/seasonal/Rewards.HalloweenEvents");
+  setProgress(f, { stage: STAGE.COMPLETE, tradeableClaimed: true });
+  PM.emitPlayerLogin({ player: f.player, username: f.player.getUsername() });
+  assert.deepEqual(f.player.getAttribute("events:completions"), ["halloween-2025", "halloween-2025-tradeables"]);
+  const g = fixture(t);
+  setProgress(g, { stage: STAGE.COMPLETE });
+  Rewards.importClaim(PM.createApi("HalloweenLegacy"), { player: g.player });
+  assert.deepEqual(g.player.getAttribute("events:completions"), ["halloween-2025"], "unclaimed tradeables stay claimable");
 });
 
 test("a full inventory keeps the decoration with Seth and the stage unchanged", async t => {

@@ -49,6 +49,7 @@ module.exports = {
     api.onCustomEvent("events:active", calendar.bind(null, api));
     api.onServerShutdown(shutdown.bind(null, api));
     api.onRegionLoaded(regionLoaded.bind(null, api));
+    api.onPlayerLogin(Rewards.importClaim.bind(null, api));
     api.onPlayerLogin(sync.bind(null, api));
     api.onCustomEvent("easter-events:changed", sync.bind(null, api));
     api.onCustomEvent("easter-events:church-fall", Church.fall.bind(null, api));

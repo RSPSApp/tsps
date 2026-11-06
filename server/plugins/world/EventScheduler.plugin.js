@@ -151,9 +151,17 @@ function rewardItems(api, rewards) {
 }
 
 // Plans every reward on a copy of the inventory with the container's own stack rules
-// (getAddableAmount/add), as Christmas Din-Dins' reward plan does; null when any part won't fit.
-function plan(api, player, items) {
+// (getAddableAmount/add), as Christmas Din-Dins' reward plan does. Items the event
+// consumes (`take`) leave the copy first, so their slots are free for the rewards.
+// Returns the planned items, "missing" when a taken item is not held, or null when a
+// reward won't fit.
+function plan(api, player, items, take = []) {
   const copy = new api.core.Inventory(player).setItems(player.getInventory().getCopiedItems());
+  for (const item of take) {
+    if (copy.getAmount(item.getId()) < item.getAmount()) return "missing";
+    // The copy is bound to the player: never refresh it, or the client sees uncommitted items.
+    copy.deleted(item.getId(), item.getAmount(), false);
+  }
   for (const item of items) {
     if (copy.getAddableAmount(item) !== item.getAmount()) return null;
     // The copy is bound to the player: never refresh it, or the client sees uncommitted items.
@@ -181,8 +189,9 @@ function grantReward(api, request) {
 function grantOnce(api, request) {
   const {player} = request, key = completionKey(request);
   const items = rewardItems(api, request.rewards ?? []);
+  const take = rewardItems(api, request.take ?? []);
   const unlock = request.unlock ?? [];
-  if (!player || typeof request.eventKey !== "string" || key === null || !items || !Array.isArray(unlock)) {
+  if (!player || typeof request.eventKey !== "string" || key === null || !items || !take || !Array.isArray(unlock)) {
     request.reason = "invalid";
     return;
   }
@@ -194,7 +203,11 @@ function grantOnce(api, request) {
     request.reason = "already-complete";
     return;
   }
-  const planned = plan(api, player, items);
+  const planned = plan(api, player, items, take);
+  if (planned === "missing") {
+    request.reason = "missing-items";
+    return;
+  }
   if (!planned) {
     request.reason = "no-space";
     return;
@@ -212,6 +225,17 @@ function grantOnce(api, request) {
   player.setAttribute(COMPLETIONS_ATTRIBUTE, [...completions(player), key]);
   request.granted = true;
   request.reason = null;
+}
+
+// Records a completion without granting anything: content imports claims its own saves
+// already show (before this helper existed) and settles rewards handed out another way.
+// Idempotent, and independent of the event window.
+function recordCompletion(request) {
+  if (!request?.player) return;
+  const key = completionKey(request);
+  request.recorded = key !== null;
+  if (key === null || completions(request.player).includes(key)) return;
+  request.player.setAttribute(COMPLETIONS_ATTRIBUTE, [...completions(request.player), key]);
 }
 
 function forceEvent(api, { player, parts }) {
@@ -249,6 +273,7 @@ module.exports = {
     api.persistAttribute(COMPLETIONS_ATTRIBUTE, []);
     api.onCustomEvent("events:status", answerStatus);
     api.onCustomEvent("events:completed", answerCompleted);
+    api.onCustomEvent("events:record-completion", recordCompletion);
     api.onCustomEvent("events:grant-reward", grantReward.bind(null, api));
     api.registerCommand("forceevent", forceEvent.bind(null, api), api.core.PlayerRights.OWNER,
       "Override a configured holiday window for testing; reset restores the calendar");

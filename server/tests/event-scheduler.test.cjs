@@ -218,3 +218,22 @@ test('a grant nested inside the unlock listener is refused and the outer complet
   assert.equal(completed(p,'other-2026'),false);assert.equal(grant(p,{completion:'other-2026'}).granted,true);
   assert.deepEqual(p.getAttribute('events:completions').sort(),['fixture-2026','other-2026']);
 });
+test('take consumes a held item in the same all-or-nothing plan, and its slot is free for the rewards',(t)=>{
+  t.mock.method(Date,'now',()=>START+1);start();const p=rewardPlayer(),inv=p.getInventory(),I=core.ItemIdentifiers;
+  for(let i=0;i<27;i++)inv.setItem(i,new core.Item(I.LOGS,1));
+  const take=[{itemId:I.LOGS,amount:1}],hat=[{itemId:I.SANTA_HAT,amount:1}];
+  assert.equal(grant(p,{rewards:[...hat,{itemId:I.COINS,amount:5}],take}).granted,true,'the taken log frees the second slot');
+  assert.equal(inv.getAmount(I.LOGS),26);assert.equal(inv.getAmount(I.SANTA_HAT),1);assert.equal(inv.getAmount(I.COINS),5);
+  const missing=grant(p,{completion:'fixture-2027',rewards:hat,take:[{itemId:I.BRONZE_DAGGER,amount:1}]});
+  assert.equal(missing.reason,'missing-items');assert.equal(completed(p,'fixture-2027'),false);
+  assert.equal(inv.getAmount(I.SANTA_HAT),1,'a refused take grants nothing');
+  assert.equal(grant(p,{completion:'fixture-2028',take:[{itemId:0,amount:1}]}).reason,'invalid');
+});
+test('record-completion imports a claim idempotently, outside the window, and blocks a later grant',(t)=>{
+  t.mock.method(Date,'now',()=>END+1);start();const p=rewardPlayer();
+  for(let i=0;i<2;i++){const q={player:p,completion:'fixture-2026'};PM.emitCustomEvent('events:record-completion',q);assert.equal(q.recorded,true);}
+  assert.deepEqual(p.getAttribute('events:completions'),['fixture-2026']);
+  const bad={player:p,completion:'Not A Key'};PM.emitCustomEvent('events:record-completion',bad);assert.equal(bad.recorded,false);
+  t.mock.method(Date,'now',()=>START+1);command('forceevent fixture auto');
+  assert.equal(grant(p).reason,'already-complete');assert.equal(p.getInventory().getAmount(core.ItemIdentifiers.SANTA_HAT),0);
+});

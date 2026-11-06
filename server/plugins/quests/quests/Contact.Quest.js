@@ -131,6 +131,7 @@ module.exports = function registerContactQuest(api) {
   // west side. Keep this reach on her quiz stages only; range 1 stays the default.
   const MAISA_TALK_RANGE = 10;
   const OSMAN_NPC_ID = NpcIdentifiers.OSMAN_9; // 4286, resolved content id for handlers/chatheads
+  const OSMAN_GARDEN_HELP_OPTION = "i'd like to talk about sq'irks";
   // The dungeon actor spawns as the cache parent; at stage 110 varbit 3274
   // resolves 11568 contact_osman_cave_instance to 4286. The world rows use the
   // matching Al Kharid (6165) and Sophanem (6166) cache parents.
@@ -657,6 +658,10 @@ module.exports = function registerContactQuest(api) {
     }
     if (npcId === OSMAN_NPC_ID) {
       const stage = quest.getStage(player);
+      if (stage >= STAGE_COMPLETE && value === OSMAN_GARDEN_HELP_OPTION) {
+        api.emitCustomEvent("sorceress-s-garden:osman-helped", { player });
+        return;
+      }
       if (value === "it could drive a wedge between the menaphite cities") {
         if (stage === STAGE_MAISA_CONVINCED) {
           quest.setStage(player, STAGE_OSMAN_AGREED);

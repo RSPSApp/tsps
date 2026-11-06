@@ -35,6 +35,7 @@ const QUEST_KEYS = {
   "Prince Ali Rescue": "prince_ali_rescue",
   "Cabin Fever": "cabin_fever",
 };
+const OSMAN_GARDEN_UNLOCK_EVENT = "sorceress-s-garden:osman-help-status";
 const VISITED_ATTRIBUTES = {
   Keldagrim: VISITED_KELDAGRIM_ATTRIBUTE,
   "Tithe Farm": VISITED_TITHE_FARM_ATTRIBUTE,
@@ -107,6 +108,12 @@ function refusal(player, minigame) {
     const request = { player, key: QUEST_KEYS[questName], complete: false };
     if (request.key) pluginApi.emitCustomEvent("quest:is-complete", request);
     if (request.complete !== true) return `You need to complete ${questName} to go there.`;
+  }
+  const garden = minigames["Sorceress's Garden"];
+  if (garden && (minigame === garden || minigame?.groupingName === garden.groupingName)) {
+    const status = { player, unlocked: false };
+    pluginApi.emitCustomEvent(OSMAN_GARDEN_UNLOCK_EVENT, status);
+    if (status.unlocked !== true) return "You need to speak to Osman to go there.";
   }
   for (const place of minigame.visited ?? []) {
     const attribute = VISITED_ATTRIBUTES[place];

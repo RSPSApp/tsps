@@ -32,8 +32,28 @@ function buildSets() {
   ]);
 }
 
+/** Not captured: the shared powered-staff wording for a preset copy. */
+const PRESET_TEXT = "Preset items cannot be used for this.";
+
+/** A preset copy (untradeable, unbankable) is never animated: Shanomi and the armour's drop hand back plain armour. */
+function restricted(item) {
+  return item.isPresetItem?.() === true || item.isUntradeable?.() === true || item.isUnbankable?.() === true;
+}
+
+/** The slots of one plain copy of each piece, or null. */
+function plainSet(player, set) {
+  const items = player.getInventory().getItems();
+  const slots = set.slice(0, 3).map((itemId) => items.findIndex((item) => item?.getId() === itemId && !restricted(item)));
+  return slots.every((slot) => slot >= 0) ? slots : null;
+}
+
 function hasSet(player, set) {
-  return set.slice(0, 3).every((itemId) => player.getInventory().contains(itemId));
+  return plainSet(player, set) !== null;
+}
+
+/** Every piece is held, but some only as preset copies. */
+function onlyPresetSet(player, set) {
+  return !hasSet(player, set) && set.slice(0, 3).every((itemId) => player.getInventory().contains(itemId));
 }
 
 function animate(player, set, animator) {
@@ -42,7 +62,9 @@ function animate(player, set, animator) {
     return;
   }
   const inventory = player.getInventory();
-  for (const itemId of set.slice(0, 3)) inventory.deleteNumber(itemId, 1);
+  const slots = plainSet(player, set);
+  if (!slots) return;
+  for (const slot of slots) inventory.deleteAtSlot(slot, 1);
   const state = { npc: null, set, ticks: 0 };
   animated.set(player, state);
   player.getMovementQueue().reset();
@@ -67,6 +89,10 @@ function animate(player, set, animator) {
 
 function useAnimator({ player, location }) {
   const set = SETS.find((candidate) => hasSet(player, candidate));
+  if (!set && SETS.some((candidate) => onlyPresetSet(player, candidate))) {
+    player.sendMessage(PRESET_TEXT);
+    return;
+  }
   if (!set) {
     Guild.talk(player, [{ statement: "You need a suitable platebody, legs and full helm of the same type to activate the armour animator." }]);
     return;
@@ -80,6 +106,10 @@ function useItemOnAnimator(event) {
   const set = SETS.find((candidate) => candidate.slice(0, 3).includes(event.itemId));
   if (!set) {
     Guild.playTranscript(api, event.player, Guild.NPCS.SHANOMI, SHANOMI_WRONG_ITEM_VARIANT);
+    return;
+  }
+  if (onlyPresetSet(event.player, set)) {
+    event.player.sendMessage(PRESET_TEXT);
     return;
   }
   if (!hasSet(event.player, set)) {

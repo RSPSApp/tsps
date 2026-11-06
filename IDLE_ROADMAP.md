@@ -61,6 +61,18 @@ Uma interface própria e sempre à mão, para o jogador nunca precisar digitar c
       lado); teto offline e última ausência viraram rodapé. Como nenhum pacote redimensiona nem
       recolore um componente, barra = trilho escuro com pips que acendem, e troca de cor =
       retângulos empilhados. Os redesenhos agora só enviam o que mudou
+- [x] **A tela não fecha mais no combate** (PR #26, 05/11/2026): quem leva dano tem as interfaces
+      fechadas pelo motor (`CombatFactory`), então cada golpe fechava a tela do Idle. Um modo agora
+      registra em `api.core.CombatInterfacePolicy` quais grupos sobrevivem ao dano; o resto fecha
+      como antes. `Common.readyToWork` também parou de fechá-la no meio da luta, onde fechar não
+      libertava ninguém
+- [x] **Só o nosso mundo na lista** (PR #27, 05/11/2026): o cliente descobre mundos pelo diretório
+      público `wss://worlds.rsps.app`, então o `REACT_APP_SERVERS_JSON` somava o nosso à lista dos
+      outros em vez de substituí-la. `REACT_APP_WEBRTC_SIGNAL_URL=off` desliga a descoberta. O nome
+      do produto saiu de quatro lugares e virou `REACT_APP_BRAND_NAME`
+- [ ] **Marca no `client/public/index.html`**: título e manifesto ainda dizem RSPS.app. É HTML
+      estático, então interpolar quebraria quem não define a variável — precisa de um passo no
+      deploy
 - [ ] **Versão mobile** conferida (o cliente já é responsivo; validar as telas idle no celular)
 
 ## P1 - Loja de Idle Coins

@@ -327,6 +327,120 @@ test('Sheep Shearer fills the remaining-wool blanks through the real partial han
   assert.ok(!texts.some(text => text.includes('[1-19]')), JSON.stringify(texts));
 });
 
+/** Talk to Fred through the variant the quest selects, collecting every page's text until a menu or the end. */
+function talkToFred(hooks, api, p) {
+  const runtime = require(root + '/plugins/quests/QuestRuntime');
+  const choice = hooks.onNpcDialogueVariant.map(fn => fn({ player: p, npcId: core.NpcIdentifiers.FRED_THE_FARMER })).find(Boolean);
+  assert.ok(choice);
+  runtime.startTranscript(api, p, core.NpcIdentifiers.FRED_THE_FARMER, choice.page, choice.variant);
+  return choice.variant;
+}
+function readPages(p, texts = []) {
+  for (let step = 0; step < 400; step++) {
+    if (p.prompt) return texts;
+    const current = p.manager.getCurrent();
+    if (!current) return texts;
+    // Pages come back wrapped; compare the words, not the line breaks.
+    if (typeof current.getText === 'function') texts.push(String(current.getText()).replace(/\s+/g, ' ').trim());
+    p.manager.advance();
+  }
+  throw new Error('dialogue did not settle');
+}
+
+test('after The Thing, the shearing option with no balls plays the wool talk, not the hand-in (2026-11-06 capture)', () => {
+  const { api, hooks, quest } = questHarness('SheepShearer');
+  const I = core.ItemIdentifiers;
+  withConditions(hooks, () => {
+    for (const [items, expected] of [
+      [[[I.SHEARS, 1], [I.WOOL, 3]], "I've got some wool. I've not managed to make it into a ball though."],
+      [[[I.SHEARS, 1]], "I haven't got any at the moment."],
+    ]) {
+      const p = dialoguePlayer(items, [['sheep-shearer:saw-thing', true]]);
+      quest.setStage(p, 1);
+      assert.equal(talkToFred(hooks, api, p), 'after-interacting-with-the-the-thing');
+      assert.deepEqual(readPages(p), ['What are you doing on my land?']);
+      choose(p, "I need to talk to you about shearing these sheep!");
+      const texts = readPages(p);
+      assert.deepEqual(texts.slice(0, 5), [
+        'I need to talk to you about shearing these sheep!',
+        'Oh. How are you doing getting those balls of wool?',
+        'How many more do I need to give you?',
+        'You need to collect 20 more balls of wool.',
+        expected,
+      ], JSON.stringify(texts));
+      assert.ok(!texts.includes('What are you doing on my land?'), 'opening line is not repeated');
+      assert.ok(!texts.includes('I have some.') && !texts.includes("Give 'em here then."), JSON.stringify(texts));
+      assert.equal(quest.getStage(p), 1);
+    }
+  });
+});
+
+test('the last ball after earlier deliveries completes with no "You give Fred" box (2026-11-06 capture)', () => {
+  const { api, hooks, quest } = questHarness('SheepShearer');
+  const I = core.ItemIdentifiers;
+  withConditions(hooks, () => {
+    const p = dialoguePlayer([[I.SHEARS, 1], [I.BALL_OF_WOOL, 1]], [['sheep-shearer:saw-thing', true]]);
+    quest.setStage(p, 20);
+    assert.equal(talkToFred(hooks, api, p), 'finishing-up');
+    readPages(p);
+    choose(p, "I need to talk to you about shearing these sheep!");
+    const texts = readPages(p);
+    assert.deepEqual(texts.slice(0, 5), [
+      'I need to talk to you about shearing these sheep!',
+      'Oh. How are you doing getting those balls of wool?',
+      'I have some.',
+      "Give 'em here then.",
+      "That's the last of them.",
+    ], JSON.stringify(texts));
+    assert.ok(!texts.concat(p.messages).some(text => /You give Fred/.test(text)), JSON.stringify([texts, p.messages]));
+    assert.equal(quest.getStage(p), 21);
+    assert.equal(p.items.get(I.BALL_OF_WOOL), 0);
+    assert.equal(p.items.get(I.COINS), 60);
+  });
+});
+
+test('Fred handing out shears goes on to spinning without the has-shears lines, and the map icon is a box', () => {
+  const { api, hooks, quest } = questHarness('SheepShearer');
+  const I = core.ItemIdentifiers;
+  withConditions(hooks, () => {
+    for (const items of [[], [[I.SHEARS, 1]]]) {
+      const p = dialoguePlayer(items);
+      talkToFred(hooks, api, p);
+      readPages(p);
+      choose(p, "I'm looking for a quest.");
+      readPages(p);
+      choose(p, 'Yes.');
+      const texts = readPages(p);
+      assert.equal(quest.getStage(p), 1);
+      assert.equal(p.items.get(I.SHEARS), 1);
+      const handedOut = items.length === 0;
+      assert.equal(texts.includes('Fred gives you a set of sharp shears.'), handedOut, JSON.stringify(texts));
+      assert.equal(texts.some(text => text.startsWith("Well, you're half way there already!")), !handedOut, JSON.stringify(texts));
+      assert.equal(texts.filter(text => text === 'Do you know how to spin wool?').length, 1, JSON.stringify(texts));
+      // The 2026-11-06 capture shows the icon in an object box, not as a chat message.
+      assert.ok(texts.includes('This icon denotes a Spinning Wheel on the world map.'), JSON.stringify(texts));
+      assert.ok(!p.messages.includes('This icon denotes a Spinning Wheel on the world map.'), JSON.stringify(p.messages));
+    }
+  });
+});
+
+test('starting with 20 balls keeps the "You give Fred 20 balls of wool." box (rsprox 1718)', () => {
+  const { api, hooks, quest } = questHarness('SheepShearer');
+  const I = core.ItemIdentifiers;
+  withConditions(hooks, () => {
+    const p = dialoguePlayer([[I.SHEARS, 1], [I.BALL_OF_WOOL, 20]]);
+    talkToFred(hooks, api, p);
+    readPages(p);
+    choose(p, "I'm looking for a quest.");
+    readPages(p);
+    choose(p, 'Yes.');
+    const texts = readPages(p);
+    assert.ok(texts.includes('You give Fred 20 balls of wool.'), JSON.stringify(texts));
+    assert.equal(quest.getStage(p), 21);
+    assert.equal(p.items.get(I.BALL_OF_WOOL), 0);
+  });
+});
+
 test('Sheep does not start when Fred cannot hand over shears on a full inventory', () => {
   const runtime = require(root + '/plugins/quests/QuestRuntime');
   const { api, hooks, quest } = questHarness('SheepShearer');

@@ -228,3 +228,34 @@ test('Runeversi room bounds, return landing and open-gate area entry use the eas
   low.player.setLocation(new core.Location(2226,4948,1));AreaManager.process(low.player);
   assert.deepEqual(loc(low.player),[2226,4948,1]);
 });
+
+test('RuneSquares west-room ladder/door enforce independent rank and eject east',async t=>{
+  const up=map('boardgames_runesquares_ladderup_experienced',2184,4951,0);
+  const a=actor(t,[2185,4951,0],1499);
+  a.player.setAttribute('games-room:runesquares-rank',1499);
+  await click(a,up);assert.deepEqual(loc(a.player),[2185,4951,0]);
+  assert.ok(a.messages.some(m=>m.includes('1500')));
+  a.player.setAttribute('games-room:runesquares-rank',1500);
+  await click(a,up);assert.equal(a.player.getLocation().getZ(),1);
+  const door=map('boardgames_runesquares_door_experienced',2191,4950,1);
+  a.player.setLocation(new core.Location(2192,4950,1));a.player.setNeedsPlacement(false);
+  a.player.setAttribute('games-room:runesquares-rank',1499);
+  await click(a,door);assert.equal(core.MapObjects.get(door.getId(),door.getLocation(),null),door);
+  a.player.setLocation(new core.Location(2188,4948,1));
+  assert.equal(Access.enforce(a.player),true);assert.deepEqual(loc(a.player),[2192,4950,1]);
+  assert.equal(Access.roomGame(new core.Location(2188,4948,0)),'runesquares');
+  assert.deepEqual(loc({getLocation:()=>Access.gameRoom('runesquares',0)}),[2188,4948,0]);
+});
+
+test('RuneSquares experienced gate opens as close-only leaf on its own tile and restores the original',async t=>{
+  const door=map('boardgames_runesquares_door_experienced',2191,4950,1);
+  const a=actor(t,[2192,4950,1],1500);a.player.setAttribute('games-room:runesquares-rank',1500);
+  await click(a,door);
+  const leaf=core.MapObjects.get(core.ObjectIdentifiers.DOOR_132,new core.Location(2191,4950,1),null);
+  assert.ok(leaf,'experienced gate uses the cache close-only open leaf on the original anchor');
+  assert.equal(core.MapObjects.get(door.getId(),door.getLocation(),null),null);
+  a.player.setLocation(new core.Location(2192,4950,1));a.player.setNeedsPlacement(false);
+  await click(a,leaf);
+  const restored=core.MapObjects.get(door.getId(),door.getLocation(),null);
+  assert.ok(restored);assert.equal(restored.getFace(),door.getFace());
+});

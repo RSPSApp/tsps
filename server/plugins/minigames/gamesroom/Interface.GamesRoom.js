@@ -1,6 +1,7 @@
 "use strict";
 const { GAMES } = require("./Games.GamesRoom");
 const Rules = require("./Rules.GamesRoom");
+const RuneSquares = require("./Interface.RuneSquares.GamesRoom");
 
 // Revision 241: interface_inv_update_big and cc_object_swapper. The latter changes a
 // dynamic child's item without clearing its operations, including empty squares.
@@ -9,6 +10,9 @@ const OBJECT_SWAPPER_SCRIPT = 719;
 const TEXT_SWAPPER_SCRIPT = 599;
 const OUTLINE_SWAPPER_SCRIPT = 6002;
 const RUNEVERSI_GRID_SCRIPT = 3423;
+// worldswitcher_wipe_favourite: only clears the target onOp/onMouseRepeat.
+// Suppressing IF_BUTTON transmission alone leaves native radio scripts active.
+const CLEAR_LOCAL_OPTION_SCRIPT = 893;
 const PIECES = ["fire", "water", "earth", "air", "mind", "body", "nature", "chaos", "law", "cosmic", "blood", "soul"];
 const MOVE_SECONDS = [15, 30, 60, 120];
 const RESULT_TEXT = {
@@ -24,7 +28,7 @@ function required(value, name) {
   if (value == null) throw new Error(`Games Room cache entry missing: ${name}`);
   return value;
 }
-function configure(core) { cache = core.CacheDefinitions; }
+function configure(core) { cache = core.CacheDefinitions; RuneSquares.configure(core); }
 function component(name) { return required(cache.getComponentId(name), name); }
 function interfaceId(name) { return required(cache.getInterfaceId(name), name); }
 function gameName(game) {
@@ -74,6 +78,7 @@ function showOptions(player, game, settings, { recipient = false } = {}) {
   }
   for (const control of ["15seconds", "30seconds", "1minute", "2minutes", "ranked"]) {
     sender.sendInterfaceFlagsRange(component(`${prefix}:${control}`), -1, -1, recipient ? 0 : 1 << 1);
+    if (recipient) sender.sendInterfaceScript(CLEAR_LOCAL_OPTION_SCRIPT, [component(`${prefix}:${control}`)]);
   }
   // The native button text is dynamic child 9, created by boardgames_button_init.
   sender.sendInterfaceScript(TEXT_SWAPPER_SCRIPT,
@@ -106,16 +111,25 @@ function drawBoard(player, match, readOnly = false) {
   // display slots empty makes proc154 clear their ops/onOp; object swaps only
   // set models. Even occupied graphics must pass clicks through (their native
   // 36px bounds overlap adjacent 32px squares). Draughts needs its slot ops.
-  const slots = match.game === "runeversi" ? [] : Array.from({ length: board.length }, (_, slot) => ({ slot, itemId: placeholder, quantity: 1 }));
+  // Edge games must create empty native slots as empty: swapping a placeholder
+  // object to -1 later leaves its inventory Examine target above the line controls.
+  const slots = match.game === "runeversi" ? [] : Array.from({ length: board.length }, (_, slot) => {
+    if (match.game !== "runesquares") return { slot, itemId: placeholder, quantity: 1 };
+    const value = board[slot];
+    return { slot, itemId: value ? pieceId(match.game, match.settings.pieces[value > 0 ? 0 : 1], false) : -1,
+      quantity: value ? 1 : 0 };
+  });
   sender.sendInterfaceScript(INVENTORY_UPDATE_SCRIPT,
     [boardUid, inventory, info.width, info.height, 0, -1,
       info.squareInput && !readOnly ? "Select square" : "", "", "", "", "", "", "", "", ""],
     undefined, undefined, { [inventory]: { capacity: board.length, slots } });
   sender.sendInterfaceFlagsRange(boardUid, 0, board.length - 1, info.squareInput && !readOnly ? 1 << 1 : 0);
-  for (let slot = 0; slot < board.length; slot++) {
-    const value = board[slot];
-    const item = value ? pieceId(match.game, match.settings.pieces[value > 0 ? 0 : 1], Math.abs(value) === 2) : -1;
-    sender.sendInterfaceScript(OBJECT_SWAPPER_SCRIPT, [boardUid, slot, item, value ? 1 : 0]);
+  if (match.game !== "runesquares") {
+    for (let slot = 0; slot < board.length; slot++) {
+      const value = board[slot];
+      const item = value ? pieceId(match.game, match.settings.pieces[value > 0 ? 0 : 1], Math.abs(value) === 2) : -1;
+      sender.sendInterfaceScript(OBJECT_SWAPPER_SCRIPT, [boardUid, slot, item, value ? 1 : 0]);
+    }
   }
   if (match.game === "runeversi") {
     // Script 3423 consumes the real inventory, rather than the temporary
@@ -157,6 +171,7 @@ function refreshMatch(player, match) {
     timers.set(player, { match, deadline: match.deadline });
   }
   drawBoard(player, match);
+  if (match.game === "runesquares") RuneSquares.refresh(player, match);
 }
 
 function showMatch(player, match) {
@@ -196,6 +211,7 @@ function showResult(player, match) {
   player.getPacketSender().sendInterfaceAnimation(component(`${prefix}:sandtimer`),
     required(cache.getSeqId("sandtimer_off"), "sandtimer_off"));
   player.getPacketSender().sendInterfaceFlagsRange(component(`${prefix}:boardinv`), 0, match.state.board.length - 1, 0);
+  if (match.game === "runesquares") RuneSquares.refresh(player, match);
   if (gameName(match.game) === "runelink") {
     for (let column = 0; column < 7; column++) player.getPacketSender()
       .sendInterfaceFlagsRange(component(`${prefix}:column${column}`), -1, -1, 0);
@@ -227,6 +243,8 @@ function refreshSpectator(player, match) {
 function showSpectator(player, match) {
   const prefix = `boardgames_${gameName(match.game)}`;
   varbit(player, "ingame", 0);
+  // boardgames_runeversi_update_grid skips its Play piece labels while viewing.
+  if (match.game === "runeversi") varbit(player, "viewing", 1);
   player.getPacketSender().sendInterface(group(match.game));
   for (const name of ["resign", "offer_draw", "turn", "turn_name", "sandtimer", "winner", "runeflash"]) {
     if (cache.getComponentId(`${prefix}:${name}`) != null) hidden(player, `${prefix}:${name}`, true);

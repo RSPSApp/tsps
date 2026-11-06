@@ -5,6 +5,7 @@ const { Server } = require('../dist/Server');
 Server.installProductionPathResolver();
 const { PluginManager } = require('../dist/plugins/PluginManager');
 const { getRegisteredQuests } = require('../plugins/quests/QuestRuntime');
+const { MAX_STACK_AMOUNT } = require('../dist/game/model/container/StackType');
 const core = PluginManager.getCoreApi();
 before(async () => {
   await require('../dist/game/cache/CachePipeline').CachePipeline.initialize(require('node:path').resolve(__dirname, '..'));
@@ -75,6 +76,11 @@ function player() {
   const index = actorIndex++;
   const inventory = {
     getAmount: (id) => items.get(id) || 0,
+    getAddableAmount: (item) => {
+      assert.equal(item.getId(), core.ItemIdentifiers.COINS, 'this mock only models coin capacity');
+      const held = items.get(item.getId()) || 0;
+      return held || inventory.getFreeSlots() > 0 ? Math.min(item.getAmount(), MAX_STACK_AMOUNT - held) : 0;
+    },
     adds: (id, amount) => items.set(id, (items.get(id) || 0) + amount),
     forceAdd: (_player, item) => items.set(item.getId(), (items.get(item.getId()) || 0) + item.getAmount()),
     deleteNumber: (id, amount) => items.set(id, Math.max(0, (items.get(id) || 0) - amount)),

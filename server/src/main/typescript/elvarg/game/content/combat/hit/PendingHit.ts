@@ -27,8 +27,6 @@ type PendingHitConfig = {
     hitMaximumSplitCount?: number;
     /** Later splats cannot roll accuracy when the first splat missed. */
     requireFirstAccurate?: boolean;
-    /** Recompute accuracy after synchronous hit hooks for each splat. */
-    isolateAccuracyCache?: boolean;
     rollAccuracy?: boolean;
     /** False for damage that pays its own XP (or none), skipping the usual combat XP. */
     experience?: boolean;
@@ -73,7 +71,6 @@ export class PendingHit {
     private hitDelays?: number[];
     private hitMaximumSplitCount = 1;
     private requireFirstAccurate = false;
-    private isolateAccuracyCache = false;
     /** Spell selected when this hit was launched; the caster may clear it before impact. */
     private spell: CombatSpell | null = null;
     /** A roll hook (Verac's set) let this hit through protection prayers. */
@@ -113,7 +110,6 @@ export class PendingHit {
                 this.hitMaximumSplitCount = delayOrConfig.hitMaximumSplitCount as number;
             }
             this.requireFirstAccurate = delayOrConfig.requireFirstAccurate === true;
-            this.isolateAccuracyCache = delayOrConfig.isolateAccuracyCache === true;
             this.bestOf = Math.max(1, Math.trunc(delayOrConfig.bestOf ?? 1));
             this.damageMultiplier = delayOrConfig.damageMultiplier ?? 1;
             this.ordinary = delayOrConfig.ordinary === true;
@@ -433,7 +429,6 @@ export class PendingHit {
             } else if (i > 0 && traits?.sharedAccuracyRollAcrossHits === true) {
                 resolved = { accurate: firstAccurate === true, bounds: firstBounds };
             } else {
-                if (this.isolateAccuracyCache) CombatFactory.clearHitRollCache(this.attacker);
                 resolved = PendingHit.withForcedMax(this.rollSpecialTraits(traits, roll.forceAccurate, rollAccuracy, i, projectedDefence), roll.forceMaxHit);
                 if (i === 0) {
                     firstAccurate = resolved.accurate;
@@ -524,20 +519,9 @@ export class PendingHit {
         }
         const range = successfulRolls > 0 ? traits.damageRangeBySuccessfulAccuracyRolls?.[successfulRolls - 1] : undefined;
 
-        // maximumHitSplitCount divides the final max hit across the hit sequence.
-        const splitCount = Math.max(1, Math.trunc(traits.maximumHitSplitCount ?? 1));
-        let splitFraction = 1;
-        if (splitCount > 1) {
-            const total = Math.max(1, DamageFormulas.sourceMaxHit(this.attacker, this.combatType));
-            const index = Math.max(0, Math.min(splitCount - 1, hitIndex));
-            splitFraction =
-                (Math.floor((total * (index + 1)) / splitCount) - Math.floor((total * index) / splitCount)) /
-                total;
-        }
-
         const bounds: SpecialDamageBounds = {
-            minimumMultiplier: (range?.minimumDamageMultiplier ?? traits.minimumDamageMultiplier ?? 0) * splitFraction,
-            maximumMultiplier: (range?.maximumDamageMultiplier ?? traits.maximumDamageMultiplier ?? 1) * splitFraction,
+            minimumMultiplier: range?.minimumDamageMultiplier ?? traits.minimumDamageMultiplier ?? 0,
+            maximumMultiplier: range?.maximumDamageMultiplier ?? traits.maximumDamageMultiplier ?? 1,
             minimumBonus: traits.minimumDamageBonus,
             maximumBonus: traits.maximumDamageBonus,
             cap: traits.maximumDamageCap,

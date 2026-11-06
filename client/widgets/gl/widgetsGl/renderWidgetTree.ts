@@ -3476,12 +3476,40 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
             // Where the text landed, so wheel input can tell text from the empty box around it.
             w._textBounds = undefined;
             if (effectiveText.length) {
+                const resolvedFont = opts.fontLoader(w.fontId ?? -1);
+                // A plugin may draw other text (a translation) and pick the line height it needs
+                // to fit; the widget's own text, which scripts read, stays as it is.
+                let displayLineHeight: number | undefined;
+                const plugins = osrsClient?.clientPlugins;
+                if (plugins?.hasWidgetDisplayText?.()) {
+                    const uid = (w.uid as number) | 0;
+                    const display = plugins.widgetDisplayText({
+                        groupId: w.groupId | 0,
+                        text: effectiveText,
+                        width: logicalWidth,
+                        height: logicalHeight,
+                        lineHeight: (w.lineHeight as number) | 0,
+                        font: resolvedFont,
+                        uid,
+                        parentUid: typeof w.parentUid === "number" && w.parentUid >= 0 ? w.parentUid : undefined,
+                        siblingText: (offset: number) => {
+                            const child = (uid & 0xffff) + offset;
+                            if (child < 0 || child > 0xffff) return undefined;
+                            const sibling = widgetManager?.getWidgetByUid?.((uid & ~0xffff) | child);
+                            return typeof sibling?.text === "string" ? sibling.text : undefined;
+                        },
+                    });
+                    if (display) {
+                        effectiveText = display.text;
+                        displayLineHeight = display.lineHeight;
+                    }
+                }
                 const normalized = effectiveText.replace(/<br\s*\/?\s*>/gi, "\n");
                 // OSRS type-4 widgets use drawLines(), but short widgets disable automatic
                 // word wrapping and only honor explicit line breaks.
                 // When textLineHeight == 0, OSRS uses font.ascent as the line height.
-                const resolvedFont = opts.fontLoader(w.fontId ?? -1);
                 const lineH =
+                    displayLineHeight ||
                     (w.lineHeight as number) | 0 ||
                     ((resolvedFont as any)?.lineHeight as number) ||
                     ((resolvedFont as any)?.ascent as number) ||

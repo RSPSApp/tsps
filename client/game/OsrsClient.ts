@@ -1836,8 +1836,8 @@ export class OsrsClient {
                 applyWildernessHudLayout(self.widgetManager, self.varManager, scriptId);
                 self.clientPlugins.onScriptFinished(scriptId);
             },
-            onScriptPre: (scriptId: number) => {
-                self.clientPlugins.onScriptPreFired(scriptId);
+            onScriptPre: (scriptId: number, vm?: Cs2Vm) => {
+                self.clientPlugins.onScriptPreFired(scriptId, vm);
             },
             clientRevision: 235,
             // Canvas dimensions as defined by the renderer's current UI layout space.
@@ -7947,7 +7947,7 @@ export class OsrsClient {
         }
 
         if (block.say && ecsId !== undefined) {
-            this.npcEcs.setOverheadText(ecsId, block.say, 100);
+            this.npcEcs.setOverheadText(ecsId, this.clientPlugins.npcOverheadText(serverId, block.say), 100);
         }
 
         if (block.colorOverride && ecsId !== undefined) {

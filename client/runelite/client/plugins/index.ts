@@ -62,6 +62,7 @@ import { ShortestPathPlugin } from "../../../game/plugins/shortestpath/ShortestP
 import type { LegacyConfigMigration } from "../../impl/LegacyConfigMigration";
 import { migrateGroundItemsConfig } from "../../../game/plugins/grounditems/migrateGroundItems";
 import { TooltipPlugin } from "../ui/overlay/tooltip/TooltipOverlay";
+import { OsrsTranslatePlugin } from "../../../game/plugins/osrstranslate/OsrsTranslatePlugin";
 import { ConfigPlugin } from "./config/ConfigPlugin";
 import type { PluginClass } from "./Plugin";
 
@@ -102,6 +103,8 @@ export const CORE_PLUGINS: ReadonlyArray<PluginClass> = [
     ChatPastePlugin,
     TimestampPlugin,
     ChatFilterPlugin,
+    // Rewrites drawn text only; after the chat plugins, whose chatbox callbacks it shares.
+    OsrsTranslatePlugin,
     AnimationSmoothingPlugin,
     TimersPlugin,
     StatusBarsPlugin,

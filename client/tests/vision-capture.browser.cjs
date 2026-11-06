@@ -85,10 +85,10 @@ function freePort() {
 }
 
 // Kill only browsers this harness launched, identified by their unique
-// --user-data-dir (mkdtemp temp profile, prefix vision-cap-). Never touches
+// --user-data-dir (mkdtemp profile unique to this invocation). Never touches
 // other Chrome/Edge processes: the user's own windows keep running, even if
 // they spawn tabs mid-capture. (A blanket PID-diff kill used to catch them.)
-const PROFILE_MARKER = "vision-cap-";
+const PROFILE_MARKER = `vision-cap-${process.pid}-`;
 
 function killOurBrowserProcesses() {
   if (process.platform !== "win32") return;
@@ -182,7 +182,7 @@ const SMOOTHING_JS = `((pm) => pm.getPlugins().find((p) => pm.getDescriptor(p).n
 // SwiftShader.
 async function tryBrowser(bin, viewport, budgetMs, targetHref) {
   const debugPort = await freePort();
-  const profile = fs.mkdtempSync(path.join(os.tmpdir(), "vision-cap-"));
+  const profile = fs.mkdtempSync(path.join(os.tmpdir(), PROFILE_MARKER));
   const proc = spawn(bin, [
     "--headless=new", "--no-first-run", "--no-default-browser-check",
     "--mute-audio", "--hide-scrollbars",
@@ -271,7 +271,7 @@ async function main() {
 
     const candidates = findBrowsers();
     if (candidates.length === 0) throw new Error("no Chromium found (set VISION_CHROME_PATH)");
-    // Reap stale harness browsers from earlier (crashed) runs before probing.
+    // Reap only this invocation's prior browser candidates before probing.
     killOurBrowserProcesses();
     const tried = [];
     let cdp = null;

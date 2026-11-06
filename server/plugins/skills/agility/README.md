@@ -4,6 +4,11 @@
 (`plugins/skills/data/agility-shortcuts.json`, data) through `ObstacleRunner.Agility.js`, a step list run one
 game tick at a time.
 
+An explicit `{ merge: { start, end, minX, minZ, maxX, maxZ } }` step schedules
+the legacy merge packet for the player and its current observers. Delays are
+20ms client cycles; signed bounds are relative to the loc anchor and may be reversed.
+The active revision241 client consumes it without a rendering change. Collision, the map object and saved state remain intact.
+
 ## Shortcuts
 
 Each entry in `agility-shortcuts.json`'s `shortcuts`:

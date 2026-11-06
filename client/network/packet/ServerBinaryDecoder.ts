@@ -1701,6 +1701,24 @@ export function decodeServerPacket(data: Uint8Array | ArrayBuffer): DecodedServe
             return { type: "hide_obj_ops", payload: { hidden: (reader.readByte() & 0xff) !== 0 } };
         }
 
+        case ServerPacketId.LOC_MERGE: {
+            const locId = reader.readShort();
+            const tile = { x: reader.readShort(), y: reader.readShort() };
+            const level = reader.readByte();
+            const shapeRot = reader.readByte();
+            const playerIndex = reader.readShort();
+            const start = reader.readShort();
+            const end = reader.readShort();
+            const minX = (reader.readByte() << 24) >> 24;
+            const minZ = (reader.readByte() << 24) >> 24;
+            const maxX = (reader.readByte() << 24) >> 24;
+            const maxZ = (reader.readByte() << 24) >> 24;
+            return { type: "loc_merge", payload: {
+                locId, tile, level, shape: shapeRot >> 2, rotation: shapeRot & 3,
+                playerIndex, start, end, minX, minZ, maxX, maxZ,
+            } };
+        }
+
         case ServerPacketId.LOC_ANIM: {
             const locId = reader.readShort();
             const tile = { x: reader.readShort(), y: reader.readShort() };

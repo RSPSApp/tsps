@@ -109,6 +109,7 @@ export const enum ServerPacketId {
     LOC_DEL = 135,
     LOC_ANIM = 136,
     CAMERA_CONTROL = 137,
+    LOC_MERGE = 138, // temporary player/loc model attachment
     SOUND = 131,
     PLAY_JINGLE = 132,
     PLAY_SONG = 133,
@@ -258,6 +259,7 @@ export const SERVER_PACKET_LENGTHS: Record<ServerPacketId, number> = {
     [ServerPacketId.LOC_CHANGE]: -1,
     [ServerPacketId.LOC_ADD_CHANGE]: -1,
     [ServerPacketId.LOC_DEL]: -1,
+    [ServerPacketId.LOC_MERGE]: 18, // loc/tile/shape + player index + cycle interval + signed bounds
     [ServerPacketId.LOC_ANIM]: 10, // locId(2) + x(2) + y(2) + level(1) + shape/rot(1) + animId(2)
     [ServerPacketId.CAMERA_CONTROL]: -1,
     [ServerPacketId.SOUND]: -1,

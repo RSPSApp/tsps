@@ -1577,7 +1577,7 @@
       "object": 30962,
       "at": [3726,10245,1],
       "level": 1,
-      "note": "rsprox captures 231/00712, 231/00714, 231/00715 (and Leagues captures): the player faces it, then a 60-cycle exact move to the far side the tick after, with human_swim_cavewall (obstacle1, the tunnel, the plant door) or human_swim_shipwall (obstacle2); no message or XP. Each is crossed across the line of its _join pieces. Not done: the loc_merge that blends the obstacle's model with the player during the swim (no support for it yet).",
+      "note": "rsprox captures 231/00712, 231/00714, 231/00715 (and Leagues captures): the player faces it, then a 60-cycle exact move to the far side the tick after, with human_swim_cavewall (obstacle1, the tunnel, the plant door) or human_swim_shipwall (obstacle2); no message or XP recorded. Each is crossed across the line of its _join pieces. The loc_merge protocol now exists; this loc's presentation has not yet been individually verified. The Wiki currently states 4.5 XP per crossing, unlike these captures; the verified 3760,10277 consumer follows the Wiki.",
       "between": {"ends":[[3725,10245,1],[3727,10245,1]],"cross":[{"face":"to"},{"wait":1},{"use":"climbOver","args":["to","SWIM_CAVEWALL",2]}]}
     },
     {
@@ -1592,7 +1592,9 @@
       "object": 30962,
       "at": [3760,10277,1],
       "level": 1,
-      "between": {"ends":[[3759,10277,1],[3761,10277,1]],"cross":[{"face":"to"},{"wait":1},{"use":"climbOver","args":["to","SWIM_CAVEWALL",2]}]}
+      "xp": 4.5,
+      "note": "rsprox231/00714 tick261: loc_merge shape10 rotation3 start0 end60 minx1 maxx-1 minz0 maxz0 accompanies the exact move. Reverse bounds cover the same normalized extent. The Wiki awards 4.5 Agility XP per obstacle; used over the recording's absent XP update. Other underwater locs retain their existing presentation pending individual consumer verification.",
+      "between": {"ends":[[3759,10277,1],[3761,10277,1]],"cross":[{"face":"to"},{"wait":1},{"merge":{"start":0,"end":60,"minX":1,"minZ":0,"maxX":-1,"maxZ":0}},{"use":"climbOver","args":["to","SWIM_CAVEWALL",2]}]}
     },
     {
       "name": "Obstacle (Fossil Island sea floor, 3763,10244)",

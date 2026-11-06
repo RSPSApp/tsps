@@ -5,6 +5,7 @@
 // ClientConnection.dispatch. Short of dispatch, because the loc would need its map and a walk: the
 // coffers and the chest through PM.emitObjectInteraction, the death through
 // PlayerDeathTask.dropItems, and Perdu's unlock through its _test export.
+// Keep bot activity out of this native fixture.
 process.env.DISABLE_PLAYER_BOTS = "1";
 
 const assert = require("node:assert/strict");

@@ -188,7 +188,7 @@ object ActorBlocks {
             direction = reader.u16leA() and 2047,
         )
 
-    private fun appearance(reader: BlockReader): AppearanceBlock {
+    internal fun appearance(reader: BlockReader): AppearanceBlock {
         val gender = reader.u8()
         val skull = reader.u8().let { if (it == 0xFF) -1 else it }
         val prayer = reader.u8().let { if (it == 0xFF) -1 else it }
@@ -230,7 +230,7 @@ object ActorBlocks {
     private fun Int.noneAsMinusOne() = if (this == 0xFFFF) -1 else this
 
     private const val WORN_SLOTS = 12
-    private const val OBJ_OFFSET = 512
+    private const val OBJ_OFFSET = 2048
     private const val KIT_OFFSET = 256
 }
 

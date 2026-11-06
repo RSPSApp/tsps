@@ -14,7 +14,8 @@
  *
  * The lit mining helmet can be put out again (Wiki: "You can extinguish it if you want it unlit"): the
  * old click that turned it unlit was the only way back, so a helmet lit outside the Lumbridge basement
- * could never be lit there for the diary. Extinguishing the other lights is not here.
+ * could never be lit there for the diary. A lit torch can also be extinguished except when it is
+ * the player's only light in the currently modelled dark area (Wiki: Light sources).
  *
  * The torch used on a fire or range lights it (Wiki: "may be used with a tinderbox or dry sticks, or
  * used on a fire or range"). It needs a handler of its own because Cooking registers a `fallback`
@@ -25,6 +26,7 @@
  * option, which Sea Slug owns (30 Firemaking, can fail, uses the sticks, moves the quest on).
  */
 const { isCooker } = require("../skills/Cooking.plugin");
+const Darkness = require("../world/Darkness.plugin");
 
 let core;
 /** Unlit item id -> { lit, level, message? }. */
@@ -82,6 +84,16 @@ function extinguishHelmet({ player, item }) {
   return true;
 }
 
+/** Extinguish only the clicked torch, unless it is the last light in the dark. */
+function extinguishTorch({ player, item }) {
+  if (item?.getId() !== core.ItemIdentifiers.LIT_TORCH) return false;
+  const inDarkness = Darkness.LUMBRIDGE_SWAMP_CAVES_BOUNDS.some((bounds) => bounds.inside(player.getLocation()));
+  if (inDarkness && !Darkness.hasLightSource(player, item)) return true;
+  item.setId(core.ItemIdentifiers.UNLIT_TORCH);
+  player.getInventory().refreshItems();
+  return true;
+}
+
 module.exports = {
   name: "LightSources",
   members: true,
@@ -91,6 +103,7 @@ module.exports = {
     api.onItemOnItem(light, { noted: false });
     api.onItemOnObject(lightOnObject, { noted: false });
     api.onItemAction("Mining helmet", { Extinguish: extinguishHelmet });
+    api.onItemAction("Lit torch", { Extinguish: extinguishTorch });
   },
   _test: { build, lightOnObject },
 };

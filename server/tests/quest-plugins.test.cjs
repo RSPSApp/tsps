@@ -23244,3 +23244,90 @@ test('native View info derives the original overview for started and completed P
     assert.deepEqual(player.getInventory().getItems(), items);
   }
 });
+
+test('Edmond Talk-to routes a fresh player to Plague City instead of Song of the Elves', () => {
+  const runtime = require('../plugins/quests/QuestRuntime');
+  const transcripts = [];
+  const originalStartTranscript = runtime.startTranscript;
+  runtime.startTranscript = (_api, _player, npcId, page, variant) => {
+    transcripts.push({ npcId, page, variant });
+    return true;
+  };
+  const completed = new Set();
+  const eventName = 'quest:is-complete';
+  const previousHooks = PluginManager.customEventHooks.get(eventName);
+  const prerequisiteAnswers = (event) => {
+    if (completed.has(event.key)) event.complete = true;
+  };
+  try {
+    const api = PluginManager.createApi('SoteEdmondDispatchTest');
+    require('../plugins/quests/quests/SongOfTheElves.Quest')(api);
+    require('../plugins/quests/quests/PlagueCity.Quest')(api);
+    PluginManager.createApi('SoteEdmondPrerequisiteAnswers').onCustomEvent(eventName, prerequisiteAnswers);
+
+    const attributes = new Map();
+    const messages = [];
+    let skillLevel = 1;
+    const player = {
+      getAttribute: (key) => attributes.get(key),
+      setAttribute: (key, value) => attributes.set(key, value),
+      getInventory: () => ({
+        getAmount: () => 0, getFreeSlots: () => 28, isFull: () => false,
+        contains: () => false, adds: () => true, deleteNumber: () => true,
+      }),
+      getEquipment: () => ({ getItems: () => [], get: () => null }),
+      getPacketSender: () => new Proxy({}, { get: () => () => {} }),
+      getDialogueManager: () => ({ isActive: () => false, startDialogues() {}, reset() {} }),
+      getSkillManager: () => ({ getMaxLevel: () => skillLevel, getCurrentLevel: () => skillLevel }),
+      sendMessage: (text) => messages.push(text),
+      getLocation: () => ({ getX: () => 0, getY: () => 0, getZ: () => 0 }),
+      isRegistered: () => true,
+    };
+    const npcId = api.core.NpcIdentifiers.EDMOND_2;
+    const definition = { getName: () => 'Edmond', getActions: () => ['Talk-to'] };
+    const npc = { getCurrentDefinition: () => definition, getId: () => npcId };
+    const dispatch = () => {
+      messages.length = 0;
+      const event = {
+        player, npc, npcId, clickType: 1, handled: false, definition,
+        location: { x: 0, y: 0, z: 0 },
+      };
+      return { handled: PluginManager.emitNpcInteraction(event), event };
+    };
+
+    const fresh = dispatch();
+    assert.equal(fresh.handled, false, 'Song of the Elves must not swallow Edmond for a fresh player');
+    assert.deepEqual(messages, [], 'a fresh player must not see Song of the Elves requirements');
+    assert.deepEqual(transcripts, []);
+    const pages = [
+      { page: 'Plague City', variants: ['starting-the-quest-talking-to-edmond'] },
+      { page: 'Song of the Elves', variants: ['starting-out-talking-to-edmond'] },
+    ];
+    assert.equal(
+      PluginManager.emitNpcDialogueVariant({ player, npc, npcId, definition, pages }),
+      'starting-the-quest-talking-to-edmond',
+      'the shared dialogue dispatch selects Plague City start'
+    );
+
+    completed.add('plague_city');
+    const refused = dispatch();
+    assert.equal(refused.handled, true, 'Song of the Elves owns Edmond once Plague City is complete');
+    assert.ok(messages.some((text) => text.includes("Mourning's End Part II")),
+      'eligible players still get the Song of the Elves prerequisite refusal');
+    assert.deepEqual(transcripts, []);
+
+    completed.add('mournings_end_part_ii');
+    completed.add('making_history');
+    completed.add('druidic_ritual');
+    skillLevel = 70;
+    const started = dispatch();
+    assert.equal(started.handled, true);
+    assert.deepEqual(transcripts, [{
+      npcId, page: 'Song of the Elves', variant: 'starting-out-talking-to-edmond',
+    }], 'eligible players still start Song of the Elves');
+  } finally {
+    runtime.startTranscript = originalStartTranscript;
+    if (previousHooks) PluginManager.customEventHooks.set(eventName, previousHooks);
+    else PluginManager.customEventHooks.delete(eventName);
+  }
+});

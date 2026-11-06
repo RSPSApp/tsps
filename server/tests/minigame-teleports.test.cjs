@@ -441,3 +441,23 @@ test('enabled league casts use their own lock/landing ticks and release movement
         assert.ok(!cancelled.ticks.flat().some(e => e.startsWith('teleport')));
     }
 });
+
+test('Soul Wars lands in the lobby on the Isle of Souls, not the tutorial instance template', () => {
+    const destinations = require('../plugins/interface/data/minigame-teleports.json').minigames;
+    const soulWarsData = require('../plugins/minigames/data/soul-wars.json');
+    const lobby = soulWarsData.lobby;
+    const soulWars = destinations['Soul Wars'];
+    assert.ok(soulWars, 'the Soul Wars teleport exists');
+    assert.deepEqual([soulWars.x, soulWars.y], [lobby.arrive[0], lobby.arrive[1]],
+        'the destination is the Soul Wars portal arrival the plugin itself uses');
+    const [x0, y0, x1, y1] = lobby.bounds;
+    assert.ok(soulWars.x >= x0 && soulWars.x <= x1 && soulWars.y >= y0 && soulWars.y <= y1,
+        'the destination is inside the registered Soul Wars lobby Area');
+    // 2018,5929 is inside the tutorial/arena template. No world map area covers it, so the map
+    // and minimap cannot show the island there (issue #2724).
+    const [templateChunkX, templateChunkY] = soulWarsData.tutorial.chunk;
+    const [templateChunksX, templateChunksY] = soulWarsData.tutorial.size;
+    const inTemplate = soulWars.x >= templateChunkX * 8 && soulWars.x < (templateChunkX + templateChunksX) * 8
+        && soulWars.y >= templateChunkY * 8 && soulWars.y < (templateChunkY + templateChunksY) * 8;
+    assert.ok(!inTemplate, 'never the tutorial instance template');
+});

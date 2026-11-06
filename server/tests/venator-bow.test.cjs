@@ -431,4 +431,135 @@ test('bank Configure-Charges conserves Venator essence when refund space is limi
             assert.equal(after.essence, before.essence + 100, details);
         }
     });
+
+
+    for (const mode of ['increase', 'decrease', 'withdraw-increase', 'replace-increase']) await t.test(mode, async (t) => {
+        const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true,
+            send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+        const player = new Player(new PlayerSession(channel));
+        player.setIndex(index++); player.setUsername(`bowrefund_${mode}`);
+        player.setRegistered(true); player.setLocation(new native.Location(3226, 3218));
+        player.needsPlacement = false;
+        const connection = new ClientConnection(channel); connection.player = player;
+        const inventory = player.getInventory();
+        t.after(() => {
+            player.closeInterruptibleInterfaces();
+            PM.emitPlayerLogout({ player, username: player.getUsername() });
+            player.setRegistered(false); native.TaskManager.cancelTasks(player.getIndex());
+            native.TaskManager.cancelTasks(player); native.TaskManager.process();
+            for (const ground of native.World.getItems().filter(g => g.getOwner() === player.getUsername())) {
+                native.ItemOnGroundManager.deregister(ground);
+            }
+        });
+        let turns = 0;
+        const turn = () => {
+            assert.ok(++turns <= 20, 'bounded native phase budget'); player.resetUpdating();
+            native.World.processCycle = (native.World.processCycle + 1) & 0x7fffffff;
+            native.TaskManager.process(); connection.processTurnPackets();
+            const queue = player.getMovementQueue(); queue.beginCycle(); queue.processEntityPursuit();
+            if (queue.hasPendingWork()) queue.process(); native.TaskManager.processWalkTo(player.getIndex());
+        };
+        const send = async packet => { await connection.dispatch([packet]); turn(); };
+        const floor = id => native.World.getItems().filter(g => !g.isPendingRemoval()
+            && g.getOwner() === player.getUsername() && g.getPrivateArea() === player.getPrivateArea()
+            && g.getItem().getId() === id).reduce((n, g) => n + g.getItem().getAmount(), 0);
+        const owned = id => inventory.getAmount(id) + player.getEquipment().getAmount(id)
+            + player.getBanks().reduce((n, bank, tab) => n + (bank && tab !== Bank.BANK_SEARCH_TAB_INDEX ? bank.getAmount(id) : 0), 0)
+            + floor(id);
+        inventory.add(new native.Item(ids.VENATOR_BOW_UNCHARGED_), false);
+        inventory.add(new native.Item(essence, 1000), false);
+        const heldBow = inventory.getItems()[inventory.getSlotForItemId(ids.VENATOR_BOW_UNCHARGED_)];
+        await send({ type: 'inventory_use_on', slot: inventory.getSlotForItemId(essence), itemId: essence,
+            target: { kind: 'inventory', slot: inventory.getSlotForItemId(ids.VENATOR_BOW_UNCHARGED_),
+                itemId: ids.VENATOR_BOW_UNCHARGED_ } });
+        assert.ok(player.getEnteredAmountAction(), 'real essence-on-bow opens the amount prompt');
+        assert.equal(VenatorBow._test.charges(heldBow), 0);
+        await send({ type: 'dialogue_amount', amount: 100 });
+        assert.equal(heldBow.getId(), ids.VENATOR_BOW);
+        assert.equal(VenatorBow._test.charges(heldBow), 100, 'real charging producer');
+        assert.equal(owned(essence), (1000) - 100);
+        const replenished = 0;
+        if (replenished) {
+            const at = player.getLocation();
+            native.ItemOnGroundManager.registerLocation(player, new native.Item(essence, replenished), at.clone());
+            assert.equal(floor(essence), replenished);
+            await send({ type: 'ground_item_action', itemId: essence, x: at.getX(), y: at.getY(), option: 'Take', optionIndex: 3 });
+            for (let wait = 0; wait < 4 && floor(essence) > 0; wait++) turn();
+            assert.equal(floor(essence), 0, 'native pickup credited the full lawful top-up');
+        }
+        player.closeInterruptibleInterfaces();
+        player.getBank(0).open(); assert.equal(Bank.isOpen(player), true);
+        Bank.deposits(player, ids.VENATOR_BOW, inventory.getSlotForItemId(ids.VENATOR_BOW), 1);
+        Bank.deposits(player, essence, inventory.getSlotForItemId(essence), inventory.getAmount(essence));
+        assert.equal(inventory.getAmount(essence), 0); assert.equal(inventory.getAmount(ids.VENATOR_BOW), 0);
+        const tab = Bank.getTabForItem(player, ids.VENATOR_BOW), bank = player.getBank(tab);
+        assert.equal(tab, 0, 'both deposits use the first native bank tab');
+        const slot = bank.getSlotForItemId(ids.VENATOR_BOW), bankedBow = bank.getItems()[slot];
+        assert.equal(bankedBow.getAmount(), 1); assert.equal(VenatorBow._test.charges(bankedBow), 100);
+        assert.equal(Bank.resolveDisplaySlot(player, slot)?.item, bankedBow, 'packet slot resolves the actual deposited bow');
+        const bankEssence = player.getBank(Bank.getTabForItem(player, essence));
+        const addable = bankEssence.getAddableAmount(new native.Item(essence, 100));
+        assert.equal(addable, 100);
+        const totalCharges = () => [inventory, player.getEquipment(), ...player.getBanks().filter((bank, tab) => bank && tab !== Bank.BANK_SEARCH_TAB_INDEX)]
+            .flatMap(container => container.getItems())
+            .filter(item => item && [ids.VENATOR_BOW, ids.VENATOR_BOW_UNCHARGED_].includes(item.getId()) && item.getAmount() > 0)
+            .reduce((sum, item) => sum + VenatorBow._test.charges(item) * item.getAmount(), 0);
+        const state = () => ({ mode, essence: owned(essence), charges: totalCharges(),
+            bows: owned(ids.VENATOR_BOW) + owned(ids.VENATOR_BOW_UNCHARGED_), bankOpen: Bank.isOpen(player) });
+        const before = state();
+        const resources = ({ essence, charges, bows }) => ({ essence, charges, bows });
+        assert.deepEqual({ essence: before.essence, charges: before.charges, bows: before.bows, bankOpen: before.bankOpen },
+            { essence: 900, charges: 100, bows: 1, bankOpen: true });
+        await send({ type: 'widget_action', widgetId: (Bank.MAIN_INTERFACE_ID << 16) | Bank.ITEMS_CHILD,
+            groupId: Bank.MAIN_INTERFACE_ID, childId: Bank.ITEMS_CHILD, buttonNum: 9,
+            slot, itemId: Bank.displayItemId(bankedBow) });
+        const action = player.getEnteredAmountAction();
+        assert.equal(action?.acceptsZero, true, 'native Configure-Charges prompt accepts zero');
+        assert.equal(player.getPacketSender().hasInputPrompt(), true);
+        assert.deepEqual(state(), before, 'opening prompt does not change owned resources');
+        if (mode === 'withdraw-increase' || mode === 'replace-increase') {
+            await send({ type: 'widget_action', widgetId: (Bank.MAIN_INTERFACE_ID << 16) | Bank.ITEMS_CHILD,
+                groupId: Bank.MAIN_INTERFACE_ID, childId: Bank.ITEMS_CHILD, buttonNum: 2, option: 'Withdraw-1',
+                slot, itemId: Bank.displayItemId(bankedBow) });
+            assert.equal(bank.getItems().includes(bankedBow) && bankedBow.getAmount() > 0, false, 'original bank object no longer live');
+            const heldSlot = inventory.getSlotForItemId(ids.VENATOR_BOW);
+            assert.ok(heldSlot >= 0, 'real withdrawal puts charged bow in inventory');
+            const withdrawn = inventory.getItems()[heldSlot];
+            assert.equal(VenatorBow._test.charges(withdrawn), 100);
+            assert.deepEqual(resources(state()), resources(before), 'withdrawal preserves resources');
+            // Cancellation is also safe: do not resurrect an action the server cleared.
+            if (player.getEnteredAmountAction() !== action || !Bank.isOpen(player)) return;
+            if (mode === 'replace-increase') {
+                await send({ type: 'widget_action', widgetId: (Bank.SIDE_INTERFACE_ID << 16) | 3,
+                    groupId: Bank.SIDE_INTERFACE_ID, childId: 3, buttonNum: 1, option: 'Deposit-1',
+                    slot: heldSlot, itemId: ids.VENATOR_BOW });
+                const liveSlot = bank.getSlotForItemId(ids.VENATOR_BOW);
+                assert.ok(liveSlot >= 0, 'real deposit replaces banked bow');
+                assert.notEqual(bank.getItems()[liveSlot], bankedBow, 'replacement is not the prompt object');
+                assert.equal(VenatorBow._test.charges(bank.getItems()[liveSlot]), 100);
+                assert.deepEqual(resources(state()), resources(before), 'replacement preserves resources');
+                if (player.getEnteredAmountAction() !== action || !Bank.isOpen(player)) return;
+            }
+        }
+        await send({ type: 'dialogue_amount', amount: mode === 'decrease' ? 0 : 200 });
+        const after = state(), details = JSON.stringify({ before, after });
+        assert.equal(after.essence + after.charges, before.essence + before.charges,
+            'owned essence and stored charges must be conserved: ' + details);
+        assert.equal(after.bows, 1, details);
+        if (mode === 'withdraw-increase') {
+            const live = inventory.getItems()[inventory.getSlotForItemId(ids.VENATOR_BOW)];
+            assert.ok(live && live !== bankedBow, 'withdrawn instance remains owned');
+            assert.equal(VenatorBow._test.charges(live), 100, 'withdrawn bow is unchanged');
+            assert.equal(after.essence, before.essence, details);
+        } else if (mode === 'replace-increase') {
+            const live = bank.getItems()[bank.getSlotForItemId(ids.VENATOR_BOW)];
+            assert.ok(live && live !== bankedBow, 'replacement instance remains owned');
+            assert.equal(VenatorBow._test.charges(live), 100, 'replacement bow is unchanged');
+            assert.equal(after.essence, before.essence, details);
+        } else if (mode === 'increase') {
+            assert.equal(after.essence, 800, details); assert.equal(after.charges, 200, details);
+        } else if (mode === 'decrease') {
+            assert.equal(after.essence, 1000, details); assert.equal(after.charges, 0, details);
+        }
+    });
 });

@@ -103,6 +103,16 @@ box's scripts share): 0 = 1, 1 = 5, 2 = All, 3 = X. Cache scripts 4052 (Withdraw
 (Deposit) put the selected quantity on op1 and fix ops 2-5 as 1, 5, X and All. Fill (683:8)
 moves everything the box takes, silently; Empty (683:9) says "The tackle box is now empty."
 
+## Forester's rations and ordinary axes
+
+On a successful chop with a carried or worn one-handed ordinary axe, a ration in
+the inventory or a carried/worn Forestry kit has a 30% chance to restore 20 run
+energy points when energy is below 90%. The proc consumes one ration. This
+combines [Jagex's original rule](https://secure.runescape.com/m=news/forestry-the-way-of-the-forester---part-one?oldschool=1)
+with the current [Forestry kit threshold](https://oldschool.runescape.wiki/w/Forestry_kit);
+it is not a captured numeric observation. The separate felling-axe energy and
+ration-consumption interaction remains unimplemented and unverified.
+
 ## Forestry kit interface
 
 Captured (rsprox 1704, rev 227; 1104, rev 237): View sends inventory 814, runs script 917
@@ -154,6 +164,6 @@ Elemental ore: "Even this spell is not hot enough to heat this item." (Wiki).
 
 ## Not done
 
-- The Forestry kit's clothes and cape pouches, and the Forester's rations' run energy.
+- The Forestry kit's clothes and cape pouches, and Forester's ration run-energy effects while using a felling axe.
 - The deposit box's container options; the Ultimate Ironman bank-booth emptying of the fish
   barrel.

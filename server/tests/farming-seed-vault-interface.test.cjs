@@ -7,6 +7,7 @@ const { PluginManager } = require("../dist/plugins/PluginManager");
 const { Player } = require("../dist/game/entity/impl/player/Player");
 const { PlayerSession } = require("../dist/net/PlayerSession");
 const { PlayerDeathTask } = require("../dist/game/task/impl/PlayerDeath");
+const { ATTR_SKIP_PERSISTENCE } = require("../plugins/bots/runtime/PersistenceConstants.PlayerBots");
 const { ClientConnection } = require("../dist/net/NetworkBuilder");
 let core, Data, Patches, vaultObject, Pin;
 let nextIndex = 100;
@@ -71,13 +72,19 @@ function actor(t) {
     };
     const p = new Player(new PlayerSession(channel));
     t.after(() => {
-        // Death tasks use a shared default key; stop only this actor's unkeyed death task.
-        for (const task of [...core.TaskManager.pendingTasks.toArray(), ...core.TaskManager.activeTasks])
-            if (task instanceof PlayerDeathTask && task.player === p) task.stop();
-        core.TaskManager.cancelTasks(p);
-        if (p.getIndex() >= 0) core.TaskManager.cancelTasks(p.getIndex());
-        p.setRegistered(false);
+        try {
+            core.GameConstants.PLAYER_PERSISTENCE.cancelRequestedSave(p);
+            // Death tasks use a shared default key; stop only this actor's unkeyed death task.
+            for (const task of [...core.TaskManager.pendingTasks.toArray(), ...core.TaskManager.activeTasks])
+                if (task instanceof PlayerDeathTask && task.player === p) task.stop();
+            core.TaskManager.cancelTasks(p);
+            if (p.getIndex() >= 0) core.TaskManager.cancelTasks(p.getIndex());
+            p.getMovementQueue().reset();
+        } finally {
+            p.setRegistered(false);
+        }
     });
+    p.setAttribute(ATTR_SKIP_PERSISTENCE, true);
     p.setIndex(nextIndex++);
     p.setUsername("vaultqa" + p.getIndex());
     p.setRegistered(true);

@@ -418,7 +418,7 @@ function store(player, location, records, layout, relocate) {
   }
   const { tile: spot, feeMultiplier: multiplier } = graveSpot(player, location);
   const deathCoord = spot ?? { x: location.getX(), y: location.getY(), z: location.getZ() };
-  const { held: items, overflow } = Common.stack(existing ? held.items : [], records, Common.GRAVE_SLOTS);
+  const { held: items, overflow } = Common.stack(existing ? held.items : [], records, Common.GRAVE_SLOTS, Fees.feeValue);
   // UNVERIFIED: what doesn't fit goes to Death's Office.
   Storage.sendToOffice(player, overflow);
   held = existing ? held : { items: [], merged: false };

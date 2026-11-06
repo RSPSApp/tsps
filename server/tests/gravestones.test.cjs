@@ -251,7 +251,7 @@ test("grave and Office fees use loaded GE quotes while preserving grave contents
   const bootMeta = { variant: "saved-boots" };
   death(player, [[RANGER_BOOTS, 1, bootMeta], [ABYSSAL_WHIP, 1], [RUNE_SCIMITAR, 1]]);
   const saved = graveOf(player);
-  assert.deepEqual(saved.items.map(item => item.id), [ABYSSAL_WHIP, RUNE_SCIMITAR, RANGER_BOOTS], "capacity selection uses cache order");
+  assert.deepEqual(saved.items.map(item => item.id).sort((a, b) => a - b), [RUNE_SCIMITAR, RANGER_BOOTS, ABYSSAL_WHIP], "the grave retains all three items");
   assert.equal(Grave.fee(player), 101000, "grave charges the loaded quote bands");
   assert.equal(Fees.feeValue(core.ItemIdentifiers.DRAGON_DEFENDER), 68007, "unquoted items retain cache value");
   assert.equal(Fees.feeValue(core.ItemIdentifiers.PHARAOHS_SCEPTRE_3_), 100, "quoted untradeable items retain cache value");
@@ -265,7 +265,8 @@ test("grave and Office fees use loaded GE quotes while preserving grave contents
   assert.equal(state.grave.officeFee, 1847614, "Office quote for the actual grave contents");
 
   // A persisted grave can still be ordered by cache value when opened after this change.
-  player.setAttribute("gravestones:grave", JSON.parse(JSON.stringify(saved)));
+  const legacyOrder = [ABYSSAL_WHIP, RUNE_SCIMITAR, RANGER_BOOTS].map(id => saved.items.find(item => item.id === id));
+  player.setAttribute("gravestones:grave", JSON.parse(JSON.stringify({ ...saved, items: legacyOrder })));
   Grave.open(player);
   assert.deepEqual(graveOf(player).items.map(item => item.id), [RANGER_BOOTS, ABYSSAL_WHIP, RUNE_SCIMITAR]);
   assert.deepEqual(sent.at(-1).items.map(item => item.id), [RANGER_BOOTS, ABYSSAL_WHIP, RUNE_SCIMITAR]);
@@ -284,4 +285,115 @@ test("grave and Office fees use loaded GE quotes while preserving grave contents
   const recovered = player.getInventory().getItems().find(item => item && item.getId() === RANGER_BOOTS);
   assert.deepEqual(recovered?.getMeta(), bootMeta, "the clicked paid slot retains its metadata");
   assert.deepEqual(graveOf(player).items.map(item => item.id), [ABYSSAL_WHIP]);
+});
+
+
+test("a full grave retains the highest fee-valued items when another death adds to it", t => {
+  const definitions = core.ItemDefinition.definitions;
+  const previous = new Map([...definitions.values()].map(def => [def, [def.grandExchangeValue, def.grandExchangeSellValue]]));
+  t.after(() => {
+    for (const def of definitions.values()) {
+      const prices = previous.get(def) ?? [undefined, undefined];
+      [def.grandExchangeValue, def.grandExchangeSellValue] = prices;
+    }
+  });
+  const loaded = require("../plugins/items/ItemDefinitionLoader.plugin")._test.loadItemPrices();
+  assert.ok(loaded.loaded > 0, "the canonical quote snapshot was loaded");
+  assert.equal(core.CacheDefinitions.getInventoryId("gravestone"), 525, "active cache grave inventory identity");
+  assert.equal(Common.GRAVE_INV, 525);
+  assert.equal(Common.GRAVE_SLOTS, 120, "server capacity matches the pinned grave inventory");
+  const boots = core.ItemDefinition.forId(RANGER_BOOTS);
+  const sceptre = core.ItemDefinition.forId(core.ItemIdentifiers.PHARAOHS_SCEPTRE_3_);
+  const defender = core.ItemDefinition.forId(core.ItemIdentifiers.DRAGON_DEFENDER);
+  assert.equal(boots.getValue(), 200);
+  assert.equal(boots.isTradeable(), true);
+  assert.equal(boots.getGrandExchangeValue(), 36201000);
+  assert.equal(Fees.officeFee(RANGER_BOOTS, false), 1810050);
+  assert.equal(sceptre.isTradeable(), false);
+  assert.equal(sceptre.getGrandExchangeValue(), 4999999);
+  assert.equal(Fees.feeValue(core.ItemIdentifiers.PHARAOHS_SCEPTRE_3_), 100, "quoted untradeable keeps cache value");
+  assert.equal(defender.hasGrandExchangeValue(), false);
+  assert.equal(Fees.feeValue(core.ItemIdentifiers.DRAGON_DEFENDER), 68007, "unquoted item keeps cache value");
+
+  // Select real, distinct equipment which can occupy inventory slots across ordinary deaths.
+  const resourceNames = new Set(require("../plugins/world/data/gravestone-resources.json").names.map(name => name.toLowerCase()));
+  const ids = [...new Set(Object.values(core.ItemIdentifiers).filter(Number.isInteger))].sort((a, b) => a - b);
+  const candidates = [];
+  for (const id of ids) {
+    if (id === RANGER_BOOTS || id < 0 || id >= core.CacheDefinitions.getCounts().items) continue;
+    const def = core.ItemDefinition.forId(id);
+    if (!def.isTradeable() || def.isNoted() || def.isStackable() || def.getValue() <= 200 ||
+        (def.getEquipmentType?.()?.getSlot?.() ?? -1) < 0 || Common.isSupply(id) ||
+        resourceNames.has(def.getName().toLowerCase())) continue;
+    const worth = Fees.feeValue(id);
+    if (worth >= 100000) continue;
+    candidates.push({ id, worth });
+  }
+  candidates.sort((a, b) => a.worth - b.worth || a.id - b.id);
+  assert.ok(candidates.length >= 120, "the active cache supplies enough eligible equipment");
+  const lowest = candidates[0];
+  const filler = [lowest, ...candidates.filter(item => item.worth > lowest.worth).slice(0, 119)];
+  assert.equal(filler.length, 120, "one unique lowest fee value and 119 higher values");
+  assert.equal(new Set(filler.map(item => item.id)).size, 120);
+  assert.ok(filler.every(item => item.worth < 100000));
+
+  const player = account("grave-overflow");
+  t.after(() => { hooks.onPlayerLogout({ player }); core.TaskManager.cancelTasks(player); player.getInventory().resetItems(); });
+  player.setRights(core.PlayerRights.NONE);
+  player.setSkullType(core.SkullType.WHITE_SKULL);
+  player.setSkullTimer(100);
+  player.getPrayerActive().fill(false);
+  assert.equal(player.isSkulled(), true);
+  const sentIds = [RANGER_BOOTS, ...filler.map(item => item.id)];
+  for (let start = 0; start < sentIds.length; start += 28) {
+    const batch = sentIds.slice(start, start + 28);
+    assert.ok(batch.length <= 28, "each death fits an inventory");
+    for (const id of batch) player.getInventory().add(new core.Item(id, 1), false);
+    const carried = player.getInventory().getValidItems();
+    assert.deepEqual(carried.map(item => item.getId()), batch, "the real inventory holds this batch");
+    assert.deepEqual(core.PlayerDeathTask.getItemsToKeep(player), [], "a skulled player without Protect Item keeps none");
+    const event = {
+      player, killer: null, location: new core.Location(3222, 3218, 0),
+      items: carried.map(item => item.clone()), untradeables: [],
+      layout: { inventory: player.getInventory().getItems().map(item => item?.getId() ?? -1), equipment: [] },
+    };
+    hooks.onPlayerDeathDrops(event);
+    player.getInventory().resetItems();
+    assert.equal(event.items.length, 0, "eligible items were stored, not dropped as supplies");
+    assert.equal(event.untradeables.length, 0);
+    const seen = start + batch.length;
+    if (seen <= 120) {
+      assert.equal(graveOf(player).items.length, seen);
+      assert.deepEqual(player.getAttribute("gravestones:office") ?? [], [], "no overflow below capacity");
+    }
+  }
+  const grave = graveOf(player).items;
+  const office = player.getAttribute("gravestones:office") ?? [];
+  assert.equal(grave.length, 120);
+  assert.equal(office.length, 1);
+  const all = [...grave, ...office];
+  assert.ok(all.every(item => item.amount === 1 && item.meta == null));
+  assert.deepEqual(all.map(item => item.id).sort((a, b) => a - b), [...sentIds].sort((a, b) => a - b), "grave and Office conserve every item");
+  assert.ok(grave.some(item => item.id === RANGER_BOOTS), "the high-quote boots stay in the grave");
+  // Equal values retain their prior order. These are real active-cache definitions.
+  const byValue = new Map();
+  for (const item of candidates) {
+    const group = byValue.get(item.worth) ?? [];
+    group.push(item.id);
+    byValue.set(item.worth, group);
+  }
+  const tied = [...byValue.values()].find(group => group.length >= 2);
+  assert.ok(tied, "the cache has distinct eligible equipment with equal fee values");
+  const tieInput = [{ id: tied[1], amount: 1 }, { id: tied[0], amount: 1 }];
+  const tieResult = Common.stack([], tieInput, 1, Fees.feeValue);
+  assert.deepEqual([tieResult.held[0].id, tieResult.overflow[0].id], [tied[1], tied[0]]);
+
+  assert.equal(office[0].id, lowest.id, "the unique least fee-valued item goes to the Office");
+  assert.equal(Fees.graveFee(grave, false), 100000);
+  assert.equal(Fees.graveFee(grave, true), 50000);
+  const state = { player };
+  custom["gravestones:state"](state);
+  assert.equal(state.office[0].fee, 0, "the free overflow item has no Office fee");
+  assert.equal(player.getAttribute("gravestones:coffer") ?? 0, 0);
+  assert.equal(player.getInventory().getValidItems().length, 0);
 });

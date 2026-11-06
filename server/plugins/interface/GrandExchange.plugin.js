@@ -74,9 +74,9 @@ const PRESET_TEXT = "Preset items cannot be used for this.";
 const COINS = ItemIdentifiers.COINS;
 const PLATINUM_TOKEN = ItemIdentifiers.PLATINUM_TOKEN;
 // OSRS Wiki Update:GE_Improvements:_Beyond_Max_Cash: payment mixes coins and platinum tokens,
-// coins first, with change in coins. Only the inventory is used (the client reads it with
-// inv_total of 995/13204 in script 9915). Cache script 779 rejects a total (varbit 4396 quantity
-// x long varp 5753 price) above lconst 500:2147482647 = 2,149,631,130,647 ("Too much money!"),
+// coins first, with change in coins. The inventory pays first (the client reads it with
+// inv_total of 995/13204 in script 9915), then the bank (see bankPayment). Cache script 779
+// rejects a total (varbit 4396 quantity x long varp 5753 price) above lconst 500:2147482647 = 2,149,631,130,647 ("Too much money!"),
 // i.e. a full stack of coins plus a full stack of tokens. The price entry (script 108) is still
 // an int prompt, so a unit price stays within MAX; only quantity x price can exceed it.
 const COINS_PER_TOKEN = 1000;
@@ -558,6 +558,84 @@ function tokensNeeded(inventory, total) {
   return tokens <= inventory.getAmount(PLATINUM_TOKEN) ? tokens : null;
 }
 
+/** Plain (not preset, untradeable or unbankable) stacks of `id`, as [slot, amount]. */
+function plainStacks(container, id) {
+  return container.getItems().flatMap((item, slot) =>
+    item?.getId() === id && item.getAmount() > 0 && !restricted(item) ? [[slot, item.getAmount()]] : []);
+}
+
+const realBankTabs = (player) => Array.from({ length: Bank.TOTAL_BANK_TABS }, (_, tab) => tab)
+  .filter((tab) => tab !== Bank.BANK_SEARCH_TAB_INDEX);
+
+/**
+ * Wiki: Grand_Exchange (Changes, 14 June 2023): "Buy offers can now use the coins from the player's
+ * bank as payment; coins in the player's inventory take precedence". Update:GE_Improvements:_Beyond_Max_Cash
+ * adds platinum tokens to the mix, taken "in whichever inventory it's taking from", with change in coins.
+ * So a buy the inventory cannot cover takes its plain coins and tokens, then the bank's coins, then
+ * the bank's tokens (change into the bank). Everything runs on copies; `{ inventory, banks }` is
+ * committed only once the offer goes through. Returns `{ message }` when it cannot be paid.
+ */
+function bankPayment(player, inventory, total) {
+  const result = new Inventory(player);
+  result.setItems(inventory.getCopiedItems());
+  let left = total;
+  let restrictedValue = 0;
+  for (const [id, value] of [[COINS, 1], [PLATINUM_TOKEN, COINS_PER_TOKEN]]) {
+    for (const [slot, amount] of plainStacks(inventory, id)) {
+      result.deleteAtSlot(slot, amount, false);
+      left -= amount * value;
+    }
+    restrictedValue += (inventory.getAmount(id) - plainStacks(inventory, id).reduce((sum, [, a]) => sum + a, 0)) * value;
+  }
+  const banks = new Map();
+  const copy = (tab) => {
+    if (!banks.has(tab)) {
+      const bank = new Bank(player);
+      bank.setItems(player.getBank(tab).getCopiedItems());
+      banks.set(tab, bank);
+    }
+    return banks.get(tab);
+  };
+  let tokenTab = -1;
+  for (const tab of realBankTabs(player)) {
+    for (const [slot, amount] of plainStacks(player.getBank(tab), COINS)) {
+      if (left <= 0) break;
+      const taken = Math.min(left, amount);
+      copy(tab).deleteAtSlot(slot, taken, false);
+      left -= taken;
+    }
+  }
+  for (const tab of realBankTabs(player)) {
+    for (const [slot, amount] of plainStacks(player.getBank(tab), PLATINUM_TOKEN)) {
+      if (left <= 0) break;
+      const taken = Math.min(Math.ceil(left / COINS_PER_TOKEN), amount);
+      copy(tab).deleteAtSlot(slot, taken, false);
+      left -= taken * COINS_PER_TOKEN;
+      tokenTab = tab;
+    }
+  }
+  if (left > 0) {
+    // Preset or other restricted copies are never spent; say so when they are what is missing.
+    const restrictedBank = realBankTabs(player).reduce((sum, tab) => {
+      const bank = player.getBank(tab);
+      return sum + [[COINS, 1], [PLATINUM_TOKEN, COINS_PER_TOKEN]].reduce((s, [id, value]) =>
+        s + (bank.getAmount(id) - plainStacks(bank, id).reduce((n, [, a]) => n + a, 0)) * value, 0);
+    }, 0);
+    return { message: restrictedValue + restrictedBank >= left ? PRESET_TEXT : "You do not have enough coins." };
+  }
+  if (left < 0) {
+    // The bank's coins were all spent before a token was, so the change (under 1,000) cannot
+    // overflow; it can still have no bank slot to land in.
+    const change = -left;
+    const bank = copy(tokenTab);
+    const before = bank.getAmount(COINS);
+    bank.add(new Item(COINS, change), false);
+    if (bank.getAmount(COINS) !== before + change) return { message: "You don't have enough bank space for your change." };
+  }
+  for (const bank of banks.values()) bank.sortItems();
+  return { inventory: result, banks };
+}
+
 function confirm(player, offer) {
   if (!active(player, offer) || !exchangeable(offer.itemId)) return;
   const amount = offer.quantity;
@@ -583,10 +661,18 @@ function confirm(player, offer) {
     (offer.sell && item.getId() > 0 && ItemDefinition.forId(item.getId()).unNote() === inputId);
   const heldAmount = inventory.getItems().filter(matchesInput).reduce((sum, item) => sum + item.getAmount(), 0);
   const tokens = offer.sell ? 0 : tokensNeeded(inventory, total);
-  if (tokens === null || (offer.sell && heldAmount < inputAmount)) {
-    sender.sendMessage(offer.sell ? "You do not have enough of that item." : "You do not have enough coins.");
+  if (offer.sell && heldAmount < inputAmount) {
+    sender.sendMessage("You do not have enough of that item.");
     return;
   }
+  // The inventory is short: the rest comes from the bank, under the bank's own access rules
+  // (an unentered Bank PIN, an Ultimate Ironman, a duel) as collecting to the bank uses.
+  const fromBank = tokens === null ? bankPayment(player, inventory, total) : null;
+  if (fromBank?.message) {
+    sender.sendMessage(fromBank.message);
+    return;
+  }
+  if (fromBank && pluginApi.emitCanBank(player, "grand-exchange-buy") === false) return;
   // Plugins may veto an offer (e.g. an untradeable item that cannot be listed).
   const confirmation = { player, itemId: offer.itemId, sell: offer.sell, quantity: amount, accepted: true };
   pluginApi.emitCustomEvent("ge:offer-confirmed", confirmation);
@@ -595,9 +681,11 @@ function confirm(player, offer) {
   }
 
   // Use the normal container rules on a copy: failed/full trades never remove live items.
-  const result = new Inventory(player);
-  result.setItems(inventory.getCopiedItems());
-  if (tokens > 0) {
+  const result = fromBank?.inventory ?? new Inventory(player);
+  if (!fromBank) result.setItems(inventory.getCopiedItems());
+  if (fromBank) {
+    // Already worked out on copies by bankPayment; committed with the inventory below.
+  } else if (tokens > 0) {
     const shortfall = total - inventory.getAmount(COINS);
     result.deleted(COINS, inventory.getAmount(COINS), false);
     result.deleted(PLATINUM_TOKEN, tokens, false);
@@ -642,6 +730,7 @@ function confirm(player, offer) {
     });
   }
   inventory.setItems(result.getItems()).refreshItems();
+  for (const [tab, bank] of fromBank?.banks ?? []) player.getBank(tab).setItems(bank.getItems());
   const delay = fillDelayMs(offer);
   const finished = { ...offer, total, finished: false, completesAt: delay === null ? null : Date.now() + delay };
   completedOffers(player)[offer.slot] = finished;

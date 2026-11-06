@@ -6,12 +6,20 @@ const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { PluginManager } = require("../dist/plugins/PluginManager");
 const { Player } = require("../dist/game/entity/impl/player/Player");
 const { PlayerSession } = require("../dist/net/PlayerSession");
+const { PlayerDeathTask } = require("../dist/game/task/impl/PlayerDeath");
 const { ClientConnection } = require("../dist/net/NetworkBuilder");
 let core, Data, Patches, vaultObject, Pin;
 let nextIndex = 100;
 const previousDisableBots = process.env.DISABLE_PLAYER_BOTS;
+const originalConsoleError = console.error;
+const caughtErrors = [];
+let hunterStartupAttempted = false;
 
 before(async () => {
+    console.error = (...args) => {
+        caughtErrors.push(args.map(String).join(" "));
+        originalConsoleError.apply(console, args);
+    };
     process.env.DISABLE_PLAYER_BOTS = "1";
     const root = path.resolve(__dirname, "..");
     await CachePipeline.initialize(root);
@@ -19,6 +27,12 @@ before(async () => {
     core = PluginManager.getCoreApi();
     core.RegionManager.init();
     core.RegionManager.loadMapFiles(1243, 3740);
+    // Registration alone leaves these real event consumers without startup context.
+    for (const hook of PluginManager.serverStartupHooks) {
+        if (!["Hunter", "WarpedSceptre"].includes(hook.pluginName)) continue;
+        if (hook.pluginName === "Hunter") hunterStartupAttempted = true;
+        hook.handler({});
+    }
     Data = require("../plugins/skills/farming/Data.Farming");
     Patches = require("../plugins/skills/farming/Patches.Farming");
     Pin = require("../plugins/interface/bankpin/Common.BankPin");
@@ -31,8 +45,17 @@ before(async () => {
 });
 
 after(() => {
-    if (previousDisableBots === undefined) delete process.env.DISABLE_PLAYER_BOTS;
-    else process.env.DISABLE_PLAYER_BOTS = previousDisableBots;
+    try {
+        if (hunterStartupAttempted) {
+            for (const hook of PluginManager.serverShutdownHooks)
+                if (hook.pluginName === "Hunter") hook.handler({});
+        }
+        assert.deepEqual(caughtErrors, [], "no caught engine or plugin errors");
+    } finally {
+        console.error = originalConsoleError;
+        if (previousDisableBots === undefined) delete process.env.DISABLE_PLAYER_BOTS;
+        else process.env.DISABLE_PLAYER_BOTS = previousDisableBots;
+    }
 });
 
 function actor(t) {
@@ -47,6 +70,14 @@ function actor(t) {
         onClose() {},
     };
     const p = new Player(new PlayerSession(channel));
+    t.after(() => {
+        // Death tasks use a shared default key; stop only this actor's unkeyed death task.
+        for (const task of [...core.TaskManager.pendingTasks.toArray(), ...core.TaskManager.activeTasks])
+            if (task instanceof PlayerDeathTask && task.player === p) task.stop();
+        core.TaskManager.cancelTasks(p);
+        if (p.getIndex() >= 0) core.TaskManager.cancelTasks(p.getIndex());
+        p.setRegistered(false);
+    });
     p.setIndex(nextIndex++);
     p.setUsername("vaultqa" + p.getIndex());
     p.setRegistered(true);

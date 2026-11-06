@@ -24,13 +24,13 @@ ticket could later carry a chosen character name.
 - Existing players see no change to what they own. Their one character is the first slot and
   keeps its name, save, friends, clan, bans and display name.
 - Every other client (native RuneLite through the gateway, headless bots, the agent MCP) keeps
-  working with no change: it enters the last played character.
+  working with no change: it enters the character whose name was typed, the primary included.
 - The feature is content a host can turn down to one slot.
 
 ## Non-goals
 
 - Cross-server anything. No shared accounts between servers.
-- A character picker for the native RuneLite client. Native enters the last played character;
+- A character picker for the native RuneLite client. Native enters the typed character;
   choosing on native is future work on the gateway (see "Later").
 - Sharing a bank, coins or items between an account's characters.
 - Renaming a character (the existing `::displayname` covers display names).
@@ -177,7 +177,8 @@ Server to client (only when the flag was set):
   then per character `string name`, `u8 combatLevel`, `u16 totalLevel`, `i64 lastPlayedAtMs`,
   `u8 flags` (bit 0 primary, bit 1 has a save on this world's profile). Sent right after a
   successful `LOGIN_RESPONSE`, and again after every create or delete. `defaultIndex` is the
-  typed character if the player typed a non-primary name, else the last played, else 0.
+  typed character if the player typed a non-primary name, else the last played, else 0, never a
+  banned character.
 - `CHARACTER_RESULT` (new id, variable-byte): `u8 ok`, `u8 code`, `string message`. Codes: 1 name
   taken, 2 invalid name, 3 slot limit reached, 4 unknown character, 5 primary cannot be deleted,
   6 confirmation did not match, 7 character online, 8 storage error, 9 primary has not entered
@@ -202,8 +203,10 @@ refused with `CHARACTER_RESULT` code 4 otherwise):
   changes) all refuse a tombstoned name.
   Replies `CHARACTER_RESULT` then `CHARACTER_LIST`.
 
-`handshake` with no prior select enters the default character (the `defaultIndex` rule). That is
-what the gateway, bots, the agent MCP and old clients get. `enterWorld` sets username, long
+`handshake` with no prior select enters the default character. With the flag that is the
+`defaultIndex` rule. Without it (the gateway, bots, the agent MCP and old clients) it is the
+typed character, the primary included, so those clients always reach every character by typing
+its name, and an existing player keeps landing on the character they typed. `enterWorld` sets username, long
 username and display name from the chosen character and applies that character's save.
 
 Reconnect: the browser client remembers the character it entered and, on automatic re-login,
@@ -281,7 +284,7 @@ No behaviour change. The gateway's `TspsLoginResult.decode` already ignores trai
 never sets the flag, so it never receives the new packets. One mechanical edit is required: the
 gateway's `TspsServerPacket` table mirrors `ServerPackets.ts` and `TspsServerPacketTest` fails on
 drift, so the two new server packet ids are added there. `connectHeadlessClient` and the MCP
-`login` tool enter the default character. The import tool from #2683 targets a character by name
+`login` tool enter the typed character. The import tool from #2683 targets a character by name
 and is unaffected.
 
 ### Admin
@@ -297,7 +300,7 @@ select, default pick, typed non-primary name resolves to the account; create wit
 name, every taken-name case, creation refused before the primary has a save; delete rules
 (primary, online, mismatch), that the save is gone, the name tombstoned for good and history re-keyed; one-account-online across two characters; token rotation and `login_forget`
 stay on the primary; `changePassword` from a non-primary writes the primary offline; handshake
-without select enters last played. Persistence: `delete` per backend in `player-saves.test.cjs`.
+without the flag enters the typed character (primary included); the default skips banned characters. Persistence: `delete` per backend in `player-saves.test.cjs`.
 
 Client (`client/tests`): packet encode and decode round trips for the three new client packets
 and two server packets; `LoginState` transitions into and out of the stage; hit tests for Play,

@@ -289,24 +289,29 @@ test('typing a non-primary name logs into its account and preselects it', async 
   assert.equal(wrong.code, 3, 'the password is the account\'s');
 });
 
-test('handshake without a select enters the default character', async (t) => {
+test('a login without the picker enters the typed character, primary included', async (t) => {
   seedSave('Zezima', { passwordHash: hashOf('pw') });
   Accounts.ensure('Zezima', 1);
   Accounts.addCharacter('zezima', 'Alt', 2);
   Accounts.touchLastPlayed('zezima', 'Alt', 3);
   const { channel, connection } = await connect('Zezima', 'pw', 0);
   assert.equal(net.ClientConnection.isLoginPending('Zezima'), true, 'the account is reserved');
-  const before = Date.now();
   const logins = await handshake(t, connection, 'Zezima');
   const player = connection.getPlayer();
   assert.ok(player, 'entered the world');
-  assert.equal(player.getUsername(), 'Alt');
+  assert.equal(player.getUsername(), 'Zezima', 'the typed primary, not the last played alt');
   assert.equal(logins.length, 1);
-  assert.equal(logins[0].isNewAccount, true, 'no save existed for this character');
-  assert.ok(Accounts.charactersOf('zezima')[1].lastPlayedAt >= before, 'last played is updated');
+  assert.equal(logins[0].isNewAccount, false);
   assert.equal(net.ClientConnection.pendingNames.size, 0, 'every reservation is released');
   assert.equal(packetsOf(channel, CHARACTER_LIST).length + packetsOf(channel, CHARACTER_RESULT).length, 0,
     'a flagless login (the gateway) sees no character packets');
+
+  const before = Date.now();
+  const alt = await connect('Alt', 'pw', 0);
+  const altLogins = await handshake(t, alt.connection, 'Zezima');
+  assert.equal(alt.connection.getPlayer().getUsername(), 'Alt', 'a typed alt enters the alt');
+  assert.equal(altLogins.at(-1).isNewAccount, true, 'no save existed for this character');
+  assert.ok(Accounts.charactersOf('zezima')[1].lastPlayedAt >= before, 'last played is updated');
 });
 
 test('select swaps the character, is refused after handshake, and refuses a banned one', async (t) => {
@@ -340,17 +345,60 @@ test('select swaps the character, is refused after handshake, and refuses a bann
   assert.equal(connection.getPlayer().getUsername(), 'Alt');
 });
 
-test('a banned default character is refused at handshake', async (t) => {
+test('a default character banned after login is refused at handshake', async (t) => {
   seedSave('Zezima', { passwordHash: hashOf('pw') });
   Accounts.ensure('Zezima', 1);
   Accounts.addCharacter('zezima', 'Alt', 2);
   Accounts.touchLastPlayed('zezima', 'Alt', 3);
-  const { channel, connection } = await connect('Zezima', 'pw', 0);
+  const { channel, connection, list } = await loginWithList('Zezima', 'pw');
+  assert.equal(list.defaultIndex, 1);
   t.mock.method(PlayerPunishment, 'banned', (name) => name.toLowerCase() === 'alt');
   await handshake(t, connection, 'Zezima');
   assert.ok(connection.getPlayer() === undefined, 'no player for a banned character');
   const responses = packetsOf(channel, LOGIN_RESPONSE).map(decodeResponse);
   assert.equal(responses.at(-1).code, 4);
+  assert.equal(net.ClientConnection.pendingNames.size, 0);
+});
+
+test('the default skips banned characters; a banned typed name is refused', async (t) => {
+  seedSave('Zezima', { passwordHash: hashOf('pw') });
+  Accounts.ensure('Zezima', 1);
+  Accounts.addCharacter('zezima', 'Alt', 2);
+  Accounts.addCharacter('zezima', 'Third', 3);
+  Accounts.touchLastPlayed('zezima', 'Alt', 9);
+  Accounts.touchLastPlayed('zezima', 'Third', 5);
+  t.mock.method(PlayerPunishment, 'banned', (name) => name.toLowerCase() === 'alt');
+
+  // With the picker: the last played that isn't banned.
+  const picked = await loginWithList('Zezima', 'pw');
+  assert.equal(picked.list.defaultIndex, 2, 'Alt is banned: Third, the next last played');
+  await handshake(t, picked.connection, 'Zezima');
+  assert.equal(picked.connection.getPlayer().getUsername(), 'Third');
+  net.ClientConnection.pendingNames.clear();
+
+  // Without it: the typed name, never the banned last played.
+  const plain = await connect('Zezima', 'pw', 0);
+  assert.equal(plain.response.success, true);
+  await handshake(t, plain.connection, 'Zezima');
+  assert.equal(plain.connection.getPlayer().getUsername(), 'Zezima');
+  net.ClientConnection.pendingNames.clear();
+
+  for (const flags of [0, LOGIN_FLAG_CHARACTER_SELECT]) {
+    assert.equal((await login('Alt', 'pw', flags)).code, 4, 'the typed character is banned');
+  }
+});
+
+test('an account whose every character is banned is refused', async (t) => {
+  seedSave('Zezima', { passwordHash: hashOf('pw') });
+  Accounts.ensure('Zezima', 1);
+  Accounts.addCharacter('zezima', 'Alt', 2);
+  t.mock.method(PlayerPunishment, 'banned', () => true);
+  for (const flags of [0, LOGIN_FLAG_CHARACTER_SELECT]) {
+    const { response, channel } = await connect('Zezima', 'pw', flags);
+    net.ClientConnection.pendingNames.clear();
+    assert.deepEqual([response.success, response.code], [false, 4]);
+    assert.equal(packetsOf(channel, CHARACTER_LIST).length, 0);
+  }
   assert.equal(net.ClientConnection.pendingNames.size, 0);
 });
 
@@ -383,7 +431,7 @@ test('a character reserved by another connection cannot be selected', async () =
   assert.equal(lastResult(channel).code, 7);
 });
 
-test('the default is the typed non-primary, else the last played, else the first', () => {
+test('the default: the typed character (primary only without the picker), else the last played unbanned, else the first', () => {
   const characters = [
     { name: 'Zezima', createdAt: 1, lastPlayedAt: 0 },
     { name: 'Alt', createdAt: 2, lastPlayedAt: 0 },
@@ -391,9 +439,16 @@ test('the default is the typed non-primary, else the last played, else the first
   ];
   assert.equal(defaultCharacterIndex(characters, 'zezima'), 0);
   characters[2].lastPlayedAt = 9;
-  assert.equal(defaultCharacterIndex(characters, 'zezima'), 2);
+  assert.equal(defaultCharacterIndex(characters, 'zezima'), 2, 'the picker preselects the last played over a typed primary');
+  assert.equal(defaultCharacterIndex(characters, 'zezima', { enterTyped: true }), 0, 'without the picker the typed primary enters');
   assert.equal(defaultCharacterIndex(characters, 'alt'), 1);
+  assert.equal(defaultCharacterIndex(characters, 'alt', { enterTyped: true }), 1);
   assert.equal(defaultCharacterIndex(characters, 'third guy'), 2);
+  const banned = (name) => name === 'Third Guy';
+  assert.equal(defaultCharacterIndex(characters, 'zezima', { banned }), 0, 'a banned last played is skipped');
+  characters[1].lastPlayedAt = 5;
+  assert.equal(defaultCharacterIndex(characters, 'zezima', { banned }), 1);
+  assert.equal(defaultCharacterIndex(characters, 'zezima', { banned: () => true }), -1, 'every character banned');
 });
 
 test('the character cap reads its plugin config, clamped, and is one in the browser host', (t) => {

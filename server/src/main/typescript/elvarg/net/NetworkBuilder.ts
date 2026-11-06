@@ -272,6 +272,11 @@ function pendingKey(name: string): string {
   return Misc.formatNameForProtocol(DisplayNames.key(name));
 }
 
+/** Whether this character name is on the ban list (it can't enter the world). */
+function isBanned(name: string): boolean {
+  return PlayerPunishment.banned(name);
+}
+
 /** Whether `username` is one of `DEV_USERNAME`'s accounts (comma-separated). */
 export function isConfiguredDeveloperUsername(username: string): boolean {
   const name = username.toLowerCase();
@@ -1350,7 +1355,14 @@ export class ClientConnection {
       characters = Accounts.entryOf(account)
         ? Accounts.charactersOf(account)
         : [{ name: primaryName, createdAt: Date.now(), lastPlayedAt: 0 }];
-      defaultIndex = defaultCharacterIndex(characters, key);
+      // Without the picker the typed character enters, primary included; with it, the typed
+      // non-primary is preselected, else the last played. Banned characters are never the default.
+      defaultIndex = defaultCharacterIndex(characters, key, { enterTyped: !wantsCharacterList, banned: isBanned });
+      if (defaultIndex < 0) {
+        this.releasePendingName();
+        this.failLogin(4, "Your account has been disabled.");
+        return;
+      }
       let chosen = characters[defaultIndex]?.name ?? primaryName;
       let isPrimary = Accounts.key(chosen) === Accounts.key(primaryName);
       characterSave = isPrimary ? save : null;
@@ -1439,7 +1451,7 @@ export class ClientConnection {
   /** The fresh character list after a create or delete, marking the character the handshake enters. */
   private sendCharacterList(pending: PendingLogin): void {
     const index = pending.characters.findIndex((c) => Accounts.key(c.name) === Accounts.key(pending.username));
-    const defaultIndex = index >= 0 ? index : defaultCharacterIndex(pending.characters, pending.username);
+    const defaultIndex = index >= 0 ? index : Math.max(0, defaultCharacterIndex(pending.characters, pending.username, { banned: isBanned }));
     this.send(encodeCharacterList(maxCharactersPerAccount(), defaultIndex, characterListFor(pending.characters, pending.profile)));
   }
 
@@ -1527,7 +1539,7 @@ export class ClientConnection {
       // Everything that can fail before the account changes: the fallback's save, then the deletes.
       if (removesPending) {
         const remaining = pending.characters.filter((c) => Accounts.key(c.name) !== Accounts.key(character.name));
-        const next = remaining[defaultCharacterIndex(remaining, pending.account)];
+        const next = remaining[Math.max(0, defaultCharacterIndex(remaining, pending.account, { banned: isBanned }))];
         fallback = { name: next.name, save: persistence.load(next.name, pending.profile) ?? null };
       }
       for (const profile of [MAIN_PROFILE, LEAGUE_PROFILE]) {

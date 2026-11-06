@@ -58,13 +58,32 @@ export function characterListFor(characters: AccountCharacter[], profile: Player
   });
 }
 
-/** The character a login enters without a choice: the typed one, else the last played, else the primary. */
-export function defaultCharacterIndex(characters: AccountCharacter[], typedKey: string): number {
+export interface DefaultCharacterOptions {
+  /**
+   * The typed character enters even when it is the primary: a login without the picker
+   * (LOGIN_FLAG_CHARACTER_SELECT) has no other way to reach it. With the picker only a typed
+   * non-primary is preselected; a typed primary gives way to the last played.
+   */
+  enterTyped?: boolean;
+  /** Characters that can't enter (banned) are never the default. */
+  banned?: (name: string) => boolean;
+}
+
+/**
+ * The character a login enters without a choice: the typed one (see `enterTyped`), else the last
+ * played, else the primary, skipping banned characters. -1 when every character is banned.
+ */
+export function defaultCharacterIndex(
+  characters: AccountCharacter[],
+  typedKey: string,
+  { enterTyped = false, banned = () => false }: DefaultCharacterOptions = {},
+): number {
   const typed = characters.findIndex((character) => Accounts.key(character.name) === Accounts.key(typedKey));
-  if (typed > 0) return typed;
-  let best = 0;
-  for (let i = 1; i < characters.length; i++) {
-    if (characters[i].lastPlayedAt > characters[best].lastPlayedAt) best = i;
+  if (typed >= 0 && (typed > 0 || enterTyped) && !banned(characters[typed].name)) return typed;
+  let best = -1;
+  for (let i = 0; i < characters.length; i++) {
+    if (banned(characters[i].name)) continue;
+    if (best < 0 || characters[i].lastPlayedAt > characters[best].lastPlayedAt) best = i;
   }
   return best;
 }

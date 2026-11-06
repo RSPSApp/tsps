@@ -58,7 +58,9 @@ The first character has the account's login name. It is the primary character.
 
 ## Native RuneLite, bots and the agent MCP
 
-These clients have no picker. They enter the character that played last, or the primary if none has. If the login name typed is a non-primary character's, they enter that character instead.
+These clients have no picker. They enter the character whose name was typed at login, the primary included, so a player who types their login name always lands on their first character.
+
+In the browser, the picker preselects the typed character if it isn't the primary, else the one played last. A banned character is never preselected; the next one played last is.
 
 ## Command
 

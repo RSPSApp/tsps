@@ -357,8 +357,15 @@ function bankItemOp(event) {
 function createBow(player) {
   const inventory = player.getInventory();
   if (inventory.getAmount(shardId) < SHARDS_PER_BOW) return;
+  const bow = new core.Item(unchargedId, 1);
+  // deleteNumber consumes shard stacks in slot order; the first may free a slot.
+  const firstStack = inventory.getItems().find(item => item.getId() === shardId && item.getAmount() > 0);
+  if (inventory.getAddableAmount(bow) < 1 && firstStack.getAmount() > SHARDS_PER_BOW) {
+    inventory.full();
+    return;
+  }
   inventory.deleteNumber(shardId, SHARDS_PER_BOW);
-  inventory.add(new core.Item(unchargedId, 1));
+  inventory.add(bow);
   playSound(player, CREATE_SOUND);
   itemStatement(player, unchargedId, "You use five venator shards to create a venator bow.");
 }

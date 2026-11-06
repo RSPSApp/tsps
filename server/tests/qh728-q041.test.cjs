@@ -662,3 +662,261 @@ test('Fishing Contest post-quest dwarves use their post-quest dialogue', () => {
   h.npcInteraction('Vestri', N.VESTRI);
   assert.equal(h.transcripts.at(-1).variant, 'returning-to-vestri-or-austri');
 });
+test('Fishing Contest native rounds stop after three catches and keep manual hand-in', async (t) => {
+  const path = require('node:path');
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { PlayerSession } = require('../dist/net/PlayerSession');
+  const { PlayerSave } = require('../dist/game/entity/impl/player/persistence/PlayerSave');
+  const { ClientConnection } = require('../dist/net/NetworkBuilder');
+  const { MultiChatboxPrompt } = require('../dist/game/model/menu/MultiChatboxPrompt');
+  const { SkillManager } = require('../dist/game/content/skill/SkillManager');
+  const oldBots = process.env.DISABLE_PLAYER_BOTS, savedTranscript = runtime.startTranscript;
+  const oldSubmit = core.TaskManager.submit, oldError = console.error;
+  const tasks = new Set(), players = [], npcs = [], errors = [], clients = new Map(), messages = new Map();
+  let started = false;
+  process.env.DISABLE_PLAYER_BOTS = '1';
+  t.after(() => {
+    try {
+      for (const task of tasks) if (task.isRunning()) task.stop();
+      for (const npc of npcs) if (npc.isRegistered()) core.World.getNpcs().removes(npc);
+      for (const player of players) {
+        if (player.isRegistered()) core.World.getPlayers().removes(player);
+      }
+      if (started) PluginManager.emitServerShutdown({});
+      for (const task of tasks) if (task.isRunning()) task.stop();
+      core.World.process();
+      assert.ok([...tasks].every((task) => !task.isRunning()), 'fixture tasks stopped');
+      assert.ok(npcs.every((npc) => !npc.isRegistered()), 'fixture NPCs removed');
+      assert.deepEqual(errors, [], 'native execution and teardown have no hidden plugin errors');
+    } finally {
+      core.TaskManager.submit = oldSubmit; console.error = oldError;
+      runtime.startTranscript = savedTranscript;
+      if (oldBots === undefined) delete process.env.DISABLE_PLAYER_BOTS; else process.env.DISABLE_PLAYER_BOTS = oldBots;
+    }
+  });
+  core.TaskManager.submit = function (...args) { if (args[0]) tasks.add(args[0]); return oldSubmit.apply(this, args); };
+  console.error = (...args) => { errors.push(args.map(String).join(' ')); return oldError.apply(console, args); };
+  // Earlier route tests deliberately replace this; the native case needs the actual transcript runner.
+  runtime.startTranscript = originalStartTranscript;
+  PluginManager.loadFromDirectory(path.resolve(__dirname, '../plugins'));
+  const { World, Location, Item, NPC, Skill, ItemIdentifiers: I, NpcIdentifiers: N } = core;
+  core.RegionManager.init(); core.RegionManager.loadMapFiles(2637, 3445);
+  PluginManager.emitServerStartup({}); started = true;
+  const quest = runtime.getRegisteredQuests().filter((entry) => entry.key === 'fishing_contest').at(-1);
+  assert.ok(quest, 'real plugin registers the quest');
+  const channel = () => ({ kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true,
+    send: () => true, close() {}, onData() {}, onError() {}, onClose() {} });
+  function actor(name, stage, loadedSave = null) {
+    assert.match(name, /^[a-z0-9]{1,12}$/, 'fixture actor has a legal username');
+    const wire = channel(), p = new Player(new PlayerSession(wire)); players.push(p);
+    const client = new ClientConnection(wire); client.player = p; clients.set(p, client);
+    const send = p.sendMessage.bind(p); messages.set(p, []);
+    p.sendMessage = (text, ...args) => { messages.get(p).push(String(text)); return send(text, ...args); };
+    p.setUsername(name); p.setLongUsername(core.Misc.stringToLongBigInt(name));
+    if (loadedSave) loadedSave.applyToPlayer(p);
+    else p.setLocation(new Location(2637, 3445, 0));
+    p.setAttribute('bot-skip-persistence', true);
+    assert.equal(World.getPlayers().add(p), true); p.needsPlacement = false;
+    if (!loadedSave) {
+      const skills = p.getSkillManager();
+      skills.setExperience(Skill.FISHING, SkillManager.getExperienceForLevel(20));
+      skills.setMaxLevel(Skill.FISHING, 20); skills.setCurrentLevel(Skill.FISHING, 20, true);
+      p.getInventory().add(new Item(I.FISHING_ROD), true);
+      p.getInventory().add(new Item(I.RED_VINE_WORM, 10), true);
+      quest.setStage(p, stage);
+    }
+    return p;
+  }
+  function makeNpc(id, x, y) {
+    const n = NPC.create(id, new Location(x, y, 0)); npcs.push(n); n.setScriptedMovement(true);
+    assert.equal(World.getNpcs().add(n), true); n.needsPlacement = false; return n;
+  }
+  const pipe = makeNpc(4080, 2638, 3445), willow = makeNpc(4079, 2638, 3446);
+  const bonzo = makeNpc(N.BONZO, 2637, 3446);
+  function click(p, npc, action) {
+    const definition = npc.getCurrentDefinition(p), clickType = definition.getActions().indexOf(action) + 1;
+    const at = npc.getLocation();
+    assert.ok(clickType > 0, `cache exposes ${action} on ${npc.getId()}`);
+    // Exercise the registered hook with the native event shape; no walk-to packet is claimed.
+    assert.equal(PluginManager.emitNpcInteraction({ player: p, npc, npcId: npc.getId(), npcIndex: npc.getIndex(),
+      location: { x: at.getX(), y: at.getY(), z: at.getZ() }, definition, clickType, handled: false }), true);
+  }
+  function ticks() { for (let i = 0; i < 4; i++) World.process(); }
+  function cast(p, spot) { click(p, spot, 'Bait'); ticks(); }
+  function bonzoLine(p, expected) {
+    const current = p.getDialogueManager().getCurrent();
+    const normalize = (text) => String(text).replace(/\s+/g, ' ').trim();
+    assert.ok(current instanceof core.NpcDialogue, 'the active result is an NPC dialogue');
+    assert.equal(current.getNpcId(), N.BONZO, 'Bonzo owns the result line');
+    assert.equal(p.getPacketSender().isChatboxInterface(231), true, 'Bonzo dialogue is mounted');
+    assert.ok(expected.map(normalize).includes(normalize(current.getText())), 'the complete existing Bonzo line is shown');
+  }
+  async function drive(p) {
+    const manager = p.getDialogueManager(), sender = p.getPacketSender();
+    for (let i = 0; i < 30 && (manager.isActive() || MultiChatboxPrompt.getPending(p)); i++) {
+      const prompt = MultiChatboxPrompt.getPending(p);
+      if (prompt) {
+        assert.equal(prompt.title, 'Select an option', 'the actor owns the native prompt');
+        assert.equal(sender.isChatboxInterface(219), true, 'native prompt is mounted');
+        assert.deepEqual(prompt.options, ['I have this big fish. Is it enough to win?', 'I think I might still be able to find a bigger fish.']);
+        await clients.get(p).dispatch([{ type: 'dialogue_continue', widgetId: (219 << 16) | 1, childIndex: 1 }]);
+        clients.get(p).processTurnPackets();
+        continue;
+      }
+      const current = manager.getCurrent();
+      if (current instanceof core.OptionDialogue) {
+        const options = current.getOptions(), index = options.findIndex((text) => /big fish/i.test(text));
+        assert.equal(sender.isChatboxInterface(219), true, 'native option dialogue owns the mounted chatbox');
+        assert.deepEqual(options, ['I have this big fish. Is it enough to win?', 'I think I might still be able to find a bigger fish.']);
+        assert.ok(index >= 0, 'native manual hand-in offers the big-fish choice');
+        assert.equal(manager.handleResume((219 << 16) | 1, index + 1), true);
+      } else {
+        const group = [217, 231, 229, 193].find((id) => sender.isChatboxInterface(id));
+        assert.ok(group, 'current native dialogue has a mounted chatbox');
+        assert.equal(manager.handleResume(group << 16, 0), true);
+      }
+    }
+    assert.equal(manager.isActive(), false, 'native dialogue finishes');
+    assert.equal(MultiChatboxPrompt.getPending(p), null, 'the actor has no pending native prompt');
+  }
+  World.process(); for (const npc of npcs) npc.needsPlacement = false;
+  const manual = actor('cntmanual', S.GARLIC);
+  cast(manual, pipe);
+  assert.equal(manual.getInventory().getAmount(I.RAW_GIANT_CARP), 1, 'control: actual quest Bait produces one carp');
+  assert.equal(manual.getInventory().getAmount(I.RED_VINE_WORM), 9, 'control: the catch consumes bait');
+  click(manual, bonzo, 'Talk-to'); await drive(manual);
+  assert.equal(quest.getStage(manual), S.WON, 'control: one carp wins through Bonzo dialogue');
+  assert.equal(manual.getInventory().getAmount(I.FISHING_TROPHY), 1);
+  const winner = actor('cntwinner', S.GARLIC);
+  cast(winner, pipe);
+  assert.equal(winner.getInventory().getAmount(I.RAW_GIANT_CARP), 1, 'first catch remains in inventory');
+  assert.equal(quest.getStage(winner), S.GARLIC, 'contest continues after the first catch');
+  cast(winner, pipe);
+  assert.equal(winner.getInventory().getAmount(I.RAW_GIANT_CARP), 2, 'first two catches remain in inventory');
+  assert.equal(quest.getStage(winner), S.GARLIC, 'contest continues after two catches');
+  cast(winner, pipe);
+  assert.equal(winner.getInventory().getAmount(I.RED_VINE_WORM), 7, 'only three real catches consume worms');
+  assert.deepEqual(errors, [], 'registered handlers and tasks report no hidden errors before the target');
+  assert.equal(winner.getInventory().getAmount(I.RAW_GIANT_CARP), 0, 'third catch automatically hands over round carp');
+  assert.equal(quest.getStage(winner), S.WON, 'automatic carp result awards the win');
+  assert.equal(winner.getInventory().getAmount(I.FISHING_TROPHY), 1);
+  bonzoLine(winner, ["We have a new winner! The heroic-looking person who was fishing by the pipes has caught the biggest carp I've seen since Grandpa Jack used to compete!"]);
+  await drive(winner);
+  assert.equal(winner.getInventory().getAmount(I.RAW_GIANT_CARP), 0, 'result replay does not hand over fish twice');
+  assert.equal(winner.getInventory().getAmount(I.FISHING_TROPHY), 1, 'result replay awards no second trophy');
+  cast(winner, pipe);
+  assert.equal(winner.getInventory().getAmount(I.RED_VINE_WORM), 7, 'a won round cannot consume a fourth worm');
+  const stale = actor('conteststale', S.GARLIC);
+  cast(stale, pipe);
+  click(stale, pipe, 'Bait');
+  click(stale, bonzo, 'Talk-to'); await drive(stale); ticks();
+  assert.equal(quest.getStage(stale), S.WON, 'manual win closes the round');
+  assert.equal(stale.getInventory().getAmount(I.RED_VINE_WORM), 9, 'pre-win queued cast cannot consume bait later');
+  assert.equal(stale.getInventory().getAmount(I.RAW_GIANT_CARP), 0, 'pre-win queued cast cannot award a later fish');
+  const loser = actor('contestloser', S.COMPETING);
+  loser.getInventory().add(new Item(I.RAW_SARDINE, 2), true);
+  cast(loser, willow); cast(loser, willow);
+  click(loser, willow, 'Bait'); click(loser, willow, 'Bait'); ticks();
+  assert.equal(loser.getInventory().getAmount(I.RED_VINE_WORM), 7, 'the queued fourth cast cannot consume bait');
+  assert.equal(loser.getInventory().getAmount(I.RAW_SARDINE), 2, 'automatic loss hands over no more than round fish');
+  bonzoLine(loser, ['And the winner is... The stranger in black!', 'And the winner is... local favourite - Big Dave!']);
+  await drive(loser);
+  assert.equal(loser.getInventory().getAmount(I.RAW_SARDINE), 2, 'loss replay does not hand over another fish');
+  const worms = loser.getInventory().getAmount(I.RED_VINE_WORM);
+  cast(loser, willow);
+  assert.equal(loser.getInventory().getAmount(I.RED_VINE_WORM), worms, 'closed round cannot catch a fourth fish');
+  const guidance = "Your fishing round has ended. Use Bonzo's Pay option to start another round.";
+  await t.test('a closed round explains its actual re-entry route', async () => {
+    assert.equal(messages.get(loser).at(-1), guidance, 'closed Bait explains the real re-entry option');
+    const closedRound = structuredClone(loser.getAttribute('fishing-contest:round'));
+    click(loser, bonzo, 'Talk-to');
+    assert.equal(messages.get(loser).at(-1), guidance, 'closed Talk also explains re-entry');
+    assert.deepEqual(loser.getAttribute('fishing-contest:round'), closedRound, 'talking alone does not reopen or debit');
+    assert.equal(loser.getInventory().getAmount(I.COINS), 0);
+  });
+  click(loser, bonzo, 'Pay');
+  bonzoLine(loser, ["You've already paid, you don't need to pay me again!"]);
+  await drive(loser);
+  cast(loser, willow);
+  assert.equal(loser.getInventory().getAmount(I.RAW_SARDINE), 3, 'existing Pay route reopens a lost round');
+
+  await t.test('manual regular-fish loss closes before a queued cast', async () => {
+  const mixed = actor('cntmixed', S.GARLIC);
+  cast(mixed, willow); cast(mixed, pipe);
+  click(mixed, pipe, 'Bait'); // a cast queued before the manual loss
+  click(mixed, bonzo, 'Talk-to'); await drive(mixed); ticks();
+  assert.equal(quest.getStage(mixed), S.GARLIC, 'manual regular-fish result loses, even with a carp');
+  assert.equal(mixed.getInventory().getAmount(I.RAW_SARDINE), 0, 'manual regular result consumes one sardine');
+  assert.equal(mixed.getInventory().getAmount(I.RAW_GIANT_CARP), 1, 'manual regular-first result preserves the carp');
+  assert.equal(mixed.getInventory().getAmount(I.RED_VINE_WORM), 8, 'queued cast cannot finish after manual loss');
+  click(mixed, pipe, 'Bait'); ticks();
+  assert.equal(messages.get(mixed).at(-1), guidance, 'manual loss also requires re-entry');
+  click(mixed, bonzo, 'Pay'); await drive(mixed);
+  click(mixed, bonzo, 'Talk-to'); await drive(mixed);
+  assert.equal(quest.getStage(mixed), S.WON, 'preserved carp can be handed in after re-entry');
+  assert.equal(mixed.getInventory().getAmount(I.RAW_GIANT_CARP), 0);
+  assert.equal(mixed.getInventory().getAmount(I.FISHING_TROPHY), 1, 'manual hand-in awards one trophy');
+  });
+
+  await t.test('a fresh paid entry resets old round and queued work', async () => {
+  const reset = actor('cntreset', S.COMPETING);
+  cast(reset, willow);
+  click(reset, willow, 'Bait'); // stale work from the previous round
+  quest.setStage(reset, S.STARTED); // explicit admin/debug stage reset, not normal quest progression
+  reset.getInventory().add(new Item(I.COINS, 5), true);
+  click(reset, bonzo, 'Pay'); await drive(reset); ticks();
+  assert.equal(reset.getInventory().getAmount(I.COINS), 0, 'fresh entry takes the actual fee');
+  assert.equal(reset.getInventory().getAmount(I.RED_VINE_WORM), 9, 'fresh entry invalidates the old pending cast');
+  assert.equal(reset.getInventory().getAmount(I.RAW_SARDINE), 1, 'no stale fish is awarded after entry');
+  cast(reset, willow); cast(reset, willow); cast(reset, willow);
+  assert.equal(reset.getInventory().getAmount(I.RAW_SARDINE), 1, 'fresh paid entry starts a full new round');
+  await drive(reset);
+  });
+
+  await t.test('a fresh paid entry clears an already-closed round', async () => {
+  const closed = actor('cntclosed', S.COMPETING);
+  cast(closed, willow); cast(closed, willow); cast(closed, willow);
+  assert.equal(closed.getAttribute('fishing-contest:round').closed, true, 'the actual three-catch loss closed the round');
+  await drive(closed);
+  quest.setStage(closed, S.STARTED); // model an admin/debug reset of the quest stage
+  closed.getInventory().add(new Item(I.COINS, 5), true);
+  click(closed, bonzo, 'Pay'); await drive(closed);
+  assert.equal(closed.getInventory().getAmount(I.COINS), 0, 'the new entry fee is paid');
+  cast(closed, willow);
+  assert.equal(closed.getInventory().getAmount(I.RAW_SARDINE), 1, 'paid entry reopens the formerly closed round');
+  assert.equal(closed.getInventory().getAmount(I.RED_VINE_WORM), 6, 'the new cast consumes one worm');
+  });
+
+  await t.test('round survives a serialized save and logout cancels the queued cast', async () => {
+  // A real logout cancels the player-keyed pending cast. Serialize the actual
+  // PlayerSave through the existing JSON codec, then restore it to a new actor.
+  const savedPlayer = actor('cntpersist', S.GARLIC);
+  cast(savedPlayer, pipe);
+  const previousTasks = new Set(tasks);
+  click(savedPlayer, pipe, 'Bait');
+  const pending = [...tasks].filter((task) => !previousTasks.has(task) && task.key === savedPlayer && task.isRunning());
+  assert.equal(pending.length, 1, 'the old player owns an active queued cast before logout');
+  assert.equal(World.getPlayers().removes(savedPlayer), true, 'native World removal runs logout');
+  assert.equal(savedPlayer.isRegistered(), false);
+  assert.ok(pending.every((task) => !task.isRunning()), 'real logout cancels the queued cast');
+  let codec;
+  require('../plugins/persistence/JsonPlayerPersistence.plugin').register({
+    getSkillManager: () => SkillManager, setPlayerPersistence: (backend) => { codec = backend; }, log() {},
+  });
+  const snapshot = JSON.parse(JSON.stringify(PlayerSave.fromPlayer(savedPlayer), codec.replacer.bind(codec)), codec.reviver.bind(codec));
+  assert.equal(snapshot.attributes['fishing-contest:round'].catches, 1, 'actual saved round contains the first catch');
+  const reloaded = actor('cntpersist', null, codec.hydratePlayerSave(snapshot));
+  PluginManager.emitPlayerLogin({ player: reloaded, username: reloaded.getUsername(), isNewAccount: false });
+  reloaded.needsPlacement = false;
+  assert.equal(quest.getStage(reloaded), S.GARLIC, 'quest stage survives the save codec');
+  assert.equal(reloaded.getAttribute('fishing-contest:round').catches, 1, 'round progress survives the save codec');
+  ticks();
+  assert.equal(reloaded.getInventory().getAmount(I.RED_VINE_WORM), 9, 'old queued cast does not affect the reloaded actor');
+  assert.equal(reloaded.getInventory().getAmount(I.RAW_GIANT_CARP), 1);
+  cast(reloaded, pipe); cast(reloaded, pipe);
+  assert.equal(quest.getStage(reloaded), S.WON, 'the restored third catch finishes the round');
+  assert.equal(reloaded.getInventory().getAmount(I.FISHING_TROPHY), 1);
+  await drive(reloaded);
+  });
+  assert.deepEqual(errors, [], 'real quest and tasks do not report hidden errors');
+});

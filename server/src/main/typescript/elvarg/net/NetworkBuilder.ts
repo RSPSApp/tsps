@@ -1431,13 +1431,19 @@ export class ClientConnection {
         this.send(encodeCharacterResult(false, 3, "You can't make more characters."));
         return;
       }
-      Accounts.addCharacter(pending.account, name);
-      pending.characters = Accounts.charactersOf(pending.account).slice();
-      this.send(encodeCharacterResult(true, 0, ""));
-      this.sendCharacterList(pending);
+      Accounts.addCharacter(pending.account, Misc.formatDisplayName(name));
     } catch (error) {
       console.error(`[login] failed to create a character for ${pending.account}`, error);
       this.send(encodeCharacterResult(false, 8, "The login server is busy."));
+      return;
+    }
+    // The character exists from here on: always answer ok, even if refreshing the list fails.
+    this.send(encodeCharacterResult(true, 0, ""));
+    try {
+      pending.characters = Accounts.charactersOf(pending.account).slice();
+      this.sendCharacterList(pending);
+    } catch (error) {
+      console.error(`[login] failed to refresh the character list of ${pending.account}`, error);
     }
   }
 
@@ -1465,8 +1471,17 @@ export class ClientConnection {
       this.send(encodeCharacterResult(false, 6, "The name you typed does not match."));
       return;
     }
+    const persistence = GameConstants.PLAYER_PERSISTENCE;
+    const deletedKey = pendingKey(character.name);
+    const removesPending = Accounts.key(pending.username) === Accounts.key(character.name);
+    let fallback: { name: string; save: any | null } | undefined;
     try {
-      const persistence = GameConstants.PLAYER_PERSISTENCE;
+      // Everything that can fail before the account changes: the fallback's save, then the deletes.
+      if (removesPending) {
+        const remaining = pending.characters.filter((c) => Accounts.key(c.name) !== Accounts.key(character.name));
+        const next = remaining[defaultCharacterIndex(remaining, pending.account)];
+        fallback = { name: next.name, save: persistence.load(next.name, pending.profile) ?? null };
+      }
       for (const profile of [MAIN_PROFILE, LEAGUE_PROFILE]) {
         try {
           await persistence.delete(character.name, profile);
@@ -1480,24 +1495,27 @@ export class ClientConnection {
         return;
       }
       Accounts.removeCharacter(pending.account, character.name);
-      pending.characters = Accounts.charactersOf(pending.account).slice();
-      const deletedKey = pendingKey(character.name);
-      if (this.reservedNames.includes(deletedKey)) {
-        this.reservedNames = this.reservedNames.filter((key) => key !== deletedKey);
-        ClientConnection.pendingNames.delete(deletedKey);
-      }
-      if (Accounts.key(pending.username) === Accounts.key(character.name)) {
-        const fallback = pending.characters[defaultCharacterIndex(pending.characters, pending.account)];
-        const save = persistence.load(fallback.name, pending.profile) ?? null;
-        this.reservePendingName(pendingKey(fallback.name));
-        pending.username = characterDisplayName(fallback.name, save);
-        pending.save = save;
-      }
-      this.send(encodeCharacterResult(true, 0, ""));
-      this.sendCharacterList(pending);
     } catch (error) {
       console.error(`[login] failed to delete ${character.name}`, error);
       this.send(encodeCharacterResult(false, 8, "The character could not be deleted."));
+      return;
+    }
+    // The character is gone from here on: update the pending login and always answer ok.
+    pending.characters = Accounts.charactersOf(pending.account).slice();
+    if (this.reservedNames.includes(deletedKey)) {
+      this.reservedNames = this.reservedNames.filter((key) => key !== deletedKey);
+      ClientConnection.pendingNames.delete(deletedKey);
+    }
+    if (fallback) {
+      this.reservePendingName(pendingKey(fallback.name));
+      pending.username = characterDisplayName(fallback.name, fallback.save);
+      pending.save = fallback.save;
+    }
+    this.send(encodeCharacterResult(true, 0, ""));
+    try {
+      this.sendCharacterList(pending);
+    } catch (error) {
+      console.error(`[login] failed to refresh the character list of ${pending.account}`, error);
     }
   }
 

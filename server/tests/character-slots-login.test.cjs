@@ -479,3 +479,33 @@ test('deleting: primary, online, confirmation, success, and persistence failure'
   const logins = await handshake(t, c.connection, 'Zezima');
   assert.notEqual(logins[0].username.toLowerCase(), 'alt');
 });
+
+test('later failures keep delete and create consistent', async (t) => {
+  seedSave('Zezima', { passwordHash: hashOf('pw') });
+  Accounts.ensure('Zezima', 1);
+  Accounts.addCharacter('zezima', 'Alt', 2);
+  seedSave('Alt');
+  const c = await connect('Zezima', 'pw', LOGIN_FLAG_CHARACTER_SELECT);
+  await select(c.connection, 'Alt');
+
+  // The fallback's save cannot be read: nothing changes and no save is deleted.
+  const realLoad = persistence.load;
+  persistence.load = (name, profile) => { if (Accounts.key(name) === 'zezima') throw new Error('read'); return realLoad(name, profile); };
+  const errors = t.mock.method(console, 'error', () => {});
+  await remove(c, 'Alt');
+  assert.equal(lastResult(c.channel).code, 8);
+  assert.deepEqual(Accounts.charactersOf('zezima').map((e) => e.name), ['Zezima', 'Alt']);
+  assert.equal(persistence.deleted.length, 0);
+  assert.equal(net.ClientConnection.isLoginPending('Alt'), true, 'still reserved');
+  persistence.load = realLoad;
+
+  // A throwing list refresh still replies ok for a created character, stored formatted.
+  const before = Accounts.charactersOf('zezima').length;
+  persistence.load = () => { throw new Error('list'); };
+  await create(c, 'New_guy');
+  persistence.load = realLoad;
+  errors.mock.restore();
+  assert.deepEqual(lastResult(c.channel), { ok: true, code: 0, message: '' });
+  assert.equal(Accounts.charactersOf('zezima').length, before + 1);
+  assert.equal(Accounts.charactersOf('zezima').at(-1).name, 'New guy');
+});

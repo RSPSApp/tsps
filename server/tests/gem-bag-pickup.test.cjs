@@ -175,6 +175,8 @@ test("an open sack stores the player's own gem once", async (t) => {
   assert.equal(Storage.amountOf(f.p, sack, I.UNCUT_RUBY), 1);
   assert.equal(f.inv.getAmount(I.UNCUT_RUBY), 0);
   assert.equal(pile.isPendingRemoval(), true);
+  assert.ok(f.messages.includes("You put it straight into your open gem sack."), JSON.stringify(f.messages));
+  assert.equal(f.messages.includes(STRAIGHT_IN), false);
 });
 
 test("an Ironman's open sack cannot take another player's gem", async (t) => {

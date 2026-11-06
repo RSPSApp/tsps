@@ -54,4 +54,3 @@
 - [x] Gracefully save/stop own QA server, close own client/tab, verify assigned ports clear.
 - [x] Publish a separate follow-up PR with sources, production path, focused test results and exact limits; release claim.
 - [x] Once #2929 is merged, comment on #2918 and #2920 and close any still-open issue, then verify states and record handoff on the local board.
-

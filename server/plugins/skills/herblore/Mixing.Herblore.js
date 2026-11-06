@@ -124,7 +124,9 @@ function missingIngredients(recipe) {
 /** The recipe these two items make for this player, or null after saying why not. */
 function chooseRecipe(player, recipes) {
   if (!Common.canUseHerblore(player)) return null;
-  const known = recipes.filter((recipe) => !recipe.quest || Common.questDone(player, recipe.quest));
+  const known = recipes.filter((recipe) => (!recipe.quest || Common.questDone(player, recipe.quest))
+    && (!recipe.unlock || Common.unlocked(player, recipe.unlock))
+    && (recipe.questStage == null || (Common.questStage(player, recipe.questKey) ?? 0) >= recipe.questStage));
   if (known.length === 0) {
     player.sendMessage(recipes.some((recipe) => recipe.quest === "dragon_slayer_ii")
       ? SUPER_ANTIFIRE_QUEST_MESSAGE : "Nothing interesting happens.");

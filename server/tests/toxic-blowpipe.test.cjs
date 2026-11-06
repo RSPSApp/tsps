@@ -452,3 +452,95 @@ test("Uncharge re-checks metadata at Yes, so preset darts arriving in the last s
   assert.equal(player.inventory.getItems()[free].getAmount(), 75, "the preset stack is untouched");
   assert.equal(player.inventory.contains(ZULRAHS_SCALES), false);
 });
+
+// Exercise selected-instance confirmation with real inventory and the native drag listener.
+test("blowpipe confirmation never redirects to another same-id pipe after inventory drag", async (t) => {
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const { PlayerSession } = require("../dist/net/PlayerSession");
+  const { HeadlessBinaryChannel } = require("../dist/net/BinaryChannel");
+  const { Inventory } = require("../dist/game/model/container/impl/Inventory");
+  const { SwitchItemSlotPacketListener } = require("../dist/net/packet/impl/SwitchItemSlotPacketListener");
+  const { TaskManager } = require("../dist/game/task/TaskManager");
+  const core = require("../dist/plugins/PluginManager").PluginManager.getCoreApi();
+  const actions = new Map();
+  let confirm, charge;
+  const api = new Proxy({}, { get: (_, name) => {
+    if (name === "core") return core;
+    if (name === "onItemAction") return (name, registered) => { actions.set(name, registered); };
+    if (name === "onInterfaceActionButton") return (_id, handler) => { confirm = handler; };
+    if (name === "onItemOnItem") return handler => { charge = handler; };
+    return () => {};
+  } });
+  ToxicBlowpipe.register(api);
+  const state = pipe => ToxicBlowpipe._test.BlowpipeState.read(pipe);
+  function actor() {
+    const channel = new HeadlessBinaryChannel();
+    const session = new PlayerSession(channel);
+    const p = new Player(session, new Location(3222, 3218, 0));
+    session.setPlayer(p);
+    t.after(() => { TaskManager.cancelTasks(p); TaskManager.cancelTasks(p.getIndex()); });
+    assert.ok(p.getHitpoints() > 0, "ordinary live actor required by native drag");
+    return p;
+  }
+  function produce(p, slot, scales, darts, variant) {
+    const inv = p.getInventory();
+    inv.setItem(slot, new Item(variant.emptyId));
+    const pipe = inv.getItems()[slot];
+    for (const [id, amount] of [[ZULRAHS_SCALES, scales], [DRAGON_DART, darts]]) {
+      inv.setItem(26, new Item(id, amount));
+      const event = { player:p, usedItemId:pipe.getId(), usedItemSlot:slot, usedItem:pipe,
+        usedWithItemId:id, usedWithItemSlot:26, usedWithItem:inv.getItems()[26], handled:false };
+      charge(event);
+      assert.equal(event.handled, true, "native registered charge producer accepted");
+      assert.equal(inv.getAmount(id), 0, "charge materials debited");
+    }
+    assert.deepEqual(state(pipe), {scales, dartId:DRAGON_DART, dartAmount:darts});
+    assert.equal(pipe.getId(), variant.chargedId, "charging retains the selected variant");
+    return pipe;
+  }
+  const variants = [
+    { name: "Toxic blowpipe", emptyId: TOXIC_BLOWPIPE_EMPTY_ID, chargedId: TOXIC_BLOWPIPE_ID },
+    { name: "Blazing blowpipe", emptyId: core.ItemIdentifiers.BLAZING_BLOWPIPE_EMPTY_, chargedId: core.ItemIdentifiers.BLAZING_BLOWPIPE },
+  ];
+  for (const variant of variants) {
+    for (const action of ["Unload", "Uncharge"]) {
+      for (const mode of ["stationary", "full", "swap"]) {
+        await t.test(`${variant.name}: ${action}: ${mode}`, () => {
+          const p = actor(), inv = p.getInventory();
+          const selected = produce(p, 0, 100, 120, variant), other = produce(p, 1, 200, 240, variant);
+          const beforeSelected = state(selected), beforeOther = state(other);
+          const xp = p.getSkillManager().getExperience(core.Skill.RANGED);
+          if (mode === "full") for (let slot=2;slot<28;slot++) inv.setItem(slot,new Item(995+slot,1));
+          assert.equal(actions.get(variant.name)[action]({player:p,item:selected,slot:0}), true);
+          if (mode === "full") {
+            assert.equal(p.getPacketSender().isChatboxInterface(ToxicBlowpipe._test.CONFIRM_GROUP_ID), false, "full refund refuses before prompt");
+          } else {
+            assert.equal(p.getPacketSender().isChatboxInterface(ToxicBlowpipe._test.CONFIRM_GROUP_ID), true, "selected pipe opened actual chatbox");
+            if (mode === "swap") {
+              SwitchItemSlotPacketListener.move(p, Inventory.INTERFACE_ID, 0, 1);
+              assert.equal(inv.getItems()[0], other, "different lawful same-id instance occupies selected slot");
+              assert.equal(inv.getItems()[1], selected);
+              assert.equal(p.getPacketSender().isChatboxInterface(ToxicBlowpipe._test.CONFIRM_GROUP_ID), true, "ordinary native drag retains chatbox");
+            }
+            assert.equal(confirm({player:p,action:1}), true);
+          }
+          // Assert accounting before the selected-instance target, so a valid target fail has totals evidence.
+          assert.equal(inv.getAmount(DRAGON_DART)+state(selected).dartAmount+state(other).dartAmount,360);
+          assert.equal(inv.getAmount(ZULRAHS_SCALES)+state(selected).scales+state(other).scales,300);
+          assert.equal(p.getSkillManager().getExperience(core.Skill.RANGED),xp);
+          assert.deepEqual(state(other),beforeOther,"unselected instance must stay unchanged");
+          if (mode !== "stationary") {
+            assert.deepEqual(state(selected),beforeSelected,"full refusal or stale selection preserves original");
+            assert.equal(inv.getAmount(DRAGON_DART),0);
+            assert.equal(inv.getAmount(ZULRAHS_SCALES),0);
+          } else {
+            assert.equal(inv.getAmount(DRAGON_DART),120,"normal selected pipe refunds darts");
+            assert.equal(state(selected).dartAmount,0);
+            assert.equal(inv.getAmount(ZULRAHS_SCALES),action === "Uncharge" ? 100 : 0);
+            assert.equal(state(selected).scales,action === "Uncharge" ? 0 : 100);
+          }
+        });
+      }
+    }
+  }
+});

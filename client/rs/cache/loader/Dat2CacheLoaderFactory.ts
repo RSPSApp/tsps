@@ -1,3 +1,4 @@
+import { CustomDefinitionLoader } from "../../../custom/definitions/CustomDefinitionStore";
 import { CustomObjTypeLoader } from "../../../custom/items/CustomObjTypeLoader";
 import { CustomNpcTypeLoader } from "../../../custom/npcs/CustomNpcTypeLoader";
 import { createDefinitionArchiveView } from "../../../custom/archives/ArchivedDefinitionStore";
@@ -5,6 +6,7 @@ import { ArchivedTypeLoader } from "../../config/ArchivedTypeLoader";
 import { LocType } from "../../config/loctype/LocType";
 import { NpcType } from "../../config/npctype/NpcType";
 import { ObjType } from "../../config/objtype/ObjType";
+import { SeqType } from "../../config/seqtype/SeqType";
 import {
     ArchiveBasTypeLoader,
     BasTypeLoader,
@@ -94,7 +96,7 @@ import { IndexType } from "../IndexType";
 import { CacheLoaderFactory } from "./CacheLoaderFactory";
 
 export class Dat2CacheLoaderFactory implements CacheLoaderFactory {
-    private archivedLoaders?: { npc: NpcTypeLoader; loc: LocTypeLoader; obj: ObjTypeLoader };
+    private archivedLoaders?: { npc: NpcTypeLoader; loc: LocTypeLoader; obj: ObjTypeLoader; seq: SeqTypeLoader };
 
     private getArchivedLoaders() {
         if (this.archivedLoaders) return this.archivedLoaders;
@@ -103,22 +105,33 @@ export class Dat2CacheLoaderFactory implements CacheLoaderFactory {
             npc: new ArchiveNpcTypeLoader(this.cacheInfo, configs.getArchive(ConfigType.DAT2.npcs)),
             loc: new ArchiveLocTypeLoader(this.cacheInfo, configs.getArchive(ConfigType.DAT2.locs)),
             obj: new ArchiveObjTypeLoader(this.cacheInfo, configs.getArchive(ConfigType.DAT2.objs)),
+            seq: new ArchiveSeqTypeLoader(this.cacheInfo, configs.getArchive(ConfigType.DAT2.seqs)),
         };
+        const nativeSeqCount = native.seq.getCount();
         const view = createDefinitionArchiveView({
             cacheInfo: this.cacheInfo,
-            counts: { npc: native.npc.getCount(), loc: native.loc.getCount(), obj: native.obj.getCount() },
+            counts: {
+                npc: native.npc.getCount(), loc: native.loc.getCount(), obj: native.obj.getCount(),
+                seq: native.seq.getCount(),
+            },
             currentDefinition: (kind, id) => ({
-                name: native[kind].load(id).name,
+                // Sequences have no name; only retired items are ever replaced in place.
+                name: kind === "seq" ? "" : native[kind].load(id).name,
                 data: native[kind].archive.getFile(id)?.data,
             }),
         });
         return this.archivedLoaders = {
-            npc: new ArchivedTypeLoader(native.npc, NpcType,
-                id => view().getSource("npc", id), () => view().getCount("npc")),
-            loc: new ArchivedTypeLoader(native.loc, LocType,
-                id => view().getSource("loc", id), () => view().getCount("loc")),
-            obj: new ArchivedTypeLoader(native.obj, ObjType,
-                id => view().getSource("obj", id), () => view().getCount("obj")),
+            npc: new CustomDefinitionLoader(new ArchivedTypeLoader(native.npc, NpcType,
+                id => view().getSource("npc", id), () => view().getCount("npc")), "npc"),
+            loc: new CustomDefinitionLoader(new ArchivedTypeLoader(native.loc, LocType,
+                id => view().getSource("loc", id), () => view().getCount("loc")), "loc"),
+            obj: new CustomDefinitionLoader(new ArchivedTypeLoader(native.obj, ObjType,
+                id => view().getSource("obj", id), () => view().getCount("obj")), "item"),
+            // Retired event animations whose ids were recycled are appended here.
+            // Archived sequences are only ever appended: native ids skip the archive view
+            // (this loader runs per animated actor per frame).
+            seq: new ArchivedTypeLoader(native.seq, SeqType,
+                id => id < nativeSeqCount ? undefined : view().getSource("seq", id), () => view().getCount("seq")),
         };
     }
     private enumTypeLoader?: EnumTypeLoader;
@@ -260,6 +273,9 @@ export class Dat2CacheLoaderFactory implements CacheLoaderFactory {
 
     getSeqTypeLoader(): SeqTypeLoader {
         if (this.seqTypeLoader) return this.seqTypeLoader;
+        if (this.cacheInfo.game === "oldschool") {
+            return this.seqTypeLoader = this.getArchivedLoaders().seq;
+        }
         if (this.isIndexConfigs()) {
             const seqIndex = this.cacheSystem.getIndex(IndexType.RS2.seqs);
             return (this.seqTypeLoader = new IndexSeqTypeLoader(this.cacheInfo, seqIndex));

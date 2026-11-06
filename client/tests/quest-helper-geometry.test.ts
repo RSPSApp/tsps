@@ -8,6 +8,16 @@ assert.equal(Buffer.from(geometry.loadedTilesPacked!.data,'base64').length,5408)
 assert.equal(Buffer.from(geometry.loadedTilesPacked!.data,'base64')[5407],255);
 assert.equal(geometry.cameraFpX,6400);assert.equal(geometry.cameraFpY,6528);assert.equal(geometry.cameraFpZ,-768);assert.equal(geometry.cameraFpPitch,255*Math.PI/1024);assert.equal(heightBytes.readInt16LE(((3*105+104)*105+104)*2)*-8,-240);assert.equal(flags[(2*104+103)*104+103],2);
 client.renderer.getPreferredMapForWorldTile=()=>undefined;assert.throws(()=>collectQuestHelperGeometry(client,{baseX:3150,baseY:3150},true),/unavailable/i);
+// A low-end client builds only the squares near the player: the rest are unloaded tiles, not a failure.
+client.renderer.getPreferredMapForWorldTile=(x:number,y:number)=>x<3150+64&&y<3150+64?map:undefined;
+const partial=collectQuestHelperGeometry(client,{baseX:3150,baseY:3150},true);const loaded=Buffer.from(partial.loadedTilesPacked!.data,'base64');
+const bit=(plane:number,x:number,y:number)=>{const index=(plane*104+x)*104+y;return (loaded[index>>3]>>(index&7))&1;};
+assert.equal(bit(0,10,10),1);assert.equal(bit(3,63,63),1);assert.equal(bit(0,64,10),0,'unbuilt squares are reported unloaded');assert.equal(bit(0,10,64),0);
+assert.equal(Buffer.from(partial.tileHeightsPacked!.data,'base64').readInt16LE(((0*105+10)*105+10)*2),30);
+// The vertex row beside an unbuilt square is read through the built neighbour's border, not left at 0.
+assert.equal(Buffer.from(partial.tileHeightsPacked!.data,'base64').readInt16LE(((0*105+64)*105+10)*2),30,'east edge vertex of the built square');
+assert.equal(Buffer.from(partial.tileHeightsPacked!.data,'base64').readInt16LE(((0*105+64)*105+64)*2),30,'corner vertex');
+assert.equal(Buffer.from(partial.tileHeightsPacked!.data,'base64').readInt16LE(((0*105+65)*105+10)*2),0,'a vertex with no built tile around it stays unloaded');
 console.log('quest helper lossless geometry and missing-map boundaries passed');
 
 import { Camera } from '../game/Camera';

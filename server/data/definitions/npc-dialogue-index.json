@@ -223,6 +223,12 @@
       "variants": [
         "preparations-for-rescue-talking-to-aggie"
       ]
+    },
+    {
+      "page": "Transcript:Secret santa present",
+      "variants": [
+        "unlocking-green-talking-to-aggie"
+      ]
     }
   ],
   "121": [
@@ -267,6 +273,12 @@
       "page": "Transcript:Prince Ali Rescue/Historical",
       "variants": [
         "preparations-for-rescue-talking-to-aggie"
+      ]
+    },
+    {
+      "page": "Transcript:Secret santa present",
+      "variants": [
+        "unlocking-green-talking-to-aggie"
       ]
     }
   ],
@@ -10090,7 +10102,8 @@
         "starting-off-talking-to-seth-groats",
         "starting-off-talking-to-seth-again-after-receiving-the-picture-for-the-first-time",
         "returning-to-fred-with-the-decorations-talking-to-seth-groats-after-collecting-each-item",
-        "the-spook-a-thon-contest"
+        "the-spook-a-thon-contest",
+        "the-spook-a-thon-contest-talking-to-fred-again-before-finishing-the-cutscene"
       ]
     },
     {
@@ -13376,6 +13389,12 @@
         "talking-to-malignius-mortifer",
         "talking-to-malignius-mortifer-talking-to-malignius-again-before-getting-the-skull",
         "talking-to-malignius-mortifer-talking-to-malignius-again-after-learning-how-to-kill-the-tanglefoot"
+      ]
+    },
+    {
+      "page": "Transcript:Secret santa present",
+      "variants": [
+        "unlocking-gold-talking-to-malignius-mortifer"
       ]
     },
     {
@@ -25528,6 +25547,25 @@
         "after-curse-of-the-empty-lord",
         "speaking-to-the-wrong-rennard"
       ]
+    },
+    {
+      "page": "Transcript:Curse of the Empty Lord",
+      "variants": [
+        "talking-to-any-mysterious-ghost-without-a-ghostspeak-amulet",
+        "talking-to-any-mysterious-ghost-in-the-wrong-location",
+        "talking-to-valdez",
+        "talking-to-valdez-talking-to-valdez-again",
+        "talking-to-rennard",
+        "talking-to-rennard-talking-to-rennard-again",
+        "talking-to-kharrim",
+        "talking-to-kharrim-talking-to-kharrim-again",
+        "talking-to-lennissa",
+        "talking-to-lennissa-talking-to-lennissa-again",
+        "talking-to-dhalak",
+        "talking-to-dhalak-talking-to-dhalak-again",
+        "talking-to-viggora",
+        "talking-to-viggora-talking-to-viggora-again"
+      ]
     }
   ],
   "3451": [
@@ -25537,6 +25575,25 @@
         "without-a-ghostspeak-amulet",
         "after-curse-of-the-empty-lord",
         "speaking-to-the-wrong-dhalak"
+      ]
+    },
+    {
+      "page": "Transcript:Curse of the Empty Lord",
+      "variants": [
+        "talking-to-any-mysterious-ghost-without-a-ghostspeak-amulet",
+        "talking-to-any-mysterious-ghost-in-the-wrong-location",
+        "talking-to-valdez",
+        "talking-to-valdez-talking-to-valdez-again",
+        "talking-to-rennard",
+        "talking-to-rennard-talking-to-rennard-again",
+        "talking-to-kharrim",
+        "talking-to-kharrim-talking-to-kharrim-again",
+        "talking-to-lennissa",
+        "talking-to-lennissa-talking-to-lennissa-again",
+        "talking-to-dhalak",
+        "talking-to-dhalak-talking-to-dhalak-again",
+        "talking-to-viggora",
+        "talking-to-viggora-talking-to-viggora-again"
       ]
     }
   ],
@@ -25548,6 +25605,25 @@
         "after-curse-of-the-empty-lord",
         "speaking-to-the-wrong-valdez"
       ]
+    },
+    {
+      "page": "Transcript:Curse of the Empty Lord",
+      "variants": [
+        "talking-to-any-mysterious-ghost-without-a-ghostspeak-amulet",
+        "talking-to-any-mysterious-ghost-in-the-wrong-location",
+        "talking-to-valdez",
+        "talking-to-valdez-talking-to-valdez-again",
+        "talking-to-rennard",
+        "talking-to-rennard-talking-to-rennard-again",
+        "talking-to-kharrim",
+        "talking-to-kharrim-talking-to-kharrim-again",
+        "talking-to-lennissa",
+        "talking-to-lennissa-talking-to-lennissa-again",
+        "talking-to-dhalak",
+        "talking-to-dhalak-talking-to-dhalak-again",
+        "talking-to-viggora",
+        "talking-to-viggora-talking-to-viggora-again"
+      ]
     }
   ],
   "3453": [
@@ -25558,6 +25634,25 @@
         "after-curse-of-the-empty-lord",
         "speaking-to-the-wrong-kharrim"
       ]
+    },
+    {
+      "page": "Transcript:Curse of the Empty Lord",
+      "variants": [
+        "talking-to-any-mysterious-ghost-without-a-ghostspeak-amulet",
+        "talking-to-any-mysterious-ghost-in-the-wrong-location",
+        "talking-to-valdez",
+        "talking-to-valdez-talking-to-valdez-again",
+        "talking-to-rennard",
+        "talking-to-rennard-talking-to-rennard-again",
+        "talking-to-kharrim",
+        "talking-to-kharrim-talking-to-kharrim-again",
+        "talking-to-lennissa",
+        "talking-to-lennissa-talking-to-lennissa-again",
+        "talking-to-dhalak",
+        "talking-to-dhalak-talking-to-dhalak-again",
+        "talking-to-viggora",
+        "talking-to-viggora-talking-to-viggora-again"
+      ]
     }
   ],
   "3454": [
@@ -25567,6 +25662,25 @@
         "without-a-ghostspeak-amulet",
         "after-curse-of-the-empty-lord",
         "speaking-to-the-wrong-lennissa"
+      ]
+    },
+    {
+      "page": "Transcript:Curse of the Empty Lord",
+      "variants": [
+        "talking-to-any-mysterious-ghost-without-a-ghostspeak-amulet",
+        "talking-to-any-mysterious-ghost-in-the-wrong-location",
+        "talking-to-valdez",
+        "talking-to-valdez-talking-to-valdez-again",
+        "talking-to-rennard",
+        "talking-to-rennard-talking-to-rennard-again",
+        "talking-to-kharrim",
+        "talking-to-kharrim-talking-to-kharrim-again",
+        "talking-to-lennissa",
+        "talking-to-lennissa-talking-to-lennissa-again",
+        "talking-to-dhalak",
+        "talking-to-dhalak-talking-to-dhalak-again",
+        "talking-to-viggora",
+        "talking-to-viggora-talking-to-viggora-again"
       ]
     }
   ],
@@ -25579,6 +25693,25 @@
         "speaking-to-the-wrong-viggora",
         "treasure-trails-master-with-no-inventory-space-available",
         "treasure-trails-master-with-inventory-space"
+      ]
+    },
+    {
+      "page": "Transcript:Curse of the Empty Lord",
+      "variants": [
+        "talking-to-any-mysterious-ghost-without-a-ghostspeak-amulet",
+        "talking-to-any-mysterious-ghost-in-the-wrong-location",
+        "talking-to-valdez",
+        "talking-to-valdez-talking-to-valdez-again",
+        "talking-to-rennard",
+        "talking-to-rennard-talking-to-rennard-again",
+        "talking-to-kharrim",
+        "talking-to-kharrim-talking-to-kharrim-again",
+        "talking-to-lennissa",
+        "talking-to-lennissa-talking-to-lennissa-again",
+        "talking-to-dhalak",
+        "talking-to-dhalak-talking-to-dhalak-again",
+        "talking-to-viggora",
+        "talking-to-viggora-talking-to-viggora-again"
       ]
     }
   ],
@@ -52139,6 +52272,12 @@
       "variants": [
         "standard-dialogue",
         "standard-dialogue-overhead-dialogue"
+      ]
+    },
+    {
+      "page": "Transcript:Secret santa present",
+      "variants": [
+        "unlocking-black-talking-to-benny"
       ]
     }
   ],
@@ -91485,7 +91624,8 @@
         "spooky-wall-lamp-talking-to-death",
         "spooky-wall-lamp-talking-to-death-after-finishing-the-quiz",
         "spooky-wall-lamp-talking-to-death-again-after-receiving-the-lamp-for-the-first-time",
-        "the-spook-a-thon-contest"
+        "the-spook-a-thon-contest",
+        "the-spook-a-thon-contest-talking-to-fred-again-before-finishing-the-cutscene"
       ]
     }
   ],
@@ -93305,6 +93445,12 @@
       "page": "Transcript:One Small Favour",
       "variants": [
         "the-various-favours-are-asked-asking-brian-to-sharpen-the-axe-using-the-blunt-axe-on-bob-optional"
+      ]
+    },
+    {
+      "page": "Transcript:Secret santa present",
+      "variants": [
+        "unlocking-blue-talking-to-bob"
       ]
     },
     {
@@ -129635,6 +129781,12 @@
       "variants": [
         "interacting-with-archibald"
       ]
+    },
+    {
+      "page": "Transcript:2026 Easter event",
+      "variants": [
+        "the-hunt-for-archibald-talking-to-the-easter-bunny-with-archibald-in-your-inventory"
+      ]
     }
   ],
   "15587": [
@@ -129643,6 +129795,12 @@
       "variants": [
         "interacting-with-archibald"
       ]
+    },
+    {
+      "page": "Transcript:2026 Easter event",
+      "variants": [
+        "the-hunt-for-archibald-talking-to-the-easter-bunny-with-archibald-in-your-inventory"
+      ]
     }
   ],
   "15588": [
@@ -129650,6 +129808,12 @@
       "page": "Transcript:Archibald",
       "variants": [
         "interacting-with-archibald"
+      ]
+    },
+    {
+      "page": "Transcript:2026 Easter event",
+      "variants": [
+        "the-hunt-for-archibald-talking-to-the-easter-bunny-with-archibald-in-your-inventory"
       ]
     },
     {
@@ -129665,6 +129829,12 @@
       "variants": [
         "interacting-with-archibald"
       ]
+    },
+    {
+      "page": "Transcript:2026 Easter event",
+      "variants": [
+        "the-hunt-for-archibald-talking-to-the-easter-bunny-with-archibald-in-your-inventory"
+      ]
     }
   ],
   "15591": [
@@ -129672,6 +129842,12 @@
       "page": "Transcript:Archibald",
       "variants": [
         "interacting-with-archibald"
+      ]
+    },
+    {
+      "page": "Transcript:2026 Easter event",
+      "variants": [
+        "the-hunt-for-archibald-talking-to-the-easter-bunny-with-archibald-in-your-inventory"
       ]
     }
   ],
@@ -129681,6 +129857,12 @@
       "variants": [
         "interacting-with-archibald"
       ]
+    },
+    {
+      "page": "Transcript:2026 Easter event",
+      "variants": [
+        "the-hunt-for-archibald-talking-to-the-easter-bunny-with-archibald-in-your-inventory"
+      ]
     }
   ],
   "15593": [
@@ -129688,6 +129870,12 @@
       "page": "Transcript:Archibald",
       "variants": [
         "interacting-with-archibald"
+      ]
+    },
+    {
+      "page": "Transcript:2026 Easter event",
+      "variants": [
+        "the-hunt-for-archibald-talking-to-the-easter-bunny-with-archibald-in-your-inventory"
       ]
     }
   ],
@@ -129697,6 +129885,12 @@
       "variants": [
         "interacting-with-archibald"
       ]
+    },
+    {
+      "page": "Transcript:2026 Easter event",
+      "variants": [
+        "the-hunt-for-archibald-talking-to-the-easter-bunny-with-archibald-in-your-inventory"
+      ]
     }
   ],
   "15595": [
@@ -129704,6 +129898,12 @@
       "page": "Transcript:Archibald",
       "variants": [
         "interacting-with-archibald"
+      ]
+    },
+    {
+      "page": "Transcript:2026 Easter event",
+      "variants": [
+        "the-hunt-for-archibald-talking-to-the-easter-bunny-with-archibald-in-your-inventory"
       ]
     }
   ],
@@ -129713,6 +129913,12 @@
       "variants": [
         "interacting-with-archibald"
       ]
+    },
+    {
+      "page": "Transcript:2026 Easter event",
+      "variants": [
+        "the-hunt-for-archibald-talking-to-the-easter-bunny-with-archibald-in-your-inventory"
+      ]
     }
   ],
   "15597": [
@@ -129720,6 +129926,12 @@
       "page": "Transcript:Archibald",
       "variants": [
         "interacting-with-archibald"
+      ]
+    },
+    {
+      "page": "Transcript:2026 Easter event",
+      "variants": [
+        "the-hunt-for-archibald-talking-to-the-easter-bunny-with-archibald-in-your-inventory"
       ]
     }
   ],
@@ -129729,6 +129941,12 @@
       "variants": [
         "interacting-with-archibald"
       ]
+    },
+    {
+      "page": "Transcript:2026 Easter event",
+      "variants": [
+        "the-hunt-for-archibald-talking-to-the-easter-bunny-with-archibald-in-your-inventory"
+      ]
     }
   ],
   "15599": [
@@ -129737,6 +129955,12 @@
       "variants": [
         "interacting-with-archibald"
       ]
+    },
+    {
+      "page": "Transcript:2026 Easter event",
+      "variants": [
+        "the-hunt-for-archibald-talking-to-the-easter-bunny-with-archibald-in-your-inventory"
+      ]
     }
   ],
   "15600": [
@@ -129744,6 +129968,12 @@
       "page": "Transcript:Archibald",
       "variants": [
         "interacting-with-archibald"
+      ]
+    },
+    {
+      "page": "Transcript:2026 Easter event",
+      "variants": [
+        "the-hunt-for-archibald-talking-to-the-easter-bunny-with-archibald-in-your-inventory"
       ]
     }
   ],

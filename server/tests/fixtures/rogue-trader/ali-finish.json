@@ -1,0 +1,168 @@
+[
+ {
+  "k": "say",
+  "t": 3703,
+  "who": "Ali Morrisane",
+  "text": "Hello <player>. How's the adventuring going?"
+ },
+ {
+  "k": "say",
+  "t": 3704,
+  "who": "player",
+  "text": "Hi Ali. Not bad. How are you?"
+ },
+ {
+  "k": "say",
+  "t": 3705,
+  "who": "Ali Morrisane",
+  "text": "Still selling."
+ },
+ {
+  "k": "say",
+  "t": 3706,
+  "who": "Ali Morrisane",
+  "text": "Good job on getting the rune shipments sorted. I'm just receiving the first of them. Though there seems to be a funny sort of locking mechanism on them, which I haven't completely figure"
+ },
+ {
+  "k": "say",
+  "t": 3714,
+  "who": "player",
+  "text": "No problem. I might have a look at it later."
+ },
+ {
+  "k": "varbit",
+  "t": 3715,
+  "id": 917,
+  "value": 0
+ },
+ {
+  "k": "say",
+  "t": 3715,
+  "who": "Ali Morrisane",
+  "text": "Fantastic job on the blackjacks. I started getting the first batches of them a short time ago, and they've being flying off the shelves, although the demand seems to be dropping off a li"
+ },
+ {
+  "k": "say",
+  "t": 3717,
+  "who": "player",
+  "text": "Not too badly, I hope."
+ },
+ {
+  "k": "say",
+  "t": 3718,
+  "who": "Ali Morrisane",
+  "text": "No, no, they're still selling fine, but if you could perhaps convince the blackjack man to send a different variety the next time you see him, I would be more than happy."
+ },
+ {
+  "k": "varbit",
+  "t": 3721,
+  "id": 920,
+  "value": 1
+ },
+ {
+  "k": "say",
+  "t": 3721,
+  "who": "player",
+  "text": "I should like to have a look at them, at some stage."
+ },
+ {
+  "k": "say",
+  "t": 3722,
+  "who": "Ali Morrisane",
+  "text": "Siamun's clothes seem to have really struck a chord with the locals in Al Kharid. Menaphite culture seems to be taking off here, rumour has it that one of Prince Ali's servants bought hi"
+ },
+ {
+  "k": "say",
+  "t": 3723,
+  "who": "player",
+  "text": "Wow, that sounds positive."
+ },
+ {
+  "k": "say",
+  "t": 3724,
+  "who": "Ali Morrisane",
+  "text": "Quite, if I don't say so myself. But in order to keep things fresh, the next time you're in Sophanem, could you ask that cranky old so-and-so Siamun to produce a new line of clothing?"
+ },
+ {
+  "k": "varbit",
+  "t": 3725,
+  "id": 915,
+  "value": 1
+ },
+ {
+  "k": "say",
+  "t": 3725,
+  "who": "player",
+  "text": "Sure, why not. The Sultan himself might even buy some of the new range."
+ },
+ {
+  "k": "say",
+  "t": 3726,
+  "who": "Ali Morrisane",
+  "text": "That would be the day."
+ },
+ {
+  "k": "say",
+  "t": 3727,
+  "who": "Ali Morrisane",
+  "text": "<player>, I would like to commend you on all the selfless help you have given me."
+ },
+ {
+  "k": "say",
+  "t": 3728,
+  "who": "player",
+  "text": "It was nothing, really."
+ },
+ {
+  "k": "say",
+  "t": 3729,
+  "who": "Ali Morrisane",
+  "text": "I think you underestimate your efforts. Anyway, as a token of my gratitude I have told all my magic carpet attendants to allow you to travel on the carpets at a discounted rate."
+ },
+ {
+  "k": "varbit",
+  "t": 3730,
+  "id": 914,
+  "value": 1
+ },
+ {
+  "k": "say",
+  "t": 3730,
+  "who": "player",
+  "text": "Really, Ali, there is no need."
+ },
+ {
+  "k": "say",
+  "t": 3731,
+  "who": "Ali Morrisane",
+  "text": "I insist."
+ },
+ {
+  "k": "menu",
+  "t": 3732,
+  "title": "Select an option",
+  "options": [
+   "I would like to have a look at your selection of blackjacks.",
+   "I would like to have a look at your selection of clothes.",
+   "I would like to have a look at your selection of runes.",
+   "I would like to have a look at your general stock."
+  ]
+ },
+ {
+  "k": "pick",
+  "t": 3738,
+  "n": 2
+ },
+ {
+  "k": "say",
+  "t": 3738,
+  "who": "Ali Morrisane",
+  "text": "Hang on a second while I get the garments."
+ },
+ {
+  "k": "varbit",
+  "t": 3739,
+  "id": 922,
+  "value": 5
+ }
+]

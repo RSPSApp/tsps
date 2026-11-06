@@ -73,3 +73,12 @@ test('every data entry resolves in the active cache and names a real option on i
  for(const s of toys.swaps)for(const i of s.cycle)assert.ok(has(i,s.option),`${i} ${s.option}`);
  for(const i of toys.ranks.items)assert.ok(toys.ranks.options.some(o=>has(i,o)),i);
 });
+test('the Giant easter egg dances in safe places, worn or held, and refuses in the Wilderness',()=>{
+ const held=player('easter19_giant_egg');held.p.setLocation(new core.Location(3222,3218,0));click(held.p,held.container,held.slot,'Easter dance');
+ assert.deepEqual(held.log.anims,[c.getSeqId('easter19_egg_emote_human')]);assert.deepEqual(held.log.gfx,[c.getSpotanimId('easter19_egg_dance_spot')]);
+ const wild=player('easter19_giant_egg',true);wild.p.setLocation(new core.Location(3100,3600,0));
+ assert.ok(core.Wilderness.levelAt(3100,3600)>0);click(wild.p,wild.container,wild.slot,'Easter dance');
+ assert.deepEqual(wild.log.anims,[]);assert.deepEqual(wild.log.messages,['Perhaps you should play with your egg somewhere safer.']);
+ const book=player('easter24_reward_book_easter');book.p.setLocation(new core.Location(3222,3218,0));click(book.p,book.container,book.slot,'Preach');
+ assert.deepEqual(book.log.anims,[c.getSeqId('easter24_preach_seq')]);assert.match(book.log.says[0],/^All eggs doth shine glory/);
+});

@@ -1,0 +1,23 @@
+[
+ {
+  "k": "menu",
+  "t": 809,
+  "title": "Select an option",
+  "options": [
+   "View blackjacks.",
+   "View runes.",
+   "View general stock."
+  ]
+ },
+ {
+  "k": "pick",
+  "t": 811,
+  "n": 1
+ },
+ {
+  "k": "varbit",
+  "t": 812,
+  "id": 922,
+  "value": 2
+ }
+]

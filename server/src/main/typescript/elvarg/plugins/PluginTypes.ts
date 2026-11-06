@@ -573,6 +573,13 @@ export interface PluginAttackSpeedEvent {
   speed: number;
 }
 
+/** A real hit is being prepared, before accuracy, damage and the target HP cap. */
+export interface PluginCombatHitPrepareEvent {
+  attacker: any;
+  target: any;
+  combatType: any;
+}
+
 export interface PluginCombatHitRollEvent {
   attacker: any;
   target: any;
@@ -1089,6 +1096,7 @@ export interface PluginApi {
   onPlayerDealtDamage(
     handler: (event: PluginPlayerDealtDamageEvent) => void
   ): void;
+  onCombatHitPrepare(handler: (event: PluginCombatHitPrepareEvent) => void): void;
   onCombatHitRoll(handler: (event: PluginCombatHitRollEvent) => void): void;
   onCombatHitDamage(handler: (event: PluginCombatHitDamageEvent) => void): void;
   /** Lets an attack ignore the attack timer, or leave it untouched (see PluginAttackTimingEvent). */
@@ -1252,6 +1260,17 @@ export interface PluginApi {
     regionId: number,
     source: string | [string, string]
   ): void;
+  /**
+   * Replace a region with in-memory map data (decoded terrain and loc files), reload its
+   * clipping and stream it to connected players. Returns false when it was refused.
+   */
+  replaceMapRegionData(regionId: number, terrainData: Uint8Array, objectData: Uint8Array | null): boolean;
+  /**
+   * Drop this plugin's runtime replacement: native clipping returns and connected clients get
+   * the native map. False when it was refused (another owner, no native map: the replacement is
+   * kept) or when a connected client could not be sent the native map.
+   */
+  restoreMapRegion(regionId: number): boolean;
   registerDefinitionSource(
     definitionType: string,
     source: DefinitionSource
@@ -1570,6 +1589,7 @@ export interface PluginCoreApi {
   LocModelType: any;
   MapObjects: any;
   ItemOnGroundManager: any;
+  GroundItemOperationType: any;
   ItemOnGround: any;
   GroundItemState: any;
   ItemDefinition: any;
@@ -1597,6 +1617,8 @@ export interface PluginCoreApi {
   CombatSpells: any;
   Autocasting: any;
   NPC: any;
+  /** World spawns: `requeue(npc)` returns a live spawn to pending, `activateNear(location)` spawns what is due. */
+  NpcSpawnDefinitionLoader: any;
   GameConstants: any;
   Music: any;
   WorldDefinition: any;

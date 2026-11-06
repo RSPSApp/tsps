@@ -393,7 +393,7 @@ function openConfirm(player, blowpipeItem, slot, warning, getStacks, apply) {
   // open clears its pending item (sendInterfaceRemoval resets "destroy-item:pending"), so the
   // player's Yes answers this prompt instead of destroying the item Destroy named.
   player.getPacketSender().sendInterfaceRemoval();
-  pendingPrompts.set(player, { itemId: blowpipeItem.getId(), slot, getStacks, apply });
+  pendingPrompts.set(player, { item: blowpipeItem, itemId: blowpipeItem.getId(), slot, getStacks, apply });
   player
     .getPacketSender()
     .sendChatboxInterface(CONFIRM_GROUP_ID)
@@ -409,7 +409,7 @@ function confirmPrompt({ player, action }) {
   player.getPacketSender().sendInterfaceRemoval();
   if (action !== 1) return true;
   const blowpipeItem = player.getInventory().getItems()[pending.slot];
-  if (blowpipeItem?.getId() === pending.itemId) {
+  if (blowpipeItem === pending.item && blowpipeItem?.getId() === pending.itemId) {
     // The inventory can fill up while the prompt is open (unequipping into the last slot), and
     // add() would silently refuse: re-check the return as it stands now and keep the pipe loaded.
     if (!canReturnAll(player.getInventory(), pending.getStacks(blowpipeItem))) {

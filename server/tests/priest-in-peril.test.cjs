@@ -109,6 +109,7 @@ function harness({ shieldOfArrav = false } = {}) {
   const statements = [];
   const grounds = [];
   const areas = [];
+  const combatProviders = [];
   const fakeCore = { ...core, StatementDialogue: { send: (_player, text) => statements.push(text) } };
   const api = new Proxy({
     core: fakeCore,
@@ -119,6 +120,7 @@ function harness({ shieldOfArrav = false } = {}) {
     onNpcInteraction: (handler) => npcInteraction.push(handler),
     onNpcDeath: (handler) => deaths.push(handler),
     registerArea: (area) => areas.push(area),
+    registerNpcCombatMethodProvider: (ids, ctor) => combatProviders.push({ ids, ctor }),
     onCustomEvent(key, handler) { custom.set(key, [...(custom.get(key) ?? []), handler]); },
     emitCustomEvent(key, event) { for (const handler of custom.get(key) ?? []) handler(event); },
     getItemOnGroundManager: () => ({ registerLocation: (_player, item, at) => grounds.push([item.getId(), at.getX(), at.getY()]) }),
@@ -127,7 +129,7 @@ function harness({ shieldOfArrav = false } = {}) {
   if (shieldOfArrav) require(root + '/plugins/quests/quests/ShieldOfArrav.Quest')(api);
   const quest = runtime.getRegisteredQuests().findLast((entry) => entry.key === 'priest_in_peril');
   const player = makePlayer();
-  const h = { areas, grounds, custom, variants, conditions, named, itemOnObject, npcInteraction, deaths, statements, quest, player };
+  const h = { combatProviders, areas, grounds, custom, variants, conditions, named, itemOnObject, npcInteraction, deaths, statements, quest, player };
   h.emit = (key, event) => {
     const request = { player, handled: false, ...event };
     for (const handler of custom.get(key) ?? []) handler(request);
@@ -516,6 +518,8 @@ test('a full inventory keeps a stacked monument item until the souvenir fits', (
 
 test('only the hooded level 30 monk drops the golden key, from the King\'s warning to the coffin', () => {
   const h = harness();
+  const told = [];
+  h.player.sendMessage = (text) => told.push(text);
   h.player.setAttribute(STAGE, 20);
   h.kill(N.MONK_OF_ZAMORAK_17);
   assert.deepEqual(h.grounds, [], 'not before the King has been told');
@@ -525,6 +529,7 @@ test('only the hooded level 30 monk drops the golden key, from the King\'s warni
   assert.deepEqual(h.grounds, [], 'the level 17 and 22 monks carry no key');
   h.kill(N.MONK_OF_ZAMORAK_17);
   assert.deepEqual(h.grounds, [[I.GOLDEN_KEY, 3410, 3488]]);
+  assert.deepEqual(told, ['<col=ef1020>Untradeable drop: Golden key</col>'], 'live tells the killer, once');
   h.player.setAttribute(STAGE, 46);
   h.kill(N.MONK_OF_ZAMORAK_17);
   assert.equal(h.grounds.length, 1, 'no key once the coffin is sealed');
@@ -604,4 +609,106 @@ test('the temple doors walk the player through instead of standing open', () => 
   h.player.moveTo(new core.Location(3409, 3489, 0));
   assert.ok(door().handled);
   assert.equal(h.player.getLocation().getX(), 3408, 'anyone inside can leave');
+});
+
+test('the temple monks punch, and now and then cast the spells the captures show', () => {
+  const h = harness();
+  const { ids, ctor } = h.combatProviders.at(-1);
+  assert.deepEqual([...ids].sort((a, b) => a - b), [3484, 3485, 3486, 16271, 16272, 16273]);
+  let accurate = true;
+  const run = (npcId, roll) => {
+    const method = new ctor();
+    const log = [];
+    let cast = null;
+    method.melee.start = () => log.push('melee');
+    method.magic.start = () => log.push('magic');
+    method.magic.hits = () => [{ isAccurate: () => accurate, withoutHitsplat: () => log.push('no splat') }];
+    const npc = { getId: () => npcId, getCombat: () => ({ setCastSpell: (s) => { cast = s; }, getSelectedSpell: () => cast }) };
+    const original = Math.random;
+    Math.random = () => roll;
+    try { method.start(npc, {}); } finally { Math.random = original; }
+    return { method, npc, log, cast: () => cast };
+  };
+  assert.deepEqual(run(3484, 0.9).log, ['melee'], 'most swings are punches');
+  assert.deepEqual(run(3484, 0.12).log, ['melee'], '3484 casts about 3 swings in 26');
+  assert.deepEqual(run(3485, 0.24).log, ['magic'], '3485 casts about 5 swings in 20');
+  assert.equal(run(3484, 0.9).method.attackDistance(), 1);
+
+  // 3485 casts Weaken or Confuse; Weaken is the first entry.
+  const weaken = run(3485, 0);
+  assert.deepEqual(weaken.log, ['magic']);
+  const lines = [];
+  let maximum = 63;
+  const levels = new Map([[core.Skill.STRENGTH, 63]]);
+  const target = {
+    isPlayer: () => true,
+    sendMessage: (text) => lines.push(text),
+    getSkillManager: () => ({
+      getCurrentLevel: (skill) => levels.get(skill), getMaxLevel: () => maximum,
+      setCurrentLevelCombat: (skill, level) => levels.set(skill, level), updateSkill: noop,
+    }),
+  };
+  weaken.cast().spellEffect({}, target);
+  assert.equal(levels.get(core.Skill.STRENGTH), 59, 'strength 63 -> 59 as captured');
+  assert.deepEqual(lines, ['You feel weakened.']);
+  weaken.cast().spellEffect({}, target);
+  assert.equal(levels.get(core.Skill.STRENGTH), 59, 'an already weakened skill is not lowered again');
+  assert.deepEqual(weaken.method.hits(weaken.npc, target) && weaken.log.slice(1), ['no splat'], 'a landed curse shows no hitsplat');
+
+  maximum = 28;
+  levels.set(core.Skill.STRENGTH, 28);
+  weaken.cast().spellEffect({}, target);
+  assert.equal(levels.get(core.Skill.STRENGTH), 26, 'strength 28 -> 26 as captured');
+
+  // The hooded monk's spell is Fire Bolt, which still hits.
+  const bolt = run(3486, 0);
+  assert.deepEqual(bolt.log, ['magic']);
+  assert.equal(bolt.cast().spellEffect === core.CombatSpells.FIRE_BOLT.spellEffect, true, 'Fire Bolt keeps its own effect');
+  bolt.method.hits(bolt.npc, target);
+  assert.deepEqual(bolt.log, ['magic'], 'a landed Fire Bolt keeps its hitsplat');
+  assert.equal(bolt.cast().maximumHit(), 5, 'the Wiki infobox max hit, not the spell\'s 12');
+  accurate = false;
+  bolt.method.hits(bolt.npc, target);
+  assert.deepEqual(bolt.log, ['magic', 'no splat'], 'a splash shows no hitsplat');
+  accurate = true;
+});
+
+test('the monks\' spells fly and land on the captured cycles and ticks', () => {
+  const h = harness();
+  const { ctor } = h.combatProviders.at(-1);
+  // [npc, roll picking the spell, projectile, launch, end, cast gfx, impact gfx, hit delay]
+  const cases = [
+    [3485, 0, 106, 44, 60, 105, 107, 2],
+    [3485, 0.99, 103, 61, 90, 102, 104, 3],
+    [3484, 0.99, 109, 51, 90, 108, 110, 3],
+    [3486, 0, 127, 51, 90, 126, 128, 3],
+  ];
+  for (const [npcId, pick, projectile, launch, end, castGfx, impactGfx, delay] of cases) {
+    const method = new ctor();
+    let cast = null;
+    method.magic.start = () => {};
+    const npc = { getId: () => npcId, getCombat: () => ({ setCastSpell: (s) => { cast = s; }, getSelectedSpell: () => cast }) };
+    const rolls = [0, pick];
+    const original = Math.random;
+    Math.random = () => rolls.shift();
+    try { method.start(npc, {}); } finally { Math.random = original; }
+    const original2 = core.Projectile.createProjectile;
+    let sent;
+    core.Projectile.createProjectile = (...args) => { sent = args.slice(2); return {}; };
+    try { cast.castProjectile({}, {}); } finally { core.Projectile.createProjectile = original2; }
+    assert.deepEqual(sent, [projectile, launch, end, 43, 31], `projectile ${projectile}`);
+    assert.equal(cast.hitDelay(), delay, `projectile ${projectile} lands after ${delay} ticks`);
+    assert.deepEqual([cast.startGraphic().getId(), cast.startGraphic().height], [castGfx, 92]);
+    assert.deepEqual([cast.endGraphic().getId(), cast.endGraphic().height], [impactGfx, 124]);
+  }
+});
+
+test('the two voices behind the temple door wear the monks\' chat heads, as captured', () => {
+  const h = harness();
+  const line = (speaker) => h.emit('npc-dialogue:line', { npcId: 12240, step: { speaker }, text: 'x' });
+  assert.equal(line('Mysterious Voice').speakerId, N.MONK_OF_ZAMORAK_4);
+  assert.equal(line('Mysterious Voice 2').speakerId, N.MONK_OF_ZAMORAK_6);
+  assert.equal(line('Drezel').speakerId, undefined, 'other speakers keep their own head');
+  assert.equal(h.emit('npc-dialogue:line', { npcId: N.KING_ROALD, step: { speaker: 'Mysterious Voice' } }).speakerId,
+    undefined, 'only the door conversation');
 });

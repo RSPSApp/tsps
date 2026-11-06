@@ -229,10 +229,11 @@ function mayEat(player, itemId, food) {
     return false;
   }
   if (food.area) {
-    const request = { player, area: food.area, inside: false };
+    // The area's owner may give its own refusal (a seasonal food that has gone off).
+    const request = { player, area: food.area, inside: false, message: "You cannot eat these supplies here." };
     pluginApi.emitCustomEvent("food:area", request);
     if (!request.inside) {
-      player.sendMessage("You cannot eat these supplies here.");
+      player.sendMessage(request.message);
       return false;
     }
   }
@@ -347,6 +348,9 @@ module.exports = {
   COMBO_ATTACK_DELAY,
   isFoodItem,
   isComboFoodItem,
+  /** Which bite of which food an item id is, and how long that bite takes: bot nodes need both. */
+  foodBite,
+  eatDelay,
   foodItemIds,
   _test: {
     getAnglerfishHeal, canAnglerfishOverheal, healAmount, rollOutcome, foodBite, leftover, eatDelay, applyFood,

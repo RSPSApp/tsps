@@ -137,12 +137,42 @@ test('a paid lap: the streak line; Tag wants an open looting bag, then fills it,
   assert.ok(stored.every(({ id }) => core.ItemDefinition.forId(id).isNoted()), 'noted resources and armour');
 });
 
+test('a completed lap can still be tagged after starting the next lap at the pipe (#2711)', () => {
+  const p = player();
+  p.inv.add(new core.Item(995, 150000));
+  p.setAttribute(Dispenser.ATTRIBUTES.paymentWarning, 1);
+  op(p, 'Pay');
+  lap(p);
+  assert.equal(p.getAttribute(Dispenser.ATTRIBUTES.ticket), 1);
+  assert.equal(p.getAttribute(Dispenser.ATTRIBUTES.reward), 1);
+  assert.equal(p.getAttribute(Dispenser.ATTRIBUTES.streak), 1);
+  hooks.events['agility:obstacle-start']({
+    player: p, objectId: core.CacheDefinitions.getLocId('obstical_pipe2'), success: true,
+  });
+  assert.equal(p.getAttribute(Dispenser.ATTRIBUTES.ticket), 1, 'the finished lap is still claimable');
+  assert.equal(p.getAttribute(Dispenser.ATTRIBUTES.reward), 1, 'and its reward too');
+  assert.equal(p.getAttribute(Dispenser.ATTRIBUTES.streak), 0, 'the Wiki resets the streak');
+  p.inv.deleteNumber(11941, 1);
+  p.inv.add(new core.Item(OPEN_BAG, 1));
+  op(p, 'Tag');
+  assert.match(p.messages.at(-1), /^You have been awarded /);
+  assert.equal(p.inv.getAmount(TICKET), 1);
+  assert.equal(p.getAttribute(Dispenser.ATTRIBUTES.ticket), 0);
+  assert.equal(p.getAttribute(Dispenser.ATTRIBUTES.reward), 0);
+});
+
 test('leaving the course loses the payment, the reward and the streak, not the ticket; logout takes 10 off the streak', () => {
   const p = player();
   p.inv.add(new core.Item(995, 150000));
   p.setAttribute(Dispenser.ATTRIBUTES.paymentWarning, 1);
   op(p, 'Pay');
   lap(p);
+  for (const [x, y] of [[3005, 10357], [3000, 10345]]) {
+    p.location = new Location(x, y, 0);
+    core.TaskManager.process();
+    assert.equal(p.getAttribute(Dispenser.ATTRIBUTES.deposit), 1, 'falling into the course dungeon keeps the payment');
+    assert.equal(p.getAttribute(Dispenser.ATTRIBUTES.reward), 1);
+  }
   p.location = new Location(2998, 3916, 0);
   core.TaskManager.process();
   assert.equal(p.varbits.get(varbit('wildy_agility_deposit')), 0);

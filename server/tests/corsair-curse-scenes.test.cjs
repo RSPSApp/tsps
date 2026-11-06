@@ -6,6 +6,8 @@
 // - The telescope view: interface wom_telescope (386) on overlay_atmosphere, as rsprox 4259 opens it for the
 //   Wise Old Man's telescope with the same sequence, human_use_wom_telecope (2171).
 // - Ithoi's run out of his hut: he walks it, on NPC 7963, whose walk sequence is human_running.
+// - Ithoi's return: the Wiki transcript has him cast Water Strike "and return to his hut", so he walks back to
+//   the foot of his stairs, where he came out. The tick he leaves is not recorded anywhere: ours is the next one.
 // Native fixture: real plugins and packet sender; scene steps as the transcript's npc-dialogue:action events,
 // the fire from a real item-on-object event. No client ran.
 const assert = require("node:assert/strict");
@@ -30,6 +32,7 @@ const DRIFTWOOD = 31724;
 const ITHOI_RUNNING = 7963;
 const STAGE_CONFESSED = 6;
 const RUN_END = [2532, 2836];
+const HUT_STAIRS_FOOT = [2532, 2833];
 
 let core;
 let next = 6800;
@@ -164,6 +167,42 @@ test("Ithoi walks out of his hut to the same tile, and doesn't teleport there", 
   assert.ok(ithoi, "Ithoi comes out");
   assert.deepEqual(teleports, [], "he doesn't teleport along the route");
   assert.deepEqual(seen.at(-1), RUN_END, "and ends where the route did");
+});
+
+test("Ithoi walks back to the foot of his stairs after Water Strike, and doesn't teleport there", (t) => {
+  const teleports = [];
+  let ithoi = null;
+  const spawn = PM.spawnNpc;
+  t.mock.method(PM, "spawnNpc", (...args) => {
+    const npc = spawn.apply(PM, args);
+    if (npc?.getId() === ITHOI_RUNNING) ithoi = npc;
+    return npc;
+  });
+  const moveTo = NPC.prototype.moveTo;
+  t.mock.method(NPC.prototype, "moveTo", function (tile) {
+    if (this.getId() === ITHOI_RUNNING) teleports.push([tile.getX(), tile.getY()]);
+    return moveTo.call(this, tile);
+  });
+  const f = actor(t);
+  quest().setStage(f.p, STAGE_CONFESSED);
+  f.p.setAttribute("corsair-curse:proof-plan", true);
+  f.p.getInventory().add(new core.Item(TINDERBOX, 1), false);
+  const object = new core.GameObject(DRIFTWOOD, new core.Location(2530, 2837, 0), 10, 0, null);
+  PM.emitItemOnObject({ player: f.p, object, itemId: TINDERBOX, objectId: DRIFTWOOD });
+
+  const seen = [];
+  for (let i = 0; i < 30; i++) {
+    core.TaskManager.process();
+    if (!ithoi) continue;
+    ithoi.getMovementQueue().process();
+    seen.push([ithoi.getLocation().getX(), ithoi.getLocation().getY()]);
+  }
+  t.diagnostic(`Ithoi ${JSON.stringify(seen)}; teleports ${JSON.stringify(teleports)}`);
+  const at = (tile) => seen.findIndex(([x, y]) => x === tile[0] && y === tile[1]);
+  assert.ok(at(RUN_END) >= 0, "he comes out to the end of his run first");
+  assert.deepEqual(seen.at(-1), HUT_STAIRS_FOOT, "then goes back to the foot of his stairs");
+  assert.ok(seen.slice(at(RUN_END)).some(([, y]) => y === 2835 || y === 2834), "walking, not jumping");
+  assert.deepEqual(teleports, [], "he doesn't teleport back");
 });
 
 test("Gnocci's dug-up doll walks its whole route, across the clipped edge at 2509,2839-2838 (#2558)", (t) => {

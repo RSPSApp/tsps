@@ -168,6 +168,7 @@ function player(level = 99, current = 99) {
     sendCameraReset: () => { p.camera.push(['reset']); return packet; },
     sendCameraShake: (...args) => { p.camera.push(['shake', ...args]); return packet; },
     sendSubInterface: (...args) => { p.camera.push(['sub', ...args]); return packet; },
+    mountSubInterface: (...args) => { p.camera.push(['sub', ...args]); return {}; },
     closeSubInterface: (...args) => { p.camera.push(['close', ...args]); return packet; },
     sendObjectRemoval: object => { clientRemovals.push(object); return packet; },
     sendObject: object => { clientSpawns.push(object); return packet; },

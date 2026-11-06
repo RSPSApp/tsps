@@ -1,0 +1,136 @@
+[
+ {
+  "k": "say",
+  "t": 1044,
+  "who": "player",
+  "text": "Hello, Siamun?"
+ },
+ {
+  "k": "say",
+  "t": 1045,
+  "who": "Siamun",
+  "text": "What?"
+ },
+ {
+  "k": "say",
+  "t": 1046,
+  "who": "player",
+  "text": "So you are Siamun then?"
+ },
+ {
+  "k": "say",
+  "t": 1047,
+  "who": "Siamun",
+  "text": "Yes now what do you want?"
+ },
+ {
+  "k": "say",
+  "t": 1048,
+  "who": "player",
+  "text": "Wow, are you this friendly to everyone?"
+ },
+ {
+  "k": "say",
+  "t": 1049,
+  "who": "Siamun",
+  "text": "Just you. Now what do you want?"
+ },
+ {
+  "k": "say",
+  "t": 1050,
+  "who": "player",
+  "text": "A mutual friend of ours, Ali Morrisane, wants you to supply his stall in Al Kharid with your garments."
+ },
+ {
+  "k": "say",
+  "t": 1051,
+  "who": "Siamun",
+  "text": "Now why would I do that?"
+ },
+ {
+  "k": "say",
+  "t": 1052,
+  "who": "player",
+  "text": "Well for one, you'd probably sell more clothes and once the people of Al Kharid see your amazing works of tailoring, I'm sure they'd spread the word of your clothes far and wide."
+ },
+ {
+  "k": "say",
+  "t": 1053,
+  "who": "Siamun",
+  "text": "Interesting, but I would need more materials to accomplish what you ask of me."
+ },
+ {
+  "k": "say",
+  "t": 1054,
+  "who": "player",
+  "text": "Well then what do you need?"
+ },
+ {
+  "k": "say",
+  "t": 1055,
+  "who": "Siamun",
+  "text": "Either get me 3 pots of dye, or 3 animal pelts of the same variety and whatever you do, don't bring me banknotes!"
+ },
+ {
+  "k": "menu",
+  "t": 1056,
+  "title": "Select an option",
+  "options": [
+   "What do you mean by animal pelt?",
+   "Ok, I'll get you the materials."
+  ]
+ },
+ {
+  "k": "pick",
+  "t": 1059,
+  "n": 2
+ },
+ {
+  "k": "varbit",
+  "t": 1059,
+  "id": 912,
+  "value": 2
+ },
+ {
+  "k": "say",
+  "t": 1059,
+  "who": "player",
+  "text": "Ok, I'll get you the materials."
+ },
+ {
+  "k": "say",
+  "t": 1060,
+  "who": "Siamun",
+  "text": "Unless you've got the materials on you?"
+ },
+ {
+  "k": "say",
+  "t": 1061,
+  "who": "player",
+  "text": "Yup, I've got what you want with me."
+ },
+ {
+  "k": "varbit",
+  "t": 1063,
+  "id": 912,
+  "value": 3
+ },
+ {
+  "k": "msg",
+  "t": 1063,
+  "kind": "mesbox",
+  "text": "You give the merchant the dye."
+ },
+ {
+  "k": "say",
+  "t": 1065,
+  "who": "Siamun",
+  "text": "Thank you adventurer. I will get my goods up to that merchant thief - Ali Morrisane as quickly as possible."
+ },
+ {
+  "k": "say",
+  "t": 1075,
+  "who": "player",
+  "text": "Think nothing of it. I'm looking forward to seeing what you've produced for the Al Kharid market."
+ }
+]

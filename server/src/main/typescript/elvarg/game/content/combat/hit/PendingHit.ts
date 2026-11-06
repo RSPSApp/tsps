@@ -255,6 +255,17 @@ export class PendingHit {
         this.updateTotalDamage();
     }
 
+    /**
+     * Lands with no hitsplat: the hit still resolves on its tick (after-hit effects, retaliation),
+     * but no damage, not even a 0, is shown. For casts that splash or only drain, which live
+     * shows without a splat.
+     */
+    public withoutHitsplat(): PendingHit {
+        this.hits = [];
+        this.updateTotalDamage();
+        return this;
+    }
+
     public setHandleAfterHitEffects(handleAfterHitEffects: boolean): PendingHit {
         this.handleAfterHitEffects = handleAfterHitEffects;
         return this;
@@ -289,6 +300,12 @@ export class PendingHit {
         if (traits?.skipAttack === true) {
             this.totalDamage = 0;
             return [];
+        }
+
+        // All real hit paths share this boundary, including first-successful claw rolls.
+        // Status damage bypasses prepareHits; utility specials returned above.
+        if (hitAmount > 0) {
+            PluginManager.emitCombatHitPrepare({ attacker: this.attacker, target: this.target, combatType: this.combatType });
         }
 
         // Declarative specials can request extra hits without hand-rolling hits().

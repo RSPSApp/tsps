@@ -12,6 +12,7 @@ const { ItemIdentifiers: Items } = require("../dist/util/ItemIdentifiers");
 const { PluginManager } = require("../dist/plugins/PluginManager");
 const { PlayerStatus } = require("../dist/game/model/PlayerStatus");
 const { Bank } = require("../dist/game/model/container/impl/Bank");
+const { MAX_STACK_AMOUNT } = require("../dist/game/model/container/StackType");
 const { Equipment } = require("../dist/game/model/container/impl/Equipment");
 const { CacheDefinitions } = require("../dist/game/cache/CacheDefinitions");
 const { Skill } = require("../dist/game/model/Skill");
@@ -42,7 +43,7 @@ before(async () => {
   });
 });
 
-function createContainer(capacity, initial = []) {
+function createContainer(capacity, initial = [], bank = false) {
   const items = initial;
   const container = {
     getItems: () => items,
@@ -51,11 +52,25 @@ function createContainer(capacity, initial = []) {
     contains: (id) => items.some((item) => item.getId() === id && item.getAmount() > 0),
     getFreeSlots: () => capacity - container.getValidItems().length,
     isFull: () => container.getFreeSlots() === 0,
+    getAddableAmount(item) {
+      const requested = Math.max(0, Math.floor(item.getAmount()));
+      if (item.getId() < 0 || !Number.isFinite(requested) || requested <= 0) return 0;
+      if (bank || item.getDefinition().isStackable()) {
+        const stack = items.find((entry) => entry.getId() === item.getId()
+          && JSON.stringify(entry.getMeta() ?? null) === JSON.stringify(item.getMeta() ?? null));
+        if (stack) return Math.min(requested, Math.max(0, MAX_STACK_AMOUNT - stack.getAmount()));
+        return container.getFreeSlots() > 0 ? Math.min(requested, MAX_STACK_AMOUNT) : 0;
+      }
+      return Math.min(requested, container.getFreeSlots());
+    },
     add(item) {
-      const stack = items.find((entry) => entry.getId() === item.getId());
-      if (stack && item.getDefinition().isStackable()) stack.setAmount(stack.getAmount() + item.getAmount());
-      else if (item.getDefinition().isStackable()) items.push(item.clone());
-      else for (let i = 0; i < item.getAmount() && container.getFreeSlots() > 0; i++) items.push(new Item(item.getId(), 1));
+      const amount = container.getAddableAmount(item);
+      if (amount <= 0) return container;
+      const stack = items.find((entry) => entry.getId() === item.getId()
+        && JSON.stringify(entry.getMeta() ?? null) === JSON.stringify(item.getMeta() ?? null));
+      if (stack && (bank || item.getDefinition().isStackable())) stack.setAmount(stack.getAmount() + amount);
+      else if (bank || item.getDefinition().isStackable()) items.push(item.clone().setAmount(amount));
+      else for (let i = 0; i < amount; i++) items.push(new Item(item.getId(), 1));
       return container;
     },
     addItem: (item) => container.add(item, true),
@@ -81,7 +96,7 @@ function createContainer(capacity, initial = []) {
 
 function createPlayer(inventoryItems = []) {
   const inventory = createContainer(28, inventoryItems);
-  const banks = Array.from({ length: Bank.TOTAL_BANK_TABS }, () => createContainer(800));
+  const banks = Array.from({ length: Bank.TOTAL_BANK_TABS }, () => createContainer(800, [], true));
   const equipment = Array.from({ length: 14 }, () => new Item(-1, 0));
   const attributes = new Map();
   const varps = new Map();
@@ -268,7 +283,7 @@ test("the gem bag holds 60 of each uncut gem and takes picked-up gems while open
   const bag = new Item(Items.GEM_BAG_2, 1);
   const player = createPlayer([bag, ...items(Items.UNCUT_RUBY, 3), ...items(Items.UNCUT_SAPPHIRE, 2)]);
   option(player, bag, "Fill");
-  assert.equal(player.messages.at(-1), GemBag.FILLED);
+  assert.deepEqual(player.messages, [], "Transcript:Gem bag: Fill is a stage direction, not a line");
   assert.equal(Storage.amountOf(player, family("gem-bag"), Items.UNCUT_RUBY), 3);
   Storage.store(player, family("gem-bag"), Items.UNCUT_RUBY, 100);
   assert.equal(Storage.amountOf(player, family("gem-bag"), Items.UNCUT_RUBY), 60);

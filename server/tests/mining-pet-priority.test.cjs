@@ -1,5 +1,7 @@
 const assert = require('node:assert/strict'), path = require('node:path');
 const {before, after, test} = require('node:test');
+// This fixture loads all plugins: prevent player bots before plugin startup.
+process.env.DISABLE_PLAYER_BOTS = '1';
 require('../dist/Server').Server.installProductionPathResolver();
 const {CachePipeline} = require('../dist/game/cache/CachePipeline');
 const {PluginManager: PM} = require('../dist/plugins/PluginManager');
@@ -11,6 +13,184 @@ before(async () => { await CachePipeline.initialize(path.resolve(__dirname,'..')
 after(() => PM.emitServerShutdown({}));
 const item = name => core.CacheDefinitions.getObjId(name);
 const npcId = name => core.CacheDefinitions.getNpcId(name);
+
+// Glove depletion uses this file's native player, equipment, object and packet route.
+// Its HF recipe must set DISABLE_PLAYER_BOTS=1 before loading plugins.
+for (const [tier, gloveName, total] of [
+  ['bare hands', null, 1],
+  ['mining gloves', 'MINING_GLOVES', 2],
+  ['superior gloves', 'SUPERIOR_MINING_GLOVES', 3],
+  ['expert gloves', 'EXPERT_MINING_GLOVES', 4],
+]) test(`native iron depletion: ${tier}`, async t => {
+  const f = actor(t), ids = core.ItemIdentifiers, skills = f.p.getSkillManager();
+  assert.equal(process.env.DISABLE_PLAYER_BOTS, '1', 'the qualified recipe disables player bots before plugin startup');
+  assert.equal(core.WorldDefinition.isMembersWorld(), true, 'gloves require a members world');
+  skills.setMaxLevel(core.Skill.MINING, 99);
+  skills.setExperience(core.Skill.MINING, core.SkillManager.getExperienceForLevel(99));
+  skills.setCurrentLevel(core.Skill.MINING, 99);
+  const levelsAtRoll = [], getLevel = skills.getCurrentLevel.bind(skills);
+  t.mock.method(skills, 'getCurrentLevel', skill => {
+    const level = getLevel(skill);
+    if (skill === core.Skill.MINING && /\bat rollAttempt \(/.test(new Error().stack)) levelsAtRoll.push(level);
+    return level;
+  });
+  f.p.getInventory().add(new core.Item(ids.RUNE_PICKAXE), true);
+  if (gloveName) f.p.getEquipment().setItem(core.Equipment.HANDS_SLOT, new core.Item(ids[gloveName]));
+  assert.equal(f.p.getInventory().getAmount(ids.RUNE_PICKAXE), 1);
+  assert.equal(f.p.getEquipment().get(core.Equipment.HANDS_SLOT)?.getId() ?? -1, gloveName ? ids[gloveName] : -1);
+  assert.equal(skills.getCurrentLevel(core.Skill.MINING), 99);
+
+  const at = new core.Location(3223, 3218, 0), rockId = core.CacheDefinitions.getLocId('ironrock2');
+  const emptyId = core.CacheDefinitions.getLocId('rocks2');
+  assert.ok(rockId >= 0 && emptyId >= 0);
+  const rock = new core.GameObject(rockId, at, 10, 0, null);
+  core.ObjectManager.register(rock, true);
+  assert.equal(core.MapObjects.get(rockId, at, null), rock);
+  const definition = core.ObjectDefinition.forPlayer(rockId, f.p);
+  assert.equal(definition.getName(), 'Iron rocks');
+  assert.ok(definition.getActions().includes('Mine'));
+  t.after(() => {
+    for (const task of [...core.TaskManager.activeTasks, ...core.TaskManager.pendingTasks.toArray()])
+      if (task.originalRockObject === rock) task.stop();
+    for (const id of [rockId, emptyId]) {
+      const object = core.MapObjects.get(id, at, null);
+      if (object) core.ObjectManager.deregister(object, true);
+    }
+  });
+
+  // Scope deterministic rolls to MiningTask.execute, including its synchronous consumers.
+  // Do not hold RNG while unrelated world tasks or route processing run.
+  core.TaskManager.process();
+  const miningTask = core.TaskManager.activeTasks.find(task => task.constructor.name === 'MiningTask');
+  assert.ok(miningTask, 'real registered MiningTask must be active');
+  assert.equal(miningTask.activeSessions.size, 0, 'no other miner shares the controlled RNG');
+  const execute = miningTask.execute.bind(miningTask);
+  let miningTicks = 0;
+  t.mock.method(miningTask, 'execute', () => {
+    const previous = Math.random;
+    try { Math.random = () => 0.01; miningTicks++; return execute(); }
+    finally { Math.random = previous; }
+  });
+  const gains = [], addXp = skills.addExperiences.bind(skills);
+  t.mock.method(skills, 'addExperiences', (skill, amount) => {
+    if (skill === core.Skill.MINING) gains.push(amount);
+    return addXp(skill, amount);
+  });
+  assert.equal(f.p.getInventory().getAmount(ids.IRON_ORE), 0);
+  async function gatherToEmpty() {
+    await f.c.dispatch([{type:'object_option', id:rockId, x:3223, y:3218, action:'Mine'}]);
+    for (let tick = 0; tick < 40 && !core.MapObjects.get(emptyId, at, null); tick++) miningCancellationTurn(f);
+    assert.ok(core.MapObjects.get(emptyId, at, null), 'the actual rock became its depleted form');
+  }
+  function respawn() {
+    for (let tick = 0; tick < 9; tick++) miningCancellationTurn(f);
+    assert.equal(core.MapObjects.get(rockId, at, null), rock, 'the same rock respawns');
+  }
+  await gatherToEmpty();
+  assert.ok(miningTicks > 0, 'registered task executed through TaskManager');
+  assert.equal(f.p.getInventory().getAmount(ids.IRON_ORE), total, 'one ore per successful gather, with no lost or duplicate ore');
+  assert.deepEqual(gains, Array(total).fill(35));
+  assert.equal(f.p.getAttribute('mining:ores-mined'), total);
+  assert.ok(levelsAtRoll.length >= total && levelsAtRoll.every(level => level === 99), 'each ore roll used Mining 99');
+  respawn();
+  if (gloveName === 'MINING_GLOVES') {
+    f.p.getEquipment().delete(ids.MINING_GLOVES, 1);
+    f.p.getInventory().add(new core.Item(ids.MINING_GLOVES), true);
+    assert.equal(f.p.getEquipment().get(core.Equipment.HANDS_SLOT)?.getId() ?? -1, -1);
+    await gatherToEmpty();
+    assert.equal(f.p.getInventory().getAmount(ids.IRON_ORE), 3, 'unequipped control depletes after one more ore');
+    assert.equal(f.p.getAttribute('mining:ores-mined'), 3);
+    respawn();
+    f.p.getEquipment().setItem(core.Equipment.HANDS_SLOT, new core.Item(ids.EXPERT_MINING_GLOVES));
+    await gatherToEmpty();
+    assert.equal(f.p.getInventory().getAmount(ids.IRON_ORE), 7, 'replacement gets a fresh expert budget after respawn');
+    assert.equal(f.p.getAttribute('mining:ores-mined'), 7);
+    assert.deepEqual(gains, Array(7).fill(35));
+    assert.ok(levelsAtRoll.length >= 7 && levelsAtRoll.every(level => level === 99));
+    respawn();
+  }
+});
+
+for (const [expert, base, total] of [[false, 2, 2], [true, 2, 3], [false, 3, 3], [true, 3, 4]]) test(`native amethyst base ${base} and ${expert ? 'expert save' : 'bare control'}`, async t => {
+  const f = actor(t), ids = core.ItemIdentifiers, skills = f.p.getSkillManager();
+  assert.equal(process.env.DISABLE_PLAYER_BOTS, '1');
+  assert.equal(core.WorldDefinition.isMembersWorld(), true);
+  skills.setMaxLevel(core.Skill.MINING, 99);
+  skills.setExperience(core.Skill.MINING, core.SkillManager.getExperienceForLevel(99));
+  skills.setCurrentLevel(core.Skill.MINING, 99);
+  const levelsAtRoll = [], getLevel = skills.getCurrentLevel.bind(skills);
+  t.mock.method(skills, 'getCurrentLevel', skill => {
+    const level = getLevel(skill);
+    if (skill === core.Skill.MINING && /\bat rollAttempt \(/.test(new Error().stack)) levelsAtRoll.push(level);
+    return level;
+  });
+  f.p.getInventory().add(new core.Item(ids.RUNE_PICKAXE), true);
+  if (expert) f.p.getEquipment().setItem(core.Equipment.HANDS_SLOT, new core.Item(ids.EXPERT_MINING_GLOVES));
+  const at = new core.Location(3223, 3218, 0), rockId = core.CacheDefinitions.getLocId('amethystrock1');
+  const emptyId = core.CacheDefinitions.getLocId('amethystrock_empty');
+  assert.ok(rockId >= 0 && emptyId >= 0);
+  const rock = new core.GameObject(rockId, at, 0, 0, null);
+  core.ObjectManager.register(rock, true);
+  assert.equal(core.MapObjects.get(rockId, at, null), rock);
+  const definition = core.ObjectDefinition.forPlayer(rockId, f.p);
+  assert.equal(definition.getName(), 'Amethyst crystals');
+  assert.ok(definition.getActions().includes('Mine'));
+  t.after(() => {
+    for (const task of [...core.TaskManager.activeTasks, ...core.TaskManager.pendingTasks.toArray()])
+      if (task.originalRockObject === rock) task.stop();
+    for (const id of [rockId, emptyId]) {
+      const object = core.MapObjects.get(id, at, null);
+      if (object) core.ObjectManager.deregister(object, true);
+    }
+  });
+  core.TaskManager.process();
+  const miningTask = core.TaskManager.activeTasks.find(task => task.constructor.name === 'MiningTask');
+  assert.ok(miningTask);
+  assert.equal(miningTask.activeSessions.size, 0);
+  const execute = miningTask.execute.bind(miningTask);
+  let yieldRolls = 0;
+  t.mock.method(miningTask, 'execute', () => {
+    const previous = Math.random;
+    try {
+      Math.random = () => {
+        const caller = new Error().stack.split('\n')[2] ?? '';
+        if (/\bat rockHolds \(/.test(caller)) { yieldRolls++; return base === 3 ? 0.99 : 0.01; }
+        return 0.01;
+      };
+      return execute();
+    }
+    finally { Math.random = previous; }
+  });
+  const gains = [], addXp = skills.addExperiences.bind(skills);
+  t.mock.method(skills, 'addExperiences', (skill, amount) => {
+    if (skill === core.Skill.MINING) gains.push(amount);
+    return addXp(skill, amount);
+  });
+  async function gatherToEmpty() {
+    await f.c.dispatch([{type:'object_option', id:rockId, x:3223, y:3218, action:'Mine'}]);
+    for (let tick = 0; tick < 40 && !core.MapObjects.get(emptyId, at, null); tick++) miningCancellationTurn(f);
+    assert.ok(core.MapObjects.get(emptyId, at, null), 'the wall really depleted');
+  }
+  await gatherToEmpty();
+  assert.equal(f.p.getInventory().getAmount(ids.AMETHYST), total);
+  assert.deepEqual(gains, Array(total).fill(240));
+  assert.equal(f.p.getAttribute('mining:ores-mined'), total);
+  assert.equal(yieldRolls, 1, 'the normal finite yield is drawn only once per standing wall');
+  assert.ok(levelsAtRoll.length >= total && levelsAtRoll.every(level => level === 99), 'each ore roll used Mining 99');
+  if (expert && base === 2) {
+    for (let tick = 0; tick < 125; tick++) miningCancellationTurn(f);
+    assert.equal(core.MapObjects.get(rockId, at, null), rock, 'the wall respawns');
+    f.p.getEquipment().delete(ids.EXPERT_MINING_GLOVES, 1);
+    f.p.getInventory().add(new core.Item(ids.EXPERT_MINING_GLOVES), true);
+    await gatherToEmpty();
+    assert.equal(f.p.getInventory().getAmount(ids.AMETHYST), 5, 'bare respawn has its own two-ore base yield');
+    assert.equal(f.p.getAttribute('mining:ores-mined'), 5);
+    assert.deepEqual(gains, Array(5).fill(240));
+    assert.equal(yieldRolls, 2, 'the respawn draws a fresh normal yield');
+    assert.ok(levelsAtRoll.length >= 5 && levelsAtRoll.every(level => level === 99));
+  }
+});
+
 function actor(t) {
   const channel={kind:'test',remoteAddress:'127.0.0.1',isOpen:()=>true,send:()=>true,close(){},onData(){},onError(){},onClose(){}};
   const p=new Player(new PlayerSession(channel)); p.setIndex(next++); p.setUsername('golempriority'+next); p.setRegistered(true); p.setLocation(new core.Location(3222,3218,0)); p.needsPlacement=false;

@@ -27,6 +27,7 @@ before(async () => {
   core.ObjectDefinition.init();
   core.RegionManager.init();
   core.RegionManager.loadMapFiles(2588, 3291);
+  core.RegionManager.loadMapFiles(2696, 3283);
   PluginManager.beforeObjectInteractionHooks = [];
   PluginManager.customEventHooks = new Map();
   PluginManager.objectHooksByName = new Map();
@@ -45,6 +46,7 @@ before(async () => {
   api.onCustomEvent("diary:task", require("../plugins/achievements/AchievementDiaries.plugin")._test.onTask);
   require("../plugins/objects/Chests.plugin").register(api);
   DiaryPlugin.register(api);
+  require("../plugins/treasuretrails/TreasureTrails.plugin").register(api);
 });
 
 after(() => {
@@ -114,7 +116,10 @@ test("lowercase Search for traps dispatches through PluginManager and credits Ar
   assert.equal(player.getSkillManager().getExperience(core.Skill.THIEVING) - beforeXp, 500);
   assert.ok(Progress.doneTasks(player, diary).has(DiaryPlugin._test.TASK));
   assert.equal(Progress.tierCount(player, diary, "hard"), 1);
-  assert.deepEqual(teleports.map((tile) => [tile.getX(), tile.getY(), tile.getZ()]), [[2696, 3283, 0]]);
+  assert.deepEqual(teleports.map((tile) => [tile.getX(), tile.getY(), tile.getZ()]), [[2697, 3283, 0]]);
+  // The dungeon entrance loc itself is clipped; the landing must be walkable.
+  assert.notEqual(core.RegionManager.getClipping(2696, 3283, 0, null), 0);
+  assert.equal(core.RegionManager.getClipping(2697, 3283, 0, null), 0);
 });
 
 test("Open cannot reach generic chest handlers and reports that its damage is unsupported", (t) => {
@@ -201,4 +206,23 @@ test("the other chest has its own cooldown, while invalid players and placements
     assert.equal(invalid.player.getInventory().getAmount(core.ItemIdentifiers.COINS), 0);
     assert.equal(Progress.tierCount(invalid.player, diary, "hard"), 0);
   }
+});
+
+test("looting a chest with an elite Sherlock scroll for this task completes the challenge", (t) => {
+  DiaryPlugin._test.reset();
+  const Runtime = require("../plugins/treasuretrails/trails/Runtime.TreasureTrails");
+  const elite = require("../plugins/treasuretrails/trails/Tiers.TreasureTrails").byName.get("elite");
+  const data = Runtime.data(elite);
+  const sherlock = data.steps.find((step) => step.skill);
+  const task = [...data.tasks.values()].find((entry) => entry.text === "Steal from a chest in Ardougne Castle.");
+  assert.ok(data.supportedTasks.includes(task), "Sherlock can set the Ardougne Castle chest task");
+  const { player, messages } = playerFixture(t);
+  const key = Runtime.metaKey(elite);
+  const state = { version: 1, token: "ardougne-chest", revision: 0, completed: 1, length: 5, row: sherlock.row };
+  const inventory = player.getInventory();
+  inventory.setItem(0, new core.Item(sherlock.itemId, 1).setMetaValue(key, state));
+  inventory.setItem(1, new core.Item(sherlock.skill.itemId, 1).setMetaValue(key, { ...state, task: task.row, taskDone: false }));
+  assert.equal(interact(player).handled, true);
+  assert.equal(inventory.getItems()[1].getMetaValue(key).taskDone, true);
+  assert.ok(messages.includes("You have completed your elite/master level challenge!"));
 });

@@ -1,0 +1,88 @@
+[
+ {
+  "k": "say",
+  "t": 707,
+  "who": "Street urchin",
+  "text": "Hey there I heard that you were trying to get the blackjack man to change his gear."
+ },
+ {
+  "k": "say",
+  "t": 710,
+  "who": "player",
+  "text": "You did?"
+ },
+ {
+  "k": "say",
+  "t": 711,
+  "who": "Street urchin",
+  "text": "Do you forget who you're talking to? I'm the fastest and sneakiest urchin in this town."
+ },
+ {
+  "k": "say",
+  "t": 712,
+  "who": "player",
+  "text": "Ok, so what's it to you then?"
+ },
+ {
+  "k": "say",
+  "t": 713,
+  "who": "Street urchin",
+  "text": "Well it suits my purpose nearly as much as yours if the blackjack seller produces a wider variety of wares."
+ },
+ {
+  "k": "say",
+  "t": 714,
+  "who": "player",
+  "text": "How so?"
+ },
+ {
+  "k": "say",
+  "t": 715,
+  "who": "Street urchin",
+  "text": "Well chances are, he'll produce some even higher quality items for me to steal"
+ },
+ {
+  "k": "say",
+  "t": 716,
+  "who": "player",
+  "text": "Aha so if you can rob the blackjack seller and get away with it, it should prove to him that his blackjack isn't up to the job?"
+ },
+ {
+  "k": "say",
+  "t": 717,
+  "who": "Street urchin",
+  "text": "There's hope for you yet."
+ },
+ {
+  "k": "say",
+  "t": 718,
+  "who": "Street urchin",
+  "text": "Seeing as we've worked successfully together in the past I will only charge you 100 gold."
+ },
+ {
+  "k": "menu",
+  "t": 718,
+  "title": "Select an option",
+  "options": [
+   "Woah! That's far too much.",
+   "Fair enough, here you go."
+  ]
+ },
+ {
+  "k": "pick",
+  "t": 724,
+  "n": 2
+ },
+ {
+  "k": "say",
+  "t": 724,
+  "who": "player",
+  "text": "Fair enough, here you go."
+ },
+ {
+  "k": "say",
+  "t": 725,
+  "who": "Street urchin",
+  "text": "Now walk up to the merchant, engage him in conversation and leave the rest up to me."
+ }
+]

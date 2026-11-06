@@ -108,7 +108,7 @@ function setCurrentLevel(player, skill, level) {
 function heal(player, amount, extraCap = 0) {
   const current = getCurrentLevel(player, Skill.HITPOINTS);
   const baseMax = getMaxLevel(player, Skill.HITPOINTS);
-  const max = baseMax + Math.max(0, extraCap);
+  const max = Math.max(current, baseMax + Math.max(0, extraCap));
   player.setHitpoints(clamp(current + amount, 0, max));
 }
 
@@ -239,15 +239,14 @@ function applyJarOfCongealedBlood(player) {
   restoreRunEnergy(player, 100);
 }
 
-function applyZamorakBrew(player) {
+/** `hpDamage(currentHp)` is the brew's Hitpoints cost; the Zamorak mix passes its own (Wiki). */
+function applyZamorakBrew(player, hpDamage = (hp) => Math.floor(2 + hp * 0.1)) {
   boostSkill(player, Skill.ATTACK, 2, 0.2);
   boostSkill(player, Skill.STRENGTH, 2, 0.12);
 
   lowerSkillByMax(player, Skill.DEFENCE, 2, 0.1, 0);
 
-  const hpCurrent = getCurrentLevel(player, Skill.HITPOINTS);
-  const hpDamage = Math.floor(2 + hpCurrent * 0.1);
-  damageButKeepAlive(player, hpDamage);
+  damageButKeepAlive(player, hpDamage(getCurrentLevel(player, Skill.HITPOINTS)));
 
   const maxPrayer = getMaxLevel(player, Skill.PRAYER);
   const prayerBoost = Math.floor(maxPrayer * 0.1);
@@ -487,7 +486,7 @@ function applyOverload(player, flat = 5, percent = 0.15) {
   });
 }
 
-/** Barbarian mixes heal 6 Hitpoints, except antipoison and restore mixes which heal 3 (Wiki). */
+/** Barbarian mixes heal 6 Hitpoints a dose; the attack, antipoison, Relicym's, strength, restore, energy and combat mixes heal 3 (Wiki). */
 function applyMix(baseEffect, healAmount = 6) {
   return (player) => {
     baseEffect(player);
@@ -507,7 +506,7 @@ function canEat(player, itemId) {
  * Why `player` may not drink a dose of `entry` here, as the drink path decides it (the canDrink
  * hooks, the potion's area, food permission, content unlocks, its own canUse); null when they may.
  */
-function drinkRefusal(player, entry) {
+function drinkPermissionRefusal(player, entry) {
   const itemId = entry.itemId;
   if (!canDrink(player, itemId)) return "You cannot use potions here.";
   if (entry.potion.area && !inArea(player, entry.potion.area)) return AREA_MESSAGES[entry.potion.area] ?? "You cannot use that here.";
@@ -515,7 +514,26 @@ function drinkRefusal(player, entry) {
   const permission = { player, itemId, allowed: true, message: null };
   pluginApi.emitCustomEvent("potions:validate-drink", permission);
   if (permission.allowed === false) return permission.message ?? "You cannot use that here.";
+  return null;
+}
+
+function drinkCanUseRefusal(player, entry) {
   if (entry.potion.canUse && !entry.potion.canUse(player)) return "You need more than 50 Hitpoints to drink this potion.";
+  return null;
+}
+
+/** Every potion-specific restriction, including a potion's HP requirement. */
+function drinkRefusal(player, entry) {
+  const permissionRefusal = drinkPermissionRefusal(player, entry);
+  if (permissionRefusal) return permissionRefusal;
+  return drinkCanUseRefusal(player, entry);
+}
+
+/** Shared action timer and stun gates for ordinary drinks and the chugging barrel. */
+function drinkTimerRefusal(player) {
+  const timers = player.getTimers();
+  if (timers.has(TimerKey.STUN)) return { kind: "stun", message: "You're currently stunned and cannot use potions." };
+  if (timers.has(TimerKey.POTION)) return { kind: "potion", message: null };
   return null;
 }
 
@@ -858,7 +876,8 @@ registerPotion({
 registerPotion({
   name: "Energy potion",
   chains: [doseChain("ENERGY_POTION_4_", "ENERGY_POTION_3_", "ENERGY_POTION_2_", "ENERGY_POTION_1_")],
-  effect: (player) => restoreRunEnergy(player, 10),
+  // Wiki: 15% a dose since 19 August 2026 (was 10%); the energy mix follows it.
+  effect: (player) => restoreRunEnergy(player, 15),
 });
 registerPotion({
   name: "Super energy",
@@ -1139,6 +1158,46 @@ registerPotion({
   effect: applyMenaphiteRemedy,
 });
 
+// ---------------------------------------------------------------- barbarian mixes of the potions above
+// Wiki (Barbarian Training's mix table): a mix drinks as its potion and heals 3 or 6 per dose.
+// Relicym's and magic essence mixes are left out: their potions have no drink here yet.
+
+/** A mix drinking as the registered potion `potionName` (or `effect`), healing `healAmount` per dose. */
+function registerMix(name, potionName, healAmount, twoDose, oneDose, effect) {
+  const potion = REGISTERED_POTIONS.find((candidate) => candidate.name === potionName);
+  if (!potion) return;
+  registerPotion({
+    name,
+    chains: [doseChain(twoDose, oneDose)],
+    requiresFoodPermission: true,
+    canUse: potion.canUse ?? undefined,
+    area: potion.area ?? undefined,
+    effect: applyMix(effect ?? potion.effect, healAmount),
+  });
+}
+
+/** Wiki (Zamorak mix): the brew's boosts and Prayer, but floor((HP - 1) / 8) damage, then the 6 heal. */
+const zamorakMix = (player) => applyZamorakBrew(player, (hp) => Math.floor((hp - 1) / 8));
+
+for (const [name, potionName, healAmount, key, effect] of [
+  ["Attack mix", "Attack potion", 3, "ATTACK_MIX"],
+  ["Strength mix", "Strength potion", 3, "STRENGTH_MIX"],
+  ["Energy mix", "Energy potion", 3, "ENERGY_MIX"],
+  ["Defence mix", "Defence potion", 6, "DEFENCE_MIX"],
+  ["Agility mix", "Agility potion", 6, "AGILITY_MIX"],
+  ["Combat mix", "Combat potion", 3, "COMBAT_MIX"],
+  ["Prayer mix", "Prayer potion", 6, "PRAYER_MIX"],
+  ["Superattack mix", "Super attack", 6, "SUPERATTACK_MIX"],
+  ["Fishing mix", "Fishing potion", 6, "FISHING_MIX"],
+  ["Hunting mix", "Hunter potion", 6, "HUNTING_MIX"],
+  ["Super str. mix", "Super strength", 6, "SUPER_STR_MIX"],
+  ["Super def. mix", "Super defence", 6, "SUPER_DEF_MIX"],
+  ["Ranging mix", "Ranging potion", 6, "RANGING_MIX"],
+  ["Magic mix", "Magic potion", 6, "MAGIC_MIX"],
+  ["Zamorak mix", "Zamorak brew", 6, "ZAMORAK_MIX", zamorakMix],
+  ["Ancient mix", "Ancient brew", 6, "ANCIENT_MIX"],
+]) registerMix(name, potionName, healAmount, `${key}_2_`, `${key}_1_`, effect);
+
 // ---------------------------------------------------------------- Chambers of Xeric gourd potions
 // Not on the Wiki (to check against a capture): the boosts by strength (weak / normal / strong). Wiki:
 // they can only be sipped inside the raid, and the gourd breaks when finished.
@@ -1328,44 +1387,25 @@ function handlePotionDrink(player, itemId, slot) {
     return true;
   }
 
-  if (!canDrink(player, itemId)) {
-    player.sendMessage("You cannot use potions here.");
+  const permissionRefusal = drinkPermissionRefusal(player, entry);
+  if (permissionRefusal) {
+    player.sendMessage(permissionRefusal);
     return true;
   }
 
-  if (entry.potion.area && !inArea(player, entry.potion.area)) {
-    player.sendMessage(AREA_MESSAGES[entry.potion.area] ?? "You cannot use that here.");
+  const timerRefusal = drinkTimerRefusal(player);
+  if (timerRefusal) {
+    if (timerRefusal.message) player.sendMessage(timerRefusal.message);
     return true;
   }
 
-  if (entry.potion.requiresFoodPermission && !canEat(player, itemId)) {
-    player.sendMessage("You cannot eat here.");
-    return true;
-  }
-
-  // Quest and content plugins can explain an item-specific unlock before a
-  // drink consumes a dose, starts a cooldown or applies any effect.
-  const permission = { player, itemId, allowed: true, message: null };
-  pluginApi.emitCustomEvent("potions:validate-drink", permission);
-  if (permission.allowed === false) {
-    if (permission.message) player.sendMessage(permission.message);
+  const canUseRefusal = drinkCanUseRefusal(player, entry);
+  if (canUseRefusal) {
+    player.sendMessage(canUseRefusal);
     return true;
   }
 
   const timers = player.getTimers();
-  if (timers.has(TimerKey.STUN)) {
-    player.sendMessage("You're currently stunned and cannot use potions.");
-    return true;
-  }
-
-  if (timers.has(TimerKey.POTION)) {
-    return true;
-  }
-
-  if (entry.potion.canUse && !entry.potion.canUse(player)) {
-    player.sendMessage("You need more than 50 Hitpoints to drink this potion.");
-    return true;
-  }
 
   timers.extendOrRegister(TimerKey.POTION, 3);
   timers.extendOrRegister(TimerKey.FOOD, 3);
@@ -1660,6 +1700,20 @@ module.exports = {
   getPotionName(itemId) {
     return POTION_BY_ITEM_ID.get(itemId)?.potion?.name ?? null;
   },
+  /** `{ potion, entry, doses, emptyItemId }` for a dose item; `emptyItemId` respects copied potions. */
+  doseOf(itemId) {
+    const entry = POTION_BY_ITEM_ID.get(itemId);
+    if (!entry) return null;
+    const lastDose = POTION_BY_ITEM_ID.get(entry.chain[entry.chain.length - 1]);
+    return {
+      potion: entry.potion,
+      entry,
+      doses: entry.doses,
+      emptyItemId: lastDose?.replacementId ?? entry.potion.emptyItemId,
+    };
+  },
+  drinkRefusal,
+  drinkTimerRefusal,
   register(api) {
     api.registerRunEnergyDrainModifier(staminaDrainModifier);
     api.registerRunEnergyStatusModifier(staminaStatus);

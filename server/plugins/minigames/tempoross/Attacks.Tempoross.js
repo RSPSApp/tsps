@@ -12,7 +12,9 @@
  *   sound 2186 under each strike; clouds grow at +6, charge at +11, Tempoross casts
  *   (`fsb_lightening_cast`) at +13, the clouds strike at +15 (NPC 10581,
  *   sound 4433) and at +16 each strike tile burns: Fire NPC 8643, spotanim 1840, loc 37582,
- *   sound 159. A fire spreads 40 ticks later with projectile 1839, twice at most.
+ *   sound 159. A fire spreads 40 ticks later with projectile 1839, and keeps spreading until it
+ *   is doused or a wave puts it out (Wiki). Captures 552 and 1858 saw two spreads, which reads as
+ *   the recording ending rather than a cap; the Wiki wins here (#2730).
  * - torrent: seq 8903, spotanim 1841 at Tempoross and projectile 1842 to a cannon, which is
  *   disabled from +6 for 24 ticks.
  * The attacks first come ~49 ticks after Tempoross surfaces, then every 50-55 ticks, wave and
@@ -44,7 +46,7 @@ class Attacks {
     this.nextAttackAt = -1;
     this.nextTorrentAt = -1;
     this.nextKind = "wave";
-    /** { npc, loc, x, y, spreads, spreadAt } by "x,y" of its south-west tile. */
+    /** { npc, loc, x, y, spreadAt } by "x,y" of its south-west tile. */
     this.fires = new Map();
     this.pending = [];
     this.debris = [];
@@ -115,7 +117,12 @@ class Attacks {
 
   waveHits() {
     const fight = this.fight;
-    if (fight.phase !== "surfaced") return;
+    if (fight.phase !== "surfaced") {
+      // Tempoross went under before the wave landed: no hit, but the overlay the warning
+      // opened has to close, or it stays up until the next wave hides it (#2692).
+      fight.forEachPlayer((player) => player.getPacketSender().sendClientScript(SCRIPT.WAVE_HIDE, F.waveOverlayHide));
+      return;
+    }
     fight.setBoss(fight.enraged ? NPC.BOSS_ENRAGED : NPC.BOSS);
     Shared.animate(fight.boss, ANIM.BOSS_SPAWN);
     for (const old of this.debris) this.cove.removeLoc(old);
@@ -206,14 +213,14 @@ class Attacks {
     return true;
   }
 
-  ignite([x, y], spreads = 0) {
+  ignite([x, y]) {
     if (!this.burnable([x, y])) return;
     const npc = this.cove.spawnNpc(NPC.FIRE, [x, y]);
     if (!npc) return;
     Shared.graphic(npc, GFX.FIRE_SPAWN);
     const loc = this.cove.placeLoc(LOC.FIRE_VISUALS, [x, y], { face: Shared.randomInt(0, 3) });
     this.cove.areaSound(SOUND.FIRE, this.cove.tile([x, y, 0]), 5);
-    this.fires.set(`${x},${y}`, { npc, loc, x, y, spreads, spreadAt: this.fight.ticks + F.fireSpreadTicks });
+    this.fires.set(`${x},${y}`, { npc, loc, x, y, spreadAt: this.fight.ticks + F.fireSpreadTicks });
   }
 
   extinguish(fire) {
@@ -245,18 +252,17 @@ class Attacks {
     if (this.fires.size === 0) return;
     const now = this.fight.ticks;
     for (const fire of [...this.fires.values()]) {
-      if (now < fire.spreadAt || fire.spreads >= F.fireSpreads) continue;
+      if (now < fire.spreadAt) continue;
       fire.spreadAt = now + F.fireSpreadTicks;
       const step = Shared.pick(SPREAD_STEPS.filter(([dx, dy]) => this.burnable([fire.x + dx, fire.y + dy])));
       if (!step) continue;
-      fire.spreads += 1;
       const to = [fire.x + step[0], fire.y + step[1]];
       this.cove.projectile(GFX.FIRE_SPREAD, this.cove.tile([fire.x, fire.y, 0]), this.cove.tile([...to, 0]), {
         cycles: 60, startHeight: 1, endHeight: 0, slope: 30,
       });
       const wave = this.waves;
       this.at(2, () => {
-        if (this.waves === wave) this.ignite(to, fire.spreads);
+        if (this.waves === wave) this.ignite(to);
       });
     }
     if (now < this.nextBurnAt) return;

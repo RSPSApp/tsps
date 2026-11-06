@@ -83,6 +83,7 @@ function bindPlugin() {
     onCustomEvent(type, handler) { (events[type] ??= []).push(handler); },
     emitCustomEvent(type, payload) { for (const handler of events[type] ?? []) handler(payload); },
     onGroundItemPickup() {},
+    onPlayerLogin() {},
     onNpcInteraction(name, actions) { interactions[name] = actions; },
     onItemOnNpc() {},
   };

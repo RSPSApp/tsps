@@ -88,14 +88,14 @@ function lapDone({ player, course }) {
 
 /**
  * Wiki (Agility dispenser): starting the next lap at the pipe without having tagged the dispenser
- * loses the unclaimed ticket and reward and resets the streak; the payment stays. Rev 233 kept the
- * streak (233/00449: 2 -> 3 and 4 -> 5 across untagged laps); the current Wiki rule is followed here.
+ * resets the reward streak; the payment stays. The unclaimed ticket and reward are not lost at the
+ * start: they stay available to Tag until another lap replaces them (rsprox 233/00449 kept them
+ * across the pipe, 2 -> 3 and 4 -> 5). Clearing them here made Tag answer "complete one full lap"
+ * for a player who had just finished one (#2711).
  */
 function lapStarted({ player, objectId }) {
   if (objectId !== core().CacheDefinitions.getLocId(DATA.lapStart)) return;
   if (!get(player, "ticket") && !get(player, "reward")) return;
-  set(player, "ticket", 0);
-  set(player, "reward", 0);
   set(player, "streak", 0);
 }
 
@@ -215,7 +215,10 @@ function onCourse(location) {
   const { minX, maxX, minY, maxY } = DATA.course;
   const x = location.getX();
   const y = location.getY();
-  return location.getZ() === 0 && x >= minX && x <= maxX && y >= minY && y <= maxY;
+  // Rope and log failures land in the course dungeon, 6400 tiles north in map coordinates.
+  const undergroundOffset = 6400;
+  return location.getZ() === 0 && x >= minX && x <= maxX &&
+    ((y >= minY && y <= maxY) || (y >= minY + undergroundOffset && y <= maxY + undergroundOffset));
 }
 
 /** Recorded on leaving: the streak, the payment and an unclaimed reward go; the ticket stays. */

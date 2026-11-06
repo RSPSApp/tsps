@@ -1188,11 +1188,12 @@
     },
     {
       "name": "Rock slide (Cairn Isle, heading east)",
-      "fail": {"low":170,"high":253,"cross":true,"hit":[1,4]},
-      "unverified": "the failure's damage (no capture)",
+      "fail": {"low":170,"high":253,"cross":true,"hit":{"percent":5,"plus":1},"hits":2,"end":"You fall and hurt yourself."},
+      "unverified": "whether a failed climb still gets across (cross) or falls back, as the Wiki's Rock slide page can be read; capture 352 has these rocks at level 99, with no failure",
       "object": 2231,
       "at": [[2792,2978,0],[2792,2979,0],[2792,2980,0]],
       "level": 15,
+      "xp": 1,
       "steps": [
         {"move":[2795,"pos.y"],"anim":"CLIMB_ROCKS","delay":15,"speed":[0,120],"dir":"west","ticks":3},
         {"anim":-1}
@@ -1201,11 +1202,12 @@
     },
     {
       "name": "Rock slide (Cairn Isle, heading west)",
-      "fail": {"low":170,"high":253,"cross":true,"hit":[1,4]},
-      "unverified": "the failure's damage (no capture); the reverse direction (only one direction was captured; it mirrors that one)",
+      "fail": {"low":170,"high":253,"cross":true,"hit":{"percent":5,"plus":1},"hits":2,"end":"You fall and hurt yourself."},
+      "unverified": "whether a failed climb still gets across (cross) or falls back; this direction's move is a forced move, capture 352 (ticks 78-83) shows it as a walk from 2795 to 2791 with 1 XP",
       "object": 2231,
       "at": [[2794,2978,0],[2794,2979,0],[2794,2980,0]],
       "level": 15,
+      "xp": 1,
       "steps": [
         {"move":[2791,"pos.y"],"anim":"CLIMB_ROCKS","delay":15,"speed":[0,120],"dir":"west","ticks":3},
         {"anim":-1}

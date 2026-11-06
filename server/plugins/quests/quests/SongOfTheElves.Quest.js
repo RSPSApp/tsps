@@ -266,6 +266,7 @@ module.exports = function registerSongOfTheElves(api) {
     "Ted Rehnison": ["Ted Rehnison", "standard-dialogue-after-song-of-the-elves"],
     "Milli Rehnison": ["Milli Rehnison", "standard-dialogue-after-song-of-the-elves"],
   };
+  const PLAGUE_CITY_KEY = "plague_city";
   const REQUIRED_QUESTS = [
     ["mournings_end_part_ii", "Mourning's End Part II"],
     ["making_history", "Making History"],
@@ -1428,6 +1429,8 @@ module.exports = function registerSongOfTheElves(api) {
     const npcName = resistanceCitizenName(event).toLowerCase();
     if (quest.getStage(player) === STAGE.NOT_STARTED) {
       if (npcName !== "edmond") return false;
+      // Edmond starts Plague City too; leave him to that quest until it is complete.
+      if (!hasQuest(player, PLAGUE_CITY_KEY)) return false;
       if (!requirementsMet(player)) { explainRequirements(player); return true; }
       return startTranscript(api, player, event.npcId, PAGE, "starting-out-talking-to-edmond");
     }

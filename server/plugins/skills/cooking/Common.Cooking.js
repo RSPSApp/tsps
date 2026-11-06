@@ -141,6 +141,13 @@ function sendVarbit(player, name, value) {
   if (Number.isInteger(id)) player.getPacketSender().sendVarbit(id, value);
 }
 
+/** Every knife a knife-on-item cut accepts (the cache's plain "Knife" objs). */
+const KNIFE_NAMES = ["KNIFE", "KNIFE_2", "KNIFE_3", "KNIFE_4", "KNIFE_5"];
+
+function knives() {
+  return new Set(KNIFE_NAMES.map((name) => core.ItemIds[name]).filter(Number.isInteger));
+}
+
 function addXp(player, xp) {
   if (xp > 0) player.getSkillManager().addExperiences(core.Skill.COOKING, xp);
 }
@@ -163,7 +170,7 @@ function run(player, step) {
 
 module.exports = {
   init, gameval, cookables, recipeWith, recipeForProduct, doughData, wineData, level, actionsPerCycle, wearsCookingCape, withArticle,
-  spam, mesbox, sendVarbit, addXp, run,
+  spam, mesbox, sendVarbit, knives, addXp, run,
   get api() { return api; },
   get core() { return core; },
 };

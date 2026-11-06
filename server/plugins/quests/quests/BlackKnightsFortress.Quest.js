@@ -1,9 +1,10 @@
 /**
  * Black Knights' Fortress, from the OSRS Wiki and captures.
- * The fortress as it stands after the quest (guards, doors, walls, grill, main door) follows rsprox
- * 469; the completed journal follows rsprox 1581 and 2977. No available capture shows the quest
- * being done. The sabotage timings came from revision 240 capture 20260817T005704, which is not in
- * the rsprox database and cannot be re-checked.
+ * The route follows two full-quest rsprox recordings, rev 240 and rev 241 (varp 130 0 -> 4): the
+ * dialogue, the stage 2 and 3 journals, the dossier, the grill position and the sabotage scene's
+ * NPC steps, camera, fades and sounds. The fortress as it stands after the quest (guards, doors,
+ * walls, grill, main door) follows rsprox 469; the completed journal follows rsprox 1581 and 2977.
+ * The stage 1 journal and the black-armour and not-disguised branches have no capture.
  */
 const ObstacleRunner = require("../../skills/agility/ObstacleRunner.Agility");
 
@@ -103,6 +104,18 @@ module.exports = function registerBlackKnightsFortressQuest(api) {
   const LISTENING_ANIMATION = 4552;
   const STOP_LISTENING_ANIMATION = 4197;
 
+  /** Sounds the sabotage scene plays (rsprox rev 240). Each follows its dialogue step, not a fixed scene tick. */
+  const THROW_SOUND = 1420;
+  const NOISE_SOUND = 1414;
+  const SPLASH_SOUND = 1416;
+  const CAT_MEOW_SOUND = 333;
+  /** The meow's area-sound range in tiles (sound_area range=5 in both recordings). */
+  const CAT_MEOW_RANGE = 5;
+  /** Ticks after continuing past "Where has Greldo..." (rev 240: 3105 -> 3108; rev 241: 10057 -> 10059). */
+  const NOISE_SOUND_DELAY = 3;
+  /** The throw (anim, spotanim, projectile, sound) follows the camera shake by a tick (rev 240 3068 -> 3069, rev 241 10028 -> 10029). */
+  const THROW_DELAY = 1;
+
   const START_HOOK = "quest:black-knights-fortress:start";
   const DOSSIER_ACTION_IDS = new Set(["RQQGDa", "kI0dT0"]);
   const QUEST_COMPLETE_ACTION_ID = "uMmzNj";
@@ -174,21 +187,25 @@ module.exports = function registerBlackKnightsFortressQuest(api) {
       ];
     }
     if (stage >= STAGE_RETURN_TO_AMIK) {
+      // Verbatim from rsprox rev 240 (stage 3 journal, seven lines).
       return [
-        "<str>I infiltrated the Black Knights' Fortress.</str>",
-        "<str>I ruined the witch's invincibility potion with a cabbage.</str>",
-        "",
-        "I should claim my reward from <col=800000>Sir Amik Varze</col>",
-        "in <col=800000>Falador Castle</col>.",
+        "<str>Sir Amik Varze asked me to investigate the Black Knights'",
+        "<str>Fortress. I sneaked inside disguised as a Guard.",
+        "<str>I eavesdropped on a Witch and the Black Knight Captain and",
+        "<str>discovered that their invincibility potion could be destroyed",
+        "<str>with a normal cabbage.",
+        "Now that I have sabotaged the witch's potion, I can claim my",
+        "<col=800000>reward</col> from <col=800000>Sir Amik Varze</col> in <col=800000>Falador Castle</col>.",
       ];
     }
     if (stage >= STAGE_SABOTAGE) {
+      // Verbatim from rsprox rev 240 (stage 2 journal, five lines).
       return [
-        "<str>I infiltrated the Black Knights' Fortress.</str>",
-        "<str>I learned that their secret weapon is an invincibility potion.</str>",
-        "",
-        "An ordinary <col=800000>cabbage</col> will ruin the potion.",
-        "A cabbage from Draynor Manor would help the witch instead.",
+        "<str>Sir Amik Varze asked me to investigate the Black Knights'",
+        "<str>Fortress. I sneaked inside disguised as a Guard.",
+        "I eavesdropped on a Witch and the Black Knight Captain and",
+        "discovered that their <col=800000>invincibility potion</col> can be destroyed",
+        "with a normal <col=800000>cabbage</col>.",
       ];
     }
     if (stage >= STAGE_INVESTIGATE) {
@@ -247,6 +264,12 @@ module.exports = function registerBlackKnightsFortressQuest(api) {
   // Route to whichever of the passage's two tiles is on the player's side. In line with the
   // passage either side may be the reachable one, so the ordinary object route picks.
   function routeFortressPassage(event) {
+    // The listener stands on the grill's own tile (rsprox rev 240 tick 2555, rev 241 tick 9859).
+    if (event.objectId === LISTENING_GRILL_LOC_ID) {
+      const tile = event.object.getLocation();
+      event.destination = { x: tile.getX(), y: tile.getY(), z: tile.getZ() };
+      return;
+    }
     if (!PASSAGE_LOC_IDS.has(event.objectId)) return;
     const { x, y, z, acrossX, acrossY } = passageTiles(event.object);
     const from = event.sourceLocation;
@@ -325,7 +348,7 @@ module.exports = function registerBlackKnightsFortressQuest(api) {
         const from = state.area.sourceTile(3032, 3507), to = state.area.sourceTile(3031, 3507);
         player.getPacketSender().sendProjectile(from, to, 0, 100, 772, 500, 50, null, 0, 192, 128);
         const graphic = new Graphic(773); graphic.delay = 100;
-        player.getPacketSender().sendGraphic(graphic, to);
+        player.getPacketSender().sendGraphic(graphic, to).sendSound(SPLASH_SOUND, 1, 0);
       });
       later(player, state, 7, () => player.getPacketSender().sendVarbit(2494, 1));
       pauseSabotage(player, state, 7, stepId);
@@ -401,12 +424,17 @@ module.exports = function registerBlackKnightsFortressQuest(api) {
     if (!state) return;
     if (text === "My potion!") event.after = () => state.witch?.performAnimation(new Animation(860));
     if (text === "Oh boy, this doesn't look good!") event.after = () => state.captain?.performAnimation(new Animation(2105));
-    if (text === "Where has Greldo got to with that magic cabbage!") event.after = () => pauseSabotage(player, state, 6, text);
+    if (text === "Where has Greldo got to with that magic cabbage!") event.after = () => {
+      later(player, state, NOISE_SOUND_DELAY, () => player.getPacketSender().sendSound(NOISE_SOUND, 1, 0));
+      pauseSabotage(player, state, 6, text);
+    };
     if (String(text).startsWith("Meow!")) {
       event.text = "Meow!";
       event.speakerId = NpcIdentifiers.BLACK_CAT;
       event.expression = BLACK_CAT_CHATHEAD_ANIMATION;
       event.after = () => {
+        const cat = state.area.sourceTile(3027, 3507);
+        player.getPacketSender().sendAreaSound(CAT_MEOW_SOUND, cat.getX(), cat.getY(), 0, 1, 0, CAT_MEOW_RANGE);
         player.getDialogueManager().reset();
         StatementDialogue.send(player, "", false);
         later(player, state, 4, () => fade(player, true));
@@ -478,6 +506,14 @@ module.exports = function registerBlackKnightsFortressQuest(api) {
       steps => steps.slice(steps.findIndex(step => step.id === after || step.text === after) + 1)));
   }
 
+  function throwCabbage(player) {
+    player.performAnimation(new Animation(4553));
+    player.getPacketSender().sendSound(THROW_SOUND, 1, 0);
+    const thrown = new Graphic(771); thrown.height = 96;
+    player.performGraphic(thrown);
+    player.getPacketSender().sendProjectile(new Location(3031, 3506, 1), new Location(3031, 3507, 1), 0, 196, 772, 130, 0, null, 96, 55, 60);
+  }
+
   function startSabotage(event) {
     const { player } = event;
     event.handled = true;
@@ -488,10 +524,7 @@ module.exports = function registerBlackKnightsFortressQuest(api) {
     player.setAttribute(SCENE_ATTRIBUTE, 1);
     controls(player, true);
     for (let axis = 0; axis < 5; axis++) player.getPacketSender().sendCameraShake(axis, 0);
-    player.performAnimation(new Animation(4553));
-    const thrown = new Graphic(771); thrown.height = 96;
-    player.performGraphic(thrown);
-    player.getPacketSender().sendProjectile(new Location(3031, 3506, 1), new Location(3031, 3507, 1), 0, 196, 772, 130, 0, null, 96, 55, 60);
+    later(player, state, THROW_DELAY, () => throwCabbage(player));
     later(player, state, 6, () => fade(player, true));
     later(player, state, 8, () => {
       state.area.enter(player);

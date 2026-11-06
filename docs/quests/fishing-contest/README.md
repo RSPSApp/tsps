@@ -17,7 +17,15 @@ Natural route linked across saved checkpoints to the Vestri trophy hand-in. Rewa
 
 ## Findings
 
-None recorded.
+The contest closes after three successful catches and automatically hands in the
+available fish caught during that round. The result uses the existing Bonzo
+dialogue; its automatic presentation and exact timing are not captured retail
+evidence. After a loss, using Bonzo's existing Pay interaction reopens a round
+without charging another fee, as a compatibility recovery policy. Bait and
+Talk-to give estimated guidance to that option when the round is closed. A
+manual regular-fish hand-in also closes the losing round. Inventory
+items of the same id cannot be distinguished if fish are dropped or exchanged;
+the hand-in is capped at the round's recorded catches.
 
 ## Runs
 

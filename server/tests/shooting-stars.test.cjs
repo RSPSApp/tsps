@@ -379,8 +379,8 @@ test("clue geodes: the Wiki's formula from the golem base gives its crashed star
   // Wiki (Crashed star): beginner 1/663 to 1/366; its other tiers are listed unfloored (1/5,642 easy).
   assert.equal(ClueGeodes.geodeChance(base, 10, 0.2), 663);
   assert.equal(ClueGeodes.geodeChance(base, 99, 0.2), 366);
-  assert.equal(ClueGeodes.geodeChance(base, 10, 1.7), 5640);
-  assert.equal(ClueGeodes.geodeChance(base, 10, 10), 33180);
+  assert.equal(ClueGeodes.geodeChance(base, 10, 1.7), 5642);
+  assert.equal(ClueGeodes.geodeChance(base, 10, 10), 33189);
 });
 
 test("the noticeboard keeps the last five stars, oldest first, with their finders", () => {
@@ -483,13 +483,13 @@ test("celestial ring: charge with stardust, extra ores up to adamantite spend ch
   worn.setMetaValue(Ring.CHARGES_META_KEY, 15);
   const wearer = miner();
   wearer.getEquipment().setItem(core.Equipment.RING_SLOT, worn);
-  const coal = { player: wearer, rockLevel: 30, extra: false };
+  const coal = { player: wearer, rockLevel: 30, bonuses: [] };
   Ring.extraOre(coal, () => 0.05);
-  assert.equal(coal.extra, true);
+  assert.equal(coal.bonuses.length, 1);
   assert.equal(Ring.charges(worn), 14);
-  const runite = { player: wearer, rockLevel: 85, extra: false };
+  const runite = { player: wearer, rockLevel: 85, bonuses: [] };
   Ring.extraOre(runite, () => 0.05);
-  assert.equal(runite.extra, false);
+  assert.equal(runite.bonuses.length, 0);
   assert.equal(Ring.charges(worn), 14, "runite is past adamantite: no charge");
   Ring.uncharge({ player: p, item: ring });
   assert.equal(ring.getId(), I.CELESTIAL_RING_UNCHARGED_);

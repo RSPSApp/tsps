@@ -98,6 +98,7 @@ import {
   PluginPlayerBeforeDeathEvent,
   PluginPlayerOptionEvent,
   PluginPlayerDealtDamageEvent,
+  PluginCombatHitPrepareEvent,
   PluginCombatHitRollEvent,
   PluginCombatHitDamageEvent,
   PluginAttackTimingEvent,
@@ -328,6 +329,7 @@ export class PluginManager {
   private static playerDeathHooks: PluginHook<PluginPlayerDeathEvent>[] = [];
   private static playerOptionHooks: PluginHook<PluginPlayerOptionEvent>[] = [];
   private static playerDealtDamageHooks: PluginHook<PluginPlayerDealtDamageEvent>[] = [];
+  private static combatHitPrepareHooks: PluginHook<PluginCombatHitPrepareEvent>[] = [];
   private static combatHitRollHooks: PluginHook<PluginCombatHitRollEvent>[] = [];
   private static combatHitDamageHooks: PluginHook<PluginCombatHitDamageEvent>[] = [];
   private static attackTimingHooks: PluginHook<PluginAttackTimingEvent>[] = [];
@@ -1696,6 +1698,13 @@ export class PluginManager {
     return Number.isFinite(event.speed) ? Math.max(1, event.speed | 0) : speed;
   }
 
+  public static emitCombatHitPrepare(event: PluginCombatHitPrepareEvent): void {
+    if (!event?.attacker || !event?.target) return;
+    for (const hook of PluginManager.combatHitPrepareHooks) {
+      PluginManager.executeHook(hook, event, "combat_hit_prepare", "combat_hit_prepare");
+    }
+  }
+
   public static emitCombatHitRoll(event: PluginCombatHitRollEvent): void {
     if (!event?.attacker || !event?.target) return;
     for (const hook of PluginManager.combatHitRollHooks) {
@@ -2464,6 +2473,7 @@ export class PluginManager {
       LocModelType: require("../game/cache/codec/rs/config/loctype/LocModelType").LocModelType,
       MapObjects: require("../game/entity/impl/object/MapObjects").MapObjects,
       ItemOnGroundManager: require("../game/entity/impl/grounditem/ItemOnGroundManager").ItemOnGroundManager,
+      GroundItemOperationType: require("../game/entity/impl/grounditem/ItemOnGroundManager").OperationType,
       ItemOnGround: require("../game/entity/impl/grounditem/ItemOnGround").ItemOnGround,
       GroundItemState: require("../game/entity/impl/grounditem/ItemOnGround").State,
       ItemDefinition: require("../game/definition/ItemDefinition").ItemDefinition,
@@ -2489,6 +2499,7 @@ export class PluginManager {
       CombatSpells: require(`${combat}/magic/CombatSpells`).CombatSpells,
       Autocasting: require(`${combat}/magic/Autocasting`).Autocasting,
       NPC: require("../game/entity/impl/npc/NPC").NPC,
+      NpcSpawnDefinitionLoader: require("../game/definition/loader/impl/NpcSpawnDefinitionLoader").NpcSpawnDefinitionLoader,
       GameConstants: require("../game/GameConstants").GameConstants,
       Music: require("../game/Music").Music,
       // world.json accessors (isMembersWorld, isMembersArea, WORLD_SPAWN, zone boundaries).
@@ -3656,6 +3667,10 @@ export class PluginManager {
           },
         });
       },
+      onCombatHitPrepare: (handler) => {
+        if (typeof handler !== "function") return;
+        PluginManager.combatHitPrepareHooks.push({ ...hookProfile(handler), handler });
+      },
       onCombatHitRoll: (handler) => {
         if (typeof handler !== "function") return;
         PluginManager.combatHitRollHooks.push({ ...hookProfile(handler), handler });
@@ -4239,6 +4254,60 @@ export class PluginManager {
             err
           );
         }
+      },
+      replaceMapRegionData: (regionId, terrainData, objectData) => {
+        if (!Number.isInteger(regionId) || regionId < 0 || regionId > 0xffff ||
+          !(terrainData instanceof Uint8Array) || terrainData.length === 0 ||
+          (objectData !== null && !(objectData instanceof Uint8Array))) {
+          console.warn(`[plugins] ${pluginName} attempted invalid replaceMapRegionData regionId=${regionId}`);
+          return false;
+        }
+        const owner = MapRegionReplacementManager.getSource(regionId);
+        if (owner !== null && owner !== pluginName) {
+          // Never stack over another owner's map (a data/regions pack): restoring would lose it.
+          console.warn(`[plugins] ${pluginName} refused: region ${regionId} is replaced by ${owner}`);
+          return false;
+        }
+        try {
+          const result = MapRegionReplacementManager.replaceMapRegionData(regionId, terrainData, objectData, pluginName);
+          applyPluginRegionReplacement(pluginName, regionId, result);
+          return true;
+        } catch (err) {
+          console.error(`[plugins] ${pluginName} failed to replace map region ${regionId}`, err);
+          return false;
+        }
+      },
+      restoreMapRegion: (regionId) => {
+        // Only the plugin that replaced a region may hand it back.
+        if (MapRegionReplacementManager.getSource(regionId) !== pluginName) return false;
+        // Build the native map first: without one, keep the replacement so the server's
+        // clipping and every client still agree.
+        let packet;
+        try {
+          packet = MapRegionReplacementManager.nativeRegionPacket(regionId);
+        } catch (err) {
+          console.error(`[plugins] ${pluginName} could not encode native map region ${regionId}`, err);
+          return false;
+        }
+        if (!packet) {
+          console.warn(`[plugins] ${pluginName} kept region ${regionId}: the cache has no native map for it`);
+          return false;
+        }
+        MapRegionReplacementManager.removeMapRegion(regionId);
+        require("../game/collision/RegionManager").RegionManager.reloadRegion(regionId);
+        // Every connected client gets the native map; one failed send does not stop the rest.
+        let delivered = true;
+        const { World } = require("../game/World");
+        World.getPlayers()?.forEach?.((player: any) => {
+          if (!player || !World.isPlayerSessionConnected(player)) return;
+          try {
+            if (!MapRegionReplacementManager.sendRegionPacketToPlayer(player, packet)) delivered = false;
+          } catch (err) {
+            delivered = false;
+            console.error(`[plugins] ${pluginName} failed to send native map region ${regionId}`, err);
+          }
+        });
+        return delivered;
       },
       registerDefinitionSource: (definitionType, source) => {
         try {

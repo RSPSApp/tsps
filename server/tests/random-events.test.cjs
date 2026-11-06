@@ -2187,6 +2187,18 @@ test('Evil twin: claw locs and camera move per click, the twin is caged, Molly p
   assert.equal(Teleports.sessionOf(p), undefined);
 });
 
+test("Evil twin: the claw panel's Close (277:6) closes it and hands the camera back", t => {
+  const h = harness(t), p = audited(h), npc = h.spawn(p, 18);
+  const session = enterEvilTwin(h, p, npc);
+  openClaw(h, p);
+  assert.equal(session.data.watching, true);
+  h.emit('InterfaceActionClick', { player: p, buttonId: (277 << 16) | 6, action: 1 });
+  assert.equal(session.data.watching, false);
+  assert.ok(sentWith(p, 'sendCameraReset'));
+  assert.ok(sentWith(p, 'closeSubInterface', (161 << 16) | 74));
+  assert.equal(session.data.attempts, 2, 'not a grab');
+});
+
 test('Evil twin: two wrong grabs earn a scolding and a fling; the door follows the transcript', t => {
   const h = harness(t), p = audited(h), npc = h.spawn(p, 18);
   const session = enterEvilTwin(h, p, npc);

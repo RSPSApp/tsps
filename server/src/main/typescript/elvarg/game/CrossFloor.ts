@@ -1,17 +1,26 @@
+import { PluginManager } from "../plugins/PluginManager";
 import type { Location } from "./model/Location";
 
-/** Optional cross-floor visibility and ranged combat. Read after environment setup. */
+/** World-configured cross-floor visibility and ranged combat; old environment settings are fallbacks. */
 export class CrossFloor {
     /** Legacy combined switch remains supported when the newer switches are unset. */
     private static legacyEnabled(): boolean { return process.env.CROSS_FLOOR_VISIBILITY_AND_COMBAT === "1"; }
     static enabled(): boolean {
-        const visibilityEnabled = process.env.CROSS_FLOOR_VISIBILITY === undefined
+        const configured = PluginManager.getPluginConfig<unknown>("CrossFloor:visibility");
+        const visibilityEnabled = typeof configured === "boolean"
+            ? configured
+            : process.env.CROSS_FLOOR_VISIBILITY === undefined
             ? CrossFloor.legacyEnabled()
             : process.env.CROSS_FLOOR_VISIBILITY === "1";
-        // Cross-floor combat must also sync visible lower-floor actors so players can see targets.
-        return visibilityEnabled || CrossFloor.combatEnabled();
+        // Combat must also sync lower-floor actors so players can see their targets.
+        return visibilityEnabled || CrossFloor.configuredCombatEnabled();
     }
     static combatEnabled(): boolean {
+        return CrossFloor.configuredCombatEnabled();
+    }
+    private static configuredCombatEnabled(): boolean {
+        const configured = PluginManager.getPluginConfig<unknown>("CrossFloor:combat");
+        if (typeof configured === "boolean") return configured;
         return process.env.CROSS_FLOOR_COMBAT === undefined
             ? (process.env.CROSS_FLOOR_VISIBILITY === undefined && CrossFloor.legacyEnabled())
             : process.env.CROSS_FLOOR_COMBAT === "1";

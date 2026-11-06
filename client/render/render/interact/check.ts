@@ -49,6 +49,8 @@ import { NpcDrawPriority, NpcType } from "../../../rs/config/npctype/NpcType";
 import { PlayerAppearance } from "../../../rs/config/player/PlayerAppearance";
 import { PlayerModelLoader } from "../../../rs/config/player/PlayerModelLoader";
 import { decodeInteractionIndex } from "../../../rs/interaction/InteractionIndex";
+import { npcExamineVisibleWhileHidden, npcOpsVisibility } from "../../../game/NpcOpsVisibility";
+import { groundObjExamineVisibleWhileHidden, groundObjOpsVisibility } from "../../../game/GroundObjOpsVisibility";
 import { getMapIndexFromTile, getMapPlaneId, getMapSquareId } from "../../../rs/map/MapFileIndex";
 import { Model } from "../../../rs/model/Model";
 import { ModelData } from "../../../rs/model/ModelData";
@@ -700,6 +702,24 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
                     });
                 }
 
+                // set_hide_npc_actions: no Use, Cast, actions or Attack; Examine stays unless a
+                // spell is selected or a low-priority follower already added it above.
+                if (npcOpsVisibility.hidden) {
+                    if (npcExamineVisibleWhileHidden(ClientState.isSpellSelected, isFollowerLowPriority)) {
+                        menuEntries.push({
+                            option: "Examine",
+                            targetId: npcType.id,
+                            targetType: MenuTargetType.NPC,
+                            npcServerId: sid | 0,
+                            targetName: npcType.name,
+                            targetLevel: npcType.combatLevel,
+                            mapX: localX,
+                            mapY: localY,
+                        });
+                    }
+                    return;
+                }
+
                 // Item selection: Use only (opcode 7), except follower examine above remains.
                 if (ClientState.isItemSelected === 1) {
                     const itemName =
@@ -1021,6 +1041,28 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
                     if (objIds.has(tileKey)) continue;
                     objIds.add(tileKey);
 
+                    // set_item_ops_disabled: no Use, Cast, ground actions or Take; Examine stays
+                    // unless a spell is selected (native adds it only in the no-selection branch).
+                    if (groundObjOpsVisibility.hidden) {
+                        if (groundObjExamineVisibleWhileHidden(ClientState.isSpellSelected)) {
+                            for (const stack of stacks) {
+                                const objType = host.osrsClient.objTypeLoader.load(stack.itemId);
+                                if (!objType || objType.name === "null") continue;
+                                const menuName = plugins.groundItemMenuName(stack, objType.name);
+                                menuEntries.push({
+                                    option: "Examine",
+                                    targetId: stack.itemId,
+                                    targetType: MenuTargetType.OBJ,
+                                    targetName: plugins.groundItemMenuTarget(stack, menuName),
+                                    targetLevel: -1,
+                                    mapX: localX,
+                                    mapY: localY,
+                                });
+                            }
+                        }
+                        continue;
+                    }
+
                     // Item selection: Use only (OSRS: opcode 16 per item, suppresses normal ops).
                     if (ClientState.isItemSelected === 1) {
                         const itemName =
@@ -1152,9 +1194,8 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
                         });
                     }
                 } else if (interactType === InteractType.NPC) {
-                    // SceneRaycaster encodes players as InteractType.NPC with a high interactId offset.
-                    const PLAYER_INTERACT_BASE = 0x8000;
-                    if (interactId >= PLAYER_INTERACT_BASE) {
+                    // Player hits carry their ECS index; custom NPC IDs can also exceed 0x8000.
+                    if (hit.playerEcsIndex != null) {
                         const ecsIndex = hit.playerEcsIndex;
                         if (ecsIndex == null) continue;
                         const firstNpcs: number[] = [];

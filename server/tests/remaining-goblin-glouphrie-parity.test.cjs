@@ -26,37 +26,52 @@ before(async () => {
 test('shared scene controls publish and clear the cinematic marker in step with 542', () => {
   const scenes = createQuestScenes({ core });
   const varbits = new Map();
+  const hides = [];
   const player = () => ({
     getMovementQueue: () => ({ reset() { return this; }, setBlockMovement() {} }),
     setUntargetable() {},
-    getPacketSender: () => ({ sendVarbit(id, value) { varbits.set(id, value); return this; } }),
+    getPacketSender: () => ({
+      sendVarbit(id, value) { varbits.set(id, value); return this; },
+      sendHideNpcOps(hidden) { hides.push(['npc', hidden]); return this; },
+      sendHideObjOps(hidden) { hides.push(['obj', hidden]); return this; },
+    }),
   });
   const other = new Map();
+  const otherHides = [];
   const otherPlayer = {
     getMovementQueue: () => ({ reset() { return this; }, setBlockMovement() {} }),
     setUntargetable() {},
-    getPacketSender: () => ({ sendVarbit(id, value) { other.set(id, value); return this; } }),
+    getPacketSender: () => ({
+      sendVarbit(id, value) { other.set(id, value); return this; },
+      sendHideNpcOps(hidden) { otherHides.push(['npc', hidden]); return this; },
+      sendHideObjOps(hidden) { otherHides.push(['obj', hidden]); return this; },
+    }),
   };
 
   const p = player();
   scenes.controls(p, true, true);
   assert.equal(varbits.get(542), 1, 'cinematic sets cutscene_status');
   assert.equal(varbits.get(12139), 1, 'cinematic sets the shared QH marker');
+  assert.deepEqual(hides, [['npc', true], ['obj', true]], 'cinematic hides NPC and ground-item ops in the same tick');
 
   varbits.clear();
+  hides.length = 0;
   scenes.controls(p, true);
   assert.equal(varbits.has(542), false, 'non-cinematic controls do not mark a cutscene');
   assert.equal(varbits.has(12139), false, 'non-cinematic controls do not mark a cutscene');
+  assert.deepEqual(hides, [], 'non-cinematic controls leave the hide flags alone');
 
   scenes.controls(p, false);
   assert.equal(varbits.get(542), 0, 'controls off clears cutscene_status');
   assert.equal(varbits.get(12139), 0, 'controls off clears the shared QH marker');
+  assert.deepEqual(hides, [['npc', false], ['obj', false]], 'controls off restores NPC and ground-item ops');
 
   scenes.controls(otherPlayer, true, true);
   assert.equal(other.get(542), 1);
   assert.equal(other.get(12139), 1);
   assert.equal(varbits.get(542), 0, 'another player does not change the first marker');
   assert.equal(varbits.get(12139), 0, 'another player does not change the first marker');
+  assert.deepEqual(otherHides, [['npc', true], ['obj', true]]);
 });
 
 function harness(pluginName, options = {}) {
@@ -220,6 +235,7 @@ function player(overrides = {}) {
         sendVarbit: (id, value) => { varbits.set(id, value); return packet; },
         sendConfig: (id, value) => { varbits.set(id, value); return packet; },
         sendSubInterface: (...args) => { log.push(['sendSubInterface', ...args]); return packet; },
+        mountSubInterface: (...args) => { log.push(['sendSubInterface', ...args]); return {}; },
         sendInterface: (...args) => { log.push(['sendInterface', ...args]); return packet; },
         closeSubInterface: (...args) => { log.push(['closeSubInterface', ...args]); return packet; },
         sendCameraMoveTo: (...args) => { log.push(['sendCameraMoveTo', ...args]); return packet; },

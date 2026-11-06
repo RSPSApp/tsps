@@ -6,6 +6,7 @@ import { Animation } from "../../../game/model/Animation";
 import { Graphic } from "../../../game/model/Graphic";
 import { GraphicHeight } from "../../../game/model/GraphicHeight";
 import { Item } from "../../../game/model/Item";
+import { MAX_STACK_AMOUNT } from "../../../game/model/container/StackType";
 import { Location } from "../../../game/model/Location";
 import { MagicSpellbook } from "../../../game/model/MagicSpellbook";
 import { Projectile } from "../../../game/model/Projectile";
@@ -325,19 +326,22 @@ export class MagicOnItemPacketListener {
     if (!payment.allowAnySpellbook && player.getSpellbook()?.getInterfaceId?.() !== MagicSpellbook.NORMAL.getInterfaceId()) {
       return;
     }
-    // The coins need somewhere to go: their stack, a free slot, the slot the item leaves, or a rune
-    // stack the cast uses up (consumeRunes takes the inventory's runes first).
-    const freesRuneSlot = !payment.free && runes.some(rune => {
-      const held = inventory.getAmount?.(rune.getId()) ?? 0;
-      return held > 0 && held <= rune.getAmount();
-    });
-    const noRoom = policy.coins > 0 && (inventory.getFreeSlots?.() ?? 1) <= 0
-      && !inventory.contains?.(ItemIdentifiers.COINS)
-      && !(policy.keepItem !== true && (item.getAmount?.() ?? 1) === 1)
-      && !freesRuneSlot;
-    if (noRoom) {
-      player.sendMessage("You don't have enough inventory space.");
-      return;
+    // An existing matching coin stack cannot overflow, even when other slots are free.
+    // A new stack may instead use a slot released by the item or spent runes.
+    if (policy.coins > 0) {
+      const coins = new Item(ItemIdentifiers.COINS, policy.coins);
+      const matchingCoins = inventory.getItems().some((held: any) => held?.getId?.() === ItemIdentifiers.COINS
+        && JSON.stringify(held.getMeta?.() ?? null) === JSON.stringify(coins.getMeta() ?? null));
+      const fitsNow = inventory.getAddableAmount(coins) === policy.coins;
+      const freesItemSlot = policy.keepItem !== true && (item.getAmount?.() ?? 1) === 1;
+      const freesRuneSlot = !payment.free && runes.some(rune => {
+        const held = inventory.getAmount?.(rune.getId()) ?? 0;
+        return held > 0 && held <= rune.getAmount();
+      });
+      if (!fitsNow && (matchingCoins || policy.coins > MAX_STACK_AMOUNT || !(freesItemSlot || freesRuneSlot))) {
+        player.sendMessage("You don't have enough inventory space.");
+        return;
+      }
     }
     if (!confirmed && policy.confirm) {
       this.confirmUntradeableAlchemy(player, spellId, slot, itemId, definition.getName(), clickedItem, source);

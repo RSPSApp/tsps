@@ -73,7 +73,8 @@ function zealRequirements(event) {
   if (event.prayer !== core.PrayerData.ZEAL) return;
   const skills = event.player.getSkillManager();
   const { Skill } = core;
-  if (event.player.getAttribute(ZEAL_UNLOCKED_ATTRIBUTE) !== true) {
+  // A game that hands out every prayer (Last Man Standing) puts Zeal in the book unearned.
+  if (!core.PrayerHandler.zealReplacesPiety(event.player)) {
     event.message = "You have not unlocked that prayer.";
   } else if (skills.getMaxLevel(Skill.ATTACK) < ZEAL_ATTACK || skills.getMaxLevel(Skill.STRENGTH) < ZEAL_STRENGTH
     || skills.getMaxLevel(Skill.DEFENCE) < ZEAL_DEFENCE) {

@@ -1526,7 +1526,10 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                 (r.colour === undefined || r.colour === ((w as any).color ?? 0)),
         );
         if (hiddenRule) return;
-        if (contentType === 1339) {
+        if (
+            contentType === 1339 &&
+            (opts.widgetManager?.isMinimapCompassVisible?.() ?? true)
+        ) {
             const compassStartMs = profileWidgetRender ? performance.now() : 0;
             const compassSpriteId = opts.widgetManager?.compassSpriteId ?? -1;
             if (compassSpriteId >= 0) {
@@ -2154,7 +2157,10 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
         // Special handling for minimap widget (contentType 1338)
         // Uses localPlayer position, NOT camera
         // WebGL-based rendering for better mobile performance
-        if (contentType === 1338) {
+        if (
+            contentType === 1338 &&
+            (opts.widgetManager?.isMinimapMapVisible?.() ?? true)
+        ) {
             const minimapStartMs = profileWidgetRender ? performance.now() : 0;
             const minimapTextureDrawCallsStart = profileWidgetRender
                 ? glr.getPerfCounters().textureDrawCalls
@@ -2718,23 +2724,26 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                         );
                     };
 
-                    clicks.register({
-                        id: `minimap:click-to-walk`,
-                        rect: { x: clickMaskX, y: clickMaskY, w: clickMaskW, h: clickMaskH },
-                        // minimap click-to-walk should not steal clicks from widgets
-                        // rendered on top of the minimap (orbs, buttons). Keep below widget targets.
-                        priority: 90,
-                        persist: false,
-                        contains: containsMinimapPoint,
-                        onMiddleClick: () => {
-                            const uiMenu = (glr.canvas as any)?.__ui?.menu;
-                            if (osrsClient.menuOpen || uiMenu?.open) return;
-                            osrsClient.minimapZoom = 4;
-                        },
-                        onDown: walkToMinimapPoint,
-                        // A widget over the minimap can consume the press first (#1797).
-                        onReleaseWithoutPress: walkToMinimapPoint,
-                    });
+                    // OSRS minimap_state 1 and 4 leave the map drawn but unclickable.
+                    if (opts.widgetManager?.isMinimapClickable?.() ?? true) {
+                        clicks.register({
+                            id: `minimap:click-to-walk`,
+                            rect: { x: clickMaskX, y: clickMaskY, w: clickMaskW, h: clickMaskH },
+                            // minimap click-to-walk should not steal clicks from widgets
+                            // rendered on top of the minimap (orbs, buttons). Keep below widget targets.
+                            priority: 90,
+                            persist: false,
+                            contains: containsMinimapPoint,
+                            onMiddleClick: () => {
+                                const uiMenu = (glr.canvas as any)?.__ui?.menu;
+                                if (osrsClient.menuOpen || uiMenu?.open) return;
+                                osrsClient.minimapZoom = 4;
+                            },
+                            onDown: walkToMinimapPoint,
+                            // A widget over the minimap can consume the press first (#1797).
+                            onReleaseWithoutPress: walkToMinimapPoint,
+                        });
+                    }
                 } // end if (playerState)
             }
             // Skip normal type-based rendering for minimap
@@ -3170,6 +3179,9 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                         app = (w as any).playerAppearance || localAppearance;
                     }
                     if (!app) return null;
+                    if (isPlayerChathead && (app.npcTransformationId ?? -1) >= 0) {
+                        return `npc:${app.npcTransformationId}`;
+                    }
 
                     const gender = (app.gender ?? 0) | 0;
                     const colors = Array.isArray(app.colors) ? app.colors.slice(0, 5) : [];
@@ -3203,8 +3215,9 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                     ? `item:${w.itemId | 0}:${(w.itemQuantity ?? 0) | 0}`
                     : `model:${(w.modelType ?? 0) | 0}:${modelId}`;
             const cacheKey =
-                isAnimated || isPlayerDesignPreview || (isPlayerModel && !appearanceKey)
-                    ? null // Animated models can't be cached (frame changes)
+                isAnimated || isPlayerDesignPreview || (isPlayerModel && !appearanceKey) ||
+                ((w as any).isPlayerChathead === true && appearanceKey?.startsWith("npc:"))
+                    ? null // NPC morphs can change with var state even when the appearance is unchanged
                     : `wm:${modelCacheId}:${rx}:${ry}:${rz}:${zoom}:${offX}:${offY}:o${
                           ortho ? 1 : 0
                       }:${width}:${height}${cacheSuffix}`;
@@ -3226,10 +3239,12 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
             const sequenceFrame =
                 liveMovementFrame !== undefined ? liveMovementFrame : (w.modelFrame ?? 0) | 0;
             const animatedKey =
-                isAnimated && !cacheKey && !isPlayerDesignPreview && !isPlayerModel
+                isAnimated && !cacheKey && !isPlayerDesignPreview && !isPlayerModel &&
+                ((w as any).isPlayerChathead !== true ||
+                    (!!appearanceKey && !appearanceKey.startsWith("npc:")))
                     ? `wa:${modelCacheId}:${sequenceId}:${sequenceFrame}:${rx}:${ry}:${rz}:${zoom}:${offX}:${offY}:o${
                           ortho ? 1 : 0
-                      }:${width}:${height}`
+                      }:${width}:${height}${cacheSuffix}`
                     : null;
             let animatedMemo: Map<
                 number,
@@ -3306,6 +3321,7 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                     // Animated/dynamic model widgets must update a stable GPU texture each frame.
                     // Using a varying cache key here would leak textures and prevent animation updates.
                     const texKey = cacheKey ? cacheKey : `wm:dyn:${w.uid}`;
+                    if (!cacheKey && !animatedKey) animatedMemo.delete(w.uid);
                     const tex = cacheKey
                         ? glr.createTextureFromCanvas(texKey, can)
                         : glr.updateTextureFromCanvas(texKey, can);

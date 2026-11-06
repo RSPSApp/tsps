@@ -11,6 +11,9 @@ const LOCKPICKING_CONFIRM = 15;
 const LOCKPICKING_SLOTS = 6;
 const LOCKPICKING_DIGITS = 6;
 const FEEDBACK_DIGITS = 3;
+// The close button (proc lockpicking_button_op_close) resumes the count dialog with the max
+// 32-bit int; the server closes the lock, with no failure message.
+const CLOSE_SENTINEL = 2147483647;
 
 function digitsOf(value, base, count = LOCKPICKING_SLOTS) {
   const digits = [];
@@ -112,6 +115,11 @@ function createQuestLockpicking(api, { activePins, target, onSolved }) {
 
   function handleAmount(player, state, amount) {
     if (pending.get(player) !== state || player.getEnteredAmountAction?.() !== state.action) return;
+    if (amount === CLOSE_SENTINEL) {
+      cancel(player);
+      player.getPacketSender().sendInterfaceRemoval();
+      return;
+    }
     const max = LOCKPICKING_DIGITS ** activePins;
     if (!Number.isInteger(amount) || amount < 0 || amount >= max) {
       player.sendMessage("That didn't seem to work.");

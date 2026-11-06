@@ -171,6 +171,14 @@ module.exports = function registerDragonSlayerQuest(api) {
   const FIRE_SMALL = 25156, FIRE_LARGE = 25155, FIREBALL = 1155, FIRE_IMPACT_GRAPHIC = 1154;
   const ELVARG_INTRO_NPC_ID = 817;
   const ELVARG_FOOTSTEP_SOUND = 3753;
+  /**
+   * The hand-over steps: "The Guildmaster hands you a key.", and the shield in this page's Duke
+   * variant (KoKING) and in the Duke's own page (LnbjYr, if_uB3 and their actions igRDii, emj6I8),
+   * which other quests' Duke conversations still reach.
+   */
+  const MELZAR_KEY_STEP = "xUz7Ja";
+  const DUKE_SHIELD_VARIANT = "protection-from-a-dragon-s-breath-talking-to-duke-horacio";
+  const DUKE_SHIELD_STEPS = new Set(["KoKING", "LnbjYr", "if_uB3", "igRDii", "emj6I8"]);
   const CHEST_OPEN_ANIMATION = 536, CHEST_OPEN_SOUND = 52, CHEST_CLOSE_SOUND = 51;
   /**
    * The map chests' transcripts (rev242 capture ticks 1422-1435 and 2694-2706): the Oracle chest's
@@ -234,7 +242,6 @@ module.exports = function registerDragonSlayerQuest(api) {
 
 
   const PAGE = "Dragon Slayer I";
-  const DUKE_PAGE = "Duke Horacio";
   const OZIACH_PAGE = "Oziach";
   const ORACLE_PAGE = "Oracle";
   const KLARENSE_PAGE = "Klarense";
@@ -547,12 +554,12 @@ module.exports = function registerDragonSlayerQuest(api) {
     }
 
     if (npcId === DUKE_HORACIO_NPC_ID) {
-      // Duke's flat page carries the anti-dragon shield conversation (the
-      // Dragon Slayer I page only holds Oziach/Ned/etc. variants). Defer while
-      // Ides of Milk needs its stage-10 permit dialogue; otherwise claim him
-      // while Dragon Slayer still owes the player a shield.
+      // The Dragon Slayer I page's shield conversation is the one live plays (rev242 capture ticks
+      // 2790-2811: "Yes!", "Well, you're braver than I!", "...as important as Falador or Varrock...";
+      // the Duke's own page words five of its lines differently). Defer while Ides of Milk needs its
+      // stage-10 permit dialogue; otherwise claim him while Dragon Slayer still owes a shield.
       if (stage < STAGE_GUILDMASTER || hasItem(player, ITEM.antiDragonShield) || idesNeedsDukePermit(player)) return null;
-      return { page: DUKE_PAGE };
+      return { page: PAGE, variant: DUKE_SHIELD_VARIANT };
     }
 
     if (npcId === OZIACH_NPC_ID) {
@@ -749,20 +756,12 @@ module.exports = function registerDragonSlayerQuest(api) {
 
     if (handleMapChestStep(event)) return;
 
-    if (npcId === GUILDMASTER_NPC_ID && stepId === "xUz7Ja") {
-      if (!hasItem(player, ITEM.mazeKey) && !player.getInventory().isFull()) {
-        player.getInventory().adds(ITEM.mazeKey, 1);
-      }
-      return;
-    }
-
-    if (
-      npcId === DUKE_HORACIO_NPC_ID &&
-      (stepId === "LnbjYr" || stepId === "igRDii" || stepId === "if_uB3" || stepId === "emj6I8")
-    ) {
-      if (!hasItem(player, ITEM.antiDragonShield) && !player.getInventory().isFull()) {
-        player.getInventory().adds(ITEM.antiDragonShield, 1);
-      }
+    // The hand-overs are item boxes showing what is given (rev242 capture ticks 1756 and 2808).
+    const handOver = npcId === GUILDMASTER_NPC_ID && stepId === MELZAR_KEY_STEP ? ITEM.mazeKey
+      : npcId === DUKE_HORACIO_NPC_ID && DUKE_SHIELD_STEPS.has(stepId) ? ITEM.antiDragonShield : null;
+    if (handOver !== null) {
+      if (!hasItem(player, handOver) && !player.getInventory().isFull()) player.getInventory().adds(handOver, 1);
+      event.box = { items: [handOver] };
       return;
     }
 

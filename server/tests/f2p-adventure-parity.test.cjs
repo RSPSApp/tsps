@@ -171,6 +171,32 @@ test('Dragon Slayer sails through the private fire and crash sequence, then coll
 });
 
 
+test('Dragon Slayer hands over the maze key and the anti-dragon shield in item boxes (rev242 ticks 1756, 2808)', () => {
+  const stepsOf = page => {
+    const steps = new Map();
+    const walk = node => { if (Array.isArray(node)) return node.forEach(walk); if (!node || typeof node !== 'object') return; if (node.id) steps.set(node.id, node.text); Object.values(node).forEach(walk); };
+    walk(runtime.loadTranscripts({ core })[page]);
+    return steps;
+  };
+  // The Duke plays this page's shield conversation, the wording live uses (rev242 ticks 2790-2811).
+  const duke = harness('DragonSlayer'), dukePlayer = player(); duke.quest.setStage(dukePlayer, 2);
+  assert.deepEqual(duke.hooks.onNpcDialogueVariant.map(fn => fn({ player: dukePlayer, npcId: N.DUKE_HORACIO })).find(Boolean),
+    { page: 'Dragon Slayer I', variant: 'protection-from-a-dragon-s-breath-talking-to-duke-horacio' });
+  for (const [page, npcId, stepId, item, text] of [
+    ['Dragon Slayer I', N.GUILDMASTER, 'xUz7Ja', I.MAZE_KEY, 'The Guildmaster hands you a key.'],
+    ['Dragon Slayer I', N.DUKE_HORACIO, 'KoKING', I.ANTI_DRAGON_SHIELD, 'The Duke hands you a heavy orange shield.'],
+    ['Duke Horacio', N.DUKE_HORACIO, 'LnbjYr', I.ANTI_DRAGON_SHIELD, 'The Duke hands you a heavy orange shield.'],
+  ]) {
+    assert.equal(stepsOf(page).get(stepId), text, `${stepId} is still the hand-over step in ${page}`);
+    const h = harness('DragonSlayer'), p = player(); h.quest.setStage(p, 2);
+    const event = h.action(p, npcId, stepId);
+    assert.equal(p.items.get(item), 1, text);
+    assert.deepEqual(event.box, { items: [item] });
+    h.action(p, npcId, stepId);
+    assert.equal(p.items.get(item), 1, 'only one');
+  }
+});
+
 test('Dragon Slayer map chests open first, then give the map in an item box as they shut (rev242 ticks 1422-1435, 2694-2706)', () => {
   const O = core.ObjectIdentifiers, h = harness('DragonSlayer'), p = player();
   h.quest.setStage(p, 2); p.attrs.set('dragon-slayer.oracle', 3);

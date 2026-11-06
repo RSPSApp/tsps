@@ -1,12 +1,10 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { RenderStatsOverlay } from "../components/RenderStatsOverlay";
-import { OsrsLoadingBar } from "../components/OsrsLoadingBar";
 // Legacy CSS menu and React minimap/orbs removed in favor of widget-based rendering
 import { subscribeChatMessages, subscribeHandshake } from "../network/ServerConnection";
 import { DownloadProgress } from "../rs/cache/CacheFiles";
 import { Canvas } from "../ui/Canvas";
-import { formatBytes } from "../common/utils/BytesUtil";
 import { isDebugMode, isIos, isMobileMode } from "../common/utils/DeviceUtil";
 import { DebugControls } from "./DebugControls";
 import "./GameContainer.css";
@@ -14,6 +12,7 @@ import { GameRenderer } from "./GameRenderer";
 import { useSidebarVisible } from "./useSubscribedGameState";
 import { useResponsiveGameframe } from "./useResponsiveGameframe";
 import { OsrsClient } from "./OsrsClient";
+import { LoadingScreen } from "./login/html/LoadingScreen";
 import { Sidebar } from "./sidebar/Sidebar";
 import { SidebarToggleArrow } from "./sidebar/SidebarToggleArrow";
 import { ControlsHelp } from "./controls/ControlsHelp";
@@ -363,22 +362,6 @@ export function GameContainer({ osrsClient }: OsrsContainerProps): JSX.Element {
         };
     }, [updateFishingStatus]);
 
-    let loadingBarOverlay: JSX.Element | undefined = undefined;
-
-    if (downloadProgress) {
-        const formattedCacheSize = formatBytes(downloadProgress.total);
-
-        const progress = ((downloadProgress.current / downloadProgress.total) * 100) | 0;
-
-        loadingBarOverlay = (
-            <div className="overlay-container max-height">
-                <OsrsLoadingBar
-                    text={`Downloading cache (${formattedCacheSize})`}
-                    progress={progress}
-                />
-            </div>
-        );
-    }
 
     return (
         <div className={[
@@ -397,7 +380,11 @@ export function GameContainer({ osrsClient }: OsrsContainerProps): JSX.Element {
             >
                 <div className="game-canvas-shell">
                     <div className="game-canvas-stage">
-                        {loadingBarOverlay}
+                        {/* Our loading screen, in place of the cache's red bar and the canvas
+                            "please wait": one screen for both waits, carrying the login art.
+                            Imported directly, not lazily: both waits it covers are short and can
+                            be over before a split chunk has finished arriving. */}
+                        <LoadingScreen osrsClient={osrsClient} download={downloadProgress} />
 
                         {/* The login page, over the canvas login that still owns the protocol. */}
                         <Suspense fallback={null}>

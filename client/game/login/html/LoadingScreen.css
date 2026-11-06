@@ -1,0 +1,134 @@
+/*
+ * The loading screen. Same language as the login page it comes from and the panels it leads to:
+ * hard edges, 2px bevels, warm browns under gold. Nothing rounded, nothing blurred.
+ */
+.osi-load {
+    position: absolute;
+    inset: 0;
+    z-index: 45;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    background: #07080c;
+    color: #eae3d2;
+    font: 15px/1.6 ui-sans-serif, system-ui, sans-serif;
+}
+
+.osi-load__plate {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    image-rendering: pixelated;
+}
+
+/* Quiet enough to read a sentence over, dark enough that the art is a texture, not a competitor. */
+.osi-load__wash {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(60% 55% at 50% 48%, rgba(5, 7, 11, 0.9) 0%, rgba(5, 7, 11, 0.95) 55%, rgba(5, 7, 11, 0.82) 100%);
+}
+
+.osi-load__body {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    width: min(460px, 86%);
+    padding: 26px 24px 22px;
+    text-align: center;
+    background: rgba(13, 16, 25, 0.92);
+    border: 3px solid #000;
+    box-shadow: inset 2px 2px 0 #3a4360, inset -2px -2px 0 #0a0c12, 0 10px 30px rgba(0, 0, 0, 0.6);
+}
+
+.osi-load__crest {
+    display: grid;
+    place-items: center;
+    width: 46px;
+    height: 46px;
+    font-weight: 800;
+    font-size: 15px;
+    color: #f5c13a;
+    background: #1d2234;
+    border: 3px solid #c8901c;
+    box-shadow: inset 2px 2px 0 #3a4360, inset -2px -2px 0 #0a0c12;
+}
+
+.osi-load__brand {
+    font-size: 21px;
+    font-weight: 800;
+    letter-spacing: 0.03em;
+    color: #fff;
+    text-shadow: 0 3px 0 #000;
+}
+
+.osi-load__heading {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.22em;
+    color: #f5c13a;
+}
+
+/* A row of blocks rather than a sliding fill: it is honest about being a count of steps. */
+.osi-load__bar {
+    display: flex;
+    gap: 2px;
+    width: 100%;
+    height: 16px;
+    margin-top: 4px;
+    padding: 3px;
+    background: #0a0c12;
+    box-shadow: inset 2px 2px 0 #000, inset -2px -2px 0 #2a3146;
+}
+
+.osi-load__bar i {
+    flex: 1;
+    background: #1b2130;
+}
+
+.osi-load__bar i.is-lit {
+    background: #f5c13a;
+    box-shadow: inset 0 -2px 0 #b8871a;
+}
+
+.osi-load__meta {
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 10px;
+    font-variant-numeric: tabular-nums;
+}
+
+.osi-load__percent {
+    font-size: 18px;
+    font-weight: 800;
+    color: #fff;
+}
+
+.osi-load__detail {
+    font-size: 12px;
+    color: #9a8d78;
+}
+
+.osi-load__tip {
+    margin: 6px 0 0;
+    max-width: 38ch;
+    font-size: 13px;
+    line-height: 1.5;
+    color: #b6ab97;
+}
+
+@media (max-width: 560px) {
+    .osi-load__body {
+        gap: 8px;
+        padding: 20px 16px 18px;
+    }
+
+    .osi-load__brand {
+        font-size: 18px;
+    }
+}

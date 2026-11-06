@@ -28,6 +28,11 @@ type Strings = {
     go: string;
     connecting: string;
     help: string;
+    /** The loading screen, which shares this screen's art and its language switch. */
+    loadCache: string;
+    loadWorld: string;
+    loadFirst: string;
+    tips: string[];
 };
 
 /**
@@ -55,6 +60,15 @@ export const STRINGS: Record<Lang, Strings> = {
         go: "ENTRAR",
         connecting: "CONECTANDO…",
         help: "Usuário de 3 a 20 caracteres. Senha com 8 no mínimo.",
+        loadCache: "BAIXANDO O MUNDO",
+        loadWorld: "ENTRANDO NO MUNDO",
+        loadFirst: "A primeira vez demora mais: depois fica no seu navegador.",
+        tips: [
+            "O personagem continua trabalhando com o navegador fechado, até 12 horas.",
+            "XP, dano e loot são calculados no servidor — nada depende da sua máquina.",
+            "Escolha a atividade na aba Idle e pode fechar o jogo.",
+            "São 35 lugares no mapa para treinar. Troque quando quiser.",
+        ],
     },
     en: {
         language: "Language",
@@ -75,6 +89,15 @@ export const STRINGS: Record<Lang, Strings> = {
         go: "SIGN IN",
         connecting: "CONNECTING…",
         help: "Username 3 to 20 characters. Password at least 8.",
+        loadCache: "DOWNLOADING THE WORLD",
+        loadWorld: "ENTERING THE WORLD",
+        loadFirst: "The first time takes longer; after that it stays in your browser.",
+        tips: [
+            "Your character keeps working with the browser closed, up to 12 hours.",
+            "XP, damage and loot are worked out on the server — none of it needs your machine.",
+            "Pick an activity on the Idle tab and you can close the game.",
+            "There are 35 places on the map to train. Move whenever you like.",
+        ],
     },
     es: {
         language: "Idioma",
@@ -95,6 +118,15 @@ export const STRINGS: Record<Lang, Strings> = {
         go: "ENTRAR",
         connecting: "CONECTANDO…",
         help: "Usuario de 3 a 20 caracteres. Contraseña de 8 como mínimo.",
+        loadCache: "DESCARGANDO EL MUNDO",
+        loadWorld: "ENTRANDO AL MUNDO",
+        loadFirst: "La primera vez tarda más; después queda en tu navegador.",
+        tips: [
+            "Tu personaje sigue trabajando con el navegador cerrado, hasta 12 horas.",
+            "XP, daño y botín se calculan en el servidor — nada depende de tu máquina.",
+            "Elige la actividad en la pestaña Idle y ya puedes cerrar el juego.",
+            "Hay 35 lugares en el mapa para entrenar. Cambia cuando quieras.",
+        ],
     },
 };
 

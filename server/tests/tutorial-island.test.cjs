@@ -302,7 +302,8 @@ test("a newly built chatbox doesn't show the login messages over the step text",
   assert.equal(sent.varbits.get(ALLOW_MES_OVERLAP), 1, "messages show over the step from the next tick");
 });
 
-test("an existing player still gets the welcome screen", async () => {
+/** The root interfaces a login opens, in order. */
+async function rootsOnLogin() {
   const { player } = tutorialPlayer(1000, 3222, 3218);
   const roots = [];
   const base = player.getPacketSender();
@@ -314,7 +315,28 @@ test("an existing player still gets the welcome screen", async () => {
   });
   PluginManager.emitPlayerLogin({ player, username: "tutorial", isNewAccount: false });
   await new Promise((resolve) => setImmediate(resolve));
+  return roots;
+}
+
+/** Runs `body` with world.json's pluginConfig replaced, then puts the real one back. */
+async function withPluginConfig(config, body) {
+  const before = PluginManager.pluginConfigCache;
+  PluginManager.pluginConfigCache = config;
+  try {
+    return await body();
+  } finally {
+    PluginManager.pluginConfigCache = before;
+  }
+}
+
+test("an existing player still gets the welcome screen when the world asks for it", async () => {
+  const roots = await withPluginConfig({ "WelcomeScreen:skip": false }, rootsOnLogin);
   assert.deepEqual(roots, [378]);
+});
+
+test("with the skip on - as this world ships - an existing player lands in the world directly", async () => {
+  const roots = await withPluginConfig({ "WelcomeScreen:skip": true }, rootsOnLogin);
+  assert.deepEqual(roots, [], "no welcome screen (378)");
 });
 
 test("the Ironman tutor plays his own transcript (spawned as 7942, he talks as the 7941 he shows as)", () => {

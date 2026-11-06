@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { GameState } from "../../login/GameState";
+import type { OsrsClient } from "../../OsrsClient";
+import { useSubscribedGameState } from "../../useSubscribedGameState";
 import { sendChat } from "../../../network/ServerConnection";
 import { getChatLines, subscribeChat, type ChatChannel, type ChatLine } from "./chatStore";
 import "./ChatPanel.css";
@@ -25,7 +28,8 @@ const time = (at: number) =>
  *
  * The canvas box stays underneath, still fed by the game; this covers it.
  */
-export function ChatPanel() {
+export function ChatPanel({ osrsClient }: { osrsClient: OsrsClient }) {
+    const gameState = useSubscribedGameState(osrsClient.stateMachine);
     const lines = useSyncExternalStore(subscribeChat, getChatLines, getChatLines);
     const [filter, setFilter] = useState<Filter>("all");
     const [draft, setDraft] = useState("");
@@ -57,6 +61,10 @@ export function ChatPanel() {
             filter === "all" ? { ...counts } : { ...previous, [filter]: counts[filter] },
         );
     }, [filter, counts]);
+
+    // Only once the player is actually in the world: a chatbox over the loading bar or the login
+    // page is furniture for a room nobody is in yet.
+    if (gameState !== GameState.LOGGED_IN) return null;
 
     function submit(event: React.FormEvent) {
         event.preventDefault();

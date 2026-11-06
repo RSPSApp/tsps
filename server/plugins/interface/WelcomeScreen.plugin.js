@@ -5,6 +5,15 @@ const FIRST_OPTION_FLAG = 1 << 1;
 const MOTW_UID = (WELCOME_SCREEN_GROUP_ID << 16) | 6;
 /** world.json pluginConfig: the scroll's text; league worlds replace it with their own. */
 const MOTW_CONFIG = "WelcomeScreen:messageOfTheWeek";
+/**
+ * world.json pluginConfig: skip the screen and drop the player straight into the world.
+ *
+ * An idle world wants the shortest path from the password to the character working; a screen
+ * whose only content is a Play button is a click for nothing. The skip uses the same early
+ * return that new accounts, bots, mobile clients and Wilderness logins already take, so there
+ * is no second way into the world to keep working.
+ */
+const SKIP_CONFIG = "WelcomeScreen:skip";
 const DEFAULT_MOTW = "Welcome to Old School RuneScape!";
 /** The chatbox line live sends on every login, whatever the welcome screen does. */
 const WELCOME_MESSAGE = "Welcome to Old School RuneScape.";
@@ -18,8 +27,10 @@ function inWilderness(player) {
 
 function login({ player, isNewAccount }) {
   player.sendMessage(WELCOME_MESSAGE);
-  // Mobile, new accounts and Wilderness logins enter the world directly.
-  if (isNewAccount || player.isPlayerBot?.() === true || inWilderness(player)
+  // Mobile, new accounts and Wilderness logins enter the world directly, and so does everyone
+  // when the world asks for it.
+  if (api.getPluginConfig(SKIP_CONFIG, false) === true
+      || isNewAccount || player.isPlayerBot?.() === true || inWilderness(player)
       || player.getAttribute(api.core.MOBILE_CLIENT_ATTRIBUTE) === true) return;
   pending.add(player);
   // The synchronous login bootstrap initializes camera, chat and account varcs first.

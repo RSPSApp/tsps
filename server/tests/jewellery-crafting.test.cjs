@@ -286,9 +286,10 @@ const crafted = [
 test('all 32 furnace products are real items, with wearable bracelets and 200 Zenyte amulet XP', () => {
   const gems = [null,1607,1605,1603,1601,1615,6573,19493];
   for (const [mould,first,products] of crafted) for (const [index,output] of products.entries()) {
+    const component = mould === 11065 && index > 0 ? first + index + 1 : first + index;
     const player = playerWith([[2357,1],[mould,1],...(gems[index] ? [[gems[index],1]] : [])]);
-    openFurnace(player); button(player,first+index); tick(tasks.at(-1),3);
-    assert.equal(player.amounts.get(output),1,`component ${first+index}`);
+    openFurnace(player); button(player,component); tick(tasks.at(-1),3);
+    assert.equal(player.amounts.get(output),1,`component ${component}`);
     const def = core.CacheDefinitions.getItem(output);
     assert.equal(def.placeholderTemplate,-1); assert.equal(def.noteTemplate,-1);
     if (mould === 11065) assert.ok(def.inventoryActions.includes('Wear'));

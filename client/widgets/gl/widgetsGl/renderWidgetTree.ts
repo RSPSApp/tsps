@@ -1526,7 +1526,10 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                 (r.colour === undefined || r.colour === ((w as any).color ?? 0)),
         );
         if (hiddenRule) return;
-        if (contentType === 1339) {
+        if (
+            contentType === 1339 &&
+            (opts.widgetManager?.isMinimapCompassVisible?.() ?? true)
+        ) {
             const compassStartMs = profileWidgetRender ? performance.now() : 0;
             const compassSpriteId = opts.widgetManager?.compassSpriteId ?? -1;
             if (compassSpriteId >= 0) {
@@ -2154,7 +2157,10 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
         // Special handling for minimap widget (contentType 1338)
         // Uses localPlayer position, NOT camera
         // WebGL-based rendering for better mobile performance
-        if (contentType === 1338) {
+        if (
+            contentType === 1338 &&
+            (opts.widgetManager?.isMinimapMapVisible?.() ?? true)
+        ) {
             const minimapStartMs = profileWidgetRender ? performance.now() : 0;
             const minimapTextureDrawCallsStart = profileWidgetRender
                 ? glr.getPerfCounters().textureDrawCalls
@@ -2718,23 +2724,26 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                         );
                     };
 
-                    clicks.register({
-                        id: `minimap:click-to-walk`,
-                        rect: { x: clickMaskX, y: clickMaskY, w: clickMaskW, h: clickMaskH },
-                        // minimap click-to-walk should not steal clicks from widgets
-                        // rendered on top of the minimap (orbs, buttons). Keep below widget targets.
-                        priority: 90,
-                        persist: false,
-                        contains: containsMinimapPoint,
-                        onMiddleClick: () => {
-                            const uiMenu = (glr.canvas as any)?.__ui?.menu;
-                            if (osrsClient.menuOpen || uiMenu?.open) return;
-                            osrsClient.minimapZoom = 4;
-                        },
-                        onDown: walkToMinimapPoint,
-                        // A widget over the minimap can consume the press first (#1797).
-                        onReleaseWithoutPress: walkToMinimapPoint,
-                    });
+                    // OSRS minimap_state 1 and 4 leave the map drawn but unclickable.
+                    if (opts.widgetManager?.isMinimapClickable?.() ?? true) {
+                        clicks.register({
+                            id: `minimap:click-to-walk`,
+                            rect: { x: clickMaskX, y: clickMaskY, w: clickMaskW, h: clickMaskH },
+                            // minimap click-to-walk should not steal clicks from widgets
+                            // rendered on top of the minimap (orbs, buttons). Keep below widget targets.
+                            priority: 90,
+                            persist: false,
+                            contains: containsMinimapPoint,
+                            onMiddleClick: () => {
+                                const uiMenu = (glr.canvas as any)?.__ui?.menu;
+                                if (osrsClient.menuOpen || uiMenu?.open) return;
+                                osrsClient.minimapZoom = 4;
+                            },
+                            onDown: walkToMinimapPoint,
+                            // A widget over the minimap can consume the press first (#1797).
+                            onReleaseWithoutPress: walkToMinimapPoint,
+                        });
+                    }
                 } // end if (playerState)
             }
             // Skip normal type-based rendering for minimap

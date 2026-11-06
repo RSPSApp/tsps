@@ -140,7 +140,7 @@ function tag({ player }) {
   set(player, "ticket", 0);
   player.sendMessage(message("ticket"));
   give(player, ticketId(), 1);
-  if (!loot) return;
+  if (!loot) return void player.getInventory().refreshItems();
   set(player, "reward", 0);
   api.emitCustomEvent("looting-bag:store", { player, items: loot, result: "no-bag" });
   const values = { a: loot[0].amount, first: itemName(loot[0].id), b: loot[1].amount, second: itemName(loot[1].id) };
@@ -157,6 +157,7 @@ function tag({ player }) {
   } else {
     player.sendMessage(message("awarded", values));
   }
+  inventory.refreshItems();
 }
 
 /** Carried or banked, open or closed (Wiki: the fee gives a bag only to a player who has none). */

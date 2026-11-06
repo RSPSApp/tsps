@@ -247,3 +247,65 @@ test('the necklace turning to dust changes the player\'s appearance', async (t) 
   await use(f, WATER, I.EARTH_RUNE);
   assert.equal(f.p.getUpdateFlag().flagged(core.Flag.APPEARANCE), true);
 });
+
+// S17 private conservation probe. Existing native packet/altar fixture and legacy prefix retained.
+for (const headroom of [null, 2, 1, 0]) {
+  test(`combination output conservation with stack headroom ${headroom}`, async (t) => {
+    const f = actor(t), inv = f.p.getInventory(), MAX = 0x7fffffff;
+    for (const [id, name, stackable] of [[I.MUD_RUNE, 'Mud rune', true],
+      [I.PURE_ESSENCE, 'Pure essence', false], [I.EARTH_RUNE, 'Earth rune', true],
+      [I.EARTH_TALISMAN, 'Earth talisman', false], [I.BINDING_NECKLACE, 'Binding necklace', false]]) {
+      const def = core.ItemDefinition.forId(id);
+      assert.equal(def.getId(), id, 'active cache exact id');
+      assert.equal(def.getName(), name, 'active cache exact name');
+      assert.equal(def.isStackable(), stackable, 'active cache definition before target');
+    }
+    assert.equal(I.MUD_RUNE, 4698); assert.equal(I.PURE_ESSENCE, 7936);
+    assert.equal(I.BINDING_NECKLACE, 5521);
+    give(f, I.PURE_ESSENCE, 2); give(f, I.EARTH_RUNE, 2); give(f, I.EARTH_TALISMAN, 1);
+    f.p.getEquipment().setItem(core.Equipment.AMULET_SLOT, new core.Item(I.BINDING_NECKLACE, 1));
+    assert.equal(f.p.getAttribute(CHARGES), undefined, 'real new necklace default16, no preset flag');
+    const held = headroom === null ? 0 : MAX - headroom;
+    if (held) give(f, I.MUD_RUNE, held);
+    assert.equal(count(f, I.PURE_ESSENCE), 2); assert.equal(count(f, I.EARTH_RUNE), 2);
+    assert.equal(count(f, I.EARTH_TALISMAN), 1); assert.equal(count(f, I.MUD_RUNE), held);
+    const floor = () => core.ItemOnGroundManager.ownedBy(f.p.getUsername()).filter(g =>
+      g.getItem().getId() === I.MUD_RUNE).reduce((n, g) => n + g.getItem().getAmount(), 0);
+    t.after(() => { for (const g of core.ItemOnGroundManager.ownedBy(f.p.getUsername())) core.ItemOnGroundManager.deregister(g); });
+    const beforeFloor = floor(), beforeXp = xpOf(f), events = [];
+    const emit = PM.emitCustomEvent.bind(PM);
+    t.mock.method(PM, 'emitCustomEvent', (name, event) => {
+      if (name === 'runecrafting:success' && event.player === f.p) events.push({...event});
+      return emit(name, event);
+    });
+    await use(f, WATER, I.EARTH_RUNE); // native selected object, real listener and plugin dispatch
+    const credited = count(f, I.MUD_RUNE) - held + floor() - beforeFloor;
+    const consumed = 2 - count(f, I.PURE_ESSENCE);
+    assert.equal(credited, consumed, 'every accepted essence credits one guaranteed necklace rune');
+    assert.equal(2 - count(f, I.EARTH_RUNE), consumed, 'elemental debit matches actual credit');
+    assert.equal(count(f, I.EARTH_TALISMAN), consumed ? 0 : 1, 'no talisman debit on refusal');
+    assert.equal(f.p.getEquipment().getItems()[core.Equipment.AMULET_SLOT].getId(), I.BINDING_NECKLACE);
+    assert.equal(f.p.getAttribute(CHARGES) ?? 16, consumed ? 15 : 16, 'charge only on accepted batch');
+    assert.ok(Math.abs(xpOf(f) - beforeXp - credited * 9.3) < 0.01, 'XP follows credited runes');
+    assert.equal(events.reduce((n, e) => n + e.runeAmount, 0), credited, 'event quantity follows credit');
+    if (headroom === null || headroom >= 2) assert.equal(credited, 2, 'room controls must complete');
+    else assert.ok(credited >= 0 && credited <= 2, 'refusal, exact partial or complete floor credit allowed');
+  });
+}
+
+// A capacity check uses the rolled quantity, without blocking a legitimate failed bind.
+for (const [rolls, headroom, expected] of [[[0.1, 0.9], 1, 1], [[0.9, 0.9], 0, 0]]) {
+  test(`imbued combination commits ${expected} bound with headroom ${headroom}`, async (t) => {
+    const f = actor(t); chance(t, rolls);
+    f.p.setAttribute(IMBUE, core.World.getProcessCycle() + 10);
+    give(f, I.PURE_ESSENCE, 2); give(f, I.EARTH_RUNE, 2); give(f, I.EARTH_TALISMAN, 1);
+    give(f, I.MUD_RUNE, 0x7fffffff - headroom);
+    const before = xpOf(f);
+    await use(f, WATER, I.EARTH_RUNE);
+    assert.equal(count(f, I.MUD_RUNE), 0x7fffffff - headroom + expected);
+    assert.equal(count(f, I.PURE_ESSENCE), 0);
+    assert.equal(count(f, I.EARTH_RUNE), 0);
+    assert.equal(count(f, I.EARTH_TALISMAN), 1, 'active Imbue preserves talisman');
+    assert.ok(Math.abs(xpOf(f) - before - expected * 9.3) < 0.01);
+  });
+}

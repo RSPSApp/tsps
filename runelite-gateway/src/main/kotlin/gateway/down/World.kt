@@ -15,6 +15,7 @@ import net.rsprot.protocol.game.outgoing.camera.CamShake
 import net.rsprot.protocol.game.outgoing.camera.CamTargetV4
 import net.rsprot.protocol.game.outgoing.camera.CamUnlock
 import net.rsprot.protocol.game.outgoing.misc.client.HideNpcOps
+import net.rsprot.protocol.game.outgoing.misc.client.HideObjOps
 import net.rsprot.protocol.game.outgoing.misc.client.HintArrow
 import net.rsprot.protocol.game.outgoing.misc.client.ResetInteractionMode
 import net.rsprot.protocol.game.outgoing.misc.client.SetInteractionMode
@@ -181,6 +182,7 @@ class World(
             TspsServerPacket.RESET_INTERACTION_MODE ->
                 world(reader.s16())?.let { send(ResetInteractionMode(it)) } ?: DropCounter.down(packet.opcode)
             TspsServerPacket.HIDE_NPC_OPS -> send(HideNpcOps(reader.u8() != 0))
+            TspsServerPacket.HIDE_OBJ_OPS -> send(HideObjOps(reader.u8() != 0))
             TspsServerPacket.SYSTEM_UPDATE -> {
                 val centis = reader.i32()
                 send(UpdateRebootTimerV2(centis / CENTIS_PER_TICK, UpdateRebootTimerV2.IgnoreUpdateMessage))

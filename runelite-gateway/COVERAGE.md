@@ -59,6 +59,7 @@ sessions, so the browser wire format doesn't change.
 | 144 / 147 REGION_REPLACEMENT / _COMPRESSED | — | dropped | 2 | server map data the client can't load |
 | 145 / 146 SET / RESET_INTERACTION_MODE | SET / RESET_INTERACTION_MODE | mapped | 7 | |
 | 148 HIDE_NPC_OPS | SET_HIDE_NPC_ACTIONS | mapped | 1 | one global boolean for the client; the native menu still offers Examine while NPC actions are hidden |
+| 149 HIDE_OBJ_OPS | SET_ITEM_OPS_DISABLED (ground items) | mapped | 1 | one global boolean for ground items, not loc scenery; Examine stays unless a spell is selected |
 | 150 / 152 SHOP_OPEN / CLOSE | UPDATE_INV_FULL / STOP_TRANSMIT (516) | mapped | 5 | interface and script come separately; tsps's prices and modes are dropped (the client works prices out) |
 | 154 TRADE_REQUEST | — | dropped | 9 | the type-101 game message carries it |
 | 155 / 156 / 157 TRADE_OPEN / UPDATE / CLOSE | UPDATE_INV_FULL (90, 90 \| 0x8000), MESSAGE_GAME | mapped | 9 | tsps opens 335/334/336 and writes their text itself; only the offers needed translating |

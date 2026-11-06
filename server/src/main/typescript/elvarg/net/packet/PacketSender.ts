@@ -54,6 +54,7 @@ import {
   encodeSetInteractionMode,
   encodeResetInteractionMode,
   encodeHideNpcOps,
+  encodeHideObjOps,
   encodeChatFilterSettings,
   encodeRunEnergy,
   encodeSkillsDelta,
@@ -1096,6 +1097,12 @@ export class PacketSender {
   /** Hides every NPC's menu actions (not Examine) across the client until set false again. */
   sendHideNpcOps(hidden: boolean): this {
     this.player.getSession().sendClientPacket(encodeHideNpcOps(hidden));
+    return this;
+  }
+
+  /** Hides every ground item's menu actions across the client until set false again. */
+  sendHideObjOps(hidden: boolean): this {
+    this.player.getSession().sendClientPacket(encodeHideObjOps(hidden));
     return this;
   }
 

@@ -1697,6 +1697,10 @@ export function decodeServerPacket(data: Uint8Array | ArrayBuffer): DecodedServe
             return { type: "hide_npc_ops", payload: { hidden: (reader.readByte() & 0xff) !== 0 } };
         }
 
+        case ServerPacketId.HIDE_OBJ_OPS: {
+            return { type: "hide_obj_ops", payload: { hidden: (reader.readByte() & 0xff) !== 0 } };
+        }
+
         case ServerPacketId.LOC_ANIM: {
             const locId = reader.readShort();
             const tile = { x: reader.readShort(), y: reader.readShort() };

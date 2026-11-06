@@ -7,6 +7,7 @@ import gateway.tsps.TspsWriter
 import net.rsprot.protocol.game.outgoing.camera.CamMoveToCyclesV3
 import net.rsprot.protocol.game.outgoing.camera.util.CameraEaseFunction
 import net.rsprot.protocol.game.outgoing.misc.client.HideNpcOps
+import net.rsprot.protocol.game.outgoing.misc.client.HideObjOps
 import net.rsprot.protocol.game.outgoing.misc.client.HintArrow
 import net.rsprot.protocol.game.outgoing.sound.SynthSound
 import net.rsprot.protocol.game.outgoing.specific.ProjAnimSpecificV4
@@ -88,6 +89,13 @@ class WorldTest {
         world.handle(packet(TspsServerPacket.HIDE_NPC_OPS, TspsWriter().u8(1)))
         world.handle(packet(TspsServerPacket.HIDE_NPC_OPS, TspsWriter().u8(0)))
         assertEquals(listOf(true, false), sent.map { (it as HideNpcOps).hidden })
+    }
+
+    @Test
+    fun `hide obj ops maps its global boolean to the native ground-item packet`() {
+        world.handle(packet(TspsServerPacket.HIDE_OBJ_OPS, TspsWriter().u8(1)))
+        world.handle(packet(TspsServerPacket.HIDE_OBJ_OPS, TspsWriter().u8(0)))
+        assertEquals(listOf(true, false), sent.map { (it as HideObjOps).hidden })
     }
 
     @Test

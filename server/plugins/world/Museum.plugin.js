@@ -254,6 +254,8 @@ const pendingLamp = new WeakMap();
 const reportedInConversation = new WeakSet();
 /** Players whose Museum area mounted the Kudos HUD in toplevel:overlay_hud. */
 const kudosHudShown = new WeakSet();
+/** Players with a museum display case open (The Golem's case 30 clears its own busy varbit). */
+const studyingDisplay = new WeakSet();
 
 const has = (player, itemId, amount = 1) => player.getInventory().getAmount(itemId) >= amount;
 
@@ -713,6 +715,7 @@ function studyDisplay({ player, objectId, location }) {
   const modelUid = (group << 16) | entry.component;
   const sender = player.getPacketSender();
   sender.sendVarbit(DISPLAY_BUSY_VARBIT, 1);
+  studyingDisplay.add(player);
   player.performAnimation(new api.core.Animation(DISPLAY_STUDY_SEQUENCE));
   sender.sendString(displayText(player, entry), (group << 16) | DISPLAY_TEXT_COMPONENT);
   sender.sendString(String(entry.number), (group << 16) | numberComponent);
@@ -727,7 +730,8 @@ function studyDisplay({ player, objectId, location }) {
 }
 
 function resetDisplayBusy({ player, interfaceId }) {
-  if (interfaceId === DIGSITE_INTERFACE || interfaceId === TIMELINE_INTERFACE) {
+  if ((interfaceId === DIGSITE_INTERFACE || interfaceId === TIMELINE_INTERFACE)
+    && studyingDisplay.delete(player)) {
     player.getPacketSender().sendVarbit(DISPLAY_BUSY_VARBIT, 0);
   }
 }

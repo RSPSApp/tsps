@@ -53,10 +53,10 @@ Not in the capture:
 
 ## Besides the quiz
 
-- Quiz models currently spin with cache script 65 as an interim. rsprox 1723 sends
-  `IfSetRotateSpeed` for `vm_natural_history` (533) model components with `xSpeed=0`,
-  `ySpeed=5` each time a case opens; the server does not expose that packet yet, so the
-  producer call stays with the native rotate-speed work rather than being guessed here.
+- Quiz models use the native `IF_SETROTATESPEED` packet. rsprox 1723 sends it for
+  `vm_natural_history` (533) components 2, 3, 7-12 and 17-20 with `xSpeed=0`, `ySpeed=5`
+  each time a case opens; components 4-6 (dragon) and 13-16 (seaslugs) got no rotate
+  packet in the capture, so they stay still rather than being spun by guess.
 - The `vm_kudos` HUD (532) is mounted in `toplevel:overlay_hud` while a player is inside the
   museum, and right-clicking the Information booth's "Check Kudos" opens the cache's
   `vm_kudos_info` list (600).

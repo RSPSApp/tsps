@@ -407,7 +407,7 @@ test("Roavar's public brain sale conserves payment and delivery", async (t) => {
   core.RegionManager.loadMapFiles(position.getX(), position.getY());
   assert.equal(core.RegionManager.getRegion(position.getX(), position.getY()).isLoaded(), true);
 
-  for (const mode of ["room", "exact coins", "poor", "already held", "brain arrives at prompt", "full bag"]) {
+  for (const mode of ["room", "exact coins", "poor", "already held", "brain held at action", "head held at action", "full bag"]) {
     await t.test(mode, async (child) => {
       const f = actor(child, FENK, 0), p = f.p, inv = f.inv;
       put(f, coins, 0, mode === "poor" ? 49 : mode === "exact coins" ? 50 : 100);
@@ -443,14 +443,14 @@ test("Roavar's public brain sale conserves payment and delivery", async (t) => {
           && item.getPrivateArea() === p.getPrivateArea() && item.getItem().getId() === id)
           .reduce((sum, item) => sum + item.getItem().getAmount(), 0),
       });
-      const snapshot = () => ({ coins: stores(coins), brain: stores(brain), filler: stores(filler),
+      const snapshot = () => ({ coins: stores(coins), brain: stores(brain), head: stores(I.DECAPITATED_HEAD_2), filler: stores(filler),
         stage: questState.getStage(p), xp: core.Skill.values().map(skill => p.getSkillManager().getExperience(skill)) });
       const owned = row => Object.values(row).reduce((sum, count) => sum + count, 0);
       let before = snapshot();
       assert.equal(owned(before.brain), mode === "already held" ? 1 : 0);
-      assert.equal(owned(stores(I.DECAPITATED_HEAD_2)), 0);
-      const messages = [];
-      child.mock.method(p, "sendMessage", (text) => { messages.push(text); });
+      assert.equal(owned(before.head), 0);
+      const messages = [], sendMessage = p.sendMessage.bind(p);
+      child.mock.method(p, "sendMessage", (text) => { messages.push(text); return sendMessage(text); });
       const actions = [], choices = [], originalEmit = PM.emitCustomEvent.bind(PM);
       child.mock.method(PM, "emitCustomEvent", (...args) => {
         const [name, event] = args;
@@ -527,27 +527,62 @@ test("Roavar's public brain sale conserves payment and delivery", async (t) => {
       assert.equal(sender.getSubInterfaceAt(mount.targetUid), mount);
       assert.deepEqual(prompt.options.map(normalize), ["I'll buy one.", "I'm not hungry."]);
       assert.deepEqual(snapshot(), before);
-      if (mode === "brain arrives at prompt") {
-        put(f, brain, 5, 1);
+      if (mode === "brain held at action" || mode === "head held at action") {
+        // Inject a late state to exercise the action; this is not a tested trade route.
+        put(f, mode === "brain held at action" ? brain : I.DECAPITATED_HEAD_2, 5, 1);
         before = snapshot();
-        assert.equal(owned(before.brain), 1);
+        assert.equal(owned(mode === "brain held at action" ? before.brain : before.head), 1);
       }
       await input({ type: "dialogue_continue", widgetId: core.MultiChatboxPrompt.OPTIONS_WIDGET_ID, childIndex: 1 });
       assert.equal(choices.length, 1);
+      const purchaseMount = sender.subInterfaceTargets.get(217);
+      assert.ok(purchaseMount, "the player's purchase line is mounted");
       await speech("I'll buy one, please.", false);
       assert.equal(actions.length, 1, "real KK0w2z receive action was reached");
       const after = snapshot(), paid = owned(before.coins) - owned(after.coins), delivered = owned(after.brain) - owned(before.brain);
       assert.ok((paid === 50 && delivered === 1) || (paid === 0 && delivered === 0),
         JSON.stringify({ mode, paid, delivered, before: { coins: before.coins, brain: before.brain }, after: { coins: after.coins, brain: after.brain } }));
-      if (mode === "brain arrives at prompt") assert.deepEqual([paid, delivered, owned(after.brain)], [0, 0, 1], "a held brain is neither charged for nor duplicated");
-      if (mode !== "full bag" && mode !== "brain arrives at prompt") assert.deepEqual([paid, delivered], [50, 1], "room or exact payment delivers one brain");
+      if (mode === "brain held at action" || mode === "head held at action") {
+        assert.deepEqual([paid, delivered], [0, 0], "an already-held quest item is not charged for");
+        assert.deepEqual(after.head, before.head, "the head is preserved");
+      } else if (mode === "full bag") {
+        assert.deepEqual([paid, delivered], [0, 0], "a full bag refuses without payment");
+      } else {
+        assert.deepEqual([paid, delivered], [50, 1], "room or exact payment delivers one brain");
+      }
       assert.deepEqual(after.filler, before.filler);
       assert.equal(after.stage, before.stage);
       assert.deepEqual(after.xp, before.xp);
       if (paid === 0) assert.deepEqual(after, before);
       assert.deepEqual(messages, mode === "full bag" ? ["You don't have enough inventory space."] : []);
-      if (paid === 0) assert.equal(manager.isActive(), false, "the refusal ends the dialogue");
+      if (paid === 0) {
+        assert.equal(manager.isActive(), false, "the refusal ends the dialogue");
+        assert.equal(sender.getChatboxGroupId(), -1, "the chatbox is closed");
+        assert.equal(sender.getSubInterfaceAt(purchaseMount.targetUid), undefined, "the purchase mount is removed");
+        assert.equal(core.MultiChatboxPrompt.getPending(p), null, "the sale choice is no longer pending");
+      }
       assert.equal(core.ItemOnGroundManager.getGroundItem(p.getUsername(), brain, position, p.getPrivateArea()), stock, "the public display is not purchased credit");
     });
   }
+});
+
+// This calls the registered action with a real player; it does not model a second client choice.
+test("Roavar's receive action cannot charge twice for one brain", (t) => {
+  const f = actor(t, FENK, 0);
+  put(f, I.COINS, 0, 100);
+  const receive = () => {
+    const step = { type: "action", action: "receive", text: "pickled brain", id: "KK0w2z" };
+    const event = { player: f.p, npcId: 6527, npc: null, definition: core.NpcDefinition.forId(6527), step,
+      pages: [{ page: "Creature of Fenkenstrain", variants: ["decapitated-head-finding-the-brains"] }],
+      text: step.text, action: step.action, target: undefined, stepId: step.id, handled: false };
+    PM.emitCustomEvent("npc-dialogue:action", event);
+    return event;
+  };
+  const first = receive();
+  assert.equal(first.handled, true);
+  assert.deepEqual([f.inv.getAmount(I.COINS), f.inv.getAmount(I.PICKLED_BRAIN)], [50, 1]);
+  const second = receive();
+  assert.equal(second.handled, true);
+  assert.equal(second.end, true);
+  assert.deepEqual([f.inv.getAmount(I.COINS), f.inv.getAmount(I.PICKLED_BRAIN)], [50, 1]);
 });

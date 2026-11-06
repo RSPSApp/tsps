@@ -9,6 +9,7 @@ import { TileHighlightManager } from "../game/highlights/TileHighlightManager";
 import { Inventory } from "../rs/inventory/Inventory";
 import { state as network } from "../network/serverConnection/state";
 import { parsePluginMessage } from "../common/network/PluginMessage";
+import { retainedInventory } from "../game/sync/InventoryStopTransmit";
 
 async function main(){
     Object.assign(globalThis,{WebSocket:{OPEN:1}}); const requests:any[]=[];
@@ -16,7 +17,8 @@ async function main(){
     network.lastSkillsState={combatLevel:3,totalLevel:1,byId:new Map([[0,{id:0,baseLevel:1,currentLevel:1,xp:0,boost:0,virtualLevel:1}]])};
     const bus=new EventBus(),config=new ConfigManager(bus),manager=new PluginManager(bus,config);
     const player:any={getIndexForServerId:()=>0,getLevel:()=>0,getAnimActionSeqId:()=>-1,getAnimMovementSeqId:()=>-1,getRotation:()=>0,getInteractionIndex:()=>-1};
-    const client:any={stateMachine:{getState:()=>30},localPlayerName:"A",getControlledPlayerMovementTile:()=>({tileX:3200,tileY:3200}),controlledPlayerServerId:1,playerEcs:player,tileHighlightManager:new TileHighlightManager(),varManager:{values:new Int32Array(1),customVarbits:new Map(),varbitLoader:{load:()=>undefined},varpChangeListeners:new Set()},inventory:new Inventory(),equipment:new Inventory(14),bankInventory:new Inventory(1410),npcEcs:{forEachActive:()=>{},mutationListeners:new Set()},renderer:{getLocIdsAtTileAllLevels:()=>[],canvas:{width:765,height:503}},groundItems:{getAllStacks:()=>[],mutationListeners:new Set()},widgetManager:{rootInterface:-1,interfaceParents:new Map(),getAllGroupRoots:()=>[],groupLoadedListeners:new Set(),interfaceClosedListeners:new Set()}};
+    const bank = new Inventory(1410);
+    const client:any={stateMachine:{getState:()=>30},localPlayerName:"A",getControlledPlayerMovementTile:()=>({tileX:3200,tileY:3200}),controlledPlayerServerId:1,playerEcs:player,tileHighlightManager:new TileHighlightManager(),varManager:{values:new Int32Array(1),customVarbits:new Map(),varbitLoader:{load:()=>undefined},varpChangeListeners:new Set()},inventory:new Inventory(),equipment:new Inventory(14),bankInventory:bank,lastKnownBank:retainedInventory(bank),npcEcs:{forEachActive:()=>{},mutationListeners:new Set()},renderer:{getLocIdsAtTileAllLevels:()=>[],canvas:{width:765,height:503}},groundItems:{getAllStacks:()=>[],mutationListeners:new Set()},widgetManager:{rootInterface:-1,interfaceParents:new Map(),getAllGroupRoots:()=>[],groupLoadedListeners:new Set(),interfaceClosedListeners:new Set()}};
     manager.getInjector().provide(CLIENT_TOKEN,client);manager.loadCorePlugins([QuestHelperPlugin]);const plugin=manager.getPlugin(QuestHelperPlugin)!;
     await manager.setPluginEnabled(QuestHelperPlugin,true);
     // No quest selected: source events keep arriving, but nothing is evaluated or sent.

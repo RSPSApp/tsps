@@ -1,4 +1,4 @@
-import { stopInventoryTransmit } from "./sync/InventoryStopTransmit";
+import { retainedInventory, stopInventoryTransmit } from "./sync/InventoryStopTransmit";
 import { openClientUrl } from "../common/openUrl";
 import { applyNpcSpecificEffect } from "./sync/NpcSpecificEffects";
 import { createNpcEcs, type NpcGraphicsEcs } from "./ecs/createNpcEcs";
@@ -982,6 +982,8 @@ export class OsrsClient {
     equipment: Inventory = new Inventory(14); // Equipment has 14 slots
     /** Bank container inventory (ID 95) - indexed 0..1409 for CS2 bankmain_build */
     bankInventory: Inventory = new Inventory(1410);
+    /** The bank's last contents for plugins: follows bankInventory but keeps them past a stop-transmit. */
+    readonly lastKnownBank: Inventory = retainedInventory(this.bankInventory);
     /** Collection log inventory (ID 620) - stores obtained items for CS2 inv_total queries */
     collectionInventory: Inventory = new Inventory(2048);
     /** Shop stock inventory (ID 516) - stores shop items for CS2 inv queries */

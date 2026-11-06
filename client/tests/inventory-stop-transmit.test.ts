@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Inventory } from "../rs/inventory/Inventory";
-import { stopInventoryTransmit } from "../game/sync/InventoryStopTransmit";
+import { retainedInventory, stopInventoryTransmit } from "../game/sync/InventoryStopTransmit";
+import { capturePlayer } from "../game/plugins/shortestpath/playerState";
+import { collectQuestHelperSnapshot } from "../game/plugins/questhelper/QuestHelperSnapshot";
 import { getTransmitCycles } from "../game/TransmitCycles";
 import { decodeServerPacket } from "../network/packet/ServerBinaryDecoder";
 import { handleInboundUi } from "../network/serverConnection/handlers/inboundUi";
@@ -48,4 +50,29 @@ test("stopping a bank clears late-subscriber replay; a subsequent partial starts
         assert.equal(resumed.length, 1);
         assert.deepEqual(resumed[0].slots.map((s: any) => [s.slot, s.itemId, s.quantity]), [[3, 554, 4]]);
     } finally { end(); state.lastBankState = undefined; }
+});
+
+test("plugins keep the closed bank's last contents; CS2's bank Inventory is cleared", () => {
+    const bankInventory = new Inventory(1410);
+    const lastKnownBank = retainedInventory(bankInventory);
+    const ecs: any = { getIndexForServerId: () => 0, getLevel: () => 0, getAnimActionSeqId: () => -1,
+        getAnimMovementSeqId: () => -1, getRotation: () => 0, getInteractionIndex: () => -1 };
+    const client: any = { inventory: new Inventory(), equipment: new Inventory(14), bankInventory, lastKnownBank,
+        getControlledPlayerMovementTile: () => ({ tileX: 3200, tileY: 3200 }), controlledPlayerServerId: 1,
+        localPlayerName: "Tester", playerEcs: ecs,
+        varManager: { values: new Int32Array(1), customVarbits: new Map(), varbitLoader: { load: () => undefined }, getVarbit: () => 0, getVarp: () => 0 },
+        npcEcs: { forEachActive: () => {} }, renderer: { getLocIdsAtTileAllLevels: () => [] }, groundItems: { getAllStacks: () => [] },
+        widgetManager: { rootInterface: -1, interfaceParents: new Map(), getAllGroupRoots: () => [] } };
+    const shortestPathBank = () => [...(capturePlayer(client, true).bank ?? new Map())];
+    const questHelperBank = () => collectQuestHelperSnapshot(client, 1, { baseX: 3150, baseY: 3150, plane: 0 } as any, [], new Set())
+        .bank?.map((item: any) => [item.id, item.quantity]);
+    bankInventory.setSnapshot([{ slot: 0, itemId: 8007, quantity: 5 }]);
+    assert.deepEqual(shortestPathBank(), [[8007, 5]]);
+    stopInventoryTransmit(new Map([[95, bankInventory]]), 95);
+    assert.equal(bankInventory.getSlot(0)?.itemId, -1, "the CS2 container is still discarded");
+    assert.deepEqual(shortestPathBank(), [[8007, 5]], "Shortest Path still counts the closed bank");
+    assert.deepEqual(questHelperBank(), [[8007, 5]], "Quest Helper still sees the closed bank");
+    bankInventory.setSnapshot([{ slot: 1, itemId: 8008, quantity: 2 }]);
+    bankInventory.setSlot(1, -1, 0);
+    assert.deepEqual(shortestPathBank(), [], "a real withdrawal while open still empties it");
 });

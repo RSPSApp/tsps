@@ -38,9 +38,16 @@ Amascut) and other reward chests are not affected.
 
 ## Cross-floor visibility and combat
 
-Set `pluginConfig` `"CrossFloor:visibility"` to show nearby players and NPCs on other floors.
-`"CrossFloor:combat"` additionally allows ranged and magic attacks between floors; melee stays
-on the same floor. Both default to `false`, and combat requires visibility to be enabled.
+Set `pluginConfig` `"CrossFloor:visibility"` to sync nearby players, NPCs, ground items and
+temporary objects on your floor and lower floors. Floors above you remain hidden. This also
+activates lower-floor NPC spawns and permits Telekinetic Grab on a lower floor. It defaults to
+`false`.
+
+Set `"CrossFloor:combat"` to allow ranged and magic attacks between floors; melee stays on the
+same floor. Combat is a child of visibility, so it only works when `"CrossFloor:visibility"` is
+`true`. Attacks can go in both floor directions, but a lower-floor player does not see a higher-floor
+attacker or their projectiles. Combat also defaults to `false`.
+
 The host exposes these under **Settings → Technical**, with combat nested below visibility.
 Restart the world after changing them.
 

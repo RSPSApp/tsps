@@ -1461,19 +1461,24 @@ module.exports = {
     }, PlayerRights.OWNER, "Enable noclip");
 
     api.registerCommand("up", ({ player }) => {
-      player.moveTo(player.getLocation().clone().setZ(player.getLocation().getZ() + 1));
+      const current = player.getLocation();
+      if (current.getZ() >= 3) {
+        player.sendMessage("You are already on the highest plane.");
+        return true;
+      }
+      player.moveTo(current.clone().setZ(current.getZ() + 1));
       return true;
-    }, PlayerRights.OWNER, "Move up one plane");
+    }, PlayerRights.OWNER, "Move up one plane at the same coordinates");
 
     api.registerCommand("down", ({ player }) => {
-      const next = player.getLocation().clone().setZ(player.getLocation().getZ() - 1);
-      if (next.getZ() < 0) {
-        next.setZ(0);
-        player.sendMessage("You cannot move to a negative plane!");
+      const current = player.getLocation();
+      if (current.getZ() <= 0) {
+        player.sendMessage("You are already on the lowest plane.");
+        return true;
       }
-      player.moveTo(next);
+      player.moveTo(current.clone().setZ(current.getZ() - 1));
       return true;
-    }, PlayerRights.OWNER, "Move down one plane");
+    }, PlayerRights.OWNER, "Move down one plane at the same coordinates");
 
     api.registerCommand("save", ({ player }) => {
       GameConstants.PLAYER_PERSISTENCE.save(player);

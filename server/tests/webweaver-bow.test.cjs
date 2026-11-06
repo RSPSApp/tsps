@@ -44,9 +44,11 @@ function player() {
   return p;
 }
 
-function bow(p, charges, worn = false) {
+// A charged bow is activated through addEther unless `paid` is false (a shop, spawn or old save).
+function bow(p, charges, worn = false, paid = true) {
   const item = new core.Item(charges === null ? I.WEBWEAVER_BOW_U_ : I.WEBWEAVER_BOW, 1);
   if (charges) item.setMetaValue(B.CHARGES_META, charges);
+  if (charges !== null && paid) item.setMetaValue(B.DEPOSIT_META, true);
   if (worn) p.getEquipment().getItems()[core.Equipment.WEAPON_SLOT] = item;
   else p.getInventory().addItem(item);
   return worn ? item : p.getInventory().getItems().find((held) => held.getId() === item.getId());
@@ -211,6 +213,64 @@ test("Wilderness PvP loses reserve and charges even when protected; other deaths
     assert.equal(item.getId(), I.WEBWEAVER_BOW);
     assert.equal(B.chargesOf(item), 7);
   }
+});
+
+test("a charged bow without a paid deposit (shop, spawn, older save) refunds only its charges on uncharge", () => {
+  for (const charges of [0, 5]) {
+    const p = player();
+    const item = bow(p, charges, false, false);
+    B.uncharge({ player: p, item });
+    assert.equal(item.getId(), I.WEBWEAVER_BOW_U_);
+    assert.equal(B.chargesOf(item), 0);
+    assert.equal(item.getMetaValue(B.DEPOSIT_META), undefined);
+    assert.equal(p.getInventory().getAmount(I.REVENANT_ETHER), charges);
+    assert.equal(p.messages.at(-1), charges ? "You uncharge your bow, regaining 5 revenant ether." : "You uncharge your bow.");
+  }
+});
+
+test("Wilderness PvP death of a bow without a paid deposit drops only its charges", () => {
+  for (const charges of [0, 7]) {
+    ground.length = 0;
+    const p = player();
+    const item = bow(p, charges, false, false);
+    hooks.death({ player: p, killer: player(), item, kept: false, shouldDropItems: true, location: new core.Location(3090, 3600, 0) });
+    assert.equal(item.getId(), I.WEBWEAVER_BOW_U_);
+    assert.deepEqual(ground.map(({ item }) => item.getAmount()), charges ? [7] : []);
+  }
+});
+
+test("charging a charged bow without a paid deposit takes the 1,000 activation ether first", () => {
+  const p = player();
+  const item = bow(p, 3, false, false);
+  p.getInventory().addItem(new core.Item(I.REVENANT_ETHER, 999));
+  charge(p, item);
+  assert.equal(p.amountAction, undefined);
+  assert.match(p.messages.at(-1), /need 1,000 revenant ether/);
+  p.getInventory().addItem(new core.Item(I.REVENANT_ETHER, 501));
+  charge(p, item);
+  assert.match(p.prompt, /0 - 500/);
+  p.amountAction.execute(500);
+  assert.equal(p.getInventory().getAmount(I.REVENANT_ETHER), 0);
+  assert.equal(B.chargesOf(item), 503);
+  assert.equal(item.getMetaValue(B.DEPOSIT_META), true);
+  B.uncharge({ player: p, item });
+  assert.equal(p.getInventory().getAmount(I.REVENANT_ETHER), 1503);
+});
+
+test("a bow activated through ether still loses its deposit and charges to the PvP killer", () => {
+  ground.length = 0;
+  const p = player();
+  const item = bow(p, null);
+  p.getInventory().addItem(new core.Item(I.REVENANT_ETHER, 1004));
+  charge(p, item);
+  p.amountAction.execute(4);
+  const killer = player();
+  hooks.death({ player: p, killer, item, kept: false, shouldDropItems: true, location: new core.Location(3090, 3600, 0) });
+  assert.equal(item.getId(), I.WEBWEAVER_BOW_U_);
+  assert.equal(item.getMetaValue(B.DEPOSIT_META), undefined);
+  assert.equal(ground.length, 1);
+  assert.equal(ground[0].owner, killer);
+  assert.equal(ground[0].item.getAmount(), 1004);
 });
 
 test("Wilderness PvM retains charges for the general death and grave rules", () => {

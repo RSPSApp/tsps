@@ -3,6 +3,7 @@ const Storage = require("./Common.StorageItems");
 const NAMES = ["Gem sack", "Open gem sack"];
 const PER_GEM = 60;
 // Sack-specific feedback is server wording; no sack transcript is retained.
+const STRAIGHT_IN = "You put it straight into your open gem sack.";
 const MESSAGE = {
   NO_GEMS: "You have nothing suitable for storing in the sack.",
   FULL: "Your sack is too full to hold all your gems.",
@@ -142,3 +143,4 @@ module.exports = (api) => {
   for (const name of NAMES) api.onItemAction(name, { Fill: fill, Open: toggle, Close: toggle, Check: check, Empty: empty });
   api.onItemOnItem(sew, { noted: false });
 };
+Object.assign(module.exports, { STRAIGHT_IN });

@@ -33,15 +33,21 @@ const SUCCESS_COUNT_ATTRIBUTE = "cooking:success-count";
 const BUSY_VARBIT = "busy";
 
 /**
- * Wiki (Cooked meat): unlike other food it can be burnt on purpose on a fire or range, for no
- * XP. Kept apart from the cookables so content that cooks raw food leaves it alone.
+ * Cooked meat and cooked chicken can be burnt on purpose. Keep them apart from the
+ * cookables so content that cooks raw food leaves them alone.
  */
 const DELIBERATE_BURN = { name: "meat", level: 1, xp: 0, stopBurn: 1, deliberate: true, message: "You deliberately burn the nicely cooked meat." };
 
 function deliberateBurnFor(itemId) {
   const { ItemIds } = Common.core;
-  if (itemId !== ItemIds.COOKED_MEAT) return undefined;
-  return { ...DELIBERATE_BURN, raw: ItemIds.COOKED_MEAT, cooked: ItemIds.BURNT_MEAT, burnt: ItemIds.BURNT_MEAT };
+  if (itemId === ItemIds.COOKED_MEAT) {
+    return { ...DELIBERATE_BURN, raw: ItemIds.COOKED_MEAT, cooked: ItemIds.BURNT_MEAT, burnt: ItemIds.BURNT_MEAT };
+  }
+  if (itemId === ItemIds.COOKED_CHICKEN) {
+    return { ...DELIBERATE_BURN, name: "chicken", message: "You deliberately burn the chicken.",
+      raw: ItemIds.COOKED_CHICKEN, cooked: ItemIds.BURNT_CHICKEN, burnt: ItemIds.BURNT_CHICKEN };
+  }
+  return undefined;
 }
 
 function cookableFor(itemId) {

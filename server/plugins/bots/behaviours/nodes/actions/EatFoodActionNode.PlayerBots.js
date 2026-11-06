@@ -74,6 +74,9 @@ class EatFoodActionNode {
       if (isF2pPvp) {
         state.pvp.f2pFoodPending = false;
         state.pvp.f2pFoodPendingHp = null;
+        // The heal took the bot clear of the threshold, so a queued follow-up is stale. Leaving it
+        // would let a later fight skip the one-hit wait on its first crossing.
+        state.pvp.f2pComboPending = false;
       }
       return "failure";
     }

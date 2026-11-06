@@ -54,6 +54,8 @@ function createPvpBehaviorState() {
     lastFoodAt: 0,
     f2pFoodPending: false,
     f2pFoodPendingHp: null,
+    /** A one-tick bite is due to be followed by a second food next tick. */
+    f2pComboPending: false,
     lastBrewAt: 0,
     lastComboEatAt: 0,
     lastVengeanceAt: 0,
@@ -134,6 +136,7 @@ function clearPvpBehaviorState(state) {
   state.pvp.lastFoodAt = 0;
   state.pvp.f2pFoodPending = false;
   state.pvp.f2pFoodPendingHp = null;
+  state.pvp.f2pComboPending = false;
   state.pvp.lastBrewAt = 0;
   state.pvp.lastComboEatAt = 0;
   state.pvp.lastVengeanceAt = 0;

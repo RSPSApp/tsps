@@ -246,6 +246,26 @@ test('a half pizza with nothing else eats its own other half next tick', () => {
   assert.equal(h.state.virtualFoodChargesRemaining, 0);
 });
 
+test('a queued follow-up does not survive the heal that cleared the threshold', () => {
+  // A queued bite left set after healing above the threshold made the next fight eat on its first
+  // crossing, skipping the one-hit reaction delay this change deliberately keeps.
+  const h = buildHarness(0, 'standard');
+  h.setItems([ItemIdentifiers.ANCHOVY_PIZZA, ItemIdentifiers.SWORDFISH]);
+  h.setHp(20);
+  assert.equal(h.tick(), 'failure', 'first crossing only arms');
+  h.setHp(10);
+  assert.equal(h.tick(), 'success');
+  assert.equal(h.state.pvp.f2pComboPending, true, 'the follow-up is queued');
+
+  h.setHp(40);
+  assert.equal(h.tick(), 'failure', 'above the threshold there is nothing to eat');
+  assert.equal(h.state.pvp.f2pComboPending, false, 'the queue is dropped, not carried over');
+
+  h.setHp(30);
+  assert.equal(h.tick(), 'failure', 'the next crossing arms and waits again');
+  assert.equal(h.getHp(), 30, 'no early bite');
+});
+
 test('a slow first food is not followed in the same tick, and eating permissions/cooldowns still apply', () => {
   const h = buildHarness(1, 'veteran');
   h.state.pvp.loadoutId = 'edge_main_melee';

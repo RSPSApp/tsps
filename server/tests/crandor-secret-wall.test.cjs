@@ -244,3 +244,22 @@ test("the Champions' Guild door is a pass-through door: the open leaf south, wal
   assert.equal(locAt(23637, 3191, 3362), null, "the door shuts again");
   assert.ok(locAt(DOOR, 3191, 3363), "the closed door is back");
 });
+
+test("Melzar's basement exit door lets the room side out and keeps the corridor side out, through Doors", (t) => {
+  core.RegionManager.loadMapFiles(2931, 9640);
+  const EXIT = core.ObjectIdentifiers.EXIT_DOOR, LEAF = 10254; // funexit_open, paired by cache name
+  const { player: corridor } = actor(t, 2, 2930, 9640);
+  settle();
+  new ObjectActionPacketListener().executeAction(corridor, EXIT, 2931, 9640, 1);
+  settle();
+  assert.ok(at(corridor)[0] <= 2930, "the corridor side is refused, not carried back through");
+  assert.equal(locAt(LEAF, 2930, 9640), null, "and the door never opened");
+
+  const { player: room } = actor(t, 2, 2932, 9640);
+  settle();
+  new ObjectActionPacketListener().executeAction(room, EXIT, 2931, 9640, 1);
+  assert.ok(until(() => locAt(LEAF, 2930, 9640) !== null, 6), "the room side opens it: funexit_open on the tile west");
+  assert.ok(until(() => at(room)[0] === 2930, 8), "and walks out into the corridor");
+  settle();
+  assert.equal(locAt(LEAF, 2930, 9640), null, "the door shuts again");
+});

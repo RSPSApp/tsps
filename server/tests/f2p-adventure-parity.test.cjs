@@ -207,6 +207,12 @@ test("Dragon Slayer's Guildmaster offers the captured follow-up menus after each
     h.choose(p, option); continueToMenu(h, p);
     assert.deepEqual(p.prompt.options, expected, `after ${option}`);
   };
+  // The quest builds these menus from the transcript's option texts: a re-export that rewords one fails here.
+  const texts = new Set();
+  const walk = node => { if (Array.isArray(node)) return node.forEach(walk); if (!node || typeof node !== 'object') return;
+    if (node.type === 'choice') (node.options || []).forEach(option => texts.add(option.text)); Object.values(node).forEach(walk); };
+  walk(runtime.loadTranscripts({ core })['Dragon Slayer I'].variants['a-quest-for-the-rune-platebody-talking-to-the-guildmaster-after-talking-to-oziach']);
+  for (const text of [MELZAR, THALZAR, LOZAR, MAP, SHIP, BREATH, OKAY, "What's so special about this dragon?"]) assert.ok(texts.has(text), text);
   h.talk(p, N.GUILDMASTER); continueToMenu(h, p);
   ask('I talked to Oziach...', [MAP, SHIP, BREATH, "What's so special about this dragon?", OKAY]);
   ask(MAP, [MELZAR, THALZAR, LOZAR]);

@@ -149,10 +149,15 @@ test('Elvarg breathes from the jump in, then watches from the lair edge after th
   area.process(player);
   assert.deepEqual(steps, [], 'no watching before she has been fought');
 
-  // Mid-jump, still on the outside tile: she may attack already.
+  // Mid-jump, still on the outside tile: she may attack already, but only while the jump plays.
+  player.getForceMovement = () => player.forceMovement ?? null;
+  h.emit('elvarg:enter', player, { aggressive: true, entering: true });
+  assert.equal(area.canAttack(npc, player), false, 'a crossing cut short (no jump playing) is not yet in');
+  player.forceMovement = {};
   h.emit('elvarg:enter', player, { aggressive: true, entering: true });
   assert.equal(npc.getCombat().getTarget(), player);
   assert.equal(area.canAttack(npc, player), null);
+  player.forceMovement = null;
   player.moveTo(new core.Location(2847, 9636, 0)); h.emit('elvarg:enter', player, { aggressive: true });
   assert.equal(area.canAttack(npc, player), null);
 
@@ -167,6 +172,7 @@ test('Elvarg breathes from the jump in, then watches from the lair edge after th
   assert.equal(npc.getCombat().getTarget(), null);
 
   // Climbing back in finds the same Elvarg.
+  player.forceMovement = {};
   h.emit('elvarg:enter', player, { aggressive: true, entering: true });
   assert.equal(h.spawned.length, 1); assert.equal(npc.getCombat().getTarget(), player);
 });

@@ -673,7 +673,8 @@ test('Dragon Slayer routes Melzar FUNLADDERTOP 2605 into the real basement and k
 
   const groundReturn = player();
   groundReturn.moveTo(new core.Location(2937, 3252, 0));
-  assert.equal(clickExit(groundReturn, exitDoor).handled, false);
+  // Claimed and refused: left unhandled, Doors' pass-through would carry the player back through.
+  assert.equal(clickExit(groundReturn, exitDoor).handled, true);
   assert.deepEqual([groundReturn.getLocation().getX(), groundReturn.getLocation().getY()], [2937, 3252],
     'the maze cannot re-enter the ground ladder room');
 
@@ -693,7 +694,7 @@ test('Dragon Slayer routes Melzar FUNLADDERTOP 2605 into the real basement and k
 
     const back = player();
     back.moveTo(new core.Location(to[0], to[1], 0));
-    assert.equal(clickExit(back, door).handled, false, `${label} exit corridor cannot reverse`);
+    assert.equal(clickExit(back, door).handled, true, `${label} exit corridor cannot reverse (claimed and refused)`);
     assert.deepEqual([back.getLocation().getX(), back.getLocation().getY()], to,
       `${label} reverse is refused without restarting the maze`);
   }

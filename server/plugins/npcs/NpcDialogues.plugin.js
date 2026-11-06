@@ -754,6 +754,9 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
     // An option the wiki guards ("If the player is wearing the Ring of Charos(a):") is hidden
     // only once a plugin answers its condition false; unanswered ones still show.
     const offered = Array.isArray(notice.options) ? notice.options : (step.options || []);
+    // An option borrowed from an earlier menu continues as it did there, with that menu's own steps.
+    const ownMenu = (option) => (step.options || []).includes(option) ? menu
+      : context.menuHistory.find((shown) => (shown.step?.options || []).includes(option)) ?? menu;
     const options = offered.filter((option) =>
       !option.condition || resolveCondition({ text: option.condition, id: option.condition_id ?? option.id }) !== false);
     const more = options.length - offset > 5;
@@ -782,9 +785,10 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
         const choice = { player, npc: event.npc, npcId, definition, option: option.text, stepId: option.id, pages: context.pages };
         api.emitCustomEvent("npc-dialogue:choice", choice);
         if (choice.end) return;
-        context.currentMenu = menu;
+        const own = ownMenu(option);
+        context.currentMenu = own;
         context.lastChoice = option.text;
-        run([...(option.steps || []), ...rest, ...tail], recordOption(option));
+        run([...(option.steps || []), ...(own === menu ? rest : own.rest || []), ...tail], recordOption(option));
       }];
     });
     if (more) pairs.push("More...", () => presentMenu(menu, offset + 4, tail, via));

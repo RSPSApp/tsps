@@ -143,7 +143,7 @@ module.exports = function registerDragonSlayerQuest(api) {
   const MELZAR_ATTACK_SPEED = 4;
   const MELZAR_KICK_CHANCE = 1 / 2;
   const MELZAR_KICK = 423;
-  /** The Wiki's max hit: every spell splashed and both kicks hit 0 in the capture. */
+  /** The Wiki's max hit, capping his spells (every spell splashed and both kicks hit 0 in the capture); the kick uses his definition's max hit, also 5. */
   const MELZAR_MAX_HIT = 5;
 
   const ATTR_ORACLE = "dragon-slayer.oracle";
@@ -203,6 +203,8 @@ module.exports = function registerDragonSlayerQuest(api) {
   const ORACLE_LID_STEPS = new Set(["kMeD2O", "a4P9BG", "BHT54J", MAP_CHESTS.oracle.lidLast]);
   const HEAD_CUT_SOUND = 3744, HEAD_OFF_SOUND = 3745, SILENCE_TRACK = 147;
   const HEAD_CUT_WALK_TICKS = 3, HEAD_CUT_WALK_MAX_TILES = 10;
+  /** The lair's west edge (east of the low wall) and Elvarg's footprint (cache size 4). */
+  const LAIR_WEST_X = 2847, ELVARG_FOOTPRINT = 4;
   const ELVARG_INTRO_FOOTSTEPS = 7;
   const SCENE_OVERLAY_UID = (161 << 16) | 1;
   const SCENE_INTERFACE = { journey: 299, route: 544, clouds: 543, elvarg: 545, fly: 546, fade: 174 };
@@ -1090,11 +1092,13 @@ module.exports = function registerDragonSlayerQuest(api) {
     const placement = MELZAR_EXIT_DOORS.find(door =>
       door.x === at.getX() && door.y === at.getY() && door.z === at.getZ());
     if (!placement) return;
+    // Claimed either way: a refused click left unhandled falls to Doors, whose pass-through
+    // family would carry the player back through the one-way door.
+    event.handled = true;
     const pos = event.player.getLocation();
     const dx = pos.getX() - placement.x, dy = pos.getY() - placement.y;
     if (Math.abs(dx) > 1 || Math.abs(dy) > 1) return;
     if (placement.exitX === 1 ? dx >= 0 : dx < 0) return;
-    event.handled = true;
     const location = plainLocation(event.location ?? at);
     crossMazeDoor(event.player, event.object, location);
   }
@@ -1126,6 +1130,8 @@ module.exports = function registerDragonSlayerQuest(api) {
   const chestInUse = new WeakMap();
 
   function swapChest(object, nextId) {
+    // Another player may have opened or shut it meanwhile (the lid's inscription takes a while): leave it.
+    if (api.core.MapObjects?.get?.(nextId, object.getLocation(), object.getPrivateArea?.() ?? null)) return object;
     const objects = api.getObjectManager();
     objects.deregister(object, true);
     const next = new GameObject(nextId, object.getLocation().clone(), object.getType(), object.getFace(), object.getPrivateArea?.() ?? null);
@@ -1434,7 +1440,10 @@ module.exports = function registerDragonSlayerQuest(api) {
       killer.getMovementQueue().reset().setBlockMovement(true); killer.setUntargetable(true);
       // rev242 capture ticks 3606-3617 (this event is her removal, 5 ticks after the death animation): the
       // player is walked in one move to the tile west of her head (+1), turns to it (+4) and cuts (+5).
-      const cutTile = new Location(at.getX() - 1, at.getY() + 1, at.getZ());
+      // Her body against the lair's west edge leaves no tile west of her head; then the tile past her
+      // east side (ours: the capture only shows her away from the wall).
+      const cutX = at.getX() - 1 >= LAIR_WEST_X ? at.getX() - 1 : at.getX() + ELVARG_FOOTPRINT;
+      const cutTile = new Location(cutX, at.getY() + 1, at.getZ());
       later(token, 1, () => {
         killer.getPacketSender().sendConfig(VARP_DRAGON_SLAYER, 9);
         if (actions.get(killer) === token) walkToHeadCut(killer, cutTile);

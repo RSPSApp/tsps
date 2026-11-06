@@ -108,8 +108,9 @@ Community-reported completion accepted for scheduling (skip full manual replay).
   `crandor-secret-wall`).
 - **Not verified:**
   - The rocks' climb from the top and the top rock's refusal: only the bottom rock was clicked.
-  - Melzar's line and kick odds: from 6 lines and 4 attacks beside the player. His max hit stays the Wiki's
-    5, since nothing landed.
+  - Melzar's line and kick odds: from 6 lines and 4 attacks beside the player. Nothing landed, so his max
+    hit is the Wiki's 5: the spells are capped at it, and the kick uses his monster definition's max hit
+    (also 5).
   - Elvarg's melee and breath when the player is adjacent or under her; her wander and acquisition range.
   - How long she would wait at the wall (ours: until the player walks off).
   - Head-cut pacing from start tiles other than the captured one.
@@ -117,10 +118,6 @@ Community-reported completion accepted for scheduling (skip full manual replay).
   - Wrong-colour maze doors (#410), which the capture doesn't exercise.
 - **Still different from live:**
   - "Eye of the Storm" (track 360) is missing from the rev241 music data until a cache bump.
-  - After a Guildmaster answer, live shows a menu of the remaining questions plus "What kind of ship do I
-    need?", "How can I protect myself from the dragon's breath?" and "Okay, I'll get going!" (ticks 1146,
-    1756). The transcript's "other options" jump replays the previous map-piece menu instead. This predates
-    this change and is a dialogue-runtime matter.
 
 ### 2026-11-02 — agent — DeepSeek V4.1 Flash
 

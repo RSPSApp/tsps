@@ -28,7 +28,7 @@ const BREATH_END_HEIGHTS = [70, 109];
  */
 const BREATH_END_BASE_CYCLES = 60;
 const BREATH_END_STAGGER_CYCLES = 5;
-/** The hit lands with the impact, never sooner than 3 ticks (both captures). */
+/** The hit lands on the tick of the impact rounded down (floor), never sooner than 3 ticks: both captures. */
 const BREATH_MIN_HIT_TICKS = 3;
 const CYCLES_PER_TICK = 30;
 /** Her centre tile, which the breath leaves from. */
@@ -97,7 +97,9 @@ function createEncounter(player) {
       this.pluginName = "Elvarg";
     }
     engaged() {
-      return this.active && !this.killed && (this.entering || insideLair(this.owner));
+      // `entering` counts only while the jump plays; a crossing cut short leaves the player outside.
+      const jumping = this.entering && this.owner.getForceMovement?.() != null;
+      return this.active && !this.killed && (jumping || insideLair(this.owner));
     }
     /**
      * Back over the wall, the player is still by her lair (this area reaches the wall's west side).

@@ -56,8 +56,6 @@ const MAX_WALK_TILES = 64;
 const BUSY_ATTRIBUTE = "agility.obstacle";
 /** The client's BUSY varbit: 1 while a course obstacle plays, 0 as it ends (rsprox 1788, 1885). */
 const BUSY_VARBIT = 12393;
-/** The chatbox's "mesbox" channel: live logs a message box's text there (rsprox `type=mesbox`). */
-const MESBOX_CHAT_TYPE = 115;
 
 let TaskManager;
 let ChatType;
@@ -125,7 +123,7 @@ function sendMessage(player, message) {
   } else if (message?.itembox) {
     const { item, text } = message.itembox;
     player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new ItemStatementDialogue(0, item, text)));
-    player.getPacketSender().sendTypedMessage(MESBOX_CHAT_TYPE, text);
+    player.getPacketSender().sendTypedMessage(ChatType.MESBOX, text);
   }
 }
 

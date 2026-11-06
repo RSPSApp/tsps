@@ -1,9 +1,13 @@
 import { GameState } from "@runelite/api/GameState";
 import { GameStateChanged } from "@runelite/api/events";
 import { Plugin, type PluginDescriptor } from "@runelite/client/plugins/Plugin";
+import { inject } from "@runelite/client/plugins/PluginInjector";
+import { ClientToolbar } from "@runelite/client/ui/ClientToolbar";
+import type { NavigationButton } from "@runelite/client/ui/NavigationButton";
 import { createElement, lazy, type ReactNode } from "react";
 import type { OsrsClient } from "../../OsrsClient";
 import { clearIdleState } from "./idleState";
+import { createIdleNavigationButton } from "./IdlePanel";
 
 const IdleHudOverlay = lazy(() =>
     import("./IdleHudOverlay").then((m) => ({ default: m.IdleHudOverlay })),
@@ -25,6 +29,27 @@ export class IdleHudPlugin extends Plugin {
         tags: ["idle"],
         configKey: "idlehudplugin",
     };
+
+    private readonly toolbar = (() => {
+        try {
+            return inject(ClientToolbar);
+        } catch {
+            return undefined;
+        }
+    })();
+
+    private navButton?: NavigationButton;
+
+    protected async startUp(): Promise<void> {
+        if (!this.toolbar) return;
+        this.navButton = createIdleNavigationButton();
+        this.toolbar.addNavigation(this.navButton);
+    }
+
+    protected async shutDown(): Promise<void> {
+        if (this.navButton) this.toolbar?.removeNavigation(this.navButton);
+        this.navButton = undefined;
+    }
 
     onGameStateChanged(event: GameStateChanged): void {
         const state = event.getGameState();

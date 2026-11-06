@@ -1123,6 +1123,23 @@ test("hud: the state is pushed to the client, and only when it changes", (t) => 
   // Switching something off is a change, and the HUD hears it.
   api.command(player, "idle auto off");
   assert.equal(player.contentData.at(-1).datasets[0].rows[0].auto, false);
+
+  // The side panel needs more than the strip does: the upgrades and today's goals ride along.
+  const full = player.contentData.at(-1).datasets[0].rows[0];
+  assert.deepEqual(full.upgrades.map((u) => [u.name, u.level, u.maxLevel, u.cost, u.affordable]), [
+    ["Quick Hands", 0, 5, 100, false],
+    ["Long Dreams", 0, 4, 150, false],
+    ["Bountiful Harvest", 0, 5, 200, false],
+  ]);
+  assert.equal(full.upgrades[0].short, "10% chance to save a tick");
+  assert.equal(full.goals.length, 3, "three a day, as the data says");
+  for (const goal of full.goals) {
+    assert.equal(typeof goal.text, "string");
+    assert.equal(typeof goal.target, "number");
+  }
+  assert.equal(full.bonus.of, 3);
+  assert.deepEqual(full.offline, { capHours: 12, efficiency: 100, lastAway: null });
+  assert.deepEqual([full.nextXp, full.nextOf], [126, 250]);
 });
 
 const TRAVEL = "../plugins/modes/idle/Travel.IdleMode";

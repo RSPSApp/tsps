@@ -22,6 +22,33 @@ export type IdleState = {
     points: number;
     /** How far to the next idle point, 0-100. */
     nextPercent: number;
+    /** The same thing in XP, for the panel to spell out. */
+    nextXp: number;
+    nextOf: number;
+    upgrades: IdleUpgrade[];
+    goals: IdleGoal[];
+    bonus: { points: number; count: number; of: number; done: boolean };
+    offline: { capHours: number; efficiency: number; lastAway: string | null };
+};
+
+export type IdleUpgrade = {
+    id: string;
+    name: string;
+    /** One line on what a level does, short enough for a narrow panel. */
+    short: string;
+    level: number;
+    maxLevel: number;
+    /** What the next level costs, or null when every level is bought. */
+    cost: number | null;
+    affordable: boolean;
+};
+
+export type IdleGoal = {
+    text: string;
+    progress: number;
+    target: number;
+    points: number;
+    done: boolean;
 };
 
 type Listener = (state: IdleState | null) => void;

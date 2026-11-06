@@ -1,0 +1,313 @@
+/*
+ * The Idle panel, in the side bar. Same language as the strip, the Idle screen and the login
+ * page: a 2px bevel, hard edges, no rounding, warm browns with gold.
+ *
+ * Everything is built for a narrow column, because that is the trade this layout makes: you see
+ * the world and the numbers at once, and the price is width.
+ */
+.ip {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px;
+    font: 12px/1.45 ui-sans-serif, system-ui, sans-serif;
+    color: #e8ded0;
+    /* A narrow column runs out of height before it runs out of things to say, and the panel is
+       clipped rather than scrolled by its container. The two controls that matter sit at the top
+       for that reason; everything below them scrolls. */
+    max-height: 100%;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.ip::-webkit-scrollbar {
+    width: 8px;
+}
+
+.ip::-webkit-scrollbar-track {
+    background: #140f0b;
+}
+
+.ip::-webkit-scrollbar-thumb {
+    background: #3b2f20;
+    border: 1px solid #120e0b;
+}
+
+.ip--empty {
+    padding: 14px;
+    color: #8a7f6c;
+}
+
+/* ---------- what it is doing now ---------- */
+.ip-now {
+    display: flex;
+    gap: 9px;
+    padding: 8px 9px;
+    background: #2f261c;
+    border: 2px solid #120e0b;
+    box-shadow: inset 2px 2px 0 #463827, inset -2px -2px 0 #120e0b;
+}
+
+.ip-now__edge {
+    flex: none;
+    width: 4px;
+    background: #7ac943;
+}
+
+.ip-now.is-stopped .ip-now__edge {
+    background: #ffb02e;
+}
+
+.ip-now__text {
+    min-width: 0;
+}
+
+.ip-now__eyebrow {
+    display: block;
+    font-size: 9.5px;
+    letter-spacing: 0.15em;
+    color: #8f7f66;
+}
+
+.ip-now__what {
+    display: block;
+    font-size: 14px;
+    font-weight: 800;
+    color: #fff;
+    overflow-wrap: anywhere;
+}
+
+.ip-now__note {
+    display: block;
+    margin-top: 2px;
+    font-size: 10.5px;
+    color: #ffb02e;
+}
+
+/* ---------- cards ---------- */
+.ip-card {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    padding: 8px 9px;
+    background: #211b16;
+    border: 2px solid #120e0b;
+    box-shadow: inset 2px 2px 0 #3b3025, inset -2px -2px 0 #120e0b;
+}
+
+.ip-card--quiet {
+    gap: 3px;
+    background: #1a1510;
+}
+
+.ip-card--off {
+    align-items: stretch;
+    gap: 9px;
+}
+
+.ip-card h3 {
+    margin: 0 0 2px;
+    font-size: 10px;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: #ff981f;
+}
+
+.ip-big {
+    font-size: 21px;
+    font-weight: 800;
+    line-height: 1.05;
+    color: #fff;
+}
+
+.ip-big small {
+    display: block;
+    margin-top: 1px;
+    font-size: 10.5px;
+    font-weight: 600;
+    color: #9a8d78;
+}
+
+.ip-muted {
+    font-size: 10.5px;
+    color: #8a7f6c;
+}
+
+.ip-off {
+    margin: 0;
+    color: #cfc6b4;
+}
+
+/* ---------- the bar, as everywhere else ---------- */
+.ip-bar {
+    display: block;
+    height: 8px;
+    background: #120e0b;
+    box-shadow: inset 1px 1px 0 #080604;
+}
+
+.ip-bar i {
+    display: block;
+    height: 100%;
+    background: #7ac943;
+    transition: width 240ms linear;
+}
+
+.ip-bar--cool i { background: #5fb8f0; }
+.ip-bar--gold i { background: #ffb02e; }
+
+@media (prefers-reduced-motion: reduce) {
+    .ip-bar i { transition: none; }
+}
+
+/* ---------- upgrades ---------- */
+.ip-row {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 5px 0;
+    border-top: 1px solid #2b241c;
+}
+
+.ip-row:first-of-type {
+    border-top: 0;
+}
+
+.ip-row__name {
+    flex: 1;
+    min-width: 0;
+}
+
+.ip-row__name b {
+    display: block;
+    font-size: 11.5px;
+    font-weight: 700;
+    color: #e8ded0;
+}
+
+.ip-row__name span {
+    display: block;
+    font-size: 9.5px;
+    line-height: 1.3;
+    color: #8a7f6c;
+}
+
+.ip-pips {
+    display: flex;
+    flex: none;
+    gap: 2px;
+}
+
+.ip-pips i {
+    width: 6px;
+    height: 9px;
+    background: #2a2219;
+}
+
+.ip-pips i.is-on {
+    background: #ffb02e;
+}
+
+.ip-buy {
+    flex: none;
+    padding: 4px 7px;
+    font: 800 10.5px ui-sans-serif, system-ui, sans-serif;
+    font-variant-numeric: tabular-nums;
+    color: #2a1c00;
+    background: linear-gradient(#ffd45e, #e0a222);
+    border: 2px solid #8a6210;
+    box-shadow: inset 2px 2px 0 #fff0b8, inset -2px -2px 0 #9c6f12;
+    cursor: pointer;
+}
+
+/* Out of reach: still says the price, because the price is the information. */
+.ip-buy.is-dear {
+    color: #8a7f6c;
+    background: #241d17;
+    border-color: #3b2f20;
+    box-shadow: inset 2px 2px 0 #342a20, inset -2px -2px 0 #120e0b;
+    cursor: default;
+}
+
+.ip-max {
+    flex: none;
+    font-size: 10px;
+    font-weight: 800;
+    color: #7ac943;
+}
+
+/* ---------- goals ---------- */
+.ip-goal {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 5px 0;
+    border-top: 1px solid #2b241c;
+}
+
+.ip-goal:first-of-type {
+    border-top: 0;
+}
+
+.ip-goal__top {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.ip-goal__top b {
+    font-size: 11.5px;
+    font-weight: 700;
+    overflow-wrap: anywhere;
+}
+
+.ip-goal__top b.is-done {
+    color: #7ac943;
+}
+
+.ip-goal__top span {
+    flex: none;
+    font-size: 10.5px;
+    color: #ffd27f;
+}
+
+.ip-bonus {
+    margin: 4px 0 0;
+}
+
+/* ---------- actions ---------- */
+.ip-acts {
+    display: flex;
+    gap: 6px;
+}
+
+.ip-acts button {
+    flex: 1;
+    padding: 9px 4px;
+    font: 800 11.5px ui-sans-serif, system-ui, sans-serif;
+    color: #ffd27f;
+    background: #3b2f20;
+    border: 2px solid #120e0b;
+    box-shadow: inset 2px 2px 0 #57452c, inset -2px -2px 0 #120e0b;
+    cursor: pointer;
+}
+
+.ip-acts button:hover {
+    background: #4a3b27;
+}
+
+.ip-go {
+    padding: 9px 4px;
+    font: 800 11.5px ui-sans-serif, system-ui, sans-serif;
+    color: #2a1c00;
+    background: linear-gradient(#ffd45e, #e0a222);
+    border: 2px solid #8a6210;
+    box-shadow: inset 2px 2px 0 #fff0b8, inset -2px -2px 0 #9c6f12;
+    cursor: pointer;
+}
+
+.ip button:focus-visible {
+    outline: 2px solid #ffb02e;
+    outline-offset: 2px;
+}

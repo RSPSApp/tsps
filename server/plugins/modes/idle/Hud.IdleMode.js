@@ -16,6 +16,7 @@ const Combat = require("./Combat.IdleMode");
 const Production = require("./Production.IdleMode");
 const Offline = require("./Offline.IdleMode");
 const Progression = require("./Progression.IdleMode");
+const Goals = require("./Goals.IdleMode");
 
 const SOURCE = "idle";
 const KEY = "state";
@@ -41,15 +42,41 @@ function activity(player) {
   return null;
 }
 
+/** The upgrades, as the panel lists them: what each does, how far it is, what the next costs. */
+function upgrades(player) {
+  const points = Progression.points(player);
+  return Progression.upgradeRows(player).map((row) => ({
+    id: row.id,
+    name: row.name,
+    short: row.short,
+    level: row.level,
+    maxLevel: row.maxLevel,
+    cost: row.cost,
+    affordable: row.cost !== null && points >= row.cost,
+  }));
+}
+
+/** Today's goals and the all-done bonus. */
+function goals(player) {
+  const { goals: today, bonus } = Goals.lines(player);
+  return {
+    goals: today.map((goal) => ({
+      text: goal.text, progress: goal.progress, target: goal.target, points: goal.points, done: goal.done,
+    })),
+    bonus: { points: bonus.points, count: bonus.count, of: bonus.of, done: bonus.done },
+  };
+}
+
 /**
- * The state the HUD draws. Rounded on purpose: the client decides how to word and colour it, and
- * an unrounded rate would make every tick look like a change.
+ * The state the strip and the side panel draw. Rounded on purpose: the client decides how to word
+ * and colour it, and an unrounded rate would make every tick look like a change.
  */
 function state(player) {
   const { xpPerPoint } = Common.data.progression;
   const idle = Common.isIdle(player);
   const rate = Offline.currentRate(player);
   const progress = Progression.progress(player);
+  const today = goals(player);
   return {
     idle,
     auto: player.getAttribute(Common.AUTO_ATTRIBUTE) !== false,
@@ -59,6 +86,16 @@ function state(player) {
     points: Progression.points(player),
     // A whole percent: the bar cannot show finer than that anyway.
     nextPercent: xpPerPoint > 0 ? Math.min(100, Math.floor((progress / xpPerPoint) * 100)) : 0,
+    nextXp: Math.floor(progress),
+    nextOf: xpPerPoint,
+    upgrades: upgrades(player),
+    goals: today.goals,
+    bonus: today.bonus,
+    offline: {
+      capHours: Progression.capHours(player),
+      efficiency: Math.round(Common.data.offline.efficiency * 100),
+      lastAway: player.getAttribute(Offline.LAST_AWAY_ATTRIBUTE) ?? null,
+    },
   };
 }
 

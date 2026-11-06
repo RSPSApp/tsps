@@ -5,6 +5,7 @@ Server.installProductionPathResolver();
 const { CachePipeline } = require('../dist/game/cache/CachePipeline');
 const { PluginManager } = require('../dist/plugins/PluginManager');
 const WorldDefinition = require('../dist/game/definition/WorldDefinition');
+const productionMembersWorld = WorldDefinition.isMembersWorld;
 const { ItemIds } = require('../dist/util/IdEnums');
 const { Animation } = require('../dist/game/model/Animation');
 const { Location } = require('../dist/game/model/Location');
@@ -50,7 +51,7 @@ before(async () => {
 });
 
 function membersWorld(t, members) {
-  const saved = WorldDefinition.isMembersWorld;
+  const saved = productionMembersWorld;
   t.after(() => { WorldDefinition.isMembersWorld = saved; });
   WorldDefinition.isMembersWorld = () => members;
 }
@@ -844,6 +845,7 @@ test("native furnace silver-bolt batches conserve inputs at output stack limits"
   const core=PluginManager.getCoreApi(),ids=core.ItemIdentifiers;
   core.RegionManager.init();core.RegionManager.loadMapFiles(3222,3218);PluginManager.emitServerStartup({});
   t.after(()=>PluginManager.emitServerShutdown({}));
+  assert.equal(core.WorldDefinition.isMembersWorld,productionMembersWorld,"restore the real configured-world provider before native work");
   assert.equal(core.WorldDefinition.isMembersWorld(),true,"native silver bolts require an actual members world");
   const recipe=Shared.DATA.silver.products.find(r=>r.item==="SILVER_BOLTS_UNF_");
   assert.ok(recipe);assert.equal(recipe.amount,10);assert.equal(recipe.xp,50);assert.equal(recipe.mould,"BOLT_MOULD");

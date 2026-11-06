@@ -79,6 +79,8 @@ module.exports = function registerGardenOfTranquillityQuest(api) {
     ObjectIdentifiers,
     RegionManager,
     Skill,
+    Task,
+    TaskManager,
   } = api.core;
   const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
 
@@ -232,6 +234,7 @@ module.exports = function registerGardenOfTranquillityQuest(api) {
   const WHITE_TREE_SHOOT_POTTED = ItemIdentifiers.WHITE_TREE_SHOOT_2; // 6462
   const WHITE_TREE_SHOOT_WATERED = ItemIdentifiers.WHITE_TREE_SHOOT_W_; // 6463
   const WHITE_TREE_SAPLING = ItemIdentifiers.WHITE_TREE_SAPLING; // 6464
+  const WHITE_TREE_FRUIT = ItemIdentifiers.WHITE_TREE_FRUIT; // 6469
   const FILLED_PLANT_POT = ItemIdentifiers.FILLED_PLANT_POT; // 5354
   const BUCKET = ItemIdentifiers.BUCKET; // 1925
   const FISHING_ROD = ItemIdentifiers.FISHING_ROD; // 307
@@ -273,6 +276,15 @@ module.exports = function registerGardenOfTranquillityQuest(api) {
   // ==========================================================================
 
   const GARDEN_GROWTH_MS = 15 * 60 * 1000; // the palace patches: 10-15 min per wiki
+  /** Post-quest the white tree holds four fruits and grows one more every five minutes. */
+  const WHITE_TREE_GROWN = 8;
+  const WHITE_TREE_MAX_FRUIT = 4;
+  const WHITE_TREE_FRUIT_GROWTH_MS = 5 * 60 * 1000;
+  /** The server's 600 ms tick: five minutes is 500 ticks. */
+  const TICK_MS = 600;
+  const WHITE_TREE_FRUIT_GROWTH_TICKS = WHITE_TREE_FRUIT_GROWTH_MS / TICK_MS;
+  const WHITE_TREE_FRUIT_TIMER = "wt";
+  const WHITE_TREE_FRUIT_AREA = { x1: 3228, y1: 3473, x2: 3230, y2: 3475 };
   const MARIGOLD_GROWTH_MS = 20 * 60 * 1000;
   const CROP_GROWTH_MS = 40 * 60 * 1000; // onions/cabbages at Lyra/Kragen
   const SAPLING_GROWTH_MS = 5 * 60 * 1000; // potted, watered shoot -> sapling
@@ -605,6 +617,120 @@ module.exports = function registerGardenOfTranquillityQuest(api) {
         refreshPatchObjects(player, patch.objectId, patch.tiles);
       }
     }
+    refreshWhiteTreeFruit(player);
+    ensureWhiteTreeFruitTask(player);
+  }
+
+  /** player -> the scheduled white-tree refill while the tree is below four fruits. */
+  const whiteTreeFruitTasks = new WeakMap();
+
+  /** Varbit 985: 8 is the bare grown tree, 9-12 are one to four fruits (the Wiki). */
+  function whiteTreeFruitCount(player) {
+    const value = vget(player, VARBIT_WHITE_TREE);
+    return value >= WHITE_TREE_GROWN ? Math.min(WHITE_TREE_MAX_FRUIT, value - WHITE_TREE_GROWN) : 0;
+  }
+
+  function setWhiteTreeFruit(player, fruits) {
+    vset(player, VARBIT_WHITE_TREE, WHITE_TREE_GROWN + fruits);
+    refreshPatchObjects(player, PATCH_WHITE_TREE, [[3229, 3474]]);
+  }
+
+  /**
+   * The quest's own growth stops at the bare tree (8). Post-quest the Wiki's tree starts with
+   * four fruits and regrows one every five minutes; the pick itself records the last change.
+   */
+  function refreshWhiteTreeFruit(player) {
+    if (stage(player) < STAGE_COMPLETE || vget(player, VARBIT_WHITE_TREE) < WHITE_TREE_GROWN) return;
+    let fruits = whiteTreeFruitCount(player);
+    let at = timerOf(player, WHITE_TREE_FRUIT_TIMER);
+    if (fruits === 0 && at <= 0) {
+      setWhiteTreeFruit(player, WHITE_TREE_MAX_FRUIT);
+      return;
+    }
+    if (fruits >= WHITE_TREE_MAX_FRUIT || at <= 0) return;
+    const grown = Math.floor((Date.now() - at) / WHITE_TREE_FRUIT_GROWTH_MS);
+    if (grown <= 0) return;
+    fruits = Math.min(WHITE_TREE_MAX_FRUIT, fruits + grown);
+    setTimer(player, WHITE_TREE_FRUIT_TIMER, fruits >= WHITE_TREE_MAX_FRUIT ? 0 : at + grown * WHITE_TREE_FRUIT_GROWTH_MS);
+    setWhiteTreeFruit(player, fruits);
+  }
+
+  /** Ticks until the next fruit is due; the task re-arms itself with this after each refill. */
+  function whiteTreeNextFruitDelayTicks(player) {
+    const at = timerOf(player, WHITE_TREE_FRUIT_TIMER);
+    const due = at > 0 ? at + WHITE_TREE_FRUIT_GROWTH_MS : Date.now() + WHITE_TREE_FRUIT_GROWTH_MS;
+    return Math.max(1, Math.ceil((due - Date.now()) / TICK_MS));
+  }
+
+  /** Refills one fruit per Wiki interval while the player stays online and below four. */
+  class WhiteTreeFruitTask extends Task {
+    constructor(player, delay) {
+      super(delay, player);
+      this.player = player;
+    }
+
+    execute() {
+      const player = this.player;
+      if (!player?.isRegistered?.() || stage(player) < STAGE_COMPLETE) {
+        whiteTreeFruitTasks.delete(player);
+        this.stop();
+        return;
+      }
+      refreshWhiteTreeFruit(player);
+      if (whiteTreeFruitCount(player) >= WHITE_TREE_MAX_FRUIT) {
+        whiteTreeFruitTasks.delete(player);
+        this.stop();
+        return;
+      }
+      this.setDelay(whiteTreeNextFruitDelayTicks(player));
+    }
+  }
+
+  function stopWhiteTreeFruitTask(player) {
+    const task = player ? whiteTreeFruitTasks.get(player) : null;
+    if (!task) return;
+    task.stop();
+    whiteTreeFruitTasks.delete(player);
+  }
+
+  /** One live refill task per player; login, bootstrap, gardener talks and picks all reach here. */
+  function ensureWhiteTreeFruitTask(player) {
+    if (!player || stage(player) < STAGE_COMPLETE) {
+      stopWhiteTreeFruitTask(player);
+      return;
+    }
+    const current = whiteTreeFruitTasks.get(player);
+    if (current?.isRunning?.()) return;
+    if (whiteTreeFruitCount(player) >= WHITE_TREE_MAX_FRUIT) {
+      stopWhiteTreeFruitTask(player);
+      return;
+    }
+    const task = new WhiteTreeFruitTask(player, whiteTreeNextFruitDelayTicks(player));
+    whiteTreeFruitTasks.set(player, task);
+    TaskManager.submit(task);
+  }
+
+  function pickWhiteTreeFruit(player, location) {
+    if (stage(player) < STAGE_COMPLETE || !inArea(location, WHITE_TREE_FRUIT_AREA)) return;
+    refreshWhiteTreeFruit(player);
+    const fruits = whiteTreeFruitCount(player);
+    if (fruits <= 0) {
+      player.sendMessage("There are no fruits on the white tree.");
+      return;
+    }
+    if (player.getInventory().isFull()) {
+      player.sendMessage("You need a free inventory slot to pick a fruit.");
+      return;
+    }
+    player.getInventory().adds(WHITE_TREE_FRUIT, 1);
+    player.getSkillManager().addExperiences(Skill.FARMING, 12);
+    setWhiteTreeFruit(player, fruits - 1);
+    if (fruits - 1 < WHITE_TREE_MAX_FRUIT && timerOf(player, WHITE_TREE_FRUIT_TIMER) <= 0) {
+      setTimer(player, WHITE_TREE_FRUIT_TIMER, Date.now());
+    }
+    player.sendMessage("You pick a white tree fruit.");
+    ensureWhiteTreeFruitTask(player);
+    api.emitCustomEvent("garden-of-tranquillity:white-tree-fruit", { player });
   }
 
   // ==========================================================================
@@ -1552,6 +1678,13 @@ module.exports = function registerGardenOfTranquillityQuest(api) {
       startTranscript(api, player, NpcIdentifiers.QUEEN_ELLAMARIA, PAGE, "starting-off-inspecting-the-plantpots");
       return;
     }
+    if (objectId === PATCH_WHITE_TREE && option === "pick-fruit") {
+      const location = event.object?.getLocation?.();
+      if (!inArea(location, WHITE_TREE_FRUIT_AREA)) return;
+      event.handled = true;
+      pickWhiteTreeFruit(player, location);
+      return;
+    }
     if (objectId === ROSES_RED || objectId === ROSES_PINK || objectId === ROSES_WHITE) {
       if (option !== "take-seed") return;
       event.handled = true;
@@ -1615,8 +1748,13 @@ module.exports = function registerGardenOfTranquillityQuest(api) {
 
   function handleLogout({ player }) {
     removeTrolley(player);
+    stopWhiteTreeFruitTask(player);
     stateCache.delete(player);
     interaction.delete(player);
+  }
+
+  function handleDisconnect({ player }) {
+    stopWhiteTreeFruitTask(player);
   }
 
   function handleAdvanceTime(event) {
@@ -1725,6 +1863,11 @@ module.exports = function registerGardenOfTranquillityQuest(api) {
 
   function grantReward(player) {
     activateRing(player);
+    if (vget(player, VARBIT_WHITE_TREE) >= WHITE_TREE_GROWN) {
+      vset(player, VARBIT_WHITE_TREE, WHITE_TREE_GROWN + WHITE_TREE_MAX_FRUIT);
+      setTimer(player, WHITE_TREE_FRUIT_TIMER, 0);
+      refreshPatchObjects(player, PATCH_WHITE_TREE, [[3229, 3474]]);
+    }
     player.getSkillManager().addExperiences(Skill.FARMING, 5000);
     const inventory = player.getInventory();
     inventory.forceAdd(player, new Item(ACORN, 1));
@@ -1775,4 +1918,13 @@ module.exports = function registerGardenOfTranquillityQuest(api) {
   api.onCustomEvent("player:bootstrap-complete", handleBootstrap);
   api.onPlayerLogin(handleLogin);
   api.onPlayerLogout(handleLogout);
+  api.onPlayerDisconnect(handleDisconnect);
+
+  module.exports._test = {
+    WHITE_TREE_FRUIT_GROWTH_MS, WHITE_TREE_FRUIT_GROWTH_TICKS, WHITE_TREE_MAX_FRUIT,
+    VARBIT_WHITE_TREE, WHITE_TREE_FRUIT_TIMER, whiteTreeFruitCount, refreshWhiteTreeFruit,
+    pickWhiteTreeFruit, whiteTreeNextFruitDelayTicks, ensureWhiteTreeFruitTask,
+    stopWhiteTreeFruitTask, WhiteTreeFruitTask, refreshGrowth, whiteTreeFruitTasks,
+    handleLogout, handleDisconnect, vget, vset, timerOf, setTimer,
+  };
 };

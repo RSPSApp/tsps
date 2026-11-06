@@ -273,7 +273,7 @@ for (const mode of ["none", "ironman"]) {
   });
 }
 
-function promptFixture(t, name, mode = "ultimate") {
+function promptFixture(t, name, mode = "ultimate", hotspotKey = "MAGIC_WARDROBE", buildableKey = "OAK_MAGIC_WARDROBE") {
   const errors = [];
   t.mock.method(console, "error", (...args) => { errors.push(args); });
   const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true,
@@ -292,7 +292,7 @@ function promptFixture(t, name, mode = "ultimate") {
   const save = Instance.createDefaultHouseSave();
   save.location = 6;
   save.rooms[1][4][6] = {
-    roomKey: "COSTUME_ROOM", rotation: 0, furniture: { MAGIC_WARDROBE: "OAK_MAGIC_WARDROBE" },
+    roomKey: "COSTUME_ROOM", rotation: 0, furniture: { [hotspotKey]: buildableKey },
   };
   player.setAttribute("construction:house", save);
   assert.equal(core.World.getPlayers().add(player), true);
@@ -305,8 +305,8 @@ function promptFixture(t, name, mode = "ultimate") {
   assert.equal(house?.owner === player, true);
   assert.equal(player.getPrivateArea() === house, true);
   const room = house.save.rooms[1][4][6];
-  const wardrobe = Object.values(room.furnitureByLocation).find(furniture => furniture.hotspotKey === "MAGIC_WARDROBE");
-  assert.equal(wardrobe?.buildableKey, "OAK_MAGIC_WARDROBE");
+  const wardrobe = Object.values(room.furnitureByLocation).find(furniture => furniture.hotspotKey === hotspotKey);
+  assert.equal(wardrobe?.buildableKey, buildableKey);
   const object = house.furnitureObjects.find(candidate => {
     const at = candidate.getLocation();
     return house.getFurnitureAt({ x: at.getX(), y: at.getY(), z: at.getZ() }, candidate.getId(), candidate.getType()) === wardrobe;
@@ -328,10 +328,11 @@ function promptItemOnWardrobe(f, id) {
 
 function openWardrobe(f) {
   const id = f.object.getId(), definition = ObjectDefinition.forPlayer(id, f.player) ?? ObjectDefinition.forId(id);
-  assert.equal(definition.getInteractions()[0].toLowerCase(), "open");
+  const index = definition.getInteractions().findIndex(action => ["open", "search", "view"].includes(action?.toLowerCase()));
+  assert.notEqual(index, -1);
   const at = f.player.getLocation();
   assert.equal(PluginManager.emitObjectInteraction({ player: f.player, object: f.object, objectId: id, definition,
-    clickType: 1, location: f.location, sourceLocation: { x: at.getX(), y: at.getY(), z: at.getZ() }, handled: false }), true);
+    clickType: index + 1, location: f.location, sourceLocation: { x: at.getX(), y: at.getY(), z: at.getZ() }, handled: false }), true);
 }
 
 function choosePrompt(player, option) {
@@ -340,6 +341,75 @@ function choosePrompt(player, option) {
   assert.equal(core.MultiChatboxPrompt.handleInterfaceActionClick({ player, buttonId: core.MultiChatboxPrompt.OPTIONS_WIDGET_ID,
     groupId: 219, slot: option, action: option }), true);
 }
+
+const BRONZE_TRIM = { representative: 12215, legs: 12217, skirt: 12219, members: 3206 };
+const DEPOSIT_WARNING = "Some sets must be complete to withdraw. Continue?";
+
+function assertBronzeTrimMapping(f) {
+  assert.ok([...core.CacheDefinitions.getEnumValues(3294).values()].includes(BRONZE_TRIM.representative));
+  assert.equal(core.CacheDefinitions.getEnumValues(3077).get(BRONZE_TRIM.representative), BRONZE_TRIM.members);
+  assert.ok([...core.CacheDefinitions.getEnumValues(BRONZE_TRIM.members).values()].includes(BRONZE_TRIM.legs));
+  assert.equal(core.CacheDefinitions.getEnumValues(3303).get(BRONZE_TRIM.legs), BRONZE_TRIM.skirt);
+  assert.equal(Storage.storageItems(f.wardrobe).get(BRONZE_TRIM.legs), BRONZE_TRIM.representative);
+}
+
+test("warning describes supported partial-set withdrawal restriction", (t) => {
+  const f = promptFixture(t, "uimwarnplain");
+  f.inventory.addItem(new Item(SPLITBARK[0], 1));
+  promptItemOnWardrobe(f, SPLITBARK[0]);
+  const title = core.MultiChatboxPrompt.getPending(f.player)?.title;
+  choosePrompt(f.player, 1);
+  assert.equal(f.wardrobe.storage[SPLITBARK[0]], 1);
+  assert.equal(Storage.withdrawHouseItem(f.player, f.house, f.wardrobe, SPLITBARK[0]), false);
+  assert.equal(f.wardrobe.storage[SPLITBARK[0]], 1);
+  assert.equal(f.inventory.getAmount(SPLITBARK[0]), 0);
+  assert.equal(title, DEPOSIT_WARNING);
+});
+
+for (const route of ["individual", "bulk"]) {
+  test(`warning does not claim alternate-set pieces are locked on ${route} deposit`, (t) => {
+    const f = promptFixture(t, route === "individual" ? "uimbrsingle" : "uimbrbulk", "ultimate", "TREASURE_CHEST", "OAK_TREASURE_CHEST");
+    assertBronzeTrimMapping(f);
+    f.inventory.addItem(new Item(BRONZE_TRIM.legs, 1));
+    if (route === "individual") promptItemOnWardrobe(f, BRONZE_TRIM.legs);
+    else { openWardrobe(f); choosePrompt(f.player, 1); }
+    const title = core.MultiChatboxPrompt.getPending(f.player)?.title;
+    choosePrompt(f.player, 1);
+    assert.equal(f.wardrobe.storage[BRONZE_TRIM.legs], 1);
+    assert.equal(Storage.withdrawHouseItem(f.player, f.house, f.wardrobe, BRONZE_TRIM.legs), true);
+    assert.equal(f.wardrobe.storage[BRONZE_TRIM.legs] ?? 0, 0);
+    assert.equal(f.inventory.getAmount(BRONZE_TRIM.legs), 1);
+    assert.equal(title, DEPOSIT_WARNING);
+  });
+}
+
+test("bulk warning stays accurate for mixed supported and alternate sets", (t) => {
+  const f = promptFixture(t, "uimmixed", "ultimate", "TREASURE_CHEST", "OAK_TREASURE_CHEST");
+  assertBronzeTrimMapping(f);
+  const studdedBody = 7362, studdedChaps = 7366;
+  assert.equal(core.CacheDefinitions.getEnumValues(3077).get(studdedBody), 3197);
+  assert.deepEqual([...core.CacheDefinitions.getEnumValues(3197).values()].sort((a, b) => a - b), [studdedBody, studdedChaps]);
+  for (const id of [studdedBody, studdedChaps]) {
+    assert.equal(Storage.storageItems(f.wardrobe).get(id), studdedBody);
+    assert.equal(core.CacheDefinitions.getEnumValues(3303).has(id), false);
+    assert.equal(core.CacheDefinitions.getEnumValues(3304).has(id), false);
+    assert.equal(core.ItemDefinition.forId(id).isStackable(), false);
+  }
+  f.inventory.addItem(new Item(BRONZE_TRIM.legs, 1));
+  f.inventory.addItem(new Item(studdedBody, 1));
+  openWardrobe(f);
+  choosePrompt(f.player, 1);
+  const title = core.MultiChatboxPrompt.getPending(f.player)?.title;
+  choosePrompt(f.player, 1);
+  assert.equal(f.wardrobe.storage[BRONZE_TRIM.legs], 1);
+  assert.equal(f.wardrobe.storage[studdedBody], 1);
+  assert.equal(Storage.withdrawHouseItem(f.player, f.house, f.wardrobe, BRONZE_TRIM.legs), true);
+  assert.equal(Storage.withdrawHouseItem(f.player, f.house, f.wardrobe, studdedBody), false);
+  assert.equal(f.inventory.getAmount(BRONZE_TRIM.legs), 1);
+  assert.equal(f.inventory.getAmount(studdedBody), 0);
+  assert.equal(f.wardrobe.storage[studdedBody], 1);
+  assert.equal(title, DEPOSIT_WARNING);
+});
 
 test("Ultimate single-piece confirmation can cancel or deposit", (t) => {
   const f = promptFixture(t, "uimwarn");

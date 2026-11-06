@@ -12,6 +12,7 @@ const AnglerOutfit = require("./fishing/AnglerOutfit.Fishing");
 const MinnowPlatform = require("./fishing/MinnowPlatform.Fishing");
 const RadasBlessing = require("./fishing/RadasBlessing.Fishing");
 const KarambwanVessel = require("./fishing/Karambwan.Fishing");
+const ClueBottles = require("./fishing/ClueBottles.Fishing");
 const { pauseForLevelUp } = require("./SkillActions");
 
 // Ticks per resource roll (Wiki: Game tick/Action lengths): rods 5, net, cage and harpoon
@@ -468,6 +469,17 @@ const SPOT_TOOLS_BY_NPC = new Map([
   [NpcIds.FISHING_SPOT_101, { Cast: TOOLS.PARK_NET }],
 ]);
 
+// Clue bottle bases are the documented heron bases for these catches. Other catches with no
+// sourced base remain unsupported here; this is not a claim that they cannot yield bottles.
+const CLUE_BOTTLE_FISH = new Set([
+  FISH.SHRIMP, FISH.ANCHOVY, FISH.SARDINE, FISH.HERRING, FISH.TROUT, FISH.SALMON,
+  FISH.PIKE, FISH.TUNA, FISH.LOBSTER, FISH.SWORDFISH, FISH.SHARK, FISH.SHARK_BAREHAND,
+  FISH.MACKEREL, FISH.COD, FISH.BASS, FISH.MONKFISH, FISH.CAVE_EEL, FISH.INFERNAL_EEL,
+  FISH.SACRED_EEL, FISH.ANGLERFISH, FISH.DARK_CRAB, FISH.KARAMBWANJI, FISH.KARAMBWAN,
+  FISH.MINNOW, FISH.LEAPING_TROUT, FISH.LEAPING_SALMON, FISH.LEAPING_STURGEON,
+]);
+const PARK_CLUE_BASE = 152120; // Wiki: Fortis park uses the catfish base.
+
 const FISHING_SPOT_NAMES = ["Fishing spot", "Rod Fishing spot"];
 const FISHING_SPOT_OPTIONS = ["Small Net", "Net", "Big Net", "Bait", "Lure", "Cage", "Harpoon", "Use-rod", "Fish", "Cast"];
 
@@ -737,7 +749,7 @@ function landExtra(player, variant, fish, amount) {
   spam(player, RadasBlessing.EXTRA_FISH_MESSAGE);
 }
 
-function landCatch(player, tool, variant, caught) {
+function landCatch(player, tool, variant, caught, spotId = null) {
   const xpMultiplier = AnglerOutfit.xpMultiplier(player);
   // Each fish needs a free slot, its own stack or room in an open fish barrel. Holy Lake shrimps
   // are lost to a full inventory that still takes karambwanji (Wiki: Fishing spot (karambwanji)).
@@ -762,6 +774,15 @@ function landCatch(player, tool, variant, caught) {
   for (const { fish, amount } of landed) {
     landExtra(player, variant, fish, amount);
   }
+  // One bottle roll set per natural catch batch; Rada's extra is not another action.
+  // The tutorial pond is outside the supported scope; no retail exclusion is inferred.
+  // The park uses its own base even though its successful catches are labelled junk.
+  if (spotId !== NpcIds.FISHING_SPOT_43) {
+    const clueFish = landed.find(({ fish }) => CLUE_BOTTLE_FISH.has(fish))?.fish;
+    const clueBase = landed.length && tool === TOOLS.PARK_NET ? PARK_CLUE_BASE : clueFish?.petBase;
+    if (clueBase > 0) ClueBottles.rollClueBottles(player, clueBase);
+  }
+
   // Wiki (Heron): a big net catch rolls the pet once per kind of fish in it.
   // A listener may take over the session (the tutorial stops after one catch).
   let stop = false;
@@ -896,7 +917,7 @@ class FishingTask extends Task {
       if (session.tool.spot?.takesCatch(player, npc)) {
         continue;
       }
-      const stopAfterCatch = landCatch(player, session.tool, variant, caught);
+      const stopAfterCatch = landCatch(player, session.tool, variant, caught, session.npcId);
 
       // ponytail: spots without their own movement still stop at random instead of moving. A full
       // inventory waits for the next tick's check, which says so.
@@ -937,6 +958,7 @@ module.exports = {
     AnglerOutfit.attach(api);
     MinnowPlatform.attach(api);
     KarambwanVessel.attach(api);
+    ClueBottles.attach(api);
 
     api.onPlayerDisconnect(({ player }) => {
       stopFishing(activeSessions, player, false);

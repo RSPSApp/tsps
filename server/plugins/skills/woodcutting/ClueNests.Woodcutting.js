@@ -45,6 +45,7 @@ function rollClueNests(player, tree) {
     // Content may make clue nests commoner ("treasure-trails:vessel-chance", a league relic): `multiplier` times.
     const boost = { player, vessel: "nest", tier: tier.name, multiplier: 1 };
     pluginApi?.emitCustomEvent?.("treasure-trails:vessel-chance", boost);
+    if (boost.allowed === false) continue;
     const base = Math.floor((Math.floor(tree.petBase) / (100 + level)) * tier.modifier);
     const chance = base < 1 ? base : Math.max(1, Math.floor(base / (boost.multiplier > 1 ? boost.multiplier : 1)));
     if (chance < 1 || Math.floor(Math.random() * chance) !== 0 || ownsClue(player, tier)) {

@@ -61,6 +61,12 @@ function playerWith(barId = I.BRONZE_BAR, bars = 27) {
       getAmount: id => items.get(id) ?? 0,
       deleteNumber: (id, n) => items.set(id, items.get(id) - n),
       addItem: item => items.set(item.getId(), (items.get(item.getId()) ?? 0) + item.getAmount()),
+      // Plain stand-ins, one per held id, for the dragon shields' preset check (it reads slots).
+      getItems: () => [...items].filter(([, n]) => n > 0).map(([id, n]) => ({ getId: () => id, getAmount: () => n })),
+      deleteAtSlot(slot, amount = 1) {
+        const id = [...items].filter(([, n]) => n > 0)[slot]?.[0];
+        if (id !== undefined) items.set(id, items.get(id) - amount);
+      },
     }),
     getEquipment: () => ({
       get: slot => player.equipped.has(slot) ? { getId: () => player.equipped.get(slot) } : null,

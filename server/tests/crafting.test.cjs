@@ -68,7 +68,12 @@ function playerWith(entries = [], { level = 99, threadUses } = {}) {
     deleteNumber: (id, amount) => amounts.set(id, Math.max(0, (amounts.get(id) ?? 0) - amount)),
     addItem: item => amounts.set(item.id, (amounts.get(item.id) ?? 0) + item.getAmount()),
     adds: (id, amount = 1) => amounts.set(id, (amounts.get(id) ?? 0) + amount),
-    getItems: () => [],
+    getItems: () => {
+      const { Item, ItemDefinition } = PluginManager.getCoreApi();
+      return [...amounts].filter(([, amount]) => amount > 0).flatMap(([id, amount]) =>
+        ItemDefinition.forId(id).isStackable() ? [new Item(id, amount)] :
+          Array.from({ length: amount }, () => new Item(id, 1)));
+    },
   };
   const packetSender = {
     sendCreationMenu(value) {
@@ -884,6 +889,31 @@ test("native furnace silver-bolt batches conserve inputs at output stack limits"
     if(label==="room"||label==="exact")assert.equal(consumed,1,"positive control completes one batch");
     assert.equal(total(ids.BOLT_MOULD),1);assert.deepEqual(gains,consumed?[50]:[]);
     assert.deepEqual(produced,consumed?[{itemId:outputId,amount:10,xp:50,kind:"jewellery"}]:[]);
+    assert.equal(p.getAttribute(Shared.CRAFTING_TASK_ATTRIBUTE),null);
+  });
+  await t.test("full inventory gold ring uses the bar's freed slot", async t => {
+    const channel={kind:"test",remoteAddress:"127.0.0.1",isOpen:()=>true,send:()=>true,close(){},onData(){},onError(){},onClose(){}};
+    const p=new Player(new PlayerSession(channel));p.setIndex(index++);p.setUsername("goldcapacity"+index);p.setRegistered(true);p.setLocation(new core.Location(3226,3218,0));p.needsPlacement=false;
+    p.getSkillManager().setCurrentLevel(core.Skill.CRAFTING,99,false);
+    const c=new ClientConnection(channel);c.player=p;
+    t.after(()=>{Shared.stopCrafting(p);PluginManager.emitPlayerDisconnect({player:p,username:p.getUsername()});PluginManager.emitPlayerLogout({player:p,username:p.getUsername()});p.setRegistered(false);core.TaskManager.cancelTasks(p.getIndex());core.TaskManager.cancelTasks(p);});
+    const inv=p.getInventory();
+    for(const id of [ids.GOLD_BAR,ids.RING_MOULD]) inv.add(new core.Item(id,1),false);
+    assert.equal(core.ItemDefinition.forId(ids.BRONZE_DAGGER).isStackable(),false);
+    for(let i=0;i<26;i++) inv.add(new core.Item(ids.BRONZE_DAGGER,1),false);
+    assert.equal(inv.getFreeSlots(),0);assert.equal(inv.getAmount(ids.GOLD_BAR),1);
+    assert.equal(core.ItemDefinition.forId(ids.GOLD_RING).isStackable(),false);
+    assert.equal(inv.getAddableAmount(new core.Item(ids.GOLD_RING,1)),0);
+    const furnaceId=[...Smithing.FURNACE_OBJECT_IDS].find(id=>{const d=core.ObjectDefinition.forPlayer(id,p);return d?.getName()==="Furnace"&&d.getActions()?.includes("Smelt");});assert.ok(Number.isInteger(furnaceId));
+    const furnace=new core.GameObject(furnaceId,new core.Location(3223,3218,0),10,0,null);core.ObjectManager.register(furnace,true);t.after(()=>core.ObjectManager.deregister(furnace,true));
+    let turns=0;const turn=()=>{assert.ok(++turns<=16);p.resetUpdating();core.World.processCycle=(core.World.processCycle+1)&0x7fffffff;core.TaskManager.process();c.processTurnPackets();const q=p.getMovementQueue();q.beginCycle();q.processEntityPursuit();if(q.hasPendingWork())q.process();core.TaskManager.processWalkTo(p.getIndex());};
+    await c.dispatch([{type:"item_on_object",objectId:furnaceId,x:3223,y:3218,itemId:ids.GOLD_BAR,slot:inv.getSlotForItemId(ids.GOLD_BAR),widgetId:149<<16}]);
+    for(let i=0;i<8&&p.getInterfaceId()!==446;i++)turn();
+    assert.equal(p.getInterfaceId(),446);assert.equal(p.getMovementQueue().size(),0);assert.equal(inv.getAmount(ids.GOLD_BAR),1);
+    await c.dispatch([{type:"widget_action",widgetId:(446<<16)|8,groupId:446,childId:8,buttonNum:1,opId:1,slot:-1,itemId:-1}]);
+    turn();assert.equal(inv.getAmount(ids.GOLD_BAR),1);assert.equal(p.getAttribute(Shared.CRAFTING_TASK_ATTRIBUTE)?.isRunning(),true);
+    for(let i=0;i<5;i++)turn();
+    assert.equal(inv.getAmount(ids.GOLD_BAR),0);assert.equal(inv.getAmount(ids.GOLD_RING),1);assert.equal(inv.getAmount(ids.RING_MOULD),1);
     assert.equal(p.getAttribute(Shared.CRAFTING_TASK_ATTRIBUTE),null);
   });
 });

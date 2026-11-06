@@ -64,10 +64,9 @@
  * scripts/lookup-gameval.ts varbit osf_* (varp 417 bits); quest DB row 107.
  *
  * Gaps / approximations:
- *  - Captain Bleemadge (10459), Wizard Cromperty (8480) and Gnormadium Avlafrim
- *    (7516) have no npc-spawns.json entry, so they are spawned once per world on
- *    the first login at their OSRS spots (White Wolf Mountain, NE Ardougne,
- *    Feldip Hills).
+ *  - Captain Bleemadge (10459) and Gnormadium Avlafrim (7516) have no
+ *    npc-spawns.json entry, so they are spawned once per world on the first login
+ *    at their OSRS spots (White Wolf Mountain and Feldip Hills).
  *  - Rantz's spawn is the nameless cache placeholder 1470; its transform varp
  *    (293, Big Chompy) resolves to 14793, which has no npc-dialogue-index entry,
  *    so his quest variants are driven by our own Talk-to hook.
@@ -835,7 +834,7 @@ module.exports = function registerOneSmallFavourQuest(api) {
     // Quest NPCs with no npc-spawns.json entry, at their OSRS spots.
     api.spawnNpc({ id: NpcIdentifiers.GNORMADIUM_AVLAFRIM, x: 2544, y: 2971, z: 0, wanderRadius: 0 });
     api.spawnNpc({ id: NpcIdentifiers.CAPTAIN_BLEEMADGE, x: 2846, y: 3498, z: 0, wanderRadius: 0 });
-    api.spawnNpc({ id: NpcIdentifiers.WIZARD_CROMPERTY, x: 2681, y: 3325, z: 0, wanderRadius: 0 });
+    // Cromperty is the canonical diary-dependent ardounge_wizard spawn (5314).
   }
 
   function syncGroundItems(player) {

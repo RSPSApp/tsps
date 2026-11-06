@@ -38,6 +38,32 @@ const MESSAGE = {
 
 let bondIds = null;
 
+/** A preset or meta-untradeable copy (Presets.PvpMode tags them) was never paid for, so it buys no credit. */
+function restricted(item) {
+  return item.isPresetItem?.() === true || item.isUntradeable?.() === true || item.isUnbankable?.() === true;
+}
+
+/** How many plain copies of `itemId` the inventory holds. */
+function plainCount(inventory, itemId) {
+  return inventory.getItems().reduce((total, held) =>
+    (held?.getId() === itemId && !restricted(held) ? total + held.getAmount() : total), 0);
+}
+
+/** Takes `count` plain copies, the selected slot first, leaving restricted copies alone. */
+function takePlain(inventory, itemId, count, firstSlot) {
+  const items = inventory.getItems();
+  const slots = [firstSlot, ...items.map((_, slot) => slot).filter((slot) => slot !== firstSlot)];
+  let left = count;
+  for (const slot of slots) {
+    const held = items[slot];
+    if (left <= 0) break;
+    if (held?.getId() !== itemId || restricted(held)) continue;
+    const taken = Math.min(left, held.getAmount());
+    inventory.deleteAtSlot(slot, taken, false);
+    left -= taken;
+  }
+}
+
 function isOpen(player) {
   return player.getPacketSender().isSubInterfaceOpen(Common.ID.cofferInterface);
 }
@@ -112,6 +138,10 @@ function selectItem(event) {
     player.sendMessage(item.getDefinition().getExamine());
     return;
   }
+  if (restricted(item)) {
+    player.sendMessage(MESSAGE.untradeable);
+    return;
+  }
   setVarp(player, "if4", credit(item.getId()));
   setVarp(player, "if3", 1);
   setVarp(player, "if2", slot);
@@ -149,7 +179,7 @@ function confirm({ player }) {
   const wanted = varp(player, "if3");
   if (!item || item.getId() <= 0 || wanted <= 0) return;
   const itemId = item.getId();
-  if (!baseDefinition(itemId).isTradeable() || isBond(itemId)) {
+  if (restricted(item) || !baseDefinition(itemId).isTradeable() || isBond(itemId)) {
     player.sendMessage(MESSAGE.untradeable);
     return;
   }
@@ -159,13 +189,13 @@ function confirm({ player }) {
     return;
   }
   const inventory = player.getInventory();
-  const count = Math.min(wanted, inventory.getAmount(itemId));
+  const count = Math.min(wanted, plainCount(inventory, itemId));
   const total = each * count;
   if (Common.state(player).coffer + total > MAX_COFFER || !Common.adjustCoffer(player, total)) {
     player.sendMessage(MESSAGE.full);
     return;
   }
-  inventory.deleteNumber(itemId, count);
+  takePlain(inventory, itemId, count, slot);
   inventory.refreshItems();
   setVarp(player, "if1", Common.state(player).coffer);
   clearSelection(player);

@@ -452,7 +452,7 @@ module.exports = function registerPrinceAliRescueQuest(api) {
           npc
         );
       },
-    }, "Is there anything I can help you with?", "I'm good, thanks.");
+    }, "Is there anything I can help you with?");
     player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(menu));
   }
 

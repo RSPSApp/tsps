@@ -76,12 +76,16 @@ function questComplete(player, key) {
 }
 
 function isUnlocked(player) {
-  return questComplete(player, PAR_QUEST_KEY) && player.getAttribute(OSMAN_HELPED_ATTRIBUTE) === true;
+  return questComplete(player, PAR_QUEST_KEY) && (
+    player.getAttribute(OSMAN_HELPED_ATTRIBUTE) === true
+    || player.getAttribute(TELEPORTED_ATTRIBUTE) === true
+  );
 }
 
 function osmanHelpStatus(request) {
   if (!request?.player) return;
   request.asked = request.player.getAttribute(OSMAN_HELPED_ATTRIBUTE) === true;
+  request.unlocked = isUnlocked(request.player);
 }
 
 function recordOsmanHelp({ player } = {}) {

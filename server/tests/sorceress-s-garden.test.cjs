@@ -277,6 +277,21 @@ test("the Teleport option works once she has teleported you, and the fountain go
   assert.equal(t.drinkFromFountain({ player: leaver, objectId: 12940 }), false);
 });
 
+test("an existing Apprentice teleport remains unlocked without the new Osman ask flag", () => {
+  const t = plugin._test;
+  const existingSave = player();
+  existingSave.setAttribute(t.TELEPORTED_ATTRIBUTE, true);
+  assert.equal(t.isUnlocked(existingSave), true);
+
+  const status = { player: existingSave };
+  t.osmanHelpStatus(status);
+  assert.equal(status.asked, false);
+  assert.equal(status.unlocked, true);
+
+  t.teleportByApprentice({ player: existingSave, npc: apprenticeNpc(), npcId: 1808 });
+  assert.deepEqual(existingSave.moves.map((at) => [at.getX(), at.getY()]), [[2912, 5474]]);
+});
+
 test("gates check the maze's level before opening", () => {
   const low = player({ level: 64 });
   plugin._test.openGate({ player: low, objectId: SUMMER_GATE });

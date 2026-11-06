@@ -426,7 +426,7 @@ test('Osman offers the garden help option after Prince Ali Rescue and records th
   line.after();
 
   const menu = [...builder.getDialogues().values()].find((entry) => entry instanceof core.OptionDialogue);
-  assert.deepEqual(menu.getOptions(), ['Is there anything I can help you with?', "I'm good, thanks."]);
+  assert.deepEqual(menu.getOptions(), ['Is there anything I can help you with?']);
   assert.equal(p.getAttribute('sorceress-s-garden:osman-help-asked'), undefined);
 
   const menuBuilder = builder;
@@ -435,6 +435,51 @@ test('Osman offers the garden help option after Prince Ali Rescue and records th
     'selecting help persists the garden prerequisite');
   assert.notEqual(builder, menuBuilder, 'the option starts Osman’s generated sq’irk dialogue');
   assert.ok(builder.getDialogues().size > 0, 'the transcript branch is available');
+
+  const Juice = require('../plugins/minigames/sorceressgarden/Juice.SorceresssGarden');
+  Juice._test.setCore(core);
+  const NpcDialogues = require('../plugins/npcs/NpcDialogues.plugin');
+  const osman = require('../data/definitions/npc-dialogues.json').Osman;
+  const sqirkOption = osman.variants['sorceress-s-garden-related-dialogue'][0].options
+    .find((option) => option.text === "I'd like to talk about sq'irks.");
+  const lines = NpcDialogues.flatten(sqirkOption.steps, {
+    resolveCondition: (condition) => Juice._test.answerCondition({ player: p, stepId: condition.id }),
+  }).flatMap((step) => [step.player, step.npc].filter((line) => typeof line === 'string'));
+  assert.deepEqual(lines, ["I'd like to talk about sq'irks."],
+    'without juice, the generated help branch reaches the real topic line and skips the hand-in');
+
+  const winterJuice = require('../plugins/minigames/sorceressgarden/Gardens.SorceresssGarden').SEASONS.winter.juiceId;
+  p.getInventory().adds(winterJuice, 1);
+  const withJuice = NpcDialogues.flatten(sqirkOption.steps, {
+    resolveCondition: (condition) => Juice._test.answerCondition({ player: p, stepId: condition.id }),
+  });
+  const handInEnd = withJuice.findIndex((step) => step.type === 'end');
+  assert.deepEqual(withJuice.slice(0, handInEnd).flatMap((step) => [step.player, step.npc]
+    .filter((line) => typeof line === 'string')),
+  [
+    'I have some sq\'irk juice for you.',
+    'Thank you very much [player name]. If you get some more sq\'irks be sure to come back.',
+    "I will. It's been a pleasure doing business with you.",
+  ], 'the juice hand-in lines are selected only when the player actually carries juice');
+});
+
+test("Contact! players can unlock the garden from Osman's after-quest sq'irk option", () => {
+  const q = register('Contact', 'contact'), p = player();
+  require('../plugins/minigames/sorceressgarden/Apprentice.SorceresssGarden')(q.api);
+  q.quest.setStage(p, 130);
+
+  const npcId = core.NpcIdentifiers.OSMAN_9;
+  const variant = q.hooks.get('onNpcDialogueVariant')[0]({ player: p, npcId });
+  assert.equal(variant, 'standard-dialogue-after-contact');
+  const option = require('../data/definitions/npc-dialogues.json').Osman
+    .variants['standard-dialogue-after-contact'][1].options
+    .find((candidate) => candidate.text === "I'd like to talk about sq'irks.");
+  assert.ok(option?.steps?.some((step) => step.type === 'reference'
+    && step.variant === 'sorceress-s-garden-related-dialogue'), 'the captured after-Contact option opens the sq\'irk transcript');
+
+  q.emit('npc-dialogue:choice', { player: p, npcId, option: option.text });
+  assert.equal(p.getAttribute('sorceress-s-garden:osman-help-asked'), true,
+    'selecting the after-Contact option records the garden prerequisite');
 });
 
 test('Ned sells captured quest rope for 15 coins or four wool, refusing missing payment and full inventory', () => {

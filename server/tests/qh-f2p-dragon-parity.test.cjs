@@ -398,11 +398,7 @@ test('Dragon Slayer claims the Doors toggle so the maze and magic doors still re
   p.items.set(I.KEY_3, 1);
   p.moveTo(new core.Location(1, 0, 0));
   request = doorToggle(h, p, O.RED_DOOR);
-  assert.equal(p.items.get(I.KEY_3), 1, 'the key is spent when the walk through the door lands');
-  core.TaskManager.process();
-  assert.equal(p.items.get(I.KEY_3), 1, 'two tiles take two ticks');
-  core.TaskManager.process();
-  assert.equal(p.items.get(I.KEY_3), 0);
+  assert.equal(p.items.get(I.KEY_3), 0, 'the key is spent as the door opens (rev242 capture tick 2109)');
   assert.match(p.messages.at(-1), /disintegrates/);
 
   p.items.set(I.KEY_3, 1);

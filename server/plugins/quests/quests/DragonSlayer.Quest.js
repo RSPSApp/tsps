@@ -111,6 +111,8 @@ module.exports = function registerDragonSlayerQuest(api) {
   // one-way only: from the room the player is leaving to the maze/exit corridor,
   // never back. The ground door's room is the ladder room east of it, reached by
   // climbing up from the basement after the chest.
+  /** The maze's doors Doors.plugin opens as pass-through doors (its PASS_THROUGH_FAMILIES). */
+  const PASS_THROUGH_DOORS = new Set([ObjectIdentifiers.DOOR_91, ...MAZE_DOORS, ObjectIdentifiers.EXIT_DOOR]);
   const MELZAR_EXIT_DOORS = [
     { x: 2938, y: 3252, z: 0, exitX: -1 }, // ground NE ladder room -> maze
     { x: 2931, y: 9640, z: 0, exitX: -1 }, // zombie room -> west exit corridor
@@ -882,13 +884,21 @@ module.exports = function registerDragonSlayerQuest(api) {
   }
 
   /**
-   * Cross a wall-straight maze door one tile past the edge it blocks. The
-   * use-item walk can leave the player standing on the door tile, and the old
-   * "east of the door" guess then sent them back the way they came; the door's
-   * face (0 west, 1 south, 2 east, 3 north - the blocked edge) says which way
-   * is through. A player already across the door is sent back the other way.
+   * Cross a maze door. Doors.plugin opens it as live does (rev242 capture ticks 2070-2688: a
+   * blocker on the doorway, the open leaf beside it, sound 62, an ordinary walk across and the door
+   * shut two ticks later); `onOpen` (spending a key) runs as it opens, as captured, and returns false
+   * to keep it shut. Without that door, the player is walked one tile past the edge the door blocks:
+   * the door's face (0 west, 1 north, 2 east, 3 south) says which way is through.
    */
-  function crossMazeDoor(player, object, location, onArrive) {
+  function crossMazeDoor(player, object, location, onOpen) {
+    if (doorWalks.has(player)) return;
+    if (object && PASS_THROUGH_DOORS.has(object.getId?.())) {
+      if (onOpen && onOpen() === false) return;
+      const request = { player, object, handled: false };
+      api.emitCustomEvent("door:open", request);
+      if (request.handled) return;
+      onOpen = null;
+    }
     const face = Number(object?.getFace?.() ?? 0) & 0x3;
     const pos = player.getLocation();
     if (face === 0 || face === 2) {
@@ -896,14 +906,14 @@ module.exports = function registerDragonSlayerQuest(api) {
       const acrossX = pos.getX() === location.x
         ? throughX
         : pos.getX() < location.x ? location.x + 1 : location.x - 1;
-      walkAcross(player, new Location(acrossX, location.y, location.z), onArrive);
+      walkAcross(player, new Location(acrossX, location.y, location.z), onOpen);
       return;
     }
     const throughY = face === 1 ? location.y + 1 : location.y - 1;
     const acrossY = pos.getY() === location.y
       ? throughY
       : pos.getY() < location.y ? location.y + 1 : location.y - 1;
-    walkAcross(player, new Location(location.x, acrossY, location.z), onArrive);
+    walkAcross(player, new Location(location.x, acrossY, location.z), onOpen);
   }
 
   /**
@@ -1009,7 +1019,8 @@ module.exports = function registerDragonSlayerQuest(api) {
     const { player } = event;
     event.handled = true;
     const key = MAZE_KEYS[doorIndex];
-    if (!hasItem(player, key)) { player.sendMessage("The door is locked."); return; }
+    // rev242 capture ticks 2114, 2136, 2556: a maze door without its key.
+    if (!hasItem(player, key)) { player.sendMessage("This door is securely locked."); return; }
     if (actions.has(player)) return;
     const at = plainLocation(event.location ?? event.object?.getLocation?.());
     crossMazeDoor(player, event.object, at, () => {

@@ -487,6 +487,21 @@ test("IP removals accept an online player or an IPv6 address", async t => {
   assert.equal(punishments.IPBanned("::ffff:192.0.2.2"), false);
 });
 
+test("IP punishments refuse the issuer's own address and loopback proxy addresses", t => {
+  const { punishments, removals } = moderation(t);
+  const owner = login("Owner", Rights.OWNER).setHostAddress("192.0.2.1");
+  login("Housemate").setHostAddress("192.0.2.1");
+  login("Proxied").setHostAddress("127.0.0.1");
+  for (const command of ["ipban housemate", "ipmute housemate", "ipban proxied", "ipmute proxied"]) {
+    type(owner, command);
+    assert.match(owner.messages.at(-1), /^Refusing/, command);
+  }
+  assert.equal(punishments.IPBanned("192.0.2.1"), false);
+  assert.equal(punishments.IPBanned("127.0.0.1"), false);
+  assert.equal(punishments.IPMuted("127.0.0.1"), false);
+  assert.equal(removals.length, 0);
+});
+
 test("moderation preserves permissions, rejects missing targets and never matches prefixes", t => {
   const { punishments, removals } = moderation(t);
   const owner = login("Owner", Rights.OWNER);

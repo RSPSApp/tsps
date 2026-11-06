@@ -894,6 +894,11 @@ function ipPunishmentCommand({ player, raw, parts }) {
     player.sendMessage(target ? "This player has no IP address." : `Player ${input} is not online.${removing ? " Use their IP address instead." : ""}`);
     return true;
   }
+  // The login IP gate has no staff exemption: your own or a proxy's loopback address would lock out you or everyone behind it.
+  if (!removing && (address === player.getHostAddress() || /^(127\.|::1$|::ffff:127\.)/.test(address))) {
+    player.sendMessage(`Refusing to IP ${mute ? "mute" : "ban"} ${address}: it is your own or a loopback address.`);
+    return true;
+  }
   const status = mute ? "muted" : "banned";
   const active = mute ? PlayerPunishment.IPMuted(address) : PlayerPunishment.IPBanned(address);
   if (removing ? active : !active) {

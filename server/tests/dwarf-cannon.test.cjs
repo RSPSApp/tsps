@@ -692,3 +692,31 @@ test('Empty rejects a different player without changing the owner cannon', () =>
   assert.equal(JSON.stringify(owner.getAttribute(Cannon.STATE_ATTRIBUTE)), saved);
   assert.ok(visitor.ticks.flat().includes(Ammo.MESSAGE.NOT_YOURS));
 });
+
+for (const steelHeadroom of [1, 20]) {
+  test(`Empty handles both ammunition types atomically at steel headroom ${steelHeadroom}`, () => {
+    const p = gunner({steel: 20}), cannon = built(p), inv = p.getInventory();
+    assert.equal(cannon.steel, 20);
+    inv.add(new core.Item(Items.GRANITE_CANNONBALL, 10), false);
+    assert.equal(Ammo.loadFromInventory(cannon, 10), 10);
+    assert.deepEqual([cannon.steel, cannon.granite], [20, 10]);
+    const held = 0x7fffffff - steelHeadroom;
+    inv.add(new core.Item(Items.STEEL_CANNONBALL, held), false);
+    assert.equal(inv.getAmount(Items.STEEL_CANNONBALL), held);
+    assert.equal(inv.getAmount(Items.GRANITE_CANNONBALL), 0);
+    assert.ok(inv.getFreeSlots() > 0);
+    const saved = JSON.stringify(p.getAttribute(Cannon.STATE_ATTRIBUTE));
+    Ammo.empty({player: p, object: cannon.object});
+    assert.equal(Cannon.cannonOf(p), cannon);
+    if (steelHeadroom === 1) {
+      assert.deepEqual([cannon.steel, cannon.granite], [20, 10]);
+      assert.equal(inv.getAmount(Items.STEEL_CANNONBALL), held);
+      assert.equal(inv.getAmount(Items.GRANITE_CANNONBALL), 0);
+      assert.equal(JSON.stringify(p.getAttribute(Cannon.STATE_ATTRIBUTE)), saved);
+    } else {
+      assert.deepEqual([cannon.steel, cannon.granite], [0, 0]);
+      assert.equal(inv.getAmount(Items.STEEL_CANNONBALL), held + 20);
+      assert.equal(inv.getAmount(Items.GRANITE_CANNONBALL), 10);
+    }
+  });
+}

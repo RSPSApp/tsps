@@ -171,6 +171,38 @@ test('Dragon Slayer sails through the private fire and crash sequence, then coll
 });
 
 
+test('Dragon Slayer map chests open first, then give the map in an item box as they shut (rev242 ticks 1422-1435, 2694-2706)', () => {
+  const O = core.ObjectIdentifiers, h = harness('DragonSlayer'), p = player();
+  h.quest.setStage(p, 2); p.attrs.set('dragon-slayer.oracle', 3);
+  const chest = (id, x, y) => new core.GameObject(id, new core.Location(x, y, 0), 10, 3, null);
+  const ids = () => h.objects.map(object => object.getId());
+  const sounds = () => p.log.filter(row => row[0] === 'sendSoundEffect').map(row => row[1]);
+
+  // The Oracle's chest: Open plays the lid's inscription, and only then does the lid open.
+  h.clicks.get(O.CHEST_14)({ player: p, objectId: O.CHEST_14, object: chest(O.CHEST_14, 3057, 9841) });
+  assert.equal(p.text, 'As you open the chest, you notice an inscription on the lid:');
+  assert.deepEqual(ids(), []);
+  h.continueUntil(p, () => p.text.startsWith('I cannot stop you')); p.manager.advance();
+  assert.deepEqual(ids(), [O.CHEST_15]); assert.ok(p.animations.includes(536)); assert.deepEqual(sounds(), [52]);
+  assert.equal(p.items.get(I.MAP_PART_3), undefined, 'opening gives nothing');
+  h.clicks.get(O.CHEST_15)({ player: p, objectId: O.CHEST_15, object: h.objects[0] });
+  assert.equal(p.text, 'You find a map piece in the chest.'); assert.equal(p.items.get(I.MAP_PART_3), 1);
+  assert.ok(p.log.some(row => row[0] === 'sendItemOnInterfaces' && row[2] === I.MAP_PART_3), 'an item box with the map piece');
+  assert.deepEqual(ids(), [O.CHEST_14], 'it shuts as the map is found'); assert.deepEqual(sounds(), [52, 51]);
+
+  // Melzar's chest: "You open the chest." as it opens; the same find; nothing more once the map is owned.
+  h.clicks.get(O.CHEST_16)({ player: p, objectId: O.CHEST_16, object: chest(O.CHEST_16, 2935, 9657) });
+  assert.equal(p.messages.at(-1), 'You open the chest.'); assert.deepEqual(ids(), [O.CHEST_14, O.CHEST_17]);
+  h.clicks.get(O.CHEST_17)({ player: p, objectId: O.CHEST_17, object: h.objects[1] });
+  assert.equal(p.text, 'You find a map piece in the chest.'); assert.equal(p.items.get(I.MAP_PART), 1);
+  assert.deepEqual(ids(), [O.CHEST_14, O.CHEST_16]);
+  h.clicks.get(O.CHEST_16)({ player: p, objectId: O.CHEST_16, object: h.objects[1] });
+  h.clicks.get(O.CHEST_17)({ player: p, objectId: O.CHEST_17, object: h.objects[1] });
+  assert.equal(p.messages.at(-1), 'You find nothing in the chest.'); assert.equal(p.items.get(I.MAP_PART), 1);
+  h.hooks.onObjectSecondClick[0]({ player: p, objectId: O.CHEST_17, object: h.objects[1] });
+  assert.deepEqual(ids(), [O.CHEST_14, O.CHEST_16], 'Close shuts it');
+});
+
 test('Dragon Slayer completion removes carried and every bank-tab head, but preserves optional-head completion and rewards', () => {
   for (const withHead of [true, false]) {
     const h=harness('DragonSlayer'),p=player();

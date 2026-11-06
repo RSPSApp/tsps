@@ -86,11 +86,13 @@ module.exports = function registerDragonSlayerQuest(api) {
 
   const LOC = {
     magicDoor: ObjectIdentifiers.MAGIC_DOOR_6,
-    oracleChest: [ObjectIdentifiers.CHEST_14, ObjectIdentifiers.CHEST_15],
+    oracleChestShut: ObjectIdentifiers.CHEST_14,
+    oracleChestOpen: ObjectIdentifiers.CHEST_15,
     shipHole: SHIP_HOLE_ID,
     shipGangplanks: [ObjectIdentifiers.GANGPLANK_15, ObjectIdentifiers.GANGPLANK_16],
     melzarEntrance: ObjectIdentifiers.DOOR_91,
-    melzarChest: [ObjectIdentifiers.CHEST_16, ObjectIdentifiers.CHEST_17],
+    melzarChestShut: ObjectIdentifiers.CHEST_16,
+    melzarChestOpen: ObjectIdentifiers.CHEST_17,
     // Crandor's volcano: the surface hole drops into the lair by the exit rope,
     // and the wall divides the rope corridor from Elvarg's chamber.
     crandorOpening: ObjectIdentifiers.HOLE_40,
@@ -169,6 +171,17 @@ module.exports = function registerDragonSlayerQuest(api) {
   const FIRE_SMALL = 25156, FIRE_LARGE = 25155, FIREBALL = 1155, FIRE_IMPACT_GRAPHIC = 1154;
   const ELVARG_INTRO_NPC_ID = 817;
   const ELVARG_FOOTSTEP_SOUND = 3753;
+  const CHEST_OPEN_ANIMATION = 536, CHEST_OPEN_SOUND = 52, CHEST_CLOSE_SOUND = 51;
+  /**
+   * The map chests' transcripts (rev242 capture ticks 1422-1435 and 2694-2706): the Oracle chest's
+   * lid inscription plays as it opens, and the open chest's "You find a map piece in the chest."
+   * is an item box as it shuts again.
+   */
+  const MAP_CHESTS = {
+    oracle: { variant: "thalzar-s-map-piece-searching-the-chest", lidLast: "87eeuP", found: "X_Dgh7" },
+    melzar: { variant: "melzar-s-map-piece-searching-the-chest", found: "Cql70f" },
+  };
+  const ORACLE_LID_STEPS = new Set(["kMeD2O", "a4P9BG", "BHT54J", MAP_CHESTS.oracle.lidLast]);
   const HEAD_CUT_SOUND = 3744, HEAD_OFF_SOUND = 3745, SILENCE_TRACK = 147;
   const HEAD_CUT_WALK_TICKS = 3, HEAD_CUT_WALK_MAX_TILES = 10;
   const ELVARG_INTRO_FOOTSTEPS = 7;
@@ -734,6 +747,8 @@ module.exports = function registerDragonSlayerQuest(api) {
       return; // leave the transcript's own message to play
     }
 
+    if (handleMapChestStep(event)) return;
+
     if (npcId === GUILDMASTER_NPC_ID && stepId === "xUz7Ja") {
       if (!hasItem(player, ITEM.mazeKey) && !player.getInventory().isFull()) {
         player.getInventory().adds(ITEM.mazeKey, 1);
@@ -1060,22 +1075,90 @@ module.exports = function registerDragonSlayerQuest(api) {
     api.emitCustomEvent("ladders:climbDown", { player: request.player, destination: TILE.melzarBasement.clone() });
   }
 
-  function handleOracleChestClick(event) {
-    const { player } = event;
-    if (oracleState(player) < 3 || ownsMapPiece(player, ITEM.mapOracle)) {
-      player.sendMessage("You find nothing useful.");
-      return;
-    }
-    if (giveItem(player, ITEM.mapOracle)) player.sendMessage("You find a piece of an old map.");
+  /** The chest a player last opened or searched, for the transcript steps that finish it (replaced, never a lock). */
+  const chestInUse = new WeakMap();
+
+  function swapChest(object, nextId) {
+    const objects = api.getObjectManager();
+    objects.deregister(object, true);
+    const next = new GameObject(nextId, object.getLocation().clone(), object.getType(), object.getFace(), object.getPrivateArea?.() ?? null);
+    objects.register(next, true);
+    return next;
   }
 
-  function handleMelzarChestClick(event) {
-    const { player } = event;
-    if (quest.getStage(player) < STAGE_OZIACH || ownsMapPiece(player, ITEM.mapMelzar)) {
-      player.sendMessage("You find nothing in the chest.");
-      return;
+  function openChest(player, object, openId) {
+    player.performAnimation(new Animation(CHEST_OPEN_ANIMATION));
+    player.getPacketSender().sendSoundEffect(CHEST_OPEN_SOUND, 1, 0);
+    swapChest(object, openId);
+  }
+
+  function shutChest(player, object, shutId) {
+    swapChest(object, shutId);
+    player.getPacketSender().sendSoundEffect(CHEST_CLOSE_SOUND, 1, 0);
+  }
+
+  const needsOracleMap = (player) => oracleState(player) >= 3 && !ownsMapPiece(player, ITEM.mapOracle);
+  const needsMelzarMap = (player) => quest.getStage(player) >= STAGE_OZIACH && !ownsMapPiece(player, ITEM.mapMelzar);
+
+  /** Open: while the map is still inside, the lid's inscription plays first and the chest opens after it. */
+  function handleOracleChestOpen(event) {
+    const { player, object } = event;
+    if (!object) return;
+    if (!needsOracleMap(player)) { openChest(player, object, LOC.oracleChestOpen); return; }
+    chestInUse.set(player, object);
+    startTranscript(api, player, 0, PAGE, MAP_CHESTS.oracle.variant, steps => steps.filter(step => ORACLE_LID_STEPS.has(step.id)));
+  }
+
+  function handleMelzarChestOpen(event) {
+    const { player, object } = event;
+    if (!object) return;
+    player.sendMessage("You open the chest.");
+    openChest(player, object, LOC.melzarChestOpen);
+  }
+
+  /** Search: the map piece in an item box as the lid shuts, or the old reply when there is nothing to find. */
+  function searchMapChest(event, chest, needsMap, map, nothing) {
+    const { player, object } = event;
+    if (!object) return;
+    if (!needsMap(player)) { player.sendMessage(nothing); return; }
+    if (player.getInventory().isFull()) { giveItem(player, map); return; }
+    chestInUse.set(player, object);
+    startTranscript(api, player, 0, PAGE, chest.variant, steps => steps.filter(step => step.id === chest.found));
+  }
+
+  function handleOracleChestSearch(event) {
+    searchMapChest(event, MAP_CHESTS.oracle, needsOracleMap, ITEM.mapOracle, "You find nothing useful.");
+  }
+
+  function handleMelzarChestSearch(event) {
+    searchMapChest(event, MAP_CHESTS.melzar, needsMelzarMap, ITEM.mapMelzar, "You find nothing in the chest.");
+  }
+
+  function handleMapChestClose(event) {
+    const { player, object, objectId } = event;
+    if (!object) return;
+    shutChest(player, object, objectId === LOC.oracleChestOpen ? LOC.oracleChestShut : LOC.melzarChestShut);
+  }
+
+  /** The chest transcripts' own steps: lid inscription boxes, then the open or the found map. */
+  function handleMapChestStep(event) {
+    const { player, stepId } = event;
+    if (ORACLE_LID_STEPS.has(stepId)) {
+      event.box = { statement: true };
+      if (stepId === MAP_CHESTS.oracle.lidLast) event.after = () => {
+        const object = chestInUse.get(player); chestInUse.delete(player);
+        if (object) openChest(player, object, LOC.oracleChestOpen);
+      };
+      return true;
     }
-    if (giveItem(player, ITEM.mapMelzar)) player.sendMessage("You find a piece of an old map.");
+    const chest = stepId === MAP_CHESTS.oracle.found ? { map: ITEM.mapOracle, shut: LOC.oracleChestShut }
+      : stepId === MAP_CHESTS.melzar.found ? { map: ITEM.mapMelzar, shut: LOC.melzarChestShut } : null;
+    if (!chest) return false;
+    const object = chestInUse.get(player); chestInUse.delete(player);
+    if (!giveItem(player, chest.map)) { event.handled = true; event.end = true; return true; }
+    event.box = { items: [chest.map] };
+    if (object) shutChest(player, object, chest.shut);
+    return true;
   }
 
   function handleCrandorOpeningClick({player}) {
@@ -1458,8 +1541,11 @@ module.exports = function registerDragonSlayerQuest(api) {
   api.onObjectFirstClick(LOC.melzarEntrance, handleMelzarEntranceClick);
   api.onObjectFirstClick(LOC.melzarExitDoor, handleMelzarExitDoorClick);
   api.onObjectFirstClick(MAZE_DOORS, handleMazeDoorClick);
-  api.onObjectFirstClick(LOC.oracleChest, handleOracleChestClick);
-  api.onObjectFirstClick(LOC.melzarChest, handleMelzarChestClick);
+  api.onObjectFirstClick(LOC.oracleChestShut, handleOracleChestOpen);
+  api.onObjectFirstClick(LOC.oracleChestOpen, handleOracleChestSearch);
+  api.onObjectFirstClick(LOC.melzarChestShut, handleMelzarChestOpen);
+  api.onObjectFirstClick(LOC.melzarChestOpen, handleMelzarChestSearch);
+  api.onObjectSecondClick([LOC.oracleChestOpen, LOC.melzarChestOpen], handleMapChestClose);
   api.onObjectFirstClick(LOC.crandorOpening, handleCrandorOpeningClick);
   api.onObjectFirstClick(LOC.crandorRope, handleCrandorRopeClick);
   api.onObjectFirstClick(LOC.crandorWall, handleCrandorWallClick);

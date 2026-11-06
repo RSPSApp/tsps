@@ -76,14 +76,14 @@ Each floor finds its traps among the cache map's locs in its own instance. Every
 - **Strange tiles.** A forward tile pushes the player on along their corridor, a backward one back, 3-7 tiles as far as walkable. A tile fires the tick after the player arrives, unless it is resting; then it waits for its next telegraph.
 - **Hits.**
   - Damage is 1-3, 2-4 or 3-5 by the trap's tier.
-  - +2: the death animation and the fade. +4: the player is at the checkpoint of the corridor they were hit in. +7: back in control.
+  - Without the ring, the recorded death animation and fade occur at +2, the checkpoint move at +4, and the HUD returns at +7. The HUD alone does not establish the exact movement-unlock tick.
   - The timer doesn't stop.
   - The checkpoints are the recordings' 23 corridor zones; elsewhere the floor's last landing is used.
   - On floor 3's layout B, the level-1 corridor uses the west drop's landing, as live (varbit 10395).
+  - An equipped Hallowed ring prevents environmental-trap damage and skips the ordinary death/fade recovery, returning to the existing modeled checkpoint. This faster return is a TSPS interpretation of the [ring's effect](https://oldschool.runescape.wiki/w/Hallowed_ring); exact ring timing and every ring-specific return tile have not been captured. A separate lightning stun still holds movement.
 
 ## Not yet
 
-- The Hallowed ring.
 - The tool storage interface (666).
 - Death handling beyond the run ending (no recording has a death inside).
 - The ambient NPCs.

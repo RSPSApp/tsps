@@ -52,12 +52,14 @@ Newest first.
   later with sound 69 on opening, as in both recordings (2026-10-17 tick 1117, 2026-11-02 ticks
   11016, 11664 and 11708-11710). The quest's golden-key rule still runs first and keeps the
   first gate shut without the key. Covered by `tests/wooden-gate.test.cjs`. Checked in-game from
-  the monument side for 3444 only.
-- **open (Doors)** Live replaces the gate leaf with `inviswall` (38848) on the gate tile while
-  the gate stands open, yet the opener crosses with an ordinary walk (no exactmove in either
-  recording). Doors can keep that wall only with `carry`, which moves the opener by forced
-  movement, so it is left out to keep the live walk; for those 2 ticks the gate tile has no wall
-  and anyone else can walk through it.
+  the monument side for 3444 only, before the blocker below was added.
+- **fixed (live capture)** While a mausoleum gate stands open, live replaces the gate leaf with
+  `inviswall` (38848) on the gate tile, yet the opener crosses with an ordinary walk (no
+  exactmove in either recording). Doors now does the same: the blocker goes up with the leaf, and
+  the opener's one step walks over it (the movement ignore-clipping flag, held until they are
+  across and never past two ticks). Nobody else can walk through behind them; without the
+  blocker, a player with no golden key could follow someone through the first gate. Unit-tested
+  against the real map collision; not seen in-game.
 - **fixed (live capture)** The two voices behind the temple door now wear the monks' chat heads
   the recording shows: "Mysterious Voice" 3484, "Mysterious Voice 2" 3486 (the plugin used one
   head, 12240, for both). Unit-tested; the head itself was not seen in a client.

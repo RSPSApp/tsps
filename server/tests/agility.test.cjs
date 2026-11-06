@@ -1429,7 +1429,7 @@ test("Ape Atoll: the rope won't take a pet across (Wiki)", () => {
   }
 });
 
-test("Wilderness Agility dispenser (Wiki): a paid lap started without Tag resets the streak and the unclaimed ticket and reward; the payment stays", () => {
+test("Wilderness Agility dispenser (Wiki): a paid lap started without Tag resets the streak but keeps the unclaimed ticket and reward; the payment stays", () => {
   const listeners = {};
   const Dispenser = require("../plugins/skills/AgilityDispenser.plugin");
   Dispenser.register(new Proxy({
@@ -1450,7 +1450,13 @@ test("Wilderness Agility dispenser (Wiki): a paid lap started without Tag resets
     assert.equal(varbit("wildy_agility_reward_lap_new"), 1, "a paid lap: streak 1");
     assert.equal(varbit("wildy_agility_reward_available"), 1);
     player.setLocation(new Location(3004, 3937, 0));
-    runLap(course, player);
+    runLap(course, player, {
+      beforeLast: () => {
+        assert.equal(player.getAttribute(Dispenser.ATTRIBUTES.ticket), 1,
+          "starting another lap does not lose the pending ticket (#2711)");
+        assert.equal(player.getAttribute(Dispenser.ATTRIBUTES.reward), 1, "nor the pending reward");
+      },
+    });
     assert.equal(varbit("wildy_agility_reward_lap_new"), 1, "the untagged lap's pipe reset it, so this lap starts again at 1");
     assert.equal(player.getAttribute(Dispenser.ATTRIBUTES.deposit), 1, "the payment stays");
     assert.equal(varbit("wildy_agility_token_available"), 1, "this lap's own ticket");

@@ -61,3 +61,25 @@ test("a bond collected into the inventory still arrives untradeable", (t) => {
   assert.equal(f.inv.getAmount(TRADEABLE_BOND), 0);
   assert.equal(f.inv.getAmount(UNTRADEABLE_BOND), 1);
 });
+
+test("the split joins the untradeable bonds already banked in another tab", (t) => {
+  const f = actor(t);
+  f.p.getBank(1).add(new core.Item(UNTRADEABLE_BOND, 3), false);
+  const tab = f.p.getBank(0);
+  tab.add(new core.Item(TRADEABLE_BOND, 2), false); // one owned, one just collected
+  PM.emitCustomEvent("ge:offer-collected", { player: f.p, itemId: TRADEABLE_BOND, amount: 1, destination: "bank", container: tab });
+  assert.equal(tab.getAmount(TRADEABLE_BOND), 1);
+  assert.equal(tab.getAmount(UNTRADEABLE_BOND), 0, "no second untradeable stack");
+  assert.equal(f.p.getBank(1).getAmount(UNTRADEABLE_BOND), 4);
+});
+
+test("a full bank still splits the bought bond off as untradeable", (t) => {
+  const f = actor(t);
+  const tab = f.p.getBank(0);
+  tab.add(new core.Item(TRADEABLE_BOND, 2), false);
+  for (let id = 1000; core.Bank.freeSlots(f.p) > 0; id += 2) tab.add(new core.Item(id, 1), false);
+  assert.equal(core.Bank.freeSlots(f.p), 0, "the bank is full");
+  PM.emitCustomEvent("ge:offer-collected", { player: f.p, itemId: TRADEABLE_BOND, amount: 1, destination: "bank", container: tab });
+  assert.equal(tab.getAmount(TRADEABLE_BOND), 1);
+  assert.equal(tab.getAmount(UNTRADEABLE_BOND), 1);
+});

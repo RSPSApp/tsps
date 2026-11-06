@@ -208,8 +208,11 @@ function convertBond(event) {
   convertSlots(player, [slot]);
 }
 
-/** Turns up to `count` tradeable bonds in `container` into untradeable ones. */
-function convertHeldBonds(container, count) {
+/**
+ * Turns up to `count` tradeable bonds in `container` into untradeable ones. `bankOwner`: the container is
+ * that player's bank tab, so a split-off untradeable stack joins the tab already holding untradeable bonds.
+ */
+function convertHeldBonds(container, count, bankOwner = null) {
   let remaining = count;
   const items = container.getItems();
   for (let slot = 0; slot < items.length && remaining > 0; slot++) {
@@ -223,12 +226,19 @@ function convertHeldBonds(container, count) {
     if (converted === amount) {
       container.setItem(slot, new Item(UNTRADEABLE_BOND, amount));
     } else {
-      // A bank stacks bonds: a bought one collected onto bonds already banked is split off that stack.
-      // With no room for the untradeable stack it stays as it was, rather than vanishing.
+      // A bank stacks bonds: a bought one collected onto bonds already banked is split off that stack, into
+      // the tab holding untradeable bonds. The split needs at most one more slot, so a full bank still takes it.
       const split = new Item(UNTRADEABLE_BOND, converted);
-      if (container.getAddableAmount(split) < converted) continue;
-      container.setItem(slot, new Item(TRADEABLE_BOND, amount - converted));
-      container.add(split, false);
+      const { Bank } = pluginApi.core;
+      const target = bankOwner ? bankOwner.getBank(Bank.getTabForItem(bankOwner, UNTRADEABLE_BOND)) : container;
+      const place = () => {
+        if (target.getAddableAmount(split) < converted) return false;
+        container.setItem(slot, new Item(TRADEABLE_BOND, amount - converted));
+        target.add(split, false);
+        return true;
+      };
+      if (!(bankOwner ? Bank.withoutLimit(bankOwner, place) : place())) continue;
+      if (target !== container) target.refreshItems();
     }
     remaining -= converted;
   }
@@ -299,7 +309,7 @@ function convertCollectedBond(event) {
   if (event?.itemId !== TRADEABLE_BOND || !event.container) {
     return;
   }
-  convertHeldBonds(event.container, event.amount);
+  convertHeldBonds(event.container, event.amount, event.destination === "bank" ? event.player : null);
 }
 
 const MOVE_BUTTON_IDS = [...MOVE_BUTTONS.keys()];

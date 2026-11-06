@@ -1,5 +1,6 @@
 import { openClientUrl } from "../common/openUrl";
 import { applyNpcSpecificEffect } from "./sync/NpcSpecificEffects";
+import { applyGlobalNpcHeadIcons, applyNpcSpecificHeadIcon } from "./sync/NpcHeadIcons";
 import { createNpcEcs, type NpcGraphicsEcs } from "./ecs/createNpcEcs";
 import { initializeWidgetItemModel } from "../widgets/WidgetItemModel";
 import { LISTENED_CLAN_TYPE, OWN_CLAN_TYPE } from "../common/social/Clans";
@@ -866,7 +867,7 @@ export class OsrsClient {
     // Appearance is server-driven; no client defaults.
 
     // ECS stores
-    npcEcs: NpcGraphicsEcs = createNpcEcs(() => this.renderer);
+    npcEcs: NpcGraphicsEcs = createNpcEcs(() => this.renderer, serverId => this.npcHeadIcons.delete(serverId));
     /** The active renderer's scene geometry, for plugins drawing over the scene in 2D. */
     sceneGeometry?: SceneGeometry;
     /** The minimap as last drawn, for plugins marking it. */
@@ -3186,7 +3187,12 @@ export class OsrsClient {
             }
         });
         this.unsubscribeNpcSpecificEffects = subscribeNpcSpecificEffects(effect => {
-            applyNpcSpecificEffect(this.npcEcs, this.renderer, effect, getClientCycle());
+            if (effect.kind === "headicon") {
+                applyNpcSpecificHeadIcon(this.npcEcs, this.npcHeadIcons,
+                    typeId => this.npcTypeLoader?.load(typeId), effect);
+            } else {
+                applyNpcSpecificEffect(this.npcEcs, this.renderer, effect, getClientCycle());
+            }
         });
         // Subscribe to server-side GFX (spot) messages and forward to renderer
         try {
@@ -7894,8 +7900,7 @@ export class OsrsClient {
         const ecsId = this.npcEcs.getEcsIdForServer(serverId);
 
         if (Array.isArray(block.headIcons)) {
-            if (block.headIcons.length > 0) this.npcHeadIcons.set(serverId, block.headIcons);
-            else this.npcHeadIcons.delete(serverId);
+            applyGlobalNpcHeadIcons(this.npcHeadIcons, serverId, block.headIcons);
         }
 
         if (ecsId !== undefined) {
@@ -8111,7 +8116,8 @@ export class OsrsClient {
         const existingInstance = this.npcInstances.instanceMap.get(instanceKey);
         // Keep OSRS-style global NPC index array in sync for menuAction packet gates.
         ClientState.npcs[sid] = null;
-        this.npcHeadIcons.delete(sid);
+        // The ECS unmap callback owns head-icon cleanup. A remove/re-add in the same
+        // NPC_INFO can change this NPC's type without ending its customized icon lifetime.
         this.npcModelOverrides.delete(sid);
         try {
             (this.renderer as any)?.clearNpcHealthBars?.(sid);

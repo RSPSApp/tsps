@@ -376,6 +376,12 @@ export class CacheDefinitions {
         return this.idByName(GamevalKind.SPOTANIM).get(name) ?? null;
     }
 
+    /** A sprite archive by its cache name, including multi-frame overhead icons. */
+    static getSpriteId(name: string): number | null {
+        const id = CacheIndexDat2.fromStore(IndexType.DAT2.sprites, CachePipeline.getStore()).getArchiveId(name);
+        return id < 0 ? null : id;
+    }
+
     /** An interface component's packed id by its gameval name (`bankside:runepouch_top`), or null. */
     static getComponentId(name: string): number | null {
         return this.getGamevals().componentId(name);

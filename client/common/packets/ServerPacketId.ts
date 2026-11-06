@@ -25,6 +25,7 @@ export const enum ServerPacketId {
     MOVEMENT_POSITION = 23,
     NPC_ANIM_SPECIFIC = 24,
     NPC_SPOTANIM_SPECIFIC = 25,
+    NPC_HEADICON_SPECIFIC = 26,
 
     // ========================================
     // VARPS/VARBITS (40-49)
@@ -195,6 +196,7 @@ export const SERVER_PACKET_LENGTHS: Record<ServerPacketId, number> = {
     [ServerPacketId.MOVEMENT_POSITION]: 18,
     [ServerPacketId.NPC_ANIM_SPECIFIC]: 5, // index(2) + id(2) + delay(1)
     [ServerPacketId.NPC_SPOTANIM_SPECIFIC]: 9, // index(2) + id(2) + slot(1) + height(2) + delay(2)
+    [ServerPacketId.NPC_HEADICON_SPECIFIC]: 7, // index(2) + slot(1) + archive(2) + frame(2)
     [ServerPacketId.NPC_INFO]: -2,
     [ServerPacketId.ANIM]: 22, // 11 shorts for animation IDs
 

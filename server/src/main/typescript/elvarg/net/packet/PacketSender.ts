@@ -24,6 +24,7 @@ import {
   encodeBankSnapshot,
   encodeNpcAnimationSpecific,
   encodeNpcSpotAnimationSpecific,
+  encodeNpcHeadIconSpecific,
   encodeChatMessage,
   type ChatStyle,
   encodeCollectionLogSnapshot,
@@ -178,6 +179,12 @@ export interface SubInterfaceMount {
 const WORN_INVENTORY_ID = 94;
 
 export class PacketSender {
+  /** Viewer-only slot customization, delivered after this viewer's NPC info. */
+  sendNpcHeadIconSpecific(npc: NPC, slot: number, archive: number, frame: number): this {
+    this.player.getSession()?.queueNpcSpecificEffect(npc,
+      encodeNpcHeadIconSpecific(npc.getIndex(), slot, archive, frame));
+    return this;
+  }
   /** A sequence for this viewer alone; it never changes the shared NPC update flags. */
   sendNpcAnimationSpecific(npc: NPC, animation: Animation): this {
     this.player.getSession()?.queueNpcSpecificEffect(npc,

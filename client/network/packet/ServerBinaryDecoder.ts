@@ -739,6 +739,15 @@ export function decodeServerPacket(data: Uint8Array | ArrayBuffer): DecodedServe
                 slot: reader.readByte(), height: reader.readShort(), delay: reader.readShort() } };
         }
 
+        case ServerPacketId.NPC_HEADICON_SPECIFIC: {
+            const index = reader.readShort();
+            const slot = reader.readByte();
+            const archiveId = reader.readShort();
+            const spriteId = reader.readShort();
+            return { type: "npc_specific_effect", payload: { kind: "headicon", index, slot,
+                archiveId: archiveId === 65535 ? -1 : archiveId, spriteId: spriteId === 65535 ? -1 : spriteId } };
+        }
+
         case ServerPacketId.INVENTORY_SNAPSHOT: {
             const count = reader.readShort();
             const slots: any[] = [];

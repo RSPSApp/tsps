@@ -512,6 +512,11 @@ export class PlayerSession {
         if (!this.sendClientPacket(effect.packet)) return;
       }
     }
+    // Content can refresh transient viewer visuals when an actor enters local view.
+    // Use the indices actually encoded, not the pre-cull candidate list.
+    PluginManager.emitCustomEvent("network:npc-sync", {
+      player, tick, npcs: [...visibleNpcs].filter(npc => sentIndices.has(npc.getIndex()) && npc.isRegistered()),
+    });
 
     if (!initialSync && sceneChanged) {
       ObjectManager.onRegionChange(player, this.sceneBaseX, this.sceneBaseY);

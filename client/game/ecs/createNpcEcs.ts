@@ -13,10 +13,14 @@ export type NpcGraphicsEcs = NpcEcs & {
 /** Attached graphics belong to a mapping's lifetime, not its reusable server index. */
 export function createNpcEcs(
     getRenderer: () => Pick<GameRenderer, "clearNpcSpotAnimations"> | undefined,
+    onServerUnmapped?: (serverId: number) => void,
 ): NpcGraphicsEcs {
     let continuing: ReadonlySet<number> | undefined;
     const ecs = new NpcEcs(1024, serverId => {
-        if (!continuing?.has(serverId)) getRenderer()?.clearNpcSpotAnimations(serverId);
+        if (!continuing?.has(serverId)) {
+            getRenderer()?.clearNpcSpotAnimations(serverId);
+            onServerUnmapped?.(serverId);
+        }
     }) as NpcGraphicsEcs;
     ecs.removeForNpcInfo = (frame, despawn) => {
         continuing = new Set(frame.spawns.map(spawn => spawn.npcId | 0));

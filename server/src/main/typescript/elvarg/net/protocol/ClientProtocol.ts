@@ -2222,6 +2222,18 @@ export function encodeWidgetSetAngle(uid: number, angleX: number, angleY: number
   return encodeServerPacket(ServerPacketId.WIDGET_SET_ANGLE, payload);
 }
 
+/**
+ * IF_SETROTATESPEED: the model's rotation speeds in graphics-cycle units. Recording 1723
+ * (rev 227) sends the component uid, then one packed int with the y (yaw) speed in the high
+ * short and the x speed in the low short, both signed.
+ */
+export function encodeWidgetSetRotateSpeed(uid: number, speedX: number, speedY: number): Buffer {
+  const payload = Buffer.alloc(8);
+  payload.writeInt32BE(uid | 0, 0);
+  payload.writeInt32BE((((speedY | 0) & 0xffff) << 16) | ((speedX | 0) & 0xffff), 4);
+  return encodeServerPacket(ServerPacketId.WIDGET_SET_ROTATE_SPEED, payload);
+}
+
 export function encodeWidgetSetItem(uid: number, itemId: number, quantity = 1): Buffer {
   const payload = Buffer.alloc(10);
   payload.writeInt32BE(uid | 0);

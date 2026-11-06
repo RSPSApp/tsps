@@ -33,6 +33,7 @@ let core = null;
 let objects = null;
 let rock = null;
 let exhaustRock = null;
+let keepsStanding = null;
 let mine = null;
 let rockSites = null;
 // Wet rocks by tile key: the rock as found on the map, and its water decoration.
@@ -133,7 +134,8 @@ function depleteWetRocks() {
   const viewers = mine.getPlayers();
   for (const { site } of wet.values()) {
     const object = standing(site);
-    if (object) exhaustRock(object, rock, viewers);
+    // A miner whose rocks do not deplete (Demonic Pacts' Endless Harvest) keeps the rock and their mining.
+    if (object && !keepsStanding?.(object, rock)) exhaustRock(object, rock, viewers);
   }
   wet.clear();
   cycle.depleteAt = -1;
@@ -186,12 +188,16 @@ function createWaterTask(api) {
   })();
 }
 
-/** `calcified`: Mining's rock entry; `exhaust(object, rock, viewers)` mines a rock out with nothing to keep it. */
-function attach(api, calcified, exhaust) {
+/**
+ * `calcified`: Mining's rock entry; `exhaust(object, rock, viewers)` mines a rock out with nothing to keep it;
+ * `keeps(object, rock)` is true when the rock's miners have content that keeps it standing.
+ */
+function attach(api, calcified, exhaust, keeps) {
   core = api.core;
   objects = api.getObjectManager();
   rock = calcified;
   exhaustRock = exhaust;
+  keepsStanding = keeps;
   rockSites = null;
   wet.clear();
   Object.assign(cycle, { tick: 0, nextOoze: between(CYCLE_TICKS), stopAt: -1, depleteAt: -1 });

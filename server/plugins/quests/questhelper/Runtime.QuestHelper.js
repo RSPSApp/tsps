@@ -15,6 +15,30 @@ const MAX_EVENTS=1024;
 // above the largest number of distinct varbits any single helper file reads (55, Mourning's End
 // Part II), and it exists only so a bridge that keeps asking cannot spin forever.
 const MAX_REQUEST_ROUNDS=64;
+// Snapshot sections a browser sends once and then names by digest (client QuestHelperReuse): the
+// scene's objects and terrain, the widget tree and the cache definitions. Held per browser session.
+const REUSABLE_SECTIONS=['objects','widgets','itemDefinitions','objectDefinitions','npcDefinitions','terrain'];
+const TERRAIN_KEYS=['loadedTilesPacked','tileHeightsPacked','tileSettingsPacked'];
+const validDigest=d=>typeof d==='string'&&/^[0-9a-f]{1,64}$/.test(d);
+/** The full snapshot: sections sent with a digest are kept, sections named by digest are restored. */
+function rehydrate(state,raw){
+ const {digests,reuse,...snapshot}=raw;
+ state.cache??=new Map();
+ if(record(digests))for(const section of REUSABLE_SECTIONS){
+  const digest=digests[section];if(!validDigest(digest))continue;
+  const value=section==='terrain'?(record(snapshot.geometry)?Object.fromEntries(TERRAIN_KEYS.filter(k=>snapshot.geometry[k]!==undefined).map(k=>[k,snapshot.geometry[k]])):undefined):snapshot[section];
+  if(value!==undefined)state.cache.set(section,{digest,value});
+ }
+ if(record(reuse))for(const section of REUSABLE_SECTIONS){
+  const digest=reuse[section];if(digest===undefined)continue;
+  const held=state.cache.get(section);
+  if(!held||held.digest!==digest)throw new Error(`Quest Helper snapshot reuses ${section} the server does not hold`);
+  if(section==='terrain')snapshot.geometry={...(record(snapshot.geometry)?snapshot.geometry:{}),...held.value};
+  else snapshot[section]=held.value;
+ }
+ return snapshot;
+}
+const cachedDigests=state=>Object.fromEntries([...(state.cache??new Map())].map(([section,{digest}])=>[section,digest]));
 const validEvents=events=>Array.isArray(events)&&events.length<=MAX_EVENTS&&events.every(event=>record(event)&&typeof event.type==='string'&&event.type.length<=128);
 
 class QuestHelperRuntime {
@@ -111,7 +135,7 @@ class QuestHelperRuntime {
   if(state&&state.session!==frame.session){await this.close(player);state=null;}
   if(!state){state={session:frame.session,engineSession:randomUUID(),assembler:new ChunkedPluginMessageAssembler(frame.session),active:true,sequence:0,busy:false,questKey:null};this.players.set(player,state);}
   try{
-   const data=state.assembler.accept(frame);if(!data)return;
+   let data=state.assembler.accept(frame);if(!data)return;
    if(data.type==='close'){await this.close(player);return;}
    if(data.type==='catalog'){
     if(!this.catalogPromise)this.catalogPromise=this.bridge.catalog().catch(error=>{this.catalogPromise=null;throw error;});const catalog=await this.catalogPromise;if(this.players.get(player)!==state)return;this.catalogData=catalog;
@@ -130,6 +154,7 @@ class QuestHelperRuntime {
    if(!Number.isSafeInteger(data.sequence)||data.sequence<=state.sequence||state.busy)return;
    if(data.helperVariant!==state.helperVariant)throw new Error('Helper variant changed without selecting');
    if(!record(data.snapshot)||!validEvents(data.events))throw new Error('Invalid helper snapshot/events');
+   data={...data,snapshot:rehydrate(state,data.snapshot)};
    state.sequence=data.sequence;state.busy=true;const generation=state.generation;
    try {
     if(this.catalogPromise)this.catalogData=await this.catalogPromise;
@@ -137,7 +162,7 @@ class QuestHelperRuntime {
     this.checkVariant(quest.key,data.helperVariant,true);
     const response=await this.compute(player,state,data);
     if(this.players.get(player)!==state||!state.active||state.generation!==generation)return;
-    const result={...response,type:'result',protocol:1,session:state.session,sequence:data.sequence,questKey:quest.key,questProgress:this.progress(player)};
+    const result={...response,type:'result',protocol:1,session:state.session,sequence:data.sequence,questKey:quest.key,questProgress:this.progress(player),cached:cachedDigests(state)};
     // Kept for the agent MCP's conformance check: what a real client was just told.
     state.lastResult={at:Date.now(),result};
     this.emit(player,result);

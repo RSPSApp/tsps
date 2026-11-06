@@ -152,6 +152,40 @@ export class ShopManager {
         return this.shopsById.size;
     }
 
+    /**
+     * Adds a shop a plugin owns, such as Rogue Trader's rune caskets for one player, without touching the stock of the
+     * others (reload() would reset them all). Remove it with removeShop when its owner is done.
+     */
+    public static registerShop(definition: ShopDefinition): void {
+        ShopDefinition.register(definition);
+        this.shopsById.set(definition.getId(), this.createRuntimeShop(definition));
+    }
+
+    /** Whether a shop is registered under this id (a plugin's per-player shop, see registerShop). */
+    public static hasShop(shopId: number): boolean {
+        return this.shopsById.has(shopId);
+    }
+
+    /** Puts more of an item into a shop's stock; anything above its original amount falls back with the shop's restock timer. */
+    public static addShopStock(shopId: number, itemId: number, amount: number): boolean {
+        const shop = this.shopsById.get(shopId);
+        if (!shop || !this.addStock(shop, itemId, amount)) {
+            return false;
+        }
+        this.refresh(shopId);
+        this.ensureRestockTask();
+        return true;
+    }
+
+    public static removeShop(shopId: number): void {
+        for (const player of Array.from(this.viewersByShopId.get(shopId) ?? [])) {
+            this.close(player);
+        }
+        this.shopsById.delete(shopId);
+        this.viewersByShopId.delete(shopId);
+        ShopDefinition.unregister(shopId);
+    }
+
     public static open(
         player: any,
         shopId: number,

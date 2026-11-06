@@ -22,6 +22,7 @@ import {
     tooltipsEnabledByDefault,
 } from "../common/utils/DeviceUtil";
 import { clamp } from "../common/utils/MathUtil";
+import { MINIMAP_STATE } from "../runelite/api/gameval/VarbitID";
 import {
     TRANSMIT_VARPS,
     VARBIT_COMBATLEVEL_TRANSMIT,
@@ -398,7 +399,7 @@ const TAB_SWITCH_SCRIPT = 914;
 /** Server-set widget properties held while their cache interface is not loaded. */
 const HELD_WIDGET_ACTIONS: ReadonlySet<string> = new Set([
     "set_text", "set_hidden", "set_model", "set_angle", "set_colour", "set_position", "set_item",
-    "set_npc_head", "set_animation", "set_player_head",
+    "set_npc_head", "set_animation", "set_player_head", "set_rotate_speed",
 ]);
 const DEFAULT_ROOT_INTERFACE = 161;
 const DEFAULT_DISPLAY_ENUM = 1130;
@@ -2883,6 +2884,13 @@ export class OsrsClient {
                     w.modelAngleY = w.rotationY = Number(payload.angleY) | 0;
                     w.modelZoom = Number(payload.zoom) | 0;
                     this.widgetManager.invalidateWidgetRender(w, "server-set-angle");
+                }
+            } else if (payload?.action === "set_rotate_speed") {
+                // IF_SETROTATESPEED: yaw speed in the high short, x speed in the low, per cycle.
+                const w = this.widgetManager?.getWidgetByUid(Number(payload.uid) | 0);
+                if (w) {
+                    w.modelRotationSpeed = ((Number(payload.speedY) | 0) & 0xffff) << 16 | ((Number(payload.speedX) | 0) & 0xffff);
+                    this.widgetManager.invalidateWidgetRender(w, "server-set-rotate-speed");
                 }
             } else if (payload?.action === "set_colour") {
                 // IF_SETCOLOUR: as the cs2 op, the colour of text and rectangles alike.
@@ -6747,6 +6755,14 @@ export class OsrsClient {
                         this.setRoofsHidden(varbitValue === 1);
                     }
                 } catch {}
+                // Varbit 6719 (minimap_state) rides in the toplevel_temp varp, so
+                // re-read it on every varp update: 2 and 5 hide the map, 3-5 the compass.
+                try {
+                    const minimapState = this.varManager.getVarbit(MINIMAP_STATE);
+                    if (minimapState !== undefined) {
+                        this.widgetManager?.setMinimapState(minimapState);
+                    }
+                } catch {}
                 // Varbit 4070 is packed into varp 439: track its value so a
                 // spellbook switch clears any spell selected in the old book.
                 try {
@@ -6809,6 +6825,14 @@ export class OsrsClient {
             // Phase 9: Preparing interface
             await showPhase(90, "Preparing interface...");
             this.widgetManager = new WidgetManager(this.cacheSystem);
+            try {
+                const initialMinimapState = this.varManager.getVarbit(MINIMAP_STATE);
+                if (initialMinimapState !== undefined) {
+                    this.widgetManager.setMinimapState(initialMinimapState);
+                }
+            } catch (err) {
+                console.warn("[OsrsClient] Failed to init minimap state", err);
+            }
             this.widgetManager.onGroupLoaded = (groupId) => {
                 for (const held of this.heldWidgetProperties.take(groupId)) this.handleWidgetPayload?.(held);
             };

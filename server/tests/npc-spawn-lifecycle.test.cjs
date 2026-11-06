@@ -17,6 +17,7 @@ const { Gamevals, GamevalKind } = require("../dist/game/cache/Gamevals");
 const { RegionManager } = require("../dist/game/collision/RegionManager");
 const { NpcDefinitionLoader } = require("../dist/game/definition/loader/impl/NpcDefinitionLoader");
 const { NpcSpawnDefinitionLoader } = require("../dist/game/definition/loader/impl/NpcSpawnDefinitionLoader");
+const { NpcSpawnDefinition } = require("../dist/game/definition/NpcSpawnDefinition");
 const { NPC } = require("../dist/game/entity/impl/npc/NPC");
 const { NpcSpawnLineage } = require("../dist/game/entity/impl/npc/NpcSpawnLineage");
 const { Direction } = require("../dist/game/model/Direction");
@@ -460,4 +461,45 @@ test("a respawn task for an NPC whose source was retired does nothing", () => {
   const task = new NPCRespawnTask(npc, 1);
   task.execute();
   assert.equal(World.getAddNPCQueue().length, 0);
+});
+
+test("requeue hands a live spawn back to its pending list once, and never a dead or dying one", () => {
+  const vetoed = new Set();
+  const api = PluginManager.createApi("RequeueVetoTest");
+  api.onCanSpawnNpc((event) => { if (vetoed.has(event.npcId)) event.allow = false; });
+  const loader = new NpcSpawnDefinitionLoader();
+  const definitions = [loader.toDefinition({ id: MAN, x: 3222, y: 3218, level: 0, wanderRadius: 0 }, "test")];
+  NpcSpawnDefinition.replace(definitions);
+  loader.applyToWorld(definitions);
+  const here = new Location(3222, 3218, 0);
+  try {
+    NpcSpawnDefinitionLoader.activateNear(here);
+    flushNpcQueues();
+    const [man] = live(MAN);
+    assert.ok(man);
+    // Live: it steps aside while vetoed and comes back once, through the loader.
+    vetoed.add(MAN);
+    assert.equal(NpcSpawnDefinitionLoader.requeue(man), true);
+    flushNpcQueues();
+    NpcSpawnDefinitionLoader.activateNear(here);
+    flushNpcQueues();
+    assert.equal(live(MAN).length, 0, "the veto keeps it pending");
+    vetoed.delete(MAN);
+    NpcSpawnDefinitionLoader.activateNear(here);
+    flushNpcQueues();
+    assert.equal(live(MAN).length, 1, "it returns once the veto ends");
+    // Dead: its respawn is already queued, so requeue refuses rather than doubling it.
+    const [again] = live(MAN);
+    again.setDying(true);
+    assert.equal(NpcSpawnDefinitionLoader.requeue(again), false, "a dying spawn is not requeued");
+    again.setDying(false);
+    kill(again);
+    assert.equal(NpcSpawnDefinitionLoader.requeue(again), false, "a dead spawn is not requeued");
+    ticksUntilRespawn(MAN);
+    NpcSpawnDefinitionLoader.activateNear(here);
+    flushNpcQueues();
+    assert.equal(live(MAN).length, 1, "only its own respawn comes back");
+  } finally {
+    NpcSpawnDefinition.replace([]);
+  }
 });

@@ -47,8 +47,8 @@
  *  - The Sisters' sniff and the mansion are not instanced; the mansion trellis is
  *    climbed with a quest handler (the shared Ladders plugin has no "Trellis").
  *  - Lighting a pot of weeds uses a short functional message, not transcript text.
- *  - Felkrash names the cat and turns it wily in OSRS; no wily-cat item exists here,
- *    so completion only checks for an overgrown cat.
+ *  - Felkrash turns the overgrown cat wily at completion and afterwards ("pets:train-wily-cat",
+ *    owned by the Pets plugin). Her cat-naming interface is not implemented.
  */
 module.exports = function registerRatcatchersQuest(api) {
   const { Equipment, ItemIdentifiers, Location, NpcIdentifiers, ObjectIdentifiers, Skill } = api.core;
@@ -247,6 +247,10 @@ module.exports = function registerRatcatchersQuest(api) {
     "Overgrown hellcat",
     "Kitten",
     "Hell-kitten",
+    "Wily cat",
+    "Wily hellcat",
+    "Lazy cat",
+    "Lazy hellcat",
   ]);
 
   // Warehouse rat holes upstairs (cast of ids 10346-10349 at 3265-3273,3377-3384).
@@ -280,6 +284,12 @@ module.exports = function registerRatcatchersQuest(api) {
   const APOTHECARY_MIXES_ACTION_ID = "MJKZu1";
   const HAND_IN_ANTIPOISON_ACTION_ID = "RCYv7q";
   const CAT_GROWS_ACTION_ID = "3-zmem";
+  // Felkrash's post-quest "Can you train my cat for me?": the training line and its three
+  // sibling conditions (an overgrown cat; a wily cat already; neither).
+  const WILY_TRAINING_ACTION_ID = "_ltgrJ";
+  const TRAIN_OVERGROWN_CONDITION_ID = "zwP5KS";
+  const TRAIN_HAS_WILY_CONDITION_ID = "y2nrAo";
+  const TRAIN_NO_CAT_CONDITION_ID = "MaGFY6";
   const QUEST_COMPLETE_ACTION_ID = "LHwBkP";
 
   let quest;
@@ -413,6 +423,17 @@ module.exports = function registerRatcatchersQuest(api) {
     const names = followerCatNames(player);
     for (const name of GROWN_CAT_NPC_NAMES) if (names.has(name)) return true;
     return false;
+  }
+
+  /** The Pets plugin's answer: an overgrown cat to train, and an existing wily or lazy cat. */
+  function wilyCatStatus(player) {
+    const request = { player, overgrown: false, wily: false };
+    api.emitCustomEvent("pets:wily-cat-status", request);
+    return request;
+  }
+
+  function trainWilyCat(player) {
+    api.emitCustomEvent("pets:train-wily-cat", { player, trained: false });
   }
 
   function hasOvergrownCat(player) {
@@ -693,6 +714,16 @@ module.exports = function registerRatcatchersQuest(api) {
         return !held(player, MUSIC_SCROLL_ITEM_ID);
       case "nqrJQU":
         return !held(player, SNAKE_CHARM_ITEM_ID) && !held(player, MUSIC_SCROLL_ITEM_ID);
+      case TRAIN_OVERGROWN_CONDITION_ID: {
+        const cats = wilyCatStatus(player);
+        return cats.overgrown && !cats.wily;
+      }
+      case TRAIN_HAS_WILY_CONDITION_ID:
+        return wilyCatStatus(player).wily;
+      case TRAIN_NO_CAT_CONDITION_ID: {
+        const cats = wilyCatStatus(player);
+        return !cats.overgrown && !cats.wily;
+      }
       case "xdcQte":
         return !hasOvergrownCat(player);
       case "FUEPJO":
@@ -805,7 +836,11 @@ module.exports = function registerRatcatchersQuest(api) {
           !quest.isComplete(player)
         ) {
           quest.complete(player);
+          trainWilyCat(player);
         }
+        return;
+      case WILY_TRAINING_ACTION_ID:
+        if (quest.isComplete(player)) trainWilyCat(player);
         return;
       case QUEST_COMPLETE_ACTION_ID:
         // Kept as a fallback for a transcript replay that reaches the marker.

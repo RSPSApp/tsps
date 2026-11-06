@@ -43,6 +43,7 @@ const MORTAL_DEVELOPER_ATTRIBUTE = "dev:mortal";
 
 const ATTACK_RANGE_DEBUG_GRAPHIC = new Graphic(332, 0);
 const MAX_NPC_COMMAND_SPAWNS = 20;
+const MAX_NPC_TYPE_ID = 0xffff; // NPC updates encode the definition id in 16 bits.
 const INFINITE_HEALTH_ATTRIBUTE = "admin:infinite-health";
 const INFINITE_RUN_ENERGY_ATTRIBUTE = "admin:infinite-run-energy";
 const RUNE_IDS = [554, 555, 556, 557, 558, 559, 560, 561, 562, 563, 564, 565, 566, 9075, 21880, 28929];
@@ -299,7 +300,16 @@ function devOnly(player) {
   return player?.getRights?.() === PlayerRights.DEVELOPER;
 }
 
-function queueNpcSpawn(player, id, amount = 1, onSpawn = null, xOffset = 0, yOffset = 0) {
+function validateNpcSpawn(player, id) {
+  if (!Number.isInteger(id) || id < 0 || id > MAX_NPC_TYPE_ID || CacheDefinitions.hasDefinition("npc", id) !== true) {
+    player.sendMessage(`NPC ${id} is not loaded in this world. For custom NPCs, save your changes, restart the world and reconnect, then try again.`);
+    return false;
+  }
+  return true;
+}
+
+function spawnNpcs(player, id, amount = 1, onSpawn = null, xOffset = 0, yOffset = 0) {
+  if (!validateNpcSpawn(player, id)) return 0;
   const origin = player.getLocation().clone();
   origin.add(xOffset, yOffset);
   const spawnCount = Math.min(Math.max(1, amount), MAX_NPC_COMMAND_SPAWNS);
@@ -320,7 +330,12 @@ function queueNpcSpawn(player, id, amount = 1, onSpawn = null, xOffset = 0, yOff
       npc.setHitpoints(10);
     }
 
-    World.getAddNPCQueue().push(npc);
+    // Register now so feedback reflects a real world slot, not a queue entry that can fail later.
+    const npcs = World.getNpcs();
+    if (!npcs.add(npc)) {
+      player.sendMessage(`Cannot spawn more NPCs: the world NPC limit has been reached (${npcs.sizeReturn()}/${npcs.capacityReturn() - 1}). Remove NPCs and try again.`);
+      break;
+    }
     if (player.getPrivateArea()) {
       player.getPrivateArea().add(npc);
     }
@@ -328,7 +343,87 @@ function queueNpcSpawn(player, id, amount = 1, onSpawn = null, xOffset = 0, yOff
     spawned++;
   }
 
+  if (spawned > 0) {
+    const count = spawned === amount ? String(spawned) : `${spawned} of ${amount}`;
+    const limit = amount > MAX_NPC_COMMAND_SPAWNS ? ` (limit: ${MAX_NPC_COMMAND_SPAWNS} per command)` : "";
+    player.sendMessage(`Spawned ${count} x ${NpcDefinition.forId(id).getName()} (${id}) at ${origin.getX()},${origin.getY()},${origin.getZ()}${limit}.`);
+    if (!CacheDefinitions.resolveNpc(id, player.getPacketSender())?.modelIds?.length) {
+      player.sendMessage(`NPC ${id} is registered, but its current form has no visible model. Check the NPC's models and transforms.`);
+    }
+    if (player.getLocalNpcs().length + spawned > World.MAX_LOCAL_NPCS) {
+      player.sendMessage(`You are at the nearby NPC display limit (${World.MAX_LOCAL_NPCS}); some spawns may be hidden. Remove nearby NPCs or move to a quieter area.`);
+    }
+  }
   return spawned;
+}
+
+function npcSpawnCommand({ player, parts }) {
+  const id = parseIntArg(parts[1]);
+  const amount = parts.length >= 3 ? parseIntArg(parts[2]) : 1;
+  if (id === null || id < 0 || amount === null || amount < 1) {
+    player.sendMessage("Usage: ::npc id [amount]");
+    return true;
+  }
+  spawnNpcs(player, id, amount);
+  return true;
+}
+
+function permanentNpcSpawnCommand({ player, parts }) {
+  const id = parseIntArg(parts[1]);
+  let radiusArg = null;
+  let facingArg = null;
+  if (parts.length >= 3) {
+    const maybeRadius = parseIntArg(parts[2]);
+    if (maybeRadius !== null) {
+      radiusArg = maybeRadius;
+      facingArg = parts.length >= 4 ? parts[3] : null;
+    } else {
+      facingArg = parts[2];
+    }
+  }
+  if (id === null || id < 0) {
+    player.sendMessage("Usage: ::npcperm id [radius] [north|south|east|west|0-7]");
+    return true;
+  }
+
+  if (radiusArg !== null && radiusArg < 0) {
+    player.sendMessage("Radius must be 0 or higher.");
+    return true;
+  }
+
+  const facing = parseFacingArg(facingArg);
+  if (facingArg != null && facing == null) {
+    player
+      .sendMessage("Invalid facing. Use north/south/east/west (or north_east etc) or -1..7.");
+    return true;
+  }
+
+  if (!validateNpcSpawn(player, id)) return true;
+
+  const location = player.getLocation();
+  const spawnEntry = {
+    id,
+    x: location.getX(),
+    y: location.getY(),
+    level: location.getZ(),
+    wanderRadius: radiusArg == null ? 0 : radiusArg,
+    ...(facing?.id == null || facing.id < 0 ? {} : { direction: facing.id }),
+  };
+
+  let file;
+  try {
+    file = appendPersistentNpcSpawn(spawnEntry);
+  } catch (error) {
+    console.error(error);
+    player.sendMessage("Failed to append persistent npc spawn.");
+    return true;
+  }
+
+  const spawned = spawnNpcs(player, id, 1);
+  player.sendMessage(
+    `Saved permanent NPC spawn (id=${id}) to ${file} at ${location.getX()},${location.getY()},${location.getZ()} (radius=${spawnEntry.wanderRadius}, facing=${facing?.label ?? "default"}).${spawned ? "" : " It has not spawned; free capacity and use ::reloadnpcspawns to retry."}`
+  );
+  return true;
 }
 
 // The cache's chatbox search (clientscript 750) searches names client side and resumes the
@@ -408,12 +503,8 @@ function spawnSearchedItem(player, id, amount) {
 }
 
 function spawnSearchedNpc(player, id, amount) {
-  if (!ownerOrDev(player) || id >= CacheDefinitions.getCounts().npcs) {
-    return;
-  }
-  const spawned = queueNpcSpawn(player, id, amount);
-  player
-    .sendMessage(`Spawned ${spawned} x ${NpcDefinition.forId(id)?.getName?.() ?? "npc"} (${id}).`);
+  if (!PluginManager.playerHasCommandRights(player, "npcs")) return;
+  spawnNpcs(player, id, amount);
 }
 
 function itemSearchCommand({ player }) {
@@ -635,15 +726,12 @@ function loopNpcAnimation(npc, animationId, key, resetFirst = true) {
 
 function startNpcAnimationQuestionnaire(api, player, npcId, possibleAnimations) {
   let npc = null;
-  queueNpcSpawn(player, npcId, 1, (spawned) => {
+  spawnNpcs(player, npcId, 1, (spawned) => {
     npc = spawned;
     // Keep the test dummy passive so it does not attack while animating.
     npc.getDefinition().aggressive = false;
   }, 1);
-  if (!npc) {
-    player.sendMessage("Unable to spawn that NPC.");
-    return;
-  }
+  if (!npc) return;
 
   const assignments = {};
   const animationLoopKey = {};
@@ -703,13 +791,10 @@ function startNpcAnimationQuestionnaire(api, player, npcId, possibleAnimations) 
 
 function startNpcAnimationScanner(api, player, npcId, possibleAnimations) {
   let npc = null;
-  queueNpcSpawn(player, npcId, 1, (spawned) => {
+  spawnNpcs(player, npcId, 1, (spawned) => {
     npc = spawned;
   }, 1);
-  if (!npc) {
-    player.sendMessage("Unable to spawn that NPC.");
-    return;
-  }
+  if (!npc) return;
 
   const animationLoopKey = {};
   const assignments = {};
@@ -1043,19 +1128,7 @@ module.exports = {
     api.registerCommand("npcs", npcSearchCommand, PlayerRights.OWNER, "Search and spawn NPCs");
     api.onPlayerProcess(closeSpawnSearchOnMove);
 
-    api.registerCommand("npc", ({ player, parts }) => {
-      const id = parseIntArg(parts[1]);
-      const amount = parts.length >= 3 ? parseIntArg(parts[2]) : 1;
-      if (id === null || id < 0 || amount === null || amount < 1) {
-        player.sendMessage("Usage: ::npc id [amount]");
-        return true;
-      }
-      const spawned = queueNpcSpawn(player, id, amount);
-      player.sendMessage(
-        `Queued ${spawned} NPC${spawned === 1 ? "" : "s"} (id=${id}).`
-      );
-      return true;
-    }, PlayerRights.OWNER, "Spawn NPC");
+    api.registerCommand("npc", npcSpawnCommand, PlayerRights.OWNER, "Spawn NPC");
 
     const npcAnimationCommand = ({ player, parts }) => {
       const id = parseIntArg(parts[1]);
@@ -1123,61 +1196,7 @@ module.exports = {
       return true;
     }, PlayerRights.OWNER, "Scan animations");
 
-    api.registerCommand("npcperm", ({ player, parts }) => {
-      const id = parseIntArg(parts[1]);
-      let radiusArg = null;
-      let facingArg = null;
-      if (parts.length >= 3) {
-        const maybeRadius = parseIntArg(parts[2]);
-        if (maybeRadius !== null) {
-          radiusArg = maybeRadius;
-          facingArg = parts.length >= 4 ? parts[3] : null;
-        } else {
-          facingArg = parts[2];
-        }
-      }
-      if (id === null || id < 0) {
-        player.sendMessage("Usage: ::npcperm id [radius] [north|south|east|west|0-7]");
-        return true;
-      }
-
-      if (radiusArg !== null && radiusArg < 0) {
-        player.sendMessage("Radius must be 0 or higher.");
-        return true;
-      }
-
-      const facing = parseFacingArg(facingArg);
-      if (facingArg != null && facing == null) {
-        player
-          .sendMessage("Invalid facing. Use north/south/east/west (or north_east etc) or -1..7.");
-        return true;
-      }
-
-      const location = player.getLocation();
-      const spawnEntry = {
-        id,
-        x: location.getX(),
-        y: location.getY(),
-        level: location.getZ(),
-        wanderRadius: radiusArg == null ? 0 : radiusArg,
-        ...(facing?.id == null || facing.id < 0 ? {} : { direction: facing.id }),
-      };
-
-      let file;
-      try {
-        file = appendPersistentNpcSpawn(spawnEntry);
-      } catch (error) {
-        console.error(error);
-        player.sendMessage("Failed to append persistent npc spawn.");
-        return true;
-      }
-
-      const spawned = queueNpcSpawn(player, id, 1);
-      player.sendMessage(
-        `Spawned ${spawned} NPC (id=${id}) and appended to ${file} at ${location.getX()},${location.getY()},${location.getZ()} (radius=${spawnEntry.wanderRadius}, facing=${facing?.label ?? "default"}).`
-      );
-      return true;
-    }, PlayerRights.OWNER, "Spawn permanent NPC");
+    api.registerCommand("npcperm", permanentNpcSpawnCommand, PlayerRights.OWNER, "Spawn permanent NPC");
 
     api.registerCommand("object", ({ player, parts }) => {
       const id = parseIntArg(parts[1]);

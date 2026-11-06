@@ -1,0 +1,44 @@
+[
+ {
+  "k": "say",
+  "t": 726,
+  "who": "player",
+  "text": "Hi, I'm back."
+ },
+ {
+  "k": "say",
+  "t": 732,
+  "who": "Blackjack seller",
+  "text": "What is it now?"
+ },
+ {
+  "k": "say",
+  "t": 737,
+  "who": "Street urchin",
+  "text": "Yoink!"
+ },
+ {
+  "k": "say",
+  "t": 743,
+  "who": "Blackjack seller",
+  "text": "Hey come back you thief!"
+ },
+ {
+  "k": "varbit",
+  "t": 748,
+  "id": 916,
+  "value": 2
+ },
+ {
+  "k": "varbit",
+  "t": 748,
+  "id": 919,
+  "value": 1
+ },
+ {
+  "k": "msg",
+  "t": 748,
+  "kind": "mesbox",
+  "text": "The blackjack seller takes a swing at the urchin, but the blow only glances off the urchin's head."
+ }
+]

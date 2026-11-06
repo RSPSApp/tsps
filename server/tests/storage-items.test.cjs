@@ -268,7 +268,7 @@ test("the gem bag holds 60 of each uncut gem and takes picked-up gems while open
   const bag = new Item(Items.GEM_BAG_2, 1);
   const player = createPlayer([bag, ...items(Items.UNCUT_RUBY, 3), ...items(Items.UNCUT_SAPPHIRE, 2)]);
   option(player, bag, "Fill");
-  assert.equal(player.messages.at(-1), GemBag.FILLED);
+  assert.deepEqual(player.messages, [], "Transcript:Gem bag: Fill is a stage direction, not a line");
   assert.equal(Storage.amountOf(player, family("gem-bag"), Items.UNCUT_RUBY), 3);
   Storage.store(player, family("gem-bag"), Items.UNCUT_RUBY, 100);
   assert.equal(Storage.amountOf(player, family("gem-bag"), Items.UNCUT_RUBY), 60);

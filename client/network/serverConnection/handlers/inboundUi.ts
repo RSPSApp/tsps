@@ -1,3 +1,4 @@
+import { getCustomDefinitionKey } from "../../../custom/definitions/CustomDefinitionStore";
 import { applyClanChannelDelta, applyClanSettingsDelta } from "../../../common/social/Clans";
 import { ClientState } from "../../../game/ClientState";
 import {
@@ -287,23 +288,25 @@ export function handleInboundUi(msg: any): boolean {
             const { loadFromPayload } = require("../../../common/gamemode/GamemodeContentStore");
             const itemRevision = CustomItemRegistry.revision;
             const archiveKey = getDefinitionArchiveKey();
+            const definitionsKey = getCustomDefinitionKey();
             loadFromPayload(msg.payload);
             const g: any = (typeof window !== "undefined" ? window : globalThis) as any;
             const mv = g?.__osrsClient;
             if (msg.payload?.datasets?.some((dataset: any) =>
                 dataset.key === "customItems" || dataset.key === "customModels" ||
-                dataset.key === "definitionArchives")) {
+                (dataset.key === "definitionArchives" || dataset.key === "customDefinitions"))) {
                 mv?.objTypeLoader?.clearCache();
                 mv?.objModelLoader?.clearCache();
-                if (datasets?.some((dataset: any) => dataset.key === "definitionArchives")) {
+                if (datasets?.some((dataset: any) => (dataset.key === "definitionArchives" || dataset.key === "customDefinitions"))) {
                     mv?.npcTypeLoader?.clearCache();
                     mv?.locTypeLoader?.clearCache();
+                    mv?.seqTypeLoader?.clearCache();
                     mv?.renderer?.invalidateDefinitionCaches();
                 }
                 mv?.workerPool?.runAll((worker: any) => worker.setCustomContent(msg.payload))
                     .catch((error: unknown) => console.error("Custom worker content failed", error));
             }
-            if (CustomItemRegistry.revision !== itemRevision || getDefinitionArchiveKey() !== archiveKey) {
+            if (CustomItemRegistry.revision !== itemRevision || getDefinitionArchiveKey() !== archiveKey || getCustomDefinitionKey() !== definitionsKey) {
                 markItemDefinitionsChanged();
             }
             if (mv && typeof mv.refreshGamemodeWorldLocs === "function") {

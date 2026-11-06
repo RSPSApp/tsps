@@ -5,7 +5,8 @@ run the in-game checklist a PR asks for, without a client.
 
 For a quest start-to-finish run (Quest Helper route, stages/varps, rewards, relog and recovery),
 use the checklist in [quest-testing.md](quest-testing.md). To follow the helper's own steps
-headless, see [quest-helper-testing.md](quest-helper-testing.md).
+headless, see [quest-helper-testing.md](quest-helper-testing.md). To read a cache definition, its
+links or what references it, see [cache-editor.md](cache-editor.md).
 
 | Step | Tool |
 | --- | --- |

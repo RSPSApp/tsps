@@ -1,0 +1,35 @@
+{
+  "source": "openrs2 cache 2468 (osrs rev236, 2026-02-25); symbols Joshua-F/osrs-dumps 7d9e9efe",
+  "definitions": [
+    {
+      "kind": "npc",
+      "id": 15587,
+      "symbol": "25th_portal_model",
+      "sourceBytes": "DAVfAAAONZcNNZdiAOgeRW50ZXIAXWMoBJRSulCMXLpEjGG6NYxluiECPGNvbD0wMGZmZmY+UG9ydGFsPC9jb2w+AAEB5VQA"
+    },
+    {
+      "kind": "npc",
+      "id": 15576,
+      "symbol": "25th_host_model",
+      "sourceBytes": "XwAADAFhAGRiAGQRBLUEtgS3BLgNAy0eVGFsay10bwAoCSIll6FilpuaFRwDIRkjAqkAe5q3AH8Ae6htABCdKZuWnTGbmgJHYXJ5AAEKANcAtQD2b2Nn+wCwAQQlhAFGKcw8AgA1JYAA"
+    },
+    {
+      "kind": "loc",
+      "id": 60739,
+      "symbol": "25th_spotlight_1",
+      "sourceBytes": "QQBUQwBUQgBwDgIPAh0oJygYNdAREwEoAQ3eDd4FAQ5yAkxpZ2h0AAA="
+    },
+    {
+      "kind": "seq",
+      "id": 13719,
+      "symbol": "25th_portal_swirl",
+      "sourceBytes": "AgAQAQAQAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUAAQACAAMABAAFAAYABwAIAAkACgALAAwADQAOAA8AEDQ7NDs0OzQ7NDs0OzQ7NDs0OzQ7NDs0OzQ7NDs0OzQ7DgABAAAMQ2QBBQAA"
+    },
+    {
+      "kind": "seq",
+      "id": 13776,
+      "symbol": "25th_spotlight_pulsate_1",
+      "sourceBytes": "AgAkAQAkABUABgAGAAYABgAGAAYABgAPABQABgAGAAYABgAGAAYABgAyABQABgAGAAYABgAGAAYABgAKABQABgAGAAYABgAGAAYABgAeAAEAAgADAAQABQAGAAcACAAJAAkACAAHAAYABQAEAAMAAgABAAEAAgADAAQABQAGAAcACAAJAAkACAAHAAYABQAEAAMAAgABHD4cPhw+HD4cPhw+HD4cPhw+HD4cPhw+HD4cPhw+HD4cPhw+HD4cPhw+HD4cPhw+HD4cPhw+HD4cPhw+HD4cPhw+HD4cPhw+AA=="
+    }
+  ]
+}

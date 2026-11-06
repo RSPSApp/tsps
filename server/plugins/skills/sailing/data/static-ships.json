@@ -267,6 +267,21 @@
   },
   {
     "id": "pandemonium_tutorial_ship",
+    "sailing": {
+      "typeId": 3,
+      "sidepanelBoatType": 8113,
+      "sidepanelFacilitySlots": 7,
+      "anims": {
+        "sail": {
+          "cloth": { "down_to_full": 13383 }
+        },
+        "helm": {
+          "active": 13346,
+          "loop": 13347,
+          "player": { "active": 13351, "loop": 13352 }
+        }
+      }
+    },
     "configId": 2,
     "sizeX": 8,
     "sizeZ": 8,
@@ -316,7 +331,8 @@
         "shape": 10,
         "rotation": 0,
         "opFlags": 15,
-        "part": "helm"
+        "part": "helm",
+        "helm": true
       },
       {
         "id": 59553,
@@ -326,7 +342,8 @@
         "shape": 10,
         "rotation": 0,
         "opFlags": 2,
-        "part": "sails"
+        "part": "sails",
+        "sailCloth": true
       },
       {
         "id": 60480,

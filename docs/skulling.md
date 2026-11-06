@@ -28,16 +28,17 @@ From the Wiki: [Skull (status)](https://oldschool.runescape.wiki/w/Skull_(status
   nothing.
 - **Abyss:** a skull from entering the Abyss lasts 10 minutes after leaving it, and entering again
   restarts it.
+- **PK Skull Prevention:** the `settings_side:skull_prevention` toggle (setting 206, varbit
+  `skull_prevent_enabled` 13131) blocks an attack that would skull the player with
+  "You cannot attack this target as it would result in you getting skulled." (rsprox recording
+  4171). It does not block attacking while already skulled, or retaliating against a player
+  already in combat with them.
 
 ## Not done
 
 - **Abyss skull:** `Runecrafting.plugin.js` skulls for 10 minutes from entering the Abyss rather
   than from leaving it, and replaces a longer skull with those 10 minutes. Left for after
   PR #1068, which reworks that plugin.
-- **PK Skull Prevention** (the `settings_side:skull_prevention` toggle, varbit
-  `skull_prevent_enabled` 13131 in rsprox captures 3121, 3886, 3950 and 4171): the setting
-  blocks attacks that would skull the player, but neither the captures nor the Wiki show how an
-  attack is refused (message or menu), so it isn't implemented.
 - **Equip warnings:** the Wiki says the amulet of avarice and the cape of skulls warn before they
   are put on, but not what the warning says. The cape's warning uses our own wording, and the
   amulet has none yet.

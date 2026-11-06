@@ -124,6 +124,15 @@ function herb(player) {
   return I.GRIMY_GUAM_LEAF;
 }
 
+// Wiki (Herb sack): an open sack stores the herbs harvested from a herbiboar, provided there is space for them.
+function harvestInto(player, rewards) {
+  const Guild = require("../farming/Guild.Farming"), { sack, stored, rest } = Guild.splitForOpenSack(player, rewards);
+  if (!C.exchange(player, [], rest)) return false;
+  for (const [id, amount] of stored) Guild.storeCrop(player, sack, id, amount);
+  if (stored.length) player.getInventory().refreshItems();
+  return true;
+}
+
 function harvest({ player, npc }) {
   const hunt = hunts.get(player);
   if (!hunt || hunt.npc !== npc) return false;
@@ -131,7 +140,7 @@ function harvest({ player, npc }) {
   hunt.rewards ??= Array.from({ length: C.roll(1, 3) + (C.hasTool(player, H.core.ItemIdentifiers.MAGIC_SECATEURS) ? 1 : 0) }, () => [herb(player), 1]);
   if (!C.begin(player, 2, HARVEST_ANIMATION, () => {
     hunt.leaving = false;
-    if (hunts.get(player) !== hunt || !C.requireLevel(player, 31, H.core.Skill.HERBLORE) || !C.exchange(player, [], hunt.rewards)) return;
+    if (hunts.get(player) !== hunt || !C.requireLevel(player, 31, H.core.Skill.HERBLORE) || !harvestInto(player, hunt.rewards)) return;
     player.getSkillManager().addExperiences(H.core.Skill.HERBLORE, (hunt.rewards.length - 1) * 25);
     H.api.emitCustomEvent("hunter:success", { player, skill: H.core.Skill.HUNTER, method: "herbiboar", npcId: H.core.NpcIdentifiers.HERBIBOAR, petChance: 6500, xp: 0 });
     const count = Number(player.getAttribute(COUNT_ATTRIBUTE) ?? 0) + 1;

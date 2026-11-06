@@ -1,6 +1,9 @@
 // Leagues VI's shops that never deplete (leagues.json `shopStock`), through the real ShopManager and
 // the real league plugin: a Demonic Pacts character's buy or sale leaves the shop's stock as it was,
 // stock a main character sold it still goes, and a character of no league buys and sells as on any world.
+// Plugins load with the player bots off: a booted bot plugin rescans and rewrites the tracked
+// server/plugins/bots/data/object-index.json whenever the tracked object ids moved.
+process.env.DISABLE_PLAYER_BOTS = "1";
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const { before, after, test } = require("node:test");

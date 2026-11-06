@@ -41,12 +41,14 @@ The client only reports the click. The server sets the variable and sends it bac
 | Collection log - New addition popup | 171 | varbit 11959 bit 1 (owned by the collection log plugin) |
 | Player Trade options | 312 | varbit 6580 `tradeoption_disabled` |
 | Player Report options | 372 | varbit 1334 `rightclick_report_abuse_disabled` |
+| PK Skull Prevention | 206 | varbit 13131 `skull_prevent_enabled` |
 | Side panel can be closed by the hotkeys | 54 | varbit 4611 `hotkey_cannot_close_sidepanel` |
 | Player Attack options (dropdown) | 55 | varp 1107 `option_attackpriority` = option |
 | NPC Attack options (dropdown) | 56 | varp 1306 `option_attackpriority_npc` = option |
 | Scroll wheel can change zoom distance | 13 | varbit 6357 `camera_zoom_mouse_disabled` |
 | Enable profanity filter | 37 | varp 1074 `option_chatfilter_disabled` |
 | Shift click to drop items | 51 | varbit 11556 `desktop_shiftclickdrop_enabled`; a fresh account starts with it on (live sent 1 at login in all 8 transcribed rsprox recordings). The login script (876, via 7431) passes it to `setshiftclickdrop` on desktop; with Shift held the inventory item's shift-click op is its top entry |
+| Ammo-picking behaviour | 305 | varbit 5697 `take_ammo_toggle`; the Ranged combat tutor's toggle writes the same setting, which is authoritative. A pre-Settings tutor choice saved on the old `ranged:equip-ammo-on-pickup` attribute is migrated into this row at login unless a setting is already saved |
 | Sailing side panel (dropdown) | 454 | varbit 18131 `settings_sailing_side_panel_onlyonboat` = option |
 | Level-up pop-up notifications (dropdown) | 315 | see below |
 | Level-up chatbox list | 493 | varbit 20158 `option_level_up_chatbox_list` |
@@ -61,6 +63,8 @@ The client only reports the click. The server sets the variable and sends it bac
 | Show level & unlocks | 0 | 1 |
 
 The keybind dropdowns (ids 16–29) set their key varbits as before, then clear the selection.
+
+The Controls tab's `settings_side:skull_prevention` toggle (116:5) flips the same varbit as its All Settings row 206, and is saved and restored with the other settings.
 
 The attack options are also dropdowns on the side panel's Controls tab (`settings_side:attack_priority_player_buttons` 116:38 and `attack_priority_npc_buttons` 116:39). Live sends op1 on their option rows 1–5 and 1–4 at login, and a click sets the varp straight to the option (slot − 1) on the same tick, as the All Settings rows do. Options from enums 3993 and 3991: 0 depends on combat levels, 1 always right-click, 2 left-click where available, 3 hidden, and for players 4 right-click for clanmates.
 

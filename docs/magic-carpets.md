@@ -38,7 +38,7 @@ Talk-to's travel options list destinations in a different order (Nardah, Menapho
 - the menu title "Carpet rides cost 200 coins." (or 100)
 - the refusal "You need 200 coins to travel on a magic carpet."
 
-The Wiki's Rogue Trader discount (100, or 75 with the ring) is left out because the miniquest isn't implemented.
+Rogue Trader's reward (Wiki) lowers them to 100, or 75 with the ring: the fare follows varbit 914, which Ali's finishing talk (rsprox 549) or "So what's in this for me?" (3169) sets; see `plugins/npcs/RogueTrader.plugin.js`.
 
 ## Talk-to
 

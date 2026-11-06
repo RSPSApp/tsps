@@ -727,7 +727,7 @@ export class World {
     private static readonly localPlayerScratch = new Set<number>();
     private static readonly MAX_LOCAL_PLAYERS = 255;
     private static readonly MAX_NEW_LOCAL_PLAYERS_PER_CYCLE = 25;
-    private static readonly MAX_LOCAL_NPCS = 255;
+    public static readonly MAX_LOCAL_NPCS = 255;
 
     // Maintains player.getLocalPlayers() - the per-tick sync path (PlayerSession.flushClient)
     // reads this list directly to know who to include in the player's view.

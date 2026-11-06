@@ -31,7 +31,7 @@ const NOT_FOOD = {
     "Infernal eel", "Jar of congealed blood", "Leechfin", "Leftovers", "Logavano fruit", "Melted easter egg", "Mint cake",
     "Mystery fruit", "Nightshade", "Poison karambwan", "Rock cake",
     "Rotten apple", "Rotten potato", "Sacred eel", "Seaweed sandwich", "Shrunk ogleroot",
-    "Slice of birthday cake", "Special super hot kebab", "Spicy stew", "Sweetcorn", "Tchiki nut paste",
+    "Special super hot kebab", "Spicy stew", "Sweetcorn", "Tchiki nut paste",
     "Servery cooked meat", "Servery meat pie", "Servery pineapple pizza", "Servery plain pizza",
     "Servery potato", "Servery stew",
   ],

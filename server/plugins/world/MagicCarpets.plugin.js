@@ -15,8 +15,8 @@
  *
  * Fares follow the Wiki (200 coins, 100 with a Ring of Charos(a), free after the hard Desert
  * Diary); no capture of a paid ride exists, so the paid menu title and the "not enough coins"
- * message are this server's wording. Rogue Trader's discount is left out: the miniquest is not
- * implemented.
+ * message are this server's wording. Rogue Trader's discount (100 coins, 75 with the ring) follows its 914 varbit,
+ * asked of plugins/npcs/RogueTrader.plugin.js by the "rogue-trader:cheap-flights" event.
  */
 const DATA = require("./data/magic-carpets.json");
 
@@ -112,8 +112,12 @@ function fareFor(player) {
   const diary = { player, diary: DESERT_DIARY, tier: FREE_RIDES_TIER, complete: null };
   pluginApi.emitCustomEvent("diary:is-complete", diary);
   if (diary.complete === true) return 0;
-  const ring = player.getEquipment().get(core.Equipment.RING_SLOT)?.getId?.();
-  return ring === core.ItemIdentifiers.RING_OF_CHAROS_A_ ? DATA.fare.charos : DATA.fare.coins;
+  const ring = player.getEquipment().get(core.Equipment.RING_SLOT)?.getId?.() === core.ItemIdentifiers.RING_OF_CHAROS_A_;
+  // Rogue Trader's reward (Wiki): 100 instead of 200, and 75 instead of 100 with the ring.
+  const cheap = { player, cheap: false };
+  pluginApi.emitCustomEvent("rogue-trader:cheap-flights", cheap);
+  if (cheap.cheap === true) return ring ? DATA.fare.cheapCharos : DATA.fare.cheap;
+  return ring ? DATA.fare.charos : DATA.fare.coins;
 }
 
 function riding(player) {

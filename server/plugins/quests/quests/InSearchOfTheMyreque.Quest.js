@@ -748,12 +748,14 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
       if (stage === STAGE_GAVE_PLANKS) quest.setStage(player, STAGE_REACHED_HOLLOWS);
       player.moveTo(new api.core.Location(3498, 3380, 0));
       player.sendMessage("You board the boat and journey to the Hollows.");
+      api.emitCustomEvent("transport:swamp-boaty", { player, from: "mortton", to: "hollows" });
       return;
     }
     if (objectId === HOLLOWS_BOAT_ID) {
       event.handled = true;
       player.moveTo(new api.core.Location(3522, 3285, 0));
       player.sendMessage("You board the boat and journey back to Mort'ton.");
+      api.emitCustomEvent("transport:swamp-boaty", { player, from: "hollows", to: "mortton" });
       return;
     }
     if (objectId === HOLLOWS_SIGN_ID) {

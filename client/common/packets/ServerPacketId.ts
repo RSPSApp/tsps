@@ -83,6 +83,7 @@ export const enum ServerPacketId {
     WIDGET_SET_ANGLE = 113, // IF_SETANGLE: model angle and zoom (112 went to IF_SETEVENTS_V2 on main)
     WIDGET_SET_ANIMATION = 114,
     WIDGET_SET_PLAYER_HEAD = 115,
+    WIDGET_SET_ROTATE_SPEED = 116, // IF_SETROTATESPEED: model x/y rotation speed per graphics cycle
     WIDGET_SET_MODEL = 117,
     WIDGET_SET_POSITION = 118,
     WIDGET_SET_COLOUR = 119,
@@ -230,6 +231,7 @@ export const SERVER_PACKET_LENGTHS: Record<ServerPacketId, number> = {
     [ServerPacketId.WIDGET_SET_MODEL]: 8, // uid(4) + raw modelId(4)
     [ServerPacketId.WIDGET_SET_POSITION]: 8, // uid(4) + x(2) + y(2)
     [ServerPacketId.WIDGET_SET_ANGLE]: 10, // uid(4) + angleX(2) + angleY(2) + zoom(2)
+    [ServerPacketId.WIDGET_SET_ROTATE_SPEED]: 8, // uid(4) + speedY(2, high) + speedX(2, low)
     [ServerPacketId.WIDGET_SET_COLOUR]: 6, // uid(4) + 15-bit rgb colour(2)
     [ServerPacketId.WIDGET_SET_HIDDEN]: 5, // uid(4) + hidden(1)
     [ServerPacketId.WIDGET_SET_ITEM]: 10, // uid(4) + itemId(2) + quantity(4)

@@ -58,6 +58,7 @@ object TspsServerPacket {
     const val WIDGET_SET_ANGLE = 113
     const val WIDGET_SET_ANIMATION = 114
     const val WIDGET_SET_PLAYER_HEAD = 115
+    const val WIDGET_SET_ROTATE_SPEED = 116
     const val WIDGET_SET_MODEL = 117
     const val WIDGET_SET_POSITION = 118
     const val WIDGET_SET_COLOUR = 119
@@ -161,6 +162,7 @@ object TspsServerPacket {
             WIDGET_SET_FLAGS to 8,
             WIDGET_SET_ANIMATION to 6,
             WIDGET_SET_PLAYER_HEAD to 4,
+            WIDGET_SET_ROTATE_SPEED to 8,
             CHAT_MESSAGE to -2,
             FRIENDS_CHAT_UPDATE to -2,
             CHAT_FILTER_SETTINGS to 3,

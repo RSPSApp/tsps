@@ -78,6 +78,7 @@ import {
   encodeWidgetSetModel,
   encodeWidgetSetPosition,
   encodeWidgetSetAngle,
+  encodeWidgetSetRotateSpeed,
   encodeWidgetSetNpcHead,
   encodeWidgetSetPlayerHead,
   encodeWidgetSetRoot,
@@ -452,6 +453,15 @@ export class PacketSender {
   /** IF_SETANGLE: a model component's x and y angles and zoom. */
   public sendInterfaceAngle(uid: number, angleX: number, angleY: number, zoom: number): this {
     this.player.getSession().sendClientPacket(encodeWidgetSetAngle(uid, angleX, angleY, zoom));
+    return this;
+  }
+
+  /**
+   * IF_SETROTATESPEED: a model component's x and y rotation speeds per graphics cycle.
+   * y is the turntable (yaw) speed; the museum quiz's models use (0, 5) in recording 1723.
+   */
+  public sendInterfaceRotateSpeed(uid: number, speedX: number, speedY: number): this {
+    this.player.getSession().sendClientPacket(encodeWidgetSetRotateSpeed(uid, speedX, speedY));
     return this;
   }
 

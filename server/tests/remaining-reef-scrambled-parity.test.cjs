@@ -133,7 +133,7 @@ test('Scrambled starts only with requirements, follows captured stages 2/4/6/8, 
   assert.equal(h.quest.getStage(q), 4);
   h.action(q, N.ALAN_2, '2DUXLf');
   assert.equal(h.quest.getStage(q), 4);
-  assert.ok(q.log.some(row => row[0] === 'sendSubInterface' && row[2] === 174));
+  assert.ok(q.log.some(row => row[0] === 'mountSubInterface' && row[2] === 174));
   h.tick(2);
   assert.ok(q.log.some(row => row[0] === 'sendCameraMoveTo'));
   assert.ok(q.log.some(row => row[0] === 'sendCameraLookAt'));

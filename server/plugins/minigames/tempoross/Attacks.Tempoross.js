@@ -115,7 +115,12 @@ class Attacks {
 
   waveHits() {
     const fight = this.fight;
-    if (fight.phase !== "surfaced") return;
+    if (fight.phase !== "surfaced") {
+      // Tempoross went under before the wave landed: no hit, but the overlay the warning
+      // opened has to close, or it stays up until the next wave hides it (#2692).
+      fight.forEachPlayer((player) => player.getPacketSender().sendClientScript(SCRIPT.WAVE_HIDE, F.waveOverlayHide));
+      return;
+    }
     fight.setBoss(fight.enraged ? NPC.BOSS_ENRAGED : NPC.BOSS);
     Shared.animate(fight.boss, ANIM.BOSS_SPAWN);
     for (const old of this.debris) this.cove.removeLoc(old);

@@ -3,7 +3,9 @@
   "fare": {
     "coins": 200,
     "charos": 100,
-    "$comment": "Wiki: 200 coins, 100 with a Ring of Charos(a); free after the hard Desert Diary. No capture of a paid ride exists."
+    "cheap": 100,
+    "cheapCharos": 75,
+    "$comment": "Wiki: 200 coins, 100 with a Ring of Charos(a); free after the hard Desert Diary. No capture of a paid ride exists. cheap and cheapCharos are Rogue Trader's reward (Wiki)."
   },
   "stations": [
     {

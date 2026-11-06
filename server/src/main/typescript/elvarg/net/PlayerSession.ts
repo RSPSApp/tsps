@@ -9,7 +9,7 @@ import { PacketBuilder } from "./packet/PacketBuilder";
 import { NetworkConstants } from "./NetworkConstants";
 import type { Player } from "../game/entity/impl/player/Player";
 import type { NpcExactMove } from "../game/entity/impl/npc/NPC";
-import type { Location } from "../game/model/Location";
+import { Location } from "../game/model/Location";
 import { Appearance } from "../game/model/Appearance";
 import { Flag } from "../game/model/Flag";
 import {
@@ -160,10 +160,14 @@ export class PlayerSession {
   }
 
   public isTileInScene(x: number, y: number, level: number): boolean {
-    return this.hasReplayedScene
-      && level === this.replayedSceneLevel
-      && x >= this.replayedSceneBaseX && x < this.replayedSceneBaseX + 104
-      && y >= this.replayedSceneBaseY && y < this.replayedSceneBaseY + 104;
+    if (!this.hasReplayedScene
+      || x < this.replayedSceneBaseX || x >= this.replayedSceneBaseX + 104
+      || y < this.replayedSceneBaseY || y >= this.replayedSceneBaseY + 104) return false;
+    if (level === this.replayedSceneLevel) return true;
+    const player = this.player;
+    return !!player && CrossFloor.visible(
+      player.getLocation(), new Location(x, y, level), 52, player.getPrivateArea(),
+    );
   }
 
   private sendRebuildNormal(

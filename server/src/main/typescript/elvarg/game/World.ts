@@ -750,7 +750,7 @@ export class World {
                 local !== player &&
                 !seen.has(local.getIndex()) &&
                 World.getPlayers().get(local.getIndex()) === local &&
-                CrossFloor.visible(origin, BoatManager.rootLocation(local), viewDistance) &&
+                CrossFloor.visible(origin, BoatManager.rootLocation(local), viewDistance, privateArea) &&
                 !local.isNeedsPlacement() &&
                 BoatManager.syncArea(local) === privateArea &&
                 BoatManager.canSeeAboard(player, local)
@@ -765,7 +765,7 @@ export class World {
         for (const candidate of World.getNearbyPlayersForUpdate(player)) {
             if (localPlayers.length >= World.MAX_LOCAL_PLAYERS || added >= World.MAX_NEW_LOCAL_PLAYERS_PER_CYCLE) break;
             if (!candidate || candidate === player || seen.has(candidate.getIndex())) continue;
-            if (!CrossFloor.visible(origin, BoatManager.rootLocation(candidate), viewDistance)) continue;
+            if (!CrossFloor.visible(origin, BoatManager.rootLocation(candidate), viewDistance, privateArea)) continue;
             if (BoatManager.syncArea(candidate) !== privateArea) continue;
             if (!BoatManager.canSeeAboard(player, candidate)) continue;
             localPlayers.push(candidate);
@@ -806,7 +806,7 @@ export class World {
                 World.getNpcs().get(npc.getIndex()) === npc &&
                 npc.isRegistered() &&
                 npc.isVisible() &&
-                CrossFloor.visible(origin, BoatManager.rootLocation(npc), viewDistance) &&
+                CrossFloor.visible(origin, BoatManager.rootLocation(npc), viewDistance, privateArea) &&
                 (!npc.isNeedsPlacement() || World.staysInViewWhenPlaced(npc)) &&
                 BoatManager.syncArea(npc) === privateArea &&
                 BoatManager.canSeeAboard(player, npc) &&
@@ -829,7 +829,7 @@ export class World {
             (!currentPet.isNeedsPlacement() || World.staysInViewWhenPlaced(currentPet)) &&
             BoatManager.syncArea(currentPet) === privateArea &&
             BoatManager.canSeeAboard(player, currentPet) &&
-            CrossFloor.visible(origin, BoatManager.rootLocation(currentPet), viewDistance)) {
+            CrossFloor.visible(origin, BoatManager.rootLocation(currentPet), viewDistance, privateArea)) {
             if (localNpcs.length === World.MAX_LOCAL_NPCS) {
                 localIndexes.delete(localNpcs.pop()!.getIndex());
             }
@@ -845,7 +845,7 @@ export class World {
             if (BoatManager.syncArea(npc) !== privateArea) continue;
             if (!BoatManager.canSeeAboard(player, npc)) continue;
             if (npc.isOwnerOnly?.() && npc.getOwner?.() !== player) continue;
-            if (!CrossFloor.visible(origin, BoatManager.rootLocation(npc), viewDistance)) continue;
+            if (!CrossFloor.visible(origin, BoatManager.rootLocation(npc), viewDistance, privateArea)) continue;
             localNpcs.push(npc);
             localIndexes.add(npc.getIndex());
         }

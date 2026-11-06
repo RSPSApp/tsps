@@ -1,4 +1,5 @@
 import type { Location } from "./model/Location";
+import type { PrivateArea } from "./model/areas/impl/PrivateArea";
 
 /** Optional cross-floor visibility and ranged combat. Read after environment setup. */
 export class CrossFloor {
@@ -24,18 +25,17 @@ export class CrossFloor {
     static canCross(a: Location, b: Location): boolean {
         return CrossFloor.combatEnabled() && a.getZ() >= 0 && a.getZ() < 4 && b.getZ() >= 0 && b.getZ() < 4;
     }
-    static visible(viewer: Location, target: Location, range: number): boolean {
-        const sameFloor = viewer.getZ() === target.getZ();
-        const crossFloorVisible = CrossFloor.enabled() && viewer.getZ() >= 0 && viewer.getZ() < 4 &&
-            target.getZ() >= 0 && target.getZ() < 4;
-        return (sameFloor || crossFloorVisible) && CrossFloor.distance(viewer, target) <= range;
+    /** Render entities on the viewer's floor and below it; do not estimate roof occlusion server-side. */
+    static visible(viewer: Location, target: Location, range: number, _privateArea: PrivateArea | null = null): boolean {
+        if (viewer.getZ() === target.getZ()) return CrossFloor.distance(viewer, target) <= range;
+        if (!CrossFloor.enabled() || viewer.getZ() < 0 || viewer.getZ() >= 4 || target.getZ() < 0 || target.getZ() >= 4) {
+            return false;
+        }
+        return target.getZ() < viewer.getZ() && CrossFloor.distance(viewer, target) <= range;
     }
 
-    /** Projectiles may render across floors when enabled; actor visibility additionally checks line of sight and roofs. */
-    static projectileVisible(viewer: Location, target: Location, range: number): boolean {
-        const sameFloor = viewer.getZ() === target.getZ();
-        const crossFloorProjectile = CrossFloor.enabled() && viewer.getZ() >= 0 && viewer.getZ() < 4 &&
-            target.getZ() >= 0 && target.getZ() < 4;
-        return (sameFloor || crossFloorProjectile) && CrossFloor.distance(viewer, target) <= range;
+    static projectileVisible(viewer: Location, target: Location, range: number, privateArea: PrivateArea | null = null): boolean {
+        if (viewer.getZ() === target.getZ()) return CrossFloor.distance(viewer, target) <= range;
+        return CrossFloor.canCross(viewer, target) && CrossFloor.distance(viewer, target) <= range;
     }
 }

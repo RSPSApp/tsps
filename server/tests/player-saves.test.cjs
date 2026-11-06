@@ -521,3 +521,38 @@ test("JSON backend deletes the file, even one still queued; Null backend ignores
   const { NullPlayerPersistence } = require("../dist/game/entity/impl/player/persistence/NullPlayerPersistence");
   await new NullPlayerPersistence().delete("anyone");
 });
+
+test("a pending delete hides the save's history and refuses a restore", async () => {
+  const p = player("Hidden");
+  setGold(p, 1);
+  persistence.save(p, "save");
+  setGold(p, 2);
+  persistence.save(p, "logout");
+  await persistence.flush();
+  const id = (await snapshots("Hidden"))[0].id;
+  const done = persistence.delete("Hidden");
+  assert.deepEqual(persistence.listSnapshots("Hidden"), []);
+  assert.equal(persistence.restoreSnapshot("Hidden", id), null);
+  await done;
+  assert.equal(persistence.exists("Hidden"), false);
+  assert.equal(persistence.findSave.get("hidden"), undefined, "the refused restore wrote nothing");
+});
+
+test("JSON delete forgets a write that fails while it waits", async () => {
+  const p = player("Json Failing");
+  const file = jsonPersistence.resolveFilePath("Json Failing");
+  const fsp = require("node:fs/promises");
+  const original = fsp.mkdir;
+  fsp.mkdir = async () => { throw new Error("disk full"); };
+  const quiet = console.error;
+  console.error = () => {};
+  try {
+    jsonPersistence.save(p);
+    await jsonPersistence.delete("Json Failing");
+  } finally {
+    fsp.mkdir = original;
+    console.error = quiet;
+  }
+  await jsonPersistence.flush();
+  assert.ok(!fs.existsSync(file));
+});

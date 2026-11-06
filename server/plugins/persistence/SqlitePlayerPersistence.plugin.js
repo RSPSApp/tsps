@@ -238,12 +238,14 @@ class SqlitePlayerPersistence extends PlayerPersistence {
   }
 
   listSnapshots(username, limit = 15, profile = MAIN_PROFILE) {
-    return this.history.list(this.saveKey(username, profile), limit);
+    const key = this.saveKey(username, profile);
+    return this.deleted.has(key) ? [] : this.history.list(key, limit);
   }
 
   /** See PlayerPersistence.restoreSnapshot. An offline player's current save goes in the history first. */
   restoreSnapshot(username, id, { online = false } = {}, profile = MAIN_PROFILE) {
     const name = this.saveKey(username, profile);
+    if (this.deleted.has(name)) return null;
     const copy = this.history.get(name, id);
     if (!copy) return null;
     if (online) {

@@ -148,6 +148,7 @@ class JsonPlayerPersistence extends PlayerPersistence {
     this.pendingSerializedSaves.delete(filePath);
     this.failedWrites.delete(filePath);
     await this.pendingWriteChain.catch(() => undefined);
+    this.failedWrites.delete(filePath);
     fs.rmSync(filePath, { force: true });
   }
 

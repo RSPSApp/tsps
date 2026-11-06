@@ -1242,6 +1242,27 @@ function countHellRat(player, npc, info, state) {
  * "pets:wily-cat-status" { player, overgrown, wily }: whether the player has an overgrown cat
  * with them (following or carried) to train, and whether they already have a wily or lazy cat.
  */
+function answerNamingCandidate(request) {
+  const player = request?.player;
+  if (!player || request.candidate) return;
+  const eligible = info => ['wily', 'lazy', 'wily_hellcat', 'lazy_hellcat'].includes(info?.stage);
+  const follower = player.getAttribute?.(CURRENT_PET_ATTRIBUTE);
+  if (follower?.isRegistered?.() && follower.isVisible?.() && follower.isPet?.()
+      && follower.getOwner?.() === player && !World.getRemoveNPCQueue().includes(follower)
+      && (player.getPrivateArea?.() ?? null) === (follower.getPrivateArea?.() ?? null)
+      && player.getLocation()?.getZ() === follower.getLocation()?.getZ()
+      && (player.getLocalNpcs?.() ?? []).includes(follower)
+      && eligible(catInfoOf(getPetByNpcId(follower.getId())))) {
+    request.candidate = {kind:'follower', npc:follower};
+    return;
+  }
+  const items = player.getInventory?.()?.getItems?.() ?? [];
+  for (let slot=0; slot<items.length; slot++) {
+    const item = items[slot], info = item && CAT_BY_ITEM.get(item.getId());
+    if (eligible(info)) { request.candidate = {kind:'inventory', slot, item}; return; }
+  }
+}
+
 function answerWilyCatStatus(request) {
   const player = request?.player;
   if (!player) return;
@@ -2140,6 +2161,7 @@ module.exports = {
     api.onCustomEvent("pets:release", releasePet);
     api.onCustomEvent("pets:award", awardPetRequest);
     api.onCustomEvent("pets:wily-cat-status", answerWilyCatStatus);
+    api.onCustomEvent("pets:naming-candidate", answerNamingCandidate);
     api.onCustomEvent("pets:train-wily-cat", trainWilyCat);
     api.onItemDropPolicy(onPetItemDropPolicy);
     api.onItemOnNpc(handleItemOnCat);

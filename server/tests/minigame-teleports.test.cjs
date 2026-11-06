@@ -177,16 +177,25 @@ function attachPlugins(prompts, quests = [], zones = [], customHooks = [], inter
     onItemAction: () => {},
     onCustomEvent: (name, handler) => customHooks.push({ name, handler }),
     emitCustomEvent: (name, request) => {
-      if (name !== 'quest:is-complete') return;
-      const quest = quests.find((entry) => entry.key === request.key);
-      if (quest) request.complete = quest.isComplete(request.player);
+      if (name === 'quest:is-complete') {
+        const quest = quests.find((entry) => entry.key === request.key);
+        if (quest) request.complete = quest.isComplete(request.player);
+        return;
+      }
+      for (const hook of customHooks) if (hook.name === name) hook.handler(request);
     },
+    onNpcInteraction: () => {},
+    onNpcDialogueVariant: () => {},
+    onNpcDialogueCondition: () => {},
+    onObjectClick: () => {},
+    onObjectInteraction: () => {},
     onZoneEnter: (zone, handler) => zones.push({ zone, handler }),
         onPlayerLogin: () => {},
         sendMultiChatboxPrompt: (player, title, ...pairs) => (prompts.push({ title, pairs }), true),
     };
     HomeTeleports.register(api);
     MinigameTeleports.register(api);
+    return api;
 }
 
 test('known missing quest gates and unvisited destinations fail closed', async (t) => {
@@ -217,6 +226,31 @@ test('known missing quest gates and unvisited destinations fail closed', async (
   assert.equal(playerRecord.player.getAttribute(VISITED_TITHE_FARM_ATTRIBUTE), true);
   assert.equal(refusal(playerRecord.player, { visited: ['Keldagrim', 'Tithe Farm'] }), null);
 
+});
+
+test("Sorceress Garden Minigame Teleport also requires Osman's unlock", async (t) => {
+  stubWorld(t)(() => {});
+  await CachePipeline.initialize(path.resolve(__dirname, '..'));
+  let questComplete = true;
+  const customHooks = [];
+  const api = attachPlugins([], [{ key: 'prince_ali_rescue', isComplete: () => questComplete }], [], customHooks);
+  require('../plugins/minigames/sorceressgarden/Apprentice.SorceresssGarden')(api);
+  const garden = require('../plugins/interface/data/minigame-teleports.json').minigames["Sorceress's Garden"];
+  const { refusal } = MinigameTeleports._test;
+
+  const locked = recordingPlayer().player;
+  assert.match(refusal(locked, garden), /speak to Osman/);
+
+  locked.setAttribute('sorceress-s-garden:osman-help-asked', true);
+  assert.equal(refusal(locked, garden), null, 'the recorded post-quest conversation unlocks Minigame Teleport');
+
+  const returning = recordingPlayer().player;
+  returning.setAttribute('sorceress-s-garden:teleported', true);
+  assert.equal(refusal(returning, garden), null, 'existing Apprentice users keep access');
+
+  questComplete = false;
+  assert.match(refusal(returning, garden), /complete Prince Ali Rescue/,
+    'the previous teleport does not bypass the quest requirement');
 });
 
 test('cooldowns: the captured messages, and the varps set on landing', async (t) => {

@@ -452,3 +452,120 @@ test('the secret wall crosses the side the player stands on and is closed before
   assert.deepEqual(h.moves.at(-1), [2876, 9799, 0], 'a side approach crosses in X');
   assert.ok(h.messages.includes("You've found a secret door."));
 });
+
+// Registered NPC/transcript/interface route with canonical seeded diary progress, not an enchant helper.
+test("native Thormac charges the earned Kandarin enchantment fee", async t => {
+  process.env.DISABLE_PLAYER_BOTS = "1";
+  const path = require("node:path");
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const { PlayerSession } = require("../dist/net/PlayerSession");
+  const { ClientConnection } = require("../dist/net/NetworkBuilder");
+  const Progress = require("../plugins/achievements/diaries/Progress.AchievementDiaries");
+  const { BY_KEY, TIERS } = require("../plugins/achievements/diaries/Data.AchievementDiaries");
+  PluginManager.loadFromDirectory(path.resolve(__dirname, "../plugins"));
+  core.RegionManager.init(); core.RegionManager.loadMapFiles(3226, 3218);
+  PluginManager.emitServerStartup({});
+  t.after(() => PluginManager.emitServerShutdown({}));
+  const quest = runtime.getRegisteredQuests().filter(q => q.key === "scorpion_catcher").at(-1);
+  assert.ok(quest); assert.equal(core.CacheDefinitions.getInterfaceId("thormac"), 332);
+  const kandarin = BY_KEY.get("kandarin"); assert.ok(kandarin);
+  let nextIndex = 1920;
+  const cases = [
+    { name: "ordinary exact fee", tier: null, held: 40000, fee: 40000, success: true },
+    { name: "ordinary short wallet", tier: null, held: 39999, fee: 40000, success: false },
+    { name: "hard short discounted wallet", tier: "hard", held: 29999, fee: 30000, success: false },
+    { name: "hard exact discounted wallet", tier: "hard", held: 30000, fee: 30000, success: true },
+    { name: "hard ample wallet", tier: "hard", held: 40000, fee: 30000, success: true },
+    { name: "elite short discounted wallet", tier: "elite", held: 19999, fee: 20000, success: false },
+    { name: "elite exact discounted wallet", tier: "elite", held: 20000, fee: 20000, success: true },
+    { name: "elite ample wallet", tier: "elite", held: 40000, fee: 20000, success: true },
+  ];
+  for (const row of cases) await t.test(row.name, async t => {
+    const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true, send: () => true,
+      close() {}, onData() {}, onError() {}, onClose() {} };
+    const player = new Player(new PlayerSession(channel));
+    player.setIndex(nextIndex++); player.setUsername("thormac" + player.getIndex());
+    player.setRegistered(true); player.setLocation(new core.Location(3226, 3218, 0)); player.needsPlacement = false;
+    const connection = new ClientConnection(channel); connection.player = player;
+    const npc = core.NPC.create(N.THORMAC, new core.Location(3227, 3218, 0));
+    assert.equal(core.World.getNpcs().add(npc), true);
+    assert.equal(npc.getCurrentDefinition(player).getName(), "Thormac");
+    t.after(() => {
+      player.closeInterruptibleInterfaces();
+      PluginManager.emitPlayerDisconnect({ player, username: player.getUsername() });
+      PluginManager.emitPlayerLogout({ player, username: player.getUsername() });
+      player.setRegistered(false); core.TaskManager.cancelTasks(player.getIndex()); core.TaskManager.cancelTasks(player);
+      core.World.getNpcs().remove(npc);
+    });
+    // Seed legal completed-and-claimed persistent progress, covering either entitlement interpretation.
+    // This fixture exercises pricing, not natural completion of every Kandarin task or quest.
+    quest.setStage(player, 4);
+    assert.equal(quest.isComplete(player), true);
+    assert.equal(player.getPacketSender().getVarp(76), 6, "canonical completed quest wire state");
+    const tiers = row.tier ? TIERS.slice(0, TIERS.indexOf(row.tier) + 1) : [];
+    player.setAttribute(Progress.TASKS_ATTRIBUTE, { kandarin: tiers.flatMap(tier => kandarin.tiers[tier].tasks.map(task => task.key)) });
+    player.setAttribute(Progress.REWARDS_ATTRIBUTE, { kandarin: [...tiers] });
+    Progress.sendDiary(player, kandarin);
+    assert.deepEqual([...Progress.claimedTiers(player, kandarin)], tiers);
+    for (const tier of TIERS) {
+      assert.equal(Progress.isTierComplete(player, kandarin, tier), tiers.includes(tier));
+      const query = { player, diary: "kandarin", tier, complete: false };
+      PluginManager.emitCustomEvent("diary:is-complete", query);
+      assert.equal(query.complete, tiers.includes(tier), "registered diary query matches seeded canonical progress");
+      assert.equal(player.getPacketSender().getVarbit(kandarin.tiers[tier].rewardVarbit), tiers.includes(tier) ? 1 : 0);
+    }
+    const inventory = player.getInventory();
+    inventory.add(new core.Item(I.COINS, row.held), false); inventory.add(new core.Item(I.AIR_BATTLESTAFF, 1), false);
+    const gains = [], skills = player.getSkillManager(), addXp = skills.addExperiences.bind(skills);
+    t.mock.method(skills, "addExperiences", (skill, amount) => { gains.push({ skill, amount }); return addXp(skill, amount); });
+    const owned = id => inventory.getAmount(id) + player.getEquipment().getAmount(id)
+      + player.getBanks().reduce((sum, bank, tab) => sum + (bank && tab !== core.Bank.BANK_SEARCH_TAB_INDEX ? bank.getAmount(id) : 0), 0)
+      + core.World.getItems().filter(ground => !ground.isPendingRemoval() && ground.getOwner() === player.getUsername()
+        && ground.getPrivateArea() === player.getPrivateArea() && ground.getItem().getId() === id)
+        .reduce((sum, ground) => sum + ground.getItem().getAmount(), 0);
+    const state = () => ({ name: row.name, tier: row.tier, coins: owned(I.COINS),
+      staff: owned(I.AIR_BATTLESTAFF), mystic: owned(I.MYSTIC_AIR_STAFF), interface: player.getInterfaceId(), gains: [...gains] });
+    let turns = 0;
+    const turn = () => {
+      assert.ok(++turns <= 24, "bounded native phase budget"); player.resetUpdating();
+      core.World.processCycle = (core.World.processCycle + 1) & 0x7fffffff; core.TaskManager.process();
+      connection.processTurnPackets(); const queue = player.getMovementQueue();
+      queue.beginCycle(); queue.processEntityPursuit(); if (queue.hasPendingWork()) queue.process();
+      core.TaskManager.processWalkTo(player.getIndex());
+    };
+    const send = async packet => { await connection.dispatch([packet]); turn(); };
+    const talk = npc.getCurrentDefinition(player).getActions().indexOf("Talk-to") + 1;
+    assert.ok(talk > 0);
+    await send({ type: "npc_option", index: npc.getIndex(), clickType: talk });
+    for (let attempt = 0; attempt < 10 && player.getInterfaceId() !== 332; attempt++) {
+      const prompt = core.MultiChatboxPrompt.getPending(player), manager = player.getDialogueManager();
+      if (prompt) {
+        assert.equal(manager.isActive(), false, "the actual plugin prompt owns its options");
+        const choice = prompt.options.indexOf("You said you'd enchant my battlestaff for me.") + 1;
+        assert.ok(choice > 0, "real post-quest Thormac enchant choice");
+        await send({ type: "dialogue_continue", widgetId: core.MultiChatboxPrompt.OPTIONS_WIDGET_ID, childIndex: choice });
+      } else if (manager.getCurrent()) {
+        const sender = player.getPacketSender(), group = sender.getChatboxGroupId();
+        assert.equal(manager.getOwner(), undefined, "ordinary Talk-to has no explicit playback owner");
+        assert.equal(sender.getChatboxOwner(), undefined); assert.ok(group >= 0);
+        const mount = sender.subInterfaceTargets.get(group);
+        assert.ok(mount); assert.equal(sender.getSubInterfaceAt(mount.targetUid), mount);
+        assert.match(manager.getCurrent().getText?.() ?? "", /scorpions|battlestaff|materials needed/);
+        await send({ type: "dialogue_continue", widgetId: (player.getPacketSender().getChatboxGroupId() << 16) | 5, childIndex: -1 });
+      } else turn();
+    }
+    assert.equal(player.getInterfaceId(), 332, "native post-quest dialogue must admit the real enchant screen");
+    assert.equal(player.getPacketSender().isSubInterfaceOpen(332), true);
+    assert.equal(owned(I.COINS), row.held); assert.equal(owned(I.AIR_BATTLESTAFF), 1);
+    assert.equal(owned(I.MYSTIC_AIR_STAFF), 0); assert.deepEqual(gains, []);
+    // Cache330 thormac_setup draws the fixed air button332:4. No direct conversion callback.
+    await send({ type: "widget_action", widgetId: (332 << 16) | 4, groupId: 332, childId: 4,
+      buttonNum: 1, opId: 1, slot: -1, itemId: -1 });
+    const details = JSON.stringify(state());
+    assert.equal(owned(I.MYSTIC_AIR_STAFF), row.success ? 1 : 0, "earned-fee delivery: " + details);
+    assert.equal(owned(I.COINS), row.held - (row.success ? row.fee : 0), "earned-fee debit: " + details);
+    assert.equal(owned(I.AIR_BATTLESTAFF), row.success ? 0 : 1, details);
+    assert.equal(owned(I.AIR_BATTLESTAFF) + owned(I.MYSTIC_AIR_STAFF), 1, details);
+    assert.deepEqual(gains, []);
+  });
+});

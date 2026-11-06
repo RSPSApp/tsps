@@ -325,7 +325,13 @@ function configureCharges(player, bow, wanted) {
   if (target > current) {
     player.getBank(Bank.getTabForItem(player, essenceId)).delete(essenceId, target - current);
   } else {
-    player.getBank(Bank.getTabForItem(player, essenceId)).add(new Item(essenceId, current - target), false);
+    const bank = player.getBank(Bank.getTabForItem(player, essenceId));
+    const refund = new Item(essenceId, current - target);
+    if (bank.getAddableAmount(refund) < refund.getAmount()) {
+      bank.full();
+      return;
+    }
+    bank.add(refund, false);
   }
   setCharges(bow, target);
   refreshBank(player);
@@ -357,8 +363,15 @@ function bankItemOp(event) {
 function createBow(player) {
   const inventory = player.getInventory();
   if (inventory.getAmount(shardId) < SHARDS_PER_BOW) return;
+  const bow = new core.Item(unchargedId, 1);
+  // deleteNumber consumes shard stacks in slot order; the first may free a slot.
+  const firstStack = inventory.getItems().find(item => item.getId() === shardId && item.getAmount() > 0);
+  if (inventory.getAddableAmount(bow) < 1 && firstStack.getAmount() > SHARDS_PER_BOW) {
+    inventory.full();
+    return;
+  }
   inventory.deleteNumber(shardId, SHARDS_PER_BOW);
-  inventory.add(new core.Item(unchargedId, 1));
+  inventory.add(bow);
   playSound(player, CREATE_SOUND);
   itemStatement(player, unchargedId, "You use five venator shards to create a venator bow.");
 }

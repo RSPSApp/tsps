@@ -22,7 +22,7 @@
     "pickup": { "text": "You're an Ironman, so you can't take items that other players have dropped.", "source": "capture" },
     "sharedKill": { "text": "As an Ironman, you don't get loot if other players helped you kill the monster.", "source": "capture" },
     "killCredit": { "text": "As an Ironman, you might not receive kill-credit for this monster.", "source": "capture" },
-    "grandExchange": { "text": "As an Ironman, you cannot use the Grand Exchange.", "source": "ours" },
+    "grandExchange": { "text": "Ironmen can only buy one bond per Grand Exchange offer.", "source": "ours" },
     "shopStock": { "text": "As an Ironman, you can only buy the shop's own stock.", "source": "ours" },
     "presets": { "text": "As an Ironman, you cannot use presets.", "source": "ours (presets are this server's)" },
     "duelStake": { "text": "As an Ironman, you cannot take part in a staked duel.", "source": "ours (Wiki: Ironmen cannot stake)" },

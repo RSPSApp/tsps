@@ -110,6 +110,7 @@ function destinationsEvent(request) {
 function destination(player, tree, grown) {
   if (tree.house) return null;
   if (!questComplete(player, tree.requires) || !hasSkills(player, tree.skills)) return null;
+  if (tree.mooredAt && !(player.getSailing().mooredDocks ?? []).includes(tree.mooredAt)) return null;
   if (tree.grown) {
     const patch = grown.find((candidate) => near(tree.grown, candidate.x, candidate.y, candidate.z, 3));
     if (!patch) return null;

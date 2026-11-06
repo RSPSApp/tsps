@@ -31,11 +31,27 @@ export class PrayerHandler {
     public static togglePrayer(player: Player, childId: number): boolean {
         let prayerId = this.prayerIdForChild(childId);
         if (prayerId === null) return false;
-        // Zeal takes Piety's place in the book once unlocked (Wiki: Zeal).
-        if (prayerId === this.PIETY && player.getAttribute(ZEAL_UNLOCKED_ATTRIBUTE) === true) prayerId = this.ZEAL;
+        prayerId = this.bookPrayer(player, prayerId);
         if (player.getPrayerActive()[prayerId]) this.deactivatePrayer(player, prayerId);
         else this.activatePrayerPrayerId(player, prayerId);
         return true;
+    }
+
+    /**
+     * The prayer a book slot stands for: Zeal takes Piety's place once unlocked (Wiki: Zeal), and
+     * wherever the client draws it there without the unlock (cs2 10157/10194: a Last Man Standing
+     * game treats every prayer as unlocked), which plugins answer with "prayer:zeal-replaces-piety"
+     * { player, replaces }.
+     */
+    public static bookPrayer(player: Player, prayerId: number): number {
+        return prayerId === this.PIETY && this.zealReplacesPiety(player) ? this.ZEAL : prayerId;
+    }
+
+    public static zealReplacesPiety(player: Player): boolean {
+        if (player.getAttribute(ZEAL_UNLOCKED_ATTRIBUTE) === true) return true;
+        const event = { player, replaces: false };
+        require("../../plugins/PluginManager").PluginManager.emitCustomEvent("prayer:zeal-replaces-piety", event);
+        return event.replaces === true;
     }
 
     public static THICK_SKIN = 0;

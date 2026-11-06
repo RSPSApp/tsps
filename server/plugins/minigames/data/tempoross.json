@@ -86,7 +86,6 @@
     "lightningTicks": { "grow": 6, "charge": 11, "cast": 13, "strike": 15, "fire": 16, "shrink": 16 },
     "strikes": [4, 8],
     "fireSpreadTicks": 40,
-    "fireSpreads": 2,
     "fireBurnTicks": 2,
     "specialSpotTicks": [30, 60],
     "$specialSpotLifeTicks": "captures 552 and 1858: watched from start to end, a spot with jumping fish lasts 41-44 ticks",

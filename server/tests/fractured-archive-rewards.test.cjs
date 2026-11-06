@@ -15,7 +15,7 @@ const rondache = require("../plugins/combat/effects/Rondache.EquipmentEffects");
 rondache._test.bind({ Equipment, ItemIdentifiers: ItemIds });
 
 rewards({
-  core: { PrayerData, Skill, ItemIdentifiers: ItemIds, Area: class {}, Boundary: class {} },
+  core: { PrayerData, PrayerHandler, Skill, ItemIdentifiers: ItemIds, Area: class {}, Boundary: class {} },
   persistAttribute() {}, registerArea() {}, onPlayerLogin() {}, onPrayerDisabled() {}, onItemAction() {}, onItemOnNpc() {}, onItemOnItem() {},
 });
 

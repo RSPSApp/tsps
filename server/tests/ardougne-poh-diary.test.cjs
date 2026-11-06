@@ -41,6 +41,8 @@ before(async () => {
   House = require("../plugins/skills/construction/House.Construction");
   Instance = require("../plugins/skills/construction/Instance.Construction");
   House.attach(api);
+  require("../plugins/modes/ironman/Common.Ironman").init(api);
+  require("../plugins/modes/ironman/Setup.Ironman")(api);
   yanillePortalId = require("../plugins/skills/construction/Estate.Construction").HOUSE_LOCATIONS
     .find(({ id }) => id === 6).portal;
 });
@@ -52,7 +54,7 @@ function playerFixture() {
   player.setAttribute("construction:house", saved);
   const varbits = new Map();
   const sender = new Proxy({}, { get: (_target, key) => key === "sendVarbit"
-    ? (id, value) => varbits.set(id, value)
+    ? (id, value) => { varbits.set(id, value); return sender; }
     : key === "getVarbit" || key === "getVarp" ? () => 0 : () => sender });
   player.getPacketSender = () => sender;
   player.varbits = varbits;
@@ -232,4 +234,78 @@ test("other portals, a house located elsewhere, and failed entry do not credit A
   }
   assert.equal(House.houseFor(visitor)?.owner, owner);
   assertUncredited(visitor);
+});
+
+
+// The registered players and real mode query travel through the portal's name prompt.
+function registeredHousePlayer(t, name, mode = "none") {
+  const player = playerFixture();
+  player.setUsername(name);
+  player.setAttribute("bot-skip-persistence", true);
+  player.getSession = () => ({ sendClientPacket: () => true, getChannel: () => null });
+  t.after(() => {
+    try {
+      House.releaseHouse(player, true);
+    } finally {
+      core.World.getPlayers().remove(player);
+    }
+  });
+  assert.equal(core.World.getPlayers().add(player), true);
+  require("../plugins/modes/ironman/Common.Ironman").setMode(player, mode);
+  const query = { player, mode: "none" };
+  api.emitCustomEvent("ironman:mode", query);
+  assert.equal(query.mode, mode);
+  return player;
+}
+
+function visitByPortal(player, name) {
+  click(player, yanillePortalId, 4, YANILLE_PORTAL_TILE);
+  assert.ok(player.enteredSyntaxAction);
+  player.enteredSyntaxAction.execute(name);
+}
+
+for (const mode of ["ironman", "ultimate", "hardcore"]) {
+  test(`${mode} may enter their own house but not another player's house`, (t) => {
+    const host = registeredHousePlayer(t, "host" + mode);
+    const guest = registeredHousePlayer(t, "gst" + mode, mode);
+    click(host, yanillePortalId, 1, YANILLE_PORTAL_TILE);
+    assert.equal(House.houseFor(host)?.owner, host);
+    visitByPortal(guest, guest.getUsername());
+    assert.equal(House.houseFor(guest)?.owner, guest, "self name enters own house");
+    House.releaseHouse(guest, true);
+    assert.equal(House.houseFor(guest), null);
+    visitByPortal(guest, host.getUsername());
+    assert.equal(House.houseFor(guest) === null, true, "another player's house is unavailable");
+    assert.equal(House.houseFor(host)?.owner, host);
+  });
+}
+
+test("ordinary guest can visit an Ironman host, subject to host settings and presence", (t) => {
+  const host = registeredHousePlayer(t, "ironhost", "ironman");
+  const guest = registeredHousePlayer(t, "normalguest");
+  click(host, yanillePortalId, 1, YANILLE_PORTAL_TILE);
+  const house = House.houseFor(host);
+  assert.equal(house?.owner, host);
+  visitByPortal(guest, host.getUsername());
+  assert.equal(House.houseFor(guest), house, "ordinary guest enters Ironman host house");
+  House.releaseHouse(guest, true);
+  host.getRelations().setChatModes(0, 2, 0);
+  visitByPortal(guest, host.getUsername());
+  assert.equal(House.houseFor(guest), null, "private chat off prevents entry");
+  host.getRelations().setChatModes(0, 0, 0);
+  house.save.locked = true;
+  visitByPortal(guest, host.getUsername());
+  assert.equal(House.houseFor(guest), null, "locked house prevents entry");
+  house.save.locked = false;
+  house.buildingMode = true;
+  visitByPortal(guest, host.getUsername());
+  assert.equal(House.houseFor(guest), null, "building mode prevents entry");
+  house.buildingMode = false;
+  core.World.getPlayers().remove(host);
+  try {
+    visitByPortal(guest, host.getUsername());
+    assert.equal(House.houseFor(guest), null, "offline host prevents entry");
+  } finally {
+    assert.equal(core.World.getPlayers().add(host), true);
+  }
 });

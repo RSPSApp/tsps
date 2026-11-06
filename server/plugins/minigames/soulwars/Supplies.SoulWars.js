@@ -110,6 +110,46 @@ function heal({ player, itemId }) {
   return true;
 }
 
+/** Use a Soul Wars bandage on a teammate in the same active arena. */
+function healTeammate(event) {
+  const { player, target, item, itemId, slot } = event;
+  const game = Match.gameOf(player);
+  if (!game || itemId !== Common.data.items.bandages) return;
+  event.handled = true;
+  if (game.over || player === target || Match.gameOf(target) !== game
+      || !game.teamOf(player) || !game.teamOf(target)) return;
+  const world = Common.core.World;
+  if (!player.isRegistered() || !target.isRegistered()
+      || world.getPlayers().get(player.getIndex()) !== player || world.getPlayers().get(target.getIndex()) !== target
+      || player.getPrivateArea() !== game.area || target.getPrivateArea() !== game.area
+      || !game.area.contains(player.getLocation()) || !game.area.contains(target.getLocation())
+      || player.getHitpoints() <= 0 || target.getHitpoints() <= 0
+      || !player.getLocation().isWithinDistance(target.getLocation(), 1)) return;
+  const inventory = player.getInventory();
+  if (!Number.isInteger(slot) || slot < 0 || slot >= inventory.capacity()
+      || inventory.getItems()[slot] !== item || item.getId() !== itemId || item.getAmount() <= 0) return;
+  // TSPS wording, following the server's opposing-team refusal convention.
+  if (game.teamOf(player) !== game.teamOf(target)) {
+    player.sendMessage("You can't bandage an opposing player.");
+    return;
+  }
+  const max = Common.maxLevel(target, "HITPOINTS");
+  const hp = target.getHitpoints();
+  // TSPS policy: don't spend a bandage on a teammate with no health, energy or poison to restore.
+  if (hp >= max && target.getRunEnergy() >= 100 && target.getPoisonDamage() <= 0) {
+    player.sendMessage(`${target.getDisplayName()} does not currently need bandaging.`);
+    return;
+  }
+  inventory.deleteAtSlot(slot, 1);
+  if (hp < max) target.setHitpoints(Math.min(max, hp + 1 + Math.floor(max * 0.15)));
+  target.setRunEnergy(100);
+  target.setPoisonDamage(0);
+  target.setVenomed(false);
+  // TSPS wording; the live update records the healer name, not its exact line.
+  target.sendMessage(`${player.getDisplayName()} uses a bandage on you.`);
+  game.active(player);
+}
+
 /** Where a team's bones count: its base, or a graveyard (a third where it isn't held). */
 function burialWorth(game, player) {
   const team = game.teamOf(player);
@@ -160,6 +200,7 @@ function attachSupplies(api) {
   }
   for (let dose = 1; dose <= 4; dose++) api.onItemAction(`Potion of power(${dose})`, { Drink: drink });
   api.onItemAction("Bandages", { Heal: heal });
+  api.onItemOnPlayer(healTeammate);
   api.onItemAction("Bones", { Bury: bury });
 }
 

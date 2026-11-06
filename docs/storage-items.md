@@ -48,9 +48,10 @@ is owned but its store remains, the upgrade also preserves those gems, combining
 60 each. The server refuses the upgrade without consuming items if the combined contents exceed that
 capacity, another lower-tier copy is owned, or a saved store is inconsistent; this is a conservative
 policy for existing server saves, not an observed game rule.
-The sack's action and refusal messages have no retained sack transcript, and ground pickup currently
-uses the gem bag's pickup wording. Semi-precious auto-storage is limited to mining here; the source
-does not establish every live-game gather source.
+The sack's action, sewing and pickup messages follow this server's pouch and bag wording; no sack
+transcript is retained. Gem bag, gem sack and herb sack ground pickup use this server's ordinary
+pickup sound; live container audio is not established. Semi-precious auto-storage is limited to
+mining here; the source does not establish every live-game gather source.
 
 ## Events
 

@@ -17,6 +17,8 @@ module.exports = {
     require("./cooking/LeapingFish.Cooking")(api);
   },
   isCookingActive: Cookers.isCookingActive,
+  /** True for a fire, range or oven the game lets you cook on (name and Cook action). */
+  isCooker: Cookers.isCooker,
   /** Every food a fire or range cooks, by its raw item id (after register). */
   get COOKABLE_BY_RAW() { return Common.cookables(); },
   COOKABLE_OBJECT_NAMES: Cookers.COOKABLE_OBJECT_NAMES,

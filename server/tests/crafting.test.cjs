@@ -5,6 +5,7 @@ Server.installProductionPathResolver();
 const { CachePipeline } = require('../dist/game/cache/CachePipeline');
 const { PluginManager } = require('../dist/plugins/PluginManager');
 const WorldDefinition = require('../dist/game/definition/WorldDefinition');
+const productionMembersWorld = WorldDefinition.isMembersWorld;
 const { ItemIds } = require('../dist/util/IdEnums');
 const { Animation } = require('../dist/game/model/Animation');
 const { Location } = require('../dist/game/model/Location');
@@ -50,7 +51,7 @@ before(async () => {
 });
 
 function membersWorld(t, members) {
-  const saved = WorldDefinition.isMembersWorld;
+  const saved = productionMembersWorld;
   t.after(() => { WorldDefinition.isMembersWorld = saved; });
   WorldDefinition.isMembersWorld = () => members;
 }
@@ -67,7 +68,18 @@ function playerWith(entries = [], { level = 99, threadUses } = {}) {
     deleteNumber: (id, amount) => amounts.set(id, Math.max(0, (amounts.get(id) ?? 0) - amount)),
     addItem: item => amounts.set(item.id, (amounts.get(item.id) ?? 0) + item.getAmount()),
     adds: (id, amount = 1) => amounts.set(id, (amounts.get(id) ?? 0) + amount),
-    getItems: () => [],
+    getItems: () => {
+      const { Item, ItemDefinition } = PluginManager.getCoreApi();
+      return [...amounts].filter(([, amount]) => amount > 0).flatMap(([id, amount]) =>
+        ItemDefinition.forId(id).isStackable() ? [new Item(id, amount)] :
+          Array.from({ length: amount }, () => new Item(id, 1)));
+    },
+    getCopiedItems: () => {
+      const { Item } = PluginManager.getCoreApi();
+      const items = inventory.getItems();
+      assert.ok(items.length <= 28, "fixture inventory exceeds capacity");
+      return [...items.map(item => item.clone()), ...Array.from({ length: 28 - items.length }, () => new Item(-1, 0))];
+    },
   };
   const packetSender = {
     sendCreationMenu(value) {
@@ -828,4 +840,86 @@ test('the slayer ring button (446:16) needs Ring bling, and makes the eternal ri
   const eternal = goldButton([[ItemIds.RING_MOULD, 1], [ItemIds.ENCHANTED_GEM, 1], [ItemIds.ETERNAL_GEM, 1]], 16, { varbits: unlocked });
   assert.equal(eternal.amounts.get(ItemIds.SLAYER_RING_ETERNAL_), 1);
   assert.equal(eternal.amounts.get(ItemIds.ENCHANTED_GEM), 1, 'the eternal gem is used, as the client shows');
+});
+
+// Native conservation oracle for one silver bar -> ten unfinished silver bolts.
+test("native furnace silver-bolt batches conserve inputs at output stack limits", async t => {
+  process.env.DISABLE_PLAYER_BOTS = "1";
+  const path = require("node:path");
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const { PlayerSession } = require("../dist/net/PlayerSession");
+  const { ClientConnection } = require("../dist/net/NetworkBuilder");
+  const { MAX_STACK_AMOUNT } = require("../dist/game/model/container/StackType");
+  const Smithing = require("../plugins/skills/Smithing.plugin");
+  const Shared = require("../plugins/skills/crafting/Shared.Crafting");
+  PluginManager.loadFromDirectory(path.resolve(__dirname,"../plugins"));
+  const core=PluginManager.getCoreApi(),ids=core.ItemIdentifiers;
+  core.RegionManager.init();core.RegionManager.loadMapFiles(3222,3218);PluginManager.emitServerStartup({});
+  t.after(()=>PluginManager.emitServerShutdown({}));
+  assert.equal(core.WorldDefinition.isMembersWorld,productionMembersWorld,"restore the real configured-world provider before native work");
+  assert.equal(core.WorldDefinition.isMembersWorld(),true,"native silver bolts require an actual members world");
+  const recipe=Shared.DATA.silver.products.find(r=>r.item==="SILVER_BOLTS_UNF_");
+  assert.ok(recipe);assert.equal(recipe.amount,10);assert.equal(recipe.xp,50);assert.equal(recipe.mould,"BOLT_MOULD");
+  const outputId=ids.SILVER_BOLTS_UNF_;
+  assert.equal(core.ItemDefinition.forId(outputId).isStackable(),true);
+  let index=1830;
+  for(const [label,seed,capacity] of [["room",0,10],["exact",MAX_STACK_AMOUNT-10,10],["near",MAX_STACK_AMOUNT-5,5],["full",MAX_STACK_AMOUNT,0]]) await t.test(label,async t=>{
+    const channel={kind:"test",remoteAddress:"127.0.0.1",isOpen:()=>true,send:()=>true,close(){},onData(){},onError(){},onClose(){}};
+    const p=new Player(new PlayerSession(channel));p.setIndex(index++);p.setUsername("boltcapacity"+index);p.setRegistered(true);p.setLocation(new core.Location(3226,3218,0));p.needsPlacement=false;
+    p.getSkillManager().setCurrentLevel(core.Skill.CRAFTING,99,false);
+    const c=new ClientConnection(channel);c.player=p;
+    t.after(()=>{Shared.stopCrafting(p);PluginManager.emitPlayerDisconnect({player:p,username:p.getUsername()});PluginManager.emitPlayerLogout({player:p,username:p.getUsername()});p.setRegistered(false);core.TaskManager.cancelTasks(p.getIndex());core.TaskManager.cancelTasks(p);});
+    const inv=p.getInventory();for(const id of [ids.SILVER_BAR,ids.BOLT_MOULD])inv.add(new core.Item(id,1),false);if(seed)inv.add(new core.Item(outputId,seed),false);
+    assert.equal(inv.getAmount(outputId),seed);assert.equal(inv.getAddableAmount(new core.Item(outputId,10)),capacity);
+    assert.equal(p.getEquipment().getItems().some(i=>i&&i.getId()>0),false);
+    const furnaceId=[...Smithing.FURNACE_OBJECT_IDS].find(id=>{const d=core.ObjectDefinition.forPlayer(id,p);return d?.getName()==="Furnace"&&d.getActions()?.includes("Smelt");});assert.ok(Number.isInteger(furnaceId));
+    const furnace=new core.GameObject(furnaceId,new core.Location(3223,3218,0),10,0,null);core.ObjectManager.register(furnace,true);t.after(()=>core.ObjectManager.deregister(furnace,true));
+    const pos=()=>[p.getLocation().getX(),p.getLocation().getY(),p.getLocation().getZ()];
+    const total=id=>inv.getAmount(id)+p.getEquipment().getAmount(id)+core.World.getItems().filter(g=>!g.isPendingRemoval()&&g.getOwner()===p.getUsername()&&g.getPrivateArea()===p.getPrivateArea()&&g.getItem().getId()===id).reduce((n,g)=>n+g.getItem().getAmount(),0);
+    const gains=[],produced=[];const skills=p.getSkillManager(),add=skills.addExperiences.bind(skills);
+    t.mock.method(skills,"addExperiences",(skill,xp)=>{if(skill===core.Skill.CRAFTING)gains.push(xp);return add(skill,xp);});
+    PluginManager.createApi("BoltCapacityObserve"+p.getIndex()).onCustomEvent("skills:produced",e=>{if(e.player===p&&e.itemId===outputId)produced.push({itemId:e.itemId,amount:e.amount,xp:e.xp,kind:e.kind});});
+    let turns=0;const rows=[];
+    const snapshot=phase=>{const q=p.getMovementQueue(),row={phase,label,turns,pos:pos(),queue:q.size(),taskActive:p.getAttribute(Shared.CRAFTING_TASK_ATTRIBUTE)?.isRunning?.()??false,bar:total(ids.SILVER_BAR),mould:total(ids.BOLT_MOULD),bolts:total(outputId),gains:[...gains],produced:[...produced]};rows.push(row);console.log("SILVER_BOLT_CAPACITY_PRECONDITION "+JSON.stringify(row));return row;};
+    const turn=()=>{assert.ok(++turns<=16);p.resetUpdating();core.World.processCycle=(core.World.processCycle+1)&0x7fffffff;core.TaskManager.process();c.processTurnPackets();const q=p.getMovementQueue();q.beginCycle();q.processEntityPursuit();if(q.hasPendingWork())q.process();core.TaskManager.processWalkTo(p.getIndex());};
+    await c.dispatch([{type:"item_on_object",objectId:furnaceId,x:3223,y:3218,itemId:ids.SILVER_BAR,slot:inv.getSlotForItemId(ids.SILVER_BAR),widgetId:149<<16}]);
+    for(let i=0;i<8&&p.getInterfaceId()!==6;i++)turn();snapshot("menu");
+    assert.equal(p.getInterfaceId(),6,"actual silverbar-on-furnace opens native silver menu");assert.deepEqual(pos(),[3226,3218,0]);assert.equal(p.getMovementQueue().size(),0);assert.equal(total(ids.SILVER_BAR),1);assert.equal(total(outputId),seed);assert.deepEqual(gains,[]);
+    await c.dispatch([{type:"widget_action",widgetId:(6<<16)|recipe.component,groupId:6,childId:recipe.component,buttonNum:1,opId:1,slot:-1,itemId:-1}]);
+    turn();snapshot("selected-before-commit");assert.equal(total(ids.SILVER_BAR),1);assert.equal(total(outputId),seed);assert.deepEqual(gains,[]);
+    if(label==="room"||label==="exact")assert.equal(p.getAttribute(Shared.CRAFTING_TASK_ATTRIBUTE)?.isRunning(),true,"working positive must admit its real pending task");
+    for(let i=0;i<5;i++)turn();const end=snapshot("completion");console.log("SILVER_BOLT_CAPACITY_OBSERVATION "+JSON.stringify(rows));
+    const consumed=1-total(ids.SILVER_BAR),credited=total(outputId)-seed;
+    assert.ok(consumed===0||consumed===1);
+    assert.equal(credited,consumed*10,"one silver bar must yield all ten bolts or remain unspent: "+JSON.stringify(end));
+    if(label==="room"||label==="exact")assert.equal(consumed,1,"positive control completes one batch");
+    assert.equal(total(ids.BOLT_MOULD),1);assert.deepEqual(gains,consumed?[50]:[]);
+    assert.deepEqual(produced,consumed?[{itemId:outputId,amount:10,xp:50,kind:"jewellery"}]:[]);
+    assert.equal(p.getAttribute(Shared.CRAFTING_TASK_ATTRIBUTE),null);
+  });
+  await t.test("full inventory gold ring uses the bar's freed slot", async t => {
+    const channel={kind:"test",remoteAddress:"127.0.0.1",isOpen:()=>true,send:()=>true,close(){},onData(){},onError(){},onClose(){}};
+    const p=new Player(new PlayerSession(channel));p.setIndex(index++);p.setUsername("goldcapacity"+index);p.setRegistered(true);p.setLocation(new core.Location(3226,3218,0));p.needsPlacement=false;
+    p.getSkillManager().setCurrentLevel(core.Skill.CRAFTING,99,false);
+    const c=new ClientConnection(channel);c.player=p;
+    t.after(()=>{Shared.stopCrafting(p);PluginManager.emitPlayerDisconnect({player:p,username:p.getUsername()});PluginManager.emitPlayerLogout({player:p,username:p.getUsername()});p.setRegistered(false);core.TaskManager.cancelTasks(p.getIndex());core.TaskManager.cancelTasks(p);});
+    const inv=p.getInventory();
+    for(const id of [ids.GOLD_BAR,ids.RING_MOULD]) inv.add(new core.Item(id,1),false);
+    assert.equal(core.ItemDefinition.forId(ids.BRONZE_DAGGER).isStackable(),false);
+    for(let i=0;i<26;i++) inv.add(new core.Item(ids.BRONZE_DAGGER,1),false);
+    assert.equal(inv.getFreeSlots(),0);assert.equal(inv.getAmount(ids.GOLD_BAR),1);
+    assert.equal(core.ItemDefinition.forId(ids.GOLD_RING).isStackable(),false);
+    assert.equal(inv.getAddableAmount(new core.Item(ids.GOLD_RING,1)),0);
+    const furnaceId=[...Smithing.FURNACE_OBJECT_IDS].find(id=>{const d=core.ObjectDefinition.forPlayer(id,p);return d?.getName()==="Furnace"&&d.getActions()?.includes("Smelt");});assert.ok(Number.isInteger(furnaceId));
+    const furnace=new core.GameObject(furnaceId,new core.Location(3223,3218,0),10,0,null);core.ObjectManager.register(furnace,true);t.after(()=>core.ObjectManager.deregister(furnace,true));
+    let turns=0;const turn=()=>{assert.ok(++turns<=16);p.resetUpdating();core.World.processCycle=(core.World.processCycle+1)&0x7fffffff;core.TaskManager.process();c.processTurnPackets();const q=p.getMovementQueue();q.beginCycle();q.processEntityPursuit();if(q.hasPendingWork())q.process();core.TaskManager.processWalkTo(p.getIndex());};
+    await c.dispatch([{type:"item_on_object",objectId:furnaceId,x:3223,y:3218,itemId:ids.GOLD_BAR,slot:inv.getSlotForItemId(ids.GOLD_BAR),widgetId:149<<16}]);
+    for(let i=0;i<8&&p.getInterfaceId()!==446;i++)turn();
+    assert.equal(p.getInterfaceId(),446);assert.equal(p.getMovementQueue().size(),0);assert.equal(inv.getAmount(ids.GOLD_BAR),1);
+    await c.dispatch([{type:"widget_action",widgetId:(446<<16)|8,groupId:446,childId:8,buttonNum:1,opId:1,slot:-1,itemId:-1}]);
+    turn();assert.equal(inv.getAmount(ids.GOLD_BAR),1);assert.equal(p.getAttribute(Shared.CRAFTING_TASK_ATTRIBUTE)?.isRunning(),true);
+    for(let i=0;i<5;i++)turn();
+    assert.equal(inv.getAmount(ids.GOLD_BAR),0);assert.equal(inv.getAmount(ids.GOLD_RING),1);assert.equal(inv.getAmount(ids.RING_MOULD),1);
+    assert.equal(p.getAttribute(Shared.CRAFTING_TASK_ATTRIBUTE),null);
+  });
 });

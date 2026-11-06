@@ -3179,6 +3179,9 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                         app = (w as any).playerAppearance || localAppearance;
                     }
                     if (!app) return null;
+                    if (isPlayerChathead && (app.npcTransformationId ?? -1) >= 0) {
+                        return `npc:${app.npcTransformationId}`;
+                    }
 
                     const gender = (app.gender ?? 0) | 0;
                     const colors = Array.isArray(app.colors) ? app.colors.slice(0, 5) : [];
@@ -3212,8 +3215,9 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                     ? `item:${w.itemId | 0}:${(w.itemQuantity ?? 0) | 0}`
                     : `model:${(w.modelType ?? 0) | 0}:${modelId}`;
             const cacheKey =
-                isAnimated || isPlayerDesignPreview || (isPlayerModel && !appearanceKey)
-                    ? null // Animated models can't be cached (frame changes)
+                isAnimated || isPlayerDesignPreview || (isPlayerModel && !appearanceKey) ||
+                ((w as any).isPlayerChathead === true && appearanceKey?.startsWith("npc:"))
+                    ? null // NPC morphs can change with var state even when the appearance is unchanged
                     : `wm:${modelCacheId}:${rx}:${ry}:${rz}:${zoom}:${offX}:${offY}:o${
                           ortho ? 1 : 0
                       }:${width}:${height}${cacheSuffix}`;
@@ -3235,10 +3239,12 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
             const sequenceFrame =
                 liveMovementFrame !== undefined ? liveMovementFrame : (w.modelFrame ?? 0) | 0;
             const animatedKey =
-                isAnimated && !cacheKey && !isPlayerDesignPreview && !isPlayerModel
+                isAnimated && !cacheKey && !isPlayerDesignPreview && !isPlayerModel &&
+                ((w as any).isPlayerChathead !== true ||
+                    (!!appearanceKey && !appearanceKey.startsWith("npc:")))
                     ? `wa:${modelCacheId}:${sequenceId}:${sequenceFrame}:${rx}:${ry}:${rz}:${zoom}:${offX}:${offY}:o${
                           ortho ? 1 : 0
-                      }:${width}:${height}`
+                      }:${width}:${height}${cacheSuffix}`
                     : null;
             let animatedMemo: Map<
                 number,
@@ -3315,6 +3321,7 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                     // Animated/dynamic model widgets must update a stable GPU texture each frame.
                     // Using a varying cache key here would leak textures and prevent animation updates.
                     const texKey = cacheKey ? cacheKey : `wm:dyn:${w.uid}`;
+                    if (!cacheKey && !animatedKey) animatedMemo.delete(w.uid);
                     const tex = cacheKey
                         ? glr.createTextureFromCanvas(texKey, can)
                         : glr.updateTextureFromCanvas(texKey, can);

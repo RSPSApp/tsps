@@ -47,8 +47,6 @@
  *  - The Sisters' sniff and the mansion are not instanced; the mansion trellis is
  *    climbed with a quest handler (the shared Ladders plugin has no "Trellis").
  *  - Lighting a pot of weeds uses a short functional message, not transcript text.
- *  - Felkrash turns the overgrown cat wily at completion and afterwards ("pets:train-wily-cat",
- *    owned by the Pets plugin). Her cat-naming interface is not implemented.
  */
 module.exports = function registerRatcatchersQuest(api) {
   const { Equipment, ItemIdentifiers, Location, NpcIdentifiers, ObjectIdentifiers, Skill } = api.core;
@@ -1402,4 +1400,6 @@ module.exports = function registerRatcatchersQuest(api) {
   api.onObjectInteraction(handleObjectInteraction);
   api.onNpcDeath(handleNpcDeath);
   api.onPlayerLogin(handleLogin);
+  require("../ratcatchers/CatNaming.Ratcatchers")(api, {quest, felkrashId: FELKRASH_NPC_ID,
+    understandsCats: player => wearingCatspeakAmulet(player) || questComplete(player, "dragon_slayer_ii")});
 };

@@ -204,6 +204,29 @@ granite 5kg 6/64, 2kg 8/75, 500g 16/100.
 
 Rune essence rocks succeed on every roll (Wiki https://oldschool.runescape.wiki/w/Pure_essence, Mod Ash).
 
+## Clue geodes
+
+[Clue geode rates](https://oldschool.runescape.wiki/w/Clue_geode) use the rock's
+base, the visible Mining level and each eligible clue tier. The matching Combat
+Achievement reward applies its 5% bonus before the level and tier calculations;
+beginner geodes do not receive a tier reward. The documented floor order is also
+used without a Combat Achievement reward. The present ring-of-wealth effect for
+geodes remains unverified here.
+
+## Mining gloves
+
+On members worlds, the equipped gloves keep eligible rocks standing for extra successful gathers before depletion.
+Regular, superior and expert gloves respectively save copper, tin, iron, silver, lead, coal and gold rocks one,
+two and three times. Superior and expert gloves save mithril and adamantite once and twice. Expert gloves save
+sandstone, sunstone, runite and amethyst once. Amethyst retains its normal two or three gathers before that save;
+the save budget is cleared when the rock depletes. Granite is unaffected.
+
+The original tier changes are in Jagex's [Project Rebalance](https://secure.runescape.com/m=news/project-rebalance-skilling--poll-81-mta-changes?oldschool=1),
+and its [follow-up](https://secure.runescape.com/m=news/minigame-tweaks-skilling-adjustments--more?oldschool=1)
+restored the single sandstone save. The current [Mining enhancers](https://oldschool.runescape.wiki/w/Mining_enhancers),
+[Lead rocks](https://oldschool.runescape.wiki/w/Lead_rocks) and [Sunstone rocks](https://oldschool.runescape.wiki/w/Sunstone_rocks)
+pages cover the later rock entries. As elsewhere on this page, this is the source contract, not an in-game test result.
+
 ## Gems while mining
 
 Before each ore roll on the ore rocks above (not sandstone, granite, essence, gem rocks, sunstone or Daeyalt,
@@ -234,7 +257,10 @@ Leagues world) has `You just found a Sapphire!` while mining coal rocks, and the
 - Sunstone momentum (better odds, 28 XP and a 20% extra chunk for 5 ticks after a success) is not modelled.
 - Infernal shale's Wiki lists ten XP values at 1/11 each; one value must be twice as likely, so all ten are
   equally weighted for now.
-- Mining gloves, Varrock armour and the expert gloves' extra amethyst/sunstone are not modelled.
+- Varrock armour is not modelled. Mining glove saves use a shared standing-rock budget; the precise OSRS
+  behavior when miners compete or change gloves on a partly mined rock is not established here. Depletion
+  hooks see a glove-kept rock as already handled. On ordinary iron, Power Miner stacks its four-ore budget
+  with glove saves (up to seven). Other finite-yield rocks and stacking with other rock-saving effects remain unverified.
 - Access isn't checked: Shilo Village for the Shilo gem rocks, the Mining Guild for amethyst, the Yama contract for
   infernal shale, Sailing islands for lead, nickel and rubium.
 - A Daeyalt face only grows back once it is empty; a face left part-mined stays at its stage.

@@ -11952,7 +11952,8 @@ test('Lantern lenses and unpowered orbs are glassblown without consuming the pip
   const sender={sendCreationMenu:m=>{menu=m;return sender;},sendSoundEffect:()=>sender};
   const player={getInventory:()=>inventory,getSkillManager:()=>({getCurrentLevel:()=>level,addExperiences:(s,n)=>xp+=n}),sendMessage:m=>messages.push(m),
    getPacketSender:()=>sender,performAnimation(){},getAttribute:()=>null,setAttribute(){},isRegistered:()=>true,getHitpoints:()=>99,
-   getMovementQueue:()=>({size:()=>0}),getForceMovement:()=>null,getInterfaceId:()=>-1,isPlayerBot:()=>false};
+   getMovementQueue:()=>({size:()=>0}),getForceMovement:()=>null,getInterfaceId:()=>-1,isPlayerBot:()=>false,
+   getLocation:()=>new api.core.Location(3200,3200,0)};
   const e={player,usedItemId:1785,usedWithItemId:1775};for(const h of handlers){h(e);if(e.handled)break;}assert.equal(e.handled,true);
   // rsprox 1842: all eight items, whatever the level, under the captured labels.
   assert.deepEqual(menu.getOptions().labels,['Beer glass','Candle lantern','Oil lamp','Vial','Fishbowl','Unpowered staff orb','Lantern lens','Light orb']);

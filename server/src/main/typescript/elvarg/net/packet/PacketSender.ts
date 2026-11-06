@@ -868,6 +868,11 @@ export class PacketSender {
     return this.chatboxGroupId;
   }
 
+  /** Owner of the currently mounted chatbox, if its presentation was scoped. */
+  public getChatboxOwner(): object | undefined {
+    return this.chatboxOwner;
+  }
+
   /** Associate only chatboxes mounted synchronously by this presentation. */
   public withChatboxOwner<T>(owner: object | undefined, present: () => T): T {
     const previous = this.presentingChatboxOwner;

@@ -26,6 +26,7 @@ const {
 } = Gardens;
 
 const SPYMASTER_NAMES = ["Osman", "Selim"];
+const HELD_JUICE_CONDITION_ID = "XwQHGY";
 
 const TOO_FEW_FRUIT_LINE = "I think I should wait until I have enough fruit to make a full glass.";
 
@@ -44,6 +45,12 @@ function heldJuice(player) {
     if (inventory.getAmount(season.juiceId) > 0) return season;
   }
   return null;
+}
+
+/** The transcript uses this condition before its juice hand-in lines. */
+function answerCondition({ player, stepId } = {}) {
+  if (!player || stepId !== HELD_JUICE_CONDITION_ID) return null;
+  return heldJuice(player) !== null;
 }
 
 function brew(event) {
@@ -104,6 +111,7 @@ module.exports = function registerJuice(pluginApi) {
   for (const key of SEASON_ORDER) {
     api.onItemOnItem("Pestle and mortar", SEASONS[key].fruitName, brew);
   }
+  api.onNpcDialogueCondition(answerCondition);
   api.onNpcsInteraction(SPYMASTER_NAMES, { "Talk-to": talkToSpymaster });
 };
 
@@ -112,7 +120,9 @@ module.exports._test = {
     core = value;
   },
   SPYMASTER_NAMES,
+  HELD_JUICE_CONDITION_ID,
   heldJuice,
+  answerCondition,
   brew,
   handIn,
   talkToSpymaster,

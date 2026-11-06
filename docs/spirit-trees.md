@@ -40,8 +40,10 @@ Closing the menu, or choosing from it, runs `chatdefault_restoreinput` (2158), a
 - **Leaving the Gnome Stronghold's tree:** The Grand Tree.
 - **Prifddinas:** Song of the Elves.
 - **Poison Waste:** The Path of Glouphrie.
-- **Laguna Aurorae:** Pandemonium and 58 Sailing.
+- **Laguna Aurorae:** Pandemonium, 58 Sailing and having moored there at least once.
 - **The Farming Guild:** 85 Farming.
+
+Legacy saves without mooring history do not prove a previous moor, even when their last dock is Laguna Aurorae. Those players need to moor again; boarding or recovering a boat does not establish the visit.
 
 Quests this server doesn't have don't block, as elsewhere. Quest varps are sent again on login (QuestRuntime), or after a relog the client would show the trees without Travel.
 
@@ -52,8 +54,7 @@ Quests this server doesn't have don't block, as elsewhere. Quest varps are sent 
 Before this, the plugin listened for "Spirit Tree", the farming patch's name. The permanent trees are named "Spirit tree", so their Travel did nothing, and the network was a chatbox list.
 
 **Not done:**
-- the house's tree;
-- Laguna Aurorae's "moored at the island once".
+- the house's tree.
 
 ## Magic Mushtrees
 

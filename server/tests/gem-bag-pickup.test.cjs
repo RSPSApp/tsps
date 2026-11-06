@@ -103,6 +103,32 @@ async function take(f) {
 const stored = (f) => Storage.amountOf(f.p, family, I.UNCUT_RUBY);
 const setIron = (f) => f.p.setAttribute("ironman:mode", "ironman");
 
+function watchPickupSounds(t, f) {
+  const sounds = [];
+  const sendSound = core.Sounds.sendSound.bind(core.Sounds);
+  t.mock.method(core.Sounds, "sendSound", (player, sound) => {
+    if (player === f.p) sounds.push(sound.getId());
+    return sendSound(player, sound);
+  });
+  return sounds;
+}
+
+for (const kind of ["bag", "sack"]) {
+  test(`a successful ${kind} pickup plays the normal pickup sound once`, async (t) => {
+    const f = actor(t, HOME, kind === "bag");
+    if (kind === "sack") f.inv.add(new core.Item(core.CacheDefinitions.getObjId("gem_sack_open")), true);
+    const pile = gemHere(t, f), events = [], sounds = watchPickupSounds(t, f);
+    pickupEvents.set(f.p, events);
+    await take(f);
+    const target = Storage.FAMILIES.get(`gem-${kind}`);
+    assert.equal(Storage.amountOf(f.p, target, I.UNCUT_RUBY), 1);
+    assert.equal(f.inv.getAmount(I.UNCUT_RUBY), 0);
+    assert.equal(pile.isPendingRemoval(), true);
+    assert.deepEqual(events, [{ amount: 1, discarded: 0, source: "pickup" }]);
+    assert.deepEqual(sounds, [core.Sound.PICK_UP_ITEM.getId()]);
+  });
+}
+
 test("an open bag takes the player's own gem (control)", async (t) => {
   const f = actor(t);
   const pile = gemHere(t, f);
@@ -115,6 +141,7 @@ test("an open bag takes the player's own gem (control)", async (t) => {
 
 test("a denied ground take cannot put a gem in the bag", async (t) => {
   const f = actor(t);
+  const sounds = watchPickupSounds(t, f);
   const pile = gemHere(t, f);
   const events = [];
   pickupEvents.set(f.p, events);
@@ -124,6 +151,25 @@ test("a denied ground take cannot put a gem in the bag", async (t) => {
   assert.equal(f.inv.getAmount(I.UNCUT_RUBY), 0);
   assert.equal(pile.isPendingRemoval(), false);
   assert.deepEqual(events, []);
+  assert.deepEqual(sounds, []);
+});
+
+test("a failed gem store leaves the ground item and plays no pickup sound", async (t) => {
+  const f = actor(t), pile = gemHere(t, f), sounds = watchPickupSounds(t, f), events = [];
+  pickupEvents.set(f.p, events);
+  const store = Storage.store.bind(Storage);
+  let attempts = 0;
+  t.mock.method(Storage, "store", (player, ...args) => {
+    if (player === f.p) { attempts++; return 0; }
+    return store(player, ...args);
+  });
+  await take(f);
+  assert.equal(attempts, 1, "the native pickup reached the injected failed store");
+  assert.equal(stored(f), 0);
+  assert.equal(f.inv.getAmount(I.UNCUT_RUBY), 0);
+  assert.equal(pile.isPendingRemoval(), false);
+  assert.deepEqual(events, []);
+  assert.deepEqual(sounds, []);
 });
 
 test("an allowed bag pickup emits the credited ground-item event once", async (t) => {
@@ -175,10 +221,13 @@ test("an open sack stores the player's own gem once", async (t) => {
   assert.equal(Storage.amountOf(f.p, sack, I.UNCUT_RUBY), 1);
   assert.equal(f.inv.getAmount(I.UNCUT_RUBY), 0);
   assert.equal(pile.isPendingRemoval(), true);
+  assert.ok(f.messages.includes("You put it straight into your open gem sack."), JSON.stringify(f.messages));
+  assert.equal(f.messages.includes(STRAIGHT_IN), false);
 });
 
 test("an Ironman's open sack cannot take another player's gem", async (t) => {
   const f = actor(t, HOME, false);
+  const sounds = watchPickupSounds(t, f);
   f.inv.add(new core.Item(core.CacheDefinitions.getObjId("gem_sack_open")), true);
   setIron(f);
   const pile = gemHere(t, f, "OtherPlayer");
@@ -189,6 +238,7 @@ test("an Ironman's open sack cannot take another player's gem", async (t) => {
   assert.equal(f.inv.getAmount(I.UNCUT_RUBY), 0);
   assert.equal(pile.isPendingRemoval(), false);
   assert.ok(f.messages.includes(REFUSED), JSON.stringify(f.messages));
+  assert.deepEqual(sounds, []);
 });
 
 function sackActor(t) {
@@ -199,6 +249,7 @@ function sackActor(t) {
 
 test("ground take policy can refuse a gem for an open sack", async (t) => {
   const f = sackActor(t), pile = gemHere(t, f), events = [];
+  const sounds = watchPickupSounds(t, f);
   pickupEvents.set(f.p, events);
   pickupPolicies.set(f.p, (event) => { event.allow = false; });
   await take(f);
@@ -206,6 +257,7 @@ test("ground take policy can refuse a gem for an open sack", async (t) => {
   assert.equal(f.inv.getAmount(I.UNCUT_RUBY), 0);
   assert.equal(pile.isPendingRemoval(), false);
   assert.deepEqual(events, []);
+  assert.deepEqual(sounds, []);
 });
 
 test("sack pickup emits the credited ground-item event once", async (t) => {
@@ -240,6 +292,7 @@ test("nested sack pickup cannot duplicate a gem", async (t) => {
 
 test("an Ironman's open bag doesn't take another player's gem, and it stays on the ground", async (t) => {
   const f = actor(t);
+  const sounds = watchPickupSounds(t, f);
   setIron(f);
   const pile = gemHere(t, f, "OtherPlayer");
   await take(f);
@@ -247,6 +300,7 @@ test("an Ironman's open bag doesn't take another player's gem, and it stays on t
   assert.equal(f.inv.getAmount(I.UNCUT_RUBY), 0, "not in the pack");
   assert.equal(pile.isPendingRemoval(), false, "still on the ground");
   assert.ok(f.messages.includes(REFUSED), JSON.stringify(f.messages));
+  assert.deepEqual(sounds, []);
 });
 
 test("an Ironman's open bag still takes their own gem (control)", async (t) => {

@@ -21,7 +21,18 @@ worktrees() { git worktree list --porcelain | sed -n 's/^worktree //p'; }
 # True when something is listening on the port. lsof is not on Windows (git-bash),
 # where it silently left every worktree "stopped"; bash's own /dev/tcp needs no
 # external tool and behaves the same on macOS, Linux and git-bash.
-port_listening() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
+#
+# A closed loopback port can take the kernel's SYN-retry window to refuse on
+# Windows (~2s), and `ls` probes every worktree in turn, so bound the probe at the
+# 0.3s scripts/agents/prune-worktrees already uses for the same check. `timeout` is
+# coreutils and absent from stock macOS, where a refusal is immediate anyway.
+port_listening() {
+  if command -v timeout >/dev/null 2>&1; then
+    (timeout 0.3 bash -c "exec 3<>/dev/tcp/127.0.0.1/$1") 2>/dev/null
+  else
+    (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null
+  fi
+}
 
 free_slot() {
   local used

@@ -124,6 +124,8 @@ function defineDoorData({ ObjectIdentifiers: O }) {
     // open leaf (active rev241 cache; pinned Games Room reference next_loc_stage).
     [O.DOOR_129, O.DOOR_132],
     [O.DOOR_130, O.DOOR_132],
+    // RuneSquares experienced room: same close-only leaf as the normal room.
+    [O.DOOR_272, O.DOOR_132],
     // Vitur clothing-shop door is a transformed 61840 parent whose visible closed/open
     // children are 61842/61843. The unnamed parent cannot be catalogued by its cache name.
     [O.DOOR_837, O.DOOR_838],
@@ -159,7 +161,7 @@ function defineDoorData({ ObjectIdentifiers: O }) {
   // 21403/21405 at 2413,3797 face 3 open as 21404/21406 face 2/0 on the same tiles).
   // Yanille's south entrance door has blocked floor immediately west of the doorway, so its
   // map-backed open pose turns on the closed tile instead of swinging into that wall.
-  OWN_TILE_DOOR_IDS = new Set([O.GATE_155, O.GATE_157, O.DOOR_287, O.DOOR_129, O.DOOR_130]);
+  OWN_TILE_DOOR_IDS = new Set([O.GATE_155, O.GATE_157, O.DOOR_287, O.DOOR_129, O.DOOR_130, O.DOOR_272]);
 
   // Tree Gnome Stronghold main gate: one 5x2 loc (190, face 2) opens into two
   // nameless 2x2 leaves (191/192), leaving the centre tile clear.

@@ -22,7 +22,7 @@ function named(object, name) {
 function refuse(event, game, action) {
   if (rank(event.player, game) >= EXPERIENCED_RANK) return false;
   event.handled = true;
-  const title = game === 'draughts' ? 'Draughts' : 'Runelink';
+  const title = game === 'runesquares' ? 'Runesquares' : game === 'draughts' ? 'Draughts' : 'Runelink';
   event.player.getPacketSender().sendMessage(`You need a ${title} rank of at least 1500 to ${action}.`);
   return true;
 }
@@ -44,12 +44,19 @@ function climb(event) {
     refuse(event, 'draughts', 'climb this ladder');
   } else if (named(object, 'boardgames_runelink_ladderup_experienced') && at(object, 2216, 4936, 0)) {
     refuse(event, 'runelink', 'climb this ladder');
+  } else if (named(object, 'boardgames_runesquares_ladderup_experienced') && at(object, 2184, 4951, 0)) {
+    refuse(event, 'runesquares', 'climb this ladder');
   }
 }
 
 function door(event) {
   if (event.handled || !event.object || !event.player) return;
   const object = event.object;
+  // The west RuneSquares room opens east, rather than north like Draughts.
+  if (named(object, 'boardgames_runesquares_door_experienced') && at(object, 2191, 4950, 1)) {
+    if (event.player.getLocation().getX() > 2191) refuse(event, 'runesquares', 'pass through this door');
+    return;
+  }
   // A player may always leave the experienced challenge room to its north.
   if (event.player.getLocation().getY() <= object.getLocation().getY()) return;
   if (named(object, 'boardgames_draughts_door_experienced') && at(object, 2198, 4943, 1)) {
@@ -60,11 +67,15 @@ function door(event) {
 }
 
 function gameRoom(game, plane = 0) {
+  // Actual cache room carpet; exact OSRS finish tile is not captured.
+  if (game === 'runesquares' && [0, 1].includes(plane)) return new core.Location(2188, 4948, plane);
   if (!['draughts', 'runelink'].includes(game) || ![0, 1].includes(plane)) return null;
   return new core.Location(game === 'draughts' ? 2196 : 2219, 4940, plane);
 }
 
 function roomGame(location) {
+  if (location && [0, 1].includes(location.getZ()) && location.getX() >= 2184 && location.getX() <= 2191 &&
+      location.getY() >= 4944 && location.getY() <= 4951) return 'runesquares';
   if (!location || ![0, 1].includes(location.getZ()) || location.getY() < 4936 || location.getY() > 4943) return null;
   if (location.getX() >= 2192 && location.getX() <= 2199) return 'draughts';
   if (location.getX() >= 2216 && location.getX() <= 2223) return 'runelink';
@@ -77,8 +88,8 @@ function enforce(player) {
   const game = roomGame(location);
   if (!game || rank(player, game) >= EXPERIENCED_RANK) return false;
   player.getMovementQueue().reset();
-  player.moveTo(new core.Location(game === 'draughts' ? 2198 : 2217, 4944, 1));
-  player.getPacketSender().sendMessage(`You need a ${game === 'draughts' ? 'Draughts' : 'Runelink'} rank of at least 1500 to enter this room.`);
+  player.moveTo(game === 'runesquares' ? new core.Location(2192, 4950, 1) : new core.Location(game === 'draughts' ? 2198 : 2217, 4944, 1));
+  player.getPacketSender().sendMessage(`You need a ${game === 'runesquares' ? 'Runesquares' : game === 'draughts' ? 'Draughts' : 'Runelink'} rank of at least 1500 to enter this room.`);
   return true;
 }
 

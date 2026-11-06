@@ -5,6 +5,7 @@
 // The draw counts completed turns without capture/promotion. Current captures do
 // not establish how the original server counts multi-jumps; captures reset it.
 function create(game) {
+  if (game === 'runesquares') return require('./Rule.RuneSquares.GamesRoom').create();
   if (game !== 'draughts' && game !== 'runelink') throw new RangeError('Unknown board game');
   const board = Array(game === 'draughts' ? 64 : 42).fill(0);
   if (game === 'draughts') {
@@ -44,6 +45,7 @@ function movesFrom(state, from, capture) {
 }
 
 function legalMoves(state) {
+  if (state.game === 'runesquares') return require('./Rule.RuneSquares.GamesRoom').legalMoves(state);
   if (state.result) return [];
   if (state.game === 'runelink') {
     return Array.from({ length: 7 }, (_, column) => ({ column })).filter(move => !state.board[move.column]);
@@ -58,6 +60,7 @@ function legalMoves(state) {
 }
 
 function play(state, side, move) {
+  if (state.game === 'runesquares') return require('./Rule.RuneSquares.GamesRoom').play(state, side, move);
   if (state.result || side !== state.turn || !move || typeof move !== 'object') return false;
   if (state.game === 'runelink') {
     if (!Number.isInteger(move.column) || !legalMoves(state).some(x => x.column === move.column)) return false;

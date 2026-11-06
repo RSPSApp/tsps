@@ -1,4 +1,6 @@
 "use strict";
+const { GAMES } = require("./Games.GamesRoom");
+const RuneSquares = require("./Interface.RuneSquares.GamesRoom");
 
 // Revision 241: interface_inv_update_big and cc_object_swapper. The latter changes a
 // dynamic child's item without clearing its operations, including empty squares.
@@ -6,6 +8,9 @@ const INVENTORY_UPDATE_SCRIPT = 151;
 const OBJECT_SWAPPER_SCRIPT = 719;
 const TEXT_SWAPPER_SCRIPT = 599;
 const OUTLINE_SWAPPER_SCRIPT = 6002;
+// worldswitcher_wipe_favourite: only clears the target onOp/onMouseRepeat.
+// Suppressing IF_BUTTON transmission alone leaves native radio scripts active.
+const CLEAR_LOCAL_OPTION_SCRIPT = 893;
 const PIECES = ["fire", "water", "earth", "air", "mind", "body", "nature", "chaos", "law", "cosmic", "blood", "soul"];
 const MOVE_SECONDS = [15, 30, 60, 120];
 const RESULT_TEXT = {
@@ -21,10 +26,14 @@ function required(value, name) {
   if (value == null) throw new Error(`Games Room cache entry missing: ${name}`);
   return value;
 }
-function configure(core) { cache = core.CacheDefinitions; }
+function configure(core) { cache = core.CacheDefinitions; RuneSquares.configure(core); }
 function component(name) { return required(cache.getComponentId(name), name); }
 function interfaceId(name) { return required(cache.getInterfaceId(name), name); }
-function gameName(game) { return game === 1 || game === "runelink" ? "runelink" : "draughts"; }
+function gameName(game) {
+  const name = typeof game === "number" ? Object.keys(GAMES).find(name => GAMES[name].id === game) : game;
+  if (!Object.hasOwn(GAMES, name)) throw new RangeError("Unknown board game");
+  return name;
+}
 function group(game) { return interfaceId(`boardgames_${gameName(game)}`); }
 function optionsGroup(game) { return interfaceId(`boardgames_${gameName(game)}_options`); }
 function varbit(player, name, value) {
@@ -35,10 +44,10 @@ function hidden(player, name, value) { player.getPacketSender().sendInterfaceDis
 function nameOf(player) { return player.getDisplayName(); }
 
 function showSelection(player, selectedGame = 0, ranks = {}) {
-  varbit(player, "game", gameName(selectedGame) === "runelink" ? 1 : 0);
+  varbit(player, "game", GAMES[gameName(selectedGame)].id);
   player.getPacketSender().sendInterface(interfaceId("boardgames_challenge"));
   // Pinned reference boardgames_challenge labels these as mine vs opponent.
-  for (const game of ["draughts", "runelink"]) {
+  for (const game of Object.keys(GAMES)) {
     const pair = ranks[game];
     if (Array.isArray(pair) && pair.length === 2) {
       text(player, `boardgames_challenge:${game}_rank`, `${pair[0]} vs ${pair[1]}`);
@@ -46,7 +55,7 @@ function showSelection(player, selectedGame = 0, ranks = {}) {
   }
   // These games are outside this plugin's supported slice. Keep the native
   // controls visible but disabled and explicitly label their rank unavailable.
-  for (const name of ["runesquares", "runeversi"]) {
+  for (const name of ["draughts", "runelink", "runesquares", "runeversi"].filter(name => !Object.hasOwn(GAMES, name))) {
     player.getPacketSender().sendInterfaceFlagsRange(component(`boardgames_challenge:${name}`), -1, -1, 0);
     text(player, `boardgames_challenge:${name}_rank`, "Unavailable");
   }
@@ -67,13 +76,14 @@ function showOptions(player, game, settings, { recipient = false } = {}) {
   }
   for (const control of ["15seconds", "30seconds", "1minute", "2minutes", "ranked"]) {
     sender.sendInterfaceFlagsRange(component(`${prefix}:${control}`), -1, -1, recipient ? 0 : 1 << 1);
+    if (recipient) sender.sendInterfaceScript(CLEAR_LOCAL_OPTION_SCRIPT, [component(`${prefix}:${control}`)]);
   }
   // The native button text is dynamic child 9, created by boardgames_button_init.
   sender.sendInterfaceScript(TEXT_SWAPPER_SCRIPT,
     [component(`${prefix}:challenge`), 9, recipient ? "Accept" : "Challenge"]);
-  const draughts = gameName(game) === "draughts";
-  text(player, `${prefix}:${draughts ? "com_42" : "com_45"}`, recipient ? "Time (fixed):" : "Time per move:");
-  text(player, `${prefix}:${draughts ? "com_56" : "com_43"}`, recipient ? "Ranked (fixed)" : "Ranked");
+  const info = GAMES[gameName(game)];
+  text(player, `${prefix}:${info.optionTimeLabel}`, recipient ? "Time (fixed):" : "Time per move:");
+  text(player, `${prefix}:${info.optionRankLabel}`, recipient ? "Ranked (fixed)" : "Ranked");
 }
 
 function pieceId(game, selection, king) {
@@ -85,7 +95,8 @@ function pieceId(game, selection, king) {
 }
 
 function drawBoard(player, match, readOnly = false) {
-  const isDraughts = gameName(match.game) === "draughts";
+  const info = GAMES[gameName(match.game)];
+  const isDraughts = match.game === "draughts";
   const board = match.state.board;
   const boardUid = component(`boardgames_${gameName(match.game)}:boardinv`);
   const sender = player.getPacketSender();
@@ -94,16 +105,25 @@ function drawBoard(player, match, readOnly = false) {
   // Use the one-shot builder rather than interface_inv_init (149): its transmit
   // listener could restore placeholders after the object swaps. Board state is
   // owned by the match; this display inventory never touches carried items.
-  const slots = Array.from({ length: board.length }, (_, slot) => ({ slot, itemId: placeholder, quantity: 1 }));
-  sender.sendInterfaceScript(INVENTORY_UPDATE_SCRIPT,
-    [boardUid, inventory, isDraughts ? 8 : 7, isDraughts ? 8 : 6, 0, -1,
-      isDraughts && !readOnly ? "Select square" : "", "", "", "", "", "", "", "", ""],
-    undefined, undefined, { [inventory]: { capacity: board.length, slots } });
-  sender.sendInterfaceFlagsRange(boardUid, 0, board.length - 1, isDraughts && !readOnly ? 1 << 1 : 0);
-  for (let slot = 0; slot < board.length; slot++) {
+  // Edge games must create empty native slots as empty: swapping a placeholder
+  // object to -1 later leaves its inventory Examine target above the line controls.
+  const slots = Array.from({ length: board.length }, (_, slot) => {
+    if (match.game !== "runesquares") return { slot, itemId: placeholder, quantity: 1 };
     const value = board[slot];
-    const item = value ? pieceId(match.game, match.settings.pieces[value > 0 ? 0 : 1], Math.abs(value) === 2) : -1;
-    sender.sendInterfaceScript(OBJECT_SWAPPER_SCRIPT, [boardUid, slot, item, value ? 1 : 0]);
+    return { slot, itemId: value ? pieceId(match.game, match.settings.pieces[value > 0 ? 0 : 1], false) : -1,
+      quantity: value ? 1 : 0 };
+  });
+  sender.sendInterfaceScript(INVENTORY_UPDATE_SCRIPT,
+    [boardUid, inventory, info.width, info.height, 0, -1,
+      info.squareInput && !readOnly ? "Select square" : "", "", "", "", "", "", "", "", ""],
+    undefined, undefined, { [inventory]: { capacity: board.length, slots } });
+  sender.sendInterfaceFlagsRange(boardUid, 0, board.length - 1, info.squareInput && !readOnly ? 1 << 1 : 0);
+  if (match.game !== "runesquares") {
+    for (let slot = 0; slot < board.length; slot++) {
+      const value = board[slot];
+      const item = value ? pieceId(match.game, match.settings.pieces[value > 0 ? 0 : 1], Math.abs(value) === 2) : -1;
+      sender.sendInterfaceScript(OBJECT_SWAPPER_SCRIPT, [boardUid, slot, item, value ? 1 : 0]);
+    }
   }
   const selected = match.selected?.get(player);
   if (!readOnly && isDraughts && Number.isInteger(selected) && selected >= 0 && selected < board.length) {
@@ -130,6 +150,7 @@ function refreshMatch(player, match) {
     timers.set(player, { match, deadline: match.deadline });
   }
   drawBoard(player, match);
+  if (match.game === "runesquares") RuneSquares.refresh(player, match);
 }
 
 function showMatch(player, match) {
@@ -142,7 +163,7 @@ function showMatch(player, match) {
   hidden(player, `${prefix}:turn`, false);
   hidden(player, `${prefix}:turn_name`, false);
   hidden(player, `${prefix}:winner`, true);
-  hidden(player, `${prefix}:runeflash`, true);
+  if (cache.getComponentId(`${prefix}:runeflash`) != null) hidden(player, `${prefix}:runeflash`, true);
   if (gameName(match.game) === "runelink") {
     for (let column = 0; column < 7; column++) player.getPacketSender()
       .sendInterfaceFlagsRange(component(`${prefix}:column${column}`), -1, -1, 2);
@@ -167,6 +188,7 @@ function showResult(player, match) {
   player.getPacketSender().sendInterfaceAnimation(component(`${prefix}:sandtimer`),
     required(cache.getSeqId("sandtimer_off"), "sandtimer_off"));
   player.getPacketSender().sendInterfaceFlagsRange(component(`${prefix}:boardinv`), 0, match.state.board.length - 1, 0);
+  if (match.game === "runesquares") RuneSquares.refresh(player, match);
   if (gameName(match.game) === "runelink") {
     for (let column = 0; column < 7; column++) player.getPacketSender()
       .sendInterfaceFlagsRange(component(`${prefix}:column${column}`), -1, -1, 0);

@@ -10,34 +10,56 @@ const core = PluginManager.getCoreApi();
 const Keldagrim = require("../plugins/areas/Keldagrim.plugin");
 const Rellekka = require("../plugins/areas/Rellekka.plugin");
 
-test("the Rellekka tunnel reaches the cave, while the city passage needs The Giant Dwarf started", () => {
-  let started = false;
-  const pluginApi = {
-    core,
-    emitCustomEvent(name, request) {
-      if (name === "quest:is-started") request.started = started;
-    },
-  };
-  Keldagrim._test.init(pluginApi);
+test("the Rellekka tunnel and cave passage reach the Dwarven Boatman without The Giant Dwarf started", () => {
+  Keldagrim._test.init({ core, emitCustomEvent() {} });
   Rellekka.register({ core, onObjectInteraction() {} });
 
   const landings = [];
-  const messages = [];
   const player = {
     moveTo: (location) => landings.push([location.getX(), location.getY()]),
-    sendMessage: (message) => messages.push(message),
+    sendMessage: () => {},
   };
   const entry = { player, location: { x: 2731, y: 3712, z: 0 }, handled: false };
   Rellekka._test.enterTunnel(entry);
-  assert.deepEqual(landings, [[2773, 10162]], "the cave remains reachable so the quest can be started");
+  assert.deepEqual(landings, [[2773, 10162]], "the Rellekka tunnel reaches the cave");
 
   Keldagrim._test.goThrough({ player, objectId: core.ObjectIdentifiers.CAVE_ENTRANCE_29 });
-  assert.deepEqual(landings, [[2773, 10162]], "the city passage rejects an unstarted quest");
-  assert.match(messages[0], /start The Giant Dwarf/);
+  assert.deepEqual(landings.at(-1), [2838, 10124],
+    "the cave passage reaches the boatman, who starts the quest and takes the player into the city");
+});
 
-  started = true;
-  Keldagrim._test.goThrough({ player, objectId: core.ObjectIdentifiers.CAVE_ENTRANCE_29 });
-  assert.deepEqual(landings.at(-1), [2838, 10124], "starting The Giant Dwarf opens the city passage");
+test("only the city, not the boatman's entrance-mine dock, marks Keldagrim visited", () => {
+  const zones = [];
+  const entered = [];
+  Keldagrim.register({
+    core,
+    onObjectInteraction() {},
+    onZoneEnter(zone, handler) { zones.push([zone, handler]); },
+    onNpcInteraction() {},
+    onNpcDialogueVariant() {},
+    onNpcDialogueCondition() {},
+    onCustomEvent() {},
+    emitCustomEvent(name, payload) { if (name === "keldagrim:entered-city") entered.push(payload); },
+  });
+  const inside = (zone, x, y) => x >= zone.minX && x <= zone.maxX && y >= zone.minY && y <= zone.maxY
+    && zone.levels.includes(0);
+  const enter = (x, y) => {
+    let fired = 0;
+    for (const [zone, handler] of zones) {
+      if (!inside(zone, x, y)) continue;
+      handler({ player: {} });
+      fired++;
+    }
+    return fired;
+  };
+
+  assert.equal(enter(2838, 10124), 0, "the boatman's dock is the entrance mine, not Keldagrim");
+  assert.equal(enter(2827, 10214), 1, "the boat ride's Black Guard HQ landing is Keldagrim");
+  assert.equal(enter(2930, 10193), 1, "the Blast Furnace is Keldagrim");
+  assert.equal(enter(2872, 10176), 0,
+    "the ferry-side house north of the river is reachable without the quest, so it is not Keldagrim");
+  assert.equal(enter(2840, 10190), 1, "the city's west half is Keldagrim");
+  assert.equal(entered.length, 3);
 });
 
 test("the ferrymen's Travel takes the 2-coin fare, one coin as the transcript's exception, and refuses with none", () => {

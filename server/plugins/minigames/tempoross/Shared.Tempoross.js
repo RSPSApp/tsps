@@ -140,8 +140,11 @@ const ANIM = {
 
 const GFX = {
   SPOT_SPLASH: 3,
-  /** Cache `stunned` (the Stun spell's landing graphic): the zap a torrent leaves on its loader. */
-  STUNNED: 80,
+  /**
+   * Cache `stunned_thieving`, the circling stars: capture 552 shows it on the cannoneer of the
+   * cannon a torrent struck. Its seq (1054) runs 8 ticks.
+   */
+  STUNNED: 245,
   PROJECTILE_COOKED: 525,
   PROJECTILE_RAW: 528,
   PROJECTILE_CRYSTALLISED: 1837,

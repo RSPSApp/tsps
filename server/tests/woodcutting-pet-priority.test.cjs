@@ -420,3 +420,55 @@ test('native woodcut cancellation: walk-cancel-restart grants one owned award an
   assert.equal(foreign.reduce((n,g)=>n+g.getItem().getAmount(),0),0,'no award may leak to the other actor');
   assert.equal(s.total(s.ids.BRONZE_AXE),1);
 });
+
+for (const [name, objectName, logName, tile] of [
+  ['scrapey', 'SCRAPEY_TREE', 'SCRAPEY_TREE_LOGS', [3784, 2956]],
+  ['jungle', 'JUNGLE_TREE_7', 'LOGS', [3778, 2953]],
+]) {
+  test(`Trouble Brewing ${name} uses the real timed, axe-gated Woodcutting action`, t => {
+    const f = actor(t), Game = require('../plugins/minigames/troublebrewing/Game.TroubleBrewing');
+    const Woodcutting = require('../plugins/skills/Woodcutting.plugin');
+    const game = Game.startNew({red:[f.p], blue:[]});
+    t.after(() => game.finish());
+    core.RegionManager.loadMapFiles(...tile);
+    f.p.setLocation(new core.Location(tile[0]-1,tile[1],0));
+    f.p.getMovementQueue().reset();
+    const tree = new core.GameObject(core.ObjectIdentifiers[objectName],new core.Location(...tile,0),10,0,null);
+    core.ObjectManager.register(tree,true);
+    t.after(() => core.ObjectManager.deregister(tree,true));
+    const chop = () => PM.emitObjectInteraction({player:f.p,object:tree,objectId:tree.getId(),location:tree.getLocation(),clickType:1,option:'Cut-Down',handled:false});
+    const xp=[], skills=f.p.getSkillManager(), add=skills.addExperiences.bind(skills);
+    t.mock.method(skills,'addExperiences',(skill,amount) => {if(skill===core.Skill.WOODCUTTING)xp.push(amount);return add(skill,amount);});
+    t.mock.method(Math,'random',() => {
+      const stack=new Error().stack;
+      return stack.includes('maybeDropBirdNest') || stack.includes('shouldDepleteTree') || stack.includes('skillingPet') ? 0.99 : 0;
+    });
+    for(let i=0;i<100;i++) chop();
+    assert.equal(Woodcutting.isWoodcuttingActive(f.p),false,'no axe cannot start chopping');
+    assert.equal(f.p.getInventory().getAmount(core.ItemIdentifiers[logName]),0);
+    assert.equal(xp.length,0);
+    f.p.getInventory().add(new core.Item(core.ItemIdentifiers.BRONZE_AXE),true);
+    for(let i=0;i<100;i++) chop();
+    assert.equal(Woodcutting.isWoodcuttingActive(f.p),true);
+    assert.equal(xp.length,0,'clicks do not pay XP before a tick');
+    assert.equal(f.p.getInventory().getAmount(core.ItemIdentifiers[logName]),0);
+    for(let i=0;i<3;i++)core.TaskManager.process();
+    assert.equal(xp.length,1,'only one roll has run');
+    assert.equal(xp[0],25);
+    assert.equal(f.p.getInventory().getAmount(core.ItemIdentifiers[logName]),1);
+    game.left(f.p);
+    core.TaskManager.process();
+    assert.equal(Woodcutting.isWoodcuttingActive(f.p),false,'leaving the game stops the active gathering session');
+  });
+}
+
+test('Scrapey tree retains its original depletion and Wiki success chart', () => {
+  const Woodcutting=require('../plugins/skills/Woodcutting.plugin');
+  const tree=Woodcutting.TREES.find(tree=>tree.logId===core.ItemIdentifiers.SCRAPEY_TREE_LOGS);
+  assert.equal(tree.respawnTicks,24);
+  assert.equal(tree.depleteChance,8);
+  assert.equal(tree.despawnTicks,undefined,'Forestry timers do not apply');
+  assert.equal(Woodcutting.calculateCutChance(1,tree,{tier:0}),23/256);
+  assert.equal(Woodcutting.calculateCutChance(99,tree,{tier:0}),75/256);
+  assert.equal(Woodcutting.calculateCutChance(50,tree,{tier:0}),49/256);
+});

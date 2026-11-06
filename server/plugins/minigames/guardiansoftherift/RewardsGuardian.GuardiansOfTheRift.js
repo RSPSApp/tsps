@@ -11,7 +11,8 @@
  *   out: mesbox "There doesn't seem to be anything else in the rift for you."
  * - Big-search: the animation, and three ticks later up to five rewards at once.
  * - With nothing to search: mesbox "There doesn't seem to be anything in the rift for you."
- * Wiki: a search costs an elemental and a catalytic point; the tables are in
+ * Wiki: a search costs an elemental and a catalytic point, and 25 abyssal pearls used on the
+ * Rewards Guardian buy one more roll (Search and Big-search spend only points); the tables are in
  * data/guardians-of-the-rift-rewards.json (the rare table rolls apart from the main one; a pouch
  * the player lacks, else a reroll; Atlax's diary and the abyssal needle only once); a needle on the
  * Rewards Guardian makes an abyssal needle. The intricate pouch needs two free slots.
@@ -27,7 +28,7 @@ const BIG_SEARCH = 5;
 const SEARCH_TICKS = 3;
 const LOOT_SOUND = 2581;
 const INTRICATE_FREE_SLOTS = 2;
-/** Wiki: instead of a point of each type, 25 abyssal pearls buy one search. */
+/** Wiki: 25 abyssal pearls used on the Rewards Guardian buy one roll. */
 const PEARL_SEARCH_COST = 25;
 /** "once" rewards and the gotr_perm_0/gotr_rewards_perm varbits that remember them. */
 const ONCE_VARBITS = {
@@ -150,32 +151,34 @@ function searchesLeft(player) {
   return Math.min(points.elemental, points.catalytic);
 }
 
-/** A point of each type pays first; with none, 25 pearls buy the search (Wiki). */
+/** Search and Big-search spend a point of each type; pearls pay only when used on the rift (Wiki). */
 function canSearch(player) {
-  return searchesLeft(player) > 0 || Records.pearls(player) >= PEARL_SEARCH_COST;
+  return searchesLeft(player) > 0;
 }
 
-function payForSearch(player) {
+function payWithPoints(player) {
   const points = Records.points(player);
-  if (points.elemental > 0 && points.catalytic > 0) {
-    Records.setPoints(player, points.elemental - 1, points.catalytic - 1);
-    return true;
-  }
+  if (points.elemental <= 0 || points.catalytic <= 0) return false;
+  Records.setPoints(player, points.elemental - 1, points.catalytic - 1);
+  return true;
+}
+
+function payWithPearls(player) {
   return Records.spendPearls(player, PEARL_SEARCH_COST);
 }
 
 /**
- * One search: the whole roll must fit before anything is given, then its points are spent and
- * every reward handed over. False when there are no searches left or no room.
+ * One search: the whole roll must fit before anything is given, then it is paid for and every
+ * reward handed over. False when it can't be paid for or there's no room.
  */
-function searchOnce(player) {
-  if (!canSearch(player)) return false;
+function searchOnce(player, pay = payWithPoints) {
+  if (pay === payWithPoints ? !canSearch(player) : Records.pearls(player) < PEARL_SEARCH_COST) return false;
   const rewards = rollSearch(player);
   if (slotsNeeded(player, rewards) > player.getInventory().getFreeSlots()) {
     player.getInventory().full();
     return false;
   }
-  if (!payForSearch(player)) return false;
+  if (!pay(player)) return false;
   Records.addSearches(player, 1);
   for (const reward of rewards) give(player, reward);
   return true;
@@ -231,6 +234,28 @@ function bigSearch({ player, objectId }) {
     while (searched < BIG_SEARCH && searchOnce(player)) searched++;
     if (searched > 0) Shared.sound(player, LOOT_SOUND);
     if (!canSearch(player)) emptied(player);
+    return false;
+  });
+  return true;
+}
+
+/**
+ * Abyssal pearls used on the Rewards Guardian: 25 of them buy one roll (Wiki), searched as Search
+ * searches once. The message for too few pearls is ours: no capture or Wiki text gives it.
+ */
+function pearlsOnRift({ player, objectId }) {
+  if (!isRift(objectId)) return false;
+  const pin = { player, feature: "rewards-guardian", resume: () => pearlsOnRift({ player, objectId }) };
+  Shared.api().emitCustomEvent("bank-pin:guard", pin);
+  if (pin.locked) return true;
+  if (Records.pearls(player) < PEARL_SEARCH_COST) {
+    player.sendMessage(`You need ${PEARL_SEARCH_COST} abyssal pearls to search the rift with them.`);
+    return true;
+  }
+  Shared.startAction(player, "pearl-search", (ticks) => {
+    if (ticks === 1) Shared.animate(player, "picking_low_shorter");
+    if (ticks < 1 + SEARCH_TICKS) return true;
+    if (searchOnce(player, payWithPearls)) Shared.sound(player, LOOT_SOUND);
     return false;
   });
   return true;
@@ -304,6 +329,7 @@ module.exports = {
   attach(api) {
     api.onObjectInteraction("<col=ffff00>Rewards Guardian</col>", { Search: search, Check: check, "Big-search": bigSearch });
     api.onItemOnObject("Needle", "<col=ffff00>Rewards Guardian</col>", needleOnRift);
+    api.onItemOnObject("Abyssal pearls", "<col=ffff00>Rewards Guardian</col>", pearlsOnRift);
     api.onItemAction("Intricate pouch", { Open: openPouch });
     api.onItemAction("Atlax's diary", { Read: readDiary });
   },

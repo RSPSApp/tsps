@@ -641,7 +641,7 @@ function hasSpaceFor(player, state) {
     const inventory = player.getInventory();
     if (!inventory.isFull()) return true;
     // An open herb sack takes the herbs itself (Guild.storeCrop).
-    if (crop?.type === "HERB" && inventory.contains(Data.itemId("Open herb sack"))) return true;
+    if (crop?.type === "HERB" && Guild.openHerbSack(player)) return true;
     return crop?.produce > 0 && core.CacheDefinitions.getItem(crop.produce).stackability !== 0 && inventory.contains(crop.produce);
 }
 /** Whether a grown patch can be picked now, and how (PICKS); says why not. */
@@ -689,7 +689,7 @@ function harvest(player, patch) {
     const picked = Number.isInteger(pick.itemId) && pick.itemId > 0 ? pick.itemId : produce;
     const pickedAmount = Number.isSafeInteger(pick.amount) && pick.amount > 0 ? pick.amount : amount;
     const left = pickedAmount - (Number.isSafeInteger(pick.stored) ? Math.min(pickedAmount, Math.max(0, pick.stored)) : 0);
-    const sack = crop.type === "HERB" && picked === produce && player.getInventory().getItems().find(i => i.getId() === Data.itemId("Open herb sack"));
+    const sack = crop.type === "HERB" && picked === produce && Guild.openHerbSack(player);
     if (left > 0 && !(sack && Guild.storeCrop(player, sack, produce, left)) && !give(player, picked, left)) return false;
     core.PluginManager.emitCustomEvent("farming:harvested", { player, crop: crop.key, patch, itemId: picked, amount: pickedAmount });
     if (blessing) player.getInventory().deleteNumber(Data.itemId("Bologa's blessing"), 1);
@@ -1176,6 +1176,9 @@ function attach(api) {
     api.onItemAction(Services.farmingItemAction);
     api.onItemAction(Guild.rewardItem);
     api.onItemAction(Guild.storageAction);
+    api.onCustomEvent("seed-box:gather", Guild.seedBoxGather);
+    api.onGroundItemPickup(Guild.seedBoxPickup);
+    api.onGroundItemPickup(Guild.pickup);
     api.onCustomEvent(core.Bank.INVENTORY_OP_EVENT, Guild.bankStorageOp);
     api.onSpellOnObject(spellOnObject);
     api.onButtonClick(Spells.farmingButton);

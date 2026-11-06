@@ -260,22 +260,20 @@ test("granite body credits only after buying it from the Assault and equipping i
   assert.equal(plain.tasks.length, 0);
 });
 
-test("stamina mix needs a stamina potion(2) and caviar on top of the Seers bank", (t) => {
+test("a stamina mix made on top of the Seers bank counts, one made below does not", (t) => {
   const f = fixture(t);
   at(f.player, 2729, 3491, 3);
-  f.player.getSkillManager().setCurrentLevels(core.Skill.HERBLORE, 86);
-  add(f.player, T.STAMINA_POTION_2);
-  add(f.player, T.CAVIAR);
-  T.staminaMix({ player: f.player, usedItemId: T.STAMINA_POTION_2, usedWithItemId: T.CAVIAR, handled: false });
-  assert.equal(f.player.getInventory().getAmount(T.STAMINA_MIX_2), 1);
+  T.staminaMix({ player: f.player, itemId: T.STAMINA_MIX_2 });
   assert.deepEqual(f.tasks, [T.TASK.staminaMix]);
+
+  const other = fixture(t);
+  at(other.player, 2729, 3491, 3);
+  T.staminaMix({ player: other.player, itemId: T.STAMINA_POTION_2 });
+  assert.equal(other.tasks.length, 0);
 
   const ground = fixture(t);
   at(ground.player, 2700, 3460, 0);
-  ground.player.getSkillManager().setCurrentLevels(core.Skill.HERBLORE, 86);
-  add(ground.player, T.STAMINA_POTION_2);
-  add(ground.player, T.CAVIAR);
-  T.staminaMix({ player: ground.player, usedItemId: T.STAMINA_POTION_2, usedWithItemId: T.CAVIAR, handled: false });
+  T.staminaMix({ player: ground.player, itemId: T.STAMINA_MIX_2 });
   assert.equal(ground.tasks.length, 0);
 });
 

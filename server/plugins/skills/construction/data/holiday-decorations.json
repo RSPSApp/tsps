@@ -1,0 +1,41 @@
+{
+  "_sources": {
+    "recorded": "Rev 230 recording 2923: Wintumber tree Plant (17 clicks) and Dig-up (5 clicks) in a player-owned house. Rev 226 recording 1686: the scarecrow's garden-only refusal.",
+    "cache": "Rev 241 osrs-dumps: obj Plant options, loc options (Dig-up, Rotate-clockwise, Rotate-anticlockwise), loc blockwalk.",
+    "wiki": "OSRS Wiki Wintumber tree and Halloween scarecrow: any free non-hotspot space in the Garden or any free outdoor space of the house; the non-owner Dig-up line. Update:Halloween 2024: the scarecrow is placed just like the Wintumber tree."
+  },
+  "decorations": [
+    {
+      "key": "wintumber",
+      "item": "gub_wintumber_tree",
+      "loc": "gub_wintumber_tree_standard",
+      "plantSeq": "farming_trowel_dig",
+      "digSeq": "human_pickupfloor",
+      "plantTicks": 3,
+      "digTicks": 2,
+      "rotatable": false,
+      "messages": {
+        "wrongPlace": "You can only plant the wintumber tree in the garden of your player-owned house.",
+        "noSpace": "There is no space to place your tree here. Try a different location.",
+        "planted": "You plant the wintumber tree.",
+        "dugUp": "You dig up the wintumber tree.",
+        "notOwner": "You can't dig up the owner's wintumber tree! How unfestive!"
+      },
+      "source": "recorded (2923) sequences, ticks and messages; wiki non-owner line"
+    },
+    {
+      "key": "scarecrow",
+      "item": "hw24_scarecrow",
+      "loc": "hw24_scarecrow_beige_ew_poh",
+      "plantSeq": "farming_trowel_dig",
+      "digSeq": "human_pickupfloor",
+      "plantTicks": 3,
+      "digTicks": 2,
+      "rotatable": true,
+      "messages": {
+        "wrongPlace": "You can only plant the scarecrow in the garden of your player-owned house."
+      },
+      "source": "recorded (1686) refusal; flow and timing follow the Wintumber tree per the Halloween 2024 update; other lines are unsourced and left out; the first look of the cache's 63 is the default"
+    }
+  ]
+}

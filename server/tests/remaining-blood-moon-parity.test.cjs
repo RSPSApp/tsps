@@ -95,6 +95,7 @@ function player(name = 'Parity') {
     sendVarbit(id, value) { varbits.set(id, value); varbitHistory.push([id, value]); packets.varbits.push([id, value]); return packet; },
     getVarbit(id) { return varbits.get(id) ?? 0; },
     sendSubInterface(...args) { packets.interfaces.push(args); return packet; },
+    mountSubInterface(...args) { packets.interfaces.push(args); return {}; },
     closeSubInterface(...args) { packets.closes.push(args); return packet; },
     sendString(text, uid) { packets.strings.push([text, uid]); return packet; },
     sendClientScript(id, ...args) { packets.scripts.push([id, ...args]); return packet; },

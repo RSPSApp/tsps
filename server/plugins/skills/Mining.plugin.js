@@ -667,7 +667,9 @@ function rollAttempt(player, rock) {
 function giveGem(player, { itemId }) {
   if (itemId == null) return;
   player.sendMessage(gemMessage(itemId));
-  giveOre(player, itemId, 1);
+  // Ours (no source covers it): with no room anywhere, which an open coal bag can bring about while
+  // still mining, the gem falls to the floor rather than vanishing.
+  deliverOre(player, prepareOre(player, itemId, 1, 0));
 }
 
 function outcomeAmount(outcome) {
@@ -702,7 +704,7 @@ class MiningTask extends Task {
       }
       if (state.levelUpPaused) continue;
 
-      const rockObject = MapObjects.get(
+      const rockObject = state.npcRock ? npcRockTarget(state.npcRock) : MapObjects.get(
         state.objectId,
         state.location,
         state.privateArea
@@ -800,7 +802,13 @@ class MiningTask extends Task {
       pluginApi.emitCustomEvent("pets:skilling-roll", petRoll);
       deliverOre(player, pendingOre);
       if (kept && !state.rock.outcomes) mineExtraOre(player, state.rock, outcome);
+      const minedNpcRock = state.npcRock;
       pluginApi.emitCustomEvent("mining:success", { player, skill: Skill.MINING, petBase: state.rock.petBase, itemId: oreId, petRolled: petRoll.handled, pickaxeId: state.pickaxe?.id ?? null, objectId: state.objectId, location: state.location });
+      if (minedNpcRock) {
+        stopMining(this.activeSessions, player);
+        pluginApi.emitCustomEvent("mining:npc-rock-mined", { player, npc: minedNpcRock.npc });
+        continue;
+      }
       if (state.rock.depletesOnOre && timerRanOut) {
         ROCK_TIMERS.delete(rockObject);
         if (depleteRock(player, rockObject, state.rock)) {
@@ -953,6 +961,32 @@ function handleMine(event) {
   }
 }
 
+/**
+ * "mining:mine-npc-rock": a rock that is an NPC (a killed Runite Golem's head), mined with the named rock's
+ * rules. `stands` says whether it can still be mined; "mining:npc-rock-mined" follows the ore.
+ */
+function mineNpcRock({ player, npc, rockName, stands }) {
+  const rock = ROCK_BY_NAME.get(rockName);
+  if (!rock) return;
+  const target = npcRockTarget({ npc, stands });
+  if (target && startMining(player, target, rock, activeSessions)) {
+    activeSessions.get(player).npcRock = { npc, stands };
+  }
+}
+
+/** The loop's view of an NPC rock, as it reads a loc's. */
+function npcRockTarget({ npc, stands }) {
+  if (!stands()) return null;
+  return {
+    getId: () => npc.getId(),
+    getLocation: () => npc.getLocation(),
+    getPrivateArea: () => npc.getPrivateArea?.() ?? null,
+    isWithinInteractionDistance: (location) => Math.max(
+      Math.abs(location.getX() - npc.getLocation().getX()), Math.abs(location.getY() - npc.getLocation().getY())
+    ) <= 1 && location.getZ() === npc.getLocation().getZ(),
+  };
+}
+
 function endMiningSession({ player }) {
   stopMining(activeSessions, player, false);
   ROLL_READY_TICKS.delete(player);
@@ -988,6 +1022,7 @@ module.exports = {
     api.persistAttribute(ORE_MINED_ATTRIBUTE, 0);
     api.onPlayerLogin(sendOresMined);
     api.onCustomEvent("mining:count-ore", countKeptOre);
+    api.onCustomEvent("mining:mine-npc-rock", mineNpcRock);
     api.onCustomEvent("mining:ores-mined", answerOresMined);
     api.onObjectInteraction("Rocks", { Mine: mineDepletedRock });
     for (const name of EMPTY_ROCK_NAMES) api.onObjectInteraction(name, { Mine: mineDepletedRock });

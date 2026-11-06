@@ -769,7 +769,7 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
           // The native option prompt is already closed; preserve any replacement UI.
           if (hook.end) return;
         }
-        const choice = { player, npc: event.npc, npcId, definition, option: option.text, stepId: option.id };
+        const choice = { player, npc: event.npc, npcId, definition, option: option.text, stepId: option.id, pages: context.pages };
         api.emitCustomEvent("npc-dialogue:choice", choice);
         if (choice.end) return;
         context.currentMenu = menu;
@@ -894,19 +894,30 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
             const actorsAvailable = () => !!actors && actors.every(actor => isExplicitCast
               ? explicitlyBoundActorAvailable(player, actor)
               : actorAvailable(player, actor));
-            if (!actorsAvailable()) {
+            // A speaker out of view has nobody to say it over, and the steps after the
+            // line may be ones the quest can't go on without. Unless a quest bound its own
+            // cast, the line goes to chat marked as theirs (our wording, no capture shows
+            // it) and the chain goes on.
+            const outOfView = !actors && !isExplicitCast && isRegistered(player);
+            if (!outOfView && !actorsAvailable()) {
               unavailable();
               manager.reset?.();
               return;
             }
             playedAny = true;
-            actors.forEach(actor => actor.forceChat(formatted));
+            if (outOfView) {
+              const name = typedLine ? step.speaker : event.definition?.getName?.();
+              player.sendMessage(name ? `${name}: ${formatted}` : formatted);
+            } else {
+              actors.forEach(actor => actor.forceChat(formatted));
+            }
             // shortcut: generic 2-tick cadence, not a captured OSRS overhead timing.
             api.core.TaskManager.submit(new api.core.CountdownTask(player, OVERHEAD_CONTINUATION_TICKS, () => {
               const current = manager.getCurrent?.();
               // A replacement dialogue owns the chat now; never close or continue it.
               if (current !== overheadAction) return;
-              if (!actorsAvailable()) {
+              // The out-of-view line has no actor to recheck, so the player is rechecked alone.
+              if (outOfView ? !isRegistered(player) : !actorsAvailable()) {
                 unavailable();
                 manager.reset?.();
                 return;
@@ -927,9 +938,10 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
         const lines = Misc.wrapText(formatted, 53);
         // A typed line spoken by someone other than the NPC being talked to (a
         // paired NPC talking to them, a cutscene actor) gets that speaker's head.
-        const speakerId = request.speakerId ?? (!isPlayer && typedLine && step.speaker && step.speaker !== definition.getName()
-          ? (context.speakerIdByName?.get(step.speaker) ?? definition.getId())
-          : definition.getId());
+        // An item's own transcript has no NPC; a named speaker still gets their head.
+        const speakerId = request.speakerId ?? (!isPlayer && typedLine && step.speaker && step.speaker !== definition?.getName()
+          ? (context.speakerIdByName?.get(step.speaker) ?? definition?.getId())
+          : definition?.getId());
         if (typeof request.before === "function") {
           chain.add(new ActionDialogue(index++, { execute: () => {
             const current = manager.getCurrent?.();
@@ -1251,7 +1263,34 @@ module.exports = {
      * `select(steps)` can narrow the variant to the steps that apply (a right-click shortcut).
      * A missing variant plays the NPC's default transcript unless `exact` is set.
      */
+    /**
+     * An item's own transcript (Haunted wine bottle, Magic egg ball): no NPC speaks it, so it
+     * is named by `variant: { page, variant }` alone. Only explicit-activation records play,
+     * which the dump gives every item transcript; an NPC conversation always needs its npcId.
+     */
+    const startPage = (request) => {
+      const { data, speakerIdByName } = load();
+      const { page, variant } = request.variant ?? {};
+      const record = typeof page === "string" && Object.hasOwn(data, page) ? data[page] : undefined;
+      if (!request.player || record?.activation !== "explicit") return;
+      const steps = record.variants ? record.variants[variant]
+        : variant === "standard-dialogue" ? record.steps : undefined;
+      const selected = typeof request.select === "function" && Array.isArray(steps) ? request.select(steps) : steps;
+      if (!selected?.length) return;
+      const pageOptions = collectPageOptions(record);
+      const context = {
+        player: request.player, pages: [{ page, variants: Object.keys(record.variants ?? { "standard-dialogue": steps }) }],
+        speakerIdByName, pageOptions: pageOptions.byText, pageOptionList: pageOptions.list,
+        pageLines: collectPageLines(record), pageMenuBefore: collectMenuBefore(record, variant),
+        pageInitialMenu: collectMenuBefore(record, variant, { initial: true }),
+      };
+      const event = { player: request.player, npc: null, npcId: null, definition: null, variant: request.variant, explicit: true };
+      request.cancel = startDialogue(api, event, selected, record.branches, context);
+      request.handled = true;
+    };
+
     api.onCustomEvent("npc-dialogue:start", (request) => {
+      if (request.npcId == null && typeof request.variant?.page === "string") return startPage(request);
       const definition = NpcDefinition.forId(request.npcId);
       if (!request.player || !definition) return;
       const event = { player: request.player, npc: request.npc, npcId: request.npcId, definition, variant: request.variant, explicit: true };

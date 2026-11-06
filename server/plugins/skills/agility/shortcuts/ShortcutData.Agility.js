@@ -54,7 +54,7 @@ const ENTRY_KEYS = new Set([
   "steps", "between", "stile", "script", "params", "fail", "requires", "unverified", "note",
 ]);
 const FAIL_KEYS = new Set([
-  "low", "high", "baseChance", "neverFailLevel", "fromLevel", "xp", "start", "end", "render", "steps", "cross", "hit",
+  "low", "high", "baseChance", "neverFailLevel", "fromLevel", "xp", "start", "end", "render", "steps", "cross", "hit", "hits",
 ]);
 const REQUIREMENT_KEYS = new Set(["method", "skills", "equipped", "items", "quest", "diary", "slayerTask", "slayerTaskMessage", "steps", "cross", "start", "end"]);
 
@@ -168,10 +168,11 @@ function failOf(spec, where) {
  */
 function crossingFail(fail, steps) {
   if (!fail?.cross) return fail;
-  const hit = { hit: fail.hit ?? [1, 4] };
+  // `hits`: how many hitsplats the fall is (the Wiki's Rock slide page: two).
+  const hits = Array.from({ length: fail.hits ?? 1 }, () => ({ hit: fail.hit ?? [1, 4] }));
   return {
     ...fail,
-    steps: (context) => [...(typeof steps === "function" ? steps(context) : steps), hit],
+    steps: (context) => [...(typeof steps === "function" ? steps(context) : steps), ...hits],
   };
 }
 

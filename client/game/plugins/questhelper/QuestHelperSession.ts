@@ -27,6 +27,8 @@ export class QuestHelperSession {
     constructor(private readonly send: (data: unknown) => void, private readonly sessionId = () => globalThis.crypto.randomUUID()) { }
     getState = (): HelperSessionState => this.state;
     hasPendingEvaluation(): boolean { return this.inFlight; }
+    /** The browser session the server knows this helper by, or "" between sessions. */
+    currentSession(): string { return this.session; }
     isCurrentMessage(data: {
         protocol?: unknown;
         session?: unknown;

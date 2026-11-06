@@ -576,21 +576,44 @@ test("Felix's real Omnishop purchase takes the pearl items once", () => {
   assert.equal(player.messages.at(-1), "You don't have enough Abyssal pearls.");
 });
 
-test('25 pearls buy a search when the player has no points, and none left is refused', () => {
+test('Search spends only points, never pearls (issue 2698): the loot pearls stay', () => {
   const player = fakePlayer();
-  Records.addPearls(player, 25);
+  Records.setPoints(player, 1, 1);
+  Records.addPearls(player, 60);
   const random = Math.random;
   Math.random = () => 0;
   try {
     rift(player, 'Search');
-    ticks(4);
+    ticks(10);
   } finally {
     Math.random = random;
   }
-  assert.equal(Records.searches(player), 1);
-  assert.equal(Records.pearls(player), 0);
-  rift(player, 'Search');
+  assert.equal(Records.searches(player), 1, 'one point of each type is one search');
+  assert.equal(Records.pearls(player), 60, 'the pearls are untouched');
+  assert.match(statementText(player), /There doesn't seem to be anything else in the rift for you\./);
+  rift(player, 'Big-search');
   assert.match(statementText(player), /There doesn't seem to be anything in the rift for you\./);
+  assert.equal(Records.pearls(player), 60);
+});
+
+test('25 pearls used on the Rewards Guardian buy one roll; fewer are refused (Wiki)', () => {
+  const player = fakePlayer();
+  Records.addPearls(player, 30);
+  const pearlsOnRift = hooks.itemOnObject['Abyssal pearls|<col=ffff00>Rewards Guardian</col>'];
+  const random = Math.random;
+  Math.random = () => 0;
+  try {
+    pearlsOnRift({ player, objectId: Shared.loc('gotr_reward_rift'), itemId: Shared.obj(Shared.ITEM.PEARL) });
+    ticks(10);
+  } finally {
+    Math.random = random;
+  }
+  assert.equal(Records.searches(player), 1, 'a single roll');
+  assert.equal(Records.pearls(player), 5);
+  pearlsOnRift({ player, objectId: Shared.loc('gotr_reward_rift'), itemId: Shared.obj(Shared.ITEM.PEARL) });
+  ticks(10);
+  assert.equal(Records.searches(player), 1);
+  assert.equal(player.messages.at(-1), 'You need 25 abyssal pearls to search the rift with them.');
 });
 
 test('a pearl roll puts the pearls in the inventory', () => {
@@ -943,6 +966,34 @@ test('an active Guardian takes the player to its altar and stays in the game; th
   player.location = new Location(3222, 3218, 0);
   ticks(6);
   assert.equal(Game.isPlaying(player), false, 'teleporting away from the altar leaves the game');
+});
+
+test('a relog at the altar of a trip goes back to the lobby, not out through the ruins (issue 2698)', () => {
+  const player = fakePlayer();
+  attackPhase(player);
+  enter(player, EARTH);
+  ticks(2);
+  assert.equal(player.getAttribute(Altars.TRIP_ATTRIBUTE), 'earth', 'the trip is saved');
+  for (const handler of hooks.logout) handler({ player });
+  assert.equal(Game.isPlaying(player), false, 'a logout ends the game');
+  player.__gotrTrip = undefined; // a new session doesn't have the trip
+  for (const handler of hooks.login) handler({ player });
+  assert.deepEqual([player.location.getX(), player.location.getY()], [Shared.LOBBY_TILE.x, Shared.LOBBY_TILE.y]);
+  assert.equal(player.getAttribute(Altars.TRIP_ATTRIBUTE), '');
+
+  // Runecrafting there without the minigame keeps its login where it is.
+  const crafter = fakePlayer('Crafter', { x: EARTH.arrival[0], y: EARTH.arrival[1] });
+  for (const handler of hooks.login) handler({ player: crafter });
+  assert.deepEqual([crafter.location.getX(), crafter.location.getY()], EARTH.arrival);
+
+  // A trip that came back is forgotten.
+  const returned = fakePlayer('Returned');
+  attackPhase(returned);
+  enter(returned, EARTH);
+  ticks(2);
+  assert.equal(claimed(returned, Shared.loc(EARTH.exit), 'Use'), true);
+  ticks(2);
+  assert.equal(returned.getAttribute(Altars.TRIP_ATTRIBUTE), '');
 });
 
 test('crafting guardian essence makes runes, a stone each, the XP and charges one cell to the altar tier', () => {
@@ -1323,6 +1374,22 @@ test('elemental rift guardians only fight beside a creature (capture 1840)', () 
   assert.equal(leech.getHitpoints(), 5);
 });
 
+test('a rift guardian goes after a creature across the temple, not only within 10 tiles (issue 2698)', t => {
+  const player = fakePlayer();
+  openGame(player);
+  Game._game.phase = Game.PHASE.ATTACK;
+  const guardian = fakeNpc({ id: Shared.npc('gotr_guardian_fire'), x: 3626, y: 9516 });
+  guardian.__gotrTier = 4;
+  guardian.__gotrNextAttack = 0;
+  RiftGuardians.guardians.add(guardian);
+  const leech = fakeNpc({ id: Shared.npc('gotr_abyssal_leech'), x: 3606, y: 9503 });
+  Creatures.creatures.set(leech, { kind: 'leech', nextAttack: Infinity, attacker: null });
+  const routes = [];
+  t.mock.method(Shared.core().PathFinder, 'calculateWalkRoute', (npc, x, y) => routes.push([npc, x, y]));
+  ticks(1);
+  assert.ok(routes.some(([npc, x, y]) => npc === guardian && x === 3606 && y === 9503), 'walks at the far leech');
+});
+
 test('full power kills every creature', () => {
   const player = fakePlayer();
   openGame(player);
@@ -1358,7 +1425,7 @@ test('below 300 energy the close says so, with no points, no XP and no rift coun
 });
 
 test('Check counts the points and searches; Search takes one reward every 3 ticks until they run out', t => {
-  t.mock.method(Math, 'random', () => 0.5); // Pearl rewards can fund extra searches; test points alone.
+  t.mock.method(Math, 'random', () => 0.5);
   const player = fakePlayer();
   Records.setPoints(player, 2, 3);
   Records.addSearches(player, 4001);

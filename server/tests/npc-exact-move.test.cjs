@@ -199,6 +199,7 @@ test('players walk through NPCs, while NPCs still block each other', () => {
       { character: otherNpc }, new Location(x, y, 0));
     assert.equal(npcBlocked(3300, 3300), true, 'an NPC is stopped by another NPC');
     assert.equal(npcBlocked(3300, 3301), false, 'the free tile beside it is walkable');
+    assert.equal(npcBlocked(3300, 3302), false, 'an NPC passes through a pet rather than safespotting behind it');
   } finally {
     World.getNpcs().remove(npc);
     World.getNpcs().remove(pet);
@@ -568,4 +569,36 @@ test('Pandemonium native dialogue turns to its actual deck speakers', async t =>
     PM.emitPlayerLogout({ player: f.player, username: f.player.getUsername() }); await f.input(stale);
     assert.ok(f.player.getPositionToFace().equals(sentinel), 'departed playback has no pending turn');
   });
+});
+
+
+test('pet occupancy stays walk-through across moves, classification changes and removal without hiding other actors', () => {
+  const { World } = require('../dist/game/World');
+  const at = new Location(3300, 3302, 0), next = new Location(3301, 3302, 0);
+  const pet = new NPC(3106, at.clone()), blocker = new NPC(3106, at.clone());
+  pet.setPet(true);
+  World.getNpcs().add(pet, true);
+  try {
+    assert.equal(World.isNpcOccupyingTile(at), false);
+    assert.equal(World.isNpcOccupyingTile(new Location(3299, 3301, 0), null, 2), false, 'large movers ignore every covered pet tile');
+    assert.ok(World.getNpcsNear(at, 1).includes(pet), 'pet remains spatially visible');
+    pet.setPet(false);
+    assert.equal(World.isNpcOccupyingTile(at), true, 'classification is live, not stale registration state');
+    pet.setPet(true);
+    assert.equal(World.isNpcOccupyingTile(at), false);
+    pet.setLocation(next.clone());
+    assert.equal(World.isNpcOccupyingTile(at), false);
+    assert.equal(World.isNpcOccupyingTile(next), false);
+    World.getNpcs().add(blocker, true);
+    assert.equal(World.isNpcOccupyingTile(at), true, 'a real NPC still blocks');
+    pet.setLocation(at.clone());
+    assert.equal(World.isNpcOccupyingTile(at), true, 'a pet cannot conceal a colocated blocker');
+    assert.equal(World.isNpcOccupyingTile(at, blocker), false, 'ignored mover sees only the walk-through pet');
+    World.getNpcs().remove(pet);
+    assert.equal(World.isNpcOccupyingTile(at), true, 'despawning the pet preserves other occupancy');
+  } finally {
+    World.getNpcs().remove(pet);
+    World.getNpcs().remove(blocker);
+  }
+  assert.equal(World.isNpcOccupyingTile(at), false);
 });

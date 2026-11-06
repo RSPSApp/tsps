@@ -185,9 +185,14 @@ function prayAtChaosAltar({ player, objectId, location }) {
 
 /** The Nature Grotto's altar: restores Prayer as altars do, and reports the restored points. */
 function natureAltar({ player }) {
-  const before = player.getSkillManager().getCurrentLevel(Skill.PRAYER);
-  const handled = handlePrayerAltar(player);
-  if (handled && player.getSkillManager().getCurrentLevel(Skill.PRAYER) > before) {
+  const skills = player.getSkillManager();
+  const before = skills.getCurrentLevel(Skill.PRAYER);
+  const max = skills.getMaxLevel(Skill.PRAYER);
+  const request = { player, handled: false };
+  api.emitCustomEvent("altar:nature-quest-prayer", request);
+  const handled = request.handled === true || handlePrayerAltar(player);
+  // The diary requires restoring Prayer below its normal maximum, not just the quest bonus.
+  if (handled && before < max && skills.getCurrentLevel(Skill.PRAYER) > before) {
     api.emitCustomEvent("altar:nature", { player });
   }
   return handled;

@@ -16,8 +16,13 @@
  * old click that turned it unlit was the only way back, so a helmet lit outside the Lumbridge basement
  * could never be lit there for the diary. Extinguishing the other lights is not here.
  *
- * Not here: lighting a torch with dry sticks or on a fire or range (Wiki).
+ * The torch's other two lights (Wiki: "may be used with a tinderbox or dry sticks, or used on a fire
+ * or range"): dry sticks light the torch and nothing else, and the torch used on a fire or range
+ * lights it. The second needs a handler of its own because Cooking registers a `fallback` that
+ * otherwise answers "You can't cook that." for every item used on a range.
  */
+const { COOKABLE_OBJECT_NAMES } = require("../skills/cooking/Cookers.Cooking");
+
 let core;
 /** Unlit item id -> { lit, level, message? }. */
 let lights;
@@ -33,16 +38,17 @@ function build(I) {
   ]);
 }
 
-function light(event) {
-  const { player } = event;
-  const ids = [event.usedItemId, event.usedWithItemId];
-  if (!ids.includes(core.ItemIdentifiers.TINDERBOX)) return;
-  const id = ids.find((candidate) => candidate !== core.ItemIdentifiers.TINDERBOX);
-  const source = lights.get(id);
-  if (!source) return;
-  event.handled = true;
-  const item = [event.usedItem, event.usedWithItem].find((held) => held?.getId() === id);
-  if (!item || !player.getInventory().contains(core.ItemIdentifiers.TINDERBOX)) return;
+/** A tinderbox lights anything; dry sticks light only the torch (Wiki: its required tool). */
+function toolFor(ids, id) {
+  if (ids.includes(core.ItemIdentifiers.TINDERBOX)) return core.ItemIdentifiers.TINDERBOX;
+  if (id === core.ItemIdentifiers.UNLIT_TORCH && ids.includes(core.ItemIdentifiers.DRY_STICKS)) {
+    return core.ItemIdentifiers.DRY_STICKS;
+  }
+  return null;
+}
+
+/** Lights `item` from `source`, or refuses on the level. Shared by both ways of lighting. */
+function applyLight(player, item, source) {
   if (player.getSkillManager().getCurrentLevel(core.Skill.FIREMAKING) < source.level) {
     player.sendMessage(`You need ${source.level} Firemaking to light this.`);
     return;
@@ -50,6 +56,30 @@ function light(event) {
   item.setId(source.lit);
   player.getInventory().refreshItems();
   if (source.message) player.sendMessage(source.message);
+}
+
+function light(event) {
+  const { player } = event;
+  const ids = [event.usedItemId, event.usedWithItemId];
+  const id = ids.find((candidate) => lights.has(candidate));
+  if (id === undefined) return;
+  const tool = toolFor(ids, id);
+  if (tool === null) return;
+  const source = lights.get(id);
+  event.handled = true;
+  const item = [event.usedItem, event.usedWithItem].find((held) => held?.getId() === id);
+  if (!item || !player.getInventory().contains(tool)) return;
+  applyLight(player, item, source);
+}
+
+/** The torch used on a fire or range (Wiki). Cooking's fallback would otherwise refuse it. */
+function lightOnObject(event) {
+  const { player } = event;
+  if (event.itemId !== core.ItemIdentifiers.UNLIT_TORCH) return;
+  const name = event.object?.getDefinition?.()?.getName?.();
+  if (!COOKABLE_OBJECT_NAMES.has(name)) return;
+  event.handled = true;
+  applyLight(player, event.item, lights.get(core.ItemIdentifiers.UNLIT_TORCH));
 }
 
 /** "Extinguish" on the lit mining helmet (5013): the unlit one (5014), on the same instance. */
@@ -67,7 +97,8 @@ module.exports = {
     core = api.core;
     lights = build(core.ItemIdentifiers);
     api.onItemOnItem(light, { noted: false });
+    api.onItemOnObject(lightOnObject, { noted: false });
     api.onItemAction("Mining helmet", { Extinguish: extinguishHelmet });
   },
-  _test: { build },
+  _test: { build, lightOnObject },
 };

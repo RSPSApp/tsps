@@ -274,7 +274,8 @@ export class QuickPrayers {
     public checkActive(): void {
         if (!this.enabled) return;
         for (const [prayerId, prayer] of this.prayers.entries()) {
-            if ((prayer != null) !== QuickPrayers.isActivated(this.player, prayerId)) {
+            const bookId = QuickPrayers.PRAYER_HANDLER.bookPrayer(this.player, prayerId);
+            if ((prayer != null) !== QuickPrayers.isActivated(this.player, bookId)) {
                 this.enabled = false;
                 this.player.getPacketSender().sendQuickPrayersState(false);
                 return;
@@ -314,7 +315,10 @@ export class QuickPrayers {
             this.enabled = false;
         } else {
             const selected = this.prayers.filter((prayer): prayer is PrayerData => prayer != null);
-            const blocked = selected.find((prayer) => !QuickPrayers.canUse(this.player, prayer, false));
+            // Piety's slot is Zeal wherever the book shows Zeal there.
+            const bookIds = selected.map((prayer) => QuickPrayers.PRAYER_HANDLER.bookPrayer(this.player, prayer.prayerId));
+            const blocked = bookIds.map((prayerId) => QuickPrayers.PRAYER_DATA.prayerData.get(prayerId))
+                .find((prayer) => !QuickPrayers.canUse(this.player, prayer, false));
             if (selected.length === 0) {
                 this.player.sendMessage("You have not setup any quick-prayers yet.");
                 this.enabled = false;
@@ -327,10 +331,10 @@ export class QuickPrayers {
                     QuickPrayers.PRAYER_ALL_ACTIVE_VARBIT,
                     this.selectedPrayerMask(),
                 );
-                for (const prayer of selected) {
-                    QuickPrayers.activatePrayerPrayerId(this.player, prayer.prayerId);
+                for (const prayerId of bookIds) {
+                    QuickPrayers.activatePrayerPrayerId(this.player, prayerId);
                 }
-                this.enabled = selected.every((prayer) => QuickPrayers.isActivated(this.player, prayer.prayerId));
+                this.enabled = bookIds.every((prayerId) => QuickPrayers.isActivated(this.player, prayerId));
             }
         }
         this.player.getPacketSender().sendQuickPrayersState(this.enabled);

@@ -75,10 +75,12 @@ Community-reported completion accepted for scheduling (skip full manual replay).
     - The cabbage spell:
       - cast animation 710 (`human_castentangle`) and graphic 177 (`entangle_casting`);
       - he deals no damage, the player stops attacking him, and his next attack is 5 ticks away;
-      - a tick later a cabbage (1965) appears for 100 ticks on a free tile 1-7 from him, with smoke
-        (graphic 86, `smokepuff`).
+      - a tick later a cabbage (1965) appears for 100 ticks on a tile 1-7 from him that he could walk to,
+        with smoke (graphic 86, `smokepuff`).
 
-      LostCity also requires a line of walk to that tile, which isn't modelled.
+      "Could walk to" is a walk outward from his tile that no wall or closed door crosses, so the cabbage
+      stays in his room (the Wiki: "a random spot in the room"). It stands in for LostCity's line-of-walk
+      test and is a little wider, since any path inside the square counts, not only a straight line.
     - The names were checked against the revision 241 cache.
     - The capture fits these tables: 5 attacks and no cabbage, which happens about 43% of the time at 20/128.
       So does the Wiki, which names the cabbage spell.

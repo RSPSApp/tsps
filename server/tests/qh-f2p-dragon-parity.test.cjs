@@ -295,6 +295,17 @@ test('Melzar shouts his transcript lines only in a fight, and fights with the ca
   assert.equal(resets, 1, 'the player stops attacking him');
   core.TaskManager.process(); core.TaskManager.process();
   assert.ok(h.ground.length > 0, 'a cabbage lands a tick later');
+  // In his own room, never through a wall or door into the next one (review P2): Quest Helper's Melzar room
+  // zones (2927-2930 x 9643-9651, 2931 x 9646-9651), from his spawn 2928,9649 on the real basement collision.
+  const inHisRoom = (x, y) => (x >= 2927 && x <= 2930 && y >= 9643 && y <= 9651) || (x === 2931 && y >= 9646 && y <= 9651);
+  for (let i = 0; i < 64; i++) {
+    roll = i / 64; const cast = new Combat(melzar); melzar.calculateDistance = () => 1; roll = 70 / 128;
+    cast.start(melzar, target); roll = i / 64;
+    core.TaskManager.process(); core.TaskManager.process();
+    const landed = h.ground.at(-1)[2];
+    assert.ok(inHisRoom(landed.getX(), landed.getY()), `cabbage at ${landed.getX()},${landed.getY()} is in Melzar's room`);
+    done(cast);
+  }
   const [owner, item, tile, area, options] = h.ground.at(-1);
   assert.equal(owner, target); assert.equal(item.getId(), I.CABBAGE); assert.equal(area, null);
   assert.deepEqual(options, { public: true, despawnDelay: 100 });
@@ -310,6 +321,19 @@ test('Melzar shouts his transcript lines only in a fight, and fights with the ca
   assert.equal(walking.attackDistance(melzar), 1, 'walks in'); assert.equal(walking.type(), core.CombatType.MELEE);
   anims.length = 0; melzar.calculateDistance = () => 1; roll = 100 / 128;
   walking.start(melzar, target); assert.deepEqual(anims, [423], 'beside now: the beside table (a kick)'); done(walking);
+  // Combat reads the speed before start(): walked in, the beside roll is already the plan it sees (review P3).
+  melzar.calculateDistance = () => 5; roll = 50 / 128;
+  const arriving = new Combat(melzar);
+  assert.equal(arriving.attackDistance(melzar), 1);
+  melzar.calculateDistance = () => 1; roll = 70 / 128;
+  assert.equal(arriving.attackSpeed(melzar), 5, 'a cabbage after walking in waits 5 ticks too');
+  arriving.start(melzar, target); assert.deepEqual(arriving.hits(melzar, target), []); done(arriving);
+  // A plan is for its target: a new fight rolls afresh (review note).
+  melzar.calculateDistance = () => 1; roll = 100 / 128;
+  const forOne = new Combat(melzar); assert.equal(forOne.type(), core.CombatType.MELEE, 'a kick planned for this target');
+  const first = target; target = { ...first, getIndex: () => 3 }; roll = 0;
+  assert.equal(new Combat(melzar).type(), core.CombatType.MAGIC, 'another target: Weaken, rolled afresh');
+  target = first; done(forOne);
 
   // The hit and the spell's effect land as its own projectile does (reviewers' P2): rev242 tick 2593's Curse
   // from one tile ends at 90 cycles, 3 ticks, where the legacy NPC timing gave 2.

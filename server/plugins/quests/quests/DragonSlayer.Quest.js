@@ -1446,7 +1446,7 @@ module.exports = function registerDragonSlayerQuest(api) {
     { under: 16, spell: MELZAR_FIRE_STRIKE },
     { under: 24, cabbage: true },
   ];
-  /** Melzar's next attack, rolled when he picks one and kept until it is made, so his reach follows it. */
+  /** Melzar's next attack and who it is for, rolled when he picks one and kept until it is made, so his reach follows it. */
   const melzarPlans = new WeakMap();
 
   function lowered(target, skill) {
@@ -1461,12 +1461,14 @@ module.exports = function registerDragonSlayerQuest(api) {
   }
 
   function melzarPlan(npc) {
-    let plan = melzarPlans.get(npc);
-    if (plan) return plan;
     const target = npc.getCombat().getTarget();
-    const beside = target && npc.calculateDistance(target) <= 1;
-    plan = beside ? rollMelzarAttack(target, MELZAR_BESIDE, { kick: true }) : rollMelzarAttack(target, MELZAR_AT_RANGE, { approach: true });
-    melzarPlans.set(npc, plan);
+    const beside = target != null && npc.calculateDistance(target) <= 1;
+    const kept = melzarPlans.get(npc);
+    // A plan outlives its attack only for the same target: a fight that ended without one (a logout, a lost
+    // target) rolls afresh. Walked in, he rolls beside the player, before anything reads his speed.
+    if (kept && kept.target === target && !(kept.plan.approach && beside)) return kept.plan;
+    const plan = beside ? rollMelzarAttack(target, MELZAR_BESIDE, { kick: true }) : rollMelzarAttack(target, MELZAR_AT_RANGE, { approach: true });
+    melzarPlans.set(npc, { plan, target });
     return plan;
   }
 
@@ -1485,16 +1487,27 @@ module.exports = function registerDragonSlayerQuest(api) {
     });
   }
 
-  /** A random free tile 1-7 from him in the basement (ours: LostCity's line-of-walk test is not modelled). */
+  /**
+   * A random tile 1-7 from him that he could walk to (LostCity: map_findsquare with lineofwalk; the Wiki:
+   * "a random spot in the room"). A walk outward from his tile that no wall or closed door crosses keeps it
+   * in his own room. Ours: reachable by any path inside that square, which is a little wider than a straight
+   * line of walk.
+   */
   function cabbageTile(npc) {
-    const at = npc.getLocation(), b = MELZAR_BASEMENT_BOUNDS, tiles = [];
-    for (let dx = -MELZAR_CABBAGE_MAX_TILES; dx <= MELZAR_CABBAGE_MAX_TILES; dx++) {
-      for (let dy = -MELZAR_CABBAGE_MAX_TILES; dy <= MELZAR_CABBAGE_MAX_TILES; dy++) {
-        if (Math.max(Math.abs(dx), Math.abs(dy)) < MELZAR_CABBAGE_MIN_TILES) continue;
-        const x = at.getX() + dx, y = at.getY() + dy;
-        if (x < b.minX || x > b.maxX || y < b.minY || y > b.maxY) continue;
-        const tile = new Location(x, y, at.getZ());
-        if (!api.core.RegionManager?.blocked?.(tile, null)) tiles.push(tile);
+    const regions = api.core.RegionManager;
+    const at = npc.getLocation(), z = at.getZ(), x0 = at.getX(), y0 = at.getY();
+    const steps = [[0, 1, "blockedNorth"], [1, 0, "blockedEast"], [0, -1, "blockedSouth"], [-1, 0, "blockedWest"]];
+    const seen = new Set([`${x0},${y0}`]), queue = [at], tiles = [];
+    while (queue.length) {
+      const here = queue.shift();
+      for (const [dx, dy, blocked] of steps) {
+        const x = here.getX() + dx, y = here.getY() + dy, key = `${x},${y}`;
+        if (seen.has(key) || Math.max(Math.abs(x - x0), Math.abs(y - y0)) > MELZAR_CABBAGE_MAX_TILES) continue;
+        if (regions?.[blocked]?.(here, null)) continue;
+        seen.add(key);
+        const tile = new Location(x, y, z);
+        queue.push(tile);
+        if (Math.max(Math.abs(x - x0), Math.abs(y - y0)) >= MELZAR_CABBAGE_MIN_TILES) tiles.push(tile);
       }
     }
     return tiles.length ? tiles[Math.floor(Math.random() * tiles.length)] : null;
@@ -1508,9 +1521,9 @@ module.exports = function registerDragonSlayerQuest(api) {
     constructor(npc) { super(); this.npc = npc ?? null; }
     plan() { return this.npc ? melzarPlan(this.npc) : { kick: true }; }
     start(npc, target) {
+      // An approach is rolled again once beside the player (melzarPlan), so this is the attack made.
       let plan = melzarPlan(npc);
-      // Walked in: beside the player now, so the beside table picks the attack.
-      if (plan.approach) { plan = rollMelzarAttack(target, MELZAR_BESIDE, { kick: true }); melzarPlans.set(npc, plan); }
+      if (plan.approach) plan = { kick: true }; // in reach but not beside (a diagonal past a corner): melee anyway
       this.made = plan;
       if (plan.kick) { npc.performAnimation(new Animation(MELZAR_KICK)); return; }
       if (plan.cabbage) { castCabbage(npc, target); return; }

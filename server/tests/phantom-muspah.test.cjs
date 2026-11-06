@@ -329,6 +329,8 @@ test("real queued maul and Ralos hits use the same floor", t => {
   assert.equal(f.npc.getDefenceLevel(), 130);
   queuedSpecial(f, "tonalztics_of_ralos", 20);
   assert.equal(f.npc.getDefenceLevel(), 125);
+  queuedSpecial(f, "elder_maul", 20);
+  assert.equal(f.npc.getDefenceLevel(), 125, "a further accurate maul hit cannot pass the floor");
   assert.equal(f.npc.previewCurrentLevel(defence, 100), 125, "charged Ralos predicts the same floor");
 });
 

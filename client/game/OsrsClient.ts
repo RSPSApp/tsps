@@ -1,4 +1,5 @@
 import { openClientUrl } from "../common/openUrl";
+import { initializeWidgetItemModel } from "../widgets/WidgetItemModel";
 import { LISTENED_CLAN_TYPE, OWN_CLAN_TYPE } from "../common/social/Clans";
 import type { MinimapGeometry, SceneGeometry } from "./scene/SceneGeometry";
 import { vec3 } from "gl-matrix";
@@ -2966,6 +2967,7 @@ export class OsrsClient {
                         (w as any).itemId = normalizedItemId;
                         (w as any).itemQuantity = quantity;
                         (w as any).modelOrthog = true;
+                        if (obj) initializeWidgetItemModel(w, obj);
                         markWidgetInteractionDirty(w);
                         this.widgetManager.invalidateWidgetRender(w);
                     }

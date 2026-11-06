@@ -3156,39 +3156,8 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
 
             // No client-side bob if no sequence; rely on server/script-provided sequence/animationId.
 
-            // If this widget is currently set to display an item, override angles/offsets/zoom
-            // from the item definition.
-            try {
-                const itemId = w.itemId;
-                const qty = (w.itemQuantity ?? 0) | 0 || 1;
-                const objLoader = (opts as any).objLoader;
-                if (typeof itemId === "number" && itemId >= 0 && objLoader?.load) {
-                    let it = objLoader.load(itemId);
-                    if (it && typeof it.getCountObj === "function") {
-                        it = it.getCountObj(objLoader, qty);
-                    }
-                    if (it) {
-                        rx = (it.xan2d | 0) as number;
-                        ry = (it.yan2d | 0) as number;
-                        rz = (it.zan2d | 0) as number;
-                        offX = (it.offsetX2d | 0) as number;
-                        offY = (it.offsetY2d | 0) as number;
-                        zoom = Math.max(1, (it.zoom2d | 0) as number);
-                    }
-                }
-            } catch {}
-
-            // Apply normalization only when the widget is displaying an item (OSRS behavior)
-            try {
-                const itemId = w.itemId;
-                if (typeof itemId === "number" && itemId >= 0) {
-                    const zUnitsX = (w as any).modelZoomWidthUnits | 0 || 0;
-                    // only width-based units are used; fallback is rawWidth
-                    if (zUnitsX > 0) zoom = Math.max(1, Math.floor((zoom * 32) / zUnitsX));
-                    else if ((w.rawWidth ?? 0) > 0)
-                        zoom = Math.max(1, Math.floor((zoom * 32) / (w.rawWidth ?? 1)));
-                }
-            } catch {}
+            // Item setters initialize the transform. Draw the current widget values so
+            // CC_SETMODELANGLE timers (including the welcome rune pulse) remain visible.
             // PERF: Build cache key FIRST and check if we have cached render result
             // Only cache static models (no animation)
             const isAnimated = sequenceId !== undefined && sequenceId >= 0;

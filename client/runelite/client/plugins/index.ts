@@ -50,6 +50,7 @@ import { StretchedModePlugin } from "../../../game/plugins/stretchedmode/Stretch
 import { OpponentInfoPlugin } from "../../../game/plugins/opponentinfo/OpponentInfoPlugin";
 import { PrayerPlugin } from "../../../game/plugins/tabreorder/PrayerPlugin";
 import { FairyRingPlugin } from "../../../game/plugins/fairyring/FairyRingPlugin";
+import { PuzzleSolverPlugin } from "../../../game/plugins/puzzlesolver/PuzzleSolverPlugin";
 import { PestControlPlugin } from "../../../game/plugins/pestcontrol/PestControlPlugin";
 import { SpellbookPlugin } from "../../../game/plugins/tabreorder/SpellbookPlugin";
 import { TimersPlugin } from "../../../game/plugins/statustimer/TimersPlugin";
@@ -125,6 +126,7 @@ export const CORE_PLUGINS: ReadonlyArray<PluginClass> = [
     PrayerPlugin,
     PestControlPlugin,
     FairyRingPlugin,
+    PuzzleSolverPlugin,
     StretchedModePlugin,
     GpuPlugin,
     LowEndDevicePlugin,

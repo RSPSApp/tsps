@@ -180,7 +180,9 @@ export class ClientImpl implements Client {
             id === InventoryID.INV ? client.inventory
             : id === InventoryID.WORN ? client.equipment
             : id === InventoryID.BANK ? client.bankInventory
-            : undefined;
+            // Any other inventory the server has sent (a puzzle box's pieces, a boat's hold), as
+            // the script VM keeps them; null until the first one arrives, as in RuneLite.
+            : client.cs2Vm?.context?.inventories?.get(id);
         return store ? new ItemContainer(id, store) : null;
     }
 

@@ -148,9 +148,18 @@ test("copied potion chains return their own empty vessel", (t) => {
   assert.deepEqual(f.inventory.getItems()[0].getMeta(), { preset: true });
 });
 
-test("fill refuses area-locked potions, food-permission drinks and Hunting mix", (t) => {
+test("fill refuses area-locked potions, non-potion drinks and Hunting mix", (t) => {
   const I = core.ItemIdentifiers;
-  for (const itemId of [I.OVERLOAD_1__5, I.BEER, I.HUNTING_MIX_1_]) {
+  for (const itemId of [
+    I.OVERLOAD_1__5,
+    I.BEER,
+    I.ASGARNIAN_ALE_3,
+    I.MOONLIGHT_MEAD,
+    I.SLAYERS_RESPITE,
+    I.CUP_OF_TEA_9,
+    I.HUNTING_MIX_1_,
+  ]) {
+    assert.ok(Potions.doseOf(itemId), `item ${itemId} is registered as a drink`);
     const f = actor(t);
     put(f, itemId, 0);
     put(f, I.CHUGGING_BARREL, 1);
@@ -159,6 +168,21 @@ test("fill refuses area-locked potions, food-permission drinks and Hunting mix",
     assert.equal(f.player.getAttribute(ATTRIBUTE), undefined);
     assert.ok(f.messages.includes("You can't store that in the chugging barrel."));
   }
+});
+
+test("fill accepts barbarian mixes and potion drinks with food permission", (t) => {
+  const I = core.ItemIdentifiers;
+  for (const itemId of [I.PRAYER_MIX_2_, I.SARADOMIN_BREW_4_, I.GUTHIX_REST_4_]) {
+    const dose = Potions.doseOf(itemId);
+    assert.ok(dose, `potion ${itemId} is registered`);
+    const f = actor(t);
+    put(f, itemId, 0);
+    put(f, I.CHUGGING_BARREL, 1);
+    fill(f, 0, 1);
+    assert.equal(f.inventory.getItems()[0].getId(), dose.emptyItemId);
+    assert.equal(f.player.getAttribute(ATTRIBUTE)[dose.potion.name].doses, dose.doses);
+  }
+  assert.ok(ChuggingBarrel.dependsOn.includes("LeagueMode"), "the bank proximity event provider is a declared dependency");
 });
 
 test("fill enforces the 100-dose cap and five potion types", (t) => {

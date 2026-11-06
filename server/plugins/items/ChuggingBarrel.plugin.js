@@ -19,6 +19,13 @@ const ASSEMBLE_ANIMATION = 10097;
 const DRINK_ANIMATION = 11645;
 const ASSEMBLED_NAME = "Chugging barrel";
 const DISASSEMBLED_NAME = "Chugging barrel (disassembled)";
+/** Drinks registered as potions for ordinary consumption but not accepted by the barrel. */
+const NON_POTION_DRINKS = new Set([
+  "Beer", "Cup of tea", "House ale", "Moonlight mead", "Moonlight mead(m)",
+  "Slayer's respite", "Slayer's respite(m)",
+]);
+/** These food-permission drinks are potions and are listed as barrel-compatible. */
+const FOOD_PERMISSION_POTIONS = new Set(["Guthix rest", "Saradomin brew"]);
 
 const MESSAGE = {
   /** Captured (4236). */
@@ -55,6 +62,12 @@ function nearBank(player) {
 function isBarrelAtSlot(player, item, slot) {
   return Number.isInteger(slot) && player.getInventory().getItems()[slot] === item &&
     item?.getId?.() === core.ItemIdentifiers.CHUGGING_BARREL;
+}
+
+function canStore(dose) {
+  const name = dose.potion.name;
+  if (dose.potion.area || name === "Hunting mix" || NON_POTION_DRINKS.has(name)) return false;
+  return !dose.potion.requiresFoodPermission || name.endsWith("mix") || FOOD_PERMISSION_POTIONS.has(name);
 }
 
 /** "Prayer potion(4)" -> "Prayer potion". */
@@ -155,7 +168,7 @@ function fill(player, item, slot) {
     player.sendMessage(MESSAGE.CANNOT_STORE);
     return;
   }
-  if (dose.potion.area || dose.potion.requiresFoodPermission || dose.potion.name === "Hunting mix") {
+  if (!canStore(dose)) {
     player.sendMessage(MESSAGE.CANNOT_STORE);
     return;
   }
@@ -198,7 +211,7 @@ function useOnBarrel(event) {
 module.exports = {
   name: "ChuggingBarrel",
   members: true,
-  dependsOn: ["Potions"],
+  dependsOn: ["Potions", "LeagueMode"],
   register(pluginApi) {
     api = pluginApi;
     core = pluginApi.core;

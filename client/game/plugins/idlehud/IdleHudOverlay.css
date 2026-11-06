@@ -1,0 +1,116 @@
+/*
+ * The idle strip, top left of the game view. Same language as the Idle screen inside the game and
+ * the login page: a 2px bevel, hard edges, no rounding, warm browns with gold.
+ */
+.idle-hud {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    z-index: 30;
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    min-width: 212px;
+    padding: 0;
+    font: 600 12px/1.3 ui-sans-serif, system-ui, sans-serif;
+    color: #e8ded0;
+    text-align: left;
+    background: #2a221a;
+    border: 2px solid #120e0b;
+    box-shadow:
+        inset 2px 2px 0 #54432c,
+        inset -2px -2px 0 #120e0b,
+        0 3px 10px rgba(0, 0, 0, 0.55);
+    cursor: pointer;
+    /* The game view handles its own pointer work; only this strip takes clicks. */
+    pointer-events: auto;
+}
+
+.idle-hud:hover {
+    background: #332a20;
+}
+
+.idle-hud:focus-visible {
+    outline: 2px solid #ffb02e;
+    outline-offset: 2px;
+}
+
+/* Green while it works, amber the moment it stops: the colour is the status. */
+.idle-hud__edge {
+    flex: none;
+    width: 4px;
+    background: #7ac943;
+}
+
+.idle-hud--stopped .idle-hud__edge {
+    background: #ffb02e;
+}
+
+.idle-hud__body {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 4px;
+    padding: 7px 10px;
+    min-width: 0;
+}
+
+.idle-hud__line {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    min-width: 0;
+}
+
+.idle-hud__line--small {
+    font-size: 10.5px;
+    font-weight: 500;
+    color: #9a8d78;
+}
+
+.idle-hud__activity {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 700;
+    color: #ffffff;
+}
+
+.idle-hud__rate {
+    flex: none;
+    font-weight: 700;
+    color: #ffd27f;
+    font-variant-numeric: tabular-nums;
+}
+
+.idle-hud__points {
+    flex: none;
+    color: #ffd27f;
+    font-variant-numeric: tabular-nums;
+}
+
+/* The same bar as everywhere else: a sunk track with a filled run over it. */
+.idle-hud__track {
+    display: block;
+    height: 6px;
+    background: #120e0b;
+    box-shadow: inset 1px 1px 0 #080604;
+}
+
+.idle-hud__fill {
+    display: block;
+    height: 100%;
+    background: #7ac943;
+    transition: width 240ms linear;
+}
+
+.idle-hud--stopped .idle-hud__fill {
+    background: #8a8268;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .idle-hud__fill {
+        transition: none;
+    }
+}

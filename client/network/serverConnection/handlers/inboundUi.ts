@@ -45,6 +45,7 @@ import type { WidgetServerPayload } from "../types/widgets";
 import { decodeBase64 } from "../utils/decodeBase64";
 import { applyGroundItemsDelta, cloneGroundItemsPayload } from "../utils/groundItems";
 import { sanitizeBankSlotMessage, sanitizeInventorySlotMessage, sanitizeSpellResult } from "../utils/sanitize";
+import { acceptIdleContentData } from "../../../game/plugins/idlehud/idleState";
 
 export function handleInboundUi(msg: any): boolean {
     if (msg.type === "inventory") {
@@ -276,6 +277,8 @@ export function handleInboundUi(msg: any): boolean {
         return true;
     }
     if (msg.type === "gamemode_data") {
+        // Idle Mode's HUD state: per-tick, not content, so it never reaches the content store.
+        if (acceptIdleContentData(msg.payload)) return true;
         const datasets = msg.payload?.datasets;
         if (datasets?.length === 1 && datasets[0].key === "worldMapPlayers") {
             // Staff world map dots: [x, y, plane, isBot] rows, drawn by the map renderer.

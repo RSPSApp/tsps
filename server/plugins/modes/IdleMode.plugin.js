@@ -37,6 +37,7 @@ module.exports = {
     require("./idle/Achievements.IdleMode")(api);
     require("./idle/Hiscores.IdleMode")(api);
     require("./idle/Screen.IdleMode")(api);
+    require("./idle/Hud.IdleMode")(api);
     require("./idle/TravelScreen.IdleMode")(api);
     require("./idle/Onboarding.IdleMode")(api);
   },

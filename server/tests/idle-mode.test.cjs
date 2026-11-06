@@ -172,6 +172,8 @@ function fakePlayer({ bankSlots = 800 } = {}) {
     bank,
     xp,
     messages,
+    /** Everything sendContentData was given: the HUD pushes through here. */
+    contentData: [],
     walks,
     moving: 0,
     isBusy: false,
@@ -197,6 +199,7 @@ function fakePlayer({ bankSlots = 800 } = {}) {
       sendString(text, id) { screen.texts.set(id, text); return this; },
       sendInterfaceDisplayState: (id, hidden) => screen.hidden.set(id, hidden),
       sendInterfaceRemoval: () => { interfaceId = -1; },
+      sendContentData: (source, datasets) => { self.contentData.push({ source, datasets }); },
       clearItemOnInterface: () => {},
     }),
     getInventory() {
@@ -1086,6 +1089,37 @@ test("screen: a fight leaves the Idle screen alone", () => {
   player.combat = { getTarget: () => null, getAttacker: () => null };
   readyToWork(player);
   assert.equal(player.getInterfaceId(), -1);
+});
+
+test("hud: the state is pushed to the client, and only when it changes", (t) => {
+  const { player } = choppingWillow(t);
+  player.setAttribute("idle-mode:points", 42);
+  player.setAttribute("idle-mode:point-progress", 125);
+  player.contentData.length = 0;
+
+  // Any change the Idle screen would redraw for also reaches the HUD, open screen or not.
+  api.emit("xp", { player, skill: Skill.WOODCUTTING, experience: 1 });
+  assert.ok(player.contentData.length > 0, "something was pushed");
+  const last = player.contentData.at(-1);
+  assert.equal(last.source, "idle");
+  assert.equal(last.datasets[0].key, "state");
+  const state = last.datasets[0].rows[0];
+  assert.equal(state.idle, true);
+  assert.equal(state.auto, true);
+  assert.equal(state.paused, null);
+  assert.equal(state.activity, "Chop down willow tree");
+  assert.equal(state.points, 42);
+  assert.equal(state.nextPercent, 50, "126 of 250 XP, to the whole percent");
+
+  // The same state again sends nothing: `changed` fires every tick a character works.
+  const before = player.contentData.length;
+  api.emit("idle-mode:changed", { player });
+  require(COMMON).changed(player);
+  assert.equal(player.contentData.length, before, "an unchanged tick is silent");
+
+  // Switching something off is a change, and the HUD hears it.
+  api.command(player, "idle auto off");
+  assert.equal(player.contentData.at(-1).datasets[0].rows[0].auto, false);
 });
 
 const TRAVEL = "../plugins/modes/idle/Travel.IdleMode";

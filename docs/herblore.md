@@ -151,6 +151,10 @@ A pestle and mortar on a secondary; no Herblore level or XP. Recordings 70 and 1
 horn), 468 (anchovies, the same loop), 1849 (bird nest); the other messages are from the capture
 archive's message log.
 
+A knife on an ordinary chocolate bar also makes one chocolate dust with no XP ([Wiki](https://oldschool.runescape.wiki/w/Chocolate_dust)).
+This path currently converts one bar per use; the Wiki documents automatic repetition, but its
+knife-specific timing and feedback are not yet implemented.
+
 - **Timing:** at once, two ticks later, then every three ticks until none are left or the player
   does something else (also the Wiki's "0, then 2, then 3 ticks").
 - **Animation and sound:** `human_herbing_grind` (364) with synth 2608.

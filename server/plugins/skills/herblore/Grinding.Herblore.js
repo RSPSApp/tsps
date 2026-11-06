@@ -23,11 +23,11 @@ function amount(player, grind) {
   return diary.complete === true ? Math.floor(rolled * 1.5) : rolled;
 }
 
-function grindOne(player, grind, requested = 1) {
+function grindOne(player, grind, requested = 1, toolId = null, withFeedback = true) {
   const inventory = player.getInventory();
   const pestle = Common.gameval("obj", "pestle_and_mortar");
   const held = inventory.getAmount(grind.itemId);
-  if (held <= 0 || inventory.getAmount(pestle) <= 0) return false;
+  if (held <= 0 || inventory.getAmount(toolId ?? pestle) <= 0) return false;
   const stack = Common.core.ItemDefinition.forId(grind.itemId).isStackable();
   const used = Math.min(held, requested);
   let made = 0;
@@ -42,14 +42,28 @@ function grindOne(player, grind, requested = 1) {
   }
   inventory.deleteNumber(grind.itemId, used);
   inventory.addItem(product);
-  Common.animate(player, GRIND_ANIMATION);
-  Common.sound(player, Common.MIX_SOUND);
-  Common.spam(player, (used < held && grind.partialMessage ? grind.partialMessage : grind.message).replace("{count}", String(made)));
+  if (withFeedback) {
+    Common.animate(player, GRIND_ANIMATION);
+    Common.sound(player, Common.MIX_SOUND);
+    Common.spam(player, (used < held && grind.partialMessage ? grind.partialMessage : grind.message).replace("{count}", String(made)));
+  }
   return true;
 }
 
 function grind(event) {
   const { player, usedItemId, usedWithItemId } = event;
+  const { KNIFE, CHOCOLATE_BAR } = Common.core.ItemIds;
+  if ((usedItemId === KNIFE && usedWithItemId === CHOCOLATE_BAR)
+      || (usedItemId === CHOCOLATE_BAR && usedWithItemId === KNIFE)) {
+    const chocolate = Common.grindFor(CHOCOLATE_BAR);
+    if (!chocolate) return;
+    event.handled = true;
+    Common.core.TaskManager.cancelTasks(player.getIndex());
+    // Wiki: knife use can repeat, but its timing and feedback are not yet captured.
+    // Convert one bar without applying the pestle's animation, sound or cadence.
+    grindOne(player, chocolate, 1, KNIFE, false);
+    return;
+  }
   const pestle = Common.gameval("obj", "pestle_and_mortar");
   if (usedItemId !== pestle && usedWithItemId !== pestle) return;
   const found = Common.grindFor(usedItemId === pestle ? usedWithItemId : usedItemId);

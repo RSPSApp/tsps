@@ -13,6 +13,8 @@ const ROOT = path.join(__dirname, '..');
 const { Server } = require('../dist/Server');
 Server.installProductionPathResolver();
 
+process.env.DISABLE_PLAYER_BOTS = '1';
+
 let PluginManager, core, MapObjects, ObjectDefinition, Location, Player, Item, Equipment, jungleQuest;
 let Common, Locs, Jungle, Fence, Favour, Villagers, Events, GemRock, Broodoo;
 let cycle = 0;
@@ -831,7 +833,6 @@ test('the poison victim weakens only when its hit lands and hurts', (t) => {
 
 
 // Exercise an earned first claim through the registered fence, NPC and dialogue handlers.
-process.env.DISABLE_PLAYER_BOTS = '1';
 test('native villager rewards preserve earned favour when trading sticks cannot fit', async (t) => {
   const { PlayerSession } = require('../dist/net/PlayerSession');
   const { ClientConnection } = require('../dist/net/NetworkBuilder');

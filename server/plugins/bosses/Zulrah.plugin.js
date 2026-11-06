@@ -12,5 +12,6 @@ module.exports = {
     require("./zulrah/Shrine.Zulrah")(api);
     require("./zulrah/Commands.Zulrah")(api);
     require("./zulrah/CombatAchievements.Zulrah")(api);
+    require("./zulrah/Resurrection.Zulrah")(api);
   },
 };

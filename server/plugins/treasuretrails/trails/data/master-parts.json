@@ -1,9 +1,7 @@
 {
   "hotColdStarters": ["cluehelper_cryptic_master_jorral"],
   "unrolled": {
-    "cluehelper_cryptic_master_watson": "Watson gave out the strange device only in the Twisted League, when Jorral was out of reach (Wiki).",
-    "cluehelper_cryptic_master_viggora": "Curse of the Empty Lord, which his step needs, isn't on this server.",
-    "cluehelper_cryptic_master_piles": "The Resource Area entry fee isn't on this server, and his step is paying it."
+    "cluehelper_cryptic_master_watson": "Watson gave out the strange device only in the Twisted League, when Jorral was out of reach (Wiki)."
   },
   "conditions": {
     "cluehelper_cryptic_master_robin": { "attack": "ATTACK_RANGE", "min": 180, "notWorn": ["TOXIC_BLOWPIPE", "TOXIC_BLOWPIPE_EMPTY_", "BLAZING_BLOWPIPE", "BLAZING_BLOWPIPE_EMPTY_"],
@@ -15,6 +13,8 @@
     "cluehelper_cryptic_master_monk_of_entrana": { "wornAny": ["HEAD_SLOT", "WEAPON_SLOT", "BODY_SLOT", "SHIELD_SLOT", "LEG_SLOT"] },
     "cluehelper_cryptic_master_mage_of_zamorak": { "outfitCount": 3 },
     "cluehelper_cryptic_master_juna": { "outfitCount": 3 },
-    "cluehelper_cryptic_master_sir_vyvin": { "outfit": true }
+    "cluehelper_cryptic_master_sir_vyvin": { "outfit": true },
+    "cluehelper_cryptic_master_viggora": { "outfit": true, "requirementEvent": "curse-of-the-empty-lord:viggora",
+      "pass": "treasure-trails-master-with-inventory-space" }
   }
 }

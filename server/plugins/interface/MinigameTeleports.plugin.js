@@ -35,6 +35,7 @@ const QUEST_KEYS = {
   "Prince Ali Rescue": "prince_ali_rescue",
   "Cabin Fever": "cabin_fever",
 };
+const OSMAN_GARDEN_UNLOCK_EVENT = "sorceress-s-garden:osman-help-status";
 const VISITED_ATTRIBUTES = {
   Keldagrim: VISITED_KELDAGRIM_ATTRIBUTE,
   "Tithe Farm": VISITED_TITHE_FARM_ATTRIBUTE,
@@ -108,6 +109,12 @@ function refusal(player, minigame) {
     if (request.key) pluginApi.emitCustomEvent("quest:is-complete", request);
     if (request.complete !== true) return `You need to complete ${questName} to go there.`;
   }
+  const garden = minigames["Sorceress's Garden"];
+  if (garden && (minigame === garden || minigame?.groupingName === garden.groupingName)) {
+    const status = { player, unlocked: false };
+    pluginApi.emitCustomEvent(OSMAN_GARDEN_UNLOCK_EVENT, status);
+    if (status.unlocked !== true) return "You need to speak to Osman to go there.";
+  }
   for (const place of minigame.visited ?? []) {
     const attribute = VISITED_ATTRIBUTES[place];
     if (!attribute || player.getAttribute(attribute) !== true) {
@@ -142,7 +149,7 @@ function castMinigameTeleport(event) {
   player.getPacketSender().sendVarbit(BUSY_VARBIT, 1).sendInterface(MINIGAMES_INTERFACE);
 }
 
-function teleportTo(player, x, y) {
+function teleportTo(player, x, y, minigameName) {
   const destination = new core.Location(x, y, 0);
   if (!core.TeleportHandler.checkReqs(player, destination)) {
     player.getPacketSender().sendVarbit(BUSY_VARBIT, 0);
@@ -152,7 +159,13 @@ function teleportTo(player, x, y) {
     const minute = dateMinutes();
     player.setAttribute(LAST_MINIGAME_TELEPORT_ATTRIBUTE, minute);
     player.getPacketSender().sendConfig(LAST_MINIGAME_TELEPORT_VARP, minute);
+    if (minigameName) pluginApi.emitCustomEvent("minigame-teleport:arrived", { player, minigame: minigameName });
   });
+}
+
+/** The minigames data key of an entry, for the arrival event (Pest Control's diary task). */
+function minigameName(entry) {
+  return Object.entries(minigames).find(([, candidate]) => candidate === entry)?.[0];
 }
 
 function chooseMinigame(event) {
@@ -171,7 +184,7 @@ function chooseMinigame(event) {
     return;
   }
   if (!minigame.choices) {
-    teleportTo(player, minigame.x, minigame.y);
+    teleportTo(player, minigame.x, minigame.y, minigameName(minigame));
     return;
   }
   // Rat Pits: which pit, in the chatbox; busy stays set until the choice.

@@ -1031,7 +1031,7 @@
     ]
   },
   "gold": {
-    "$comment": "crafting_gold (446): `firstComponent` is each type's plain-gold button; product rows are [item, level, XP] in `gems` order (null: plain gold).",
+    "$comment": "crafting_gold (446): `components` are each type's buttons and product rows are [item, level, XP], both in `gems` order (null: plain gold). The rev 241 bracelet row skips 51 (its mould layer). `slayerRing` is the ring row's extra button (446:16, Wiki Slayer ring): the client offers the eternal ring when an eternal gem is carried (script crafting_gold_checkgem), and both need the Ring bling unlock.",
     "gems": [
       null,
       "SAPPHIRE",
@@ -1045,7 +1045,7 @@
     "types": [
       {
         "name": "ring",
-        "firstComponent": 8,
+        "components": [8, 9, 10, 11, 12, 13, 14, 15],
         "mould": "RING_MOULD",
         "products": [
           [
@@ -1092,7 +1092,7 @@
       },
       {
         "name": "necklace",
-        "firstComponent": 23,
+        "components": [23, 24, 25, 26, 27, 28, 29, 30],
         "mould": "NECKLACE_MOULD",
         "products": [
           [
@@ -1139,7 +1139,7 @@
       },
       {
         "name": "amulet",
-        "firstComponent": 37,
+        "components": [37, 38, 39, 40, 41, 42, 43, 44],
         "mould": "AMULET_MOULD",
         "products": [
           [
@@ -1186,7 +1186,7 @@
       },
       {
         "name": "bracelet",
-        "firstComponent": 50,
+        "components": [50, 52, 53, 54, 55, 56, 57, 58],
         "mould": "BRACELET_MOULD",
         "products": [
           [
@@ -1232,6 +1232,17 @@
         ]
       }
     ],
+    "slayerRing": {
+      "component": 16,
+      "mould": "RING_MOULD",
+      "level": 75,
+      "xp": 15,
+      "unlockVarbit": "slayer_ring_unlocked",
+      "products": [
+        ["ETERNAL_GEM", "SLAYER_RING_ETERNAL_"],
+        ["ENCHANTED_GEM", "SLAYER_RING_8_"]
+      ]
+    },
     "quantities": {
       "60": 1,
       "61": 5,
@@ -1580,6 +1591,25 @@
         "level": 66,
         "xp": 137.5
       }
+    ]
+  },
+  "snelms": {
+    "$comment": "https://oldschool.runescape.wiki/w/Snelm - a chisel on a blamish snail shell, level 15 Crafting, 32.5 XP, 2 ticks. Round shells make round snelms; pointed shells (_3) make pointed snelms. There is no pointed bark shell or pointed broken bark snelm in the cache.",
+    "level": 15,
+    "xp": 32.5,
+    "ticks": 2,
+    "seq": 890,
+    "seqName": "human_opalcutting",
+    "recipes": [
+      {"shell": "BLAMISH_MYRE_SHELL", "item": "MYRE_SNELM"},
+      {"shell": "BLAMISH_RED_SHELL", "item": "BLOODNTAR_SNELM"},
+      {"shell": "BLAMISH_OCHRE_SHELL", "item": "OCHRE_SNELM"},
+      {"shell": "BLAMISH_BLUE_SHELL", "item": "BRUISE_BLUE_SNELM"},
+      {"shell": "BLAMISH_BARK_SHELL", "item": "BROKEN_BARK_SNELM"},
+      {"shell": "BLAMISH_MYRE_SHELL_3", "item": "POINTED_MYRE_SNELM"},
+      {"shell": "BLAMISH_RED_SHELL_3", "item": "POINTED_BLOODNTAR_SNELM"},
+      {"shell": "BLAMISH_OCHRE_SHELL_3", "item": "POINTED_OCHRE_SNELM"},
+      {"shell": "BLAMISH_BLUE_SHELL_3", "item": "POINTED_BRUISE_BLUE_SNELM"}
     ]
   }
 }

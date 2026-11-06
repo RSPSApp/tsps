@@ -1,22 +1,39 @@
 const assert = require("node:assert/strict");
 const path = require("node:path");
-const { before, test } = require("node:test");
+const { before, after, test } = require("node:test");
 require("../dist/Server").Server.installProductionPathResolver();
 const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { PluginManager } = require("../dist/plugins/PluginManager");
 const { Player } = require("../dist/game/entity/impl/player/Player");
 const { PlayerSession } = require("../dist/net/PlayerSession");
+const { PlayerDeathTask } = require("../dist/game/task/impl/PlayerDeath");
+const { ATTR_SKIP_PERSISTENCE } = require("../plugins/bots/runtime/PersistenceConstants.PlayerBots");
 const { ClientConnection } = require("../dist/net/NetworkBuilder");
 let core, Data, Patches, vaultObject, Pin;
 let nextIndex = 100;
+const previousDisableBots = process.env.DISABLE_PLAYER_BOTS;
+const originalConsoleError = console.error;
+const caughtErrors = [];
+let hunterStartupAttempted = false;
 
 before(async () => {
+    console.error = (...args) => {
+        caughtErrors.push(args.map(String).join(" "));
+        originalConsoleError.apply(console, args);
+    };
+    process.env.DISABLE_PLAYER_BOTS = "1";
     const root = path.resolve(__dirname, "..");
     await CachePipeline.initialize(root);
     PluginManager.loadFromDirectory(path.join(root, "plugins"));
     core = PluginManager.getCoreApi();
     core.RegionManager.init();
     core.RegionManager.loadMapFiles(1243, 3740);
+    // Registration alone leaves these real event consumers without startup context.
+    for (const hook of PluginManager.serverStartupHooks) {
+        if (!["Hunter", "WarpedSceptre"].includes(hook.pluginName)) continue;
+        if (hook.pluginName === "Hunter") hunterStartupAttempted = true;
+        hook.handler({});
+    }
     Data = require("../plugins/skills/farming/Data.Farming");
     Patches = require("../plugins/skills/farming/Patches.Farming");
     Pin = require("../plugins/interface/bankpin/Common.BankPin");
@@ -26,6 +43,20 @@ before(async () => {
         new core.Location(1243, 3740, 0),
     );
     assert.ok(vaultObject, "real cache/map Seed Vault loc");
+});
+
+after(() => {
+    try {
+        if (hunterStartupAttempted) {
+            for (const hook of PluginManager.serverShutdownHooks)
+                if (hook.pluginName === "Hunter") hook.handler({});
+        }
+        assert.deepEqual(caughtErrors, [], "no caught engine or plugin errors");
+    } finally {
+        console.error = originalConsoleError;
+        if (previousDisableBots === undefined) delete process.env.DISABLE_PLAYER_BOTS;
+        else process.env.DISABLE_PLAYER_BOTS = previousDisableBots;
+    }
 });
 
 function actor(t) {
@@ -40,11 +71,26 @@ function actor(t) {
         onClose() {},
     };
     const p = new Player(new PlayerSession(channel));
+    t.after(() => {
+        try {
+            core.GameConstants.PLAYER_PERSISTENCE.cancelRequestedSave(p);
+            // Death tasks use a shared default key; stop only this actor's unkeyed death task.
+            for (const task of [...core.TaskManager.pendingTasks.toArray(), ...core.TaskManager.activeTasks])
+                if (task instanceof PlayerDeathTask && task.player === p) task.stop();
+            core.TaskManager.cancelTasks(p);
+            if (p.getIndex() >= 0) core.TaskManager.cancelTasks(p.getIndex());
+            p.getMovementQueue().reset();
+        } finally {
+            p.setRegistered(false);
+        }
+    });
+    p.setAttribute(ATTR_SKIP_PERSISTENCE, true);
     p.setIndex(nextIndex++);
     p.setUsername("vaultqa" + p.getIndex());
     p.setRegistered(true);
     p.setLocation(new core.Location(1244, 3740, 0));
     p.needsPlacement = false;
+    p.getSkillManager().setMaxLevels(core.Skill.FARMING, 45, false).setCurrentLevel(core.Skill.FARMING, 45, false);
     const connection = new ClientConnection(channel);
     connection.player = p;
     const messages = [];
@@ -63,6 +109,21 @@ function actor(t) {
             handled: false,
         });
     return { p, connection, messages, farm, open };
+}
+
+
+function setIronmanMode(f, mode) {
+    const previous = f.p.getRights();
+    f.p.setRights(core.PlayerRights.ADMINISTRATOR);
+    try {
+        PluginManager.emitCommand({
+            player: f.p, base: "ironman", raw: `ironman ${mode}`,
+            parts: ["ironman", mode], handled: false,
+        });
+    } finally {
+        f.p.setRights(previous);
+    }
+    assert.equal(f.p.getAttribute("ironman:mode"), mode, "registered mode command");
 }
 
 async function click(f, name, action = 1, slot, itemId) {
@@ -177,6 +238,111 @@ test("legacy recovery obeys PIN, range, life and trade gates", (t) => {
         assert.equal(f.p.getInventory().getAmount(id), 0, mode);
         assert.equal(f.farm.vault[id], 2, mode);
     }
+});
+
+test("Ultimate Ironman cannot open the Seed Vault or create state", (t) => {
+    const f = actor(t);
+    setIronmanMode(f, "ultimate");
+    f.p.setAttribute(Patches.FARM_ATTRIBUTE, undefined);
+    f.p.getInventory().add(new core.Item(seed(), 6), false);
+    assert.equal(PluginManager.emitCanBank(f.p, "deposit-box"), false, "registered UIM bank rule");
+    assert.equal(f.p.isNeedsPlacement(), false);
+    assert.ok(f.p.getHitpoints() > 0);
+    f.open();
+    assert.notEqual(f.p.getInterfaceId(), core.CacheDefinitions.getInterfaceId("seed_vault"), "UIM vault refusal");
+    assert.equal(f.p.getAttribute(Patches.FARM_ATTRIBUTE), undefined, "no farm state created");
+    assert.equal(f.p.getInventory().getAmount(seed()), 6, "inventory unchanged");
+});
+
+test("Ultimate Ironman is refused before the Vault PIN keypad", (t) => {
+    const locked = actor(t);
+    setIronmanMode(locked, "ultimate");
+    locked.p.setAttribute(Patches.FARM_ATTRIBUTE, undefined);
+    Pin.set(locked.p, "hash", Pin.hash(locked.p, "2468"));
+    locked.open();
+    assert.notEqual(locked.p.getInterfaceId(), Pin.ids.groups.keypad, "UIM refusal precedes PIN");
+    assert.notEqual(locked.p.getInterfaceId(), core.CacheDefinitions.getInterfaceId("seed_vault"));
+    assert.equal(locked.p.getAttribute(Patches.FARM_ATTRIBUTE), undefined);
+});
+
+test("standard Ironman still unlocks and uses the Seed Vault with a PIN", async (t) => {
+    const f = actor(t);
+    setIronmanMode(f, "ironman");
+    f.p.setAttribute(Patches.FARM_ATTRIBUTE, undefined);
+    Pin.set(f.p, "hash", Pin.hash(f.p, "2468"));
+    f.p.getInventory().add(new core.Item(seed(), 6), false);
+    f.open();
+    assert.equal(f.p.getInterfaceId(), Pin.ids.groups.keypad, "vault PIN prompt");
+    assert.equal(f.p.getAttribute(Patches.FARM_ATTRIBUTE), undefined);
+    await amount(f, 2468);
+    core.TaskManager.process();
+    core.TaskManager.process();
+    assert.equal(f.p.getInterfaceId(), core.CacheDefinitions.getInterfaceId("seed_vault"));
+    await deposit(f);
+    assert.equal(Patches.farmFor(f.p).vault[seed()], 6);
+    assert.equal(f.p.getInventory().getAmount(seed()), 0);
+});
+
+test("Ultimate Ironman cannot recover an existing legacy Vault balance", (t) => {
+    const f = actor(t), id = Data.itemId("Gout tuber");
+    f.p.getInventory().add(new core.Item(id, 3), false);
+    legacyDeposit(f);
+    assert.equal(f.farm.vault[id], 3, "old producer stored the balance");
+    assert.equal(f.p.getInventory().getAmount(id), 0);
+    setIronmanMode(f, "ultimate");
+    f.open();
+    assert.equal(f.p.getInventory().getAmount(id), 0, "no legacy recovery for UIM");
+    assert.equal(f.farm.vault[id], 3, "saved balance unchanged");
+    assert.notEqual(f.p.getInterfaceId(), core.CacheDefinitions.getInterfaceId("seed_vault"));
+});
+
+test("a PIN resume rechecks a switch to Ultimate before opening the Vault", async (t) => {
+    const f = actor(t);
+    setIronmanMode(f, "ironman");
+    f.p.setAttribute(Patches.FARM_ATTRIBUTE, undefined);
+    Pin.set(f.p, "hash", Pin.hash(f.p, "2468"));
+    f.open();
+    assert.equal(f.p.getInterfaceId(), Pin.ids.groups.keypad);
+    setIronmanMode(f, "ultimate");
+    assert.equal(f.p.getInterfaceId(), Pin.ids.groups.keypad, "mode command leaves keypad open");
+    await amount(f, 2468);
+    core.TaskManager.process();
+    core.TaskManager.process();
+    assert.notEqual(f.p.getInterfaceId(), core.CacheDefinitions.getInterfaceId("seed_vault"), "resume refuses UIM");
+    assert.equal(f.p.getAttribute(Patches.FARM_ATTRIBUTE), undefined);
+});
+
+test("remote Vault event preserves the PIN guard for an allowed player", async (t) => {
+    const f = actor(t);
+    f.p.setLocation(new core.Location(3200, 3200, 0));
+    f.p.needsPlacement = false;
+    f.p.setAttribute(Patches.FARM_ATTRIBUTE, undefined);
+    Pin.set(f.p, "hash", Pin.hash(f.p, "2468"));
+    f.p.getInventory().add(new core.Item(seed(), 6), false);
+    const request = { player: f.p, opened: false };
+    PluginManager.emitCustomEvent("farming:open-seed-vault", request);
+    assert.equal(request.opened, true, "registered remote consumer");
+    assert.equal(f.p.getInterfaceId(), Pin.ids.groups.keypad);
+    assert.equal(f.p.getAttribute(Patches.FARM_ATTRIBUTE), undefined);
+    await amount(f, 2468);
+    core.TaskManager.process();
+    core.TaskManager.process();
+    assert.equal(f.p.getInterfaceId(), core.CacheDefinitions.getInterfaceId("seed_vault"));
+    await deposit(f);
+    assert.equal(Patches.farmFor(f.p).vault[seed()], 6);
+});
+
+test("changing an open Vault user to Ultimate blocks later transfers", async (t) => {
+    const f = actor(t);
+    f.p.getInventory().add(new core.Item(seed(), 6), false);
+    f.open();
+    assert.equal(f.p.getInterfaceId(), core.CacheDefinitions.getInterfaceId("seed_vault"));
+    const before = structuredClone(f.farm.vault);
+    setIronmanMode(f, "ultimate");
+    assert.equal(f.p.getInterfaceId(), core.CacheDefinitions.getInterfaceId("seed_vault"), "mode command leaves modal open");
+    await deposit(f);
+    assert.equal(f.p.getInventory().getAmount(seed()), 6, "no UIM transfer");
+    assert.deepEqual(f.farm.vault, before, "saved balances unchanged");
 });
 
 test("opens native main and side modal with existing saved seeds", (t) => {

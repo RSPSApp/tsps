@@ -566,3 +566,157 @@ test("cache-derived room restrictions match closed walkable components and canno
     }
   }
 });
+
+// Exercise pickup through the canonical handler with real setup and inventory state.
+for (const headroom of [null, 30, 1, 0]) {
+  test(`owner pickup conserves loaded ammo at stack headroom ${headroom}`, (t) => {
+    const MAX = 0x7fffffff, p = gunner({steel: 30}), cannon = built(p), inv = p.getInventory();
+    const def = core.ItemDefinition.forId(Items.STEEL_CANNONBALL);
+    assert.equal(Items.STEEL_CANNONBALL, 2); assert.equal(def.getId(), 2);
+    assert.equal(def.getName(), 'Steel cannonball'); assert.equal(def.isStackable(), true);
+    assert.ok(cannon && cannon.stage === 4 && cannon.steel === 30 && cannon.granite === 0, 'real setup/loading producer');
+    assert.equal(inv.getAmount(Items.STEEL_CANNONBALL), 0);
+    const held = headroom === null ? 0 : MAX - headroom;
+    if (held) inv.add(new core.Item(Items.STEEL_CANNONBALL, held), false);
+    assert.equal(inv.getAmount(Items.STEEL_CANNONBALL), held);
+    assert.ok(inv.getFreeSlots() >= 5, 'parts and fresh ammo slot fit; target is stack headroom');
+    const ground = (id) => core.ItemOnGroundManager.ownedBy(p.getUsername()).filter(g =>
+      g.getItem().getId() === id).reduce((n, g) => n + g.getItem().getAmount(), 0);
+    const ids = [...Cannon.KINDS.plain.parts, Items.STEEL_CANNONBALL];
+    t.after(() => { for (const g of core.ItemOnGroundManager.ownedBy(p.getUsername())) core.ItemOnGroundManager.deregister(g); });
+    const before = ids.map(id => inv.getAmount(id) + ground(id) +
+      (id === Items.STEEL_CANNONBALL ? cannon.steel : 1));
+    const savedBefore = JSON.stringify(p.getAttribute(Cannon.STATE_ATTRIBUTE));
+    Decay.pickUp({player: p, object: cannon.object});
+    const live = Cannon.cannonOf(p);
+    const after = ids.map(id => inv.getAmount(id) + ground(id) +
+      (live ? (id === Items.STEEL_CANNONBALL ? live.steel : 1) : 0));
+    assert.deepEqual(after, before, 'inventory + owned floor + active world cannon preserve every part and ammo');
+    if (live) {
+      assert.equal(live, cannon); assert.equal(live.steel, 30); assert.equal(live.granite, 0);
+      assert.equal(JSON.stringify(p.getAttribute(Cannon.STATE_ATTRIBUTE)), savedBefore, 'refusal preserves saved cannon');
+    } else {
+      assert.equal(p.getAttribute(Cannon.STATE_ATTRIBUTE), null);
+      for (const part of Cannon.KINDS.plain.parts) assert.equal(inv.getAmount(part) + ground(part), 1);
+    }
+    if (headroom === null || headroom >= 30) assert.equal(live, null, 'room controls complete pickup');
+  });
+}
+
+test('owner pickup with no part slots refuses and preserves cannon and inventory', () => {
+  const p = gunner({steel: 30}), cannon = built(p), inv = p.getInventory();
+  while (inv.getFreeSlots() > 0) inv.add(new core.Item(Items.BRONZE_AXE, 1), false);
+  const before = inv.getCopiedItems().map(i => [i.getId(), i.getAmount()]);
+  Decay.pickUp({player: p, object: cannon.object});
+  assert.equal(Cannon.cannonOf(p), cannon); assert.equal(cannon.steel, 30);
+  assert.deepEqual(inv.getCopiedItems().map(i => [i.getId(), i.getAmount()]), before);
+});
+
+for (const freeSlots of [5, 6]) {
+  test(`pickup accounts for parts and both ammunition stacks with ${freeSlots} free slots`, () => {
+    const p = gunner({steel: 20}), cannon = built(p), inv = p.getInventory();
+    assert.equal(cannon.steel, 20);
+    inv.add(new core.Item(Items.GRANITE_CANNONBALL, 10), false);
+    assert.equal(Ammo.loadFromInventory(cannon, 10), 10);
+    assert.deepEqual([cannon.stage, cannon.steel, cannon.granite], [4, 20, 10]);
+    while (inv.getFreeSlots() > freeSlots) inv.add(new core.Item(Items.BRONZE_AXE, 1), false);
+    const before = inv.getCopiedItems().map(i => [i.getId(), i.getAmount()]);
+    const saved = JSON.stringify(p.getAttribute(Cannon.STATE_ATTRIBUTE));
+    Decay.pickUp({player: p, object: cannon.object});
+    if (freeSlots === 5) {
+      assert.equal(Cannon.cannonOf(p), cannon);
+      assert.deepEqual([cannon.steel, cannon.granite], [20, 10]);
+      assert.equal(JSON.stringify(p.getAttribute(Cannon.STATE_ATTRIBUTE)), saved);
+      assert.deepEqual(inv.getCopiedItems().map(i => [i.getId(), i.getAmount()]), before);
+    } else {
+      assert.equal(Cannon.cannonOf(p), null);
+      assert.equal(inv.getAmount(Items.STEEL_CANNONBALL), 20);
+      assert.equal(inv.getAmount(Items.GRANITE_CANNONBALL), 10);
+      for (const part of Cannon.KINDS.plain.parts) assert.equal(inv.getAmount(part), 1);
+    }
+  });
+}
+
+// Empty uses the owner's existing cannon; the tests account for every loaded ball.
+for (const headroom of [null, 30, 1, 0]) {
+  test(`owner Empty conserves loaded steel at stack headroom ${headroom}`, (t) => {
+    const MAX = 0x7fffffff, p = gunner({steel: 30}), cannon = built(p), inv = p.getInventory();
+    const id = Items.STEEL_CANNONBALL, def = core.ItemDefinition.forId(id);
+    assert.equal(id, 2); assert.equal(def.getId(), 2); assert.equal(def.getName(), 'Steel cannonball');
+    assert.equal(def.isStackable(), true);
+    assert.ok(cannon && cannon.stage === 4 && cannon.steel === 30 && cannon.granite === 0, 'real setup and load');
+    assert.equal(inv.getAmount(id), 0);
+    const held = headroom === null ? 0 : MAX - headroom;
+    if (held) inv.add(new core.Item(id, held), false);
+    assert.equal(inv.getAmount(id), held); assert.ok(inv.getFreeSlots() > 0);
+    const ground = () => core.ItemOnGroundManager.ownedBy(p.getUsername()).filter(g => g.getItem().getId() === id)
+      .reduce((sum, g) => sum + g.getItem().getAmount(), 0);
+    t.after(() => { for (const g of core.ItemOnGroundManager.ownedBy(p.getUsername())) core.ItemOnGroundManager.deregister(g); });
+    const before = inv.getAmount(id) + ground() + cannon.steel;
+    const saved = JSON.stringify(p.getAttribute(Cannon.STATE_ATTRIBUTE));
+    cannon.firing = true;
+    assert.equal(Ammo.empty({player: p, object: cannon.object}), true);
+    assert.equal(Cannon.cannonOf(p), cannon);
+    assert.equal(inv.getAmount(id) + ground() + cannon.steel, before, 'inventory + owner floor + cannon conserve steel');
+    if (headroom === null || headroom >= 30) {
+      assert.equal(cannon.steel, 0); assert.equal(inv.getAmount(id), held + 30);
+      assert.equal(cannon.firing, false, 'successful unload stops firing');
+    } else if (cannon.steel === 30) {
+      assert.equal(JSON.stringify(p.getAttribute(Cannon.STATE_ATTRIBUTE)), saved, 'refusal retains saved contents');
+      assert.equal(cannon.firing, true, 'refusal leaves firing unchanged');
+    }
+  });
+}
+
+test('Empty with no ammo slot refuses without changing the cannon or inventory', () => {
+  const p = gunner({steel: 30}), cannon = built(p), inv = p.getInventory();
+  assert.equal(cannon.steel, 30); assert.equal(inv.getAmount(Items.STEEL_CANNONBALL), 0);
+  while (inv.getFreeSlots() > 0) inv.add(new core.Item(Items.BRONZE_AXE, 1), false);
+  const before = inv.getCopiedItems().map(i => [i.getId(), i.getAmount()]);
+  const saved = JSON.stringify(p.getAttribute(Cannon.STATE_ATTRIBUTE));
+  cannon.firing = true;
+  assert.equal(Ammo.empty({player: p, object: cannon.object}), true);
+  assert.equal(Cannon.cannonOf(p), cannon); assert.equal(cannon.steel, 30); assert.equal(cannon.firing, true);
+  assert.equal(JSON.stringify(p.getAttribute(Cannon.STATE_ATTRIBUTE)), saved);
+  assert.deepEqual(inv.getCopiedItems().map(i => [i.getId(), i.getAmount()]), before);
+});
+
+test('Empty rejects a different player without changing the owner cannon', () => {
+  const owner = gunner({steel: 30}), cannon = built(owner);
+  const visitor = gunner({parts: [], steel: 0});
+  const saved = JSON.stringify(owner.getAttribute(Cannon.STATE_ATTRIBUTE));
+  assert.equal(cannon.steel, 30);
+  assert.equal(Ammo.empty({player: visitor, object: cannon.object}), true);
+  assert.equal(Cannon.cannonOf(owner), cannon); assert.equal(cannon.steel, 30);
+  assert.equal(visitor.getInventory().getAmount(Items.STEEL_CANNONBALL), 0);
+  assert.equal(JSON.stringify(owner.getAttribute(Cannon.STATE_ATTRIBUTE)), saved);
+  assert.ok(visitor.ticks.flat().includes(Ammo.MESSAGE.NOT_YOURS));
+});
+
+for (const steelHeadroom of [1, 20]) {
+  test(`Empty handles both ammunition types atomically at steel headroom ${steelHeadroom}`, () => {
+    const p = gunner({steel: 20}), cannon = built(p), inv = p.getInventory();
+    assert.equal(cannon.steel, 20);
+    inv.add(new core.Item(Items.GRANITE_CANNONBALL, 10), false);
+    assert.equal(Ammo.loadFromInventory(cannon, 10), 10);
+    assert.deepEqual([cannon.steel, cannon.granite], [20, 10]);
+    const held = 0x7fffffff - steelHeadroom;
+    inv.add(new core.Item(Items.STEEL_CANNONBALL, held), false);
+    assert.equal(inv.getAmount(Items.STEEL_CANNONBALL), held);
+    assert.equal(inv.getAmount(Items.GRANITE_CANNONBALL), 0);
+    assert.ok(inv.getFreeSlots() > 0);
+    const saved = JSON.stringify(p.getAttribute(Cannon.STATE_ATTRIBUTE));
+    Ammo.empty({player: p, object: cannon.object});
+    assert.equal(Cannon.cannonOf(p), cannon);
+    if (steelHeadroom === 1) {
+      assert.deepEqual([cannon.steel, cannon.granite], [20, 10]);
+      assert.equal(inv.getAmount(Items.STEEL_CANNONBALL), held);
+      assert.equal(inv.getAmount(Items.GRANITE_CANNONBALL), 0);
+      assert.equal(JSON.stringify(p.getAttribute(Cannon.STATE_ATTRIBUTE)), saved);
+    } else {
+      assert.deepEqual([cannon.steel, cannon.granite], [0, 0]);
+      assert.equal(inv.getAmount(Items.STEEL_CANNONBALL), held + 20);
+      assert.equal(inv.getAmount(Items.GRANITE_CANNONBALL), 10);
+    }
+  });
+}

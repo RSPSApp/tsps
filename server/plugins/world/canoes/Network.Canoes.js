@@ -270,7 +270,7 @@ function arrive(player, from, to, type) {
   core.TaskManager.submit(new core.CountdownTask({}, 3, () => {
     if (player.isRegistered()) player.getPacketSender().sendObjectRemoval(sinking);
   }));
-  if (from.id === 1 && to.id === 4 && type.id === 4) api.emitCustomEvent("diary:task", { player, diary: "lumbridge-draynor", task: "travel-from-lumbridge-to-edgeville-on-a-waka-can" });
+  if (from.id === 1 && to.id === 4 && type.id === 4) api.emitCustomEvent("diary:task", { player, diary: "lumbridge", task: "travel-from-lumbridge-to-edgeville-on-a-waka-can" });
 }
 
 /** One drifting piece of river scenery; see RIDE_SCENERY. */
@@ -326,7 +326,7 @@ function select({ player, buttonId, groupId = buttonId >>> 16, childId = buttonI
   if (!to || !type || !canTravel(menu.station, to, type)) return;
   closeMenu(player);
   if (to.id === 0) {
-    api.sendMultiChatboxPrompt(player, "Travel into the Wilderness? This is a one-way trip.", ["Yes, take me into the Wilderness.", () => travel(player, menu.station, to, type), "No, stay here.", () => {}]);
+    api.sendMultiChatboxPrompt(player, "Travel into the Wilderness? This is a one-way trip.", "Yes, take me into the Wilderness.", () => travel(player, menu.station, to, type), "No, stay here.", () => {});
   } else travel(player, menu.station, to, type);
 }
 

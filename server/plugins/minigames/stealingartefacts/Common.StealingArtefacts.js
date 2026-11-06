@@ -202,6 +202,7 @@ function handIn(player, random = Math.random) {
   player.setAttribute(TASK_ATTRIBUTE, null);
   player.setAttribute(FAILED_ATTRIBUTE, null);
   sessions.delete(player);
+  getApi().emitCustomEvent("stealing-artefacts:handed-in", { player, itemId, coins });
   return coins;
 }
 

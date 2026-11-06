@@ -176,35 +176,35 @@ function axe(id, requiredLevel, tier, animationId, extra = {}) {
 
 // OSRS Wiki axe list. `tier` indexes the CUT_CHANCE rows: 3rd age, crystal and infernal axes cut
 // like dragon, gilded like rune and blessed like mithril. Felling axes cut like their standard
-// counterpart (their bonus needs Forester's rations, which do not exist here). Animation ids are
+// counterpart; Forester's rations enable their extra XP and reduced log yield. Animation ids are
 // RuneLite's WOODCUTTING_* constants; blessed has none of its own and uses mithril's.
 // Listed worst to best: a player uses the last axe here they hold and can use.
 const AXES = [
-  axe(ItemIds.BRONZE_FELLING_AXE, 1, 0, 10064),
+  axe(ItemIds.BRONZE_FELLING_AXE, 1, 0, 10064, { felling: true }),
   axe(ItemIds.BRONZE_AXE, 1, 0, 879, { standard: true }),
-  axe(ItemIds.IRON_FELLING_AXE, 1, 1, 10065),
+  axe(ItemIds.IRON_FELLING_AXE, 1, 1, 10065, { felling: true }),
   axe(ItemIds.IRON_AXE, 1, 1, 877, { standard: true }),
-  axe(ItemIds.STEEL_FELLING_AXE, 6, 2, 10066),
+  axe(ItemIds.STEEL_FELLING_AXE, 6, 2, 10066, { felling: true }),
   axe(ItemIds.STEEL_AXE, 6, 2, 875, { standard: true }),
-  axe(ItemIds.BLACK_FELLING_AXE, 11, 3, 10067),
+  axe(ItemIds.BLACK_FELLING_AXE, 11, 3, 10067, { felling: true }),
   axe(ItemIds.BLACK_AXE, 11, 3, 873, { standard: true }),
   axe(ItemIds.BLESSED_AXE, 21, 4, 871),
-  axe(ItemIds.MITHRIL_FELLING_AXE, 21, 4, 10068),
+  axe(ItemIds.MITHRIL_FELLING_AXE, 21, 4, 10068, { felling: true }),
   axe(ItemIds.MITHRIL_AXE, 21, 4, 871, { standard: true }),
-  axe(ItemIds.ADAMANT_FELLING_AXE, 31, 5, 10069),
+  axe(ItemIds.ADAMANT_FELLING_AXE, 31, 5, 10069, { felling: true }),
   axe(ItemIds.ADAMANT_AXE, 31, 5, 869, { standard: true }),
   axe(ItemIds.GILDED_AXE, 41, 6, 8303),
-  axe(ItemIds.RUNE_FELLING_AXE, 41, 6, 10070),
+  axe(ItemIds.RUNE_FELLING_AXE, 41, 6, 10070, { felling: true }),
   axe(ItemIds.RUNE_AXE, 41, 6, 867, { standard: true }),
-  axe(ItemIds._3RD_AGE_FELLING_AXE, 61, 7, 10074),
-  axe(ItemIds.DRAGON_FELLING_AXE, 61, 7, 10071),
+  axe(ItemIds._3RD_AGE_FELLING_AXE, 61, 7, 10074, { felling: true }),
+  axe(ItemIds.DRAGON_FELLING_AXE, 61, 7, 10071, { felling: true }),
   axe(ItemIds._3RD_AGE_AXE, 61, 7, 7264),
   axe(ItemIds.DRAGON_AXE, 61, 7, 2846, { standard: true }),
   axe(ItemIds.INFERNAL_AXE_UNCHARGED_, 61, 7, 2117, { requiredFiremaking: 85 }),
   axe(ItemIds.INFERNAL_AXE_UNCHARGED__2, 61, 7, 8778, { requiredFiremaking: 85 }),
   axe(ItemIds.INFERNAL_AXE_UNCHARGED__4, 61, 7, 8778, { requiredFiremaking: 85 }),
   axe(ItemIds.CRYSTAL_AXE_INACTIVE_, 71, 7, 8324, { requiredAgility: 50 }),
-  axe(ItemIds.CRYSTAL_FELLING_AXE, 71, 7, 10072, { requiredAgility: 50 }),
+  axe(ItemIds.CRYSTAL_FELLING_AXE, 71, 7, 10072, { requiredAgility: 50, felling: true }),
   axe(ItemIds.CRYSTAL_AXE, 71, 7, 8324, { requiredAgility: 50 }),
   axe(ItemIds.INFERNAL_AXE, 61, 7, 2117, { requiredFiremaking: 85, speed: 0.3 }),
   axe(ItemIds.INFERNAL_AXE_OR_, 61, 7, 8778, { requiredFiremaking: 85, speed: 0.3 }),
@@ -239,6 +239,21 @@ const CUT_CHANCE = Object.freeze({
 const AXES_BEST_FIRST = [...AXES].reverse();
 
 const TREES = [
+  {
+    // Trouble Brewing's placement/team handler requests this through woodcutting:chop.
+    name: "scrapey tree",
+    objectNames: [],
+    requiredLevel: 1,
+    xpReward: 25,
+    logId: ItemIds.SCRAPEY_TREE_LOGS,
+    // Wiki's rounded success chart endpoints, bronze through dragon (revision 15240304).
+    cutChance: [[23, 75], [36, 113], [49, 151], [55, 159], [62, 191], [76, 226], [85, 264], [90, 286]],
+    roundedCutChance: true,
+    respawnTicks: 24,
+    stumpId: ObjectIds.SCRAPEY_TREE_2,
+    multi: true,
+    depleteChance: 8,
+  },
   {
     name: "normal tree",
     objectNames: ["Tree", "Dead tree", "Evergreen tree", "Dying tree"],
@@ -665,6 +680,14 @@ function findBestUsableAxe(player) {
 
   for (const axe of AXES_BEST_FIRST) {
     if ((equippedWeaponId === axe.id || inventory.contains(axe.id)) && canUseAxe(player, axe)) {
+      // An equally strong felling axe may supply its bonus even beside the ordinary axe.
+      // Keep Infernal and no-ration priority; never promote a lower or unusable profile.
+      if (!axe.felling && !axe.requiredFiremaking) {
+        const felling = AXES_BEST_FIRST.find((candidate) => candidate.felling &&
+          candidate.tier === axe.tier && candidate.requiredLevel === axe.requiredLevel &&
+          (equippedWeaponId === candidate.id || inventory.contains(candidate.id)) && canUseAxe(player, candidate));
+        if (felling && availableFellingRations(player) > 0) return felling;
+      }
       return axe;
     }
   }
@@ -703,7 +726,9 @@ function cutChanceRange(tree, axe) {
 
 function calculateCutChance(level, tree, axe) {
   const [low, high] = cutChanceRange(tree, axe);
-  const successes = 1 + Math.floor((low * (99 - level)) / 98) + Math.floor((high * (level - 1)) / 98);
+  const successes = tree.roundedCutChance
+    ? Math.round((low * (99 - level) + high * (level - 1)) / 98)
+    : 1 + Math.floor((low * (99 - level)) / 98) + Math.floor((high * (level - 1)) / 98);
   return Math.min(1, Math.max(0, successes / 256));
 }
 
@@ -717,6 +742,57 @@ function lumberjackXpMultiplier(player) {
   const worn = LUMBERJACK_OUTFIT.filter((piece) => isWearing(player, piece.slot, piece.itemIds));
   const bonus = worn.reduce((sum, piece) => sum + piece.bonus, 0);
   return 1 + bonus + (worn.length === LUMBERJACK_OUTFIT.length ? LUMBERJACK_SET_BONUS : 0);
+}
+
+/** A query only: axe selection must not spend the ration before a successful action. */
+function availableFellingRations(player) {
+  if (!pluginApi.core.WorldDefinition.isMembersWorld()) return 0;
+  const request = { player, itemId: ItemIds.FORESTERS_RATION, amount: player.getInventory().getAmount(ItemIds.FORESTERS_RATION) };
+  pluginApi.emitCustomEvent("storage:amount", request);
+  return request.amount;
+}
+
+/** Forester's rations enable the felling-axe bonus only on a successful chop (OSRS Forestry: Part Two).
+ * Reuse the carried-container contract already used for bait, coal and planks.
+ */
+function useFellingRation(player, axe) {
+  if (!axe.felling || !pluginApi.core.WorldDefinition.isMembersWorld()) return false;
+  const ration = ItemIds.FORESTERS_RATION;
+  if (player.getInventory().contains(ration)) {
+    player.getInventory().deleteNumber(ration, 1);
+    return true;
+  }
+  const request = { player, itemId: ration, amount: 1, taken: 0 };
+  pluginApi.emitCustomEvent("storage:take", request);
+  return request.taken === 1;
+}
+
+/** Ordinary one-handed axes can use a ration for energy on a successful chop.
+ * Jagex Forestry Part One specifies 30% and 20 run-energy points; Wiki: Forester's ration
+ * specifies the below-90% threshold. Felling axes retain their separate existing behavior.
+ */
+function rollForesterRationEnergy(player, axe) {
+  if (!axe || axe.felling || !AXES.includes(axe) || !pluginApi.core.WorldDefinition.isMembersWorld()) return false;
+  if (pluginApi.core.ItemDefinition.forId(axe.id).isDoubleHanded()) return false;
+  if (!player.getInventory().contains(axe.id) && getEquippedWeaponId(player) !== axe.id) return false;
+  if (player.getRunEnergyUnits() >= 9000 || availableFellingRations(player) < 1) return false;
+  if (Math.random() >= 0.3) return false;
+  const ration = ItemIds.FORESTERS_RATION;
+  if (player.getInventory().contains(ration)) player.getInventory().deleteNumber(ration, 1);
+  else {
+    const request = { player, itemId: ration, amount: 1, taken: 0 };
+    pluginApi.emitCustomEvent("storage:take", request);
+    if (request.taken !== 1) return false;
+  }
+  player.addRunEnergyUnits(2000);
+  player.getPacketSender().sendRunEnergy();
+  return true;
+}
+
+/** Same cut chance and cadence: a ration changes XP and delivery, not whether the chop succeeds. */
+function fellingChop(player, axe) {
+  const rationUsed = useFellingRation(player, axe);
+  return { bonus: rationUsed, skipLog: rationUsed && Math.random() < 0.2 };
 }
 
 function logMessage(tree) {
@@ -742,6 +818,11 @@ function countLog(player) {
   const chopped = (player.getAttribute(LOGS_CHOPPED_ATTRIBUTE) ?? 0) + 1;
   player.setAttribute(LOGS_CHOPPED_ATTRIBUTE, chopped);
   player.getPacketSender().sendConfig(pluginApi.core.CacheDefinitions.getVarpId(LOGS_CHOPPED_VARP), chopped);
+}
+
+/** The counter for whoever shows it ("woodcutting:logs-chopped", the league summary's logs row). */
+function answerLogsChopped(query) {
+  query.count = query.player?.getAttribute(LOGS_CHOPPED_ATTRIBUTE) ?? 0;
 }
 
 function sendLogsChopped({ player }) {
@@ -1086,7 +1167,9 @@ function processWoodcuttingTick(activeSessions, currentTick) {
       continue;
     }
 
-    if (player.getMovementQueue()?.size?.() > 0) {
+    // The global task runs before player turns; the last step may have drained the route.
+    const movement = player.getMovementQueue();
+    if (movement?.size?.() > 0 || movement?.isMovings?.()) {
       stopWoodcutting(activeSessions, player);
       continue;
     }
@@ -1165,17 +1248,21 @@ function processWoodcuttingTick(activeSessions, currentTick) {
 
     // A nest falls instead of that roll's log: no log, line or XP (rsprox capture 293, five nests).
     if (state.tree.logId >= 0 && !maybeDropBirdNest(player)) {
+      const felling = fellingChop(player, state.axe);
+      rollForesterRationEnergy(player, state.axe);
+      const baseXp = state.tree.xpReward * lumberjackXpMultiplier(player);
+      const xp = felling.bonus ? baseXp + baseXp / 10 : baseXp;
       let pendingLog = null;
-      if (!InfernalAxe.tryBurnLog(player, state.axe.id, state.tree.logId)) {
-        pendingLog = prepareLog(player, state.tree.logId, state.tree.xpReward * lumberjackXpMultiplier(player));
+      if (!felling.skipLog && !InfernalAxe.tryBurnLog(player, state.axe.id, state.tree.logId)) {
+        pendingLog = prepareLog(player, state.tree.logId, xp);
         countLog(player);
       }
-      // A burnt log still says it was cut (rsprox captures 1637, 3996).
-      sendSpam(player, logMessage(state.tree));
+      // A burnt log still says it was cut (rsprox captures 1637, 3996); a felling skip gives no log.
+      if (!felling.skipLog) sendSpam(player, logMessage(state.tree));
       CrystalAxe.tryUseCharge(player);
       player
         .getSkillManager()
-        .addExperiences(Skill.WOODCUTTING, state.tree.xpReward * lumberjackXpMultiplier(player));
+        .addExperiences(Skill.WOODCUTTING, xp);
       // OSRS gives a winning pet the last backpack slot before the resource.
       // Keep storage/XP before this roll and the ordinary success consumers after delivery.
       const petRoll = { player, skill: Skill.WOODCUTTING, petBase: state.tree.petBase, handled: false };
@@ -1187,6 +1274,9 @@ function processWoodcuttingTick(activeSessions, currentTick) {
         petBase: state.tree.petBase,
         petRolled: petRoll.handled,
         logId: state.tree.logId,
+        location: state.location,
+        // Resource-count consumers distinguish a felling omission from the successful action.
+        logAmount: felling.skipLog ? 0 : 1,
         axeId: state.axe?.id ?? null,
       });
       ClueNests.rollClueNests(player, state.tree);
@@ -1284,6 +1374,7 @@ module.exports = {
     api.onCustomEvent("level-up:popup-opened", pauseWoodcutting);
     api.persistAttribute(LOGS_CHOPPED_ATTRIBUTE, 0);
     api.onPlayerLogin(sendLogsChopped);
+    api.onCustomEvent("woodcutting:logs-chopped", answerLogsChopped);
 
     api.onItemFirstAction((event) => {
       if (searchBirdNest(event.player, event.itemId)) {

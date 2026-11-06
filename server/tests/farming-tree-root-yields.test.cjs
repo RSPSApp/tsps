@@ -95,3 +95,27 @@ test('clearing a dead uncut tree or a fruit-tree stump does not give ordinary tr
         assert.equal(f.state().crop, undefined);
     }
 });
+test('a successful stump dig emits the roots payload after the whole amount is given', t => {
+    const f = prepare(t, { key: 'MAGIC', level: 91 });
+    const events = [];
+    t.mock.method(core.PluginManager, 'emitCustomEvent', (name, event) => {
+        if (name === 'farming:roots') events.push(event);
+    });
+    f.dig();
+    assert.equal(f.roots('Magic roots'), 3);
+    assert.equal(events.length, 1);
+    assert.equal(events[0].crop, 'MAGIC');
+    assert.equal(events[0].amount, 3);
+    assert.equal(events[0].itemId, Data.itemId('Magic roots'));
+    assert.equal(events[0].patch.id, f.patch.id);
+});
+test('a full inventory does not emit a partial roots payload', t => {
+    const f = prepare(t, { key: 'MAGIC', level: 91, free: 2 });
+    const events = [];
+    t.mock.method(core.PluginManager, 'emitCustomEvent', (name, event) => {
+        if (name === 'farming:roots') events.push(event);
+    });
+    f.dig();
+    assert.equal(f.roots('Magic roots'), 0);
+    assert.deepEqual(events, []);
+});

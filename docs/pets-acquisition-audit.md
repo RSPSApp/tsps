@@ -27,10 +27,32 @@ diary flag and plucking did not request its roll. See `chompy-pet-acquisition.md
 
 ## Remaining work and ownership
 
-- Bloodhound's master-clue source needs checking with the clue owner. Claude owns Treasure
-  Trails; this branch makes no clue changes. Coordination handoff posted locally.
-- Penance queen/princess acquisition needs Barbarian Assault, which is absent from this
-  baseline. Adding an unconditional pet award would not implement the missing activity.
+- Bloodhound (5 November 2026): the master casket's 1/1,000 tertiary goes through
+  `pets:award` (follower, backpack or Probita, once per family) instead of the reward
+  screen. A master casket that becomes the Mimic rolls no tertiaries (`Reward.Mimic.js` asks
+  `treasure-trails:roll-casket`, the base table only), so it never gives the Bloodhound or the
+  tertiary master clue; that predates this change. Its cache "Dig" follower option (Wiki: a spade for clue steps) is not wired: the
+  spade's clue digs answer every `onCanUseItem` spade hook, quest digs included.
+- Penance Princess: the high gamble reads the Barbarian Assault match's recorded Queen kills
+  and per-role Honour Points (500, Wiki "Barbarian Assault/Gambles"). The high gamble's
+  extra elite clue roll is a Barbarian Assault gap, not a pet one.
+- Cats (5 November 2026): Felkrash trains an overgrown cat (or overgrown hellcat) into a wily
+  cat at Ratcatchers completion and afterwards, one wily or lazy cat at a time (menagerie
+  excepted). A wily cat turns lazy within an hour of follower time; about 15 rats retrain it
+  4-6 growth ticks later. An adult, wily or lazy cat's seventh hell-rat makes its hell form
+  unless a hellcat is held outside the menagerie; the cat keeps its age and retraining
+  progress (Wiki "Hellcat", Mod Ash). Milk reverts every hell stage. Overgrown cats still
+  catch vermin at 75%, which predates this change and contradicts Wiki "Overgrown cat"
+  ("will lose its ability to catch vermin"); they get no hell-rat route here. Not modelled: the activity-level
+  catch bonus, the hell-rat behemoth route (no Rat Pits),
+  kalphite larva/butterfly catches, and exact transformation messages (no capture or Wiki
+  text; only the hellcat line is shown, matching the hell-kitten one).
+- Felkrash names a carried or following wily or lazy cat after Ratcatchers. The six-letter
+  name is shared by these cat forms and appears in her naming conversation; it persists in
+  the player save. The first naming defaults to `AAAAAA`; later opens restore the saved
+  name. The arrows cycle `A`-`Z` and space. That default and cycling order are TSPS policy,
+  not a recorded retail timing or UI claim.
+  Cat and hellcat dialogue beyond the naming conversation remains outside this feature.
 - Probita already reclaims recorded missing pets freely. The current
   [Probita Wiki page](https://oldschool.runescape.wiki/w/Probita) dates free reclaim to
   10 September2025. Do not add the obsolete one-million-coin fee. A native recovery screen

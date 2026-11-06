@@ -505,10 +505,6 @@ test('Royal Trouble: investigation route, lift repair, diary, boss and rewards',
   assert.equal(p.varbits.get(2141), 80);
   assert.equal(p.items.get(I.MINING_PROP), 1);
 
-  p.items.set(I.BURNT_DIARY_1, 1);
-  h.itemAction(p, I.BURNT_DIARY_1);
-  assert.equal(p.varbits.get(2141), 80, 'one diary page cannot skip to stage 100');
-
   // Crevice stays locked until the prop is placed.
   h.object(p, O.CREVICE_10);
   assert.equal(p.varbits.get(2145), 0);
@@ -563,6 +559,8 @@ test('Royal Trouble: investigation route, lift repair, diary, boss and rewards',
   assert.equal(p.varbits.get(2157), 0);
   h.itemAction(p, I.BURNT_DIARY_5);
   assert.equal(p.varbits.get(2141), 100, 'reading the completed diary reaches 100');
+  assert.equal(p.varbits.get(2149), 1, 'the first read marks only diary chapter 1');
+  assert.equal(p.varbits.get(2150) ?? 0, 0, 'the first read does not mark every chapter');
   h.object(p, O.CREVICE_12);
   assert.equal(p.varbits.get(2157) ?? 0, 0, 'the watched flag lands when the scene ends');
   assert.equal(p.getLocation().getY(), 10276, 'the recorded kids scene places the camera over the room');
@@ -595,6 +593,7 @@ test('Royal Trouble: investigation route, lift repair, diary, boss and rewards',
   assert.match(h.variant(N.QUEEN_SIGRID, p).variant, /with-the-heavy-box$/);
   h.action(p, N.QUEEN_SIGRID, 'ARzdfn');
   assert.equal(p.varbits.get(2142), 40);
+  assert.equal(p.varbits.get(2158), 6, 'capture 91: all six stolen items are handed back');
   assert.equal(p.items.get(I.LETTER_6), 1);
   assert.match(h.variant(N.KING_VARGAS, p).variant, /returning-to-king-vargas$/);
   h.action(p, N.KING_VARGAS, '2rSWNl');
@@ -602,11 +601,40 @@ test('Royal Trouble: investigation route, lift repair, diary, boss and rewards',
   assert.equal(p.varbits.get(2141), 130, 'completion records the captured 130');
   assert.equal(p.varbits.get(2143), 0);
   assert.equal(p.varbits.get(2144), 0);
+  assert.equal(p.varbits.get(2149), 0, 'completion clears diary chapter 1');
+  assert.equal(p.varbits.get(2150), 0, 'completion clears diary chapter 2');
+  assert.equal(p.varbits.get(2156), 0, 'capture 91 clears the coal-in-engine bit on completion');
+  assert.equal(p.varbits.get(2158), 0, 'capture 91 clears the returned-items count on completion');
+  assert.equal(p.varbits.get(2161), 1, 'capture 91 leaves the know-about-teens bit set');
   const xp = p.xp.length, points = p.attributes.get('quest.points');
   h.action(p, N.KING_VARGAS, '2rSWNl');
   assert.equal(p.xp.length, xp);
   assert.equal(p.attributes.get('quest.points'), points);
 });
+
+test('Royal Trouble: reading the diary marks one chapter per read', () => {
+  const h = harness(royal(), new Set(['fremennik_trials', 'heroes_quest', 'throne_of_miscellania']));
+  const partial = h.player();
+  h.quest.setStage(partial, 80);
+  partial.items.set(I.BURNT_DIARY, 1);
+  h.itemAction(partial, I.BURNT_DIARY);
+  assert.equal(h.quest.getStage(partial), 80, 'one diary page cannot skip to stage 100');
+  assert.equal(partial.varbits.get(2149), 1, 'the first read marks only diary chapter 1');
+  assert.equal(partial.varbits.get(2150) ?? 0, 0, 'one page does not mark every diary chapter');
+
+  const p = h.player();
+  h.quest.setStage(p, 20);
+  p.items.set(I.BURNT_DIARY, 1);
+  h.itemAction(p, I.BURNT_DIARY);
+  assert.equal(p.varbits.get(2149), 1, 'capture 91: the first read marks diary chapter 1');
+  assert.equal(p.varbits.get(2150) ?? 0, 0, 'the first read does not mark every chapter');
+  h.itemAction(p, I.BURNT_DIARY);
+  assert.equal(p.varbits.get(2150), 1, 'the second read advances to chapter 2');
+  h.hooks.onPlayerLogin[0]({ player: p });
+  assert.equal(p.varbits.get(2149), 1, 'login restores the read chapters');
+  assert.equal(p.varbits.get(2150), 1);
+});
+
 
 test('Royal Trouble: dropped scroll and prop are recoverable, relog restores varbits', () => {
   const done = new Set(['fremennik_trials', 'heroes_quest', 'throne_of_miscellania']);
@@ -614,9 +642,13 @@ test('Royal Trouble: dropped scroll and prop are recoverable, relog restores var
   h.quest.setStage(p, 20);
   p.attributes.set('royal-trouble:royal-misc', 50);
   p.attributes.set('royal-trouble:royal-etc', 20);
+  p.attributes.set('royal-trouble:etc-items-returned', 6);
+  p.attributes.set('royal-trouble:knows-teens', 1);
   h.hooks.onPlayerLogin[0]({ player: p });
   assert.equal(p.varbits.get(2141), 50);
   assert.equal(p.varbits.get(2142), 20);
+  assert.equal(p.varbits.get(2158), 6);
+  assert.equal(p.varbits.get(2161), 1);
   p.attributes.set('royal-trouble:royal-misc', 0);
   h.hooks.onPlayerLogin[0]({ player: p });
   assert.equal(p.varbits.get(2141), 0);

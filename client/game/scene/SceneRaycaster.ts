@@ -713,9 +713,6 @@ export class SceneRaycaster {
             const interactId = baseNpcTypeId(npcEcs.getNpcTypeId(ecsId) | 0);
             if (interactId < 0) continue;
             const npcPlane = npcEcs.getLevel(ecsId) | 0;
-            if (typeof basePlane === "number" && (npcPlane | 0) !== (basePlane | 0)) {
-                continue;
-            }
             let heightTiles = 0;
             try {
                 let npcType: NpcType | undefined = this.osrsClient.npcTypeLoader.load(interactId);
@@ -792,7 +789,6 @@ export class SceneRaycaster {
             const view = this.osrsClient.worldViewManager.getWorldView(worldViewId);
             if (!view) return;
             const npcPlane = npcEcs.getLevel(ecsId) | 0;
-            if (typeof basePlane === "number" && (npcPlane | 0) !== (basePlane | 0)) return;
             const interactId = baseNpcTypeId(npcEcs.getNpcTypeId(ecsId) | 0);
             if (interactId < 0) return;
             let heightTiles = 0;
@@ -849,10 +845,6 @@ export class SceneRaycaster {
         const byMap = new Map<number, number[]>();
         for (let i = 0; i < n; i++) {
             if (pe.getIsHidden(i)) continue;
-            const playerPlane = pe.getLevel(i) | 0;
-            if (typeof basePlane === "number" && (playerPlane | 0) !== (basePlane | 0)) {
-                continue;
-            }
             const worldViewId = pe.getWorldViewId(i) | 0;
             const mapId =
                 worldViewId >= 0
@@ -885,9 +877,6 @@ export class SceneRaycaster {
                 const py = pe.getY(pid) | 0;
                 const interactId = PLAYER_INTERACT_BASE + (indexInMap & 0x7fff);
                 const playerPlane = pe.getLevel(pid) | 0;
-                if (typeof basePlane === "number" && (playerPlane | 0) !== (basePlane | 0)) {
-                    continue;
-                }
                 // The deck scene gives the height; the box goes where the deck is drawn.
                 const groundY = this.sampleHeightAt(px / 128.0, py / 128.0, playerPlane | 0, true);
                 let worldX = px / 128.0;

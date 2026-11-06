@@ -1355,27 +1355,31 @@ module.exports = function registerEnakhrasLamentQuest(api) {
 
   function handleItemOnObject(event) {
     const { player, objectId, itemId } = event;
-    if (objectId === FLAT_GROUND && itemId === SANDSTONE_BASE) {
+    // The map places the statue's multiloc and a click names it; the varbit decides which stage shows.
+    const statueId = objectId === SURFACE_STATUE_MULTILOC_ID
+      ? api.core.ObjectDefinition.forPlayer(objectId, player)?.id ?? objectId
+      : objectId;
+    if (statueId === FLAT_GROUND && itemId === SANDSTONE_BASE) {
       event.handled = true;
       if (quest.getStage(player) < STAGE_BASE_MADE || !has(player, SANDSTONE_BASE)) return;
       take(player, SANDSTONE_BASE, 1);
       advanceTo(player, STAGE_BASE_PLACED);
       return;
     }
-    if ((objectId === HEADLESS_STATUE_1 || objectId === HEADLESS_STATUE_2) && itemId === SANDSTONE_BODY) {
+    if ((statueId === HEADLESS_STATUE_1 || statueId === HEADLESS_STATUE_2) && itemId === SANDSTONE_BODY) {
       event.handled = true;
       if (quest.getStage(player) < STAGE_BODY_MADE || !has(player, SANDSTONE_BODY)) return;
       take(player, SANDSTONE_BODY, 1);
       advanceTo(player, STAGE_BODY_PLACED);
       return;
     }
-    if (isStatueObject(objectId) && isChiselItem(itemId)) {
+    if (isStatueObject(statueId) && isChiselItem(itemId)) {
       event.handled = true;
       if (quest.getStage(player) !== STAGE_BODY_PLACED) return;
       advanceTo(player, STAGE_STATUE_CHISELLED);
       return;
     }
-    if (isStatueObject(objectId) && ORIGINAL_HEAD_IDS.has(itemId)) {
+    if (isStatueObject(statueId) && ORIGINAL_HEAD_IDS.has(itemId)) {
       event.handled = true;
       if (quest.getStage(player) < STAGE_HEAD_MADE || !has(player, itemId)) return;
       if (headMade(player) !== headChoice(player) || !hasBit(player, BIT_HEAD_TOLD)) {
@@ -1562,13 +1566,13 @@ module.exports = function registerEnakhrasLamentQuest(api) {
           (action === "ice" && (hasBit(player, BIT_ICE) || npc.getId() !== CRUST_OF_ICE_NPC_ID))) return;
       if (!accurate) {
         npc.performGraphic(api.core.MagicCombatMethod.SPLASH_GRAPHIC);
-        api.core.Sounds.sendSound(player, api.core.Sound.SPELL_FAIL_SPLASH);
+        api.core.Sounds.playAreaSoundAt(npc, api.core.Sound.SPELL_FAIL_SPLASH, api.core.MagicCombatMethod.IMPACT_SOUND_RADIUS);
         return;
       }
       const endGraphic = event.spell.endGraphic();
       if (endGraphic) npc.performGraphic(endGraphic);
-      const impactSound = event.spell.impactSound();
-      if (impactSound) api.core.Sounds.sendSound(npc, impactSound);
+      const impactSound = api.core.MagicCombatMethod.impactSoundFor(event.spell);
+      if (impactSound) api.core.Sounds.playAreaSoundAt(npc, impactSound, api.core.MagicCombatMethod.IMPACT_SOUND_RADIUS);
       if (action === "boneguard") {
         removeQuestNpc(player, BONEGUARD_NPC_ID);
         advanceTo(player, STAGE_BONEGUARD1);

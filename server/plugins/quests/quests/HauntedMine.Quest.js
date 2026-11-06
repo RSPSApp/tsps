@@ -486,14 +486,17 @@ module.exports = function registerHauntedMineQuest(api) {
     }
   }
 
-  function handleStartHook({ player, npcId, hook }) {
+  function handleStartHook(event) {
+    const { player, npcId, hook } = event;
     if (npcId !== ZEALOT_NPC_ID || hook !== START_HOOK) return;
     if (quest.getStage(player) === 0) {
       if (!meetsSkillRequirements(player)) {
+        event.end = true;
         notifySkillRequirements(player);
         return;
       }
       if (!questIsComplete(player, "priest_in_peril")) {
+        event.end = true;
         player.sendMessage("You must complete Priest in Peril to start this quest.");
         return;
       }

@@ -40,6 +40,7 @@ module.exports = function registerIdesOfMilkQuest(api) {
   const DUKE_NPC_ID = NpcIdentifiers.DUKE_HORACIO; // 815
   const BULL_NPC_ID = NpcIdentifiers.BULL; // 15625, the pre-reveal "Bull"
   const QUEST_BRUTUS_NPC_ID = NpcIdentifiers.BRUTUS; // cowboss, as captured in the quest
+  const DEMONIC_BRUTUS_NPC_ID = NpcIdentifiers.DEMONIC_BRUTUS; // 15628, post-quest hard version
   const MAPPED_BULL_NPC_ID = 15624; // cache cowboss_mapped, morphs on cowquest
 
   const SHELVES_OBJECT_ID = ObjectIdentifiers.SHELVES_180; // 60785, "Shelves" Search
@@ -64,6 +65,7 @@ module.exports = function registerIdesOfMilkQuest(api) {
   const COWBELL_AMULET_ITEM_ID = ItemIdentifiers.COWBELL_AMULET; // 33103
   const CHARGED_COWBELL_AMULET_ITEM_ID = ItemIdentifiers.COWBELL_AMULET_2; // 33104
   const MAGIC_LAMP_ITEM_ID = ItemIdentifiers.MAGIC_LAMP; // 33117
+  const ABYSSAL_POTATO_ITEM_ID = ItemIdentifiers.ABYSSAL_POTATO; // 33118
   const LAMP_XP = 1000;
 
   const VARP_COWQUEST = 5412; // "cowquest_main"
@@ -151,6 +153,7 @@ module.exports = function registerIdesOfMilkQuest(api) {
       super([new Boundary(3240, 3268, 3265, 3301, 0)]);
       this.player = player;
       this.bull = null;
+      this.demonic = false;
       this.meleeRemaining = 3;
       this.nextSpecial = "charge";
       this.stompsRemaining = 0;
@@ -244,10 +247,10 @@ module.exports = function registerIdesOfMilkQuest(api) {
       const end = charge ? chargeDestination(npc, aimed) : null;
       if (charge) npc.getMovementQueue().reset().setBlockMovement(true);
       if (!charge && arena.stompsRemaining === 0) {
-        arena.stompTiles = stompTiles(at, aimed);
         arena.stompsRemaining = quest.isComplete(player) ? 3 : 1 + Math.floor(Math.random() * 3);
       }
-      const tiles = arena.stompTiles;
+      // 4153 ticks 586/594/602: each snort aims again, then holds that footprint through impact.
+      const tiles = charge ? null : stompTiles(at, aimed);
       if (!charge) arena.stompsRemaining--;
       if (charge || arena.stompsRemaining === 0) {
         // shortcut: Wiki gives the 1–6 melee / 1–3 stomp ranges, not their distribution; verify with more fights.
@@ -726,9 +729,11 @@ module.exports = function registerIdesOfMilkQuest(api) {
     const player = arena.player;
     if (killer !== player) return;
     if (quest.isComplete(player)) {
-      countBrutusKill(player, World.getProcessCycle() - arena.startTick, true);
+      if (!arena.demonic) countBrutusKill(player, World.getProcessCycle() - arena.startTick, true);
       arena.bull = null;
+      arena.demonic = false;
       bullsByPlayer.delete(player);
+      arena.detach(npc);
       api.removeNpc(npc);
       // Keep the field and its loot until the player leaves; Ring can bring the next bull early.
       arena.respawnTask = later(arena, npc.getDefinition().getRespawn(), () => spawnArenaBull(arena));
@@ -781,6 +786,57 @@ module.exports = function registerIdesOfMilkQuest(api) {
       arena.respawnTask.stop();
       arena.respawnTask = later(arena, 13, () => spawnArenaBull(arena));
     }
+  }
+
+  function completeQuest(player, key) {
+    const request = { player, key, complete: false };
+    api.emitCustomEvent("quest:is-complete", request);
+    return request.complete === true;
+  }
+
+  /** Upgrade the player's post-quest Brutus; the Wiki's potato is consumed only on confirmation. */
+  function feedAbyssalPotato(event) {
+    const { player, itemId } = event;
+    const target = event.target ?? event.npc;
+    if (itemId !== ABYSSAL_POTATO_ITEM_ID || target?.getId?.() !== QUEST_BRUTUS_NPC_ID) return false;
+    event.handled = true;
+    const arena = fightsByPlayer.get(player);
+    if (!quest.isComplete(player) || !arena || arena.bull !== target || arena.demonic) {
+      player.sendMessage("You need to release Brutus in your own cow-field encounter after The Ides of Milk.");
+      return true;
+    }
+    if (!completeQuest(player, "desert_treasure_ii")) {
+      player.sendMessage("You need to complete Desert Treasure II before feeding an abyssal potato to Brutus.");
+      return true;
+    }
+    const inventory = player.getInventory();
+    if (inventory.getAmount(ABYSSAL_POTATO_ITEM_ID) < 1) return true;
+    api.sendMultiChatboxPrompt(player, "Feed the abyssal potato to Brutus and fight Demonic Brutus?", "Yes", () => {
+      if (fightsByPlayer.get(player) !== arena || arena.bull !== target || arena.demonic || !quest.isComplete(player)
+          || !completeQuest(player, "desert_treasure_ii") || inventory.getAmount(ABYSSAL_POTATO_ITEM_ID) < 1) return;
+      const at = target.getLocation().clone();
+      const demonic = api.spawnNpc({
+        id: DEMONIC_BRUTUS_NPC_ID,
+        x: at.getX(), y: at.getY(), z: at.getZ(),
+        wanderRadius: 0, owner: player, ownerOnly: true,
+      });
+      if (!demonic) {
+        player.sendMessage("Brutus cannot be transformed right now. Your abyssal potato was not used.");
+        return;
+      }
+      inventory.deleteNumber(ABYSSAL_POTATO_ITEM_ID, 1);
+      inventory.refreshItems?.();
+      arena.detach(target);
+      api.removeNpc(target);
+      demonic.__skipDefaultRespawn = true;
+      demonic.setCombatXpMultiplier(2);
+      arena.bull = demonic;
+      arena.demonic = true;
+      arena.startTick = World.getProcessCycle();
+      arena.enter(demonic);
+      bullsByPlayer.set(player, demonic);
+    }, "No", () => {});
+    return true;
   }
   /** The first sample's "that's not good milk" damage (never below 1 Hitpoint). */
   function damageFromSample(player) {
@@ -1010,6 +1066,7 @@ module.exports = function registerIdesOfMilkQuest(api) {
   api.onCustomEvent("ides-of-milk:cowbell-ring", ringForBull);
   api.onObjectInteraction(handleObjectInteraction);
   api.onItemAction(handleItemAction);
+  api.onItemOnNpc(feedAbyssalPotato);
   api.onNpcDeath(handleNpcDeath);
   api.registerNpcCombatMethodProvider([QUEST_BRUTUS_NPC_ID], BrutusCombat);
   api.onCustomEvent("combat-achievements:personal-best", answerBrutusBest);

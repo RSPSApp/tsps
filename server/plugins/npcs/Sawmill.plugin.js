@@ -133,13 +133,15 @@ function plankMaking(event) {
   event.end = true;
   const { player } = event;
   const npcId = event.npc?.getId?.() ?? event.npcId;
+  // Walk-to resets cancel player-indexed tasks, including this deferred menu.
   core.TaskManager.submit(new (class extends core.Task {
     constructor() {
-      super(1, null, false);
+      super(1, player.getIndex(), false);
     }
     execute() {
       this.stop();
-      if (player.isRegistered()) openPlankMenu(player, npcId);
+      if (player.isRegistered() && !player.getDialogueManager().isActive()
+        && !player.getPacketSender().hasInterruptibleInterface()) openPlankMenu(player, npcId);
     }
   })());
 }

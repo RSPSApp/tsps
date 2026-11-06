@@ -220,6 +220,7 @@ export class NPC extends Mobile {
     public static readonly WALK_THROUGH_ENTITIES_FLAG = "movement:walk-through-entities";
     /** OSRS's "full" entity collision: players wait instead of stepping onto this NPC (the Agility Pyramid's moving blocks). */
     public static readonly BLOCKS_PLAYERS_FLAG = "movement:blocks-players";
+    public static readonly BLOCKS_PROJECTILES_FLAG = "combat:blocks-projectiles";
 
     public canWalkThroughNPCs(): boolean {
         if (this.pet || this.hasFlag(NPC.WALK_THROUGH_ENTITIES_FLAG)) {

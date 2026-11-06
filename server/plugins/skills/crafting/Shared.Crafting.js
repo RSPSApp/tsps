@@ -159,6 +159,8 @@ function startMaking(player, {
   stopCrafting(player);
   if (!has()) return;
   const pace = actionInterval(player, kind, interval);
+  // A completed approach belongs to the previous action, not this new session.
+  const startLocation = player.getLocation().clone();
 
   const play = () => {
     animate(player, animation, sound);
@@ -174,6 +176,7 @@ function startMaking(player, {
     execute() {
       if (!player.isRegistered() || player.getHitpoints() <= 0 ||
         player.getMovementQueue().size() > 0 || player.getForceMovement() != null ||
+        !player.getLocation().equals(startLocation) ||
         player.getInterfaceId() !== -1 || (anchor && player.getLocation().getDistance(anchor) > 2) || !has()) {
         this.stop();
         return;

@@ -18,6 +18,9 @@ const { coveOf, coveOfNpc } = require("./Cove.Tempoross");
 const { DATA, ITEM, ANIM, GFX, SOUND } = Shared;
 const F = DATA.fight;
 
+/** Raw graphic height of the stun stars: at the head, as every other use of stunned_thieving. */
+const STUN_HEIGHT = 124;
+
 const AMMO = {
   [ITEM.COOKED]: { points: DATA.points.loadCooked, damage: DATA.damage.cooked, gfx: GFX.PROJECTILE_COOKED, xp: 1 },
   [ITEM.CRYSTALLISED]: { points: DATA.points.loadCrystallised, damage: DATA.damage.crystallised, gfx: GFX.PROJECTILE_CRYSTALLISED, xp: 1.2 },
@@ -81,6 +84,7 @@ class Cannons {
     const cannon = crate.cannonLoc;
     if (!ammo || !cannon || !this.fight.boss) return;
     const mirrored = crate.data.side === "east";
+    crate.cannoneer?.setPositionToFace(cannon.getLocation());
     this.cove.locAnim(cannon, mirrored ? ANIM.CANNON_FIRING_MIRROR : ANIM.CANNON_FIRING);
     const muzzle = this.cove.tile([...crate.data.muzzle, 0]);
     const target = this.cove.tile([...DATA.cove.bossCentre, 0]);
@@ -112,6 +116,7 @@ class Cannons {
       if (player.__temporossLoading === crate && Shared.actionOf(player) === "load") {
         Shared.stopAction(player);
         player.sendMessage("The surge of lightning arcs from the cannon into you...");
+        stun(player);
       }
     }
     return index;
@@ -121,6 +126,24 @@ class Cannons {
     crate.disabledUntil = -1;
     crate.cannonLoc = this.cove.replaceLoc(crate.cannonLoc, crate.data.cannon);
   }
+}
+
+/**
+ * The zap the torrent leaves on a loader (Wiki: it "stuns any player currently loading the
+ * cannon"). The Wiki gives no length, so the player is held only while the stars circle their
+ * head, not for the cannon's whole 24-tick disable (#2692).
+ */
+function stun(player) {
+  Shared.animate(player, ANIM.STUNNED);
+  Shared.graphic(player, GFX.STUNNED, STUN_HEIGHT);
+  player.getMovementQueue().reset();
+  player.getMovementQueue().setBlockMovement(true);
+  const until = Shared.later(player, F.torrentStunTicks, () => {
+    if (player.__temporossStun !== until) return;
+    player.__temporossStun = null;
+    if (player.isRegistered()) player.getMovementQueue().setBlockMovement(false);
+  });
+  player.__temporossStun = until;
 }
 
 // ------------------------------------------------------------------ filling
@@ -155,7 +178,6 @@ function fill(event) {
   }
   player.setPositionToFace(npc.getLocation());
   player.sendMessage("You start loading harpoonfish into the cannon.");
-  player.__temporossLoading = crate;
   Shared.startAction(player, "load", (ticks) => {
     if (fight.result || fight.cannons.disabled(crate)) return false;
     if (ticks % DATA.ticks.load !== 1) return true;
@@ -164,6 +186,7 @@ function fill(event) {
     load(player, fight, crate, fishId);
     return nextFish(player) !== null;
   });
+  player.__temporossLoading = crate;
   return true;
 }
 

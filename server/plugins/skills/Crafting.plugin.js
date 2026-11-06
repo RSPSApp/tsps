@@ -11,8 +11,10 @@ module.exports = {
     Shared.attach(api);
     require("./crafting/Leather.Crafting")(api);
     require("./crafting/Gems.Crafting")(api);
+    require("./crafting/Snelms.Crafting")(api);
     require("./crafting/Jewellery.Crafting")(api);
     require("./crafting/Glassblowing.Crafting")(api);
+    require("./crafting/LightOrbs.Crafting")(api);
     require("./crafting/Pottery.Crafting")(api);
     require("./crafting/Spinning.Crafting")(api);
     require("./crafting/Battlestaves.Crafting")(api);

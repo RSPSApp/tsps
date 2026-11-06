@@ -330,7 +330,6 @@ module.exports = function registerDesertTreasureII(api) {
   const STRANGLEWOOD_CITY_ENTERED = "desert-treasure-ii:city-entered";
   const SUCELLUS_AREA = "desert-treasure-ii:sucellus-area";
   const WHISPERER_AREA = "desert-treasure-ii:whisperer-area";
-  const SUCELLUS_MUSHROOMS = "desert-treasure-ii:sucellus-mushrooms";
   const SUCELLUS_VATS = "desert-treasure-ii:sucellus-vats";
   const SUCELLUS_POISONS = "desert-treasure-ii:sucellus-poisons";
   const SUCELLUS_ENCOUNTER_STARTED = "desert-treasure-ii:sucellus-encounter-started";
@@ -2854,7 +2853,6 @@ module.exports = function registerDesertTreasureII(api) {
         // recipe progress so the normal cache suppliers can make two fresh
         // poisons instead of leaving a spent attempt permanently locked.
         p.setAttribute(SUCELLUS_POISONS, 0);
-        p.setAttribute(SUCELLUS_MUSHROOMS, { musca: 0, arder: 0 });
         p.setAttribute(SUCELLUS_VATS, {});
         p.setAttribute(SUCELLUS_ENCOUNTER_STARTED, false);
         p.sendMessage("The Duke has returned to his slumber. The mushrooms and vats are ready for another attempt.");
@@ -4317,9 +4315,17 @@ module.exports = function registerDesertTreasureII(api) {
     return true;
   }
 
+  /**
+   * The Wiki has a lost medallion recovered from the remains. Not during the last chapter's trial, where
+   * rsprox 1703 t16397 has it missing as the story and it comes back by its own drop.
+   */
+  function whispererMedallionOpen(p) {
+    return inChapter(p, "whisperer") && !inLastMedallionTrial(p);
+  }
+
   function syncWhispererRemains(p, state = p?.getAttribute?.(LASSAR) ?? {}) {
     const existing = whispererRemains.get(p);
-    const shouldExist = state.whispererDefeated === true && state.medallion !== true
+    const shouldExist = state.whispererDefeated === true && whispererMedallionOpen(p)
       && !has(p, I.WHISPERERS_MEDALLION);
     if (shouldExist && !existing) {
       // Wiki/QH place the entrails at the fight's material return tile. The
@@ -5797,11 +5803,18 @@ module.exports = function registerDesertTreasureII(api) {
       && p.getAttribute(LASSAR)?.whispererDefeated
       && (option === "search" || option === "take" || option === "inspect")) {
       const state = p.getAttribute(LASSAR) ?? {};
-      if (!state.medallion && !has(p, I.WHISPERERS_MEDALLION)) p.getInventory().adds(I.WHISPERERS_MEDALLION, 1);
+      if (has(p, I.WHISPERERS_MEDALLION) || !whispererMedallionOpen(p)) return true;
+      if (p.getInventory().getFreeSlots() < 1) {
+        // As Vardorvis' does. No capture of this: the wording is ours.
+        p.sendMessage("You need inventory space for the Whisperer's medallion.");
+        return true;
+      }
+      p.getInventory().adds(I.WHISPERERS_MEDALLION, 1);
       setLassar(p, { ...state, medallion: true });
       markMedallionFound(p, "whisperer");
       syncWhispererRemains(p, { ...state, medallion: true });
-      p.sendMessage("You search the Whisperer's remains and recover her medallion.");
+      // Rsprox 1703 t16262, there in an item box.
+      p.sendMessage("You find a medallion amongst the entrails.");
       return true;
     }
     if (inChapter(p, "whisperer") && visibleId === 48310 && p.getAttribute(LASSAR)?.medallion
@@ -5928,7 +5941,6 @@ module.exports = function registerDesertTreasureII(api) {
           if (area instanceof SucellusArea && !area.isDestroyed()) p.moveTo(area.tile(101, 104, 2));
           return true;
         }
-        const mushrooms = p.getAttribute(SUCELLUS_MUSHROOMS) ?? { musca: 0, arder: 0 };
         if ([O.PESTLE_AND_MORTAR, O.PESTLE_AND_MORTAR_2].includes(visibleId)) {
           if (!has(p, I.PESTLE_AND_MORTAR)) p.getInventory().adds(I.PESTLE_AND_MORTAR, 1);
           p.sendMessage("You take a pestle and mortar from the shelf.");
@@ -5939,22 +5951,16 @@ module.exports = function registerDesertTreasureII(api) {
           p.sendMessage("You take a pickaxe from the rack.");
           return true;
         }
-        if ([O.MUSCA_MUSHROOMS, O.MUSCA_MUSHROOMS_2].includes(visibleId)) {
-          const count = Math.min(3, mushrooms.musca + 1);
-          if (count === mushrooms.musca) return p.sendMessage("You have gathered enough Musca mushrooms.");
-          mushrooms.musca = count;
-          p.setAttribute(SUCELLUS_MUSHROOMS, mushrooms);
-          p.getInventory().adds(I.MUSCA_MUSHROOM, 1);
-          p.sendMessage(`You gather a Musca mushroom (${count}/3).`);
-          return true;
-        }
-        if ([O.ARDER_MUSHROOMS, O.ARDER_MUSHROOMS_2].includes(visibleId)) {
-          const count = Math.min(3, mushrooms.arder + 1);
-          if (count === mushrooms.arder) return p.sendMessage("You have gathered enough Arder mushrooms.");
-          mushrooms.arder = count;
-          p.setAttribute(SUCELLUS_MUSHROOMS, mushrooms);
-          p.getInventory().adds(I.ARDER_MUSHROOM, 1);
-          p.sendMessage(`You gather an Arder mushroom (${count}/3).`);
+        // Rsprox 91 t10587-t10681 and 1703 t10504-t10842: no cap, and these two lines. The capture's
+        // repeat picking isn't modelled: each click picks one.
+        const mushroom = [O.MUSCA_MUSHROOMS, O.MUSCA_MUSHROOMS_2].includes(visibleId) ? I.MUSCA_MUSHROOM
+          : [O.ARDER_MUSHROOMS, O.ARDER_MUSHROOMS_2].includes(visibleId) ? I.ARDER_MUSHROOM : null;
+        if (mushroom !== null) {
+          if (p.getInventory().getFreeSlots() < 1) {
+            return p.sendMessage("You don't have enough inventory space for any more mushrooms.");
+          }
+          p.getInventory().adds(mushroom, 1);
+          p.sendMessage("You pick a mushroom.");
           return true;
         }
         if ([O.SALT_DEPOSIT, O.SALT_DEPOSIT_2].includes(visibleId)) {
@@ -6007,6 +6013,10 @@ module.exports = function registerDesertTreasureII(api) {
           const vat = { ...(vats[vatKey] ?? { powders: [], salt: 0 }) };
           if (vat.powders?.includes(I.ARDER_POWDER) && vat.powders?.includes(I.MUSCA_POWDER)
             && vat.salt >= 6 && action.includes("empty")) {
+            if (p.getInventory().getFreeSlots() < 1 && !has(p, I.ARDER_MUSCA_POISON)) {
+              // No capture of this: the wording is ours.
+              return p.sendMessage("You need inventory space for the poison.");
+            }
             vat.powders = [];
             vat.salt = 0;
             vats[vatKey] = vat;
@@ -8969,7 +8979,7 @@ module.exports = function registerDesertTreasureII(api) {
   [FINAL_CELL_ACTIVE, FINAL_CELL_SOLUTION, FINAL_CELL_GUESS, FINAL_CELL_ATTEMPTS, FINAL_CELL_OPEN, FINAL_CELL_GEAR,
     FINAL_CELL_CHEST, FINAL_FIGURE_STARTED, FINAL_FIGURE_DEFEATED, "desert-treasure-ii:final-cell-pending",
     "desert-treasure-ii:final-cutscene-started", FINAL_WIGHT_INDEX, FINAL_WIGHTS_STARTED, FINAL_WIGHTS_COMPLETE].forEach((key) => api.persistAttribute(key));
-  [SUCELLUS_MUSHROOMS, SUCELLUS_VATS, SUCELLUS_POISONS, SUCELLUS_ENCOUNTER_STARTED, SUCELLUS_DEFEATED, SUCELLUS_WEST_ROOM,
+  [SUCELLUS_VATS, SUCELLUS_POISONS, SUCELLUS_ENCOUNTER_STARTED, SUCELLUS_DEFEATED, SUCELLUS_WEST_ROOM,
     SUCELLUS_WEST_ASSASSIN_TALKED,
     SUCELLUS_CELL_PROGRESS, SUCELLUS_CELL_ENTERED, SUCELLUS_CELL_ESCAPED, SUCELLUS_ASSASSIN_GONE, SUCELLUS_CAPTAIN_ACCEPTED,
     SUCELLUS_PRISON_GEAR, SUCELLUS_PRISON_PROGRESS, SUCELLUS_PRISON_CHECKPOINT, SUCELLUS_PRISON_COMPLETE].forEach((key) => api.persistAttribute(key));

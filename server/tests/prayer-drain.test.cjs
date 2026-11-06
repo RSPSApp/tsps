@@ -26,8 +26,8 @@ before(async () => {
 });
 
 function fixture(t, { points = 50 } = {}) {
-  const player = new Player(null), messages = [];
-  const sender = new Proxy({}, { get: () => () => sender });
+  const player = new Player(null), messages = [], sounds = [];
+  const sender = new Proxy({ sendSoundEffect(...args) { sounds.push(args); return sender; } }, { get: (target,key) => target[key] ?? (() => sender) });
   t.mock.method(player, 'getPacketSender', () => sender);
   t.mock.method(player, 'sendMessage', (text) => messages.push(text));
   player.setRegistered(true);
@@ -35,7 +35,7 @@ function fixture(t, { points = 50 } = {}) {
   player.getSkillManager().setCurrentLevel(Skill.PRAYER, points, false);
   player.getSkillManager().setMaxLevel(Skill.HITPOINTS, 99);
   player.getSkillManager().setCurrentLevel(Skill.HITPOINTS, 99, false);
-  return { player, messages, points: () => player.getSkillManager().getCurrentLevel(Skill.PRAYER) };
+  return { player, messages, sounds, points: () => player.getSkillManager().getCurrentLevel(Skill.PRAYER) };
 }
 
 /** Switches a prayer on and lets the free activation tick pass. */
@@ -104,6 +104,7 @@ test('Prayer at 0 switches every prayer off with the live message on the next ti
   assert.equal(PrayerHandler.isActivated(f.player, PrayerHandler.THICK_SKIN), false);
   assert.deepEqual(f.messages, [RUN_OUT]);
   assert.equal(f.player.isDrainingPrayer(), false);
+  assert.deepEqual(f.sounds.map(args => args.slice(0,3)), [[2672,0,0]], 'raw3167 tick136: one depletion synth, no per-prayer off whooshes');
 });
 
 test('Prayer drained to 0 by something else shuts the prayers off on the next tick too', (t) => {
@@ -113,4 +114,57 @@ test('Prayer drained to 0 by something else shuts the prayers off on the next ti
   tick(f.player, 1);
   assert.equal(PrayerHandler.isActivated(f.player, PrayerHandler.THICK_SKIN), false);
   assert.deepEqual(f.messages, [RUN_OUT]);
+});
+
+
+test('captured missing Prayer activations use private immediate synths and automatic replacements stay quiet', t => {
+  t.mock.method(PluginManager,'emitPrayerDisabled',()=>null);
+  const expected = { SHARP_EYE:2685,RIGOUR:2685,MYSTIC_WILL:2670,AUGURY:2670,PROTECT_ITEM:1982,HAWK_EYE:2666,
+    MYSTIC_LORE:2668,EAGLE_EYE:2665,MYSTIC_MIGHT:2669,RETRIBUTION:2682,REDEMPTION:2680,SMITE:2686,
+    PRESERVE:2679,CHIVALRY:3826,PIETY:3825 };
+  for (const [prayer,id] of Object.entries(expected)) {
+    const f=fixture(t); f.player.getSkillManager().setMaxLevel(Skill.DEFENCE,99);
+    PrayerHandler.activatePrayerPrayerId(f.player,PrayerHandler[prayer]);
+    assert.equal(f.player.getPrayerActive()[PrayerHandler[prayer]],true,prayer);
+    assert.deepEqual(f.sounds.map(args=>args.slice(0,3)),[[id,0,0]],prayer+' raw2990/selected prayer recordings');
+    PrayerHandler.activatePrayerPrayerId(f.player,PrayerHandler[prayer]);
+    assert.equal(f.sounds.length,1,'already-active prayer adds no sound');
+    PrayerHandler.deactivatePrayer(f.player,PrayerHandler[prayer]);
+    assert.deepEqual(f.sounds.at(-1).slice(0,3),[2663,0,0],'manual off is retained');
+  }
+  const f=fixture(t); f.player.getSkillManager().setMaxLevel(Skill.DEFENCE,99);
+  PrayerHandler.activatePrayerPrayerId(f.player,PrayerHandler.PROTECT_FROM_MELEE); f.sounds.length=0;
+  PrayerHandler.activatePrayerPrayerId(f.player,PrayerHandler.SMITE);
+  assert.deepEqual(f.sounds.map(args=>args[0]),[2686],'raw2990: replacing an incompatible prayer plays only its new activation');
+});
+
+
+test('a stale drain flag after the last manual off cannot emit a depletion sound or repeat shutdown', t => {
+  const f=fixture(t,{points:1}); activate(f.player,'THICK_SKIN');
+  f.player.getSkillManager().setCurrentLevel(Skill.PRAYER,0,false);
+  PrayerHandler.deactivatePrayer(f.player,PrayerHandler.THICK_SKIN);
+  tick(f.player,3);
+  assert.deepEqual(f.sounds.map(args=>args[0]),[2663]);
+  assert.deepEqual(f.messages,[]);
+  assert.equal(f.player.isDrainingPrayer(),false);
+});
+
+
+test('actual quick-prayer toggles play four activations but one manual group-off, with a quiet preset preclear', t => {
+  t.mock.method(PluginManager,'emitPrayerDisabled',()=>null);
+  const f=fixture(t);f.player.getSkillManager().setMaxLevel(Skill.DEFENCE,99);
+  const selected=Array(30).fill(null);
+  for(const name of ['STEEL_SKIN','ULTIMATE_STRENGTH','INCREDIBLE_REFLEXES','PROTECT_FROM_MELEE']) selected[PrayerHandler[name]]=PrayerData[name];
+  const quick=f.player.getQuickPrayers();quick.setPrayers(selected);
+  assert.equal(quick.handleWidgetAction(541,4,1),true);
+  assert.deepEqual(f.sounds.map(args=>args[0]),[2687,2691,2667,2676],'raw3277 quick-enable');
+  f.sounds.length=0;quick.handleWidgetAction(541,4,1);
+  assert.deepEqual(f.sounds.map(args=>args[0]),[2663],'raw3277 tick5053 has one off for four active prayers');
+  assert.equal(f.player.getPrayerActive().some(Boolean),false);
+  PrayerHandler.activatePrayerPrayerId(f.player,PrayerHandler.PROTECT_ITEM);f.sounds.length=0;
+  quick.handleWidgetAction(541,4,1);
+  assert.deepEqual(f.sounds.map(args=>args[0]),[2687,2691,2667,2676],'replacing the existing prayers adds no off sound');
+  quick.handleWidgetAction(541,4,1);quick.setPrayers(Array(30).fill(null));f.sounds.length=0;
+  quick.handleWidgetAction(541,4,1);
+  assert.deepEqual(f.sounds,[],'empty-preset refusal adds no activation/off');
 });

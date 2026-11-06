@@ -14,7 +14,13 @@ const Common = require("./Common.MageTrainingArena");
 
 const STREAK_ATTRIBUTE = "mage-training-arena:telekinetic-streak";
 const TELEKINETIC_GRAB_SPELL_ID = 1168;
-const MAZE_MOVE_CYCLES = 150;
+/** Telekinetic Grab's projectile reaches its impact graphic at this client-cycle offset. */
+const GRAB_IMPACT_CYCLES = 80;
+const GRAB_IMPACT_TICKS = Math.ceil(GRAB_IMPACT_CYCLES / 30);
+/** The guardian runs at two tiles per game tick after the May 2024 MTA update. */
+const MAZE_MOVE_CYCLES_PER_TILE = 15;
+const GUARDIAN_MOVE_SOUND = 1666;
+const GUARDIAN_COMPLETE_SOUND = 1665;
 /** The theatre's reach for its guardian: its statues stand inside a maze the player is outside. */
 const GUARDIAN_REACH = 24;
 /** Observe's camera height in the captured packet's 1/128-tile units (17.8 tiles above the maze). */
@@ -200,11 +206,16 @@ function isMazeGuardian(id) {
 function mazeGuardianAction(event) {
   const id = event.npc?.getId?.() ?? event.npcId;
   if (!isMazeGuardian(id)) return;
-  const action = event.definition?.getActions?.()?.[event.clickType - 1];
+  const action = String(
+    event.option ?? event.definition?.getActions?.()?.[event.clickType - 1] ?? ""
+  ).toLowerCase();
+  const session = sessionOf(event.player);
+  const defaultNewMaze = session?.solved && event.clickType === 1 &&
+    (event.npc?.getContentId?.(event.player) ?? event.npcId) === Common.ids.npcs.mazeGuardianComplete;
   const handled =
-    action === "Observe" ? observe(event) :
-    action === "Reset" ? reset(event) :
-    action === "New-maze" ? newMaze(event) :
+    action === "observe" ? observe(event) :
+    action === "reset" ? reset(event) :
+    action === "new-maze" || defaultNewMaze ? newMaze(event) :
     false;
   if (handled) event.handled = true;
 }
@@ -255,10 +266,24 @@ function castVisuals(player, target) {
 function moveStatue(session, destination) {
   const { player, npc, maze } = session;
   if (!npc) return;
+  const from = npc.getLocation();
+  const distance = Math.max(
+    Math.abs(destination.getX() - from.getX()),
+    Math.abs(destination.getY() - from.getY())
+  );
+  const moveCycles = Math.max(1, distance * MAZE_MOVE_CYCLES_PER_TILE);
   session.moving = true;
   npc.setNpcTransformationId?.(Common.ids.npcs.mazeGuardianMoving);
-  npc.exactMove(destination, { endCycles: MAZE_MOVE_CYCLES });
-  Common.later(Math.ceil(MAZE_MOVE_CYCLES / 30), () => {
+  npc.exactMove(destination, { endCycles: moveCycles });
+  Common.core.Sounds?.playAreaSound?.({
+    soundId: GUARDIAN_MOVE_SOUND,
+    x: from.getX(),
+    y: from.getY(),
+    level: from.getZ(),
+    loops: 1,
+    radius: 10,
+  });
+  Common.later(Math.ceil(moveCycles / 30), () => {
     if (sessionOf(player) !== session) return;
     session.moving = false;
     if (sameTile(destination, Common.toLocation(maze.goal))) {
@@ -276,16 +301,14 @@ function complete(session) {
   session.solved = true;
   npc?.setNpcTransformationId?.(Common.ids.npcs.mazeGuardianComplete);
   const at = npc?.getLocation?.() ?? player.getLocation();
-  for (const soundId of [1666, 1665]) {
-    Common.core.Sounds?.playAreaSound?.({
-      soundId,
-      x: at.getX(),
-      y: at.getY(),
-      level: at.getZ(),
-      loops: 1,
-      radius: 10,
-    });
-  }
+  Common.core.Sounds?.playAreaSound?.({
+    soundId: GUARDIAN_COMPLETE_SOUND,
+    x: at.getX(),
+    y: at.getY(),
+    level: at.getZ(),
+    loops: 1,
+    radius: 10,
+  });
 
   const points = Common.awardPoints(player, "telekinetic", telekinetic.mazePoints);
   player.getSkillManager().addExperiences(Common.core.Skill.MAGIC, telekinetic.mazeXp);
@@ -326,7 +349,12 @@ function castTelekinetic(event) {
 
   const destination = slide(target, direction);
   if (sameTile(destination, target)) return;
-  moveStatue(session, destination);
+  // Keep the guardian still, and ignore additional casts, until Telekinetic Grab lands.
+  session.moving = true;
+  Common.later(GRAB_IMPACT_TICKS, () => {
+    if (sessionOf(event.player) !== session || !session.npc) return;
+    moveStatue(session, destination);
+  });
 }
 
 // --- The area
@@ -372,7 +400,8 @@ function attach(api) {
 module.exports = {
   attach, enter, enterObject, observe, reset, newMaze, mazeGuardianAction, mazeGuardianRoute, isMazeGuardian, castTelekinetic, complete, moveStatue,
   startSession, removeSession, sessionOf, directionFor, randomMazeIndex, slide, canStep, updateOverlay, sendOverlay,
-  pointsComponent, streakComponent, defineArea, STREAK_ATTRIBUTE, TELEKINETIC_GRAB_SPELL_ID, MAZE_MOVE_CYCLES, GUARDIAN_REACH,
+  pointsComponent, streakComponent, defineArea, STREAK_ATTRIBUTE, TELEKINETIC_GRAB_SPELL_ID,
+  GRAB_IMPACT_CYCLES, GRAB_IMPACT_TICKS, MAZE_MOVE_CYCLES_PER_TILE, GUARDIAN_REACH,
   get area() { return area; },
   get sessions() { return sessions; },
 };

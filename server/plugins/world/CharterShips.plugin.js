@@ -358,7 +358,7 @@ function sail(player, destination, fare) {
     offerFare(player, destination, fare);
     return;
   }
-  const voyage = { landing: false };
+  const voyage = { landing: false, from: portAt(player.getLocation()) };
   voyages.set(player, voyage);
   setPreviousDestination(player, destination);
   inventory.deleteNumber(core.ItemIdentifiers.COINS, fare);
@@ -399,6 +399,7 @@ function sail(player, destination, fare) {
         voyage.landing = true;
         player.moveTo(new core.Location(destination.deck.x, destination.deck.y, destination.deck.z));
         voyage.landing = false;
+        pluginApi.emitCustomEvent("charter-ships:arrived", { player, from: voyage.from, to: destination });
       }
       if (tick === FADE_IN_TICKS) {
         setVarbit(player, MINIMAP_STATE_VARBIT, 0);
@@ -535,7 +536,8 @@ function transcriptOpensMap(event) {
 
     execute() {
       this.stop();
-      if (player.isRegistered()) openMap(player);
+      // A newer main modal owns this target; do not replace it with the old map.
+      if (player.isRegistered() && !player.getPacketSender().getSubInterfaceAt(MAIN_MODAL)) openMap(player);
     }
   })());
 }

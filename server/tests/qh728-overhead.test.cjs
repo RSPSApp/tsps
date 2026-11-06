@@ -177,7 +177,7 @@ test('overhead before and after each run once, in order around the forced chat',
   assert.deepEqual(log.map(({ text, turn }) => [turn, text]), [[0, 'One'], [2, 'Two']]);
 });
 
-test('a missing third actor runs before, then uses unavailable without after or the completion tail', () => {
+test('a third actor out of view goes to chat marked as theirs, and the chain goes on', () => {
   const log = [];
   let after = 0;
   let before = 0;
@@ -192,16 +192,58 @@ test('a missing third actor runs before, then uses unavailable without after or 
     request.after = () => after++;
   });
 
-  assert.equal(log.length, 0);
+  assert.equal(log.length, 0, 'nothing is said over an actor nobody can see');
   assert.equal(before, 1, 'before has already set up the scene when the actor is resolved');
+  assert.deepEqual(player.messages, ['Absent ghost: Boo']);
+  advanceTicks(2);
+  assert.equal(after, 1);
+  assert.deepEqual(actions.map((action) => action.stepId), ['reward'], 'the steps after it run');
+  assert.ok(player.manager.getCurrent() instanceof NpcDialogue);
+  assert.equal(player.manager.getCurrent().getText(), 'Completion tail');
+});
+
+test('a player unregistered during an out-of-view line gets neither after nor the steps after it', () => {
+  const log = [];
+  let after = 0;
+  const player = createPlayer(log);
+  const def = definition('Speaker');
+  const actions = play(player, createNpc(log, { name: 'Speaker', x: 3201, y: 3200 }), def, [
+    { type: 'line', speaker: 'Absent ghost', text: 'Boo', presentation: 'overhead' },
+    { type: 'action', id: 'reward', text: 'You win' },
+  ], (request) => {
+    request.after = () => after++;
+  });
+
+  assert.deepEqual(player.messages, ['Absent ghost: Boo']);
+  player.registered = false;
+  advanceTicks(2);
   assert.equal(after, 0);
   assert.deepEqual(actions, []);
-  assert.equal(player.removals, 1);
+  assert.equal(player.manager.getCurrent(), undefined);
+});
+
+test('an explicitly bound cast that is gone still ends the conversation', () => {
+  const log = [];
+  let after = 0;
+  const player = createPlayer(log);
+  const def = definition('Speaker');
+  const actions = play(player, createNpc(log, { name: 'Speaker', x: 3201, y: 3200 }), def, [
+    { type: 'line', speaker: 'Absent ghost', text: 'Boo', presentation: 'overhead' },
+    { type: 'action', id: 'reward', text: 'You win' },
+  ], (request) => {
+    request.actors = [createNpc(log, { name: 'Absent ghost', x: 3201, y: 3200, registered: false })];
+    request.after = () => after++;
+  });
+
+  advanceTicks(2);
+  assert.equal(log.length, 0);
+  assert.equal(after, 0);
+  assert.deepEqual(actions, []);
   assert.equal(player.manager.getCurrent(), undefined);
   assert.deepEqual(player.messages, ["That conversation isn't available right now."]);
 });
 
-test('ordinary speech before a missing overhead actor is preserved until its action is reached', () => {
+test('ordinary speech before an out-of-view overhead actor is shown first, and the chain goes on', () => {
   const log = [];
   let before = 0;
   let after = 0;
@@ -228,7 +270,9 @@ test('ordinary speech before a missing overhead actor is preserved until its act
   assert.equal(before, 1);
   assert.equal(after, 0);
   assert.equal(log.length, 0);
-  assert.equal(player.manager.getCurrent(), undefined);
+  advanceTicks(2);
+  assert.equal(after, 1);
+  assert.equal(player.manager.getCurrent().getText(), 'Completion tail');
 });
 
 test('a stale, hidden, remote or wrong-name event.npc falls back to the exact visible local actor', () => {
@@ -286,8 +330,10 @@ test('public combat-owned NPCs stay visible while foreign owner-only NPCs are re
   const foreign = createNpc(missingLog, { name: 'Speaker', x: 3200, y: 3200, owner: {}, ownerOnly: true, index: 1 });
   const missingPlayer = createPlayer(missingLog, { localNpcs: [foreign] });
   play(missingPlayer, foreign, def, [{ npc: 'Hello', presentation: 'overhead' }, { npc: 'Tail' }]);
-  assert.deepEqual(missingLog, []);
-  assert.equal(missingPlayer.manager.getCurrent(), undefined);
+  assert.deepEqual(missingLog, [], "nothing is said over another player's NPC");
+  assert.deepEqual(missingPlayer.messages, ['Speaker: Hello']);
+  advanceTicks(2);
+  assert.equal(missingPlayer.manager.getCurrent().getText(), 'Tail');
 });
 
 test('actor names resolve through getCurrentDefinition(player), not the base definition', () => {

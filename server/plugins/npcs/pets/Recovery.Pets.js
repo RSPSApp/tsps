@@ -82,6 +82,13 @@ function openNow(player, context) {
   SESSIONS.set(player, context);
   player.getPacketSender().sendInterface(group());
   sync(player, context);
+  if (context.area === null) {
+    api.emitCustomEvent("diary:task", {
+      player,
+      diary: "ardougne",
+      task: "check-what-pets-you-have-insured-with-probita-in",
+    });
+  }
 }
 function open(event) {
   const {player, npc} = event;

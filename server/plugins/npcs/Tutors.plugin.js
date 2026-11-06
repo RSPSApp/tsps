@@ -15,7 +15,12 @@
 const { getRegisteredQuests } = require("../quests/QuestRuntime");
 
 const CLAIM_ATTRIBUTE = "tutors.combat_claim_at";
+// The pre-Settings save of the ammo toggle; migrated into the Setting at login.
 const AUTO_EQUIP_ATTRIBUTE = "ranged:equip-ammo-on-pickup";
+// The same switch as Settings > Gameplay > "Ammo-picking behaviour" (setting id 305).
+const AMMO_PICKUP_SETTING_ID = 305;
+const AMMO_PICKUP_VARBIT = 5697;
+const SETTINGS_VALUES_ATTRIBUTE = "settings:values";
 const CLAIM_COOLDOWN_MS = 30 * 60 * 1000;
 const TRAINING_ARROW_COUNT = 25;
 const RUNE_COUNT = 30;
@@ -108,8 +113,12 @@ function onClaimCooldown(player) {
   return Date.now() - (Number(player.getAttribute(CLAIM_ATTRIBUTE)) || 0) < CLAIM_COOLDOWN_MS;
 }
 
+/** Adds the item and returns how many were actually received (a full inventory can take none). */
 function give(player, itemId, amount = 1) {
-  player.getInventory().adds(itemId, amount);
+  const inventory = player.getInventory();
+  const before = inventory.getAmount(itemId);
+  inventory.adds(itemId, amount);
+  return inventory.getAmount(itemId) - before;
 }
 
 function claimed(player) {
@@ -278,15 +287,13 @@ function handleAction(event) {
     }
   } else if (npcId === NPC.RANGED) {
     if (/training shortbow and 25 arrows/i.test(text)) {
-      give(player, ITEM.TRAINING_BOW);
-      give(player, ITEM.TRAINING_ARROWS, TRAINING_ARROW_COUNT);
-      claimed(player);
+      const bow = give(player, ITEM.TRAINING_BOW);
+      const arrows = give(player, ITEM.TRAINING_ARROWS, TRAINING_ARROW_COUNT);
+      if (bow > 0 && arrows >= TRAINING_ARROW_COUNT) claimed(player);
     } else if (/gives you a training shortbow/i.test(text)) {
-      give(player, ITEM.TRAINING_BOW);
-      claimed(player);
+      if (give(player, ITEM.TRAINING_BOW) > 0) claimed(player);
     } else if (/gives you 25 training arrows/i.test(text)) {
-      give(player, ITEM.TRAINING_ARROWS, TRAINING_ARROW_COUNT);
-      claimed(player);
+      if (give(player, ITEM.TRAINING_ARROWS, TRAINING_ARROW_COUNT) >= TRAINING_ARROW_COUNT) claimed(player);
     } else if (/give back you training (bow|arrows)/i.test(text)) {
       const itemId = /bow/i.test(text) ? ITEM.TRAINING_BOW : ITEM.TRAINING_ARROWS;
       player.getInventory().deleteNumber(itemId, player.getInventory().getAmount(itemId));
@@ -310,11 +317,11 @@ function handleAction(event) {
  */
 function handleRuneReceive(player, text) {
   if (/air runes/i.test(text)) {
-    give(player, ITEM.AIR_RUNE, RUNE_COUNT);
+    if (give(player, ITEM.AIR_RUNE, RUNE_COUNT) < RUNE_COUNT) return;
   } else if (/mind runes/i.test(text)) {
-    give(player, ITEM.MIND_RUNE, RUNE_COUNT);
-    if (!owns(player, ITEM.AIR_RUNE) && freeSlots(player) > 0) {
-      give(player, ITEM.AIR_RUNE, RUNE_COUNT);
+    if (give(player, ITEM.MIND_RUNE, RUNE_COUNT) < RUNE_COUNT) return;
+    if (!owns(player, ITEM.AIR_RUNE) && freeSlots(player) > 0
+      && give(player, ITEM.AIR_RUNE, RUNE_COUNT) >= RUNE_COUNT) {
       gaveAir.add(player);
     }
   } else {
@@ -387,14 +394,27 @@ function claimRunes({ player, npc, npcId }) {
 /** "Can you toggle my ammo to equip when I pick it up please?" on the Ranged combat tutor. */
 function handleAmmoToggleChoice({ player, npcId, option }) {
   if (npcId !== NPC.RANGED) return;
-  if (option === "Automatically equip it.") player.setAttribute(AUTO_EQUIP_ATTRIBUTE, true);
-  else if (option === "Place it in my inventory.") player.setAttribute(AUTO_EQUIP_ATTRIBUTE, false);
+  if (option !== "Automatically equip it." && option !== "Place it in my inventory.") return;
+  const enabled = option === "Automatically equip it.";
+  pluginApi?.emitCustomEvent("settings:set", {
+    player, settingId: AMMO_PICKUP_SETTING_ID, value: enabled ? 1 : 0,
+  });
+}
+
+/** A pre-Settings tutor choice becomes the saved Setting once, unless one is already saved. */
+function migrateLegacyAmmoToggle({ player }) {
+  if (player?.getAttribute?.(AUTO_EQUIP_ATTRIBUTE) !== true) return;
+  const saved = player.getAttribute(SETTINGS_VALUES_ATTRIBUTE);
+  if (saved && Object.prototype.hasOwnProperty.call(saved, `varbit:${AMMO_PICKUP_VARBIT}`)) return;
+  pluginApi?.emitCustomEvent("settings:set", {
+    player, settingId: AMMO_PICKUP_SETTING_ID, value: 1,
+  });
 }
 
 /** With the toggle on, ground ammo matching the worn ammo slot stacks there, not in the bag. */
 function autoEquipPickedUpAmmo(event) {
   const player = event.player;
-  if (player?.getAttribute?.(AUTO_EQUIP_ATTRIBUTE) !== true) return;
+  if (player?.getPacketSender?.().getVarbit?.(AMMO_PICKUP_VARBIT) !== 1) return;
   const equipment = player.getEquipment();
   const worn = equipment.get(core.Equipment.AMMUNITION_SLOT);
   if (!worn || worn.getId() !== event.groundItemId) return;
@@ -435,6 +455,7 @@ module.exports = {
     init(api);
     api.persistAttribute(CLAIM_ATTRIBUTE);
     api.persistAttribute(AUTO_EQUIP_ATTRIBUTE);
+    api.onPlayerLogin(migrateLegacyAmmoToggle);
     api.onNpcDialogueVariant(selectVariant);
     api.onNpcDialogueCondition(answerCondition);
     api.onCustomEvent("npc-dialogue:action", handleAction);

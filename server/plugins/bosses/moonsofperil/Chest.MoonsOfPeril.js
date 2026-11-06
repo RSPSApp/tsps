@@ -159,10 +159,9 @@ function close(player) {
 
 /** Into the inventory: all of it, or as much as there is room for. */
 function take(player, entry, amount) {
-  const { Item, ItemDefinition } = Common.core;
+  const { Item } = Common.core;
   const inventory = player.getInventory();
-  const stackable = ItemDefinition.forId(entry.id)?.isStackable?.() === true;
-  const room = stackable ? (inventory.contains(entry.id) || inventory.getFreeSlots() > 0 ? amount : 0) : Math.min(amount, inventory.getFreeSlots());
+  const room = inventory.getAddableAmount(new Item(entry.id, amount));
   if (room <= 0) {
     inventory.full?.();
     return 0;
@@ -231,8 +230,10 @@ function bankAll({ player }) {
   for (const entry of items) {
     const bank = bankFor(player, unnoted(entry.id));
     if (!bank) continue;
-    bank.add(new Item(unnoted(entry.id), entry.amount), false);
-    entry.amount = 0;
+    const room = bank.getAddableAmount(new Item(unnoted(entry.id), entry.amount));
+    if (room <= 0) continue;
+    bank.add(new Item(unnoted(entry.id), room), false);
+    entry.amount -= room;
   }
   setContents(player, items);
   if (contents(player).length > 0) {

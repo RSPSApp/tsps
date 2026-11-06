@@ -9,8 +9,8 @@
  */
 export const DEVICE_OPTION_SCREEN_BRIGHTNESS = 6;
 export const SCREEN_BRIGHTNESS_MAX = 100;
-/** Gamma 0.795: today's look (the renderer's long-standing 0.8), on the slider's 5-step grid. */
-export const DEFAULT_SCREEN_BRIGHTNESS = 35;
+/** Start the Settings slider at its midpoint (gamma 0.75). */
+export const DEFAULT_SCREEN_BRIGHTNESS = 50;
 
 const DARKEST_GAMMA = 0.9;
 const BRIGHTEST_GAMMA = 0.6;

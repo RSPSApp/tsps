@@ -1,13 +1,17 @@
 import { createElement, lazy, type ReactNode } from "react";
 import { Plugin, type PluginDescriptor } from "@runelite/client/plugins/Plugin";
-import type { ConfigManager } from "@runelite/client/config/ConfigManager";
+import { inject } from "@runelite/client/plugins/PluginInjector";
+import { TimersConfig } from "./TimersConfig";
+import { appendAttackTimerOverhead } from "../attacktimer/AttackTimerOverhead";
 import type { WebGLOsrsRendererHost } from "../../../render/render/hostInterface";
 import type { OverheadTextEntry } from "../../../ui/devoverlay/Overlay";
+import { ConfigManager } from "@runelite/client/config/ConfigManager";
 import type { OsrsClient } from "../../OsrsClient";
 import { showAllTimers } from "../../../common/utils/DeviceUtil";
-import { appendAttackTimerOverhead } from "../attacktimer/AttackTimerOverhead";
 import { VengeanceTimer } from "../vengeancetimer/VengeanceTimer";
 import { StatusTimer } from "./StatusTimer";
+import { getAttackTimerTicks } from "../attacktimer/attackTimerState";
+import { getCurrentTick } from "../../../network/serverConnection/timing";
 
 const TimersOverlay = lazy(() =>
     import("./TimersOverlay").then((m) => ({ default: m.TimersOverlay })),
@@ -50,6 +54,9 @@ export class TimersPlugin extends Plugin {
         configKey: "timersplugin",
     };
 
+    static config = TimersConfig;
+    readonly config = inject(ConfigManager).getConfig(TimersConfig);
+
     readonly poison = new StatusTimer();
     readonly freeze = new StatusTimer();
     readonly antifire = new StatusTimer();
@@ -66,9 +73,9 @@ export class TimersPlugin extends Plugin {
     private readonly listeners = new Set<() => void>();
 
     /** Number of visible infoboxes before a slot, used to pack the shared combat row. */
-    visibleInfoboxCount(before = 6, now = Date.now()): number {
+    visibleInfoboxCount(before = 7, now = Date.now()): number {
         if (!this.isEnabled()) return 0;
-        if (showAllTimers) return before;
+        if (showAllTimers) return Math.min(before, this.config.showAttackTimer() ? 6 : 7);
         let count = 0;
         for (let i = 0; i < Math.min(before, this.effects.length); i++) {
             const timer = this.effects[i],
@@ -77,6 +84,7 @@ export class TimersPlugin extends Plugin {
                 count++;
         }
         if (before > 5 && this.vengeance.getRemainingSeconds(now) > 0) count++;
+        if (before > 6 && !this.config.showAttackTimer() && this.attackTimerTicks() > 0) count++;
         return count;
     }
 
@@ -104,14 +112,11 @@ export class TimersPlugin extends Plugin {
         maxEntries: number,
         playerDefaultHeightTiles: number | undefined,
     ): void {
-        if (this.isEnabled())
-            appendAttackTimerOverhead(
-                host,
-                index,
-                output,
-                maxEntries,
-                playerDefaultHeightTiles,
-                showAllTimers,
-            );
+        if (this.isEnabled() && this.config.showAttackTimer())
+            appendAttackTimerOverhead(host, index, output, maxEntries, playerDefaultHeightTiles, showAllTimers);
+    }
+
+    attackTimerTicks(): number {
+        return this.isEnabled() ? getAttackTimerTicks(getCurrentTick()) : 0;
     }
 }

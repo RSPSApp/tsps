@@ -1,11 +1,32 @@
 const assert = require('node:assert/strict');
 const path = require('node:path');
-const { before, test } = require('node:test');
+const { before, afterEach, test } = require('node:test');
 const { Server } = require('../dist/Server');
 Server.installProductionPathResolver();
 const { PluginManager } = require('../dist/plugins/PluginManager');
 const runtime = require('../plugins/quests/QuestRuntime');
 const sailingContent = require('../plugins/skills/sailing/SailingContent.Sailing');
+const unitHelms = new Set();
+
+afterEach(() => {
+  const { TaskManager } = require('../dist/game/task/TaskManager');
+  const { BoatManager } = require('../dist/game/content/sailing/BoatManager');
+  let firstError;
+  for (const { player, api, hooks } of unitHelms) {
+    for (const logout of hooks.logout) {
+      try { logout({ player }); } catch (error) { firstError ??= error; }
+    }
+    try { api.emitCustomEvent('sailing:leave-helm', { player }); }
+    catch (error) { firstError ??= error; }
+    finally {
+      try { api.emitCustomEvent('sailing:leave-supplied-panel', { player, boat: BoatManager.getBoatAboard(player) }); }
+      catch (error) { firstError ??= error; }
+      try { TaskManager.cancelTasks(player); } catch (error) { firstError ??= error; }
+    }
+  }
+  unitHelms.clear();
+  if (firstError) throw firstError;
+});
 
 before(async () => {
   await require('../dist/game/cache/CachePipeline').CachePipeline.initialize(path.resolve(__dirname, '..'));
@@ -58,7 +79,7 @@ function setup() {
     onPlayerLogin(fn) { hooks.login.push(fn); },
     onPlayerLogout(fn) { hooks.logout.push(fn); },
     spawnNpc(definition) {
-      const npc = { definition, getId: () => definition.id, getLocation: () => new core.Location(definition.x ?? 0, definition.y ?? 0, definition.z ?? 0), isRegistered: () => true, isNpc: () => true, isPlayer: () => false, getAsNpc() { return npc; }, getArea: () => npc.__area, setArea: (area) => { npc.__area = area; }, isOwnerOnly: () => definition.ownerOnly, getOwner: () => definition.owner };
+      const npc = { definition, getId: () => definition.id, getLocation: () => new core.Location(definition.x ?? 0, definition.y ?? 0, definition.z ?? 0), isRegistered: () => true, isNpc: () => true, isPlayer: () => false, getAsNpc() { return npc; }, getArea: () => npc.__area, getPrivateArea: () => npc.__area ?? null, setArea: (area) => { npc.__area = area; }, isOwnerOnly: () => definition.ownerOnly, getOwner: () => definition.owner, setMobileInteraction(target) { npc.target = target; } };
       return npc;
     },
     removeNpc() {},
@@ -67,12 +88,15 @@ function setup() {
     getWorld() { return { getNpcs: () => [] }; },
   }, { get(target, key) { return target[key] ?? (() => {}); } });
 
-  const attrs = new Map(), inventory = new Map(), varbits = new Map(), messages = [], xp = [], interfaces = [], scripts = [], cameras = [], hints = [], closedInterfaces = 0;
+  const attrs = new Map(), inventory = new Map(), varbits = new Map(), messages = [], xp = [], interfaces = [], scripts = [], cameras = [], hints = [], modes = [], flags = [], closedInterfaces = 0;
   const levels = new Map();
   let location = new core.Location(3025, 3208, 0);
   const sailing = { boats: [], activeBoatSlot: null };
   const sender = new Proxy({
     sendVarbit(id, value) { varbits.set(id, value); return sender; },
+    getVarbit(id) { return varbits.get(id) ?? 0; },
+    sendInteractionMode(...args) { modes.push(args); return sender; },
+    sendResetInteractionMode(id) { modes.push(['reset', id]); return sender; },
     sendInterface(id) { interfaces.push(id); return sender; },
     sendInterfaceScript(id, args) { scripts.push({ id, args }); return sender; },
     sendInterfaceRemoval() { closedInterfaces++; return sender; },
@@ -82,11 +106,13 @@ function setup() {
     sendCameraReset() { cameras.push(['reset']); return sender; },
     sendCameraTarget(target) { cameras.push(['target', target]); return sender; },
     sendSubInterface(uid, id, type, options) { scripts.push({ uid, id, type, ...options }); return sender; },
+    sendInterfaceFlagsRange(...args) { flags.push(args); return sender; },
     closeSubInterface(uid) { scripts.push({ close: uid }); return sender; },
     sendPositionalHint(...args) { hints.push(args.slice(0, 4)); return sender; },
     clearHintArrow() { hints.push(['clear']); return sender; },
     sendConfig(id, value) { varbits.set(id, value); return sender; },
     sendInterfaceRemoval() { return sender; },
+    hasInterruptibleInterface() { return false; },
   }, { get(target, key) { return target[key] ?? (() => sender); } });
   const player = {
     getAttribute: (key) => attrs.get(key),
@@ -113,20 +139,26 @@ function setup() {
     moveTo(value) { location = value; },
     getSailing: () => sailing,
     isRegistered: () => true,
+    getHitpoints: () => 99,
+    isDying: false,
     isPlayerBot: () => false,
     getIndex: () => 1,
+    getLocalPlayers: () => [],
     isPlayer: () => true,
     getAsPlayer() { return player; },
     isNpc: () => false,
     getEquipment: () => ({ getItems: () => [] }),
     getDialogueManager: () => ({ isActive: () => false, startDialogues() {}, getCurrent() { return null; } }),
-    getPrivateArea: () => null,
+    getPrivateArea: () => player.__area ?? null,
+    setMobileInteraction(target) { player.target = target; },
+    setPositionToFace(target) { player.face = target; },
     getMovementQueue: () => ({ reset() { return this; }, setBlockMovement() { return this; } }),
     setUntargetable() {},
     performAnimation() {},
     getArea: () => player.__area,
     setArea: (area) => { player.__area = area; },
     getUsername: () => 'parity',
+    getDisplayName: () => 'parity',
     setEnteredAmountAction(action) { player.amountAction = action; },
     getEnteredAmountAction() { return player.amountAction; },
   };
@@ -168,8 +200,13 @@ function setup() {
     lastPrompt.pairs[index + 1]();
   };
   const clickObject = (objectId) => { for (const fn of hooks.objects) fn({ player, objectId, clickType: 1 }); };
-  const clickInterface = (groupId, childId) => { const event = { player, groupId, childId, handled: false }; for (const fn of hooks.interfaceClicks) fn(event); return event; };
-  return { api, core, hooks, player, attrs, persistentKeys, saveState, restoreState, relog, inventory, varbits, messages, xp, levels, sailing, location, emit, action, line, variant, tickOnce, answerPrompt, clickObject, clickInterface, interfaces, scripts, cameras, hints, get lastLineSpeakerId() { return lastLineSpeakerId; }, get closedInterfaces() { return closedInterfaces; }, prompt: () => lastPrompt, setLocation(value) { location = value; } };
+  const clickInterface = (groupId, childId, slot) => { const event = { player, groupId, childId, slot, handled: false }; for (const fn of hooks.interfaceClicks) fn(event); return event; };
+  // These quest-unit calls still use their direct object hook. Register the real
+  // sailing control requests; dispatcher order is outside this quest-unit helper.
+  require('../plugins/skills/sailing/Helm.plugin').register({ ...api, onObjectInteraction() {}, onObjectRoute() {} });
+  require('../plugins/skills/sailing/Sailing.plugin').register({ ...api, onPlayerLogin() {} });
+  unitHelms.add({ player, api, hooks });
+  return { api, core, hooks, player, attrs, persistentKeys, saveState, restoreState, relog, inventory, varbits, messages, xp, levels, sailing, location, emit, action, line, variant, tickOnce, answerPrompt, clickObject, clickInterface, interfaces, scripts, cameras, hints, modes, flags, get lastLineSpeakerId() { return lastLineSpeakerId; }, get closedInterfaces() { return closedInterfaces; }, prompt: () => lastPrompt, setLocation(value) { location = value; } };
 }
 
 function clickAction(h, objectId, name, actions, optionIndex) {
@@ -197,32 +234,37 @@ test('Pandemonium uses the captured varbit stages and the real raft cargo route'
   h.action(h.core.NpcIdentifiers.WILL, 'BDfVg8');
   assert.equal(quest.getStage(h.player), 6);
   h.tickOnce(); h.tickOnce();
-  assert.ok(h.cameras.some((camera) => camera[0] === 'move' && camera[3] === 550), 'tutorial ship camera');
+  assert.ok(h.cameras.some((camera) => camera[0] === 'target' && Number.isInteger(camera[1].worldEntity)), 'free tutorial ship camera');
   h.hooks.named.get('Will')['Talk-to']({ player: h.player, npcId: h.core.NpcIdentifiers.WILL, definition: { getName: () => 'Will' } });
+  assert.equal(quest.getStage(h.player), 6, 'the instructions are still pending');
+  h.emit('npc-dialogue:line', { npcId: h.core.NpcIdentifiers.WILL, text: 'Over to you, [player name]! Take the helm when ready.',
+    step: { speaker: 'Anne' }, pages: [{ page: 'Pandemonium', variants: ['at-the-boat-talking-to-anne-or-will'] }] }).before();
   assert.equal(quest.getStage(h.player), 8);
   h.line(h.core.NpcIdentifiers.WILL, 'A line', { speaker: 'Will' });
   assert.equal(h.lastLineSpeakerId, 14958, 'boat Will chathead');
   h.emit('npc-dialogue:choice', { npcId: h.core.NpcIdentifiers.WILL, option: "Okay, I'll get to it." });
-  assert.equal(quest.getStage(h.player), 10);
+  assert.equal(quest.getStage(h.player), 8);
   const { BoatManager } = require('../dist/game/content/sailing/BoatManager');
   const boat = BoatManager.all().find((entry) => entry.ownerPlayerId === 1);
   const helm = BoatManager.getSpec(boat).locs.find((loc) => loc.part === 'helm');
   assert.equal(clickAction(h, helm.id, 'Helm', ['Navigate', 'Escape'], 0).handled, true);
   assert.equal(quest.getStage(h.player), 10, 'helm alone waits for sails');
-  const sailActions = h.core.CacheDefinitions.getObject(29506).actions;
+  const sailActions = h.core.CacheDefinitions.getObject(59553).actions;
   assert.equal(sailActions[1], 'Set', 'cache Sails Set is option 2');
-  assert.equal(clickAction(h, 29506, 'Sails', sailActions, 1).handled, true);
+  assert.equal(clickAction(h, 59553, 'Sails', sailActions, 1).handled, true);
   assert.equal(quest.getStage(h.player), 10, 'sails start the voyage');
-  boat.fineX = 3032 * 128 + 64;
-  boat.fineY = 3050 * 128;
+  boat.fineX = 3035 * 128 + 32;
+  boat.fineY = 3048 * 128 + 96;
   BoatManager.tick();
   assert.equal(quest.getStage(h.player), 12, 'the ship arrives at the captured wreck point');
   h.hooks.named.get('Will')['Talk-to']({ player: h.player, npcId: h.core.NpcIdentifiers.WILL, definition: { getName: () => 'Will' } });
   assert.equal(quest.getStage(h.player), 14);
   h.action(h.core.NpcIdentifiers.WILL, 'p40qKY');
-  assert.equal(quest.getStage(h.player), 16);
+  assert.equal(quest.getStage(h.player), 14, 'the cup popup precedes the actual shore finish');
   h.action(h.core.NpcIdentifiers.WILL, 'hQBGdU');
   assert.equal(BoatManager.all().some((entry) => entry.ownerPlayerId === 1), false, 'the tutorial ship and crew are cleaned up');
+  // The real native scene suite proves the owned shore callback; this hook fixture resumes after it.
+  quest.setStage(h.player, 16);
   h.line(h.core.NpcIdentifiers.SQUAWKING_STEVE_BEANIE, 'You should speak to Ribs.');
   assert.equal(quest.getStage(h.player), 18);
   h.emit('npc-dialogue:choice', { npcId: h.core.NpcIdentifiers.RIBS, option: 'No, tell me about him.' });
@@ -512,40 +554,53 @@ test('Pandemonium uses the actual static-ship blueprint and its lifecycle hooks'
   }
   const definition = StaticShips.definitions.get('pandemonium_tutorial_ship');
   assert.ok(definition, 'shared data supplies the tutorial ship');
-  assert.deepEqual(definition.walkableTiles, [[3, 2], [3, 3], [3, 4]]);
-  assert.equal(definition.deckLocs.find((loc) => loc.part === 'helm').id, 59554);
+  assert.deepEqual(definition.walkableTiles, [[3, 2], [3, 3], [3, 4], [3, 5], [4, 2], [4, 3], [4, 4], [4, 5]]);
+  assert.equal(definition.deckLocs.find((loc) => loc.part === 'helm').id, 59620);
   const quest = load(h, 'Pandemonium.Quest.js');
   h.action(h.core.NpcIdentifiers.WILL, 'BDfVg8');
   assert.equal(StaticShips.all().length, 1, 'one owner-only static ship');
   const ship = StaticShips.all()[0];
   assert.equal(ship.boat.ownerOnly, true);
   assert.equal(ship.boat.ownerPlayerId, 1);
-  assert.equal(`${ship.boat.tileX},${ship.boat.tileY}`, '3054,3193', 'captured start root');
+  assert.equal(`${ship.boat.tileX},${ship.boat.tileY}`, '3056,3190', 'captured start root');
   assert.equal(BoatManager.getBoatAboard(h.player), ship.boat, 'the player boards the real deck');
-  assert.ok(BoatManager.getSpec(ship.boat).locs.some((loc) => loc.id === 59554), 'real helm loc on deck');
+  assert.ok(BoatManager.getSpec(ship.boat).locs.some((loc) => loc.id === 59620), 'real helm loc on deck');
   assert.ok(StaticShips.get(ship.boat.entityIndex), 'the shared registry owns it');
   quest.setStage(h.player, 10);
   const sail = BoatManager.getSpec(ship.boat).locs.find((loc) => loc.part === 'sails');
-  const sailActions = h.core.CacheDefinitions.getObject(29506).actions;
-  assert.equal(clickAction(h, 29506, 'Sails', sailActions, 0).handled, false, 'the Trim option is not the tutorial raise-sails action');
+  const sailActions = h.core.CacheDefinitions.getObject(59553).actions;
+  assert.equal(clickAction(h, 59553, 'Sails', sailActions, 0).handled, false, 'the Trim option is not the tutorial raise-sails action');
   assert.equal(ship.boat.moveMode, 0);
-  clickAction(h, 29506, 'Sails', sailActions, 1);
+  clickAction(h, 59553, 'Sails', sailActions, 1);
   assert.equal(quest.getStage(h.player), 10, 'sails alone do not reach the wreck');
   assert.equal(ship.boat.moveMode, 0, 'the ship does not move before the helm');
-  clickAction(h, 59554, 'Helm', ['Navigate', 'Escape'], 0);
+  clickAction(h, 59620, 'Helm', ['Navigate', 'Escape'], 0);
   assert.equal(quest.getStage(h.player), 10, 'helm alone does not reach the wreck');
-  clickAction(h, 29506, 'Sails', sailActions, 1);
+  clickAction(h, 59553, 'Sails', sailActions, 1);
   assert.equal(quest.getStage(h.player), 10, 'raising sails starts the voyage, not arrival');
-  assert.equal(ship.boat.moveMode, 1, 'the captured voyage runs at half sail');
+  assert.equal(ship.boat.moveMode, 2, 'the captured voyage runs at full sail');
   const startY = ship.boat.fineY;
-  for (let tick = 0; tick < 300 && quest.getStage(h.player) < 12; tick++) BoatManager.tick();
+  // These are the recorder's actual heading inputs, driven by this helper actor rather than
+  // replayed by production on a timer. The native regression separately decodes real packets.
+  const headings = new Map([[0, 0], [25, 2], [31, 1], [61, 0]]);
+  for (let tick = 0; tick < 300 && quest.getStage(h.player) < 12; tick++) {
+    if (headings.has(tick)) BoatManager.setHelmHeading(h.player, headings.get(tick));
+    BoatManager.tick();
+  }
   assert.notEqual(ship.boat.fineY, startY, 'the static ship actually moves on the real map');
   assert.equal(quest.getStage(h.player), 12, `the real collision route reaches the captured wreck (boat ${ship.boat.tileX},${ship.boat.tileY})`);
-  assert.ok(Math.abs(ship.boat.tileX - 3032) <= 2 && Math.abs(ship.boat.tileY - 3050) <= 2,
+  assert.ok(Math.abs(ship.boat.tileX - 3035) <= 2 && Math.abs(ship.boat.tileY - 3048) <= 2,
     'the boat stops at the captured wreck root');
   assert.equal(h.varbits.get(18315), 1, 'reached-wreck varbit set on arrival');
-  assert.ok(BoatManager.getSpec(ship.boat).locs.some((loc) => loc.id === 60482), 'real placed salvaging hook on the deck');
-  assert.ok(BoatManager.getSpec(ship.boat).locs.some((loc) => loc.id === 60464), 'wreck loc present');
+  assert.equal(ship.boat.helmPlayerId, undefined, 'arrival releases the live helm without losing the earned capability');
+  assert.equal(h.varbits.get(sailingContent.VARBIT.FACILITY_LOCKEDIN), 0, 'arrival frees the facility for the salvage hook');
+  assert.equal(h.varbits.get(sailingContent.VARBIT.SIDEPANEL_PLAYER_AT_HELM), 0);
+  assert.equal(h.varbits.get(sailingContent.VARBIT.SIDEPANEL_HELM_STATUS), 1);
+  assert.equal(h.varbits.get(sailingContent.VARBIT.SIDEPANEL_BOAT_MOVE_MODE), 0);
+  assert.equal(h.attrs.get('pandemonium:tutorial-helm'), true);
+  assert.equal(h.attrs.get('pandemonium:tutorial-sails'), true);
+  assert.ok(BoatManager.getSpec(ship.boat).locs.some((loc) => loc.id === 60480), 'the placed salvage parent is already on the deck');
+  assert.equal(BoatManager.getSpec(ship.boat).locs.some((loc) => loc.id === 60464), false, 'the world wreck is not added to the deck');
   const firstIndex = ship.boat.entityIndex;
   for (const login of h.hooks.login) login({ player: h.player });
   assert.equal(StaticShips.all().length, 1, 'relog replaces the tutorial ship');
@@ -579,8 +634,8 @@ test('Pandemonium spawns the captured crew on the static deck at interactable co
     assert.ok(will && anne, 'the deck crew spawns the canonical boat parents 14958/14963');
     assert.equal(calls.some((call) => call.npcId === 14959 || call.npcId === 14964), false,
       'the deck does not spawn the dialogue children directly');
-    assert.deepEqual([will.x, will.y], [3, 2], 'Will uses the captured placeholder deck tile');
-    assert.deepEqual([anne.x, anne.y], [4, 3], 'Anne uses the captured deck tile beside the helm');
+    assert.deepEqual([will.x, will.y], [4, 3], 'Will uses his captured deck tile');
+    assert.deepEqual([anne.x, anne.y], [3, 2], 'Anne uses her captured deck tile');
     const boarding = ship.spec.boardingTile;
     for (const call of [will, anne]) {
       const distance = Math.max(Math.abs(call.x - boarding.x), Math.abs(call.y - boarding.y));
@@ -622,7 +677,7 @@ test('Pandemonium owner spawns canonical parents and keeps the cache dialogue ch
   }
 });
 
-test('Pandemonium salvage uses the real placed hook 60482, grants once and persists', () => {
+test('Pandemonium hooks without an owned ship cannot Deploy and a carried cup persists for pending retry', () => {
   const h = setup();
   const quest = load(h, 'Pandemonium.Quest.js');
   h.attrs.set('pandemonium:stage-version', 2);
@@ -632,16 +687,16 @@ test('Pandemonium salvage uses the real placed hook 60482, grants once and persi
     for (const fn of h.hooks.objects) fn(event);
     return event;
   };
-  assert.equal(click(60480).handled, false, 'the unnamed 60480 twin is not the placed hook');
-  assert.equal(click(60482).handled, true, 'the real placed Salvaging hook is claimed');
+  assert.equal(click(60480).handled, false, 'a parent id alone does not establish an owned tutorial ship');
+  assert.equal(click(60482).handled, false, 'a visible-child id alone cannot establish ownership either');
   h.action(h.core.NpcIdentifiers.WILL, 'p40qKY');
-  assert.equal(quest.getStage(h.player), 16);
+  assert.equal(quest.getStage(h.player), 14);
   assert.equal(h.inventory.get(h.core.ItemIdentifiers.OLD_CUP), 1);
   h.action(h.core.NpcIdentifiers.WILL, 'p40qKY');
   assert.equal(h.inventory.get(h.core.ItemIdentifiers.OLD_CUP), 1, 'the cup is granted once');
   const saved = h.saveState();
   h.relog(saved);
-  assert.equal(quest.getStage(h.player), 16, 'the salvaged stage survives relog');
+  assert.equal(quest.getStage(h.player), 14, 'the unfinished shore stage survives relog for an owned retry');
 });
 
 test('Pandemonium relog restores stages 12/14 at the earned wreck, docked and armed once', () => {
@@ -655,19 +710,21 @@ test('Pandemonium relog restores stages 12/14 at the earned wreck, docked and ar
   for (const login of h.hooks.login) login({ player: h.player });
   let ship = StaticShips.all()[0];
   assert.ok(ship, 'stage 12 login restores the actual static ship');
-  assert.equal(ship.boat.tileX, 3032);
-  assert.equal(ship.boat.tileY, 3050);
+  assert.equal(ship.boat.tileX, 3035);
+  assert.equal(ship.boat.tileY, 3048);
   assert.equal(BoatManager.getBoatAboard(h.player), ship.boat, 'the player is restored on the deck');
   assert.equal(ship.boat.moveMode, 0, 'the voyage is stopped at the wreck');
+  assert.equal(ship.boat.helmPlayerId, undefined, 'stage 12 recovery does not reacquire a live helm');
+  assert.equal(h.varbits.get(sailingContent.VARBIT.FACILITY_LOCKEDIN), 0);
+  assert.equal(h.varbits.get(sailingContent.VARBIT.SIDEPANEL_PLAYER_AT_HELM), 0);
   const spec = BoatManager.getSpec(ship.boat);
-  assert.equal(spec.locs.filter((loc) => loc.id === 60482).length, 1, 'the placed hook is not duplicated');
-  assert.equal(spec.locs.filter((loc) => loc.id === 60464).length, 1, 'the wreck is not duplicated');
+  assert.equal(spec.locs.filter((loc) => loc.id === 60480).length, 1, 'the placed hook is not duplicated');
+  assert.equal(spec.locs.filter((loc) => loc.id === 60464).length, 0, 'the real-world wreck is not put on the deck');
   // Stage 12 still has to talk to Will before the hook becomes a salvage action.
   h.hooks.named.get('Will')['Talk-to']({ player: h.player, npcId: h.core.NpcIdentifiers.WILL, definition: { getName: () => 'Will' } });
   assert.equal(quest.getStage(h.player), 14);
-  h.clickObject(60482);
   h.action(h.core.NpcIdentifiers.WILL, 'p40qKY');
-  assert.equal(quest.getStage(h.player), 16);
+  assert.equal(quest.getStage(h.player), 14, 'the item popup cannot skip the shore scene');
   assert.equal(h.inventory.get(h.core.ItemIdentifiers.OLD_CUP), 1);
   h.action(h.core.NpcIdentifiers.WILL, 'p40qKY');
   assert.equal(h.inventory.get(h.core.ItemIdentifiers.OLD_CUP), 1, 'retry cannot duplicate the cup');
@@ -681,13 +738,18 @@ test('Pandemonium relog restores stages 12/14 at the earned wreck, docked and ar
   for (const login of h.hooks.login) login({ player: h.player });
   ship = StaticShips.all()[0];
   assert.ok(ship, 'stage 14 relog rebuilds the actual static ship');
-  assert.equal(ship.boat.tileX, 3032);
-  assert.equal(ship.boat.tileY, 3050);
+  assert.equal(ship.boat.tileX, 3035);
+  assert.equal(ship.boat.tileY, 3048);
   assert.equal(BoatManager.getBoatAboard(h.player), ship.boat);
-  assert.equal(BoatManager.getSpec(ship.boat).locs.filter((loc) => loc.id === 60482).length, 1);
-  h.clickObject(60482);
+  assert.equal(ship.boat.helmPlayerId, undefined, 'earned flags do not re-grip the helm at stage 14');
+  assert.equal(ship.boat.moveMode, 0);
+  assert.equal(h.varbits.get(sailingContent.VARBIT.FACILITY_LOCKEDIN), 0);
+  assert.equal(h.varbits.get(sailingContent.VARBIT.SIDEPANEL_PLAYER_AT_HELM), 0);
+  assert.equal(h.attrs.get('pandemonium:tutorial-helm'), true, 'earned capability remains saved');
+  assert.equal(h.attrs.get('pandemonium:tutorial-sails'), true);
+  assert.equal(BoatManager.getSpec(ship.boat).locs.filter((loc) => loc.id === 60480).length, 1);
   h.action(h.core.NpcIdentifiers.WILL, 'p40qKY');
-  assert.equal(quest.getStage(h.player), 16);
+  assert.equal(quest.getStage(h.player), 14);
   assert.equal(h.inventory.get(h.core.ItemIdentifiers.OLD_CUP), 1);
   h.action(h.core.NpcIdentifiers.WILL, 'p40qKY');
   assert.equal(h.inventory.get(h.core.ItemIdentifiers.OLD_CUP), 1);
@@ -704,7 +766,7 @@ test('Pandemonium deck hook routes Deploy from the player pose instead of the al
   const ship = StaticShips.all()[0];
   h.player.moveTo(new Location(ship.boat.deckBaseX + 3, ship.boat.deckBaseY + 3, 0));
   const object = { getLocation: () => new Location(ship.boat.deckBaseX + 2, ship.boat.deckBaseY + 3, 0) };
-  const event = { player: h.player, objectId: 60482, object, blockAccessFlags: 15 };
+  const event = { player: h.player, objectId: 60480, clickType: 1, object, blockAccessFlags: 15 };
   for (const fn of h.hooks.routes) fn(event);
   assert.deepEqual(event.destination, {
     x: ship.boat.deckBaseX + 3, y: ship.boat.deckBaseY + 3, z: 0,
@@ -867,7 +929,7 @@ test('Crab bottle recovery reports only after the collection is actually granted
   assert.ok(!said.some((message) => message.includes('familiar shells')), 'recovery is not announced before it is given');
 });
 
-test('Pandemonium cameras frame the rendered ship and follow it once the helm is taken', () => {
+test('Pandemonium camera follows the rendered ship freely before and after the helm is taken', () => {
   const h = setup();
   const StaticShips = require('../plugins/skills/sailing/StaticShips.Sailing');
   const { BoatManager } = require('../dist/game/content/sailing/BoatManager');
@@ -877,23 +939,17 @@ test('Pandemonium cameras frame the rendered ship and follow it once the helm is
     h.action(h.core.NpcIdentifiers.WILL, 'BDfVg8');
     const ship = StaticShips.all()[0];
     h.tickOnce(); h.tickOnce();
-    for (const camera of h.cameras.filter((camera) => camera[0] === 'move' || camera[0] === 'look')) {
-      assert.ok(Math.abs(camera[1] - ship.boat.tileX) < 20 && Math.abs(camera[2] - ship.boat.tileY) < 20,
-        'camera frames the boat at sea, not its synthetic deck scene');
-    }
-    assert.equal(h.cameras.filter((camera) => camera[0] === 'move' || camera[0] === 'look').length, 2);
+    assert.equal(h.cameras.filter((camera) => camera[0] === 'move' || camera[0] === 'look').length, 0);
+    assert.deepEqual(h.cameras.at(-1), ['target', { worldEntity: ship.boat.entityIndex }]);
     quest.setStage(h.player, 10);
-    clickAction(h, 59554, 'Helm', ['Navigate', 'Escape'], 0);
+    clickAction(h, 59620, 'Helm', ['Navigate', 'Escape'], 0);
     assert.deepEqual(h.cameras.at(-1), ['target', { worldEntity: ship.boat.entityIndex }],
       'taking the helm releases the fixed camera to follow the moving boat');
-    clickAction(h, 29506, 'Sails', h.core.CacheDefinitions.getObject(29506).actions, 1);
-    ship.boat.fineX = 3032 * 128 + 64; ship.boat.fineY = 3050 * 128;
+    clickAction(h, 59553, 'Sails', h.core.CacheDefinitions.getObject(59553).actions, 1);
+    ship.boat.fineX = 3035 * 128 + 32; ship.boat.fineY = 3048 * 128 + 96;
     BoatManager.tick(); h.tickOnce(); h.tickOnce();
-    assert.equal(h.cameras.filter((camera) => camera[0] === 'move' || camera[0] === 'look').length, 4);
-    for (const camera of h.cameras.filter((camera) => camera[0] === 'move' || camera[0] === 'look').slice(-2)) {
-      assert.ok(Math.abs(camera[1] - ship.boat.tileX) < 20 && Math.abs(camera[2] - ship.boat.tileY) < 20,
-        'wreck camera also uses main-world coordinates');
-    }
+    assert.equal(h.cameras.filter((camera) => camera[0] === 'move' || camera[0] === 'look').length, 0,
+      'arrival keeps the voyage context; the captured fixed camera belongs to later Deploy');
     assert.equal(quest.getStage(h.player), 12);
   } finally {
     for (const logout of h.hooks.logout) logout({ player: h.player });
@@ -925,10 +981,11 @@ test('Pandemonium cancels departed ship cameras and offers boarding again from t
     replaced.boat.fineX = 3400 * 128;
     h.action(h.core.NpcIdentifiers.WILL, 'BDfVg8');
     h.tickOnce();
-    assert.ok(h.cameras.at(-1)[1] < 3100, 'a replacement cancels the departed ship camera');
+    assert.deepEqual(h.cameras.at(-1), ['target', { worldEntity: StaticShips.all()[0].boat.entityIndex }],
+      'a replacement targets its own ship, never the departed one');
     h.action(h.core.NpcIdentifiers.WILL, 'BDfVg8');
     quest.setStage(h.player, 10);
-    clickAction(h, 59554, 'Helm', ['Navigate', 'Escape'], 0);
+    clickAction(h, 59620, 'Helm', ['Navigate', 'Escape'], 0);
     h.tickOnce(); h.tickOnce();
     assert.deepEqual(h.cameras.at(-1), ['target', { worldEntity: StaticShips.all()[0].boat.entityIndex }],
       'a pending intro cannot replace helm tracking');
@@ -945,7 +1002,7 @@ test('Pandemonium cancels departed ship cameras and offers boarding again from t
     h.action(h.core.NpcIdentifiers.WILL, 'VuZpfc');
     h.action(h.core.NpcIdentifiers.WILL, 'Nm7LVw');
     assert.equal(quest.getStage(h.player), 14, 'reboarding preserves earned wreck progress');
-    assert.equal(StaticShips.all()[0].boat.tileY, 3050);
+    assert.equal(StaticShips.all()[0].boat.tileY, 3048);
     const previous = StaticShips.all()[0];
     for (const logout of h.hooks.logout) logout({ player: h.player });
     h.tickOnce(); h.tickOnce();
@@ -961,5 +1018,345 @@ test('Pandemonium cancels departed ship cameras and offers boarding again from t
     assert.deepEqual(h.cameras.at(-1), ['reset'], 'logout during the intro fade cancels its camera');
   } finally {
     for (const logout of h.hooks.logout) logout({ player: h.player });
+  }
+});
+
+
+test('Pandemonium save/load resumes the required boarding briefing without granting the helm', () => {
+  const h = setup();
+  const StaticShips = require('../plugins/skills/sailing/StaticShips.Sailing');
+  const { BoatManager } = require('../dist/game/content/sailing/BoatManager');
+  for (const stale of StaticShips.all()) StaticShips.dispose(stale);
+  const quest = load(h, 'Pandemonium.Quest.js');
+  const lines = [];
+  h.api.onCustomEvent('npc-dialogue:line', event => lines.push(event.text));
+  try {
+    h.action(h.core.NpcIdentifiers.WILL, 'BDfVg8');
+    for (const logout of h.hooks.logout) logout({ player: h.player });
+    h.relog(h.saveState());
+    const ship = StaticShips.all()[0];
+    assert.equal(BoatManager.getBoatAboard(h.player), ship.boat);
+    h.tickOnce(); h.tickOnce();
+    assert.ok(lines.includes('Lovely! The open sea!'), 'login resumes the authored briefing');
+    assert.equal(quest.getStage(h.player), 6, 'showing instructions does not complete them');
+    assert.equal(clickAction(h, 59620, 'Helm', ['Navigate', 'Escape'], 0).handled, false);
+    h.emit('npc-dialogue:line', { npcId: h.core.NpcIdentifiers.WILL,
+      text: 'Over to you, [player name]! Take the helm when ready.', step: { speaker: 'Anne' },
+      pages: [{ page: 'Pandemonium', variants: ['at-the-boat-talking-to-anne-or-will'] }] }).before();
+    assert.equal(quest.getStage(h.player), 8);
+    for (const logout of h.hooks.logout) logout({ player: h.player });
+    h.relog(h.saveState());
+    const count = lines.length;
+    h.tickOnce(); h.tickOnce();
+    assert.equal(lines.length, count, 'a completed briefing is not replayed on stage 8 login');
+    assert.equal(clickAction(h, 59620, 'Helm', ['Navigate', 'Escape'], 0).handled, true);
+    assert.equal(quest.getStage(h.player), 10);
+  } finally {
+    for (const logout of h.hooks.logout) logout({ player: h.player });
+  }
+});
+
+test('Pandemonium persists the earned tutorial helm and sails through real save/load', () => {
+  const h = setup();
+  const StaticShips = require('../plugins/skills/sailing/StaticShips.Sailing');
+  for (const stale of StaticShips.all()) StaticShips.dispose(stale);
+  const quest = load(h, 'Pandemonium.Quest.js');
+  try {
+    h.action(h.core.NpcIdentifiers.WILL, 'BDfVg8');
+    quest.setStage(h.player, 8);
+    clickAction(h, 59620, 'Helm', ['Navigate', 'Escape'], 0);
+    const helmSave = h.saveState();
+    assert.equal(helmSave['pandemonium:tutorial-helm'], true);
+    assert.equal(helmSave['pandemonium:tutorial-sails'], false);
+    for (const logout of h.hooks.logout) logout({ player: h.player });
+    h.relog(helmSave);
+    assert.equal(StaticShips.all()[0].boat.helmPlayerId, h.player.getIndex());
+    assert.equal(StaticShips.all()[0].boat.moveMode, 0);
+    clickAction(h, 59553, 'Sails', h.core.CacheDefinitions.getObject(59553).actions, 1);
+    assert.equal(StaticShips.all()[0].boat.moveMode, 2, 'the earned helm permits raising sails after login');
+    const sailSave = h.saveState();
+    assert.equal(sailSave['pandemonium:tutorial-sails'], true);
+    for (const logout of h.hooks.logout) logout({ player: h.player });
+    h.relog(sailSave);
+    assert.equal(quest.getStage(h.player), 10, 'recovery does not skip the voyage');
+    assert.equal(StaticShips.all()[0].boat.helmPlayerId, h.player.getIndex());
+    assert.equal(StaticShips.all()[0].boat.moveMode, 2, 'the already-started voyage resumes');
+    const legacySave = { ...sailSave };
+    delete legacySave['pandemonium:tutorial-helm'];
+    delete legacySave['pandemonium:tutorial-sails'];
+    for (const logout of h.hooks.logout) logout({ player: h.player });
+    h.relog(legacySave);
+    assert.equal(quest.getStage(h.player), 10);
+    assert.notEqual(StaticShips.all()[0].boat.helmPlayerId, h.player.getIndex(), 'missing legacy flags do not infer helm ownership');
+    assert.equal(StaticShips.all()[0].boat.moveMode, 0, 'a missing old sails flag does not infer a voyage');
+    clickAction(h, 59553, 'Sails', h.core.CacheDefinitions.getObject(59553).actions, 1);
+    assert.equal(h.messages.at(-1), 'You need to take the helm before raising the sails.');
+    assert.equal(clickAction(h, 59620, 'Helm', ['Navigate', 'Escape'], 0).handled, true, 'an old stage 10 save can legitimately retake the helm');
+    clickAction(h, 59553, 'Sails', h.core.CacheDefinitions.getObject(59553).actions, 1);
+    assert.equal(StaticShips.all()[0].boat.moveMode, 2);
+    assert.equal(quest.getStage(h.player), 10, 're-navigation retains earned quest progress');
+  } finally {
+    for (const logout of h.hooks.logout) logout({ player: h.player });
+  }
+});
+
+test('Pandemonium only earns the helm after accepted canonical control and reapplies it once', () => {
+  const h = setup();
+  const StaticShips = require('../plugins/skills/sailing/StaticShips.Sailing');
+  const { TaskManager } = require('../dist/game/task/TaskManager');
+  const { VARBIT, SCRIPT_HELM_UPDATE } = sailingContent;
+  for (const stale of StaticShips.all()) StaticShips.dispose(stale);
+  const quest = load(h, 'Pandemonium.Quest.js');
+  let allow = false;
+  h.api.onCustomEvent('sailing:can-use-hands', event => { event.allow = allow; });
+  try {
+    h.action(h.core.NpcIdentifiers.WILL, 'BDfVg8');
+    quest.setStage(h.player, 8);
+    const boat = StaticShips.all()[0].boat;
+    assert.equal(clickAction(h, 59620, 'Helm', ['Navigate', 'Escape'], 0).handled, true);
+    assert.equal(quest.getStage(h.player), 8, 'denied control does not earn progression');
+    assert.notEqual(h.attrs.get('pandemonium:tutorial-helm'), true, 'denied control is not saved as earned');
+    assert.notEqual(boat.helmPlayerId, h.player.getIndex());
+    assert.equal(h.modes.length, 0);
+    allow = true;
+    clickAction(h, 59620, 'Helm', ['Navigate', 'Escape'], 0);
+    assert.equal(quest.getStage(h.player), 10);
+    assert.equal(boat.helmPlayerId, h.player.getIndex());
+    assert.equal(h.varbits.get(VARBIT.SIDEPANEL_PLAYER_AT_HELM), 1);
+    assert.equal(h.scripts.some(script => script.id === SCRIPT_HELM_UPDATE), true);
+    assert.equal(h.sailing.boats.length, 0, 'no personal boat is invented');
+    assert.equal(h.varbits.get(VARBIT.SIDEPANEL_BOAT_MOVE_MODE), 4, 'the first accepted heading can raise full sail');
+    const loops = TaskManager.pendingTasks.length, modes = h.modes.length, scripts = h.scripts.length;
+    clickAction(h, 59620, 'Helm', ['Navigate', 'Escape'], 0);
+    assert.equal(TaskManager.pendingTasks.length, loops, 'repeat activation does not create another native loop');
+    assert.equal(h.modes.length, modes, 'repeat activation does not toggle or duplicate controls');
+    assert.equal(h.scripts.length, scripts);
+    assert.equal(boat.moveMode, 0);
+  } finally {
+    for (const logout of h.hooks.logout) logout({ player: h.player });
+  }
+});
+
+test('supplied helm requests refuse foreign, unboarded and disposed boats', () => {
+  const h = setup();
+  const StaticShips = require('../plugins/skills/sailing/StaticShips.Sailing');
+  for (const stale of StaticShips.all()) StaticShips.dispose(stale);
+  const quest = load(h, 'Pandemonium.Quest.js');
+  let other;
+  try {
+    h.action(h.core.NpcIdentifiers.WILL, 'BDfVg8'); quest.setStage(h.player, 8);
+    const boat = StaticShips.all()[0].boat;
+    const foreign = { ...h.player, getIndex: () => 2 };
+    assert.equal(h.emit('sailing:take-helm', { player: foreign, boat }).accepted, false);
+    other = StaticShips.spawn('pandemonium_tutorial_ship', { owner: h.player, ownerOnly: true });
+    assert.ok(other);
+    assert.equal(h.emit('sailing:take-helm', { boat: other.boat }).accepted, false, 'visibility/ownership does not replace boarding');
+    StaticShips.dispose(other);
+    assert.equal(h.emit('sailing:take-helm', { boat: other.boat }).accepted, false, 'retired instance cannot grant control');
+    assert.equal(h.modes.length, 0);
+    assert.equal(quest.getStage(h.player), 8);
+    assert.equal(h.sailing.boats.length, 0);
+  } finally {
+    if (other) StaticShips.dispose(other);
+    for (const logout of h.hooks.logout) logout({ player: h.player });
+  }
+});
+
+test('a supplied control releases after physical leave without clearing a newer scene control', () => {
+  const h = setup();
+  const StaticShips = require('../plugins/skills/sailing/StaticShips.Sailing');
+  const { VARBIT } = sailingContent;
+  for (const stale of StaticShips.all()) StaticShips.dispose(stale);
+  const quest = load(h, 'Pandemonium.Quest.js');
+  try {
+    h.action(h.core.NpcIdentifiers.WILL, 'BDfVg8'); quest.setStage(h.player, 8);
+    clickAction(h, 59620, 'Helm', ['Navigate', 'Escape'], 0);
+    const previous = StaticShips.all()[0].boat;
+    assert.equal(StaticShips.leave(h.player), true);
+    assert.equal(h.emit('sailing:leave-helm', { boat: previous }).left, true);
+    assert.equal(h.varbits.get(VARBIT.SIDEPANEL_PLAYER_AT_HELM), 0);
+    assert.ok(h.modes.some(mode => mode[0] === 'reset' && mode[1] === previous.entityIndex));
+    h.action(h.core.NpcIdentifiers.WILL, 'BDfVg8');
+    const current = StaticShips.all()[0].boat;
+    assert.notEqual(current, previous);
+    assert.equal(current.helmPlayerId, h.player.getIndex(), 'earned control is reapplied to the new scene');
+    const modes = h.modes.length;
+    assert.equal(h.emit('sailing:leave-helm', { boat: previous }).left, false, 'old scene cannot release the current boat');
+    assert.equal(h.modes.length, modes);
+    assert.equal(current.helmPlayerId, h.player.getIndex());
+    assert.equal(h.varbits.get(VARBIT.SIDEPANEL_PLAYER_AT_HELM), 1);
+    assert.equal(h.sailing.boats.length, 0);
+  } finally {
+    for (const logout of h.hooks.logout) logout({ player: h.player });
+  }
+});
+
+test('the tutorial panel remount preserves accepted helm and sail state without restarting departure', () => {
+  const h = setup();
+  const StaticShips = require('../plugins/skills/sailing/StaticShips.Sailing');
+  const { BoatManager } = h.core;
+  const { VARBIT } = sailingContent;
+  const quest = load(h, 'Pandemonium.Quest.js');
+  let earnedSails = 0;
+  const setAttribute = h.player.setAttribute.bind(h.player);
+  h.player.setAttribute = (key, value) => {
+    if (key === 'pandemonium:tutorial-sails' && value === true) earnedSails++;
+    return setAttribute(key, value);
+  };
+  h.action(h.core.NpcIdentifiers.WILL, 'BDfVg8');
+  quest.setStage(h.player, 8);
+  const ship = StaticShips.all().find(ship => ship.boat === BoatManager.getBoatAboard(h.player));
+  assert.ok(ship);
+  const panel = () => {
+    h.clickInterface(593, 48);
+    const mount = h.scripts.findLast(script => script.id === 937 && script.uid === ((161 << 16) | 76));
+    assert.ok(mount, 'the tutorial has a real Sailing panel mount');
+    assert.equal(mount.varps[5117], 8113, 'the panel describes the actual temporary boat');
+    assert.equal(mount.varbits[VARBIT.SIDEPANEL_BOAT_HP], ship.hitpoints);
+    assert.equal(mount.varbits[VARBIT.SIDEPANEL_BOAT_HP_MAX], ship.maxHitpoints);
+    assert.equal(mount.varbits[VARBIT.SIDEPANEL_FACILITY_SAIL], 0, 'the supplied Sail part uses record zero');
+    assert.equal(mount.varbits[VARBIT.SIDEPANEL_FACILITY_HELM], 0, 'the supplied Helm part uses record zero');
+    assert.ok(h.flags.some(args => args[0] === ((937 << 16) | 25) && args[1] === 0 && args[2] === 7 && args[3] === 30),
+      'only the proven common Sail and Helm prefix receives facility operation permissions');
+    return mount.varbits;
+  };
+  assert.equal(panel()[VARBIT.SIDEPANEL_HELM_STATUS], 1);
+  clickAction(h, 59620, 'Helm', ['Navigate', 'Escape'], 0);
+  assert.equal(quest.getStage(h.player), 10);
+  assert.equal(panel()[VARBIT.SIDEPANEL_PLAYER_AT_HELM], 1);
+  assert.equal(panel()[VARBIT.SIDEPANEL_BOAT_MOVE_MODE], 4);
+  // This unit helper calls the real steering entry. The private native case drives the codec.
+  BoatManager.setHelmHeading(h.player, 0);
+  assert.equal(ship.boat.moveMode, 2);
+  assert.equal(h.attrs.get('pandemonium:tutorial-sails'), true);
+  assert.equal(earnedSails, 1);
+  assert.equal(panel()[VARBIT.SIDEPANEL_BOAT_MOVE_MODE], 2, 'remount never restores initial moored state');
+  assert.equal(panel()[VARBIT.SIDEPANEL_HELM_STATUS], 2);
+  BoatManager.setHelmHeading(h.player, 7);
+  assert.equal(earnedSails, 1, 'repeat heading does not re-earn or restart departure');
+  h.clickInterface(937, 25, 0);
+  assert.equal(ship.boat.moveMode, 0, 'the actual sail-row Stop uses canonical control');
+  BoatManager.setHelmHeading(h.player, 1);
+  for (let i = 0; i < 40; i++) BoatManager.tick();
+  assert.equal(ship.boat.moveMode, 0, 'Stop survives the old recorder replay boundaries');
+  assert.equal(ship.boat.heading, 128, 'the heading remains the accepted player input');
+  assert.equal(panel()[VARBIT.SIDEPANEL_BOAT_MOVE_MODE], 0, 'remount preserves stopped state');
+  assert.equal(earnedSails, 1);
+  clickAction(h, 59553, 'Sails', h.core.CacheDefinitions.getObject(59553).actions, 1);
+  assert.equal(ship.boat.moveMode, 2, 'direct Set uses the same canonical sail path');
+  assert.equal(earnedSails, 1, 'setting sails again does not restart the voyage');
+  assert.equal(h.sailing.boats.length, 0);
+});
+
+test('a supplied panel refuses foreign, unboarded and retired requests and ignores an old release', () => {
+  const h = setup();
+  const StaticShips = require('../plugins/skills/sailing/StaticShips.Sailing');
+  const { BoatManager } = h.core;
+  const { VARBIT } = sailingContent;
+  const quest = load(h, 'Pandemonium.Quest.js');
+  h.action(h.core.NpcIdentifiers.WILL, 'BDfVg8'); quest.setStage(h.player, 8);
+  const previous = BoatManager.getBoatAboard(h.player);
+  assert.equal(h.player.getPacketSender().getVarbit(VARBIT.SHIPYARD_MODE), 0, 'normal supplied-panel mode');
+  assert.equal(h.emit('sailing:board-supplied-panel', { boat: previous, accepted: false }).accepted, true);
+  clickAction(h, 59620, 'Helm', ['Navigate', 'Escape'], 0);
+  const foreign = { ...h.player, getIndex: () => 2 };
+  const disconnected = { ...h.player, isRegistered: () => false };
+  assert.equal(h.emit('sailing:board-supplied-panel', { player: foreign, boat: previous, accepted: false }).accepted, false);
+  assert.equal(h.emit('sailing:board-supplied-panel', { player: disconnected, boat: previous, accepted: false }).accepted, false);
+  h.varbits.set(VARBIT.SHIPYARD_MODE, 1);
+  assert.equal(h.emit('sailing:board-supplied-panel', { boat: previous, accepted: false }).accepted, false,
+    'the common-prefix request refuses a different native construction mode');
+  h.varbits.set(VARBIT.SHIPYARD_MODE, 0);
+  const other = StaticShips.spawn('pandemonium_tutorial_ship', { owner: h.player, ownerOnly: true });
+  try {
+    assert.equal(h.emit('sailing:board-supplied-panel', { boat: other.boat, accepted: false }).accepted, false);
+    StaticShips.dispose(other);
+    assert.equal(h.emit('sailing:board-supplied-panel', { boat: other.boat, accepted: false }).accepted, false);
+  } finally { StaticShips.dispose(other); }
+  assert.equal(h.varbits.get(VARBIT.SIDEPANEL_PLAYER_AT_HELM), 1, 'invalid requests do not clear the current lease');
+  const beforeRemount = h.scripts.length;
+  h.clickInterface(593, 48);
+  assert.ok(h.scripts.slice(beforeRemount).some(script => script.id === 937),
+    'an invalid replacement request does not discard the valid panel record');
+  h.action(h.core.NpcIdentifiers.WILL, 'BDfVg8');
+  const current = BoatManager.getBoatAboard(h.player);
+  assert.notEqual(current, previous);
+  const scripts = h.scripts.length;
+  h.emit('sailing:leave-supplied-panel', { boat: previous });
+  assert.equal(h.scripts.length, scripts, 'an older scene cannot clear a newer panel');
+  assert.equal(h.varbits.get(VARBIT.SIDEPANEL_PLAYER_AT_HELM), 1);
+  assert.equal(h.sailing.boats.length, 0);
+});
+
+test('the supplied intro Sails Set emits its captured down-to-full transition', () => {
+  const h = setup();
+  const StaticShips = require('../plugins/skills/sailing/StaticShips.Sailing');
+  const { BoatManager } = h.core;
+  const { VARBIT } = sailingContent;
+  const sender = h.player.getPacketSender();
+  const oldObject = Object.getOwnPropertyDescriptor(sender, 'sendObject');
+  const oldAnimation = Object.getOwnPropertyDescriptor(sender, 'sendObjectAnimation');
+  const outputs = [];
+  // Observe production sender arguments in this quest helper, not encoded packets.
+  sender.sendObject = (loc) => {
+    outputs.push({ kind: 'object', id: loc.getId() });
+    return sender;
+  };
+  sender.sendObjectAnimation = (loc, animation) => {
+    const here = loc.getLocation();
+    outputs.push({ kind: 'animation', tuple: [loc.getId(), here.getX(), here.getY(), here.getZ(),
+      loc.getType(), loc.getFace(), animation.getId()] });
+    return sender;
+  };
+  try {
+    for (const stale of StaticShips.all()) StaticShips.dispose(stale);
+    const quest = load(h, 'Pandemonium.Quest.js');
+    h.action(h.core.NpcIdentifiers.WILL, 'BDfVg8');
+    quest.setStage(h.player, 8); // Post-briefing checkpoint, not a natural quest playthrough.
+    const ship = StaticShips.all().find(ship => ship.boat === BoatManager.getBoatAboard(h.player));
+    assert.ok(ship, 'the player is aboard the registered supplied ship');
+    const spec = BoatManager.getSpec(ship.boat);
+    const sail = spec.locs.find(loc => loc.id === 59553);
+    assert.ok(sail);
+    assert.deepEqual([sail.x, sail.y, sail.level, sail.shape, sail.rotation], [4, 4, 1, 10, 0]);
+    assert.equal(sail.sailCloth, true, 'the supplied Set target remains the cloth-tagged loc');
+    const definition = h.core.CacheDefinitions.getObject(59553);
+    assert.equal(definition.name, 'Sails');
+    assert.equal(definition.seqId, 13884, 'native default is separate from the explicit transition');
+    const options = definition.actions;
+    const setIndex = options.indexOf('Set');
+    assert.ok(setIndex >= 0, 'the actual cached definition exposes Set');
+    outputs.length = 0;
+    clickAction(h, 59553, definition.name, options, setIndex);
+    assert.deepEqual(outputs.filter(output => output.kind === 'animation'), [],
+      'pre-helm Set sends no loc animation');
+    assert.equal(quest.getStage(h.player), 8, 'pre-helm Set does not bypass the stage gate');
+
+    clickAction(h, 59620, 'Helm', ['Navigate', 'Escape'], 0);
+    assert.equal(quest.getStage(h.player), 10);
+    assert.equal(ship.boat.helmPlayerId, h.player.getIndex());
+    assert.equal(h.varbits.get(VARBIT.SIDEPANEL_BOAT_MOVE_MODE), 4, 'accepted helm starts down/moored');
+    outputs.length = 0; // Exclude the separate accepted-helm animation.
+    const set = clickAction(h, 59553, definition.name, options, setIndex);
+    assert.equal(set.handled, true, 'registered quest input accepted Set');
+    assert.equal(h.varbits.get(VARBIT.SIDEPANEL_BOAT_MOVE_MODE), 2, 'canonical Set reached FULL');
+    assert.equal(ship.boat.moveMode, 2);
+    assert.deepEqual(outputs.filter(output => output.kind === 'animation').map(output => output.tuple),
+      [[59553, ship.boat.deckBaseX + 4, ship.boat.deckBaseY + 4, 1, 10, 0, 13383]],
+      'supplied Set emits exactly its captured down-to-full transition');
+    const clothUpdate = outputs.findIndex(output => output.kind === 'object' && output.id === 59553);
+    const transition = outputs.findIndex(output => output.kind === 'animation');
+    assert.ok(clothUpdate >= 0 && clothUpdate < transition, 'cloth options update precedes its transition');
+    assert.equal(h.core.CacheDefinitions.getObject(59553).seqId, 13884,
+      'explicit transition does not rewrite the native default sequence');
+  } finally {
+    try {
+      for (const logout of h.hooks.logout) logout({ player: h.player });
+    } finally {
+      if (oldObject) Object.defineProperty(sender, 'sendObject', oldObject);
+      else delete sender.sendObject;
+      if (oldAnimation) Object.defineProperty(sender, 'sendObjectAnimation', oldAnimation);
+      else delete sender.sendObjectAnimation;
+    }
   }
 });

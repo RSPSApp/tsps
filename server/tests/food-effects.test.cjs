@@ -31,7 +31,7 @@ const NOT_FOOD = {
     "Infernal eel", "Jar of congealed blood", "Leechfin", "Leftovers", "Logavano fruit", "Melted easter egg", "Mint cake",
     "Mystery fruit", "Nightshade", "Poison karambwan", "Rock cake",
     "Rotten apple", "Rotten potato", "Sacred eel", "Seaweed sandwich", "Shrunk ogleroot",
-    "Slice of birthday cake", "Special super hot kebab", "Spicy stew", "Sweetcorn", "Tchiki nut paste",
+    "Special super hot kebab", "Spicy stew", "Sweetcorn", "Tchiki nut paste",
     "Servery cooked meat", "Servery meat pie", "Servery pineapple pizza", "Servery plain pizza",
     "Servery potato", "Servery stew",
   ],
@@ -402,4 +402,9 @@ test('quest supplies restore bounded Prayer and share stamina, with their real c
       assert.equal(player.hp, 50 + healed);
     }
   } finally { foodAreaAllowed = false; }
+});
+
+test("eating a Mackerel names the Mackerel, not the cod (issue #2455)", () => {
+  const mackerel = DATA.foods.find((food) => food.name === "Mackerel");
+  assert.equal(mackerel.message, "You eat the mackerel.");
 });

@@ -413,7 +413,7 @@ test('Al Shabim, Siad, the chest, the anvil and the feathers build the prototype
   assert.equal(p.items.get(K.PROTOTYPE_DART_TIP), 1);
   assert.equal(stage(h, p), 13);
 
-  const fletch = { player: p, itemId: K.FEATHER, otherItemId: K.PROTOTYPE_DART_TIP, handled: false };
+  const fletch = { player: p, usedItemId: K.FEATHER, usedWithItemId: K.PROTOTYPE_DART_TIP, handled: false };
   h.itemOnItem.forEach(handler => handler(fletch));
   assert.equal(fletch.handled, true);
   assert.equal(p.items.get(K.FEATHER), 0);
@@ -713,7 +713,7 @@ test('dart crafting enforces the actual Smithing and Fletching requirements with
   assert.equal(p.items.get(K.BRONZE_BAR), 0);
   p.items.set(K.FEATHER, 10);
   p.setSkillLevel(core.Skill.FLETCHING, 9);
-  const combine = { player: p, itemId: K.FEATHER, otherItemId: K.PROTOTYPE_DART_TIP, handled: false };
+  const combine = { player: p, usedItemId: K.FEATHER, usedWithItemId: K.PROTOTYPE_DART_TIP, handled: false };
   h.itemOnItem.forEach(handler => handler(combine));
   assert.equal(combine.handled, true);
   assert.equal(p.items.get(K.FEATHER), 10, 'low Fletching leaves feathers intact');
@@ -776,7 +776,7 @@ test('a lost slave outfit is recovered the canonical way', () => {
   p.equip(K.SLAVE_BOOTS, E.FEET_SLOT);
   const wornMine = object(h, 'Mine door entrance', 'Open', { player: p, objectId: 2675, handled: false });
   assert.equal(wornMine.handled, true);
-  assert.deepEqual(p.moves.at(-1), [3279, 9420, 0]);
+  assert.deepEqual(p.moves.at(-1), [3279, 9427, 0]);
 });
 
 test('the escaping slave owns his own transcript and turns back into a male slave', () => {

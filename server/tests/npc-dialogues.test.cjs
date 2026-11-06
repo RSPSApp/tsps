@@ -650,12 +650,16 @@ test('Lumbridge tutors hand out what their transcripts say', () => {
       Sounds: { sendSound() {} }, Sound: { PICK_UP_ITEM: 0 },
       ItemOnGroundManager: { deregister(groundItem) { groundItem.deregistered = true; } },
     },
-    persistAttribute() {}, onNpcDialogueVariant() {}, onItemOnNpc() {},
+    persistAttribute() {}, onNpcDialogueVariant() {}, onItemOnNpc() {}, onPlayerLogin() {},
     onNpcDialogueCondition(handler) { hooks.condition = handler; },
     onCustomEvent(name, handler) { hooks[name] = handler; },
     onNpcInteraction(name, actions) { hooks[name] = actions; },
     onGroundItemPickup(handler) { hooks.pickup = handler; },
-    emitCustomEvent(_name, request) { hooks.started = request.variant; },
+    emitCustomEvent(name, request) {
+      if (name !== 'settings:set') { hooks.started = request.variant; return; }
+      hooks.settings = request;
+      if (request.settingId === 305) request.player.getPacketSender().sendVarbit(5697, request.value);
+    },
   });
   const container = (items = {}) => {
     const map = new Map(Object.entries(items).map(([id, n]) => [Number(id), n]));
@@ -665,8 +669,10 @@ test('Lumbridge tutors hand out what their transcripts say', () => {
   const player = (bank = {}) => {
     const attributes = {};
     const inventory = container();
+    const varbits = {};
     return { inventory, messages: [], getInventory: () => inventory, getEquipment: () => container(), getBanks: () => [container(bank)],
       getAttribute: (key) => attributes[key], setAttribute: (key, value) => { attributes[key] = value; },
+      getPacketSender: () => ({ getVarbit: (id) => varbits[id] ?? 0, sendVarbit: (id, value) => { varbits[id] = value; } }),
       sendMessage(text) { this.messages.push(text); }, getSkillManager: () => ({ getMaxLevel: () => 1 }) };
   };
   // Plays a transcript the way startDialogue drives the hooks, taking the menu option `pick`.
@@ -711,7 +717,8 @@ test('Lumbridge tutors hand out what their transcripts say', () => {
 
   // The ranged tutor's pickup toggle: same ammo as the worn slot goes to the slot, not the bag.
   hooks['npc-dialogue:choice']({ player: ranger, npcId: N.RANGED_COMBAT_TUTOR, option: 'Automatically equip it.' });
-  assert.equal(ranger.getAttribute('ranged:equip-ammo-on-pickup'), true);
+  assert.equal(hooks.settings.settingId, 305);
+  assert.equal(hooks.settings.value, 1);
   const { Equipment } = require('../dist/game/model/container/impl/Equipment');
   const { Item } = require('../dist/game/model/Item');
   const ammoSlot = new Item(I.BRONZE_ARROW, 5);
@@ -728,7 +735,7 @@ test('Lumbridge tutors hand out what their transcripts say', () => {
   hooks.pickup(wrongAmmo);
   assert.equal(wrongAmmo.handled, false, 'different ammo stays on the normal inventory pickup path');
   hooks['npc-dialogue:choice']({ player: ranger, npcId: N.RANGED_COMBAT_TUTOR, option: 'Place it in my inventory.' });
-  assert.equal(ranger.getAttribute('ranged:equip-ammo-on-pickup'), false);
+  assert.equal(hooks.settings.value, 0);
   const disabled = { player: ranger, groundItemId: I.BRONZE_ARROW, groundItem: { getItem: () => new Item(I.BRONZE_ARROW, 3) }, handled: false };
   hooks.pickup(disabled);
   assert.equal(disabled.handled, false);
@@ -1598,4 +1605,91 @@ test('initial recovery rejects mutually exclusive prior menus instead of taking 
   } };
   assert.equal(collectMenuBefore(record, 'talking-again',
     { initial: true, callerName: 'Akrisae' }), undefined, 'ambiguity cannot fall back to an older menu');
+});
+
+test('below plus queued choice preserves supplied jump results and inline priority', () => {
+  const jump = { type: 'jump', reference: 'below' };
+  const choice = { type: 'choice', options: [{ text: 'Continue', steps: [] }] };
+  const body = [{ npc: 'Resolved continuation' }];
+  const menu = { step: choice, rest: [] };
+  for (const [result, expected] of [
+    [body, [{ type: 'jump_to', steps: body }, choice]],
+    ['end', [{ type: 'end' }]],
+    [{ menu }, [{ type: 'gomenu', menu }, choice]],
+    [null, [choice]],
+  ]) {
+    let calls = 0;
+    assert.deepEqual(flatten([jump, choice], { resolveJump() { calls++; return result; } }), expected);
+    assert.equal(calls, 1, 'the supplied resolver decides the unresolved jump');
+  }
+  assert.deepEqual(flatten([{ ...jump, steps: body }, choice], {
+    resolveJump() { assert.fail('an inline target must bypass the resolver'); },
+  }), [{ type: 'jump_to', steps: body }, choice]);
+});
+
+// Exercise production resolution with real startDialogue, recording its visible
+// lines and menus while synchronously executing only ActionDialogue entries.
+function belowContinuationPlayback(steps, context = {}, selected = null) {
+  const said = [], prompts = [];
+  const player = {
+    getDialogueManager: () => ({ reset() {}, startDialogues(chain) {
+      for (const entry of chain.getDialogues().values()) {
+        if (entry.constructor.name === 'ActionDialogue') entry.send(player);
+      }
+    } }),
+    getPacketSender: () => ({ sendInterfaceRemoval() {} }), sendMessage() {},
+  };
+  const event = { player, npcId: 3490, definition: { getId: () => 3490, getName: () => 'Jorral' } };
+  const api = {
+    emitCustomEvent(name, request) { if (name === 'npc-dialogue:line') said.push(request.text); },
+    sendMultiChatboxPrompt(_player, title, ...pairs) {
+      prompts.push(title);
+      if (selected !== null) {
+        const label = selected;
+        selected = null;
+        const index = pairs.indexOf(label);
+        assert.ok(index >= 0, `option ${label} exists`);
+        pairs[index + 1]();
+      }
+      return true;
+    },
+  };
+  startDialogue(api, event, steps, {}, { ...event, pages: [], ...context });
+  return { said, prompts };
+}
+
+test('production below keeps matching player and NPC continuations ahead of a queued menu', () => {
+  const menu = { type: 'choice', prompt: 'Queued', options: [{ text: 'Bye', steps: [] }] };
+  const jump = { type: 'jump', reference: 'below' };
+  const strong = { npc: 'The matched continuation.' };
+  const question = 'What should I do?';
+  const line = 'I know the answer.';
+  const player = belowContinuationPlayback([{ player: question }, jump, menu], {
+    pageOptions: new Map([['whatshouldido', [{ player: question }, strong]]]),
+  });
+  assert.deepEqual(player.said, [question, strong.npc]);
+  assert.deepEqual(player.prompts, ['Queued']);
+  const npc = belowContinuationPlayback([{ npc: line }, jump, menu], {
+    pageLines: new Map([['iknowtheanswer', [{ npc: line }, strong]]]),
+  });
+  assert.deepEqual(npc.said, [line, strong.npc]);
+  assert.deepEqual(npc.prompts, ['Queued']);
+});
+
+test('production below uses an adjacent menu but retains historical above and nonadjacent below', () => {
+  const queued = { type: 'choice', prompt: 'Follow-up', options: [{ text: 'Bye', steps: [] }] };
+  const tree = (reference, adjacent) => [{ type: 'choice', prompt: 'Topics', options: [
+    { text: 'First', steps: [{ npc: 'First topic.' }, ...(reference === 'below'
+      ? [{ type: 'jump', reference }, ...(adjacent ? [] : [{ npc: 'Tail.' }]), queued] : [])] },
+    { text: 'Second', steps: [{ npc: 'Second topic.' }, ...(reference === 'above' ? [{ type: 'jump', reference }, queued] : [])] },
+  ] }];
+  const adjacent = belowContinuationPlayback(tree('below', true), {}, 'First');
+  assert.deepEqual(adjacent.said, ['First topic.']);
+  assert.deepEqual(adjacent.prompts, ['Topics', 'Follow-up']);
+  const nonadjacent = belowContinuationPlayback(tree('below', false), {}, 'First');
+  assert.deepEqual(nonadjacent.said, ['First topic.', 'Second topic.', 'Tail.']);
+  assert.deepEqual(nonadjacent.prompts, ['Topics', 'Follow-up']);
+  const above = belowContinuationPlayback(tree('above', true), {}, 'Second');
+  assert.deepEqual(above.said, ['Second topic.', 'First topic.']);
+  assert.deepEqual(above.prompts, ['Topics', 'Follow-up']);
 });

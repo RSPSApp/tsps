@@ -95,6 +95,27 @@ test("an entry keeps the captured move, with whole ticks and a destination per s
   assert.deepEqual(stairs.sides, [{ from: [3, 3, 0], to: [1, 2, 1] }, { from: [9, 9, 0], to: [5, 6, 1] }]);
 });
 
+// The sync records the first sound a capture heard around the climb, and with a fight nearby that is the fight's
+// (#2595: a hurt sound on stairs). loc-teleport-sync.json's ignoreSounds lists the Wiki-named attack, hit, block and
+// weapon sounds; toEntry skips them and takes the first sound that is not one, or none.
+test("an entry skips a fight's sound and takes the first one that is not (loc-teleport-sync.json ignoreSounds)", () => {
+  const entry = (sounds) => toEntry(captured({ sounds }), { display: "Ladder", option: "Climb" });
+  assert.equal(entry([[1615, 2], [2454, 3]]).sound, 2454, "dagannoth_attack, then the climbing loop");
+  assert.equal(entry([[519, 1], [2454, 3]]).sound, 2454, "human_hit_2, then the climbing loop");
+  assert.equal(entry([[2454, 1], [1615, 2]]).sound, 2454, "the first non-fight sound still wins");
+  assert.equal("sound" in entry([[1615, 2]]), false, "only a fight's sound: silent");
+  assert.equal("sound" in entry([[400, 0], [2958, 1], [2811, 1]]), false, "demon_attack and the hits around it: silent");
+});
+
+test("no entry carries a sound the sync ignores, and every ignored sound says what it is", () => {
+  const ignored = decisions.ignoreSounds ?? {};
+  assert.ok(Object.keys(ignored).length >= 30, "the ignore list exists");
+  for (const [id, name] of Object.entries(ignored)) assert.match(String(name), /\w/, `sound ${id} has its Wiki name`);
+  const carrying = data.locs.filter((entry) => entry.sound !== undefined && Object.hasOwn(ignored, String(entry.sound)))
+    .map((entry) => `${entry.name} ${entry.x},${entry.y} ${entry.sound} ${ignored[entry.sound]}`);
+  assert.deepEqual(carrying, [], "these entries play a fight's sound");
+});
+
 test("every entry is a placed loc with that option in the rev 241 cache, once per tile and option", () => {
   const keys = new Set();
   for (const entry of data.locs) {
@@ -846,6 +867,69 @@ test("Lletya's north and south tree passes cross the western wall from either si
       );
     }
   }
+});
+
+test("every Cam Torum squeeze door crosses straight to the opposite tile, from either side (#2449)", () => {
+  // Captured (237/1098, 1102, 1105, 1135; 226/1693): the player keeps the row or column they
+  // clicked from. Doors without a capture take the same rule from their cache rotation.
+  const doors = data.locs.filter((entry) => entry.id === 51005);
+  // The cache places the door at ten tiles; the one at 1465,9582 opens onto solid map and is left out.
+  assert.equal(doors.length, 9, "every placement of the door with a walkable far side");
+  assert.ok(!doors.some((door) => door.x === 1465 && door.y === 9582));
+  // The 2x1 door turned a quarter (rotation 1 or 3) is one tile wide and crossed east-west.
+  const mirror = (from, door, face) => {
+    const [x, y, z] = from;
+    return face % 2 === 1 ? [2 * door.x - x, y, z] : [x, 2 * door.y - y, z];
+  };
+  for (const door of doors) {
+    const object = locAt(door.id, door.x, door.y, door.z);
+    assert.equal(door.sides.length, 4, `${door.x},${door.y} has a side for each of its two tiles, both ways`);
+    for (const side of door.sides) {
+      assert.deepEqual(side.to, mirror(side.from, door, object.getFace()), `${door.x},${door.y}: ${side.from} crosses straight over`);
+      for (const [x, y, z] of [side.from, side.to]) {
+        assert.equal(core.RegionManager.getClipping(x, y, z, null) & 0x200100, 0, `${x},${y} beside ${door.x},${door.y} is walkable`);
+      }
+      assert.ok(object.isWithinInteractionDistance(new core.Location(...side.from)), `${side.from} reaches the door at ${door.x},${door.y}`);
+      const visit = explorer(side.from);
+      const event = { player: visit.player, object, objectId: object.getId(), clickType: 1, handled: false };
+      hooks.object(event);
+      assert.equal(event.handled, true);
+      runTicks(visit, 4);
+      const at = visit.player.getLocation();
+      assert.deepEqual([at.getX(), at.getY(), at.getZ()], side.to, `${door.x},${door.y} from ${side.from}`);
+    }
+  }
+});
+
+test("a Cam Torum squeeze door says you squeeze through, as spam on the move's tick (#2449)", () => {
+  // Captured (226/1693 tick 1706; 237/1098, 1102, 1105, 1135): every crossing gets the spam
+  // "You manage to squeeze through the tiny door." on the teleport's tick, before the move.
+  for (const door of data.locs.filter((entry) => entry.id === 51005)) {
+    assert.equal(door.message, "You manage to squeeze through the tiny door.", `${door.x},${door.y}`);
+    assert.equal(door.messageType, "spam", `${door.x},${door.y}`);
+    assert.equal(requirementFor(door, decisions), null, "no gate decision, so a sync keeps the entry as it is");
+  }
+  const object = locAt(51005, 1431, 9567, 1);
+  const visit = explorer([1432, 9568, 1]);
+  const sender = visit.player.getPacketSender();
+  const said = new Proxy({}, {
+    get: (target, key) => key === "sendTypedMessage"
+      ? (type, text) => (visit.ticks[visit.ticks.length - 1].push(`message ${type} ${text}`), said)
+      : (...args) => (sender[key](...args), said),
+  });
+  visit.player.getPacketSender = () => said;
+  visit.player.sendMessage = (text) => visit.ticks[visit.ticks.length - 1].push(`message game ${text}`);
+  const event = { player: visit.player, object, objectId: object.getId(), clickType: 1, handled: false };
+  hooks.object(event);
+  assert.equal(event.handled, true);
+  runTicks(visit, 4);
+  assert.deepEqual(visit.ticks, [
+    [],
+    [],
+    ["anim 6103", "sound 2452"],
+    [`message ${core.ChatType.SPAM} You manage to squeeze through the tiny door.`, "move 1430,9568,1"],
+    [],
+  ]);
 });
 
 test("trapdoor swaps: each loc has its option, and becomes the other state", () => {

@@ -7,10 +7,11 @@ const GLOW_PRESET_ATTRIBUTE = "visual:glow-preset";
 const GLOW_INTENSITY_ATTRIBUTE = "visual:glow-intensity";
 const LAST_GLOW_PRESET_ATTRIBUTE = "killstreaks:last-glow-preset";
 const TOTAL_KILLS_ATTRIBUTE = "killstreaks:total-kills";
-const STREAK_ATTRIBUTE = "killstreaks:streak";
+const STREAK_ATTRIBUTE = "pvp:killstreak";
 const HIGHEST_STREAK_ATTRIBUTE = "killstreaks:highest-streak";
 const DEATHS_ATTRIBUTE = "killstreaks:deaths";
 const RECENT_KILLS_ATTRIBUTE = "killstreaks:recent-kills";
+let pluginApi;
 const RATIO_FORMAT = new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 });
 
 const BASE_BLOOD_MONEY_REWARD = 150;
@@ -93,7 +94,14 @@ function incrementAttribute(player, attribute) {
   player.setAttribute(attribute, parseAttributeInt(player.getAttribute(attribute), 0) + 1);
 }
 
-function killDeathRatio(player) {
+function pvpStatistics(player) {
+  const request = { player, stats: null };
+  pluginApi?.emitCustomEvent?.("pvp:stats", request);
+  return request.stats;
+}
+
+function killDeathRatio(player, statistics = pvpStatistics(player)) {
+  if (statistics) return RATIO_FORMAT.format(statistics.kdr);
   const deaths = parseAttributeInt(player.getAttribute(DEATHS_ATTRIBUTE), 0);
   const kills = parseAttributeInt(player.getAttribute(TOTAL_KILLS_ATTRIBUTE), 0);
   return RATIO_FORMAT.format(deaths === 0 ? kills : kills / deaths);
@@ -222,12 +230,18 @@ function updatePvpInterface(player) {
   if (!isEligibleKillstreakPlayer(player)) {
     return;
   }
+  const statistics = pvpStatistics(player);
   player
     .getPacketSender?.()
     .sendString?.(`@or1@Killstreak: ${normalizeKillstreak(player)}`, 52029)
-    ?.sendString?.(`@or1@Kills: ${parseAttributeInt(player.getAttribute(TOTAL_KILLS_ATTRIBUTE), 0)}`, 52030)
-    ?.sendString?.(`@or1@Deaths: ${parseAttributeInt(player.getAttribute(DEATHS_ATTRIBUTE), 0)}`, 52031)
-    ?.sendString?.(`@or1@K/D Ratio: ${killDeathRatio(player)}`, 52033);
+    ?.sendString?.(`@or1@Kills: ${statistics?.playerKills ?? parseAttributeInt(player.getAttribute(TOTAL_KILLS_ATTRIBUTE), 0)}`, 52030)
+    ?.sendString?.(`@or1@Deaths: ${statistics?.pvpDeaths ?? parseAttributeInt(player.getAttribute(DEATHS_ATTRIBUTE), 0)}`, 52031)
+    ?.sendString?.(`@or1@K/D Ratio: ${killDeathRatio(player, statistics)}`, 52033);
+}
+
+function persistKillstreak(player) {
+  pluginApi.emitCustomEvent("persistence:save", { player, reason: "pvp-killstreak" });
+  pluginApi.emitCustomEvent("pvp:stats-changed", { player });
 }
 
 function trackRecentKill(killer, victim) {
@@ -314,6 +328,7 @@ function applyKillstreakProgress(player) {
 
   const glowOutcome = syncKillstreakGlow(player);
   updatePvpInterface(player);
+  persistKillstreak(player);
 
   return {
     streak,
@@ -339,6 +354,7 @@ function handleVictimDefeat(victim, options = {}) {
   }
   syncKillstreakGlow(victim);
   updatePvpInterface(victim);
+  if (previousStreak > 0) persistKillstreak(victim);
 }
 
 function handleThresholdAnnouncement(killer, outcome) {
@@ -444,29 +460,36 @@ function handlePlayerKill(killer, victim) {
 let World;
 let ItemOnGroundManager;
 
+function initialize(api) {
+  pluginApi = api;
+  World = api.getWorld();
+  ItemOnGroundManager = api.getItemOnGroundManager();
+}
+
+function login({ player }) {
+  syncKillstreakGlow(player);
+  updatePvpInterface(player);
+}
+
+function playerDefeated({ killer, victim }) {
+  const eligibility = { killer, victim, allow: true };
+  pluginApi.emitCustomEvent("pvp:count-stats", eligibility);
+  if (eligibility.allow === false) return;
+  const botKill = shouldIncrementForBotKill(killer, victim);
+  const playerKill = isEligiblePlayerKill(killer, victim);
+  if (botKill) applyKillstreakProgressAndAnnouncements(killer);
+  handleVictimDefeat(victim, { countDeath: playerKill });
+  if (playerKill) handlePlayerKill(killer, victim);
+}
+
 module.exports = {
   name: "KillStreaks",
   dependsOn: ["Wilderness"],
   register(api) {
-    World = api.getWorld();
-    ItemOnGroundManager = api.getItemOnGroundManager();
+    initialize(api);
+    api.persistAttribute(STREAK_ATTRIBUTE, 0);
     api.registerCommand("kdr", sayKillDeathRatio, undefined, "Say your kill/death ratio");
-    api.onPlayerLogin(({ player }) => {
-      syncKillstreakGlow(player);
-      updatePvpInterface(player);
-    });
-
-    api.onPlayerDefeated(({ killer, victim }) => {
-      const botKill = shouldIncrementForBotKill(killer, victim);
-      const playerKill = isEligiblePlayerKill(killer, victim);
-
-      if (botKill) {
-        applyKillstreakProgressAndAnnouncements(killer);
-      }
-      handleVictimDefeat(victim, { countDeath: playerKill });
-      if (playerKill) {
-        handlePlayerKill(killer, victim);
-      }
-    });
+    api.onPlayerLogin(login);
+    api.onPlayerDefeated(playerDefeated);
   },
 };

@@ -1,14 +1,16 @@
 /**
  * The relic interface (league_relics, 655), as captured: the side panel's View Relics opens it as
  * the main modal with the click events on its tier slots; a slot click records the relic viewed
- * (varbit league_relic_last_viewed = tier x 3 + slot) and runs the client's redraw scripts;
- * the confirm button unlocks the viewed relic.
+ * (varbit league_relic_last_viewed = the clicked slot) and runs the client's redraw scripts;
+ * the confirm button unlocks the viewed relic. Client script 3189 numbers the clickzones with one
+ * running counter over the tiers' relics, so a slot is the relics of the tiers before it plus its
+ * place in its own tier: Demonic Pacts' tier 7 holds two, so its tier 8 is slots 20-22 (rec 1135:
+ * slot 19 views Reloaded, struct 1127; slot 22 Flask of Fervour, struct 6454).
  */
 const Common = require("./Common.LeagueRelics");
 const Unlock = require("./Unlock.LeagueRelics");
 
 const { FLAG_OP1 } = require("../../interface/widgetGroup");
-const SLOTS_PER_TIER = 3;
 /** if_setevents IF_SCRIPT_TRIGGER (bit 23, as RSProx names it): the relic effect toggles' script triggers. */
 const FLAG_SCRIPT_TRIGGER = 1 << 23;
 
@@ -21,6 +23,17 @@ const viewing = new WeakMap();
 
 function ui() {
   return Common.data.interface;
+}
+
+/** The relic at clickzone `sub` of a catalog, as { tier (index), slot (1-based) }, or null past its last relic. */
+function slotToRelic(catalog, sub) {
+  let first = 0;
+  for (let tier = 0; tier < (catalog?.tiers.length ?? 0); tier++) {
+    const count = catalog.tiers[tier].relics.length;
+    if (sub < first + count) return { tier, slot: sub - first + 1 };
+    first += count;
+  }
+  return null;
 }
 
 function open({ player }) {
@@ -43,8 +56,8 @@ function open({ player }) {
 
 /**
  * What the relic is to the viewer, as 3193 takes it (the interface data's `viewStates`): their own (the tier's pick,
- * or Reloaded's), another of a chosen tier (unless Reloaded may still take it), out of reach of
- * their points, or theirs to choose.
+ * or Reloaded's), another of a chosen tier, one Reloaded's unused extra pick may take (rec 1135),
+ * out of reach of their points, or theirs to choose.
  */
 function viewState(player, type, tier, relicSlot) {
   const states = ui().viewStates;
@@ -54,7 +67,7 @@ function viewState(player, type, tier, relicSlot) {
   if (picked !== undefined) {
     // Reloaded's extra pick may still take it: chosen tiers stay open to that one choice.
     const reloadedWhy = Unlock.reloadedRefusal(player, type, tier, relicSlot, true);
-    return reloadedWhy === null || reloadedWhy === "alreadyChosen" ? states.tierTaken : states.available;
+    return reloadedWhy === null || reloadedWhy === "alreadyChosen" ? states.tierTaken : states.repick;
   }
   if (Common.points(player) < Common.catalog(type).tiers[tier].cost) return states.locked;
   return states.available;
@@ -65,9 +78,9 @@ function view({ player, slot }) {
   const index = Number(slot);
   const state = viewing.get(player);
   if (type === null || !state || !Number.isInteger(index) || index < 0) return false;
-  const tier = Math.floor(index / SLOTS_PER_TIER);
-  const relicSlot = (index % SLOTS_PER_TIER) + 1;
-  if (!Common.relic(type, tier, relicSlot)) return false;
+  const at = slotToRelic(Common.catalog(type), index);
+  if (!at) return false;
+  const { tier, slot: relicSlot } = at;
   const { group, viewScript, viewScriptComponents, toggleScript, toggleScriptComponents } = ui();
   const structs = Common.structIds(type, tier, relicSlot);
   const sender = player.getPacketSender();
@@ -102,7 +115,8 @@ function confirm({ player }) {
   }
   // The bank counts while the player is still banking behind the modal (closing it resets the status).
   const bankOpen = state.bankOpen && player.getStatus() === Common.core.PlayerStatus.BANKING;
-  if (Unlock.unlock(player, Math.floor(state.slot / SLOTS_PER_TIER), (state.slot % SLOTS_PER_TIER) + 1, { bankOpen })) viewing.delete(player);
+  const at = slotToRelic(Common.catalog(Common.leagueOf(player)), state.slot);
+  if (at && Unlock.unlock(player, at.tier, at.slot, { bankOpen })) viewing.delete(player);
   return true;
 }
 
@@ -112,3 +126,5 @@ module.exports = function attach(api) {
   api.onInterfaceActionButton(Unlock.uid(group, clickzones), view);
   api.onInterfaceActionButton(Unlock.uid(group, confirmChild), confirm);
 };
+
+module.exports.slotToRelic = slotToRelic;

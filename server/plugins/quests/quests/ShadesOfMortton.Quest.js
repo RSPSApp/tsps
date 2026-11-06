@@ -266,6 +266,9 @@ module.exports = function registerShadesOfMorttonQuest(api) {
     "~ Repairing the temple ~To repair the temple you need to increase your material resource pool by bringing limestone bricks, timber beams (or wooden planks) and swamp paste, either in your inventory or in a Flamtaer bag.";
 
   let quest;
+  // One quest registration belongs to one server World, like the altar below.
+  const world = api.getWorld();
+  let templeRepaired = 0;
   // The Flamtaer altar is one world object: unlit (4091) until someone lights it (4090).
   let altarObject = null;
   let altarLit = false;
@@ -283,21 +286,18 @@ module.exports = function registerShadesOfMorttonQuest(api) {
   }
 
   function templeProgress(player) {
-    let repaired = Math.min(100, Number(player.getAttribute(TEMPLE_REPAIRED_ATTRIBUTE)) || 0);
+    const oldRepaired = Math.min(100, Number(player.getAttribute(TEMPLE_REPAIRED_ATTRIBUTE)) || 0);
     let sanctity = Math.min(100, Number(player.getAttribute(TEMPLE_SANCTITY_ATTRIBUTE)) || 0);
-    if (repaired === 0 && sanctity === 0) {
-      // Saves from the old 0..5 model were already allowed to light the altar
-      // once five walls had been repaired.
+    if (oldRepaired === 0 && sanctity === 0) {
+      // Preserve old personal sanctity without inferring a world repair percentage.
       if (quest.getStage(player) >= STAGE_CAN_LIGHT_ALTAR) {
-        repaired = 100;
         sanctity = 20;
       } else {
         const built = Number(player.getAttribute(LEGACY_TEMPLE_BUILD_ATTRIBUTE)) || 0;
-        repaired = Math.min(100, built);
         sanctity = Math.min(100, built);
       }
     }
-    return { repaired, sanctity };
+    return { repaired: templeRepaired, sanctity };
   }
 
   function syncTemple(player) {
@@ -305,6 +305,12 @@ module.exports = function registerShadesOfMorttonQuest(api) {
     const packet = player.getPacketSender();
     packet.sendConfig(VARP_TEMPLE_REPAIRED, repaired);
     packet.sendConfig(VARP_TEMPLE_SANCTITY, sanctity);
+  }
+
+  function syncTempleRepairOthers(actor) {
+    for (const player of world.getPlayers()) {
+      if (player && player !== actor) player.getPacketSender().sendConfig(VARP_TEMPLE_REPAIRED, templeRepaired);
+    }
   }
 
   function curedMultiValue(player) {
@@ -873,11 +879,8 @@ module.exports = function registerShadesOfMorttonQuest(api) {
     player.getInventory().deleteNumber(ItemIdentifiers.LIMESTONE_BRICK, ticks);
     player.getInventory().deleteNumber(timberId, ticks);
     player.getInventory().deleteNumber(ItemIdentifiers.SWAMP_PASTE, 5 * ticks);
-    const { repaired, sanctity } = templeProgress(player);
-    player.setAttribute(
-      TEMPLE_REPAIRED_ATTRIBUTE,
-      Math.min(100, repaired + ticks)
-    );
+    const { sanctity } = templeProgress(player);
+    templeRepaired = Math.min(100, templeRepaired + ticks);
     // Capture 1846: one repair click gives +1% repair and +2 sanctity, then a
     // separate sanctity tick lands a few ticks later.
     player.setAttribute(
@@ -885,6 +888,7 @@ module.exports = function registerShadesOfMorttonQuest(api) {
       Math.min(100, sanctity + Math.min(2, ticks + 1))
     );
     syncTemple(player);
+    syncTempleRepairOthers(player);
     TaskManager.submit(new CountdownTask(player, 4, () => {
       if (player.isRegistered?.() === false) return;
       const progress = templeProgress(player);

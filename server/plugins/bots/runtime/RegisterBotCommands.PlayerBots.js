@@ -1,4 +1,5 @@
 const { PlayerRights } = require("../../../src/main/typescript/elvarg/game/model/rights/PlayerRights");
+const { botNameProblem } = require("../lib/BotNames.PlayerBots");
 const { FriendsChatManager } = require("../../interface/FriendsChatManager");
 const { isPvpOnlyBotState } = require("../behaviours/state/State.PlayerBots");
 const { ATTR_RECRUIT_OWNER_USERNAME } = require("./RecruitConstants.PlayerBots");
@@ -311,6 +312,24 @@ function registerBotCommands(options) {
     });
     return true;
   }, PlayerRights.ADMINISTRATOR, "Set bot behaviour");
+
+  // ::botname <current name> <new name> (underscores are spaces); lasts until the bot logs out.
+  api.registerCommand("botname", ({ player, parts }) => {
+    const spaced = (text) => String(text ?? "").replace(/_/g, " ").trim();
+    const current = spaced(parts[1]).toLowerCase();
+    const name = spaced(parts[2]);
+    const bot = [...api.core.World.getPlayers()].find(candidate => candidate.isPlayerBot?.() === true &&
+      (candidate.getDisplayName().toLowerCase() === current || candidate.getUsername().toLowerCase() === current));
+    const problem = !bot ? `botname: no bot ${parts[1] ?? ""}` : botNameProblem(name) ??
+      (runtime.botNameTaken(bot.getUsername(), name) ? "That name is not available." : null);
+    if (problem) {
+      player.sendMessage(`${problem} Usage: ::botname <current name> <new name>`);
+      return true;
+    }
+    bot.setDisplayName(name);
+    player.sendMessage(`${bot.getUsername()} is now shown as ${name}.`);
+    return true;
+  }, PlayerRights.DEVELOPER, "Rename a bot's display name");
 
   // Live brain state for one bot: activity frames, the top action's own summary,
   // pending walk and combat target. For diagnosing stuck bots without a debugger.

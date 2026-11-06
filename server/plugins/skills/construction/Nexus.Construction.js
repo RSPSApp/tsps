@@ -1,6 +1,6 @@
 "use strict";
 
-const { CacheDefinitions, CountdownTask, Location, Skill, TaskManager, TeleportHandler } = require("./Core.Construction");
+const { api, CacheDefinitions, CountdownTask, Location, Skill, TaskManager, TeleportHandler } = require("./Core.Construction");
 const Ids = require("./Ids.Construction");
 const House = require("./House.Construction");
 const Portals = require("./Portals.Construction");
@@ -16,14 +16,19 @@ const Portals = require("./Portals.Construction");
 // - Configuration opens telenexus (19). Dragging a slotted row onto the portal (left_click_layer)
 //   makes it the left-click destination and left_click_options 2/3 picks it or its alternate;
 //   left_text clears it ("Drag from the slotted list to the portal to set the left click
-//   destination."); Done saves the temp varbits, clears poh_nexus_id and closes (captured).
+//   destination."); Done saves the temp varbits, clears poh_nexus_id and closes (captured), or,
+//   when the slots changed, the client shows the cost panel and Confirm saves.
 //   Adding (non_slotted row i is enum 1375's i-th destination) and reordering slots by dragging,
 //   and removing by dragging a slot back, aren't captured: adding costs 1,000x the spell's runes
 //   from the inventory on Done, needs its Magic level, and removing refunds nothing (Wiki).
 //   Marble holds 4, gilded 8, crystalline 41 (Wiki).
 const MENU = Ids.iface("telenexus_teleport"), CONFIG = Ids.iface("telenexus");
 const ROWS = 13, KEYS = 8, ALT_ROWS = 17, ALT_KEYS = 7, OPTIONS_LAYER = 10;
-const LEFT_CLICK_LAYER = 3, LEFT_TEXT = 6, LEFT_CLICK_OPTIONS = 8, DONE = 9, NON_SLOTTED = 22, CONFIRM_DETAILS = 29, SLOTTED = 39;
+// telenexus by component name: the rev 241 ids moved (Done was 9, now 15; the list layers shifted too).
+const child = (name) => Ids.component(`telenexus:${name}`) & 0xffff;
+const LEFT_CLICK_LAYER = child("click_layer"), LEFT_TEXT = child("click_text"), LEFT_CLICK_OPTIONS = child("radio_button_options");
+const DONE = child("telenexus_donebutton"), CONFIRM = child("telenexus_confirm");
+const NON_SLOTTED = child("non_slotted_list"), CONFIRM_DETAILS = child("confirm_details"), SLOTTED = child("slotted_list");
 const COST_INV = 619;
 const NEXUS_ID = Ids.varbit("poh_nexus_id"), LEFT = Ids.varbit("poh_nexus_left_click"), LEFT_TEMP = Ids.varbit("poh_nexus_left_click_temp");
 // The 45 slots: poh_nexus_tele_<n>, and the interfaces' poh_nexus_tele_<n>_temp copies.
@@ -96,6 +101,7 @@ function teleportTo(player, house, id) {
   if (!destination?.tile) return player.sendMessage("That destination isn't available yet.");
   if (!TeleportHandler.checkReqs(player, destination.tile)) return;
   house.exitHouse(player, destination.tile.clone());
+  api.emitCustomEvent("construction:portal", { player, destination: destination.spellName });
 }
 
 /**
@@ -196,9 +202,21 @@ function configClick(event, session) {
     if (base && (event.slot ?? event.action) === 3 && base.alternate) session.left = base.alternate;
     else if (base && (event.slot ?? event.action) === 2) session.left = base.id;
   } else if (event.childId === DONE) {
+    return doneClicked(player, session);
+  } else if (event.childId === CONFIRM) {
     return done(player, session);
   }
   sendConfig(player, session);
+}
+
+/**
+ * Done (client script telenexus_okbutton_click): the client compares the sum of the temp slot
+ * varbits with the saved ones. Equal, it closes by itself, so a reorder or a new left-click
+ * destination saves here; different, it shows the cost panel and waits for Confirm.
+ */
+function doneClicked(player, session) {
+  const sum = (slots) => slots.reduce((total, id) => total + id, 0);
+  if (sum(session.slots) === sum(stateOf(player, session.furniture).slots)) return done(player, session);
 }
 
 /** Done: pay for new destinations (inventory runes, the spell's Magic level), then save. */

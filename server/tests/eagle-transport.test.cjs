@@ -153,9 +153,7 @@ test('a completed real death cancels the old flight before its arrival', () => {
   player.isDying = true;
   player.setHitpoints(0);
   const death = new PlayerDeathTask(player);
-  death.execute();
-  death.execute();
-  death.execute();
+  for (let tick = 0; tick < 5; tick++) death.execute();
   const respawn = at(player);
   assert.equal(player.isDyingReturn(), false);
   assert.ok(player.getHitpoints() > 0);
@@ -363,5 +361,25 @@ test('a closed connection cannot arrive while real combat keeps the player regis
     const queue = core.World.getRemovePlayerQueue();
     const index = queue.indexOf(player);
     if (index >= 0) queue.splice(index, 1);
+  }
+});
+
+
+test('eagle arrival preserves the shared event and credits Desert only after arriving there', (t) => {
+  const events = [];
+  t.mock.method(Common.api, 'emitCustomEvent', (name, payload) => events.push({ name, payload }));
+  for (const [eagle, to, desert] of [
+    [npc(1487, 2019, 4957, 3), Common.data.eyries.desert.arrive, true],
+    [npc(1488, 2023, 4961, 3), Common.data.eyries.jungle.arrive, false],
+  ]) {
+    events.length = 0;
+    const player = fakePlayer();
+    Flight.fly(player, eagle);
+    assert.deepEqual(events, [], 'starting a flight awards nothing');
+    flush();
+    assert.deepEqual(events.map((event) => event.name), desert ? ['eagle-transport:arrived', 'diary:task'] : ['eagle-transport:arrived']);
+    assert.equal(events[0].payload.player, player);
+    assert.deepEqual(events[0].payload.to, to);
+    if (desert) assert.equal(events[1].payload.task, 'travel-to-the-desert-via-eagle');
   }
 });

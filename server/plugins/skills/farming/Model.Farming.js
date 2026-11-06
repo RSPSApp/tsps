@@ -33,7 +33,8 @@ function tickIndex(at, offset) {
 }
 function emptyPatch(now, farm, weeds = 0) {
     return { stage: 0, weeds, compost: 0, watered: false, status: "growing", checked: false,
-        protected: false, lives: 0, nextAt: nextGrowth(now, Data.FORMULAS.growth.tickMinutes, farm.offset), plantedAt: now };
+        protected: false, lives: 0, plantExperiencePending: false,
+        nextAt: nextGrowth(now, Data.FORMULAS.growth.tickMinutes, farm.offset), plantedAt: now };
 }
 function startingLives(crop, compost) {
     if (Data.COMPOSTABLE_YIELD.has(crop.type)) return 3 + compost;

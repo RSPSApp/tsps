@@ -17,6 +17,7 @@ const { Gamevals, GamevalKind } = require("../dist/game/cache/Gamevals");
 const { RegionManager } = require("../dist/game/collision/RegionManager");
 const { NpcDefinitionLoader } = require("../dist/game/definition/loader/impl/NpcDefinitionLoader");
 const { NpcSpawnDefinitionLoader } = require("../dist/game/definition/loader/impl/NpcSpawnDefinitionLoader");
+const { NpcSpawnDefinition } = require("../dist/game/definition/NpcSpawnDefinition");
 const { NPC } = require("../dist/game/entity/impl/npc/NPC");
 const { NpcSpawnLineage } = require("../dist/game/entity/impl/npc/NpcSpawnLineage");
 const { Direction } = require("../dist/game/model/Direction");
@@ -130,6 +131,78 @@ test("Death Plateau's wounded soldier stays seated at the road fork", (t) => {
   for (let tick = 0; tick < 100; tick++) soldier.getMovementCoordinator().process();
   assert.equal(steps.mock.callCount(), 0, "a visible wounded soldier never attempts to wander");
   assert.equal(soldier.getMovementCoordinator().getRadius(), 0);
+});
+
+// Corsair Cove's seated crew: the cache gives each of these NPCs a seated or lying pose as its walk
+// animation, so a wander radius makes them slide around in that pose (issue #2410).
+for (const [label, id, walkSeq] of [
+  ["Altarkiz", 7986, 4851],
+  ["Ithoi the Navigator", 7962, 6284],
+  ["Cabin Boy Colin", 7968, 6282],
+  ["Gnocci the Cook", 7973, 6282],
+  ["Arsen the Thief", 7977, 6282],
+]) test(`${label} does not slide around in a seated pose`, (t) => {
+  const row = require("../data/definitions/npc-spawns.json").find(spawn => spawn.id === id);
+  assert.ok(row, "the spawn exists");
+  const definition = CacheDefinitions.getNpc(id);
+  assert.equal(definition.walkSeqId, walkSeq, "the cache's walk animation is a seated pose (4851 aide sitting cross-legged, 6284 sitting up, 6282 barely conscious)");
+
+  spawnFile([row]);
+  const [npc] = live(id);
+  assert.ok(npc, "the real loader activates the spawn");
+  t.mock.method(World, "isLocationActive", () => true);
+  t.mock.method(Math, "random", () => 0.1);
+  const steps = t.mock.method(npc.getMovementQueue(), "addSteps");
+  for (let tick = 0; tick < 100; tick++) npc.getMovementCoordinator().process();
+  assert.equal(steps.mock.callCount(), 0, "a seated NPC never attempts to wander");
+  assert.equal(npc.getMovementCoordinator().getRadius(), 0);
+});
+
+// Every spawn whose cache walk animation is a seated or lying pose must stand still: with a wander radius
+// it slides around in that pose. 4851 aide sitting cross-legged, 6284 sitting up, 6282 barely conscious.
+// The Corsair crew were found first (#2410); this takes every other row on the same poses, found from the
+// cache so a later import cannot bring one back.
+const SEATED_WALK_SEQUENCES = new Set([4851, 6284, 6282]);
+
+test("no spawn walks in a seated pose", () => {
+  const offenders = require("../data/definitions/npc-spawns.json")
+    .filter(row => typeof row.id === "number" && SEATED_WALK_SEQUENCES.has(CacheDefinitions.getNpc(row.id)?.walkSeqId) && row.wanderRadius !== 0)
+    .map(row => `${row.name} ${row.id} at ${row.x},${row.y},${row.level} radius ${row.wanderRadius ?? "default"}`);
+  assert.deepEqual(offenders, [], "these rows would slide around in a seated or lying pose");
+});
+
+for (const id of [8573, 9193, 14227]) test(`NPC ${id} does not slide around in a seated pose`, (t) => {
+  const row = require("../data/definitions/npc-spawns.json").find(spawn => spawn.id === id);
+  assert.ok(row, "the spawn exists");
+  assert.ok(SEATED_WALK_SEQUENCES.has(CacheDefinitions.getNpc(id).walkSeqId), "its cache walk animation is a seated pose");
+  spawnFile([row]);
+  const [npc] = live(id);
+  assert.ok(npc, "the real loader activates the spawn");
+  t.mock.method(World, "isLocationActive", () => true);
+  t.mock.method(Math, "random", () => 0.1);
+  const steps = t.mock.method(npc.getMovementQueue(), "addSteps");
+  for (let tick = 0; tick < 100; tick++) npc.getMovementCoordinator().process();
+  assert.equal(steps.mock.callCount(), 0, "a seated NPC never attempts to wander");
+  assert.equal(npc.getMovementCoordinator().getRadius(), 0);
+});
+
+// The ferry parents (Rimmington dock, Corsair Cove docks) walk with human_ready but show a captain who walks
+// with human_walk_f; an unrestricted radius made the ferry captain drift without a walk animation (#2410).
+for (const [label, parentName] of [["Rimmington", "corsair_ferry_rimmington"], ["Corsair Cove docks", "corsair_ferry_covedocks"]]) test(`the ${label} ferry spawn does not wander`, (t) => {
+  const id = CacheDefinitions.getNpcId(parentName);
+  const row = require("../data/definitions/npc-spawns.json").find(spawn => spawn.id === id);
+  assert.ok(row, "the canonical ferry spawn exists");
+  assert.equal(CacheDefinitions.getSeqName(CacheDefinitions.getNpc(id).walkSeqId), "human_ready", "the parent has a standing pose as its walk");
+
+  spawnFile([row]);
+  const [ferry] = live(id);
+  assert.ok(ferry, "the real loader activates the canonical spawn");
+  t.mock.method(World, "isLocationActive", () => true);
+  t.mock.method(Math, "random", () => 0.1);
+  const steps = t.mock.method(ferry.getMovementQueue(), "addSteps");
+  for (let tick = 0; tick < 100; tick++) ferry.getMovementCoordinator().process();
+  assert.equal(steps.mock.callCount(), 0, "the ferry must not attempt random walking");
+  assert.equal(ferry.getMovementCoordinator().getRadius(), 0);
 });
 
 for (const [name, parentName, childName, stage, pose] of [
@@ -388,4 +461,45 @@ test("a respawn task for an NPC whose source was retired does nothing", () => {
   const task = new NPCRespawnTask(npc, 1);
   task.execute();
   assert.equal(World.getAddNPCQueue().length, 0);
+});
+
+test("requeue hands a live spawn back to its pending list once, and never a dead or dying one", () => {
+  const vetoed = new Set();
+  const api = PluginManager.createApi("RequeueVetoTest");
+  api.onCanSpawnNpc((event) => { if (vetoed.has(event.npcId)) event.allow = false; });
+  const loader = new NpcSpawnDefinitionLoader();
+  const definitions = [loader.toDefinition({ id: MAN, x: 3222, y: 3218, level: 0, wanderRadius: 0 }, "test")];
+  NpcSpawnDefinition.replace(definitions);
+  loader.applyToWorld(definitions);
+  const here = new Location(3222, 3218, 0);
+  try {
+    NpcSpawnDefinitionLoader.activateNear(here);
+    flushNpcQueues();
+    const [man] = live(MAN);
+    assert.ok(man);
+    // Live: it steps aside while vetoed and comes back once, through the loader.
+    vetoed.add(MAN);
+    assert.equal(NpcSpawnDefinitionLoader.requeue(man), true);
+    flushNpcQueues();
+    NpcSpawnDefinitionLoader.activateNear(here);
+    flushNpcQueues();
+    assert.equal(live(MAN).length, 0, "the veto keeps it pending");
+    vetoed.delete(MAN);
+    NpcSpawnDefinitionLoader.activateNear(here);
+    flushNpcQueues();
+    assert.equal(live(MAN).length, 1, "it returns once the veto ends");
+    // Dead: its respawn is already queued, so requeue refuses rather than doubling it.
+    const [again] = live(MAN);
+    again.setDying(true);
+    assert.equal(NpcSpawnDefinitionLoader.requeue(again), false, "a dying spawn is not requeued");
+    again.setDying(false);
+    kill(again);
+    assert.equal(NpcSpawnDefinitionLoader.requeue(again), false, "a dead spawn is not requeued");
+    ticksUntilRespawn(MAN);
+    NpcSpawnDefinitionLoader.activateNear(here);
+    flushNpcQueues();
+    assert.equal(live(MAN).length, 1, "only its own respawn comes back");
+  } finally {
+    NpcSpawnDefinition.replace([]);
+  }
 });

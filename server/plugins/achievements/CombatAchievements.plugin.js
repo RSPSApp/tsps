@@ -15,6 +15,7 @@
  *   api.emitCustomEvent("combat-achievements:tier", { player, tier: "Hard" })
  *                                       comes back with `unlocked`: whether the tier is reached,
  *                                       and `claimed`: whether its rewards were claimed from Ghommal
+ *                                       and `currentThresholdMet`: whether current points still reach the tier
  *   api.emitCustomEvent("combat-achievements:open", { player, collectionLogCategory? })
  *                                       the account summary's row; a collection log boss's button
  *   answer "combat-achievements:summary" { player }  -> completed (tasks done), speed (speed tasks
@@ -60,6 +61,8 @@ function onTier(request) {
   const status = Progress.tierStatus(request.player, tier);
   request.unlocked = status > 0;
   request.claimed = status === 2;
+  // Claimed tiers can outlive a raised threshold; passive rewards need current points.
+  request.currentThresholdMet = Progress.points(request.player) >= tier.threshold;
 }
 
 /** What the character has done, in totals (the Leagues' tasks ask). */

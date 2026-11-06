@@ -10,7 +10,9 @@
  * tunnels as clear or blocked (varbits 138/139).
  *
  * Nothing may end up inside the rocks (issue 1929): barricades can't be set up on a patch, and a
- * standard dropped on one goes home (Game.CastleWars.js), so rocks never fall on a dropped one.
+ * standard dropped on one goes home while either rock layer stands; once both are cleared it is
+ * placed on the inside floor corner just outside the patch (Game.CastleWars.js), so rocks never
+ * fall on a dropped one.
  *
  * Cache locs: rocks at the four patches below, cave walls 4448 on the corners of each patch.
  * RSPS-only (Near-Reality): which team owns which patch and the clear/collapse messages.
@@ -173,6 +175,27 @@ function isRockTile(location) {
   return patches().some((patch) => inPatch(patch, location));
 }
 
+/**
+ * The tile a standard dropped on a tunnel patch belongs on (issue 2355). Outside every footprint
+ * it stays where the carrier is. While either rock layer stands the standard goes home (null).
+ * A cleared 2x2 patch uses the inside floor corner in the patch's own orientation, keeping the
+ * carrier's across-axis tile. Evidence limits are in server/docs/castle-wars-flags.md.
+ */
+function flagDropTile(location) {
+  const patch = patches().find((candidate) => inPatch(candidate, location));
+  if (!patch) {
+    return location;
+  }
+  if (isBlocked(patch)) {
+    return null;
+  }
+  const [x, y, face] = patch.rocks;
+  // North-south (face 0) moves along y; east-west (face 1) moves along x.
+  return face === 0
+    ? new core.Location(location.getX(), location.getY() === y ? y - 1 : y + PATCH_SIZE, 0)
+    : new core.Location(location.getX() === x ? x - 1 : x + PATCH_SIZE, location.getY(), 0);
+}
+
 function collapseTunnel(player, patch, slot) {
   if (isBlocked(patch)) {
     player.sendMessage("The tunnel is already blocked.");
@@ -209,6 +232,7 @@ module.exports = function attachCastleWarsTunnels(pluginApi, castleWars) {
   game = castleWars;
   core = api.core;
   game.isTunnelRockTile = isRockTile;
+  game.tunnelFlagDropTile = flagDropTile;
   api.onObjectInteraction("Rocks", { Mine: mineRocks });
   api.onObjectInteraction("Cave wall", { Collapse: collapseWall });
   api.onItemOnObject("Explosive potion", "Rocks", blastRocks);

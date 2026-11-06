@@ -30,4 +30,15 @@ module.exports = {
   climbOverLoc: () => ({
     steps: ({ pos, obj }) => [climbOver([obj.x, obj.y + (pos.y > obj.y ? -1 : 1)])],
   }),
+
+  /** Yanille's north wall rocks are a one-way climb out of town; the capture has no sequence. */
+  yanilleClimbingRocks: () => ({
+    route: ({ obj, pos }) => (pos.y > obj.y ? null : [obj.x, obj.y, obj.z]),
+    precondition: ({ pos, obj }) => (pos.y > obj.y ? "You can't climb up the rocks from this side." : null),
+    steps: ({ obj }) => [
+      { move: [obj.x, obj.y + 3, obj.z], speed: [0, 60], ticks: 1 },
+      { sound: 2453 },
+      { msg: "You climb over the wall." },
+    ],
+  }),
 };

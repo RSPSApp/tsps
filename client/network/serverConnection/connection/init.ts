@@ -1,3 +1,4 @@
+import { replaceCustomDefinitions } from "../../../custom/definitions/CustomDefinitionStore";
 import { PlayerSyncContext } from "../../../game/sync/PlayerSyncContext";
 import { PlayerUpdateDecoder } from "../../../game/sync/PlayerUpdateDecoder";
 import { setPacketSocket } from "../../packet";
@@ -49,6 +50,7 @@ export function initServerConnection(url: string = DEFAULT_URL): void {
         CustomItemRegistry.clear();
         CustomModelRegistry.clear();
         replaceDefinitionArchives([]);
+        replaceCustomDefinitions([]);
         clearWorldOverlays();
         const client = (globalThis as any).__osrsClient;
         client?.objTypeLoader?.clearCache();
@@ -57,7 +59,7 @@ export function initServerConnection(url: string = DEFAULT_URL): void {
         client?.locTypeLoader?.clearCache();
         client?.renderer?.invalidateDefinitionCaches();
         void client?.workerPool?.runAll((worker: any) => worker.setCustomContent({
-            gamemodeId: "connection-reset", datasets: [{ key: "definitionArchives", rows: [] }],
+            gamemodeId: "connection-reset", datasets: [{ key: "customItems", rows: [] }, { key: "customModels", rows: [] }, { key: "definitionArchives", rows: [] }, { key: "customDefinitions", rows: [] }],
         })).catch((error: unknown) => console.error("Archived worker reset failed", error));
         state.playerSyncContext = new PlayerSyncContext();
         state.playerUpdateDecoder = new PlayerUpdateDecoder();

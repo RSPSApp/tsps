@@ -141,6 +141,7 @@ function boardShip(player, trip, modal, onLand) {
     landed = true;
     Common.end(player);
     player.moveTo(Common.toLocation(trip.to));
+    Common.arrived(player, trip.routeName);
     hold(player, false);
     if (logout) return;
     reopenShipTabs(player);
@@ -195,6 +196,7 @@ function galleon(player, trip) {
     if (!Common.travelling(player)) return;
     Common.end(player);
     player.moveTo(Common.toLocation(trip.to));
+    Common.arrived(player, trip.routeName);
     hold(player, false);
     out.sendInterfaceRemoval();
   };
@@ -209,6 +211,7 @@ function fadeTrip(player, trip) {
   const land = () => {
     if (!Common.travelling(player)) return;
     player.moveTo(Common.toLocation(trip.to));
+    Common.arrived(player, trip.routeName);
     if (trip.message?.at === trip.teleport) message(player, trip.message.text, trip.message.spam);
   };
   hold(player, true);
@@ -252,6 +255,7 @@ function rowing(player, trip) {
   const land = () => {
     if (!Common.travelling(player)) return;
     player.moveTo(Common.toLocation(trip.to));
+    Common.arrived(player, trip.routeName);
   };
   const finish = () => {
     if (!Common.travelling(player)) return;
@@ -283,9 +287,12 @@ const STYLES = { ship_journey: shipJourney, longship, galleon, fade: fadeTrip, r
 
 /** Sends the player on a route by name; false if they're already travelling or it's unknown. */
 function travel(player, routeName) {
-  const trip = Common.route(routeName);
-  if (!trip || !player || Common.travelling(player)) return false;
+  const route = Common.route(routeName);
+  if (!route || !player || Common.travelling(player)) return false;
+  const trip = { ...route, routeName };
+  const from = player.getLocation().clone();
   STYLES[trip.style](player, trip);
+  Common.api.emitCustomEvent("ferries:departed", { player, route: routeName, from });
   return true;
 }
 

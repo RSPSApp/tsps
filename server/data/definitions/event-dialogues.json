@@ -7534,9 +7534,19 @@
                       "text": "Lost it already? Lucky for you, I've got a spare tucked away. You can have this one."
                     },
                     {
-                      "type": "jump",
-                      "reference": "continues",
-                      "id": "mxaG3S"
+                      "type": "condition",
+                      "text": "If the player has no inventory space:",
+                      "id": "UBDVQJ",
+                      "steps": [
+                        {
+                          "type": "line",
+                          "speaker": "Seth Groats",
+                          "text": "Oh, looks like you've got no space for it. I'll hold onto it until you do."
+                        },
+                        {
+                          "type": "end"
+                        }
+                      ]
                     },
                     {
                       "type": "condition",
@@ -7546,37 +7556,15 @@
                           "type": "message",
                           "text": "You have acquired a spooky picture, a chair, scarecrow and wall lamp. You should return to Fred in Lumbridge.",
                           "id": "tdDfyd"
-                        },
-                        {
-                          "type": "action",
-                          "action": "receive",
-                          "text": "a Spooky picture",
-                          "id": "Nkt5y6"
-                        },
-                        {
-                          "type": "jump",
-                          "reference": "continues",
-                          "id": "csYv-m"
                         }
                       ],
                       "id": "pMyO2X"
                     },
                     {
-                      "type": "condition",
-                      "text": "If the player has no inventory space:",
-                      "steps": [
-                        {
-                          "type": "line",
-                          "speaker": "Seth Groats",
-                          "text": "Oh, looks like you've got no space for it. I'll hold onto it until you do."
-                        },
-                        {
-                          "type": "jump",
-                          "reference": "continues",
-                          "id": "I60naq"
-                        }
-                      ],
-                      "id": "UBDVQJ"
+                      "type": "action",
+                      "action": "receive",
+                      "text": "a Spooky picture",
+                      "id": "Nkt5y6"
                     }
                   ],
                   "id": "1Glkal"
@@ -8658,8 +8646,13 @@
                   "steps": [
                     {
                       "type": "jump",
-                      "reference": "above",
-                      "id": "Kg0hmG"
+                      "id": "Kg0hmG",
+                      "steps": [
+                        {
+                          "type": "call",
+                          "branch": "jump-c9b44ecef3bdb073"
+                        }
+                      ]
                     }
                   ],
                   "id": "uDxjdh"
@@ -8917,8 +8910,13 @@
                     },
                     {
                       "type": "jump",
-                      "reference": "above",
-                      "id": "kzB_xv"
+                      "id": "kzB_xv",
+                      "steps": [
+                        {
+                          "type": "call",
+                          "branch": "jump-d62a299ec75c3e97"
+                        }
+                      ]
                     }
                   ],
                   "id": "Xu40ur"
@@ -9017,6 +9015,173 @@
           "type": "end"
         }
       ],
+      "jump-c9b44ecef3bdb073": [
+        {
+          "type": "condition",
+          "text": "If not wearing at least 3 Halloween items:",
+          "steps": [
+            {
+              "type": "action",
+              "action": "open_interface",
+              "target": "Diango's Holiday Item Retrieval",
+              "id": "L9reaW"
+            }
+          ],
+          "id": "9NWeHn"
+        },
+        {
+          "type": "condition",
+          "text": "If not wearing at least 3 Halloween items:",
+          "steps": [
+            {
+              "type": "line",
+              "speaker": "Diango",
+              "text": "Well now, someone's clearly in the Halloween spirit! A deal's a deal! Here's your spooky pumpkin lantern."
+            },
+            {
+              "type": "condition",
+              "text": "If the player has no inventory space:",
+              "steps": [
+                {
+                  "type": "line",
+                  "speaker": "Diango",
+                  "text": "Ah, but I see you don't have space for it right now. Come back when you do."
+                },
+                {
+                  "type": "end"
+                }
+              ],
+              "id": "5nwfqm"
+            },
+            {
+              "type": "action",
+              "action": "receive",
+              "text": "a Spooky pumpkin lantern",
+              "id": "BSrsl1"
+            },
+            {
+              "player": "Thank you, Diango. I'll make sure it gets put to good use."
+            },
+            {
+              "type": "line",
+              "speaker": "Diango",
+              "text": "Just keep the costumes. You might need them for the contest!"
+            }
+          ],
+          "id": "_MxZad"
+        }
+      ],
+      "jump-d62a299ec75c3e97": [
+        {
+          "type": "condition",
+          "text": "If the player is not wearing at least 3 Halloween items and/or does not have the Spooky pumpkin lantern equipped:",
+          "steps": [
+            {
+              "type": "end"
+            }
+          ],
+          "id": "4Sjcyo"
+        },
+        {
+          "type": "condition",
+          "text": "If the player is wearing at least 3 Halloween items and has the Spooky pumpkin lantern equipped:",
+          "steps": [
+            {
+              "type": "action",
+              "text": "A cutscene begins. Death shows up to judge Fred's farm decorations.",
+              "id": "5shIok"
+            },
+            {
+              "type": "line",
+              "speaker": "Seth Groats",
+              "text": "Hmm... This looks familiar."
+            },
+            {
+              "type": "line",
+              "speaker": "Seth Groats",
+              "text": "You've been busy, haven't you?"
+            },
+            {
+              "type": "line",
+              "speaker": "Death",
+              "text": "Hmm... Spooky indeed. Not spine-chilling, but... effort was made."
+            },
+            {
+              "type": "line",
+              "speaker": "Death",
+              "text": "Those wall lamps are to die for."
+            },
+            {
+              "type": "line",
+              "speaker": "Death",
+              "text": "I hereby grant this house an... honourable mention!"
+            },
+            {
+              "type": "line",
+              "speaker": "Fred the Farmer",
+              "text": "An honourable mention!",
+              "presentation": "overhead"
+            },
+            {
+              "player": "What?!",
+              "presentation": "overhead"
+            },
+            {
+              "type": "line",
+              "speaker": "Seth Groats",
+              "text": "Huh... interesting.",
+              "presentation": "overhead"
+            },
+            {
+              "type": "action",
+              "text": "The cutscene ends.",
+              "id": "LRWlwH"
+            },
+            {
+              "player": "Just an honourable mention? After all that work?"
+            },
+            {
+              "type": "line",
+              "speaker": "Fred the Farmer",
+              "text": "An honourable mention! Thank you, my friend! You've made this old farmer's haunted dreams come true. I've never won anything in a Spook-a-thon contest before!"
+            },
+            {
+              "type": "line",
+              "speaker": "Fred the Farmer",
+              "text": "Here, take this as my appreciation for your help!"
+            },
+            {
+              "type": "condition",
+              "text": "If the player has insufficient inventory space:",
+              "steps": [
+                {
+                  "type": "message",
+                  "text": "You need [1-9] free inventory [slot/slots] to receive your Halloween event rewards.",
+                  "id": "sIAJwR"
+                },
+                {
+                  "type": "end"
+                }
+              ],
+              "id": "n77zq-"
+            },
+            {
+              "type": "action",
+              "text": "(Event complete interface opens.)",
+              "action": "open_interface",
+              "action_source": "text",
+              "target": "Event complete",
+              "id": "eC17__"
+            },
+            {
+              "type": "message",
+              "text": "You've completed the Halloween event: Spook-a-thon Decoration Contest",
+              "id": "LqbtJm"
+            }
+          ],
+          "id": "H4FTU9"
+        }
+      ],
       "jump-0f373180712afbc7": [
         {
           "type": "line",
@@ -9062,6 +9227,1062 @@
           "type": "line",
           "speaker": "Death",
           "text": "Now, come back to me when you have some free space and I'll give you your prize."
+        },
+        {
+          "type": "end"
+        }
+      ]
+    }
+  },
+  "2026 Easter event": {
+    "default": null,
+    "variants": {
+      "starting-the-event-talking-to-the-easter-bunny": [
+        {
+          "player": "Hello there, Easter Bunny. Is everything alright?"
+        },
+        {
+          "type": "line",
+          "speaker": "Easter Bunny",
+          "text": "Oh my, oh my!"
+        },
+        {
+          "player": "What's wrong?"
+        },
+        {
+          "type": "line",
+          "speaker": "Easter Bunny",
+          "text": "No, no. This can't be happening!"
+        },
+        {
+          "player": "Take a deep breath, calm down. Tell me what's wrong."
+        },
+        {
+          "type": "line",
+          "speaker": "Easter Bunny",
+          "text": "I thought for once everything would run as smooth as milk chocolate."
+        },
+        {
+          "type": "line",
+          "speaker": "Easter Bunny",
+          "text": "I had everything prepared! The eggs, the baskets - I even straightened my ears before I got here."
+        },
+        {
+          "player": "Straightened your ears? How would you even-"
+        },
+        {
+          "type": "line",
+          "speaker": "Easter Bunny",
+          "text": "And then disaster struck! I counted my eggs backwards, forwards, upside-down and up, but alas... One is missing."
+        },
+        {
+          "player": "Are you sure you brought the right amount?"
+        },
+        {
+          "type": "line",
+          "speaker": "Easter Bunny",
+          "text": "Absolutely! I have an entire year to plan for Easter. What do you think I do when I'm not here celebrating with you?"
+        },
+        {
+          "player": "Well, I suppose I never thought about that."
+        },
+        {
+          "type": "line",
+          "speaker": "Easter Bunny",
+          "text": "I'm at home, painting and counting eggs, of course! And tending to my chickens."
+        },
+        {
+          "type": "line",
+          "speaker": "Easter Bunny",
+          "text": "Oh, I can't stomach this. [player name], won't you help me find the missing egg?"
+        },
+        {
+          "type": "choice",
+          "prompt": "Start the Easter event?",
+          "options": [
+            {
+              "text": "Yes.",
+              "steps": [
+                {
+                  "type": "line",
+                  "speaker": "Easter Bunny",
+                  "text": "Thank you! Archibald left a note before he left. It may help you find him. It's on a table just over there."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Easter Bunny",
+                  "text": "He is a curious one. Whenever he hears of interesting places, he tends to want to go there."
+                },
+                {
+                  "player": "Archibald? You named the egg?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Easter Bunny",
+                  "text": "Of course. I name all my eggs. There's also Eggward, Eggon, Leggolas and Greggory, to name a few."
+                },
+                {
+                  "player": "And you teach them to write, too?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Easter Bunny",
+                  "text": "--The Easter Bunny winks at you.--"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Easter Bunny",
+                  "text": "Go on now, before he travels too far!"
+                },
+                {
+                  "player": "Guess I'm off to chase an egg."
+                }
+              ]
+            },
+            {
+              "text": "No.",
+              "steps": [
+                {
+                  "player": "I don't have time at the moment, sorry."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Easter Bunny",
+                  "text": "Oh Archibald, oh Archibald. Wheresoever art thou, Archibald?"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "starting-the-event-searching-the-note-on-a-table-before-starting-the-event": [
+        {
+          "player": "I should probably talk to the Easter Bunny before I take anything."
+        }
+      ],
+      "starting-the-event-searching-the-note-on-a-table-after-starting-the-event": [
+        {
+          "type": "condition",
+          "text": "If the player has no inventory space:",
+          "steps": [
+            {
+              "type": "message",
+              "text": "You don't have enough space to pick up the note.",
+              "id": "wPqvP1"
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "EDAN11"
+        },
+        {
+          "type": "message",
+          "text": "You pick up the note left by Archibald.",
+          "id": "j82ekL"
+        }
+      ],
+      "the-hunt-for-archibald-talking-to-the-easter-bunny-before-reading-the-notes": [
+        {
+          "type": "line",
+          "speaker": "Easter Bunny",
+          "text": "Did you have a look at the note?"
+        },
+        {
+          "player": "Not yet, no."
+        },
+        {
+          "type": "line",
+          "speaker": "Easter Bunny",
+          "text": "It's on a table just over there, you should take it and give it a read."
+        },
+        {
+          "player": "Ok!"
+        }
+      ],
+      "the-hunt-for-archibald-talking-to-the-easter-bunny-after-losing-the-notes": [
+        {
+          "player": "I lost the notes."
+        },
+        {
+          "type": "condition",
+          "text": "If the player has no inventory space:",
+          "steps": [
+            {
+              "type": "line",
+              "speaker": "Easter Bunny",
+              "text": "Thats okay, I made some copies but you'll need to make some space to be able to take them."
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "0B-vEh"
+        },
+        {
+          "type": "line",
+          "speaker": "Easter Bunny",
+          "text": "Thats okay, I made some copies so here you go."
+        }
+      ],
+      "the-hunt-for-archibald-talking-to-the-easter-bunny-after-picking-up-the-first-note": [
+        {
+          "player": "Can you help me understand where Archibald is?"
+        },
+        {
+          "type": "line",
+          "speaker": "Easter Bunny",
+          "text": "Certainly, let me see what Archibald has left you with..."
+        },
+        {
+          "type": "condition",
+          "text": "If the player has not read the note yet:",
+          "steps": [
+            {
+              "type": "line",
+              "speaker": "Easter Bunny",
+              "text": "You should read the note Archibald left you."
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "_xRQOL"
+        },
+        {
+          "type": "condition",
+          "text": "If the player has already read the note:",
+          "steps": [
+            {
+              "type": "line",
+              "speaker": "Easter Bunny",
+              "text": "It sounds like you must seek out a potion maker. Try in west Varrock."
+            }
+          ],
+          "id": "a54HiJ"
+        }
+      ],
+      "the-hunt-for-archibald-searching-the-apothecary-s-bookshelf": [
+        {
+          "type": "condition",
+          "text": "If the player does not have both hands free:",
+          "steps": [
+            {
+              "type": "message",
+              "text": "You need both hands free to catch Archibald.",
+              "id": "MDWzgu"
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "fmcDgK"
+        },
+        {
+          "type": "condition",
+          "text": "If the player has no inventory space:",
+          "steps": [
+            {
+              "type": "message",
+              "text": "You don't have enough space to pick up Archibald.",
+              "id": "xE7pY9"
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "aD8b2t"
+        },
+        {
+          "type": "message",
+          "text": "As you reach for Archibald, he tumbles away. You pick up the note he left behind.",
+          "id": "UW6vn2"
+        }
+      ],
+      "the-hunt-for-archibald-talking-to-the-easter-bunny-after-picking-up-the-second-note": [
+        {
+          "player": "Can you help me understand where Archibald is?"
+        },
+        {
+          "type": "line",
+          "speaker": "Easter Bunny",
+          "text": "Certainly, let me see what Archibald has left you with..."
+        },
+        {
+          "type": "condition",
+          "text": "If the player has not read the note yet:",
+          "steps": [
+            {
+              "type": "line",
+              "speaker": "Easter Bunny",
+              "text": "A bendy stick? Sounds like some sort of weapon. Try one of the shops near the centre of Varrock."
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "E993zC"
+        },
+        {
+          "type": "condition",
+          "text": "If the player has already read the note:",
+          "steps": [
+            {
+              "type": "line",
+              "speaker": "Easter Bunny",
+              "text": "Ah, an egg box. The solution is usually near where you found it. Try searching the Archery shop for clues."
+            }
+          ],
+          "id": "MFaVO8"
+        }
+      ],
+      "the-hunt-for-archibald-searching-lowe-s-stepladder": [
+        {
+          "type": "condition",
+          "text": "If the player does not have both hands free:",
+          "steps": [
+            {
+              "type": "message",
+              "text": "You need both hands free to catch Archibald.",
+              "id": "mj8pjn"
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "gTlt87"
+        },
+        {
+          "type": "condition",
+          "text": "If the player has no inventory space:",
+          "steps": [
+            {
+              "type": "message",
+              "text": "You don't have enough space to pick up Archibald.",
+              "id": "O7KaKG"
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "sgzsjm"
+        },
+        {
+          "type": "message",
+          "text": "You find a wooden egg that needs to be unlocked.",
+          "id": "1XnoZw"
+        }
+      ],
+      "the-hunt-for-archibald-opening-the-locked-egg-with-the-wrong-password": [
+        {
+          "type": "message",
+          "text": "That didn't seem to work.",
+          "id": "fjWH9D"
+        }
+      ],
+      "the-hunt-for-archibald-opening-the-locked-egg-with-the-correct-password": [
+        {
+          "type": "message",
+          "text": "You manage to open the egg and inside you find a note.",
+          "id": "WB09CY"
+        }
+      ],
+      "the-hunt-for-archibald-talking-to-the-easter-bunny-after-picking-up-the-third-note": [
+        {
+          "player": "Can you help me understand where Archibald is?"
+        },
+        {
+          "type": "line",
+          "speaker": "Easter Bunny",
+          "text": "Certainly, let me see what Archibald has left you with..."
+        },
+        {
+          "type": "condition",
+          "text": "If the player has not read the note yet:",
+          "steps": [
+            {
+              "type": "line",
+              "speaker": "Easter Bunny",
+              "text": "You should read the note Archibald left you. It came from the egg box in the Archery shop in west Varrock."
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "i1wBvQ"
+        },
+        {
+          "type": "condition",
+          "text": "If the player has already read the note:",
+          "steps": [
+            {
+              "type": "line",
+              "speaker": "Easter Bunny",
+              "text": "Archibald always liked a good view and the sound of church bells. I hear north east Varrock may be good."
+            }
+          ],
+          "id": "TXETO1"
+        }
+      ],
+      "the-hunt-for-archibald-searching-the-wall-on-top-of-the-varrock-church": [
+        {
+          "type": "condition",
+          "text": "If the player isn't holding the scribbled notes:",
+          "steps": [
+            {
+              "type": "message",
+              "text": "I should bring my notes with me incase I need them.",
+              "id": "qtKj7L"
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "VUri4t"
+        },
+        {
+          "type": "condition",
+          "text": "If the player is holding the scribbled notes:",
+          "steps": [
+            {
+              "player": "Aha, this time I got you."
+            },
+            {
+              "type": "action",
+              "text": "Archibald tips slowly off the wall",
+              "id": "wYl5d6"
+            },
+            {
+              "player": "Here we go again."
+            },
+            {
+              "type": "message",
+              "text": "You pick up the note left behind by Archibald after his escape.",
+              "id": "09C7NQ"
+            }
+          ],
+          "id": "RBfPN1"
+        }
+      ],
+      "the-hunt-for-archibald-talking-to-the-easter-bunny-after-picking-up-the-fourth-note": [
+        {
+          "player": "Can you help me understand where Archibald is?"
+        },
+        {
+          "type": "line",
+          "speaker": "Easter Bunny",
+          "text": "Certainly, let me see what Archibald has left you with..."
+        },
+        {
+          "type": "condition",
+          "text": "If the player has not read the note yet:",
+          "steps": [
+            {
+              "type": "line",
+              "speaker": "Easter Bunny",
+              "text": "You should read the note Archibald left you at the top of the church in north east Varrock."
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "gZHLu4"
+        },
+        {
+          "type": "condition",
+          "text": "If the player has already read the note:",
+          "steps": [
+            {
+              "type": "line",
+              "speaker": "Easter Bunny",
+              "text": "A shiny, pointy stick is likely another weapon. Try the shops in central Varrock."
+            }
+          ],
+          "id": "LJpoqH"
+        }
+      ],
+      "the-hunt-for-archibald-searching-the-varrock-swordshop-table": [
+        {
+          "type": "condition",
+          "text": "If the player does not have both hands free:",
+          "steps": [
+            {
+              "type": "message",
+              "text": "You need both hands free to catch Archibald.",
+              "id": "A0x326"
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "C_cK11"
+        },
+        {
+          "type": "condition",
+          "text": "If the player has no inventory space:",
+          "steps": [
+            {
+              "type": "message",
+              "text": "You don't have enough space to pick up Archibald.",
+              "id": "0sdO1e"
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "LwdRh3"
+        },
+        {
+          "type": "message",
+          "text": "You find Archibald, but before you could grab him, he tumbles away once more. You grab the note he left behind.",
+          "id": "jnLauK"
+        }
+      ],
+      "the-hunt-for-archibald-talking-to-the-easter-bunny-after-picking-up-the-fifth-note": [
+        {
+          "player": "Can you help me understand where Archibald is?"
+        },
+        {
+          "type": "line",
+          "speaker": "Easter Bunny",
+          "text": "Certainly, let me see what Archibald has left you with..."
+        },
+        {
+          "type": "condition",
+          "text": "If the player has not read the note yet:",
+          "steps": [
+            {
+              "type": "line",
+              "speaker": "Easter Bunny",
+              "text": "You should read the note Archibald left you at the sword shop in central Varrock."
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "yV80s1"
+        },
+        {
+          "type": "condition",
+          "text": "If the player has already read the note:",
+          "steps": [
+            {
+              "type": "line",
+              "speaker": "Easter Bunny",
+              "text": "Rumours say Zamorakians hang out in south east Varrock. Maybe try there?"
+            }
+          ],
+          "id": "V2MAD4"
+        }
+      ],
+      "the-hunt-for-archibald-searching-the-chair-in-the-zamorakian-chapel": [
+        {
+          "type": "condition",
+          "text": "If the player does not have both hands free:",
+          "steps": [
+            {
+              "type": "message",
+              "text": "You need both hands free to catch Archibald.",
+              "id": "MJQfN0"
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "OFDRyt"
+        },
+        {
+          "type": "condition",
+          "text": "If the player has no inventory space:",
+          "steps": [
+            {
+              "type": "message",
+              "text": "You don't have enough space to pick up Archibald.",
+              "id": "tdgu2h"
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "9TEDoH"
+        },
+        {
+          "type": "message",
+          "text": "You find Archibald, but he swiftly tumbles out of your hands. You spot an anagram he left behind and pick it up.",
+          "id": "SnYLyp"
+        }
+      ],
+      "the-hunt-for-archibald-talking-to-the-easter-bunny-after-picking-up-the-sixth-note": [
+        {
+          "player": "Can you help me understand where Archibald is?"
+        },
+        {
+          "type": "line",
+          "speaker": "Easter Bunny",
+          "text": "Certainly, let me see what Archibald has left you with..."
+        },
+        {
+          "type": "condition",
+          "text": "If the player has not read the note yet:",
+          "steps": [
+            {
+              "type": "line",
+              "speaker": "Easter Bunny",
+              "text": "You should read the note Archibald left you at the Zamorakian chapel in south east Varrock."
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "g061HE"
+        },
+        {
+          "type": "condition",
+          "text": "If the player has already read the note:",
+          "steps": [
+            {
+              "type": "line",
+              "speaker": "Easter Bunny",
+              "text": "An anagram, huh? I bet it's a location in Varrock. Probably an inn - that's where I would go."
+            }
+          ],
+          "id": "uNZhy1"
+        }
+      ],
+      "the-hunt-for-archibald-searching-the-bed-in-the-blue-moon-inn": [
+        {
+          "type": "condition",
+          "text": "If the player does not have both hands free:",
+          "steps": [
+            {
+              "type": "message",
+              "text": "You need both hands free to catch Archibald.",
+              "id": "WkXpJ8"
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "9HX24h"
+        },
+        {
+          "type": "condition",
+          "text": "If the player has no inventory space:",
+          "steps": [
+            {
+              "type": "message",
+              "text": "You don't have enough space to pick up Archibald.",
+              "id": "Z6GN9S"
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "GbsRSQ"
+        },
+        {
+          "type": "message",
+          "text": "You find a decoy egg.",
+          "id": "Pjjn96"
+        }
+      ],
+      "the-hunt-for-archibald-opening-the-decoy-egg": [
+        {
+          "type": "message",
+          "text": "You open the egg and inside you find a note.",
+          "id": "YdWi-2"
+        }
+      ],
+      "the-hunt-for-archibald-talking-to-the-easter-bunny-after-picking-up-the-seventh-note": [
+        {
+          "player": "Can you help me understand where Archibald is?"
+        },
+        {
+          "type": "line",
+          "speaker": "Easter Bunny",
+          "text": "Certainly, let me see what Archibald has left you with..."
+        },
+        {
+          "type": "condition",
+          "text": "If the player has not read the note yet:",
+          "steps": [
+            {
+              "type": "line",
+              "speaker": "Easter Bunny",
+              "text": "You should read the note Archibald left you at the Blue Moon Inn in the south of Varrock."
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "-_cFtE"
+        },
+        {
+          "type": "condition",
+          "text": "If the player has already read the note:",
+          "steps": [
+            {
+              "type": "line",
+              "speaker": "Easter Bunny",
+              "text": "There's only one king around these parts. He lives in Varrock Palace."
+            }
+          ],
+          "id": "shQA97"
+        }
+      ],
+      "the-hunt-for-archibald-searching-the-suit-of-armour-in-varrock-palace": [
+        {
+          "type": "condition",
+          "text": "If the player does not have both hands free:",
+          "steps": [
+            {
+              "type": "message",
+              "text": "You need both hands free to catch Archibald.",
+              "id": "pTmKWT"
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "xjvd4j"
+        },
+        {
+          "type": "condition",
+          "text": "If the player has no inventory space:",
+          "steps": [
+            {
+              "type": "message",
+              "text": "You don't have enough space to pick up Archibald.",
+              "id": "vS7iKP"
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "334xli"
+        },
+        {
+          "type": "message",
+          "text": "You find Archibald. You look away for a split second, but he's gone again. You grab the note he left behind.",
+          "id": "N62OqQ"
+        }
+      ],
+      "the-hunt-for-archibald-talking-to-the-easter-bunny-after-picking-up-the-eighth-note": [
+        {
+          "player": "Can you help me understand where Archibald is?"
+        },
+        {
+          "type": "line",
+          "speaker": "Easter Bunny",
+          "text": "Certainly, let me see what Archibald has left you with..."
+        },
+        {
+          "type": "condition",
+          "text": "If the player has not read the note yet:",
+          "steps": [
+            {
+              "type": "line",
+              "speaker": "Easter Bunny",
+              "text": "You should read the note Archibald left you at the throne room in Varrock Palace."
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "tCLQZW"
+        },
+        {
+          "type": "condition",
+          "text": "If the player has already read the note:",
+          "steps": [
+            {
+              "type": "line",
+              "speaker": "Easter Bunny",
+              "text": "I remember seeing a massive vault under the bank here in west Varrock."
+            }
+          ],
+          "id": "nD87uj"
+        }
+      ],
+      "the-hunt-for-archibald-catching-archibald-in-the-varrock-west-bank-basement": [
+        {
+          "type": "condition",
+          "text": "If the player does not have both hands free:",
+          "steps": [
+            {
+              "type": "message",
+              "text": "You need both hands free to catch Archibald.",
+              "id": "Z0bLU9"
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "rruHIZ"
+        },
+        {
+          "type": "condition",
+          "text": "If the player has no inventory space:",
+          "steps": [
+            {
+              "type": "message",
+              "text": "You don't have enough space to pick up Archibald.",
+              "id": "JGyJI7"
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "E9BEO9"
+        },
+        {
+          "player": "Got you! You're not getting away this time!"
+        }
+      ],
+      "the-hunt-for-archibald-talking-to-the-easter-bunny-after-finding-archibald-but-without-him-in-your-inventory": [
+        {
+          "type": "line",
+          "speaker": "Easter Bunny",
+          "text": "Did you find Archibald yet?"
+        },
+        {
+          "player": "Not yet."
+        }
+      ],
+      "the-hunt-for-archibald-talking-to-the-easter-bunny-with-archibald-in-your-inventory": [
+        {
+          "player": "I found the e- I mean, Archibald."
+        },
+        {
+          "type": "line",
+          "speaker": "Easter Bunny",
+          "text": "Amazing! Archibald, my beloved. Didn't I tell you not to go running off like that?"
+        },
+        {
+          "type": "line",
+          "speaker": "Archibald",
+          "text": "--Archibald appears to whisper something intangible to the Easter Bunny.--"
+        },
+        {
+          "type": "line",
+          "speaker": "Easter Bunny",
+          "text": "Really? Is that so?"
+        },
+        {
+          "type": "line",
+          "speaker": "Archibald",
+          "text": "--Archibald nods to the Easter Bunny.--"
+        },
+        {
+          "type": "line",
+          "speaker": "Easter Bunny",
+          "text": "Thank you for finding Archibald, [player name]!"
+        },
+        {
+          "type": "line",
+          "speaker": "Easter Bunny",
+          "text": "I have something fun for you."
+        },
+        {
+          "type": "condition",
+          "text": "If the player has insufficient inventory space:",
+          "steps": [
+            {
+              "type": "message",
+              "text": "You need [1/2] more free inventory [slot/slots] to receive your Easter event rewards.",
+              "id": "aKCOUt"
+            },
+            {
+              "type": "line",
+              "speaker": "Easter Bunny",
+              "text": "Come back when you have more space in your inventory."
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "Fi6u_n"
+        },
+        {
+          "type": "action",
+          "text": "Event completion screen pops up.",
+          "id": "FyFpyU"
+        },
+        {
+          "type": "line",
+          "speaker": "Easter Bunny",
+          "text": "Archibald enjoyed your adventure so much that he'd like to travel with you."
+        }
+      ],
+      "the-hunt-for-archibald-talking-to-the-easter-bunny-before-claiming-the-rewards": [
+        {
+          "type": "line",
+          "speaker": "Easter Bunny",
+          "text": "Thank you for finding Archibald, [player name]!"
+        },
+        {
+          "type": "jump",
+          "id": "r9vRBO",
+          "steps": [
+            {
+              "type": "call",
+              "branch": "jump-4d7b17ad91a6b2ba"
+            }
+          ]
+        }
+      ],
+      "post-event-talking-to-the-easter-bunny": [
+        {
+          "type": "line",
+          "speaker": "Easter Bunny",
+          "text": "Thank you again for finding Archibald, [player name]!"
+        },
+        {
+          "player": "You're very welcome."
+        },
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "What are you going to do now?",
+              "steps": [
+                {
+                  "player": "What are you going to do now?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Easter Bunny",
+                  "text": "My eggs and I are going to spread the Easter cheer to the fine city of Varrock."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Easter Bunny",
+                  "text": "Many people grow up without chocolate, you know. It's just not right."
+                },
+                {
+                  "player": "So true. What has the world come to?"
+                },
+                {
+                  "type": "jump",
+                  "reference": "other",
+                  "id": "xkiWUZ"
+                }
+              ]
+            },
+            {
+              "text": "Why did you decide to celebrate Easter in Varrock?",
+              "steps": [
+                {
+                  "player": "Why did you decide to celebrate Easter in Varrock?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Easter Bunny",
+                  "text": "All of Gielinor deserve to celebrate Easter. I figured Varrock is a particularly busy place."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Easter Bunny",
+                  "text": "By positioning myself here I maximise my CTPOTR."
+                },
+                {
+                  "player": "C.. T.. what?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Easter Bunny",
+                  "text": "CTPOTR. Chocolate to person over time ratio. You need to maximise your reach and minimise time spent, to optimise value."
+                },
+                {
+                  "player": "I see. I never realised how seriously you took this."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Easter Bunny",
+                  "text": "Of course. Easter only happens once a year. I have to make the most out of it."
+                },
+                {
+                  "type": "jump",
+                  "reference": "other",
+                  "id": "qW2LAv"
+                }
+              ]
+            },
+            {
+              "text": "Can you tell me more about the Easter eggs?",
+              "steps": [
+                {
+                  "player": "Can you tell me more about the Easter eggs?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Easter Bunny",
+                  "text": "The eggs are a family tradition. Hatching them, caring for them, watching them develop. This is the job of an Easter Bunny."
+                },
+                {
+                  "player": "Hold on. Are you saying there are more Easter bunnies?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Easter Bunny",
+                  "text": "Oh yes, my mother was one. And my father. And their parents before them."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Easter Bunny",
+                  "text": "Maybe one day you can become one too!"
+                },
+                {
+                  "player": "I'm more of an adventurer-type person, myself."
+                },
+                {
+                  "type": "jump",
+                  "reference": "other",
+                  "id": "U7eyQf"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "activation": "explicit",
+    "branches": {
+      "jump-4d7b17ad91a6b2ba": [
+        {
+          "type": "line",
+          "speaker": "Easter Bunny",
+          "text": "I have something fun for you."
+        },
+        {
+          "type": "condition",
+          "text": "If the player has insufficient inventory space:",
+          "steps": [
+            {
+              "type": "message",
+              "text": "You need [1/2] more free inventory [slot/slots] to receive your Easter event rewards.",
+              "id": "aKCOUt"
+            },
+            {
+              "type": "line",
+              "speaker": "Easter Bunny",
+              "text": "Come back when you have more space in your inventory."
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "Fi6u_n"
+        },
+        {
+          "type": "action",
+          "text": "Event completion screen pops up.",
+          "id": "FyFpyU"
+        },
+        {
+          "type": "line",
+          "speaker": "Easter Bunny",
+          "text": "Archibald enjoyed your adventure so much that he'd like to travel with you."
         },
         {
           "type": "end"
@@ -13100,5 +14321,2597 @@
         }
       ]
     }
+  },
+  "Aereck's caged monkey": {
+    "default": "standard-dialogue",
+    "variants": {
+      "standard-dialogue": [
+        {
+          "type": "line",
+          "speaker": "Monkey",
+          "text": "*yawn* I told you human, I'm not interested in following your Saradomin."
+        },
+        {
+          "player": "I see you're finally awake!"
+        },
+        {
+          "type": "line",
+          "speaker": "Monkey",
+          "text": "Oh, you're a different human than last time. Well, Marimbo is the only goddess for me and you won't persuade me otherwise."
+        },
+        {
+          "player": "You don't have to worry, I'm not a priest. I won't try to convert you to Saradomin."
+        },
+        {
+          "player": "Although, I'm not all that familiar with Marimbo. Is that the god you worship?"
+        },
+        {
+          "type": "line",
+          "speaker": "Monkey",
+          "text": "Goddess, but yes. All monkeys send their thoughts and prayers to Marimbo."
+        },
+        {
+          "player": "I didn't realise monkeys were so religious. You learn something new every day I suppose!"
+        },
+        {
+          "type": "line",
+          "speaker": "Monkey",
+          "text": "Well, if you could start learning how to open this cage that would be appreciated. I've got a job to do."
+        },
+        {
+          "player": "Oh, sure... I'll get right on it. But it might take me a while to figure it out."
+        }
+      ],
+      "using-aereck-s-caged-monkey-on-an-affected-npc": [
+        {
+          "type": "message",
+          "text": "There is already a monkey in that cage!",
+          "id": "UFJTGR"
+        }
+      ]
+    },
+    "activation": "explicit"
+  },
+  "Bervirius notes": {
+    "default": null,
+    "variants": {
+      "tattered-yellow-papyrus": [
+        {
+          "type": "unavailable",
+          "id": "FIkq1e"
+        }
+      ],
+      "crusty-orange-papyrus": [
+        {
+          "type": "unavailable",
+          "id": "PEHTCO"
+        }
+      ],
+      "decayed-white-papyrus": [
+        {
+          "type": "unavailable",
+          "id": "_B51vN"
+        }
+      ]
+    },
+    "activation": "explicit"
+  },
+  "Bob's caged monkey": {
+    "default": "standard-dialogue",
+    "variants": {
+      "standard-dialogue": [
+        {
+          "type": "line",
+          "speaker": "Monkey",
+          "text": "Let me out! Let me out! When I get out of this crate, I'm going to give that axe merchant a piece of my mind."
+        },
+        {
+          "player": "That's exactly why I'm not letting you out. You've caused enough trouble as it is."
+        },
+        {
+          "type": "line",
+          "speaker": "Monkey",
+          "text": "I didn't do anything at all! All I wanted was a monkey-sized battle axe and when I found one, that human started yelling and throwing things at me."
+        },
+        {
+          "type": "line",
+          "speaker": "Monkey",
+          "text": "I even offered to pay for it but he wouldn't accept my money."
+        },
+        {
+          "player": "I mean you did try to steal his stuff first. Perhaps you should be more honest next time?"
+        },
+        {
+          "type": "line",
+          "speaker": "Monkey",
+          "text": "But I'm a paying customer! I have rights! He can't treat me like that!"
+        },
+        {
+          "player": "*sigh* If I put in a word with his manager, would that satisfy you?"
+        },
+        {
+          "type": "line",
+          "speaker": "Monkey",
+          "text": "Only if I get compensation too!"
+        },
+        {
+          "player": "I'll see what I can do."
+        }
+      ],
+      "using-bob-s-caged-monkey-on-an-affected-npc": [
+        {
+          "type": "message",
+          "text": "There is already a monkey in that cage!",
+          "id": "SpThx8"
+        }
+      ]
+    },
+    "activation": "explicit"
+  },
+  "Cow's caged monkey": {
+    "default": "standard-dialogue",
+    "variants": {
+      "standard-dialogue": [
+        {
+          "type": "line",
+          "speaker": "Monkey",
+          "text": "That was a mighty fine banana. Do you have any more?"
+        },
+        {
+          "player": "I'm afraid that was the last one I had."
+        },
+        {
+          "type": "line",
+          "speaker": "Monkey",
+          "text": "Oh, that's unfortunate."
+        },
+        {
+          "player": "So..."
+        },
+        {
+          "type": "line",
+          "speaker": "Monkey",
+          "text": "Yes?"
+        },
+        {
+          "player": "You can speak?"
+        },
+        {
+          "type": "line",
+          "speaker": "Monkey",
+          "text": "And so can you. What's your point?"
+        },
+        {
+          "player": "I mean, how can you speak? I thought you guys could only say things like 'ook ook'? Is it magic?"
+        },
+        {
+          "type": "line",
+          "speaker": "Monkey",
+          "text": "When we decided to come here and thwart your Humans Against Monkeys operation, we made sure to obtain some amulets of humanspeak so that we could better intimidate you all."
+        },
+        {
+          "player": "I see... can I have your amulet of humanspeak?"
+        },
+        {
+          "type": "line",
+          "speaker": "Monkey",
+          "text": "No."
+        },
+        {
+          "player": "Oh... okay then."
+        }
+      ],
+      "using-cow-s-caged-monkey-on-an-affected-npc": [
+        {
+          "type": "message",
+          "text": "There is already a monkey in that cage!",
+          "id": "_2VVrS"
+        }
+      ]
+    },
+    "activation": "explicit"
+  },
+  "Crumpled scroll": {
+    "default": null,
+    "variants": {
+      "unsectioned": [
+        {
+          "type": "unavailable",
+          "id": "pEsi8i"
+        }
+      ]
+    },
+    "activation": "explicit"
+  },
+  "Donie's caged monkey": {
+    "default": "standard-dialogue",
+    "variants": {
+      "standard-dialogue": [
+        {
+          "type": "line",
+          "speaker": "Monkey",
+          "text": "Ah! Is it gone yet? Did you kill it?"
+        },
+        {
+          "player": "Kill what? Are you okay? What's wrong?"
+        },
+        {
+          "type": "line",
+          "speaker": "Monkey",
+          "text": "I... I'm not the bravest amongst my friends and when I left the group I saw this huge, creepy, green-skinned creature! I thought it was going to eat me!"
+        },
+        {
+          "player": "Huge... green skinned?"
+        },
+        {
+          "player": "Oh! You mean a goblin! I suppose they would be quite a bit scarier from your perspective."
+        },
+        {
+          "type": "line",
+          "speaker": "Monkey",
+          "text": "I... don't know what it is but please just send me back to Ape Atoll. I don't think I am cut out for this."
+        },
+        {
+          "player": "It's okay, you're safe now inside this cage and you'll be back home before you know it."
+        }
+      ],
+      "using-donie-s-caged-monkey-on-an-affected-npc": [
+        {
+          "type": "message",
+          "text": "There is already a monkey in that cage!",
+          "id": "4sGV_J"
+        }
+      ]
+    },
+    "activation": "explicit"
+  },
+  "Haunted wine bottle": {
+    "default": null,
+    "variants": {
+      "when-using-the-wake-ghost-option": [
+        {
+          "type": "unavailable",
+          "id": "SMFC4P"
+        }
+      ],
+      "talking-to-the-bottle-without-a-ghostspeak-amulet": [
+        {
+          "player": "Hello...?"
+        },
+        {
+          "type": "message",
+          "text": "WoooOooOooOooooOOOoo.",
+          "id": "xfLXr0"
+        }
+      ],
+      "talking-to-the-bottle-the-first-time-with-a-ghostspeak-amulet": [
+        {
+          "player": "Hello...?"
+        },
+        {
+          "type": "message",
+          "text": "Yes, [player name]?",
+          "id": "SKVrvu"
+        },
+        {
+          "player": "I didn't expect you to talk to me!"
+        },
+        {
+          "type": "message",
+          "text": "Well, you have something that lets you speak to ghosts, and I am a ghost.",
+          "id": "oOvZp-"
+        },
+        {
+          "player": "True! Nice to meet you!"
+        },
+        {
+          "type": "message",
+          "text": "Likewise, I think. Please don't disturb me too much. I'm trying to rest.",
+          "id": "nVbe2l"
+        }
+      ],
+      "talking-to-the-bottle-the-second-time-with-a-ghostspeak-amulet": [
+        {
+          "player": "Hello...?"
+        },
+        {
+          "type": "message",
+          "text": "What do you want?",
+          "id": "HDUXvs"
+        },
+        {
+          "player": "What is it like living in a tiny bottle?"
+        },
+        {
+          "type": "message",
+          "text": "Living? LIVING? I'm trapped in here, that isn't living!",
+          "id": "pNpoD3"
+        },
+        {
+          "type": "message",
+          "text": "...I'm also a ghost.",
+          "id": "2aa-4o"
+        },
+        {
+          "player": "Good point."
+        }
+      ],
+      "talking-to-the-bottle-the-third-time-with-a-ghostspeak-amulet": [
+        {
+          "player": "Hello...?"
+        },
+        {
+          "type": "message",
+          "text": "I'm awake.",
+          "id": "H6HZxZ"
+        },
+        {
+          "player": "Can I talk to you occasionally?"
+        },
+        {
+          "type": "message",
+          "text": "If you have to. Try and make it interesting.",
+          "id": "8k0Aof"
+        }
+      ],
+      "talking-to-the-bottle-subsequent-times-with-a-ghostspeak-amulet": [
+        {
+          "player": "Hello...?"
+        },
+        {
+          "type": "random",
+          "options": [
+            {
+              "text": "Dialogue 1",
+              "steps": [
+                {
+                  "type": "message",
+                  "text": "I'm trying to sleep, what is it?",
+                  "id": "U4gVgN"
+                },
+                {
+                  "player": "Who were you when you used to be alive?"
+                },
+                {
+                  "type": "message",
+                  "text": "I used to be an adventurer like you...",
+                  "id": "2RAff8"
+                },
+                {
+                  "type": "message",
+                  "text": "...then I took an arrow to the knee.",
+                  "id": "QAfJ-q"
+                },
+                {
+                  "player": "That's unfortunate. I've never heard of that happening before."
+                },
+                {
+                  "type": "message",
+                  "text": "You're one lucky adventurer then.",
+                  "id": "5iSM_R"
+                }
+              ]
+            },
+            {
+              "text": "Dialogue 2",
+              "steps": [
+                {
+                  "type": "message",
+                  "text": "Hmm?",
+                  "id": "aPD-gy"
+                },
+                {
+                  "player": "Who is your favourite god?"
+                },
+                {
+                  "type": "message",
+                  "text": "Zaros. We had some great times together.",
+                  "id": "a5dyyC"
+                }
+              ]
+            },
+            {
+              "text": "Dialogue 3",
+              "steps": [
+                {
+                  "type": "message",
+                  "text": "Hello again, [player name].",
+                  "id": "WeheX9"
+                },
+                {
+                  "player": "Any words of wisdom for me?"
+                },
+                {
+                  "type": "message",
+                  "text": "Don't get trapped in a bottle.",
+                  "id": "ZQ01sz"
+                },
+                {
+                  "player": "Thanks."
+                }
+              ]
+            },
+            {
+              "text": "Dialogue 4",
+              "steps": [
+                {
+                  "type": "message",
+                  "text": "Hello...?",
+                  "id": "4rmmVT"
+                },
+                {
+                  "player": "Can you do any impressions?"
+                },
+                {
+                  "type": "message",
+                  "text": "Sure, what would you like to hear?",
+                  "id": "8_0DAO"
+                },
+                {
+                  "player": "Surprise me!"
+                },
+                {
+                  "type": "message",
+                  "text": "Okay, woooOooOooOooooO I'm a ghost, woOoOooOoooo.",
+                  "id": "3jzDYF"
+                },
+                {
+                  "player": "Very funny."
+                }
+              ]
+            },
+            {
+              "text": "Dialogue 5",
+              "steps": [
+                {
+                  "type": "message",
+                  "text": "Hi [player name].",
+                  "id": "InISHN"
+                },
+                {
+                  "player": "How many times have we spoken to each other now?"
+                },
+                {
+                  "type": "message",
+                  "text": "[number of times spoken to] times.",
+                  "id": "ptn3dQ"
+                },
+                {
+                  "player": "Wow! How are you keeping count?"
+                },
+                {
+                  "type": "message",
+                  "text": "It's not like I have much else to do.",
+                  "id": "1jpXh3"
+                },
+                {
+                  "player": "I suppose. Here's to many more great conversations!"
+                },
+                {
+                  "type": "message",
+                  "text": "... lovely.",
+                  "id": "rO7EYc"
+                }
+              ]
+            },
+            {
+              "text": "Dialogue 6",
+              "steps": [
+                {
+                  "type": "message",
+                  "text": "What?",
+                  "id": "8XJs62"
+                },
+                {
+                  "player": "Why do you slap me each time I wake you up?"
+                },
+                {
+                  "type": "message",
+                  "text": "How would YOU like to be rudely awoken when you're trying to sleep?",
+                  "id": "zRoX8V"
+                },
+                {
+                  "player": "I suppose."
+                }
+              ]
+            },
+            {
+              "text": "Dialogue 7",
+              "steps": [
+                {
+                  "type": "message",
+                  "text": "What do you want?",
+                  "id": "9LboDX"
+                },
+                {
+                  "player": "What is your favourite number?"
+                },
+                {
+                  "type": "message",
+                  "text": "Two. I've always liked two. It's small, simple, and doesn't play any tricks.",
+                  "id": "Mi3S6q"
+                },
+                {
+                  "player": "Interesting, I've always liked eight myself."
+                }
+              ]
+            },
+            {
+              "text": "Dialogue 8",
+              "steps": [
+                {
+                  "type": "message",
+                  "text": "Yes?",
+                  "id": "BXOa1R"
+                },
+                {
+                  "player": "How old are you?"
+                },
+                {
+                  "type": "message",
+                  "text": "I don't remember anymore. Pretty old.",
+                  "id": "_FJO_T"
+                }
+              ]
+            },
+            {
+              "text": "Dialogue 9",
+              "steps": [
+                {
+                  "type": "message",
+                  "text": "Hi?",
+                  "id": "zYjxOP"
+                },
+                {
+                  "player": "You're a lovely colour of green today!"
+                },
+                {
+                  "type": "message",
+                  "text": "Thank you very much!",
+                  "id": "hN4LKW"
+                }
+              ]
+            },
+            {
+              "text": "Dialogue 10",
+              "steps": [
+                {
+                  "type": "message",
+                  "text": "Please stop waking me up!",
+                  "id": "WV4E87"
+                },
+                {
+                  "player": "I'm sorry!"
+                }
+              ]
+            },
+            {
+              "text": "Dialogue 11",
+              "steps": [
+                {
+                  "type": "message",
+                  "text": "What is it now?",
+                  "id": "m9FT3k"
+                },
+                {
+                  "player": "Nothing. I just wanted to see if you were still here."
+                },
+                {
+                  "type": "message",
+                  "text": "I'm trapped in a bottle. I'm not going anywhere.",
+                  "id": "tjBW5s"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "activation": "explicit"
+  },
+  "Iorwerth's message": {
+    "default": null,
+    "variants": {
+      "unsectioned": [
+        {
+          "type": "unavailable",
+          "id": "2aZrRb"
+        },
+        {
+          "type": "unavailable",
+          "id": "lXYNZk"
+        },
+        {
+          "type": "unavailable",
+          "id": "oO2zrO"
+        }
+      ]
+    },
+    "activation": "explicit"
+  },
+  "List": {
+    "default": null,
+    "variants": {
+      "unsectioned": [
+        {
+          "type": "message",
+          "text": "Items I need to get for King Roald's garden:\nDelphiniums (see Elstan near Falador)\nPink orchids (see Lyra near Port Phasmatys)\nYellow orchids (see Lyra near Port Phasmatys)\nSnowdrops (see Kragen near Ardougne)\nBurthorpe vine (see Bernald in Burthorpe)\nWhite rosebush (go to Edgeville Monastery)\nPink rosebush (go to Edgeville monastery)\nRed rosebush (go to Edgeville monastery)\nA White Tree (see Cantaera in Catherby).\nA statue of Saradomin from Falador.\nA statue of a king from outside Lumbridge Castle.",
+          "id": "eLgqW2"
+        }
+      ]
+    },
+    "activation": "explicit"
+  },
+  "Magic egg ball": {
+    "activation": "explicit",
+    "branches": {
+      "jump-81f488a6ceed37a5": [
+        {
+          "type": "random",
+          "options": [
+            {
+              "text": "Dialogue 1",
+              "steps": [
+                {
+                  "type": "message",
+                  "text": "As I see it, yes.",
+                  "id": "CTCiNU"
+                },
+                {
+                  "type": "end"
+                }
+              ]
+            },
+            {
+              "text": "Dialogue 2",
+              "steps": [
+                {
+                  "type": "message",
+                  "text": "Ask again later.",
+                  "id": "wu9Y44"
+                },
+                {
+                  "type": "end"
+                }
+              ]
+            },
+            {
+              "text": "Dialogue 3",
+              "steps": [
+                {
+                  "type": "message",
+                  "text": "Better not tell you now.",
+                  "id": "hxhwR5"
+                },
+                {
+                  "type": "end"
+                }
+              ]
+            },
+            {
+              "text": "Dialogue 4",
+              "steps": [
+                {
+                  "type": "message",
+                  "text": "Cannot predict now.",
+                  "id": "J8U0JE"
+                },
+                {
+                  "type": "end"
+                }
+              ]
+            },
+            {
+              "text": "Dialogue 5",
+              "steps": [
+                {
+                  "type": "message",
+                  "text": "Concentrate and ask again.",
+                  "id": "cqIetD"
+                },
+                {
+                  "type": "end"
+                }
+              ]
+            },
+            {
+              "text": "Dialogue 6",
+              "steps": [
+                {
+                  "type": "message",
+                  "text": "Don't count on it.",
+                  "id": "8LdF-5"
+                },
+                {
+                  "type": "end"
+                }
+              ]
+            },
+            {
+              "text": "Dialogue 7",
+              "steps": [
+                {
+                  "type": "message",
+                  "text": "It is certain.",
+                  "id": "YCcTlP"
+                },
+                {
+                  "type": "end"
+                }
+              ]
+            },
+            {
+              "text": "Dialogue 8",
+              "steps": [
+                {
+                  "type": "message",
+                  "text": "It is decidedly so.",
+                  "id": "Bcp-jq"
+                },
+                {
+                  "type": "end"
+                }
+              ]
+            },
+            {
+              "text": "Dialogue 9",
+              "steps": [
+                {
+                  "type": "message",
+                  "text": "Most likely.",
+                  "id": "bIBogz"
+                },
+                {
+                  "type": "end"
+                }
+              ]
+            },
+            {
+              "text": "Dialogue 10",
+              "steps": [
+                {
+                  "type": "message",
+                  "text": "My reply is no.",
+                  "id": "7bh5yG"
+                },
+                {
+                  "type": "end"
+                }
+              ]
+            },
+            {
+              "text": "Dialogue 11",
+              "steps": [
+                {
+                  "type": "message",
+                  "text": "My sources say no.",
+                  "id": "hHoJCz"
+                },
+                {
+                  "type": "end"
+                }
+              ]
+            },
+            {
+              "text": "Dialogue 12",
+              "steps": [
+                {
+                  "type": "message",
+                  "text": "Outlook is good.",
+                  "id": "kgdmug"
+                },
+                {
+                  "type": "end"
+                }
+              ]
+            },
+            {
+              "text": "Dialogue 13",
+              "steps": [
+                {
+                  "type": "message",
+                  "text": "Outlook not so good.",
+                  "id": "gnfdRy"
+                },
+                {
+                  "type": "end"
+                }
+              ]
+            },
+            {
+              "text": "Dialogue 14",
+              "steps": [
+                {
+                  "type": "message",
+                  "text": "Reply hazy, try again.",
+                  "id": "XR2Vcw"
+                },
+                {
+                  "type": "end"
+                }
+              ]
+            },
+            {
+              "text": "Dialogue 15",
+              "steps": [
+                {
+                  "type": "message",
+                  "text": "Signs point to yes.",
+                  "id": "2PMtBT"
+                },
+                {
+                  "type": "end"
+                }
+              ]
+            },
+            {
+              "text": "Dialogue 16",
+              "steps": [
+                {
+                  "type": "message",
+                  "text": "Very doubtful.",
+                  "id": "Q4VKYj"
+                },
+                {
+                  "type": "end"
+                }
+              ]
+            },
+            {
+              "text": "Dialogue 17",
+              "steps": [
+                {
+                  "type": "message",
+                  "text": "Without a doubt.",
+                  "id": "3Z0y2g"
+                },
+                {
+                  "type": "end"
+                }
+              ]
+            },
+            {
+              "text": "Dialogue 18",
+              "steps": [
+                {
+                  "type": "message",
+                  "text": "Yes.",
+                  "id": "c7G0kc"
+                },
+                {
+                  "type": "end"
+                }
+              ]
+            },
+            {
+              "text": "Dialogue 19",
+              "steps": [
+                {
+                  "type": "message",
+                  "text": "Yes - Definitely.",
+                  "id": "kgqWUe"
+                },
+                {
+                  "type": "end"
+                }
+              ]
+            },
+            {
+              "text": "Dialogue 20",
+              "steps": [
+                {
+                  "type": "message",
+                  "text": "You may rely on it.",
+                  "id": "VnlysM"
+                },
+                {
+                  "type": "end"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "steps": [
+      {
+        "type": "choice",
+        "prompt": "What would you like to ask the Magic Egg?",
+        "options": [
+          {
+            "text": "What rare item will I get today?",
+            "steps": [
+              {
+                "type": "random",
+                "options": [
+                  {
+                    "text": "Dialogue 1",
+                    "steps": [
+                      {
+                        "player": "Magic Egg Ball, will I receive a 50 Coins drop today?"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 2",
+                    "steps": [
+                      {
+                        "player": "Magic Egg Ball, will I receive a Archers Ring drop today?"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 3",
+                    "steps": [
+                      {
+                        "player": "Magic Egg Ball, will I receive a Armadyl Crossbow drop today?"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 4",
+                    "steps": [
+                      {
+                        "player": "Magic Egg Ball, will I receive a Armadyl Helmet drop today?"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 5",
+                    "steps": [
+                      {
+                        "player": "Magic Egg Ball, will I receive a Avernic Defender drop today?"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 6",
+                    "steps": [
+                      {
+                        "player": "Magic Egg Ball, will I receive a Bandos Chestplate drop today?"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 7",
+                    "steps": [
+                      {
+                        "player": "Magic Egg Ball, will I receive a Bandos Tassets drop today?"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 8",
+                    "steps": [
+                      {
+                        "player": "Magic Egg Ball, will I receive a Berserker Ring drop today?"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 9",
+                    "steps": [
+                      {
+                        "player": "Magic Egg Ball, will I receive a Big Bones drop today?"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 10",
+                    "steps": [
+                      {
+                        "player": "Magic Egg Ball, will I receive a Black d'hide Vambraces drop today?"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 11",
+                    "steps": [
+                      {
+                        "player": "Magic Egg Ball, will I receive a Dharok's Platebody drop today?"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 12",
+                    "steps": [
+                      {
+                        "player": "Magic Egg Ball, will I receive a Dragonfire Shield drop today?"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 13",
+                    "steps": [
+                      {
+                        "player": "Magic Egg Ball, will I receive a Dragon Claws drop today?"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 14",
+                    "steps": [
+                      {
+                        "player": "Magic Egg Ball, will I receive a Dragon hunter crossbow drop today?"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 15",
+                    "steps": [
+                      {
+                        "player": "Magic Egg Ball, will I receive a Dragon Warhammer drop today?"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 16",
+                    "steps": [
+                      {
+                        "player": "Magic Egg Ball, will I receive a Goblin Mail drop today?"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 17",
+                    "steps": [
+                      {
+                        "player": "Magic Egg Ball, will I receive a Justiciar Faceguard drop today?"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 18",
+                    "steps": [
+                      {
+                        "player": "Magic Egg Ball, will I receive a Ranger Boots drop today?"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 19",
+                    "steps": [
+                      {
+                        "player": "Magic Egg Ball, will I receive a Scythe of Vitur drop today?"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 20",
+                    "steps": [
+                      {
+                        "player": "Magic Egg Ball, will I receive a Tanzanite Fang drop today?"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 21",
+                    "steps": [
+                      {
+                        "player": "Magic Egg Ball, will I receive a Twisted Bow drop today?"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "type": "message",
+                "text": "You shake the egg violently.",
+                "id": "PzNuhT"
+              },
+              {
+                "type": "random",
+                "options": [
+                  {
+                    "text": "Dialogue 1",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "As I see it, yes.",
+                        "id": "CTCiNU"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 2",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Ask again later.",
+                        "id": "wu9Y44"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 3",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Better not tell you now.",
+                        "id": "hxhwR5"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 4",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Cannot predict now.",
+                        "id": "J8U0JE"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 5",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Concentrate and ask again.",
+                        "id": "cqIetD"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 6",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Don't count on it.",
+                        "id": "8LdF-5"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 7",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "It is certain.",
+                        "id": "YCcTlP"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 8",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "It is decidedly so.",
+                        "id": "Bcp-jq"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 9",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Most likely.",
+                        "id": "bIBogz"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 10",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "My reply is no.",
+                        "id": "7bh5yG"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 11",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "My sources say no.",
+                        "id": "hHoJCz"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 12",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Outlook is good.",
+                        "id": "kgdmug"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 13",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Outlook not so good.",
+                        "id": "gnfdRy"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 14",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Reply hazy, try again.",
+                        "id": "XR2Vcw"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 15",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Signs point to yes.",
+                        "id": "2PMtBT"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 16",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Very doubtful.",
+                        "id": "Q4VKYj"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 17",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Without a doubt.",
+                        "id": "3Z0y2g"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 18",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Yes.",
+                        "id": "c7G0kc"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 19",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Yes - Definitely.",
+                        "id": "kgqWUe"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 20",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "You may rely on it.",
+                        "id": "VnlysM"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "text": "Will I get a pet today?",
+            "steps": [
+              {
+                "type": "random",
+                "options": [
+                  {
+                    "text": "Dialogue 1",
+                    "steps": [
+                      {
+                        "player": "Magic Egg Ball, will I get a pet Baby Mole today?"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 2",
+                    "steps": [
+                      {
+                        "player": "Magic Egg Ball, will I get a pet Beaver today?"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 3",
+                    "steps": [
+                      {
+                        "player": "Magic Egg Ball, will I get a pet Hellpuppy today?"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 4",
+                    "steps": [
+                      {
+                        "player": "Magic Egg Ball, will I get a pet Olmlet today?"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 5",
+                    "steps": [
+                      {
+                        "player": "Magic Egg Ball, will I get a pet Phoenix today?"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 6",
+                    "steps": [
+                      {
+                        "player": "Magic Egg Ball, will I get a pet Rocky today?"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 7",
+                    "steps": [
+                      {
+                        "player": "Magic Egg Ball, will I get a pet Snakeling today?"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 8",
+                    "steps": [
+                      {
+                        "player": "Magic Egg Ball, will I get a pet Tangleroot today?"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 9",
+                    "steps": [
+                      {
+                        "player": "Magic Egg Ball, will I get a pet Vorki today?"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "type": "message",
+                "text": "You shake the egg violently.",
+                "id": "e3YIyo"
+              },
+              {
+                "type": "jump",
+                "id": "KWYFE-",
+                "steps": [
+                  {
+                    "type": "call",
+                    "branch": "jump-81f488a6ceed37a5"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "text": "What should I train today?",
+            "steps": [
+              {
+                "player": "Magic Egg Ball, what should I train today?"
+              },
+              {
+                "type": "message",
+                "text": "You shake the egg violently.",
+                "id": "r_4TSk"
+              },
+              {
+                "type": "random",
+                "options": [
+                  {
+                    "text": "Dialogue 1",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Today you will train yourself in Agility.",
+                        "id": "uNtHdq"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 2",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Today you will train yourself in Attack.",
+                        "id": "zBEf5B"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 3",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Today you will train yourself in Crafting.",
+                        "id": "vsHE_U"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 4",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Today you will train yourself in Construction.",
+                        "id": "uPrmBI"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 5",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Today you will train yourself in Cooking.",
+                        "id": "GPz1TI"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 6",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Today you will train yourself in Defence.",
+                        "id": "RjwbGI"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 7",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Today you will train yourself in Farming.",
+                        "id": "lH0oOv"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 8",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Today you will train yourself in Firemaking.",
+                        "id": "FDqkFS"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 9",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Today you will train yourself in Fishing.",
+                        "id": "1-gg41"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 10",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Today you will train yourself in Fletching.",
+                        "id": "eUb2LF"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 11",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Today you will train yourself in Herblore.",
+                        "id": "fGSYsd"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 12",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Today you will train yourself in Hunting.",
+                        "id": "L2BMBV"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 13",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Today you will train yourself in Magic.",
+                        "id": "sOztl3"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 14",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Today you will train yourself in Mining.",
+                        "id": "cEe3AI"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 15",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Today you will train yourself in Prayer.",
+                        "id": "V7ZjcY"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 16",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Today you will train yourself in Range.",
+                        "id": "XJvMNF"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 17",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Today you will train yourself in Runecrafting.",
+                        "id": "deFEtF"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 18",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Today you will train yourself in Slayer.",
+                        "id": "jnNzm4"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 19",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Today you will train yourself in Smithing.",
+                        "id": "5bpRdA"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 20",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Today you will train yourself in Strength.",
+                        "id": "eCGtsl"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 21",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Today you will train yourself in Thieving.",
+                        "id": "Jc8bEH"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 22",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Today you will train yourself in Woodcutting.",
+                        "id": "RF_CzS"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "text": "What boss should I fight today?",
+            "steps": [
+              {
+                "player": "Magic Egg Ball, what boss should I fight today?"
+              },
+              {
+                "type": "message",
+                "text": "You shake the egg violently.",
+                "id": "P7MDnL"
+              },
+              {
+                "type": "random",
+                "options": [
+                  {
+                    "text": "Dialogue 1",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Today you will fight the great Abyssal Sire.",
+                        "id": "aCGfio"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 2",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Today you will fight the great Alchemical Hydra.",
+                        "id": "oJHvv-"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 3",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Today you will fight the great Barrows brothers.",
+                        "id": "ma4wnG"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 4",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Today you will fight the great Bryophyta.",
+                        "id": "_nl-Kc"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 5",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Today you will fight the great Callisto.",
+                        "id": "sT3MDM"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 6",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Today you will fight the great Cerberus.",
+                        "id": "O3tejB"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 7",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Today you will fight the great Chaos Elemental.",
+                        "id": "TkA3vm"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 8",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Today you will fight the great Chaos Fanatic.",
+                        "id": "bJ4ffT"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 9",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Today you will fight the great Commander Zilyana.",
+                        "id": "eKWK_D"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 10",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Today you will fight the great Crazy Archaeologist.",
+                        "id": "sr4ClQ"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 11",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Today you will fight the great Corporeal Beast.",
+                        "id": "wPuDDw"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 12",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Today you will fight the great Dagannoth Kings.",
+                        "id": "azQRTL"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 13",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Today you will fight the great Deranged Archaeologist.",
+                        "id": "Hd6inY"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 14",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Today you will fight the great General Graardor.",
+                        "id": "VGXyQX"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 15",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Today you will fight the great Giant Mole.",
+                        "id": "LGWShk"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 16",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Today you will fight the great Grotesque Guardians.",
+                        "id": "M9djQ9"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 17",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Today you will fight the great Hespori.",
+                        "id": "asnfPP"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 18",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Today you will fight the great Kalphite Queen.",
+                        "id": "F3Muvd"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 19",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Today you will fight the great King Black Dragon.",
+                        "id": "cMgMdF"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 20",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Today you will fight the great K'ril Tsutsaroth.",
+                        "id": "Dx_SfS"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 21",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Today you will fight the great Kraken.",
+                        "id": "d80Psi"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 22",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Today you will fight the great Kree'Arra.",
+                        "id": "hp5MLs"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 23",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Today you will fight the great Nex.",
+                        "id": "Lo5SJY"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 24",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Today you will fight the great Nightmare.",
+                        "id": "o-VNiE"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 25",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Today you will fight the great Obor.",
+                        "id": "B7YpSU"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 26",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Today you will fight the great Sarachnis.",
+                        "id": "6EViSW"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 27",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Today you will fight the great Skotizo.",
+                        "id": "SVu9O1"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 28",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Today you will fight the great Tempoross.",
+                        "id": "bMURkb"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 29",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Today you will fight the great Thermonuclear Smoke Devil.",
+                        "id": "soumOw"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 30",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Today you will fight the great Venenatis.",
+                        "id": "N8HUxl"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 31",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Today you will fight the great Vet'ion.",
+                        "id": "ofKHYa"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 32",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Today you will fight the great Vorkath.",
+                        "id": "B2IbH7"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 33",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Today you will fight the great Zalcano.",
+                        "id": "QGitrp"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Dialogue 34",
+                    "steps": [
+                      {
+                        "type": "message",
+                        "text": "Today you will fight the great Zulrah.",
+                        "id": "3Jfn97"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "text": "Never mind.",
+            "steps": [
+              {
+                "type": "message",
+                "text": "The egg returns to its dormant state.",
+                "id": "6FJOd7"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "Melzar's notes": {
+    "default": null,
+    "variants": {
+      "unsectioned": [
+        {
+          "type": "unavailable",
+          "id": "HMCGqb"
+        },
+        {
+          "type": "unavailable",
+          "id": "60cIpK"
+        },
+        {
+          "type": "unavailable",
+          "id": "P394PQ"
+        },
+        {
+          "type": "unavailable",
+          "id": "RtzdRZ"
+        },
+        {
+          "type": "unavailable",
+          "id": "Utymvn"
+        },
+        {
+          "type": "unavailable",
+          "id": "bXxzFZ"
+        },
+        {
+          "type": "unavailable",
+          "id": "tbcYeO"
+        },
+        {
+          "type": "unavailable",
+          "id": "B7e1UN"
+        },
+        {
+          "type": "unavailable",
+          "id": "Gt-cnH"
+        },
+        {
+          "type": "unavailable",
+          "id": "d0dI_e"
+        },
+        {
+          "type": "unavailable",
+          "id": "b5EvGE"
+        },
+        {
+          "type": "unavailable",
+          "id": "Th_1fZ"
+        },
+        {
+          "type": "unavailable",
+          "id": "zDeLnn"
+        },
+        {
+          "type": "unavailable",
+          "id": "KC9GTf"
+        },
+        {
+          "type": "unavailable",
+          "id": "WesvY8"
+        },
+        {
+          "type": "unavailable",
+          "id": "T3_Wmh"
+        },
+        {
+          "type": "unavailable",
+          "id": "eDfdNg"
+        },
+        {
+          "type": "unavailable",
+          "id": "Ec5vaP"
+        },
+        {
+          "type": "unavailable",
+          "id": "FbHXi1"
+        },
+        {
+          "type": "unavailable",
+          "id": "bWFmA8"
+        },
+        {
+          "type": "unavailable",
+          "id": "Fu3Ep8"
+        },
+        {
+          "type": "unavailable",
+          "id": "zfMvd2"
+        },
+        {
+          "type": "unavailable",
+          "id": "hGg7be"
+        },
+        {
+          "type": "unavailable",
+          "id": "_xDI3S"
+        },
+        {
+          "type": "unavailable",
+          "id": "r9yPmW"
+        },
+        {
+          "type": "unavailable",
+          "id": "SPk3ff"
+        },
+        {
+          "type": "unavailable",
+          "id": "g2qPqt"
+        },
+        {
+          "type": "unavailable",
+          "id": "DkChD5"
+        },
+        {
+          "type": "unavailable",
+          "id": "0odUQf"
+        }
+      ]
+    },
+    "activation": "explicit"
+  },
+  "Secret santa present": {
+    "default": null,
+    "variants": {
+      "change-colour-option-on-the-present": [
+        {
+          "type": "condition",
+          "text": "If no other colours are unlocked:",
+          "steps": [
+            {
+              "type": "message",
+              "text": "Deliver the present to the residents of Gielinor to unlock more colours. Check the name tag!",
+              "id": "ZTu7nJ"
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "41tHv-"
+        },
+        {
+          "type": "condition",
+          "text": "If at least one colour is unlocked:",
+          "steps": [
+            {
+              "type": "choice",
+              "options": [
+                {
+                  "text": "Red",
+                  "steps": []
+                },
+                {
+                  "text": "Blue",
+                  "condition": "If blue unlocked:",
+                  "steps": [],
+                  "id": "18M1Fk"
+                },
+                {
+                  "text": "Green",
+                  "condition": "If green unlocked:",
+                  "steps": [],
+                  "id": "gd9T3P"
+                },
+                {
+                  "text": "Black",
+                  "condition": "If black unlocked:",
+                  "steps": [],
+                  "id": "Bz_Sxq"
+                },
+                {
+                  "text": "Gold",
+                  "condition": "If gold unlocked:",
+                  "steps": [],
+                  "id": "sMkbBA"
+                },
+                {
+                  "text": "I want to unlock more colours!",
+                  "condition": "If at least one colour still locked:",
+                  "steps": [
+                    {
+                      "type": "message",
+                      "text": "Deliver the present to the residents of Gielinor to unlock more colours. Check the name tag!",
+                      "id": "wWy_5-"
+                    }
+                  ],
+                  "id": "cjRkuv"
+                }
+              ]
+            }
+          ],
+          "id": "o0MOoj"
+        }
+      ],
+      "unlocking-blue-read-tag": [
+        {
+          "type": "message",
+          "text": "I sell tools that chop. Near where adventures begin. Come visit my shop.",
+          "id": "SkLL-S"
+        }
+      ],
+      "unlocking-blue-talking-to-bob": [
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "I have a present for you!",
+              "steps": [
+                {
+                  "player": "I have a present for you!"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Bob",
+                  "text": "Lovely! I've been waiting for you to turn up!"
+                },
+                {
+                  "player": "You've been waiting for me?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Bob",
+                  "text": "Yes! Didn't anybody tell you? This present is actually for you!"
+                },
+                {
+                  "player": "For me?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Bob",
+                  "text": "All for you. Every time you deliver it, you'll unlock a new colour of wrapping paper for it."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Bob",
+                  "text": "It's a pretty magical present!"
+                },
+                {
+                  "player": "That sounds pretty cool! So I can change its colour?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Bob",
+                  "text": "Yep. Look, you can change its wrapping paper to blue now."
+                },
+                {
+                  "type": "action",
+                  "text": "Bob performs an enchant animation and unlocks the new colour.",
+                  "id": "_AS9KU"
+                },
+                {
+                  "type": "message",
+                  "text": "You've unlocked blue wrapping paper for your present.",
+                  "id": "MmpiHG"
+                },
+                {
+                  "player": "That's so cool! Who do I deliver it to next?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Bob",
+                  "text": "You'll have to figure that out for yourself, that's the fun. Check the name tag!"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Bob",
+                  "text": "I'm going to get back to work, good luck."
+                }
+              ]
+            },
+            {
+              "text": "Talk about other things."
+            }
+          ]
+        }
+      ],
+      "unlocking-green-read-tag": [
+        {
+          "type": "message",
+          "text": "Red, yellow and blue. Onion, woad, redberries. All will do. Witch one will you choose?",
+          "id": "lJKifI"
+        }
+      ],
+      "unlocking-green-talking-to-aggie": [
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "I have a present for you!",
+              "steps": [
+                {
+                  "player": "I have a present for you!"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Aggie",
+                  "text": "Hello [player name]. You've found me, well done."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Aggie",
+                  "text": "Let me unlock the next colour for you."
+                },
+                {
+                  "type": "action",
+                  "text": "Aggie performs an enchant animation and unlocks the new colour.",
+                  "id": "rFjI5F"
+                },
+                {
+                  "type": "message",
+                  "text": "You've unlocked green wrapping paper for your present.",
+                  "id": "qrR4nb"
+                },
+                {
+                  "player": "Thank you, Aggie!"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Aggie",
+                  "text": "Good luck with the next one!"
+                }
+              ]
+            },
+            {
+              "text": "Talk about other things."
+            }
+          ]
+        }
+      ],
+      "unlocking-black-read-tag": [
+        {
+          "type": "message",
+          "text": "I sell news each day. 'Read all about it' I say. A low price to pay.",
+          "id": "4sa67g"
+        }
+      ],
+      "unlocking-black-talking-to-benny": [
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "I have a present for you!",
+              "steps": [
+                {
+                  "player": "I have a present for you!"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Benny",
+                  "text": "Hi [player name]. I didn't think you'd find me!"
+                },
+                {
+                  "player": "Who else sells newspapers!"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Benny",
+                  "text": "I suppose I should have made the clue harder."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Benny",
+                  "text": "I'll unlock the next colour for you."
+                },
+                {
+                  "type": "action",
+                  "text": "Benny performs an enchant animation and unlocks the new colour.",
+                  "id": "aD5kAc"
+                },
+                {
+                  "type": "message",
+                  "text": "You've unlocked black wrapping paper for your present.",
+                  "id": "_XvIdM"
+                },
+                {
+                  "player": "Thank you, Benny!"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Benny",
+                  "text": "It's no problem. Good luck with the last one!"
+                }
+              ]
+            },
+            {
+              "text": "Talk about other things."
+            }
+          ]
+        }
+      ],
+      "unlocking-gold-read-tag": [
+        {
+          "type": "message",
+          "text": "I summon the dead. Skeletons, Zombies and Ghosts. Land, Flame, Wind and Sea.",
+          "id": "tFV7Gc"
+        }
+      ],
+      "unlocking-gold-talking-to-malignius-mortifer": [
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "I have a present for you!",
+              "steps": [
+                {
+                  "player": "I have a present for you!"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Malignius Mortifer",
+                  "text": "I see. Let's do this quickly, I am quite busy."
+                },
+                {
+                  "type": "action",
+                  "text": "Malignius Mortifer performs an enchant animation and unlocks the new colour.",
+                  "id": "AqyfoW"
+                },
+                {
+                  "type": "message",
+                  "text": "You've unlocked gold wrapping paper for your present.",
+                  "id": "SyvI60"
+                },
+                {
+                  "player": "Thank you!"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Malignius Mortifer",
+                  "text": "You've completed your tasks, well done."
+                },
+                {
+                  "player": "You were the last one?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Malignius Mortifer",
+                  "text": "Yes. Always save the best until last."
+                },
+                {
+                  "player": "You're the best?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Malignius Mortifer",
+                  "text": "Obviously, I am Malignius Mortifer."
+                },
+                {
+                  "player": "Ah yes, the great Malignius Mortifer..."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Malignius Mortifer",
+                  "text": "You don't think I'm great?"
+                },
+                {
+                  "player": "I do! Of course I do."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Malignius Mortifer",
+                  "text": "Good, now begone."
+                }
+              ]
+            },
+            {
+              "text": "Talk about other things."
+            }
+          ]
+        }
+      ],
+      "read-tag-after-unlocking-all-colours": [
+        {
+          "type": "message",
+          "text": "You've already delivered the present to everyone and unlocked all the colours of wrapping paper.",
+          "id": "hyfBez"
+        }
+      ]
+    },
+    "activation": "explicit"
+  },
+  "Sheep's caged monkey": {
+    "default": "standard-dialogue",
+    "variants": {
+      "standard-dialogue": [
+        {
+          "type": "line",
+          "speaker": "Baby monkey",
+          "text": "Wha... what's going on? Is it time to attack the humans yet?"
+        },
+        {
+          "player": "Erm, no, not yet. You can continue sleeping."
+        },
+        {
+          "type": "line",
+          "speaker": "Baby monkey",
+          "text": "Oh... okay then..."
+        },
+        {
+          "type": "message",
+          "text": "You hear some snoring sounds coming from the trap.",
+          "id": "t1pHRp"
+        },
+        {
+          "player": "Out for the count. It's probably for the best."
+        }
+      ],
+      "using-sheep-s-caged-monkey-on-an-affected-npc": [
+        {
+          "type": "message",
+          "text": "There is already a monkey in that cage!",
+          "id": "QRRNwT"
+        }
+      ]
+    },
+    "activation": "explicit"
+  },
+  "Tattered scroll": {
+    "default": null,
+    "variants": {
+      "unsectioned": [
+        {
+          "type": "unavailable",
+          "id": "OkaEtb"
+        }
+      ]
+    },
+    "activation": "explicit"
+  },
+  "Unicorn's caged monkey": {
+    "default": "standard-dialogue",
+    "variants": {
+      "standard-dialogue": [
+        {
+          "type": "line",
+          "speaker": "Monkey",
+          "text": "You lied to me human. While that was a mighty fine banana, it was not the best banana in the world!"
+        },
+        {
+          "player": "And how would you know? Have you tried every banana in the world?"
+        },
+        {
+          "type": "line",
+          "speaker": "Monkey",
+          "text": "Well, no... I suppose not, but I've had better. On Ape Atoll there is a tree which grows red bananas. They are the best!"
+        },
+        {
+          "type": "condition",
+          "text": "If the player has freed King Awowogei subquest.",
+          "steps": [
+            {
+              "player": "Ah, of course. I almost forgot about those. I once had to prepare a stuffed snake using those bananas for King Awowogei."
+            },
+            {
+              "type": "line",
+              "speaker": "Monkey",
+              "text": "Wait? You've worked for our great ruler? I didn't realise we had started employing human chefs. Bring me a banana sandwich immediately!"
+            },
+            {
+              "type": "jump",
+              "reference": "continue",
+              "id": "h0xfWz"
+            }
+          ],
+          "id": "qkXH-D"
+        },
+        {
+          "type": "condition",
+          "text": "If the player has not freed King Awowogei subquest.",
+          "steps": [
+            {
+              "player": "Red bananas? Surely you're pulling my leg? There's no such thing."
+            },
+            {
+              "type": "line",
+              "speaker": "Monkey",
+              "text": "What? I'm in this cage. I can't pull your leg."
+            },
+            {
+              "type": "jump",
+              "reference": "continue",
+              "id": "-VmYfc"
+            }
+          ],
+          "id": "ZKVl4s"
+        },
+        {
+          "player": "Erm... never mind."
+        }
+      ],
+      "using-unicorn-s-caged-monkey-on-an-affected-npc": [
+        {
+          "type": "message",
+          "text": "There is already a monkey in that cage!",
+          "id": "4-UBuB"
+        }
+      ]
+    },
+    "activation": "explicit"
   }
 }

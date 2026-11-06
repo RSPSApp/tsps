@@ -28,6 +28,7 @@ const IDLE_TICKS_KEY = "castlewars:idle-ticks";
 const SPAWN_IDLE_TICKS = 200;
 
 const teamByPlayer = new WeakMap();
+const participationStarted = new WeakMap();
 const sentVars = new WeakMap();
 const braceletEffect = new WeakSet();
 const flagHeldSince = new WeakMap();
@@ -117,6 +118,7 @@ function setTeamId(player, teamId) {
   }
   if (teamId == null) {
     teamByPlayer.delete(player);
+    participationStarted.delete(player);
     return;
   }
   teamByPlayer.set(player, teamId);
@@ -379,8 +381,8 @@ function carriedTeamOf(player) {
   return null;
 }
 
-/** Put the dropped standard on the floor where the player stands. */
-function placeDroppedFlag(flagTeam, player) {
+/** Put the dropped standard on its final tile: the player's, or a cleared tunnel's floor corner. */
+function placeDroppedFlag(flagTeam, player, dropLocation) {
   // One standard per team: remove whatever drop a previous life left behind, so repeated
   // deaths in the same spot cannot stack flag objects.
   removeDroppedFlagObject(flagTeam);
@@ -388,7 +390,7 @@ function placeDroppedFlag(flagTeam, player) {
   const otherDrop = droppedFlagObjects[otherTeam];
   // The client has one scenery slot per tile. Returning the dropper's own standard
   // keeps the enemy standard available instead of hiding one beneath the other.
-  if (otherDrop?.getLocation().equals(player.getLocation())) {
+  if (otherDrop?.getLocation().equals(dropLocation)) {
     const ownTeam = getTeamId(player);
     restoreFlagToBase(ownTeam, "overlap");
     if (flagTeam === ownTeam) return;
@@ -396,12 +398,12 @@ function placeDroppedFlag(flagTeam, player) {
   flagStatus[flagTeam] = 2;
   flagCarriers[flagTeam] = null;
   if (process.env.CW_BOT_DEBUG === "1") {
-    const tile = getLocationTile(player);
+    const tile = getLocationTile(dropLocation);
     console.log(`[cw_flag] drop ${flagTeam} by ${player.getUsername?.()} at ${tile.x},${tile.y},${tile.z}`);
   }
   const dropped = new core.GameObject(
     getTeamData(flagTeam).droppedFlagObjectId,
-    player.getLocation().clone(),
+    dropLocation.clone(),
     10,
     0,
     player.getPrivateArea()
@@ -430,7 +432,7 @@ function clearStrayDroppedFlags() {
   droppedFlagObjects[data.TEAM.ZAMORAK] = null;
 }
 
-/** Stones and rocks return any flag; catapult corners only return the carrier's own flag. */
+/** Stones and blocked rock patches return any flag; catapult corners return the carrier's own. */
 function dropCarriedFlag(player) {
   // The equipment is authoritative for live carries; the tracked carrier covers deaths
   // whose item processing stripped the banner before this ran (bot deaths are handled
@@ -446,14 +448,21 @@ function dropCarriedFlag(player) {
   clearWeaponSlot(player);
   const tile = getLocationTile(player);
   // RuneHQ: "if you die on the stepping stones or under the rockslide, it will return to your
-  // base." The rockslide covers a tunnel's rock tiles, fallen or mined away (issue 1929).
+  // base." The rockslide returns the flag while either rock layer stands; a cleared patch
+  // drops it on the inside floor corner just outside the footprint (issues 1929, 2355).
   if (tile && (isSteppingStone(tile)
-    || (carriedFlagTeam === getTeamId(player) && catapultReturnTeam(player))
-    || game.isTunnelRockTile?.(player.getLocation()))) {
+    || (carriedFlagTeam === getTeamId(player) && catapultReturnTeam(player)))) {
     restoreFlagToBase(carriedFlagTeam, "returns");
     return;
   }
-  placeDroppedFlag(carriedFlagTeam, player);
+  const dropLocation = game.tunnelFlagDropTile
+    ? game.tunnelFlagDropTile(player.getLocation())
+    : player.getLocation();
+  if (dropLocation === null) {
+    restoreFlagToBase(carriedFlagTeam, "returns");
+    return;
+  }
+  placeDroppedFlag(carriedFlagTeam, player, dropLocation);
 }
 
 // --- Barricades --------------------------------------------------------------------------
@@ -461,6 +470,7 @@ function dropCarriedFlag(player) {
 function trackBarricade(npc, teamId) {
   npc.castleWarsTeam = teamId;
   npc.setFlag(core.NPC.BLOCKS_PLAYERS_FLAG);
+  npc.setFlag(core.NPC.BLOCKS_PROJECTILES_FLAG);
   barricades.add(npc);
 }
 
@@ -477,6 +487,7 @@ function releaseBarricade(npc) {
     return;
   }
   npc.removeFlag(core.NPC.BLOCKS_PLAYERS_FLAG);
+  npc.removeFlag(core.NPC.BLOCKS_PROJECTILES_FLAG);
 }
 
 function removeBarricade(npc) {
@@ -560,23 +571,48 @@ function checkStartCountdown() {
   }
 }
 
+function startParticipation(player) {
+  if (!participationStarted.has(player)) participationStarted.set(player, World.getProcessCycle());
+}
+
 function rewardPlayer(player) {
   const teamId = getTeamId(player);
-  if (!teamId) {
+  if (!teamId || player.isRegistered?.() !== true || player.getArea() !== game.gameArea || !inGameBounds(player.getLocation())) {
     return;
   }
-  // OSRS Wiki, non-dedicated worlds: shut-out win 3, win 2, loss 1, 0-0 draw 1, scoring draw 2.
   const own = score[teamId];
   const other = score[opposingTeam(teamId)];
-  const award = { player, minigame: "castle-wars", points: own === other ? (own === 0 ? 1 : 2) : own < other ? 1 : other === 0 ? 3 : 2 };
-  api.emitCustomEvent("minigame:points", award);
-  const tickets = award.points;
   const result = own === other ? "Tie game!" : own > other ? "You won the game." : "You lost the game.";
   if (player.getAttribute(BOT_KEY) !== true) {
     api.emitCustomEvent("castlewars:player-result", { player, result: own === other ? "tie" : own > other ? "win" : "loss" });
   }
-  player.getInventory().adds(core.ItemIdentifiers.CASTLE_WARS_TICKET, tickets);
-  player.sendMessage(`${result} You received ${tickets} Castle Wars ticket${tickets === 1 ? "" : "s"}.`);
+  const started = participationStarted.get(player);
+  if (started == null || World.getProcessCycle() - started < secondsToTicks(data.REWARD_MINIMUM_SECONDS)) {
+    player.sendMessage("You must play at least 15 minutes to receive Castle Wars rewards.");
+    return;
+  }
+  // OSRS Wiki, non-dedicated worlds: shut-out win 3, win 2, loss 1, 0-0 draw 1, scoring draw 2.
+  const award = { player, minigame: "castle-wars", points: own === other ? (own === 0 ? 1 : 2) : own < other ? 1 : other === 0 ? 3 : 2 };
+  api.emitCustomEvent("minigame:points", award);
+  const tickets = award.points;
+  const inventory = player.getInventory();
+  if (!Number.isSafeInteger(tickets) || tickets <= 0 || inventory.getFreeSlots() === 0
+    || inventory.getAddableAmount(new core.Item(core.ItemIdentifiers.CASTLE_WARS_TICKET, tickets)) < tickets) {
+    player.sendMessage("You don't have enough inventory space for your Castle Wars rewards.");
+    return;
+  }
+  const plaudits = { player, amount: tickets, allow: true, commit: null };
+  if (player.getAttribute(BOT_KEY) !== true && !player.isPlayerBot()) api.emitCustomEvent("castlewars:reward-plaudits", plaudits);
+  if (!plaudits.allow) {
+    player.sendMessage("You cannot hold any more Castle Wars plaudits.");
+    return;
+  }
+  const before = inventory.getAmount(core.ItemIdentifiers.CASTLE_WARS_TICKET);
+  inventory.adds(core.ItemIdentifiers.CASTLE_WARS_TICKET, tickets);
+  const delivered = inventory.getAmount(core.ItemIdentifiers.CASTLE_WARS_TICKET) - before;
+  if (delivered <= 0) return;
+  plaudits.commit?.(delivered);
+  player.sendMessage(`${result} You received ${delivered} Castle Wars ticket${delivered === 1 ? "" : "s"}.`);
 }
 
 function returnToLobby(player, message = null) {
@@ -935,6 +971,7 @@ module.exports = function createCastleWarsGame(registry) {
     beginStartCountdown,
     checkStartCountdown,
     checkTeamsRemain,
+    startParticipation,
     endGame,
     releaseSeededBots,
     resetMatchState,

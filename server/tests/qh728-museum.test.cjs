@@ -120,7 +120,7 @@ function makeEquipment(ids = []) {
 function makePlayer(attributes = {}, items = {}, equipped = []) {
   const attrs = new Map(Object.entries(attributes));
   const inventory = makeInventory(items);
-  const messages = [], varbits = [], texts = [];
+  const messages = [], varbits = [], texts = [], strings = [];
   const levels = new Map(), experience = new Map();
   const bankCounts = new Map();
   const bank = {
@@ -147,6 +147,7 @@ function makePlayer(attributes = {}, items = {}, equipped = []) {
     getBank: () => bank,
     getSkillManager: () => skills,
     sendMessage: (message) => messages.push(message),
+    performAnimation() {},
     getUsername: () => "museum-test", getDisplayName: () => "museum-test",
     getAppearance: () => ({ isMale: () => true }),
     getPacketSender: () => sender,
@@ -154,6 +155,7 @@ function makePlayer(attributes = {}, items = {}, equipped = []) {
     messages,
     varbits,
     texts,
+    strings,
     attrs,
     inventory,
     get menu() { return menu; },
@@ -183,6 +185,7 @@ function makePlayer(attributes = {}, items = {}, equipped = []) {
       return ((varps.get(baseVar) ?? 0) >> startBit) & ((1 << (endBit - startBit + 1)) - 1);
     },
     sendInterfaceRemoval() { return sender; },
+    sendString(text, uid) { strings.push([uid, text]); return sender; },
     isChatboxInterface() { return true; },
   }, { get(target, key) { return key in target ? target[key] : () => sender; } });
   player.manager = new DialogueManager(player);
@@ -217,6 +220,7 @@ function makeApi(quests = new Set()) {
     onInterfaceActionButton() {},
     onNpcDialogueVariant() {},
     onPlayerLogin(handler) { login.push(handler); },
+    registerArea() {},
     sendMultiChatboxPrompt(_player, _title, ...flat) {
       const options = [];
       for (let i = 0; i < flat.length; i += 2) options.push([flat[i], flat[i + 1]]);
@@ -497,6 +501,29 @@ test("Museum: What Lies Below pays only with the book; Hazeel's mid-branch gap n
   assert.equal(getKudos(hazeel, hazeelPlayer), 0);
 });
 
+test("Museum: Curse of the Empty Lord pays 10 Kudos and its 10,000 XP lamp only with the full ghostly robes", () => {
+  const world = makeApi(new Set(["the_dig_site", "curse_of_the_empty_lord"]));
+  const robes = [I.GHOSTLY_ROBE, I.GHOSTLY_ROBE_2, I.GHOSTLY_BOOTS, I.GHOSTLY_HOOD, I.GHOSTLY_GLOVES, I.GHOSTLY_CLOAK];
+  const player = makePlayer({}, Object.fromEntries(robes.slice(1).map((id) => [id, 1])), []);
+  talkToMinas(world, player);
+  assert.equal(getKudos(world, player), 0, "a robe piece short");
+  assert.equal(player.inventory.getAmount(11188), 0);
+  const dressed = makePlayer({}, Object.fromEntries(robes.slice(2).map((id) => [id, 1])), [robes[0], robes[1]]);
+  talkToMinas(world, dressed);
+  assert.equal(getKudos(world, dressed), 10, "worn pieces count");
+  assert.equal(dressed.inventory.getAmount(11188), 1);
+  for (const id of robes.slice(2)) assert.equal(dressed.inventory.getAmount(id), 1, "the robes stay");
+  talkToMinas(world, dressed);
+  assert.equal(getKudos(world, dressed), 10, "reported once");
+  dressed.setLevel("Attack", 49);
+  const skill = { getName: () => "Attack", getIndex: () => 0 };
+  world.itemAction({ player: dressed, item: dressed.inventory.get(dressed.inventory.slotOf(11188)), itemId: 11188, slot: dressed.inventory.slotOf(11188) });
+  const prompt = world.xpreward.at(-1);
+  assert.equal(prompt.minLevel, 50);
+  dressed.setLevel("Attack", 50);
+  assert.equal(prompt.onConfirm(skill, "Attack"), "<col=0000ff>Your wish has been granted!</col> You have been awarded 10,000 Attack experience!");
+});
+
 test("Museum: Minas lamps enforce minimum level and full-bag retry without duplication", () => {
   const world = makeApi(new Set(["the_dig_site", "making_history"]));
   const player = makePlayer({}, {}, []);
@@ -615,6 +642,16 @@ test("Museum: placing a unique artefact removes its duplicates from inventory an
   assert.equal(getKudos(world, player), 10);
 });
 
+test("Museum: Minas does not play the no-report fallback after a report in the same chat", () => {
+  const world = makeApi(new Set(["making_history"]));
+  const player = makePlayer();
+  talkToMinas(world, player);
+  assert.equal(getKudos(world, player), 5);
+  const said = player.texts.join(" | ");
+  assert.ok(!said.includes("On second thoughts"), said);
+  assert.ok(!said.includes("I'm sure you'll find more"), said);
+});
+
 test("Museum: VM_KUDOS wire mirrors persisted Kudos at 0/99/100 and preserves sibling bits", () => {
   const vm = CacheDefinitions.getVarbit(3637);
   assert.equal(vm.baseVar, 1010);
@@ -653,4 +690,45 @@ test("Museum: VM_KUDOS wire mirrors persisted Kudos at 0/99/100 and preserves si
     assert.equal(minasPlayer.getVarp(1010) & siblingBits, siblingBits);
     assert.equal(minasPlayer.configs.some(([id]) => id === 1010), false);
   }
+});
+
+function studyText(world, player, objectId) {
+  player.strings.length = 0;
+  objectAction(world, "Display case", "Study", player, objectId, 3250, 3450, 1);
+  return player.strings.find(([uid]) => uid === ((534 << 16) | 2))?.[1];
+}
+
+test("Museum: display Study picks the post-report Wiki text for the same object id", () => {
+  const world = makeApi();
+  const cases = [
+    [24622, "recent evidence from a brave adventurer suggests that Zamorak was not a god", "curse_of_the_empty_lord"],
+    [24643, "Scorpius, the early 4th Age astrologer", "observatory_quest"],
+    [24637, "However, recent information we have received suggests that Ivandis", "in_aid_of_the_myreque"],
+    [24624, "It was this staff, wielded by Zamorak, which killed the god Zaros", "temple_of_ikov"],
+  ];
+  for (const [objectId, postText, report] of cases) {
+    const before = makePlayer();
+    assert.doesNotMatch(studyText(world, before, objectId), new RegExp(postText), `${objectId} before report`);
+
+    const after = makePlayer({ [STATE]: { minas: [report] } });
+    assert.match(studyText(world, after, objectId), new RegExp(postText), `${objectId} after ${report}`);
+  }
+
+  // Hazeel Cult's display only changes when the player sided with Hazeel.
+  const noReport = makePlayer({ "quest.hazeel_cult.side": 1 });
+  assert.doesNotMatch(studyText(world, noReport, 24655), /Of particular note was an evil lord/);
+  const carnillean = makePlayer({ "quest.hazeel_cult.side": 0, [STATE]: { minas: ["hazeel_cult"] } });
+  assert.doesNotMatch(studyText(world, carnillean, 24655), /Of particular note was an evil lord/);
+  const hazeel = makePlayer({ "quest.hazeel_cult.side": 1, [STATE]: { minas: ["hazeel_cult"] } });
+  assert.match(studyText(world, hazeel, 24655), /Of particular note was an evil lord/);
+});
+
+test("Museum: Curse of the Empty Lord report selects display 16's post-report text", () => {
+  const world = makeApi(new Set(["the_dig_site", "curse_of_the_empty_lord"]));
+  const robes = [I.GHOSTLY_ROBE, I.GHOSTLY_ROBE_2, I.GHOSTLY_BOOTS, I.GHOSTLY_HOOD, I.GHOSTLY_GLOVES, I.GHOSTLY_CLOAK];
+  const player = makePlayer({}, Object.fromEntries(robes.slice(2).map((id) => [id, 1])), [robes[0], robes[1]]);
+  talkToMinas(world, player);
+  assert.deepEqual(player.getAttribute(STATE).minas, ["curse_of_the_empty_lord"]);
+  assert.equal(getKudos(world, player), 10);
+  assert.match(studyText(world, player, 24622), /recent evidence from a brave adventurer suggests that Zamorak was not a god/);
 });

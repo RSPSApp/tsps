@@ -12,6 +12,16 @@ const DRAGON_IMPACT = 1100;
 const SHADOW_IMPACT = 1103;
 const GRAPHIC_HEIGHT = 96;
 
+/** Raw2510: other listeners hear doublefire at the victim, not the private launch on the archer. */
+function playTargetDoublefire({ attacker, target, method }) {
+  const { CombatType, RangedWeapon, Sound, Sounds } = core;
+  if (!attacker?.isPlayer() || method?.type() !== CombatType.RANGED
+    || attacker.getCombat().getRangedWeapon() !== RangedWeapon.DARK_BOW) return;
+  const at = target.getLocation();
+  Sounds.playAreaSound({ soundId: Sound.DARK_BOW_DOUBLEFIRE.getId(),
+    x: at.getX(), y: at.getY(), level: at.getZ(), radius: 10, source: target, exclude: attacker });
+}
+
 function isDragonArrow(player) {
   const { Ammunition } = core;
   return [Ammunition.DRAGON_ARROW, Ammunition.SEEKING_DRAGON_ARROW].includes(player.getCombat().getAmmunition());
@@ -42,8 +52,17 @@ function buildDarkBowSpecialAttack(core) {
 
   class DarkBowCombatMethod extends RangedCombatMethod {
     hits(character, target) {
-      const distance = character.getLocation().getDistance(target.getLocation());
+      const distance = CombatPosition.projectileDistance(character, target);
       const delays = WeaponProfiles.hitDelays(character.getAsPlayer(), distance);
+      if (character.getLocation().getZ() !== target.getLocation().getZ()) {
+        const arrivals = [
+          Projectile.ticksToLand(46 + (target.isNpc() ? 5 : 6) * distance),
+          Projectile.ticksToLand(55 + 10 * distance),
+        ];
+        return delays.map((delay, index) => new PendingHit(character, target, this, {
+          delay: Math.max(delay, arrivals[index] ?? delay), hitAmount: 1,
+        }));
+      }
       return delays.map((delay) => new PendingHit(character, target, this, { delay, hitAmount: 1 }));
     }
 
@@ -70,7 +89,7 @@ function buildDarkBowSpecialAttack(core) {
       const dragon = isDragonArrow(player);
       Sounds.sendSound(character, dragon ? Sound.DARK_BOW_DRAGON_SPECIAL : Sound.DARK_BOW_SHADOW_SPECIAL);
       const projectileId = dragon ? DRAGON_PROJECTILE : ammo === Ammunition.BROAD_ARROW ? BROAD_SHADOW_PROJECTILE : SHADOW_PROJECTILE;
-      const distance = CombatPosition.distance(character, target);
+      const distance = CombatPosition.projectileDistance(character, target);
       // RSProx 273/2510: the visible arrow travels inside each special effect.
       const flights = [
         { end: 46 + (target.isNpc() ? 5 : 6) * distance, angle: 5 },
@@ -81,6 +100,8 @@ function buildDarkBowSpecialAttack(core) {
           Projectile.createProjectile(player, target, id, 41, end, 40, 36)
             .withAngle(angle).withProgress(11).sendProjectile();
         }
+        // Raw273 confirms dragon timing; the Wiki sound table assigns 3737 to both special impacts.
+        Sounds.playAreaSoundAt(target, new Sound(Sound.DARK_BOW_IMPACT.getId(), 1, end, 0), 10);
       }
       target.performGraphic(new Graphic(dragon ? DRAGON_IMPACT : SHADOW_IMPACT, flights[1].end, GRAPHIC_HEIGHT));
       CombatFactory.decrementAmmo(player, target.getLocation(), HIT_COUNT);
@@ -122,5 +143,6 @@ function buildDarkBowSpecialAttack(core) {
 module.exports = function registerDarkBowSpecialAttack(api) {
   core = api.core;
   api.onCombatHitDamage(rollDescent);
+  api.onCustomEvent("combat:attack-started", playTargetDoublefire);
   api.registerCombatSpecial(buildDarkBowSpecialAttack(core));
 };

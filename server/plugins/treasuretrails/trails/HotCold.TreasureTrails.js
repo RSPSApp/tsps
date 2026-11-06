@@ -7,8 +7,9 @@
 // row's fight, and digging again once it is beaten gives the next clue. The device is kept.
 const Runtime = require("./Runtime.TreasureTrails");
 const Dialogue = require("./Dialogue.TreasureTrails");
-// The beginner device's bands are the master device's too (Wiki "Treasure Trails/Guide/Hot Cold").
-const { temperature } = require("../beginner/Runtime.BeginnerTreasureTrails");
+// The beginner device's bands and Feel lines are the master device's too (Wiki "Treasure Trails/Guide/Hot
+// Cold", rsprox 236/3931).
+const { reading } = require("../beginner/Runtime.BeginnerTreasureTrails");
 const MAKING_HISTORY = "making_history";
 const NO_HISTORY = "treasure-trails-master-when-player-has-not-completed-making-history";
 const WITHOUT_DEVICE = "treasure-trails-master-when-player-does-not-have-a-strange-device-in-their-inventory";
@@ -106,10 +107,7 @@ function feel(event, random = Math.random) {
   if (!trail) { Dialogue.mesbox(player, INACTIVE); return true; }
   const target = Runtime.data(trail.tier).byRow.get(trail.state.hotcold);
   const current = distance(location(player), target.location);
-  const previous = trail.state.previous;
-  const comparison = previous == null ? "" : current < previous ? ", and warmer than last time" :
-    current > previous ? ", but colder than last time" : ", and the same temperature as last time";
-  player.sendMessage(`The device is ${temperature(current)}${comparison}.`);
+  player.sendMessage(reading(current, trail.state.previous));
   trail.item.setMetaValue(Runtime.metaKey(trail.tier), { ...trail.state, previous: current });
   player.getInventory().refreshItems();
   const damage = DAMAGE[0] + Math.floor(random() * (DAMAGE[1] - DAMAGE[0] + 1));

@@ -54,9 +54,10 @@ Newest first.
   first gate shut without the key. Covered by `tests/wooden-gate.test.cjs`. Checked in-game from
   the monument side for 3444 only.
 - **open (Doors)** Live replaces the gate leaf with `inviswall` (38848) on the gate tile while
-  the gate stands open. Doors leaves it out, as for the other pass-through gates, because it
-  would block the player's own step; so for those 2 ticks the gate tile has no wall and anyone
-  else can walk through it.
+  the gate stands open, yet the opener crosses with an ordinary walk (no exactmove in either
+  recording). Doors can keep that wall only with `carry`, which moves the opener by forced
+  movement, so it is left out to keep the live walk; for those 2 ticks the gate tile has no wall
+  and anyone else can walk through it.
 - **fixed (live capture)** The two voices behind the temple door now wear the monks' chat heads
   the recording shows: "Mysterious Voice" 3484, "Mysterious Voice 2" 3486 (the plugin used one
   head, 12240, for both). Unit-tested; the head itself was not seen in a client.

@@ -1,3 +1,4 @@
+import { lowEndDeviceModeEnabled } from "../../game/plugins/lowenddevice/LowEndDeviceMode";
 import Denque from "denque";
 import { mat4, vec2, vec3, vec4 } from "gl-matrix";
 import { button, folder } from "leva";
@@ -207,7 +208,9 @@ export function resolveEffectiveLodThresholdTiles(host: WebGLOsrsRendererHost, f
             return host.effectiveLodThresholdTiles | 0;
         }
         const profile = host.syncBrowserQualityProfile();
-        const target = isTouchDevice || isLowEndDevice
+        const capToProfile = !gpu?.overrideDeviceCaps &&
+            (isTouchDevice || isLowEndDevice || lowEndDeviceModeEnabled);
+        const target = capToProfile
             ? Math.min(base, Math.max(0, Math.min(renderDistance, profile.lodThresholdCap | 0)))
             : base;
         host.effectiveLodThresholdTiles = Math.max(0, target | 0);

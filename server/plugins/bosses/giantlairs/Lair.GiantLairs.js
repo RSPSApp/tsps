@@ -333,7 +333,7 @@ function onBossDeath({ npc }) {
   if (!session || npc !== session.boss) return;
   session.boss = null;
   session.killed = true;
-  CombatAchievements.bossKilled(session.player, session.lair);
+  CombatAchievements.bossKilled(session.player, session.lair, npc);
   session.respawning = false;
 }
 

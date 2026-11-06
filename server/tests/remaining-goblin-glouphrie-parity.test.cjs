@@ -220,6 +220,7 @@ function player(overrides = {}) {
         sendVarbit: (id, value) => { varbits.set(id, value); return packet; },
         sendConfig: (id, value) => { varbits.set(id, value); return packet; },
         sendSubInterface: (...args) => { log.push(['sendSubInterface', ...args]); return packet; },
+        mountSubInterface: (...args) => { log.push(['sendSubInterface', ...args]); return {}; },
         sendInterface: (...args) => { log.push(['sendInterface', ...args]); return packet; },
         closeSubInterface: (...args) => { log.push(['closeSubInterface', ...args]); return packet; },
         sendCameraMoveTo: (...args) => { log.push(['sendCameraMoveTo', ...args]); return packet; },

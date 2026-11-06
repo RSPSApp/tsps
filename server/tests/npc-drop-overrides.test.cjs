@@ -180,3 +180,37 @@ test("the manta ray keeps its own seed rows beside the uncommon seed table (#198
   for (const seed of ["Yew seed", "Magic seed", "Redwood tree seed"]) assert.ok(names.has(seed), seed);
   assert.ok(manta.entries.some((entry) => entry.shared_table === "uncommonSeed"));
 });
+
+
+test("saved world tables survive dump changes and reset inherits the updated dump", () => {
+  const { __internals } = require("../plugins/npcs/NpcDrops.plugin");
+  const saved = { main_max_roll: 128, rolls: 2, entries: [{ item_id: 1353, quantity: [1, 3], weight: 2, out_of: 128, notes: ["Quest condition"] }], tertiary: [] };
+  const custom = { tables: { spectre: { replacement: saved } } };
+  const updated = { main_max_roll: 512, entries: [{ item_id: 995, weight: 512, out_of: 512, quantity: [1, 1] }] };
+  const fresh = () => ({ tables: { spectre: structuredClone(updated), untouched: { entries: [] } }, npcs: {} });
+  const world = fresh();
+  __internals.applyCustomDrops(world, custom);
+  assert.deepEqual(world.tables.spectre, saved);
+  assert.deepEqual(world.tables.untouched, { entries: [] });
+  __internals.applyOverrides(world, {}, { tables: { spectre: { addEntries: [{ item_id: 526, quantity: [1, 1], always: true }] } } });
+  assert.equal(world.tables.spectre.entries.length, 2, "repo corrections still apply after custom tables");
+  assert.equal(saved.entries.length, 1, "runtime changes never leak into the saved source");
+  const reset = fresh();
+  __internals.applyCustomDrops(reset, {});
+  assert.deepEqual(reset.tables.spectre, updated);
+  const renamed = { tables: {}, npcs: {} };
+  __internals.applyCustomDrops(renamed, custom);
+  assert.deepEqual(renamed.tables.spectre, saved, "missing defaults do not discard saved tables");
+});
+
+test("invalid saved tables fall back to defaults without aborting other tables", (t) => {
+  const { __internals } = require("../plugins/npcs/NpcDrops.plugin");
+  t.mock.method(console, "error", () => {});
+  for (const replacement of [null, [], { entries: [null] }, { tertiary: "bad" }]) {
+    const original = { entries: [{ item_id: 995 }] };
+    const world = { tables: { broken: original, valid: {} } };
+    __internals.applyCustomDrops(world, { tables: { broken: { replacement }, valid: { replacement: { entries: [] } } } });
+    assert.equal(world.tables.broken, original);
+    assert.deepEqual(world.tables.valid, { entries: [] });
+  }
+});

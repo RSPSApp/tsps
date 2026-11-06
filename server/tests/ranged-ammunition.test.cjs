@@ -8,6 +8,13 @@ Server.installProductionPathResolver();
 const { Ammunition, RangedWeapon } = require('../dist/game/content/combat/ranged/RangedData');
 const { ItemIdentifiers: Items } = require('../dist/util/ItemIdentifiers');
 
+test('the standard shortbow and longbow fire arrows up to iron', () => {
+  for (const [weapon, name] of [[RangedWeapon.SHORTBOW, 'shortbow'], [RangedWeapon.LONGBOW, 'longbow']]) {
+    assert.ok(weapon.getAmmunitionData().includes(Ammunition.BRONZE_ARROW), `${name} fires bronze arrows`);
+    assert.ok(weapon.getAmmunitionData().includes(Ammunition.IRON_ARROW), `${name} fires iron arrows`);
+  }
+});
+
 test('dragon bolts, plain and gem-tipped, are ammunition for the dragon-tier crossbows only', () => {
   const dragonBolts = [Items.DRAGON_BOLTS_2, Items.RUBY_DRAGON_BOLTS_E_, Items.RUBY_DRAGON_BOLTS, Items.ONYX_DRAGON_BOLTS_E_, Items.OPAL_DRAGON_BOLTS];
   for (const id of dragonBolts) {
@@ -454,15 +461,28 @@ test("a block on the tick of a swing doesn't replace it (cache interrupt priorit
   t.mock.method(player, 'getSession', () => ({ sendClientPacket: () => true, write: () => true }));
   const WHIP_ATTACK = 1658;
   const WHIP_BLOCK = 1659;
+  assert.equal(player.getAnimationGeneration(), 0);
   player.performAnimation(new Animation(WHIP_ATTACK));
+  assert.equal(player.getAnimationGeneration(), 1);
   player.performAnimation(new Animation(WHIP_BLOCK));
+  assert.equal(player.getAnimationGeneration(), 1, 'a cache-priority rejection does not take ownership');
   assert.equal(player.getAnimation().getId(), WHIP_ATTACK, "the opponent's hit landing this tick keeps the swing");
   player.resetUpdating();
+  assert.equal(player.getAnimationGeneration(), 1, 'sync clears the queued mask while retaining its owner');
+  player.performAnimation(null);
+  assert.equal(player.getAnimationGeneration(), 1);
   player.performAnimation(new Animation(WHIP_BLOCK));
   player.performAnimation(new Animation(WHIP_ATTACK));
+  assert.equal(player.getAnimationGeneration(), 3);
   assert.equal(player.getAnimation().getId(), WHIP_ATTACK, 'a swing replaces a block');
   player.performAnimation(new Animation(-1));
+  assert.equal(player.getAnimationGeneration(), 4, 'an explicit reset is also a new accepted animation');
   assert.equal(player.getAnimation().getId(), -1, 'a reset always applies');
+  const { Priority } = require('../dist/game/model/Priority');
+  player.performAnimation(new Animation(WHIP_ATTACK, Priority.HIGH));
+  const generation = player.getAnimationGeneration();
+  player.performAnimation(new Animation(WHIP_BLOCK, Priority.LOW));
+  assert.equal(player.getAnimationGeneration(), generation, 'the explicit-priority rejection preserves ownership too');
 });
 
 const { BOW_OF_FAERDHINEN_ARROWS } = require('../dist/game/content/combat/ranged/CrystalBow');

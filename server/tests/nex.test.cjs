@@ -270,3 +270,177 @@ test("the mages' and reavers' hits land with their projectiles (#1862)", (t) => 
     }
   }
 });
+
+test("Nex's loot roll is marked as loot, not a second kill: the fight counts the kill", () => {
+  const player = { sendMessage() {} };
+  const original = fakeApi.core.ItemDefinition.forId;
+  fakeApi.getItemOnGroundManager = () => ({ registerLocation() {} });
+  fakeApi.core.Item = class { constructor(itemId, amount) { this.itemId = itemId; this.amount = amount; } };
+  fakeApi.core.ItemDefinition.forId = (id) => ({ ...original(id), getNoteId: () => -1, isNoted: () => false, isStackable: () => true });
+  try {
+    const fight = { boss: {}, arena: { area: {} }, contribution: new Map([[player, 100]]) };
+    const before = events.length;
+    Loot.reward(fight, [player], {});
+    const rolls = events.slice(before).filter(([name]) => name === "npc-drops:roll").map(([, payload]) => payload);
+    assert.equal(rolls.length, 1);
+    assert.equal(rolls[0].countKill, false);
+    assert.equal(rolls[0].npc, fight.boss);
+  } finally {
+    fakeApi.core.ItemDefinition.forId = original;
+  }
+});
+
+test("an eligible Ironman keeps a personal Nex reward after a shared kill", async (t) => {
+  // Exercise the real hit queue and Nex's registered death/reward path without running a server.
+  // One-damage test hits and a deterministic table are fixture inputs, not OSRS rate claims.
+  const path = require("node:path");
+  const { Server } = require("../dist/Server");
+  Server.installProductionPathResolver();
+  const { CachePipeline } = require("../dist/game/cache/CachePipeline");
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  const { NpcDefinitionLoader } = require("../dist/game/definition/loader/impl/NpcDefinitionLoader");
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const { NPCDeathTask } = require("../dist/game/task/impl/NPCDeathTask");
+  await CachePipeline.initialize(path.resolve(__dirname, ".."));
+  new NpcDefinitionLoader().load();
+  const native = PluginManager.getCoreApi();
+  const core = { ...native, ItemDefinition: { forId: () => ({
+    getNoteId: () => -1, isNoted: () => false, isStackable: () => true,
+  }) } };
+  const hooks = new Map(), custom = new Map(), tasks = [], placed = [], rolls = [], spawned = [];
+  const add = (map, name, fn) => { if (!map.has(name)) map.set(name, []); map.get(name).push(fn); };
+  const dispatch = (name, event) => { for (const fn of hooks.get(name) ?? []) fn(event); };
+  const api = new Proxy({
+    core,
+    persistAttribute() {}, registerNpcCombatMethodProvider() {}, registerArea() {},
+    onCustomEvent: (name, fn) => add(custom, name, fn),
+    emitCustomEvent(name, event) {
+      if (name === "npc-drops:roll-table") {
+        for (const entry of FAKE_TABLE.filter((item) => !event.entryFilter || event.entryFilter(item))) {
+          event.drops.push({ itemId: entry.item_id, amount: entry.amount ?? 1, noted: false });
+        }
+      }
+      const roll = name === "npc-drops:roll" ? { player: event.player, before: event.drops.map((d) => d.itemId), countKill: event.countKill } : null;
+      for (const fn of custom.get(name) ?? []) fn(event);
+      if (roll) { roll.after = event.drops.map((d) => d.itemId); rolls.push(roll); }
+    },
+    getItemOnGroundManager: () => ({ registerLocation: (owner, item) => placed.push({ owner, id: item.getId() }) }),
+    removeNpc: (npc) => npc.setRegistered(false),
+  }, { get: (target, name) => target[name] ?? ((...args) => {
+    const fn = args.at(-1);
+    if (typeof fn === "function") add(hooks, name, fn);
+  }) });
+  const ironCommonPath = require.resolve("../plugins/modes/ironman/Common.Ironman");
+  const ironLootPath = require.resolve("../plugins/modes/ironman/Loot.Ironman");
+  const previousIronCommon = require.cache[ironCommonPath], previousIronLoot = require.cache[ironLootPath];
+  let fight, participants = [];
+  t.after(() => {
+    fight?.stop();
+    for (const task of tasks) if (task.isRunning?.()) task.stop();
+    for (const npc of spawned) { npc.getCombat().getHitQueue().clear(); npc.setRegistered(false); }
+    for (const player of participants) { player.getCombat().getHitQueue().clear(); player.setRegistered(false); }
+    if (previousIronCommon) require.cache[ironCommonPath] = previousIronCommon;
+    else delete require.cache[ironCommonPath];
+    if (previousIronLoot) require.cache[ironLootPath] = previousIronLoot;
+    else delete require.cache[ironLootPath];
+    Common.init(fakeApi);
+  });
+  delete require.cache[ironCommonPath]; delete require.cache[ironLootPath];
+  const Iron = require(ironCommonPath);
+  Iron.init(api);
+  require(ironLootPath)(api);
+  require("../plugins/bosses/Nex.plugin").register(api);
+  for (const [gameval, key] of [["nex", "nex"], ["nex_spawning", "spawning"], ["nex_soulsplit", "soulSplit"], ["nex_deflect", "deflect"], ["nex_dying", "dying"]]) {
+    assert.equal(core.CacheDefinitions.getNpcId(gameval), Common.data.npcs[key], `${gameval} matches the active cache`);
+  }
+  let cycle = 0, ended = false;
+  t.mock.method(native.World, "getProcessCycle", () => cycle);
+  t.mock.method(native.World, "getRemoveNPCQueue", () => []);
+  t.mock.method(native.World, "markNpcCombatActive", () => {});
+  t.mock.method(native.TaskManager, "submit", (task) => { task.setRunning(true); tasks.push(task); });
+  t.mock.method(PluginManager, "emitNpcHitModify", (npc, hit) => { const event = { npc, hit }; dispatch("onNpcHitModify", event); return event.hit; });
+  t.mock.method(PluginManager, "emitNpcBeforeDeath", (event) => { dispatch("onNpcBeforeDeath", event); return event.preventDeath; });
+  t.mock.method(PluginManager, "emitNpcDeath", (event) => dispatch("onNpcDeath", event));
+  t.mock.method(PluginManager, "emitPlayerDealtDamage", (event) => dispatch("onPlayerDealtDamage", event));
+  t.mock.method(PluginManager, "emitCustomEvent", (name, event) => api.emitCustomEvent(name, event));
+  t.mock.method(Common, "say", () => {});
+  t.mock.method(Common, "areaSound", () => {});
+  t.mock.method(Common, "projectile", () => {});
+  t.mock.method(Common, "damage", () => {});
+  const tile = (coords) => new core.Location(...coords);
+  for (const name of ["iron", "main", "observer"]) {
+    const player = new Player(null, tile(Common.data.chamber.aisles[0].end));
+    participants.push(player);
+    const sender = new Proxy({}, { get: (_, key) => key === "getVarbit" || key === "getVarp" ? () => 0 : () => sender });
+    player.getPacketSender = () => sender;
+    player.messages = [];
+    player.sendMessage = (message) => player.messages.push(message);
+    player.setUsername(name); player.setRegistered(true); player.setNeedsPlacement(false); player.setHitpoints(99);
+  }
+  const [iron, main, observer] = participants;
+  iron.setAttribute("ironman:mode", "ironman");
+  const arena = {
+    area: {}, tile, players: () => participants,
+    spawn(id, coords) {
+      const npc = core.NPC.create(id, tile(coords));
+      spawned.push(npc);
+      npc.setRegistered(true); npc.setNeedsPlacement(false);
+      npc.__skipDefaultRespawn = true;
+      t.mock.method(npc.getCombat(), "attack", () => {});
+      return npc;
+    },
+    ended: (_fight, killed) => { ended = killed; },
+  };
+  fight = new Fight(arena);
+  // Suppress unrelated boss attacks and visuals; retain source phase transitions and death callbacks.
+  fight.pickTarget = () => {}; fight.move = () => {}; fight.act = () => {}; fight.blast = () => {};
+  for (let i = 0; i <= Common.data.spawn.firstAttackTick && (fight.stage === "spawning" || fight.tick < fight.immuneUntil); i++) fight.process();
+  assert.equal(fight.stage, "fighting");
+  assert.ok(fight.tick >= fight.immuneUntil);
+  const method = new (class extends core.CombatMethod { type() { return core.CombatType.RANGED; } })();
+  let nextPlayer = 0;
+  function hit(target) {
+    const attacker = [iron, main][nextPlayer++ % 2];
+    const pending = new core.PendingHit(attacker, target, method, {
+      delay: 0, damage: 1, rollAccuracy: false, experience: false, handleAfterHitEffects: false,
+    });
+    core.CombatFactory.addPendingHit(pending);
+    target.getCombat().getHitQueue().process(++cycle);
+    fight.process();
+  }
+  while (fight.phase().mage) {
+    const phase = fight.phase();
+    const floor = Math.floor(Common.data.fight.hitpoints * phase.floor);
+    const bossHits = fight.boss.getHitpoints() - floor;
+    for (let i = 0; i < bossHits; i++) hit(fight.boss);
+    assert.equal(fight.boss.getHitpoints(), floor);
+    const mage = fight.mages.get(phase.mage);
+    assert.ok(fight.vulnerable.has(phase.mage));
+    const mageHits = mage.getHitpoints();
+    for (let i = 0; i < mageHits; i++) hit(mage);
+    assert.equal(mage.getHitpoints(), 0);
+    const death = tasks.find((task) => task instanceof NPCDeathTask && task.npc === mage);
+    assert.ok(death, "the real mage death task was scheduled");
+    death.execute(); death.execute();
+    const previous = fight.phaseIndex;
+    for (let i = 0; i <= Common.data.fight.nextPhaseTicks && fight.phaseIndex === previous; i++) fight.process();
+    assert.equal(fight.phaseIndex, previous + 1);
+  }
+  const finalHits = fight.boss.getHitpoints();
+  for (let i = 0; i < finalHits; i++) hit(fight.boss);
+  assert.equal(fight.stage, "dying", "NPC.appendDeath reached Nex's registered before-death hook");
+  const owed = Loot.shares(fight.contribution, participants).owed.map((entry) => entry.player);
+  assert.ok(owed.includes(iron) && owed.includes(main));
+  assert.ok(!owed.includes(observer));
+  for (let i = 0; i <= Common.data.wrath.damageTick && !fight.stopped; i++) fight.process();
+  assert.equal(fight.stopped, true);
+  assert.equal(ended, true);
+  const ironRoll = rolls.find((roll) => roll.player === iron);
+  const mainRoll = rolls.find((roll) => roll.player === main);
+  assert.ok(ironRoll.before.includes(565), "Nex produced the Ironman's personal fixture reward");
+  assert.equal(ironRoll.countKill, false);
+  assert.ok(mainRoll.after.includes(565) && placed.some((drop) => drop.owner === main && drop.id === 565), "normal Nex participant receives the same fixture reward");
+  assert.ok(!rolls.some((roll) => roll.player === observer), "a participant without a share gets no roll");
+  assert.ok(ironRoll.after.includes(565) && placed.some((drop) => drop.owner === iron && drop.id === 565), "the Ironman's personal reward survives the shared-kill filter");
+  assert.ok(!iron.messages.includes(Iron.message("sharedKill")), "no shared-kill refusal for an eligible Nex reward");
+});

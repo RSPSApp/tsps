@@ -17,6 +17,7 @@ import { Skill } from "../../../../model/Skill";
 import type { CombatSpell } from "../../magic/CombatSpell";
 import { Spell } from "../../magic/Spell";
 import { Autocasting } from "../../magic/Autocasting";
+import { CrossFloor } from "../../../../CrossFloor";
 
 
 export class MagicCombatMethod extends CombatMethod {
@@ -43,6 +44,8 @@ export class MagicCombatMethod extends CombatMethod {
         // Capture: Undead Grasp.
         21832: 5030,
     };
+    /** Live plays a spell's impact and its splash as an area sound this far round the target's tile. */
+    public static readonly IMPACT_SOUND_RADIUS = 10;
     private static readonly IMPACT_SOUNDS: Readonly<Record<number, number>> = {
         1: 1460,
         1152: 221, 1153: 121, 1154: 212, 1156: 133, 1157: 3010, 1158: 161,
@@ -75,20 +78,21 @@ export class MagicCombatMethod extends CombatMethod {
         const own = spell?.hitDelay?.();
         if (typeof own === "number") return own;
         if (!attacker.isPlayer()) return Projectile.arrivalTicks(attacker, target, Projectile.LEGACY_MAGIC_END_BASE);
+        const from = CombatPosition.location(attacker, target);
+        const to = CombatPosition.location(target, attacker);
+        const crossFloor = CrossFloor.canCross(from, to) && from.getZ() !== to.getZ();
         const distance = MagicCombatMethod.isBarrage(spell)
-            ? CombatPosition.distance(attacker, target)
+            ? crossFloor ? CombatPosition.projectileDistance(attacker, target) : CombatPosition.distance(attacker, target)
             : MagicCombatMethod.edgeDistance(attacker, target);
+        if (crossFloor) {
+            return Projectile.ticksToLand(Projectile.LEGACY_MAGIC_END_BASE + distance * 10);
+        }
         return 1 + Math.floor((1 + distance) / 3);
     }
 
-    /** Chebyshev distance from the attacker's tile to the nearest tile of the target. */
+    /** Flight distance in tile units from the attacker to the nearest tile of the target. */
     private static edgeDistance(attacker: Mobile, target: Mobile): number {
-        const from = CombatPosition.location(attacker, target);
-        const to = CombatPosition.location(target, attacker);
-        const size = Math.max(1, target.getSize?.() ?? 1);
-        const dx = Math.max(0, to.getX() - from.getX(), from.getX() - (to.getX() + size - 1));
-        const dy = Math.max(0, to.getY() - from.getY(), from.getY() - (to.getY() + size - 1));
-        return Math.max(dx, dy);
+        return CombatPosition.edgeDistance(attacker, target);
     }
 
     /** Barrages are the only area spells from level 86 (bursts go up to 70). */
@@ -290,16 +294,24 @@ export class MagicCombatMethod extends CombatMethod {
                 const endGraphic = previousSpell.endGraphic();
                 // A spell with no impact graphic (a grasp shows its own at the cast) sends none.
                 if (endGraphic) target.performGraphic(endGraphic);
-                const impactSound = previousSpell.impactSound()
-                    ?? MagicCombatMethod.resolveImpactSound(previousSpell.spellId());
-                Sounds.sendSound(target, impactSound);
+                // Live (RSProx 102 tick 232, 3275): an area sound at the target's tile with range 10,
+                // for an NPC or a player. A private synth never reached the caster, and an area sound
+                // of range 0 (what Sounds.sendSound gives an NPC) is dropped by the client.
+                const impactSound = MagicCombatMethod.impactSoundFor(previousSpell);
+                if (impactSound) Sounds.playAreaSoundAt(target, impactSound, MagicCombatMethod.IMPACT_SOUND_RADIUS);
               } else {
                 // Send splash graphics for the spell because it wasn't accurate
                 target.performGraphic(MagicCombatMethod.SPLASH_GRAPHIC);
-                Sounds.sendSound(attacker, Sound.SPELL_FAIL_SPLASH);
+                // Also an area sound at the target (3275: 492 `sound_area id=227 range=10`).
+                Sounds.playAreaSoundAt(target, Sound.SPELL_FAIL_SPLASH, MagicCombatMethod.IMPACT_SOUND_RADIUS);
             }
             previousSpell.finishCast(attacker, target, accurate, damage, hit.getSpellContext());
         }
+    }
+
+    /** A spell's own impact sound, else the table by its spell id (null: none captured). */
+    public static impactSoundFor(spell: { impactSound(): Sound | null; spellId(): number }): Sound | null {
+        return spell.impactSound() ?? MagicCombatMethod.resolveImpactSound(spell.spellId());
     }
 
     private static resolveImpactSound(spellId: number): Sound | null {

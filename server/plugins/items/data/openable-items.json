@@ -123,6 +123,21 @@
           {"item": "BLIGHTED_SUPER_RESTORE_4_", "weight": 1, "amount": [4, 4], "noted": true}
         ] }
     ] },
+    {"name": "Castle wars supply crate", "items": ["CASTLE_WARS_SUPPLY_CRATE"], "entrana": "You can't open this on Entrana.", "tables": [
+        { "rolls": 3, "entries": [
+          {"item": "BLIGHTED_MANTA_RAY", "weight": 1, "amount": [15, 25], "noted": true},
+          {"item": "BLIGHTED_ANGLERFISH", "weight": 1, "amount": [25, 35], "noted": true},
+          {"item": "BLIGHTED_KARAMBWAN", "weight": 1, "amount": [35, 45], "noted": true},
+          {"item": "BLIGHTED_SUPER_RESTORE_4_", "weight": 1, "amount": [4, 4], "noted": true},
+          {"item": "BLIGHTED_ANCIENT_ICE_SACK", "weight": 1, "amount": [10, 15]},
+          {"item": "BLIGHTED_VENGEANCE_SACK", "weight": 1, "amount": [20, 30]},
+          {"item": "CASTLE_WARS_ARROW", "weight": 1, "amount": [75, 105]},
+          {"item": "CASTLE_WARS_BOLTS", "weight": 1, "amount": [75, 105]},
+          {"item": "RUNE_ARROW", "weight": 1, "amount": [175, 225]},
+          {"item": "RUNE_JAVELIN", "weight": 1, "amount": [100, 120]},
+          {"item": "CASTLE_WARS_TICKET", "weight": 1, "amount": [2, 2]}
+        ] }
+    ] },
     {"name": "Hunter kit", "entrana": "Some forms of Hunter gear are not appreciated by the monks.", "tables": [
         { "rolls": "all", "entries": [
           {"item": "NOOSE_WAND", "weight": 1, "amount": [1, 1]},

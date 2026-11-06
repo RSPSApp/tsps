@@ -379,8 +379,8 @@ test("clue geodes: the Wiki's formula from the golem base gives its crashed star
   // Wiki (Crashed star): beginner 1/663 to 1/366; its other tiers are listed unfloored (1/5,642 easy).
   assert.equal(ClueGeodes.geodeChance(base, 10, 0.2), 663);
   assert.equal(ClueGeodes.geodeChance(base, 99, 0.2), 366);
-  assert.equal(ClueGeodes.geodeChance(base, 10, 1.7), 5640);
-  assert.equal(ClueGeodes.geodeChance(base, 10, 10), 33180);
+  assert.equal(ClueGeodes.geodeChance(base, 10, 1.7), 5642);
+  assert.equal(ClueGeodes.geodeChance(base, 10, 10), 33189);
 });
 
 test("the noticeboard keeps the last five stars, oldest first, with their finders", () => {

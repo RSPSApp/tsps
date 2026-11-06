@@ -71,10 +71,12 @@ test("leaving the crater removes owned spawn and acid state", () => {
   assert.equal(Specials.fights.has(boss), false);
 });
 
-test("only the Dragon Slayer II Vorkath step uses the quest form; everyone else gets 750", () => {
-  const player = (stage) => ({ getAttribute: (key) => key === "quest.dragon_slayer_ii.stage" ? stage : undefined });
+test("only an active Dragon Slayer II fight uses the quest form; everyone else gets 750", () => {
+  const player = (stage, trip = false) => ({ getAttribute: (key) => key === "quest.dragon_slayer_ii.stage" ? stage
+    : key === "dragon-slayer-ii:ungael-trip" ? trip : undefined });
   // The quest form exists for the one stage where she blocks the laboratory, and drops nothing.
-  assert.equal(Shared.awakeIdForPlayer(player(Shared.QUEST_FIGHT_STAGE)), 8060);
+  assert.equal(Shared.awakeIdForPlayer(player(Shared.QUEST_FIGHT_STAGE, true)), 8060);
+  assert.equal(Shared.awakeIdForPlayer(player(Shared.QUEST_FIGHT_STAGE)), 8061, "stage alone does not prove the player entered via the quest route");
   assert.equal(Shared.maxHitpointsForId(8060), 460);
   // Not started (0), the earlier stages and every stage past the fight: the post-quest boss.
   for (const stage of [0, 1, 7, 9, 13, 14]) {
@@ -83,6 +85,22 @@ test("only the Dragon Slayer II Vorkath step uses the quest form; everyone else 
   assert.equal(Shared.maxHitpointsForId(8061), 750);
   assert.equal(Shared.isAwakeNpc({ getId: () => 8060 }), true);
   assert.equal(Shared.isAwakeNpc({ getId: () => 8061 }), true);
+});
+
+test("Vorkath's crater refuses players before Dragon Slayer II and allows its quest or postquest state", () => {
+  const completed = new Set();
+  Area.attach({
+    core: { PrivateArea: class {}, Boundary: class {} },
+    emitCustomEvent(name, request) { if (name === "quest:is-complete") request.complete = completed.has(request.key); },
+    onPlayerProcess() {}, onPlayerLogout() {}, onPlayerDisconnect() {},
+  });
+  const player = (stage, trip = false) => ({ getAttribute: (key) => key === "quest.dragon_slayer_ii.stage" ? stage
+    : key === "dragon-slayer-ii:ungael-trip" ? trip : undefined });
+  assert.equal(Area.canEnter(player(0)), false);
+  assert.equal(Area.canEnter(player(Shared.QUEST_FIGHT_STAGE)), false);
+  assert.equal(Area.canEnter(player(Shared.QUEST_FIGHT_STAGE, true)), true);
+  completed.add("dragon_slayer_ii");
+  assert.equal(Area.canEnter(player(Shared.QUEST_FIGHT_STAGE + 1)), true);
 });
 
 test("the quest form's ranged attack caps at 28, the post-quest form's at 32 (Wiki infobox)", () => {

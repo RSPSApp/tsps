@@ -92,6 +92,11 @@ module.exports = function registerSheepHerderQuest(api) {
       pen: { x: 2596, y: 3359, z: 0 },
     },
   ];
+  /**
+   * The sheep standing in the world: the cache's multi-NPCs (PLAGUESHEEP_1-4), showing as the Prod forms above
+   * until Mourning's End Part I's varbits 800-803 re-dye them. Shared by every player, so they stay put.
+   */
+  const WORLD_SHEEP_IDS = new Set([6179, 6180, 6181, 6182]);
   const SHEEP_BY_NPC = new Map(SHEEP.map((sheep) => [sheep.npcId, sheep]));
   const BONES_BY_ITEM = new Map(SHEEP.map((sheep) => [sheep.bones, sheep]));
 
@@ -356,14 +361,16 @@ module.exports = function registerSheepHerderQuest(api) {
     return Boolean(tracked && npc && tracked.getId?.() === npc.getId?.());
   }
 
-  /** Prod a penned sheep with the cattleprod while wearing the suit. */
+  const isWorldSheep = (npc) => WORLD_SHEEP_IDS.has(npc?.getId?.());
+
+  /** Prod a sheep with the cattleprod while wearing the suit. */
   function handleNpcInteraction(event) {
     const index = SHEEP.findIndex((sheep) => sheep.npcId === event.npcId);
     if (index === -1) return;
     const action = (event.definition?.getActions?.() ?? [])[event.clickType - 1];
     if (String(action).toLowerCase() !== "prod") return;
     const { player } = event;
-    if (!isPlayersSheep(player, index, event.npc)) return;
+    if (!isPlayersSheep(player, index, event.npc) && !isWorldSheep(event.npc)) return;
     event.handled = true;
     if (quest.getStage(player) !== STAGE_DISPOSING) {
       player.sendMessage("You have no reason to interfere with this sheep.");
@@ -392,9 +399,10 @@ module.exports = function registerSheepHerderQuest(api) {
     const index = SHEEP.findIndex((sheep) => sheep.npcId === (event.npcId ?? event.target?.getId?.()));
     if (index === -1) return;
     const { player } = event;
-    if (!isPlayersSheep(player, index, event.target)) return;
+    const worldSheep = isWorldSheep(event.target);
+    if (!worldSheep && !isPlayersSheep(player, index, event.target)) return;
     event.handled = true;
-    if (progress(player, index) !== 1) {
+    if (worldSheep || progress(player, index) !== 1) {
       player.sendMessage("The sheep must be safely inside the enclosure first.");
       return;
     }

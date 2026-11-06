@@ -13,16 +13,19 @@ export class LabelRig {
     readonly counts: Int32Array;
     /** Labels whose faces alpha/colour transforms change: those poses need the CPU path. */
     readonly faceLabelled: Uint8Array;
+    private readonly vertexLabels: Int32Array;
 
     private constructor(readonly model: Model) {
         const labels = model.vertexLabels;
         this.labelCount = labels.length;
+        this.vertexLabels = new Int32Array(model.verticesCount).fill(-1);
         this.sums = new Float64Array(this.labelCount * 3);
         this.counts = new Int32Array(this.labelCount);
         for (let label = 0; label < this.labelCount; label++) {
             const vertices = labels[label];
             this.counts[label] = vertices.length;
             for (const v of vertices) {
+                this.vertexLabels[v] = label;
                 this.sums[label * 3] += model.verticesX[v];
                 this.sums[label * 3 + 1] += model.verticesY[v];
                 this.sums[label * 3 + 2] += model.verticesZ[v];
@@ -42,14 +45,29 @@ export class LabelRig {
             : undefined;
     }
 
+    private readonly heights = new WeakMap<Float32Array, number>();
+
+    /** Actor.logicalHeight is the animated model's height, before spot animations. */
+    height(matrices: Float32Array): number {
+        const cached = this.heights.get(matrices);
+        if (cached !== undefined) return cached;
+        const model = this.model;
+        const labels = this.vertexLabelOf();
+        let height = 0;
+        for (let v = 0; v < model.usedVertexCount; v++) {
+            const o = labels[v] * POSE_FLOATS_PER_LABEL;
+            const y = o < 0 ? model.verticesY[v] :
+                matrices[o + 4] * model.verticesX[v] + matrices[o + 5] * model.verticesY[v] +
+                matrices[o + 6] * model.verticesZ[v] + matrices[o + 7];
+            height = Math.max(height, -y);
+        }
+        this.heights.set(matrices, height);
+        return height;
+    }
+
     /** Each vertex's label, or -1 for a vertex in none. */
     vertexLabelOf(): Int32Array {
-        const out = new Int32Array(this.model.verticesCount).fill(-1);
-        const labels = this.model.vertexLabels;
-        for (let label = 0; label < labels.length; label++) {
-            for (const v of labels[label]) out[v] = label;
-        }
-        return out;
+        return this.vertexLabels;
     }
 }
 

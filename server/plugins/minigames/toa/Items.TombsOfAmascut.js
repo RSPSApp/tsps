@@ -9,7 +9,8 @@
  * the ward (10,000 soul runes, 260 experience in each skill; it dismantles, the runes aren't returned),
  * the thread (75 Crafting, a needle or costume needle). Captured: a remnant on the pet (227/01753
  * tick 2724): OpNpcT with the item, TOA_UNLOCKED_PET_MORPH_*, and the message.
- * Not built: Metamorphosis into a remnant's forms (npcs/Pets.plugin.js knows only 11812 and 11813).
+ * The unlocks recorded here (toa:pet-morphs) are what the pet's Metamorphosis menu offers
+ * (npcs/pets/TombsOfAmascut.Pets.js).
  */
 
 const Shared = require("./Shared.TombsOfAmascut");
@@ -217,7 +218,8 @@ const REMNANTS = {
   "Remnant of Akkha": [14498], "Remnant of Ba-Ba": [14499], "Remnant of Kephri": [14500], "Remnant of Zebak": [14501],
   "Ancient remnant": [14502, 14503],
 };
-const GUARDIAN_NPCS = new Set([11812, 11813]);
+// Every form of the guardian takes a remnant (rsprox 1757 ticks 28912 and 31408, on Zebo 11849).
+const GUARDIAN_NPCS = new Set([11812, 11813, 11846, 11847, 11848, 11849, 11850, 11851]);
 const ATTR_UNLOCKED = "toa:pet-morphs";
 
 function sendUnlocks({ player }) {
@@ -225,7 +227,8 @@ function sendUnlocks({ player }) {
 }
 
 function remnantOnPet(event) {
-  const { player, npc, itemId, slot } = event;
+  // The item-on-NPC event carries the NPC as `target` (PluginItemOnNpcEvent); there is no `npc`.
+  const { player, target: npc, itemId, slot } = event;
   const varbits = REMNANTS[Shared.core().ItemDefinition.forId(itemId)?.getName?.()];
   if (!varbits || !GUARDIAN_NPCS.has(npc?.getId?.())) return;
   event.handled = true;

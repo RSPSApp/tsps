@@ -4,6 +4,7 @@ const QuestRuntime = require("../quests/QuestRuntime");
 const RUNE_CHARGES = 6;
 const GUILD_CHARGES = 4;
 const WEALTH_CHARGES = 5;
+const ARDOUGNE_HARD_TASK = "recharge-some-jewellery-at-the-totem-in-the-lege";
 const rechargeTables = new WeakMap();
 
 function rechargeTable(core) {
@@ -73,12 +74,15 @@ function rechargeAtFountain(api, event) {
     if (site === "rune") return true;
     return site === "totem" ? piece.recharge.totem === true : piece.recharge.heroes === true;
   };
-  event.handled = true;
   if (!fits(used.piece)) {
+    event.handled = true;
     player.sendMessage("Nothing interesting happens.");
     return;
   }
+  event.handled = true;
   let eternal = false;
+  let changed = false;
+  let recharged = false;
   for (const container of [player.getInventory(), player.getEquipment()]) {
     for (const item of container.getItems()) {
       const entry = rechargeableEntry(core, table, item, site);
@@ -93,11 +97,18 @@ function rechargeAtFountain(api, event) {
         const chargedId = entry.piece.charged.find(([, charges]) => charges === target)[0];
         item.setId(entry.noted ? core.ItemDefinition.forId(chargedId).getNoteId() : chargedId);
       }
+      changed = true;
+      if (site === "totem" && (entry.piece.key === "skills" || entry.piece.key === "combat")) recharged = true;
     }
     container.refreshItems();
   }
+  if (!changed) {
+    player.sendMessage("Nothing interesting happens.");
+    return;
+  }
   api.getBonusManager().update(player);
   player.getUpdateFlag().flag(core.Flag.APPEARANCE);
+  if (recharged) api.emitCustomEvent("diary:task", { player, diary: "ardougne", task: ARDOUGNE_HARD_TASK });
   player.sendMessage(eternal
     ? "The power of the fountain is transferred into an amulet of eternal glory. It will now have unlimited charges."
     : site === "totem"
@@ -108,3 +119,5 @@ function rechargeAtFountain(api, event) {
 module.exports = function registerRecharge(api) {
   api.onItemOnObject(rechargeAtFountain.bind(null, api));
 };
+
+module.exports._test = { rechargeAtFountain, chargingSite, rechargeableEntry, ARDOUGNE_HARD_TASK };

@@ -1,7 +1,7 @@
 "use strict";
 
 /**
- * Tridents of the seas and the swamp, and their (e) versions (docs/powered-staves.md).
+ * Tridents of the seas and the swamp, including enhanced and ornamented versions (docs/powered-staves.md).
  *
  * OSRS Wiki (https://oldschool.runescape.wiki/w/Trident_of_the_seas,
  * https://oldschool.runescape.wiki/w/Trident_of_the_swamp): powered staves casting every 4 ticks
@@ -21,7 +21,7 @@
  * 1042).
  */
 
-const { definePoweredStaff, distance, ticksFor } = require("./PoweredStaff");
+const { definePoweredStaff, refundsFit, restricted, plainAmount, takePlain, PRESET_TEXT, distance, ticksFor } = require("./PoweredStaff");
 
 const TRIDENT_CHARGE_META_KEY = "trident-charges";
 const TRIDENT_MAX_CHARGES = 2500;
@@ -68,23 +68,44 @@ function initialize(pluginApi) {
   COINS_ID = I.COINS;
   ZULRAH_SCALES_ID = I.ZULRAHS_SCALES;
   const runes = [[DEATH_RUNE_ID, 1], [CHAOS_RUNE_ID, 1], [FIRE_RUNE_ID, FIRE_RUNES_PER_CHARGE]];
-  const seas = (unchargedId, chargedId, maxCharges) => ({
+  const seas = (unchargedId, chargedId, maxCharges, ornamented, fullChargedIds = []) => ({
     unchargedId, chargedId, maxCharges, look: SEAS_LOOK, venom: false,
+    pairs: [
+      ...fullChargedIds.map((id) => [id, unchargedId]),
+      [chargedId, unchargedId],
+      ...(ornamented ? [
+        ...(ornamented.fullChargedId ? [[ornamented.fullChargedId, ornamented.unchargedId]] : []),
+        [ornamented.chargedId, ornamented.unchargedId],
+      ] : []),
+    ],
+    fullChargedIds: new Set([...fullChargedIds, ...(ornamented?.fullChargedId ? [ornamented.fullChargedId] : [])]),
     minimumMaxHit: 1, maxHitOffset: -5, levelRequired: 75,
     primaryResourceId: COINS_ID, primaryPerCharge: COINS_PER_CHARGE, primaryName: "coins",
     refundResources: runes,
   });
-  const swamp = (unchargedId, chargedId, maxCharges) => ({
+  const swamp = (unchargedId, chargedId, maxCharges, ornamented) => ({
     unchargedId, chargedId, maxCharges, look: SWAMP_LOOK, venom: true,
+    pairs: [[chargedId, unchargedId], [ornamented.chargedId, ornamented.unchargedId]],
+    fullChargedIds: new Set(),
     minimumMaxHit: 4, maxHitOffset: -2, levelRequired: 78,
     primaryResourceId: ZULRAH_SCALES_ID, primaryPerCharge: 1, primaryName: "Zulrah scales",
     refundResources: [...runes, [ZULRAH_SCALES_ID, 1]],
   });
   RECIPES = [
-    seas(I.UNCHARGED_TRIDENT, I.TRIDENT_OF_THE_SEAS, TRIDENT_MAX_CHARGES),
-    swamp(I.UNCHARGED_TOXIC_TRIDENT, I.TRIDENT_OF_THE_SWAMP, TRIDENT_MAX_CHARGES),
-    seas(I.UNCHARGED_TRIDENT_E_, I.TRIDENT_OF_THE_SEAS_E_, ENHANCED_MAX_CHARGES),
-    swamp(I.UNCHARGED_TOXIC_TRIDENT_E_, I.TRIDENT_OF_THE_SWAMP_E_, ENHANCED_MAX_CHARGES),
+    seas(I.UNCHARGED_TRIDENT, I.TRIDENT_OF_THE_SEAS, TRIDENT_MAX_CHARGES, {
+      chargedId: I.TRIDENT_OF_THE_SEAS_O_,
+      unchargedId: I.UNCHARGED_TRIDENT_O_,
+      fullChargedId: I.TRIDENT_OF_THE_SEAS_FULL_O_,
+    }, [I.TRIDENT_OF_THE_SEAS_FULL_]),
+    swamp(I.UNCHARGED_TOXIC_TRIDENT, I.TRIDENT_OF_THE_SWAMP, TRIDENT_MAX_CHARGES, {
+      chargedId: I.TRIDENT_OF_THE_SWAMP_O_, unchargedId: I.UNCHARGED_TOXIC_TRIDENT_O_,
+    }),
+    seas(I.UNCHARGED_TRIDENT_E_, I.TRIDENT_OF_THE_SEAS_E_, ENHANCED_MAX_CHARGES, {
+      chargedId: I.TRIDENT_OF_THE_SEAS_E_O_, unchargedId: I.UNCHARGED_TRIDENT_E_O_,
+    }),
+    swamp(I.UNCHARGED_TOXIC_TRIDENT_E_, I.TRIDENT_OF_THE_SWAMP_E_, ENHANCED_MAX_CHARGES, {
+      chargedId: I.TRIDENT_OF_THE_SWAMP_E_O_, unchargedId: I.UNCHARGED_TOXIC_TRIDENT_E_O_,
+    }),
   ];
   staves = RECIPES.map((recipe) => {
     recipe.staff = definePoweredStaff(api, staffConfig(recipe));
@@ -95,7 +116,7 @@ function initialize(pluginApi) {
 // ------------------------------------------------------------------ combat
 
 function projectileEnd(from, to) {
-  return PROJECTILE.BASE + Math.max(1, distance(from, to)) * PROJECTILE.PER_TILE;
+  return PROJECTILE.BASE + Math.max(1, distance(from, to, core.CombatPosition)) * PROJECTILE.PER_TILE;
 }
 
 function maxHit(recipe, player) {
@@ -145,7 +166,7 @@ function staffConfig(recipe) {
     name: recipe.look.name,
     chargesKey: TRIDENT_CHARGE_META_KEY,
     maxCharges: recipe.maxCharges,
-    pairs: [[recipe.chargedId, recipe.unchargedId]],
+    pairs: recipe.pairs,
     maxHit: (player) => maxHit(recipe, player),
     attackSpeed: ATTACK_SPEED,
     range: ATTACK_RANGE,
@@ -161,6 +182,13 @@ function staffConfig(recipe) {
 }
 
 function resolveTrident(attacker) {
+  if (attacker?.isPlayer?.()) {
+    const item = attacker.getAsPlayer().getEquipment().get(core.Equipment.WEAPON_SLOT);
+    const recipe = recipeForTridentId(item?.getId?.());
+    if (recipe?.fullChargedIds.has(item.getId()) && item.getMetaValue?.(TRIDENT_CHARGE_META_KEY) == null) {
+      item.setMetaValue(TRIDENT_CHARGE_META_KEY, recipe.maxCharges);
+    }
+  }
   for (const staff of staves) {
     const method = staff.resolver.resolve(attacker);
     if (method) return method;
@@ -171,7 +199,7 @@ function resolveTrident(attacker) {
 // ------------------------------------------------------------------ charges
 
 function recipeForTridentId(itemId) {
-  return RECIPES.find((r) => r.unchargedId === itemId || r.chargedId === itemId) ?? null;
+  return RECIPES.find((recipe) => recipe.pairs.some(([charged, uncharged]) => charged === itemId || uncharged === itemId)) ?? null;
 }
 
 function isTridentId(itemId) {
@@ -179,11 +207,14 @@ function isTridentId(itemId) {
 }
 
 function getCharges(item) {
-  return recipeForTridentId(item?.getId?.())?.staff.chargesOf(item) ?? 0;
+  const recipe = recipeForTridentId(item?.getId?.());
+  if (!recipe) return 0;
+  if (recipe.fullChargedIds.has(item.getId()) && item.getMetaValue?.(TRIDENT_CHARGE_META_KEY) == null) return recipe.maxCharges;
+  return recipe.staff.chargesOf(item);
 }
 
 function setCharges(item, value) {
-  return recipeForTridentId(item.getId()).staff.setCharges(item, value);
+  return recipeForTridentId(item.getId())?.staff.setCharges(item, value) ?? 0;
 }
 
 function getItemContainer(player, item, preferredSlot = -1) {
@@ -219,25 +250,30 @@ function chargeTrident(player, tridentItem, tridentSlot, recipe) {
   }
 
   const inventory = player.getInventory();
-  const affordable = Math.min(
-    inventory.getAmount(DEATH_RUNE_ID),
-    inventory.getAmount(CHAOS_RUNE_ID),
-    Math.floor(inventory.getAmount(FIRE_RUNE_ID) / FIRE_RUNES_PER_CHARGE),
-    Math.floor(inventory.getAmount(recipe.primaryResourceId) / recipe.primaryPerCharge),
+  const batches = (amountOf) => Math.min(
+    amountOf(DEATH_RUNE_ID),
+    amountOf(CHAOS_RUNE_ID),
+    Math.floor(amountOf(FIRE_RUNE_ID) / FIRE_RUNES_PER_CHARGE),
+    Math.floor(amountOf(recipe.primaryResourceId) / recipe.primaryPerCharge),
     recipe.maxCharges - current
   );
+  const affordable = batches((id) => plainAmount(inventory, id));
 
   if (affordable <= 0) {
+    if (batches((id) => inventory.getAmount(id)) > 0) {
+      player.sendMessage(PRESET_TEXT);
+      return;
+    }
     player.sendMessage(
       `You need death runes, chaos runes, fire runes and ${recipe.primaryName} to charge this.`
     );
     return;
   }
 
-  inventory.deleteNumber(DEATH_RUNE_ID, affordable);
-  inventory.deleteNumber(CHAOS_RUNE_ID, affordable);
-  inventory.deleteNumber(FIRE_RUNE_ID, affordable * FIRE_RUNES_PER_CHARGE);
-  inventory.deleteNumber(recipe.primaryResourceId, affordable * recipe.primaryPerCharge);
+  takePlain(inventory, DEATH_RUNE_ID, affordable);
+  takePlain(inventory, CHAOS_RUNE_ID, affordable);
+  takePlain(inventory, FIRE_RUNE_ID, affordable * FIRE_RUNES_PER_CHARGE);
+  takePlain(inventory, recipe.primaryResourceId, affordable * recipe.primaryPerCharge);
 
   setCharges(tridentItem, current + affordable);
   refreshTridentState(player, tridentItem, tridentSlot);
@@ -276,12 +312,16 @@ function chargeWithResources(event) {
   }
 
   event.handled = true;
+  if (restricted(tridentOnLeft ? usedWithItem : usedItem)) {
+    player.sendMessage(PRESET_TEXT);
+    return;
+  }
   chargeTrident(player, tridentItem, tridentSlot, recipe);
 }
 
 function unchargeTrident({ player, item }) {
   const recipe = recipeForTridentId(item?.getId?.());
-  if (!recipe || item.getId() !== recipe.chargedId) return false;
+  if (!recipe || !recipe.pairs.some(([charged]) => charged === item.getId())) return false;
   const current = getCharges(item);
   if (current <= 0) {
     player.sendMessage("Your trident has no charges to remove.");
@@ -289,18 +329,13 @@ function unchargeTrident({ player, item }) {
   }
 
   const inventory = player.getInventory();
-  const neededSlots = recipe.refundResources.reduce(
-    (slots, [resourceId]) => slots + (inventory.contains(resourceId) ? 0 : 1),
-    0
-  );
-  if (inventory.getFreeSlots() < neededSlots) {
+  const refunds = recipe.refundResources.map(([resourceId, amountPerCharge]) => new core.Item(resourceId, current * amountPerCharge));
+  if (!refundsFit(inventory, refunds)) {
     player.sendMessage("Your inventory is too full to uncharge your trident.");
     return true;
   }
 
-  for (const [resourceId, amountPerCharge] of recipe.refundResources) {
-    inventory.addItem(new core.Item(resourceId, current * amountPerCharge));
-  }
+  for (const refund of refunds) inventory.addItem(refund);
   setCharges(item, 0);
   refreshTridentState(player, item);
   player.sendMessage(
@@ -317,7 +352,10 @@ function unchargeTrident({ player, item }) {
  */
 function dismantle({ player, item }) {
   const I = ItemIdentifiers;
-  const trident = new Map([[I.UNCHARGED_TOXIC_TRIDENT, I.UNCHARGED_TRIDENT], [I.UNCHARGED_TOXIC_TRIDENT_E_, I.UNCHARGED_TRIDENT_E_]]).get(item?.getId?.());
+  const trident = new Map([
+    [I.UNCHARGED_TOXIC_TRIDENT, I.UNCHARGED_TRIDENT],
+    [I.UNCHARGED_TOXIC_TRIDENT_E_, I.UNCHARGED_TRIDENT_E_],
+  ]).get(item?.getId?.());
   if (trident === undefined) return false;
   const { DialogueChainBuilder, OptionDialogue } = core;
   player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
@@ -373,12 +411,23 @@ module.exports = {
   register(pluginApi) {
     initialize(pluginApi);
     pluginApi.onItemOnItem(chargeWithResources, { noted: false });
-    for (const name of ["Trident of the Seas", "Trident of the Swamp", "Trident of the Seas (e)", "Trident of the Swamp (e)"]) {
+    for (const name of [
+      "Trident of the Seas", "Trident of the Seas (full)", "Trident of the Seas (o)", "Trident of the Seas (full) (o)",
+      "Trident of the Seas (e)", "Trident of the Seas (e) (o)",
+      "Trident of the Swamp", "Trident of the Swamp (o)", "Trident of the Swamp (e)", "Trident of the Swamp (e) (o)",
+    ]) {
       pluginApi.onItemAction(name, { Check: sendChargeStatus, Charge: chargeOption, Uncharge: unchargeTrident });
     }
-    for (const name of ["Uncharged trident", "Uncharged toxic trident", "Uncharged trident (e)", "Uncharged toxic trident (e)"]) {
+    for (const name of ["Uncharged trident", "Uncharged trident (e)", "Uncharged toxic trident", "Uncharged toxic trident (e)"]) {
       // Check works uncharged too, in the inventory and worn (an unhandled worn option unequips).
       pluginApi.onItemAction(name, { Check: sendChargeStatus, Charge: chargeOption, Dismantle: dismantle });
+    }
+    for (const name of [
+      "Uncharged trident (o)", "Uncharged trident (e) (o)",
+      "Uncharged toxic trident (o)", "Uncharged toxic trident (e) (o)",
+    ]) {
+      // Ornament removal takes the Dismantle option; the generic ornament handler owns it.
+      pluginApi.onItemAction(name, { Check: sendChargeStatus, Charge: chargeOption });
     }
     pluginApi.registerCombatMethodResolver({ resolve: resolveTrident });
     pluginApi.onCustomEvent("powered-staff:spell", answerSpell);

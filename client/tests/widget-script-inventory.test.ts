@@ -139,3 +139,63 @@ console.log("inventory drag identity, ordering and release tests passed");
     vm.run(script, [], [], undefined, (decoded?.payload as any).args);
     assert.equal(vm.longStack[0], price);
 }
+
+// A left-click on an inventory slot, with the flags the server really sends and no stubbed router:
+// the press transmits nothing, and the release sends a listed op as the plain inventory packet.
+{
+    const { processWidgetClickInput } = require("../game/widgets/input/widgetClickInput");
+    const { WidgetActionRouter } = require("../game/widgets/WidgetActionRouter");
+    const { decodeClientPackets, MAIN_INVENTORY_SLOT_FLAGS } = require("../../server/src/main/typescript/elvarg/net/protocol/ClientProtocol");
+    const { setPacketSocket, flushPackets } = require("../network/packet");
+    const { state } = require("../network/serverConnection/state");
+    const SHADOW = 27275;
+    const frames: Buffer[] = [];
+    const socket = { readyState: 1, send: (frame: Uint8Array) => frames.push(Buffer.from(frame)) };
+    (globalThis as any).WebSocket ??= { OPEN: 1 };
+    state.socket = socket;
+    setPacketSocket(socket as any);
+    const slot: any = { uid: (149 << 16) + 32768, parentUid: 149 << 16, fileId: -1, childIndex: 0, groupId: 149,
+        itemId: SHADOW, width: 36, height: 32, dragZoneSize: 5, actions: ["Wield", "Check", "Uncharge"] };
+    const wm: any = { meslayerContinueWidget: null, beginBatch() {}, endBatch() {}, flushBatch() {},
+        invalidateWidgetRender() {}, invalidateAll() {}, isEffectivelyHidden: () => false,
+        getWidgetByUid: (uid: number) => uid === slot.uid ? slot : undefined,
+        getWidgetFlags: (widget: any) => widget === slot ? MAIN_INVENTORY_SLOT_FLAGS : 0, getWidgetOpMask: () => 0 };
+    const interaction = new WidgetInteractionController({ getWidgetManager: () => wm,
+        getInputManager: () => undefined, getRendererCanvas: () => undefined,
+        getTradeRequestTargetsByName: () => new Map() });
+    assert.equal(interaction.isWidgetDraggable(slot), true, "the real slot flags make it draggable");
+    let router: any;
+    const clientDeps: any = new Proxy({
+        getWidgetManager: () => wm, getWidgetInteraction: () => interaction,
+        getInputManager: () => undefined, getVarManager: () => undefined,
+        getCustomInterfaces: () => ({ handleWidgetClick: () => false, rowIdAt: () => undefined, handleWidgetOp() {} }),
+        getPlayerDesign: () => ({ handleWidgetAction: () => false }),
+        getTransmitCycles: () => ({ cycleCntr: 1 }),
+        handleWidgetAction: (event: any) => router.handleWidgetAction(event),
+    }, { get: (target: any, key: any) => target[key] ?? (() => undefined) });
+    router = new WidgetActionRouter(clientDeps);
+    const primary = () => ({ option: "Wield", target: "Tumeken's shadow", slot: 0, itemId: SHADOW, opIndex: 2 });
+    const sent = () => {
+        flushPackets();
+        const packets = frames.flatMap((frame) => decodeClientPackets(frame));
+        frames.length = 0;
+        return packets;
+    };
+    processWidgetClickInput(clientDeps, { cachedHoverHits: null }, {
+        input: { leftClickX: 10, leftClickY: 10 }, collectFromAllRoots: () => [slot],
+        getWidgetFlags: (widget: any) => wm.getWidgetFlags(widget),
+    }, wm, interaction, primary, true);
+    assert.equal(interaction.clickedWidget, slot, "the press holds the slot");
+    const pressed = sent().length;
+    assert.equal(pressed, 0, "the press transmits nothing");
+    processWidgetReleaseInput(clientDeps, { mx: 10, my: 10 } as any, wm, interaction, primary, false);
+    const released = sent();
+    assert.equal(released.length, 1, "the release sends one packet");
+    assert.equal(released[0].type, "inventory_action");
+    assert.equal(released[0].option, "Wield");
+    assert.equal(released[0].slot, 0);
+    assert.equal(released[0].itemId, SHADOW);
+    state.socket = null;
+    setPacketSocket(null as any);
+    console.log(`TUMEKEN_WIELD_LEFT_CLICK_PASS press=${pressed} release=${released[0].type} option=${released[0].option} slot=${released[0].slot}`);
+}

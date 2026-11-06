@@ -12,6 +12,7 @@ const TAB_SELECTED_VARBIT = 13071; // side_channels_tab_selected
 const TAB_ATTRIBUTE = "side-channels:tab";
 const CHAT_CHANNEL_TAB = 0;
 const YOUR_CLAN_TAB = 1;
+const GROUPING_TAB = 3;
 const SOCIAL_SIDE_BUTTON = 7;
 const CHAT_CHANNEL_GROUP = 7;
 /** Button component -> tab index and interface, by the rev 241 cache's 707:2-5. */
@@ -31,10 +32,13 @@ const OP1 = 1 << 1;
 const replacements = new WeakMap();
 /** What stands in for Your Clan, such as the clan creation panel: { group, onMount }. */
 const clanReplacements = new WeakMap();
+/** What stands in for Grouping, such as the PvP Arena side panel: { group, onMount }. */
+const groupingReplacements = new WeakMap();
 
 function replacementFor(player, tab) {
   if (tab === CHAT_CHANNEL_TAB) return replacements.get(player);
-  return tab === YOUR_CLAN_TAB ? clanReplacements.get(player) : undefined;
+  if (tab === YOUR_CLAN_TAB) return clanReplacements.get(player);
+  return tab === GROUPING_TAB ? groupingReplacements.get(player) : undefined;
 }
 
 function selectedTab(player) {
@@ -98,6 +102,20 @@ function replaceYourClan({ player, group, onMount }) {
   if (selectedTab(player) === YOUR_CLAN_TAB) mountSelected(player);
 }
 
+/**
+ * "side-channels:replace-grouping" ({ player, group, onMount }): shows `group` on Grouping and
+ * brings it up. A null group puts Grouping back.
+ */
+function replaceGrouping({ player, group, onMount }) {
+  if (group == null) groupingReplacements.delete(player);
+  else {
+    groupingReplacements.set(player, { group, onMount });
+    player.setAttribute(TAB_ATTRIBUTE, GROUPING_TAB);
+    player.getPacketSender().sendTab(SOCIAL_SIDE_BUTTON);
+  }
+  if (selectedTab(player) === GROUPING_TAB) mountSelected(player);
+}
+
 module.exports = {
   name: "SideChannels",
   register(api) {
@@ -108,5 +126,6 @@ module.exports = {
     api.onCustomEvent("gameframe:tab-mounted", restoreSelectedTabOnMount);
     api.onCustomEvent("side-channels:replace-chat-channel", replaceChatChannel);
     api.onCustomEvent("side-channels:replace-your-clan", replaceYourClan);
+    api.onCustomEvent("side-channels:replace-grouping", replaceGrouping);
   },
 };

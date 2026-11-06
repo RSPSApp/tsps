@@ -138,6 +138,29 @@ function fits(inventory, rewards) {
   return room >= 0;
 }
 
+/** Zealots still standing, by the player who raised them (server hygiene: removed at logout). */
+const zealots = new Map();
+
+/**
+ * Wiki: a chest opened in the catacombs raises an Undead Zealot 1 time in 20, fought by the
+ * opener alone (an owner, so anyone else is refused; not hidden from others, nor made multi-combat).
+ */
+function raiseZealot(player, object) {
+  const { npc, chance } = Common.data.zealot;
+  if (Math.random() >= chance) return;
+  const at = object.getLocation();
+  const raised = Common.api.spawnNpc({ id: Common.npcId(npc), x: at.getX(), y: at.getY(), z: at.getZ(), owner: player, wanderRadius: 0 });
+  if (!raised) return;
+  const standing = (zealots.get(player) ?? []).filter((z) => z.isRegistered?.());
+  zealots.set(player, [...standing, raised]);
+}
+
+/** A zealot left alive when its opener logs out would stay in the world for good, unreachable. */
+function forgetZealots({ player }) {
+  for (const zealot of zealots.get(player) ?? []) Common.api.removeNpc(zealot);
+  zealots.delete(player);
+}
+
 function talk(player, pages) {
   const { DialogueChainBuilder, ItemStatementDialogue, ActionDialogue } = Common.core;
   const manager = player.getDialogueManager();
@@ -174,12 +197,37 @@ function chest({ player, object }) {
   inventory.refreshItems?.();
   sound(player, cat().sounds.chest);
   swap(object, openChestName(found), Common.data.chests.openTicks);
+  raiseZealot(player, object);
   const treasure = coins > 0 ? Common.message("treasure", { coins }) : Common.message("noTreasureCoins");
   talk(player, [[treasure, loot?.id ?? COINS], [Common.message("swampPaste", { paste }), Common.objId(SWAMP_PASTE)]]);
   return true;
 }
 
+/**
+ * Wiki: bleached bones offered on the Altar of the Damned restore full Prayer (no experience; the
+ * bone is read as consumed). Only the effect is established: no animation, sound or line was
+ * recorded, so none is made up. The bones must still be held on arrival (the walk can outlast a
+ * drop), and at full Prayer the event is left to the engine, which consumes nothing.
+ */
+function bonesOnAltar(event) {
+  const { player, object, itemId } = event;
+  const { altar, bones } = Common.data.zealot;
+  if ((object?.getId?.() ?? event.objectId) !== Common.locId(altar) || itemId !== Common.objId(bones)) return;
+  const inventory = player.getInventory();
+  if (inventory.getAmount(itemId) < 1) return;
+  const skills = player.getSkillManager();
+  const { Skill } = Common.core;
+  if (skills.getCurrentLevel(Skill.PRAYER) >= skills.getMaxLevel(Skill.PRAYER)) return;
+  event.handled = true;
+  inventory.delete(itemId, 1);
+  inventory.refreshItems?.();
+  skills.setCurrentLevels(Skill.PRAYER, skills.getMaxLevel(Skill.PRAYER));
+  skills.updateSkill(Skill.PRAYER);
+}
+
 function attachCatacombs(api) {
+  api.onItemOnObject(bonesOnAltar);
+  api.onPlayerLogout(forgetZealots);
   api.onObjectInteraction("Wooden doors", { Open: entrance });
   for (const name of Object.keys(Common.data.catacombs.doors)) api.onObjectInteraction(name, { Open: tombDoor });
   for (const metal of Common.data.keyMetals) {
@@ -187,4 +235,4 @@ function attachCatacombs(api) {
   }
 }
 
-module.exports = { attachCatacombs, entrance, tombDoor, chest, rollLoot, coinsFor, chestOf };
+module.exports = { attachCatacombs, bonesOnAltar, raiseZealot, forgetZealots, entrance, tombDoor, chest, rollLoot, coinsFor, chestOf };

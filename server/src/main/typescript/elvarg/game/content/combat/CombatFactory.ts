@@ -1,7 +1,6 @@
+import { CrossFloor } from "../../CrossFloor";
 import { CombatPosition } from "./CombatPosition";
 import { ItemAliases } from "../../model/ItemAliases";
-import { Sound } from "../../Sound";
-import { Sounds } from "../../Sounds";
 import { PrayerHandler } from "../PrayerHandler";
 import { Dueling, DuelRule, DuelState } from "../Duelling";
 import { WeaponInterfaces } from "./WeaponInterfaces";
@@ -238,6 +237,9 @@ export class CombatFactory {
         const rolled = { attacker: entity, target: victim, combatType: type, damage, minimum: range.minimum, maximum: range.maximum };
         PluginManager.emitCustomEvent("combat:hit-rolled", rolled);
         if (rolled.damage !== damage && Number.isFinite(rolled.damage)) damage = Math.max(0, Math.floor(rolled.damage));
+
+        // OSRS Project Rebalance (29 May 2024): successful player zeroes become ones before defences.
+        if (entity.isPlayer() && damage === 0 && range.maximum > 0) damage = 1;
 
         // Wiki (Ward of Arceuus): demons hit 10% less, that 10% rounded down first.
         if (entity.isNpc() && victim.isPlayer() && ArceuusSpells.hasWard(victim)) {
@@ -535,8 +537,8 @@ export class CombatFactory {
         const targetLocation = CombatPosition.location(target, attacker);
         if (
             CombatPosition.area(attacker, target) !== CombatPosition.area(target, attacker) ||
-            attackerLocation.getZ() !== targetLocation.getZ() ||
-            attackerLocation.getDistance(targetLocation) >= 40
+            (attackerLocation.getZ() !== targetLocation.getZ() && !CrossFloor.canCross(attackerLocation, targetLocation)) ||
+            CrossFloor.distance(attackerLocation, targetLocation) >= 40
         ) {
             return false;
         }
@@ -983,12 +985,6 @@ export class CombatFactory {
         // Target-side player effects.
         if (target.isPlayer()) {
             const playerTarget = target.getAsPlayer();
-            if (resolvedHit.isAccurate() && damage > 0) {
-                Sounds.sendSound(playerTarget, Sound.PLAYER_GETTING_HIT);
-            } else {
-                Sounds.sendSound(playerTarget, Sound.DEFENCE_BLOCK);
-            }
-
             // Close interfaces while being hit (except developer rights).
             if (playerTarget.getRights() != PlayerRights.DEVELOPER &&
                 (playerTarget.busy() || playerTarget.getPacketSender().hasInterruptibleInterface())) {
@@ -1324,31 +1320,39 @@ export class CombatFactory {
             return;
         }
 
-        // Player bots should behave as players so we don't check them here...
-
-        // We've probably already been skulled by this player.
-        const targetHasDamagedAttacker = target.getCombat().damageMapContains(attacker);
-        const attackerHasDamagedTarget = attacker.getCombat().damageMapContains(target);
-        if (targetHasDamagedAttacker || attackerHasDamagedTarget) {
-            return;
-        }
-
-        if (
-            target.getCombat().getAttacker() != null &&
-            target.getCombat().getAttacker() == attacker
-        ) {
-            return;
-        }
-
-        if (
-            attacker.getCombat().getAttacker() != null &&
-            attacker.getCombat().getAttacker() == target
-        ) {
+        if (!CombatFactory.wouldSkull(attacker, target)) {
             return;
         }
 
         // Wiki: a white skull lasts 30 minutes after attacking a player.
         CombatFactory.skull(attacker, SkullType.WHITE_SKULL, CombatFactory.PVP_SKULL_SECONDS);
+    }
+
+    /**
+     * Whether attacking `target` now would give `attacker` a skull. An already-skulled attacker
+     * only has their timer extended, and retaliation or a fight already underway never skulls.
+     */
+    public static wouldSkull(attacker: Player, target: Player): boolean {
+        if (!Wilderness.isIn(attacker) || !Wilderness.isIn(target) || attacker.isSkulled()) {
+            return false;
+        }
+
+        // Player bots should behave as players so we don't check them here...
+
+        // We've probably already been skulled by this player.
+        if (target.getCombat().damageMapContains(attacker) || attacker.getCombat().damageMapContains(target)) {
+            return false;
+        }
+
+        if (target.getCombat().getAttacker() == attacker) {
+            return false;
+        }
+
+        if (attacker.getCombat().getAttacker() == target) {
+            return false;
+        }
+
+        return true;
     }
 
     public static readonly PVP_SKULL_SECONDS = 30 * 60;

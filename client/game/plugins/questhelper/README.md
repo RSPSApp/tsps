@@ -48,7 +48,8 @@ plugin draws what the upstream plugin draws.
 - **Use 'Shortest Path' plugin** (off by default, as upstream):
   - Upstream's `DetailedQuestStep` posts `PluginMessage("shortestpath", "path" | "clear")` as steps start and end, and when the option is toggled.
   - The bridge collects what upstream's steps post and returns it with each evaluation, and the client hands it to the Shortest Path plugin.
-  - The client clears the route itself when the quest is switched or Quest Helper stops, because the engine isn't asked again then.
+  - A route is replayed when Shortest Path starts after the step posted it, so enabling the plugin later still draws the route.
+  - The client clears the route itself when the quest is switched, Quest Helper stops or the player logs out, because the engine isn't asked again then.
 - **Bank tab** (`QuestBankTab`):
   - A "quest-helper" button by the bank's tabs lays the quest's items out in sections: recommended, each part of the quest, then "Non-quest items".
   - Missing items are placeholders with "Details".
@@ -58,6 +59,17 @@ plugin draws what the upstream plugin draws.
 - **Grand Exchange** (`QuestGrandExchangeInterface`):
   - At the Grand Exchange, "View missing items" by the item search lists the quest's missing tradeable items.
   - Away from it, a step that names items to buy shows them at once (with *Show Puzzle Solutions*).
+
+## Snapshots
+
+Every evaluation sends the engine a snapshot of the game (QuestHelperSnapshot). The large,
+rarely changing parts (the scene's objects and terrain, the loaded widget tree and the cache
+definitions) are sent in full once with a digest; the server keeps them per browser session and
+echoes what it holds (`cached`) in every result, after which the client names an unchanged section
+by digest (`reuse`) instead of resending it (QuestHelperReuse). The bridge still gets a full
+snapshot. A session that doesn't hold what the client names answers with an error, and the client
+sends everything in full again. Map squares a low-end client hasn't built are reported as unloaded
+tiles rather than failing the snapshot, and nothing is collected while no quest is selected.
 
 ## Settings
 

@@ -1426,6 +1426,8 @@ module.exports = function registerSwanSongQuest(api) {
     varbitId: VARBIT_SWAN_SONG,
     startedValue: STAGE_STARTED,
     completionValue: STAGE_COMPLETE,
+    // Keep persisted gameplay stages; publish the cache quest state, including its final reward phase.
+    varpValue: stage => stage >= STAGE_COMPLETE ? 200 : stage,
     questPoints: 2,
     xpRewards: [
       { skillId: Skill.MAGIC.getIndex(), amount: 15000, label: "Magic" },

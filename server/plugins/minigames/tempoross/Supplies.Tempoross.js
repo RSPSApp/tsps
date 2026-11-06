@@ -5,8 +5,8 @@
  *
  * Captures: Take gives one ("You take a Bucket from the crate.", "You take a Hammer from the
  * crate."), Take-5 five ("You take some Buckets from the crate."), with `human_pickuptable` and
- * sound 2582. A pump fills every bucket at once: `human_pickuptable`, sound 4950 and "You fill
- * the bucket with water." for each.
+ * sound 2582. A pump fills one bucket a tick until none are empty (captures 552, 1858): each
+ * fill plays `human_pickuptable` and sound 4950 and says "You fill the bucket with water.".
  */
 
 const Shared = require("./Shared.Tempoross");
@@ -93,17 +93,20 @@ function pump(event) {
     return true;
   }
   player.setPositionToFace(object.getLocation());
-  Shared.later(player, 1, () => {
-    if (!player.isRegistered()) return;
-    const count = inventory.getAmount(ITEM.BUCKET);
-    if (count <= 0) return;
-    Shared.animate(player, ANIM.UNTETHER);
-    player.getPacketSender().sendSound(SOUND_PUMP, 100, 0);
-    inventory.delete(ITEM.BUCKET, count);
-    inventory.adds(ITEM.BUCKET_OF_WATER, count);
-    inventory.refreshItems();
-    for (let i = 0; i < count; i++) player.sendMessage("You fill the bucket with water.");
-  });
+  Shared.startAction(player, "pump", () => fillBucket(player));
+  return true;
+}
+
+/** One bucket a tick; the tick after the last one ends the action. */
+function fillBucket(player) {
+  const inventory = player.getInventory();
+  if (inventory.getAmount(ITEM.BUCKET) <= 0) return false;
+  Shared.animate(player, ANIM.UNTETHER);
+  player.getPacketSender().sendSound(SOUND_PUMP, 100, 0);
+  inventory.delete(ITEM.BUCKET, 1);
+  inventory.adds(ITEM.BUCKET_OF_WATER, 1);
+  inventory.refreshItems();
+  player.sendMessage("You fill the bucket with water.");
   return true;
 }
 

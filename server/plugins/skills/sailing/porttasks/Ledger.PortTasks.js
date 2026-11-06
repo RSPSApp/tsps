@@ -140,6 +140,16 @@ function depositCargo({ player, location }) {
     return task?.crate === crate && task.destination === dock?.id && slot.delivered < slot.taken;
   });
   if (index < 0) {
+    const carriedIndex = player.getAttribute(common.CARRIED_SLOT_ATTRIBUTE);
+    const carried = Number.isInteger(carriedIndex) ? held[carriedIndex] : null;
+    const source = carried && common.taskById(carried.id);
+    if (source?.type === "courier" && source.crate === crate && source.cargoPort === dock?.id
+      && carried.taken > carried.delivered) {
+      held[carriedIndex] = { ...carried, taken: carried.taken - 1 };
+      common.setSlots(player, held);
+      common.putDown(player);
+      return;
+    }
     player.sendMessage("This cargo isn't for delivery here.");
     return;
   }

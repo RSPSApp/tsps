@@ -94,41 +94,126 @@ class ContentTest {
     }
 
     @Test
-    fun `high level alchemy on an inventory item turns it into coins`() {
+    fun `high and low alchemy consume the earliest copy when a later inventory slot is targeted`() {
+        for (spell in listOf(HIGH_ALCHEMY, LOW_ALCHEMY)) {
+            LiveGateway.login(developer()).use { game ->
+                game.expect<RebuildLoginV2>()
+                game.command("clearinv")
+                var magic = 0
+                var slotEvents: IfSetEventsV2? = null
+                val inventory = HashMap<Int, Pair<Int, Int>>()
+                val track: (Any) -> Unit = { message ->
+                    when (message) {
+                        is UpdateStatV2 -> if (message.stat == MAGIC) magic = message.currentLevel
+                        is IfSetEventsV2 -> if (message.interfaceId == INVENTORY && message.componentId == 0) slotEvents = message
+                        is UpdateInvFull ->
+                            if (message.inventoryId == MAIN_INVENTORY) {
+                                inventory.clear()
+                                message.objs.forEachIndexed { slot, obj -> if (obj.id >= 0) inventory[slot] = obj.id to obj.count }
+                            }
+                        is UpdateInvPartial ->
+                            if (message.inventoryId == MAIN_INVENTORY) {
+                                for (obj in message.objs) if (obj.id >= 0) inventory[obj.slot] = obj.id to obj.count else inventory.remove(obj.slot)
+                            }
+                    }
+                }
+                game.ticks(SETTLE_TICKS, each = track)
+                // The official client only casts on (or uses onto) a slot whose events make it a target.
+                val events = requireNotNull(slotEvents) { "the inventory's slots get their events" }.events1
+                assertEquals(INVENTORY_TARGET_EVENTS, events and INVENTORY_TARGET_EVENTS, "live's target events on the inventory")
+                if (magic < HIGH_ALCHEMY_LEVEL) game.command("setlevel magic $HIGH_ALCHEMY_LEVEL")
+                for ((item, count) in HIGH_ALCHEMY_ITEMS) game.command("item $item $count")
+                game.ticks(2, each = track)
+                val coinsBefore = inventory.values.filter { it.first == COINS }.sumOf { it.second }
+                val slots = inventory.filterValues { it.first == BRONZE_AXE }.keys.sorted()
+                assertEquals(3, slots.size, "three separate axes are in $inventory")
+                val clicked = slots.last()
+                for ((count, consumed) in slots.withIndex()) {
+                    game.buttonT((SPELLBOOK shl 16) or spell, NONE, NONE, INVENTORY shl 16, clicked, BRONZE_AXE)
+                    game.ticks(ALCHEMY_TICKS, each = track)
+                    assertTrue(inventory[consumed]?.first != BRONZE_AXE, "spell $spell must consume slot $consumed: $inventory")
+                    if (consumed != clicked) assertEquals(BRONZE_AXE, inventory[clicked]?.first, "later clicked copy remains")
+                    assertEquals(3 - count - 1, inventory.values.count { it.first == BRONZE_AXE }, "exactly one axe per cast")
+                }
+                assertTrue(inventory.values.filter { it.first == COINS }.sumOf { it.second } > coinsBefore, "coins came instead: $inventory")
+            }
+        }
+    }
+
+    @Test
+    fun `rune pouch bank view fills directly from native bank item operations`() {
         LiveGateway.login(developer()).use { game ->
             game.expect<RebuildLoginV2>()
-            var magic = 0
-            var slotEvents: IfSetEventsV2? = null
-            val inventory = HashMap<Int, Pair<Int, Int>>()
-            val track: (Any) -> Unit = { message ->
-                when (message) {
-                    is UpdateStatV2 -> if (message.stat == MAGIC) magic = message.currentLevel
-                    is IfSetEventsV2 -> if (message.interfaceId == INVENTORY && message.componentId == 0) slotEvents = message
-                    is UpdateInvFull ->
-                        if (message.inventoryId == MAIN_INVENTORY) {
-                            inventory.clear()
-                            message.objs.forEachIndexed { slot, obj -> if (obj.id >= 0) inventory[slot] = obj.id to obj.count }
-                        }
-                    is UpdateInvPartial ->
-                        if (message.inventoryId == MAIN_INVENTORY) {
-                            for (obj in message.objs) if (obj.id >= 0) inventory[obj.slot] = obj.id to obj.count else inventory.remove(obj.slot)
-                        }
+            val state = prepareRunePouch(game)
+            val slot = requireNotNull(state.bank.entries.firstOrNull { it.value.first == AIR_RUNE }?.key)
+            game.button(12, 12, op = 4, sub = slot, obj = AIR_RUNE) // Withdraw-10 into the viewed pouch.
+            game.ticks(3, state.vars, state::track)
+            assertEquals(1, varbit(state.vars, 29), "air occupies the pouch's first slot")
+            assertEquals(10, varbit(state.vars, 1624), "the bank fills the pouch directly")
+            assertTrue(state.inventory.values.none { it.first == AIR_RUNE }, "runes never enter inventory")
+        }
+    }
+
+    @Test
+    fun `rune pouch loadout creation accepts native object search and quantity answers`() {
+        LiveGateway.login(developer()).use { game ->
+            game.expect<RebuildLoginV2>()
+            val state = prepareRunePouch(game)
+            // Choose a different rune from a previous run so stale saved loadouts cannot pass.
+            val type = if (varbit(state.vars, 9717) == 1) 4 else 1
+            val rune = if (type == 1) AIR_RUNE else FIRE_RUNE
+            game.button(15, 33, sub = 1) // Cache bankside:runepouch_loadout_a, first slot.
+            game.resumeObject(rune)
+            game.ticks(2, state.vars, state::track)
+            assertEquals(type, varbit(state.vars, 9717), "RESUME_P_OBJDIALOG stores the picked rune")
+            assertEquals(0, varbit(state.vars, 9686), "a new pick clears the old limit")
+            game.resumeCount(50)
+            game.ticks(2, state.vars, state::track)
+            assertEquals(50, varbit(state.vars, 9686), "native count answer sets the limit")
+            game.button(15, 27) // Cache bankside:runepouch_load_a.
+            game.ticks(3, state.vars, state::track)
+            assertEquals(type, varbit(state.vars, 29))
+            assertEquals(50, varbit(state.vars, 1624), "the created loadout fills from the bank")
+        }
+    }
+
+    private class RunePouchState {
+        val vars = HashMap<Int, Int>()
+        val inventory = HashMap<Int, Pair<Int, Int>>()
+        val bank = HashMap<Int, Pair<Int, Int>>()
+        fun track(message: Any) {
+            when (message) {
+                is UpdateInvFull -> {
+                    val target = when (message.inventoryId) { 93 -> inventory; 95 -> bank; else -> return }
+                    target.clear()
+                    message.objs.forEachIndexed { slot, obj -> if (obj.id >= 0) target[slot] = obj.id to obj.count }
+                }
+                is UpdateInvPartial -> {
+                    val target = when (message.inventoryId) { 93 -> inventory; 95 -> bank; else -> return }
+                    for (obj in message.objs) if (obj.id >= 0) target[obj.slot] = obj.id to obj.count else target.remove(obj.slot)
                 }
             }
-            game.ticks(SETTLE_TICKS, each = track)
-            // The official client only casts on (or uses onto) a slot whose events make it a target.
-            val events = requireNotNull(slotEvents) { "the inventory's slots get their events" }.events1
-            assertEquals(INVENTORY_TARGET_EVENTS, events and INVENTORY_TARGET_EVENTS, "live's target events on the inventory")
-            if (magic < HIGH_ALCHEMY_LEVEL) game.command("setlevel magic $HIGH_ALCHEMY_LEVEL")
-            for ((item, count) in HIGH_ALCHEMY_ITEMS) game.command("item $item $count")
-            game.ticks(2, each = track)
-            val coinsBefore = inventory.values.filter { it.first == COINS }.sumOf { it.second }
-            val slot = requireNotNull(inventory.entries.firstOrNull { it.value.first == BRONZE_AXE }?.key) { "the axe is in $inventory" }
-            game.buttonT((SPELLBOOK shl 16) or HIGH_ALCHEMY, NONE, NONE, INVENTORY shl 16, slot, BRONZE_AXE)
-            game.ticks(ALCHEMY_TICKS, each = track)
-            assertTrue(inventory.values.none { it.first == BRONZE_AXE }, "the axe is gone: $inventory")
-            assertTrue(inventory.values.filter { it.first == COINS }.sumOf { it.second } > coinsBefore, "coins came instead: $inventory")
         }
+    }
+
+    private fun prepareRunePouch(game: HeadlessClient.Game): RunePouchState {
+        val state = RunePouchState()
+        game.closeModal(); game.ticks(2, state.vars, state::track)
+        game.command("clearinv"); game.command("item $RUNE_POUCH 1")
+        game.ticks(2, state.vars, state::track)
+        game.button(149, 0, op = 6, sub = 0, obj = RUNE_POUCH) // Cache enum4303 maps item action4 (Empty) to widget op6.
+        game.ticks(2, state.vars, state::track)
+        assertEquals(0, varbit(state.vars, 1624), "previous pouch contents are emptied before setup")
+        game.command("clearinv"); game.command("item $RUNE_POUCH 1")
+        game.command("item $AIR_RUNE 100"); game.command("item $FIRE_RUNE 100"); game.command("bank")
+        game.ticks(3, state.vars, state::track)
+        for ((slot, item) in state.inventory.toMap()) if (item.first == AIR_RUNE || item.first == FIRE_RUNE)
+            game.button(15, 3, op = 8, sub = slot, obj = item.first)
+        game.ticks(2, state.vars, state::track)
+        game.button(15, 3, sub = 0, obj = RUNE_POUCH)
+        game.ticks(2, state.vars, state::track)
+        assertEquals(3, varbit(state.vars, 9727), "native bank pouch view is active")
+        return state
     }
 
     private fun developer(): String {
@@ -179,6 +264,9 @@ class ContentTest {
         const val SPELLBOOK = 218
         const val VARROCK_TELEPORT = 26
         const val VARROCK_TELEPORT_LEVEL = 25
+        const val RUNE_POUCH = 12791
+        const val AIR_RUNE = 556
+        const val FIRE_RUNE = 554
         const val MAGIC = 6
 
         /** Law, air and fire runes. */
@@ -191,14 +279,16 @@ class ContentTest {
         const val INVENTORY = 149
         const val MAIN_INVENTORY = 93
         const val INVENTORY_TARGET_EVENTS = (0x3F shl 11) or (1 shl 21)
+        // Cache rev 241 spellbook components (magic_highalchemy / magic_lowalchemy).
         const val HIGH_ALCHEMY = 47
+        const val LOW_ALCHEMY = 24
         const val HIGH_ALCHEMY_LEVEL = 55
         const val BRONZE_AXE = 1351
         const val COINS = 995
         const val NONE = 0xFFFF
-        const val ALCHEMY_TICKS = 4
+        const val ALCHEMY_TICKS = 6
 
         /** Nature and fire runes, and the axe to alch. */
-        val HIGH_ALCHEMY_ITEMS = listOf(561 to 1, 554 to 5, BRONZE_AXE to 1)
+        val HIGH_ALCHEMY_ITEMS = listOf(561 to 3, 554 to 15, BRONZE_AXE to 3)
     }
 }

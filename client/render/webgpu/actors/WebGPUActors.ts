@@ -897,6 +897,7 @@ export class WebGPUActors {
                 poseRow = -1;
             }
             if (!posed) continue;
+            if (posed.logicalHeight !== undefined) client.playerEcs.setAnimatedHeight(pid, posed.logicalHeight);
             const timeLoaded = map.timeLoaded;
             const passes: [GpuGeometry | undefined, ActorDrawItem[], GPURenderPipeline][] = [
                 [

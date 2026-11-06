@@ -1,0 +1,1257 @@
+{
+ "_source": "Hand-held wording for the Rogue Trader conversations the generated npc-dialogues.json has no page for (Ali's introduction, reminders, reports and thanks, Aubury's proposal, Siamun, the blackjack seller, the street urchin). The generated page does have Ali Morrisane's variant standard-dialogue-after-completing-rogue-trader (the blackjack, clothes and runes/casket menus and the expand-your-business answers), which the plugin uses for his later visits. 'scenes' are copied from rsprox 3169 (rev 232) t8217-8289, 1756 (rev 227) t13560-13599, 3170 (rev 232) and 549 (rev 227) by knowledge/tsps/opus-team/2623/build-scenes.py and its siblings; 'wikiScenes' are Transcript:Rogue Trader on the OSRS Wiki, not in any capture; 'oursScenes' are lines this server wrote because no capture or Wiki line has them.",
+ "scenes": {
+  "hello": [
+   [
+    "ali",
+    "Hello [player name]. How's the adventuring going?"
+   ],
+   [
+    "player",
+    "Hi Ali. Not bad. How are you?"
+   ],
+   [
+    "ali",
+    "Still selling."
+   ]
+  ],
+  "introduction": [
+   [
+    "player",
+    "Anything interesting?"
+   ],
+   [
+    "ali",
+    "For you, always. As a matter of fact I have just acquired a fleet of magic carpets, which operate throughout the Kharidian desert."
+   ],
+   [
+    "player",
+    "Wow, that sounds great, how about your stall?"
+   ],
+   [
+    "ali",
+    "Trade is good, but I would like to expand and diversify, but it's proving a little more difficult than I initially thought."
+   ],
+   [
+    "player",
+    "How so?"
+   ],
+   [
+    "ali",
+    "I think the other merchants in this town are conspiring against me."
+   ],
+   [
+    "player",
+    "Oh come on! You're just being paranoid now."
+   ],
+   [
+    "ali",
+    "Well maybe I can't get any new suppliers then because I'm Pollnivnian."
+   ],
+   [
+    "player",
+    "You're what?"
+   ],
+   [
+    "ali",
+    "From Pollnivneach."
+   ],
+   [
+    "player",
+    "Maybe I could help you then?"
+   ],
+   [
+    "ali",
+    "Perhaps you could."
+   ]
+  ],
+  "siamunErrand": [
+   [
+    "ali",
+    "I have an old friend - a cloth merchant Siamun, who lives in Sophanem - Do you know the place?"
+   ],
+   [
+    "player",
+    "Umm..... Images of cats and priests come to mind. Ah yes! There we go, it's the city of the dead South of Pollnivneach isn't it?"
+   ],
+   [
+    "ali",
+    "That's the one, well if you could convince him to supply me with some of his merchandise, I would be more than willing to sell them to the masses ...... for a small percentage of course."
+   ]
+  ],
+  "whatsInIt": [
+   [
+    "player",
+    "What's in this for me?"
+   ],
+   [
+    "ali",
+    "I thought you wanted to help."
+   ],
+   [
+    "player",
+    "Of course, but everyone seems to be benefiting here but me."
+   ],
+   [
+    "ali",
+    "What do you mean?"
+   ],
+   [
+    "player",
+    "Well the trader gets their product sold, you get your cut, but what do I get?"
+   ],
+   [
+    "ali",
+    "You get access to more products. Is that not reward enough?"
+   ],
+   [
+    "ali",
+    "Hmmm... Perhaps not."
+   ]
+  ],
+  "discountOffer": [
+   [
+    "ali",
+    "I'll tell you what then, how about I let you have discounted flights on my magic carpet rides?"
+   ],
+   [
+    "set",
+    "cheapflights",
+    1
+   ],
+   [
+    "player",
+    "Wow that would be great."
+   ],
+   [
+    "ali",
+    "Fair enough so, we have a win, win, win situation on our hands then."
+   ]
+  ],
+  "blackjackErrand": [
+   [
+    "player",
+    "Is there anyone else you want me to talk to on your behalf?"
+   ],
+   [
+    "ali",
+    "There's a blackjack seller in Pollnivneach, a cautious type of guy, not the usual entrepreneurial sort that I would normally deal with, but..."
+   ],
+   [
+    "ali",
+    "I think that he has a product with real potential..."
+   ],
+   [
+    "player",
+    "What? .... Blackjacks?"
+   ],
+   [
+    "ali",
+    "Yes, but at the moment the product isn't polished enough, if you could convince him to create a larger variety of weapon I would gladly stock his products."
+   ]
+  ],
+  "discountReminder": [
+   [
+    "ali",
+    "Didn't we also agree that you would get discounted travel on my magic carpet network?"
+   ],
+   [
+    "player",
+    "Oh ya, I forgot."
+   ],
+   [
+    "ali",
+    "So what's your problem then?"
+   ],
+   [
+    "player",
+    "I don't have one I guess."
+   ],
+   [
+    "ali",
+    "Good, that's what I like to hear. Now where were we?"
+   ]
+  ],
+  "runesBriefing": [
+   [
+    "ali",
+    "I think I need just one more product type, something magical ... now what could I stock that's magical, has large demand and a pretty good profit margin..."
+   ],
+   [
+    "player",
+    "How about runes?"
+   ],
+   [
+    "ali",
+    "Yes, that would be perfect, but who could I get that would supply? There really seems to be a gap in the market in the desert but I don't know anyone in that line of business."
+   ]
+  ],
+  "runesRuneMysteries": [
+   [
+    "player",
+    "Hang on, I know somebody called Aubury, decent fella. I helped him out a while back. Perhaps I could approach him about the idea."
+   ]
+  ],
+  "runesMarket": [
+   [
+    "ali",
+    "Oh yes, the rune seller from Varrock. That would be perfect. He's far enough away that he wouldn't end up competing with himself."
+   ],
+   [
+    "set",
+    "runes",
+    1
+   ],
+   [
+    "player",
+    "What do you mean?"
+   ],
+   [
+    "ali",
+    "Well the rune market is a limited one, if I were to sell his runes from a location nearby his shop, then I would take part of his market share so he would in fact not benefit from me sel"
+   ],
+   [
+    "player",
+    "Ah ha I think I know where this is going. So because you're located far enough away from him you will take up someone else's share in the market and Aubury will make more money as a result."
+   ],
+   [
+    "ali",
+    "Very well anticipated."
+   ]
+  ],
+  "getGoing": [
+   [
+    "ali",
+    "Well you had better get going, you've a fair bit of travelling ahead of you. Unless you want to make a small purchase from me first?"
+   ]
+  ],
+  "okFirst": [
+   [
+    "player",
+    "Ok I'll get on to it."
+   ]
+  ],
+  "okLater": [
+   [
+    "player",
+    "Ok I'll see what I can do."
+   ]
+  ],
+  "junk": "Despite your best efforts Ali Morrisane, the greatest salesman in the world, still manages to sell you some junk.",
+  "goodJob": [
+   [
+    "ali",
+    "Good job on getting the rune shipments sorted. I'm just receiving the first of them. Though there seems to be a funny sort of locking mechanism on them, which I haven't completely figured out."
+   ],
+   [
+    "player",
+    "No problem. I might have a look at it later."
+   ]
+  ],
+  "hangOn": [
+   [
+    "ali",
+    "Hang on a second."
+   ]
+  ],
+  "runesNoStock": [
+   [
+    "ali",
+    "Well at the moment I don't exactly have a selection of runes."
+   ],
+   [
+    "player",
+    "You don't?"
+   ],
+   [
+    "ali",
+    "Those boxes from your friend Aubury have a very odd locking mechanism."
+   ],
+   [
+    "player",
+    "You have managed to get them off?"
+   ],
+   [
+    "ali",
+    "Not exactly."
+   ],
+   [
+    "player",
+    "What do you mean by 'not exactly'?"
+   ],
+   [
+    "ali",
+    "What I mean by 'not exactly' is 'no, I haven't managed to get the lock off'."
+   ],
+   [
+    "player",
+    "Oh."
+   ],
+   [
+    "ali",
+    "I was kind of hoping that you would have a look at them. There are two distinctive types of caskets one with a simple locking mechanism and another, which ummm... looks a little tricky to say the least."
+   ]
+  ],
+  "smallCasketPick": [
+   [
+    "player",
+    "I think I'll have a go at opening a small casket of runes."
+   ]
+  ],
+  "auburyProposal": [
+   [
+    "player",
+    "Actually, I'm here with a business proposal from Ali Morrisane."
+   ],
+   [
+    "aubury",
+    "Ali who?"
+   ],
+   [
+    "player",
+    "Ali Morrisane, a salesman of great repute based in Al Kharid."
+   ],
+   [
+    "aubury",
+    "What is this proposal then?"
+   ],
+   [
+    "player",
+    "He wants to set up a rune-selling franchise in the markets of Al Kharid and he wants you to supply him with the stock."
+   ],
+   [
+    "aubury",
+    "Why doesn't he get his own runes and sell them?"
+   ],
+   [
+    "player",
+    "His talents don't lie in that area. What he's good at is selling things, and lots of them."
+   ],
+   [
+    "aubury",
+    "Hmm, interesting... So let's get this straight, he wants me to supply him with runes, which he will sell, and send me the profits?"
+   ],
+   [
+    "player",
+    "Nearly. He will charge a small commission on the runes."
+   ],
+   [
+    "aubury",
+    "Do you think that it will work? Will people actually buy these runes off him?"
+   ],
+   [
+    "player",
+    "I wouldn't be surprised. Supply and demand are his rune essence and ore."
+   ],
+   [
+    "aubury",
+    "Now this is very important, is he trustworthy?"
+   ],
+   [
+    "player",
+    "Yes, I believe so. Trust is a key part of commerce and something, which I doubt he would neglect."
+   ],
+   [
+    "aubury",
+    "Fair enough, I'll trust your judgement."
+   ],
+   [
+    "player",
+    "So you'll supply him with runes then?"
+   ],
+   [
+    "hook",
+    "rogue-trader:aubury"
+   ],
+   [
+    "aubury",
+    "Well if he's half as good a salesman as you suggest I should have no problem in funding my research and maybe even redecorating this place."
+   ]
+  ],
+  "largeCasketPick": [
+   [
+    "player",
+    "I'm feeling lucky, let's have a look at opening one of those large caskets."
+   ]
+  ],
+  "largeForceFail": [
+   [
+    "player",
+    "Hmmm... This lock looks like it may be impossible to prise open."
+   ]
+  ],
+  "largePickFail": [
+   [
+    "player",
+    "Hmmm... This lock looks like it may be impossible to pick open."
+   ]
+  ],
+  "messages": {
+   "failChest": "You fail to open the chest.",
+   "armsTire": "Your arms tire from the exertions of trying to open the casket...",
+   "forceOpen": "You force the lock open with a combination of your strength and agility.",
+   "pickFail": "You fail to pick the lock - your fingers get numb from fumbling with the lock.",
+   "click": "You hear the locking mechanism click open!",
+   "giveDye": "You give the merchant the dye.",
+   "givePelts": "You give the merchant the animal pelts."
+  },
+  "bjProposal": [
+   [
+    "seller",
+    "Hello. Could I interest you in a Blackjack?"
+   ],
+   [
+    "player",
+    "Can I interest you in a proposal?"
+   ],
+   [
+    "seller",
+    "What are we talking about here? Nothing dodgy I hope. I don't like anything dodgy, I had enough of that sort of thing when the bandits and those rogue Menaphites were running things here, so I packed up my things and left."
+   ],
+   [
+    "seller",
+    "and left."
+   ],
+   [
+    "player",
+    "No no nothing of the sort, a friend of mine Ali Morrisane, have you ever heard of him?"
+   ],
+   [
+    "seller",
+    "Have I what? He's my idol, he's the greatest salesman in all of Gielinor. Word has it that he even sold...."
+   ],
+   [
+    "player",
+    "...yeah yeah, sand to the Bedabin. Hmpf!! I have heard that story more times than I care for.. Anyway he has a proposal for you...."
+   ],
+   [
+    "seller",
+    "I'm all ears. Does he want to take me on as an apprentice?"
+   ],
+   [
+    "player",
+    "No no nothing of the sort."
+   ],
+   [
+    "seller",
+    "Oh...?"
+   ],
+   [
+    "player",
+    "He sees quite a bit of potential in your product."
+   ],
+   [
+    "seller",
+    "The urchins of the town do too, they're always trying to steal my products."
+   ],
+   [
+    "player",
+    "Yes, but Ali says if he were to stock your products he would need a larger variation of product."
+   ],
+   [
+    "seller",
+    "I don't know. I'm quite happy with the product that I'm making at the moment."
+   ],
+   [
+    "player",
+    "Hmm.. Ali did voice some concerns about you. He said you were an over cautious individual and ..."
+   ],
+   [
+    "seller",
+    "He did?"
+   ],
+   [
+    "set",
+    "blackjacks",
+    2
+   ],
+   [
+    "player",
+    "Look will you create a larger variety of blackjacks or not?"
+   ],
+   [
+    "seller",
+    "I don't know."
+   ],
+   [
+    "player",
+    "What do I have to do to convince you that you should make a larger variety?"
+   ],
+   [
+    "seller",
+    "Well I suppose if you could demonstrate to me that they weren't up to the job."
+   ]
+  ],
+  "bjCunning": [
+   [
+    "player",
+    "Hmm... I'll have to think of a cunning plan."
+   ],
+   [
+    "seller",
+    "What was that?"
+   ],
+   [
+    "player",
+    "What was what? Oh I must have been thinking out loud again, sorry."
+   ]
+  ],
+  "bjUrchin": [
+   [
+    "urchin",
+    "Hey there I heard that you were trying to get the blackjack man to change his gear."
+   ],
+   [
+    "player",
+    "You did?"
+   ],
+   [
+    "urchin",
+    "Do you forget who you're talking to? I'm the fastest and sneakiest urchin in this town."
+   ],
+   [
+    "player",
+    "Ok, so what's it to you then?"
+   ],
+   [
+    "urchin",
+    "Well it suits my purpose nearly as much as yours if the blackjack seller produces a wider variety of wares."
+   ],
+   [
+    "player",
+    "How so?"
+   ],
+   [
+    "urchin",
+    "Well chances are, he'll produce some even higher quality items for me to steal"
+   ],
+   [
+    "player",
+    "Aha so if you can rob the blackjack seller and get away with it, it should prove to him that his blackjack isn't up to the job?"
+   ],
+   [
+    "urchin",
+    "There's hope for you yet."
+   ],
+   [
+    "urchin",
+    "Seeing as we've worked successfully together in the past I will only charge you 100 gold."
+   ]
+  ],
+  "bjUrchinPaid": [
+   [
+    "player",
+    "Fair enough, here you go."
+   ],
+   [
+    "urchin",
+    "Now walk up to the merchant, engage him in conversation and leave the rest up to me."
+   ]
+  ],
+  "bjTheft": [
+   [
+    "player",
+    "Hi, I'm back."
+   ],
+   [
+    "seller",
+    "What is it now?"
+   ],
+   [
+    "urchin",
+    "Yoink!"
+   ],
+   [
+    "seller",
+    "Hey come back you thief!"
+   ],
+   [
+    "set",
+    "weapons",
+    2
+   ],
+   [
+    "set",
+    "urchinGlove",
+    1
+   ]
+  ],
+  "bjTheftBox": "The blackjack seller takes a swing at the urchin, but the blow only glances off the urchin's head.",
+  "bjFinishDefensive": [
+   [
+    "seller",
+    "Hello. Could I interest you in a Blackjack?"
+   ],
+   [
+    "seller",
+    "That pesky little urchin has done it again! I can't believe it he's managed to rob me again."
+   ],
+   [
+    "player",
+    "Well maybe you should modify the blackjack to have better defensive qualities."
+   ],
+   [
+    "seller",
+    "I might as well. Next time I'll get him."
+   ],
+   [
+    "player",
+    "So I take it you will be supplying Ali Morrisane with the new variety of blackjack then?"
+   ],
+   [
+    "set",
+    "weapons",
+    0
+   ],
+   [
+    "set",
+    "blackjacks",
+    4
+   ],
+   [
+    "seller",
+    "Yes, yes. I'll start shipping it by carpet as soon as the first batch is ready."
+   ]
+  ],
+  "bjAgain": [
+   [
+    "seller",
+    "Hello. Could I interest you in a Blackjack?"
+   ],
+   [
+    "seller",
+    "Ah, it's you again [player name]. Tell me how are the blackjack sales going?"
+   ],
+   [
+    "player",
+    "Not too bad, Ali was well impressed by the reaction and demand they had initially but he's a little concerned about how the sales have dropped off of recent."
+   ],
+   [
+    "player",
+    "Maybe you could produce a different range of products?"
+   ],
+   [
+    "seller",
+    "I'm not too sure, I'm quite happy to stick with what I've got unless, I had a good reason to change."
+   ]
+  ],
+  "bjOffensiveAsk": [
+   [
+    "player",
+    "I bet you couldn't knock me out with your blackjack."
+   ],
+   [
+    "seller",
+    "I reckon I could."
+   ],
+   [
+    "player",
+    "I'll tell you what, if you can't knock me out with one blow, you should make better blackjacks."
+   ],
+   [
+    "seller",
+    "Nah, I don't like the sounds of that. It leaves a lot up to chance."
+   ],
+   [
+    "player",
+    "Ok, ok, how about two blows to the head?"
+   ],
+   [
+    "seller",
+    "Are you sure? I could possibly kill you?"
+   ]
+  ],
+  "bjOffensiveSure": [
+   [
+    "player",
+    "I'm sure. No pain no gain. Grr!!"
+   ],
+   [
+    "seller",
+    "You adventurers are crazy."
+   ]
+  ],
+  "bjHit1": [
+   [
+    "player",
+    "Ow! Ha! You didn't knock me down."
+   ]
+  ],
+  "bjOffensiveAgain": [
+   [
+    "seller",
+    "You really are truly mad."
+   ],
+   [
+    "player",
+    "Are you going to hit me again? I really want to get this over with."
+   ]
+  ],
+  "bjHit2": [
+   [
+    "player",
+    "Yeeeoouch.... that hurt! I'm still standing though, You can't knock me down."
+   ]
+  ],
+  "bjOffensiveEnd": [
+   [
+    "seller",
+    "Either your head is thicker than it looks or else I need to rework my blackjack."
+   ],
+   [
+    "player",
+    "Umm... definitely the blackjack. <col=0000ff>You just about fight off another bout of dizziness and <col=0000ff>nausea."
+   ],
+   [
+    "seller",
+    "I suppose I'll just have to modify the blackjack so that it has a better attack."
+   ],
+   [
+    "player",
+    "Great, so I take it you will be supplying Ali Morrisane with the new variety of blackjack then?"
+   ],
+   [
+    "set",
+    "weapons",
+    0
+   ],
+   [
+    "set",
+    "toldAli",
+    0
+   ],
+   [
+    "set",
+    "blackjacks",
+    3
+   ],
+   [
+    "seller",
+    "Yes, yes. I'll start shipping it by carpet as soon as the first batch is ready."
+   ]
+  ],
+  "aliBlackjackReport": [
+   [
+    "ali",
+    "Fantastic job on the blackjacks. I started getting the first batches of them a short time ago, and they've being flying off the shelves, although the demand seems to be dropping off a little."
+   ],
+   [
+    "player",
+    "Not too badly, I hope."
+   ],
+   [
+    "ali",
+    "No, no, they're still selling fine, but if you could perhaps convince the blackjack man to send a different variety the next time you see him, I would be more than happy."
+   ],
+   [
+    "set",
+    "toldAli",
+    1
+   ],
+   [
+    "player",
+    "I should like to have a look at them, at some stage."
+   ]
+  ],
+  "siaFirst": [
+   [
+    "player",
+    "Hello, Siamun?"
+   ],
+   [
+    "siamun",
+    "What?"
+   ],
+   [
+    "player",
+    "So you are Siamun then?"
+   ],
+   [
+    "siamun",
+    "Yes now what do you want?"
+   ],
+   [
+    "player",
+    "Wow, are you this friendly to everyone?"
+   ],
+   [
+    "siamun",
+    "Just you. Now what do you want?"
+   ],
+   [
+    "player",
+    "A mutual friend of ours, Ali Morrisane, wants you to supply his stall in Al Kharid with your garments."
+   ],
+   [
+    "siamun",
+    "Now why would I do that?"
+   ],
+   [
+    "player",
+    "Well for one, you'd probably sell more clothes and once the people of Al Kharid see your amazing works of tailoring, I'm sure they'd spread the word of your clothes far and wide."
+   ],
+   [
+    "siamun",
+    "Interesting, but I would need more materials to accomplish what you ask of me."
+   ],
+   [
+    "player",
+    "Well then what do you need?"
+   ],
+   [
+    "siamun",
+    "Either get me 3 pots of dye, or 3 animal pelts of the same variety and whatever you do, don't bring me banknotes!"
+   ]
+  ],
+  "siaOkMaterials": [
+   [
+    "player",
+    "Ok, I'll get you the materials."
+   ],
+   [
+    "siamun",
+    "Unless you've got the materials on you?"
+   ]
+  ],
+  "siaYup": [
+   [
+    "player",
+    "Yup, I've got what you want with me."
+   ]
+  ],
+  "siaThanks": [
+   [
+    "siamun",
+    "Thank you adventurer. I will get my goods up to that merchant thief - Ali Morrisane as quickly as possible."
+   ],
+   [
+    "player",
+    "Think nothing of it. I'm looking forward to seeing what you've produced for the Al Kharid market."
+   ]
+  ],
+  "siaDesertAsk": [
+   [
+    "player",
+    "Hello Siamun."
+   ],
+   [
+    "siamun",
+    "Hello adventurer. How are sales going?"
+   ],
+   [
+    "player",
+    "Not too bad, Ali was well impressed by the reaction and demand they had initially but he's a little concerned about how the sales have dropped off of recent."
+   ],
+   [
+    "siamun",
+    "Hmmm... Maybe I could produce a different range of products."
+   ],
+   [
+    "siamun",
+    "I tell you what, get me 3 animal pelts of the same variety and I'll change the shipments around and whatever you do, don't bring me banknotes!"
+   ]
+  ],
+  "siaDesertOk": [
+   [
+    "player",
+    "Ok, I'll get you the materials."
+   ],
+   [
+    "siamun",
+    "Unless you've got the materials on you?"
+   ]
+  ],
+  "siaYupDesert": [
+   [
+    "player",
+    "Yup, I've got what you want with me."
+   ]
+  ],
+  "siaThanksDesert": [
+   [
+    "siamun",
+    "Thank you adventurer. I will get my goods up to that merchant thief Ali Morrisane as quickly as possible."
+   ],
+   [
+    "player",
+    "Think nothing of it. I'm looking forward to seeing what you've produced for the Al Kharid market."
+   ]
+  ],
+  "aliClothesReport": [
+   [
+    "ali",
+    "Siamun's clothes seem to have really struck a chord with the locals in Al Kharid. Menaphite culture seems to be taking off here, rumour has it that one of Prince Ali's servants bought him one of Siamun's robes."
+   ],
+   [
+    "player",
+    "Wow, that sounds positive."
+   ],
+   [
+    "ali",
+    "Quite, if I don't say so myself. But in order to keep things fresh, the next time you're in Sophanem, could you ask that cranky old so-and-so Siamun to produce a new line of clothing?"
+   ],
+   [
+    "set",
+    "garments",
+    1
+   ],
+   [
+    "player",
+    "Sure, why not. The Sultan himself might even buy some of the new range."
+   ],
+   [
+    "ali",
+    "That would be the day."
+   ]
+  ],
+  "aliFinish": [
+   [
+    "ali",
+    "[player name], I would like to commend you on all the selfless help you have given me."
+   ],
+   [
+    "player",
+    "It was nothing, really."
+   ],
+   [
+    "ali",
+    "I think you underestimate your efforts. Anyway, as a token of my gratitude I have told all my magic carpet attendants to allow you to travel on the carpets at a discounted rate."
+   ],
+   [
+    "set",
+    "cheapflights",
+    1
+   ],
+   [
+    "player",
+    "Really, Ali, there is no need."
+   ],
+   [
+    "ali",
+    "I insist."
+   ]
+  ]
+ },
+ "wikiScenes": {
+  "blackjackErrandNoIcthlarin": [
+   [
+    "ali",
+    "My friend in Sophanem... Ahh never mind him, maybe we might have a look at him another time."
+   ],
+   [
+    "player",
+    "Is there anyone else you want me to talk to on your behalf?"
+   ],
+   [
+    "ali",
+    "There's a blackjack seller in Pollnivneach, a cautious type of guy, not the usual entrepreneurial sort that I would normally deal with, but..."
+   ],
+   [
+    "ali",
+    "I think that he has a product with real potential..."
+   ],
+   [
+    "player",
+    "What? .... Blackjacks?"
+   ],
+   [
+    "ali",
+    "Yes, but at the moment the product isn't polished enough, if you could convince him to create a larger variety of weapon I would gladly stock his products."
+   ]
+  ],
+  "sigh": [
+   [
+    "ali",
+    "<col=0000ff>~Sigh.</col>"
+   ],
+   [
+    "player",
+    "What's up with you?"
+   ],
+   [
+    "ali",
+    "Well, I always fancied that I could be a great draper, but the way things are looking that's not about to happen any time soon."
+   ],
+   [
+    "player",
+    "Is there anything I could do to help?"
+   ],
+   [
+    "ali",
+    "I have a friend - well, actually more of an acquaintance - who lives in Sophanem, some way to the south of here, and who may be able to help. But, from what I've heard, no one can enter or leave the city."
+   ],
+   [
+    "player",
+    "Maybe I could give it a look."
+   ]
+  ],
+  "lookUp": [
+   [
+    "ali",
+    "Is there any chance of getting you to look up a merchant to supply me?"
+   ]
+  ],
+  "reminderSiamun": [
+   [
+    "player",
+    "Who did you want me to talk to again?"
+   ],
+   [
+    "ali",
+    "Go see Siamun in Sophanem about some clothes."
+   ],
+   [
+    "player",
+    "Right, so I'll go see Siamun of Sophanem."
+   ],
+   [
+    "ali",
+    "Good, good."
+   ]
+  ],
+  "reminderWho": [
+   [
+    "player",
+    "Who did you want me to talk to again?"
+   ]
+  ],
+  "reminders": [
+   [
+    "ali",
+    "Could you talk to your friend Aubury in Varrock about supplying me with runes?"
+   ],
+   [
+    "player",
+    "Hmm, that could work out quite well. Varrock is always quite busy, so I might try to get a couple of other things done while I'm there."
+   ],
+   [
+    "ali",
+    "Don't tarry there too long, I'm quite anxious to get a rune store open before anyone else in this area."
+   ],
+   [
+    "ali",
+    "In Pollnivneach go and talk to the blackjack seller. Convince him to supply me with his produce."
+   ],
+   [
+    "player",
+    "Any ideas how I should go about that?"
+   ],
+   [
+    "ali",
+    "You're a bright chap. I'm sure you'll work something out."
+   ],
+   [
+    "player",
+    "I'll get to it right away."
+   ]
+  ],
+  "yaSoon": [
+   [
+    "player",
+    "Ya, I'll get to it soon."
+   ]
+  ],
+  "tooBusy": [
+   [
+    "player",
+    "No, I'm really too busy."
+   ]
+  ],
+  "bjSkip": [
+   [
+    "player",
+    "Umm... on second thoughts I might give it a skip. I just had my hair done, I wouldn't want to mess it up."
+   ],
+   [
+    "seller",
+    "Phew! Sighs with relief. At last the voice of reason speaks."
+   ],
+   [
+    "seller",
+    "Now if you don't mind I'll be getting back to work. Thank you."
+   ]
+  ],
+  "bjSellerAfter": [
+   [
+    "seller",
+    "Hello. Could I interest you in a Blackjack?"
+   ],
+   [
+    "seller",
+    "Oh sorry [player name]. I mistook you for another customer."
+   ],
+   [
+    "player",
+    "No problem."
+   ],
+   [
+    "seller",
+    "Have you checked with Ali Morrisane whether my blackjacks are selling or not?"
+   ],
+   [
+    "player",
+    "Not yet, I have a few thing to do first."
+   ],
+   [
+    "seller",
+    "Well I would be very grateful if you could have a talk with him sooner rather than later, I am still a little nervous about the new variation of my blackjack."
+   ],
+   [
+    "player",
+    "Don't worry, I'll get to it."
+   ]
+  ],
+  "bjSellerHello": [
+   [
+    "seller",
+    "Hello. Could I interest you in a Blackjack?"
+   ]
+  ],
+  "bjUrchinAfter": [
+   [
+    "urchin",
+    "Hah! Did you see the face on the blackjack seller! Ha boyo! I had to move quick to get out of the way of his blackjack."
+   ],
+   [
+    "player",
+    "You did well. I thought he hit you when swung his blackjack at you."
+   ],
+   [
+    "urchin",
+    "Ya he nearly did. Boyo, does my head still hurt."
+   ],
+   [
+    "player",
+    "You mean he hit you?"
+   ],
+   [
+    "urchin",
+    "Barely, the trick is in moving with the blow."
+   ],
+   [
+    "player",
+    "I might bear that in mind for next time."
+   ]
+  ],
+  "bjUrchinBroke": [
+   [
+    "player",
+    "I don't have that much money on me."
+   ],
+   [
+    "urchin",
+    "Pity, maybe we can do it again sometime."
+   ]
+  ],
+  "siaWhatPelt": [
+   [
+    "player",
+    "What do you mean by animal pelt?"
+   ],
+   [
+    "siamun",
+    "Just get me 3 cowhides, 3 wolf or snake skins or the shearings of 3 sheep. Simpler still get me 3 pots of dye and, remember, I won't accept banknotes."
+   ],
+   [
+    "player",
+    "Ok, I'll get you the materials."
+   ],
+   [
+    "siamun",
+    "Unless you've got the materials on you?"
+   ]
+  ],
+  "siaNo": [
+   [
+    "player",
+    "Ummm.. No."
+   ],
+   [
+    "siamun",
+    "Keh! Come back when you have what I need."
+   ]
+  ],
+  "siaWhatAgain": [
+   [
+    "player",
+    "Umm... What do you need again?"
+   ],
+   [
+    "siamun",
+    "Three pots of dye, no banknotes. Can you remember that?"
+   ],
+   [
+    "player",
+    "I think so."
+   ],
+   [
+    "siamun",
+    "Good, good."
+   ]
+  ],
+  "siaOkOnly": [
+   [
+    "player",
+    "Ok."
+   ]
+  ],
+  "siaDyeAsk": [
+   [
+    "player",
+    "Hello Siamun."
+   ],
+   [
+    "siamun",
+    "Hello adventurer. How are sales going?"
+   ],
+   [
+    "player",
+    "Not too bad, Ali was well impressed by the reaction and demand they had initially but he's a little concerned about how the sales have dropped off of recent."
+   ],
+   [
+    "siamun",
+    "Hmmm... Maybe I could produce a different range of products."
+   ],
+   [
+    "siamun",
+    "I'll tell you what, get me 3 pots of dye and I'll change the type of garments I'm sending to Ali and, remember, I won't accept banknotes."
+   ]
+  ],
+  "siaAfter": [
+   [
+    "siamun",
+    "Hello adventurer. Have you checked with Ali M whether my garments are selling or not?"
+   ],
+   [
+    "player",
+    "Not yet, I have a few things to do first."
+   ],
+   [
+    "siamun",
+    "Well I would be very much obliged it you could have a talk with him sooner rather than later, I'm not all that sure of the trustworthiness of those carpet men."
+   ],
+   [
+    "player",
+    "Don't worry, I'll get to it."
+   ]
+  ],
+  "siaTwo": [
+   [
+    "player",
+    "Hello Siamun."
+   ],
+   [
+    "siamun",
+    "Unless you've got the materials on you?"
+   ]
+  ]
+ },
+ "oursScenes": {
+  "bjKnockedOut": [
+   [
+    "box",
+    "The blackjack seller knocks you out cold. You wake up a little while later with a sore head."
+   ]
+  ]
+ }
+}

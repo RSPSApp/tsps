@@ -152,6 +152,40 @@ export class ShopManager {
         return this.shopsById.size;
     }
 
+    /**
+     * Adds a shop a plugin owns, such as Rogue Trader's rune caskets for one player, without touching the stock of the
+     * others (reload() would reset them all). Remove it with removeShop when its owner is done.
+     */
+    public static registerShop(definition: ShopDefinition): void {
+        ShopDefinition.register(definition);
+        this.shopsById.set(definition.getId(), this.createRuntimeShop(definition));
+    }
+
+    /** Whether a shop is registered under this id (a plugin's per-player shop, see registerShop). */
+    public static hasShop(shopId: number): boolean {
+        return this.shopsById.has(shopId);
+    }
+
+    /** Puts more of an item into a shop's stock; anything above its original amount falls back with the shop's restock timer. */
+    public static addShopStock(shopId: number, itemId: number, amount: number): boolean {
+        const shop = this.shopsById.get(shopId);
+        if (!shop || !this.addStock(shop, itemId, amount)) {
+            return false;
+        }
+        this.refresh(shopId);
+        this.ensureRestockTask();
+        return true;
+    }
+
+    public static removeShop(shopId: number): void {
+        for (const player of Array.from(this.viewersByShopId.get(shopId) ?? [])) {
+            this.close(player);
+        }
+        this.shopsById.delete(shopId);
+        this.viewersByShopId.delete(shopId);
+        ShopDefinition.unregister(shopId);
+    }
+
     public static open(
         player: any,
         shopId: number,
@@ -167,7 +201,15 @@ export class ShopManager {
         }
 
         this.setActiveShop(player, shopId, targetUid);
-        return this.openInterface(player, shop, resetScroll, targetUid);
+        const opened = this.openInterface(player, shop, resetScroll, targetUid);
+        if (opened) {
+            PluginManager.emitCustomEvent("shop:opened", {
+                player,
+                shopId,
+                shopName: shop.definition.getName(),
+            });
+        }
+        return opened;
     }
 
     public static close(player: any): void {
@@ -644,7 +686,8 @@ export class ShopManager {
         const delivered = ItemDefinition.forId(deliverId);
         const inventory = player.getInventory();
         if (delivered.isStackable?.()) {
-            if (!inventory.containsNumber(deliverId) && inventory.getFreeSlots() <= 0) {
+            quantity = Math.min(quantity, inventory.getAddableAmount(new Item(deliverId, quantity)));
+            if (quantity <= 0) {
                 inventory.full();
                 return;
             }
@@ -751,7 +794,11 @@ export class ShopManager {
             shop.definition.getCurrency(),
             quantity * price
         );
-        this.addStock(shop, stockId, quantity);
+        // Content may keep the stock as it was on a sale too ("shop:keep-stock" with `selling`, a
+        // league's shops whose stock never changes): the item is paid for and not added.
+        const keep = { player, shopId: shop.definition.getId(), itemId: stockId, amount: quantity, keep: false, selling: true };
+        PluginManager.emitCustomEvent("shop:keep-stock", keep);
+        if (!keep.keep) this.addStock(shop, stockId, quantity);
         Sounds.sendSound(player, Sound.DROP_ITEM);
         this.refresh(shop.definition.getId());
         this.ensureRestockTask();
@@ -840,7 +887,8 @@ export class ShopManager {
     /**
      * Takes a purchase out of the stock: what was bought. Content may keep the shop's own stock
      * ("shop:keep-stock" { player, shopId, itemId, amount, keep }, a league's shops that never
-     * deplete): then only stock above the shop's own amount (what players sold it) goes.
+     * deplete): then only stock above the shop's own amount (what players sold it) goes. A sale
+     * asks the same event with `selling: true` (sellItem).
      */
     private static takeStock(player: any, shop: RuntimeShop, itemId: number, amount: number): number {
         const request = { player, shopId: shop.definition.getId(), itemId, amount, keep: false };

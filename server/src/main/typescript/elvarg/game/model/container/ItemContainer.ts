@@ -316,18 +316,13 @@ export abstract class ItemContainer {
       (this instanceof Inventory || this instanceof Equipment) &&
       to instanceof Bank
     ) {
-      if (
-        to.getAmount(item.getId()) + item.getAmount() >
-          MAX_STACK_AMOUNT ||
-        to.getAmount(item.getId()) + item.getAmount() <= 0
-      ) {
-        item.setAmount(MAX_STACK_AMOUNT - to.getAmount(item.getId()));
-        if (item.getAmount() <= 0) {
-          this.getPlayer().sendMessage(
-            "You cannot deposit that entire amount into your bank."
-          );
-          return this;
-        }
+      const bankItem = item.clone().setId(getItemDefinition().forId(item.getId()).unNote());
+      item.setAmount(to.getAddableAmount(bankItem));
+      if (item.getAmount() <= 0) {
+        this.getPlayer().sendMessage(
+          "You cannot deposit that entire amount into your bank."
+        );
+        return this;
       }
     }
 
@@ -379,6 +374,17 @@ export abstract class ItemContainer {
 
     if (item.getAmount() <= 0) {
       return this;
+    }
+
+    if (to instanceof Bank) {
+      const bankItem = item.clone().setId(getItemDefinition().forId(item.getId()).unNote());
+      item.setAmount(to.getAddableAmount(bankItem));
+      if (item.getAmount() <= 0) {
+        this.getPlayer().sendMessage(
+          "You cannot deposit that entire amount into your bank."
+        );
+        return this;
+      }
     }
 
     this.deleteBoolean(item, refresh);
@@ -641,11 +647,25 @@ export abstract class ItemContainer {
    * @return The ItemContainer instance.
    */
   public deleted(id: number, amount: number, refresh: boolean): ItemContainer {
-    return this.deletedItem(
-      new Item(id, amount),
-      this.getSlotForItemId(id),
-      refresh
-    );
+    const item = new Item(id, amount);
+    const stacks = id < 0 || amount <= 0 ? [] : this.items.flatMap((held, slot) =>
+      held?.getId() === id && held.getAmount() > 0 ? [slot] : []);
+    if (stacks.length < 2 || !(item.getDefinition().isStackable() || this.stackType() == StackType.STACKS)) {
+      return this.deletedItem(item, this.getSlotForItemId(id), refresh);
+    }
+    // One id can sit in several stacks (different metadata), and callers count the total: take the
+    // whole amount, or deleteItemContainer would stop at the end of the one slot it is given.
+    let left = amount;
+    for (const slot of stacks) {
+      if (left <= 0) break;
+      const taken = Math.min(left, this.items[slot].getAmount());
+      this.deletedItem(new Item(id, taken), slot, false);
+      left -= taken;
+    }
+    if (refresh) {
+      this.refreshItems();
+    }
+    return this;
   }
 
   public deletedItem(item: Item, slot: number, refresh: boolean) {

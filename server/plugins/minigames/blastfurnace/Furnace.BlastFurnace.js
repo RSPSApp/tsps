@@ -298,9 +298,11 @@ function depositCoins(player, amount) {
 
 function withdrawCoins(player, amount) {
   const state = stateOf(player);
-  const count = Math.min(amount, state.coffer);
-  if (!(count > 0)) return;
-  if (coins(player) === 0 && player.getInventory().getFreeSlots() === 0) {
+  const wanted = Math.min(amount, state.coffer);
+  if (!(wanted > 0)) return;
+  // What the coin stack can still hold; the coffer keeps the rest.
+  const count = player.getInventory().getAddableAmount(new core.Item(core.ItemIdentifiers.COINS, wanted));
+  if (count <= 0) {
     player.sendMessage("You don't have enough inventory space.");
     return;
   }

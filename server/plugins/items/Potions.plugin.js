@@ -30,6 +30,8 @@ let pluginApi;
 const DRINK_ANIMATION = new Animation(829);
 const DEFAULT_EMPTY_ITEM = ItemIds.VIAL;
 const NO_EMPTY_ITEM = -1;
+/** Barcrawl reward: the guard's automatic vial-smashing toggle (barbarian guard). */
+const AUTO_SMASH_VIALS_VARBIT = 5668;
 const STAMINA_DURATION_MS = 2 * 60 * 1000;
 const DIVINE_DURATION_MS = 5 * 60 * 1000;
 const OVERLOAD_DURATION_MS = 5 * 60 * 1000;
@@ -237,15 +239,14 @@ function applyJarOfCongealedBlood(player) {
   restoreRunEnergy(player, 100);
 }
 
-function applyZamorakBrew(player) {
+/** `hpDamage(currentHp)` is the brew's Hitpoints cost; the Zamorak mix passes its own (Wiki). */
+function applyZamorakBrew(player, hpDamage = (hp) => Math.floor(2 + hp * 0.1)) {
   boostSkill(player, Skill.ATTACK, 2, 0.2);
   boostSkill(player, Skill.STRENGTH, 2, 0.12);
 
   lowerSkillByMax(player, Skill.DEFENCE, 2, 0.1, 0);
 
-  const hpCurrent = getCurrentLevel(player, Skill.HITPOINTS);
-  const hpDamage = Math.floor(2 + hpCurrent * 0.1);
-  damageButKeepAlive(player, hpDamage);
+  damageButKeepAlive(player, hpDamage(getCurrentLevel(player, Skill.HITPOINTS)));
 
   const maxPrayer = getMaxLevel(player, Skill.PRAYER);
   const prayerBoost = Math.floor(maxPrayer * 0.1);
@@ -485,7 +486,7 @@ function applyOverload(player, flat = 5, percent = 0.15) {
   });
 }
 
-/** Barbarian mixes heal 6 Hitpoints, except antipoison and restore mixes which heal 3 (Wiki). */
+/** Barbarian mixes heal 6 Hitpoints a dose; the attack, antipoison, Relicym's, strength, restore, energy and combat mixes heal 3 (Wiki). */
 function applyMix(baseEffect, healAmount = 6) {
   return (player) => {
     baseEffect(player);
@@ -505,7 +506,7 @@ function canEat(player, itemId) {
  * Why `player` may not drink a dose of `entry` here, as the drink path decides it (the canDrink
  * hooks, the potion's area, food permission, content unlocks, its own canUse); null when they may.
  */
-function drinkRefusal(player, entry) {
+function drinkPermissionRefusal(player, entry) {
   const itemId = entry.itemId;
   if (!canDrink(player, itemId)) return "You cannot use potions here.";
   if (entry.potion.area && !inArea(player, entry.potion.area)) return AREA_MESSAGES[entry.potion.area] ?? "You cannot use that here.";
@@ -513,7 +514,26 @@ function drinkRefusal(player, entry) {
   const permission = { player, itemId, allowed: true, message: null };
   pluginApi.emitCustomEvent("potions:validate-drink", permission);
   if (permission.allowed === false) return permission.message ?? "You cannot use that here.";
+  return null;
+}
+
+function drinkCanUseRefusal(player, entry) {
   if (entry.potion.canUse && !entry.potion.canUse(player)) return "You need more than 50 Hitpoints to drink this potion.";
+  return null;
+}
+
+/** Every potion-specific restriction, including a potion's HP requirement. */
+function drinkRefusal(player, entry) {
+  const permissionRefusal = drinkPermissionRefusal(player, entry);
+  if (permissionRefusal) return permissionRefusal;
+  return drinkCanUseRefusal(player, entry);
+}
+
+/** Shared action timer and stun gates for ordinary drinks and the chugging barrel. */
+function drinkTimerRefusal(player) {
+  const timers = player.getTimers();
+  if (timers.has(TimerKey.STUN)) return { kind: "stun", message: "You're currently stunned and cannot use potions." };
+  if (timers.has(TimerKey.POTION)) return { kind: "potion", message: null };
   return null;
 }
 
@@ -856,7 +876,8 @@ registerPotion({
 registerPotion({
   name: "Energy potion",
   chains: [doseChain("ENERGY_POTION_4_", "ENERGY_POTION_3_", "ENERGY_POTION_2_", "ENERGY_POTION_1_")],
-  effect: (player) => restoreRunEnergy(player, 10),
+  // Wiki: 15% a dose since 19 August 2026 (was 10%); the energy mix follows it.
+  effect: (player) => restoreRunEnergy(player, 15),
 });
 registerPotion({
   name: "Super energy",
@@ -1137,6 +1158,46 @@ registerPotion({
   effect: applyMenaphiteRemedy,
 });
 
+// ---------------------------------------------------------------- barbarian mixes of the potions above
+// Wiki (Barbarian Training's mix table): a mix drinks as its potion and heals 3 or 6 per dose.
+// Relicym's and magic essence mixes are left out: their potions have no drink here yet.
+
+/** A mix drinking as the registered potion `potionName` (or `effect`), healing `healAmount` per dose. */
+function registerMix(name, potionName, healAmount, twoDose, oneDose, effect) {
+  const potion = REGISTERED_POTIONS.find((candidate) => candidate.name === potionName);
+  if (!potion) return;
+  registerPotion({
+    name,
+    chains: [doseChain(twoDose, oneDose)],
+    requiresFoodPermission: true,
+    canUse: potion.canUse ?? undefined,
+    area: potion.area ?? undefined,
+    effect: applyMix(effect ?? potion.effect, healAmount),
+  });
+}
+
+/** Wiki (Zamorak mix): the brew's boosts and Prayer, but floor((HP - 1) / 8) damage, then the 6 heal. */
+const zamorakMix = (player) => applyZamorakBrew(player, (hp) => Math.floor((hp - 1) / 8));
+
+for (const [name, potionName, healAmount, key, effect] of [
+  ["Attack mix", "Attack potion", 3, "ATTACK_MIX"],
+  ["Strength mix", "Strength potion", 3, "STRENGTH_MIX"],
+  ["Energy mix", "Energy potion", 3, "ENERGY_MIX"],
+  ["Defence mix", "Defence potion", 6, "DEFENCE_MIX"],
+  ["Agility mix", "Agility potion", 6, "AGILITY_MIX"],
+  ["Combat mix", "Combat potion", 3, "COMBAT_MIX"],
+  ["Prayer mix", "Prayer potion", 6, "PRAYER_MIX"],
+  ["Superattack mix", "Super attack", 6, "SUPERATTACK_MIX"],
+  ["Fishing mix", "Fishing potion", 6, "FISHING_MIX"],
+  ["Hunting mix", "Hunter potion", 6, "HUNTING_MIX"],
+  ["Super str. mix", "Super strength", 6, "SUPER_STR_MIX"],
+  ["Super def. mix", "Super defence", 6, "SUPER_DEF_MIX"],
+  ["Ranging mix", "Ranging potion", 6, "RANGING_MIX"],
+  ["Magic mix", "Magic potion", 6, "MAGIC_MIX"],
+  ["Zamorak mix", "Zamorak brew", 6, "ZAMORAK_MIX", zamorakMix],
+  ["Ancient mix", "Ancient brew", 6, "ANCIENT_MIX"],
+]) registerMix(name, potionName, healAmount, `${key}_2_`, `${key}_1_`, effect);
+
 // ---------------------------------------------------------------- Chambers of Xeric gourd potions
 // Not on the Wiki (to check against a capture): the boosts by strength (weak / normal / strong). Wiki:
 // they can only be sipped inside the raid, and the gourd breaks when finished.
@@ -1326,44 +1387,25 @@ function handlePotionDrink(player, itemId, slot) {
     return true;
   }
 
-  if (!canDrink(player, itemId)) {
-    player.sendMessage("You cannot use potions here.");
+  const permissionRefusal = drinkPermissionRefusal(player, entry);
+  if (permissionRefusal) {
+    player.sendMessage(permissionRefusal);
     return true;
   }
 
-  if (entry.potion.area && !inArea(player, entry.potion.area)) {
-    player.sendMessage(AREA_MESSAGES[entry.potion.area] ?? "You cannot use that here.");
+  const timerRefusal = drinkTimerRefusal(player);
+  if (timerRefusal) {
+    if (timerRefusal.message) player.sendMessage(timerRefusal.message);
     return true;
   }
 
-  if (entry.potion.requiresFoodPermission && !canEat(player, itemId)) {
-    player.sendMessage("You cannot eat here.");
-    return true;
-  }
-
-  // Quest and content plugins can explain an item-specific unlock before a
-  // drink consumes a dose, starts a cooldown or applies any effect.
-  const permission = { player, itemId, allowed: true, message: null };
-  pluginApi.emitCustomEvent("potions:validate-drink", permission);
-  if (permission.allowed === false) {
-    if (permission.message) player.sendMessage(permission.message);
+  const canUseRefusal = drinkCanUseRefusal(player, entry);
+  if (canUseRefusal) {
+    player.sendMessage(canUseRefusal);
     return true;
   }
 
   const timers = player.getTimers();
-  if (timers.has(TimerKey.STUN)) {
-    player.sendMessage("You're currently stunned and cannot use potions.");
-    return true;
-  }
-
-  if (timers.has(TimerKey.POTION)) {
-    return true;
-  }
-
-  if (entry.potion.canUse && !entry.potion.canUse(player)) {
-    player.sendMessage("You need more than 50 Hitpoints to drink this potion.");
-    return true;
-  }
 
   timers.extendOrRegister(TimerKey.POTION, 3);
   timers.extendOrRegister(TimerKey.FOOD, 3);
@@ -1373,11 +1415,17 @@ function handlePotionDrink(player, itemId, slot) {
   Sounds.sendSound(player, Sound.DRINK);
 
   const meta = inventory.getItems()[slot]?.getMeta();
-  inventory.setItem(slot, new Item(entry.replacementId, entry.replacementId === NO_EMPTY_ITEM ? 0 : 1, meta)).refreshItems();
+  const smashVial = entry.replacementId === ItemIds.VIAL
+    && entry.replacementId === entry.potion.emptyItemId
+    && player.getPacketSender().getVarbit?.(AUTO_SMASH_VIALS_VARBIT) === 1;
+  const replacement = smashVial ? NO_EMPTY_ITEM : entry.replacementId;
+  inventory.setItem(slot, new Item(replacement, replacement === NO_EMPTY_ITEM ? 0 : 1, meta)).refreshItems();
   entry.potion.effect(player);
 
   if (entry.potion.drink?.messages) {
     for (const message of entry.potion.drink.messages(itemId)) player.sendMessage(message);
+  } else if (smashVial) {
+    player.sendMessage("You quickly smash the empty vial using the trick a Barbarian taught you.");
   } else if (entry.replacementId === entry.potion.emptyItemId) {
     player.sendMessage(entry.potion.area === "chambers-of-xeric"
       ? "You have finished your potion. The gourd vial disintegrates."
@@ -1468,6 +1516,19 @@ function doseFamily(itemId) {
   return { key: entry.chain, byDose: [entry.potion.emptyItemId, ...[...entry.chain].reverse()], doses: entry.doses, max: 4 };
 }
 
+const PRESET_REFUSAL = "Preset items cannot be used for this.";
+
+/** Preset, untradeable and unbankable copies carry restrictions that pouring must neither shed nor invent. */
+function restrictedVessel(item) {
+  const { Item } = pluginApi.core;
+  return item.isPresetItem?.() === true
+    || item.getMetaValue?.(Item.PRESET_META) === true
+    || item.getMetaValue?.(Item.UNTRADEABLE_META) === true
+    || item.getMetaValue?.(Item.UNBANKABLE_META) === true;
+}
+
+const sameMeta = (a, b) => JSON.stringify(a.getMeta() ?? null) === JSON.stringify(b.getMeta() ?? null);
+
 function pourMessage(player, text) {
   player.getPacketSender().sendSound(POUR_SOUND, 1, 0).sendTypedMessage(pluginApi.core.ChatType.SPAM, text);
 }
@@ -1492,8 +1553,16 @@ function pourPotion(event) {
   const emptySlot = source ? usedWithItemSlot : usedItemSlot;
   if (potion && potion.max > 1 && potion.doses >= 2 && inventory.getItems()[emptySlot].getId() === potion.byDose[0]) {
     event.handled = true;
-    inventory.setItem(potionSlot, new Item(potion.byDose[Math.ceil(potion.doses / 2)], 1));
-    inventory.setItem(emptySlot, new Item(potion.byDose[Math.floor(potion.doses / 2)], 1));
+    // Both halves carry the potion's marks, as drinking does. An empty vessel with marks of its own
+    // would lose them, so only an unmarked one (or one marked alike) takes part.
+    const potionItem = inventory.getItems()[potionSlot];
+    const vessel = inventory.getItems()[emptySlot];
+    if ((restrictedVessel(potionItem) || restrictedVessel(vessel)) && vessel.getMeta() != null && !sameMeta(potionItem, vessel)) {
+      player.sendMessage(PRESET_REFUSAL);
+      return;
+    }
+    inventory.setItem(potionSlot, new Item(potion.byDose[Math.ceil(potion.doses / 2)], 1, potionItem.getMeta()));
+    inventory.setItem(emptySlot, new Item(potion.byDose[Math.floor(potion.doses / 2)], 1, potionItem.getMeta()));
     inventory.refreshItems();
     pourMessage(player, "You divide the liquid between the vessels.");
     return;
@@ -1502,8 +1571,13 @@ function pourPotion(event) {
   event.handled = true;
   const transferred = Math.min(source.doses, source.max - target.doses);
   if (transferred === 0) return;
-  inventory.setItem(usedItemSlot, new Item(source.byDose[source.doses - transferred], 1));
-  inventory.setItem(usedWithItemSlot, new Item(target.byDose[target.doses + transferred], 1));
+  // Doses from a marked vessel into an unmarked one (or the reverse) would shed or invent marks.
+  if ((restrictedVessel(sourceItem) || restrictedVessel(targetItem)) && !sameMeta(sourceItem, targetItem)) {
+    player.sendMessage(PRESET_REFUSAL);
+    return;
+  }
+  inventory.setItem(usedItemSlot, new Item(source.byDose[source.doses - transferred], 1, sourceItem.getMeta()));
+  inventory.setItem(usedWithItemSlot, new Item(target.byDose[target.doses + transferred], 1, targetItem.getMeta()));
   inventory.refreshItems();
   pourMessage(player, `You have combined the liquid into ${DOSE_WORDS[target.doses + transferred]} doses.`);
 }
@@ -1522,7 +1596,7 @@ function emptyVessel(event) {
   const inventory = player.getInventory();
   if (empty <= 0 || inventory.getItems()[slot]?.getId() !== itemId) return;
   event.handled = true;
-  inventory.setItem(slot, new Item(empty, 1)).refreshItems();
+  inventory.setItem(slot, new Item(empty, 1, inventory.getItems()[slot].getMeta())).refreshItems();
   player.getPacketSender().sendTypedMessage(pluginApi.core.ChatType.SPAM, "You empty the vial.");
 }
 
@@ -1626,6 +1700,20 @@ module.exports = {
   getPotionName(itemId) {
     return POTION_BY_ITEM_ID.get(itemId)?.potion?.name ?? null;
   },
+  /** `{ potion, entry, doses, emptyItemId }` for a dose item; `emptyItemId` respects copied potions. */
+  doseOf(itemId) {
+    const entry = POTION_BY_ITEM_ID.get(itemId);
+    if (!entry) return null;
+    const lastDose = POTION_BY_ITEM_ID.get(entry.chain[entry.chain.length - 1]);
+    return {
+      potion: entry.potion,
+      entry,
+      doses: entry.doses,
+      emptyItemId: lastDose?.replacementId ?? entry.potion.emptyItemId,
+    };
+  },
+  drinkRefusal,
+  drinkTimerRefusal,
   register(api) {
     api.registerRunEnergyDrainModifier(staminaDrainModifier);
     api.registerRunEnergyStatusModifier(staminaStatus);

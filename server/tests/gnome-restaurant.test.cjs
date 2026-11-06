@@ -22,11 +22,13 @@ const {
 
 let prompt = null;
 let dialogueVariant = null;
+const obtains = [];
 init({
   core: {
     ...core,
     PluginManager: { emitNpcDialogueVariant: () => dialogueVariant },
   },
+  emitCustomEvent: (name, event) => { if (name === "collection-log:obtain") obtains.push(event); },
   sendMultiChatboxPrompt: (player, title, ...pairs) => {
     const options = [];
     for (let i = 0; i < pairs.length; i += 2) options.push({ text: pairs[i], pick: pairs[i + 1] });
@@ -39,6 +41,7 @@ beforeEach(() => {
   reset();
   prompt = null;
   dialogueVariant = null;
+  obtains.length = 0;
 });
 
 function makeInventory(items = {}) {
@@ -314,6 +317,12 @@ test("every recipient in the data accepts its ordered dish", () => {
     assert.equal(event.handled, true, `${recipient.name} accepts ${item.name}`);
     assert.equal(sessionOf(cook), undefined, `${recipient.name} receives the delivery`);
     assert.ok(cook.messages.some((message) => message.includes(`to ${recipient.name}.`)), `${recipient.name} hand-over line`);
+    if (recipient.tier === "hard") {
+      assert.ok(obtains.some((event) => event.player === cook && event.itemId !== TOKEN),
+        `${recipient.name}: the hard tip is credited to the collection log`);
+    } else {
+      assert.equal(obtains.some((event) => event.player === cook), false, `${recipient.name}: no item tip to credit`);
+    }
   }
 });
 

@@ -714,14 +714,16 @@ export function decodeServerPacket(data: Uint8Array | ArrayBuffer): DecodedServe
 
         case ServerPacketId.NPC_INFO: {
             const loopCycle = reader.readInt();
-            const large = reader.readBoolean();
+            const npcFlags = reader.readByte();
+            const large = (npcFlags & 1) !== 0;
+            const crossFloor = (npcFlags & 2) !== 0;
             const rootTileX = reader.readShort();
             const rootTileY = reader.readShort();
             const packetLen = reader.readShort();
             const packet = reader.readBytes(packetLen);
             return {
                 type: "npc_info",
-                payload: { loopCycle, large, rootTileX, rootTileY, packet },
+                payload: { loopCycle, large, crossFloor, rootTileX, rootTileY, packet },
             };
         }
 
@@ -971,6 +973,23 @@ export function decodeServerPacket(data: Uint8Array | ArrayBuffer): DecodedServe
                 },
             };
 
+        case ServerPacketId.WIDGET_SET_ROTATE_SPEED: {
+            // IF_SETROTATESPEED: uid, then y (yaw) speed in the high short and x in the low,
+            // both signed graphics-cycle deltas (recording 1723).
+            const uid = reader.readInt();
+            const packed = reader.readInt();
+            const signed = (value: number) => (value > 0x7fff ? value - 0x10000 : value);
+            return {
+                type: "widget",
+                payload: {
+                    action: "set_rotate_speed",
+                    uid,
+                    speedX: signed(packed & 0xffff),
+                    speedY: signed((packed >>> 16) & 0xffff),
+                },
+            };
+        }
+
         case ServerPacketId.WIDGET_SET_POSITION:
             return {
                 type: "widget",
@@ -1122,39 +1141,6 @@ export function decodeServerPacket(data: Uint8Array | ArrayBuffer): DecodedServe
                 },
             };
 
-        case ServerPacketId.WIDGET_SET_QUEST_LIST: {
-            const groupCount = reader.readShort();
-            const groups: Array<{
-                title: string;
-                quests: Array<{ key: string; slot: number; status: number; displayName: string }>;
-            }> = [];
-            for (let i = 0; i < groupCount; i++) {
-                const title = reader.readString();
-                const questCount = reader.readShort();
-                const quests: Array<{
-                    key: string;
-                    slot: number;
-                    status: number;
-                    displayName: string;
-                }> = [];
-                for (let j = 0; j < questCount; j++) {
-                    quests.push({
-                        slot: reader.readShort(),
-                        status: reader.readByte(),
-                        key: reader.readString(),
-                        displayName: reader.readString(),
-                    });
-                }
-                groups.push({ title, quests });
-            }
-            return {
-                type: "widget",
-                payload: {
-                    action: "set_quest_list",
-                    groups,
-                },
-            };
-        }
 
         case ServerPacketId.CHAT_MESSAGE: {
             const messageTypes: Record<number, string> = {

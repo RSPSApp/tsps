@@ -15,6 +15,7 @@ import { World } from "../../World";
 import { CombatConstants } from "./CombatConstants";
 import { CombatFactory, CanAttackResponse } from "./CombatFactory";
 import { CombatRange } from "./CombatRange";
+import { CrossFloor } from "../../CrossFloor";
 import { CombatSpecial } from "./CombatSpecial";
 import { SpecialAttackTargetingResolver } from "./SpecialAttackTargeting";
 import { AccuracyFormulasDpsCalc } from "./formula/AccuracyFormulasDpsCalc";
@@ -436,7 +437,7 @@ export class Combat {
         if (this.character.isNpc()) {
             movement.setPursuitCheckpoint(PathFinder.naiveEntityDestination(this.character, target));
             state.routeRequested = true;
-        } else if (this.shouldRouteToward(movement, location)) {
+        } else if (this.shouldRouteToward(movement, location, target)) {
             this.trace("route", target);
             state.routeRequested = true;
             this.routedTargetX = location.getX();
@@ -447,9 +448,9 @@ export class Combat {
     }
 
     /**
-     * A path is only recalculated on its final checkpoint, and only when the target
-     * has actually moved - turning points earlier in the corridor are preserved, and
-     * a stationary target does not need the same route rebuilt every cycle.
+     * A path is only recalculated near its final checkpoint. Same-floor targets may
+     * trigger a refresh when they move; cross-floor targets keep the chosen clear-shot
+     * route until it finishes, so a wandering target cannot make the player reverse course.
      *
      * Two cases sit outside that rule. An empty queue has no path to preserve, so it
      * always routes. A step the clipping map rejected (a door shut across the
@@ -457,10 +458,18 @@ export class Combat {
      * an entity rejected does not, since the pathfinder cannot see entities and would
      * hand back the identical corridor.
      */
-    private shouldRouteToward(movement: MovementQueue, targetLocation: Location): boolean {
+    private shouldRouteToward(movement: MovementQueue, targetLocation: Location, target: Mobile): boolean {
         if (movement.size() === 0 || movement.wasRouteInvalidated()) {
             return true;
         }
+        const attackerLocation = CombatPosition.location(this.character, target);
+        const routedTargetLocation = CombatPosition.location(target, this.character);
+        const crossFloorTarget = CrossFloor.canCross(attackerLocation, routedTargetLocation) &&
+            attackerLocation.getZ() !== routedTargetLocation.getZ();
+        // Cross-floor routes end at a carefully selected clear-shot tile. Replacing the final
+        // checkpoint whenever a wandering target moves can make the player turn back and forth
+        // forever. Finish this route, then select a fresh firing tile when the queue empties.
+        if (crossFloorTarget) return false;
         if (movement.size() > 1) {
             return false;
         }
@@ -808,7 +817,14 @@ export class Combat {
         // safespot or a normal engagement) keeps it, so this bounds hunting, not the fight the
         // player started. The footprint already extends `size - 1` north and east.
         const aggressionRange = definition.getAggressionRange(method.attackDistance(npc));
-        const targetDistance = CombatRange.footprintDistance(spawn, definition.getSize(), target.getLocation());
+        const crossFloorRangedFight = method.type() !== CombatType.MELEE &&
+            CrossFloor.canCross(npc.getLocation(), target.getLocation());
+        const targetDistance = CombatRange.footprintDistance(
+            spawn,
+            definition.getSize(),
+            target.getLocation(),
+            crossFloorRangedFight,
+        );
         if (spawnDistance > definition.getCombatFollowDistance()
             || targetDistance > aggressionRange) {
             coordinator.setCoordinateState(CoordinateState.RETREATING);
@@ -879,11 +895,13 @@ export class Combat {
      * An NPC whose target is fighting it from where it cannot be reached (a safespot) keeps it,
      * facing it and trying its step every cycle, as live does; it does not reset and walk home
      * between the target's hits. Fighting it means attacking it, or having hit it within the
-     * attacker window. A target that stops fighting is let go by the usual releases.
+     * attacker window. A target that stops fighting is let go by the usual releases, unless content
+     * says it never lets go ("combat:keep-target", the Fight Cave's monsters).
      */
     private isSafespotted(target: Mobile): boolean {
         return this.character.isNpc() &&
-            (target.getCombat().getTarget() === this.character || this.attacker === target);
+            (this.character.hasFlag("combat:keep-target")
+                || target.getCombat().getTarget() === this.character || this.attacker === target);
     }
 
     /** Every new engagement, and every actor with no engagement, starts with full patience. */

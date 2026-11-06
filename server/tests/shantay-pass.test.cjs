@@ -185,3 +185,109 @@ test("the Port Sarim lock gets easier with each failure and with a lockpick", ()
   assert.ok(Math.abs(Jail.pickChance(withLevel(1), 4) - 0.82) < 1e-9);
   assert.ok(Math.abs(Jail.pickChance(withLevel(1, { 1523: 1 }), 0) - 0.23) < 1e-9);
 });
+
+
+// The real Buy-pass producer and inventory capacity, separate from the legacy gate mocks above.
+test("native Shantay purchases charge only when a pass can be delivered", async t => {
+  process.env.DISABLE_PLAYER_BOTS = "1";
+  const path = require("node:path");
+  const { CachePipeline } = require("../dist/game/cache/CachePipeline");
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const { PlayerSession } = require("../dist/net/PlayerSession");
+  const { ClientConnection } = require("../dist/net/NetworkBuilder");
+  await CachePipeline.initialize();
+  const native = PluginManager.getCoreApi();
+  PluginManager.loadFromDirectory(path.resolve(__dirname, "../plugins"));
+  native.RegionManager.init(); native.RegionManager.loadMapFiles(3226, 3218);
+  PluginManager.emitServerStartup({});
+  t.after(() => PluginManager.emitServerShutdown({}));
+  const MAX = 0x7fffffff, PRICE = 5, PASS = native.ItemIdentifiers.SHANTAY_PASS;
+  assert.equal(PASS, SHANTAY_PASS);
+  assert.equal(native.ItemDefinition.forId(PASS).isStackable(), true, "active-cache pass is stackable");
+  assert.equal(native.WorldDefinition.isMembersWorld(), true, "the real members-only service must be available");
+  let nextIndex = 1940;
+  for (const mode of ["ordinary", "last stack space", "short wallet", "full pack", "capped stack"]) await t.test(mode, async t => {
+    const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true, send: () => true,
+      close() {}, onData() {}, onError() {}, onClose() {} };
+    const player = new Player(new PlayerSession(channel));
+    player.setIndex(nextIndex++); player.setUsername("passbuyer" + player.getIndex());
+    player.setRegistered(true); player.setLocation(new native.Location(3226, 3218, 0)); player.needsPlacement = false;
+    const connection = new ClientConnection(channel); connection.player = player;
+    const npc = native.NPC.create(native.NpcIdentifiers.SHANTAY, new native.Location(3227, 3218, 0));
+    assert.equal(native.World.getNpcs().add(npc), true);
+    assert.equal(npc.getId(), 4642); assert.equal(npc.getCurrentDefinition(player).getName(), "Shantay");
+    t.after(() => {
+      player.closeInterruptibleInterfaces();
+      PluginManager.emitPlayerDisconnect({ player, username: player.getUsername() });
+      PluginManager.emitPlayerLogout({ player, username: player.getUsername() });
+      player.setRegistered(false); native.TaskManager.cancelTasks(player.getIndex()); native.TaskManager.cancelTasks(player);
+      native.World.getNpcs().remove(npc);
+      for (const ground of native.World.getItems().filter(g => g.getOwner() === player.getUsername())) native.ItemOnGroundManager.deregister(ground);
+    });
+    const inv = player.getInventory(), wallet = mode === "short wallet" ? PRICE - 1 : PRICE * 2;
+    const capped = mode === "capped stack", near = mode === "last stack space" || capped;
+    inv.add(new native.Item(COINS, wallet), false);
+    if (near) inv.add(new native.Item(PASS, MAX - 1), false);
+    if (mode === "full pack") while (inv.getFreeSlots() > 0) inv.add(new native.Item(native.ItemIdentifiers.LOGS), false);
+    const gains = [], skills = player.getSkillManager(), addXp = skills.addExperiences.bind(skills);
+    t.mock.method(skills, "addExperiences", (skill, amount) => { gains.push({ skill, amount }); return addXp(skill, amount); });
+    const floor = id => native.World.getItems().filter(g => !g.isPendingRemoval() && g.getOwner() === player.getUsername()
+      && g.getPrivateArea() === player.getPrivateArea() && g.getItem().getId() === id).reduce((n, g) => n + g.getItem().getAmount(), 0);
+    const stores = id => ({ inventory: inv.getAmount(id), equipment: player.getEquipment().getAmount(id),
+      bank: player.getBanks().reduce((n, b, tab) => n + (b && tab !== native.Bank.BANK_SEARCH_TAB_INDEX ? b.getAmount(id) : 0), 0), floor: floor(id) });
+    const owned = id => Object.values(stores(id)).reduce((n, amount) => n + amount, 0);
+    const state = () => ({ mode, coins: stores(COINS), passes: stores(PASS), free: inv.getFreeSlots(), gains: [...gains] });
+    let turns = 0;
+    const turn = () => {
+      assert.ok(++turns <= 16, "bounded native phase budget"); player.resetUpdating();
+      native.World.processCycle = (native.World.processCycle + 1) & MAX; native.TaskManager.process();
+      connection.processTurnPackets(); const queue = player.getMovementQueue();
+      queue.beginCycle(); queue.processEntityPursuit(); if (queue.hasPendingWork()) queue.process();
+      native.TaskManager.processWalkTo(player.getIndex());
+    };
+    const send = async packet => { await connection.dispatch([packet]); turn(); };
+    if (capped) {
+      const at = player.getLocation(); native.ItemOnGroundManager.registerLocation(player, new native.Item(PASS), at.clone());
+      assert.equal(floor(PASS), 1);
+      await send({ type: "ground_item_action", itemId: PASS, x: at.getX(), y: at.getY(), option: "Take", optionIndex: 3 });
+      for (let n = 0; n < 6 && floor(PASS); n++) turn();
+      assert.equal(inv.getAmount(PASS), MAX, "actual native pickup fills the ordinary stack"); assert.equal(floor(PASS), 0);
+    }
+    assert.equal(player.getDialogueManager().getCurrent(), undefined);
+    assert.equal(inv.getAmount(COINS), wallet); assert.deepEqual(gains, []);
+    assert.equal(inv.getAddableAmount(new native.Item(PASS)), capped || mode === "full pack" ? 0 : 1);
+    if (capped) assert.ok(inv.getFreeSlots() > 0, "a free slot must coexist with the saturated ordinary stack");
+    const before = state(), coinsBefore = owned(COINS), passBefore = owned(PASS);
+    const messages = [], sendMessage = player.sendMessage.bind(player);
+    t.mock.method(player, "sendMessage", message => { messages.push(message); return sendMessage(message); });
+    let purchaseActions = 0;
+    const emit = PluginManager.emitCustomEvent.bind(PluginManager);
+    t.mock.method(PluginManager, "emitCustomEvent", (name, payload) => {
+      if (name === "npc-dialogue:action" && payload.player === player && payload.npc === npc
+          && payload.kind === "message" && payload.stepId === "crT5RR") purchaseActions++;
+      return emit(name, payload);
+    });
+    const buy = npc.getCurrentDefinition(player).getActions().indexOf("Buy-pass") + 1; assert.ok(buy > 0);
+    await send({ type: "npc_option", index: npc.getIndex(), clickType: buy });
+    for (let n = 0; n < 6 && !player.getDialogueManager().getCurrent(); n++) turn();
+    const current = player.getDialogueManager().getCurrent();
+    if (!capped) {
+      assert.ok(current, "actual NPC Buy-pass must produce its native result/refusal");
+      const sender = player.getPacketSender(), group = sender.getChatboxGroupId(), mount = sender.subInterfaceTargets.get(group);
+      assert.ok(group >= 0); assert.ok(mount); assert.equal(sender.getSubInterfaceAt(mount.targetUid), mount, "terminal native chatbox remains mounted");
+    }
+    const after = state(), details = JSON.stringify({ before, after, dialogue: current?.constructor.name, text: current?.getText?.() });
+    if (capped) assert.equal(purchaseActions, 1, "actual Buy-pass purchase action reached once");
+    assert.equal(messages.filter(message => message === "You cannot hold any more Shantay passes.").length, capped ? 1 : 0, "capacity refusal message");
+    // First target assertion: full-stack refusal must not consume a five-coin fee without delivery.
+    assert.equal(owned(COINS) + PRICE * (owned(PASS) - passBefore), coinsBefore, "paid pass conservation: " + details);
+    const success = mode === "ordinary" || mode === "last stack space";
+    assert.equal(owned(PASS), passBefore + (success ? 1 : 0), details);
+    assert.equal(owned(COINS), wallet - (success ? PRICE : 0), details);
+    if (success) {
+      assert.equal(current instanceof native.ItemStatementDialogue, true, "purchase uses the actual native item box");
+      assert.equal(current.getText(), "You purchase a Shantay Pass.");
+    }
+    assert.deepEqual(gains, []);
+  });
+});

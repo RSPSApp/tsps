@@ -165,6 +165,7 @@ function tickHammering(player, work, now) {
   }
   if (Math.random() >= repairChance(player)) return;
   repairStrut(strut, now);
+  pluginApi.emitCustomEvent?.("motherlode:strut-repaired", { player, strut: strut.strut });
   const level = player.getSkillManager().getMaxLevel(Skill.SMITHING);
   player.getSkillManager().addExperiences(Skill.SMITHING, level * REPAIR_XP_PER_LEVEL);
 }

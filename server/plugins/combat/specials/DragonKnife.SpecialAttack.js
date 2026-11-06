@@ -1,14 +1,14 @@
 module.exports = function registerDragonKnifeSpecialAttack(api) {
-  const { Animation, CombatFactory, CombatSpecial, Equipment, ItemIdentifiers, PendingHit, Projectile, RangedCombatMethod, Sound, Sounds, WeaponProfiles } = api.core;
+  const { Animation, CombatFactory, CombatPosition, CombatSpecial, Equipment, ItemIdentifiers, PendingHit, Projectile, RangedCombatMethod, Sound, Sounds } = api.core;
 
   const DRAIN = 25;
   const SPECIAL_AMMO_COST = 2;
-  const ANIMATION = new Animation(8292);
+  const ANIMATION = new Animation(8291); // HUMAN_DRAGON_TKNIVES_SPEC
+  const POISON_ANIMATION = new Animation(8292); // HUMAN_DRAGON_TKNIVES_SPEC_POISON
 
   class DragonKnifeCombatMethod extends RangedCombatMethod {
     hits(character, target) {
-      const distance = character.getLocation().getDistance(target.getLocation());
-      const hitDelay = WeaponProfiles.hitDelays(character.getAsPlayer(), distance)[0];
+      const hitDelay = RangedCombatMethod.playerHitDelays(character, target, CombatPosition.projectileDistance(character, target))[0];
       return [
         new PendingHit(character, target, this, hitDelay),
         new PendingHit(character, target, this, hitDelay),
@@ -33,7 +33,8 @@ module.exports = function registerDragonKnifeSpecialAttack(api) {
     start(character, target) {
       const player = character.getAsPlayer();
       CombatSpecial.drain(player, DRAIN);
-      player.performAnimation(ANIMATION);
+      const weaponId = player.getEquipment().get(Equipment.WEAPON_SLOT).getId();
+      player.performAnimation(weaponId === ItemIdentifiers.DRAGON_KNIFE ? ANIMATION : POISON_ANIMATION);
       Sounds.sendSound(character, Sound.THROW_DART);
       Projectile.createProjectile(character, target, 1629, 30, 60, 40, 36).sendProjectile();
       Projectile.createProjectile(character, target, 1629, 26, 64, 43, 36).sendProjectile();

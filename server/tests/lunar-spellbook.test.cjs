@@ -10,6 +10,7 @@ Server.installProductionPathResolver();
 const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { CacheDefinitions } = require("../dist/game/cache/CacheDefinitions");
 const { LunarSpells } = require("../dist/game/content/combat/magic/LunarSpells");
+const { Skill } = require("../dist/game/model/Skill");
 const { Spell } = require("../dist/game/content/combat/magic/Spell");
 
 before(async () => {
@@ -155,7 +156,9 @@ test("Monster Examine sends interface 522 the text live sends script 1179", () =
     getElementalWeakness: () => null, getCombatLevel: () => 32, getMaxHit: () => 3, getName: () => "Outlaw",
     getRangedDefenceBonus: () => 0,
   };
-  const npc = { getCurrentDefinition: () => definition, getHitpoints: () => 20, getLocation: () => ({}), performGraphic() {} };
+  const npc = { getCurrentDefinition: () => definition,
+    getCurrentLevel: skill => definition.getStats()[[Skill.ATTACK, Skill.STRENGTH, Skill.DEFENCE, Skill.RANGED, Skill.MAGIC].indexOf(skill)],
+    getHitpoints: () => 20, getLocation: () => ({}), performGraphic() {} };
   const sent = [];
   const sender = {
     sendMagicTabInterface(id) { sent.push(["mount", id]); return sender; },
@@ -167,4 +170,56 @@ test("Monster Examine sends interface 522 the text live sends script 1179", () =
   });
   castable(() => LunarSpells.handleNpcTarget(player, npc, "Monster Examine"));
   assert.deepEqual(sent, [["mount", 522], ["script", 1179, live.replace("<br>Strength bonus: -21", "")]]);
+
+  const options = { includeMaxHit: false, includeAttackStyle: false, meleeBonusLabel: "Attack bonus" };
+  assert.equal(LunarSpells.monsterStats(npc, options), live.replace("<br>Strength bonus: -21", "")
+    .replace("<br>Max standard hit: 3", "").replace("<br>Main attack style: Crush", ""));
+  const withBonus = { ...npc, getCurrentDefinition: () => ({ ...definition,
+    getStats: () => [35, 30, 25, 1, 1, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+  }) };
+  assert.ok(LunarSpells.monsterStats(withBonus, options).includes("<br>Attack bonus: 7"));
+  assert.ok(LunarSpells.monsterStats(withBonus).includes("<br>Crush bonus: 7"), "optional field controls leave the Lunar defaults intact");
+  const drained = { ...npc, getCurrentLevel: skill => new Map([
+    [Skill.ATTACK, 3], [Skill.DEFENCE, 0], [Skill.STRENGTH, 2], [Skill.MAGIC, 1], [Skill.RANGED, 0],
+  ]).get(skill) };
+  for (const settings of [undefined, options]) {
+    assert.ok(LunarSpells.monsterStats(drained, settings).includes(
+      "Attack: 3<br>Defence: 0<br>Strength: 2<br>Magic: 1<br>Ranged: 0"),
+      "both inspection spells report temporary instance levels instead of the base definition");
+  }
+});
+
+test("Lunar teleport arrival identifies only the caster after a successful landing", () => {
+  const { TeleportHandler } = require("../dist/game/model/teleportation/TeleportHandler");
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  const original = { check: TeleportHandler.checkReqs, teleport: TeleportHandler.teleport,
+    nearby: LunarSpells.forNearbyPlayers, emit: PluginManager.emitCustomEvent };
+  const arrivals = [], events = [], player = caster([]), passenger = caster([]);
+  const spells = [LunarSpells.TELEPORTS.get("catherby teleport"), LunarSpells.GROUP_TELEPORTS.get("tele group catherby")];
+  const pay = spells.map(spell => spell.pay);
+  try {
+    TeleportHandler.checkReqs = () => true;
+    TeleportHandler.teleport = (target, destination, type, warning, arrived) => arrivals.push({ target, arrived });
+    PluginManager.emitCustomEvent = (name, event) => events.push({ channel: name, ...event });
+    LunarSpells.forNearbyPlayers = (source, radius, visit) => visit(passenger);
+    for (const spell of spells) spell.pay = () => true;
+    spells[0].castTeleport(player);
+    assert.deepEqual(events, [], "starting a cast is not an arrival");
+    arrivals.shift().arrived();
+    assert.deepEqual(events.map(event => [event.channel, event.name, event.player]),
+      [["spell:teleport-arrival", "catherby teleport", player]]);
+    events.length = 0;
+    LunarSpells.castGroupTeleport(player, spells[1]);
+    assert.deepEqual(events, []);
+    assert.equal(arrivals.length, 2);
+    assert.equal(arrivals[1].target, passenger);
+    assert.equal(arrivals[1].arrived, undefined, "group passengers did not cast a spell");
+    arrivals[0].arrived();
+    assert.deepEqual(events.map(event => [event.channel, event.name, event.player]),
+      [["spell:teleport-arrival", "tele group catherby", player]]);
+  } finally {
+    TeleportHandler.checkReqs = original.check; TeleportHandler.teleport = original.teleport;
+    LunarSpells.forNearbyPlayers = original.nearby; PluginManager.emitCustomEvent = original.emit;
+    spells.forEach((spell, i) => { spell.pay = pay[i]; });
+  }
 });

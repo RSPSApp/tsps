@@ -13,8 +13,8 @@
  * in the sibling varp 518 "mourning_quest_bits" as varbits 797/798-810/9149-9156;
  * Part II's stage is varbit 1103 over varp 574, which this plugin never writes.
  *
- * Stages (varp 517):
- *   1  STARTED       Eluned took you to Lletya and Arianwyn explained the task
+ * Durable stages (nativeProgress maps these onto the real varp 517 phases):
+ *   1  STARTED       Eluned's introduction; go to Arianwyn
  *   2  DISGUISE      the Arandar mourner is dead and its outfit is loose
  *   3  CLEANED       Tegid's soap and a bucket of water cleaned the top
  *   4  TROUSERS      Oronwen repaired the trousers (2 silk + bear fur)
@@ -61,7 +61,12 @@
  *    is held: the static spawn 6287 resolves to nothing at varbit 799's default,
  *    so varbit 799 is left alone rather than toggling the world spawn.
  *  - The "Aim and Fire" combat interface is not scripted; the loaded fixed device
- *    is used directly on a flock and the loaded toad's colour must match it.
+ *    is used directly on a flock and the loaded toad's colour must match it. Loading the
+ *    device says so, in a line of our own wording. The loaded colour is saved. Varbit 804 is
+ *    sent as 1 for any colour, as the colour-to-value map is unknown. A second toad is refused
+ *    and the device can't be wielded empty (Wiki), each with a line of our own wording; the
+ *    wield rule applies only while loading is possible (the fixed-device stage to the sheep).
+ *    The Empty option isn't scripted.
  *  - Oronwen's incremental silk/fur item-on-NPC hand-ins are not scripted; her
  *    dialogue hands the trousers over when 2 silk and bear fur are carried.
  *  - The 50 Thieving, 60 Ranged, Roving Elves, Big Chompy Bird Hunting and
@@ -256,7 +261,11 @@ module.exports = function registerMourningsEndPartIQuest(api) {
   const GNOME_PARCELS_ATTRIBUTE = "quest.mournings_end_part_i.gnome-parcels";
   const SHEEP_ATTRIBUTE = "quest.mournings_end_part_i.sheep";
   const STORES_ATTRIBUTE = "quest.mournings_end_part_i.stores";
+  const BRIEFED_ATTRIBUTE = "mournings-end-part-i:briefed";
+  const BRIEFING_END_LINE = "Alright, I'll see what I can do.";
   const TEGID_ATTRIBUTE = "quest.mournings_end_part_i.tegid";
+  // The colour of the toad in the fixed device ("" when empty). Saved, so a logout keeps it.
+  const LOADED_ATTRIBUTE = "quest.mournings_end_part_i.loaded";
 
   const SHEEP_BIT_BY_COLOUR = new Map([
     ["red", 1 << 0],
@@ -315,7 +324,6 @@ module.exports = function registerMourningsEndPartIQuest(api) {
 
   let quest;
   const spawnedGnomeByPlayer = new Map();
-  const loadedToadByPlayer = new Map();
 
   // ==========================================================================
   // Small state helpers
@@ -383,6 +391,11 @@ module.exports = function registerMourningsEndPartIQuest(api) {
 
   function sheepBits(player) {
     return Number(player.getAttribute(SHEEP_ATTRIBUTE)) || 0;
+  }
+
+  function loadedColour(player) {
+    const colour = String(player.getAttribute(LOADED_ATTRIBUTE) ?? "");
+    return SHEEP_BIT_BY_COLOUR.has(colour) ? colour : "";
   }
 
   function sheepBitSet(player, colour) {
@@ -631,6 +644,19 @@ module.exports = function registerMourningsEndPartIQuest(api) {
     }
   }
 
+  function handleDialogueLine(event) {
+    const { player, npcId, step, text } = event;
+    if ((!ARIANWYN_IDS.has(npcId) && !ELUNED_IDS.has(npcId))
+      || step?.player !== BRIEFING_END_LINE || text !== BRIEFING_END_LINE
+      || quest.getStage(player) !== STAGE_STARTED) return;
+    event.after = () => {
+      if (quest.getStage(player) !== STAGE_STARTED) return;
+      player.setAttribute(BRIEFED_ATTRIBUTE, true);
+      player.getPacketSender().sendConfig(VARP_MOURNINGS_END_PART_I,
+        nativeProgress(STAGE_STARTED, player));
+    };
+  }
+
   function repairTrousers(player) {
     if (!held(player, RIPPED_MOURNER_TROUSERS)) return;
     take(player, RIPPED_MOURNER_TROUSERS, 1);
@@ -867,11 +893,23 @@ module.exports = function registerMourningsEndPartIQuest(api) {
     const stage = quest.getStage(player);
     if (stage < STAGE_FIXED_DEVICE || stage >= STAGE_SHEEP) return false;
     if (!held(player, toadId) || !held(player, FIXED_DEVICE)) return false;
+    if (sheepBitSet(player, COLOUR_BY_TOAD.get(toadId))) {
+      // Our wording. Loaded, it could never be fired, and the device holds one toad, so it would block the rest.
+      player.sendMessage("That colour of sheep is already dyed, so the device won't take that toad.");
+      return true;
+    }
+    if (loadedColour(player)) {
+      // Wiki: "Only one toad may be placed in the device at a time." The line is our wording.
+      player.sendMessage("The device already holds a toad.");
+      return true;
+    }
     player.sendMessage(
       "You put the dye-filled toad in to the firing chamber. To use the device, select the Aim and Fire mode from your Combat Options."
     );
+    // Our wording, not live's: Aim and Fire isn't scripted, as no capture shows how it aims.
+    player.sendMessage("Aim and Fire isn't available here: use the loaded device directly on a sheep of that colour.");
     take(player, toadId, 1);
-    loadedToadByPlayer.set(player, COLOUR_BY_TOAD.get(toadId));
+    player.setAttribute(LOADED_ATTRIBUTE, COLOUR_BY_TOAD.get(toadId));
     player.getPacketSender().sendVarbit(VARBIT_GUN_AMMO, 1);
     return true;
   }
@@ -883,10 +921,9 @@ module.exports = function registerMourningsEndPartIQuest(api) {
     if (!held(player, FIXED_DEVICE)) return false;
     const colour = SHEEP_COLOUR_BY_NPC.get(npcId);
     if (!colour) return false;
-    const loaded = loadedToadByPlayer.get(player);
-    if (loaded !== colour) return false;
+    if (loadedColour(player) !== colour) return false;
     if (sheepBitSet(player, colour)) return false;
-    loadedToadByPlayer.delete(player);
+    player.setAttribute(LOADED_ATTRIBUTE, "");
     player.getPacketSender().sendVarbit(VARBIT_GUN_AMMO, 0);
     player.setAttribute(SHEEP_ATTRIBUTE, sheepBits(player) | SHEEP_BIT_BY_COLOUR.get(colour));
     player.getPacketSender().sendVarbit(SHEEP_VARBIT_BY_COLOUR.get(colour), 1);
@@ -1249,7 +1286,7 @@ module.exports = function registerMourningsEndPartIQuest(api) {
     const sender = player.getPacketSender();
     sender.sendVarbit(VARBIT_SEE_ELUNED, stage >= STAGE_STARTED ? 1 : 0);
     sender.sendVarbit(VARBIT_MOURNER_VIS, stage >= STAGE_DISGUISE ? 1 : 0);
-    sender.sendVarbit(VARBIT_GUN_AMMO, 0);
+    sender.sendVarbit(VARBIT_GUN_AMMO, loadedColour(player) ? 1 : 0);
     for (const [colour, varbit] of SHEEP_VARBIT_BY_COLOUR) {
       sender.sendVarbit(varbit, sheepBitSet(player, colour) ? 1 : 0);
     }
@@ -1379,6 +1416,18 @@ module.exports = function registerMourningsEndPartIQuest(api) {
     ensureGnome(player);
   }
 
+  /** Wiki: "the device can only be wielded when filled with ammo." Checked only while loading is possible. */
+  function canEquipDevice(event) {
+    const { player, item } = event;
+    if (!player || !item || item.getId() !== FIXED_DEVICE) return;
+    const stage = quest.getStage(player);
+    if (stage < STAGE_FIXED_DEVICE || stage >= STAGE_SHEEP) return;
+    if (loadedColour(player)) return;
+    event.allow = false;
+    // Our wording: the Wiki gives the rule, not live's message.
+    player.sendMessage("The device can only be wielded when it holds a toad.");
+  }
+
   function handleBootstrap({ player }) {
     if (player) syncVarbits(player);
   }
@@ -1386,18 +1435,18 @@ module.exports = function registerMourningsEndPartIQuest(api) {
   function handleLogout({ player }) {
     if (!player) return;
     removeGnome(player);
-    loadedToadByPlayer.delete(player);
   }
 
   function handleStageChanged(event) {
     if (!event || event.key !== "mournings_end_part_i" || !event.player) return;
     if (event.stage === 0) {
+      event.player.setAttribute(BRIEFED_ATTRIBUTE, false);
       event.player.setAttribute(GNOME_STATE_ATTRIBUTE, 0);
       event.player.setAttribute(GNOME_PARCELS_ATTRIBUTE, 0);
       event.player.setAttribute(SHEEP_ATTRIBUTE, 0);
       event.player.setAttribute(STORES_ATTRIBUTE, "");
       event.player.setAttribute(TEGID_ATTRIBUTE, 0);
-      loadedToadByPlayer.delete(event.player);
+      event.player.setAttribute(LOADED_ATTRIBUTE, "");
     }
     syncVarbits(event.player);
     ensureGnome(event.player);
@@ -1410,13 +1459,24 @@ module.exports = function registerMourningsEndPartIQuest(api) {
   api.persistAttribute(GNOME_STATE_ATTRIBUTE);
   api.persistAttribute(GNOME_PARCELS_ATTRIBUTE);
   api.persistAttribute(SHEEP_ATTRIBUTE);
+  api.persistAttribute(LOADED_ATTRIBUTE, "");
   api.persistAttribute(STORES_ATTRIBUTE);
   api.persistAttribute(TEGID_ATTRIBUTE);
+  api.persistAttribute(BRIEFED_ATTRIBUTE, false);
+
+  // QH 06da90's mourning_quest phases: disguise 3, assignment 4, sheep 5, poison 6,
+  // secret 7, report 8, complete 9. Preserve compact saved phases used by these handlers.
+  function nativeProgress(stage, player) {
+    if (stage === STAGE_STARTED && player.getAttribute(BRIEFED_ATTRIBUTE) === true) return 3;
+    const phases = [0, 2, 3, 3, 3, 4, 5, 5, 5, 6, 6, 6, 7, 8, 9];
+    return phases[Math.max(0, Math.min(stage | 0, STAGE_COMPLETE))];
+  }
 
   quest = registerQuest(api, {
     key: "mournings_end_part_i",
     name: "Mourning's End Part I",
     varpId: VARP_MOURNINGS_END_PART_I,
+    varpValue: nativeProgress,
     startedValue: STAGE_STARTED,
     completionValue: STAGE_COMPLETE,
     questPoints: 2,
@@ -1441,6 +1501,7 @@ module.exports = function registerMourningsEndPartIQuest(api) {
   api.onNpcInteraction("Tegid", { "Talk-to": talkToTegid });
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onCustomEvent("npc-dialogue:choice", handleChoice);
+  api.onCustomEvent("npc-dialogue:line", handleDialogueLine);
   api.onCustomEvent("npc-dialogue:hook", handleDialogueHook);
   api.onCustomEvent("mournings-end-part-i:start-requirements", answerStartRequirementQuery);
   api.onItemOnItem(handleItemOnItem);
@@ -1455,6 +1516,7 @@ module.exports = function registerMourningsEndPartIQuest(api) {
   api.onCustomEvent("ladders:climb", claimHqLadder);
   api.onPlayerLogin(handleLogin);
   api.onPlayerLogout(handleLogout);
+  api.onCanEquip(canEquipDevice);
   api.onCustomEvent("player:bootstrap-complete", handleBootstrap);
   api.onCustomEvent("quest:stage-changed", handleStageChanged);
 };

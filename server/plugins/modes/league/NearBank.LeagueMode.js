@@ -1,7 +1,9 @@
 /**
- * Whether a Shattered Relics character stands in a bank (data/league-shattered.json `bank`): where
- * fragments change (Fragments, Wiki /Fragments) and quest packs auto-complete (Unlocks, the
- * league's launch news: "you can only auto-complete quests while in a Bank").
+ * Whether a league character stands in a bank (data/league-shattered.json `bank`): where Shattered
+ * Relics' fragments change (Fragments, Wiki /Fragments) and quest packs auto-complete (Unlocks, the
+ * league's launch news: "you can only auto-complete quests while in a Bank"), and, asked over
+ * `league:near-bank` { player, distance? } -> { near } with a tighter distance, where Demonic
+ * Pacts' item relics unlock (LeagueRelics' Unlock).
  */
 const Common = require("./Common.LeagueMode");
 const { data } = require("./Shattered.LeagueMode");
@@ -18,9 +20,9 @@ function banksAt(object) {
   return actions.includes(bankAction) || (bankChests.includes(definition?.getName?.()) && actions.some(Boolean));
 }
 
-/** A loc that banks, or an NPC with a Bank option, within `bank.distance` on the character's plane. */
-function nearBank(player) {
-  const { bankAction, distance } = config();
+/** A loc that banks, or an NPC with a Bank option, within `distance` (`bank.distance` unless given) on the character's plane. */
+function nearBank(player, distance = config().distance) {
+  const { bankAction } = config();
   const { MapObjects, RegionManager } = Common.core;
   const here = player.getLocation();
   const [x, y, z] = [here.getX(), here.getY(), here.getZ()];
@@ -37,4 +39,13 @@ function nearBank(player) {
     && npc.getLocation().getZ() === z && here.getDistance(npc.getLocation()) <= distance);
 }
 
-module.exports = { nearBank, banksAt };
+/** `league:near-bank`: the answer for another plugin. */
+function answerNearBank(query) {
+  if (query?.player) query.near = nearBank(query.player, query.distance ?? config().distance);
+}
+
+module.exports = function attach(api) {
+  api.onCustomEvent("league:near-bank", answerNearBank);
+};
+
+Object.assign(module.exports, { nearBank, banksAt });

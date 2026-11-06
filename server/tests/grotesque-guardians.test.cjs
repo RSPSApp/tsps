@@ -256,6 +256,10 @@ test('Dusk only takes melee; Dawn takes ranged or a halberd, never other melee',
   const ranged = fakeHit(player, core.CombatType.RANGED, [20]);
   Roof.guardianHit({ npc: dusk, hit: ranged });
   assert.equal(ranged.parts[0].getDamage(), 0);
+  const earth = fakeHit(player, core.CombatType.MAGIC, [20]);
+  earth.getSpell = () => core.CombatSpells.EARTH_STRIKE;
+  Roof.guardianHit({ npc: dusk, hit: earth });
+  assert.equal(earth.parts[0].getDamage(), 0, 'Earth spells do not bypass Dusk\'s Magic immunity');
   const melee = fakeHit(player, core.CombatType.MELEE, [20]);
   Roof.guardianHit({ npc: dusk, hit: melee });
   assert.equal(melee.parts[0].getDamage(), 20);
@@ -790,4 +794,18 @@ test('Dawn\'s and enraged Dusk\'s ranged hits land with well-formed projectiles 
   }
   assert.equal(Combat.flightEnd('ranged', 2), 45);
   assert.equal(Combat.flightEnd('ranged', 3), 60);
+});
+
+test("Dawn's death never rolls drops or tallies a kill; only Dusk's death does", () => {
+  const dawn = fakeGuardian(Common.ids.npcs.dawnPhase1, 1701, 4573);
+  const dusk = fakeGuardian(Common.ids.npcs.duskPhase4, 1689, 4573);
+  const player = fakePlayer();
+  dropEvents = [];
+  Kills.guardianDeath({ npc: dawn, killer: player });
+  assert.equal(dropEvents.length, 0, "Dawn's death is not the kill and gives nothing");
+  assert.equal(player.getAttribute(Common.KILLS_ATTRIBUTE), undefined);
+  Kills.guardianDeath({ npc: dusk, killer: player });
+  assert.deepEqual(dropEvents.map((event) => event.name), ['npc-drops:roll-table', 'npc-drops:roll', 'npc-drops:place']);
+  assert.equal(player.getAttribute(Common.KILLS_ATTRIBUTE), 1, "only Dusk's death counts the kill");
+  flush();
 });

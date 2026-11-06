@@ -16,6 +16,7 @@ const spawned = [];
 const axe = { id: 1359, requiredLevel: 41, tier: 6, animationId: 867 };
 const tasks = [];
 const events = [];
+const prompts = [];
 let members = true;
 let tick = 0;
 class CountdownTask {
@@ -53,6 +54,11 @@ before(async () => {
       return npc;
     },
     removeNpc() {},
+    sendMultiChatboxPrompt: (p, title, ...pairs) => {
+      if (pairs.length < 2 || pairs.length % 2 !== 0 || !pairs.every((pair, i) => i % 2 ? typeof pair === "function" : typeof pair === "string")) return false;
+      prompts.push({ player: p, title, pairs });
+      return true;
+    },
     emitCustomEvent: (name, event) => {
       if (name === "woodcutting:axe") event.axe = (event.itemId ? event.itemId === axe.id : event.player.hasAxe) ? axe : null;
       else events.push({ name, ...event });
@@ -161,6 +167,37 @@ test("a real map choice rows privately, lands, consumes the canoe and releases c
   assert.equal(varbit("fov_clamp"), 0); assert.equal(varbit("draw_distance_max_override"), 0);
   assert.deepEqual([p.location.getX(), p.location.getY()], to.landing);
   assert.equal(p.area, null); assert.equal(p.blocked, false); assert.equal(plugin._test.state(p, from), 0);
+  assert.match(p.messages.at(-1), /Your canoe sinks/);
+});
+
+test("Waka travel from Lumbridge to Edgeville emits the Lumbridge diary task", () => {
+  const from = stations.find((station) => station.id === 1);
+  const p = player(from);
+  make(p, from, TYPES[3]);
+  plugin._test.paddle({ player: p, object: object(from) });
+  choose(p, 953, 22);
+  advance(28);
+  assert.ok(events.some((event) => event.name === "diary:task"
+    && event.diary === "lumbridge"
+    && event.task === "travel-from-lumbridge-to-edgeville-on-a-waka-can"));
+});
+
+test("the Wilderness pond choice offers paired confirmation options and rows there", () => {
+  const from = stations[4]; const to = stations[5]; const p = player(from);
+  make(p, from, TYPES[3]);
+  plugin._test.paddle({ player: p, object: object(from) });
+  prompts.length = 0;
+  choose(p, 953, 28);
+  assert.equal(prompts.length, 1, "the map choice must register one confirmation prompt");
+  const yes = prompts[0].pairs[1];
+  assert.equal(typeof yes, "function");
+  yes(p, 0, prompts[0].pairs[0]);
+  advance(2);
+  assert.equal(p.blocked, true);
+  assert.deepEqual([p.location.getX(), p.location.getY()], [1817, 4515]);
+  advance(26);
+  assert.deepEqual([p.location.getX(), p.location.getY()], to.landing);
+  assert.equal(p.blocked, false); assert.equal(plugin._test.state(p, from), 0);
   assert.match(p.messages.at(-1), /Your canoe sinks/);
 });
 

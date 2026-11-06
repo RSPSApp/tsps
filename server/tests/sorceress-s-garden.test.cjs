@@ -213,7 +213,19 @@ test("the apprentice's transcript: variant by past teleports, Osman and follower
   assert.equal(t.answerCondition({ player: locked, npcId: 1808, text: "If the player has not talked to Osman about the Sorceress's Garden:" }), true);
   assert.equal(t.answerCondition({ player: locked, npcId: 1808, text: "If the player has talked to Osman about the Sorceress's Garden:" }), false);
   questComplete = true;
+  assert.equal(t.answerCondition({ player: locked, npcId: 1808, text: "If the player has talked to Osman about the Sorceress's Garden:" }), false,
+    "quest completion alone does not count as asking Osman");
+  assert.equal(t.answerCondition({ player: locked, npcId: 1808, text: "If the player has not talked to Osman about the Sorceress's Garden:" }), true);
+  t.recordOsmanHelp({ player: locked });
+  assert.equal(locked.getAttribute(t.OSMAN_HELPED_ATTRIBUTE), true);
   assert.equal(t.answerCondition({ player: locked, npcId: 1808, text: "If the player has talked to Osman about the Sorceress's Garden:" }), true);
+  questComplete = false;
+  assert.equal(t.answerCondition({ player: locked, npcId: 1808, text: "If the player has talked to Osman about the Sorceress's Garden:" }), false,
+    "asking Osman does not bypass the quest requirement");
+
+  const status = { player: locked, asked: false };
+  t.osmanHelpStatus(status);
+  assert.equal(status.asked, true, "Prince Ali Rescue can query the persisted ask state");
 
   const followed = player();
   followed.setAttribute(t.PET_ATTRIBUTE, { isRegistered: () => true });
@@ -253,6 +265,7 @@ test("the Teleport option works once she has teleported you, and the fountain go
 
   const p = player();
   p.setAttribute(t.TELEPORTED_ATTRIBUTE, true);
+  p.setAttribute(t.OSMAN_HELPED_ATTRIBUTE, true);
   const npc = apprenticeNpc();
   t.teleportByApprentice({ player: p, npc, npcId: 1808 });
   assert.deepEqual(npc.chats, ["Senventior Disthinte Molesko!"]);
@@ -262,6 +275,21 @@ test("the Teleport option works once she has teleported you, and the fountain go
   t.drinkFromFountain({ player: leaver, objectId: FOUNTAIN });
   assert.deepEqual(leaver.moves.map((at) => [at.getX(), at.getY()]), [[3321, 3141]]);
   assert.equal(t.drinkFromFountain({ player: leaver, objectId: 12940 }), false);
+});
+
+test("an existing Apprentice teleport remains unlocked without the new Osman ask flag", () => {
+  const t = plugin._test;
+  const existingSave = player();
+  existingSave.setAttribute(t.TELEPORTED_ATTRIBUTE, true);
+  assert.equal(t.isUnlocked(existingSave), true);
+
+  const status = { player: existingSave };
+  t.osmanHelpStatus(status);
+  assert.equal(status.asked, false);
+  assert.equal(status.unlocked, true);
+
+  t.teleportByApprentice({ player: existingSave, npc: apprenticeNpc(), npcId: 1808 });
+  assert.deepEqual(existingSave.moves.map((at) => [at.getX(), at.getY()]), [[2912, 5474]]);
 });
 
 test("gates check the maze's level before opening", () => {

@@ -1,4 +1,5 @@
 // Run after `yarn build`: node --test tests/npc-exact-move.test.cjs
+process.env.DISABLE_PLAYER_BOTS = '1';
 const assert = require('node:assert/strict');
 const { test, before } = require('node:test');
 
@@ -472,4 +473,99 @@ test('reflected PvP credit uses modified and capped HP loss, excluding zero, mis
   apply(new HitDamage(99, HitMask.RED).markReflected().setSource(source));
   assert.equal(f.death(victim).killer, source);
   assert.deepEqual(victim.__recentDeathDamagerEntries, [{ player: source, damage: 3 }]);
+});
+
+// Check the real dialogue producer and session views inside the boat's coordinate system.
+test('Pandemonium native dialogue turns to its actual deck speakers', async t => {
+  const path = require('node:path');
+  const { PluginManager: PM } = require('../dist/plugins/PluginManager');
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { ClientConnection } = require('../dist/net/NetworkBuilder');
+  const { decodeClientPackets } = require('../dist/net/protocol/ClientProtocol');
+  const { ClientPacketId } = require('../dist/net/protocol/NativeClientPackets');
+  const { MultiChatboxPrompt } = require('../dist/game/model/menu/MultiChatboxPrompt');
+  const core = PM.getCoreApi(), initialCycle = core.World.processCycle;
+  PM.loadFromDirectory(path.resolve(__dirname, '../plugins')); PM.emitServerStartup({});
+  core.RegionManager.init();
+  t.after(() => { PM.emitServerShutdown({}); core.World.processCycle = initialCycle; });
+  const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(q => q.key === 'pandemonium');
+  const ships = require('../plugins/skills/sailing/StaticShips.Sailing'), syncs = [];
+  const willId = core.CacheDefinitions.getNpcId('sailing_intro_will_boat');
+  const anneId = core.CacheDefinitions.getNpcId('sailing_intro_anne_boat');
+  PM.createApi('DeckFacingTest').onCustomEvent('network:sync-views', event => syncs.push(event));
+  let counter = 0;
+  function fixture(test) {
+    const packets = [], channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true,
+      send: packet => { packets.push(packet); return true; }, close() {}, onData() {}, onError() {}, onClose() {} };
+    const session = new PlayerSession(channel), player = new Player(session);
+    player.setUsername(`deckfacing${counter++}`); session.setPlayer(player);
+    test.mock.method(session, 'sendClientPacket', packet => { packets.push(packet); return true; });
+    assert.ok(core.World.getPlayers().add(player));
+    const connection = new ClientConnection(channel); connection.player = player;
+    player.setAttribute('pandemonium:stage-version', 2); quest.setStage(player, 6);
+    const lifecycle = { player, username: player.getUsername(), isNewAccount: false };
+    PM.emitPlayerLogin(lifecycle);
+    const ship = ships.all().find(s => s.boat.ownerPlayerId === player.getIndex()); assert.ok(ship);
+    const crew = [...core.World.getNpcs()].filter(n => n.getOwner() === player && [willId, anneId].includes(n.getId()));
+    const will = crew.find(n => n.getId() === willId), anne = crew.find(n => n.getId() === anneId);
+    assert.equal(will.getContentId(player), core.CacheDefinitions.getNpcId('sailing_intro_will_vis'));
+    assert.equal(anne.getContentId(player), core.CacheDefinitions.getNpcId('sailing_intro_anne_vis'));
+    player.closeInterruptibleInterfaces(); player.setNeedsPlacement(false); crew.forEach(n => n.setNeedsPlacement(false));
+    test.after(() => {
+      player.closeInterruptibleInterfaces(); PM.emitPlayerLogout(lifecycle); core.TaskManager.cancelTasks(player.getIndex());
+      test.mock.method(player, 'onRemove', () => {}); core.World.getPlayers().remove(player);
+      assert.equal(core.World.getPlayers().get(player.getIndex()), null);
+    });
+    async function input(frame) { await connection.dispatch(decodeClientPackets(frame)); connection.processTurnPackets(); }
+    async function talk(npc = will) {
+      const index = npc.getIndex();
+      await input(Buffer.from([ClientPacketId.OPNPC1_ALT, 0, index >>> 8, (index + 128) & 255]));
+      for (let tick = 0; tick < 8; tick++) {
+        core.TaskManager.processWalkTo(player.getIndex()); player.getMovementQueue().beginCycle(); player.getMovementQueue().process();
+        core.TaskManager.process(); crew.filter(n => n.isRegistered()).forEach(n => n.process());
+      }
+    }
+    function continuation() {
+      const frame = Buffer.alloc(7); frame[0] = ClientPacketId.RESUME_PAUSEBUTTON; frame[1] = 255; frame[2] = 127;
+      frame.writeUInt32BE((player.getPacketSender().getChatboxGroupId() << 16) | 5, 3); return frame;
+    }
+    function flush() {
+      core.World.updateLocalNpcs(player, crew.filter(n => n.isRegistered()));
+      session.flush(++core.World.processCycle); session.flush(++core.World.processCycle);
+      assert.ok(packets.some(p => p[0] === 21), 'the real session sends native NPC_INFO');
+      return syncs.filter(event => event.player === player).at(-1);
+    }
+    return { player, will, anne, talk, input, continuation, flush,
+      next: () => input(continuation()), current: () => player.getDialogueManager().getCurrent() };
+  }
+  await t.test('native Talk-to and Continues alternate the player between Will and Anne', async test => {
+    const f = fixture(test); await f.talk();
+    assert.equal(f.current().getNpcId(), willId);
+    assert.equal(f.will.getInteractingMobile(), f.player, 'ordinary native Talk-to still pairs the NPC');
+    let view = f.flush();
+    assert.equal(view.players.find(p => p.index === f.player.getIndex()).faceDirection, 0, 'Will is due south');
+    assert.deepEqual(view.npcs.find(n => n.index === f.will.getIndex()).faceTile,
+      { x: f.player.getLocation().getX(), y: f.player.getLocation().getY() });
+    await f.next(); await f.next(); assert.equal(f.current().getNpcId(), anneId);
+    view = f.flush();
+    assert.equal(view.players.find(p => p.index === f.player.getIndex()).faceDirection, 151,
+      'Anne at deck(3,2) receives the angle observed in recording381');
+    assert.ok(f.player.getPositionToFace().equals(f.anne.getLocation()));
+    await f.next(); await f.next(); assert.equal(f.current().getNpcId(), willId);
+    assert.equal(f.flush().players.find(p => p.index === f.player.getIndex()).faceDirection, 0);
+  });
+  await t.test('foreign, cancelled and retired dialogue actors cannot retarget the player', async test => {
+    const f = fixture(test), other = fixture(test); await other.talk(f.will);
+    assert.equal(other.current(), undefined, 'a native foreign-actor click is rejected');
+    await f.talk(); await f.next(); const stale = f.continuation(); f.player.closeInterruptibleInterfaces();
+    const sentinel = f.player.getLocation().clone().add(1, 0); f.player.setPositionToFace(sentinel);
+    PM.createApi('DeckFacingReplacement').sendMultiChatboxPrompt(f.player, 'Keep this choice', 'Yes', () => {}, 'No', () => {});
+    await f.input(stale); assert.ok(f.player.getPositionToFace().equals(sentinel));
+    assert.equal(MultiChatboxPrompt.getPending(f.player)?.title, 'Keep this choice');
+    f.player.closeInterruptibleInterfaces(); await f.talk(); await f.next(); PM.removeNpc(f.anne);
+    f.player.setPositionToFace(sentinel); await f.next();
+    assert.ok(f.player.getPositionToFace().equals(sentinel), 'a queued line ignores a retired actor');
+    PM.emitPlayerLogout({ player: f.player, username: f.player.getUsername() }); await f.input(stale);
+    assert.ok(f.player.getPositionToFace().equals(sentinel), 'departed playback has no pending turn');
+  });
 });

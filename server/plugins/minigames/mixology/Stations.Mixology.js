@@ -16,7 +16,7 @@
  *   synth 2582, the station's idle02, both varbits back to 0. With no room for it: "You don't
  *   have enough inventory space to collect the finished Anti-leech lotion." and it waits.
  * - Retort: every tick the player clicks it again adds 1 more (2 a tick), for 2 XP a click.
- * - Alembic: when progress reaches 4 the bellows open (synth 2655 and
+ * - Alembic: after four active pumps the bellows open (synth 2655 and
  *   vfx_machinery_alchemy01_alembic01 at its front, both 30 cycles late); a click on the next
  *   tick hits (varbit 11338): progress jumps a third of the total (4 -> 10 at a total of 19),
  *   then +2 for the tick, and 14 XP. Any other click while it works loses 2 progress.
@@ -97,7 +97,8 @@ const MIN_TOTAL = 1;
 const CLICK_BONUS = 1;
 const MISS_PENALTY = 2;
 const RETORT_CLICK_XP = 2;
-const ALEMBIC_CUE_PROGRESS = 4;
+const ALEMBIC_FIRST_PUMP = 4;
+const ALEMBIC_RETRY_PUMPS = 7;
 const AGITATOR_CUE_RANGE = [2, 5];
 const SOUND_CUE = 2655;
 const SOUND_FINISHED = 2582;
@@ -164,7 +165,7 @@ function begin(player, station) {
   const cue = station.cue;
   const cueProgress = station.key === "agitator"
     ? AGITATOR_CUE_RANGE[0] + Math.floor(Math.random() * (AGITATOR_CUE_RANGE[1] - AGITATOR_CUE_RANGE[0] + 1))
-    : ALEMBIC_CUE_PROGRESS;
+    : ALEMBIC_FIRST_PUMP;
   work.set(player, {
     station,
     tile: new Location(location.getX(), location.getY(), location.getZ()),
@@ -172,6 +173,10 @@ function begin(player, station) {
     click: -1,
     cueProgress: cue ? cueProgress : -1,
     cueTick: -1,
+    // Count active pumps, not progress: a miss deducts progress and leaving resets pumps.
+    pumps: 0,
+    cuePump: ALEMBIC_FIRST_PUMP,
+    retryScheduled: false,
     // A potion picked back up keeps its hit: the bonus comes once per potion (Wiki).
     hits: station.hitVarbit && Shared.get(player, station.hitVarbit) === 1 ? cue.hits : 0,
     bar: null,
@@ -270,7 +275,14 @@ function click(player, station, state, now, progress, needed) {
   }
   const spec = station.cue;
   const inWindow = state.cueTick >= 0 && now > state.cueTick && now <= state.cueTick + spec.window;
-  if (!inWindow || state.hits >= spec.hits) return progress - MISS_PENALTY;
+  if (!inWindow || state.hits >= spec.hits) {
+    if (station.key === "alembic" && state.hits === 0 && !state.retryScheduled) {
+      state.retryScheduled = true;
+      state.cuePump = state.pumps + ALEMBIC_RETRY_PUMPS;
+      state.cueTick = -1;
+    }
+    return progress - MISS_PENALTY;
+  }
   Shared.addXp(player, spec.xp[state.hits]);
   state.hits++;
   Shared.set(player, station.hitVarbit, 1);
@@ -290,13 +302,15 @@ function tick(player, now) {
   if (now === state.started) return;
   const { station } = state;
   const needed = total(player);
+  if (station.key === "alembic") state.pumps++;
   const progress = Shared.get(player, station.progressVarbit);
   const next = state.click === now
     ? click(player, station, state, now, progress, needed)
     : progress + 1;
   setProgress(player, station, Math.min(needed, next));
   if (next !== progress + 1 && next < needed) showBar(player, state, Math.max(0, next), needed);
-  if (station.cue && state.cueTick < 0 && state.hits < station.cue.hits && next >= state.cueProgress) cue(player, station, state, now);
+  const cueReached = station.key === "alembic" ? state.pumps >= state.cuePump : next >= state.cueProgress;
+  if (station.cue && state.cueTick < 0 && state.hits < station.cue.hits && cueReached) cue(player, station, state, now);
   if (next >= needed) {
     finish(player, station);
     return;

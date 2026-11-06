@@ -6,6 +6,7 @@ import net.rsprot.buffer.extensions.toJagByteBuf
 import net.rsprot.compression.HuffmanCodec
 import net.rsprot.crypto.cipher.IsaacRandom
 import net.rsprot.protocol.message.IncomingMessage
+import net.rsprot.protocol.game.incoming.prot.GameClientProt
 import net.rsprox.cache.api.Cache
 import net.rsprox.cache.api.CacheProvider
 import net.rsprox.cache.api.type.GameVal
@@ -193,6 +194,13 @@ class HeadlessClient(private val host: String, private val port: Int) {
                 }.buffer.let { it.array().copyOf(it.writerIndex()) },
             )
 
+        /** Native object-search answer (cache RESUME_OBJDIALOG); RSProt's decoder reads g2. */
+        fun resumeObject(obj: Int) = sendFixed(GameClientProt.RESUME_P_OBJDIALOG.opcode,
+            Unpooled.buffer().toJagByteBuf().apply { p2(obj) }.buffer.let { it.array().copyOf(it.writerIndex()) })
+
+        fun resumeCount(count: Int) = sendFixed(GameClientProt.RESUME_P_COUNTDIALOG.opcode,
+            Unpooled.buffer().toJagByteBuf().apply { p4(count) }.buffer.let { it.array().copyOf(it.writerIndex()) })
+
         /** IF_BUTTONT: the selected component (a spell, or an item's Use) on a target component's slot. */
         fun buttonT(selected: Int, selectedSub: Int, selectedObj: Int, target: Int, targetSub: Int, targetObj: Int) =
             sendFixed(
@@ -275,6 +283,25 @@ class HeadlessClient(private val host: String, private val port: Int) {
 
         /** UPDATE_PLAYER_MODEL_V2: 26 raw bytes, as the character designer sends them. */
         fun updatePlayerModel(bytes: ByteArray) = sendFixed(UPDATE_PLAYER_MODEL_V2, bytes)
+
+        /** Terminal check after the expected final packet; discards any trailing bytes. */
+        fun disconnectsWithin(timeoutMs: Int): Boolean {
+            val previousTimeout = socket.soTimeout
+            val deadline = System.nanoTime() + timeoutMs * 1_000_000L
+            val trailing = ByteArray(1024)
+            try {
+                while (true) {
+                    val remaining = deadline - System.nanoTime()
+                    if (remaining <= 0) return false
+                    socket.soTimeout = ((remaining + 999_999) / 1_000_000).toInt().coerceAtLeast(1)
+                    if (input.read(trailing) == -1) return true
+                }
+            } catch (_: SocketTimeoutException) {
+                return false
+            } finally {
+                socket.soTimeout = previousTimeout
+            }
+        }
 
         /** CLIENT_CHEAT: a `::` command, without the colons. */
         fun command(text: String) =

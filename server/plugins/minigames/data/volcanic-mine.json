@@ -53,6 +53,8 @@
     "block": 50, "clear": 50, "inspect": 50, "throw": 1, "chip": 1, "vortex": 100,
     "_cap": "Wiki: blocking and unblocking pay 50 each, up to 300 a player per game.",
     "capCap": 300,
+    "_balanceCap": "Wiki (Volcanic Mine; Petrified Pete's Ore Shop): the most points a player can have is 2^21 - 1. That the excess is lost, and that the Mining XP is still paid on it, are inferred: the Wiki says neither. It also says a warning is given near the cap; its wording was not found by text search of the archive, so none is sent.",
+    "balanceCap": 2097151,
     "fragments": { "iron": 15, "silver": 20, "coal": 25, "gold": 34, "mithril": 44, "adamantite": 55, "runite": 70 }
   },
   "xp": {

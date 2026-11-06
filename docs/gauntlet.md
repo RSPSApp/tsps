@@ -56,7 +56,7 @@ The Corrupted Gauntlet uses the same layout 8 chunks east. Rim and corner rooms 
 
 ## A run
 
-**Entry.** The entrance (37340) is a multiloc on varp 2353: it shows "Enter", plus "Enter-corrupted" after any completion. Bryn turns players away if they:
+**Entry.** Completing Song of the Elves is required to start either Gauntlet. The entrance (37340) is a multiloc on varp 2353: it shows "Enter", plus "Enter-corrupted" after any completion. Bryn turns players away if they:
 - haven't spoken to him (his first talk sets this);
 - have a pet out;
 - have a reward waiting (varbit 9179).

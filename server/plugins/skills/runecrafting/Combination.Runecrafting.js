@@ -8,7 +8,8 @@
  * lava), at Runecraft 6 mist, 10 dust, 13 mud, 15 smoke, 19 steam, 23 lava. It takes pure essence and the same
  * number of the elemental runes, and either the used rune's talisman (spent) or an active Magic Imbue (the talisman
  * is then kept). Essence, runes and talisman go whether or not the runes bind; each rune binds on a 50% chance, and a
- * worn Binding necklace (16 uses, one per altar use) binds them all.
+ * worn Binding necklace (16 uses, one per altar use) binds them all. A batch is refused before spending anything
+ * when the bound runes cannot fit in the inventory.
  * XP an essence is each rune's own Recipe infobox on the Wiki, by altar. The Steam rune page's table says 9.3 on the
  * Water altar and its prose 9.5; the table is used.
  * rsprox 1757 (rev 227) tick 18626: an earth rune on the water altar with 6 pure essence gave 2 mud runes with the
@@ -74,11 +75,11 @@ function takeable(inventory, id) {
   return slots;
 }
 const total = (slots) => slots.reduce((sum, [, amount]) => sum + amount, 0);
-function takeFrom(inventory, slots, amount) {
+function takeFrom(inventory, slots, amount, refresh = true) {
   for (const [slot, have] of slots) {
     if (amount <= 0) return;
     const take = Math.min(have, amount);
-    inventory.deleteAtSlot(slot, take);
+    inventory.deleteAtSlot(slot, take, refresh);
     amount -= take;
   }
 }
@@ -125,6 +126,18 @@ function combine(event) {
   const necklace = wornNecklace(player);
   let bound = 0;
   for (let i = 0; i < amount; i++) if (necklace || Math.random() < SUCCESS_CHANCE) bound++;
+
+  if (bound > 0) {
+    // Check the actual rolled output after the same slot-specific debits as the real transaction.
+    const preview = new core.Inventory(player).setItems(inventory.getCopiedItems());
+    takeFrom(preview, essenceSlots, amount, false);
+    takeFrom(preview, runeSlots, amount, false);
+    if (!useImbue) takeFrom(preview, talismanSlots, 1, false);
+    if (preview.getAddableAmount(new core.Item(rune.made, bound)) < bound) {
+      inventory.full();
+      return;
+    }
+  }
 
   takeFrom(inventory, essenceSlots, amount);
   takeFrom(inventory, runeSlots, amount);

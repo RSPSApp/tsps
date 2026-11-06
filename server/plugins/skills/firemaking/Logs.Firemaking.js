@@ -416,6 +416,7 @@ function startFiremakingAttempt(player, log, source, activeSessions) {
     bowId: source.bowId,
     log,
     location: sessionLocation,
+    startLocation: player.getLocation().clone(),
     privateArea,
     nextActionTick: sessionTick + FIRST_LIGHT_ROLL_TICKS,
     catchTick: null,
@@ -602,6 +603,13 @@ function processFiremakingTick(activeSessions, currentTick) {
 
     // After a hit, the queued step off the log is ours and must not cancel the fire.
     if (session.catchTick == null && player.getMovementQueue()?.size?.() > 0) {
+      stopFiremaking(activeSessions, player);
+      continue;
+    }
+    // The queue can drain before this global task runs; detect an actual step too.
+    // The successful roll queues its own step, so only check before catchTick.
+    if (session.mode === SESSION_MODE.GROUND && session.catchTick == null &&
+        !player.getLocation().equals(session.startLocation)) {
       stopFiremaking(activeSessions, player);
       continue;
     }

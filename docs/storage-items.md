@@ -48,9 +48,10 @@ is owned but its store remains, the upgrade also preserves those gems, combining
 60 each. The server refuses the upgrade without consuming items if the combined contents exceed that
 capacity, another lower-tier copy is owned, or a saved store is inconsistent; this is a conservative
 policy for existing server saves, not an observed game rule.
-The sack's action and refusal messages have no retained sack transcript, and ground pickup currently
-uses the gem bag's pickup wording. Semi-precious auto-storage is limited to mining here; the source
-does not establish every live-game gather source.
+The sack's action, sewing and pickup messages follow this server's pouch and bag wording; no sack
+transcript is retained. Gem bag, gem sack and herb sack ground pickup use this server's ordinary
+pickup sound; live container audio is not established. Semi-precious auto-storage is limited to
+mining here; the source does not establish every live-game gather source.
 
 ## Events
 
@@ -85,6 +86,7 @@ inventory option, even from the bank panel; it now leaves the bank panel's ops t
 | Gem bag | "You just found a/an [gem]!" / "You put it straight into your open gem bag." / "You open your gem bag, ready to fill it." / "You close your gem bag." / "Sapphires: # / Emeralds: # / Rubies: #" / "Diamonds: # / Dragonstones: #" / "Only uncut gems can be stored in the bag." / "Your bag is too full to hold all your gems." / "You have nothing suitable for storing in the bag." | Wiki; Fill itself has no line |
 | Fish barrel | "The barrel is full. It may be emptied at a bank." | Wiki |
 | Log basket | "The basket is full." / "Your basket is empty." / "The basket is empty." / "You empty your basket." / "You empty as many logs as you can carry." / "You empty your basket into the bank." | parsed from live chat |
+| Log basket | "You empty some of your basket's contents into the bank." / "Your bank cannot hold the remaining contents of your basket." | Ours (not captured) |
 | Tackle box | "The tackle box is now empty." | captured |
 | Tackle box | "The tackle box cannot hold itself! How weird would that be?" | Wiki |
 
@@ -101,6 +103,16 @@ The quantity buttons 683:4-7 set varbit 11795 (`ii_elnock_storage_selectedquanti
 box's scripts share): 0 = 1, 1 = 5, 2 = All, 3 = X. Cache scripts 4052 (Withdraw) and 4053
 (Deposit) put the selected quantity on op1 and fix ops 2-5 as 1, 5, X and All. Fill (683:8)
 moves everything the box takes, silently; Empty (683:9) says "The tackle box is now empty."
+
+## Forester's rations and ordinary axes
+
+On a successful chop with a carried or worn one-handed ordinary axe, a ration in
+the inventory or a carried/worn Forestry kit has a 30% chance to restore 20 run
+energy points when energy is below 90%. The proc consumes one ration. This
+combines [Jagex's original rule](https://secure.runescape.com/m=news/forestry-the-way-of-the-forester---part-one?oldschool=1)
+with the current [Forestry kit threshold](https://oldschool.runescape.wiki/w/Forestry_kit);
+it is not a captured numeric observation. The separate felling-axe energy and
+ration-consumption interaction remains unimplemented and unverified.
 
 ## Forestry kit interface
 
@@ -153,6 +165,6 @@ Elemental ore: "Even this spell is not hot enough to heat this item." (Wiki).
 
 ## Not done
 
-- The Forestry kit's clothes and cape pouches, and the Forester's rations' run energy.
+- The Forestry kit's clothes and cape pouches, and Forester's ration run-energy effects while using a felling axe.
 - The deposit box's container options; the Ultimate Ironman bank-booth emptying of the fish
   barrel.

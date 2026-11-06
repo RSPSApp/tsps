@@ -1,7 +1,9 @@
 /**
  * Clue nests (OSRS Wiki): every log rolls each clue tier the player does not already own, at
- * 1 in floor(floor(base) / (100 + Woodcutting) * tier modifier), where base is the tree's beaver
- * rate. The woodcutting cape's nest bonus does not apply. Opening a nest gives the clue scroll and
+ * 1 in floor(floor(base * CA) / (100 + Woodcutting) * tier modifier), where base is the tree's
+ * beaver rate. The matching CA reward reduces base by 5%, and an imbued ring doubles nonbeginner
+ * clue chances while chopping in the Wilderness; see Wiki: Clue nest (beginner) for its exception.
+ * The woodcutting cape's nest bonus does not apply. Opening a nest gives the clue scroll and
  * an empty bird nest.
  */
 let core = null;
@@ -41,13 +43,25 @@ function rollClueNests(player, tree) {
     return;
   }
   const level = player.getSkillManager().getCurrentLevel(core.Skill.WOODCUTTING);
+  const location = player.getLocation?.();
+  const I = core.ItemIdentifiers;
+  const rings = [I.RING_OF_WEALTH_I_, I.RING_OF_WEALTH_I1_, I.RING_OF_WEALTH_I2_,
+    I.RING_OF_WEALTH_I3_, I.RING_OF_WEALTH_I4_, I.RING_OF_WEALTH_I5_, I.RING_OF_WEALTH_I1__2, I.RING_OF_WEALTH_I5__2];
+  const wildernessRing = location && core.Wilderness?.isInLocation?.(location) &&
+    core.Wilderness?.levelAt?.(location.getX(), location.getY()) > 0 &&
+    rings.some(id => Number.isInteger(id) && player.getEquipment?.()?.contains?.(id));
   for (const tier of tiers) {
     // Content may make clue nests commoner ("treasure-trails:vessel-chance", a league relic): `multiplier` times.
     const boost = { player, vessel: "nest", tier: tier.name, multiplier: 1 };
     pluginApi?.emitCustomEvent?.("treasure-trails:vessel-chance", boost);
-    const base = Math.floor((Math.floor(tree.petBase) / (100 + level)) * tier.modifier);
+    if (boost.allowed === false) continue;
+    const achievement = { player, tier: tier.name, currentThresholdMet: false };
+    if (tier.name !== "beginner") pluginApi?.emitCustomEvent?.("combat-achievements:tier", achievement);
+    const adjusted = achievement.currentThresholdMet === true ? Math.floor(tree.petBase * 95 / 100) : Math.floor(tree.petBase);
+    const base = Math.floor((adjusted / (100 + level)) * tier.modifier);
     const chance = base < 1 ? base : Math.max(1, Math.floor(base / (boost.multiplier > 1 ? boost.multiplier : 1)));
-    if (chance < 1 || Math.floor(Math.random() * chance) !== 0 || ownsClue(player, tier)) {
+    const ringMultiplier = wildernessRing && tier.name !== "beginner" ? 2 : 1;
+    if (chance < 1 || Math.random() * chance >= ringMultiplier || ownsClue(player, tier)) {
       continue;
     }
     const reward = {player, itemId: tier.nestId, box: false};

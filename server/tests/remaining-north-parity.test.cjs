@@ -1168,13 +1168,9 @@ test('Secrets North6 cult travel: real cave 2852 lands at the raft and boards to
     });
   };
 
-  // Valve clicks are handler-level state setup, before the cave; they are not
-  // a movement-route assertion. The route proof below starts at the landing.
-  for (const [id, x, y] of [
-    [2844, 2562, 3247], [2845, 2572, 3263], [2846, 2585, 3245],
-    [2847, 2597, 3263], [2848, 2611, 3242],
-  ]) click(id, x, y);
-  assert.equal(Number(p.getAttribute('quest.hazeel_cult.valves')), 31, 'all five valves open');
+  // Valve setup is handler-level state, before the cave; it is not a movement
+  // route assertion. sewervalve1/2/4/5 right, sewervalve3 left is the native target.
+  p.setAttribute('quest.hazeel_cult.valve-directions', (1 << 0) | (1 << 1) | (1 << 3) | (1 << 4));
 
   click(2852, 2585, 3233); // cave entrance
   assert.deepEqual([p.getLocation().getX(), p.getLocation().getY(), p.getLocation().getZ()], [2570, 9682, 0],

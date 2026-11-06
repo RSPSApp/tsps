@@ -1,15 +1,21 @@
+import { PluginManager } from "../plugins/PluginManager";
 import type { Location } from "./model/Location";
 
-/** Optional cross-floor visibility and ranged combat. Read after environment setup. */
+/** World-configured cross-floor visibility and ranged combat; old environment settings are fallbacks. */
 export class CrossFloor {
     /** Legacy combined switch remains supported when the newer switches are unset. */
     private static legacyEnabled(): boolean { return process.env.CROSS_FLOOR_VISIBILITY_AND_COMBAT === "1"; }
     static enabled(): boolean {
+        const configured = PluginManager.getPluginConfig<unknown>("CrossFloor:visibility");
+        if (typeof configured === "boolean") return configured;
         return process.env.CROSS_FLOOR_VISIBILITY === undefined
             ? CrossFloor.legacyEnabled()
             : process.env.CROSS_FLOOR_VISIBILITY === "1";
     }
     static combatEnabled(): boolean {
+        if (!CrossFloor.enabled()) return false;
+        const configured = PluginManager.getPluginConfig<unknown>("CrossFloor:combat");
+        if (typeof configured === "boolean") return configured;
         return process.env.CROSS_FLOOR_COMBAT === undefined
             ? (process.env.CROSS_FLOOR_VISIBILITY === undefined && CrossFloor.legacyEnabled())
             : process.env.CROSS_FLOOR_COMBAT === "1";

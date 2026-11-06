@@ -53,6 +53,8 @@ import {
   encodeCameraTarget,
   encodeSetInteractionMode,
   encodeResetInteractionMode,
+  encodeHideNpcOps,
+  encodeHideObjOps,
   encodeChatFilterSettings,
   encodeRunEnergy,
   encodeSkillsDelta,
@@ -868,6 +870,11 @@ export class PacketSender {
     return this.chatboxGroupId;
   }
 
+  /** Owner of the currently mounted chatbox, if its presentation was scoped. */
+  public getChatboxOwner(): object | undefined {
+    return this.chatboxOwner;
+  }
+
   /** Associate only chatboxes mounted synchronously by this presentation. */
   public withChatboxOwner<T>(owner: object | undefined, present: () => T): T {
     const previous = this.presentingChatboxOwner;
@@ -1084,6 +1091,18 @@ export class PacketSender {
   /** Drops a world's own interaction mode, so it follows the default again. */
   sendResetInteractionMode(worldId: number): this {
     this.player.getSession().sendClientPacket(encodeResetInteractionMode(worldId));
+    return this;
+  }
+
+  /** Hides every NPC's menu actions (not Examine) across the client until set false again. */
+  sendHideNpcOps(hidden: boolean): this {
+    this.player.getSession().sendClientPacket(encodeHideNpcOps(hidden));
+    return this;
+  }
+
+  /** Hides every ground item's menu actions across the client until set false again. */
+  sendHideObjOps(hidden: boolean): this {
+    this.player.getSession().sendClientPacket(encodeHideObjOps(hidden));
     return this;
   }
 

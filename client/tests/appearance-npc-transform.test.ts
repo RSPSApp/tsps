@@ -7,6 +7,8 @@ import { PlayerDesignController } from "../game/widgets/PlayerDesignController";
 import { encodePlayerAppearance } from "../../server/src/main/typescript/elvarg/net/protocol/ClientProtocol";
 import { decodeAppearanceBinary } from "../game/sync/AppearanceDecoder";
 
+const RUNE_FULL_HELM_ID = 1163;
+
 const bytes = new Uint8Array([
     0, 255, 255, 255, 255, 0, 172,
     0, 0, 0, 0, 0,
@@ -97,3 +99,21 @@ for (const pronouns of [2, 1, 0]) {
     mounted = true;
 }
 console.log("native pronoun updates preserve active designer edits passed");
+
+// Body type B jaw kits are identikit ids >= 256 in this cache (female jaw 292-306), so the
+// wire value kitId + 256 reaches the item range under the old >= 512 split and was dropped.
+// Native ranges: 256-2047 kit, >= 2048 item (runescape-client PlayerComposition).
+for (const jawKit of [292, 306]) {
+    const encoded = encodePlayerAppearance({ gender: 1, pronouns: 1, colors: [0, 0, 0, 0, 0],
+        kits: [45, jawKit, 56, 61, 67, 70, 79], equip: new Array(14).fill(-1) },
+        "Jaw", 3, 32, new Array(7).fill(-1));
+    const decoded = decodeAppearanceBinary(encoded)!;
+    assert.equal(decoded.kits[1], jawKit, `body type B jaw kit ${jawKit} survives the appearance update`);
+}
+// The same split must keep a normal item id in its equipment slot.
+const itemEncoded = encodePlayerAppearance({ gender: 1, pronouns: 1, colors: [0, 0, 0, 0, 0],
+    kits: [45, 292, 56, 61, 67, 70, 79],
+    equip: [RUNE_FULL_HELM_ID, ...new Array(13).fill(-1)] }, "Jaw", 3, 32, new Array(7).fill(-1));
+assert.equal(decodeAppearanceBinary(itemEncoded)!.equipment[0], RUNE_FULL_HELM_ID,
+    "a head item id still decodes next to high-numbered kits");
+console.log("body type B jaw and item appearance ranges passed");

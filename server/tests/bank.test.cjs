@@ -680,6 +680,87 @@ function bankOf(player, ...tabs) {
   tabs.forEach((ids, tab) => ids.forEach((id) => player.getBank(tab).add(new Item(id, 1), false)));
 }
 
+
+test("native tab drag preserves containers, contents and save/load ordering", async (t) => {
+  const { CachePipeline } = require("../dist/game/cache/CachePipeline");
+  await CachePipeline.initialize(process.cwd());
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const { PlayerSession } = require("../dist/net/PlayerSession");
+  const { ClientConnection } = require("../dist/net/NetworkBuilder");
+  const { decodeClientPackets } = require("../dist/net/protocol/ClientProtocol");
+  const { PlayerSave } = require("../dist/game/entity/impl/player/persistence/PlayerSave");
+  const { GameConstants } = require("../dist/game/GameConstants");
+  const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true,
+    send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+  const player = new Player(new PlayerSession(channel));
+  player.setUsername("banktabreorder");
+  player.setRegistered(true);
+  player.setStatus(PlayerStatus.BANKING);
+  player.setInterfaceId(Bank.MAIN_INTERFACE_ID);
+  player.getBank(0).add(new Item(995, 43), false);
+  player.getBank(1).add(new Item(A, 1, { charges: 7 }), false);
+  player.getBank(1).setItem(1, new Item(B, 0));
+  player.getBank(2).add(new Item(995, 2147483647), false);
+  player.getBank(3).add(new Item(C, 2), false);
+  player.setCurrentBankTab(3);
+  const before = [0, 1, 2, 3].map(tab => player.getBank(tab));
+  const contents = bank => bank.getValidItems().map(item => [item.getId(), item.getAmount(), item.getMeta()]);
+  const original = before.map(contents);
+  const saves = [];
+  t.mock.method(GameConstants.PLAYER_PERSISTENCE, "requestSave", (_p, reason) => saves.push(reason));
+  const connection = new ClientConnection(channel);
+  connection.player = player;
+  // Exact frame asserted from gateway Upstream.handle(IfButtonD): tab slot13 ->11, no item IDs.
+  const packet = decodeClientPackets(Buffer.from("01ffff0a000c00ffff008d000a000c0b00", "hex"));
+  assert.deepEqual(packet[0], { type: "widget_drag", sourceWidgetId: BANK_TABS, targetWidgetId: BANK_TABS,
+    sourceSlot: 13, targetSlot: 11, sourceItemId: 65535, targetItemId: 65535 });
+  await connection.dispatch(packet, true);
+  assert.equal(player.getBank(1), before[3]);
+  assert.equal(player.getBank(3), before[1]);
+  assert.equal(player.getBank(0), before[0]);
+  assert.equal(player.getBank(2), before[2]);
+  assert.equal(player.getCurrentBankTab(), 1, "the viewed contents follow their moved tab");
+  assert.deepEqual([0, 1, 2, 3].map(tab => contents(player.getBank(tab))), [original[0], original[3], original[2], original[1]]);
+  assert.ok(before.every(bank => bank.getPlayer() === player && bank.player === player));
+  assert.ok(saves.includes("bank-tab-reorder"));
+  let codec;
+  require("../plugins/persistence/JsonPlayerPersistence.plugin").register({
+    getSkillManager: () => require("../dist/game/content/skill/SkillManager").SkillManager,
+    setPlayerPersistence: value => { codec = value; }, log() {},
+  });
+  const saved = JSON.parse(JSON.stringify(PlayerSave.fromPlayer(player), codec.replacer.bind(codec)), codec.reviver.bind(codec));
+  const loaded = new Player(new PlayerSession(channel));
+  codec.hydratePlayerSave(saved).applyToPlayer(loaded);
+  assert.deepEqual([0, 1, 2, 3].map(tab => contents(loaded.getBank(tab))), [original[0], original[3], original[2], original[1]]);
+  loaded.setStatus(PlayerStatus.BANKING);
+  loaded.setInterfaceId(Bank.MAIN_INTERFACE_ID);
+  Bank.viewTab(loaded, 1);
+  Bank.withdraw(loaded, C, 0, 1, 1);
+  assert.equal(loaded.getInventory().getAmount(C), 1);
+  assert.equal(loaded.getBank(1).getAmount(C), 1);
+  loaded.getInventory().add(new Item(UNRELATED, 2), false);
+  const slot = loaded.getInventory().getSlotForItemId(UNRELATED);
+  drag(loaded, SIDE_ITEMS, slot, UNRELATED, BANK_TABS, 11);
+  assert.equal(loaded.getBank(1).getAmount(UNRELATED), 1, "later deposit uses the moved container");
+  assert.equal(loaded.getBank(3).getAmount(A), 1);
+  assert.equal(loaded.getBank(2).getAmount(995), 2147483647);
+  player.setRegistered(false);
+});
+
+test("tab drags reject main, empty, invalid and unrelated destinations without moving items", () => {
+  for (const [from, targetWidget, to] of [[10, BANK_TABS, 11], [11, BANK_TABS, 10],
+    [11, BANK_TABS, 13], [13, BANK_TABS, 11], [11, BANK_TABS, 11],
+    [11, BANK_TABS, 65535], [11, BANK_ITEMS, 0], [11, SIDE_ITEMS, 0]]) {
+    const player = createPlayer();
+    bankOf(player, [C], [A], [B]);
+    const containers = player.banks.slice();
+    const contents = tabsOf(player);
+    drag(player, BANK_TABS, from, 65535, targetWidget, to);
+    assert.deepEqual(player.banks, containers);
+    assert.deepEqual(tabsOf(player), contents);
+  }
+});
+
 test("dragging a bank item onto another swaps them, or inserts in insert mode", () => {
   const swapping = createPlayer();
   bankOf(swapping, [A, B, C]);

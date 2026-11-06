@@ -48,6 +48,7 @@ afterEach(() => {
 function makePlayer(attributes = {}) {
   const attrs = new Map(Object.entries(attributes));
   const messages = [], texts = [], strings = new Map(), hidden = new Map(), sounds = [], animations = [];
+  const rotates = [], scripts = [];
   const experience = new Map();
   const varps = new Map();
   let interfaceId = -1;
@@ -69,6 +70,8 @@ function makePlayer(attributes = {}) {
     // As the real one: closing interfaces also ends the dialogue.
     sendInterfaceRemoval() { interfaceId = -1; player.manager.reset(); return sender; },
     sendSound(id) { sounds.push(id); return sender; },
+    sendInterfaceRotateSpeed(uid, speedX, speedY) { rotates.push({ uid, speedX, speedY }); return sender; },
+    sendClientScript(id, ...args) { scripts.push({ id, args }); return sender; },
     isChatboxInterface() { return true; },
   }, { get(target, key) { return key in target ? target[key] : () => sender; } });
   const player = {
@@ -88,7 +91,7 @@ function makePlayer(attributes = {}) {
     varbit: (id) => sender.getVarbit(id),
     get menu() { return menu; },
     set menu(value) { menu = value; },
-    attrs, messages, texts, strings, hidden, sounds, animations, experience,
+    attrs, messages, texts, strings, hidden, sounds, animations, experience, rotates, scripts,
   };
   player.manager = new DialogueManager(player);
   return player;
@@ -111,6 +114,7 @@ function makeWorld() {
     onInterfaceActionButton(uid, handler) { buttons.set(uid, handler); },
     onAnyNpcInteraction(actions) { anyNpc = actions; },
     onPlayerLogin(handler) { login.push(handler); },
+    registerArea() {},
     sendMultiChatboxPrompt(player, _title, ...flat) {
       const options = [];
       for (let i = 0; i < flat.length; i += 2) options.push([flat[i], flat[i + 1]]);
@@ -242,6 +246,29 @@ test("questions, answers and progress follow the capture", () => {
   assert.equal(player.hidden.get(ids.quizText), true);
   click(world, player, 0);
   assert.equal(player.attrs.get(KUDOS), 2);
+});
+
+test("only the captured quiz model components get native rotate speed", () => {
+  const world = makeWorld();
+  const player = makePlayer({ [STATE]: { agreed: true } });
+  // Recording 1723 (rev 227): IF_SETROTATESPEED (0, 5) on vm_natural_history components
+  // 2, 3, 7-12, 17-20 only; the dragon (4-6) and seaslug (13-16) models got no packet.
+  const captured = [2, 3, 7, 8, 9, 10, 11, 12, 17, 18, 19, 20];
+  const rotated = [];
+  for (const entry of QUIZ.cases) {
+    player.rotates.length = 0;
+    study(world, player, entry);
+    for (const call of player.rotates) {
+      assert.equal(call.speedX, 0);
+      assert.equal(call.speedY, 5);
+      assert.equal(Math.floor(call.uid / 0x10000), ids.quiz);
+      rotated.push(call.uid & 0xffff);
+    }
+  }
+  assert.deepEqual(rotated.sort((a, b) => a - b), captured);
+  // The interim cache spinner script is gone: the native packet carries the rotation, so
+  // there is no second timer running at its own speed.
+  assert.deepEqual(player.scripts, []);
 });
 
 test("all 14 cases, then Orlando's reward once", () => {

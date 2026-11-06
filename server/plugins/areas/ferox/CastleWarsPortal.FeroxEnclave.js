@@ -4,7 +4,7 @@
  *
  * - "Enter" warns that there is no return portal to Ferox Enclave from Castle Wars, and on "Yes."
  *   teleports a tick later to the Castle Wars lobby. Free-to-play worlds can come back through
- *   the lobby's double doors (not wired up here - "Not done" in docs/ferox-enclave.md).
+ *   the lobby's double doors; the return destination, prompt text and timing are our choices.
  */
 const { Location } = require("../../../src/main/typescript/elvarg/game/model/Location");
 const Ferox = require("./Common.FeroxEnclave");
@@ -13,6 +13,29 @@ const Ferox = require("./Common.FeroxEnclave");
 const LOBBY = new Location(2440, 3090, 0);
 // The Wiki names the warning only; the wording is ours.
 const WARNING = "There is no return portal to Ferox Enclave from Castle Wars.";
+
+// The return location and the question's wording/timing are TSPS choices, not captures.
+const RETURN = require('./FreeForAll.FeroxEnclave').RETURN;
+
+function returnToFerox(player, origin) {
+  if (!player.getLocation().equals(origin) || Ferox.core.WorldDefinition.isMembersWorld()) return;
+  Ferox.later(player, 1, () => {
+    if (player.getLocation().equals(origin) && !Ferox.core.WorldDefinition.isMembersWorld()) player.moveTo(RETURN.clone());
+  });
+}
+
+function useLobbyDoor(request) {
+  if (request.handled || Ferox.core.WorldDefinition.isMembersWorld()) return;
+  const { LARGE_DOOR_98, LARGE_DOOR_99 } = Ferox.core.ObjectIdentifiers;
+  if (request.objectId !== LARGE_DOOR_98 && request.objectId !== LARGE_DOOR_99) return;
+  const location = request.object.getLocation();
+  if (location.getZ() !== 0 || location.getX() < 2430 || location.getX() > 2450
+      || location.getY() < 3080 || location.getY() > 3100) return;
+  request.handled = true;
+  const origin = request.player.getLocation().clone();
+  Ferox.api.sendMultiChatboxPrompt(request.player, 'Return to the Ferox Enclave?',
+    'Yes.', player => returnToFerox(player, origin), 'No.', () => {});
+}
 
 function teleport(player) {
   Ferox.later(player, 1, () => {
@@ -39,6 +62,7 @@ function enter({ player }) {
 
 module.exports = function attachCastleWarsPortal(api) {
   api.onObjectInteraction("Castle Wars portal", { Enter: enter });
+  api.onCustomEvent("door:toggle", useLobbyDoor);
 };
 
 Object.assign(module.exports, { enter, teleport, LOBBY, WARNING });

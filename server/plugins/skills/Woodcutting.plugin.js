@@ -767,6 +767,28 @@ function useFellingRation(player, axe) {
   return request.taken === 1;
 }
 
+/** Ordinary one-handed axes can use a ration for energy on a successful chop.
+ * Jagex Forestry Part One specifies 30% and 20 run-energy points; Wiki: Forester's ration
+ * specifies the below-90% threshold. Felling axes retain their separate existing behavior.
+ */
+function rollForesterRationEnergy(player, axe) {
+  if (!axe || axe.felling || !AXES.includes(axe) || !pluginApi.core.WorldDefinition.isMembersWorld()) return false;
+  if (pluginApi.core.ItemDefinition.forId(axe.id).isDoubleHanded()) return false;
+  if (!player.getInventory().contains(axe.id) && getEquippedWeaponId(player) !== axe.id) return false;
+  if (player.getRunEnergyUnits() >= 9000 || availableFellingRations(player) < 1) return false;
+  if (Math.random() >= 0.3) return false;
+  const ration = ItemIds.FORESTERS_RATION;
+  if (player.getInventory().contains(ration)) player.getInventory().deleteNumber(ration, 1);
+  else {
+    const request = { player, itemId: ration, amount: 1, taken: 0 };
+    pluginApi.emitCustomEvent("storage:take", request);
+    if (request.taken !== 1) return false;
+  }
+  player.addRunEnergyUnits(2000);
+  player.getPacketSender().sendRunEnergy();
+  return true;
+}
+
 /** Same cut chance and cadence: a ration changes XP and delivery, not whether the chop succeeds. */
 function fellingChop(player, axe) {
   const rationUsed = useFellingRation(player, axe);
@@ -951,19 +973,21 @@ function searchBirdNest(player, nestId) {
     return false;
   }
 
-  if (player.getInventory().getFreeSlots() <= 0) {
+  const inventory = player.getInventory();
+  const freeSlots = inventory.getFreeSlots();
+  const seed = freeSlots > 0 && SEED_NEST_IDS.has(nestId) ? rollNestSeed() : null;
+  if (freeSlots <= 0 || (seed && inventory.getAddableAmount(new Item(seed.id, 1)) < 1)) {
     player.getDialogueManager().startDialogues(
       new pluginApi.core.DialogueChainBuilder().add(new pluginApi.core.StatementDialogue(0, NEST_FULL_MESSAGE))
     );
     return true;
   }
 
-  player.getInventory().deleteNumber(nestId, 1);
-  player.getInventory().adds(BIRD_NESTS.EMPTY_NEST, 1);
+  inventory.deleteNumber(nestId, 1);
+  inventory.adds(BIRD_NESTS.EMPTY_NEST, 1);
 
-  if (SEED_NEST_IDS.has(nestId)) {
-    const seed = rollNestSeed();
-    player.getInventory().adds(seed.id, 1);
+  if (seed) {
+    inventory.adds(seed.id, 1);
     sendSpam(player, `You take ${seed.text} out of the bird's nest.`);
     return true;
   }
@@ -1227,6 +1251,7 @@ function processWoodcuttingTick(activeSessions, currentTick) {
     // A nest falls instead of that roll's log: no log, line or XP (rsprox capture 293, five nests).
     if (state.tree.logId >= 0 && !maybeDropBirdNest(player)) {
       const felling = fellingChop(player, state.axe);
+      rollForesterRationEnergy(player, state.axe);
       const baseXp = state.tree.xpReward * lumberjackXpMultiplier(player);
       const xp = felling.bonus ? baseXp + baseXp / 10 : baseXp;
       let pendingLog = null;

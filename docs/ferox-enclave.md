@@ -75,4 +75,5 @@ Players can't attack each other inside the town or in its buffer, unless one of 
 
 - The portal (30386, "Enter", at 3146, 3638 by The Old Nite pub; checked against this cache - it moved here from the Clan Wars building in May 2023) first says "There is no return portal to Ferox Enclave from Castle Wars." (the Wiki names the warning; the wording is ours), then asks "Enter the Castle Wars portal?", Yes. / No.
 - On Yes: a tick later you're in the Castle Wars lobby at 2440, 3090 (the tile the ring of dueling's Castle Wars teleport uses). On No: nothing.
-- **Not done:** on a free-to-play world the lobby's double doors teleport back to Ferox; our Castle Wars doesn't have that yet, so for now the warning is always final.
+- On a free-to-play world the lobby's locked double doors offer a return to Ferox (Wiki: Castle Wars and Canoe); declining leaves the doors closed. Members can open the doors normally.
+- The return uses the existing Ferox free-for-all exit tile (3128, 3629). That destination, the prompt wording and the one-tick delay are our choices, not observations of the Castle Wars return.

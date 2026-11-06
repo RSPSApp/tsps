@@ -478,7 +478,7 @@ function attachCookers(api) {
 }
 
 module.exports = Object.assign(attachCookers, {
-  isCookingActive, COOKABLE_OBJECT_NAMES, FIRE_OBJECT_NAMES,
+  isCookingActive, isCooker, COOKABLE_OBJECT_NAMES, FIRE_OBJECT_NAMES,
   _test: {
     startCooking, offerCook, cookOne, isSuccess, stopBurnLevel, successMessage, burnMessage, cookAnimationFor, cookableFor,
     GAUNTLETS_STOP_BURN, activeSessions,

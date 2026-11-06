@@ -1283,23 +1283,36 @@ test('training-room deaths keep real gear and Hardcore status, clean room items 
   const { GameConstants } = require('../dist/game/GameConstants');
   const { ItemOnGroundManager } = require('../dist/game/entity/impl/grounditem/ItemOnGroundManager');
   const areas = [];
+  const errors = [];
+  const reportError = console.error;
+  t.mock.method(console, 'error', (...args) => { errors.push(args); reportError(...args); });
   const api = PluginManager.createApi('MageTrainingArenaDeathRegression');
   const registerArea = api.registerArea;
   api.registerArea = (area) => { areas.push(area); registerArea(area); };
   const deaths = new Map();
-  api.onPlayerDeath((event) => deaths.set(event.player, event));
+  const deathCounts = new Map();
+  api.onPlayerDeath((event) => {
+    deaths.set(event.player, event);
+    deathCounts.set(event.player, (deathCounts.get(event.player) ?? 0) + 1);
+  });
   const Ironman = require('../plugins/modes/ironman/Common.Ironman');
   Ironman.init(api);
   require('../plugins/modes/ironman/Hardcore.Ironman')(api);
   require('../plugins/minigames/MageTrainingArena.plugin').register(api);
+  // Pinned rev-241 gamevals for the actual room items and retained helmet.
+  assert.equal(Common.ids.items.banana, 1963);
+  assert.equal(Common.ids.items.cube, 6899);
+  assert.equal(Common.ids.items.arenaCoins, 8890);
+  assert.equal(core.CacheDefinitions.getObjId('bronze_full_helm'), 1155);
   t.mock.method(ItemOnGroundManager, 'registerLocation', () => {});
   t.mock.method(core.TaskManager, 'submit', () => {});
   const saves = [];
   t.mock.method(GameConstants.PLAYER_PERSISTENCE, 'requestSave', (player, reason) => {
-    saves.push({ player, reason, location: player.getLocation().clone(), items: player.getInventory().getValidItems().map((item) => item.getId()) });
+    saves.push({ player, reason, location: player.getLocation().clone(), items: player.getInventory().getValidItems().map((item) => item.getId()), points: Common.POINT_TYPES.map((type) => Common.points(player, type)) });
   });
   const roomData = Object.entries(Common.data).filter(([key, room]) => key !== 'lobby' && room?.bounds && room?.arrive);
-  for (const [name, room] of roomData) await t.test(name, (t) => {
+  const cases = roomData.flatMap(([name, room]) => (name === 'graveyard' ? [0, 7, 10, 20] : [20]).map((balance) => ({ name, room, balance })));
+  for (const { name, room, balance } of cases) await t.test(`${name} with ${balance} Graveyard points`, (t) => {
     const player = new Player(null, Common.toLocation(room.arrive));
     player.setUsername('mta_safe_death');
     player.setRegistered(true);
@@ -1307,6 +1320,8 @@ test('training-room deaths keep real gear and Hardcore status, clean room items 
     t.mock.method(player, 'sendMessage', () => {});
     t.after(() => player.setRegistered(false));
     player.setAttribute('ironman:mode', 'hardcore');
+    for (const type of Common.POINT_TYPES) Common.addPoints(player, type, type === 'graveyard' ? balance : 20);
+    const beforePoints = Common.POINT_TYPES.map((type) => Common.points(player, type));
     const area = areas.find((area) => area.getBoundaries().some((bounds) => bounds.inside(player.getLocation())));
     assert.ok(area, 'the native plugin registered this room');
     area.enter(player);
@@ -1318,7 +1333,10 @@ test('training-room deaths keep real gear and Hardcore status, clean room items 
     player.getInventory().adds(roomItem, 1);
     const task = new PlayerDeathTask(player);
     for (let tick = 0; tick < 5; tick++) task.execute();
+    assert.equal(deathCounts.get(player), 1, 'one real death dispatch');
     assert.equal(deaths.get(player)?.itemsLost, false);
+    const expectedPoints = beforePoints.map((value, i) => Common.POINT_TYPES[i] === 'graveyard' && name === 'graveyard' ? Math.max(0, value - 10) : value);
+    assert.deepEqual(Common.POINT_TYPES.map((type) => Common.points(player, type)), expectedPoints);
     assert.equal(Ironman.modeOf(player), 'hardcore');
     for (const id of carried) assert.equal(player.getInventory().getAmount(id), 100);
     assert.equal(player.getEquipment().get(core.Equipment.HEAD_SLOT).getId(), 1155);
@@ -1326,12 +1344,29 @@ test('training-room deaths keep real gear and Hardcore status, clean room items 
     assert.equal(area.hasMember(player), false);
     assert.equal(player.getArea(), null);
     assert.deepEqual([player.getLocation().getX(), player.getLocation().getY(), player.getLocation().getZ()], Common.data.lobby.arrive);
+    const beforeRespawn = saves.findLast((save) => save.player === player && save.reason === 'death');
+    assert.deepEqual(beforeRespawn?.points, beforePoints, 'death save precedes the death hook');
     const saved = saves.findLast((save) => save.player === player && save.reason === 'respawn');
     assert.ok(saved);
+    assert.deepEqual(saved.points, expectedPoints, 'respawn save observes the penalty exactly once');
     assert.equal(saved.items.includes(roomItem), false);
   });
   const outside = new Player(null, loc(3200, 3200));
   assert.equal(PluginManager.emitShouldDropItemsOnDeath(outside, null), null, 'normal deaths keep their existing policy');
+  outside.setUsername('mta_outside');
+  outside.setRegistered(true);
+  t.after(() => outside.setRegistered(false));
+  t.mock.method(outside, 'getSession', () => ({ sendClientPacket: () => true, write: () => true }));
+  t.mock.method(outside, 'sendMessage', () => {});
+  for (const type of Common.POINT_TYPES) Common.addPoints(outside, type, 20);
+  const outsideBefore = Common.POINT_TYPES.map((type) => Common.points(outside, type));
+  const outsideTask = new PlayerDeathTask(outside);
+  for (let tick = 0; tick < 5; tick++) outsideTask.execute();
+  assert.equal(deathCounts.get(outside), 1, 'outside death dispatches once');
+  assert.equal(deaths.get(outside)?.itemsLost, true);
+  assert.deepEqual(Common.POINT_TYPES.map((type) => Common.points(outside, type)), outsideBefore);
+  assert.deepEqual(saves.findLast((save) => save.player === outside && save.reason === 'respawn')?.points, outsideBefore);
+  assert.equal(errors.length, 0, 'death tasks did not catch and log an exception');
 });
 
 test('native reward purchases charge only what fits in real rune stacks and freed wand slots', async (t) => {

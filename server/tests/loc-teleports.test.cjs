@@ -291,6 +291,25 @@ test("the Underground Pass south-wall cave links to the dwarf camp and back", ()
   assert.deepEqual([lower.player.getLocation().getX(), lower.player.getLocation().getY(), lower.player.getLocation().getZ()], up.to);
 });
 
+test("the Old Nite's cave stairs and the Ferox Enclave dungeon's opening link both ways (#2834)", () => {
+  const down = data.locs.find((loc) => loc.name === "wildy_hub_stairs_cave");
+  const up = data.locs.find((loc) => loc.name === "wildy_hub_grotto_exit");
+  for (const [entry, from] of [[down, [3152, 3644, 0]], [up, [3158, 10027, 0]]]) {
+    const visit = explorer(from);
+    const object = locAt(entry.id, entry.x, entry.y, entry.z);
+    const request = { player: visit.player, object, objectId: entry.id, clickType: entry.op, handled: false };
+    hooks.object(request);
+    assert.equal(request.handled, true, `${entry.name} is handled`);
+    runTicks(visit, 2);
+    const at = visit.player.getLocation();
+    assert.deepEqual([at.getX(), at.getY(), at.getZ()], entry.to);
+    assert.equal(core.RegionManager.blocked(at, null), false, `${entry.name} lands on a walkable tile`);
+  }
+  const route = new RsmodRouteFinding((x, y, z, area) => core.RegionManager.getClipping(x, y, z, area));
+  const path = route.findRoute({ level: 0, srcX: 3158, srcY: 10027, srcSize: 1, destX: down.to[0], destY: down.to[1], privateArea: null, moveNear: false });
+  assert.equal(path.success && !path.alternative, true, "the Soul Wars portal's landing walks to the opening");
+});
+
 test("the Ancient Cavern whirlpool requires Barbarian firemaking and pyre-ship training", () => {
   const entry = data.locs.find((loc) => loc.name === "ancient_cavern_whirlpool");
   assert.deepEqual([entry.id, entry.x, entry.y, entry.z, entry.to], [25274, 2510, 3506, 0, [1765, 5365, 1]]);

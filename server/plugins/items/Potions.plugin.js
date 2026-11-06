@@ -506,7 +506,7 @@ function canEat(player, itemId) {
  * Why `player` may not drink a dose of `entry` here, as the drink path decides it (the canDrink
  * hooks, the potion's area, food permission, content unlocks, its own canUse); null when they may.
  */
-function drinkRefusal(player, entry) {
+function drinkPermissionRefusal(player, entry) {
   const itemId = entry.itemId;
   if (!canDrink(player, itemId)) return "You cannot use potions here.";
   if (entry.potion.area && !inArea(player, entry.potion.area)) return AREA_MESSAGES[entry.potion.area] ?? "You cannot use that here.";
@@ -514,7 +514,26 @@ function drinkRefusal(player, entry) {
   const permission = { player, itemId, allowed: true, message: null };
   pluginApi.emitCustomEvent("potions:validate-drink", permission);
   if (permission.allowed === false) return permission.message ?? "You cannot use that here.";
+  return null;
+}
+
+function drinkCanUseRefusal(player, entry) {
   if (entry.potion.canUse && !entry.potion.canUse(player)) return "You need more than 50 Hitpoints to drink this potion.";
+  return null;
+}
+
+/** Every potion-specific restriction, including a potion's HP requirement. */
+function drinkRefusal(player, entry) {
+  const permissionRefusal = drinkPermissionRefusal(player, entry);
+  if (permissionRefusal) return permissionRefusal;
+  return drinkCanUseRefusal(player, entry);
+}
+
+/** Shared action timer and stun gates for ordinary drinks and the chugging barrel. */
+function drinkTimerRefusal(player) {
+  const timers = player.getTimers();
+  if (timers.has(TimerKey.STUN)) return { kind: "stun", message: "You're currently stunned and cannot use potions." };
+  if (timers.has(TimerKey.POTION)) return { kind: "potion", message: null };
   return null;
 }
 
@@ -1368,44 +1387,25 @@ function handlePotionDrink(player, itemId, slot) {
     return true;
   }
 
-  if (!canDrink(player, itemId)) {
-    player.sendMessage("You cannot use potions here.");
+  const permissionRefusal = drinkPermissionRefusal(player, entry);
+  if (permissionRefusal) {
+    player.sendMessage(permissionRefusal);
     return true;
   }
 
-  if (entry.potion.area && !inArea(player, entry.potion.area)) {
-    player.sendMessage(AREA_MESSAGES[entry.potion.area] ?? "You cannot use that here.");
+  const timerRefusal = drinkTimerRefusal(player);
+  if (timerRefusal) {
+    if (timerRefusal.message) player.sendMessage(timerRefusal.message);
     return true;
   }
 
-  if (entry.potion.requiresFoodPermission && !canEat(player, itemId)) {
-    player.sendMessage("You cannot eat here.");
-    return true;
-  }
-
-  // Quest and content plugins can explain an item-specific unlock before a
-  // drink consumes a dose, starts a cooldown or applies any effect.
-  const permission = { player, itemId, allowed: true, message: null };
-  pluginApi.emitCustomEvent("potions:validate-drink", permission);
-  if (permission.allowed === false) {
-    if (permission.message) player.sendMessage(permission.message);
+  const canUseRefusal = drinkCanUseRefusal(player, entry);
+  if (canUseRefusal) {
+    player.sendMessage(canUseRefusal);
     return true;
   }
 
   const timers = player.getTimers();
-  if (timers.has(TimerKey.STUN)) {
-    player.sendMessage("You're currently stunned and cannot use potions.");
-    return true;
-  }
-
-  if (timers.has(TimerKey.POTION)) {
-    return true;
-  }
-
-  if (entry.potion.canUse && !entry.potion.canUse(player)) {
-    player.sendMessage("You need more than 50 Hitpoints to drink this potion.");
-    return true;
-  }
 
   timers.extendOrRegister(TimerKey.POTION, 3);
   timers.extendOrRegister(TimerKey.FOOD, 3);
@@ -1700,6 +1700,20 @@ module.exports = {
   getPotionName(itemId) {
     return POTION_BY_ITEM_ID.get(itemId)?.potion?.name ?? null;
   },
+  /** `{ potion, entry, doses, emptyItemId }` for a dose item; `emptyItemId` respects copied potions. */
+  doseOf(itemId) {
+    const entry = POTION_BY_ITEM_ID.get(itemId);
+    if (!entry) return null;
+    const lastDose = POTION_BY_ITEM_ID.get(entry.chain[entry.chain.length - 1]);
+    return {
+      potion: entry.potion,
+      entry,
+      doses: entry.doses,
+      emptyItemId: lastDose?.replacementId ?? entry.potion.emptyItemId,
+    };
+  },
+  drinkRefusal,
+  drinkTimerRefusal,
   register(api) {
     api.registerRunEnergyDrainModifier(staminaDrainModifier);
     api.registerRunEnergyStatusModifier(staminaStatus);

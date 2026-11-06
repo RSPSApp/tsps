@@ -179,7 +179,7 @@ export class Sailing {
         const boat = Sailing.activeBoat(player);
         if (!dock || !instance || !boat) return "You can't dock here.";
         boat.location = Sailing.atSea(instance, dockId);
-        Sailing.dockedAt(player, dock);
+        Sailing.dockedAt(player, dock, true);
         return null;
     }
 
@@ -194,7 +194,7 @@ export class Sailing {
         if (!dock || !instance || !boat) return "You can't disembark here.";
         const { fineX, fineY, level, angle } = instance;
         boat.location = { kind: "docked", dock: dockId, at: { fineX, fineY, level, angle } };
-        Sailing.dockedAt(player, dock);
+        Sailing.dockedAt(player, dock, true);
         Sailing.leave(player, instance, "disembark");
         Sailing.moveExpected(player, new Location(dock.landing.x, dock.landing.y, dock.landing.z));
         return null;
@@ -290,11 +290,15 @@ export class Sailing {
     }
 
     /** Records a dock as the player's last (and return point), as boarding or docking there does. */
-    private static dockedAt(player: Player, dock: SailingDock): void {
+    private static dockedAt(player: Player, dock: SailingDock, moored = false): void {
         const state = player.getSailing();
         state.returnPoint = { ...dock.landing };
         state.lastDock = dock.id;
         if (!dock.mooringPoint) state.lastStandardDock = dock.id;
+        if (moored) {
+            const history = state.mooredDocks ??= [];
+            if (!history.includes(dock.id)) history.push(dock.id);
+        }
     }
 
     private static embark(player: Player, boat: OwnedBoat, placement: BoatPlacement, dockId?: string): boolean {

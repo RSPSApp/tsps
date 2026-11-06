@@ -369,6 +369,7 @@ test("upgrading tote and real gem bag to a sack conserves both stores", async (t
   assert.deepEqual([tote, bag, I.THREAD, I.IMMACULATE_MOLE_SKIN].map((item) => has(f, item)), [0, 0, 0, 0]);
   assert.equal(has(f, I.NEEDLE), 1);
   assert.deepEqual(given, [300]);
+  assert.equal(f.messages.filter((text) => text === "You sew a gem sack.").length, 1);
   const sack = Storage.FAMILIES.get("gem-sack");
   assert.ok(sack);
   assert.deepEqual([Storage.amountOf(f.p, sack, I.UNCUT_OPAL), Storage.amountOf(f.p, sack, I.UNCUT_RUBY)], [4, 3]);
@@ -377,6 +378,14 @@ test("upgrading tote and real gem bag to a sack conserves both stores", async (t
   await click(f, 33393, "Empty");
   assert.deepEqual([has(f, I.UNCUT_OPAL), has(f, I.UNCUT_RUBY)], [4, 3]);
   assert.equal(Storage.total(f.p, sack), 0);
+});
+
+test("sack Check labels gems consistently with the pouch", async (t) => {
+  const f = actor(t, [id("gem_sack")]);
+  Storage.store(f.p, Storage.FAMILIES.get("gem-sack"), I.UNCUT_OPAL, 4);
+  await click(f, id("gem_sack"), "Check");
+  assert.match(f.messages.at(-1), /Opal: 4/);
+  assert.doesNotMatch(f.messages.at(-1), /Uncut /);
 });
 
 test("a sack upgrade with another real gem bag refuses without changing items or stores", async (t) => {

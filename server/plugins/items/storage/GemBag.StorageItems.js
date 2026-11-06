@@ -4,6 +4,7 @@
  * steals or gets while mining. Its contents are kept on death.
  */
 const Storage = require("./Common.StorageItems");
+const GemSack = require("./GemSack.StorageItems");
 
 const NAMES = ["Gem bag", "Open gem bag"];
 const PER_GEM = 60;
@@ -148,8 +149,10 @@ function pickup(event) {
     if (Storage.store(player, target, itemId, 1) !== 1) return;
     manager.deregister(groundItem);
     Storage.api.emitCustomEvent("ground-items:taken", { player, groundItem, source: "pickup", itemId, amount: 1, discarded: 0 });
+    // Mirror the server's ordinary ground pickup; live container audio is not established.
+    Storage.core.Sounds.sendSound(player, Storage.core.Sound.PICK_UP_ITEM);
     player.getLastItemPickup().reset();
-    player.sendMessage(STRAIGHT_IN);
+    player.sendMessage(target === family ? STRAIGHT_IN : GemSack.STRAIGHT_IN);
   } finally {
     pickupItems.delete(groundItem);
     pickupPlayers.delete(player);

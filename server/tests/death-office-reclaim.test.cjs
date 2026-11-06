@@ -147,3 +147,33 @@ test('capacity queries are read-only and match metadata, nonstackable and bank s
     assert.equal(bank.getAddableAmount(new core.Item(RUNE_SCIMITAR, 10)), 2,
         'nonstackable items use the same stack limit in a bank');
 });
+
+
+test('Office retrieval charges the loaded GE quote for each noted whip taken', t => {
+    const definitions = core.ItemDefinition.definitions;
+    const previous = new Map([...definitions.values()].map(def => [def, [def.grandExchangeValue, def.grandExchangeSellValue]]));
+    t.after(() => {
+        for (const def of definitions.values()) {
+            const prices = previous.get(def) ?? [undefined, undefined];
+            [def.grandExchangeValue, def.grandExchangeSellValue] = prices;
+        }
+    });
+    const loaded = require('../plugins/items/ItemDefinitionLoader.plugin')._test.loadItemPrices();
+    assert.ok(loaded.loaded > 0, 'the canonical snapshot loader loaded prices');
+    const whip = core.ItemDefinition.forId(WHIP_NOTE);
+    assert.equal(whip.isNoted(), true);
+    assert.equal(whip.isTradeable(), true, 'the loaded noted whip is tradeable in the active cache');
+    assert.equal(whip.hasGrandExchangeValue(), true);
+    assert.equal(whip.getGrandExchangeValue(), 751282, 'the loader propagated the base whip quote');
+    const f = fixture(t);
+    f.store([{ id: WHIP_NOTE, amount: 2, meta: null }]);
+    f.p.setAttribute('gravestones:coffer', 100000);
+    const query = { player: f.p };
+    OfficeCommon.api().emitCustomEvent('gravestones:state', query);
+    assert.equal(query.office[0].fee, 37564, 'each Office item uses the loaded quote');
+    f.configs.set(OfficeCommon.VARP.if2, 0);
+    f.click('officeTakeAll');
+    assert.equal(f.p.getInventory().getAmount(WHIP_NOTE), 2);
+    assert.equal(f.p.getAttribute('gravestones:coffer'), 24872);
+    assert.deepEqual(f.held(), []);
+});

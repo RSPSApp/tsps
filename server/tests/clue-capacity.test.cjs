@@ -19,6 +19,7 @@ function fixture(complete = true, members = true) {
   const api = {core: {...core, WorldDefinition: {isMembersWorld: () => members}},
     persistAttribute: (key, value) => persisted.set(key, value), onPlayerLogin: fn => logins.push(fn),
     onItemAction: (name, handlers) => actions.set(name, handlers), onGroundItemPickup() {},
+    onNpcDialogueCondition() {}, onPlayerLogout() {},
     onCustomEvent(name, fn) { if (!events.has(name)) events.set(name, []); events.get(name).push(fn); },
     emitCustomEvent(name, request) { for (const fn of events.get(name) ?? []) fn(request); },
   };
@@ -32,6 +33,25 @@ function fixture(complete = true, members = true) {
   }
   return {player, inventory, banks, attributes, persisted, actions, api, logins, sent, query, capacity, open};
 }
+
+test("vessel opt-out suppresses generation without changing capacity or the multiplier", () => {
+  const f = fixture();
+  const key = "treasure-trails:vessel-drops-disabled";
+  assert.equal(f.persisted.get(key), false);
+  for (const vessel of ["bottle", "geode", "nest"]) {
+    const chance = () => f.query("treasure-trails:vessel-chance", {
+      player: f.player, vessel, tier: "beginner", multiplier: 4,
+    });
+    assert.notEqual(chance().allowed, false);
+    f.player.setAttribute(key, true);
+    const blocked = chance();
+    assert.equal(blocked.allowed, false);
+    assert.equal(blocked.multiplier, 4);
+    assert.equal(f.query("treasure-trails:can-receive", {player: f.player, tier: "beginner", allowed: null}).allowed, true);
+    f.player.setAttribute(key, false);
+    assert.notEqual(chance().allowed, false);
+  }
+});
 
 for (const tier of TIERS) test(`${tier} capacity requires the quest and each consumed case adds exactly one`, () => {
   const before = fixture(false);

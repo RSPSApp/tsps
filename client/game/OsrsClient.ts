@@ -305,6 +305,8 @@ import { headingIndicator } from "./sailing/HeadingIndicator";
 import { retryOnMissingGroup } from "../rs/cache/js5/retryOnMissingGroup";
 import type { GraphicsDefaults } from "../rs/config/defaults/GraphicsDefaults";
 import { interactionModes } from "./InteractionModes";
+import { npcOpsVisibility } from "./NpcOpsVisibility";
+import { groundObjOpsVisibility } from "./GroundObjOpsVisibility";
 import { RuneLite } from "../runelite/client/RuneLite";
 import { notifyActorGraphic, notifyActorHitsplat, notifyActorHealth } from "./ActorEventHooks";
 import { dispatchMenuAction, menuClickListeners, type MenuActionData } from "../ui/menu/menuEvents";
@@ -2976,6 +2978,7 @@ export class OsrsClient {
                     (w as any).isNpcChathead = npcId >= 0;
                     (w as any).npcTypeId = npcId >= 0 ? npcId : undefined;
                     (w as any).isPlayerChathead = false;
+                    (w as any).isPlayerModel = false;
                     (w as any).playerAppearance = undefined;
                     this.widgetManager.invalidateWidgetRender(w);
                 }
@@ -3001,9 +3004,11 @@ export class OsrsClient {
                     (w as any).isNpcChathead = false;
                     (w as any).npcTypeId = undefined;
                     (w as any).isPlayerChathead = true;
+                    (w as any).isPlayerModel = false;
                     (w as any).playerAppearance = appearance
                         ? {
                               gender: appearance.gender,
+                              npcTransformationId: appearance.npcTransformationId,
                               colors: Array.from(appearance.colors ?? []),
                               kits: Array.from(appearance.kits ?? []),
                               equip: Array.from(appearance.equip ?? []),
@@ -8609,6 +8614,8 @@ export class OsrsClient {
             }
             // Live sets walk again before every logout; a dropped connection doesn't get that far.
             interactionModes.clear();
+            npcOpsVisibility.clear();
+            groundObjOpsVisibility.clear();
 
             // Clear the last account's varps and transient varcs, keeping persistent client
             // preferences loaded: the next login only sends its non-zero varps, so anything

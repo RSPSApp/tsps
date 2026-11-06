@@ -27,6 +27,7 @@ before(async () => {
   core.ObjectDefinition.init();
   core.RegionManager.init();
   core.RegionManager.loadMapFiles(2588, 3291);
+  core.RegionManager.loadMapFiles(2696, 3283);
   PluginManager.beforeObjectInteractionHooks = [];
   PluginManager.customEventHooks = new Map();
   PluginManager.objectHooksByName = new Map();
@@ -115,7 +116,10 @@ test("lowercase Search for traps dispatches through PluginManager and credits Ar
   assert.equal(player.getSkillManager().getExperience(core.Skill.THIEVING) - beforeXp, 500);
   assert.ok(Progress.doneTasks(player, diary).has(DiaryPlugin._test.TASK));
   assert.equal(Progress.tierCount(player, diary, "hard"), 1);
-  assert.deepEqual(teleports.map((tile) => [tile.getX(), tile.getY(), tile.getZ()]), [[2696, 3283, 0]]);
+  assert.deepEqual(teleports.map((tile) => [tile.getX(), tile.getY(), tile.getZ()]), [[2697, 3283, 0]]);
+  // The dungeon entrance loc itself is clipped; the landing must be walkable.
+  assert.notEqual(core.RegionManager.getClipping(2696, 3283, 0, null), 0);
+  assert.equal(core.RegionManager.getClipping(2697, 3283, 0, null), 0);
 });
 
 test("Open cannot reach generic chest handlers and reports that its damage is unsupported", (t) => {

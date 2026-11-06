@@ -209,7 +209,9 @@ function unlock(player, slot, itemId) {
   const inventory = player.getInventory();
   const needed = 1 + (inventory.contains(coinsId()) ? 0 : 1);
   const refund = new (core().Item)(coinsId(), Common.DATA.unlockRefund);
-  if (inventory.getFreeSlots() < needed || (inventory.contains(coinsId()) && inventory.getAddableAmount(refund) < refund.getAmount())) {
+  const parchment = new (core().Item)(parchmentId(), 1);
+  if (inventory.getFreeSlots() < needed || inventory.getAddableAmount(parchment) < 1 ||
+      (inventory.contains(coinsId()) && inventory.getAddableAmount(refund) < refund.getAmount())) {
     player.sendMessage(MESSAGE.NO_SPACE);
     return;
   }

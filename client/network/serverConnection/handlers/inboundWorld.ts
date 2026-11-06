@@ -1,6 +1,8 @@
 import { ClientState } from "../../../game/ClientState";
 import { sampleBridgeHeightForWorldTile, sampleCameraHeightForWorldTile } from "../../../game/scene/BridgeHeightSampler";
 import { interactionModes } from "../../../game/InteractionModes";
+import { npcOpsVisibility } from "../../../game/NpcOpsVisibility";
+import { groundObjOpsVisibility } from "../../../game/GroundObjOpsVisibility";
 import {
     VARP_AREA_SOUNDS_VOLUME,
     VARP_COMBAT_TARGET_PLAYER_INDEX,
@@ -59,6 +61,14 @@ export function handleInboundWorld(msg: any): boolean {
     }
     if (msg.type === "reset_interaction_mode") {
         interactionModes.reset(msg.payload.worldId);
+        return true;
+    }
+    if (msg.type === "hide_npc_ops") {
+        npcOpsVisibility.set(msg.payload.hidden === true);
+        return true;
+    }
+    if (msg.type === "hide_obj_ops") {
+        groundObjOpsVisibility.set(msg.payload.hidden === true);
         return true;
     }
     if (msg.type === "region_replacement") {

@@ -508,6 +508,18 @@ test("an artefact used on Simon sells just that one", () => {
   assert.equal(p.inventory.get(ids().item.coins), 750);
 });
 
+test("Simon refuses an artefact invoice larger than a new coin stack", () => {
+  const noted = ids().item.noted.goldenStatuette;
+  const count = Math.floor(0x7fffffff / 1250) + 1;
+  const p = player({ items: { [noted]: count } });
+  const request = { player: p, npcId: 5786, stepId: "Kn2FnM", handled: false };
+  T.Simon.onDialogueAction(request);
+  assert.equal(request.end, true);
+  assert.equal(p.inventory.get(noted), count);
+  assert.equal(p.inventory.get(ids().item.coins) ?? 0, 0);
+  assert.equal(T.Simon.owed.has(p), false);
+});
+
 test("Simon: his introduction first, then the pyramid top lines, before and after the first sale (Wiki transcript)", () => {
   const p = player();
   const { VARIANT } = T.Simon;
@@ -824,6 +836,7 @@ test("native Simon artefact sales preserve the full payment at the coin limit", 
     { name: "one-item exact payment headroom", route: "item", held: MAX - PRICE, seals: 1, moved: 1 },
     { name: "payment uses the consumed artefact slot", route: "item", held: 0, seals: 1, moved: 1, full: true },
     { name: "declined one-item offer", route: "item", held: 1000, seals: 1, moved: 0, decline: true },
+    { name: "one-item insufficient payment headroom", route: "item", held: MAX - PRICE + 1, seals: 1, moved: 0, near: true },
     { name: "one-item capped coin stack", route: "item", held: MAX, seals: 1, moved: 0, capped: true },
     { name: "Talk-to capped coin stack", route: "talk", held: MAX, seals: 2, moved: 0, capped: true },
   ];
@@ -885,6 +898,7 @@ test("native Simon artefact sales preserve the full payment at the coin limit", 
     assert.equal(owned(COINS), row.held); assert.equal(owned(GOLD), row.seals); assert.equal(T.Simon.owed.has(player), false);
     const addable = inv.getAddableAmount(new native.Item(COINS, PRICE * (row.route === "talk" ? row.seals : 1)));
     if (row.capped) assert.equal(addable, 0, "native output precondition, with real artefacts still present");
+    if (row.near) assert.equal(addable, PRICE - 1, "native output cannot accept the entire invoice");
     if (row.name === "one-item exact payment headroom") assert.equal(addable, PRICE);
     const before = state(), valueBefore = owned(COINS) + PRICE * owned(GOLD);
     if (row.route === "item") await send({ type: "item_on_npc", widgetId: 149 << 16, targetIndex: npc.getIndex(),

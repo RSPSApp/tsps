@@ -16,12 +16,15 @@
  * old click that turned it unlit was the only way back, so a helmet lit outside the Lumbridge basement
  * could never be lit there for the diary. Extinguishing the other lights is not here.
  *
- * The torch's other two lights (Wiki: "may be used with a tinderbox or dry sticks, or used on a fire
- * or range"): dry sticks light the torch and nothing else, and the torch used on a fire or range
- * lights it. The second needs a handler of its own because Cooking registers a `fallback` that
- * otherwise answers "You can't cook that." for every item used on a range.
+ * The torch used on a fire or range lights it (Wiki: "may be used with a tinderbox or dry sticks, or
+ * used on a fire or range"). It needs a handler of its own because Cooking registers a `fallback`
+ * that otherwise answers "You can't cook that." for every item used on a range.
+ *
+ * Dry sticks are not a tool here: the Wiki's Dry sticks page says "Unlike a tinderbox, clicking to
+ * use the sticks on an unlit torch has no effect" — they light it through their own Rub-together
+ * option, which Sea Slug owns (30 Firemaking, can fail, uses the sticks, moves the quest on).
  */
-const { COOKABLE_OBJECT_NAMES } = require("../skills/cooking/Cookers.Cooking");
+const { isCooker } = require("../skills/Cooking.plugin");
 
 let core;
 /** Unlit item id -> { lit, level, message? }. */
@@ -38,15 +41,6 @@ function build(I) {
   ]);
 }
 
-/** A tinderbox lights anything; dry sticks light only the torch (Wiki: its required tool). */
-function toolFor(ids, id) {
-  if (ids.includes(core.ItemIdentifiers.TINDERBOX)) return core.ItemIdentifiers.TINDERBOX;
-  if (id === core.ItemIdentifiers.UNLIT_TORCH && ids.includes(core.ItemIdentifiers.DRY_STICKS)) {
-    return core.ItemIdentifiers.DRY_STICKS;
-  }
-  return null;
-}
-
 /** Lights `item` from `source`, or refuses on the level. Shared by both ways of lighting. */
 function applyLight(player, item, source) {
   if (player.getSkillManager().getCurrentLevel(core.Skill.FIREMAKING) < source.level) {
@@ -61,14 +55,13 @@ function applyLight(player, item, source) {
 function light(event) {
   const { player } = event;
   const ids = [event.usedItemId, event.usedWithItemId];
-  const id = ids.find((candidate) => lights.has(candidate));
-  if (id === undefined) return;
-  const tool = toolFor(ids, id);
-  if (tool === null) return;
+  if (!ids.includes(core.ItemIdentifiers.TINDERBOX)) return;
+  const id = ids.find((candidate) => candidate !== core.ItemIdentifiers.TINDERBOX);
   const source = lights.get(id);
+  if (!source) return;
   event.handled = true;
   const item = [event.usedItem, event.usedWithItem].find((held) => held?.getId() === id);
-  if (!item || !player.getInventory().contains(tool)) return;
+  if (!item || !player.getInventory().contains(core.ItemIdentifiers.TINDERBOX)) return;
   applyLight(player, item, source);
 }
 
@@ -76,8 +69,7 @@ function light(event) {
 function lightOnObject(event) {
   const { player } = event;
   if (event.itemId !== core.ItemIdentifiers.UNLIT_TORCH) return;
-  const name = event.object?.getDefinition?.()?.getName?.();
-  if (!COOKABLE_OBJECT_NAMES.has(name)) return;
+  if (!isCooker(event.object.getDefinition())) return;
   event.handled = true;
   applyLight(player, event.item, lights.get(core.ItemIdentifiers.UNLIT_TORCH));
 }

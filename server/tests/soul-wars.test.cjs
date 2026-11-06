@@ -1243,19 +1243,31 @@ test('a bandage used on a teammate reaches the registered Soul Wars handler', as
   assert.ok(enemy && Match.gameOf(enemy.p) === game, 'enemy belongs to this real match');
   enemy.p.moveTo(patient.p.getLocation().clone()); enemy.p.setNeedsPlacement(false);
   enemy.p.getSkillManager().setMaxLevel(core.Skill.HITPOINTS, 99).setCurrentLevel(core.Skill.HITPOINTS, 50, true);
-  const beforeEnemy = nativeItemUses.length, enemyMessages = enemy.messages.length;
+  enemy.p.setRunEnergy(21);
+  game.activity.set(healer.p, 17);
+  const healerHpBeforeRefusals = healer.p.getHitpoints(), healerRunBeforeRefusals = healer.p.getRunEnergy();
+  const beforeEnemy = nativeItemUses.length, enemyMessages = enemy.messages.length, healerBeforeEnemy = healer.messages.length;
   await use(enemy.p, 0);
   assert.equal(nativeItemUses.length, beforeEnemy + 1, 'enemy request reaches actual item-on-player dispatcher');
   assert.equal(enemy.p.getHitpoints(), 50, 'opposing team receives no healing');
   assert.equal(enemy.messages.length, enemyMessages, 'rejected use emits no healing feedback');
+  assert.equal(healer.messages.length, healerBeforeEnemy + 1);
+  assert.equal(healer.messages.at(-1), "You can't bandage an opposing player.");
   assert.equal(healer.p.getInventory().getAmount(Common.data.items.bandages), 1, 'enemy use spends nothing');
+  assert.equal(enemy.p.getRunEnergy(), 21); assert.equal(game.activity.get(healer.p), 17, 'enemy refusal is not activity');
+  assert.equal(healer.p.getHitpoints(), healerHpBeforeRefusals); assert.equal(healer.p.getRunEnergy(), healerRunBeforeRefusals);
   patient.p.getSkillManager().setCurrentLevel(core.Skill.HITPOINTS, 99, true);
   patient.p.setRunEnergy(100); patient.p.setPoisonDamage(0); patient.p.setVenomed(false);
-  const beforeNoNeed = nativeItemUses.length, beforeNoNeedMessages = patient.messages.length;
+  const beforeNoNeed = nativeItemUses.length, beforeNoNeedMessages = patient.messages.length, healerBeforeNoNeed = healer.messages.length;
   await use(patient.p, 0);
   assert.equal(nativeItemUses.length, beforeNoNeed + 1, 'full teammate request reaches the registered path');
   assert.equal(patient.messages.length, beforeNoNeedMessages, 'no-need refusal sends no healing feedback');
+  assert.equal(healer.messages.length, healerBeforeNoNeed + 1);
+  assert.equal(healer.messages.at(-1), `${patient.p.getDisplayName()} does not currently need bandaging.`);
   assert.equal(healer.p.getInventory().getAmount(Common.data.items.bandages), 1, 'full healthy teammate does not consume a bandage under TSPS policy');
+  assert.equal(game.activity.get(healer.p), 17, 'no-need refusal is not activity');
+  assert.equal(patient.p.getHitpoints(), 99); assert.equal(patient.p.getRunEnergy(), 100);
+  assert.equal(healer.p.getHitpoints(), healerHpBeforeRefusals); assert.equal(healer.p.getRunEnergy(), healerRunBeforeRefusals);
   patient.p.setPoisonDamage(6); patient.p.setVenomed(true);
   await use(patient.p, 0);
   assert.equal(patient.p.getHitpoints(), 99); assert.equal(patient.p.getPoisonDamage(), 0);
@@ -1263,9 +1275,10 @@ test('a bandage used on a teammate reaches the registered Soul Wars handler', as
   assert.equal(healer.p.getInventory().getAmount(Common.data.items.bandages), 0, 'poison-only use consumes one');
   healer.p.getInventory().setItem(0, new core.Item(Common.data.items.bandages, 1));
   patient.p.getSkillManager().setCurrentLevel(core.Skill.HITPOINTS, 50, true);
-  const beforeInvalid = nativeItemUses.length;
+  const beforeInvalid = nativeItemUses.length, healerBeforeInvalid = healer.messages.length;
   await use(patient.p, 27);
   assert.equal(nativeItemUses.length, beforeInvalid, 'empty selected slot is rejected by the native listener');
+  assert.equal(healer.messages.length, healerBeforeInvalid, 'invalid slot emits no refusal');
   assert.equal(patient.p.getHitpoints(), 50); assert.equal(healer.p.getInventory().getAmount(Common.data.items.bandages), 1);
   // A delayed native walk must not consume a replacement from the originally selected slot.
   const adjacent = healer.p.getLocation().clone(), patientTile = patient.p.getLocation().clone();
@@ -1276,7 +1289,7 @@ test('a bandage used on a teammate reaches the registered Soul Wars handler', as
   }
   assert.ok(distant, 'a standable distant arena tile exists');
   healer.p.moveTo(distant); healer.p.setNeedsPlacement(false);
-  const original = healer.p.getInventory().getItems()[0], beforeStale = nativeItemUses.length;
+  const original = healer.p.getInventory().getItems()[0], beforeStale = nativeItemUses.length, healerBeforeStale = healer.messages.length;
   const { TaskType } = require('../dist/game/task/TaskType'); const beforeWalkTasks = new Set(tasks);
   await healer.connection.dispatch([{type:'item_on_player', widgetId:149 << 16, targetIndex:patient.p.getIndex(), itemId:Common.data.items.bandages, slot:0}]);
   World.processCycle++; TaskManager.process(); healer.connection.processTurnPackets();
@@ -1295,6 +1308,7 @@ test('a bandage used on a teammate reaches the registered Soul Wars handler', as
   assert.equal(stale.item, original, 'dispatcher carries its originally selected item');
   assert.equal(healer.p.getInventory().getItems()[0], replacement, 'replacement survives the stale callback');
   assert.equal(patient.p.getHitpoints(), 50, 'stale callback does not heal');
+  assert.equal(healer.messages.length, healerBeforeStale, 'stale callback emits no refusal');
   // Supplementary handler guard: both real actors retain area membership while their coordinates are outside it.
   healer.p.moveTo(new core.Location(3200, 3200, 0)); patient.p.moveTo(new core.Location(3201, 3200, 0));
   assert.equal(healer.p.getPrivateArea(), game.area); assert.equal(patient.p.getPrivateArea(), game.area);

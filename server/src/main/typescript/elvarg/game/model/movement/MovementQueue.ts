@@ -958,10 +958,18 @@ export class MovementQueue {
             destination = new Location(destX, destY, this.character.getLocation().getZ());
         }
 
+        // OSRS: a player following a player (not a combat chase) walks onto the tile the
+        // leader just left, so it trails directly behind instead of stepping to its side.
+        const trailsLeader = playerFollowingPlayer && this.character.getCombatFollowing() == null &&
+            destination != null && destination.getDistance(following.getLocation()) === 1;
+        if (trailsLeader && destination.equals(this.character.getLocation())) {
+            return;
+        }
+
         if (
             destination == null ||
             destination.equals(this.character.getLocation()) ||
-            followerDistance > 1
+            (followerDistance > 1 && !trailsLeader)
         ) {
             destination = this.getClosestFollowTile(following) ?? destination;
         }

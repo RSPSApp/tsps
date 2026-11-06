@@ -89,6 +89,24 @@ test('a follower keeps up with a moving leader and settles one tile behind', asy
   assert.equal(follower.p.getFollowing(), leader.p);
 });
 
+test('a follower trails onto the tile the leader just left, even on diagonals (#2823)', async (t) => {
+  const follower = actor(t, 3241, 3219);
+  const leader = actor(t, 3240, 3218);
+  leader.p.setRunning(false);
+  follower.p.setRunning(false);
+  follow(follower, leader);
+
+  leader.p.getMovementQueue().requestWalk(new core.Location(3235, 3213, 0));
+  for (let i = 0; i < 4; i++) {
+    const left = leader.p.getLocation().clone();
+    leader.p.getMovementQueue().process();
+    follower.p.getMovementQueue().process();
+    assert.ok(!leader.p.getLocation().equals(left), `tick ${i}: the leader should step`);
+    assert.ok(follower.p.getLocation().equals(left),
+      `tick ${i}: follower at ${follower.p.getLocation()} should be on the leader's last tile ${left}`);
+  }
+});
+
 test('follow does not end when the leader outruns the 15-tile player view', async (t) => {
   const follower = actor(t, 3240, 3218);
   const leader = actor(t, 3262, 3218);

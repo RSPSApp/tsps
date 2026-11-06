@@ -50,7 +50,7 @@ const COORDINATES = {
   "object.z": (scope) => scope.obj.z,
 };
 const ENTRY_KEYS = new Set([
-  "name", "object", "at", "level", "xp", "option", "start", "end", "render", "route", "refuse",
+  "name", "object", "at", "level", "levelMessage", "xp", "option", "start", "end", "render", "route", "refuse",
   "steps", "between", "stile", "script", "params", "fail", "requires", "unverified", "note",
 ]);
 const FAIL_KEYS = new Set([
@@ -201,6 +201,19 @@ function refusalOf(spec, where) {
   };
 }
 
+/**
+ * The message a player below `level` gets instead of the generic one: a game message, `{ spam }`,
+ * `{ mesbox }` or `{ itembox: { item, text } }`, played by ObstacleRunner.sendMessage.
+ */
+function levelMessageOf(spec, where) {
+  const valid = typeof spec === "string"
+    || typeof spec?.spam === "string"
+    || typeof spec?.mesbox === "string"
+    || (Number.isInteger(spec?.itembox?.item) && typeof spec.itembox.text === "string");
+  if (!valid) throw new Error(`agility-shortcuts.json: "${where}" levelMessage needs a message, spam, mesbox or itembox { item, text }`);
+  return spec;
+}
+
 function build(raw, index) {
   const where = raw.name ?? `entry ${index}`;
   for (const key of Object.keys(raw)) {
@@ -222,6 +235,7 @@ function build(raw, index) {
     }
     entry.option = raw.option;
   }
+  if (raw.levelMessage != null) entry.levelMessage = levelMessageOf(raw.levelMessage, where);
   if (raw.start != null) entry.start = raw.start;
   if (raw.end != null) entry.end = raw.end;
   if (raw.render != null) entry.render = animation(raw.render, where);

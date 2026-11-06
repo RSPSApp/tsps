@@ -1,6 +1,6 @@
 /** Dragon Slayer I: revision240 RSProx stages, offerings, voyage and Elvarg proof. See docs/f2p-adventure-parity.md. */
 module.exports = function registerDragonSlayerQuest(api) {
-  const { Skill, Item, Location, Animation, Graphic, GameObject, ForceMovement, TaskManager, CountdownTask, TemplatedInstanceArea, DialogueChainBuilder, Area, Boundary, ActionDialogue, StatementDialogue, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
+  const { Skill, Item, Location, Animation, Graphic, GameObject, ForceMovement, TaskManager, CountdownTask, TemplatedInstanceArea, DialogueChainBuilder, Area, Boundary, ChatType, ActionDialogue, StatementDialogue, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
   const { registerQuest, startTranscript, getRegisteredQuests } = require("../QuestRuntime");
 
   const GUILDMASTER_NPC_ID = NpcIdentifiers.GUILDMASTER;
@@ -1112,6 +1112,7 @@ module.exports = function registerDragonSlayerQuest(api) {
     event.handled = true;
     if (quest.getStage(player) < STAGE_CRANDOR) return;
     if (player.getAttribute(ATTR_SHORTCUT) !== true) {
+      // rev242 capture tick 3520: the first crossing only, with varbit 3741 set.
       player.sendMessage("You found a secret door.<br>You remember where the secret door is for future reference.");
     }
     openCrandorShortcut(player);
@@ -1142,7 +1143,8 @@ module.exports = function registerDragonSlayerQuest(api) {
     const entering = player.getLocation().getX() < 2846;
     if (entering && quest.getStage(player) < STAGE_OZIACH) { player.sendMessage("You have no reason to enter the dragon's lair."); return; }
     if (entering && !saved(player, ELVARG_KILLED_ATTRIBUTE)) api.emitCustomEvent("elvarg:enter", {player, handled:false, aggressive:false});
-    player.sendMessage("You climb over the low wall.");
+    // rev242 capture ticks 3488, 3493, 3547: every crossing, on the filterable spam channel.
+    player.getPacketSender().sendTypedMessage(ChatType.SPAM, "You climb over the low wall.");
     const start = new Location(entering ? 2845 : 2847, 9636, 0), end = new Location(entering ? 2847 : 2845, 9636, 0);
     const token = {}; actions.set(player, token);
     player.moveTo(start); player.getMovementQueue().reset().setBlockMovement(true);
@@ -1154,6 +1156,19 @@ module.exports = function registerDragonSlayerQuest(api) {
       if (entering && !saved(player, ELVARG_KILLED_ATTRIBUTE)) api.emitCustomEvent("elvarg:enter", {player, handled:false, aggressive:true});
       else if (!entering) api.emitCustomEvent("elvarg:leave", {player});
     });
+  }
+
+  // ============================================================================
+  // Melzar's Maze
+  // ============================================================================
+
+  /** All three floors play "The Maze" (rev242 capture); the map's own region track there is Emperor. */
+  function createMelzarMazeArea() {
+    class MelzarMazeArea extends Area {
+      getMusicTrack() { return MELZAR_MAZE_TRACK; }
+    }
+    const { minX, maxX, minY, maxY, floors } = MELZAR_MAZE_BOUNDS;
+    return new MelzarMazeArea(floors.map((z) => new Boundary(minX, maxX, minY, maxY, z)));
   }
 
   // ============================================================================
@@ -1267,14 +1282,7 @@ module.exports = function registerDragonSlayerQuest(api) {
   });
 
   for (const key of [OFFERINGS_ATTRIBUTE, INSTRUCTIONS_ATTRIBUTE, NED_KNOWS_ATTRIBUTE, ELVARG_SEEN_ATTRIBUTE, ELVARG_KILLED_ATTRIBUTE, EXPLAINED_ATTRIBUTE]) api.persistAttribute(key, 0);
-  class MelzarMazeArea extends Area {
-    constructor() {
-      const { minX, maxX, minY, maxY, floors } = MELZAR_MAZE_BOUNDS;
-      super(floors.map((z) => new Boundary(minX, maxX, minY, maxY, z)));
-    }
-    getMusicTrack() { return MELZAR_MAZE_TRACK; }
-  }
-  api.registerArea(new MelzarMazeArea());
+  api.registerArea(createMelzarMazeArea());
   api.persistAttribute(ATTR_ORACLE, 0);
   api.persistAttribute(ATTR_NED_ASKED);
   api.persistAttribute(ATTR_OZIACH_CONGRATS);

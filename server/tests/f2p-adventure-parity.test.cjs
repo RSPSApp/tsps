@@ -236,6 +236,9 @@ test('Dragon Slayer start warns and changes stage when Guildmaster actually sets
 test('Dragon Slayer logout releases an interrupted wall crossing without a stale exact move', () => {
   const h=harness('DragonSlayer'),p=player();h.quest.setStage(p,9);p.moveTo(new core.Location(2845,9636));
   h.clicks.get(core.ObjectIdentifiers.WALL_161)({player:p});assert.ok(p.forceMovement);assert.equal(p.blocked,true);
+  // rev242 capture ticks 3488, 3493, 3547: the crossing message is on the filterable spam channel (105).
+  assert.deepEqual(p.log.filter(row=>row[0]==='sendTypedMessage'),[['sendTypedMessage',105,'You climb over the low wall.']]);
+  assert.ok(!p.messages.includes('You climb over the low wall.'));
   h.hooks.onPlayerLogout[0]({player:p});assert.equal(p.forceMovement,null);assert.equal(p.blocked,false);h.tick(5);assert.equal(p.getLocation().getX(),2845);
 });
 

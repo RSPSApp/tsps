@@ -198,6 +198,31 @@ test('Dragon Slayer only offers the Oracle and Wormbrain map branches after the 
   assert.match(variant(h, p, N.WORMBRAIN).variant, /lozar-s-map-piece/);
 });
 
+test('Dragon Slayer withholds the Melzar key on a full inventory, and the reply returns to the menu (rev242 tick 1146)', () => {
+  const h = harness(), p = player();
+  const condition = 'If the player does not have enough free inventory space:';
+  assert.equal(answer(h, p, N.GUILDMASTER, condition), false, 'room in the pack');
+  p.getInventory().isFull = () => true;
+  assert.equal(answer(h, p, N.GUILDMASTER, condition), true, 'a full pack and no key');
+  p.items.set(I.MAZE_KEY, 1);
+  assert.equal(answer(h, p, N.GUILDMASTER, condition), false, 'already holding the key');
+
+  const record = runtime.loadTranscripts({ core })['Dragon Slayer I'];
+  const found = [];
+  const walk = node => {
+    if (Array.isArray(node)) return node.forEach(walk);
+    if (!node || typeof node !== 'object') return;
+    if (node.id === 'dragon-slayer-i:melzar-key-no-space') found.push(node);
+    Object.values(node).forEach(walk);
+  };
+  walk(record);
+  assert.equal(found.length, 2, 'the variant and the shared branch');
+  for (const node of found) {
+    assert.equal(node.text, condition);
+    assert.deepEqual(node.steps.at(-1), { type: 'jump', reference: 'other', id: 'dragon-slayer-i:melzar-key-no-space-menu' });
+  }
+});
+
 test('Dragon Slayer answers the Pandemonium and Murder Mystery guards instead of letting them default true', () => {
   const h = harness(), p = player();
   assert.equal(answer(h, p, N.GUILDMASTER, 'If the player has completed Pandemonium:'), false);
@@ -241,6 +266,9 @@ test('Dragon Slayer hands the real shared Crandor wall to Doors both ways withou
   const first = clickCrandorWall(h, p);
   assert.equal(first.handled, true);
   assert.equal(p.attrs.get('dragon-slayer.shortcut'), true);
+  // rev242 capture tick 3520: the discovery message on the first crossing only.
+  const found = 'You found a secret door.<br>You remember where the secret door is for future reference.';
+  assert.deepEqual(p.messages, [found]);
   assert.equal(p.varbits.get(3741), 1);
   assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [2836, 9601], 'the player is not teleported');
   assert.equal(opened.length, 1);
@@ -251,6 +279,7 @@ test('Dragon Slayer hands the real shared Crandor wall to Doors both ways withou
 
   const back = clickCrandorWall(h, p);
   assert.equal(back.handled, true);
+  assert.deepEqual(p.messages, [found], 'not repeated once the shortcut is known');
   assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [2836, 9601]);
   assert.equal(opened.length, 2);
 
@@ -667,6 +696,9 @@ test('Dragon Slayer walks through the Melzar front door in both directions and k
     [2940, 3248], 'the exterior side with the maze key reaches the tile across the real door');
   assert.equal(entering.items.get(I.MAZE_KEY), 1);
   assert.equal(h.quest.getStage(entering), 2);
+  // rev242 capture (20261106T101002) tick 2070.
+  assert.deepEqual(entering.messages, ['You use the key and the door opens.']);
+  assert.deepEqual(leaving.messages, []);
 
   const locked = player();
   cleanMelzarPlayer(t, h, locked);

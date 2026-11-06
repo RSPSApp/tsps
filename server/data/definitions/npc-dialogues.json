@@ -294054,7 +294054,9 @@
                                       "text": "Ask me about Melzar's map piece again when you have enough free inventory space for the key."
                                     },
                                     {
-                                      "type": "end"
+                                      "type": "jump",
+                                      "reference": "other",
+                                      "id": "dragon-slayer-i:melzar-key-no-space-menu"
                                     }
                                   ],
                                   "id": "dragon-slayer-i:melzar-key-no-space"
@@ -297161,7 +297163,9 @@
                       "text": "Ask me about Melzar's map piece again when you have enough free inventory space for the key."
                     },
                     {
-                      "type": "end"
+                      "type": "jump",
+                      "reference": "other",
+                      "id": "dragon-slayer-i:melzar-key-no-space-menu"
                     }
                   ],
                   "id": "dragon-slayer-i:melzar-key-no-space"

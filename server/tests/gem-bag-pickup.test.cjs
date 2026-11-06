@@ -505,7 +505,7 @@ test("log basket bank-empty feedback matches what moved", async (t) => {
       assert.equal(afterStored, beforeStored - moved);
       assert.equal(f.inv.getAmount(basketId), 1);
       const expected = mode === "empty" ? "Your basket is empty."
-        : mode.startsWith("near") ? "You empty some of your basket into the bank."
+        : mode.startsWith("near") ? "You empty some of your basket's contents into the bank."
         : mode.startsWith("full") ? "Your bank cannot hold the remaining contents of your basket."
         : "You empty your basket into the bank.";
       assert.deepEqual(f.messages.slice(beforeMessages), [expected]);

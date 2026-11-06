@@ -1,0 +1,532 @@
+{
+  "12137": {
+    "component": 11,
+    "interface": 528,
+    "number": 36,
+    "plane": 0,
+    "text": "Thought to be an altar decoration, possibly celebrating the beginning of the 4th Age when Saranthium was at its most vibrant. Lovingly crafted in silver and sapphire, it is still in good condition.",
+    "variant": "Default"
+  },
+  "12138": {
+    "component": 10,
+    "interface": 528,
+    "number": 37,
+    "plane": 0,
+    "text": "This small symbol was used as a decoration on the Saradominist altars throughout the city. Two or three examples have been found, but this is the best. Worked in blue-enamelled bronze, it has not survived the ages well. We believe this to be from the early years when the city was still being built.",
+    "variant": "Default"
+  },
+  "12139": {
+    "component": 8,
+    "interface": 528,
+    "number": 22,
+    "plane": 0,
+    "text": "Two distinct types of pottery have been recovered from the Dig Site, adding evidence to the two settlements on this site. The red clay pottery appears to be much older and occasionally has purple Zarosian symbols, while the Saradominist artefacts are usually of a lighter shade with blue decorations.",
+    "variant": "After adding pottery"
+  },
+  "12232": {
+    "component": 13,
+    "interface": 528,
+    "number": 42,
+    "plane": 0,
+    "text": "Found at the Dig Site east of Varrock by a recently qualified archaeologist. It appears to be a symbol of the god, Zaros.",
+    "variant": "Default"
+  },
+  "12233": {
+    "component": 12,
+    "interface": 528,
+    "number": 43,
+    "plane": 0,
+    "text": "Excavated recently from a cavernous temple below the Dig Site by a recently qualified archaeologist. It is of great significance, as it proves the existence of a settlement that predates the Saradominist city currently being excavated. The temple appears to be dedicated to the pagan god, Zaros, and survived the destruction of the Zarosian city which was rebuilt by Saradominists.",
+    "variant": "Default"
+  },
+  "12234": {
+    "component": 4,
+    "interface": 528,
+    "number": 44,
+    "plane": 0,
+    "text": "A battered and bent coin with Zamorakian markings. It bears the word 'Senntisten', which we believe to be the original name of the city, Saranthium, before it was rebuilt by those loyal to Saradomin. Partial numbers on the coin would indicate that it is from the year 3740, presumably from the 3rd Age.",
+    "variant": "Default"
+  },
+  "15484": {
+    "component": 3,
+    "interface": 528,
+    "number": 45,
+    "plane": 0,
+    "text": "A coin in very good condition with Saradominist markings. It bears the word 'Saranthium', which we have found to be the name of the city being excavated east of Varrock. The numbers on the coin would indicate that it is from the year 3804, presumably from the 3rd Age as the Godwars were coming to an end.",
+    "variant": "Default"
+  },
+  "15485": {
+    "component": 41,
+    "interface": 534,
+    "number": 21,
+    "plane": 1,
+    "text": "5th Age - currently 169 years old<br><br>In the first years of the 5th Age, human mages discovered the secrets of making runes from rune essence. They did so by using various runic altars (also called runecrafting altars) across Gielinor. Due to the power of these runes, humans started to become dominant within the world, with the human kingdoms of Misthalin and Asgarnia quickly growing to become the ones we know today. The mages who discovered rune essence (modelled here) set up a great tower of wizardry in southern Misthalin.",
+    "variant": "empty (Default)"
+  },
+  "24539": {
+    "component": 11,
+    "interface": 528,
+    "number": 36,
+    "plane": 0,
+    "text": "Thought to be an altar decoration, possibly celebrating the beginning of the 4th Age when Saranthium was at its most vibrant. Lovingly crafted in silver and sapphire, it is still in good condition.",
+    "variant": "Default"
+  },
+  "24540": {
+    "component": 10,
+    "interface": 528,
+    "number": 37,
+    "plane": 0,
+    "text": "This small symbol was used as a decoration on the Saradominist altars throughout the city. Two or three examples have been found, but this is the best. Worked in blue-enamelled bronze, it has not survived the ages well. We believe this to be from the early years when the city was still being built.",
+    "variant": "Default"
+  },
+  "24541": {
+    "component": 14,
+    "interface": 528,
+    "number": 38,
+    "plane": 0,
+    "text": "One of the few vases found in good condition. Its markings show some kind of celebration to Saradomin.",
+    "variant": "Default"
+  },
+  "24542": {
+    "component": 8,
+    "interface": 528,
+    "number": 22,
+    "plane": 0,
+    "text": "Two distinct types of pottery have been recovered from the Dig Site, adding evidence to the two settlements on this site. The red clay pottery appears to be much older and occasionally has purple Zarosian symbols, while the Saradominist artefacts are usually of a lighter shade with blue decorations.",
+    "variant": "After adding pottery"
+  },
+  "24543": {
+    "component": 9,
+    "interface": 528,
+    "number": 22,
+    "plane": 0,
+    "text": "Two beautiful examples of the many items of pottery found around the Dig Site. There appear to be Saradominist markings upon these artefacts, indicating that this was at one time a Saradominist city. This pottery appears to be dated around the beginning of the 4th Age.",
+    "variant": "Prior to adding [[pottery]]"
+  },
+  "24544": {
+    "component": 6,
+    "interface": 528,
+    "number": 40,
+    "plane": 0,
+    "text": "Fine silver and gold jewellery has been found concealed in one of the many urns scattered around the Dig Site. Not much is known about it, although most of the items do have Saradominist markings.",
+    "variant": "Default"
+  },
+  "24545": {
+    "component": 5,
+    "interface": 528,
+    "number": 41,
+    "plane": 0,
+    "text": "Arrowheads of crude bronze have been found along with the finds deeper in the Dig Site, which leads us to believe that the forces occupying the city before the Saradominists used bows, as well as other methods of war.",
+    "variant": "Default"
+  },
+  "24546": {
+    "component": 13,
+    "interface": 528,
+    "number": 42,
+    "plane": 0,
+    "text": "Found at the Dig Site east of Varrock by a recently qualified archaeologist. It appears to be a symbol of the god, Zaros.",
+    "variant": "Default"
+  },
+  "24547": {
+    "component": 12,
+    "interface": 528,
+    "number": 43,
+    "plane": 0,
+    "text": "Excavated recently from a cavernous temple below the Dig Site by a recently qualified archaeologist. It is of great significance, as it proves the existence of a settlement that predates the Saradominist city currently being excavated. The temple appears to be dedicated to the pagan god, Zaros, and survived the destruction of the Zarosian city which was rebuilt by Saradominists.",
+    "variant": "Default"
+  },
+  "24548": {
+    "component": 4,
+    "interface": 528,
+    "number": 44,
+    "plane": 0,
+    "text": "A battered and bent coin with Zamorakian markings. It bears the word 'Senntisten', which we believe to be the original name of the city, Saranthium, before it was rebuilt by those loyal to Saradomin. Partial numbers on the coin would indicate that it is from the year 3740, presumably from the 3rd Age.",
+    "variant": "Default"
+  },
+  "24549": {
+    "component": 3,
+    "interface": 528,
+    "number": 45,
+    "plane": 0,
+    "text": "A coin in very good condition with Saradominist markings. It bears the word 'Saranthium', which we have found to be the name of the city being excavated east of Varrock. The numbers on the coin would indicate that it is from the year 3804, presumably from the 3rd Age as the Godwars were coming to an end.",
+    "variant": "Default"
+  },
+  "24551": {
+    "component": 35,
+    "interface": 534,
+    "number": 24,
+    "plane": 1,
+    "text": "4th Age - yr 700-800<br><br>Arrav is probably the best known hero from the 4th Age. In his youth, he was found by a tribe that took him to be a good omen and set up a camp that they called Avarrocka. That camp, in later years, became known as our glorious city of Varrock. Many legends are told of Arrav's heroics later in his life.<br><br>The shield of Arrav was lost in year 143 of the 5th Age, when a gang of thieves called the Phoenix Gang broke into Varrock Museum and stole it. King Roald has offered a 1,200gp bounty for the reward of the shield and we keep this display case empty in the hopes it will one day be returned.",
+    "variant": "Before Shield of Arrav"
+  },
+  "24621": {
+    "component": 3,
+    "interface": 528,
+    "number": 27,
+    "plane": 0,
+    "text": "The Layers of Archaeology<br><br>Soil Layers<br><br>O horizon - The top layer of soil is made up mostly of leaves and decomposed organic matter.<br><br>A horizon (topsoil) - Plants grow in this dark-coloured layer, which is made up of decomposed organic matter mixed with mineral particles.<br><br>E horizon - This eluviation (leaching) layer has a light colour and is made up of sand and silt. We often find significant archaeological artefacts in this layer.<br><br>B horizon (subsoil) - Contains clay and mineral deposits that it receives from layers above, when water drips through.<br><br>C horizon - Regolith consists of slightly broken up bedrock. Plant roots do not penetrate into this layer.<br><br>R horizon - The bedrock layer that is beneath all the other layers.",
+    "variant": "Default"
+  },
+  "24622": {
+    "component": 15,
+    "interface": 534,
+    "number": 16,
+    "plane": 1,
+    "text": "1st-2nd Age<br><br>The 1st Age is thought to have been 4,000 years long. The world of Gielinor was created by the gods Saradomin, Zamorak and Guthix at the beginning of the 1st Age. It's thought that, for much of this time, the gods were still in the process of forming the world and making the various lands, seas, plants and animals.<br><br>2nd Age - Research suggests this age was roughly 2,000 years long. This map is our approximation of the lands at that time, based upon our existing knowledge of the world.",
+    "variant": "Default",
+    "variants": [
+      {
+        "report": "curse_of_the_empty_lord",
+        "text": "1st - 2nd Ages<br><br>The 1st Age is thought to have been 4,000 years long. The world of Gielinor is said to have been created by the gods Saradomin, Zamorak and Guthix at the start of the 1st Age. However, recent evidence from a brave adventurer suggests that Zamorak was not a god at this point in time and so would not have been able to create worlds. It's thought that for much of this time, the gods were still in the process of forming the world and making the various lands, seas, plants and animals. This map is our approximation of the lands at that time, based upon our existing knowledge of the world"
+      }
+    ]
+  },
+  "24623": {
+    "component": 47,
+    "interface": 534,
+    "number": 28,
+    "plane": 1,
+    "text": "End of 2nd Age<br><br>This is a replica of the Staff of Armadyl, made from descriptions given to us by a brave adventurer. Armadyl is said to be a god whom was worshipped during the 2nd and 3rd Ages, though he does not seem to have much of a following in modern times.",
+    "variant": "empty (Default)",
+    "variants": [
+      {
+        "report": "temple_of_ikov",
+        "text": "End of 2nd Age<br><br>This is a replica of the Staff of Armadyl, made from descriptions given to us by a brave adventurer. It was this staff, wielded by Zamorak, which killed the god Zaros and cursed all those who aided this treacherous deed. It would seem that it was around this time that Zamorak ascended to godhood. Not much is known of what happened to the staff afterwards, until its recent discovery. Armadyl is said to be a god whom was worshipped during the 2nd and 3rd Ages, though he does not seem to have much of a following in modern times."
+      }
+    ]
+  },
+  "24624": {
+    "component": 47,
+    "interface": 534,
+    "number": 28,
+    "plane": 1,
+    "text": "End of 2nd Age<br><br>This is a replica of the Staff of Armadyl, made from descriptions given to us by a brave adventurer. Armadyl is said to be a god whom was worshipped during the 2nd and 3rd Ages, though he does not seem to have much of a following in modern times.",
+    "variant": "Default",
+    "variants": [
+      {
+        "report": "temple_of_ikov",
+        "text": "End of 2nd Age<br><br>This is a replica of the Staff of Armadyl, made from descriptions given to us by a brave adventurer. It was this staff, wielded by Zamorak, which killed the god Zaros and cursed all those who aided this treacherous deed. It would seem that it was around this time that Zamorak ascended to godhood. Not much is known of what happened to the staff afterwards, until its recent discovery. Armadyl is said to be a god whom was worshipped during the 2nd and 3rd Ages, though he does not seem to have much of a following in modern times."
+      }
+    ]
+  },
+  "24625": {
+    "component": 50,
+    "interface": 534,
+    "number": 31,
+    "plane": 1,
+    "text": "3rd Age - 4,000 years long<br><br>The scorched earth of the Wilderness is a lasting reminder of the destruction wrought during the God Wars. The little evidence found intact from these times would indicate that most of the mortal races only just survived this onslaught. Stories handed down over generations tell of great, powerful entities and agents of the gods fighting cataclysmic wars. However, at the end of this 4,000 year long 3rd Age, it seems that Saradomin, Guthix and Zamorak settled for less direct influence on our world.",
+    "variant": "Default"
+  },
+  "24627": {
+    "component": 49,
+    "interface": 534,
+    "number": 30,
+    "plane": 1,
+    "text": "3rd Age - yr 3000-4000<br><br>This statuette was found in an underground temple in the ruined city of Uzer, which was destroyed late in the 3rd Age, suddenly, due to causes unknown. It probably represents one of the clay golems that the craftsmen of the city built as warriors and servants. The statuette was originally part of a mechanism whose purpose is unknown.",
+    "variant": "Default"
+  },
+  "24628": {
+    "component": 38,
+    "interface": 534,
+    "number": 19,
+    "plane": 1,
+    "text": "4th Age - 2,000 yrs long<br><br>Finds indicate that at the beginning of the 4th Age, the humans who had survived the God Wars formed nomadic tribes that battled for survival against not only each other, but also the dwarves, goblins, ogres, gnomes and many more races that were competing for land and resources. Over time, they started to make more permanent settlements throughout the world, but they continued to battle with their neighbours.",
+    "variant": "Default"
+  },
+  "24629": {
+    "component": 10,
+    "interface": 534,
+    "number": 8,
+    "plane": 1,
+    "text": "4th Age - yr 1-200<br><br>Taverley is the site of the only known example of a surviving druidic stone circle, but the druids of Guthix speak of many others scattered across Gielinor in the past. Our best dating techniques place them in the 4th Age. The druids built them to worship Guthix all across the world. The Druids claim to be keeping watch for Guthix, keeping balance in the world.",
+    "variant": "Default"
+  },
+  "24631": {
+    "component": 41,
+    "interface": 534,
+    "number": 21,
+    "plane": 1,
+    "text": "5th Age - currently 169 years old<br><br>In the first years of the 5th Age, human mages discovered the secrets of making runes from rune essence. They did so by using various runic altars (also called runecrafting altars) across Gielinor. Due to the power of these runes, humans started to become dominant within the world, with the human kingdoms of Misthalin and Asgarnia quickly growing to become the ones we know today. The mages who discovered rune essence (modelled here) set up a great tower of wizardry in southern Misthalin.",
+    "variant": "Default"
+  },
+  "24632": {
+    "component": 53,
+    "interface": 534,
+    "number": 34,
+    "plane": 1,
+    "text": "4th Age - yr 500-900<br><br>An early 4th Age map showing the human civilisations starting to settle into more permanent villages. After the God Wars, all the races began to rebuild their settlements.",
+    "variant": "Default"
+  },
+  "24633": {
+    "component": 39,
+    "interface": 534,
+    "number": 20,
+    "plane": 1,
+    "text": "4th Age - yr 1-100<br><br>Around the beginning of the 4th Age, a new terror was seen in the world: the dragonkin. Without active gods, the people had to deal with this problem largely by themselves. Heroes arose to step up to this challenge, one of them being Robert the Strong, who led the resistance against the dragonkin threat.",
+    "variant": "empty (Default)"
+  },
+  "24634": {
+    "component": 39,
+    "interface": 534,
+    "number": 20,
+    "plane": 1,
+    "text": "4th Age - yr 1-100<br><br>Around the beginning of the 4th Age, a new terror was seen in the world: the dragonkin. Without active gods, the people had to deal with this problem largely by themselves. Heroes arose to step up to this challenge, one of them being Robert the Strong, who led the resistance against the dragonkin threat.",
+    "variant": "Default"
+  },
+  "24635": {
+    "component": 48,
+    "interface": 534,
+    "number": 29,
+    "plane": 1,
+    "text": "4th Age - yr 31-60<br><br>A fine example of an incredibly old star chart. Not much is known about it, but the positions of the stars indicate that it was made around the years 31-60 of the 4th Age.",
+    "variant": "Default"
+  },
+  "24636": {
+    "component": 42,
+    "interface": 534,
+    "number": 23,
+    "plane": 1,
+    "text": "4th Age - yr 1100-1200<br><br>A tide of evil creatures from the east threatened Avarrocka and border skirmishes were seen between them and the human settlers. Seven priestly warriors - Iriandul Caistlyn, Sarl Dunegun, Friar Twiblick, Derygull, Ivandis Seergaze, Erysail the Pious and Essiandar Gar - attempted to drive the evil creatures back into what we now know as Morytania. Saradomin blessed the River Salve, making it impassable to the foul things lurking in the swamps, and the brave priests were buried in the temple above the river.",
+    "variant": "empty (Default)",
+    "variants": [
+      {
+        "report": "in_aid_of_the_myreque",
+        "text": "4th Age - yr 1100-1200<br><br>A tide of evil creatuers from the east threatened Avarrocka and border skirmishes were seen between them and the human settlers. Seven priestly warriors - Iriandul Caistlyn, Sarl Dunegun, Friar Twiblick, Derygull, Ivandis Seergaze, Erysail the Pious and Essiandar Gar - attempted to drive the evil creatures back into what we now know as Morytania. Saradomin blessed the River Salve, making it impassable to the foul things lurking in the swamps, and the brave priests were buried in the temple above the river. However, recent information we have received suggests that Ivandis may have actually been buried in a secret cave in Morytania."
+      }
+    ]
+  },
+  "24637": {
+    "component": 42,
+    "interface": 534,
+    "number": 23,
+    "plane": 1,
+    "text": "4th Age - yr 1100-1200<br><br>A tide of evil creatures from the east threatened Avarrocka and border skirmishes were seen between them and the human settlers. Seven priestly warriors - Iriandul Caistlyn, Sarl Dunegun, Friar Twiblick, Derygull, Ivandis Seergaze, Erysail the Pious and Essiandar Gar - attempted to drive the evil creatures back into what we now know as Morytania. Saradomin blessed the River Salve, making it impassable to the foul things lurking in the swamps, and the brave priests were buried in the temple above the river.",
+    "variant": "Default",
+    "variants": [
+      {
+        "report": "in_aid_of_the_myreque",
+        "text": "4th Age - yr 1100-1200<br><br>A tide of evil creatuers from the east threatened Avarrocka and border skirmishes were seen between them and the human settlers. Seven priestly warriors - Iriandul Caistlyn, Sarl Dunegun, Friar Twiblick, Derygull, Ivandis Seergaze, Erysail the Pious and Essiandar Gar - attempted to drive the evil creatures back into what we now know as Morytania. Saradomin blessed the River Salve, making it impassable to the foul things lurking in the swamps, and the brave priests were buried in the temple above the river. However, recent information we have received suggests that Ivandis may have actually been buried in a secret cave in Morytania."
+      }
+    ]
+  },
+  "24638": {
+    "component": 35,
+    "interface": 534,
+    "number": 24,
+    "plane": 1,
+    "text": "4th Age - yr 700-800<br><br>Arrav is probably the best known hero from the 4th Age. In his youth, he was found by a tribe that took him to be a good omen and set up a camp that they called Avarrocka. That camp, in later years, became known as our glorious city of Varrock. Many legends are told of Arrav's heroics later in his life.<br><br>The shield of Arrav was lost in year 143 of the 5th Age, when a gang of thieves called the Phoenix Gang broke into Varrock Museum and stole it. King Roald has offered a 1,200gp bounty for the reward of the shield and we keep this display case empty in the hopes it will one day be returned.",
+    "variant": "empty (Before Shield of Arrav)"
+  },
+  "24640": {
+    "component": 24,
+    "interface": 534,
+    "number": 15,
+    "plane": 1,
+    "text": "4th Age - yr 1777<br><br>Temple records show that human settlers came to the temple on the River Salve looking for new lands in which to settle. While there were legends that the temple on the Salve was blocking great evil, they refused to heed the warnings of the then custodians of the temple, thinking them possibly behind the times or reciting old legends. The lands of Misthalin and Asgarnia weren't the safest places in the world - the human tribes of these times were having constant troubles with goblins, hobgoblins, giants, etc., so how much worse could Morytania have been? So, human settlers passed over the Salve into Morytania. The Museum recently came into possession of this torn map showing the expansion routes of the settlers.",
+    "variant": "Default"
+  },
+  "24641": {
+    "component": 8,
+    "interface": 534,
+    "number": 6,
+    "plane": 1,
+    "text": "4th Age - yr 1937<br><br>Settlers established a town on the River Lum. Across the river they build a bridge and hence the town became called Lumbridge. This heralded more human settlements springing up early in the next age, where humans began to move into the desert, establishing Al Kharid, and towns on both Karamja and Entrana.",
+    "variant": "Default"
+  },
+  "24642": {
+    "component": 36,
+    "interface": 534,
+    "number": 17,
+    "plane": 1,
+    "text": "No information at this time.",
+    "variant": "empty (Default)",
+    "variants": [
+      {
+        "report": "observatory_quest",
+        "text": "5th Age - yr 12<br><br>Scorpius, the early 4th Age astrologer, used this machine (in the Observatory, which he designed) to track the stars and predict the future, gaining dark knowledge. The plans for his machine were lost in the early 4th Age. In the early 5th Age they were rediscovered and from these plans the Observatory was restored. Since then, many have learned the ways of the astrologer."
+      }
+    ]
+  },
+  "24643": {
+    "component": 36,
+    "interface": 534,
+    "number": 17,
+    "plane": 1,
+    "text": "No information at this time.",
+    "variant": "Default",
+    "variants": [
+      {
+        "report": "observatory_quest",
+        "text": "5th Age - yr 12<br><br>Scorpius, the early 4th Age astrologer, used this machine (in the Observatory, which he designed) to track the stars and predict the future, gaining dark knowledge. The plans for his machine were lost in the early 4th Age. In the early 5th Age they were rediscovered and from these plans the Observatory was restored. Since then, many have learned the ways of the astrologer."
+      }
+    ]
+  },
+  "24644": {
+    "component": 51,
+    "interface": 534,
+    "number": 32,
+    "plane": 1,
+    "text": "5th Age - yr 23<br><br>An evil vampyre lord started to take control over northern Morytania and his minions visited the various human groups in the area demanding blood tithes, causing widespread panic. Werewolves founded a settlement near to the temple. From the few survivors, we learned that most of the human inhabitants eventually succumbed and paid the blood tithe imposed by the vampyres. Only the inhabitants of Castle Fenkenstrain stood up to this evil influence.",
+    "variant": "Default"
+  },
+  "24645": {
+    "component": 3,
+    "interface": 534,
+    "number": 1,
+    "plane": 1,
+    "text": "5th Age - yr 62<br><br>The barbarian invaders were running out of steam. They were pretty much forced to make peace or be wiped out, so they agreed to settle down peacefully and make a village on the Misthalin/Asgarnia border, thinking that they could lie low, well-positioned to build up strength and resume their campaign later. This is what is now called the Barbarian Village.",
+    "variant": "Default"
+  },
+  "24646": {
+    "component": 22,
+    "interface": 534,
+    "number": 14,
+    "plane": 2,
+    "text": "5th Age - yr 169<br><br>King Roald of Misthalin renovated a ruined town in north-west Misthalin. It was a town once known as Padewwa{{sic}}, but was destroyed during the God Wars and known to the humans only as Ghost Town. King Roald renamed the town Edgeville.",
+    "variant": "Default"
+  },
+  "24647": {
+    "component": 43,
+    "interface": 534,
+    "number": 24,
+    "plane": 1,
+    "text": "4th Age - yr 700-800<br><br>Arrav is probably the best known hero from the 4th Age. In his youth, he was found by a tribe that took him to be a good omen and set up a camp which they called Avarrocka. That camp, in later years, became known as our glorious city of Varrock. Many legends are told of Arrav's heroics later in his life.<br><br>The shield you see here actually belonged to Arrav. For a time, this priceless exhibit was lost to us, when a bunch of thieves called the Phoenix Gang broke into the Varrock Museum and stole it. We thank the daring adventurer who recently returned the shield to us.",
+    "variant": "After Shield of Arrav"
+  },
+  "24648": {
+    "component": 13,
+    "interface": 534,
+    "number": 11,
+    "plane": 1,
+    "text": "5th Age - yr 9<br><br>As the manufacture of runes intensified and Magic became available to people of a great variety of ages and backgrounds. It soon became evident just how dangerous this was, with a great many tragic accidents occurring due to inexperienced wizards. Wizards and victims alike called for something to be done, but it was only due to a tragic accident involving one of the leaders of that time that the Mage Training Arena was constructed, established with all skill levels in mind. They even created magic guardians to run the building.",
+    "variant": "Default"
+  },
+  "24649": {
+    "component": 44,
+    "interface": 534,
+    "number": 25,
+    "plane": 1,
+    "text": "5th Age - yr 20<br><br>A striking example of early 5th Age weapon-smithing - this steel sword has been magically treated to make it especially powerful against demons. It is thought to have belonged to a warrior who lived in Varrock. This is a replica; the original Silverlight is in the hands of Sir Prysin of Varrock.<br><br>After telling Historian Minas about Demon Slayer:<br><br>5th Age - yr 20<br><br>A striking example of early 5th Age weapon-smithing, this steel sword has been magically treated to make it especially powerful against demons. It originally belonged to a warrior who defended Varrock from the demon Delrith, and was recently used to drive off the very same demon once again. This is a replica; the original Silverlight is in the hands of a private collector.",
+    "variant": "Default"
+  },
+  "24650": {
+    "component": 4,
+    "interface": 534,
+    "number": 2,
+    "plane": 1,
+    "text": "5th Age - yr 42-62<br><br>The Fremennik mountain tribe has always been opposed to the manufacture of runes, as they feel this should be the work of the gods. A group of the more warmongering of the mountain tribe broke away, led by a warrior called Gunnar, and went on a rampage across northern Kandarin and Asgarnia to put a stop to this 'runecrafting'.<br><br>A group of master smith dwarves, known as the Imcando, were some of the most unfortunate during this period. They had been given many fire and nature runes by the White Knights of Falador to help with their smithing by use of the Superheat Item spell. The invading Fremennik were not happy about all the spellcasting and launched many attacks, reducing the Imcando to near extinction. The invading Fremennik met a fair amount of resistance and their numbers were reduced very significantly over the years.",
+    "variant": "Default"
+  },
+  "24651": {
+    "component": 14,
+    "interface": 534,
+    "number": 5,
+    "plane": 1,
+    "text": "5th Age - yr 47<br><br>The invading Fremennik had a number of sympathisers within the kingdom of Misthalin. There were many warriors skilled in the art of the sword and bow that take offence to this art of spellcasting, and taking matters into their own hands, they destroyed the Mage Training Arena.",
+    "variant": "Default"
+  },
+  "24652": {
+    "component": 65,
+    "interface": 534,
+    "number": 35,
+    "plane": 2,
+    "text": "5th Age - yr 70<br><br>The open nature of the Order of Wizards ended in disaster in the 70th year of the 5th Age. Zamorakian members of the order betrayed them and burnt down the Wizards' Tower. The tower was rebuilt, but the location of the Rune Essence Mine used by the order was lost. As a result, the further campaigns of the barbarians never happened.",
+    "variant": "Default"
+  },
+  "24653": {
+    "component": 11,
+    "interface": 534,
+    "number": 9,
+    "plane": 2,
+    "text": "5th Age - yr 132<br><br>King Arthur and the Knights of the Round Table arrive on Gielinor in year 132 of the 5th Age. Legend says they will return to Britain in its time of greatest need, so they're passing their time on Gielinor until then. King Ulthas saw them as good and rightful men who would do much good in the world, and granted them a large area of land to set up a new Camelot in north-east Kandarin. This is a replica of King Arthur's sword, Excalibur.",
+    "variant": "empty (Default)"
+  },
+  "24654": {
+    "component": 11,
+    "interface": 534,
+    "number": 9,
+    "plane": 2,
+    "text": "5th Age - yr 132<br><br>King Arthur and the Knights of the Round Table arrive on Gielinor in year 132 of the 5th Age. Legend says they will return to Britain in its time of greatest need, so they're passing their time on Gielinor until then. King Ulthas saw them as good and rightful men who would do much good in the world, and granted them a large area of land to set up a new Camelot in north-east Kandarin. This is a replica of King Arthur's sword, Excalibur.",
+    "variant": "Default"
+  },
+  "24655": {
+    "component": 7,
+    "interface": 534,
+    "number": 7,
+    "plane": 1,
+    "text": "5th Age - yr 7<br><br>Using the power of runes, Saradominist humans in Kandarin, led by the Carnillean family, became confident and decided to take on the evil influences resident in the area around what is now known as Ardougne. From there, they expanded their territory until Kandarin was the largest of the human kingdoms.",
+    "variant": "Default",
+    "variants": [
+      {
+        "report": "hazeel_cult",
+        "sideAttribute": "quest.hazeel_cult.side",
+        "side": 1,
+        "text": "5th Age - yr 7<br><br>Using the power of runes, Saradominist humans in Kandarin, led by the Carnillean family, became confident and decided to take on the evil influences resident in the area around what is now know as Ardougne. Of particular note was an evil lord by the name of Hazeel, so they stormed his home and defeated the Zamorakians inside. The following morning, the Carnillean forefathers moved into the empty household and claimed it as their own. From this base the Carnilleans began to build the city of Ardougne. From there, they expanded their territory until Kandarin was the largest of the human kingdoms."
+      }
+    ]
+  },
+  "24656": {
+    "component": 37,
+    "interface": 534,
+    "number": 18,
+    "plane": 2,
+    "text": "5th Age - yr 143<br><br>The Phoenix Gang had a big fight amongst themselves and the Shield of Arrav was broken in half as a result. Shortly afterwards, some gang members decided they didn't want to be part of the Phoenix Gang anymore, so split off to form the Black Arm Gang. On their way out they looted what treasures they could, which included one of the halves of the shield. The Phoenix and Black Arm gangs became bitter rivals - a rivalry that lasts to this day.",
+    "variant": "Default"
+  },
+  "24657": {
+    "component": 38,
+    "interface": 534,
+    "number": 26,
+    "plane": 2,
+    "text": "5th Age - yr 154<br><br>A strange undead necromancer leads an army of undead out of the Wilderness in an attack upon Varrock. Misthalin is strong enough and still has enough runes that the attack is defeated fairly quickly.",
+    "variant": "Default"
+  },
+  "24658": {
+    "component": 52,
+    "interface": 534,
+    "number": 33,
+    "plane": 2,
+    "text": "5th Age - yr 162-163<br><br>The old king of Asgarnia, King Vallance, falls very ill. The White Knights took advantage of this and began to take control of Falador and Asgarnia for themselves.<br><br>Year 163, 5th Age - The White Knights declared that the Black Knights were no longer to have any political power within Asgarnia. Lord Daquarius of the Kinshra immediately responds by declaring his Black Knights as being at a state of war with Falador. The two sides engaged in a big battle to the north of Falador - however, both sides were fairly evenly matched, and retreated to their fortresses to build up their forces and devise plans to crush the other, once and for all.",
+    "variant": "Default"
+  },
+  "24659": {
+    "component": 14,
+    "interface": 534,
+    "number": 12,
+    "plane": 2,
+    "text": "5th Age - yr 169<br><br>A collection of wizards took it upon themselves to resurrect the Mage Training Arena along with all the guardians that were destroyed with it. These guardians were created out of the very same essence as runes, embodying the Magic power and authority needed to oversee the Arena.",
+    "variant": "Default"
+  },
+  "24660": {
+    "component": 12,
+    "interface": 534,
+    "number": 10,
+    "plane": 2,
+    "text": "5th Age - yr 20<br><br>What little we know of gnomish history is mainly learned from the glider pilots scattered around Gielinor. They did mention that an old gnome engineer called Oaknock used to make model gliders for his children. Oaknock's son, Yewknock{{sic}}, ended up creating this method of transport with inspiration from his father's models. Captain Daerkin and Captain Ninto were said to be the test pilots of the initial prototypes, though enquiries{{sic}} have proved them to be reticent to give much information. It appears that these gliders will safely support one gnome in flight. The staff at the Museum have carefully constructed this replica model.<br><br>After telling about The Grand Tree:<br><br>5th Age - yr 20<br><br>What little we know of gnomish history is mainly learned from the glider pilots scattered around Gielinor. They did mention that an old gnome engineer called Oaknock used to make model gliders for his children. Oaknock's son, Yewknock{{sic}}, ended up creating this method of transport with inspiration from his father's models. Captain Daerkin and Captain Ninto were said to be the test pilots of the initial prototypes, though enquiries{{sic}} have proved them to be reticent to give much information. Previously, we thought that the strange, 'bird-like', wood and leather gliders that the gnomes find so useful would only support a single gnome in flight. However, due to a brave adventurer heroically aiding the gnomes to save their Grand Tree and earning their gratitude, we find that the gliders can indeed transport at least one human and one gnome. The staff at the Museum have carefully constructed this replica model.",
+    "variant": "Default"
+  },
+  "24661": {
+    "component": 16,
+    "interface": 534,
+    "number": 47,
+    "plane": 2,
+    "text": "5th Age - yr 136<br><br>King Ulthas of Ardougne dies from an accidental arrow shot while out on a hunting expedition. Ardougne is left to his two sons Tyras and Lathas with the city split between them.",
+    "variant": "Default"
+  },
+  "24662": {
+    "component": 3,
+    "interface": 534,
+    "number": 3,
+    "plane": 2,
+    "text": "5th Age - yr 70<br><br>Donated by one of our citizens, this historic tome details the rise and fall of an order of Zamorakian mages, called the Dagon'hai, residing in Varrock. Skilled in the art of chaos Magic, the Dagon'hai fought continually with the priests of Saradomin until the day they were forced out of the city. They were not seen again until they were discovered recently in a tunnel near Varrock.",
+    "variant": "empty (Default)"
+  },
+  "24663": {
+    "component": 3,
+    "interface": 534,
+    "number": 3,
+    "plane": 2,
+    "text": "5th Age - yr 70<br><br>Donated by one of our citizens, this historic tome details the rise and fall of an order of Zamorakian mages, called the Dagon'hai, residing in Varrock. Skilled in the art of chaos Magic, the Dagon'hai fought continually with the priests of Saradomin until the day they were forced out of the city. They were not seen again until they were discovered recently in a tunnel near Varrock.",
+    "variant": "Default"
+  }
+}

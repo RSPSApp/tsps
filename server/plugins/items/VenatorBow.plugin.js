@@ -325,7 +325,13 @@ function configureCharges(player, bow, wanted) {
   if (target > current) {
     player.getBank(Bank.getTabForItem(player, essenceId)).delete(essenceId, target - current);
   } else {
-    player.getBank(Bank.getTabForItem(player, essenceId)).add(new Item(essenceId, current - target), false);
+    const bank = player.getBank(Bank.getTabForItem(player, essenceId));
+    const refund = new Item(essenceId, current - target);
+    if (bank.getAddableAmount(refund) < refund.getAmount()) {
+      bank.full();
+      return;
+    }
+    bank.add(refund, false);
   }
   setCharges(bow, target);
   refreshBank(player);

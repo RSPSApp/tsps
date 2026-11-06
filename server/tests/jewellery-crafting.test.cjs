@@ -44,6 +44,13 @@ function playerWith(entries = []) {
   const amounts = new Map(entries), attrs = new Map(), log = [];
   const inventory = {
     getItems: () => [...amounts].filter(([, n]) => n > 0).map(([id, n]) => new core.Item(id, n)),
+    getCopiedItems: () => {
+      const items = [...amounts].filter(([, n]) => n > 0).flatMap(([id, n]) =>
+        core.ItemDefinition.forId(id).isStackable() ? [new core.Item(id, n)] :
+          Array.from({ length: n }, () => new core.Item(id, 1)));
+      assert.ok(items.length <= 28, "fixture inventory exceeds capacity");
+      return [...items, ...Array.from({ length: 28 - items.length }, () => new core.Item(-1, 0))];
+    },
     getAmount: id => amounts.get(id) ?? 0,
     contains: id => (amounts.get(id) ?? 0) > 0,
     deleteNumber: (id, n) => amounts.set(id, Math.max(0, (amounts.get(id) ?? 0) - n)),
@@ -443,6 +450,8 @@ test("native gold jewellery stops a pending conversion after a drained one-step 
     core.ObjectManager.register(furnace,true);t.after(()=>core.ObjectManager.deregister(furnace,true));
     const pos=()=>[p.getLocation().getX(),p.getLocation().getY(),p.getLocation().getZ()];
     const initial=pos(),gains=[],openings=[],rows=[];
+    let completed=false;
+    t.after(()=>{ if(!completed) t.diagnostic("JEWELLERY_CANCELLATION_OBSERVATION "+JSON.stringify({rows,openings})); });
     const skills=p.getSkillManager(),add=skills.addExperiences.bind(skills);
     t.mock.method(skills,"addExperiences",(skill,xp)=>{if(skill===core.Skill.CRAFTING)gains.push(xp);return add(skill,xp);});
     const total=id=>p.getInventory().getAmount(id)+p.getEquipment().getAmount(id)+core.World.getItems().filter(g=>!g.isPendingRemoval()&&g.getOwner()===p.getUsername()&&g.getPrivateArea()===p.getPrivateArea()&&g.getItem().getId()===id).reduce((n,g)=>n+g.getItem().getAmount(),0);
@@ -455,7 +464,7 @@ test("native gold jewellery stops a pending conversion after a drained one-step 
     const snapshot=label=>{
       const q=p.getMovementQueue(),task=p.getAttribute(Shared.CRAFTING_TASK_ATTRIBUTE);
       const row={label,mode,turns,epoch:core.World.getProcessCycle(),pos:pos(),queue:q.size(),moving:q.isMovings(),didMove:q.didMoveThisCycle(),taskActive:task?.isRunning?.()??false,interfaceId:p.getInterfaceId(),bar:total(ids.GOLD_BAR),ring:total(ids.GOLD_RING),mould:total(ids.RING_MOULD),gains:[...gains]};
-      rows.push(row);console.log("JEWELLERY_CANCELLATION_PRECONDITION "+JSON.stringify(row));return row;
+      rows.push(row);return row;
     };
     const turn=()=>{
       assert.ok(++turns<=24,"bounded native turn budget");p.resetUpdating();core.World.processCycle=(core.World.processCycle+1)&0x7fffffff;
@@ -483,10 +492,11 @@ test("native gold jewellery stops a pending conversion after a drained one-step 
       assert.ok(p.getLocation().getDistance(menu.location)<=2,"anchor-radius refusal must not replace cancellation");
     }
     for(let i=0;i<5;i++)turn();
-    const end=snapshot("completion-window");console.log("JEWELLERY_CANCELLATION_OBSERVATION "+JSON.stringify({rows,openings}));
+    const end=snapshot("completion-window");
     const cancelled=mode==="interrupt";
     assert.deepEqual(gains,cancelled?[]:[15],"pending gold-ring XP cancellation: "+JSON.stringify(end));
     assert.equal(total(ids.GOLD_BAR),cancelled?1:0);assert.equal(total(ids.GOLD_RING),cancelled?0:1);assert.equal(total(ids.RING_MOULD),1);
     assert.equal(p.getAttribute(Shared.CRAFTING_TASK_ATTRIBUTE),null);
+    completed=true;
   });
 });

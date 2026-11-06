@@ -109,9 +109,7 @@ function craftFurnaceProduct(player, product) {
   const inventory = player.getInventory();
   const output = new Item(product.itemId, product.amount);
   // Check the whole batch after the inputs have freed their slots.
-  const preview = new Inventory(player);
-  const items = inventory.getItems();
-  preview.getItems().splice(0, items.length, ...items.map((item) => item.clone()));
+  const preview = new Inventory(player).setItems(inventory.getCopiedItems());
   preview.deleted(product.bar, 1, false);
   for (const id of product.extra) preview.deleted(id, 1, false);
   if (preview.getAddableAmount(output) < product.amount) {

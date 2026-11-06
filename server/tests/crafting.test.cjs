@@ -74,6 +74,12 @@ function playerWith(entries = [], { level = 99, threadUses } = {}) {
         ItemDefinition.forId(id).isStackable() ? [new Item(id, amount)] :
           Array.from({ length: amount }, () => new Item(id, 1)));
     },
+    getCopiedItems: () => {
+      const { Item } = PluginManager.getCoreApi();
+      const items = inventory.getItems();
+      assert.ok(items.length <= 28, "fixture inventory exceeds capacity");
+      return [...items.map(item => item.clone()), ...Array.from({ length: 28 - items.length }, () => new Item(-1, 0))];
+    },
   };
   const packetSender = {
     sendCreationMenu(value) {

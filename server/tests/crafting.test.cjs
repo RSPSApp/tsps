@@ -968,11 +968,11 @@ test("native furnace silver-bolt batches conserve inputs at output stack limits"
   });
   await t.test("a carried Imcando hammer works for a hard leather shield", async t => {
     const { CREATION_MENU_GROUP_ID, CREATION_MENU_FIRST_ITEM_COMPONENT } = require("../dist/net/packet/PacketSender");
-    assert.equal(CREATION_MENU_GROUP_ID,270);assert.equal(ids.IMCANDO_HAMMER,25644);
+    assert.equal(CREATION_MENU_GROUP_ID,270);assert.equal(ids.IMCANDO_HAMMER,25644);assert.equal(ids.IMCANDO_HAMMER_OFF_HAND_,29775);
     const recipe=Shared.DATA.combine.recipes.find(r=>r.item==="HARD_LEATHER_SHIELD");
     assert.ok(recipe);assert.deepEqual(recipe.pair,["HARD_LEATHER","OAK_SHIELD"]);assert.deepEqual(recipe.pairAmounts,[2,1]);
     assert.deepEqual(recipe.materials,[["BRONZE_NAILS",15]]);assert.deepEqual(recipe.tools,["HAMMER"]);assert.equal(recipe.level,41);assert.equal(recipe.xp,70);
-    for(const [mode,tool,expectMenu,remove] of [["ordinary hammer",ids.HAMMER,true,false],["no hammer",null,false,false],["ordinary hammer removed before make",ids.HAMMER,true,true],["carried Imcando hammer",ids.IMCANDO_HAMMER,true,false]]) await t.test(mode,async t=>{
+    for(const [mode,tool,expectMenu,remove] of [["ordinary hammer",ids.HAMMER,true,false],["no hammer",null,false,false],["ordinary hammer removed before make",ids.HAMMER,true,true],["carried Imcando hammer",ids.IMCANDO_HAMMER,true,false],["carried off-hand Imcando hammer",ids.IMCANDO_HAMMER_OFF_HAND_,true,false]]) await t.test(mode,async t=>{
       const channel={kind:"test",remoteAddress:"127.0.0.1",isOpen:()=>true,send:()=>true,close(){},onData(){},onError(){},onClose(){}};
       const p=new Player(new PlayerSession(channel));p.setIndex(index++);p.setUsername("shieldtool"+index);p.setRegistered(true);p.setLocation(new core.Location(3226,3218,0));p.needsPlacement=false;
       const c=new ClientConnection(channel),inv=p.getInventory(),skill=p.getSkillManager(),craft=core.Skill.CRAFTING;c.player=p;
@@ -984,7 +984,7 @@ test("native furnace silver-bolt batches conserve inputs at output stack limits"
       for(const [id,n] of entries){assert.equal(inv.getAmount(id),n);const def=core.ItemDefinition.forId(id);assert.ok(def.getName());assert.equal(def.isNoted(),false);}
       assert.equal(p.getEquipment().getItems().some(i=>i&&i.getId()>0),false);
       assert.equal(inv.getAmount(ids.HAMMER),tool===ids.HAMMER?1:0);assert.equal(inv.getAmount(ids.IMCANDO_HAMMER),tool===ids.IMCANDO_HAMMER?1:0);
-      if(tool!=null){const toolSlot=inv.getSlotForItemId(tool);assert.ok(toolSlot>=0);assert.equal(inv.getItems()[toolSlot].getId(),tool);assert.equal(inv.getItems()[toolSlot].getMeta(),null);assert.match(core.ItemDefinition.forId(tool).getName(),tool===ids.IMCANDO_HAMMER?/^imcando hammer$/i:/^hammer$/i);assert.notEqual(PluginManager.emitCanUseItem(p,tool,"use"),false);}
+      if(tool!=null){const toolSlot=inv.getSlotForItemId(tool);assert.ok(toolSlot>=0);assert.equal(inv.getItems()[toolSlot].getId(),tool);assert.equal(inv.getItems()[toolSlot].getMeta(),null);assert.match(core.ItemDefinition.forId(tool).getName(),tool===ids.IMCANDO_HAMMER?/^imcando hammer$/i:tool===ids.IMCANDO_HAMMER_OFF_HAND_?/^imcando hammer \(off-hand\)$/i:/^hammer$/i);assert.notEqual(PluginManager.emitCanUseItem(p,tool,"use"),false);}
       assert.notEqual(PluginManager.emitCanUseItem(p,ids.HARD_LEATHER,"use"),false);assert.notEqual(PluginManager.emitCanUseItem(p,ids.OAK_SHIELD,"use"),false);
       const initialXp=skill.getExperience(craft),slot=inv.getSlotForItemId(ids.HARD_LEATHER),target=inv.getSlotForItemId(ids.OAK_SHIELD);
       assert.ok(slot>=0&&target>=0&&slot!==target);assert.equal(inv.getItems()[slot].getId(),ids.HARD_LEATHER);assert.equal(inv.getItems()[target].getId(),ids.OAK_SHIELD);

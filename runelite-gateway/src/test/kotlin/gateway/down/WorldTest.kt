@@ -1,9 +1,16 @@
 package gateway.down
 
 import gateway.session.WorldEntities
+import gateway.headless.HeadlessClient
+import gateway.headless.TestCache
 import gateway.tsps.TspsPacket
 import gateway.tsps.TspsServerPacket
 import gateway.tsps.TspsWriter
+import io.netty.buffer.Unpooled
+import net.rsprot.buffer.extensions.toJagByteBuf
+import net.rsprot.compression.HuffmanCodec
+import net.rsprot.crypto.cipher.NopStreamCipher
+import net.rsprot.protocol.game.outgoing.codec.specific.ObjEnabledOpsSpecificEncoder
 import net.rsprot.protocol.game.outgoing.camera.CamMoveToCyclesV3
 import net.rsprot.protocol.game.outgoing.camera.util.CameraEaseFunction
 import net.rsprot.protocol.game.outgoing.misc.client.HideNpcOps
@@ -16,8 +23,14 @@ import net.rsprot.protocol.game.outgoing.specific.LocAnimSpecific
 import net.rsprot.protocol.game.outgoing.specific.ObjAddSpecific
 import net.rsprot.protocol.game.outgoing.specific.ObjCountSpecific
 import net.rsprot.protocol.game.outgoing.specific.ObjDelSpecific
+import net.rsprot.protocol.game.outgoing.specific.ObjEnabledOpsSpecific
 import net.rsprot.protocol.game.outgoing.zone.header.UpdateZonePartialEnclosed
 import net.rsprot.protocol.message.OutgoingGameMessage
+import net.rsprox.cache.api.CacheProvider
+import net.rsprox.protocol.session.AttributeMap
+import net.rsprox.protocol.session.Session
+import net.rsprox.protocol.v241.ServerPacketDecoderServiceV241
+import net.rsprox.protocol.game.outgoing.model.specific.ObjEnabledOpsSpecific as DecodedObjEnabledOpsSpecific
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -156,8 +169,8 @@ class WorldTest {
         groundStack(delta, 1, quantity = 2)
         delta.u16(1).i32(2)
         items.handle(packet(TspsServerPacket.GROUND_ITEMS_DELTA, delta))
-        assertTrue(sent[0] is ObjCountSpecific, "a quantity change updates the one remaining stack")
-        assertTrue(sent[1] is ObjDelSpecific, "taking the other stack removes it once")
+        assertEquals(listOf(ObjDelSpecific::class, ObjDelSpecific::class, ObjAddSpecific::class), sent.map { it::class }, "rebuild an ambiguous group after changing and removing its stacks")
+        assertEquals(2, (sent.last() as ObjAddSpecific).quantity)
         sent.clear()
         items.handle(packet(TspsServerPacket.GROUND_ITEMS, TspsWriter().i32(3).u16(0)))
         assertEquals(2, (sent.single() as ObjDelSpecific).quantity)
@@ -178,9 +191,100 @@ class WorldTest {
         assertTrue(sent.single() is ObjAddSpecific)
     }
 
-    private fun groundStack(writer: TspsWriter, id: Int, quantity: Int = 1) {
-        writer.i32(id).u16(PLANK).i32(quantity).u16(3222).u16(3218).u8(0)
-            .i32(0).i32(0).i32(200).i32(-1).u8(0).u8(0)
+    @Test
+    fun `single ground stack flags change without replacing it and survive scene rebuilds`() {
+        val items = GroundItems { sent += it }
+        items.rebuild(LUMBRIDGE_ZONE_X, LUMBRIDGE_ZONE_Z)
+        val snapshot = TspsWriter().i32(1).u16(1)
+        groundStack(snapshot, 1, enabledOps = 0b10101)
+        items.handle(packet(TspsServerPacket.GROUND_ITEMS, snapshot))
+        assertEquals(0b10101.toByte(), (sent.single() as ObjAddSpecific).opFlags)
+        sent.clear()
+        val delta = TspsWriter().i32(2).u16(1)
+        groundStack(delta, 1, quantity = 2, enabledOps = 0b01010)
+        delta.u16(0)
+        items.handle(packet(TspsServerPacket.GROUND_ITEMS_DELTA, delta))
+        assertEquals(listOf(ObjCountSpecific::class, ObjEnabledOpsSpecific::class), sent.map { it::class })
+        assertEquals(0b01010.toByte(), (sent.last() as ObjEnabledOpsSpecific).opFlags)
+        val encoder = ObjEnabledOpsSpecificEncoder()
+        assertEquals(56, encoder.prot.opcode, "revision 241 obj_enabled_ops_specific")
+        val wire = Unpooled.buffer().toJagByteBuf()
+        try {
+            encoder.encode(NopStreamCipher, wire, sent.last() as ObjEnabledOpsSpecific)
+            val decoder = ServerPacketDecoderServiceV241(HuffmanCodec.create(Unpooled.wrappedBuffer(TestCache.huffman)), CacheProvider { HeadlessClient.NoCache })
+            val decoded = decoder.decode(encoder.prot.opcode, wire, Session(0, AttributeMap())) as DecodedObjEnabledOpsSpecific
+            assertEquals(0b01010, decoded.opFlags.value)
+            assertEquals(PLANK, decoded.id)
+            assertEquals(Triple(0, 3222, 3218), Triple(decoded.coordGrid.level, decoded.coordGrid.x, decoded.coordGrid.z))
+        } finally {
+            wire.buffer.release()
+        }
+        sent.clear()
+        items.rebuild(LUMBRIDGE_ZONE_X + 20, LUMBRIDGE_ZONE_Z)
+        assertTrue(sent.single() is ObjDelSpecific)
+        sent.clear()
+        items.rebuild(LUMBRIDGE_ZONE_X, LUMBRIDGE_ZONE_Z)
+        assertEquals(0b01010.toByte(), (sent.single() as ObjAddSpecific).opFlags)
+    }
+
+    @Test
+    fun `same item and quantity on one tile keep separate masks after change and removal`() {
+        val items = GroundItems { sent += it }
+        items.rebuild(LUMBRIDGE_ZONE_X, LUMBRIDGE_ZONE_Z)
+        val snapshot = TspsWriter().i32(1).u16(2)
+        groundStack(snapshot, 1, enabledOps = 0)
+        groundStack(snapshot, 2, enabledOps = 31)
+        items.handle(packet(TspsServerPacket.GROUND_ITEMS, snapshot))
+        assertEquals(listOf(0.toByte(), 31.toByte()), sent.filterIsInstance<ObjAddSpecific>().map { it.opFlags })
+        sent.clear()
+        val delta = TspsWriter().i32(2).u16(1)
+        groundStack(delta, 2, enabledOps = 4)
+        delta.u16(0)
+        items.handle(packet(TspsServerPacket.GROUND_ITEMS_DELTA, delta))
+        assertEquals(listOf(ObjDelSpecific::class, ObjDelSpecific::class, ObjAddSpecific::class, ObjAddSpecific::class), sent.map { it::class })
+        assertEquals(listOf(0.toByte(), 4.toByte()), sent.filterIsInstance<ObjAddSpecific>().map { it.opFlags })
+        sent.clear()
+        items.handle(packet(TspsServerPacket.GROUND_ITEMS_DELTA, TspsWriter().i32(3).u16(0).u16(1).i32(1)))
+        assertEquals(listOf(ObjDelSpecific::class, ObjDelSpecific::class, ObjAddSpecific::class), sent.map { it::class })
+        assertEquals(4.toByte(), (sent.last() as ObjAddSpecific).opFlags)
+        sent.clear()
+        val unchanged = TspsWriter().i32(4).u16(1)
+        groundStack(unchanged, 2, enabledOps = 4)
+        items.handle(packet(TspsServerPacket.GROUND_ITEMS, unchanged))
+        assertTrue(sent.isEmpty(), "unchanged snapshots must not duplicate the retained item")
+        items.handle(packet(TspsServerPacket.GROUND_ITEMS, TspsWriter().i32(5).u16(0)))
+        assertTrue(sent.single() is ObjDelSpecific)
+        sent.clear()
+        val respawn = TspsWriter().i32(6).u16(1)
+        groundStack(respawn, 3)
+        items.handle(packet(TspsServerPacket.GROUND_ITEMS, respawn))
+        assertEquals(31.toByte(), (sent.single() as ObjAddSpecific).opFlags)
+    }
+
+    @Test
+    fun `stack ids exchanged between tiles remain visible for later rebuilds`() {
+        val items = GroundItems { sent += it }
+        items.rebuild(LUMBRIDGE_ZONE_X, LUMBRIDGE_ZONE_Z)
+        val snapshot = TspsWriter().i32(1).u16(2)
+        groundStack(snapshot, 1, enabledOps = 1, x = 3222)
+        groundStack(snapshot, 2, enabledOps = 2, x = 3223)
+        items.handle(packet(TspsServerPacket.GROUND_ITEMS, snapshot))
+        sent.clear()
+        val changed = TspsWriter().i32(2).u16(2)
+        groundStack(changed, 1, enabledOps = 1, x = 3223)
+        groundStack(changed, 2, enabledOps = 2, x = 3222)
+        items.handle(packet(TspsServerPacket.GROUND_ITEMS, changed))
+        assertEquals(2, sent.filterIsInstance<ObjDelSpecific>().size)
+        assertEquals(setOf(3223 to 1.toByte(), 3222 to 2.toByte()), sent.filterIsInstance<ObjAddSpecific>().map { it.coordGrid.x to it.opFlags }.toSet())
+        sent.clear()
+        items.rebuild(LUMBRIDGE_ZONE_X, LUMBRIDGE_ZONE_Z)
+        assertEquals(2, sent.filterIsInstance<ObjDelSpecific>().size, "both moved ids must remain in the visible set")
+        assertEquals(2, sent.filterIsInstance<ObjAddSpecific>().size)
+    }
+
+    private fun groundStack(writer: TspsWriter, id: Int, quantity: Int = 1, enabledOps: Int = 31, x: Int = 3222) {
+        writer.i32(id).u16(PLANK).i32(quantity).u16(x).u16(3218).u8(0)
+            .i32(0).i32(0).i32(200).i32(-1).u8(0).u8(0).u8(enabledOps)
     }
 
     /** A tsps packet with [payload]'s bytes, as TspsCodec.split would hand it over. */

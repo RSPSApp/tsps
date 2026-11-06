@@ -63,27 +63,33 @@ function grindOne(player, grind, requested = 1, toolId = null, withFeedback = tr
 
 function grind(event) {
   const { player, usedItemId, usedWithItemId } = event;
-  const { KNIFE, CHOCOLATE_BAR } = Common.core.ItemIds;
-  if ((usedItemId === KNIFE && usedWithItemId === CHOCOLATE_BAR)
-      || (usedItemId === CHOCOLATE_BAR && usedWithItemId === KNIFE)) {
-    const chocolate = Common.grindFor(CHOCOLATE_BAR);
-    if (!chocolate) return;
-    event.handled = true;
-    Common.core.TaskManager.cancelTasks(player.getIndex());
-    // Wiki: knife use can repeat, but its timing and feedback are not yet captured.
-    // Convert one bar without applying the pestle's animation, sound or cadence.
-    if (onlyRestricted(player, chocolate)) player.sendMessage(Common.PRESET_REFUSAL);
-    else grindOne(player, chocolate, 1, KNIFE, false);
-    return;
-  }
   const pestle = Common.gameval("obj", "pestle_and_mortar");
-  if (usedItemId !== pestle && usedWithItemId !== pestle) return;
-  const found = Common.grindFor(usedItemId === pestle ? usedWithItemId : usedItemId);
+  let found;
+  let alternateTool = null;
+  if (usedItemId === pestle || usedWithItemId === pestle) {
+    found = Common.grindFor(usedItemId === pestle ? usedWithItemId : usedItemId);
+  } else {
+    const used = Common.grindFor(usedItemId);
+    const usedWith = Common.grindFor(usedWithItemId);
+    if (used?.alternateToolId === usedWithItemId) {
+      found = used;
+      alternateTool = usedWithItemId;
+    } else if (usedWith?.alternateToolId === usedItemId) {
+      found = usedWith;
+      alternateTool = usedItemId;
+    }
+  }
   if (!found) return;
   event.handled = true;
   Common.core.TaskManager.cancelTasks(player.getIndex());
   if (onlyRestricted(player, found)) {
     player.sendMessage(Common.PRESET_REFUSAL);
+    return;
+  }
+  if (alternateTool !== null) {
+    // Wiki: knife use can repeat, but its timing and feedback are not yet captured.
+    // Convert one bar without applying the pestle's animation, sound or cadence.
+    grindOne(player, found, 1, alternateTool, false);
     return;
   }
   if (found.quantityPrompt) {

@@ -252,6 +252,7 @@ export type SkillView = {
 };
 
 export type GroundItemView = {
+  enabledOps?: number;
   id: number;
   itemId: number;
   quantity: number;
@@ -1380,6 +1381,16 @@ export function encodeInventorySnapshot(slots: Array<{ slot: number; itemId: num
   ]));
 }
 
+/** UPDATE_INV_STOPTRANSMIT clears client data only, never authoritative item storage. */
+export function encodeInventoryStopTransmit(inventoryId: number): Buffer {
+  if (!Number.isInteger(inventoryId) || inventoryId < 0 || inventoryId > 0xffff) {
+    throw new RangeError("inventoryId must be an unsigned short");
+  }
+  const body = Buffer.alloc(2);
+  body.writeUInt16BE(inventoryId);
+  return encodeServerPacket(ServerPacketId.INVENTORY_STOP_TRANSMIT, body);
+}
+
 export function encodeInventorySlot(slot: number, itemId: number, quantity: number): Buffer {
   return encodeServerPacket(ServerPacketId.INVENTORY_SLOT, encodeItemSlot(slot, itemId, quantity));
 }
@@ -1421,7 +1432,7 @@ export function encodeBankSlot(slot: BankSlotView): Buffer {
   return encodeServerPacket(ServerPacketId.BANK_SLOT, encodeBankSlotPayload(slot));
 }
 
-export const GROUND_ITEM_BYTES = 33;
+export const GROUND_ITEM_BYTES = 34;
 
 function encodeGroundItem(stack: GroundItemView): Buffer {
   const payload = Buffer.alloc(GROUND_ITEM_BYTES);
@@ -1437,6 +1448,7 @@ function encodeGroundItem(stack: GroundItemView): Buffer {
   payload.writeInt32BE(stack.ownerId ?? -1, 27);
   payload[31] = stack.isPrivate ? 1 : 0;
   payload[32] = stack.ownership ?? 0;
+  payload[33] = (stack.enabledOps ?? 0x1f) & 0x1f;
   return payload;
 }
 

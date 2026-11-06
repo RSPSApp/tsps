@@ -1,3 +1,4 @@
+import { isGroundItemOperationEnabled } from "../../../game/data/ground/GroundItemStore";
 import { buildPlayerActionEntries } from "./playerMenu";
 import Denque from "denque";
 import { mat4, vec2, vec3, vec4 } from "gl-matrix";
@@ -1143,6 +1144,7 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
 
                         const actions = objType.groundActions ?? [];
                         for (let actionIdx = 4; actionIdx >= 0; actionIdx--) {
+                            if (!isGroundItemOperationEnabled(stack, actionIdx)) continue;
                             const option = actions[actionIdx];
                             if (option) {
                                 const capturedStack = stack;

@@ -1910,10 +1910,11 @@ test("Broken Raft checks the grapple requirements on both approaches", async (t)
   const { PlayerSession } = require("../dist/net/PlayerSession");
   const { Inventory } = require("../dist/game/model/container/impl/Inventory");
   const { EquipPacketListener } = require("../dist/net/packet/impl/EquipPacketListener");
+  const { EquipmentRequirements } = require("../dist/game/model/equipment/EquipmentRequirements");
   const { ObjectActionPacketListener } = require("../dist/net/packet/impl/ObjectActionPacketListener");
   const core = PluginManager.getCoreApi();
   const oldBots = process.env.DISABLE_PLAYER_BOTS, oldSubmit = core.TaskManager.submit, oldError = console.error;
-  const ownedTasks = new Set(), actors = [], errors = [], rolls = new Map();
+  const ownedTasks = new Set(), actors = [], errors = [], rolls = new Map(), rollLevels = new Map();
   let started = false;
   process.env.DISABLE_PLAYER_BOTS = "1";
   t.after(() => {
@@ -1940,7 +1941,12 @@ test("Broken Raft checks the grapple requirements on both approaches", async (t)
   assert.ok(PluginManager.loadedPlugins.includes("Agility"), "real Agility plugin is registered");
   assert.equal(core.WorldDefinition.isMembersWorld(), true);
   PluginManager.createApi("RaftFixture").onCustomEvent("agility:roll", ({ player, objectId }) => {
-    if (objectId === 17068) rolls.set(player, (rolls.get(player) ?? 0) + 1);
+    if (objectId !== 17068) return;
+    rolls.set(player, (rolls.get(player) ?? 0) + 1);
+    const sm = player.getSkillManager();
+    rollLevels.set(player, [Skill.AGILITY, Skill.STRENGTH, Skill.RANGED].map((skill) => ({
+      current: sm.getCurrentLevel(skill), base: sm.getMaxLevel(skill), xp: sm.getExperience(skill),
+    })));
   });
   PluginManager.emitServerStartup({}); started = true;
   const { World, RegionManager, MapObjects, Item, Equipment } = core;
@@ -1953,14 +1959,15 @@ test("Broken Raft checks the grapple requirements on both approaches", async (t)
   assert.equal(raftDef.getInteractions()[0], "Grapple");
   const channel = () => ({ kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true, send: () => true,
     close() {}, onData() {}, onError() {}, onClose() {} });
-  function actor(name, tile, agility, strength, ranged, geared) {
+  function actor(name, tile, agility, strength, ranged, geared, baseLevels) {
     const player = new Player(new PlayerSession(channel())); actors.push(player);
     player.setUsername(name); player.setLongUsername(core.Misc.stringToLongBigInt(name));
     player.setAttribute("bot-skip-persistence", true); player.setLocation(new Location(...tile));
     assert.equal(RegionManager.blocked(player.getLocation(), null), false, "approach tile is walkable in the active map");
     assert.equal(World.getPlayers().add(player), true); player.needsPlacement = false;
     const sm = player.getSkillManager();
-    for (const [skill, base] of [[Skill.AGILITY, agility], [Skill.STRENGTH, 19], [Skill.RANGED, 37]]) {
+    for (const [skill, base] of [[Skill.AGILITY, baseLevels.agility], [Skill.STRENGTH, baseLevels.strength], [Skill.RANGED, baseLevels.ranged]]) {
+      sm.setExperiences(skill, core.SkillManager.getExperienceForLevel(base), false);
       sm.setMaxLevel(skill, base); sm.setCurrentLevels(skill, base);
     }
     if (geared) {
@@ -1968,19 +1975,27 @@ test("Broken Raft checks the grapple requirements on both approaches", async (t)
         player.getInventory().add(new Item(id, 1), true);
         const slot = player.getInventory().getItems().findIndex((item) => item.getId() === id);
         assert.ok(slot >= 0, "real item is present before equipment action");
+        const definition = core.ItemDefinition.forId(id);
+        assert.ok(definition, "active item definition exists");
+        assert.equal(EquipmentRequirements.getUnmet(player, definition), null, "equipment is legal at base levels");
         EquipPacketListener.equip(player, id, slot, Inventory.INTERFACE_ID);
       }
       assert.equal(player.getEquipment().getItems()[Equipment.WEAPON_SLOT].getId(), 9174, "bronze crossbow was actually equipped");
       assert.equal(player.getEquipment().getItems()[Equipment.AMMUNITION_SLOT].getId(), 9419, "mith grapple was actually equipped");
     }
-    sm.setCurrentLevels(Skill.STRENGTH, strength); sm.setCurrentLevels(Skill.RANGED, ranged);
-    assert.equal(sm.getMaxLevel(Skill.STRENGTH), 19); assert.equal(sm.getMaxLevel(Skill.RANGED), 37);
-    assert.equal(sm.getCurrentLevel(Skill.AGILITY), agility); assert.equal(sm.getCurrentLevel(Skill.STRENGTH), strength);
-    assert.equal(sm.getCurrentLevel(Skill.RANGED), ranged);
+    for (const [skill, desired, base] of [[Skill.AGILITY, agility, baseLevels.agility],
+      [Skill.STRENGTH, strength, baseLevels.strength], [Skill.RANGED, ranged, baseLevels.ranged]]) {
+      if (desired > base) sm.increaseCurrentLevel(skill, desired - base, desired);
+      else sm.setCurrentLevels(skill, desired);
+      assert.equal(sm.getMaxLevel(skill), base);
+      assert.equal(sm.getCurrentLevel(skill), desired);
+      assert.equal(sm.getExperience(skill), core.SkillManager.getExperienceForLevel(base));
+    }
     return player;
   }
-  async function check(name, tile, agility, strength, ranged, geared, accepted) {
-    const p = actor(name, tile, agility, strength, ranged, geared), messages = [];
+  async function check(name, tile, agility, strength, ranged, geared, accepted, options = {}) {
+    const baseLevels = { agility: options.baseAgility ?? agility, strength: options.baseStrength ?? 19, ranged: options.baseRanged ?? 37 };
+    const p = actor(name, tile, agility, strength, ranged, geared, baseLevels), messages = [];
     const send = p.sendMessage.bind(p);
     p.sendMessage = (message, ...args) => { messages.push(String(message)); return send(message, ...args); };
     try {
@@ -2000,8 +2015,15 @@ test("Broken Raft checks the grapple requirements on both approaches", async (t)
     assert.equal(sm.getCurrentLevel(Skill.AGILITY), agility, "Agility at dispatch outcome");
     assert.equal(sm.getCurrentLevel(Skill.STRENGTH), strength, "Strength at dispatch outcome");
     assert.equal(sm.getCurrentLevel(Skill.RANGED), ranged, "Ranged at dispatch outcome");
-    assert.equal(sm.getMaxLevel(Skill.STRENGTH), 19); assert.equal(sm.getMaxLevel(Skill.RANGED), 37);
+    assert.equal(sm.getMaxLevel(Skill.AGILITY), baseLevels.agility);
+    assert.equal(sm.getMaxLevel(Skill.STRENGTH), baseLevels.strength);
+    assert.equal(sm.getMaxLevel(Skill.RANGED), baseLevels.ranged);
     if (accepted) {
+      const expected = [[Skill.AGILITY, agility, baseLevels.agility], [Skill.STRENGTH, strength, baseLevels.strength],
+        [Skill.RANGED, ranged, baseLevels.ranged]].map(([skill, current, base]) => ({
+        current, base, xp: core.SkillManager.getExperienceForLevel(base),
+      }));
+      assert.deepEqual(rollLevels.get(p), expected, "current levels, base levels and XP at the actual agility roll");
       assert.ok(obstacle?.isRunning(), "valid requirements start the real obstacle task");
       assert.equal(rolls.get(p), 1, "the actual agility attempt was reached exactly once");
       assert.equal(p.getMovementQueue().isMovementBlocked(), true, "the obstacle owns movement");
@@ -2013,6 +2035,7 @@ test("Broken Raft checks the grapple requirements on both approaches", async (t)
       assert.equal(rolls.get(p) ?? 0, 0, "refusal occurs before an agility attempt");
       assert.equal(obstacle == null, true, "refusal does not start an obstacle");
       assert.equal(sourceRefusal(), true, "the existing shortcut consumer reported a requirements refusal");
+      if (options.refusal) assert.ok(messages.includes(options.refusal), "the expected skill is named in the refusal");
       assert.equal(p.getMovementQueue().isMovementBlocked(), false, "refusal leaves movement unlocked");
       assert.deepEqual(snapshot(), before, "refusal conserves position, XP, hitpoints and items");
     }
@@ -2028,9 +2051,17 @@ test("Broken Raft checks the grapple requirements on both approaches", async (t)
   await t.test("west exact grapple thresholds", () => check("raftgoodw", west, 8, 19, 37, true, true));
   await t.test("below Agility threshold", () => check("raftagilo", west, 7, 19, 37, true, false));
   await t.test("missing grapple gear", () => check("raftnogear", west, 8, 19, 37, false, false));
-  await t.test("west below Strength", () => check("raftweakw", west, 8, 18, 37, true, false));
-  await t.test("east below Ranged", () => check("raftrangee", east, 8, 19, 36, true, false));
+  await t.test("west below Strength", () => check("raftweakw", west, 8, 18, 37, true, false,
+    { refusal: "You need a Strength level of at least 19 to attempt this." }));
+  await t.test("east below Ranged", () => check("raftrangee", east, 8, 19, 36, true, false,
+    { refusal: "You need a Ranged level of at least 37 to attempt this." }));
   await t.test("east exact grapple thresholds", () => check("raftgoode", east, 8, 19, 37, true, true));
   await t.test("barehanded below 48", () => check("raftbarelo", west, 47, 1, 1, false, false));
   await t.test("barehanded at 48", () => check("raftbareok", east, 48, 1, 1, false, true));
+  await t.test("Agility boosted above base reaches the grapple requirement", () =>
+    check("raftboostag", west, 8, 19, 37, true, true, { baseAgility: 7 }));
+  await t.test("Strength boosted above base reaches the grapple requirement", () =>
+    check("raftboostst", east, 8, 19, 37, true, true, { baseStrength: 18 }));
+  await t.test("Ranged boosted above base reaches the grapple requirement", () =>
+    check("raftboostra", west, 8, 19, 37, true, true, { baseRanged: 36 }));
 });

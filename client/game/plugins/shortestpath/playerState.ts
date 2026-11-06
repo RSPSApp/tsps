@@ -74,7 +74,7 @@ export function capturePlayer(client: OsrsClient, bankSeen: boolean): PlayerSnap
     addSlots(carried, client.inventory);
     addSlots(carried, client.equipment);
     const bank = new Map<number, number>();
-    const bankItems = addSlots(bank, client.bankInventory);
+    const bankItems = addSlots(bank, client.lastKnownBank);
     return {
         levels,
         questState: questStateReader(client),

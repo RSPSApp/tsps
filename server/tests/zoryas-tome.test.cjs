@@ -56,9 +56,15 @@ function inventory({ astral = 0, nature = 0 } = {}) {
     const inv = {
         astral, nature, added: [],
         getAmount: (id) => (id === I.ASTRAL_RUNE ? inv.astral : id === I.NATURE_RUNE ? inv.nature : 0),
-        getItems: () => inv.added,
+        // The rune stacks first, then what was refunded; charging takes runes by slot (PoweredStaff.takePlain).
+        getItems: () => [
+            ...(inv.astral > 0 ? [new Item(I.ASTRAL_RUNE, inv.astral)] : []),
+            ...(inv.nature > 0 ? [new Item(I.NATURE_RUNE, inv.nature)] : []),
+            ...inv.added,
+        ],
         getAddableAmount: (item) => item.getAmount(),
         deleteNumber: (id, n) => { if (id === I.ASTRAL_RUNE) inv.astral -= n; else inv.nature -= n; },
+        deleteAtSlot: (slot, n) => inv.deleteNumber(inv.getItems()[slot].getId(), n),
         refreshItems: () => {}, contains: () => true, getFreeSlots: () => 28,
         addItem: (item) => inv.added.push(item),
     };

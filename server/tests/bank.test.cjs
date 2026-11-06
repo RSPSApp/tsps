@@ -1018,6 +1018,7 @@ test("as captured: closing the bank under an unanswered Enter amount prompt abor
       // Real interface reset; the bank's if_closesub stands in for the tracked-interface close.
       const sender = Object.assign(Object.create(PacketSender.prototype), {
         player,
+        inventoryOwners: new Map(),
         closeTrackedInterfaces: () => opcodes.push(ServerPacketId.WIDGET_CLOSE_SUB) > 0,
         sendConfig() { return this; },
         sendVarbit() { return this; },

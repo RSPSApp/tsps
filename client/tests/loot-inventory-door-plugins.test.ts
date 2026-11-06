@@ -14,6 +14,7 @@ import { InventorySetupsPlugin, InventorySetupsConfig } from "../game/plugins/in
 import { InventorySetupsPanel } from "../game/plugins/inventorysetups/InventorySetupsPanel";
 import { DoorKickerPlugin, DoorKickerConfig } from "../game/plugins/doorkicker/DoorKickerPlugin";
 import { GroundItemStore } from "../game/data/ground/GroundItemStore";
+import { retainedInventory } from "../game/sync/InventoryStopTransmit";
 
 class MemoryStorage implements ConfigStorage {
     private readonly values = new Map<string, string>();
@@ -36,12 +37,13 @@ async function main(): Promise<void> {
     const interfaceClosedListeners = new Set<(groupId: number, modalMode: number, unload: boolean) => void>();
     const playerAnimations: Array<[number, number]> = [];
     let bankOpen = true;
+    const bank = new Inventory(1410);
     const client: any = {
         controlledPlayerServerId: 42,
         groundItems,
         inventory: new Inventory(),
         equipment: new Inventory(14),
-        bankInventory: new Inventory(1410),
+        bankInventory: bank, lastKnownBank: retainedInventory(bank),
         widgetManager: { getWidgetByUid: () => bankOpen ? {} : undefined, groupLoadedListeners, interfaceClosedListeners },
         objTypeLoader: { load: (id: number) => ({ id, name: id === 4151 ? "Abyssal whip" : `Item ${id}`, price: 100, noteTemplate: -1, note: -1 }) },
         playerAnimController: { setAnimation: (playerId: number, sequence: number) => playerAnimations.push([playerId, sequence]) },

@@ -360,17 +360,18 @@ test('native Lowe purchases charge only for credited ordinary arrows', async t =
   const iron = require('../plugins/modes/ironman/Common.Ironman');
   const relics = require('../plugins/modes/leaguerelics/Common.LeagueRelics');
   assert.equal(ARROW, 882); assert.equal(core.ItemDefinition.forId(ARROW).isStackable(), true);
-  for (const mode of ['room', 'last stack space', 'full pack without arrows', 'capped stack', 'buy five with two spaces']) {
+  for (const mode of ['room', 'last stack space', 'full pack without arrows', 'capped stack', 'buy five with two spaces', 'tagged stack with room', 'tagged stack full pack', 'full pack with exact coins']) {
     await t.test(mode, async child => {
       // Existing native actor, loader, stock reset and ClientConnection; no fake stock/capacity.
       core.ShopManager.reload();
       const f = actor(child), p = f.p, inv = p.getInventory();
       PM.emitPlayerLogin({player:p, username:p.getUsername()}); p.closeInterruptibleInterfaces();
       assert.equal(iron.isIron(p), false); assert.equal(relics.leagueOf(p), null);
-      inv.add(new core.Item(COINS, 10000), false);
+      inv.add(new core.Item(COINS, mode === 'full pack with exact coins' ? 1 : 10000), false);
       if (mode === 'last stack space' || mode === 'capped stack') inv.add(new core.Item(ARROW, CAP - 1), false);
       if (mode === 'buy five with two spaces') inv.add(new core.Item(ARROW, CAP - 2), false);
-      if (mode === 'full pack without arrows') while (inv.getFreeSlots() > 0) inv.add(new core.Item(core.ItemIdentifiers.RAKE), false);
+      if (mode.startsWith('tagged stack')) inv.add(new core.Item(ARROW, 3, {source:'tagged'}), false);
+      if (mode === 'full pack without arrows' || mode === 'tagged stack full pack' || mode === 'full pack with exact coins') while (inv.getFreeSlots() > 0) inv.add(new core.Item(core.ItemIdentifiers.RAKE), false);
       const at = p.getLocation(), npc = core.NPC.create(core.NpcIdentifiers.LOWE, new core.Location(at.getX() + 1, at.getY(), at.getZ()));
       assert.equal(core.World.getNpcs().add(npc), true);
       const definition = npc.getCurrentDefinition(p); assert.equal(definition.getName(), 'Lowe');
@@ -401,7 +402,7 @@ test('native Lowe purchases charge only for credited ordinary arrows', async t =
         for (let n = 0; n < 4 && stores(ARROW).floor; n++) turn();
         assert.equal(inv.getAmount(ARROW), CAP, 'actual native Take fills the ordinary arrow stack'); assert.equal(stores(ARROW).floor, 0);
       }
-      const expectedSpace = mode === 'capped stack' || mode === 'full pack without arrows' ? 0 : mode === 'buy five with two spaces' ? 2 : 1;
+      const expectedSpace = mode === 'capped stack' || mode === 'full pack without arrows' || mode === 'tagged stack full pack' || mode === 'full pack with exact coins' ? 0 : mode === 'buy five with two spaces' ? 2 : 1;
       assert.equal(inv.getAddableAmount(new core.Item(ARROW, mode === 'buy five with two spaces' ? 5 : 1)), expectedSpace);
       const beforeTrade = {coins:stores(COINS), arrows:stores(ARROW), rake:stores(core.ItemIdentifiers.RAKE), xp:xp()};
       await send({type:'npc_option', index:npc.getIndex(), clickType:trade});
@@ -411,20 +412,26 @@ test('native Lowe purchases charge only for credited ordinary arrows', async t =
       assert.ok(mount); assert.equal(sender.getSubInterfaceAt((161 << 16) | 16), mount);
       const slot = view.stock.findIndex(row => row.itemId === ARROW); assert.ok(slot >= 0);
       const quote = view.stock[slot].price, stockBefore = view.stock[slot].amount;
-      assert.ok(Number.isInteger(quote) && quote > 0 && quote * 5 <= inv.getAmount(COINS), 'actual displayed positive native quote and affordable funds');
+      const requested = mode === 'buy five with two spaces' ? 5 : 1;
+      assert.ok(Number.isInteger(quote) && quote > 0 && quote * requested <= inv.getAmount(COINS), 'actual displayed positive native quote and affordable funds');
+      if (mode === 'full pack with exact coins') assert.equal(inv.getAmount(COINS), quote, 'payment would consume the coin stack');
       assert.equal(stockBefore, 2000, 'ordinary authored stock after existing runtime reload');
       assert.deepEqual({coins:stores(COINS), arrows:stores(ARROW), rake:stores(core.ItemIdentifiers.RAKE), xp:xp()}, beforeTrade);
       const before = {coins:stores(COINS), arrows:stores(ARROW), rake:stores(core.ItemIdentifiers.RAKE), xp:xp()}, coinBefore = owned(COINS), arrowBefore = owned(ARROW);
-      const requested = mode === 'buy five with two spaces' ? 5 : 1;
       await send({type:'widget_action', widgetId:(300 << 16) | 16, groupId:300, childId:16, buttonNum:requested === 5 ? 3 : 2, slot:slot + 1, itemId:ARROW});
-      const credited = owned(ARROW) - arrowBefore, debit = coinBefore - owned(COINS), stockAfter = core.ShopManager.getOpenShop(p).stock.find(row => row.itemId === ARROW).amount;
+      const credited = owned(ARROW) - arrowBefore, debit = coinBefore - owned(COINS), stockAfter = core.ShopManager.shopsById.get(1221).stock.get(ARROW) ?? 0;
       const after = {coins:stores(COINS), arrows:stores(ARROW), rake:stores(core.ItemIdentifiers.RAKE), xp:xp(), stockAfter}, details = JSON.stringify({mode, quote, requested, before, after});
       // First target: charge for actual owned credit; an owned-floor delivery also counts.
       assert.equal(debit, quote * credited, 'native buy fee/item conservation: ' + details);
       assert.equal(stockBefore - stockAfter, credited, 'native stock debit equals owned credit: ' + details);
       assert.ok(Number.isInteger(credited) && credited >= 0 && credited <= requested, details);
-      if (mode === 'room' || mode === 'last stack space') assert.equal(credited, 1, details);
-      if (mode === 'full pack without arrows') assert.equal(credited, 0, details);
+      if (mode === 'room' || mode === 'last stack space' || mode === 'tagged stack with room') assert.equal(credited, 1, details);
+      if (mode === 'full pack without arrows' || mode === 'capped stack' || mode === 'tagged stack full pack' || mode === 'full pack with exact coins') assert.equal(credited, 0, details);
+      if (mode === 'buy five with two spaces') assert.equal(credited, 2, details);
+      if (mode.startsWith('tagged stack')) {
+        const tagged = inv.getItems().find(item => item.getId() === ARROW && item.getMeta()?.source === 'tagged');
+        assert.ok(tagged); assert.equal(tagged.getAmount(), 3);
+      }
       assert.deepEqual(stores(core.ItemIdentifiers.RAKE), before.rake); assert.deepEqual(xp(), before.xp);
     });
   }

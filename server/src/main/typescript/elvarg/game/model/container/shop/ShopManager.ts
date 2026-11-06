@@ -686,7 +686,8 @@ export class ShopManager {
         const delivered = ItemDefinition.forId(deliverId);
         const inventory = player.getInventory();
         if (delivered.isStackable?.()) {
-            if (!inventory.containsNumber(deliverId) && inventory.getFreeSlots() <= 0) {
+            quantity = Math.min(quantity, inventory.getAddableAmount(new Item(deliverId, quantity)));
+            if (quantity <= 0) {
                 inventory.full();
                 return;
             }

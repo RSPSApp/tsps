@@ -216,6 +216,10 @@ module.exports = function registerPrinceAliRescueQuest(api) {
   }
 
   function osmanVariant(stage) {
+    // "Prince Ali is safe once more. Chancellor Hassan has your payment." is the
+    // pre-reward line. Once the reward is claimed the transcript's post-quest line
+    // takes over, as Contact.Quest.js does for Osman after Contact!.
+    if (stage >= STAGE_COMPLETE) return "standard-dialogue-after-prince-ali-rescue";
     if (stage >= STAGE_PRINCE_SAVED) return PAR("prince-ali-rescued-talking-to-osman");
     if (stage === STAGE_STARTED) return PAR("starting-out-talking-to-osman");
     if (stage >= STAGE_SPOKEN_TO_OSMAN && stage < STAGE_PREPARATION_COMPLETE) {

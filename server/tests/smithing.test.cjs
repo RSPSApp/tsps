@@ -809,7 +809,7 @@ test("native furnace smelting admission and one-step cancellation", async t => {
     const channel = {kind:"test",remoteAddress:"127.0.0.1",isOpen:()=>true,send:()=>true,close(){},onData(){},onError(){},onClose(){}};
     const p = new Player(new PlayerSession(channel));
     p.setIndex(index++); p.setUsername("smithcancel" + index); p.setRegistered(true);
-    p.setLocation(new core.Location(mode === "approach" ? 3219 : 3222, 3218, 0));
+    p.setLocation(new core.Location(mode === "approach" ? 3219 : 3226, 3218, 0));
     p.needsPlacement = false;
     const c = new ClientConnection(channel); c.player = p;
     t.after(() => {
@@ -869,6 +869,10 @@ test("native furnace smelting admission and one-step cancellation", async t => {
     const menu=p.getCreationMenu();
     assert.ok(menu,"native furnace reach must open CreationMenu");
     if(mode === "approach") assert.notDeepEqual(pos(),initial,"object interaction actually approached");
+    else assert.deepEqual(pos(),initial,"stationary control begins at the observed reachable furnace side");
+    const admission=pos();
+    assert.deepEqual(admission,[3226,3218,0],"anchor actual settled furnace admission, not original spawn");
+    console.log("SMITHING_CANCELLATION_PRECONDITION "+JSON.stringify(snapshot("admitted-menu")));
     assert.ok(furnace.isWithinInteractionDistance(p.getLocation()));
     assert.equal(p.getMovementQueue().size(),0);
     untouched();
@@ -881,12 +885,14 @@ test("native furnace smelting admission and one-step cancellation", async t => {
     assert.equal(Sessions.typeOf(p),"smelt","native selection admits pending smelt");
     assert.equal(p.getCreationMenu(),null);
     assert.equal(openings,0,"global task precedes queued menu input");
-    if(mode === "interrupt") await c.dispatch([{type:"move",worldX:3221,worldY:3218,modifierFlags:0,run:false}]);
+    if(mode === "interrupt") await c.dispatch([{type:"move",worldX:3225,worldY:3217,modifierFlags:0,run:false}]);
     turn(); // The pending cycle opens before this turn's actual walk.
     assert.equal(openings,1); assert.equal(openingStates[0].accepted,true);
-    untouched(); snapshot("pending-after-input");
+    assert.deepEqual(openingStates[0].pos,admission,"cycle opens at the settled admission before native walk");
+    untouched();
+    console.log("SMITHING_CANCELLATION_PRECONDITION "+JSON.stringify(snapshot("pending-after-input")));
     if(mode === "interrupt") {
-      assert.deepEqual(pos(),[3221,3218,0],"actual native one-step walk must reach destination");
+      assert.deepEqual(pos(),[3225,3217,0],"actual native one-step walk must reach destination");
       assert.equal(p.getMovementQueue().size(),0,"route drains before next global task");
       assert.equal(p.getMovementQueue().didMoveThisCycle(),true);
       assert.equal(p.getMovementQueue().isMovings(),true);

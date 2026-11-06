@@ -156,13 +156,14 @@ test("scroll on an already imbued mask retains the existing first-owned fallback
 test("assembly needs 55 Crafting and every component", () => {
   const low = createPlayer({ crafting: 54, inventory: [ItemIdentifiers.BLACK_MASK_I_, ...PARTS] });
   assemble({ player: low, usedItemId: ItemIdentifiers.EARMUFFS, usedWithItemId: ItemIdentifiers.FACEMASK, handled: false });
-  assert.equal(low.items.length, 6);
+  assert.deepEqual(low.items.map((entry) => entry.getId()), [ItemIdentifiers.BLACK_MASK_I_, ...PARTS]);
   assert.match(low.messages[0], /Crafting level of 55/);
 
   const missing = createPlayer({ inventory: [ItemIdentifiers.BLACK_MASK_I_, ...PARTS.slice(1)] });
   const event = { player: missing, usedItemId: ItemIdentifiers.FACEMASK, usedWithItemId: ItemIdentifiers.NOSE_PEG, handled: false };
   assemble(event);
   assert.equal(event.handled, false);
+  assert.deepEqual(missing.items.map((entry) => entry.getId()), [ItemIdentifiers.BLACK_MASK_I_, ...PARTS.slice(1)]);
 });
 
 test("assembly needs the Malevolent masquerade unlock", () => {
@@ -170,7 +171,7 @@ test("assembly needs the Malevolent masquerade unlock", () => {
   const event = { player, usedItemId: ItemIdentifiers.EARMUFFS, usedWithItemId: ItemIdentifiers.BLACK_MASK_7_, handled: false };
   assemble(event);
   assert.equal(event.handled, true);
-  assert.equal(player.items.length, 6);
+  assert.deepEqual(player.items.map((entry) => entry.getId()), [ItemIdentifiers.BLACK_MASK_7_, ...PARTS]);
   assert.match(player.messages[0], /Malevolent masquerade/);
 });
 
@@ -228,7 +229,7 @@ test("a scroll with no mask or helmet is left alone", () => {
   };
   imbue(event);
   assert.equal(event.handled, false);
-  assert.equal(player.items.length, 2);
+  assert.deepEqual(player.items.map((entry) => entry.getId()), [ItemIdentifiers.SCROLL_OF_IMBUING, ItemIdentifiers.EARMUFFS]);
 });
 
 test("a boosted hit does not spam chat; the stats row carries the on-task state", () => {

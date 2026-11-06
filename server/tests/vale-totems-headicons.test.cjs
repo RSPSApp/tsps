@@ -56,6 +56,39 @@ test('captured leaves follow actual carved state, visits and collapse for two in
   assert.equal(icon.getHeadIcon(), -1, 'consumer never changes the global NPC icon');
 });
 
+test('visit and collapse leaves leave in the same tick, carve one tick later, with no duplicate on the next sync', () => {
+  const a = viewer(5);
+  carve(a.player, 2);
+  a.session.flush(1);
+  assert.deepEqual(frames(a), [], 'the carve leaf is the sync-path leaf, one tick after its varbit');
+  a.session.flush(2);
+  assert.deepEqual(frames(a), [1]);
+  a.packets.length = 0;
+  Ents.visitAll(a.player); a.session.flush(3);
+  assert.deepEqual(frames(a), [0], 'visit leaf is sent by the flush of the visit tick');
+  a.session.flush(4);
+  assert.deepEqual(frames(a), [0], 'the following sync repeats nothing');
+  a.packets.length = 0;
+  Ents.visitAll(a.player); a.session.flush(5);
+  assert.deepEqual(frames(a), [65535], 'collapse clear is sent by the flush of the visit tick');
+  a.session.flush(6);
+  assert.deepEqual(frames(a), [65535]);
+});
+
+test('a visit sends a changed site once, and a site out of view sends nothing', () => {
+  const a = viewer(6), b = viewer(7);
+  carve(a.player, 4); carve(b.player, 4);
+  flush(a, 1); flush(b, 1);
+  b.player.getLocalNpcs().splice(0);
+  a.packets.length = b.packets.length = 0;
+  Ents.visitAll(a.player); Ents.visitAll(b.player);
+  a.session.flush(3); b.session.flush(3); a.session.flush(4); b.session.flush(4);
+  assert.deepEqual(frames(a), [2]);
+  assert.deepEqual(frames(b), [], 'out of view: nothing sent');
+  b.player.getLocalNpcs().push(icon); flush(b, 5);
+  assert.deepEqual(frames(b), [2], 'back in view: current durability only');
+});
+
 test('real remove/return and saved-state login resend current durability without replaying stale customization', () => {
   const a = viewer(3); carve(a.player, 7); flush(a, 1); assert.deepEqual(frames(a), [6]);
   a.packets.length = 0; a.player.getLocalNpcs().splice(0); flush(a, 3);

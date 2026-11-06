@@ -18,6 +18,7 @@ const Shared = require("./Shared.ValeTotems");
 const State = require("./State.ValeTotems");
 const Totems = require("./Totems.ValeTotems");
 const Spirits = require("./Spirits.ValeTotems");
+const Icons = require("./Icons.ValeTotems");
 
 const { DATA } = Shared;
 const POINTS_MAX = (1 << 14) - 1;
@@ -42,10 +43,11 @@ function visit(player, site) {
   State.set(player, site, { points: Math.min(POINTS_MAX, totem.points + offeringsFor(player, site, totem)) });
   if (totem.decay > 1) {
     State.set(player, site, { decay: totem.decay - 1 });
-    return;
+  } else {
+    State.collapse(player, site);
+    State.rollAnimals(player, site);
   }
-  State.collapse(player, site);
-  State.rollAnimals(player, site);
+  Icons.refresh(player);
 }
 
 /** One ent visit at every site, for one player. */

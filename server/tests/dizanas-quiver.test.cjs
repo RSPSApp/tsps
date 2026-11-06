@@ -435,9 +435,9 @@ for (const outcome of ['break', 'drop']) {
       const { World } = require('../dist/game/World');
       const player = new Player(null, new Location(3200, 3200));
       player.setUsername(`qflight_${outcome}_${replacement}`);
+      t.mock.method(player, 'getSession', () => ({ sendClientPacket: () => true, write: () => true }));
       player.getMovementQueue().reset();
       player.resetUpdating();
-      t.mock.method(player, 'getSession', () => ({ sendClientPacket: () => true, write: () => true }));
       const scheduled = [];
       const submit = TaskManager.submit;
       t.mock.method(TaskManager, 'submit', function (task) {

@@ -1,6 +1,6 @@
 import { openClientUrl } from "../common/openUrl";
 import { applyNpcSpecificEffect } from "./sync/NpcSpecificEffects";
-import { createNpcEcs } from "./ecs/createNpcEcs";
+import { createNpcEcs, type NpcGraphicsEcs } from "./ecs/createNpcEcs";
 import { LISTENED_CLAN_TYPE, OWN_CLAN_TYPE } from "../common/social/Clans";
 import type { MinimapGeometry, SceneGeometry } from "./scene/SceneGeometry";
 import { vec3 } from "gl-matrix";
@@ -281,7 +281,6 @@ import { CombatOptionsController } from "./combat/CombatOptionsController";
 import { HitsplatFlushController } from "./combat/HitsplatFlushController";
 import { ClientScriptLoader } from "./cs2/ClientScriptLoader";
 import { ClientGroundItemStack, GroundItemStore } from "./data/ground/GroundItemStore";
-import { NpcEcs } from "./ecs/NpcEcs";
 import { PlayerEcs } from "./ecs/PlayerEcs";
 import { TileHighlightManager } from "./highlights/TileHighlightManager";
 import { PlayerInteractionSystem } from "./interactions/PlayerInteractionSystem";
@@ -866,7 +865,7 @@ export class OsrsClient {
     // Appearance is server-driven; no client defaults.
 
     // ECS stores
-    npcEcs: NpcEcs = createNpcEcs(() => this.renderer);
+    npcEcs: NpcGraphicsEcs = createNpcEcs(() => this.renderer);
     /** The active renderer's scene geometry, for plugins drawing over the scene in 2D. */
     sceneGeometry?: SceneGeometry;
     /** The minimap as last drawn, for plugins marking it. */
@@ -7580,9 +7579,7 @@ export class OsrsClient {
             level: decodeBase.level | 0,
         });
 
-        for (const npcId of decoded.removals) {
-            this.despawnNpcBinary(npcId | 0);
-        }
+        this.npcEcs.removeForNpcInfo(decoded, npcId => this.despawnNpcBinary(npcId));
 
         for (const spawn of decoded.spawns) {
             this.spawnNpcBinary(spawn, payload.loopCycle | 0);

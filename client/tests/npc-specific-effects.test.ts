@@ -126,6 +126,29 @@ test("real unmapping clears delayed graphics before index reuse but render mappi
     } finally { f.unsubscribe(); }
 });
 
+test("a type change sent as remove and re-add in one NPC_INFO keeps graphics; a plain removal clears them", () => {
+    const f = fixture();
+    try {
+        f.spawn();
+        const other = f.ecs.createNpc(50, 50, 1, 1, 64, 64, 0, 0, 0, 0);
+        f.ecs.setServerMapping(other, 8);
+        f.receive([25, 0, 7, 1, 44, 2, 0, 0, 2, 88]);
+        f.receive([25, 0, 8, 1, 45, 2, 0, 0, 0, 0]);
+        const despawn = (serverId: number) => f.ecs.destroyNpc(f.ecs.getEcsIdForServer(serverId)!);
+        const readd = { npcId: 7, typeId: 2, tileX: 3200, tileY: 3200, level: 0, rot: 0, teleport: false, worldViewId: -1 };
+        f.ecs.removeForNpcInfo({ removals: [7, 8], spawns: [readd] }, despawn);
+        f.spawn();
+        assert.equal([...f.graphics.getActorInstances("npc", 7)].length, 1, "the transformed NPC's delayed spot keeps playing");
+        assert.equal([...f.graphics.getActorInstances("npc", 8)].length, 0, "an NPC removed in the same NPC_INFO without a re-add loses its spot");
+        f.ecs.removeForNpcInfo({ removals: [7], spawns: [] }, despawn);
+        assert.equal([...f.graphics.getActorInstances("npc", 7)].length, 0, "a later plain removal clears it");
+        f.spawn();
+        f.receive([25, 0, 7, 1, 46, 2, 0, 0, 0, 0]);
+        f.ecs.destroyNpc(f.ecs.getEcsIdForServer(7)!);
+        assert.equal([...f.graphics.getActorInstances("npc", 7)].length, 0, "the re-add exemption ends with its NPC_INFO");
+    } finally { f.unsubscribe(); }
+});
+
 test("WebGPU NPC graphics use the same real unmap lifecycle and preserve live mapping transfers", async () => {
     (globalThis as any).self = globalThis;
     const { WebGPUActors } = await import("../render/webgpu/actors/WebGPUActors");

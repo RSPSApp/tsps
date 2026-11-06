@@ -223,13 +223,20 @@ test("putting the cape of skulls on warns first; No changes nothing, Yes equips 
 
 test("skull prevention blocks an attack that would skull and says why", () => {
   const message = "You cannot attack this target as it would result in you getting skulled.";
-  const blocked = { attacker: player(), target: player(), allow: null };
+  const blocked = { attacker: player(), target: player(), method: {}, allow: null };
   blocked.attacker.varbits.set(13131, 1);
   SkullPrevention._test.blockSkullAttack(blocked);
   assert.equal(blocked.allow, false);
   assert.deepEqual(blocked.attacker.messages, [message]);
 
-  const off = { attacker: player(), target: player(), allow: null };
+  const bystander = { attacker: player(), target: player(), allow: null };
+  bystander.attacker.varbits.set(13131, 1);
+  SkullPrevention._test.blockSkullAttack(bystander);
+  SkullPrevention._test.blockSkullAttack(bystander);
+  assert.equal(bystander.allow, false, "an area attack still spares a bystander it would skull for");
+  assert.deepEqual(bystander.attacker.messages, [], "but says nothing for each one");
+
+  const off = { attacker: player(), target: player(), method: {}, allow: null };
   SkullPrevention._test.blockSkullAttack(off);
   assert.equal(off.allow, null, "the setting is off");
   assert.deepEqual(off.attacker.messages, []);
@@ -243,7 +250,13 @@ test("skull prevention blocks an attack that would skull and says why", () => {
   retaliating.target.attacker = retaliating.attacker;
   retaliating.attacker.varbits.set(13131, 1);
   SkullPrevention._test.blockSkullAttack(retaliating);
-  assert.equal(retaliating.allow, null, "retaliation does not skull");
+  assert.equal(retaliating.allow, null, "a fight already underway does not skull");
+
+  const struckBack = { attacker: player(), target: player(), method: {}, allow: null };
+  struckBack.attacker.attacker = struckBack.target;
+  struckBack.attacker.varbits.set(13131, 1);
+  SkullPrevention._test.blockSkullAttack(struckBack);
+  assert.equal(struckBack.allow, null, "retaliation does not skull");
 
   const outside = { attacker: player({ at: new Location(3222, 3218, 0) }), target: player(), allow: null };
   outside.attacker.varbits.set(13131, 1);

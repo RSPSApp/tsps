@@ -32,6 +32,17 @@ before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, '..'));
   PM.loadFromDirectory(path.resolve(__dirname, '../plugins'));
   core = PM.getCoreApi(); I = core.ItemIdentifiers;
+  // Verify the active cache once before the conservation cases use these definitions.
+  for (const [id, name, stackable] of [[I.MUD_RUNE, 'Mud rune', true],
+    [I.PURE_ESSENCE, 'Pure essence', false], [I.EARTH_RUNE, 'Earth rune', true],
+    [I.EARTH_TALISMAN, 'Earth talisman', false], [I.BINDING_NECKLACE, 'Binding necklace', false]]) {
+    const def = core.ItemDefinition.forId(id);
+    assert.equal(def.getId(), id, 'active cache exact id');
+    assert.equal(def.getName(), name, 'active cache exact name');
+    assert.equal(def.isStackable(), stackable, 'active cache stackability');
+  }
+  assert.equal(I.MUD_RUNE, 4698); assert.equal(I.PURE_ESSENCE, 7936);
+  assert.equal(I.BINDING_NECKLACE, 5521);
   core.RegionManager.init(); core.RegionManager.loadMapFiles(3222, 3218);
   PM.emitServerStartup({});
 });
@@ -248,20 +259,10 @@ test('the necklace turning to dust changes the player\'s appearance', async (t) 
   assert.equal(f.p.getUpdateFlag().flagged(core.Flag.APPEARANCE), true);
 });
 
-// S17 private conservation probe. Existing native packet/altar fixture and legacy prefix retained.
+// A guaranteed binding must conserve every essence even when the output stack is nearly full.
 for (const headroom of [null, 2, 1, 0]) {
   test(`combination output conservation with stack headroom ${headroom}`, async (t) => {
     const f = actor(t), inv = f.p.getInventory(), MAX = 0x7fffffff;
-    for (const [id, name, stackable] of [[I.MUD_RUNE, 'Mud rune', true],
-      [I.PURE_ESSENCE, 'Pure essence', false], [I.EARTH_RUNE, 'Earth rune', true],
-      [I.EARTH_TALISMAN, 'Earth talisman', false], [I.BINDING_NECKLACE, 'Binding necklace', false]]) {
-      const def = core.ItemDefinition.forId(id);
-      assert.equal(def.getId(), id, 'active cache exact id');
-      assert.equal(def.getName(), name, 'active cache exact name');
-      assert.equal(def.isStackable(), stackable, 'active cache definition before target');
-    }
-    assert.equal(I.MUD_RUNE, 4698); assert.equal(I.PURE_ESSENCE, 7936);
-    assert.equal(I.BINDING_NECKLACE, 5521);
     give(f, I.PURE_ESSENCE, 2); give(f, I.EARTH_RUNE, 2); give(f, I.EARTH_TALISMAN, 1);
     f.p.getEquipment().setItem(core.Equipment.AMULET_SLOT, new core.Item(I.BINDING_NECKLACE, 1));
     assert.equal(f.p.getAttribute(CHARGES), undefined, 'real new necklace default16, no preset flag');

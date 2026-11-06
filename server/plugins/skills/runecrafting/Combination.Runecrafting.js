@@ -8,7 +8,8 @@
  * lava), at Runecraft 6 mist, 10 dust, 13 mud, 15 smoke, 19 steam, 23 lava. It takes pure essence and the same
  * number of the elemental runes, and either the used rune's talisman (spent) or an active Magic Imbue (the talisman
  * is then kept). Essence, runes and talisman go whether or not the runes bind; each rune binds on a 50% chance, and a
- * worn Binding necklace (16 uses, one per altar use) binds them all.
+ * worn Binding necklace (16 uses, one per altar use) binds them all. A batch is refused before spending anything
+ * when the bound runes cannot fit in the inventory.
  * XP an essence is each rune's own Recipe infobox on the Wiki, by altar. The Steam rune page's table says 9.3 on the
  * Water altar and its prose 9.5; the table is used.
  * rsprox 1757 (rev 227) tick 18626: an earth rune on the water altar with 6 pure essence gave 2 mud runes with the

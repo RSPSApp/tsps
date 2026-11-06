@@ -875,3 +875,128 @@ test("Jangerberries preserve an existing Ancient brew Prayer boost", async t => 
   assert.equal(f.p.getTimers().has(core.TimerKey.FOOD), true);
   assert.equal(f.p.getSkillManager().getExperience(core.Skill.PRAYER), f.prayerXp);
 });
+
+// Ordinary drinks and house refreshments use different empty glasses.
+function ordinaryAleActor(t) {
+  const f = divineActor(t, 90);
+  assert.equal(core.WorldDefinition.isMembersWorld(), true);
+  assert.equal(f.p.isRegistered(), true);
+  assert.equal(f.p.isPlayerBot(), false);
+  assert.equal(f.p.isDyingReturn() ?? false, false);
+  assert.equal(f.p.getPrivateArea(), null);
+  assert.equal(f.p.getLocation().getX(), HOME[0]);
+  assert.equal(f.p.getLocation().getY(), HOME[1]);
+  assert.equal(f.p.getTimers().has(core.TimerKey.POTION), false);
+  assert.equal(f.p.getTimers().has(core.TimerKey.FOOD), false);
+  assert.equal(f.p.getTimers().has(core.TimerKey.STUN), false);
+  assert.equal(I.BEER_GLASS, 1919);
+  assert.equal(I.BEER_GLASS_4, 7742);
+  const ordinary = core.CacheDefinitions.getItem(I.BEER_GLASS);
+  const house = core.CacheDefinitions.getItem(I.BEER_GLASS_4);
+  assert.equal(ordinary.name, "Beer glass");
+  assert.equal(ordinary.isTradable, true);
+  assert.equal(ordinary.noteTemplate, -1);
+  assert.equal(ordinary.placeholderTemplate, -1);
+  assert.equal(house.name, "Beer glass");
+  assert.equal(house.isMembers, true);
+  assert.equal(f.inv.getAmount(I.BEER_GLASS), 0);
+  assert.equal(f.inv.getAmount(I.BEER_GLASS_4), 0);
+  return f;
+}
+
+function placeOrdinaryAle(f, id, expectedName) {
+  const definition = core.CacheDefinitions.getItem(id);
+  assert.equal(definition.name, expectedName);
+  assert.equal(definition.inventoryActions[0], "Drink");
+  assert.equal(definition.isTradable, true);
+  assert.equal(definition.noteTemplate, -1);
+  assert.equal(definition.placeholderTemplate, -1);
+  assert.equal(core.ItemDefinition.forId(id).isNoted(), false);
+  assert.equal(core.ItemDefinition.forId(id).isTradeable(), true);
+  const held = put(f, item(id), 0);
+  assert.equal(f.inv.getItems()[0], held);
+  assert.equal(held.getId(), id);
+  assert.equal(held.getAmount(), 1);
+  assert.equal(held.getMeta(), null);
+  return held;
+}
+
+for (const [name, id, expectedId, hitpoints] of [
+  ["Moonlight mead", () => I.MOONLIGHT_MEAD, 2955, 94],
+  ["Wizard's mind bomb", () => I.WIZARDS_MIND_BOMB, 1907, 91],
+]) {
+  test(`${name} returns an ordinary beer glass`, async t => {
+    const f = ordinaryAleActor(t);
+    assert.equal(id(), expectedId);
+    placeOrdinaryAle(f, id(), name);
+    const hpXp = f.p.getSkillManager().getExperience(core.Skill.HITPOINTS);
+    assert.equal(f.p.getHitpoints(), 90);
+    await browserOp(f, 0, "Drink");
+    assert.equal(f.inv.getItems()[0].getId(), I.BEER_GLASS,
+      "the consumed ordinary ale leaves an ordinary beer glass in its slot");
+    assert.equal(f.inv.getAmount(I.BEER_GLASS_4), 0);
+    assert.equal(f.inv.getItems()[0].getAmount(), 1);
+    assert.equal(f.inv.getItems()[0].getMeta(), null);
+    assert.equal(f.inv.getAmount(id()), 0);
+    assert.equal(f.inv.getAmount(I.BEER_GLASS), 1);
+    assert.equal(f.p.getHitpoints(), hitpoints);
+    assert.equal(f.p.getSkillManager().getExperience(core.Skill.HITPOINTS), hpXp);
+    assert.equal(f.p.getTimers().has(core.TimerKey.POTION), true);
+  });
+}
+
+test("ordinary beer leaves its normal glass", async t => {
+  const f = ordinaryAleActor(t);
+  assert.equal(I.BEER, 1917);
+  placeOrdinaryAle(f, I.BEER, "Beer");
+  await browserOp(f, 0, "Drink");
+  assert.equal(f.inv.getItems()[0].getId(), I.BEER_GLASS);
+  assert.equal(f.inv.getItems()[0].getAmount(), 1);
+  assert.equal(f.inv.getItems()[0].getMeta(), null);
+  assert.equal(f.inv.getAmount(I.BEER_GLASS_4), 0);
+  assert.equal(f.p.getHitpoints(), 91);
+});
+
+test("ordinary beer replaces its own slot when the inventory is full", async t => {
+  const f = ordinaryAleActor(t);
+  placeOrdinaryAle(f, I.BEER, "Beer");
+  fill(f);
+  assert.equal(f.inv.getFreeSlots(), 0);
+  await browserOp(f, 0, "Drink");
+  assert.equal(f.inv.getItems()[0].getId(), I.BEER_GLASS);
+  assert.equal(f.inv.getItems()[0].getAmount(), 1);
+  assert.equal(f.inv.getItems()[0].getMeta(), null);
+  assert.equal(f.inv.getFreeSlots(), 0);
+  assert.equal(f.inv.getAmount(I.BEER_GLASS_4), 0);
+});
+
+test("an active potion cooldown keeps ordinary mead intact", async t => {
+  const f = ordinaryAleActor(t);
+  const held = placeOrdinaryAle(f, I.MOONLIGHT_MEAD, "Moonlight mead");
+  f.p.getTimers().extendOrRegister(core.TimerKey.POTION, 3);
+  assert.equal(f.p.getTimers().has(core.TimerKey.POTION), true);
+  await browserOp(f, 0, "Drink");
+  assert.equal(f.inv.getItems()[0], held);
+  assert.equal(f.inv.getItems()[0].getId(), I.MOONLIGHT_MEAD);
+  assert.equal(f.inv.getItems()[0].getAmount(), 1);
+  assert.equal(f.inv.getItems()[0].getMeta(), null);
+  assert.equal(f.inv.getAmount(I.BEER_GLASS), 0);
+  assert.equal(f.inv.getAmount(I.BEER_GLASS_4), 0);
+  assert.equal(f.p.getHitpoints(), 90);
+});
+
+// This checks the registered identities; it does not create or consume a house drink.
+test("ale registrations retain the glass for their drink variant", () => {
+  const { findPotionEntry } = require("../plugins/items/Potions.plugin")._test;
+  const ordinary = [I.WIZARDS_MIND_BOMB, I.DWARVEN_STOUT, I.AXEMANS_FOLLY, I.BANDITS_BREW,
+    I.MOONLIGHT_MEAD, I.MOONLIGHT_MEAD_M_, I.SLAYERS_RESPITE, I.SLAYERS_RESPITE_M_];
+  const house = [I.BEER_3, I.CIDER_3, I.ASGARNIAN_ALE_3, I.GREENMANS_ALE_3,
+    I.DRAGON_BITTER_3, I.CHEFS_DELIGHT_3];
+  for (const [ids, expected] of [[ordinary, I.BEER_GLASS], [house, I.BEER_GLASS_4]]) {
+    for (const id of ids) {
+      const entry = findPotionEntry(id);
+      assert.ok(entry, `ale ${id} is registered`);
+      assert.equal(entry.replacementId, expected, `ale ${id} has the correct empty glass`);
+    }
+  }
+});

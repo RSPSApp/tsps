@@ -86,7 +86,7 @@ function freePort() {
 }
 
 // Kill only browsers this harness launched, identified by their unique
-// --user-data-dir (mkdtemp temp profile, invocation-specific prefix). Never touches
+// --user-data-dir (mkdtemp profile unique to this invocation). Never touches
 // other Chrome/Edge processes: the user's own windows keep running, even if
 // they spawn tabs mid-capture. (A blanket PID-diff kill used to catch them.)
 const PROFILE_MARKER = `vision-cap-${process.pid}-`;
@@ -272,7 +272,7 @@ async function main() {
 
     const candidates = findBrowsers();
     if (candidates.length === 0) throw new Error("no Chromium found (set VISION_CHROME_PATH)");
-    // Cleanup is limited to this invocation's profiles; parallel QA is left alone.
+    // Reap only this invocation's prior browser candidates before probing.
     killOurBrowserProcesses();
     const tried = [];
     let cdp = null;

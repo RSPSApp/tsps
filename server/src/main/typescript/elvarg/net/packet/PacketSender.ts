@@ -35,6 +35,7 @@ import {
   GROUND_ITEM_BYTES,
   encodeLocAddChange,
   encodeLocAnim,
+  encodeLocMerge,
   encodeTileSpotAnim,
   encodeLocDel,
   encodeInventorySlot,
@@ -1270,6 +1271,12 @@ export class PacketSender {
     this.player.getSession().sendClientPacket(encodeLocDel(
       location.getX(), location.getY(), location.getZ(), object.getType(), object.getFace()
     ));
+    return this;
+  }
+
+  /** A recipient-specific native loc_merge; the target index belongs to player sync. */
+  sendObjectMerge(merge: import("../protocol/LocMerge").LocMergePayload): this {
+    this.player.getSession().sendClientPacket(encodeLocMerge(merge));
     return this;
   }
 

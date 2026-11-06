@@ -643,7 +643,7 @@ for (const [id, cup, boost, animation] of [[Items.CUP_OF_TEA_9, Items.EMPTY_CUP_
     requiresFoodPermission: true, effect: player => boostSkill(player, Skill.CONSTRUCTION, boost, 0),
     drink: { animation, messages: (itemId) => [itemId === id ? "You drink the cup of tea." : "You drink the cup of milky tea.", "You feel refreshed and ready for more building."] } });
 }
-for (const [id, effect] of [
+for (const [id, effect, emptyItemId = Items.BEER_GLASS_4] of [
   [Items.BEER_3, player => { boostSkill(player, Skill.STRENGTH, 1, 0.02); lowerSkillByCurrent(player, Skill.ATTACK, 1, 0.06); }],
   [Items.CIDER_3, player => { boostSkill(player, Skill.FARMING, 1, 0); lowerSkillByCurrent(player, Skill.ATTACK, 2, 0); lowerSkillByCurrent(player, Skill.STRENGTH, 2, 0); }],
   [Items.ASGARNIAN_ALE_3, player => { boostSkill(player, Skill.STRENGTH, 2, 0); lowerSkillByCurrent(player, Skill.ATTACK, 2, 0.05); }],
@@ -651,32 +651,32 @@ for (const [id, effect] of [
   [Items.DRAGON_BITTER_3, player => { boostSkill(player, Skill.STRENGTH, 2, 0); lowerSkillByCurrent(player, Skill.ATTACK, 2, 0.05); }],
   [Items.CHEFS_DELIGHT_3, player => { boostSkill(player, Skill.COOKING, 1, 0.05); lowerSkillByCurrent(player, Skill.ATTACK, 2, 0.05); lowerSkillByCurrent(player, Skill.STRENGTH, 2, 0.05); }],
   // Wiki: Wizard's mind bomb +2/+3 Magic, -1/-5 Attack, Strength and Defence.
-  [Items.WIZARDS_MIND_BOMB, player => { boostSkill(player, Skill.MAGIC, 2, 0.02); for (const skill of [Skill.ATTACK, Skill.STRENGTH, Skill.DEFENCE]) lowerSkillByCurrent(player, skill, 1, 0.05); }],
+  [Items.WIZARDS_MIND_BOMB, player => { boostSkill(player, Skill.MAGIC, 2, 0.02); for (const skill of [Skill.ATTACK, Skill.STRENGTH, Skill.DEFENCE]) lowerSkillByCurrent(player, skill, 1, 0.05); }, Items.BEER_GLASS],
   // Wiki: Dwarven stout +1 Mining and Smithing, -4% - 2 Attack, Strength and Defence.
-  [Items.DWARVEN_STOUT, player => { boostSkill(player, Skill.MINING, 1, 0); boostSkill(player, Skill.SMITHING, 1, 0); for (const skill of [Skill.ATTACK, Skill.STRENGTH, Skill.DEFENCE]) lowerSkillByCurrent(player, skill, 2, 0.04); }],
+  [Items.DWARVEN_STOUT, player => { boostSkill(player, Skill.MINING, 1, 0); boostSkill(player, Skill.SMITHING, 1, 0); for (const skill of [Skill.ATTACK, Skill.STRENGTH, Skill.DEFENCE]) lowerSkillByCurrent(player, skill, 2, 0.04); }, Items.BEER_GLASS],
   // Wiki: Axeman's folly +1 Woodcutting, -3 Attack and Strength.
-  [Items.AXEMANS_FOLLY, player => { boostSkill(player, Skill.WOODCUTTING, 1, 0); for (const skill of [Skill.ATTACK, Skill.STRENGTH]) lowerSkillByCurrent(player, skill, 3, 0); }],
+  [Items.AXEMANS_FOLLY, player => { boostSkill(player, Skill.WOODCUTTING, 1, 0); for (const skill of [Skill.ATTACK, Skill.STRENGTH]) lowerSkillByCurrent(player, skill, 3, 0); }, Items.BEER_GLASS],
   // Wiki: Bandit's brew +1 Thieving and Attack, -6% - 3 Strength and Defence.
-  [Items.BANDITS_BREW, player => { boostSkill(player, Skill.THIEVING, 1, 0); boostSkill(player, Skill.ATTACK, 1, 0); for (const skill of [Skill.STRENGTH, Skill.DEFENCE]) lowerSkillByCurrent(player, skill, 3, 0.06); }],
+  [Items.BANDITS_BREW, player => { boostSkill(player, Skill.THIEVING, 1, 0); boostSkill(player, Skill.ATTACK, 1, 0); for (const skill of [Skill.STRENGTH, Skill.DEFENCE]) lowerSkillByCurrent(player, skill, 3, 0.06); }, Items.BEER_GLASS],
 ]) {
-  registerPotion({ name: "House ale", chains: [[id]], emptyItemId: Items.BEER_GLASS_4,
+  registerPotion({ name: "House ale", chains: [[id]], emptyItemId,
     requiresFoodPermission: true, effect: player => { heal(player, 1); effect(player); } });
 }
 
 // Wiki: Moonlight mead heals 4 (mature 6) with no boosts or drains.
-registerPotion({ name: "Moonlight mead", chains: [[Items.MOONLIGHT_MEAD]], emptyItemId: Items.BEER_GLASS_4,
+registerPotion({ name: "Moonlight mead", chains: [[Items.MOONLIGHT_MEAD]], emptyItemId: Items.BEER_GLASS,
   requiresFoodPermission: true, effect: (player) => heal(player, 4) });
-registerPotion({ name: "Moonlight mead(m)", chains: [[Items.MOONLIGHT_MEAD_M_]], emptyItemId: Items.BEER_GLASS_4,
+registerPotion({ name: "Moonlight mead(m)", chains: [[Items.MOONLIGHT_MEAD_M_]], emptyItemId: Items.BEER_GLASS,
   requiresFoodPermission: true, effect: (player) => heal(player, 6) });
 // Wiki: Slayer's respite boosts Slayer by 2 (mature 4) and drains Attack and
 // Strength by floor(current * 0.02) + 2 (mature + 3); it heals 1 (mature 2).
-registerPotion({ name: "Slayer's respite", chains: [[Items.SLAYERS_RESPITE]], emptyItemId: Items.BEER_GLASS_4,
+registerPotion({ name: "Slayer's respite", chains: [[Items.SLAYERS_RESPITE]], emptyItemId: Items.BEER_GLASS,
   requiresFoodPermission: true, effect: (player) => {
     heal(player, 1);
     boostSkill(player, Skill.SLAYER, 2, 0);
     for (const skill of [Skill.ATTACK, Skill.STRENGTH]) lowerSkillByCurrent(player, skill, 2, 0.02);
   } });
-registerPotion({ name: "Slayer's respite(m)", chains: [[Items.SLAYERS_RESPITE_M_]], emptyItemId: Items.BEER_GLASS_4,
+registerPotion({ name: "Slayer's respite(m)", chains: [[Items.SLAYERS_RESPITE_M_]], emptyItemId: Items.BEER_GLASS,
   requiresFoodPermission: true, effect: (player) => {
     heal(player, 2);
     boostSkill(player, Skill.SLAYER, 4, 0);

@@ -577,3 +577,196 @@ test('Bowfa consumption ownership preserves the existing ammunition eligibility 
     assert.equal(Factory.checkAmmo(archer, 1), false, 'other weapons still require compatible ammunition');
   }
 });
+
+
+test('Fire Warrior ordinary attack eligibility and queued hits', async t => {
+  const path = require('node:path');
+  const { CachePipeline } = require('../dist/game/cache/CachePipeline');
+  const { NpcDefinitionLoader } = require('../dist/game/definition/loader/impl/NpcDefinitionLoader');
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { PlayerSession } = require('../dist/net/PlayerSession');
+  const { AreaManager } = require('../dist/game/model/areas/AreaManager');
+  const QuestRuntime = require('../plugins/quests/QuestRuntime');
+  const { ATTR_SKIP_PERSISTENCE } = require('../plugins/bots/runtime/PersistenceConstants.PlayerBots');
+  await CachePipeline.initialize(path.resolve(__dirname, '..'));
+  require('../plugins/items/ItemDefinitionLoader.plugin').register({ log() {}, onPlayerLogin() {}, registerContentEndpoint() {} });
+  new NpcDefinitionLoader().load();
+  const core = PluginManager.getCoreApi();
+  core.RegionManager.init(); core.RegionManager.loadMapFiles(2646, 9867);
+  require('../plugins/quests/quests/TempleOfIkov.Quest')(PluginManager.createApi('TempleOfIkovNative'));
+  const quest = QuestRuntime.questNamed('Temple of Ikov'); assert.ok(quest);
+  assert.equal(core.CacheDefinitions.getNpcId('ikov_firewarrior'),3448);
+  assert.equal(core.CacheDefinitions.getObjId('ice_arrow'),78);
+  assert.equal(AreaManager.areas.length,0,'selective fixture has not registered full-world areas');
+  const oldCycle=core.World.processCycle, oldSubmit=core.TaskManager.submit, tasks=[];
+  const oldError=console.error, errors=[];
+  console.error=(...args)=>{ errors.push(args.map(String).join(' ')); oldError.apply(console,args); };
+  core.TaskManager.submit=function(task) { tasks.push(task); return oldSubmit.call(this,task); };
+  t.after(()=>{
+    try { core.World.processCycle=oldCycle; }
+    finally { core.TaskManager.submit=oldSubmit; console.error=oldError; }
+    assert.deepEqual(errors,[],'no swallowed engine errors');
+  });
+  let nextIndex=1300;
+  function actors(st, id=core.NpcIdentifiers.FIRE_WARRIOR_OF_LESARKUS) {
+    const channel={kind:'test',remoteAddress:'127.0.0.1',isOpen:()=>true,send:()=>true,close(){},onData(){},onError(){},onClose(){}};
+    const p=new Player(new PlayerSession(channel)); let npc=null;
+    const taskStart=tasks.length;
+    st.after(()=>{
+      const location=p.getLocation();
+      const otherOccupants=core.World.isPlayerOccupyingTile(location,p);
+      try {
+        for(const task of tasks.slice(taskStart)) task.stop();
+        core.GameConstants.PLAYER_PERSISTENCE.cancelRequestedSave(p);
+        core.TaskManager.cancelTasks(p); core.TaskManager.cancelTasks(p.getIndex());
+        p.getCombat().getHitQueue().clear(); p.getMovementQueue().reset();
+        if(npc) { npc.getCombat().getHitQueue().clear(); PluginManager.removeNpc(npc); }
+      } finally {
+        core.World.unregisterPlayerPosition(p); p.setRegistered(false);
+      }
+      assert.equal(core.World.isPlayerOccupyingTile(location),otherOccupants,'owned player position is removed');
+    });
+    p.setIndex(nextIndex++); p.setUsername('fw'+p.getIndex()); p.setRegistered(true);
+    assert.match(p.getUsername(),/^fw\d{4}$/);
+    p.setAttribute(ATTR_SKIP_PERSISTENCE,true); p.setNeedsPlacement(false);
+    for (const skill of [core.Skill.RANGED, core.Skill.HITPOINTS]) {
+      p.getSkillManager().setExperiences(skill,core.SkillManager.getExperienceForLevel(99),false);
+      p.getSkillManager().setMaxLevel(skill,99); p.getSkillManager().setCurrentLevel(skill,99,false);
+      assert.equal(p.getSkillManager().getMaxLevel(skill),99);
+      assert.equal(p.getSkillManager().getCurrentLevel(skill),99);
+    }
+    p.setHitpoints(99);
+    quest.setStage(p,50); assert.equal(quest.getStage(p),50);
+    const origin=new core.Location(2646,9867,0);
+    npc=PluginManager.spawnNpc({id,x:2646,y:9867,z:0,wanderRadius:0,owner:p,ownerOnly:true});
+    assert.ok(npc?.isRegistered()); npc.setNeedsPlacement(false); assert.equal(npc.getOwner(),p);
+    assert.equal(npc.isOwnerOnly(),true);
+    const adjacent=[[0,1],[1,0],[0,-1],[-1,0]].find(([dx,dy])=>
+      core.RegionManager.canMove(origin.getX(),origin.getY(),origin.getX()+dx,origin.getY()+dy,0,1,1,null) &&
+      core.RegionManager.canMove(origin.getX()+dx,origin.getY()+dy,origin.getX(),origin.getY(),0,1,1,null));
+    assert.ok(adjacent,'quest-room spawn has legal adjacent tile');
+    p.setLocation(new core.Location(origin.getX()+adjacent[0],origin.getY()+adjacent[1],0));
+    AreaManager.process(p); AreaManager.process(npc);
+    assert.equal(AreaManager.inMulti(npc),false,'quest-room fixture is not in a multi area');
+    assert.equal(npc.isMultiCombat(),false,'the cache NPC is not always multi');
+    return {p,npc};
+  }
+  function equip(p,weapon,ammo,ammoCount=1,style=core.WeaponInterfaces.SHORTBOW) {
+    const definition=core.ItemDefinition.forId(weapon);
+    assert.equal(definition.getWeaponInterface(),style,'item definition supplies the selected combat style');
+    const stackable=definition.isStackable();
+    p.getEquipment().setItem(core.Equipment.WEAPON_SLOT,new core.Item(weapon,stackable?5:1));
+    p.getEquipment().setItem(core.Equipment.AMMUNITION_SLOT,new core.Item(ammo,ammo<0?0:ammoCount));
+    p.setWeapon(style); p.setFightType(style.getFightType()[0]); core.BonusManager.update(p);
+    return core.CombatFactory.getMethod(p);
+  }
+  function step(p,npc,turns=1) {
+    for(let i=0;i<turns;i++) {
+      core.World.processCycle++; core.TaskManager.process(); p.resetUpdating();
+      const m=p.getMovementQueue(); m.beginCycle(); p.getCombat().preMovementProcess();
+      m.processEntityPursuit(); if(m.hasPendingWork())m.process();
+      p.getCombat().postMovementProcess(); core.TaskManager.processWalkTo(p.getIndex());
+      npc.getCombat().getHitQueue().process(core.World.getProcessCycle());
+    }
+  }
+  function forceAccuracy(st,p,npc) {
+    assert.ok(core.DamageFormulas.sourceMaxHit(p,core.CombatType.RANGED)>0,'ranged setup can deal damage');
+    const formula=core.AccuracyFormulasDpsCalc, original=formula.rollAccuracy;
+    st.mock.method(formula,'rollAccuracy',function(attacker,target,...rest) {
+      return attacker===p && target===npc ? true : original.call(this,attacker,target,...rest);
+    });
+  }
+  const I=core.ItemIdentifiers, C=core.CanAttackResponse;
+  assert.equal(core.ItemDefinition.forId(I.ICE_ARROWS).isStackable(),true,'active-cache ice arrows are stackable');
+  await t.test('wrong arrow cannot launch an ordinary attack',st=>{
+    const {p,npc}=actors(st); const method=equip(p,I.YEW_SHORTBOW,I.RUNE_ARROW,5); forceAccuracy(st,p,npc);
+    assert.equal(method.type(),core.CombatType.RANGED); assert.ok(npc.getHitpoints()>0);
+    const hp=npc.getHitpoints(), ammo=p.getEquipment().get(core.Equipment.AMMUNITION_SLOT).getAmount();
+    p.getCombat().attack(npc); step(p,npc);
+    const queued=npc.getCombat().getHitQueue().hasPendingHitFrom(p);
+    step(p,npc,5);
+    assert.equal(npc.getHitpoints(),hp,'ordinary wrong-arrow damage must not land');
+    assert.equal(queued,false,'the ordinary attack must not queue a hit');
+    assert.equal(p.getEquipment().get(core.Equipment.AMMUNITION_SLOT).getAmount(),ammo);
+    assert.equal(core.CombatFactory.canAttackPermission(p,npc,false,method),C.CANT_ATTACK_IN_AREA);
+  });
+  await t.test('melee and self-charging bows do not qualify from a quiver alone',st=>{
+    const {p,npc}=actors(st);
+    let method=equip(p,I.RUNE_SCIMITAR,I.ICE_ARROWS,1,core.WeaponInterfaces.SCIMITAR);
+    assert.equal(method.type(),core.CombatType.MELEE);
+    assert.equal(core.CombatFactory.canAttackPermission(p,npc,false,method),C.CANT_ATTACK_IN_AREA);
+    method=equip(p,I.BOW_OF_FAERDHINEN,I.ICE_ARROWS,1,core.WeaponInterfaces.LONGBOW);
+    assert.equal(method.type(),core.CombatType.RANGED);
+    assert.equal(core.Ammunition.firesFromAmmoSlot(p),false);
+    assert.equal(core.CombatFactory.canAttackPermission(p,npc,false,method),C.CANT_ATTACK_IN_AREA);
+  });
+  await t.test('the final ice arrow can launch and land before the next attack is denied',st=>{
+    const {p,npc}=actors(st); const method=equip(p,I.YEW_SHORTBOW,I.ICE_ARROWS,1); forceAccuracy(st,p,npc);
+    assert.equal(core.Ammunition.getFor(p).getItemId(),I.ICE_ARROWS);
+    assert.equal(core.CombatFactory.canAttackPermission(p,npc,false,method),C.CAN_ATTACK);
+    const hp=npc.getHitpoints(); p.getCombat().attack(npc); step(p,npc);
+    assert.equal(npc.getCombat().getHitQueue().hasPendingHitFrom(p),true,'real attack queued a hit');
+    step(p,npc,5); assert.ok(npc.getHitpoints()<hp,'queued ice-arrow hit landed');
+    assert.notEqual(p.getEquipment().get(core.Equipment.AMMUNITION_SLOT).getId(),I.ICE_ARROWS);
+    const after=npc.getHitpoints(); p.getCombat().attack(npc); step(p,npc,4);
+    assert.equal(npc.getHitpoints(),after,'no second hit without ammunition');
+  });
+  await t.test('a launched ice arrow keeps its queued hit after a quiver swap',st=>{
+    const {p,npc}=actors(st); const method=equip(p,I.YEW_SHORTBOW,I.ICE_ARROWS,1); forceAccuracy(st,p,npc);
+    assert.equal(core.CombatFactory.canAttackPermission(p,npc,false,method),C.CAN_ATTACK);
+    const hp=npc.getHitpoints(); p.getCombat().attack(npc); step(p,npc);
+    assert.equal(npc.getCombat().getHitQueue().hasPendingHitFrom(p),true);
+    const replacement=new core.Item(I.RUNE_ARROW,5);
+    p.getEquipment().setItem(core.Equipment.AMMUNITION_SLOT,replacement);
+    step(p,npc,5);
+    assert.ok(npc.getHitpoints()<hp,'the already queued hit lands under current TSPS behavior');
+    assert.equal(p.getEquipment().get(core.Equipment.AMMUNITION_SLOT),replacement);
+    assert.equal(replacement.getAmount(),5,'the delayed debit leaves the replacement stack alone');
+    assert.equal(core.CombatFactory.canAttackPermission(p,npc,false,core.CombatFactory.getMethod(p)),C.CANT_ATTACK_IN_AREA);
+  });
+  await t.test('a thrown knife with an equipped ice arrow lands and retains the arrow',st=>{
+    const {p,npc}=actors(st); const method=equip(p,I.RUNE_KNIFE,I.ICE_ARROWS,1,core.WeaponInterfaces.KNIFE); forceAccuracy(st,p,npc);
+    assert.equal(core.Ammunition.getFor(p).getItemId(),I.RUNE_KNIFE);
+    assert.equal(core.CombatFactory.canAttackPermission(p,npc,false,method),C.CAN_ATTACK);
+    const hp=npc.getHitpoints(); p.getCombat().attack(npc); step(p,npc);
+    assert.equal(npc.getCombat().getHitQueue().hasPendingHitFrom(p),true);
+    step(p,npc,5); assert.ok(npc.getHitpoints()<hp);
+    assert.equal(p.getEquipment().get(core.Equipment.AMMUNITION_SLOT).getId(),I.ICE_ARROWS);
+    assert.equal(p.getEquipment().get(core.Equipment.AMMUNITION_SLOT).getAmount(),1);
+  });
+  for (const [weapon,style] of [[I.RUNE_DART,core.WeaponInterfaces.DART], [I.RUNE_THROWNAXE,core.WeaponInterfaces.THROWNAXE]]) {
+    await t.test(`a thrown weapon ${weapon} qualifies only with ice arrows equipped`,st=>{
+      const {p,npc}=actors(st);
+      let method=equip(p,weapon,I.ICE_ARROWS,1,style); forceAccuracy(st,p,npc);
+      assert.equal(core.CombatFactory.canAttackPermission(p,npc,false,method),C.CAN_ATTACK);
+      const hp=npc.getHitpoints(); p.getCombat().attack(npc); step(p,npc);
+      assert.equal(npc.getCombat().getHitQueue().hasPendingHitFrom(p),true);
+      step(p,npc,5); assert.ok(npc.getHitpoints()<hp,'the thrown hit landed');
+      assert.equal(p.getEquipment().get(core.Equipment.AMMUNITION_SLOT).getAmount(),1);
+      method=equip(p,weapon,I.RUNE_ARROW,1,style);
+      assert.equal(core.CombatFactory.canAttackPermission(p,npc,false,method),C.CANT_ATTACK_IN_AREA);
+    });
+  }
+  await t.test('recoil still lands through the direct reflected-damage queue',st=>{
+    const {p,npc}=actors(st);
+    p.getEquipment().setItem(core.Equipment.RING_SLOT,new core.Item(I.RING_OF_RECOIL,1));
+    const method=core.CombatFactory.getMethod(npc);
+    const hit=new core.PendingHit(npc,p,method,{statusDamage:true,damage:10,handleAfterHitEffects:false});
+    const beforePlayer=p.getHitpoints(), beforeNpc=npc.getHitpoints();
+    core.CombatFactory.addPendingHit(hit);
+    for(let i=0;i<5;i++) {
+      core.World.processCycle++;
+      p.getCombat().getHitQueue().process(core.World.getProcessCycle());
+      npc.getCombat().getHitQueue().process(core.World.getProcessCycle());
+    }
+    assert.ok(p.getHitpoints()<beforePlayer,'the queued incoming hit lands');
+    assert.ok(npc.getHitpoints()<beforeNpc,'the existing recoil producer damages the warrior');
+  });
+  await t.test('an ordinary NPC remains attackable with ordinary arrows',st=>{
+    const {p,npc}=actors(st,core.NpcIdentifiers.MAN); const method=equip(p,I.YEW_SHORTBOW,I.RUNE_ARROW,5); forceAccuracy(st,p,npc);
+    assert.equal(core.CombatFactory.canAttackPermission(p,npc,false,method),C.CAN_ATTACK);
+    const hp=npc.getHitpoints(); p.getCombat().attack(npc); step(p,npc);
+    assert.equal(npc.getCombat().getHitQueue().hasPendingHitFrom(p),true);
+    step(p,npc,5); assert.ok(npc.getHitpoints()<hp);
+  });
+});

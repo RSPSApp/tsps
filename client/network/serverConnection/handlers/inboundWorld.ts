@@ -270,6 +270,10 @@ export function handleInboundWorld(msg: any): boolean {
         }
         return true;
     }
+    if (msg.type === "loc_merge") {
+        // Native revision 241 consumes LOC_MERGE without changing scene or player models.
+        return true;
+    }
     if (msg.type === "loc_anim") {
         const payload = msg.payload;
         try {

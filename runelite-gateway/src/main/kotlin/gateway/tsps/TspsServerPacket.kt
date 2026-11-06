@@ -81,6 +81,7 @@ object TspsServerPacket {
     const val LOC_DEL = 135
     const val LOC_ANIM = 136
     const val CAMERA_CONTROL = 137
+    const val LOC_MERGE = 138
     const val REBUILD_REGION = 140
     const val REBUILD_NORMAL = 141
     const val REBUILD_WORLDENTITY = 142
@@ -182,6 +183,7 @@ object TspsServerPacket {
             LOC_ADD_CHANGE to -1,
             LOC_DEL to -1,
             LOC_ANIM to 10,
+            LOC_MERGE to 18,
             SOUND to -1,
             PLAY_JINGLE to 5,
             PLAY_SONG to 10,

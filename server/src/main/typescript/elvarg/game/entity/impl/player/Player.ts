@@ -61,6 +61,8 @@ import { ServerPerf } from "../../../../util/ServerPerf";
 import { getSequencePriority } from "../../../cache/NpcAnimationScanner";
 import { LOGIN_TOKENS_ATTRIBUTE } from "../../../../net/login/LoginTokens";
 import { CacheDefinitions } from "../../../cache/CacheDefinitions";
+import type { GameObject } from "../object/GameObject";
+import { type LocMergeBounds, validateLocMerge } from "../../../../net/protocol/LocMerge";
 
 const ATTR_SKIP_PERSISTENCE = "bot-skip-persistence";
 const DEFAULT_AUDIO_SETTINGS: Readonly<Record<number, number>> = {
@@ -987,6 +989,25 @@ export class Player extends Mobile {
         }
         this.viewDistanceQuietCycles = 0;
         if (this.viewDistance < Player.PREFERRED_VIEW_DISTANCE) this.viewDistance++;
+    }
+
+    /** Send the legacy loc_merge contract; revision241 consumes it without rendering changes. */
+    public mergeObject(object: GameObject, start: number, end: number, bounds: LocMergeBounds): this {
+        const location = object.getLocation();
+        const merge = {
+            ...bounds, locId: object.getId(), tile: { x: location.getX(), y: location.getY() },
+            level: location.getZ(), shape: object.getType(), rotation: object.getFace(),
+            playerIndex: this.getIndex(), start, end,
+        };
+        validateLocMerge(merge);
+        this.getPacketSender().sendObjectMerge(merge);
+        // View membership belongs to the recipient and can be asymmetric at crowded edges.
+        World.getPlayers().forEach(viewer => {
+            if (viewer !== this && viewer.getLocalPlayers().includes(this)) {
+                viewer.getPacketSender().sendObjectMerge(merge);
+            }
+        });
+        return this;
     }
 
     public getLocalPlayers(): Player[] {

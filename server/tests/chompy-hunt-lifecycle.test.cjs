@@ -113,11 +113,13 @@ test("distance does not suppress a placed bait and duplicate tiles are rejected 
 
 test("Western diary double-spawn rewards use real claimed tiers and RNG boundaries", t => {
   const Progress = require("../plugins/achievements/diaries/Progress.AchievementDiaries");
-  const diary = require("../plugins/achievements/diaries/Data.AchievementDiaries").BY_KEY.get("western");
+  const { BY_KEY, TIERS } = require("../plugins/achievements/diaries/Data.AchievementDiaries");
+  const diary = BY_KEY.get("western");
   for (const [tier, roll, expected] of [[null, 0, 1], ["easy", 0.249999, 2], ["easy", 0.25, 1],
-    ["medium", 0.499999, 2], ["medium", 0.5, 1], ["hard", 0.49, 2], ["elite", 0.99999, 2]]) {
+    ["medium", 0.499999, 2], ["medium", 0.5, 1], ["hard", 0.499999, 2], ["hard", 0.5, 1], ["elite", 0.99999, 2]]) {
     const f = setup(t);
-    if (tier) Progress.claimTier(f.player, diary, tier);
+    // Rewards are claimed in order, so a hard completer has claimed easy and medium too.
+    if (tier) for (const claimed of TIERS.slice(0, TIERS.indexOf(tier) + 1)) Progress.claimTier(f.player, diary, claimed);
     f.hunt.place(f.player);
     let calls = 0;
     t.mock.method(Math, "random", () => ++calls === 1 ? 0 : roll);

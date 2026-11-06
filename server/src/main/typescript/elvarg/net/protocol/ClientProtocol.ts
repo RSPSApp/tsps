@@ -4,6 +4,7 @@ import { CLIENT_PACKET_LENGTHS as NATIVE_CLIENT_PACKET_LENGTHS, ClientPacketId a
 import { SERVER_PACKET_LENGTHS, ServerPacketId } from "./ServerPackets";
 import { EntityInteractionMode, INTERACTION_WORLD_DEFAULT, TileInteractionMode } from "./InteractionMode";
 import { deflateSync } from "zlib";
+import { type LocMergePayload, validateLocMerge } from "./LocMerge";
 
 export const enum ClientPacket {
   NPC_OPTION_2 = 12,
@@ -1469,6 +1470,24 @@ export function encodeLocDel(x: number, y: number, level: number, shape: number,
   payload[4] = level;
   payload[5] = (shape << 2) | (rotation & 3);
   return encodeServerPacket(ServerPacketId.LOC_DEL, payload);
+}
+
+export function encodeLocMerge(merge: LocMergePayload): Buffer {
+  validateLocMerge(merge);
+  const payload = Buffer.alloc(18);
+  payload.writeUInt16BE(merge.locId, 0);
+  payload.writeUInt16BE(merge.tile.x, 2);
+  payload.writeUInt16BE(merge.tile.y, 4);
+  payload[6] = merge.level;
+  payload[7] = (merge.shape << 2) | merge.rotation;
+  payload.writeUInt16BE(merge.playerIndex, 8);
+  payload.writeUInt16BE(merge.start, 10);
+  payload.writeUInt16BE(merge.end, 12);
+  payload.writeInt8(merge.minX, 14);
+  payload.writeInt8(merge.minZ, 15);
+  payload.writeInt8(merge.maxX, 16);
+  payload.writeInt8(merge.maxZ, 17);
+  return encodeServerPacket(ServerPacketId.LOC_MERGE, payload);
 }
 
 export function encodeLocAnim(id: number, x: number, y: number, level: number, shape: number, rotation: number, animationId: number): Buffer {

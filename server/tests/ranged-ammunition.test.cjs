@@ -762,6 +762,34 @@ test('Fire Warrior ordinary attack eligibility and queued hits', async t => {
     assert.ok(p.getHitpoints()<beforePlayer,'the queued incoming hit lands');
     assert.ok(npc.getHitpoints()<beforeNpc,'the existing recoil producer damages the warrior');
   });
+  for (const [label, id, arrow] of [['ordinary NPC with ice arrows', core.NpcIdentifiers.MAN, I.ICE_ARROWS], ['Fire Warrior with ice arrows', core.NpcIdentifiers.FIRE_WARRIOR_OF_LESARKUS, I.ICE_ARROWS], ['ordinary NPC with rune arrows', core.NpcIdentifiers.MAN, I.RUNE_ARROW]]) {
+    await t.test(`dark bow fires two arrows at ${label}`,st=>{
+      const {p,npc}=actors(st,id); const method=equip(p,I.DARK_BOW,arrow,2,core.WeaponInterfaces.DARK_BOW); forceAccuracy(st,p,npc);
+      assert.equal(core.WeaponProfiles.ranged(p).ammoRequired,2);
+      assert.equal(core.Ammunition.getFor(p).getItemId(),arrow);
+      const hp=npc.getHitpoints(); p.getCombat().attack(npc); step(p,npc);
+      const queued=npc.getCombat().getHitQueue().hasPendingHitFrom(p);
+      step(p,npc,6);
+      assert.ok(npc.getHitpoints()<hp,'dark-bow hit lands');
+      assert.equal(queued,true,'the real attack queued a hit');
+      assert.notEqual(p.getEquipment().get(core.Equipment.AMMUNITION_SLOT).getId(),arrow,'both arrows consumed');
+    });
+  }
+  await t.test('dark bow cannot fire with only one ice arrow',st=>{
+    const {p,npc}=actors(st,core.NpcIdentifiers.MAN);
+    const method=equip(p,I.DARK_BOW,I.ICE_ARROWS,1,core.WeaponInterfaces.DARK_BOW);
+    assert.equal(core.WeaponProfiles.ranged(p).ammoRequired,2);
+    assert.equal(core.CombatFactory.canAttackPermission(p,npc,false,method),C.CAN_ATTACK);
+    assert.equal(method.canAttack(p,npc),false);
+    assert.equal(p.getEquipment().get(core.Equipment.AMMUNITION_SLOT).getAmount(),1);
+  });
+  await t.test('twisted bow still fires ice arrows at the Fire Warrior',st=>{
+    const {p,npc}=actors(st); const method=equip(p,I.TWISTED_BOW,I.ICE_ARROWS,1,core.WeaponInterfaces.SHORTBOW); forceAccuracy(st,p,npc);
+    assert.equal(core.CombatFactory.canAttackPermission(p,npc,false,method),C.CAN_ATTACK);
+    const hp=npc.getHitpoints(); p.getCombat().attack(npc); step(p,npc);
+    assert.equal(npc.getCombat().getHitQueue().hasPendingHitFrom(p),true);
+    step(p,npc,6); assert.ok(npc.getHitpoints()<hp,'twisted-bow hit lands');
+  });
   await t.test('an ordinary NPC remains attackable with ordinary arrows',st=>{
     const {p,npc}=actors(st,core.NpcIdentifiers.MAN); const method=equip(p,I.YEW_SHORTBOW,I.RUNE_ARROW,5); forceAccuracy(st,p,npc);
     assert.equal(core.CombatFactory.canAttackPermission(p,npc,false,method),C.CAN_ATTACK);

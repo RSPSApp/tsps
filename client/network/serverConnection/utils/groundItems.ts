@@ -5,6 +5,7 @@ export function cloneGroundItemStack(stack: GroundItemStackMessage): GroundItemS
     return {
         id: stack.id | 0,
         itemId: stack.itemId | 0,
+        enabledOps: (stack.enabledOps ?? 0x1f) & 0x1f,
         quantity: stack.quantity | 0,
         tile: {
             x: stack.tile?.x ?? 0,

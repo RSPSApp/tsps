@@ -3,11 +3,15 @@ import { Location } from "../../../game/model/Location";
 import { PluginManager } from "../../../plugins/PluginManager";
 
 export class SecondGroundItemOptionPacketListener {
-  public static interact(player: any, itemId: number, x: number, y: number, clickType: number): void {
+  public static interact(player: any, itemId: number, x: number, y: number, clickType: number, stackId?: number): void {
     if (!player || player.getHitpoints() <= 0) {
       return;
     }
     const position = new Location(x, y, player.getLocation().getZ());
+
+    const groundItem = ItemOnGroundManager.getOperableGroundItem(player, itemId, position, clickType, stackId);
+    if (!groundItem || groundItem.getItem().getId() !== itemId || !Location.isSameTile(groundItem.getPosition(), position)
+        || !ItemOnGroundManager.canOperate(player, groundItem, clickType)) return;
 
     player.getSkillManager().stopSkillable();
 
@@ -23,13 +27,8 @@ export class SecondGroundItemOptionPacketListener {
     }
 
     player.getMovementQueue().walkToGroundItem(position, () => {
-      const groundItem = ItemOnGroundManager.getGroundItem(
-        player.getUsername(),
-        itemId,
-        position,
-        player.getPrivateArea(),
-      );
-      if (!groundItem) {
+      if (!ItemOnGroundManager.canOperate(player, groundItem, clickType)
+          || groundItem.getItem().getId() !== itemId || !Location.isSameTile(groundItem.getPosition(), position)) {
         return;
       }
 

@@ -16,6 +16,7 @@ import {
 import type { LocType } from "../../rs/config/loctype/LocType";
 import type { NpcType } from "../../rs/config/npctype/NpcType";
 import type { ObjType } from "../../rs/config/objtype/ObjType";
+import { isGroundItemOperationEnabled } from "../data/ground/GroundItemStore";
 import { MenuOpcode } from "../../ui/menu/MenuState";
 import {
     canTargetGroundItem,
@@ -316,7 +317,7 @@ export function buildGroundItemMenuEntries(
     let hasTakeAction = false;
     for (let actionIdx = 0; actionIdx < objType.groundActions.length; actionIdx++) {
         const option = objType.groundActions[actionIdx];
-        if (!option) continue;
+        if (!option || !isGroundItemOperationEnabled(stack, actionIdx)) continue;
 
         if (actionIdx === 2) hasTakeAction = true;
 
@@ -341,7 +342,7 @@ export function buildGroundItemMenuEntries(
     }
 
     // OSRS: Default "Take" option if no action defined at index 2
-    if (!hasTakeAction) {
+    if (!hasTakeAction && isGroundItemOperationEnabled(stack, 2)) {
         const capturedStack = stack;
         actions.push({
             option: "Take",

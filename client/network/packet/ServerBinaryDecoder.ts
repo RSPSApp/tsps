@@ -306,6 +306,7 @@ export function decodeServerPacket(data: Uint8Array | ArrayBuffer): DecodedServe
         const ownerIdRaw = reader.readInt();
         const isPrivateRaw = reader.readBoolean();
         const ownershipRaw = reader.readByte();
+        const enabledOps = reader.readByte() & 0x1f;
 
         const createdTick = createdTickRaw >= 0 ? createdTickRaw : undefined;
         const privateUntilTick = privateUntilTickRaw > 0 ? privateUntilTickRaw : undefined;
@@ -330,6 +331,7 @@ export function decodeServerPacket(data: Uint8Array | ArrayBuffer): DecodedServe
             ownerId,
             isPrivate,
             ownership,
+            enabledOps,
         };
     };
 

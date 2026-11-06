@@ -8,6 +8,10 @@ import { PrivateArea } from "../../../model/areas/impl/PrivateArea";
 export class ItemOnGround {
     private static nextId = 1;
     private readonly id = ItemOnGround.nextId++;
+    /** Native ground-action bits 0..4; Examine, item-use and spells are separate. */
+    private enabledOps = 0x1f;
+    private viewerEnabledOps = new WeakMap<Player, number>();
+    private viewerOverrideCount = 0;
     position: Location;
     state: State = State.SEEN_BY_PLAYER;
     owner: string | null;
@@ -98,6 +102,45 @@ export class ItemOnGround {
 
     public getTiming() {
         return ItemOnGroundManager.getTiming(this);
+    }
+
+    public getEnabledOps(viewer?: Player): number {
+        return (viewer && this.viewerEnabledOps.get(viewer)) ?? this.enabledOps;
+    }
+
+    public setEnabledOps(mask: number, viewer?: Player): ItemOnGround {
+        if (!Number.isInteger(mask) || mask < 0 || mask > 0x1f) throw new RangeError("Ground operation mask must be 0..31");
+        if (viewer) {
+            if (!this.viewerEnabledOps.has(viewer)) this.viewerOverrideCount++;
+            this.viewerEnabledOps.set(viewer, mask);
+        }
+        else this.enabledOps = mask;
+        this.refreshEnabledOps(viewer);
+        return this;
+    }
+
+    public resetEnabledOps(viewer: Player): ItemOnGround {
+        if (this.viewerEnabledOps.delete(viewer)) {
+            this.viewerOverrideCount--;
+            this.refreshEnabledOps(viewer);
+        }
+        return this;
+    }
+
+    public isOperationEnabled(viewer: Player, operation: number): boolean {
+        return Number.isInteger(operation) && operation >= 1 && operation <= 5
+            && (this.getEnabledOps(viewer) & (1 << (operation - 1))) !== 0;
+    }
+
+    public hasSameOperationPolicy(other: ItemOnGround): boolean {
+        // Viewer policies belong to this exact stack/session. Do not merge them away.
+        return this.enabledOps === other.enabledOps && this.viewerOverrideCount === 0 && other.viewerOverrideCount === 0;
+    }
+
+    private refreshEnabledOps(viewer?: Player): void {
+        if (!World.getItems().includes(this) || this.pendingRemoval) return;
+        if (viewer) ItemOnGroundManager.performPlayer(viewer, this, OperationType.ALTER);
+        else ItemOnGroundManager.perform(this, OperationType.ALTER);
     }
 
     public getPosition(): Location {
@@ -192,6 +235,7 @@ export class ItemOnGround {
     public clone(): ItemOnGround {
         const copy = new ItemOnGround(this.state, this.owner, this.getPosition(), this.item.clone(), this.goesGlobal, this.respawnTimer, this.privateArea, this.staticSpawn);
         copy.despawnDelay = this.despawnDelay;
+        copy.enabledOps = this.enabledOps;
         return copy;
     }
 

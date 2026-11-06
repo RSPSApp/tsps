@@ -36,6 +36,7 @@ export type ShopStockEntryMessage = {
 };
 
 export type GroundItemStackMessage = {
+    enabledOps?: number;
     id: number;
     itemId: number;
     quantity: number;

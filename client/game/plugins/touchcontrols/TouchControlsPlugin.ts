@@ -1,3 +1,4 @@
+import { isGroundItemOperationEnabled } from "../../data/ground/GroundItemStore";
 import type { OsrsClient } from "../../OsrsClient";
 import { ConfigChanged } from "@runelite/api/events";
 import { Plugin, type PluginDescriptor } from "@runelite/client/plugins/Plugin";
@@ -439,6 +440,7 @@ export class TouchControlsPlugin extends Plugin implements ClientPlugin {
             const name = stripTags(plugins?.groundItemMenuName?.(stack, type.name) ?? type.name);
             const hidden = plugins?.deprioritizeGroundItem?.(stack) ?? false;
             for (let actionIndex = 0; actionIndex < 5; actionIndex++) {
+                if (!isGroundItemOperationEnabled(stack, actionIndex)) continue;
                 const option = type.groundActions?.[actionIndex] ?? (actionIndex === 2 ? "Take" : undefined);
                 if (option) options.push({ option, actionIndex, stack, name, deprioritized: hidden && actionIndex === 2 });
             }

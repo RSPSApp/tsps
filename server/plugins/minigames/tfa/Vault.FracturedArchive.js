@@ -176,9 +176,23 @@ class VaultRoom extends Raid.Room {
     const loot = this.loot.get(player.getUsername());
     if (!loot) return;
     logLoot(player, loot);
-    for (const entry of loot.entries) move(player, entry, entry.amount, "bank");
+    // What the bank can't hold goes to the inventory (saved with the player), and anything left to the floor
+    // outside, where leaving (or logging back in) puts them: nothing is deleted, whatever space is left.
+    let overflow = false;
+    for (const entry of loot.entries) {
+      let left = entry.amount - move(player, entry, entry.amount, "bank");
+      if (left <= 0) continue;
+      overflow = true;
+      left -= move(player, { ...entry, amount: left }, left, "inventory");
+      if (left > 0) {
+        const { Item, ItemOnGroundManager } = Shared.core();
+        ItemOnGroundManager.registerLocation(player, new Item(entry.id, left), Shared.loc(Shared.TILE.LEAVE));
+      }
+    }
     this.loot.delete(player.getUsername());
-    player.sendMessage("Your unclaimed rewards from the Archive have been sent to your bank.");
+    player.sendMessage(overflow
+      ? "Your bank couldn't hold all of your unclaimed rewards from the Archive; the rest are with you."
+      : "Your unclaimed rewards from the Archive have been sent to your bank.");
   }
 }
 

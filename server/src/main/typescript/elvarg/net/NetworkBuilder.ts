@@ -133,7 +133,15 @@ async function forgetLoginToken(rawUsername: string, token: string): Promise<voi
   const protocolName = Misc.formatNameForProtocol(username);
   if (protocolName.length < 1 || protocolName.length > 12 || !Misc.isValidName(protocolName)) return;
   const profile = GameConstants.WORLD_PROFILE;
-  const online = World.getPlayerByName(username);
+  // Remembered logins live on the account's primary, whichever character name was typed.
+  let owner = username;
+  try {
+    const account = Accounts.accountOf(username);
+    owner = (account && Accounts.primaryOf(account)) || username;
+  } catch (error) {
+    console.warn(`[login] could not read the account of ${username}`, error);
+  }
+  const online = World.getPlayerByName(owner);
   if (online) {
     const entries = readLoginTokens(online.getAttribute(LOGIN_TOKENS_ATTRIBUTE), Date.now());
     const check = checkLoginToken(entries, token);
@@ -142,9 +150,9 @@ async function forgetLoginToken(rawUsername: string, token: string): Promise<voi
   }
   try {
     // Only a token the account holds causes a write, so made-up requests cost nothing.
-    const save = GameConstants.PLAYER_PERSISTENCE.load(username, profile);
+    const save = GameConstants.PLAYER_PERSISTENCE.load(owner, profile);
     if (!save || checkLoginToken(readLoginTokens(save.attributes?.[LOGIN_TOKENS_ATTRIBUTE], Date.now()), token).kind !== "valid") return;
-    await GameConstants.PLAYER_PERSISTENCE.updateOffline(username, (stored) => {
+    await GameConstants.PLAYER_PERSISTENCE.updateOffline(owner, (stored) => {
       const entries = readLoginTokens(stored.attributes?.[LOGIN_TOKENS_ATTRIBUTE], Date.now());
       const check = checkLoginToken(entries, token);
       if (check.kind !== "valid") return;

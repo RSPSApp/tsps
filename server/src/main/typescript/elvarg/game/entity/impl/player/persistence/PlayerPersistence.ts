@@ -72,18 +72,32 @@ export abstract class PlayerPersistence {
 
     /**
      * A new password for the account: the live character takes it (and signs out its remembered
-     * logins), its save is written, and the account's other character's save gets the same hash
-     * with its remembered logins signed out too, so the old password opens neither character.
+     * logins), and the account's credentials follow. A primary writes its own save and gets the
+     * same hash on its other profile's save; a non-primary's change goes straight into the
+     * primary's saves (both profiles), since the credentials live only there. Remembered logins
+     * are signed out on every save the hash lands on, so the old password opens nothing.
      */
     public async changePassword(player: Player, passwordHashWithSalt: string): Promise<void> {
         player.setPasswordHashWithSalt(passwordHashWithSalt);
+        const { Accounts } = require("../Accounts") as typeof import("../Accounts");
+        const account = Accounts.accountOf(player.getUsername());
+        const primary = account ? Accounts.primaryOf(account) : undefined;
+        if (account && primary && !Accounts.isPrimary(account, player.getUsername())) {
+            for (const profile of [MAIN_PROFILE, siblingProfile(MAIN_PROFILE)]) {
+                if (!this.exists(primary, profile)) continue;
+                await this.updateOffline(primary, (save) => this.replaceCredentials(save, passwordHashWithSalt), "password-change", profile, { evenIfOnline: true });
+            }
+            return;
+        }
         this.requestSave(player, "password-change");
         const other = siblingProfile(player.getProfile());
         if (!this.exists(player.getUsername(), other)) return;
-        await this.updateOffline(player.getUsername(), (save) => {
-            save.setPasswordHashWithSalt(passwordHashWithSalt);
-            save.attributes = { ...(save.attributes ?? {}), [LOGIN_TOKENS_ATTRIBUTE]: [] };
-        }, "password-change", other, { evenIfOnline: true });
+        await this.updateOffline(player.getUsername(), (save) => this.replaceCredentials(save, passwordHashWithSalt), "password-change", other, { evenIfOnline: true });
+    }
+
+    private replaceCredentials(save: PlayerSave, passwordHashWithSalt: string): void {
+        save.setPasswordHashWithSalt(passwordHashWithSalt);
+        save.attributes = { ...(save.attributes ?? {}), [LOGIN_TOKENS_ATTRIBUTE]: [] };
     }
 
     /** Snapshot after the current operation finishes; overlapping triggers share one write. */

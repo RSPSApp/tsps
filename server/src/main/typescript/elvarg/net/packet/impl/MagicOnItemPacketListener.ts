@@ -190,12 +190,13 @@ export class MagicOnItemPacketListener {
     // The item comes away when the projectile lands, not on the cast; the grab doesn't stall the
     // player, and anyone can still take the item first.
     const listener = this;
+    const casterFloor = player.getLocation().getZ();
     TaskManager.submit(new class extends Task {
       // Not keyed to the player, so walking off or clicking doesn't cancel a grab already flying.
       constructor() { super(Math.ceil(MagicOnItemPacketListener.TELEKINETIC_GRAB_LANDS_CYCLES / 30), false); }
       execute(): void {
         this.stop();
-        listener.landGroundItemGrab(player, groundItemId, position);
+        listener.landGroundItemGrab(player, groundItemId, position, casterFloor);
       }
     });
   }
@@ -215,19 +216,21 @@ export class MagicOnItemPacketListener {
     }
     return CrossFloor.visible(
       player.getLocation(), position, MagicOnItemPacketListener.TELEKINETIC_GRAB_RANGE,
-      player.getPrivateArea?.() ?? null,
     );
   }
 
   /** The telegrab projectile has landed: the item is taken if it is still there. */
-  private landGroundItemGrab(player: any, groundItemId: number, position: Location): void {
+  private landGroundItemGrab(player: any, groundItemId: number, position: Location, casterFloor = position.getZ()): void {
     if (!player.isRegistered?.() || player.getHitpoints?.() <= 0) {
       return;
     }
-    if (!this.withinTelegrabRange(player, position)) {
+    if (casterFloor === position.getZ()
+      ? player.getLocation().getZ() !== casterFloor
+      : !this.withinTelegrabRange(player, position)) {
       player.sendMessage("Your telegrab fizzles as you move too far away.");
       return;
     }
+    player.getSkillManager().addExperiences(Skill.MAGIC, MagicOnItemPacketListener.TELEKINETIC_GRAB_XP);
     const groundItem = this.findVisibleGroundItem(player, groundItemId, position.getX(), position.getY());
     if (!groundItem) {
       player.sendMessage("Too late - it's gone!");
@@ -235,7 +238,6 @@ export class MagicOnItemPacketListener {
     }
     if (!this.canGrabGroundItem(player, groundItem)) return;
     if (ItemOnGroundManager.transferToInventory(player, groundItem, "telegrab") <= 0) return;
-    player.getSkillManager().addExperiences(Skill.MAGIC, MagicOnItemPacketListener.TELEKINETIC_GRAB_XP);
     PluginManager.emitCustomEvent("magic:telekinetic-grab", { player, itemId: groundItemId, position });
   }
 
@@ -430,7 +432,7 @@ export class MagicOnItemPacketListener {
       if (item.getPrivateArea?.() !== player.getPrivateArea?.()) {
         return false;
       }
-      if (!CrossFloor.visible(player.getLocation(), position, 64, player.getPrivateArea?.() ?? null)) return false;
+      if (!CrossFloor.visible(player.getLocation(), position, 64)) return false;
       if (item.getState?.() === State.SEEN_BY_PLAYER && item.getOwner?.() !== player.getUsername?.()) {
         return false;
       }

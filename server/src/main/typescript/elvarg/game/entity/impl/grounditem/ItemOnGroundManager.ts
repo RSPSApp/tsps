@@ -368,7 +368,7 @@ export class ItemOnGroundManager {
         const itemLocation = item.getPosition();
         const playerLocation = player.getLocation();
         if (item.getPrivateArea() !== player.getPrivateArea()
-            || !CrossFloor.visible(playerLocation, itemLocation, 64, player.getPrivateArea())) return false;
+            || !CrossFloor.visible(playerLocation, itemLocation, 64)) return false;
         if (item.getState() === State.SEEN_BY_PLAYER) return this.isOwner(player.getUsername(), item);
         return this.isOwner(player.getUsername(), item)
             || item.isStaticSpawn()
@@ -380,8 +380,8 @@ export class ItemOnGroundManager {
     public static canInteract(player: Player, item: ItemOnGround, source: "pickup" | "telegrab" = "pickup"): boolean {
         if (!item) return false;
         if (source === "pickup" && item.getPosition().getZ() !== player.getLocation().getZ()) return false;
-        const reach = source === "telegrab" ? 10 : 64;
-        return CrossFloor.visible(player.getLocation(), item.getPosition(), reach, player.getPrivateArea()) &&
+        const reach = source === "telegrab" && item.getPosition().getZ() !== player.getLocation().getZ() ? 10 : 64;
+        return CrossFloor.visible(player.getLocation(), item.getPosition(), reach) &&
             this.canSee(player, item);
     }
 

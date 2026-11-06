@@ -205,14 +205,14 @@ export class Projectile {
             const viewer = sameArea ? player.getLocation() : BoatManager.rootLocation(player);
             // Seen as far as NPCs are: an area that widens that shows their projectiles too.
             const range = Math.max(15, player.getNpcViewDistance?.() ?? 15);
-            if (!CrossFloor.projectileVisible(viewer, this.start, range, player.getPrivateArea())) {
+            if (!CrossFloor.projectileVisible(viewer, this.start, range)) {
                 skippedView++;
                 return;
             }
             if (
                 this.lockon &&
                 typeof this.lockon.getLocation === "function" &&
-                !CrossFloor.projectileVisible(viewer, sameArea ? this.lockon.getLocation() : BoatManager.rootLocation(this.lockon), range, player.getPrivateArea())
+                !CrossFloor.projectileVisible(viewer, sameArea ? this.lockon.getLocation() : BoatManager.rootLocation(this.lockon), range)
             ) {
                 skippedTargetView++;
                 return;

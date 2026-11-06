@@ -5,7 +5,6 @@ import { Location } from "../../../model/Location";
 import { GameObject } from "./GameObject";
 import { MapObjects } from "./MapObjects";
 import { PluginContext } from "../../../../plugins/PluginContext";
-import { CrossFloor } from "../../../CrossFloor";
 
 import type { PrivateArea } from "../../../model/areas/impl/PrivateArea";
 export class ObjectManager {
@@ -202,19 +201,11 @@ export class ObjectManager {
                         || location.getY() < baseY || location.getY() >= baseY + this.SCENE_SIZE) {
                         continue;
                     }
-                    if (location.getZ() !== player.getLocation().getZ()
-                        && !CrossFloor.visible(player.getLocation(), location, 52, player.getPrivateArea())) {
-                        continue;
-                    }
                     this.sendShown(player, object);
                 }
             }
         }
         for (const object of MapObjects.ownerObjectsInScene(player, baseX, baseY, this.SCENE_SIZE)) {
-            if (object.getLocation().getZ() !== player.getLocation().getZ()
-                && !CrossFloor.visible(player.getLocation(), object.getLocation(), 52, player.getPrivateArea())) {
-                continue;
-            }
             player.getPacketSender().sendObject(object);
         }
     }

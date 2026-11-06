@@ -252,7 +252,7 @@ export class NpcSpawnDefinitionLoader extends DefinitionLoader {
                         for (const definition of pending) {
                             const spawnPosition = definition.getPosition();
                             const activationRange = viewDistance + (definition.getRadius() ?? NpcSpawnDefinitionLoader.DEFAULT_WANDER_RADIUS);
-                            if (Math.max(
+                            if (level !== location.getZ() && Math.max(
                                 Math.abs(spawnPosition.getX() - location.getX()),
                                 Math.abs(spawnPosition.getY() - location.getY()),
                             ) > activationRange) {

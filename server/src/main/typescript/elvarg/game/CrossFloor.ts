@@ -1,5 +1,4 @@
 import type { Location } from "./model/Location";
-import type { PrivateArea } from "./model/areas/impl/PrivateArea";
 
 /** Optional cross-floor visibility and ranged combat. Read after environment setup. */
 export class CrossFloor {
@@ -26,7 +25,7 @@ export class CrossFloor {
         return CrossFloor.combatEnabled() && a.getZ() >= 0 && a.getZ() < 4 && b.getZ() >= 0 && b.getZ() < 4;
     }
     /** Render entities on the viewer's floor and below it; do not estimate roof occlusion server-side. */
-    static visible(viewer: Location, target: Location, range: number, _privateArea: PrivateArea | null = null): boolean {
+    static visible(viewer: Location, target: Location, range: number): boolean {
         if (viewer.getZ() === target.getZ()) return CrossFloor.distance(viewer, target) <= range;
         if (!CrossFloor.enabled() || viewer.getZ() < 0 || viewer.getZ() >= 4 || target.getZ() < 0 || target.getZ() >= 4) {
             return false;
@@ -34,7 +33,7 @@ export class CrossFloor {
         return target.getZ() < viewer.getZ() && CrossFloor.distance(viewer, target) <= range;
     }
 
-    static projectileVisible(viewer: Location, target: Location, range: number, privateArea: PrivateArea | null = null): boolean {
+    static projectileVisible(viewer: Location, target: Location, range: number): boolean {
         if (viewer.getZ() === target.getZ()) return CrossFloor.distance(viewer, target) <= range;
         return CrossFloor.canCross(viewer, target) && CrossFloor.distance(viewer, target) <= range;
     }

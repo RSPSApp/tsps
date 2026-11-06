@@ -1367,7 +1367,7 @@ module.exports = {
       }
       player.moveTo(current.clone().setZ(current.getZ() + 1));
       return true;
-    }, PlayerRights.DEVELOPER, "Move up one plane at the same coordinates");
+    }, PlayerRights.OWNER, "Move up one plane at the same coordinates");
 
     api.registerCommand("down", ({ player }) => {
       const current = player.getLocation();
@@ -1377,7 +1377,7 @@ module.exports = {
       }
       player.moveTo(current.clone().setZ(current.getZ() - 1));
       return true;
-    }, PlayerRights.DEVELOPER, "Move down one plane at the same coordinates");
+    }, PlayerRights.OWNER, "Move down one plane at the same coordinates");
 
     api.registerCommand("save", ({ player }) => {
       GameConstants.PLAYER_PERSISTENCE.save(player);

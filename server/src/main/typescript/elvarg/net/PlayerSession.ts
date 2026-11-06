@@ -166,7 +166,7 @@ export class PlayerSession {
     if (level === this.replayedSceneLevel) return true;
     const player = this.player;
     return !!player && CrossFloor.visible(
-      player.getLocation(), new Location(x, y, level), 52, player.getPrivateArea(),
+      player.getLocation(), new Location(x, y, level), 52,
     );
   }
 

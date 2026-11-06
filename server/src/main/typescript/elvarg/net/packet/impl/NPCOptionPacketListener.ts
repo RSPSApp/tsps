@@ -48,7 +48,7 @@ export class NPCOptionPacketListener {
     // in a deck scene; range must be measured root-to-root.
     const playerRoot = BoatManager.rootLocation(player);
     const npcRoot = BoatManager.rootLocation(npc);
-    if (!CrossFloor.visible(playerRoot, npcRoot, 24, player.getPrivateArea?.() ?? null)) { trace("DROPPED: >24 tiles", npc); return; }
+    if (!CrossFloor.visible(playerRoot, npcRoot, 24)) { trace("DROPPED: >24 tiles", npc); return; }
 
     const definition = npc.getCurrentDefinition(player);
     const option = definition?.getActions()?.[clickType - 1]?.toLowerCase();
@@ -170,7 +170,7 @@ export class NPCOptionPacketListener {
     if (!resolution.spell && selection) PluginManager.emitCustomEvent("magic:resolve-spell", resolution);
     const spell = resolution.spell;
     if (!npc || !spell || !CrossFloor.visible(
-      BoatManager.rootLocation(player), BoatManager.rootLocation(npc), 24, player.getPrivateArea?.() ?? null,
+      BoatManager.rootLocation(player), BoatManager.rootLocation(npc), 24,
     ) || npc.getHitpoints?.() <= 0) {
       player.getMovementQueue().reset();
       return false;

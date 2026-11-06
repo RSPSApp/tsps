@@ -4,6 +4,7 @@
  * partial-withdrawal precedent; the precise sequence and payment-source priority are unverified. */
 const Lair = require("./Lair.Mimic");
 const StorageDeaths = require("../../items/storage/Events.StorageItems");
+const Fees = require("../../world/gravestones/Fees.Gravestones");
 
 const ATTR = "mimic:retrieval";
 const OWNER = "mimic";
@@ -13,6 +14,7 @@ const INV = 525;
 const SLOTS = 120;
 const IF1 = { unpaid: 17, paid: 18, empty: -1 };
 const MAIN_MODAL_OPEN = 2524;
+const PAID_SCRIPT = 3478;
 const MODAL = 0;
 const TAKE_OP = 2;
 const EXAMINE_OP = 10;
@@ -115,8 +117,9 @@ function open(player) {
 }
 
 /**
- * Coffer first; the remainder comes from one covered source. Bank, carried, then stored coins is a
- * TSPS choice: the available sources do not establish that priority. Preflight before any debit.
+ * The coffer pays first, including a partial balance; the shared fee service then chooses an
+ * inventory or bank balance covering the rest, with stored coins as the last fallback. UIMs use
+ * only carried or stored coins. The priority of the non-coffer sources is a TSPS choice.
  */
 function pay(player, lot) {
   const state = { player, coffer: 0, ironman: null };
@@ -132,38 +135,80 @@ function pay(player, lot) {
   const tab = ultimate ? null : core.Bank.getTabForItem(player, coins);
   const bank = tab == null || tab < 0 ? null : player.getBank(tab);
   const inventory = player.getInventory();
-  const heldCoins = lot.items.filter((entry) => entry && entry.id === coins).reduce((sum, entry) => sum + entry.amount, 0);
-  const source = remainder > 0 && bank && bank.getAmount(coins) >= remainder ? bank
-    : remainder > 0 && inventory.getAmount(coins) >= remainder ? inventory : null;
-  if (remainder > 0 && !source && heldCoins < remainder) {
+  const heldCoins = () => lot.items.filter((entry) => entry && entry.id === coins).reduce((sum, entry) => sum + entry.amount, 0);
+  const hasExternal = inventory.getAmount(coins) >= remainder || (bank && bank.getAmount(coins) >= remainder);
+  if (remainder > 0 && !hasExternal && heldCoins() < remainder) {
     player.sendMessage(MESSAGE.cannotPay);
     return false;
   }
-  if (coffer > 0) {
-    const debit = { player, amount: -coffer, ok: false };
-    api.emitCustomEvent("gravestones:coffer-adjust", debit);
-    if (!debit.ok) return false;
-  }
-  const refundCoffer = () => {
-    if (coffer > 0) api.emitCustomEvent("gravestones:coffer-adjust", { player, amount: coffer, ok: false });
+  const debits = [];
+  const messages = [];
+  let paymentFailed = false;
+  const undo = () => {
+    while (debits.length > 0) {
+      const debit = debits.pop();
+      if (debit.source === "coffer") {
+        const refund = { player, amount: debit.amount, ok: false };
+        api.emitCustomEvent("gravestones:coffer-adjust", refund);
+        if (!refund.ok) throw new Error("Mimic retrieval could not restore a coffer payment");
+      }
+      else {
+        const container = debit.source === "bank" ? bank : inventory;
+        const before = container.getAmount(coins);
+        container.add(new core.Item(coins, debit.amount), false);
+        if (container.getAmount(coins) - before !== debit.amount) throw new Error("Mimic retrieval could not restore a coin payment");
+        container.refreshItems();
+      }
+    }
   };
-  // Coffer observers run synchronously. Do not spend a stale lot or a changed source afterward.
-  if (!active() || (source && source.getAmount(coins) < remainder)) {
-    refundCoffer();
+  const sharedPay = (amount) => {
+    const beforeState = { player, coffer: 0 };
+    api.emitCustomEvent("gravestones:state", beforeState);
+    if (!active()) return null;
+    const before = { coffer: beforeState.coffer, inventory: inventory.getAmount(coins), bank: bank?.getAmount(coins) ?? 0 };
+    const request = { player, amount, office: false, source: null, message: null };
+    api.emitCustomEvent("gravestones:pay-fee", request);
+    if (request.source) {
+      const afterState = { player, coffer: 0 };
+      api.emitCustomEvent("gravestones:state", afterState);
+      const after = { coffer: afterState.coffer, inventory: inventory.getAmount(coins), bank: bank?.getAmount(coins) ?? 0 };
+      const taken = before[request.source] - after[request.source];
+      if (taken > 0) debits.push({ source: request.source, amount: taken });
+      if (taken !== amount) { paymentFailed = true; undo(); return null; }
+      if (request.message) messages.push(request.message);
+    }
+    return request.source;
+  };
+  if (coffer > 0 && (!active() || sharedPay(coffer) !== "coffer")) {
+    undo();
     return false;
   }
-  if (source) {
-    const original = source.getItems().map((item) => item?.clone?.() ?? item);
-    const before = source.getAmount(coins);
-    source.deleted(coins, remainder, false);
-    if (before - source.getAmount(coins) !== remainder) {
-      original.forEach((item, slot) => source.setItem(slot, item));
-      refundCoffer();
+  if (!active()) { undo(); return false; }
+  let external = false;
+  if (remainder > 0 && ultimate && inventory.getAmount(coins) >= remainder) {
+    const original = inventory.getItems().map(item => item?.clone?.() ?? item);
+    const before = inventory.getAmount(coins);
+    inventory.deleteNumber(coins, remainder);
+    external = before - inventory.getAmount(coins) === remainder;
+    if (!external) {
+      original.forEach((item, slot) => inventory.setItem(slot, item));
+      undo();
       return false;
     }
+    if (external) {
+      debits.push({ source: "inventory", amount: remainder });
+      messages.push(Fees.paymentMessage("inventory", remainder));
+      inventory.refreshItems();
+    }
+  } else if (remainder > 0 && !ultimate) {
+    external = !!sharedPay(remainder);
+  }
+  if (paymentFailed || !active() || (remainder > 0 && !external && heldCoins() < remainder)) {
+    undo();
+    return false;
   }
   const next = { ...lot, items: lot.items.map((entry) => entry ? { ...entry } : null), paid: true };
-  if (!source) {
+  if (remainder > 0 && !external) {
     let due = remainder;
     for (const entry of next.items) {
       if (!entry || entry.id !== coins || due <= 0) continue;
@@ -171,14 +216,21 @@ function pay(player, lot) {
       entry.amount -= taken;
       due -= taken;
     }
+    if (due !== 0) { undo(); return false; }
     next.items = next.items.map((entry) => entry && entry.amount > 0 ? entry : null);
+    messages.push(`Payment has been taken from your stored items: ${remainder.toLocaleString("en-GB")} x Coins`);
   }
   setHeld(player, next);
-  source?.refreshItems();
+  for (const message of messages) player.sendMessage(message);
+  const after = { player, coffer: 0 };
+  api.emitCustomEvent("gravestones:state", after);
+  const empty = !next.items.some(entry => entry && entry.amount > 0);
+  if ((held(player) !== next && !(empty && !held(player))) || player.__retrievalOwner !== OWNER || !isOpen(player)) return true;
   const sender = player.getPacketSender();
   sender.sendConfig(VARP.if1, held(player) ? IF1.paid : IF1.empty);
   sendContents(player, next);
-  sender.sendConfig(VARP.if2, ultimate ? 0 : Math.max(0, state.coffer - coffer));
+  sender.sendConfig(VARP.if2, ultimate ? 0 : Math.max(0, after.coffer || 0));
+  sender.sendInterfaceScript(PAID_SCRIPT, [FEE, ultimate ? 0 : Math.max(0, after.coffer || 0)]);
   return true;
 }
 

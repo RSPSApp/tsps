@@ -7,6 +7,10 @@ const { before, after, test } = require('node:test');
 const { Server } = require('../dist/Server');
 Server.installProductionPathResolver();
 const { CachePipeline } = require('../dist/game/cache/CachePipeline');
+const { CacheIndexDat2 } = require('../dist/game/cache/codec/rs/cache/CacheIndex');
+const { IndexType } = require('../dist/game/cache/codec/rs/cache/IndexType');
+require('ts-node').register({ transpileOnly: true, compilerOptions: { module: 'CommonJS', moduleResolution: 'Node', target: 'ES2020' } });
+const { readScript, hasLongCounts } = require('../scripts/cs2-reader');
 const { PluginManager } = require('../dist/plugins/PluginManager');
 const { PlayerDeathTask } = require('../dist/game/task/impl/PlayerDeath');
 const { Player } = require('../dist/game/entity/impl/player/Player');
@@ -30,10 +34,10 @@ before(async () => {
   require('../plugins/items/ItemDefinitionLoader.plugin').register({ log() {}, onPlayerLogin() {}, registerContentEndpoint() {} });
 });
 
-test('Mimic death uses its casket retrieval and stored payment, with a real loss producer', t => {
+for (const focus of ['entry', 'payment', 'coffer', 'rollback', 'short-debit', 'stale-stored', 'postcommit']) test(`Mimic retrieval feedback: ${focus} after a real death`, t => {
   const hooks = { drops: [], custom: new Map(), objects: new Map(), buttons: new Map(), keep: [], dropPolicy: [], logout: [] };
   let dropDispatches = 0, grave = null;
-  const scheduled = [], players = [], spawned = [], errors = [], grounds = [];
+  const scheduled = [], players = [], spawned = [], errors = [], grounds = [], feeRequests = [], messages = [], scripts = [];
   const original = new Map(['emitPlayerDeathDrops', 'emitShouldKeepItemOnDeath', 'emitShouldDropItemsOnDeath', 'emitPlayerDeath', 'emitPlayerDefeated'].map(k => [k, PluginManager[k]]));
   const submit = core.TaskManager.submit, ground = ItemOnGroundManager.registerLocation, error = console.error;
   const savedKeys = new Set(PlayerSave.persistentAttributeKeys), savedDefaults = new Map(PlayerSave.attributeDefaults);
@@ -47,6 +51,9 @@ test('Mimic death uses its casket retrieval and stored payment, with a real loss
         GameConstants.PLAYER_PERSISTENCE.cancelRequestedSave(player);
         player.getInventory().resetItems(); player.getEquipment().resetItems();
       }
+      // Run the real grave timer's empty-set cleanup after logout, before stopping tasks. Its
+      // module-level task sentinel otherwise survives into the next independent case.
+      for (const task of scheduled.filter(task => task.key === 'gravestones:timer')) task.execute();
       const queue = core.World.getRemoveNPCQueue();
       for (let i = queue.length - 1; i >= 0; i--) if (spawned.includes(queue[i])) queue.splice(i, 1);
       for (const task of scheduled) task.stop();
@@ -74,6 +81,12 @@ test('Mimic death uses its casket retrieval and stored payment, with a real loss
   assert.equal(core.CacheDefinitions.getEnumValues(1753).get(18), 'Things the Mimic rejected');
   assert.equal(core.CacheDefinitions.getEnumValues(1756).get(17), 995);
   assert.equal(core.CacheDefinitions.getEnumValues(1757).get(17), 90000);
+  const scriptIndex = CacheIndexDat2.fromStore(IndexType.DAT2.clientScript, CachePipeline.getStore());
+  const script = scriptIndex.getFileSmart(3478);
+  assert.ok(script?.data, 'active cache contains clientscript 3478');
+  const signature = readScript(new Int8Array(script.data), hasLongCounts(CachePipeline.getActive().revision)).header;
+  assert.equal(signature.intArgs, 2, 'active 3478 accepts the pinned fee and coffer arguments');
+  assert.equal(signature.objArgs, 0);
   core.TaskManager.submit = task => scheduled.push(task);
   ItemOnGroundManager.registerLocation = (_owner, item) => { grounds.push(item.clone()); return null; };
   console.error = (...args) => { errors.push(args.map(String)); error(...args); };
@@ -102,8 +115,14 @@ test('Mimic death uses its casket retrieval and stored payment, with a real loss
     onPlayerLogout: fn => hooks.logout.push(fn),
     onShouldDropItemsOnDeath: fn => hooks.dropPolicy.push(fn),
     onCustomEvent(name, fn) { const list = hooks.custom.get(name) ?? []; list.push(fn); hooks.custom.set(name, list); },
-    emitCustomEvent(name, payload) { for (const fn of hooks.custom.get(name) ?? []) fn(payload); },
+    emitCustomEvent(name, payload) {
+      for (const fn of hooks.custom.get(name) ?? []) fn(payload);
+      if (name === 'gravestones:pay-fee') feeRequests.push({ amount: payload.amount, source: payload.source });
+    },
     onObjectInteraction(name, ops) { hooks.objects.set(name, ops); },
+    onItemOnObject(item, object, fn) {
+      if (item === 'Mimic' && object === '<col=ffff00>Strange casket</col>') hooks.presentCasket = fn;
+    },
     onInterfaceActionButton(id, fn) { const list = hooks.buttons.get(id) ?? []; list.push(fn); hooks.buttons.set(id, list); },
   }, { get(target, key) { return key in target ? target[key] : () => {}; } });
   // Same registered callbacks as the plugins; adapter supplies sorted dispatch and no live World.
@@ -143,6 +162,7 @@ test('Mimic death uses its casket retrieval and stored payment, with a real loss
     if (key === 'sendConfig') return (id, value) => { varps.set(id, value); return sender; };
     if (key === 'sendInterfaceDisplayState') return (id, value) => { hidden.set(id, value); return sender; };
     if (key === 'sendString') return (value, id) => { strings.set(id, value); return sender; };
+    if (key === 'sendInterfaceScript') return (id, args) => { scripts.push([id, args]); return sender; };
     if (key === 'isSubInterfaceOpen') return id => opened && id === 602;
     if (key === 'sendSubInterface') return (_parent, id) => { opened = id === 602; return sender; };
     if (key === 'sendInterfaceRemoval') return () => { opened = false; return sender; };
@@ -177,7 +197,7 @@ test('Mimic death uses its casket retrieval and stored payment, with a real loss
   grave.despawn(ordinary);
 
   player.getPacketSender = () => sender;
-  player.sendMessage = () => {};
+  player.sendMessage = message => messages.push(message);
   player.isRegistered = () => true;
   player.moveTo = function (location) { this.setLocation(location); return this; };
   player.setUsername('mimic-retrieval-native');
@@ -186,12 +206,12 @@ test('Mimic death uses its casket retrieval and stored payment, with a real loss
   player.setSkullTimer(100);
   player.setHitpoints(10);
   player.getPrayerActive().fill(false);
-  iron.setMode(player, 'ultimate');
+  iron.setMode(player, focus === 'coffer' ? 'none' : 'ultimate');
   const casket = new Item(core.ItemIdentifiers.MIMIC, 1);
   const State = require('../plugins/bosses/mimic/State.Mimic');
   const entry = State.initialize(casket, 'elite', 5);
   player.getInventory().setItem(0, casket);
-  player.getInventory().setItem(1, new Item(core.ItemIdentifiers.COINS, 100000));
+  player.getInventory().setItem(1, new Item(core.ItemIdentifiers.COINS, focus === 'entry' ? 10000 : 100000));
   player.getInventory().setItem(2, new Item(core.ItemIdentifiers.ABYSSAL_WHIP, 1));
   const tackleId = core.CacheDefinitions.getObjId('tackle_box');
   assert.equal(tackleId, 25580);
@@ -211,7 +231,7 @@ test('Mimic death uses its casket retrieval and stored payment, with a real loss
   assert.equal(Lair.sessionOf(area).owner, player);
   assert.equal(require('../plugins/bosses/mimic/Challenge.Mimic').challenge({ player, npc: Lair.sessionOf(area).casket }), true);
   assert.equal(Lair.sessionOf(area).boss, Lair.sessionOf(area).casket);
-  assert.deepEqual(PlayerDeathTask.getItemsToKeep(player), [], 'registered UIM keep hook');
+  assert.deepEqual(PlayerDeathTask.getItemsToKeep(player), [], focus === 'coffer' ? 'skulled normal player keeps none' : 'registered UIM keep hook');
   const task = beginDeath(player);
   for (let tick = 0; tick < 5; tick++) task.execute();
   assert.equal(task.isStopped(), true);
@@ -219,7 +239,7 @@ test('Mimic death uses its casket retrieval and stored payment, with a real loss
   const lot = player.getAttribute('mimic:retrieval');
   assert.ok(lot && !lot.paid, 'unsafe Mimic death stores the actual loss at the casket');
   assert.equal(player.getAttribute('gravestones:grave') ?? null, null);
-  assert.equal(lot.items.reduce((n, row) => n + (row.id === core.ItemIdentifiers.COINS ? row.amount : 0), 0), 100000);
+  assert.equal(lot.items.reduce((n, row) => n + (row.id === core.ItemIdentifiers.COINS ? row.amount : 0), 0), focus === 'entry' ? 10000 : 100000);
   assert.ok(lot.items.some(row => row.id === core.ItemIdentifiers.MIMIC && row.meta['mimic-rolls'].id === entry.id));
   assert.ok(lot.items.some(row => row.id === core.ItemIdentifiers.ABYSSAL_WHIP));
   assert.ok(lot.items.some(row => row.id === tackleId), 'untradeable tackle box enters retrieval');
@@ -235,6 +255,42 @@ test('Mimic death uses its casket retrieval and stored payment, with a real loss
   assert.deepEqual(storage.contents(loaded, family), [{ id: core.ItemIdentifiers.FISHING_BAIT, amount: 100 }]);
   area.leave(player, false); // adapter for area exit after the completed death callback
   assert.equal(player.getAttribute(State.LEDGER_ATTRIBUTE)[entry.id].rolls, 4);
+  if (focus === 'entry') {
+    // The lot has only 10k and a UIM cannot use bank/coffer. A separate casket is presented
+    // through the registered item-on-object callback; the actual dialogue leads to a real session.
+    const another = new Item(core.ItemIdentifiers.MIMIC, 1);
+    State.initialize(another, 'elite', 5);
+    player.getInventory().setItem(0, another);
+    assert.equal(hooks.objects.get('<col=ffff00>Strange casket</col>').Search({ player }), true);
+    assert.equal(varps.get(core.CacheDefinitions.getVarpId('if1')), 17, 'Search still opens the unpaid lot');
+    sender.sendInterfaceRemoval();
+    assert.equal(typeof hooks.presentCasket, 'function');
+    assert.equal(hooks.presentCasket({ player, item: another, itemId: another.getId(), objectId: 34733 }), true);
+    const dialogue = player.getDialogueManager();
+    assert.equal(dialogue.isActive(), true, 'presenting a casket offers the fight despite an unpaid lot');
+    dialogue.advance();
+    const options = dialogue.getCurrent();
+    assert.deepEqual(options.getOptions(), ['Fight the Mimic', 'Come back later']);
+    assert.equal(dialogue.handleResume(core.OptionDialogue.OPTIONS_WIDGET_ID, 1), true);
+    dialogue.advance();
+    assert.equal(Lair.sessionOf(player.getArea())?.owner, player, 'fight selection enters a new real Mimic session');
+    assert.deepEqual(player.getAttribute('mimic:retrieval'), lot, 'starting a fight does not consume the old lot');
+    return;
+  }
+  if (focus === 'coffer') {
+    const credit = { player, amount: 100000, ok: false };
+    api.emitCustomEvent('gravestones:coffer-adjust', credit);
+    assert.equal(credit.ok, true);
+    assert.equal(hooks.objects.get('<col=ffff00>Strange casket</col>').Search({ player }), true);
+    const payButtons = hooks.buttons.get(core.CacheDefinitions.getComponentId('gravestone_retrieval:button'));
+    for (const fn of payButtons) fn({ player });
+    assert.equal(player.getAttribute('mimic:retrieval').paid, true);
+    assert.equal(player.getAttribute('gravestones:coffer'), 10000);
+    assert.equal(player.getAttribute('mimic:retrieval').items.find(row => row?.id === core.ItemIdentifiers.COINS).amount, 100000);
+    assert.ok(scripts.some(([id, args]) => id === 3478 && args[0] === 90000 && args[1] === 10000),
+      'paid script receives the nonzero remaining coffer');
+    return;
+  }
   varps.set(core.CacheDefinitions.getVarpId('if3'), 1); // prior shared retrieval interface state
   assert.equal(hooks.objects.get('<col=ffff00>Strange casket</col>').Search({ player }), true);
   assert.equal(varps.get(core.CacheDefinitions.getVarpId('if3')), 0, 'unsupported Bank-All is not exposed');
@@ -263,7 +319,7 @@ test('Mimic death uses its casket retrieval and stored payment, with a real loss
   assert.ok(recoveredTackle);
   player.getInventory().resetItems();
   player.getInventory().setItem(0, recoveredCasket);
-  player.getInventory().setItem(1, new Item(core.ItemIdentifiers.COINS, 10000));
+  player.getInventory().setItem(1, new Item(core.ItemIdentifiers.COINS, focus === 'stale-stored' ? 60000 : 10000));
   player.getInventory().setItem(2, new Item(core.ItemIdentifiers.ABYSSAL_WHIP, 1));
   player.getInventory().setItem(3, new Item(core.ItemIdentifiers.RUNE_DEFENDER, 1));
   player.getInventory().setItem(4, recoveredTackle);
@@ -291,14 +347,78 @@ test('Mimic death uses its casket retrieval and stored payment, with a real loss
   hooks.objects.get('<col=ffff00>Strange casket</col>').Search({ player });
   assert.equal(varps.get(core.CacheDefinitions.getVarpId('if1')), 17);
   assert.equal(varps.get(core.CacheDefinitions.getVarpId('if2')), 30000, 'actual coffer balance displayed');
+  if (focus === 'stale-stored') {
+    const paidScripts = scripts.filter(([id]) => id === 3478).length;
+    const observers = hooks.custom.get('gravestones:pay-fee');
+    const changeStored = request => {
+      if (request.player === player && request.amount === 30000) {
+        player.getAttribute('mimic:retrieval').items.find(row => row?.id === core.ItemIdentifiers.COINS).amount = 0;
+      }
+    };
+    observers.push(changeStored);
+    for (const fn of button) fn({ player });
+    observers.splice(observers.indexOf(changeStored), 1);
+    assert.equal(player.getAttribute('mimic:retrieval').paid, false, 'changed held funds cannot complete the fee');
+    assert.equal(player.getAttribute('gravestones:coffer'), 30000, 'coffer debit was restored');
+    assert.equal(scripts.filter(([id]) => id === 3478).length, paidScripts);
+    return;
+  }
   const beforeShortfall = structuredClone(secondLot);
   for (const fn of button) fn({ player });
   assert.deepEqual(player.getAttribute('mimic:retrieval'), beforeShortfall, 'shortfall leaves lot untouched');
   assert.equal(player.getAttribute('gravestones:coffer'), 30000, 'shortfall does not debit coffer');
   player.getBank(0).add(new Item(core.ItemIdentifiers.COINS, 60000), false);
+  if (focus === 'postcommit') {
+    const paidScripts = scripts.filter(([id]) => id === 3478).length;
+    const observers = hooks.custom.get('gravestones:state');
+    const switchAfterCommit = request => {
+      if (request.player === player && player.getAttribute('mimic:retrieval')?.paid) player.__retrievalOwner = 'other-service';
+    };
+    observers.push(switchAfterCommit);
+    for (const fn of button) fn({ player });
+    observers.splice(observers.indexOf(switchAfterCommit), 1);
+    assert.equal(player.getAttribute('mimic:retrieval').paid, true, 'the funded payment was committed');
+    assert.equal(player.__retrievalOwner, 'other-service');
+    assert.equal(varps.get(core.CacheDefinitions.getVarpId('if1')), 17, 'do not paint stale paid state over the new owner');
+    assert.equal(scripts.filter(([id]) => id === 3478).length, paidScripts);
+    return;
+  }
+  if (focus === 'rollback') {
+    // A synchronous fee observer switches the shared interface owner after the second debit.
+    // Both real source balances and the original lot must be restored before returning.
+    const oldLot = structuredClone(player.getAttribute('mimic:retrieval'));
+    const paidScripts = scripts.filter(([id]) => id === 3478).length;
+    const observers = hooks.custom.get('gravestones:pay-fee');
+    const switchOwner = request => { if (request.player === player && request.amount === 60000) player.__retrievalOwner = 'other-service'; };
+    observers.push(switchOwner);
+    for (const fn of button) fn({ player });
+    observers.splice(observers.indexOf(switchOwner), 1);
+    assert.deepEqual(player.getAttribute('mimic:retrieval'), oldLot, 'changed owner cannot commit a paid lot');
+    assert.equal(player.getAttribute('gravestones:coffer'), 30000, 'coffer refund receipt');
+    assert.equal(player.getBank(0).getAmount(core.ItemIdentifiers.COINS), 60000, 'bank refund receipt');
+    assert.equal(scripts.filter(([id]) => id === 3478).length, paidScripts, 'aborted payment does not refresh another service');
+    return;
+  }
+  if (focus === 'short-debit') {
+    // A container that removes one coin too few must not turn a partial debit into a paid lot.
+    const oldLot = structuredClone(player.getAttribute('mimic:retrieval'));
+    const bank = player.getBank(0), deleted = bank.deleted;
+    bank.deleted = function (id, amount, refresh) { return deleted.call(this, id, amount - 1, refresh); };
+    try { for (const fn of button) fn({ player }); } finally { bank.deleted = deleted; }
+    assert.deepEqual(player.getAttribute('mimic:retrieval'), oldLot);
+    assert.equal(player.getAttribute('gravestones:coffer'), 30000);
+    assert.equal(bank.getAmount(core.ItemIdentifiers.COINS), 60000);
+    return;
+  }
   for (const fn of button) fn({ player });
   const secondPaid = player.getAttribute('mimic:retrieval');
   assert.equal(secondPaid.paid, true);
+  assert.deepEqual(feeRequests.slice(-2), [{ amount: 30000, source: 'coffer' }, { amount: 60000, source: 'bank' }],
+    'partial coffer and remaining bank payment use the shared fee service');
+  assert.ok(messages.some(text => text.includes("Death's Coffer") && text.includes('30,000')));
+  assert.ok(messages.some(text => text.includes('your bank') && text.includes('60,000')));
+  assert.ok(messages.some(text => text.includes('your stored items') && text.includes('90,000')));
+  assert.ok(scripts.some(([id, args]) => id === 3478 && args[0] === 90000 && args[1] === 0), 'paid interface script');
   assert.equal(player.getAttribute('gravestones:coffer') ?? 0, 0);
   assert.equal(varps.get(core.CacheDefinitions.getVarpId('if2')), 0);
   assert.equal(player.getBank(0).getAmount(core.ItemIdentifiers.COINS), 0);
@@ -354,7 +474,7 @@ test('Mimic death uses its casket retrieval and stored payment, with a real loss
   // Simultaneous victory uses the registered reward callback; the NPC is an adapter, not full combat.
   const simultaneous = new Player(null, new Location(1645, 3570, 1));
   players.push(simultaneous);
-  simultaneous.getPacketSender = () => sender; simultaneous.sendMessage = () => {};
+  simultaneous.getPacketSender = () => sender; simultaneous.sendMessage = text => messages.push(text);
   simultaneous.isRegistered = () => true;
   simultaneous.moveTo = function (location) { this.setLocation(location); return this; };
   simultaneous.setUsername('simultaneous-mimic'); simultaneous.setRights(PlayerRights.NONE);
@@ -383,7 +503,10 @@ test('Mimic death uses its casket retrieval and stored payment, with a real loss
   for (let slot = 0; slot < 27; slot++) simultaneous.getInventory().setItem(slot, new Item(core.ItemIdentifiers.RUNE_SCIMITAR, 1));
   simultaneous.getInventory().setItem(27, new Item(core.ItemIdentifiers.COINS, 90000));
   hooks.objects.get('<col=ffff00>Strange casket</col>').Search({ player: simultaneous });
+  const sharedBeforeUim = feeRequests.length;
   for (const fn of button) fn({ player: simultaneous });
+  assert.equal(feeRequests.length, sharedBeforeUim, 'UIM carried payment does not consult the shared bank/coffer path');
+  assert.ok(messages.some(text => text.includes('your inventory') && text.includes('90,000')));
   assert.equal(simultaneous.getInventory().getAmount(core.ItemIdentifiers.COINS), 0);
   assert.equal(simultaneous.getInventory().getFreeSlots(), 1, 'paying from carried coins makes room');
   assert.equal(simultaneous.getAttribute('mimic:retrieval').paid, true);

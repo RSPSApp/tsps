@@ -305,6 +305,7 @@ import { headingIndicator } from "./sailing/HeadingIndicator";
 import { retryOnMissingGroup } from "../rs/cache/js5/retryOnMissingGroup";
 import type { GraphicsDefaults } from "../rs/config/defaults/GraphicsDefaults";
 import { interactionModes } from "./InteractionModes";
+import { npcOpsVisibility } from "./NpcOpsVisibility";
 import { RuneLite } from "../runelite/client/RuneLite";
 import { notifyActorGraphic, notifyActorHitsplat, notifyActorHealth } from "./ActorEventHooks";
 import { dispatchMenuAction, menuClickListeners, type MenuActionData } from "../ui/menu/menuEvents";
@@ -8612,6 +8613,7 @@ export class OsrsClient {
             }
             // Live sets walk again before every logout; a dropped connection doesn't get that far.
             interactionModes.clear();
+            npcOpsVisibility.clear();
 
             // Clear the last account's varps and transient varcs, keeping persistent client
             // preferences loaded: the next login only sends its non-zero varps, so anything

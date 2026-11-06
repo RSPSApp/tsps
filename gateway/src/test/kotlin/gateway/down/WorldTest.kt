@@ -6,6 +6,7 @@ import gateway.tsps.TspsServerPacket
 import gateway.tsps.TspsWriter
 import net.rsprot.protocol.game.outgoing.camera.CamMoveToCyclesV3
 import net.rsprot.protocol.game.outgoing.camera.util.CameraEaseFunction
+import net.rsprot.protocol.game.outgoing.misc.client.HideNpcOps
 import net.rsprot.protocol.game.outgoing.misc.client.HintArrow
 import net.rsprot.protocol.game.outgoing.sound.SynthSound
 import net.rsprot.protocol.game.outgoing.specific.ProjAnimSpecificV4
@@ -80,6 +81,13 @@ class WorldTest {
         boats.handle(packet(TspsServerPacket.SET_INTERACTION_MODE, TspsWriter().u16(3999).u8(1).u8(1)))
         // tsps's 3000+ would be out of the client's range; -2 is the client's own; an unknown boat is dropped.
         assertEquals(listOf(WORLD, -2), sent.map { (it as SetInteractionMode).worldId })
+    }
+
+    @Test
+    fun `hide npc ops maps its global boolean to the native packet`() {
+        world.handle(packet(TspsServerPacket.HIDE_NPC_OPS, TspsWriter().u8(1)))
+        world.handle(packet(TspsServerPacket.HIDE_NPC_OPS, TspsWriter().u8(0)))
+        assertEquals(listOf(true, false), sent.map { (it as HideNpcOps).hidden })
     }
 
     @Test

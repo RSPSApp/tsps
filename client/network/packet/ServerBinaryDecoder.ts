@@ -1693,6 +1693,10 @@ export function decodeServerPacket(data: Uint8Array | ArrayBuffer): DecodedServe
             return { type: "reset_interaction_mode", payload: { worldId: reader.readSignedShort() } };
         }
 
+        case ServerPacketId.HIDE_NPC_OPS: {
+            return { type: "hide_npc_ops", payload: { hidden: (reader.readByte() & 0xff) !== 0 } };
+        }
+
         case ServerPacketId.LOC_ANIM: {
             const locId = reader.readShort();
             const tile = { x: reader.readShort(), y: reader.readShort() };

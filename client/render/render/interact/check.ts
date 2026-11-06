@@ -49,6 +49,7 @@ import { NpcDrawPriority, NpcType } from "../../../rs/config/npctype/NpcType";
 import { PlayerAppearance } from "../../../rs/config/player/PlayerAppearance";
 import { PlayerModelLoader } from "../../../rs/config/player/PlayerModelLoader";
 import { decodeInteractionIndex } from "../../../rs/interaction/InteractionIndex";
+import { npcExamineVisibleWhileHidden, npcOpsVisibility } from "../../../game/NpcOpsVisibility";
 import { getMapIndexFromTile, getMapPlaneId, getMapSquareId } from "../../../rs/map/MapFileIndex";
 import { Model } from "../../../rs/model/Model";
 import { ModelData } from "../../../rs/model/ModelData";
@@ -698,6 +699,24 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
                         mapX: localX,
                         mapY: localY,
                     });
+                }
+
+                // set_hide_npc_actions: no Use, Cast, actions or Attack; Examine stays unless a
+                // spell is selected or a low-priority follower already added it above.
+                if (npcOpsVisibility.hidden) {
+                    if (npcExamineVisibleWhileHidden(ClientState.isSpellSelected, isFollowerLowPriority)) {
+                        menuEntries.push({
+                            option: "Examine",
+                            targetId: npcType.id,
+                            targetType: MenuTargetType.NPC,
+                            npcServerId: sid | 0,
+                            targetName: npcType.name,
+                            targetLevel: npcType.combatLevel,
+                            mapX: localX,
+                            mapY: localY,
+                        });
+                    }
+                    return;
                 }
 
                 // Item selection: Use only (opcode 7), except follower examine above remains.

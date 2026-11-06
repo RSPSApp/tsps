@@ -99,3 +99,17 @@ test("with a preset and a plain whip held, only the plain one is sacrificed, eve
   assert.equal(amount(f.inv, I.ABYSSAL_WHIP, false), 0);
   assert.equal(amount(f.inv, I.ABYSSAL_WHIP, true), 1, "the preset whip is left alone");
 });
+
+test("a preset copy put in the selected slot after selecting is refused at Confirm", (t) => {
+  const f = actor(t);
+  const coffer = cofferHandlers();
+  f.inv.setItem(0, new core.Item(I.ABYSSAL_WHIP, 1));
+  const before = Common.state(f.p).coffer;
+  coffer.open(f.p);
+  coffer.select(f.p, 0);
+  f.inv.setItem(0, preset(new core.Item(I.ABYSSAL_WHIP, 1))); // swapped in while the coffer is open
+  coffer.confirm(f.p);
+  assert.equal(f.messages.at(-1), "You cannot trade that item to Death.");
+  assert.equal(Common.state(f.p).coffer, before);
+  assert.equal(amount(f.inv, I.ABYSSAL_WHIP, true), 1);
+});

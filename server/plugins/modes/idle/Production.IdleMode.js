@@ -389,7 +389,7 @@ function work(player, now) {
   if (missing !== null) {
     return pause(player, "out", `Idle production has paused: you're out of ${Common.itemName(missing).toLowerCase()}. Bank some more and ${verbs(target)[1]} one by hand to restart it.`);
   }
-  if (!Common.readyToWork(player)) return "busy";
+  if (!Common.mayWork(player)) return "busy";
   state.lastAttemptAt = now;
   const repeated = repeat(player, target);
   // A line's use opens no menu.

@@ -283,7 +283,7 @@ function fight(player, now) {
     player.sendMessage(`Idle combat has paused: your character can't get a fight with a ${target.name.toLowerCase()}. Kill one to restart it.`);
     return "paused";
   }
-  if (!Common.readyToWork(player)) return "busy";
+  if (!Common.mayWork(player)) return "busy";
   state.lastAttemptAt = now;
   state.lastNpc = npc;
   state.lastNpcFought = false;

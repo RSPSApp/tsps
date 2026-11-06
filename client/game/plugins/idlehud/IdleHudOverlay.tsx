@@ -34,17 +34,16 @@ export function IdleHudOverlay() {
 
     const stopped = state.paused !== null || !state.auto;
     const note = state.paused ? PAUSED[state.paused] ?? "parado" : !state.auto ? "retomada automática desligada" : null;
-    const open = () => sendChat("::idle", "public", 0);
 
     return (
-        <button
-            type="button"
-            className={`idle-hud${stopped ? " idle-hud--stopped" : ""}`}
-            onClick={open}
-            title="Abrir a tela do Idle"
-        >
+        <div className={`idle-hud${stopped ? " idle-hud--stopped" : ""}`}>
             <span className="idle-hud__edge" aria-hidden="true" />
-            <span className="idle-hud__body">
+            <button
+                type="button"
+                className="idle-hud__body"
+                onClick={() => sendChat("::idle", "public", 0)}
+                title="Abrir a tela do Idle"
+            >
                 <span className="idle-hud__line">
                     <span className="idle-hud__activity">{state.activity ?? "Nada escolhido ainda"}</span>
                     <span className="idle-hud__rate">{rate(state.xpPerHour)} xp/h</span>
@@ -56,7 +55,18 @@ export function IdleHudOverlay() {
                     <span>{note ?? `${state.nextPercent}% do próximo ponto`}</span>
                     <span className="idle-hud__points">{state.points.toLocaleString("pt-BR")} pts</span>
                 </span>
-            </span>
-        </button>
+            </button>
+            {/* Switching off used to mean opening the screen, which is exactly what a fight made
+                impossible. It belongs here, one click away and never covered by anything. */}
+            <button
+                type="button"
+                className="idle-hud__stop"
+                onClick={() => sendChat("::idle off", "public", 0)}
+                title="Desligar o Idle Mode"
+                aria-label="Desligar o Idle Mode"
+            >
+                <span aria-hidden="true">■</span>
+            </button>
+        </div>
     );
 }

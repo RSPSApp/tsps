@@ -1065,7 +1065,7 @@ const COMMON = "../plugins/modes/idle/Common.IdleMode";
 
 test("screen: a fight leaves the Idle screen alone", () => {
   const { GROUP_ID } = require(SCREEN);
-  const { readyToWork } = require(COMMON);
+  const { mayWork } = require(COMMON);
   const player = idlePlayer();
   api.command(player, "idle");
   assert.equal(player.getInterfaceId(), GROUP_ID);
@@ -1074,21 +1074,24 @@ test("screen: a fight leaves the Idle screen alone", () => {
   assert.ok(api.combatProofInterfaces.has(GROUP_ID), "the Idle screen survives being hit");
   assert.ok(api.combatProofInterfaces.has(require(TRAVEL_SCREEN).GROUP_ID), "and so does Travel");
 
-  // Mid-fight, closing the screen cannot free him, so the work must not close it for nothing.
+  // Mid-fight, being hit, or standing between kills: the screen is never in the way, and the
+  // work never closes it. Between kills is the one that mattered — it fires every few seconds
+  // while chickens die, which made the screen impossible to keep open and so to switch off from.
   player.isBusy = true;
-  player.combat = { getTarget: () => ({ name: "Chicken" }), getAttacker: () => null };
-  assert.equal(readyToWork(player), false);
-  assert.equal(player.getInterfaceId(), GROUP_ID, "the screen stayed open through the fight");
+  const fights = [
+    ["mid-fight", { getTarget: () => ({ name: "Chicken" }), getAttacker: () => null }],
+    ["being hit", { getTarget: () => null, getAttacker: () => ({ name: "Chicken" }) }],
+    ["between kills", { getTarget: () => null, getAttacker: () => null }],
+  ];
+  for (const [when, combat] of fights) {
+    player.combat = combat;
+    assert.equal(mayWork(player), true, `the work goes on ${when}`);
+    assert.equal(player.getInterfaceId(), GROUP_ID, `and the screen is still open ${when}`);
+  }
 
-  // A monster hitting him counts the same, even with no target of his own.
-  player.combat = { getTarget: () => null, getAttacker: () => ({ name: "Chicken" }) };
-  assert.equal(readyToWork(player), false);
-  assert.equal(player.getInterfaceId(), GROUP_ID);
-
-  // Out of the fight the screen is the one thing in the way, so it still closes for the work.
-  player.combat = { getTarget: () => null, getAttacker: () => null };
-  readyToWork(player);
-  assert.equal(player.getInterfaceId(), -1);
+  // Any other interface still stops the work, which is the half worth keeping.
+  player.setInterfaceId(12);
+  assert.equal(mayWork(player), false);
 });
 
 test("hud: the state is pushed to the client, and only when it changes", (t) => {
@@ -1812,7 +1815,7 @@ test("goals: a login on a new day says the day's goals", (t) => {
   assert.equal(player.messages.length, said, "the same day: not said again");
 });
 
-test("work: an open Idle screen is closed to go back to work; any other interface waits", (t) => {
+test("work: an open Idle screen does not stop the work; any other interface does", (t) => {
   const { GROUP_ID } = require(SCREEN);
   const { player, advance } = cookingShrimps(t);
   const { work } = require(PRODUCTION);
@@ -1823,8 +1826,8 @@ test("work: an open Idle screen is closed to go back to work; any other interfac
   assert.equal(player.getInterfaceId(), GROUP_ID);
   player.inventory = [new Item(SHRIMPS, 27)];
   advance(10_000);
-  assert.equal(work(player, Date.now()), "repeated", "the Idle screen gave way");
-  assert.equal(player.getInterfaceId(), -1);
+  assert.equal(work(player, Date.now()), "repeated", "the work carries on behind the screen");
+  assert.equal(player.getInterfaceId(), GROUP_ID, "and the screen is still there to watch it");
   player.setInterfaceId(12);
   player.inventory = [new Item(SHRIMPS, 27)];
   advance(10_000);

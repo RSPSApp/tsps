@@ -26,10 +26,6 @@
     pointer-events: auto;
 }
 
-.idle-hud:hover {
-    background: #332a20;
-}
-
 .idle-hud:focus-visible {
     outline: 2px solid #ffb02e;
     outline-offset: 2px;
@@ -53,6 +49,39 @@
     gap: 4px;
     padding: 7px 10px;
     min-width: 0;
+    font: inherit;
+    color: inherit;
+    text-align: left;
+    background: none;
+    border: 0;
+    cursor: pointer;
+}
+
+.idle-hud__body:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.idle-hud__body:focus-visible,
+.idle-hud__stop:focus-visible {
+    outline: 2px solid #ffb02e;
+    outline-offset: -2px;
+}
+
+/* Stop, right on the strip: the one control you need when the screen is in the way. */
+.idle-hud__stop {
+    flex: none;
+    width: 30px;
+    font: 700 11px/1 ui-sans-serif, system-ui, sans-serif;
+    color: #e0b0a4;
+    background: #3a221c;
+    border: 0;
+    border-left: 2px solid #120e0b;
+    cursor: pointer;
+}
+
+.idle-hud__stop:hover {
+    color: #fff;
+    background: #5c2f24;
 }
 
 .idle-hud__line {

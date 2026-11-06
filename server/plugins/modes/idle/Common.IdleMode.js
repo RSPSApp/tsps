@@ -103,32 +103,19 @@ function registerScreen(groupId) {
   core?.CombatInterfacePolicy?.keepOpenInCombat?.(groupId);
 }
 
-/** Free to go back to work, or only an Idle screen in the way (checked before anything is done). */
+/**
+ * Free to go back to work. An open Idle screen does not count as in the way: it is the screen the
+ * player watches *while* the character works, so the work carries on behind it. Any other
+ * interface — a bank, a shop, a dialogue — does count, and the work waits.
+ *
+ * This used to come in two flavours, the second of which closed the screen right before acting.
+ * That was a mistake twice over. It contradicted this one, and it fired between every kill, which
+ * made the screen impossible to keep open while fighting and so impossible to switch idle off
+ * from. Nothing the work does needs the interface shut: the attack, the walk and the use are all
+ * server-side calls.
+ */
 function mayWork(player) {
   return free(player) || IDLE_SCREENS.has(player.getInterfaceId?.());
-}
-
-/** What stands in the way of work besides an open Idle screen. */
-function blockedBesidesScreen(player) {
-  if (player.getMovementQueue().size() > 0) return true;
-  const combat = player.getCombat?.();
-  return Boolean(combat?.getTarget?.() || combat?.getAttacker?.());
-}
-
-/**
- * Free to go back to work, as `free`, except that an open Idle screen is closed for it: the player
- * may leave it open to watch, and a click on the world needs no interface open. Called right
- * before acting, so the screen only closes when there is work to do.
- *
- * Closing it only ever helps when the screen is the one thing in the way. Mid-fight it is not, so
- * closing it there bought nothing and shut the screen every time the next monster was picked.
- */
-function readyToWork(player) {
-  if (free(player)) return true;
-  if (!IDLE_SCREENS.has(player.getInterfaceId?.())) return false;
-  if (blockedBesidesScreen(player)) return false;
-  player.getPacketSender().sendInterfaceRemoval();
-  return free(player);
 }
 
 /** An idle player gathering one of the idle skills. */
@@ -261,7 +248,6 @@ module.exports = {
   chebyshev,
   free,
   registerScreen,
-  readyToWork,
   mayWork,
   bank,
   bankHasRoom,

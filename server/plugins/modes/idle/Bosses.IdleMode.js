@@ -157,7 +157,7 @@ function look(player, now) {
   if (state.mayMine) {
     const shell = nearest(player, crab().searchTiles, (npc) => npcName(npc) === crab().shell && !state.mined.has(npc));
     if (shell) {
-      if (!Common.readyToWork(player)) return "busy";
+      if (!Common.mayWork(player)) return "busy";
       state.mined.add(shell);
       state.mayMine = false;
       mine(player, shell);
@@ -176,7 +176,7 @@ function look(player, now) {
   if (player.getLocation().getZ() === z && Common.chebyshev(player.getLocation(), { x, y }) <= crab().followTiles) return "waiting";
   const cave = nearestCave(player);
   if (!cave) return "no-cave";
-  if (!Common.readyToWork(player)) return "busy";
+  if (!Common.mayWork(player)) return "busy";
   crawl(player, cave);
   return "following";
 }

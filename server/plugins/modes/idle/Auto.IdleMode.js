@@ -226,7 +226,7 @@ function resume(player, now) {
   const usable = (entity) => !(state.skips.get(entity) > now);
   const entity = target.kind === "npc" ? findNpc(player, target, usable) : findObject(player, target, usable);
   if (!entity) return "none";
-  if (!Common.readyToWork(player)) return "busy";
+  if (!Common.mayWork(player)) return "busy";
   state.lastAttemptAt = now;
   state.lastEntity = entity;
   if (target.kind === "npc") useNpc(player, entity, target);

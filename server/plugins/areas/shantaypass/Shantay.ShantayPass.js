@@ -85,6 +85,7 @@ function dialogueAction(action) {
   if (action.kind === "message") {
     if (action.text === PURCHASE_MESSAGE) {
       if (player.getInventory().getAddableAmount(new Item(ItemIdentifiers.SHANTAY_PASS, 1)) < 1) {
+        player.sendMessage("You cannot hold any more Shantay passes.");
         action.end = true;
         return;
       }

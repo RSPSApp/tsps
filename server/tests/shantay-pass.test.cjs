@@ -258,6 +258,8 @@ test("native Shantay purchases charge only when a pass can be delivered", async 
     assert.equal(inv.getAddableAmount(new native.Item(PASS)), capped || mode === "full pack" ? 0 : 1);
     if (capped) assert.ok(inv.getFreeSlots() > 0, "a free slot must coexist with the saturated ordinary stack");
     const before = state(), coinsBefore = owned(COINS), passBefore = owned(PASS);
+    const messages = [], sendMessage = player.sendMessage.bind(player);
+    t.mock.method(player, "sendMessage", message => { messages.push(message); return sendMessage(message); });
     let purchaseActions = 0;
     const emit = PluginManager.emitCustomEvent.bind(PluginManager);
     t.mock.method(PluginManager, "emitCustomEvent", (name, payload) => {
@@ -276,6 +278,7 @@ test("native Shantay purchases charge only when a pass can be delivered", async 
     }
     const after = state(), details = JSON.stringify({ before, after, dialogue: current?.constructor.name, text: current?.getText?.() });
     if (capped) assert.equal(purchaseActions, 1, "actual Buy-pass purchase action reached once");
+    assert.equal(messages.filter(message => message === "You cannot hold any more Shantay passes.").length, capped ? 1 : 0, "capacity refusal message");
     // First target assertion: full-stack refusal must not consume a five-coin fee without delivery.
     assert.equal(owned(COINS) + PRICE * (owned(PASS) - passBefore), coinsBefore, "paid pass conservation: " + details);
     const success = mode === "ordinary" || mode === "last stack space";

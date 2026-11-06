@@ -116,7 +116,7 @@ function act(fight, npc, state) {
   });
 }
 
-/** Drinking: a cure while infected weakens it ("You haven't got anything..." comes from the orb). */
+/** A committed cure dose while infected weakens the parasite. */
 function drink({ player, itemId }) {
   const fight = require("./Dream.Nightmare").dreamOf(player)?.fight;
   if (!fight?.parasites.has(player)) return;
@@ -145,8 +145,14 @@ function clear(fight) {
   }
 }
 
+function parasiteOrbEligible(request) {
+  const state = require("./Dream.Nightmare").dreamOf(request.player)?.fight?.parasites.get(request.player);
+  if (state && !state.weak) request.active = true;
+}
+
 function attachParasites(api) {
-  api.onCanDrink(drink);
+  api.onCustomEvent("potions:drunk", drink);
+  api.onCustomEvent("nightmare:parasite-orb-eligible", parasiteOrbEligible);
   api.onNpcDeath(parasiteDied);
 }
 

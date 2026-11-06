@@ -1158,9 +1158,16 @@ registerPotion({
   effect: applyMenaphiteRemedy,
 });
 
+// Relicym's balm can be drunk for the Nightmare parasite. Player disease itself is not modelled.
+registerPotion({
+  name: "Relicym's balm",
+  chains: [doseChain("RELICYMS_BALM_4_", "RELICYMS_BALM_3_", "RELICYMS_BALM_2_", "RELICYMS_BALM_1_")],
+  effect: () => {},
+});
+
 // ---------------------------------------------------------------- barbarian mixes of the potions above
 // Wiki (Barbarian Training's mix table): a mix drinks as its potion and heals 3 or 6 per dose.
-// Relicym's and magic essence mixes are left out: their potions have no drink here yet.
+// Relicym's and magic essence mixes are left out; their mix effects are not implemented.
 
 /** A mix drinking as the registered potion `potionName` (or `effect`), healing `healAmount` per dose. */
 function registerMix(name, potionName, healAmount, twoDose, oneDose, effect) {
@@ -1648,8 +1655,31 @@ const CURE_POTIONS = new Map([
  * Consumption still uses the ordinary drink handler and its restrictions.
  */
 function cureFromHealthOrb({ player }) {
-  if (!player || (!player.isPoisoned?.() && !player.isVenomed?.())) return;
+  if (!player) return;
+  const poisoned = player.isPoisoned?.() || player.isVenomed?.();
+  const parasite = { player, active: false };
+  pluginApi.emitCustomEvent("nightmare:parasite-orb-eligible", parasite);
   const items = player.getInventory().getItems();
+  if (parasite.active) {
+    // Wiki: Relicym's balm is preferred to Sanfew when weakening a parasite.
+    let selected = null;
+    for (let slot = 0; slot < items.length; slot++) {
+      const itemId = items[slot]?.getId?.() ?? -1;
+      const entry = POTION_BY_ITEM_ID.get(itemId);
+      if (!entry || pluginApi.core.ItemDefinition.forId(itemId).isNoted()) continue;
+      const priority = entry.potion.name === "Relicym's balm" ? 2 : entry.potion.name === "Sanfew serum" ? 1 : 0;
+      if (!priority) continue;
+      if (!selected || priority > selected.priority ||
+          (entry.potion === selected.entry.potion && entry.doses < selected.entry.doses)) {
+        selected = { entry, priority, itemId, slot };
+      }
+    }
+    if (selected) {
+      handlePotionDrink(player, selected.itemId, selected.slot);
+      return;
+    }
+  }
+  if (!poisoned) return;
   let selected = null;
   for (let slot = 0; slot < items.length; slot++) {
     const itemId = items[slot]?.getId?.() ?? -1;

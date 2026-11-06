@@ -375,7 +375,8 @@ function nativeKillCredit(t) {
   function respawn(p) {
     const task = death(p);
     assert.ok(task);
-    for (let tick = 0; tick < 3; tick++) { clock(); task.execute(); }
+    // Death animation starts on the first execution; respawn follows four ticks later.
+    for (let tick = 0; tick < 5; tick++) { clock(); task.execute(); }
     assert.equal(p.isDyingReturn(), false);
     assert.equal(p.getHitpoints(), 99);
   }
@@ -511,6 +512,9 @@ test('Pandemonium native dialogue turns to its actual deck speakers', async t =>
     const will = crew.find(n => n.getId() === willId), anne = crew.find(n => n.getId() === anneId);
     assert.equal(will.getContentId(player), core.CacheDefinitions.getNpcId('sailing_intro_will_vis'));
     assert.equal(anne.getContentId(player), core.CacheDefinitions.getNpcId('sailing_intro_anne_vis'));
+    // Let the two-tick login dialogue open before isolating explicit NPC clicks.
+    for (let tick = 0; tick < 2; tick++) core.TaskManager.process();
+    assert.equal(player.getDialogueManager().getCurrent()?.getNpcId(), willId);
     player.closeInterruptibleInterfaces(); player.setNeedsPlacement(false); crew.forEach(n => n.setNeedsPlacement(false));
     test.after(() => {
       player.closeInterruptibleInterfaces(); PM.emitPlayerLogout(lifecycle); core.TaskManager.cancelTasks(player.getIndex());

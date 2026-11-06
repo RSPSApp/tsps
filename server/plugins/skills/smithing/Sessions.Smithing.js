@@ -18,6 +18,8 @@ function start(player, { type, skill = null, remaining, interval, firstDelay = 0
   stop(player, false);
   SESSIONS.set(player, {
     type, skill, remaining, interval, finishDelay, begin, step, onStop,
+    // Movement before admission (such as approaching a furnace) belongs to the old action.
+    startLocation: player.getLocation().clone(),
     // The task's next run is the tick the session started on (offset 0).
     nextCycle: tick + 1 + firstDelay,
     finishAt: null,
@@ -102,7 +104,9 @@ function process() {
       stop(player, false);
       continue;
     }
-    if (player.getMovementQueue().size() > 0 || player.getForceMovement() != null) {
+    // A one-step route can drain between task ticks, so the queue alone misses the walk.
+    if (player.getMovementQueue().size() > 0 || player.getForceMovement() != null ||
+        !player.getLocation().equals(session.startLocation)) {
       stop(player);
       continue;
     }

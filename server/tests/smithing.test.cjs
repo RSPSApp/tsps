@@ -80,6 +80,7 @@ function playerWith(barId = I.BRONZE_BAR, bars = 27) {
     setInterfaceId: id => { player.interfaceId = id; },
     setEnteredAmountAction: action => { player.amountAction = action; },
     getMovementQueue: () => ({ size: () => player.moving ? 1 : 0 }),
+    getLocation: () => new (PluginManager.getCoreApi().Location)(0, 0, 0),
     getForceMovement: () => null, isRegistered: () => true, getHitpoints: () => 99,
     performAnimation(animation) { player.animation = animation?.getId?.(); player.animationDelay = animation?.getDelay?.(); },
     sendMessage(message) { player.messages.push(message); },
@@ -805,11 +806,11 @@ test("native furnace smelting admission and one-step cancellation", async t => {
   PluginManager.emitServerStartup({});
   t.after(() => PluginManager.emitServerShutdown({}));
   let index = 1710;
-  for (const mode of ["stationary", "approach", "interrupt"]) await t.test(mode, async t => {
+  for (const mode of ["stationary", "approach", "interrupt", "ore-approach"]) await t.test(mode, async t => {
     const channel = {kind:"test",remoteAddress:"127.0.0.1",isOpen:()=>true,send:()=>true,close(){},onData(){},onError(){},onClose(){}};
     const p = new Player(new PlayerSession(channel));
     p.setIndex(index++); p.setUsername("smithcancel" + index); p.setRegistered(true);
-    p.setLocation(new core.Location(mode === "approach" ? 3219 : 3226, 3218, 0));
+    p.setLocation(new core.Location(mode === "approach" || mode === "ore-approach" ? 3219 : 3226, 3218, 0));
     p.needsPlacement = false;
     const c = new ClientConnection(channel); c.player = p;
     t.after(() => {
@@ -819,7 +820,7 @@ test("native furnace smelting admission and one-step cancellation", async t => {
       assert.equal(Sessions.typeOf(p), null, "native disconnect clears the private session");
     });
     assert.equal(p.getEquipment().getItems().some(i => i && i.getId() > 0), false);
-    for (const id of [I.COPPER_ORE,I.TIN_ORE]) p.getInventory().add(new core.Item(id,1), false);
+    for (const id of mode === "ore-approach" ? [I.SILVER_ORE] : [I.COPPER_ORE,I.TIN_ORE]) p.getInventory().add(new core.Item(id,1), false);
     const recipe = Smithing.SMELTING_RECIPES.find(r => r.barId === I.BRONZE_BAR);
     assert.deepEqual(recipe.ingredients, [[I.COPPER_ORE,1],[I.TIN_ORE,1]]);
     assert.equal(recipe.xp, 6.2);
@@ -863,6 +864,28 @@ test("native furnace smelting admission and one-step cancellation", async t => {
       core.TaskManager.processWalkTo(p.getIndex());
     };
     const untouched = () => { assert.equal(total(I.COPPER_ORE),1); assert.equal(total(I.TIN_ORE),1); assert.equal(total(I.BRONZE_BAR),0); assert.deepEqual(gains,[]); };
+    if(mode === "ore-approach") {
+      skills.setCurrentLevel(core.Skill.SMITHING, 99, false).setMaxLevels(core.Skill.SMITHING, 99, false);
+      const silver = Smithing.SMELTING_RECIPES.find(r => r.barId === I.SILVER_BAR);
+      assert.deepEqual(silver.ingredients, [[I.SILVER_ORE,1]]);
+      assert.equal(furnace.isWithinInteractionDistance(p.getLocation()),false);
+      const slot = p.getInventory().getSlotForItemId(I.SILVER_ORE);
+      assert.ok(slot >= 0);
+      await c.dispatch([{type:"item_on_object",objectId:furnaceId,x:3223,y:3218,itemId:I.SILVER_ORE,slot,widgetId:149<<16}]);
+      for(let i=0;i<10 && Sessions.typeOf(p)!=="smelt";i++)turn();
+      assert.notDeepEqual(pos(),initial,"real item-on-furnace interaction approached");
+      assert.equal(Sessions.typeOf(p),"smelt","lone ore automatically admits a session");
+      assert.equal(p.getCreationMenu(),null);
+      assert.equal(total(I.SILVER_ORE),1);
+      assert.equal(total(I.SILVER_BAR),0);
+      console.log("SMITHING_ORE_APPROACH_ADMISSION "+JSON.stringify(snapshot("ore-admission")));
+      for(let i=0;i<7;i++)turn();
+      assert.equal(total(I.SILVER_ORE),0);
+      assert.equal(total(I.SILVER_BAR),1);
+      assert.deepEqual(gains,[silver.xp]);
+      assert.equal(Sessions.typeOf(p),null);
+      return;
+    }
     if(mode === "approach") assert.equal(furnace.isWithinInteractionDistance(p.getLocation()),false,"genuine approach begins outside reach");
     await c.dispatch([{type:"object_option",id:furnaceId,x:3223,y:3218,action:"Smelt"}]);
     for(let i=0;i<10 && !p.getCreationMenu();i++)turn();

@@ -1238,14 +1238,11 @@ function countHellRat(player, npc, info, state) {
   return true;
 }
 
-/**
- * "pets:wily-cat-status" { player, overgrown, wily }: whether the player has an overgrown cat
- * with them (following or carried) to train, and whether they already have a wily or lazy cat.
- */
+/** Find an eligible carried or following cat for Felkrash to name. */
 function answerNamingCandidate(request) {
   const player = request?.player;
   if (!player || request.candidate) return;
-  const eligible = info => ['wily', 'lazy', 'wily_hellcat', 'lazy_hellcat'].includes(info?.stage);
+  const eligible = info => CAT_WILY_STAGES.has(info?.stage) || CAT_LAZY_STAGES.has(info?.stage);
   const follower = player.getAttribute?.(CURRENT_PET_ATTRIBUTE);
   if (follower?.isRegistered?.() && follower.isVisible?.() && follower.isPet?.()
       && follower.getOwner?.() === player && !World.getRemoveNPCQueue().includes(follower)
@@ -1263,6 +1260,10 @@ function answerNamingCandidate(request) {
   }
 }
 
+/**
+ * "pets:wily-cat-status" { player, overgrown, wily }: whether the player has an overgrown cat
+ * with them (following or carried) to train, and whether they already have a wily or lazy cat.
+ */
 function answerWilyCatStatus(request) {
   const player = request?.player;
   if (!player) return;

@@ -763,3 +763,115 @@ test("ordinary food preserves a brew's existing overheal", async t => {
   assert.notEqual(f.inv.getItems()[1]?.getId(), shark);
   assert.equal(f.p.getSkillManager().getExperience(core.Skill.HITPOINTS), xp);
 });
+
+// Prayer restores must not lower a boost produced by a real Ancient brew.
+function prayerRestoreActor(t) {
+  const f = actor(t);
+  const skills = f.p.getSkillManager();
+  const xp = core.SkillManager.getExperienceForLevel(99);
+  for (const name of [...SKILLS, "HITPOINTS"]) {
+    const skill = core.Skill[name];
+    skills.setExperience(skill, xp);
+    skills.setMaxLevel(skill, 99);
+    skills.setCurrentLevel(skill, 99, false);
+    assert.equal(skills.getExperience(skill), xp);
+    assert.equal(skills.getMaxLevel(skill), 99);
+    assert.equal(skills.getCurrentLevel(skill), 99);
+  }
+  assert.equal(f.p.isPlayerBot(), false);
+  assert.equal(f.p.getPrayerActive().some(Boolean), false);
+  assert.equal(f.p.getTimers().has(core.TimerKey.STUN), false);
+  assert.equal(f.p.getTimers().has(core.TimerKey.POTION), false);
+  assert.equal(f.p.getAttribute("potions:divine:state") ?? null, null);
+  return { ...f, prayerXp: xp };
+}
+
+async function ancientPrayerBoost(f) {
+  plainDrink(f, 0, I.ANCIENT_BREW_4_);
+  assert.equal(f.inv.getItems()[0].getId(), 26340);
+  await browserOp(f, 0, "Drink");
+  assert.equal(f.inv.getItems()[0].getId(), 26342);
+  assert.equal(f.inv.getItems()[0].getAmount(), 1);
+  assert.equal(f.inv.getItems()[0].getMeta(), null);
+  assert.equal(f.p.getSkillManager().getCurrentLevel(core.Skill.PRAYER), 103);
+  for (const name of ["ATTACK", "STRENGTH", "DEFENCE"]) {
+    assert.equal(f.p.getSkillManager().getCurrentLevel(core.Skill[name]), 88);
+  }
+  assert.equal(f.p.getTimers().has(core.TimerKey.POTION), true);
+  for (let tick = 0; tick < 3; tick++) f.p.getTimers().process();
+  assert.equal(f.p.getTimers().has(core.TimerKey.POTION), false);
+  assert.equal(f.p.getTimers().has(core.TimerKey.STUN), false);
+  assert.equal(f.p.getPrayerActive().some(Boolean), false);
+  assert.equal(f.p.getAttribute("potions:divine:state") ?? null, null);
+  assert.equal(f.p.getSkillManager().getMaxLevel(core.Skill.PRAYER), 99);
+  assert.equal(f.p.getSkillManager().getCurrentLevel(core.Skill.PRAYER), 103);
+  assert.equal(f.p.getSkillManager().getExperience(core.Skill.PRAYER), f.prayerXp);
+}
+
+test("a super restore preserves an existing Ancient brew Prayer boost", async t => {
+  const f = prayerRestoreActor(t);
+  await ancientPrayerBoost(f);
+  plainDrink(f, 1, I.SUPER_RESTORE_4_);
+  assert.equal(f.inv.getItems()[1].getId(), 3024);
+  assert.equal(f.p.getSkillManager().getCurrentLevel(core.Skill.ATTACK), 88);
+  assert.equal(f.p.getSkillManager().getCurrentLevel(core.Skill.PRAYER), 103);
+  await browserOp(f, 1, "Drink");
+  assert.equal(f.p.getSkillManager().getCurrentLevel(core.Skill.PRAYER), 103,
+    "a positive restore must not remove existing Prayer points");
+  assert.equal(f.inv.getItems()[1].getId(), 3026);
+  assert.equal(f.inv.getItems()[1].getAmount(), 1);
+  assert.equal(f.inv.getItems()[1].getMeta(), null);
+  assert.equal(f.inv.getItems()[0].getId(), 26342);
+  for (const name of ["ATTACK", "STRENGTH", "DEFENCE"]) {
+    assert.equal(f.p.getSkillManager().getCurrentLevel(core.Skill[name]), 99);
+  }
+  assert.equal(f.p.getSkillManager().getExperience(core.Skill.PRAYER), f.prayerXp);
+});
+
+test("the Ancient brew Prayer boost remains after its intake timer clears", async t => {
+  const f = prayerRestoreActor(t);
+  await ancientPrayerBoost(f);
+  PM.emitPlayerProcess({ player: f.p });
+  assert.equal(f.p.getSkillManager().getCurrentLevel(core.Skill.PRAYER), 103);
+  assert.equal(f.p.getSkillManager().getCurrentLevel(core.Skill.ATTACK), 88);
+  assert.equal(f.p.getSkillManager().getExperience(core.Skill.PRAYER), f.prayerXp);
+});
+
+test("a super restore raises Prayer below base", async t => {
+  const f = prayerRestoreActor(t);
+  f.p.getSkillManager().setCurrentLevel(core.Skill.PRAYER, 60, false);
+  assert.equal(f.p.getSkillManager().getMaxLevel(core.Skill.PRAYER), 99);
+  assert.equal(f.p.getSkillManager().getCurrentLevel(core.Skill.PRAYER), 60);
+  plainDrink(f, 0, I.SUPER_RESTORE_4_);
+  await browserOp(f, 0, "Drink");
+  assert.equal(f.p.getSkillManager().getCurrentLevel(core.Skill.PRAYER), 92);
+  assert.equal(f.inv.getItems()[0].getId(), 3026);
+  assert.equal(f.inv.getItems()[0].getMeta(), null);
+  assert.equal(f.p.getSkillManager().getExperience(core.Skill.PRAYER), f.prayerXp);
+});
+
+test("a super restore remains drinkable at base Prayer", async t => {
+  const f = prayerRestoreActor(t);
+  plainDrink(f, 0, I.SUPER_RESTORE_4_);
+  await browserOp(f, 0, "Drink");
+  assert.equal(f.p.getSkillManager().getCurrentLevel(core.Skill.PRAYER), 99);
+  assert.equal(f.inv.getItems()[0].getId(), 3026);
+  assert.equal(f.inv.getItems()[0].getMeta(), null);
+  assert.equal(f.p.getSkillManager().getExperience(core.Skill.PRAYER), f.prayerXp);
+});
+
+test("Jangerberries preserve an existing Ancient brew Prayer boost", async t => {
+  const f = prayerRestoreActor(t);
+  await ancientPrayerBoost(f);
+  assert.equal(core.CacheDefinitions.getItem(I.JANGERBERRIES).inventoryActions[0], "Eat");
+  assert.equal(core.ItemDefinition.forId(I.JANGERBERRIES).isNoted(), false);
+  const berries = put(f, item(I.JANGERBERRIES), 1);
+  assert.equal(berries.getAmount(), 1);
+  assert.equal(berries.getMeta(), null);
+  assert.equal(f.p.getTimers().has(core.TimerKey.FOOD), false);
+  await browserOp(f, 1, "Eat");
+  assert.equal(f.p.getSkillManager().getCurrentLevel(core.Skill.PRAYER), 103);
+  assert.notEqual(f.inv.getItems()[1].getId(), I.JANGERBERRIES);
+  assert.equal(f.p.getTimers().has(core.TimerKey.FOOD), true);
+  assert.equal(f.p.getSkillManager().getExperience(core.Skill.PRAYER), f.prayerXp);
+});

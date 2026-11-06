@@ -64,9 +64,10 @@ candy volleys of six with minion spawns, escalating stomps, joint minion death.
 An unsafe death during the fight puts the lost items, including unprotected untradeables, at the
 strange casket. Search it to pay 90,000 coins and retrieve them. Items that do not fit stay there
 until taken; a later unsafe death removes what remains. Ultimate Ironmen can retrieve their items.
-The fee uses Death's Coffer first, then one source that covers the balance: the bank, carried
-coins, or coins held in the casket. This source priority and partial-withdrawal sequence are TSPS
-choices. The shared retrieval interface uses the cache's Mimic-specific states (17 unpaid, 18
+For ordinary accounts, the fee uses Death's Coffer first, then one source that covers the balance:
+the bank, carried coins, or coins held in the casket. Ultimate Ironmen use carried or stored coins;
+the service does not use their bank or Coffer. This source priority and partial-withdrawal sequence
+are TSPS choices. The shared retrieval interface uses the cache's Mimic-specific states (17 unpaid, 18
 paid). The precise interaction and payment order are not verified by a recording. Safe deaths do
 not clear the held items. Sources: [Strange casket](https://oldschool.runescape.wiki/w/Strange_casket)
 and [Item Retrieval Service](https://oldschool.runescape.wiki/w/Item_Retrieval_Service).

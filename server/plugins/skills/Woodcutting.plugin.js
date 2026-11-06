@@ -973,19 +973,21 @@ function searchBirdNest(player, nestId) {
     return false;
   }
 
-  if (player.getInventory().getFreeSlots() <= 0) {
+  const inventory = player.getInventory();
+  const freeSlots = inventory.getFreeSlots();
+  const seed = freeSlots > 0 && SEED_NEST_IDS.has(nestId) ? rollNestSeed() : null;
+  if (freeSlots <= 0 || (seed && inventory.getAddableAmount(new Item(seed.id, 1)) < 1)) {
     player.getDialogueManager().startDialogues(
       new pluginApi.core.DialogueChainBuilder().add(new pluginApi.core.StatementDialogue(0, NEST_FULL_MESSAGE))
     );
     return true;
   }
 
-  player.getInventory().deleteNumber(nestId, 1);
-  player.getInventory().adds(BIRD_NESTS.EMPTY_NEST, 1);
+  inventory.deleteNumber(nestId, 1);
+  inventory.adds(BIRD_NESTS.EMPTY_NEST, 1);
 
-  if (SEED_NEST_IDS.has(nestId)) {
-    const seed = rollNestSeed();
-    player.getInventory().adds(seed.id, 1);
+  if (seed) {
+    inventory.adds(seed.id, 1);
     sendSpam(player, `You take ${seed.text} out of the bird's nest.`);
     return true;
   }

@@ -28,7 +28,10 @@ function fill({ player }) {
   if (moved === 0) player.sendMessage(MESSAGE.FULL);
 }
 function check({ player }) {
-  player.sendMessage(gemIds().map((id) => `${Storage.itemName(id)}: ${Storage.amountOf(player, family, id)}`).join(" / "));
+  player.sendMessage(gemIds().map((id) => {
+    const gem = Storage.itemName(id).replace(/^Uncut /, "");
+    return `${gem.charAt(0).toUpperCase()}${gem.slice(1)}: ${Storage.amountOf(player, family, id)}`;
+  }).join(" / "));
 }
 function empty({ player }) {
   if (Storage.core.Bank.isOpen(player)) return emptyToBank(player);
@@ -132,6 +135,7 @@ function sew(event) {
   Storage.setContents(player, pouchFamily, []);
   Storage.setContents(player, bagFamily, []);
   player.getSkillManager().addExperiences(Skill.CRAFTING, 300);
+  player.sendMessage("You sew a gem sack.");
 }
 module.exports = (api) => {
   Storage.register(family);

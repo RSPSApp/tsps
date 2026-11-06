@@ -16,6 +16,8 @@
  * _special_impact (4430), caster spotanims _standard_spotanim (4433) / _spec_spotanim (4432), with
  * _female versions (4435 / 4434). The Wiki gives no projectile timings, so Sanguinesti's are reused (estimate).
  */
+const { restricted, plainAmount, takePlain, PRESET_TEXT } = require("./PoweredStaff");
+
 const MAX_CHARGES = 20000;
 const ASTRAL_PER_CHARGE = 3;
 const NATURE_PER_CHARGE = 2;
@@ -220,22 +222,32 @@ function chargeTome(event) {
   if (otherId !== ids().ASTRAL_RUNE && otherId !== ids().NATURE_RUNE) return;
   event.handled = true;
   const inventory = player.getInventory();
+  // Preset copies never pay: Uncharge refunds plain runes, so they would come back tradeable.
+  if (restricted(tome === usedItem ? usedWithItem : usedItem)) {
+    player.sendMessage(PRESET_TEXT);
+    return;
+  }
   const current = chargesOf(tome);
   if (current >= MAX_CHARGES) {
     player.sendMessage("Your Zorya's tome is already fully charged.");
     return;
   }
-  const affordable = Math.min(
-    Math.floor(inventory.getAmount(ids().ASTRAL_RUNE) / ASTRAL_PER_CHARGE),
-    Math.floor(inventory.getAmount(ids().NATURE_RUNE) / NATURE_PER_CHARGE),
+  const batches = (count) => Math.min(
+    Math.floor(count(ids().ASTRAL_RUNE) / ASTRAL_PER_CHARGE),
+    Math.floor(count(ids().NATURE_RUNE) / NATURE_PER_CHARGE),
     MAX_CHARGES - current,
   );
+  const affordable = batches((id) => plainAmount(inventory, id));
+  if (affordable < 1 && batches((id) => inventory.getAmount(id)) >= 1) {
+    player.sendMessage(PRESET_TEXT);
+    return;
+  }
   if (affordable < 1) {
     player.sendMessage("You need three astral runes and two nature runes for each charge.");
     return;
   }
-  inventory.deleteNumber(ids().ASTRAL_RUNE, affordable * ASTRAL_PER_CHARGE);
-  inventory.deleteNumber(ids().NATURE_RUNE, affordable * NATURE_PER_CHARGE);
+  takePlain(inventory, ids().ASTRAL_RUNE, affordable * ASTRAL_PER_CHARGE);
+  takePlain(inventory, ids().NATURE_RUNE, affordable * NATURE_PER_CHARGE);
   setCharges(player, tome, current + affordable);
   player.sendMessage(`You apply ${affordable.toLocaleString()} charge${affordable === 1 ? "" : "s"} to your Zorya's tome.`);
 }

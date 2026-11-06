@@ -226,13 +226,30 @@ test("shops sell an Ironman only their own stock", () => {
   assert.equal(main.limit, 4);
 });
 
-test("no Grand Exchange for an Ironman", () => {
-  const request = { player: account("iron", "ironman"), allow: true, message: null };
-  custom["grand-exchange:can-open"](request);
-  assert.equal(request.allow, false);
-  const main = { player: account("main"), allow: true, message: null };
-  custom["grand-exchange:can-open"](main);
-  assert.equal(main.allow, true);
+test("Ironmen may only place single-bond buy offers", () => {
+  assert.equal(typeof custom["ge:offer-confirmed"], "function", "Ironman offer listener is registered");
+  for (const mode of ["ironman", "ultimate", "hardcore"]) {
+    const player = account(`ge-${mode}`, mode);
+    for (const [itemId, sell, quantity, allowed] of [
+      [core.ItemIdentifiers.OLD_SCHOOL_BOND, false, 1, true],
+      [core.ItemIdentifiers.OLD_SCHOOL_BOND, false, 2, false],
+      [core.ItemIdentifiers.OLD_SCHOOL_BOND, true, 1, false],
+      [core.ItemIdentifiers.COINS, false, 1, false],
+      [core.ItemIdentifiers.COINS, true, 1, false],
+    ]) {
+      player.messages.length = 0;
+      const request = { player, itemId, sell, quantity, accepted: true };
+      custom["ge:offer-confirmed"](request);
+      assert.equal(request.accepted, allowed, `${mode}: ${itemId}/${sell}/${quantity}`);
+      assert.deepEqual(player.messages, allowed ? [] : ["Ironmen can only buy one bond per Grand Exchange offer."]);
+    }
+    const priorVeto = { player, itemId: core.ItemIdentifiers.OLD_SCHOOL_BOND, sell: false, quantity: 1, accepted: false };
+    custom["ge:offer-confirmed"](priorVeto);
+    assert.equal(priorVeto.accepted, false, "another plugin's veto is retained");
+  }
+  const main = { player: account("main"), itemId: core.ItemIdentifiers.COINS, sell: false, quantity: 1, accepted: true };
+  custom["ge:offer-confirmed"](main);
+  assert.equal(main.accepted, true);
 });
 
 test("an Ultimate Ironman can't bank and keeps nothing on death; a standard Ironman can", () => {
@@ -400,4 +417,208 @@ test("Ironman Telegrab refuses other-owned loot before spending runes or schedul
   assert.deepEqual(player.messages, ["You're an Ironman, so you can't take items that other players have dropped."]);
   assert.equal(spent, 0); assert.equal(scheduled, 0);
   assert.equal(pile.isPendingRemoval(), false); assert.equal(player.getInventory().getAmount(995), 0);
+});
+
+
+// Connected native regression: real Ironman, GE and Bonds registrations and decoded UI actions.
+// No client rendering or retail Ironman-specific widget is claimed.
+test("Ironmen use GE only for single-bond buys, with safe collection", async t => {
+  process.env.DISABLE_PLAYER_BOTS = "1";
+  const { PlayerSession } = require("../dist/net/PlayerSession");
+  const { ClientConnection } = require("../dist/net/NetworkBuilder");
+  const PM = PluginManager;
+  PM.loadFromDirectory(path.resolve(__dirname, "../plugins"));
+  core.RegionManager.init();
+  core.RegionManager.loadMapFiles(3222, 3218);
+  PM.emitServerStartup({});
+  t.after(() => PM.emitServerShutdown({}));
+  const I = core.ItemIdentifiers;
+  let next = 1400;
+  function actor(mode, scope) {
+    const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true,
+      send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+    const p = new Player(new PlayerSession(channel));
+    p.setIndex(next++); p.setUsername(`geiron${p.getIndex()}`); p.setRegistered(true);
+    p.setAttribute("bot-skip-persistence", true);
+    p.setLocation(new core.Location(3222, 3218, 0)); p.needsPlacement = false;
+    const c = new ClientConnection(channel); c.player = p;
+    const sender = p.getPacketSender(), messages = [], varbits = new Map(), configs = new Map();
+    const original = sender.sendMessage.bind(sender), originalVarbit = sender.sendVarbit.bind(sender), originalConfig = sender.sendConfig.bind(sender);
+    sender.sendMessage = message => { messages.push(message); return original(message); };
+    sender.sendVarbit = (id, value) => { varbits.set(id, value); return originalVarbit(id, value); };
+    sender.sendConfig = (id, value) => { configs.set(id, value); return originalConfig(id, value); };
+    scope.after(() => {
+      PM.emitPlayerLogout({ player: p, username: p.getUsername() });
+      p.setRegistered(false); core.TaskManager.cancelTasks(p.getIndex()); core.TaskManager.cancelTasks(p);
+    });
+    if (mode) {
+      const request = { player: p, mode, handled: false };
+      PM.emitCustomEvent("ironman:set-mode", request);
+      assert.equal(request.handled, true, "real account mode producer");
+    }
+    p.getInventory().setItem(0, new core.Item(I.COINS, 1_000_000_000));
+    p.getInventory().setItem(2, new core.Item(I.PLATINUM_TOKEN, 3));
+    return { p, c, inv: p.getInventory(), messages, varbits, configs };
+  }
+  async function button(f, child, slot = 0, itemId = -1, action = 1, group = 465) {
+    await f.c.dispatch([{ type: "widget_action", widgetId: (group << 16) | child,
+      groupId: group, childId: child, buttonNum: action, slot, itemId }]);
+    f.c.processTurnPackets();
+  }
+  function open(f) {
+    PM.emitCommand({ player: f.p, raw: "ge", base: "ge", parts: ["ge"], handled: false });
+    assert.equal(f.p.getInterfaceId(), 465, "the registered GE entry opens");
+  }
+  const placed = f => Object.values(f.p.getAttribute("grand-exchange-offers") ?? {});
+  async function selectBuy(f, itemId, quantity = 1) {
+    await button(f, 7, 3);
+    const search = f.p.getEnteredSyntaxAction();
+    assert.ok(search, "buy search is active");
+    search.execute(String(itemId));
+    if (quantity === 2) await button(f, 34, 2);
+  }
+  async function confirm(f) {
+    const oldTimeout = global.setTimeout, emit = PM.emitCustomEvent, callbacks = [], confirmations = [];
+    try {
+      global.setTimeout = (callback, delay) => { callbacks.push({ callback, delay }); return { unref() {} }; };
+      PM.emitCustomEvent = function(name, event) {
+        if (name === "ge:offer-confirmed") confirmations.push({ itemId: event.itemId, sell: event.sell });
+        return emit.call(PM, name, event);
+      };
+      await button(f, 30);
+    } finally { global.setTimeout = oldTimeout; PM.emitCustomEvent = emit; }
+    return { callbacks, confirmations };
+  }
+  async function sell(f, id) {
+    f.inv.setItem(1, new core.Item(id, 1));
+    await button(f, 0, 1, id, 1, 467);
+    return confirm(f);
+  }
+  const banks = f => Array.from({ length: core.Bank.TOTAL_BANK_TABS }, (_, tab) =>
+    f.p.getBank(tab).getItems().map(item => [item.getId(), item.getAmount()]));
+  for (const mode of ["ironman", "ultimate", "hardcore"]) {
+    await t.test(`${mode}: buy and collect a bond`, async st => {
+      const f = actor(mode, st); open(f);
+      await selectBuy(f, I.OLD_SCHOOL_BOND);
+      const before = f.inv.getAmount(I.COINS);
+      const { callbacks: timers } = await confirm(f);
+      assert.equal(placed(f).length, 1, "single bond accepted");
+      const offer = placed(f)[0];
+      assert.equal(offer.itemId, I.OLD_SCHOOL_BOND); assert.equal(offer.quantity, 1);
+      assert.equal(f.inv.getAmount(I.COINS), before - offer.total, "only price escrowed");
+      assert.equal(timers.length, 1, "the GE scheduled completion");
+      timers[0].callback(); assert.equal(offer.finished, true);
+      await button(f, 6);
+      assert.equal(placed(f).length, 0);
+      assert.equal(f.inv.getAmount(I.OLD_SCHOOL_BOND), 0);
+      assert.equal(f.inv.getAmount(I.OLD_SCHOOL_BOND_UNTRADEABLE_), 1, "Bonds converts collection");
+    });
+  }
+  for (const [name, id, quantity] of [["two bonds", I.OLD_SCHOOL_BOND, 2], ["non-bond", I.RUNE_SCIMITAR, 1]]) {
+    await t.test(`reject ${name} buy before escrow`, async st => {
+      const f = actor("ironman", st); open(f); await selectBuy(f, id, quantity);
+      const coins = f.inv.getAmount(I.COINS), tokens = f.inv.getAmount(I.PLATINUM_TOKEN), limits = JSON.stringify(f.p.getAttribute("grand-exchange-limits") ?? {});
+      assert.equal(f.configs.get(1151), id, "selected item"); assert.equal(f.varbits.get(4396), quantity, "selected quantity");
+      const { confirmations } = await confirm(f);
+      assert.deepEqual(confirmations, [{ itemId: id, sell: false }], "the intended offer reaches confirmation");
+      assert.equal(placed(f).length, 0); assert.equal(f.inv.getAmount(I.COINS), coins);
+      assert.equal(f.inv.getAmount(I.PLATINUM_TOKEN), tokens);
+      assert.equal(JSON.stringify(f.p.getAttribute("grand-exchange-limits") ?? {}), limits);
+    });
+  }
+  for (const [name, id] of [["bond", I.OLD_SCHOOL_BOND], ["ordinary item", I.RUNE_SCIMITAR]]) {
+    await t.test(`reject ${name} sale before escrow`, async st => {
+      const f = actor("ironman", st); open(f);
+      const coins = f.inv.getAmount(I.COINS), tokens = f.inv.getAmount(I.PLATINUM_TOKEN), limits = JSON.stringify(f.p.getAttribute("grand-exchange-limits") ?? {});
+      const { confirmations } = await sell(f, id);
+      assert.deepEqual(confirmations, [{ itemId: id, sell: true }], "the intended sale reaches confirmation");
+      assert.equal(placed(f).length, 0); assert.equal(f.inv.getAmount(id), 1);
+      assert.equal(f.inv.getAmount(I.COINS), coins); assert.equal(f.inv.getAmount(I.PLATINUM_TOKEN), tokens);
+      assert.equal(JSON.stringify(f.p.getAttribute("grand-exchange-limits") ?? {}), limits);
+    });
+  }
+  await t.test("an untradeable bond cannot be sold", async st => {
+    const f = actor("ironman", st); open(f);
+    f.inv.setItem(1, new core.Item(I.OLD_SCHOOL_BOND_UNTRADEABLE_, 1));
+    await button(f, 0, 1, I.OLD_SCHOOL_BOND_UNTRADEABLE_, 1, 467);
+    await confirm(f);
+    assert.equal(placed(f).length, 0);
+    assert.equal(f.inv.getAmount(I.OLD_SCHOOL_BOND_UNTRADEABLE_), 1);
+  });
+  await t.test("recheck mode after offer setup", async st => {
+    const f = actor(null, st); open(f); await selectBuy(f, I.RUNE_SCIMITAR);
+    const request = { player: f.p, mode: "ironman", handled: false };
+    PM.emitCustomEvent("ironman:set-mode", request); assert.equal(request.handled, true);
+    const coins = f.inv.getAmount(I.COINS); const { confirmations } = await confirm(f);
+    assert.deepEqual(confirmations, [{ itemId: I.RUNE_SCIMITAR, sell: false }]);
+    assert.equal(placed(f).length, 0); assert.equal(f.inv.getAmount(I.COINS), coins);
+  });
+  await t.test("ordinary accounts retain non-bond buying", async st => {
+    const f = actor(null, st); open(f); await selectBuy(f, I.RUNE_SCIMITAR);
+    const before = f.inv.getAmount(I.COINS); await confirm(f);
+    assert.equal(placed(f).length, 1); assert.equal(f.inv.getAmount(I.COINS), before - placed(f)[0].total);
+  });
+  await t.test("ordinary accounts retain selling", async st => {
+    const f = actor(null, st); open(f); await sell(f, I.RUNE_SCIMITAR);
+    assert.equal(placed(f).length, 1); assert.equal(f.inv.getAmount(I.RUNE_SCIMITAR), 0);
+  });
+  await t.test("Ultimate bank collection refuses and inventory collection succeeds", async st => {
+    const f = actor("ultimate", st); open(f); await selectBuy(f, I.OLD_SCHOOL_BOND);
+    const { callbacks: timers } = await confirm(f); assert.equal(placed(f).length, 1); assert.equal(timers.length, 1);
+    timers[0].callback(); assert.equal(placed(f)[0].finished, true);
+    const bankBefore = banks(f), offerBefore = JSON.stringify(placed(f)), coins = f.inv.getAmount(I.COINS);
+    await button(f, 6, 0, -1, 2);
+    assert.deepEqual(banks(f), bankBefore); assert.equal(JSON.stringify(placed(f)), offerBefore);
+    assert.equal(f.inv.getAmount(I.COINS), coins);
+    assert.equal(placed(f).length, 1, "bank refusal preserves offer");
+    assert.equal(f.inv.getAmount(I.OLD_SCHOOL_BOND_UNTRADEABLE_), 0);
+    await button(f, 6);
+    assert.equal(placed(f).length, 0); assert.equal(f.inv.getAmount(I.OLD_SCHOOL_BOND_UNTRADEABLE_), 1);
+  });
+  await t.test("standard Ironman can collect a bought bond into bank", async st => {
+    const f = actor("ironman", st); open(f); await selectBuy(f, I.OLD_SCHOOL_BOND);
+    const { callbacks: timers } = await confirm(f); assert.equal(timers.length, 1); timers[0].callback();
+    await button(f, 6, 0, -1, 2);
+    assert.equal(placed(f).length, 0);
+    const tab = core.Bank.getTabForItem(f.p, I.OLD_SCHOOL_BOND);
+    assert.equal(f.p.getBank(tab).getAmount(I.OLD_SCHOOL_BOND_UNTRADEABLE_), 1);
+  });
+  await t.test("Ultimate collection box cannot bank an already completed bond", async st => {
+    const f = actor("ultimate", st); open(f); await selectBuy(f, I.OLD_SCHOOL_BOND);
+    const { callbacks: timers } = await confirm(f); assert.equal(timers.length, 1); timers[0].callback();
+    PM.emitCommand({ player: f.p, raw: "gecollect", base: "gecollect", parts: ["gecollect"], handled: false });
+    assert.equal(f.p.getInterfaceId(), 402);
+    const bankBefore = banks(f), offerBefore = JSON.stringify(placed(f)), coins = f.inv.getAmount(I.COINS);
+    await button(f, 4, 0, -1, 1, 402);
+    assert.deepEqual(banks(f), bankBefore); assert.equal(JSON.stringify(placed(f)), offerBefore);
+    assert.equal(f.inv.getAmount(I.COINS), coins);
+    assert.equal(placed(f).length, 1, "bank collection retains the offer");
+    await button(f, 3, 0, -1, 1, 402);
+    assert.equal(placed(f).length, 0); assert.equal(f.inv.getAmount(I.OLD_SCHOOL_BOND_UNTRADEABLE_), 1);
+  });
+  await t.test("full inventory retains a completed bond offer", async st => {
+    const f = actor("ironman", st); open(f); await selectBuy(f, I.OLD_SCHOOL_BOND);
+    const { callbacks: timers } = await confirm(f); assert.equal(timers.length, 1); timers[0].callback();
+    for (let slot = 1; slot < 28; slot++) f.inv.setItem(slot, new core.Item(I.TINDERBOX, 1));
+    assert.equal(f.inv.getFreeSlots(), 0);
+    await button(f, 6);
+    assert.equal(placed(f).length, 1); assert.equal(f.inv.getAmount(I.OLD_SCHOOL_BOND_UNTRADEABLE_), 0);
+    f.inv.setItem(1, new core.Item(-1, 0));
+    await button(f, 6);
+    assert.equal(placed(f).length, 0); assert.equal(f.inv.getAmount(I.OLD_SCHOOL_BOND_UNTRADEABLE_), 1);
+  });
+  await t.test("locked PIN guards entry and resumes a legal purchase", async st => {
+    const f = actor("ironman", st);
+    const pin = require("../plugins/interface/bankpin/Common.BankPin");
+    f.p.setAttribute("bank-pin:hash", pin.hash(f.p, "2468"));
+    PM.emitCommand({ player: f.p, raw: "ge", base: "ge", parts: ["ge"], handled: false });
+    assert.equal(f.p.getInterfaceId(), 213, "actual PIN keypad opens before the GE");
+    const answer = f.p.getEnteredAmountAction();
+    assert.ok(answer, "keypad owns the active amount action");
+    answer.execute(2468);
+    for (let i = 0; i < 3; i++) core.TaskManager.process();
+    assert.equal(f.p.getInterfaceId(), 465, "correct PIN resumes GE");
+    await selectBuy(f, I.OLD_SCHOOL_BOND); await confirm(f);
+    assert.equal(placed(f).length, 1, "legal purchase after PIN");
+  });
 });

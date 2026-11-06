@@ -192,6 +192,7 @@ function setup(completed = ['gertrudes_cat', 'ictlharins_little_helper'], option
     setFreeSlots: (value) => { freeSlots = value; },
     bootstrapComplete: () => fire('player:bootstrap-complete'),
     setOtherStage: (key, value) => externalStages.set(key, value),
+    on: (name, handler) => custom.set(name, [...(custom.get(name) ?? []), handler]),
     dialogueData,
   };
 }
@@ -416,4 +417,37 @@ test('rat pole handoff waits for capacity and a completed player can reclaim a l
   h.setFreeSlots(1);
   h.line('Here you go.', N.PHINGSPET);
   assert.equal(h.inventory.get(I.RAT_POLE), 1, 'the canonical no-pole dialogue can reissue it after capacity is available');
+});
+
+test('Felkrash trains an overgrown cat at completion and afterwards, as the Pets plugin answers', () => {
+  const h = setup();
+  const N = core.NpcIdentifiers;
+  const I = core.ItemIdentifiers;
+  const cats = { overgrown: true, wily: false };
+  const trained = [];
+  h.on('pets:wily-cat-status', (request) => Object.assign(request, cats));
+  h.on('pets:train-wily-cat', (request) => trained.push(request.player));
+
+  // Post-quest "Can you train my cat for me?": an overgrown cat, a wily cat already, neither.
+  h.quest.setStage(h.player, 22);
+  assert.deepEqual(['zwP5KS', 'y2nrAo', 'MaGFY6'].map((id) => h.condition(id, N.FELKRASH)), [true, false, false]);
+  cats.wily = true;
+  assert.deepEqual(['zwP5KS', 'y2nrAo', 'MaGFY6'].map((id) => h.condition(id, N.FELKRASH)), [false, true, false]);
+  Object.assign(cats, { overgrown: false, wily: false });
+  assert.deepEqual(['zwP5KS', 'y2nrAo', 'MaGFY6'].map((id) => h.condition(id, N.FELKRASH)), [false, false, true]);
+
+  h.action('_ltgrJ', N.FELKRASH);
+  assert.equal(trained.length, 1, 'the training line trains the cat');
+
+  // Before completion the post-quest line does nothing; the quest's own wily-cat line trains.
+  const early = setup();
+  const earlyTrained = [];
+  early.on('pets:train-wily-cat', (request) => earlyTrained.push(request.player));
+  early.inventory.set(I.PET_CAT_7, 1);
+  early.action('_ltgrJ', N.FELKRASH);
+  assert.equal(earlyTrained.length, 0);
+  early.quest.setStage(early.player, 21);
+  early.action('3-zmem', N.FELKRASH);
+  assert.equal(early.stage(), 22);
+  assert.equal(earlyTrained.length, 1, 'completion trains the overgrown cat');
 });

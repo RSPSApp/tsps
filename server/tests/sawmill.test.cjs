@@ -37,6 +37,8 @@ beforeEach(() => {
   sawdust.length = 0;
 });
 
+let nextMockIndex = 20000;
+
 /** 28 slots; coins and vouchers stack, everything else takes a slot each. */
 function createPlayer(slots) {
   const inventory = Array.from({ length: 28 }, (_, slot) => slots[slot] ?? null);
@@ -44,16 +46,18 @@ function createPlayer(slots) {
   const said = [];
   let menu = null;
   const attributes = new Map();
+  const index = nextMockIndex++;
   const player = {
-    said, inventory, attributes,
+    said, inventory, attributes, dialogueActive: false, interfaceActive: false,
+    getIndex: () => index,
     menu: () => menu,
     isRegistered: () => true,
     getLocation: () => new core.Location(3302, 3491),
     getPrivateArea: () => null,
     getAttribute: (key) => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
-    getPacketSender: () => ({ sendCreationMenu: (value) => { menu = value; } }),
-    getDialogueManager: () => ({ startDialogues: (builder) => said.push([...builder.getDialogues().values()][0].text ?? [...builder.getDialogues().values()][0].getText?.()) }),
+    getPacketSender: () => ({ sendCreationMenu: (value) => { menu = value; }, hasInterruptibleInterface: () => player.interfaceActive }),
+    getDialogueManager: () => ({ isActive: () => player.dialogueActive, startDialogues: (builder) => said.push([...builder.getDialogues().values()][0].text ?? [...builder.getDialogues().values()][0].getText?.()) }),
     getInventory: () => ({
       contains: (id) => inventory.some((item) => item?.id === id),
       getAmount: (id) => inventory.filter((item) => item?.id === id).reduce((sum, item) => sum + item.amount, 0),
@@ -128,7 +132,7 @@ test("as captured: Buy-plank's menu - the priced labels, at most the logs carrie
   assert.deepEqual([player.menu().getOptions().maxAmount, player.menu().getOptions().lastAmount], [15, 5], "opens on the last amount");
 });
 
-test("core: the menu sends the captured 2046 arguments, after the last item's varp (the space key); menus without options are unchanged", () => {
+test("core: the menu sends the captured 2046 arguments, after the last item's varp (the space key); menus without options use Make", () => {
   const scripts = [];
   const attributes = new Map();
   const sender = new Proxy({ player: { setCreationMenu() {}, getAttribute: (key) => attributes.get(key) } }, {
@@ -149,7 +153,7 @@ test("core: the menu sends the captured 2046 arguments, after the last item's va
   scripts.length = 0;
   send(new CreationMenu("What would you like to make?", [1511], { execute() {} }));
   const [, plain] = scripts.find(([id]) => id === 2046);
-  assert.deepEqual([plain[0], plain[1], plain[2], plain.at(-1)], [13, "What would you like to make?|Logs", 28, 28]);
+  assert.deepEqual([plain[0], plain[1], plain[2], plain.at(-1)], [0, "What would you like to make?|Logs", 28, 28]);
 });
 
 test("as captured: plank by plank - the coins, a log, then the plank in the first free slot", () => {
@@ -221,6 +225,19 @@ test("Talk-to's Plank-making action opens the menu after the conversation closes
   assert.equal(player.menu().getOptions().maxAmount, 1);
 });
 
+test("a newer dialogue or interface prevents the deferred menu from opening", () => {
+  for (const state of ["dialogueActive", "interfaceActive"]) {
+    const player = createPlayer({ 3: { id: 1511, amount: 1 } });
+    const event = { player, npc: { getId: () => 3101, getDefinition: () => ({ getName: () => "Sawmill operator" }) }, action: "open_interface", target: "Plank-making", handled: false };
+    plankMaking(event);
+    assert.deepEqual([event.handled, event.end], [true, true]);
+    player[state] = true;
+    TaskManager.process();
+    TaskManager.process();
+    assert.equal(player.menu(), null, state);
+  }
+});
+
 test("Varrock diary: a normal plank, and 20 mahogany planks in one go", () => {
   const wood = createPlayer({ 1: { id: COINS, amount: 1000 }, 3: { id: 1511, amount: 1 } });
   convert(wood, 3101, data().planks[0], 1);
@@ -249,4 +266,214 @@ test('a real paid conversion registers sawdust visible to its payer and another 
   assert.equal(core.ItemOnGroundManager.canSee(player, dust), true);
   assert.equal(core.ItemOnGroundManager.canSee(other, dust), true);
   assert.equal(dust.isStaticSpawn(), false, 'the pile must retain its timed expiry');
+});
+
+test("native creation menu verbs preserve recipe slots and literal quantities", async () => {
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const { PlayerSession } = require("../dist/net/PlayerSession");
+  const { ClientConnection } = require("../dist/net/NetworkBuilder");
+  const channel = { kind: "test", isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+  const player = new Player(new PlayerSession(channel));
+  player.setIndex(123); player.setUsername("makexverbs"); player.setRegistered(true);
+  const connection = new ClientConnection(channel); connection.player = player;
+  const sender = player.getPacketSender(), scripts = [];
+  sender.sendInterfaceScript = (id, args) => { scripts.push([id, args]); return sender; };
+  try {
+    for (const mode of [undefined, 0, 6, 13, 10, 3, 12, 27, 17, 31]) {
+      for (const slot of [0, 1]) for (const quantity of [0, 1, 5, 10, 17, 999]) {
+        const calls = [];
+        const options = { maxAmount: 17, lastAmount: 5, ...(mode === undefined ? {} : { mode }) };
+        sender.sendCreationMenu(new CreationMenu("What would you like to make?", [1511, 6332],
+          { execute: (...args) => calls.push(args) }, options));
+        const args = scripts.findLast(([id]) => id === 2046)[1];
+        assert.equal(args[0], mode ?? 0);
+        assert.deepEqual([args[2], args[3], args[4], args.at(-1)], [17, 1511, 6332, 5]);
+        await connection.dispatch([{ type: "dialogue_continue", widgetId: (270 << 16) | (15 + slot), childIndex: quantity }]);
+        connection.processTurnPackets();
+        assert.deepEqual(calls, [[[1511, 6332][slot], quantity > 0 ? Math.min(quantity, 17) : 1]]);
+      }
+    }
+  } finally { player.setRegistered(false); }
+});
+
+// Existing native Player/decoded-input/selected-World-phase seam; no direct Sawmill admission helper.
+test("native interrupted Sawmill dialogue cannot reopen its deferred creation menu", async t => {
+  process.env.DISABLE_PLAYER_BOTS = "1";
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const { PlayerSession } = require("../dist/net/PlayerSession");
+  const { ClientConnection } = require("../dist/net/NetworkBuilder");
+  PluginManager.loadFromDirectory(path.resolve(__dirname, "../plugins"));
+  core.RegionManager.init();
+  core.RegionManager.loadMapFiles(3226, 3218);
+  PluginManager.emitServerStartup({});
+  t.after(() => { PluginManager.emitServerShutdown({}); start(api); });
+  let nextIndex = 1910;
+  for (const mode of ["stationary", "direct-buy", "move", "replacement-dialogue"]) {
+    await t.test(mode, async t => {
+      const channel = {
+        kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true, send: () => true,
+        close() {}, onData() {}, onError() {}, onClose() {},
+      };
+      const player = new Player(new PlayerSession(channel));
+      player.setIndex(nextIndex++);
+      player.setUsername("sawlife" + player.getIndex());
+      player.setRegistered(true);
+      player.setLocation(new core.Location(3226, 3218, 0));
+      player.needsPlacement = false;
+      const connection = new ClientConnection(channel);
+      connection.player = player;
+      const sender = player.getPacketSender(), manager = player.getDialogueManager();
+      // Actors are seeded for native route geometry; these are not asserted retail spawn coordinates.
+      const npc = core.NPC.create(3101, new core.Location(3227, 3218, 0));
+      assert.equal(core.World.getNpcs().add(npc), true);
+      const definition = npc.getCurrentDefinition(player);
+      assert.equal(definition.getName(), "Sawmill operator");
+      const option = name => {
+        const index = definition.getActions().indexOf(name);
+        assert.ok(index >= 0, "cache action " + name);
+        return { type: "npc_option", index: npc.getIndex(), clickType: index + 1 };
+      };
+      const inventory = player.getInventory(), I = core.ItemIdentifiers;
+      inventory.add(new core.Item(I.COINS, 1000), false);
+      inventory.add(new core.Item(I.LOGS, 1), false);
+      const originalFloor = new Set(core.World.getItems());
+      t.after(() => {
+        player.closeInterruptibleInterfaces();
+        PluginManager.emitPlayerDisconnect({ player, username: player.getUsername() });
+        PluginManager.emitPlayerLogout({ player, username: player.getUsername() });
+        player.setRegistered(false);
+        core.TaskManager.cancelTasks(player.getIndex());
+        core.TaskManager.cancelTasks(player);
+        core.World.getNpcs().remove(npc);
+        for (const ground of [...core.World.getItems()]) {
+          if (!originalFloor.has(ground) && (ground.getOwner() === player.getUsername()
+            || ground.getItem().getId() === I.SAWDUST)) core.ItemOnGroundManager.deregister(ground);
+        }
+      });
+      const producers = [], gains = [];
+      const emit = PluginManager.emitCustomEvent.bind(PluginManager);
+      t.mock.method(PluginManager, "emitCustomEvent", (name, payload) => {
+        const result = emit(name, payload);
+        if (name === "npc-dialogue:action" && payload.player === player
+          && payload.action === "open_interface" && payload.target === "Plank-making") {
+          producers.push({ step: payload.stepId, handled: payload.handled, npc: payload.npc });
+        }
+        return result;
+      });
+      const skills = player.getSkillManager(), addXp = skills.addExperiences.bind(skills);
+      t.mock.method(skills, "addExperiences", (skill, amount) => {
+        gains.push({ skill, amount });
+        return addXp(skill, amount);
+      });
+      const owned = id => inventory.getAmount(id) + player.getEquipment().getAmount(id)
+        + player.getBanks().reduce((sum, bank, tab) => sum
+          + (bank && tab !== core.Bank.BANK_SEARCH_TAB_INDEX ? bank.getAmount(id) : 0), 0)
+        + core.World.getItems().filter(ground => !ground.isPendingRemoval()
+          && ground.getOwner() === player.getUsername() && ground.getPrivateArea() === player.getPrivateArea()
+          && ground.getItem().getId() === id).reduce((sum, ground) => sum + ground.getItem().getAmount(), 0);
+      const state = () => ({ mode, pos: [player.getLocation().getX(), player.getLocation().getY()],
+        queue: player.getMovementQueue().size(), didMove: player.getMovementQueue().didMoveThisCycle(),
+        coins: owned(I.COINS), logs: owned(I.LOGS), planks: owned(I.PLANK), vouchers: owned(VOUCHER),
+        hasMenu: Boolean(player.getCreationMenu()), chatbox: sender.getChatboxGroupId(),
+        dialogue: manager.getCurrent()?.getText?.(), gains: [...gains] });
+      const untouched = () => {
+        assert.equal(owned(I.COINS), 1000); assert.equal(owned(I.LOGS), 1);
+        assert.equal(owned(I.PLANK), 0); assert.equal(owned(VOUCHER), 0); assert.deepEqual(gains, []);
+      };
+      let turns = 0;
+      const turn = () => {
+        assert.ok(++turns <= 24, "bounded native phase budget");
+        player.resetUpdating();
+        core.World.processCycle = (core.World.processCycle + 1) & 0x7fffffff;
+        core.TaskManager.process();
+        connection.processTurnPackets();
+        const queue = player.getMovementQueue();
+        queue.beginCycle(); queue.processEntityPursuit();
+        if (queue.hasPendingWork()) queue.process();
+        core.TaskManager.processWalkTo(player.getIndex());
+      };
+      const send = async (...packets) => { await connection.dispatch(packets); turn(); };
+      if (mode === "direct-buy") {
+        await send(option("Buy-plank"));
+        for (let i = 0; i < 5 && !player.getCreationMenu(); i++) turn();
+        assert.ok(player.getCreationMenu(), "genuine Buy-plank control");
+      } else {
+        await send(option("Talk-to"));
+        for (let i = 0; i < 5 && !manager.getCurrent(); i++) turn();
+        assert.match(manager.getCurrent()?.getText?.() ?? "", /Do you want me to make some planks/);
+        assert.equal(manager.getOwner(), undefined, "ordinary Talk-to has no explicit playback owner");
+        assert.equal(sender.getChatboxOwner(), undefined);
+        await send({ type: "dialogue_continue", widgetId: (sender.getChatboxGroupId() << 16) | 5, childIndex: -1 });
+        const prompt = core.MultiChatboxPrompt.getPending(player);
+        assert.ok(prompt, "the actual transcript option prompt must own this choice");
+        assert.equal(manager.isActive(), false);
+        const choice = prompt.options.indexOf("Yes, please make me some planks.") + 1;
+        assert.ok(choice > 0);
+        await send({ type: "dialogue_continue", widgetId: core.MultiChatboxPrompt.OPTIONS_WIDGET_ID, childIndex: choice });
+        assert.equal(core.MultiChatboxPrompt.getPending(player), null);
+        assert.equal(manager.getCurrent()?.getText?.(), "Yes, please make me some planks.");
+        assert.equal(sender.getChatboxGroupId(), 217, "actual PlayerDialogue, not another option prompt");
+        const oldDialogue = manager.getCurrent();
+        const oldMount = sender.subInterfaceTargets.get(sender.getChatboxGroupId());
+        assert.ok(oldDialogue); assert.ok(oldMount);
+        assert.equal(sender.getSubInterfaceAt(oldMount.targetUid), oldMount);
+        assert.equal(manager.getOwner(), undefined); assert.equal(sender.getChatboxOwner(), undefined);
+        assert.equal(player.getCreationMenu() ?? null, null); untouched();
+        const resume = { type: "dialogue_continue", widgetId: (217 << 16) | 5, childIndex: -1 };
+        const followUp = mode === "move"
+          ? [{ type: "move", worldX: 3225, worldY: 3217, modifierFlags: 0, run: false }]
+          : mode === "replacement-dialogue" ? [option("Talk-to")] : [];
+        // Both packets are processed in this same player turn, before the next global task phase.
+        await send(resume, ...followUp);
+        assert.equal(producers.length, 1, "the actual registered Plank-making producer was reached");
+        assert.equal(producers[0].step, "Tc6di4");
+        assert.equal(producers[0].handled, true); assert.equal(producers[0].npc, npc);
+        assert.equal(player.getCreationMenu() ?? null, null, "deferred menu has not run yet"); untouched();
+        let replacementMount, replacementOwner, replacementDialogue;
+        if (mode === "move") {
+          assert.deepEqual(state().pos, [3225, 3217]);
+          assert.equal(player.getMovementQueue().size(), 0);
+          assert.equal(player.getMovementQueue().didMoveThisCycle(), true);
+          assert.equal(manager.isActive(), false); assert.equal(sender.getChatboxGroupId(), -1);
+        } else if (mode === "replacement-dialogue") {
+          replacementDialogue = manager.getCurrent(); replacementOwner = manager.getOwner();
+          assert.match(replacementDialogue?.getText?.() ?? "", /Do you want me to make some planks/);
+          assert.equal(replacementOwner, undefined, "replacement ordinary Talk-to is also unowned");
+          assert.notEqual(replacementDialogue, oldDialogue);
+          assert.equal(sender.getChatboxOwner(), undefined);
+          // Read the real terminal mount, not a fresh observation object or only the chatbox owner.
+          replacementMount = sender.subInterfaceTargets.get(sender.getChatboxGroupId());
+          assert.ok(replacementMount); assert.notEqual(replacementMount, oldMount);
+          assert.equal(sender.getSubInterfaceAt(replacementMount.targetUid), replacementMount);
+        }
+        turn();
+        const details = JSON.stringify(state());
+        if (mode === "move") {
+          assert.equal(player.getCreationMenu() ?? null, null, "cancelled service must stay closed: " + details);
+          untouched();
+          await send({ type: "dialogue_continue", widgetId: (270 << 16) | 15, childIndex: 1 });
+          untouched();
+          return;
+        }
+        if (mode === "replacement-dialogue") {
+          assert.equal(sender.getSubInterfaceAt(replacementMount.targetUid), replacementMount,
+            "old deferred service must preserve the new dialogue mount: " + details);
+          assert.equal(manager.getCurrent(), replacementDialogue);
+          assert.equal(manager.getOwner(), replacementOwner); assert.equal(sender.getChatboxOwner(), replacementOwner);
+          assert.equal(player.getCreationMenu() ?? null, null); untouched();
+          return;
+        }
+        assert.ok(player.getCreationMenu(), "stationary deferred-open positive control");
+      }
+      untouched();
+      const menu = player.getCreationMenu();
+      assert.equal(menu.getTitle(), "How many do you wish to make?");
+      const slot = menu.getItems().indexOf(I.LOGS);
+      assert.ok(slot >= 0); assert.equal(menu.getOptions().maxAmount, 1);
+      await send({ type: "dialogue_continue", widgetId: (270 << 16) | (15 + slot), childIndex: 1 });
+      assert.equal(owned(I.COINS), 900); assert.equal(owned(I.LOGS), 0); assert.equal(owned(I.PLANK), 1);
+      assert.equal(owned(VOUCHER), 0); assert.deepEqual(gains, []);
+      assert.equal(player.getCreationMenu() ?? null, null);
+    });
+  }
 });

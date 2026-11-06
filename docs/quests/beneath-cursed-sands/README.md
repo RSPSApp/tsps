@@ -20,6 +20,10 @@ and lily varbits was fixed and unit-tested.
 
 ## Findings
 
+- **open** (2026-11-05) `bcs_excavation_status` (varbit 13843, varp 3421 bits 10-11) is never
+  published. Capture 101 sets it to **1** at the quest start, **2** while the tomb is open and
+  **0** on completion (ticks 8542, 10757 and 11030, lines 156066, 207112 and 215645). No client
+  check or Quest Helper branch is known for it, so it was left alone rather than guessed.
 - **fixed** Login restored only `13844` (entry), `13847` (mould), `13850` (lily) and the owed
   item bits. It now also restores the captured `13845` (citizen talked), `13846` (pillar found),
   `13848` (tomb found), `13849` (rotation solved, **15**) and `13851` (completion type **2**).

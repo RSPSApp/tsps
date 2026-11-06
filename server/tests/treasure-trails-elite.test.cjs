@@ -117,14 +117,14 @@ test("every elite step is a cache clue item; the guards, challenges and Sherlock
   assert.equal(data.uri, C.getNpcId("trail_elite_uri"));
 });
 
-test("steps this server can't finish are never rolled: three kill steps and four Sherlock tasks", () => {
+test("steps this server can't finish are never rolled: every Sherlock task is set", () => {
   fixture();
   const data = Runtime.data(ELITE);
   assert.deepEqual(data.steps.filter(step => !data.rollable.includes(step)).map(step => C.getDbRowName(step.targetRow)).sort(),
-    // The pyre-ship barbarian spirit, the quest-only shellbane gryphon, and the clue's Frost Nagua (13788; the world's are 13787).
-    ["cluehelper_target_kill_barbarian", "cluehelper_target_kill_frost_nagua", "cluehelper_target_kill_gryphon_boss"]);
+    // These are the only elite gaps left after accounting for plugin-backed NPC spawns.
+    []);
   assert.deepEqual([...data.tasks.values()].filter(task => !SKILL_CHALLENGES[task.key]).map(task => task.text).sort(),
-    ["Fix a magical lamp in Dorgesh-Kaan.", "Mine some nickel.", "Score a goal in skullball.", "Steal from a chest in Ardougne Castle."].sort());
+    []);
   for (const key of Object.keys(SKILL_CHALLENGES).filter(key => key.includes("_elite_"))) assert.ok(data.tasks.has([...data.tasks.values()].find(task => task.key === key)?.row), key);
 });
 

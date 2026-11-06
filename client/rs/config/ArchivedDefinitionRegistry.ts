@@ -1,14 +1,16 @@
 import type { CacheInfo } from "../cache/CacheInfo";
 import { crc32 } from "../util/Crc32";
 import { decodeArchivedType } from "./ArchivedTypeLoader";
+import { archivedSeqFields } from "./ArchivedTypeLoader";
 import type { ArchivedReferenceField, ArchivedTypeSource } from "./ArchivedTypeLoader";
 import { LocType } from "./loctype/LocType";
 import { NpcType } from "./npctype/NpcType";
 import { ObjType } from "./objtype/ObjType";
+import { SeqType } from "./seqtype/SeqType";
 import type { Type } from "./Type";
 import type { TypeConstructor } from "./TypeLoader";
 
-export type ArchivedDefinitionKind = "npc" | "loc" | "obj";
+export type ArchivedDefinitionKind = "npc" | "loc" | "obj" | "seq";
 export interface ArchivedDefinitionRow {
     kind: ArchivedDefinitionKind;
     symbol: string;
@@ -26,7 +28,8 @@ export interface ArchivedDefinitionBundle {
 }
 export interface ArchivedDefinitionContext {
     cacheInfo: CacheInfo;
-    counts: Record<ArchivedDefinitionKind, number>;
+    /** Sequences are optional: a context without their native count rejects archived sequences. */
+    counts: Record<Exclude<ArchivedDefinitionKind, "seq">, number> & { seq?: number };
     currentDefinition(kind: ArchivedDefinitionKind, id: number): {
         name: string;
         data?: Int8Array;
@@ -34,9 +37,9 @@ export interface ArchivedDefinitionContext {
 }
 
 const constructors: Record<ArchivedDefinitionKind, TypeConstructor<Type>> = {
-    npc: NpcType, loc: LocType, obj: ObjType,
+    npc: NpcType, loc: LocType, obj: ObjType, seq: SeqType,
 };
-const kinds: readonly ArchivedDefinitionKind[] = ["npc", "loc", "obj"];
+const kinds: readonly ArchivedDefinitionKind[] = ["npc", "loc", "obj", "seq"];
 const targetKey = (kind: ArchivedDefinitionKind, id: number) => kind + ":" + id;
 const sourceKey = (bundle: string, kind: ArchivedDefinitionKind, id: number) => bundle + ":" + kind + ":" + id;
 const nameKey = (bundle: string, kind: ArchivedDefinitionKind, symbol: string) => bundle + ":" + kind + ":" + symbol;
@@ -53,10 +56,12 @@ export class ArchivedDefinitionRegistry {
     private bundles: readonly ArchivedDefinitionBundle[] = [];
     private counts: Record<ArchivedDefinitionKind, number>;
     private readonly nativeCounts: Record<ArchivedDefinitionKind, number>;
+    private readonly sequencesSupported: boolean;
     private readonly target: Pick<CacheInfo, "name" | "game" | "revision">;
 
     constructor(private readonly context: ArchivedDefinitionContext) {
-        this.nativeCounts = { ...context.counts };
+        this.sequencesSupported = context.counts.seq !== undefined;
+        this.nativeCounts = { ...context.counts, seq: context.counts.seq ?? 0 };
         for (const kind of kinds) {
             if (!Number.isInteger(this.nativeCounts[kind]) || this.nativeCounts[kind] < 0) {
                 throw new Error("Invalid native definition count");
@@ -100,7 +105,10 @@ export class ArchivedDefinitionRegistry {
                 if (!row || !kinds.includes(row.kind) || !validId(row.id) || row.id === 0 || !validId(row.sourceId)) {
                     throw new Error("Invalid archived definition kind or wire id range");
                 }
-                if (typeof row.symbol !== "string" || !/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(row.symbol)) {
+                if (row.kind === "seq" && !this.sequencesSupported) {
+                    throw new Error("Archived sequences need the native sequence count");
+                }
+                if (typeof row.symbol !== "string" || !/^[a-zA-Z0-9_]+$/.test(row.symbol)) {
                     throw new Error("Invalid archived definition symbol");
                 }
                 const key = targetKey(row.kind, row.id);
@@ -145,10 +153,19 @@ export class ArchivedDefinitionRegistry {
                 return target;
             };
             const references: Partial<Record<ArchivedReferenceField, number | readonly number[]>> = {};
-            if (entry.row.kind !== "obj") {
+            if (entry.row.kind === "npc" || entry.row.kind === "loc") {
                 const transforms = (entry.type as NpcType | LocType).transforms;
                 if (transforms) references.transforms = Object.freeze(transforms.map(reference));
-            } else {
+                // Animations are optional bundle members: an id the bundle does not
+                // archive is a current native sequence, while a recycled one must be
+                // carried by the same bundle and is rebound to its appended id.
+                const native = entry.type as unknown as Record<string, number>;
+                for (const field of archivedSeqFields(entry.row.kind)) {
+                    const id = native[field];
+                    const target = id >= 0 ? sourceIds.get(sourceKey(entry.bundle, "seq", id)) : undefined;
+                    if (target !== undefined && target !== id) references[field] = target;
+                }
+            } else if (entry.row.kind === "obj") {
                 const item = entry.type as ObjType;
                 const fields = ["note", "noteTemplate", "notedId", "unnotedId", "placeholder", "placeholderTemplate"] as const;
                 for (const field of fields) {

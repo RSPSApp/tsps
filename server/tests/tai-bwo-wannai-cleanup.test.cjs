@@ -5,11 +5,15 @@
 // network stubbed. The world clock is counted here so the 149- and 1000-tick restores can be crossed.
 const assert = require('node:assert/strict');
 const path = require('node:path');
-const { test, before, beforeEach, afterEach } = require('node:test');
+const { test, before, after, beforeEach, afterEach } = require('node:test');
+const { PluginContext } = require('../dist/plugins/PluginContext');
+const originalRandom = Math.random;
 
 const ROOT = path.join(__dirname, '..');
 const { Server } = require('../dist/Server');
 Server.installProductionPathResolver();
+
+process.env.DISABLE_PLAYER_BOTS = '1';
 
 let PluginManager, core, MapObjects, ObjectDefinition, Location, Player, Item, Equipment, jungleQuest;
 let Common, Locs, Jungle, Fence, Favour, Villagers, Events, GemRock, Broodoo;
@@ -52,7 +56,9 @@ before(async () => {
   GemRock = require(`${dir}GemRock.TaiBwoWannaiCleanup`);
   Broodoo = require(`${dir}Broodoo.TaiBwoWannaiCleanup`);
   jungleQuest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find((q) => q.key === 'jungle_potion');
+  PluginManager.emitServerStartup({});
 });
+after(() => PluginManager.emitServerShutdown({}));
 
 beforeEach(() => {
   // Every map loc back as the cache placed it.
@@ -151,7 +157,7 @@ test('hacking needs Murcaily first, a wielded machete and the Woodcutting level'
 
 test('a hack: the result 7 ticks after the click (01858), the jungle one stage down in place, its spar, XP, then favour 3 ticks on', (t) => {
   const p = villager(t);
-  t.mock.method(Math, 'random', () => 0);
+  mockRandom(t, () => 0);
   const before = xp(p);
   const original = MapObjects.get(loc('tai_bwo_jungle_vegetation_easy_1'), at(LIGHT), null);
   click(p, LIGHT, 'Hack');
@@ -175,7 +181,7 @@ test('a hack: the result 7 ticks after the click (01858), the jungle one stage d
 
 test('a miss gives 1 XP and leaves the jungle', (t) => {
   const p = villager(t);
-  t.mock.method(Math, 'random', () => 0.999);
+  mockRandom(t, () => 0.999);
   const before = xp(p);
   click(p, MEDIUM, 'Hack');
   tick(7);
@@ -186,7 +192,7 @@ test('a miss gives 1 XP and leaves the jungle', (t) => {
 
 test('cut to the ground: stage 5 ends the hack with the message, and the jungle grows back 149 ticks after its last change', (t) => {
   const p = villager(t);
-  t.mock.method(Math, 'random', () => 0);
+  mockRandom(t, () => 0);
   click(p, DENSE, 'Hack');
   tick(9 * 3 + 7);
   assert.equal(locAt(DENSE), loc('tai_bwo_jungle_vegetation_hard_5'));
@@ -202,7 +208,7 @@ test('cut to the ground: stage 5 ends the hack with the message, and the jungle 
 
 test('the last free slot gets its spar, then the hack stops with the recorded message', (t) => {
   const p = villager(t);
-  t.mock.method(Math, 'random', () => 0);
+  mockRandom(t, () => 0);
   p.getInventory().add(new Item(obj('bones'), 27));
   click(p, LIGHT, 'Hack');
   tick(7);
@@ -217,7 +223,7 @@ test('the last free slot gets its spar, then the hack stops with the recorded me
 
 test('walking away stops the hack and keeps a favour gain already due', (t) => {
   const p = villager(t);
-  t.mock.method(Math, 'random', () => 0);
+  mockRandom(t, () => 0);
   click(p, LIGHT, 'Hack');
   tick(7);
   p.getMovementQueue().addSteps(new Location(2771, 3063, 0));
@@ -287,7 +293,10 @@ test('favour stops at 100%, with the recorded message', (t) => {
   Favour.gain(p, 3);
   assert.equal(Favour.points(p), 1000);
   assert.equal(varbit(p, 'favour_percentage'), 100);
-  assert.deepEqual(p.messages, ['Your Favour total is now full, you cannot gain any more.<br>Talk to the villagers to get favour converted to trading sticks.']);
+  assert.deepEqual(p.messages, [
+    'Your Favour total is now full, you cannot gain any more.<br>Talk to the villagers to get favour converted to trading sticks.',
+    '<col=dc143c>Well done! You have completed a medium task in the Karamja area. Your Achievement Diary has been updated.</col>',
+  ]);
 });
 
 test('sticks: the fit passes through the three recorded claims', () => {
@@ -382,7 +391,7 @@ test('a machete on a spar makes 5 skewers; a skewer on a spider carcass makes a 
 
 test('repairing the fence ends a hack, and hacking ends a repair', (t) => {
   const p = villager(t);
-  t.mock.method(Math, 'random', () => 0.999);
+  mockRandom(t, () => 0.999);
   p.getInventory().add(new Item(obj('thatching_spar_light'), 3));
   click(p, LIGHT, 'Hack');
   tick(2);
@@ -414,7 +423,7 @@ test('two players on one fence: the one who finds it finished stops without spen
 
 test('a teleport away ends a hack and a repair', (t) => {
   const p = villager(t);
-  t.mock.method(Math, 'random', () => 0.999);
+  mockRandom(t, () => 0.999);
   click(p, LIGHT, 'Hack');
   tick(2);
   p.setLocation(new Location(3222, 3218, 0));
@@ -433,7 +442,7 @@ test('a teleport away ends a hack and a repair', (t) => {
 
 test('a level-up pop-up holds the hack until it is continued', (t) => {
   const p = villager(t);
-  t.mock.method(Math, 'random', () => 0);
+  mockRandom(t, () => 0);
   click(p, LIGHT, 'Hack');
   let resume = null;
   PluginManager.emitCustomEvent('level-up:popup-opened', { player: p, skill: core.Skill.WOODCUTTING, pause: (session, onResume) => { resume = onResume; } });
@@ -504,15 +513,23 @@ test('logged in inside the village, the overlay waits for the welcome screen, th
 const npc = (name) => id('Npc', name);
 const entry = (key) => Common.data.events.table.find((e) => e.key === key);
 
+/** Keep deterministic village rolls local while background plugins use their own randomness. */
+function mockRandom(t, draw) {
+  t.mock.method(Math, 'random', () => {
+    const owner = PluginContext.current();
+    return owner == null || owner === 'TaiBwoWannaiCleanup' ? draw() : originalRandom();
+  });
+}
+
 /** Math.random answers from `values` in turn (then the last, again). */
 function randoms(t, values) {
   let i = 0;
-  t.mock.method(Math, 'random', () => values[Math.min(i++, values.length - 1)]);
+  mockRandom(t, () => values[Math.min(i++, values.length - 1)]);
 }
 
 test('the event chance: one more in 101 for each result, to 7; none at 0', (t) => {
   const p = villager(t, { events: true });
-  t.mock.method(Math, 'random', () => 0.999);
+  mockRandom(t, () => 0.999);
   click(p, LIGHT, 'Hack');
   tick(7);
   assert.equal(varbit(p, 'eventchance'), 1);
@@ -548,7 +565,7 @@ test('an event takes the swing: the stall, then the message, the step back and t
 test('the table follows the Wiki weights, and the gout tuber odds go 1/100 at 10 to 1/33 at 99', (t) => {
   const keys = [];
   for (let n = 0; n < 99; n++) {
-    t.mock.method(Math, 'random', () => (n + 0.5) / 99);
+    mockRandom(t, () => (n + 0.5) / 99);
     keys.push(Events.pick().key);
     t.mock.restoreAll();
   }
@@ -602,7 +619,7 @@ test('a gem rock: Mine at 40 with a pickaxe, a gem a swing, 65 XP, three gems an
   mine();
   assert.deepEqual(p.messages, ['You need a pickaxe to mine this rock.']);
   p.getInventory().add(new Item(obj('rune_pickaxe'), 1));
-  t.mock.method(Math, 'random', () => 0);
+  mockRandom(t, () => 0);
   const before = p.getSkillManager().getExperience(core.Skill.MINING);
   mine();
   tick(40);
@@ -636,7 +653,7 @@ test("kills: the threat's favour to the killer with the recorded message; mosqui
   kill(spider);
   assert.equal(Favour.points(p), 20, 'no spider favour before the first sticks');
   Common.advance(p, 5);
-  t.mock.method(Math, 'random', () => 0);
+  mockRandom(t, () => 0);
   kill(spawnFor(t, p, 'spider'));
   assert.equal(Favour.points(p), 30, '1-2%');
 });
@@ -657,7 +674,7 @@ test("Broodoo victims: a player's hits do at most 3; the right item hurts, with 
   const { HitDamage, HitMask } = core;
   const parts = [new HitDamage(20, HitMask.RED), new HitDamage(5, HitMask.RED), new HitDamage(0, HitMask.BLUE)];
   let total = null;
-  const hit = { getHits: () => parts, getHandleAfterHitEffects: () => false, getAttacker: () => p, getTarget: () => white, getTotalDamage: () => total ?? 25, updateTotalDamage() { total = parts.reduce((sum, d) => sum + d.getDamage(), 0); } };
+  const hit = { isAccurate: () => true, getHits: () => parts, getHandleAfterHitEffects: () => false, getAttacker: () => p, getTarget: () => white, getTotalDamage: () => total ?? 25, updateTotalDamage() { total = parts.reduce((sum, d) => sum + d.getDamage(), 0); } };
   PluginManager.emitPlayerDealtDamage({ player: p, target: white, hit });
   assert.deepEqual(parts.map((d) => d.getDamage()), [3, 0, 0]);
   assert.equal(total, 3);
@@ -666,7 +683,7 @@ test("Broodoo victims: a player's hits do at most 3; the right item hurts, with 
   use(white, obj('bones'));
   assert.ok(p.messages.includes('Nothing interesting happens.'));
   p.getInventory().add(new Item(obj('cabbage'), 1));
-  t.mock.method(Math, 'random', () => 0);
+  mockRandom(t, () => 0);
   const cooking = p.getSkillManager().getExperience(core.Skill.COOKING);
   const hp = white.getHitpoints();
   use(white, obj('cabbage'));
@@ -692,7 +709,7 @@ test("the poison victim's hit weakens: 1-3 off five combat stats, with the messa
   const p = villager(t, { events: true });
   const skills = p.getSkillManager();
   for (const name of ['ATTACK', 'STRENGTH', 'DEFENCE', 'RANGED', 'MAGIC']) skills.setMaxLevel(core.Skill[name], 50).setCurrentLevel(core.Skill[name], 50);
-  t.mock.method(Math, 'random', () => 0.999);
+  mockRandom(t, () => 0.999);
   Broodoo.weaken(p);
   for (const name of ['ATTACK', 'STRENGTH', 'DEFENCE', 'RANGED', 'MAGIC']) assert.equal(skills.getCurrentLevel(core.Skill[name]), 47);
   assert.ok(p.messages.includes('You feel incredibly weakened.'));
@@ -709,7 +726,7 @@ test('a spawn left alone goes after 50 minutes', (t) => {
 
 test('a pickup that fills the last slot during a swing: the result cuts nothing and gives nothing', (t) => {
   const p = villager(t);
-  t.mock.method(Math, 'random', () => 0);
+  mockRandom(t, () => 0);
   p.getInventory().add(new Item(obj('bones'), 27));
   const xpBefore = xp(p);
   click(p, LIGHT, 'Hack');
@@ -772,7 +789,7 @@ test('a pickup filling the bag while mining: no gem taken from the rock, no XP',
   const jungle = MapObjects.get(loc('tai_bwo_jungle_vegetation_easy_1'), at(LIGHT), null);
   Events.revealGemRock(p, Common.data.jungle[0], jungle);
   const rock = MapObjects.get(loc('village_gem_rock1'), at(LIGHT), null);
-  t.mock.method(Math, 'random', () => 0);
+  mockRandom(t, () => 0);
   PluginManager.emitObjectInteraction({ player: p, object: rock, objectId: rock.getId(), definition: ObjectDefinition.forPlayer(rock.getId(), p), clickType: 1, location: { x: LIGHT[0], y: LIGHT[1], z: 0 }, handled: false });
   pickUpShark(t, p);
   const before = p.getSkillManager().getExperience(core.Skill.MINING);
@@ -812,4 +829,168 @@ test('the poison victim weakens only when its hit lands and hurts', (t) => {
   blow().notifyApplied(4);
   assert.ok(skills.getCurrentLevel(core.Skill.ATTACK) < 50);
   assert.ok(p.messages.includes('You feel incredibly weakened.'));
+});
+
+
+// Exercise an earned first claim through the registered fence, NPC and dialogue handlers.
+test('native villager rewards preserve earned favour when trading sticks cannot fit', async (t) => {
+  const { PlayerSession } = require('../dist/net/PlayerSession');
+  const { ClientConnection } = require('../dist/net/NetworkBuilder');
+  const { SkillManager } = require('../dist/game/content/skill/SkillManager');
+  const { MAX_STACK_AMOUNT } = require('../dist/game/model/container/StackType');
+  const stick = obj('village_trade_sticks');
+  const spar = obj('thatching_spar_light');
+  const murcaily = Common.data.villagers.find((v) => v.first === true);
+  assert.equal(murcaily.name, 'Murcaily');
+  assert.equal(stick, core.ItemIdentifiers.TRADING_STICKS);
+  assert.equal(core.ItemDefinition.forId(stick).isStackable(), true);
+  assert.equal(Common.data.spars.find((s) => s.item === 'thatching_spar_light').points, 1);
+
+  for (const mode of ['room', 'last stack space', 'full pack without sticks', 'capped stack']) {
+    await t.test(mode, async (t) => {
+      const channel = {
+        kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true, send: () => true,
+        close() {}, onData() {}, onError() {}, onClose() {},
+      };
+      const p = new Player(new PlayerSession(channel));
+      p.setIndex(index++);
+      p.setUsername('stickclaim' + p.getIndex());
+      p.setRegistered(true);
+      p.setLocation(new Location(FENCE[0] + 1, FENCE[1], FENCE[2]));
+      p.needsPlacement = false;
+      const connection = new ClientConnection(channel);
+      connection.player = p;
+      // Quest completion and the explanation are prior state; the repair earns the favour.
+      jungleQuest.setStage(p, jungleQuest.completionValue);
+      Common.advance(p, Common.data.progress.told);
+      assert.equal(jungleQuest.isComplete(p), true);
+      assert.equal(Favour.points(p), 0);
+      PluginManager.emitPlayerLogin({ player: p, username: p.getUsername() });
+      p.closeInterruptibleInterfaces();
+      const skills = p.getSkillManager();
+      const woodcutting = core.Skill.WOODCUTTING;
+      skills.setExperience(woodcutting, SkillManager.getExperienceForLevel(99))
+        .setMaxLevel(woodcutting, 99).setCurrentLevel(woodcutting, 99);
+      assert.equal(skills.getMaxLevel(woodcutting), 99);
+      assert.equal(skills.getCurrentLevel(woodcutting), 99);
+      const inv = p.getInventory();
+      const machete = obj('machette_redtopaz');
+      p.getEquipment().setItem(Equipment.WEAPON_SLOT, new Item(machete));
+      inv.add(new Item(spar), false);
+      const near = mode === 'last stack space' || mode === 'capped stack';
+      if (near) inv.add(new Item(stick, MAX_STACK_AMOUNT - 1), false);
+      const npc = core.NPC.create(id('Npc', `${murcaily.npc}_multinpc`) ?? id('Npc', murcaily.npc),
+        new Location(FENCE[0] + 1, FENCE[1] + 1, FENCE[2]));
+      assert.equal(core.World.getNpcs().add(npc), true);
+      assert.equal(npc.getCurrentDefinition(p).getName(), murcaily.name);
+      t.after(() => {
+        p.closeInterruptibleInterfaces();
+        PluginManager.emitPlayerDisconnect({ player: p, username: p.getUsername() });
+        PluginManager.emitPlayerLogout({ player: p, username: p.getUsername() });
+        p.setRegistered(false);
+        core.TaskManager.cancelTasks(p.getIndex());
+        core.TaskManager.cancelTasks(p);
+        core.World.getNpcs().remove(npc);
+        for (const ground of core.World.getItems().filter((g) => g.getOwner() === p.getUsername())) {
+          core.ItemOnGroundManager.deregister(ground);
+        }
+      });
+      const gains = [];
+      const addXp = skills.addExperience.bind(skills);
+      t.mock.method(skills, 'addExperience', (skill, amount, multipliers) => {
+        gains.push({ skill: skill.getIndex(), amount, multipliers: !!multipliers });
+        return addXp(skill, amount, multipliers);
+      });
+      const stores = (itemId) => ({
+        inventory: inv.getAmount(itemId), equipment: p.getEquipment().getAmount(itemId),
+        bank: p.getBanks().reduce((n, b, tab) => n +
+          (b && tab !== core.Bank.BANK_SEARCH_TAB_INDEX ? b.getAmount(itemId) : 0), 0),
+        floor: core.World.getItems().filter((g) => !g.isPendingRemoval() && g.getOwner() === p.getUsername() &&
+          g.getPrivateArea() === p.getPrivateArea() && g.getItem().getId() === itemId)
+          .reduce((n, g) => n + g.getItem().getAmount(), 0),
+      });
+      const owned = (itemId) => Object.values(stores(itemId)).reduce((n, amount) => n + amount, 0);
+      const state = () => ({
+        mode, sticks: stores(stick), favour: Favour.points(p), cooldown: Villagers.cooldownOf(p, murcaily),
+        progress: Common.progress(p), spar: stores(spar), machete: stores(machete), gains: [...gains],
+      });
+      let turns = 0;
+      const turn = () => {
+        assert.ok(++turns <= 48, 'bounded native phase budget');
+        p.resetUpdating();
+        cycle++;
+        core.TaskManager.process();
+        connection.processTurnPackets();
+        const queue = p.getMovementQueue();
+        queue.beginCycle();
+        queue.processEntityPursuit();
+        if (queue.hasPendingWork()) queue.process();
+        core.TaskManager.processWalkTo(p.getIndex());
+      };
+      const send = async (packet) => { await connection.dispatch([packet]); turn(); };
+      if (mode === 'capped stack') {
+        const here = p.getLocation();
+        core.ItemOnGroundManager.registerLocation(p, new Item(stick), here.clone());
+        assert.equal(stores(stick).floor, 1);
+        await send({ type: 'ground_item_action', itemId: stick, x: here.getX(), y: here.getY(), option: 'Take', optionIndex: 3 });
+        for (let n = 0; n < 6 && stores(stick).floor; n++) turn();
+        assert.equal(inv.getAmount(stick), MAX_STACK_AMOUNT, 'native pickup fills the stack');
+        assert.equal(stores(stick).floor, 0);
+      }
+      const fence = Locs.find(Common.data.fence.locs.map(loc), at(FENCE));
+      assert.ok(fence, 'actual loaded fence');
+      const option = ObjectDefinition.forPlayer(fence.getId(), p).getInteractions().indexOf('Repair') + 1;
+      assert.ok(option > 0);
+      const xpBefore = skills.getExperience(woodcutting);
+      await send({ type: 'object_option', id: fence.getId(), x: FENCE[0], y: FENCE[1], clickType: option, action: 'Repair' });
+      for (let n = 0; n < 22 && Favour.points(p) === 0; n++) turn();
+      assert.equal(Favour.points(p), 1, 'repair earns one favour point');
+      assert.equal(owned(spar), 0, 'repair consumes the light spar');
+      assert.equal(Common.progress(p), Common.data.progress.repaired);
+      assert.ok(skills.getExperience(woodcutting) > xpBefore);
+      assert.equal(skills.getCurrentLevel(woodcutting), 99);
+      assert.equal(skills.getMaxLevel(woodcutting), 99);
+      assert.deepEqual(gains, [{ skill: woodcutting.getIndex(), amount: 28.1, multipliers: false }]);
+      if (mode === 'full pack without sticks') {
+        while (inv.getFreeSlots() > 0) inv.add(new Item(core.ItemIdentifiers.LOGS), false);
+      }
+      const logs = stores(core.ItemIdentifiers.LOGS);
+      const repairGains = gains.map((g) => ({ ...g }));
+      assert.equal(Villagers.canClaim(p, murcaily), true);
+      assert.equal(Villagers.cooldownOf(p, murcaily), 1);
+      assert.equal(Villagers.sticksFor(Favour.points(p)), 1, 'the current invoice');
+      assert.equal(inv.getAddableAmount(new Item(stick)), mode === 'capped stack' || mode === 'full pack without sticks' ? 0 : 1);
+      const before = state();
+      const valueBefore = owned(stick) + Favour.points(p);
+      const talkOption = npc.getCurrentDefinition(p).getActions().indexOf('Talk-to') + 1;
+      assert.ok(talkOption > 0);
+      await send({ type: 'npc_option', index: npc.getIndex(), clickType: talkOption });
+      const manager = p.getDialogueManager();
+      const sender = p.getPacketSender();
+      const speech = manager.getCurrent();
+      assert.ok(speech instanceof core.NpcDialogue);
+      assert.equal(speech.getText(), Common.message('firstClaim'));
+      assert.equal(manager.getOwner(), undefined);
+      assert.equal(sender.getChatboxGroupId(), 231);
+      const mount = sender.subInterfaceTargets.get(231);
+      assert.ok(mount);
+      assert.equal(sender.getSubInterfaceAt(mount.targetUid), mount);
+      assert.deepEqual(state(), before, 'the offer does not consume resources');
+      await send({ type: 'dialogue_continue', widgetId: (231 << 16) | 5, childIndex: -1 });
+      const end = state();
+      const details = JSON.stringify({ before, after: end });
+      assert.equal(owned(stick) + Favour.points(p), valueBefore, 'earned favour/payment conservation: ' + details);
+      const credited = owned(stick) - Object.values(before.sticks).reduce((n, amount) => n + amount, 0);
+      assert.ok(credited === 0 || credited === 1, details);
+      if (mode === 'room' || mode === 'last stack space') assert.equal(credited, 1, details);
+      if (mode === 'full pack without sticks') assert.equal(credited, 0, details);
+      assert.equal(Favour.points(p), 1 - credited, details);
+      assert.equal(Villagers.cooldownOf(p, murcaily), credited ? 7 : 1, details);
+      assert.equal(Common.progress(p), credited ? Common.data.progress.claimed : Common.data.progress.repaired, details);
+      assert.deepEqual(stores(core.ItemIdentifiers.LOGS), logs);
+      assert.equal(owned(spar), 0);
+      assert.equal(owned(machete), 1);
+      assert.deepEqual(gains, repairGains, 'the payout adds no XP beyond the repair');
+    });
+  }
 });

@@ -27,7 +27,7 @@ The capture index lists every loc option that moved the player, per loc and clic
 python3 rsprox_index.py loc-teleports --out loc-teleports.json
 ```
 
-Per loc: the destinations (and the tile the player clicked from, for locs used from either side), the tick of the move, the player's animation, sounds, whether the screen faded, the messages of attempts that didn't move anyone, a dialogue choice on the way, and labels for instances, boats, agility shortcuts and Leagues or event worlds. Ticks count from the player arriving at the loc.
+Per loc: the destinations (and the tile the player clicked from, for locs used from either side), the tick of the move, the player's animation, sounds (the first one that is not a fight's: `ignoreSounds` in `loc-teleport-sync.json` lists the attack, hit, block and weapon sounds the sync skips, as a monster fighting nearby is the first thing a capture hears), whether the screen faded, the messages of attempts that didn't move anyone, a dialogue choice on the way, and labels for instances, boats, agility shortcuts and Leagues or event worlds. Ticks count from the player arriving at the loc.
 
 ## The sync
 
@@ -262,7 +262,7 @@ The object-route hook walks to that threshold before playing the transition.
 The click is handled the tick after the player arrives, so each captured tick comes one tick earlier from the click:
 1. **The animation's tick:** the animation and sound, and the fade out when there is one.
 2. **A tick later:** the minimap goes off.
-3. **The captured tick:** the move.
+3. **The captured tick:** the move, after the entry's `message` when it has one: the game message live OSRS sends on a successful crossing (`messageType: "spam"` for one the chat filter hides). The Cam Torum squeeze doors say "You manage to squeeze through the tiny door." as spam on the teleport's tick (226/1693; 237/1098, 1102, 1105, 1135). The capture export keeps success messages without their type or tick, so the sync doesn't write them; it keeps one on an entry already in the data.
 4. **After the move:** the fade back in a tick later, and the overlay closed two ticks after that.
 
 Movement is blocked meanwhile. The sequence stops if the player is moved, dies or logs out.

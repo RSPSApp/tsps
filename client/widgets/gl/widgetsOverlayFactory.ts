@@ -67,96 +67,6 @@ function fitPortraitParams(model: any, params: any): any {
 }
 
 /** Chatbox interface group (chatlog + input), mirrored from the widget layer. */
-const CHATBOX_GROUP_ID = 162;
-
-/**
- * Screen-rect of the chatbox in main-canvas pixels (top-left origin), used to
- * anchor the system-update countdown just above the chatbox. The chat group
- * (162) is mounted into a gameframe slot (WIDGET_OPEN_SUB) and the render
- * pass draws the mounted root at the slot's origin plus the root's own
- * offset - the root's cached x/y alone (0,0) would anchor the text to the
- * screen's top-left corner. So the layout-space absolute position is walked
- * from the hosting slot (like the widget overlay's containerOf(162)), with
- * the chat root's own walk as fallback when the group is not mounted. The
- * result goes through the widget root's letterbox transform (the same
- * __widgetRenderScale/Offset the render pass applies).
- */
-export function getChatboxScreenRect(host: { osrsClient: OsrsClient }): {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-} | undefined {
-    try {
-        const manager = host.osrsClient?.widgetManager;
-        if (!manager) return undefined;
-        const chatRoots = manager.getAllGroupRoots?.(CHATBOX_GROUP_ID) ?? [];
-        const chatRoot = chatRoots[0];
-        if (!chatRoot) return undefined;
-
-        // The slot widget hosting the chat group, if this layout mounts it.
-        let slot: any;
-        const parents = (manager as any).interfaceParents;
-        if (parents && typeof parents[Symbol.iterator] === "function") {
-            for (const [uid, parent] of parents) {
-                if (parent?.group === CHATBOX_GROUP_ID) {
-                    slot = (manager as any).getWidgetByUid?.(uid);
-                    break;
-                }
-            }
-        }
-
-        // Layout-space absolute position (sum of ancestor x/y, like the
-        // gameframe context's absRectOf).
-        let ax = 0;
-        let ay = 0;
-        let cur: any = slot ?? chatRoot;
-        for (let guard = 0; cur && guard < 32; guard++) {
-            ax += Number(cur.x) || 0;
-            ay += Number(cur.y) || 0;
-            const parentUid = cur.parentUid;
-            if (parentUid === undefined || parentUid === 0xffff || parentUid === cur.uid) break;
-            cur = (manager as any).getWidgetByUid?.(parentUid);
-        }
-        if (slot) {
-            // The mounted root is drawn at the slot's origin plus its own offset.
-            ax += Number(chatRoot.x) || 0;
-            ay += Number(chatRoot.y) || 0;
-        }
-
-        const rootInterface: number | undefined = manager.rootInterface;
-        const viewportRoot =
-            typeof rootInterface === "number" && rootInterface >= 0
-                ? (manager.getAllGroupRoots?.(rootInterface)?.[0] ?? null)
-                : null;
-        const renderScaleX =
-            typeof (viewportRoot as any)?.__widgetRenderScaleX === "number"
-                ? (viewportRoot as any).__widgetRenderScaleX
-                : 1;
-        const renderScaleY =
-            typeof (viewportRoot as any)?.__widgetRenderScaleY === "number"
-                ? (viewportRoot as any).__widgetRenderScaleY
-                : 1;
-        const renderOffsetX =
-            typeof (viewportRoot as any)?.__widgetRenderOffsetX === "number"
-                ? (viewportRoot as any).__widgetRenderOffsetX
-                : 0;
-        const renderOffsetY =
-            typeof (viewportRoot as any)?.__widgetRenderOffsetY === "number"
-                ? (viewportRoot as any).__widgetRenderOffsetY
-                : 0;
-
-        const x = ax * renderScaleX + renderOffsetX;
-        const y = ay * renderScaleY + renderOffsetY;
-        const width = (Number(chatRoot.width) || Number(slot?.width) || 0) * renderScaleX;
-        const height = (Number(chatRoot.height) || Number(slot?.height) || 0) * renderScaleY;
-        if (!(width > 0 && height > 0)) return undefined;
-        return { x, y, width, height };
-    } catch {
-        return undefined;
-    }
-}
-
 /**
  * Builds the widget overlay (HUD, gameframe, menus, minimap, tooltips) against a backend-neutral
  * host. Extracted verbatim from client/render/render/init/shaders.ts so the WebGPU ui module can
@@ -569,6 +479,29 @@ export function createWidgetsOverlay(host: WidgetsOverlayHost): WidgetsOverlay {
                                                         ? host.osrsClient.playerEcs.getAppearance(idx)
                                                         : undefined;
                                                 })();
+                                            const npcId = appearance?.npcTransformationId ?? -1;
+                                            if (npcId >= 0) {
+                                                const loader = host.osrsClient.npcTypeLoader;
+                                                const baseNpcType = loader?.load(npcId);
+                                                const npcType = baseNpcType?.transforms
+                                                    ? baseNpcType.transform(host.osrsClient.varManager, loader)
+                                                    : baseNpcType;
+                                                if (!host.chatheadFactory) {
+                                                    host.chatheadFactory = new ChatheadFactory(
+                                                        host.osrsClient.modelLoader,
+                                                        host.osrsClient.textureLoader,
+                                                    );
+                                                }
+                                                const chatModel = npcType
+                                                    ? host.chatheadFactory.get(npcType)
+                                                    : undefined;
+                                                return chatModel
+                                                    ? host.model2DRenderer.renderModelInstanceToCanvasExtents(
+                                                          chatModel,
+                                                          params,
+                                                      )
+                                                    : undefined;
+                                            }
                                             if (host.playerChatheadFactory && appearance) {
                                                 const chatModel =
                                                     host.playerChatheadFactory.get(appearance);

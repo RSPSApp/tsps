@@ -74,7 +74,11 @@ test('God Wars generals preserve exact source fractions in one exclusive pool', 
             .map(bonus => [entry.item_id, bonus.item_id])).sort((a,b) => a[0]-b[0]), expectedPairs, id);
     }
     assert.deepEqual(Object.entries(dump.tables).filter(([id]) => !GWD_REMAINDERS[id])
-        .flatMap(([id, table]) => table.entries.filter(entry => entry.weight_basis).map(() => id)), []);
+        .flatMap(([id, table]) => table.entries.filter(entry => entry.weight_basis && entry.weight_basis !== 'conditional_group').map(() => id)), []);
+    const conditionalTables = Object.entries(dump.tables)
+        .filter(([, table]) => table.entries.some(entry => entry.weight_basis === 'conditional_group'))
+        .map(([id]) => id);
+    assert.deepEqual(conditionalTables, ['corporeal_beast'], 'only the imported conditional unique group');
 });
 
 test('God Wars unique outcomes do not also roll the main table independently', t => {

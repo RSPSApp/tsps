@@ -28,6 +28,7 @@ const DRAGON_DEFENDER = 12954;
 function fakeItem(id, { tradeable = true, high = 38400, low = 25600, presetUntradeable = false } = {}) {
   return {
     getId: () => id,
+    getMeta: () => presetUntradeable ? { untradeable: true } : null,
     isUntradeable: () => presetUntradeable,
     getDefinition: () => ({
       getHighAlchValue: () => high,

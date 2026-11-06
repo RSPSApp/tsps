@@ -4,8 +4,9 @@
  * their Wiki transcript or the Travel option). The way in from Rellekka is in Rellekka.plugin.js
  * and the Blast Furnace stairs are in minigames/BlastFurnace.plugin.js.
  *
- * Tiles are Offline_Scape's (RSPS); the locs are the cache's. OSRS requires starting The Giant
- * Dwarf to enter Keldagrim, so the cave-to-city passage is gated on that quest state.
+ * Tiles are Offline_Scape's (RSPS); the locs are the cache's. The cave entrance leads to the
+ * Dwarven Boatman on the river's near bank; talking to him starts The Giant Dwarf and the boat
+ * ride is what takes you into the city, so the cave entrance itself cannot be quest-gated.
  */
 
 /** Loc id -> where it takes you. */
@@ -20,7 +21,10 @@ const FERRY_MESSAGE = "The dwarf ferries you across the river.";
 const NO_FARE_CONDITION = "If the player doesn't have 2 coins:";
 /** The transcript's [Charm] crossings, which are free. */
 const CHARM_CROSSINGS = new Set(["d9TbkS", "PJ6RxL"]);
-const CITY_ZONE = { minX: 2790, maxX: 2940, minY: 10100, maxY: 10215, levels: [0] };
+/** The city's music regions (Tale of Keldagrim, Land of the Dwarves); the entrance mine and the
+ * boatman's dock south of the river are "Time to Mine", not the city. */
+const CITY_ZONE_EAST = { minX: 2880, maxX: 2943, minY: 10112, maxY: 10239, levels: [0] };
+const CITY_ZONE_WEST = { minX: 2816, maxX: 2879, minY: 10177, maxY: 10239, levels: [0] };
 
 let core;
 let pluginApi;
@@ -45,17 +49,7 @@ function init(api) {
 function goThrough(event) {
   const to = PASSAGES.get(event.objectId);
   if (!to) return false;
-  if (event.objectId === core.ObjectIdentifiers.CAVE_ENTRANCE_29 && !hasStartedGiantDwarf(event.player)) {
-    event.player.sendMessage("You need to start The Giant Dwarf to enter Keldagrim.");
-    return;
-  }
   event.player.moveTo(new core.Location(to[0], to[1], 0));
-}
-
-function hasStartedGiantDwarf(player) {
-  const request = { player, key: "giant_dwarf", started: false };
-  pluginApi.emitCustomEvent("quest:is-started", request);
-  return request.started === true;
 }
 
 function markKeldagrimVisited({ player }) {
@@ -141,7 +135,8 @@ module.exports = {
     api.onObjectInteraction("Tunnel", { Enter: goThrough });
     api.onObjectInteraction("Cave entrance", { "Go-through": goThrough });
     api.onObjectInteraction("Entrance", { "Go-through": goThrough });
-    api.onZoneEnter(CITY_ZONE, markKeldagrimVisited);
+    api.onZoneEnter(CITY_ZONE_EAST, markKeldagrimVisited);
+    api.onZoneEnter(CITY_ZONE_WEST, markKeldagrimVisited);
     api.onObjectInteraction("Stairs", { "Climb-up": climbStairsUp, "Climb-down": climbStairsDown });
     api.onNpcInteraction("Dwarven Ferryman", { Travel: travel });
     api.onNpcDialogueVariant(ferrymanVariant);

@@ -20,6 +20,8 @@
 /server/data/definitions/reward-caskets.json text eol=lf
 # The league task catalog is generated (yarn generate:league-tasks --check compares it byte for byte).
 /server/plugins/modes/data/league-tasks.json text eol=lf
+# Preserve the historical cache export's deterministic bytes on Windows.
+/server/plugins/world/seasonal/data/christmas-2025-archive.json text eol=lf
 # The Quest Helper bridge's Gradle wrapper: the shell script must keep LF, the jar is binary.
 /tools/quest-helper-bridge/gradlew text eol=lf
 /tools/quest-helper-bridge/gradlew.bat text eol=crlf

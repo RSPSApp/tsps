@@ -240,7 +240,7 @@ export function handleInboundSync(msg: any): boolean {
             if (!buffer || buffer.length === 0) return true;
             for (const cb of state.npcInfoListeners) {
                 try {
-                    cb({ loopCycle, large, rootTileX, rootTileY, packet: buffer });
+                    cb({ loopCycle, large, crossFloor: payload?.crossFloor === true, rootTileX, rootTileY, packet: buffer });
                 } catch (err) {
                     console.warn("npc_info listener error", err);
                 }

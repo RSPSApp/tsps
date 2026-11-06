@@ -45,8 +45,10 @@ Crop levels, planting/harvest/check-health XP and seed counts are the Wiki's
 held as explicit rows in `Data.Farming.js`. Planting reads the player's current
 Farming level (so boosts count) and refuses a lower level with
 `You need level <n> Farming to plant that.` before taking a seed or touching
-the patch. Herbs defer their planting XP until the final pick, as the Wiki
-describes.
+the patch. Planting XP is deferred for every crop until its health check or
+until the patch clears after harvest; clearing a dead crop awards that pending
+planting XP. Early spade clearing is enabled only when a patch can grow more
+than one crop species, matching the June 2026 Wiki update.
 
 Growth is part of the server's one-tick Farming task. `Model.nextGrowth`
 aligns every stage to the Wiki's fixed 5/10/20/40/80/160/320/640-minute cycle
@@ -70,7 +72,9 @@ stops for 40 minutes), not twice its normal cycle.
 
 ## Fidelity limits
 
-This is **not a verified 1:1 implementation**. In particular:
+This is **not a verified 1:1 implementation**. The patch planting, harvest,
+health-check XP timing, early-clearing rules and named herb transforms were
+audited against the current Wiki/cache for issue #2360. In particular:
 
 - Disease, compost, watering, yield, Kronos and barbarian rates live in
   `Data.Farming.js`'s `FORMULAS` table, not inside the model. Published rates
@@ -195,6 +199,15 @@ Herb-sack Empty uses the canonical Herblore cleaning levels through `herblore:cl
 so limited inventory space is filled from the lowest-level herb first (including
 Huasca before Snapdragon). Regression checks cover both sack variants, partial/repeated
 withdrawals and full inventories. Source: [Herb sack](https://oldschool.runescape.wiki/w/Herb_sack).
+
+An open sack also takes grimy herbs picked up from the ground and herbs harvested from a herbiboar,
+as it does from patches, whole or not at all for a pickup and per herb for a harvest, while it has room
+(30 of each type here, 100 in a silklined sack). A closed sack takes none. Wiki: "will automatically
+store any grimy herbs that are picked up", "provided there is space for it". No message is shown, as none is documented.
+
+A pristine spider silk (Sarachnis's) used on a herb sack makes it a silklined herb sack, which stores 100 of each grimy herb
+and otherwise works the same, open or closed. The upgrade has no cost or level requirement (Wiki: [Silklined herb sack](https://oldschool.runescape.wiki/w/Silklined_herb_sack)).
+Assumed, as no source says: the herbs already in the sack are kept, an open sack stays open, and no message is shown.
 
 The four South Falador allotment/flower/herb patches award 10% extra Farming XP
 after the Medium Falador Diary, queried through canonical diary progress. The

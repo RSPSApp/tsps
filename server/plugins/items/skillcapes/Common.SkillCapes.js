@@ -181,7 +181,8 @@ function talk(player, steps) {
       chain.add(new core.ActionDialogue(index++, { execute: () => {
         step();
         if (rest.length) talk(player, rest);
-        else if (!player.getDialogueManager().getCurrent?.()) player.getPacketSender().sendInterfaceRemoval();
+        // A prompt the step just opened stays open: this removal would close it.
+        else if (!player.getDialogueManager().getCurrent?.() && !core.MultiChatboxPrompt.getPending(player)) player.getPacketSender().sendInterfaceRemoval();
       } }));
       player.getDialogueManager().startDialogues(chain);
       return;

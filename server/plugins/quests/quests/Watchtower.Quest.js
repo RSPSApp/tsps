@@ -35,6 +35,13 @@ module.exports = function registerWatchtowerQuest(api) {
   const { Skill, Location, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
   const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
 
+  const ObstacleRunner = require("../../skills/agility/ObstacleRunner.Agility");
+  ObstacleRunner.init(api);
+
+  const ROPE_THROW_ANIMATION = 775;
+  const ROPE_SWING_ANIMATION = 751;
+  const ROPE_SWING_OBJECT_ANIMATION = 497;
+  const ROPE_SWING_SOUND = 2494;
   const PAGE = "Watchtower";
 
   const VARP_WATCHTOWER = 212;
@@ -264,15 +271,6 @@ module.exports = function registerWatchtowerQuest(api) {
     [20025, { crystal: CRYSTAL_3, bit: BIT_PLACED_CYAN }],
     [20033, { crystal: CRYSTAL_2, bit: BIT_PLACED_MAGENTA }],
   ]);
-  // Wiki item sources: two Skavid-cave nightshade spawns (100-tick respawn) and
-  // the Feldip Hills death rune west of the gnome glider (200-tick respawn).
-  const NIGHTSHADE_SPAWNS = [
-    { x: 2528, y: 9415 },
-    { x: 2530, y: 9462 },
-  ];
-  const NIGHTSHADE_RESPAWN_TICKS = 100;
-  const DEATH_RUNE_SPAWN = { x: 2500, y: 2967 };
-  const DEATH_RUNE_RESPAWN_TICKS = 200;
   const CAVE_EXITS = new Map([
     [ObjectIdentifiers.CAVE_EXIT_2, { x: 2562, y: 3024 }],
     [ObjectIdentifiers.CAVE_EXIT_3, { x: 2524, y: 3070 }],
@@ -299,7 +297,6 @@ module.exports = function registerWatchtowerQuest(api) {
   const START_HOOK = "quest:watchtower:start";
 
   let quest;
-  let itemOnGroundManager;
 
   function bits(player) {
     const value = Number(player.getAttribute(BITS_ATTRIBUTE));
@@ -510,6 +507,16 @@ module.exports = function registerWatchtowerQuest(api) {
       "I helped the wizards of Yanille restore the Watchtower.",
       "I should return all four crystals to the wizard.",
     ];
+  }
+
+  function hasReadSpellScroll(player) {
+    return quest.getStage(player) >= STAGE_READ_SCROLL;
+  }
+
+  function canCastWatchtowerTeleport(event) {
+    if (event.spellName?.trim().toLowerCase() !== "watchtower teleport" || hasReadSpellScroll(event.player)) return;
+    event.allow = false;
+    event.player?.sendMessage?.("You need to read the Watchtower spell scroll before casting this spell.");
   }
 
   function grantReward(player) {
@@ -846,10 +853,10 @@ module.exports = function registerWatchtowerQuest(api) {
     }
 
     if (value.includes("if the player has read the spell scroll")) {
-      return quest.getStage(player) >= STAGE_READ_SCROLL;
+      return hasReadSpellScroll(player);
     }
     if (value.includes("if the player has not read the spell scroll")) {
-      return quest.getStage(player) < STAGE_READ_SCROLL;
+      return !hasReadSpellScroll(player);
     }
     if (value.includes("if the player lost the spell scroll")) {
       return !has(SPELL_SCROLL) && !bank(SPELL_SCROLL);
@@ -1255,9 +1262,62 @@ module.exports = function registerWatchtowerQuest(api) {
     startTranscript(api, player, WIZARD_ID, PAGE, "entering-the-enclave-mining-the-rock-of-dalgroth");
   }
 
+  /** rsprox 3271 ticks 3913–3918: the rope is lost on the west-bank crossing. */
+  function crossGrewRiver(event, entering) {
+    const { player, object } = event;
+    if (!object) return;
+    const at = object.getLocation();
+    const x = entering ? 2499 : 2511, y = entering ? 3087 : 3090;
+    if (at.getX() !== x || at.getY() !== y || at.getZ() !== 0) return;
+    event.handled = true;
+    const from = player.getLocation();
+    if (ObstacleRunner.isBusy(player) || from.getZ() !== 0 ||
+        (entering ? from.getX() > 2501 : from.getY() > 3092)) return;
+    if (entering && !held(player, ItemIdentifiers.ROPE)) return;
+    const start = entering ? [2501, 3087] : [2511, 3092];
+    if (Math.max(Math.abs(from.getX() - start[0]), Math.abs(from.getY() - start[1])) > 3) return;
+    // shortcut: return endpoints use the cache orientation and sister swing in capture 348; verify with an exit capture.
+    const end = entering ? [2505, 3087] : [2511, 3096];
+    const roped = new api.core.GameObject(ObjectIdentifiers.ROPESWING_10, at.clone(), object.getType(), object.getFace(), player.getPrivateArea());
+    let task;
+    let ropeConsumed = false;
+    const steps = [{ walk: [start], arrive: true }, { faceDir: entering ? "east" : "north" }];
+    if (entering) steps.push(
+      { msg: "You tie the rope to the tree..." }, { anim: ROPE_THROW_ANIMATION }, { wait: 1 },
+      { run: () => {
+        if (!held(player, ItemIdentifiers.ROPE)) { task.stop(); return; }
+        remove(player, ItemIdentifiers.ROPE);
+        ropeConsumed = true;
+        player.getPacketSender().sendObject(roped);
+      } },
+      { wait: 1 }
+    );
+    steps.push(
+      { objAnim: ROPE_SWING_OBJECT_ANIMATION },
+      { move: end, anim: ROPE_SWING_ANIMATION, delay: 20, speed: [45, 70], ticks: 0 },
+      { wait: 1 }, { msg: "You skillfully swing across." }, { sound: ROPE_SWING_SOUND },
+      { wait: 2 }, { tele: end }
+    );
+    task = ObstacleRunner.run({ player, object: entering ? roped : object }, steps, {
+      onFinish: (completed) => {
+        if (!entering) return;
+        // Logout fast-forwards movement without executing the delayed payment step.
+        if (completed && !ropeConsumed) {
+          if (held(player, ItemIdentifiers.ROPE)) remove(player, ItemIdentifiers.ROPE);
+          else player.moveTo(new Location(start[0], start[1], 0));
+        }
+        player.getPacketSender().sendObject(object);
+      },
+    });
+  }
+
   function handleObjectInteraction(event) {
     const { player, objectId } = event;
     if (!player) return;
+    if (objectId === ObjectIdentifiers.ROPESWING_9 && (event.option === "Swing-on" || event.clickType === 1)) {
+      crossGrewRiver(event, false);
+      return;
+    }
     if (BUSH_IDS.has(objectId)) {
       event.handled = true;
       searchBush(player, objectId);
@@ -1587,6 +1647,10 @@ module.exports = function registerWatchtowerQuest(api) {
   function handleItemOnObject(event) {
     const { player, itemId, objectId } = event;
     if (!player) return;
+    if (objectId === ObjectIdentifiers.BRANCH && itemId === ItemIdentifiers.ROPE) {
+      crossGrewRiver(event, true);
+      return;
+    }
     if (objectId === CHEST_ID && itemId === TOBANS_KEY) {
       event.handled = true;
       startTranscript(api, player, TOBAN_ID, PAGE, "ogre-investigations-toban-looting-toban-s-chest");
@@ -1636,36 +1700,6 @@ module.exports = function registerWatchtowerQuest(api) {
   }
 
   /**
-   * The wiki's static item sources are not in ground-items.json and this plugin
-   * owns no data file, so they are registered once (first login) and marked as
-   * never-despawn static spawns that respawn after a pick-up.
-   */
-  function ensureGroundSpawn(player, itemId, spawn, respawnTicks) {
-    const exists = api.core.World.getItems().some(
-      (item) =>
-        !item.isPendingRemoval() &&
-        item.getItem().getId() === itemId &&
-        item.getPosition().getX() === spawn.x &&
-        item.getPosition().getY() === spawn.y
-    );
-    if (exists) return;
-    const ground = itemOnGroundManager.registerLocation(
-      player,
-      new api.core.Item(itemId, 1),
-      new Location(spawn.x, spawn.y, 0)
-    );
-    ground.staticSpawn = true;
-    ground.respawnTimer = respawnTicks;
-  }
-
-  function ensureWorldSpawns(player) {
-    ensureGroundSpawn(player, DEATH_RUNE, DEATH_RUNE_SPAWN, DEATH_RUNE_RESPAWN_TICKS);
-    for (const spawn of NIGHTSHADE_SPAWNS) {
-      ensureGroundSpawn(player, CAVE_NIGHTSHADE, spawn, NIGHTSHADE_RESPAWN_TICKS);
-    }
-  }
-
-  /**
    * The north-west gate's relic guards must be talkable from outside the closed
    * gate. Called on login so the move happens before anyone can walk up, and
    * idempotent: once on the outer tiles they are only pinned in place.
@@ -1690,7 +1724,6 @@ module.exports = function registerWatchtowerQuest(api) {
 
   function handleLogin({ player }) {
     refreshQuestList(player);
-    ensureWorldSpawns(player);
     placeNorthWestGateGuards();
   }
 
@@ -1700,6 +1733,8 @@ module.exports = function registerWatchtowerQuest(api) {
     varpId: VARP_WATCHTOWER,
     startedValue: STAGE_STARTED,
     completionValue: STAGE_COMPLETE,
+    // The saved completion is 12; cache state 13 is complete, and 14 keeps the scroll-read phase.
+    varpValue: stage => stage === STAGE_COMPLETE ? 13 : stage,
     questPoints: 4,
     xpRewards: [{ skillId: Skill.MAGIC.getIndex(), amount: 15250, label: "Magic" }],
     rewardItemId: SPELL_SCROLL,
@@ -1710,10 +1745,10 @@ module.exports = function registerWatchtowerQuest(api) {
   });
 
   api.persistAttribute(BITS_ATTRIBUTE);
-  itemOnGroundManager = api.getItemOnGroundManager();
 
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
+  api.onCanTeleport(canCastWatchtowerTeleport);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onCustomEvent("npc-dialogue:condition", handleCondition);

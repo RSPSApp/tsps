@@ -349,6 +349,7 @@ export const TRANSMIT_VARPS: ReadonlySet<number> = new Set([
     // Attack option settings - transmit so server can persist them
     VARP_OPTION_ATTACK_PRIORITY_PLAYER, // Player attack options (0-4)
     VARP_OPTION_ATTACK_PRIORITY_NPC, // NPC attack options (0-3)
+    2856, // option_collection_new_item (varbit 11959) shares this varp with other settings
 ]);
 
 // ========== VARC (Client variables - not persisted) ==========

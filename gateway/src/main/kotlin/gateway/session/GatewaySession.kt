@@ -57,7 +57,7 @@ class GatewaySession(
     private val responses: GameLoginResponseHandler<GatewaySession>,
     private val block: LoginBlock<AuthenticationType>,
 ) : TspsSocket.Listener {
-    private enum class State { CONNECTING, LOGGING_IN, ENTERING, AWAITING_SCENE, IN_GAME, CLOSED }
+    private enum class State { CONNECTING, LOGGING_IN, ENTERING, AWAITING_SCENE, IN_GAME, LOGGING_OUT, CLOSED }
 
     private val executor: ScheduledExecutorService =
         Executors.newSingleThreadScheduledExecutor { Thread(it, "gateway-${block.username}").apply { isDaemon = true } }
@@ -119,7 +119,7 @@ class GatewaySession(
         // gone while tsps still logs it in would leave the tsps session and this thread running.
         channel.closeFuture().addListener {
             run {
-                if (state != State.IN_GAME) {
+                if (state != State.IN_GAME && state != State.LOGGING_OUT) {
                     log.info("${block.username}: the client disconnected while logging in")
                     close()
                 }
@@ -156,7 +156,7 @@ class GatewaySession(
         run {
             log.info("${block.username}: $reason")
             when (state) {
-                State.CLOSED -> Unit
+                State.CLOSED, State.LOGGING_OUT -> Unit
                 State.IN_GAME -> close()
                 else -> fail(LoginResponse.LoginServerOffline)
             }
@@ -178,7 +178,7 @@ class GatewaySession(
             // (restored settings, keybinds, ...) arrive first; keep them for after the handshake.
             State.ENTERING -> if (packet.opcode == TspsServerPacket.HANDSHAKE) onHandshake(TspsHandshake.decode(packet)) else beforeHandshake += packet
             State.AWAITING_SCENE, State.IN_GAME -> onGamePacket(packet)
-            State.CONNECTING, State.CLOSED -> Unit
+            State.CONNECTING, State.LOGGING_OUT, State.CLOSED -> Unit
         }
     }
 
@@ -225,15 +225,17 @@ class GatewaySession(
             }
             TspsServerPacket.RUN_ENERGY -> {
                 val reader = packet.reader()
-                send(UpdateRunEnergy(reader.u8() * RUN_ENERGY_PER_PERCENT))
+                reader.u8() // percent; the exact units follow
+                val running = reader.u8()
+                send(UpdateRunEnergy(reader.u16()))
                 // The run orb reads varp 173; the browser sets it from this packet itself.
-                varps.setVarp(RUN_VARP, reader.u8())?.let(::send)
+                varps.setVarp(RUN_VARP, running)?.let(::send)
             }
             TspsServerPacket.LOGOUT_RESPONSE -> {
                 val reader = packet.reader()
                 val ok = reader.u8() != 0
                 val reason = reader.string()
-                if (ok) send(Logout) else if (reason.isNotEmpty()) send(MessageGame(GAME_MESSAGE, reason))
+                if (ok) beginLogout() else if (reason.isNotEmpty()) send(MessageGame(GAME_MESSAGE, reason))
             }
             TspsServerPacket.TICK -> groundItems.tick(packet.reader().i32())
             else -> {
@@ -440,7 +442,7 @@ class GatewaySession(
                     task()
                 } catch (e: Throwable) {
                     log.log(Level.SEVERE, "${block.username}: session failed", e)
-                    if (state == State.IN_GAME) close() else fail(LoginResponse.UnknownReplyFromLoginServer)
+                    if (state == State.IN_GAME || state == State.LOGGING_OUT) close() else fail(LoginResponse.UnknownReplyFromLoginServer)
                 }
             }
         } catch (e: RejectedExecutionException) {
@@ -448,6 +450,26 @@ class GatewaySession(
             return false
         }
         return true
+    }
+
+    private fun beginLogout() {
+        val session = session
+        if (session == null) {
+            fail(LoginResponse.LoginServerOffline)
+            return
+        }
+        state = State.LOGGING_OUT
+        session.queue(Logout)
+        session.flush()
+        // tsps closes its WebSocket immediately after accepting logout. Keep native TCP open
+        // briefly so the client processes Logout before EOF, rather than reconnecting.
+        executor.schedule({
+            run {
+                // Flush is already drained; close transport before releasing session resources.
+                session.ctx.close()
+                close()
+            }
+        }, LOGOUT_DRAIN_MS, TimeUnit.MILLISECONDS)
     }
 
     private fun close() {
@@ -466,6 +488,7 @@ class GatewaySession(
     }
 
     private companion object {
+        const val LOGOUT_DRAIN_MS = 250L
         val log: Logger = Logger.getLogger(GatewaySession::class.java.name)
         const val STAFF_ADMINISTRATOR = 2
 
@@ -486,7 +509,6 @@ class GatewaySession(
         const val IN_WILDERNESS_VARBIT = 5963
         const val NAME_SET_VARBIT = 8119
         const val RUN_VARP = 173
-        const val RUN_ENERGY_PER_PERCENT = 100
         const val GAME_MESSAGE = 0
 
         const val FOLLOW_OP = 3

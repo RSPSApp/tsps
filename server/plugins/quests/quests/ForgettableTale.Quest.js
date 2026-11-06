@@ -5,6 +5,9 @@
  * variant selectors, the prose-condition answers, the Kelda hops patch and Keldagrim brewery
  * brewing, the Red Axe tunnel sequence, the memory-wipe cutscene and the reward.
  *
+ * The stage numbers below are durable plugin stages. nativeProgress maps them to
+ * the native cache phases; see docs/quests/native-quest-state-a.md.
+ *
  * Stage varbit: 822 "forget_quest" (varp 521, bits 0-7). The value order below is this
  * plugin's own; no cache consumer of 822 exists beyond the quest list. The sibling bits of
  * varp 521 are driven the way the cache expects:
@@ -880,6 +883,7 @@ module.exports = function registerForgettableTaleQuest(api) {
     }
     if (option === "Ask about closed off tunnel." && CONDUCTOR_IDS.has(npcId)) {
       player.setAttribute(CONDUCTOR_ATTRIBUTE, true);
+      player.getPacketSender().sendVarbit(VARBIT_STAGE, nativeProgress(stageOf(player), player));
       return;
     }
     if (option === "Can you help me with a boarded up tunnel?" && DIRECTOR_IDS.has(npcId)) {
@@ -1699,11 +1703,21 @@ module.exports = function registerForgettableTaleQuest(api) {
   api.persistAttribute(STOUT_ATTRIBUTE);
   api.persistAttribute(CONDUCTOR_ATTRIBUTE);
 
+  // QH 06da90's forget_quest brewing/tunnel/memory phases; cache DB completes at 140.
+  // The authored compact stages and existing side-varbit saves remain unchanged.
+  function nativeProgress(stage, player) {
+    stage |= 0;
+    if (stage === STAGE_VELDABAN_BRIEFED && player.getAttribute(CONDUCTOR_ATTRIBUTE)) return 80;
+    const phases = [0, 10, 20, 30, 30, 40, 40, 50, 50, 60, 70, 70, 100, 100, 105, 118, 120, 130, 140];
+    return phases[Math.max(0, Math.min(stage, STAGE_COMPLETE))];
+  }
+
   quest = registerQuest(api, {
     key: "forgettable_tale",
     name: "Forgettable Tale...",
     varpId: VARP_FORGET,
     varbitId: VARBIT_STAGE,
+    varbitValue: nativeProgress,
     startedValue: STAGE_STARTED,
     completionValue: STAGE_COMPLETE,
     questPoints: 2,

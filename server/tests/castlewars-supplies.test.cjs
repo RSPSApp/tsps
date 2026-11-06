@@ -310,6 +310,7 @@ for (const name of ['Energy Transfer', 'Vengeance Other', 'Vengeance', 'Spellboo
         if (params.get(param)) costs.push([params.get(param), params.get(param + 1)]);
       }
       if (mode === 'paid') for (const [id, amount] of costs) p.getInventory().adds(id, amount);
+      p.getSkillManager().setMaxLevels(core.Skill.HITPOINTS, 99, false).setCurrentLevel(core.Skill.HITPOINTS, 99, false);
       p.setSpecialPercentage(100);
       p.setRunEnergy(100);
       target.setSpecialPercentage(0);
@@ -330,7 +331,7 @@ for (const name of ['Energy Transfer', 'Vengeance Other', 'Vengeance', 'Spellboo
       if (name === 'Energy Transfer') {
         assert.equal(p.getSpecialPercentage(), casts ? 0 : 100);
         assert.equal(target.getSpecialPercentage(), casts ? 100 : 0);
-        assert.equal(target.getRunEnergy(), casts ? 50 : 0);
+        assert.equal(target.getRunEnergy(), casts ? 100 : 0);
       } else if (name === 'Vengeance Other') {
         assert.equal(target.hasVengeanceReturn(), casts);
       } else if (name === 'Vengeance') {

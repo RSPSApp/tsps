@@ -77,7 +77,7 @@ function player() {
     getPacketSender: () => packet, getDialogueManager: () => p.manager, getUpdateFlag: () => ({ flag: noop }),
     getSkillManager: () => ({ addExperiences: (skill, amount) => xp.push([skill.getIndex(),amount]), getCombatLevel: () => p.combat ?? 3, getCurrentLevel: () => p.magic ?? 99 }),
     getMovementQueue: () => ({ reset() { return this; }, setBlockMovement(value) { p.blocked = value; return this; } }),
-    setUntargetable: value => { p.untargetable = value; }, setForceMovement: movement => {p.forceMovement=movement;}, getLocation: () => location, moveTo: to => { location = to; },
+    setUntargetable: value => { p.untargetable = value; }, setForceMovement: movement => {p.forceMovement=movement;}, getForceMovement: () => p.forceMovement ?? null, getLocation: () => location, moveTo: to => { location = to; },
     getArea: () => area, getPrivateArea: () => area, setArea: value => { area = value; }, getIndex: () => p.index,
     isPlayer: () => true, isNpc: () => false, getAsPlayer: () => p, isRegistered: () => true,
     getCombat: () => ({getHitQueue:()=>({addPendingDamage: damage=>{p.damage=damage;}})}),
@@ -154,9 +154,35 @@ test('Dragon Slayer sails through the private fire and crash sequence, then coll
   const npc={getLocation:()=>new core.Location(2853,9637,0)};h.hooks.onNpcDeath[0]({killer:p,npcId:8033,npc});
   h.tick(1);assert.equal(p.configs.get(176),9);assert.equal(p.items.get(I.ELVARGS_HEAD),undefined);assert.equal(h.quest.isComplete(p),false);
   h.tick(10);assert.equal(p.items.get(I.ELVARGS_HEAD),1);assert.ok(p.animations.includes(6654));assert.ok(p.animations.includes(6655));h.tick(3);
-  h.talk(p,N.OZIACH);h.continueUntil(p,()=>h.quest.isComplete(p));assert.equal(p.attrs.get('quest.points'),2);assert.deepEqual(p.xp,[[core.Skill.STRENGTH.getIndex(),18650],[core.Skill.DEFENCE.getIndex(),18650]]);
+  // seq 6655 is 10.0 ticks in the cache (sum of its frame delays, 300 client ticks), so the player stays held to its end: free at tick 21, not 14 (cache length, ours)
+  assert.equal(p.blocked,true,'still in the head-cut animation 3 ticks after it started');h.tick(6);assert.equal(p.blocked,true);h.tick(1);assert.equal(p.blocked,false);
+  h.talk(p,N.OZIACH);h.continueUntil(p,()=>h.quest.isComplete(p));assert.equal(p.items.get(I.ELVARGS_HEAD),0);assert.equal(p.attrs.get('quest.points'),2);assert.deepEqual(p.xp,[[core.Skill.STRENGTH.getIndex(),18650],[core.Skill.DEFENCE.getIndex(),18650]]);
 });
 
+
+test('Dragon Slayer completion removes carried and every bank-tab head, but preserves optional-head completion and rewards', () => {
+  for (const withHead of [true, false]) {
+    const h=harness('DragonSlayer'),p=player();
+    h.quest.setStage(p,9);p.attrs.set('dragon-slayer:elvarg-killed',1);
+    if (withHead) p.items.set(I.ELVARGS_HEAD,2);
+    p.items.set(I.COINS,123);
+    const tabs=Array.from({length:core.Bank.TOTAL_BANK_TABS},()=>new Map([[I.ELVARGS_HEAD,withHead?2:0],[I.COINS,456]]));
+    p.getBanks=()=>tabs.map(items=>({
+      getAmount:id=>items.get(id)??0,
+      deleteNumber(id,amount){assert.ok(amount>0);items.set(id,(items.get(id)??0)-amount);},
+    }));
+    h.talk(p,N.OZIACH);h.continueUntil(p,()=>h.quest.isComplete(p));
+    assert.equal(p.items.get(I.ELVARGS_HEAD)??0,0);
+    assert.ok(tabs.every(items=>items.get(I.ELVARGS_HEAD)===0));
+    assert.equal(p.items.get(I.COINS),123);
+    assert.ok(tabs.every(items=>items.get(I.COINS)===456));
+    assert.equal(p.attrs.get('quest.points'),2);
+    assert.deepEqual(p.xp,[[core.Skill.STRENGTH.getIndex(),18650],[core.Skill.DEFENCE.getIndex(),18650]]);
+    h.action(p,N.OZIACH,'0KEI_n');
+    assert.equal(h.quest.complete(p),false);
+    assert.equal(p.attrs.get('quest.points'),2);assert.equal(p.xp.length,2);
+  }
+});
 
 test('Ernest lever changes reproduce every recorded door bitset, including repeated toggles', () => {
   const h=harness('ErnestTheChicken'),p=player();
@@ -308,4 +334,153 @@ test('interrupting Elvarg introduction after the return cancels its delayed shot
   const resetCount = p.log.filter(row => row[0] === 'sendCameraReset').length;
   assert.equal(resetCount, 1); assert.deepEqual(p.log.filter(row => row[0] === 'sendCameraUnlock'), [['sendCameraUnlock', false]]);
   h.tick(5); assert.equal(p.log.filter(row => row[0] === 'sendCameraReset').length, resetCount);
+});
+
+// Regression: use the production Player's lazy bank array and container methods.
+const { Player: ProductionPlayer } = require('../dist/game/entity/impl/player/Player');
+for (const scenario of ['carried-head-lazy-tabs', 'no-head-lazy-tabs', 'banked-head-null-search-tab']) {
+  test(`Dragon Slayer ${scenario}: normal Oziach completion grants both XP rewards`, () => {
+    const h = harness('DragonSlayer'), p = player();
+    const productionPlayer = new ProductionPlayer(null);
+    p.banks = productionPlayer.getBanks();
+    p.getBanks = ProductionPlayer.prototype.getBanks.bind(p);
+    p.getBank = ProductionPlayer.prototype.getBank.bind(p);
+    p.setBank = ProductionPlayer.prototype.setBank.bind(p);
+    p.isSearchingBank = () => false;
+    p.getCurrentBankTab = () => 0;
+    p.getInterfaceId = () => -1;
+    const inventory = new core.Inventory(p);
+    p.getInventory = () => inventory;
+    inventory.adds(I.COINS, 123);
+    if (scenario === 'carried-head-lazy-tabs') inventory.adds(I.ELVARGS_HEAD, 1);
+    if (scenario === 'banked-head-null-search-tab') {
+      for (let tab = 0; tab < core.Bank.BANK_SEARCH_TAB_INDEX; tab++) p.getBank(tab);
+      p.getBank(0).adds(I.ELVARGS_HEAD, 1);
+      // A normal login never restores the ephemeral search tab.
+      p.setBank(core.Bank.BANK_SEARCH_TAB_INDEX, null);
+    }
+    h.quest.setStage(p, 9);
+    p.attrs.set('dragon-slayer:elvarg-killed', 1);
+    const nullTabs = p.getBanks().flatMap((bank, tab) => bank === null ? [tab] : []);
+    let failure;
+    try {
+      h.talk(p, N.OZIACH);
+      h.continueUntil(p, () => h.quest.isComplete(p));
+    } catch (error) { failure = error; }
+    const receipt = {
+      scenario, nullTabs,
+      failure: failure ? { name: failure.name, message: failure.message, stack: failure.stack } : null,
+      stage: h.quest.getStage(p), questPoints: p.attrs.get('quest.points'), xp: p.xp,
+      inventoryHead: inventory.getAmount(I.ELVARGS_HEAD), coins: inventory.getAmount(I.COINS),
+      repeatCompletion: h.quest.complete(p),
+    };
+    assert.equal(failure, undefined, 'normal completion must not throw on production lazy banks');
+    assert.deepEqual(p.xp, [[core.Skill.STRENGTH.getIndex(),18650],[core.Skill.DEFENCE.getIndex(),18650]]);
+    assert.equal(receipt.stage, 10);
+    assert.equal(receipt.questPoints, 2);
+    assert.equal(receipt.inventoryHead, 0);
+    assert.equal(receipt.coins, 123);
+    assert.equal(receipt.repeatCompletion, false);
+  });
+}
+
+// Melzar's Maze doors and the Oracle's riddle door are walked through (ForceMovement, as Doors.plugin's pass-through gates),
+// never teleported. The player stays put until the walk lands; keys and offerings are never lost to a walk that did not happen.
+const doorObject = (x, y, face = 0) => ({ getFace: () => face, getLocation: () => new core.Location(x, y, 0), getId: () => 0 });
+const toggleDoor = (h, p, objectId, object) => {
+  const request = { player: p, objectId, object, location: { x: object.getLocation().getX(), y: object.getLocation().getY(), z: 0 },
+    clickType: 1, handled: false, definition: { getInteractions: () => ['Open'] } };
+  h.emit('door:toggle', request); return request;
+};
+const at = p => [p.getLocation().getX(), p.getLocation().getY()];
+
+test('Melzar maze door: unlocking walks the player across and spends the key on arrival', () => {
+  const h = harness('DragonSlayer'), p = player(); h.quest.setStage(p, 2);
+  const door = doorObject(2931, 9640); p.items.set(I.KEY_3, 1); p.moveTo(new core.Location(2932, 9640, 0));
+  assert.equal(toggleDoor(h, p, core.ObjectIdentifiers.RED_DOOR, door).handled, true);
+  assert.deepEqual(at(p), [2932, 9640], 'the player is not teleported');
+  assert.ok(p.forceMovement, 'a walk is under way');
+  assert.equal(p.items.get(I.KEY_3), 1, 'the key is only spent when the walk lands');
+  assert.equal(p.forceMovement.getReverseSpeed(), 60, 'two tiles take two ticks (30 client cycles per tile), as the gate crossing paces them');
+  assert.equal(p.forceMovement.getAnimation(), 819);
+  h.tick(1);
+  assert.deepEqual(at(p), [2932, 9640], 'one tile per tick: halfway is not across'); assert.equal(p.items.get(I.KEY_3), 1);
+  h.tick(1);
+  assert.deepEqual(at(p), [2930, 9640]); assert.equal(p.forceMovement, null);
+  assert.equal(p.items.get(I.KEY_3), 0); assert.match(p.messages.at(-1), /disintegrates/);
+});
+
+test('Melzar maze door: a walk cancelled by logout keeps the key and leaves the player free to retry', () => {
+  const h = harness('DragonSlayer'), p = player(); h.quest.setStage(p, 2);
+  const door = doorObject(2931, 9640); p.items.set(I.KEY_3, 1); p.moveTo(new core.Location(2932, 9640, 0));
+  toggleDoor(h, p, core.ObjectIdentifiers.RED_DOOR, door);
+  h.hooks.onPlayerLogout[0]({ player: p }); h.tick(2);
+  assert.deepEqual(at(p), [2932, 9640]); assert.equal(p.forceMovement, null);
+  assert.equal(p.items.get(I.KEY_3), 1, 'no key lost for a crossing that never happened');
+  toggleDoor(h, p, core.ObjectIdentifiers.RED_DOOR, door); h.tick(2);
+  assert.deepEqual(at(p), [2930, 9640]); assert.equal(p.items.get(I.KEY_3), 0);
+});
+
+test('Melzar maze door: clicking again mid-walk does not spend a second key', () => {
+  const h = harness('DragonSlayer'), p = player(); h.quest.setStage(p, 2);
+  const door = doorObject(2931, 9640); p.items.set(I.KEY_3, 2); p.moveTo(new core.Location(2932, 9640, 0));
+  toggleDoor(h, p, core.ObjectIdentifiers.RED_DOOR, door); toggleDoor(h, p, core.ObjectIdentifiers.RED_DOOR, door); h.tick(3);
+  assert.deepEqual(at(p), [2930, 9640]); assert.equal(p.items.get(I.KEY_3), 1);
+});
+
+test('Melzar brown exit door walks the player out instead of teleporting', () => {
+  const h = harness('DragonSlayer'), p = player(); p.moveTo(new core.Location(2928, 9649, 0));
+  const door = doorObject(2927, 9649), event = { player: p, object: door, objectId: core.ObjectIdentifiers.EXIT_DOOR, location: door.getLocation(), handled: false };
+  h.clicks.get(core.ObjectIdentifiers.EXIT_DOOR)(event);
+  assert.equal(event.handled, true); assert.deepEqual(at(p), [2928, 9649]); assert.ok(p.forceMovement);
+  h.tick(1); assert.deepEqual(at(p), [2928, 9649]); h.tick(1);
+  assert.deepEqual(at(p), [2926, 9649]); assert.equal(p.forceMovement, null);
+});
+
+test('Riddle door: the offerings are spent first, the door opens a tick later, and only then does the player walk through', () => {
+  const O = core.ObjectIdentifiers, h = harness('DragonSlayer'), p = player(); h.quest.setStage(p, 3);
+  p.attrs.set('dragon-slayer.oracle', 2); p.moveTo(new core.Location(3049, 9839, 0));
+  const object = doorObject(3050, 9839), offerings = [I.SILK, I.UNFIRED_BOWL, I.LOBSTER_POT, I.WIZARDS_MIND_BOMB];
+  for (const id of offerings) p.items.set(id, 1);
+  for (const id of offerings) h.hooks.onItemOnObject[0]({ player: p, itemId: id, objectId: O.MAGIC_DOOR_6, object });
+  for (const id of offerings) assert.equal(p.items.get(id), 0);
+  assert.deepEqual(at(p), [3049, 9839]); assert.ok(!p.messages.includes('The door opens...')); assert.equal(p.forceMovement ?? null, null);
+  h.tick(1);
+  assert.equal(p.messages.at(-1), 'The door opens...'); assert.ok(p.log.some(row => row[0] === 'sendObjectAnimation'));
+  assert.deepEqual(at(p), [3049, 9839], 'the door has opened but the player has not been moved yet'); assert.ok(p.forceMovement, 'now walking through');
+  assert.equal(p.forceMovement.getReverseSpeed(), 60);
+  h.tick(1); assert.deepEqual(at(p), [3049, 9839]);
+  h.tick(1);
+  assert.deepEqual(at(p), [3051, 9839]); assert.equal(p.forceMovement, null);
+});
+
+test('Riddle door: a walk cancelled mid-way keeps the offerings, and the opened door can be walked through again', () => {
+  const O = core.ObjectIdentifiers, h = harness('DragonSlayer'), p = player(); h.quest.setStage(p, 3);
+  p.attrs.set('dragon-slayer.oracle', 3); p.attrs.set('dragon-slayer:offerings', 15); p.moveTo(new core.Location(3049, 9839, 0));
+  const object = doorObject(3050, 9839);
+  h.clicks.get(O.MAGIC_DOOR_6)({ player: p, object, location: object.getLocation(), handled: false });
+  assert.ok(p.forceMovement); assert.deepEqual(at(p), [3049, 9839]);
+  h.hooks.onPlayerDisconnect[0]({ player: p }); h.tick(2);
+  assert.deepEqual(at(p), [3049, 9839]); assert.equal(p.forceMovement, null); assert.equal(p.attrs.get('dragon-slayer:offerings'), 15);
+  h.clicks.get(O.MAGIC_DOOR_6)({ player: p, object, location: object.getLocation(), handled: false }); h.tick(2);
+  assert.deepEqual(at(p), [3051, 9839]);
+});
+
+test('Melzar maze door: dying mid-walk (death clears the force movement) keeps the key and strands nothing', () => {
+  const h = harness('DragonSlayer'), p = player(); h.quest.setStage(p, 2);
+  const door = doorObject(2931, 9640); p.items.set(I.KEY_3, 1); p.moveTo(new core.Location(2932, 9640, 0));
+  toggleDoor(h, p, core.ObjectIdentifiers.RED_DOOR, door); h.tick(1);
+  p.setForceMovement(null); h.tick(3);
+  assert.deepEqual(at(p), [2932, 9640]); assert.equal(p.items.get(I.KEY_3), 1);
+  toggleDoor(h, p, core.ObjectIdentifiers.RED_DOOR, door); h.tick(2);
+  assert.deepEqual(at(p), [2930, 9640], 'the door can be tried again: no walk token was left behind'); assert.equal(p.items.get(I.KEY_3), 0);
+});
+
+test('A door walk does not hold the quest action token, so a ship repair clicked during it still starts', () => {
+  const h = harness('DragonSlayer'), p = player(); h.quest.setStage(p, 4);
+  const door = doorObject(2931, 9640); p.items.set(I.KEY_3, 1); p.moveTo(new core.Location(2932, 9640, 0));
+  p.items.set(I.PLANK, 3); p.items.set(I.STEEL_NAILS, 90); p.items.set(I.HAMMER, 1);
+  toggleDoor(h, p, core.ObjectIdentifiers.RED_DOOR, door); assert.ok(p.forceMovement);
+  h.clicks.get(25036)({ player: p });
+  assert.ok(p.animations.includes(3676), 'the repair began while the door walk was under way');
 });

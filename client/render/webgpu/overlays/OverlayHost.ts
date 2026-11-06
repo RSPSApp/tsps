@@ -1357,7 +1357,7 @@ export class OverlayHost {
             }
         } catch {}
 
-        // Plugin text with the local player's overhead chat (the attack timer) (render.ts 1043-1052).
+        // Plugin text shares the local player's overhead chat stacking group.
         try {
             this.typedHost.osrsClient.clientPlugins.appendLocalPlayerOverheads(
                 this.typedHost,

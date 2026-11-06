@@ -41,7 +41,7 @@ before(() => {
     onNpcHitModify: (fn) => hooks.npcHit.push(fn),
     onPlayerDeath: (fn) => hooks.death.push(fn),
     onShouldDropItemsOnDeath: (fn) => hooks.drops.push(fn),
-    onPlayerLogin() {},
+    onPlayerLogin: (fn) => (hooks.login ??= []).push(fn),
     onPlayerLogout: (fn) => (hooks.logout ??= []).push(fn),
     onPlayerDisconnect: (fn) => (hooks.disconnect ??= []).push(fn),
     onCanBank: (fn) => hooks.canBank.push(fn),
@@ -56,6 +56,11 @@ before(() => {
     onInterfaceActionButton: (ids, fn) => { for (const id of [].concat(ids)) (hooks.buttons ??= new Map()).set(id, fn); },
   };
   require('../plugins/minigames/NightmareZone.plugin').register(api);
+  require('../plugins/achievements/diaries/ArdougneSalveDiary.plugin').register(api);
+  const Progress = require('../plugins/achievements/diaries/Progress.AchievementDiaries');
+  const AchievementDiaries = require('../plugins/achievements/AchievementDiaries.plugin');
+  Progress(api);
+  api.onCustomEvent('diary:task', AchievementDiaries._test.onTask);
   Common = require('../plugins/minigames/nightmarezone/Common.NightmareZone');
   Dominic = require('../plugins/minigames/nightmarezone/Dominic.NightmareZone');
   Coffer = require('../plugins/minigames/nightmarezone/Coffer.NightmareZone');
@@ -90,13 +95,14 @@ const QUESTS = () => Common.data.bosses.map((boss) => boss.quest);
 function fakePlayer({ quests = QUESTS().slice(0, 12), coins = 0 } = {}) {
   const attributes = new Map();
   const p = {
-    location: new Location(2608, 3116, 0), messages: [], varbits: new Map(), varps: new Map(), texts: new Map(), pages: [],
+    location: new Location(2608, 3116, 0), messages: [], varbits: new Map(), varps: new Map(), texts: new Map(), pages: [], worn: [],
     quests: new Set(quests), inventory: container(),
     isPlayer: () => true, getAsPlayer: () => p, isRegistered: () => true, getUsername: () => 'Dreamer',
     getLocation: () => p.location, moveTo(l) { p.location = l; }, setLocation(l) { p.location = l; }, getArea: () => p.area, setArea(a) { p.area = a; },
     getPrivateArea: () => null, getIndex: () => 1,
     getAttribute: (k) => attributes.get(k), setAttribute: (k, v) => attributes.set(k, v),
     getInventory: () => p.inventory,
+    getEquipment: () => ({ getItems: () => p.worn }),
     sendMessage: (m) => p.messages.push(m),
     hp: 99, levels: {}, damage: [], special: 0,
     getHitpoints: () => p.hp, heal(amount) { p.hp = Math.min(99, p.hp + amount); },
@@ -479,6 +485,76 @@ test('Upgrades: Imbue (sub = 2 x the backpack slot) quotes the price when short,
   button('upgrades', { player: p, slot: 2, opId: 1 });
   assert.equal(p.inventory.slots[1].id, 11865, 'the slayer helmet (i)');
   assert.equal(Common.points(p), 50_000);
+});
+
+test('the Ardougne Elite diary credits the NMZ Salve imbue and a worn NMZ amulet once', (t) => {
+  const p = fakePlayer();
+  const ids = core.ItemIdentifiers;
+  const salveBase = ids.SALVE_AMULET_E_;
+  const salveImbued = ids.SALVE_AMULET_EI_;
+  const imbues = core.CacheDefinitions.getEnumValues(Common.data.rewards.enums.imbues);
+  assert.equal(imbues.get(salveBase), salveImbued, 'the NMZ cache enum maps its enchanted Salve amulet to its NMZ imbued form');
+  p.getPrivateArea = () => ({ id: 'test-private-area' });
+  p.inventory.slots.push({ id: salveBase, amount: 1, meta: { custom: 'preserved' } });
+  Common.addPoints(p, 800_000);
+
+  button('upgrades', { player: p, slot: 0, opId: 1 });
+
+  assert.equal(p.inventory.slots[0].id, salveImbued);
+  assert.deepEqual(p.inventory.slots[0].meta, { custom: 'preserved' });
+  assert.equal(Common.points(p), 0);
+  const Progress = require('../plugins/achievements/diaries/Progress.AchievementDiaries');
+  const tasks = Progress.doneTasks(p, require('../plugins/achievements/diaries/Data.AchievementDiaries').BY_KEY.get('ardougne'));
+  assert.deepEqual([...tasks], ['imbue-a-salve-amulet-at-nightmare-zone-or-equip']);
+  assert.equal(p.varbits.get(require('../plugins/achievements/diaries/Data.AchievementDiaries').BY_KEY.get('ardougne').tiers.elite.countVarbit), 1);
+
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { EquipPacketListener } = require('../dist/net/packet/impl/EquipPacketListener');
+  const { PluginManager } = require('../dist/plugins/PluginManager');
+  t.mock.method(PluginManager, 'emitCustomEvent', (name, event) => hooks.events[name]?.(event));
+  const oldSalve = new Player({ sendClientPacket() {} });
+  oldSalve.setRegistered(true);
+  oldSalve.getEquipment().setItem(core.Equipment.AMULET_SLOT, new core.Item(ids.SALVE_AMULET_I_, 1));
+  oldSalve.getEquipment().refreshItems();
+  assert.deepEqual([...Progress.doneTasks(oldSalve, require('../plugins/achievements/diaries/Data.AchievementDiaries').BY_KEY.get('ardougne'))], [],
+    'the real equipment refresh event does not credit an item restored on the player');
+  oldSalve.getInventory().setItem(0, new core.Item(ids.SALVE_AMULET_I_, 1));
+  EquipPacketListener.equip(oldSalve, ids.SALVE_AMULET_I_, 0, 3214);
+  assert.equal(oldSalve.getEquipment().getItems()[core.Equipment.AMULET_SLOT].getId(), ids.SALVE_AMULET_I_);
+  assert.deepEqual([...Progress.doneTasks(oldSalve, require('../plugins/achievements/diaries/Data.AchievementDiaries').BY_KEY.get('ardougne'))], [
+    'imbue-a-salve-amulet-at-nightmare-zone-or-equip',
+  ], 'the real equip handler credits a same-id replacement');
+
+  const originalSalve = fakePlayer();
+  originalSalve.inventory.slots.push({ id: ids.SALVE_AMULET, amount: 1 });
+  Common.addPoints(originalSalve, 800_000);
+  button('upgrades', { player: originalSalve, slot: 0, opId: 1 });
+  assert.equal(originalSalve.inventory.slots[0].id, ids.SALVE_AMULET_I_);
+  assert.deepEqual([...Progress.doneTasks(originalSalve, require('../plugins/achievements/diaries/Data.AchievementDiaries').BY_KEY.get('ardougne'))], [
+    'imbue-a-salve-amulet-at-nightmare-zone-or-equip',
+  ], 'the NMZ upgrade to the older imbued item id counts too');
+});
+
+test('the diary does not credit a failed NMZ imbue or a same-looking Soul Wars Salve', () => {
+  const p = fakePlayer();
+  const ids = core.ItemIdentifiers;
+  p.inventory.slots.push({ id: ids.SALVE_AMULET_E_, amount: 1 });
+  Common.addPoints(p, 799_999);
+  button('upgrades', { player: p, slot: 0, opId: 1 });
+  assert.equal(p.inventory.slots[0].id, ids.SALVE_AMULET_E_);
+
+  for (const [baseItemId, imbuedItemId] of [
+    [ids.SALVE_AMULET_I__3, ids.SALVE_AMULET_EI__3],
+    [ids.SALVE_AMULET_I__5, ids.SALVE_AMULET_EI__5],
+  ]) hooks.events['nightmare-zone:imbued']({ player: p, baseItemId, imbuedItemId });
+  for (const id of [ids.SALVE_AMULET_I__3, ids.SALVE_AMULET_EI__3, ids.SALVE_AMULET_I__5, ids.SALVE_AMULET_EI__5]) {
+    p.worn[core.Equipment.AMULET_SLOT] = new core.Item(id, 1);
+    hooks.events['equipment:changed']?.({ player: p });
+  }
+  const Progress = require('../plugins/achievements/diaries/Progress.AchievementDiaries');
+  const diary = require('../plugins/achievements/diaries/Data.AchievementDiaries').BY_KEY.get('ardougne');
+  assert.deepEqual([...Progress.doneTasks(p, diary)], []);
+  assert.equal(Common.points(p), 799_999);
 });
 
 test('a logout during the entry fade cancels the dream: the fee back in the coffer, the dream still prepared', () => {

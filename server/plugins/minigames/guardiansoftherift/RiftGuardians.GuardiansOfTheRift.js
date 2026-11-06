@@ -46,7 +46,6 @@ const SOUND = { SCRAPE: 942, CARVE: 2586, ALIVE: 956 };
 /** Ours: guardians hit 0-6 (rsprox captures), up by their cell's tier, every 4 ticks. */
 const MAX_HIT = [0, 3, 4, 5, 6];
 const ATTACK_TICKS = 4;
-const SIGHT = 10;
 const RANGED_REACH = 7;
 /** Where the guardians hold, between the barriers and the rift. */
 const POST = { minX: 3605, maxX: 3626, minY: 9512, maxY: 9517 };
@@ -152,12 +151,16 @@ function dismissAll() {
 }
 
 /**
- * A guardian goes for the nearest creature it can see. Capture 1840: elementals only ever fight
- * beside it with the melee sequences, catalytics only at range with the ranged ones.
+ * A guardian goes for the nearest creature in the temple. Capture 1840: elementals only ever fight
+ * beside it with the melee sequences, catalytics only at range with the ranged ones. rsprox
+ * capture 20261020T162558: guardians walk at creatures 11-26 tiles off (86 of 122 such steps
+ * closed in) and rarely stand with one over 10 tiles away, so there is no sight limit; one would
+ * leave the guardians at one end of their post idle while creatures broke the far barriers
+ * (issue 2698).
  */
 function guardianTurn(npc, now) {
   const from = Creatures.tileOf(npc);
-  const target = Creatures.nearestCreature(from, Creatures.sizeOf(npc), SIGHT);
+  const target = Creatures.nearestCreature(from, Creatures.sizeOf(npc), Infinity);
   if (!target) return;
   const melee = Creatures.isElementalGuardian(npc);
   if (target.gap > (melee ? 1 : RANGED_REACH)) {

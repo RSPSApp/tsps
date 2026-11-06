@@ -5,12 +5,26 @@ let pluginApi;
 
 const HOUSE_TABLET = "teleport to house";
 const HOUSE_TABLET_OPTIONS = new Set(["break", "inside", "outside"]);
+/** A redirected house tablet (scroll of redirection) that finishes the Desert Diary's Pollnivneach task. */
+const POLLNIVNEACH_REDIRECT = "pollnivneach teleport";
+const POLLNIVNEACH_REDIRECT_TASK = "teleport-to-pollnivneach-with-a-redirected-telep";
 // One bit per alternate tablet (in teleport-tablets.json order), set when Break goes to the alternate.
 const ALTERNATES_ATTRIBUTE = "spell-teleports:alternates";
 // The spell's own options (client script 2615 names op1/op3 "Cast").
 const SPELL_ALTERNATE_OP = 2;
 const SPELL_CONFIGURE_OP = 10;
 const ALTERNATES = new Map(Object.entries(TABLETS.alternates).map(([name, data], index) => [name, { ...data, name, bit: 1 << index }]));
+// The Wilderness teleports' op10 (client script magic_spellbook_modifyops): "Disable warning" while
+// the spell's varbit is 1, "Enable warning" while it is 0. It toggles the varbit and never casts.
+// One bit per spell, set while its warning is on.
+const WILDERNESS_WARNINGS_ATTRIBUTE = "spell-teleports:wilderness-warnings";
+const WILDERNESS_WARNINGS = new Map([
+  ["dareeyak teleport", "dareeyak_teleport_warning"],
+  ["carrallanger teleport", "carrallagar_teleport_warning"],
+  ["annakarl teleport", "annakarl_teleport_warning"],
+  ["ghorrock teleport", "ghorrock_teleport_warning"],
+  ["teleport to target", "bounty_teleport_warning"],
+].map(([name, varbit], index) => [name, { varbit, bit: 1 << index }]));
 
 function spellName(event) {
   const itemId = event.itemId ?? -1;
@@ -178,6 +192,13 @@ function useTablet(event) {
   const target = tabletDestination(event, name, option);
   if (!target) return;
   const { player } = event;
+  if (name === POLLNIVNEACH_REDIRECT) {
+    const arrival = target.onArrival;
+    target.onArrival = () => {
+      pluginApi.emitCustomEvent("diary:task", { player, diary: "desert", task: POLLNIVNEACH_REDIRECT_TASK });
+      arrival?.();
+    };
+  }
   if (!player.getInventory().contains(event.itemId) || !core.TeleportHandler.checkReqs(player, target.destination)) return;
   // OSRS uses the tablet up two ticks in, as it is absorbed (docs/teleport-tablets.md).
   const useUp = () => player.getInventory().deleteNumber(event.itemId, 1);
@@ -197,6 +218,28 @@ function syncAlternates({ player }) {
   for (const alternate of ALTERNATES.values()) {
     if (alternateChosen(player, alternate)) sendAlternate(player, alternate);
   }
+  for (const warning of WILDERNESS_WARNINGS.values()) {
+    if (warningOn(player, warning)) sendWarning(player, warning);
+  }
+}
+
+function warningOn(player, warning) {
+  return ((Number(player.getAttribute(WILDERNESS_WARNINGS_ATTRIBUTE)) || 0) & warning.bit) !== 0;
+}
+
+function sendWarning(player, warning) {
+  const varbit = core.CacheDefinitions.getVarbitId(warning.varbit);
+  if (varbit != null) player.getPacketSender().sendVarbit(varbit, warningOn(player, warning) ? 1 : 0);
+}
+
+/** op10 on a Wilderness teleport: flip its warning (the client relabels the op from the varbit). */
+function toggleWarning(event) {
+  const warning = event.opId === SPELL_CONFIGURE_OP && WILDERNESS_WARNINGS.get(event.spellName?.trim().toLowerCase());
+  if (!warning) return;
+  event.handled = true;
+  const bits = Number(event.player.getAttribute(WILDERNESS_WARNINGS_ATTRIBUTE)) || 0;
+  event.player.setAttribute(WILDERNESS_WARNINGS_ATTRIBUTE, bits ^ warning.bit);
+  sendWarning(event.player, warning);
 }
 
 /**
@@ -261,8 +304,10 @@ module.exports = {
     core = api.core;
     pluginApi = api;
     api.persistAttribute(ALTERNATES_ATTRIBUTE, 0);
+    api.persistAttribute(WILDERNESS_WARNINGS_ATTRIBUTE, 0);
     api.onItemAction(useTablet);
     api.onPlayerLogin(syncAlternates);
+    api.onSpellCast(toggleWarning);
     api.onSpellCast(castAlternate);
     api.onInterfaceActionClick(castSpell);
   },

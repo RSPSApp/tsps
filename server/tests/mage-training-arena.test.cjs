@@ -10,7 +10,10 @@ const { Server } = require('../dist/Server');
 Server.installProductionPathResolver();
 const { PluginManager } = require('../dist/plugins/PluginManager');
 const { CachePipeline } = require('../dist/game/cache/CachePipeline');
+const { Player } = require('../dist/game/entity/impl/player/Player');
+const { PlayerSession } = require('../dist/net/PlayerSession');
 const core = PluginManager.getCoreApi();
+let realCasters = 0;
 
 let Common, Guardians, Lobby, Telekinetic, Enchanting, Alchemists, Graveyard, Rewards, events, ironmanMode, testApi;
 
@@ -68,8 +71,9 @@ function fakePlayer(x = 3363, y = 9644, z = 0) {
   const strings = new Map();
   const hidden = new Map();
   const camera = [];
+  const scripts = [];
   const player = {
-    messages: [], attributes: {}, xp, strings, hidden, camera, magic: 99, anims: 0, runEnergy: 100,
+    messages: [], attributes: {}, xp, strings, hidden, camera, scripts, magic: 99, anims: 0, runEnergy: 100,
     getLocation: () => tile,
     moveTo: (to) => { tile = to; },
     isRegistered: () => true,
@@ -80,7 +84,8 @@ function fakePlayer(x = 3363, y = 9644, z = 0) {
     getRunEnergy: () => player.runEnergy,
     setRunEnergy: (value) => { player.runEnergy = value; },
     getPacketSender: () => ({
-      sendSubInterface() {}, closeSubInterface() {}, sendSound() {}, sendRunEnergy() {},
+      sendSubInterface() {}, closeSubInterface() {}, sendSound() {}, sendSoundEffect() {}, sendRunEnergy() {},
+      sendClientScript: (...args) => scripts.push(args),
       sendString: (text, id) => strings.set(id, text),
       sendInterfaceDisplayState: (id, hide) => hidden.set(id, hide),
       sendCameraLookAt: (x, y, height, motion) => camera.push({ mode: 'look', x, y, height, motion }),
@@ -236,6 +241,22 @@ test('each pile gives its shape, 1 in 32 a dragonstone; nothing with a full pack
   Enchanting.takeFromPile({ player, objectId: locs.cubePile }, () => 0.5);
   assert.equal(player.items.get(items.cube) ?? 0, 0);
   assert.equal(player.messages.at(-1), Common.message('inventoryFull'));
+});
+
+test('MTA level 1 and 2 enchants return to the spellbook only after a successful cast', () => {
+  for (const level of [1, 2]) {
+    for (const accepted of [false, true]) {
+      const player = fakePlayer();
+      const itemId = Common.ids.items.cube;
+      player.items.set(itemId, 1);
+      player.slots = [{ getId: () => itemId }];
+      const spell = { canCast: () => accepted, baseExperience: () => 17.5,
+        data: { animation: 719, graphic: 114, sound: 136 } };
+      Enchanting.enchantShape({ player, spell, spellName: `Lvl-${level} Enchant`, itemId, slot: 0 });
+      assert.deepEqual(player.scripts, accepted ? [[915, 6]] : []);
+      assert.equal(player.items.get(itemId), accepted ? 0 : 1);
+    }
+  }
 });
 
 test('enchant points: the spell level, doubled every 10th shape, +2 on the bonus shape, double for a dragonstone', () => {
@@ -422,6 +443,7 @@ test('Telekinetic Grab slides the guardian and a solved maze awards its points o
   const session = Telekinetic.startSession(player, 8);
   const npc = session.npc;
   player.moveTo(loc(3340, 9684, 2));
+  const start = npc.getLocation();
   const pending = [];
   const originalLater = Common.later;
   Common.later = (ticks, action) => pending.push({ ticks, action });
@@ -431,9 +453,19 @@ test('Telekinetic Grab slides the guardian and a solved maze awards its points o
     assert.equal(event.handled, true);
     assert.equal(event.runes(), 1);
     assert.equal(player.anims, 1);
+    assert.equal(npc.getId(), Common.ids.npcs.mazeGuardian, 'the guardian waits for the projectile');
+    assert.deepEqual([npc.getLocation().getX(), npc.getLocation().getY(), npc.getLocation().getZ()], [start.getX(), start.getY(), start.getZ()]);
+    assert.equal(pending[0].ticks, Telekinetic.GRAB_IMPACT_TICKS);
+    pending.shift().action();
     assert.equal(npc.getId(), Common.ids.npcs.mazeGuardianMoving);
     assert.deepEqual([npc.getLocation().getX(), npc.getLocation().getY(), npc.getLocation().getZ()], [3348, 9683, 2]);
-    assert.equal(pending[0].ticks, 5);
+    const moveCycles = npc.moves.at(-1).options.endCycles;
+    const distance = Math.max(
+      Math.abs(npc.getLocation().getX() - start.getX()),
+      Math.abs(npc.getLocation().getY() - start.getY())
+    );
+    assert.equal(moveCycles, distance * Telekinetic.MAZE_MOVE_CYCLES_PER_TILE);
+    assert.equal(pending[0].ticks, Math.ceil(moveCycles / 30));
     pending.shift().action();
     assert.equal(npc.getId(), Common.ids.npcs.mazeGuardian);
 
@@ -505,10 +537,20 @@ test('Reset returns the statue and keeps the streak; New-maze moves to the next 
 
   next.solved = true;
   const before = spawned.length;
+  next.npc.setNpcTransformationId(Common.ids.npcs.mazeGuardianComplete);
   const original = Math.random;
   Math.random = () => 0;
   try {
-    Telekinetic.newMaze({ player, npc: next.npc });
+    const event = {
+      player,
+      npc: next.npc,
+      npcId: Common.ids.npcs.mazeGuardianComplete,
+      clickType: 1,
+      definition: { getActions: () => [] },
+      handled: false,
+    };
+    Telekinetic.mazeGuardianAction(event);
+    assert.equal(event.handled, true, 'the completed guardian default action advances the maze');
   } finally {
     Math.random = original;
   }
@@ -852,6 +894,240 @@ test('the chute: a point per 16 fruit (a peach is 2), at most 3 a deposit, 5 XP 
   assert.equal(Graveyard.depositFruit(fakePlayer(x, y, z)), null);
 });
 
+/**
+ * What the server sends the client, as captured in rsprox 1757 (rev 227, Creature Graveyard):
+ * synth_sound / sound_area / map_anim packets and the player's animations and graphics.
+ */
+function recordEffects(player) {
+  const effects = { sounds: [], areaSounds: [], graphics: [], animations: [], playerGraphics: [] };
+  const sender = player.getPacketSender();
+  player.getPacketSender = () => ({
+    ...sender,
+    sendSound: (id) => effects.sounds.push(id),
+    sendSoundEffect: (id) => effects.sounds.push(id),
+    sendAreaSound: (id, x, y, level, loops, delay, radius, attenuation) => effects.areaSounds.push({ id, x, y, level, loops, delay, radius, attenuation }),
+    sendGraphic: (graphic, location) => effects.graphics.push({ id: graphic.getId(), delay: graphic.getDelay(), x: location.getX(), y: location.getY(), z: location.getZ() }),
+  });
+  player.performAnimation = (animation) => effects.animations.push(animation.getId());
+  player.performGraphic = (graphic) => effects.playerGraphics.push(graphic.getId());
+  return effects;
+}
+
+function castBones(player, spellName) {
+  const Spell = core.Spell.prototype;
+  const original = Spell.canCast;
+  Spell.canCast = () => true;
+  try {
+    Graveyard.castBonesSpell({ player, spellName, handled: false });
+  } finally {
+    Spell.canCast = original;
+  }
+}
+
+test('both bones spells play sound 114 with their cast in the room (Wiki, List of sound IDs: bones_to_bananas_all)', () => {
+  const [x, y, z] = graveyardTile();
+  const peaches = fakePlayer(x, y, z);
+  const peachEffects = recordEffects(peaches);
+  peaches.setAttribute(Graveyard.PEACHES_UNLOCKED_ATTRIBUTE, true);
+  peaches.items.set(Common.ids.items.bones1, 2);
+  castBones(peaches, 'Bones to Peaches');
+  assert.equal(peaches.items.get(Common.ids.items.peach), 2);
+  assert.deepEqual(peachEffects.animations, [722], 'rsprox 1757: all 10 captured casts create peaches (obj 6883)');
+  assert.deepEqual(peachEffects.playerGraphics, [141]);
+  assert.deepEqual(peachEffects.sounds, [114], 'synth_sound 114 as the cast starts');
+  const bananas = fakePlayer(x, y, z);
+  const bananaEffects = recordEffects(bananas);
+  bananas.items.set(Common.ids.items.bones1, 2);
+  castBones(bananas, 'Bones to Bananas');
+  assert.equal(bananas.items.get(Common.ids.items.banana), 2);
+  assert.deepEqual(bananaEffects.sounds, [114], 'used for both spells, once a cast');
+  assert.deepEqual(bananaEffects.animations, [722]);
+});
+
+test('a bones spell cast in the room stays in the room, so the normal cast adds no second sound', () => {
+  const [x, y, z] = graveyardTile();
+  const player = fakePlayer(x, y, z);
+  recordEffects(player);
+  player.items.set(Common.ids.items.bones1, 1);
+  const Spell = core.Spell.prototype;
+  const original = Spell.canCast;
+  Spell.canCast = () => true;
+  const event = { player, spellName: 'Bones to Bananas', handled: false };
+  try {
+    Graveyard.castBonesSpell(event);
+  } finally {
+    Spell.canCast = original;
+  }
+  assert.equal(event.handled, true, 'emitSpellCast runs before EffectSpells.handleSpell, and a handled cast stops there');
+});
+
+function realCaster(t) {
+  const channel = {
+    kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true, send: () => true,
+    close() {}, onData() {}, onError() {}, onClose() {},
+  };
+  const player = new Player(new PlayerSession(channel));
+  player.setIndex(5600 + (realCasters++));
+  player.setUsername(`bonesqa${realCasters}`);
+  player.setRegistered(true);
+  player.needsPlacement = false;
+  player.getSkillManager().setMaxLevels(core.Skill.MAGIC, 99, false).setCurrentLevels(core.Skill.MAGIC, 99, false);
+  const sounds = [];
+  t.mock.method(player.getPacketSender(), 'sendSoundEffect', (id) => { sounds.push(id); return player.getPacketSender(); });
+  t.after(() => player.setRegistered(false));
+  return { player, sounds };
+}
+
+function giveRunes(player) {
+  for (const [id, amount] of [[561, 2], [555, 4], [557, 4]]) player.getInventory().add(new core.Item(id, amount), false);
+}
+
+for (const [name, fruit] of [['BONES_TO_BANANAS', 1963], ['BONES_TO_PEACHES', 6883]]) {
+  test(`the normal cast of ${name} plays sound 114 once, and none without bones`, (t) => {
+    const spell = core.EffectSpells[name];
+    const control = realCaster(t);
+    giveRunes(control.player);
+    core.EffectSpells.handleSpell(control.player, spell.spellId());
+    assert.deepEqual(control.sounds, [], 'control: no bones, no cast, no sound');
+
+    const { player, sounds } = realCaster(t);
+    giveRunes(player);
+    player.getInventory().add(new core.Item(526, 2), false);
+    core.EffectSpells.handleSpell(player, spell.spellId());
+    assert.equal(player.getInventory().getAmount(fruit), 2, 'the cast happened');
+    assert.deepEqual(sounds, [114], 'one sound for the cast, however many bones');
+  });
+}
+
+test('turning fruit in plays animation 832 and sound 1663; an empty chute plays neither', () => {
+  const [x, y, z] = graveyardTile();
+  const player = fakePlayer(x, y, z);
+  const effects = recordEffects(player);
+  Graveyard.depositFruit(player);
+  assert.deepEqual(effects.animations, []);
+  assert.deepEqual(effects.sounds, []);
+  player.items.set(Common.ids.items.banana, 20);
+  Graveyard.depositFruit(player);
+  assert.deepEqual(effects.animations, [832], 'rsprox 1757: sequence 832 on the deposit');
+  assert.deepEqual(effects.sounds, [1663], 'rsprox 1757: synth_sound 1663 on the deposit');
+});
+
+function enterGraveyard(player, tasks) {
+  player.isPlayer = () => true;
+  player.getAsPlayer = () => player;
+  const manager = Common.core.TaskManager;
+  const original = manager.submit;
+  manager.submit = (task) => tasks.push(task);
+  try {
+    new (Graveyard.defineArea())().postEnter(player);
+  } finally {
+    manager.submit = original;
+  }
+}
+
+/** Runs `action` while tasks the plugin submits (the landings) are collected into `tasks`. */
+function collecting(tasks, action) {
+  const manager = Common.core.TaskManager;
+  const original = manager.submit;
+  manager.submit = (task) => tasks.push(task);
+  try {
+    action();
+  } finally {
+    manager.submit = original;
+  }
+}
+
+test('every 10 ticks the room rains 40 bones (graphics 520-523) on open floor, with 4 area sounds 1661', () => {
+  core.RegionManager.init();
+  core.RegionManager.loadMapFiles(3363, 9637);
+  const observed = require('./fixtures/graveyard-bones-observed.json');
+  const [x, y, z] = graveyardTile();
+  const player = fakePlayer(x, y, z);
+  const effects = recordEffects(player);
+  const tasks = [];
+  enterGraveyard(player, tasks);
+  assert.equal(tasks.length, 1, 'one repeating task for the player in the room');
+  assert.equal(tasks[0].delay, 10, 'every 10 ticks');
+  const seen = new Set();
+  for (let pulse = 0; pulse < 600; pulse++) {
+    effects.graphics.length = 0;
+    effects.areaSounds.length = 0;
+    collecting([], () => tasks[0].execute());
+    assert.equal(effects.graphics.length, 40, `pulse ${pulse}: 40 map_anim`);
+    assert.equal(new Set(effects.graphics.map((g) => `${g.x},${g.y}`)).size, 40, 'on distinct tiles');
+    for (const g of effects.graphics) {
+      assert.ok(g.id >= 520 && g.id <= 523, `graphic ${g.id}`);
+      assert.equal(g.delay, 10);
+      assert.ok(g.x >= 3344 && g.x <= 3383 && g.y >= 9620 && g.y <= 9659 && g.z === 1, `${g.x},${g.y},${g.z}`);
+      assert.equal(core.RegionManager.blocked(loc(g.x, g.y, g.z), null), false, `rsprox 1757: none of its 580 tiles is blocked, but ${g.x},${g.y} is`);
+      seen.add(`${g.x},${g.y}`);
+    }
+    if (pulse === 0) {
+      assert.deepEqual(
+        effects.areaSounds.map((s) => [s.id, s.x, s.y, s.level, s.loops, s.radius, s.attenuation]),
+        [[1661, 3352, 9631, 1, 1, 20, 20], [1661, 3352, 9650, 1, 1, 20, 20], [1661, 3374, 9631, 1, 1, 20, 20], [1661, 3374, 9650, 1, 1, 20, 20]],
+        'rsprox 1757: sound_area 1661 at the four points of the room',
+      );
+    }
+  }
+  const missed = observed.filter(([ox, oy]) => !seen.has(`${ox},${oy}`));
+  assert.deepEqual(missed, [], 'every tile the capture shows a bone on can be hit');
+});
+
+test('re-entering or leaving ends the old storm, and a task of a player who left sends nothing', () => {
+  const [x, y, z] = graveyardTile();
+  const player = fakePlayer(x, y, z);
+  const effects = recordEffects(player);
+  const tasks = [];
+  enterGraveyard(player, tasks);
+  enterGraveyard(player, tasks);
+  assert.equal(tasks.length, 2);
+  collecting([], () => tasks[0].execute());
+  assert.equal(effects.graphics.length, 0, 'the first storm was replaced');
+  collecting([], () => tasks[1].execute());
+  assert.equal(effects.graphics.length, 40);
+  effects.graphics.length = 0;
+  new (Graveyard.defineArea())().postLeave(player, true);
+  collecting([], () => tasks[1].execute());
+  assert.equal(effects.graphics.length, 0, 'logging out stops it');
+  const moved = fakePlayer(x, y, z);
+  const movedEffects = recordEffects(moved);
+  const movedTasks = [];
+  enterGraveyard(moved, movedTasks);
+  moved.moveTo(loc(3200, 3200, 0));
+  collecting([], () => movedTasks[0].execute());
+  assert.equal(movedEffects.graphics.length, 0, 'out of the room it ends itself');
+});
+
+test('a bone hits for 2 three ticks after it appears if the player is still on its tile; stepping off dodges it', () => {
+  core.RegionManager.init();
+  core.RegionManager.loadMapFiles(3363, 9637);
+  const stand = loc(3363, 9639, 1);
+  for (const dodge of [false, true]) {
+    const player = fakePlayer(3363, 9639, 1);
+    const effects = recordEffects(player);
+    const hits = [];
+    player.getCombat = () => ({ getHitQueue: () => ({ addPendingDamage: (damage) => hits.push(...damage.map((d) => d.getDamage())) }) });
+    const tasks = [];
+    enterGraveyard(player, tasks);
+    const landings = [];
+    let found = false;
+    for (let pulse = 0; pulse < 5000 && !found; pulse++) {
+      effects.graphics.length = 0;
+      landings.length = 0;
+      collecting(landings, () => tasks[0].execute());
+      found = effects.graphics.some((g) => g.x === stand.getX() && g.y === stand.getY());
+    }
+    assert.ok(found, 'a bone lands on the tile');
+    assert.equal(landings.length, 1, 'one landing for the burst');
+    assert.equal(landings[0].delay, 3, 'three ticks later');
+    assert.deepEqual(hits, [], 'nothing before it lands');
+    if (dodge) player.moveTo(loc(3362, 9640, 1));
+    landings[0].execute();
+    assert.deepEqual(hits, dodge ? [] : [2], dodge ? 'dodged (rsprox 1757: 2 of 2)' : 'hit for 2 (rsprox 1757: 4 of 4)');
+  }
+});
+
 test('every Graveyard point earns a rune, given on leaving; logging out keeps the room\'s things', () => {
   const Area = Graveyard.defineArea();
   const area = new Area();
@@ -938,6 +1214,8 @@ test('wands are upgrades: each takes the tier before it', () => {
   assert.equal(Rewards.buy(player, slotOf(6910), 1), 1);
   assert.equal(player.items.get(6908), 0, 'the beginner wand is handed in');
   assert.equal(player.items.get(6910), 1);
+  assert.ok(events.some(([name, event]) => name === 'collection-log:obtain' && event.itemId === 6910 && event.amount === 1),
+    'the bought wand is credited to the collection log');
 });
 
 test('Bones to Peaches is a one-time unlock needing Magic 60, read by the Graveyard', () => {
@@ -950,6 +1228,8 @@ test('Bones to Peaches is a one-time unlock needing Magic 60, read by the Gravey
   assert.equal(Rewards.buy(player, slotOf(6926), 5), 1);
   assert.equal(player.getAttribute(Common.PEACHES_UNLOCKED_ATTRIBUTE), true);
   assert.equal(player.items.get(6926) ?? 0, 0, 'no item, an unlock');
+  assert.ok(events.some(([name, event]) => name === 'collection-log:obtain' && event.itemId === 6926 && event.amount === 1),
+    'the Bones to Peaches unlock is credited to the collection log');
   assert.equal(Rewards.buy(player, slotOf(6926), 1), 0);
   assert.equal(player.messages.at(-1), Common.message('shopAlreadyUnlocked'));
 });
@@ -1003,23 +1283,36 @@ test('training-room deaths keep real gear and Hardcore status, clean room items 
   const { GameConstants } = require('../dist/game/GameConstants');
   const { ItemOnGroundManager } = require('../dist/game/entity/impl/grounditem/ItemOnGroundManager');
   const areas = [];
+  const errors = [];
+  const reportError = console.error;
+  t.mock.method(console, 'error', (...args) => { errors.push(args); reportError(...args); });
   const api = PluginManager.createApi('MageTrainingArenaDeathRegression');
   const registerArea = api.registerArea;
   api.registerArea = (area) => { areas.push(area); registerArea(area); };
   const deaths = new Map();
-  api.onPlayerDeath((event) => deaths.set(event.player, event));
+  const deathCounts = new Map();
+  api.onPlayerDeath((event) => {
+    deaths.set(event.player, event);
+    deathCounts.set(event.player, (deathCounts.get(event.player) ?? 0) + 1);
+  });
   const Ironman = require('../plugins/modes/ironman/Common.Ironman');
   Ironman.init(api);
   require('../plugins/modes/ironman/Hardcore.Ironman')(api);
   require('../plugins/minigames/MageTrainingArena.plugin').register(api);
+  // Pinned rev-241 gamevals for the actual room items and retained helmet.
+  assert.equal(Common.ids.items.banana, 1963);
+  assert.equal(Common.ids.items.cube, 6899);
+  assert.equal(Common.ids.items.arenaCoins, 8890);
+  assert.equal(core.CacheDefinitions.getObjId('bronze_full_helm'), 1155);
   t.mock.method(ItemOnGroundManager, 'registerLocation', () => {});
   t.mock.method(core.TaskManager, 'submit', () => {});
   const saves = [];
   t.mock.method(GameConstants.PLAYER_PERSISTENCE, 'requestSave', (player, reason) => {
-    saves.push({ player, reason, location: player.getLocation().clone(), items: player.getInventory().getValidItems().map((item) => item.getId()) });
+    saves.push({ player, reason, location: player.getLocation().clone(), items: player.getInventory().getValidItems().map((item) => item.getId()), points: Common.POINT_TYPES.map((type) => Common.points(player, type)) });
   });
   const roomData = Object.entries(Common.data).filter(([key, room]) => key !== 'lobby' && room?.bounds && room?.arrive);
-  for (const [name, room] of roomData) await t.test(name, (t) => {
+  const cases = roomData.flatMap(([name, room]) => (name === 'graveyard' ? [0, 7, 10, 20] : [20]).map((balance) => ({ name, room, balance })));
+  for (const { name, room, balance } of cases) await t.test(`${name} with ${balance} Graveyard points`, (t) => {
     const player = new Player(null, Common.toLocation(room.arrive));
     player.setUsername('mta_safe_death');
     player.setRegistered(true);
@@ -1027,6 +1320,8 @@ test('training-room deaths keep real gear and Hardcore status, clean room items 
     t.mock.method(player, 'sendMessage', () => {});
     t.after(() => player.setRegistered(false));
     player.setAttribute('ironman:mode', 'hardcore');
+    for (const type of Common.POINT_TYPES) Common.addPoints(player, type, type === 'graveyard' ? balance : 20);
+    const beforePoints = Common.POINT_TYPES.map((type) => Common.points(player, type));
     const area = areas.find((area) => area.getBoundaries().some((bounds) => bounds.inside(player.getLocation())));
     assert.ok(area, 'the native plugin registered this room');
     area.enter(player);
@@ -1037,10 +1332,11 @@ test('training-room deaths keep real gear and Hardcore status, clean room items 
     const roomItem = { enchanting: Common.ids.items.cube, alchemists: Common.ids.items.arenaCoins, graveyard: Common.ids.items.banana }[name];
     player.getInventory().adds(roomItem, 1);
     const task = new PlayerDeathTask(player);
-    task.execute();
-    task.execute();
-    task.execute();
+    for (let tick = 0; tick < 5; tick++) task.execute();
+    assert.equal(deathCounts.get(player), 1, 'one real death dispatch');
     assert.equal(deaths.get(player)?.itemsLost, false);
+    const expectedPoints = beforePoints.map((value, i) => Common.POINT_TYPES[i] === 'graveyard' && name === 'graveyard' ? Math.max(0, value - 10) : value);
+    assert.deepEqual(Common.POINT_TYPES.map((type) => Common.points(player, type)), expectedPoints);
     assert.equal(Ironman.modeOf(player), 'hardcore');
     for (const id of carried) assert.equal(player.getInventory().getAmount(id), 100);
     assert.equal(player.getEquipment().get(core.Equipment.HEAD_SLOT).getId(), 1155);
@@ -1048,12 +1344,29 @@ test('training-room deaths keep real gear and Hardcore status, clean room items 
     assert.equal(area.hasMember(player), false);
     assert.equal(player.getArea(), null);
     assert.deepEqual([player.getLocation().getX(), player.getLocation().getY(), player.getLocation().getZ()], Common.data.lobby.arrive);
+    const beforeRespawn = saves.findLast((save) => save.player === player && save.reason === 'death');
+    assert.deepEqual(beforeRespawn?.points, beforePoints, 'death save precedes the death hook');
     const saved = saves.findLast((save) => save.player === player && save.reason === 'respawn');
     assert.ok(saved);
+    assert.deepEqual(saved.points, expectedPoints, 'respawn save observes the penalty exactly once');
     assert.equal(saved.items.includes(roomItem), false);
   });
   const outside = new Player(null, loc(3200, 3200));
   assert.equal(PluginManager.emitShouldDropItemsOnDeath(outside, null), null, 'normal deaths keep their existing policy');
+  outside.setUsername('mta_outside');
+  outside.setRegistered(true);
+  t.after(() => outside.setRegistered(false));
+  t.mock.method(outside, 'getSession', () => ({ sendClientPacket: () => true, write: () => true }));
+  t.mock.method(outside, 'sendMessage', () => {});
+  for (const type of Common.POINT_TYPES) Common.addPoints(outside, type, 20);
+  const outsideBefore = Common.POINT_TYPES.map((type) => Common.points(outside, type));
+  const outsideTask = new PlayerDeathTask(outside);
+  for (let tick = 0; tick < 5; tick++) outsideTask.execute();
+  assert.equal(deathCounts.get(outside), 1, 'outside death dispatches once');
+  assert.equal(deaths.get(outside)?.itemsLost, true);
+  assert.deepEqual(Common.POINT_TYPES.map((type) => Common.points(outside, type)), outsideBefore);
+  assert.deepEqual(saves.findLast((save) => save.player === outside && save.reason === 'respawn')?.points, outsideBefore);
+  assert.equal(errors.length, 0, 'death tasks did not catch and log an exception');
 });
 
 test('native reward purchases charge only what fits in real rune stacks and freed wand slots', async (t) => {

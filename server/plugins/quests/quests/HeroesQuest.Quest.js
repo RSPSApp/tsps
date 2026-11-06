@@ -19,7 +19,7 @@
  * Shield of Arrav gang varp is not readable here).
  */
 module.exports = function registerHeroesQuest(api) {
-  const { Skill, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
+  const { Skill, Item, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
   const { registerQuest, startTranscript, refreshQuestList, QUEST_POINTS_ATTRIBUTE } = require("../QuestRuntime");
 
   const PAGE = "Heroes' Quest";
@@ -372,8 +372,11 @@ module.exports = function registerHeroesQuest(api) {
     }
     if (npcId === GRIP_NPC_ID) {
       const stage = quest.getStage(player);
-      if (stage !== STAGE_PHOENIX_CHARLIE && stage !== STAGE_BLACK_GRIP) return;
-      if (!has(player, KEYRING)) give(player, KEYRING);
+      // Only this kill gives a keyring, and stage 4 moves on, so a lost one comes from him again.
+      const lost = stage === STAGE_PHOENIX_GRIP && !has(player, KEYRING) && !has(player, CANDLESTICK);
+      if (stage !== STAGE_PHOENIX_CHARLIE && stage !== STAGE_BLACK_GRIP && !lost) return;
+      // Wiki: "Once he dies, pick up Grip's keyring", so a full bag leaves it on the ground.
+      if (!has(player, KEYRING)) player.getInventory().forceAdd(player, new Item(KEYRING, 1));
       if (stage === STAGE_PHOENIX_CHARLIE) quest.setStage(player, STAGE_PHOENIX_GRIP);
     }
   }
@@ -383,7 +386,15 @@ module.exports = function registerHeroesQuest(api) {
     if (!CANDLESTICK_CHEST_IDS.includes(event.objectId) || event.itemId !== KEYRING) return;
     const { player } = event;
     const stage = quest.getStage(player);
-    if (stage !== STAGE_PHOENIX_GRIP && stage !== STAGE_BLACK_GRIP) return;
+    // Only this chest gives a candlestick, and stage 11 moves on, so a lost one comes from it again.
+    const lost = stage === STAGE_BLACK_CANDLESTICK && !has(player, CANDLESTICK);
+    if (stage !== STAGE_PHOENIX_GRIP && stage !== STAGE_BLACK_GRIP && !lost) return;
+    if (!has(player, CANDLESTICK) && player.getInventory().getFreeSlots() < 1) {
+      // No capture of this: the wording is ours, as InAidOfTheMyreque's buy-back has it.
+      player.sendMessage("You don't have enough inventory space.");
+      event.handled = true;
+      return;
+    }
     if (!has(player, CANDLESTICK)) give(player, CANDLESTICK);
     player.sendMessage("You unlock the chest and take Scarface Pete's candlestick.");
     if (stage === STAGE_BLACK_GRIP) quest.setStage(player, STAGE_BLACK_CANDLESTICK);

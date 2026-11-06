@@ -35,6 +35,7 @@ function fakePlayer({ cape = I.DIZANAS_QUIVER, weapon = I.TWISTED_BOW, ammo = nu
     contains: (id) => carried.has(id),
     getAmount: (id) => carried.get(id) ?? 0,
     getFreeSlots: () => 27,
+    getAddableAmount: (item) => item.getAmount(),
     adds(id, amount) { carried.set(id, (carried.get(id) ?? 0) + amount); return inventory; },
     add(item) { carried.set(item.getId(), (carried.get(item.getId()) ?? 0) + item.getAmount()); return inventory; },
     deleteNumber(id, amount) {
@@ -417,3 +418,144 @@ test('Wilderness death above 20 destroys an unlocked quiver, but keeps a locked 
     core.ItemOnGroundManager.registerLocation = registerLocation;
   }
 });
+
+// Native shot producer and registered quiver slot operations; no full plugin startup/World loop.
+for (const outcome of ['break', 'drop']) {
+  for (const replacement of ['stationary', 'different-id', 'same-id']) {
+    test(`in-flight quiver ${outcome}: ${replacement} contents`, (t) => {
+      const { Player } = require('../dist/game/entity/impl/player/Player');
+      const { NPC } = require('../dist/game/entity/impl/npc/NPC');
+      const { Location } = require('../dist/game/model/Location');
+      const { NpcIdentifiers } = require('../dist/util/NpcIdentifiers');
+      const { RangedWeapon } = require('../dist/game/content/combat/ranged/RangedData');
+      const { RangedCombatMethod } = require('../dist/game/content/combat/method/impl/RangedCombatMethod');
+      const { WeaponInterfaces } = require('../dist/game/content/combat/WeaponInterfaces');
+      const { FightType } = require('../dist/game/content/combat/FightType');
+      const { Task, TaskManager, ItemOnGroundManager } = core;
+      const { World } = require('../dist/game/World');
+      const player = new Player(null, new Location(3200, 3200));
+      player.setUsername(`qflight_${outcome}_${replacement}`);
+      t.mock.method(player, 'getSession', () => ({ sendClientPacket: () => true, write: () => true }));
+      player.getMovementQueue().reset();
+      player.resetUpdating();
+      const scheduled = [];
+      const submit = TaskManager.submit;
+      t.mock.method(TaskManager, 'submit', function (task) {
+        scheduled.push(task);
+        return submit.call(this, task);
+      });
+      t.after(() => {
+        for (const task of scheduled) task.stop();
+        TaskManager.process();
+        const items = World.getItems();
+        for (const item of ItemOnGroundManager.ownedBy(player.getUsername())) {
+          const index = items.indexOf(item);
+          if (index >= 0) items.splice(index, 1);
+        }
+      });
+      const oldId = I.BRONZE_ARROW;
+      const newId = replacement === 'different-id' ? I.RUNE_ARROW : oldId;
+      const eq = player.getEquipment();
+      const inv = player.getInventory();
+      eq.set(Equipment.CAPE_SLOT, new Item(I.DIZANAS_QUIVER_UNCHARGED_, 1));
+      eq.set(Equipment.WEAPON_SLOT, new Item(I.MAGIC_SHORTBOW, 1));
+      eq.set(Equipment.AMMUNITION_SLOT, new Item(oldId, 3));
+      player.setWeapon(WeaponInterfaces.SHORTBOW);
+      player.setFightType(FightType.SHORTBOW_RAPID);
+      const slot = (op) => {
+        const event = { player, buttonId: (387 << 16) | 28, groupId: 387, childId: 28,
+          opId: op, action: op, handled: false };
+        assert.equal(PluginManager.emitInterfaceActionClick(event), true);
+        assert.equal(event.handled, true);
+      };
+      slot(2);
+      assert.deepEqual(Quiver.stored(player), { id: oldId, amount: 3 });
+      if (replacement !== 'stationary') inv.adds(newId, 7);
+      const stores = () => {
+        const floor = ItemOnGroundManager.ownedBy(player.getUsername());
+        const amount = (id) => inv.getAmount(id)
+          + eq.getItems().filter(x => x.getId() === id).reduce((n, x) => n + x.getAmount(), 0)
+          + (Quiver.stored(player)?.id === id ? Quiver.stored(player).amount : 0)
+          + floor.filter(x => x.getItem().getId() === id).reduce((n, x) => n + x.getItem().getAmount(), 0);
+        return { old: amount(oldId), other: newId === oldId ? 0 : amount(newId),
+          floor: floor.map(x => [x.getItem().getId(), x.getItem().getAmount()]) };
+      };
+      const initial = stores();
+      player.getCombat().setRangedWeapon(RangedWeapon.getFor(player));
+      player.getCombat().setAmmunition(Ammunition.getFor(player));
+      const target = NPC.create(NpcIdentifiers.MAN, new Location(3204, 3200));
+      const method = new RangedCombatMethod();
+      assert.equal(method.canAttack(player, target), true);
+      const flight = Math.max(1, ...RangedCombatMethod.landingDelays(player, target).map(x => x + 1));
+      assert.equal(flight, 3, 'actual same-floor NPC shot producer');
+      assert.equal(player.getBaseAttackSpeed(), 3, 'native cache/style cadence');
+      const getRandom = Misc.getRandom;
+      let ammoRolls = 0;
+      Misc.getRandom = function (max, ...args) {
+        if (max === 99) { ammoRolls++; return outcome === 'break' ? 10 : 50; }
+        return getRandom.call(this, max, ...args);
+      };
+      try { method.start(player, target); } finally { Misc.getRandom = getRandom; }
+      assert.equal(ammoRolls, 1);
+      const ammoTask = scheduled.find(x => x.key === Task.DEFAULT_KEY && x.getDelay() === flight);
+      assert.ok(ammoTask?.isRunning(), 'real default-key deferred ammo task');
+      assert.deepEqual(stores(), initial, 'launch preserves all ammo stores');
+      let selected;
+      if (replacement !== 'stationary') {
+        slot(1); // Full Quiver-Remove: old contents returned before refill.
+        assert.equal(Quiver.stored(player), null);
+        assert.equal(inv.getAmount(oldId), newId === oldId ? 10 : 3);
+        inv.deleteNumber(newId, 7);
+        eq.set(Equipment.AMMUNITION_SLOT, new Item(newId, 7));
+        slot(2); // Canonical Fill of an empty quiver, not a same-store top-up.
+        selected = player.getAttribute(Quiver.ATTRIBUTE);
+        assert.deepEqual(Quiver.stored(player), { id: newId, amount: 7 });
+        assert.equal(inv.getAmount(oldId), 3, 'old returned contents retained');
+        assert.deepEqual(stores(), initial, 'Remove/equip/Fill conserves all stores');
+      }
+      for (let phase = 1; phase < flight; phase++) {
+        TaskManager.process();
+        assert.equal(ammoTask.isRunning(), true);
+        assert.deepEqual(stores(), initial, `pre-impact task phase ${phase}`);
+      }
+      TaskManager.process();
+      assert.equal(ammoTask.isStopped(), true, 'shot task reached terminal apply');
+      if (replacement === 'stationary') {
+        assert.deepEqual(Quiver.stored(player), { id: oldId, amount: 2 });
+        assert.deepEqual(stores(), { old: outcome === 'break' ? 2 : 3, other: 0,
+          floor: outcome === 'break' ? [] : [[oldId, 1]] });
+      } else {
+        // TSPS's existing swap/empty contract leaves new contents alone. No retail policy inferred.
+        assert.equal(inv.getAmount(oldId), 3, 'old returned ammo is untouched');
+        assert.deepEqual(Quiver.stored(player), { id: newId, amount: 7 }, 'replacement contents untouched');
+        assert.equal(player.getAttribute(Quiver.ATTRIBUTE), selected, 'replacement store identity retained');
+        assert.deepEqual(stores(), initial, 'replacement shot causes no cross-store debit or floor credit');
+      }
+    });
+  }
+}
+
+// Partial removal and another pending shot leave the selected stack in place.
+for (const change of ['partial removal', 'another shot']) {
+  test(`in-flight quiver shot after ${change} still consumes its selected stack`, (t) => {
+    const player = fakePlayer({ ammo: [I.DRAGON_ARROW, 3] });
+    click(player, 2);
+    const selected = player.getAttribute(Quiver.ATTRIBUTE);
+    const tasks = [];
+    t.mock.method(core.TaskManager, 'submit', (task) => { tasks.push(task); });
+    t.mock.method(Misc, 'getRandom', () => 10); // Both shots break.
+    assert.equal(PluginManager.decrementRangedAmmo(player, null, 1, 3), true);
+    if (change === 'partial removal') {
+      t.mock.method(player.getInventory(), 'getAddableAmount', () => 1);
+      click(player, 1);
+      assert.equal(player.getInventory().getAmount(I.DRAGON_ARROW), 1);
+    } else {
+      assert.equal(PluginManager.decrementRangedAmmo(player, null, 1, 3), true);
+      tasks[1].execute();
+    }
+    assert.equal(player.getAttribute(Quiver.ATTRIBUTE), selected);
+    assert.deepEqual(Quiver.stored(player), { id: I.DRAGON_ARROW, amount: 2 });
+    tasks[0].execute();
+    assert.deepEqual(Quiver.stored(player), { id: I.DRAGON_ARROW, amount: 1 });
+  });
+}

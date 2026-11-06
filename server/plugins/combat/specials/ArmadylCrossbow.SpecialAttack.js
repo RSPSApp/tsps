@@ -1,6 +1,6 @@
 // TODO: ported from xrsps-typescript; untested.
 module.exports = function registerArmadylCrossbowSpecialAttack(api) {
-  const { Animation, CombatFactory, CombatSpecial, ItemIdentifiers, PendingHit, Projectile, RangedCombatMethod, RangedWeapon, Sound, Sounds } = api.core;
+  const { Animation, CombatFactory, CombatPosition, CombatSpecial, ItemIdentifiers, PendingHit, Projectile, RangedCombatMethod, RangedWeapon, Sound, Sounds } = api.core;
 
   const DRAIN = 50;
   const ARMADYL_EYE_ACCURACY_MULTIPLIER = 2;
@@ -14,7 +14,10 @@ module.exports = function registerArmadylCrossbowSpecialAttack(api) {
 
   class ArmadylCrossbowCombatMethod extends RangedCombatMethod {
     hits(character, target) {
-      return [new PendingHit(character, target, this, 2)];
+      const differentFloor = character.getLocation().getZ() !== target.getLocation().getZ();
+      const distance = CombatPosition.projectileDistance(character, target);
+      const delay = differentFloor ? Math.max(2, Projectile.ticksToLand(RangedCombatMethod.projectileEnd(SHOT, distance))) : 2;
+      return [new PendingHit(character, target, this, delay)];
     }
 
     canAttack(character, target) {
@@ -33,7 +36,7 @@ module.exports = function registerArmadylCrossbowSpecialAttack(api) {
       CombatSpecial.drain(player, DRAIN);
       player.performAnimation(ANIMATION);
       Sounds.playAreaSoundAt(character, Sound.ARMADYL_CROSSBOW_SPECIAL, 1);
-      const distance = character.getLocation().getDistance(target.getLocation());
+      const distance = CombatPosition.projectileDistance(character, target);
       const end = RangedCombatMethod.projectileEnd(SHOT, distance);
       Projectile.createProjectile(
         character,

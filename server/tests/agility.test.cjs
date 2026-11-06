@@ -12,6 +12,10 @@ const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { CacheDefinitions } = require("../dist/game/cache/CacheDefinitions");
 const { ObjectIds } = require("../dist/util/IdEnums");
 const { PluginManager } = require("../dist/plugins/PluginManager");
+const AchievementDiaries = require("../plugins/achievements/AchievementDiaries.plugin");
+const DiaryData = require("../plugins/achievements/diaries/Data.AchievementDiaries");
+const DiaryProgress = require("../plugins/achievements/diaries/Progress.AchievementDiaries");
+const YanilleGrappleDiary = require("../plugins/achievements/diaries/ArdougneYanilleGrappleDiary.plugin");
 
 /** Runs submitted tasks on demand instead of on the game loop. */
 const tasks = [];
@@ -30,12 +34,12 @@ function tick() {
   }
 }
 
-const hooks = { persisted: {}, areas: [], route: [], click: new Map(), logout: [], login: [], teleport: [], events: [], npcs: {}, answers: {}, listeners: {} };
+const hooks = { persisted: {}, areas: [], route: [], click: new Map(), objectActions: new Map(), logout: [], login: [], teleport: [], events: [], npcs: {}, answers: {}, listeners: {} };
 const groundItems = [];
 /** Answers ItemOnGroundManager.ownedBy: the stacks a test has put on the floor. */
 const floorStacks = [];
 const Agility = require("../plugins/skills/Agility.plugin");
-Agility.register({
+const agilityApi = {
   core: PluginManager.getCoreApi(),
   getTaskManager: () => taskManager,
   getItemOnGroundManager: () => ({
@@ -47,6 +51,7 @@ Agility.register({
   persistAttribute: (key, value) => { hooks.persisted[key] = value; },
   onObjectRoute: (handler) => hooks.route.push(handler),
   onObjectFirstClick: (ids, handler) => ids.forEach((id) => hooks.click.set(id, handler)),
+  onObjectInteraction: (name, actions) => hooks.objectActions.set(name, { ...(hooks.objectActions.get(name) ?? {}), ...actions }),
   onCanTeleport: (handler) => hooks.teleport.push(handler),
   registerArea: (area) => hooks.areas.push(area),
   onPlayerLogout: (handler) => hooks.logout.push(handler),
@@ -58,7 +63,7 @@ Agility.register({
     hooks.answers[name]?.(payload);
   },
   log() {},
-});
+};
 
 const { COURSES } = require("../plugins/skills/agility/courses/Courses.Agility");
 const { Anim } = require("../plugins/skills/agility/Constants.Agility");
@@ -135,11 +140,18 @@ function createPlayer(x, y, z, level = 99, { skills = {}, worn = [], held = [], 
 
 function gameObject(id, x, y, z, face = 0) {
   const definition = CacheDefinitions.getObject(id);
+  const actions = definition?.actions ?? [];
   return {
     getId: () => id,
     getFace: () => face,
     getLocation: () => new Location(x, y, z),
-    getDefinition: () => ({ getSizeX: () => definition?.sizeX ?? 1, getSizeY: () => definition?.sizeY ?? 1 }),
+    getDefinition: () => ({
+      getName: () => definition?.name,
+      getSizeX: () => definition?.sizeX ?? 1,
+      getSizeY: () => definition?.sizeY ?? 1,
+      getActions: () => actions,
+      getInteractions: () => actions,
+    }),
   };
 }
 
@@ -149,20 +161,26 @@ function tileOf(player) {
 }
 
 /** Routes the player the way the object packet would, clicks, and plays the obstacle out. */
-function operate(player, objectId, objectTile) {
-  const object = gameObject(objectId, ...objectTile);
-  const route = { player, object, objectId, clickType: 1, destination: null };
+function operate(player, objectId, objectTile, face = 0, clickType = 1) {
+  const object = gameObject(objectId, ...objectTile, face);
+  const definition = object.getDefinition();
+  const route = { player, object, definition, objectId, clickType, destination: null };
   hooks.route.forEach((handler) => handler(route));
   if (route.destination) {
     player.setLocation(new Location(route.destination.x, route.destination.y, route.destination.z));
   }
-  const handler = hooks.click.get(objectId);
-  assert.ok(handler, `no click handler for object ${objectId}`);
+  const option = definition.getActions()?.[clickType - 1];
+  const handler = clickType === 1
+    ? hooks.click.get(objectId)
+    : hooks.objectActions.get(definition.getName())?.[option];
+  assert.ok(handler, `no click handler for object ${objectId}, option ${option}`);
   const handled = handler({
     player,
     object,
+    definition,
     objectId,
-    clickType: 1,
+    clickType,
+    option,
     location: { x: objectTile[0], y: objectTile[1], z: objectTile[2] },
     handled: false,
   });
@@ -203,6 +221,7 @@ function runLap(course, player, { beforeLast } = {}) {
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
+  Agility.register(agilityApi);
 });
 
 /** A loc the cache has: named, or a nameless multiloc (Wyrmscraig's cliff top) drawn as one. */
@@ -340,6 +359,99 @@ test("every shortcut plays out from either side without leaving the player locke
   } finally {
     Math.random = random;
   }
+});
+
+test("shortcut audit: current directional Agility gates and captured no-sequence climbs", () => {
+  const entry = (name, objectId) => SHORTCUTS.find((shortcut) =>
+    shortcut.name === name && (Array.isArray(shortcut.object) ? shortcut.object.includes(objectId) : shortcut.object === objectId));
+  const context = (obj, pos) => ({ obj: { ...obj, id: obj.id ?? 0 }, pos });
+
+  assert.equal(entry("Strange floor (Fremennik Slayer Dungeon)", 16544).level, 43);
+  assert.equal(entry("Pipe (Brimhaven Dungeon)", 21727).level, 1);
+  assert.equal(entry("Pipe (Brimhaven Dungeon, toward demons)", 60840).level, 34);
+  assert.equal(entry("Pipe (Brimhaven Dungeon Entrance)", 21728).level, 22);
+  assert.equal(entry("Pipe (Brimhaven Dungeon Entrance, toward entrance)", 60841).level, 1);
+  assert.equal(entry("Log balance (Brimhaven Dungeon, heading east)", 20882).level, 30);
+  assert.equal(entry("Log balance (Brimhaven Dungeon, heading west)", 20884).level, 1);
+  assert.equal(entry("Stepping stones (Western Brimhaven Dungeon)", 21738).level, 12);
+  assert.equal(entry("Stepping stones (Western Brimhaven Dungeon)", 21739).level, 1);
+
+  const river = entry("Stepping stones (Eastern Brimhaven Dungeon)", 19040);
+  assert.deepEqual([
+    river.level(context({ x: 2688, y: 9547 }, { x: 2690, y: 9547 })),
+    river.level(context({ x: 2684, y: 9548 }, { x: 2682, y: 9548 })),
+    river.level(context({ x: 2695, y: 9531 }, { x: 2695, y: 9533 })),
+    river.level(context({ x: 2696, y: 9527 }, { x: 2697, y: 9525 })),
+  ], [1, 56, 56, 1]);
+
+  const pyramid = entry("Climbing rocks (Agility Pyramid)", 11948);
+  assert.equal(pyramid.level(context({ x: 3335, y: 2827 }, { x: 3334, y: 2827 })), 1);
+  assert.equal(pyramid.level(context({ x: 3335, y: 2827 }, { x: 3336, y: 2827 })), 30);
+
+  const middleRailing = entry("Railing (Arceuus Library, middle floor)", 28373);
+  const topRailing = entry("Railing (Arceuus Library, top floor)", 28373);
+  assert.equal(middleRailing.level, 52);
+  assert.equal(topRailing.level, 62);
+  for (const [obj, from, landing] of [
+    [{ x: 1628, y: 3806, z: 1, face: 3 }, [1627, 3806, 1], [1629, 3806, 0]],
+    [{ x: 1637, y: 3804, z: 2, face: 1 }, [1638, 3804, 2], [1636, 3804, 0]],
+    [{ x: 1629, y: 3803, z: 1, face: 2 }, [1629, 3802, 1], [1629, 3804, 0]],
+    [{ x: 1631, y: 3812, z: 2, face: 0 }, [1631, 3813, 2], [1631, 3811, 0]],
+  ]) {
+    assert.deepEqual(middleRailing.route(context(obj, { x: from[0], y: from[1], z: from[2] })), from);
+    assert.deepEqual(middleRailing.steps(context(obj, { x: from[0], y: from[1], z: from[2] })), [{ move: landing }]);
+  }
+
+  const yanille = entry("Climbing rocks (Yanille)", 23543);
+  const yanilleObj = { x: 2561, y: 3108, z: 0 };
+  assert.equal(yanille.precondition(context(yanilleObj, { x: 2561, y: 3106, z: 0 })), null);
+  assert.match(yanille.precondition(context(yanilleObj, { x: 2561, y: 3111, z: 0 })), /this side/);
+  assert.deepEqual(yanille.steps(context(yanilleObj, { x: 2561, y: 3108, z: 0 })), [
+    { move: [2561, 3111, 0], speed: [0, 60], ticks: 1 },
+    { sound: 2453 },
+    { msg: "You climb over the wall." },
+  ]);
+  const townPlayer = createPlayer(2561, 3106, 0, 5);
+  operate(townPlayer, 23543, [2561, 3108, 0]);
+  assert.deepEqual(tileOf(townPlayer), [2561, 3111, 0]);
+  assert.equal(townPlayer.state.xp, 25);
+  const northPlayer = createPlayer(2561, 3111, 0, 5);
+  operate(northPlayer, 23543, [2561, 3108, 0]);
+  assert.deepEqual(tileOf(northPlayer), [2561, 3111, 0]);
+  assert.equal(northPlayer.state.xp, 0);
+  assert.ok(northPlayer.state.messages.some((message) => message.includes("this side")));
+  const taverleySteps = entry("Climbing rocks (Taverley)", 53255).steps(
+    context({ x: 2946, y: 3439, z: 0 }, { x: 2947, y: 3439, z: 0 })
+  );
+  assert.deepEqual(taverleySteps, [
+    { move: [2943, 3439, 0], speed: [0, 60], ticks: 1 },
+    { sound: 2453 },
+    { msg: "You climb over the wall." },
+  ]);
+});
+
+test("Arceuus railings use their cached Jump-down option and award Agility XP", () => {
+  for (const [objectId, floor, level, xp] of [[28373, 1, 52, 3], [28374, 2, 62, 4]]) {
+    const actions = CacheDefinitions.getObject(objectId)?.actions ?? [];
+    assert.equal(actions[0], "Inspect", `object ${objectId} keeps its Inspect action first`);
+    const clickType = actions.indexOf("Jump-down") + 1;
+    assert.ok(clickType > 1, `object ${objectId} has a cached Jump-down action`);
+
+    const inspect = createPlayer(1627, 3806, floor, level);
+    assert.equal(operate(inspect, objectId, [1628, 3806, floor], 3, actions.indexOf("Inspect") + 1), false);
+    assert.deepEqual(tileOf(inspect), [1627, 3806, floor], "Inspect does not route or jump");
+    assert.equal(inspect.state.xp, 0, "Inspect does not award Agility XP");
+
+    const player = createPlayer(1627, 3806, floor, level);
+    operate(player, objectId, [1628, 3806, floor], 3, clickType);
+    assert.deepEqual(tileOf(player), [1629, 3806, 0]);
+    assert.equal(player.state.xp, xp);
+  }
+
+  const demonPipe = createPlayer(2698, 9492, 0, 34);
+  operate(demonPipe, 60840, [2698, 9493, 0]);
+  assert.deepEqual(tileOf(demonPipe), [2698, 9500, 0]);
+  assert.equal(demonPipe.state.xp, 10);
 });
 
 test("the cache-backed Varrock broken fence crosses its clipped north-south edge", () => {
@@ -535,6 +647,125 @@ test("a grapple needs the gear and skills, or the barehanded Agility level (Wiki
   assert.ok(!fires(climber), "no grapple fired");
 });
 
+test("Yanille's south-wall grapple updates Ardougne medium progress after crossing", () => {
+  const wall = [2556, 3074, 0];
+  const credits = () => hooks.events.filter((event) => event.name === "agility:yanille-grapple");
+  const taskKey = "grapple-over-yanille-s-south-wall";
+  const ardougne = DiaryData.BY_KEY.get("ardougne");
+  const medium = ardougne.tiers.medium;
+  const assertNoProgress = (player) => {
+    assert.equal(player.getAttribute(DiaryProgress.TASKS_ATTRIBUTE)?.ardougne?.includes(taskKey) ?? false, false);
+    assert.equal(player.state.varbits.get(medium.countVarbit), undefined);
+  };
+
+  DiaryProgress({
+    core: PluginManager.getCoreApi(),
+    persistAttribute() {},
+    onPlayerLogin() {},
+    getTaskManager: () => taskManager,
+    emitCustomEvent() {},
+  });
+  hooks.answers["diary:task"] = AchievementDiaries._test.onTask;
+  YanilleGrappleDiary.register({
+    onCustomEvent: (name, handler) => { hooks.answers[name] = handler; },
+    emitCustomEvent: (name, payload) => {
+      hooks.events.push({ name, payload });
+      hooks.answers[name]?.(payload);
+    },
+  });
+
+  hooks.events.length = 0;
+  const grappler = createPlayer(2556, 3075, 0, 39, {
+    skills: { strength: 38, ranged: 21 },
+    worn: grappleGear(),
+  });
+  operate(grappler, 17047, wall);
+  assert.deepEqual(tileOf(grappler), [2556, 3074, 1]);
+  assert.equal(credits().length, 1);
+  assert.equal(credits()[0].payload.method, "grapple");
+  assert.deepEqual(grappler.getAttribute(DiaryProgress.TASKS_ATTRIBUTE).ardougne, [taskKey]);
+  assert.equal(grappler.state.varbits.get(medium.countVarbit), 1);
+  assert.equal(grappler.state.varbits.get(ardougne.startedVarbit), 1);
+
+  hooks.events.length = 0;
+  const otherApproach = createPlayer(2556, 3072, 0, 39, {
+    skills: { strength: 38, ranged: 21 },
+    worn: grappleGear(),
+  });
+  operate(otherApproach, 17047, [2556, 3073, 0]);
+  assert.deepEqual(tileOf(otherApproach), [2556, 3073, 1]);
+  assert.equal(credits().length, 1);
+  assert.deepEqual(otherApproach.getAttribute(DiaryProgress.TASKS_ATTRIBUTE).ardougne, [taskKey]);
+  assert.equal(otherApproach.state.varbits.get(medium.countVarbit), 1);
+
+  hooks.events.length = 0;
+  const barehanded = createPlayer(2556, 3075, 0, 69, {
+    skills: { strength: 37, ranged: 21 },
+    worn: grappleGear(),
+  });
+  operate(barehanded, 17047, wall);
+  assert.deepEqual(tileOf(barehanded), [2556, 3074, 1]);
+  assert.equal(credits().length, 0, "the level-69 barehanded alternative does not count");
+  assertNoProgress(barehanded);
+
+  hooks.events.length = 0;
+  const privateArea = createPlayer(2556, 3075, 0, 39, {
+    skills: { strength: 38, ranged: 21 },
+    worn: grappleGear(),
+  });
+  privateArea.getPrivateArea = () => ({});
+  operate(privateArea, 17047, wall);
+  assert.equal(credits().length, 0, "a private crossing does not count");
+  assertNoProgress(privateArea);
+
+  hooks.events.length = 0;
+  const interrupted = createPlayer(2556, 3075, 0, 39, {
+    skills: { strength: 38, ranged: 21 },
+    worn: grappleGear(),
+  });
+  hooks.click.get(17047)({ player: interrupted, object: gameObject(17047, ...wall), objectId: 17047, clickType: 1, location: { x: wall[0], y: wall[1], z: wall[2] }, handled: false });
+  interrupted.getAttribute("agility.obstacle").stop();
+  assert.equal(credits().length, 0, "an interrupted action does not count");
+  assertNoProgress(interrupted);
+
+  hooks.events.length = 0;
+  const otherWall = createPlayer(2556, 3072, 0, 39, {
+    skills: { strength: 38, ranged: 21 },
+    worn: grappleGear(),
+  });
+  otherWall.setLocation(new Location(3033, 3390, 0));
+  operate(otherWall, 17047, [3033, 3390, 0]);
+  assert.deepEqual(tileOf(otherWall), [3033, 3389, 1]);
+  assert.equal(credits().length, 0, "a Falador wall crossing does not count");
+  assertNoProgress(otherWall);
+
+  hooks.events.length = 0;
+  const loggedOut = createPlayer(2556, 3075, 0, 39, {
+    skills: { strength: 38, ranged: 21 },
+    worn: grappleGear(),
+  });
+  const object = gameObject(17047, ...wall);
+  hooks.click.get(17047)({ player: loggedOut, object, objectId: 17047, clickType: 1, location: { x: wall[0], y: wall[1], z: wall[2] }, handled: false });
+  tick();
+  hooks.logout.forEach((handler) => handler({ player: loggedOut }));
+  assert.equal(credits().length, 0, "logout fast-forward does not count");
+  assertNoProgress(loggedOut);
+
+  hooks.events.length = 0;
+  const dead = createPlayer(2556, 3075, 0, 39, {
+    skills: { strength: 38, ranged: 21 },
+    worn: grappleGear(),
+  });
+  hooks.click.get(17047)({ player: dead, object: gameObject(17047, ...wall), objectId: 17047, clickType: 1, location: { x: wall[0], y: wall[1], z: wall[2] }, handled: false });
+  dead.getHitpoints = () => 0;
+  tick();
+  assert.equal(credits().length, 0, "death interrupts the crossing");
+  assertNoProgress(dead);
+
+  delete hooks.answers["agility:yanille-grapple"];
+  delete hooks.answers["diary:task"];
+});
+
 test("a quest gate refuses only when the quest plugin says it isn't done", () => {
   const window = [3290, 3158, 0];
   try {
@@ -684,6 +915,21 @@ test("Varrock's fallable obstacles stop failing at 46, the Wiki's no-fail level"
       assert.equal(below.state.xp, 0);
       assert.equal(below.getAttribute("agility.obstacle") ?? null, null);
     }
+  } finally {
+    Math.random = random;
+  }
+});
+
+test("Al Kharid's zip line cannot fail after the 2024 fail-point removal", () => {
+  const zipline = COURSES.find((entry) => entry.key === "alkharid").obstacles.find((entry) => entry.index === 4);
+  const random = Math.random;
+  Math.random = () => 0.999;
+  try {
+    const player = createPlayer(3301, 3163, 3, 20);
+    operate(player, zipline.object, [3301, 3163, 3]);
+    assert.deepEqual(tileOf(player), [3315, 3163, 1]);
+    assert.equal(player.state.xp, 48);
+    assert.equal(player.state.hits, 0);
   } finally {
     Math.random = random;
   }
@@ -1183,7 +1429,7 @@ test("Ape Atoll: the rope won't take a pet across (Wiki)", () => {
   }
 });
 
-test("Wilderness Agility dispenser (Wiki): a paid lap started without Tag resets the streak and the unclaimed ticket and reward; the payment stays", () => {
+test("Wilderness Agility dispenser (Wiki): a paid lap started without Tag resets the streak but keeps the unclaimed ticket and reward; the payment stays", () => {
   const listeners = {};
   const Dispenser = require("../plugins/skills/AgilityDispenser.plugin");
   Dispenser.register(new Proxy({
@@ -1192,6 +1438,9 @@ test("Wilderness Agility dispenser (Wiki): a paid lap started without Tag resets
   }, { get: (target, key) => (key in target ? target[key] : () => {}) }));
   const answers = ["agility:lap", "agility:obstacle-start"];
   for (const name of answers) hooks.answers[name] = listeners[name];
+  const random = Math.random;
+  // The Wilderness obstacles can fail even at 99; this is about the dispenser, so the laps pass.
+  Math.random = () => 0;
   try {
     const course = COURSES.find((entry) => entry.key === "wilderness");
     const player = createPlayer(3004, 3937, 0);
@@ -1201,11 +1450,18 @@ test("Wilderness Agility dispenser (Wiki): a paid lap started without Tag resets
     assert.equal(varbit("wildy_agility_reward_lap_new"), 1, "a paid lap: streak 1");
     assert.equal(varbit("wildy_agility_reward_available"), 1);
     player.setLocation(new Location(3004, 3937, 0));
-    runLap(course, player);
+    runLap(course, player, {
+      beforeLast: () => {
+        assert.equal(player.getAttribute(Dispenser.ATTRIBUTES.ticket), 1,
+          "starting another lap does not lose the pending ticket (#2711)");
+        assert.equal(player.getAttribute(Dispenser.ATTRIBUTES.reward), 1, "nor the pending reward");
+      },
+    });
     assert.equal(varbit("wildy_agility_reward_lap_new"), 1, "the untagged lap's pipe reset it, so this lap starts again at 1");
     assert.equal(player.getAttribute(Dispenser.ATTRIBUTES.deposit), 1, "the payment stays");
     assert.equal(varbit("wildy_agility_token_available"), 1, "this lap's own ticket");
   } finally {
+    Math.random = random;
     for (const name of answers) delete hooks.answers[name];
   }
 });
@@ -1491,7 +1747,7 @@ test("Agility Pyramid blocks slide out over two ticks, wait two, and slide back:
   assert.deepEqual([north.npc, north.home, north.dir], [5787, [3366, 2845, 3], [0, 1]]);
 });
 
-test("course pipes replay the squeeze with every crawl, so no weapon shows on the way", () => {
+test("course pipes replay the squeeze with every crawl", () => {
   const SQUEEZE_PIPE = 749; // human_doublepipesqueeze: both hands empty
   const pipes = [
     ["gnome", ObjectIds.OBSTACLE_PIPE_10, { x: 2484, y: 3430, z: 0 }],
@@ -1510,4 +1766,85 @@ test("course pipes replay the squeeze with every crawl, so no weapon shows on th
   const wildy = COURSES.find((entry) => entry.key === "wilderness").obstacles.find((entry) => entry.object === ObjectIds.OBSTACLE_PIPE_9);
   const route = wildy.steps({ player: null, obj: null, pos: { x: 3004, y: 3937, z: 0 } }).filter((step) => step.move || step.tele).map((step) => (step.move ?? step.tele)[1]);
   assert.deepEqual(route, [3940, 3947, 3950]);
+
+  // rsprox 449 sends SEQUENCE 749 exactly twice, on the two crawl ticks; the unseen middle tick
+  // has no sequence.
+  const steps = wildy.steps({ player: null, obj: null, pos: { x: 3004, y: 3937, z: 0 } });
+  assert.equal(steps.filter((step) => step.anim === SQUEEZE_PIPE).length, 2);
+  const gap = steps.findIndex((step) => step.tele);
+  assert.notEqual(gap, -1);
+  assert.equal(steps[gap + 1].anim, undefined, "no third sequence on the unseen tick");
+
+  // rsprox 449: each crawl's 30-cycle sequence delay and its exact-move start are the same cycle,
+  // so the client's native hand-override gate empties the hands exactly as the crawl begins.
+  for (const move of steps.filter((step) => step.anim === SQUEEZE_PIPE)) {
+    assert.equal(move.delay, 30);
+    assert.deepEqual(move.speed, [30, 126]);
+  }
+});
+
+test("Wilderness ridge door: opening the south door and the north gates swaps the captured locs for two ticks (rsprox 449/450)", () => {
+  const { RIDGE, openRidgeDoor, openRidgeGates } = require("../plugins/skills/agility/shortcuts/Wilderness.Agility")._test;
+  const events = [];
+  const placed = new Map();
+  const key = (id, tile) => `${id}:${tile[0]},${tile[1]},${tile[2]}`;
+  const place = (id, tile) => placed.set(key(id, tile), {
+    getId: () => id,
+    getLocation: () => new Location(tile[0], tile[1], tile[2]),
+  });
+  place(RIDGE.door, RIDGE.doorTile);
+  place(RIDGE.gateLeft, RIDGE.gateLeftTile);
+  place(RIDGE.gateRight, RIDGE.gateRightTile);
+  const core = {
+    Location,
+    GameObject: class {
+      constructor(id, location, type, face) { this.id = id; this.location = location; this.face = face; }
+      getId() { return this.id; }
+      getLocation() { return this.location; }
+    },
+    MapObjects: { get: (id, location) => placed.get(key(id, [location.getX(), location.getY(), location.getZ()])) ?? null },
+    ObjectManager: {
+      register: (object) => events.push(["register", object.getId()]),
+      deregister: (object) => events.push(["deregister", object.getId()]),
+    },
+    Task: class { constructor(delay, key) { this.delay = delay; this.key = key; } stop() { this.stopped = true; } },
+    TaskManager: { submit: (task) => events.push(["task", task]) },
+  };
+  const context = { core, player: { getPrivateArea: () => null } };
+
+  assert.equal(openRidgeDoor(context), true);
+  assert.deepEqual(events.slice(0, 3), [
+    ["deregister", RIDGE.door], ["register", RIDGE.invisWall], ["register", RIDGE.prisonDoorOpen],
+  ]);
+  assert.equal(events[3][0], "task");
+  const doorTask = events[3][1];
+  assert.equal(doorTask.delay, 2);
+  events.length = 0;
+  doorTask.execute();
+  assert.deepEqual(events, [
+    ["deregister", RIDGE.invisWall], ["deregister", RIDGE.prisonDoorOpen], ["register", RIDGE.door],
+  ]);
+
+  events.length = 0;
+  assert.equal(openRidgeGates(context), true);
+  assert.deepEqual(events.filter(([kind]) => kind !== "task"), [
+    ["deregister", RIDGE.gateLeft], ["deregister", RIDGE.gateRight],
+    ["register", RIDGE.invisWall], ["register", RIDGE.invisWall],
+    ["register", RIDGE.gateOpenLeft], ["register", RIDGE.gateOpenRight],
+  ]);
+
+  // A missing gate leaf leaves every closed loc in place: no partial swap.
+  placed.delete(key(RIDGE.gateRight, RIDGE.gateRightTile));
+  events.length = 0;
+  assert.equal(openRidgeGates(context), false);
+  assert.deepEqual(events, []);
+
+  const enter = require("../plugins/skills/agility/shortcuts/Wilderness.Agility").wildernessRidgeIn();
+  assert.deepEqual(enter.end, { spam: RIDGE.endIn });
+  assert.deepEqual(enter.steps[0], { msg: { spam: RIDGE.start } });
+  assert.deepEqual(enter.steps[2], { walk: [[2998, 3931]] });
+  const leave = require("../plugins/skills/agility/shortcuts/Wilderness.Agility").wildernessRidgeOut();
+  assert.deepEqual(leave.end, { spam: RIDGE.endOut });
+  assert.deepEqual(leave.steps[2], { walk: [[2998, 3918]] });
+  assert.deepEqual(leave.steps[4], { walk: [[2998, 3916]] });
 });

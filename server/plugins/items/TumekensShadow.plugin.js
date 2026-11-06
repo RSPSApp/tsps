@@ -24,6 +24,7 @@ const CHARGES_KEY = "tumekens-shadow-charges";
 const MAX_CHARGES = 20000;
 const SOULS_PER_CHARGE = 2;
 const CHAOS_PER_CHARGE = 5;
+const INVENTORY_TOO_FULL = "Your inventory is too full to hold the runes.";
 
 const ANIMATION_CAST = 9493;
 const GRAPHIC = { CASTING: 2125, TRAVEL: 2126, IMPACT: 2127 };
@@ -32,6 +33,8 @@ const ATTACK_RANGE = 8;
 const LONGRANGE_EXTRA = 2;
 const MAX_MAGIC_DAMAGE = 100;
 const SOUND_CAST = 6410;
+// Captures 1846, 1885, 3285, 3299, 3340: a `sound_area id=1460 range=10` at the target in 672 casts.
+const SOUND_IMPACT = 1460;
 // The projectile (rsprox captures): it leaves after 56 client cycles and takes 16 more plus 10 a
 // tile, with angle 32 and progress 40. Heights are sent times four (248 and 124; captured 250, 124).
 const PROJECTILE = { DELAY: 56, LENGTH: 16, PER_TILE: 10, START_HEIGHT: 62, END_HEIGHT: 31, ANGLE: 32, PROGRESS: 40 };
@@ -39,7 +42,7 @@ const PROJECTILE = { DELAY: 56, LENGTH: 16, PER_TILE: 10, START_HEIGHT: 62, END_
 const MAGIC_ATTACK = 3; // BonusManager.ATTACK_MAGIC
 const MAGIC_DAMAGE = 12; // BonusManager.MAGIC_STRENGTH among the "other" bonuses
 
-const { definePoweredStaff } = require("./PoweredStaff");
+const { definePoweredStaff, distance } = require("./PoweredStaff");
 
 let api = null;
 let staff = null;
@@ -73,7 +76,7 @@ function inTombs(player) {
 // ------------------------------------------------------------------ combat
 
 function travelCycles(from, to) {
-  return PROJECTILE.DELAY + PROJECTILE.LENGTH + from.getLocation().getDistance(to.getLocation()) * PROJECTILE.PER_TILE;
+  return PROJECTILE.DELAY + PROJECTILE.LENGTH + distance(from, to, core().CombatPosition) * PROJECTILE.PER_TILE;
 }
 
 function look({ Animation, Graphic, GraphicHeight, Projectile }) {
@@ -84,6 +87,7 @@ function look({ Animation, Graphic, GraphicHeight, Projectile }) {
       travelCycles(cast, castOn), PROJECTILE.START_HEIGHT, PROJECTILE.END_HEIGHT)
       .withAngle(PROJECTILE.ANGLE).withProgress(PROJECTILE.PROGRESS),
     castSound: () => SOUND_CAST,
+    impactSound: () => SOUND_IMPACT,
     endGraphic: () => new Graphic(GRAPHIC.IMPACT, GraphicHeight.HIGH),
   };
 }
@@ -169,6 +173,20 @@ function checkShadow({ player, item }) {
   return true;
 }
 
+/**
+ * Whether the whole refund fits. Runes stack only onto the same metadata, so a preset stack isn't
+ * room, and each new stack needs a slot of its own.
+ */
+function refundFits(inventory, charges) {
+  const { Item } = core();
+  const I = ids();
+  const refund = [new Item(I.SOUL_RUNE, charges * SOULS_PER_CHARGE), new Item(I.CHAOS_RUNE, charges * CHAOS_PER_CHARGE)];
+  const meta = (item) => JSON.stringify(item.getMeta() ?? null);
+  const hasStack = (rune) => inventory.getValidItems().some((item) => item.getId() === rune.getId() && meta(item) === meta(rune));
+  return inventory.getFreeSlots() >= refund.filter((rune) => !hasStack(rune)).length
+    && refund.every((rune) => inventory.getAddableAmount(rune) >= rune.getAmount());
+}
+
 function unchargeShadow({ player, item }) {
   const { Item } = core();
   const I = ids();
@@ -178,14 +196,21 @@ function unchargeShadow({ player, item }) {
     return true;
   }
   const inventory = player.getInventory();
-  const needed = (inventory.contains(I.SOUL_RUNE) ? 0 : 1) + (inventory.contains(I.CHAOS_RUNE) ? 0 : 1);
-  if (inventory.getFreeSlots() < needed) {
-    player.sendMessage("Your inventory is too full to hold the runes.");
+  if (!refundFits(inventory, charges)) {
+    player.sendMessage(INVENTORY_TOO_FULL);
     return true;
   }
+  const staffId = item.getId();
   api.sendMultiChatboxPrompt(player, "Uncharge all the charges from your staff?", "Yes.", () => {
+    // The prompt can sit open while the items change. Wielding clones the staff, and a removed
+    // object keeps its charges, so only the object still carried can pay.
+    const carried = [inventory, player.getEquipment()].some((container) => container.getItems().includes(item));
     const left = chargesOf(item);
-    if (left <= 0) return;
+    if (!carried || item.getId() !== staffId || left <= 0) return;
+    if (!refundFits(inventory, left)) {
+      player.sendMessage(INVENTORY_TOO_FULL);
+      return;
+    }
     inventory.addItem(new Item(I.SOUL_RUNE, left * SOULS_PER_CHARGE));
     inventory.addItem(new Item(I.CHAOS_RUNE, left * CHAOS_PER_CHARGE));
     setCharges(player, item, 0);

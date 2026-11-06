@@ -3,6 +3,7 @@
  * render distance and the roof plane limit the WebGL renderer computes once per
  * frame before drawing the scene.
  */
+import { lowEndDeviceModeEnabled } from "../../game/plugins/lowenddevice/LowEndDeviceMode";
 import { clamp } from "../../common/utils/MathUtil";
 import { ClientState } from "../../game/ClientState";
 import { MapManager } from "../../game/MapManager";
@@ -11,6 +12,7 @@ import { computeRoofPlaneLimit } from "../../game/roof/RoofVisibility";
 import { resolveBridgePromotedPlane } from "../../game/scene/PlaneResolver";
 import { Scene } from "../../rs/scene/Scene";
 import {
+    LOW_END_QUALITY_PROFILE,
     DESKTOP_QUALITY_PROFILE,
     IOS_SAFARI_QUALITY_PROFILE,
     MOBILE_TOUCH_QUALITY_PROFILE,
@@ -57,10 +59,13 @@ export function updateWebGPUMapStreaming(renderer: WebGPURenderer, frameCount: n
  * resolveBrowserQualityProfile selects from.
  */
 export function resolveWebGPURenderDistance(renderer: WebGPURenderer): number {
-    const base = clamp((renderer.osrsClient.clientPlugins.gpuSettings()?.drawDistance ?? renderer.osrsClient.renderDistance) | 0, 25,
+    const gpu = renderer.osrsClient.clientPlugins.gpuSettings();
+    const base = clamp((gpu?.drawDistance ?? renderer.osrsClient.renderDistance) | 0, 25,
         renderer.osrsClient.clientPlugins.hdEnabled() ? 160 : 90);
     const profile = resolveQualityProfile();
-    const target = isTouchDevice || isLowEndDevice ? Math.min(base, profile.renderDistanceCap | 0) : base;
+    const capToProfile = !gpu?.overrideDeviceCaps &&
+        (isTouchDevice || isLowEndDevice || lowEndDeviceModeEnabled);
+    const target = capToProfile ? Math.min(base, profile.renderDistanceCap | 0) : base;
     return Math.max(0, target | 0);
 }
 
@@ -70,12 +75,13 @@ export function resolveWebGPULodDistance(renderer: WebGPURenderer): number {
     const gpu = renderer.osrsClient.clientPlugins.gpuSettings();
     const base = clamp(gpu ? gpu.drawDistance - 2 : renderer.osrsClient.lodDistance | 0, 0,
         Math.min(distance, renderer.osrsClient.clientPlugins.hdEnabled() ? 48 : distance));
-    return isTouchDevice || isLowEndDevice
-        ? Math.min(base, resolveQualityProfile().lodThresholdCap | 0)
-        : base;
+    const capToProfile = !gpu?.overrideDeviceCaps &&
+        (isTouchDevice || isLowEndDevice || lowEndDeviceModeEnabled);
+    return capToProfile ? Math.min(base, resolveQualityProfile().lodThresholdCap | 0) : base;
 }
 
 function resolveQualityProfile(): BrowserQualityProfile {
+    if (lowEndDeviceModeEnabled) return LOW_END_QUALITY_PROFILE;
     // Mirrors resolveBrowserQualityProfile (render/render/quality.ts).
     if (!isMobileMode && !isLowEndDevice) {
         return DESKTOP_QUALITY_PROFILE;

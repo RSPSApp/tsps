@@ -17,9 +17,13 @@ function chestOpened(player, lair, opened) {
   api.emitCustomEvent("combat-achievements:kill", { player, monster: lair.name, count: opened });
 }
 
-function bossKilled(player, lair) {
+function bossKilled(player, lair, npc) {
   if (!api.core.WorldDefinition.isMembersWorld()) {
     api.emitCustomEvent("combat-achievements:complete", { player, task: ON_A_FREE_WORLD[lair.name] });
+  }
+  const killingBlow = npc?.getCombat?.().getHitQueue?.().getLastAppliedHit?.();
+  if (lair.slug === "bryophyta" && killingBlow?.getHitmask?.() === api.core.HitMask.GREEN) {
+    api.emitCustomEvent("combat-achievements:complete", { player, task: "A Slow Death" });
   }
 }
 

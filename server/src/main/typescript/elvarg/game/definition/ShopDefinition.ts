@@ -28,6 +28,15 @@ export class ShopDefinition {
         }
     }
 
+    /** Adds one definition without replacing the rest (a plugin's shop for one player, see ShopManager.registerShop). */
+    public static register(definition: ShopDefinition): void {
+        this.definitions.set(definition.getId(), definition);
+    }
+
+    public static unregister(id: number): void {
+        this.definitions.delete(id);
+    }
+
     public static forId(id: number): ShopDefinition | undefined {
         return this.definitions.get(id);
     }

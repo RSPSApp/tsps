@@ -18,6 +18,22 @@ env_of() { sed -n "s/^$2=//p" "$1/.env" 2>/dev/null | tail -1 || true; }
 slot_of() { env_of "$1" WT_SLOT; }
 worktrees() { git worktree list --porcelain | sed -n 's/^worktree //p'; }
 
+# True when something is listening on the port. lsof is not on Windows (git-bash),
+# where it silently left every worktree "stopped"; bash's own /dev/tcp needs no
+# external tool and behaves the same on macOS, Linux and git-bash.
+#
+# A closed loopback port can take the kernel's SYN-retry window to refuse on
+# Windows (~2s), and `ls` probes every worktree in turn, so bound the probe at the
+# 0.3s scripts/agents/prune-worktrees already uses for the same check. `timeout` is
+# coreutils and absent from stock macOS, where a refusal is immediate anyway.
+port_listening() {
+  if command -v timeout >/dev/null 2>&1; then
+    (timeout 0.3 bash -c "exec 3<>/dev/tcp/127.0.0.1/$1") 2>/dev/null
+  else
+    (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null
+  fi
+}
+
 free_slot() {
   local used
   used=$(for dir in $(worktrees); do slot_of "$dir"; done)
@@ -70,6 +86,7 @@ case "${1:-ls}" in
   new)
     branch=${2:?usage: wt new <branch> [base]}
     dir="$(dirname "$MAIN")/$(basename "$MAIN")-${branch//\//-}"
+    free_slot >/dev/null # fail before creating a worktree that would get no .env
     if git show-ref -q --verify "refs/heads/$branch"; then
       git worktree add "$dir" "$branch"
     else
@@ -90,7 +107,7 @@ case "${1:-ls}" in
       gateway=$(env_of "$dir" GATEWAY_PORT)
       client=${client:-3000} game=${game:-43594} mcp=${mcp:-49700} gateway=${gateway:-43595}
       branch=$(git -C "$dir" branch --show-current) state=stopped
-      lsof -nP -iTCP:"$game" -sTCP:LISTEN >/dev/null 2>&1 && state=running
+      port_listening "$game" && state=running
       if [ -z "$n" ] && [ "$dir" != "$MAIN" ]; then
         printf '%-4s %-36s %s\n' - "${branch:-detached}" "no slot: scripts/wt slot $dir"
         continue

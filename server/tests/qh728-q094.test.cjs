@@ -34,6 +34,10 @@ before(async () => {
   RegionManager.init();
 });
 
+/** What a real sender's getVarbit answers: the last value sent, else 0. */
+const varbitReader = (log) => (id) =>
+  log.findLast(([method, varbitId]) => method === 'sendVarbit' && varbitId === id)?.[2] ?? 0;
+
 function makePlayer() {
   const attrs = new Map();
   const items = new Map();
@@ -65,7 +69,7 @@ function makePlayer() {
     getItems: () => [...items.entries()].filter(([, amount]) => amount > 0)
       .map(([id, amount]) => ({ getId: () => id, getAmount: () => amount, getDefinition: () => ({ getWeight: () => 0 }) })),
   };
-  const sender = new Proxy({}, { get: (_target, prop) => (...args) => { log.push([String(prop), ...args]); return sender; } });
+  const sender = new Proxy({ getVarbit: varbitReader(log) }, { get: (target, prop) => target[prop] ?? ((...args) => { log.push([String(prop), ...args]); return sender; }) });
   const skillManager = {
     getCurrentLevel: skill => xp.get(`level:${skill}`) ?? 99,
     getMaxLevel: skill => xp.get(`level:${skill}`) ?? 99,
@@ -267,6 +271,7 @@ function dialoguePlayer() {
   p.manager = new DialogueManager(p);
   p.getDialogueManager = () => p.manager;
   const packet = new Proxy({
+    getVarbit: varbitReader(p.log),
     sendInterfaceRemoval() { p.manager.reset(); p.prompt = null; return packet; },
   }, { get: (target, key) => target[key] ?? ((...args) => { p.log.push([String(key), ...args]); return packet; }) });
   p.getPacketSender = () => packet;

@@ -241,19 +241,25 @@ module.exports = function registerRumDealQuest(api) {
     return request.complete === true;
   }
 
+  const REQUIRED_SKILLS = [
+    [Skill.FARMING, 40], [Skill.FISHING, 50], [Skill.PRAYER, 47],
+    [Skill.CRAFTING, 42], [Skill.SLAYER, 42],
+  ];
+
   function meetsRequirements(player) {
     return (
-      level(player, Skill.FARMING) >= 40 &&
-      level(player, Skill.FISHING) >= 50 &&
-      level(player, Skill.PRAYER) >= 47 &&
-      level(player, Skill.CRAFTING) >= 42 &&
-      level(player, Skill.SLAYER) >= 42 &&
+      REQUIRED_SKILLS.every(([skill, required]) => level(player, skill) >= required) &&
       questIsComplete(player, "zogre_flesh_eaters") &&
       questIsComplete(player, "priest_in_peril")
     );
   }
 
-  function notifyQuestRequirements(player) {
+  function notifyRequirements(player) {
+    for (const [skill, required] of REQUIRED_SKILLS) {
+      if (level(player, skill) < required) {
+        player.sendMessage(`You need ${required} ${skill.getName()} to start this quest.`);
+      }
+    }
     if (!questIsComplete(player, "zogre_flesh_eaters")) {
       player.sendMessage("You must complete Zogre Flesh Eaters to start this quest.");
     }
@@ -573,22 +579,26 @@ module.exports = function registerRumDealQuest(api) {
   }
 
   /** The "Keep the money" choice on Pirate Pete's start menu accepts the quest. */
-  function handleChoice({ player, npcId, option }) {
+  function handleChoice(event) {
+    const { player, npcId, option } = event;
     if (!PETE_NPC_IDS.has(npcId) || quest.getStage(player) !== 0) return;
     if (String(option).toLowerCase().includes("keep the money")) {
       if (!meetsRequirements(player)) {
-        notifyQuestRequirements(player);
+        event.end = true;
+        notifyRequirements(player);
         return;
       }
       quest.setStage(player, STAGE_STARTED);
     }
   }
 
-  function handleHook({ player, npcId, hook }) {
+  function handleHook(event) {
+    const { player, npcId, hook } = event;
     if (!PETE_NPC_IDS.has(npcId) || hook !== START_HOOK) return;
     if (quest.getStage(player) < STAGE_STARTED) {
       if (!meetsRequirements(player)) {
-        notifyQuestRequirements(player);
+        event.end = true;
+        notifyRequirements(player);
         return;
       }
       quest.setStage(player, STAGE_STARTED);

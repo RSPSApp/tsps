@@ -17,25 +17,38 @@ let Shared, Voyage, Rewards, Lobby, Sea;
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, '..'));
   Shared = require('../plugins/minigames/fishingtrawler/Shared.FishingTrawler');
-  Shared.bind({ core });
+  Shared.bind({ core, emitCustomEvent: () => {} });
   ({ Voyage } = require('../plugins/minigames/fishingtrawler/Voyage.FishingTrawler'));
   Rewards = require('../plugins/minigames/fishingtrawler/Rewards.FishingTrawler');
   Lobby = require('../plugins/minigames/fishingtrawler/Lobby.FishingTrawler');
   Sea = require('../plugins/minigames/fishingtrawler/Sea.FishingTrawler');
 });
 
-function fakePlayer({ fishing = 99 } = {}) {
+function fakePlayer({ fishing = 99, registered = true, hitpoints = 10, location = [2665, 3170, 1], privateArea = null, dying = false } = {}) {
   const attributes = new Map();
+  const banked = new Map();
+  const bank = {
+    contains: (id) => (banked.get(id) ?? 0) > 0,
+    getAmount: (id) => banked.get(id) ?? 0,
+    getFreeSlots: () => 800,
+    getAddableAmount: (item) => item.getAmount(),
+    add: (item) => banked.set(item.getId(), (banked.get(item.getId()) ?? 0) + item.getAmount()),
+  };
+  const at = new core.Location(location[0], location[1], location[2]);
   const player = {
     messages: [],
     sendMessage: (text) => player.messages.push(text),
-    isRegistered: () => true,
+    isRegistered: () => registered,
+    getHitpoints: () => hitpoints,
+    isDyingReturn: () => dying,
+    getPrivateArea: () => privateArea,
+    getLocation: () => at,
     getAttribute: (key) => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
     getSkillManager: () => ({ getMaxLevel: () => fishing, getCurrentLevel: () => fishing }),
     getInventory: () => ({ contains: () => false, getAmount: () => 0 }),
     getEquipment: () => ({ contains: () => false, getAmount: () => 0 }),
-    getBank: () => ({ contains: () => false, getAmount: () => 0, getFreeSlots: () => 800 }),
+    getBank: () => bank,
     getCurrentBankTab: () => 0,
   };
   return player;
@@ -261,6 +274,82 @@ test('sailing again throws back a catch left in the net', () => {
   assert.deepEqual(launched, [player]);
 });
 
+test('the Ardougne easy task completes when the lobby launches a voyage', () => {
+  const api = Shared.api();
+  const emitCustomEvent = api.emitCustomEvent;
+  const launch = Sea.launch;
+  const { area, departAt, task } = Lobby.lobby;
+  const { voyage } = Sea.sea;
+  const events = [];
+  const first = fakePlayer();
+  const second = fakePlayer();
+  const outside = fakePlayer({ location: [2674, 3170, 1] });
+  const privatePlayer = fakePlayer({ privateArea: {} });
+  const dead = fakePlayer({ hitpoints: 0 });
+  const dying = fakePlayer({ dying: true });
+  const unregistered = fakePlayer({ registered: false });
+  Shared.bind({ ...api, emitCustomEvent: (name, event) => events.push([name, event]) });
+  Lobby.lobby.area = { getPlayers: () => [first, second, first, outside, privatePlayer, dead, dying, unregistered] };
+  Sea.launch = (players) => {
+    const launched = { players };
+    Sea.sea.voyage = launched;
+    return launched;
+  };
+
+  try {
+    Lobby.lobby.departAt = 0;
+    Lobby.tickLobby();
+    assert.deepEqual(Sea.sea.voyage.players, [first, second]);
+    assert.deepEqual(events, [first, second].map((player) => ["diary:task", {
+      player,
+      diary: "ardougne",
+      task: "go-out-fishing-on-the-fishing-trawler",
+    }]));
+
+    Lobby.tickLobby();
+    assert.equal(events.length, 2, 'the queued tick does not credit the same departure again');
+  } finally {
+    Shared.bind(api);
+    Sea.launch = launch;
+    Sea.sea.voyage = voyage;
+    Lobby.lobby.area = area;
+    Lobby.lobby.departAt = departAt;
+    Lobby.lobby.task = task;
+  }
+  assert.equal(Shared.api().emitCustomEvent, emitCustomEvent);
+});
+
+test('the Ardougne easy task does not complete while queued or when launch fails', () => {
+  const api = Shared.api();
+  const launch = Sea.launch;
+  const { area, departAt, task } = Lobby.lobby;
+  const { voyage } = Sea.sea;
+  const events = [];
+  const player = fakePlayer();
+  Shared.bind({ ...api, emitCustomEvent: (name, event) => events.push([name, event]) });
+  Lobby.lobby.area = { getPlayers: () => [player] };
+
+  try {
+    Sea.sea.voyage = {};
+    Lobby.lobby.departAt = 0;
+    Lobby.tickLobby();
+    assert.deepEqual(events, [], 'waiting for the trawler at sea does not count');
+
+    Sea.sea.voyage = null;
+    Lobby.lobby.departAt = 0;
+    Sea.launch = () => null;
+    Lobby.tickLobby();
+    assert.deepEqual(events, [], 'a failed launch does not count');
+  } finally {
+    Shared.bind(api);
+    Sea.launch = launch;
+    Sea.sea.voyage = voyage;
+    Lobby.lobby.area = area;
+    Lobby.lobby.departAt = departAt;
+    Lobby.lobby.task = task;
+  }
+});
+
 test("the crates only answer for the trawler's own: other Hammers crates fall through", () => {
   const Actions = require('../plugins/minigames/fishingtrawler/Actions.FishingTrawler');
   const ids = Shared.ids();
@@ -276,10 +365,14 @@ test("the crates only answer for the trawler's own: other Hammers crates fall th
 test('a full bank keeps the rest of the catch in the net', () => {
   const player = fakePlayer();
   const banked = [];
-  player.getBank = () => ({ contains: () => false, getAmount: () => 0,
+  const amounts = new Map();
+  player.getBank = () => ({ contains: (id) => (amounts.get(id) ?? 0) > 0, getAmount: (id) => amounts.get(id) ?? 0,
     getFreeSlots: () => banked.length === 0 ? 1 : 0,
     getAddableAmount: (item) => banked.length === 0 ? item.getAmount() : 0,
-    add: (item) => banked.push(item.getId()) });
+    add: (item) => {
+      banked.push(item.getId());
+      amounts.set(item.getId(), (amounts.get(item.getId()) ?? 0) + item.getAmount());
+    } });
   player.getSkillManager = () => ({ getMaxLevel: () => 99, getCurrentLevel: () => 99, addExperiences: () => {} });
   player.setAttribute(Shared.REWARD_ATTRIBUTE, { items: [[317, 3], [321, 2]], xp: 10 });
   Rewards.inspectNet({ player });
@@ -357,4 +450,20 @@ test('balance: an idle crew sinks before the end, a steady patcher lasts the who
   }
   assert.equal(busy.result, 'returned');
   assert.equal(busy.contribution.get(player), Shared.DATA.points.max);
+});
+
+test('an angler piece is credited to the collection log when it reaches the bank', () => {
+  const obtains = [];
+  Shared.bind({ core, emitCustomEvent: (name, event) => { if (name === 'collection-log:obtain') obtains.push(event); } });
+  const player = fakePlayer();
+  const ids = Shared.ids();
+  player.getInventory = () => ({ contains: () => false, getAmount: () => 0, getAddableAmount: () => 1, adds: () => {} });
+  const banked = new Map();
+  player.getBank = () => ({ contains: id => (banked.get(id) ?? 0) > 0, getAmount: id => banked.get(id) ?? 0, getFreeSlots: () => 800,
+    getAddableAmount: item => item.getAmount(), add: item => banked.set(item.getId(), (banked.get(item.getId()) ?? 0) + item.getAmount()) });
+  player.getSkillManager = () => ({ getMaxLevel: () => 99, getCurrentLevel: () => 99, addExperiences: () => {} });
+  player.setAttribute(Shared.REWARD_ATTRIBUTE, { items: [[ids.items.anglerHat, 1], [317, 1]], xp: 1 });
+  Rewards.inspectNet({ player });
+  assert.deepEqual(obtains.map((event) => [event.itemId, event.amount]), [[ids.items.anglerHat, 1]]);
+  Shared.bind({ core, emitCustomEvent: () => {} });
 });

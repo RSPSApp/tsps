@@ -11,12 +11,16 @@
  * Transcript: https://oldschool.runescape.wiki/w/Transcript:Silk_merchant
  */
 const { ItemIdentifiers } = require("../../src/main/typescript/elvarg/util/ItemIdentifiers");
+const { Item } = require("../../src/main/typescript/elvarg/game/model/Item");
+const { MAX_STACK_AMOUNT } = require("../../src/main/typescript/elvarg/game/model/container/StackType");
 
 const AGREED_PRICE_ATTRIBUTE = "silk-merchant:agreed-price";
+const AGREEMENT_TOKEN_ATTRIBUTE = "silk-merchant:agreement-token";
 
 const WIKI_PAGE_DIARY_TASK_KEY = "sell-silk-to-silk-trader-in-ardougne-for-60-coin";
 
 let api;
+let agreementSequence = 0;
 
 /**
  * Silk merchant (East Ardougne, Great Kourend).
@@ -62,25 +66,43 @@ function onDialogueVariant(context) {
 function onDialogueChoice(request) {
   if (!SILK_MERCHANT_IDS.has(request.npcId)) return;
   const agreed = AGREED_ON.get(request.option);
-  if (agreed) request.player.setAttribute(AGREED_PRICE_ATTRIBUTE, agreed);
-  else if (PRICES_REJECTED.has(request.option)) request.player.setAttribute(AGREED_PRICE_ATTRIBUTE, null);
+  if (agreed) {
+    request.player.setAttribute(AGREED_PRICE_ATTRIBUTE, agreed);
+    request.player.setAttribute(AGREEMENT_TOKEN_ATTRIBUTE, ++agreementSequence);
+  } else if (PRICES_REJECTED.has(request.option)) {
+    clearAgreement(request.player);
+  }
+}
+
+function clearAgreement(player) {
+  player.setAttribute(AGREED_PRICE_ATTRIBUTE, null);
+  player.setAttribute(AGREEMENT_TOKEN_ATTRIBUTE, null);
 }
 
 /** True when the merchant being talked to stands in the East Ardougne market. */
 function inArdougneMarket(npc) {
   const location = npc?.getLocation?.();
-  return !!location && location.x >= ARDOUGNE_MARKET_BOX.minX && location.x <= ARDOUGNE_MARKET_BOX.maxX
-    && location.y >= ARDOUGNE_MARKET_BOX.minY && location.y <= ARDOUGNE_MARKET_BOX.maxY;
+  return !!location && location.getZ() === 0
+    && location.getX() >= ARDOUGNE_MARKET_BOX.minX && location.getX() <= ARDOUGNE_MARKET_BOX.maxX
+    && location.getY() >= ARDOUGNE_MARKET_BOX.minY && location.getY() <= ARDOUGNE_MARKET_BOX.maxY;
 }
 
 /** The whole business: every un-noted silk in the inventory for the agreed price each. */
 function sellSilk(player, price) {
   const inventory = player.getInventory();
   const silk = inventory.getAmount(ItemIdentifiers.SILK);
-  if (silk <= 0) return;
+  if (silk <= 0) return 0;
+  const payout = silk * price;
+  const coins = new Item(ItemIdentifiers.COINS, payout);
+  const addable = inventory.getAddableAmount(coins);
+  const freedSlots = silk;
+  if (addable < payout && (inventory.getAmount(ItemIdentifiers.COINS) > 0
+    || inventory.getFreeSlots() + freedSlots < 1 || payout > MAX_STACK_AMOUNT)) return 0;
+
   inventory.delete(ItemIdentifiers.SILK, silk);
-  inventory.adds(ItemIdentifiers.COINS, silk * price);
-  player.setAttribute(AGREED_PRICE_ATTRIBUTE, null);
+  inventory.adds(ItemIdentifiers.COINS, payout);
+  clearAgreement(player);
+  return silk;
 }
 
 function onDialogueLine(request) {
@@ -88,9 +110,17 @@ function onDialogueLine(request) {
   const agreed = SALE_LINES.get(request.text);
   if (agreed == null || request.player.getAttribute(AGREED_PRICE_ATTRIBUTE) !== agreed) return;
   const { player, npc, npcId } = request;
+  const agreementToken = player.getAttribute(AGREEMENT_TOKEN_ATTRIBUTE);
+  if (agreementToken == null) return;
+  let callbackUsed = false;
   request.after = () => {
-    sellSilk(player, agreed);
-    if (agreed === 60 && inArdougneMarket(npc)) {
+    if (callbackUsed) return;
+    callbackUsed = true;
+    if (player.getAttribute(AGREED_PRICE_ATTRIBUTE) !== agreed
+      || player.getAttribute(AGREEMENT_TOKEN_ATTRIBUTE) !== agreementToken) return;
+    const silkSold = sellSilk(player, agreed);
+    if (silkSold > 0 && agreed === 60 && inArdougneMarket(npc)
+      && player.getPrivateArea() === null && npc.getPrivateArea?.() == null) {
       api.emitCustomEvent("diary:task", { player, npcId, diary: "ardougne", task: WIKI_PAGE_DIARY_TASK_KEY });
     }
   };
@@ -107,6 +137,7 @@ module.exports = {
   },
   _test: {
     AGREED_PRICE_ATTRIBUTE,
+    AGREEMENT_TOKEN_ATTRIBUTE,
     variantFor,
     onDialogueVariant,
     onDialogueChoice,

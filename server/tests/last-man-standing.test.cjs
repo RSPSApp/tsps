@@ -336,6 +336,7 @@ test('a withdrawal fills only what the coin stack can hold, and the coffer keeps
     core,
     getPluginConfig: (_key, fallback) => fallback,
     getSkillManager: () => require('../dist/game/content/skill/SkillManager').SkillManager,
+    emitCustomEvent() {},
     ...extra,
   });
   initWith({ sendMultiChatboxPrompt: () => {} });
@@ -416,4 +417,149 @@ test('Justine\'s purchase: the set is added in full when the stack has the room,
   entered.execute(1);
   assert.equal(Common.points(p), 7);
   assert.equal(p.getInventory().getAmount(id('rune_arrow')), 2147483300);
+});
+
+test("Justine's purchase records its own collection-log items only when it succeeds", (t) => {
+  const Rewards = require('../plugins/minigames/lms/Rewards.LastManStanding');
+  const CollectionLog = require('../plugins/achievements/CollectionLog.plugin');
+  const Progress = require('../plugins/achievements/collectionlog/Progress.CollectionLog');
+  const listeners = new Map();
+  const bus = new Proxy({
+    core,
+    persistAttribute() {},
+    onCustomEvent(name, handler) { listeners.set(name, [...(listeners.get(name) ?? []), handler]); },
+    emitCustomEvent(name, request) { for (const handler of listeners.get(name) ?? []) handler(request); },
+    getTaskManager: () => ({ submit() {} }),
+  }, { get: (target, key) => target[key] ?? (() => {}) });
+  Common.init(bus);
+  CollectionLog.register(bus);
+  t.after(() => Common.init({
+    core,
+    getPluginConfig: (_key, fallback) => fallback,
+    getSkillManager: () => require('../dist/game/content/skill/SkillManager').SkillManager,
+    emitCustomEvent() {},
+  }));
+
+  const p = realPlayer(t);
+  const entry = Common.data.shop.stock.find((row) => row && row[0] === 'br_deadman_body');
+  const slot = Common.data.shop.stock.indexOf(entry);
+  const itemId = id('br_deadman_body');
+  const boltEntry = Common.data.shop.stock.find((row) => row && row[0] === 'barrows_karil_ammo');
+  const boltSlot = Common.data.shop.stock.indexOf(boltEntry);
+  const boltId = id('barrows_karil_ammo');
+
+  p.setAttribute(Common.POINTS_ATTRIBUTE, boltEntry[1]);
+  Rewards.confirm({ player: p, slot: boltSlot });
+  assert.equal(Common.points(p), boltEntry[1], 'a tradeable reward without a win is refused');
+  assert.equal(Progress.obtained(p, boltId), 0, 'a denied purchase is not logged');
+
+  p.setAttribute(Common.POINTS_ATTRIBUTE, 0);
+  p.setAttribute(Common.ATTRIBUTES.wins, 1);
+  Rewards.confirm({ player: p, slot });
+  assert.equal(Progress.obtained(p, itemId), 0, 'no points: nothing delivered or logged');
+
+  p.setAttribute(Common.POINTS_ATTRIBUTE, entry[1]);
+  for (let i = 0; i < p.getInventory().capacity(); i++) p.getInventory().add(new core.Item(id('br_deadman_legs'), 1), false);
+  Rewards.confirm({ player: p, slot });
+  assert.equal(Common.points(p), entry[1], 'a full inventory costs no points');
+  assert.equal(Progress.obtained(p, itemId), 0, 'a refused purchase is not logged');
+
+  p.getInventory().resetItems();
+  Rewards.confirm({ player: p, slot });
+  assert.equal(Common.points(p), 0);
+  assert.equal(p.getInventory().getAmount(itemId), 1);
+  assert.equal(Progress.obtained(p, itemId), 1, 'the actual purchase path records the item once');
+
+  let entered;
+  t.mock.method(p, 'setEnteredAmountAction', (action) => { entered = action; });
+  p.setAttribute(Common.POINTS_ATTRIBUTE, boltEntry[1]);
+  Rewards.confirm({ player: p, slot: boltSlot });
+  entered.execute(1);
+  assert.equal(Common.points(p), 0);
+  assert.equal(p.getInventory().getAmount(boltId), 200, 'the set is delivered in full');
+  assert.equal(Progress.obtained(p, boltId), 0, 'Bolt racks belong to Barrows, not the LMS log');
+});
+
+// Issue 2701: a chest house on Desert Island's west edge has a strip of open ground between its
+// fence and the map's edge. Start tiles were any standable tile near a chest, so a player could
+// begin in that strip with no way out.
+test('starts and crates go only on the island\'s connected ground, never behind a fence', (t) => {
+  require('../dist/game/definition/ObjectDefinition').ObjectDefinition.init();
+  for (const map of Common.data.maps) {
+    t.mock.method(Common, 'pick', (list) => (list === Common.data.maps ? map : list[0]));
+    const game = new Match.Game(new Array(24).fill(0).map(() => ({ getAttribute: () => 0 })));
+    t.mock.restoreAll();
+    const ground = game.ground();
+    const onGround = (tile) => ground.has(game.groundKey(tile.getX(), tile.getY()));
+    assert.ok(ground.size > 9000, `${map.name}: the island is one walkable region (${ground.size})`);
+    for (const zone of map.safezones) assert.ok(onGround(game.area.at([...zone.centre, 0])), `${map.name}: ${zone.name}`);
+    if (map.name === 'Desert Island') {
+      const strip = game.area.at([3392, 5798, 0]);
+      assert.ok(Common.standable(strip.getX(), strip.getY(), 0, game.area), 'the strip is open ground');
+      assert.ok(!onGround(strip), 'but nothing joins it to the island');
+    }
+    for (let round = 0; round < 20; round++) {
+      for (const tile of game.spawnTiles()) assert.ok(onGround(tile), `${map.name}: start ${game.area.templateOf(tile)}`);
+      for (const spot of game.chestSpots) {
+        const tile = game.openTileNear(spot, 10);
+        if (tile) assert.ok(onGround(tile), `${map.name}: crate ${game.area.templateOf(tile)}`);
+      }
+    }
+    game.area.destroy();
+  }
+});
+
+// Issue 2701: in a game the client draws Zeal in Piety's slot without the unlock (cs2 10157 ->
+// 10194), as live players use it. The server turned Piety on there, so the drawn Zeal never
+// went off again when Rigour or Augury did.
+test('in a game Piety\'s slot is Zeal without the unlock, and Augury puts it out', (t) => {
+  const { PrayerHandler } = require('../dist/game/content/PrayerHandler');
+  const hooks = new Map();
+  Match.attachMatch(new Proxy({}, { get: (_, key) => (key === 'onCustomEvent' ? (name, fn) => hooks.set(name, fn) : () => {}) }));
+  t.mock.method(PluginManager, 'emitCustomEvent', (name, payload) => hooks.get(name)?.(payload));
+  t.mock.method(Common, 'later', () => {});
+  t.mock.method(Common, 'every', () => {});
+  t.mock.method(require('../plugins/minigames/lms/Lobby.LastManStanding'), 'openOverlay', () => {});
+  const choose = (p) => {
+    for (const skill of ['ATTACK', 'STRENGTH', 'DEFENCE', 'PRAYER', 'HITPOINTS']) {
+      p.getSkillManager().setMaxLevel(core.Skill[skill], 99);
+      p.getSkillManager().setCurrentLevel(core.Skill[skill], 99, false);
+    }
+    return p;
+  };
+  const PIETY_SLOT = 35, AUGURY_SLOT = 36;
+
+  const outside = choose(realPlayer(t));
+  PrayerHandler.togglePrayer(outside, PIETY_SLOT);
+  assert.equal(outside.getPrayerActive()[PrayerHandler.PIETY], true, 'outside a game, no unlock: Piety');
+
+  const p = choose(realPlayer(t));
+  const game = new Match.Game([p]);
+  game.build = 0;
+  game.enter(p, game.area.at([...game.zone.centre, 0]));
+  PrayerHandler.togglePrayer(p, PIETY_SLOT);
+  assert.equal(p.getPrayerActive()[PrayerHandler.ZEAL], true);
+  assert.ok(!p.getPrayerActive()[PrayerHandler.PIETY]);
+  PrayerHandler.togglePrayer(p, AUGURY_SLOT);
+  assert.equal(p.getPrayerActive()[PrayerHandler.AUGURY], true);
+  assert.ok(!p.getPrayerActive()[PrayerHandler.ZEAL]);
+  assert.equal(p.varbits.get(16577), 0, 'prayer_zeal goes out on the client');
+
+  // Quick prayers: the set {Piety's slot} turns Zeal on, and stays on while another prayer
+  // comes and goes (Zeal has no quick-prayer slot of its own).
+  const { PrayerData } = require('../dist/game/content/PrayerHandler');
+  const orb = core.CacheDefinitions.getComponentId('orbs:prayerbutton');
+  const quick = p.getQuickPrayers();
+  PrayerHandler.deactivatePrayers(p);
+  quick.setPrayers(Object.assign([], { [PrayerHandler.PIETY]: PrayerData.PIETY }));
+  quick.handleWidgetAction(orb >>> 16, orb & 0xffff, 1);
+  assert.equal(p.getPrayerActive()[PrayerHandler.ZEAL], true, 'the quick set turns Zeal on');
+  assert.equal(quick.enabled, true);
+  const PROTECT_FROM_MELEE_SLOT = 23;
+  PrayerHandler.togglePrayer(p, PROTECT_FROM_MELEE_SLOT);
+  PrayerHandler.togglePrayer(p, PROTECT_FROM_MELEE_SLOT);
+  assert.equal(quick.enabled, true, 'another prayer on and off leaves the quick set on');
+  quick.handleWidgetAction(orb >>> 16, orb & 0xffff, 1);
+  assert.ok(!p.getPrayerActive()[PrayerHandler.ZEAL], 'the next orb click puts Zeal out');
+  game.area.destroy();
 });

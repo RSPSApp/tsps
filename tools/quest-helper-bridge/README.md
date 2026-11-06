@@ -62,7 +62,8 @@ them. The agent MCP's `quest_helper` tool drives this bridge headless — see
 - **Vars:** sparse nonzero `varps`, observed `varbits` (or `varbitDefinitions`), and `questStates`.
 - **Player:** `inventory`, `equipment` and an optional `bank`; the local player and `skills`.
 - **Scene:** `npcs`, `objects`, `groundItems`, the visible `widgets` tree, and cache definitions.
-- **Geometry:** the browser camera's view-projection matrix and packed heights, for upstream's own overlays.
+- **Geometry:** the browser camera's view-projection matrix and packed heights, for upstream's own overlays. `loadedTilesPacked` marks the tiles the client has built; the rest are absent from the scene.
+- **Reuse (server only):** the browser sends `objects`, `widgets`, the definitions and the packed terrain once with `digests`, and afterwards names an unchanged section in `reuse` by digest; the server restores it before forwarding, and echoes the digests it holds as `cached` on each result. The bridge always receives a full snapshot.
 
 Missing state produces `MISSING_STATE` with a structured request, and an unimplemented API produces `UNSUPPORTED_API`. Neither falls back to null or zero.
 

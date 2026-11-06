@@ -121,6 +121,7 @@ function setup(pluginPath, questKey, options = {}) {
     sendConfig(id, value) { configs.set(id, value); return sender; },
     sendInterfaceRemoval() { current = null; return sender; },
     sendSubInterface(target, group, type) { subInterfaces.set(group, { target, type }); return sender; },
+    mountSubInterface(target, group, type) { const mount = { target, type }; subInterfaces.set(group, mount); return mount; },
     sendCameraMoveTo(...args) { cameras.moves.push(args); return sender; },
     sendCameraLookAt(...args) { cameras.looks.push(args); return sender; },
     sendCameraReset() { cameras.resets += 1; return sender; },
@@ -1592,8 +1593,8 @@ test('Fremennik Trials: Peer offers and performs his bank spell when talked to a
   const moved = [];
   const items = [new h.core.Item(I.COINS, 5)];
   const container = (list) => ({
-    getValidItems: () => list.slice(), refreshItems() {}, getAmount: () => 0,
-    switchItems(_to, item) { moved.push(item.getId()); list.splice(list.findIndex((entry) => entry.getId() === item.getId()), 1); },
+    getItems: () => list, getValidItems: () => list.slice(), refreshItems() {}, getAmount: () => 0,
+    switchItem(_to, item, _sort, slot) { moved.push(item.getId()); list.splice(slot, 1); },
   });
   Object.assign(h.player, {
     getInventory: () => container(items), getEquipment: () => container([]),

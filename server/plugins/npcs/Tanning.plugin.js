@@ -11,6 +11,7 @@ const GROUP = 324;
 const CLOSE = (GROUP << 16) | 91;
 const BUTTONS = Array.from({ length:32 }, (_, index) => (GROUP << 16) | (124 + index));
 const opened = new WeakMap();
+let api = null;
 
 function openTanning(event) {
   if (!event.player || event.handled) return;
@@ -52,6 +53,7 @@ function tan(player, index, requested, context) {
   if (hide.hide) player.sendMessage(count === 1 ? `The tanner tans your ${hide.hide}.` : `The tanner tans ${count} ${hide.hide}s for you.`);
   opened.delete(player);
   player.getPacketSender().sendInterfaceRemoval();
+  api?.emitCustomEvent('tanning:done', { player, tanner: context.npc?.getCurrentDefinition?.()?.getName?.() ?? context.npc?.getDefinition?.()?.getName?.(), count });
   return count;
 }
 
@@ -77,7 +79,8 @@ function logout({ player }) { opened.delete(player); }
 
 module.exports = {
   name: 'Tanning',
-  register(api) {
+  register(pluginApi) {
+    api = pluginApi;
     api.onCustomEvent('tanning:open', openTanning);
     api.onNpcsInteraction(['Ellis', 'Tanner', 'Sbott'], { Trade: tradeWithTanner });
     api.onNpcInteraction('Eodan', { 'Tan-hides': tradeWithTanner });

@@ -10,6 +10,10 @@ const { ItemIdentifiers } = require("../../src/main/typescript/elvarg/util/ItemI
 
 // Active cache: ge_offers (465), ge_offers_side (467), scripts 773/779/794.
 const GE = 465;
+const GE_HISTORY = 383;
+const GE_HISTORY_RESET_SCRIPT = 1644;
+const GE_HISTORY_ENTRY_SCRIPT = 1645;
+const GE_HISTORY_REFRESH_SCRIPT = 1646;
 const GE_COLLECT = 402;
 const collectUid = (child) => (GE_COLLECT << 16) | child;
 const SIDE = 467;
@@ -36,6 +40,8 @@ const MARKET_STRIDE = 7;
 const FINISHED = 5;
 const OFFERS_ATTRIBUTE = "grand-exchange-offers";
 const LIMITS_ATTRIBUTE = "grand-exchange-limits";
+const HISTORY_ATTRIBUTE = "grand-exchange-history";
+const HISTORY_LIMIT = 40;
 const LIMIT_WINDOW_MS = 4 * 60 * 60 * 1000;
 const OFFER_MIN_DELAY_MS = 5_000;
 // Milliseconds; applies to newly placed offers.
@@ -48,6 +54,7 @@ const OFFER_ILLIQUID_MAX_MS = 5 * 60_000;
 const OFFER_GUIDE_DELAY = 0.1;
 const OFFER_PRICE_SENSITIVITY = 50;
 const MAX = 0x7fffffff;
+const PRESET_TEXT = "Preset items cannot be used for this.";
 const COINS = ItemIdentifiers.COINS;
 const PLATINUM_TOKEN = ItemIdentifiers.PLATINUM_TOKEN;
 // OSRS Wiki Update:GE_Improvements:_Beyond_Max_Cash: payment mixes coins and platinum tokens,
@@ -118,6 +125,7 @@ const offers = new WeakMap();
 const completionTimers = new WeakMap();
 const viewing = new WeakMap();
 const searching = new WeakSet();
+const historyOpen = new WeakSet();
 let pluginApi;
 let marketData;
 
@@ -264,12 +272,37 @@ function completedOffers(player) {
   return slots;
 }
 
+function tradeHistory(player) {
+  let history = player.getAttribute(HISTORY_ATTRIBUTE);
+  if (!Array.isArray(history)) player.setAttribute(HISTORY_ATTRIBUTE, history = []);
+  return history;
+}
+
 function saveOffers(player) {
   GameConstants.PLAYER_PERSISTENCE.save(player, "grand-exchange");
 }
 
+function recordHistory(player, offer) {
+  if (!offer || offer.historyRecorded || !offer.finished || offer.aborted) return false;
+  const itemId = Number(offer.itemId);
+  const quantity = Number(offer.quantity);
+  const total = Number(offer.total);
+  if (!Number.isInteger(itemId) || itemId <= 0 || !Number.isInteger(quantity) || quantity <= 0 ||
+      !Number.isSafeInteger(total) || total < 0) return false;
+
+  const completedAt = Number(offer.completedAt) || Number(offer.completesAt) || Date.now();
+  const history = tradeHistory(player);
+  history.unshift({ itemId, sell: Boolean(offer.sell), quantity, total, tax: tax(offer), completedAt });
+  history.length = Math.min(history.length, HISTORY_LIMIT);
+  offer.historyRecorded = true;
+  return true;
+}
+
 function scheduleCompletion(player, offer) {
-  if (offer.finished || offer.completesAt === null) return;
+  if (offer.finished || offer.completesAt === null) {
+    if (recordHistory(player, offer)) saveOffers(player);
+    return;
+  }
   let timers = completionTimers.get(player);
   if (!timers) completionTimers.set(player, timers = new Set());
   const timer = setTimeout(() => {
@@ -279,6 +312,8 @@ function scheduleCompletion(player, offer) {
     // re-save and re-announce an already-completed offer.
     if (offer.finished) return;
     offer.finished = true;
+    offer.completedAt = Date.now();
+    recordHistory(player, offer);
     saveOffers(player);
     refreshCollectionBox(player);
     const sender = player.getPacketSender();
@@ -290,6 +325,15 @@ function scheduleCompletion(player, offer) {
     sender.sendMessage(`${offer.sell ? "Sold" : "Bought"} ${offer.quantity.toLocaleString("en-US")} x ${ItemDefinition.forId(offer.itemId).getName()}. Click Collect.`);
   }, Math.max(0, offer.completesAt - Date.now()));
   timers.add(timer);
+}
+
+function restoreCompletedOffers({ player }) {
+  let historyUpdated = false;
+  for (const offer of Object.values(completedOffers(player))) {
+    if (offer.finished) historyUpdated = recordHistory(player, offer) || historyUpdated;
+    else scheduleCompletion(player, offer);
+  }
+  if (historyUpdated) saveOffers(player);
 }
 
 function marketVarps(slot, offer) {
@@ -400,6 +444,24 @@ function home(player) {
     .sendVarbit(SELECTED_SLOT, 0);
 }
 
+function showHistory(player) {
+  const sender = player.getPacketSender();
+  historyOpen.add(player);
+  sender.sendClientScript(2524, -1, -1)
+    .sendSubInterface(MAIN_MODAL, GE_HISTORY, 0)
+    .sendClientScript(GE_HISTORY_RESET_SCRIPT);
+  for (const [index, entry] of tradeHistory(player).slice(0, HISTORY_LIMIT).entries()) {
+    // Script 1645 takes four ints followed by the gross total and tax as longs.
+    const total = Number(entry.total);
+    const fee = Number(entry.tax) || 0;
+    sender.sendInterfaceScript(GE_HISTORY_ENTRY_SCRIPT, [index, entry.itemId, entry.sell ? 1 : 0,
+      entry.quantity, BigInt(Number.isSafeInteger(total) && total >= 0 ? total : 0),
+      BigInt(Number.isSafeInteger(fee) && fee >= 0 ? fee : 0)]);
+  }
+  sender.sendClientScript(GE_HISTORY_REFRESH_SCRIPT)
+    .sendInterfaceFlagsRange((GE_HISTORY << 16) | 3, 0, 234, 1026);
+}
+
 function closeSearch(player) {
   if (!searching.delete(player)) return;
   player.setEnteredSyntaxAction(null);
@@ -500,7 +562,7 @@ function confirm(player, offer) {
     return;
   }
   // Plugins may veto an offer (e.g. an untradeable item that cannot be listed).
-  const confirmation = { player, itemId: offer.itemId, sell: offer.sell, accepted: true };
+  const confirmation = { player, itemId: offer.itemId, sell: offer.sell, quantity: amount, accepted: true };
   pluginApi.emitCustomEvent("ge:offer-confirmed", confirmation);
   if (confirmation.accepted === false) {
     return;
@@ -522,11 +584,25 @@ function confirm(player, offer) {
       return;
     }
   } else {
-    result.deleted(inputId, inputAmount, false);
-    if (result.getAmount(inputId) !== inventory.getAmount(inputId) - inputAmount) {
+    // An offer's input comes from one stack; a delete by id would run on into the next.
+    const plain = (item) => item.getId() === inputId && item.getAmount() > 0 && !restricted(item);
+    const firstStack = inventory.getItems().find(plain);
+    const plainTotal = inventory.getItems().filter(plain).reduce((sum, item) => sum + item.getAmount(), 0);
+    if (!firstStack || plainTotal < inputAmount && !ItemDefinition.forId(inputId).isStackable()) {
+      sender.sendMessage(PRESET_TEXT);
+      return;
+    }
+    if (ItemDefinition.forId(inputId).isStackable() && firstStack.getAmount() < inputAmount) {
       sender.sendMessage("Trade one item stack at a time.");
       return;
     }
+    let left = inputAmount;
+    result.getItems().forEach((item, slot) => {
+      if (left <= 0 || !plain(item)) return;
+      const taken = Math.min(left, item.getAmount());
+      result.deleteAtSlot(slot, taken, false);
+      left -= taken;
+    });
   }
   inventory.setItems(result.getItems()).refreshItems();
   const delay = fillDelayMs(offer);
@@ -555,7 +631,8 @@ function collectionOutputId(baseId, amount, action, forceNotes = false) {
   const noteId = ItemDefinition.forId(baseId).getNoteId();
   const noteable = noteId >= 0 && ItemDefinition.forId(noteId).isNoted();
   if (!noteable || action === 3) return baseId;
-  if (forceNotes) return noteId;
+  // Collect-all notes a stack but not a single item: notes begin at two in a slot (rsprox 1521: one bought item arrives as the item).
+  if (forceNotes) return amount > 1 ? noteId : baseId;
   if (action === 2) return amount === 1 ? noteId : baseId;
   if (action === 1) return amount > 1 ? noteId : baseId;
   return baseId;
@@ -564,6 +641,8 @@ function collectionOutputId(baseId, amount, action, forceNotes = false) {
 function collect(player, action, slot = viewing.get(player), forceNotes = false) {
   const offer = completedOffers(player)[slot];
   if (!offer?.finished) return;
+  // A bank collection must obey the same account restrictions as bank access.
+  if (action === 3 && pluginApi.emitCanBank(player, "grand-exchange-collect") === false) return false;
   const inventory = player.getInventory();
   const parts = [];
   // Each part lands on a copy first, so a collection that does not fit hands over nothing.
@@ -629,14 +708,16 @@ function abort(player, slot = viewing.get(player)) {
   sender.sendMessage("Abort request acknowledged. Please be aware that your offer may have already been completed.");
 }
 
-/** The Collect button (465:6, dynamic child 0): op 1 to the inventory (as notes), op 2 to the bank. */
+/** The Collect button (465:6, dynamic child 0): op 1 to the inventory (a slot of two or more as notes, a single item as the item), op 2 to the bank. */
 function collectAll(player, action) {
   const to = action === 2 ? 3 : 1;
-  for (const slot of Object.keys(completedOffers(player)).map(Number)) collect(player, to, slot, to === 1);
+  for (const slot of Object.keys(completedOffers(player)).map(Number)) {
+    if (collect(player, to, slot, to === 1) === false) break;
+  }
 }
 
 function openGrandExchange({ player }) {
-  // "grand-exchange:can-open": other content may keep a player out (an Ironman).
+  // "grand-exchange:can-open": other content may keep a player out.
   const request = { player, allow: true, message: null };
   pluginApi.emitCustomEvent("grand-exchange:can-open", request);
   if (!request.allow) {
@@ -647,7 +728,10 @@ function openGrandExchange({ player }) {
   const pin = { player, feature: "grand-exchange", resume: () => openGrandExchange({ player }) };
   pluginApi.emitCustomEvent("bank-pin:guard", pin);
   if (pin.locked) return true;
-  if ([GE, GE_COLLECT].includes(player.getInterfaceId())) player.getPacketSender().sendInterfaceRemoval();
+  if ([GE, GE_COLLECT].includes(player.getInterfaceId())) {
+    player.getPacketSender().sendInterfaceRemoval();
+    historyOpen.delete(player);
+  }
   if (player.busy()) {
     player.sendMessage("Finish what you are doing before opening the Grand Exchange.");
     return true;
@@ -720,21 +804,31 @@ function handleCollectionButton({ player, buttonId, slot, action }) {
   if (player.getInterfaceId() !== GE_COLLECT) return true;
   const child = buttonId & 0xffff;
   if ((child === 3 || child === 4) && action === 1) {
-    for (const index of Object.keys(completedOffers(player)).map(Number)) collect(player, child === 4 ? 3 : 1, index, child === 3);
+    collectAll(player, child === 4 ? 2 : 1);
   } else if (child >= 5 && child <= 12 && slot === 3 && action >= 1 && action <= 3) {
     collect(player, action, child - 5);
   }
   return true;
 }
 
+/** Preset (and other untradeable or unbankable) copies never sell. */
+function restricted(item) {
+  return item.isPresetItem() || item.isUntradeable() || item.isUnbankable();
+}
+
 function handleInventoryItem(event) {
   // The cache has used both 467:0 and the normal inventory id for this
   // mounted panel. The item/slot validation is the reliable discriminator.
   if (event.player.getInterfaceId() !== GE) return false;
+  if (historyOpen.has(event.player)) return true;
   const item = event.player.getInventory().getItems()[event.slot];
   if (item?.getId() === event.itemId && validItem(event.itemId)) {
     if (!exchangeable(event.itemId)) {
       event.player.sendMessage("That item can't be traded on the Grand Exchange.");
+      return true;
+    }
+    if (restricted(item)) {
+      event.player.sendMessage(PRESET_TEXT);
       return true;
     }
     start(event.player, true, offers.get(event.player)?.slot ?? 0, event.itemId);
@@ -745,6 +839,7 @@ function handleInventoryItem(event) {
 
 function handleExchangeButton({ player, buttonId, slot, action }) {
   if (player.getInterfaceId() !== GE) return true;
+  if (historyOpen.has(player)) return true;
   if (buttonId === uid(24) && action >= 1 && action <= 3) { collect(player, action); return true; }
   // Child 1 of 465:6 is Repeat Offer (script 793), not handled here.
   if (buttonId === uid(6) && slot === 0 && (action === 1 || action === 2)) { collectAll(player, action); return true; }
@@ -754,6 +849,7 @@ function handleExchangeButton({ player, buttonId, slot, action }) {
     return true;
   }
   if (action !== 1) return true;
+  if (buttonId === uid(3)) { showHistory(player); return true; }
   if (buttonId === uid(4)) { home(player); return true; }
   const child = buttonId & 0xffff;
   if (child >= 7 && child <= 14) {
@@ -800,9 +896,30 @@ function handleExchangeButton({ player, buttonId, slot, action }) {
   return true;
 }
 
+function handleHistoryButton({ player, buttonId, slot, action }) {
+  if (!historyOpen.has(player) || action !== 1) return true;
+  if (buttonId === historyUid(2)) {
+    openGrandExchange({ player });
+    return true;
+  }
+  if (buttonId !== historyUid(3) || !Number.isInteger(slot) || slot < 0) return true;
+
+  // Script 1645 creates six dynamic children per history row; the widget action
+  // slot is the child index within that list.
+  const entry = tradeHistory(player)[Math.floor(slot / 6)];
+  if (!entry || !exchangeable(Number(entry.itemId))) return true;
+  openGrandExchange({ player });
+  if (!historyOpen.has(player) && player.getInterfaceId() === GE) {
+    start(player, false, 0, Number(entry.itemId));
+  }
+  return true;
+}
+
 const COLLECTION_BUTTONS = Array.from({ length: 10 }, (_, i) => collectUid(i + 3));
 // Child 34 is the offer setup panel; its quantity and price controls are dynamic children (slot 1-13).
-const EXCHANGE_BUTTONS = [uid(4), uid(6), uid(23), uid(24), uid(26), uid(30), uid(34), ...Array.from({ length: 8 }, (_, i) => uid(i + 7))];
+const EXCHANGE_BUTTONS = [uid(3), uid(4), uid(6), uid(23), uid(24), uid(26), uid(30), uid(34), ...Array.from({ length: 8 }, (_, i) => uid(i + 7))];
+const historyUid = (child) => (GE_HISTORY << 16) | child;
+const HISTORY_BUTTONS = [historyUid(2), historyUid(3)];
 
 module.exports = {
   name: "GrandExchange",
@@ -821,6 +938,10 @@ module.exports = {
     remainingLimit,
     recordLimit,
     LIMITS_ATTRIBUTE,
+    HISTORY_ATTRIBUTE,
+    HISTORY_LIMIT,
+    tradeHistory,
+    recordHistory,
     LIMIT_WINDOW_MS,
     OFFERS_ATTRIBUTE,
     setMarketData: (data) => {
@@ -833,14 +954,15 @@ module.exports = {
     loadMarketData();
     api.persistAttribute(OFFERS_ATTRIBUTE, {});
     api.persistAttribute(LIMITS_ATTRIBUTE, {});
-    api.onPlayerLogin(({ player }) => {
-      for (const offer of Object.values(completedOffers(player))) scheduleCompletion(player, offer);
-    });
+    api.persistAttribute(HISTORY_ATTRIBUTE, []);
+    api.onPlayerLogin(restoreCompletedOffers);
     api.onPlayerProcess(({ player }) => {
       if (searching.has(player) && player.getInterfaceId() !== GE) closeSearch(player);
+      if (historyOpen.has(player) && player.getInterfaceId() !== GE) historyOpen.delete(player);
     });
     api.onPlayerLogout(({ player }) => {
       searching.delete(player);
+      historyOpen.delete(player);
       for (const timer of completionTimers.get(player) ?? []) clearTimeout(timer);
       completionTimers.delete(player);
     });
@@ -862,10 +984,17 @@ module.exports = {
     api.onObjectInteraction("Bank Chest", {
       "Collect": openCollectionBox,
     });
+    api.onObjectInteraction("Chest", {
+      "Collect": openCollectionBox,
+    });
 
     api.onInterfaceActionButton(COLLECTION_BUTTONS, handleCollectionButton);
     api.onItemFirstAction(handleInventoryItem);
     api.onInterfaceActionButton(SIDE_ITEMS, (event) => event.action === 1 && handleInventoryItem(event));
     api.onInterfaceActionButton(EXCHANGE_BUTTONS, handleExchangeButton);
+    api.onInterfaceActionButton(HISTORY_BUTTONS, handleHistoryButton);
+    api.onCustomEvent("interface:closed", ({ player, interfaceId }) => {
+      if (interfaceId === GE_HISTORY) historyOpen.delete(player);
+    });
   },
 };

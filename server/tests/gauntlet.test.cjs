@@ -1,4 +1,5 @@
 // Run after `yarn build`: node --test tests/gauntlet.test.cjs
+process.env.DISABLE_PLAYER_BOTS = '1';
 const assert = require('node:assert/strict');
 const { test, before } = require('node:test');
 
@@ -9,13 +10,25 @@ const { CachePipeline } = require('../dist/game/cache/CachePipeline');
 const { RegionManager } = require('../dist/game/collision/RegionManager');
 const { PluginManager } = require('../dist/plugins/PluginManager');
 const { Location } = require('../dist/game/model/Location');
+const { Player } = require('../dist/game/entity/impl/player/Player');
+const { PlayerSave } = require('../dist/game/entity/impl/player/persistence/PlayerSave');
+const { ObjectDefinition } = require('../dist/game/definition/ObjectDefinition');
+const { GameObject } = require('../dist/game/entity/impl/object/GameObject');
 const Shared = require('../plugins/minigames/gauntlet/Shared.Gauntlet');
 const GauntletMap = require('../plugins/minigames/gauntlet/Map.Gauntlet');
 
-before(() => {
-  CachePipeline.initialize();
+let nativeApi, songQuest;
+before(async () => {
+  await CachePipeline.initialize();
   RegionManager.init();
+  ObjectDefinition.init();
   Shared.bind({ core: PluginManager.getCoreApi() });
+  // As on a members world, the minigame loads before the quest registration.
+  nativeApi = PluginManager.createApi('GauntletQuestEntryTest');
+  require('../plugins/minigames/gauntlet/Lobby.Gauntlet')(nativeApi);
+  require('../plugins/quests/quests/SongOfTheElves.Quest')(nativeApi);
+  songQuest = require('../plugins/quests/QuestRuntime').questNamed('Song of the Elves');
+  assert.ok(songQuest);
 });
 
 /** A seeded random, so a failing layout can be replayed. */
@@ -188,7 +201,7 @@ function fakeApi() {
     getItemOnGroundManager: () => ({ registerLocation: (player, item) => (hooks.ground ??= []).push(item.getId()) }),
     spawnNpc: ({ id, x, y, z }) => { const npc = fakeNpc(id, x, y, z); spawnedNpcs.push(npc); return npc; },
     removeNpc: (npc) => { npc.removed = true; },
-    emitCustomEvent() {},
+    emitCustomEvent: (name, event) => PluginManager.emitCustomEvent(name, event),
   };
 }
 
@@ -226,6 +239,9 @@ function container(size) {
     contains: (id) => slots.some((slot) => slot?.id === id),
     getAmount: (id) => slots.reduce((sum, slot) => sum + (slot?.id === id ? slot.amount : 0), 0),
     getFreeSlots: () => slots.filter((slot) => !slot).length,
+    getAddableAmount: (item) => (item.getDefinition().isStackable()
+      ? (slots.some((slot) => slot?.id === item.getId()) || slots.filter((slot) => !slot).length > 0 ? item.getAmount() : 0)
+      : Math.min(item.getAmount(), slots.filter((slot) => !slot).length)),
     delete(id, amount = 1) {
       for (let i = 0; i < slots.length && amount > 0; i++) {
         if (slots[i]?.id !== id) continue;
@@ -340,6 +356,8 @@ test('the Gauntlet Portal in Prifddinas lands two tiles south of where runs end,
 test('the entrance turns players away until they have spoken to Bryn, and with items on them', () => {
   bindHooks();
   const player = fakePlayer('Entrant');
+  player.setAttribute('quest.song_of_the_elves.stage', songQuest.completionValue);
+  assert.equal(songQuest.isComplete(player), true);
   interact('The Gauntlet', 'Enter', player, null);
   assert.equal(Run.runOf(player), null, "Bryn hasn't been spoken to");
   assert.equal(hooks.variants[0]({ player, npcId: 9020 }), 'first-time-talking-to-him');
@@ -356,6 +374,97 @@ test('the entrance turns players away until they have spoken to Bryn, and with i
   assert.ok(saves.includes('Entrant'), 'saved before entering');
   run.end('exit', { fade: false });
 });
+
+// PluginManager's named interaction seam is exercised directly; this is not scene routing.
+function questEntrant(t, name, complete, errors) {
+  let player;
+  t.after(() => {
+    const run = player && Run.runOf(player);
+    try {
+      if (run) run.end('exit', { fade: false });
+    } finally {
+      try {
+        if (run) {
+          TaskManager.cancelTasks(run);
+          run.map.destroy();
+        }
+      } finally {
+        if (player) TaskManager.cancelTasks(player);
+      }
+    }
+    if (run) assert.equal(run.map.isDestroyed(), true, 'the allocated instance is released');
+    assert.equal(errors.length, 0, 'no native hook or cleanup errors');
+  });
+  const sender = new Proxy({}, { get: (_target, key) =>
+    key === 'getVarbit' || key === 'getVarp' ? () => 0 : () => sender });
+  const original = new Player(null);
+  original.setUsername(name);
+  original.getPacketSender = () => sender;
+  songQuest.setStage(original, complete ? songQuest.completionValue : songQuest.startedValue);
+  const save = PlayerSave.fromPlayer(original);
+  assert.equal(save.attributes['quest.song_of_the_elves.stage'], songQuest.getStage(original));
+  player = new Player(null);
+  player.setUsername(name);
+  player.getPacketSender = () => sender;
+  save.applyToPlayer(player);
+  assert.equal(songQuest.isComplete(player), complete, 'quest state survives a real PlayerSave round trip');
+  player.setAttribute(Lobby.ATTR_SPOKEN_TO_BRYN, true);
+  // The Corrupted option must already be unlocked to make quest refusal causal.
+  player.setAttribute(Run.ATTR_STATS, { completions: { regular: 1, corrupted: 0 } });
+  player.setLocation(new Location(3032, 6127, 1));
+  return player;
+}
+
+function nativeEntrance(player, clickType) {
+  const id = PluginManager.getCoreApi().CacheDefinitions.getLocId('gauntlet_entrance_hm_enabled');
+  assert.equal(id, 36084);
+  const definition = ObjectDefinition.forId(id);
+  assert.equal(definition.getName(), 'The Gauntlet');
+  assert.equal(definition.getInteractions()[clickType - 1], clickType === 1 ? 'Enter' : 'Enter-corrupted');
+  const object = new GameObject(id, player.getLocation(), 10, 0, null);
+  return PluginManager.emitObjectInteraction({ player, object, definition, objectId: id, clickType, handled: false });
+}
+
+for (const [mode, clickType] of [['regular', 1], ['corrupted', 2]]) {
+  test(`a saved incomplete Song of the Elves blocks ${mode} entry before creating a run`, (t) => {
+    const errors = [], report = console.error;
+    t.mock.method(console, 'error', (...args) => { errors.push(args); report(...args); });
+    const player = questEntrant(t, `incomplete-${mode}`, false, errors);
+    Shared.bind(nativeApi);
+    assert.equal(Run.hasCompleted(player), true);
+    assert.equal(player.getInventory().getValidItems().length, 0);
+    assert.equal(player.getEquipment().getValidItems().length, 0);
+    const location = player.getLocation();
+    const saveCount = saves.length;
+    assert.equal(TaskManager.hasActiveTask(player), false);
+    assert.equal(nativeEntrance(player, clickType), true);
+    assert.equal(Run.runOf(player) === null, true, 'no run is allocated');
+    assert.equal(player.getDialogueManager().getCurrent()?.getText(),
+      'You need to complete Song of the Elves to enter the Gauntlet.');
+    assert.equal(player.getAttribute(Run.ATTR_RUN), undefined);
+    assert.equal(saves.length, saveCount);
+    assert.equal(TaskManager.hasActiveTask(player), false);
+    assert.equal(player.getArea(), null);
+    assert.equal(player.getLocation(), location);
+    assert.equal(player.getInventory().getValidItems().length, 0);
+    assert.equal(player.getEquipment().getValidItems().length, 0);
+    assert.equal(errors.length, 0);
+  });
+
+  test(`a saved completed Song of the Elves permits ${mode} entry`, (t) => {
+    const errors = [], report = console.error;
+    t.mock.method(console, 'error', (...args) => { errors.push(args); report(...args); });
+    const player = questEntrant(t, `completed-${mode}`, true, errors);
+    Shared.bind(nativeApi);
+    assert.equal(Run.hasCompleted(player), true);
+    assert.equal(nativeEntrance(player, clickType), true);
+    const run = Run.runOf(player);
+    assert.equal(run?.mode, mode);
+    assert.equal(player.getAttribute(Run.ATTR_RUN), mode);
+    assert.ok(saves.includes(player.getUsername()));
+    assert.equal(errors.length, 0);
+  });
+}
 
 test('a run starts with the Wiki kit and the timer, and lighting a node opens the next room', () => {
   bindHooks();

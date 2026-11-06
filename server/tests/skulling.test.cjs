@@ -15,6 +15,7 @@ const { ItemIdentifiers } = require("../dist/util/ItemIdentifiers");
 const { ItemDefinition } = require("../dist/game/definition/ItemDefinition");
 const Avarice = require("../plugins/npcs/revenants/Avarice.Revenants");
 const CapeOfSkulls = require("../plugins/items/CapeOfSkulls.plugin");
+const SkullPrevention = require("../plugins/combat/SkullPrevention.plugin");
 
 const PVP_TICKS = 3000; // 30 minutes
 const ITEM_TICKS = 2000; // 20 minutes
@@ -27,6 +28,7 @@ before(async () => {
   const core = PluginManager.getCoreApi();
   Avarice({ core, persistAttribute() {}, onPlayerProcess() {}, ...modifierStubs() });
   CapeOfSkulls.register({ core, onCanEquip() {}, onCustomEvent() {}, onPlayerLogin() {} });
+  SkullPrevention.register({ core: { CombatFactory }, onCanAttack() {} });
 });
 
 function modifierStubs() {
@@ -57,6 +59,11 @@ function player({ at = WILDERNESS, timer = 0, type = SkullType.WHITE_SKULL } = {
     setSkullType: (skullType) => { p.skullType = skullType; },
     getUpdateFlag: () => ({ flag: () => { p.appearanceFlags++; } }),
     sendMessage: (message) => p.messages.push(message),
+    getPacketSender: () => ({
+      getVarbit: (id) => p.varbits.get(id) ?? 0,
+      sendMessage: (message) => p.messages.push(message),
+    }),
+    varbits: new Map(),
     getCombat: () => ({ getAttacker: () => p.attacker, damageMapContains: (other) => p.damaged.has(other) }),
     getEquipment: () => ({ getItems: () => equipment, get: (slot) => equipment[slot] ?? null }),
   };
@@ -212,4 +219,47 @@ test("putting the cape of skulls on warns first; No changes nothing, Yes equips 
   answer(dropped, 1);
   assert.equal(dropped.getEquipment().getItems()[CAPE_SLOT].getId(), -1, "Yes after the cape left the inventory does nothing");
   assert.equal(dropped.isSkulled(), false);
+});
+
+test("skull prevention blocks an attack that would skull and says why", () => {
+  const message = "You cannot attack this target as it would result in you getting skulled.";
+  const blocked = { attacker: player(), target: player(), method: {}, allow: null };
+  blocked.attacker.varbits.set(13131, 1);
+  SkullPrevention._test.blockSkullAttack(blocked);
+  assert.equal(blocked.allow, false);
+  assert.deepEqual(blocked.attacker.messages, [message]);
+
+  const bystander = { attacker: player(), target: player(), allow: null };
+  bystander.attacker.varbits.set(13131, 1);
+  SkullPrevention._test.blockSkullAttack(bystander);
+  SkullPrevention._test.blockSkullAttack(bystander);
+  assert.equal(bystander.allow, false, "an area attack still spares a bystander it would skull for");
+  assert.deepEqual(bystander.attacker.messages, [], "but says nothing for each one");
+
+  const off = { attacker: player(), target: player(), method: {}, allow: null };
+  SkullPrevention._test.blockSkullAttack(off);
+  assert.equal(off.allow, null, "the setting is off");
+  assert.deepEqual(off.attacker.messages, []);
+
+  const skulled = { attacker: player({ timer: 100 }), target: player(), allow: null };
+  skulled.attacker.varbits.set(13131, 1);
+  SkullPrevention._test.blockSkullAttack(skulled);
+  assert.equal(skulled.allow, null, "an existing skull is only prolonged");
+
+  const retaliating = { attacker: player(), target: player(), allow: null };
+  retaliating.target.attacker = retaliating.attacker;
+  retaliating.attacker.varbits.set(13131, 1);
+  SkullPrevention._test.blockSkullAttack(retaliating);
+  assert.equal(retaliating.allow, null, "a fight already underway does not skull");
+
+  const struckBack = { attacker: player(), target: player(), method: {}, allow: null };
+  struckBack.attacker.attacker = struckBack.target;
+  struckBack.attacker.varbits.set(13131, 1);
+  SkullPrevention._test.blockSkullAttack(struckBack);
+  assert.equal(struckBack.allow, null, "retaliation does not skull");
+
+  const outside = { attacker: player({ at: new Location(3222, 3218, 0) }), target: player(), allow: null };
+  outside.attacker.varbits.set(13131, 1);
+  SkullPrevention._test.blockSkullAttack(outside);
+  assert.equal(outside.allow, null, "nothing skulls outside the Wilderness");
 });

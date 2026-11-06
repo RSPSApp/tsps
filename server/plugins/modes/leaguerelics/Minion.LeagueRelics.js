@@ -1,30 +1,48 @@
 /**
  * Minion (https://oldschool.runescape.wiki/w/Minion_(Demonic_Pacts_League)), Demonic Pacts' tier 8
- * relic: the Minion whistle's Blow summons the minion (the cache's league_guardian) beside its
- * owner for 30 minutes, with the melee spawn the recordings show; Banish sends it away. It follows
- * its owner and fights the NPC its owner fights, never a player, Yama or the Gemstone Crab (Wiki),
+ * relic: the Minion whistle's Blow summons the minion beside its owner for 30 minutes, with the
+ * melee spawn the recordings show; Banish sends it away. It follows its owner and fights the NPC
+ * its owner fights (or, with none, the NPC fighting its owner), never a player, Yama or the
+ * Gemstone Crab (Wiki),
  * every 3 ticks (1.8 s) in the style the target is weakest to (the lowest of its melee, ranged and
- * magic defence rolls; a change of style shows the style's spotanim and takes its look), with an
+ * magic defence rolls; a change of style shows the style's spotanim and turns it into that style's
+ * imp), with an
  * attack roll of 45,000 against the target's defence roll for that style, hitting 3 up to 10 plus
  * 2 for each unique Zamorak item fed to the whistle (up to five, used on it unnoted; the Wiki's
  * list, by the items' own ids). Hits count as its owner's, as a thrall's do. The varbit
  * league_guardian_active runs the client's 30-minute buff timer against map_clock.
  *
- * Its looks are server-only cache columns, so each style's bas, body models, attack, projectile
- * and change spotanim are as the Leagues VI recordings show other players' minions
- * (data/league-minion.json). The pursuit is the Arceuus thralls' (core ArceuusThralls), with
- * their reach: 1 tile in melee, 6 at range (ours: the minion's reach is in no source).
+ * Live dresses the cache's league_guardian in each style's body models and bas, server-only
+ * columns; the cache's debug_thrall_imp_* NPCs carry exactly those looks, so the minion is the
+ * melee imp, transformed to the style's (data/league-minion.json). Each style's attack,
+ * projectile and change spotanim are as the Leagues VI recordings show other players' minions.
+ * The pursuit is the Arceuus thralls' (core ArceuusThralls), with their reach: 1 tile in melee,
+ * 6 at range (ours: the minion's reach is in no source).
+ *
+ * The whistle's Rules (its subops) set the cache's league_guardian_* varbits and the loot value
+ * varp, saved and sent at login: Area of effect, Follow (off: the minion waits where it is between
+ * fights, unless its owner goes too far), and Looting (items, noted, a minimum value). Check says
+ * the time left. No recording of Rules or Check, so their lines are ours.
  *
  * Not here, and why: the AoE in multicombat (no source gives its reach: the recordings show up to
- * five targets 0 to 7 tiles apart), the automatic looting and its threshold and noted settings
- * (the whistle's Rules and Check, where they are set, are unrecorded, as is where the loot goes),
- * and every message (no recording of the whistle in use on a Demonic Pacts world; Grid Master's
- * guardian lines name another relic).
+ * five targets 0 to 7 tiles apart) and the automatic looting (nothing records where the loot goes
+ * or when it is picked up); their Rules settings are stored for them. Its other messages (no
+ * recording of the whistle in use on a Demonic Pacts world; Grid Master's guardian lines name
+ * another relic).
  */
 const Common = require("./Common.LeagueRelics");
+const Teleports = require("./Teleports.LeagueRelics");
 const DATA = require("../data/league-minion.json");
 
 const ITEMS_ATTRIBUTE = "league:minion-items";
+/** The Rules' settings: each a varbit's 'disabled' flag (0 on), and the loot value. */
+const AOE_DISABLED_ATTRIBUTE = "league:minion-aoe-disabled";
+const FOLLOW_DISABLED_ATTRIBUTE = "league:minion-follow-disabled";
+const ITEMS_DISABLED_ATTRIBUTE = "league:minion-pickup-items-disabled";
+const NOTED_DISABLED_ATTRIBUTE = "league:minion-pickup-noted-disabled";
+const PICKUP_VALUE_ATTRIBUTE = "league:minion-pickup-value";
+const RULE_ATTRIBUTES = { aoe: AOE_DISABLED_ATTRIBUTE, follow: FOLLOW_DISABLED_ATTRIBUTE, items: ITEMS_DISABLED_ATTRIBUTE, noted: NOTED_DISABLED_ATTRIBUTE };
+const TICKS_PER_MINUTE = 100;
 const MELEE_REACH = 1;
 const RANGED_REACH = 6;
 const PURSUIT_ATTRIBUTE = "league:minion-pursuit";
@@ -61,14 +79,41 @@ function sendActive(player, on) {
   player.getPacketSender().sendVarbit(core.CacheDefinitions.getVarbitId(DATA.activeVarbit), on ? 1 : 0);
 }
 
-/** Takes on a style's look: its body models and bas, and with `shown` the change spotanim. */
+function styleNpc(style) {
+  return core.CacheDefinitions.getNpcId(DATA.styles[style].npc);
+}
+
+/** Takes on a style's look: that style's imp, and with `shown` the change spotanim. */
 function setStyle(minion, style, shown) {
   const look = DATA.styles[style];
   minion.style = style;
-  minion.npc.setModelCustomisation(DATA.modelSlots.map((slot, index) => ({ slot, modelId: look.models[index] })));
-  const idle = seq(look.idle);
-  minion.npc.setBaseAnimations({ idle, walk: seq(look.walk), turnLeft: idle, turnRight: idle });
+  minion.npc.setNpcTransformationId(styleNpc(style));
   if (shown) minion.npc.performGraphic(new core.Graphic(spotanim(look.change), 0, 0));
+}
+
+/** Whether a Rules setting is on (its 'disabled' flag clear). */
+function ruleOn(player, rule) {
+  return player.getAttribute(RULE_ATTRIBUTES[rule]) !== 1;
+}
+
+function pickupValue(player) {
+  return Number(player.getAttribute(PICKUP_VALUE_ATTRIBUTE) ?? 0) | 0;
+}
+
+/** The Rules' varbits and the loot value, as saved. */
+function sendRules(player) {
+  const { CacheDefinitions } = core;
+  const sender = player.getPacketSender();
+  for (const rule of Object.keys(RULE_ATTRIBUTES)) sender.sendVarbit(CacheDefinitions.getVarbitId(DATA.rules[rule].varbit), ruleOn(player, rule) ? 0 : 1);
+  sender.sendConfig(CacheDefinitions.getVarpId(DATA.rules.looting.valueVarp), pickupValue(player));
+}
+
+/** Flips a Rules setting, with its line. */
+function toggleRule(player, rule) {
+  const on = !ruleOn(player, rule);
+  player.setAttribute(RULE_ATTRIBUTES[rule], on ? 0 : 1);
+  sendRules(player);
+  player.sendMessage(on ? DATA.rules[rule].on : DATA.rules[rule].off);
 }
 
 /** The style the target is weakest to: the lowest of its defence rolls (melee: its weakest of stab, slash and crush). */
@@ -112,27 +157,43 @@ function attack(player, minion, target) {
     const hit = new core.HitDamage(damage, damage > 0 ? core.HitMask.RED : core.HitMask.BLUE).setSource(player)
       .onApplied((dealt) => target.getCombat().addDamage(player, dealt));
     target.getCombat().getHitQueue().addPendingDamage([hit]);
+    // A hit is an attack on it: an NPC regenerates 10% a tick once 20 s pass with none
+    // (core NPC), so with its owner not fighting it the minion's damage would heal straight back.
+    target.getCombat().getLastAttack().reset();
   };
   if (look.hitDelayTicks <= 1) land();
   else core.TaskManager.submit(new core.CountdownTask(npc, look.hitDelayTicks - 1, land));
 }
 
 /**
- * The NPC its owner fights, when the minion may fight it too: only one the owner may attack now
+ * The NPC its owner fights, else the one fighting its owner (the owner's attacker), when the
+ * minion may fight it too: only one the owner may attack now
  * (core's attack permission, which spends nothing). Combat keeps a refused target to retry it
  * (a second NPC clicked while another holds the owner in single combat), so the target alone
  * is no leave to hit it.
  */
 function targetOf(player) {
-  const target = player.getCombat().getTarget();
+  const combat = player.getCombat();
+  const target = combat.getTarget() ?? combat.getAttacker?.() ?? null;
   if (!target?.isNpc?.() || !target.isRegistered?.() || target.isUntargetable?.() || target.getHitpoints() <= 0) return null;
   if (DATA.spared.includes(target.getDefinition?.()?.getName?.())) return null;
   if (core.CombatFactory.canAttackPermission(player, target) !== core.CanAttackResponse.CAN_ATTACK) return null;
   return target;
 }
 
+/** After its owner; with Follow off, it waits where it is unless its owner goes too far. */
 function follow(minion, player) {
   const npc = minion.npc;
+  if (!ruleOn(player, "follow") && npc.getLocation?.()?.getZ?.() === player.getLocation().getZ()
+    && npc.calculateDistance(player) <= DATA.followLeash) {
+    // A pursuit left over from a fight that ended is dropped too, as approach() does once in reach.
+    if (npc.getFollowing() != null || npc.getAttribute(PURSUIT_ATTRIBUTE) != null) {
+      npc.setFollowing(null);
+      npc.getMovementQueue().reset();
+      npc.setAttribute(PURSUIT_ATTRIBUTE, null);
+    }
+    return;
+  }
   if (npc.getFollowing() === player) return;
   npc.getMovementQueue().reset();
   npc.setAttribute(PURSUIT_ATTRIBUTE, null);
@@ -199,7 +260,7 @@ function dismiss(player) {
 function summon(player) {
   dismiss(player);
   const here = player.getLocation();
-  const npc = api.spawnNpc({ id: core.CacheDefinitions.getNpcId(DATA.npc), x: here.getX(), y: here.getY(), z: here.getZ(), owner: player, wanderRadius: 0 });
+  const npc = api.spawnNpc({ id: styleNpc("melee"), x: here.getX(), y: here.getY(), z: here.getZ(), owner: player, wanderRadius: 0 });
   if (!npc) return;
   npc.setPet(true);
   npc.setUntargetable(true);
@@ -220,11 +281,70 @@ function schedule(player, minion) {
   }));
 }
 
+/** Check: the time left, or that none is summoned. */
+function check(player) {
+  const minion = minions.get(player);
+  if (!minion) {
+    player.sendMessage(DATA.check.none);
+    return;
+  }
+  const minutes = Math.floor(minion.ticksLeft / TICKS_PER_MINUTE);
+  player.sendMessage(minutes < 1 ? DATA.check.lastMinute : DATA.check.left.replace("{minutes}", minutes));
+}
+
+/** The Looting menu: items and noted on or off, and the minimum value. */
+function looting(player) {
+  const menu = DATA.rules.looting;
+  const state = (rule) => (ruleOn(player, rule) ? menu.enabled : menu.disabled);
+  api.sendMultiChatboxPrompt(player, menu.title,
+    menu.items.replace("{state}", state("items")), () => toggleRule(player, "items"),
+    menu.noted.replace("{state}", state("noted")), () => toggleRule(player, "noted"),
+    menu.value.replace("{value}", pickupValue(player).toLocaleString("en-GB")), () => askValue(player));
+}
+
+function askValue(player) {
+  player.setEnteredAmountAction({
+    execute: (amount) => {
+      const value = Math.floor(Number(amount));
+      if (!Number.isSafeInteger(value) || value < 0) return;
+      player.setAttribute(PICKUP_VALUE_ATTRIBUTE, value);
+      sendRules(player);
+      player.sendMessage(DATA.rules.looting.valueSet.replace("{value}", value.toLocaleString("en-GB")));
+    },
+  });
+  player.getPacketSender().sendEnterAmountPrompt(DATA.rules.looting.valuePrompt);
+}
+
+/** Rules: its submenu entry (the item's subops), Area of effect, Follow or Looting; a click with no entry lists the three. */
+function rules(event) {
+  const { player } = event;
+  const picked = Teleports.subOption(event);
+  if (picked === DATA.rules.aoe.subop) toggleRule(player, "aoe");
+  else if (picked === DATA.rules.follow.subop) toggleRule(player, "follow");
+  else if (picked === DATA.rules.looting.subop) looting(player);
+  else {
+    api.sendMultiChatboxPrompt(player, DATA.rules.title,
+      DATA.rules.aoe.subop, () => toggleRule(player, "aoe"),
+      DATA.rules.follow.subop, () => toggleRule(player, "follow"),
+      DATA.rules.looting.subop, () => looting(player));
+  }
+}
+
 function only(fn) {
   return (event) => {
     if (!active(event.player)) return false;
     event.handled = true;
     fn(event.player);
+    return true;
+  };
+}
+
+/** As `only`, for a handler that needs the whole click (its submenu entry). */
+function onlyEvent(fn) {
+  return (event) => {
+    if (!active(event.player)) return false;
+    event.handled = true;
+    fn(event);
     return true;
   };
 }
@@ -245,7 +365,9 @@ function feed(event) {
 }
 
 function login({ player }) {
-  if (Common.leagueOf(player) !== null) sendActive(player, false);
+  if (Common.leagueOf(player) === null) return;
+  sendActive(player, false);
+  sendRules(player);
 }
 
 function logout({ player }) {
@@ -257,10 +379,18 @@ module.exports = function attach(pluginApi) {
   core = pluginApi.core;
   effect = Common.data.effects.minion;
   api.persistAttribute(ITEMS_ATTRIBUTE, null);
-  api.onItemAction(DATA.whistle, { Blow: only(summon), Banish: only(dismiss) });
+  api.persistAttribute(AOE_DISABLED_ATTRIBUTE, 0);
+  api.persistAttribute(FOLLOW_DISABLED_ATTRIBUTE, 0);
+  api.persistAttribute(ITEMS_DISABLED_ATTRIBUTE, 0);
+  api.persistAttribute(NOTED_DISABLED_ATTRIBUTE, 0);
+  api.persistAttribute(PICKUP_VALUE_ATTRIBUTE, 0);
+  api.onItemAction(DATA.whistle, { Blow: only(summon), Banish: only(dismiss), Rules: onlyEvent(rules), Check: only(check) });
   api.onItemOnItem(feed);
   api.onCustomEvent("league:login", login);
   api.onPlayerLogout(logout);
 };
 
-Object.assign(module.exports, { ITEMS_ATTRIBUTE, minions, tick, maxHit, weakestStyle, hitChance, summon, dismiss });
+Object.assign(module.exports, {
+  ITEMS_ATTRIBUTE, AOE_DISABLED_ATTRIBUTE, FOLLOW_DISABLED_ATTRIBUTE, ITEMS_DISABLED_ATTRIBUTE, NOTED_DISABLED_ATTRIBUTE, PICKUP_VALUE_ATTRIBUTE,
+  minions, tick, maxHit, weakestStyle, hitChance, summon, dismiss, ruleOn,
+});

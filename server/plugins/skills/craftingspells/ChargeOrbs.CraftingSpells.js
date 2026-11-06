@@ -10,6 +10,7 @@ const ORBS = DATA.chargeOrbs;
 const CHARGING_ATTRIBUTE = "crafting-spells:charging";
 
 let core = null;
+let pluginApi = null;
 let spells = null;
 
 /** Spell name (lower case) -> spell, built on first use. */
@@ -56,6 +57,7 @@ function chargeOnce(player, spell) {
   player.getInventory().deleteNumber(unpoweredOrb(), 1);
   player.getInventory().addItem(new core.Item(spell.orbId, 1));
   player.getSkillManager().addExperiences(core.Skill.MAGIC, spell.baseExperience());
+  pluginApi.emitCustomEvent("crafting:made", { player, itemId: spell.orbId });
   return true;
 }
 
@@ -102,5 +104,6 @@ function chargeOrb(event) {
 
 module.exports = function attach(api) {
   core = api.core;
+  pluginApi = api;
   api.onSpellOnObject(chargeOrb);
 };

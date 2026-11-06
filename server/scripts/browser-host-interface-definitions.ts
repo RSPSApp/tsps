@@ -5,6 +5,7 @@ const plugins = [
   "DestroyItem",
   "TeleportInterface",
   "MaxHitsInterface",
+  "SideJournalDefaults",
 ];
 
 const definitions: Array<{ groupId: number; widgets: unknown[] }> = [buildPresetsInterfaceDefinition()];

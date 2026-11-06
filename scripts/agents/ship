@@ -1,0 +1,28 @@
+#!/bin/sh
+# Commit this worktree's changes, push the branch and open a PR, as the agent identity in
+# AGENTS.md ("GitHub identity"). Run it inside rsps-shell. See docs/bug-loop.md.
+#
+#   scripts/agents/ship <commit-message-file> <pr-body-file> "<PR title>"
+#
+# Refuses to run as the wrong GitHub account, shows what it stages, and warns when the PR
+# isn't linked to the issues its body says it fixes.
+set -eu
+login=${AGENT_GH_LOGIN:-nharrison93}
+msg=${1:?usage: ship <commit-message-file> <pr-body-file> "<title>"}
+body=${2:?usage: ship <commit-message-file> <pr-body-file> "<title>"}
+title=${3:?usage: ship <commit-message-file> <pr-body-file> "<title>"}
+[ "$(gh api user --jq .login)" = "$login" ] || { echo "ship: gh is not $login (run inside rsps-shell)" >&2; exit 1; }
+branch=$(git branch --show-current)
+[ -n "$branch" ] && [ "$branch" != main ] || { echo "ship: not on a feature branch" >&2; exit 1; }
+
+git add -A
+git status --short
+git -c user.name="$login" -c user.email="$login@proton.me" commit -q -F "$msg"
+git -c credential.helper= -c 'credential.helper=!gh auth git-credential' \
+  push -q https://github.com/RSPSApp/tsps.git "HEAD:refs/heads/$branch"
+url=$(gh pr create --repo RSPSApp/tsps --base main --head "$branch" --title "$title" --body-file "$body")
+echo "$url"
+
+want=$(grep -oiE '(fixes|closes|resolves) #[0-9]+' "$body" | grep -oE '[0-9]+' | sort -u | tr '\n' ' ')
+have=$(gh pr view "$url" --json closingIssuesReferences --jq '[.closingIssuesReferences[].number]|sort|map(tostring)|join(" ")')
+[ "$(echo $want)" = "$(echo $have)" ] || echo "ship: WARNING: body fixes [$want] but GitHub links [$have]" >&2

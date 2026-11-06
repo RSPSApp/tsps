@@ -23,7 +23,7 @@
  * the uncharged staff into 10,000 demon tears, after a Yes / No.
  */
 
-const { definePoweredStaff, distance, ticksFor } = require("./PoweredStaff");
+const { definePoweredStaff, refundsFit, distance, ticksFor } = require("./PoweredStaff");
 
 const CHARGES_KEY = "eye-of-ayak-charges";
 const MATERIAL_KEY = "eye-of-ayak-charge-material";
@@ -69,7 +69,7 @@ function format(amount) {
 // ------------------------------------------------------------------ combat
 
 function projectileEnd(from, to) {
-  return Math.max(PROJECTILE.MIN_END, PROJECTILE.START + (Math.max(1, distance(from, to)) - 1) * PROJECTILE.PER_TILE);
+  return Math.max(PROJECTILE.MIN_END, PROJECTILE.START + (Math.max(1, distance(from, to, core.CombatPosition)) - 1) * PROJECTILE.PER_TILE);
 }
 
 function maxHit(player) {
@@ -237,15 +237,15 @@ function refund(player, item) {
   if (charges <= 0 || !player.getInventory().getItems().includes(item)) return;
   const inventory = player.getInventory();
   const I = ids();
-  const returned = material === TEARS
+  const returned = (material === TEARS
     ? [[I.DEMON_TEAR, charges]]
-    : [[I.DEATH_RUNE, charges * DEATH_RUNES_PER_CHARGE], [I.CHAOS_RUNE, charges * CHAOS_RUNES_PER_CHARGE]];
-  const slots = returned.filter(([id]) => !inventory.contains(id)).length;
-  if (inventory.getFreeSlots() < slots) {
+    : [[I.DEATH_RUNE, charges * DEATH_RUNES_PER_CHARGE], [I.CHAOS_RUNE, charges * CHAOS_RUNES_PER_CHARGE]])
+    .map(([id, amount]) => new core.Item(id, amount));
+  if (!refundsFit(inventory, returned)) {
     player.sendMessage("You don't have enough inventory space to uncharge the Eye of Ayak.");
     return;
   }
-  for (const [id, amount] of returned) inventory.addItem(new core.Item(id, amount));
+  for (const refund of returned) inventory.addItem(refund);
   staff.setCharges(item, 0);
   item.setMetaValue(MATERIAL_KEY, undefined);
   inventory.refreshItems();
@@ -288,8 +288,14 @@ function dismantleIntoTears(player, item) {
   const inventory = player.getInventory();
   const slot = inventory.getItems().indexOf(item);
   if (slot < 0 || item.getId() !== ids().EYE_OF_AYAK_UNCHARGED_) return;
-  inventory.getItems()[slot] = null;
-  inventory.addItem(new core.Item(ids().DEMON_TEAR, DISMANTLE_TEARS));
+  const tears = new core.Item(ids().DEMON_TEAR, DISMANTLE_TEARS);
+  // With no stack to join, the eye's own slot takes the tears.
+  if (inventory.getAmount(ids().DEMON_TEAR) > 0 && inventory.getAddableAmount(tears) < DISMANTLE_TEARS) {
+    player.sendMessage("You don't have enough inventory space to do that.");
+    return;
+  }
+  inventory.setItem(slot, new core.Item(-1, 0));
+  inventory.addItem(tears);
   inventory.refreshItems();
   player.sendMessage(`You dismantle the Eye of Ayak into ${format(DISMANTLE_TEARS)} demon tears.`);
 }

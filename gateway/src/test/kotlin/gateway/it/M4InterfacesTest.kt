@@ -88,6 +88,62 @@ class M4InterfacesTest {
         }
     }
 
+    @Test
+    fun `native quest row identities open the matching journal instead of dense browser neighbours`() {
+        login().use { game ->
+            game.until(TICKS)
+            for ((nativeSlot, title) in listOf(16 to "Pirate's Treasure", 55 to "Elemental Workshop I")) {
+                game.button(399, 7, op = 2, sub = nativeSlot)
+                val messages = game.until(TICKS)
+                val titles = messages.filterIsInstance<net.rsprox.protocol.game.outgoing.model.interfaces.IfSetText>()
+                    .filter { it.interfaceId == 119 || it.interfaceId == 782 }
+                    .map { it.text }
+                assertTrue(titles.any { title in it }, "native row $nativeSlot expected $title; got $titles")
+            }
+        }
+    }
+
+    @Test
+    fun `native quest events and map wiki ops use stock packet semantics`() {
+        login().use { game ->
+            val startup = game.until(TICKS)
+            val definitions = VarTypes(TestCache.cache)
+            fun bit(id: Int): Int {
+                val type = requireNotNull(definitions.varbit(id))
+                val value = startup.mapNotNull {
+                    when (it) {
+                        is VarpSmall -> if (it.id == type.varp) it.value else null
+                        is VarpLarge -> if (it.id == type.varp) it.value else null
+                        else -> null
+                    }
+                }.lastOrNull() ?: 0
+                return (value ushr type.lsb) and type.mask
+            }
+            assertEquals(343, bit(1782), "native cache maximum QP")
+            assertEquals(184, bit(11877), "native main quest total")
+            assertEquals(0, bit(6347), "fresh native main completion count")
+            assertEquals(0, bit(13987), "fresh native subquest completion count")
+            assertEquals(0, bit(14162), "fresh native miniquest completion count")
+            val events = startup
+                .filterIsInstance<net.rsprox.protocol.game.outgoing.model.interfaces.IfSetEventsV2>()
+                .last { it.interfaceId == 399 && it.componentId == 7 }
+            assertEquals(0, events.start)
+            assertEquals(217, events.end)
+            assertEquals(31, events.events2, "live OP1–5; dormant Pin OP6 stays disabled")
+            game.button(399, 7, op = 5, sub = 201)
+            val wiki = game.until(TICKS)
+                .filterIsInstance<net.rsprox.protocol.game.outgoing.model.misc.player.RunClientScript>()
+                .single { it.id == 3300 }
+            assertEquals(listOf("Search", "", "", "", "Scrambled!/Quick guide"), wiki.values)
+            game.button(399, 7, op = 3, sub = 16)
+            val map = game.until(TICKS)
+                .filterIsInstance<net.rsprox.protocol.game.outgoing.model.misc.player.RunClientScript>()
+                .single { it.id == 3331 }
+            assertEquals((595 shl 16) or 3, map.values[0])
+            assertEquals(3, map.values.size)
+        }
+    }
+
     private fun login(): HeadlessClient.Game {
         val result = LiveGateway.client().login(LiveGateway.newAccount("gwui"), PASSWORD, modulus)
         assertEquals(OK, result.code)

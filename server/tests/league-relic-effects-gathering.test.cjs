@@ -313,6 +313,39 @@ test("Power Miner: with the pickaxe, a second chance, four ores a rock, ore bank
   assert.equal(banked(who.other, I.STEEL_BAR), 0);
 });
 
+// Listener-level guard: the producer is exercised separately by the native test.
+test("Power Miner does not spend its count on synthetic glove-held events", () => {
+  const who = cases(POWER_MINER, 5, "ECHO_PICKAXE");
+  for (let saves = 0; saves <= 3; saves++) {
+    const object = {};
+    const deplete = (player, gloveSaveAdditive = false) => emit("mining:deplete-rock", {
+      player, object, rock: "Iron rocks", handled: gloveSaveAdditive, gloveSaveAdditive,
+    }).handled;
+    for (let i = 0; i < saves; i++) assert.equal(deplete(who.relic, true), true);
+    assert.deepEqual([deplete(who.relic), deplete(who.relic), deplete(who.relic), deplete(who.relic)],
+      [true, true, true, false], "four separate relic attempts after glove-held events");
+    assert.equal(deplete(who.relic), true, "count resets after depletion");
+  }
+  // A separately handled event without the ordinary-rock additive marker retains
+  // the existing count policy (including finite-yield rocks); no retail claim.
+  const legacy = {};
+  for (let i = 0; i < 3; i++) {
+    assert.equal(emit("mining:deplete-rock", {player: who.relic, object: legacy,
+      rock: "Amethyst crystals", handled: true, gloveSaveAdditive: false}).handled, true);
+  }
+  assert.equal(emit("mining:deplete-rock", {player: who.relic, object: legacy,
+    rock: "Amethyst crystals", handled: false, gloveSaveAdditive: false}).handled, false);
+  const shared = {};
+  const deplete = (player, gloveSaveAdditive = false) => emit("mining:deplete-rock", {
+    player, object: shared, rock: "Iron rocks", handled: gloveSaveAdditive, gloveSaveAdditive,
+  }).handled;
+  assert.equal(deplete(who.relic), true);
+  assert.equal(deplete(who.relic), true);
+  assert.equal(deplete(who.without, true), true, "another miner keeps the same rock with a glove");
+  assert.equal(deplete(who.relic), true, "the relic count survived the other miner's save");
+  assert.equal(deplete(who.relic), false);
+});
+
 test("Power Miner: carried or wielded Echo pickaxes smelt steel at Smithing 1 without coal and award steel XP", () => {
   for (const wielded of [false, true]) {
     const player = cases(POWER_MINER, 5, "ECHO_PICKAXE").relic;

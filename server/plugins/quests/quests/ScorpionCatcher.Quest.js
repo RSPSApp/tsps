@@ -19,9 +19,9 @@
  * Requirements: the OSRS Wiki marks Alfred Grimhand's Barcrawl as the only
  * "[required to start]" requirement and 31 Prayer as "[not required to start]"
  * (it is needed to enter the Monastery 1st floor, shared Doors/Ladders content
- * this plugin does not own). This server has no Barcrawl quest or attribute, so
- * the start gate cannot be enforced here and the quest is offered as it comes;
- * Prayer is therefore not used as a substitute for the missing requirement.
+ * this plugin does not own). The Barcrawl is answered through the quest runtime by
+ * name, so the start gate is enforced here; Prayer is still not treated as a
+ * substitute for it.
  *
  * Picking a scorpion up stings for 3 hitpoints (OSRS Wiki, "The first
  * scorpion"), and the post-quest battlestaff service uses the cache interface
@@ -59,6 +59,8 @@ module.exports = function registerScorpionCatcherQuest(api) {
   const ENCHANT_TARGET = "Thormac's battlestaff enchanting";
   /** OSRS Wiki (Battlestaff): 40,000 coins; 30,000/20,000 with the Hard/Elite Kandarin diaries. */
   const ENCHANT_PRICE = 40000;
+  const HARD_ENCHANT_PRICE = 30000;
+  const ELITE_ENCHANT_PRICE = 20000;
   const COINS = ItemIdentifiers.COINS;
   /** The interface's "Enchant" buttons, one per elemental battlestaff (cache script 330). */
   const ENCHANT_STAFF_BY_BUTTON = new Map([
@@ -122,6 +124,12 @@ module.exports = function registerScorpionCatcherQuest(api) {
   const enchanting = new WeakSet();
 
   const has = (player, itemId) => player.getInventory().getAmount(itemId) > 0;
+
+  function barcrawlComplete(player) {
+    const request = { player, name: "Alfred Grimhand's Barcrawl", complete: false };
+    api.emitCustomEvent("quest:is-complete", request);
+    return request.complete === true;
+  }
   const ownsAnyCage = (player) => CAGE_ITEM_IDS.some((itemId) => has(player, itemId));
   const ownsFullCage = (player) => has(player, FULL_CAGE);
 
@@ -140,7 +148,7 @@ module.exports = function registerScorpionCatcherQuest(api) {
         "I can start this quest by speaking to <col=800000>Thormac</col>",
         "in the <col=800000>Sorcerer's Tower</col> south-west of Catherby.",
         "",
-        "I need level 31 <col=800000>Prayer</col> to enter the Monastery upstairs.",
+        "I need to complete Alfred Grimhand's Barcrawl first.",
       ];
     }
     const lines = ["<str>Thormac asked me to recover his three Kharid scorpions.</str>", ""];
@@ -196,10 +204,9 @@ module.exports = function registerScorpionCatcherQuest(api) {
         return "finishing-up";
       }
       if (stage === 0) {
-        // The only start requirement is Alfred Grimhand's Barcrawl, which this
-        // server has no quest or attribute for, so the quest is offered as it
-        // comes rather than refused on a requirement that cannot be read.
-        return "starting-off-with-the-requirements";
+        return barcrawlComplete(player)
+          ? "starting-off-with-the-requirements"
+          : "starting-off-without-the-requirements";
       }
       return "starting-off-subsequent-dialogue";
     }
@@ -278,6 +285,15 @@ module.exports = function registerScorpionCatcherQuest(api) {
     });
   }
 
+  function enchantPrice(player) {
+    const request = { player, diary: "kandarin", tier: "elite", complete: false };
+    api.emitCustomEvent("diary:is-complete", request);
+    if (request.complete) return ELITE_ENCHANT_PRICE;
+    request.tier = "hard";
+    api.emitCustomEvent("diary:is-complete", request);
+    return request.complete ? HARD_ENCHANT_PRICE : ENCHANT_PRICE;
+  }
+
   /** "Enchant" on one of the interface's battlestaff buttons. */
   function handleEnchantClick(event) {
     const { player } = event;
@@ -293,12 +309,13 @@ module.exports = function registerScorpionCatcherQuest(api) {
       player.sendMessage("You do not have that battlestaff.");
       return;
     }
-    if (inventory.getAmount(COINS) < ENCHANT_PRICE) {
+    const price = enchantPrice(player);
+    if (inventory.getAmount(COINS) < price) {
       player.sendMessage("You do not have enough coins to pay for that.");
       return;
     }
     inventory.deleteNumber(staff, 1);
-    inventory.deleteNumber(COINS, ENCHANT_PRICE);
+    inventory.deleteNumber(COINS, price);
     inventory.adds(MYSTIC_STAFF_BY_BATTLESTAFF.get(staff), 1);
     player.sendMessage("Thormac enchants your battlestaff into a mystic staff.");
   }

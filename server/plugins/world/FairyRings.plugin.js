@@ -63,6 +63,7 @@ const FAVOURITE_CODE_TEXT = 151;
 /** The favourites' remove stars; component 166 is not one. */
 const FAVOURITE_STARS = [161, 162, 163, 164, 165, 167, 168, 169, 170, 171];
 const MAX_FAVOURITES = 10;
+const LOG_FAVOURITE_OP = 2;
 
 const FLOWERS_GRAPHIC = 569;
 const VANISH_ANIMATION = 3265;
@@ -96,6 +97,7 @@ const configuredRing = new WeakMap();
 /** code -> { code, destination, destinationId, index, logText, logComponent, starComponent } */
 let rings = new Map();
 let ringsByComponent = new Map();
+const pendingTeleports = new WeakMap();
 
 function unpackCoord(packed) {
   return { x: (packed >> 14) & 0x3fff, y: packed & 0x3fff, z: packed >>> 28 };
@@ -205,6 +207,24 @@ function ringTile(location) {
   return location ? new Location(location.x, location.y, location.z) : null;
 }
 
+function locationSnapshot(player) {
+  const location = player.getLocation?.();
+  if (!location) return null;
+  return new Location(location.getX(), location.getY(), location.getZ());
+}
+
+function sameTile(left, right) {
+  return left && right && left.getX() === right.getX() && left.getY() === right.getY() && left.getZ() === right.getZ();
+}
+
+function cancelPendingTeleport(player, pending = pendingTeleports.get(player)) {
+  if (!pending) return false;
+  pending.cancelled = true;
+  if (pendingTeleports.get(player) !== pending) return false;
+  pendingTeleports.delete(player);
+  return true;
+}
+
 /** OSRS sets busy the tick after the dials open (not on a dial click). */
 function openDial({ player, location }) {
   if (!player || !canUse(player)) return;
@@ -271,7 +291,11 @@ function stepOntoRing(player, ring) {
 function fairyTeleport(player, ring, from, fromClick) {
   const sender = player.getPacketSender();
   const onRing = !from || from.equals(player.getLocation());
+  const origin = locationSnapshot(player);
+  const privateArea = player.getPrivateArea?.() ?? null;
+  const teleportSerial = player.getTeleportSerial?.();
   if (!onRing) stepOntoRing(player, from);
+  const expectedTile = locationSnapshot(player);
   const delay = onRing ? 0 : 1;
   const sameRing = ring.destination.getDistance(from ?? player.getLocation()) <= 1;
   const vanish = () => {
@@ -283,6 +307,13 @@ function fairyTeleport(player, ring, from, fromClick) {
   if (delay === 0) vanish();
   // A ring's option runs on the player's turn, after this tick's tasks: the first run is tick 1.
   let tick = fromClick ? -1 : 0;
+  const pending = { cancelled: false };
+  cancelPendingTeleport(player);
+  pendingTeleports.set(player, pending);
+  const stillValid = () => !pending.cancelled && pendingTeleports.get(player) === pending &&
+    (pending.landed || (player.isRegistered() && player.getHitpoints?.() > 0 && !player.isDyingReturn?.() &&
+      player.getTeleportSerial?.() === teleportSerial &&
+      (player.getPrivateArea?.() ?? null) === privateArea && sameTile(locationSnapshot(player), expectedTile)));
   core.TaskManager.submit(new (class extends core.Task {
     constructor() {
       super(1, player, false);
@@ -290,18 +321,36 @@ function fairyTeleport(player, ring, from, fromClick) {
 
     execute() {
       tick++;
-      if (!player.isRegistered()) {
+      if (!stillValid()) {
+        const ownsPending = cancelPendingTeleport(player, pending);
+        if (ownsPending && player.isRegistered()) sender.sendVarbit(BUSY_VARBIT, 0);
         this.stop();
         return;
       }
       if (tick === delay) vanish();
       if (tick === delay + 3) {
         if (!sameRing) {
-          const from = player.getLocation?.()?.clone?.() ?? null;
-          const fromInstance = player.getPrivateArea?.() != null;
+          const teleportFrom = locationSnapshot(player);
+          const fromInstance = privateArea != null;
           player.moveTo(ring.destination);
-          // As the core's teleports do ("teleport:landed"): where it began, for content that remembers it.
-          core.PluginManager?.emitCustomEvent?.("teleport:landed", { player, from, fromInstance, to: ring.destination });
+          const landed = player.getLocation?.();
+          const arrived = landed && landed.getX() === ring.destination.getX() &&
+            landed.getY() === ring.destination.getY() && landed.getZ() === ring.destination.getZ() &&
+            teleportFrom && !sameTile(landed, teleportFrom) &&
+            player.getTeleportSerial?.() === (teleportSerial === undefined ? undefined : teleportSerial + 1) &&
+            (player.getPrivateArea?.() ?? null) === privateArea && player.getHitpoints?.() > 0 &&
+            !player.isDyingReturn?.() && player.isRegistered();
+          if (!arrived) {
+            const ownsPending = cancelPendingTeleport(player, pending);
+            if (ownsPending && player.isRegistered()) sender.sendVarbit(BUSY_VARBIT, 0);
+            this.stop();
+            return;
+          }
+          pending.landed = true;
+          // Emit arrival only after the player reaches the requested tile.
+          core.PluginManager?.emitCustomEvent?.("teleport:landed", {
+            player, from: origin, fromInstance, to: landed, source: "fairy-ring", code: ring.code,
+          });
           rememberUse(player, ring);
         }
         pluginApi.emitCustomEvent("fairy-rings:travelled", { player, code: ring.code, destination: player.getLocation() });
@@ -310,10 +359,19 @@ function fairyTeleport(player, ring, from, fromClick) {
       if (tick === delay + 4) {
         sender.sendVarbit(BUSY_VARBIT, 0);
         player.performAnimation(core.Animation.DEFAULT_RESET_ANIMATION);
+        cancelPendingTeleport(player, pending);
         this.stop();
       }
     }
   })());
+}
+
+function playerDied({ player }) {
+  if (!player) return;
+  const pending = pendingTeleports.get(player);
+  if (cancelPendingTeleport(player, pending) && player.isRegistered()) {
+    player.getPacketSender().sendVarbit(BUSY_VARBIT, 0);
+  }
 }
 
 /** A light source keeps AJQ's dark-cave warning away. */
@@ -358,14 +416,18 @@ function confirmDial(player) {
   fairyTeleport(player, ring, configuredRing.get(player), true);
 }
 
-/** Travel log clicks: use a code, add or remove a favourite. */
-function logAction(player, childId, option) {
+/**
+ * Travel log clicks: use a code, add or remove a favourite. The text rows have op1 "Use code" and
+ * op2 "Add Favourite"/"Remove Favourite" (rev 241 fairyrings_log); the stars have only the favourite
+ * op. Decided from the op: IF_BUTTON packets carry no menu text.
+ */
+function logAction(player, childId, op) {
   const favourites = codeList(player, FAVOURITES_ATTRIBUTE);
   const favouriteSlot = childId >= FAVOURITE_TEXT && childId < FAVOURITE_TEXT + MAX_FAVOURITES
     ? childId - FAVOURITE_TEXT
     : FAVOURITE_STARS.indexOf(childId);
   if (favouriteSlot >= 0) {
-    if (/remove/i.test(option ?? "") || FAVOURITE_STARS.includes(childId)) {
+    if (op === LOG_FAVOURITE_OP || FAVOURITE_STARS.includes(childId)) {
       favourites.splice(favouriteSlot, 1);
       player.setAttribute(FAVOURITES_ATTRIBUTE, favourites.join(","));
       sendFavourites(player);
@@ -380,7 +442,7 @@ function logAction(player, childId, option) {
   }
   const ring = ringsByComponent.get(childId);
   if (!ring) return;
-  const adding = /favourite/i.test(option ?? "") || childId === ring.starComponent;
+  const adding = op === LOG_FAVOURITE_OP || childId === ring.starComponent;
   if (!adding) {
     setDials(player, ring.code);
     return;
@@ -410,7 +472,7 @@ function interfaceAction(event) {
     }
   } else if (groupId === LOG_INTERFACE) {
     event.handled = true;
-    logAction(player, childId, event.option);
+    logAction(player, childId, event.action ?? event.opId);
   } else if (groupId === WARNING_INTERFACE) {
     event.handled = true;
     if (childId === WARNING_DONT_ASK) {
@@ -483,6 +545,15 @@ function attach(api) {
   }
 }
 
+/** Monsters cannot attack a player standing in the centre of a fairy ring (Wiki: Fairy ring). */
+function protectRingCentre(event) {
+  const { attacker, target } = event ?? {};
+  if (!attacker?.isNpc?.() || !target?.isPlayer?.()) return;
+  const location = target.getLocation?.();
+  if (!location) return;
+  if ([...rings.values()].some((ring) => ring.destination?.equals?.(location))) event.allow = false;
+}
+
 /** The rings' options, as the cache names them (op 3 is a plain "Last-destination", not a multiloc). */
 function ringOptions() {
   return { Zanaris: zanaris, Configure: openDial, "Last-destination": lastDestination, Use: useExitRing };
@@ -503,6 +574,7 @@ module.exports = {
     interfaceAction,
     interfaceClosed,
     hasLightSource,
+    playerDied,
     ringOptions,
     rings: () => rings,
     DIAL_VARBITS,
@@ -516,9 +588,11 @@ module.exports = {
     api.persistAttribute(LAST_CODE_ATTRIBUTE);
     api.persistAttribute(USED_CODES_ATTRIBUTE);
     api.persistAttribute(FAVOURITES_ATTRIBUTE);
+    api.onCanAttack(protectRingCentre);
     api.onObjectInteraction("Fairy ring", ringOptions());
     api.onInterfaceActionClick(interfaceAction);
     api.onCustomEvent("interface:closed", interfaceClosed);
+    api.onPlayerDeath?.(playerDied);
     api.onCustomEvent("fairy-rings:configure", openDial);
     api.onCustomEvent("fairy-rings:zanaris", zanaris);
     api.onCustomEvent("fairy-rings:last-destination", lastDestination);

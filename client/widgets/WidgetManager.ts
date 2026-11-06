@@ -137,6 +137,13 @@ export class WidgetManager {
     /** The widget with contentType 1338 - minimap area */
     minimapWidget: WidgetNode | null = null;
 
+    /**
+     * OSRS `minimap_state` (varbit 6719), read from its `toplevel_temp` varp:
+     * 0 enabled, 1 map unclickable, 2 hide map, 3 hide compass,
+     * 4 hide compass and map unclickable, 5 disabled.
+     */
+    minimapState = 0;
+
     /** The widget with contentType 1339 - compass (rotates with camera yaw) */
     compassWidget: WidgetNode | null = null;
 
@@ -512,6 +519,18 @@ export class WidgetManager {
             if (((w.type ?? 0) | 0) !== 6) continue;
             const groupId = typeof w.groupId === "number" ? w.groupId | 0 : ((w.uid ?? 0) >>> 16) & 0xffff;
             if (!openGroups.has(groupId)) continue;
+
+            // IF_SETROTATESPEED rotates the model whether or not it has a sequence. Recording
+            // 1723 packs the yaw speed in the high short and the x (pitch) speed in the low.
+            const rotationSpeed = (w.modelRotationSpeed ?? 0) | 0;
+            if (rotationSpeed !== 0) {
+                const speedY = rotationSpeed >> 16;
+                const speedX = (rotationSpeed << 16) >> 16;
+                w.rotationY = ((w.rotationY ?? 0) + speedY * delta) & 2047;
+                w.rotationX = ((w.rotationX ?? 0) + speedX * delta) & 2047;
+                this.invalidateWidgetRender(w, "widget-model-rotation");
+            }
+
             const seqId0 = (w.sequenceId ?? -1) | 0;
             const seqId2 = (w.sequenceId2 ?? -1) | 0;
             if (seqId0 === -1 && seqId2 === -1) continue;
@@ -2401,6 +2420,34 @@ export class WidgetManager {
     }
 
     /**
+     * Apply OSRS `minimap_state` (varbit 6719). Native draws the map unless the
+     * state is 2 or 5, and the compass unless it is 3, 4 or 5.
+     */
+    setMinimapState(state: number): void {
+        const next = Math.max(0, Math.min(7, state | 0));
+        if (next === this.minimapState) return;
+        this.minimapState = next;
+        // Repaint the whole frame so a hidden map or compass cannot leave its last
+        // drawn pixels behind.
+        this.invalidateAll();
+    }
+
+    /** OSRS minimap_state: the map is drawn for every state except 2 and 5. */
+    isMinimapMapVisible(): boolean {
+        return this.minimapState !== 2 && this.minimapState !== 5;
+    }
+
+    /** OSRS minimap_state: the compass is drawn only while the state is below 3. */
+    isMinimapCompassVisible(): boolean {
+        return this.minimapState < 3;
+    }
+
+    /** OSRS minimap_state: only states 0 and 3 accept click-to-walk on the map. */
+    isMinimapClickable(): boolean {
+        return this.minimapState === 0 || this.minimapState === 3;
+    }
+
+    /**
      * Update the compass widget's spriteAngle based on camera yaw.
      * In OSRS, the compass is drawn natively using the camera yaw directly.
      * Here we update the widget's spriteAngle property before rendering.
@@ -2408,7 +2455,7 @@ export class WidgetManager {
      * @param cameraYaw Camera yaw in OSRS units (0-2048 = 360 degrees)
      */
     updateCompassAngle(cameraYaw: number): void {
-        if (!this.compassWidget) return;
+        if (!this.compassWidget || !this.isMinimapCompassVisible()) return;
 
         // Convert camera yaw (0-2048) to widget spriteAngle (0-65536)
         // Both represent 360 degrees, so multiply by 32
@@ -2430,7 +2477,7 @@ export class WidgetManager {
      */
     updateMinimap(): void {
         const minimap = this.minimapWidget;
-        if (!minimap || this.isEffectivelyHidden(minimap.uid)) return;
+        if (!minimap || !this.isMinimapMapVisible() || this.isEffectivelyHidden(minimap.uid)) return;
         this.invalidateWidgetRect(minimap);
     }
 }

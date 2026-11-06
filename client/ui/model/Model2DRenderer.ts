@@ -617,8 +617,10 @@ export class Model2DRenderer {
 
         let triDrawn = 0;
         let triSkippedAlpha = 0;
-        // Default to OSRS UI behaviour: no z-buffer unless explicitly enabled
-        const disableZbuf = !depthTest;
+        // Player composites carry explicit equipment depth layers. The in-world renderer
+        // applies those layers with a depth buffer; do the same for widget previews so an
+        // equipped model cannot be overpainted by overlapping body-kit faces.
+        const disableZbuf = !depthTest && !model.faceRenderLayers;
         function drawTexturedTri(
             x0: number,
             y0: number,
@@ -715,7 +717,7 @@ export class Model2DRenderer {
                     // ai == 0 means fully transparent face
                     if (ai > 0) {
                         plot(idx, R, G, B, ai);
-                        if (!disableZbuf) zbuf[idx] = effZ - zBias;
+                        if (!disableZbuf && ai === 255) zbuf[idx] = effZ - zBias;
                     }
                 }
             }
@@ -785,7 +787,7 @@ export class Model2DRenderer {
                     const B = (w0 * b0 + w1 * b1 + w2 * b2) | 0;
                     if (ai === 0) continue;
                     plot(idx, R, G, B, ai);
-                    if (!disableZbuf) zbuf[idx] = effZ;
+                    if (!disableZbuf && ai === 255) zbuf[idx] = effZ;
                 }
             }
             triDrawn++;
@@ -862,7 +864,10 @@ export class Model2DRenderer {
         const binsLen = diameter > 0 ? diameter : maxBinObserved + 1;
         const bins: number[][] = Array.from({ length: binsLen }, () => []);
         for (const [b, list] of tmpBins.entries()) if (b >= 0 && b < binsLen) bins[b] = list;
-        const prioArr = model.faceRenderPriorities;
+        // Explicit render layers are produced by PlayerModelLoader for player composites and
+        // take precedence over the cache's per-face priorities in the in-world renderer too.
+        const renderPriorities = model.faceRenderLayers ?? model.faceRenderPriorities;
+        const prioArr = renderPriorities;
         const drawOrder: number[] = [];
         if (!prioArr) {
             for (let b = binsLen - 1; b >= 0; b--) {
@@ -937,6 +942,21 @@ export class Model2DRenderer {
             while (peekDepth() !== -1000) pop10or11();
         }
 
+        // A layered player composite needs opaque geometry to establish the depth buffer
+        // before translucent equipment is blended over it. Keep each pass in the existing
+        // depth/layer order so translucent faces still blend back-to-front.
+        if (model.faceRenderLayers && model.faceAlphas) {
+            const opaqueFaces: number[] = [];
+            const translucentFaces: number[] = [];
+            for (const face of drawOrder) {
+                if ((model.faceAlphas[face] & 0xff) === 0) opaqueFaces.push(face);
+                else translucentFaces.push(face);
+            }
+            drawOrder.length = 0;
+            for (const face of opaqueFaces) drawOrder.push(face);
+            for (const face of translucentFaces) drawOrder.push(face);
+        }
+
         // Debug dump moved below draw loop to ensure counters are initialized
 
         // Draw using depth-ordered faces
@@ -984,8 +1004,8 @@ export class Model2DRenderer {
             const faceAlpha = faceAlphaArr ? 0xff - (faceAlphaArr[f] & 0xff) : 0xff;
             // OSRS priority is 0-10+, but shader logic uses compressed 0-7 bands for depth bias.
             // Masking prevents excessive bias for high-priority faces (like 10+) which could pull back-faces through.
-            const rawPriority = model.faceRenderPriorities
-                ? model.faceRenderPriorities[f] & 0xff
+            const rawPriority = renderPriorities
+                ? renderPriorities[f] & 0xff
                 : 0;
             const priority = rawPriority & 0x7;
             if (faceTexId !== -1 && (model as any).uvs) {

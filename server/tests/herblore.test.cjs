@@ -57,6 +57,7 @@ function inventory(contents) {
     },
     full() { return self; },
     getItems: () => slots.map((item) => item ?? new core.Item(-1, 0)),
+    getCopiedItems: () => self.getItems().map((item) => item.clone()),
     getAmount: (id) => slots.filter((item) => item?.getId() === id).reduce((sum, item) => sum + item.getAmount(), 0),
     setItem(slot, item) { slots[slot] = item; return self; },
     refreshItems() { return self; },
@@ -75,6 +76,12 @@ function inventory(contents) {
         amount -= taken;
         if (item.getAmount() === taken) slots[slot] = null; else item.setAmount(item.getAmount() - taken);
       }
+      return self;
+    },
+    deleteAtSlot(slot, amount = 1) {
+      const item = slots[slot];
+      if (!item) return self;
+      if (item.getAmount() <= amount) slots[slot] = null; else item.setAmount(item.getAmount() - amount);
       return self;
     },
     adds(id, amount) { return self.addItem(new core.Item(id, amount)); },

@@ -420,14 +420,17 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
     return request.complete === true;
   }
 
-  function handleStartHook({ player, npcId, hook }) {
+  function handleStartHook(event) {
+    const { player, npcId, hook } = event;
     if (hook !== START_HOOK || !VANSTROM_NPC_IDS.has(npcId)) return;
     if (quest.getStage(player) === STAGE_UNSTARTED) {
       if (!meetsSkillRequirements(player)) {
+        event.end = true;
         notifySkillRequirements(player);
         return;
       }
       if (!natureSpiritComplete(player)) {
+        event.end = true;
         player.sendMessage("You must complete Nature Spirit to start this quest.");
         return;
       }
@@ -745,12 +748,14 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
       if (stage === STAGE_GAVE_PLANKS) quest.setStage(player, STAGE_REACHED_HOLLOWS);
       player.moveTo(new api.core.Location(3498, 3380, 0));
       player.sendMessage("You board the boat and journey to the Hollows.");
+      api.emitCustomEvent("transport:swamp-boaty", { player, from: "mortton", to: "hollows" });
       return;
     }
     if (objectId === HOLLOWS_BOAT_ID) {
       event.handled = true;
       player.moveTo(new api.core.Location(3522, 3285, 0));
       player.sendMessage("You board the boat and journey back to Mort'ton.");
+      api.emitCustomEvent("transport:swamp-boaty", { player, from: "hollows", to: "mortton" });
       return;
     }
     if (objectId === HOLLOWS_SIGN_ID) {

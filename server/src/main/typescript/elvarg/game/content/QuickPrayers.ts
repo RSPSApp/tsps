@@ -1,3 +1,5 @@
+import { Sound } from "../Sound";
+import { Sounds } from "../Sounds";
 import { CacheDefinitions } from "../cache/CacheDefinitions";
 import { Player } from "../entity/impl/player/Player";
 import { Skill } from "../model/Skill";
@@ -271,8 +273,14 @@ export class QuickPrayers {
 
     public checkActive(): void {
         if (!this.enabled) return;
+        // The prayers the set turns on: Piety's slot is Zeal wherever the book shows Zeal there,
+        // and Zeal has no slot of its own, so the comparison is against the set's book ids.
+        const expected = new Set<number>();
         for (const [prayerId, prayer] of this.prayers.entries()) {
-            if ((prayer != null) !== QuickPrayers.isActivated(this.player, prayerId)) {
+            if (prayer != null) expected.add(QuickPrayers.PRAYER_HANDLER.bookPrayer(this.player, prayerId));
+        }
+        for (let prayerId = 0; prayerId < this.prayers.length; prayerId++) {
+            if (expected.has(prayerId) !== (QuickPrayers.isActivated(this.player, prayerId) === true)) {
                 this.enabled = false;
                 this.player.getPacketSender().sendQuickPrayersState(false);
                 return;
@@ -305,12 +313,17 @@ export class QuickPrayers {
             return;
         }
         if (this.enabled) {
-            QuickPrayers.PRAYER_HANDLER.deactivatePrayers(this.player);
+            // Raw3277: one off synth for the whole preset, then each activation when re-enabled.
+            QuickPrayers.PRAYER_HANDLER.deactivatePrayers(this.player, false);
+            Sounds.sendSound(this.player, Sound.PRAYER_TURN_OFF);
             this.player.getPacketSender().sendVarbit(QuickPrayers.PRAYER_ALL_ACTIVE_VARBIT, 0);
             this.enabled = false;
         } else {
             const selected = this.prayers.filter((prayer): prayer is PrayerData => prayer != null);
-            const blocked = selected.find((prayer) => !QuickPrayers.canUse(this.player, prayer, false));
+            // Piety's slot is Zeal wherever the book shows Zeal there.
+            const bookIds = selected.map((prayer) => QuickPrayers.PRAYER_HANDLER.bookPrayer(this.player, prayer.prayerId));
+            const blocked = bookIds.map((prayerId) => QuickPrayers.PRAYER_DATA.prayerData.get(prayerId))
+                .find((prayer) => !QuickPrayers.canUse(this.player, prayer, false));
             if (selected.length === 0) {
                 this.player.sendMessage("You have not setup any quick-prayers yet.");
                 this.enabled = false;
@@ -318,15 +331,15 @@ export class QuickPrayers {
                 QuickPrayers.canUse(this.player, blocked, true);
                 this.enabled = false;
             } else {
-                QuickPrayers.PRAYER_HANDLER.deactivatePrayers(this.player);
+                QuickPrayers.PRAYER_HANDLER.deactivatePrayers(this.player, false);
                 this.player.getPacketSender().sendVarbit(
                     QuickPrayers.PRAYER_ALL_ACTIVE_VARBIT,
                     this.selectedPrayerMask(),
                 );
-                for (const prayer of selected) {
-                    QuickPrayers.activatePrayerPrayerId(this.player, prayer.prayerId);
+                for (const prayerId of bookIds) {
+                    QuickPrayers.activatePrayerPrayerId(this.player, prayerId);
                 }
-                this.enabled = selected.every((prayer) => QuickPrayers.isActivated(this.player, prayer.prayerId));
+                this.enabled = bookIds.every((prayerId) => QuickPrayers.isActivated(this.player, prayerId));
             }
         }
         this.player.getPacketSender().sendQuickPrayersState(this.enabled);

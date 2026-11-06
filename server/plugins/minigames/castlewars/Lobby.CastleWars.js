@@ -10,9 +10,7 @@
 const FoodPlugin = require("../../items/Food.plugin");
 const { createBotPlayer } = require("../../bots/behaviours/spawn/PlayerFactory.PlayerBots");
 const { ATTR_SKIP_PERSISTENCE } = require("../../bots/runtime/PersistenceConstants.PlayerBots");
-const { ShopManager } = require("../../../src/main/typescript/elvarg/game/model/container/shop/ShopManager");
-
-const CASTLE_WARS_TICKET_EXCHANGE_SHOP = 1432;
+const RewardShop = require("./RewardShop.CastleWars");
 const SEED_BOTS_CONFIG_KEY = "CastleWars:seedBots";
 const BOT_ROLE_ATTRIBUTE = "castlewars:bot-role";
 const BOT_TIER_ATTRIBUTE = "castlewars:bot-tier";
@@ -224,6 +222,18 @@ function useCastleWarsPortal(event) {
   }
 }
 
+/** The cache keeps its Disable-XP label; this prompt also restores previously disabled gains. */
+function toggleCombatExperience({ player }) {
+  const disabled = player.getAttribute(data.COMBAT_XP_DISABLED_ATTRIBUTE) === true;
+  api.sendMultiChatboxPrompt(player, `${disabled ? "Enable" : "Disable"} combat XP during Castle Wars?`,
+    "Yes", () => {
+      if ((player.getAttribute(data.COMBAT_XP_DISABLED_ATTRIBUTE) === true) !== disabled) return;
+      player.setAttribute(data.COMBAT_XP_DISABLED_ATTRIBUTE, !disabled);
+      player.sendMessage(`Combat XP is now ${disabled ? "enabled" : "disabled"} during Castle Wars.`);
+    },
+    "Cancel", () => {});
+}
+
 module.exports = function attachCastleWarsLobby(registry, castleWars) {
   api = registry;
   game = castleWars;
@@ -234,7 +244,8 @@ module.exports = function attachCastleWarsLobby(registry, castleWars) {
   game.PRACTICE_MAXED_KEY = PRACTICE_MAXED_ATTRIBUTE;
   game.joinFromLobby = joinWaitingRoom;
   registry.onObjectInteraction(useCastleWarsPortal);
-  registry.onNpcInteraction("Lanthus", { Trade: ({ player }) => ShopManager.open(player, CASTLE_WARS_TICKET_EXCHANGE_SHOP) });
+  registry.persistAttribute?.(data.COMBAT_XP_DISABLED_ATTRIBUTE, false);
+  registry.onNpcInteraction("Lanthus", { Trade: RewardShop.open, "Disable-XP": toggleCombatExperience });
 };
 
 module.exports._test = { chooseTeam, seedsBots, SEED_BOTS_CONFIG_KEY, BOT_TIER_OPTIONS };

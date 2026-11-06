@@ -53,7 +53,17 @@ export function getRequestedRendererType(): OsrsRendererType | undefined {
         const requested = new URLSearchParams(window.location.search).get("renderer");
         if (requested === WEBGL || requested === WEBGPU) return requested;
     } catch {}
-    return undefined;
+    return storedRendererType();
+}
+
+/** The GPU plugin's Renderer setting (read before plugins exist, hence from storage). */
+function storedRendererType(): OsrsRendererType | undefined {
+    try {
+        const stored = localStorage.getItem("rl.config.gpu.renderer");
+        return stored === "WebGL" ? WEBGL : stored === "WebGPU" ? WEBGPU : undefined;
+    } catch {
+        return undefined;
+    }
 }
 
 /**

@@ -18,7 +18,11 @@ const EXIT_DELAY_TICKS = 8;
 const JAD_KILL_BONUS = 4000;
 const HEALER_HEAL = 5;
 const HEALER_HEAL_TICKS = 4;
-const HEALER_COMBAT_REACH = 4;
+// Capture 83: a healer that had been fighting went back to Jad with the player 10 and 12 tiles off, 9 and 10 ticks after
+// it was last hit. Both numbers are ours, from those 2 cases.
+const HEALER_LOSES_PLAYER_AT = 10;
+const HEALER_LOSES_PLAYER_TICKS = 9;
+const ATTR_HEALER_LAST_HIT = "tzhaar:healer-last-hit";
 const HEAL_GRAPHIC = 444; // TZHAAR_HEAL
 const TZREK_JAD = /^TzRek-Jad$/;
 const LOGOUT_PAUSED = "Your logout request has been received. The minigame will be paused at the end of this wave. "
@@ -132,7 +136,12 @@ function spawn(session, player, id, at, attack = true) {
   npc.__skipDefaultRespawn = true;
   session.area.add(npc);
   session.npcs.add(npc);
-  if (attack) npc.getCombat().attack(player);
+  if (attack) {
+    // Capture 551: unclicked monsters stand still for up to 41 ticks, then walk on; the Tz-Kih traced at 2384,5095 stood
+    // 20 ticks out of reach without clearing its face. Healers aren't flagged: the Wiki has them lose interest.
+    npc.setFlag("combat:keep-target");
+    npc.getCombat().attack(player);
+  }
   return npc;
 }
 
@@ -171,16 +180,30 @@ function tendJad(player, session) {
   for (const healer of session.healers) {
     const distance = healer.calculateDistance(jad);
     const fighting = healer.getCombat().getTarget() != null;
-    if (distance <= 1 || (fighting && distance <= HEALER_COMBAT_REACH)) {
+    if (fighting) {
+      // Captures 83 and 551: all 21 of Jad's heals came with a healer beside him facing him, none from one fighting.
+      if (healer.calculateDistance(player) >= HEALER_LOSES_PLAYER_AT
+          && cycle - Number(healer.getAttribute(ATTR_HEALER_LAST_HIT) ?? 0) >= HEALER_LOSES_PLAYER_TICKS) {
+        healer.getCombat().reset();
+      }
+      continue;
+    }
+    if (distance <= 1) {
       if (cycle % HEALER_HEAL_TICKS === 0 && jad.getHitpoints() < maxHp) {
         healer.setMobileInteraction?.(jad);
         jad.performGraphic(new Graphic(HEAL_GRAPHIC));
         jad.heal(HEALER_HEAL);
         CombatAchievements.jadHealed(player);
       }
-    } else if (!fighting) {
+    } else {
       PathFinder.calculateWalkRoute(healer, jad.getLocation().getX(), jad.getLocation().getY());
     }
+  }
+}
+
+function healerHit({ target }) {
+  if (target?.isNpc?.() && target.getId() === core.NpcIdentifiers.YT_HURKOT) {
+    target.setAttribute(ATTR_HEALER_LAST_HIT, core.World.getProcessCycle());
   }
 }
 
@@ -274,6 +297,7 @@ function rescueGroundItems(player, area) {
 
 function enterCave({ player }) {
   startRun(player, 1, core.Misc.getRandom(SPAWN_CYCLE.length - 1), ENTRY);
+  api.emitCustomEvent("fight-caves:entered", { player });
   say(player, "You're on your own now JalYt, prepare to fight for your life!");
   return true;
 }
@@ -367,6 +391,7 @@ module.exports = {
     pluginApi.onObjectSecondClick(core.ObjectIdentifiers.CAVE_ENTRANCE_45, leaveCave);
     pluginApi.onPlayerLogin(resumeRun);
     pluginApi.onPlayerProcess(processRun);
+    pluginApi.onCombatHitResolved(healerHit);
     pluginApi.onPlayerDeath(caveDeath);
     pluginApi.onShouldDropItemsOnDeath(keepItemsInCave);
     pluginApi.onCanTeleport(noTeleportOut);

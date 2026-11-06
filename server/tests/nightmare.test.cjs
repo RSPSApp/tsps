@@ -5,6 +5,7 @@ const { test } = require("node:test");
 const Common = require("../plugins/bosses/nightmare/Common.Nightmare");
 
 const hooks = { custom: {}, npc: {}, drop: null, condition: null };
+const achievementEvents = [];
 const fakeApi = {
   core: {
     Item: class { constructor(id, amount) { this.id = id; this.amount = amount; } },
@@ -15,6 +16,10 @@ const fakeApi = {
   onNpcsInteraction(names, actions) { for (const name of names) hooks.npc[name] = actions; },
   onNpcDialogueCondition(handler) { hooks.condition = handler; },
   onCustomEvent(name, handler) { (hooks.custom[name] ??= []).push(handler); },
+  emitCustomEvent(name, event) {
+    if (name === "combat-achievements:complete") achievementEvents.push(event);
+    for (const handler of hooks.custom[name] ?? []) handler(event);
+  },
 };
 Common.init(fakeApi);
 
@@ -24,6 +29,7 @@ const Claws = require("../plugins/bosses/nightmare/Claws.Nightmare");
 const Sleepwalkers = require("../plugins/bosses/nightmare/Sleepwalkers.Nightmare");
 const Totems = require("../plugins/bosses/nightmare/Totems.Nightmare");
 const Fight = require("../plugins/bosses/nightmare/Fight.Nightmare");
+const CombatAchievements = require("../plugins/bosses/nightmare/CombatAchievements.Nightmare");
 const Dream = require("../plugins/bosses/nightmare/Dream.Nightmare");
 const Retrieval = require("../plugins/bosses/nightmare/Retrieval.Nightmare");
 Retrieval.attachRetrieval(fakeApi);
@@ -110,6 +116,63 @@ test("her shield and the totems scale past five players, up to the Wiki's caps",
   assert.equal(Totems.chargeMax({ phosani: false, teamSize: 1 }), 300);
   assert.equal(Totems.chargeMax({ phosani: false, teamSize: 10 }), 450);
   assert.equal(Totems.chargeMax({ phosani: true, teamSize: 1 }), 200);
+});
+
+test("Phosani's task judgement uses the prayer, walker, damage and spore state", () => {
+  const player = fakePlayer();
+  player.isPlayer = () => true;
+  const clean = { phosani: true, players: () => [player] };
+  achievementEvents.length = 0;
+  CombatAchievements.judge(clean, player);
+  assert.deepEqual(achievementEvents.map(({ task }) => task).sort(), [
+    "Crush Hour", "Dreamland Express", "I Would Simply React", "Perfect Phosani's Nightmare",
+  ].sort());
+
+  const failed = { phosani: true, players: () => [player] };
+  CombatAchievements.prayerDisabled(failed, player);
+  CombatAchievements.sleepwalkerReached(failed, true);
+  CombatAchievements.crushHourFailed(failed);
+  CombatAchievements.sporesSlowed(failed, player);
+  CombatAchievements.damageTaken(failed, player, 1);
+  achievementEvents.length = 0;
+  CombatAchievements.judge(failed, player);
+  assert.deepEqual(achievementEvents, [], "each recorded failure blocks its corresponding task");
+});
+
+test("Phosani's Crush Hour checks for living registered husks and parasites at death", (t) => {
+  t.mock.method(Specials, "interrupt", () => {});
+  t.mock.method(Sleepwalkers, "clear", () => {});
+  const player = fakePlayer();
+
+  const judgeCrushHour = (minions) => {
+    const movement = { setBlockMovement() { return movement; }, reset() {} };
+    const fight = Object.assign(Object.create(Fight.Fight.prototype), {
+      phosani: true,
+      stage: "fighting",
+      tick: 0,
+      events: [],
+      minions: new Set(minions),
+      players: () => [player],
+      boss: {
+        getCombat: () => ({ reset() {} }),
+        setUntargetable() {},
+        getMovementQueue: () => movement,
+      },
+    });
+    fight.dying();
+    achievementEvents.length = 0;
+    CombatAchievements.judge(fight, player);
+    return achievementEvents.some(({ task }) => task === "Crush Hour");
+  };
+
+  for (const marker of ["__nightmareHusk", "__nightmareParasite"]) {
+    const survivor = { isRegistered: () => true, getHitpoints: () => 1, [marker]: {} };
+    assert.equal(judgeCrushHour([survivor]), false, `${marker} survives the boss`);
+  }
+  const dead = { __nightmareHusk: {}, isRegistered: () => true, getHitpoints: () => 0 };
+  const removed = { __nightmareParasite: {}, isRegistered: () => false, getHitpoints: () => 1 };
+  const walker = { __nightmareWalker: {}, isRegistered: () => true, getHitpoints: () => 1 };
+  assert.equal(judgeCrushHour([dead, removed, walker]), true, "dead, removed and non-minion NPCs do not fail it");
 });
 
 test("the claws stay on the arena floor, off the totems", () => {
@@ -212,4 +275,29 @@ test("husk hits land with their captured projectiles (#1862)", (t) => {
   assert.deepEqual(shots, [husks.magic.projectile, husks.ranged.projectile]);
   // Magic lands at 67 cycles (3 ticks), ranged at 60 (2), not a tick out.
   assert.deepEqual(strikes, [["magic", 3], ["ranged", 2]]);
+});
+
+test("The Nightmare's loot roll is marked as loot, not a second kill: the fight counts the kill", () => {
+  const Loot = require("../plugins/bosses/nightmare/Loot.Nightmare");
+  const emitted = [];
+  fakeApi.emitCustomEvent = (name, payload) => {
+    emitted.push([name, payload]);
+    if (name === "npc-drops:roll-table") payload.drops.push({ itemId: 995, amount: 1 });
+  };
+  fakeApi.getItemOnGroundManager = () => ({ registerLocation() {} });
+  fakeApi.core.ItemIdentifiers = { BIG_BONES: 532, BONES: 526 };
+  fakeApi.core.Item = class { constructor(itemId, amount) { this.itemId = itemId; this.amount = amount; } };
+  fakeApi.core.ItemDefinition = { forId: () => ({ getNoteId: () => -1, isNoted: () => false, isStackable: () => true }) };
+  const player = fakePlayer();
+  const fight = {
+    phosani: false,
+    boss: {},
+    dream: { tile: () => ({}), area: {} },
+    contribution: new Map([[player, { shield: 1, totems: 1 }]]),
+  };
+  Loot.reward(fight, [player]);
+  const rolls = emitted.filter(([name]) => name === "npc-drops:roll").map(([, payload]) => payload);
+  assert.equal(rolls.length, 1);
+  assert.equal(rolls[0].countKill, false);
+  assert.equal(rolls[0].npc, fight.boss);
 });

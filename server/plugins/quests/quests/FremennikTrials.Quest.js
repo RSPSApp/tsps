@@ -6,6 +6,9 @@
  * Swensen, Peer, Thorvald, Askeladden and the merchant-chain Fremennik, the
  * prose-condition answers, the start hook, the seven trials and the completion.
  *
+ * The stage numbers below are durable plugin stages. nativeProgress maps them to
+ * the native cache phases; see docs/quests/native-quest-state-a.md.
+ *
  * Stages (varp 347, the real OSRS "VIKING" varp): 1 started, each completed
  * trial advances a stage up to 7, and Brundt's acceptance sets 8 (complete).
  * Per-trial progress (0 none / 1 started / 2 done) is
@@ -440,6 +443,7 @@ module.exports = function registerFremennikTrialsQuest(api) {
     setTrialState(player, index, 2);
     const stage = quest.getStage(player);
     if (stage < STAGE_COMPLETE - 1) quest.setStage(player, stage + 1);
+    else player.getPacketSender().sendConfig(VARP_FREMENNIK_TRIALS, nativeProgress(stage, player));
     player.sendMessage(`Congratulations! You have completed ${TRIAL_NAMES[index]}.`);
   }
 
@@ -2023,10 +2027,19 @@ module.exports = function registerFremennikTrialsQuest(api) {
   api.persistAttribute(MERCHANT_ATTRIBUTE);
   api.persistAttribute(FLAGS_ATTRIBUTE);
 
+  // QH 06da90: viking 1..7 are trials, 8 awaits Brundt, and the cache completes at 10.
+  // Saved stage 7 was capped before the seventh vote; its durable trial bits disambiguate it.
+  function nativeProgress(stage, player) {
+    if (stage >= STAGE_COMPLETE) return 10;
+    if (stage <= 0) return 0;
+    return Math.max(stage, Math.min(8, 1 + votesFor(player)));
+  }
+
   quest = registerQuest(api, {
     key: "fremennik_trials",
     name: "The Fremennik Trials",
     varpId: VARP_FREMENNIK_TRIALS,
+    varpValue: nativeProgress,
     startedValue: STAGE_STARTED,
     completionValue: STAGE_COMPLETE,
     questPoints: 3,

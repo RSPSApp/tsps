@@ -2,9 +2,12 @@
 
 const { randomUUID } = require("node:crypto");
 const Data = require("./Data.BeginnerTreasureTrails");
+const { TIERS, completedAttribute, sharedCompletedCount } = require("../trails/Tiers.TreasureTrails");
 const TRAIL_META = "treasure-trails:beginner";
-const COMPLETED_ATTRIBUTE = "treasure-trails:beginner-completed";
+const COMPLETED_ATTRIBUTE = completedAttribute({ name: "beginner" });
 const COUNT_VARBIT_NAME = "collection_clues_beginner_completed";
+// The cache's collection log category name.
+const CATEGORY_NAME = "Beginner Treasure Trails";
 let api;
 let core;
 let catalogue;
@@ -218,15 +221,27 @@ function temperature(distance) {
     distance < 100 ? "hot" : distance < 150 ? "warm" : distance < 200 ? "cold" : distance < 500 ? "very cold" : "ice cold";
 }
 
+// Live OSRS's Feel lines (rsprox 235/1043, 236/3931, 227/1862; the same on the beginner and master devices):
+// "The device is <temperature>." on the first feel, then the change against the last feel, and at the
+// dig spot "... visibly shaking and burns to the touch." RuneLite's hot/cold solver reads these words
+// (HotColdTemperature "The device is ", HotColdTemperatureChange "and warmer than" / "but colder than" /
+// "and the same temperature as" ... " last time.").
+const SHAKING = "The device is visibly shaking and burns to the touch. This must be the spot.";
+function reading(current, previous) {
+  const now = temperature(current);
+  if (now === "visibly shaking") return SHAKING;
+  const change = previous == null ? "" : current < previous ? ", and warmer than last time" :
+    current > previous ? ", but colder than last time" : ", and the same temperature as last time";
+  return `The device is ${now}${change}.`;
+}
+
 function feel(event) {
   if (event.itemId !== data().device || !clicked(event, data().device)) return false;
   const trail = trails(event.player, true).find(trail => trail.step.kind === "hotcold");
   if (!trail) { event.player.sendMessage("The strange device is inactive."); return true; }
   const target = data().hotcold.find(target => target.row === trail.state.hotcold);
   const current = distance(location(event.player), target.location);
-  const previous = trail.state.previous;
-  const comparison = previous == null ? "" : current < previous ? ", and warmer than last time" : current > previous ? ", and colder than last time" : ", and the same temperature as last time";
-  event.player.sendMessage(`The strange device is ${temperature(current)}${comparison}.`);
+  event.player.sendMessage(reading(current, trail.state.previous));
   trail.item.setMetaValue(TRAIL_META, { ...trail.state, previous: current });
   return true;
 }
@@ -240,7 +255,12 @@ function restore({ player }) {
 }
 
 function categoryCount(request) {
-  if (/^Treasure Trails \(Beginner\)$/i.test(request.category)) request.count = Number(request.player.getAttribute(COMPLETED_ATTRIBUTE)) || 0;
+  // This saved-count query must also work on free worlds, where members trails do not load.
+  if (request.category === "Shared Treasure Trail Rewards") {
+    request.count = sharedCompletedCount(request.player);
+    return;
+  }
+  if (request.category === CATEGORY_NAME) request.count = Number(request.player.getAttribute(COMPLETED_ATTRIBUTE)) || 0;
 }
 
 function canEmote(request) {
@@ -259,6 +279,7 @@ module.exports = function attachBeginnerTreasureTrails(pluginApi) {
   core = api.core;
   catalogue = null;
   api.persistAttribute(COMPLETED_ATTRIBUTE, 0);
+  for (const tier of TIERS) api.persistAttribute(completedAttribute(tier), 0);
   api.onItemAction("Clue scroll (beginner)", { Read: read, "Check steps": checkSteps });
   api.onItemAction("Strange device", { Feel: feel });
   api.onBeforeNpcInteraction(talk);
@@ -272,4 +293,4 @@ module.exports = function attachBeginnerTreasureTrails(pluginApi) {
   api.onInterfaceActionButton((203 << 16) | 1, close);
 };
 
-Object.assign(module.exports, { TRAIL_META, COMPLETED_ATTRIBUTE, data, trailLength: length, stateOf, trails, read, checkSteps, advance, talk, dig, emote, feel, temperature, emoteReady, restore, canEmote });
+Object.assign(module.exports, { TRAIL_META, COMPLETED_ATTRIBUTE, data, trailLength: length, stateOf, trails, read, checkSteps, advance, talk, dig, emote, feel, temperature, reading, emoteReady, restore, categoryCount, canEmote });

@@ -77,8 +77,11 @@ function fakePlayer(index, location, area = null) {
   return player;
 }
 
+let nextPlayerIndex = 1600;
 function realPlayer(x, y) {
   const player = new Player(null);
+  player.setIndex(nextPlayerIndex++);
+  player.setRegistered(true);
   const sender = new Proxy({}, {
     get: (target, key) => {
       if (key === "getVarbit") return () => 0;
@@ -396,8 +399,13 @@ test("real NPC listener keeps same-deck routing and rejects foreign decks, owner
   const listener = new NPCOptionPacketListener();
   try {
     listener.executeOption(player, deckNpc.getIndex(), 1);
-    for (let tick = 0; tick < 2 && interacted.length === 0; tick++) TaskManager.process();
-    assert.deepEqual(interacted.map((event) => event.npc), [deckNpc],
+    for (let tick = 0; tick < 6 && interacted.length === 0; tick++) {
+      TaskManager.processWalkTo(player.getIndex());
+      player.getMovementQueue().beginCycle();
+      player.getMovementQueue().process();
+      TaskManager.process();
+    }
+    assert.deepEqual(interacted.map((event) => event.npc === deckNpc), [true],
       "same-deck NPC keeps local routing");
 
     interacted.length = 0;
@@ -423,15 +431,15 @@ test("Pandemonium's tutorial ship keeps its explicit deck tiles and dynamic locs
   assert.equal(StaticShips.definitions.has("pandemonium_tutorial_ship"), true);
   const ship = StaticShips.spawn("pandemonium_tutorial_ship");
   try {
-    assert.deepEqual(ship.spec.walkableDeck, [{ x: 3, y: 2 }, { x: 3, y: 3 }, { x: 3, y: 4 }]);
-    assert.deepEqual(ship.spec.locs.filter((loc) => [59554, 59530, 29506, 59663].includes(loc.id))
-      .map((loc) => loc.id).sort((a, b) => a - b), [29506, 59530, 59554, 59663]);
+    assert.deepEqual(ship.spec.walkableDeck, [3, 4].flatMap(x => [2, 3, 4, 5].map(y => ({ x, y }))));
+    assert.deepEqual(ship.spec.locs.filter((loc) => [59620, 59553, 60480].includes(loc.id))
+      .map((loc) => loc.id).sort((a, b) => a - b), [59553, 59620, 60480]);
     const npc = StaticShips.addDeckNpc(ship, 14959, 3, 2, fakePlayer(1, new Location(0, 0, 0)));
     assert.equal(BoatManager.getBoatAboard(npc), ship.boat, "deck NPCs join the static ship's area");
     const packets = require("../dist/game/content/sailing/WorldEntitySync")
       .WorldEntitySync.flush(fakePlayer(1, new Location(3025, 3209, 0)));
-    assert.equal(packets.filter((packet) => packet[0] === 134).length, 4,
-      "the blueprint's dynamic helm/sails/sail-cloth/placeholder locs are sent");
+    assert.equal(packets.filter((packet) => packet[0] === 134).length, 3,
+      "the blueprint's dynamic helm/sails/hook locs are sent");
     assert.ok(packets.some((packet) => packet[0] === 142) && packets.some((packet) => packet[0] === 143));
   } finally {
     StaticShips.dispose(ship);

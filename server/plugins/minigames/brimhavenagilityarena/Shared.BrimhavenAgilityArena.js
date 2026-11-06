@@ -265,11 +265,14 @@ function sendArrow(player) {
   sender.sendPositionalHint(new core.Location(tile.x, tile.y, ARENA_PLANE), 2, 60, ARENA_PLANE);
 }
 
-function isInArena(player) {
-  const at = player.getLocation();
+function isInArenaLocation(at) {
   return at.getZ() === ARENA_PLANE
     && at.getX() >= ARENA.minX && at.getX() <= ARENA.maxX
     && at.getY() >= ARENA.minY && at.getY() <= ARENA.maxY;
+}
+
+function isInArena(player) {
+  return isInArenaLocation(player.getLocation());
 }
 
 /**
@@ -328,6 +331,6 @@ module.exports = {
   DARTS_FAIL_MESSAGE, FEE_MESSAGE,
   cycle, sessions, tileKey, stateOf, hasSession, clearState, agilityLevel, tagXp, addXp,
   addObstacleXp, wearsBonusGloves, trapDamage, hit, drainAgility, successChance, roll,
-  levelRefusal, activeTile, advanceCycle, tick, sendArrow, isInArena, rewardTag, trapAt,
+  levelRefusal, activeTile, advanceCycle, tick, sendArrow, isInArena, isInArenaLocation, rewardTag, trapAt,
   trapSpanAt,
 };

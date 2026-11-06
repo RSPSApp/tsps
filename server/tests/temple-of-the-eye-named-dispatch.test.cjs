@@ -343,7 +343,9 @@ test('the temple, vision and tutorial play in separate instances, and closing re
   const temple = player.getPrivateArea();
   assert.ok(temple?.contains?.(player.getLocation()), 'the temple is a private instance the player is inside');
   assert.equal(quest.getStage(player), 95);
-  assert.ok(spawnedNpcs().length > 0, 'temple cast spawned');
+  assert.equal(spawnedNpcs().length, 0, 'arrival cast waits for its recorded portal cues');
+  for (let i = 0; i < 33; i++) { core.World.processCycle++; core.TaskManager.process(); for (const npc of core.World.getNpcs()) npc.process(); }
+  assert.equal(spawnedNpcs().length, 4, 'all four actors walked in before the first speech');
   assert.ok(spawnedNpcs().every(npc => npc.getPrivateArea?.() === temple), 'temple cast belongs to the instance');
 
   quest.setStage(player, 105);
@@ -358,8 +360,8 @@ test('the temple, vision and tutorial play in separate instances, and closing re
   const templeAgain = player.getPrivateArea();
   const visionReturn = player.getLocation();
   assert.equal(templeAgain?.getName?.(), 'Temple of the Eye');
-  assert.equal(visionReturn.getX(), templeAgain.getBaseX() + 32);
-  assert.equal(visionReturn.getY(), templeAgain.getBaseY() + 38);
+  assert.equal(visionReturn.getX(), templeAgain.getBaseX() + 56);
+  assert.equal(visionReturn.getY(), templeAgain.getBaseY() + 70);
 
   action('9R5c1w', N.WIZARD_PERSTEN_3);
   action('dUuNRU', N.WIZARD_PERSTEN_3);
@@ -389,8 +391,8 @@ test('the temple, vision and tutorial play in separate instances, and closing re
   core.TaskManager.process();
   core.TaskManager.process();
   assert.deepEqual(hints.at(-1), {
-    x: tutorial.getBaseX() + 28,
-    y: tutorial.getBaseY() + 15,
+    x: tutorial.getBaseX() + 52,
+    y: tutorial.getBaseY() + 47,
     height: 64,
   }, 'the arrow moved to the middle of the workbench');
 
@@ -620,6 +622,8 @@ async function nativeIncantation(t, burst = false, interrupt = null, startStage 
     } else tick();
   }
   assert.equal(quest.getStage(player), 100, JSON.stringify({ lines, chants, actors: spawned.map(npc => ({ id: npc.getId(), registered: npc.isRegistered(), visible: npc.isVisible(), local: player.getLocalNpcs().includes(npc) })), blocked: player.getMovementQueue().isMovementBlocked() }));
+  assert.equal(player.getNpcTransformationId(), -1, 'arrival restores the real player appearance');
+  assert.equal(player.getNpcViewDistance(), 15, 'normal arrival end restores the prior NPC view');
   assert.equal(chants.length, 4);
   assert.deepEqual(chants.map(([id]) => id).sort(), [N.APPRENTICE_TAMARA_2, N.APPRENTICE_FELIX_3, N.APPRENTICE_CORDELIA_2, N.WIZARD_PERSTEN_3].sort());
   assert.ok(chants.every(([, text]) => text === 'Saris! Val! Curak! Belito!'));
@@ -630,14 +634,14 @@ async function nativeIncantation(t, burst = false, interrupt = null, startStage 
   assert.ok(packets.length > 0, 'actual native NPC/player sync and UI packets were encoded');
   assert.equal(player.getMovementQueue().isMovementBlocked(), false);
 
-  // The arrival move and look both belong to the instance. The look target (y=5626) is
-  // six tiles outside the copied y=5632 square; it must still be translated.
+  // Raw1693 arrival camera source (2399,5636) looks at (2399,5626). Both now
+  // fall within the captured scenic palette, south of the original playable room.
   const temple = player.getPrivateArea();
   assert.ok(temple, 'the temple instance is still active at the arrival checkpoint');
   const arrivalIndex = cameraMoves.findIndex(([x, y, height]) =>
-    x === temple.getBaseX() + 31 && y === temple.getBaseY() + 4 && height === 550);
+    x === temple.getBaseX() + 55 && y === temple.getBaseY() + 36 && height === 550);
   assert.ok(arrivalIndex >= 0, 'arrival camera move is translated into the instance');
-  assert.deepEqual(cameraLooks[arrivalIndex], [temple.getBaseX() + 31, temple.getBaseY() - 6, 300],
+  assert.deepEqual(cameraLooks[arrivalIndex], [temple.getBaseX() + 55, temple.getBaseY() + 26, 300],
     'arrival camera look is translated even though it is outside the copied square');
 
   if (holdSpace) assert.ok(heldContinues > 0, 'Continues reached the waiting chant');
@@ -651,3 +655,222 @@ test('a bank replacement cancels the deferred scene and releases its old control
 test('a new private quest scene keeps its own controls when the deferred incantation is cancelled', t => nativeIncantation(t, true, 'scene'));
 test('logout cancels the deferred incantation start', t => nativeIncantation(t, true, 'logout'));
 test('Continues held through the chant cannot end its timed overhead line', t => nativeIncantation(t, true, null, 85, true));
+
+function nativeSceneFixture(t, username = 'tote-capture') {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { PlayerSession } = require('../dist/net/PlayerSession');
+  const { ClientConnection } = require('../dist/net/NetworkBuilder');
+  const registered = registerProductionPlugins({ nativeNpcs: true });
+  const faces = []; const faceTile = core.NPC.prototype.faceTile;
+  t.mock.method(core.NPC.prototype, 'faceTile', function(location) { faces.push({ npc: this, x: location.getX(), y: location.getY() }); return faceTile.call(this, location); });
+  const packets = [];
+  const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true,
+    send: packet => { packets.push(packet); return true; }, close() {}, onData() {}, onError() {}, onClose() {} };
+  const player = new Player(new PlayerSession(channel));
+  player.setIndex(1804); player.setUsername(username); player.setRegistered(true);
+  player.setLocation(new core.Location(3104, 9573));
+  const connection = new ClientConnection(channel); connection.player = player;
+  core.RegionManager.init(); core.RegionManager.loadMapFiles(3104, 9573);
+  const hook = name => PluginManager[name].find(entry => entry.pluginName === 'TempleOfTheEyeDispatchTest');
+  function tick(count = 1) {
+    while (count--) {
+      core.World.processCycle++; core.TaskManager.process(); connection.processTurnPackets();
+      require('../dist/game/model/areas/AreaManager').AreaManager.process(player);
+      player.getMovementQueue().process(); core.TaskManager.processWalkTo(player.getIndex());
+      for (const npc of core.World.getNpcs()) npc.process();
+      core.World.updateLocalNpcs(player, [...core.World.getNpcs()]);
+      player.getSession().flushClient(core.World.processCycle);
+      player.resetUpdating(); for (const npc of core.World.getNpcs()) npc.resetUpdating();
+    }
+  }
+  const action = stepId => PluginManager.emitCustomEvent('npc-dialogue:action',
+    { player, npcId: N.WIZARD_PERSTEN_4, stepId, kind: 'action', handled: false, text: stepId });
+  t.after(() => {
+    hook('logoutHooks').handler({ player, username }); player.closeInterruptibleInterfaces();
+    player.setRegistered(false); core.TaskManager.cancelTasks(player); core.TaskManager.cancelTasks(player.getIndex()); registered.cleanup();
+  });
+  player.setAttribute('quest.temple_of_the_eye.stage-schema', 2);
+  return { ...registered, player, connection, packets, faces, hook, tick, action,
+    enter() { registered.quest.setStage(player, 90); hook('loginHooks').handler({ player, username }); action('I_aoEy'); return player.getPrivateArea(); } };
+}
+
+function assertCapturedPalette(area, kind) {
+  const crypto = require('node:crypto');
+  const capture = require('../plugins/quests/data/temple-of-the-eye-templates.json');
+  for (const view of capture.views.filter(view => view.kind === kind)) {
+    const bytes = Buffer.alloc(4 * 4 * 13 * 13); let offset = 0;
+    for (let plane = 0; plane < 4; plane++) for (let x = 0; x < 13; x++) for (let y = 0; y < 13; y++) {
+      const chunk = area.getChunk(plane, x + view.offset[0], y + view.offset[1]);
+      const packed = chunk ? (chunk.sourcePlane << 24) | (chunk.sourceChunkX << 14) | (chunk.sourceChunkY << 3) | (chunk.rotation << 1) : -1;
+      bytes.writeInt32BE(packed, offset); offset += 4;
+    }
+    assert.equal(crypto.createHash('sha256').update(bytes).digest('hex'), view.paletteSha256,
+      `all 676 raw template entries, including holes, at capture tick ${view.tick}`);
+  }
+}
+
+test('raw1693 arrival palette and portal actors run through actual NPC processing', t => {
+  const f = nativeSceneFixture(t), { player, tick } = f;
+  const area = f.enter();
+  assertCapturedPalette(area, 'temple');
+  assert.equal(area.contains(area.sourceTile(2398, 5630)), false, 'scenery does not expand the playable room');
+  assert.equal(area.contains(area.sourceTile(2398, 5632)), true);
+  assert.equal(player.getNpcTransformationId(), 716, 'recorded invisible camera actor');
+  tick(15);
+  const persten = f.spawned.find(npc => npc.getId() === 11438 && npc.isRegistered());
+  assert.ok(persten, 'Persten arrives at raw tick4483, fifteen ticks after rebuild');
+  assert.equal(persten.getLocation().getY(), area.getBaseY() + 30, 'source5630 is outside old playable bounds');
+  assert.equal(persten.getPrivateArea(), area, 'outside actor remains activated in its owner area');
+  // Raw1693 requires the native large NPC update: the portal begins21 tiles away.
+  assert.equal(player.getNpcViewDistance(),21);
+  assert.equal(player.getLocalNpcs().includes(persten), true, 'portal animation is published even outside the normal15-tile view');
+  tick(5);
+  assert.equal(persten.getLocation().getY(), area.getBaseY() + 31, 'actual World NPC processing takes the first north step');
+  tick(6);
+  assert.equal(persten.getLocation().getY(), area.getBaseY() + 37, 'recorded seven-tile walk completes');
+  assert.equal(player.getLocalNpcs().includes(persten), true, 'walking into view publishes the actual NPC');
+  tick(7);
+  const cast = f.spawned.filter(npc => [11438,11441,11444,11447].includes(npc.getId()) && npc.isRegistered());
+  assert.equal(cast.length, 4);
+  assert.ok(cast.every(npc => player.getLocalNpcs().includes(npc)), 'all four recorded actors are actually synced to the client');
+  assert.deepEqual(cast.map(npc => [npc.getId(), npc.getLocation().getX() - area.getBaseX(), npc.getLocation().getY() - area.getBaseY()]).sort(),
+    [[11438,54,37],[11441,54,35],[11444,56,35],[11447,55,35]].sort(), 'raw actor endpoints, not normalized transcript guesses');
+  assert.ok(cast.every(npc => !npc.hasFlag('movement:ignore-clipping')));
+  assert.equal(player.getDialogueManager().getCurrent().getText(), 'Well this is... unexpected.');
+  assert.ok(f.packets.length > 0, 'real native sync packets emitted');
+});
+
+for (const interruption of ['dialogue', 'bank', 'logout', 'scene']) {
+  test(`arrival ${interruption} cancellation releases its model and scripted actors`, t => {
+    const f = nativeSceneFixture(t), { player, tick } = f;
+    f.enter(); tick(21);
+    const cast = f.spawned.filter(npc => npc.getId() === 11438 && npc.isRegistered());
+    assert.equal(cast.length, 1);
+    assert.equal(cast[0].hasFlag('movement:ignore-clipping'), true);
+    let replacement, scenes, bank;
+    if (interruption === 'logout') {
+      player.setRegistered(false); f.hook('logoutHooks').handler({ player, username: player.getUsername() });
+    } else if (interruption === 'bank') { player.getBank(0).open(); bank = player.getInterfaceId(); }
+    else {
+      if (interruption === 'scene') {
+        scenes = require('../plugins/quests/QuestScenes').createQuestScenes(PluginManager.createApi('ReplacementArrival'));
+        scenes.open(player, 'replacement', [[3090,3110,9560,9580,0]]); player.moveTo(new core.Location(3100,9570)); scenes.controls(player, true, true);
+      }
+      player.getDialogueManager().startDialogues(new core.DialogueChainBuilder().add(new core.StatementDialogue(0, 'Replacement.')));
+      replacement = player.getDialogueManager().getCurrent();
+    }
+    tick(35);
+    assert.equal(player.getNpcTransformationId(), -1);
+    assert.equal(player.getNpcViewDistance(),15);
+    assert.ok(cast.every(npc => !npc.hasFlag('movement:ignore-clipping') && !npc.isScriptedMovement()), 'removed actors release movement exceptions');
+    assert.ok(f.spawned.filter(npc => [11438,11441,11444,11447].includes(npc.getId())).every(npc => !npc.isRegistered()), 'stale callbacks cannot respawn the cast');
+    if (replacement) assert.equal(player.getDialogueManager().getCurrent(), replacement);
+    if (bank !== undefined) assert.equal(player.getInterfaceId(), bank);
+    if (interruption !== 'logout') {
+      assert.equal(player.getMovementQueue().isMovementBlocked(), interruption === 'scene');
+      assert.equal(player.getPacketSender().getVarbit(542), interruption === 'scene' ? 1 : 0, 'camera controls released unless owned by the replacement');
+    }
+    scenes?.end(player);
+  });
+}
+
+test('Mind and both Water returns restore exactly one tutorial cast, then the closing Guardian faces the rift', t => {
+  const f = nativeSceneFixture(t), { player, quest, tick } = f;
+  quest.setStage(player, 115);
+  player.setAttribute('temple-of-the-eye:tutorial', 30);
+  player.setAttribute('quest.temple_of_the_eye.mind-briefed', 1);
+  player.setLocation(new core.Location(3613,9496));
+  f.hook('loginHooks').handler({ player, username: player.getUsername() });
+  let tutorial = player.getPrivateArea();
+  assertCapturedPalette(tutorial, 'tutorial');
+  const objectAction = (id, option) => {
+    const event = { player, objectId: id, object: { getId: () => id }, definition: { getName: () => '', getInteractions: () => [option] }, clickType: 1, option, handled: false };
+    assert.equal(PluginManager.emitObjectInteraction(event), true, `production object action ${id} ${option}`);
+  };
+  const castIds = [11445,11448,11442,11456];
+  const assertCast = () => {
+    for (const id of castIds) {
+      const npcs = [...core.World.getNpcs()].filter(npc => npc.getOwner?.() === player && npc.getId() === id && npc.isRegistered());
+      assert.equal(npcs.length, 1, `one owned actor ${id}`); assert.equal(npcs[0].getPrivateArea(), tutorial);
+    }
+    const guardian = [...core.World.getNpcs()].find(npc => npc.getOwner?.() === player && npc.getId() === 11456);
+    assert.ok(f.faces.some(face => face.npc === guardian && face.x === tutorial.getBaseX()+55 && face.y === tutorial.getBaseY()+80), 'raw tutorial Guardian face coord was published');
+    assert.equal(guardian.getFace().getDirection().getId(), 1, 'persistent north spawn facing');
+  };
+  assertCast();
+  for (const progress of [30,45,60]) {
+    player.setAttribute('temple-of-the-eye:tutorial', progress);
+    player.getInventory().adds(I.GUARDIAN_ESSENCE, 5); player.getInventory().adds(I.UNCHARGED_CELL, 1);
+    if (progress === 60) {
+      player.getInventory().adds(26888, 1);
+      assert.equal(PluginManager.emitItemOnObject({ player, object: {}, objectId: 43810, itemId: 26888,
+        objectDefinition: { getName: () => 'Guardian of Water' }, itemDefinition: { getName: () => 'Portal talisman (water)', isNoted: () => false }, handled: false }), true);
+    } else objectAction(progress === 30 ? 43822 : 43821, 'Enter');
+    tick(3);
+    assert.equal(player.getPrivateArea(), null, 'altar uses the ordinary map');
+    assert.ok(castIds.every(id => ![...core.World.getNpcs()].some(npc => npc.getOwner?.() === player && npc.getId() === id)), 'outbound cast is removed');
+    objectAction(progress === 30 ? 34761 : 34762, 'Craft-rune');
+    assert.equal(player.getAttribute('temple-of-the-eye:tutorial'), progress + 5);
+    objectAction(progress === 30 ? 34749 : 34750, 'Use'); tick(3);
+    tutorial = player.getPrivateArea();
+    assert.equal(tutorial?.getName(), 'Temple of the Eye (tutorial)'); assertCast();
+    const count = core.World.getObjects().filter(object => object.getOwner?.() === player).length;
+    objectAction(progress === 30 ? 34749 : 34750, 'Use'); tick(3); assertCast();
+    assert.equal(core.World.getObjects().filter(object => object.getOwner?.() === player).length, count, 'repeat return does not duplicate tutorial props');
+    assert.equal(quest.getStage(player),115); assert.equal(quest.isComplete(player),false);
+  }
+  player.setAttribute('temple-of-the-eye:tutorial',70);
+  PluginManager.emitNpcInteraction(npcEvent(player,'The Great Guardian',11456,'Power-up')); tick(5);
+  assert.equal(quest.getStage(player),120);
+  const temple = player.getPrivateArea();
+  const guardian = [...core.World.getNpcs()].find(npc => npc.getOwner?.() === player && npc.getId() === 11455);
+  assert.ok(f.faces.some(face => face.npc === guardian && face.x === temple.getBaseX()+55 && face.y === temple.getBaseY()+80), 'raw8812 face10751,4368 maps to source2399,5680');
+  assert.equal(guardian.getFace().getDirection().getId(),1);
+  const felix = [...core.World.getNpcs()].find(npc => npc.getOwner?.() === player && npc.getId() === 11447);
+  assert.equal(felix.getLocation().getX(),temple.getBaseX()+57,'raw8813..8815 Felix walks west to source2401');
+});
+
+for (const checkpoint of ['speech', 'pan', 'locator', 'resumed speech']) {
+  for (const interruption of ['escape', 'dialogue', 'bank']) {
+    test(`arrival ${checkpoint} ${interruption} replacement releases only its cinematic ownership`, t => {
+      const f = nativeSceneFixture(t), { player, tick } = f;
+      f.enter(); tick(33);
+      const manager = player.getDialogueManager();
+      assert.equal(manager.getCurrent().getText(), 'Well this is... unexpected.');
+      if (checkpoint !== 'speech') {
+        manager.advance(); tick(); manager.advance(); tick(); manager.advance();
+        if (checkpoint !== 'pan') {
+          tick(24); assert.equal(manager.getCurrent().getText(), 'Let me cast a locator spell!');
+          manager.advance();
+          if (checkpoint === 'resumed speech') {
+            tick(3); assert.match(manager.getCurrent().getText(), /^It seems we're deep below the sea/);
+          }
+        }
+      }
+      let replacement, bank;
+      if (interruption === 'escape') player.closeInterruptibleInterfaces();
+      else if (interruption === 'bank') { player.getBank(0).open(); bank = player.getInterfaceId(); }
+      else {
+        manager.startDialogues(new core.DialogueChainBuilder().add(new core.StatementDialogue(0,'New conversation.')));
+        replacement = manager.getCurrent();
+      }
+      tick(30);
+      assert.equal(player.getNpcTransformationId(),-1);
+      assert.equal(player.getNpcViewDistance(),15);
+      assert.equal(player.getMovementQueue().isMovementBlocked(),false);
+      assert.equal(player.getPacketSender().getVarbit(542),0);
+      assert.ok(f.spawned.filter(npc => [11438,11441,11444,11447].includes(npc.getId())).every(npc => !npc.isRegistered() && !npc.hasFlag('movement:ignore-clipping') && !npc.isScriptedMovement()));
+      if (replacement) assert.equal(manager.getCurrent(),replacement,'old scene preserves replacement conversation');
+      if (bank !== undefined) assert.equal(player.getInterfaceId(),bank,'old scene preserves replacement bank');
+    });
+  }
+}
+
+
+test('arrival preserves a wider preexisting NPC view on cancellation', t => {
+  const f = nativeSceneFixture(t); f.player.setNpcViewDistance(35); f.enter(); f.tick(33);
+  assert.equal(f.player.getNpcViewDistance(),35);
+  f.player.closeInterruptibleInterfaces(); f.tick();
+  assert.equal(f.player.getNpcViewDistance(),35);
+  assert.equal(f.player.getNpcTransformationId(),-1);
+});

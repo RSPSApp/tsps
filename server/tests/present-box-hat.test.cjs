@@ -10,7 +10,7 @@ before(async()=>{
  await CachePipeline.initialize(path.resolve(__dirname,'..'));core=PM.getCoreApi();
  ids=['festive','simple','icy','antisanta'].map(s=>core.CacheDefinitions.getObjId('xmas24_present_hat_'+s));
  group=core.CacheDefinitions.getInterfaceId('item_transmog');clickzones=core.CacheDefinitions.getComponentId('item_transmog:entries_clickzones');varp=core.CacheDefinitions.getVarpId('item_transmog_active_obj');
- const file=path.resolve(__dirname,'../plugins/items/PresentBoxHat.plugin.js');if(fs.existsSync(file))require(file).register(PM.createApi('PresentBoxHat'));
+ const file=path.resolve(__dirname,'../plugins/items/ItemStyles.plugin.js');if(fs.existsSync(file))require(file).register(PM.createApi('ItemStyles'));
 });
 function player(worn=false){const p=new Player(null);p.setUsername('hatqa');p.getSession=()=>({sendClientPacket:()=>true});const messages=[];p.sendMessage=m=>messages.push(m);const container=worn?p.getEquipment():p.getInventory();container.setItem(0,new core.Item(ids[0],1,{fixture:'preserved'}));return {p,container,messages};}
 function open(p,c,slot=0){const id=c.getItems()[slot].getId();return Items.handleAction(p,c===p.getEquipment()?core.Equipment.INVENTORY_INTERFACE_ID:core.Inventory.INTERFACE_ID,id,slot,c===p.getEquipment()?2:3);}

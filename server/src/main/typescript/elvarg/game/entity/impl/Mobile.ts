@@ -85,6 +85,8 @@ export abstract class Mobile extends Entity {
     public updateFlag = new UpdateFlag();
     public positionToFace: Location;
     public animation: Animation;
+    /** Retained after sync so delayed cleanup can identify the last accepted animation. */
+    private animationGeneration = 0;
     public graphic: Graphic;
     private following: Mobile;
     /**
@@ -383,6 +385,7 @@ export abstract class Mobile extends Entity {
             }
         }
         this.animation = animation;
+        this.animationGeneration++;
         this.getUpdateFlag().flag(Flag.ANIMATION);
     }
 
@@ -529,6 +532,10 @@ export abstract class Mobile extends Entity {
 
     getAnimation(): Animation {
         return this.animation;
+    }
+
+    getAnimationGeneration(): number {
+        return this.animationGeneration;
     }
 
     /**

@@ -745,6 +745,28 @@ test("fishing spots roll on the Wiki's tick lengths after the captured first rol
   assert.equal(Fishing.pikeInterval(() => 0.5), 5);
 });
 
+test("a one-step walk stops fishing even after the route has drained", async () => {
+  const { core, fisher, amount, spot, start, ticks } = await fishingLoop();
+  const { ItemIdentifiers: I, NpcIdentifiers: N } = core;
+  await withRandom(0.02, async () => {
+    // FishingTask runs before player turns. A one-tile walk is a single step, so by the next
+    // pass the queue is empty and only the moving flag says the player walked away (#2449).
+    for (const walked of [false, true]) {
+      const lobster = fisher({ items: [[I.LOBSTER_POT]] });
+      let moving = false;
+      lobster.getMovementQueue = () => ({ size: () => 0, isMovings: () => moving });
+      start(lobster, spot(N.FISHING_SPOT_10, walked ? 21 : 20), "Cage");
+      ticks(1);
+      moving = walked;
+      ticks(1);
+      moving = false;
+      ticks(4);
+      assert.equal(amount(lobster, I.RAW_LOBSTER), walked ? 0 : 1, walked ? "the walk ends the session" : "control: the catch lands");
+      if (walked) assert.equal(lobster.animations.at(-1), 65535, "the walk resets the fishing animation");
+    }
+  });
+});
+
 test("karambwan vessels fish every 4 ticks and every attempt uses the karambwanji", async () => {
   const { core, Fishing, fisher, amount, spot, start, ticks } = await fishingLoop();
   const { ItemIdentifiers: I, NpcIdentifiers: N } = core;
@@ -790,6 +812,30 @@ test("karambwan vessels fish every 4 ticks and every attempt uses the karambwanj
   assert.equal(Fishing.catchChance(65, FISH.KARAMBWAN), 107 / 256);
 });
 
+test("barehand shark plays the cache start, ready and shark-finish sequences", async () => {
+  const { core, Fishing, fisher, amount, spot, start, ticks } = await fishingLoop();
+  const { ItemIdentifiers: I, NpcIdentifiers: N, Skill } = core;
+  await withRandom(0.02, async () => {
+    const p = fisher();
+    p.getSkillManager = () => ({
+      getCurrentLevel: (skill) => (skill === Skill.STRENGTH ? 76 : 96),
+      getMaxLevel: () => 99,
+      addExperiences: () => {},
+    });
+    start(p, spot(N.FISHING_SPOT_11, 31), "Harpoon");
+    const tool = Fishing.TOOLS.BAREHAND_SHARK;
+    assert.equal(tool.animationId, 6703, "cache BRUT_PLAYER_HAND_FISHING_START");
+    assert.equal(tool.loopAnimationId, 6704, "cache BRUT_PLAYER_HAND_FISHING_READY");
+    assert.equal(tool.catchAnimationId, 6706, "cache BRUT_PLAYER_HAND_FISHING_END_SHARK_1");
+    assert.deepEqual(p.animations, [6703], "the start line plays the start sequence");
+    ticks(3);
+    assert.equal(amount(p, I.RAW_SHARK), 0, "the harpoon first roll is 4 ticks");
+    ticks(1);
+    assert.equal(amount(p, I.RAW_SHARK), 1);
+    assert.deepEqual(p.animations, [6703, 6704, 6706], "the catch plays the ready loop then the finish");
+  });
+});
+
 test("Holy Lake karambwanji: floor(level / 5) + 1 a catch, shrimps only with room", async () => {
   const { core, Fishing, fisher, amount, spot, start, ticks } = await fishingLoop();
   const { ItemIdentifiers: I, NpcIdentifiers: N } = core;
@@ -819,4 +865,1131 @@ test("Holy Lake karambwanji: floor(level / 5) + 1 a catch, shrimps only with roo
     Fishing.landCatch(crowded, TOOLS.KARAMBWANJI_NET, Fishing.findTool(crowded, TOOLS.KARAMBWANJI_NET), [FISH.KARAMBWANJI]);
     assert.equal(amount(crowded, I.RAW_KARAMBWANJI), 21);
   });
+});
+
+test("Civitas illa Fortis's park pond: Cast with a big net lands its table, 7.5 XP a catch; another net is the wrong size", async () => {
+  const { core, Fishing, fisher, amount, spot, start, ticks } = await fishingLoop();
+  const { ItemIdentifiers: I, NpcIdentifiers: N, NpcDefinition } = core;
+  const { TOOLS, FISH, rollTable, getSpotTool } = Fishing;
+  const pond = NpcDefinition.forId(N.FISHING_SPOT_101);
+  assert.equal(getSpotTool(N.FISHING_SPOT_101, pond, pond.getActions().indexOf("Cast") + 1), TOOLS.PARK_NET);
+
+  // 0.02 lands every roll, past the pre-rolls and the tertiary, on the first weighted item.
+  await withRandom(0.02, async () => {
+    const caster = fisher({ level: 1, items: [[I.BIG_FISHING_NET]] });
+    assert.equal(start(caster, spot(N.FISHING_SPOT_101, 9), "Cast"), true, "the fishing loop takes the park pond");
+    assert.deepEqual(caster.messages, ["You cast out your net..."]);
+    ticks(1);
+    assert.equal(amount(caster, I.BROKEN_GLASS_2), 1);
+    assert.equal(caster.messages.at(-1), "You find some broken glass.");
+    assert.equal(caster.xp, 7.5);
+    ticks(3);
+    assert.equal(amount(caster, I.BROKEN_GLASS_2), 4, "a roll a tick, and the spot never moves");
+    assert.ok(caster.animations.length >= 5 && caster.animations.every((id) => id === 620), "human_largenet each tick");
+
+    const wrong = fisher({ items: [[I.SMALL_FISHING_NET]] });
+    start(wrong, spot(N.FISHING_SPOT_101, 10), "Cast");
+    assert.deepEqual(wrong.messages, ["This is the wrong size net for fishing here."]);
+    assert.equal(wrong.statements.length, 0, "a chat line, not a box");
+  });
+
+  // The table: pre-rolls first, else the weights (glass 3, boot 2, net 2, casket 2, keys 1 of 10), a tertiary on top.
+  const rolls = (...values) => () => values.shift();
+  assert.deepEqual(rollTable(TOOLS.PARK_NET.table, rolls(0.005)), [FISH.PARK_JADE], "jade, 1/100");
+  assert.deepEqual(rollTable(TOOLS.PARK_NET.table, rolls(0.5, 0.001, 0.5)), [FISH.PARK_RED_TOPAZ]);
+  for (const [pick, fish] of [[0.29, FISH.PARK_BROKEN_GLASS], [0.31, FISH.PARK_OLD_BOOT], [0.55, FISH.PARK_BIG_FISHING_NET],
+    [0.75, FISH.PARK_CASKET], [0.95, FISH.PARK_HOUSE_KEYS]]) {
+    assert.deepEqual(rollTable(TOOLS.PARK_NET.table, rolls(0.5, 0.5, pick, 0.5)), [fish], `${pick}`);
+  }
+  assert.deepEqual(rollTable(TOOLS.PARK_NET.table, rolls(0.5, 0.5, 0.95, 0.0001)), [FISH.PARK_HOUSE_KEYS, FISH.PARK_LOOP_HALF]);
+  assert.equal(FISH.PARK_LOOP_HALF.experience, 0, "a tertiary gives no experience of its own");
+});
+
+test("Gita Prymes upgrades angler kit to spirit kit for 1,200 flakes, then both ways free", async () => {
+  const { CachePipeline } = require("../dist/game/cache/CachePipeline");
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  await CachePipeline.initialize(path.resolve(__dirname, ".."));
+  const core = PluginManager.getCoreApi();
+  const { ItemIdentifiers: I, NpcIdentifiers: N } = core;
+  const Angler = require("../plugins/skills/fishing/AnglerOutfit.Fishing");
+  const handlers = {};
+  const emitted = [];
+  Angler.attach({
+    core,
+    persistAttribute() {},
+    onItemOnNpc: (handler) => { handlers.item = handler; },
+    onNpcDialogueCondition: (handler) => { handlers.condition = handler; },
+    onCustomEvent: (name, handler) => { handlers[name] = handler; },
+    emitCustomEvent: (name, payload) => emitted.push({ name, payload }),
+  });
+
+  function player(items = [], paid = {}) {
+    const counts = new Map(items);
+    const attributes = new Map([[Angler._test.PAID_ATTRIBUTE, paid]]);
+    const messages = [];
+    return {
+      messages,
+      getInventory: () => ({
+        getAmount: (id) => counts.get(id) ?? 0,
+        deleteNumber: (id, amount) => counts.set(id, Math.max(0, (counts.get(id) ?? 0) - amount)),
+        adds: (id, amount) => counts.set(id, (counts.get(id) ?? 0) + amount),
+        refreshItems() {},
+      }),
+      getAttribute: (key) => attributes.get(key),
+      setAttribute: (key, value) => attributes.set(key, value),
+      sendMessage: (message) => messages.push(message),
+    };
+  }
+
+  const exchange = (p, itemId) => {
+    const event = { player: p, npcId: N.GITA_PRYMES, itemId, handled: false };
+    handlers.item(event);
+    return event;
+  };
+
+  const first = player([[I.ANGLER_HAT, 1], [I.SPIRIT_FLAKES, 1200]]);
+  assert.equal(exchange(first, I.ANGLER_HAT).handled, true);
+  assert.equal(first.getInventory().getAmount(I.ANGLER_HAT), 0);
+  assert.equal(first.getInventory().getAmount(I.SPIRIT_ANGLER_HEADBAND), 1);
+  assert.equal(first.getInventory().getAmount(I.SPIRIT_FLAKES), 0);
+  assert.deepEqual(first.messages, ["Gita Prymes exchanges your Angler hat for Spirit Angler kit."]);
+  assert.ok(emitted.some((event) => event.name === "collection-log:obtain"
+    && event.payload.itemId === I.SPIRIT_ANGLER_HEADBAND && event.payload.player === first));
+
+  // Converting back is free; upgrading again is free because that piece's fee is paid.
+  exchange(first, I.SPIRIT_ANGLER_HEADBAND);
+  assert.equal(first.getInventory().getAmount(I.ANGLER_HAT), 1);
+  assert.equal(first.messages.at(-1), "Gita Prymes exchanges your Spirit angler headband for regular Angler kit.");
+  emitted.length = 0;
+  exchange(first, I.ANGLER_HAT);
+  assert.equal(first.getInventory().getAmount(I.SPIRIT_ANGLER_HEADBAND), 1);
+  assert.equal(first.getInventory().getAmount(I.SPIRIT_FLAKES), 0, "the fee is paid once per piece");
+  assert.ok(emitted.some((event) => event.name === "collection-log:obtain" && event.payload.itemId === I.SPIRIT_ANGLER_HEADBAND));
+
+  const short = player([[I.ANGLER_TOP, 1], [I.SPIRIT_FLAKES, 1199]]);
+  exchange(short, I.ANGLER_TOP);
+  assert.equal(short.getInventory().getAmount(I.ANGLER_TOP), 1);
+  assert.equal(short.getInventory().getAmount(I.SPIRIT_FLAKES), 1199);
+  assert.equal(short.messages.at(-1), "Gita Prymes wants 1,200 spirit flakes to upgrade your Angler top. Spirit Angler kit gives the same Fishing XP bonus as the regular Angler kit. If you change it back later, you will not get your spirit flakes back.");
+
+  emitted.length = 0;
+  const wrong = player([[I.LOGS, 1]]);
+  assert.equal(exchange(wrong, I.LOGS).handled, true);
+  assert.equal(emitted.at(-1).name, "npc-dialogue:start");
+  assert.equal(emitted.at(-1).payload.variant, "if-given-anything-that-isn-t-an-angler-s-outfit-piece");
+
+  assert.equal(handlers.condition({ npcId: N.GITA_PRYMES, player: player(), stepId: Angler._test.CONDITIONS.NO_ANGLER }), true);
+  const unpaid = player([[I.ANGLER_BOOTS, 1]]);
+  assert.equal(handlers.condition({ npcId: N.GITA_PRYMES, player: unpaid, stepId: Angler._test.CONDITIONS.FIRST_UPGRADE }), true);
+  assert.equal(handlers.condition({ npcId: N.GITA_PRYMES, player: unpaid, stepId: Angler._test.CONDITIONS.ALREADY_UPGRADED }), false);
+  const paid = player([[I.ANGLER_BOOTS, 1]], { boots: true });
+  assert.equal(handlers.condition({ npcId: N.GITA_PRYMES, player: paid, stepId: Angler._test.CONDITIONS.FIRST_UPGRADE }), false);
+  assert.equal(handlers.condition({ npcId: N.GITA_PRYMES, player: paid, stepId: Angler._test.CONDITIONS.ALREADY_UPGRADED }), true);
+  const spirit = player([[I.SPIRIT_ANGLER_WADERS, 1]]);
+  assert.equal(handlers.condition({ npcId: N.GITA_PRYMES, player: spirit, stepId: Angler._test.CONDITIONS.NO_SPIRIT }), false);
+  assert.equal(handlers.condition({ npcId: N.GITA_PRYMES, player: spirit, stepId: Angler._test.CONDITIONS.HAS_SPIRIT }), true);
+
+  // Talking through the first-time branch exchanges the piece and fills the message's blank.
+  const talker = player([[I.ANGLER_TOP, 1], [I.SPIRIT_FLAKES, 1200]]);
+  handlers["npc-dialogue:condition"]({ npcId: N.GITA_PRYMES, player: talker, stepId: Angler._test.CONDITIONS.FIRST_UPGRADE });
+  const choice = { npcId: N.GITA_PRYMES, player: talker, option: "Proceed", end: false };
+  handlers["npc-dialogue:choice"](choice);
+  assert.equal(choice.end, false);
+  assert.equal(talker.getInventory().getAmount(I.SPIRIT_ANGLER_TOP), 1);
+  assert.equal(talker.getInventory().getAmount(I.SPIRIT_FLAKES), 0);
+  const message = { npcId: N.GITA_PRYMES, player: talker, kind: "message", stepId: "3sMFrS", step: { text: "Gita Prymes exchanges your [outfit piece] for Spirit Angler kit." } };
+  handlers["npc-dialogue:action"](message);
+  assert.equal(talker.messages.at(-1), "Gita Prymes exchanges your Angler top for Spirit Angler kit.");
+
+  // The warning messages before Proceed name the piece that will be converted.
+  const warned = player([[I.ANGLER_WADERS, 1]]);
+  const warning = { npcId: N.GITA_PRYMES, player: warned, kind: "message", stepId: "biLPTa", step: { text: "Gita Prymes wants 1,200 spirit flakes to upgrade your [outfit piece]. Spirit Angler kit gives the same Fishing XP bonus as the regular Angler kit. If you change it back later, you will not get your spirit flakes back." } };
+  handlers["npc-dialogue:action"](warning);
+  assert.equal(warned.messages.at(-1), "Gita Prymes wants 1,200 spirit flakes to upgrade your Angler waders. Spirit Angler kit gives the same Fishing XP bonus as the regular Angler kit. If you change it back later, you will not get your spirit flakes back.");
+  const paidWarning = player([[I.ANGLER_WADERS, 1]], { waders: true });
+  const paidMessage = { npcId: N.GITA_PRYMES, player: paidWarning, kind: "message", stepId: "y9-UMa", step: { text: "Gita Prymes will upgrade your [outfit piece] for free, as you have already paid the conversion fee. Spirit Angler kit gives the same Fishing XP bonus as the regular Angler kit." } };
+  handlers["npc-dialogue:action"](paidMessage);
+  assert.equal(paidWarning.messages.at(-1), "Gita Prymes will upgrade your Angler waders for free, as you have already paid the conversion fee. Spirit Angler kit gives the same Fishing XP bonus as the regular Angler kit.");
+
+  const talkerShort = player([[I.ANGLER_WADERS, 1], [I.SPIRIT_FLAKES, 1199]]);
+  handlers["npc-dialogue:condition"]({ npcId: N.GITA_PRYMES, player: talkerShort, stepId: Angler._test.CONDITIONS.FIRST_UPGRADE });
+  const shortChoice = { npcId: N.GITA_PRYMES, player: talkerShort, option: "Proceed", end: false };
+  handlers["npc-dialogue:choice"](shortChoice);
+  assert.equal(shortChoice.end, true, "the branch ends without exchanging when the flakes are short");
+  assert.equal(talkerShort.getInventory().getAmount(I.ANGLER_WADERS), 1);
+  // NpcDialogues reuses message leaves from the cached transcript between players.
+  const sharedStep = { type: "message", text: "Gita Prymes wants 1,200 spirit flakes to upgrade your [outfit piece]." };
+  const messageFor = p => ({ npcId: N.GITA_PRYMES, player: p, kind: "message", step: sharedStep, text: sharedStep.text });
+  const firstWarning = messageFor(player([[I.ANGLER_HAT, 1]]));
+  handlers["npc-dialogue:action"](firstWarning);
+  assert.equal(sharedStep.text, "Gita Prymes wants 1,200 spirit flakes to upgrade your [outfit piece].", "cached transcript is never personalized");
+  assert.equal(firstWarning.handled, true);
+  assert.equal(firstWarning.player.messages.at(-1), "Gita Prymes wants 1,200 spirit flakes to upgrade your Angler hat.");
+  const nextWarning = messageFor(player([[I.ANGLER_BOOTS, 1]]));
+  handlers["npc-dialogue:action"](nextWarning);
+  assert.equal(nextWarning.player.messages.at(-1), "Gita Prymes wants 1,200 spirit flakes to upgrade your Angler boots.");
+
+});
+
+
+// Native ordinary Fishing and connected vessel controls.
+test("native ordinary trout catch can award an eligible beginner clue bottle", async (t) => {
+  const { CachePipeline } = require("../dist/game/cache/CachePipeline");
+  const { PluginManager: PM } = require("../dist/plugins/PluginManager");
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const { PlayerSession } = require("../dist/net/PlayerSession");
+  const { SkillManager } = require("../dist/game/content/skill/SkillManager");
+  const priorBots = process.env.DISABLE_PLAYER_BOTS;
+  const priorRandom = Math.random;
+  const fixtureTasks = new Set();
+  process.env.DISABLE_PLAYER_BOTS = "1";
+  let core, player, spot, submit;
+  t.after(() => {
+    Math.random = priorRandom;
+    try {
+      try {
+        if (player) {
+          core.TaskManager.cancelTasks(player.getIndex());
+          core.TaskManager.cancelTasks(player);
+          if (player.isRegistered()) core.World.getPlayers().removes(player);
+        }
+      } finally {
+        if (spot?.isRegistered()) core.World.getNpcs().removes(spot);
+      }
+    } finally {
+      try { PM.emitServerShutdown({}); }
+      finally {
+        try { for (const task of fixtureTasks) task.stop(); }
+        finally {
+          if (submit) core.TaskManager.submit = submit;
+          if (priorBots === undefined) delete process.env.DISABLE_PLAYER_BOTS;
+          else process.env.DISABLE_PLAYER_BOTS = priorBots;
+        }
+      }
+    }
+  });
+  await CachePipeline.initialize(path.resolve(__dirname, ".."));
+  core = PM.getCoreApi();
+  submit = core.TaskManager.submit;
+  core.TaskManager.submit = function (...args) {
+    if (args[0]) fixtureTasks.add(args[0]);
+    return submit.apply(this, args);
+  };
+  PM.loadFromDirectory(path.resolve(__dirname, "../plugins"));
+  const { ItemIdentifiers: I, NpcIdentifiers: N, Skill, Location, Item, NPC, World } = core;
+  core.RegionManager.init();
+  core.RegionManager.loadMapFiles(3104, 3424);
+  PM.emitServerStartup({});
+  const channel = {kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true,
+    send: () => true, close() {}, onData() {}, onError() {}, onClose() {}};
+  player = new Player(new PlayerSession(channel));
+  player.setUsername("cluebottlefixture");
+  player.setAttribute("bot-skip-persistence", true);
+  player.setLocation(new Location(3104, 3424, 0));
+  assert.equal(World.getPlayers().add(player), true, "native player joins World");
+  player.needsPlacement = false;
+  const skills = player.getSkillManager();
+  skills.setExperience(Skill.FISHING, SkillManager.getExperienceForLevel(20));
+  skills.setMaxLevel(Skill.FISHING, 20);
+  skills.setCurrentLevel(Skill.FISHING, 20, true);
+  player.getInventory().add(new Item(I.FLY_FISHING_ROD), true);
+  player.getInventory().add(new Item(I.FEATHER, 2), true);
+  spot = NPC.create(N.ROD_FISHING_SPOT_10, new Location(3105, 3424, 0));
+  spot.setScriptedMovement(true);
+  assert.equal(World.getNpcs().add(spot), true, "native spot joins World");
+  spot.needsPlacement = false;
+  // Activate the genuine global fishing task before the interaction.
+  World.process();
+  player.needsPlacement = false;
+  spot.needsPlacement = false;
+  const definition = spot.getCurrentDefinition(player);
+  const clickType = definition.getActions().indexOf("Lure") + 1;
+  assert.ok(clickType > 0, "cache exposes Lure");
+  const eligibility = {player, tier: "beginner", allowed: null};
+  PM.emitCustomEvent("treasure-trails:can-receive", eligibility);
+  assert.equal(eligibility.allowed, true, "the actual capacity producer admits this player");
+  const xp = skills.getExperience(Skill.FISHING);
+  let catchRolls = 0, bottleRolls = 0;
+  Math.random = () => {
+    const stack = new Error().stack;
+    if (stack.includes("rollCatch")) { catchRolls++; return 0.02; }
+    if (stack.includes("rollClueBottles")) return bottleRolls++ === 0 ? 0 : 0.999999;
+    return priorRandom();
+  };
+  assert.equal(PM.emitNpcInteraction({player, npc: spot, npcId: spot.getId(), definition,
+    clickType, handled: false}), true, "registered spot accepts Lure");
+  for (let i = 0; i < 4; i++) World.process();
+  assert.equal(player.getInventory().getAmount(I.RAW_TROUT), 1, "control: ordinary catch lands");
+  assert.equal(skills.getExperience(Skill.FISHING) - xp, 50, "control: trout awards Fishing XP");
+  assert.equal(player.getInventory().getAmount(I.FEATHER), 1, "control: one feather is consumed");
+  assert.equal(catchRolls, 1, "only the intended trout roll was forced");
+  assert.equal(player.getInventory().getAmount(I.CLUE_BOTTLE_BEGINNER_), 1,
+    "eligible ordinary trout catch awards the forced beginner bottle");
+  assert.ok(bottleRolls >= 1, "the clue producer used the scoped bottle roll");
+
+  const inventory = player.getInventory();
+  const bank = player.getBank(0);
+  function resetFisher() {
+    inventory.resetItems();
+    inventory.add(new Item(I.FLY_FISHING_ROD), true);
+    inventory.add(new Item(I.FEATHER, 5), true);
+  }
+  function capacity(tier) {
+    const request = {player, tier, allowed: null};
+    PM.emitCustomEvent("treasure-trails:can-receive", request);
+    return request.allowed;
+  }
+  function fishOnce({catchRandom = 0.02, bottleRandom = 0, fishId = I.RAW_TROUT,
+    baitId = I.FEATHER, npc = spot, action = "Lure", ticks = 4, forceRada = false} = {}) {
+    let catchCount = 0, clueCount = 0, radaCount = 0;
+    Math.random = () => {
+      const stack = new Error().stack;
+      if (stack.includes("rollCatch")) {
+        const position = catchCount++;
+        return typeof catchRandom === "function" ? catchRandom(position) : catchRandom;
+      }
+      if (stack.includes("rollClueBottles")) return clueCount++ === 0 ? bottleRandom : 0.999999;
+      if (stack.includes("rollExtraFish") && forceRada) { radaCount++; return 0; }
+      return priorRandom();
+    };
+    const beforeXp = skills.getExperience(Skill.FISHING);
+    const beforeBait = inventory.getAmount(baitId);
+    const beforeFish = inventory.getAmount(fishId);
+    const npcDefinition = npc.getCurrentDefinition(player);
+    const option = npcDefinition.getActions().indexOf(action) + 1;
+    assert.ok(option > 0, `cache exposes ${action}`);
+    assert.equal(PM.emitNpcInteraction({player, npc, npcId: npc.getId(), definition: npcDefinition,
+      clickType: option, handled: false}), true);
+    for (let i = 0; i < ticks; i++) World.process();
+    return {catchCount, clueCount, radaCount, xp: skills.getExperience(Skill.FISHING) - beforeXp,
+      feathers: beforeBait - inventory.getAmount(baitId),
+      fish: inventory.getAmount(fishId) - beforeFish};
+  }
+  function caughtTrout(result) {
+    assert.equal(result.catchCount, 1);
+    assert.equal(result.fish, 1);
+    assert.equal(result.xp, 50);
+    assert.equal(result.feathers, 1);
+  }
+
+  // Banked beginner clue reaches the real shared capacity producer. The same
+  // catch can still award the independently eligible easy tier.
+  resetFisher();
+  bank.resetItems();
+  bank.add(new Item(I.CLUE_SCROLL_BEGINNER_), true);
+  assert.equal(capacity("beginner"), false);
+  assert.equal(capacity("easy"), true);
+  const blockedCatch = fishOnce();
+  caughtTrout(blockedCatch);
+  assert.equal(inventory.getAmount(I.CLUE_BOTTLE_BEGINNER_), 0);
+  assert.equal(inventory.getAmount(I.CLUE_BOTTLE_EASY_), 1);
+
+  // Removing the banked clue changes the native result with otherwise identical
+  // source, actor and scoped rolls.
+  bank.deleteNumber(I.CLUE_SCROLL_BEGINNER_, 1);
+  resetFisher();
+  assert.equal(capacity("beginner"), true);
+  const uncappedCatch = fishOnce();
+  caughtTrout(uncappedCatch);
+  assert.equal(inventory.getAmount(I.CLUE_BOTTLE_BEGINNER_), 1);
+
+  // An unsuccessful ordinary attempt consumes no feather, yields no XP/fish,
+  // and does not invoke the bottle roller.
+  resetFisher();
+  const missed = fishOnce({catchRandom: 0.99});
+  assert.equal(missed.catchCount, 1);
+  assert.equal(missed.fish, 0);
+  assert.equal(missed.xp, 0);
+  assert.equal(missed.feathers, 0);
+  assert.equal(missed.clueCount, 0);
+  assert.equal(inventory.getAmount(I.CLUE_BOTTLE_BEGINNER_), 0);
+
+  // Before X Marks, the landed fish takes the last inventory slot and the
+  // actual beginner bottle is placed on the ground for the player.
+  resetFisher();
+  for (let i = 0; i < 25; i++) inventory.add(new Item(I.LOGS), true);
+  assert.equal(inventory.getFreeSlots(), 1);
+  const beforeBottleGround = new Set(World.getItems());
+  try {
+    const fullBottleCatch = fishOnce();
+    caughtTrout(fullBottleCatch);
+    assert.equal(inventory.getFreeSlots(), 0);
+    assert.equal(inventory.getAmount(I.CLUE_BOTTLE_BEGINNER_), 0);
+    const bottles = World.getItems().filter((ground) => !beforeBottleGround.has(ground) &&
+      ground.getOwner() === player.getUsername() && ground.getItem().getId() === I.CLUE_BOTTLE_BEGINNER_);
+    assert.equal(bottles.length, 1);
+  } finally {
+    for (const ground of [...World.getItems()]) {
+      if (!beforeBottleGround.has(ground) && ground.getOwner() === player.getUsername()) {
+        core.ItemOnGroundManager.deregister(ground);
+      }
+    }
+    core.ItemOnGroundManager.process();
+  }
+
+  // Use the registered quest's real completion producer, then the ordinary
+  // Fishing catch must receive a scroll box rather than a bottle.
+  const quests = require("../plugins/quests/QuestRuntime").getRegisteredQuests();
+  const xMarks = quests.find((quest) => quest.key === "x_marks_the_spot");
+  assert.ok(xMarks, "X Marks the Spot is registered");
+  assert.equal(xMarks.isComplete(player), false);
+  assert.equal(xMarks.complete(player, {scroll: false, announce: false}), true);
+  const questQuery = {player, key: "x_marks_the_spot", complete: null};
+  PM.emitCustomEvent("quest:is-complete", questQuery);
+  assert.equal(questQuery.complete, true);
+  resetFisher();
+  assert.equal(capacity("beginner"), true);
+  const boxedCatch = fishOnce();
+  caughtTrout(boxedCatch);
+  assert.equal(inventory.getAmount(I.SCROLL_BOX_BEGINNER_), 1);
+  assert.equal(inventory.getAmount(I.CLUE_BOTTLE_BEGINNER_), 0);
+
+  // Inventory boxes also count towards the real two-box cap; another eligible
+  // tier still rolls on the next genuine catch.
+  inventory.add(new Item(I.SCROLL_BOX_BEGINNER_), true);
+  assert.equal(capacity("beginner"), false);
+  assert.equal(capacity("easy"), true);
+  const inventoryCapped = fishOnce();
+  caughtTrout(inventoryCapped);
+  assert.equal(inventory.getAmount(I.SCROLL_BOX_BEGINNER_), 2);
+  assert.equal(inventory.getAmount(I.SCROLL_BOX_EASY_), 1);
+
+  // The fish consumes the only free slot. Inspect the actual ground-item list,
+  // then deregister only items created by this fixture even if an assertion fails.
+  resetFisher();
+  for (let i = 0; i < 25; i++) inventory.add(new Item(I.LOGS), true);
+  assert.equal(inventory.getFreeSlots(), 1);
+  const groundBefore = new Set(World.getItems());
+  t.after(() => {
+    for (const ground of [...World.getItems()]) {
+      if (!groundBefore.has(ground) && ground.getOwner() === player.getUsername()) {
+        core.ItemOnGroundManager.deregister(ground);
+      }
+    }
+    core.ItemOnGroundManager.process();
+  });
+  const groundCatch = fishOnce();
+  caughtTrout(groundCatch);
+  assert.equal(inventory.getFreeSlots(), 0);
+  assert.equal(inventory.getAmount(I.SCROLL_BOX_BEGINNER_), 0);
+  const groundBox = World.getItems().filter((ground) => !groundBefore.has(ground) &&
+    ground.getOwner() === player.getUsername() && ground.getItem().getId() === I.SCROLL_BOX_BEGINNER_);
+  assert.equal(groundBox.length, 1);
+
+  // Keep beginner at the unlocked two-box cap, so easy is the first eligible
+  // tier. The 1/13084 boundaries come from trout base 923616 and level 20.
+  core.ItemOnGroundManager.deregister(groundBox[0]);
+  core.ItemOnGroundManager.process();
+  bank.resetItems();
+  bank.add(new Item(I.SCROLL_BOX_BEGINNER_, 2), true);
+  assert.equal(capacity("beginner"), false);
+  resetFisher();
+  const normalInside = fishOnce({bottleRandom: (1 - 1e-6) / 13084});
+  caughtTrout(normalInside);
+  assert.equal(inventory.getAmount(I.SCROLL_BOX_EASY_), 1);
+  resetFisher();
+  const normalOutside = fishOnce({bottleRandom: (1 + 1e-6) / 13084});
+  caughtTrout(normalOutside);
+  assert.equal(inventory.getAmount(I.SCROLL_BOX_EASY_), 0);
+
+  // Visible Fishing 105 uses the unclamped level for bottles. At this level
+  // the real fly-rod cascade lands salmon; trout and salmon share the same base.
+  resetFisher();
+  // Earlier trout XP is close to a real level-up; keep both boosted rolls at 105.
+  skills.setExperience(Skill.FISHING, SkillManager.getExperienceForLevel(20));
+  skills.setCurrentLevel(Skill.FISHING, 105, true);
+  const boosted = fishOnce({fishId: I.RAW_SALMON, bottleRandom: (1 - 1e-6) / 7659});
+  assert.equal(boosted.catchCount, 1);
+  assert.equal(boosted.fish, 1);
+  assert.equal(boosted.xp, 70);
+  assert.equal(boosted.feathers, 1);
+  assert.equal(skills.getCurrentLevel(Skill.FISHING), 105);
+  assert.equal(inventory.getAmount(I.SCROLL_BOX_EASY_), 1);
+  resetFisher();
+  const boostedOutside = fishOnce({fishId: I.RAW_SALMON, bottleRandom: (1 + 1e-6) / 7659});
+  assert.equal(boostedOutside.fish, 1);
+  assert.equal(skills.getCurrentLevel(Skill.FISHING), 105);
+  assert.equal(inventory.getAmount(I.SCROLL_BOX_EASY_), 0);
+  skills.setCurrentLevel(Skill.FISHING, 20, true);
+
+  // Complete real CA tasks through the progress producer, then exercise the
+  // matching easy-tier rate. No fabricated reward flag stands in for points.
+  const CAData = require("../plugins/achievements/combatachievements/Data.CombatAchievements");
+  const CAProgress = require("../plugins/achievements/combatachievements/Progress.CombatAchievements");
+  const easyTier = CAData.tiers().find((tier) => tier.name.toLowerCase() === "easy");
+  assert.ok(easyTier);
+  for (const task of CAData.tasks().values()) {
+    if (CAProgress.points(player) >= easyTier.threshold) break;
+    CAProgress.complete(player, task, {silent: true});
+  }
+  assert.ok(CAProgress.points(player) >= easyTier.threshold);
+  const achieved = {player, tier: "easy", currentThresholdMet: null};
+  PM.emitCustomEvent("combat-achievements:tier", achieved);
+  assert.equal(achieved.currentThresholdMet, true);
+  resetFisher();
+  const caInside = fishOnce({bottleRandom: (1 - 1e-6) / 12430});
+  caughtTrout(caInside);
+  assert.equal(inventory.getAmount(I.SCROLL_BOX_EASY_), 1);
+  resetFisher();
+  const caOutside = fishOnce({bottleRandom: (1 + 1e-6) / 12430});
+  caughtTrout(caOutside);
+  assert.equal(inventory.getAmount(I.SCROLL_BOX_EASY_), 0);
+
+  // Simulate a previously claimed tier after a threshold increase through the
+  // real progress mutators. Claimed status alone must not retain the rate buff.
+  CAProgress.reset(player);
+  CAProgress.setClaimed(player, easyTier);
+  const stale = {player, tier: "easy", currentThresholdMet: null};
+  PM.emitCustomEvent("combat-achievements:tier", stale);
+  assert.equal(stale.claimed, true);
+  assert.equal(stale.currentThresholdMet, false);
+  resetFisher();
+  const staleClaim = fishOnce({bottleRandom: (1 + 1e-6) / 13084});
+  caughtTrout(staleClaim);
+  assert.equal(inventory.getAmount(I.SCROLL_BOX_EASY_), 0);
+
+  // Compare the same legal Wilderness dark-crab catch with and without a worn
+  // imbued ring, using the real Wilderness location and equipment containers.
+  // 1.5/1373 misses at the ordinary easy rate and succeeds at twice that rate.
+  core.RegionManager.loadMapFiles(3186, 3927);
+  player.setLocation(new Location(3186, 3927, 0));
+  player.needsPlacement = false;
+  skills.setExperience(Skill.FISHING, SkillManager.getExperienceForLevel(85));
+  skills.setMaxLevel(Skill.FISHING, 85);
+  skills.setCurrentLevel(Skill.FISHING, 85, true);
+  const darkSpot = NPC.create(N.FISHING_SPOT_36, new Location(3187, 3927, 0));
+  darkSpot.setScriptedMovement(true);
+  assert.equal(World.getNpcs().add(darkSpot), true);
+  darkSpot.needsPlacement = false;
+  t.after(() => { if (darkSpot.isRegistered()) World.getNpcs().removes(darkSpot); });
+  assert.equal(core.Wilderness.isInLocation(player.getLocation()), true);
+  assert.ok(core.Wilderness.levelAt(3186, 3927) > 0);
+  function resetDarkFisher() {
+    inventory.resetItems();
+    inventory.add(new Item(I.LOBSTER_POT), true);
+    inventory.add(new Item(I.DARK_FISHING_BAIT, 5), true);
+  }
+  const darkOptions = {npc: darkSpot, action: "Cage", ticks: 3, fishId: I.RAW_DARK_CRAB,
+    baitId: I.DARK_FISHING_BAIT, bottleRandom: 1.5 / 1373};
+  resetDarkFisher();
+  const noRing = fishOnce(darkOptions);
+  assert.equal(noRing.fish, 1);
+  assert.equal(noRing.xp, 130);
+  assert.equal(noRing.feathers, 1);
+  assert.equal(inventory.getAmount(I.SCROLL_BOX_EASY_), 0);
+  player.getEquipment().setItem(core.Equipment.RING_SLOT, new Item(I.RING_OF_WEALTH_I_));
+  resetDarkFisher();
+  const withRing = fishOnce(darkOptions);
+  assert.equal(withRing.fish, 1);
+  assert.equal(withRing.xp, 130);
+  assert.equal(withRing.feathers, 1);
+  assert.equal(inventory.getAmount(I.SCROLL_BOX_EASY_), 1);
+  player.getEquipment().setItem(core.Equipment.RING_SLOT, new Item(-1, 0));
+
+  // A real Rada's blessing proc adds a second fish, but no extra bottle roll.
+  // Hold every other tier at its actual box capacity to make the single
+  // beginner roll observable. Ordinary Fishing has no spirit-flakes extra-fish
+  // producer at this pin, so this does not claim a flakes proc was exercised.
+  player.setLocation(new Location(3104, 3424, 0));
+  player.needsPlacement = false;
+  skills.setExperience(Skill.FISHING, SkillManager.getExperienceForLevel(20));
+  skills.setMaxLevel(Skill.FISHING, 20);
+  skills.setCurrentLevel(Skill.FISHING, 20, true);
+  bank.resetItems();
+  for (const id of [I.SCROLL_BOX_EASY_, I.SCROLL_BOX_MEDIUM_, I.SCROLL_BOX_HARD_, I.SCROLL_BOX_ELITE_]) {
+    bank.add(new Item(id, 2), true);
+  }
+  assert.equal(capacity("beginner"), true);
+  assert.equal(capacity("easy"), false);
+  resetFisher();
+  player.getEquipment().setItem(core.Equipment.AMMUNITION_SLOT, new Item(I.RADAS_BLESSING_4));
+  const radaCatch = fishOnce({forceRada: true});
+  assert.equal(radaCatch.catchCount, 1);
+  assert.equal(radaCatch.radaCount, 1);
+  assert.equal(radaCatch.fish, 2);
+  assert.equal(radaCatch.xp, 50);
+  assert.equal(radaCatch.feathers, 1);
+  assert.equal(radaCatch.clueCount, 1);
+  assert.equal(inventory.getAmount(I.SCROLL_BOX_BEGINNER_), 1);
+  player.getEquipment().setItem(core.Equipment.AMMUNITION_SLOT, new Item(-1, 0));
+
+  // Exercise the actual league task/relic producer and vessel-chance listener.
+  // The preview Treasure Seeker relic in Trailblazer Reloaded multiplies vessel
+  // rates by ten. The seed task completions use real catalogue IDs and the real
+  // event; they are fixture setup, not a claim that the player performed them.
+  resetFisher();
+  const noRelic = fishOnce({bottleRandom: 5 / 1539});
+  caughtTrout(noRelic);
+  assert.equal(inventory.getAmount(I.SCROLL_BOX_BEGINNER_), 0);
+  player.setProfile("league");
+  player.setAttribute("league:type", 4);
+  const leagueTasks = require("../plugins/modes/data/league-tasks.json").leagues["4"].tasks;
+  const seedTasks = leagueTasks.filter((task) => task.area === 0 && task.points === 400).slice(0, 3);
+  assert.equal(seedTasks.length, 3);
+  for (const task of seedTasks) {
+    const request = {player, id: task.id};
+    PM.emitCustomEvent("league:complete-task", request);
+    assert.equal(request.completed, true, task.id);
+  }
+  const UnlockRelic = require("../plugins/modes/leaguerelics/Unlock.LeagueRelics");
+  assert.equal(UnlockRelic.unlock(player, 2, 3, {bankOpen: false}), true);
+  const leagueChance = {player, vessel: "bottle", tier: "beginner", multiplier: 1};
+  PM.emitCustomEvent("treasure-trails:vessel-chance", leagueChance);
+  assert.equal(leagueChance.multiplier, 10);
+  resetFisher();
+  const relicCatch = fishOnce({bottleRandom: 5 / 1539});
+  assert.equal(relicCatch.fish, 1);
+  assert.ok(relicCatch.xp > 0);
+  assert.equal(relicCatch.feathers, 1);
+  assert.equal(inventory.getAmount(I.SCROLL_BOX_BEGINNER_), 1);
+  UnlockRelic.reset(player);
+  player.setProfile("main");
+
+  // Aerial fishing already owns its bottle rolls. A real Hunter catch, including
+  // its own spirit-flake extra-fish producer, must not enter the ordinary Fishing
+  // bottle roller when it emits the shared fishing:success event.
+  core.RegionManager.loadMapFiles(1365, 3632);
+  player.setLocation(new Location(1365, 3632, 0));
+  player.needsPlacement = false;
+  skills.setExperience(Skill.FISHING, SkillManager.getExperienceForLevel(43));
+  skills.setMaxLevel(Skill.FISHING, 43);
+  skills.setCurrentLevel(Skill.FISHING, 43, true);
+  skills.setExperience(Skill.HUNTER, SkillManager.getExperienceForLevel(35));
+  skills.setMaxLevel(Skill.HUNTER, 35);
+  skills.setCurrentLevel(Skill.HUNTER, 35, true);
+  inventory.resetItems();
+  inventory.add(new Item(I.KING_WORM, 5), true);
+  inventory.add(new Item(I.SPIRIT_FLAKES, 5), true);
+  bank.resetItems();
+  assert.equal(capacity("beginner"), true);
+  const alry = NPC.create(N.ALRY_THE_ANGLER, new Location(1367, 3632, 0));
+  const aerialSpot = NPC.create(N.FISHING_SPOT_12, new Location(1358, 3631, 0));
+  alry.setScriptedMovement(true);
+  aerialSpot.setScriptedMovement(true);
+  assert.equal(World.getNpcs().add(alry), true);
+  assert.equal(World.getNpcs().add(aerialSpot), true);
+  alry.needsPlacement = false;
+  aerialSpot.needsPlacement = false;
+  t.after(() => {
+    if (alry.isRegistered()) World.getNpcs().removes(alry);
+    if (aerialSpot.isRegistered()) World.getNpcs().removes(aerialSpot);
+  });
+  function npcAction(npc, action) {
+    const def = npc.getCurrentDefinition(player);
+    const click = def.getActions().indexOf(action) + 1;
+    assert.ok(click > 0, `cache exposes ${action}`);
+    return PM.emitNpcInteraction({player, npc, npcId: npc.getId(), definition: def,
+      clickType: click, handled: false});
+  }
+  assert.equal(npcAction(alry, "Get bird"), true);
+  assert.equal(player.getEquipment().get(core.Equipment.WEAPON_SLOT).getId(), I.CORMORANTS_GLOVE_2);
+  let ordinaryBottleCalls = 0;
+  let aerialVesselQueries = 0;
+  const emitCustomEvent = PM.emitCustomEvent;
+  PM.emitCustomEvent = function (name, payload) {
+    if (name === "treasure-trails:vessel-chance" && payload.player === player && payload.vessel === "bottle") {
+      aerialVesselQueries++;
+    }
+    return emitCustomEvent.apply(this, arguments);
+  };
+  t.after(() => { PM.emitCustomEvent = emitCustomEvent; });
+  Math.random = () => {
+    const stack = new Error().stack;
+    if (stack.includes("rollClueBottles")) { ordinaryBottleCalls++; return 0; }
+    if (stack.includes("Aerial.Hunter")) return 0.25;
+    return priorRandom();
+  };
+  const aerialXp = skills.getExperience(Skill.FISHING);
+  assert.equal(npcAction(aerialSpot, "Catch"), true);
+  for (let i = 0; i < 5; i++) World.process();
+  assert.equal(inventory.getAmount(I.BLUEGILL), 2, "the actual flake proc adds a second Hunter fish");
+  assert.equal(inventory.getAmount(I.SPIRIT_FLAKES), 4);
+  assert.equal(inventory.getAmount(I.KING_WORM), 4);
+  assert.ok(skills.getExperience(Skill.FISHING) > aerialXp);
+  assert.equal(ordinaryBottleCalls, 0, "Hunter's success does not invoke ordinary bottle rolls");
+  assert.equal(aerialVesselQueries, 5, "the flake proc does not add Hunter bottle roll sets");
+  assert.equal(inventory.getAmount(I.SCROLL_BOX_BEGINNER_), 0);
+  PM.emitCustomEvent = emitCustomEvent;
+
+  // Drive Arthur's existing dialogue and confirmation choices through the real
+  // dialogue and client packet path. Drop policy is distinct from capacity and
+  // from opening a vessel already held before the opt-out.
+  assert.equal(npcAction(alry, "Get bird"), true, "return the borrowed cormorant");
+  core.RegionManager.loadMapFiles(3228, 3236);
+  player.setLocation(new Location(3228, 3236, 0));
+  player.needsPlacement = false;
+  const arthur = NPC.create(N.ARTHUR_THE_CLUE_HUNTER, new Location(3229, 3236, 0));
+  arthur.setScriptedMovement(true);
+  assert.equal(World.getNpcs().add(arthur), true);
+  arthur.needsPlacement = false;
+  t.after(() => { if (arthur.isRegistered()) World.getNpcs().removes(arthur); });
+  const { ClientConnection } = require("../dist/net/NetworkBuilder");
+  const { MultiChatboxPrompt } = require("../dist/game/model/menu/MultiChatboxPrompt");
+  const client = new ClientConnection(channel);
+  client.player = player;
+  async function packet(input) {
+    await client.dispatch([input]);
+    client.processTurnPackets();
+    World.process();
+  }
+  async function continueDialogue(group) {
+    await packet({type: "dialogue_continue", widgetId: (group << 16) | 5, childIndex: -1});
+  }
+  async function choose(text) {
+    const prompt = MultiChatboxPrompt.getPending(player);
+    const dialogue = player.getDialogueManager().getCurrent();
+    const options = prompt?.options ?? (dialogue instanceof core.OptionDialogue ? dialogue.getOptions() : []);
+    const position = options.indexOf(text);
+    assert.ok(position >= 0, `real prompt contains ${text}`);
+    await packet({type: "dialogue_continue", widgetId: (219 << 16) | 1, childIndex: position + 1});
+  }
+  async function arthurToggle(confirmation) {
+    player.getDialogueManager().reset();
+    player.getPacketSender().sendInterfaceRemoval();
+    assert.equal(npcAction(arthur, "Talk-to"), true);
+    await continueDialogue(231);
+    await choose("Toggle gaining vesseled clue scrolls.");
+    await continueDialogue(217);
+    await continueDialogue(231);
+    await choose(confirmation);
+    player.getDialogueManager().reset();
+    player.getPacketSender().sendInterfaceRemoval();
+  }
+  function vesselPolicy() {
+    const request = {player, vessel: "bottle", tier: "beginner", multiplier: 1};
+    PM.emitCustomEvent("treasure-trails:vessel-chance", request);
+    return request.allowed;
+  }
+  async function checkAerialPolicy(enabled) {
+    core.RegionManager.loadMapFiles(1365, 3632);
+    player.setLocation(new Location(1365, 3632, 0));
+    player.needsPlacement = false;
+    player.getMovementQueue().reset();
+    for (const [skill, level] of [[Skill.FISHING, 43], [Skill.HUNTER, 35]]) {
+      skills.setExperience(skill, SkillManager.getExperienceForLevel(level));
+      skills.setMaxLevel(skill, level);
+      skills.setCurrentLevel(skill, level, true);
+    }
+    bank.resetItems();
+    inventory.resetItems();
+    inventory.add(new Item(I.KING_WORM, 5), true);
+    inventory.add(new Item(I.SPIRIT_FLAKES, 5), true);
+    assert.equal(capacity("beginner"), true);
+    assert.equal(npcAction(alry, "Get bird"), true);
+    assert.equal(player.getEquipment().get(core.Equipment.WEAPON_SLOT).getId(), I.CORMORANTS_GLOVE_2);
+    const emit = PM.emitCustomEvent;
+    let policyQueries = 0, ownRolls = 0, ordinaryRolls = 0;
+    PM.emitCustomEvent = function (name, payload) {
+      if (name === "treasure-trails:vessel-chance" && payload.player === player && payload.vessel === "bottle") policyQueries++;
+      return emit.apply(this, arguments);
+    };
+    Math.random = () => {
+      const stack = new Error().stack;
+      if (stack.includes("rollClueBottles")) { ordinaryRolls++; return 0; }
+      if (/\bat roll \([^\n]*Context\.Hunter\.js:\d+:\d+\)/.test(stack) && stack.includes("Aerial.Hunter")) {
+        // The first two calls select fish and tench; force only the next,
+        // beginner vessel roll when the shared policy permits one.
+        return ownRolls++ === 2 ? 0 : 0.25;
+      }
+      if (stack.includes("Aerial.Hunter")) return 0.25;
+      return priorRandom();
+    };
+    const beforeXp = skills.getExperience(Skill.FISHING);
+    try {
+      assert.equal(npcAction(aerialSpot, "Catch"), true);
+      for (let i = 0; i < 5; i++) World.process();
+      assert.equal(inventory.getAmount(I.BLUEGILL), 2, "the actual flake proc keeps its extra fish");
+      assert.equal(inventory.getAmount(I.SPIRIT_FLAKES), 4);
+      assert.equal(inventory.getAmount(I.KING_WORM), 4);
+      assert.ok(skills.getExperience(Skill.FISHING) > beforeXp);
+      assert.equal(policyQueries, 5);
+      assert.equal(ordinaryRolls, 0, "Aerial never invokes ordinary Fishing bottles");
+      assert.equal(inventory.getAmount(I.SCROLL_BOX_BEGINNER_), enabled ? 1 : 0);
+      assert.equal(ownRolls, enabled ? 7 : 2, "only enabled Aerial performs its five own clue rolls");
+    } finally {
+      Math.random = priorRandom;
+      PM.emitCustomEvent = emit;
+      npcAction(alry, "Get bird");
+    }
+  }
+  async function checkMiningAndWoodcutting(enabled) {
+    core.RegionManager.loadMapFiles(3222, 3218);
+    player.setLocation(new Location(3222, 3218, 0));
+    player.needsPlacement = false;
+    player.getMovementQueue().reset();
+    for (const skill of [Skill.MINING, Skill.WOODCUTTING]) {
+      skills.setExperience(skill, SkillManager.getExperienceForLevel(30));
+      skills.setMaxLevel(skill, 30);
+      skills.setCurrentLevel(skill, 30, true);
+    }
+    bank.resetItems();
+    for (const id of [I.SCROLL_BOX_EASY_, I.SCROLL_BOX_MEDIUM_, I.SCROLL_BOX_HARD_, I.SCROLL_BOX_ELITE_]) {
+      bank.add(new Item(id, 2), true);
+    }
+    for (const row of [
+      {skill: Skill.MINING, tool: I.BRONZE_PICKAXE, id: core.CacheDefinitions.getLocId("copperrock1"),
+        action: "Mine", resource: I.COPPER_ORE, clueFunction: "rollClueGeodes"},
+      {skill: Skill.WOODCUTTING, tool: I.BRONZE_AXE, id: core.ObjectIdentifiers.TREE,
+        action: "Chop down", resource: I.LOGS, clueFunction: "rollClueNests"},
+    ]) {
+      player.setLocation(new Location(3222, 3218, 0));
+      player.needsPlacement = false;
+      inventory.resetItems();
+      inventory.add(new Item(row.tool), true);
+      const object = new core.GameObject(row.id, new Location(3223, 3218, 0), 10, 0, null);
+      core.ObjectManager.register(object, true);
+      let clueCalls = 0;
+      Math.random = () => {
+        const stack = new Error().stack;
+        if (stack.includes(row.clueFunction)) { clueCalls++; return 0; }
+        if (stack.includes("rollSucceeds") || stack.includes("rollLog") || stack.includes("rollGemTable")) return 0.02;
+        if (stack.includes("maybeDropBirdNest")) return 0.99;
+        return priorRandom();
+      };
+      const beforeXp = skills.getExperience(row.skill);
+      try {
+        await packet({type: "object_option", id: row.id, x: 3223, y: 3218, action: row.action});
+        for (let i = 0; i < 20 && inventory.getAmount(row.resource) === 0; i++) World.process();
+        assert.ok(inventory.getAmount(row.resource) >= 1, `${row.action} still produces its resource`);
+        assert.ok(skills.getExperience(row.skill) > beforeXp, `${row.action} still gives XP`);
+        assert.equal(inventory.getAmount(I.SCROLL_BOX_BEGINNER_), enabled ? 1 : 0);
+        if (enabled) assert.ok(clueCalls > 0, `${row.action} rolls its enabled clue`);
+        else assert.equal(clueCalls, 0, `${row.action} suppresses its opted-out clue`);
+      } finally {
+        skills.stopSkillable();
+        core.ObjectManager.deregister(object, true);
+        player.setLocation(new Location(3218, 3218, 0));
+        player.needsPlacement = false;
+        World.process();
+      }
+    }
+  }
+  async function checkBirdhouse(enabled) {
+    // Use a real cache-defined birdhouse base, placement, seeds, time-advance
+    // event and Empty action. The fixture places the object at a test location;
+    // it does not claim to test the map's natural spawn or traversal.
+    const Birdhouses = require("../plugins/skills/hunter/Birdhouses.Hunter");
+    const base = [...Birdhouses.bases.keys()][0];
+    assert.ok(Number.isInteger(base));
+    core.RegionManager.loadMapFiles(3676, 3882);
+    player.setLocation(new Location(3676, 3882, 0));
+    player.needsPlacement = false;
+    player.getMovementQueue().reset();
+    skills.setExperience(Skill.HUNTER, SkillManager.getExperienceForLevel(35));
+    skills.setMaxLevel(Skill.HUNTER, 35);
+    skills.setCurrentLevel(Skill.HUNTER, 35, true);
+    inventory.resetItems();
+    inventory.add(new Item(I.BIRD_HOUSE), true);
+    inventory.add(new Item(I.BARLEY_SEED, 10), true);
+    bank.resetItems();
+    for (const id of [I.SCROLL_BOX_EASY_, I.SCROLL_BOX_MEDIUM_, I.SCROLL_BOX_HARD_, I.SCROLL_BOX_ELITE_]) {
+      bank.add(new Item(id, 2), true);
+    }
+    const object = new core.GameObject(base, new Location(3677, 3882, 0), 10, 0, null);
+    core.ObjectManager.register(object, true);
+    try {
+      await packet({type: "object_option", id: base, x: 3677, y: 3882, action: "Build"});
+      for (let i = 0; i < 5; i++) World.process();
+      let state = player.getAttribute(Birdhouses.ATTRIBUTE)?.[base];
+      assert.ok(state, "the actual Build action places the birdhouse");
+      await packet({type: "item_on_object", widgetId: 149 << 16, objectId: base,
+        itemId: I.BARLEY_SEED, slot: inventory.getSlotForItemId(I.BARLEY_SEED), x: 3677, y: 3882});
+      for (let i = 0; i < 5; i++) World.process();
+      state = player.getAttribute(Birdhouses.ATTRIBUTE)?.[base];
+      assert.equal(state?.seeds, 10, "the actual item-on-object producer fills it");
+      const time = {player, ms: Birdhouses.DURATION, handledBy: []};
+      PM.emitCustomEvent("agent:advance-time", time);
+      assert.ok(time.handledBy.includes("Hunter"));
+      let policyQueries = 0;
+      const emit = PM.emitCustomEvent;
+      PM.emitCustomEvent = function (name, payload) {
+        if (name === "treasure-trails:vessel-chance" && payload.player === player && payload.vessel === "nest") policyQueries++;
+        return emit.apply(this, arguments);
+      };
+      Math.random = () => new Error().stack.includes("Birdhouses.Hunter") ? 0 : priorRandom();
+      try {
+        await packet({type: "object_option", id: base, x: 3677, y: 3882, action: "Empty"});
+        for (let i = 0; i < 5; i++) World.process();
+      } finally {
+        PM.emitCustomEvent = emit;
+      }
+      assert.equal(player.getAttribute(Birdhouses.ATTRIBUTE)?.[base], undefined, "the house was actually emptied");
+      assert.equal(inventory.getAmount(I.CLOCKWORK), 1, "the clockwork remains a normal reward");
+      assert.ok(inventory.getAmount(I.BIRD_NEST_6) >= 1, "ordinary nest rewards remain");
+      assert.ok(policyQueries > 0);
+      assert.equal(inventory.getAmount(I.SCROLL_BOX_BEGINNER_), enabled ? 1 : 0);
+    } finally {
+      core.ObjectManager.deregister(object, true);
+      player.getMovementQueue().reset();
+    }
+  }
+  async function checkDriftNet(enabled) {
+    // Enter the real private area through the existing quest/access producers,
+    // set a real anchor, advance passive catches with a scoped clock and take
+    // its rewards through the registered Harvest action and dialogue.
+    const DriftNets = require("../plugins/skills/hunter/DriftNets.Hunter");
+    const voyage = quests.find((quest) => quest.key === "bone_voyage");
+    assert.ok(voyage);
+    if (!voyage.isComplete(player)) {
+      assert.equal(voyage.complete(player, {scroll: false, announce: false, experience: false}), true);
+    }
+    skills.setExperience(Skill.FISHING, SkillManager.getExperienceForLevel(47));
+    skills.setMaxLevel(Skill.FISHING, 47);
+    skills.setCurrentLevel(Skill.FISHING, 47, true);
+    skills.setExperience(Skill.HUNTER, SkillManager.getExperienceForLevel(44));
+    skills.setMaxLevel(Skill.HUNTER, 44);
+    skills.setCurrentLevel(Skill.HUNTER, 44, true);
+    player.getDialogueManager().reset();
+    player.getPacketSender().sendInterfaceRemoval();
+    inventory.resetItems();
+    bank.resetItems();
+    if (!DriftNets.hasAccess(player)) {
+      inventory.add(new Item(I.NUMULITE, 20000), true);
+      assert.equal(DriftNets.buyPermanent(player), true, "the actual access purchase succeeds");
+    }
+    inventory.add(new Item(I.DRIFT_NET), true);
+    DriftNets.enter(player);
+    const area = player.getPrivateArea();
+    assert.ok(area, "the actual DriftNets entry producer creates the area");
+    const anchor = area.getObjects().find((object) => DriftNets.bases.has(object.getId()));
+    assert.ok(anchor, "the loaded area contains a real drift-net anchor");
+    const at = anchor.getLocation();
+    player.setLocation(new Location(at.getX() - 1, at.getY(), at.getZ()));
+    player.needsPlacement = false;
+    player.getMovementQueue().reset();
+    const anchorId = anchor.getId();
+    const originalNow = Date.now;
+    try {
+      await packet({type: "object_option", id: anchorId, x: at.getX(), y: at.getY(), action: "Set up"});
+      for (let i = 0; i < 4; i++) World.process();
+      const net = DriftNets.state(player).nets[anchorId];
+      assert.ok(net, "the registered action sets the net");
+      // This advances the existing server's passive-capture interval solely to
+      // construct a full net; it is not evidence of retail timing.
+      let now = originalNow();
+      Date.now = () => now;
+      for (let i = 0; i < 10; i++) { now += 60001; World.process(); }
+      Date.now = originalNow;
+      assert.equal(net.count, 10, "the real task fills the net with passive catches");
+      inventory.resetItems();
+      let randomCalls = 0, policyQueries = 0;
+      const emit = PM.emitCustomEvent;
+      PM.emitCustomEvent = function (name, payload) {
+        if (name === "treasure-trails:vessel-chance" && payload.player === player && payload.vessel === "bottle") policyQueries++;
+        return emit.apply(this, arguments);
+      };
+      const draws = enabled
+        ? [0.5, 0, ...Array.from({length: 9}, () => [0.5, 0, 0]).flat()]
+        : Array.from({length: 10}, () => [0.5, 0]).flat();
+      Math.random = () => {
+        const stack = new Error().stack;
+        if (stack.includes("rewards") && stack.includes("DriftNets.Hunter")) return draws[randomCalls++] ?? 0.5;
+        return priorRandom();
+      };
+      try {
+        await packet({type: "object_option", id: anchorId, x: at.getX(), y: at.getY(), action: "Harvest"});
+        for (let i = 0; i < 8; i++) {
+          const dialogue = player.getDialogueManager().getCurrent();
+          if (dialogue instanceof core.OptionDialogue && dialogue.getOptions().includes("Take catch")) break;
+          World.process();
+        }
+        assert.equal(policyQueries, 1, "the real Harvest action generated rewards");
+        await choose("Take catch");
+        for (let i = 0; i < 3; i++) World.process();
+      } finally {
+        PM.emitCustomEvent = emit;
+      }
+      assert.equal(policyQueries, 1);
+      assert.equal(inventory.getAmount(I.SCROLL_BOX_MEDIUM_), enabled ? 1 : 0);
+      assert.equal(inventory.getAmount(I.OYSTER), enabled ? 9 : 10, "the opted-out clue branch falls back to fish");
+      assert.equal(DriftNets.state(player).nets[anchorId], undefined, "the real take action completes");
+    } finally {
+      Date.now = originalNow;
+      DriftNets.cleanup({player});
+      player.setLocation(new Location(3222, 3218, 0));
+      player.needsPlacement = false;
+    }
+  }
+  assert.notEqual(vesselPolicy(), false, "absent opt-out preserves existing TSPS behavior");
+  await arthurToggle("Yes please, I want to stop receiving vesseled containers.");
+  assert.equal(vesselPolicy(), false);
+  const { PlayerSave } = require("../dist/game/entity/impl/player/persistence/PlayerSave");
+  const restoredPlayer = new Player(new PlayerSession(channel));
+  restoredPlayer.setUsername("cluebottlerestore");
+  PlayerSave.fromPlayer(player).applyToPlayer(restoredPlayer);
+  const restoredPolicy = {player: restoredPlayer, vessel: "bottle", tier: "beginner", multiplier: 1};
+  PM.emitCustomEvent("treasure-trails:vessel-chance", restoredPolicy);
+  assert.equal(restoredPolicy.allowed, false, "the actual saved opt-out survives restoration");
+  t.after(() => { restoredPlayer.setRegistered(false); core.TaskManager.cancelTasks(restoredPlayer); });
+  await checkAerialPolicy(false);
+  await checkMiningAndWoodcutting(false);
+  await checkBirdhouse(false);
+  await checkDriftNet(false);
+  player.setLocation(new Location(3104, 3424, 0));
+  player.needsPlacement = false;
+  skills.setExperience(Skill.FISHING, SkillManager.getExperienceForLevel(20));
+  skills.setMaxLevel(Skill.FISHING, 20);
+  skills.setCurrentLevel(Skill.FISHING, 20, true);
+  bank.resetItems();
+  resetFisher();
+  assert.equal(capacity("beginner"), true, "opt-out does not deny clue capacity");
+  const optedOut = fishOnce();
+  caughtTrout(optedOut);
+  assert.equal(optedOut.clueCount, 0);
+  assert.equal(inventory.getAmount(I.SCROLL_BOX_BEGINNER_), 0);
+  inventory.add(new Item(I.CLUE_BOTTLE_BEGINNER_), true);
+  const bottleSlot = inventory.getSlotForItemId(I.CLUE_BOTTLE_BEGINNER_);
+  await packet({type: "inventory_action", widgetId: 149 << 16, slot: bottleSlot,
+    itemId: I.CLUE_BOTTLE_BEGINNER_, option: "Open", optionIndex: 1});
+  assert.equal(inventory.getAmount(I.CLUE_BOTTLE_BEGINNER_), 0);
+  assert.equal(inventory.getAmount(I.SCROLL_BOX_BEGINNER_), 1, "held vessel still opens while opted out");
+  player.setLocation(new Location(3228, 3236, 0));
+  player.needsPlacement = false;
+  await arthurToggle("Yes please, I want to start receiving vesseled containers");
+  assert.notEqual(vesselPolicy(), false);
+  await checkAerialPolicy(true);
+  await checkMiningAndWoodcutting(true);
+  await checkBirdhouse(true);
+  await checkDriftNet(true);
+  player.setLocation(new Location(3104, 3424, 0));
+  player.needsPlacement = false;
+  skills.setExperience(Skill.FISHING, SkillManager.getExperienceForLevel(20));
+  skills.setMaxLevel(Skill.FISHING, 20);
+  skills.setCurrentLevel(Skill.FISHING, 20, true);
+  resetFisher();
+  const optedBackIn = fishOnce();
+  caughtTrout(optedBackIn);
+  assert.equal(inventory.getAmount(I.SCROLL_BOX_BEGINNER_), 1);
+
+  // Simulate the world-membership setting while retaining the actual shared
+  // capacity handler, native player, spot and FishingTask. This tests its
+  // membership branch; it is not a separately booted F2P world.
+  const originalMembersWorld = core.WorldDefinition.isMembersWorld;
+  try {
+    core.WorldDefinition.isMembersWorld = () => false;
+    bank.resetItems();
+    resetFisher();
+    assert.equal(capacity("beginner"), true);
+    for (const tier of ["easy", "medium", "hard", "elite"]) assert.equal(capacity(tier), false, tier);
+    const freeCatch = fishOnce();
+    caughtTrout(freeCatch);
+    assert.equal(freeCatch.clueCount, 1);
+    assert.equal(inventory.getAmount(I.SCROLL_BOX_BEGINNER_), 1);
+    resetFisher();
+    bank.add(new Item(I.SCROLL_BOX_BEGINNER_, 2), true);
+    assert.equal(capacity("beginner"), false);
+    const freeCapped = fishOnce();
+    caughtTrout(freeCapped);
+    assert.equal(freeCapped.clueCount, 0);
+    assert.equal(inventory.getAmount(I.SCROLL_BOX_BEGINNER_), 0);
+  } finally {
+    core.WorldDefinition.isMembersWorld = originalMembersWorld;
+  }
+
+  // Big net can land several fish types and two mackerel in one natural batch.
+  // Only one beginner clue roll set belongs to that batch.
+  core.RegionManager.loadMapFiles(2845, 3429);
+  player.setLocation(new Location(2845, 3429, 0));
+  player.needsPlacement = false;
+  skills.setExperience(Skill.FISHING, SkillManager.getExperienceForLevel(99));
+  skills.setMaxLevel(Skill.FISHING, 99);
+  skills.setCurrentLevel(Skill.FISHING, 99, true);
+  bank.resetItems();
+  for (const id of [I.SCROLL_BOX_EASY_, I.SCROLL_BOX_MEDIUM_, I.SCROLL_BOX_HARD_, I.SCROLL_BOX_ELITE_]) {
+    bank.add(new Item(id, 2), true);
+  }
+  const bigSpot = NPC.create(N.FISHING_SPOT_20, new Location(2846, 3429, 0));
+  bigSpot.setScriptedMovement(true);
+  assert.equal(World.getNpcs().add(bigSpot), true);
+  bigSpot.needsPlacement = false;
+  t.after(() => { if (bigSpot.isRegistered()) World.getNpcs().removes(bigSpot); });
+  function resetBigNet() {
+    inventory.resetItems();
+    inventory.add(new Item(I.BIG_FISHING_NET), true);
+  }
+  const bigOptions = {npc: bigSpot, action: "Big Net", ticks: 3,
+    fishId: I.RAW_MACKEREL, baitId: I.BIG_FISHING_NET};
+  resetBigNet();
+  const bigCatch = fishOnce(bigOptions);
+  assert.equal(bigCatch.fish, 2);
+  assert.equal(inventory.getAmount(I.RAW_COD), 1);
+  assert.equal(inventory.getAmount(I.RAW_BASS), 1);
+  assert.ok(bigCatch.xp > 0);
+  assert.equal(bigCatch.clueCount, 1);
+  assert.equal(inventory.getAmount(I.SCROLL_BOX_BEGINNER_), 1);
+
+  // An ordinary big-net junk-only batch remains outside this documented-fish
+  // scope. This is a supported-scope limit, not a claim about the retail rule.
+  resetBigNet();
+  const junkOnly = fishOnce({...bigOptions, catchRandom: (index) => index === 0 ? 0.02 : 0.99});
+  assert.equal(inventory.getAmount(I.LEATHER_BOOTS), 1);
+  assert.equal(junkOnly.fish, 0);
+  assert.equal(junkOnly.clueCount, 0);
+  assert.equal(inventory.getAmount(I.SCROLL_BOX_BEGINNER_), 0);
+
+  // Fortis park has its own documented base even though its catches are marked
+  // junk in the Fishing data and never emit a pet-oriented success event.
+  core.RegionManager.loadMapFiles(1737, 3101);
+  player.setLocation(new Location(1737, 3101, 0));
+  player.needsPlacement = false;
+  skills.setExperience(Skill.FISHING, SkillManager.getExperienceForLevel(1));
+  skills.setMaxLevel(Skill.FISHING, 1);
+  skills.setCurrentLevel(Skill.FISHING, 1, true);
+  const parkSpot = NPC.create(N.FISHING_SPOT_101, new Location(1738, 3101, 0));
+  parkSpot.setScriptedMovement(true);
+  assert.equal(World.getNpcs().add(parkSpot), true);
+  parkSpot.needsPlacement = false;
+  t.after(() => { if (parkSpot.isRegistered()) World.getNpcs().removes(parkSpot); });
+  resetBigNet();
+  const parkCatch = fishOnce({npc: parkSpot, action: "Cast", ticks: 1,
+    fishId: I.BROKEN_GLASS_2, baitId: I.BIG_FISHING_NET});
+  assert.equal(parkCatch.fish, 1);
+  assert.ok(parkCatch.xp > 0);
+  assert.equal(parkCatch.clueCount, 1);
+  assert.equal(inventory.getAmount(I.SCROLL_BOX_BEGINNER_), 1);
+
+  // Tutorial Island's separate pond remains outside this change's supported
+  // source scope. This preserves current behavior; it is not a retail no-drop claim.
+  player.setLocation(new Location(3222, 3218, 0));
+  player.needsPlacement = false;
+  core.RegionManager.loadMapFiles(3098, 3090);
+  const tutorialPlayer = new Player(new PlayerSession(channel));
+  tutorialPlayer.setUsername("cluebottletutorial");
+  tutorialPlayer.setAttribute("bot-skip-persistence", true);
+  tutorialPlayer.setLocation(new Location(3098, 3090, 0));
+  assert.equal(World.getPlayers().add(tutorialPlayer), true);
+  tutorialPlayer.needsPlacement = false;
+  tutorialPlayer.getInventory().add(new Item(I.SMALL_FISHING_NET), true);
+  const tutorialSpot = NPC.create(N.FISHING_SPOT_43, new Location(3099, 3090, 0));
+  tutorialSpot.setScriptedMovement(true);
+  assert.equal(World.getNpcs().add(tutorialSpot), true);
+  tutorialSpot.needsPlacement = false;
+  t.after(() => {
+    core.TaskManager.cancelTasks(tutorialPlayer);
+    core.TaskManager.cancelTasks(tutorialPlayer.getIndex());
+    if (tutorialPlayer.isRegistered()) World.getPlayers().removes(tutorialPlayer);
+    if (tutorialSpot.isRegistered()) World.getNpcs().removes(tutorialSpot);
+  });
+  const tutorialDefinition = tutorialSpot.getCurrentDefinition(tutorialPlayer);
+  const tutorialClick = tutorialDefinition.getActions().indexOf("Net") + 1;
+  assert.ok(tutorialClick > 0);
+  const tutorialCapacity = {player: tutorialPlayer, tier: "beginner", allowed: null};
+  PM.emitCustomEvent("treasure-trails:can-receive", tutorialCapacity);
+  assert.equal(tutorialCapacity.allowed, true);
+  const tutorialXp = tutorialPlayer.getSkillManager().getExperience(Skill.FISHING);
+  let tutorialClueRolls = 0;
+  Math.random = () => {
+    const stack = new Error().stack;
+    if (stack.includes("rollCatch")) return 0.02;
+    if (stack.includes("rollClueBottles")) { tutorialClueRolls++; return 0; }
+    return priorRandom();
+  };
+  assert.equal(PM.emitNpcInteraction({player: tutorialPlayer, npc: tutorialSpot, npcId: tutorialSpot.getId(),
+    definition: tutorialDefinition, clickType: tutorialClick, handled: false}), true);
+  for (let i = 0; i < 3; i++) World.process();
+  assert.equal(tutorialPlayer.getInventory().getAmount(I.RAW_SHRIMPS), 1);
+  assert.equal(tutorialPlayer.getSkillManager().getExperience(Skill.FISHING) - tutorialXp, 10);
+  assert.equal(tutorialClueRolls, 0);
+  assert.equal(tutorialPlayer.getInventory().getAmount(I.CLUE_BOTTLE_BEGINNER_), 0);
+
 });

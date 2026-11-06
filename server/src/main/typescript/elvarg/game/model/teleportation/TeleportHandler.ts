@@ -146,7 +146,7 @@ export class TeleportHandler {
         player.getCombat().reset();
     }
 
-    public static checkReqs(player: Player, targetLocation: Location, wildernessLevelLimit: number = 20): boolean {
+    public static checkReqs(player: Player, targetLocation: Location, wildernessLevelLimit: number = 20, spellName?: string): boolean {
         if (player.busy()) {
             player.sendMessage("You cannot do that right now.");
             return false;
@@ -174,7 +174,7 @@ export class TeleportHandler {
 
         const area = player.getArea();
         const canTeleport = (area ? PluginManager.callArea(area, "canTeleport", player, wildernessLevelLimit, targetLocation) : null)
-            ?? PluginManager.emitCanTeleport(player, wildernessLevelLimit, targetLocation);
+            ?? PluginManager.emitCanTeleport(player, wildernessLevelLimit, targetLocation, spellName);
         if (canTeleport === false) {
             return false;
         }

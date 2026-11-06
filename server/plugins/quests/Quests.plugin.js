@@ -7,6 +7,7 @@
  * (King Roald, Reldo, ...) fall back to it after the other quests' handlers.
  */
 const QUESTS = [
+  "AlfredGrimhandsBarcrawl",
   "RecipeForDisaster",
   "WhileGuthixSleeps",
   "ANightAtTheTheatre",
@@ -19,7 +20,7 @@ const QUESTS = [
   "BigChompyBirdHunting", "Biohazard", "BlackKnightsFortress", "BoneVoyage",
   "CabinFever", "ChildrenOfTheSun", "ClientOfKourend", "ClockTower",
   "ColdWar", "Contact", "CooksAssistant", "CorsairCurse",
-  "CrabQuest", "CreatureOfFenkenstrain", "CurrentAffairs", "CurseOfArrav",
+  "CrabQuest", "CreatureOfFenkenstrain", "CurrentAffairs", "CurseOfArrav", "CurseOfTheEmptyLord",
   "DaddysHome",
   "DarknessOfHallowvale", "DeathOnTheIsle", "DeathPlateau", "DeathToTheDorgeshuun",
   // BearYourSoul also searches the Arceuus Library shelves; DepthsOfDespair's active
@@ -116,6 +117,17 @@ module.exports = {
   name: "Quests",
   QUESTS,
   register(api) {
+    if (api.core.WorldDefinition.isMembersWorld()) {
+      const { CAVE_NIGHTSHADE, DEATH_RUNE } = api.core.ItemIdentifiers;
+      api.registerDefinitionSource("ground_items", {
+        name: "watchtower",
+        load: () => [
+          { id: DEATH_RUNE, location: { x: 2500, y: 2967, z: 0 }, amt: 1, respawn: 200 },
+          { id: CAVE_NIGHTSHADE, location: { x: 2528, y: 9415, z: 0 }, amt: 1, respawn: 100 },
+          { id: CAVE_NIGHTSHADE, location: { x: 2530, y: 9462, z: 0 }, amt: 1, respawn: 100 },
+        ],
+      });
+    }
     require("./Equipment.Quests")(api);
     require("./Shops.Quests")(api);
     require("./QuestRuntime").registerQuestWidgets(forPlayers(api));

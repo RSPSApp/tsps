@@ -65,6 +65,7 @@ type Call = [string, ...unknown[]];
     Object.assign(ClientState, { npcAttackOption: 2, playerAttackOption: 2, localPlayerCombatLevel: 126, baseX: 2368, baseY: 3072 });
 
     function overlappingMenu(npcTypeId: number, playerHit: boolean) {
+        const types = { load: (id: number) => id === 50000 ? { ...npcTypes.load(655), id, name: "Demo Goblin" } : npcTypes.load(id) };
         const tileX = 2427, tileY = 3078, mapId = ((tileX >> 6) << 8) | (tileY >> 6);
         const localX = ((tileX & 63) << 7) + 64, localY = ((tileY & 63) << 7) + 64;
         const input = { getInteractionMouseX: () => 100, getInteractionMouseY: () => 100,
@@ -74,7 +75,7 @@ type Call = [string, ...unknown[]];
             camera: { viewMatrix: new Float32Array(16), projectionMatrix: new Float32Array(16), containsScreenPoint: () => true },
             menuOpenedFrame: -100, menuOpen: false, tooltips: true, isPointOverWidget: () => false,
             clientPlugins: { shouldKeepWorldMenuOpen: () => false }, closeMenu() {},
-            hoveredTile: { tileX, tileY, plane: 0 }, npcTypeLoader: npcTypes, varManager: vm.context.varManager,
+            hoveredTile: { tileX, tileY, plane: 0 }, npcTypeLoader: types, varManager: vm.context.varManager,
             controlledPlayerServerId: 1, menuState: new MenuState(), settings: {}, menuActiveSimpleEntries: [],
             npcEcs: { isActive: () => true, isLinked: () => true, getSize: () => 1, getMapId: () => mapId,
                 getX: () => localX, getY: () => localY, getNpcTypeId: () => npcTypeId, getServerId: () => 5,
@@ -89,7 +90,7 @@ type Call = [string, ...unknown[]];
             cachedMenuEntries: [], cachedClientMenuEntries: [], cachedLocIds: new Set(), cachedObjIds: new Set(),
             cachedNpcIds: new Set(), cachedPlayerIds: new Set(), boundToCssEvent: () => ({}),
             computeTileAt: () => ({ tileX, tileY, plane: 0 }), isMouseInUIRegion: () => false,
-            screenToRay: () => ({}), getPlayerRawPlane: () => 0, getEffectiveNpcType: (id: number) => npcTypes.load(id),
+            screenToRay: () => ({}), getPlayerRawPlane: () => 0, getEffectiveNpcType: (id: number) => types.load(id),
             updateInteractHighlightHoverTarget() {}, performWorldEntryAction() {},
             sceneRaycaster: { raycast: () => [{ interactType: InteractType.NPC,
                 interactId: playerHit ? 0x8002 : npcTypeId, npcServerId: 5, npcEcsId: 1,
@@ -100,6 +101,13 @@ type Call = [string, ...unknown[]];
         return client.menuActiveSimpleEntries.filter((entry: any) => entry.option === "Attack");
     }
     try {
+        for (const playerHit of [false, true]) {
+            const attacks = overlappingMenu(50000, playerHit);
+            const goblin = attacks.find((entry: any) => entry.targetType === MenuTargetType.NPC);
+            assert.ok(goblin, `custom NPC menu exists, player hit ${playerHit}`);
+            assert.equal(goblin.targetId, 50000);
+            assert.equal(goblin.actionIndex, 1);
+        }
         for (const id of [5722, 5723, 5724, 5725, 15582, 15583, 15584, 15585]) {
             for (const playerHit of [false, true]) {
                 const attacks = overlappingMenu(id, playerHit);

@@ -23,6 +23,7 @@ const { animation, spam } = Common;
 
 // Wiki: goldsmith gauntlets (or the Smithing or max cape) raise gold bar XP from 22.5 to 56.2.
 const GOLDSMITH_GAUNTLETS_BONUS_XP = 33.7;
+const SMELT_MENU_MODE = 13; // skillmulti Smelt, cache enum 1809
 const SMELT_TITLE = "What would you like to smelt?";
 const LOVAKITE_FURNACE = "Lovakite furnace";
 const NO_ORE_MESSAGE = "You don't have any ore to smelt.";
@@ -158,7 +159,7 @@ function finishSmelt(player, chosen, furnaceId) {
   const extraXp = (outcome.bars - 1) * smeltingXp(player, outcome.secondRecipe ?? recipe);
   player.getSkillManager().addExperiences(skill, smeltingXp(player, recipe) + extraXp);
   if (recipe.retrieveMessage) spam(player, recipe.retrieveMessage);
-  Core.api.emitCustomEvent("smelting:success", { player, skill, itemId: recipe.barId });
+  Core.api.emitCustomEvent("smelting:success", { player, skill, itemId: recipe.barId, furnaceId });
   Common.produced(player, skill, recipe.barId, outcome.bars, smeltingXp(player, recipe) + extraXp, "smelt");
   return true;
 }
@@ -217,6 +218,7 @@ function openMenu(player, entries) {
   const most = Math.max(1, ...entries.map((entry) => entry.most));
   player.getPacketSender().sendCreationMenu(
     new CreationMenu(SMELT_TITLE, [...byItem.keys()], { execute: (itemId, amount) => byItem.get(itemId)?.start(player, amount) }, {
+      mode: SMELT_MENU_MODE,
       maxAmount: Math.min(most, MAX_QUANTITY),
     })
   );

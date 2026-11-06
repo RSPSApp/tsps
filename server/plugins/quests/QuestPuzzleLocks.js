@@ -48,7 +48,7 @@ function directionalLockAmount(solution) {
   return packed * 10 + solution.length;
 }
 
-function createLock(api, group, expected, openInterface, onSolved) {
+function createLock(api, group, expected, openInterface, onSolved, failureMessage = "That doesn't seem to work.") {
   const pending = new WeakMap();
 
   function currentInterface(player) {
@@ -85,7 +85,7 @@ function createLock(api, group, expected, openInterface, onSolved) {
     const interfaceId = currentInterface(player);
     if (interfaceId !== null && interfaceId !== group) return;
     if (!Number.isInteger(amount) || amount !== expected) {
-      player.sendMessage("That doesn't seem to work.");
+      player.sendMessage(failureMessage);
       finish(player, state, false, { removeInterface: true });
       return;
     }
@@ -112,7 +112,8 @@ function createLock(api, group, expected, openInterface, onSolved) {
   return { open, cancel };
 }
 
-function createCombinationLock(api, { digits, datasetRow, onSolved }) {
+/** `failureMessage` is the wrong-code line the content's own source gives, when it differs. */
+function createCombinationLock(api, { digits, datasetRow, onSolved, failureMessage }) {
   if (!Number.isInteger(datasetRow) || datasetRow < 0) {
     throw new Error("combination lock datasetRow must be a non-negative integer");
   }
@@ -129,7 +130,7 @@ function createCombinationLock(api, { digits, datasetRow, onSolved }) {
       1,
       -1,
     ]);
-  }, onSolved);
+  }, onSolved, failureMessage);
 }
 
 function createDirectionalLock(api, { solution, onSolved }) {

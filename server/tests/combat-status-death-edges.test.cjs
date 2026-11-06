@@ -271,8 +271,11 @@ test('the dying event fires during the death animation, before respawning', t =>
   const victim = new Player(null), killer = new Player(null);
   const order = [];
   t.mock.method(victim.getCombat(), 'getKiller', () => killer);
-  t.mock.method(victim, 'getPacketSender', () => ({ sendConfig() {}, sendInterfaceRemoval() {}, sendDestination() {} }));
-  t.mock.method(victim, 'sendMessage', () => {});
+  t.mock.method(victim, 'getPacketSender', () => ({
+    sendConfig() {}, sendInterfaceRemoval() {}, sendDestination() {},
+    sendJingle(id) { order.push('jingle:' + id); },
+  }));
+  t.mock.method(victim, 'sendMessage', message => order.push('message:' + message));
   t.mock.method(victim, 'performAnimation', animation => {
     assert.equal(animation.getId(), 836);
     order.push('animation');
@@ -285,7 +288,47 @@ test('the dying event fires during the death animation, before respawning', t =>
     order.push('dying');
   });
   new PlayerDeathTask(victim).execute();
+  assert.deepEqual(order, ['message:Oh dear, you are dead!', 'jingle:90', 'animation', 'dying']);
+});
+
+test('ordinary death completes four ticks after animation, preserving final lifecycle order', t => {
+  // Local-player deaths in rsprox 426, 1084, 1085 and 2508 all respawn at animation tick + 4.
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { PlayerDeathTask } = require('../dist/game/task/impl/PlayerDeath');
+  const { PluginManager } = require('../dist/plugins/PluginManager');
+  const { GameConstants } = require('../dist/game/GameConstants');
+  const victim = new Player(null);
+  const order = [];
+  const sender = new Proxy({}, { get: () => () => sender });
+  t.mock.method(victim, 'getPacketSender', () => sender);
+  t.mock.method(victim, 'sendMessage', () => {});
+  t.mock.method(victim, 'performAnimation', animation => {
+    assert.equal(animation.getId(), 836);
+    order.push('animation');
+  });
+  t.mock.method(victim, 'resetAttributes', () => order.push('reset'));
+  t.mock.method(victim, 'moveTo', () => order.push('respawn'));
+  t.mock.method(PluginManager, 'emitShouldDropItemsOnDeath', () => false);
+  t.mock.method(PluginManager, 'emitCustomEvent', (name, event) => {
+    if (name === 'player:dying') order.push('dying');
+    if (name === 'player:death-bones') event.allow = false;
+    if (name === 'player:respawn') order.push('respawn-policy');
+  });
+  t.mock.method(PluginManager, 'emitPlayerDefeated', () => order.push('defeated'));
+  t.mock.method(PluginManager, 'emitPlayerDeath', () => { order.push('death'); return false; });
+  t.mock.method(GameConstants.PLAYER_PERSISTENCE, 'requestSave', (_player, reason) => order.push('save:' + reason));
+  const task = new PlayerDeathTask(victim);
+  task.execute();
   assert.deepEqual(order, ['animation', 'dying']);
+  assert.equal(victim.getMovementQueue().isMovementBlocked(), true);
+  assert.equal(victim.isUntargetable(), true);
+  for (let elapsed = 1; elapsed < 4; elapsed++) {
+    task.execute();
+    assert.deepEqual(order, ['animation', 'dying'], 'no completion at animation tick + ' + elapsed);
+  }
+  task.execute();
+  assert.deepEqual(order, ['animation', 'dying', 'reset', 'defeated', 'save:death', 'death',
+    'respawn-policy', 'respawn', 'save:respawn']);
 });
 
 test('attack-started observers run only after permission succeeds, for every combat style', t => {

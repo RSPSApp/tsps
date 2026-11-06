@@ -147,7 +147,7 @@ function processPlayer(fight, player) {
     const amount = Common.randomInt(1, flowers.maxHit);
     fight.at(1, () => {
       if (!player.isRegistered()) return;
-      Common.damage(player, amount);
+      Common.damage(player, amount, fight);
       fight.healShield(amount * 2);
     });
   }

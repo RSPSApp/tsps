@@ -32,11 +32,15 @@ function secondChance(request) {
 
 /** The rock stands until its fourth ore; a rock depleted by anyone else starts its count afresh. */
 function keepRock(request) {
+  // The oozing water's end is no ore: it neither counts toward the four nor clears another miner's count.
+  if (request.water) return;
   if (!withTool(request.player)) {
     // Another miner's last ore really depletes it; the respawned rock is the same object.
     if (!request.handled) mined.delete(request.object);
     return;
   }
+  // A glove save is an additional gather, not one of this relic's four ores.
+  if (request.gloveSaveAdditive) return;
   const count = (mined.get(request.object) ?? 0) + 1;
   if (count < effect.oresPerRock) {
     mined.set(request.object, count);

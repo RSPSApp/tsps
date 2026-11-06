@@ -106,6 +106,8 @@ export class MovementQueue {
     private blockedByDynamicOccupancy = false;
     private routeEvaluated = false;
     private alternativeRoute = false;
+    /** The next queued step may ignore a spell freeze, but no other movement lock. */
+    private forceOneStepThroughFreeze = false;
     private entityPursuit: (() => void) | null = null;
     /**
      * Set when a step toward the head checkpoint was rejected, plus whether an
@@ -213,6 +215,28 @@ export class MovementQueue {
         position.setX(position.getX() + x);
         position.setY(position.getY() + y);
         this.addSteps(position);
+    }
+
+    /**
+     * Queues one collision-checked step through a spell freeze. Mithril seeds use this in OSRS
+     * PvP; stun, duel restrictions, placement and other movement locks still prevent the step.
+     */
+    public walkStepIgnoringFreeze(x: number, y: number): boolean {
+        if (!this.character.isPlayer() || Math.max(Math.abs(x), Math.abs(y)) !== 1
+            || (x !== 0 && y !== 0) || !this.getMobilityIgnoringFreeze().canMove()) {
+            return false;
+        }
+
+        const source = this.character.getLocation();
+        const destination = source.transform(x, y);
+        if (!this.checkDestination(destination) || !this.canWalkTo(destination, source)) {
+            return false;
+        }
+
+        this.reset();
+        this.forceOneStepThroughFreeze = true;
+        this.points.push(new Point(destination, Direction.fromDeltas(x, y)));
+        return true;
     }
 
     /**
@@ -518,7 +542,11 @@ export class MovementQueue {
             return;
         }
 
-        if (!this.getMobility().canMove()) {
+        const forceOneStepThroughFreeze = this.forceOneStepThroughFreeze;
+        this.forceOneStepThroughFreeze = false;
+        if (!(forceOneStepThroughFreeze
+            ? this.getMobilityIgnoringFreeze()
+            : this.getMobility()).canMove()) {
             this.isMoving = false;
             return;
         }
@@ -537,7 +565,7 @@ export class MovementQueue {
         const start = this.character.getLocation();
         let current = start;
         let previous = start;
-        let steps = this.isRunToggled() ? 2 : 1;
+        let steps = forceOneStepThroughFreeze ? 1 : this.isRunToggled() ? 2 : 1;
         let moved = false;
         this.stepBlocked = false;
         this.stepBlockedByEntity = false;
@@ -803,6 +831,7 @@ export class MovementQueue {
     }
 
     public reset(clearDestination = true): MovementQueue {
+        this.forceOneStepThroughFreeze = false;
         this.externalMovementUntil = 0;
         this.runOverride = null;
         this.points.clear();
@@ -929,10 +958,18 @@ export class MovementQueue {
             destination = new Location(destX, destY, this.character.getLocation().getZ());
         }
 
+        // OSRS: a player following a player (not a combat chase) walks onto the tile the
+        // leader just left, so it trails directly behind instead of stepping to its side.
+        const trailsLeader = playerFollowingPlayer && this.character.getCombatFollowing() == null &&
+            destination != null && destination.getDistance(following.getLocation()) === 1;
+        if (trailsLeader && destination.equals(this.character.getLocation())) {
+            return;
+        }
+
         if (
             destination == null ||
             destination.equals(this.character.getLocation()) ||
-            followerDistance > 1
+            (followerDistance > 1 && !trailsLeader)
         ) {
             destination = this.getClosestFollowTile(following) ?? destination;
         }

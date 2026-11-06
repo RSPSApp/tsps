@@ -5,6 +5,7 @@ const REWARDS_ENUM = 708, RETRIEVAL_SCRIPT = 450, SLOT_LIMIT = 228;
 const UNLOCKED_ATTRIBUTE = "holiday-rewards:unlocked";
 const TITLE = "Diango's Holiday Item Retrieval";
 const NO_SPACE = "You don't have enough inventory space to take that.";
+const UNLOCK_MESSAGE = "You've unlocked a holiday item: ";
 const sessions = new WeakMap();
 const HouseRetrieval = require("../skills/construction/Retrieval.Construction");
 const HouseState = require("../skills/construction/StorageState.Construction");
@@ -60,11 +61,45 @@ function unlock(api, request) {
   request.player.setAttribute(UNLOCKED_ATTRIBUTE,[...new Set([...unlocked(request.player),...request.items])]);
   request.accepted=true;
 }
+// Rev 232 recording 3200: wearing or playing with a holiday item you hold but never
+// unlocked registers it with Diango ("Check rank" on the same wreath does not).
+// An item is its own entry; an alternate style counts only when its family holds exactly
+// one entry (the 25th anniversary tabards share a family but are separate entries).
+function catalogueEntry(api, itemId) {
+  const d=data(api);
+  if (!d.entryOf) {
+    const owners=new Map();
+    for (const id of d.rows.values()) for (const member of d.families.get(id)) {
+      if (!owners.has(member)) owners.set(member,new Set());
+      owners.get(member).add(id);
+    }
+    d.entryOf=new Map();
+    for (const [member,entries] of owners) {
+      if (entries.has(member)) d.entryOf.set(member,member);
+      else if (entries.size===1) d.entryOf.set(member,[...entries][0]);
+    }
+  }
+  return d.entryOf.get(itemId) ?? null;
+}
+function used(api, {player, itemId}) {
+  if (!player || !Number.isInteger(itemId)) return;
+  const entry=catalogueEntry(api,itemId);
+  if (entry==null) return;
+  const d=data(api), name=d.names.get(entry);
+  if (unlocked(player).includes(name)) return;
+  player.setAttribute(UNLOCKED_ATTRIBUTE,[...unlocked(player),name]);
+  player.sendMessage(`${UNLOCK_MESSAGE}<col=ef1020>${api.core.CacheDefinitions.getItem(entry).name}</col>`);
+}
+function equipped(api, event) {
+  if (event?.equipped === true) used(api, event);
+}
 function owns(api, player, family, includeInventory=true) {
   const banks=player.getBanks().slice(0,api.core.Bank.BANK_SEARCH_TAB_INDEX);
   const containers=[player.getEquipment(),...banks];
   if(includeInventory)containers.unshift(player.getInventory());
-  return containers.some(container=>container && family.some(id=>container.getAmount(id)>0));
+  // A planted Wintumber tree or scarecrow still belongs to the player (dug up, it comes back).
+  const planted={player,itemIds:[]};api.emitCustomEvent("construction:planted",planted);
+  return family.some(id=>planted.itemIds.includes(id)) || containers.some(container=>container && family.some(id=>container.getAmount(id)>0));
 }
 function masks(api, player) {
   const d=data(api),keys=new Set(unlocked(player)),result=new Array(8).fill(0);
@@ -118,9 +153,14 @@ function logout({player}) {sessions.delete(player);}
 module.exports={name:"HolidayRewards",register(api){
   api.persistAttribute(UNLOCKED_ATTRIBUTE,[]);
   api.persistAttribute(HouseState.HOUSE_ATTRIBUTE,HouseState.defaultHouse());
+  api.persistAttribute(HouseState.DECORATIONS_ATTRIBUTE,{});
   api.onCustomEvent("holiday-rewards:unlock",unlock.bind(null,api));
+  api.onCustomEvent("holiday-rewards:used",used.bind(null,api));
+  api.onCustomEvent("equipment:changed",equipped.bind(null,api));
   api.onCustomEvent("construction:costume-retrieve",HouseRetrieval.retrieve.bind(null,api));
+  api.onCustomEvent("construction:planted",HouseRetrieval.planted.bind(null,api));
   api.onNpcInteraction("Diango",{"Holiday-items":open.bind(null,api)});
+  api.onCustomEvent("holiday-rewards:open",open.bind(null,api));
   api.onInterfaceActionClick(take.bind(null,api));
   api.onCustomEvent("interface:closed",closed.bind(null,api));
   api.onCustomEvent("interface:changed",changed.bind(null,api));

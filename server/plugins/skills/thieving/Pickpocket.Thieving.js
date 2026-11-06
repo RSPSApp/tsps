@@ -229,6 +229,17 @@ function rogueDoubleChance(player) {
 }
 
 /**
+ * Wiki (Gem bag): an open bag takes gems stolen from people too, TzHaar-Hur and Vyre among them.
+ * Transcript:Gem bag gives the find line first, and alone when the bag has no room (`announce`).
+ */
+function storedGems(player, id, amount) {
+  if (!String(core.ItemDefinition.forId(id)?.getName?.() ?? "").startsWith("Uncut ")) return 0;
+  const request = { player, itemId: id, amount, stored: 0, announce: true };
+  pluginApi.emitCustomEvent("storage:gather", request);
+  return request.stored;
+}
+
+/**
  * Hands the loot over: coins as the target's coin pouch; the rogue outfit may double it, and
  * content's `multiplier` (a league fragment's double loot) multiplies it again. Clues are never more.
  * What the inventory has no room for (a doubled pouch's coins, a doubled item) falls to the floor.
@@ -249,7 +260,11 @@ function giveLoot(player, target, loot, random = Math.random, multiplier = 1) {
       continue;
     }
     const total = clue ? amount : amount * times;
-    inventory.forceAdd(player, new core.Item(id, total));
+    const left = total - storedGems(player, id, total);
+    // Wiki (Seed box): "Seeds pickpocketed from Master Farmers will now be directly placed into an open seed box."
+    const request = { player, itemId: id, amount: left, stored: 0 };
+    if (target.key === "master_farmer") pluginApi.emitCustomEvent("seed-box:gather", request);
+    if (left > request.stored) inventory.forceAdd(player, new core.Item(id, left - request.stored));
     given.push({ ...item, amount: total });
   }
   return given;
@@ -377,36 +392,35 @@ function pickpocketTask(player, npc, target, name, event) { return new (class ex
     this.stop();
     const { player, npc, target, name, event } = this;
     if (!player.isRegistered() || !npc.isRegistered() || player.getHitpoints() <= 0) return;
-    // Capture (a hero): with the outcome the player stops tracking the NPC and keeps facing the
-    // tile it stood on, so a walking NPC isn't followed round.
-    if (player.getInteractingMobile?.() === npc) player.setMobileInteraction(null);
-    player.setPositionToFace(npc.getLocation());
     const succeeded = Math.random() < successChance(player, target);
     if (succeeded) succeed(player, npc, target, name);
     else fail(player, npc, target, name);
     // Content may ask for another go ("thieving:done", a league relic that keeps pickpocketing): the same click, a tick later.
     const done = { player, kind: "pickpocket", npc, succeeded, again: false };
     pluginApi.emitCustomEvent("thieving:done", done);
-    // A repeat only while neither has moved: the player on the tile they pickpocketed from, the NPC still within reach.
-    const inReach = event && samePlace(player.getLocation(), event.from) && npc.getLocation().getDistance?.(player.getLocation()) <= Math.max(1, npc.getSize?.() ?? 1);
-    // Keyed by the player's index, as their other actions: walking off (MovementQueue.walkToReset) cancels it; and
-    // checked again when it fires, in case they moved another way.
-    if (done.again && inReach) core.TaskManager.submit(new core.CountdownTask(player.getIndex(), 1, () => {
-      const stillThere = samePlace(player.getLocation(), event.from) && npc.isRegistered()
-        && npc.getLocation().getDistance?.(player.getLocation()) <= Math.max(1, npc.getSize?.() ?? 1);
-      if (stillThere && player.getMovementQueue?.()?.isMovings?.() !== true) pickpocket({ ...event, repeat: true });
-    }));
+    // Leagues VI captures (recs 1104-1106, Larcenist): the player keeps facing the NPC and follows it as it
+    // wanders, with no clicks of their own, an attempt every 2 ticks for hundreds of attempts. The repeat is the
+    // player's action, keyed by their index, so any click (MovementQueue.walkToReset) ends the chain; and only
+    // while the player still tracks this NPC, since a click between the attempt and this outcome (a Walk) has
+    // already cleared that, and this task, not keyed to the player, still resolves.
+    if (done.again && player.getInteractingMobile?.() === npc) {
+      core.TaskManager.submit(new core.CountdownTask(player.getIndex(), 1, () => pickpocketAgain(event)));
+      return;
+    }
+    // Capture (a hero): with the outcome the player stops tracking the NPC and keeps facing the
+    // tile it stood on, so a walking NPC isn't followed round.
+    if (player.getInteractingMobile?.() === npc) player.setMobileInteraction(null);
+    player.setPositionToFace(npc.getLocation());
   }
 })(player, npc, target, name, event); }
 
-/** Where something stands, as plain coordinates. */
-function tile(location) {
-  return { x: location?.getX?.(), y: location?.getY?.(), z: location?.getZ?.() };
-}
-
-function samePlace(location, from) {
-  const here = tile(location);
-  return !!from && here.x !== undefined && here.x === from.x && here.y === from.y && here.z === from.z;
+/**
+ * The next attempt of a repeating pickpocket: walk up to the NPC wherever it has wandered and try
+ * again on arrival (the same tick when one step does it, so the 2-tick cadence holds). Ends when
+ * the NPC is gone or can't be reached (walkToEntity's own checks) or the attempt is refused.
+ */
+function pickpocketAgain(event) {
+  event.player.getMovementQueue().walkToEntity(event.npc, () => pickpocket({ ...event, repeat: true }));
 }
 
 function pickpocket(event) {
@@ -460,7 +474,7 @@ function pickpocket(event) {
   // `chanceBonus` raises the success chance by that percent and `painless` stuns without the damage (a league fragment).
   const tuned = request.chanceBonus > 0 || request.painless ? { ...target, chanceBonus: Math.max(0, request.chanceBonus | 0), painless: request.painless === true } : target;
   const rolled = request.unconscious ? { ...tuned, low: 256, high: 256, coinPouch: null } : request.alwaysSucceeds ? { ...tuned, low: 256, high: 256 } : tuned;
-  core.TaskManager.submit(pickpocketTask(player, npc, rolled, name, { ...event, from: event.from ?? tile(player.getLocation()) }));
+  core.TaskManager.submit(pickpocketTask(player, npc, rolled, name, event));
 }
 
 /** Coins in one pouch of this kind (a range rolls per pouch). */

@@ -72,7 +72,7 @@ test('failed patch actions award no XP', t => {
     assert.equal(Patches.fertilize(f.player, patch, 1, false), false);
     assert.deepEqual(f.xp, []);
 });
-test('planting and harvesting apply the patch reward, including deferred herb planting XP', t => {
+test('all planting XP is deferred to crop health check or final harvest, with patch rewards', t => {
     for (const key of ['MARIGOLD', 'GUAM']) {
         const f = fixture(t), crop = Data.CROPS.get(key);
         const patch = Data.CACHE.patches.find(p => isFalador(p) && p.type === crop.type);
@@ -84,15 +84,14 @@ test('planting and harvesting apply the patch reward, including deferred herb pl
         hooks.onItemOnObject(event);
         ticks(3);
         assert.equal(state.crop, key);
-        if (key === 'GUAM') assert.deepEqual(f.xp, []);
-        else assert.ok(Math.abs(f.xp.at(-1)[1] - crop.plant * 1.1) < 1e-9);
+        assert.deepEqual(f.xp, [], `${key} has no planting XP on planting`);
         Object.assign(state, { status: 'grown', stage: crop.stages, lives: 1, nextAt: Number.MAX_SAFE_INTEGER });
         f.xp.length = 0;
         t.mock.method(core.ObjectDefinition, 'forPlayer', () => ({ getInteractions: () => ['Pick'] }));
         t.mock.method(Math, 'random', () => 0.999999);
         hooks.onObjectInteraction({ ...event, handled: false });
         ticks(3);
-        const expected = (crop.harvest + (key === 'GUAM' ? crop.plant : 0)) * 1.1;
+        const expected = (crop.harvest + crop.plant) * 1.1;
         assert.ok(Math.abs(f.xp.reduce((sum, [, amount]) => sum + amount, 0) - expected) < 1e-9, key);
     }
 });

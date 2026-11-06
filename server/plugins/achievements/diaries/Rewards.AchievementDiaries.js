@@ -29,14 +29,54 @@ function meetsRequirement(player, requirement) {
   return !skill || player.getSkillManager().getCurrentLevel(skill) >= requirement.level;
 }
 
-function grant(player, diary, tier) {
+function grant(player, diary, tier, generation) {
   const inventory = player.getInventory();
-  for (const id of diary.tiers[tier].rewardItems) inventory.adds(id, 1);
+  const items = diary.tiers[tier].rewardItems;
+  if (Progress.tierGeneration(player, diary, tier) !== generation || claimableTier(player, diary) !== tier
+    || !meetsRequirement(player, diary.tiers[tier].requirement)
+    || inventory.getFreeSlots() < items.length
+    || (typeof inventory.getAddableAmount === "function"
+      && items.some((id) => inventory.getAddableAmount(new pluginApi.core.Item(id, 1)) < 1))) {
+    player.sendMessage(inventory.getFreeSlots() < items.length
+      ? `You need ${items.length} free inventory spaces to claim your reward.`
+      : "You can no longer claim this reward.");
+    return false;
+  }
+  for (const id of items) inventory.adds(id, 1);
   Progress.claimTier(player, diary, tier);
+  return true;
+}
+
+function claimedHighestTier(player, diary) {
+  const claimed = Progress.claimedTiers(player, diary);
+  return [...TIERS].reverse().find((tier) => claimed.has(tier)) ?? null;
+}
+
+/** Another copy is handed back only while the player owns none in the inventory, worn or bank. */
+function owns(player, itemId) {
+  const searchTab = pluginApi?.core?.Bank?.BANK_SEARCH_TAB_INDEX;
+  return player.getInventory().contains(itemId)
+    || (player.getEquipment?.().contains?.(itemId) ?? false)
+    || (player.getBanks?.() ?? []).some((bank, tab) => tab !== searchTab && bank?.contains?.(itemId));
+}
+
+function giveAnotherCloak(player, diary) {
+  const tier = claimedHighestTier(player, diary);
+  if (!tier || owns(player, diary.tiers[tier].rewardItems[0])) {
+    player.sendMessage(`You don't need another ${diary.itemNoun} right now.`);
+    return false;
+  }
+  const inventory = player.getInventory();
+  if (inventory.getFreeSlots() < 1) {
+    player.sendMessage("You don't have enough inventory space.");
+    return false;
+  }
+  inventory.adds(diary.tiers[tier].rewardItems[0], 1);
+  return true;
 }
 
 function toSteps(claim, onReward) {
-  return claim.map((step) => step.reward ? { exec: onReward }
+  return claim.map((step) => step.reward ? { exec: onReward, stopOnFalse: true }
     : step.npc !== undefined ? { npc: [step.npc] } : { player: [step.player] });
 }
 
@@ -48,10 +88,12 @@ function talkTo(event) {
   const data = diary.tiers[tier];
   const context = { npcId: definition.getId() };
   const opening = data.claim.find((step) => step.player !== undefined);
+  const generation = Progress.tierGeneration(player, diary, tier);
   if (!meetsRequirement(player, data.requirement)) {
     QuestRuntime.startDialogue(pluginApi, player, context, [
       { player: [opening.player] },
       ...data.requirement.refusal.map((line) => ({ npc: [line] })),
+      { exec: () => QuestRuntime.startTranscript(pluginApi, player, definition.getId(), "Two-pints", "standard-dialogue", (steps) => steps.slice(1)) },
     ]);
     return true;
   }
@@ -59,13 +101,8 @@ function talkTo(event) {
     player.sendMessage(`You need ${data.rewardItems.length} free inventory spaces to claim your reward.`);
     return true;
   }
-  QuestRuntime.startDialogue(pluginApi, player, context, toSteps(data.claim, () => grant(player, diary, tier)));
+  QuestRuntime.startDialogue(pluginApi, player, context, toSteps(data.claim, () => grant(player, diary, tier, generation)));
   return true;
-}
-
-function owns(player, itemId) {
-  return player.getInventory().contains(itemId) || player.getEquipment().contains(itemId) ||
-    player.getBanks().some((bank, tab) => tab !== pluginApi.core.Bank.BANK_SEARCH_TAB_INDEX && bank?.contains?.(itemId));
 }
 
 /** "<NPC> gives you another ...": the highest claimed tier's item, when none is owned. */
@@ -74,18 +111,10 @@ function reclaim(action) {
   const diary = BY_NPC.get(action.definition?.getName?.());
   if (!diary) return;
   const { player } = action;
-  const claimed = Progress.claimedTiers(player, diary);
-  const items = TIERS.filter((tier) => claimed.has(tier)).map((tier) => diary.tiers[tier].rewardItems[0]);
   action.handled = true;
-  if (items.length === 0 || items.some((id) => owns(player, id))) {
-    player.sendMessage(`You don't need another ${diary.itemNoun} right now.`);
+  if (!giveAnotherCloak(player, diary)) {
     return;
   }
-  if (player.getInventory().getFreeSlots() < 1) {
-    player.sendMessage("You don't have enough inventory space.");
-    return;
-  }
-  player.getInventory().adds(items.at(-1), 1);
   player.sendMessage(String(action.text));
 }
 

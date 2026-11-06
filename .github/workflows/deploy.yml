@@ -3,7 +3,7 @@ name: Deploy
 # Every merge to main deploys the browser host (/host), the game client (/play) and
 # World 1 from the same commit, so all three speak the same protocol.
 # The build job runs repo code without deploy secrets; the deploy job holds them and
-# runs only this file and .github/scripts/ftp-upload.mjs.
+# runs only the deployment scripts under .github/scripts/.
 on:
     push:
         branches: [main]
@@ -45,7 +45,9 @@ jobs:
                   (cd tsps/client && yarn install --immutable)
                   (cd rsps-website/host && corepack yarn@1.22.22 install --frozen-lockfile)
             - name: Test cache publishing
-              run: node --test tsps/server/tests/ensure-cache.test.cjs
+              run: |
+                  node --test tsps/server/tests/ensure-cache.test.cjs
+                  node --test tsps/.github/scripts/ftp-upload.test.mjs tsps/.github/scripts/web-deploy.test.mjs
             - name: Build host
               working-directory: rsps-website/host
               run: |
@@ -57,21 +59,19 @@ jobs:
               working-directory: tsps/client
               # CRA fails the build on warnings when CI is set.
               run: CI=false corepack yarn run build
+            - name: Prepare web deployment
+              run: node tsps/.github/scripts/web-deploy.mjs prepare rsps-website/host/build tsps/client/build web "$GITHUB_SHA" "$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
             - uses: actions/upload-artifact@v4
               with:
-                  name: host
-                  path: rsps-website/host/build
-                  retention-days: 1
-            - uses: actions/upload-artifact@v4
-              with:
-                  name: client
-                  path: tsps/client/build
+                  name: web
+                  path: web
+                  include-hidden-files: true
                   retention-days: 1
 
     deploy:
         needs: build
         runs-on: ubuntu-latest
-        # Holds the FTP and World 1 secrets; restricted to main in the environment settings.
+        # Holds the restricted World 1 deployment key; restricted to main in the environment settings.
         environment: production
         steps:
             - uses: actions/checkout@v4
@@ -84,47 +84,13 @@ jobs:
             - uses: actions/setup-node@v4
               with:
                   node-version: 22
-            - run: npm install --prefix .github/scripts --no-save --ignore-scripts basic-ftp@6.2.1
             - uses: actions/download-artifact@v4
               with:
-                  path: dist
-            - name: Upload host and client
-              env:
-                  FTP_HOST: ${{ secrets.FTP_HOST }}
-                  FTP_PORT: ${{ secrets.FTP_PORT }}
-                  FTP_USER: ${{ secrets.FTP_USER }}
-                  FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
-                  FTP_TLS_SERVERNAME: ${{ secrets.FTP_TLS_SERVERNAME }}
-                  FTP_REMOTE_DIR: ${{ secrets.FTP_REMOTE_DIR }}
-              run: |
-                  node .github/scripts/ftp-upload.mjs dist/host "$FTP_REMOTE_DIR"
-                  node .github/scripts/ftp-upload.mjs dist/client /play
-            # /usr/local/bin/tsps-deploy is installed from .github/scripts/deploy-world1.sh.
-            # It also publishes the full client cache locally on the VPS.
-            - name: Deploy World 1
+                  name: web
+                  path: web
+            # The VPS helper verifies every staged file, publishes the web files,
+            # backs up/restarts World 1, checks the public cache, then announces the release.
+            - name: Upload changed files over SSH and deploy
               env:
                   VPS_DEPLOY_KEY: ${{ secrets.VPS_DEPLOY_KEY }}
-              run: |
-                  install -m 700 -d ~/.ssh
-                  printf '%s\n' "$VPS_DEPLOY_KEY" > ~/.ssh/world1 && chmod 600 ~/.ssh/world1
-                  echo '192.209.62.27 ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCoB0OlJIGSQYZiN9md4kUJSSdLFzEdjBjkpQSQlbdvZ3HSK1u91SjmexudbuCIjylFnafxjqWsihpz85cZCYnkcwf1NpMEvqhVUCkO4WTqT5bAaPMM7QLyL3VcOMDFqDFC30Gub1rFOdxty9hun22uiqwaizrM2dBJP7DwC2QTz9tA9A1Vc0GW9OxeUluNGpdOixtcotVBYZccHgRQpUjN2FOKA5CPdFPMuRpmTMETCPUp3iBiQlY9P6YTKULhd8NPUC95wFHR7MoMrwgJsx/kE3kmUzaLsIq8HKs9hFmlzKR2o12pxzbuF+FmrvUwBsLKC64AWVKsKNz2LXjvEV9CZY6BOJ6qRFu8qsN1AmVr+/q0X4EeaOQ+9PxQMaHnpI7y85bqxbpgKMkoxwmnWOB1GJsMrN3eijozk+iK04NEQOfsrH4npRmvkudQ7ActxtvDXzKv0RCUE6dj9u4gxHjQKncIgcczPGKskuymFMHfaVNZppiGdD0f8CFA5uIIYJE=' > ~/.ssh/known_hosts
-                  ssh -i ~/.ssh/world1 -o IdentitiesOnly=yes -o BatchMode=yes root@192.209.62.27 "$GITHUB_SHA"
-            - name: Verify public client cache
-              run: |
-                  node --input-type=module <<'JS'
-                  import assert from 'node:assert/strict';
-                  import { readFileSync } from 'node:fs';
-                  const target = readFileSync('server/target.txt', 'utf8').trim();
-                  const base = 'https://rsps.app/play/caches/';
-                  const manifest = await fetch(base + 'caches.json', { cache: 'no-store' });
-                  assert.ok(manifest.ok, `Cache manifest returned ${manifest.status}`);
-                  const entries = await manifest.json();
-                  assert.equal(entries[0]?.name, target, 'Public client cache does not match server/target.txt');
-                  for (const file of ['main_file_cache.dat2', 'main_file_cache.idx255']) {
-                      const response = await fetch(`${base}${target}/${file}`, { headers: { Range: 'bytes=0-0' } });
-                      assert.equal(response.status, 206, `${file} is missing or does not support range requests`);
-                      assert.match(response.headers.get('content-range') ?? '', /^bytes 0-0\/[1-9]\d*$/);
-                      assert.equal((await response.arrayBuffer()).byteLength, 1);
-                  }
-                  console.log(`Public client cache verified: ${target}`);
-                  JS
+              run: sh .github/scripts/deploy-web.sh web "$GITHUB_SHA" "$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"

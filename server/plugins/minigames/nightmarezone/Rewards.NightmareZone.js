@@ -190,6 +190,7 @@ function upgrades({ player, slot, opId }) {
   const meta = item.getMeta?.();
   inventory.setItem(at, new Common.core.Item(imbued, 1, meta ? { ...meta } : null));
   inventory.refreshItems?.();
+  Common.api.emitCustomEvent("nightmare-zone:imbued", { player, baseItemId: id, imbuedItemId: imbued });
   player.sendMessage(Common.message("imbued", { name }));
   return true;
 }

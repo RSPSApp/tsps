@@ -284,10 +284,12 @@ module.exports = function registerLostCityQuest(api) {
     }
   }
 
-  function handleStartHook({ player, npcId, hook }) {
+  function handleStartHook(event) {
+    const { player, npcId, hook } = event;
     if (npcId !== WARRIOR_NPC_ID || hook !== START_HOOK) return;
     if (quest.getStage(player) < STAGE_STARTED) {
       if (missingSkillRequirements(player).length > 0) {
+        event.end = true;
         notifySkillRequirements(player);
         return;
       }

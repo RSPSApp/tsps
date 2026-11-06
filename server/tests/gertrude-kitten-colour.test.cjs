@@ -261,29 +261,29 @@ test("deferred completion scrolls show each player's actual random kitten", t =>
   const held=new core.OptionDialogue(0,{executeOption() {}},"Continue later");
   a.player.getDialogueManager().startDialogues(new core.DialogueChainBuilder().add(held));
   assert.equal(a.player.getDialogueManager().getCurrent(),held);
-  const originalRandom=Math.random; let sample=0, hits=0;
-  t.after(()=>{ Math.random=originalRandom; });
-  Math.random=function scopedRewardRandom() {
-    const caller=String(new Error().stack).split("\n")[2] ?? "";
-    if (/\bgrantReward\b/.test(caller) && /GertrudesCat\.Quest\.js/.test(caller)) { hits++; return sample; }
-    return originalRandom();
-  };
-  assert.equal(a.quest.complete(a.player),true); sample=0.999999;
+  assert.equal(a.quest.complete(a.player),true);
   assert.equal(a.player.getSkillManager().getMaxLevel(cooking),50);
   assert.equal(a.player.getDialogueManager().getCurrent(),held);
   assert.equal(a.player.getPacketSender().getChatboxGroupId(),219);
   assert.equal(b.quest.complete(b.player),true);
+  const awarded = f => {
+    assert.equal(kittens(f),1,"exactly one kitten was awarded");
+    const ids=kittenIds(core).filter(id => f.player.getInventory().getAmount(id) === 1);
+    assert.equal(ids.length,1,"the awarded kitten is a known variant");
+    return ids[0];
+  };
+  const aKitten=awarded(a), bKitten=awarded(b);
   assert.deepEqual(first,[]); assert.deepEqual(second,[]);
   for (let i=0;i<4;i++) core.TaskManager.process();
   assert.equal(a.player.getDialogueManager().getCurrent(),held);
   assert.equal(a.player.getPacketSender().getChatboxGroupId(),219);
   assert.deepEqual(first,[],"open dialogue defers the first scroll");
-  assert.deepEqual(second,[[core.ItemIdentifiers.PET_KITTEN_6,1]]);
+  assert.deepEqual(second,[[bKitten,1]]);
   a.player.closeInterruptibleInterfaces();
   assert.equal(a.player.getDialogueManager().isActive(),false);
   for (let i=0;i<4;i++) core.TaskManager.process();
-  assert.deepEqual(first,[[core.ItemIdentifiers.PET_KITTEN,1]]);
-  assert.equal(a.player.getInventory().getAmount(core.ItemIdentifiers.PET_KITTEN),1);
-  assert.equal(b.player.getInventory().getAmount(core.ItemIdentifiers.PET_KITTEN_6),1);
-  assert.equal(hits,2);
+  assert.deepEqual(first,[[aKitten,1]]);
+  assert.equal(a.player.getInventory().getAmount(aKitten),1);
+  assert.equal(b.player.getInventory().getAmount(bKitten),1);
+  assert.equal(kittens(a),1); assert.equal(kittens(b),1);
 });

@@ -8,6 +8,8 @@
  * like to add? (0 - N)", then show an objectbox with the charged circlet. Uncharge asks to
  * confirm first. Worn, its charges show in varbit buff_water_circlet_charges.
  */
+const { restricted, plainAmount, takePlain, PRESET_TEXT } = require("./PoweredStaff");
+
 const MAX_CHARGES = 500000;
 const RUNES_PER_CHARGE = 5;
 const CHARGE_META_KEY = "circlet-of-water:charges";
@@ -62,7 +64,12 @@ function statement(player, text) {
 /** Captures (rsprox): the count prompt, then an objectbox with the charged circlet. */
 function promptCharge(player, circlet) {
   const inventory = player.getInventory();
-  const most = Math.min(MAX_CHARGES - charges(circlet), Math.floor(inventory.getAmount(waterRuneId) / RUNES_PER_CHARGE));
+  // Only plain water runes pay: Uncharge refunds plain runes, so a preset copy would come back tradeable.
+  const most = Math.min(MAX_CHARGES - charges(circlet), Math.floor(plainAmount(inventory, waterRuneId) / RUNES_PER_CHARGE));
+  if (most <= 0 && inventory.getAmount(waterRuneId) >= RUNES_PER_CHARGE) {
+    player.sendMessage(PRESET_TEXT);
+    return;
+  }
   if (most <= 0) {
     statement(player, "You need some water runes to charge your circlet.");
     return;
@@ -72,9 +79,9 @@ function promptCharge(player, circlet) {
       if (!inventory.getItems().includes(circlet)) return;
       const before = charges(circlet);
       const added = Math.min(Math.floor(Number(amount)), MAX_CHARGES - before,
-        Math.floor(inventory.getAmount(waterRuneId) / RUNES_PER_CHARGE));
+        Math.floor(plainAmount(inventory, waterRuneId) / RUNES_PER_CHARGE));
       if (!(added > 0)) return;
-      inventory.deleteNumber(waterRuneId, added * RUNES_PER_CHARGE);
+      takePlain(inventory, waterRuneId, added * RUNES_PER_CHARGE);
       setCharges(circlet, before + added);
       inventory.refreshItems();
       itemStatement(player, circletId, before > 0
@@ -91,6 +98,10 @@ function charge({ player, item }) {
 }
 
 function chargeWithRunes(event) {
+  if (restricted(isCirclet(event.usedItemId) ? event.usedWithItem : event.usedItem)) {
+    event.player.sendMessage(PRESET_TEXT);
+    return true;
+  }
   promptCharge(event.player, isCirclet(event.usedItemId) ? event.usedItem : event.usedWithItem);
   return true;
 }

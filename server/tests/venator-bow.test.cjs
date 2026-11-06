@@ -236,7 +236,7 @@ test('combining Venator shards conserves the input when the bow cannot fit', asy
     }
     assert.ok(Number.isInteger(combineOp), 'Combine resolves from the actual inventory definition');
     let index = 6400;
-    for (const mode of ['room', 'consumed-slot', 'full-surplus', 'decline', 'insufficient']) {
+    for (const mode of ['room', 'consumed-slot', 'split-consumed-slot', 'split-full-surplus', 'full-surplus', 'decline', 'insufficient']) {
         await t.test(mode, async (t) => {
             const channel = {
                 kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true,
@@ -273,7 +273,16 @@ test('combining Venator shards conserves the input when the bow cannot fit', asy
                     .reduce((n, ground) => n + ground.getItem().getAmount(), 0);
             const snapshot = () => ({ shards: owned(shard), bows: owned(bow), free: inv.getFreeSlots() });
             const initial = mode === 'insufficient' ? 4 : mode === 'consumed-slot' ? 5 : 10;
-            inv.add(new native.Item(shard, initial), false);
+            if (mode.startsWith('split-')) {
+                const first = mode === 'split-consumed-slot' ? 3 : 7;
+                inv.add(new native.Item(shard, first), false);
+                const other = new native.Item(shard, initial - first);
+                other.setMetaValue('test:separate-stack', true);
+                inv.add(other, false);
+                assert.equal(inv.getItems().filter(item => item.getId() === shard).length, 2);
+            } else {
+                inv.add(new native.Item(shard, initial), false);
+            }
             const slots = mode === 'room' ? 1 : 0;
             while (inv.getFreeSlots() > slots) inv.add(new native.Item(ids.RAKE), false);
             assert.equal(inv.getFreeSlots(), slots);
@@ -301,7 +310,7 @@ test('combining Venator shards conserves the input when the bow cannot fit', asy
             const details = JSON.stringify({ mode, before, after });
             assert.equal(after.shards + 5 * after.bows, before.shards + 5 * before.bows,
                 `five shards or one bow must remain owned: ${details}`);
-            const success = mode === 'room' || mode === 'consumed-slot';
+            const success = mode === 'room' || mode === 'consumed-slot' || mode === 'split-consumed-slot';
             assert.equal(after.shards, initial - (success ? 5 : 0), details);
             assert.equal(after.bows, success ? 1 : 0, details);
         });

@@ -1,11 +1,14 @@
 "use strict";
 
+const { hasQuestJournal, openQuestJournal } = require("../quests/QuestRuntime");
+
 /**
  * The skill guide (skill_guide_v2, interface 860), as live OSRS opens it (rsprox captures, see
  * docs/skill-guide.md): "View <skill> guide" on a Skills tab stat opens the guide in the
  * floater, makes its tabs clickable and runs skill_guide_v2_init with the guide's number for
  * that skill. The guide's own scripts draw it and switch its tabs; the server only opens,
- * re-opens (a link to another skill's guide) and closes it.
+ * re-opens (a link to another skill's guide) and closes it, and opens a quest's journal from
+ * the Quest XP tab.
  *
  * Before opening, a click is offered to other plugins as `skills:stat-clicked` (payload
  * { player, childId, handled }): SetSkillLevel claims it on PvP worlds for its level prompt.
@@ -19,6 +22,7 @@ const VIEW_GUIDE_OP = 2;
 
 const GUIDE_CLOSE = 4;
 const GUIDE_TABS = 7;
+const GUIDE_QUEST_LINK = 17;
 const GUIDE_SKILL_LINK = 18;
 const GUIDE_LIST = 21;
 const TAB_SLOTS = 200;
@@ -66,6 +70,20 @@ function followSkillLink(event) {
   openGuide(event.player, guideSkill);
 }
 
+/**
+ * "View-journal" on a Quest XP row: cache script 9189 sends the quest table row's id column as
+ * the trigger's one int. Live OSRS closes the guide and opens that quest's journal, as the quest
+ * list's "Read journal" does.
+ */
+function viewQuestJournal(event) {
+  if (!event.scriptTrigger) return;
+  const questId = readTriggerInt(event.argsData);
+  if (!hasQuestJournal(questId)) return;
+  event.handled = true;
+  event.player.getPacketSender().closeInterface(GUIDE);
+  openQuestJournal(event.player, questId);
+}
+
 /** if_triggeroplocal arguments: ints as zigzag varints. */
 function readTriggerInt(argsData) {
   if (!argsData?.length) return undefined;
@@ -90,6 +108,7 @@ function onInterfaceClick(event) {
   if (groupId === STATS) viewGuide(event);
   else if (groupId === GUIDE && childId === GUIDE_CLOSE) closeGuide(event);
   else if (groupId === GUIDE && childId === GUIDE_SKILL_LINK) followSkillLink(event);
+  else if (groupId === GUIDE && childId === GUIDE_QUEST_LINK) viewQuestJournal(event);
 }
 
 module.exports = {

@@ -54,11 +54,12 @@ function triggerInt(value) {
   return Buffer.from(bytes);
 }
 
-test("the components are the cache's: the Skills tab's stats and the guide's close, tabs, list and skill link", () => {
+test("the components are the cache's: the Skills tab's stats and the guide's close, tabs, list, quest and skill links", () => {
   const stats = interfaces.get(320).components;
   const guide = interfaces.get(GUIDE);
   assert.equal(guide.name, "skill_guide_v2");
-  assert.deepEqual([4, 7, 18, 21].map((child) => guide.components.get(child)), ["close", "tabs", "skill_guide_button_trigger", "list"]);
+  assert.deepEqual([4, 7, 17, 18, 21].map((child) => guide.components.get(child)),
+    ["close", "tabs", "quest_journal_button_trigger", "skill_guide_button_trigger", "list"]);
   assert.equal(GUIDE_SKILL_BY_STAT.size, 24);
   for (const child of GUIDE_SKILL_BY_STAT.keys()) assert.match(stats.get(child), /^[a-z]+$/, `stats component ${child}`);
   assert.equal(new Set(GUIDE_SKILL_BY_STAT.values()).size, 24, "one guide number per skill");
@@ -104,4 +105,62 @@ test("the guide's skill link reopens it on that skill, and its close button clos
   assert.deepEqual(account.sent, []);
   assert.equal(click(account, GUIDE, 4, { action: 1 }).handled, true);
   assert.deepEqual(account.sent, [["closeInterface", GUIDE]]);
+});
+
+/** A real player whose packet sender records what opens and what closes. */
+function questPlayer(t, stage) {
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const { PlayerSession } = require("../dist/net/PlayerSession");
+  const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+  const account = new Player(new PlayerSession(channel));
+  account.setUsername("skillguidequest");
+  account.setAttribute("quest.pirates_treasure.stage", stage);
+  const sender = account.getPacketSender();
+  const sent = [];
+  for (const method of ["sendSubInterface", "closeInterface", "sendConfig"]) {
+    const original = sender[method].bind(sender);
+    t.mock.method(sender, method, (...args) => { sent.push([method, ...args]); return original(...args); });
+  }
+  return { account, sent };
+}
+
+test("View-journal on a Quest XP row closes the guide and opens that quest's journal, as the quest list does", (t) => {
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  const { questRowById } = require("../plugins/quests/QuestList.QuestRuntime");
+  require("../plugins/quests/quests/PiratesTreasure.Quest")(PluginManager.createApi("SkillGuideQuestTest"));
+  const cache = PluginManager.getCoreApi().CacheDefinitions;
+  const rowNamed = (name) => [...require("../plugins/quests/QuestList.QuestRuntime").metadata(cache).values()].find((row) => row.displayname?.[0] === name);
+  const pirates = rowNamed("Pirate's Treasure");
+  const cooks = rowNamed("Cook's Assistant");
+  const waterfall = rowNamed("Waterfall Quest");
+  assert.equal(pirates.id[0], 16);
+  assert.equal(questRowById(pirates.id[0], cache), pirates, "the trigger int is the quest table's id column");
+  const LATEST_QUEST_JOURNAL = 3679;
+
+  for (const [stage, group] of [[1, 119], [0, 782]]) {
+    const { account, sent } = questPlayer(t, stage);
+    account.getPacketSender().sendSubInterface(FLOATER_UID, GUIDE, 1);
+    sent.length = 0;
+    assert.equal(click(account, GUIDE, 17, { scriptTrigger: true, argsData: triggerInt(pirates.id[0]) }).handled, true);
+    assert.deepEqual(sent[0], ["closeInterface", GUIDE], "the guide closes first");
+    assert.deepEqual(sent.find(([method, id]) => method === "sendConfig" && id === LATEST_QUEST_JOURNAL), ["sendConfig", LATEST_QUEST_JOURNAL, pirates.rowId]);
+    assert.deepEqual(sent.filter(([method]) => method === "sendSubInterface").map((args) => args.slice(1, 3)), [[FLOATER_UID, group]],
+      stage ? "a started quest opens its journal" : "a quest not started opens its overview");
+    assert.equal(account.getAttribute("quest.pirates_treasure.stage"), stage, "viewing changes no progress");
+  }
+
+  // A quest tsps doesn't define but has start text for opens its overview, as in the quest list.
+  const cooksPlayer = questPlayer(t, 0);
+  assert.equal(click(cooksPlayer.account, GUIDE, 17, { scriptTrigger: true, argsData: triggerInt(cooks.id[0]) }).handled, true);
+  assert.deepEqual(cooksPlayer.sent.filter(([method]) => method === "sendSubInterface").map((args) => args[2]), [782]);
+
+  // Nothing to open (no quest, no start text, an id no quest has, a plain click): the guide stays.
+  const { account, sent } = questPlayer(t, 0);
+  for (const extra of [
+    { scriptTrigger: true, argsData: triggerInt(waterfall.id[0]) },
+    { scriptTrigger: true, argsData: triggerInt(65000) },
+    { scriptTrigger: true },
+    { action: 1 },
+  ]) assert.equal(click(account, GUIDE, 17, extra).handled, false);
+  assert.deepEqual(sent, []);
 });

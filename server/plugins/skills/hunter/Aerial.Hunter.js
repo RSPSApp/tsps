@@ -74,7 +74,10 @@ function fish({ player, npc, npcId }) {
       const boost = { player, vessel: "bottle", tier: tier.toLowerCase(), multiplier: 1 };
       H.api.emitCustomEvent("treasure-trails:vessel-chance", boost);
       if (boost.allowed === false) continue;
-      const denominator = Math.max(1, Math.floor(636833 / (100 + level(player,H.core.Skill.FISHING)) * modifier / (boost.multiplier > 1 ? boost.multiplier : 1)));
+      const achievement = { player, tier: tier.toLowerCase(), currentThresholdMet: false };
+      if (tier !== "BEGINNER") H.api.emitCustomEvent("combat-achievements:tier", achievement);
+      const base = achievement.currentThresholdMet === true ? Math.floor(636833 * 95 / 100) : 636833;
+      const denominator = Math.max(1, Math.floor(base / (100 + level(player,H.core.Skill.FISHING)) * modifier / (boost.multiplier > 1 ? boost.multiplier : 1)));
       if (roll(1,denominator) !== 1) continue;
       const id = I[`${require("./Context.Hunter").questComplete(player,"x_marks_the_spot") ? "SCROLL_BOX" : "CLUE_BOTTLE"}_${tier}_`];
       if (!exchange(player,[],[[id,1]])) require("./Context.Hunter").drop(player,[[id,1]],player.getLocation());

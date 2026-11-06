@@ -204,6 +204,15 @@ granite 5kg 6/64, 2kg 8/75, 500g 16/100.
 
 Rune essence rocks succeed on every roll (Wiki https://oldschool.runescape.wiki/w/Pure_essence, Mod Ash).
 
+## Clue geodes
+
+[Clue geode rates](https://oldschool.runescape.wiki/w/Clue_geode) use the rock's
+base, the visible Mining level and each eligible clue tier. The matching Combat
+Achievement reward applies its 5% bonus before the level and tier calculations;
+beginner geodes do not receive a tier reward. The documented floor order is also
+used without a Combat Achievement reward. The present ring-of-wealth effect for
+geodes remains unverified here.
+
 ## Mining gloves
 
 On members worlds, the equipped gloves keep eligible rocks standing for extra successful gathers before depletion.

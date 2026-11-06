@@ -196,7 +196,7 @@ function sellTops(request) {
   const coins = tops * PYRAMID_TOP_COINS;
   if (!paymentFits(player.getInventory(), tops, coins)) {
     request.end = true;
-    player.sendMessage("You don't have enough inventory space.");
+    player.sendMessage("You do not have enough room to carry all of those coins.");
     return;
   }
   player.getInventory().deleteNumber(Common.ids().item.pyramidTop, tops);

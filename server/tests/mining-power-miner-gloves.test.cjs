@@ -11,13 +11,11 @@ const {ClientConnection} = require('../dist/net/NetworkBuilder');
 let core, PlayerSave, next = 1250;
 before(async () => { await CachePipeline.initialize(path.resolve(__dirname,'..')); PM.loadFromDirectory(path.resolve(__dirname,'../plugins')); core=PM.getCoreApi(); ({PlayerSave}=require('../dist/game/entity/impl/player/persistence/PlayerSave')); core.RegionManager.init(); core.RegionManager.loadMapFiles(3222,3218); core.RegionManager.loadMapFiles(2611,3295); PM.emitServerStartup({}); });
 after(() => PM.emitServerShutdown({}));
-const item = name => core.CacheDefinitions.getObjId(name);
-const npcId = name => core.CacheDefinitions.getNpcId(name);
 
 
 function actor(t) {
   const channel={kind:'test',remoteAddress:'127.0.0.1',isOpen:()=>true,send:()=>true,close(){},onData(){},onError(){},onClose(){}};
-  const p=new Player(new PlayerSession(channel)); p.setIndex(next++); p.setUsername('golempriority'+next); p.setRegistered(true); p.setLocation(new core.Location(3222,3218,0)); p.needsPlacement=false;
+  const p=new Player(new PlayerSession(channel)); p.setIndex(next++); p.setUsername('pwrminer'+next); p.setRegistered(true); p.setLocation(new core.Location(3222,3218,0)); p.needsPlacement=false;
   const c=new ClientConnection(channel); c.player=p;
   t.after(()=>{PM.emitPlayerLogout({player:p,username:p.getUsername()});p.setRegistered(false);core.TaskManager.cancelTasks(p.getIndex());for(const n of [...core.World.getNpcs()])if(n?.getOwner?.()===p)core.World.getNpcs().remove(n);});
   return {p,c};
@@ -109,6 +107,9 @@ for (const [label, relic, gloves, total, amethyst] of [
   assert.equal(task.activeSessions.size, 0);
   const execute = task.execute.bind(task), levels = [], getLevel = skills.getCurrentLevel.bind(skills);
   let yieldDraws = 0;
+  // These checks rely on Node's unminified stack names and fail if they drift.
+  // Deliberately observe the level read inside rollAttempt, not unrelated level queries.
+  // Keep this frame name aligned with Mining.plugin.js when that function is renamed.
   t.mock.method(skills,'getCurrentLevel', skill => {
     const level = getLevel(skill);
     if (skill === core.Skill.MINING && /\bat rollAttempt \(/.test(new Error().stack)) levels.push(level);
@@ -118,6 +119,8 @@ for (const [label, relic, gloves, total, amethyst] of [
     const saved = Math.random;
     try {
       Math.random = () => {
+        // Count the direct rockHolds yield draw, excluding other random consumers.
+        // Keep this frame name aligned with Mining.plugin.js if it is renamed.
         const caller = new Error().stack.split('\n')[2] ?? '';
         if (amethyst && /\bat rockHolds \(/.test(caller)) yieldDraws++;
         return 0.01;

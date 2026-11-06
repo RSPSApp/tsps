@@ -36,9 +36,10 @@ const MAX_PLANE = 3;
 function loadDeclaredLinks() {
   const data = require("./data/climb-links.json");
   const links = new Map();
-  for (const { up, down, landing } of data.pairs) {
+  // `landing` is where climbing up lands, `downLanding` where climbing down does.
+  for (const { up, down, landing, downLanding } of data.pairs) {
     links.set(`${up.id}:${up.x},${up.y},${up.z}`, { direction: UP, id: down.id, x: down.x, y: down.y, z: down.z, landing: landing ?? null });
-    links.set(`${down.id}:${down.x},${down.y},${down.z}`, { direction: DOWN, id: up.id, x: up.x, y: up.y, z: up.z, landing: null });
+    links.set(`${down.id}:${down.x},${down.y},${down.z}`, { direction: DOWN, id: up.id, x: up.x, y: up.y, z: up.z, landing: downLanding ?? null });
   }
   return links;
 }

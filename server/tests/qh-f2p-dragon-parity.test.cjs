@@ -894,3 +894,17 @@ test('Crandor diary route credits climbing from the dungeon to the surface only'
   assert.ok(p.getLocation().getY() >= 6400);
   assert.equal(arrivals.length, 1);
 });
+
+test("the Lady Lumbridge's ladder leads down into the hold, where Quest Helper's repair step looks (rev242 tick 2917)", () => {
+  RegionManager.loadMapFiles(3049, 3208, true);
+  RegionManager.loadMapFiles(3049, 9640, true);
+  const down = MapObjects.get(2590, new core.Location(3049, 3208, 1), null);
+  const up = MapObjects.get(2592, new core.Location(3049, 9640, 1), null);
+  assert.ok(down && up, 'both ladders are on the map');
+  const hold = ClimbLinks.destination(down, ClimbLinks.DOWN, new core.Location(3048, 3208, 1));
+  assert.deepEqual([hold.getX(), hold.getY(), hold.getZ()], [3048, 9640, 1], 'the hold, not the dock under the ship');
+  // Quest Helper's shipHull zone: 3041-3050, 9639-9641, plane 1.
+  assert.ok(hold.getX() >= 3041 && hold.getX() <= 3050 && hold.getY() >= 9639 && hold.getY() <= 9641 && hold.getZ() === 1);
+  const deck = ClimbLinks.destination(up, ClimbLinks.UP, hold);
+  assert.deepEqual([deck.getX(), deck.getY(), deck.getZ()], [3048, 3208, 1], 'back up on the deck');
+});

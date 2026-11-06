@@ -15,6 +15,10 @@ export class NullPlayerPersistence extends PlayerPersistence {
     return false;
   }
 
+  async delete(_username: string): Promise<void> {
+    // nothing is stored
+  }
+
   async encryptPassword(plainPassword: string): Promise<string> {
     return plainPassword;
   }

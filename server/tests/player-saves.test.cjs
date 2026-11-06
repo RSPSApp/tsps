@@ -446,3 +446,78 @@ test("legacy combat style fields resolve uniquely within every weapon family", (
     }
   }
 });
+
+test("deleting a save removes the row, keeps its history under a deleted key, and frees the name", async () => {
+  const p = player("Doomed");
+  setGold(p, 1);
+  persistence.save(p, "save");
+  setGold(p, 2);
+  persistence.save(p, "logout");
+  await persistence.flush();
+  await persistence.delete("Doomed");
+  assert.equal(persistence.exists("Doomed"), false);
+  assert.equal(persistence.load("Doomed"), null);
+  assert.deepEqual(await snapshots("Doomed"), []);
+  const kept = persistence.database.prepare("SELECT username, reason FROM player_save_history WHERE username LIKE 'deleted:%:doomed' ORDER BY id").all();
+  assert.equal(kept.length, 2, "every older copy was re-keyed");
+  // The final copy equals the newest one already recorded, so history skips a duplicate.
+  assert.equal(kept.at(-1).reason, "logout");
+  const fresh = player("Doomed");
+  setGold(fresh, 9);
+  persistence.save(fresh, "fresh");
+  assert.deepEqual((await snapshots("Doomed")).map((s) => s.reason), ["fresh"]);
+  assert.equal(await savedGold("Doomed"), 9);
+});
+
+test("deleting a save records an unrecorded final copy as character-delete", async () => {
+  const p = player("Doomed Two");
+  setGold(p, 1);
+  persistence.save(p, "save");
+  await persistence.flush();
+  persistence.database.prepare("DELETE FROM player_save_history WHERE username = 'doomed_two'").run();
+  await persistence.delete("Doomed Two");
+  const reasons = persistence.database.prepare("SELECT reason FROM player_save_history WHERE username LIKE 'deleted:%:doomed_two' ORDER BY id").all().map((r) => r.reason);
+  assert.equal(reasons.at(-1), "character-delete");
+});
+
+test("deleting a save that does not exist resolves and writes nothing", async () => {
+  const before = persistence.sequence;
+  await persistence.delete("Never Existed");
+  assert.equal(persistence.sequence, before);
+  assert.equal(persistence.exists("Never Existed"), false);
+});
+
+test("deleting right after a save still in flight leaves nothing behind", async () => {
+  const p = player("Racer");
+  setGold(p, 3);
+  persistence.save(p, "save");
+  assert.ok(persistence.unwritten.has("racer"));
+  const done = persistence.delete("Racer");
+  assert.equal(persistence.exists("Racer"), false, "gone at once");
+  assert.equal(persistence.load("Racer"), null);
+  await done;
+  await persistence.flush();
+  assert.equal(persistence.findSave.get("racer"), undefined);
+  assert.equal(persistence.exists("Racer"), false);
+});
+
+test("JSON backend deletes the file, even one still queued; Null backend ignores delete", async () => {
+  const p = player("Json Doomed");
+  jsonPersistence.save(p);
+  await jsonPersistence.flush();
+  const file = jsonPersistence.resolveFilePath("Json Doomed");
+  assert.ok(fs.existsSync(file));
+  await jsonPersistence.delete("Json Doomed");
+  assert.equal(jsonPersistence.exists("Json Doomed"), false);
+  assert.ok(!fs.existsSync(file));
+  jsonPersistence.save(p);
+  await jsonPersistence.delete("Json Doomed");
+  await jsonPersistence.flush();
+  assert.ok(!fs.existsSync(file), "a queued write does not land after the delete");
+  const idb = new IndexedDbPlayerPersistence();
+  idb.save(p);
+  await idb.delete("Json Doomed");
+  assert.equal(idb.exists("Json Doomed"), false);
+  const { NullPlayerPersistence } = require("../dist/game/entity/impl/player/persistence/NullPlayerPersistence");
+  await new NullPlayerPersistence().delete("anyone");
+});

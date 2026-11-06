@@ -61,6 +61,11 @@ export abstract class PlayerPersistence {
         return true;
     }
 
+    /** Removes a profile's save; a backend that keeps a history re-keys it so a new character of that name starts clean. */
+    public async delete(_username: string, _profile: PlayerProfile = MAIN_PROFILE): Promise<void> {
+        throw new Error("This persistence backend does not support deleting saves");
+    }
+
     protected saveOffline(_username: string, _save: PlayerSave, _reason: string, _profile: PlayerProfile = MAIN_PROFILE): void {
         throw new Error("This persistence backend does not support offline updates");
     }

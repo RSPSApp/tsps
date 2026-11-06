@@ -72,6 +72,8 @@ class SqlitePlayerPersistence extends PlayerPersistence {
     }
     /** Saves sent to the writer and not yet committed: username -> { seq, json }. Loads read these first. */
     this.unwritten = new Map();
+    /** Keys whose delete the writer hasn't committed: key -> seq. load/exists treat them as absent. */
+    this.deleted = new Map();
     /** Messages the writer hasn't answered, by seq, to resend if it dies. */
     this.inFlight = new Map();
     this.failedWrites = new Map();
@@ -119,7 +121,10 @@ class SqlitePlayerPersistence extends PlayerPersistence {
     const seq = ++this.sequence;
     const message = { seq, username, savedAt: new Date().toISOString(), writes };
     const row = writes.find((write) => write.kind === "row");
-    if (row) this.unwritten.set(username, { seq, json: row.json });
+    if (row) {
+      this.unwritten.set(username, { seq, json: row.json });
+      this.deleted.delete(username);
+    }
     this.inFlight.set(seq, message);
     if (!this.writer) {
       this.writerFailures = 0;
@@ -135,6 +140,7 @@ class SqlitePlayerPersistence extends PlayerPersistence {
   onWritten({ seq, username, ok, error }) {
     this.inFlight.delete(seq);
     if (this.unwritten.get(username)?.seq === seq) this.unwritten.delete(username);
+    if (this.deleted.get(username) === seq) this.deleted.delete(username);
     if (ok) {
       this.failedWrites.delete(username);
     } else {
@@ -159,6 +165,7 @@ class SqlitePlayerPersistence extends PlayerPersistence {
 
   /** The player's newest save JSON: one waiting for the writer, else the stored one. */
   currentJson(username) {
+    if (this.deleted.has(username)) return undefined;
     return this.unwritten.get(username)?.json ?? this.findSave.get(username)?.saveJson;
   }
 
@@ -254,7 +261,24 @@ class SqlitePlayerPersistence extends PlayerPersistence {
 
   exists(username, profile = MAIN_PROFILE) {
     const name = this.saveKey(username, profile);
+    if (this.deleted.has(name)) return false;
     return this.unwritten.has(name) || this.findSave.get(name) !== undefined;
+  }
+
+  /**
+   * Removes the save. Its history, the final copy included, is kept under `deleted:<time>:<key>`
+   * so the name starts clean; load/exists stop seeing it at once.
+   */
+  async delete(username, profile = MAIN_PROFILE) {
+    const key = this.saveKey(username, profile);
+    const current = this.currentJson(key);
+    this.pendingRestores.delete(key);
+    if (typeof current !== "string") return;
+    this.unwritten.delete(key);
+    const historyKey = `deleted:${Date.now()}:${key}`;
+    this.enqueue(key, [{ kind: "history", json: current, reason: "character-delete" }, { kind: "delete", historyKey }]);
+    this.deleted.set(key, this.sequence);
+    await this.flush();
   }
 
   normalizeUsername(username) {

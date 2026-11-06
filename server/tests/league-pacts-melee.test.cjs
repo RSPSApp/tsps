@@ -667,7 +667,8 @@ test("a bystander's reflected hit pauses regeneration but leaves a single-way NP
   npc.process();
   assert.equal(npc.getHitpoints(), hp - 2, "the bystander's recoil still lands");
   assert.equal(npc.getCombat().getAttacker(), fighter, "the fighter keeps the NPC");
-  assert.equal(npc.getCombat().getLastAttack().elapsed(), 0, "regeneration pauses");
+  assert.equal(npc.getCombat().getLastAttack().elapsed(), 5 * GameConstants.GAME_ENGINE_PROCESSING_CYCLE_RATE,
+    "the fighter's own timer runs on; regeneration waits on it");
   assert.equal(permission(fighter, npc), "CAN_ATTACK");
   assert.equal(permission(bystander, npc), "TARGET_IN_COMBAT");
   // The fighter's own reflection still tags the NPC and holds its timer.
@@ -677,6 +678,71 @@ test("a bystander's reflected hit pauses regeneration but leaves a single-way NP
   assert.equal(npc.getHitpoints(), hp - 4);
   assert.equal(npc.getCombat().getAttacker(), fighter);
   assert.equal(npc.getCombat().getLastAttack().elapsed(), 0);
+});
+
+/** A fighter's single-way tag on a hill giant that targets a bystander wearing a ring of recoil; the fighter walks off. */
+function staleTagScenario(name, start) {
+  const { AreaManager } = require("../dist/game/model/areas/AreaManager");
+  const { PendingHit } = require("../dist/game/content/combat/hit/PendingHit");
+  const fighter = character(`${name}-fighter`);
+  const bystander = character(`${name}-bystander`);
+  bystander.setAutoRetaliate(false);
+  equip(bystander, core.Equipment.RING_SLOT, ITEMS.ringOfRecoil);
+  const npc = new NPC(HILL_GIANT, new Location(3200, 3201, 0));
+  npc.setRegistered(true);
+  npc.setMaxHitpoints(100);
+  npc.setHitpoints(100);
+  assert.equal(AreaManager.inMulti(npc), false, "single-way combat");
+  forceAccurate = true;
+  randoms([], 0.99);
+  cycle(start);
+  return { fighter, bystander, npc, PendingHit };
+}
+
+/** The fighter's real hit tags the NPC, which keeps the bystander as its target. */
+function fighterTags({ fighter, bystander, npc, PendingHit }) {
+  core.CombatFactory.executeHit(new PendingHit(fighter, npc, core.CombatFactory.getMethod(fighter), 0));
+  npc.process();
+  assert.equal(npc.getCombat().getAttacker(), fighter);
+  assert.equal(npc.getCombat().getTarget(), bystander, "a single-way NPC doesn't retarget");
+  fighter.setLocation(new Location(3220, 3220, 0));
+  return npc.getHitpoints();
+}
+
+test("ordinary single-way melee: the NPC waits out a fighter's tag before hitting a bystander", () => {
+  const scenario = staleTagScenario("pact-stale-melee", 15000);
+  const { bystander, npc } = scenario;
+  npc.getCombat().attack(bystander);
+  const tagged = fighterTags(scenario);
+  for (let tick = 15001; tick <= 15060; tick++) {
+    cycle(tick);
+    bystander.getCombat().getHitQueue().process(tick);
+    npc.process();
+  }
+  assert.ok(bystander.getHitpoints() < 99, "the NPC hit the bystander once the tag expired");
+  assert.ok(npc.getHitpoints() < tagged - 5, "the bystander's recoil kept landing");
+  assert.equal(npc.getCombat().getAttacker(), bystander, "the bystander's own recoil tags the untagged NPC");
+  assert.equal(permission(bystander, npc), "CAN_ATTACK");
+});
+
+test("a bystander's recoil doesn't keep an absent fighter's single-way tag alive", () => {
+  // NPC hits that land without the NPC's attack-permission check: one already in flight when the
+  // fighter's tag lands, or a scripted/plugin attack that queues hits on players directly.
+  const scenario = staleTagScenario("pact-stale-scripted", 16000);
+  const { bystander, npc, PendingHit } = scenario;
+  npc.getCombat().setTarget(bystander);
+  const tagged = fighterTags(scenario);
+  for (let tick = 16001; tick <= 16060; tick++) {
+    cycle(tick);
+    if ((tick - 16001) % 4 === 0) core.CombatFactory.executeHit(new PendingHit(npc, bystander, core.CombatFactory.getMethod(npc), 0));
+    bystander.getCombat().getHitQueue().process(tick);
+    npc.process();
+    if (tick === 16005) assert.equal(npc.getCombat().getAttacker(), scenario.fighter, "the fighter's tag holds for 6 seconds");
+  }
+  assert.ok(bystander.getHitpoints() < 99 - 20, "the NPC kept hitting the bystander");
+  assert.ok(npc.getHitpoints() < tagged - 10, "the bystander's recoil kept landing");
+  assert.notEqual(npc.getCombat().getAttacker(), scenario.fighter, "the absent fighter's tag expires");
+  assert.equal(permission(bystander, npc), "CAN_ATTACK");
 });
 
 test("a reflected hit from a dead or logged-out source pauses regeneration but tags nobody", () => {

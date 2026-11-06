@@ -64,6 +64,12 @@ module.exports = function registerGertrudesCatQuest(api) {
   const DOOGLE_LEAVES_ITEM_ID = ItemIdentifiers.DOOGLE_LEAVES;
   const CHOCOLATE_CAKE_ITEM_ID = ItemIdentifiers.CHOCOLATE_CAKE;
   const STEW_ITEM_ID = ItemIdentifiers.STEW;
+  const KITTEN_ITEMS = [ItemIdentifiers.PET_KITTEN, ItemIdentifiers.PET_KITTEN_2,
+    ItemIdentifiers.PET_KITTEN_3, ItemIdentifiers.PET_KITTEN_4, ItemIdentifiers.PET_KITTEN_5,
+    ItemIdentifiers.PET_KITTEN_6];
+  const RING_OF_CHAROS_A = ItemIdentifiers.RING_OF_CHAROS_A_;
+  const chosenKittens = new WeakMap();
+  const initialMenus = new WeakMap();
 
   /** Fluffs' quest flavour: talking is the same throughout, the hiss hint moves by stage. */
   const FLUFFS_TALK_VARIANT = "finding-fluffs-talk-to-fluffs";
@@ -127,6 +133,11 @@ module.exports = function registerGertrudesCatQuest(api) {
     // The wiki's completion hand-out also includes the cake and stew the scroll advertises.
     player.getInventory().adds(CHOCOLATE_CAKE_ITEM_ID, 1);
     player.getInventory().adds(STEW_ITEM_ID, 1);
+    // The Wiki says random without the ring; the distribution is not specified there.
+    const kitten = chosenKittens.get(player) ?? KITTEN_ITEMS[Math.floor(Math.random() * KITTEN_ITEMS.length)];
+    const inventory = player.getInventory();
+    if (inventory.isFull()) inventory.forceAdd(player, new api.core.Item(kitten, 1));
+    else inventory.adds(kitten, 1);
   }
 
   function gertrudeVariant(stage) {
@@ -228,7 +239,27 @@ module.exports = function registerGertrudesCatQuest(api) {
         event.end = true;
         return;
       }
-      if (!quest.isComplete(player) && stage >= STAGE_RESCUED) quest.complete(player);
+      if (!quest.isComplete(player) && stage >= STAGE_RESCUED) {
+        const wearingRing = () => player.getEquipment?.().get(api.core.Equipment.RING_SLOT)?.getId?.() === RING_OF_CHAROS_A;
+        if (!wearingRing()) {
+          initialMenus.delete(player);
+          quest.complete(player);
+        } else {
+          const token = {};
+          initialMenus.set(player, token);
+          const cancel = () => { if (initialMenus.get(player) === token) initialMenus.delete(player); };
+          const request = { player, opened: false, cancel, choose: (kitten) => {
+            if (initialMenus.get(player) !== token) return;
+            initialMenus.delete(player);
+            if (quest.isComplete(player) || quest.getStage(player) !== STAGE_RESCUED || !wearingRing()) return;
+            if (player.getInventory().getFreeSlots() < 3 || !KITTEN_ITEMS.includes(kitten)) return;
+            chosenKittens.set(player, kitten);
+            try { quest.complete(player); } finally { chosenKittens.delete(player); }
+          } };
+          api.emitCustomEvent("gertrude:initial-kitten-menu", request);
+          if (!request.opened) cancel();
+        }
+      }
       event.handled = true;
       event.end = true;
       return;
@@ -425,7 +456,7 @@ module.exports = function registerGertrudesCatQuest(api) {
     completionValue: STAGE_COMPLETE,
     questPoints: 1,
     xpRewards: [{ skillId: Skill.COOKING.getIndex(), amount: 1525, label: "Cooking" }],
-    rewardItemId: ItemIdentifiers.PET_KITTEN,
+    scrollItemId: ItemIdentifiers.PET_KITTEN,
     rewardItemLabel: "A pet kitten",
     otherRewards: ["A chocolate cake and a bowl of stew", "The ability to raise cats"],
     buildJournal,

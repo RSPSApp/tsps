@@ -20,7 +20,8 @@ gameval. The Gauntlet's range is `server/plugins/minigames/gauntlet/Prep.Gauntle
   [Burnt fish](https://oldschool.runescape.wiki/w/Burnt_fish) pages (herring and mackerel burn
   to 357, trout, cod, pike and salmon to 343, tuna and bass to 367, sardine to 369, anchovies to
   323), [Cooked rabbit](https://oldschool.runescape.wiki/w/Cooked_rabbit) (burnt meat), and
-  [Cooked meat](https://oldschool.runescape.wiki/w/Cooked_meat) for burning it on purpose.
+  [Cooked meat](https://oldschool.runescape.wiki/w/Cooked_meat) and
+  [Burnt chicken](https://oldschool.runescape.wiki/w/Burnt_chicken) for burning them on purpose.
   The pie, pizza and dough recipes come from each item's page, the wine timer and
   success chances from [Jug of wine](https://oldschool.runescape.wiki/w/Jug_of_wine),
   [Unfermented wine](https://oldschool.runescape.wiki/w/Unfermented_wine) and
@@ -53,7 +54,8 @@ gameval. The Gauntlet's range is `server/plugins/minigames/gauntlet/Prep.Gauntle
   bluefin, marlin), "You successfully cook a swordtip squid." / "a jumbo squid". Baking: "You
   successfully bake a traditional apple pie.", "You successfully bake a delicious redberry pie.",
   "You successfully bake a pizza." A burn is "You accidentally burn the herring." Cooked meat on
-  a cooker: "You deliberately burn the nicely cooked meat."
+  a cooker: "You deliberately burn the nicely cooked meat." Cooked chicken (Wiki): "You deliberately burn
+  the nicely cooked chicken."
 - **`cooking_success_count`** goes up one for each food cooked and back to 0 on a burn, the
   Gauntlet's paddlefish included. It is saved with the player.
 - **Refusals** are message boxes: "You need a Cooking level of 80 to cook a shark.", "You haven't

@@ -215,7 +215,7 @@ function onDialogueAction(request) {
     const taken = TAKE_ALL.has(request.stepId) ? takeAll(request.player) : takeOne(request.player);
     if (!taken) {
       request.end = true;
-      request.player.sendMessage("You don't have enough inventory space.");
+      request.player.sendMessage("You do not have enough room to carry all of those coins.");
     }
   } else if (PAY.has(request.stepId)) {
     pay(request);

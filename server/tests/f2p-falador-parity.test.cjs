@@ -11,7 +11,7 @@ before(async () => require('../dist/game/cache/CachePipeline').CachePipeline.ini
 let index = 300;
 
 function setup(module) {
-  const custom = new Map(), named = new Map(), objects = [], items = [], itemActions = [], logout = [], variants = [], conditions = [], tasks = [], spawned = [], removed = [], worldNpcs = [];
+  const custom = new Map(), named = new Map(), objects = [], items = [], itemActions = [], logout = [], routes = [], variants = [], conditions = [], tasks = [], spawned = [], removed = [], worldNpcs = [];
   const core = { ...actualCore,
     CountdownTask: class { constructor(key, ticks, run) { Object.assign(this, { key, ticks, run }); } },
     TaskManager: { submit(task) { tasks.push(task); } }, World: { getNpcs: () => worldNpcs },
@@ -23,7 +23,7 @@ function setup(module) {
     onNpcDialogueVariant(fn) { variants.push(fn); }, onNpcDialogueCondition(fn) { conditions.push(fn); },
     onNpcInteraction(name, actions) { if (typeof name === 'string') named.set(name, actions); },
     onObjectInteraction(name, actions) { objects.push(typeof name === 'function' ? { fn: name } : { name, actions }); },
-    onItemOnNpc(fn) { items.push(fn); }, onItemAction(fn) { itemActions.push(fn); }, onPlayerLogout(fn) { logout.push(fn); },
+    onItemOnNpc(fn) { items.push(fn); }, onItemAction(fn) { itemActions.push(fn); }, onPlayerLogout(fn) { logout.push(fn); }, onObjectRoute(fn) { routes.push(fn); },
     spawnNpc(def) {
       let area, location = new core.Location(def.x, def.y, def.z), npcIndex = index++;
       const npc = { def, getId: () => def.id, getIndex: () => npcIndex, getLocation: () => location, moveTo(value) { location = value; },
@@ -58,7 +58,7 @@ function setup(module) {
   const action = (npcId, stepId) => { const e = { player, npcId, stepId }; api.emitCustomEvent('npc-dialogue:action', e); return e; };
   const line = (npcId, text, speaker) => { const e = { player, npcId, text, step: { speaker } }; api.emitCustomEvent('npc-dialogue:line', e); return e; };
   function runAt(ticks) { const matched = tasks.filter(task => task.ticks === ticks); for (const task of matched) tasks.splice(tasks.indexOf(task), 1); for (const task of matched) task.run(); }
-  return { api, core, quest, player, attrs, inventory, equipment, varbits, configs, xp, messages, animations, graphics, packets, spawned, removed, tasks, named, objects, items, itemActions, worldNpcs,
+  return { api, core, quest, player, attrs, inventory, equipment, varbits, configs, xp, messages, animations, graphics, packets, spawned, removed, tasks, named, objects, items, itemActions, worldNpcs, routes,
     emit, action, line, runAt, current: () => current, variant: npcId => variants[0]({ player, npcId }),
     condition: (npcId, text) => conditions[0]({ player, npcId, text }), setMining(value) { mining = value; }, setCombat(value) { combat = value; }, setFull(value) { full = value; },
     logout() { for (const fn of logout) fn({ player }); },
@@ -272,4 +272,52 @@ test('Black Knights sabotage sends the recorded tick-ten camera and restores it 
   h.runAt(9); assert.deepEqual(h.packets.filter(row => /sendCamera(Unlock|Reset)/.test(row.key)), [
     { key: 'sendCameraReset', args: [] }, { key: 'sendCameraUnlock', args: [false] }, { key: 'sendCameraReset', args: [] },
   ]);
+});
+
+test('Black Knights journal at stages 2 and 3 is the captured rev 240 text', () => {
+  const h = setup('BlackKnightsFortress');
+  const journal = stage => { h.quest.setStage(h.player, stage); return h.quest.buildJournal(h.player, h.quest); };
+  const struck = [
+    "<str>Sir Amik Varze asked me to investigate the Black Knights'",
+    "<str>Fortress. I sneaked inside disguised as a Guard.",
+  ];
+  assert.deepEqual(journal(2), [...struck,
+    "I eavesdropped on a Witch and the Black Knight Captain and",
+    "discovered that their <col=800000>invincibility potion</col> can be destroyed",
+    "with a normal <col=800000>cabbage</col>.",
+  ]);
+  assert.deepEqual(journal(3), [...struck,
+    "<str>I eavesdropped on a Witch and the Black Knight Captain and",
+    "<str>discovered that their invincibility potion could be destroyed",
+    "<str>with a normal cabbage.",
+    "Now that I have sabotaged the witch's potion, I can claim my",
+    "<col=800000>reward</col> from <col=800000>Sir Amik Varze</col> in <col=800000>Falador Castle</col>.",
+  ]);
+});
+
+test('Black Knights sabotage plays the captured throw, noise, splash and meow sounds', () => {
+  const h = setup('BlackKnightsFortress'); h.quest.setStage(h.player, 2); h.inventory.set(I.CABBAGE, 1);
+  const sounds = () => h.packets.filter(row => row.key === 'sendSound').map(row => row.args[0]);
+  // The camera shakes on the scene's first tick; the throw follows one tick later (rev 240 3068 -> 3069).
+  h.action(N.WITCH_5, 'lUsX9u'); assert.equal(h.packets.filter(row => row.key === 'sendCameraShake').length, 5);
+  assert.deepEqual(sounds(), []); assert.deepEqual(h.animations, []); assert.deepEqual(h.graphics, []);
+  h.runAt(1); assert.deepEqual(sounds(), [1420]); assert.deepEqual(h.animations, [4553]); assert.deepEqual(h.graphics, [771]);
+  h.runAt(8); h.runAt(40); assert.deepEqual(sounds(), [1420], 'the noise is not on a fixed scene tick');
+  h.line(N.WITCH_5, 'Where has Greldo got to with that magic cabbage!').after();
+  assert.deepEqual(sounds(), [1420]); h.runAt(3); assert.deepEqual(sounds(), [1420, 1414]);
+  h.action(N.WITCH_5, 'Ug7RZ1'); h.runAt(2); assert.deepEqual(sounds(), [1420, 1414, 1416]);
+  // No scripted track: rev 241 plays none at "My potion!", and rev 240's 374 is the area track after jingle 5 ends.
+  assert.equal(h.line(N.WITCH_5, 'My potion!').before, undefined);
+  h.line(N.WITCH_5, 'Meow!').after();
+  const area = h.player.getPrivateArea(), cat = area.sourceTile(3027, 3507);
+  assert.deepEqual(h.packets.filter(row => row.key === 'sendAreaSound').map(row => row.args), [[333, cat.getX(), cat.getY(), 0, 1, 0, 5]]);
+  assert.deepEqual(h.packets.filter(row => row.key === 'sendSong'), []);
+});
+
+test('Black Knights grill Listen-at routes onto the grill tile, as both recordings stand', () => {
+  const h = setup('BlackKnightsFortress'), route = h.routes[0];
+  const grill = { objectId: O.GRILL, object: { getLocation: () => new h.core.Location(3026, 3507, 0) }, sourceLocation: { x: 3022, y: 3510, z: 0 } };
+  route(grill); assert.deepEqual(grill.destination, { x: 3026, y: 3507, z: 0 });
+  const other = { objectId: O.CRATE_140, object: { getLocation: () => new h.core.Location(3026, 3507, 0) }, sourceLocation: { x: 3022, y: 3510, z: 0 } };
+  route(other); assert.equal(other.destination, undefined);
 });

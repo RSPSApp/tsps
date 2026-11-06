@@ -235,11 +235,23 @@ function sideHazeel(h, p) {
   h.finish(p);
 }
 
+function turnValve(h, p, id, direction) {
+  h.object(p, id, 'Turn');
+  assert.ok(p.prompt, `valve ${id} opens its left/right prompt`);
+  assert.match(p.prompt.title, new RegExp(`turned to the ${direction === 'right' ? 'left' : 'right'}`));
+  h.choose(p, `Turn it to the ${direction}.`);
+}
+
 function solveValves(h, p) {
-  for (const id of [O.SEWER_VALVE, O.SEWER_VALVE_2, O.SEWER_VALVE_3, O.SEWER_VALVE_4, O.SEWER_VALVE_5]) {
-    h.object(p, id, 'Turn');
-  }
-  assert.equal(p.attrs.get('quest.hazeel_cult.valves'), 31);
+  // Native start: sewervalve3 right, the rest left (the plugin persists this default).
+  p.setAttribute('quest.hazeel_cult.valve-directions', 1 << 2);
+  // Native gameval order and target: sewervalve1/2/4/5 right, sewervalve3 left.
+  turnValve(h, p, O.SEWER_VALVE, 'right');
+  turnValve(h, p, O.SEWER_VALVE_2, 'right');
+  turnValve(h, p, O.SEWER_VALVE_3, 'left');
+  turnValve(h, p, O.SEWER_VALVE_4, 'right');
+  turnValve(h, p, O.SEWER_VALVE_5, 'right');
+  assert.equal(p.attrs.get('quest.hazeel_cult.valve-directions'), 27);
 }
 
 test('Hazeel side: poison, mark, raft, crate key, hidden wall, ladder, scroll chest and Alomone hand-in', () => {
@@ -261,7 +273,7 @@ test('Hazeel side: poison, mark, raft, crate key, hidden wall, ladder, scroll ch
   assert.equal(p.items.get(I.HAZEELS_MARK), 1, 'Clivet hands over the mark after the poisoning');
 
   solveValves(h, p);
-  h.object(p, O.RAFT, 'Board');
+  h.object(p, O.RAFT, 'Board', { x: 2567, y: 9679, z: 0 });
   assert.equal(p.loc.getX(), 2606);
   h.talk(p, N.ALOMONE); h.finish(p);
   assert.equal(h.quest.getStage(p), 6);
@@ -312,6 +324,66 @@ test('Hazeel side: poison, mark, raft, crate key, hidden wall, ladder, scroll ch
   assert.equal(h.quest.getStage(p), 9);
 });
 
+test('Hazeel valves prompt both directions, keep state on Do nothing, and drive the raft by leading-correct count', () => {
+  const h = harness();
+  const p = player();
+  h.quest.setStage(p, 4);
+  const ATTR = 'quest.hazeel_cult.valve-directions';
+  p.setAttribute(ATTR, 1 << 2); // native start: sewervalve3 right, the rest left
+
+  h.object(p, O.SEWER_VALVE, 'Turn');
+  assert.equal(p.prompt.title, 'The valve is currently turned to the left.');
+  assert.deepEqual(p.prompt.options, ['Turn it to the right.', 'Do nothing.']);
+  h.choose(p, 'Do nothing.');
+  assert.equal(p.attrs.get(ATTR), 1 << 2, 'Do nothing leaves the valve orientation alone');
+  assert.equal(p.messages.at(-1), 'You leave the valve alone.');
+
+  h.object(p, O.SEWER_VALVE, 'Turn');
+  h.choose(p, 'Turn it to the right.');
+  assert.equal(p.attrs.get(ATTR), (1 << 2) | 1);
+  assert.equal(p.messages.at(-1), 'You turn the valve to the right. Beneath your feet you hear the sudden sound of rushing water.');
+
+  h.object(p, O.SEWER_VALVE_3, 'Turn');
+  assert.equal(p.prompt.title, 'The valve is currently turned to the right.');
+  assert.deepEqual(p.prompt.options, ['Turn it to the left.', 'Do nothing.']);
+  h.choose(p, 'Turn it to the left.');
+  assert.equal(p.attrs.get(ATTR), 1, 'sewervalve3 changes from right to left');
+
+  const board = (value) => {
+    p.setAttribute(ATTR, value);
+    p.loc = new core.Location(2570, 9682, 0);
+    p.messages = [];
+    h.object(p, O.RAFT, 'Board', { x: 2567, y: 9679, z: 0 });
+  };
+  board(0);
+  assert.deepEqual([p.loc.getX(), p.loc.getY()], [2570, 9682], 'no correct leading valves leaves the raft on the shore');
+  assert.equal(p.messages.at(-1), "The current is flowing against the raft. It won't move.");
+  board(1);
+  assert.deepEqual([p.loc.getX(), p.loc.getY()], [2578, 9687]);
+  assert.match(p.messages.at(-1), /stops at the first island\./);
+  board(7);
+  assert.deepEqual([p.loc.getX(), p.loc.getY()], [2593, 9694]);
+  assert.match(p.messages.at(-1), /stops at the second island\./);
+  board(3);
+  assert.deepEqual([p.loc.getX(), p.loc.getY()], [2616, 9725]);
+  assert.match(p.messages.at(-1), /stops at the fourth island\./);
+  board(11);
+  assert.deepEqual([p.loc.getX(), p.loc.getY()], [2600, 9711]);
+  assert.match(p.messages.at(-1), /stops at the third island\./);
+  board(27);
+  assert.deepEqual([p.loc.getX(), p.loc.getY()], [2606, 9692]);
+  assert.equal(p.messages.at(-1), 'The raft washes up the sewer until it reaches the end of the passage.');
+
+  p.messages = [];
+  h.object(p, O.RAFT, 'Board', { x: 2606, y: 9693, z: 0 });
+  assert.deepEqual([p.loc.getX(), p.loc.getY()], [2568, 9681]);
+  assert.equal(p.messages.at(-1), 'The raft flows back to the cave entrance.');
+
+  for (const [x, y] of [[2578, 9687], [2593, 9694], [2616, 9725], [2600, 9711], [2606, 9692], [2568, 9681]]) {
+    assert.equal(RegionManager.blocked(new core.Location(x, y, 0), null), false, `raft landing ${x},${y} is walkable`);
+  }
+});
+
 test('Hazeel side: full-bag poison handout is recoverable from Clivet', () => {
   const h = harness();
   const p = player();
@@ -349,7 +421,7 @@ test('Ceril side: Alomone death, armour chest, Ceril hand-in, cupboard accusatio
   assert.equal(p.varbits.get(14770), 1, 'interrupted combat is replayed on login');
 
   solveValves(h, p);
-  h.object(p, O.RAFT, 'Board');
+  h.object(p, O.RAFT, 'Board', { x: 2567, y: 9679, z: 0 });
   h.talk(p, N.ALOMONE); h.finish(p);
   assert.equal(h.quest.getStage(p), 4);
 

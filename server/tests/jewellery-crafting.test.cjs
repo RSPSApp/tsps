@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const { test, before } = require('node:test');
+const { test, before, afterEach } = require('node:test');
 const { Server } = require('../dist/Server');
 Server.installProductionPathResolver();
 const { CachePipeline } = require('../dist/game/cache/CachePipeline');
@@ -10,6 +10,16 @@ const { World } = require('../dist/game/World');
 let core;
 const crafting = {};
 const tasks = [];
+const legacyPlayers = new Set();
+afterEach(() => {
+  if (!core) return;
+  for (const player of legacyPlayers) {
+    // Legacy spells use both index and object keys; stop only this fixture's actors.
+    core.TaskManager.cancelTasks(player.getIndex());
+    core.TaskManager.cancelTasks(player);
+  }
+  legacyPlayers.clear();
+});
 before(async () => {
   await CachePipeline.initialize(process.cwd());
   core = PluginManager.getCoreApi();
@@ -70,6 +80,7 @@ function playerWith(entries = []) {
     getLocation: () => player.location, isRegistered: () => true, getHitpoints: () => 99,
     getMovementQueue: () => ({ size: () => player.moving ? 1 : 0 }), getForceMovement: () => null,
   };
+  legacyPlayers.add(player);
   return player;
 }
 function cast(player,name,itemId,slot = player.getInventory().getItems().findIndex(item => item.id === itemId)) {

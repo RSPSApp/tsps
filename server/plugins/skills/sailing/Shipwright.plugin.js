@@ -18,6 +18,7 @@ const { sendBoatVarbits } = require("./BoatVarbits.Sailing");
 const { recoveryFee } = require("./BoatParts.Sailing");
 const { MODE, openBoatSelection } = require("./BoatSelection.plugin");
 const BoatShop = require("./BoatShop.Sailing");
+const { customiseBoat } = require("./Shipyard.plugin");
 
 const COINS = 995;
 /** Port Wizards Perrie, Peter, Petra and Paulie; one appears for each recovery. */
@@ -125,9 +126,6 @@ function recoverBoat({ player, npc, definition }) {
   openBoatSelection(player, MODE.RECOVER, dock, (slot) => recoverSlot(player, dock, slot, head));
 }
 
-/** The Wiki transcript's "I'd like to recover a boat." step opens the selection for this target. */
-const RECOVER_TARGET = "Recover Boat";
-
 /**
  * Still standing with the shipwright, free, and with nothing else open: the guard
  * Destroy.Shipwright's `open()` applies, since the selection opens a tick after the click
@@ -143,17 +141,30 @@ function stillWith(quote) {
 }
 
 /**
- * The Recover-boat dialogue step. Its NPC option is not on every shipwright's definition (the
- * spawned Junior Jim offers Talk-to alone), so on those the dialogue is the only route to it.
- * One tick late: the interface opens once the dialogue has closed, as Destroy.Shipwright does.
+ * The shipwright's boat services as the transcript's `open_interface` targets, each wired to the
+ * handler its NPC option already uses. Junior Jim's definition (14974) offers Talk-to alone, so
+ * for him these steps are the only route to any of them; an unclaimed target drops the action and
+ * the conversation simply ends with nothing opened. Destroy Boat keeps its own listener.
  */
-function recoverFromDialogue(event) {
-  if (event.action !== "open_interface" || event.target !== RECOVER_TARGET) return;
+const DIALOGUE_TARGETS = {
+  "Boat Emporium": BoatShop.openShop,
+  "Boat Customisation": customiseBoat,
+  "Recover Boat": recoverBoat,
+};
+
+/**
+ * A shipwright's boat-service dialogue step: claimed here, then opened one tick later so the
+ * interface lands after the dialogue has closed, as Destroy.Shipwright does.
+ */
+function shipwrightDialogue(event) {
+  if (event.action !== "open_interface") return;
+  const open = DIALOGUE_TARGETS[event.target];
+  if (open === undefined) return;
   event.handled = true;
   event.end = true;
   const quote = { player: event.player, npc: event.npc, definition: event.definition };
   later(event.player, 1, () => {
-    if (stillWith(quote)) recoverBoat(quote);
+    if (stillWith(quote)) open(quote);
   });
 }
 
@@ -165,7 +176,7 @@ module.exports = {
     pluginApi = api;
     BoatShop.bind(api);
     require("./shipwright/Destroy.Shipwright")(api);
-    api.onCustomEvent("npc-dialogue:action", recoverFromDialogue);
+    api.onCustomEvent("npc-dialogue:action", shipwrightDialogue);
     api.onCustomEvent("omnishop:describe", BoatShop.describe);
     api.onCustomEvent("omnishop:can-buy", BoatShop.canBuy);
     api.onCustomEvent("omnishop:purchase", BoatShop.deliver);

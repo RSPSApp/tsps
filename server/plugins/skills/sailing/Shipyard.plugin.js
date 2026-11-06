@@ -378,6 +378,7 @@ module.exports = {
   name: "SailingShipyard",
   members: true,
   readOptionRow,
+  customiseBoat,
   beginVisit,
   visitedBoat,
   refreshShownBoat,

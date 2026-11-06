@@ -121,6 +121,20 @@ test("any component on another assembles the helmet, and a charged mask loses it
   assert.deepEqual(player.items.map((entry) => entry.getId()), [ItemIdentifiers.SLAYER_HELMET]);
 });
 
+test("mask-on-mask retains the existing first-owned fallback", () => {
+  const player = createPlayer({ inventory: [ItemIdentifiers.BLACK_MASK, ItemIdentifiers.BLACK_MASK_I_, ...PARTS] });
+  assemble({ player, usedItem: player.items[1], usedItemId: ItemIdentifiers.BLACK_MASK_I_, usedItemSlot: 1,
+    usedWithItem: player.items[0], usedWithItemId: ItemIdentifiers.BLACK_MASK, usedWithItemSlot: 0, handled: false });
+  assert.deepEqual(player.items.map((entry) => entry.getId()), [ItemIdentifiers.BLACK_MASK_I_, ItemIdentifiers.SLAYER_HELMET]);
+});
+
+test("scroll on an already imbued mask retains the existing first-owned fallback", () => {
+  const player = createPlayer({ inventory: [ItemIdentifiers.BLACK_MASK, ItemIdentifiers.BLACK_MASK_I_, ...PARTS, ItemIdentifiers.SCROLL_OF_IMBUING] });
+  assemble({ player, usedItem: player.items[7], usedItemId: ItemIdentifiers.SCROLL_OF_IMBUING, usedItemSlot: 7,
+    usedWithItem: player.items[1], usedWithItemId: ItemIdentifiers.BLACK_MASK_I_, usedWithItemSlot: 1, handled: false });
+  assert.deepEqual(player.items.map((entry) => entry.getId()), [ItemIdentifiers.BLACK_MASK_I_, ItemIdentifiers.SLAYER_HELMET_I_]);
+});
+
 test("assembly needs 55 Crafting and every component", () => {
   const low = createPlayer({ crafting: 54, inventory: [ItemIdentifiers.BLACK_MASK_I_, ...PARTS] });
   assemble({ player: low, usedItemId: ItemIdentifiers.EARMUFFS, usedWithItemId: ItemIdentifiers.FACEMASK, handled: false });

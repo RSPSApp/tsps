@@ -172,8 +172,10 @@ function assemble(event) {
     return;
   }
   const inventory = player.getInventory();
-  const selectedMask = maskId(usedItemId) ? usedItem : maskId(usedWithItemId) ? usedWithItem : null;
-  const selectedSlot = maskId(usedItemId) ? usedItemSlot : usedWithItemSlot;
+  const maskOnUsed = maskId(usedItemId) != null && PARTS.includes(usedWithItemId);
+  const maskOnWith = maskId(usedWithItemId) != null && PARTS.includes(usedItemId);
+  const selectedMask = maskOnUsed ? usedItem : maskOnWith ? usedWithItem : null;
+  const selectedSlot = maskOnUsed ? usedItemSlot : usedWithItemSlot;
   const mask = selectedMask ?? findMask(inventory);
   if (!mask || PARTS.some((part) => !inventory.contains(part))) return;
   event.handled = true;

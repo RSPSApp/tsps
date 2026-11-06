@@ -501,7 +501,7 @@ function confirm(player, offer) {
     return;
   }
   // Plugins may veto an offer (e.g. an untradeable item that cannot be listed).
-  const confirmation = { player, itemId: offer.itemId, sell: offer.sell, accepted: true };
+  const confirmation = { player, itemId: offer.itemId, sell: offer.sell, quantity: amount, accepted: true };
   pluginApi.emitCustomEvent("ge:offer-confirmed", confirmation);
   if (confirmation.accepted === false) {
     return;
@@ -580,6 +580,8 @@ function collectionOutputId(baseId, amount, action, forceNotes = false) {
 function collect(player, action, slot = viewing.get(player), forceNotes = false) {
   const offer = completedOffers(player)[slot];
   if (!offer?.finished) return;
+  // A bank collection must obey the same account restrictions as bank access.
+  if (action === 3 && pluginApi.emitCanBank(player, "grand-exchange-collect") === false) return;
   const inventory = player.getInventory();
   const parts = [];
   // Each part lands on a copy first, so a collection that does not fit hands over nothing.
@@ -652,7 +654,7 @@ function collectAll(player, action) {
 }
 
 function openGrandExchange({ player }) {
-  // "grand-exchange:can-open": other content may keep a player out (an Ironman).
+  // "grand-exchange:can-open": other content may keep a player out.
   const request = { player, allow: true, message: null };
   pluginApi.emitCustomEvent("grand-exchange:can-open", request);
   if (!request.allow) {
@@ -703,7 +705,7 @@ function openGrandExchange({ player }) {
     .sendInterfaceFlagsRange(uid(23), 0, 1, 2)
     // Same item operations as the normal inventory panel.
     .sendInterfaceFlagsRange(SIDE_ITEMS, 0, 27, 1086);
-  sender.sendMessage("Grand Exchange: live guide prices. Fills depend on trade volume and your price; buy limits reset every four hours.");
+  sender.sendMessage("Grand Exchange: live guide prices. Fills depend on trade volume and your price; buy limits reset every four hours. Ironmen can only buy one bond per offer.");
   return true;
 }
 

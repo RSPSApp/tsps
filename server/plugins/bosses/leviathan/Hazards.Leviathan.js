@@ -19,7 +19,7 @@ class Hazards {
     this.firstRoar = true;
     const { west, east, south, north } = Common.data.arena;
     for (let x = west; x <= east; x++) for (let y = south; y <= north; y++) {
-      if ((this.session.area.getClip(this.session.tile([x, y])) & 0x200100) === 0) this.floor.add(Model.key([x, y]));
+      if ((this.session.area.getClip(this.session.tile([x, y])) & Common.core.RegionManager.BLOCKED_MASK) === 0) this.floor.add(Model.key([x, y]));
     }
   }
   playerTile() { return this.session.sourceTile(this.fight.player.getLocation()).slice(0, 2); }

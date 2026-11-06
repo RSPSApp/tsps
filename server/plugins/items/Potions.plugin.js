@@ -1656,7 +1656,7 @@ function cureFromHealthOrb({ player }) {
     if (itemId <= 0) continue;
     const entry = POTION_BY_ITEM_ID.get(itemId);
     const strength = entry && CURE_POTIONS.get(entry.potion.name);
-    if (strength === undefined || !entry) continue;
+    if (strength === undefined || !entry || pluginApi.core.ItemDefinition.forId(itemId).isNoted()) continue;
     if (!selected || strength > selected.strength ||
         (entry.potion === selected.entry.potion && entry.doses < selected.entry.doses)) {
       selected = { entry, strength, itemId, slot };

@@ -122,7 +122,7 @@ function blast(npc, method, tile, max, adjacentMax) {
 
 function freeTile(tile) {
   const { RegionManager } = Shared.core();
-  return (RegionManager.getClipping(tile.x, tile.y, tile.z) & 0x1280100) === 0;
+  return (RegionManager.getClipping(tile.x, tile.y, tile.z) & RegionManager.BLOCKED_MASK) === 0;
 }
 
 /** Six tiles in the 7x7 around the landing, each different and walkable (capture: six). */

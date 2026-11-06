@@ -80,7 +80,7 @@ function freeSquares(map, room, size) {
   const { RegionManager } = Shared.core();
   const free = (x, y) => {
     const tile = map.roomTile(room, x, y);
-    return (RegionManager.getClipping(tile.getX(), tile.getY(), tile.getZ(), map) & 0x1280100) === 0;
+    return (RegionManager.getClipping(tile.getX(), tile.getY(), tile.getZ(), map) & RegionManager.BLOCKED_MASK) === 0;
   };
   const squares = [];
   for (let x = 3; x + size - 1 <= 12; x++) {

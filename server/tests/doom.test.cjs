@@ -377,7 +377,7 @@ test('a genuinely completed Final Dawn still opens the boss entrance with Pass-t
 });
 
 test('the arrival, the volatile earth tiles and the lobby tiles are open floor', () => {
-  const free = ({ x, y, z = 0 }) => (RegionManager.getClipping(x, y, z, null) & 0x1280100) === 0;
+  const free = ({ x, y, z = 0 }) => (RegionManager.getClipping(x, y, z, null) & RegionManager.BLOCKED_MASK) === 0;
   for (const key of ['ARRIVAL', 'LOBBY', 'LOBBY_GAP', 'RESPAWN', 'RUINS']) assert.ok(free(Shared.TILES[key]), key);
   for (const [x, y] of Hazards.EARTH.pool) assert.ok(free({ x, y }), `earth at ${x},${y}`);
   for (const [x, y] of Hazards.EARTH.pool) assert.ok(free(Shared.shift({ x, y }, true)), `deep earth at ${x},${y}`);

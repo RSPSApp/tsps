@@ -2152,8 +2152,7 @@ module.exports = function registerDesertTreasureII(api) {
     if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
     const regionManager = api.core.RegionManager;
     if (typeof regionManager?.getClipping !== "function") return true;
-    // Match the walkable-tile test used by the existing boss hazard plugins.
-    return (regionManager.getClipping(x, y, z, area) & 0x1280100) === 0;
+    return (regionManager.getClipping(x, y, z, area) & regionManager.BLOCKED_MASK) === 0;
   }
   function finalWightHasProjectileLine(area, source, destination) {
     const regionManager = api.core.RegionManager;

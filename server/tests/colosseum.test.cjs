@@ -647,10 +647,10 @@ test('Solarflare circles a pillar on its 16 open tiles', () => {
     assert.equal(path.length, 16);
     assert.equal(path.filter((tile) => tile.corner).length, 4);
     for (const tile of path) {
-      assert.equal(RegionManager.getClipping(tile.x, tile.y, 0) & 0x1280100, 0, `${tile.x},${tile.y} is open`);
+      assert.equal(RegionManager.getClipping(tile.x, tile.y, 0) & RegionManager.BLOCKED_MASK, 0, `${tile.x},${tile.y} is open`);
     }
     for (let x = pillar.x; x < pillar.x + 3; x++) {
-      assert.notEqual(RegionManager.getClipping(x, pillar.y + 1, 0) & 0x1280100, 0, 'the pillar blocks');
+      assert.notEqual(RegionManager.getClipping(x, pillar.y + 1, 0) & RegionManager.BLOCKED_MASK, 0, 'the pillar blocks');
     }
   }
 });
@@ -769,7 +769,7 @@ test("Sol's patterns: Spear 1 is 5x6 and two lines of 4; the Shields leave one s
 test('the barricade closes the gaps between the four pillars', () => {
   const tiles = Patterns.barricade();
   const blocked = (x, y) => tiles.some((tile) => tile.x === x && tile.y === y) ||
-    (RegionManager.getClipping(x, y, 0) & 0x1280100) !== 0;
+    (RegionManager.getClipping(x, y, 0) & RegionManager.BLOCKED_MASK) !== 0;
   const { minX, maxX, minY, maxY } = Patterns.BARRICADE;
   for (let x = minX; x <= maxX; x++) assert.ok(blocked(x, minY) && blocked(x, maxY), `x ${x}`);
   for (let y = minY; y <= maxY; y++) assert.ok(blocked(minX, y) && blocked(maxX, y), `y ${y}`);
@@ -1120,7 +1120,7 @@ test('native Minotaur healing uses the arena visibility and eligibility rules', 
       for (const actor of [player, minotaur, target]) {
         const at = actor.getLocation();
         for (let dx = 0; dx < actor.getSize(); dx++) for (let dy = 0; dy < actor.getSize(); dy++) {
-          assert.equal(RegionManager.getClipping(at.getX() + dx, at.getY() + dy, at.getZ(), run.area) & 0x1280100, 0, 'actor occupies an open cache tile');
+          assert.equal(RegionManager.getClipping(at.getX() + dx, at.getY() + dy, at.getZ(), run.area) & RegionManager.BLOCKED_MASK, 0, 'actor occupies an open cache tile');
         }
       }
       run.waveTicks = 4;
@@ -1134,7 +1134,7 @@ test('native Minotaur healing uses the arena visibility and eligibility rules', 
     const { run, minotaur, target, pulse } = f;
     assert.equal(target.getSize(), 3);
     assert.equal(target.getMaxHitpoints(), 220);
-    assert.notEqual(RegionManager.getClipping(1816, 3114, 0, run.area) & 0x1280100, 0);
+    assert.notEqual(RegionManager.getClipping(1816, 3114, 0, run.area) & RegionManager.BLOCKED_MASK, 0);
     assert.equal(center(minotaur).getDistance(center(target)), 6);
     assert.equal(sight(minotaur, target, run.area), false, 'centre ray hits the cache pillar');
     assert.equal(RegionManager.canProjectileAttackBounds(minotaur.getLocation(), target.getLocation(), 3, 3, 3, 3, run.area), true, 'closest footprint edge is open');

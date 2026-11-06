@@ -95,7 +95,7 @@ test('only the start and boss rooms are drawn at first; lighting a room opens th
     assert.ok(start.lit && map.room(3, 3).lit);
     assert.equal(map.rooms.flat().filter((room) => room.lit).length, 2);
     const tile = map.startTile(seeded(1));
-    assert.equal(RegionManager.getClipping(tile.getX(), tile.getY(), tile.getZ(), map) & 0x1280100, 0,
+    assert.equal(RegionManager.getClipping(tile.getX(), tile.getY(), tile.getZ(), map) & RegionManager.BLOCKED_MASK, 0,
       'the start tile is open floor');
 
     // A side of the start room that leads away from the boss room.
@@ -568,7 +568,7 @@ test('passing the barrier from its corridor starts the fight and lands on the ar
     interact('Barrier', 'Quick-pass', player, barrier);
     assert.equal(run.stage, 'boss');
     assert.ok(run.inArena(player.getLocation()), 'two tiles in, on the floor');
-    assert.equal(RegionManager.getClipping(player.getLocation().getX(), player.getLocation().getY(), 1, run.map) & 0x1280100, 0);
+    assert.equal(RegionManager.getClipping(player.getLocation().getX(), player.getLocation().getY(), 1, run.map) & RegionManager.BLOCKED_MASK, 0);
   } finally {
     run.end('exit', { fade: false });
   }

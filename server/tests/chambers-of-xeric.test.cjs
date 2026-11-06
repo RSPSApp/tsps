@@ -251,7 +251,7 @@ test('Challenge Mode is always the same three floors, every combat and puzzle ro
 // ------------------------------------------------------------------ the map
 
 test('the map: floors on planes 3, 2 (and 1), the Olm beside them, every landing open', () => {
-  const free = (map, tile) => (RegionManager.getClipping(tile.getX(), tile.getY(), tile.getZ(), map) & 0x1280100) === 0;
+  const free = (map, tile) => (RegionManager.getClipping(tile.getX(), tile.getY(), tile.getZ(), map) & RegionManager.BLOCKED_MASK) === 0;
   for (let i = 0; i < 8; i++) {
     const layout = i === 0 ? Layout.challengeLayout() : Layout.normalLayout();
     const map = CoxMap.createMap(layout);

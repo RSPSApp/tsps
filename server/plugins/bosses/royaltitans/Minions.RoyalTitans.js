@@ -15,7 +15,6 @@ const CombatAchievements = require("./CombatAchievements.RoyalTitans");
 const VOID_MAGE_SET_MULTIPLIER = 1.45;
 /** A cast spell is remembered this long, for the hit that lands after the selection cleared. */
 const RECENT_CAST_TICKS = 6;
-const WALKABLE_MASK = 0x1280100;
 
 let core = null;
 let attackMagicIndex = 0;
@@ -31,7 +30,7 @@ const { alive, tileOf, later, sessionOfNpc } = Shared;
 
 /** Walkable in the fight's own instance (its collision, not the main world's). */
 function isWalkable(session, x, y) {
-  return (core.RegionManager.getClipping(x, y, 0, session.area) & WALKABLE_MASK) === 0;
+  return (core.RegionManager.getClipping(x, y, 0, session.area) & core.RegionManager.BLOCKED_MASK) === 0;
 }
 
 /** Three elementals on walkable tiles near the caster (falling back around blocked

@@ -732,6 +732,146 @@ function mineAll(h, player, name, rockId) {
   return { rock, restore: () => { MapObjects.get = original; } };
 }
 
+test("mining gloves: eligible rocks use the tier save table, with granite as a negative control", () => {
+  assert.equal(core.WorldDefinition.isMembersWorld(), true);
+  const tiers = [-1, core.ItemIdentifiers.MINING_GLOVES, core.ItemIdentifiers.SUPERIOR_MINING_GLOVES,
+    core.ItemIdentifiers.EXPERT_MINING_GLOVES];
+  const standard = [0, 1, 2, 3], superior = [0, 0, 1, 2], expert = [0, 0, 0, 1], none = [0, 0, 0, 0];
+  const rows = [
+    ["Copper rocks", standard], ["Tin rocks", standard], ["Iron rocks", standard],
+    ["Silver rocks", standard], ["Lead rocks", standard, "leadrock1"], ["Coal rocks", standard],
+    ["Gold rocks", standard], ["Mithril rocks", superior], ["Adamantite rocks", superior],
+    ["Sandstone rocks", expert], ["Sunstone rocks", expert, "sunstonerock1"],
+    ["Runite rocks", expert], ["Amethyst crystals", expert, "amethystrock1", 2], ["Granite rocks", none],
+  ];
+  for (const [name, saves, gameval, base = 1] of rows) for (let tier = 0; tier < tiers.length; tier++) {
+    const h = harness(), player = createPlayer();
+    const items = [];
+    if (tiers[tier] > 0) items[core.Equipment.HANDS_SLOT] = { getId: () => tiers[tier] };
+    player.getEquipment = () => ({ getItems: () => items });
+    const entry = Mining.ROCKS.find(rock => rock.objectName === name);
+    assert.ok(entry, name);
+    const id = gameval ? loc(gameval) : entry.objectIds[0];
+    assert.ok(id >= 0, name);
+    const restoreRandom = scriptRandom([], 0);
+    const { restore } = mineAll(h, player, name, id);
+    try {
+      h.tick(12);
+      assert.equal(player.added.reduce((sum, [, amount]) => sum + amount, 0), base + saves[tier], `${name}, tier ${tier}`);
+      assert.equal(player.xp.length, base + saves[tier], `${name}, tier ${tier}: XP per successful gather`);
+      assert.ok(h.registered.length > 0, `${name}, tier ${tier}: rock depleted`);
+    } finally {
+      restoreRandom();
+      restore();
+    }
+  }
+});
+
+test("mining gloves: a shared rock budget remains bounded across a tier swap and competing miners", () => {
+  const h = harness(), first = createPlayer(), items = [];
+  const hands = core.Equipment.HANDS_SLOT;
+  items[hands] = { getId: () => core.ItemIdentifiers.MINING_GLOVES };
+  first.getEquipment = () => ({ getItems: () => items });
+  const restoreRandom = scriptRandom([], 0);
+  const mined = mineAll(h, first, "Iron rocks", loc("ironrock2"));
+  try {
+    h.tick(2);
+    assert.equal(first.added.length, 1);
+    assert.equal(h.registered.length, 0, "basic gloves saved the standing rock once");
+    items[hands] = { getId: () => core.ItemIdentifiers.EXPERT_MINING_GLOVES };
+    h.tick(9);
+    assert.equal(first.added.length, 4, "upgrading does not restart the rock's save budget");
+    assert.ok(h.registered.length > 0, "the rock is eventually exhausted");
+  } finally {
+    restoreRandom();
+    mined.restore();
+  }
+
+  const h2 = harness(), a = createPlayer(), b = createPlayer(), gloves = [];
+  gloves[hands] = { getId: () => core.ItemIdentifiers.MINING_GLOVES };
+  a.getEquipment = b.getEquipment = () => ({ getItems: () => gloves });
+  const restoreSecondRandom = scriptRandom([], 0);
+  const shared = mineAll(h2, a, "Iron rocks", loc("ironrock2"));
+  try {
+    h2.interactions.get("Iron rocks").Mine({ player: b, object: shared.rock, definition: { getName: () => "Iron rocks" } });
+    h2.tick(2);
+    assert.equal(a.added.length + b.added.length, 2);
+    assert.ok(h2.registered.length > 0, "two miners cannot each renew a basic save for the same rock");
+  } finally {
+    restoreSecondRandom();
+    shared.restore();
+  }
+});
+
+test("mining gloves: a free-to-play world does not apply their save", () => {
+  const h = harness(), player = createPlayer(), gloves = [];
+  gloves[core.Equipment.HANDS_SLOT] = { getId: () => core.ItemIdentifiers.EXPERT_MINING_GLOVES };
+  player.getEquipment = () => ({ getItems: () => gloves });
+  const previousMembers = core.WorldDefinition.isMembersWorld;
+  core.WorldDefinition.isMembersWorld = () => false;
+  const restoreRandom = scriptRandom([], 0);
+  const mined = mineAll(h, player, "Iron rocks", loc("ironrock2"));
+  try {
+    h.tick(2);
+    assert.equal(player.added.length, 1);
+    assert.ok(h.registered.length > 0);
+  } finally {
+    core.WorldDefinition.isMembersWorld = previousMembers;
+    restoreRandom();
+    mined.restore();
+  }
+});
+
+test("mining gloves: the depletion hook observes each attempt and can retain its four-ore limit", () => {
+  const tiers = [-1, core.ItemIdentifiers.MINING_GLOVES, core.ItemIdentifiers.SUPERIOR_MINING_GLOVES,
+    core.ItemIdentifiers.EXPERT_MINING_GLOVES];
+  for (let tier = 0; tier < tiers.length; tier++) {
+    const seen = [];
+    const h = harness({ emit: (key, event) => {
+      if (key !== "mining:deplete-rock") return;
+      seen.push(event.handled);
+      if (seen.length < 4) event.handled = true;
+    } });
+    const player = createPlayer(), gloves = [];
+    if (tiers[tier] > 0) gloves[core.Equipment.HANDS_SLOT] = { getId: () => tiers[tier] };
+    player.getEquipment = () => ({ getItems: () => gloves });
+    const restoreRandom = scriptRandom([], 0);
+    const mined = mineAll(h, player, "Iron rocks", loc("ironrock2"));
+    try {
+      h.tick(12);
+      assert.equal(player.added.length, 4, `tier ${tier}: four ores, not repeated glove budgets`);
+      assert.deepEqual(seen, Array.from({ length: 4 }, (_, index) => index < tier));
+      assert.ok(h.registered.length > 0, "the hook's fourth ore depleted the rock");
+    } finally {
+      restoreRandom();
+      mined.restore();
+    }
+  }
+});
+
+test("expert gloves: a content-kept amethyst wall does not redraw its spent base yield or save", () => {
+  const seen = [];
+  const h = harness({ emit: (key, event) => {
+    if (key !== "mining:deplete-rock") return;
+    seen.push(event.handled);
+    if (seen.length === 2) event.handled = true;
+  } });
+  const player = createPlayer(), gloves = [];
+  gloves[core.Equipment.HANDS_SLOT] = { getId: () => core.ItemIdentifiers.EXPERT_MINING_GLOVES };
+  player.getEquipment = () => ({ getItems: () => gloves });
+  const restoreRandom = scriptRandom([], 0);
+  const mined = mineAll(h, player, "Amethyst crystals", loc("amethystrock1"));
+  try {
+    h.tick(14);
+    assert.equal(player.added.length, 4, "two base, one glove save, one content save");
+    assert.deepEqual(seen, [true, false, false]);
+    assert.ok(h.registered.length > 0);
+  } finally {
+    restoreRandom();
+    mined.restore();
+  }
+});
+
 test("rune essence (70, 3027): sound 3600 and the ore counter with each essence, and no chat line", () => {
   const h = harness();
   const player = createPlayer({ level: 1, pickaxe: ItemIds.BRONZE_PICKAXE });

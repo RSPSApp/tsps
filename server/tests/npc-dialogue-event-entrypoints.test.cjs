@@ -3297,3 +3297,247 @@ test('Lost Tribe silverware search preserves capacity, duplicate and stage/conta
     assert.equal(f.quest.getStage(f.player), setup.stage ?? 9);
   }
 });
+
+// The Tourist Trap: use the registered NPC/dialogue/cart paths with a seeded quest stage.
+// The NPC and cart come from the active cache/map; no client or full quest was run.
+let touristDriverMapReady = false;
+function touristDriverFixture(t, { stage = 25, coins = 0 } = {}) {
+  const f = fixture(t), { player } = f, I = core.ItemIdentifiers;
+  const errors = [];
+  const originalError = console.error;
+  t.mock.method(console, 'error', (...args) => { errors.push(args.map(String).join(' ')); originalError.apply(console, args); });
+  let npc;
+  t.after(() => {
+    try {
+      try { player.closeInterruptibleInterfaces(); }
+      finally {
+        core.TaskManager.cancelTasks(player); core.TaskManager.cancelTasks(player.getIndex());
+        if (npc && core.World.getNpcs().get(npc.getIndex()) === npc) core.World.getNpcs().remove(npc);
+      }
+      assert.ok(!npc || core.World.getNpcs().get(npc.getIndex()) !== npc);
+      assert.ok(!npc || !npc.isRegistered());
+      assert.equal(player.isRegistered(), false);
+      assert.equal(core.TaskManager.hasActiveTask(player), false);
+      assert.equal(core.TaskManager.hasActiveTask(player.getIndex()), false);
+      assert.equal(MultiChatboxPrompt.getPending(player), null);
+      assert.equal(player.getDialogueManager().getCurrent(), undefined);
+    } finally { assert.deepEqual(errors, [], 'no caught dialogue, hook or cleanup errors'); }
+  });
+  const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(q => q.key === 'the_tourist_trap');
+  assert.ok(quest, 'Tourist Trap is registered');
+  player.setAttribute('the-tourist-trap:stage-version', 1);
+  quest.setStage(player, stage);
+  player.getPacketSender().sendVarbit(2809, stage >= 25 ? 1 : 0);
+  if (coins) player.getInventory().add(new core.Item(I.COINS, coins), false);
+  if (!touristDriverMapReady) {
+    core.RegionManager.init();
+    core.RegionManager.loadMapFiles(3287, 3022);
+    touristDriverMapReady = true;
+  }
+  player.setLocation(new core.Location(3288, 3022, 0));
+  player.setNeedsPlacement(false);
+  npc = core.NPC.create(core.NpcIdentifiers.MINE_CART_DRIVER, new core.Location(3287, 3022, 0));
+  assert.equal(core.World.getNpcs().add(npc), true);
+  assert.equal(core.World.getNpcs().get(npc.getIndex()), npc);
+  const carts = [...core.MapObjects.mapObjects.values()].flat().filter(object => {
+    const loc = object.getLocation();
+    return object.getId() === 2682 && loc.getZ() === 0
+      && Math.abs(loc.getX() - 3287) < 64 && Math.abs(loc.getY() - 3022) < 64;
+  });
+  assert.equal(carts.length, 1, 'loaded map contains the camp flatback-cart parent');
+  const cart = carts[0], loc = cart.getLocation();
+  f.npc = npc; f.quest = quest;
+  f.stage = () => quest.getStage(player);
+  f.coins = () => player.getInventory().getAmount(I.COINS);
+  f.talk = () => {
+    const definition = npc.getCurrentDefinition(player);
+    assert.equal(definition.getName(), 'Mine cart driver');
+    assert.ok(definition.getActions().includes('Talk-to'));
+    return PM.emitNpcInteraction({ player, npc, npcId: npc.getId(), action: 'Talk-to', clickType: 1, handled: false });
+  };
+  f.search = () => {
+    player.closeInterruptibleInterfaces();
+    // This fixture enters the registered object hook directly after placing the player
+    // next to the actual cache object; it does not claim object packet/pathing coverage.
+    player.setLocation(new core.Location(loc.getX() + 1, loc.getY(), loc.getZ()));
+    player.setNeedsPlacement(false);
+    const current = core.ObjectDefinition.forPlayer(cart.getId(), player);
+    const clickType = current.getInteractions().indexOf('Search') + 1;
+    assert.ok(clickType > 0, 'the active cart has a Search action');
+    const beforeSearch = player.getLocation().clone();
+    const handled = PM.emitObjectInteraction({ player, object: cart, definition: current, location: loc, objectId: current.id,
+      x: loc.getX(), y: loc.getY(), z: loc.getZ(), option: 'Search', clickType, handled: false });
+    return { handled, beforeSearch };
+  };
+  return f;
+}
+
+const TOURIST_JOKES = [
+  'Nice cart.',
+  "One wagon wheel says to the other, 'I'll see you around'.",
+  "'One good turn deserves another'",
+  'Fired... no, shot perhaps!',
+  'In for a penny in for a pound.',
+  "Well, you see, it's like this...",
+];
+async function touristUntil(f, stop) {
+  const player = f.player, manager = player.getDialogueManager();
+  for (let n = 0; n < 80; n++) {
+    if (stop()) return;
+    const pending = MultiChatboxPrompt.getPending(player);
+    assert.equal(pending, null, `unexpected prompt ${pending?.title}: ${pending?.options?.join(' | ')}`);
+    const current = manager.getCurrent();
+    assert.ok(current, 'the real dialogue remains active until the requested step');
+    if (typeof current.getText === 'function') await nextLine(f);
+    else core.TaskManager.process();
+  }
+  assert.fail('the dialogue did not reach the requested step');
+}
+async function touristChoose(f, option) {
+  await touristUntil(f, () => MultiChatboxPrompt.getPending(f.player) !== null);
+  const prompt = MultiChatboxPrompt.getPending(f.player);
+  const index = prompt.options.indexOf(option);
+  assert.ok(index >= 0, `native prompt offers ${option}; got ${prompt.options.join(' | ')}`);
+  await choose(f, index + 1);
+}
+async function touristJokes(f) {
+  assert.equal(f.talk(), true, 'the registered Talk-to starts dialogue');
+  for (const option of TOURIST_JOKES) await touristChoose(f, option);
+}
+async function touristTerminal(f, text) {
+  await touristUntil(f, () => {
+    const current = f.player.getDialogueManager().getCurrent();
+    return current instanceof core.NpcDialogue && current.getText().replace(/\s+/g, ' ').trim() === text;
+  });
+  const current = f.player.getDialogueManager().getCurrent();
+  assert.ok(current instanceof core.NpcDialogue);
+  assert.equal(current.getNpcId(), core.NpcIdentifiers.MINE_CART_DRIVER);
+  assert.equal(f.player.getPacketSender().isChatboxInterface(231), true);
+}
+const RIOT_LINE = "Oh, right... Okay, you'd better jump in the cart then! Quickly!";
+const BRIBE_LINE = 'Okay, get in the back of the cart then!';
+
+test('Tourist Trap driver: talking alone does not unlock the camp cart', t => {
+  const f = touristDriverFixture(t, { coins: 100 });
+  assert.equal(f.talk(), true);
+  assert.ok(f.player.getDialogueManager().getCurrent() || MultiChatboxPrompt.getPending(f.player));
+  const { beforeSearch } = f.search();
+  assert.equal(f.stage(), 25, 'without agreement Search cannot move the quest to escape');
+  assert.equal(f.coins(), 100);
+  assert.ok(f.player.getLocation().equals(beforeSearch), 'refused Search leaves position unchanged');
+});
+
+test('Tourist Trap driver: the full riot dialogue permits the actual cart search', async t => {
+  const f = touristDriverFixture(t, { coins: 127 });
+  await touristJokes(f);
+  await touristChoose(f, 'Prison riot in ten minutes, get your cart out of here!');
+  await touristChoose(f, "You can't leave me here, I'll get killed!");
+  await touristTerminal(f, RIOT_LINE);
+  assert.equal(f.stage(), 25, 'the accepting line has not yet been continued');
+  await nextLine(f);
+  assert.equal(f.stage(), 26);
+  assert.equal(f.coins(), 127);
+  f.search();
+  assert.equal(f.stage(), 27);
+  assert.deepEqual([f.player.getLocation().getX(), f.player.getLocation().getY(), f.player.getLocation().getZ()], [3304, 3112, 0]);
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.ANA_IN_A_BARREL), 1);
+});
+
+test('Tourist Trap driver: a 100-coin agreement is charged once and permits escape', async t => {
+  const f = touristDriverFixture(t, { coins: 200 });
+  await touristJokes(f);
+  await touristChoose(f, "There's ten gold in it for you if you leave now - no questions asked.");
+  await touristChoose(f, 'A hundred it is!');
+  await touristTerminal(f, BRIBE_LINE);
+  assert.equal(f.coins(), 200, 'payment is held until the accepting line is continued');
+  await nextLine(f);
+  assert.equal(f.stage(), 26);
+  assert.equal(f.coins(), 100, 'the driver takes exactly 100');
+  f.player.closeInterruptibleInterfaces();
+  await touristJokes(f);
+  await touristChoose(f, "There's ten gold in it for you if you leave now - no questions asked.");
+  await touristChoose(f, 'A hundred it is!');
+  await touristTerminal(f, BRIBE_LINE);
+  await nextLine(f);
+  assert.equal(f.coins(), 100, 'a second accepting conversation cannot debit again');
+  f.search();
+  assert.equal(f.stage(), 27);
+  assert.deepEqual([f.player.getLocation().getX(), f.player.getLocation().getY(), f.player.getLocation().getZ()], [3304, 3112, 0]);
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.ANA_IN_A_BARREL), 1);
+});
+
+test('Tourist Trap driver: insufficient coins cannot unlock or debit the cart', async t => {
+  const f = touristDriverFixture(t, { coins: 99 });
+  await touristJokes(f);
+  await touristChoose(f, "There's ten gold in it for you if you leave now - no questions asked.");
+  await touristChoose(f, 'A hundred it is!');
+  await touristTerminal(f, "You little cheat, trying to trick me! I'll show you! Guards! Guards!");
+  assert.equal(f.coins(), 99);
+  f.search();
+  assert.equal(f.stage(), 25);
+  assert.equal(f.coins(), 99);
+});
+
+test('Tourist Trap driver: lost coins at the final line cannot buy an agreement', async t => {
+  const f = touristDriverFixture(t, { coins: 100 });
+  await touristJokes(f);
+  await touristChoose(f, "There's ten gold in it for you if you leave now - no questions asked.");
+  await touristChoose(f, 'A hundred it is!');
+  await touristTerminal(f, BRIBE_LINE);
+  f.player.getInventory().deleteNumber(core.ItemIdentifiers.COINS, 1);
+  await nextLine(f);
+  assert.equal(f.stage(), 25);
+  assert.equal(f.coins(), 99);
+  f.search();
+  assert.equal(f.stage(), 25);
+});
+
+test('Tourist Trap driver: cancelling the accepting line or changing stage consumes nothing', async t => {
+  const f = touristDriverFixture(t, { coins: 100 });
+  await touristJokes(f);
+  await touristChoose(f, "There's ten gold in it for you if you leave now - no questions asked.");
+  await touristChoose(f, 'A hundred it is!');
+  await touristTerminal(f, BRIBE_LINE);
+  f.player.closeInterruptibleInterfaces();
+  await nextLine(f);
+  assert.equal(f.stage(), 25);
+  assert.equal(f.coins(), 100);
+  await touristJokes(f);
+  await touristChoose(f, "There's ten gold in it for you if you leave now - no questions asked.");
+  await touristChoose(f, 'A hundred it is!');
+  await touristTerminal(f, BRIBE_LINE);
+  f.quest.setStage(f.player, 26);
+  await nextLine(f);
+  assert.equal(f.coins(), 100, 'a stale continuation cannot take coins after stage changes');
+});
+
+test('Tourist Trap driver: a wrong riot outcome and below-stage talk do not allow escape', async t => {
+  const f = touristDriverFixture(t);
+  await touristJokes(f);
+  await touristChoose(f, 'Prison riot in ten minutes, get your cart out of here!');
+  await touristChoose(f, 'Good luck!');
+  await touristTerminal(f, 'Yeah, you too!');
+  await nextLine(f);
+  f.search();
+  assert.equal(f.stage(), 25, 'the driver did not agree to carry the player');
+});
+
+test('Tourist Trap driver: ordinary conversation remains available before stage 25', t => {
+  const f = touristDriverFixture(t, { stage: 24 });
+  assert.equal(f.talk(), true);
+  assert.equal(f.stage(), 24);
+});
+
+test('Tourist Trap driver: exactly 100 coins reaches the bribe acceptance branch', async t => {
+  const f = touristDriverFixture(t, { coins: 100 });
+  await touristJokes(f);
+  await touristChoose(f, "There's ten gold in it for you if you leave now - no questions asked.");
+  await touristChoose(f, 'A hundred it is!');
+  await touristTerminal(f, BRIBE_LINE);
+  assert.equal(f.coins(), 100);
+  await nextLine(f);
+  assert.equal(f.stage(), 26);
+  assert.equal(f.coins(), 0);
+  f.search();
+  assert.equal(f.stage(), 27);
+});

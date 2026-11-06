@@ -544,5 +544,22 @@ test('in a game Piety\'s slot is Zeal without the unlock, and Augury puts it out
   assert.equal(p.getPrayerActive()[PrayerHandler.AUGURY], true);
   assert.ok(!p.getPrayerActive()[PrayerHandler.ZEAL]);
   assert.equal(p.varbits.get(16577), 0, 'prayer_zeal goes out on the client');
+
+  // Quick prayers: the set {Piety's slot} turns Zeal on, and stays on while another prayer
+  // comes and goes (Zeal has no quick-prayer slot of its own).
+  const { PrayerData } = require('../dist/game/content/PrayerHandler');
+  const orb = core.CacheDefinitions.getComponentId('orbs:prayerbutton');
+  const quick = p.getQuickPrayers();
+  PrayerHandler.deactivatePrayers(p);
+  quick.setPrayers(Object.assign([], { [PrayerHandler.PIETY]: PrayerData.PIETY }));
+  quick.handleWidgetAction(orb >>> 16, orb & 0xffff, 1);
+  assert.equal(p.getPrayerActive()[PrayerHandler.ZEAL], true, 'the quick set turns Zeal on');
+  assert.equal(quick.enabled, true);
+  const PROTECT_FROM_MELEE_SLOT = 23;
+  PrayerHandler.togglePrayer(p, PROTECT_FROM_MELEE_SLOT);
+  PrayerHandler.togglePrayer(p, PROTECT_FROM_MELEE_SLOT);
+  assert.equal(quick.enabled, true, 'another prayer on and off leaves the quick set on');
+  quick.handleWidgetAction(orb >>> 16, orb & 0xffff, 1);
+  assert.ok(!p.getPrayerActive()[PrayerHandler.ZEAL], 'the next orb click puts Zeal out');
   game.area.destroy();
 });

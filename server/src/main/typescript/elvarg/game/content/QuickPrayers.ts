@@ -273,9 +273,14 @@ export class QuickPrayers {
 
     public checkActive(): void {
         if (!this.enabled) return;
+        // The prayers the set turns on: Piety's slot is Zeal wherever the book shows Zeal there,
+        // and Zeal has no slot of its own, so the comparison is against the set's book ids.
+        const expected = new Set<number>();
         for (const [prayerId, prayer] of this.prayers.entries()) {
-            const bookId = QuickPrayers.PRAYER_HANDLER.bookPrayer(this.player, prayerId);
-            if ((prayer != null) !== QuickPrayers.isActivated(this.player, bookId)) {
+            if (prayer != null) expected.add(QuickPrayers.PRAYER_HANDLER.bookPrayer(this.player, prayerId));
+        }
+        for (let prayerId = 0; prayerId < this.prayers.length; prayerId++) {
+            if (expected.has(prayerId) !== (QuickPrayers.isActivated(this.player, prayerId) === true)) {
                 this.enabled = false;
                 this.player.getPacketSender().sendQuickPrayersState(false);
                 return;

@@ -133,18 +133,25 @@ async function chooseLagunaFromGrandExchange(p) {
   core.RegionManager.loadMapFiles(from.tree[0], from.tree[1]);
   p.setLocation(new core.Location(...from.landing));
   p.needsPlacement = false;
-  const location = new core.Location(...from.tree);
   const baseId = core.CacheDefinitions.getLocId("spirittree_small");
   assert.equal(baseId, 1295, "pinned cache's nameless transformed tree base");
-  const object = core.MapObjects.get(baseId, location);
-  assert.ok(object, "the Grand Exchange tree base is present on the map");
-  const definition = core.ObjectDefinition.forPlayer(object.getId(), p);
-  assert.ok(definition?.getName() === "Spirit tree" && definition.getInteractions().includes("Travel"),
-    "the quest-complete transformation offers Travel");
+  // SpiritTrees.treeAt accepts map objects within six tiles of its authored tree site.
+  let object, definition;
+  for (let dx = -6; dx <= 6 && !object; dx++) {
+    for (let dy = -6; dy <= 6 && !object; dy++) {
+      const location = new core.Location(from.tree[0] + dx, from.tree[1] + dy, from.tree[2]);
+      const candidate = core.MapObjects.get(baseId, location);
+      const def = candidate && core.ObjectDefinition.forPlayer(candidate.getId(), p);
+      if (def?.getName() === "Spirit tree" && def.getInteractions().includes("Travel")) {
+        object = candidate; definition = def;
+      }
+    }
+  }
+  assert.ok(object && definition, "a quest-complete Grand Exchange map tree offers Travel");
   const clickType = definition.getInteractions().findIndex((option) => option === "Travel") + 1;
   assert.ok(clickType > 0, "actual Travel option slot");
   assert.equal(PM.emitObjectInteraction({ player: p, object, objectId: object.getId(), definition, clickType,
-    location: { x: from.tree[0], y: from.tree[1], z: from.tree[2] }, handled: false }), true);
+    location: { x: object.getLocation().getX(), y: object.getLocation().getY(), z: object.getLocation().getZ() }, handled: false }), true);
   const menu = p.getAttribute("spirit-trees:menu");
   assert.ok(menu && menu.choices[slot]?.tree.name === "Laguna Aurorae", "registered menu owns the selected slot");
   const offered = menu.choices[slot].to != null;

@@ -138,7 +138,7 @@ function sameStack(a, b) {
   return a.id === b.id && JSON.stringify(a.meta ?? null) === JSON.stringify(b.meta ?? null);
 }
 
-/** What one of an item is worth to a grave: its cache value, as kept-on-death ranks items. */
+/** The cache/store value of one item, used when no other value order is supplied. */
 function value(id) {
   return Math.max(0, core().ItemDefinition.forId(id).getValue());
 }
@@ -155,10 +155,10 @@ function isSupply(id) {
 
 /**
  * Adds `adding` to `records`, stacked like a bank (meta must match), and sorted most valuable
- * first, the order the client's fee bands read. A stack holds up to 2^31-1. Returns what fits in
+ * first, using `worth` for the value order. A stack holds up to 2^31-1. Returns what fits in
  * `capacity` slots and what is left over: the least valuable slots past it.
  */
-function stack(records, adding, capacity) {
+function stack(records, adding, capacity, worth = value) {
   const stacks = [];
   const overflow = [];
   for (const entry of [...records, ...adding]) {
@@ -171,7 +171,7 @@ function stack(records, adding, capacity) {
     stacks[index].amount = Math.min(total, MAX_STACK);
     if (total > MAX_STACK) overflow.push({ ...entry, amount: total - MAX_STACK });
   }
-  stacks.sort((a, b) => value(b.id) - value(a.id));
+  stacks.sort((a, b) => worth(b.id) - worth(a.id));
   return { held: stacks.slice(0, capacity), overflow: [...overflow, ...stacks.slice(capacity)] };
 }
 

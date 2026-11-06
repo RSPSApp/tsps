@@ -124,6 +124,27 @@ existing level/quest gates. In-game verification covers the three four-dose step
 click with spare ingredients, the repeat-horn refusal, XP totals, and ordinary potion Make-X.
 There is no normal-world Sanfew mixing recording in the indexed captures consulted here.
 
+### Barbarian mixes
+
+Barbarian Training's Herblore section (`server/plugins/npcs/BarbarianTraining.plugin.js`). A
+two-dose potion with roe or caviar makes a two-dose mix. The 29 rows in `herblore.json` come from the
+Wiki's mix table on its Barbarian Training page: level, XP, and roe only for the attack,
+antipoison, Relicym's, strength and restore mixes, with caviar for every mix. Each row has an
+`unlock`, which `Common.unlocked` asks about through `"herblore:unlocked"`:
+
+- `barbarian_herblore:started` (the attack mix): once Otto has asked for one.
+- `barbarian_herblore` (every other mix): once the attack mix has been handed to him.
+
+Without it, the pair says "Nothing interesting happens.", like any pair that makes nothing. Live's
+refusal is not captured.
+
+Recording 1533 (rev 224): "You combine your potion with the fish eggs." (spam), the usual
+`human_herbing_vial` and synth 2608, and 8 XP for the attack mix, made at once from the one pair.
+The first attack mix also shows a message box, "You feel you have learned more of barbarian ways.
+Otto might wish to talk to you more." Mixes are `manual`, one per use. The Wiki's changelog adds an
+optional Make-All setting (May 2024), which is not here. Caviar uses the same message, which has
+not been captured for caviar.
+
 ## Grinding
 
 A pestle and mortar on a secondary; no Herblore level or XP. Recordings 70 and 1875 (unicorn

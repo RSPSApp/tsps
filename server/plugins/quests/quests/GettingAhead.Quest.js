@@ -153,10 +153,12 @@ module.exports = function registerGettingAheadQuest(api) {
   ]);
   const later = (key, ticks, fn) => TaskManager.submit(new CountdownTask(key, ticks, fn));
 
+  /** A fade back in leaves the full-screen fade overlay mounted on 161:1 once the script has run (#2640). Take it down then, but only if it is still the interface mounted there: a ladder or transport that mounted something else in the meantime is not ours to close, and a later fade out is a new mount. */
   function fade(player, out, duration = 50) {
-    player.getPacketSender().sendSubInterface(FLOATER_UID, 174, 1, {
+    const mount = player.getPacketSender().mountSubInterface(FLOATER_UID, 174, 1, {
       postScripts: [{ scriptId: 948, args: out ? [0, 255, 0, 0, duration] : [0, 0, 0, 255, duration] }],
     });
+    if (!out) later({}, Math.ceil(duration / 30) + 1, () => player.getPacketSender().closeSubInterfaceMount(mount));
   }
 
   function confirm(player, title, yes) {

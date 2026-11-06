@@ -295,7 +295,7 @@ Bounty tasks, Repair kits).
   (`PlayerMovementSync.acrossDeckOrientation`).
 - **Not done**: chainshot and incendiary cannonballs, the ballistic attractor, the perildance
   bitter's +1, the cannons' auto-retaliate setting, the side panel's NPC target layer (937:26),
-  Telekinetic Grab on corpses, the herb sack and seed box when looting, crewmates "fire at will"
+  Telekinetic Grab on corpses, the herb sack when looting, crewmates "fire at will"
   needing their target cleared, and multi-combat limits at sea.
 - Shipwright Seb repairs the boat visiting the shipyard for 50 coins per missing hitpoint,
   with canonical confirmation, a remembered warning choice and PIN-guarded bank fallback.

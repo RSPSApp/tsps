@@ -326,7 +326,7 @@ function select({ player, buttonId, groupId = buttonId >>> 16, childId = buttonI
   if (!to || !type || !canTravel(menu.station, to, type)) return;
   closeMenu(player);
   if (to.id === 0) {
-    api.sendMultiChatboxPrompt(player, "Travel into the Wilderness? This is a one-way trip.", ["Yes, take me into the Wilderness.", () => travel(player, menu.station, to, type), "No, stay here.", () => {}]);
+    api.sendMultiChatboxPrompt(player, "Travel into the Wilderness? This is a one-way trip.", "Yes, take me into the Wilderness.", () => travel(player, menu.station, to, type), "No, stay here.", () => {});
   } else travel(player, menu.station, to, type);
 }
 

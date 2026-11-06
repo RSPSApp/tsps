@@ -7,10 +7,11 @@ The Farming Guild Seed Vault opens the cache's storage modal 631 with side panel
 - Normal RSProx 232/03150 and 238/04222 show inventory 626 before the modal pair, native quantity operations, favourites, placeholders and reordering.
 - Cache 241 supplies current component names, scripts 2811–2834, inventory 626, capacity 104, seed-category objparam 709 and contract objparam 895. Script 7784 and group 906 provide the newer deposit-slot lock editor; no recording of that editor was used.
 - Wiki Seed vault and Bank PIN provide storage eligibility and the PIN requirement.
+- The [Jagex Seed Vault update](https://oldschool.runescape.wiki/w/Update%3AThe_Seed_Vault) excludes Ultimate Ironmen; no Vault-specific refusal line is sourced.
 
 ## Behaviour
 
-The PIN guard runs before creating or revealing storage. Native deposits and withdrawals recheck the owned modal pair, exact canonical farm state, location, life/status and PIN. Deposit plans operate on a complete slot-by-slot inventory clone and commit once; notes normalize to eligible seeds/saplings and metadata-bearing copies are left untouched. Full inventories and stack caps allow only safe amounts.
+Ultimate Ironmen are refused before the PIN guard or access to saved Vault state. The existing bank-policy hooks are asked for refusal side effects, but their first answer can vary the message; denial does not depend on the answer. If the mode changes while the Vault is already open, subsequent actions are refused; the existing modal is not closed by that mode change. Existing saved balances remain untouched. For permitted accounts, the PIN guard runs before creating or revealing storage. Native deposits and withdrawals recheck the owned modal pair, exact canonical farm state, location, life/status and PIN. Deposit plans operate on a complete slot-by-slot inventory clone and commit once; notes normalize to eligible seeds/saplings and metadata-bearing copies are left untouched. Full inventories and stack caps allow only safe amounts.
 
 Saved order, holes/placeholders, eight favourites, chosen/custom quantity and deposit-slot locks supplement the existing balance map. Native dragging validates both current items. Zero cancels amount input; close, replacement, movement, trade, death, logout or a new PIN challenge prevents stale callbacks. PIN resume opens a fresh screen rather than replaying a transfer.
 

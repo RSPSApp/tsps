@@ -60,6 +60,17 @@ plugin draws what the upstream plugin draws.
   - At the Grand Exchange, "View missing items" by the item search lists the quest's missing tradeable items.
   - Away from it, a step that names items to buy shows them at once (with *Show Puzzle Solutions*).
 
+## Snapshots
+
+Every evaluation sends the engine a snapshot of the game (QuestHelperSnapshot). The large,
+rarely changing parts (the scene's objects and terrain, the loaded widget tree and the cache
+definitions) are sent in full once with a digest; the server keeps them per browser session and
+echoes what it holds (`cached`) in every result, after which the client names an unchanged section
+by digest (`reuse`) instead of resending it (QuestHelperReuse). The bridge still gets a full
+snapshot. A session that doesn't hold what the client names answers with an error, and the client
+sends everything in full again. Map squares a low-end client hasn't built are reported as unloaded
+tiles rather than failing the snapshot, and nothing is collected while no quest is selected.
+
 ## Settings
 
 Group `questhelper`, with the upstream keys and sections. *Spicy stew*, *Show Puzzle Solutions*, the hint switches, *Use 'Shortest Path' plugin* and the colours are sent to the engine with each evaluation.

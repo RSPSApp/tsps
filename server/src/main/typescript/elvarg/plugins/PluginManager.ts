@@ -98,6 +98,7 @@ import {
   PluginPlayerBeforeDeathEvent,
   PluginPlayerOptionEvent,
   PluginPlayerDealtDamageEvent,
+  PluginCombatHitPrepareEvent,
   PluginCombatHitRollEvent,
   PluginCombatHitDamageEvent,
   PluginAttackTimingEvent,
@@ -328,6 +329,7 @@ export class PluginManager {
   private static playerDeathHooks: PluginHook<PluginPlayerDeathEvent>[] = [];
   private static playerOptionHooks: PluginHook<PluginPlayerOptionEvent>[] = [];
   private static playerDealtDamageHooks: PluginHook<PluginPlayerDealtDamageEvent>[] = [];
+  private static combatHitPrepareHooks: PluginHook<PluginCombatHitPrepareEvent>[] = [];
   private static combatHitRollHooks: PluginHook<PluginCombatHitRollEvent>[] = [];
   private static combatHitDamageHooks: PluginHook<PluginCombatHitDamageEvent>[] = [];
   private static attackTimingHooks: PluginHook<PluginAttackTimingEvent>[] = [];
@@ -1696,6 +1698,13 @@ export class PluginManager {
     return Number.isFinite(event.speed) ? Math.max(1, event.speed | 0) : speed;
   }
 
+  public static emitCombatHitPrepare(event: PluginCombatHitPrepareEvent): void {
+    if (!event?.attacker || !event?.target) return;
+    for (const hook of PluginManager.combatHitPrepareHooks) {
+      PluginManager.executeHook(hook, event, "combat_hit_prepare", "combat_hit_prepare");
+    }
+  }
+
   public static emitCombatHitRoll(event: PluginCombatHitRollEvent): void {
     if (!event?.attacker || !event?.target) return;
     for (const hook of PluginManager.combatHitRollHooks) {
@@ -2464,6 +2473,7 @@ export class PluginManager {
       LocModelType: require("../game/cache/codec/rs/config/loctype/LocModelType").LocModelType,
       MapObjects: require("../game/entity/impl/object/MapObjects").MapObjects,
       ItemOnGroundManager: require("../game/entity/impl/grounditem/ItemOnGroundManager").ItemOnGroundManager,
+      GroundItemOperationType: require("../game/entity/impl/grounditem/ItemOnGroundManager").OperationType,
       ItemOnGround: require("../game/entity/impl/grounditem/ItemOnGround").ItemOnGround,
       GroundItemState: require("../game/entity/impl/grounditem/ItemOnGround").State,
       ItemDefinition: require("../game/definition/ItemDefinition").ItemDefinition,
@@ -3656,6 +3666,10 @@ export class PluginManager {
             handler(event);
           },
         });
+      },
+      onCombatHitPrepare: (handler) => {
+        if (typeof handler !== "function") return;
+        PluginManager.combatHitPrepareHooks.push({ ...hookProfile(handler), handler });
       },
       onCombatHitRoll: (handler) => {
         if (typeof handler !== "function") return;

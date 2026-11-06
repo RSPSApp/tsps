@@ -63,11 +63,7 @@ function partStats(boat, part) {
 }
 
 /** The boat's stats from its parts: HP is the hull's plus the keel's, and so on. */
-function boatStats(boat) {
-  const hull = partStats(boat, "hull");
-  const keel = partStats(boat, "keel");
-  const sails = partStats(boat, "sails");
-  const helm = partStats(boat, "helm");
+function statsFromParts(hull, keel, sails, helm) {
   const stat = (row, column) => row?.int(column) ?? 0;
   return {
     hitpoints: stat(hull, STAT.hitpoints) + stat(keel, STAT.hitpoints),
@@ -80,6 +76,34 @@ function boatStats(boat) {
     rapidResistance: stat(helm, STAT.rapidResistance),
     crystalFleckedResistance: stat(keel, STAT.crystalFleckedResistance),
   };
+}
+
+function boatStats(boat) {
+  return statsFromParts(...["hull", "keel", "sails", "helm"].map(part => partStats(boat, part)));
+}
+
+/** A temporary boat's authored type row has parts, without any owned boat slot or tiers. */
+function boatStatsForRow(typeRowId) {
+  const row = CacheDefinitions.getDbRow(typeRowId);
+  if (!row) return undefined;
+  const parts = [];
+  for (const part of ["hull", "keel", "sails", "helm"]) {
+    const columns = PART_COLUMNS[part];
+    const optionId = row.column(columns.list)[0];
+    if (typeof optionId !== "number") return undefined;
+    const option = CacheDefinitions.getDbRow(optionId);
+    if (!option) return undefined;
+    const statsId = option.int(columns.stats, -1);
+    // Like partStats, an existing option can have no stats reference.
+    if (statsId < 0) {
+      parts.push(undefined);
+      continue;
+    }
+    const stats = CacheDefinitions.getDbRow(statsId);
+    if (!stats) return undefined;
+    parts.push(stats);
+  }
+  return statsFromParts(...parts);
 }
 
 /** The sidepanel's and login's part tier values; the trim follows the hull, as captured. */
@@ -168,6 +192,7 @@ module.exports = {
   TYPE_RECOVERY_FEE,
   partOptions,
   boatStats,
+  boatStatsForRow,
   partTiers,
   recoveryFee,
   specFor,

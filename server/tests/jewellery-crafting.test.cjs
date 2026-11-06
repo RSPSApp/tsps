@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const { test, before } = require('node:test');
+const { test, before, afterEach } = require('node:test');
 const { Server } = require('../dist/Server');
 Server.installProductionPathResolver();
 const { CachePipeline } = require('../dist/game/cache/CachePipeline');
@@ -10,6 +10,16 @@ const { World } = require('../dist/game/World');
 let core;
 const crafting = {};
 const tasks = [];
+const legacyPlayers = new Set();
+afterEach(() => {
+  if (!core) return;
+  for (const player of legacyPlayers) {
+    // Legacy spells use both index and object keys; stop only this fixture's actors.
+    core.TaskManager.cancelTasks(player.getIndex());
+    core.TaskManager.cancelTasks(player);
+  }
+  legacyPlayers.clear();
+});
 before(async () => {
   await CachePipeline.initialize(process.cwd());
   core = PluginManager.getCoreApi();
@@ -34,6 +44,13 @@ function playerWith(entries = []) {
   const amounts = new Map(entries), attrs = new Map(), log = [];
   const inventory = {
     getItems: () => [...amounts].filter(([, n]) => n > 0).map(([id, n]) => new core.Item(id, n)),
+    getCopiedItems: () => {
+      const items = [...amounts].filter(([, n]) => n > 0).flatMap(([id, n]) =>
+        core.ItemDefinition.forId(id).isStackable() ? [new core.Item(id, n)] :
+          Array.from({ length: n }, () => new core.Item(id, 1)));
+      assert.ok(items.length <= 28, "fixture inventory exceeds capacity");
+      return [...items, ...Array.from({ length: 28 - items.length }, () => new core.Item(-1, 0))];
+    },
     getAmount: id => amounts.get(id) ?? 0,
     contains: id => (amounts.get(id) ?? 0) > 0,
     deleteNumber: (id, n) => amounts.set(id, Math.max(0, (amounts.get(id) ?? 0) - n)),
@@ -70,6 +87,7 @@ function playerWith(entries = []) {
     getLocation: () => player.location, isRegistered: () => true, getHitpoints: () => 99,
     getMovementQueue: () => ({ size: () => player.moving ? 1 : 0 }), getForceMovement: () => null,
   };
+  legacyPlayers.add(player);
   return player;
 }
 function cast(player,name,itemId,slot = player.getInventory().getItems().findIndex(item => item.id === itemId)) {
@@ -275,9 +293,10 @@ const crafted = [
 test('all 32 furnace products are real items, with wearable bracelets and 200 Zenyte amulet XP', () => {
   const gems = [null,1607,1605,1603,1601,1615,6573,19493];
   for (const [mould,first,products] of crafted) for (const [index,output] of products.entries()) {
+    const component = mould === 11065 && index > 0 ? first + index + 1 : first + index;
     const player = playerWith([[2357,1],[mould,1],...(gems[index] ? [[gems[index],1]] : [])]);
-    openFurnace(player); button(player,first+index); tick(tasks.at(-1),3);
-    assert.equal(player.amounts.get(output),1,`component ${first+index}`);
+    openFurnace(player); button(player,component); tick(tasks.at(-1),3);
+    assert.equal(player.amounts.get(output),1,`component ${component}`);
     const def = core.CacheDefinitions.getItem(output);
     assert.equal(def.placeholderTemplate,-1); assert.equal(def.noteTemplate,-1);
     if (mould === 11065) assert.ok(def.inventoryActions.includes('Wear'));
@@ -386,4 +405,98 @@ test('Charge Air Orb on the Obelisk of Air uses one unpowered orb per cast and t
   assert.equal(player.count(I.AIR_ORB), 1);
   assert.equal(player.count(I.UNPOWERED_ORB), 1);
   assert.equal(player.count(I.COSMIC_RUNE) + player.count(I.AIR_RUNE), 0);
+});
+
+// Native furnace route and selected World phases; no direct recipe/session admission helper.
+test("native gold jewellery stops a pending conversion after a drained one-step walk", async t => {
+  process.env.DISABLE_PLAYER_BOTS = "1";
+  const path = require("node:path");
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const { PlayerSession } = require("../dist/net/PlayerSession");
+  const { ClientConnection } = require("../dist/net/NetworkBuilder");
+  const Smithing = require("../plugins/skills/Smithing.plugin");
+  const Shared = require("../plugins/skills/crafting/Shared.Crafting");
+  PluginManager.loadFromDirectory(path.resolve(__dirname,"../plugins"));
+  core.RegionManager.init(); core.RegionManager.loadMapFiles(3222,3218);
+  PluginManager.emitServerStartup({});
+  t.after(() => PluginManager.emitServerShutdown({}));
+  const ids=core.ItemIdentifiers;
+  const ringType=Shared.DATA.gold.types.find(row=>row.name==="ring");
+  const productIndex=ringType.products.findIndex(row=>row[0]==="GOLD_RING");
+  assert.ok(productIndex>=0);
+  const component=ringType.components[productIndex];
+  assert.deepEqual(ringType.products[productIndex],["GOLD_RING",5,15]);
+  let index=1780;
+  for(const mode of ["stationary","approach","interrupt"]) await t.test(mode,async t=>{
+    const channel={kind:"test",remoteAddress:"127.0.0.1",isOpen:()=>true,send:()=>true,close(){},onData(){},onError(){},onClose(){}};
+    const p=new Player(new PlayerSession(channel));p.setIndex(index++);p.setUsername("jewelcancel"+index);p.setRegistered(true);
+    p.setLocation(new core.Location(mode==="approach"?3219:3226,3218,0));p.needsPlacement=false;
+    p.getSkillManager().setCurrentLevel(core.Skill.CRAFTING,99,false);
+    const c=new ClientConnection(channel);c.player=p;
+    t.after(()=>{
+      Shared.stopCrafting(p);
+      PluginManager.emitPlayerDisconnect({player:p,username:p.getUsername()});
+      PluginManager.emitPlayerLogout({player:p,username:p.getUsername()});
+      p.setRegistered(false);core.TaskManager.cancelTasks(p.getIndex());core.TaskManager.cancelTasks(p);
+      assert.equal(p.getAttribute(Shared.CRAFTING_TASK_ATTRIBUTE),null);
+    });
+    assert.equal(p.getEquipment().getItems().some(item=>item&&item.getId()>0),false);
+    for(const id of [ids.GOLD_BAR,ids.RING_MOULD])p.getInventory().add(new core.Item(id,1),false);
+    const furnaceId=[...Smithing.FURNACE_OBJECT_IDS].find(id=>{
+      const d=core.ObjectDefinition.forPlayer(id,p);return d?.getName()==="Furnace"&&d.getActions()?.includes("Smelt");
+    });
+    assert.ok(Number.isInteger(furnaceId));
+    const furnace=new core.GameObject(furnaceId,new core.Location(3223,3218,0),10,0,null);
+    core.ObjectManager.register(furnace,true);t.after(()=>core.ObjectManager.deregister(furnace,true));
+    const pos=()=>[p.getLocation().getX(),p.getLocation().getY(),p.getLocation().getZ()];
+    const initial=pos(),gains=[],openings=[],rows=[];
+    let completed=false;
+    t.after(()=>{ if(!completed) t.diagnostic("JEWELLERY_CANCELLATION_OBSERVATION "+JSON.stringify({rows,openings})); });
+    const skills=p.getSkillManager(),add=skills.addExperiences.bind(skills);
+    t.mock.method(skills,"addExperiences",(skill,xp)=>{if(skill===core.Skill.CRAFTING)gains.push(xp);return add(skill,xp);});
+    const total=id=>p.getInventory().getAmount(id)+p.getEquipment().getAmount(id)+core.World.getItems().filter(g=>!g.isPendingRemoval()&&g.getOwner()===p.getUsername()&&g.getPrivateArea()===p.getPrivateArea()&&g.getItem().getId()===id).reduce((n,g)=>n+g.getItem().getAmount(),0);
+    let turns=0;const animate=p.performAnimation.bind(p);
+    t.mock.method(p,"performAnimation",(...args)=>{
+      const result=animate(...args);
+      if(args[0]?.getId()===899)openings.push({turns,pos:pos(),accepted:p.getAnimation()?.getId()===899,bar:total(ids.GOLD_BAR),ring:total(ids.GOLD_RING),gains:[...gains]});
+      return result;
+    });
+    const snapshot=label=>{
+      const q=p.getMovementQueue(),task=p.getAttribute(Shared.CRAFTING_TASK_ATTRIBUTE);
+      const row={label,mode,turns,epoch:core.World.getProcessCycle(),pos:pos(),queue:q.size(),moving:q.isMovings(),didMove:q.didMoveThisCycle(),taskActive:task?.isRunning?.()??false,interfaceId:p.getInterfaceId(),bar:total(ids.GOLD_BAR),ring:total(ids.GOLD_RING),mould:total(ids.RING_MOULD),gains:[...gains]};
+      rows.push(row);return row;
+    };
+    const turn=()=>{
+      assert.ok(++turns<=24,"bounded native turn budget");p.resetUpdating();core.World.processCycle=(core.World.processCycle+1)&0x7fffffff;
+      core.TaskManager.process();c.processTurnPackets();
+      const q=p.getMovementQueue();q.beginCycle();q.processEntityPursuit();if(q.hasPendingWork())q.process();core.TaskManager.processWalkTo(p.getIndex());
+    };
+    const untouched=()=>{assert.deepEqual(gains,[]);assert.equal(total(ids.GOLD_BAR),1);assert.equal(total(ids.GOLD_RING),0);assert.equal(total(ids.RING_MOULD),1);};
+    if(mode==="approach")assert.equal(furnace.isWithinInteractionDistance(p.getLocation()),false);
+    await c.dispatch([{type:"item_on_object",objectId:furnaceId,x:3223,y:3218,itemId:ids.GOLD_BAR,slot:p.getInventory().getSlotForItemId(ids.GOLD_BAR),widgetId:149<<16}]);
+    for(let i=0;i<10&&p.getInterfaceId()!==446;i++)turn();
+    snapshot("furnace-menu");
+    assert.equal(p.getInterfaceId(),446,"real bar-on-furnace must open native gold menu");
+    if(mode==="approach")assert.notDeepEqual(pos(),initial);else assert.deepEqual(pos(),initial);
+    assert.deepEqual(pos(),[3226,3218,0]);assert.equal(p.getMovementQueue().size(),0);untouched();
+    const menu=p.getAttribute("crafting:jewellery-menu");assert.ok(menu);assert.equal(menu.amount,1);
+    await c.dispatch([{type:"widget_action",widgetId:(446<<16)|component,groupId:446,childId:component,buttonNum:1,opId:1,slot:-1,itemId:-1}]);
+    turn();snapshot("accepted-pending");
+    assert.equal(p.getInterfaceId(),-1);assert.equal(p.getAttribute(Shared.CRAFTING_TASK_ATTRIBUTE)?.isRunning(),true);
+    assert.equal(openings.length,1);assert.equal(openings[0].accepted,true);assert.deepEqual(openings[0].pos,[3226,3218,0]);untouched();
+    if(mode==="interrupt")await c.dispatch([{type:"move",worldX:3225,worldY:3217,modifierFlags:0,run:false}]);
+    turn();snapshot("after-input-before-due");untouched();
+    if(mode==="interrupt"){
+      assert.deepEqual(pos(),[3225,3217,0]);assert.equal(p.getMovementQueue().size(),0);
+      assert.equal(p.getMovementQueue().didMoveThisCycle(),true);assert.equal(p.getMovementQueue().isMovings(),true);
+      assert.ok(p.getLocation().getDistance(menu.location)<=2,"anchor-radius refusal must not replace cancellation");
+    }
+    for(let i=0;i<5;i++)turn();
+    const end=snapshot("completion-window");
+    const cancelled=mode==="interrupt";
+    assert.deepEqual(gains,cancelled?[]:[15],"pending gold-ring XP cancellation: "+JSON.stringify(end));
+    assert.equal(total(ids.GOLD_BAR),cancelled?1:0);assert.equal(total(ids.GOLD_RING),cancelled?0:1);assert.equal(total(ids.RING_MOULD),1);
+    assert.equal(p.getAttribute(Shared.CRAFTING_TASK_ATTRIBUTE),null);
+    completed=true;
+  });
 });

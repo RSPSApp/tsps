@@ -33,7 +33,8 @@ import { collectHelperNpc, collectQuestHelperSnapshot } from "./QuestHelperSnaps
 import { OwnedTileHighlights, resolveTargetTiles } from "./QuestHelperHighlights";
 import { createQuestHelperNavigationButton, QuestHelperOverlay } from "./QuestHelperPanel";
 import { collectQuestHelperDefinitions } from "./QuestHelperDefinitions";
-import { collectQuestHelperGeometry } from "./QuestHelperGeometry";
+import { collectQuestHelperGeometry, collectQuestHelperTerrain } from "./QuestHelperGeometry";
+import { SnapshotReuse } from "./QuestHelperReuse";
 import {OwnedQuestHintArrow,questDirection} from "./QuestHelperNavigation";
 /** QuestHelperConfig.QUEST_BACKGROUND_GROUP: per-profile state the sidebar keeps. */
 const BACKGROUND_GROUP = "questhelpervars";
@@ -77,6 +78,8 @@ export class QuestHelperPlugin extends Plugin {
     private readonly onScriptPre = (id: number) => { if (this.isStarted() && this.isEnabled()) this.guardBankTab(() => this.bankTab.onScriptPreFired(id)); };
     private readonly session = new QuestHelperSession(data => this.signal(data));
     private readonly assembly = new ChunkedPluginMessageAssembler();
+    /** Large, rarely changing snapshot sections the server already holds (sent by digest). */
+    private readonly reuse = new SnapshotReuse();
     private readonly events = new QuestHelperEvents();
     private readonly highlights = new OwnedTileHighlights(this.client.tileHighlightManager, 60001);
     private readonly navigation = new OwnedQuestHintArrow();
@@ -367,6 +370,7 @@ export class QuestHelperPlugin extends Plugin {
             else if (data.type === "result") {
                 const wasComplete=this.getState().result?.status==='complete';
                 if(!this.session.accept(data))return;
+                this.reuse.accept(this.session.currentSession(), data.cached);
                 this.forwardPluginMessages();
                 this.refreshBankTab();
                 if(!wasComplete&&this.getState().result?.status==='complete'&&this.nav)this.toolbar.openPanel(this.nav);
@@ -386,8 +390,11 @@ export class QuestHelperPlugin extends Plugin {
                         this.geometryRequested = true;
                 }
             }
-            else if (data.type === "error")
+            else if (data.type === "error") {
+                // Whatever the server held may be gone (a stale reuse, a restart): send full sections next.
+                this.reuse.reset();
                 this.session.acceptError(data);
+            }
         }
         catch (error) {
             this.session.fail(error instanceof Error ? error.message : "Invalid Quest Helper response.");
@@ -428,6 +435,13 @@ export class QuestHelperPlugin extends Plugin {
         }
         if (this.faulted || now - this.lastSent < 1000)
             return;
+        if (!this.getState().selected) {
+            // No quest: the session only polls the catalog by tick (QuestHelperSession); the scene isn't read.
+            this.events.clear();
+            this.session.update(account, { tick: this.tick } as ReadonlyClientSnapshot);
+            this.refreshHighlights();
+            return;
+        }
         try {
             const selected = this.getState().catalog?.quests.find(quest => quest.questKey === this.getState().selected && quest.helperVariant === this.getState().variant);
             for (const id of selected?.requiredVarbits ?? [])
@@ -441,12 +455,16 @@ export class QuestHelperPlugin extends Plugin {
             const definitions = collectQuestHelperDefinitions(this.client, { items: this.itemDefinitionIds, objects: this.objectDefinitionIds, npcs: this.npcDefinitionIds });
             const weight=getLatestRunEnergy()?.weight;
             const mouse=this.client.inputManager?{x:this.client.inputManager.mouseX,y:this.client.inputManager.mouseY}:undefined;
-            this.snapshot = { ...snapshot, ...definitions, mouse, weight, combatLevel:skills.combatLevel, bank: this.knownBank ? snapshot.bank : undefined, containers: { 93: snapshot.inventory, 94: snapshot.equipment, ...(this.knownBank ? { 95: snapshot.bank ?? [] } : {}) }, localPlayer: { ...snapshot.localPlayer, weight, combatLevel: skills.combatLevel }, geometry: this.geometryRequested ? collectQuestHelperGeometry(this.client, ClientState, true) : { x: 0, y: 0, mouse, width: this.client.renderer.canvas.width, height: this.client.renderer.canvas.height } };
+            // The terrain is sampled with the snapshot but packed only when the server lacks it.
+            const terrain = this.geometryRequested ? collectQuestHelperTerrain(this.client, ClientState) : undefined;
+            this.snapshot = { ...snapshot, ...definitions, mouse, weight, combatLevel:skills.combatLevel, bank: this.knownBank ? snapshot.bank : undefined, containers: { 93: snapshot.inventory, 94: snapshot.equipment, ...(this.knownBank ? { 95: snapshot.bank ?? [] } : {}) }, localPlayer: { ...snapshot.localPlayer, weight, combatLevel: skills.combatLevel }, geometry: this.geometryRequested ? collectQuestHelperGeometry(this.client, ClientState, false) : { x: 0, y: 0, mouse, width: this.client.renderer.canvas.width, height: this.client.renderer.canvas.height } };
             const events = this.events.drain();
             events.push({ type: "gameTick", tick: this.tick });
             this.lastSent = now;
             this.pendingSince = now;
-            this.session.update(account, this.snapshot, events);
+            // The session may open on this call; sections are then sent in full for it.
+            this.session.update(account);
+            this.session.update(account, this.reuse.prepare(this.session.currentSession(), this.snapshot, terrain), events);
             this.refreshHighlights();
         }
         catch (error) {

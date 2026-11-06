@@ -16,7 +16,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 const { before, after, test } = require("node:test");
 // This fixture does not exercise bots or their writable object-index cache.
-process.env.DISABLE_PLAYER_BOTS = "1";
+const priorBots = process.env.DISABLE_PLAYER_BOTS;
 require("../dist/Server").Server.installProductionPathResolver();
 const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { PluginManager: PM } = require("../dist/plugins/PluginManager");
@@ -32,18 +32,27 @@ const HOME = [3222, 3218];
 const LUMBRIDGE_BASEMENT = [3200, 9600];
 const HELMET_TASK = "light-your-mining-helmet-in-the-lumbridge-castle";
 let core;
-let next = 7700;
+let next = 1000;
 
+let started = false;
 before(async () => {
+  process.env.DISABLE_PLAYER_BOTS = "1";
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
   PM.loadFromDirectory(path.resolve(__dirname, "../plugins"));
   core = PM.getCoreApi();
   core.RegionManager.init();
   core.RegionManager.loadMapFiles(...HOME);
+  started = true;
   PM.emitServerStartup({});
 });
 // The file starts the server's plugins, so it ends them the way the server does.
-after(() => PM.emitServerShutdown({}));
+after(() => {
+  try { if (started) PM.emitServerShutdown({}); }
+  finally {
+    if (priorBots === undefined) delete process.env.DISABLE_PLAYER_BOTS;
+    else process.env.DISABLE_PLAYER_BOTS = priorBots;
+  }
+});
 
 function actor(t, firemaking = 99, at = HOME) {
   const channel = {
@@ -51,6 +60,13 @@ function actor(t, firemaking = 99, at = HOME) {
     close() {}, onData() {}, onError() {}, onClose() {},
   };
   const p = new Player(new PlayerSession(channel));
+  // Register cleanup before the actor is made active, including setup failures.
+  t.after(() => {
+    if (p.isRegistered()) PM.emitPlayerLogout({ player: p, username: p.getUsername() });
+    p.setRegistered(false);
+    core.TaskManager.cancelTasks(p.getIndex());
+    core.TaskManager.cancelTasks(p);
+  });
   p.setIndex(next++);
   p.setUsername("light" + p.getIndex());
   p.setRegistered(true);
@@ -63,11 +79,6 @@ function actor(t, firemaking = 99, at = HOME) {
   t.mock.method(p, "performAnimation", (animation) => { animations.push(animation); });
   const c = new ClientConnection(channel);
   c.player = p;
-  t.after(() => {
-    PM.emitPlayerLogout({ player: p, username: p.getUsername() });
-    p.setRegistered(false);
-    core.TaskManager.cancelTasks(p.getIndex());
-  });
   return { p, c, inv: p.getInventory(), messages, animations };
 }
 
@@ -280,4 +291,166 @@ test("the Lost Tribe brooch gives Mistag's unlit mining helmet (5014), as the sh
   });
   assert.equal(carried(f).includes(I.MINING_HELMET_2), true, "the unlit helmet");
   assert.equal(carried(f).includes(I.MINING_HELMET), false, "not the lit one");
+});
+
+// The Wiki's other way to light a torch: "may be used with a tinderbox or dry sticks, or used on a
+// fire or range". Dry sticks are NOT a tool here — the Dry sticks page says "Unlike a tinderbox,
+// clicking to use the sticks on an unlit torch has no effect"; they light it through their own
+// Rub-together option, which Sea Slug owns (30 Firemaking, can fail, uses the sticks, moves the
+// quest on). The object path needs its own handler because Cooking registers a `fallback` that
+// answers "You can't cook that." for any item used on a range.
+test("dry sticks used on the torch do nothing: that is Rub-together's job, not a use-on", async (t) => {
+  const f = actor(t, 99);
+  f.inv.setItem(0, item(I.UNLIT_TORCH));
+  f.inv.setItem(1, item(I.DRY_STICKS));
+  await useOn(f, 1, 0);
+  assert.deepEqual(carried(f), [I.UNLIT_TORCH, I.DRY_STICKS], "the torch stays unlit and the sticks are kept");
+  assert.deepEqual(f.messages, []);
+});
+
+/** The torch used on `name`, through the real hook chain (so Cooking's fallback is in play). */
+function useTorchOn(f, name) {
+  // Keep the controlled name, but supply the real object's id/location surface
+  // to the other registered item-on-object hooks that see an unhandled event.
+  const object = new core.GameObject(114, new core.Location(3210, 3215, 0), 10, 0, null);
+  const definition = object.getDefinition();
+  assert.ok(definition, "fixture object has a cache definition");
+  const controlledDefinition = Object.create(definition);
+  controlledDefinition.getName = () => name;
+  controlledDefinition.getInteractions = () => [];
+  object.getDefinition = () => controlledDefinition;
+  return PM.emitItemOnObject({
+    player: f.p,
+    object,
+    objectId: 114, item: f.inv.getItems()[0], itemId: I.UNLIT_TORCH, itemSlot: 0,
+    interfaceType: 149, location: { x: 3210, y: 3215, z: 0 }, handled: false,
+  });
+}
+
+test("the torch used on a range lights it, where the cooking fallback would refuse it", (t) => {
+  const f = actor(t, 1);
+  f.inv.setItem(0, item(I.UNLIT_TORCH));
+  assert.equal(useTorchOn(f, "Cooking range"), true, "the light source claims the use");
+  assert.equal(idAt(f, 0), I.LIT_TORCH);
+  assert.deepEqual(f.messages, ["You light your torch."]);
+});
+
+test("the torch used on something that is not a fire or range is left alone", (t) => {
+  const f = actor(t, 1);
+  f.inv.setItem(0, item(I.UNLIT_TORCH));
+  useTorchOn(f, "Tree");
+  assert.equal(idAt(f, 0), I.UNLIT_TORCH);
+  assert.deepEqual(f.messages, []);
+});
+
+
+// The cache-defined action is delivered through decoded inventory_action, the
+// actual selected Item instance and PluginManager's named action registration.
+const DARK_CAVE = [3200, 9550];
+const Darkness = require('../plugins/world/Darkness.plugin');
+function assertInModelledDarkness(f) {
+  assert.ok(Darkness.LUMBRIDGE_SWAMP_CAVES_BOUNDS.some(bounds => bounds.inside(f.p.getLocation())));
+}
+
+test('active cache identifies the lit torch and its Extinguish option', () => {
+  const lit = core.CacheDefinitions.getItem(I.LIT_TORCH);
+  const unlit = core.CacheDefinitions.getItem(I.UNLIT_TORCH);
+  assert.equal(I.LIT_TORCH, 594);
+  assert.equal(I.UNLIT_TORCH, 596);
+  assert.equal(lit.name, 'Lit torch');
+  assert.equal(unlit.name, 'Unlit torch');
+  assert.equal(lit.inventoryActions[3], 'Extinguish');
+  assert.ok(!unlit.inventoryActions.includes('Extinguish'));
+});
+
+test('outside darkness Extinguish replaces only the clicked torch and keeps its identity', async t => {
+  const f = actor(t), selected = item(I.LIT_TORCH).setMetaValue(core.Item.PRESET_META, true);
+  f.inv.setItem(0, item(I.LIT_TORCH));
+  f.inv.setItem(1, selected);
+  assert.ok(!Darkness.LUMBRIDGE_SWAMP_CAVES_BOUNDS.some(b => b.inside(f.p.getLocation())));
+  await extinguish(f, 1);
+  assert.deepEqual([idAt(f, 0), idAt(f, 1)], [I.LIT_TORCH, I.UNLIT_TORCH]);
+  assert.equal(f.inv.getItems()[1], selected);
+  assert.equal(selected.isPresetItem(), true);
+});
+
+test('the sole carried torch cannot be extinguished in the modelled dark cave', async t => {
+  const f = actor(t, 99, DARK_CAVE), selected = item(I.LIT_TORCH).setMetaValue(core.Item.PRESET_META, true);
+  f.inv.setItem(0, selected);
+  assertInModelledDarkness(f);
+  assert.equal(Darkness.hasLightSource(f.p), true);
+  const setId = t.mock.method(selected, 'setId');
+  await extinguish(f, 0);
+  assert.equal(f.inv.getItems()[0], selected);
+  assert.equal(idAt(f, 0), I.LIT_TORCH);
+  assert.equal(selected.isPresetItem(), true);
+  assert.equal(setId.mock.callCount(), 0, 'the guard does not temporarily mutate the item');
+});
+
+test('two identical torches count separately; only the selected second one goes out', async t => {
+  const f = actor(t, 99, DARK_CAVE), first = item(I.LIT_TORCH), second = item(I.LIT_TORCH).setMetaValue(core.Item.PRESET_META, true);
+  f.inv.setItem(0, first); f.inv.setItem(1, second);
+  assertInModelledDarkness(f);
+  assert.equal(Darkness.hasLightSource(f.p), true);
+  await extinguish(f, 1);
+  assert.deepEqual([idAt(f, 0), idAt(f, 1)], [I.LIT_TORCH, I.UNLIT_TORCH]);
+  assert.equal(f.inv.getItems()[0], first);
+  assert.equal(f.inv.getItems()[1], second);
+  assert.equal(second.isPresetItem(), true);
+  const setId = t.mock.method(first, 'setId');
+  await extinguish(f, 0);
+  assert.deepEqual([idAt(f, 0), idAt(f, 1)], [I.LIT_TORCH, I.UNLIT_TORCH], 'remaining light is protected');
+  assert.equal(setId.mock.callCount(), 0);
+});
+
+for (const [label, alternative, worn] of [
+  ['a lit candle', I.LIT_CANDLE, false],
+  ['an equipped mining helmet', I.MINING_HELMET, true],
+  ['a carried Firemaking cape', I.FIREMAKING_CAPE, false],
+]) {
+  test(`in the cave ${label} permits putting out the torch`, async t => {
+    const f = actor(t, 99, DARK_CAVE);
+    if (worn) f.p.getEquipment().setItem(core.Equipment.HEAD_SLOT, item(alternative));
+    else f.inv.setItem(1, item(alternative));
+    assertInModelledDarkness(f);
+    assert.equal(Darkness.hasLightSource(f.p), true, 'the alternative is an independently recognised light');
+    const selected = item(I.LIT_TORCH); f.inv.setItem(0, selected);
+    await extinguish(f, 0);
+    assert.equal(idAt(f, 0), I.UNLIT_TORCH);
+    assert.equal(f.inv.getItems()[0], selected);
+    assert.equal(Darkness.hasLightSource(f.p), true, 'the alternative remains available');
+  });
+}
+
+test('a carried but unworn mining helmet is not a second light', async t => {
+  const f = actor(t, 99, DARK_CAVE);
+  f.inv.setItem(1, item(I.MINING_HELMET));
+  assertInModelledDarkness(f);
+  assert.equal(Darkness.hasLightSource(f.p), false);
+  f.inv.setItem(0, item(I.LIT_TORCH));
+  await extinguish(f, 0);
+  assert.deepEqual([idAt(f, 0), idAt(f, 1)], [I.LIT_TORCH, I.MINING_HELMET]);
+});
+
+test('unlit, unrelated and stale selected-slot actions leave the inventory alone', async t => {
+  const f = actor(t);
+  f.inv.setItem(0, item(I.UNLIT_TORCH)); f.inv.setItem(1, item(I.CANDLE));
+  const first = f.inv.getItems()[0], second = f.inv.getItems()[1];
+  await extinguish(f, 0); await extinguish(f, 1);
+  await f.c.dispatch([{ type:'inventory_action', slot:0, itemId:I.LIT_TORCH, widgetId:3214, option:'Extinguish' }]);
+  f.c.processTurnPackets();
+  assert.deepEqual([idAt(f, 0), idAt(f, 1)], [I.UNLIT_TORCH, I.CANDLE]);
+  assert.equal(f.inv.getItems()[0], first); assert.equal(f.inv.getItems()[1], second);
+});
+
+// Existing oil-light action remains registered alongside the new torch action.
+test('the existing lit oil lamp Extinguish action is unchanged', async t => {
+  const f = actor(t), selected = item(I.OIL_LAMP_3);
+  f.inv.setItem(0, selected);
+  const definition = core.CacheDefinitions.getItem(I.OIL_LAMP_3);
+  assert.equal(definition.name, 'Oil lamp');
+  assert.ok(definition.inventoryActions.includes('Extinguish'));
+  await extinguish(f, 0);
+  assert.equal(idAt(f, 0), I.OIL_LAMP);
+  assert.equal(f.inv.getItems()[0], selected);
 });

@@ -52,6 +52,8 @@ const XPDROPS_SETUP_ATTRIBUTE = "settings:xpdrops-setup";
 // event (bit 23), as live does for these four on the settings tab (RSProx captures); without
 // it the sliders change the volume until relog. The browser forwards triggers regardless.
 const SETTINGS_SIDE_GROUP = 116;
+const SKULL_PREVENTION_SETTING = 206;
+const SKULL_PREVENTION_TOGGLE = (116 << 16) | 5; // settings_side:skull_prevention
 const TRANSMIT_TRIGGER = 1 << 23;
 const WELCOME_PLAY_BUTTON = (378 << 16) | 72;
 const VOLUME_SLIDER_VARPS = new Map([
@@ -330,6 +332,15 @@ function toggleSetting(player, settingId) {
   return true;
 }
 
+/** Another plugin sets one of its rows' variables: sent and saved as when its row is clicked. */
+function setSettingValue({ player, settingId, value }) {
+  const row = SETTINGS[settingId];
+  if (!row || row.options || !Number.isInteger(value)) return false;
+  setSettingVar(player, varKey(row), value);
+  if (row.script !== undefined) player.getPacketSender().sendClientScript(row.script);
+  return true;
+}
+
 /** A dropdown option chosen: set the option's vars, or the one var to the option's index. */
 function chooseSettingOption(player, settingId, option) {
   const row = SETTINGS[settingId];
@@ -527,6 +538,10 @@ function receiveGameframeLayout(event) {
 
 function choosePlayerAttackOption({ player, slot }) {
   return Number.isInteger(slot) && chooseSettingOption(player, PLAYER_ATTACK_OPTIONS_SETTING, slot - 1);
+}
+
+function toggleSkullPrevention({ player }) {
+  return toggleSetting(player, SKULL_PREVENTION_SETTING);
 }
 
 function chooseNpcAttackOption({ player, slot }) {
@@ -821,6 +836,7 @@ module.exports = {
     api.onInterfaceActionButton(ALL_SETTINGS_SEARCH_BAR, startSettingsSearch);
     api.onInterfaceActionButton(QUEST_LIST_SETTINGS_BUTTON, openQuestSettings);
     api.onCustomEvent("interface:closed", endSettingsSearch);
+    api.onCustomEvent("settings:set", setSettingValue);
     api.onInterfaceActionButton(ALL_SETTINGS_SETTINGS_CLICKZONE, clickSetting);
     api.onInterfaceActionButton(ALL_SETTINGS_DROPDOWN_BUTTONS, clickDropdownOption);
     api.onInterfaceActionButton(ALL_SETTINGS_DROPDOWN_CLOSE, closeDropdown);
@@ -832,6 +848,7 @@ module.exports = {
     api.onCustomEvent("network:plugin-message", receiveGameframeLayout);
     api.onInterfaceActionButton(ATTACK_PRIORITY_PLAYER_BUTTONS_UID, choosePlayerAttackOption);
     api.onInterfaceActionButton(ATTACK_PRIORITY_NPC_BUTTONS_UID, chooseNpcAttackOption);
+    api.onInterfaceActionButton(SKULL_PREVENTION_TOGGLE, toggleSkullPrevention);
 
     // Keybindings panel (121): remember which dropdown was clicked, then let the
     // cache's CS2 script (985) open the key popup.

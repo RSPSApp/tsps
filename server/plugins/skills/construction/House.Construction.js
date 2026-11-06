@@ -27,6 +27,7 @@ const CombatRoom = require("./CombatRoom.Construction");
 const Dungeon = require("./Dungeon.Construction");
 const ThroneRoom = require("./ThroneRoom.Construction");
 const Menagerie = require("./Menagerie.Construction");
+const Decorations = require("./Decorations.Construction");
 const GamesRoom = require("./GamesRoom.Construction");
 const CombatRings = require("./CombatRings.Construction");
 const Tea = require("./Tea.Construction");
@@ -239,7 +240,10 @@ function enterHouse(player, buildingMode, diaryEntryContext = null) {
 
 function canVisitHouse(player, house) {
   const owner = house.owner;
-  return !!owner && !house.isDestroyed() && !house.buildingMode && !house.save.locked
+  const mode = { player, mode: "none" };
+  api.emitCustomEvent("ironman:mode", mode);
+  return (owner === player || !["ironman", "ultimate", "hardcore"].includes(mode.mode))
+    && !!owner && !house.isDestroyed() && !house.buildingMode && !house.save.locked
     && owner.getRelations().canReceivePrivateMessageFrom(player);
 }
 
@@ -1401,6 +1405,7 @@ function attach(api) {
   Dungeon.attachDungeon(api);
   ThroneRoom.attachThroneRoom(api);
   Menagerie.attachMenagerie(api);
+  Decorations.attachDecorations(api);
   GamesRoom.attachGamesRoom(api);
   CombatRings.attachCombatRings(api);
   Tea.attachTea(api);

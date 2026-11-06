@@ -52,15 +52,21 @@ function loadNode(comboEatChance, profileId) {
   vm.runInNewContext(fs.readFileSync(filename, 'utf8'), {
     module,
     Math,
+    // The real module sees these; without them a debug switch or Date call reads as undefined.
+    process,
+    Date,
+    console,
     require: (name) => {
       if (name.endsWith('/PvpAssignment.PlayerBots')) {
         const { getPvpProfile } = localRequire(name);
         return { getPvpProfile: () => ({ ...getPvpProfile(profileId), comboEatChance }) };
       }
-      if (name.endsWith('/state/State.PlayerBots')) return {
-        computeEatThreshold: (maxHp, ratio, f2p) =>
-          f2p ? Math.min(24, Math.max(1, maxHp - 1)) : Math.max(1, Math.ceil(maxHp * ratio)),
-      };
+      // Delegate to the real threshold so these tests follow the implementation instead of
+      // restating the F2P constant, which let a 24 -> 36 change pass them silently.
+      if (name.endsWith('/state/State.PlayerBots')) {
+        const { computeEatThreshold } = localRequire(name);
+        return { computeEatThreshold };
+      }
       if (name.endsWith('/NodeContext.PlayerBots')) return { resolveBotNodeContext: (ctx) => ctx };
       return localRequire(name);
     },
@@ -90,6 +96,8 @@ function buildHarness(comboEatChance = 0, profileId = 'standard') {
         if ((item.getAmount?.() ?? 1) > 1) item.setAmount(item.getAmount() - 1);
         else foodItems[slot] = null;
       },
+      // Bite foods rewrite their slot (a pizza becomes a half), so the harness needs this too.
+      setItem: (slot, item) => { foodItems[slot] = item; },
       refreshItems: () => {},
     }),
     getTimers: () => timers,
@@ -128,7 +136,7 @@ function buildHarness(comboEatChance = 0, profileId = 'standard') {
 test('F2P bot only eats once engaged and after HP actually drops', () => {
   const h = buildHarness();
 
-  h.setHp(30);
+  h.setHp(40);
   assert.equal(h.tick(), 'failure', 'above the F2P threshold nothing happens');
   assert.equal(h.state.pvp.f2pFoodPending, false);
 
@@ -193,7 +201,72 @@ test('low HP reacts with a real shark and karambwan in one turn, preserving food
   assert.ok(h.timers.has(core.TimerKey.KARAMBWAN));
 });
 
-test('two normal foods cannot be combo eaten, and eating permissions/cooldowns still apply', () => {
+test('F2P bots cross above a possible max hit, so the one-hit wait cannot leave them on fumes', () => {
+  const { computeEatThreshold } = localRequire('../../state/State.PlayerBots');
+  // An F2P max hit is around 21 (rune 2h, ~90 Strength), so arming at 24 meant eating at 3 HP.
+  assert.equal(computeEatThreshold(99, 0.4, true), 36, 'crosses 15 above a max hit');
+  assert.equal(computeEatThreshold(30, 0.4, true), 29, 'never arms at or above full HP');
+  // Members keep the ratio.
+  assert.equal(computeEatThreshold(99, 0.4, false), 40);
+});
+
+test('half a pizza is followed by a swordfish on the next tick, never the same one', () => {
+  // comboEatChance 0 rules out the karambwan branch.
+  const h = buildHarness(0, 'standard');
+  h.setItems([ItemIdentifiers.ANCHOVY_PIZZA, ItemIdentifiers.SWORDFISH]);
+  h.setHp(20);
+  assert.equal(h.tick(), 'failure', 'first crossing only arms');
+  h.setHp(10);
+  assert.equal(h.tick(), 'success');
+  assert.equal(h.getHp(), 19, 'half a pizza heals 9');
+  assert.equal(h.state.pvp.f2pComboPending, true, 'the other half of the combo is queued');
+
+  // The pizza half still sets the food timer for a tick, so the same tick cannot eat again.
+  assert.equal(h.tick(), 'failure', 'one bite per tick, as the food timer enforces');
+  assert.equal(h.getHp(), 19);
+
+  h.timers.process();
+  assert.equal(h.tick(), 'success', 'the follow-up does not wait for another hit');
+  assert.equal(h.getHp(), 33, 'a swordfish (14) rather than the pizza half (9)');
+  assert.equal(h.state.pvp.f2pComboPending, false, 'the queue is spent');
+});
+
+test('a half pizza with nothing else eats its own other half next tick', () => {
+  const h = buildHarness(0, 'standard');
+  h.setItems([ItemIdentifiers.ANCHOVY_PIZZA]);
+  h.setHp(20);
+  assert.equal(h.tick(), 'failure', 'first crossing only arms');
+  h.setHp(10);
+  assert.equal(h.tick(), 'success');
+  assert.equal(h.getHp(), 19);
+
+  h.timers.process();
+  assert.equal(h.tick(), 'success');
+  assert.equal(h.getHp(), 28, 'the remaining half heals 9');
+  assert.equal(h.state.virtualFoodChargesRemaining, 0);
+});
+
+test('a queued follow-up does not survive the heal that cleared the threshold', () => {
+  // A queued bite left set after healing above the threshold made the next fight eat on its first
+  // crossing, skipping the one-hit reaction delay this change deliberately keeps.
+  const h = buildHarness(0, 'standard');
+  h.setItems([ItemIdentifiers.ANCHOVY_PIZZA, ItemIdentifiers.SWORDFISH]);
+  h.setHp(20);
+  assert.equal(h.tick(), 'failure', 'first crossing only arms');
+  h.setHp(10);
+  assert.equal(h.tick(), 'success');
+  assert.equal(h.state.pvp.f2pComboPending, true, 'the follow-up is queued');
+
+  h.setHp(40);
+  assert.equal(h.tick(), 'failure', 'above the threshold there is nothing to eat');
+  assert.equal(h.state.pvp.f2pComboPending, false, 'the queue is dropped, not carried over');
+
+  h.setHp(30);
+  assert.equal(h.tick(), 'failure', 'the next crossing arms and waits again');
+  assert.equal(h.getHp(), 30, 'no early bite');
+});
+
+test('a slow first food is not followed in the same tick, and eating permissions/cooldowns still apply', () => {
   const h = buildHarness(1, 'veteran');
   h.state.pvp.loadoutId = 'edge_main_melee';
   h.setHp(5);

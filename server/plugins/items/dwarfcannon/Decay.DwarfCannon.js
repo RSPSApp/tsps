@@ -65,17 +65,23 @@ function pickUp({ player, object }) {
   const Items = Cannon.core.ItemIdentifiers;
   const inventory = player.getInventory();
   const balls = [[Items.STEEL_CANNONBALL, cannon.steel], [Items.GRANITE_CANNONBALL, cannon.granite]].filter(([, amount]) => amount > 0);
-  const slots = cannon.stage + balls.filter(([id]) => !inventory.contains(id)).length;
-  if (inventory.getFreeSlots() < slots) {
-    player.sendMessage(MESSAGE.NO_SPACE);
-    return true;
+  const returns = [
+    ...Cannon.KINDS[cannon.kind].parts.slice(0, cannon.stage).map((id) => new Cannon.core.Item(id, 1)),
+    ...balls.map(([id, amount]) => new Cannon.core.Item(id, amount)),
+  ];
+  const preview = new Cannon.core.Inventory(player).setItems(inventory.getCopiedItems());
+  for (const item of returns) {
+    if (preview.getAddableAmount(item) < item.getAmount()) {
+      player.sendMessage(MESSAGE.NO_SPACE);
+      return true;
+    }
+    preview.add(item, false);
   }
   player.getPacketSender().sendTypedMessage(Cannon.core.ChatType.SPAM, PICKED_UP);
   Cannon.forget(cannon);
   player.setAttribute(Cannon.STATE_ATTRIBUTE, null);
   Cannon.clearVars(player);
-  for (const part of Cannon.KINDS[cannon.kind].parts.slice(0, cannon.stage)) inventory.add(new Cannon.core.Item(part, 1), true);
-  for (const [id, amount] of balls) inventory.add(new Cannon.core.Item(id, amount), true);
+  for (const item of returns) inventory.add(item, true);
   player.getPacketSender().sendSound(Data.SOUND.PICK_UP, 1, 0);
   return true;
 }

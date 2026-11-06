@@ -11,6 +11,10 @@ or `Ctrl+/` to open `::commands` while playing; page text fields keep their norm
 - [`client/`](client/) — browser client (Forked from [xRSPS](https://github.com/xrsps/xrsps-typescript))
 - [`server/`](server/) — game server (Official continuation of our [Elvarg](https://github.com/RSPSApp/elvarg-rsps) fork - Ported to TypeScript)
 
+### RuneLite gateway
+
+[`runelite-gateway/`](runelite-gateway/README.md) connects RuneLite and the official OSRS client to the server through RSProx, with a separate session per player. Run `yarn gateway` alongside the server; see the [setup and supported features](runelite-gateway/README.md).
+
 ## Quick start
 
 Install [Node.js 22.16 or later](https://nodejs.org/en/download) first. No separate Yarn or Corepack installation is needed.
@@ -35,15 +39,14 @@ Two optional local services are Java; neither is needed to run the server.
 | Command | What it enables | Setup |
 | --- | --- | --- |
 | `yarn bridge` | the in-game Quest Helper panel, from the upstream Java helper | **Java 21**, then the one-time build in [`tools/quest-helper-bridge`](tools/quest-helper-bridge/README.md) |
-| `yarn gateway` | the official OSRS client through RSProx, playing on this server | [`gateway/README.md`](gateway/README.md) |
+| `yarn gateway` | the official OSRS client through RSProx, playing on this server | [`runelite-gateway/README.md`](runelite-gateway/README.md) |
 
 The bridge and server need the same `QUEST_HELPER_TOKEN` (at least 24 characters) in `.env`.
 Without it, the panel reports that the server token is missing. Tutorial Island and Recipe for
 Disaster still work because the server answers those itself. `QUEST_HELPER_URL` can point the
 server at a bridge outside loopback, such as `http://quest-helper:16471`; it must be an HTTP(S)
 URL without credentials, query parameters or a fragment. The default is
-`http://127.0.0.1:${QUEST_HELPER_PORT:-16471}`. A separate single-client RuneLite 1.13.3 demo
-lives in [`tools/runelite-gateway`](tools/runelite-gateway/README.md).
+`http://127.0.0.1:${QUEST_HELPER_PORT:-16471}`.
 
 ## Publish your world
 

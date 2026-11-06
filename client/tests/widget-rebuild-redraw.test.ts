@@ -74,16 +74,22 @@ console.log("Widget rebuilds only redraw when they change");
 const seqTypes = { load: () => ({ frameLengths: [1, 1, 1], frameIds: [1, 2, 3], frameStep: 1, isSkeletalSeq: () => false }) };
 const openModel: any = { uid: (161 << 16) | 9, groupId: 161, parentUid: root.uid, type: 6, sequenceId: 1, sequenceId2: -1, modelFrame: 0, modelFrameCycle: 0 };
 const closedModel: any = { uid: (378 << 16) | 54, groupId: 378, parentUid: -1, type: 6, sequenceId: 1, sequenceId2: -1, modelFrame: 0, modelFrameCycle: 0, rootIndex: 0 };
+// IF_SETROTATESPEED: turntable speed 5 (high short) and pitch speed 3 (low short), no sequence.
+const spinningModel: any = { uid: (161 << 16) | 10, groupId: 161, parentUid: root.uid, type: 6, sequenceId: -1, sequenceId2: -1, rotationX: 0, rotationY: 0, modelRotationSpeed: (5 << 16) | 3 };
 manager.registerWidget(openModel);
 manager.registerWidget(closedModel);
+manager.registerWidget(spinningModel);
 (manager as any).rootInterface = 161;
 manager.consumeAllRootDirty();
 manager.tickModelAnimations(5, seqTypes as never);
 assert.ok(openModel.modelFrame > 0, "an open interface's model animates");
 assert.equal(closedModel.modelFrame, 0, "a closed interface's model stays put");
+assert.equal(spinningModel.rotationY, 25, "rotate-speed advances the turntable (yaw) axis");
+assert.equal(spinningModel.rotationX, 15, "rotate-speed advances the pitch axis");
 manager.consumeAllRootDirty();
 (manager as any).rootInterface = 999;
 manager.tickModelAnimations(5, seqTypes as never);
+assert.equal(spinningModel.rotationY, 25, "closed interfaces don't spin their models");
 assert.equal(manager.isAnyRootDirty(), false, "closed interfaces don't redraw the UI");
 
 console.log("Only open interfaces animate their models");

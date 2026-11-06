@@ -153,11 +153,19 @@ function near(player, object, anywhere = false) {
         (anywhere || player.getLocation().isWithinDistance(object.getLocation(), 5))
     );
 }
+function ultimate(player) {
+    const query = { player, mode: "none" };
+    core.PluginManager.emitCustomEvent("ironman:mode", query);
+    if (query.mode !== "ultimate") return false;
+    // Use the existing bank restriction's refusal side effects for this mode.
+    core.PluginManager.emitCanBank(player, "seed-vault");
+    return true;
+}
 function current(player) {
-    const session = SESSIONS.get(player),
-        sender = player.getPacketSender();
-    return session &&
-        session.farm === Patches.farmFor(player) &&
+    const session = SESSIONS.get(player);
+    if (!session || ultimate(player)) return null;
+    const sender = player.getPacketSender();
+    return session.farm === Patches.farmFor(player) &&
         near(player, session.object, session.anywhere) &&
         player.getInterfaceId() === group("seed_vault") &&
         sender.isSubInterfaceOpen(group("seed_vault")) &&
@@ -170,6 +178,7 @@ function open(event) {
     const { player, object } = event;
     const anywhere = event.anywhere === true;
     if (!anywhere && !player.getLocation().isWithinDistance(object.getLocation(), 5)) return;
+    if (ultimate(player)) return;
     // Do not create storage state or expose its contents until the shared PIN guard succeeds.
     const request = { player, feature: "seed-vault", resume: () => open(event) };
     core.PluginManager.emitCustomEvent("bank-pin:guard", request);
@@ -217,6 +226,10 @@ function guarded(player, session) {
     };
     core.PluginManager.emitCustomEvent("bank-pin:guard", request);
     return !request.locked && current(player) === session;
+}
+/** Refresh only an existing visible vault; do not open it or prompt for a PIN. */
+function refreshOpen(player) {
+    if (current(player)) sync(player);
 }
 function changed(player) {
     player.getInventory().refreshItems();
@@ -506,4 +519,4 @@ function drag(event) {
 function logout({ player }) {
     SESSIONS.delete(player);
 }
-Object.assign(module.exports, { open, click, drag, logout });
+Object.assign(module.exports, { open, click, drag, logout, eligible, held, refreshOpen });

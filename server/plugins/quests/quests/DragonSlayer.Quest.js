@@ -1177,7 +1177,8 @@ module.exports = function registerDragonSlayerQuest(api) {
         }
         killer.sendMessage("You cut off Elvarg's head as proof of your victory!");
         killer.getPacketSender().sendJingle(267, 0);
-        later(token, 3, () => { actions.delete(killer); killer.getMovementQueue().setBlockMovement(false); killer.setUntargetable(false); });
+        // Seq 6655 is 10.0 ticks in the cache (frame delays summed, 30 client ticks a tick): the player is held to its end. Cache length, ours.
+        later(token, 10, () => { actions.delete(killer); killer.getMovementQueue().setBlockMovement(false); killer.setUntargetable(false); });
       });
       return;
     }

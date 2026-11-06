@@ -14,6 +14,7 @@
     "54": { "name": "Modern Layout - Side panel can be closed by the hotkeys", "varbit": 4611 },
     "55": { "name": "Player Attack options", "varp": 1107 },
     "56": { "name": "NPC Attack options", "varp": 1306 },
+    "206": { "name": "PK Skull Prevention", "varbit": 13131 },
     "81": { "name": "Last Man Standing fog colour", "varbit": 11865 },
     "82": { "name": "Enable precise timing", "varbit": 11866 },
     "84": { "name": "Food/Potions can form supply piles on death", "varbit": 11893 },
@@ -23,6 +24,7 @@
     "299": { "name": "Show enemy name on health overlay", "varbit": 14706 },
     "300": { "name": "Compact boss health overlay", "varbit": 14707 },
     "301": { "name": "Health overlay display type", "varbit": 14708 },
+    "305": { "name": "Ammo-picking behaviour", "varbit": 5697 },
     "312": { "name": "Player Trade options", "varbit": 6580 },
     "315": {
       "name": "Level-up pop-up notifications",

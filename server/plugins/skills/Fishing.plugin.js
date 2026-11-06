@@ -12,6 +12,7 @@ const AnglerOutfit = require("./fishing/AnglerOutfit.Fishing");
 const MinnowPlatform = require("./fishing/MinnowPlatform.Fishing");
 const RadasBlessing = require("./fishing/RadasBlessing.Fishing");
 const KarambwanVessel = require("./fishing/Karambwan.Fishing");
+const ClueBottles = require("./fishing/ClueBottles.Fishing");
 const { pauseForLevelUp } = require("./SkillActions");
 
 // Ticks per resource roll (Wiki: Game tick/Action lengths): rods 5, net, cage and harpoon
@@ -93,7 +94,7 @@ class FishingTool {
    * stationary: its spots never move, so a session runs until the player stops it.
    * firstRoll: ticks from the start line to the first roll, when it isn't the interval.
    * animation plays with the start line; loopAnimation (the same unless given) on every roll, or
-   * every few ticks without animateOnRoll.
+   * every few ticks without animateOnRoll; catchAnimation, when given, plays on a successful roll.
    * startMessage, missMessage: what a cast and a missed attempt say, when they say anything.
    * followMessage: a second start line, a tick after the first.
    * noToolStatement, noBaitStatement: the message boxes shown without the tool or the bait.
@@ -103,15 +104,16 @@ class FishingTool {
    * levelStatement: the message box (given the level) shown below the tool's level.
    */
   constructor({
-    id, level, animation, loopAnimation = animation, fish, variants, bait = [], worn = [], quest = null, multi = false,
+    id, level, animation, loopAnimation = animation, catchAnimation = null, fish, variants, bait = [], worn = [], quest = null, multi = false,
     requires = [], interval = FISHING_ACTION_INTERVAL_TICKS, firstRoll = null, animateOnRoll = true, unboostable = false, spot = null,
     vessel = null, stationary = false, startMessage = "You begin to fish..", followMessage = null, missMessage = null,
-    noToolStatement = null, noBaitStatement = null, noToolMessage = null, levelStatement = null, table = null,
+    noToolStatement = null, noBaitStatement = null, noToolMessage = null, levelStatement = null, table = null, barehand = false,
   }) {
     this.id = id;
     this.level = level;
     this.animationId = animation;
     this.loopAnimationId = loopAnimation;
+    this.catchAnimationId = catchAnimation;
     this.fish = fish;
     this.variants = variants ?? [{ ids: [id], level: 1, bonus: 100 }];
     this.bait = bait;
@@ -134,6 +136,7 @@ class FishingTool {
     this.table = table;
     this.noBaitStatement = noBaitStatement;
     this.levelStatement = levelStatement;
+    this.barehand = barehand;
   }
 }
 
@@ -203,6 +206,11 @@ const FISH = Object.freeze({
   SWORDFISH: new Fish({ id: ItemIds.RAW_SWORDFISH, level: 50, rolls: [[4, 48]], xp: 100, caught: "a raw swordfish", petBase: 257770 }),
   SHARK: new Fish({
     id: ItemIds.RAW_SHARK, level: 76, rolls: [[3, 40]], xp: 110, caught: "a shark", petBase: 82243, message: () => "You catch a shark!",
+  }),
+  // Wiki (Barbarian Training#Barehanded fishing): barehand shark gives 11 Strength XP too.
+  SHARK_BAREHAND: new Fish({
+    id: ItemIds.RAW_SHARK, level: 76, rolls: [[3, 40]], xp: 110, caught: "a shark", petBase: 82243,
+    message: () => "You catch a shark!", extraXp: [[Skill.STRENGTH, 11]],
   }),
 
   // Big net: charts from the Wiki (Fishing spot (big net, harpoon)); lines from rsprox captures
@@ -297,6 +305,16 @@ const TOOLS = Object.freeze({
   SHARK_HARPOON: new FishingTool({
     id: ItemIds.HARPOON, level: 76, animation: ANIM.HARPOON, fish: [FISH.SHARK], variants: HARPOONS,
     interval: NET_CAGE_HARPOON_INTERVAL_TICKS, ...HARPOON,
+  }),
+  // Wiki (Barbarian Training#Barehanded fishing): barehand shark needs 96 Fishing and 76
+  // Strength, 110 Fishing XP and 11 Strength XP. Cache revision 241 sequences 6703 (start),
+  // 6704 (ready loop) and 6706 (shark finish; 6705 is frame-identical); the empty ids variant
+  // means "no tool, bare hands". Wiki: barehand speed and catch rate equal a harpoon's.
+  BAREHAND_SHARK: new FishingTool({
+    id: ItemIds.HARPOON, level: 96, animation: 6703, loopAnimation: 6704, catchAnimation: 6706, fish: [FISH.SHARK_BAREHAND],
+    variants: [{ ids: [], level: 96, bonus: 100, barehand: true }], requires: [[Skill.STRENGTH, 76]],
+    interval: NET_CAGE_HARPOON_INTERVAL_TICKS, firstRoll: HARPOON_ROD_FIRST_ROLL_TICKS, barehand: true,
+    startMessage: START_HARPOON, levelStatement: (level) => `You need to be at least level ${level} Fishing to catch sharks with your bare hands.`,
   }),
   LOBSTER_POT: new FishingTool({
     id: ItemIds.LOBSTER_POT, level: 40, animation: ANIM.CAGE, fish: [FISH.LOBSTER], interval: NET_CAGE_HARPOON_INTERVAL_TICKS,
@@ -451,6 +469,17 @@ const SPOT_TOOLS_BY_NPC = new Map([
   [NpcIds.FISHING_SPOT_101, { Cast: TOOLS.PARK_NET }],
 ]);
 
+// Clue bottle bases are the documented heron bases for these catches. Other catches with no
+// sourced base remain unsupported here; this is not a claim that they cannot yield bottles.
+const CLUE_BOTTLE_FISH = new Set([
+  FISH.SHRIMP, FISH.ANCHOVY, FISH.SARDINE, FISH.HERRING, FISH.TROUT, FISH.SALMON,
+  FISH.PIKE, FISH.TUNA, FISH.LOBSTER, FISH.SWORDFISH, FISH.SHARK, FISH.SHARK_BAREHAND,
+  FISH.MACKEREL, FISH.COD, FISH.BASS, FISH.MONKFISH, FISH.CAVE_EEL, FISH.INFERNAL_EEL,
+  FISH.SACRED_EEL, FISH.ANGLERFISH, FISH.DARK_CRAB, FISH.KARAMBWANJI, FISH.KARAMBWAN,
+  FISH.MINNOW, FISH.LEAPING_TROUT, FISH.LEAPING_SALMON, FISH.LEAPING_STURGEON,
+]);
+const PARK_CLUE_BASE = 152120; // Wiki: Fortis park uses the catfish base.
+
 const FISHING_SPOT_NAMES = ["Fishing spot", "Rod Fishing spot"];
 const FISHING_SPOT_OPTIONS = ["Small Net", "Net", "Big Net", "Bait", "Lure", "Cage", "Harpoon", "Use-rod", "Fish", "Cast"];
 
@@ -467,12 +496,20 @@ function spotTools(npcId, definition) {
   return found;
 }
 
-function getSpotTool(npcId, definition, clickType) {
+function getSpotTool(npcId, definition, clickType, player = null) {
   const actions = definition?.getActions?.() ?? [];
   const option = actions[clickType - 1];
   const tools = SPOT_TOOLS_BY_NPC.get(npcId) ??
     SPOT_TOOLS_BY_OPTIONS.get(actions.filter(Boolean).join("/"));
-  return option ? tools?.[option] : undefined;
+  const tool = option ? tools?.[option] : undefined;
+  // No harpoon carried or wielded: the harpoon option falls back to Barbarian barehanding.
+  if (tool === TOOLS.SHARK_HARPOON && player && !hasHarpoon(player)) return TOOLS.BAREHAND_SHARK;
+  return tool;
+}
+
+function hasHarpoon(player) {
+  const has = (id) => player.getInventory().contains(id) || player.getEquipment?.()?.contains(id);
+  return HARPOONS.some((variant) => variant.ids.some(has));
 }
 
 function getFishingLevel(player) {
@@ -502,7 +539,7 @@ function questAllows(player, name) {
 function findTool(player, tool) {
   const level = getFishingLevel(player);
   const has = (id) => player.getInventory().contains(id) || player.getEquipment?.()?.contains(id);
-  const found = tool.variants.find((variant) => variant.level <= level && variant.ids.some(has)) ?? null;
+  const found = tool.variants.find((variant) => variant.level <= level && (variant.ids.length === 0 || variant.ids.some(has))) ?? null;
   if (found) return found;
   // Content may stand in for the tool ("fishing:tool", a league relic's harpoon that fishes as any of them).
   const request = { player, variants: tool.variants, variant: null };
@@ -712,7 +749,7 @@ function landExtra(player, variant, fish, amount) {
   spam(player, RadasBlessing.EXTRA_FISH_MESSAGE);
 }
 
-function landCatch(player, tool, variant, caught) {
+function landCatch(player, tool, variant, caught, spotId = null) {
   const xpMultiplier = AnglerOutfit.xpMultiplier(player);
   // Each fish needs a free slot, its own stack or room in an open fish barrel. Holy Lake shrimps
   // are lost to a full inventory that still takes karambwanji (Wiki: Fishing spot (karambwanji)).
@@ -737,12 +774,21 @@ function landCatch(player, tool, variant, caught) {
   for (const { fish, amount } of landed) {
     landExtra(player, variant, fish, amount);
   }
+  // One bottle roll set per natural catch batch; Rada's extra is not another action.
+  // The tutorial pond is outside the supported scope; no retail exclusion is inferred.
+  // The park uses its own base even though its successful catches are labelled junk.
+  if (spotId !== NpcIds.FISHING_SPOT_43) {
+    const clueFish = landed.find(({ fish }) => CLUE_BOTTLE_FISH.has(fish))?.fish;
+    const clueBase = landed.length && tool === TOOLS.PARK_NET ? PARK_CLUE_BASE : clueFish?.petBase;
+    if (clueBase > 0) ClueBottles.rollClueBottles(player, clueBase);
+  }
+
   // Wiki (Heron): a big net catch rolls the pet once per kind of fish in it.
   // A listener may take over the session (the tutorial stops after one catch).
   let stop = false;
   for (const fish of new Set(landed.map((entry) => entry.fish))) {
     if (fish.junk) continue;
-    const event = { player, skill: Skill.FISHING, itemId: fish.id, petBase: fish.petBase, stop: false };
+    const event = { player, skill: Skill.FISHING, itemId: fish.id, petBase: fish.petBase, barehand: variant.barehand === true, stop: false };
     pluginApi.emitCustomEvent("fishing:success", event);
     if (event.stop) stop = true;
   }
@@ -865,10 +911,13 @@ class FishingTask extends Task {
         if (session.tool.missMessage) spam(player, session.tool.missMessage);
         continue;
       }
+      if (session.tool.catchAnimationId !== null) {
+        player.performAnimation(new Animation(session.tool.catchAnimationId));
+      }
       if (session.tool.spot?.takesCatch(player, npc)) {
         continue;
       }
-      const stopAfterCatch = landCatch(player, session.tool, variant, caught);
+      const stopAfterCatch = landCatch(player, session.tool, variant, caught, session.npcId);
 
       // ponytail: spots without their own movement still stop at random instead of moving. A full
       // inventory waits for the next tick's check, which says so.
@@ -909,6 +958,7 @@ module.exports = {
     AnglerOutfit.attach(api);
     MinnowPlatform.attach(api);
     KarambwanVessel.attach(api);
+    ClueBottles.attach(api);
 
     api.onPlayerDisconnect(({ player }) => {
       stopFishing(activeSessions, player, false);
@@ -917,7 +967,7 @@ module.exports = {
 
     // Returning false leaves spots this plugin doesn't fish (aerial...) to others.
     function startFishingInteraction(event) {
-      const tool = getSpotTool(event.npcId, event.definition, event.clickType);
+      const tool = getSpotTool(event.npcId, event.definition, event.clickType, event.player);
       return tool ? startFishing(event.player, event.npc, tool, activeSessions) : false;
     }
     const actions = Object.fromEntries(FISHING_SPOT_OPTIONS.map((option) => [option, startFishingInteraction]));
@@ -940,6 +990,7 @@ module.exports = {
   rollTable,
   findTool,
   getSpotTool,
+  hasHarpoon,
   spotTools,
   isFishingActive,
   FISHING_SPOT_NAMES,

@@ -5,6 +5,9 @@
 // ClientConnection.dispatch. Short of dispatch, because the loc would need its map and a walk: the
 // coffers and the chest through PM.emitObjectInteraction, the death through
 // PlayerDeathTask.dropItems, and Perdu's unlock through its _test export.
+// Keep bot activity out of this native fixture.
+process.env.DISABLE_PLAYER_BOTS = "1";
+
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const { before, after, test } = require("node:test");
@@ -40,6 +43,8 @@ let next = 5200;
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
   PM.loadFromDirectory(path.resolve(__dirname, "../plugins"));
+  // Bounty Hunter depends on PlayerBots, so attach its real coffer with bots disabled.
+  require("../plugins/minigames/bountyhunter/Coffer.BountyHunter")(PM.createApi("BountyHunterCofferTest"));
   core = PM.getCoreApi();
   I = core.ItemIdentifiers;
   core.RegionManager.init();
@@ -346,4 +351,117 @@ test("Perdu unlock: a coin stack that can't take the refund leaves the item lock
   assert.equal(f.inv.getAmount(I.COINS), over, "the coins are unchanged");
   assert.equal(f.inv.getAmount(parchment()), 0, "no parchment");
   assert.equal(f.messages.at(-1), NO_SPACE);
+});
+
+// Exercise the registered Perdu interaction as well as the direct coin-cap check above.
+test("native Perdu unlock conserves the parchment entitlement at the stack limit", async (t) => {
+  const parchment = BrokenCommon.idOf(BrokenCommon.TROUVER_PARCHMENT);
+  assert.equal(parchment, I.TROUVER_PARCHMENT);
+  assert.equal(core.ItemDefinition.forId(parchment).isStackable(), true, "active-cache stackability");
+  assert.equal(BrokenCommon.lookup(I.INFERNAL_CAPE).form.lockedId, I.INFERNAL_CAPE_L_);
+  assert.equal(BrokenCommon.lookup(I.INFERNAL_CAPE_L_).form.unlockedId, I.INFERNAL_CAPE);
+  const refund = BrokenCommon.DATA.unlockRefund;
+  const fee = BrokenCommon.DATA.lockCost;
+
+  for (const mode of ["room", "exact-stack", "full-inventory", "capped-stack"]) {
+    await t.test(mode, async (t) => {
+      const f = actor(t, [3226, 3218]);
+      const { p, inv } = f;
+      const npc = core.NPC.create(core.NpcIdentifiers.PERDU, new core.Location(3227, 3218, 0));
+      assert.equal(core.World.getNpcs().add(npc), true);
+      assert.equal(npc.getCurrentDefinition(p).getName(), "Perdu", "real morph-visible actor");
+      t.after(() => {
+        p.closeInterruptibleInterfaces();
+        core.TaskManager.cancelTasks(p.getIndex());
+        core.TaskManager.cancelTasks(p);
+        core.World.getNpcs().remove(npc);
+        for (const ground of core.World.getItems().filter((g) => g.getOwner() === p.getUsername())) {
+          core.ItemOnGroundManager.deregister(ground);
+        }
+      });
+      let turns = 0;
+      const turn = () => {
+        assert.ok(++turns <= 32, "bounded native phase budget");
+        p.resetUpdating();
+        core.World.processCycle = (core.World.processCycle + 1) & 0x7fffffff;
+        core.TaskManager.process();
+        f.c.processTurnPackets();
+        const queue = p.getMovementQueue();
+        queue.beginCycle();
+        queue.processEntityPursuit();
+        if (queue.hasPendingWork()) queue.process();
+        core.TaskManager.processWalkTo(p.getIndex());
+      };
+      const packet = async (value) => {
+        await f.c.dispatch([value]);
+        turn();
+      };
+      const floor = (id) => core.World.getItems()
+        .filter((g) => !g.isPendingRemoval() && g.getOwner() === p.getUsername() &&
+          g.getPrivateArea() === p.getPrivateArea() && g.getItem().getId() === id)
+        .reduce((n, g) => n + g.getItem().getAmount(), 0);
+      const owned = (id) => inv.getAmount(id) + p.getEquipment().getAmount(id) +
+        p.getBanks().reduce((n, b, i) => n +
+          (b && i !== core.Bank.BANK_SEARCH_TAB_INDEX ? b.getAmount(id) : 0), 0) + floor(id);
+      const state = () => ({
+        mode, parchment: owned(parchment), coins: owned(I.COINS),
+        locked: owned(I.INFERNAL_CAPE_L_), unlocked: owned(I.INFERNAL_CAPE), free: inv.getFreeSlots(),
+      });
+      async function offer(itemId) {
+        p.getDialogueManager().reset();
+        p.getPacketSender().sendInterfaceRemoval();
+        await packet({ type: "item_on_npc", widgetId: 149 << 16, targetIndex: npc.getIndex(),
+          itemId, slot: inv.getSlotForItemId(itemId) });
+        for (let n = 0; n < 8 && !p.getDialogueManager().getCurrent() && !pending(f); n++) turn();
+        assert.equal(pending(f), null, "Perdu starts a native line, not an invented option callback");
+        assert.match(p.getDialogueManager().getCurrent()?.getText?.() ?? "",
+          itemId === I.INFERNAL_CAPE ? /cost you/ : /returning your parchment/);
+        const group = p.getPacketSender().getChatboxGroupId();
+        assert.ok(group >= 0);
+        await packet({ type: "dialogue_continue", widgetId: (group << 16) | 5, childIndex: -1 });
+        const menu = pending(f);
+        assert.ok(menu, "native line must hand off to the real plugin prompt");
+        assert.equal(p.getDialogueManager().isActive(), false, "MultiChatboxPrompt owns this response");
+        assert.ok(menu.options[0].startsWith(itemId === I.INFERNAL_CAPE ? "Lock item" : "Yes"));
+        return menu;
+      }
+      const capped = mode === "capped-stack", full = mode === "full-inventory";
+      const initial = (mode === "exact-stack" || capped) ? MAX_STACK_AMOUNT : 2;
+      inv.add(plain(I.INFERNAL_CAPE), false);
+      inv.add(plain(parchment, initial), false);
+      inv.add(plain(I.COINS, fee + 1000), false);
+      await offer(I.INFERNAL_CAPE);
+      await packet({ type: "dialogue_continue", widgetId: core.MultiChatboxPrompt.OPTIONS_WIDGET_ID, childIndex: 1 });
+      assert.equal(owned(I.INFERNAL_CAPE_L_), 1, "actual paid lock producer");
+      assert.equal(owned(I.INFERNAL_CAPE), 0);
+      assert.equal(owned(parchment), initial - 1);
+      assert.equal(owned(I.COINS), 1000);
+      if (capped) {
+        const at = p.getLocation();
+        core.ItemOnGroundManager.registerLocation(p, plain(parchment), at.clone());
+        assert.equal(floor(parchment), 1);
+        await packet({ type: "ground_item_action", itemId: parchment, x: at.getX(), y: at.getY(),
+          option: "Take", optionIndex: 3 });
+        for (let n = 0; n < 6 && floor(parchment) > 0; n++) turn();
+        assert.equal(inv.getAmount(parchment), MAX_STACK_AMOUNT, "native pickup tops the ordinary stack back up");
+        assert.equal(floor(parchment), 0);
+      }
+      if (full) fillTo(f, 0);
+      const before = state();
+      await offer(I.INFERNAL_CAPE_L_);
+      assert.match(pending(f).title, /Unlock it/);
+      assert.equal(inv.getAddableAmount(plain(parchment)), capped ? 0 : 1, "observable native output capacity");
+      assert.equal(inv.getAddableAmount(plain(I.COINS, refund)), refund, "coin refund has room");
+      await packet({ type: "dialogue_continue", widgetId: core.MultiChatboxPrompt.OPTIONS_WIDGET_ID, childIndex: 1 });
+      const end = state();
+      const details = JSON.stringify({ before, end });
+      assert.equal(end.parchment + end.locked, before.parchment + before.locked,
+        "returned parchment plus retained locked entitlement must be conserved: " + details);
+      const refuse = capped || full;
+      assert.equal(end.locked, refuse ? 1 : 0, details);
+      assert.equal(end.unlocked, refuse ? 0 : 1, details);
+      assert.equal(end.coins, before.coins + (refuse ? 0 : refund), details);
+      assert.equal(end.parchment, before.parchment + (refuse ? 0 : 1), details);
+    });
+  }
 });

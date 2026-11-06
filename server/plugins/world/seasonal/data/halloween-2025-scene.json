@@ -1,0 +1,57 @@
+{
+  "$comment": "2025 Halloween event (Spook-a-thon). Sources per field: see server/docs/halloween-2025-source.md.",
+  "eventChairs": [
+    [3116, 3355], [3111, 3355], [3106, 3355], [3124, 3358], [3107, 3360], [3102, 3361], [3095, 3361],
+    [3110, 3363], [3118, 3364], [3115, 3366], [3106, 3366], [3110, 3370], [3114, 3371], [3105, 3371]
+  ],
+  "eventChairWander": 4,
+  "sethChair": { "x": 3229, "y": 3289, "z": 0, "wander": 2 },
+  "cowPen": { "minX": 3021, "minY": 3298, "maxX": 3044, "maxY": 3314, "z": 0 },
+  "cowNames": ["Cow", "Cow calf"],
+  "danceEmotes": ["emote_dance", "emote_dance_scottish", "emote_dance_spin", "emote_dance_headbang",
+    "zombie_dance", "bday17_style", "bday17_lasso", "human_emote_crabdance"],
+  "cutscene": {
+    "player": { "x": 3188, "y": 3281, "z": 0 },
+    "camera": { "x": 3188, "y": 3284, "height": 500, "lookX": 3188, "lookY": 3277, "lookHeight": 200 },
+    "actors": [
+      { "symbol": "hw25_deadth_cs", "role": "death", "x": 3188, "y": 3279, "face": "SOUTH" },
+      { "symbol": "hw25_seth_groats_cs", "role": "seth", "x": 3186, "y": 3280, "face": "EAST" },
+      { "symbol": "hw25_fred_the_farmer_cs", "role": "fred", "x": 3190, "y": 3280, "face": "WEST" },
+      { "symbol": "hw25_chair_npc_cs", "role": "chair", "x": 3187, "y": 3278, "face": "SOUTH" }
+    ]
+  },
+  "previousRewards": [
+    "scythe", "trick_or_treat_head", "hw06_pumpkin_head", "hw06_spooky_boots", "hw06_spooky_gloves",
+    "hw06_spooky_legs", "hw06_spooky_body", "hw06_spooky_head", "halloweenmask_black", "hw07_grim_hood",
+    "antipanties", "gravedigger_hat", "gravedigger_top", "gravedigger_legs", "gravedigger_boots", "gravedigger_gloves",
+    "hw16_reward_mask", "hw16_reward_top", "hw16_reward_bottom", "hw16_reward_knife", "hw17_reward_mask",
+    "hw18_clown_mask", "hw18_clown_top", "hw18_clown_bowtie", "hw18_clown_legs", "hw18_clown_feet", "hw18_eek",
+    "hw19_ghost_hood", "hw19_ghost_top", "hw19_ghost_legs", "hw19_ghost_gloves", "hw19_ghost_boots",
+    "hw19_pumpkin_lantern", "hw19_skeleton_lantern", "hw19_ghost_hood_slime", "hw19_ghost_top_slime",
+    "hw19_ghost_legs_slime", "hw19_ghost_gloves_slime", "hw19_ghost_boots_slime", "hw20_headless_head",
+    "hw20_poh_pumpkin", "hw21_saucepan_hat", "hw21_ugly_jumper01", "hw21_haunted_bottle", "hw22_treat_cauldron_0",
+    "hw22_witch_hat", "hw22_witch_torso", "hw22_witch_robes", "hw22_witch_boots", "hw22_witch_cape",
+    "hw22_reward_wig01", "hw23_reward_cobwebcape", "hw23_reward_spiderhat", "hw24_reward_pumpkin_beige_ew",
+    "hw24_shirt", "hw24_scarecrow"
+  ],
+  "eventRewards": ["hw25_pumpkin_lantern_reward", "hw25_chair_obj_reward", "hw25_grim_reaper_top",
+    "hw25_grim_reaper_bottoms", "hw25_grim_reaper_gloves"],
+  "extraHalloweenItems": ["halloweenmask_red", "halloweenmask_green", "halloweenmask_blue"],
+  "excludedFromContest": ["hw24_reward_pumpkin_beige_ew", "hw24_shirt", "hw24_scarecrow"],
+  "rewards": {
+    "items": [
+      { "symbol": "hw25_grim_reaper_top", "amount": 1 },
+      { "symbol": "hw25_grim_reaper_bottoms", "amount": 1 },
+      { "symbol": "hw25_grim_reaper_gloves", "amount": 1 },
+      { "symbol": "hw25_chair_obj_reward", "amount": 1 }
+    ],
+    "lantern": "hw25_pumpkin_lantern_reward",
+    "tradeable": [
+      { "symbol": "cert_pumpkin", "amount": 2 },
+      { "symbol": "cert_halloweenmask_red", "amount": 2 },
+      { "symbol": "cert_halloweenmask_green", "amount": 2 },
+      { "symbol": "cert_halloweenmask_blue", "amount": 2 }
+    ],
+    "tradeablePlaySeconds": 86400
+  }
+}

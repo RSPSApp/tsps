@@ -133,11 +133,11 @@ test("the caves warn, swarm and damage an unlit player until a light is lit", as
 
 test('A sapphire lantern is assembled, fuelled at its still, lit and extinguished with actual ingredients', () => {
  const {PluginManager}=require('../dist/plugins/PluginManager'),core=PluginManager.getCoreApi(),I=core.ItemIdentifiers;
- const hooks={pairs:[],object:null,actions:new Map()},items=[],attrs=new Map(),bits=new Map();let currentCraft=99,maxCraft=99,fire=48;
+ const hooks={pairs:[],object:null,actions:new Map()},items=[],attrs=new Map(),bits=new Map(),events=[];let currentCraft=99,maxCraft=99,fire=48;
  const item=id=>({id,getId(){return this.id;},setId(id){this.id=id;return this;}});
  const inv={getItems:()=>items,contains:id=>items.some(i=>i.getId()===id),deleteNumber:(id,n)=>{while(n--){const i=items.findIndex(i=>i.getId()===id);assert(i>=0);items.splice(i,1);}},adds:(id,n)=>{while(n--)items.push(item(id));},refreshItems(){}};
  const player={getPacketSender:()=>({sendVarbit:(id,v)=>bits.set(id,v)}),getInventory:()=>inv,getEquipment:()=>({getItems:()=>[]}),getAttribute:k=>attrs.get(k),setAttribute:(k,v)=>attrs.set(k,v),getSkillManager:()=>({getCurrentLevel:s=>s===core.Skill.CRAFTING?currentCraft:fire,getMaxLevel:()=>maxCraft}),performAnimation(){},sendMessage(){}};
- require('../plugins/items/OilLights.plugin').register({core:{...core,ObjectDefinition:{forPlayer:id=>{assert.equal(id,5908);return {getName:()=> 'Lamp oil still'};}}},persistAttribute(){},onPlayerLogin:h=>hooks.login=h,onItemOnItem:h=>hooks.pairs.push(h),onItemOnObject:h=>hooks.object=h,onItemAction:(name,actions)=>hooks.actions.set(name,actions)});
+ require('../plugins/items/OilLights.plugin').register({core:{...core,ObjectDefinition:{forPlayer:id=>{assert.equal(id,5908);return {getName:()=> 'Lamp oil still'};}}},persistAttribute(){},emitCustomEvent:(name,event)=>events.push({name,...event}),onPlayerLogin:h=>hooks.login=h,onItemOnItem:h=>hooks.pairs.push(h),onItemOnObject:h=>hooks.object=h,onItemAction:(name,actions)=>hooks.actions.set(name,actions)});
  const pair=(a,b)=>{const e={player,usedItemId:a,usedWithItemId:b,usedItem:items.find(i=>i.getId()===a),usedWithItem:items.find(i=>i.getId()===b)};for(const h of hooks.pairs){h(e);if(e.handled)break;}return e;};
  const still=x=>({getId:()=>5908,getDefinition:()=>({getName:()=> 'null'}),getLocation:()=>new core.Location(x,3300,0)});
  const fuel=(id,x=2900)=>hooks.object({player,itemId:id,object:still(x)});
@@ -148,7 +148,8 @@ test('A sapphire lantern is assembled, fuelled at its still, lit and extinguishe
  fuel(I.SAPPHIRE_LANTERN);assert(inv.contains(I.SAPPHIRE_LANTERN),'empty still gives no fuel');
  fuel(I.SWAMP_TAR);assert(!inv.contains(I.SWAMP_TAR));fuel(I.SAPPHIRE_LANTERN,2901);assert(inv.contains(I.SAPPHIRE_LANTERN),'oil stays in its own still');fuel(I.SAPPHIRE_LANTERN);assert(inv.contains(I.SAPPHIRE_LANTERN_2));
  pair(I.TINDERBOX,I.SAPPHIRE_LANTERN_2);assert(inv.contains(I.SAPPHIRE_LANTERN_2),'lighting requires 49 Firemaking');fire=49;pair(I.TINDERBOX,I.SAPPHIRE_LANTERN_2);assert(inv.contains(I.SAPPHIRE_LANTERN_3));assert(inv.contains(I.TINDERBOX));
- assert(require('../plugins/world/Darkness.plugin').hasLightSource(player));hooks.actions.get('Sapphire lantern').Extinguish({player,item:items.find(i=>i.getId()===I.SAPPHIRE_LANTERN_3)});assert(inv.contains(I.SAPPHIRE_LANTERN_2));assert(!require('../plugins/world/Darkness.plugin').hasLightSource(player));
+ assert.deepEqual(events,[{name:'oil-lights:lit',player,itemId:I.SAPPHIRE_LANTERN_3}],'only the successful lighting emits the event');
+ assert(require('../plugins/world/Darkness.plugin').hasLightSource(player));hooks.actions.get('Sapphire lantern').Extinguish({player,item:items.find(i=>i.getId()===I.SAPPHIRE_LANTERN_3)});assert(inv.contains(I.SAPPHIRE_LANTERN_2));assert(!require('../plugins/world/Darkness.plugin').hasLightSource(player));assert.equal(events.length,1,'extinguishing adds no lighting event');
  attrs.set('oil-lights:distilled-oil','2937,3210,0');hooks.login({player});assert.equal(bits.get(281),1);attrs.set('oil-lights:distilled-oil',0);hooks.login({player});assert.equal(bits.get(281),0);
  maxCraft=49;pair(I.LANTERN_LENS,I.SAPPHIRE_LANTERN_2);assert(inv.contains(I.BULLSEYE_LANTERN));assert(inv.contains(I.SAPPHIRE));
 });

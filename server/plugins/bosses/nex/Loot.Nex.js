@@ -98,4 +98,17 @@ function reward(fight, players, where) {
   }
 }
 
-module.exports = { reward, rollLoot, shares };
+/** Nex already selects the present, eligible recipient before sending their personal roll. */
+function ironmanKeeps(request) {
+  const fight = request.npc?.__nexFight;
+  if (request.npcId !== Common.data.npcs.nex || !fight || fight.stopped ||
+      fight.boss !== request.npc || fight.stage !== "ended") return;
+  if (!shares(fight.contribution, fight.players()).owed.some(({ player }) => player === request.player)) return;
+  request.keep.push(...request.drops.map((drop) => drop.itemId));
+}
+
+function attach(api) {
+  api.onCustomEvent("ironman:shared-kill-keeps", ironmanKeeps);
+}
+
+module.exports = { attach, reward, rollLoot, shares };

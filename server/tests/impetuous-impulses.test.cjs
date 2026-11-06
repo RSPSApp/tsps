@@ -32,6 +32,7 @@ function player({ hunter = 17, boost = 0, strength = 1, items = {} } = {}) {
     getInventory: () => ({
       getAmount: (id) => inventory.get(id) ?? 0,
       contains: (id) => (inventory.get(id) ?? 0) > 0,
+      containsNumber: (id) => (inventory.get(id) ?? 0) > 0,
       getFreeSlots: () => 28 - [...inventory.values()].reduce((sum, amount) => sum + amount, 0),
       capacity: () => 28,
       adds: (id, amount) => inventory.set(id, (inventory.get(id) ?? 0) + amount),
@@ -41,6 +42,7 @@ function player({ hunter = 17, boost = 0, strength = 1, items = {} } = {}) {
       getMaxLevel: (skill) => (skill === Skill.HUNTER ? hunter : 99),
       getCurrentLevel: (skill) => (skill === Skill.HUNTER ? hunter + boost : skill === Skill.STRENGTH ? strength : 99),
       addExperiences: (_, amount) => { p.xp += amount; },
+      addExperience: (skill, amount) => { if (skill === Skill.STRENGTH) p.xp += amount; },
     }),
     sendMessage: (message) => p.messages.push(message),
     getLocation: () => p.location,
@@ -124,6 +126,138 @@ test("leaving or moving cancels a pending push", () => {
   plugin._test.process(walking);
   assert.equal(plugin._test.pushes.has(walking), false);
   assert.equal(walking.moved.length, 0);
+});
+
+test("Elnock's toggle awards the tier's Strength XP once on, and nothing while off", () => {
+  // Opted out by default since 1 March 2023: a fast push still moves the player, it just pays nothing.
+  const off = player({ strength: 99 });
+  assert.equal(plugin._test.xpEnabled(off), false);
+  plugin._test.pushThrough({ player: off, object: WHEAT, random: sequence(0, 0) });
+  for (let i = 0; i < 6; i++) plugin._test.process(off);
+  assert.equal(off.moved.length, 1, "the push still completes with XP off");
+  assert.equal(off.xp, 0, "off by default, as since 1 March 2023");
+
+  const fast = player({ strength: 99 });
+  plugin._test.setXpEnabled(fast, true);
+  plugin._test.pushThrough({ player: fast, object: WHEAT, random: sequence(0, 0) });
+  for (let i = 0; i < 6; i++) plugin._test.process(fast);
+  assert.equal(fast.xp, 4, "a fast push is 4 XP");
+
+  const medium = player({ strength: 99 });
+  plugin._test.setXpEnabled(medium, true);
+  plugin._test.pushThrough({ player: medium, object: WHEAT, random: sequence(0.99, 0) });
+  for (let i = 0; i < 8; i++) plugin._test.process(medium);
+  assert.equal(medium.xp, 2, "a medium push is 2 XP");
+
+  const slow = player({ strength: 1 });
+  plugin._test.setXpEnabled(slow, true);
+  plugin._test.pushThrough({ player: slow, object: WHEAT, random: sequence(0.99, 0.99) });
+  for (let i = 0; i < 10; i++) plugin._test.process(slow);
+  assert.equal(slow.xp, 0, "a slow push is worth nothing either way");
+});
+
+test("the wheat branch asks the question that matches the current toggle", () => {
+  const { wheatCondition, ELNOCK_NPC_ID, WHEAT_ON_CONDITION, WHEAT_OFF_CONDITION } = plugin._test.elnock;
+  const p = player();
+
+  // Off by default, so he offers to turn it on.
+  assert.equal(wheatCondition({ player: p, npcId: ELNOCK_NPC_ID, text: WHEAT_ON_CONDITION }), false);
+  assert.equal(wheatCondition({ player: p, npcId: ELNOCK_NPC_ID, text: WHEAT_OFF_CONDITION }), true);
+
+  plugin._test.setXpEnabled(p, true);
+  assert.equal(wheatCondition({ player: p, npcId: ELNOCK_NPC_ID, text: WHEAT_ON_CONDITION }), true);
+  assert.equal(wheatCondition({ player: p, npcId: ELNOCK_NPC_ID, text: WHEAT_OFF_CONDITION }), false);
+
+  assert.equal(wheatCondition({ player: p, npcId: 1, text: WHEAT_ON_CONDITION }), null, "another NPC is left alone");
+  assert.equal(wheatCondition({ player: p, npcId: ELNOCK_NPC_ID, text: "Something else:" }), null);
+});
+
+test("Elnock plays the \"before learning\" transcript until he has taught the player", () => {
+  const { variant, onChoice, taught, ELNOCK_NPC_ID, BEFORE_LEARNING, AFTER_LEARNING } = plugin._test.elnock;
+  const p = player();
+
+  assert.equal(variant({ player: p, npcId: ELNOCK_NPC_ID }), BEFORE_LEARNING);
+  assert.equal(variant({ player: p, npcId: 1 }), null, "another NPC is left alone");
+
+  // Asking how to catch them is what moves him on; the wheat branch only exists in the later text.
+  onChoice({ player: p, npcId: ELNOCK_NPC_ID, option: "So what are these implings?" });
+  assert.equal(taught(p), false, "an unrelated choice teaches nothing");
+  assert.equal(variant({ player: p, npcId: ELNOCK_NPC_ID }), BEFORE_LEARNING);
+
+  onChoice({ player: p, npcId: ELNOCK_NPC_ID, option: "Can I catch these implings then?" });
+  assert.equal(taught(p), true);
+  assert.equal(variant({ player: p, npcId: ELNOCK_NPC_ID }), AFTER_LEARNING);
+});
+
+test("the wheat branch is reachable only after he has taught the player", () => {
+  // The transcript that contains the wheat option is the "after learning" one, so this guards the
+  // path that makes the toggle reachable at all.
+  const dialogs = require("../data/definitions/npc-dialogues.json");
+  const el = dialogs["Elnock Inquisitor"];
+  const { BEFORE_LEARNING, AFTER_LEARNING } = plugin._test.elnock;
+  const hasWheat = (name) => JSON.stringify(el.variants[name]).includes("Can you tell me about the wheat?");
+
+  assert.equal(el.default, BEFORE_LEARNING, "his default transcript is the pre-learning one");
+  assert.equal(hasWheat(BEFORE_LEARNING), false, "the pre-learning text has no wheat branch");
+  assert.equal(hasWheat(AFTER_LEARNING), true, "the wheat branch lives in the post-learning text");
+});
+
+test("the scroll question is answered from the inventory, or he offers one forever", () => {
+  const { wheatCondition, ELNOCK_NPC_ID } = plugin._test.elnock;
+  const text = "If the player has an Impling scroll in their inventory:";
+  const withScroll = player({ items: { [core.ItemIdentifiers.IMPLING_SCROLL]: 1 } });
+  const without = player();
+
+  // The transcript's wording is inverted: these steps are what he says to someone WITHOUT one, so
+  // the branch has to answer "no scroll" for the offer to play and "has scroll" to fall through to
+  // his six-option menu.
+  assert.equal(wheatCondition({ player: withScroll, npcId: ELNOCK_NPC_ID, text }), false,
+    "holding the scroll skips the offer and reaches his menu");
+  assert.equal(wheatCondition({ player: without, npcId: ELNOCK_NPC_ID, text }), true,
+    "without one he offers it");
+});
+
+test("accepting the scroll offer actually hands one over", () => {
+  const { wheatAction, ELNOCK_NPC_ID, SCROLL_STEP } = plugin._test.elnock;
+  const p = player();
+  const scroll = core.ItemIdentifiers.IMPLING_SCROLL;
+  assert.equal(p.getInventory().getAmount(scroll), 0);
+
+  const event = { player: p, npcId: ELNOCK_NPC_ID, stepId: SCROLL_STEP };
+  wheatAction(event);
+  assert.equal(event.handled, true);
+  assert.equal(p.getInventory().getAmount(scroll), 1, "the narration alone gave nothing before");
+  // Handled steps stop the engine sending their own line, so the plugin has to say it.
+  assert.match(p.messages.at(-1), /gives you a scroll/);
+});
+
+test("the export's textless prompt marker no longer ends the wheat branch", () => {
+  // The bare "Turn wheat Strengh XP ON?" line came out of the export as an `unavailable` marker,
+  // which ends playback. Handling it continues the branch, so the Yes/No behind it still plays.
+  const { wheatAction, ELNOCK_NPC_ID, PROMPT_GAP_STEP } = plugin._test.elnock;
+  const event = { player: player(), npcId: ELNOCK_NPC_ID, stepId: PROMPT_GAP_STEP };
+  wheatAction(event);
+  assert.equal(event.handled, true, "handled carries on with the rest of the branch");
+  assert.equal(event.end, undefined, "and must not close the dialogue");
+});
+
+test("confirming either wheat outcome sets the toggle", () => {
+  const { wheatAction, ELNOCK_NPC_ID, WHEAT_XP_ON_STEP, WHEAT_XP_OFF_STEP } = plugin._test.elnock;
+  const p = player();
+
+  const on = { player: p, npcId: ELNOCK_NPC_ID, stepId: WHEAT_XP_ON_STEP };
+  wheatAction(on);
+  assert.equal(plugin._test.xpEnabled(p), true);
+  assert.equal(on.handled, true);
+
+  const off = { player: p, npcId: ELNOCK_NPC_ID, stepId: WHEAT_XP_OFF_STEP };
+  wheatAction(off);
+  assert.equal(plugin._test.xpEnabled(p), false);
+  assert.equal(off.handled, true);
+
+  const other = { player: p, npcId: ELNOCK_NPC_ID, stepId: "not-a-step" };
+  wheatAction(other);
+  assert.equal(other.handled, undefined, "an unrelated step is left for its own handler");
 });
 
 test("Elnock's gift is once per account and needs room", () => {

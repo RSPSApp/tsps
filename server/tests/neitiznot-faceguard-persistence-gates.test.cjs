@@ -218,7 +218,7 @@ test("the faceguard needs 70 Defence (item data), the helm 55", (t) => {
 });
 
 test("the quest gates are per item: the faceguard names The Fremennik Exiles, the helm The Fremennik Isles", (t) => {
-  // World config turns these gates on; they are off by default.
+  // Quest equipment gates default on; pin the config on for this test.
   const readConfig = PluginManager.getPluginConfig;
   t.mock.method(PluginManager, "getPluginConfig", (key, fallback) =>
     key === "quests:equipment-requirements" ? true : readConfig.call(PluginManager, key, fallback));

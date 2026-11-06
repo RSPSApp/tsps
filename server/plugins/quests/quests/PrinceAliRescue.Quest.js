@@ -216,6 +216,10 @@ module.exports = function registerPrinceAliRescueQuest(api) {
   }
 
   function osmanVariant(stage) {
+    // "Prince Ali is safe once more. Chancellor Hassan has your payment." is the
+    // pre-reward line. Once the reward is claimed the transcript's post-quest line
+    // takes over, as Contact.Quest.js does for Osman after Contact!.
+    if (stage >= STAGE_COMPLETE) return "standard-dialogue-after-prince-ali-rescue";
     if (stage >= STAGE_PRINCE_SAVED) return PAR("prince-ali-rescued-talking-to-osman");
     if (stage === STAGE_STARTED) return PAR("starting-out-talking-to-osman");
     if (stage >= STAGE_SPOKEN_TO_OSMAN && stage < STAGE_PREPARATION_COMPLETE) {
@@ -399,6 +403,16 @@ module.exports = function registerPrinceAliRescueQuest(api) {
   function handleLine(event) {
     const { player, npcId } = event;
     const line = String(event.text ?? "");
+    const postQuestOsmanLine = OSMAN_NPC_IDS.has(npcId)
+      && line.startsWith("Well done. A great rescue.")
+      && quest.getStage(player) >= STAGE_COMPLETE;
+    if (postQuestOsmanLine) {
+      const status = { player, asked: false };
+      api.emitCustomEvent("sorceress-s-garden:osman-help-status", status);
+      if (!status.asked) {
+        event.after = () => openOsmanGardenHelpMenu(player, npcId, event.npc);
+      }
+    }
     if (npcId === HASSAN_NPC_ID && line.startsWith("You'll find our Spymaster")) event.before = () => {
       if (!accepted.has(player) || quest.getStage(player) !== 0) return;
       accepted.delete(player);
@@ -412,6 +426,34 @@ module.exports = function registerPrinceAliRescueQuest(api) {
       const stage = quest.getStage(player);
       if (stage >= STAGE_SPOKEN_TO_OSMAN && stage < STAGE_PREPARATION_COMPLETE && hasDisguise(player) && held(player, BRONZE_KEY_ITEM_ID) && held(player, ROPE_ITEM_ID)) quest.setStage(player, STAGE_PREPARATION_COMPLETE);
     };
+  }
+
+  function startOsmanGardenDialogue(steps) {
+    const sqirkTopic = steps.find((step) => step.type === "choice")?.options?.find(
+      (option) => option.text === "I'd like to talk about sq'irks."
+    );
+    return sqirkTopic?.steps ?? [];
+  }
+
+  function openOsmanGardenHelpMenu(player, npcId, npc) {
+    const { DialogueChainBuilder, OptionDialogue } = api.core;
+    const menu = new OptionDialogue(0, {
+      executeOption(option) {
+        player.getPacketSender().sendInterfaceRemoval();
+        if (Number(option) !== 1) return;
+        api.emitCustomEvent("sorceress-s-garden:osman-helped", { player });
+        startTranscript(
+          api,
+          player,
+          npcId,
+          "Osman",
+          "sorceress-s-garden-related-dialogue",
+          startOsmanGardenDialogue,
+          npc
+        );
+      },
+    }, "Is there anything I can help you with?");
+    player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(menu));
   }
 
   function later(player, ticks, action) {

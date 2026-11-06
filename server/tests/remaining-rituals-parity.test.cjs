@@ -49,12 +49,13 @@ function setup(pluginPath) {
   };
   const originalRangedStart = core.RangedCombatMethod.prototype.start;
   core.RangedCombatMethod.prototype.start = function(player) { player.__rangedShots = (player.__rangedShots ?? 0) + 1; };
+  const world = { getNpcs: () => [], getPlayers: () => [player] };
   const api = new Proxy({
     core,
     persistAttribute() {},
     registerArea() {},
     getItemOnGroundManager: () => groundManager,
-    getWorld: () => ({ getNpcs: () => [] }),
+    getWorld: () => world,
     spawnNpc(def) {
       const npc = { def, getId: () => def.id, getIndex: () => 9000 + spawned.length, getHitpoints: () => 10,
         getLocation: () => new core.Location(def.x, def.y, def.z), isRegistered: () => true,
@@ -133,6 +134,7 @@ function setup(pluginPath) {
     sendSong(id) { songs.push(id); return sender; },
     sendJingle(id) { songs.push(id); return sender; },
     sendSubInterface(uid, id, type, options) { subInterfaces.push(['open', uid, id, options]); return sender; },
+    mountSubInterface(uid, id, type, options) { subInterfaces.push(['open', uid, id, options]); return {}; },
     closeSubInterface(uid) { subInterfaces.push(['close', uid]); return sender; },
     sendInterface(id) { interfaces.push(id); return sender; },
     sendString(text, uid) { strings.set(uid, text); return sender; },
@@ -583,7 +585,7 @@ test("Shades of Mort'ton migrates old saves and publishes the native 207/208 cur
   temple.quest.setStage(temple.player, 60);
   temple.attrs.set('quest.shades_of_mortton.met_razmire', 'cured');
   temple.login();
-  assert.equal(temple.configs.get(343), 100);
+  assert.equal(temple.configs.get(343), 0, 'legacy quest state cannot set a world repair percentage');
   assert.equal(temple.configs.get(345), 20);
   assert.ok((temple.configs.get(340) & 12) !== 0, 'old cured-NPC saves rebuild varp 340');
 
@@ -900,4 +902,153 @@ test('Tai completion merges the extra coins into an existing stack and adds on o
   } finally {
     manager.registers = original;
   }
+});
+
+
+// Separate registration contexts model separate server-world lifecycles, not
+// two live worlds in one server process.
+test("Shades repair registrations do not seed a new world from player saves", () => {
+  const a = setup('../plugins/quests/quests/ShadesOfMortton.Quest');
+  const b = setup('../plugins/quests/quests/ShadesOfMortton.Quest');
+  const I = a.core.ItemIdentifiers, O = a.core.ObjectIdentifiers;
+  a.quest.setStage(a.player, 55);
+  for (const [id, count] of [[I.HAMMER, 1], [I.LIMESTONE_BRICK, 1], [I.PLANK, 1], [I.SWAMP_PASTE, 5]]) a.give(id, count);
+  a.object(O.BROKEN_WALL);
+  assert.equal(a.configs.get(343), 1);
+  b.quest.setStage(b.player, 60);
+  b.attrs.set('shades-of-mortton:temple-repaired', 84);
+  b.attrs.set('shades-of-mortton:temple-sanctity', 31);
+  b.login();
+  assert.equal(b.configs.get(343), 0, 'old personal repair does not seed this world');
+  assert.equal(b.configs.get(345), 31, 'saved sanctity remains personal');
+  assert.equal(b.quest.getStage(b.player), 60, 'prior altar eligibility remains personal');
+  a.login();
+  assert.equal(a.configs.get(343), 1, 'the first registration retains its own repair state');
+});
+
+test("Shades repair fans out between real world players and preserves personal state", t => {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { PlayerSession } = require('../dist/net/PlayerSession');
+  const core = PluginManager.getCoreApi();
+  const { World, TaskManager, ItemIdentifiers: I, ObjectIdentifiers: O } = core;
+  const priorBots = process.env.DISABLE_PLAYER_BOTS;
+  const originalSubmit = TaskManager.submit;
+  const tasks = new Set(), actors = [];
+  let started = false;
+  t.after(() => {
+    try {
+      for (const p of actors) {
+        TaskManager.cancelTasks(p);
+        if (p.isRegistered()) World.getPlayers().removes(p);
+      }
+      if (started) PluginManager.emitServerShutdown({});
+    } finally {
+      for (const task of tasks) task.stop();
+      TaskManager.submit = originalSubmit;
+      if (priorBots === undefined) delete process.env.DISABLE_PLAYER_BOTS;
+      else process.env.DISABLE_PLAYER_BOTS = priorBots;
+    }
+  });
+  process.env.DISABLE_PLAYER_BOTS = '1';
+  TaskManager.submit = function (...args) {
+    if (args[0]) tasks.add(args[0]);
+    return originalSubmit.apply(this, args);
+  };
+  PluginManager.loadFromDirectory(path.resolve(__dirname, '../plugins'));
+  core.RegionManager.init();
+  core.RegionManager.loadMapFiles(3506, 3316);
+  started = true; // shutdown also owns a partially completed startup
+  PluginManager.emitServerStartup({});
+  World.process();
+  const quest = runtime.getRegisteredQuests().filter(q => q.key === 'shades_of_mortton').at(-1);
+  assert.ok(quest, 'the real plugin registered the Shades quest');
+  function actor(name) {
+    const channel = {kind:'test', remoteAddress:'127.0.0.1', isOpen:()=>true,
+      send:()=>true, close(){}, onData(){}, onError(){}, onClose(){}};
+    const player = new Player(new PlayerSession(channel));
+    const configs = new Map(), sender = player.getPacketSender();
+    const sendConfig = sender.sendConfig.bind(sender);
+    sender.sendConfig = (id, value) => { configs.set(id, value); return sendConfig(id, value); };
+    player.setUsername(name);
+    player.setAttribute('bot-skip-persistence', true);
+    player.setLocation(new core.Location(3506, 3315, 0));
+    actors.push(player); // cleanup is installed before the actual onAdd/login
+    assert.equal(World.getPlayers().add(player), true);
+    assert.equal(World.getPlayers().get(player.getIndex()), player);
+    player.needsPlacement = false;
+    return { player, configs };
+  }
+  const a = actor('shadesrepaira'), b = actor('shadesrepairb');
+  quest.setStage(a.player, 55);
+  quest.setStage(b.player, 55);
+  b.player.setAttribute('shades-of-mortton:temple-sanctity', 11);
+  for (const f of [a, b]) PluginManager.emitPlayerLogin({ player:f.player, username:f.player.getUsername(), isNewAccount:false });
+  assert.equal(a.configs.get(343), 0);
+  assert.equal(b.configs.get(343), 0, 'both online players start in the same unbuilt world');
+  assert.equal(b.configs.get(345), 11);
+  const inventory = a.player.getInventory();
+  for (const [id, count] of [[I.HAMMER, 1], [I.LIMESTONE_BRICK, 2], [I.PLANK, 2], [I.SWAMP_PASTE, 10]]) {
+    inventory.add(new core.Item(id, count), true);
+    assert.equal(inventory.getAmount(id), count);
+  }
+  const wallLocation = new core.Location(3506, 3316, 0);
+  const wall = new core.GameObject(O.BROKEN_WALL, wallLocation, 10, 0, null);
+  const repair = (player = a.player) => PluginManager.emitObjectInteraction({player, object:wall,
+    objectId:wall.getId(), clickType:1, location:wallLocation, handled:false});
+  assert.equal(repair(), true, 'registered object handler receives the repair action');
+  assert.equal(inventory.getAmount(I.LIMESTONE_BRICK), 1);
+  assert.equal(inventory.getAmount(I.PLANK), 1);
+  assert.equal(inventory.getAmount(I.SWAMP_PASTE), 5);
+  assert.equal(inventory.getAmount(I.HAMMER), 1);
+  assert.equal(a.configs.get(343), 1);
+  assert.equal(b.configs.get(343), 1, 'online observer receives the shared percentage');
+  assert.equal(a.configs.get(345), 2);
+  assert.equal(b.configs.get(345), 11, 'observer sanctity is not the contributor sanctity');
+  assert.equal(quest.getStage(b.player), 55, 'observation grants no quest progress');
+  for (let i = 0; i < 4; i++) World.process();
+  assert.equal(a.configs.get(345), 3, 'the actual delayed task updates only the contributor');
+  assert.equal(b.configs.get(345), 11);
+  const peerInventory = b.player.getInventory();
+  for (const [id, count] of [[I.HAMMER, 1], [I.LIMESTONE_BRICK, 1], [I.PLANK, 1], [I.SWAMP_PASTE, 5]]) {
+    peerInventory.add(new core.Item(id, count), true);
+    assert.equal(peerInventory.getAmount(id), count);
+  }
+  assert.equal(repair(b.player), true, 'the peer contributes through the same registered handler');
+  for (const id of [I.LIMESTONE_BRICK, I.PLANK, I.SWAMP_PASTE]) assert.equal(peerInventory.getAmount(id), 0);
+  assert.equal(peerInventory.getAmount(I.HAMMER), 1);
+  assert.equal(a.configs.get(343), 2);
+  assert.equal(b.configs.get(343), 2, 'both contributions accumulate in the same world');
+  assert.equal(a.configs.get(345), 3);
+  assert.equal(b.configs.get(345), 13);
+  assert.equal(World.getPlayers().removes(b.player), true);
+  assert.equal(repair(), true);
+  assert.equal(a.configs.get(343), 3);
+  assert.equal(b.configs.get(343), 2, 'offline observers do not receive fan-out');
+  assert.equal(World.getPlayers().add(b.player), true);
+  b.player.needsPlacement = false;
+  PluginManager.emitPlayerLogin({ player:b.player, username:b.player.getUsername(), isNewAccount:false });
+  assert.equal(b.configs.get(343), 3, 'login sends the current world state');
+  assert.equal(b.configs.get(345), 13);
+  assert.equal(quest.getStage(b.player), 55);
+  assert.equal(inventory.getAmount(I.LIMESTONE_BRICK), 0);
+  assert.equal(inventory.getAmount(I.PLANK), 0);
+  assert.equal(inventory.getAmount(I.SWAMP_PASTE), 0);
+
+  // Reach the existing contributor-only quest threshold while the peer watches.
+  a.player.getEquipment().setItem(core.Equipment.HANDS_SLOT, new core.Item(I.FLAMTAER_BRACELET));
+  for (let i = 0; i < 20; i++) {
+    for (const [id, count] of [[I.LIMESTONE_BRICK, 5], [I.PLANK, 5], [I.SWAMP_PASTE, 25]]) {
+      inventory.add(new core.Item(id, count), true);
+      assert.equal(inventory.getAmount(id), count);
+    }
+    assert.equal(repair(), true);
+    assert.equal(inventory.getAmount(I.LIMESTONE_BRICK), 0);
+    assert.equal(inventory.getAmount(I.PLANK), 0);
+    assert.equal(inventory.getAmount(I.SWAMP_PASTE), 0);
+  }
+  assert.equal(a.configs.get(343), 100);
+  assert.equal(b.configs.get(343), 100);
+  assert.equal(quest.getStage(a.player), 60, 'the eligible contributor receives their own quest credit');
+  assert.equal(quest.getStage(b.player), 55, 'a shared 100 percent does not grant observer quest credit');
+  assert.equal(b.configs.get(345), 13);
 });

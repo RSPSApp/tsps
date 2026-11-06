@@ -1,3 +1,4 @@
+process.env.DISABLE_PLAYER_BOTS = '1';
 // Run after `yarn build`: node --test tests/ferox-enclave.test.cjs
 const assert = require("node:assert/strict");
 const path = require("node:path");
@@ -230,8 +231,8 @@ function enclaveWorld(t) {
     onCustomEvent(name, handler) { custom.set(name, [...(custom.get(name) ?? []), handler]); },
     emitCustomEvent(name, event) { for (const handler of custom.get(name) ?? []) handler(event); },
     onServerStartup(handler) { startup.push(handler); },
-    onCanAttack(handler) { global.attack.push(handler); },
-    onPlayerProcess(handler) { global.process.push(handler); },
+    onCanAttack(handler) { if (name === 'FeroxEnclave') global.attack.push(handler); },
+    onPlayerProcess(handler) { if (name === 'FeroxEnclave') global.process.push(handler); },
   }, { get(target, name) { return target[name] ?? (() => {}); } });
   require('../plugins/areas/Wilderness.plugin').register(apiFor('Wilderness'));
   FeroxPlugin.register(apiFor('FeroxEnclave'));
@@ -470,3 +471,151 @@ test("free-for-all: the exit portal a tick later; the Mysterious Portal is unava
   assert.deepEqual(q.ticks[0], ["varbit 12393=1", "statement: This portal is unavailable on this world."]);
 });
 
+
+// Native name/action dispatch, not network walk routing.
+const { describe, after } = require('node:test');
+describe('Castle Wars lobby return (native dispatch)', () => {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { PlayerSession } = require('../dist/net/PlayerSession');
+  const { ClientConnection } = require('../dist/net/NetworkBuilder');
+  let core, leaves, originals, next = 4900;
+  before(() => {
+    core = PluginManager.getCoreApi();
+    RegionManager.loadMapFiles(2440, 3090);
+    RegionManager.loadMapFiles(3128, 3629);
+    require('../plugins/objects/Doors.plugin').register(PluginManager.createApi('Doors'));
+    FeroxPlugin.register(PluginManager.createApi('FeroxEnclave'));
+    PluginManager.emitServerStartup({});
+    leaves = [core.ObjectIdentifiers.LARGE_DOOR_98, core.ObjectIdentifiers.LARGE_DOOR_99].map(id => {
+      const found = [...MapObjects.mapObjects.values()].flat().filter(o => {
+        const l = o.getLocation();
+        return o.getId() === id && l.getZ() === 0 && l.getX() >= 2430 && l.getX() <= 2450
+          && l.getY() >= 3080 && l.getY() <= 3100;
+      });
+      assert.equal(found.length, 1, `one mapped lobby leaf ${id}`);
+      return found[0];
+    });
+    originals = leaves.map(o => ({ id: o.getId(), location: o.getLocation().clone(),
+      clipping: RegionManager.getClipping(o.getLocation().getX(), o.getLocation().getY(), 0, null) }));
+  });
+  after(() => PluginManager.emitServerShutdown({}));
+  function actor(t) {
+    const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true,
+      send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+    const session = new PlayerSession(channel), p = new Player(session);
+    session.setPlayer(p); p.setIndex(next++); p.setUsername(`feroxdoor${p.getIndex()}`);
+    p.setRegistered(true); p.needsPlacement = false;
+    const client = new ClientConnection(channel); client.player = p;
+    t.after(() => { core.TaskManager.cancelTasks(p); core.TaskManager.cancelTasks(p.getIndex()); p.setRegistered(false); });
+    return { p, client };
+  }
+  function standing() { return originals.map(row => MapObjects.get(row.id, row.location.clone(), null)); }
+  function closed() {
+    assert.ok(standing().every(Boolean), 'both original map leaves stand');
+    for (const row of originals) assert.equal(RegionManager.getClipping(row.location.getX(), row.location.getY(), 0, null), row.clipping);
+  }
+  function click(f, leaf) {
+    const o = standing()[leaf]; assert.ok(o, 'clicked closed map leaf');
+    const l = o.getLocation(), source = new core.Location(l.getX(), l.getY() + 1, l.getZ());
+    assert.equal(RegionManager.blocked(source, null), false, 'adjacent source tile is walkable');
+    f.p.setLocation(source); f.p.needsPlacement = false;
+    const definition = core.ObjectDefinition.forPlayer(o.getId(), f.p);
+    assert.equal(definition.getName(), 'Large door');
+    const clickType = definition.getInteractions().findIndex(a => a?.toLowerCase() === 'open') + 1;
+    assert.ok(clickType, 'cache supplies Open');
+    assert.equal(PluginManager.emitObjectInteraction({ player: f.p, object: o, objectId: o.getId(), definition, clickType,
+      option: 'Open', sourceLocation: { x: source.getX(), y: source.getY(), z: source.getZ() },
+      location: { x: l.getX(), y: l.getY(), z: l.getZ() }, handled: false }), true);
+  }
+  function resetDoor() {
+    // Exercise the real door's own auto-close; no other plugins or startup jobs are registered here.
+    for (let i = 0; i < 502; i++) core.TaskManager.process();
+  }
+  async function choose(f, n) {
+    await f.client.dispatch([{ type: 'dialogue_continue', widgetId: core.MultiChatboxPrompt.OPTIONS_WIDGET_ID, childIndex: n }]);
+    f.client.processTurnPackets();
+  }
+  for (const leaf of [0, 1]) {
+    test(`leaf ${leaf}: members named dispatch opens the real pair`, (t) => {
+      t.mock.method(core.WorldDefinition, 'isMembersWorld', () => true);
+      const f = actor(t);
+      try { closed(); click(f, leaf); assert.ok(standing().every(o => !o), 'both closed leaves removed'); }
+      finally { resetDoor(); }
+      closed();
+    });
+    test(`leaf ${leaf}: F2P asks before travel and leaves both leaves closed on cancel`, async (t) => {
+      t.mock.method(core.WorldDefinition, 'isMembersWorld', () => false);
+      const f = actor(t);
+      try {
+        closed(); click(f, leaf);
+        const pending = core.MultiChatboxPrompt.getPending(f.p);
+        assert.ok(pending, 'return confirmation is shown'); closed();
+        const no = pending.options.findIndex(s => /^(no|cancel)\b/i.test(s)); assert.ok(no >= 0);
+        const at = f.p.getLocation().clone(); await choose(f, no + 1);
+        core.TaskManager.process(); core.TaskManager.process();
+        assert.ok(f.p.getLocation().equals(at)); closed();
+      } finally { resetDoor(); }
+    });
+    test(`leaf ${leaf}: F2P does not open the shared door`, (t) => {
+      t.mock.method(core.WorldDefinition, 'isMembersWorld', () => false);
+      const f = actor(t);
+      try { closed(); click(f, leaf); closed(); } finally { resetDoor(); }
+    });
+    test(`leaf ${leaf}: F2P acceptance reaches safe walkable Ferox`, async (t) => {
+      t.mock.method(core.WorldDefinition, 'isMembersWorld', () => false);
+      const f = actor(t);
+      try {
+        closed(); click(f, leaf);
+        const pending = core.MultiChatboxPrompt.getPending(f.p); assert.ok(pending, 'return confirmation is shown');
+        const yes = pending.options.findIndex(s => /^yes\b/i.test(s)); assert.ok(yes >= 0);
+        await choose(f, yes + 1); core.TaskManager.process(); core.TaskManager.process();
+        assert.ok(Bounds.isInsideEnclave(f.p.getLocation()), 'arrived in the enclave');
+        assert.equal(RegionManager.blocked(f.p.getLocation(), null), false, 'arrival tile is walkable');
+        closed();
+      } finally { resetDoor(); }
+    });
+    test(`leaf ${leaf}: a stale return cannot move a player who walked away`, async (t) => {
+      t.mock.method(core.WorldDefinition, 'isMembersWorld', () => false);
+      const f = actor(t);
+      try {
+        closed(); click(f, leaf);
+        const pending = core.MultiChatboxPrompt.getPending(f.p); assert.ok(pending);
+        const yes = pending.options.findIndex(s => /^yes\b/i.test(s)); assert.ok(yes >= 0);
+        const away = new core.Location(2440, 3090, 0); f.p.setLocation(away.clone()); f.p.needsPlacement = false;
+        await choose(f, yes + 1); core.TaskManager.process(); core.TaskManager.process();
+        assert.ok(f.p.getLocation().equals(away)); closed();
+      } finally { resetDoor(); }
+    });
+    for (const change of ['movement', 'world', 'logout']) {
+      test(`leaf ${leaf}: ${change} after Yes prevents delayed travel`, async (t) => {
+        let members = false;
+        t.mock.method(core.WorldDefinition, 'isMembersWorld', () => members);
+        const f = actor(t);
+        try {
+          closed(); click(f, leaf);
+          const pending = core.MultiChatboxPrompt.getPending(f.p); assert.ok(pending);
+          const yes = pending.options.findIndex(s => /^yes\b/i.test(s)); assert.ok(yes >= 0);
+          await choose(f, yes + 1);
+          if (change === 'movement') f.p.setLocation(new core.Location(2440, 3090, 0));
+          if (change === 'world') members = true;
+          if (change === 'logout') f.p.setRegistered(false);
+          const at = f.p.getLocation().clone();
+          core.TaskManager.process(); core.TaskManager.process();
+          assert.ok(f.p.getLocation().equals(at)); closed();
+        } finally { resetDoor(); }
+      });
+    }
+    test(`leaf ${leaf}: another prompt replaces the return`, async (t) => {
+      t.mock.method(core.WorldDefinition, 'isMembersWorld', () => false);
+      const f = actor(t);
+      try {
+        closed(); click(f, leaf); assert.ok(core.MultiChatboxPrompt.getPending(f.p));
+        let picked = false;
+        core.MultiChatboxPrompt.showPrompt('fixture', f.p, 'Replacement?', ['Yes.', () => { picked = true; }, 'No.', () => {}]);
+        const at = f.p.getLocation().clone(); await choose(f, 1);
+        core.TaskManager.process(); core.TaskManager.process();
+        assert.equal(picked, true); assert.ok(f.p.getLocation().equals(at)); closed();
+      } finally { resetDoor(); }
+    });
+  }
+});

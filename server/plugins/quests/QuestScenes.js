@@ -75,9 +75,11 @@ function createQuestScenes(api, { onEnd } = {}) {
   }
 
   function fade(player, out) {
-    player.getPacketSender().sendSubInterface(FADE_UID, FADE_INTERFACE, 1, {
+    const sender = player.getPacketSender();
+    const mount = sender.mountSubInterface(FADE_UID, FADE_INTERFACE, 1, {
       postScripts: [{ scriptId: FADE_SCRIPT, args: out ? [0, 255, 0, 0, FADE_CYCLES] : [0, 0, 0, 255, FADE_CYCLES] }],
     });
+    if (!out) TaskManager.submit(new CountdownTask(player, 3, () => sender.closeSubInterfaceMount(mount)));
   }
 
   function closeFade(player) {
@@ -93,6 +95,10 @@ function createQuestScenes(api, { onEnd } = {}) {
       const cinematic = active && cutscene ? 1 : 0;
       player.getPacketSender().sendVarbit(CUTSCENE_STATUS_VARBIT, cinematic);
       player.getPacketSender().sendVarbit(GRAVESTONE_TLI_HIDE_VARBIT, cinematic);
+      // Live toggles hidenpcops, hidelocops and hideobjops with cutscene_status in the same tick
+      // (capture facts in the PR); loc ops remain a separate change.
+      player.getPacketSender().sendHideNpcOps(cinematic === 1);
+      player.getPacketSender().sendHideObjOps(cinematic === 1);
     }
   }
 

@@ -18,6 +18,13 @@ requirements again. Expiry before a click refused fishing; expiry during flight 
 lost the catch. Both checks are removed. The borrowing gate, bait check and cancellation
 on player movement, combat, return of the bird or session cleanup remain in place.
 
+## Clue bottles
+
+Aerial fishing has its own [clue bottle](https://oldschool.runescape.wiki/w/Clue_bottle)
+rolls. The matching Combat Achievement tier's 5% bonus applies to its eligible
+non-beginner bottle tier. This follows the Wiki's general bottle formula and listed
+Aerial base; it is not a separate captured Aerial reward observation.
+
 ## Comparison and verification
 
 The Wiki also describes guaranteed catches, distance-based travel time, fishing with a

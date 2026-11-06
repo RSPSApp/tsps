@@ -43,15 +43,18 @@ Each rule comes from the rsprox capture database (https://rsprox.net/database) o
 | --- | --- | --- |
 | No trading with players, either way | all | "You are an Ironman. You stand alone." (captured); to someone asking an Ironman: "*name* is an Ironman. He/She stands alone." (captured) |
 | No picking up items other players own (their drops and kills, also once public; unowned spawns are fine). Stacks from different owners never merge, so a public stack cannot absorb someone else's drop | all | "You're an Ironman, so you can't take items that other players have dropped." (captured) |
-| No drop from a kill another player damaged in the last 60 seconds (the same damage record that decides the killer; 0-damage hits aren't recorded) | all | "As an Ironman, you don't get loot if other players helped you kill the monster." (captured) |
+| No items from the Falador Party Room balloons (Wiki: Party chest, Party balloon): a pop takes nothing from the chest, and a drop another player popped is theirs (owned), so the pickup rule above applies. Ironmen cannot donate to the chest either (ours) | all | "As an Ironman, you stand alone." (donating, ours) |
+| No drop from a kill another player damaged in the last 60 seconds (the same damage record that decides the killer; 0-damage hits aren't recorded). Eligible personal Nex rewards are an exception (Wiki: Nex) | all | "As an Ironman, you don't get loot if other players helped you kill the monster." (captured) |
 | A warning when attacking an npc another player damaged (once per npc) | all | "As an Ironman, you might not receive kill-credit for this monster." (captured) |
 | Loot from a player an Ironman kills is the fallen player's (Wiki: Ironmen can't take PvP loot) | all | none |
 | No combat experience from fighting players (Wiki) | all | none |
+| No entering another player's house (Wiki); own house remains available | all | Existing house-unavailable message *(ours)* |
 | Shops sell only their own stock, never what players sold to them (Wiki) | all | "As an Ironman, you can only buy the shop's own stock." *(ours)* |
-| No Grand Exchange (Wiki) | all | "As an Ironman, you cannot use the Grand Exchange." *(ours)* |
+| Grand Exchange: only single-bond buy offers (Wiki); no sales or other purchases | all | "Ironmen can only buy one bond per Grand Exchange offer." *(ours)* |
 | No presets: this server's PvP loadouts hand out items. Covers `::presets`, the interface, and the automatic opening after a death, which is skipped quietly | all | "As an Ironman, you cannot use presets." *(ours)* |
 | No staking in the Duel Arena; a free duel is still allowed (Wiki: Ironmen can't stake) | all | "As an Ironman, you cannot take part in a staked duel." *(ours)* |
 | No bank (the Ironman tutor, captured) | Ultimate | "As an Ultimate Ironman, you cannot use the bank." *(ours)* |
+| No Seed Vault access ([Jagex update](https://oldschool.runescape.wiki/w/Update%3AThe_Seed_Vault)) | Ultimate | no Vault-specific line |
 | All items dropped on death, none kept (the Ironman tutor, captured) | Ultimate | none |
 | One life: a dangerous death makes them a standard Ironman; a safe death (a minigame) doesn't | Hardcore | "You have fallen as a Hardcore Ironman. You are now a standard Ironman." *(ours)* |
 
@@ -79,7 +82,7 @@ Generic additions for these rules:
 - **The player death event** carries `itemsLost`: whether the death was dangerous.
 - **Presets** ask `presets:can-use` `{ player, allow, message }` before opening or applying one.
 - **`ShopManager`** asks `shop:buy-limit` `{ player, shopId, itemId, available, original, limit, message }` before a purchase.
-- **The Grand Exchange** asks `grand-exchange:can-open` `{ player, allow, message }` before opening.
+- **The Grand Exchange** emits `ge:offer-confirmed` `{ player, itemId, sell, quantity, accepted }` before escrow; Ironman restrictions can veto the offer. Collecting to a bank checks `onCanBank` first, including locked PIN, duel and Nightmare Zone restrictions. The collection box does not open a PIN keypad; enter the PIN elsewhere before banking a collection.
 - **The Duel Arena** asks `duelarena:can-stake` `{ player, session, allow, message }` before an
   item is offered and, whenever a staked duel is accepted, for both players, so a mode change
   between the two final confirmations still refuses it.
@@ -88,10 +91,8 @@ Generic additions for these rules:
 
 - **Group Ironman** (and Hardcore and Unranked Group Ironman).
 - **A bank PIN** when choosing a mode, as OSRS asks for one.
-- **Bonds:** Ironmen may trade bonds and buy them through their own Grand Exchange interface.
+- **Bonds:** Ironmen can buy a single bond per offer through the existing Grand Exchange screen; the OSRS Ironman-specific presentation is not yet implemented.
 - **Other limits:**
-  - entering other players' houses;
   - Nightmare Zone group dreams;
-  - the group-boss loot exceptions (raids, Wintertodt, Nex…);
-  - the Falador Party Room's balloons;
-  - the many Ultimate storage limits (seed vault, looting bag on PvP worlds, the POH costume room…).
+  - other group-boss loot exceptions (raids, Wintertodt…);
+  - other Ultimate storage limits (looting bag on PvP worlds, the POH costume room…).

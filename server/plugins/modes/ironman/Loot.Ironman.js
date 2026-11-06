@@ -77,6 +77,7 @@ function experience(event) {
 module.exports = function attach(api) {
   api.onGroundItemPickup(pickup);
   api.onCustomEvent("magic:can-telekinetic-grab", telegrab);
+  api.onCustomEvent("ground-item:can-store", telegrab);
   api.onCustomEvent("npc-drops:roll", rolledDrops);
   api.onCanAttack(attacking);
   api.onPlayerDeathItemDrop(playerLoot);

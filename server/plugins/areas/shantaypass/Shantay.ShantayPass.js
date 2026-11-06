@@ -81,9 +81,14 @@ function takeFine(player) {
 function dialogueAction(action) {
   if (!isShantay(action.definition)) return;
   const { player } = action;
-  const { ItemIdentifiers } = Common.getCore();
+  const { Item, ItemIdentifiers } = Common.getCore();
   if (action.kind === "message") {
     if (action.text === PURCHASE_MESSAGE) {
+      if (player.getInventory().getAddableAmount(new Item(ItemIdentifiers.SHANTAY_PASS, 1)) < 1) {
+        player.sendMessage("You cannot hold any more Shantay passes.");
+        action.end = true;
+        return;
+      }
       takeFine(player);
       player.getInventory().adds(ItemIdentifiers.SHANTAY_PASS, 1);
       action.box = { items: [ItemIdentifiers.SHANTAY_PASS] };

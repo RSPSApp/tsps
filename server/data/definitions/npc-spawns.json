@@ -26724,6 +26724,7 @@
   {"level":0,"name":"Butler","x":1447,"y":2933,"id":13866,"source":"wiki"},
   {"level":0,"name":"Meaty Aura Logist","x":1779,"y":2940,"id":15154,"source":"wiki","direction":4,"wanderRadius":0},
   {"level":0,"name":"Meaty Aura Logist","x":1714,"y":3193,"id":15154,"source":"wiki","direction":6,"wanderRadius":0},
+  {"level":0,"name":"Shipwright Sam","x":3024,"y":3204,"id":15363,"source":"wiki"},
   {"level":0,"name":"Shipwright Sennia","x":1779,"y":3125,"id":15370,"source":"wiki"},
   {"level":0,"name":"Shipwright Silas","x":1446,"y":2965,"id":15372,"source":"wiki"},
   {"level":0,"name":"Ranulph","x":1366,"y":3367,"id":14577,"source":"wiki"},

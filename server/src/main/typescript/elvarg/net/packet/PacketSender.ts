@@ -53,6 +53,8 @@ import {
   encodeCameraTarget,
   encodeSetInteractionMode,
   encodeResetInteractionMode,
+  encodeHideNpcOps,
+  encodeHideObjOps,
   encodeChatFilterSettings,
   encodeRunEnergy,
   encodeSkillsDelta,
@@ -78,6 +80,7 @@ import {
   encodeWidgetSetModel,
   encodeWidgetSetPosition,
   encodeWidgetSetAngle,
+  encodeWidgetSetRotateSpeed,
   encodeWidgetSetNpcHead,
   encodeWidgetSetPlayerHead,
   encodeWidgetSetRoot,
@@ -452,6 +455,15 @@ export class PacketSender {
   /** IF_SETANGLE: a model component's x and y angles and zoom. */
   public sendInterfaceAngle(uid: number, angleX: number, angleY: number, zoom: number): this {
     this.player.getSession().sendClientPacket(encodeWidgetSetAngle(uid, angleX, angleY, zoom));
+    return this;
+  }
+
+  /**
+   * IF_SETROTATESPEED: a model component's x and y rotation speeds per graphics cycle.
+   * y is the turntable (yaw) speed; the museum quiz's models use (0, 5) in recording 1723.
+   */
+  public sendInterfaceRotateSpeed(uid: number, speedX: number, speedY: number): this {
+    this.player.getSession().sendClientPacket(encodeWidgetSetRotateSpeed(uid, speedX, speedY));
     return this;
   }
 
@@ -858,6 +870,11 @@ export class PacketSender {
     return this.chatboxGroupId;
   }
 
+  /** Owner of the currently mounted chatbox, if its presentation was scoped. */
+  public getChatboxOwner(): object | undefined {
+    return this.chatboxOwner;
+  }
+
   /** Associate only chatboxes mounted synchronously by this presentation. */
   public withChatboxOwner<T>(owner: object | undefined, present: () => T): T {
     const previous = this.presentingChatboxOwner;
@@ -1074,6 +1091,18 @@ export class PacketSender {
   /** Drops a world's own interaction mode, so it follows the default again. */
   sendResetInteractionMode(worldId: number): this {
     this.player.getSession().sendClientPacket(encodeResetInteractionMode(worldId));
+    return this;
+  }
+
+  /** Hides every NPC's menu actions (not Examine) across the client until set false again. */
+  sendHideNpcOps(hidden: boolean): this {
+    this.player.getSession().sendClientPacket(encodeHideNpcOps(hidden));
+    return this;
+  }
+
+  /** Hides every ground item's menu actions across the client until set false again. */
+  sendHideObjOps(hidden: boolean): this {
+    this.player.getSession().sendClientPacket(encodeHideObjOps(hidden));
     return this;
   }
 

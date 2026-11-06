@@ -74,7 +74,8 @@ function isNoted(id) {
  * A container family: `key` (attribute and log name), `names` (every item that shares the
  * store, open variants included), `openNames` (the variants that fill themselves), `pairs`
  * (closed/open gamevals), `accepts(id)`,
- * `room(player, id, contents)` (how many more of `id` fit), `usable(id)` (whether consumers may
+ * `room(player, id, contents)` (how many more of `id` fit), `announced(player, id)` (its line for a
+ * gather that asks with `announce`, room or not), `usable(id)` (whether consumers may
  * take `id` from it while it is carried) and `followsOnDeath` (contents go where the item goes on death).
  */
 function register(family) {
@@ -228,10 +229,13 @@ function emptyToBank(player, family) {
   let moved = 0;
   for (const entry of contents(player, family)) {
     const tab = player.getBank(Bank.getTabForItem(player, entry.id));
-    if (tab.isFull() && !tab.contains(entry.id)) continue;
-    take(player, family, entry.id, entry.amount);
-    tab.add(new core.Item(entry.id, entry.amount), false);
-    moved += entry.amount;
+    const item = new core.Item(entry.id, entry.amount);
+    const accepted = tab.getAddableAmount(item);
+    if (accepted <= 0) continue;
+    const taken = take(player, family, entry.id, accepted);
+    if (taken <= 0) continue;
+    tab.add(item.setAmount(taken), false);
+    moved += taken;
   }
   refreshBank(player);
   return moved;
@@ -263,7 +267,7 @@ function showBox(player, lines) {
 function answerRoom(event) {
   if (event.room) return;
   for (const family of FAMILIES.values()) {
-    if (!family.gathers?.(event.player) || !family.accepts(event.itemId)) continue;
+    if (!family.gathers?.(event.player, event) || !family.accepts(event.itemId)) continue;
     if (family.room(event.player, event.itemId, contents(event.player, family)) > 0) {
       event.room = true;
       return;
@@ -276,7 +280,8 @@ function answerGather(event) {
   for (const family of FAMILIES.values()) {
     const left = event.amount - event.stored;
     if (left <= 0) return;
-    if (!family.gathers?.(event.player) || !family.accepts(event.itemId)) continue;
+    if (!family.gathers?.(event.player, event) || !family.accepts(event.itemId)) continue;
+    if (event.announce) family.announced?.(event.player, event.itemId);
     const stored = store(event.player, family, event.itemId, left);
     if (stored > 0) {
       event.stored += stored;

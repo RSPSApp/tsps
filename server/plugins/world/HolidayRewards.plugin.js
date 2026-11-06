@@ -97,7 +97,9 @@ function owns(api, player, family, includeInventory=true) {
   const banks=player.getBanks().slice(0,api.core.Bank.BANK_SEARCH_TAB_INDEX);
   const containers=[player.getEquipment(),...banks];
   if(includeInventory)containers.unshift(player.getInventory());
-  return containers.some(container=>container && family.some(id=>container.getAmount(id)>0));
+  // A planted Wintumber tree or scarecrow still belongs to the player (dug up, it comes back).
+  const planted={player,itemIds:[]};api.emitCustomEvent("construction:planted",planted);
+  return family.some(id=>planted.itemIds.includes(id)) || containers.some(container=>container && family.some(id=>container.getAmount(id)>0));
 }
 function masks(api, player) {
   const d=data(api),keys=new Set(unlocked(player)),result=new Array(8).fill(0);
@@ -151,11 +153,14 @@ function logout({player}) {sessions.delete(player);}
 module.exports={name:"HolidayRewards",register(api){
   api.persistAttribute(UNLOCKED_ATTRIBUTE,[]);
   api.persistAttribute(HouseState.HOUSE_ATTRIBUTE,HouseState.defaultHouse());
+  api.persistAttribute(HouseState.DECORATIONS_ATTRIBUTE,{});
   api.onCustomEvent("holiday-rewards:unlock",unlock.bind(null,api));
   api.onCustomEvent("holiday-rewards:used",used.bind(null,api));
   api.onCustomEvent("equipment:changed",equipped.bind(null,api));
   api.onCustomEvent("construction:costume-retrieve",HouseRetrieval.retrieve.bind(null,api));
+  api.onCustomEvent("construction:planted",HouseRetrieval.planted.bind(null,api));
   api.onNpcInteraction("Diango",{"Holiday-items":open.bind(null,api)});
+  api.onCustomEvent("holiday-rewards:open",open.bind(null,api));
   api.onInterfaceActionClick(take.bind(null,api));
   api.onCustomEvent("interface:closed",closed.bind(null,api));
   api.onCustomEvent("interface:changed",changed.bind(null,api));

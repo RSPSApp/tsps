@@ -1008,3 +1008,29 @@ test('the swamp Area reports successful player entry independently of quest stag
   h.area.postEnter(h.player);
   assert.equal(entries.length, 1, 'private areas do not count as swamp entry');
 });
+
+
+test('walking through an already-open swamp gate records entry without crediting exits or teleports (#2852)', () => {
+  const cases = [
+    { from: [3443, 3459], to: [3443, 3457], expected: 10, name: 'running south through the gate' },
+    { from: [3444, 3458], to: [3444, 3457], expected: 10, name: 'walking south through the gate' },
+    { from: [3443, 3457], to: [3443, 3459], expected: 5, name: 'leaving the swamp' },
+    { from: [3443, 3458], to: [3443, 3457], expected: 5, teleport: true, name: 'teleporting just inside' },
+    { from: [3443, 3459], to: [3440, 3336], expected: 5, name: 'teleporting to the grotto' },
+    { from: [3446, 3459], to: [3446, 3457], expected: 5, name: 'crossing elsewhere' },
+  ];
+  for (const entry of cases) {
+    const h = harness(), p = h.player;
+    h.quest.setStage(p, 5);
+    p.setLocation(new core.Location(...entry.from, 0));
+    h.area.process(p);
+    p.setLocation(new core.Location(...entry.to, 0));
+    p.needsPlacement = Boolean(entry.teleport);
+    h.area.process(p);
+    assert.equal(h.quest.getStage(p), entry.expected, entry.name);
+    assert.equal(h.spawned.length, 0, 'crossing never auto-summons the ghost');
+    objectAction(h, { objectId: O.GROTTO, ...interaction(['Enter'], 1) });
+    assert.equal(h.spawned.some(npc => npc.getId() === N.FILLIMAN_TARLOCK),
+      entry.expected === 10, entry.name + ': only legitimate entry unlocks the existing summon');
+  }
+});

@@ -4,9 +4,9 @@
  * Getting in and out of the Sorceress's Garden, and the gates into each maze.
  *
  * The Apprentice (cache NPC 1808, spawned at 3321,3139) teleports the player into the
- * central garden after Prince Ali Rescue is complete; below that she refuses with the
- * Wiki's line. The Wiki also requires having asked Osman about the garden first, which
- * this plugin folds into the quest requirement (noted in the PR).
+ * central garden after Prince Ali Rescue is complete and the player has asked Osman for
+ * help; otherwise she refuses with the Wiki's line. The ask is persisted by this plugin,
+ * while PrinceAliRescue supplies the captured help option after Osman's post-quest line.
  *
  * Talk-to plays her Wiki transcript (npc-dialogues.json): this unit picks the variant by
  * whether she has teleported the player before, answers its Osman and follower conditions
@@ -43,6 +43,8 @@ const APPRENTICE_NAME = "Apprentice";
 const PET_ATTRIBUTE = "pets:current";
 /** Persisted flag: the Apprentice has cast the teleport at least once. */
 const TELEPORTED_ATTRIBUTE = "sorceress-s-garden:teleported";
+/** Persisted flag: the player asked Osman for something to do after Prince Ali Rescue. */
+const OSMAN_HELPED_ATTRIBUTE = "sorceress-s-garden:osman-help-asked";
 const PAR_QUEST_KEY = "prince_ali_rescue";
 
 const REFUSAL_LINE = "I can't do that now, I'm far too busy sweeping.";
@@ -74,7 +76,20 @@ function questComplete(player, key) {
 }
 
 function isUnlocked(player) {
-  return questComplete(player, PAR_QUEST_KEY);
+  return questComplete(player, PAR_QUEST_KEY) && (
+    player.getAttribute(OSMAN_HELPED_ATTRIBUTE) === true
+    || player.getAttribute(TELEPORTED_ATTRIBUTE) === true
+  );
+}
+
+function osmanHelpStatus(request) {
+  if (!request?.player) return;
+  request.asked = request.player.getAttribute(OSMAN_HELPED_ATTRIBUTE) === true;
+  request.unlocked = isUnlocked(request.player);
+}
+
+function recordOsmanHelp({ player } = {}) {
+  if (player) player.setAttribute(OSMAN_HELPED_ATTRIBUTE, true);
 }
 
 /** Only the Pets plugin's following pet is visible from here; other followers are not. */
@@ -203,6 +218,9 @@ module.exports = function registerApprentice(pluginApi) {
   api = pluginApi;
   core = pluginApi.core;
   api.persistAttribute(TELEPORTED_ATTRIBUTE);
+  api.persistAttribute(OSMAN_HELPED_ATTRIBUTE, false);
+  api.onCustomEvent("sorceress-s-garden:osman-help-status", osmanHelpStatus);
+  api.onCustomEvent("sorceress-s-garden:osman-helped", recordOsmanHelp);
   api.onNpcInteraction(APPRENTICE_NAME, { Teleport: teleportByApprentice });
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
@@ -220,8 +238,11 @@ module.exports._test = {
   PET_LINE,
   SPELL_LINE,
   TELEPORTED_ATTRIBUTE,
+  OSMAN_HELPED_ATTRIBUTE,
   PET_ATTRIBUTE,
   isUnlocked,
+  osmanHelpStatus,
+  recordOsmanHelp,
   hasFollower,
   LANDING,
   teleportIn,

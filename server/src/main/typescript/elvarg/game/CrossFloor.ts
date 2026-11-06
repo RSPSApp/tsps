@@ -5,9 +5,11 @@ export class CrossFloor {
     /** Legacy combined switch remains supported when the newer switches are unset. */
     private static legacyEnabled(): boolean { return process.env.CROSS_FLOOR_VISIBILITY_AND_COMBAT === "1"; }
     static enabled(): boolean {
-        return process.env.CROSS_FLOOR_VISIBILITY === undefined
+        const visibilityEnabled = process.env.CROSS_FLOOR_VISIBILITY === undefined
             ? CrossFloor.legacyEnabled()
             : process.env.CROSS_FLOOR_VISIBILITY === "1";
+        // Cross-floor combat must also sync visible lower-floor actors so players can see targets.
+        return visibilityEnabled || CrossFloor.combatEnabled();
     }
     static combatEnabled(): boolean {
         return process.env.CROSS_FLOOR_COMBAT === undefined
@@ -34,7 +36,6 @@ export class CrossFloor {
     }
 
     static projectileVisible(viewer: Location, target: Location, range: number): boolean {
-        if (viewer.getZ() === target.getZ()) return CrossFloor.distance(viewer, target) <= range;
-        return CrossFloor.canCross(viewer, target) && CrossFloor.distance(viewer, target) <= range;
+        return CrossFloor.visible(viewer, target, range);
     }
 }

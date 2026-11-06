@@ -8328,9 +8328,9 @@ test('Desert Treasure II final wights expose their distinct smoke, clone, vial a
     TemplatedInstanceArea: TestInstance, GameObject: TestObject, RangedCombatMethod: TestRangedCombatMethod,
     MeleeCombatMethod: TestMeleeCombatMethod, PendingHit: TestPendingHit,
     Animation: class { constructor(id) { this.id = id; } },
-    RegionManager: { getClipping(x, y, z, area) {
+    RegionManager: { BLOCKED_MASK: base.core.RegionManager.BLOCKED_MASK, getClipping(x, y, z, area) {
       clipChecks.push({ x, y, z, area });
-      return (x === 8227 && y === 1614) || (x === 8227 && y === 1646) || (x === 8224 && y === 1646) ? 0x20100 : 0;
+      return (x === 8227 && y === 1614) || (x === 8227 && y === 1643) || (x === 8227 && y === 1646) || (x === 8224 && y === 1646) ? 0x20100 : 0;
     }, canProjectileAttackBounds(_source, destination) {
       const x = destination.getX?.() ?? destination.x, y = destination.getY?.() ?? destination.y;
       return !(x === 8227 && y === 1646) && !(x === 8224 && y === 1646);
@@ -8549,7 +8549,9 @@ test('Desert Treasure II final wights expose their distinct smoke, clone, vial a
     for (const hook of hitRollHooks) hook(ordinaryNpcRoll);
     assert.equal(ordinaryNpcRoll.bypassProtectionPrayer, false, 'other NPCs do not inherit the clone prayer rule');
     assert.ok(clones.every(clone => !((clone.location.x === 8227 && clone.location.y === 1646)
-      || (clone.location.x === 8224 && clone.location.y === 1646))), 'clones avoid floor-blocked or projectile-blocked cache cover points');
+      || (clone.location.x === 8227 && clone.location.y === 1643)
+      || (clone.location.x === 8224 && clone.location.y === 1646))),
+    'clones avoid floor-blocked or projectile-blocked cache cover points (8227,1643 is a preferred clone lane blocked by the floor alone)');
     assert.ok(clones.every(clone => (core.RegionManager.getClipping(clone.location.x, clone.location.y, 0, area) & core.RegionManager.BLOCKED_MASK) === 0
       && core.RegionManager.canProjectileAttackBounds(current.getLocation(), clone.location, 1, 1, 1, 1, area)),
     'each placed clone occupies clear floor with a projectile path from Ketla');

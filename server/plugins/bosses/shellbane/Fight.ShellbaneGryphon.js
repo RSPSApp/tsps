@@ -278,7 +278,7 @@ class Fight {
 function walkable(tile) {
   const { RegionManager } = Common.core;
   if (!RegionManager?.getClipping) return true;
-  return (RegionManager.getClipping(tile.getX(), tile.getY(), tile.getZ(), null) & 0x200100) === 0;
+  return (RegionManager.getClipping(tile.getX(), tile.getY(), tile.getZ(), null) & RegionManager.BLOCKED_MASK) === 0;
 }
 
 function wearsAnything(player) {

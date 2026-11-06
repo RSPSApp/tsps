@@ -24,6 +24,9 @@ export const enum ClientPacket {
   LOGOUT = 203,
   LOGIN = 204,
   LOGIN_FORGET = 207,
+  CHARACTER_SELECT = 206,
+  CHARACTER_CREATE = 208,
+  CHARACTER_DELETE = 209,
   FACE = 211,
   MOVEMENT_INPUT = 215,
   LOC_INTERACT = 231,
@@ -35,6 +38,8 @@ export const enum ServerPacket {
   HANDSHAKE = 2,
   LOGIN_RESPONSE = 3,
   LOGOUT_RESPONSE = 4,
+  CHARACTER_LIST = 7,
+  CHARACTER_RESULT = 8,
   PLAYER_SYNC = 20,
   NPC_INFO = 21,
   ANIM = 22,
@@ -315,6 +320,9 @@ export type ClientMessage =
   | { type: "logout" }
   | { type: "login"; username: string; password: string; revision: number; flags: number }
   | { type: "login_forget"; username: string; token: string }
+  | { type: "character_select"; name: string }
+  | { type: "character_create"; name: string }
+  | { type: "character_delete"; name: string; confirmName: string }
   | { type: "handshake"; name: string; clientType: number; capabilities: number };
 
 class Reader {
@@ -950,6 +958,12 @@ export function decodeClientPacket(frame: Buffer): ClientMessage {
       };
     case ClientPacket.LOGIN_FORGET:
       return { type: "login_forget", username: reader.string(), token: reader.string() };
+    case ClientPacket.CHARACTER_SELECT:
+      return { type: "character_select", name: reader.string() };
+    case ClientPacket.CHARACTER_CREATE:
+      return { type: "character_create", name: reader.string() };
+    case ClientPacket.CHARACTER_DELETE:
+      return { type: "character_delete", name: reader.string(), confirmName: reader.string() };
     case ClientPacket.HANDSHAKE: {
       const name = reader.string();
       const hasAppearance = reader.byte() !== 0;
@@ -2636,6 +2650,39 @@ export function encodeLoginResponse(
   return packet(
     ServerPacket.LOGIN_RESPONSE,
     Buffer.concat([fixed, string(error), string(displayName), string(loginToken)])
+  );
+}
+
+export interface CharacterListEntry {
+  name: string;
+  combatLevel: number;
+  totalLevel: number;
+  lastPlayedAt: number;
+  primary: boolean;
+  hasSave: boolean;
+}
+
+export function encodeCharacterList(
+  maxCharacters: number,
+  defaultIndex: number,
+  entries: CharacterListEntry[]
+): Buffer {
+  const parts: Buffer[] = [Buffer.from([maxCharacters, defaultIndex, entries.length])];
+  for (const entry of entries) {
+    const fixed = Buffer.alloc(12);
+    fixed[0] = entry.combatLevel;
+    fixed.writeUInt16BE(entry.totalLevel, 1);
+    fixed.writeBigInt64BE(BigInt(entry.lastPlayedAt), 3);
+    fixed[11] = (entry.primary ? 1 : 0) | (entry.hasSave ? 2 : 0);
+    parts.push(string(entry.name), fixed);
+  }
+  return packet(ServerPacket.CHARACTER_LIST, Buffer.concat(parts), 2);
+}
+
+export function encodeCharacterResult(ok: boolean, code: number, message: string): Buffer {
+  return packet(
+    ServerPacket.CHARACTER_RESULT,
+    Buffer.concat([Buffer.from([ok ? 1 : 0, code]), string(message)])
   );
 }
 

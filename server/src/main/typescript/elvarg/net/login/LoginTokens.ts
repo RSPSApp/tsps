@@ -16,6 +16,8 @@ export const MAX_LOGIN_TOKENS = 5;
 export const LOGIN_FLAG_REMEMBER = 1;
 /** The password field holds a remembered-login token. */
 export const LOGIN_FLAG_TOKEN = 2;
+/** The client handles the character list and picks a character after login. */
+export const LOGIN_FLAG_CHARACTER_SELECT = 4;
 
 export interface LoginTokenEntry {
     hash: string;

@@ -29,6 +29,7 @@ function rollClueBottles(player, base, random = Math.random) {
     const denominator = bottleDenominator(base, level, tier.tenths, achievement.currentThresholdMet === true);
     if (denominator < 1) continue;
     const multiplier = Number.isFinite(boost.multiplier) && boost.multiplier > 1 ? boost.multiplier : 1;
+    // https://oldschool.runescape.wiki/w/Clue_bottle_%28beginner%29: no imbued-ring bonus.
     const chanceMultiplier = multiplier * (wildernessRing && tier.name !== "beginner" ? 2 : 1);
     if (random() * denominator >= chanceMultiplier) continue;
 

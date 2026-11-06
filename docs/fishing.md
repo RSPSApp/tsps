@@ -106,7 +106,7 @@ interpretation of a successful action, not a captured multi-fish observation. Ra
 fish do not add a roll set. Fortis park has its own documented base. Inventory, bank and
 scroll-case capacity, X Marks the Spot boxes, full-inventory ground placement and league
 vessel modifiers use the shared clue services. A worn imbued ring of wealth doubles the
-non-beginner bottle rate in the Wilderness.
+non-beginner bottle rate in the Wilderness; [beginner bottles](https://oldschool.runescape.wiki/w/Clue_bottle_%28beginner%29) are excluded.
 
 Arthur's vessel opt-out suppresses new bottles, geodes and clue nests from their supported
 skilling sources without blocking an already held vessel from being opened. TSPS defaults

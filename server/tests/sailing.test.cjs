@@ -1068,7 +1068,7 @@ test("Junior Jim's Recover-boat asks which boat, takes the fee from the bank and
   assert.equal(h.bank.getAmount(995), 750, "nothing is charged for a refused recovery");
 });
 
-test("the Recover-a-boat dialogue step is claimed, so it does not fall through uneaten", () => {
+test("the shipwright's boat-service dialogue steps are claimed, so they do not fall through", () => {
   const shipwright = registerPlugin("Shipwright.plugin");
   const action = shipwright.events["npc-dialogue:action"];
   assert.equal(typeof action, "function", "Shipwright.plugin handles dialogue actions");
@@ -1082,18 +1082,32 @@ test("the Recover-a-boat dialogue step is claimed, so it does not fall through u
     action: "open_interface", target, handled: false, end: false,
   });
 
-  // The transcript's step ("I'd like to recover a boat.") opens "Recover Boat"; nothing claimed it
-  // before, so the dialogue closed and the selection never appeared (#2747). It opens a tick later
-  // (once the dialogue has closed, as Destroy.Shipwright does), so the claim is what a unit test
-  // can see; the open itself is exercised in game.
-  const wanted = step("Recover Boat");
-  action(wanted);
-  assert.equal(wanted.handled, true, "the recover step is claimed");
-  assert.equal(wanted.end, true, "and ends the dialogue");
+  // The transcript's steps for buy, customise and recover each fire open_interface with a target,
+  // and nothing claimed any of them, so the dialogue closed with nothing opened (#2747). Junior Jim
+  // is the only shipwright without the NPC options, so on him these steps are the only route.
+  // They open a tick later (once the dialogue has closed, as Destroy.Shipwright does), so the claim
+  // is what a unit test can see; the open itself is exercised in game.
+  for (const target of ["Boat Emporium", "Boat Customisation", "Recover Boat"]) {
+    const wanted = step(target);
+    action(wanted);
+    assert.equal(wanted.handled, true, `${target} is claimed`);
+    assert.equal(wanted.end, true, `${target} ends the dialogue`);
+  }
 
-  const other = step("Destroy Boat");
-  action(other);
-  assert.equal(other.handled, false, "another target is left to its own handler");
+  // Destroy Boat has its own listener in Destroy.Shipwright, and must not be swallowed here.
+  const destroy = step("Destroy Boat");
+  action(destroy);
+  assert.equal(destroy.handled, false, "Destroy Boat is left to its own handler");
+
+  // An unrelated target is still nobody's here.
+  const unknown = step("Something Else");
+  action(unknown);
+  assert.equal(unknown.handled, false, "an unknown target is not claimed");
+
+  // And a non-open_interface action is ignored outright.
+  const otherAction = { ...step("Recover Boat"), action: "receive" };
+  action(otherAction);
+  assert.equal(otherAction.handled, false, "only open_interface steps are claimed");
 });
 
 /** Junior Jim's Buy-boat with the real Omnishop plugin, on one custom-event bus. */

@@ -72,6 +72,6 @@ test('real map has forty-eight seats per plane, exhaustion is isolated and relea
 });
 
 test('unsupported game and plane do not reserve a table', () => {
-  assert.equal(tables.allocate('runeversi', 0), null);
+  assert.equal(tables.allocate('unknown-game', 0), null);
   assert.equal(tables.allocate('draughts', 2), null);
 });

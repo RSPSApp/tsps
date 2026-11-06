@@ -53,10 +53,8 @@ function selection(player,target) {
   const room=Access.roomGame(player.getLocation());
   const menu={target,game:room??'draughts',stage:'selection',settings:settings(player)};
   menus.set(player,menu);results.delete(player);
-  if(room)options(player,menu);else Screen.showSelection(player,0,{
-    draughts:[rank(player,'draughts'),rank(target,'draughts')],
-    runelink:[rank(player,'runelink'),rank(target,'runelink')],
-  });
+  if(room)options(player,menu);else Screen.showSelection(player,0,
+    Object.fromEntries(Object.keys(GAMES).map(game=>[game,[rank(player,game),rank(target,game)]])));
 }
 function options(player,menu) { menu.stage='options';Screen.showOptions(player,menu.game,menu.settings); }
 function playerOption(event) {
@@ -119,6 +117,8 @@ function finish(match,winner,reason,{departing=null,returnDeparting=false}={}) {
   match.allocation.release();
   // Four completed turns before ranking comes only from the historical reference.
   // It prevents instant-resign rank transfers; current capture confirmation is absent.
+  // Runeversi reuses this existing rating policy; its formula and four-turn
+  // threshold are not established by a current Runeversi recording.
   if(match.settings.ranked&&winner!=null&&match.turns>=4) {
     const w=match.players[winner],l=match.players[1-winner],wr=rank(w,match.game),lr=rank(l,match.game),delta=Rules.rankChange(wr,lr);
     w.setAttribute(RANK_ATTRIBUTES[match.game],Math.min(60000,wr+delta));l.setAttribute(RANK_ATTRIBUTES[match.game],Math.max(1,lr-delta));
@@ -168,6 +168,8 @@ function click(event) {
     }
     if(match.game==='runelink') {
       for(let col=0;col<7;col++)if(is(`${prefix}:column${col}`))return move(player,match,{column:col});
+    } else if(match.game==='runeversi') {
+      for(let to=0;to<64;to++)if(is(`${prefix}:square_${to}`))return move(player,match,{to});
     } else if(is(`${prefix}:boardinv`)&&Number.isInteger(event.slot)&&event.slot>=0&&event.slot<64&&match.players[match.state.turn]===player) {
       const from=match.selected.get(player),to=event.slot;
       if(from!==undefined&&move(player,match,{from,to}))return;
@@ -178,11 +180,11 @@ function click(event) {
   if(results.has(player)&&is(`boardgames_${results.get(player).game}:close`)) {results.delete(player);player.getPacketSender().sendInterfaceRemoval();return;}
   const menu=menus.get(player);if(!menu)return;
   if(menu.stage==='selection'&&group===core.CacheDefinitions.getInterfaceId('boardgames_challenge')) {
-    if(is('boardgames_challenge:draughts'))menu.game='draughts';
-    else if(is('boardgames_challenge:runelink'))menu.game='runelink';
-    else if(is('boardgames_challenge:select'))return options(player,menu);
-    else return;
-    player.getPacketSender().sendVarbit(core.CacheDefinitions.getVarbitId('boardgames_game'),menu.game==='runelink'?1:0);return;
+    if(is('boardgames_challenge:select'))return options(player,menu);
+    const game=Object.keys(GAMES).find(name=>is(`boardgames_challenge:${name}`));
+    if(!game)return;
+    menu.game=game;
+    player.getPacketSender().sendVarbit(core.CacheDefinitions.getVarbitId('boardgames_game'),GAMES[game].id);return;
   }
   if((menu.stage==='options'||menu.stage==='accept')&&group===Screen.optionsGroup(menu.game)) {
     const prefix=`boardgames_${menu.game}_options`,piece=PIECES.findIndex(n=>is(`${prefix}:${n}`)),time=TIMES.findIndex(n=>is(`${prefix}:${n}`));
@@ -222,6 +224,8 @@ function processPlayer(player) {
   if(departed.length)return finish(match,departed.length===1?1-departed[0]:null,'Player left the game.');
   Seating.process(match,player,now());
   if(match.players[match.state.turn]===player&&now()>=match.deadline) {
+    // Runeversi uses the existing legal random auto-move policy too. The cache
+    // establishes its clock choices, but its timeout policy is not captured.
     const auto=Rules.chooseAutoMove(match.state);if(auto)move(player,match,auto);
   }
 }

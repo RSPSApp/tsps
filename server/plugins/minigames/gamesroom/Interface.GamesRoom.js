@@ -1,5 +1,6 @@
 "use strict";
 const { GAMES } = require("./Games.GamesRoom");
+const Rules = require("./Rules.GamesRoom");
 
 // Revision 241: interface_inv_update_big and cc_object_swapper. The latter changes a
 // dynamic child's item without clearing its operations, including empty squares.
@@ -7,6 +8,7 @@ const INVENTORY_UPDATE_SCRIPT = 151;
 const OBJECT_SWAPPER_SCRIPT = 719;
 const TEXT_SWAPPER_SCRIPT = 599;
 const OUTLINE_SWAPPER_SCRIPT = 6002;
+const RUNEVERSI_GRID_SCRIPT = 3423;
 const PIECES = ["fire", "water", "earth", "air", "mind", "body", "nature", "chaos", "law", "cosmic", "blood", "soul"];
 const MOVE_SECONDS = [15, 30, 60, 120];
 const RESULT_TEXT = {
@@ -111,6 +113,18 @@ function drawBoard(player, match) {
     const item = value ? pieceId(match.game, match.settings.pieces[value > 0 ? 0 : 1], Math.abs(value) === 2) : -1;
     sender.sendInterfaceScript(OBJECT_SWAPPER_SCRIPT, [boardUid, slot, item, value ? 1 : 0]);
   }
+  if (match.game === "runeversi") {
+    // Script 3423 consumes the real inventory, rather than the temporary
+    // placeholders used by the one-shot builder, to set Play piece labels.
+    const actualSlots = board.flatMap((value, slot) => value ? [{ slot,
+      itemId: pieceId(match.game, match.settings.pieces[value > 0 ? 0 : 1], false), quantity: 1 }] : []);
+    sender.sendInterfaceScript(RUNEVERSI_GRID_SCRIPT, [], undefined, undefined,
+      { [inventory]: { capacity: board.length, slots: actualSlots } });
+    const legal = new Set(Rules.legalMoves(match.state).map(move => move.to));
+    const active = match.players[match.state.turn] === player && !match.finished;
+    for (let to = 0; to < 64; to++) sender.sendInterfaceFlagsRange(
+      component(`boardgames_runeversi:square_${to}`), -1, -1, active && legal.has(to) ? 2 : 0);
+  }
   const selected = match.selected?.get(player);
   if (isDraughts && Number.isInteger(selected) && selected >= 0 && selected < board.length) {
     sender.sendInterfaceScript(OUTLINE_SWAPPER_SCRIPT, [boardUid, selected, 2]);
@@ -126,7 +140,10 @@ function refreshMatch(player, match) {
   sender.sendInterfaceModel(component(`${prefix}:p2_rune`), pieceId(match.game, match.settings.pieces[1], false), 600);
   text(player, `${prefix}:turn_name`, nameOf(match.players[match.state.turn]));
   text(player, `${prefix}:status1`, match.drawOffer ? "A draw has been offered." : `${match.settings.seconds} seconds per move`);
-  text(player, `${prefix}:status2`, match.drawOffer ? "Offer draw to accept." : "");
+  text(player, `${prefix}:status2`, match.drawOffer ? "Offer draw to accept." :
+    match.game === "runeversi" ? (match.state.passed != null ?
+      (match.players[match.state.passed] === player ? "You have no legal move." : "Opponent has no legal move.") :
+      `${match.state.board.filter(p => p > 0).length} vs ${match.state.board.filter(p => p < 0).length}`) : "");
   const previous = timers.get(player);
   if (previous?.match !== match || previous.deadline !== match.deadline) {
     // Native cache animation supplies the sand countdown; selection redraws must
@@ -148,7 +165,8 @@ function showMatch(player, match) {
   hidden(player, `${prefix}:turn`, false);
   hidden(player, `${prefix}:turn_name`, false);
   hidden(player, `${prefix}:winner`, true);
-  hidden(player, `${prefix}:runeflash`, true);
+  if (cache.getComponentId(`${prefix}:runeflash`) != null) hidden(player, `${prefix}:runeflash`, true);
+  if (match.game === "runeversi") varbit(player, "viewing", 0);
   if (gameName(match.game) === "runelink") {
     for (let column = 0; column < 7; column++) player.getPacketSender()
       .sendInterfaceFlagsRange(component(`${prefix}:column${column}`), -1, -1, 2);
@@ -169,13 +187,18 @@ function showResult(player, match) {
   hidden(player, `${prefix}:winner`, false);
   text(player, `${prefix}:winner`, result.winner == null ? "The game is a draw." : `${nameOf(match.players[result.winner])} wins!`);
   text(player, `${prefix}:status1`, RESULT_TEXT[result.reason] ?? result.reason);
-  text(player, `${prefix}:status2`, "");
+  text(player, `${prefix}:status2`, match.game === "runeversi"
+    ? `${match.state.board.filter(p => p > 0).length} vs ${match.state.board.filter(p => p < 0).length}` : "");
   player.getPacketSender().sendInterfaceAnimation(component(`${prefix}:sandtimer`),
     required(cache.getSeqId("sandtimer_off"), "sandtimer_off"));
   player.getPacketSender().sendInterfaceFlagsRange(component(`${prefix}:boardinv`), 0, match.state.board.length - 1, 0);
   if (gameName(match.game) === "runelink") {
     for (let column = 0; column < 7; column++) player.getPacketSender()
       .sendInterfaceFlagsRange(component(`${prefix}:column${column}`), -1, -1, 0);
+  }
+  if (match.game === "runeversi") {
+    for (let to = 0; to < 64; to++) player.getPacketSender()
+      .sendInterfaceFlagsRange(component(`boardgames_runeversi:square_${to}`), -1, -1, 0);
   }
 }
 

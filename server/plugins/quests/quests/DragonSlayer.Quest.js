@@ -1,7 +1,7 @@
 /** Dragon Slayer I: revision240 RSProx stages, offerings, voyage and Elvarg proof. See docs/f2p-adventure-parity.md. */
 module.exports = function registerDragonSlayerQuest(api) {
-  const { Skill, Item, Location, Animation, Graphic, GameObject, ForceMovement, TaskManager, CountdownTask, TemplatedInstanceArea, DialogueChainBuilder, Area, Boundary, ChatType, ActionDialogue, StatementDialogue, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
-  const { registerQuest, startTranscript, getRegisteredQuests } = require("../QuestRuntime");
+  const { Skill, Item, Location, Animation, Graphic, GameObject, ForceMovement, TaskManager, CountdownTask, TemplatedInstanceArea, DialogueChainBuilder, Area, Boundary, ChatType, CombatSpells, CombatType, MagicCombatMethod, PendingHit, Projectile, ActionDialogue, StatementDialogue, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
+  const { registerQuest, startTranscript, getRegisteredQuests, loadTranscripts } = require("../QuestRuntime");
 
   const GUILDMASTER_NPC_ID = NpcIdentifiers.GUILDMASTER;
   const DUKE_HORACIO_NPC_ID = NpcIdentifiers.DUKE_HORACIO;
@@ -127,6 +127,19 @@ module.exports = function registerDragonSlayerQuest(api) {
   /** Melzar's Maze plays "The Maze" on all three floors (rev242 capture); the map's own region track is Emperor. */
   const MELZAR_MAZE_TRACK = 365;
   const MELZAR_MAZE_BOUNDS = { minX: 2921, maxX: 2940, minY: 3238, maxY: 3259, floors: [0, 1, 2] };
+  /** The basement under it, where Melzar fights; its own region track is already The Maze. */
+  const MELZAR_BASEMENT_BOUNDS = { minX: 2921, maxX: 2940, minY: 9638, maxY: 9659, z: 0 };
+  const MELZAR_NPC_ID = NpcIdentifiers.MELZAR_THE_MAD;
+  const MELZAR_FIGHT_VARIANT = "melzar-s-map-piece-fighting-melzar-the-mad";
+  // rev242 capture ticks 2584-2609 (Melzar's second fight): a line on 6 of 18 ticks in combat, on
+  // attack ticks and quiet ones alike and never out of combat, so a roll each tick, not one per attack.
+  const MELZAR_SHOUT_CHANCE = 1 / 3;
+  // Attacks every 4 ticks (2589-2605); kicks only from beside the player, 2 of his 4 attacks there.
+  const MELZAR_ATTACK_SPEED = 4;
+  const MELZAR_KICK_CHANCE = 1 / 2;
+  const MELZAR_KICK = 423;
+  /** The Wiki's max hit: every spell splashed and both kicks hit 0 in the capture. */
+  const MELZAR_MAX_HIT = 5;
 
   const ATTR_ORACLE = "dragon-slayer.oracle";
   const ATTR_NED_ASKED = "dragon-slayer.ned-asked";
@@ -1162,13 +1175,72 @@ module.exports = function registerDragonSlayerQuest(api) {
   // Melzar's Maze
   // ============================================================================
 
-  /** All three floors play "The Maze" (rev242 capture); the map's own region track there is Emperor. */
+  /**
+   * All three floors play "The Maze" (rev242 capture); the map's own region track there is Emperor.
+   * The basement is in it too, so Melzar's shouts run only for actors in the maze.
+   */
   function createMelzarMazeArea() {
     class MelzarMazeArea extends Area {
       getMusicTrack() { return MELZAR_MAZE_TRACK; }
+      process(mobile) { shoutInFight(mobile); }
     }
     const { minX, maxX, minY, maxY, floors } = MELZAR_MAZE_BOUNDS;
-    return new MelzarMazeArea(floors.map((z) => new Boundary(minX, maxX, minY, maxY, z)));
+    const basement = MELZAR_BASEMENT_BOUNDS;
+    return new MelzarMazeArea([
+      ...floors.map((z) => new Boundary(minX, maxX, minY, maxY, z)),
+      new Boundary(basement.minX, basement.maxX, basement.minY, basement.maxY, basement.z),
+    ]);
+  }
+
+  let melzarShouts = null;
+  /** The transcript's four overhead lines for the fight, read once. */
+  function melzarFightLines() {
+    melzarShouts ??= (loadTranscripts(api)?.[PAGE]?.variants?.[MELZAR_FIGHT_VARIANT] ?? [])
+      .flatMap((step) => step.options ?? [])
+      .flatMap((option) => option.steps ?? [])
+      .filter((step) => step.presentation === "overhead" && typeof step.text === "string")
+      .map((step) => step.text);
+    return melzarShouts;
+  }
+
+  function shoutInFight(mobile) {
+    if (!mobile.isNpc?.() || mobile.getId() !== MELZAR_NPC_ID) return;
+    if (mobile.getHitpoints() <= 0 || !mobile.getCombat().getTarget()) return;
+    const lines = melzarFightLines();
+    if (lines.length === 0 || Math.random() >= MELZAR_SHOUT_CHANCE) return;
+    mobile.forceChat(lines[Math.floor(Math.random() * lines.length)]);
+  }
+
+  // rev242 capture ticks 2589, 2593, 2597: cast animation, projectile, and its start and end cycles
+  // from one tile (10 cycles a tile further, as Fire Strike's 51 -> 101 at five tiles shows).
+  const MELZAR_SPELLS = [
+    { base: CombatSpells.FIRE_STRIKE, anim: 9144, projectile: 100, start: 51, endAtOneTile: 61 },
+    { base: CombatSpells.CURSE, anim: 11428, projectile: 109, start: 51, endAtOneTile: 90 },
+    { base: CombatSpells.WEAKEN, anim: 11426, projectile: 106, start: 44, endAtOneTile: 60 },
+  ].map(({ base, anim, projectile, start, endAtOneTile }) => {
+    const spell = Object.create(base);
+    spell.castAnimation = () => new Animation(anim);
+    spell.castProjectile = (source, target) => Projectile.createProjectile(source, target, projectile, start,
+      Projectile.arrivalCycles(source, target, endAtOneTile - 10), 43, 31);
+    spell.maximumHit = () => Math.min(MELZAR_MAX_HIT, base.maximumHit());
+    return spell;
+  });
+
+  /** Fire Strike, Curse, Weaken or (beside the player) a kick, every 4 ticks. Built for each attack. */
+  class MelzarCombat extends MagicCombatMethod {
+    start(npc, target) {
+      this.kick = npc.calculateDistance(target) <= 1 && Math.random() < MELZAR_KICK_CHANCE;
+      if (this.kick) {
+        npc.performAnimation(new Animation(MELZAR_KICK));
+        return;
+      }
+      npc.getCombat().setCastSpell(MELZAR_SPELLS[Math.floor(Math.random() * MELZAR_SPELLS.length)]);
+      super.start(npc, target);
+    }
+    type() { return this.kick ? CombatType.MELEE : super.type(); }
+    hits(npc, target) { return this.kick ? [new PendingHit(npc, target, this, 1)] : super.hits(npc, target); }
+    attackSpeed() { return MELZAR_ATTACK_SPEED; }
+    finished(npc) { npc.getCombat().setCastSpell(null); }
   }
 
   // ============================================================================
@@ -1283,6 +1355,7 @@ module.exports = function registerDragonSlayerQuest(api) {
 
   for (const key of [OFFERINGS_ATTRIBUTE, INSTRUCTIONS_ATTRIBUTE, NED_KNOWS_ATTRIBUTE, ELVARG_SEEN_ATTRIBUTE, ELVARG_KILLED_ATTRIBUTE, EXPLAINED_ATTRIBUTE]) api.persistAttribute(key, 0);
   api.registerArea(createMelzarMazeArea());
+  api.registerNpcCombatMethodProvider(MELZAR_NPC_ID, MelzarCombat, { singleton: false });
   api.persistAttribute(ATTR_ORACLE, 0);
   api.persistAttribute(ATTR_NED_ASKED);
   api.persistAttribute(ATTR_OZIACH_CONGRATS);

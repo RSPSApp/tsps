@@ -30,7 +30,7 @@ before(async () => {
 });
 
 function harness(withDoors = false, withLadders = false, withPrince = false) {
-  const hooks = {}, events = {}, objects = [], ground = [], clicks = new Map(), interactions = new Map(), tasks = [], stageQueries = [];
+  const hooks = {}, events = {}, objects = [], ground = [], clicks = new Map(), interactions = new Map(), tasks = [], stageQueries = [], areas = [];
   // QuestRuntime fixture for the quest:get-stage query: answer from registered quest metadata,
   // never from raw stage attributes.
   (events['quest:get-stage'] ??= []).push(request => {
@@ -51,6 +51,7 @@ function harness(withDoors = false, withLadders = false, withPrince = false) {
     getItemOnGroundManager: () => ({ registerLocation: (...args) => ground.push(args) }),
     getTaskManager: () => taskManager,
     persistAttribute: () => {},
+    registerArea: area => areas.push(area),
     onObjectFirstClick: (ids, fn) => [].concat(ids).forEach(id => clicks.set(id, fn)),
     onObjectInteraction: (name, actions) => {
       if (typeof name !== 'string' || !actions) return;
@@ -72,7 +73,7 @@ function harness(withDoors = false, withLadders = false, withPrince = false) {
   if (withLadders) require('../plugins/objects/Ladders.plugin').register(api);
   if (withPrince) require('../plugins/quests/quests/PrinceAliRescue.Quest')(api);
   return {
-    hooks, events, objects, ground, clicks, interactions, stageQueries,
+    hooks, events, objects, ground, clicks, interactions, stageQueries, areas,
     emit: (name, event) => (events[name] ?? []).forEach(fn => fn(event)),
     runTasks(cycles = 8) {
       let active = [...tasks];
@@ -221,6 +222,52 @@ test('Dragon Slayer withholds the Melzar key on a full inventory, and the reply 
     assert.equal(node.text, condition);
     assert.deepEqual(node.steps.at(-1), { type: 'jump', reference: 'other', id: 'dragon-slayer-i:melzar-key-no-space-menu' });
   }
+});
+
+test('Melzar shouts his transcript lines only in a fight, and fights with the captured spells and kick (rev242 ticks 2584-2609)', (t) => {
+  const h = harness();
+  const maze = h.areas[0];
+  assert.equal(maze.getMusicTrack(), 365);
+  for (const [x, y, z] of [[2933, 3248, 0], [2930, 3250, 1], [2925, 3249, 2], [2929, 9649, 0]]) {
+    assert.ok(maze.getBoundaries().some(b => b.inside(new core.Location(x, y, z))), `${x},${y},${z} is in the maze`);
+  }
+  assert.ok(!maze.getBoundaries().some(b => b.inside(new core.Location(2942, 3248, 0))), 'outside the front door is not');
+
+  let target = null, hitpoints = 44, roll = 0, cast = null;
+  t.mock.method(Math, 'random', () => roll);
+  const said = [], anims = [];
+  const melzar = {
+    isNpc: () => true, getId: () => N.MELZAR_THE_MAD, getHitpoints: () => hitpoints,
+    getCombat: () => ({ getTarget: () => target, setCastSpell: spell => { cast = spell; } }),
+    forceChat: text => said.push(text), calculateDistance: () => 1, performAnimation: a => anims.push(a.getId()),
+  };
+  maze.process(melzar);
+  assert.deepEqual(said, [], 'silent out of combat');
+  target = {};
+  maze.process(melzar);
+  assert.deepEqual(said, ['By the power of custard!'], 'the transcript variant\'s first line');
+  roll = 0.99; maze.process(melzar);
+  assert.equal(said.length, 1, 'a roll above 1/3 stays quiet');
+  roll = 0; hitpoints = 0; maze.process(melzar);
+  assert.equal(said.length, 1, 'not while dying');
+  maze.process({ isNpc: () => false });
+  assert.equal(said.length, 1);
+
+  const [Combat] = h.hooks.registerNpcCombatMethodProvider;
+  t.mock.method(core.MagicCombatMethod.prototype, 'start', () => {});
+  const kick = new Combat(melzar);
+  roll = 0; kick.start(melzar, target);
+  assert.deepEqual(anims, [423]);
+  assert.equal(kick.type(), core.CombatType.MELEE);
+  assert.equal(kick.attackSpeed(melzar), 4);
+  const spell = new Combat(melzar);
+  roll = 0.9; spell.start(melzar, target);
+  assert.equal(spell.type(), core.CombatType.MAGIC);
+  assert.equal(cast.castAnimation().getId(), 11426, 'Weaken, as captured');
+  assert.equal(cast.maximumHit(), 0);
+  roll = 0.1; melzar.calculateDistance = () => 5; new Combat(melzar).start(melzar, target);
+  assert.equal(cast.castAnimation().getId(), 9144, 'no kick from five tiles: Fire Strike');
+  assert.ok(cast.maximumHit() <= 5, 'the Wiki max hit');
 });
 
 test('Dragon Slayer answers the Pandemonium and Murder Mystery guards instead of letting them default true', () => {

@@ -351,3 +351,99 @@ test("an Ironman's open looting bag still takes their own gem (control)", async 
   assert.ok(f.messages.some((text) => /in your Looting bag/i.test(text)), JSON.stringify(f.messages));
   assert.equal(pile.isPendingRemoval(), true);
 });
+
+
+test("emptying a gem bag into the bank preserves gems at stack limits", async (t) => {
+  const { MAX_STACK_AMOUNT } = require("../dist/game/model/container/StackType");
+  const Bank = core.Bank;
+  for (const mode of ["room", "exact", "near", "full"]) {
+    await t.test(mode, async (t) => {
+      const f = actor(t);
+      const ruby = I.UNCUT_RUBY;
+      const bank = f.p.getBank(0);
+      const headroom = mode === "exact" ? 2 : mode === "near" ? 1 : 0;
+      const initialBank = mode === "room" ? 100 : MAX_STACK_AMOUNT - headroom - 1;
+      const bag = f.inv.getItems()[f.inv.getSlotForItemId(OPEN_GEM_BAG)];
+      assert.equal(core.CacheDefinitions.getObjId("gem_bag_open"), OPEN_GEM_BAG);
+      assert.equal(core.CacheDefinitions.getItem(OPEN_GEM_BAG).params?.get(595), "Empty");
+      assert.equal(core.CacheDefinitions.getItem(OPEN_GEM_BAG).inventoryActions[0], "Fill");
+      assert.equal(core.ItemDefinition.forId(ruby).isStackable(), false);
+      assert.equal(bank.stackType(), require("../dist/game/model/container/StackType").StackType.STACKS);
+      t.after(() => f.p.closeInterruptibleInterfaces());
+      const send = async (packet) => {
+        await f.c.dispatch([packet]);
+        f.c.processTurnPackets();
+      };
+      const xp = () => core.Skill.values().map((skill) => f.p.getSkillManager().getExperience(skill));
+      const initialXp = xp(), gains = [];
+      const addExperience = f.p.getSkillManager().addExperience.bind(f.p.getSkillManager());
+      t.mock.method(f.p.getSkillManager(), "addExperience", (...args) => {
+        gains.push([String(args[0]), args[1]]);
+        return addExperience(...args);
+      });
+      f.inv.add(new core.Item(ruby), false).add(new core.Item(ruby), true);
+      assert.equal(f.inv.getAmount(ruby), 2);
+      assert.equal(Storage.amountOf(f.p, family, ruby), 0);
+      await send({ type: "inventory_action", widgetId: (149 << 16),
+        slot: f.inv.getItems().indexOf(bag), itemId: OPEN_GEM_BAG, option: "Fill" });
+      assert.equal(Storage.amountOf(f.p, family, ruby), 2, "real Fill stores both ordinary gems");
+      assert.equal(f.inv.getAmount(ruby), 0);
+      bank.add(new core.Item(ruby, initialBank), false);
+      assert.equal(bank.getAmount(ruby), initialBank);
+      f.inv.add(new core.Item(ruby), true);
+      bank.open();
+      assert.equal(Bank.isOpen(f.p), true, "normal live bank admission permits this player");
+      assert.equal(f.p.getPacketSender().getSubInterfaceAt((161 << 16) | 74)?.groupId, Bank.SIDE_INTERFACE_ID);
+      const rubySlot = f.inv.getSlotForItemId(ruby);
+      await send({ type: "widget_action", widgetId: (Bank.SIDE_INTERFACE_ID << 16) | 3,
+        groupId: Bank.SIDE_INTERFACE_ID, childId: 3, buttonNum: 2,
+        slot: rubySlot, itemId: ruby, option: "Deposit-1" });
+      assert.equal(bank.getAmount(ruby), initialBank + 1, "native deposit establishes the final bank stack");
+      assert.equal(f.inv.getAmount(ruby), 0);
+      assert.equal(Storage.amountOf(f.p, family, ruby), 2);
+      assert.equal(bank.getAddableAmount(new core.Item(ruby, 2)), mode === "room" ? 2 : headroom);
+      assert.equal(Bank.isOpen(f.p), true);
+      assert.equal(f.inv.getItems().includes(bag), true);
+      const floor = () => core.World.getItems().filter((ground) => !ground.isPendingRemoval()
+        && ground.getOwner() === f.p.getUsername() && ground.getPrivateArea() === f.p.getPrivateArea()
+        && ground.getItem().getId() === ruby).reduce((sum, ground) => sum + ground.getItem().getAmount(), 0);
+      const state = () => ({
+        inventory: f.inv.getAmount(ruby), equipment: f.p.getEquipment().getAmount(ruby),
+        banks: f.p.getBanks().reduce((sum, tab, index) => sum + (tab && index !== Bank.BANK_SEARCH_TAB_INDEX ? tab.getAmount(ruby) : 0), 0),
+        stored: [...Storage.FAMILIES.values()].reduce((sum, target) => sum + Storage.amountOf(f.p, target, ruby), 0),
+        floor: floor(), bags: f.inv.getAmount(OPEN_GEM_BAG),
+      });
+      const total = (value) => value.inventory + value.equipment + value.banks + value.stored + value.floor;
+      const before = state(), ops = [];
+      assert.equal(before.stored, 2);
+      assert.equal(before.floor, 0);
+      assert.deepEqual(gains, []);
+      assert.deepEqual(xp(), initialXp);
+      const emit = PM.emitCustomEvent.bind(PM);
+      t.mock.method(PM, "emitCustomEvent", (name, event) => {
+        const result = emit(name, event);
+        if (name === Bank.INVENTORY_OP_EVENT && event.player === f.p && event.op === 9) {
+          ops.push({ item: event.item === bag, slot: event.slot, handled: event.handled });
+        }
+        return result;
+      });
+      const bagSlot = f.inv.getItems().indexOf(bag);
+      await send({ type: "widget_action", widgetId: (Bank.SIDE_INTERFACE_ID << 16) | 3,
+        groupId: Bank.SIDE_INTERFACE_ID, childId: 3, buttonNum: 9,
+        slot: bagSlot, itemId: OPEN_GEM_BAG, option: "Empty" });
+      assert.deepEqual(ops, [{ item: true, slot: bagSlot, handled: true }], "real bank op reaches the container handler once");
+      const after = state(), details = JSON.stringify({ mode, before, after, headroom });
+      assert.equal(total(after), total(before), "all bank, container and owned gems remain conserved: " + details);
+      assert.equal(after.bags, 1, details);
+      assert.deepEqual(gains, [], details);
+      assert.deepEqual(xp(), initialXp, details);
+      if (mode === "room" || mode === "exact") {
+        assert.equal(after.stored, 0, details);
+        assert.equal(after.banks, before.banks + 2, details);
+      } else {
+        assert.equal(after.stored, 2 - headroom, details);
+        assert.equal(after.banks, before.banks + headroom, details);
+      }
+    });
+  }
+});

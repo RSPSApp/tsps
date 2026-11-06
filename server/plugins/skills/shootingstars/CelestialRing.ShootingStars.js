@@ -51,7 +51,7 @@ function addBoost(request) {
 function extraOre(request, random = Math.random) {
   const ring = wornRing(request.player);
   if (!ring || ring.getId() !== ids().charged || request.rockLevel > RING.extraOreMaxLevel) return;
-  if (random() * RING.extraOreChance < 1) request.extra = true;
+  if (random() * RING.extraOreChance < 1) request.bonuses.push({});
   const left = charges(ring) - 1;
   if (left > 0) {
     ring.setMetaValue(CHARGES_META_KEY, left);

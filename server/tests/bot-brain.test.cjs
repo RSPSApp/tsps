@@ -2856,3 +2856,42 @@ test('regional roamers in the Revenant Caves spawn only where the player can wal
     assert.ok(walkable(at.getX(), at.getY()), `${player.getUsername()} at ${at.getX()},${at.getY()} is reachable`);
   }
 });
+
+test('every PvP archetype equips real, wearable, un-noted gear', () => {
+  // A noted item and an item with no wear position are both slot -1, so both would silently drop
+  // out of the equipment filter and leave the bot half-dressed instead of failing loudly.
+  const coreLocal = require('../dist/plugins/PluginManager').PluginManager.getCoreApi();
+  const definitions = JSON.parse(fs.readFileSync('data/definitions/pvp-bot-loadouts.json', 'utf8'));
+  const I = coreLocal.ItemIdentifiers;
+  const SLOTS = { 0: 'head', 1: 'cape', 2: 'amulet', 3: 'weapon', 4: 'body', 5: 'shield',
+    7: 'legs', 9: 'hands', 10: 'feet', 12: 'ring', 13: 'ammo' };
+  const expand = (name, out = []) => {
+    if (typeof name !== 'string') return out;
+    if (name.startsWith('@')) {
+      for (const inner of definitions.pools[name.slice(1)] ?? []) expand(inner, out);
+    } else {
+      out.push(name);
+    }
+    return out;
+  };
+  const problems = [];
+  for (const archetype of definitions.archetypes) {
+    for (const [slot, spec] of Object.entries(archetype.equipment ?? {})) {
+      for (const name of [].concat(spec).flatMap((entry) => expand(entry))) {
+        const id = I[name];
+        if (typeof id !== 'number') continue;
+        const definition = coreLocal.ItemDefinition.forId(id);
+        if (!definition?.getName?.()) {
+          problems.push(`${archetype.id}: ${slot}=${name} has no definition`);
+          continue;
+        }
+        if (definition.isNoted?.()) problems.push(`${archetype.id}: ${slot}=${name} is the noted ${id}`);
+        const wears = definition.getEquipmentType().getSlot();
+        if (wears >= 0 && SLOTS[wears] !== slot) {
+          problems.push(`${archetype.id}: ${slot}=${name} actually wears ${SLOTS[wears]}`);
+        }
+      }
+    }
+  }
+  assert.deepEqual(problems, []);
+});

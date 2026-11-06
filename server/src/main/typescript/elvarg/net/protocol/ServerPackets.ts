@@ -120,6 +120,8 @@ export const enum ServerPacketId {
     SET_INTERACTION_MODE = 145, // OSRS set_interaction_mode: what tile/entity clicks do in a world
     RESET_INTERACTION_MODE = 146, // OSRS reset_interaction_mode: drops a world's own mode
     REGION_REPLACEMENT_COMPRESSED = 147, // deflated REGION_REPLACEMENT payload; dense regions do not fit raw
+    HIDE_NPC_OPS = 148, // OSRS set_hide_npc_actions: one global boolean hiding NPC menu actions
+    HIDE_OBJ_OPS = 149, // OSRS set_item_ops_disabled (ground items): one global boolean hiding ground-item menu actions
 
     // ========================================
     // SHOP/TRADE (150-169)
@@ -272,6 +274,8 @@ export const SERVER_PACKET_LENGTHS: Record<ServerPacketId, number> = {
     [ServerPacketId.REGION_REPLACEMENT_COMPRESSED]: -2, // regionId(2) + flags(1) + lengths(8) + deflated data
     [ServerPacketId.SET_INTERACTION_MODE]: 4, // worldId(2) + tileMode(1) + entityMode(1)
     [ServerPacketId.RESET_INTERACTION_MODE]: 2, // worldId(2)
+    [ServerPacketId.HIDE_NPC_OPS]: 1, // hidden(1)
+    [ServerPacketId.HIDE_OBJ_OPS]: 1, // hidden(1)
 
     [ServerPacketId.SHOP_OPEN]: -2,
     [ServerPacketId.SHOP_SLOT]: -1,

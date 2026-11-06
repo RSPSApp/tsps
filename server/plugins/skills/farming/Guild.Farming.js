@@ -227,6 +227,8 @@ function pickup(event) {
         if (storeCrop(player, sack, itemId, 1) !== 1) return;
         manager.deregister(groundItem);
         core.PluginManager.emitCustomEvent("ground-items:taken", { player, groundItem, source: "pickup", itemId, amount: 1, discarded: 0 });
+        // Mirror this server's ordinary ground pickup; live sack audio is not established.
+        core.Sounds.sendSound(player, core.Sound.PICK_UP_ITEM);
         player.getLastItemPickup().reset();
         player.getInventory().refreshItems();
     } finally {

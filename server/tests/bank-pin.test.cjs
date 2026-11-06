@@ -299,6 +299,26 @@ test("agent:advance-time brings a pending PIN forward (for testing)", () => {
   assert.deepEqual(idle.handledBy, [], "nothing timed, not listed");
 });
 
+test('Seed Vault bank-policy query bypasses the PIN listener without unlocking it', () => {
+  const player = withPin('1234');
+  assert.equal(Common.hasPin(player), true);
+  assert.equal(Common.isUnlocked(player), false);
+  const saved = { ...player.attributes };
+  const vault = { player, allow: null, source: 'seed-vault' };
+  Settings.canBank(vault);
+  assert.equal(vault.allow, null, 'the PIN listener leaves the Vault query unanswered');
+  assert.deepEqual(player.attributes, saved, 'the PIN state is unchanged');
+  assert.equal(player.interface, -1, 'no keypad is opened');
+  assert.equal(player.amount, null);
+  assert.deepEqual(player.messages, []);
+  assert.equal(Common.isUnlocked(player), false);
+  const other = { player, allow: null, source: 'servant' };
+  Settings.canBank(other);
+  assert.equal(other.allow, false, 'a different remote bank query is still refused');
+  assert.equal(player.messages.at(-1), 'You need to enter your Bank PIN at a bank first.');
+  assert.equal(player.interface, -1);
+});
+
 test("deposit boxes need no PIN; any other check while locked is refused; the keypad's Exit does nothing", () => {
   const player = withPin("1234");
   const deposit = { player, allow: null, source: "deposit-box" };

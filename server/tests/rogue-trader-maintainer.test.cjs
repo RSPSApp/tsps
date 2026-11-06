@@ -160,13 +160,13 @@ test('4. switching back to the Menaphite clothes resets 915 as well: Siamun asks
 // answered Gianne jnr.'s "Captain Dalbur:" delivery steps (Gnome Restaurant, npc 2547), which are not ours to answer.
 const askCondition = (f, npcId, text) => require('../dist/plugins/PluginManager').PluginManager.emitNpcDialogueCondition({ player: f.p, npc: f.npc, npcId, pages: [], text });
 
-test("3. the Dalbur condition of Ali's page is answered false for Ali (3533)", async (t) => {
+test("3a. the Dalbur condition of Ali's page is answered false for Ali (3533)", async (t) => {
   const f = H.actor(t);
   assert.equal(askCondition(f, 3533, 'If the player has asked Captain Dalbur what he thinks of Ali Morrisane:'), false);
   assert.equal(askCondition(f, 3533, 'If the player has asked Captain Dalbur what he thinks of Ali'), false);
 });
 
-test("3. Gianne jnr.'s Captain Dalbur: delivery step (2547) is not answered by Rogue Trader", async (t) => {
+test("3b. Gianne jnr.'s Captain Dalbur: delivery step (2547) is not answered by Rogue Trader", async (t) => {
   const f = H.actor(t);
   assert.notEqual(askCondition(f, 2547, 'Captain Dalbur:'), false, 'not forced to false by our handler');
   assert.equal(askCondition(f, 2547, 'Captain Dalbur:'), null, 'and nothing else answers it either');

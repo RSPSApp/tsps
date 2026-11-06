@@ -15,7 +15,8 @@
  *   player still on one 3 ticks later takes 2 damage; they can be stepped away from (Wiki, rsprox 1757).
  * Sounds, animations and the bones are as captured (rsprox 1757, rev 227; see the graveyard data).
  * Bones to Bananas' sound isn't captured: the Wiki's List of sound IDs gives 114 for both spells.
- * Not here: protection from the bones, the hit's sound, and the room's 10-point death cost (Wiki).
+ * Death costs 10 Graveyard points (Wiki), handled by the shared safe-death policy.
+ * Not here: protection from the bones and the hit's sound.
  */
 const Common = require("./Common.MageTrainingArena");
 

@@ -170,6 +170,7 @@ function respawnInHall(event) {
   const area = roomAt(event.player);
   if (!area) return;
   event.handled = true;
+  if (area === rooms.get("graveyard")) addPoints(event.player, "graveyard", -10);
   // Clear room-only items and settle its rewards before the respawn is saved.
   area.leave(event.player, false);
   if (event.player.getArea() === area) event.player.setArea(null);

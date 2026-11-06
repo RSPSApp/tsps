@@ -536,7 +536,8 @@ function transcriptOpensMap(event) {
 
     execute() {
       this.stop();
-      if (player.isRegistered()) openMap(player);
+      // A newer main modal owns this target; do not replace it with the old map.
+      if (player.isRegistered() && !player.getPacketSender().getSubInterfaceAt(MAIN_MODAL)) openMap(player);
     }
   })());
 }

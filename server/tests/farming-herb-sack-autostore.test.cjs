@@ -153,6 +153,26 @@ test("an open sack takes a grimy herb picked up from the ground", async (t) => {
   assert.equal(core.ItemOnGroundManager.getGroundItem(f.p.getUsername(), guam, f.p.getLocation(), null), null, "off the ground");
 });
 
+test("herb sack pickup uses the normal pickup sound only after a successful take", async (t) => {
+  const success = actor(t, "Open herb sack"), denied = actor(t, "Open silklined herb sack");
+  const sounds = [];
+  const sendSound = core.Sounds.sendSound.bind(core.Sounds);
+  t.mock.method(core.Sounds, "sendSound", (player, sound, ...rest) => {
+    if (player === success.p || player === denied.p) sounds.push([player, sound]);
+    return sendSound(player, sound, ...rest);
+  });
+  t.after(() => {
+    const ground = core.ItemOnGroundManager.getGroundItem(denied.p.getUsername(), I.GRIMY_GUAM_LEAF, denied.p.getLocation(), null);
+    if (ground) core.ItemOnGroundManager.deregister(ground);
+  });
+  pickupPolicies.set(denied.p, (event) => { event.allow = false; });
+  await take(success, I.GRIMY_GUAM_LEAF);
+  assert.equal(stored(success)[I.GRIMY_GUAM_LEAF], 1);
+  await take(denied, I.GRIMY_GUAM_LEAF);
+  assert.equal(storedTotal(denied), 0);
+  assert.deepEqual(sounds, [[success.p, core.Sound.PICK_UP_ITEM]]);
+});
+
 for (const sack of ["Open herb sack", "Open silklined herb sack"]) {
   test(`${sack} respects a refused ground take`, async (t) => {
     const f = actor(t, sack), herb = I.GRIMY_GUAM_LEAF, events = [];

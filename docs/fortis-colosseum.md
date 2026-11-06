@@ -157,7 +157,7 @@ While it charges, the orbs show on its body in throwing order, one a tick, in sp
 
 **Minotaur:**
 - Its damage lands a tick after its swing (Wiki).
-- While not in melee range of the player, every 5 ticks it heals each damaged enemy within 6 tiles to full. The Wiki says it heals continuously and gives no rate; the healing has no animation here.
+- While the player is outside its footprint's melee reach, the Minotaur heals non-Minotaur enemies below 75% health when their centre tiles are within 7 tiles and have line of sight, including around pillars ([Mod Arcane](https://www.reddit.com/r/2007scape/comments/1e90fkb/comment/lecvxj9/)). TSPS uses its standard centre tile for even-sized NPCs; that choice is not separately captured. Its existing 5-tick healing check and lack of animation remain estimates.
 
 **Animations and graphics:**
 - The trio and the shaman are from the capture. Shaman: anim 10859, cast 1458, projectile 1459, impact 1460. Seer: 10853 with fire blast 130/131. Archer: 10850 with arrow 9. Berserker: 10856.
@@ -168,7 +168,7 @@ While it charges, the orbs show on its body in throwing order, one a tick, in sp
 
 **Not done yet:**
 - Two Manticores copying each other's orb order.
-- Line-of-sight rules, including the Minotaur's healing being blocked by the pillars.
+- Other encounter line-of-sight rules.
 
 ## Modifiers
 

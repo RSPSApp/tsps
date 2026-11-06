@@ -16,6 +16,7 @@ module.exports = {
     require("./storage/Events.StorageItems")(api);
     require("./storage/CoalBag.StorageItems")(api);
     require("./storage/GemBag.StorageItems")(api);
+    require("./storage/GemSack.StorageItems")(api);
     require("./storage/GemPouch.StorageItems")(api);
     require("./storage/FishBarrel.StorageItems")(api);
     require("./storage/LogBasket.StorageItems")(api);

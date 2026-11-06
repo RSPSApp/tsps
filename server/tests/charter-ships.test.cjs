@@ -102,6 +102,7 @@ function createPlayer({ at, coins = 10000, ring = 0, items = [], varbits = {}, v
     getVarp: (id) => varpValues.get(id) ?? 0,
     sendVarbit: (id, value) => { varbitValues.set(id, value); sent.varbits.push([id, value]); return sender; },
     sendClientScript: (id, ...args) => { sent.scripts.push([id, ...args]); return sender; },
+    getSubInterfaceAt: (uid) => uid === ((161 << 16) | 16) && interfaceId >= 0 ? { targetUid: uid, groupId: interfaceId, type: 0 } : undefined,
     sendInterface: (id) => { interfaceId = id; sent.interfaces.push(id); return sender; },
     sendSubInterface: (uid, id, type, options) => { sent.subs.push({ uid, id, type, options }); return sender; },
     closeSubInterface: (uid) => { sent.closed.push(uid); return sender; },
@@ -472,4 +473,223 @@ test("the transcripts play the crew's current-port question as an exact variant,
   const stan = { player, npcId: 9301, variant: "right-click-charter-to-current-location", exact: true, handled: false };
   starts.get("npc-dialogue:start")(stan);
   assert.equal(stan.handled, false, "Trader Stan has no such variant, so nothing plays");
+});
+
+// Keep full native registration after the legacy callbacks above, which use a fake task queue.
+test("native Charter dialogue preserves a newer trading post interface", async t => {
+  const previousBotsSetting = process.env.DISABLE_PLAYER_BOTS;
+  process.env.DISABLE_PLAYER_BOTS = "1";
+  const TRADING_POST_SHOP_ID = 1354;
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const { PlayerSession } = require("../dist/net/PlayerSession");
+  const { ClientConnection } = require("../dist/net/NetworkBuilder");
+  const { ShopDefinitionLoader } = require("../dist/game/definition/loader/impl/ShopDefinitionLoader");
+  const { NpcDialogue } = require("../dist/game/model/dialogues/entries/impl/NpcDialogue");
+  const { PlayerDialogue } = require("../dist/game/model/dialogues/entries/impl/PlayerDialogue");
+  PluginManager.loadFromDirectory(path.resolve(__dirname, "../plugins"));
+  const core = PluginManager.getCoreApi();
+  core.RegionManager.init();
+  core.RegionManager.loadMapFiles(3226, 3218);
+  assert.equal(new ShopDefinitionLoader().load(), true);
+  core.ShopManager.initialize();
+  assert.equal(core.ShopDefinition.forId(TRADING_POST_SHOP_ID).getName(), "Trader Stan's Trading Post");
+  PluginManager.emitServerStartup({});
+  t.after(() => {
+    PluginManager.emitServerShutdown({});
+    CharterShips.register(api);
+    if (previousBotsSetting === undefined) delete process.env.DISABLE_PLAYER_BOTS;
+    else process.env.DISABLE_PLAYER_BOTS = previousBotsSetting;
+  });
+  const stanId = CacheDefinitions.getNpcId("sailing_transport_trader_stan_catherby");
+  assert.equal(stanId, 9301);
+  const mapId = CacheDefinitions.getInterfaceId("sailing_menu");
+  const sideId = CacheDefinitions.getInterfaceId("chartering_menu_side");
+  assert.equal(mapId, 72);
+  assert.equal(sideId, 885);
+  assert.equal(MAP_COMPONENT(), (mapId << 16) | 3);
+  assert.equal(LIST_COMPONENT(), (sideId << 16) | 4);
+  let mapTarget;
+  let nextIndex = 1940;
+  for (const mode of ["stationary Talk-to", "direct Charter", "replacement Trade"]) {
+    await t.test(mode, async t => {
+      const channel = {
+        kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true, send: () => true,
+        close() {}, onData() {}, onError() {}, onClose() {},
+      };
+      const player = new Player(new PlayerSession(channel));
+      player.setIndex(nextIndex++);
+      player.setUsername("charter" + player.getIndex());
+      player.setRegistered(true);
+      player.setLocation(new Location(3226, 3218, 0));
+      player.needsPlacement = false;
+      const connection = new ClientConnection(channel);
+      connection.player = player;
+      // Real cache actor at loaded geometry, for interface admission rather than retail spawning.
+      const npc = core.NPC.create(stanId, new Location(3227, 3218, 0));
+      assert.equal(core.World.getNpcs().add(npc), true);
+      const definition = npc.getCurrentDefinition(player);
+      assert.equal(definition.getId(), stanId);
+      assert.equal(definition.getName(), "Trader Stan");
+      assert.equal(npc.getContentId(player), stanId);
+      const option = name => {
+        const slot = definition.getActions().indexOf(name);
+        assert.ok(slot >= 0, "actual cache action: " + name);
+        return { type: "npc_option", index: npc.getIndex(), clickType: slot + 1 };
+      };
+      for (const name of ["Talk-to", "Trade", "Charter"]) option(name);
+      const inventory = player.getInventory();
+      inventory.add(new core.Item(ItemIdentifiers.COINS, 10000), false);
+      const sender = player.getPacketSender(), manager = player.getDialogueManager();
+      const producers = [], operations = [], shops = [], flags = [], gains = [], voyages = [], submitted = [];
+      const submit = core.TaskManager.submit.bind(core.TaskManager);
+      t.mock.method(core.TaskManager, "submit", task => { submitted.push(task); return submit(task); });
+      const emit = PluginManager.emitCustomEvent.bind(PluginManager);
+      t.mock.method(PluginManager, "emitCustomEvent", (name, event) => {
+        const result = emit(name, event);
+        if (event.player !== player) return result;
+        if (name === "npc-dialogue:action" && /charter map/i.test(event.text ?? "")) {
+          producers.push({ step: event.stepId, npc: event.npc, handled: event.handled, end: event.end });
+        }
+        if (name === "npc:operated") operations.push(event.option);
+        if (name === "shop:opened") shops.push(event.shopId);
+        if (name === "charter-ships:arrived") voyages.push(true);
+        return result;
+      });
+      const sendFlags = sender.sendInterfaceFlagsRange.bind(sender);
+      t.mock.method(sender, "sendInterfaceFlagsRange", (...args) => {
+        flags.push(args);
+        return sendFlags(...args);
+      });
+      const skills = player.getSkillManager(), addXp = skills.addExperiences.bind(skills);
+      t.mock.method(skills, "addExperiences", (...args) => {
+        gains.push(args);
+        return addXp(...args);
+      });
+      const items = container => container.getItems().map(item => item ? [item.getId(), item.getAmount()] : null);
+      const stores = () => ({
+        inventory: items(inventory), equipment: items(player.getEquipment()),
+        banks: player.getBanks().map((bank, tab) => bank && tab !== core.Bank.BANK_SEARCH_TAB_INDEX ? items(bank) : null),
+        ground: core.World.getItems().filter(item => !item.isPendingRemoval()
+          && item.getOwner() === player.getUsername()).map(item => [item.getItem().getId(), item.getItem().getAmount()]),
+      });
+      const initialStores = stores();
+      const unchanged = () => {
+        assert.deepEqual(stores(), initialStores);
+        assert.deepEqual(gains, []);
+        assert.deepEqual(voyages, []);
+        assert.equal(player.getAttribute(CharterShips._test.PREVIOUS_DESTINATION_ATTRIBUTE) ?? 0, 0);
+      };
+      t.after(() => {
+        player.closeInterruptibleInterfaces();
+        core.ShopManager.close(player);
+        PluginManager.emitPlayerDisconnect({ player, username: player.getUsername() });
+        PluginManager.emitPlayerLogout({ player, username: player.getUsername() });
+        player.setRegistered(false);
+        core.TaskManager.cancelTasks(player.getIndex());
+        core.TaskManager.cancelTasks(player);
+        core.World.getNpcs().remove(npc);
+        for (const task of submitted) if (task.isRunning()) task.stop();
+      });
+      let turns = 0;
+      const turn = () => {
+        assert.ok(++turns <= 20, "bounded native phase budget");
+        player.resetUpdating();
+        core.World.processCycle = (core.World.processCycle + 1) & 0x7fffffff;
+        core.TaskManager.process();
+        connection.processTurnPackets();
+        const queue = player.getMovementQueue();
+        queue.beginCycle();
+        queue.processEntityPursuit();
+        if (queue.hasPendingWork()) queue.process();
+        core.TaskManager.processWalkTo(player.getIndex());
+      };
+      const send = async (...packets) => { await connection.dispatch(packets); turn(); };
+      const resume = () => ({ type: "dialogue_continue", widgetId: (sender.getChatboxGroupId() << 16) | 5, childIndex: -1 });
+      if (mode === "direct Charter") {
+        await send(option("Charter"));
+        for (let i = 0; i < 5 && player.getInterfaceId() !== mapId; i++) turn();
+        assert.ok(operations.includes("charter"), "real native Charter producer");
+      } else {
+        await send(option("Talk-to"));
+        for (let i = 0; i < 5 && !manager.getCurrent(); i++) turn();
+        assert.ok(operations.includes("talk-to"));
+        assert.ok(manager.getCurrent() instanceof NpcDialogue);
+        assert.equal(manager.getCurrent().getText(), "Can I help you?");
+        assert.equal(sender.getChatboxGroupId(), 231);
+        assert.equal(manager.getOwner(), undefined);
+        assert.equal(sender.getChatboxOwner(), undefined);
+        await send(resume());
+        const prompt = core.MultiChatboxPrompt.getPending(player);
+        assert.ok(prompt, "actual transcript menu is the owning consumer");
+        assert.equal(manager.isActive(), false);
+        const label = "Yes, I would like to charter a ship.";
+        const choice = prompt.options.indexOf(label) + 1;
+        assert.ok(choice > 0);
+        await send({ type: "dialogue_continue", widgetId: core.MultiChatboxPrompt.OPTIONS_WIDGET_ID, childIndex: choice });
+        assert.equal(core.MultiChatboxPrompt.getPending(player), null);
+        assert.ok(manager.getCurrent() instanceof PlayerDialogue);
+        assert.equal(manager.getCurrent().getText(), label);
+        assert.equal(sender.getChatboxGroupId(), 217);
+        await send(resume());
+        assert.ok(manager.getCurrent() instanceof NpcDialogue);
+        assert.match(manager.getCurrent().getText(), /^Certainly(?:, (?:sir|madam))?\. Where would you like to go\?$/);
+        assert.equal(sender.getChatboxGroupId(), 231);
+        assert.equal(manager.getOwner(), undefined);
+        assert.equal(sender.getChatboxOwner(), undefined);
+        const terminal = sender.subInterfaceTargets.get(sender.getChatboxGroupId());
+        assert.ok(terminal && Object.isFrozen(terminal));
+        assert.equal(sender.getSubInterfaceAt(terminal.targetUid), terminal);
+        assert.equal(player.getMovementQueue().size(), 0, "Talk-to approach has settled");
+        const admissionPosition = player.getLocation().clone();
+        unchanged();
+        await send(resume(), ...(mode === "replacement Trade" ? [option("Trade")] : []));
+        assert.equal(producers.length, 1);
+        assert.equal(producers[0].step, "YNVF6c");
+        assert.equal(producers[0].npc === npc, true);
+        assert.equal(producers[0].handled, true);
+        assert.equal(producers[0].end, true);
+        assert.equal(manager.isActive(), false);
+        assert.equal(sender.getChatboxGroupId(), -1);
+        assert.equal(player.getLocation().equals(admissionPosition), true);
+        assert.notEqual(player.getInterfaceId(), mapId, "deferred map has not run in the input phase");
+        unchanged();
+        let replacement;
+        if (mode === "replacement Trade") {
+          assert.ok(operations.includes("trade"), "successful real native Trade producer before next global phase");
+          assert.deepEqual(shops, [TRADING_POST_SHOP_ID]);
+          assert.equal(player.getInterfaceId(), core.ShopManager.MAIN_INTERFACE_ID);
+          replacement = sender.subInterfaceTargets.get(core.ShopManager.MAIN_INTERFACE_ID);
+          assert.ok(replacement && Object.isFrozen(replacement));
+          assert.equal(replacement.targetUid, mapTarget, "the controls prove the shared main target");
+          assert.equal(sender.getSubInterfaceAt(replacement.targetUid), replacement);
+        }
+        turn();
+        unchanged();
+        if (replacement) {
+          assert.equal(sender.getSubInterfaceAt(replacement.targetUid), replacement,
+            "deferred Charter must preserve the newer trading post main mount");
+          assert.equal(player.getInterfaceId(), core.ShopManager.MAIN_INTERFACE_ID);
+          assert.equal(sender.isSubInterfaceOpen(sideId), false);
+          return;
+        }
+      }
+      assert.equal(player.getInterfaceId(), mapId);
+      const map = sender.subInterfaceTargets.get(mapId), side = sender.subInterfaceTargets.get(sideId);
+      assert.ok(map && side);
+      if (mapTarget === undefined) mapTarget = map.targetUid;
+      assert.equal(map.targetUid, mapTarget);
+      assert.equal(map.targetUid, CacheDefinitions.getComponentId("toplevel_osrs_stretch:mainmodal"));
+      assert.equal(side.targetUid, CacheDefinitions.getComponentId("toplevel_osrs_stretch:sidemodal"));
+      assert.equal(map.type, 0);
+      assert.equal(side.type, 3);
+      assert.equal(sender.getSubInterfaceAt(map.targetUid), map);
+      assert.equal(sender.getSubInterfaceAt(side.targetUid), side);
+      const last = CharterShips._test.destinations().length * 2 - 1;
+      assert.deepEqual(flags.filter(([uid]) => uid === MAP_COMPONENT() || uid === LIST_COMPONENT()), [
+        [MAP_COMPONENT(), 0, last, 2], [LIST_COMPONENT(), 0, last, 2],
+      ]);
+      unchanged();
+    });
+  }
 });

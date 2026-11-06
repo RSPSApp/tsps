@@ -508,6 +508,32 @@ test("an artefact used on Simon sells just that one", () => {
   assert.equal(p.inventory.get(ids().item.coins), 750);
 });
 
+test("Simon refuses an artefact invoice larger than a new coin stack", () => {
+  const noted = ids().item.noted.goldenStatuette;
+  const count = Math.floor(0x7fffffff / 1250) + 1;
+  const p = player({ items: { [noted]: count } });
+  const request = { player: p, npcId: 5786, stepId: "Kn2FnM", handled: false };
+  T.Simon.onDialogueAction(request);
+  assert.equal(request.end, true);
+  assert.equal(p.inventory.get(noted), count);
+  assert.equal(p.inventory.get(ids().item.coins) ?? 0, 0);
+  assert.equal(T.Simon.owed.has(p), false);
+});
+
+test("Simon explains when an artefact payment cannot fit", () => {
+  for (const route of ["one", "all"]) {
+    const p = player({ items: { [art("goldSeal")]: 1, [ids().item.coins]: 0x7fffffff } });
+    if (route === "one") T.Simon.onItemOnNpc({ player: p, npcId: 5786, itemId: art("goldSeal"), target: {}, handled: false });
+    const request = { player: p, npcId: 5786, stepId: route === "one" ? "0egJhg" : "Kn2FnM", handled: false };
+    T.Simon.onDialogueAction(request);
+    assert.equal(request.end, true);
+    assert.equal(p.inventory.get(art("goldSeal")), 1);
+    assert.equal(p.inventory.get(ids().item.coins), 0x7fffffff);
+    assert.equal(T.Simon.owed.has(p), false);
+    assert.deepEqual(p.messages, ["You do not have enough room to carry all of those coins."]);
+  }
+});
+
 test("Simon: his introduction first, then the pyramid top lines, before and after the first sale (Wiki transcript)", () => {
   const p = player();
   const { VARIANT } = T.Simon;
@@ -553,7 +579,7 @@ test("Simon keeps the tops when the coin stack cannot take the whole payment", (
   assert.equal(request.end, true);
   assert.equal(p.inventory.get(ids().item.pyramidTop), 1);
   assert.equal(p.inventory.get(ids().item.coins), 0x7fffffff - 5000);
-  assert.deepEqual(p.messages, ["You don't have enough inventory space."]);
+  assert.deepEqual(p.messages, ["You do not have enough room to carry all of those coins."]);
 });
 
 test("Simon's payment can take the slot the tops leave in a full inventory", () => {
@@ -796,4 +822,124 @@ test("captured panel search: three pulls a tick apart, synth 1220 on the first a
   assert.deepEqual(t2.sounds, [1220]);
   assert.deepEqual(t3.messages, ["You find a door! You open it successfully."]);
   assert.ok(has(t3, ids().varbit.outerPanels[2], 2) && has(t3, ids().varbit.busy, 0));
+});
+
+
+// Native registered Simon offers, without the legacy inventory/dialogue/task stand-ins above.
+test("native Simon artefact sales preserve the full payment at the coin limit", async t => {
+  process.env.DISABLE_PLAYER_BOTS = "1";
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const { PlayerSession } = require("../dist/net/PlayerSession");
+  const { ClientConnection } = require("../dist/net/NetworkBuilder");
+  const native = PluginManager.getCoreApi();
+  PluginManager.loadFromDirectory(path.resolve(__dirname, "../plugins"));
+  native.RegionManager.init(); native.RegionManager.loadMapFiles(3226, 3218);
+  PluginManager.emitServerStartup({});
+  t.after(() => PluginManager.emitServerShutdown({}));
+  assert.equal(C.getCore().World, native.World); assert.equal(C.getCore().TaskManager, native.TaskManager);
+  const MAX = 0x7fffffff, PRICE = 750, COINS = native.ItemIdentifiers.COINS;
+  const GOLD = native.CacheDefinitions.getObjId("ntk_seal_gold");
+  assert.equal(GOLD, 9040); assert.equal(C.DATA.artefacts.goldSeal.coins, PRICE);
+  assert.equal(native.ItemDefinition.forId(GOLD).isStackable(), false);
+  assert.equal(native.ItemDefinition.forId(GOLD).isNoted(), false);
+  assert.equal(native.ItemDefinition.forId(COINS).isStackable(), true);
+  let nextIndex = 1960;
+  const cases = [
+    { name: "one-item ordinary payment", route: "item", held: 0, seals: 2, moved: 1 },
+    { name: "Talk-to ordinary all-artefact payment", route: "talk", held: 0, seals: 2, moved: 2 },
+    { name: "one-item exact payment headroom", route: "item", held: MAX - PRICE, seals: 1, moved: 1 },
+    { name: "payment uses the consumed artefact slot", route: "item", held: 0, seals: 1, moved: 1, full: true },
+    { name: "declined one-item offer", route: "item", held: 1000, seals: 1, moved: 0, decline: true },
+    { name: "one-item insufficient payment headroom", route: "item", held: MAX - PRICE + 1, seals: 1, moved: 0, near: true },
+    { name: "one-item capped coin stack", route: "item", held: MAX, seals: 1, moved: 0, capped: true },
+    { name: "Talk-to capped coin stack", route: "talk", held: MAX, seals: 2, moved: 0, capped: true },
+  ];
+  for (const row of cases) await t.test(row.name, async t => {
+    const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true, send: () => true,
+      close() {}, onData() {}, onError() {}, onClose() {} };
+    const player = new Player(new PlayerSession(channel));
+    player.setIndex(nextIndex++); player.setUsername("simonbuyer" + player.getIndex());
+    player.setRegistered(true); player.setLocation(new native.Location(3226, 3218, 0)); player.needsPlacement = false;
+    const connection = new ClientConnection(channel); connection.player = player;
+    const npc = native.NPC.create(native.CacheDefinitions.getNpcId("agility_pyramid_simon"), new native.Location(3227, 3218, 0));
+    assert.equal(native.World.getNpcs().add(npc), true);
+    assert.equal(npc.getId(), 5786); assert.equal(npc.getCurrentDefinition(player).getName(), "Simon Templeton");
+    t.after(() => {
+      player.closeInterruptibleInterfaces();
+      PluginManager.emitPlayerDisconnect({ player, username: player.getUsername() });
+      PluginManager.emitPlayerLogout({ player, username: player.getUsername() });
+      player.setRegistered(false); native.TaskManager.cancelTasks(player.getIndex()); native.TaskManager.cancelTasks(player);
+      native.World.getNpcs().remove(npc);
+      for (const ground of native.World.getItems().filter(g => g.getOwner() === player.getUsername())) native.ItemOnGroundManager.deregister(ground);
+    });
+    const inv = player.getInventory();
+    for (let n = 0; n < row.seals; n++) inv.add(new native.Item(GOLD), false);
+    if (row.held) inv.add(new native.Item(COINS, row.capped ? MAX - 1 : row.held), false);
+    if (row.full) while (inv.getFreeSlots() > 0) inv.add(new native.Item(native.ItemIdentifiers.LOGS), false);
+    const logsBefore = inv.getAmount(native.ItemIdentifiers.LOGS), gains = [];
+    const skills = player.getSkillManager(), addXp = skills.addExperiences.bind(skills);
+    t.mock.method(skills, "addExperiences", (skill, amount) => { gains.push({ skill, amount }); return addXp(skill, amount); });
+    const floor = id => native.World.getItems().filter(g => !g.isPendingRemoval() && g.getOwner() === player.getUsername()
+      && g.getPrivateArea() === player.getPrivateArea() && g.getItem().getId() === id).reduce((n, g) => n + g.getItem().getAmount(), 0);
+    const stores = id => ({ inventory: inv.getAmount(id), equipment: player.getEquipment().getAmount(id),
+      bank: player.getBanks().reduce((n, b, tab) => n + (b && tab !== native.Bank.BANK_SEARCH_TAB_INDEX ? b.getAmount(id) : 0), 0), floor: floor(id) });
+    const owned = id => Object.values(stores(id)).reduce((n, amount) => n + amount, 0);
+    const state = () => ({ name: row.name, coins: stores(COINS), seals: stores(GOLD), owed: T.Simon.owed.get(player) ?? 0, gains: [...gains] });
+    let turns = 0;
+    const turn = () => {
+      assert.ok(++turns <= 32, "bounded native phase budget"); player.resetUpdating();
+      native.World.processCycle = (native.World.processCycle + 1) & MAX; native.TaskManager.process();
+      connection.processTurnPackets(); const queue = player.getMovementQueue();
+      queue.beginCycle(); queue.processEntityPursuit(); if (queue.hasPendingWork()) queue.process();
+      native.TaskManager.processWalkTo(player.getIndex());
+    };
+    const send = async packet => { await connection.dispatch([packet]); turn(); };
+    const observeLine = () => {
+      const current = player.getDialogueManager().getCurrent(), sender = player.getPacketSender(), group = sender.getChatboxGroupId();
+      assert.ok(current instanceof native.NpcDialogue || current instanceof native.PlayerDialogue, "actual native speech must own this continuation");
+      assert.ok(group === 231 || group === 217);
+      const mount = sender.subInterfaceTargets.get(group); assert.ok(mount); assert.equal(sender.getSubInterfaceAt(mount.targetUid), mount);
+      return { current, group };
+    };
+    const continueLine = async () => { const { group } = observeLine(); await send({ type: "dialogue_continue", widgetId: (group << 16) | 5, childIndex: -1 }); };
+    if (row.capped) {
+      const at = player.getLocation(); native.ItemOnGroundManager.registerLocation(player, new native.Item(COINS), at.clone());
+      assert.equal(floor(COINS), 1);
+      await send({ type: "ground_item_action", itemId: COINS, x: at.getX(), y: at.getY(), option: "Take", optionIndex: 3 });
+      for (let n = 0; n < 6 && floor(COINS); n++) turn();
+      assert.equal(inv.getAmount(COINS), MAX, "real native pickup fills the ordinary coin stack"); assert.equal(floor(COINS), 0);
+    }
+    assert.equal(owned(COINS), row.held); assert.equal(owned(GOLD), row.seals); assert.equal(T.Simon.owed.has(player), false);
+    const addable = inv.getAddableAmount(new native.Item(COINS, PRICE * (row.route === "talk" ? row.seals : 1)));
+    if (row.capped) assert.equal(addable, 0, "native output precondition, with real artefacts still present");
+    if (row.near) assert.equal(addable, PRICE - 1, "native output cannot accept the entire invoice");
+    if (row.name === "one-item exact payment headroom") assert.equal(addable, PRICE);
+    const before = state(), valueBefore = owned(COINS) + PRICE * owned(GOLD);
+    if (row.route === "item") await send({ type: "item_on_npc", widgetId: 149 << 16, targetIndex: npc.getIndex(),
+      itemId: GOLD, slot: inv.getSlotForItemId(GOLD) });
+    else {
+      const talk = npc.getCurrentDefinition(player).getActions().indexOf("Talk-to") + 1; assert.ok(talk > 0);
+      await send({ type: "npc_option", index: npc.getIndex(), clickType: talk });
+    }
+    for (let n = 0; n < 8 && !native.MultiChatboxPrompt.getPending(player); n++) {
+      const current = player.getDialogueManager().getCurrent();
+      if (current) {
+        assert.match(current.getText(), /You wanna sell that mate|interesting artefacts|Bonzer|flog the lot/); await continueLine();
+      } else turn();
+    }
+    const menu = native.MultiChatboxPrompt.getPending(player); assert.ok(menu, "actual registered offer must produce its native choice");
+    assert.equal(player.getDialogueManager().isActive(), false, "real MultiChatboxPrompt owns the options");
+    const choice = menu.options.indexOf(row.decline ? "No, I think I'll keep it." : "Yes, show me the money.") + 1; assert.ok(choice > 0);
+    await send({ type: "dialogue_continue", widgetId: native.MultiChatboxPrompt.OPTIONS_WIDGET_ID, childIndex: choice });
+    assert.equal(observeLine().current.getText(), row.decline ? "No, I think I'll keep it." : "Yes, show me the money.");
+    assert.deepEqual(state(), before, "resources remain intact until the real player's line is continued");
+    await continueLine();
+    const after = state(), details = JSON.stringify({ before, after });
+    // First target assertion: a sold artefact must remain owned or be paid in full; floor credit counts.
+    assert.equal(owned(COINS) + PRICE * owned(GOLD), valueBefore, "artefact/payment conservation: " + details);
+    assert.equal(owned(GOLD), row.seals - row.moved, details);
+    assert.equal(owned(COINS), row.held + row.moved * PRICE, details);
+    assert.equal(T.Simon.owed.has(player), false, "no transient unpaid invoice remains after the synchronous transaction");
+    assert.equal(inv.getAmount(native.ItemIdentifiers.LOGS), logsBefore); assert.deepEqual(gains, []);
+  });
 });

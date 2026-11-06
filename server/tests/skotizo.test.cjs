@@ -212,3 +212,200 @@ test("the hellfire burst's hit lands on the tick the projectile does (#1862)", (
     Common.init({ core: previous, emitCustomEvent: (name, payload) => emitted.push({ name, payload }) });
   }
 });
+
+// Native Slayer task controls below use the existing cache and server plugin route.
+const { CachePipeline: NativeCachePipeline } = require("../dist/game/cache/CachePipeline");
+const { NpcDefinitionLoader: NativeNpcDefinitionLoader } = require("../dist/game/definition/loader/impl/NpcDefinitionLoader");
+const { PluginManager } = require("../dist/plugins/PluginManager");
+const { CacheDefinitions } = require("../dist/game/cache/CacheDefinitions");
+const Data = require("../plugins/skills/slayer/Data.Slayer");
+const Tasks = require("../plugins/skills/slayer/Tasks.Slayer");
+const core = PluginManager.getCoreApi();
+const taskId = (name) => [...Data.get().taskById.values()].find((task) => task.displayName === name).id;
+const varp = (player, name) => player.getPacketSender().getVarp(CacheDefinitions.getVarpId(name));
+function giveTask(player, master, name, amount) {
+  const sender = player.getPacketSender();
+  sender.sendConfig(CacheDefinitions.getVarpId("slayer_target"), taskId(name));
+  sender.sendConfig(CacheDefinitions.getVarpId("slayer_count"), amount);
+  sender.sendConfig(CacheDefinitions.getVarpId("slayer_count_original"), amount);
+  sender.sendVarbit(CacheDefinitions.getVarbitId("slayer_master"), master);
+}
+
+test("Skotizo is a named black-demon substitute as well as a greater demon", async () => {
+  await NativeCachePipeline.initialize(require("node:path").resolve(__dirname, ".."));
+  new NativeNpcDefinitionLoader().load();
+  Data.init({ core });
+  const greater = taskId("Greater Demons"), black = taskId("Black Demons");
+  const id = core.NpcIdentifiers.SKOTIZO, definition = CacheDefinitions.getNpc(id);
+  assert.equal(id, 7286);
+  assert.equal(definition.name, "Skotizo");
+  assert.equal(Data.npcTaskId(id), greater, "active cache NPC param 50 is the greater-demon task");
+  assert.equal(greater, 29); assert.equal(black, 30);
+  assert.equal(Data.npcCountsFor(greater, id, definition.name), true, "greater-demon match control");
+  assert.equal(Data.npcCountsFor(black, id, definition.name), true, "Skotizo also counts as a black demon");
+});
+
+// The real lair producer is used for setup. Damage attribution and lethal HP are
+// seeded; NPCDeathTask and registered Slayer death hooks run on real World ticks.
+test("native Skotizo lair deaths count for Konar's Catacombs demon assignments", async (t) => {
+  const path = require("node:path");
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const { PlayerSession } = require("../dist/net/PlayerSession");
+  const { SkillManager } = require("../dist/game/content/skill/SkillManager");
+  const Lair = require("../plugins/bosses/skotizo/Lair.Skotizo");
+  const oldBots = process.env.DISABLE_PLAYER_BOTS, oldSubmit = core.TaskManager.submit;
+  const oldError = console.error, errors = [], tasks = new Set(), actors = [], controls = [], sessions = [], ownedNpcs = new Set();
+  const groundBefore = new Set(core.World.getItems());
+  let started = false;
+  process.env.DISABLE_PLAYER_BOTS = "1";
+  t.after(() => {
+    try {
+      for (const task of tasks) if (task.isRunning()) task.stop();
+      for (const session of sessions) for (const monster of session.area.getNpcs()) ownedNpcs.add(monster);
+      for (const session of sessions) {
+        if (!session.area.isDestroyed() && session.area.hasMember(session.player)) session.area.leave(session.player, false);
+        if (!session.ended) session.end();
+      }
+      for (const monster of controls) if (monster.isRegistered()) core.World.getNpcs().removes(monster);
+      for (const actor of actors) {
+        PluginManager.emitPlayerLogout({ player: actor, username: actor.getUsername() });
+        if (actor.isRegistered()) core.World.getPlayers().removes(actor);
+      }
+      for (const item of [...core.World.getItems()]) {
+        if (!groundBefore.has(item) && actors.some((actor) => item.getOwner() === actor.getUsername())) core.ItemOnGroundManager.deregister(item);
+      }
+      core.ItemOnGroundManager.process();
+      if (started) PluginManager.emitServerShutdown({});
+      for (const task of tasks) if (task.isRunning()) task.stop();
+      core.World.process();
+      assert.ok(sessions.every((session) => session.ended && session.area.isDestroyed()), "fixture lairs are destroyed");
+      assert.ok([...ownedNpcs].every((monster) => !monster.isRegistered() && !core.World.getAddNPCQueue().includes(monster)), "fixture lair NPCs are removed");
+      assert.ok([...tasks].every((task) => !task.isRunning()), "fixture tasks are stopped");
+      assert.equal(core.World.getItems().some((item) => !groundBefore.has(item) && actors.some((actor) => item.getOwner() === actor.getUsername())), false);
+      assert.deepEqual(errors, [], "native execution and teardown have no hidden plugin errors");
+    } finally {
+      core.TaskManager.submit = oldSubmit; console.error = oldError;
+      if (oldBots === undefined) delete process.env.DISABLE_PLAYER_BOTS; else process.env.DISABLE_PLAYER_BOTS = oldBots;
+    }
+  });
+  core.TaskManager.submit = function (...args) { if (args[0]) tasks.add(args[0]); return oldSubmit.apply(this, args); };
+  console.error = (...args) => { errors.push(args.map(String).join(" ")); return oldError.apply(console, args); };
+  await NativeCachePipeline.initialize(path.resolve(__dirname, ".."));
+  PluginManager.loadFromDirectory(path.resolve(__dirname, "../plugins"));
+  core.RegionManager.init();
+  core.RegionManager.loadMapFiles(1662, 10049);
+  core.RegionManager.loadMapFiles(2257, 5650);
+  PluginManager.emitServerStartup({}); started = true;
+  const channel = () => ({ kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true,
+    send: () => true, close() {}, onData() {}, onError() {}, onClose() {} });
+  function actor(name) {
+    const player = new Player(new PlayerSession(channel())); actors.push(player);
+    player.setUsername(name); player.setLongUsername(core.Misc.stringToLongBigInt(name));
+    player.setAttribute("bot-skip-persistence", true);
+    player.setLocation(new core.Location(1662, 10049, 0));
+    assert.equal(core.World.getPlayers().add(player), true); player.needsPlacement = false;
+    const skills = player.getSkillManager();
+    skills.setExperience(core.Skill.SLAYER, SkillManager.getExperienceForLevel(99));
+    skills.setMaxLevel(core.Skill.SLAYER, 99); skills.setCurrentLevel(core.Skill.SLAYER, 99, true);
+    assert.equal(skills.getCurrentLevel(core.Skill.SLAYER), 99, "Bloodveld Slayer-level control");
+    return player;
+  }
+  function trackLair(player) {
+    const session = Lair.arrive(player); sessions.push(session);
+    for (const monster of session.area.getNpcs()) ownedNpcs.add(monster);
+    return session;
+  }
+  const area = [...Data.get().areas.values()].find((entry) => entry.id === 1);
+  assert.equal(area.name, "Catacombs of Kourend");
+  const greater = taskId("Greater Demons"), black = taskId("Black Demons");
+  const konar = Data.get().masters.get(8);
+  for (const id of [greater, black]) {
+    const entry = konar.tasks.find((row) => row.task.id === id);
+    assert.ok(entry && entry.areaRows.some((row) => Data.get().areas.get(row)?.id === area.id), "cache allows this Konar Catacombs assignment");
+  }
+  // Set the real task varps as fixture setup; this is not a master-dialogue test.
+  function setTask(player, name, assignedArea = area, masterId = 8) {
+    giveTask(player, masterId, name, 5);
+    player.getPacketSender().sendConfig(CacheDefinitions.getVarpId("slayer_area"), assignedArea.id);
+    assert.equal(Tasks.current(player).area.id, assignedArea.id);
+  }
+  function query(player, monster, extra = {}) {
+    const request = { player, npc: monster, ...extra };
+    PluginManager.emitCustomEvent("slayer:on-task", request); return request.onTask;
+  }
+  function bloodveld(x, y) {
+    const monster = core.NPC.create(core.NpcIdentifiers.BLOODVELD, new core.Location(x, y, 0));
+    controls.push(monster); monster.setScriptedMovement(true); monster.__skipDefaultRespawn = true;
+    assert.equal(core.World.getNpcs().add(monster), true); monster.needsPlacement = false;
+    return monster;
+  }
+  const player = actor("skgreater");
+  setTask(player, "Bloodveld");
+  const inside = bloodveld(1690, 10070), outside = bloodveld(3420, 3560);
+  assert.equal(query(player, inside), true, "actual Catacombs Bloodveld is on task");
+  assert.equal(query(player, outside), false, "actual Slayer Tower Bloodveld is outside the assigned area");
+  const controlDeaths = [];
+  PluginManager.createApi("SkotizoKonarControlObserve").onNpcDeath((event) => {
+    if (event.npc === inside && event.killer === player) controlDeaths.push(event);
+  });
+  const beforeControlXp = player.getSkillManager().getExperience(core.Skill.SLAYER);
+  inside.getCombat().addDamage(player, inside.getMaxHitpoints()); inside.setHitpoints(0);
+  for (let i = 0; i < 60 && controlDeaths.length === 0; i++) core.World.process();
+  assert.equal(controlDeaths.length, 1, "ordinary in-area NPCDeathTask reaches the registered Slayer handler");
+  assert.equal(varp(player, "slayer_count"), 4, "ordinary in-area kill decrements the task");
+  assert.ok(player.getSkillManager().getExperience(core.Skill.SLAYER) > beforeControlXp, "ordinary in-area kill awards Slayer XP");
+
+  setTask(player, "Greater Demons");
+  const session = trackLair(player);
+  const boss = session.fight.boss, at = boss.getLocation().clone();
+  assert.equal(Lair.sessionOf(player), session); assert.equal(boss.getPrivateArea(), session.area);
+  assert.ok(session.inArena(at) && at.getX() >= 8192, "actual Skotizo stands in the allocated lair");
+  assert.equal(boss.getId(), core.NpcIdentifiers.SKOTIZO);
+  assert.equal(Data.npcTaskId(boss.getId()), greater);
+  assert.equal(Data.npcCountsFor(greater, boss.getId(), "Skotizo"), true, "greater match before area target");
+  assert.equal(Data.inArea(area, at), false, "allocated instance coordinates are outside the world box");
+  const liveOnTask = query(player, boss);
+  const numericOnTask = query(player, boss, { npcId: boss.getId(), location: boss.getLocation() });
+  const deaths = [];
+  PluginManager.createApi("SkotizoKonarNativeObserve").onNpcDeath((event) => {
+    if (event.npc === boss && event.killer === player) deaths.push(event);
+  });
+  boss.getCombat().addDamage(player, boss.getMaxHitpoints()); boss.setHitpoints(0);
+  for (let i = 0; i < 60 && deaths.length === 0; i++) core.World.process();
+  assert.equal(deaths.length, 1, "real NPCDeathTask reports the owner and actual boss exactly once");
+  assert.deepEqual(errors, [], "registered World and death hooks report no errors before the target");
+  assert.equal(varp(player, "slayer_count"), 4, "the Skotizo death decrements the Catacombs greater-demon task once");
+  assert.equal(liveOnTask, true, "actual NPC on-task query uses the same area rule");
+  assert.equal(numericOnTask, true, "numeric query carrying the actual NPC uses the same area rule");
+  assert.deepEqual([at.getX(), at.getY(), at.getZ()], [boss.getLocation().getX(), boss.getLocation().getY(), boss.getLocation().getZ()], "real NPC location is unchanged");
+
+  const blackPlayer = actor("skblack"); setTask(blackPlayer, "Black Demons");
+  const blackSession = trackLair(blackPlayer);
+  const blackBoss = blackSession.fight.boss, blackAt = blackBoss.getLocation();
+  assert.equal(blackBoss.getPrivateArea(), blackSession.area);
+  assert.equal(Data.npcCountsFor(black, blackBoss.getId(), "Skotizo"), true);
+  assert.equal(query(blackPlayer, blackBoss), true);
+  assert.equal(query(blackPlayer, blackBoss, { npcId: blackBoss.getId(), location: blackAt }), true);
+  const noNpc = { player: blackPlayer, npcId: blackBoss.getId(), location: blackAt };
+  PluginManager.emitCustomEvent("slayer:on-task", noNpc);
+  assert.equal(noNpc.onTask, false, "id-only request cannot inherit an instance area");
+  assert.equal(Data.npcTaskId(core.NpcIdentifiers.BLACK_DEMON), black, "actual alternate NPC matches the black-demon task");
+  assert.equal(query(blackPlayer, blackBoss, { npcId: core.NpcIdentifiers.BLACK_DEMON, location: blackAt }), false, "a different requested NPC id cannot borrow the lair");
+  assert.equal(query(blackPlayer, blackBoss, { npcId: blackBoss.getId(), location: new core.Location(3420, 3560, 0) }), false, "explicit alternate location remains outside");
+  const otherAreaRow = konar.tasks.find((entry) => entry.task.id === black).areaRows.find((row) => Data.get().areas.get(row)?.id !== area.id);
+  const otherArea = Data.get().areas.get(otherAreaRow);
+  assert.ok(otherArea?.boxes?.length);
+  setTask(blackPlayer, "Black Demons", otherArea);
+  assert.equal(query(blackPlayer, blackBoss), false, "a different Konar area remains excluded");
+  assert.ok(Data.get().masters.get(7).tasks.some((entry) => entry.task.id === black), "Krystilia has black-demon assignments");
+  setTask(blackPlayer, "Black Demons", area, 7);
+  assert.equal(query(blackPlayer, blackBoss), false, "Krystilia's Wilderness restriction remains in force");
+  setTask(blackPlayer, "Black Demons");
+  const foreign = actor("skforeign"); setTask(foreign, "Black Demons");
+  assert.equal(query(foreign, blackBoss), false, "another player cannot borrow the owner lair");
+  blackBoss.getCombat().addDamage(blackPlayer, blackBoss.getMaxHitpoints()); blackBoss.setHitpoints(0);
+  for (let i = 0; i < 60 && varp(blackPlayer, "slayer_count") === 5; i++) core.World.process();
+  assert.equal(varp(blackPlayer, "slayer_count"), 4, "actual black-demon task decrements once");
+  assert.equal(varp(player, "slayer_count"), 4, "later World ticks do not credit the first death twice");
+  assert.deepEqual(errors, [], "native death and on-task paths report no hidden errors");
+});

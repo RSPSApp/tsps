@@ -2090,6 +2090,92 @@ test('pass-through gates preserve east-west crossing and isolate private copies 
   }
 });
 
+test('the Priest in Peril mausoleum gates swing in the captured leaf, let the player through and shut', async () => {
+  await initializeMapCollisionOnce();
+  RegionManager.loadMapFiles(3405, 9895, true);
+  require('../dist/game/definition/ObjectDefinition').ObjectDefinition.init();
+  const h = buildHarness({ cacheObjects: new Map([3444, 3445, 3446, 38848].map(id => [id, CacheDefinitions.getObject(id)])),
+    objectManager: ObjectManager, realMapObjects: true });
+  const IGNORE_CLIPPING = 'movement:ignore-clipping';
+  // The gate's edge, blocked from either side: gate 3444 on 9895's south edge, 3445 on 3431's east edge.
+  const blocked = (id) => id === 3444
+    ? [RegionManager.blockedNorth(new Location(3405, 9894, 0), null), RegionManager.blockedSouth(new Location(3405, 9895, 0), null)]
+    : [RegionManager.blockedEast(new Location(3431, 9897, 0), null), RegionManager.blockedWest(new Location(3432, 9897, 0), null)];
+  const walker = (px, py, steps) => {
+    const flags = new Set();
+    let queued = 0;
+    return { flags, getPrivateArea: () => null, getLocation: () => new Location(px, py, 0),
+      hasFlag: (f) => flags.has(f), setFlag: (f, on = true) => { if (on) flags.add(f); else flags.delete(f); },
+      removeFlag: (f) => flags.delete(f),
+      getMovementQueue: () => ({ reset() { queued = 0; }, size: () => queued,
+        addSteps: tile => { queued++; steps.push([tile.getX(), tile.getY()]); } }) };
+  };
+  // [gate id, gate tile, the inactive leaf's tile, player start, expected step]
+  const cases = [
+    [3444, [3405, 9895], [3405, 9894], [3405, 9894], [3405, 9895]],
+    [3444, [3405, 9895], [3405, 9894], [3405, 9895], [3405, 9894]],
+    [3445, [3431, 9897], [3432, 9897], [3431, 9897], [3432, 9897]],
+    [3445, [3431, 9897], [3432, 9897], [3432, 9897], [3431, 9897]],
+  ];
+  try {
+    // The quest's key rule (door:toggle) runs first: a gate it keeps locked never swings.
+    {
+      const steps = [];
+      const object = MapObjects.get(3444, new Location(3405, 9895, 0), null);
+      const player = walker(3405, 9895, steps);
+      h.setDoorToggleHandler(request => { request.handled = true; });
+      const sounds = h.sounds.length;
+      assert.equal(h.handlers.get('Gate').Open({ player, object, objectId: 3444,
+        definition: object.getDefinition(), location: object.getLocation(), clickType: 1 }), true);
+      h.setDoorToggleHandler(null);
+      assert.deepEqual(steps, [], 'a locked gate lets nobody through');
+      assert.equal(h.sounds.length, sounds, 'and makes no gate sound');
+      assert.ok(MapObjects.get(3444, new Location(3405, 9895, 0), null), 'the gate stays shut');
+      assert.ok(!MapObjects.get(3446, new Location(3405, 9894, 0), null), 'no leaf swings in');
+      assert.equal(h.submitted.length, 0, 'nothing to close');
+      assert.ok(!player.flags.has(IGNORE_CLIPPING), 'and no walking over walls');
+    }
+    for (const [id, [gx, gy], [lx, ly], [px, py], step] of cases) {
+      const steps = [];
+      const object = MapObjects.get(id, new Location(gx, gy, 0), null);
+      assert.ok(object, `the cache gate ${id} stands at ${gx},${gy}`);
+      assert.deepEqual(blocked(id), [true, true], `closed: gate ${id} blocks both ways`);
+      const player = walker(px, py, steps);
+      const forcedBefore = h.forced.length;
+      const submittedBefore = h.submitted.length;
+      assert.equal(h.handlers.get('Gate').Open({ player, object, objectId: id,
+        definition: object.getDefinition(), location: object.getLocation(), clickType: 1 }), true);
+      assert.deepEqual(steps, [step], 'the opener gets one ordinary walk step across');
+      assert.equal(h.forced.length, forcedBefore, 'no forced movement: live walks across');
+      assert.ok(player.flags.has(IGNORE_CLIPPING), 'their step walks over the blocker');
+      assert.equal(h.sounds.at(-1)[1].getId(), 69, 'the captured opening sound');
+      assert.ok(MapObjects.get(3446, new Location(lx, ly, 0), null), 'the inactive leaf 3446 swings in');
+      assert.ok(!MapObjects.get(id, new Location(gx, gy, 0), null), 'the gate leaf is out while open');
+      assert.ok(MapObjects.get(38848, new Location(gx, gy, 0), null), 'inviswall stands on the gate tile, as live');
+      assert.deepEqual(blocked(id), [true, true], 'open: the blocker still stops everyone else, both ways');
+      const queued = h.submitted.slice(submittedBefore);
+      const { ForceMovementTask } = require('../dist/game/task/impl/ForceMovementTask');
+      assert.equal(queued.length, 2, 'the walk-over and the close, nothing else');
+      assert.ok(queued.every(task => !(task instanceof ForceMovementTask)), 'no forced movement task');
+      const [walkOver, close] = queued;
+      assert.equal(walkOver.delay, 1);
+      walkOver.execute();
+      assert.ok(player.flags.has(IGNORE_CLIPPING), 'kept until the opener is across (one tick left)');
+      walkOver.execute();
+      assert.ok(!player.flags.has(IGNORE_CLIPPING), 'and never past two ticks');
+      assert.equal(close.delay, 2, 'it shuts two ticks later');
+      close.execute();
+      assert.ok(MapObjects.get(id, new Location(gx, gy, 0), null), 'the gate is back');
+      assert.ok(!MapObjects.get(3446, new Location(lx, ly, 0), null), 'the inactive leaf is gone');
+      assert.ok(!MapObjects.get(38848, new Location(gx, gy, 0), null), 'and so is the blocker');
+      assert.deepEqual(blocked(id), [true, true], 'shut again');
+    }
+  } finally {
+    for (const task of h.submitted) if (task.isRunning()) task.execute();
+    h.restore();
+  }
+});
+
 test('Elena’s cabinet house opens into its nameless cache door variant', async () => {
   await initializeMapCollisionOnce();
   const closed = CacheDefinitions.getObject(2054), opened = CacheDefinitions.getObject(2055);

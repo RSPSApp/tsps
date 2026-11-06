@@ -245,7 +245,8 @@ async function campfireHarness(t) {
     }),
     getWorld: () => ({ getObjects: () => [...objects] }),
     onCustomEvent() {}, emitCustomEvent() {}, emitFiremakingBlocked: () => false,
-    onPlayerDisconnect: h => hooks.disconnect = h, onItemOnGroundItem() {}, onGroundItemClick() {},
+    onPlayerDisconnect: h => hooks.disconnect = h, onItemOnGroundItem() {},
+    onGroundItemClick: (_ids, _type, h) => hooks.groundLight = h,
     onItemOnItem: h => hooks.combine = h,
     onItemOnObject: (item, _object, h) => hooks.use = h ?? item,
     onObjectInteraction: (name, actions) => { hooks[name] = actions; },
@@ -291,7 +292,7 @@ async function campfireHarness(t) {
     core.MapObjects.mapObjects = oldMapObjects;
     Math.random = oldRandom;
   });
-  return { core, I, O, inventory, loc, player, hooks, objects, ashes, animations, messages, graphics,
+  return { core, I, O, inventory, loc, player, hooks, objects, ground, ashes, animations, messages, graphics,
     tick, useLog, menu: () => menu, xp: () => xp, chain: () => chain,
     light() {
       hooks.combine({ player, usedItemId: I.TINDERBOX, usedWithItemId: I.LOGS });
@@ -448,6 +449,20 @@ test("the player steps off the log with the animation reset, and the fire catche
   assert.equal(h.messages.at(-1), 'The fire catches and the logs begin to burn.');
 });
 
+test("lighting an adjacent ground log uses the player's admitted position", async t => {
+  const h = await campfireHarness(t);
+  const tile = h.loc.clone().addX(1);
+  h.ground.push({ item: new core.Item(h.I.LOGS, 1), loc: tile });
+  const event = { player: h.player, groundItemId: h.I.LOGS,
+    location: { x: tile.getX(), y: tile.getY(), z: tile.getZ() }, handled: false };
+  h.hooks.groundLight(event);
+  assert.equal(event.handled, true, "adjacent ground log admitted");
+  h.tick(4);
+  assert.equal(h.ground.length, 0, "ground log consumed");
+  assert.equal(h.objects.size, 1, "fire catches");
+  assert.equal(h.xp(), 40);
+});
+
 test("Barbarian Firemaking accepts ordinary bows and rejects the Wiki's excluded bows", async () => {
   const { CachePipeline } = require("../dist/game/cache/CachePipeline");
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
@@ -510,4 +525,123 @@ test("bow firemaking stays members-only while ordinary firemaking works on free 
   assert.match(h.messages.at(-1), /members' world/);
   h.light();
   assert.equal(h.xp(), 40);
+});
+
+// Exercise a native manual walk and the automatic step after a successful roll.
+test("native manual walk cancels lighting before the roll while automatic success step still commits", async t => {
+  process.env.DISABLE_PLAYER_BOTS = "1";
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const { PlayerSession } = require("../dist/net/PlayerSession");
+  const { ClientConnection } = require("../dist/net/NetworkBuilder");
+  PluginManager.loadFromDirectory(path.resolve(__dirname, "../plugins"));
+  core.RegionManager.init();
+  core.RegionManager.loadMapFiles(3226, 3218);
+  PluginManager.emitServerStartup({});
+  t.after(() => PluginManager.emitServerShutdown({}));
+  const Firemaking = require("../plugins/skills/Firemaking.plugin");
+  const I = core.ItemIdentifiers;
+  const fireId = core.ObjectIdentifiers.FIRE_23;
+  let index = 1840;
+  for (const mode of ["normal-auto-step", "manual-before-roll"]) await t.test(mode, async t => {
+    const channel = {
+      kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true, send: () => true,
+      close() {}, onData() {}, onError() {}, onClose() {},
+    };
+    const p = new Player(new PlayerSession(channel));
+    p.setIndex(index++);
+    p.setUsername("firewalk" + index);
+    p.setRegistered(true);
+    p.setLocation(new core.Location(3226, 3218, 0));
+    p.needsPlacement = false;
+    p.getSkillManager().setCurrentLevel(core.Skill.FIREMAKING, 99, false);
+    const c = new ClientConnection(channel);
+    c.player = p;
+    const anchor = p.getLocation().clone();
+    const gains = [];
+    const animations = [];
+    const ownedGround = () => core.World.getItems().filter(g =>
+      !g.isPendingRemoval() && g.getOwner() === p.getUsername() && g.getPrivateArea() === p.getPrivateArea());
+    const total = id => p.getInventory().getAmount(id) + ownedGround()
+      .filter(g => g.getItem().getId() === id).reduce((n, g) => n + g.getItem().getAmount(), 0);
+    const fires = () => core.ObjectManager.objectsAt(anchor)
+      .filter(o => o.getId() === fireId && o.getPrivateArea() === p.getPrivateArea());
+    t.after(() => {
+      PluginManager.emitPlayerDisconnect({ player: p, username: p.getUsername() });
+      PluginManager.emitPlayerLogout({ player: p, username: p.getUsername() });
+      p.setRegistered(false);
+      core.TaskManager.cancelTasks(p.getIndex());
+      core.TaskManager.cancelTasks(p);
+      for (const g of ownedGround()) core.ItemOnGroundManager.deregister(g);
+      for (const o of fires()) core.ObjectManager.deregister(o, true);
+    });
+    for (const id of [I.LOGS, I.TINDERBOX]) p.getInventory().add(new core.Item(id, 1), false);
+    const skills = p.getSkillManager();
+    const add = skills.addExperiences.bind(skills);
+    t.mock.method(skills, "addExperiences", (skill, xp) => {
+      if (skill === core.Skill.FIREMAKING) gains.push(xp);
+      return add(skill, xp);
+    });
+    const animate = p.performAnimation.bind(p);
+    t.mock.method(p, "performAnimation", animation => {
+      const result = animate(animation);
+      animations.push({ id: animation?.getId(), accepted: p.getAnimation() === animation });
+      return result;
+    });
+    let turns = 0;
+    const snapshot = label => {
+      const q = p.getMovementQueue();
+      return {
+        mode, label, turns, epoch: core.World.getProcessCycle(),
+        position: [p.getLocation().getX(), p.getLocation().getY()],
+        queue: q.size(), didMove: q.didMoveThisCycle(), stall: p.getCombat().getAnimationStallTicks(),
+        active: Firemaking.isFiremakingActive(p), inventoryLogs: p.getInventory().getAmount(I.LOGS),
+        allLogs: total(I.LOGS), tinderbox: total(I.TINDERBOX), fires: fires().length, gains: [...gains],
+      };
+    };
+    const turn = () => {
+      assert.ok(++turns <= 16, "bounded phase budget");
+      p.resetUpdating();
+      core.World.processCycle = (core.World.processCycle + 1) & 0x7fffffff;
+      core.TaskManager.process();
+      c.processTurnPackets();
+      const q = p.getMovementQueue();
+      q.beginCycle();
+      q.processEntityPursuit();
+      if (q.hasPendingWork()) q.process();
+      core.TaskManager.processWalkTo(p.getIndex());
+    };
+    assert.equal(fires().length, 0);
+    assert.equal(total(I.LOGS), 1);
+    await c.dispatch([{
+      type: "inventory_use_on", itemId: I.TINDERBOX, slot: p.getInventory().getSlotForItemId(I.TINDERBOX),
+      target: { kind: "inventory", id: I.LOGS, slot: p.getInventory().getSlotForItemId(I.LOGS) },
+    }]);
+    turn();
+    assert.equal(Firemaking.isFiremakingActive(p), true, "native item combination admitted lighting");
+    assert.ok(animations.some(a => a.id === 733 && a.accepted), "actual opening animation accepted");
+    assert.equal(p.getInventory().getAmount(I.LOGS), 0);
+    assert.equal(total(I.LOGS), 1, "owned ground intermediate");
+    assert.equal(fires().length, 0);
+    assert.deepEqual(gains, []);
+    assert.equal(p.getCombat().isAnimationStalled(), false);
+    if (mode === "manual-before-roll") {
+      await c.dispatch([{ type: "move", worldX: 3225, worldY: 3217, modifierFlags: 0, run: false }]);
+      turn();
+      assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [3225, 3217]);
+      assert.equal(p.getMovementQueue().size(), 0);
+      assert.equal(p.getMovementQueue().didMoveThisCycle(), true);
+      assert.equal(fires().length, 0);
+      assert.deepEqual(gains, []);
+      assert.equal(total(I.LOGS), 1);
+    }
+    for (let n = 0; n < 6; n++) turn();
+    const end = snapshot("completion-window");
+    const cancelled = mode === "manual-before-roll";
+    assert.deepEqual(gains, cancelled ? [] : [40], "pending firemaking XP after manual walk: " + JSON.stringify(end));
+    assert.equal(total(I.LOGS), cancelled ? 1 : 0);
+    assert.equal(total(I.TINDERBOX), 1);
+    assert.equal(fires().length, cancelled ? 0 : 1);
+    assert.equal(Firemaking.isFiremakingActive(p), false);
+    if (!cancelled) assert.equal(p.getLocation().equals(anchor), false, "genuine automatic step must remain a successful control");
+  });
 });

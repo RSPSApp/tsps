@@ -99,7 +99,7 @@ function hasFurnaceMaterials(player, product) {
 }
 
 function craftFurnaceProduct(player, product) {
-  const { PluginManager, Item } = Shared.getCore();
+  const { PluginManager, Item, Inventory } = Shared.getCore();
   if (Shared.craftingLevel(player) < product.level) {
     player.sendMessage(`You need a Crafting level of at least ${product.level} to craft this.`);
     return false;
@@ -107,9 +107,18 @@ function craftFurnaceProduct(player, product) {
   if (!hasFurnaceMaterials(player, product) ||
       PluginManager.emitCanUseItem(player, product.itemId, "craft") === false) return false;
   const inventory = player.getInventory();
+  const output = new Item(product.itemId, product.amount);
+  // Check the whole batch after the inputs have freed their slots.
+  const preview = new Inventory(player).setItems(inventory.getCopiedItems());
+  preview.deleted(product.bar, 1, false);
+  for (const id of product.extra) preview.deleted(id, 1, false);
+  if (preview.getAddableAmount(output) < product.amount) {
+    inventory.full();
+    return false;
+  }
   inventory.deleteNumber(product.bar, 1);
   for (const id of product.extra) inventory.deleteNumber(id, 1);
-  inventory.addItem(new Item(product.itemId, product.amount));
+  inventory.addItem(output);
   Shared.addCraftingXp(player, product.xp);
   Shared.getApi().emitCustomEvent("crafting:made", { player, itemId: product.itemId, furnace: true });
   Shared.produced(player, product.itemId, product.amount, product.xp, "jewellery", [[product.bar, 1], ...product.extra.map((id) => [id, 1])]);

@@ -68,10 +68,10 @@ const LUMBRIDGE_SWAMP_CAVES_BOUNDS = [new Boundary(3136, 3264, 9536, 9600, 0)];
 
 let pluginApi;
 
-function containerHasLightSource(container, ids) {
+function containerHasLightSource(container, ids, excludedItem) {
   const items = container?.getItems?.() ?? [];
   for (const item of items) {
-    if (item && ids.has(item.getId())) {
+    if (item && item !== excludedItem && ids.has(item.getId())) {
       return true;
     }
   }
@@ -84,8 +84,8 @@ function carriesFiremakingCape(player) {
   return request.result === true;
 }
 
-function hasLightSource(player) {
-  if (containerHasLightSource(player?.getInventory?.(), CARRIED_LIGHT_SOURCE_IDS) || carriesFiremakingCape(player)) {
+function hasLightSource(player, excludedInventoryItem) {
+  if (containerHasLightSource(player?.getInventory?.(), CARRIED_LIGHT_SOURCE_IDS, excludedInventoryItem) || carriesFiremakingCape(player)) {
     return true;
   }
   const equipment = player?.getEquipment?.();

@@ -4,6 +4,7 @@
  * steals or gets while mining. Its contents are kept on death.
  */
 const Storage = require("./Common.StorageItems");
+const GemSack = require("./GemSack.StorageItems");
 
 const NAMES = ["Gem bag", "Open gem bag"];
 const PER_GEM = 60;
@@ -122,8 +123,10 @@ function pickup(event) {
   const item = groundItem.getItem();
   if (pickupItems.has(groundItem) || pickupPlayers.has(player)) { event.handled = true; return; }
   // Metadata and non-unit stacks use the ordinary pickup path, which preserves their identity.
-  if (!Storage.hasOpen(player, family) || !family.accepts(item.getId()) || item.getMeta() != null || item.getAmount() !== 1) return;
-  if (family.room(player, item.getId(), Storage.contents(player, family)) < 1) return;
+  if (!family.accepts(item.getId()) || item.getMeta() != null || item.getAmount() !== 1) return;
+  const sack = Storage.FAMILIES.get("gem-sack");
+  const target = Storage.hasOpen(player, family) ? family : sack && Storage.hasOpen(player, sack) ? sack : null;
+  if (!target || target.room(player, item.getId(), Storage.contents(player, target)) < 1) return;
   const manager = Storage.core.ItemOnGroundManager;
   const itemId = item.getId(), position = groundItem.getPosition().clone(), owner = groundItem.getOwner();
   const area = groundItem.getPrivateArea(), state = groundItem.getState();
@@ -142,12 +145,14 @@ function pickup(event) {
       || groundItem.getItem() !== item || item.getId() !== itemId || item.getAmount() !== 1 || item.getMeta() != null
       || !groundItem.getPosition().equals(position) || groundItem.getOwner() !== owner
       || groundItem.getPrivateArea() !== area || groundItem.getState() !== state
-      || !Storage.hasOpen(player, family) || family.room(player, itemId, Storage.contents(player, family)) < 1) return;
-    if (Storage.store(player, family, itemId, 1) !== 1) return;
+      || !Storage.hasOpen(player, target) || target.room(player, itemId, Storage.contents(player, target)) < 1) return;
+    if (Storage.store(player, target, itemId, 1) !== 1) return;
     manager.deregister(groundItem);
     Storage.api.emitCustomEvent("ground-items:taken", { player, groundItem, source: "pickup", itemId, amount: 1, discarded: 0 });
+    // Mirror the server's ordinary ground pickup; live container audio is not established.
+    Storage.core.Sounds.sendSound(player, Storage.core.Sound.PICK_UP_ITEM);
     player.getLastItemPickup().reset();
-    player.sendMessage(STRAIGHT_IN);
+    player.sendMessage(target === family ? STRAIGHT_IN : GemSack.STRAIGHT_IN);
   } finally {
     pickupItems.delete(groundItem);
     pickupPlayers.delete(player);

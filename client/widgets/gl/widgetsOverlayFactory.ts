@@ -479,6 +479,29 @@ export function createWidgetsOverlay(host: WidgetsOverlayHost): WidgetsOverlay {
                                                         ? host.osrsClient.playerEcs.getAppearance(idx)
                                                         : undefined;
                                                 })();
+                                            const npcId = appearance?.npcTransformationId ?? -1;
+                                            if (npcId >= 0) {
+                                                const loader = host.osrsClient.npcTypeLoader;
+                                                const baseNpcType = loader?.load(npcId);
+                                                const npcType = baseNpcType?.transforms
+                                                    ? baseNpcType.transform(host.osrsClient.varManager, loader)
+                                                    : baseNpcType;
+                                                if (!host.chatheadFactory) {
+                                                    host.chatheadFactory = new ChatheadFactory(
+                                                        host.osrsClient.modelLoader,
+                                                        host.osrsClient.textureLoader,
+                                                    );
+                                                }
+                                                const chatModel = npcType
+                                                    ? host.chatheadFactory.get(npcType)
+                                                    : undefined;
+                                                return chatModel
+                                                    ? host.model2DRenderer.renderModelInstanceToCanvasExtents(
+                                                          chatModel,
+                                                          params,
+                                                      )
+                                                    : undefined;
+                                            }
                                             if (host.playerChatheadFactory && appearance) {
                                                 const chatModel =
                                                     host.playerChatheadFactory.get(appearance);

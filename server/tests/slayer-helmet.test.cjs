@@ -79,18 +79,36 @@ function createPlayer({ head = -1, crafting = 99, inventory = [], helmUnlocked =
     getInventory: () => ({
       getItems: () => items,
       contains: (id) => items.some((entry) => entry.getId() === id),
-      deleteAtSlot: (slot) => { items.splice(slot, 1); },
+      deleteAtSlot: (slot) => { if (items[slot]?.getId() > 0) items[slot].setId(-1); },
       deleteNumber: (id) => {
-        const index = items.findIndex((entry) => entry.getId() === id);
-        if (index >= 0) items.splice(index, 1);
+        const entry = items.find((entry) => entry.getId() === id);
+        if (entry) entry.setId(-1);
       },
-      adds: (id) => items.push(item(id)),
-      getFreeSlots: () => 28 - items.length,
+      adds: (id) => {
+        const slot = items.findIndex((entry) => entry.getId() < 0);
+        if (slot < 0) items.push(item(id));
+        else items[slot] = item(id);
+      },
+      getFreeSlots: () => 28 - items.filter((entry) => entry.getId() > 0).length,
       refreshItems() {},
     }),
   };
   return player;
 }
+
+test("the fake inventory preserves slots and reuses the first empty slot", () => {
+  const player = createPlayer({ inventory: [ItemIdentifiers.BLACK_MASK, ItemIdentifiers.EARMUFFS, ItemIdentifiers.BLACK_MASK_I_] });
+  const inventory = player.getInventory();
+  const last = player.items[2];
+  inventory.deleteAtSlot(1, 1);
+  assert.deepEqual(player.items.map((entry) => entry.getId()), [ItemIdentifiers.BLACK_MASK, -1, ItemIdentifiers.BLACK_MASK_I_]);
+  assert.equal(player.items[2], last);
+  assert.equal(inventory.getFreeSlots(), 26);
+  inventory.adds(ItemIdentifiers.FACEMASK, 1);
+  assert.deepEqual(player.items.map((entry) => entry.getId()), [ItemIdentifiers.BLACK_MASK, ItemIdentifiers.FACEMASK, ItemIdentifiers.BLACK_MASK_I_]);
+  assert.equal(player.items[2], last);
+  assert.equal(inventory.getFreeSlots(), 25);
+});
 
 test("a slayer helmet adds a sixth to melee accuracy and damage on task only", () => {
   const player = createPlayer({ head: ItemIdentifiers.SLAYER_HELMET });
@@ -118,33 +136,34 @@ test("any component on another assembles the helmet, and a charged mask loses it
     usedWithItem: player.items[0], usedWithItemId: ItemIdentifiers.BLACK_MASK_7_, usedWithItemSlot: 0, handled: false };
   assemble(event);
   assert.equal(event.handled, true);
-  assert.deepEqual(player.items.map((entry) => entry.getId()), [ItemIdentifiers.SLAYER_HELMET]);
+  assert.deepEqual(player.items.map((entry) => entry.getId()), [ItemIdentifiers.SLAYER_HELMET, ...Array(5).fill(-1)]);
 });
 
 test("mask-on-mask retains the existing first-owned fallback", () => {
   const player = createPlayer({ inventory: [ItemIdentifiers.BLACK_MASK, ItemIdentifiers.BLACK_MASK_I_, ...PARTS] });
   assemble({ player, usedItem: player.items[1], usedItemId: ItemIdentifiers.BLACK_MASK_I_, usedItemSlot: 1,
     usedWithItem: player.items[0], usedWithItemId: ItemIdentifiers.BLACK_MASK, usedWithItemSlot: 0, handled: false });
-  assert.deepEqual(player.items.map((entry) => entry.getId()), [ItemIdentifiers.BLACK_MASK_I_, ItemIdentifiers.SLAYER_HELMET]);
+  assert.deepEqual(player.items.map((entry) => entry.getId()), [ItemIdentifiers.SLAYER_HELMET, ItemIdentifiers.BLACK_MASK_I_, ...Array(5).fill(-1)]);
 });
 
 test("scroll on an already imbued mask retains the existing first-owned fallback", () => {
   const player = createPlayer({ inventory: [ItemIdentifiers.BLACK_MASK, ItemIdentifiers.BLACK_MASK_I_, ...PARTS, ItemIdentifiers.SCROLL_OF_IMBUING] });
   assemble({ player, usedItem: player.items[7], usedItemId: ItemIdentifiers.SCROLL_OF_IMBUING, usedItemSlot: 7,
     usedWithItem: player.items[1], usedWithItemId: ItemIdentifiers.BLACK_MASK_I_, usedWithItemSlot: 1, handled: false });
-  assert.deepEqual(player.items.map((entry) => entry.getId()), [ItemIdentifiers.BLACK_MASK_I_, ItemIdentifiers.SLAYER_HELMET_I_]);
+  assert.deepEqual(player.items.map((entry) => entry.getId()), [ItemIdentifiers.SLAYER_HELMET_I_, ItemIdentifiers.BLACK_MASK_I_, ...Array(6).fill(-1)]);
 });
 
 test("assembly needs 55 Crafting and every component", () => {
   const low = createPlayer({ crafting: 54, inventory: [ItemIdentifiers.BLACK_MASK_I_, ...PARTS] });
   assemble({ player: low, usedItemId: ItemIdentifiers.EARMUFFS, usedWithItemId: ItemIdentifiers.FACEMASK, handled: false });
-  assert.equal(low.items.length, 6);
+  assert.deepEqual(low.items.map((entry) => entry.getId()), [ItemIdentifiers.BLACK_MASK_I_, ...PARTS]);
   assert.match(low.messages[0], /Crafting level of 55/);
 
   const missing = createPlayer({ inventory: [ItemIdentifiers.BLACK_MASK_I_, ...PARTS.slice(1)] });
   const event = { player: missing, usedItemId: ItemIdentifiers.FACEMASK, usedWithItemId: ItemIdentifiers.NOSE_PEG, handled: false };
   assemble(event);
   assert.equal(event.handled, false);
+  assert.deepEqual(missing.items.map((entry) => entry.getId()), [ItemIdentifiers.BLACK_MASK_I_, ...PARTS.slice(1)]);
 });
 
 test("assembly needs the Malevolent masquerade unlock", () => {
@@ -152,7 +171,7 @@ test("assembly needs the Malevolent masquerade unlock", () => {
   const event = { player, usedItemId: ItemIdentifiers.EARMUFFS, usedWithItemId: ItemIdentifiers.BLACK_MASK_7_, handled: false };
   assemble(event);
   assert.equal(event.handled, true);
-  assert.equal(player.items.length, 6);
+  assert.deepEqual(player.items.map((entry) => entry.getId()), [ItemIdentifiers.BLACK_MASK_7_, ...PARTS]);
   assert.match(player.messages[0], /Malevolent masquerade/);
 });
 
@@ -170,7 +189,7 @@ test("a scroll of imbuing turns a black mask into its imbued form, keeping its c
   imbue(event);
   assert.equal(event.handled, true);
   assert.equal(mask.getId(), ItemIdentifiers.BLACK_MASK_7_I_);
-  assert.deepEqual(player.items.map((entry) => entry.getId()), [ItemIdentifiers.BLACK_MASK_7_I_]);
+  assert.deepEqual(player.items.map((entry) => entry.getId()), [-1, ItemIdentifiers.BLACK_MASK_7_I_]);
   assert.match(player.messages.at(-1), /black mask/);
 
   const helmet = createPlayer({ inventory: [ItemIdentifiers.SLAYER_HELMET, ItemIdentifiers.SCROLL_OF_IMBUING_2] });
@@ -182,7 +201,7 @@ test("a scroll of imbuing turns a black mask into its imbued form, keeping its c
     usedWithItemId: ItemIdentifiers.SCROLL_OF_IMBUING_2,
     handled: false,
   });
-  assert.deepEqual(helmet.items.map((entry) => entry.getId()), [ItemIdentifiers.SLAYER_HELMET_I_]);
+  assert.deepEqual(helmet.items.map((entry) => entry.getId()), [ItemIdentifiers.SLAYER_HELMET_I_, -1]);
 });
 
 test("a scroll on a component makes the imbued helmet directly", () => {
@@ -197,7 +216,7 @@ test("a scroll on a component makes the imbued helmet directly", () => {
   };
   assemble(event);
   assert.equal(event.handled, true);
-  assert.deepEqual(player.items.map((entry) => entry.getId()), [ItemIdentifiers.SLAYER_HELMET_I_]);
+  assert.deepEqual(player.items.map((entry) => entry.getId()), [ItemIdentifiers.SLAYER_HELMET_I_, ...Array(6).fill(-1)]);
 });
 
 test("a scroll with no mask or helmet is left alone", () => {
@@ -210,7 +229,7 @@ test("a scroll with no mask or helmet is left alone", () => {
   };
   imbue(event);
   assert.equal(event.handled, false);
-  assert.equal(player.items.length, 2);
+  assert.deepEqual(player.items.map((entry) => entry.getId()), [ItemIdentifiers.SCROLL_OF_IMBUING, ItemIdentifiers.EARMUFFS]);
 });
 
 test("a boosted hit does not spam chat; the stats row carries the on-task state", () => {
@@ -256,15 +275,16 @@ test("a worn Slayer helmet's Check is its worn option, not the inventory's Disas
 test("native explicit mask selection preserves an unrelated normal/imbued mask", async t => {
   process.env.DISABLE_PLAYER_BOTS = "1";
   const path = require("node:path");
-  const { CachePipeline } = require("../dist/game/cache/CachePipeline");
+  const { CachePipeline, parseCacheTarget } = require("../dist/game/cache/CachePipeline");
+  const target = require("node:fs").readFileSync(path.resolve(__dirname, "../target.txt"), "utf8").trim();
   const { PluginManager } = require("../dist/plugins/PluginManager");
   const { Player } = require("../dist/game/entity/impl/player/Player");
   const { PlayerSession } = require("../dist/net/PlayerSession");
   const { ClientConnection } = require("../dist/net/NetworkBuilder");
   const { isMembersWorld } = require("../dist/game/definition/WorldDefinition");
   await CachePipeline.initialize();
-  assert.equal(CachePipeline.getActive().name, "osrs-241_2026-10-20");
-  assert.equal(CachePipeline.getActive().revision, 241);
+  assert.equal(CachePipeline.getActive().name, target);
+  assert.equal(CachePipeline.getActive().revision, parseCacheTarget(target).revision);
   assert.equal(isMembersWorld(), true);
   PluginManager.loadFromDirectory(path.resolve(__dirname, "../plugins"));
   const core = PluginManager.getCoreApi(), I = core.ItemIdentifiers;

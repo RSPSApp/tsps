@@ -30,6 +30,16 @@ The whole symbol list is checked against the native catalogue before persisting
 owning an item, an active date or opening Diango does not grant completion.
 This contract does not itself implement an annual activity or tradeable rares.
 
+The four holiday events (Christmas Din-Dins, Easter 2026, Halloween 2025 and the 25th
+Anniversary) reach this service through EventScheduler's `events:grant-reward`
+([event-scheduler.md](event-scheduler.md)). The helper validates the unlock list as part of
+the same all-or-nothing grant that adds the items and records the once-per-account completion
+in `events:completions`. The 25th Anniversary is the exception: it keeps emitting
+`holiday-rewards:unlock` itself after the grant, as before, so a refused unlock is only logged
+and its items still arrive. It also does so in its post-window Diango settlement, which grants
+no items. Older saves' claims are imported into `events:completions` on login, so the helper
+never grants an event its own progress already shows as claimed.
+
 ## Production path and state owners
 
 Native NPC action -> NPC packet/PluginManager name/action dispatcher -> HolidayRewards

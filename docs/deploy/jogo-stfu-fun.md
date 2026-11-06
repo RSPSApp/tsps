@@ -30,6 +30,20 @@ the split is by matcher and priority, not by subdomain:
 | 90 | `PathPrefix(/api/)` | `jogo-server` |
 | 10 | `Host(jogo.stfu.fun)` | `jogo-web` |
 
+**`client/.env` beats the root one, and it is not yours.** Create React App reads
+`client/.env` after the root `.env`, so a local development override there wins
+over production. Building the client with one present ships a client that points
+at `ws://localhost:43594`: it loads, it is branded correctly, and nobody can
+connect. Check before every client build:
+
+```bash
+ls client/.env    # must not exist; keep the dev one as client/.env.localdev
+grep -o 'wss\?://[^"]*' client/build/static/js/main.*.js | sort -u
+```
+
+The second line is the one that matters — it says where the built client will
+actually dial.
+
 **Compile elsewhere, ship the result.** With no swap and ten production
 containers, a webpack build here can get something else killed. Build the client
 and the server on a workstation and copy `client/build` and `server/dist` over.
@@ -76,6 +90,15 @@ PUBLIC_URL=/
 where the upstream project mounts its own client. Overriding it through the
 environment keeps `package.json` identical to upstream, so syncing never
 conflicts over it. Without it every asset 404s at the root.
+
+```
+REACT_APP_WEBRTC_SIGNAL_URL=off
+REACT_APP_BRAND_NAME=OldSchool Idle
+```
+
+`off` stops the client discovering worlds through the shared directory at
+`wss://worlds.rsps.app`, so the server list is this world alone;
+`REACT_APP_BRAND_NAME` is the name the tab title and the login screens print.
 
 `server/data/definitions/world.local.json` turns the idle mode on for new
 accounts. Note the path: it is read relative to `server/`, not from the repo root.

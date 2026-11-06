@@ -531,8 +531,9 @@ export class NPC extends Mobile {
 
     /**
      * The level setCurrentLevels would leave for `skill`, without changing this NPC: the same
-     * stat-drain immunity and 0..base clamp. Content that predicts a pending drain (a second
-     * ranged hit's defence roll) can use it without draining the NPC early.
+     * stat-drain immunity; otherwise floors the level and clamps it to [min(base, configured
+     * minimum), base], where the minimum defaults to 0. Content that predicts a pending drain
+     * (a second ranged hit's defence roll) can use it without draining the NPC early.
      */
     public previewCurrentLevel(skill: Skill, level: number): number {
         if (!Number.isFinite(level)) throw new RangeError("Invalid NPC combat level");

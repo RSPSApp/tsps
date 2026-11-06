@@ -79,6 +79,7 @@ function createPlayer({ head = -1, crafting = 99, inventory = [], helmUnlocked =
     getInventory: () => ({
       getItems: () => items,
       contains: (id) => items.some((entry) => entry.getId() === id),
+      deleteAtSlot: (slot) => { items.splice(slot, 1); },
       deleteNumber: (id) => {
         const index = items.findIndex((entry) => entry.getId() === id);
         if (index >= 0) items.splice(index, 1);
@@ -113,7 +114,8 @@ const PARTS = ["EARMUFFS", "FACEMASK", "NOSE_PEG", "SPINY_HELMET", "ENCHANTED_GE
 
 test("any component on another assembles the helmet, and a charged mask loses its charges", () => {
   const player = createPlayer({ inventory: [ItemIdentifiers.BLACK_MASK_7_, ...PARTS] });
-  const event = { player, usedItemId: ItemIdentifiers.EARMUFFS, usedWithItemId: ItemIdentifiers.BLACK_MASK_7_, handled: false };
+  const event = { player, usedItem: player.items[1], usedItemId: ItemIdentifiers.EARMUFFS, usedItemSlot: 1,
+    usedWithItem: player.items[0], usedWithItemId: ItemIdentifiers.BLACK_MASK_7_, usedWithItemSlot: 0, handled: false };
   assemble(event);
   assert.equal(event.handled, true);
   assert.deepEqual(player.items.map((entry) => entry.getId()), [ItemIdentifiers.SLAYER_HELMET]);
@@ -282,14 +284,16 @@ test("native explicit mask selection preserves an unrelated normal/imbued mask",
   for (const variant of variants) for (const selectedImbued of [false, true])
     for (const reverse of [false, true]) {
       cases.push({ variant, selectedImbued, reverse, order: "single", mode: "assemble" });
-      for (const order of ["selected-first", "other-first"])
+      for (const order of ["selected-first", "other-first"]) {
         cases.push({ variant, selectedImbued, reverse, order, mode: "assemble" });
+        cases.push({ variant, selectedImbued, reverse, order, mode: "assemble", sameForm: true });
+      }
     }
   for (const mode of ["locked", "low-level"])
     cases.push({ variant: variants[0], selectedImbued: true, reverse: false, order: "other-first", mode });
   let index = 1880;
   for (const spec of cases) await t.test(JSON.stringify(spec), async t => {
-    const { variant, selectedImbued, reverse, order, mode } = spec;
+    const { variant, selectedImbued, reverse, order, mode, sameForm = false } = spec;
     const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true,
       send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
     const p = new Player(new PlayerSession(channel));
@@ -333,20 +337,20 @@ test("native explicit mask selection preserves an unrelated normal/imbued mask",
         target: { kind: "inventory", id: b.getId(), slot: targetSlot } }]);
       c.processTurnPackets();
     };
-    const toImbue = selectedImbued ? selected : other;
-    if (toImbue) {
-      const beforeSlot = items().indexOf(toImbue);
+    const toImbue = sameForm ? (selectedImbued ? [selected, other] : []) : [selectedImbued ? selected : other].filter(Boolean);
+    for (const maskToImbue of toImbue) {
+      const beforeSlot = items().indexOf(maskToImbue);
       const scroll = add(I.SCROLL_OF_IMBUING);
-      await use(scroll, toImbue);
-      assert.equal(items()[beforeSlot], toImbue, "native imbue preserves selected object and slot");
-      assert.equal(toImbue.getId(), variant.imbued, "native imbue preserves charge count in its mapped id");
+      await use(scroll, maskToImbue);
+      assert.equal(items()[beforeSlot], maskToImbue, "native imbue preserves selected object and slot");
+      assert.equal(maskToImbue.getId(), variant.imbued, "native imbue preserves charge count in its mapped id");
       assert.equal(inv.getAmount(I.SCROLL_OF_IMBUING), 0);
     }
     for (const id of parts) add(id);
     const component = items()[inv.getSlotForItemId(I.EARMUFFS)];
     const selectedId = selectedImbued ? variant.imbued : variant.plain;
     assert.equal(selected.getId(), selectedId);
-    if (other) assert.equal(other.getId(), selectedImbued ? variant.plain : variant.imbued);
+    if (other) assert.equal(other.getId(), sameForm ? selectedId : selectedImbued ? variant.plain : variant.imbued);
     const state = item => ({ id: item.getId(), amount: item.getAmount(), meta: item.getMeta() });
     const snapshot = () => items().map(item => item && state(item));
     const before = snapshot(), beforeRefs = [...items()], otherState = other && state(other);
@@ -407,7 +411,7 @@ test("native explicit mask selection preserves an unrelated normal/imbued mask",
     }
     assert.equal(items().includes(selected), false, "the selected mask object is consumed");
     for (const id of parts) assert.equal(inv.getAmount(id), 0);
-    assert.equal(inv.getAmount(selectedId), 0);
+    assert.equal(inv.getAmount(selectedId), other && sameForm ? 1 : 0);
     assert.equal(outputs, 1);
     assert.equal(inv.getAmount(selectedImbued ? I.SLAYER_HELMET_I_ : I.SLAYER_HELMET), 1);
     assert.equal(items().filter(item => item && item.getId() > 0).length, other ? 2 : 1);

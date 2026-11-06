@@ -18,8 +18,9 @@ const MESSAGE = {
   EMPTIED: "You empty your basket.",
   EMPTIED_SOME: "You empty as many logs as you can carry.",
   EMPTIED_TO_BANK: "You empty your basket into the bank.",
-  /** Server wording; no partial or refused bank-empty transcript is retained. */
+  /** Ours (not captured). */
   EMPTIED_SOME_TO_BANK: "You empty some of your basket's contents into the bank.",
+  /** Ours (not captured). */
   BANK_NO_ROOM: "Your bank cannot hold the remaining contents of your basket.",
   /** Ours (not captured). */
   NO_LOGS: "You have no logs to put in the basket.",

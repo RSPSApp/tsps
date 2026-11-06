@@ -90,16 +90,29 @@ test("the diary is credited by each ordinary success event", (t) => {
   const f = diaryFixture(t);
   f.api.emitCustomEvent("apothecary:strength-potion-made", { player: f.player, amount: 1 });
   f.api.emitCustomEvent("gertrude:kitten-colour-chosen", { player: f.player, colour: 0 });
-  f.api.emitCustomEvent("asyff:spottier-cape-traded", { player: f.player });
   f.api.emitCustomEvent("garden-of-tranquillity:white-tree-fruit", { player: f.player });
   f.api.emitCustomEvent("farming:roots", {
     player: f.player, crop: "YEW", itemId: D.YEW_ROOTS, amount: 2, patch: { ...D.VARROCK_TREE_PATCH },
   });
   assert.equal(f.taskKeys.has(D.TASK.apothecary), true);
   assert.equal(f.taskKeys.has(D.TASK.kittenColour), true);
-  assert.equal(f.taskKeys.has(D.TASK.spottierCape), true);
   assert.equal(f.taskKeys.has(D.TASK.whiteTreeFruit), true);
   assert.equal(f.taskKeys.has(D.TASK.yewRoots), true);
+});
+
+test("the spottier cape task needs Asyff's trade and then the cape worn", (t) => {
+  const f = diaryFixture(t);
+  f.player.getEquipment().setItem(core.Equipment.CAPE_SLOT, new Item(Y.SPOTTIER_CAPE, 1));
+  f.api.emitCustomEvent("equipment:changed", { player: f.player });
+  assert.equal(f.taskKeys.has(D.TASK.spottierCape), false, "a cape from elsewhere");
+
+  f.player.getEquipment().setItem(core.Equipment.CAPE_SLOT, null);
+  f.api.emitCustomEvent("asyff:spottier-cape-traded", { player: f.player, capeId: Y.SPOTTIER_CAPE });
+  assert.equal(f.taskKeys.has(D.TASK.spottierCape), false, "traded but not worn");
+
+  f.player.getEquipment().setItem(core.Equipment.CAPE_SLOT, new Item(Y.SPOTTIER_CAPE, 1));
+  f.api.emitCustomEvent("equipment:changed", { player: f.player });
+  assert.equal(f.taskKeys.has(D.TASK.spottierCape), true);
 });
 
 test("only a Varrock Palace yew harvest of at least two roots credits the diary", (t) => {

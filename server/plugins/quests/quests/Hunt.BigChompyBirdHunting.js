@@ -107,8 +107,11 @@ module.exports = function createChompyHunt(api, callbacks = {}) {
       const player = bait.player;
       if (player.isRegistered() && player.getPrivateArea() === bait.area && player.getLocation().isWithinDistance(bait.at, 16)) {
         player.getPacketSender().sendGraphic(new Graphic(burstGraphic), bait.at);
-        if (player.getHitpoints() > 0 && player.getLocation().isWithinDistance(bait.at, 1)) {
-          player.getCombat().getHitQueue().addPendingDamage([new HitDamage(1 + Math.floor(Math.random() * 2), HitMask.RED)]);
+        // The burst cannot kill: damage is clamped to leave the owner at 1 HP, and skipped at 1 HP.
+        const damage = player.getLocation().isWithinDistance(bait.at, 1)
+          ? Math.min(1 + Math.floor(Math.random() * 2), player.getHitpoints() - 1) : 0;
+        if (damage >= 1) {
+          player.getCombat().getHitQueue().addPendingDamage([new HitDamage(damage, HitMask.RED)]);
         }
       }
     }

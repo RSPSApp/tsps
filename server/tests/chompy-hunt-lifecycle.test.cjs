@@ -217,3 +217,17 @@ test("burst damage is restricted to the owning player on the same plane and area
     f.hunt.shutdown();
   }
 });
+
+test("burst damage cannot kill the owner: skipped at 1 HP, clamped to leave 1 HP, full otherwise", t => {
+  for (const [hp, expected] of [[1, 1], [2, 1], [10, 8]]) {
+    const f = setup(t);
+    t.mock.method(Math, "random", () => 0.99);
+    f.hunt.place(f.player);
+    f.player.setHitpoints(hp);
+    tick(100);
+    f.player.getCombat().getHitQueue().process(core.World.getProcessCycle());
+    assert.equal(f.player.getHitpoints(), expected, `owner at ${hp} HP`);
+    f.hunt.shutdown();
+    t.mock.restoreAll();
+  }
+});

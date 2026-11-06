@@ -5,6 +5,8 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { test, before, beforeEach, afterEach } = require('node:test');
+// Accounts writes its file to this path; set it before `dist` is required.
+process.env.TSPS_ACCOUNTS_FILE = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'accounts-')), 'accounts.json');
 const { Server } = require('../dist/Server');
 Server.installProductionPathResolver();
 
@@ -392,4 +394,13 @@ test('a write that fails leaves the old name and says so', () => {
   assert.equal(alice.getDisplayName(), 'Alice');
   assert.equal(events.length, 0);
   assert.equal(errors.length, 1);
+});
+
+test('a name belonging to an account character is in use even without a save', () => {
+  const { Accounts } = require('../dist/game/entity/impl/player/Accounts');
+  Accounts.reset(); Accounts.ensure('Owner', 1); Accounts.addCharacter('owner', 'Unentered', 2);
+  GameConstants.PLAYER_PERSISTENCE = { ...GameConstants.PLAYER_PERSISTENCE, exists: () => false };
+  assert.equal(DisplayNames.loginNameInUse('unentered'), true);
+  assert.equal(DisplayNames.refusal('someone', 'Unentered'), 'That name is not available.');
+  assert.equal(DisplayNames.loginNameInUse('nobody'), false);
 });

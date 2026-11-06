@@ -54,6 +54,7 @@ Each rule comes from the rsprox capture database (https://rsprox.net/database) o
 | No presets: this server's PvP loadouts hand out items. Covers `::presets`, the interface, and the automatic opening after a death, which is skipped quietly | all | "As an Ironman, you cannot use presets." *(ours)* |
 | No staking in the Duel Arena; a free duel is still allowed (Wiki: Ironmen can't stake) | all | "As an Ironman, you cannot take part in a staked duel." *(ours)* |
 | No bank (the Ironman tutor, captured) | Ultimate | "As an Ultimate Ironman, you cannot use the bank." *(ours)* |
+| No Seed Vault access ([Jagex update](https://oldschool.runescape.wiki/w/Update%3AThe_Seed_Vault)) | Ultimate | no Vault-specific line |
 | All items dropped on death, none kept (the Ironman tutor, captured) | Ultimate | none |
 | One life: a dangerous death makes them a standard Ironman; a safe death (a minigame) doesn't | Hardcore | "You have fallen as a Hardcore Ironman. You are now a standard Ironman." *(ours)* |
 
@@ -94,4 +95,4 @@ Generic additions for these rules:
 - **Other limits:**
   - Nightmare Zone group dreams;
   - other group-boss loot exceptions (raids, Wintertodt…);
-  - the many Ultimate storage limits (seed vault, looting bag on PvP worlds, the POH costume room…).
+  - other Ultimate storage limits (looting bag on PvP worlds, the POH costume room…).

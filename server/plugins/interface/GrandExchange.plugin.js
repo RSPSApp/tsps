@@ -10,6 +10,10 @@ const { ItemIdentifiers } = require("../../src/main/typescript/elvarg/util/ItemI
 
 // Active cache: ge_offers (465), ge_offers_side (467), scripts 773/779/794.
 const GE = 465;
+const GE_HISTORY = 383;
+const GE_HISTORY_RESET_SCRIPT = 1644;
+const GE_HISTORY_ENTRY_SCRIPT = 1645;
+const GE_HISTORY_REFRESH_SCRIPT = 1646;
 const GE_COLLECT = 402;
 const collectUid = (child) => (GE_COLLECT << 16) | child;
 const SIDE = 467;
@@ -36,6 +40,8 @@ const MARKET_STRIDE = 7;
 const FINISHED = 5;
 const OFFERS_ATTRIBUTE = "grand-exchange-offers";
 const LIMITS_ATTRIBUTE = "grand-exchange-limits";
+const HISTORY_ATTRIBUTE = "grand-exchange-history";
+const HISTORY_LIMIT = 40;
 const LIMIT_WINDOW_MS = 4 * 60 * 60 * 1000;
 const OFFER_MIN_DELAY_MS = 5_000;
 // Milliseconds; applies to newly placed offers.
@@ -265,12 +271,37 @@ function completedOffers(player) {
   return slots;
 }
 
+function tradeHistory(player) {
+  let history = player.getAttribute(HISTORY_ATTRIBUTE);
+  if (!Array.isArray(history)) player.setAttribute(HISTORY_ATTRIBUTE, history = []);
+  return history;
+}
+
 function saveOffers(player) {
   GameConstants.PLAYER_PERSISTENCE.save(player, "grand-exchange");
 }
 
+function recordHistory(player, offer) {
+  if (!offer || offer.historyRecorded || !offer.finished || offer.aborted) return false;
+  const itemId = Number(offer.itemId);
+  const quantity = Number(offer.quantity);
+  const total = Number(offer.total);
+  if (!Number.isInteger(itemId) || itemId <= 0 || !Number.isInteger(quantity) || quantity <= 0 ||
+      !Number.isSafeInteger(total) || total < 0) return false;
+
+  const completedAt = Number(offer.completedAt) || Number(offer.completesAt) || Date.now();
+  const history = tradeHistory(player);
+  history.unshift({ itemId, sell: Boolean(offer.sell), quantity, total, completedAt });
+  history.length = Math.min(history.length, HISTORY_LIMIT);
+  offer.historyRecorded = true;
+  return true;
+}
+
 function scheduleCompletion(player, offer) {
-  if (offer.finished || offer.completesAt === null) return;
+  if (offer.finished || offer.completesAt === null) {
+    if (recordHistory(player, offer)) saveOffers(player);
+    return;
+  }
   let timers = completionTimers.get(player);
   if (!timers) completionTimers.set(player, timers = new Set());
   const timer = setTimeout(() => {
@@ -280,6 +311,8 @@ function scheduleCompletion(player, offer) {
     // re-save and re-announce an already-completed offer.
     if (offer.finished) return;
     offer.finished = true;
+    offer.completedAt = Date.now();
+    recordHistory(player, offer);
     saveOffers(player);
     refreshCollectionBox(player);
     const sender = player.getPacketSender();
@@ -291,6 +324,15 @@ function scheduleCompletion(player, offer) {
     sender.sendMessage(`${offer.sell ? "Sold" : "Bought"} ${offer.quantity.toLocaleString("en-US")} x ${ItemDefinition.forId(offer.itemId).getName()}. Click Collect.`);
   }, Math.max(0, offer.completesAt - Date.now()));
   timers.add(timer);
+}
+
+function restoreCompletedOffers({ player }) {
+  let historyUpdated = false;
+  for (const offer of Object.values(completedOffers(player))) {
+    if (offer.finished) historyUpdated = recordHistory(player, offer) || historyUpdated;
+    else scheduleCompletion(player, offer);
+  }
+  if (historyUpdated) saveOffers(player);
 }
 
 function marketVarps(slot, offer) {
@@ -399,6 +441,23 @@ function home(player) {
     .sendVarbit(QUANTITY, 1)
     .sendVarpLong(PRICE_LONG, 1)
     .sendVarbit(SELECTED_SLOT, 0);
+}
+
+function showHistory(player) {
+  const sender = player.getPacketSender();
+  sender.sendClientScript(2524, -1, -1)
+    .sendSubInterface(MAIN_MODAL, GE_HISTORY, 0)
+    .sendClientScript(GE_HISTORY_RESET_SCRIPT);
+  const now = Date.now();
+  for (const [index, entry] of tradeHistory(player).slice(0, HISTORY_LIMIT).entries()) {
+    const completedAt = Number(entry.completedAt) || now;
+    const minutesAgo = Math.max(0, Math.floor((now - completedAt) / 60_000));
+    // Script 1645 fills a GE history row: index, item, buy/sell, quantity, total price, minutes ago.
+    sender.sendClientScript(GE_HISTORY_ENTRY_SCRIPT, index, entry.itemId, entry.sell ? 1 : 0,
+      entry.quantity, entry.total, minutesAgo);
+  }
+  sender.sendClientScript(GE_HISTORY_REFRESH_SCRIPT)
+    .sendInterfaceFlagsRange((GE_HISTORY << 16) | 3, 0, 234, 1026);
 }
 
 function closeSearch(player) {
@@ -779,6 +838,7 @@ function handleExchangeButton({ player, buttonId, slot, action }) {
     return true;
   }
   if (action !== 1) return true;
+  if (buttonId === uid(3)) { showHistory(player); return true; }
   if (buttonId === uid(4)) { home(player); return true; }
   const child = buttonId & 0xffff;
   if (child >= 7 && child <= 14) {
@@ -827,7 +887,7 @@ function handleExchangeButton({ player, buttonId, slot, action }) {
 
 const COLLECTION_BUTTONS = Array.from({ length: 10 }, (_, i) => collectUid(i + 3));
 // Child 34 is the offer setup panel; its quantity and price controls are dynamic children (slot 1-13).
-const EXCHANGE_BUTTONS = [uid(4), uid(6), uid(23), uid(24), uid(26), uid(30), uid(34), ...Array.from({ length: 8 }, (_, i) => uid(i + 7))];
+const EXCHANGE_BUTTONS = [uid(3), uid(4), uid(6), uid(23), uid(24), uid(26), uid(30), uid(34), ...Array.from({ length: 8 }, (_, i) => uid(i + 7))];
 
 module.exports = {
   name: "GrandExchange",
@@ -846,6 +906,9 @@ module.exports = {
     remainingLimit,
     recordLimit,
     LIMITS_ATTRIBUTE,
+    HISTORY_ATTRIBUTE,
+    tradeHistory,
+    recordHistory,
     LIMIT_WINDOW_MS,
     OFFERS_ATTRIBUTE,
     setMarketData: (data) => {
@@ -858,9 +921,8 @@ module.exports = {
     loadMarketData();
     api.persistAttribute(OFFERS_ATTRIBUTE, {});
     api.persistAttribute(LIMITS_ATTRIBUTE, {});
-    api.onPlayerLogin(({ player }) => {
-      for (const offer of Object.values(completedOffers(player))) scheduleCompletion(player, offer);
-    });
+    api.persistAttribute(HISTORY_ATTRIBUTE, []);
+    api.onPlayerLogin(restoreCompletedOffers);
     api.onPlayerProcess(({ player }) => {
       if (searching.has(player) && player.getInterfaceId() !== GE) closeSearch(player);
     });

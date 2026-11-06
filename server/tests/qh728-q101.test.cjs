@@ -61,6 +61,7 @@ function harness({ prayer = 31, prayerCurrent = prayer, barcrawl = true } = {}) 
   const sender = new Proxy({
     sendConfig(id, value) { configs.set(id, value); return sender; },
     sendInterface(groupId) { interfaces.push(groupId); return sender; },
+    getSubInterfaceAt() { return undefined; },
   }, { get(target, key) { return key in target ? target[key] : () => sender; } });
   let location = new core.Location(0, 0, 0);
   const inventory = {

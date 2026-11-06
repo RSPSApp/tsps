@@ -410,3 +410,33 @@ test('Runeversi draw, rematch, resign, modal replacement and logout clean up exa
   m=await match(a,b,'runeversi');PM.emitPlayerLogout({player:b,username:b.getUsername()});assert.equal(m.state.result.winner,0);
   assert.equal(Room.matchOf(a),undefined);assert.equal(Room.matchOf(b),undefined);
 });
+
+for (const game of ['runelink','runeversi']) test(`native ${game} occupied-table View-game is read-only and viewer Close cannot forfeit either player`, async () => {
+  const a=actor(), b=actor(), v=actor();
+  a.setDisplayName('Board One'); b.setDisplayName('Board Two');
+  const m=await match(a,b,game);
+  const table=m.allocation.playingTable, at=table.getLocation();
+  v.moveTo(at.clone().transform(0,-1));placementTick();received(v);
+  const frame=Buffer.alloc(8);frame[0]=96;
+  frame[1]=(at.getX()+128)&255;frame[2]=at.getX()>>>8;
+  frame.writeUInt16LE(at.getY(),3);frame[5]=0;
+  frame[6]=table.getId()>>>8;frame[7]=(table.getId()+128)&255;
+  await wire(v,frame);
+  const Viewer=require('../plugins/minigames/gamesroom/Spectator.GamesRoom');
+  assert.ok(Viewer.viewOf(v)===m, JSON.stringify({position:v.getLocation(),interface:v.getInterfaceId(),table:table.getId(),decoded:require('../dist/net/protocol/ClientProtocol').decodeClientPackets(frame)}));
+  const packets=received(v), uid=name=>core.CacheDefinitions.getComponentId(`boardgames_${game}:${name}`);
+  for(const name of ['resign','offer_draw','turn','turn_name','sandtimer'])assert.equal(hiddenValue(packets,uid(name)),1,name);
+  assert.equal(hiddenValue(packets,uid('close')),0);
+  if (game === 'runelink') for(let column=0;column<7;column++)assert.equal(flagValue(packets,uid(`column${column}`)),0);
+  else for(let to=0;to<64;to++)assert.equal(flagValue(packets,uid(`square_${to}`)),0);
+  assert.equal(textValue(packets,uid('p1_name')),'Board One');
+  assert.equal(textValue(packets,uid('p2_name')),'Board Two');
+  const count=m.state.board.filter(Boolean).length, move=Rules.legalMoves(m.state)[0];
+  const control=`boardgames_${game}:${game === 'runelink' ? `column${move.column}` : `square_${move.to}`}`;
+  await click(v,control);await click(v,`boardgames_${game}:resign`);await click(v,`boardgames_${game}:offer_draw`);
+  assert.equal(m.state.board.filter(Boolean).length,count);assert.equal(m.finished,undefined);assert.equal(m.drawOffer,null);
+  await click(m.players[m.state.turn],control);
+  assert.equal(m.state.board.filter(Boolean).length,count+1);assert.ok(received(v).some(p=>p.id===110));
+  await click(v,`boardgames_${game}:close`);
+  assert.equal(Viewer.viewOf(v),undefined);assert.equal(Room.matchOf(a),m);assert.equal(Room.matchOf(b),m);
+});

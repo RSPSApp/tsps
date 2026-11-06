@@ -91,7 +91,7 @@ function pieceId(game, selection, king) {
   return required(cache.getObjId(name), name);
 }
 
-function drawBoard(player, match) {
+function drawBoard(player, match, readOnly = false) {
   const info = GAMES[gameName(match.game)];
   const isDraughts = match.game === "draughts";
   const board = match.state.board;
@@ -109,9 +109,9 @@ function drawBoard(player, match) {
   const slots = match.game === "runeversi" ? [] : Array.from({ length: board.length }, (_, slot) => ({ slot, itemId: placeholder, quantity: 1 }));
   sender.sendInterfaceScript(INVENTORY_UPDATE_SCRIPT,
     [boardUid, inventory, info.width, info.height, 0, -1,
-      info.squareInput ? "Select square" : "", "", "", "", "", "", "", "", ""],
+      info.squareInput && !readOnly ? "Select square" : "", "", "", "", "", "", "", "", ""],
     undefined, undefined, { [inventory]: { capacity: board.length, slots } });
-  sender.sendInterfaceFlagsRange(boardUid, 0, board.length - 1, info.squareInput ? 1 << 1 : 0);
+  sender.sendInterfaceFlagsRange(boardUid, 0, board.length - 1, info.squareInput && !readOnly ? 1 << 1 : 0);
   for (let slot = 0; slot < board.length; slot++) {
     const value = board[slot];
     const item = value ? pieceId(match.game, match.settings.pieces[value > 0 ? 0 : 1], Math.abs(value) === 2) : -1;
@@ -125,12 +125,12 @@ function drawBoard(player, match) {
     sender.sendInterfaceScript(RUNEVERSI_GRID_SCRIPT, [], undefined, undefined,
       { [inventory]: { capacity: board.length, slots: actualSlots } });
     const legal = new Set(Rules.legalMoves(match.state).map(move => move.to));
-    const active = match.players[match.state.turn] === player && !match.finished;
+    const active = !readOnly && match.players[match.state.turn] === player && !match.finished;
     for (let to = 0; to < 64; to++) sender.sendInterfaceFlagsRange(
       component(`boardgames_runeversi:square_${to}`), -1, -1, active && legal.has(to) ? 2 : 0);
   }
   const selected = match.selected?.get(player);
-  if (isDraughts && Number.isInteger(selected) && selected >= 0 && selected < board.length) {
+  if (!readOnly && isDraughts && Number.isInteger(selected) && selected >= 0 && selected < board.length) {
     sender.sendInterfaceScript(OUTLINE_SWAPPER_SCRIPT, [boardUid, selected, 2]);
   }
 }
@@ -206,4 +206,37 @@ function showResult(player, match) {
   }
 }
 
-module.exports = { configure, component, group, optionsGroup, showSelection, showOptions, showMatch, refreshMatch, showResult };
+// Rev241 has no dedicated viewer group. Reuse its native board and Close,
+// retaining the historical read-only view's absence of player/turn controls.
+// Current OSRS viewer timing/layout has no local capture; no auto-close timer
+// or spectator permissions are inferred from the historical implementation.
+function refreshSpectator(player, match) {
+  const prefix = `boardgames_${gameName(match.game)}`;
+  const sender = player.getPacketSender();
+  for (let side = 0; side < 2; side++) {
+    text(player, `${prefix}:p${side + 1}_name`, nameOf(match.players[side]));
+    sender.sendInterfaceModel(component(`${prefix}:p${side + 1}_rune`), pieceId(match.game, match.settings.pieces[side], false), 600);
+  }
+  drawBoard(player, match, true);
+  if (match.finished) showResult(player, match);
+  else {
+    text(player, `${prefix}:status1`, "");
+    text(player, `${prefix}:status2`, "");
+  }
+}
+function showSpectator(player, match) {
+  const prefix = `boardgames_${gameName(match.game)}`;
+  varbit(player, "ingame", 0);
+  player.getPacketSender().sendInterface(group(match.game));
+  for (const name of ["resign", "offer_draw", "turn", "turn_name", "sandtimer", "winner", "runeflash"]) {
+    if (cache.getComponentId(`${prefix}:${name}`) != null) hidden(player, `${prefix}:${name}`, true);
+  }
+  hidden(player, `${prefix}:close`, false);
+  if (gameName(match.game) === "runelink") {
+    for (let column = 0; column < 7; column++) player.getPacketSender()
+      .sendInterfaceFlagsRange(component(`${prefix}:column${column}`), -1, -1, 0);
+  }
+  refreshSpectator(player, match);
+}
+
+module.exports = { configure, component, group, optionsGroup, showSelection, showOptions, showMatch, refreshMatch, showResult, showSpectator, refreshSpectator };

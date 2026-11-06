@@ -5,6 +5,7 @@ const Screen = require('./Interface.GamesRoom');
 const Tables = require('./Tables.GamesRoom');
 const Access = require('./Access.GamesRoom');
 const Seating = require('./Seating.GamesRoom');
+const Spectator = require('./Spectator.GamesRoom');
 const RANK_ATTRIBUTES = Object.fromEntries(Object.keys(GAMES).map(game => [game, `games-room:${game}-rank`]));
 const SETTINGS_ATTRIBUTE = 'games-room:settings';
 const SECONDS = [15,30,60,120];
@@ -34,7 +35,7 @@ function available(player) {
 }
 function pairValid(a,b) {
   const aRoom=a&&Access.roomGame(a.getLocation()),bRoom=b&&Access.roomGame(b.getLocation());
-  return a!==b&&available(a)&&available(b)&&aRoom===bRoom&&a.getLocation().getZ()===b.getLocation().getZ()&&a.getLocation().getDistance(b.getLocation())<=16;
+  return a!==b&&!Spectator.viewOf(a)&&!Spectator.viewOf(b)&&available(a)&&available(b)&&aRoom===bRoom&&a.getLocation().getZ()===b.getLocation().getZ()&&a.getLocation().getDistance(b.getLocation())<=16;
 }
 function invitation(a,b) { return invitations.get(a)?.get(b); }
 function removeInvitation(inv) {
@@ -113,6 +114,7 @@ function start(inv,recipientSettings) {
 function finish(match,winner,reason,{departing=null,returnDeparting=false}={}) {
   if(match.finished)return;
   match.finished=true;match.state.result={winner,reason};
+  Spectator.refresh(match);
   Seating.release(match);
   match.allocation.release();
   // Four completed turns before ranking comes only from the historical reference.
@@ -133,6 +135,7 @@ function finish(match,winner,reason,{departing=null,returnDeparting=false}={}) {
   }
 }
 function leave(player) {
+  Spectator.leave(player, true);
   cancelInvitations(player);menus.delete(player);results.delete(player);
   const match=matches.get(player);if(match)finish(match,1-match.players.indexOf(player),'Opponent left the game.',{departing:player});
 }
@@ -150,10 +153,12 @@ function move(player,match,move) {
   if(match.state.forced==null||match.state.result)match.turns++;
   match.deadline=now()+ticks(match.settings.seconds);
   for(const p of match.players)Screen.refreshMatch(p,match);
+  Spectator.refresh(match);
   if(match.state.result)finish(match,match.state.result.winner,match.state.result.reason);
   return true;
 }
 function click(event) {
+  if(Spectator.click(event))return;
   const {player,buttonId}=event,group=buttonId>>>16;
   const supported=[core.CacheDefinitions.getInterfaceId('boardgames_challenge'),...Object.keys(GAMES).flatMap(game=>[Screen.group(game),Screen.optionsGroup(game)])];
   if(!supported.includes(group))return;event.handled=true;
@@ -164,7 +169,8 @@ function click(event) {
     if(is(`${prefix}:resign`))return finish(match,1-match.players.indexOf(player),'Resigned.');
     if(is(`${prefix}:offer_draw`)) {
       if(match.drawOffer&&match.drawOffer!==player)return finish(match,null,'Draw agreed.');
-      match.drawOffer=player;for(const p of match.players)Screen.refreshMatch(p,match);return;
+      match.drawOffer=player;for(const p of match.players)Screen.refreshMatch(p,match);
+      Spectator.refresh(match);return;
     }
     if(match.game==='runelink') {
       for(let col=0;col<7;col++)if(is(`${prefix}:column${col}`))return move(player,match,{column:col});
@@ -197,6 +203,7 @@ function click(event) {
   }
 }
 function closed({player,interfaceId}) {
+  Spectator.closed({player,interfaceId});
   const match=matches.get(player);
   if(match&&interfaceId===Screen.group(match.game))return finish(match,1-match.players.indexOf(player),'Game closed.',{departing:player,returnDeparting:true});
   const menu=menus.get(player);
@@ -204,6 +211,7 @@ function closed({player,interfaceId}) {
   const result=results.get(player);if(result&&interfaceId===Screen.group(result.game))results.delete(player);
 }
 function opened({player,groupId,targetUid}) {
+  Spectator.opened({player,groupId,targetUid});
   if(targetUid!==core.CacheDefinitions.getComponentId('toplevel_osrs_stretch:mainmodal'))return;
   const match=matches.get(player);
   if(match&&groupId!==Screen.group(match.game))finish(match,1-match.players.indexOf(player),'Game replaced.',{departing:player,returnDeparting:true});
@@ -217,6 +225,7 @@ function bootstrap({player}) {
   for(const game of Object.keys(GAMES))player.getPacketSender().sendConfig(core.CacheDefinitions.getVarpId(`boardgames_${game}_rank`),rank(player,game));
 }
 function processPlayer(player) {
+  Spectator.process(player);
   if(!player.isPlayer())return;
   for(const list of invitations.values())for(const inv of [...list.values()])if((inv.from===player||inv.to===player)&&!pairValid(inv.from,inv.to))removeInvitation(inv);
   const match=matches.get(player);if(!match)return;
@@ -231,11 +240,16 @@ function processPlayer(player) {
 }
 function shutdown() {
   for(const match of new Set(matches.values()))finish(match,null,'Server shutdown.');
-  invitations.clear();menus.clear();results.clear();
+  Spectator.shutdown();invitations.clear();menus.clear();results.clear();
 }
+function matchAt(object) {
+  return [...new Set(matches.values())].find(match=>!match.finished&&match.allocation.playingTable===object);
+}
+function prepareViewer(player) { cancelInvitations(player);menus.delete(player);results.delete(player); }
 function attach(pluginApi) {
   api=pluginApi;core=api.core;Screen.configure(core);Tables.configure(core);Seating.configure(core);
   Access.attach(api,{rank});
+  Spectator.attach(api,{available,matchAt,prepare:prepareViewer});
   class GamesRoomArea extends core.Area {
     postEnter(p) {if(p.isPlayer()){Access.enforce(p);p.getPacketSender().sendPlayerOption(4,'Challenge',false);}}
     postLeave(p) {if(p.isPlayer()){leave(p);p.getPacketSender().sendPlayerOption(4,'null',false);}}

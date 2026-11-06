@@ -44,7 +44,6 @@ test('a deleted name is tombstoned for good and survives a restart', () => {
   assert.equal(Accounts.isDeleted('ZEZ_ALT'), true, 'key normalisation');
   Accounts.ensure('Other', 1300);
   assert.throws(() => Accounts.addCharacter('other', 'Zez Alt'), /deleted/);
-  assert.throws(() => Accounts.addCharacter('zezima', 'zez alt'), /deleted/, 'not even by its own account');
   assert.throws(() => Accounts.ensure('Zez Alt'), /deleted/, 'nor as a new login');
   Accounts.reset();
   assert.deepEqual(Accounts.deletedOf('zez alt'), { name: 'Zez Alt', account: 'zezima', deletedAt: 1200 });
@@ -123,4 +122,55 @@ test('a structural write carries the pending last-played time', () => {
   Accounts.ensure('Other', 4200);
   Accounts.reset();
   assert.equal(Accounts.charactersOf('zezima')[0].lastPlayedAt, 4000, 'survives a restart');
+});
+
+test('the account that deleted a name may create it again, which removes its tombstone', () => {
+  Accounts.ensure('Zezima', 1000); Accounts.ensure('Other', 1000);
+  Accounts.addCharacter('zezima', 'Zez Alt', 1100);
+  Accounts.removeCharacter('zezima', 'Zez Alt', 1200);
+  assert.throws(() => Accounts.addCharacter('other', 'Zez Alt'), /deleted/, 'another account still cannot');
+  const again = Accounts.addCharacter('zezima', 'ZEZ ALT', 1300);
+  assert.equal(again.name, 'ZEZ ALT');
+  assert.equal(Accounts.isDeleted('zez alt'), false);
+  assert.equal(Accounts.accountOf('zez alt'), 'zezima');
+  Accounts.reset();
+  assert.equal(Accounts.isDeleted('zez alt'), false, 'in the same write');
+  assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')).deleted, {});
+});
+
+test('a tombstone from before it recorded its account is claimable by nobody', () => {
+  fs.writeFileSync(file, JSON.stringify({ accounts: { zezima: { createdAt: 1, characters: [{ name: 'Zezima', createdAt: 1, lastPlayedAt: 0 }] } }, deleted: { old: { name: 'Old', deletedAt: 5 } } }));
+  assert.throws(() => Accounts.addCharacter('zezima', 'Old'), /deleted/);
+  assert.equal(Accounts.deletedOf('old').account, '');
+});
+
+test('an account holds at most MAX_TOMBSTONES_PER_ACCOUNT tombstones', () => {
+  assert.equal(Accounts.MAX_TOMBSTONES_PER_ACCOUNT, 6);
+  Accounts.ensure('Zezima', 1000);
+  for (let i = 0; i < Accounts.MAX_TOMBSTONES_PER_ACCOUNT; i++) {
+    assert.equal(Accounts.canDelete('zezima'), true);
+    Accounts.addCharacter('zezima', 'Burner ' + i, 1100 + i);
+    Accounts.removeCharacter('zezima', 'Burner ' + i, 1200 + i);
+  }
+  assert.equal(Accounts.deletedCountOf('zezima'), 6);
+  assert.equal(Accounts.canDelete('zezima'), false);
+  Accounts.addCharacter('zezima', 'Seventh', 1300);
+  assert.throws(() => Accounts.removeCharacter('zezima', 'Seventh', 1400), /too many/);
+  assert.deepEqual(Accounts.charactersOf('zezima').map((c) => c.name), ['Zezima', 'Seventh'], 'nothing removed');
+  assert.equal(Accounts.isDeleted('Seventh'), false);
+  // Re-creating one of its own frees a tombstone.
+  Accounts.addCharacter('zezima', 'Burner 0', 1500);
+  assert.equal(Accounts.canDelete('zezima'), true);
+});
+
+test('releaseDeleted frees a tombstoned name for anyone', () => {
+  Accounts.ensure('Zezima', 1000); Accounts.addCharacter('zezima', 'Zez Alt', 1100);
+  Accounts.removeCharacter('zezima', 'Zez Alt', 1200);
+  assert.equal(Accounts.releaseDeleted('Nobody'), undefined);
+  assert.deepEqual(Accounts.releaseDeleted('zez_alt'), { name: 'Zez Alt', account: 'zezima', deletedAt: 1200 });
+  assert.equal(Accounts.isDeleted('zez alt'), false);
+  Accounts.reset();
+  assert.equal(Accounts.isDeleted('zez alt'), false, 'written');
+  Accounts.ensure('Other', 1300);
+  assert.equal(Accounts.addCharacter('other', 'Zez Alt', 1400).name, 'Zez Alt');
 });

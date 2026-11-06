@@ -1203,8 +1203,8 @@ export class ClientConnection {
     let deletedName = false;
     try {
       const owner = Accounts.accountOf(typedName);
-      // A deleted character's name is never claimed again: its display names, clan rank and
-      // punishments are still keyed by it.
+      // A deleted character's name is never a new login (only its own account re-creates it):
+      // its display names, clan rank and punishments are still keyed by it.
       deletedName = owner === undefined && Accounts.isDeleted(typedName);
       account = owner ?? Accounts.key(typedName);
       primaryName = Accounts.primaryOf(account) ?? typedName;
@@ -1485,15 +1485,16 @@ export class ClientConnection {
         this.send(encodeCharacterResult(false, 2, "Names are 1 to 12 letters, numbers and spaces."));
         return;
       }
-      // Taken: another account's character, save, online or pending login, a deleted character's
-      // name (kept for good), or another account's current or held display name (the shared namespace).
+      // Taken: another account's character, save, online or pending login, a name another account
+      // deleted (kept reserved), or another account's current or held display name (the shared
+      // namespace). A name this account deleted comes back to it.
       const nameKey = DisplayNames.key(name);
-      if (Accounts.isDeleted(nameKey)) {
+      if (Accounts.isDeleted(nameKey) && !Accounts.deletedBy(nameKey, pending.account)) {
         this.send(encodeCharacterResult(false, 1, "That name belonged to a deleted character and can't be used again."));
         return;
       }
       const owner = DisplayNames.ownerOf(nameKey);
-      if ((owner !== undefined && owner !== nameKey) || DisplayNames.loginNameInUse(nameKey)) {
+      if ((owner !== undefined && owner !== nameKey) || DisplayNames.loginNameInUse(nameKey, pending.account)) {
         this.send(encodeCharacterResult(false, 1, "That name is not available."));
         return;
       }
@@ -1539,6 +1540,19 @@ export class ClientConnection {
     }
     if (DisplayNames.key(String(rawConfirm ?? "")) !== DisplayNames.key(character.name)) {
       this.send(encodeCharacterResult(false, 6, "The name you typed does not match."));
+      return;
+    }
+    // Each delete reserves its name; an account can only hold so many. Refused before any save goes.
+    let canDelete: boolean;
+    try {
+      canDelete = Accounts.canDelete(pending.account);
+    } catch (error) {
+      console.error(`[login] failed to read the deleted names of ${pending.account}`, error);
+      this.send(encodeCharacterResult(false, 8, "The character could not be deleted."));
+      return;
+    }
+    if (!canDelete) {
+      this.send(encodeCharacterResult(false, 11, "You have deleted too many characters. Ask a member of staff to free a name."));
       return;
     }
     const persistence = GameConstants.PLAYER_PERSISTENCE;

@@ -61,7 +61,9 @@ Bans in `Bans.txt` are per character name, with one rule for the account:
 - Delete asks the player to type the character's name. A different name cancels it.
 - A character that is online cannot be deleted.
 - The save is removed for every profile, and the character leaves the account.
-- The name is never free again. `accounts.json` keeps it under `deleted` (a tombstone). A login with that name, a new character with it and a display-name change to it are all refused: "That name belonged to a deleted character and can't be used again." (a display-name change says "That name is not available.").
+- The name stays reserved. `accounts.json` keeps it under `deleted` (a tombstone) with the account that deleted it. A login with that name, a new character with it from any other account, and a display-name change to it are all refused: "That name belonged to a deleted character and can't be used again." (a display-name change says "That name is not available.").
+- The account that deleted it can make a character with that name again, which undoes a mistaken delete's hold on the name (the save stays gone). That removes the tombstone.
+- An account can hold at most 6 deleted names. A delete beyond that is refused before anything is removed: "You have deleted too many characters. Ask a member of staff to free a name." Re-creating one of its own deleted names, or staff releasing one, makes room.
 - Nothing else keyed by the name is released or rewritten: its display name and held names in `display-names.json`, its clan membership and rank in `clans.json`, and its entries in `Bans.txt` and `Mutes.txt` stay. The tombstone makes them unreachable, so no other player can inherit them. A display name the deleted character showed stays reserved too.
 - Before that, the server keeps a copy of the save in the save history with the reason `character-delete`. On SQLite the history rows are re-keyed to `deleted:<time>:<name>`, so `::snapshots` and `::rollback` never show the old character under its name. An admin with database access can still read them; there is no in-game restore. See [Player saves](./player-saves.md#the-save-history).
 
@@ -71,9 +73,11 @@ These clients have no picker. They enter the character whose name was typed at l
 
 In the browser, the picker preselects the typed character if it isn't the primary, else the one played last. A banned character is never preselected; the next one played last is.
 
-## Command
+## Commands
 
 `::characters <name>` (developer rank) lists the characters of the account that owns `<name>`, primary first, with when each last played. It prints `No account owns that name.` for an unknown name.
+
+`::releasename <name>` (developer rank) frees a deleted character's name: anyone can then log in with it or create it. It replies `Released <name> (deleted by <account>). The name can be used again.`, or `No deleted character had that name.` Whatever stayed keyed by the name (its display names, clan rank, bans and mutes) goes to whoever takes it next, so clear those first if they matter.
 
 ## More
 

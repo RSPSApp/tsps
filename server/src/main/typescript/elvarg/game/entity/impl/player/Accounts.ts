@@ -16,11 +16,14 @@ export interface AccountEntry {
     characters: AccountCharacter[];
 }
 
-/** A deleted character's name: never claimable again, since display names, clans and punishments are keyed by it. */
+/**
+ * A deleted character's name: claimable only by the account that deleted it, since display names,
+ * clans and punishments are keyed by it. Staff can release it (`releaseDeleted`).
+ */
 export interface DeletedName {
     /** The name as the account had it. */
     name: string;
-    /** The account that deleted it. */
+    /** The account that deleted it ("" for a tombstone written before this was recorded: nobody's). */
     account: string;
     deletedAt: number;
 }
@@ -32,9 +35,12 @@ export interface DeletedName {
  * so they are kept in memory and written at most once per `LAST_PLAYED_WRITE_DELAY_MS`, by the
  * next structural write, or by `flush()` at shutdown, whichever comes first.
  *
- * A deleted character's name is kept for good under `deleted` (a tombstone). Everything else keyed
- * by a login name (display names, clan ranks, bans and mutes) stays behind on delete, so the name
- * must never lead to another account. A file from before tombstones has no `deleted` and loads as none.
+ * A deleted character's name is kept under `deleted` (a tombstone). Everything else keyed by a
+ * login name (display names, clan ranks, bans and mutes) stays behind on delete, so the name must
+ * never lead to another account: only the account that deleted it may create it again (which
+ * removes the tombstone), and staff may release it. An account holds at most
+ * MAX_TOMBSTONES_PER_ACCOUNT, so deleting can't reserve names without bound. A file from before
+ * tombstones has no `deleted` and loads as none.
  */
 export class Accounts {
     static readonly FILE_ENV = "TSPS_ACCOUNTS_FILE";
@@ -43,6 +49,8 @@ export class Accounts {
     private static owners = new Map<string, string>();
     /** Name key -> tombstone of a deleted character. */
     private static deleted = new Map<string, DeletedName>();
+    /** The most deleted names one account may hold reserved; a delete beyond it is refused. */
+    static readonly MAX_TOMBSTONES_PER_ACCOUNT = 6;
     /** The longest a last-played time waits in memory before it is written. */
     static readonly LAST_PLAYED_WRITE_DELAY_MS = 30_000;
     /** Last-played times changed since the file was last written. */
@@ -173,6 +181,46 @@ export class Accounts {
         return this.deleted.get(this.key(name));
     }
 
+    /** How many deleted names this account holds reserved. */
+    public static deletedCountOf(accountKey: string): number {
+        this.load();
+        const account = this.key(accountKey);
+        let count = 0;
+        for (const tombstone of this.deleted.values()) if (tombstone.account === account) count++;
+        return count;
+    }
+
+    /** Whether the account may delete another character (it holds fewer than MAX_TOMBSTONES_PER_ACCOUNT). */
+    public static canDelete(accountKey: string): boolean {
+        return this.deletedCountOf(accountKey) < this.MAX_TOMBSTONES_PER_ACCOUNT;
+    }
+
+    /** Whether this deleted name was deleted by this account, which may create it again. */
+    public static deletedBy(name: string, accountKey: string): boolean {
+        const tombstone = this.deletedOf(name);
+        return tombstone !== undefined && tombstone.account !== "" && tombstone.account === this.key(accountKey);
+    }
+
+    /**
+     * Staff: frees a deleted name for anyone, returning its tombstone (undefined when the name has
+     * none). What stayed keyed by the name (display names, clan rank, bans, mutes) goes with it to
+     * whoever takes it next. Throws, changing nothing, when the file can't be written.
+     */
+    public static releaseDeleted(name: string): DeletedName | undefined {
+        this.load();
+        const nameKey = this.key(name);
+        const tombstone = this.deleted.get(nameKey);
+        if (!tombstone) return undefined;
+        this.deleted.delete(nameKey);
+        try {
+            this.save();
+        } catch (error) {
+            this.deleted.set(nameKey, tombstone);
+            throw error;
+        }
+        return tombstone;
+    }
+
     public static entryOf(accountKey: string): AccountEntry | undefined {
         return this.load().get(this.key(accountKey));
     }
@@ -209,18 +257,26 @@ export class Accounts {
         return entry;
     }
 
-    /** Adds a character to the account. Throws, changing nothing, when the name is owned or the file can't be written. */
+    /**
+     * Adds a character to the account. A name this account deleted comes back, its tombstone removed
+     * in the same write. Throws, changing nothing, when the name is owned, another account's deleted
+     * name, or the file can't be written.
+     */
     public static addCharacter(accountKey: string, name: string, now = Date.now()): AccountCharacter {
         const entry = this.entryOf(accountKey);
         if (!entry) throw new Error("No such account");
         if (this.accountOf(name)) throw new Error("That name is owned by an account");
-        if (this.isDeleted(name)) throw new Error("That name belonged to a deleted character");
+        const nameKey = this.key(name);
+        const tombstone = this.deleted.get(nameKey);
+        if (tombstone && !this.deletedBy(name, accountKey)) throw new Error("That name belonged to a deleted character");
         const character: AccountCharacter = { name, createdAt: now, lastPlayedAt: 0 };
         entry.characters.push(character);
+        if (tombstone) this.deleted.delete(nameKey);
         try {
             this.save();
         } catch (error) {
             entry.characters.pop();
+            if (tombstone) this.deleted.set(nameKey, tombstone);
             throw error;
         }
         this.reindex();
@@ -229,13 +285,15 @@ export class Accounts {
 
     /**
      * Removes a character and keeps its name as a tombstone, in one write. False, changing nothing,
-     * for the primary or a name the account doesn't have.
+     * for the primary or a name the account doesn't have. Throws, changing nothing, when the
+     * account already holds MAX_TOMBSTONES_PER_ACCOUNT (check canDelete first) or the file can't be written.
      */
     public static removeCharacter(accountKey: string, name: string, now = Date.now()): boolean {
         const entry = this.entryOf(accountKey);
         if (!entry || this.isPrimary(accountKey, name)) return false;
         const index = entry.characters.findIndex((c) => this.key(c.name) === this.key(name));
         if (index < 0) return false;
+        if (!this.canDelete(accountKey)) throw new Error("That account has deleted too many characters");
         const [removed] = entry.characters.splice(index, 1);
         const nameKey = this.key(removed.name);
         const before = this.deleted.get(nameKey);

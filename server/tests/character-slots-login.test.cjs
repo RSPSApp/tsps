@@ -774,12 +774,10 @@ test('a deleted name is never claimable again: create, login and display names',
   assert.equal(saves.has(saveKey('Altguy')), false);
   assert.equal(Accounts.isDeleted('altguy'), true);
 
-  // Another account can't create it, nor can the account that deleted it.
+  // Another account can't create it.
   const o = await connect('Owner', 'pw', LOGIN_FLAG_CHARACTER_SELECT);
   await create(o, 'AltGuy');
   assert.deepEqual(lastResult(o.channel), { ok: false, code: 1, message: "That name belonged to a deleted character and can't be used again." });
-  await create(c, 'altguy');
-  assert.equal(lastResult(c.channel).code, 1);
   assert.deepEqual(Accounts.charactersOf('owner').map((e) => e.name), ['Owner']);
 
   // A fresh login with the name (a new primary) is refused, with or without the picker, and claims nothing.
@@ -803,4 +801,34 @@ test('a deleted name is never claimable again: create, login and display names',
   net.ClientConnection.pendingNames.clear();
   assert.equal((await login('ALTGUY', 'pw')).code, 3);
   assert.equal(DisplayNames.refusal('Owner', 'altguy'), 'That name is not available.');
+
+  // The account that deleted it may take it back (a mistaken delete), freeing its tombstone.
+  const back = await connect('Zezima', 'pw', LOGIN_FLAG_CHARACTER_SELECT);
+  await create(back, 'AltGuy');
+  assert.deepEqual(lastResult(back.channel), { ok: true, code: 0, message: '' });
+  assert.deepEqual(Accounts.charactersOf('zezima').map((e) => e.name), ['Zezima', 'AltGuy']);
+  assert.equal(Accounts.isDeleted('altguy'), false);
+});
+
+test('a delete beyond the tombstone limit is refused before anything is deleted', async (t) => {
+  t.mock.method(PluginManager, 'getPluginConfig', (key, fallback) => (key === 'characters:maxPerAccount' ? 6 : fallback));
+  seedSave('Zezima', { passwordHash: hashOf('pw') });
+  Accounts.ensure('Zezima', 1);
+  for (let i = 0; i < Accounts.MAX_TOMBSTONES_PER_ACCOUNT; i++) {
+    Accounts.addCharacter('zezima', 'Burner ' + i, 2);
+    Accounts.removeCharacter('zezima', 'Burner ' + i, 3);
+  }
+  Accounts.addCharacter('zezima', 'Alt', 4);
+  seedSave('Alt');
+  const c = await connect('Zezima', 'pw', LOGIN_FLAG_CHARACTER_SELECT);
+  await remove(c, 'Alt');
+  assert.deepEqual(lastResult(c.channel), { ok: false, code: 11, message: 'You have deleted too many characters. Ask a member of staff to free a name.' });
+  assert.equal(persistence.deleted.length, 0, 'no save was deleted');
+  assert.equal(saves.has(saveKey('Alt')), true);
+  assert.deepEqual(Accounts.charactersOf('zezima').map((e) => e.name), ['Zezima', 'Alt']);
+
+  // Staff free one: the account can delete again.
+  Accounts.releaseDeleted('Burner 0');
+  await remove(c, 'Alt');
+  assert.equal(lastResult(c.channel).code, 0);
 });

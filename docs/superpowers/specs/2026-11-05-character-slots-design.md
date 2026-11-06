@@ -190,7 +190,9 @@ Server to client (only when the flag was set):
   taken, 2 invalid name, 3 slot limit reached, 4 unknown character, 5 primary cannot be deleted,
   6 confirmation did not match, 7 character online, 8 storage error, 9 primary has not entered
   the world yet, 10 character banned (a `CHARACTER_SELECT` of a banned character, or a
-  `CHARACTER_CREATE` on an account whose primary is banned).
+  `CHARACTER_CREATE` on an account whose primary is banned), 11 too many deleted characters (a
+  `CHARACTER_DELETE` when the account already holds `MAX_TOMBSTONES_PER_ACCOUNT` deleted names).
+  The client shows the server's message for every code, so a new code needs no client change.
 
 Client to server, accepted only between login OK and handshake (added to `IMMEDIATE_PACKETS`,
 refused with `CHARACTER_RESULT` code 4 otherwise):
@@ -205,10 +207,16 @@ refused with `CHARACTER_RESULT` code 4 otherwise):
   character, or when `confirmName` differs from `name` case-insensitively. Otherwise: a history
   snapshot with reason `character-delete` where the backend supports history, then the save is
   removed for every profile, and the character is removed from the account and its name
-  tombstoned in the same write. The name is never claimable again: display names, clan ranks and
-  punishments are keyed by it and are not released, so the tombstone keeps them unreachable.
-  Login (a brand-new name), `CHARACTER_CREATE` and `DisplayNames.loginNameInUse` (display-name
-  changes) all refuse a tombstoned name.
+  tombstoned in the same write. The tombstone records the deleting account. The name is not
+  claimable by anyone else: display names, clan ranks and punishments are keyed by it and are not
+  released, so the tombstone keeps them unreachable. Login (a brand-new name), another account's
+  `CHARACTER_CREATE` and `DisplayNames.loginNameInUse` (display-name changes) all refuse a
+  tombstoned name. The deleting account may `CHARACTER_CREATE` it again (its own identity
+  returns to it), which removes the tombstone in the same write. To bound reservation, an
+  account holds at most `MAX_TOMBSTONES_PER_ACCOUNT = 6` tombstones; a delete beyond that is
+  refused with code 11 before any save is touched. Staff free a name with `::releasename`
+  (`Accounts.releaseDeleted`). Tombstones written before the account was recorded load with an
+  empty account and are claimable by nobody until released.
   Replies `CHARACTER_RESULT` then `CHARACTER_LIST`.
 
 `handshake` with no prior select enters the default character. With the flag that is the
@@ -304,7 +312,9 @@ and is unaffected.
 ### Admin
 
 `::characters <name>` (developer rank) prints the account's characters with last played times,
-through `api.core.Accounts`. Read-only.
+through `api.core.Accounts`. Read-only. `::releasename <name>` (developer rank) removes a
+tombstone through `Accounts.releaseDeleted`, so the name can be taken again (with whatever is
+still keyed by it).
 
 ### Tests
 
@@ -312,7 +322,7 @@ Server (`server/tests`, extend the login harness in `login-tokens.test.cjs` or a
 `character-slots.test.cjs`): account created lazily on first login; list sent only with the flag;
 select, default pick, typed non-primary name resolves to the account; create with cap, invalid
 name, every taken-name case, creation refused before the primary has a save; delete rules
-(primary, online, mismatch), that the save is gone, the name tombstoned for good and history re-keyed; one-account-online across two characters; token rotation and `login_forget`
+(primary, online, mismatch), that the save is gone, the name tombstoned (reclaimable by its own account, at most 6 per account, released by `::releasename`) and history re-keyed; one-account-online across two characters; token rotation and `login_forget`
 stay on the primary; `changePassword` from the primary or an alt rewrites every character's saves; handshake
 without the flag enters the typed character (primary included); the default skips banned characters. Persistence: `delete` per backend in `player-saves.test.cjs`.
 

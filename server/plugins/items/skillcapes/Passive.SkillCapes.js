@@ -16,10 +16,9 @@ const EXTRA_ORE_MAX_LEVEL = 70;
 const EXTRA_ORE_MESSAGE = "Your cape allows you to mine an additional ore.";
 
 function extraOre(request) {
-  if (request.extra || request.rockLevel > EXTRA_ORE_MAX_LEVEL || !Capes.hasPerk(request.player, "MINING")) return;
+  if (request.rockLevel > EXTRA_ORE_MAX_LEVEL || !Capes.hasPerk(request.player, "MINING")) return;
   if (Math.random() < EXTRA_ORE_CHANCE) {
-    request.extra = true;
-    request.message = EXTRA_ORE_MESSAGE;
+    request.bonuses.push({ message: EXTRA_ORE_MESSAGE });
   }
 }
 

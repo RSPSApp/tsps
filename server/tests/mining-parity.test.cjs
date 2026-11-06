@@ -1012,7 +1012,7 @@ test("a respawned barronite rock gets a fresh 20 seconds, and so does one conten
 
 test("a Mining cape's extra sandstone is the same size, with its line, XP and count (3165)", () => {
   const cape = "Your cape allows you to mine an additional ore.";
-  const h = harness({ emit: (key, request) => { if (key === "mining:extra-ore") Object.assign(request, { extra: true, message: cape }); } });
+  const h = harness({ emit: (key, request) => { if (key === "mining:extra-ore") request.bonuses.push({ message: cape }); } });
   const player = createPlayer();
   const restoreRandom = scriptRandom([0.99, 0.99, 0.99, 0], 0.99);
   const { restore } = mineRock(h, player, "Sandstone rocks", loc("enakh_sandstone_rocks"));

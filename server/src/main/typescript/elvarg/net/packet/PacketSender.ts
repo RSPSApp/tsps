@@ -53,6 +53,7 @@ import {
   encodeCameraTarget,
   encodeSetInteractionMode,
   encodeResetInteractionMode,
+  encodeHideNpcOps,
   encodeChatFilterSettings,
   encodeRunEnergy,
   encodeSkillsDelta,
@@ -1089,6 +1090,12 @@ export class PacketSender {
   /** Drops a world's own interaction mode, so it follows the default again. */
   sendResetInteractionMode(worldId: number): this {
     this.player.getSession().sendClientPacket(encodeResetInteractionMode(worldId));
+    return this;
+  }
+
+  /** Hides every NPC's menu actions (not Examine) across the client until set false again. */
+  sendHideNpcOps(hidden: boolean): this {
+    this.player.getSession().sendClientPacket(encodeHideNpcOps(hidden));
     return this;
   }
 

@@ -1,7 +1,9 @@
 // Farming menus through native option resumes with every plugin loaded and real game objects.
 const assert = require('node:assert/strict');
 const path = require('node:path');
-const { before, test } = require('node:test');
+const { before, after, test } = require('node:test');
+// Full startup is needed before native NPC hooks; bots are outside this fixture.
+process.env.DISABLE_PLAYER_BOTS = '1';
 require('../dist/Server').Server.installProductionPathResolver();
 const { CachePipeline } = require('../dist/game/cache/CachePipeline');
 const { PluginManager } = require('../dist/plugins/PluginManager');
@@ -18,11 +20,12 @@ before(async () => {
   PluginManager.loadFromDirectory(path.resolve(__dirname, '../plugins'));
   core = PluginManager.getCoreApi();
   core.RegionManager.init();
-  for (const [x, y] of [[1802, 3502], [2435, 3414]]) core.RegionManager.loadMapFiles(x, y);
+  for (const [x, y] of [[1802, 3502], [2435, 3414], [3050, 3307]]) core.RegionManager.loadMapFiles(x, y);
   Data = require('../plugins/skills/farming/Data.Farming');
   Patches = require('../plugins/skills/farming/Patches.Farming');
-  Data.initializeFarmingData();
+  PluginManager.emitServerStartup({});
 });
+after(() => PluginManager.emitServerShutdown({}));
 
 function actor(t, x = 1802, y = 3502) {
   const transport = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true,
@@ -354,4 +357,153 @@ test('an invalid gardener answer never counts towards the five reports', async t
   await finishGardener(f);
   assert.deepEqual(f.asked(), []);
   assert.deepEqual([...new Set(f.names)], [f.gardener.getCurrentDefinition(f.p).getName()]);
+});
+
+
+// A quote may outlive a growth boundary, including maturity or death.
+test('gardener protection rechecks the patch at native Yes', async t => {
+  const {SkillManager} = require('../dist/game/content/skill/SkillManager');
+  const Model = require('../plugins/skills/farming/Model.Farming');
+  const patch = Data.CACHE.patches.find(p => p.id === 8550 && p.x === 3050 && p.y === 3307 && p.z === 0);
+  const crop = Data.CROPS.get('ONION'); assert.ok(patch); assert.equal(crop.stages, 4);
+  const names = ['Rake', 'Seed dibber', 'Onion seed', 'Potatoes(10)', 'Plant cure', 'Vial', 'Weeds'];
+  const ids = names.map(name => Data.itemId(name));
+  const [rake, dibber, seed, payment, cure, vial, weeds] = ids;
+  assert.deepEqual(crop.payment, [[payment, 1]]); assert.equal(crop.seedCount, 3);
+  for (const mode of ['growing Yes', 'grown before Pay', 'closed quote', 'grown pending quote', 'diseased Yes', 'dead before Pay', 'dead pending quote']) await t.test(mode, async child => {
+    const f = actor(child, patch.x - 1, patch.y), p = f.p, inv = p.getInventory(), skill = p.getSkillManager();
+    skill.setExperience(core.Skill.FARMING, SkillManager.getExperienceForLevel(99));
+    skill.setMaxLevels(core.Skill.FARMING, 99, false).setCurrentLevels(core.Skill.FARMING, 99, false);
+    p.needsPlacement = false;
+    PluginManager.emitPlayerLogin({player:p, username:p.getUsername()}); p.closeInterruptibleInterfaces();
+    const state = Patches.stateFor(p, patch), sender = p.getPacketSender(), manager = p.getDialogueManager();
+    assert.equal(state.crop, undefined); assert.equal(state.weeds, 3); assert.ok(p.getHitpoints() > 0);
+    assert.ok(core.MapObjects.get(patch.id, new core.Location(patch.x, patch.y, patch.z), p.getPrivateArea()), 'actual map allotment is present');
+    const npc = core.NPC.create(core.NpcIdentifiers.ELSTAN, new core.Location(patch.x - 1, patch.y + 1, 0));
+    assert.equal(core.World.getNpcs().add(npc), true); assert.equal(npc.getCurrentDefinition(p).getName(), 'Elstan');
+    child.after(() => {
+      p.closeInterruptibleInterfaces(); PluginManager.emitPlayerDisconnect({player:p, username:p.getUsername()});
+      PluginManager.emitPlayerLogout({player:p, username:p.getUsername()}); p.setRegistered(false);
+      core.TaskManager.cancelTasks(p); core.TaskManager.cancelTasks(p.getIndex()); core.World.getNpcs().remove(npc);
+      for (const g of core.World.getItems().filter(g => g.getOwner() === p.getUsername())) core.ItemOnGroundManager.deregister(g);
+    });
+    for (const [id, count] of [[rake,1], [dibber,1], [seed,3], [payment,2], [cure,4]]) inv.add(new core.Item(id,count), false);
+    const stores = id => ({inventory:inv.getAmount(id), equipment:p.getEquipment().getAmount(id),
+      bank:p.getBanks().reduce((n,b,tab) => n + (b && tab !== core.Bank.BANK_SEARCH_TAB_INDEX ? b.getAmount(id) : 0), 0),
+      floor:core.World.getItems().filter(g => !g.isPendingRemoval() && g.getOwner() === p.getUsername()
+        && g.getPrivateArea() === p.getPrivateArea() && g.getItem().getId() === id).reduce((n,g) => n + g.getItem().getAmount(), 0)});
+    const snapshot = () => ({items:Object.fromEntries(ids.map(id => [id,stores(id)])), xp:core.Skill.values().map(s => skill.getExperience(s))});
+    const originalEmit = core.PluginManager.emitCustomEvent.bind(core.PluginManager), protectedEvents = [], rakedEvents = [];
+    child.mock.method(core.PluginManager, 'emitCustomEvent', (name,event) => {
+      if (event?.player === p && name === 'farming:protected') protectedEvents.push(event);
+      if (event?.player === p && name === 'farming:raked') rakedEvents.push(event);
+      return originalEmit(name,event);
+    });
+    let turns = 0;
+    const turn = () => {
+      assert.ok(++turns <= 120, 'bounded real task/input/movement phase budget'); p.resetUpdating();
+      core.World.processCycle = (core.World.processCycle + 1) & 0x7fffffff; core.TaskManager.process();
+      f.connection.processTurnPackets(); const q = p.getMovementQueue(); q.beginCycle(); q.processEntityPursuit();
+      if (q.hasPendingWork()) q.process(); core.TaskManager.processWalkTo(p.getIndex());
+    };
+    const send = async packet => { await f.connection.dispatch([packet]); turn(); };
+    const use = id => { const slot = inv.getItems().findIndex(i => i.getId() === id && i.getAmount() > 0); assert.ok(slot >= 0);
+      return send({type:'item_on_object', widgetId:core.Inventory.INTERFACE_ID, objectId:patch.id, itemId:id, slot, x:patch.x, y:patch.y}); };
+    const checkLevel = () => { assert.ok(skill.getMaxLevel(core.Skill.FARMING) >= crop.level); assert.ok(skill.getCurrentLevel(core.Skill.FARMING) >= crop.level); };
+    const initial = snapshot(); await use(rake);
+    for (let n = 0; state.weeds && n < 24; n++) turn();
+    assert.equal(state.weeds, 0); assert.equal(state.crop, undefined); assert.equal(rakedEvents.length, 3);
+    assert.equal(inv.getAmount(weeds), 3); assert.ok(skill.getExperience(core.Skill.FARMING) > initial.xp[core.Skill.FARMING.getIndex()]); checkLevel();
+    const raked = snapshot(); await use(seed);
+    for (let n = 0; !state.crop && n < 6; n++) turn();
+    assert.equal(Patches.stateFor(p,patch), state); assert.equal(state.crop, crop.key); assert.equal(state.stage, 0);
+    assert.equal(state.status, 'growing'); assert.equal(state.protected, false); assert.equal(state.plantExperiencePending, true);
+    assert.equal(inv.getAmount(seed), 0); assert.deepEqual(snapshot().xp, raked.xp); checkLevel();
+    let curesUsed = 0;
+    const growOne = () => {
+      const oldStage = state.stage, event = {player:p, ms:Math.max(0,state.nextAt - Date.now() + 1), handledBy:[]};
+      assert.equal(state.status, 'growing'); assert.ok(Number.isFinite(event.ms));
+      PluginManager.emitCustomEvent('agent:advance-time', event); assert.ok(event.handledBy.includes('Farming'));
+      assert.equal(Patches.stateFor(p,patch), state); assert.equal(state.stage, oldStage + 1);
+    };
+    const diseaseCase = ['diseased Yes', 'dead before Pay', 'dead pending quote'].includes(mode);
+    if (diseaseCase) {
+      // Inject a roll only into this direct model advance; never replace global Math.random.
+      let rolls = 0;
+      Model.advanceFarm(Patches.farmFor(p), state.nextAt, () => { rolls++; return 0; });
+      assert.equal(rolls, 1); assert.equal(Patches.stateFor(p,patch),state);
+      assert.equal(state.stage, 1); assert.equal(state.status, 'diseased'); checkLevel();
+    }
+    while (!diseaseCase && state.stage < crop.stages - 1) {
+      growOne();
+      if (state.status === 'diseased') { const before = snapshot(); await use(cure); curesUsed++;
+        assert.equal(inv.getAmount(cure), before.items[cure].inventory - 1); assert.equal(inv.getAmount(vial), before.items[vial].inventory + 1);
+        assert.deepEqual(snapshot().xp, before.xp); assert.equal(state.status,'growing'); }
+      assert.equal(state.status,'growing'); checkLevel();
+    }
+    assert.equal(state.stage, diseaseCase ? 1 : crop.stages - 1); assert.equal(inv.getAmount(cure),4-curesUsed); assert.equal(inv.getAmount(vial),curesUsed);
+    assert.deepEqual(snapshot().xp,raked.xp); assert.equal(inv.getAmount(payment),2); assert.equal(state.protected,false);
+    const expectedPrepared = structuredClone(initial);
+    expectedPrepared.items[seed].inventory -= 3; expectedPrepared.items[weeds].inventory += 3;
+    expectedPrepared.items[cure].inventory -= curesUsed; expectedPrepared.items[vial].inventory += curesUsed;
+    expectedPrepared.xp = raked.xp; assert.deepEqual(snapshot(),expectedPrepared,'native rake/plant/cures account for every declared item in every store');
+    for (const s of core.Skill.values()) if (s !== core.Skill.FARMING) assert.equal(raked.xp[s.getIndex()],initial.xp[s.getIndex()]);
+    const prepared = snapshot();
+    const pay = async () => { const definition = npc.getCurrentDefinition(p), actions = definition.getActions();
+      const clickType = actions.findIndex(action => /^pay(?:$| \()/i.test(action ?? '')) + 1;
+      assert.ok(clickType > 0, JSON.stringify({npcId:npc.getId(),contentId:npc.getContentId(p),definition:definition.getName(),actions,clickType,selectedAction:actions[clickType-1] ?? null}));
+      await send({type:'npc_option',index:npc.getIndex(),clickType}); };
+    const quote = () => { const menu = manager.getCurrent(); assert.ok(menu instanceof core.OptionDialogue);
+      assert.equal(menu.getTitle(),'Pay 1 sack of potatoes?'); assert.deepEqual(menu.getOptions(),['Yes.','No.',"Yes and don't ask again."]);
+      assert.equal(sender.getChatboxGroupId(),219); assert.equal(manager.getOwner(),undefined); assert.equal(p.busy(),false);
+      const mount = sender.subInterfaceTargets.get(219); assert.ok(mount); assert.equal(sender.getSubInterfaceAt(mount.targetUid),mount);
+      return {menu,mount}; };
+    const yes = () => send({type:'dialogue_continue',widgetId:core.OptionDialogue.OPTIONS_WIDGET_ID,childIndex:1});
+    const die = () => {
+      assert.equal(state.status, 'diseased');
+      const event = {player:p, ms:Math.max(0,state.nextAt - Date.now() + 1), handledBy:[]};
+      PluginManager.emitCustomEvent('agent:advance-time', event); assert.ok(event.handledBy.includes('Farming'));
+      assert.equal(Patches.stateFor(p,patch),state); assert.equal(state.status,'dead');
+    };
+    if (mode === 'dead before Pay') {
+      die(); await pay();
+      assert.ok(manager.getCurrent() instanceof core.NpcDialogue); assert.equal(manager.getCurrent().getNpcId(),npc.getId());
+      assert.equal(manager.getCurrent().getText(),'That crop does not need my protection.');
+      assert.deepEqual(snapshot(),prepared); assert.equal(state.protected,false); assert.equal(protectedEvents.length,0); return;
+    }
+    if (mode === 'grown before Pay') {
+      growOne(); assert.equal(state.status,'grown'); await pay();
+      assert.ok(manager.getCurrent() instanceof core.NpcDialogue); assert.equal(manager.getCurrent().getNpcId(),npc.getId());
+      assert.equal(manager.getCurrent().getText(),"That patch is already fully grown! I don't know what you want me to do with it!");
+      assert.deepEqual(snapshot(),prepared); assert.equal(state.protected,false); assert.equal(protectedEvents.length,0); return;
+    }
+    await pay(); const current = quote(); assert.equal(Patches.stateFor(p,patch),state);
+    assert.equal(state.status,diseaseCase ? 'diseased' : 'growing');
+    assert.deepEqual(snapshot(),prepared); assert.equal(protectedEvents.length,0);
+    if (mode === 'closed quote') {
+      await send({type:'interface_close'}); assert.notEqual(manager.getCurrent(),current.menu); await yes();
+      assert.deepEqual(snapshot(),prepared); assert.equal(state.protected,false); assert.equal(protectedEvents.length,0); return;
+    }
+    if (mode === 'dead pending quote') {
+      die(); assert.equal(manager.getCurrent(),current.menu);
+      assert.equal(sender.getSubInterfaceAt(current.mount.targetUid),current.mount); quote();
+      assert.equal(Patches.stateFor(p,patch),state); assert.deepEqual(snapshot(),prepared); checkLevel();
+      await yes(); const after = snapshot();
+      assert.deepEqual(after.items[payment],prepared.items[payment],JSON.stringify({rule:'a dead patch must not be charged',status:state.status,protected:state.protected,resources:after}));
+      assert.deepEqual(after,prepared); assert.equal(state.status,'dead'); assert.equal(state.protected,false); assert.equal(protectedEvents.length,0); return;
+    }
+    if (mode === 'grown pending quote') {
+      growOne(); assert.equal(state.status,'grown'); assert.equal(state.stage,crop.stages);
+      assert.equal(manager.getCurrent(),current.menu); assert.equal(sender.getSubInterfaceAt(current.mount.targetUid),current.mount);
+      quote(); assert.equal(Patches.stateFor(p,patch),state); assert.deepEqual(snapshot(),prepared); checkLevel();
+      await yes(); const after = snapshot();
+      assert.deepEqual(after.items[payment],prepared.items[payment],JSON.stringify({rule:'a matured patch must not be charged',state:{crop:state.crop,stage:state.stage,status:state.status,protected:state.protected},curesUsed,resources:after}));
+      assert.deepEqual(after,prepared); assert.equal(state.protected,false); assert.equal(protectedEvents.length,0); return;
+    }
+    await yes(); assert.equal(state.status,'growing'); assert.equal(state.protected,true); assert.equal(protectedEvents.length,1);
+    assert.equal(protectedEvents[0].patch,patch); assert.equal(protectedEvents[0].npc,npc); assert.equal(protectedEvents[0].crop,crop.key);
+    const expected = structuredClone(prepared); expected.items[payment].inventory--;
+    assert.deepEqual(snapshot(),expected,'one sack pays for the still-growing patch, all stores and XP otherwise conserved');
+    await yes(); assert.deepEqual(snapshot(),expected,'stale native Yes cannot charge the second affordable sack'); assert.equal(protectedEvents.length,1);
+  });
 });

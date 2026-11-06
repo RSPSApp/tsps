@@ -577,7 +577,7 @@ function askGardener(player, npc, p) {
     if (!canPay(player, crop.payment)) { gardenerSays(player, npc, `I want ${paymentText(crop.payment)} for that.`); return; }
     const farm = Patches.farmFor(player);
     const accept = () => {
-        if (!Patches.nearPatch(player, p) || Patches.stateFor(player, p) !== state || state.protected || !canPay(player, crop.payment)) return;
+        if (!Patches.nearPatch(player, p) || Patches.stateFor(player, p) !== state || (state.status === "grown" || state.status === "dead") || state.protected || !canPay(player, crop.payment)) return;
         pay(player, crop.payment);
         state.protected = true;
         if (state.status === "diseased") { state.status = "growing"; state.nextAt = Model.nextGrowth(Date.now(), Data.stageMinutes(crop, state.stage), farm.offset); }

@@ -17,7 +17,7 @@
  * alongside the historical 4855-4857 ids.
  */
 module.exports = function registerBigChompyBirdHuntingQuest(api) {
-  const { Skill, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
+  const { Skill, Item, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
   const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
 
   const PAGE = "Big Chompy Bird Hunting";
@@ -53,6 +53,8 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
   const BUGS_TOOLS_MESSAGE_ID = "x2E72Z";
   /** Fycie sells 25 feathers for 50 coins. */
   const FYCIE_FEATHERS_MESSAGE_ID = "EA27SG";
+  const FYCIE_FEATHER_PRICE = 50;
+  const FYCIE_FEATHER_AMOUNT = 25;
   /** "You show the bloated toad to Rantz. He nods with approval." */
   const SHOW_TOAD_MESSAGE_ID = "rAqfRS";
   /** "Congratulations! Quest complete!" in handing-the-chompy-to-rantz. */
@@ -146,6 +148,8 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
   const page = (p, variant) => ({ page: p, variant });
   const has = (player, itemId, quantity = 1) => player.getInventory().getAmount(itemId) >= quantity;
   const freeSlots = (player) => player.getInventory().getFreeSlots?.() ?? 0;
+  const canReceiveFycieFeathers = (player) =>
+    player.getInventory().getAddableAmount(new Item(ItemIdentifiers.FEATHER, FYCIE_FEATHER_AMOUNT)) === FYCIE_FEATHER_AMOUNT;
   const hasEquipped = (player, itemId) =>
     (player.getEquipment?.()?.getItems?.() ?? []).some((item) => item?.getId?.() === itemId);
   const hasBow = (player) => has(player, OGRE_BOW) || hasEquipped(player, OGRE_BOW);
@@ -304,8 +308,8 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
     if (value.includes("does not have 50 coins") || value.includes("has 50 coins and inventory space")) {
       if (npcId !== FYCIE_NPC_ID || !FYCIE_COIN_STEPS.has(stepId)) return null;
       return value.includes("does not")
-        ? !has(player, ItemIdentifiers.COINS, 50)
-        : has(player, ItemIdentifiers.COINS, 50) && freeSlots(player) >= 1;
+        ? !has(player, ItemIdentifiers.COINS, FYCIE_FEATHER_PRICE)
+        : has(player, ItemIdentifiers.COINS, FYCIE_FEATHER_PRICE) && freeSlots(player) >= 1 && canReceiveFycieFeathers(player);
     }
     return null;
   }
@@ -706,9 +710,9 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
 
   function buyFycieFeathers(player) {
     if (player.getAttribute(FYCIE_FEATHERS_ATTRIBUTE)) return;
-    if (!has(player, ItemIdentifiers.COINS, 50) || freeSlots(player) < 1) return;
-    player.getInventory().deleteNumber(ItemIdentifiers.COINS, 50);
-    player.getInventory().adds(ItemIdentifiers.FEATHER, 25);
+    if (!has(player, ItemIdentifiers.COINS, FYCIE_FEATHER_PRICE) || freeSlots(player) < 1 || !canReceiveFycieFeathers(player)) return;
+    player.getInventory().deleteNumber(ItemIdentifiers.COINS, FYCIE_FEATHER_PRICE);
+    player.getInventory().adds(ItemIdentifiers.FEATHER, FYCIE_FEATHER_AMOUNT);
     player.setAttribute(FYCIE_FEATHERS_ATTRIBUTE, 1);
   }
 

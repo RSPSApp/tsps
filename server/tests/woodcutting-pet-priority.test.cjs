@@ -604,3 +604,132 @@ for (const [rowIndex,row] of [
     assert.equal(rationCount(),row.rations-(row.felling?1:row.restore?1:0),'actual ration consumption matches the scoped action');
   });
 }
+
+
+// Search uses decoded inventory input. Only the actual seed-roll frame is fixed;
+// the original RNG is restored before any global task pass.
+test('native seed nests conserve their rolled contents at stack capacity', async t => {
+  const I = core.ItemIdentifiers, MAX = 0x7fffffff;
+  assert.equal(I.ACORN, 5312);
+  assert.equal(I.BIRD_NEST_10, 22798);
+  assert.equal(I.BIRD_NEST_4, 5073);
+  assert.equal(I.BIRD_NEST_6, 5075);
+  assert.equal(core.ItemDefinition.forId(I.ACORN).isStackable(), true);
+  assert.equal(core.WorldDefinition.isMembersWorld(), true);
+
+  const cases = [
+    { name: 'room', nest: I.BIRD_NEST_10, acorns: 50 },
+    { name: 'last stack space', nest: I.BIRD_NEST_10, acorns: MAX - 1 },
+    { name: 'capped current nest', nest: I.BIRD_NEST_10, acorns: MAX - 1, pickup: true },
+    { name: 'capped legacy nest', nest: I.BIRD_NEST_4, acorns: MAX - 1, pickup: true },
+    { name: 'full pack refusal', nest: I.BIRD_NEST_10, acorns: 50, full: true },
+  ];
+  for (const row of cases) await t.test(row.name, async t => {
+    const f = actor(t), player = f.p, inventory = player.getInventory();
+    player.setAttribute('bot-skip-persistence', true);
+    inventory.setItem(0, new core.Item(I.ACORN, row.acorns));
+    inventory.setItem(1, new core.Item(row.nest));
+    if (row.full) while (inventory.getFreeSlots() > 0) inventory.add(new core.Item(I.RAKE), false);
+    inventory.refreshItems();
+
+    const ground = id => core.World.getItems().filter(value =>
+      !value.isPendingRemoval() && value.getOwner() === player.getUsername() &&
+      value.getPrivateArea() === player.getPrivateArea() && value.getItem().getId() === id);
+    const stores = id => ({
+      inventory: inventory.getAmount(id),
+      equipment: player.getEquipment().getAmount(id),
+      bank: player.getBanks().reduce((sum, tab, index) => sum +
+        (tab && index !== core.Bank.BANK_SEARCH_TAB_INDEX ? tab.getAmount(id) : 0), 0),
+      floor: ground(id).reduce((sum, value) => sum + value.getItem().getAmount(), 0),
+    });
+    const owned = id => Object.values(stores(id)).reduce((sum, amount) => sum + amount, 0);
+    t.after(() => {
+      for (const value of [...core.World.getItems()]) {
+        if (value.getOwner() === player.getUsername()) core.ItemOnGroundManager.deregister(value);
+      }
+    });
+
+    const skills = player.getSkillManager(), gains = [];
+    const xp = () => core.Skill.values().map(skill => skills.getExperience(skill));
+    const addExperience = skills.addExperience.bind(skills);
+    t.mock.method(skills, 'addExperience', (...args) => {
+      gains.push(args[1]);
+      return addExperience(...args);
+    });
+    if (row.pickup) {
+      const at = player.getLocation();
+      core.ItemOnGroundManager.registerLocation(player, new core.Item(I.ACORN), at.clone());
+      assert.equal(ground(I.ACORN).reduce((sum, value) => sum + value.getItem().getAmount(), 0), 1);
+      assert.equal(player.getLastItemPickup().elapsedTime(300), true, 'the real first-pickup cooldown permits Take');
+      await f.c.dispatch([{
+        type: 'ground_item_action', itemId: I.ACORN,
+        x: at.getX(), y: at.getY(), option: 'Take', optionIndex: 3,
+      }]);
+      f.c.processTurnPackets();
+      assert.equal(inventory.getAmount(I.ACORN), MAX, 'native Take fills the ordinary seed stack');
+      assert.equal(ground(I.ACORN).length, 0, 'no pickup remainder can hide missing output');
+    }
+
+    const options = core.CacheDefinitions.getItem(row.nest).inventoryActions;
+    const searchIndex = options.findIndex(option => option?.toLowerCase() === 'search');
+    assert.equal(searchIndex, 0, 'the actual nest exposes Search as its first action');
+    const slot = inventory.getSlotForItemId(row.nest), clicked = inventory.getItems()[slot];
+    assert.equal(clicked.getId(), row.nest);
+    assert.equal(clicked.getAmount(), 1);
+    assert.equal(inventory.getAddableAmount(new core.Item(I.ACORN)), row.pickup ? 0 : 1);
+    assert.equal(inventory.getFreeSlots(), row.full ? 0 : 26);
+    assert.deepEqual(gains, []);
+    const initialXp = xp();
+    const entitlement = owned(I.ACORN) + owned(row.nest);
+    const containers = owned(I.BIRD_NEST_6) + owned(row.nest);
+    const actions = [], emitItemAction = PM.emitItemAction.bind(PM);
+    t.mock.method(PM, 'emitItemAction', event => {
+      const result = emitItemAction(event);
+      if (event.player === player && event.itemId === row.nest) actions.push({
+        slot: event.slot, first: event.clickType === 1,
+        selected: event.item === clicked, handled: event.handled, result,
+      });
+      return result;
+    });
+
+    await f.c.dispatch([{
+      type: 'inventory_action', slot, itemId: row.nest,
+      widgetId: 149 << 16, option: 'Search', optionIndex: searchIndex + 1,
+    }]);
+    let seedDraws = 0;
+    const originalRandom = Math.random;
+    Math.random = () => {
+      if (new Error().stack.includes('rollNestSeed')) {
+        seedDraws++;
+        return 0; // A legal draw selecting the table's first entry, one Acorn.
+      }
+      return originalRandom();
+    };
+    try { f.c.processTurnPackets(); } finally { Math.random = originalRandom; }
+    assert.deepEqual(actions, [{ slot, first: true, selected: true, handled: true, result: true }],
+      'the decoded cached action must reach the real selected-item consumer');
+    const consumed = inventory.getAmount(row.nest) === 0;
+    if (consumed) assert.equal(seedDraws, 1, 'a consumed nest must have used the actual controlled seed roll');
+    else assert.ok(seedDraws <= 1, 'a valid capacity refusal need not draw a seed');
+    const observation = JSON.stringify({
+      mode: row.name, acorns: stores(I.ACORN), nests: owned(row.nest),
+      emptyNests: owned(I.BIRD_NEST_6), seedDraws, free: inventory.getFreeSlots(), gains,
+    });
+    assert.equal(owned(I.ACORN) + owned(row.nest), entitlement,
+      'the selected seed or its unsearched nest remains owned: ' + observation);
+    assert.equal(owned(I.BIRD_NEST_6) + owned(row.nest), containers,
+      'every consumed nest leaves its empty container');
+    if (!row.pickup && !row.full) {
+      assert.equal(consumed, true, 'room and exact-space controls must really search');
+      assert.equal(inventory.getAmount(I.ACORN), row.acorns + 1);
+      assert.equal(owned(I.BIRD_NEST_6), 1);
+    }
+    if (row.full) {
+      assert.equal(consumed, false, 'the existing full-pack refusal preserves the nest');
+      assert.equal(seedDraws, 0);
+      assert.equal(owned(I.BIRD_NEST_6), 0);
+    }
+    assert.deepEqual(gains, [], 'Search awards no XP');
+    assert.deepEqual(xp(), initialXp, 'stored skill XP is unchanged');
+  });
+});

@@ -227,6 +227,17 @@ restored the single sandstone save. The current [Mining enhancers](https://oldsc
 [Lead rocks](https://oldschool.runescape.wiki/w/Lead_rocks) and [Sunstone rocks](https://oldschool.runescape.wiki/w/Sunstone_rocks)
 pages cover the later rock entries. As elsewhere on this page, this is the source contract, not an in-game test result.
 
+## Varrock armour and extra ore
+
+On members worlds the worn armour has a 10% extra-ore roll on the ordinary metal rocks supported here:
+tier 1 or higher for copper, tin, iron, silver, coal, gold and lead; tier 2 for mithril; tier 3 for
+adamantite; tier 4 for runite. The Mining cape and charged celestial ring roll independently where each
+is eligible. Each delivered bonus gives normal XP and counts as an ore; each must fit in the inventory
+or an accepting storage path. A charged ring loses one charge on the base gather, including when its
+bonus roll misses. Treat the single charge in a simultaneous multi-enhancer case as the implementation's
+nonrecursive interpretation, not a captured retail observation. See the Wiki's [Mining enhancers](https://oldschool.runescape.wiki/w/Mining_enhancers),
+[Iron rocks](https://oldschool.runescape.wiki/w/Iron_rocks) and [Lead rocks](https://oldschool.runescape.wiki/w/Lead_rocks).
+
 ## Gems while mining
 
 Before each ore roll on the ore rocks above (not sandstone, granite, essence, gem rocks, sunstone or Daeyalt,
@@ -257,7 +268,8 @@ Leagues world) has `You just found a Sapphire!` while mining coal rocks, and the
 - Sunstone momentum (better odds, 28 XP and a 20% extra chunk for 5 ticks after a success) is not modelled.
 - Infernal shale's Wiki lists ten XP values at 1/11 each; one value must be twice as likely, so all ten are
   equally weighted for now.
-- Varrock armour is not modelled. Mining glove saves use a shared standing-rock budget; the precise OSRS
+- Varrock armour is supported only on the ordinary ores listed above; other rocks and the armour 4 gem-table
+  bonus remain unverified or unmodelled. Mining glove saves use a shared standing-rock budget; the precise OSRS
   behavior when miners compete or change gloves on a partly mined rock is not established here. Depletion
   hooks see a glove-kept rock as already handled. On ordinary iron, Power Miner stacks its four-ore budget
   with glove saves (up to seven). Other finite-yield rocks and stacking with other rock-saving effects remain unverified.

@@ -12,6 +12,7 @@ import { GameState } from "../game/login/GameState";
 import { MenuOpcode } from "../ui/menu/MenuState";
 import { setMenuTransform } from "../ui/menu/menuTransforms";
 import { applyMenuSwaps } from "../game/plugins/menuswapper/menuSwaps";
+import { npcOpsVisibility } from "../game/NpcOpsVisibility";
 
 type Move = { dx: number; dy: number; running: boolean; rotation: number };
 
@@ -238,6 +239,14 @@ const refusal = (fromX: number, fromY: number, toX: number, toY: number): Contin
     assert.deepEqual(plugin.getUiState().action, { kind: "npc", options: [{ option: "Attack", target: "Cow", id: 0 }] });
     plugin.interact(0);
     assert.deepEqual(sent[0].slice(2), [MenuOpcode.NpcSecondOption, 11, "Attack", "Cow"]);
+    // hidenpcops takes the NPC's button away; it comes back with the next scan once shown again.
+    npcOpsVisibility.set(true);
+    plugin.onClientTick();
+    assert.equal(plugin.getUiState().action, undefined, "hidden NPC actions offer no button");
+    npcOpsVisibility.clear();
+    plugin.onGameTick();
+    plugin.onClientTick();
+    assert.equal(plugin.getUiState().action?.options[0].target, "Cow", "shown again, the cow's button returns");
     // Held, the cow stays the target after the player steps off it.
     plugin.pin(true);
     at = { x: 61, y: 61 };

@@ -520,6 +520,20 @@ test("Simon refuses an artefact invoice larger than a new coin stack", () => {
   assert.equal(T.Simon.owed.has(p), false);
 });
 
+test("Simon explains when an artefact payment cannot fit", () => {
+  for (const route of ["one", "all"]) {
+    const p = player({ items: { [art("goldSeal")]: 1, [ids().item.coins]: 0x7fffffff } });
+    if (route === "one") T.Simon.onItemOnNpc({ player: p, npcId: 5786, itemId: art("goldSeal"), target: {}, handled: false });
+    const request = { player: p, npcId: 5786, stepId: route === "one" ? "0egJhg" : "Kn2FnM", handled: false };
+    T.Simon.onDialogueAction(request);
+    assert.equal(request.end, true);
+    assert.equal(p.inventory.get(art("goldSeal")), 1);
+    assert.equal(p.inventory.get(ids().item.coins), 0x7fffffff);
+    assert.equal(T.Simon.owed.has(p), false);
+    assert.deepEqual(p.messages, ["You do not have enough room to carry all of those coins."]);
+  }
+});
+
 test("Simon: his introduction first, then the pyramid top lines, before and after the first sale (Wiki transcript)", () => {
   const p = player();
   const { VARIANT } = T.Simon;
@@ -565,7 +579,7 @@ test("Simon keeps the tops when the coin stack cannot take the whole payment", (
   assert.equal(request.end, true);
   assert.equal(p.inventory.get(ids().item.pyramidTop), 1);
   assert.equal(p.inventory.get(ids().item.coins), 0x7fffffff - 5000);
-  assert.deepEqual(p.messages, ["You don't have enough inventory space."]);
+  assert.deepEqual(p.messages, ["You do not have enough room to carry all of those coins."]);
 });
 
 test("Simon's payment can take the slot the tops leave in a full inventory", () => {

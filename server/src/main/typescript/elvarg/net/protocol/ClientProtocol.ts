@@ -1622,6 +1622,14 @@ export function encodeResetInteractionMode(worldId: number): Buffer {
   return encodeServerPacket(ServerPacketId.RESET_INTERACTION_MODE, payload);
 }
 
+/**
+ * set_hide_npc_actions (hidenpcops): one boolean for the whole client. While hidden, NPC
+ * menus keep Examine but drop Use, Cast, every action and Attack.
+ */
+export function encodeHideNpcOps(hidden: boolean): Buffer {
+  return encodeServerPacket(ServerPacketId.HIDE_NPC_OPS, Buffer.from([hidden ? 1 : 0]));
+}
+
 /** Puts the camera back on the player and stops any shake (cam_reset). */
 /**
  * cam_target: the camera (and what the client centres its view and sound on) follows a tile or an

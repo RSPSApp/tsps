@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const path = require("node:path");
-const {before, test} = require("node:test");
+const {before, after, test} = require("node:test");
 // The bots spawn on load, which keeps the process alive after the tests, and nothing here needs them.
 process.env.DISABLE_PLAYER_BOTS = "1";
 require("../dist/Server").Server.installProductionPathResolver();
@@ -15,7 +15,11 @@ before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
   PM.loadFromDirectory(path.resolve(__dirname, "../plugins"));
   core = PM.getCoreApi();
+  core.RegionManager.init();
+  core.RegionManager.loadMapFiles(3222, 3218);
+  PM.emitServerStartup({});
 });
+after(() => PM.emitServerShutdown({}));
 const id = name => core.CacheDefinitions.getObjId(name);
 const uid = name => core.CacheDefinitions.getComponentId(name);
 function actor(t, tier = "elite") {

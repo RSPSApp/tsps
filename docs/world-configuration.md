@@ -36,6 +36,27 @@ Amascut) and other reward chests are not affected.
 }
 ```
 
+## Cross-floor visibility and combat
+
+Set `pluginConfig` `"CrossFloor:visibility"` to show nearby players and NPCs on other floors.
+`"CrossFloor:combat"` additionally allows ranged and magic attacks between floors; melee stays
+on the same floor. Both default to `false`, and combat requires visibility to be enabled.
+The host exposes these under **Settings → Technical**, with combat nested below visibility.
+Restart the world after changing them.
+
+```json
+{
+  "pluginConfig": {
+    "CrossFloor:visibility": true,
+    "CrossFloor:combat": false
+  }
+}
+```
+
+Explicit boolean values override the older `CROSS_FLOOR_VISIBILITY`, `CROSS_FLOOR_COMBAT` and
+`CROSS_FLOOR_VISIBILITY_AND_COMBAT` environment flags. Those flags remain fallbacks for existing
+setups, but combat now always requires visibility, including when using the old flags.
+
 ## Welcome screen message
 
 `pluginConfig` `"WelcomeScreen:messageOfTheWeek"` is the text on the scroll at the bottom of

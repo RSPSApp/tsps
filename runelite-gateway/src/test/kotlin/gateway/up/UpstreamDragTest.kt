@@ -32,6 +32,13 @@ class UpstreamDragTest {
         assertEquals(26382, dragged(ITEMS, 1, NO_OBJ, ITEMS, 5, 26382))
     }
 
+    @Test
+    fun `tab reorder keeps the tab component and slot numbers`() {
+        upstream.handle(IfButtonD(CombinedId(TABS), 13, NO_OBJ, CombinedId(TABS), 11, NO_OBJ))
+        assertEquals("01ffff0a000c00ffff008d000a000c0b00",
+            sent.removeLast().joinToString("") { "%02x".format(it.toInt() and 0xFF) })
+    }
+
     private companion object {
         const val ITEMS = (12 shl 16) or 12
         const val TABS = (12 shl 16) or 10

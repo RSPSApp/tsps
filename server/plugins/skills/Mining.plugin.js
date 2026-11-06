@@ -508,7 +508,9 @@ function nextStageId(rockObject, rock) {
 
 /** Depletes the rock unless content keeps it standing ("mining:deplete-rock", a league relic's four ores a rock); true when it went. */
 function depleteRock(player, rockObject, rock, heldByGloves = false) {
-  const event = { player, object: rockObject, rock: rock.objectName, handled: heldByGloves };
+  // Preserve existing finite-yield/staged behavior until its relic interaction is established.
+  const gloveSaveAdditive = heldByGloves && !rock.yield && !rock.stages;
+  const event = { player, object: rockObject, rock: rock.objectName, handled: heldByGloves, gloveSaveAdditive };
   pluginApi.emitCustomEvent("mining:deplete-rock", event);
   if (event.handled) return false;
   // A staged rock grows back whole, from whichever stage it was mined out.

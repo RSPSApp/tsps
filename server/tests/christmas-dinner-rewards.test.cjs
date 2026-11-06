@@ -1,5 +1,7 @@
 const assert=require('node:assert/strict'),path=require('node:path');
-const {before,test}=require('node:test');
+const {before,after,test}=require('node:test');
+// The claim commits through EventScheduler's events:grant-reward, which trusts only its window.
+const {setWindow}=require('./helpers/event-window.cjs');
 require('../dist/Server').Server.installProductionPathResolver();
 const {CachePipeline}=require('../dist/game/cache/CachePipeline');
 const {PluginManager:PM}=require('../dist/plugins/PluginManager');
@@ -16,7 +18,9 @@ before(async()=>{
   require('../plugins/world/PlayerOnlineTimer.plugin').register(PM.createApi('PlayerOnlineTimer'));
   require('../plugins/world/HolidayRewards.plugin').register(PM.createApi('HolidayRewards'));
   platter=Progress.platterId(api);
+  setWindow(PM,'christmas-2025',true);
 });
+after(()=>setWindow(PM,'christmas-2025',null));
 function fixture(seconds=90000){
   const channel={kind:'test',remoteAddress:'127.0.0.1',isOpen:()=>true,send:()=>true,close(){},onData(){},onError(){},onClose(){}};
   const p=new Player(new PlayerSession(channel));p.setIndex(index++);p.setRegistered(true);p.setUsername('christmasrewards');
@@ -89,4 +93,18 @@ test('reward commit exchanges the platter once and preserves unrelated inventory
   assert.ok(p.getAttribute('holiday-rewards:unlocked').includes('xm21_present_1'));
   const before=snapshot(p);assert.equal(Rewards.claim(api,p,revision),false);
   assert.deepEqual(snapshot(p),before,'repeated completion cannot mint more rares');
+  assert.deepEqual(p.getAttribute('events:completions'),['christmas-2025'],'the grant records its once-per-account completion');
+});
+
+test('a dinner completed before EventScheduler kept completions is imported on login and never granted again',()=>{
+  const p=fixture();
+  // A legacy save: completed by the old direct commit, with no events:completions yet.
+  p.setAttribute(Progress.PROGRESS_ATTRIBUTE,{...Progress.read(p),phase:'complete'});
+  Rewards.importClaim(api,{player:p});Rewards.importClaim(api,{player:p});
+  assert.deepEqual(p.getAttribute('events:completions'),['christmas-2025']);
+  // Even a save whose progress was rolled back to ready cannot claim past the recorded completion.
+  p.setAttribute(Progress.PROGRESS_ATTRIBUTE,{...Progress.read(p),phase:'ready'});
+  const before=snapshot(p);assert.equal(Rewards.claim(api,p,Progress.read(p).revision),false);
+  assert.deepEqual(snapshot(p),before);assert.equal(p.getInventory().getAmount(platter),1,'a refused grant keeps the platter');
+  assert.equal(Progress.read(p).phase,'complete','the recorded completion settles the rolled-back progress');
 });

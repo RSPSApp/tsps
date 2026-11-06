@@ -81,7 +81,7 @@ function playerAt(x, y, items = new Map()) {
     getHitpoints: () => 99,
     isDyingReturn: () => false,
     getPrivateArea: () => null,
-    getLocation: () => ({ getX: () => player.x, getY: () => player.y, getZ: () => player.z }),
+    getLocation: () => new core.Location(player.x, player.y, player.z),
     getTeleportSerial: () => 0,
     getArea: () => null,
     x, y, z: 0,

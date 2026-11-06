@@ -757,13 +757,16 @@ export abstract class Mobile extends Entity {
         // Reflections land separately from the attack, sometimes after their source died.
         if (hit.isReflected() && source && source !== this && hit.getHealthLost() > 0) {
             if (this.isNpc()) {
-                // Every such hit pauses regeneration, but it never takes a single-way NPC from
-                // the player fighting it, and a dead or logged-out source tags nobody.
+                // Such a hit pauses regeneration, but it never takes a single-way NPC from
+                // the player fighting it, and a dead or logged-out source tags nobody. While
+                // another attacker is held its own clock is left alone: restarting it would keep
+                // an absent fighter's tag alive, and regeneration (20s) can't start before that
+                // tag expires (6s), which resets the clock anyway.
                 const combat = this.getCombat();
                 const attacker = combat.getAttacker();
                 const sourceLive = source.isRegistered() && source.getHitpoints() > 0;
                 if (sourceLive && (attacker == null || attacker === source)) combat.setUnderAttack(source);
-                else combat.getLastAttack().reset();
+                else if (attacker == null) combat.getLastAttack().reset();
             }
             if (this.isPlayer() && source.isPlayer()) this.getCombat().addDamage(source, hit.getHealthLost());
         }

@@ -134,17 +134,13 @@ async function chooseLagunaFromGrandExchange(p) {
   p.setLocation(new core.Location(...from.landing));
   p.needsPlacement = false;
   const location = new core.Location(...from.tree);
-  const ids = Object.entries(core.ObjectIdentifiers).filter(([name, id]) => name.startsWith("SPIRIT_TREE") && Number.isInteger(id)).map(([, id]) => id);
-  let object, definition;
-  for (const id of ids) {
-    const candidate = core.MapObjects.get(id, location);
-    if (!candidate) continue;
-    const def = core.ObjectDefinition.forPlayer(candidate.getId(), p);
-    if (def?.getName() === "Spirit tree" && def.getInteractions().includes("Travel")) {
-      object = candidate; definition = def; break;
-    }
-  }
-  assert.ok(object && definition, "the Grand Exchange tree is present and offers Travel for this quest state");
+  const baseId = core.CacheDefinitions.getLocId("spirittree_small");
+  assert.equal(baseId, 1295, "pinned cache's nameless transformed tree base");
+  const object = core.MapObjects.get(baseId, location);
+  assert.ok(object, "the Grand Exchange tree base is present on the map");
+  const definition = core.ObjectDefinition.forPlayer(object.getId(), p);
+  assert.ok(definition?.getName() === "Spirit tree" && definition.getInteractions().includes("Travel"),
+    "the quest-complete transformation offers Travel");
   const clickType = definition.getInteractions().findIndex((option) => option === "Travel") + 1;
   assert.ok(clickType > 0, "actual Travel option slot");
   assert.equal(PM.emitObjectInteraction({ player: p, object, objectId: object.getId(), definition, clickType,
@@ -246,9 +242,14 @@ test("quest and Sailing requirements still apply after a qualifying moor", (t) =
   quest.setStage(p, 0);
   assert.equal(hasLaguna(p), false, "real quest incomplete");
   quest.setStage(p, quest.completionValue);
-  p.getSkillManager().setMaxLevels(core.Skill.SAILING, 57, false);
+  const skill = p.getSkillManager();
+  skill.setExperiences(core.Skill.SAILING, core.SkillManager.getExperienceForLevel(57), false);
+  skill.setMaxLevels(core.Skill.SAILING, 57, false).setCurrentLevel(core.Skill.SAILING, 57, false);
+  assert.equal(skill.getMaxLevel(core.Skill.SAILING), 57, "the level read by the destination gate");
   assert.equal(hasLaguna(p), false, "Sailing below 58");
-  p.getSkillManager().setMaxLevels(core.Skill.SAILING, 58, false);
+  skill.setExperiences(core.Skill.SAILING, core.SkillManager.getExperienceForLevel(58), false);
+  skill.setMaxLevels(core.Skill.SAILING, 58, false).setCurrentLevel(core.Skill.SAILING, 58, false);
+  assert.equal(skill.getMaxLevel(core.Skill.SAILING), 58);
   assert.equal(hasLaguna(p), true);
 });
 

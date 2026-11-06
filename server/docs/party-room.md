@@ -15,6 +15,9 @@ Wiki: [Party Room](https://oldschool.runescape.wiki/w/Party_Room), [Party chest]
   chest inside a box around the room (found by a flood fill that respects wall edges; the box is ours). The coins are taken
   once balloons are down, so a lever that drops none costs nothing. Balloons last two minutes and live in memory, so a
   restart clears them and keeps the chest.
+- **Knight dance:** select Nightly Dance at the lever for 500 coins. Six shared knights dance and sing; the chest can be
+  empty. A second request while they dance costs nothing, as does a failed spawn. The song and Talk-to line use the
+  generated Knight (Falador Party Room) transcript. The matching cache names the knight's idle animation `partyroom_dance`.
 - **Pop:** decided at the pop. The balloon goes first, so one balloon pays once. Chance per balloon is `0.5 * items / 216`
   (ours: the Wiki gives no formula), then a uniform item; a stackable gives uniform 1..all, anything else one. Ironmen pop
   and take nothing. The drop belongs to whoever popped it and is seen by everyone: the Wiki's Ironman page bars receiving
@@ -23,7 +26,10 @@ Wiki: [Party Room](https://oldschool.runescape.wiki/w/Party_Room), [Party chest]
 
 ## Not done / ours
 
-- Party Pete removing cheap items and the knights (separate PR).
+- Party Pete removing cheap items.
+- The six knight positions and four-tick song cadence follow the Near-Reality reference, not a live OSRS capture; the
+  existing map control finds blocked tiles there but does not establish the tabletop or exact retail positions. Pete's
+  final line is played when he is nearby. No client rendering or live timing was verified.
 - The F2P membership exception currently recognises the server's persisted bond-redemption history; no other source of
   membership purchase history was found, so externally granted membership is not represented by this check.
 - Ironmen cannot donate (ours: the Wiki is silent and may allow it; Clan Halls have no such rule).

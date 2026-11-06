@@ -16,6 +16,7 @@ const crypto = require("crypto");
 const path = require("path");
 const PartyChest = require("../../interface/partychest/Offer.PartyChest");
 const Store = require("./Store.PartyRoom");
+const Knights = require("./Knights.PartyRoom");
 
 const CLOSED_CHEST = 26193; // Open
 const OPEN_CHEST = 2418; // Deposit, Shut
@@ -281,6 +282,15 @@ function pullLever({ player }) {
   return true;
 }
 
+/** The lever offers balloons or a knight dance; opening or cancelling costs nothing. */
+function leverMenu({ player }) {
+  api.sendMultiChatboxPrompt(player, "Select an option",
+    "Balloon Bonanza (1,000 coins)", () => pullLever({ player }),
+    "Nightly Dance (500 coins)", () => Knights.start(player),
+    "No action", () => {});
+  return true;
+}
+
 /** One balloon in `used` items of 216 pays with this chance: a full chest is MAX_ODDS, one item is rare. */
 function oddsOf(used) {
   return (MAX_ODDS * used) / Store.CAPACITY;
@@ -308,6 +318,7 @@ function burst({ player, location }) {
 }
 
 function reset() {
+  Knights.reset();
   balloons.clear();
   screen?.reset();
   Store.reset();
@@ -316,6 +327,7 @@ function reset() {
 function attach(pluginApi) {
   api = pluginApi;
   core = pluginApi.core;
+  Knights.init(pluginApi);
   Store.configure({ file: profileFile, isStackable: (id) => new core.Item(id, 1).getDefinition().isStackable() });
   screen = PartyChest.create({
     mainGroup: MAIN_GROUP,
@@ -338,7 +350,7 @@ function attach(pluginApi) {
   api.onObjectFirstClick([CLOSED_CHEST], openChest);
   api.onObjectSecondClick([OPEN_CHEST], openChest);
   api.onObjectThirdClick([OPEN_CHEST], shutChest);
-  api.onObjectFirstClick(LEVERS, pullLever);
+  api.onObjectFirstClick(LEVERS, leverMenu);
   api.onObjectFirstClick(Array.from({ length: BALLOON_COLOURS }, (_, index) => FIRST_BALLOON + index), burst);
   api.onCustomEvent("player:bootstrap-complete", ({ player }) => screen.restoreOffer(player));
   api.onPlayerLogout(({ player }) => screen.playerGone(player));
@@ -358,5 +370,5 @@ const balloonKeys = () => [...balloons.keys()];
 
 module.exports = {
   attach, balloonCount, balloonKeys, burst, confirm, expireBalloon, landingTiles, oddsOf, placeBalloon,
-  pullLever, releaseBalloons, reset, screenOf: () => screen,
+  leverMenu, pullLever, releaseBalloons, reset, screenOf: () => screen,
 };

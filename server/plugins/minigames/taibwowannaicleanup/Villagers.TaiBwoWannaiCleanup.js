@@ -62,13 +62,14 @@ function grant(player, villager) {
   const sticks = sticksFor(Favour.points(player));
   const item = Common.objId(Common.data.sticks.item);
   const inventory = player.getInventory();
-  if (!inventory.contains(item) && inventory.getFreeSlots() <= 0) {
+  const reward = new Common.core.Item(item, sticks);
+  if (inventory.getAddableAmount(reward) < sticks) {
     player.sendMessage(Common.message("noRoom"));
     return;
   }
   Favour.spend(player, sticks);
   setCooldown(player, villager, Common.data.villagerCooldown.claimed);
-  inventory.add(new Common.core.Item(item, sticks));
+  inventory.add(reward);
   Common.advance(player, Common.data.progress.claimed);
   startCooldown(player, villager);
   const { DialogueChainBuilder, EndDialogue, ItemStatementDialogue } = Common.core;

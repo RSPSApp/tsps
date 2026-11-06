@@ -8,7 +8,8 @@ import type { CharacterListEntry } from "../protocol/ClientProtocol";
 
 /** Characters per account by default (pluginConfig `characters:maxPerAccount`). */
 const DEFAULT_MAX_CHARACTERS = 3;
-const MAX_CHARACTERS_LIMIT = 20;
+/** The picker draws at most this many legible rows. */
+const MAX_CHARACTERS_LIMIT = 6;
 
 /**
  * How many characters one account may have. The in-browser host keeps no account file across
@@ -30,11 +31,19 @@ export function characterDisplayName(name: string, save: any | null, fallback = 
   return saved && Misc.formatNameForProtocol(saved) === Misc.formatNameForProtocol(name) ? saved : fallback;
 }
 
-/** The account's characters as the picker shows them, each read from its save for `profile`. */
-export function characterListFor(accountKey: string, profile: PlayerProfile): CharacterListEntry[] {
-  return Accounts.charactersOf(accountKey).map((character, index) => {
-    const save = GameConstants.PLAYER_PERSISTENCE.load(character.name, profile) ?? null;
-    // A character with no save yet enters as a new player does.
+/**
+ * The characters as the picker shows them, each read from its save for `profile`. A save that
+ * can't be read lists that character as one without a save rather than failing the whole list.
+ */
+export function characterListFor(characters: AccountCharacter[], profile: PlayerProfile): CharacterListEntry[] {
+  return characters.map((character, index) => {
+    let save: any | null = null;
+    try {
+      save = GameConstants.PLAYER_PERSISTENCE.load(character.name, profile) ?? null;
+    } catch (error) {
+      console.error(`[login] failed to load ${character.name} for the character list`, error);
+    }
+    // A character with no (readable) save is shown as a new player.
     const levels: number[] = save?.getSkills?.()?.maxLevel ?? new Skills().maxLevel;
     let totalLevel = 0;
     for (let i = 0; i < SkillManager.AMOUNT_OF_SKILLS; i++) totalLevel += Number(levels[i]) || 0;

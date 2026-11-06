@@ -7,6 +7,7 @@ const { test, before, beforeEach } = require('node:test');
 
 // Accounts writes its file to this path; keep it off the real data/saves, before `dist` is required.
 process.env.TSPS_ACCOUNTS_FILE = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'accounts-')), 'accounts.json');
+process.env.TSPS_DISPLAY_NAMES_FILE = path.join(path.dirname(process.env.TSPS_ACCOUNTS_FILE), 'display-names.json');
 const { Server } = require('../dist/Server');
 Server.installProductionPathResolver();
 
@@ -18,6 +19,7 @@ const { World } = require('../dist/game/World');
 const { Sailing } = require('../dist/game/content/sailing/Sailing');
 const { PluginManager } = require('../dist/plugins/PluginManager');
 const { Accounts } = require('../dist/game/entity/impl/player/Accounts');
+const { DisplayNames } = require('../dist/game/entity/impl/player/DisplayNames');
 const { SkillManager, Skills } = require('../dist/game/content/skill/SkillManager');
 const { MAIN_PROFILE, LEAGUE_PROFILE, profileStorageKey } = require('../dist/game/entity/impl/player/persistence/PlayerProfile');
 const net = require('../dist/net/NetworkBuilder');
@@ -84,6 +86,8 @@ beforeEach(() => {
   persistence.failDelete = null;
   Accounts.reset();
   fs.rmSync(process.env.TSPS_ACCOUNTS_FILE, { force: true });
+  DisplayNames.reset();
+  fs.rmSync(process.env.TSPS_DISPLAY_NAMES_FILE, { force: true });
   net.ClientConnection.pendingNames.clear();
   GameConstants.PLAYER_PERSISTENCE = persistence;
 });
@@ -198,13 +202,59 @@ async function handshake(t, connection, name) {
 
 const ninetyNines = () => new Array(SkillManager.AMOUNT_OF_SKILLS).fill(99);
 
-test('a first login creates the account and sends no list without the flag', async () => {
-  const { channel, response } = await connect('Zezima', 'pw', 0);
+test('a first login writes no account until the handshake, and sends no list without the flag', async (t) => {
+  const { channel, connection, response } = await connect('Zezima', 'pw', 0);
   assert.equal(response.success, true);
   assert.equal(response.displayName, 'Zezima');
-  assert.deepEqual(Accounts.charactersOf('zezima').map((c) => c.name), ['Zezima']);
+  assert.equal(Accounts.entryOf('zezima'), undefined, 'a login alone records no account');
+  assert.equal(fs.existsSync(process.env.TSPS_ACCOUNTS_FILE), false, 'and writes nothing');
   assert.equal(packetsOf(channel, CHARACTER_LIST).length, 0);
   assert.equal(packetsOf(channel, CHARACTER_RESULT).length, 0);
+  await handshake(t, connection, 'Zezima');
+  assert.equal(connection.getPlayer().getUsername(), 'Zezima');
+  assert.deepEqual(Accounts.charactersOf('zezima').map((c) => c.name), ['Zezima'], 'entering records it');
+  assert.ok(Accounts.charactersOf('zezima')[0].lastPlayedAt > 0);
+  Accounts.reset();
+  assert.deepEqual(Accounts.charactersOf('zezima').map((c) => c.name), ['Zezima'], 'on disk');
+});
+
+test('a brand-new name lists itself in memory and a closed connection leaves no account', async () => {
+  const { connection, list } = await loginWithList('Newbie', 'pw');
+  assert.deepEqual(list.entries.map((e) => [e.name, e.primary, e.hasSave]), [['Newbie', true, false]]);
+  connection.cleanup('socket_close');
+  assert.equal(Accounts.entryOf('newbie'), undefined);
+  assert.equal(net.ClientConnection.pendingNames.size, 0);
+});
+
+test('a login left on the picker is closed after the pending-login timeout, releasing its names', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  seedSave('Zezima', { passwordHash: hashOf('pw') });
+  Accounts.ensure('Zezima', 1);
+  Accounts.addCharacter('zezima', 'Alt', 2);
+  const { channel, connection } = await connect('Zezima', 'pw', LOGIN_FLAG_CHARACTER_SELECT);
+  await select(connection, 'Alt');
+  let closed = null;
+  channel.close = (code, reason) => { closed = [code, reason]; };
+  assert.equal(net.ClientConnection.isLoginPending('Zezima'), true);
+  assert.equal(net.ClientConnection.isLoginPending('Alt'), true);
+  t.mock.timers.tick(net.ClientConnection.PENDING_LOGIN_TIMEOUT_MS - 1);
+  assert.equal(closed, null, 'not before the timeout');
+  t.mock.timers.tick(1);
+  assert.deepEqual(closed, [1001, 'login timeout']);
+  assert.equal(net.ClientConnection.pendingNames.size, 0, 'the account and character are released');
+  assert.equal((await login('Zezima', 'pw', 0)).success, true, 'the account can log in again');
+});
+
+test('the handshake cancels the pending-login timeout', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  seedSave('Zezima', { passwordHash: hashOf('pw') });
+  const { channel, connection } = await connect('Zezima', 'pw', 0);
+  let closed = false;
+  channel.close = () => { closed = true; };
+  await handshake(t, connection, 'Zezima');
+  t.mock.timers.tick(net.ClientConnection.PENDING_LOGIN_TIMEOUT_MS * 2);
+  assert.equal(closed, false);
+  assert.ok(connection.getPlayer());
 });
 
 test('with the flag the list follows the response and marks the default', async () => {
@@ -350,7 +400,13 @@ test('the character cap reads its plugin config, clamped, and is one in the brow
   const config = t.mock.method(PluginManager, 'getPluginConfig', (_key, fallback) => fallback);
   assert.equal(maxCharactersPerAccount(), 3);
   config.mock.mockImplementation(() => 50);
-  assert.equal(maxCharactersPerAccount(), 20);
+  assert.equal(maxCharactersPerAccount(), 6, 'the picker draws at most six rows');
+  config.mock.mockImplementation(() => 6.9);
+  assert.equal(maxCharactersPerAccount(), 6);
+  config.mock.mockImplementation(() => 2.9);
+  assert.equal(maxCharactersPerAccount(), 2, 'rounded down');
+  config.mock.mockImplementation(() => 'lots');
+  assert.equal(maxCharactersPerAccount(), 3, 'a non-numeric value falls back to the default');
   config.mock.mockImplementation(() => 0);
   assert.equal(maxCharactersPerAccount(), 1);
   config.mock.mockImplementation(() => 5);
@@ -380,7 +436,9 @@ test('creating a character: precondition, name rules, cap, success', async (t) =
   const c = await connect('Zezima', 'pw', LOGIN_FLAG_CHARACTER_SELECT);
   await create(c, 'Alt');
   assert.equal(lastResult(c.channel).code, 9, 'the primary has not entered the world yet');
+  // As if it entered (and logged out) in the meantime: its account record and save exist.
   seedSave('Zezima', { passwordHash: hashOf('pw') });
+  Accounts.ensure('Zezima', 1);
   await create(c, 'bad!name');
   assert.equal(lastResult(c.channel).code, 2);
   await create(c, 'ThirteenChars1');
@@ -508,4 +566,115 @@ test('later failures keep delete and create consistent', async (t) => {
   assert.deepEqual(lastResult(c.channel), { ok: true, code: 0, message: '' });
   assert.equal(Accounts.charactersOf('zezima').length, before + 1);
   assert.equal(Accounts.charactersOf('zezima').at(-1).name, 'New guy');
+});
+
+test('every taken name refuses a create with code 1', async (t) => {
+  t.mock.method(PluginManager, 'getPluginConfig', (key, fallback) => (key === 'characters:maxPerAccount' ? 6 : fallback));
+  seedSave('Zezima', { passwordHash: hashOf('pw') });
+  seedSave('Owner', { passwordHash: hashOf('pw') });
+  Accounts.ensure('Zezima', 1);
+  Accounts.ensure('Owner', 1);
+  Accounts.addCharacter('owner', 'Owned Alt', 2);
+  const now = Date.now();
+  // Owner shows "Shown Name"; the earlier "Old Name" stays held for it.
+  DisplayNames.set('Owner', 'Old Name', now - 2, 60_000);
+  DisplayNames.set('Owner', 'Shown Name', now - 1, 60_000);
+  const c = await connect('Zezima', 'pw', LOGIN_FLAG_CHARACTER_SELECT);
+
+  const refused = async (name, why) => {
+    await create(c, name);
+    const result = lastResult(c.channel);
+    assert.deepEqual([result.ok, result.code], [false, 1], why);
+  };
+  await refused('Zezima', "the account's own primary");
+  seedSave('Saved Guy');
+  await refused('saved guy', 'a save on the main profile');
+  seedSave('League Guy', { profile: LEAGUE_PROFILE });
+  await refused('League Guy', 'a save on the league profile');
+  await refused('Owned_Alt', "another account's character, never entered");
+  await refused('shown name', 'a display name another account shows');
+  await refused('Old Name', 'a display name another account holds');
+  const online = t.mock.method(World, 'getPlayerByName', (name) => (name.toLowerCase() === 'online guy' ? {} : undefined));
+  await refused('Online Guy', 'online');
+  online.mock.restore();
+  const other = await connect('Pending Guy', 'pw', 0);
+  assert.equal(other.response.success, true);
+  await refused('Pending Guy', 'a pending login on another connection');
+
+  assert.deepEqual(Accounts.charactersOf('zezima').map((e) => e.name), ['Zezima'], 'nothing was created');
+  await create(c, 'Free Name');
+  assert.equal(lastResult(c.channel).code, 0, 'a free name is accepted');
+});
+
+test('a display name whose hold ran out no longer blocks a create', async () => {
+  seedSave('Zezima', { passwordHash: hashOf('pw') });
+  seedSave('Owner', { passwordHash: hashOf('pw') });
+  DisplayNames.set('Owner', 'Gone Name', 1, 0);
+  DisplayNames.set('Owner', 'Shown Name', 2, 1);
+  const c = await connect('Zezima', 'pw', LOGIN_FLAG_CHARACTER_SELECT);
+  await create(c, 'Gone Name');
+  assert.equal(lastResult(c.channel).code, 0);
+});
+
+test("an unreadable alt's save still lets the account log in and lists the alt", async (t) => {
+  seedSave('Zezima', { passwordHash: hashOf('pw'), maxLevel: ninetyNines() });
+  Accounts.ensure('Zezima', 1);
+  Accounts.addCharacter('zezima', 'Alt', 2);
+  Accounts.addCharacter('zezima', 'Broken', 3);
+  seedSave('Alt', { maxLevel: ninetyNines() });
+  seedSave('Broken', { maxLevel: ninetyNines() });
+  Accounts.touchLastPlayed('zezima', 'Alt', 9);
+  const realLoad = persistence.load;
+  t.after(() => { persistence.load = realLoad; });
+  persistence.load = (name, profile) => { if (Accounts.key(name) === 'broken') throw new Error('corrupt'); return realLoad(name, profile); };
+  const errors = t.mock.method(console, 'error', () => {});
+  const { response, list, connection, channel } = await loginWithList('Zezima', 'pw');
+  assert.equal(response.success, true);
+  assert.equal(list.defaultIndex, 1, 'the last played (readable) alt is still the default');
+  assert.deepEqual(list.entries.map((e) => [e.name, e.hasSave]), [['Zezima', true], ['Alt', true], ['Broken', false]]);
+  const fresh = new Skills();
+  assert.equal(list.entries[2].totalLevel, fresh.maxLevel.reduce((sum, level) => sum + level, 0), 'listed with fresh levels');
+  assert.ok(errors.mock.callCount() > 0, 'the failure is logged');
+  await select(connection, 'Broken');
+  assert.equal(lastResult(channel).code, 8, 'selecting it is refused');
+});
+
+test('an unreadable default character falls back to the primary; an unreadable primary still fails', async (t) => {
+  seedSave('Zezima', { passwordHash: hashOf('pw') });
+  Accounts.ensure('Zezima', 1);
+  Accounts.addCharacter('zezima', 'Broken', 2);
+  seedSave('Broken');
+  Accounts.touchLastPlayed('zezima', 'Broken', 9);
+  const realLoad = persistence.load;
+  t.after(() => { persistence.load = realLoad; });
+  persistence.load = (name, profile) => { if (Accounts.key(name) === 'broken') throw new Error('corrupt'); return realLoad(name, profile); };
+  t.mock.method(console, 'error', () => {});
+  const { response, list, connection } = await loginWithList('Broken', 'pw');
+  assert.equal(response.success, true);
+  assert.equal(list.defaultIndex, 0, 'the primary is the default instead');
+  assert.equal(net.ClientConnection.isLoginPending('Broken'), false, 'the unreadable character is not reserved');
+  await handshake(t, connection, 'Zezima');
+  assert.equal(connection.getPlayer().getUsername(), 'Zezima');
+
+  net.ClientConnection.pendingNames.clear();
+  persistence.load = (name, profile) => { if (Accounts.key(name) === 'zezima') throw new Error('corrupt'); return realLoad(name, profile); };
+  assert.equal((await login('Zezima', 'pw', 0)).code, 8);
+});
+
+test('a delete whose login vanished during the awaited deletes still removes the character', async (t) => {
+  seedSave('Zezima', { passwordHash: hashOf('pw') });
+  Accounts.ensure('Zezima', 1);
+  Accounts.addCharacter('zezima', 'Alt', 2);
+  seedSave('Alt');
+  const c = await connect('Zezima', 'pw', LOGIN_FLAG_CHARACTER_SELECT);
+  const realDelete = persistence.delete;
+  t.after(() => { persistence.delete = realDelete; });
+  persistence.delete = async (name, profile) => {
+    await realDelete(name, profile);
+    c.connection.cleanup('socket_close');
+  };
+  await remove(c, 'Alt');
+  assert.equal(lastResult(c.channel).code, 4);
+  assert.deepEqual(Accounts.charactersOf('zezima').map((e) => e.name), ['Zezima'], 'the account no longer lists it');
+  assert.equal(saves.has(saveKey('Alt')), false);
 });

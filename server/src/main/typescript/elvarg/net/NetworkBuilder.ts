@@ -390,6 +390,12 @@ export class ClientConnection {
   /** Set by the first ping: a client from before the keepalive is never timed out. */
   private sendsKeepalive = false;
   private idleCheck?: ReturnType<typeof setInterval>;
+  /**
+   * A login that never reaches the handshake (a player left on the character picker) holds its
+   * account and character names; the connection is closed after this long so they are released.
+   */
+  public static readonly PENDING_LOGIN_TIMEOUT_MS = 5 * 60_000;
+  private pendingLoginTimeout?: ReturnType<typeof setTimeout>;
   private pending?: PendingLogin;
   /** The pendingNames keys this connection holds: its account and the character it will enter. */
   private reservedNames: string[] = [];
@@ -1329,18 +1335,34 @@ export class ClientConnection {
     let characterSave: any | null;
     let characterList: ReturnType<typeof characterListFor> | null = null;
     try {
-      Accounts.ensure(primaryName);
-      characters = Accounts.charactersOf(account);
+      // An account record is written only for a name with a save; a name never entered stays in
+      // memory until its handshake (enterWorld), so a login alone can't claim a name for good.
+      if (credentials) Accounts.ensure(primaryName);
+      characters = Accounts.entryOf(account)
+        ? Accounts.charactersOf(account)
+        : [{ name: primaryName, createdAt: Date.now(), lastPlayedAt: 0 }];
       defaultIndex = defaultCharacterIndex(characters, key);
-      const chosen = characters[defaultIndex]?.name ?? primaryName;
-      const isPrimary = Accounts.key(chosen) === Accounts.key(primaryName);
-      characterSave = isPrimary ? save : GameConstants.PLAYER_PERSISTENCE.load(chosen, profile) ?? null;
+      let chosen = characters[defaultIndex]?.name ?? primaryName;
+      let isPrimary = Accounts.key(chosen) === Accounts.key(primaryName);
+      characterSave = isPrimary ? save : null;
+      if (!isPrimary) {
+        try {
+          characterSave = GameConstants.PLAYER_PERSISTENCE.load(chosen, profile) ?? null;
+        } catch (error) {
+          // One unreadable character doesn't lock the account: the primary enters instead.
+          console.error(`[login] failed to load ${chosen}; defaulting to ${primaryName}`, error);
+          defaultIndex = Math.max(0, characters.findIndex((c) => Accounts.key(c.name) === Accounts.key(primaryName)));
+          chosen = primaryName;
+          isPrimary = true;
+          characterSave = save;
+        }
+      }
       // A character keeps the name it was first saved with (either profile's, for the primary);
       // the typed one only names a new account.
       const fallback = (name: string) => (Accounts.key(name) === Accounts.key(typedName) ? typedName : name);
       primaryDisplayName = characterDisplayName(primaryName, save ?? credentials, fallback(primaryName));
       username = isPrimary ? primaryDisplayName : characterDisplayName(chosen, characterSave, fallback(chosen));
-      if (wantsCharacterList) characterList = characterListFor(account, profile);
+      if (wantsCharacterList) characterList = characterListFor(characters, profile);
     } catch (error) {
       console.error(`[login] failed to read the characters of ${typedName}`, error);
       this.releasePendingName();
@@ -1349,6 +1371,7 @@ export class ClientConnection {
     }
     this.reservePendingName(pendingKey(username));
     this.pending = { account, username, profile, passwordHash, save: characterSave, loginTokens, characters, wantsCharacterList };
+    this.startPendingLoginTimeout();
     // The response names the account (its primary): remembered logins and "Log out" resolve by it.
     this.send(encodeLoginResponse(true, -1, "", primaryDisplayName, loginToken));
     if (characterList) this.send(encodeCharacterList(maxCharactersPerAccount(), defaultIndex, characterList));
@@ -1408,7 +1431,7 @@ export class ClientConnection {
   private sendCharacterList(pending: PendingLogin): void {
     const index = pending.characters.findIndex((c) => Accounts.key(c.name) === Accounts.key(pending.username));
     const defaultIndex = index >= 0 ? index : defaultCharacterIndex(pending.characters, pending.username);
-    this.send(encodeCharacterList(maxCharactersPerAccount(), defaultIndex, characterListFor(pending.account, pending.profile)));
+    this.send(encodeCharacterList(maxCharactersPerAccount(), defaultIndex, characterListFor(pending.characters, pending.profile)));
   }
 
   /** Between login and handshake: adds a character to the account. Creating writes no save. */
@@ -1431,7 +1454,11 @@ export class ClientConnection {
         this.send(encodeCharacterResult(false, 2, "Names are 1 to 12 letters, numbers and spaces."));
         return;
       }
-      if (DisplayNames.loginNameInUse(DisplayNames.key(name))) {
+      // Taken: another account's character, save, online or pending login, or another account's
+      // current or held display name (the shared namespace).
+      const nameKey = DisplayNames.key(name);
+      const owner = DisplayNames.ownerOf(nameKey);
+      if ((owner !== undefined && owner !== nameKey) || DisplayNames.loginNameInUse(nameKey)) {
         this.send(encodeCharacterResult(false, 1, "That name is not available."));
         return;
       }
@@ -1499,6 +1526,8 @@ export class ClientConnection {
         }
       }
       if (this.pending !== pending || this.player || this.closed) {
+        // The saves are gone and the player confirmed: the account forgets the character too.
+        Accounts.removeCharacter(pending.account, character.name);
         this.send(encodeCharacterResult(false, 4, "There is no account to delete a character from right now."));
         return;
       }
@@ -1529,6 +1558,7 @@ export class ClientConnection {
 
   private enterWorld(clientType: number = 0, capabilities: number = 0): void {
     if (!this.pending || this.player) return;
+    this.clearPendingLoginTimeout();
     if (this.closed) {
       this.releasePendingName();
       return;
@@ -1579,9 +1609,11 @@ export class ClientConnection {
     this.releasePendingName();
     if (pending.account) {
       try {
+        // A name entering for the first time gets its account record now (login kept it in memory).
+        if (!Accounts.entryOf(pending.account)) Accounts.ensure(pending.characters[0]?.name ?? pending.username);
         Accounts.touchLastPlayed(pending.account, pending.username);
       } catch (error) {
-        console.warn(`[login] could not record when ${pending.username} last played`, error);
+        console.warn(`[login] could not record the account or last played time of ${pending.username}`, error);
       }
     }
     // Back aboard a boat they logged out on at sea.
@@ -1834,6 +1866,26 @@ export class ClientConnection {
     this.reservedNames.push(key);
   }
 
+  /** Closes a connection whose login hasn't reached the handshake in PENDING_LOGIN_TIMEOUT_MS. */
+  private startPendingLoginTimeout(): void {
+    this.clearPendingLoginTimeout();
+    if (this.closed) return;
+    this.pendingLoginTimeout = setTimeout(() => {
+      this.pendingLoginTimeout = undefined;
+      if (this.player || !this.pending) return;
+      this.cleanup("pending_login_timeout");
+      try {
+        this.channel.close(1001, "login timeout");
+      } catch {}
+    }, ClientConnection.PENDING_LOGIN_TIMEOUT_MS);
+    this.pendingLoginTimeout.unref?.();
+  }
+
+  private clearPendingLoginTimeout(): void {
+    if (this.pendingLoginTimeout) clearTimeout(this.pendingLoginTimeout);
+    this.pendingLoginTimeout = undefined;
+  }
+
   /** Drops the logged-in connection once a client that pings goes quiet (IDLE_TIMEOUT_MS). */
   private startIdleCheck(): void {
     if (this.closed) return;
@@ -1852,6 +1904,7 @@ export class ClientConnection {
     this.closed = true;
     this.stalledInput = null;
     if (this.idleCheck) clearInterval(this.idleCheck);
+    this.clearPendingLoginTimeout();
     this.releasePendingName();
     if (!this.player) return;
     // The disconnect hooks fire when the player leaves the world, which a player in

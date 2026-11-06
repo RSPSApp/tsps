@@ -796,3 +796,68 @@ for (const [level, runes] of [[77, 3], [78, 4], [103, 4], [104, 5]]) {
     noCraftEffects(player);
   });
 }
+
+// With no diary bonus, each accepted essence should credit its rolled rune.
+for (const headroom of [null, 2, 1, 0]) {
+  test(`Ourania preserves rolled runes with stack headroom ${headroom}`, () => {
+    const core = PluginManager.getCoreApi(), data = require("../plugins/skills/data/ourania-altar.json");
+    assert.equal(ItemIdentifiers.SOUL_RUNE, 566); assert.equal(ItemIdentifiers.PURE_ESSENCE, 7936);
+    for (const [id, name, stackable] of [[ItemIdentifiers.SOUL_RUNE, "Soul rune", true],
+      [ItemIdentifiers.PURE_ESSENCE, "Pure essence", false]]) {
+      const def = core.ItemDefinition.forId(id);
+      assert.equal(def.getId(), id); assert.equal(def.getName(), name); assert.equal(def.isStackable(), stackable);
+    }
+    assert.equal(data.runes[0].rune, "SOUL_RUNE"); assert.ok(data.levels[0].weights[0] > 0);
+    assert.equal(ardougneMedium, false, "no diary bonus");
+    const held = headroom === null ? 0 : 0x7fffffff - headroom;
+    const items = [[ItemIdentifiers.PURE_ESSENCE, 1], [ItemIdentifiers.PURE_ESSENCE, 1],
+      [ItemIdentifiers.RUNE_ESSENCE, 1]];
+    if (held) items.push([ItemIdentifiers.SOUL_RUNE, held]);
+    const player = crafter(1, items);
+    assert.equal(amount(player, ItemIdentifiers.PURE_ESSENCE), 2);
+    assert.equal(amount(player, ItemIdentifiers.SOUL_RUNE), held);
+    emitted.length = 0;
+    withRandom([0], () => assert.equal(craft(player, ObjectIdentifiers.ALTAR_31), true));
+    const credited = amount(player, ItemIdentifiers.SOUL_RUNE) - held;
+    const consumed = 2 - amount(player, ItemIdentifiers.PURE_ESSENCE);
+    assert.equal(credited, consumed, "one rolled rune per accepted pure essence");
+    assert.equal(amount(player, ItemIdentifiers.RUNE_ESSENCE), 1, "unrelated essence stays");
+    assert.ok(Math.abs(player.xp.reduce((a, n) => a + n, 0) - credited * 11 * 1.7) < 1e-9);
+    const successes = emitted.filter(([name, event]) => name === "runecrafting:success" && event.player === player);
+    assert.equal(successes.reduce((n, [, event]) => n + event.runeAmount, 0), credited);
+    assert.equal(successes.reduce((n, [, event]) => n + event.rolls, 0), consumed);
+    if (headroom === null || headroom === 2) assert.equal(credited, 2, "room control completes");
+  });
+}
+
+for (const headroom of [2, 1]) {
+  test(`Ourania diary bonus respects stack headroom ${headroom}`, () => {
+    ardougneMedium = true;
+    try {
+      const held = 0x7fffffff - headroom;
+      const player = crafter(99, [[ItemIdentifiers.PURE_ESSENCE, 1], [ItemIdentifiers.SOUL_RUNE, held]]);
+      emitted.length = 0;
+      withRandom([0], () => assert.equal(craft(player, ObjectIdentifiers.ALTAR_31), true));
+      const credit = amount(player, ItemIdentifiers.SOUL_RUNE) - held;
+      const consumed = 1 - amount(player, ItemIdentifiers.PURE_ESSENCE);
+      assert.equal(credit, 2 * consumed, "bonus runes are fully credited or the essence remains");
+      assert.equal(consumed, headroom === 2 ? 1 : 0, "exact capacity crafts; insufficient capacity refuses");
+      assert.ok(Math.abs(player.xp.reduce((a, n) => a + n, 0) - consumed * 11 * 1.7) < 1e-9);
+      const events = emitted.filter(([name, event]) => name === "runecrafting:success" && event.player === player);
+      assert.equal(events.reduce((n, [, e]) => n + e.runeAmount, 0), credit);
+      assert.equal(events.reduce((n, [, e]) => n + e.rolls, 0), consumed);
+    } finally { ardougneMedium = false; }
+  });
+}
+
+test("Ourania refuses the whole mixed batch when a later rolled stack is full", () => {
+  const player = crafter(1, [[ItemIdentifiers.PURE_ESSENCE, 1], [ItemIdentifiers.PURE_ESSENCE, 1],
+    [ItemIdentifiers.SOUL_RUNE, 0x7fffffff]]);
+  emitted.length = 0;
+  withRandom([0.9999, 0], () => assert.equal(craft(player, ObjectIdentifiers.ALTAR_31), true));
+  assert.equal(amount(player, ItemIdentifiers.PURE_ESSENCE), 2);
+  assert.equal(amount(player, ItemIdentifiers.SOUL_RUNE), 0x7fffffff);
+  assert.equal(amount(player, ItemIdentifiers.AIR_RUNE), 0);
+  assert.deepEqual(player.xp, []);
+  assert.equal(emitted.filter(([name, event]) => name === "runecrafting:success" && event.player === player).length, 0);
+});

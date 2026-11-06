@@ -290,7 +290,7 @@ for (const headroom of [null, 2, 1, 0]) {
     assert.ok(Math.abs(xpOf(f) - beforeXp - credited * 9.3) < 0.01, 'XP follows credited runes');
     assert.equal(events.reduce((n, e) => n + e.runeAmount, 0), credited, 'event quantity follows credit');
     if (headroom === null || headroom >= 2) assert.equal(credited, 2, 'room controls must complete');
-    else assert.ok(credited >= 0 && credited <= 2, 'refusal, exact partial or complete floor credit allowed');
+    else assert.equal(credited, 0, 'a batch that cannot fit is refused');
   });
 }
 

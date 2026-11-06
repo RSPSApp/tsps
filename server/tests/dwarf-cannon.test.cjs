@@ -567,8 +567,7 @@ test("cache-derived room restrictions match closed walkable components and canno
   }
 });
 
-// S19 private probe uses the existing suite's actual setup and pickup handler.
-// Native packet dispatch remains an explicit review/admission blocker for this draft.
+// Exercise pickup through the registered handler with real setup and inventory state.
 for (const headroom of [null, 30, 1, 0]) {
   test(`owner pickup conserves loaded ammo at stack headroom ${headroom}`, (t) => {
     const MAX = 0x7fffffff, p = gunner({steel: 30}), cannon = built(p), inv = p.getInventory();
@@ -612,3 +611,28 @@ test('owner pickup with no part slots refuses and preserves cannon and inventory
   assert.equal(Cannon.cannonOf(p), cannon); assert.equal(cannon.steel, 30);
   assert.deepEqual(inv.getCopiedItems().map(i => [i.getId(), i.getAmount()]), before);
 });
+
+for (const freeSlots of [5, 6]) {
+  test(`pickup accounts for parts and both ammunition stacks with ${freeSlots} free slots`, () => {
+    const p = gunner({steel: 20}), cannon = built(p), inv = p.getInventory();
+    assert.equal(cannon.steel, 20);
+    inv.add(new core.Item(Items.GRANITE_CANNONBALL, 10), false);
+    assert.equal(Ammo.loadFromInventory(cannon, 10), 10);
+    assert.deepEqual([cannon.stage, cannon.steel, cannon.granite], [4, 20, 10]);
+    while (inv.getFreeSlots() > freeSlots) inv.add(new core.Item(Items.BRONZE_AXE, 1), false);
+    const before = inv.getCopiedItems().map(i => [i.getId(), i.getAmount()]);
+    const saved = JSON.stringify(p.getAttribute(Cannon.STATE_ATTRIBUTE));
+    Decay.pickUp({player: p, object: cannon.object});
+    if (freeSlots === 5) {
+      assert.equal(Cannon.cannonOf(p), cannon);
+      assert.deepEqual([cannon.steel, cannon.granite], [20, 10]);
+      assert.equal(JSON.stringify(p.getAttribute(Cannon.STATE_ATTRIBUTE)), saved);
+      assert.deepEqual(inv.getCopiedItems().map(i => [i.getId(), i.getAmount()]), before);
+    } else {
+      assert.equal(Cannon.cannonOf(p), null);
+      assert.equal(inv.getAmount(Items.STEEL_CANNONBALL), 20);
+      assert.equal(inv.getAmount(Items.GRANITE_CANNONBALL), 10);
+      for (const part of Cannon.KINDS.plain.parts) assert.equal(inv.getAmount(part), 1);
+    }
+  });
+}

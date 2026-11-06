@@ -1317,6 +1317,60 @@ test("Evil Eye: Teleport's area submenu, carried or worn, lists its destinations
   assert.equal(fresh.sent.messages.at(-1), Common.message("noLastDestination"));
 });
 
+test("Evil Eye: Mimic stays in Watson's small upstairs room, including Last-destination (#2876)", () => {
+  core.RegionManager.init();
+  const Teleports = require("../plugins/modes/leaguerelics/Teleports.LeagueRelics");
+  const destination = area(EVIL_EYE_DATA, "Kourend").destinations.find(entry => entry.name === "Mimic");
+  const tile = new Location(destination.x, destination.y, destination.z);
+  const watson = require("../plugins/bosses/mimic/Shared.Mimic").WATSON_TILE;
+  assert.deepEqual([tile.getX(), tile.getY(), tile.getZ()], watson);
+  core.RegionManager.loadMapFiles(tile.getX(), tile.getY());
+  assert.ok(!core.RegionManager.blocked(tile, null), "canonical room tile is open");
+  assert.equal(Teleports.reach(tile, 30), 21, "actual upstairs room is smaller than the fallback's target");
+  assert.ok(Teleports.landing(tile).equals(tile), "do not cross a wall looking for a larger component");
+  const player = character("mimic-eye", "league", EVIL_EYE);
+  withLeague({}, () => {
+    click(player, I.EVIL_EYE, "Teleport");
+    pick(player, "Great Kourend");
+    pick(player, "Mimic");
+    assert.ok(ticksTo(player, destination) > 0, "menu lands beside the Strange casket");
+    const last = player.getAttribute("league:last-destination:evil-eye");
+    assert.deepEqual([last.x, last.y, last.z], watson, "remember the safe upstairs tile and plane");
+    relocate(player, new Location(3200, 3200, 0));
+    click(player, I.EVIL_EYE, "Last-destination");
+    assert.ok(ticksTo(player, destination) > 0, "repeat keeps the room and plane");
+    relocate(player, new Location(3200, 3200, 0));
+    click(player, I.EVIL_EYE, "Teleport");
+    pick(player, "Great Kourend");
+    pick(player, "Mimic");
+    core.TaskManager.process(); // cast tick 0, before its recorded animation/lock tick
+    relocate(player, new Location(3201, 3200, 0)); // movement interrupts an unlocked cast
+    assert.equal(ticksTo(player, destination, 10), -1, "interrupted cast does not land");
+    assert.deepEqual([player.getLocation().getX(), player.getLocation().getY(), player.getLocation().getZ()],
+      [3201, 3200, 0]);
+    assert.deepEqual(player.getAttribute("league:last-destination:evil-eye"), last, "cancel does not replace remembered arrival");
+  });
+});
+
+test("league teleport landing preserves open destinations and still repairs blocked targets", () => {
+  core.RegionManager.init();
+  const Teleports = require("../plugins/modes/leaguerelics/Teleports.LeagueRelics");
+  for (const data of [EVIL_EYE_DATA, ALACRITY_DATA]) {
+    for (const destination of data.areas.flatMap(entry => entry.destinations)) {
+      const tile = new Location(destination.x, destination.y, destination.z ?? 0);
+      core.RegionManager.loadMapFiles(tile.getX(), tile.getY());
+      if (!core.RegionManager.blocked(tile, null)) {
+        assert.ok(Teleports.landing(tile).equals(tile), destination.name + " retains its canonical destination");
+      }
+    }
+  }
+  const casket = new Location(1645, 3569, 1);
+  assert.ok(core.RegionManager.blocked(casket, null), "the actual Strange casket is solid");
+  const repaired = Teleports.landing(casket);
+  assert.ok(!core.RegionManager.blocked(repaired, null), "blocked targets still find open floor");
+  assert.equal(repaired.getZ(), casket.getZ(), "fallback preserves the destination plane");
+});
+
 test("Evil Eye: a destination in an area not unlocked is refused, from the menu and Last-destination", () => {
   const player = character("locked-eye", "league", EVIL_EYE);
   const varlamore = area(EVIL_EYE_DATA, "Varlamore");

@@ -167,6 +167,12 @@ test('leaving the course loses the payment, the reward and the streak, not the t
   p.setAttribute(Dispenser.ATTRIBUTES.paymentWarning, 1);
   op(p, 'Pay');
   lap(p);
+  for (const [x, y] of [[3005, 10357], [3000, 10345]]) {
+    p.location = new Location(x, y, 0);
+    core.TaskManager.process();
+    assert.equal(p.getAttribute(Dispenser.ATTRIBUTES.deposit), 1, 'falling into the course dungeon keeps the payment');
+    assert.equal(p.getAttribute(Dispenser.ATTRIBUTES.reward), 1);
+  }
   p.location = new Location(2998, 3916, 0);
   core.TaskManager.process();
   assert.equal(p.varbits.get(varbit('wildy_agility_deposit')), 0);

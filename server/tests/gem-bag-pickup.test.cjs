@@ -451,12 +451,14 @@ test("emptying a gem bag into the bank preserves gems at stack limits", async (t
 test("log basket bank-empty feedback matches what moved", async (t) => {
   const { MAX_STACK_AMOUNT } = require("../dist/game/model/container/StackType");
   const Bank = core.Bank, basketId = core.CacheDefinitions.getObjId("log_basket_open");
-  const logs = I.LOGS, basketFamily = Storage.FAMILIES.get("log-basket");
+  const basketFamily = Storage.FAMILIES.get("log-basket");
   assert.equal(core.CacheDefinitions.getItem(basketId).params?.get(595), "Empty");
   assert.equal(core.CacheDefinitions.getItem(basketId).inventoryActions[0], "Fill");
-  for (const mode of ["empty", "room", "exact", "near", "full"]) {
+  for (const mode of ["empty", "room", "exact", "near", "full", "near-bark", "full-bark"]) {
     await t.test(mode, async (t) => {
       const f = actor(t, HOME, false), bank = f.p.getBank(0);
+      const logs = mode.endsWith("-bark") ? I.BARK : I.LOGS;
+      if (mode.endsWith("-bark")) assert.equal(core.CacheDefinitions.getItem(logs).name, "Bark");
       f.inv.add(new core.Item(basketId), true);
       const basket = f.inv.getItems()[f.inv.getSlotForItemId(basketId)];
       t.after(() => f.p.closeInterruptibleInterfaces());
@@ -467,7 +469,7 @@ test("log basket bank-empty feedback matches what moved", async (t) => {
           slot: f.inv.getItems().indexOf(basket), itemId: basketId, option: "Fill" });
         assert.equal(Storage.amountOf(f.p, basketFamily, logs), 2, "native Fill stored both logs");
         assert.equal(f.inv.getAmount(logs), 0);
-        const headroom = mode === "exact" ? 2 : mode === "near" ? 1 : 0;
+        const headroom = mode === "exact" ? 2 : mode.startsWith("near") ? 1 : 0;
         const initialBank = mode === "room" ? 100 : MAX_STACK_AMOUNT - headroom - 1;
         bank.add(new core.Item(logs, initialBank), false);
         f.inv.add(new core.Item(logs), true);
@@ -498,13 +500,13 @@ test("log basket bank-empty feedback matches what moved", async (t) => {
       assert.deepEqual(ops, [{ item: true, handled: true }]);
       const afterBank = bank.getAmount(logs), afterStored = Storage.amountOf(f.p, basketFamily, logs);
       assert.equal(afterBank + afterStored + f.inv.getAmount(logs), beforeBank + beforeStored);
-      const moved = mode === "empty" || mode === "full" ? 0 : mode === "near" ? 1 : 2;
+      const moved = mode === "empty" || mode.startsWith("full") ? 0 : mode.startsWith("near") ? 1 : 2;
       assert.equal(afterBank - beforeBank, moved);
       assert.equal(afterStored, beforeStored - moved);
       assert.equal(f.inv.getAmount(basketId), 1);
       const expected = mode === "empty" ? "Your basket is empty."
-        : mode === "near" ? "You empty some logs into your bank."
-        : mode === "full" ? "Your bank cannot hold the logs remaining in your basket."
+        : mode.startsWith("near") ? "You empty some of your basket into the bank."
+        : mode.startsWith("full") ? "Your bank cannot hold the remaining contents of your basket."
         : "You empty your basket into the bank.";
       assert.deepEqual(f.messages.slice(beforeMessages), [expected]);
     });

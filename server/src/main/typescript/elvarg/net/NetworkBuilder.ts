@@ -1129,6 +1129,12 @@ export class ClientConnection {
         case "character_select":
           this.selectCharacter(packet.name);
           continue;
+        case "character_create":
+          this.createCharacter(packet.name);
+          continue;
+        case "character_delete":
+          await this.deleteCharacter(packet.name, packet.confirmName);
+          continue;
         case "handshake":
           this.enterWorld(packet.clientType, packet.capabilities);
           continue;
@@ -1378,6 +1384,121 @@ export class ClientConnection {
     pending.username = characterDisplayName(character.name, save);
     pending.save = save;
     this.send(encodeCharacterResult(true, 0, ""));
+  }
+
+  /** Whether this name is online, entering, or held by another connection's login. */
+  private characterBusy(name: string): boolean {
+    const key = pendingKey(name);
+    return (
+      !!World.getPlayerByName(name) ||
+      World.getAddPlayerQueue().some((player) => Misc.formatNameForProtocol(player.getUsername()) === key) ||
+      (ClientConnection.pendingNames.has(key) && !this.reservedNames.includes(key))
+    );
+  }
+
+  /** The fresh character list after a create or delete, marking the character the handshake enters. */
+  private sendCharacterList(pending: PendingLogin): void {
+    const index = pending.characters.findIndex((c) => Accounts.key(c.name) === Accounts.key(pending.username));
+    const defaultIndex = index >= 0 ? index : defaultCharacterIndex(pending.characters, pending.username);
+    this.send(encodeCharacterList(maxCharactersPerAccount(), defaultIndex, characterListFor(pending.account, pending.profile)));
+  }
+
+  /** Between login and handshake: adds a character to the account. Creating writes no save. */
+  private createCharacter(rawName: string): void {
+    const pending = this.pending;
+    if (!pending || this.player || this.closed) {
+      this.send(encodeCharacterResult(false, 4, "There is no account to add a character to right now."));
+      return;
+    }
+    try {
+      const primary = Accounts.primaryOf(pending.account);
+      const persistence = GameConstants.PLAYER_PERSISTENCE;
+      if (!primary || !(persistence.exists(primary, MAIN_PROFILE) || persistence.exists(primary, LEAGUE_PROFILE))) {
+        this.send(encodeCharacterResult(false, 9, "Enter the world once with your first character."));
+        return;
+      }
+      const name = String(rawName ?? "").trim();
+      const protocolName = Misc.formatNameForProtocol(name);
+      if (protocolName.length < 1 || protocolName.length > 12 || !Misc.isValidName(name)) {
+        this.send(encodeCharacterResult(false, 2, "Names are 1 to 12 letters, numbers and spaces."));
+        return;
+      }
+      if (DisplayNames.loginNameInUse(DisplayNames.key(name))) {
+        this.send(encodeCharacterResult(false, 1, "That name is not available."));
+        return;
+      }
+      if (Accounts.charactersOf(pending.account).length >= maxCharactersPerAccount()) {
+        this.send(encodeCharacterResult(false, 3, "You can't make more characters."));
+        return;
+      }
+      Accounts.addCharacter(pending.account, name);
+      pending.characters = Accounts.charactersOf(pending.account).slice();
+      this.send(encodeCharacterResult(true, 0, ""));
+      this.sendCharacterList(pending);
+    } catch (error) {
+      console.error(`[login] failed to create a character for ${pending.account}`, error);
+      this.send(encodeCharacterResult(false, 8, "The login server is busy."));
+    }
+  }
+
+  /** Between login and handshake: deletes a non-primary character and its saves. */
+  private async deleteCharacter(rawName: string, rawConfirm: string): Promise<void> {
+    const pending = this.pending;
+    if (!pending || this.player || this.closed) {
+      this.send(encodeCharacterResult(false, 4, "There is no account to delete a character from right now."));
+      return;
+    }
+    const character = pending.characters.find((c) => Accounts.key(c.name) === Accounts.key(String(rawName ?? "")));
+    if (!character) {
+      this.send(encodeCharacterResult(false, 4, "That character is not on this account."));
+      return;
+    }
+    if (Accounts.isPrimary(pending.account, character.name)) {
+      this.send(encodeCharacterResult(false, 5, "Your first character can't be deleted."));
+      return;
+    }
+    if (this.characterBusy(character.name)) {
+      this.send(encodeCharacterResult(false, 7, "That character is logged in."));
+      return;
+    }
+    if (DisplayNames.key(String(rawConfirm ?? "")) !== DisplayNames.key(character.name)) {
+      this.send(encodeCharacterResult(false, 6, "The name you typed does not match."));
+      return;
+    }
+    try {
+      const persistence = GameConstants.PLAYER_PERSISTENCE;
+      for (const profile of [MAIN_PROFILE, LEAGUE_PROFILE]) {
+        try {
+          await persistence.delete(character.name, profile);
+        } catch (error) {
+          // A backend that keeps no per-name saves has nothing to delete.
+          if (!String((error as Error)?.message ?? error).includes("does not support")) throw error;
+        }
+      }
+      if (this.pending !== pending || this.player || this.closed) {
+        this.send(encodeCharacterResult(false, 4, "There is no account to delete a character from right now."));
+        return;
+      }
+      Accounts.removeCharacter(pending.account, character.name);
+      pending.characters = Accounts.charactersOf(pending.account).slice();
+      const deletedKey = pendingKey(character.name);
+      if (this.reservedNames.includes(deletedKey)) {
+        this.reservedNames = this.reservedNames.filter((key) => key !== deletedKey);
+        ClientConnection.pendingNames.delete(deletedKey);
+      }
+      if (Accounts.key(pending.username) === Accounts.key(character.name)) {
+        const fallback = pending.characters[defaultCharacterIndex(pending.characters, pending.account)];
+        const save = persistence.load(fallback.name, pending.profile) ?? null;
+        this.reservePendingName(pendingKey(fallback.name));
+        pending.username = characterDisplayName(fallback.name, save);
+        pending.save = save;
+      }
+      this.send(encodeCharacterResult(true, 0, ""));
+      this.sendCharacterList(pending);
+    } catch (error) {
+      console.error(`[login] failed to delete ${character.name}`, error);
+      this.send(encodeCharacterResult(false, 8, "The character could not be deleted."));
+    }
   }
 
   private enterWorld(clientType: number = 0, capabilities: number = 0): void {

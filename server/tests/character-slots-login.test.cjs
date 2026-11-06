@@ -19,7 +19,7 @@ const { Sailing } = require('../dist/game/content/sailing/Sailing');
 const { PluginManager } = require('../dist/plugins/PluginManager');
 const { Accounts } = require('../dist/game/entity/impl/player/Accounts');
 const { SkillManager, Skills } = require('../dist/game/content/skill/SkillManager');
-const { MAIN_PROFILE, profileStorageKey } = require('../dist/game/entity/impl/player/persistence/PlayerProfile');
+const { MAIN_PROFILE, LEAGUE_PROFILE, profileStorageKey } = require('../dist/game/entity/impl/player/persistence/PlayerProfile');
 const net = require('../dist/net/NetworkBuilder');
 const { LOGIN_FLAG_CHARACTER_SELECT } = require('../dist/net/login/LoginTokens');
 const { defaultCharacterIndex, maxCharactersPerAccount } = require('../dist/net/login/CharacterSlots');
@@ -62,6 +62,9 @@ function seedSave(name, { passwordHash = '', maxLevel, profile = MAIN_PROFILE } 
 const persistence = {
   load: (name, profile = MAIN_PROFILE) => saves.get(saveKey(name, profile)) ?? null,
   exists: (name, profile = MAIN_PROFILE) => saves.has(saveKey(name, profile)),
+  delete: async (name, profile = MAIN_PROFILE) => { persistence.deleted.push([Accounts.key(name), profile]); if (persistence.failDelete) throw persistence.failDelete; saves.delete(saveKey(name, profile)); },
+  deleted: [],
+  failDelete: null,
   save: () => {},
   saveOffline: () => {},
   updateOffline: async (name, update, _reason, profile = MAIN_PROFILE) => {
@@ -77,6 +80,8 @@ const persistence = {
 
 beforeEach(() => {
   saves.clear();
+  persistence.deleted.length = 0;
+  persistence.failDelete = null;
   Accounts.reset();
   fs.rmSync(process.env.TSPS_ACCOUNTS_FILE, { force: true });
   net.ClientConnection.pendingNames.clear();
@@ -357,4 +362,120 @@ test('the character cap reads its plugin config, clamped, and is one in the brow
     if (host === undefined) delete process.env.BROWSER_HOST;
     else process.env.BROWSER_HOST = host;
   }
+});
+
+async function send(connection, packet) {
+  connection.inject([packet]);
+  await connection.idle();
+}
+const create = (c, name) => send(c.connection, { type: 'character_create', name });
+const remove = (c, name, confirmName = name) => send(c.connection, { type: 'character_delete', name, confirmName });
+
+test('creating a character: precondition, name rules, cap, success', async (t) => {
+  t.mock.method(PluginManager, 'getPluginConfig', (key, fallback) => (key === 'characters:maxPerAccount' ? 3 : fallback));
+  const early = new net.ClientConnection(stubChannel());
+  await send(early, { type: 'character_create', name: 'Alt' });
+  assert.equal(lastResult(early.channel).code, 4, 'no create before login');
+
+  const c = await connect('Zezima', 'pw', LOGIN_FLAG_CHARACTER_SELECT);
+  await create(c, 'Alt');
+  assert.equal(lastResult(c.channel).code, 9, 'the primary has not entered the world yet');
+  seedSave('Zezima', { passwordHash: hashOf('pw') });
+  await create(c, 'bad!name');
+  assert.equal(lastResult(c.channel).code, 2);
+  await create(c, 'ThirteenChars1');
+  assert.equal(lastResult(c.channel).code, 2);
+  await create(c, 'Zezima');
+  assert.equal(lastResult(c.channel).code, 1);
+  seedSave('Taken', { passwordHash: hashOf('pw') });
+  await create(c, 'taken');
+  assert.equal(lastResult(c.channel).code, 1);
+
+  const before = packetsOf(c.channel, CHARACTER_LIST).length;
+  await create(c, 'Alt');
+  assert.deepEqual(lastResult(c.channel), { ok: true, code: 0, message: '' });
+  const lists = packetsOf(c.channel, CHARACTER_LIST);
+  assert.equal(lists.length, before + 1);
+  const entry = decodeList(lists.at(-1)).entries.find((e) => e.name === 'Alt');
+  assert.ok(entry && entry.hasSave === false && entry.primary === false);
+  assert.equal(saves.size, 2, 'creating writes no save');
+
+  await create(c, 'Third');
+  assert.equal(lastResult(c.channel).code, 0);
+  await create(c, 'Fourth');
+  assert.equal(lastResult(c.channel).code, 3);
+  assert.equal(Accounts.charactersOf('zezima').length, 3);
+});
+
+test('a league-only primary save also allows creating', async () => {
+  seedSave('Zezima', { passwordHash: hashOf('pw'), profile: LEAGUE_PROFILE });
+  const c = await connect('Zezima', 'pw', LOGIN_FLAG_CHARACTER_SELECT);
+  await create(c, 'Alt');
+  assert.equal(lastResult(c.channel).code, 0);
+});
+
+test('a new character enters as a new player; the primary re-enters as an old one', async (t) => {
+  seedSave('Zezima', { passwordHash: hashOf('pw') });
+  const c = await connect('Zezima', 'pw', LOGIN_FLAG_CHARACTER_SELECT);
+  await create(c, 'Alt');
+  await select(c.connection, 'Alt');
+  assert.equal(lastResult(c.channel).code, 0);
+  const logins = await handshake(t, c.connection, 'Zezima');
+  assert.equal(logins.length, 1);
+  assert.equal(logins[0].isNewAccount, true);
+  assert.equal(logins[0].username, 'Alt');
+
+  net.ClientConnection.pendingNames.clear();
+  const d = await connect('Zezima', 'pw', LOGIN_FLAG_CHARACTER_SELECT);
+  await select(d.connection, 'Zezima'); // the last played (Alt) is the default otherwise
+  const again = await handshake(t, d.connection, 'Zezima');
+  assert.equal(again.at(-1).isNewAccount, false);
+});
+
+test('deleting: primary, online, confirmation, success, and persistence failure', async (t) => {
+  seedSave('Zezima', { passwordHash: hashOf('pw') });
+  Accounts.ensure('Zezima', 1);
+  Accounts.addCharacter('zezima', 'Alt', 2);
+  Accounts.addCharacter('zezima', 'Other', 3);
+  seedSave('Alt');
+  const c = await connect('Zezima', 'pw', LOGIN_FLAG_CHARACTER_SELECT);
+
+  await remove(c, 'Nobody');
+  assert.equal(lastResult(c.channel).code, 4);
+  await remove(c, 'zezima');
+  assert.equal(lastResult(c.channel).code, 5);
+  const online = t.mock.method(World, 'getPlayerByName', (name) => (name.toLowerCase() === 'alt' ? {} : undefined));
+  await remove(c, 'Alt');
+  assert.equal(lastResult(c.channel).code, 7);
+  online.mock.restore();
+  net.ClientConnection.pendingNames.add('other');
+  await remove(c, 'Other');
+  assert.equal(lastResult(c.channel).code, 7, 'reserved by another connection');
+  net.ClientConnection.pendingNames.delete('other');
+  await remove(c, 'Alt', 'Other');
+  assert.equal(lastResult(c.channel).code, 6);
+  assert.equal(Accounts.charactersOf('zezima').length, 3);
+  assert.equal(persistence.deleted.length, 0);
+
+  persistence.failDelete = new Error('disk');
+  const errors = t.mock.method(console, 'error', () => {});
+  await remove(c, 'Alt', 'alt');
+  assert.equal(lastResult(c.channel).code, 8);
+  assert.equal(Accounts.charactersOf('zezima').length, 3, 'a failed delete leaves the account alone');
+  errors.mock.restore();
+  persistence.failDelete = new Error('This persistence backend does not support deleting saves');
+  persistence.deleted.length = 0;
+
+  // The pending character itself is deleted: the default falls back and is reserved.
+  await select(c.connection, 'Alt');
+  assert.equal(net.ClientConnection.isLoginPending('Alt'), true);
+  const lists = packetsOf(c.channel, CHARACTER_LIST).length;
+  await remove(c, 'ALT', 'alt');
+  assert.deepEqual(lastResult(c.channel), { ok: true, code: 0, message: '' });
+  assert.deepEqual(Accounts.charactersOf('zezima').map((e) => e.name), ['Zezima', 'Other']);
+  assert.deepEqual(persistence.deleted.map((d) => d[1]).sort(), [LEAGUE_PROFILE, MAIN_PROFILE].sort());
+  assert.equal(packetsOf(c.channel, CHARACTER_LIST).length, lists + 1);
+  assert.equal(net.ClientConnection.isLoginPending('Alt'), false, 'the deleted character is released');
+  const logins = await handshake(t, c.connection, 'Zezima');
+  assert.notEqual(logins[0].username.toLowerCase(), 'alt');
 });

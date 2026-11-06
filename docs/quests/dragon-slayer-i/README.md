@@ -23,9 +23,14 @@ Community-reported completion accepted for scheduling (skip full manual replay).
 
 ### 2026-11-06 · agent · rev-242 capture review
 
-- **Source:** user-supplied RSProx capture `20261106T101002-5ab63b4.bin` (revision 242, SHA-256 `7ab95f95…fd1b`,
-  a fresh run from the Guildmaster to the Oziach hand-in), transcribed with upstream `blurite/rsprox`
-  (`osrs-242`). The raw log is kept out of Git. Tick numbers below are that capture's.
+- **Source:** user-supplied RSProx capture `20261106T101002-5ab63b4.bin` (revision 242.1, a fresh run from the
+  Guildmaster to the Oziach hand-in), SHA-256 `7ab95f958f587c8a1ff61bc3762aae4a2c1fea95d2b52212ef553115b0a5fd1b`.
+  It was transcribed with upstream `blurite/rsprox` `master` at `f1081e91839fee9af02d090ade82dfc47e234120`
+  (`TranscribeCommandKt`, filter set `archive`, instanced coordinates translated to source tiles). The raw log
+  is kept out of Git because it carries account details. Redacted excerpts of the cited tick ranges, with the
+  decoder settings and the redaction script, are in
+  [this gist](https://gist.github.com/Bandit-HaxUnit/f07570da5ee93ced5e21e83fd7770123). Tick numbers below are
+  that capture's.
 - **Matched the plugin already:** the varp 176 wire sequence 0,1,2,3,6,7,8,9,10; plank varbits 1835-1837;
   instruction varbits 3742-3746; offering varbits 3747-3750; 1832, 3741, 18306; locs 25115, 25154, 25161,
   2606; Crandor rocks 53234/53236 at 84 Agility (already a captured shortcut, rsprox 362).

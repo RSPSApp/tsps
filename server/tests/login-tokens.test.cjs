@@ -390,7 +390,7 @@ const { Accounts } = require('../dist/game/entity/impl/player/Accounts');
 const CHARACTER_LIST = 7;
 
 /** An account "tokenuser" (primary) with one alternate "tokenalt", each with a main save, and optionally a league save for the primary. */
-function accountWithAlt(hash, { league = false } = {}) {
+function accountWithAlt(hash, { league = false, altLeague = false } = {}) {
   const { PlayerPersistence } = require('../dist/game/entity/impl/player/persistence/PlayerPersistence');
   Accounts.reset();
   require('node:fs').rmSync(process.env.TSPS_ACCOUNTS_FILE, { force: true });
@@ -413,6 +413,7 @@ function accountWithAlt(hash, { league = false } = {}) {
   makeSave('tokenuser|main');
   makeSave('tokenalt|main');
   if (league) makeSave('tokenuser|league');
+  if (altLeague) makeSave('tokenalt|league');
   const writes = [];
   const store = Object.assign(Object.create(PlayerPersistence.prototype), {
     load: (name, profile = 'main') => saves.get(`${name.toLowerCase()}|${profile}`) ?? null,
@@ -479,36 +480,44 @@ test('a remembered password login that enters a non-primary leaves login tokens 
   assert.equal(saves.get('tokenuser|main').attributes[tokens.LOGIN_TOKENS_ATTRIBUTE].length, 1, 'they went to the primary save');
 });
 
-test('changing the password while playing a non-primary character rewrites the primary save and signs out its tokens', async () => {
+/** Changes the password while `liveName` is online on the main profile; returns what was written. */
+async function changePasswordAs(liveName) {
   const { Player } = require('../dist/game/entity/impl/player/Player');
   const { World } = require('../dist/game/World');
   const hashA = await PasswordUtil.generatePasswordHashWithSalt('passwordA');
   const hashB = await PasswordUtil.generatePasswordHashWithSalt('passwordB');
-  const { saves, hashes, writes, store } = accountWithAlt(hashA, { league: true });
-  const entry = [{ hash: 'a'.repeat(64), lastUsed: Date.now() }];
-  saves.get('tokenuser|main').attributes[tokens.LOGIN_TOKENS_ATTRIBUTE] = entry;
-  saves.get('tokenuser|league').attributes[tokens.LOGIN_TOKENS_ATTRIBUTE] = entry;
-  const alt = new Player(null);
-  alt.setUsername('tokenalt');
-  alt.setProfile('main');
-  alt.setPasswordHashWithSalt(hashA);
+  const { saves, hashes, writes, store } = accountWithAlt(hashA, { league: true, altLeague: true });
+  for (const save of saves.values()) save.attributes[tokens.LOGIN_TOKENS_ATTRIBUTE] = [{ hash: 'a'.repeat(64), lastUsed: Date.now() }];
+  const live = new Player(null);
+  live.setUsername(liveName);
+  live.setProfile('main');
+  live.setPasswordHashWithSalt(hashA);
+  const requested = [];
+  store.requestSave = (player, reason) => requested.push([player.getUsername(), reason]);
   const byName = World.getPlayerByName;
-  World.getPlayerByName = (name) => (name === 'tokenalt' ? alt : undefined);
-  store.requestSave = () => {};
+  World.getPlayerByName = (name) => (name.toLowerCase() === liveName ? live : undefined);
   try {
-    await store.changePassword(alt, hashB);
+    await store.changePassword(live, hashB);
   } finally {
     World.getPlayerByName = byName;
   }
-  assert.equal(alt.getPasswordHashWithSalt(), hashB, 'the live character takes it');
-  assert.equal(hashes.get('tokenuser|main'), hashB, 'the primary main save holds it');
-  assert.equal(hashes.get('tokenuser|league'), hashB, 'and its league save');
-  assert.deepEqual(saves.get('tokenuser|main').attributes[tokens.LOGIN_TOKENS_ATTRIBUTE], []);
-  assert.deepEqual(saves.get('tokenuser|league').attributes[tokens.LOGIN_TOKENS_ATTRIBUTE], []);
-  assert.deepEqual(writes.sort(), ['tokenuser|league', 'tokenuser|main'], 'nothing else was written offline');
-  assert.equal(hashes.get('tokenalt|main'), hashA, 'the alternate save is only written by its own logout save');
-  assert.equal(saves.get('tokenalt|main').attributes[tokens.LOGIN_TOKENS_ATTRIBUTE], undefined);
-});
+  return { live, hashB, saves, hashes, writes, requested };
+}
+
+for (const liveName of ['tokenuser', 'tokenalt']) {
+  test(`changing the password as ${liveName} rewrites every character's saves and signs out their tokens`, async () => {
+    const { live, hashB, saves, hashes, writes, requested } = await changePasswordAs(liveName);
+    assert.equal(live.getPasswordHashWithSalt(), hashB, 'the live character takes it');
+    assert.deepEqual(requested, [[liveName, 'password-change']], 'and its own save is written at once');
+    const ids = ['tokenuser|main', 'tokenuser|league', 'tokenalt|main', 'tokenalt|league'];
+    const offline = ids.filter((id) => id !== `${liveName}|main`);
+    assert.deepEqual(writes.sort(), offline.sort(), 'every other save is written offline, nothing twice');
+    for (const id of offline) {
+      assert.equal(hashes.get(id), hashB, `${id} holds the new hash`);
+      assert.deepEqual(saves.get(id).attributes[tokens.LOGIN_TOKENS_ATTRIBUTE], [], `${id} has no remembered logins`);
+    }
+  });
+}
 
 test('login_forget with a character name drops the token from the primary save', async () => {
   const hash = await PasswordUtil.generatePasswordHashWithSalt('hunter22');

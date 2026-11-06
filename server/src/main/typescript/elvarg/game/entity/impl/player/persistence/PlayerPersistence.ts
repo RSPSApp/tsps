@@ -72,27 +72,37 @@ export abstract class PlayerPersistence {
 
     /**
      * A new password for the account: the live character takes it (and signs out its remembered
-     * logins), and the account's credentials follow. A primary writes its own save and gets the
-     * same hash on its other profile's save; a non-primary's change goes straight into the
-     * primary's saves (both profiles), since the credentials live only there. Remembered logins
-     * are signed out on every save the hash lands on, so the old password opens nothing.
+     * logins) and its save is written now; then every save of every character of the account, on
+     * both profiles, gets the same hash with its remembered logins signed out, offline. The
+     * credential is the primary's, but an alt's save keeps a copy of the hash: if accounts.json
+     * were lost, an alt with no hash would open with any password (an empty hash is a new account),
+     * so the copy must never be stale. The account's other characters are offline (one character
+     * of an account online at a time). Every save is attempted; the first failure is thrown after.
      */
     public async changePassword(player: Player, passwordHashWithSalt: string): Promise<void> {
         player.setPasswordHashWithSalt(passwordHashWithSalt);
-        const { Accounts } = require("../Accounts") as typeof import("../Accounts");
-        const account = Accounts.accountOf(player.getUsername());
-        const primary = account ? Accounts.primaryOf(account) : undefined;
-        if (account && primary && !Accounts.isPrimary(account, player.getUsername())) {
-            for (const profile of [MAIN_PROFILE, siblingProfile(MAIN_PROFILE)]) {
-                if (!this.exists(primary, profile)) continue;
-                await this.updateOffline(primary, (save) => this.replaceCredentials(save, passwordHashWithSalt), "password-change", profile, { evenIfOnline: true });
-            }
-            return;
-        }
         this.requestSave(player, "password-change");
-        const other = siblingProfile(player.getProfile());
-        if (!this.exists(player.getUsername(), other)) return;
-        await this.updateOffline(player.getUsername(), (save) => this.replaceCredentials(save, passwordHashWithSalt), "password-change", other, { evenIfOnline: true });
+        const { Accounts } = require("../Accounts") as typeof import("../Accounts");
+        const liveKey = Accounts.key(player.getUsername());
+        const account = Accounts.accountOf(player.getUsername());
+        const names = account ? Accounts.charactersOf(account).map((character) => character.name) : [];
+        if (!names.some((name) => Accounts.key(name) === liveKey)) names.push(player.getUsername());
+        let failure: unknown = null;
+        for (const name of names) {
+            const live = Accounts.key(name) === liveKey;
+            for (const profile of [MAIN_PROFILE, siblingProfile(MAIN_PROFILE)]) {
+                // The live character's own save is the one requestSave writes.
+                if (live && profile === player.getProfile()) continue;
+                try {
+                    if (!this.exists(name, profile)) continue;
+                    await this.updateOffline(name, (save) => this.replaceCredentials(save, passwordHashWithSalt), "password-change", profile, { evenIfOnline: live });
+                } catch (error) {
+                    console.error(`[persistence] could not write the new password to ${name} (${profile})`, error);
+                    failure ??= error;
+                }
+            }
+        }
+        if (failure) throw failure;
     }
 
     private replaceCredentials(save: PlayerSave, passwordHashWithSalt: string): void {

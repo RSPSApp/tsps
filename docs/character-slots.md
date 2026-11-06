@@ -36,7 +36,7 @@ Run one server process per data directory, as for the saves themselves.
 Back up `accounts.json` together with the saves database (`players.sqlite`, or the JSON save folder), and restore them together. The saves alone are not enough:
 
 - **Ownership:** it is the only record of which characters each account owns. Without it, each character with a save becomes an account of its own, and characters that never entered become free names.
-- **Alt passwords:** an alt has no password of its own; it logs in with its primary's. Without the file, an alt opens with the password its own save last held, which is stale after a password change on the primary.
+- **Alt passwords:** an alt has no password of its own; it logs in with its primary's. Each alt's save also keeps a copy of the account's password hash, and `::changepassword` (from any character) rewrites it on every character's saves and signs out their remembered logins. Without the file, each alt with a save opens on its own with the account's current password.
 - **Deleted names:** without the tombstones, a deleted character's name can be taken again, together with its display names, clan rank, bans and mutes.
 
 If the file exists but can't be read (for example, damaged or hand-edited JSON), every login is refused. Players see "The login server is busy."; the server log names the file and says to repair it or restore it from the backup. A missing file is not an error: the server starts a new one, so restoring the backup must come before the server is started again.

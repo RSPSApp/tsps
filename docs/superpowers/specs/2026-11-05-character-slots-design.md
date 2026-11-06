@@ -149,8 +149,12 @@ primary's main-profile save, with the existing league-save fallback when no main
 Remembered-login tokens stay on the primary's save for the **world's profile** (the league save on
 a league world), so tokens issued before this ships keep working. `login()` loads the primary's
 saves for credentials where it loads `main`/`save` today; token issue, rotation and `login_forget`
-work on those saves. `changePassword` writes the live player if they are the primary, and otherwise
-writes the primary's saves offline through `updateOffline` (plus the league sibling as today).
+work on those saves. `changePassword` writes the live character's save and then every other save
+of every character of the account (both profiles) offline through `updateOffline`, each with the
+new hash and its remembered logins cleared. The account's other characters are offline (one
+online at a time). An alt's save keeps a copy of the hash on purpose: if `accounts.json` were
+lost, an alt with an empty hash would open with any password (an empty stored hash reads as a new
+account), so the copy is kept and never left stale.
 
 **Creation requires the primary to have a save.** A brand-new account has no save until its first
 handshake; until then `CHARACTER_CREATE` is refused (code 9, "Enter the world once with your first
@@ -309,7 +313,7 @@ Server (`server/tests`, extend the login harness in `login-tokens.test.cjs` or a
 select, default pick, typed non-primary name resolves to the account; create with cap, invalid
 name, every taken-name case, creation refused before the primary has a save; delete rules
 (primary, online, mismatch), that the save is gone, the name tombstoned for good and history re-keyed; one-account-online across two characters; token rotation and `login_forget`
-stay on the primary; `changePassword` from a non-primary writes the primary offline; handshake
+stay on the primary; `changePassword` from the primary or an alt rewrites every character's saves; handshake
 without the flag enters the typed character (primary included); the default skips banned characters. Persistence: `delete` per backend in `player-saves.test.cjs`.
 
 Client (`client/tests`): packet encode and decode round trips for the three new client packets

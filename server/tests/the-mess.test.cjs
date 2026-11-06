@@ -13,7 +13,9 @@ const {
   ITEM,
   OBJECT,
   HUD,
+  APPRECIATION,
   sessions,
+  worldSession,
   sessionOf,
   decayTick,
   cleanUp,
@@ -50,6 +52,7 @@ function player({ cooking = 99, items = {} } = {}) {
   const sender = {};
   const p = {
     messages: [], xp: 0, inventory, hud: null, hudOpen: false, hudClosed: false,
+    getLocation: () => new (PluginManager.getCoreApi().Location)(1640, 3625, 0),
     getInventory: () => ({
       getAmount: held,
       contains: (id) => held(id) > 0,
@@ -87,6 +90,8 @@ function step(player, a, b) {
 
 beforeEach(() => {
   sessions.clear();
+  // Only fixture setup resets the World; leaving the Mess must never do this.
+  if (worldSession) for (const key of Object.keys(worldSession.appreciation)) worldSession.appreciation[key] = APPRECIATION.START;
   prompts.length = 0;
 });
 
@@ -303,4 +308,193 @@ test("Ewesey's Cooking conditions answer from the real level", () => {
   assert.equal(eweseyCondition({ npcId: 6926, player: low, text: "If the player does not have enough Hosidius Favour:" }), false);
   assert.equal(eweseyCondition({ npcId: 6926, player: player(), text: "With at least 20 Cooking:" }), true);
   assert.equal(eweseyCondition({ npcId: 1, player: low, text: "With at least 20 Cooking:" }), null);
+});
+
+// Real registered plugin hooks and actor inventories; the table is cache-defined but constructed.
+// Zone and item-on-object events are dispatched directly, not through decoded packets or movement.
+test("native Mess visitors share appreciation and keep personal serving outcomes", async t => {
+  const { CachePipeline } = require("../dist/game/cache/CachePipeline");
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const { PlayerSession } = require("../dist/net/PlayerSession");
+  const { ItemDefinition } = require("../dist/game/definition/ItemDefinition");
+  const { SkillManager } = require("../dist/game/content/skill/SkillManager");
+  const shared = require("../plugins/minigames/themess/Shared.TheMess");
+  const previousApi = shared.api();
+  const core = PluginManager.getCoreApi();
+  let started = false;
+  t.after(() => {
+    if (started) PluginManager.emitServerShutdown({});
+    sessions.clear();
+    shared.init(previousApi);
+  });
+  await CachePipeline.initialize();
+  core.ObjectDefinition.init();
+  assert.equal(core.CacheDefinitions.getInterfaceId("hosidius_servery_hud"), HUD.INTERFACE);
+  assert.equal(core.CacheDefinitions.getInventoryId("skill_guide_cooking_wine"), HUD.INVENTORY);
+  assert.equal(core.CacheDefinitions.getLocId("hosidius_servery_deposit"), OBJECT.BUFFET_TABLE);
+  assert.equal(core.CacheDefinitions.getObjId("hosidius_servery_meat_pie"), ITEM.MEAT_PIE);
+  assert.equal(core.CacheDefinitions.getObjId("hosidius_servery_pineapple_pizza"), ITEM.PINEAPPLE_PIZZA);
+  assert.equal(core.CacheDefinitions.getObjId("hosidius_servery_stew"), ITEM.STEW);
+  TheMess.register(PluginManager.createApi("NativeTheMess"));
+  started = true; // shutdown owns even a partially completed startup
+  PluginManager.emitServerStartup({});
+  const table = new core.GameObject(OBJECT.BUFFET_TABLE, new core.Location(1640, 3625, 0), 10, 0);
+  assert.equal(table.getDefinition().getName(), "Buffet table");
+  assert.equal(ItemDefinition.forId(ITEM.MEAT_PIE).isNoted(), false);
+  const location = (x, y) => new core.Location(x, y, 0);
+  const reset = () => {
+    sessions.clear();
+    if (worldSession) for (const key of Object.keys(worldSession.appreciation)) worldSession.appreciation[key] = APPRECIATION.START;
+  };
+  let serial = 0;
+  function actor(test, pies = 0, initialBars = [1000, 1000, 1000]) {
+    const channel = { kind: "test", isOpen: () => true, send: () => true, close() {}, onData() {}, onClose() {}, onError() {} };
+    const session = new PlayerSession(channel), p = new Player(session), hud = [];
+    session.setPlayer(p);
+    p.setUsername(`native-mess-${serial++}`);
+    p.setLocation(location(1640, 3624));
+    test.mock.method(p, "onAdd", () => {});
+    test.mock.method(p, "onRemove", () => {});
+    const sender = p.getPacketSender(), original = sender.sendInventory.bind(sender);
+    test.mock.method(sender, "sendInventory", (id, capacity, items) => {
+      if (id === HUD.INVENTORY) hud.push(items.map(item => item.amount));
+      return original(id, capacity, items);
+    });
+    test.after(() => {
+      if (p.isRegistered()) {
+        PluginManager.emitPlayerLogout({ player: p, username: p.getUsername() });
+        core.World.getPlayers().remove(p);
+      }
+      core.TaskManager.cancelTasks(p);
+      core.TaskManager.cancelTasks(p.getIndex());
+      core.World.refreshActiveRegions();
+    });
+    assert.equal(core.World.getPlayers().add(p), true);
+    assert.equal(core.World.getPlayers().get(p.getIndex()), p);
+    p.getSkillManager().setMaxLevels(core.Skill.COOKING, 99, false).setCurrentLevel(core.Skill.COOKING, 99, false)
+      .setExperience(core.Skill.COOKING, SkillManager.getExperienceForLevel(99));
+    assert.equal(p.getSkillManager().getCurrentLevel(core.Skill.COOKING), 99);
+    assert.equal(p.getSkillManager().getMaxLevel(core.Skill.COOKING), 99);
+    if (pies) p.getInventory().adds(ITEM.MEAT_PIE, pies);
+    assert.equal(p.getInventory().getAmount(ITEM.MEAT_PIE), pies);
+    PluginManager.updatePlayerZones(p);
+    assert.ok(hud.length > 0, "zone enter sends a HUD");
+    if (initialBars) assert.deepEqual(hud.at(-1), initialBars, "zone enter sends the expected bars");
+    return { p, hud, xp: p.getSkillManager().getExperience(core.Skill.COOKING) };
+  }
+  function usePie(p) {
+    const inventory = p.getInventory();
+    const item = inventory.getItems().find(entry => entry?.getId() === ITEM.MEAT_PIE);
+    return PluginManager.emitItemOnObject({ player: p, object: table, objectId: table.getId(), itemId: ITEM.MEAT_PIE, item, handled: false });
+  }
+  const xp = actor => actor.p.getSkillManager().getExperience(core.Skill.COOKING) - actor.xp;
+  const rate = core.GameConstants.EXPERIENCE_MULTIPLIER;
+  assert.ok(Number.isFinite(rate) && rate > 0);
+  const inventory = actor => actor.p.getInventory().getItems().map(item => item ? [item.getId(), item.getAmount(), JSON.stringify(item.getMeta?.() ?? null)] : null);
+  const bars = actor => ({ ...sessionOf(actor.p).appreciation });
+
+  await t.test("A then B then A share HUD and pre-serve XP without sharing inventory", test => {
+    reset();
+    const a = actor(test, 2), b = actor(test, 1);
+    assert.equal(usePie(a.p), true);
+    assert.equal(a.p.getInventory().getAmount(ITEM.MEAT_PIE), 1);
+    assert.equal(b.p.getInventory().getAmount(ITEM.MEAT_PIE), 1);
+    assert.equal(xp(a), 160 * rate);
+    assert.equal(xp(b), 0);
+    assert.deepEqual(b.hud.at(-1), [850, 1000, 1000], "B sees A's serve");
+    assert.equal(usePie(b.p), true);
+    assert.equal(xp(b), 136 * rate, "B's own XP uses the pre-serve world bar");
+    assert.equal(b.p.getInventory().getAmount(ITEM.MEAT_PIE), 0);
+    assert.deepEqual(a.hud.at(-1), [700, 1000, 1000]);
+    assert.equal(usePie(a.p), true);
+    assert.equal(xp(a), (160 + 112) * rate);
+    assert.equal(a.p.getInventory().getAmount(ITEM.MEAT_PIE), 0);
+    assert.deepEqual(b.hud.at(-1), [550, 1000, 1000]);
+    const before = { a: inventory(a), b: inventory(b), bars: bars(a), axp: xp(a), bxp: xp(b), ahud: a.hud.length, bhud: b.hud.length };
+    assert.equal(usePie(b.p), true, "handler owns a second click, but cannot serve absent food");
+    assert.deepEqual({ a: inventory(a), b: inventory(b), bars: bars(a), axp: xp(a), bxp: xp(b), ahud: a.hud.length, bhud: b.hud.length }, before);
+  });
+
+  await t.test("leave stops HUD fanout and re-entry sees the current World bars", test => {
+    reset();
+    const a = actor(test, 2), b = actor(test);
+    assert.equal(usePie(a.p), true);
+    b.p.setLocation(location(1630, 3624));
+    PluginManager.updatePlayerZones(b.p);
+    assert.equal(sessions.has(b.p), false);
+    const count = b.hud.length;
+    assert.equal(usePie(a.p), true);
+    assert.equal(b.hud.length, count, "visitor outside the zone receives no later HUD");
+    b.p.setLocation(location(1640, 3624));
+    PluginManager.updatePlayerZones(b.p);
+    assert.deepEqual(b.hud.at(-1), [700, 1000, 1000], "return reads shared state, not a fresh bar");
+  });
+
+  await t.test("an actor moved outside before its zone update is pruned from fanout", test => {
+    reset();
+    const a = actor(test, 1), b = actor(test);
+    b.p.setLocation(location(1630, 3624)); // before the next registered zone update
+    assert.equal(sessions.has(b.p), true);
+    const count = b.hud.length;
+    assert.equal(usePie(a.p), true);
+    assert.equal(b.hud.length, count);
+    assert.equal(sessions.has(b.p), false, "outside viewer is no longer retained");
+  });
+
+  await t.test("an unregistered visitor is pruned without a logout callback", test => {
+    reset();
+    const a = actor(test, 1), b = actor(test);
+    core.World.getPlayers().remove(b.p);
+    assert.equal(b.p.isRegistered(), false);
+    assert.equal(sessions.has(b.p), true);
+    const count = b.hud.length;
+    assert.equal(usePie(a.p), true);
+    assert.equal(b.hud.length, count);
+    assert.equal(sessions.has(b.p), false);
+  });
+
+  await t.test("an unrelated item does not change inventory, XP or either HUD", test => {
+    reset();
+    const a = actor(test), b = actor(test);
+    a.p.getInventory().adds(385, 1);
+    const item = a.p.getInventory().getItems().find(entry => entry?.getId() === 385);
+    assert.ok(item);
+    const before = { a: inventory(a), b: inventory(b), bars: bars(a), axp: xp(a), bxp: xp(b), ahud: a.hud.length, bhud: b.hud.length };
+    assert.equal(PluginManager.emitItemOnObject({ player: a.p, object: table, objectId: table.getId(), itemId: 385, item, handled: false }), true);
+    assert.deepEqual({ a: inventory(a), b: inventory(b), bars: bars(a), axp: xp(a), bxp: xp(b), ahud: a.hud.length, bhud: b.hud.length }, before);
+  });
+
+  await t.test("a missing dish preserves both inventories, XP, bars and HUDs", test => {
+    reset();
+    const a = actor(test), b = actor(test);
+    const before = { a: inventory(a), b: inventory(b), bars: bars(a), axp: xp(a), bxp: xp(b), ahud: a.hud.length, bhud: b.hud.length };
+    assert.equal(usePie(a.p), true);
+    assert.deepEqual({ a: inventory(a), b: inventory(b), bars: bars(a), axp: xp(a), bxp: xp(b), ahud: a.hud.length, bhud: b.hud.length }, before);
+  });
+
+  await t.test("disconnect removes only the viewer and a new actor sees the continuing World", test => {
+    reset();
+    const a = actor(test, 2), b = actor(test);
+    assert.equal(usePie(a.p), true);
+    PluginManager.emitPlayerDisconnect({ player: b.p, username: b.p.getUsername() });
+    assert.equal(sessions.has(b.p), false);
+    core.World.getPlayers().remove(b.p);
+    const count = b.hud.length;
+    assert.equal(usePie(a.p), true);
+    assert.equal(b.hud.length, count, "disconnected actor receives no update");
+    const c = actor(test, 0, null);
+    assert.deepEqual(c.hud.at(-1), [700, 1000, 1000]);
+  });
+
+  await t.test("all visitors leave, the existing approximate tick runs, and a new visitor sees that state", test => {
+    reset();
+    const a = actor(test, 1);
+    assert.equal(usePie(a.p), true);
+    a.p.setLocation(location(1630, 3624));
+    PluginManager.updatePlayerZones(a.p);
+    assert.equal(sessions.size, 0);
+    decayTick(); // existing approximation, not a claim about the live rate or direction
+    const b = actor(test, 0, null);
+    assert.deepEqual(b.hud.at(-1), [860, 1000, 1000]);
+  });
 });

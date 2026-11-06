@@ -1400,6 +1400,6 @@ module.exports = function registerRatcatchersQuest(api) {
   api.onObjectInteraction(handleObjectInteraction);
   api.onNpcDeath(handleNpcDeath);
   api.onPlayerLogin(handleLogin);
-  require("../ratcatchers/CatNaming.Quest")(api, {quest, felkrashId: FELKRASH_NPC_ID,
+  require("../ratcatchers/CatNaming.Ratcatchers")(api, {quest, felkrashId: FELKRASH_NPC_ID,
     understandsCats: player => wearingCatspeakAmulet(player) || questComplete(player, "dragon_slayer_ii")});
 };

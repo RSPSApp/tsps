@@ -611,18 +611,34 @@ test('Fire Warrior ordinary attack eligibility and queued hits', async t => {
   function actors(st, id=core.NpcIdentifiers.FIRE_WARRIOR_OF_LESARKUS) {
     const channel={kind:'test',remoteAddress:'127.0.0.1',isOpen:()=>true,send:()=>true,close(){},onData(){},onError(){},onClose(){}};
     const p=new Player(new PlayerSession(channel)); let npc=null;
-    const taskStart=tasks.length;
+    const taskStart=tasks.length, priorAddQueue=new Set(core.World.getAddNPCQueue());
     st.after(()=>{
       const location=p.getLocation();
       const otherOccupants=core.World.isPlayerOccupyingTile(location,p);
       try {
-        for(const task of tasks.slice(taskStart)) task.stop();
+        // NPCDeathTask.stop also removes and schedules a respawn; do not replay
+        // that override for a completed task or while cancelling an owned one.
+        for(const task of tasks.slice(taskStart)) if(task.isRunning()) core.Task.prototype.stop.call(task);
         core.GameConstants.PLAYER_PERSISTENCE.cancelRequestedSave(p);
         core.TaskManager.cancelTasks(p); core.TaskManager.cancelTasks(p.getIndex());
         p.getCombat().getHitQueue().clear(); p.getMovementQueue().reset();
-        if(npc) { npc.getCombat().getHitQueue().clear(); PluginManager.removeNpc(npc); }
+        if(npc) {
+          npc.getCombat().reset(); npc.getCombat().setUnderAttack(null); npc.getCombat().getHitQueue().clear();
+          PluginManager.removeNpc(npc);
+          const removed=core.World.getRemoveNPCQueue();
+          while(removed.includes(npc)) removed.splice(removed.indexOf(npc),1);
+        }
       } finally {
         core.World.unregisterPlayerPosition(p); p.setRegistered(false);
+      }
+      assert.ok(tasks.slice(taskStart).every(task=>!task.isRunning()),'owned test tasks are stopped');
+      if(npc) {
+        assert.equal(npc.isRegistered(),false);
+        assert.notEqual(core.World.getNpcs().get(npc.getIndex()),npc);
+        assert.ok(!core.World.getAddNPCQueue().some(entry=>!priorAddQueue.has(entry)
+          && entry.getRealId()===npc.getRealId() && entry.getSpawnPosition().equals(npc.getSpawnPosition())),
+          'no new respawn clone remains queued');
+        assert.ok(!core.World.getRemoveNPCQueue().includes(npc));
       }
       assert.equal(core.World.isPlayerOccupyingTile(location),otherOccupants,'owned player position is removed');
     });
@@ -764,24 +780,53 @@ test('Fire Warrior ordinary attack eligibility and queued hits', async t => {
   });
   for (const [label, id, arrow] of [['ordinary NPC with ice arrows', core.NpcIdentifiers.MAN, I.ICE_ARROWS], ['Fire Warrior with ice arrows', core.NpcIdentifiers.FIRE_WARRIOR_OF_LESARKUS, I.ICE_ARROWS], ['ordinary NPC with rune arrows', core.NpcIdentifiers.MAN, I.RUNE_ARROW]]) {
     await t.test(`dark bow fires two arrows at ${label}`,st=>{
-      const {p,npc}=actors(st,id); const method=equip(p,I.DARK_BOW,arrow,2,core.WeaponInterfaces.DARK_BOW); forceAccuracy(st,p,npc);
+      const {p,npc}=actors(st,id); equip(p,I.DARK_BOW,arrow,10,core.WeaponInterfaces.DARK_BOW); forceAccuracy(st,p,npc);
+      const inventory=p.getInventory(); inventory.adds(arrow,3);
+      const equipment=p.getEquipment(), stack=equipment.get(core.Equipment.AMMUNITION_SLOT);
+      const bow=equipment.get(core.Equipment.WEAPON_SLOT);
+      assert.equal(stack.getId(),arrow); assert.equal(stack.getAmount(),10);
+      assert.equal(bow.getId(),I.DARK_BOW); assert.equal(bow.getAmount(),1);
+      assert.equal(inventory.getAmount(arrow),3);
       assert.equal(core.WeaponProfiles.ranged(p).ammoRequired,2);
       assert.equal(core.Ammunition.getFor(p).getItemId(),arrow);
       const hp=npc.getHitpoints(); p.getCombat().attack(npc); step(p,npc);
       const queued=npc.getCombat().getHitQueue().hasPendingHitFrom(p);
+      assert.equal(equipment.get(core.Equipment.AMMUNITION_SLOT),stack);
+      assert.equal(stack.getAmount(),10,'the delayed debit has not happened at launch');
+      // Stop only the next attack; the launched target hit and unkeyed ammo task remain queued.
+      p.getCombat().reset();
       step(p,npc,6);
       assert.ok(npc.getHitpoints()<hp,'dark-bow hit lands');
       assert.equal(queued,true,'the real attack queued a hit');
-      assert.notEqual(p.getEquipment().get(core.Equipment.AMMUNITION_SLOT).getId(),arrow,'both arrows consumed');
+      assert.equal(equipment.get(core.Equipment.AMMUNITION_SLOT),stack);
+      assert.equal(stack.getId(),arrow); assert.equal(stack.getAmount(),8,'exactly two arrows leave the equipped stack');
+      assert.equal(inventory.getAmount(arrow),3,'the separate inventory stack is unchanged');
+      assert.equal(equipment.get(core.Equipment.WEAPON_SLOT),bow);
+      assert.equal(bow.getId(),I.DARK_BOW); assert.equal(bow.getAmount(),1);
     });
   }
   await t.test('dark bow cannot fire with only one ice arrow',st=>{
     const {p,npc}=actors(st,core.NpcIdentifiers.MAN);
     const method=equip(p,I.DARK_BOW,I.ICE_ARROWS,1,core.WeaponInterfaces.DARK_BOW);
+    forceAccuracy(st,p,npc);
+    const inventory=p.getInventory(); inventory.adds(I.ICE_ARROWS,3);
+    const stack=p.getEquipment().get(core.Equipment.AMMUNITION_SLOT), hp=npc.getHitpoints();
+    const bow=p.getEquipment().get(core.Equipment.WEAPON_SLOT);
+    assert.equal(stack.getId(),I.ICE_ARROWS); assert.equal(stack.getAmount(),1);
+    assert.equal(bow.getId(),I.DARK_BOW); assert.equal(bow.getAmount(),1);
+    assert.equal(inventory.getAmount(I.ICE_ARROWS),3);
     assert.equal(core.WeaponProfiles.ranged(p).ammoRequired,2);
     assert.equal(core.CombatFactory.canAttackPermission(p,npc,false,method),C.CAN_ATTACK);
     assert.equal(method.canAttack(p,npc),false);
-    assert.equal(p.getEquipment().get(core.Equipment.AMMUNITION_SLOT).getAmount(),1);
+    p.getCombat().attack(npc); step(p,npc);
+    assert.equal(npc.getCombat().getHitQueue().hasPendingHitFrom(p),false,'the refused attack queues no hit');
+    step(p,npc,6);
+    assert.equal(npc.getHitpoints(),hp);
+    assert.equal(p.getEquipment().get(core.Equipment.AMMUNITION_SLOT),stack);
+    assert.equal(stack.getId(),I.ICE_ARROWS); assert.equal(stack.getAmount(),1);
+    assert.equal(inventory.getAmount(I.ICE_ARROWS),3);
+    assert.equal(p.getEquipment().get(core.Equipment.WEAPON_SLOT),bow);
+    assert.equal(bow.getId(),I.DARK_BOW); assert.equal(bow.getAmount(),1);
   });
   await t.test('twisted bow still fires ice arrows at the Fire Warrior',st=>{
     const {p,npc}=actors(st); const method=equip(p,I.TWISTED_BOW,I.ICE_ARROWS,1,core.WeaponInterfaces.SHORTBOW); forceAccuracy(st,p,npc);

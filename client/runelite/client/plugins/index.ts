@@ -4,6 +4,7 @@ import { VoiceChatPlugin } from "../../../game/plugins/voice/VoiceChatPlugin";
 import { AnimationSmoothingPlugin } from "../../../game/plugins/animationsmoothing/AnimationSmoothingPlugin";
 import { BankPlugin } from "../../../game/plugins/bank/BankPlugin";
 import { BankTagsPlugin } from "../../../game/plugins/banktags/BankTagsPlugin";
+import { ClueScrollPlugin } from "../../../game/plugins/cluescrolls/ClueScrollPlugin";
 import { BoostsPlugin } from "../../../game/plugins/boosts/BoostsPlugin";
 import { ChatNotificationsPlugin } from "../../../game/plugins/chatnotifications/ChatNotificationsPlugin";
 import { ChatPastePlugin } from "../../../game/plugins/chatpaste/ChatPastePlugin";
@@ -93,6 +94,8 @@ export const CORE_PLUGINS: ReadonlyArray<PluginClass> = [
     BankTagsPlugin,
     // After Bank Tags: its tag tab title is set before the value joins it.
     BankPlugin,
+    // After Bank Tags: it registers its "clue" tags with Bank Tags' TagManager.
+    ClueScrollPlugin,
     CombatLevelPlugin,
     NotesPlugin,
     NpcIndicatorsPlugin,

@@ -32,6 +32,18 @@ export class Rectangle implements Shape {
         return new Rectangle(this.x, this.y, this.width, this.height);
     }
 
+    /** java.awt.Rectangle.contains(Rectangle): the other rectangle lies entirely inside this one. */
+    containsRect(other: Rectangle): boolean {
+        if (this.width <= 0 || this.height <= 0 || other.width <= 0 || other.height <= 0) return false;
+        return other.x >= this.x && other.y >= this.y && other.x + other.width <= this.x + this.width && other.y + other.height <= this.y + this.height;
+    }
+
+    /** java.awt.Rectangle.intersects: the two rectangles share any area. */
+    intersects(other: Rectangle): boolean {
+        if (this.width <= 0 || this.height <= 0 || other.width <= 0 || other.height <= 0) return false;
+        return other.x < this.x + this.width && other.x + other.width > this.x && other.y < this.y + this.height && other.y + other.height > this.y;
+    }
+
     /** The four corners, clockwise from the top left, for drawing as a polygon. */
     corners(): ReadonlyArray<readonly [number, number]> {
         return [

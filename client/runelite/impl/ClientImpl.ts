@@ -109,6 +109,12 @@ export class ClientImpl implements Client {
         return out;
     }
 
+    getNpcByIndex(index: number): NPC | null {
+        const npcs = this.osrsClient.npcEcs;
+        if (!npcs || !(index > 0) || npcs.getEcsIdForServer(index) === undefined) return null;
+        return this.npc(index);
+    }
+
     getVarpValue(varpId: number): number {
         return this.osrsClient.varManager?.getVarp(varpId) ?? 0;
     }
@@ -188,6 +194,14 @@ export class ClientImpl implements Client {
 
     getObjectDefinition(id: number): ObjectComposition | null {
         return getObjectDefinition(this.osrsClient, id);
+    }
+
+    getNpcDefinition(id: number): NPCComposition | null {
+        const client = this.osrsClient;
+        if (!(id >= 0)) return null;
+        let type = client.npcTypeLoader?.load(id | 0);
+        if (type?.transforms && client.varManager) type = type.transform(client.varManager, client.npcTypeLoader) ?? type;
+        return type ? { getName: () => type.name, getActions: () => type.actions ?? [] } : null;
     }
 
     getPlane(): number {

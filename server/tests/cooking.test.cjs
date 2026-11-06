@@ -1003,254 +1003,251 @@ test("native queued wine conserves banked jugs at the output stack limit", async
   }
 });
 
-test('cooked chicken and cooked meat can be deliberately burned on a live fire', async t => {
+test('native cooking on a live fire', async suite => {
   const path = require('node:path');
-  const { Player } = require('../dist/game/entity/impl/player/Player');
-  const { PlayerSession } = require('../dist/net/PlayerSession');
-  const { ClientConnection } = require('../dist/net/NetworkBuilder');
-  const { SkillManager } = require('../dist/game/content/skill/SkillManager');
   const previousBots = process.env.DISABLE_PLAYER_BOTS;
   process.env.DISABLE_PLAYER_BOTS = '1';
-  t.after(() => { if (previousBots === undefined) delete process.env.DISABLE_PLAYER_BOTS; else process.env.DISABLE_PLAYER_BOTS = previousBots; });
+  let started = false;
+  suite.after(() => {
+    if (started) PluginManager.emitServerShutdown({});
+    if (previousBots === undefined) delete process.env.DISABLE_PLAYER_BOTS;
+    else process.env.DISABLE_PLAYER_BOTS = previousBots;
+  });
   PluginManager.loadFromDirectory(path.resolve(__dirname, '../plugins'));
   core.RegionManager.init();
   core.RegionManager.loadMapFiles(3226, 3218);
+  started = true;
   PluginManager.emitServerStartup({});
-  t.after(() => PluginManager.emitServerShutdown({}));
-  const Firemaking = require('../plugins/skills/Firemaking.plugin');
-  const I = core.ItemIdentifiers, fireId = core.ObjectIdentifiers.FIRE_23;
-  assert.equal(fireId, 26185);
-  assert.equal(core.WorldDefinition.isMembersWorld(), true);
-  const cookTask = submittedCookingTasks.find(task => Number.isInteger(task.cycle));
-  assert.ok(cookTask && cookTask.isStopped(), 'the existing native cooking runner is stopped after its earlier test');
-  assert.equal(Cooking._test.activeSessions.size, 0, 'earlier cooking sessions are retired');
-  core.TaskManager.submit(cookTask);
-  t.after(() => { cookTask.stop(); core.TaskManager.process(); });
-  const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true, send: () => true,
-    close() {}, onData() {}, onError() {}, onClose() {} };
-  const p = new Player(new PlayerSession(channel));
-  p.setIndex(3190); p.setUsername('cookfire'); p.setRegistered(true);
-  p.setLocation(new core.Location(3226, 3218, 0)); p.needsPlacement = false;
-  const c = new ClientConnection(channel); c.player = p;
-  const anchor = p.getLocation().clone(), inventory = p.getInventory(), skills = p.getSkillManager();
-  for (const skill of [core.Skill.COOKING, core.Skill.FIREMAKING]) {
-    skills.setMaxLevels(skill, 99, false).setCurrentLevels(skill, 99, false)
-      .setExperience(skill, SkillManager.getExperienceForLevel(99));
-    assert.equal(skills.getCurrentLevel(skill), 99);
-  }
-  const fires = () => core.ObjectManager.objectsAt(anchor).filter(o =>
-    o.getId() === fireId && o.getPrivateArea() === p.getPrivateArea());
-  const ownedGround = () => core.World.getItems().filter(g => !g.isPendingRemoval()
-    && g.getOwner() === p.getUsername() && g.getPrivateArea() === p.getPrivateArea());
-  t.after(() => {
-    PluginManager.emitPlayerDisconnect({ player: p, username: p.getUsername() });
-    PluginManager.emitPlayerLogout({ player: p, username: p.getUsername() });
-    p.setRegistered(false); core.TaskManager.cancelTasks(p.getIndex()); core.TaskManager.cancelTasks(p);
-    for (const g of ownedGround()) core.ItemOnGroundManager.deregister(g);
-    for (const fire of fires()) core.ObjectManager.deregister(fire, true);
+  await suite.test('cooked chicken and cooked meat can be deliberately burned on a live fire', async t => {
+    const { Player } = require('../dist/game/entity/impl/player/Player');
+    const { PlayerSession } = require('../dist/net/PlayerSession');
+    const { ClientConnection } = require('../dist/net/NetworkBuilder');
+    const { SkillManager } = require('../dist/game/content/skill/SkillManager');
+    const Firemaking = require('../plugins/skills/Firemaking.plugin');
+    const I = core.ItemIdentifiers, fireId = core.ObjectIdentifiers.FIRE_23;
+    assert.equal(fireId, 26185);
+    assert.equal(core.WorldDefinition.isMembersWorld(), true);
+    const cookTask = submittedCookingTasks.find(task => Number.isInteger(task.cycle));
+    assert.ok(cookTask && cookTask.isStopped(), 'the existing native cooking runner is stopped after its earlier test');
+    assert.equal(Cooking._test.activeSessions.size, 0, 'earlier cooking sessions are retired');
+    core.TaskManager.submit(cookTask);
+    t.after(() => { cookTask.stop(); core.TaskManager.process(); });
+    const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true, send: () => true,
+      close() {}, onData() {}, onError() {}, onClose() {} };
+    const p = new Player(new PlayerSession(channel));
+    p.setIndex(3190); p.setUsername('cookfire'); p.setRegistered(true);
+    p.setLocation(new core.Location(3226, 3218, 0)); p.needsPlacement = false;
+    const c = new ClientConnection(channel); c.player = p;
+    const anchor = p.getLocation().clone(), inventory = p.getInventory(), skills = p.getSkillManager();
+    for (const skill of [core.Skill.COOKING, core.Skill.FIREMAKING]) {
+      skills.setMaxLevels(skill, 99, false).setCurrentLevels(skill, 99, false)
+        .setExperience(skill, SkillManager.getExperienceForLevel(99));
+      assert.equal(skills.getCurrentLevel(skill), 99);
+    }
+    const fires = () => core.ObjectManager.objectsAt(anchor).filter(o =>
+      o.getId() === fireId && o.getPrivateArea() === p.getPrivateArea());
+    const ownedGround = () => core.World.getItems().filter(g => !g.isPendingRemoval()
+      && g.getOwner() === p.getUsername() && g.getPrivateArea() === p.getPrivateArea());
+    t.after(() => {
+      PluginManager.emitPlayerDisconnect({ player: p, username: p.getUsername() });
+      PluginManager.emitPlayerLogout({ player: p, username: p.getUsername() });
+      p.setRegistered(false); core.TaskManager.cancelTasks(p.getIndex()); core.TaskManager.cancelTasks(p);
+      for (const g of ownedGround()) core.ItemOnGroundManager.deregister(g);
+      for (const fire of fires()) core.ObjectManager.deregister(fire, true);
+    });
+    const actions = [], emitItemOnObject = PluginManager.emitItemOnObject;
+    t.mock.method(PluginManager, 'emitItemOnObject', event => {
+      const result = emitItemOnObject.call(PluginManager, event);
+      if (event.player === p) actions.push({ itemId: event.itemId, item: event.item, object: event.object,
+        slot: event.itemSlot, handled: event.handled, result });
+      return result;
+    });
+    let turns = 0;
+    const turn = () => {
+      assert.ok(++turns <= 75, 'bounded native phase budget');
+      p.resetUpdating(); core.World.processCycle = (core.World.processCycle + 1) & 0x7fffffff;
+      core.TaskManager.process(); c.processTurnPackets();
+      const q = p.getMovementQueue(); q.beginCycle(); q.processEntityPursuit();
+      if (q.hasPendingWork()) q.process();
+      core.TaskManager.processWalkTo(p.getIndex());
+    };
+    for (const id of [I.LOGS, I.TINDERBOX]) inventory.add(new core.Item(id, 1), false);
+    assert.equal(fires().length, 0);
+    await c.dispatch([{ type: 'inventory_use_on', itemId: I.TINDERBOX, slot: inventory.getSlotForItemId(I.TINDERBOX),
+      target: { kind: 'inventory', id: I.LOGS, slot: inventory.getSlotForItemId(I.LOGS) } }]);
+    turn();
+    assert.equal(Firemaking.isFiremakingActive(p), true, 'real tinderbox/log use starts lighting');
+    assert.equal(inventory.getAmount(I.LOGS), 0);
+    assert.equal(ownedGround().filter(g => g.getItem().getId() === I.LOGS).length, 1);
+    for (let n = 0; n < 8; n++) turn();
+    assert.equal(Firemaking.isFiremakingActive(p), false);
+    assert.equal(fires().length, 1, 'lighting produced a registered fire');
+    const fire = fires()[0];
+    assert.equal(core.MapObjects.get(fireId, anchor, p.getPrivateArea()), fire);
+    assert.equal(fire.getDefinition().getName(), 'Fire');
+    assert.equal(p.getLocation().equals(anchor), false, 'real lighting stepped away');
+    turn(); turn();
+    assert.equal(p.getMovementQueue().size(), 0);
+    assert.equal(p.getMovementQueue().isMovings(), false);
+    assert.equal(fire.isWithinInteractionDistance(p.getLocation()), true);
+    const useFire = async id => {
+      const slot = inventory.getSlotForItemId(id);
+      assert.ok(slot >= 0 && inventory.getItems()[slot].getId() === id, 'owned input slot is current');
+      const selected = inventory.getItems()[slot], before = actions.length;
+      assert.equal(selected.getAmount(), 1);
+      assert.equal(selected.isPresetItem(), false);
+      assert.equal(core.MapObjects.get(fireId, anchor, p.getPrivateArea()), fire, 'same live fire remains');
+      await c.dispatch([{ type: 'item_on_object', widgetId: core.Inventory.INTERFACE_ID,
+        objectId: fireId, itemId: id, slot, x: anchor.getX(), y: anchor.getY() }]);
+      for (let n = 0; n < 8 && actions.length === before; n++) turn();
+      assert.deepEqual(actions.slice(before), [{ itemId: id, item: selected, object: fire, slot, handled: true, result: true }],
+        'decoded use reaches the registered consumer with the selected item and live fire');
+    };
+    const awaitOutput = id => { for (let n = 0; n < 8 && inventory.getAmount(id) === 0; n++) turn(); };
+    inventory.add(new core.Item(I.RAW_BEEF, 1), false);
+    await useFire(I.RAW_BEEF); assert.equal(Cooking.isCookingActive(p), true, 'raw beef admits cooking');
+    awaitOutput(I.COOKED_MEAT);
+    assert.equal(inventory.getAmount(I.RAW_BEEF), 0);
+    assert.equal(inventory.getAmount(I.COOKED_MEAT), 1, 'native raw beef produced cooked meat');
+    turn();
+    const meatXp = skills.getExperience(core.Skill.COOKING);
+    await useFire(I.COOKED_MEAT); assert.equal(Cooking.isCookingActive(p), true, 'cooked meat admits reburning');
+    awaitOutput(I.BURNT_MEAT);
+    assert.equal(inventory.getAmount(I.COOKED_MEAT), 0);
+    assert.equal(inventory.getAmount(I.BURNT_MEAT), 1, 'same fire burns cooked meat');
+    assert.equal(skills.getExperience(core.Skill.COOKING), meatXp, 'existing deliberate-meat path awards no XP');
+    turn();
+    inventory.add(new core.Item(I.RAW_CHICKEN, 1), false);
+    await useFire(I.RAW_CHICKEN); assert.equal(Cooking.isCookingActive(p), true, 'raw chicken admits cooking');
+    awaitOutput(I.COOKED_CHICKEN);
+    assert.equal(inventory.getAmount(I.RAW_CHICKEN), 0);
+    assert.equal(inventory.getAmount(I.COOKED_CHICKEN), 1, 'native raw chicken produced cooked chicken');
+    assert.equal(inventory.getAmount(I.BURNT_CHICKEN), 0);
+    turn();
+    const chickenXp = skills.getExperience(core.Skill.COOKING);
+    const sender = p.getPacketSender(), sendTypedMessage = sender.sendTypedMessage;
+    const chickenMessages = [];
+    t.mock.method(sender, 'sendTypedMessage', function (type, text, ...rest) {
+      if (type === core.ChatType.SPAM) chickenMessages.push(text);
+      return sendTypedMessage.call(this, type, text, ...rest);
+    });
+    await useFire(I.COOKED_CHICKEN);
+    awaitOutput(I.BURNT_CHICKEN);
+    assert.deepEqual([inventory.getAmount(I.COOKED_CHICKEN), inventory.getAmount(I.BURNT_CHICKEN)], [0, 1],
+      'cooked chicken used on a fire becomes burnt chicken');
+    assert.equal(skills.getExperience(core.Skill.COOKING), chickenXp, 'deliberately burnt chicken awards no Cooking XP');
+    assert.equal(chickenMessages.filter(text => text === 'You deliberately burn the nicely cooked chicken.').length, 1,
+      'the chicken burn message is sent on the spam channel');
   });
-  const actions = [], emitItemOnObject = PluginManager.emitItemOnObject;
-  t.mock.method(PluginManager, 'emitItemOnObject', event => {
-    const result = emitItemOnObject.call(PluginManager, event);
-    if (event.player === p) actions.push({ itemId: event.itemId, item: event.item, object: event.object,
-      slot: event.itemSlot, handled: event.handled, result });
-    return result;
+  await suite.test('ordinary seaweed used on a live fire produces soda ash', async t => {
+    const { Player } = require('../dist/game/entity/impl/player/Player');
+    const { PlayerSession } = require('../dist/net/PlayerSession');
+    const { ClientConnection } = require('../dist/net/NetworkBuilder');
+    const { SkillManager } = require('../dist/game/content/skill/SkillManager');
+    const Firemaking = require('../plugins/skills/Firemaking.plugin');
+    const I = core.ItemIdentifiers, fireId = core.ObjectIdentifiers.FIRE_23;
+    assert.equal(fireId, 26185);
+    assert.equal(core.WorldDefinition.isMembersWorld(), true);
+    const cookTask = submittedCookingTasks.find(task => Number.isInteger(task.cycle));
+    assert.ok(cookTask && cookTask.isStopped(), 'the existing native cooking runner is stopped after its earlier test');
+    assert.equal(Cooking._test.activeSessions.size, 0, 'earlier cooking sessions are retired');
+    core.TaskManager.submit(cookTask);
+    t.after(() => { cookTask.stop(); core.TaskManager.process(); });
+    const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true, send: () => true,
+      close() {}, onData() {}, onError() {}, onClose() {} };
+    const p = new Player(new PlayerSession(channel));
+    p.setIndex(3191); p.setUsername('seaweed'); p.setRegistered(true);
+    p.setLocation(new core.Location(3226, 3218, 0)); p.needsPlacement = false;
+    const c = new ClientConnection(channel); c.player = p;
+    const anchor = p.getLocation().clone(), inventory = p.getInventory(), skills = p.getSkillManager();
+    for (const skill of [core.Skill.COOKING, core.Skill.FIREMAKING]) {
+      skills.setMaxLevels(skill, 99, false).setCurrentLevels(skill, 99, false)
+        .setExperience(skill, SkillManager.getExperienceForLevel(99));
+      assert.equal(skills.getCurrentLevel(skill), 99);
+    }
+    const fires = () => core.ObjectManager.objectsAt(anchor).filter(o =>
+      o.getId() === fireId && o.getPrivateArea() === p.getPrivateArea());
+    const ownedGround = () => core.World.getItems().filter(g => !g.isPendingRemoval()
+      && g.getOwner() === p.getUsername() && g.getPrivateArea() === p.getPrivateArea());
+    t.after(() => {
+      PluginManager.emitPlayerDisconnect({ player: p, username: p.getUsername() });
+      PluginManager.emitPlayerLogout({ player: p, username: p.getUsername() });
+      p.setRegistered(false); core.TaskManager.cancelTasks(p.getIndex()); core.TaskManager.cancelTasks(p);
+      for (const g of ownedGround()) core.ItemOnGroundManager.deregister(g);
+      for (const fire of fires()) core.ObjectManager.deregister(fire, true);
+    });
+    const actions = [], emitItemOnObject = PluginManager.emitItemOnObject;
+    t.mock.method(PluginManager, 'emitItemOnObject', event => {
+      const result = emitItemOnObject.call(PluginManager, event);
+      if (event.player === p) actions.push({ itemId: event.itemId, item: event.item, object: event.object,
+        slot: event.itemSlot, handled: event.handled, result });
+      return result;
+    });
+    let turns = 0;
+    const turn = () => {
+      assert.ok(++turns <= 75, 'bounded native phase budget');
+      p.resetUpdating(); core.World.processCycle = (core.World.processCycle + 1) & 0x7fffffff;
+      core.TaskManager.process(); c.processTurnPackets();
+      const q = p.getMovementQueue(); q.beginCycle(); q.processEntityPursuit();
+      if (q.hasPendingWork()) q.process();
+      core.TaskManager.processWalkTo(p.getIndex());
+    };
+    for (const id of [I.LOGS, I.TINDERBOX]) inventory.add(new core.Item(id, 1), false);
+    assert.equal(fires().length, 0);
+    await c.dispatch([{ type: 'inventory_use_on', itemId: I.TINDERBOX, slot: inventory.getSlotForItemId(I.TINDERBOX),
+      target: { kind: 'inventory', id: I.LOGS, slot: inventory.getSlotForItemId(I.LOGS) } }]);
+    turn();
+    assert.equal(Firemaking.isFiremakingActive(p), true, 'real tinderbox/log use starts lighting');
+    assert.equal(inventory.getAmount(I.LOGS), 0);
+    assert.equal(ownedGround().filter(g => g.getItem().getId() === I.LOGS).length, 1);
+    for (let n = 0; n < 8; n++) turn();
+    assert.equal(Firemaking.isFiremakingActive(p), false);
+    assert.equal(fires().length, 1, 'lighting produced a registered fire');
+    const fire = fires()[0];
+    assert.equal(core.MapObjects.get(fireId, anchor, p.getPrivateArea()), fire);
+    assert.equal(fire.getDefinition().getName(), 'Fire');
+    assert.equal(p.getLocation().equals(anchor), false, 'real lighting stepped away');
+    turn(); turn();
+    assert.equal(p.getMovementQueue().size(), 0);
+    assert.equal(p.getMovementQueue().isMovings(), false);
+    assert.equal(fire.isWithinInteractionDistance(p.getLocation()), true);
+    const useFire = async id => {
+      const slot = inventory.getSlotForItemId(id);
+      assert.ok(slot >= 0 && inventory.getItems()[slot].getId() === id, 'owned input slot is current');
+      const selected = inventory.getItems()[slot], before = actions.length;
+      assert.equal(selected.getAmount(), 1);
+      assert.equal(selected.isPresetItem(), false);
+      assert.equal(core.MapObjects.get(fireId, anchor, p.getPrivateArea()), fire, 'same live fire remains');
+      await c.dispatch([{ type: 'item_on_object', widgetId: core.Inventory.INTERFACE_ID,
+        objectId: fireId, itemId: id, slot, x: anchor.getX(), y: anchor.getY() }]);
+      for (let n = 0; n < 8 && actions.length === before; n++) turn();
+      assert.deepEqual(actions.slice(before), [{ itemId: id, item: selected, object: fire, slot, handled: true, result: true }],
+        'decoded use reaches the registered consumer with the selected item and live fire');
+    };
+    const awaitOutput = id => { for (let n = 0; n < 8 && inventory.getAmount(id) === 0; n++) turn(); };
+    inventory.add(new core.Item(I.RAW_BEEF, 1), false);
+    await useFire(I.RAW_BEEF); assert.equal(Cooking.isCookingActive(p), true, 'raw beef admits cooking');
+    awaitOutput(I.COOKED_MEAT);
+    assert.equal(inventory.getAmount(I.RAW_BEEF), 0);
+    assert.equal(inventory.getAmount(I.COOKED_MEAT), 1, 'native raw beef produced cooked meat on this fire');
+    turn();
+    assert.equal(I.SEAWEED, 401);
+    assert.equal(I.SODA_ASH, 1781);
+    for (const [id, name] of [[I.SEAWEED, 'Seaweed'], [I.SODA_ASH, 'Soda ash']]) {
+      const definition = new core.Item(id, 1).getDefinition();
+      assert.equal(definition.getName(), name, 'the active cache resolves the ordinary item');
+      assert.equal(definition.isNoted(), false);
+      assert.equal(definition.isStackable(), false);
+    }
+    inventory.add(new core.Item(I.SEAWEED, 1), false);
+    assert.equal(inventory.getAmount(I.SEAWEED), 1);
+    assert.equal(inventory.getAmount(I.SODA_ASH), 0);
+    assert.ok(inventory.getAddableAmount(new core.Item(I.SODA_ASH, 1)) >= 1, 'soda ash has inventory room');
+    const seaweedXp = skills.getExperience(core.Skill.COOKING);
+    await useFire(I.SEAWEED);
+    awaitOutput(I.SODA_ASH);
+    assert.deepEqual([inventory.getAmount(I.SEAWEED), inventory.getAmount(I.SODA_ASH)], [0, 1],
+      'ordinary seaweed used on a fire becomes soda ash');
+    assert.equal(skills.getExperience(core.Skill.COOKING), seaweedXp, 'producing soda ash awards no Cooking XP');
   });
-  let turns = 0;
-  const turn = () => {
-    assert.ok(++turns <= 75, 'bounded native phase budget');
-    p.resetUpdating(); core.World.processCycle = (core.World.processCycle + 1) & 0x7fffffff;
-    core.TaskManager.process(); c.processTurnPackets();
-    const q = p.getMovementQueue(); q.beginCycle(); q.processEntityPursuit();
-    if (q.hasPendingWork()) q.process();
-    core.TaskManager.processWalkTo(p.getIndex());
-  };
-  for (const id of [I.LOGS, I.TINDERBOX]) inventory.add(new core.Item(id, 1), false);
-  assert.equal(fires().length, 0);
-  await c.dispatch([{ type: 'inventory_use_on', itemId: I.TINDERBOX, slot: inventory.getSlotForItemId(I.TINDERBOX),
-    target: { kind: 'inventory', id: I.LOGS, slot: inventory.getSlotForItemId(I.LOGS) } }]);
-  turn();
-  assert.equal(Firemaking.isFiremakingActive(p), true, 'real tinderbox/log use starts lighting');
-  assert.equal(inventory.getAmount(I.LOGS), 0);
-  assert.equal(ownedGround().filter(g => g.getItem().getId() === I.LOGS).length, 1);
-  for (let n = 0; n < 8; n++) turn();
-  assert.equal(Firemaking.isFiremakingActive(p), false);
-  assert.equal(fires().length, 1, 'lighting produced a registered fire');
-  const fire = fires()[0];
-  assert.equal(core.MapObjects.get(fireId, anchor, p.getPrivateArea()), fire);
-  assert.equal(fire.getDefinition().getName(), 'Fire');
-  assert.equal(p.getLocation().equals(anchor), false, 'real lighting stepped away');
-  turn(); turn();
-  assert.equal(p.getMovementQueue().size(), 0);
-  assert.equal(p.getMovementQueue().isMovings(), false);
-  assert.equal(fire.isWithinInteractionDistance(p.getLocation()), true);
-  const useFire = async id => {
-    const slot = inventory.getSlotForItemId(id);
-    assert.ok(slot >= 0 && inventory.getItems()[slot].getId() === id, 'owned input slot is current');
-    const selected = inventory.getItems()[slot], before = actions.length;
-    assert.equal(selected.getAmount(), 1);
-    assert.equal(selected.isPresetItem(), false);
-    assert.equal(core.MapObjects.get(fireId, anchor, p.getPrivateArea()), fire, 'same live fire remains');
-    await c.dispatch([{ type: 'item_on_object', widgetId: core.Inventory.INTERFACE_ID,
-      objectId: fireId, itemId: id, slot, x: anchor.getX(), y: anchor.getY() }]);
-    for (let n = 0; n < 8 && actions.length === before; n++) turn();
-    assert.deepEqual(actions.slice(before), [{ itemId: id, item: selected, object: fire, slot, handled: true, result: true }],
-      'decoded use reaches the registered consumer with the selected item and live fire');
-  };
-  const awaitOutput = id => { for (let n = 0; n < 8 && inventory.getAmount(id) === 0; n++) turn(); };
-  inventory.add(new core.Item(I.RAW_BEEF, 1), false);
-  await useFire(I.RAW_BEEF); assert.equal(Cooking.isCookingActive(p), true, 'raw beef admits cooking');
-  awaitOutput(I.COOKED_MEAT);
-  assert.equal(inventory.getAmount(I.RAW_BEEF), 0);
-  assert.equal(inventory.getAmount(I.COOKED_MEAT), 1, 'native raw beef produced cooked meat');
-  turn();
-  const meatXp = skills.getExperience(core.Skill.COOKING);
-  await useFire(I.COOKED_MEAT); assert.equal(Cooking.isCookingActive(p), true, 'cooked meat admits reburning');
-  awaitOutput(I.BURNT_MEAT);
-  assert.equal(inventory.getAmount(I.COOKED_MEAT), 0);
-  assert.equal(inventory.getAmount(I.BURNT_MEAT), 1, 'same fire burns cooked meat');
-  assert.equal(skills.getExperience(core.Skill.COOKING), meatXp, 'existing deliberate-meat path awards no XP');
-  turn();
-  inventory.add(new core.Item(I.RAW_CHICKEN, 1), false);
-  await useFire(I.RAW_CHICKEN); assert.equal(Cooking.isCookingActive(p), true, 'raw chicken admits cooking');
-  awaitOutput(I.COOKED_CHICKEN);
-  assert.equal(inventory.getAmount(I.RAW_CHICKEN), 0);
-  assert.equal(inventory.getAmount(I.COOKED_CHICKEN), 1, 'native raw chicken produced cooked chicken');
-  assert.equal(inventory.getAmount(I.BURNT_CHICKEN), 0);
-  turn();
-  const chickenXp = skills.getExperience(core.Skill.COOKING);
-  const sender = p.getPacketSender(), sendTypedMessage = sender.sendTypedMessage;
-  const chickenMessages = [];
-  t.mock.method(sender, 'sendTypedMessage', function (type, text, ...rest) {
-    if (type === core.ChatType.SPAM) chickenMessages.push(text);
-    return sendTypedMessage.call(this, type, text, ...rest);
-  });
-  await useFire(I.COOKED_CHICKEN);
-  awaitOutput(I.BURNT_CHICKEN);
-  assert.deepEqual([inventory.getAmount(I.COOKED_CHICKEN), inventory.getAmount(I.BURNT_CHICKEN)], [0, 1],
-    'cooked chicken used on a fire becomes burnt chicken');
-  assert.equal(skills.getExperience(core.Skill.COOKING), chickenXp, 'deliberately burnt chicken awards no Cooking XP');
-  assert.equal(chickenMessages.filter(text => text === 'You deliberately burn the nicely cooked chicken.').length, 1,
-    'the chicken burn message is sent on the spam channel');
-});
-
-test('ordinary seaweed used on a live fire produces soda ash', async t => {
-  const path = require('node:path');
-  const { Player } = require('../dist/game/entity/impl/player/Player');
-  const { PlayerSession } = require('../dist/net/PlayerSession');
-  const { ClientConnection } = require('../dist/net/NetworkBuilder');
-  const { SkillManager } = require('../dist/game/content/skill/SkillManager');
-  const previousBots = process.env.DISABLE_PLAYER_BOTS;
-  process.env.DISABLE_PLAYER_BOTS = '1';
-  t.after(() => { if (previousBots === undefined) delete process.env.DISABLE_PLAYER_BOTS; else process.env.DISABLE_PLAYER_BOTS = previousBots; });
-  PluginManager.loadFromDirectory(path.resolve(__dirname, '../plugins'));
-  core.RegionManager.init();
-  core.RegionManager.loadMapFiles(3226, 3218);
-  PluginManager.emitServerStartup({});
-  t.after(() => PluginManager.emitServerShutdown({}));
-  const Firemaking = require('../plugins/skills/Firemaking.plugin');
-  const I = core.ItemIdentifiers, fireId = core.ObjectIdentifiers.FIRE_23;
-  assert.equal(fireId, 26185);
-  assert.equal(core.WorldDefinition.isMembersWorld(), true);
-  const cookTask = submittedCookingTasks.find(task => Number.isInteger(task.cycle));
-  assert.ok(cookTask && cookTask.isStopped(), 'the existing native cooking runner is stopped after its earlier test');
-  assert.equal(Cooking._test.activeSessions.size, 0, 'earlier cooking sessions are retired');
-  core.TaskManager.submit(cookTask);
-  t.after(() => { cookTask.stop(); core.TaskManager.process(); });
-  const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true, send: () => true,
-    close() {}, onData() {}, onError() {}, onClose() {} };
-  const p = new Player(new PlayerSession(channel));
-  p.setIndex(3190); p.setUsername('cookfire'); p.setRegistered(true);
-  p.setLocation(new core.Location(3226, 3218, 0)); p.needsPlacement = false;
-  const c = new ClientConnection(channel); c.player = p;
-  const anchor = p.getLocation().clone(), inventory = p.getInventory(), skills = p.getSkillManager();
-  for (const skill of [core.Skill.COOKING, core.Skill.FIREMAKING]) {
-    skills.setMaxLevels(skill, 99, false).setCurrentLevels(skill, 99, false)
-      .setExperience(skill, SkillManager.getExperienceForLevel(99));
-    assert.equal(skills.getCurrentLevel(skill), 99);
-  }
-  const fires = () => core.ObjectManager.objectsAt(anchor).filter(o =>
-    o.getId() === fireId && o.getPrivateArea() === p.getPrivateArea());
-  const ownedGround = () => core.World.getItems().filter(g => !g.isPendingRemoval()
-    && g.getOwner() === p.getUsername() && g.getPrivateArea() === p.getPrivateArea());
-  t.after(() => {
-    PluginManager.emitPlayerDisconnect({ player: p, username: p.getUsername() });
-    PluginManager.emitPlayerLogout({ player: p, username: p.getUsername() });
-    p.setRegistered(false); core.TaskManager.cancelTasks(p.getIndex()); core.TaskManager.cancelTasks(p);
-    for (const g of ownedGround()) core.ItemOnGroundManager.deregister(g);
-    for (const fire of fires()) core.ObjectManager.deregister(fire, true);
-  });
-  const actions = [], emitItemOnObject = PluginManager.emitItemOnObject;
-  t.mock.method(PluginManager, 'emitItemOnObject', event => {
-    const result = emitItemOnObject.call(PluginManager, event);
-    if (event.player === p) actions.push({ itemId: event.itemId, item: event.item, object: event.object,
-      slot: event.itemSlot, handled: event.handled, result });
-    return result;
-  });
-  let turns = 0;
-  const turn = () => {
-    assert.ok(++turns <= 75, 'bounded native phase budget');
-    p.resetUpdating(); core.World.processCycle = (core.World.processCycle + 1) & 0x7fffffff;
-    core.TaskManager.process(); c.processTurnPackets();
-    const q = p.getMovementQueue(); q.beginCycle(); q.processEntityPursuit();
-    if (q.hasPendingWork()) q.process();
-    core.TaskManager.processWalkTo(p.getIndex());
-  };
-  for (const id of [I.LOGS, I.TINDERBOX]) inventory.add(new core.Item(id, 1), false);
-  assert.equal(fires().length, 0);
-  await c.dispatch([{ type: 'inventory_use_on', itemId: I.TINDERBOX, slot: inventory.getSlotForItemId(I.TINDERBOX),
-    target: { kind: 'inventory', id: I.LOGS, slot: inventory.getSlotForItemId(I.LOGS) } }]);
-  turn();
-  assert.equal(Firemaking.isFiremakingActive(p), true, 'real tinderbox/log use starts lighting');
-  assert.equal(inventory.getAmount(I.LOGS), 0);
-  assert.equal(ownedGround().filter(g => g.getItem().getId() === I.LOGS).length, 1);
-  for (let n = 0; n < 8; n++) turn();
-  assert.equal(Firemaking.isFiremakingActive(p), false);
-  assert.equal(fires().length, 1, 'lighting produced a registered fire');
-  const fire = fires()[0];
-  assert.equal(core.MapObjects.get(fireId, anchor, p.getPrivateArea()), fire);
-  assert.equal(fire.getDefinition().getName(), 'Fire');
-  assert.equal(p.getLocation().equals(anchor), false, 'real lighting stepped away');
-  turn(); turn();
-  assert.equal(p.getMovementQueue().size(), 0);
-  assert.equal(p.getMovementQueue().isMovings(), false);
-  assert.equal(fire.isWithinInteractionDistance(p.getLocation()), true);
-  const useFire = async id => {
-    const slot = inventory.getSlotForItemId(id);
-    assert.ok(slot >= 0 && inventory.getItems()[slot].getId() === id, 'owned input slot is current');
-    const selected = inventory.getItems()[slot], before = actions.length;
-    assert.equal(selected.getAmount(), 1);
-    assert.equal(selected.isPresetItem(), false);
-    assert.equal(core.MapObjects.get(fireId, anchor, p.getPrivateArea()), fire, 'same live fire remains');
-    await c.dispatch([{ type: 'item_on_object', widgetId: core.Inventory.INTERFACE_ID,
-      objectId: fireId, itemId: id, slot, x: anchor.getX(), y: anchor.getY() }]);
-    for (let n = 0; n < 8 && actions.length === before; n++) turn();
-    assert.deepEqual(actions.slice(before), [{ itemId: id, item: selected, object: fire, slot, handled: true, result: true }],
-      'decoded use reaches the registered consumer with the selected item and live fire');
-  };
-  const awaitOutput = id => { for (let n = 0; n < 8 && inventory.getAmount(id) === 0; n++) turn(); };
-  inventory.add(new core.Item(I.RAW_BEEF, 1), false);
-  await useFire(I.RAW_BEEF); assert.equal(Cooking.isCookingActive(p), true, 'raw beef admits cooking');
-  awaitOutput(I.COOKED_MEAT);
-  assert.equal(inventory.getAmount(I.RAW_BEEF), 0);
-  assert.equal(inventory.getAmount(I.COOKED_MEAT), 1, 'native raw beef produced cooked meat on this fire');
-  turn();
-  assert.equal(I.SEAWEED, 401);
-  assert.equal(I.SODA_ASH, 1781);
-  for (const [id, name] of [[I.SEAWEED, 'Seaweed'], [I.SODA_ASH, 'Soda ash']]) {
-    const definition = new core.Item(id, 1).getDefinition();
-    assert.equal(definition.getName(), name, 'the active cache resolves the ordinary item');
-    assert.equal(definition.isNoted(), false);
-    assert.equal(definition.isStackable(), false);
-  }
-  inventory.add(new core.Item(I.SEAWEED, 1), false);
-  assert.equal(inventory.getAmount(I.SEAWEED), 1);
-  assert.equal(inventory.getAmount(I.SODA_ASH), 0);
-  assert.ok(inventory.getAddableAmount(new core.Item(I.SODA_ASH, 1)) >= 1, 'soda ash has inventory room');
-  const seaweedXp = skills.getExperience(core.Skill.COOKING);
-  await useFire(I.SEAWEED);
-  awaitOutput(I.SODA_ASH);
-  assert.deepEqual([inventory.getAmount(I.SEAWEED), inventory.getAmount(I.SODA_ASH)], [0, 1],
-    'ordinary seaweed used on a fire becomes soda ash');
-  assert.equal(skills.getExperience(core.Skill.COOKING), seaweedXp, 'producing soda ash awards no Cooking XP');
 });

@@ -45,6 +45,8 @@ const FLAGS = (1 << 1) | (1 << 2) | (1 << 3) | (1 << 4) | (1 << 5) | (1 << 10);
 const BANDAGES_PER_CHEST = 10;
 const BANDAGES_PER_WIPE = 3;
 const BANDAGE = { HEAL: 20, RUN: 20, STAMINA_MS: 120_000 };
+/** Not captured: a bandage outside an Entry Mode raid (an older save, a Normal raid) does nothing. */
+const OUTSIDE_ENTRY = "You can only use these bandages in an Entry Mode raid.";
 
 function memberOf(player) {
   const raid = Raid.raidOf(player);
@@ -116,6 +118,10 @@ function useBandage(event) {
   const { player, itemId } = event;
   if (itemId !== Shared.ITEM.BANDAGES) return false;
   const { Skill } = Shared.core();
+  if (!Raid.raidOf(player)?.isEntry) {
+    player.sendMessage(OUTSIDE_ENTRY);
+    return true;
+  }
   const inventory = player.getInventory();
   if (!inventory.contains(Shared.ITEM.BANDAGES)) return true;
   inventory.delete(Shared.ITEM.BANDAGES, 1);

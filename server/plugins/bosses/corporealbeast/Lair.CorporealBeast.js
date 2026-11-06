@@ -42,7 +42,7 @@ function enterCave({ player, objectId }) {
   return true;
 }
 
-/** Resolve a northern-copy teleport anchor, or the server teleport panel's lobby. */
+/** request.tile, when supplied, is a northern-copy [x, y, z] anchor; omission uses the northern lobby. */
 function teleportDestination(request) {
   if (!request?.player) return;
   const anchor = Array.isArray(request.tile)

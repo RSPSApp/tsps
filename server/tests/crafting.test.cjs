@@ -1139,4 +1139,40 @@ test("native furnace silver-bolt batches conserve inputs at output stack limits"
       if (isWool) woolControlsPassed++;
     });
   });
+  await t.test("magic stringing rechecks the selected materials before its task", async t => {
+    for (const [label, removed] of [["selected magic string removed", ids.MAGIC_STRING], ["unstrung amulet removed", ids.EMERALD_AMULET_U_]]) await t.test(label, async t => {
+      const channel = {kind:"test",remoteAddress:"127.0.0.1",isOpen:()=>true,send:()=>true,close(){},onData(){},onError(){},onClose(){}};
+      const p = new Player(new PlayerSession(channel));
+      p.setIndex(index++); p.setUsername("naturecancel"+index); p.setRegistered(true);
+      p.setLocation(new core.Location(3226,3218,0)); p.needsPlacement=false;
+      const c = new ClientConnection(channel), inv = p.getInventory(), skill = p.getSkillManager(), craft = core.Skill.CRAFTING;
+      c.player = p;
+      t.after(()=>{Shared.stopCrafting(p);PluginManager.emitPlayerDisconnect({player:p,username:p.getUsername()});PluginManager.emitPlayerLogout({player:p,username:p.getUsername()});p.setRegistered(false);core.TaskManager.cancelTasks(p.getIndex());core.TaskManager.cancelTasks(p);});
+      skill.setCurrentLevel(craft,1,false).setMaxLevels(craft,1,false).setExperience(craft,0);
+      for (const id of [ids.EMERALD_AMULET_U_,ids.MAGIC_STRING,ids.BALL_OF_WOOL]) inv.add(new core.Item(id,1),false);
+      for (const id of [ids.EMERALD_AMULET_U_,ids.MAGIC_STRING,ids.BALL_OF_WOOL]) {
+        const slot=inv.getSlotForItemId(id); assert.ok(slot>=0); assert.equal(inv.getAmount(id),1);
+        assert.equal(inv.getItems()[slot].getMeta(),null); assert.notEqual(PluginManager.emitCanUseItem(p,id,"use"),false);
+      }
+      assert.equal(skill.getCurrentLevel(craft),1); assert.equal(skill.getMaxLevel(craft),1); assert.equal(skill.getExperience(craft),0);
+      assert.equal(inv.getAmount(ids.PRE_NATURE_AMULET),0); assert.equal(inv.getAmount(ids.EMERALD_AMULET),0);
+      const source=inv.getSlotForItemId(ids.MAGIC_STRING),target=inv.getSlotForItemId(ids.EMERALD_AMULET_U_);
+      let observed=null; const emit=PluginManager.emitItemOnItem.bind(PluginManager);
+      t.mock.method(PluginManager,"emitItemOnItem",event=>{const result=emit(event); if(event.player===p) observed={used:event.usedItemId,with:event.usedWithItemId,handled:event.handled}; return result;});
+      let turns=0;
+      const turn=()=>{assert.ok(++turns<=8);p.resetUpdating();core.World.processCycle=(core.World.processCycle+1)&0x7fffffff;core.TaskManager.process();c.processTurnPackets();const q=p.getMovementQueue();q.beginCycle();q.processEntityPursuit();if(q.hasPendingWork())q.process();core.TaskManager.processWalkTo(p.getIndex());};
+      await c.dispatch([{type:"inventory_use_on",slot:source,itemId:ids.MAGIC_STRING,target:{kind:"inventory",slot:target,itemId:ids.EMERALD_AMULET_U_}}]);
+      turn();
+      assert.deepEqual(observed,{used:ids.MAGIC_STRING,with:ids.EMERALD_AMULET_U_,handled:true});
+      assert.equal(core.TaskManager.hasActiveTask(p.getIndex(),"NextTick"),true,"real stringing task is pending before removal");
+      inv.deleteNumber(removed,1); assert.equal(inv.getAmount(removed),0);
+      for(let i=0;i<3;i++) turn();
+      assert.equal(core.TaskManager.hasActiveTask(p.getIndex(),"NextTick"),false);
+      assert.equal(inv.getAmount(ids.MAGIC_STRING),removed===ids.MAGIC_STRING?0:1);
+      assert.equal(inv.getAmount(ids.EMERALD_AMULET_U_),removed===ids.EMERALD_AMULET_U_?0:1);
+      assert.equal(inv.getAmount(ids.BALL_OF_WOOL),1);
+      assert.equal(inv.getAmount(ids.PRE_NATURE_AMULET),0); assert.equal(inv.getAmount(ids.EMERALD_AMULET),0);
+      assert.equal(skill.getExperience(craft),0); assert.equal(skill.getCurrentLevel(craft),1); assert.equal(skill.getMaxLevel(craft),1);
+    });
+  });
 });

@@ -348,6 +348,9 @@ module.exports = {
   COMBO_ATTACK_DELAY,
   isFoodItem,
   isComboFoodItem,
+  /** Which bite of which food an item id is, and how long that bite takes: bot nodes need both. */
+  foodBite,
+  eatDelay,
   foodItemIds,
   _test: {
     getAnglerfishHeal, canAnglerfishOverheal, healAmount, rollOutcome, foodBite, leftover, eatDelay, applyFood,

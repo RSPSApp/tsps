@@ -92,7 +92,7 @@ function warnsOnDeposit(furniture, item) {
 function confirmDeposit(event, context, position, inventory, apply) {
   const player = event.player, snapshot = inventorySnapshot(inventory);
   // The confirmation text and bulk trigger are this server's approximation.
-  api.sendMultiChatboxPrompt(player, "An incomplete set cannot be withdrawn until it is complete. Continue?", "Deposit", () => {
+  api.sendMultiChatboxPrompt(player, "Some sets must be complete to withdraw. Continue?", "Deposit", () => {
     if (!sameContext(event, context, position) || !isUltimate(player) || !sameInventory(inventory, snapshot)) return;
     const pin = { player, feature: "poh-costume-room", resume: () => {} };
     api.emitCustomEvent("bank-pin:guard", pin);

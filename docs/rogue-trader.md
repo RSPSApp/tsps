@@ -36,6 +36,9 @@ Only two boards are in any capture; they are the pool.
 Selling: Ali pays half an item's value for runes in his casket, elemental and other-runes shops (`shop:sell-price`; Wiki `buymultiplier=500`),
 so the "Buy all" offer cannot be sold back for a profit. A casket's own shop holds its runes as surplus: they fall back instead of restocking. His blackjack and clothes shops keep the repo's default sell price.
 
+The generated post-errand remarks at Dommik, Ellis, Karim, Zeke, and the Al Kharid shop keeper and assistant require all three
+errands and Prince Ali Rescue (Wiki, Post-errand task). The existing errand-completion state supplies the three-errand check.
+
 ## Not captured (ours or the Wiki's, labelled where sent)
 
 915 going back to 0 when Siamun switches from the desert outfits to the Menaphite clothing: 3170 has only the Menaphite-to-desert switch (915 1 -> 0 at t1367); the reset on the way back is symmetrical, not captured.
@@ -47,6 +50,5 @@ knock-out route, what a player at 912 = 2 meets.
 
 ## Not done
 
-The four Alis (6552-6555), whose generated pages are empty, and the shop owners' remarks about Ali (Wiki, Post-errand task: the generated file has
-them, but nothing here answers their Rogue Trader conditions). The Captain Dalbur options of "I hear you're planning to expand your business
+The four Alis (6552-6555), whose generated pages are empty. The Captain Dalbur options of "I hear you're planning to expand your business
 here..." are hidden. The per-player shops start over at logout.

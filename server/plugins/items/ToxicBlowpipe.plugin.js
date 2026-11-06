@@ -1,5 +1,6 @@
 let core;
 let pluginApi;
+const { restricted, PRESET_TEXT } = require("./PoweredStaff");
 const methods = new Map();
 const uncappedDamage = new WeakMap();
 
@@ -243,7 +244,10 @@ function chargeScales(player, blowpipeItem, blowpipeSlot, scaleItem) {
   if (add <= 0) {
     return;
   }
-  player.getInventory().deleteNumber(core.ItemIdentifiers.ZULRAHS_SCALES, add);
+  // Only the stack used pays, by its slot: an id-wide delete could take a preset copy instead.
+  const slot = player.getInventory().getItems().indexOf(scaleItem);
+  if (slot < 0) return;
+  player.getInventory().deleteAtSlot(slot, add);
   BlowpipeState.addScales(blowpipeItem, add);
   refreshBlowpipeState(player, blowpipeItem, blowpipeSlot);
   player.sendMessage(`You add ${add} Zulrah scales to the blowpipe.`);
@@ -273,7 +277,10 @@ function chargeDarts(player, blowpipeItem, blowpipeSlot, dartItem) {
     return;
   }
 
-  player.getInventory().deleteNumber(dartId, add);
+  // Only the stack used pays, by its slot: an id-wide delete could take a preset copy instead.
+  const slot = player.getInventory().getItems().indexOf(dartItem);
+  if (slot < 0) return;
+  player.getInventory().deleteAtSlot(slot, add);
   BlowpipeState.addDarts(blowpipeItem, dartId, add);
   refreshBlowpipeState(player, blowpipeItem, blowpipeSlot);
   player.sendMessage(`You load ${add} ${getAmmoName(dartId)} into the blowpipe.`);
@@ -670,6 +677,12 @@ function itemOnItem(event) {
   const blowpipeItem = blowpipeOnLeft ? usedItem : usedWithItem;
   const otherItem = blowpipeOnLeft ? usedWithItem : usedItem;
   const otherItemId = blowpipeOnLeft ? usedWithItemId : usedItemId;
+  // Preset copies never load: Unload and Uncharge pay back plain scales and darts.
+  if ((otherItemId === core.ItemIdentifiers.ZULRAHS_SCALES || isToxicBlowpipeDartId(otherItemId)) && restricted(otherItem)) {
+    event.handled = true;
+    player.sendMessage(PRESET_TEXT);
+    return;
+  }
   if (otherItemId === core.ItemIdentifiers.ZULRAHS_SCALES) {
     event.handled = true;
     chargeScales(player, blowpipeItem, blowpipeSlot, otherItem);

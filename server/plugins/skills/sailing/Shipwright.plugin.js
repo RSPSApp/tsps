@@ -65,8 +65,12 @@ function pay(player, fee) {
   return false;
 }
 
-/** A Port Wizard teleports in, recovers the boat and teleports out; the shipwright confirms. */
-function castRecovery(player, dock) {
+/**
+ * A Port Wizard teleports in, recovers the boat and teleports out; the shipwright confirms.
+ * `head` is the shipwright the player spoke to, so the line shows their face: Jim's multinpc
+ * parent is nameless, so his chat head is the constant rather than his resolved form.
+ */
+function castRecovery(player, dock, head = JUNIOR_JIM_HEAD) {
   const spot = dock.portWizard ?? dock.landing;
   const wizard = pluginApi.spawnNpc({
     id: PORT_WIZARDS[Math.floor(Math.random() * PORT_WIZARDS.length)],
@@ -82,7 +86,7 @@ function castRecovery(player, dock) {
     playSound(player, SOUND_CAST, 35);
     const where = dock.name.replace(/^The /, "the ");
     player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
-      new NpcDialogue(0, JUNIOR_JIM_HEAD, `All done! The boat is now docked here at ${where}.`),
+      new NpcDialogue(0, head, `All done! The boat is now docked here at ${where}.`),
       new PlayerDialogue(1, "Thanks!"),
       new EndDialogue(2),
     ));
@@ -96,7 +100,7 @@ function castRecovery(player, dock) {
 }
 
 /** Recovers the boat in `slot` to `dock`, if it can be and the player can pay. */
-function recoverSlot(player, dock, slot) {
+function recoverSlot(player, dock, slot, head = JUNIOR_JIM_HEAD) {
   const refusal = Sailing.recoverRefusal(player, slot, dock.id);
   if (refusal) {
     player.sendMessage(refusal);
@@ -108,7 +112,7 @@ function recoverSlot(player, dock, slot) {
   // A recovery loses salvage, courier crates and fish from the hold (OSRS Wiki, Cargo hold).
   dropLostOnRecovery(boat);
   sendBoatVarbits(player);
-  castRecovery(player, dock);
+  castRecovery(player, dock, head);
 }
 
 function recoverBoat({ player, npc, definition }) {
@@ -116,11 +120,27 @@ function recoverBoat({ player, npc, definition }) {
   const name = (definition ?? npc.getCurrentDefinition?.(player))?.getName?.() ?? "";
   const dock = content().docks.find((candidate) => candidate.shipwright === name);
   if (!dock) return false;
-  openBoatSelection(player, MODE.RECOVER, dock, (slot) => recoverSlot(player, dock, slot));
+  // The shipwright's own id, so the confirmation shows their face and not Junior Jim's.
+  const head = npc?.getId?.() ?? JUNIOR_JIM_HEAD;
+  openBoatSelection(player, MODE.RECOVER, dock, (slot) => recoverSlot(player, dock, slot, head));
 }
 
 /** The Wiki transcript's "I'd like to recover a boat." step opens the selection for this target. */
 const RECOVER_TARGET = "Recover Boat";
+
+/**
+ * Still standing with the shipwright, free, and with nothing else open: the guard
+ * Destroy.Shipwright's `open()` applies, since the selection opens a tick after the click
+ * that asked for it and the player may have walked off or opened something else by then.
+ */
+function stillWith(quote) {
+  const { player, npc } = quote;
+  return player?.isRegistered?.() === true && !player.busy?.()
+    && npc?.isRegistered?.() === true
+    && player.getLocation().isWithinDistance(npc.getLocation(), 5)
+    && !player.getDialogueManager().isActive()
+    && !player.getPacketSender().hasInterruptibleInterface();
+}
 
 /**
  * The Recover-boat dialogue step. Its NPC option is not on every shipwright's definition (the
@@ -132,7 +152,9 @@ function recoverFromDialogue(event) {
   event.handled = true;
   event.end = true;
   const quote = { player: event.player, npc: event.npc, definition: event.definition };
-  later(event.player, 1, () => recoverBoat(quote));
+  later(event.player, 1, () => {
+    if (stillWith(quote)) recoverBoat(quote);
+  });
 }
 
 module.exports = {

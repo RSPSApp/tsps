@@ -23,6 +23,12 @@ const MORYTANIA = [
 ];
 /** Burgh de Rott's shore and both harpoon spots (npc-spawns.json 4476/4477). */
 const BURGH_DE_ROTT = { minX: 3460, maxX: 3550, minY: 3150, maxY: 3225, z: 0 };
+/**
+ * Mort Myre Swamp south of its gate fence (gate 3443-3444, 3457 in Doors.plugin.js) for the
+ * Snelm task's exclusion; every ghast spawn (x 3401-3563, y 3328-3452) lies inside. Not the
+ * Nature Spirit box, which reaches y 3480 and takes in southern Canifis and its bank.
+ */
+const MORT_MYRE = { minX: 3380, maxX: 3590, minY: 3310, maxY: 3457, z: 0 };
 const GUTHIX_BALANCE = new Set([7660, 7662, 7664, 7666]); // finished 4/3/2/1-dose
 
 let api = null;
@@ -39,10 +45,14 @@ function inBox(location, box) {
 }
 
 const inMorytania = (location) => MORYTANIA.some((box) => inBox(location, box));
+/** Same boxes on any floor (Wiki: the Guthix balance task counts anywhere in Morytania). */
+const inMorytaniaAnyFloor = (location) => MORYTANIA.some(({ z, ...box }) => inBox(location, box));
 
 function snelm({ player, skill, kind }) {
   if (skill !== api.core.Skill.CRAFTING || kind !== "snelms") return;
-  if (inMorytania(player.getLocation())) emit(player, TASKS.snelm);
+  const location = player.getLocation();
+  // Wiki (Morytania Diary): "Must be done outside of Mort Myre Swamp".
+  if (inMorytania(location) && !inBox(location, MORT_MYRE)) emit(player, TASKS.snelm);
 }
 
 function troubleBrewing({ player }) {
@@ -55,7 +65,7 @@ function swampBoaty({ player, from }) {
 
 function guthixBalance({ player, itemId }) {
   if (!GUTHIX_BALANCE.has(itemId)) return;
-  if (inMorytania(player.getLocation())) emit(player, TASKS.guthixBalance);
+  if (inMorytaniaAnyFloor(player.getLocation())) emit(player, TASKS.guthixBalance);
 }
 
 function barehandShark({ player, skill, itemId, barehand }) {

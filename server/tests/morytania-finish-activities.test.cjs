@@ -160,6 +160,19 @@ test("Morytania diary: the five new actions emit their catalogue tasks", () => {
   for (const task of Object.values(t.TASKS)) assert.ok(emitted.includes(task), `emitted ${task}`);
   assert.equal(emitted.filter((task) => task === t.TASKS.snelm).length, 1, "dedupe is left to the Progress store");
   assert.equal(t.swampBoaty({ player, from: "mortton" }), undefined);
+
+  // Wiki: the Snelm must be made outside Mort Myre Swamp; the Guthix mix counts on any floor.
+  emitted.length = 0;
+  t.snelm({ player: playerAt(3440, 3400), skill: core.Skill.CRAFTING, kind: "snelms" });
+  assert.equal(emitted.includes(t.TASKS.snelm), false, "no Snelm task inside the swamp");
+  // Canifis bank booth, Canifis square and the tile north of the swamp gate are outside it.
+  for (const [x, y] of [[3512, 3479], [3494, 3475], [3444, 3459]]) {
+    emitted.length = 0;
+    t.snelm({ player: playerAt(x, y), skill: core.Skill.CRAFTING, kind: "snelms" });
+    assert.ok(emitted.includes(t.TASKS.snelm), `Snelm at (${x}, ${y}) counts`);
+  }
+  t.guthixBalance({ player: playerAt(3495, 3490, 1), itemId: 7660 });
+  assert.ok(emitted.includes(t.TASKS.guthixBalance), "upstairs in Morytania counts");
 });
 
 test("Trouble Brewing: ingredients and three lit boilers brew a bottle that scores when packed", () => {

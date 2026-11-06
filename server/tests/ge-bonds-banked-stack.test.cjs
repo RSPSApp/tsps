@@ -11,6 +11,7 @@ const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { PluginManager: PM } = require("../dist/plugins/PluginManager");
 const { Player } = require("../dist/game/entity/impl/player/Player");
 const { PlayerSession } = require("../dist/net/PlayerSession");
+const { ClientConnection } = require("../dist/net/NetworkBuilder");
 
 const TRADEABLE_BOND = 13190;
 const UNTRADEABLE_BOND = 13192;
@@ -35,10 +36,12 @@ function actor(t) {
   p.setAttribute("bot-skip-persistence", true);
   p.setLocation(new core.Location(3200, 3200, 0));
   p.needsPlacement = false;
+  const c = new ClientConnection(channel);
+  c.player = p;
   const messages = [];
   t.mock.method(p.getPacketSender(), "sendMessage", (message) => { messages.push(message); return p.getPacketSender(); });
   t.after(() => { p.setRegistered(false); core.TaskManager.cancelTasks(p); });
-  return { p, inv: p.getInventory(), messages };
+  return { p, c, inv: p.getInventory(), messages };
 }
 
 
@@ -82,4 +85,50 @@ test("a full bank still splits the bought bond off as untradeable", (t) => {
   PM.emitCustomEvent("ge:offer-collected", { player: f.p, itemId: TRADEABLE_BOND, amount: 1, destination: "bank", container: tab });
   assert.equal(tab.getAmount(TRADEABLE_BOND), 1);
   assert.equal(tab.getAmount(UNTRADEABLE_BOND), 1);
+});
+
+// The real GE collect path: an offer waiting in the slot, the main Collect button (465:6), op 1 to the inventory, op 2 to the bank.
+const GE = 465;
+async function collectOffer(f, offer, op) {
+  f.p.setAttribute("grand-exchange-offers", { 0: { slot: 0, price: 10, total: 10, finished: true, completesAt: null, ...offer } });
+  PM.emitCommand({ player: f.p, raw: "ge", base: "ge", parts: ["ge"], handled: false });
+  assert.equal(f.p.getInterfaceId(), GE, "the GE opened");
+  await f.c.dispatch([{ type: "widget_action", widgetId: (GE << 16) | 6, groupId: GE, childId: 6, buttonNum: op, slot: 0, itemId: -1 }]);
+  f.c.processTurnPackets();
+  assert.equal(Object.keys(f.p.getAttribute("grand-exchange-offers") ?? {}).length, 0, "the offer was collected");
+}
+const abortedSell = { itemId: TRADEABLE_BOND, sell: true, aborted: true, quantity: 1 };
+
+test("a bond returned by a cancelled sell, collected onto banked bonds, stays tradeable", async (t) => {
+  const f = actor(t);
+  f.p.getBank(0).add(new core.Item(TRADEABLE_BOND, 3), false);
+  await collectOffer(f, abortedSell, 2);
+  assert.equal(f.p.getBank(0).getAmount(TRADEABLE_BOND), 4);
+  assert.equal(f.p.getBank(0).getAmount(UNTRADEABLE_BOND), 0);
+});
+
+test("a bond returned by a cancelled sell, collected to the inventory, stays tradeable", async (t) => {
+  const f = actor(t);
+  await collectOffer(f, abortedSell, 1);
+  assert.equal(f.inv.getAmount(TRADEABLE_BOND), 1);
+  assert.equal(f.inv.getAmount(UNTRADEABLE_BOND), 0);
+});
+
+test("a bond bought on the GE, collected through the real path onto banked bonds, still arrives untradeable", async (t) => {
+  const f = actor(t);
+  f.p.getBank(0).add(new core.Item(TRADEABLE_BOND, 3), false);
+  await collectOffer(f, { itemId: TRADEABLE_BOND, sell: false, quantity: 1 }, 2);
+  assert.equal(f.p.getBank(0).getAmount(TRADEABLE_BOND), 3);
+  assert.equal(f.p.getBank(0).getAmount(UNTRADEABLE_BOND), 1);
+});
+
+test("a whole bought stack joins the untradeable bonds already banked", (t) => {
+  const f = actor(t);
+  f.p.getBank(1).add(new core.Item(UNTRADEABLE_BOND, 3), false);
+  const tab = f.p.getBank(0);
+  tab.add(new core.Item(TRADEABLE_BOND, 2), false);
+  PM.emitCustomEvent("ge:offer-collected", { player: f.p, itemId: TRADEABLE_BOND, amount: 2, destination: "bank", container: tab });
+  assert.equal(tab.getAmount(TRADEABLE_BOND), 0);
+  assert.equal(tab.getAmount(UNTRADEABLE_BOND), 0, "no second untradeable stack");
+  assert.equal(f.p.getBank(1).getAmount(UNTRADEABLE_BOND), 5);
 });

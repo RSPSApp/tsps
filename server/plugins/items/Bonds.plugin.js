@@ -223,14 +223,28 @@ function convertHeldBonds(container, count, bankOwner = null) {
     const amount = item.getAmount();
     const converted = Math.min(remaining, amount);
     const { Item } = pluginApi.core;
-    if (converted === amount) {
+    const { Bank } = pluginApi.core;
+    const heldTab = bankOwner ? bankOwner.getBank(Bank.getTabForItem(bankOwner, UNTRADEABLE_BOND)) : null;
+    if (converted === amount && heldTab?.getAmount(UNTRADEABLE_BOND) > 0) {
+      // The whole stack is the bought bonds, and untradeable bonds are already banked: join that stack.
+      const whole = new Item(UNTRADEABLE_BOND, amount);
+      const place = () => {
+        if (heldTab.getAddableAmount(whole) < amount) return false;
+        container.deletedItem(new Item(TRADEABLE_BOND, amount), slot, false);
+        heldTab.add(whole, false);
+        return true;
+      };
+      if (!Bank.withoutLimit(bankOwner, place)) continue;
+      container.refreshItems();
+      if (heldTab !== container) heldTab.refreshItems();
+      slot--;
+    } else if (converted === amount) {
       container.setItem(slot, new Item(UNTRADEABLE_BOND, amount));
     } else {
       // A bank stacks bonds: a bought one collected onto bonds already banked is split off that stack, into
       // the tab holding untradeable bonds. The split needs at most one more slot, so a full bank still takes it.
       const split = new Item(UNTRADEABLE_BOND, converted);
-      const { Bank } = pluginApi.core;
-      const target = bankOwner ? bankOwner.getBank(Bank.getTabForItem(bankOwner, UNTRADEABLE_BOND)) : container;
+      const target = heldTab ?? container;
       const place = () => {
         if (target.getAddableAmount(split) < converted) return false;
         container.setItem(slot, new Item(TRADEABLE_BOND, amount - converted));
@@ -306,7 +320,8 @@ function vetoUntradeableSale(event) {
 
 /** Grand Exchange: a bond bought from an offer arrives untradeable. */
 function convertCollectedBond(event) {
-  if (event?.itemId !== TRADEABLE_BOND || !event.container) {
+  // A bond handed back from an aborted sell was never bought: it stays tradeable.
+  if (event?.itemId !== TRADEABLE_BOND || !event.container || event.returned) {
     return;
   }
   convertHeldBonds(event.container, event.amount, event.destination === "bank" ? event.player : null);

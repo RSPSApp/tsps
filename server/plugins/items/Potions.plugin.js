@@ -1700,6 +1700,11 @@ module.exports = {
   getPotionName(itemId) {
     return POTION_BY_ITEM_ID.get(itemId)?.potion?.name ?? null;
   },
+  /** `{ potion, doses, emptyItemId }` for a potion dose item, or null. Used by the chugging barrel. */
+  doseOf(itemId) {
+    const entry = POTION_BY_ITEM_ID.get(itemId);
+    return entry ? { potion: entry.potion, doses: entry.doses, emptyItemId: entry.potion.emptyItemId } : null;
+  },
   register(api) {
     api.registerRunEnergyDrainModifier(staminaDrainModifier);
     api.registerRunEnergyStatusModifier(staminaStatus);

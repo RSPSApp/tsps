@@ -165,6 +165,79 @@ test("a nested pickup during the take policy cannot duplicate the gem", async (t
   assert.deepEqual(events, [{ amount: 1, discarded: 0, source: "pickup" }]);
 });
 
+test("an open sack stores the player's own gem once", async (t) => {
+  const f = actor(t, HOME, false);
+  f.inv.add(new core.Item(core.CacheDefinitions.getObjId("gem_sack_open")), true);
+  const pile = gemHere(t, f);
+  await take(f);
+  const sack = Storage.FAMILIES.get("gem-sack");
+  assert.ok(sack);
+  assert.equal(Storage.amountOf(f.p, sack, I.UNCUT_RUBY), 1);
+  assert.equal(f.inv.getAmount(I.UNCUT_RUBY), 0);
+  assert.equal(pile.isPendingRemoval(), true);
+});
+
+test("an Ironman's open sack cannot take another player's gem", async (t) => {
+  const f = actor(t, HOME, false);
+  f.inv.add(new core.Item(core.CacheDefinitions.getObjId("gem_sack_open")), true);
+  setIron(f);
+  const pile = gemHere(t, f, "OtherPlayer");
+  await take(f);
+  const sack = Storage.FAMILIES.get("gem-sack");
+  assert.ok(sack);
+  assert.equal(Storage.amountOf(f.p, sack, I.UNCUT_RUBY), 0);
+  assert.equal(f.inv.getAmount(I.UNCUT_RUBY), 0);
+  assert.equal(pile.isPendingRemoval(), false);
+  assert.ok(f.messages.includes(REFUSED), JSON.stringify(f.messages));
+});
+
+function sackActor(t) {
+  const f = actor(t, HOME, false);
+  f.inv.add(new core.Item(core.CacheDefinitions.getObjId("gem_sack_open")), true);
+  return f;
+}
+
+test("ground take policy can refuse a gem for an open sack", async (t) => {
+  const f = sackActor(t), pile = gemHere(t, f), events = [];
+  pickupEvents.set(f.p, events);
+  pickupPolicies.set(f.p, (event) => { event.allow = false; });
+  await take(f);
+  assert.equal(Storage.amountOf(f.p, Storage.FAMILIES.get("gem-sack"), I.UNCUT_RUBY), 0);
+  assert.equal(f.inv.getAmount(I.UNCUT_RUBY), 0);
+  assert.equal(pile.isPendingRemoval(), false);
+  assert.deepEqual(events, []);
+});
+
+test("sack pickup emits the credited ground-item event once", async (t) => {
+  const f = sackActor(t), pile = gemHere(t, f), events = [];
+  pickupEvents.set(f.p, events);
+  await take(f);
+  assert.equal(Storage.amountOf(f.p, Storage.FAMILIES.get("gem-sack"), I.UNCUT_RUBY), 1);
+  assert.equal(pile.isPendingRemoval(), true);
+  assert.deepEqual(events, [{ amount: 1, discarded: 0, source: "pickup" }]);
+});
+
+test("metadata gem bypasses sack storage and keeps metadata", async (t) => {
+  const f = sackActor(t), pile = gemHere(t, f);
+  pile.getItem().setMetaValue("gem-test:marker", 17);
+  await take(f);
+  assert.equal(Storage.amountOf(f.p, Storage.FAMILIES.get("gem-sack"), I.UNCUT_RUBY), 0);
+  const held = f.inv.getValidItems().find((entry) => entry.getId() === I.UNCUT_RUBY);
+  assert.equal(held?.getMetaValue("gem-test:marker"), 17);
+});
+
+test("nested sack pickup cannot duplicate a gem", async (t) => {
+  const f = sackActor(t), pile = gemHere(t, f), events = [];
+  pickupEvents.set(f.p, events);
+  let calls = 0;
+  pickupPolicies.set(f.p, () => { calls++; if (calls === 1) core.ItemOnGroundManager.pickup(f.p, pile); });
+  await take(f);
+  assert.equal(calls, 1);
+  assert.equal(Storage.amountOf(f.p, Storage.FAMILIES.get("gem-sack"), I.UNCUT_RUBY), 1);
+  assert.equal(f.inv.getAmount(I.UNCUT_RUBY), 0);
+  assert.deepEqual(events, [{ amount: 1, discarded: 0, source: "pickup" }]);
+});
+
 test("an Ironman's open bag doesn't take another player's gem, and it stays on the ground", async (t) => {
   const f = actor(t);
   setIron(f);

@@ -215,7 +215,10 @@ function onCourse(location) {
   const { minX, maxX, minY, maxY } = DATA.course;
   const x = location.getX();
   const y = location.getY();
-  return location.getZ() === 0 && x >= minX && x <= maxX && y >= minY && y <= maxY;
+  // Rope and log failures land in the course dungeon, 6400 tiles north in map coordinates.
+  const undergroundOffset = 6400;
+  return location.getZ() === 0 && x >= minX && x <= maxX &&
+    ((y >= minY && y <= maxY) || (y >= minY + undergroundOffset && y <= maxY + undergroundOffset));
 }
 
 /** Recorded on leaving: the streak, the payment and an unclaimed reward go; the ticket stays. */

@@ -98,6 +98,7 @@ import {
   PluginPlayerBeforeDeathEvent,
   PluginPlayerOptionEvent,
   PluginPlayerDealtDamageEvent,
+  PluginCombatHitPrepareEvent,
   PluginCombatHitRollEvent,
   PluginCombatHitDamageEvent,
   PluginAttackTimingEvent,
@@ -328,6 +329,7 @@ export class PluginManager {
   private static playerDeathHooks: PluginHook<PluginPlayerDeathEvent>[] = [];
   private static playerOptionHooks: PluginHook<PluginPlayerOptionEvent>[] = [];
   private static playerDealtDamageHooks: PluginHook<PluginPlayerDealtDamageEvent>[] = [];
+  private static combatHitPrepareHooks: PluginHook<PluginCombatHitPrepareEvent>[] = [];
   private static combatHitRollHooks: PluginHook<PluginCombatHitRollEvent>[] = [];
   private static combatHitDamageHooks: PluginHook<PluginCombatHitDamageEvent>[] = [];
   private static attackTimingHooks: PluginHook<PluginAttackTimingEvent>[] = [];
@@ -1694,6 +1696,13 @@ export class PluginManager {
       PluginManager.executeHook(hook, event, "attack_speed", "attack_speed");
     }
     return Number.isFinite(event.speed) ? Math.max(1, event.speed | 0) : speed;
+  }
+
+  public static emitCombatHitPrepare(event: PluginCombatHitPrepareEvent): void {
+    if (!event?.attacker || !event?.target) return;
+    for (const hook of PluginManager.combatHitPrepareHooks) {
+      PluginManager.executeHook(hook, event, "combat_hit_prepare", "combat_hit_prepare");
+    }
   }
 
   public static emitCombatHitRoll(event: PluginCombatHitRollEvent): void {
@@ -3657,6 +3666,10 @@ export class PluginManager {
             handler(event);
           },
         });
+      },
+      onCombatHitPrepare: (handler) => {
+        if (typeof handler !== "function") return;
+        PluginManager.combatHitPrepareHooks.push({ ...hookProfile(handler), handler });
       },
       onCombatHitRoll: (handler) => {
         if (typeof handler !== "function") return;

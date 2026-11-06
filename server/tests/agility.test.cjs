@@ -504,6 +504,39 @@ test("the shortcut data refuses unknown kinds, scripts, animations and keys", ()
   assert.throws(() => build({ ...base, steps: [], colour: "red" }, 0), /unknown key "colour"/);
 });
 
+test("cache-rotated Kandarin stiles route to the near side and cross their long footprint (#2871)", () => {
+  const { RegionManager } = require("../dist/game/collision/RegionManager");
+  const { MapObjects } = require("../dist/game/entity/impl/object/MapObjects");
+  RegionManager.init();
+  const placements = [
+    { at: [2761, 3436, 0], ends: [[2761, 3435, 0], [2761, 3438, 0]], approaches: [[2761, 3433, 0], [2761, 3440, 0]] },
+    { at: [2638, 3350, 0], ends: [[2637, 3350, 0], [2640, 3350, 0]] },
+    { at: [2647, 3375, 0], ends: [[2646, 3375, 0], [2649, 3375, 0]] },
+    { at: [2655, 3347, 0], ends: [[2654, 3347, 0], [2657, 3347, 0]] },
+    { at: [2917, 3438, 0], ends: [[2916, 3438, 0], [2919, 3438, 0]] },
+  ];
+  for (const { at, ends, approaches = ends } of placements) {
+    RegionManager.loadMapFiles(at[0], at[1]);
+    const object = MapObjects.get(ObjectIds.STILE, new Location(...at), null);
+    assert.ok(object, `cache stile at ${at}`);
+    for (const side of [0, 1]) {
+      const from = ends[side], to = ends[1 - side];
+      assert.equal(RegionManager.blocked(new Location(...from), null), false, "approach is walkable");
+      assert.equal(RegionManager.blocked(new Location(...to), null), false, "landing is walkable");
+      const player = createPlayer(...approaches[side], 1);
+      const route = { player, object, objectId: ObjectIds.STILE, clickType: 1, destination: null };
+      hooks.route.forEach(handler => handler(route));
+      assert.deepEqual(route.destination, { x: from[0], y: from[1], z: from[2] },
+        `the approach stays on side ${side} at ${at}`);
+      // Arrival is fixtured here; live MCP covers the actual approach path.
+      player.setLocation(new Location(...from));
+      assert.notEqual(operate(player, ObjectIds.STILE, at, object.getFace()), false);
+      assert.deepEqual(tileOf(player), to, `crossing from side ${side} at ${at}`);
+      assert.equal(player.state.xp, 0, "a level-1 stile grants no XP");
+    }
+  }
+});
+
 test("native Lizardman Canyon handholds enter and leave both crossings at level 1", () => {
   const { RegionManager } = require("../dist/game/collision/RegionManager");
   const { MapObjects } = require("../dist/game/entity/impl/object/MapObjects");

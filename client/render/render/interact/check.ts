@@ -50,6 +50,7 @@ import { PlayerAppearance } from "../../../rs/config/player/PlayerAppearance";
 import { PlayerModelLoader } from "../../../rs/config/player/PlayerModelLoader";
 import { decodeInteractionIndex } from "../../../rs/interaction/InteractionIndex";
 import { npcExamineVisibleWhileHidden, npcOpsVisibility } from "../../../game/NpcOpsVisibility";
+import { groundObjExamineVisibleWhileHidden, groundObjOpsVisibility } from "../../../game/GroundObjOpsVisibility";
 import { getMapIndexFromTile, getMapPlaneId, getMapSquareId } from "../../../rs/map/MapFileIndex";
 import { Model } from "../../../rs/model/Model";
 import { ModelData } from "../../../rs/model/ModelData";
@@ -1039,6 +1040,28 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
                     const tileKey = `${localX}:${localY}`;
                     if (objIds.has(tileKey)) continue;
                     objIds.add(tileKey);
+
+                    // set_item_ops_disabled: no Use, Cast, ground actions or Take; Examine stays
+                    // unless a spell is selected (native adds it only in the no-selection branch).
+                    if (groundObjOpsVisibility.hidden) {
+                        if (groundObjExamineVisibleWhileHidden(ClientState.isSpellSelected)) {
+                            for (const stack of stacks) {
+                                const objType = host.osrsClient.objTypeLoader.load(stack.itemId);
+                                if (!objType || objType.name === "null") continue;
+                                const menuName = plugins.groundItemMenuName(stack, objType.name);
+                                menuEntries.push({
+                                    option: "Examine",
+                                    targetId: stack.itemId,
+                                    targetType: MenuTargetType.OBJ,
+                                    targetName: plugins.groundItemMenuTarget(stack, menuName),
+                                    targetLevel: -1,
+                                    mapX: localX,
+                                    mapY: localY,
+                                });
+                            }
+                        }
+                        continue;
+                    }
 
                     // Item selection: Use only (OSRS: opcode 16 per item, suppresses normal ops).
                     if (ClientState.isItemSelected === 1) {

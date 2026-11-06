@@ -191,7 +191,7 @@ Broadcasts: `boss:personal-best` (18 fights, not ToA, Tempoross or the Sepulchre
 `onExperienceGained`, `diary:tier-complete`, `ironman:hardcore-death`, `loot-keys:opened`, and combat and total
 level marks. **Ours:** hardcore death and loot key wording; total level every 25, as tsps's own level-up message.
 
-Gateway (`gateway/.../down/Clans.kt`, `gateway/COVERAGE.md`): 124-128 and clan chat both ways, kick, ban and mute.
+Gateway (`runelite-gateway/.../down/Clans.kt`, `runelite-gateway/COVERAGE.md`): 124-128 and clan chat both ways, kick, ban and mute.
 It compiles on JDK 17 and its tests decode through RSProx's 241 decoders, but **nothing has run against the
 official client**. No recording shows `VarClan`, guest chat upstream, or kick, ban and mute, so those rest on
 rsprot and the scripts. The gateway restarts update numbers from the last full update, because live's delta carries

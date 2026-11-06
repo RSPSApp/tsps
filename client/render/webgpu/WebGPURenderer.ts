@@ -225,7 +225,10 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
     static async probeAdapter(): Promise<GPUAdapter | undefined> {
         if (!isWebGPUSupported) return undefined;
         try {
-            return (await navigator.gpu.requestAdapter()) ?? undefined;
+            // On machines with both an integrated and a discrete GPU, the default adapter can be
+            // the integrated one while the compositor runs on the discrete GPU. The canvas then
+            // can't be shared across adapters and Chromium reads every frame back through the CPU.
+            return (await navigator.gpu.requestAdapter({ powerPreference: "high-performance" })) ?? undefined;
         } catch {
             return undefined;
         }

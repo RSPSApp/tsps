@@ -1630,6 +1630,15 @@ export function encodeHideNpcOps(hidden: boolean): Buffer {
   return encodeServerPacket(ServerPacketId.HIDE_NPC_OPS, Buffer.from([hidden ? 1 : 0]));
 }
 
+/**
+ * set_item_ops_disabled (hideobjops): one boolean for the whole client. While hidden, ground-item
+ * menus drop Use, Cast and every ground action (including the Take fallback); Examine stays only
+ * when no spell is selected.
+ */
+export function encodeHideObjOps(hidden: boolean): Buffer {
+  return encodeServerPacket(ServerPacketId.HIDE_OBJ_OPS, Buffer.from([hidden ? 1 : 0]));
+}
+
 /** Puts the camera back on the player and stops any shake (cam_reset). */
 /**
  * cam_target: the camera (and what the client centres its view and sound on) follows a tile or an
@@ -2506,7 +2515,7 @@ export function encodeGameframeTabSetup(group: number, root: number = 161): Buff
 
 // Transient player attribute set from the handshake's clientType byte.
 export const MOBILE_CLIENT_ATTRIBUTE = "mobile-client";
-// The session is an official OSRS client behind the gateway (gateway/): it gets the fields the
+// The session is an official OSRS client behind the gateway (runelite-gateway/): it gets the fields the
 // browser wire leaves out. Transient, set from HANDSHAKE_CAPABILITY_NATIVE_CLIENT.
 export const NATIVE_CLIENT_ATTRIBUTE = "native-client";
 export const HANDSHAKE_CAPABILITY_NATIVE_CLIENT = 0x1;

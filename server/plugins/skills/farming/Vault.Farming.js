@@ -227,6 +227,10 @@ function guarded(player, session) {
     core.PluginManager.emitCustomEvent("bank-pin:guard", request);
     return !request.locked && current(player) === session;
 }
+/** Refresh only an existing visible vault; do not open it or prompt for a PIN. */
+function refreshOpen(player) {
+    if (current(player)) sync(player);
+}
 function changed(player) {
     player.getInventory().refreshItems();
     sync(player);
@@ -515,4 +519,4 @@ function drag(event) {
 function logout({ player }) {
     SESSIONS.delete(player);
 }
-Object.assign(module.exports, { open, click, drag, logout });
+Object.assign(module.exports, { open, click, drag, logout, eligible, held, refreshOpen });

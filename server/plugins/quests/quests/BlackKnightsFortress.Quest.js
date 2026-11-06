@@ -104,12 +104,13 @@ module.exports = function registerBlackKnightsFortressQuest(api) {
   const LISTENING_ANIMATION = 4552;
   const STOP_LISTENING_ANIMATION = 4197;
 
-  /** Sounds the sabotage scene plays (rsprox rev 240: ticks 1, 40, 60 and 90 of the scene). */
+  /** Sounds the sabotage scene plays (rsprox rev 240). Each follows its dialogue step, not a fixed scene tick. */
   const THROW_SOUND = 1420;
   const NOISE_SOUND = 1414;
   const SPLASH_SOUND = 1416;
   const CAT_MEOW_SOUND = 333;
-  const NOISE_SOUND_TICK = 40;
+  /** Ticks after continuing past "Where has Greldo..." (rev 240: 3105 -> 3108; rev 241: 10057 -> 10059). */
+  const NOISE_SOUND_DELAY = 3;
   /** "My potion!" switches to the fortress track with no fades (rev 240 tick 66). */
   const KNIGHTMARE_TRACK = 374;
   const NO_FADES = { fadeOutDelay: 0, fadeOutSpeed: 0, fadeInDelay: 0, fadeInSpeed: 0 };
@@ -425,7 +426,10 @@ module.exports = function registerBlackKnightsFortressQuest(api) {
       event.after = () => state.witch?.performAnimation(new Animation(860));
     }
     if (text === "Oh boy, this doesn't look good!") event.after = () => state.captain?.performAnimation(new Animation(2105));
-    if (text === "Where has Greldo got to with that magic cabbage!") event.after = () => pauseSabotage(player, state, 6, text);
+    if (text === "Where has Greldo got to with that magic cabbage!") event.after = () => {
+      later(player, state, NOISE_SOUND_DELAY, () => player.getPacketSender().sendSound(NOISE_SOUND, 1, 0));
+      pauseSabotage(player, state, 6, text);
+    };
     if (String(text).startsWith("Meow!")) {
       event.text = "Meow!";
       event.speakerId = NpcIdentifiers.BLACK_CAT;
@@ -538,7 +542,6 @@ module.exports = function registerBlackKnightsFortressQuest(api) {
       later(player, state, tick, () => state[key]?.getMovementQueue().addFirstStep(state.area.sourceTile(x, y)));
     }
     later(player, state, 14, () => fade(player, false));
-    later(player, state, NOISE_SOUND_TICK, () => player.getPacketSender().sendSound(NOISE_SOUND, 1, 0));
     pauseSabotage(player, state, 24, "lUsX9u");
   }
 

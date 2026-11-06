@@ -299,7 +299,9 @@ test('Black Knights sabotage plays the captured throw, noise, splash, track and 
   const h = setup('BlackKnightsFortress'); h.quest.setStage(h.player, 2); h.inventory.set(I.CABBAGE, 1);
   const sounds = () => h.packets.filter(row => row.key === 'sendSound').map(row => row.args[0]);
   h.action(N.WITCH_5, 'lUsX9u'); assert.deepEqual(sounds(), [1420]);
-  h.runAt(8); h.runAt(40); assert.deepEqual(sounds(), [1420, 1414]);
+  h.runAt(8); h.runAt(40); assert.deepEqual(sounds(), [1420], 'the noise is not on a fixed scene tick');
+  h.line(N.WITCH_5, 'Where has Greldo got to with that magic cabbage!').after();
+  assert.deepEqual(sounds(), [1420]); h.runAt(3); assert.deepEqual(sounds(), [1420, 1414]);
   h.action(N.WITCH_5, 'Ug7RZ1'); h.runAt(2); assert.deepEqual(sounds(), [1420, 1414, 1416]);
   h.line(N.WITCH_5, 'My potion!').before();
   assert.deepEqual(h.packets.filter(row => row.key === 'sendSong').map(row => row.args), [[374, { fadeOutDelay: 0, fadeOutSpeed: 0, fadeInDelay: 0, fadeInSpeed: 0 }]]);

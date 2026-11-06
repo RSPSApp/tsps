@@ -151,9 +151,6 @@ A pestle and mortar on a secondary; no Herblore level or XP. Recordings 70 and 1
 horn), 468 (anchovies, the same loop), 1849 (bird nest); the other messages are from the capture
 archive's message log.
 
-Preset (restricted) copies are refused with "Preset items cannot be used for this." for both tools, as
-in mixing; plain copies carried alongside are still ground and the preset ones stay.
-
 - **Timing:** at once, two ticks later, then every three ticks until none are left or the player
   does something else (also the Wiki's "0, then 2, then 3 ticks").
 - **Animation and sound:** `human_herbing_grind` (364) with synth 2608.
@@ -179,6 +176,12 @@ in mixing; plain copies carried alongside are still ground and the preset ones s
 A knife on an ordinary chocolate bar also makes one chocolate dust with no XP ([Wiki](https://oldschool.runescape.wiki/w/Chocolate_dust)).
 This path currently converts one bar per use; the Wiki documents automatic repetition, but its
 knife-specific timing and feedback are not yet implemented.
+
+Grinding rows in `server/plugins/skills/data/herblore.json` use a pestle and mortar by default. A row
+may declare `alternateTool` as a cache item gameval; the chocolate bar row declares `"knife"`.
+
+Herblore's grinding handler refuses preset (restricted) copies with "Preset items cannot be used for
+this." for the pestle and the knife, as in mixing; plain copies alongside are still ground.
 
 Regression coverage exercises the registered item-on-item handler for quantity selection,
 partial/all messages, zero/invalid input, supply removal, capacity/stack limits and nihil

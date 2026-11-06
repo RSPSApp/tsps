@@ -43,22 +43,37 @@ function recentRaid() {
   return latest;
 }
 
-function raidOfName(name) {
+function selectionOfName(name) {
   const wanted = String(name ?? "").trim().toLowerCase();
   for (const raid of Raid.raids.values()) {
     if (raid.over) continue;
-    if ([...raid.players, ...raid.spectators].some((player) => Shared.displayName(player).toLowerCase() === wanted || player.getUsername().toLowerCase() === wanted)) return raid;
+    const player = [...raid.players, ...raid.spectators].find((candidate) =>
+      Shared.displayName(candidate).toLowerCase() === wanted || candidate.getUsername().toLowerCase() === wanted);
+    if (player) return { raid, player };
   }
   return null;
 }
 
-/** Wiki: someone whose private chat is friends only must have the viewer on their list. */
-function mayWatchRaid(viewer, raid) {
-  return raid.players.every((member) => {
-    const request = { player: member, viewer, allowed: true };
+function raidOfName(name) {
+  return selectionOfName(name)?.raid ?? null;
+}
+
+/** A named subject owns the list; Recent Party retains its existing admission events. */
+function mayWatchRaid(viewer, raid, subject) {
+  return (subject ? [subject] : raid.players).every((member) => {
+    const request = { player: member, viewer, allowed: true, namedSubject: !!subject };
     Shared.api().emitCustomEvent("tob:may-spectate", request);
     return request.allowed;
   });
+}
+
+function friendsOnlyAdmission(request) {
+  if (!request.namedSubject) return;
+  const { PrivateChatStatus } = Shared.core();
+  const relations = request.player.getRelations();
+  if (relations.getStatus() === PrivateChatStatus.FRIENDS_ONLY && !relations.hasFriend(request.viewer.getLongUsername())) {
+    request.allowed = false;
+  }
 }
 
 function placeIn(viewer, raid, room) {
@@ -71,12 +86,12 @@ function placeIn(viewer, raid, room) {
   raid.openHud(viewer);
 }
 
-function watch(viewer, raid) {
+function watch(viewer, raid, subject) {
   if (!raid || raid.over) {
     viewer.sendMessage("There's no such party in the Theatre right now.");
     return;
   }
-  if (!mayWatchRaid(viewer, raid)) {
+  if (!mayWatchRaid(viewer, raid, subject)) {
     viewer.sendMessage("That party's members aren't accepting spectators.");
     return;
   }
@@ -117,7 +132,10 @@ function observe({ player, recent }) {
     return;
   }
   player.getPacketSender().sendInterfaceRemoval();
-  player.setEnteredSyntaxAction?.({ execute: (name) => watch(player, raidOfName(name)) });
+  player.setEnteredSyntaxAction?.({ execute: (name) => {
+    const selection = selectionOfName(name);
+    watch(player, selection?.raid, selection?.player);
+  } });
   player.getPacketSender().sendEnterInputPrompt?.("Enter a player's name:");
 }
 
@@ -153,6 +171,7 @@ function talkTo({ player }) {
 module.exports = function registerTheatreSpectate(api) {
   Shared.bind(api);
   api.onCustomEvent("tob:observe", observe);
+  api.onCustomEvent("tob:may-spectate", friendsOnlyAdmission);
   api.onCustomEvent("tob:room-built", roomBuilt);
   api.onCustomEvent("tob:raid-over", raidOver);
   api.onNpcInteraction("Abigaila", { "Talk-to": talkTo, Scry: clickScry });

@@ -29,10 +29,11 @@ function discount(fee, iron) {
   return iron ? Math.floor(fee / 2) : fee;
 }
 
-/** The existing GE buy quote when available; preserve the cache value for unquoted items. */
+/** The existing GE buy quote for tradeable items; preserve cache value for the rest. */
 function feeValue(id) {
   const definition = Common.definition(id);
-  return definition.hasGrandExchangeValue() ? Math.max(0, definition.getGrandExchangeValue()) : Common.value(id);
+  return definition.isTradeable() && definition.hasGrandExchangeValue()
+    ? Math.max(0, definition.getGrandExchangeValue()) : Common.value(id);
 }
 
 function isPaid(id) {

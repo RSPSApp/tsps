@@ -162,6 +162,7 @@ test('Office retrieval charges the loaded GE quote for each noted whip taken', t
     assert.ok(loaded.loaded > 0, 'the canonical snapshot loader loaded prices');
     const whip = core.ItemDefinition.forId(WHIP_NOTE);
     assert.equal(whip.isNoted(), true);
+    assert.equal(whip.isTradeable(), true, 'the loaded noted whip is tradeable in the active cache');
     assert.equal(whip.hasGrandExchangeValue(), true);
     assert.equal(whip.getGrandExchangeValue(), 751282, 'the loader propagated the base whip quote');
     const f = fixture(t);

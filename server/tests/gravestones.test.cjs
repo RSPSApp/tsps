@@ -209,6 +209,7 @@ test("grave and Office fees use loaded GE quotes while preserving grave contents
   const scimitar = core.ItemDefinition.forId(RUNE_SCIMITAR);
   const coins = core.ItemDefinition.forId(COINS);
   const defender = core.ItemDefinition.forId(core.ItemIdentifiers.DRAGON_DEFENDER);
+  const sceptre = core.ItemDefinition.forId(core.ItemIdentifiers.PHARAOHS_SCEPTRE_3_);
   assert.equal(boots.getName(), "Ranger boots");
   assert.equal(whip.getName(), "Abyssal whip");
   assert.equal(scimitar.getName(), "Rune scimitar");
@@ -216,6 +217,11 @@ test("grave and Office fees use loaded GE quotes while preserving grave contents
   assert.ok([boots, whip, scimitar].every(def => def.isTradeable()), "snapshot items are tradeable in the active cache");
   assert.equal(defender.hasGrandExchangeValue(), false);
   assert.equal(defender.getValue(), 68007);
+  assert.equal(sceptre.getName(), "Pharaoh's sceptre");
+  assert.equal(sceptre.isTradeable(), false, "active cache marks the quoted sceptre untradeable");
+  assert.equal(sceptre.getValue(), 100);
+  assert.equal(sceptre.hasGrandExchangeValue(), true);
+  assert.equal(sceptre.getGrandExchangeValue(), 4999999, "historical quote exists for this untradeable variant");
   assert.equal(boots.getValue(), 200, "active-cache ranger boots store value");
   assert.equal(boots.hasGrandExchangeValue(), true);
   assert.equal(boots.getGrandExchangeValue(), 36201000, "loader uses the greater inverted snapshot quote");
@@ -248,6 +254,8 @@ test("grave and Office fees use loaded GE quotes while preserving grave contents
   assert.deepEqual(saved.items.map(item => item.id), [ABYSSAL_WHIP, RUNE_SCIMITAR, RANGER_BOOTS], "capacity selection uses cache order");
   assert.equal(Grave.fee(player), 101000, "grave charges the loaded quote bands");
   assert.equal(Fees.feeValue(core.ItemIdentifiers.DRAGON_DEFENDER), 68007, "unquoted items retain cache value");
+  assert.equal(Fees.feeValue(core.ItemIdentifiers.PHARAOHS_SCEPTRE_3_), 100, "quoted untradeable items retain cache value");
+  assert.equal(Fees.graveFee([{ id: core.ItemIdentifiers.PHARAOHS_SCEPTRE_3_, amount: 1 }], false), 0);
   assert.equal(Fees.officeFee(ABYSSAL_WHIP, false), 37564);
   assert.equal(Fees.officeFee(ABYSSAL_WHIP, true), 18782);
   assert.equal(Fees.officeFee(RUNE_SCIMITAR, false), 0);

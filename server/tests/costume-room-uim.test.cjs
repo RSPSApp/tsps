@@ -9,6 +9,7 @@ const { GameObject } = require("../dist/game/entity/impl/object/GameObject");
 const { ObjectDefinition } = require("../dist/game/definition/ObjectDefinition");
 const { Item } = require("../dist/game/model/Item");
 const { ItemIdentifiers: Items } = require("../dist/util/ItemIdentifiers");
+const { PlayerSession } = require("../dist/net/PlayerSession");
 
 let core;
 let House;
@@ -16,6 +17,8 @@ let Instance;
 let Storage;
 let yanillePortalId;
 let api;
+const pinBlocked = new WeakSet();
+let pinResume;
 const YANILLE_PORTAL_TILE = [2542, 3097, 0];
 
 before(async () => {
@@ -23,6 +26,9 @@ before(async () => {
   ObjectDefinition.init();
   core = PluginManager.getCoreApi();
   api = PluginManager.createApi("CostumeRoomUimTest");
+  api.onCustomEvent("bank-pin:guard", (request) => {
+    if (pinBlocked.has(request.player)) { request.locked = true; pinResume = request.resume; }
+  });
   require("../plugins/skills/construction/Core.Construction").init(api);
   House = require("../plugins/skills/construction/House.Construction");
   Instance = require("../plugins/skills/construction/Instance.Construction");
@@ -199,3 +205,330 @@ test("normal players may withdraw a piece of a partial Splitbark set", (t) => {
   assert.equal(f.inventory.getAmount(SPLITBARK[0]), 1);
   assert.deepEqual(f.wardrobe.storage, Object.fromEntries(SPLITBARK.slice(1, 4).map(id => [id, 1])));
 });
+
+test("Ultimate duplicate deposit keeps the second piece in inventory", (t) => {
+  const f = costumeFixture(t, "uimdupe", "ultimate");
+  storeSplitbark(f, [SPLITBARK[0]]);
+  f.inventory.addItem(new Item(SPLITBARK[0], 1));
+  const slot = f.inventory.getItems().findIndex(item => item.getId() === SPLITBARK[0]);
+  const before = inventorySnapshot(f.inventory), stored = { ...f.wardrobe.storage };
+  assert.equal(Storage.depositHouseItem(f.player, f.house, f.wardrobe, slot), false);
+  assert.deepEqual(inventorySnapshot(f.inventory), before);
+  assert.deepEqual(f.wardrobe.storage, stored);
+});
+
+test("Ultimate deposit does not copy an item if slot deletion does not occur", (t) => {
+  const f = costumeFixture(t, "uimnodelete", "ultimate");
+  f.inventory.addItem(new Item(SPLITBARK[0], 1));
+  const slot = f.inventory.getItems().findIndex(item => item.getId() === SPLITBARK[0]);
+  const held = f.inventory.getItems()[slot], before = inventorySnapshot(f.inventory), storage = f.wardrobe.storage;
+  const original = f.inventory.deleteAtSlot;
+  f.inventory.deleteAtSlot = function () { return this; };
+  t.after(() => { f.inventory.deleteAtSlot = original; });
+  assert.equal(Storage.depositHouseItem(f.player, f.house, f.wardrobe, slot), false);
+  assert.equal(f.inventory.getItems()[slot] === held, true);
+  assert.deepEqual(inventorySnapshot(f.inventory), before);
+  assert.equal(f.wardrobe.storage === storage, true);
+});
+
+test("Ultimate deposit restores mutated slots when deletion removes too much", (t) => {
+  const f = costumeFixture(t, "uimbaddelete", "ultimate");
+  f.inventory.addItem(new Item(SPLITBARK[0], 2));
+  f.inventory.addItem(new Item(Items.TINDERBOX, 1).setMeta({ fixture: "keep" }));
+  const slot = f.inventory.getItems().findIndex(item => item.getId() === SPLITBARK[0]);
+  const beforeItems = f.inventory.getItems().slice(), before = inventorySnapshot(f.inventory), storage = f.wardrobe.storage;
+  const held = beforeItems.find(item => item.getId() === Items.TINDERBOX);
+  const original = f.inventory.deleteAtSlot;
+  f.inventory.deleteAtSlot = function (index) {
+    original.call(this, index, 1, false);
+    const second = this.getItems().findIndex(item => item.getId() === SPLITBARK[0]);
+    original.call(this, second, 1, false);
+    return this;
+  };
+  t.after(() => { f.inventory.deleteAtSlot = original; });
+  assert.equal(Storage.depositHouseItem(f.player, f.house, f.wardrobe, slot), false);
+  assert.deepEqual(inventorySnapshot(f.inventory), before);
+  for (let i = 0; i < beforeItems.length; i++) assert.equal(f.inventory.getItems()[i] === beforeItems[i], true);
+  assert.deepEqual(held.getMeta(), { fixture: "keep" });
+  assert.equal(f.wardrobe.storage === storage, true);
+});
+
+for (const mode of ["none", "ironman"]) {
+  test(`${mode} accounts may store duplicate pieces`, (t) => {
+    const f = costumeFixture(t, "dupe" + mode, mode);
+    storeSplitbark(f, [SPLITBARK[0], SPLITBARK[0]]);
+    assert.equal(f.wardrobe.storage[SPLITBARK[0]], 2);
+  });
+}
+
+for (const mode of ["none", "ironman"]) {
+  test(`${mode} players bulk deposit without a new warning`, (t) => {
+    const f = promptFixture(t, "bulk" + mode, mode);
+    f.inventory.addItem(new Item(SPLITBARK[0], 1));
+    openWardrobe(f);
+    choosePrompt(f.player, 1);
+    assert.equal(core.MultiChatboxPrompt.getPending(f.player), null);
+    assert.equal(f.inventory.getAmount(SPLITBARK[0]), 0);
+    assert.equal(f.wardrobe.storage[SPLITBARK[0]], 1);
+  });
+}
+
+function promptFixture(t, name, mode = "ultimate") {
+  const errors = [];
+  t.mock.method(console, "error", (...args) => { errors.push(args); });
+  const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true,
+    send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+  const player = new Player(new PlayerSession(channel));
+  t.after(() => {
+    pinBlocked.delete(player);
+    try {
+      try { House.releaseHouse(player, true); } finally { core.World.getPlayers().remove(player); }
+    } finally {
+      assert.deepEqual(errors, [], "no native prompt, callback or cleanup errors");
+    }
+  });
+  player.setUsername(name);
+  player.setAttribute("bot-skip-persistence", true);
+  const save = Instance.createDefaultHouseSave();
+  save.location = 6;
+  save.rooms[1][4][6] = {
+    roomKey: "COSTUME_ROOM", rotation: 0, furniture: { MAGIC_WARDROBE: "OAK_MAGIC_WARDROBE" },
+  };
+  player.setAttribute("construction:house", save);
+  assert.equal(core.World.getPlayers().add(player), true);
+  require("../plugins/modes/ironman/Common.Ironman").setMode(player, mode);
+  const query = { player, mode: "none" };
+  api.emitCustomEvent("ironman:mode", query);
+  assert.equal(query.mode, mode);
+  click(player, yanillePortalId, 1, YANILLE_PORTAL_TILE);
+  const house = House.houseFor(player);
+  assert.equal(house?.owner === player, true);
+  assert.equal(player.getPrivateArea() === house, true);
+  const room = house.save.rooms[1][4][6];
+  const wardrobe = Object.values(room.furnitureByLocation).find(furniture => furniture.hotspotKey === "MAGIC_WARDROBE");
+  assert.equal(wardrobe?.buildableKey, "OAK_MAGIC_WARDROBE");
+  const object = house.furnitureObjects.find(candidate => {
+    const at = candidate.getLocation();
+    return house.getFurnitureAt({ x: at.getX(), y: at.getY(), z: at.getZ() }, candidate.getId(), candidate.getType()) === wardrobe;
+  });
+  assert.ok(object, "real wardrobe object was drawn in the owned house");
+  const at = object.getLocation(), location = { x: at.getX(), y: at.getY(), z: at.getZ() };
+  player.moveTo(new core.Location(location.x - 1, location.y, location.z));
+  return { player, house, room, wardrobe, object, location, inventory: player.getInventory() };
+}
+
+function promptItemOnWardrobe(f, id) {
+  const itemSlot = f.inventory.getItems().findIndex(item => item.getId() === id);
+  assert.notEqual(itemSlot, -1);
+  const item = f.inventory.getItems()[itemSlot];
+  assert.equal(PluginManager.emitItemOnObject({ player: f.player, object: f.object, objectId: f.object.getId(),
+    location: f.location, item, itemId: id, itemSlot, interfaceType: 149, handled: false }), true);
+  return itemSlot;
+}
+
+function openWardrobe(f) {
+  const id = f.object.getId(), definition = ObjectDefinition.forPlayer(id, f.player) ?? ObjectDefinition.forId(id);
+  assert.equal(definition.getInteractions()[0].toLowerCase(), "open");
+  const at = f.player.getLocation();
+  assert.equal(PluginManager.emitObjectInteraction({ player: f.player, object: f.object, objectId: id, definition,
+    clickType: 1, location: f.location, sourceLocation: { x: at.getX(), y: at.getY(), z: at.getZ() }, handled: false }), true);
+}
+
+function choosePrompt(player, option) {
+  assert.ok(core.MultiChatboxPrompt.getPending(player));
+  assert.equal(player.getPacketSender().isChatboxInterface(219), true);
+  assert.equal(core.MultiChatboxPrompt.handleInterfaceActionClick({ player, buttonId: core.MultiChatboxPrompt.OPTIONS_WIDGET_ID,
+    groupId: 219, slot: option, action: option }), true);
+}
+
+test("Ultimate single-piece confirmation can cancel or deposit", (t) => {
+  const f = promptFixture(t, "uimwarn");
+  f.inventory.addItem(new Item(SPLITBARK[0], 1));
+  promptItemOnWardrobe(f, SPLITBARK[0]);
+  assert.deepEqual(core.MultiChatboxPrompt.getPending(f.player)?.options, ["Deposit", "Cancel"]);
+  assert.equal(f.inventory.getAmount(SPLITBARK[0]), 1);
+  choosePrompt(f.player, 2);
+  assert.equal(f.inventory.getAmount(SPLITBARK[0]), 1);
+  assert.equal(f.wardrobe.storage?.[SPLITBARK[0]] ?? 0, 0);
+  promptItemOnWardrobe(f, SPLITBARK[0]);
+  choosePrompt(f.player, 1);
+  assert.equal(f.inventory.getAmount(SPLITBARK[0]), 0);
+  assert.equal(f.wardrobe.storage[SPLITBARK[0]], 1);
+});
+
+test("an already-stored Ultimate piece is refused through item-on-furniture", (t) => {
+  const f = promptFixture(t, "uimrepeat");
+  f.inventory.addItem(new Item(SPLITBARK[0], 1));
+  promptItemOnWardrobe(f, SPLITBARK[0]);
+  choosePrompt(f.player, 1);
+  f.inventory.addItem(new Item(SPLITBARK[0], 1));
+  promptItemOnWardrobe(f, SPLITBARK[0]);
+  assert.equal(core.MultiChatboxPrompt.getPending(f.player), null);
+  assert.equal(f.inventory.getAmount(SPLITBARK[0]), 1);
+  assert.equal(f.wardrobe.storage[SPLITBARK[0]], 1);
+});
+
+test("Ultimate bulk confirmation stores one of two identical pieces", (t) => {
+  const f = promptFixture(t, "uimbulk");
+  f.inventory.addItem(new Item(SPLITBARK[0], 2));
+  assert.equal(f.inventory.getAmount(SPLITBARK[0]), 2);
+  openWardrobe(f);
+  assert.equal(core.MultiChatboxPrompt.getPending(f.player)?.title, "Costume storage");
+  choosePrompt(f.player, 1);
+  assert.deepEqual(core.MultiChatboxPrompt.getPending(f.player)?.options, ["Deposit", "Cancel"]);
+  assert.equal(f.inventory.getAmount(SPLITBARK[0]), 2);
+  choosePrompt(f.player, 1);
+  assert.equal(f.wardrobe.storage[SPLITBARK[0]], 1);
+  assert.equal(f.inventory.getAmount(SPLITBARK[0]), 1);
+});
+
+test("bulk cancel and changed inventory leave all pieces untouched", (t) => {
+  const f = promptFixture(t, "uimbcancel");
+  f.inventory.addItem(new Item(SPLITBARK[0], 1));
+  openWardrobe(f);
+  choosePrompt(f.player, 1);
+  choosePrompt(f.player, 2);
+  assert.equal(f.inventory.getAmount(SPLITBARK[0]), 1);
+  assert.equal(f.wardrobe.storage?.[SPLITBARK[0]] ?? 0, 0);
+  openWardrobe(f);
+  choosePrompt(f.player, 1);
+  f.inventory.addItem(new Item(Items.TINDERBOX, 1));
+  choosePrompt(f.player, 1);
+  assert.equal(f.inventory.getAmount(SPLITBARK[0]), 1);
+  assert.equal(f.inventory.getAmount(Items.TINDERBOX), 1);
+  assert.equal(f.wardrobe.storage?.[SPLITBARK[0]] ?? 0, 0);
+});
+
+test("changing mode while the storage menu is open prevents bulk deposit", (t) => {
+  const f = promptFixture(t, "uimbmode");
+  f.inventory.addItem(new Item(SPLITBARK[0], 1));
+  openWardrobe(f);
+  require("../plugins/modes/ironman/Common.Ironman").setMode(f.player, "none");
+  choosePrompt(f.player, 1);
+  assert.equal(f.inventory.getAmount(SPLITBARK[0]), 1);
+  assert.equal(f.wardrobe.storage?.[SPLITBARK[0]] ?? 0, 0);
+});
+
+test("replacing the clicked item invalidates a pending confirmation", (t) => {
+  const f = promptFixture(t, "uimslot");
+  f.inventory.addItem(new Item(SPLITBARK[0], 1));
+  const slot = promptItemOnWardrobe(f, SPLITBARK[0]);
+  f.inventory.setItem(slot, new Item(SPLITBARK[0], 1));
+  choosePrompt(f.player, 1);
+  assert.equal(f.inventory.getAmount(SPLITBARK[0]), 1);
+  assert.equal(f.wardrobe.storage?.[SPLITBARK[0]] ?? 0, 0);
+});
+
+test("moving after a warning invalidates confirmation", (t) => {
+  const f = promptFixture(t, "uimmoved");
+  f.inventory.addItem(new Item(SPLITBARK[0], 1));
+  promptItemOnWardrobe(f, SPLITBARK[0]);
+  const at = f.player.getLocation();
+  f.player.setLocation(new core.Location(at.getX() + 1, at.getY(), at.getZ()));
+  choosePrompt(f.player, 1);
+  assert.equal(f.inventory.getAmount(SPLITBARK[0]), 1);
+  assert.equal(f.wardrobe.storage?.[SPLITBARK[0]] ?? 0, 0);
+});
+
+test("leaving the private house invalidates confirmation", (t) => {
+  const f = promptFixture(t, "uimleave");
+  f.inventory.addItem(new Item(SPLITBARK[0], 1));
+  promptItemOnWardrobe(f, SPLITBARK[0]);
+  f.house.remove(f.player);
+  choosePrompt(f.player, 1);
+  assert.equal(f.inventory.getAmount(SPLITBARK[0]), 1);
+  assert.equal(f.wardrobe.storage?.[SPLITBARK[0]] ?? 0, 0);
+});
+
+test("replacing the furniture invalidates confirmation", (t) => {
+  const f = promptFixture(t, "uimreplace");
+  f.inventory.addItem(new Item(SPLITBARK[0], 1));
+  promptItemOnWardrobe(f, SPLITBARK[0]);
+  const key = Object.keys(f.room.furnitureByLocation).find(key => f.room.furnitureByLocation[key] === f.wardrobe);
+  assert.ok(key);
+  f.room.furnitureByLocation[key] = { ...f.wardrobe };
+  choosePrompt(f.player, 1);
+  assert.equal(f.inventory.getAmount(SPLITBARK[0]), 1);
+  assert.equal(f.wardrobe.storage?.[SPLITBARK[0]] ?? 0, 0);
+  assert.equal(f.room.furnitureByLocation[key].storage?.[SPLITBARK[0]] ?? 0, 0);
+});
+
+test("changing mode after the warning invalidates confirmation", (t) => {
+  const f = promptFixture(t, "uimmode");
+  f.inventory.addItem(new Item(SPLITBARK[0], 1));
+  promptItemOnWardrobe(f, SPLITBARK[0]);
+  require("../plugins/modes/ironman/Common.Ironman").setMode(f.player, "none");
+  choosePrompt(f.player, 1);
+  assert.equal(f.inventory.getAmount(SPLITBARK[0]), 1);
+  assert.equal(f.wardrobe.storage?.[SPLITBARK[0]] ?? 0, 0);
+});
+
+test("a newly locked PIN prevents confirmation and a later resume consumes nothing", (t) => {
+  const f = promptFixture(t, "uimpin");
+  f.inventory.addItem(new Item(SPLITBARK[0], 1));
+  promptItemOnWardrobe(f, SPLITBARK[0]);
+  pinResume = null;
+  pinBlocked.add(f.player);
+  choosePrompt(f.player, 1);
+  assert.equal(typeof pinResume, "function");
+  assert.equal(f.inventory.getAmount(SPLITBARK[0]), 1);
+  assert.equal(f.wardrobe.storage?.[SPLITBARK[0]] ?? 0, 0);
+  pinBlocked.delete(f.player);
+  pinResume();
+  assert.equal(f.inventory.getAmount(SPLITBARK[0]), 1);
+  assert.equal(f.wardrobe.storage?.[SPLITBARK[0]] ?? 0, 0);
+});
+
+test("changing the item during the initial PIN guard prevents a stale resume", (t) => {
+  const f = promptFixture(t, "uimpinstale");
+  f.inventory.addItem(new Item(SPLITBARK[0], 1));
+  pinResume = null;
+  pinBlocked.add(f.player);
+  const slot = promptItemOnWardrobe(f, SPLITBARK[0]);
+  assert.equal(typeof pinResume, "function");
+  f.inventory.setItem(slot, new Item(SPLITBARK[0], 1));
+  pinBlocked.delete(f.player);
+  pinResume();
+  assert.equal(core.MultiChatboxPrompt.getPending(f.player), null);
+  assert.equal(f.inventory.getAmount(SPLITBARK[0]), 1);
+  assert.equal(f.wardrobe.storage?.[SPLITBARK[0]] ?? 0, 0);
+});
+
+test("changing mode during the initial PIN guard prevents a stale resume", (t) => {
+  const f = promptFixture(t, "uimpincode");
+  f.inventory.addItem(new Item(SPLITBARK[0], 1));
+  pinResume = null;
+  pinBlocked.add(f.player);
+  promptItemOnWardrobe(f, SPLITBARK[0]);
+  assert.equal(typeof pinResume, "function");
+  require("../plugins/modes/ironman/Common.Ironman").setMode(f.player, "none");
+  pinBlocked.delete(f.player);
+  pinResume();
+  assert.equal(core.MultiChatboxPrompt.getPending(f.player), null);
+  assert.equal(f.inventory.getAmount(SPLITBARK[0]), 1);
+  assert.equal(f.wardrobe.storage?.[SPLITBARK[0]] ?? 0, 0);
+});
+
+test("a replacement prompt cannot confirm the earlier deposit", (t) => {
+  const f = promptFixture(t, "uimother");
+  f.inventory.addItem(new Item(SPLITBARK[0], 1));
+  promptItemOnWardrobe(f, SPLITBARK[0]);
+  let selected = false;
+  api.sendMultiChatboxPrompt(f.player, "Other prompt", "Close", () => { selected = true; });
+  assert.equal(core.MultiChatboxPrompt.getPending(f.player)?.title, "Other prompt");
+  choosePrompt(f.player, 1);
+  assert.equal(selected, true);
+  assert.equal(f.inventory.getAmount(SPLITBARK[0]), 1);
+  assert.equal(f.wardrobe.storage?.[SPLITBARK[0]] ?? 0, 0);
+});
+
+for (const mode of ["none", "ironman"]) {
+  test(`${mode} players deposit an individual set piece without a new warning`, (t) => {
+    const f = promptFixture(t, "use" + mode, mode);
+    f.inventory.addItem(new Item(SPLITBARK[0], 1));
+    promptItemOnWardrobe(f, SPLITBARK[0]);
+    assert.equal(core.MultiChatboxPrompt.getPending(f.player), null);
+    assert.equal(f.inventory.getAmount(SPLITBARK[0]), 0);
+    assert.equal(f.wardrobe.storage[SPLITBARK[0]], 1);
+  });
+}

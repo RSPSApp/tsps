@@ -86,3 +86,41 @@ test('a malformed entry inside a valid deleted object still reserves its name', 
   Accounts.reset();
   for (const name of ['Str Name', 'Num Name', 'Null Name']) assert.equal(Accounts.isDeleted(name), true, name);
 });
+
+const onDisk = () => JSON.parse(fs.readFileSync(file, 'utf8'));
+const diskPlayed = (name) => onDisk().accounts.zezima.characters.find((c) => c.name === name).lastPlayedAt;
+
+test('touchLastPlayed updates memory at once but defers the file write; flush writes it', () => {
+  Accounts.ensure('Zezima', 1000); Accounts.addCharacter('zezima', 'Alt', 1100);
+  const before = fs.readFileSync(file, 'utf8');
+  Accounts.touchLastPlayed('zezima', 'Alt', 5000);
+  assert.equal(Accounts.charactersOf('zezima')[1].lastPlayedAt, 5000, 'in memory now');
+  assert.equal(fs.readFileSync(file, 'utf8'), before, 'the file is not rewritten on every world entry');
+  Accounts.flush();
+  assert.equal(diskPlayed('Alt'), 5000);
+  const flushed = fs.readFileSync(file, 'utf8');
+  Accounts.flush();
+  assert.equal(fs.readFileSync(file, 'utf8'), flushed, 'nothing pending: nothing written');
+});
+
+test('pending last-played times are written by the coalescing timer, once per window', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  Accounts.ensure('Zezima', 1000); Accounts.addCharacter('zezima', 'Alt', 1100);
+  Accounts.touchLastPlayed('zezima', 'Zezima', 4000);
+  Accounts.touchLastPlayed('zezima', 'Alt', 5000);
+  t.mock.timers.tick(Accounts.LAST_PLAYED_WRITE_DELAY_MS - 1);
+  assert.equal(diskPlayed('Alt'), 0, 'not before the window ends');
+  t.mock.timers.tick(1);
+  assert.equal(diskPlayed('Zezima'), 4000);
+  assert.equal(diskPlayed('Alt'), 5000, 'both entries in one write');
+});
+
+test('a structural write carries the pending last-played time', () => {
+  Accounts.ensure('Zezima', 1000);
+  Accounts.touchLastPlayed('zezima', 'Zezima', 4000);
+  Accounts.addCharacter('zezima', 'Alt', 4100);
+  assert.equal(diskPlayed('Zezima'), 4000);
+  Accounts.ensure('Other', 4200);
+  Accounts.reset();
+  assert.equal(Accounts.charactersOf('zezima')[0].lastPlayedAt, 4000, 'survives a restart');
+});

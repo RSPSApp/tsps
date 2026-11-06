@@ -123,7 +123,10 @@ name (no save) is written only when it first enters the world (`enterWorld`); un
 character exists in memory, so a login that never enters claims no name. There is no migration
 step and nothing to run for hosts.
 
-`lastPlayedAt` updates on `enterWorld`. Exposed to plugins as `api.core.Accounts` (read-only
+`lastPlayedAt` updates in memory on `enterWorld`. So that a world entry doesn't rewrite the
+whole file on the game thread, it is written at most once every 30 s (an unref'd timer), with the
+next structural write (ensure, add, remove), or by `Accounts.flush()` in the graceful shutdown,
+whichever comes first; a crash can lose up to 30 s of last-played times and nothing else. Exposed to plugins as `api.core.Accounts` (read-only
 queries: `accountOf(name)`, `charactersOf(accountKey)`).
 
 Durability, my call: the file lives next to `display-names.json` and has the same assumptions,

@@ -28,7 +28,9 @@ export interface DeletedName {
 /**
  * Accounts: one login name owning several character names. The account is keyed by its primary
  * (login) name; every character name leads to one account. The file is written whole on every
- * change: characters change rarely.
+ * structural change (characters change rarely). Last-played times change on every world entry,
+ * so they are kept in memory and written at most once per `LAST_PLAYED_WRITE_DELAY_MS`, by the
+ * next structural write, or by `flush()` at shutdown, whichever comes first.
  *
  * A deleted character's name is kept for good under `deleted` (a tombstone). Everything else keyed
  * by a login name (display names, clan ranks, bans and mutes) stays behind on delete, so the name
@@ -41,6 +43,11 @@ export class Accounts {
     private static owners = new Map<string, string>();
     /** Name key -> tombstone of a deleted character. */
     private static deleted = new Map<string, DeletedName>();
+    /** The longest a last-played time waits in memory before it is written. */
+    static readonly LAST_PLAYED_WRITE_DELAY_MS = 30_000;
+    /** Last-played times changed since the file was last written. */
+    private static dirty = false;
+    private static writeTimer: ReturnType<typeof setTimeout> | null = null;
 
     /** The key two names share when they are the same name. */
     public static key(name: string): string {
@@ -118,6 +125,35 @@ export class Accounts {
         const temporary = `${target}.tmp`;
         fs.writeFileSync(temporary, JSON.stringify({ accounts: Object.fromEntries(this.load()), deleted: Object.fromEntries(this.deleted) }, null, 2));
         fs.renameSync(temporary, target);
+        // Every write is the whole file: pending last-played times went with it.
+        this.dirty = false;
+        this.clearWriteTimer();
+    }
+
+    private static clearWriteTimer(): void {
+        if (this.writeTimer) clearTimeout(this.writeTimer);
+        this.writeTimer = null;
+    }
+
+    /** Writes pending last-played times now (shutdown). Throws when the file can't be written; they stay pending. */
+    public static flush(): void {
+        if (!this.dirty || !this.entries) return;
+        this.save();
+    }
+
+    private static scheduleWrite(): void {
+        if (this.writeTimer) return;
+        this.writeTimer = setTimeout(() => {
+            this.writeTimer = null;
+            try {
+                this.flush();
+            } catch (error) {
+                console.error("[accounts] could not write last-played times; retrying later", error);
+                this.scheduleWrite();
+            }
+        }, this.LAST_PLAYED_WRITE_DELAY_MS);
+        // Never what keeps the process alive; shutdown flushes.
+        (this.writeTimer as any)?.unref?.();
     }
 
     /** The account key owning this character name (the primary included), or undefined. */
@@ -216,21 +252,19 @@ export class Accounts {
         return true;
     }
 
+    /** Records a world entry in memory now; the file gets it within LAST_PLAYED_WRITE_DELAY_MS (see the class doc). */
     public static touchLastPlayed(accountKey: string, name: string, now = Date.now()): void {
         const character = this.charactersOf(accountKey).find((c) => this.key(c.name) === this.key(name));
         if (!character) return;
-        const before = character.lastPlayedAt;
         character.lastPlayedAt = now;
-        try {
-            this.save();
-        } catch (error) {
-            character.lastPlayedAt = before;
-            throw error;
-        }
+        this.dirty = true;
+        this.scheduleWrite();
     }
 
     /** Forgets what is in memory, so tests can read the file again as a restart would. */
     public static reset(): void {
+        this.clearWriteTimer();
+        this.dirty = false;
         this.entries = null;
         this.owners.clear();
         this.deleted = new Map();

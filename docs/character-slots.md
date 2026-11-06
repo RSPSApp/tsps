@@ -27,6 +27,8 @@ Set `characters:maxPerAccount` in `world.local.json` under `pluginConfig`:
 
 Accounts are in `data/saves/accounts.json`. Set `TSPS_ACCOUNTS_FILE` to use another path. The file lists each account's characters in slot order, with when each was created and last played. A player who already has a save gets an account the first time they log in; a new name gets one when it first enters the world, so a login that never enters claims nothing. There is nothing to migrate. The file also keeps every deleted character's name (see [Deleting a character](#deleting-a-character)).
 
+Last-played times are written at most every 30 seconds, and on a normal shutdown; a crash can lose the latest ones, which only changes which character the picker preselects.
+
 Run one server process per data directory, as for the saves themselves.
 
 ### Back it up with the saves

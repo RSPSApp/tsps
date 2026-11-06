@@ -281,3 +281,44 @@ test("the Lost Tribe brooch gives Mistag's unlit mining helmet (5014), as the sh
   assert.equal(carried(f).includes(I.MINING_HELMET_2), true, "the unlit helmet");
   assert.equal(carried(f).includes(I.MINING_HELMET), false, "not the lit one");
 });
+
+// The Wiki's other way to light a torch: "may be used with a tinderbox or dry sticks, or used on a
+// fire or range". Dry sticks are NOT a tool here — the Dry sticks page says "Unlike a tinderbox,
+// clicking to use the sticks on an unlit torch has no effect"; they light it through their own
+// Rub-together option, which Sea Slug owns (30 Firemaking, can fail, uses the sticks, moves the
+// quest on). The object path needs its own handler because Cooking registers a `fallback` that
+// answers "You can't cook that." for any item used on a range.
+test("dry sticks used on the torch do nothing: that is Rub-together's job, not a use-on", async (t) => {
+  const f = actor(t, 99);
+  f.inv.setItem(0, item(I.UNLIT_TORCH));
+  f.inv.setItem(1, item(I.DRY_STICKS));
+  await useOn(f, 1, 0);
+  assert.deepEqual(carried(f), [I.UNLIT_TORCH, I.DRY_STICKS], "the torch stays unlit and the sticks are kept");
+  assert.deepEqual(f.messages, []);
+});
+
+/** The torch used on `name`, through the real hook chain (so Cooking's fallback is in play). */
+function useTorchOn(f, name) {
+  return PM.emitItemOnObject({
+    player: f.p,
+    object: { getDefinition: () => ({ getName: () => name, getInteractions: () => [] }) },
+    objectId: 114, item: f.inv.getItems()[0], itemId: I.UNLIT_TORCH, itemSlot: 0,
+    interfaceType: 149, location: { x: 3210, y: 3215, z: 0 }, handled: false,
+  });
+}
+
+test("the torch used on a range lights it, where the cooking fallback would refuse it", (t) => {
+  const f = actor(t, 1);
+  f.inv.setItem(0, item(I.UNLIT_TORCH));
+  assert.equal(useTorchOn(f, "Cooking range"), true, "the light source claims the use");
+  assert.equal(idAt(f, 0), I.LIT_TORCH);
+  assert.deepEqual(f.messages, ["You light your torch."]);
+});
+
+test("the torch used on something that is not a fire or range is left alone", (t) => {
+  const f = actor(t, 1);
+  f.inv.setItem(0, item(I.UNLIT_TORCH));
+  useTorchOn(f, "Tree");
+  assert.equal(idAt(f, 0), I.UNLIT_TORCH);
+  assert.deepEqual(f.messages, []);
+});

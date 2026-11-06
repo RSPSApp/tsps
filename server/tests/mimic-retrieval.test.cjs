@@ -3,14 +3,11 @@ const previousBotsSetting = process.env.DISABLE_PLAYER_BOTS;
 process.env.DISABLE_PLAYER_BOTS = '1';
 const assert = require('node:assert/strict');
 const path = require('node:path');
+const { spawnSync } = require('node:child_process');
 const { before, after, test } = require('node:test');
 const { Server } = require('../dist/Server');
 Server.installProductionPathResolver();
 const { CachePipeline } = require('../dist/game/cache/CachePipeline');
-const { CacheIndexDat2 } = require('../dist/game/cache/codec/rs/cache/CacheIndex');
-const { IndexType } = require('../dist/game/cache/codec/rs/cache/IndexType');
-require('ts-node').register({ transpileOnly: true, compilerOptions: { module: 'CommonJS', moduleResolution: 'Node', target: 'ES2020' } });
-const { readScript, hasLongCounts } = require('../scripts/cs2-reader');
 const { PluginManager } = require('../dist/plugins/PluginManager');
 const { PlayerDeathTask } = require('../dist/game/task/impl/PlayerDeath');
 const { Player } = require('../dist/game/entity/impl/player/Player');
@@ -32,6 +29,18 @@ after(() => {
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, '..'));
   require('../plugins/items/ItemDefinitionLoader.plugin').register({ log() {}, onPlayerLogin() {}, registerContentEndpoint() {} });
+  // The repository's existing decoder runs in a child: registering ts-node in this process
+  // makes source modules resolvable and splits their cache singleton from the initialized dist.
+  const decoded = spawnSync(process.execPath, ['node_modules/ts-node/dist/bin.js', '--compiler-options',
+    '{"target":"es2020"}', 'scripts/dump-cs2.ts', '3478'],
+  { cwd: path.resolve(__dirname, '..'), encoding: 'utf8', timeout: 120000, maxBuffer: 1024 * 1024 });
+  assert.ifError(decoded.error);
+  assert.equal(decoded.signal, null, `existing script decoder terminated: ${decoded.stderr}`);
+  assert.equal(decoded.status, 0, `existing script decoder failed: ${decoded.stderr}\n${decoded.stdout}`);
+  const signature = decoded.stdout.match(/^; script 3478 .*\bintArgs=(\d+) objArgs=(\d+)/m);
+  assert.ok(signature, `active cache contains a decoded clientscript 3478 header: ${decoded.stdout}`);
+  assert.equal(Number(signature[1]), 2, 'active 3478 accepts the pinned fee and coffer arguments');
+  assert.equal(Number(signature[2]), 0);
 });
 
 for (const focus of ['entry', 'payment', 'coffer', 'rollback', 'short-debit', 'stale-stored', 'postcommit']) test(`Mimic retrieval feedback: ${focus} after a real death`, t => {
@@ -81,12 +90,6 @@ for (const focus of ['entry', 'payment', 'coffer', 'rollback', 'short-debit', 's
   assert.equal(core.CacheDefinitions.getEnumValues(1753).get(18), 'Things the Mimic rejected');
   assert.equal(core.CacheDefinitions.getEnumValues(1756).get(17), 995);
   assert.equal(core.CacheDefinitions.getEnumValues(1757).get(17), 90000);
-  const scriptIndex = CacheIndexDat2.fromStore(IndexType.DAT2.clientScript, CachePipeline.getStore());
-  const script = scriptIndex.getFileSmart(3478);
-  assert.ok(script?.data, 'active cache contains clientscript 3478');
-  const signature = readScript(new Int8Array(script.data), hasLongCounts(CachePipeline.getActive().revision)).header;
-  assert.equal(signature.intArgs, 2, 'active 3478 accepts the pinned fee and coffer arguments');
-  assert.equal(signature.objArgs, 0);
   core.TaskManager.submit = task => scheduled.push(task);
   ItemOnGroundManager.registerLocation = (_owner, item) => { grounds.push(item.clone()); return null; };
   console.error = (...args) => { errors.push(args.map(String)); error(...args); };

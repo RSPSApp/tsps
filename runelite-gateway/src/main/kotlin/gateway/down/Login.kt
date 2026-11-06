@@ -4,7 +4,13 @@ import gateway.tsps.TspsPacket
 import net.rsprot.protocol.loginprot.outgoing.LoginResponse
 
 /** `LOGIN_RESPONSE` (3): `u8 ok, i32 code, error, displayName, token`. */
-class TspsLoginResult(val ok: Boolean, val code: Int, val error: String) {
+class TspsLoginResult(
+    val ok: Boolean,
+    val code: Int,
+    val error: String,
+    val displayName: String = "",
+    val token: String = "",
+) {
     /** The OSRS response for a refused login. tsps's codes follow OSRS except where noted. */
     fun toLoginResponse(): LoginResponse =
         when (code) {
@@ -23,7 +29,12 @@ class TspsLoginResult(val ok: Boolean, val code: Int, val error: String) {
     companion object {
         fun decode(packet: TspsPacket): TspsLoginResult {
             val reader = packet.reader()
-            return TspsLoginResult(reader.u8() != 0, reader.i32(), reader.string())
+            val ok = reader.u8() != 0
+            val code = reader.i32()
+            val error = reader.string()
+            val name = if (reader.remaining > 0) reader.string() else ""
+            val token = if (reader.remaining > 0) reader.string() else ""
+            return TspsLoginResult(ok, code, error, name, token)
         }
 
         private fun disallowed(message: String) = LoginResponse.DisallowedByScript(message, "", "")

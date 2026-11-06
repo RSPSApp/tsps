@@ -31,7 +31,9 @@ before(async () => {
   PM.createApi('QuestFixture').onCustomEvent('quest:is-complete', request => { if (quests.has(request.key)) request.complete = quests.get(request.key); });
 });
 after(() => setActive(false));
-function setActive(active) { PM.emitCustomEvent('events:active', { key: Data.EVENT_KEY, active }); }
+// Through the real scheduler: the reward goes through events:grant-reward, which trusts only its window.
+const { setWindow } = require('./helpers/event-window.cjs');
+function setActive(active) { setWindow(PM, Data.EVENT_KEY, active); }
 function fixture(name = 'bdaytest') {
   const p = new Player(null);
   p.setUsername(name);
@@ -111,7 +113,9 @@ test('mementos collect once each, only while collecting, and every tile varbit f
   } finally { setActive(false); }
 });
 
-test('rewards are all or nothing with a full inventory, given once, and the jug note stacks', () => {
+test('rewards are all or nothing with a full inventory, given once, and the jug note stacks', (t) => {
+  setActive(true);
+  t.after(() => setActive(null));
   const { p } = fixture('bdayreward');
   const I = core.ItemIdentifiers, inventory = p.getInventory();
   Progress.markComplete(api, p);
@@ -131,6 +135,32 @@ test('rewards are all or nothing with a full inventory, given once, and the jug 
   assert.equal(Progress.rewarded(p), true);
   for (const name of Data.REWARDS) assert.equal(inventory.getAmount(I[name]), 1, name);
   assert.equal(inventory.getAmount(I.HALF_FULL_WINE_JUG_2), 5);
+  assert.deepEqual(p.getAttribute('events:completions'), [Data.EVENT_KEY], 'the grant records its once-per-account completion');
+});
+
+test('a save rewarded before EventScheduler kept completions is imported on login and never rewarded again', (t) => {
+  setActive(true);
+  t.after(() => setActive(null));
+  const { p } = fixture('bdaylegacy');
+  const I = core.ItemIdentifiers;
+  Progress.markComplete(api, p);
+  Progress.markRewarded(p);
+  Rewards.importClaim(api, { player: p });
+  Rewards.importClaim(api, { player: p });
+  assert.deepEqual(p.getAttribute('events:completions'), [Data.EVENT_KEY]);
+  Rewards.grant(api, { player: p });
+  assert.equal(p.getInventory().getAmount(I._25TH_ANNIVERSARY_HELMET), 0);
+});
+
+test('a rolled-back save whose completion is recorded settles its progress instead of granting again', (t) => {
+  setActive(true);
+  t.after(() => setActive(null));
+  const { p } = fixture('bdayrollback');
+  Progress.markComplete(api, p);
+  api.emitCustomEvent('events:record-completion', { player: p, completion: Data.EVENT_KEY });
+  Rewards.grant(api, { player: p });
+  assert.equal(p.getInventory().getAmount(core.ItemIdentifiers._25TH_ANNIVERSARY_HELMET), 0);
+  assert.equal(Progress.rewarded(p), true);
 });
 
 test('a full inventory at the reward step: Diango keeps the cosmetics after the window, with no second set', () => {
@@ -147,6 +177,7 @@ test('a full inventory at the reward step: Diango keeps the cosmetics after the 
   // Closing settles online players; this fixture is not in the world list, so it logs in after.
   PM.emitPlayerLogin({ player: p, username: p.getUsername() });
   assert.equal(Progress.rewarded(p), true, 'the closed window settles it');
+  assert.deepEqual(p.getAttribute('events:completions'), [Data.EVENT_KEY], 'settling records the completion outside the window');
   for (const name of Data.REWARDS) assert.ok(unlocked().includes(names.get(I[name])), name + ' claimable from Diango');
   // A reopened window cannot hand out a second set on top of Diango's.
   for (let slot = 0; slot < 28; slot++) inventory.setItem(slot, new core.Item(-1, 0));

@@ -18,11 +18,14 @@ import { EventBus } from "./eventbus/EventBus";
 import { PluginManager } from "./plugins/PluginManager";
 import { ClientToolbar } from "./ui/ClientToolbar";
 import { OverlayRenderer } from "./ui/overlay/OverlayRenderer";
+import { WorldMapPointManager } from "./ui/overlay/worldmap/WorldMapPointManager";
 import { bindOverlayFonts } from "./ui/overlay/OverlayFonts";
 import { CLIENT_TOKEN } from "./plugins/PluginInjector";
 import { CORE_PLUGINS, LEGACY_CONFIG_MIGRATIONS } from "./plugins";
 import { toRuneLiteGameState } from "../impl/GameStateMapping";
 import { bindNpcEvents } from "../impl/NpcEventSource";
+import { syncWorldMapPoints } from "./ui/overlay/worldmap/worldMapLayout";
+import { bindContainerEvents, WidgetSourceBinder } from "../impl/ContainerEventSource";
 import { runLegacyConfigMigrations } from "../impl/LegacyConfigMigration";
 import { migrateTileMarkersConfig } from "../../game/plugins/tilemarkers/migrateTileMarkers";
 import { migrateTimersConfig } from "../../game/plugins/statustimer/TimersPlugin";
@@ -46,12 +49,17 @@ export class RuneLite {
     readonly chatboxPanelManager: ChatboxPanelManager;
     /** Plugin options on widget menus (`inject(MenuManager)`). */
     readonly menuManager = new MenuManager();
+    /** Plugin markers on the world map (`inject(WorldMapPointManager)`); the world map draws them. */
+    readonly worldMapPointManager: WorldMapPointManager;
+    private readonly widgetSources: WidgetSourceBinder;
 
     private constructor(
         private readonly client: OsrsClient,
         private readonly loadPlugins: boolean,
     ) {
         this.configManager = new ConfigManager(this.eventBus);
+        this.worldMapPointManager = new WorldMapPointManager(() => syncWorldMapPoints(client, this.worldMapPointManager));
+        this.widgetSources = new WidgetSourceBinder(client, (event) => this.eventBus.post(event));
         bindOverlayFonts(this.configManager);
         this.pluginManager = new PluginManager(this.eventBus, this.configManager);
         this.clientToolbar = this.pluginManager.getInjector().get(ClientToolbar);
@@ -68,9 +76,15 @@ export class RuneLite {
         return instance;
     }
 
-    /** Posts a CommandExecuted event; returns true when a subscriber consumed it. */
-    postCommandExecuted(command: string): void {
-        this.eventBus.post(new CommandExecuted(command));
+    /** Binds the widget-manager event sources; the client calls this once its widget manager exists. */
+    bindWidgetSources(): void {
+        this.widgetSources.bind();
+    }
+
+    /** Posts a CommandExecuted for a "::" chat line: the first word is the command, the rest its arguments. */
+    postCommandExecuted(line: string): void {
+        const [command, ...args] = line.trim().split(/\s+/);
+        if (command) this.eventBus.post(new CommandExecuted(command, args));
     }
 
     postClientTick(): void {
@@ -95,6 +109,7 @@ export class RuneLite {
         injector.provide(CLIENT_TOKEN, this.client);
         injector.provide(ChatboxPanelManager, this.chatboxPanelManager);
         injector.provide(MenuManager, this.menuManager);
+        injector.provide(WorldMapPointManager, this.worldMapPointManager);
         this.eventBus.subscribe(GameStateChanged, (event) => this.chatboxPanelManager.onGameStateChanged(event));
         setManagedMenus((entries, context) => this.menuManager.apply(entries, context));
 
@@ -114,6 +129,12 @@ export class RuneLite {
             }
         });
         this.postNpcEvents();
+        // ItemContainerChanged from the backpack and worn equipment.
+        bindContainerEvents(this.client, (event) => this.eventBus.post(event));
+        // WidgetLoaded from interface opens, and NPC and player dialogue pages as DIALOG chat
+        // messages ("<name>|<text>"), as RuneLite sees them. Both read the widget manager, which the
+        // client creates after this constructor-time load and then calls bindWidgetSources().
+        this.bindWidgetSources();
 
         // state.tickListeners fire after the tick's packets are applied.
         subscribeTick(() => this.eventBus.post(new GameTick()));

@@ -9,6 +9,7 @@ import { FONT_PLAIN_12 } from "../../../ui/fonts";
 import { getClientClock } from "../../TransmitCycles";
 import type { OsrsClient } from "../../OsrsClient";
 import { MouseHighlightConfig } from "./MouseHighlightConfig";
+import { menuOptionDisplayText } from "../../../ui/menu/menuOptionDisplayText";
 
 /** What the plugin reads from the client: the hovered entry and native tooltip state. */
 export type MouseHighlightClient = {
@@ -97,7 +98,8 @@ export class MouseHighlightPlugin extends Plugin {
         // If this varc is set, a tooltip is already being displayed
         if (this.client.getVarcIntValue(TOOLTIP_BUILT) === 1) return undefined;
 
-        const text = option + (target ? ` ${target}` : "");
+        // The checks above compare the game's English option; the tooltip shows it as drawn.
+        const text = menuOptionDisplayText(option) + (target ? ` ${target}` : "");
         // Cache 4728 builds a near-pointer tooltip without the legacy TOOLTIP_BUILT flag.
         if (this.client.nativeTooltipVisible(text)) return undefined;
         return { text };

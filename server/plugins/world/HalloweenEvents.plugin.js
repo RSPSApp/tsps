@@ -53,6 +53,7 @@ module.exports = {
     api.onCustomEvent("events:active", calendar.bind(null, api));
     api.onServerShutdown(shutdown.bind(null, api));
     api.onRegionLoaded(regionLoaded.bind(null, api));
+    api.onPlayerLogin(Rewards.importClaim.bind(null, api));
     api.onPlayerLogin(Sync.refresh.bind(null, api));
     api.onCustomEvent("halloween-2025:changed", Sync.refresh.bind(null, api));
     api.onCustomEvent("halloween-2025:cutscene-start", Cutscene.start.bind(null, api));

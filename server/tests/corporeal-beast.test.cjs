@@ -23,11 +23,13 @@ const Shields = require('../plugins/bosses/corporealbeast/SpiritShields.Corporea
 const Commands = require('../plugins/bosses/corporealbeast/Commands.CorporealBeast');
 
 const hooks = { objects: {}, zones: [], prompts: [], startup: [], methods: {}, hitModify: [], death: [] };
+let modeApi;
 
 function fakeApi() {
   return {
     core: PluginManager.getCoreApi(),
     emitCustomEvent: (name, payload) => PluginManager.emitCustomEvent(name, payload),
+    onCustomEvent: (name, handler) => modeApi.onCustomEvent(name, handler),
     onObjectInteraction: (name, actions) => { hooks.objects[name] = actions; },
     onZoneEnter: (zone, handler) => hooks.zones.push({ zone, enter: handler }),
     onZoneExit: (zone, handler) => hooks.zones.push({ zone, exit: handler }),
@@ -107,7 +109,7 @@ before(() => {
   World.getPlayers = () => worldPlayers;
   CachePipeline.initialize();
   RegionManager.init();
-  const modeApi = PluginManager.createApi('CorpRoomModeTest');
+  modeApi = PluginManager.createApi('CorpRoomModeTest');
   require('../plugins/modes/ironman/Common.Ironman').init(modeApi);
   require('../plugins/modes/ironman/Setup.Ironman')(modeApi);
   const api = fakeApi();

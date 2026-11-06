@@ -48,7 +48,7 @@ function boxAt(event) {
 
 function destinationTile(player, slot) {
   const { tile } = DESTINATIONS[slot];
-  const [x, y, z] = typeof tile === "function" ? tile(player) : tile;
+  const [x, y, z] = typeof tile === "function" ? tile(player, api) : tile;
   return new Location(x, y, z);
 }
 

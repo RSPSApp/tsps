@@ -26,6 +26,7 @@ import { captureAppendedRects, composeDrawAboveWidgets } from "../../widgets/gl/
 import { Overlay, OverlayInitArgs, OverlayUpdateArgs, RenderPhase } from "./Overlay";
 import { isCurrentClientType, reportedClientType } from "../../rs/cs2/ClientType";
 import { overlayFontsVersion } from "../../runelite/client/ui/overlay/OverlayFonts";
+import { menuOptionDisplayText } from "../menu/menuOptionDisplayText";
 
 /**
  * The enhanced client's mouseover text setting, mouseover_text_disabled from rev 241 (it was
@@ -744,7 +745,7 @@ export class WidgetsOverlay implements Overlay {
 
         let text = "";
         if (topEntry) {
-            const option = String(topEntry.option || "").trim();
+            const option = menuOptionDisplayText(String(topEntry.option || "").trim());
             const target = String(topEntry.target || "").trim();
             text = target ? `${option} ${target}` : option;
             if (optionCount > 1) {

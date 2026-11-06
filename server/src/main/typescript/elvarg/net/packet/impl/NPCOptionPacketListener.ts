@@ -169,7 +169,9 @@ export class NPCOptionPacketListener {
     // Plugins can supply scripted utility spells missing from the legacy spell tables.
     if (!resolution.spell && selection) PluginManager.emitCustomEvent("magic:resolve-spell", resolution);
     const spell = resolution.spell;
-    if (!npc || !spell || !CrossFloor.visible(BoatManager.rootLocation(player), BoatManager.rootLocation(npc), 24) || npc.getHitpoints?.() <= 0) {
+    if (!npc || !spell || !CrossFloor.visible(
+      BoatManager.rootLocation(player), BoatManager.rootLocation(npc), 24,
+    ) || npc.getHitpoints?.() <= 0) {
       player.getMovementQueue().reset();
       return false;
     }

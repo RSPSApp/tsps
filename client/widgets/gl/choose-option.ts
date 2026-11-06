@@ -8,6 +8,10 @@ import { MenuState } from "../../ui/menu/MenuState";
 import { drawTextGL as UI_drawTextGL } from "../../widgets/components/TextRenderer";
 import { GLRenderer } from "./renderer";
 import { openPluginMenu } from "../../ui/menu/menuEvents";
+import { menuOptionDisplayText } from "../../ui/menu/menuOptionDisplayText";
+
+/** The menu's "Choose Option" title, as shown. */
+const CHOOSE_OPTION_HEADER = (): string => menuOptionDisplayText("Choose Option");
 
 type FontLoader = (id: number) => BitmapFont | undefined;
 
@@ -194,7 +198,8 @@ function sp(logicalPx: number, scale: number): number {
 }
 
 function entryFullText(e: { option?: string; target?: string }): string {
-    const option = e.option || "";
+    // Drawn and measured text only: dispatch keeps the option as the game sent it.
+    const option = menuOptionDisplayText(e.option || "");
     const target = e.target || "";
     if (!target.length) return option;
     return option.length ? `${option} ${target}` : target;
@@ -240,7 +245,7 @@ export function getChooseOptionMenuRect(
     }
 
     const s = uiScale > 0 ? uiScale : 1;
-    const size = computeMenuSize(fontLoader, "Choose Option", menu.entries, s);
+    const size = computeMenuSize(fontLoader, CHOOSE_OPTION_HEADER(), menu.entries, s);
 
     let left = ((menu.x | 0) - ((size.w / 2) | 0)) | 0;
     if (left + size.w > (hostW | 0)) left = (hostW | 0) - size.w;
@@ -847,7 +852,7 @@ export function drawChooseOptionMenu(
     drawMenuLevel(glr, opts, menu, {
         rect: menuRect,
         entries: menu.entries,
-        headerText: "Choose Option",
+        headerText: CHOOSE_OPTION_HEADER(),
         scroll: rt.menuScroll,
         targetIdPrefix: "__menu_opt_",
         targetPriority: MENU_OPTION_PRIORITY_BASE,

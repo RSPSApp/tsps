@@ -27,3 +27,6 @@ data/saves/araxxor-scoreboard.json
 # Every boss/minigame scoreboard keeps its world records here (and a .tmp while saving).
 data/saves/*-scoreboard.json
 data/saves/*-scoreboard.json.tmp
+# Seasonal rares claims per account and stock used (plugins/events/SeasonalRares.plugin.js).
+data/saves/seasonal-rares.json
+data/saves/seasonal-rares.json.tmp

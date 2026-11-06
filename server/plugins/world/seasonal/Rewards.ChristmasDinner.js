@@ -25,6 +25,7 @@ const UNLOCKS=Object.freeze([
   'xmas23_helmet','xmas23_jumper','xmas24_present_hat_festive','xmas24_dog_mask','xmas24_festive_scarf','xmas24_dog_boots',
   ...COSMETICS,
 ]);
+const EVENT_KEY='christmas-2025';
 const REQUIRED_FREE_SLOTS=12;
 const RARE_PLAY_SECONDS=25*60*60;
 const scrolls=new WeakSet();
@@ -83,14 +84,21 @@ function plan(api,player,revision){
 }
 
 function claim(api,player,revision){
+  // This plan keeps the event's own gates (progress, the platter, 12 free slots, rares
+  // eligibility); EventScheduler's grant re-plans on the live inventory, takes the platter,
+  // unlocks Diango's catalogue and records the once-per-account completion in one commit.
   const next=plan(api,player,revision);if(!next)return false;
-  // HolidayRewards is the synchronous entitlement owner: it validates the entire
-  // catalogue request before changing attributes and never mutates inventory.
-  const unlock={player,items:[...UNLOCKS]};api.emitCustomEvent('holiday-rewards:unlock',unlock);
-  if(unlock.accepted!==true)return false;
-  player.getInventory().setItems(next.items);
+  const grant={player,eventKey:EVENT_KEY,completion:EVENT_KEY,
+    rewards:next.rewards.map(row=>({itemId:row.id,amount:row.amount})),
+    take:[{itemId:Progress.platterId(api),amount:1}],unlock:[...UNLOCKS]};
+  api.emitCustomEvent('events:grant-reward',grant);
+  if(grant.granted!==true){
+    // The completion is recorded but the progress is not (a rolled-back save): the rewards were
+    // already given, so settle the progress rather than leave the dinner claimable forever.
+    if(grant.reason==='already-complete')Progress.complete(api,player,revision);
+    return false;
+  }
   if(!Progress.complete(api,player,revision))throw new Error('Christmas completion changed during synchronous reward commit');
-  player.getInventory().refreshItems();
   for(const row of next.rewards.slice(0,COSMETICS.length))
     player.sendMessage("You've received a holiday item: <col=e00a19>"+api.core.CacheDefinitions.getItem(row.id).name);
   player.sendMessage("You've completed the Christmas event: Christmas Din-Dins at the Blue Moon Inn");
@@ -98,4 +106,10 @@ function claim(api,player,revision){
   return true;
 }
 
-module.exports={COSMETICS,RARES,UNLOCKS,REQUIRED_FREE_SLOTS,RARE_PLAY_SECONDS,eligibleForRares,plan,claim,show,close};
+// Saves completed before EventScheduler kept completions are imported on login.
+function importClaim(api,{player}){
+  let state;try{state=Progress.read(player);}catch{return;}
+  if(state.phase==='complete')api.emitCustomEvent('events:record-completion',{player,completion:EVENT_KEY});
+}
+
+module.exports={EVENT_KEY,importClaim,COSMETICS,RARES,UNLOCKS,REQUIRED_FREE_SLOTS,RARE_PLAY_SECONDS,eligibleForRares,plan,claim,show,close};

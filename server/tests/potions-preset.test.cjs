@@ -236,6 +236,106 @@ test("pouring a plain potion into a preset one is refused and changes nothing", 
   assert.ok(f.messages.includes(REFUSAL));
 });
 
+
+
+// Actual bank-note production and the registered health-orb widget route.
+async function withdrawSanfewNotes(f) {
+  const ordinary = 10931;
+  const noted = 10932;
+  const original = core.ItemDefinition.forId(ordinary);
+  const certificate = core.ItemDefinition.forId(noted);
+  assert.equal(original.isNoted(), false);
+  assert.equal(original.getNoteId(), noted);
+  assert.equal(certificate.isNoted(), true);
+  assert.equal(certificate.unNote(), ordinary);
+  assert.equal(certificate.isStackable(), true);
+  assert.equal(core.CacheDefinitions.getItem(ordinary).inventoryActions[0], "Drink");
+  assert.equal((core.CacheDefinitions.getItem(noted).inventoryActions ?? []).includes("Drink"), false);
+  const bank = f.p.getBank(0);
+  bank.add(item(ordinary, 2), false);
+  assert.equal(bank.getAmount(ordinary), 2);
+  bank.open();
+  assert.equal(core.Bank.isOpen(f.p), true);
+  assert.equal(f.p.withdrawAsNote(), false);
+  await button(f, core.Bank.MAIN_INTERFACE_ID, core.Bank.NOTE_CHILD, undefined, 1);
+  assert.equal(f.p.withdrawAsNote(), true);
+  const slot = bank.getSlotForItemId(ordinary);
+  assert.ok(slot >= 0);
+  core.Bank.withdraw(f.p, ordinary, slot, 2, 0);
+  assert.equal(bank.getAmount(ordinary), 0);
+  assert.equal(f.inv.getAmount(noted), 2);
+  const noteSlot = f.inv.getItems().findIndex(held => held?.getId() === noted);
+  assert.ok(noteSlot >= 0);
+  assert.equal(f.inv.getItems()[noteSlot].getAmount(), 2);
+  assert.equal(f.inv.getItems()[noteSlot].getMeta(), null);
+  f.p.getPacketSender().sendInterfaceRemoval();
+  assert.equal(core.Bank.isOpen(f.p), false);
+  return noteSlot;
+}
+
+function poisonForOrb(t, f) {
+  const { CombatPoisonEffect } = require("../dist/game/task/impl/CombatPoisonEffect");
+  assert.equal(f.p.isPoisoned(), false);
+  assert.equal(f.p.isVenomed(), false);
+  core.CombatFactory.poisonEntity(f.p, 20, 1);
+  t.after(() => CombatPoisonEffect.suspend(f.p));
+  assert.equal(f.p.isPoisoned(), true);
+  assert.equal(f.p.isVenomed(), false);
+  assert.equal(f.p.getPoisonDamage(), 20);
+  assert.equal(f.p.getTimers().has(core.TimerKey.POTION), false);
+  assert.equal(f.p.getTimers().has(core.TimerKey.STUN), false);
+  assert.ok(f.p.getHitpoints() > 0);
+}
+async function clickHealthCure(f) {
+  const component = core.CacheDefinitions.getComponentId("orbs:healthbutton");
+  assert.equal(component, (160 << 16) | 9);
+  await button(f, component >>> 16, component & 0xffff, undefined, 1);
+}
+
+test("health-orb Cure leaves bank-noted Sanfew serum untouched", async t => {
+  const f = actor(t);
+  const slot = await withdrawSanfewNotes(f);
+  poisonForOrb(t, f);
+  assert.equal(f.inv.getItems()[slot].getId(), 10932);
+  assert.equal(f.inv.getItems()[slot].getAmount(), 2);
+  await clickHealthCure(f);
+  assert.equal(f.inv.getAmount(10932), 2, "notes are not drinkable and must be retained");
+  assert.equal(f.inv.getItems()[slot].getMeta(), null);
+  assert.equal(f.inv.getAmount(I.VIAL), 0);
+  assert.equal(f.p.getPoisonDamage(), 20);
+  assert.equal(f.p.getTimers().has(core.TimerKey.POTION), false);
+});
+
+test("health-orb Cure consumes an ordinary Sanfew dose", async t => {
+  const f = actor(t);
+  assert.equal(core.ItemDefinition.forId(10931).isNoted(), false);
+  assert.equal(core.CacheDefinitions.getItem(10931).inventoryActions[0], "Drink");
+  put(f, item(10931), 0);
+  poisonForOrb(t, f);
+  await clickHealthCure(f);
+  assert.equal(f.inv.getItems()[0].getId(), I.VIAL);
+  assert.equal(f.inv.getItems()[0].getAmount(), 1);
+  assert.equal(f.p.getPoisonDamage(), 0);
+  assert.equal(f.p.isPoisoned(), false);
+  assert.equal(f.p.getTimers().has(core.TimerKey.POTION), true);
+});
+
+test("health-orb Cure skips noted Sanfew and uses carried antipoison", async t => {
+  const f = actor(t);
+  const slot = await withdrawSanfewNotes(f);
+  const antipoison = I.ANTIPOISON_1_;
+  assert.equal(core.ItemDefinition.forId(antipoison).isNoted(), false);
+  assert.equal(core.CacheDefinitions.getItem(antipoison).inventoryActions[0], "Drink");
+  const treatmentSlot = slot === 0 ? 1 : 0;
+  put(f, item(antipoison), treatmentSlot);
+  poisonForOrb(t, f);
+  await clickHealthCure(f);
+  assert.equal(f.inv.getAmount(10932), 2, "the noted stack remains whole");
+  assert.equal(f.inv.getItems()[treatmentSlot].getId(), I.VIAL);
+  assert.equal(f.p.getPoisonDamage(), 0);
+  assert.equal(f.p.isPoisoned(), false);
+});
+
 test("control: a plain potion divides into a vial as before", async (t) => {
   const f = actor(t);
   put(f, item(I.SARADOMIN_BREW_4_), 0);

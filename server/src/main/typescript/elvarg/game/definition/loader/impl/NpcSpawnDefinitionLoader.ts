@@ -1,4 +1,5 @@
 import { World } from "../../../World";
+import { CrossFloor } from "../../../CrossFloor";
 import { NpcDefinition } from "../../NpcDefinition";
 import { NpcSpawnDefinition } from "../../NpcSpawnDefinition";
 import { NPC } from "../../../entity/impl/npc/NPC";
@@ -238,18 +239,32 @@ export class NpcSpawnDefinitionLoader extends DefinitionLoader {
             const regionX = location.getX() >> 6;
             const regionY = location.getY() >> 6;
             const radius = Math.max(1, Math.ceil((viewDistance + NpcSpawnDefinitionLoader.MAX_DEFERRED_WANDER_RADIUS) / 64));
-            for (let dx = -radius; dx <= radius; dx++) {
-                for (let dy = -radius; dy <= radius; dy++) {
-                    const key = `${location.getZ()}:${regionX + dx}:${regionY + dy}`;
-                    const pending = NpcSpawnDefinitionLoader.pendingByRegion.get(key);
-                    if (!pending) continue;
-                    const remaining: NpcSpawnDefinition[] = [];
-                    for (const definition of pending) {
-                        if (NpcSpawnDefinitionLoader.spawn(definition)) applied++;
-                        else remaining.push(definition);
+            const levels = CrossFloor.enabled() && location.getZ() >= 0 && location.getZ() < 4
+                ? Array.from({ length: location.getZ() + 1 }, (_, level) => level)
+                : [location.getZ()];
+            for (const level of levels) {
+                for (let dx = -radius; dx <= radius; dx++) {
+                    for (let dy = -radius; dy <= radius; dy++) {
+                        const key = `${level}:${regionX + dx}:${regionY + dy}`;
+                        const pending = NpcSpawnDefinitionLoader.pendingByRegion.get(key);
+                        if (!pending) continue;
+                        const remaining: NpcSpawnDefinition[] = [];
+                        for (const definition of pending) {
+                            const spawnPosition = definition.getPosition();
+                            const activationRange = viewDistance + (definition.getRadius() ?? NpcSpawnDefinitionLoader.DEFAULT_WANDER_RADIUS);
+                            if (level !== location.getZ() && Math.max(
+                                Math.abs(spawnPosition.getX() - location.getX()),
+                                Math.abs(spawnPosition.getY() - location.getY()),
+                            ) > activationRange) {
+                                remaining.push(definition);
+                                continue;
+                            }
+                            if (NpcSpawnDefinitionLoader.spawn(definition)) applied++;
+                            else remaining.push(definition);
+                        }
+                        if (remaining.length) NpcSpawnDefinitionLoader.pendingByRegion.set(key, remaining);
+                        else NpcSpawnDefinitionLoader.pendingByRegion.delete(key);
                     }
-                    if (remaining.length) NpcSpawnDefinitionLoader.pendingByRegion.set(key, remaining);
-                    else NpcSpawnDefinitionLoader.pendingByRegion.delete(key);
                 }
             }
             // shortcut: activated NPCs stay alive to preserve scripts and respawn timers; add sleeping only with state-safe lifecycle support.

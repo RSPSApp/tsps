@@ -134,3 +134,106 @@ test('reentrant Owner close and shutdown reach every subscriber in start/stop or
     assert.equal(status(),false);assert.equal(lateNpc,null);
   }
 });
+
+function rewardPlayer() {
+  const p=new Player(null);p.setUsername('holidayqa');p.getSession=()=>({sendClientPacket:()=>true});p.sendMessage=()=>{};return p;
+}
+function grant(p,extra={}) {
+  const q={player:p,eventKey:'fixture',completion:'fixture-2026',rewards:[{itemId:core.ItemIdentifiers.SANTA_HAT,amount:1},{itemId:core.ItemIdentifiers.COINS,amount:5}],...extra};
+  PM.emitCustomEvent('events:grant-reward',q);return q;
+}
+function completed(p,completion='fixture-2026') {const q={player:p,completion};PM.emitCustomEvent('events:completed',q);return q.completed;}
+test('grant-reward gives every item once per completion key on a real inventory',(t)=>{
+  t.mock.method(Date,'now',()=>START+1);start();const p=rewardPlayer();
+  assert.equal(completed(p),false);
+  const first=grant(p);assert.equal(first.granted,true);assert.equal(first.reason,null);
+  assert.equal(p.getInventory().getAmount(core.ItemIdentifiers.SANTA_HAT),1);assert.equal(p.getInventory().getAmount(core.ItemIdentifiers.COINS),5);
+  const again=grant(p);assert.equal(again.granted,false);assert.equal(again.reason,'already-complete');
+  assert.equal(p.getInventory().getAmount(core.ItemIdentifiers.SANTA_HAT),1);assert.equal(completed(p),true);
+  assert.equal(grant(p,{completion:'fixture-2027'}).granted,true,'a different year is independent');
+});
+test('grant-reward refuses outside the window or when stopped and records nothing',(t)=>{
+  let now=START-1;t.mock.method(Date,'now',()=>now);start();const p=rewardPlayer();
+  assert.equal(grant(p).reason,'inactive');now=START+1;command('forceevent fixture auto');
+  stop();assert.equal(grant(p).reason,'inactive');
+  assert.equal(p.getInventory().getFreeSlots(),28);assert.equal(completed(p),false);
+});
+test('a full inventory or capped stack keeps the completion and grants nothing',(t)=>{
+  t.mock.method(Date,'now',()=>START+1);start();const p=rewardPlayer(),inv=p.getInventory();
+  for(let i=0;i<27;i++)inv.setItem(i,new core.Item(core.ItemIdentifiers.LOGS,1));
+  // One free slot: the hat fits, the coins would need a second slot.
+  const q=grant(p);assert.equal(q.granted,false);assert.equal(q.reason,'no-space');
+  assert.equal(inv.getAmount(core.ItemIdentifiers.SANTA_HAT),0);assert.equal(completed(p),false);
+  inv.setItem(26,new core.Item(core.ItemIdentifiers.COINS,2147483647-4));
+  assert.equal(grant(p,{rewards:[{itemId:core.ItemIdentifiers.COINS,amount:5}]}).reason,'no-space','stack cap');
+  assert.equal(grant(p,{rewards:[{itemId:core.ItemIdentifiers.COINS,amount:4}]}).granted,true,'exactly the room left');
+  assert.equal(inv.getAmount(core.ItemIdentifiers.COINS),2147483647);
+});
+test('invalid requests and bad Diango unlocks are rejected without side effects',(t)=>{
+  t.mock.method(Date,'now',()=>START+1);start();const p=rewardPlayer();
+  for(const extra of [{rewards:[{itemId:0,amount:1}]},{rewards:[{itemId:core.ItemIdentifiers.SANTA_HAT,amount:0}]},{completion:'Bad Key'},{eventKey:undefined}])
+    assert.equal(grant(p,extra).reason,'invalid');
+  assert.equal(p.getInventory().getFreeSlots(),28);assert.equal(completed(p),false);
+});
+test('completions survive a real save and reload',(t)=>{
+  t.mock.method(Date,'now',()=>START+1);start();const p=rewardPlayer();grant(p);
+  const Json=require('../plugins/persistence/JsonPlayerPersistence.plugin'),codec=new Json.JsonPlayerPersistence();
+  Json.register(PM.createApi('JsonPlayerPersistence'));
+  const {PlayerSave}=require('../dist/game/entity/impl/player/persistence/PlayerSave');
+  const saved=JSON.parse(JSON.stringify(PlayerSave.fromPlayer(p),codec.replacer.bind(codec)),codec.reviver.bind(codec));
+  const restored=rewardPlayer();codec.hydratePlayerSave(saved).applyToPlayer(restored);
+  assert.equal(completed(restored),true);assert.equal(grant(restored).reason,'already-complete');
+});
+test('a successful grant records its Diango unlocks; an unknown name blocks the whole grant',(t)=>{
+  t.mock.method(Date,'now',()=>START+1);start();
+  require('../plugins/world/HolidayRewards.plugin.js').register(PM.createApi('HolidayRewards'));
+  const p=rewardPlayer();
+  assert.equal(grant(p,{unlock:['win05_hat1','no_such_holiday_item']}).reason,'unlock-refused');
+  assert.equal(p.getInventory().getAmount(core.ItemIdentifiers.SANTA_HAT),0);assert.equal(completed(p),false);
+  assert.equal(grant(p,{unlock:['win05_hat1']}).granted,true);
+  assert.deepEqual(p.getAttribute('holiday-rewards:unlocked'),['win05_hat1']);
+});
+test('ids past the cache and amounts past the stack cap are invalid, not clamped',(t)=>{
+  t.mock.method(Date,'now',()=>START+1);start();const p=rewardPlayer();
+  const past=core.CacheDefinitions.getCounts().items;
+  assert.equal(grant(p,{rewards:[{itemId:past+5,amount:1}]}).reason,'invalid');
+  assert.equal(grant(p,{rewards:[{itemId:core.ItemIdentifiers.COINS,amount:3000000000}]}).reason,'invalid');
+  assert.equal(p.getInventory().getFreeSlots(),28);assert.equal(completed(p),false);
+});
+test('a plain stack beside a metadata stack of the same id is planned like add merges it',(t)=>{
+  t.mock.method(Date,'now',()=>START+1);start();const p=rewardPlayer(),inv=p.getInventory();
+  inv.setItem(0,new core.Item(core.ItemIdentifiers.COINS,2000000000).setMeta({x:1}));inv.setItem(1,new core.Item(core.ItemIdentifiers.COINS,1));
+  assert.equal(grant(p,{rewards:[{itemId:core.ItemIdentifiers.COINS,amount:200000000}]}).granted,true);
+  assert.equal(inv.getItems()[1].getAmount(),200000001);assert.equal(inv.getItems()[0].getAmount(),2000000000);
+});
+test('a grant nested inside the unlock listener is refused and the outer completion keeps every key',(t)=>{
+  t.mock.method(Date,'now',()=>START+1);start();const p=rewardPlayer();let nested=null,armed=true;
+  PM.createApi('NestedGrantTest').onCustomEvent('holiday-rewards:unlock',e=>{
+    if(!armed||e.player!==p)return;armed=false;e.accepted=true;
+    nested=grant(p,{completion:'other-2026',rewards:[{itemId:core.ItemIdentifiers.SANTA_HAT,amount:1}]});
+  });
+  const outer=grant(p,{unlock:['win05_hat1'],rewards:[{itemId:core.ItemIdentifiers.SANTA_HAT,amount:1}]});
+  assert.equal(nested.reason,'busy');assert.equal(outer.granted,true);
+  assert.equal(p.getInventory().getAmount(core.ItemIdentifiers.SANTA_HAT),1);
+  assert.equal(completed(p,'other-2026'),false);assert.equal(grant(p,{completion:'other-2026'}).granted,true);
+  assert.deepEqual(p.getAttribute('events:completions').sort(),['fixture-2026','other-2026']);
+});
+test('take consumes a held item in the same all-or-nothing plan, and its slot is free for the rewards',(t)=>{
+  t.mock.method(Date,'now',()=>START+1);start();const p=rewardPlayer(),inv=p.getInventory(),I=core.ItemIdentifiers;
+  for(let i=0;i<27;i++)inv.setItem(i,new core.Item(I.LOGS,1));
+  const take=[{itemId:I.LOGS,amount:1}],hat=[{itemId:I.SANTA_HAT,amount:1}];
+  assert.equal(grant(p,{rewards:[...hat,{itemId:I.COINS,amount:5}],take}).granted,true,'the taken log frees the second slot');
+  assert.equal(inv.getAmount(I.LOGS),26);assert.equal(inv.getAmount(I.SANTA_HAT),1);assert.equal(inv.getAmount(I.COINS),5);
+  const missing=grant(p,{completion:'fixture-2027',rewards:hat,take:[{itemId:I.BRONZE_DAGGER,amount:1}]});
+  assert.equal(missing.reason,'missing-items');assert.equal(completed(p,'fixture-2027'),false);
+  assert.equal(inv.getAmount(I.SANTA_HAT),1,'a refused take grants nothing');
+  assert.equal(grant(p,{completion:'fixture-2028',take:[{itemId:0,amount:1}]}).reason,'invalid');
+});
+test('record-completion imports a claim idempotently, outside the window, and blocks a later grant',(t)=>{
+  t.mock.method(Date,'now',()=>END+1);start();const p=rewardPlayer();
+  for(let i=0;i<2;i++){const q={player:p,completion:'fixture-2026'};PM.emitCustomEvent('events:record-completion',q);assert.equal(q.recorded,true);}
+  assert.deepEqual(p.getAttribute('events:completions'),['fixture-2026']);
+  const bad={player:p,completion:'Not A Key'};PM.emitCustomEvent('events:record-completion',bad);assert.equal(bad.recorded,false);
+  t.mock.method(Date,'now',()=>START+1);command('forceevent fixture auto');
+  assert.equal(grant(p).reason,'already-complete');assert.equal(p.getInventory().getAmount(core.ItemIdentifiers.SANTA_HAT),0);
+});

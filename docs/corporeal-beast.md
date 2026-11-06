@@ -25,7 +25,7 @@ The Corporeal Beast, built from the OSRS Wiki, a live rsprox capture (a games ne
 
 ## The lair
 
-The lair is in the map twice, 128 tiles apart, with the same locs: the normal room and the one intended for ironmen of combat level 90 and up (Wiki). The capture was taken in the northern copy (y around 4382). The normal room is the southern copy (y around 4254). Cave entry selects the copy by account mode and combat level; this cave change does not verify other arrival routes.
+The lair is in the map twice, 128 tiles apart, with the same locs: the normal room and the one intended for ironmen of combat level 90 and up (Wiki). The capture was taken in the northern copy (y around 4382). The normal room is the southern copy (y around 4254). With the Corporeal Beast plugin active, cave entry and the supported teleport routes select the copy by account mode and base combat level.
 
 | What | Where | Notes |
 | --- | --- | --- |
@@ -39,7 +39,7 @@ The lair is in the map twice, 128 tiles apart, with the same locs: the normal ro
 - **The overlay:** in the room east of the passage, the Corp overlay (interface 13) opens on the HUD, and it closes on leaving (capture).
   - Script 693 shows varbit 999 as "Damage: N" ("Damage: Lots!" from 4,000).
   - Phase 2 keeps varbit 999 up to date.
-- **The games necklace and jewellery box** currently target (2967, 4381) in the northern copy for every account; `::teleports` (Bosses) targets the normal room's lobby at (2966, 4252), regardless of account. Their final routing through teleport and area hooks has not been verified here, so this cave change does not establish room separation for those routes.
+- **The games necklace and jewellery box** target (2967, 4381) in the northern copy for eligible ironmen and the corresponding tile 128 south for other accounts. `::teleports` (Bosses) uses the existing lobby tile in the appropriate copy. The copy is selected when the teleport starts; it is not rechecked at arrival. This does not implement the ironman fight's kill-credit or brazier rules, or establish isolation for every possible arrival route.
 
 ## The capture
 

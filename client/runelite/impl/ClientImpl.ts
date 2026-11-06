@@ -1,11 +1,22 @@
-import type { Actor, Client, NPC, NPCComposition, Player, WorldPoint } from "@runelite/api/Client";
+import type { Actor, Client, NPC, NPCComposition, Player, Point } from "@runelite/api/Client";
+import { WorldPoint } from "@runelite/api/coords/WorldPoint";
+import type { EnumComposition } from "@runelite/api/EnumComposition";
 import type { GameState } from "@runelite/api/GameState";
+import { ItemContainer } from "@runelite/api/Item";
+import type { ItemComposition } from "@runelite/api/ItemComposition";
+import type { ObjectComposition } from "@runelite/api/ObjectComposition";
+import type { Widget } from "@runelite/api/widgets/Widget";
 import { TOPLEVEL } from "@runelite/api/gameval/InterfaceID";
+import * as InventoryID from "@runelite/api/gameval/InventoryID";
+import { ClientState } from "../../game/ClientState";
 import type { OsrsClient } from "../../game/OsrsClient";
 import { getCurrentTick } from "../../network/serverConnection/timing";
 import { decodeInteractionIndex } from "../../rs/interaction/InteractionIndex";
 import type { SkillId } from "../../rs/skill/skills";
+import { getEnum, getItemDefinition, getObjectDefinition } from "./ClientDefinitions";
+import { clearHintArrow, hintArrowNpcIndex, setHintArrow } from "./ClientHintArrows";
 import { toRuneLiteGameState } from "./GameStateMapping";
+import { getWidget } from "./WidgetImpl";
 
 /** RuneLite's Constants.CLIENT_TICK_LENGTH. */
 const CLIENT_TICK_LENGTH = 20;
@@ -31,11 +42,7 @@ export class ClientImpl implements Client {
                 return seq >= 0 ? seq : -1;
             },
             // The player ECS holds world positions, 128 units per tile.
-            getWorldLocation: (): WorldPoint => ({
-                x: players.getX(index) >> 7,
-                y: players.getY(index) >> 7,
-                plane: players.getLevel(index) | 0,
-            }),
+            getWorldLocation: () => new WorldPoint(players.getX(index) >> 7, players.getY(index) >> 7, players.getLevel(index) | 0),
             getInteracting: () => this.actor(players.getInteractionIndex(index)),
         };
     }
@@ -52,17 +59,32 @@ export class ClientImpl implements Client {
                 getInteractionKey: () => key,
             };
         }
-        const npc: NPC = {
-            getId: () => this.npcType(target.id)?.id ?? -1,
-            getIndex: () => target.id,
-            getName: () => this.npcType(target.id)?.name ?? null,
-            getInteractionKey: () => key,
+        return this.npc(target.id, key);
+    }
+
+    /** RuneLite's NPC for a server index: every getter reads the store live. */
+    private npc(serverId: number, interactionKey = -1): NPC {
+        const client = this.osrsClient;
+        const ecsId = () => client.npcEcs?.getEcsIdForServer(serverId);
+        return {
+            getId: () => {
+                const id = ecsId();
+                return id === undefined ? -1 : client.npcEcs.getNpcTypeId(id) | 0;
+            },
+            getIndex: () => serverId,
+            getName: () => this.npcType(serverId)?.name ?? null,
+            getInteractionKey: () => interactionKey,
             getComposition: (): NPCComposition | null => {
-                const type = this.npcType(target.id);
+                const type = this.npcType(serverId);
                 return type ? { getName: () => type.name, getActions: () => type.actions ?? [] } : null;
             },
+            getWorldLocation: () => {
+                const id = ecsId();
+                if (id === undefined) return new WorldPoint(-1, -1, 0);
+                const npcs = client.npcEcs;
+                return new WorldPoint(npcs.getX(id) >> 7, npcs.getY(id) >> 7, npcs.getLevel(id) | 0);
+            },
         };
-        return npc;
     }
 
     /** The NPC's type after transforms (RuneLite's NPC.getTransformedComposition). */
@@ -73,6 +95,24 @@ export class ClientImpl implements Client {
         let type = client.npcTypeLoader?.load(client.npcEcs.getNpcTypeId(ecsId) | 0);
         if (type?.transforms) type = type.transform(client.varManager, client.npcTypeLoader) ?? type;
         return type ?? undefined;
+    }
+
+    getNpcs(): NPC[] {
+        const npcs = this.osrsClient.npcEcs;
+        if (!npcs) return [];
+        const out: NPC[] = [];
+        for (const ecsId of npcs.getAllActiveIds()) {
+            if (!npcs.isLinked(ecsId)) continue;
+            const serverId = npcs.getServerId(ecsId) | 0;
+            if (serverId > 0) out.push(this.npc(serverId));
+        }
+        return out;
+    }
+
+    getNpcByIndex(index: number): NPC | null {
+        const npcs = this.osrsClient.npcEcs;
+        if (!npcs || !(index > 0) || npcs.getEcsIdForServer(index) === undefined) return null;
+        return this.npc(index);
     }
 
     getVarpValue(varpId: number): number {
@@ -128,5 +168,62 @@ export class ClientImpl implements Client {
 
     getIntStack(): ArrayLike<number> {
         return this.osrsClient.cs2Vm.intStack;
+    }
+
+    getWidget(componentId: number): Widget | null {
+        return getWidget(this.osrsClient.widgetManager, componentId);
+    }
+
+    getItemContainer(id: number): ItemContainer | null {
+        const client = this.osrsClient;
+        const store =
+            id === InventoryID.INV ? client.inventory
+            : id === InventoryID.WORN ? client.equipment
+            : id === InventoryID.BANK ? client.bankInventory
+            : undefined;
+        return store ? new ItemContainer(id, store) : null;
+    }
+
+    getItemDefinition(id: number): ItemComposition | null {
+        return getItemDefinition(this.osrsClient, id);
+    }
+
+    getEnum(id: number): EnumComposition | null {
+        return getEnum(this.osrsClient, id);
+    }
+
+    getObjectDefinition(id: number): ObjectComposition | null {
+        return getObjectDefinition(this.osrsClient, id);
+    }
+
+    getNpcDefinition(id: number): NPCComposition | null {
+        const client = this.osrsClient;
+        if (!(id >= 0)) return null;
+        let type = client.npcTypeLoader?.load(id | 0);
+        if (type?.transforms && client.varManager) type = type.transform(client.varManager, client.npcTypeLoader) ?? type;
+        return type ? { getName: () => type.name, getActions: () => type.actions ?? [] } : null;
+    }
+
+    getPlane(): number {
+        return ClientState.plane | 0;
+    }
+
+    getMouseCanvasPosition(): Point {
+        const input = this.osrsClient.inputManager;
+        const x = Number(input?.mouseX), y = Number(input?.mouseY);
+        return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : { x: -1, y: -1 };
+    }
+
+    setHintArrow(target: NPC | WorldPoint): void {
+        setHintArrow(target);
+    }
+
+    clearHintArrow(): void {
+        clearHintArrow();
+    }
+
+    getHintArrowNpc(): NPC | null {
+        const index = hintArrowNpcIndex();
+        return index > 0 ? this.npc(index) : null;
     }
 }

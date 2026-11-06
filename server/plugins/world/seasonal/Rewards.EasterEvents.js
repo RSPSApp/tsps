@@ -3,6 +3,7 @@
 // Wiki 2026 Easter event, Rewards: Archibald; two noted Easter eggs with at least 25 hours
 // of play time; and every Easter reward from earlier years, reclaimable from Diango.
 const Progress = require("./Progress.EasterEvents");
+const EVENT_KEY = "easter-2026";
 const COMPANION = "easter26_egg_companion";
 const RUNAWAY = "easter26_runaway_egg";
 const RARE = Object.freeze({ symbol: "cert_easter_egg", amount: 2 });
@@ -61,12 +62,21 @@ function missingSlots(api, player) {
 function claim(api, player) {
   const next = plan(api, player);
   if (!next || next.missing) return false;
-  // HolidayRewards validates the whole catalogue request before saving any entitlement.
-  const unlock = { player, items: [...UNLOCKS] };
-  api.emitCustomEvent("holiday-rewards:unlock", unlock);
-  if (unlock.accepted !== true) return false;
-  player.getInventory().setItems(next.items);
-  player.getInventory().refreshItems();
+  // The plan above keeps Easter's own rule (rewards must fit before the runaway egg's slot
+  // frees up); EventScheduler's grant then takes the egg, adds the rewards, unlocks Diango's
+  // catalogue and records the once-per-account completion in one commit.
+  const grant = {
+    player, eventKey: EVENT_KEY, completion: EVENT_KEY,
+    rewards: next.rows.map(row => ({ itemId: row.id, amount: row.amount })),
+    take: [{ itemId: itemId(api, RUNAWAY), amount: 1 }], unlock: [...UNLOCKS],
+  };
+  api.emitCustomEvent("events:grant-reward", grant);
+  if (grant.granted !== true) {
+    // The completion is recorded but the progress is not (a rolled-back save): the rewards were
+    // already given, so settle the progress rather than leave the hunt stuck at the catch.
+    if (grant.reason === "already-complete") Progress.write(api, player, { ...Progress.read(player), complete: true });
+    return false;
+  }
   const state = Progress.read(player);
   state.complete = true;
   Progress.write(api, player, state);
@@ -101,4 +111,9 @@ function closeScroll(api, event) {
 }
 function clear({ player }) { scrolls.delete(player); }
 
-module.exports = { UNLOCKS, RARE_PLAY_SECONDS, plan, missingSlots, claim, show, showNextTick, closeScroll, clear };
+// Saves that finished before EventScheduler kept completions are imported on login.
+function importClaim(api, { player }) {
+  if (Progress.read(player).complete) api.emitCustomEvent("events:record-completion", { player, completion: EVENT_KEY });
+}
+
+module.exports = { EVENT_KEY, importClaim, UNLOCKS, RARE_PLAY_SECONDS, plan, missingSlots, claim, show, showNextTick, closeScroll, clear };

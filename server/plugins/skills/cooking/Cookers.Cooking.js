@@ -13,6 +13,13 @@ const { pauseForLevelUp, actionInterval } = require("../SkillActions");
 const FIRST_COOK_TICKS = 2;
 const SECOND_COOK_TICKS = 3;
 const COOK_INTERVAL_TICKS = 4;
+/**
+ * Ticks from a manual re-use of raw karambwan while it is already cooking to the next food.
+ * The Wiki's 1-tick Cooking method re-opens the cooking dialogue on the tick a karambwan is
+ * cooked, so the next one follows a tick later instead of restarting the first-food delay.
+ * The Wiki documents this method for raw karambwan; other foods keep their queued timing.
+ */
+const KARAMBWAN_RECLICK_TICKS = 1;
 const ONE_TYPE_TITLE = "How many would you like to cook?";
 const MANY_TYPES_TITLE = "What would you like to cook?";
 /** clientscript skillmulti_setup's first argument on every captured cooking menu. */
@@ -184,7 +191,9 @@ function canCook(player, object, cookable) {
 
 /**
  * Cooks `amount` of the food (all of it by default), the first FIRST_COOK_TICKS after this tick.
- * Clicks are handled after the tick's tasks, so the cooking task has already run this tick.
+ * Re-using raw karambwan while it cooks (the Wiki's 1-tick method) makes the next one due
+ * KARAMBWAN_RECLICK_TICKS later instead of restarting the first-food delay. Clicks are handled
+ * after the tick's tasks, so the cooking task has already run this tick.
  */
 function startCooking(player, object, cookable, sessions = activeSessions, amount = Infinity) {
   if (!canCook(player, object, cookable)) return false;
@@ -192,6 +201,9 @@ function startCooking(player, object, cookable, sessions = activeSessions, amoun
     return false;
   }
 
+  const previous = sessions.get(player);
+  const reusing = !!previous && previous.cookable.raw === cookable.raw
+    && cookable.raw === Common.core.ItemIds.RAW_KARAMBWAN;
   stopCooking(player, false);
   ensureCookTask();
   sessions.set(player, {
@@ -200,11 +212,15 @@ function startCooking(player, object, cookable, sessions = activeSessions, amoun
     objectId: object.getId(),
     location: object.getLocation().clone(),
     privateArea: object.getPrivateArea(),
-    nextCookTick: (cookingTask?.cycle ?? 0) + (cookable.firstCookTicks ?? FIRST_COOK_TICKS),
-    cooked: 0,
+    // Repeated clicks must not shorten the initial captured first-food delay.
+    nextCookTick: reusing && previous.cooked === 0 ? previous.nextCookTick
+      : (cookingTask?.cycle ?? 0) + (reusing
+        ? KARAMBWAN_RECLICK_TICKS
+        : (cookable.firstCookTicks ?? FIRST_COOK_TICKS)),
+    cooked: reusing ? previous.cooked : 0,
     remaining: amount,
   });
-  Common.sendVarbit(player, BUSY_VARBIT, 1);
+  if (!reusing || previous.cooked === 0) Common.sendVarbit(player, BUSY_VARBIT, 1);
 
   return true;
 }

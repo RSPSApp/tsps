@@ -146,7 +146,7 @@ function tileOf(player, entry) {
   if (!entry.live) return entry.tile;
   const request = { player };
   pluginApi.emitCustomEvent(entry.live, request);
-  return request.tile;
+  return request.tile === undefined ? entry.tile : request.tile;
 }
 
 function confirmWilderness(player, entry, tile, level) {

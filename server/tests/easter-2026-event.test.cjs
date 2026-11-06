@@ -28,7 +28,9 @@ before(async () => {
 });
 after(() => window(false));
 
-function window(active) { PM.emitCustomEvent("events:active", Object.freeze({ key: KEY, active })); }
+// Through the real scheduler: the Easter grant goes through events:grant-reward, which trusts only its window.
+const { setWindow } = require("./helpers/event-window.cjs");
+function window(active) { setWindow(PM, KEY, active); }
 function fixture(name = "easterqa") {
   const { PlayerSession } = require("../dist/net/PlayerSession");
   const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
@@ -138,6 +140,23 @@ test("a full hunt grants Archibald, the play-time eggs and every Diango Easter u
   assert.deepEqual([...p.getAttribute("holiday-rewards:unlocked")].sort(), [...Rewards.UNLOCKS].sort());
   p.getPacketSender().sendInterfaceRemoval(); talk(p);
   assert.equal(count(p, "easter26_egg_companion"), 1, "post-event talk cannot regrant");
+  assert.deepEqual(p.getAttribute("events:completions"), [KEY], "the grant records its once-per-account completion");
+  window(false);
+});
+
+test("a hunt finished before EventScheduler kept completions is imported on login and never granted again", () => {
+  window(true);
+  const { p } = fixture("easterlegacy");
+  Progress.write(PM.createApi("EasterLegacy"), p, { ...state(p), started: true, complete: true });
+  Rewards.importClaim(PM.createApi("EasterLegacy"), { player: p });
+  assert.deepEqual(p.getAttribute("events:completions"), [KEY]);
+  // A caught egg on a rolled-back save still cannot pass the recorded completion; the egg stays.
+  Progress.write(PM.createApi("EasterLegacy"), p, { ...state(p), caught: true, complete: false });
+  p.getInventory().add(new core.Item(c.getObjId("easter26_runaway_egg"), 1), false);
+  assert.equal(Rewards.claim(PM.createApi("EasterLegacy"), p), false);
+  assert.equal(count(p, "easter26_egg_companion"), 0);
+  assert.equal(count(p, "easter26_runaway_egg"), 1);
+  assert.equal(state(p).complete, true, "the recorded completion settles the rolled-back progress");
   window(false);
 });
 

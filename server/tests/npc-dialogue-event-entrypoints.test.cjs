@@ -3207,3 +3207,93 @@ test('Legends guard still refuses an ineligible player after the RFD opening', a
   assert.equal(f.quest('legends_quest').getStage(player), 0);
   assert.equal(rfdSavedProgress(player), before);
 });
+
+function lostTribeSilverwareFixture(t, { ham = 2, stage = 9, contact = 2, silverware = true } = {}) {
+  const f = fixture(t);
+  f.quest = registeredQuest('the_lost_tribe');
+  f.quest.setStage(f.player, stage);
+  f.player.setAttribute('quest.the_lost_tribe.ham', ham);
+  f.player.setAttribute('quest.the_lost_tribe.contact', contact);
+  f.npc = core.NPC.create(core.NpcIdentifiers.DUKE_HORACIO, new core.Location(3211, 3220, 1));
+  if (silverware) f.player.getInventory().add(new core.Item(core.ItemIdentifiers.SILVERWARE, 1), false);
+  f.talk = () => PM.emitNpcInteraction({ player: f.player, npc: f.npc, npcId: f.npc.getId(), action: 'Talk-to', clickType: 1, handled: false });
+  f.search = () => {
+    const id = core.ObjectIdentifiers.CRATE_65, location = new core.Location(3152, 9645, 0);
+    const object = new core.GameObject(id, location, 10, 0, null);
+    return PM.emitObjectInteraction({ player: f.player, object, location,
+      objectId: id, x: 3152, y: 9645, z: 0, option: 'Search', clickType: 1, handled: false });
+  };
+  return f;
+}
+async function lostTribeContinue(f) {
+  const group = f.player.getPacketSender().getChatboxGroupId();
+  await f.connection.dispatch([{ type: 'dialogue_continue', widgetId: (group << 16) | 5, childIndex: -1 }]);
+  f.connection.processTurnPackets();
+}
+async function lostTribeHandIn(f) {
+  f.talk();
+  for (let n = 0; n < 10 && !MultiChatboxPrompt.getPending(f.player); n++) await lostTribeContinue(f);
+  const options = MultiChatboxPrompt.getPending(f.player)?.options ?? [];
+  const index = options.indexOf('I found the missing silverware in the HAM cave!');
+  assert.ok(index >= 0, 'actual Duke transcript offers the hand-in');
+  await choose(f, index + 1);
+  for (let n = 0; n < 20 && f.player.getDialogueManager().getCurrent(); n++) await lostTribeContinue(f);
+}
+test('Lost Tribe silverware stays owned across Duke opener cancellation and signs only at real hand-in (#2893)', async t => {
+  const f = lostTribeSilverwareFixture(t), I = core.ItemIdentifiers;
+  assert.equal(f.talk(), true);
+  assert.equal(f.player.getInventory().getAmount(I.SILVERWARE), 1, 'opening Duke dialogue does not consume the item');
+  f.player.closeInterruptibleInterfaces();
+  assert.equal(f.quest.getStage(f.player), 9);
+  for (let n = f.player.getInventory().getFreeSlots(); n > 0; n--) f.player.getInventory().add(new core.Item(I.BRONZE_DAGGER, 1), false);
+  assert.equal(f.player.getInventory().getFreeSlots(), 0);
+  await lostTribeHandIn(f);
+  assert.equal(f.quest.getStage(f.player), 10);
+  assert.equal(f.player.getInventory().getAmount(I.SILVERWARE), 0);
+  assert.equal(f.player.getInventory().getAmount(I.PEACE_TREATY), 1, 'silverware slot becomes treaty even with full inventory');
+  f.player.closeInterruptibleInterfaces(); f.talk();
+  assert.equal(f.player.getInventory().getAmount(I.PEACE_TREATY), 1, 'retalk does not duplicate treaty');
+});
+test('Lost Tribe historical consumed silverware can be recovered from the real crate and handed in after save reload (#2893)', async t => {
+  const f = lostTribeSilverwareFixture(t, { silverware: false }), I = core.ItemIdentifiers;
+  const save = require('../dist/game/entity/impl/player/persistence/PlayerSave').PlayerSave.fromPlayer(f.player);
+  const restored = lostTribeSilverwareFixture(t, { silverware: false });
+  save.applyToPlayer(restored.player);
+  restored.search();
+  for (let n = 0; n < 12 && restored.player.getDialogueManager().getCurrent(); n++) await lostTribeContinue(restored);
+  assert.equal(restored.player.getInventory().getAmount(I.SILVERWARE), 1, 'ham2 without item remains recoverable');
+  restored.search();
+  assert.equal(restored.player.getInventory().getAmount(I.SILVERWARE), 1, 'no duplicate silverware');
+  await lostTribeHandIn(restored);
+  assert.equal(restored.quest.getStage(restored.player), 10);
+  assert.equal(restored.player.getInventory().getAmount(I.PEACE_TREATY), 1);
+});
+
+test('Lost Tribe silverware search preserves capacity, duplicate and stage/contact gates (#2893)', async t => {
+  const I = core.ItemIdentifiers;
+  for (const ham of [0, 2]) {
+    const f = lostTribeSilverwareFixture(t, { ham, silverware: false });
+    for (let n = 0; n < 28; n++) f.player.getInventory().add(new core.Item(I.BRONZE_DAGGER, 1), false);
+    f.search();
+    assert.equal(f.player.getInventory().getAmount(I.SILVERWARE), 0, 'full inventory cannot acquire silverware');
+    assert.equal(f.player.getAttribute('quest.the_lost_tribe.ham'), ham, 'failed acquisition preserves progress');
+    f.player.closeInterruptibleInterfaces();
+    f.player.getInventory().deleteNumber(I.BRONZE_DAGGER, 1);
+    f.search();
+    for (let n = 0; n < 12 && f.player.getDialogueManager().getCurrent(); n++) await lostTribeContinue(f);
+    assert.equal(f.player.getInventory().getAmount(I.SILVERWARE), 1);
+    f.search();
+    assert.equal(f.player.getInventory().getAmount(I.SILVERWARE), 1, 'repeat does not duplicate');
+  }
+  const banked = lostTribeSilverwareFixture(t, { silverware: false });
+  banked.player.getBank(0).add(new core.Item(I.SILVERWARE, 1), false);
+  banked.search();
+  assert.equal(banked.player.getInventory().getAmount(I.SILVERWARE), 0, 'banked silverware is not lost');
+  assert.equal(banked.player.getBanks()[0].getAmount(I.SILVERWARE), 1);
+  for (const setup of [{ stage: 8 }, { stage: 10 }, { stage: 12 }, { contact: 1 }]) {
+    const f = lostTribeSilverwareFixture(t, { ...setup, silverware: false });
+    f.search();
+    assert.equal(f.player.getInventory().getAmount(I.SILVERWARE), 0, 'only the current objective can recover it');
+    assert.equal(f.quest.getStage(f.player), setup.stage ?? 9);
+  }
+});

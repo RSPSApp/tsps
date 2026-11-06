@@ -1,8 +1,20 @@
 # Holiday event scheduler
 
 The reusable scheduler is the foundation of the Holiday & seasonal events tracker section.
-It does not implement an annual activity or distribute rewards. `plugins/world/data/events.json`
-is deliberately empty until a sourced activity supplies a real year-specific window.
+It does not implement an annual activity. Each activity's window is configured in
+`plugins/world/data/events.json`, and the four holiday events grant their once-per-account
+rewards through the shared helper below: Christmas Din-Dins (`christmas-2025`), Easter 2026
+(`easter-2026`), the 25th Anniversary (`anniversary-2026`) and Halloween 2025
+(`halloween-2025`, plus `halloween-2025-tradeables` for Fred's later tradeables).
+
+Each event keeps its own saved progress as the first gate, and its own capacity precheck so
+its refusal messages are unchanged. The helper then re-plans and commits the grant and
+records the completion. Saves claimed before the helper existed are imported on login: each
+event sends `events:record-completion` when its own progress already shows the claim
+(Christmas phase `complete`, the Easter `complete` bit, Birthday `rewarded`, Halloween stage
+`COMPLETE` and `tradeableClaimed`). A rolled-back progress save therefore still cannot claim
+twice, and nobody loses a claim. The 2026 re-run windows reuse the 2025 keys, as the events
+themselves never reset per year.
 
 ## Configuration and contract
 
@@ -24,6 +36,30 @@ reason, and activates no content. Dates are not extrapolated into future years.
   independently idempotent and tested through their own failure/cleanup paths.
 - `events:status` uses a request `{ key, active: false }`; the scheduler writes its answer to
   `active`. Unknown keys and a stopped scheduler are inactive. No internal Set/Map escapes.
+- `events:grant-reward` is the shared once-per-account reward helper. Content sends
+  `{ player, eventKey, completion?, rewards: [{ itemId, amount }], take?: [{ itemId, amount }],
+  unlock?: [cache obj names] }`. `take` lists items the event consumes in the same commit
+  (the serving platter, the runaway egg): they leave the planning copy first, so their slots
+  are free for the rewards, and an item that is not held refuses with `missing-items`.
+  `completion` defaults to `eventKey`; give each annual run its own key (e.g. `christmas-2025`)
+  so a later year is independent. The helper writes `granted` and `reason` back:
+  `inactive` (window closed or scheduler stopped), `already-complete`, `missing-items`, `no-space`,
+  `unlock-refused` (an `unlock` name is not in Diango's catalogue), `busy` (a grant for the
+  same player is already running, e.g. from inside an unlock listener) or `invalid` (a
+  malformed request, an id outside the active cache, or an amount above the stack cap).
+  It plans every item on a copy of the inventory with the container's own `getAddableAmount`
+  and `add` rules before changing anything, so a grant is all or nothing and a refusal never
+  records the completion. `unlock` names (cache symbols such as `win05_hat1`) are passed to
+  `holiday-rewards:unlock` for Diango's retrieval; an unknown name refuses the whole grant.
+  The helper does not check that the player is still online: a delayed caller must.
+  Item ids come from the content plugin, never from the scheduler, and the content plugin
+  chooses the player-facing message for each `reason`.
+- `events:completed` answers `{ player, completion }` with `completed`. Completions persist
+  in the `events:completions` player attribute as an array of keys.
+- `events:record-completion` takes `{ player, completion }` and records that key without granting
+  anything, idempotently and whether or not the window is open (it answers `recorded`). It is for
+  importing claims older saves already show, and for rewards settled another way (the 25th
+  Anniversary's post-window Diango settlement).
 - Owner-only `::forceevent <key> [on|off|auto]` overrides a window for testing (default on).
   `::forceevent reset` restores all configured windows. Overrides are local to this process
   and disappear on shutdown; no player saves or rights are changed. Invalid commands do

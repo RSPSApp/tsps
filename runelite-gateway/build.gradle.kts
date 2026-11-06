@@ -16,6 +16,7 @@ dependencies {
     runtimeOnly(libs.slf4j.simple)
     testImplementation("net.rsprox:osrs-241")
     testImplementation("net.rsprox:protocol")
+    testImplementation("io.netty:netty-codec-http")
     testImplementation("net.rsprox:cache-api")
     testImplementation(platform(libs.junit.bom))
     testImplementation(libs.junit.jupiter)

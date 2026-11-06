@@ -96,6 +96,7 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
   const DEAD_CARCASS = new WeakMap();
   const FIRST_HUNTS = new WeakMap();
   const FIRST_CHOMPY = new WeakSet();
+  const BAIT_HINT_PLAYERS = new WeakSet();
   const HUNT_WAIT_TICKS = 5;
   const HUNT_SHOT_TICKS = 2;
   const HUNT_SETTLE_TICKS = 3;
@@ -184,7 +185,7 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
     if (stage >= STAGE_RANTZ_MISSED) return ["Talk to <col=800000>Rantz</col> and ask him to let you use the ogre bow."];
     if (stage >= STAGE_CHOMPY_MISSED) return ["Wait for Rantz to finish shooting at the chompy."];
     if (stage >= STAGE_WAITING_CHOMPY) return ["Wait for the chompy to come to the bait."];
-    if (stage >= STAGE_SHOWN_TOAD) return ["Release a <col=800000>bloated toad</col> in the clearing south of Rantz."];
+    if (stage >= STAGE_SHOWN_TOAD) return ["Drop a <col=800000>bloated toad</col> in the clearing south of Rantz."];
     if (stage >= STAGE_BELLOWS_TAKEN) return ["Fill the ogre bellows at swamp bubbles, inflate a swamp toad,", "then show the bloated toad to <col=800000>Rantz</col>."];
     if (stage >= STAGE_KIDS_EXPLAINED_TOADS) return ["Open the rock-covered chest in the cave for ogre bellows."];
     if (stage >= STAGE_GIVEN_ARROWS) return ["Ask Rantz how to attract a chompy, then speak to his children."];
@@ -215,6 +216,7 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
         return page(PAGE, "talking-to-rantz-after-he-failed-talking-to-rantz-before-hunting-the-chompy");
       }
       if (stage >= STAGE_RANTZ_MISSED) return page(PAGE, "talking-to-rantz-after-he-failed");
+      if (stage === STAGE_SHOWN_TOAD) return page(PAGE, "returning-to-rantz-with-the-bloated-toad-talking-to-rantz-again");
       if (stage >= STAGE_SHOWN_TOAD) return page(PAGE, "successfully-attracting-a-chompy-after-the-chompy-eats-the-toad");
       if (stage >= STAGE_KIDS_EXPLAINED_TOADS) {
         return page(PAGE, has(player, BLOATED_TOAD)
@@ -610,10 +612,25 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
     player.sendMessage("You killed the chompy bird.");
   }
 
-  /** Release the bloated toad to start the hunt. */
+  /** Cache Drop places bait; Release / Release All let the toads escape instead. */
   function handleItemAction(event) {
     const option = String(event.option ?? "").toLowerCase();
-    if (event.itemId !== BLOATED_TOAD || !option.includes("release")) return;
+    if (event.itemId !== BLOATED_TOAD) return;
+    if (option === "release" || option === "release all") {
+      event.handled = true;
+      const inventory = event.player.getInventory();
+      if (inventory.getItems()[event.slot]?.getId() !== BLOATED_TOAD) return;
+      if (option === "release all") {
+        for (let slot = 0; slot < inventory.capacity(); slot++) {
+          if (inventory.getItems()[slot]?.getId() === BLOATED_TOAD) inventory.deleteAtSlot(slot);
+        }
+      } else {
+        inventory.deleteAtSlot(event.slot);
+      }
+      event.player.forceChat("Free the fatsy toady!");
+      return;
+    }
+    if (option !== "drop") return;
     const stage = quest.getStage(event.player);
     if (stage < STAGE_SHOWN_TOAD) {
       event.player.sendMessage("You should ask Rantz where to place this toad.");
@@ -785,7 +802,27 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
     refreshQuestList(player);
   }
 
+  // Later login hooks (including Temple of the Eye) reset the hint channel.
+  // Restore this quest's saved placement marker after all of those hooks.
+  function handleBootstrap({ player }) {
+    syncBaitHint(player);
+  }
+
+  function syncBaitHint(player) {
+    if (quest.getStage(player) === STAGE_SHOWN_TOAD) {
+      player.getPacketSender().sendPositionalHint(new api.core.Location(TOAD_CLEARING.x, TOAD_CLEARING.y, TOAD_CLEARING.z));
+      BAIT_HINT_PLAYERS.add(player);
+    } else if (BAIT_HINT_PLAYERS.delete(player)) {
+      player.getPacketSender().clearHintArrow();
+    }
+  }
+
+  function handleStageChanged({ player, key }) {
+    if (key === "big_chompy_bird_hunting") syncBaitHint(player);
+  }
+
   function handleLogout({ player }) {
+    BAIT_HINT_PLAYERS.delete(player);
     cancelFirstHunt(player);
   }
 
@@ -824,6 +861,8 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onCustomEvent("npc-dialogue:choice", handleDialogueChoice);
   api.onCustomEvent("npc-dialogue:line", handleDialogueLine);
+  api.onCustomEvent("quest:stage-changed", handleStageChanged);
+  api.onCustomEvent("player:bootstrap-complete", handleBootstrap);
   api.onItemOnObject(handleItemOnObject);
   api.onItemOnNpc(handleItemOnNpc);
   api.onItemAction(handleItemAction);

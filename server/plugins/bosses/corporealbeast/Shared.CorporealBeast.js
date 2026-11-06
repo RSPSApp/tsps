@@ -46,6 +46,7 @@ const ROOMS = {
   normal: { dy: -128 },
   ironman: { dy: 0 },
 };
+const IRONMAN_ROOM_COMBAT_LEVEL = 90;
 /** Where the games necklace lands you (capture) and the cave puts you (Offline_Scape). */
 const LOBBY = { x: 2966, y: 4380, z: 2 };
 const CAVE_ARRIVAL = { x: 2964, y: 4382, z: 2 };
@@ -56,6 +57,14 @@ const ROOM_AREAS = Object.values(ROOMS).map(({ dy }) => ({ minX: 2974, maxX: 300
 
 function shifted(tile, room = "normal") {
   return { ...tile, y: tile.y + ROOMS[room].dy };
+}
+
+/** The account-mode and base-combat boundary shared by the lair's entry routes. */
+function roomFor(player) {
+  const mode = { player, mode: "none" };
+  api().emitCustomEvent("ironman:mode", mode);
+  return mode.mode !== "none" && player.getSkillManager().getCombatLevel() >= IRONMAN_ROOM_COMBAT_LEVEL
+    ? "ironman" : "normal";
 }
 
 /** The Corp overlay (interface 13) and the damage it shows (varbit 999, script 693). */
@@ -137,5 +146,5 @@ function options(player, title, ...pairs) {
 module.exports = {
   bind, core, api,
   NPC, OBJECT, ROOMS, LOBBY, CAVE_ARRIVAL, OUTSIDE, ROOM_AREAS, INTERFACE, VARBIT, OVERLAY_HUD_UID,
-  loc, shifted, inRoom, later, repeat, randomInclusive, playersNear, tileGraphic, options,
+  loc, shifted, roomFor, inRoom, later, repeat, randomInclusive, playersNear, tileGraphic, options,
 };

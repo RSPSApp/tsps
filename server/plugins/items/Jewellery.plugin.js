@@ -106,7 +106,7 @@ function useCharge(player, item, castId = item.getId()) {
 }
 
 function destinationTile(player, destination) {
-  const tile = typeof destination.tile === "function" ? destination.tile(player) : destination.tile;
+  const tile = typeof destination.tile === "function" ? destination.tile(player, pluginApi) : destination.tile;
   return new Location(tile[0], tile[1], tile[2] ?? 0);
 }
 

@@ -9,13 +9,13 @@ const {Player} = require('../dist/game/entity/impl/player/Player');
 const {PlayerSession} = require('../dist/net/PlayerSession');
 const {ClientConnection} = require('../dist/net/NetworkBuilder');
 let core, PlayerSave, next = 1250;
-before(async () => { await CachePipeline.initialize(path.resolve(__dirname,'..')); PM.loadFromDirectory(path.resolve(__dirname,'../plugins')); core=PM.getCoreApi(); ({PlayerSave}=require('../dist/game/entity/impl/player/persistence/PlayerSave')); core.RegionManager.init(); core.RegionManager.loadMapFiles(3222,3218); core.RegionManager.loadMapFiles(2611,3295); PM.emitServerStartup({}); });
+before(async () => { await CachePipeline.initialize(path.resolve(__dirname,'..')); PM.loadFromDirectory(path.resolve(__dirname,'../plugins')); core=PM.getCoreApi(); ({PlayerSave}=require('../dist/game/entity/impl/player/persistence/PlayerSave')); core.RegionManager.init(); core.RegionManager.loadMapFiles(3222,3218); core.RegionManager.loadMapFiles(2611,3295); core.RegionManager.loadMapFiles(1666,3136); PM.emitServerStartup({}); });
 after(() => PM.emitServerShutdown({}));
 
 
-function actor(t) {
+function actor(t, x=3222, y=3218) {
   const channel={kind:'test',remoteAddress:'127.0.0.1',isOpen:()=>true,send:()=>true,close(){},onData(){},onError(){},onClose(){}};
-  const p=new Player(new PlayerSession(channel)); p.setIndex(next++); p.setUsername('varmine'+next); p.setRegistered(true); p.setLocation(new core.Location(3222,3218,0)); p.needsPlacement=false;
+  const p=new Player(new PlayerSession(channel)); p.setIndex(next++); p.setUsername('varmine'+next); p.setRegistered(true); p.setLocation(new core.Location(x,y,0)); p.needsPlacement=false;
   const c=new ClientConnection(channel); c.player=p;
   t.after(()=>{
     let active;
@@ -78,18 +78,24 @@ configurations.push(
 );
 
 for (const config of configurations) test(`native ordinary iron enhancers: ${config.label}`, async t => {
-  const f = actor(t), p = f.p, ids = core.ItemIdentifiers, skills = p.getSkillManager();
+  const x=config.hotfoot ? 1666 : 3222, y=config.hotfoot ? 3136 : 3218;
+  const f = actor(t,x,y), p = f.p, ids = core.ItemIdentifiers, skills = p.getSkillManager();
   p.setAttribute('bot-skip-persistence',true);
   if (config.bank) {
     p.setProfile('league');
     p.setAttribute('league:type',config.hotfoot ? 6 : 5);
     p.setAttribute('league:relics',config.hotfoot ? {0:1,1:1} : {0:1});
     if (!config.hotfoot) p.setAttribute('league:power-miner-mode','off');
-    const area = require('../plugins/modes/leagueareas/Regions.LeagueAreaUnlocks').areaAt(config.hotfoot ? 6 : 5,3222,3218);
+    const area = require('../plugins/modes/leagueareas/Regions.LeagueAreaUnlocks').areaAt(config.hotfoot ? 6 : 5,x,y);
     if (area !== null) p.setAttribute('league:areas',[area]);
   }
   PM.emitPlayerLogin({player:p,username:p.getUsername(),isNewAccount:false,profile:config.bank ? 'league' : 'main'});
-  p.setLocation(new core.Location(3222,3218,0)); p.needsPlacement=false;
+  p.setLocation(new core.Location(x,y,0)); p.needsPlacement=false;
+  if (config.hotfoot) {
+    const regions=require('../plugins/modes/leagueareas/Regions.LeagueAreaUnlocks');
+    assert.equal(regions.areaAt(6,x,y),21);
+    assert.equal(regions.isOpenAt(6,p,p.getLocation()),true,'Demonic Pacts permits this Varlamore fixture location');
+  }
   skills.setMaxLevel(core.Skill.MINING,99);
   skills.setExperience(core.Skill.MINING,core.SkillManager.getExperienceForLevel(99));
   skills.setCurrentLevel(core.Skill.MINING,99);
@@ -153,7 +159,8 @@ for (const config of configurations) test(`native ordinary iron enhancers: ${con
   assert.equal(bank.getAmount(ids.IRON_ORE),0);
   if (config.hotfoot) assert.equal(outputBank.getAmount(ids.STEEL_BAR),0);
   assert.equal(p.getInventory().getAmount(ids.IRON_ORE),0);
-  const at = new core.Location(3223,3218,0), rockId=core.CacheDefinitions.getLocId('ironrock2');
+  // The registered iron target is synthetic; this does not assert a rock spawn at the fixture tile.
+  const at = new core.Location(x+1,y,0), rockId=core.CacheDefinitions.getLocId('ironrock2');
   const emptyId=core.CacheDefinitions.getLocId('rocks2');
   assert.ok(rockId>=0 && emptyId>=0);
   const rock = new core.GameObject(rockId,at,10,0,null);
@@ -214,9 +221,13 @@ for (const config of configurations) test(`native ordinary iron enhancers: ${con
   const {GameConstants}=require('../dist/game/GameConstants');
   const startXp=skills.getExperience(core.Skill.MINING);
   const startSmithXp=skills.getExperience(core.Skill.SMITHING);
-  await f.c.dispatch([{type:'object_option',id:rockId,x:3223,y:3218,action:'Mine'}]);
+  await f.c.dispatch([{type:'object_option',id:rockId,x:x+1,y,action:'Mine'}]);
   for (let i=0;i<90 && (config.hotfoot ? successes===0 : !core.MapObjects.get(emptyId,at,null));i++)
     miningCancellationTurn(f);
+  if (config.hotfoot) {
+    assert.equal(p.getLocation().getX(),x); assert.equal(p.getLocation().getY(),y);
+    assert.equal(require('../plugins/modes/leagueareas/Regions.LeagueAreaUnlocks').isOpenAt(6,p,p.getLocation()),true);
+  }
   assert.ok(levels.length>0 && levels.every(level=>level===99),'the consuming roll reads visible level 99');
   assert.ok(p.getAttribute('mining:ores-mined')>0,'one real successful gather occurred');
   const baseGathers=config.bank && !config.hotfoot ? 4 : 1;

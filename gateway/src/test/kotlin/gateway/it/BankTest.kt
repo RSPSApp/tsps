@@ -68,6 +68,56 @@ class BankTest {
         }
     }
 
+    @Test
+    fun `tab containers swap by native drag and keep their order after relog`() {
+        val developer = LiveGateway.developerName
+        assumeTrue(developer != null, "DEV_USERNAME is required for the bank test account")
+        var original: List<Int> = emptyList()
+        var reordered: List<Int> = emptyList()
+        LiveGateway.login(developer!!).use { game ->
+            game.expect<RebuildLoginV2>()
+            game.bankAfter(LOGIN_TICKS, allowNone = true)
+            game.command("bank")
+            var opened = game.bankAfter(TICKS)
+            assumeTrue(tabSizes().sum() == 0, "use an account without custom tabs")
+            if (opened.size < 2) {
+                for (item in SEED_ITEMS) game.command("item $item 1")
+                game.bankAfter(TICKS, allowNone = true)
+                game.button(BANK, DEPOSIT_INVENTORY)
+                opened = game.bankAfter(TICKS)
+            }
+            original = opened
+            val last = opened.last()
+            game.drag(BANK, ITEMS, opened.lastIndex, last, BANK, TABS, TAB_1, NO_OBJ)
+            val oneTab = game.bankAfter(TICKS)
+            val penultimate = oneTab.last()
+            game.drag(BANK, ITEMS, oneTab.lastIndex, penultimate, BANK, TABS, TAB_1 + 1, NO_OBJ)
+            val before = game.bankAfter(TICKS)
+            assertEquals(listOf(last, penultimate), before.take(2))
+            game.drag(BANK, TABS, TAB_1, NO_OBJ, BANK, TABS, TAB_1 + 1, NO_OBJ)
+            reordered = game.bankAfter(TICKS)
+            assertEquals(listOf(penultimate, last) + before.drop(2), reordered)
+            assertEquals(original.sorted(), reordered.sorted(), "every item is preserved")
+            println("native tab reorder before=$before after=$reordered")
+        }
+        LiveGateway.login(developer).use { game ->
+            game.expect<RebuildLoginV2>()
+            game.bankAfter(LOGIN_TICKS, allowNone = true)
+            game.command("bank")
+            val loaded = game.bankAfter(TICKS)
+            assertEquals(reordered, loaded, "native disconnect/save/relogin preserves tab order")
+            assertEquals(listOf(1, 1), tabSizes().take(2))
+            println("native tab reorder after relog=$loaded")
+            // Restore the developer's original layout: swap back, then return tab2 before tab1.
+            game.drag(BANK, TABS, TAB_1, NO_OBJ, BANK, TABS, TAB_1 + 1, NO_OBJ)
+            val swappedBack = game.bankAfter(TICKS)
+            game.drag(BANK, ITEMS, 1, swappedBack[1], BANK, ITEMS, MAIN_TAB_DROP, NO_OBJ)
+            val firstLeft = game.bankAfter(TICKS)
+            game.drag(BANK, ITEMS, 0, firstLeft[0], BANK, ITEMS, MAIN_TAB_DROP, NO_OBJ)
+            assertEquals(original, game.bankAfter(TICKS), "original layout restored")
+        }
+    }
+
     /** Tabs 1-9's sizes, from their varbits. */
     private fun tabSizes(): List<Int> =
         (TAB_1_SIZE until TAB_1_SIZE + 9).map { id ->

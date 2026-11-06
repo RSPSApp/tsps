@@ -34,6 +34,12 @@ function enterCorrupted(event) {
 
 function startRun(player, corrupted) {
   if (Run.runOf(player)) return true;
+  const quest = { player, key: "song_of_the_elves", complete: null };
+  Shared.api().emitCustomEvent("quest:is-complete", quest);
+  if (quest.complete !== true) {
+    Shared.statement(player, "You need to complete Song of the Elves to enter the Gauntlet.");
+    return true;
+  }
   if (player.getAttribute(ATTR_SPOKEN_TO_BRYN) !== true) {
     Shared.npcSay(player, Shared.NPC.BRYN, BRYN.NOT_SPOKEN);
     return true;

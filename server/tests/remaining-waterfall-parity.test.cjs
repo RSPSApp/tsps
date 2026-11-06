@@ -201,7 +201,7 @@ test('start, raft, Hudon, bookcase, Golrie key and pebble use only normal intera
   assert.equal(p.attributes.get('quest.points'), undefined);
 
   q.call('onObjectInteraction', objectEvent(p, ID.raft, 2509, 3493));
-  assert.ok(p.packets.some(([method, , interfaceId]) => method === 'sendSubInterface' && interfaceId === 174),
+  assert.ok(p.packets.some(([method, , interfaceId]) => method === 'mountSubInterface' && interfaceId === 174),
     'raft fades out');
   assert.ok(p.packets.some(([method, group]) => method === 'sendChatboxInterface' && group === 229),
     'raft uses the captured messagebox');

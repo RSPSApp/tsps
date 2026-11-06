@@ -335,3 +335,195 @@ test("cutting amethyst: tips that do not fit leave the amethyst uncut", async (t
   assert.deepEqual(result, [MAX - 14, 1], "refused, nothing taken");
   assert.ok(f.messages.includes(SPACE_TEXT), "says why");
 });
+
+// This module-level setting is applied before the existing before hook loads plugins.
+const previousBotsSetting = process.env.DISABLE_PLAYER_BOTS;
+process.env.DISABLE_PLAYER_BOTS = "1";
+after(() => {
+  if (previousBotsSetting === undefined) delete process.env.DISABLE_PLAYER_BOTS;
+  else process.env.DISABLE_PLAYER_BOTS = previousBotsSetting;
+});
+
+test("emptying a bow string spool as notes conserves strings at the stack limit", async t => {
+  const Spool = require("../plugins/skills/fletching/Spool.Fletching");
+  const spoolId = I.BOW_STRING_SPOOL, stringId = I.BOW_STRING;
+  const noteId = core.ItemDefinition.forId(stringId).getNoteId();
+  const capacity = Spool.CAPACITY_BY_SPARES[0];
+  assert.equal(spoolId, 31052);
+  assert.equal(stringId, 1777);
+  assert.equal(capacity, 250);
+  assert.equal(core.CacheDefinitions.getObjId("bowstring_spool"), spoolId);
+  assert.equal(core.CacheDefinitions.getObjId("bow_string"), stringId);
+  assert.equal(core.CacheDefinitions.getObjId("cert_bow_string"), noteId);
+  assert.equal(core.ItemDefinition.forId(noteId).isNoted(), true);
+  assert.equal(core.ItemDefinition.forId(noteId).isStackable(), true);
+  assert.equal(core.ItemDefinition.forId(noteId).unNote(), stringId);
+  assert.equal(core.ItemDefinition.forId(stringId).isNoted(), false);
+  const chargesVarbit = core.CacheDefinitions.getVarbitId("bowstring_spool_charges");
+  const sizeVarbit = core.CacheDefinitions.getVarbitId("bowstring_spool_size");
+  assert.ok(Number.isInteger(chargesVarbit));
+  assert.ok(Number.isInteger(sizeVarbit));
+  const optionsWidget = core.CacheDefinitions.getComponentId("chatmenu:options");
+  assert.equal(optionsWidget, core.OptionDialogue.OPTIONS_WIDGET_ID);
+  const cases = [
+    { name: "room for all notes", seed: 500, topUp: 0 },
+    { name: "exact stack limit", seed: MAX, topUp: 0 },
+    { name: "125 notes of headroom", seed: MAX, topUp: 125 },
+    { name: "no note headroom", seed: MAX, topUp: capacity },
+  ];
+  for (const c of cases) {
+    await t.test(c.name, async t => {
+      const f = actor(t), p = f.p, inventory = f.inv;
+      const sender = p.getPacketSender(), manager = p.getDialogueManager();
+      put(f, item(spoolId), 0);
+      put(f, item(noteId, c.seed), 1);
+      inventory.refreshItems();
+      const initialGround = new Set(core.World.getItems());
+      t.after(() => {
+        p.closeInterruptibleInterfaces();
+        core.TaskManager.cancelTasks(p);
+        for (const ground of [...core.World.getItems()]) {
+          if (!initialGround.has(ground) && ground.getOwner() === p.getUsername()) {
+            core.ItemOnGroundManager.deregister(ground);
+            const index = core.World.getItems().indexOf(ground);
+            if (index >= 0) core.World.getItems().splice(index, 1);
+          }
+        }
+      });
+      const actions = [], taken = [];
+      const emitAction = PM.emitItemAction.bind(PM);
+      t.mock.method(PM, "emitItemAction", event => {
+        const result = emitAction(event);
+        if (event.player === p && event.itemId === spoolId) {
+          actions.push({ option: event.option, handled: event.handled, slot: event.slot });
+        }
+        return result;
+      });
+      const emit = PM.emitCustomEvent.bind(PM);
+      t.mock.method(PM, "emitCustomEvent", (name, event) => {
+        const result = emit(name, event);
+        if (name === "ground-items:taken" && event.player === p) {
+          taken.push({ source: event.source, itemId: event.itemId, amount: event.amount, discarded: event.discarded });
+        }
+        return result;
+      });
+      const itemAction = async option => {
+        const definition = core.CacheDefinitions.getItem(spoolId);
+        const slot = inventory.getItems().findIndex(held => held.getId() === spoolId);
+        const index = definition.inventoryActions.indexOf(option);
+        assert.ok(slot >= 0 && index >= 0, "cache-backed spool action " + option);
+        await send(f, { type: "inventory_action", widgetId: core.Inventory.INTERFACE_ID,
+          itemId: spoolId, slot, optionIndex: index + 1, option });
+        assert.deepEqual(actions.at(-1), { option, handled: true, slot });
+      };
+      const held = (container, id) => container.getItems().reduce((sum, entry) => sum
+        + (entry.getId() === id ? entry.getAmount() : 0), 0);
+      const owned = id => held(inventory, id) + held(p.getEquipment(), id)
+        + p.getBanks().reduce((sum, bank, tab) => sum
+          + (bank && tab !== core.Bank.BANK_SEARCH_TAB_INDEX ? held(bank, id) : 0), 0)
+        + core.World.getItems().filter(ground => !ground.isPendingRemoval()
+          && ground.getOwner() === p.getUsername()).reduce((sum, ground) => sum
+            + (ground.getItem().getId() === id ? ground.getItem().getAmount() : 0), 0);
+      const stored = () => Number(p.getAttribute(Spool.CHARGES_ATTRIBUTE) ?? 0);
+      const state = () => ({ notes: owned(noteId), strings: owned(stringId), stored: stored(),
+        inventoryNotes: inventory.getAmount(noteId), freeSlots: inventory.getFreeSlots(),
+        headroom: inventory.getAddableAmount(item(noteId, capacity)) });
+      const total = value => value.notes + value.strings + value.stored;
+      const xp = () => core.Skill.values().map(skill => p.getSkillManager().getExperience(skill));
+      const initialXp = xp();
+      assert.equal(inventory.getItems()[1].isPresetItem(), false);
+      assert.equal(stored(), 0, "account starts without injected string credit");
+      assert.equal(sender.getVarbit(sizeVarbit), 0, "default account capacity");
+      assert.equal(total(state()), c.seed);
+      await itemAction("Fill");
+      assert.equal(stored(), capacity, "real Fill consumes 250 noted bow strings");
+      assert.equal(sender.getVarbit(chargesVarbit), capacity);
+      assert.equal(inventory.getAmount(noteId), c.seed - capacity);
+      assert.equal(owned(stringId), 0);
+      assert.equal(total(state()), c.seed);
+      if (c.topUp > 0) {
+        const ground = core.ItemOnGroundManager.registers(p, item(noteId, c.topUp));
+        assert.equal(core.World.getItems().includes(ground), true);
+        assert.equal(core.ItemOnGroundManager.canSee(p, ground), true);
+        assert.equal(ground.getItem().getAmount(), c.topUp);
+        assert.equal(ground.getPosition().equals(p.getLocation()), true);
+        assert.equal(total(state()), c.seed + c.topUp, "seeded owned floor is included before Take");
+        const takeIndex = core.CacheDefinitions.getItem(noteId).groundActions.indexOf("Take");
+        assert.ok(takeIndex >= 0, "cache-backed noted bow string Take option");
+        assert.equal(p.getLastItemPickup().elapsedTime(300), true);
+        await send(f, { type: "ground_item_action", itemId: noteId, stackId: ground.getId(),
+          x: p.getLocation().getX(), y: p.getLocation().getY(), option: "Take", optionIndex: takeIndex + 1 });
+        assert.deepEqual(taken, [{ source: "pickup", itemId: noteId, amount: c.topUp, discarded: 0 }]);
+        assert.equal(inventory.getAmount(noteId), c.seed - capacity + c.topUp);
+        assert.equal(core.World.getItems().filter(entry => !entry.isPendingRemoval()
+          && entry.getOwner() === p.getUsername() && entry.getItem().getId() === noteId)
+          .reduce((sum, entry) => sum + entry.getItem().getAmount(), 0), 0, "native Take removed the seeded floor quantity");
+      }
+      const before = state();
+      assert.equal(before.stored, capacity);
+      assert.equal(before.freeSlots, inventory.capacity() - 2);
+      assert.equal(before.headroom, Math.min(capacity, MAX - before.inventoryNotes));
+      assert.equal(before.headroom, c.topUp ? capacity - c.topUp : capacity);
+      assert.equal(total(before), c.seed + c.topUp);
+      assert.deepEqual(xp(), initialXp, "Fill and Take award no XP");
+      await itemAction("Empty");
+      const prompt = manager.getCurrent();
+      assert.ok(prompt instanceof core.OptionDialogue, "Empty's native OptionDialogue owns the selection");
+      assert.equal(core.MultiChatboxPrompt.getPending(p), null);
+      assert.equal(prompt.getTitle(), "Empty the spool?");
+      assert.deepEqual(prompt.getOptions(), ["Take them as bow strings.", "Take them as notes.", "Cancel."]);
+      assert.equal(sender.getChatboxGroupId(), optionsWidget >>> 16);
+      assert.equal(manager.getOwner(), undefined);
+      assert.equal(total(state()), total(before), "opening the real prompt transfers nothing");
+      const choice = prompt.getOptions().indexOf("Take them as notes.") + 1;
+      assert.equal(choice, 2);
+      await send(f, { type: "dialogue_continue", widgetId: optionsWidget, childIndex: choice });
+      const after = state();
+      // A refusal, a partial withdrawal or a complete refund onto the floor can all conserve strings.
+      assert.equal(total(after), total(before), "all owned strings plus account storage: "
+        + JSON.stringify({ before, after }));
+      assert.equal(manager.isActive(), false, "decoded selection consumed the actual native option prompt");
+      assert.ok(Number.isInteger(after.stored) && after.stored >= 0 && after.stored <= capacity);
+      if (c.topUp === 0) {
+        assert.equal(after.stored, 0, "working withdrawal control empties the spool");
+        assert.equal(after.inventoryNotes, c.seed);
+      }
+      assert.equal(sender.getVarbit(chargesVarbit), after.stored);
+      assert.equal(owned(spoolId), 1);
+      assert.deepEqual(xp(), initialXp, "Empty awards no XP");
+    });
+  }
+});
+
+
+test("emptying a spool as unnoted strings keeps the remainder stored", async t => {
+  const Spool = require("../plugins/skills/fletching/Spool.Fletching");
+  const f = actor(t), p = f.p, inventory = f.inv;
+  const spoolId = I.BOW_STRING_SPOOL, stringId = I.BOW_STRING;
+  const noteId = core.ItemDefinition.forId(stringId).getNoteId();
+  const capacity = Spool.CAPACITY_BY_SPARES[0];
+  put(f, item(spoolId), 0);
+  put(f, item(noteId, capacity), 1);
+  inventory.refreshItems();
+  t.after(() => { p.closeInterruptibleInterfaces(); core.TaskManager.cancelTasks(p); });
+  const action = async option => {
+    const index = core.CacheDefinitions.getItem(spoolId).inventoryActions.indexOf(option);
+    assert.ok(index >= 0);
+    await send(f, { type: "inventory_action", widgetId: core.Inventory.INTERFACE_ID,
+      itemId: spoolId, slot: 0, optionIndex: index + 1, option });
+  };
+  await action("Fill");
+  assert.equal(p.getAttribute(Spool.CHARGES_ATTRIBUTE), capacity);
+  assert.equal(inventory.getAmount(noteId), 0);
+  const free = inventory.getFreeSlots();
+  assert.equal(free, inventory.capacity() - 1);
+  await action("Empty");
+  const prompt = p.getDialogueManager().getCurrent();
+  assert.ok(prompt instanceof core.OptionDialogue);
+  assert.equal(prompt.getOptions()[0], "Take them as bow strings.");
+  await send(f, { type: "dialogue_continue", widgetId: core.OptionDialogue.OPTIONS_WIDGET_ID, childIndex: 1 });
+  assert.equal(p.getDialogueManager().isActive(), false);
+  assert.equal(inventory.getAmount(stringId), free);
+  assert.equal(p.getAttribute(Spool.CHARGES_ATTRIBUTE), capacity - free);
+  assert.equal(inventory.getAmount(stringId) + p.getAttribute(Spool.CHARGES_ATTRIBUTE), capacity);
+});

@@ -26,6 +26,11 @@
  * used up unless the Guardian is active ("The portal talisman shatters and you find yourself at
  * the altar it originated from.").
  * The overlay colours of earth, mind, cosmic and death aren't captured; they borrow the closest.
+ *
+ * A logout ends the player's game (Temple), so a login at the altar of a trip they were on sends
+ * them back to the temple's lobby, as a login on the game's side of the barrier does; otherwise
+ * the altar's portal would take them out to its ruins with the game lost (issue 2698). The altar
+ * is saved for that, since the trip itself doesn't survive the logout.
  */
 
 const Shared = require("./Shared.GuardiansOfTheRift");
@@ -60,6 +65,8 @@ const ALTARS = [
 }));
 
 const RETURN_TILE = { x: 3615, y: 9491 };
+/** The altar (its key) the player is at on a trip, saved so a login there can be sent back. */
+const TRIP_ATTRIBUTE = "guardians-of-the-rift:altar-trip";
 const PORTAL_SOUND = 1098;
 const CRAFT_SOUND = 2710;
 const TALISMAN_CHANCE = 250;
@@ -100,6 +107,18 @@ function questDone(player, key) {
 
 // ------------------------------------------------------------------ trips
 
+/** The trip the player is on (an altar) or none; the altar it reached is saved too. */
+function setTrip(player, altar, arrived = false) {
+  player.__gotrTrip = altar;
+  if (!altar) player.setAttribute(TRIP_ATTRIBUTE, "");
+  else if (arrived) player.setAttribute(TRIP_ATTRIBUTE, altar.key);
+}
+
+function nearAltar(location, altar) {
+  return Math.abs(location.getX() - altar.arrival[0]) < ALTAR_RANGE
+    && Math.abs(location.getY() - altar.arrival[1]) < ALTAR_RANGE;
+}
+
 function overlay(player, altar, on) {
   if (Records.setting(player, "gotr_colourful_fade_disabled") === 1) return;
   const sender = player.getPacketSender();
@@ -126,12 +145,12 @@ function travel(player, altar, going, message, whileActive = false) {
   Shared.later(2, () => {
     if (!player.isRegistered()) return;
     if (whileActive && !isActive(altar)) {
-      player.__gotrTrip = null;
+      setTrip(player, null);
       overlay(player, altar, false);
       Shared.statement(player, "The Guardian is dormant. Its energy might return soon.");
       return;
     }
-    player.__gotrTrip = going ? altar : null;
+    setTrip(player, going ? altar : null, going);
     Shared.spam(player, message);
     const [x, y] = going ? altar.arrival : [RETURN_TILE.x, RETURN_TILE.y];
     player.moveTo(Shared.location({ x, y }));
@@ -148,7 +167,7 @@ function travel(player, altar, going, message, whileActive = false) {
 }
 
 function enterAltar(player, altar, whileActive = false) {
-  player.__gotrTrip = altar;
+  setTrip(player, altar);
   travel(player, altar, true, `You step through the rift and find yourself at the ${altar.name} Altar.`, whileActive);
 }
 
@@ -220,9 +239,18 @@ function onTrip(player) {
   const altar = player.__gotrTrip;
   if (!altar) return false;
   const location = player.getLocation();
-  const near = Math.abs(location.getX() - altar.arrival[0]) < ALTAR_RANGE && Math.abs(location.getY() - altar.arrival[1]) < ALTAR_RANGE;
-  if (!near && !Shared.inTemple(location)) player.__gotrTrip = null;
+  const near = nearAltar(location, altar);
+  if (!near && !Shared.inTemple(location)) setTrip(player, null);
   return near;
+}
+
+/** A login at the altar of the trip the logout ended: back to the temple's lobby. */
+function login({ player }) {
+  const key = player.getAttribute(TRIP_ATTRIBUTE);
+  if (!key) return;
+  player.setAttribute(TRIP_ATTRIBUTE, "");
+  const altar = ALTARS.find((candidate) => candidate.key === key);
+  if (altar && nearAltar(player.getLocation(), altar)) player.moveTo(Shared.location(Shared.LOBBY_TILE));
 }
 
 // ------------------------------------------------------------------ crafting
@@ -378,8 +406,10 @@ function attachGuardians(api) {
 }
 
 module.exports = {
-  ALTARS, isActive,
+  ALTARS, TRIP_ATTRIBUTE, isActive,
   attach(api) {
+    api.persistAttribute(TRIP_ATTRIBUTE, "");
+    api.onPlayerLogin(login);
     attachGuardians(api);
     api.onBeforeObjectInteraction(claimTrip);
     api.onNpcDialogueCondition(answerCondition);

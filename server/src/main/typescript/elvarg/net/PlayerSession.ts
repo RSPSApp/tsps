@@ -19,6 +19,8 @@ import {
   encodePlayerAppearance,
   encodeInitialPlayerSync,
   encodeLogoutResponse,
+  encodeHideNpcOps,
+  encodeHideObjOps,
   encodeWalkInteractionMode,
   encodeNpcSync,
   encodePlayerSync,
@@ -224,6 +226,8 @@ export class PlayerSession {
    */
   public logout(): void {
     this.sendClientPacket(encodeWalkInteractionMode());
+    this.sendClientPacket(encodeHideNpcOps(false));
+    this.sendClientPacket(encodeHideObjOps(false));
     this.sendClientPacket(encodeLogoutResponse());
     this.flushPackets();
     this.channel.close?.(1000, "logout");
@@ -310,6 +314,10 @@ export class PlayerSession {
 
     const initialSync = !this.playerSyncState;
     if (initialSync) {
+      // Live sends hidenpcops=false and hideobjops=false at login, so a world switch cannot
+      // inherit the previous world's cutscene state; the client keeps the booleans across logins.
+      this.sendClientPacket(encodeHideNpcOps(false));
+      this.sendClientPacket(encodeHideObjOps(false));
       this.sceneBaseX = Math.max(0, (sceneTile.x - 48) & ~7);
       this.sceneBaseY = Math.max(0, (sceneTile.y - 48) & ~7);
     } else {

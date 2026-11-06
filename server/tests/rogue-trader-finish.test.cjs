@@ -6,8 +6,8 @@
 //   "...travel on the carpets at a discounted rate.", and the menu.
 // The reward is the cheaper carpets (Wiki: 100 coins instead of 200, 75 instead of 100 with a Ring of Charos(a); free after the hard
 // Desert Diary as before): the fare of a Rug Merchant's Travel menu follows 914.
-// Not done, and not a capture: the four Alis (6552-6555, empty pages in the generated file) and the shop owners' remarks about
-// Ali (Wiki, Post-errand task), which are separate NPC dialogues.
+// Not done, and not a capture: the four Alis (6552-6555, empty pages in the generated file).
+// Dommik's menu and the shopkeeper condition gates are covered by rogue-trader-shopkeepers.test.cjs.
 // Real packets, real dispatch.
 const assert = require('node:assert/strict');
 const { before, after, test } = require('node:test');

@@ -21,6 +21,7 @@ const itemsComponent = () => cache().getComponentId(parcels().items);
 /** Transmit ops 1-7 on each item (the seven script 2855 sets). */
 const ITEM_OPS_FLAGS = 0xfe;
 const DEPOSIT_SOURCE = "deposit-box";
+const MAIN_MODAL = (161 << 16) | 16;
 
 const sticksId = () => Common.objId(Common.data.sticks.item);
 const sticksHeld = (player) => player.getInventory().getAmount(sticksId());
@@ -108,7 +109,10 @@ function onAction(event) {
   if (!isRionasta(event) || event.action !== "open_interface" || event.target !== parcels().action) return;
   event.handled = true;
   event.end = true;
-  Common.later(event.player, 1, () => open(event.player));
+  Common.later(event.player, 1, () => {
+    // Keep a newer main interface in place while this request was deferred.
+    if (!event.player.getPacketSender().getSubInterfaceAt(MAIN_MODAL)) open(event.player);
+  });
 }
 
 /** Send-parcel: as the conversation's request, without the talk. */

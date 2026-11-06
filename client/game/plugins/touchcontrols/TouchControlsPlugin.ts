@@ -14,6 +14,8 @@ import type { LocType } from "../../../rs/config/loctype/LocType";
 import type { NpcType } from "../../../rs/config/npctype/NpcType";
 import { baseNpcTypeId } from "../../../custom/npcs/NpcModelOverrideRegistry";
 import { getNpcMenuOptions } from "../../menu/WorldMenuBuilder";
+import { npcOpsVisibility } from "../../NpcOpsVisibility";
+import { groundObjOpsVisibility } from "../../GroundObjOpsVisibility";
 import { stripTags } from "../npcindicators/npcMatching";
 import { RS_TO_RADIANS } from "../../../rs/MathConstants";
 import { MOBILE_ROOT_INTERFACE } from "../../../rs/cs2/ClientType";
@@ -343,6 +345,13 @@ export class TouchControlsPlugin extends Plugin implements ClientPlugin {
             this.itemsKey = "";
             return;
         }
+        // set_hide_npc_actions hides NPC actions everywhere, held button included.
+        if (npcOpsVisibility.hidden && this.focus?.kind === "npc") this.focus = this.npcUnder = undefined;
+        // hideobjops likewise; the key resets so the pile refocuses once shown again.
+        if (groundObjOpsVisibility.hidden && this.focus?.kind === "obj") {
+            this.focus = this.itemsUnder = undefined;
+            this.itemsKey = "";
+        }
         // An NPC walking off (or a new collision) must not swap the button under a held finger.
         if (this.pinned && this.focus) return;
         const scanKey = `${player.x},${player.y},${player.plane},${this.gameTicks},${this.client.groundItems?.getVersion()}`;
@@ -392,7 +401,7 @@ export class TouchControlsPlugin extends Plugin implements ClientPlugin {
     private npcAt(x: number, y: number, plane: number): Extract<TouchTarget, { kind: "npc" }> | undefined {
         const npcs = this.client.npcEcs;
         const loader = this.client.npcTypeLoader;
-        if (!npcs || !loader) return undefined;
+        if (!npcs || !loader || npcOpsVisibility.hidden) return undefined;
         let found: Extract<TouchTarget, { kind: "npc" }> | undefined;
         npcs.forEachActive((ecsId) => {
             const serverId = npcs.getServerId(ecsId);
@@ -417,7 +426,7 @@ export class TouchControlsPlugin extends Plugin implements ClientPlugin {
      */
     private itemsAt(x: number, y: number, plane: number): Extract<TouchTarget, { kind: "obj" }> | undefined {
         const { groundItems, objTypeLoader: loader, clientPlugins: plugins } = this.client;
-        if (!groundItems || !loader) return undefined;
+        if (!groundItems || !loader || groundObjOpsVisibility.hidden) return undefined;
         const options: ObjOption[] = [];
         for (const stack of groundItems.getStacksAt(x, y, plane).reverse()) {
             let type;

@@ -165,6 +165,7 @@ test('the Woodcutting request uses per-log farmed depletion while wild redwoods 
         getEquipment: () => ({ getItems: () => [], get: () => null }),
         getSkillManager: () => ({ getCurrentLevel: () => 99, stopSkillable() {}, addExperiences() {} }),
         getCombat: () => ({ reset() {} }), getForceMovement: () => null,
+        getRunEnergyUnits: () => 10000,
         getMovementQueue: () => ({ size: () => 0 }), getHitpoints: () => 99, isRegistered: () => true,
         getLocation: () => branches[0].getLocation().clone(),
         setPositionToFace() {}, performAnimation() {}, sendMessage() {},

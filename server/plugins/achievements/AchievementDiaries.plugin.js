@@ -124,6 +124,7 @@ module.exports = {
     Journal(api);
     Rewards(api);
     Lamps(api);
+    require("./diaries/Cape.AchievementDiaries")(api);
     require("./diaries/Actions.AchievementDiaries")(api);
     require("./diaries/Desert.AchievementDiaries")(api);
     require("./diaries/Morytania.AchievementDiaries")(api);

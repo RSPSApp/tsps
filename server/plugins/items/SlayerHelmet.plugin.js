@@ -161,7 +161,7 @@ function helmUnlocked(player) {
 
 function assemble(event) {
   if (event.handled) return;
-  const { player, usedItemId, usedWithItemId } = event;
+  const { player, usedItem, usedWithItem, usedItemId, usedWithItemId, usedItemSlot, usedWithItemSlot } = event;
   const scrollOnUsed = isImbueScroll(usedItemId);
   const scrollOnWith = isImbueScroll(usedWithItemId);
   const usingScroll = scrollOnUsed || scrollOnWith;
@@ -172,7 +172,11 @@ function assemble(event) {
     return;
   }
   const inventory = player.getInventory();
-  const mask = findMask(inventory);
+  const maskOnUsed = maskId(usedItemId) != null && PARTS.includes(usedWithItemId);
+  const maskOnWith = maskId(usedWithItemId) != null && PARTS.includes(usedItemId);
+  const selectedMask = maskOnUsed ? usedItem : maskOnWith ? usedWithItem : null;
+  const selectedSlot = maskOnUsed ? usedItemSlot : usedWithItemSlot;
+  const mask = selectedMask ?? findMask(inventory);
   if (!mask || PARTS.some((part) => !inventory.contains(part))) return;
   event.handled = true;
   if (!helmUnlocked(player)) {
@@ -184,7 +188,8 @@ function assemble(event) {
     return;
   }
   const imbued = usingScroll || maskId(mask.getId()) === "imbued";
-  inventory.deleteNumber(mask.getId(), 1);
+  if (selectedMask) inventory.deleteAtSlot(selectedSlot, 1);
+  else inventory.deleteNumber(mask.getId(), 1);
   for (const part of PARTS) inventory.deleteNumber(part, 1);
   if (usingScroll) inventory.deleteNumber(scrollOnUsed ? Number(usedItemId) : Number(usedWithItemId), 1);
   inventory.adds(imbued ? ItemIdentifiers.SLAYER_HELMET_I_ : ItemIdentifiers.SLAYER_HELMET, 1);

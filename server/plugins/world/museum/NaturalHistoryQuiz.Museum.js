@@ -16,8 +16,10 @@
  * case's plaque showing the display without the quiz. The captured last case ends on the
  * ordinary "that's all of them" lines, not the Wiki's longer last-case variant.
  *
- * Not sent: if_setrotatespeed on the models (no such packet in tsps yet, so they stand
- * still) and the vm_kudos HUD overlay, which the museum does not have yet.
+ * Models: recording 1723 sends IF_SETROTATESPEED for interface 533 components 2, 3, 7-12
+ * and 17-20 (xSpeed 0, ySpeed 5) each time a case opens. The dragon (4-6) and seaslug
+ * (13-16) model components got no rotate-speed packet in that capture, so they are left
+ * still rather than spun by guess. The vm_kudos HUD is mounted by the museum plugin.
  */
 "use strict";
 
@@ -46,6 +48,14 @@ const KUDOS_PER_CASE = 2;
 const REWARD_XP = 1000;
 const SOUND_RIGHT_ANSWER = 3648;
 const SOUND_KUDOS = 3653;
+/**
+ * IF_SETROTATESPEED in recording 1723 rotates exactly these vm_natural_history (533) model
+ * components, one per single-model case. Components 4-6 (dragon) and 13-16 (seaslugs) got no
+ * rotate packet in the capture; do not spin them without evidence.
+ */
+const ROTATED_QUIZ_COMPONENTS = new Set([2, 3, 7, 8, 9, 10, 11, 12, 17, 18, 19, 20]);
+const ROTATE_SPEED_X = 0;
+const ROTATE_SPEED_Y = 5;
 const NOT_AGREED_MESSAGE = "This looks like some sort of quiz. I wonder if I can take part...";
 const KUDOS_MESSAGE = "You have earned Kudos with the Museum!";
 const REWARD_MESSAGE = "You have gained 1000xp in Slayer and Hunter.";
@@ -133,7 +143,12 @@ function openCase(player, entry) {
   sender.sendInterface(ids.interfaceId);
   sender.sendString(entry.title, ids.title);
   sender.sendString(String(entry.number), ids.number);
-  for (const model of entry.models) sender.sendInterfaceRawModel(model.uid, model.model);
+  for (const model of entry.models) {
+    sender.sendInterfaceRawModel(model.uid, model.model);
+    if (ROTATED_QUIZ_COMPONENTS.has(model.uid & 0xffff)) {
+      sender.sendInterfaceRotateSpeed(model.uid, ROTATE_SPEED_X, ROTATE_SPEED_Y);
+    }
+  }
   if (progress < QUESTIONS_PER_CASE) {
     const question = entry.questions[progress];
     sender.sendString(question.question, ids.question);

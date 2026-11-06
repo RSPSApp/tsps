@@ -83,8 +83,6 @@ const STEW_COST = 20;
 const GRANITE_BODY_COST = 95000;
 const SUPERANTIPOISON_LEVEL = 48;
 const YEW_LONGBOW_LEVEL = 70;
-const STAMINA_MIX_LEVEL = 86;
-const STAMINA_MIX_XP = 60;
 const SHARKS_REQUIRED = 5;
 
 const BA_SHOP_ID = 1427;
@@ -437,28 +435,10 @@ function equipmentChanged({ player }) {
 
 // ---------------------------------------------------------------- stamina mix
 
-function staminaMix(event) {
-  const { player, usedItemId, usedWithItemId } = event;
-  if (!active(player)) return false;
-  const pair = [usedItemId, usedWithItemId];
-  if (!pair.includes(STAMINA_POTION_2) || !pair.includes(CAVIAR)) return false;
-  if (!inBox(player.getLocation(), SEERS_BANK_ROOF)) {
-    player.sendMessage("You need to mix that on top of the Seers' Village bank.");
-    return true;
-  }
-  if (player.getSkillManager().getCurrentLevel(core.Skill.HERBLORE) < STAMINA_MIX_LEVEL) {
-    player.sendMessage(`You need a Herblore level of at least ${STAMINA_MIX_LEVEL} to mix that.`);
-    return true;
-  }
-  const inventory = player.getInventory();
-  if (!inventory.contains(STAMINA_POTION_2) || !inventory.contains(CAVIAR)) return false;
-  inventory.deleteNumber(STAMINA_POTION_2, 1);
-  inventory.deleteNumber(CAVIAR, 1);
-  inventory.adds(STAMINA_MIX_2, 1);
-  player.getSkillManager().addExperiences(core.Skill.HERBLORE, STAMINA_MIX_XP);
+/** The stamina mix is Herblore's barbarian recipe (it needs Barbarian Training); this credits one made on the bank roof. */
+function staminaMix({ player, itemId }) {
+  if (!active(player) || itemId !== STAMINA_MIX_2 || !inBox(player.getLocation(), SEERS_BANK_ROOF)) return;
   credit(player, TASK.staminaMix);
-  event.handled = true;
-  return true;
 }
 
 function firemakingSuccess({ player, itemId, bow }) {
@@ -503,6 +483,7 @@ module.exports = {
     registry.onCustomEvent("woodcutting:success", woodcuttingSuccess);
     registry.onCustomEvent("fletching:made", fletchingMade);
     registry.onCustomEvent("herblore:made", herbloreMade);
+    registry.onCustomEvent("herblore:made", staminaMix);
     registry.onCustomEvent("agility:obstacle", agilityObstacle);
     registry.onCustomEvent("equipment:changed", equipmentChanged);
     registry.onCustomEvent("construction:house-redecorated", houseRedecorated);
@@ -516,7 +497,6 @@ module.exports = {
       "Search for traps": hemensterChest,
     });
     registry.onObjectInteraction("Blackboard", { Read: blackboardRead });
-    registry.onItemOnItem(staminaMix, { noted: false });
     registry.onCustomEvent("npc-dialogue:action", openCandleShop);
   },
   _test: {

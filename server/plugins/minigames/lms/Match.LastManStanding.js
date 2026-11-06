@@ -187,15 +187,71 @@ class Game {
     return tiles.length ? tiles : [this.area.at([...this.zone.centre, 0])];
   }
 
-  /** A walkable tile within `range` of a location on the copy, or null. */
+  /**
+   * A tile within `range` of a location on the copy that a player can walk off, or null. Being
+   * standable is not enough: a chest beside a fence or the map's edge has open tiles on the far
+   * side that nothing connects to the island (issue 2701).
+   */
   openTileNear(location, range) {
     const { Location } = Common.core;
-    for (let attempt = 0; attempt < 20; attempt++) {
+    const z = location.getZ();
+    const ground = z === 0 ? this.ground() : null;
+    for (let attempt = 0; attempt < 40; attempt++) {
       const x = location.getX() + Common.randomInt(-range, range);
       const y = location.getY() + Common.randomInt(-range, range);
-      if (Common.standable(x, y, location.getZ(), this.area)) return new Location(x, y, location.getZ());
+      if (!Common.standable(x, y, z, this.area)) continue;
+      if (ground && !ground.has(this.groundKey(x, y))) continue;
+      return new Location(x, y, z);
     }
     return null;
+  }
+
+  groundKey(x, y) {
+    return (x - this.area.getBaseX()) * 0x10000 + (y - this.area.getBaseY());
+  }
+
+  /**
+   * The island's open ground on plane 0: the largest set of tiles joined by steps a player can
+   * take, walls and fences included. Pockets cut off from it (behind a fence at the map's edge,
+   * a shut building) are left out. Worked out once a game, on first use.
+   */
+  ground() {
+    if (this.groundTiles) return this.groundTiles;
+    const { RegionManager } = Common.core;
+    const [w, h] = this.map.size;
+    const width = w * 8;
+    const height = h * 8;
+    const baseX = this.area.getBaseX();
+    const baseY = this.area.getBaseY();
+    const seen = new Set();
+    let largest = new Set();
+    const steps = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+    for (let sx = 0; sx < width; sx++) {
+      for (let sy = 0; sy < height; sy++) {
+        const start = this.groundKey(baseX + sx, baseY + sy);
+        if (seen.has(start) || !Common.standable(baseX + sx, baseY + sy, 0, this.area)) continue;
+        const region = new Set([start]);
+        seen.add(start);
+        const queue = [[baseX + sx, baseY + sy]];
+        while (queue.length) {
+          const [x, y] = queue.pop();
+          for (const [dx, dy] of steps) {
+            const nx = x + dx;
+            const ny = y + dy;
+            if (nx < baseX || ny < baseY || nx >= baseX + width || ny >= baseY + height) continue;
+            const key = this.groundKey(nx, ny);
+            if (seen.has(key) || !Common.standable(nx, ny, 0, this.area)) continue;
+            if (!RegionManager.canMove(x, y, nx, ny, 0, 1, 1, this.area)) continue;
+            seen.add(key);
+            region.add(key);
+            queue.push([nx, ny]);
+          }
+        }
+        if (region.size > largest.size) largest = region;
+      }
+    }
+    this.groundTiles = largest;
+    return largest;
   }
 
   enter(player, tile) {
@@ -488,6 +544,14 @@ function bypassPrayerUnlocks(event) {
   if (gameOf(event.player)) event.bypass = true;
 }
 
+/**
+ * In a game the client draws Zeal in Piety's place whatever the account unlocked (cs2 10157 ->
+ * 10194), and live players use it there (rsprox 20261026T161730, Max/Med games).
+ */
+function zealReplacesPiety(event) {
+  if (gameOf(event.player)) event.replaces = true;
+}
+
 /** Wiki: run energy never runs out in a game. */
 function noDrain(entity, amount) {
   return gameOf(Common.asPlayer(entity)) ? 0 : amount;
@@ -532,6 +596,7 @@ function attachMatch(api) {
   api.onCanGainExperience(noExperience);
   api.onPrayerDisabled(prayerDisabled);
   api.onCustomEvent("prayer:unlocks-bypass", bypassPrayerUnlocks);
+  api.onCustomEvent("prayer:zeal-replaces-piety", zealReplacesPiety);
   api.registerRunEnergyDrainModifier(noDrain);
 }
 

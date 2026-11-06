@@ -5,6 +5,7 @@
 // other league's character with the same slots, not a main character. Through the owners' own
 // code: the shop's buy and sell, the alchemy cast, the bone altars' offering, Farming's planting
 // and picking, and Managing Miscellania's upkeep.
+process.env.DISABLE_PLAYER_BOTS = "1";
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const { test, before, afterEach } = require("node:test");
@@ -35,8 +36,15 @@ let Data;
 let Model;
 let Patches;
 let Guild;
+let Vault;
 let Kingdom;
 const farming = {};
+let farmingOptionHandler;
+const harvestEvents = new WeakMap();
+const onlineFixtures = new WeakMap();
+const onlineActors = new WeakSet();
+const plantingObservers = new WeakMap();
+const observedPinChecks = new WeakMap();
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
@@ -49,6 +57,15 @@ before(async () => {
   GameConstants.setWorldProfile("league"); // a Trailblazer Reloaded world (the league type is the plugin config below)
   // Core and Farming emit through the real PluginManager; the plugins here emit through this api.
   const real = PluginManager.createApi("LeagueRelicEconomyTest");
+  real.onCustomEvent("farming:plant-rules", (event) => plantingObservers.get(event.player)?.(event));
+  real.onCustomEvent("bank-pin:guard", ({ player }) => {
+    const observed = observedPinChecks.get(player);
+    if (observed) observed.count++;
+  });
+  for (const name of ["farming:harvested", "farming:harvest"]) real.onCustomEvent(name, (event) => {
+    const counts = harvestEvents.get(event.player);
+    if (counts) counts[name] = (counts[name] ?? 0) + 1;
+  });
   const lists = {};
   const on = (name) => (handler) => {
     (lists[name] ??= []).push(handler);
@@ -76,6 +93,10 @@ before(async () => {
     onInterfaceActionButton: (ids, handler) => {
       for (const id of [].concat(ids)) on(`button:${id}`)(handler);
     },
+    onCanGainExperience: (handler) => {
+      on("onCanGainExperience")(handler);
+      real.onCanGainExperience((event) => { if (onlineActors.has(event.player)) handler(event); });
+    },
     onCustomEvent: (name, handler) => {
       custom[name] = (custom[name] ?? []).concat(handler);
       real.onCustomEvent(name, handler);
@@ -97,8 +118,12 @@ before(async () => {
   Model = require("../plugins/skills/farming/Model.Farming");
   Patches = require("../plugins/skills/farming/Patches.Farming");
   Guild = require("../plugins/skills/farming/Guild.Farming");
+  Vault = require("../plugins/skills/farming/Vault.Farming");
   Data.initializeFarmingData();
-  Patches.attach(new Proxy({}, { get: (_, name) => (...args) => { farming[name] ??= args[0]; } }));
+  Patches.attach(new Proxy({}, { get: (_, name) => (...args) => {
+    farming[name] ??= args[0];
+    if (name === "onInterfaceActionClick" && args[0].name === "farmingOptionClick") farmingOptionHandler = args[0];
+  } }));
   api.onCustomEvent("farming:open-seed-vault", Guild.openSeedVault);
 });
 
@@ -430,8 +455,16 @@ function pick(player, patch) {
 }
 
 function mockScenery(t) {
-  t.mock.property(require("../plugins/skills/farming/Core.Farming"), "MapObjects", { get: () => null });
-  t.mock.property(require("../plugins/skills/farming/Core.Farming"), "ObjectDefinition", { forPlayer: () => ({ getInteractions: () => ["Pick"], getName: () => "Herb patch" }) });
+  const farmingCore = require("../plugins/skills/farming/Core.Farming");
+  const originals = ["MapObjects", "ObjectDefinition"].map((key) => [key, Object.getOwnPropertyDescriptor(farmingCore, key)]);
+  t.after(() => {
+    for (const [key, descriptor] of originals) {
+      if (descriptor) Object.defineProperty(farmingCore, key, descriptor);
+      else delete farmingCore[key];
+    }
+  });
+  farmingCore.MapObjects = { get: () => null, getType: () => null };
+  farmingCore.ObjectDefinition = { forPlayer: () => ({ getInteractions: () => ["Pick"], getName: () => "Herb patch" }) };
   t.mock.method(require("../plugins/skills/farming/Services.Farming"), "cropRewards", () => {});
 }
 
@@ -515,6 +548,500 @@ test("Overgrown: 75% to keep the seed, crops never die; the vault opens the seed
     player.setNeedsPlacement(false);
     itemActions.get("Leprechaun's vault").Open({ player, slot: 0 });
     assert.equal(player.interfaces.length, 0, `${player.getUsername()}'s vault does nothing`);
+  }
+});
+
+// Scope deterministic rolls to the function that actually consumes them; all other RNG is real.
+function farmingRandom({ saveSeed = false, contractRoll = null } = {}) {
+  const calls = { planting: 0, assignment: 0 };
+  Math.random = () => {
+    const frame = new Error().stack.split("\n")[2] ?? "";
+    if (frame.includes("Overgrown.LeagueRelics.js") && /\bat (?:Object\.)?planting\b/.test(frame)) { calls.planting++; return saveSeed ? 0.1 : 0.99; }
+    if (frame.includes("Patches.Farming.js") && /\bat (?:Object\.)?(?:automaticHerb|harvest)\b/.test(frame)) return 0.99;
+    if (frame.includes("Model.Farming.js") && /\bat (?:Object\.)?advanceFarm\b/.test(frame)) return 0.99;
+    if (contractRoll !== null && frame.includes("Guild.Farming.js") && /\bat (?:Object\.)?assign\b/.test(frame)) { calls.assignment++; return contractRoll; }
+    return realRandom();
+  };
+  return calls;
+}
+// The automatic cycle uses the existing growth and vault actions, with an online tracked player.
+function onlineHerb(t, name, picks = OVERGROWN, seedCount = 2, patch = HERB_PATCH(), compost = "Ultracompost", profile = "league", leagueType = 5) {
+  let fixture = onlineFixtures.get(t);
+  if (!fixture) {
+    fixture = { players: [], errors: [] };
+    onlineFixtures.set(t, fixture);
+    const report = console.error.bind(console);
+    t.mock.method(console, "error", (...args) => { fixture.errors.push(args); report(...args); });
+    t.after(() => {
+      for (const actor of fixture.players) {
+        try { farming.onPlayerLogout({ player: actor }); Vault.logout({ player: actor }); }
+        catch (error) { fixture.errors.push([error]); }
+      }
+      assert.deepEqual(fixture.errors, [], "no swallowed Farming errors or teardown failures");
+    });
+  }
+  const player = character(name, profile, picks, leagueType);
+  fixture.players.push(player);
+  onlineActors.add(player);
+  harvestEvents.set(player, {});
+  const previousSender = player.getPacketSender();
+  const sender = new Proxy(previousSender, { get(target, key) {
+    return key === "getVarbit" || key === "getVarp" ? () => 0 : Reflect.get(target, key);
+  } });
+  player.getPacketSender = () => sender;
+  const state = farmer(player, patch);
+  const skill = player.getSkillManager();
+  const { SkillManager } = require("../dist/game/content/skill/SkillManager");
+  skill.setExperience(Skill.FARMING, SkillManager.getExperienceForLevel(99));
+  player.setNeedsPlacement(false);
+  farming.onPlayerLogin({ player });
+  const seed = Data.itemId("Guam seed"), herb = Data.itemId("Grimy guam leaf");
+  assert.equal(seed, 5291, "active cache matches pinned guam_seed");
+  assert.equal(herb, 199, "active cache matches pinned unidentified_guam");
+  if (seedCount) depositSeeds(player, seed, seedCount);
+  const ultra = Data.itemId(compost);
+  player.getInventory().add(new Item(ultra), false);
+  farming.onItemOnObject({ player, object: { getId: () => patch.id }, location: { x: patch.x, y: patch.y, z: patch.z },
+    itemId: ultra, itemSlot: player.getInventory().getSlotForItemId(ultra) });
+  for (let i = 0; i < 2; i++) Patches.tick();
+  assert.equal(state.compost, compost === "Ultracompost" ? 3 : 2, "real compost action completed");
+  plant(player, patch, seed);
+  assert.equal(state.status, "growing", "manual seed planting completed");
+  return { player, patch, state, seed, herb, farm: player.getAttribute(Patches.FARM_ATTRIBUTE) };
+}
+function depositSeeds(player, seed, count) {
+  const farm = player.getAttribute(Patches.FARM_ATTRIBUTE);
+  const before = farm.vault?.[seed] ?? 0;
+  for (let i = 0; i < count; i++) player.getInventory().add(new Item(seed), false);
+  const carried = amount(player, seed);
+  player.getInterfaceId = () => core.CacheDefinitions.getInterfaceId("seed_vault");
+  Vault.open({ player, anywhere: true });
+  Vault.click({ player, buttonId: core.CacheDefinitions.getComponentId("seed_vault:deposit_all"), action: 1 });
+  assert.equal(farm.vault[seed], before + carried, "vault deposit producer");
+  assert.equal(amount(player, seed), 0);
+}
+function matureHerb(player) {
+  const event = { player, ms: 4 * 60 * 60 * 1000, handledBy: [] };
+  Patches.advanceTime(event);
+  assert.deepEqual(event.handledBy, ["Farming"], "actual online growth hook");
+}
+function bankAmount(player, id) {
+  return player.getBank(core.Bank.getTabForItem(player, id)).getAmount(id);
+}
+
+test("Overgrown: treated herbs mature online into bank and replant repeatedly from vault", (t) => {
+  mockScenery(t);
+  farmingRandom();
+  const { player, patch, state, seed, herb, farm } = onlineHerb(t, "autogrow", OVERGROWN, 2);
+  const key = Data.patchKey(patch), xp = player.getSkillManager().getExperience(Skill.FARMING);
+  const rewards = require("../plugins/skills/farming/Services.Farming").cropRewards;
+  const skill = player.getSkillManager(), awardCalls = [], realAward = skill.addExperiences.bind(skill);
+  const crop = Data.CROPS.get("GUAM");
+  const pickGate = PluginManager.emitCanGainExperience(player, Skill.FARMING, crop.harvest);
+  const plantGate = PluginManager.emitCanGainExperience(player, Skill.FARMING, crop.plant);
+  assert.ok(pickGate.multiplier > 1, "registered League experience multiplier is active");
+  const applied = (base, gate) => Math.floor(base * GameConstants.EXPERIENCE_MULTIPLIER * gate.multiplier * 10 + 1e-6) / 10;
+  const expectedXp = 6 * applied(crop.harvest, pickGate) + applied(crop.plant, plantGate);
+  t.mock.method(skill, "addExperiences", (which, xpAmount) => { awardCalls.push([which, xpAmount]); return realAward(which, xpAmount); });
+  assert.equal(bankAmount(player, herb), 0);
+  matureHerb(player);
+  assert.equal(state.lives, 0);
+  assert.equal(bankAmount(player, herb), 6, "six individual crops deposited");
+  assert.equal(amount(player, herb), 0, "not carried");
+  assert.equal(farm.vault[seed], 1, "one matching vault seed consumed");
+  assert.equal(farm.patches[key].status, "growing");
+  assert.equal(farm.patches[key].crop, "GUAM");
+  assert.equal(farm.patches[key].compost, 3);
+  assert.equal(Math.round((skill.getExperience(Skill.FARMING) - xp) * 10), Math.round(expectedXp * 10),
+    "actual XP delta matches each native multiplied award exactly once");
+  assert.deepEqual(awardCalls, [...Array(6)].map(() => [Skill.FARMING, crop.harvest]).concat([[Skill.FARMING, crop.plant]]),
+    "each banked pick and the pending planting XP are awarded once at native base rates");
+  assert.equal(rewards.mock.calls.length, 0, "no pet or Hespori roll");
+  assert.deepEqual(harvestEvents.get(player), {}, "no manual harvesting or task events");
+  matureHerb(player);
+  assert.equal(bankAmount(player, herb), 12, "second real growth produces one more crop");
+  assert.equal(farm.vault[seed], 0);
+  assert.equal(farm.patches[key].status, "growing");
+  matureHerb(player);
+  assert.equal(bankAmount(player, herb), 12, "no vault seed means no later automatic harvest");
+  assert.equal(farm.patches[key].status, "grown");
+});
+
+test("Overgrown: no matching seed and no relic leave a grown patch for manual harvest", (t) => {
+  mockScenery(t);
+  farmingRandom();
+  for (const [name, picks, seedCount] of [["noseed", OVERGROWN, 0], ["norelic", {}, 2]]) {
+    const { player, patch, state, herb } = onlineHerb(t, name, picks, seedCount);
+    matureHerb(player);
+    assert.equal(state.status, "grown");
+    assert.equal(bankAmount(player, herb), 0);
+    pick(player, patch);
+    assert.equal(amount(player, herb), 1, "ordinary manual pick still works");
+    assert.equal(harvestEvents.get(player)["farming:harvested"], 1, "observer sees the manual event");
+  }
+});
+
+test("Overgrown: full bank defers without losing seed, herbs or XP", (t) => {
+  mockScenery(t);
+  farmingRandom();
+  const { player, state, seed, herb, farm } = onlineHerb(t, "fullbank", OVERGROWN, 1);
+  const bank = player.getBank(core.Bank.getTabForItem(player, herb));
+  bank.add(new Item(herb, 2147483647), false);
+  assert.equal(bank.getAmount(herb), 2147483647);
+  const xp = player.getSkillManager().getExperience(Skill.FARMING);
+  matureHerb(player);
+  assert.equal(state.status, "grown");
+  assert.equal(state.lives, 6);
+  assert.equal(bank.getAmount(herb), 2147483647);
+  assert.equal(farm.vault[seed], 1);
+  assert.equal(player.getSkillManager().getExperience(Skill.FARMING), xp);
+});
+
+test("Overgrown: partially banked herbs resume once without duplicating output or seed", (t) => {
+  mockScenery(t);
+  farmingRandom();
+  const { player, patch, state, seed, herb, farm } = onlineHerb(t, "partial", OVERGROWN, 1);
+  const bank = player.getBank(core.Bank.getTabForItem(player, herb));
+  bank.add(new Item(herb, 2147483646), false);
+  const xp = player.getSkillManager().getExperience(Skill.FARMING);
+  matureHerb(player);
+  assert.equal(bank.getAmount(herb), 2147483647);
+  assert.equal(state.lives, 5);
+  assert.equal(farm.vault[seed], 1, "seed remains until harvest completes");
+  assert.ok(player.getSkillManager().getExperience(Skill.FARMING) > xp);
+  bank.deleteNumber(herb, 10);
+  Patches.advanceTime({ player, ms: 0, handledBy: [] });
+  assert.equal(bank.getAmount(herb), 2147483642, "five remaining herbs deposited once");
+  assert.equal(state.lives, 0);
+  assert.equal(farm.vault[seed], 0);
+  assert.equal(farm.patches[Data.patchKey(patch)].status, "growing");
+  Patches.advanceTime({ player, ms: 0, handledBy: [] });
+  assert.equal(bank.getAmount(herb), 2147483642, "refresh cannot duplicate harvest");
+});
+
+test("Overgrown: a manual pick cancels the partial cycle on the same patch state", (t) => {
+  mockScenery(t);
+  farmingRandom();
+  const { player, patch, state, seed, herb, farm } = onlineHerb(t, "manualcancel", OVERGROWN, 1);
+  const bank = player.getBank(core.Bank.getTabForItem(player, herb));
+  bank.add(new Item(herb, 2147483646), false);
+  matureHerb(player);
+  assert.equal(state.lives, 5);
+  bank.deleteNumber(herb, 10);
+  const before = bank.getAmount(herb);
+  pick(player, patch);
+  assert.equal(state.lives, 4);
+  assert.equal(amount(player, herb), 1);
+  Patches.advanceTime({ player, ms: 0, handledBy: [] });
+  assert.equal(bank.getAmount(herb), before);
+  assert.equal(farm.vault[seed], 1);
+  assert.equal(farm.patches[Data.patchKey(patch)], state);
+});
+
+test("Overgrown: depositing the seed after maturity does not restart the missed cycle", (t) => {
+  mockScenery(t);
+  farmingRandom();
+  const { player, patch, state, seed, herb, farm } = onlineHerb(t, "lateseed", OVERGROWN, 0);
+  matureHerb(player);
+  assert.equal(state.status, "grown");
+  depositSeeds(player, seed, 1);
+  Patches.advanceTime({ player, ms: 0, handledBy: [] });
+  assert.equal(state.status, "grown");
+  assert.equal(bankAmount(player, herb), 0);
+  assert.equal(farm.vault[seed], 1);
+  pick(player, patch);
+  assert.equal(amount(player, herb), 1);
+});
+
+test("Overgrown: a real Farming Guild contract completes without manual harvest events", (t) => {
+  mockScenery(t);
+  farmingRandom();
+  const patch = Data.CACHE.patches.find(p => p.type === "HERB" && p.x >= 1216 && p.x <= 1279 && p.y >= 3712 && p.y <= 3775 && p.z === 0);
+  assert.ok(patch, "active Farming Guild herb patch");
+  const { player, farm } = onlineHerb(t, "guildauto", OVERGROWN, 1, patch);
+  const options = Guild.CONTRACTS[0].filter(([level]) => level <= 99)
+    .flatMap(([, , keys]) => keys.split(" "));
+  const index = options.indexOf("GUAM");
+  assert.ok(index >= 0);
+  const randomCalls = farmingRandom({ contractRoll: (index + 0.1) / options.length });
+  const npc = { getLocation: () => player.getLocation() };
+  Guild.guildNpc({ player, npc, definition: { getName: () => "Guildmaster Jane" } });
+  assert.ok(farmingOptionHandler, "registered farming dialogue owner");
+  farmingOptionHandler({ player, buttonId: core.OptionDialogue.OPTIONS_WIDGET_ID, action: 1, slot: -1 });
+  assert.equal(randomCalls.assignment, 1);
+  assert.equal(farm.contract.crop, "GUAM", "actual Jane assignment");
+  assert.equal(farm.contract.complete, false);
+  matureHerb(player);
+  assert.equal(farm.contract.complete, true);
+  assert.deepEqual(harvestEvents.get(player), {}, "no manual task events");
+});
+
+test("Overgrown: each harvest uses the current level before that pick's XP", (t) => {
+  mockScenery(t);
+  farmingRandom();
+  const { player } = onlineHerb(t, "levelup", OVERGROWN, 1);
+  const { SkillManager } = require("../dist/game/content/skill/SkillManager");
+  const skill = player.getSkillManager();
+  skill.setExperience(Skill.FARMING, SkillManager.getExperienceForLevel(99) - 1);
+  skill.setMaxLevels(Skill.FARMING, 98, false).setCurrentLevel(Skill.FARMING, 98, false);
+  assert.equal(skill.getCurrentLevel(Skill.FARMING), 98);
+  const levels = [], original = Model.saveLifeChance;
+  t.mock.method(Model, "saveLifeChance", (...args) => { levels.push(args[1]); return original(...args); });
+  matureHerb(player);
+  assert.equal(levels.length, 6);
+  assert.equal(levels[0], 98);
+  assert.equal(levels[1], 99, "first XP award changes the following pick");
+});
+
+test("Overgrown: automatic replant applies the existing seed-save roll", (t) => {
+  mockScenery(t);
+  const randomCalls = farmingRandom({ saveSeed: true });
+  const { player, patch, seed, herb, farm } = onlineHerb(t, "seedkeep", OVERGROWN, 1);
+  const before = randomCalls.planting;
+  matureHerb(player);
+  assert.equal(randomCalls.planting, before + 1, "one actual Overgrown planting roll at replant");
+  assert.equal(bankAmount(player, herb), 6);
+  assert.equal(farm.vault[seed], 1, "successful roll keeps the matching vault seed");
+  assert.equal(farm.patches[Data.patchKey(patch)].status, "growing");
+});
+
+test("Overgrown: withdrawing the matching seed cancels a partial automatic harvest", (t) => {
+  mockScenery(t);
+  farmingRandom();
+  const { player, patch, state, seed, herb, farm } = onlineHerb(t, "seedwithdraw", OVERGROWN, 1);
+  const bank = player.getBank(core.Bank.getTabForItem(player, herb));
+  bank.add(new Item(herb, 2147483646), false);
+  matureHerb(player);
+  assert.equal(state.lives, 5);
+  Vault.open({ player, anywhere: true });
+  const slot = farm.vaultOrder.indexOf(seed);
+  assert.ok(slot >= 0);
+  Vault.click({ player, buttonId: core.CacheDefinitions.getComponentId("seed_vault:obj_list"), slot, itemId: seed, action: 1 });
+  assert.equal(farm.vault[seed], 0, "actual vault withdrawal");
+  bank.deleteNumber(herb, 10);
+  const before = bank.getAmount(herb);
+  Patches.advanceTime({ player, ms: 0, handledBy: [] });
+  assert.equal(bank.getAmount(herb), before);
+  assert.equal(farm.patches[Data.patchKey(patch)], state);
+  assert.equal(state.lives, 5);
+});
+
+test("Overgrown: session and relic loss cancel a partially banked cycle", (t) => {
+  mockScenery(t);
+  farmingRandom();
+  for (const mode of ["relic", "disconnect", "logout"]) {
+    const { player, patch, state, seed, herb, farm } = onlineHerb(t, `cancel${mode}`, OVERGROWN, 1);
+    const bank = player.getBank(core.Bank.getTabForItem(player, herb));
+    bank.add(new Item(herb, 2147483646), false);
+    matureHerb(player);
+    assert.equal(state.lives, 5);
+    if (mode === "relic") player.setAttribute("league:relics", {});
+    else if (mode === "disconnect") farming.onPlayerDisconnect?.({ player });
+    else farming.onPlayerLogout({ player });
+    bank.deleteNumber(herb, 10);
+    const before = bank.getAmount(herb);
+    if (mode !== "logout") Patches.advanceTime({ player, ms: 0, handledBy: [] });
+    if (mode === "logout") { farming.onPlayerLogin({ player }); Patches.advanceTime({ player, ms: 0, handledBy: [] }); }
+    assert.equal(bank.getAmount(herb), before, mode);
+    assert.equal(farm.vault[seed], 1, mode);
+    assert.equal(farm.patches[Data.patchKey(patch)], state, mode);
+    assert.equal(state.lives, 5, mode);
+  }
+});
+
+test("Overgrown: a different vault seed and non-ultracomposted herb do not start this bounded cycle", (t) => {
+  mockScenery(t);
+  farmingRandom();
+  const wrong = onlineHerb(t, "wrongseed", OVERGROWN, 0);
+  const marrentill = Data.itemId("Marrentill seed");
+  assert.equal(marrentill, 5292, "active cache matches pinned marrentill_seed");
+  depositSeeds(wrong.player, marrentill, 1);
+  matureHerb(wrong.player);
+  assert.equal(wrong.state.status, "grown");
+  assert.equal(bankAmount(wrong.player, wrong.herb), 0);
+  assert.equal(wrong.farm.vault[marrentill], 1);
+  const untreated = onlineHerb(t, "notultra", OVERGROWN, 1, HERB_PATCH(), "Supercompost");
+  matureHerb(untreated.player);
+  assert.equal(untreated.state.status, "grown");
+  assert.equal(bankAmount(untreated.player, untreated.herb), 0);
+  assert.equal(untreated.farm.vault[untreated.seed], 1);
+});
+
+test("Overgrown: a crop that matured while offline is left for manual harvesting", (t) => {
+  mockScenery(t);
+  farmingRandom();
+  const { player, state, seed, herb, farm } = onlineHerb(t, "offlinemature", OVERGROWN, 1);
+  farming.onPlayerLogout({ player });
+  Model.advanceFarm(farm, Date.now() + 4 * 60 * 60 * 1000);
+  assert.equal(state.status, "grown", "existing model advanced the offline crop");
+  farming.onPlayerLogin({ player });
+  assert.equal(state.status, "grown");
+  assert.equal(bankAmount(player, herb), 0);
+  assert.equal(farm.vault[seed], 1);
+});
+
+test("Overgrown: all bank slots occupied also preserves a grown herb and seed", (t) => {
+  mockScenery(t);
+  farmingRandom();
+  const { player, state, seed, herb, farm } = onlineHerb(t, "noslots", OVERGROWN, 1);
+  const bank = player.getBank(0);
+  for (let id = 1; id < core.CacheDefinitions.getCounts().items && bank.getFreeSlots() > 0; id++) {
+    const definition = core.CacheDefinitions.getItem(id);
+    if (!definition?.name || definition.name.toLowerCase() === "null" || definition.noteTemplate >= 0
+      || definition.placeholderTemplate >= 0 || core.Bank.sharesPlaceholder(id, herb)) continue;
+    bank.add(new Item(id, 1), false);
+  }
+  assert.equal(bank.getFreeSlots(), 0, "native global bank capacity is full");
+  const destination = player.getBank(core.Bank.getTabForItem(player, herb));
+  assert.equal(destination.getAddableAmount(new Item(herb, 1)), 0, "no produce stack or placeholder");
+  const xp = player.getSkillManager().getExperience(Skill.FARMING);
+  matureHerb(player);
+  assert.equal(state.status, "grown");
+  assert.equal(state.lives, 6);
+  assert.equal(bankAmount(player, herb), 0);
+  assert.equal(farm.vault[seed], 1);
+  assert.equal(player.getSkillManager().getExperience(Skill.FARMING), xp);
+});
+
+test("Overgrown: another league and main accounts do not automatically harvest", (t) => {
+  mockScenery(t);
+  farmingRandom();
+  for (const [name, profile, leagueType] of [["wrongleague", "league", 4], ["mainaccount", "main", 5]]) {
+    const { player, state, seed, herb, farm } = onlineHerb(t, name, OVERGROWN, 1, HERB_PATCH(), "Ultracompost", profile, leagueType);
+    matureHerb(player);
+    assert.equal(state.status, "grown", profile);
+    assert.equal(bankAmount(player, herb), 0, profile);
+    assert.equal(farm.vault[seed], 1, profile);
+  }
+});
+
+test("Overgrown: synchronous seed withdrawal prevents replant without duplicate rewards", (t) => {
+  mockScenery(t);
+  farmingRandom();
+  const { player, patch, state, seed, herb, farm } = onlineHerb(t, "hookwithdraw", OVERGROWN, 1);
+  let calls = 0;
+  plantingObservers.set(player, () => {
+    calls++;
+    Vault.open({ player, anywhere: true });
+    Vault.click({ player, buttonId: core.CacheDefinitions.getComponentId("seed_vault:obj_list"),
+      slot: farm.vaultOrder.indexOf(seed), itemId: seed, action: 1 });
+  });
+  matureHerb(player);
+  assert.equal(calls, 1);
+  assert.equal(bankAmount(player, herb), 6);
+  assert.equal(farm.vault[seed], 0);
+  assert.equal(state.lives, 0);
+  assert.equal(farm.patches[Data.patchKey(patch)].crop, undefined, "only the exhausted original is cleared");
+  Patches.advanceTime({ player, ms: 0, handledBy: [] });
+  assert.equal(bankAmount(player, herb), 6, "no repeated harvest");
+});
+
+test("Overgrown: a synchronous replacement crop is not overwritten by replant", (t) => {
+  mockScenery(t);
+  farmingRandom();
+  const { player, patch, seed, herb, farm } = onlineHerb(t, "hookreplace", OVERGROWN, 1);
+  const replacement = { ...Model.emptyPatch(Date.now(), farm), crop: "MARRENTILL", status: "growing" };
+  plantingObservers.set(player, () => { farm.patches[Data.patchKey(patch)] = replacement; });
+  matureHerb(player);
+  assert.equal(bankAmount(player, herb), 6);
+  assert.equal(farm.vault[seed], 1, "no seed debit after replacement");
+  assert.equal(farm.patches[Data.patchKey(patch)], replacement);
+});
+
+// Capture the same vault-inventory calls a visible Seed Vault receives, without a client/socket.
+function captureVaultInventory(player) {
+  const original = player.getPacketSender(), packets = [];
+  const sender = new Proxy(original, { get(target, key) {
+    if (key === "sendInventory") return (id, capacity, items) => {
+      packets.push({ id, capacity, items: items.map(item => item ? { ...item } : null) });
+      return sender;
+    };
+    return Reflect.get(target, key);
+  } });
+  player.getPacketSender = () => sender;
+  const vaultId = core.CacheDefinitions.getInventoryId("seed_vault");
+  assert.equal(vaultId, 626, "active cache seed_vault inventory matches pinned inv.sym");
+  return { packets, vaultPackets: () => packets.filter(packet => packet.id === vaultId) };
+}
+function seedCell(packet, farm, seed) {
+  assert.equal(packet.capacity, 104);
+  const slot = farm.vaultOrder.indexOf(seed);
+  assert.ok(slot >= 0, "the vault retains the seed's actual slot");
+  return packet.items[slot];
+}
+
+test("Overgrown: an open Seed Vault updates its seed count after a replant", (t) => {
+  mockScenery(t);
+  farmingRandom();
+  const { player, patch, seed, farm } = onlineHerb(t, "vaultcount", OVERGROWN, 2);
+  const { vaultPackets } = captureVaultInventory(player);
+  const pins = { count: 0 }; observedPinChecks.set(player, pins);
+  let inventoryRefreshes = 0;
+  const inventory = player.getInventory(), refreshInventory = inventory.refreshItems.bind(inventory);
+  t.mock.method(inventory, "refreshItems", (...args) => { inventoryRefreshes++; return refreshInventory(...args); });
+  Vault.open({ player, anywhere: true });
+  const shown = vaultPackets();
+  assert.equal(shown.length, 1, "actual vault open sent its inventory");
+  assert.deepEqual(seedCell(shown[0], farm, seed), { id: seed, amount: 2 });
+  assert.equal(farm.vault[seed], 2);
+  const guards = pins.count, refreshes = inventoryRefreshes;
+  assert.ok(guards > 0, "actual open checked the PIN guard");
+  assert.ok(refreshes > 0, "actual open refreshed carried inventory");
+  matureHerb(player);
+  assert.equal(farm.vault[seed], 1, "real automatic replant consumed one seed");
+  assert.equal(farm.patches[Data.patchKey(patch)].status, "growing", "replacement is committed");
+  const after = vaultPackets();
+  assert.equal(after.length, 2, "open vault receives the new inventory");
+  assert.deepEqual(seedCell(after[1], farm, seed), { id: seed, amount: 1 });
+  assert.deepEqual(seedCell(after[0], farm, seed), { id: seed, amount: 2 }, "prior packet is a snapshot");
+  assert.equal(pins.count, guards, "background refresh does not reopen or prompt for PIN");
+  assert.equal(inventoryRefreshes, refreshes, "background vault update does not refresh carried inventory");
+});
+
+test("Overgrown: an open Seed Vault receives the empty seed placeholder", (t) => {
+  mockScenery(t);
+  farmingRandom();
+  const { player, seed, farm } = onlineHerb(t, "vaultempty", OVERGROWN, 1);
+  const { vaultPackets } = captureVaultInventory(player);
+  Vault.open({ player, anywhere: true });
+  assert.deepEqual(seedCell(vaultPackets()[0], farm, seed), { id: seed, amount: 1 });
+  const placeholder = core.CacheDefinitions.getItem(seed).placeholder;
+  assert.ok(placeholder > 0, "active cache has the seed placeholder");
+  matureHerb(player);
+  assert.equal(farm.vault[seed], 0);
+  const after = vaultPackets();
+  assert.equal(after.length, 2);
+  assert.deepEqual(seedCell(after[1], farm, seed), { id: placeholder, amount: 1 });
+});
+
+test("Overgrown: saving the seed does not send an unnecessary vault refresh", (t) => {
+  mockScenery(t);
+  farmingRandom({ saveSeed: true });
+  const { player, patch, state, seed, herb, farm } = onlineHerb(t, "vaultsaved", OVERGROWN, 1);
+  const { vaultPackets } = captureVaultInventory(player);
+  Vault.open({ player, anywhere: true });
+  assert.equal(vaultPackets().length, 1);
+  matureHerb(player);
+  assert.equal(bankAmount(player, herb), 6, "the automatic harvest happened");
+  assert.notEqual(farm.patches[Data.patchKey(patch)], state, "a new crop was planted");
+  assert.equal(farm.patches[Data.patchKey(patch)].status, "growing");
+  assert.equal(farm.vault[seed], 1);
+  assert.equal(vaultPackets().length, 1);
+});
+
+test("Overgrown: a stale or closed Seed Vault is not refreshed", (t) => {
+  mockScenery(t);
+  farmingRandom();
+  for (const state of ["stale", "closed"]) {
+    const { player, seed, farm } = onlineHerb(t, `vault${state}`, OVERGROWN, 1);
+    const { vaultPackets } = captureVaultInventory(player);
+    Vault.open({ player, anywhere: true });
+    assert.equal(vaultPackets().length, 1);
+    if (state === "stale") player.getInterfaceId = () => -1;
+    else Vault.logout({ player });
+    matureHerb(player);
+    assert.equal(farm.vault[seed], 0, "replant still consumes the seed");
+    assert.equal(vaultPackets().length, 1, `${state} vault received no background inventory`);
   }
 });
 

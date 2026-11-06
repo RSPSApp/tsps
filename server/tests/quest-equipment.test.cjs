@@ -40,19 +40,24 @@ test("every listed item resolves to an id", () => {
   assert.ok(attachEquipment._test.requirements().size > 90);
 });
 
+test("quest equipment requirements are on when the config is missing", () => {
+  for (const pvpMode of [false, true]) {
+    reset({ pvpMode, complete: { "Lost City": false } });
+    assert.equal(equip(Items.DRAGON_DAGGER).allow, false);
+  }
+});
+
 test("a rune platebody without Dragon Slayer I is refused with live OSRS's two lines", () => {
-  reset({ equipmentRequirements: true, complete: { "Dragon Slayer I": false } });
+  reset({ complete: { "Dragon Slayer I": false } });
   assert.deepEqual(equip(Items.RUNE_PLATEBODY), {
     allow: false,
     messages: ["You have not earned the right to wear this yet.", "You need to complete the Dragon Slayer I quest first."],
   });
 });
 
-test("quest equipment requirements default to disabled independently of PvP mode", () => {
-  for (const pvpMode of [false, true]) {
-    reset({ pvpMode, complete: { "Lost City": false } });
-    assert.deepEqual(equip(Items.DRAGON_DAGGER), { allow: null, messages: [] });
-  }
+test("a rune platebody goes on once Dragon Slayer I is complete", () => {
+  reset({ complete: { "Dragon Slayer I": true } });
+  assert.deepEqual(equip(Items.RUNE_PLATEBODY), { allow: null, messages: [] });
 });
 
 test("the config can enable requirements independently of PvP mode", () => {
@@ -62,7 +67,7 @@ test("the config can enable requirements independently of PvP mode", () => {
   }
 });
 
-test("the config can disable requirements independently of PvP mode", () => {
+test("explicit false still turns requirements off independently of PvP mode", () => {
   for (const pvpMode of [false, true]) {
     reset({ equipmentRequirements: false, pvpMode, complete: { "Lost City": false } });
     assert.deepEqual(equip(Items.DRAGON_DAGGER), { allow: null, messages: [] });

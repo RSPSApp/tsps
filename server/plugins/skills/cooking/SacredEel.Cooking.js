@@ -7,7 +7,6 @@
  */
 const Common = require("./Common.Cooking");
 
-const KNIFE_NAMES = ["KNIFE", "KNIFE_2", "KNIFE_3", "KNIFE_4", "KNIFE_5"];
 const MIN_LEVEL = 72;
 
 function tables() {
@@ -15,7 +14,7 @@ function tables() {
   return {
     eel: ItemIds.SACRED_EEL,
     scales: ItemIds.ZULRAHS_SCALES,
-    knives: new Set(KNIFE_NAMES.map(name => ItemIds[name]).filter(Number.isInteger)),
+    knives: Common.knives(),
   };
 }
 

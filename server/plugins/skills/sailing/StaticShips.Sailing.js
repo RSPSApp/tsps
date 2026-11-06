@@ -120,6 +120,11 @@ function spawn(id, { owner, ownerOnly = false, entityIndex, fineX, fineY, level 
   const definition = definitions.get(id);
   if (!definition) return undefined;
   const spec = specFor(definition);
+  // A supplied Sailing boat uses its native type's real parts, not a made-up owned record.
+  const stats = definition.sailing
+    ? require("./BoatParts.Sailing").boatStatsForRow(definition.sailing.sidepanelBoatType) : undefined;
+  if (definition.sailing && !stats) throw new Error(`Missing sailing parts for static ship ${id}`);
+  if (stats) spec.stats = stats;
   const boat = coreApi().BoatManager.spawnStatic(owner?.getIndex?.() ?? -1, spec, {
     fineX: fineX ?? (definition.fineX ?? 0),
     fineY: fineY ?? (definition.fineY ?? 0),
@@ -128,8 +133,9 @@ function spawn(id, { owner, ownerOnly = false, entityIndex, fineX, fineY, level 
   }, entityIndex);
   if (!boat) return undefined;
   boat.ownerOnly = ownerOnly;
+  const maxHitpoints = stats?.hitpoints ?? definition.hitpoints;
   const ship = {
-    id, definition, boat, spec, hitpoints: definition.hitpoints, maxHitpoints: definition.hitpoints, npcs: [],
+    id, definition, boat, spec, hitpoints: maxHitpoints, maxHitpoints, npcs: [],
   };
   ships.set(boat.entityIndex, ship);
   ship.npcs = spawnDeckNpcs(ship, owner);

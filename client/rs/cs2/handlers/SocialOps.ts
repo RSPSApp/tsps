@@ -15,7 +15,7 @@ export function registerSocialOps(handlers: HandlerMap): void {
         const friend = ctx.friendList[index];
         if (friend) {
             ctx.pushString(friend.name);
-            ctx.pushString(friend.previousName || friend.name);
+            ctx.pushString(friend.previousName);
         } else {
             ctx.pushString("");
             ctx.pushString("");
@@ -105,7 +105,7 @@ export function registerSocialOps(handlers: HandlerMap): void {
         const ignored = ctx.ignoreList[index];
         if (ignored) {
             ctx.pushString(ignored.name);
-            ctx.pushString(ignored.previousName || ignored.name);
+            ctx.pushString(ignored.previousName);
         } else {
             ctx.pushString("");
             ctx.pushString("");

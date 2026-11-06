@@ -147,3 +147,20 @@ test('Invalid, forged, unrelated and cancelled counts cannot unlock or clear ano
   assert.equal(h2.scripts.length, 1, 'logout cancels the next-tick reopen');
   h2.death[0]({ player: h2.player });
 });
+
+test('The close button (max 32-bit int, proc lockpicking_button_op_close) closes without a failure or reopen', () => {
+  const h = harness(4, 153);
+  let removed = 0;
+  const sender = h.player.getPacketSender;
+  h.player.getPacketSender = () => ({ ...sender(), sendInterfaceRemoval() { removed++; return this; } });
+  h.lockpick.open(h.player);
+  const action = h.player.amountAction;
+  action.execute(2147483647);
+  assert.deepEqual(h.messages, [], 'no failure message');
+  assert.equal(removed, 1, 'the lock closes');
+  assert.equal(h.player.amountAction, null, 'its prompt is cleared');
+  h.tick();
+  assert.equal(h.interfaces.length, 1, 'not reopened');
+  action.execute(153);
+  assert.equal(h.solved(), 0, 'a stale count after closing is ignored');
+});

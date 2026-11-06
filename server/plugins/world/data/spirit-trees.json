@@ -1,5 +1,5 @@
 {
-  "$comment": "The spirit tree network, played by plugins/world/SpiritTrees.plugin.js (docs/spirit-trees.md). `trees` are in the menu's order, as live OSRS lists them (rsprox capture database, https://rsprox.net/database, rev 237-238). `tree` is where the tree stands (Wiki); `landing` where travelling there puts the player (captured where recorded, else beside the tree). Permanent trees may need a quest (`requires`, enforced only for quests this server has) or a skill (`skills`); `grown` trees are farming patches, usable once grown and checked; `house` is a player-owned house's tree. Requirements from https://oldschool.runescape.wiki/w/Spirit_tree.",
+  "$comment": "The spirit tree network, played by plugins/world/SpiritTrees.plugin.js (docs/spirit-trees.md). `trees` are in the menu's order, as live OSRS lists them (rsprox capture database, https://rsprox.net/database, rev 237-238). `tree` is where the tree stands (Wiki); `landing` where travelling there puts the player (captured where recorded, else beside the tree). Permanent trees may need a quest (`requires`, enforced only for quests this server has) or a skill (`skills`); `grown` trees are farming patches, usable once grown and checked; `house` is a player-owned house's tree; `mooredAt` requires a prior moor at that Sailing dock id. Requirements from https://oldschool.runescape.wiki/w/Spirit_tree.",
   "trees": [
     {"name": "Tree Gnome Village", "tree": [2539, 3166, 0], "landing": [2542, 3170, 0]},
     {"name": "Gnome Stronghold", "tree": [2460, 3446, 0], "landing": [2461, 3444, 0], "leaveRequires": "The Grand Tree"},
@@ -14,6 +14,6 @@
     {"name": "Farming Guild", "grown": [1253, 3750, 0], "skills": {"Farming": 85}},
     {"name": "Your house", "house": true},
     {"name": "Poison Waste", "tree": [2339, 3111, 0], "landing": [2339, 3109, 0], "requires": "The Path of Glouphrie"},
-    {"name": "Laguna Aurorae", "tree": [1202, 2786, 0], "landing": [1203, 2785, 0], "requires": "Pandemonium", "skills": {"Sailing": 58}}
+    {"name": "Laguna Aurorae", "tree": [1202, 2786, 0], "landing": [1203, 2785, 0], "requires": "Pandemonium", "skills": {"Sailing": 58}, "mooredAt": "laguna_aurorae"}
   ]
 }

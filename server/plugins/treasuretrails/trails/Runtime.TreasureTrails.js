@@ -94,10 +94,24 @@ function partRollable(step) {
   return step.target !== "npc" || step.npcIds.some(id => worldSpawned().has(id));
 }
 
-/** A new step's own state: a three-part step draws its three parts. */
-function stepState(tier, step, random = Math.random) {
+/**
+ * Whether `player` may be given a part. A part whose master-parts.json condition names a
+ * `requirementEvent` (Viggora: Curse of the Empty Lord up to him) asks its content, which sets
+ * `ready`; with no player to ask, it is left out.
+ */
+function partOffered(player, step) {
+  const event = MASTER_PARTS.conditions[step.key]?.requirementEvent;
+  if (!event) return true;
+  if (!player) return false;
+  const request = { player, npc: null, ready: false, here: false };
+  api?.emitCustomEvent?.(event, request);
+  return request.ready === true;
+}
+
+/** A new step's own state: a three-part step draws its three parts, from those the player may get. */
+function stepState(tier, step, random = Math.random, player = null) {
   if (!isThreePart(data(tier), step)) return {};
-  const pool = [...data(tier).parts], parts = [];
+  const pool = data(tier).parts.filter(part => partOffered(player, part)), parts = [];
   while (parts.length < 3) parts.push(pool.splice(Math.floor(random() * pool.length), 1)[0].row);
   return { parts, found: [false, false, false] };
 }
@@ -152,7 +166,7 @@ function stateOf(player, slot, random = Math.random) {
   if (validState(tier, item, current)) return { tier, item, slot, state: current, step: data(tier).byRow.get(current.row) };
   // A clue without a trail (a drop, box or vessel) starts one on a random step of its tier.
   const step = pick(data(tier).rollable, random);
-  const state = { version: 1, token: randomUUID(), revision: 0, completed: 0, length: trailLength(tier, random, player), row: step.row, ...stepState(tier, step, random) };
+  const state = { version: 1, token: randomUUID(), revision: 0, completed: 0, length: trailLength(tier, random, player), row: step.row, ...stepState(tier, step, random, player) };
   const replacement = stepItem(tier, step, state);
   inventory.setItem(slot, replacement);
   inventory.refreshItems();
@@ -264,14 +278,14 @@ function dismissUri(player) {
 }
 
 /** What a finished step leaves: the next step's clue, or the casket after the last. */
-function nextItem(trail, random = Math.random) {
+function nextItem(trail, random = Math.random, player = null) {
   const completed = trail.state.completed + 1;
   if (completed >= trail.state.length) return { casket: true, item: new core.Item(data(trail.tier).casket, 1) };
   // A step's own progress (a fight, a puzzle, master's done task, Falo's song, a hot/cold target
   // and a three-part step's parts) ends with it.
   const { defeated, solved, image, taskDone, song, hotcold, previous, parts, found, ...carried } = trail.state;
   const step = pick(data(trail.tier).rollable, random);
-  return { casket: false, item: stepItem(trail.tier, step, { ...carried, completed, revision: trail.state.revision + 1, ...stepState(trail.tier, step, random) }) };
+  return { casket: false, item: stepItem(trail.tier, step, { ...carried, completed, revision: trail.state.revision + 1, ...stepState(trail.tier, step, random, player) }) };
 }
 
 /** `said` overrides the hand-over message, as the giving NPC's transcript words it: { clue, casket }. */
@@ -285,7 +299,7 @@ function advance(player, snapshot, random = Math.random, said = {}, show = true,
     const slot = auxiliarySlot(player, trail, kind);
     if (slot >= 0) inventory.setItem(slot, new core.Item(-1, 0));
   }
-  const { casket, item: received } = nextItem(trail, random);
+  const { casket, item: received } = nextItem(trail, random, player);
   // Live captures: "You've found a new clue!" and "You've obtained a casket!", in a message box.
   const words = casket ? said.casket ?? "You've obtained a casket!" : said.clue ?? "You've found a new clue!";
   // The exact slot matters when scrolls of several tiers are carried.
@@ -505,7 +519,7 @@ function keyDrop({ player, npcId, drops }) {
 function killDrop({ killer, npc, npcId }) {
   const trail = killer && trails(killer).find(entry => entry.step.target === "kill" && entry.step.npcIds.includes(npcId));
   if (!trail) return;
-  const next = nextItem(trail);
+  const next = nextItem(trail, Math.random, killer);
   killer.getInventory().deleteAtSlot(trail.slot, 1);
   core.ItemOnGroundManager.registerLocation(killer, next.item, npc.getLocation().clone());
   // As live captures show it.
@@ -708,5 +722,5 @@ module.exports = function attachTreasureTrails(pluginApi) {
 };
 
 Object.assign(module.exports, { META_PREFIX, EMOTE_RADIUS, MUSIC_RADIUS, data, tierOfItem, trailLength, stateOf, trails, read, checkSteps,
-  advance, nextItem, puzzleSlot, lightSlot, boxSlot, auxiliarySlot, handOutPuzzle, summon, liveEncounter, partsText, wearing, TORN_PARTS, MASTER_PARTS, startedTrails, stillHeld, rollable, talk, search, keyDrop, killDrop, dig, emote, encounterDied,
+  advance, nextItem, partOffered, puzzleSlot, lightSlot, boxSlot, auxiliarySlot, handOutPuzzle, summon, liveEncounter, partsText, wearing, TORN_PARTS, MASTER_PARTS, startedTrails, stillHeld, rollable, talk, search, keyDrop, killDrop, dig, emote, encounterDied,
   songPlayed, emoteReady, answered, clueText, restore, categoryCount, completedAttribute, metaKey, requirementWaived });

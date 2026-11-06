@@ -18,6 +18,9 @@ const { coveOf, coveOfNpc } = require("./Cove.Tempoross");
 const { DATA, ITEM, ANIM, GFX, SOUND } = Shared;
 const F = DATA.fight;
 
+/** Raw graphic height of the stun stars: at the head, as every other use of stunned_thieving. */
+const STUN_HEIGHT = 124;
+
 const AMMO = {
   [ITEM.COOKED]: { points: DATA.points.loadCooked, damage: DATA.damage.cooked, gfx: GFX.PROJECTILE_COOKED, xp: 1 },
   [ITEM.CRYSTALLISED]: { points: DATA.points.loadCrystallised, damage: DATA.damage.crystallised, gfx: GFX.PROJECTILE_CRYSTALLISED, xp: 1.2 },
@@ -126,18 +129,21 @@ class Cannons {
 }
 
 /**
- * The zap the torrent leaves on a loader: the cache's generic stun animation and graphic.
- * The Wiki gives no separate player-stun length, so this keeps them still for the same
- * window the cannon is disabled (inferred from the attack's 24-tick disable).
+ * The zap the torrent leaves on a loader (Wiki: it "stuns any player currently loading the
+ * cannon"). The Wiki gives no length, so the player is held only while the stars circle their
+ * head, not for the cannon's whole 24-tick disable (#2692).
  */
 function stun(player) {
   Shared.animate(player, ANIM.STUNNED);
-  Shared.graphic(player, GFX.STUNNED);
+  Shared.graphic(player, GFX.STUNNED, STUN_HEIGHT);
   player.getMovementQueue().reset();
   player.getMovementQueue().setBlockMovement(true);
-  Shared.later(player, F.torrentDisabledTicks, () => {
+  const until = Shared.later(player, F.torrentStunTicks, () => {
+    if (player.__temporossStun !== until) return;
+    player.__temporossStun = null;
     if (player.isRegistered()) player.getMovementQueue().setBlockMovement(false);
   });
+  player.__temporossStun = until;
 }
 
 // ------------------------------------------------------------------ filling

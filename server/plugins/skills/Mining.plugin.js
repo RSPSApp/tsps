@@ -11,6 +11,7 @@ const CrystalPickaxe = require("./mining/CrystalPickaxe.Mining");
 const ClueGeodes = require("./mining/ClueGeodes.Mining");
 const CalcifiedWater = require("./mining/CalcifiedWater.Mining");
 const Saltpetre = require("./mining/Saltpetre.Mining");
+const VarrockArmour = require("./mining/VarrockArmour.Mining");
 const { pauseForLevelUp, actionInterval } = require("./SkillActions");
 
 // rsprox recordings: a mined-out rock becomes "rocks1"/"rocks2" (the digit of the rock's own gameval,
@@ -267,6 +268,14 @@ const ACTIVE_MINERS = new Set();
 const ROLL_READY_TICKS = new Map();
 // Ore taken so far from rocks that give several before going (`yield`), by the standing rock.
 const ROCK_YIELDS = new WeakMap();
+// Saves belong to the standing rock and are cleared when it is exhausted. Tracking the
+// saves already used also bounds the effect if miners change gloves or share a rock.
+const ROCK_GLOVE_SAVES = new WeakMap();
+const GLOVE_STANDARD_ROCKS = new Set([
+  "Copper rocks", "Tin rocks", "Iron rocks", "Silver rocks", "Lead rocks", "Coal rocks", "Gold rocks",
+]);
+const GLOVE_SUPERIOR_ROCKS = new Set(["Mithril rocks", "Adamantite rocks"]);
+const GLOVE_EXPERT_ROCKS = new Set(["Sandstone rocks", "Sunstone rocks", "Runite rocks", "Amethyst crystals"]);
 // Ticks left on a rock that runs out on a timer (`depletionTicks`), by the standing rock; it counts
 // down on the ticks someone mines it.
 const ROCK_TIMERS = new WeakMap();
@@ -302,6 +311,28 @@ function rockHolds(rockObject, rock) {
   if (holds) ROCK_YIELDS.set(rockObject, taken);
   else ROCK_YIELDS.delete(rockObject);
   return holds;
+}
+
+/** Extra successful gathers allowed by the gloves actually worn at this rock. */
+function gloveSaves(player, rock) {
+  if (!pluginApi.core.WorldDefinition.isMembersWorld()) return 0;
+  const hands = player.getEquipment().getItems()[Equipment.HANDS_SLOT];
+  const tier = hands?.getId() === ItemIdentifiers.MINING_GLOVES ? 1
+    : hands?.getId() === ItemIdentifiers.SUPERIOR_MINING_GLOVES ? 2
+      : hands?.getId() === ItemIdentifiers.EXPERT_MINING_GLOVES ? 3 : 0;
+  if (GLOVE_STANDARD_ROCKS.has(rock.objectName)) return tier;
+  if (GLOVE_SUPERIOR_ROCKS.has(rock.objectName)) return Math.max(0, tier - 1);
+  return tier === 3 && GLOVE_EXPERT_ROCKS.has(rock.objectName) ? 1 : 0;
+}
+
+/** Spend one save only after the rock's ordinary yield has run out. */
+function gloveHolds(player, rockObject, rock) {
+  const saved = ROCK_GLOVE_SAVES.get(rockObject) ?? { used: 0, baseExhausted: false };
+  if (saved.used >= gloveSaves(player, rock)) return false;
+  saved.used++;
+  saved.baseExhausted = true;
+  ROCK_GLOVE_SAVES.set(rockObject, saved);
+  return true;
 }
 
 class RockRespawnTask extends Task {
@@ -477,8 +508,10 @@ function nextStageId(rockObject, rock) {
 }
 
 /** Depletes the rock unless content keeps it standing ("mining:deplete-rock", a league relic's four ores a rock); true when it went. */
-function depleteRock(player, rockObject, rock) {
-  const event = { player, object: rockObject, rock: rock.objectName, handled: false };
+function depleteRock(player, rockObject, rock, heldByGloves = false) {
+  // Preserve existing finite-yield/staged behavior until its relic interaction is established.
+  const gloveSaveAdditive = heldByGloves && !rock.yield && !rock.stages;
+  const event = { player, object: rockObject, rock: rock.objectName, handled: heldByGloves, gloveSaveAdditive };
   pluginApi.emitCustomEvent("mining:deplete-rock", event);
   if (event.handled) return false;
   // A staged rock grows back whole, from whichever stage it was mined out.
@@ -516,6 +549,7 @@ function minersKeepStanding(rockObject, rock) {
 function exhaustRock(rockObject, rock, viewers, whole = rockObject) {
   ROCK_TIMERS.delete(rockObject);
   ROCK_YIELDS.delete(rockObject);
+  ROCK_GLOVE_SAVES.delete(rockObject);
   const depleted = replaceRock(rockObject, depletedRockId(rockObject.getId(), rock));
   if (rock.depletionSound) {
     const at = depleted.getLocation();
@@ -667,7 +701,9 @@ function rollAttempt(player, rock) {
 function giveGem(player, { itemId }) {
   if (itemId == null) return;
   player.sendMessage(gemMessage(itemId));
-  giveOre(player, itemId, 1);
+  // Ours (no source covers it): with no room anywhere, which an open coal bag can bring about while
+  // still mining, the gem falls to the floor rather than vanishing.
+  deliverOre(player, prepareOre(player, itemId, 1, 0));
 }
 
 function outcomeAmount(outcome) {
@@ -702,7 +738,7 @@ class MiningTask extends Task {
       }
       if (state.levelUpPaused) continue;
 
-      const rockObject = MapObjects.get(
+      const rockObject = state.npcRock ? npcRockTarget(state.npcRock) : MapObjects.get(
         state.objectId,
         state.location,
         state.privateArea
@@ -800,7 +836,13 @@ class MiningTask extends Task {
       pluginApi.emitCustomEvent("pets:skilling-roll", petRoll);
       deliverOre(player, pendingOre);
       if (kept && !state.rock.outcomes) mineExtraOre(player, state.rock, outcome);
+      const minedNpcRock = state.npcRock;
       pluginApi.emitCustomEvent("mining:success", { player, skill: Skill.MINING, petBase: state.rock.petBase, itemId: oreId, petRolled: petRoll.handled, pickaxeId: state.pickaxe?.id ?? null, objectId: state.objectId, location: state.location });
+      if (minedNpcRock) {
+        stopMining(this.activeSessions, player);
+        pluginApi.emitCustomEvent("mining:npc-rock-mined", { player, npc: minedNpcRock.npc });
+        continue;
+      }
       if (state.rock.depletesOnOre && timerRanOut) {
         ROCK_TIMERS.delete(rockObject);
         if (depleteRock(player, rockObject, state.rock)) {
@@ -822,8 +864,11 @@ class MiningTask extends Task {
         state.objectId = replaceRock(rockObject, nextStage).getId();
         continue;
       }
-      if (rockHolds(rockObject, state.rock)) continue;
-      if (!depleteRock(player, rockObject, state.rock)) continue;
+      // A saved finite-yield rock has already spent its normal yield; do not draw a
+      // fresh Amethyst yield until the rock really depletes and respawns.
+      if (!ROCK_GLOVE_SAVES.get(rockObject)?.baseExhausted && rockHolds(rockObject, state.rock)) continue;
+      const heldByGloves = gloveHolds(player, rockObject, state.rock);
+      if (!depleteRock(player, rockObject, state.rock, heldByGloves)) continue;
       stopMining(this.activeSessions, player);
     }
   }
@@ -854,9 +899,14 @@ function inventoryBlocks(player, oreId) {
 function giveOre(player, oreId, amount, xp = 0) {
   const request = { player, itemId: oreId, amount, stored: 0, skill: Skill.MINING, xp };
   pluginApi.emitCustomEvent("storage:gather", request);
-  if (amount > request.stored) {
-    player.getInventory().adds(oreId, amount - request.stored);
-  }
+  // `stored` counts requested units even if a listener transforms or doubles output.
+  const stored = Number.isFinite(request.stored) ? Math.max(0, Math.min(amount, request.stored)) : 0;
+  const remaining = amount - stored;
+  if (remaining <= 0) return stored;
+  const item = new pluginApi.core.Item(oreId, remaining);
+  const accepted = Math.min(remaining, player.getInventory().getAddableAmount(item));
+  if (accepted > 0) player.getInventory().add(item.clone().setAmount(accepted), true);
+  return stored + accepted;
 }
 
 /** Storage resolves first; a winning pet can take room reserved for the remaining ore. */
@@ -875,7 +925,7 @@ function deliverOre(player, ore) {
 }
 
 /**
- * "mining:extra-ore": a mining enhancer (the charged celestial ring) may grant a second ore with
+ * "mining:extra-ore": mining enhancers may each grant an extra ore with
  * its experience, and its own `message`. Without room for it, neither is given (Wiki, Mod Ash).
  * A sandstone or granite piece is doubled at its own size (Wiki Sandstone rocks; rsprox capture
  * 3165: "Your cape allows you to mine an additional ore.", two 1kg pieces, two counts).
@@ -886,15 +936,14 @@ function mineExtraOre(player, rock, outcome) {
   }
   const oreId = outcome?.itemId ?? rock.oreId;
   const xp = outcome?.xp ?? rock.xp;
-  const request = { player, oreId, rockLevel: rock.level, extra: false, message: null };
+  const request = { player, oreId, rockLevel: rock.level, bonuses: [] };
   pluginApi.emitCustomEvent("mining:extra-ore", request);
-  if (!request.extra || inventoryBlocks(player, oreId)) {
-    return;
+  for (const bonus of request.bonuses) {
+    if (inventoryBlocks(player, oreId) || giveOre(player, oreId, 1, xp) !== 1) break;
+    if (bonus.message) spam(player, bonus.message);
+    countOre(player);
+    player.getSkillManager().addExperiences(Skill.MINING, xp);
   }
-  if (request.message) spam(player, request.message);
-  giveOre(player, oreId, 1, xp);
-  countOre(player);
-  player.getSkillManager().addExperiences(Skill.MINING, xp);
 }
 
 /**
@@ -953,6 +1002,32 @@ function handleMine(event) {
   }
 }
 
+/**
+ * "mining:mine-npc-rock": a rock that is an NPC (a killed Runite Golem's head), mined with the named rock's
+ * rules. `stands` says whether it can still be mined; "mining:npc-rock-mined" follows the ore.
+ */
+function mineNpcRock({ player, npc, rockName, stands }) {
+  const rock = ROCK_BY_NAME.get(rockName);
+  if (!rock) return;
+  const target = npcRockTarget({ npc, stands });
+  if (target && startMining(player, target, rock, activeSessions)) {
+    activeSessions.get(player).npcRock = { npc, stands };
+  }
+}
+
+/** The loop's view of an NPC rock, as it reads a loc's. */
+function npcRockTarget({ npc, stands }) {
+  if (!stands()) return null;
+  return {
+    getId: () => npc.getId(),
+    getLocation: () => npc.getLocation(),
+    getPrivateArea: () => npc.getPrivateArea?.() ?? null,
+    isWithinInteractionDistance: (location) => Math.max(
+      Math.abs(location.getX() - npc.getLocation().getX()), Math.abs(location.getY() - npc.getLocation().getY())
+    ) <= 1 && location.getZ() === npc.getLocation().getZ(),
+  };
+}
+
 function endMiningSession({ player }) {
   stopMining(activeSessions, player, false);
   ROLL_READY_TICKS.delete(player);
@@ -988,6 +1063,7 @@ module.exports = {
     api.persistAttribute(ORE_MINED_ATTRIBUTE, 0);
     api.onPlayerLogin(sendOresMined);
     api.onCustomEvent("mining:count-ore", countKeptOre);
+    api.onCustomEvent("mining:mine-npc-rock", mineNpcRock);
     api.onCustomEvent("mining:ores-mined", answerOresMined);
     api.onObjectInteraction("Rocks", { Mine: mineDepletedRock });
     for (const name of EMPTY_ROCK_NAMES) api.onObjectInteraction(name, { Mine: mineDepletedRock });
@@ -1001,6 +1077,7 @@ module.exports = {
     ClueGeodes.attach(api);
     CalcifiedWater.attach(api, ROCK_BY_NAME.get(CalcifiedWater.ROCK_NAME), exhaustRock, minersKeepStanding);
     Saltpetre.attach(api);
+    VarrockArmour.attach(api);
 
     api.log("registered", {
       rocks: ROCKS.length,

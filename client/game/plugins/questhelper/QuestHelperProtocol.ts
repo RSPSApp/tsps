@@ -270,6 +270,8 @@ export type HelperResponse = {
     diagnostics: HelperDiagnostic[];
     requests?: HelperStateRequest[];
     questProgress?: QuestProgress[];
+    /** Digests of the reusable snapshot sections the server holds for this session (QuestHelperReuse). */
+    cached?: Readonly<Record<string, string>>;
     overview?: HelperOverview;
     sections?: HelperSection[];
     overlayPanel?: OverlayLine[];
@@ -365,6 +367,7 @@ const bankTab = (v: unknown): boolean =>
 export function parseHelperResponse(value: unknown): HelperResponse | null {
     if (obj(value) && !(optional(value, "pluginMessages", v => list(v, pluginMessage, 64)) && optional(value, "bankTab", bankTab))) return null;
     if (obj(value) && !optional(value,"questProgress",v=>list(v,progress,512))) return null;
+    if (obj(value) && !optional(value, "cached", v => obj(v) && Object.keys(v).length <= 16 && Object.values(v).every(d => typeof d === "string" && /^[0-9a-f]{1,64}$/.test(d)))) return null;
     if (obj(value) && !(optional(value, "overview", overview) && optional(value, "sections", v => list(v, x => section(x), 256)) && optional(value, "overlayPanel", v => list(v, overlayLine, 512)))) return null;
     if (!obj(value) || value.protocol !== 1 || !str(value.session) || !str(value.questKey) || !str(value.sourceCommit) || !int(value.sequence) || value.sequence < 1 || !["active", "complete", "unsupported", "unavailable"].includes(value.status as string) || !(value.activeStep === null || step(value.activeStep)) || !list(value.panels, v => obj(v) && str(v.title) && optional(v, "text", v => list(v, str)) && optional(v, "requirements", v => list(v, requirement))) || !list(value.diagnostics, diagnostic) || !optional(value, "requests", v => list(v, r => obj(r) && typeof r.kind === "string" && /^(geometry|varbit|varbitDefinition|itemDefinitions|objectDefinitions|npcDefinitions|widget|widgetBounds|questState|container)(\.[a-zA-Z][a-zA-Z0-9]{0,63})?$/.test(r.kind) && int(r.id) && r.id >= 0)))
         return null;

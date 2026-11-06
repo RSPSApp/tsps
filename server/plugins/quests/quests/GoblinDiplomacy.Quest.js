@@ -270,8 +270,10 @@ module.exports = function registerGoblinDiplomacyQuest(api) {
     return true;
   }
 
+  /** A fade back in leaves the full-screen fade overlay mounted on 161:1 once the script has run (#2640). Take it down then, but only if it is still the interface mounted there: a ladder or transport that mounted something else in the meantime is not ours to close, and a later fade out is a new mount. */
   function fade(player, out) {
-    player.getPacketSender().sendSubInterface(FADE_UID, 174, 1, { postScripts: [{ scriptId: 948, args: out ? [0, 255, 0, 0, 25] : [0, 0, 0, 255, 25] }] });
+    const mount = player.getPacketSender().mountSubInterface(FADE_UID, 174, 1, { postScripts: [{ scriptId: 948, args: out ? [0, 255, 0, 0, 25] : [0, 0, 0, 255, 25] }] });
+    if (!out) TaskManager.submit(new CountdownTask(player, 2, () => player.getPacketSender().closeSubInterfaceMount(mount)));
   }
 
   function sync(player) {

@@ -134,6 +134,24 @@ function questDone(player, requirement) {
   return answer !== false;
 }
 
+/**
+ * Whether content outside the quest system has taught a recipe's `unlock` ("herblore:unlocked"
+ * { player, unlock, allowed }: Barbarian Training answers "barbarian_herblore", or
+ * "barbarian_herblore:started" for the attack mix Otto asks for). No answer does not lock it.
+ */
+function unlocked(player, unlock) {
+  const request = { player, unlock, allowed: null };
+  api.emitCustomEvent("herblore:unlocked", request);
+  return request.allowed !== false;
+}
+
+/** The player's stage in a quest (`quest:get-stage`), or null when no quest answers. */
+function questStage(player, key) {
+  const request = { player, key, stage: null };
+  api.emitCustomEvent("quest:get-stage", request);
+  return typeof request.stage === "number" ? request.stage : null;
+}
+
 /** Herblore needs Druidic Ritual; says so and returns false without it. */
 function canUseHerblore(player) {
   if (questDone(player, "druidic_ritual")) return true;
@@ -193,7 +211,7 @@ function answerHerbs(request) {
 
 module.exports = {
   MIX_ANIMATION, MIX_SOUND,
-  init, gameval, herbFor, grindFor, recipesWith, repeatMessage, answerClean, answerUnfinished, answerHerbs, level, actionsPerCycle, questDone, canUseHerblore,
+  init, gameval, herbFor, grindFor, recipesWith, repeatMessage, answerClean, answerUnfinished, answerHerbs, level, actionsPerCycle, questDone, unlocked, questStage, canUseHerblore,
   wearsHerbloreCape, spam, mesbox, animate, sound, addXp, run,
   get api() { return api; },
   get core() { return core; },

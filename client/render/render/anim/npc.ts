@@ -232,7 +232,7 @@ export function resolveNpcMovementSequenceIds(host: WebGLOsrsRendererHost,
         }
 
         try {
-            const npcType = host.osrsClient.npcTypeLoader.load(npcTypeId | 0);
+            const npcType = host.getEffectiveNpcType(npcTypeId | 0);
             if (!npcType) {
                 return { movementSeqId, idleSeqId, walkSeqId };
             }

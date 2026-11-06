@@ -601,6 +601,11 @@ function mapAction(event) {
   const { interfaces } = Common.data;
   if (event.groupId !== interfaces.templetrek_map) return;
   event.handled = true;
+  // The close button is a static transmit op1 "Close" (rev 241); it is hidden once a route is chosen.
+  if (event.childId === interfaces["templetrek_map:templetrek_close_button"]) {
+    if (!trekOf(event.player)?.route) event.player.getPacketSender().closeInterface(interfaces.templetrek_map);
+    return;
+  }
   const route = [1, 2, 3].find((n) => interfaces[`templetrek_map:templetrek_route_${n}`] === event.childId);
   if (route) trekOf(event.player)?.chooseRoute(route);
 }

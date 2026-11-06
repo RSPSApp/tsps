@@ -32,7 +32,7 @@ function varbit(player, name, value) {
 }
 function text(player, name, value) { player.getPacketSender().sendString(String(value), component(name)); }
 function hidden(player, name, value) { player.getPacketSender().sendInterfaceDisplayState(component(name), value); }
-function nameOf(player) { return player.getUsername(); }
+function nameOf(player) { return player.getDisplayName(); }
 
 function showSelection(player, selectedGame = 0, ranks = {}) {
   varbit(player, "game", gameName(selectedGame) === "runelink" ? 1 : 0);

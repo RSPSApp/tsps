@@ -76,13 +76,13 @@ function issue(player,menu) {
   const inv={from:player,to:menu.target,game:menu.game,settings:{...menu.settings},created:now()};
   let list=invitations.get(player);if(!list)invitations.set(player,list=new Map());list.set(menu.target,inv);
   menus.delete(player);player.getPacketSender().sendInterfaceRemoval();
-  player.sendMessage(`You challenge ${menu.target.getUsername()} to ${menu.game==='draughts'?'Draughts':'RuneLink'}.`);
-  menu.target.sendMessage(`${player.getUsername()} challenges you to ${menu.game==='draughts'?'Draughts':'RuneLink'}. Choose Challenge on that player to accept.`);
+  player.sendMessage(`You challenge ${menu.target.getDisplayName()} to ${menu.game==='draughts'?'Draughts':'Runelink'}.`);
+  menu.target.sendMessage(`${player.getDisplayName()} challenges you to ${menu.game==='draughts'?'Draughts':'Runelink'}. Choose Challenge on that player to accept.`);
   api.sendMultiChatboxPrompt(menu.target,'Accept this game challenge?',
     'Accept',()=>accept(inv),'Decline',()=>decline(inv));
 }
 function decline(inv) {
-  if(removeInvitation(inv))inv.from.sendMessage(`${inv.to.getUsername()} declined your challenge.`);
+  if(removeInvitation(inv))inv.from.sendMessage(`${inv.to.getDisplayName()} declined your challenge.`);
 }
 function accept(inv) {
   if(invitation(inv.from,inv.to)!==inv)return;

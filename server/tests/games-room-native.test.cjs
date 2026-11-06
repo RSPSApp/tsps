@@ -287,3 +287,28 @@ test('PacketSender close forfeits once and cannot end a later native match', asy
   assert.equal(fresh.state.result.winner, 1, 'real modal replacement also forfeits');
   assert.equal(Room.matchOf(a), undefined);
 });
+
+test('challenge, decline messages and board names show display names, never login names', async () => {
+  const a = actor(), b = actor();
+  a.setDisplayName('Alice Disp');
+  b.setDisplayName('Bob Disp');
+  const said = new Map([[a, []], [b, []]]);
+  for (const p of [a, b]) {
+    const send = p.sendMessage.bind(p);
+    p.sendMessage = text => { said.get(p).push(String(text)); return send(text); };
+  }
+  await invite(a, b, 'runelink');
+  assert.ok(said.get(a).includes('You challenge Bob Disp to Runelink.'));
+  assert.ok(said.get(b).includes('Alice Disp challenges you to Runelink. Choose Challenge on that player to accept.'));
+  await choice(b, 2);
+  assert.ok(said.get(a).includes('Bob Disp declined your challenge.'));
+  const m = await match(a, b, 'runelink');
+  const board = received(m.players[0]);
+  const name = key => textValue(board, core.CacheDefinitions.getComponentId(`boardgames_runelink:${key}`));
+  assert.equal(name('p1_name'), m.players[0].getDisplayName());
+  assert.equal(name('p2_name'), m.players[1].getDisplayName());
+  assert.equal(name('turn_name'), m.players[m.state.turn].getDisplayName());
+  for (const text of [...said.get(a), ...said.get(b), name('p1_name'), name('p2_name'), name('turn_name')]) {
+    assert.ok(!text.includes(a.getUsername()) && !text.includes(b.getUsername()), `no login name in "${text}"`);
+  }
+});

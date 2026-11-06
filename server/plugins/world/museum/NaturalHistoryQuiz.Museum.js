@@ -46,6 +46,8 @@ const KUDOS_PER_CASE = 2;
 const REWARD_XP = 1000;
 const SOUND_RIGHT_ANSWER = 3648;
 const SOUND_KUDOS = 3653;
+/** Cache script 65/66 spins an interface model; The Golem's display case uses it (rsprox 1723). */
+const MODEL_SPINNER_SCRIPT = 65;
 const NOT_AGREED_MESSAGE = "This looks like some sort of quiz. I wonder if I can take part...";
 const KUDOS_MESSAGE = "You have earned Kudos with the Museum!";
 const REWARD_MESSAGE = "You have gained 1000xp in Slayer and Hunter.";
@@ -133,7 +135,10 @@ function openCase(player, entry) {
   sender.sendInterface(ids.interfaceId);
   sender.sendString(entry.title, ids.title);
   sender.sendString(String(entry.number), ids.number);
-  for (const model of entry.models) sender.sendInterfaceRawModel(model.uid, model.model);
+  for (const model of entry.models) {
+    sender.sendInterfaceRawModel(model.uid, model.model);
+    sender.sendClientScript(MODEL_SPINNER_SCRIPT, 0, 5, 0, model.uid);
+  }
   if (progress < QUESTIONS_PER_CASE) {
     const question = entry.questions[progress];
     sender.sendString(question.question, ids.question);

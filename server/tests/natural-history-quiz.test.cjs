@@ -111,6 +111,7 @@ function makeWorld() {
     onInterfaceActionButton(uid, handler) { buttons.set(uid, handler); },
     onAnyNpcInteraction(actions) { anyNpc = actions; },
     onPlayerLogin(handler) { login.push(handler); },
+    registerArea() {},
     sendMultiChatboxPrompt(player, _title, ...flat) {
       const options = [];
       for (let i = 0; i < flat.length; i += 2) options.push([flat[i], flat[i + 1]]);

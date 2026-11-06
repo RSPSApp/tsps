@@ -34,7 +34,7 @@ test('cross-floor ranged and magic honor the option, range and collision; melee 
   assert.equal(CombatRange.canReach(archer, method(CombatType.MAGIC), target), false);
 });
 
-test('lower-floor actor and projectile visibility follows visibility or combat options', t => {
+test('lower-floor actor and projectile visibility follows its parent visibility option', t => {
   const { CrossFloor } = require('../dist/game/CrossFloor');
   const previous = Object.fromEntries(['CROSS_FLOOR_VISIBILITY_AND_COMBAT', 'CROSS_FLOOR_VISIBILITY', 'CROSS_FLOOR_COMBAT'].map(key => [key, process.env[key]]));
   t.after(() => { for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; } });
@@ -53,16 +53,18 @@ test('lower-floor actor and projectile visibility follows visibility or combat o
     'projectiles from floors above the viewer stay hidden');
   process.env.CROSS_FLOOR_COMBAT = '1';
   process.env.CROSS_FLOOR_VISIBILITY = '0';
-  assert.equal(CrossFloor.enabled(), true, 'cross-floor combat also enables lower-floor entity sync');
-  assert.equal(CrossFloor.visible(viewer, lower, 15), true,
-    'combat enabled keeps lower-floor NPC targets visible');
-  assert.equal(CrossFloor.projectileVisible(viewer, lower, 15), true);
-  assert.equal(CrossFloor.projectileVisible(viewer, upper, 15), false,
-    'combat does not expose projectiles on hidden upper floors');
+  assert.equal(CrossFloor.enabled(), false, 'explicitly disabling visibility stays authoritative');
+  assert.equal(CrossFloor.combatEnabled(), false, 'combat cannot bypass its visibility prerequisite');
+  assert.equal(CrossFloor.visible(viewer, lower, 15), false);
+  assert.equal(CrossFloor.projectileVisible(viewer, lower, 15), false);
   process.env.CROSS_FLOOR_COMBAT = '0';
   assert.equal(CrossFloor.visible(viewer, lower, 15), false, 'both options off restores same-floor visibility');
   assert.equal(CrossFloor.projectileVisible(viewer, lower, 15), false,
     'both options off hides cross-floor projectiles');
+  process.env.CROSS_FLOOR_VISIBILITY = '1';
+  process.env.CROSS_FLOOR_COMBAT = '1';
+  assert.equal(CrossFloor.enabled(), true);
+  assert.equal(CrossFloor.combatEnabled(), true, 'combat is enabled when both parent and child options are on');
 });
 
 test('cross-floor combat searches reachable clear-shot tiles on the attacker floor', t => {

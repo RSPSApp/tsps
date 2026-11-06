@@ -11,6 +11,8 @@ const { Projectile } = require('../dist/game/model/Projectile');
 const { TaskManager } = require('../dist/game/task/TaskManager');
 const { Location } = require('../dist/game/model/Location');
 const { Sounds } = require('../dist/game/Sounds');
+const { World } = require('../dist/game/World');
+const { PluginManager } = require('../dist/plugins/PluginManager');
 
 // The item used to land in the pack on the cast tick, before the projectile reached it.
 test('Telekinetic Grab takes the item when its projectile lands, not on the cast', (t) => {
@@ -84,4 +86,59 @@ test('Telekinetic Grab takes the item when its projectile lands, not on the cast
     run();
     assert.equal(added.length, 2, 'opt-in telegrab can take a visible item from a lower floor');
     assert.equal(experiences.length, 3);
+});
+
+test('Telekinetic Grab takes the stack from its captured floor when another floor matches', (t) => {
+    const listener = new MagicOnItemPacketListener();
+    const previous = Object.fromEntries(['CROSS_FLOOR_VISIBILITY_AND_COMBAT', 'CROSS_FLOOR_VISIBILITY', 'CROSS_FLOOR_COMBAT'].map(key => [key, process.env[key]]));
+    t.after(() => { for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; } });
+    delete process.env.CROSS_FLOOR_VISIBILITY_AND_COMBAT;
+    process.env.CROSS_FLOOR_VISIBILITY = '1';
+    process.env.CROSS_FLOOR_COMBAT = '0';
+    t.mock.method(PluginManager, 'getPluginConfig', () => undefined);
+    t.mock.method(PluginManager, 'emitCustomEvent', () => {});
+
+    const makePile = (position) => ({
+        getItem: () => ({ getId: () => 995, getAmount: () => 10 }),
+        getPosition: () => position,
+        getPrivateArea: () => null,
+        getState: () => undefined,
+        isPendingRemoval: () => false,
+    });
+    const lowerPile = makePile(new Location(3205, 3200, 0));
+    const middlePile = makePile(new Location(3205, 3200, 1));
+    let groundItems = [lowerPile];
+    t.mock.method(World, 'getItems', () => groundItems);
+    t.mock.method(ItemOnGroundManager, 'canSee', () => true);
+    t.mock.method(listener, 'canGrabGroundItem', () => true);
+    for (const name of ['hasRunes', 'canReceiveGroundItem']) t.mock.method(listener, name, () => true);
+    t.mock.method(listener, 'runeCosts', () => []);
+    t.mock.method(listener, 'consumeRunes', () => {});
+    const taken = [];
+    t.mock.method(ItemOnGroundManager, 'transferToInventory', (_player, item) => { taken.push(item); return 1; });
+    const tasks = [];
+    t.mock.method(TaskManager, 'submit', task => tasks.push(task));
+    t.mock.method(Projectile.prototype, 'sendProjectile', () => {});
+    t.mock.method(Sounds, 'sendSound', () => {});
+    const sender = new Proxy({}, { get: (_, name) => (name === 'then' ? undefined : () => sender) });
+
+    const player = {
+        isRegistered: () => true,
+        getHitpoints: () => 10,
+        getLocation: () => new Location(3200, 3200, 2),
+        getPrivateArea: () => null,
+        getUsername: () => 'tester',
+        getClickDelay: () => ({ elapsedTime: () => true, reset() {} }),
+        getSkillManager: () => ({ getCurrentLevel: () => 99, stopSkillable() {}, addExperiences() {} }),
+        getPacketSender: () => sender,
+        setPositionToFace() {}, performAnimation() {}, performGraphic() {},
+    };
+    listener.castGroundItem(player, 995, 3205, 3200, 1168);
+    assert.equal(tasks.length, 1, 'the lower-floor target starts a delayed grab');
+
+    // A matching pile appears on an intermediate floor before the projectile lands.
+    groundItems = [lowerPile, middlePile];
+    tasks[0].execute();
+
+    assert.deepEqual(taken, [lowerPile], 'a matching stack on the intermediate floor is not substituted');
 });

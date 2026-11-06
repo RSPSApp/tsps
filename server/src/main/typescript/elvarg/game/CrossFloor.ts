@@ -7,18 +7,13 @@ export class CrossFloor {
     private static legacyEnabled(): boolean { return process.env.CROSS_FLOOR_VISIBILITY_AND_COMBAT === "1"; }
     static enabled(): boolean {
         const configured = PluginManager.getPluginConfig<unknown>("CrossFloor:visibility");
-        const visibilityEnabled = typeof configured === "boolean"
-            ? configured
-            : process.env.CROSS_FLOOR_VISIBILITY === undefined
+        if (typeof configured === "boolean") return configured;
+        return process.env.CROSS_FLOOR_VISIBILITY === undefined
             ? CrossFloor.legacyEnabled()
             : process.env.CROSS_FLOOR_VISIBILITY === "1";
-        // Combat must also sync lower-floor actors so players can see their targets.
-        return visibilityEnabled || CrossFloor.configuredCombatEnabled();
     }
     static combatEnabled(): boolean {
-        return CrossFloor.configuredCombatEnabled();
-    }
-    private static configuredCombatEnabled(): boolean {
+        if (!CrossFloor.enabled()) return false;
         const configured = PluginManager.getPluginConfig<unknown>("CrossFloor:combat");
         if (typeof configured === "boolean") return configured;
         return process.env.CROSS_FLOOR_COMBAT === undefined

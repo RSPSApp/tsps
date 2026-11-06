@@ -232,7 +232,9 @@ export class MagicOnItemPacketListener {
       return;
     }
     player.getSkillManager().addExperiences(Skill.MAGIC, MagicOnItemPacketListener.TELEKINETIC_GRAB_XP);
-    const groundItem = this.findVisibleGroundItem(player, groundItemId, position.getX(), position.getY());
+    const groundItem = this.findVisibleGroundItem(
+      player, groundItemId, position.getX(), position.getY(), position.getZ(),
+    );
     if (!groundItem) {
       player.sendMessage("Too late - it's gone!");
       return;
@@ -421,7 +423,7 @@ export class MagicOnItemPacketListener {
     player.getDialogueManager().startDialogues(chain);
   }
 
-  private findVisibleGroundItem(player: any, groundItemId: number, x: number, y: number): any | null {
+  private findVisibleGroundItem(player: any, groundItemId: number, x: number, y: number, z?: number): any | null {
     const candidates = World.getItems().filter((item) => {
       if (!item || item.isPendingRemoval?.()) {
         return false;
@@ -431,6 +433,9 @@ export class MagicOnItemPacketListener {
       }
       const position = item.getPosition?.();
       if (position?.getX?.() !== x || position?.getY?.() !== y) {
+        return false;
+      }
+      if (z !== undefined && position.getZ?.() !== z) {
         return false;
       }
       if (item.getPrivateArea?.() !== player.getPrivateArea?.()) {

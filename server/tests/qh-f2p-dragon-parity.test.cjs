@@ -236,14 +236,16 @@ test('Melzar shouts his transcript lines only in a fight, and fights with the ca
   let target = null, hitpoints = 44, roll = 0, cast = null;
   t.mock.method(Math, 'random', () => roll);
   const said = [], anims = [];
+  let melzarAt = new core.Location(2928, 9649, 0);
   const melzar = {
+    getLocation: () => melzarAt, getSize: () => 1, getIndex: () => 1, isPlayer: () => false,
     isNpc: () => true, getId: () => N.MELZAR_THE_MAD, getHitpoints: () => hitpoints,
     getCombat: () => ({ getTarget: () => target, setCastSpell: spell => { cast = spell; } }),
     forceChat: text => said.push(text), calculateDistance: () => 1, performAnimation: a => anims.push(a.getId()),
   };
   maze.process(melzar);
   assert.deepEqual(said, [], 'silent out of combat');
-  target = {};
+  target = { getLocation: () => new core.Location(2928, 9648, 0), getSize: () => 1, getIndex: () => 2, isPlayer: () => true };
   maze.process(melzar);
   assert.deepEqual(said, ['By the power of custard!'], 'the transcript variant\'s first line');
   roll = 0.99; maze.process(melzar);
@@ -265,6 +267,21 @@ test('Melzar shouts his transcript lines only in a fight, and fights with the ca
   assert.equal(spell.type(), core.CombatType.MAGIC);
   assert.equal(cast.castAnimation().getId(), 11426, 'Weaken, as captured');
   assert.equal(cast.maximumHit(), 0);
+  // The hit and the spell's effect land as its own projectile does (reviewers' P2): rev242 tick 2593's Curse
+  // from one tile ends at 90 cycles, 3 ticks, where the legacy NPC timing gave 2.
+  const lands = (spell) => core.Projectile.ticksToLand(spell.arrival(melzar, target));
+  melzar.calculateDistance = () => 5; // no kick, so every roll picks a spell
+  for (const [spellRoll, anim, end] of [[0.1, 9144, 61], [0.5, 11428, 90], [0.9, 11426, 60]]) {
+    roll = spellRoll;
+    new Combat(melzar).start(melzar, target);
+    assert.equal(cast.castAnimation().getId(), anim);
+    assert.equal(cast.arrival(melzar, target), end, 'one tile: the captured end cycle');
+    assert.equal(core.MagicCombatMethod.hitDelay(melzar, target, cast), Math.ceil(end / 30), 'hit on the projectile');
+  }
+  melzarAt = new core.Location(2928, 9653, 0); // five tiles
+  new Combat(melzar).start(melzar, target);
+  assert.equal(cast.arrival(melzar, target), 60 + 4 * 10, 'Weaken from five tiles: 10 cycles a tile more');
+  assert.equal(core.MagicCombatMethod.hitDelay(melzar, target, cast), lands(cast));
   roll = 0.1; melzar.calculateDistance = () => 5; new Combat(melzar).start(melzar, target);
   assert.equal(cast.castAnimation().getId(), 9144, 'no kick from five tiles: Fire Strike');
   assert.ok(cast.maximumHit() <= 5, 'the Wiki max hit');

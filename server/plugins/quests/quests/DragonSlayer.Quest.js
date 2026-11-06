@@ -1398,11 +1398,24 @@ module.exports = function registerDragonSlayerQuest(api) {
   ].map(({ base, anim, projectile, start, endAtOneTile }) => {
     const spell = Object.create(base);
     spell.castAnimation = () => new Animation(anim);
+    spell.arrival = (source, target) => Projectile.arrivalCycles(source, target, endAtOneTile - 10);
     spell.castProjectile = (source, target) => Projectile.createProjectile(source, target, projectile, start,
-      Projectile.arrivalCycles(source, target, endAtOneTile - 10), 43, 31);
+      spell.arrival(source, target), 43, 31);
     spell.maximumHit = () => Math.min(MELZAR_MAX_HIT, base.maximumHit());
     return spell;
   });
+
+  /**
+   * One attack's copy of `spell` whose hit (and Curse/Weaken effect) lands as its own projectile does.
+   * CombatSpell.hitDelay() takes no target, and without it MagicCombatMethod times an NPC's hit to the
+   * legacy 46 + 10 a tile, a tick before Curse's captured 90-cycle flight from one tile.
+   */
+  function castAt(spell, npc, target) {
+    const cast = Object.create(spell);
+    const ticks = Projectile.ticksToLand(spell.arrival(npc, target));
+    cast.hitDelay = () => ticks;
+    return cast;
+  }
 
   /** Fire Strike, Curse, Weaken or (beside the player) a kick, every 4 ticks. Built for each attack. */
   class MelzarCombat extends MagicCombatMethod {
@@ -1412,7 +1425,7 @@ module.exports = function registerDragonSlayerQuest(api) {
         npc.performAnimation(new Animation(MELZAR_KICK));
         return;
       }
-      npc.getCombat().setCastSpell(MELZAR_SPELLS[Math.floor(Math.random() * MELZAR_SPELLS.length)]);
+      npc.getCombat().setCastSpell(castAt(MELZAR_SPELLS[Math.floor(Math.random() * MELZAR_SPELLS.length)], npc, target));
       super.start(npc, target);
     }
     type() { return this.kick ? CombatType.MELEE : super.type(); }

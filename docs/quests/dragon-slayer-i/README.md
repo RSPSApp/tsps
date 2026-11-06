@@ -60,7 +60,10 @@ Community-reported completion accepted for scheduling (skip full manual replay).
     captured), or kicks (423) when beside the player. He used to only melee.
   - His four overhead lines come from the transcript on a 1/3 roll each tick in combat (6 lines in 18 ticks;
     silent out of combat).
-  - He respawns 29 ticks after removal.
+  - He respawns 30 ticks after removal, the Wiki's figure (sources.md: on behaviour the Wiki wins). The
+    capture shows 29 (removed tick 2609, back at 2638).
+  - Each spell's hit and effect land with its own projectile (3 ticks for Curse from one tile, its captured
+    90-cycle flight), not on the generic NPC spell timing.
   - The capture has no cabbage of any kind, so none is added.
 - **Map chests** (ticks 1421-1435, 2693-2709): Open first, with the Oracle chest's lid inscription and then
   the open chest. Search gives "You find a map piece in the chest." in an item box as it shuts. Close shuts it.

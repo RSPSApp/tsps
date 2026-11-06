@@ -371,11 +371,11 @@ test("an eligible Ironman keeps a personal Nex reward after a shared kill", asyn
   for (const name of ["iron", "main", "observer"]) {
     const player = new Player(null, tile(Common.data.chamber.aisles[0].end));
     participants.push(player);
-    player.setUsername(name); player.setRegistered(true); player.setNeedsPlacement(false); player.setHitpoints(99);
     const sender = new Proxy({}, { get: (_, key) => key === "getVarbit" || key === "getVarp" ? () => 0 : () => sender });
     player.getPacketSender = () => sender;
     player.messages = [];
     player.sendMessage = (message) => player.messages.push(message);
+    player.setUsername(name); player.setRegistered(true); player.setNeedsPlacement(false); player.setHitpoints(99);
   }
   const [iron, main, observer] = participants;
   iron.setAttribute("ironman:mode", "ironman");

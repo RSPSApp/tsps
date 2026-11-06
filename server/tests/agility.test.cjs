@@ -1882,3 +1882,23 @@ test("Wilderness ridge door: opening the south door and the north gates swaps th
   assert.deepEqual(leave.steps[2], { walk: [[2998, 3918]] });
   assert.deepEqual(leave.steps[4], { walk: [[2998, 3916]] });
 });
+
+test("Fossil Island sea-floor obstacles and holes each give 4.5 Agility XP (Wiki: Underwater Agility and Thieving)", () => {
+  const obstacles = [
+    [30962, [3758, 10260, 1], [3757, 10260, 1], 3759],
+    [30962, [3726, 10245, 1], [3725, 10245, 1], 3727],
+    [30962, [3824, 10264, 1], [3825, 10264, 1], 3823],
+    [30964, [3754, 10244, 1], [3754, 10243, 1], null],
+    [30964, [3808, 10253, 1], [3807, 10253, 1], 3809],
+  ];
+  for (const [object, at, from, landingX] of obstacles) {
+    const player = createPlayer(...from);
+    operate(player, object, at);
+    assert.equal(player.state.xp, 4.5, `${object} at ${at}`);
+    if (landingX != null) assert.equal(tileOf(player)[0], landingX, `${object} at ${at} crosses`);
+  }
+  const hole = createPlayer(3754, 10243, 1);
+  operate(hole, 30966, [3754, 10241, 1]);
+  assert.equal(hole.state.xp, 4.5);
+  assert.deepEqual(tileOf(hole), [3779, 10241, 1]);
+});

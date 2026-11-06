@@ -139,7 +139,9 @@ function cross(player, entering) {
 }
 
 function pay(player, asked) {
-  if (!nearGate(player) || !isOutside(player) || ObstacleRunner.isBusy(player)) return;
+  // Still crossing (the gate not yet shut behind a player who just left): cross() would refuse,
+  // so nothing is taken.
+  if (!nearGate(player) || !isOutside(player) || ObstacleRunner.isBusy(player) || crossing.has(player)) return;
   const fee = feeFor(player);
   // The tier moved since the question: ask again, so the price asked is the price paid.
   if (fee !== asked) {

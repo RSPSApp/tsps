@@ -1,10 +1,11 @@
 'use strict';
+const { GAMES } = require('./Games.GamesRoom');
 const Rules = require('./Rules.GamesRoom');
 const Screen = require('./Interface.GamesRoom');
 const Tables = require('./Tables.GamesRoom');
 const Access = require('./Access.GamesRoom');
 const Seating = require('./Seating.GamesRoom');
-const RANK_ATTRIBUTES = { draughts: 'games-room:draughts-rank', runelink: 'games-room:runelink-rank' };
+const RANK_ATTRIBUTES = Object.fromEntries(Object.keys(GAMES).map(game => [game, `games-room:${game}-rank`]));
 const SETTINGS_ATTRIBUTE = 'games-room:settings';
 const SECONDS = [15,30,60,120];
 const PIECES = ['firerune','waterrune','earthrune','airrune','mindrune','bodyrune','naturerune','chaosrune','lawrune','cosmicrune','bloodrune','soulrune'];
@@ -29,7 +30,7 @@ function available(player) {
   if(!inRoom(player)||matches.has(player)||core.CombatFactory.inCombat(player))return false;
   if(player.isNeedsPlacement()||player.isTeleportingReturn()||player.getForceMovement()!=null||player.getStatus()!==core.PlayerStatus.NONE)return false;
   const open=player.getInterfaceId();
-  return open<=0||[core.CacheDefinitions.getInterfaceId('boardgames_challenge'),Screen.optionsGroup('draughts'),Screen.optionsGroup('runelink'),Screen.group('draughts'),Screen.group('runelink')].includes(open);
+  return open<=0||[core.CacheDefinitions.getInterfaceId('boardgames_challenge'),...Object.keys(GAMES).flatMap(game=>[Screen.optionsGroup(game),Screen.group(game)])].includes(open);
 }
 function pairValid(a,b) {
   const aRoom=a&&Access.roomGame(a.getLocation()),bRoom=b&&Access.roomGame(b.getLocation());
@@ -76,8 +77,8 @@ function issue(player,menu) {
   const inv={from:player,to:menu.target,game:menu.game,settings:{...menu.settings},created:now()};
   let list=invitations.get(player);if(!list)invitations.set(player,list=new Map());list.set(menu.target,inv);
   menus.delete(player);player.getPacketSender().sendInterfaceRemoval();
-  player.sendMessage(`You challenge ${menu.target.getDisplayName()} to ${menu.game==='draughts'?'Draughts':'Runelink'}.`);
-  menu.target.sendMessage(`${player.getDisplayName()} challenges you to ${menu.game==='draughts'?'Draughts':'Runelink'}. Choose Challenge on that player to accept.`);
+  player.sendMessage(`You challenge ${menu.target.getDisplayName()} to ${GAMES[menu.game].title}.`);
+  menu.target.sendMessage(`${player.getDisplayName()} challenges you to ${GAMES[menu.game].title}. Choose Challenge on that player to accept.`);
   api.sendMultiChatboxPrompt(menu.target,'Accept this game challenge?',
     'Accept',()=>accept(inv),'Decline',()=>decline(inv));
 }
@@ -142,11 +143,11 @@ function invalidSides(match) {
   return match.players.flatMap((p,side)=>!inRoom(p)||!p.getLocation().equals(match.seats[side])?[side]:[]);
 }
 function move(player,match,move) {
-  const side=match.players.indexOf(player),previous=match.state.turn;
+  const side=match.players.indexOf(player);
   if(!pairValidForMatch(match)||!Rules.play(match.state,side,move))return false;
   Seating.moved(match,player);
   match.selected.clear();match.drawOffer=null;
-  if(match.state.turn!==previous||match.state.result)match.turns++;
+  if(match.state.forced==null||match.state.result)match.turns++;
   match.deadline=now()+ticks(match.settings.seconds);
   for(const p of match.players)Screen.refreshMatch(p,match);
   if(match.state.result)finish(match,match.state.result.winner,match.state.result.reason);
@@ -154,7 +155,7 @@ function move(player,match,move) {
 }
 function click(event) {
   const {player,buttonId}=event,group=buttonId>>>16;
-  const supported=[core.CacheDefinitions.getInterfaceId('boardgames_challenge'),Screen.group('draughts'),Screen.group('runelink'),Screen.optionsGroup('draughts'),Screen.optionsGroup('runelink')];
+  const supported=[core.CacheDefinitions.getInterfaceId('boardgames_challenge'),...Object.keys(GAMES).flatMap(game=>[Screen.group(game),Screen.optionsGroup(game)])];
   if(!supported.includes(group))return;event.handled=true;
   if((event.opId??event.action)!==1||!ownScreen(player,group))return;
   const is=name=>buttonId===Screen.component(name),match=matches.get(player);
@@ -211,7 +212,7 @@ function opened({player,groupId,targetUid}) {
 }
 function logout({player}) {leave(player);}
 function bootstrap({player}) {
-  for(const game of ['draughts','runelink'])player.getPacketSender().sendConfig(core.CacheDefinitions.getVarpId(`boardgames_${game}_rank`),rank(player,game));
+  for(const game of Object.keys(GAMES))player.getPacketSender().sendConfig(core.CacheDefinitions.getVarpId(`boardgames_${game}_rank`),rank(player,game));
 }
 function processPlayer(player) {
   if(!player.isPlayer())return;
@@ -238,7 +239,7 @@ function attach(pluginApi) {
   }
   // Reference region34,77, confirmed against the active Games Room map.
   area=new GamesRoomArea([new core.Boundary(2176,2239,4928,4991,0),new core.Boundary(2176,2239,4928,4991,1)]);
-  api.persistAttribute(RANK_ATTRIBUTES.draughts,1000);api.persistAttribute(RANK_ATTRIBUTES.runelink,1000);
+  for(const attribute of Object.values(RANK_ATTRIBUTES))api.persistAttribute(attribute,1000);
   api.persistAttribute(SETTINGS_ATTRIBUTE,{piece:1,seconds:30,ranked:true});
   api.registerArea(area);api.onPlayerOption(playerOption);api.onCustomEvent('player:option-route',route);api.onInterfaceActionClick(click);
   api.onPlayerLogout(logout);api.onCustomEvent('interface:closed',closed);api.onCustomEvent('interface:opened',opened);api.onCustomEvent('player:bootstrap-complete',bootstrap);

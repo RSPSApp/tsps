@@ -1,0 +1,12 @@
+'use strict';
+
+// Native boardgames_game values and options label components, verified against
+// the revision 241 challenge/options scripts and active cache.
+const GAMES = {
+  draughts: { id: 0, title: 'Draughts', width: 8, height: 8, squareInput: true,
+    optionTimeLabel: 'com_42', optionRankLabel: 'com_56' },
+  runelink: { id: 1, title: 'Runelink', width: 7, height: 6, squareInput: false,
+    optionTimeLabel: 'com_45', optionRankLabel: 'com_43' },
+};
+
+module.exports = { GAMES };

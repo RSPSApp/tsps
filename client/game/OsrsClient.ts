@@ -399,7 +399,7 @@ const TAB_SWITCH_SCRIPT = 914;
 /** Server-set widget properties held while their cache interface is not loaded. */
 const HELD_WIDGET_ACTIONS: ReadonlySet<string> = new Set([
     "set_text", "set_hidden", "set_model", "set_angle", "set_colour", "set_position", "set_item",
-    "set_npc_head", "set_animation", "set_player_head",
+    "set_npc_head", "set_animation", "set_player_head", "set_rotate_speed",
 ]);
 const DEFAULT_ROOT_INTERFACE = 161;
 const DEFAULT_DISPLAY_ENUM = 1130;

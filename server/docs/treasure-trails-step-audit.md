@@ -10,7 +10,7 @@ Audit date: 2026-11-04. The catalogue below covers 908 cluehelper rows from the 
 | Elite | 124 / 124 |
 | Master | 97 / 265 |
 
-Easy, medium, and hard have no cache rows suppressed by the current runtime checks. Elite is now complete after adding the content-backed kills described below. Master three-part cryptic trails have 29 safe part candidates. Two other candidate rows stay out of the part pool: Viggora depends on the absent Curse of the Empty Lord miniquest, and Watson's row is a correct exclusion (see "Correct exclusions" below).
+Easy, medium, and hard have no cache rows suppressed by the current runtime checks. Elite is now complete after adding the content-backed kills described below. Master three-part cryptic trails have all 30 part candidates in the pool. Viggora's is drawn only for a player who has reached him in Curse of the Empty Lord (see below). Watson's row stays out, and that is a correct exclusion (see "Correct exclusions" below).
 
 Elite Sherlock has all 25 task rows wired.
 
@@ -35,6 +35,8 @@ The RSProx recordings reviewed for this audit corroborate clue and Sherlock scro
 - Create a Barrows teleport tablet: the tablet is made at the Arceuus lectern in the Ouditor's house (loc 28802, enum 2628), not a house lectern, which is why no house lectern enum lists it. #2548 added that lectern to `Lectern.Construction.js`; this task counts its `construction:tablet-made` event for a Barrows teleport. Its Study refusals, rune message, border varbit and own Create-last now follow rsprox 235/03899 and the Wiki. [Barrows teleport (tablet)](https://oldschool.runescape.wiki/w/Barrows_teleport_(tablet)), [Lectern (Arceuus)](https://oldschool.runescape.wiki/w/Lectern_(Arceuus)).
 - Mix a ranging mix: the recipe is one of Herblore's barbarian mixes. It is learned through Barbarian Training's Herblore section. Otto Godblessed teaches rod fishing (the rod under his bed and a leaping fish), then asks for an attack mix, and handing it over unlocks every mix (`plugins/npcs/BarbarianTraining.plugin.js`, `docs/herblore.md`). The task counts `herblore:made` with the ranging mix(2). [Ranging mix](https://oldschool.runescape.wiki/w/Ranging_mix_%281%29), [Barbarian Training](https://oldschool.runescape.wiki/w/Barbarian_Training).
 
+- Viggora: Curse of the Empty Lord is now on the server (`plugins/quests/quests/CurseOfTheEmptyLord.Quest.js`, with its transcript imported from osrsreboxed-db), and the ring of visibility shows the ghosts (`plugins/items/RingOfVisibility.plugin.js`). The Wiki's requirement is the miniquest up to the point where the player talks to Viggora, plus a ghostspeak amulet (or Morytania legs 2+) and a ring of visibility (or ring of shadows). His part is drawn only for a player whose miniquest stage has reached him (asked through `curse-of-the-empty-lord:viggora`). It is handed over only with the cache outfit worn, and only by the Viggora at the player's own sequence spot: the cache's clue-helper script maps `secret_ghost_randomiser` 1/2/3 to his Rogues' Castle, Slayer Tower and Edgeville Dungeon targets. The torn-part Talk-to hook now also accepts the ghosts' cache spelling `Talk-To`. [Viggora](https://oldschool.runescape.wiki/w/Viggora).
+
 ## Correct exclusions
 
 - Watson's cryptic row ("Buried beneath the ground, who knows where it's found. Lucky for you, a man called Watson…") is the Twisted League copy of Jorral's hot/cold starter: in that league Watson handed out the strange device because Jorral was out of reach. On a main-game world the row is never given, so it is not a gap. Watson's main-game role, trading one clue of each lower tier for a master clue, is implemented in `Watson.TreasureTrails.js`. [Watson](https://oldschool.runescape.wiki/w/Watson).
@@ -52,7 +54,7 @@ Mining nickel and stealing from a chest in Ardougne Castle are wired now that th
 
 ### Master three-part cryptic parts
 
-- Viggora: the Wiki requires Curse of the Empty Lord to have reached the point where the player talks to him, plus a ghostspeak amulet and a ring of visibility. The miniquest is not on this server, so his part stays out of the pool. [Viggora](https://oldschool.runescape.wiki/w/Viggora).
+None: every part can be drawn.
 
 ## Verification
 
@@ -61,3 +63,5 @@ Mining nickel and stealing from a chest in Ardougne Castle are wired now that th
 Master follow-up (2026-11-05): an active-cache catalogue load gives 96 rollable master rows and 29 parts; `tests/treasure-trails-master.test.cjs` covers the two new tasks (inside and outside their area) and Piles' and Lovada's torn parts, and the spawn sync's repair was run twice from the fixture with no change on the second run.
 
 Ranging mix follow-up (2026-11-05): `tests/barbarian-training.test.cjs` covers Otto's topics, the bed, the catch, the unlock and the mix; `tests/treasure-trails-master.test.cjs` now covers the ranging mix task with the other master tasks. Live on a slot server, a rolled master clue on this step completed with a made ranging mix, and Sherlock gave the next clue.
+
+Viggora (2026-11-05): `tests/treasure-trails-master.test.cjs` checks the pool has 30 parts and that Viggora is never drawn before the miniquest reaches him, but is drawn after. It also checks his part is handed over only with the outfit, at the player's own spot and with the cache's `Talk-To` option. `tests/curse-of-the-empty-lord.test.cjs` covers the miniquest's three sequences. On a slot-39 QA server, the headless player was refused at the wrong-sequence Viggora and without ghostspeak, and was handed the torn part at their own spot with the outfit.

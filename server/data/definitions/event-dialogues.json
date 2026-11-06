@@ -7534,9 +7534,19 @@
                       "text": "Lost it already? Lucky for you, I've got a spare tucked away. You can have this one."
                     },
                     {
-                      "type": "jump",
-                      "reference": "continues",
-                      "id": "mxaG3S"
+                      "type": "condition",
+                      "text": "If the player has no inventory space:",
+                      "id": "UBDVQJ",
+                      "steps": [
+                        {
+                          "type": "line",
+                          "speaker": "Seth Groats",
+                          "text": "Oh, looks like you've got no space for it. I'll hold onto it until you do."
+                        },
+                        {
+                          "type": "end"
+                        }
+                      ]
                     },
                     {
                       "type": "condition",
@@ -7546,37 +7556,15 @@
                           "type": "message",
                           "text": "You have acquired a spooky picture, a chair, scarecrow and wall lamp. You should return to Fred in Lumbridge.",
                           "id": "tdDfyd"
-                        },
-                        {
-                          "type": "action",
-                          "action": "receive",
-                          "text": "a Spooky picture",
-                          "id": "Nkt5y6"
-                        },
-                        {
-                          "type": "jump",
-                          "reference": "continues",
-                          "id": "csYv-m"
                         }
                       ],
                       "id": "pMyO2X"
                     },
                     {
-                      "type": "condition",
-                      "text": "If the player has no inventory space:",
-                      "steps": [
-                        {
-                          "type": "line",
-                          "speaker": "Seth Groats",
-                          "text": "Oh, looks like you've got no space for it. I'll hold onto it until you do."
-                        },
-                        {
-                          "type": "jump",
-                          "reference": "continues",
-                          "id": "I60naq"
-                        }
-                      ],
-                      "id": "UBDVQJ"
+                      "type": "action",
+                      "action": "receive",
+                      "text": "a Spooky picture",
+                      "id": "Nkt5y6"
                     }
                   ],
                   "id": "1Glkal"
@@ -8658,8 +8646,13 @@
                   "steps": [
                     {
                       "type": "jump",
-                      "reference": "above",
-                      "id": "Kg0hmG"
+                      "id": "Kg0hmG",
+                      "steps": [
+                        {
+                          "type": "call",
+                          "branch": "jump-c9b44ecef3bdb073"
+                        }
+                      ]
                     }
                   ],
                   "id": "uDxjdh"
@@ -8917,8 +8910,13 @@
                     },
                     {
                       "type": "jump",
-                      "reference": "above",
-                      "id": "kzB_xv"
+                      "id": "kzB_xv",
+                      "steps": [
+                        {
+                          "type": "call",
+                          "branch": "jump-d62a299ec75c3e97"
+                        }
+                      ]
                     }
                   ],
                   "id": "Xu40ur"
@@ -9015,6 +9013,173 @@
         },
         {
           "type": "end"
+        }
+      ],
+      "jump-c9b44ecef3bdb073": [
+        {
+          "type": "condition",
+          "text": "If not wearing at least 3 Halloween items:",
+          "steps": [
+            {
+              "type": "action",
+              "action": "open_interface",
+              "target": "Diango's Holiday Item Retrieval",
+              "id": "L9reaW"
+            }
+          ],
+          "id": "9NWeHn"
+        },
+        {
+          "type": "condition",
+          "text": "If not wearing at least 3 Halloween items:",
+          "steps": [
+            {
+              "type": "line",
+              "speaker": "Diango",
+              "text": "Well now, someone's clearly in the Halloween spirit! A deal's a deal! Here's your spooky pumpkin lantern."
+            },
+            {
+              "type": "condition",
+              "text": "If the player has no inventory space:",
+              "steps": [
+                {
+                  "type": "line",
+                  "speaker": "Diango",
+                  "text": "Ah, but I see you don't have space for it right now. Come back when you do."
+                },
+                {
+                  "type": "end"
+                }
+              ],
+              "id": "5nwfqm"
+            },
+            {
+              "type": "action",
+              "action": "receive",
+              "text": "a Spooky pumpkin lantern",
+              "id": "BSrsl1"
+            },
+            {
+              "player": "Thank you, Diango. I'll make sure it gets put to good use."
+            },
+            {
+              "type": "line",
+              "speaker": "Diango",
+              "text": "Just keep the costumes. You might need them for the contest!"
+            }
+          ],
+          "id": "_MxZad"
+        }
+      ],
+      "jump-d62a299ec75c3e97": [
+        {
+          "type": "condition",
+          "text": "If the player is not wearing at least 3 Halloween items and/or does not have the Spooky pumpkin lantern equipped:",
+          "steps": [
+            {
+              "type": "end"
+            }
+          ],
+          "id": "4Sjcyo"
+        },
+        {
+          "type": "condition",
+          "text": "If the player is wearing at least 3 Halloween items and has the Spooky pumpkin lantern equipped:",
+          "steps": [
+            {
+              "type": "action",
+              "text": "A cutscene begins. Death shows up to judge Fred's farm decorations.",
+              "id": "5shIok"
+            },
+            {
+              "type": "line",
+              "speaker": "Seth Groats",
+              "text": "Hmm... This looks familiar."
+            },
+            {
+              "type": "line",
+              "speaker": "Seth Groats",
+              "text": "You've been busy, haven't you?"
+            },
+            {
+              "type": "line",
+              "speaker": "Death",
+              "text": "Hmm... Spooky indeed. Not spine-chilling, but... effort was made."
+            },
+            {
+              "type": "line",
+              "speaker": "Death",
+              "text": "Those wall lamps are to die for."
+            },
+            {
+              "type": "line",
+              "speaker": "Death",
+              "text": "I hereby grant this house an... honourable mention!"
+            },
+            {
+              "type": "line",
+              "speaker": "Fred the Farmer",
+              "text": "An honourable mention!",
+              "presentation": "overhead"
+            },
+            {
+              "player": "What?!",
+              "presentation": "overhead"
+            },
+            {
+              "type": "line",
+              "speaker": "Seth Groats",
+              "text": "Huh... interesting.",
+              "presentation": "overhead"
+            },
+            {
+              "type": "action",
+              "text": "The cutscene ends.",
+              "id": "LRWlwH"
+            },
+            {
+              "player": "Just an honourable mention? After all that work?"
+            },
+            {
+              "type": "line",
+              "speaker": "Fred the Farmer",
+              "text": "An honourable mention! Thank you, my friend! You've made this old farmer's haunted dreams come true. I've never won anything in a Spook-a-thon contest before!"
+            },
+            {
+              "type": "line",
+              "speaker": "Fred the Farmer",
+              "text": "Here, take this as my appreciation for your help!"
+            },
+            {
+              "type": "condition",
+              "text": "If the player has insufficient inventory space:",
+              "steps": [
+                {
+                  "type": "message",
+                  "text": "You need [1-9] free inventory [slot/slots] to receive your Halloween event rewards.",
+                  "id": "sIAJwR"
+                },
+                {
+                  "type": "end"
+                }
+              ],
+              "id": "n77zq-"
+            },
+            {
+              "type": "action",
+              "text": "(Event complete interface opens.)",
+              "action": "open_interface",
+              "action_source": "text",
+              "target": "Event complete",
+              "id": "eC17__"
+            },
+            {
+              "type": "message",
+              "text": "You've completed the Halloween event: Spook-a-thon Decoration Contest",
+              "id": "LqbtJm"
+            }
+          ],
+          "id": "H4FTU9"
         }
       ],
       "jump-0f373180712afbc7": [

@@ -22,6 +22,13 @@ gh issue list --repo RSPSApp/tsps --state open --limit 150 --json number,title,a
 - **Take what you can verify** through the agent MCP (rules, items, NPCs, dialogue, drops,
   movement) or with headless screenshots (visuals). A report that needs the reporter's answer
   waits for it. Suggestions aren't bugs; take them only when asked.
+- **Ask for evidence when needed.** A useful report states what happened, what should happen and
+  how to reproduce it. Evidence is not required to file: an obvious defect can be clear from the
+  reproduction alone. When the behavior is non-obvious, ask for the precise rsprox/Wiki/cache/code
+  or other mechanics evidence needed to establish or diagnose it, and label the issue
+  `needs-evidence` / `capture-needed`; keep plausible bugs open, and never reject an obvious issue
+  just for a missing link. Close completed or already-fixed work as **COMPLETED**, and close only
+  confirmed non-bugs or duplicates as **NOT_PLANNED**.
 
 ## 2. Claim it
 
@@ -86,8 +93,25 @@ The goal is closed bugs, not partially closed ones.
 - **If it really can't be done** (no recording, cache, CS2 or Wiki source exists), ship what's
   real with `Refs #N`. Then comment on the issue with exactly what evidence would finish it, and
   unassign yourself.
-- **If it already works** (it matches a capture, or someone else fixed it), close it with a
-  comment that cites the evidence or the PR.
+- **If it already works** (it matches a capture, or someone else fixed it), close it as
+  **COMPLETED** with a comment that cites the evidence or the PR.
+- **Keep plausible bugs open.** If the report looks like a real defect but the exact expected
+  behavior, values, timing or messages are missing, don't close it. Comment with the precise
+  evidence needed (for example, "an rsprox capture of this door being used" or "the cache/CS2
+  value that defines the result"), apply `needs-evidence` (or `capture-needed` when a recording
+  is the specific missing piece), and leave it unassigned or hand it back. Native detail or a
+  reproduction not being available is not a reason to close.
+- **Close confirmed non-bugs and duplicates as NOT_PLANNED.** Use **NOT_PLANNED** only when the
+  report is confirmed not to describe a defect against any supported behavior, or is a duplicate.
+  Completed or fixed work closes as **COMPLETED** (above), not **NOT_PLANNED**. State the precise
+  reason and evidence.
+- **Separate capture-needed from needs-evidence.** If the behavior is established and only a
+  recording of the exact values, timing or messages is missing, label `capture-needed` and say
+  what to capture. If the behavior is plausible but the source or reproduction is unclear, use
+  `needs-evidence` and ask for the missing rsprox/Wiki/cache/code reference. Never use either
+  label for a confirmed non-bug.
+- **Keep these open:** obvious source-backed defects, supported capture-dependent work and
+  approved feature roadmap requests.
 
 ## 6. Review before you ship
 

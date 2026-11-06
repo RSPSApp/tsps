@@ -182,7 +182,7 @@ export interface WidgetNode {
     rotationX?: number; // model rotation X (cache format)
     rotationY?: number; // model rotation Y (cache format)
     rotationZ?: number; // model rotation Z (cache format)
-    /** IF_SETROTATESPEED packed as the live client keeps it: x speed in the high short, z in the low. */
+    /** IF_SETROTATESPEED packed: signed y (yaw) speed in the high short, x (pitch) speed in the low. */
     modelRotationSpeed?: number;
     modelAngleX?: number; // alias for CS2 ops
     modelAngleY?: number; // alias for CS2 ops

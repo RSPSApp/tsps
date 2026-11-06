@@ -20,6 +20,7 @@ import net.rsprot.protocol.game.outgoing.interfaces.IfSetNpcHead
 import net.rsprot.protocol.game.outgoing.interfaces.IfSetObject
 import net.rsprot.protocol.game.outgoing.interfaces.IfSetPlayerHead
 import net.rsprot.protocol.game.outgoing.interfaces.IfSetPosition
+import net.rsprot.protocol.game.outgoing.interfaces.IfSetRotateSpeed
 import net.rsprot.protocol.game.outgoing.interfaces.IfSetText
 import net.rsprot.protocol.game.outgoing.misc.player.RunClientScript
 import net.rsprot.protocol.game.outgoing.misc.player.TriggerOnDialogAbort
@@ -79,6 +80,11 @@ class Interfaces(
             TspsServerPacket.WIDGET_SET_PLAYER_HEAD -> component(reader) { i, c -> IfSetPlayerHead(i, c) }
             TspsServerPacket.WIDGET_SET_ANIMATION -> component(reader) { i, c -> IfSetAnim(i, c, reader.s16()) }
             TspsServerPacket.WIDGET_SET_ANGLE -> component(reader) { i, c -> IfSetAngle(i, c, reader.u16(), reader.u16(), reader.u16()) }
+            TspsServerPacket.WIDGET_SET_ROTATE_SPEED ->
+                component(reader) { i, c ->
+                    val packed = reader.i32()
+                    IfSetRotateSpeed(i, c, packed.toShort().toInt(), (packed ushr 16).toShort().toInt())
+                }
             TspsServerPacket.WIDGET_SET_MODEL -> component(reader) { i, c -> IfSetModelV2(i, c, reader.i32()) }
             TspsServerPacket.WIDGET_SET_POSITION -> component(reader) { i, c -> IfSetPosition(i, c, reader.s16(), reader.s16()) }
             TspsServerPacket.WIDGET_SET_COLOUR ->

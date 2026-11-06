@@ -44,9 +44,15 @@ diary flag and plucking did not request its roll. See `chompy-pet-acquisition.md
   progress (Wiki "Hellcat", Mod Ash). Milk reverts every hell stage. Overgrown cats still
   catch vermin at 75%, which predates this change and contradicts Wiki "Overgrown cat"
   ("will lose its ability to catch vermin"); they get no hell-rat route here. Not modelled: the activity-level
-  catch bonus, Felkrash's cat-naming interface, the hell-rat behemoth route (no Rat Pits),
+  catch bonus, the hell-rat behemoth route (no Rat Pits),
   kalphite larva/butterfly catches, and exact transformation messages (no capture or Wiki
   text; only the hellcat line is shown, matching the hell-kitten one).
+- Felkrash names a carried or following wily or lazy cat after Ratcatchers. The six-letter
+  name is shared by these cat forms and appears in her naming conversation; it persists in
+  the player save. The first naming defaults to `AAAAAA`; later opens restore the saved
+  name. The arrows cycle `A`-`Z` and space. That default and cycling order are TSPS policy,
+  not a recorded retail timing or UI claim.
+  Cat and hellcat dialogue beyond the naming conversation remains outside this feature.
 - Probita already reclaims recorded missing pets freely. The current
   [Probita Wiki page](https://oldschool.runescape.wiki/w/Probita) dates free reclaim to
   10 September2025. Do not add the obsolete one-million-coin fee. A native recovery screen

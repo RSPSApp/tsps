@@ -5,7 +5,7 @@
  * world gives them out during its own event windows, as data says. Each row of data/seasonal-rares.json names a
  * rare (cache obj symbol plus id, checked against the cache at startup), the EventScheduler key whose window owns it
  * (events.json), how many one account may claim (perAccount) and an optional world-wide cap (stock). Nothing is
- * sold, so no price exists here; the permanent ::shops Rares Shop (custom-shops.json 23) is separate and untouched.
+ * sold, so no price exists here. No shop stocks them either: the configured rares are not in custom-shops.json.
  *
  * ::rares lists what the player may claim right now. Window state is always asked of the scheduler
  * ("events:status"), at listing and again at the pick, so a closed window (or ::forceevent off) leaves nothing to
@@ -14,15 +14,12 @@
  *
  * Two records guard a claim, and the larger count wins: the account's own "seasonal-rares:claims" attribute, and the
  * world file data/saves/seasonal-rares.json, which also counts the stock cap and survives a player-save rollback.
- * The world file is written before the player save lands, so a crash in between can lose a claimed rare but never
- * duplicate one. An unreadable world file stops all claims (and is left as it is) rather than starting the counts over.
+ * The world file is written first: if that write fails nothing is given, and a crash after it can lose a claimed rare
+ * but never duplicate one. An unreadable world file stops all claims (and is left as it is) rather than starting the
+ * counts over.
  *
  * Claims are refused away from the main character (a league profile) and while the player is in an area, busy or in
  * combat, as minigames such as LMS and the Gauntlet replace the inventory on exit.
- *
- * By default every configured rare is hidden from every shop ("shop:stock-visible"), so the windowed claim is the only
- * source; the rest of each shop is untouched. world.json pluginConfig "SeasonalRares:shopsSellRares": true lets shops
- * (the ::shops Rares Shop, custom-shops.json 23) sell them again.
  */
 
 const fs = require("fs");
@@ -30,7 +27,6 @@ const path = require("path");
 const configuredRows = require("./data/seasonal-rares.json");
 
 const CLAIMS_ATTRIBUTE = "seasonal-rares:claims";
-const SHOPS_SELL_RARES_CONFIG = "SeasonalRares:shopsSellRares";
 const MAIN_PROFILE = "main";
 const MENU_SIZE = 5;
 const KEY_PATTERN = /^[a-z][a-z0-9-]*$/;
@@ -40,7 +36,6 @@ let rows = [];
 let storeFile = path.join(process.cwd(), "data", "saves", "seasonal-rares.json");
 let store = {};
 let storeReadable = true;
-let hiddenInShops = new Set();
 
 /** The world record, or null when the file exists but cannot be used (claims then stay shut until it is fixed). */
 function readStore() {
@@ -55,9 +50,9 @@ function readStore() {
   }
 }
 
-function writeStore() {
+function writeStore(next) {
   fs.mkdirSync(path.dirname(storeFile), { recursive: true });
-  fs.writeFileSync(`${storeFile}.tmp`, JSON.stringify(store));
+  fs.writeFileSync(`${storeFile}.tmp`, JSON.stringify(next));
   fs.renameSync(`${storeFile}.tmp`, storeFile);
 }
 
@@ -93,7 +88,6 @@ function load(source = configuredRows) {
   const saved = readStore();
   storeReadable = saved !== null;
   store = saved ?? {};
-  hiddenInShops = api.getPluginConfig(SHOPS_SELL_RARES_CONFIG, false) === true ? new Set() : new Set(rows.map((row) => row.id));
 }
 
 function eventActive(key) {
@@ -160,18 +154,24 @@ function claim(player, key) {
     player.sendMessage("You don't have enough inventory space to take that.");
     return false;
   }
-  inventory.adds(row.id, 1);
-  const own = accountClaims(player);
-  player.setAttribute(CLAIMS_ATTRIBUTE, { ...own, [row.key]: claimedBy(player, row) + 1 });
-  api.core.GameConstants.PLAYER_PERSISTENCE.requestSave(player, "seasonal-rares-claim");
+  // The world record is the rollback and stock guard, so it is written before anything is given.
+  const count = claimedBy(player, row) + 1;
   const name = accountName(player);
   const entry = store[row.key] ?? { claimed: 0, by: {} };
-  store[row.key] = {
-    claimed: worldClaimed(row) + 1,
-    by: { ...entry.by, [name]: (isCount(entry.by?.[name]) ? entry.by[name] : 0) + 1 },
-  };
-  writeStore();
-  player.sendMessage(`You claim a ${itemName(row)}.`);
+  const next = { ...store, [row.key]: { claimed: worldClaimed(row) + 1, by: { ...entry.by, [name]: count } } };
+  try {
+    writeStore(next);
+  } catch (error) {
+    api.log(`SeasonalRares: could not record ${row.key} for ${name} (${error.message}); nothing given`);
+    player.sendMessage("That rare can't be claimed right now. Please try again later.");
+    return false;
+  }
+  store = next;
+  inventory.adds(row.id, 1);
+  player.setAttribute(CLAIMS_ATTRIBUTE, { ...accountClaims(player), [row.key]: count });
+  api.core.GameConstants.PLAYER_PERSISTENCE.requestSave(player, "seasonal-rares-claim");
+  const claimed = itemName(row);
+  player.sendMessage(`You claim ${/^[aeiou]/i.test(claimed) ? "an" : "a"} ${claimed}.`);
   return true;
 }
 
@@ -214,11 +214,6 @@ function announce({ key, active }) {
   }
 }
 
-/** Unless shopsSellRares is on, no shop lists a configured rare. */
-function hideFromShops(request) {
-  if (hiddenInShops.has(request.itemId)) request.visible = false;
-}
-
 function greet({ player }) {
   if (api && claimable(player).length > 0) player.sendMessage("Seasonal rares are being given out. Type ::rares to claim yours.");
 }
@@ -244,6 +239,5 @@ module.exports = {
     pluginApi.registerCommand("rares", openMenu, pluginApi.core.PlayerRights.NONE, "Claim a seasonal rare while its event window is open");
     pluginApi.onCustomEvent("events:active", announce);
     pluginApi.onPlayerLogin(greet);
-    pluginApi.onCustomEvent("shop:stock-visible", hideFromShops);
   },
 };

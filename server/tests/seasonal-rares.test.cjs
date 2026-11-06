@@ -20,11 +20,6 @@ const customShops = require('../data/definitions/custom-shops.json');
 const SANTA = 'christmas-santa-hat';
 let core, dir, rareApi, saves, savedDirectory, next = 900;
 const Json = require('../plugins/persistence/JsonPlayerPersistence.plugin');
-const {execFileSync} = require('node:child_process');
-const git = args => execFileSync('git', args, {cwd: __dirname, encoding: 'utf8', maxBuffer: 1 << 26});
-// The branch's own base, so a later edit on main does not fail this test.
-const base = git(['merge-base', 'HEAD', 'origin/main']).trim();
-const mainShops = JSON.parse(git(['show', `${base}:server/data/definitions/custom-shops.json`]));
 
 before(async () => {
   // Every claim requests a player save: keep them out of data/saves/characters.
@@ -209,9 +204,16 @@ test('rows that fail the cache or config checks are never served, and a disabled
   for (const key of ['wrong-id', 'no-quantity', 'untradeable', 'switched-off']) assert.equal(Rares.testing.claim(f.p, key), false);
 });
 
-test('permanent shop stock is unchanged: custom-shops.json matches main, Rares Shop 23 included', () => {
-  assert.deepEqual(customShops, mainShops);
-  assert.ok(customShops.some(shop => shop.id === 23 && shop.name === 'Rares Shop'));
+test('no shop stocks a configured rare; the Rares Shop keeps only the unconfigured rares', () => {
+  const configured = new Set(rows.map(row => row.id));
+  for (const shop of customShops) {
+    assert.deepEqual(shop.originalStock.filter(entry => configured.has(entry.id)), [], `${shop.name} stocks no configured rare`);
+  }
+  const rares = customShops.find(shop => shop.id === 23);
+  const C = core.CacheDefinitions;
+  assert.deepEqual(rares.originalStock.map(entry => entry.id),
+    ['black_partyhat', 'rainbow_partyhat', 'halloweenmask_black', 'discofreturning'].map(name => C.getObjId(name)));
+  assert.equal(rares.icon, C.getObjId('black_partyhat'), 'the panel icon is an item the shop still sells');
 });
 
 test('claims are refused in an area, busy, or on a league character, and record nothing', t => {
@@ -259,16 +261,6 @@ test('every menu page has Cancel and at most five options', async t => {
   assert.equal(held(f, santa()), 0);
 });
 
-test('by default no shop sells a configured rare; shopsSellRares true lets shops sell them again', t => {
-  const visible = itemId => {const q = {player: null, shopId: 23, shopName: 'Rares Shop', itemId, visible: true};PM.emitCustomEvent('shop:stock-visible', q);return q.visible;};
-  for (const row of rows) assert.equal(visible(row.id), false, `default hides ${row.key}`);
-  assert.equal(visible(core.CacheDefinitions.getObjId('rainbow_partyhat')), true, 'unconfigured Rares Shop stock stays');
-  assert.equal(visible(core.ItemIdentifiers.COINS), true, 'other stock untouched');
-  t.mock.method(rareApi, 'getPluginConfig', (key, fallback) => key === 'SeasonalRares:shopsSellRares' ? true : fallback);
-  Rares.testing.load();
-  for (const row of rows) assert.equal(visible(row.id), true, `shopsSellRares true shows ${row.key}`);
-});
-
 test('the real Rares Shop (custom-shops.json 23) opens without any configured rare in its stock', t => {
   const {ShopManager} = require('../dist/game/model/container/shop/ShopManager');
   new (require('../dist/game/definition/loader/impl/ShopDefinitionLoader').ShopDefinitionLoader)().load();
@@ -280,4 +272,29 @@ test('the real Rares Shop (custom-shops.json 23) opens without any configured ra
   assert.ok(listed.length > 0, 'the shop still has its other stock');
   assert.deepEqual(listed.filter(id => configured.has(id)), []);
   assert.ok(listed.includes(core.CacheDefinitions.getObjId('rainbow_partyhat')));
+});
+
+test('a world record that cannot be written gives nothing and records nothing', t => {
+  const f = actor(t);
+  command(f, 'forceevent christmas-2025 on');
+  const blocker = path.join(dir, 'not-a-directory');
+  fs.writeFileSync(blocker, 'x');
+  Rares.testing.setStoreFile(path.join(blocker, 'seasonal-rares.json'));
+  assert.equal(Rares.testing.claim(f.p, SANTA), false);
+  assert.ok(f.messages.includes("That rare can't be claimed right now. Please try again later."));
+  assert.equal(held(f, santa()), 0);
+  assert.equal(f.p.getAttribute(Rares.CLAIMS_ATTRIBUTE)?.[SANTA], undefined);
+  // The failed claim left no in-memory count behind: a writable file afterwards records exactly one.
+  Rares.testing.setStoreFile(path.join(dir, 'seasonal-rares.json'));
+  assert.equal(Rares.testing.claim(f.p, SANTA), true);
+  assert.equal(held(f, santa()), 1);
+  const saved = JSON.parse(fs.readFileSync(path.join(dir, 'seasonal-rares.json'), 'utf8'));
+  assert.deepEqual(saved[SANTA], {claimed: 1, by: {[f.p.getUsername().toLowerCase()]: 1}});
+});
+
+test('the claim message uses an before a vowel', t => {
+  const f = actor(t);
+  command(f, 'forceevent easter-2026 on');
+  assert.equal(Rares.testing.claim(f.p, 'easter-egg'), true);
+  assert.ok(f.messages.includes('You claim an Easter egg.'));
 });

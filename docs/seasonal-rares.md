@@ -19,16 +19,10 @@ inventory on exit), busy or in combat ("You can't claim a seasonal rare right no
 
 ## Shops no longer sell the event rares
 
-By default every configured rare is hidden from every shop (`shop:stock-visible`; hidden stock takes
-no slot and cannot be bought), so the event window is the only source. The rest of each shop is
-untouched: the `::shops` Rares Shop (`custom-shops.json` id 23) still lists the rares that have no row
-here (black/rainbow partyhat, black h'ween mask, disk of returning), and `custom-shops.json` itself
-is unchanged. A world that wants shops to sell the event rares all year again sets, in
-`world.json` / `world.local.json`:
-
-```json
-"pluginConfig": { "SeasonalRares:shopsSellRares": true }
-```
+No shop stocks a configured rare, so the event window is the only source. The `::shops` Rares Shop
+(`custom-shops.json` id 23) no longer lists them; it keeps the rares that have no row here (black and
+rainbow partyhat, black h'ween mask, disk of returning), and its panel icon is now the black partyhat.
+Adding a rare to the list means taking it out of any shop that stocks it, in the shop data itself.
 
 ## Configuring a rare
 
@@ -86,9 +80,10 @@ picked, so a menu left open across a close grants nothing.
   the player, a save is requested on each claim) and the world file `server/data/saves/seasonal-rares.json`
   (`{ key: { claimed, by: { username: count } } }`, written atomically, gitignored). The world file
   enforces `stock` and stops a re-claim after a player-save rollback.
-- The world file is written before the player save lands, so a crash in between can lose a claimed
-  rare but never duplicate one. An unreadable world file shuts every claim and is left as it is
-  (fix or remove it, then restart) instead of the counts starting over.
+- The world file is written first. If that write fails (disk full, permissions, a locked file), the
+  player gets "That rare can't be claimed right now. Please try again later." and nothing is given or
+  recorded. A crash after the write but before the player save lands can lose a claimed rare, but
+  never duplicate one.
 - The world file is read at startup and written whole; two server processes must not share one
   `data/saves` directory.
 - A full inventory refuses with "You don't have enough inventory space to take that." and records nothing.

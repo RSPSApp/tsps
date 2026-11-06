@@ -142,6 +142,11 @@ export class HitQueue {
         return this.pendingHits.length > 0 || this.pendingDamage.length > 0;
     }
 
+    /** Whether this exact hit is still queued, independent of other hits from its attacker. */
+    hasPendingHit(hit: PendingHit): boolean {
+        return this.pendingHits.some((entry) => entry.hit === hit);
+    }
+
     hasPendingHitFrom(attacker: Mobile): boolean {
         return this.pendingHits.some(({ hit }) => hit.getAttacker() === attacker);
     }

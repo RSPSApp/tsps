@@ -71,6 +71,8 @@ export type SpecialDamageBounds = {
     maximumBonus?: number;
     cap?: number;
     reduction?: number;
+    /** Split the completed maximum across equally sized hits, preserving the remainder. */
+    maximumSplit?: { index: number; count: number };
 };
 
 const getPlayerCombatSpecial = (player: Player): CombatSpecial | null => {
@@ -479,6 +481,12 @@ export class CombatFactory {
             const swap = minimum;
             minimum = maximum;
             maximum = swap;
+        }
+        if (boundsOverride?.maximumSplit) {
+            const count = Math.max(1, Math.trunc(boundsOverride.maximumSplit.count));
+            const index = Math.max(0, Math.min(count - 1, Math.trunc(boundsOverride.maximumSplit.index)));
+            maximum = Math.floor(maximum * (index + 1) / count) - Math.floor(maximum * index / count);
+            minimum = Math.min(minimum, maximum);
         }
         minimum = Math.max(minimum, Math.min(maximum, Math.max(0, minimumFloor)));
         return { minimum: Math.max(0, minimum), maximum: Math.max(0, maximum) };

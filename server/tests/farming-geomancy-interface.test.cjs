@@ -1,7 +1,11 @@
 // Native Geomancy widget input with all plugins and real game objects; only transport/message output is captured.
 const assert = require("node:assert/strict");
 const path = require("node:path");
-const { before, test } = require("node:test");
+const { before, after, test } = require("node:test");
+const previousDisableBots = process.env.DISABLE_PLAYER_BOTS;
+process.env.DISABLE_PLAYER_BOTS = "1";
+const originalConsoleError = console.error, caughtErrors = [];
+let hunterStartupAttempted = false;
 require("../dist/Server").Server.installProductionPathResolver();
 const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { PluginManager } = require("../dist/plugins/PluginManager");
@@ -10,21 +14,46 @@ const { PlayerSession } = require("../dist/net/PlayerSession");
 const { ClientConnection } = require("../dist/net/NetworkBuilder");
 const { SkillManager } = require("../dist/game/content/skill/SkillManager");
 const { PlayerStatus } = require("../dist/game/model/PlayerStatus");
+const { PlayerDeathTask } = require("../dist/game/task/impl/PlayerDeath");
 const ROOT = path.resolve(__dirname, "..");
 let core, spell, Data, Patches;
 let actorIndex = 100;
 
 before(async () => {
+    console.error = (...args) => {
+        caughtErrors.push(args.map(String).join(" "));
+        originalConsoleError.apply(console, args);
+    };
     await CachePipeline.initialize(ROOT);
     PluginManager.loadFromDirectory(path.join(ROOT, "plugins"));
     core = PluginManager.getCoreApi();
     core.RegionManager.init();
     core.RegionManager.loadMapFiles(3200, 3200);
+    const hunterHooks = PluginManager.serverStartupHooks.filter(hook => hook.pluginName === "Hunter");
+    assert.ok(hunterHooks.length, "real Hunter startup is registered");
+    for (const hook of hunterHooks) {
+        hunterStartupAttempted = true;
+        hook.handler({});
+    }
     Data = require("../plugins/skills/farming/Data.Farming");
     Patches = require("../plugins/skills/farming/Patches.Farming");
     Data.initializeFarmingData();
     spell = core.CacheDefinitions.getSpellByName("Geomancy");
     assert.ok(spell);
+});
+
+after(() => {
+    try {
+        if (hunterStartupAttempted) {
+            for (const hook of PluginManager.serverShutdownHooks)
+                if (hook.pluginName === "Hunter") hook.handler({});
+        }
+        assert.deepEqual(caughtErrors, [], "no caught engine or plugin errors");
+    } finally {
+        console.error = originalConsoleError;
+        if (previousDisableBots === undefined) delete process.env.DISABLE_PLAYER_BOTS;
+        else process.env.DISABLE_PLAYER_BOTS = previousDisableBots;
+    }
 });
 
 function channel() {
@@ -43,6 +72,22 @@ function channel() {
 function caster(t, { level = 99, casts = 1, book, full = false } = {}) {
     const transport = channel();
     const p = new Player(new PlayerSession(transport));
+    t.after(() => {
+        try {
+            require("../plugins/skills/farming/Geomancy.Farming").logout({ player: p });
+            core.GameConstants.PLAYER_PERSISTENCE.cancelRequestedSave(p);
+            // Death uses a shared default key; stop only this actor's unkeyed death task.
+            const deaths = [...core.TaskManager.pendingTasks.toArray(), ...core.TaskManager.activeTasks]
+                .filter(task => task instanceof PlayerDeathTask && task.player === p);
+            for (const task of deaths) task.stop();
+            core.TaskManager.cancelTasks(p);
+            if (p.getIndex() >= 0) core.TaskManager.cancelTasks(p.getIndex());
+            p.getMovementQueue().reset();
+            assert.ok(deaths.every(task => task.isStopped()), "actor death tasks are stopped");
+        } finally {
+            p.setRegistered(false);
+        }
+    });
     p.setUsername(`geoin${actorIndex}`);
     p.setIndex(actorIndex++);
     p.setRegistered(true);

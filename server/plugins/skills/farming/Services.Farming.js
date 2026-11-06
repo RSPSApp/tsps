@@ -636,7 +636,7 @@ function farmingItemAction(event) {
         if (!patch) player.sendMessage("Use the amulet on a farming patch to bind it.");
         else {
             // A growth boundary can pass after the scheduled refresh but before this input.
-            Model.advanceFarm(Patches.farmFor(player), Date.now());
+            Patches.advanceFarm(player);
             const state = Patches.stateFor(player, patch);
             player.sendMessage(`Your bound patch: ${state.crop ? `${Data.CROPS.get(state.crop).name}, ${state.status}` : "empty"}.`);
         }

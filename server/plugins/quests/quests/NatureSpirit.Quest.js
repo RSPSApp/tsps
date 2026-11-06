@@ -1253,6 +1253,9 @@ module.exports = function registerNatureSpiritQuest(api) {
   api.onGroundItemPickup(handleWashingBowlPickup);
   api.onObjectInteraction(handleGrotto);
   api.onObjectInteraction(handleBloomPick);
+  api.onCustomEvent("altar:nature-quest-prayer", (request) => {
+    if (prayAtNatureAltar(request)) request.handled = true;
+  });
   api.onObjectInteraction("Altar of nature", { "Pray-at": prayAtNatureAltar });
   api.onPlayerLogin(handleLogin);
   api.onPlayerLogout(handleLogout);

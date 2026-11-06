@@ -151,10 +151,6 @@ A pestle and mortar on a secondary; no Herblore level or XP. Recordings 70 and 1
 horn), 468 (anchovies, the same loop), 1849 (bird nest); the other messages are from the capture
 archive's message log.
 
-A knife on an ordinary chocolate bar also makes one chocolate dust with no XP ([Wiki](https://oldschool.runescape.wiki/w/Chocolate_dust)).
-This path currently converts one bar per use; the Wiki documents automatic repetition, but its
-knife-specific timing and feedback are not yet implemented.
-
 Preset (restricted) copies are refused with "Preset items cannot be used for this." for both tools, as
 in mixing; plain copies carried alongside are still ground and the preset ones stay.
 
@@ -179,6 +175,10 @@ in mixing; plain copies carried alongside are still ground and the preset ones s
 - **Nihil shards:** the [Nihil dust Wiki page](https://oldschool.runescape.wiki/w/Nihil_dust)
   specifies one dust per shard and auto-crushing at 0, then 2, then every 3 ticks. Stackability
   does not make this a bulk conversion. Walking or another action interrupts the loop.
+
+A knife on an ordinary chocolate bar also makes one chocolate dust with no XP ([Wiki](https://oldschool.runescape.wiki/w/Chocolate_dust)).
+This path currently converts one bar per use; the Wiki documents automatic repetition, but its
+knife-specific timing and feedback are not yet implemented.
 
 Regression coverage exercises the registered item-on-item handler for quantity selection,
 partial/all messages, zero/invalid input, supply removal, capacity/stack limits and nihil

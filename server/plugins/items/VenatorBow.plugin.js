@@ -352,7 +352,11 @@ function bankItemOp(event) {
     // 0 uncharges the bow.
     acceptsZero: true,
     execute(amount) {
-      if (core.Bank.isOpen(player)) configureCharges(player, item, amount);
+      const { Bank } = core;
+      if (!Bank.isOpen(player) || !isBow(item.getId()) || item.getAmount() !== 1) return;
+      const stillBanked = player.getBanks().some((bank, tab) =>
+        tab !== Bank.BANK_SEARCH_TAB_INDEX && bank?.getItems().includes(item));
+      if (stillBanked) configureCharges(player, item, amount);
     },
   });
   player.getPacketSender().sendEnterAmountPrompt(`How many charges do you want your venator bow to have? (0 - ${format(most)})`);

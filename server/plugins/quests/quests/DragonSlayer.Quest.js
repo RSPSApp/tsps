@@ -54,6 +54,7 @@ module.exports = function registerDragonSlayerQuest(api) {
     mapWormbrain: ItemIdentifiers.MAP_PART_2,
     mapOracle: ItemIdentifiers.MAP_PART_3,
     crandorMap: ItemIdentifiers.CRANDOR_MAP,
+    cabbage: ItemIdentifiers.CABBAGE,
     mazeKey: ItemIdentifiers.MAZE_KEY,
     redKey: ItemIdentifiers.KEY_3,
     orangeKey: ItemIdentifiers.KEY_4,
@@ -139,10 +140,23 @@ module.exports = function registerDragonSlayerQuest(api) {
   // rev242 capture ticks 2584-2609 (Melzar's second fight): a line on 6 of 18 ticks in combat, on
   // attack ticks and quiet ones alike and never out of combat, so a roll each tick, not one per attack.
   const MELZAR_SHOUT_CHANCE = 1 / 3;
-  // Attacks every 4 ticks (2589-2605); kicks only from beside the player, 2 of his 4 attacks there.
+  // Attacks every 4 ticks (2589-2605); kicks only from beside the player.
   const MELZAR_ATTACK_SPEED = 4;
-  const MELZAR_KICK_CHANCE = 1 / 2;
   const MELZAR_KICK = 423;
+  // NOT FROM OSRS: the attack tables, the stat gating and the cabbage attack below come from another
+  // server's script, LostCity's 2004 (revision 274) melzar_the_mad.rs2 ("data based off of 200 or so
+  // attacks"), as server/AGENTS.md rule 10 asks us to say. The capture (5 attacks, no cabbage) is
+  // consistent with them; the Wiki names the cabbage spell. Its names are checked against the rev 241 cache.
+  const MELZAR_ROLL = 128;
+  /** The cabbage cast takes 5 ticks before his next attack, not 4 (LostCity: action delay map_clock + 5). */
+  const MELZAR_CABBAGE_SPEED = 5;
+  const MELZAR_CABBAGE_CAST = 710; // human_castentangle
+  const MELZAR_CABBAGE_CAST_GRAPHIC = 177, MELZAR_CABBAGE_CAST_HEIGHT = 92; // entangle_casting
+  const MELZAR_CABBAGE_SMOKE = 86, MELZAR_CABBAGE_SMOKE_HEIGHT = 124; // smokepuff, on the cabbage's tile
+  /** Up to 7 tiles from him, at least 1 (LostCity: map_findsquare(npc_coord, 1, 7, lineofwalk)). */
+  const MELZAR_CABBAGE_MIN_TILES = 1, MELZAR_CABBAGE_MAX_TILES = 7;
+  /** Half LostCity's 200-tick ground-item time (^lootdrop_duration / 2). */
+  const MELZAR_CABBAGE_TICKS = 100;
   /** The Wiki's max hit, capping his spells (every spell splashed and both kicks hit 0 in the capture); the kick uses his definition's max hit, also 5. */
   const MELZAR_MAX_HIT = 5;
 
@@ -1417,21 +1431,103 @@ module.exports = function registerDragonSlayerQuest(api) {
     return cast;
   }
 
-  /** Fire Strike, Curse, Weaken or (beside the player) a kick, every 4 ticks. Built for each attack. */
-  class MelzarCombat extends MagicCombatMethod {
-    start(npc, target) {
-      this.kick = npc.calculateDistance(target) <= 1 && Math.random() < MELZAR_KICK_CHANCE;
-      if (this.kick) {
-        npc.performAnimation(new Animation(MELZAR_KICK));
-        return;
+  const [MELZAR_FIRE_STRIKE, MELZAR_CURSE, MELZAR_WEAKEN] = MELZAR_SPELLS;
+  // LostCity's two tables, on a 0-127 roll: the first row the roll is under whose stat (if any) the player
+  // still has at full wins. Beside the player the rest is a kick; at range it is walking in (its Zap at
+  // 24-31, seen only when he auto-retaliates, is left out and walks in too).
+  const MELZAR_BESIDE = [
+    { under: 20, spell: MELZAR_WEAKEN, unlessLowered: Skill.STRENGTH },
+    { under: 40, spell: MELZAR_CURSE, unlessLowered: Skill.DEFENCE },
+    { under: 60, spell: MELZAR_FIRE_STRIKE },
+    { under: 80, cabbage: true },
+  ];
+  const MELZAR_AT_RANGE = [
+    { under: 8, spell: MELZAR_WEAKEN, unlessLowered: Skill.STRENGTH },
+    { under: 16, spell: MELZAR_FIRE_STRIKE },
+    { under: 24, cabbage: true },
+  ];
+  /** Melzar's next attack, rolled when he picks one and kept until it is made, so his reach follows it. */
+  const melzarPlans = new WeakMap();
+
+  function lowered(target, skill) {
+    if (!target?.isPlayer?.()) return false;
+    const skills = target.getSkillManager();
+    return skills.getCurrentLevel(skill) < skills.getMaxLevel(skill);
+  }
+
+  function rollMelzarAttack(target, table, otherwise) {
+    const roll = Math.floor(Math.random() * MELZAR_ROLL);
+    return table.find((row) => roll < row.under && !(row.unlessLowered && lowered(target, row.unlessLowered))) ?? otherwise;
+  }
+
+  function melzarPlan(npc) {
+    let plan = melzarPlans.get(npc);
+    if (plan) return plan;
+    const target = npc.getCombat().getTarget();
+    const beside = target && npc.calculateDistance(target) <= 1;
+    plan = beside ? rollMelzarAttack(target, MELZAR_BESIDE, { kick: true }) : rollMelzarAttack(target, MELZAR_AT_RANGE, { approach: true });
+    melzarPlans.set(npc, plan);
+    return plan;
+  }
+
+  /** A cabbage on a free tile near him in a puff of smoke; it deals no damage (LostCity's npc_cabbage_attack). */
+  function castCabbage(npc, target) {
+    npc.performAnimation(new Animation(MELZAR_CABBAGE_CAST));
+    npc.performGraphic(new Graphic(MELZAR_CABBAGE_CAST_GRAPHIC, 0, MELZAR_CABBAGE_CAST_HEIGHT));
+    // LostCity: "in osrs, the player stops attacking him".
+    if (target?.isPlayer?.() && target.getCombat().getTarget() === npc) target.getCombat().reset();
+    later(npc, 1, () => {
+      const tile = cabbageTile(npc);
+      if (!tile || !target?.isPlayer?.() || !itemOnGroundManager) return;
+      itemOnGroundManager.registerLocation(target, new Item(ITEM.cabbage, 1), tile, null,
+        { public: true, despawnDelay: MELZAR_CABBAGE_TICKS });
+      target.getPacketSender().sendGlobalGraphic(new Graphic(MELZAR_CABBAGE_SMOKE, 0, MELZAR_CABBAGE_SMOKE_HEIGHT), tile);
+    });
+  }
+
+  /** A random free tile 1-7 from him in the basement (ours: LostCity's line-of-walk test is not modelled). */
+  function cabbageTile(npc) {
+    const at = npc.getLocation(), b = MELZAR_BASEMENT_BOUNDS, tiles = [];
+    for (let dx = -MELZAR_CABBAGE_MAX_TILES; dx <= MELZAR_CABBAGE_MAX_TILES; dx++) {
+      for (let dy = -MELZAR_CABBAGE_MAX_TILES; dy <= MELZAR_CABBAGE_MAX_TILES; dy++) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) < MELZAR_CABBAGE_MIN_TILES) continue;
+        const x = at.getX() + dx, y = at.getY() + dy;
+        if (x < b.minX || x > b.maxX || y < b.minY || y > b.maxY) continue;
+        const tile = new Location(x, y, at.getZ());
+        if (!api.core.RegionManager?.blocked?.(tile, null)) tiles.push(tile);
       }
-      npc.getCombat().setCastSpell(castAt(MELZAR_SPELLS[Math.floor(Math.random() * MELZAR_SPELLS.length)], npc, target));
+    }
+    return tiles.length ? tiles[Math.floor(Math.random() * tiles.length)] : null;
+  }
+
+  /**
+   * Fire Strike, Curse, Weaken, the cabbage spell or (beside the player) a kick, on LostCity's tables (above).
+   * At range most rolls walk him in instead, so his reach follows the attack he has picked. Built for each attack.
+   */
+  class MelzarCombat extends MagicCombatMethod {
+    constructor(npc) { super(); this.npc = npc ?? null; }
+    plan() { return this.npc ? melzarPlan(this.npc) : { kick: true }; }
+    start(npc, target) {
+      let plan = melzarPlan(npc);
+      // Walked in: beside the player now, so the beside table picks the attack.
+      if (plan.approach) { plan = rollMelzarAttack(target, MELZAR_BESIDE, { kick: true }); melzarPlans.set(npc, plan); }
+      this.made = plan;
+      if (plan.kick) { npc.performAnimation(new Animation(MELZAR_KICK)); return; }
+      if (plan.cabbage) { castCabbage(npc, target); return; }
+      npc.getCombat().setCastSpell(castAt(plan.spell, npc, target));
       super.start(npc, target);
     }
-    type() { return this.kick ? CombatType.MELEE : super.type(); }
-    hits(npc, target) { return this.kick ? [new PendingHit(npc, target, this, 1)] : super.hits(npc, target); }
-    attackSpeed() { return MELZAR_ATTACK_SPEED; }
-    finished(npc) { npc.getCombat().setCastSpell(null); }
+    current() { return this.made ?? this.plan(); }
+    type() { const plan = this.current(); return plan.kick || plan.approach ? CombatType.MELEE : super.type(); }
+    attackDistance(npc) { const plan = this.current(); return plan.kick || plan.approach ? 1 : super.attackDistance(npc); }
+    hits(npc, target) {
+      const plan = this.current();
+      if (plan.kick) return [new PendingHit(npc, target, this, 1)];
+      if (plan.cabbage) return [];
+      return super.hits(npc, target);
+    }
+    attackSpeed() { return this.current().cabbage ? MELZAR_CABBAGE_SPEED : MELZAR_ATTACK_SPEED; }
+    finished(npc) { melzarPlans.delete(npc); npc.getCombat().setCastSpell(null); }
   }
 
   // ============================================================================

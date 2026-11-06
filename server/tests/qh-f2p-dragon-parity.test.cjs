@@ -224,7 +224,7 @@ test('Dragon Slayer withholds the Melzar key on a full inventory, and the reply 
   }
 });
 
-test('Melzar shouts his transcript lines only in a fight, and fights with the captured spells and kick (rev242 ticks 2584-2609)', (t) => {
+test('Melzar shouts his transcript lines only in a fight, and fights with the captured spells, kick and the cabbage spell (rev242 ticks 2584-2609)', (t) => {
   const h = harness();
   const maze = h.areas[0];
   assert.equal(maze.getMusicTrack(), 365);
@@ -255,36 +255,77 @@ test('Melzar shouts his transcript lines only in a fight, and fights with the ca
   maze.process({ isNpc: () => false });
   assert.equal(said.length, 1);
 
+  // His attacks follow LostCity's tables (RSPS-sourced, see the plugin): a 0-127 roll, stat-gated spells.
   const [Combat] = h.hooks.registerNpcCombatMethodProvider;
   t.mock.method(core.MagicCombatMethod.prototype, 'start', () => {});
-  const kick = new Combat(melzar);
-  roll = 0; kick.start(melzar, target);
-  assert.deepEqual(anims, [423]);
-  assert.equal(kick.type(), core.CombatType.MELEE);
-  assert.equal(kick.attackSpeed(melzar), 4);
-  const spell = new Combat(melzar);
-  roll = 0.9; spell.start(melzar, target);
-  assert.equal(spell.type(), core.CombatType.MAGIC);
-  assert.equal(cast.castAnimation().getId(), 11426, 'Weaken, as captured');
-  assert.equal(cast.maximumHit(), 0);
+  const graphics = [], levels = { [core.Skill.STRENGTH.getName()]: [99, 99], [core.Skill.DEFENCE.getName()]: [99, 99] };
+  let playerTarget = null, resets = 0;
+  Object.assign(target, {
+    getSkillManager: () => ({ getCurrentLevel: (s) => levels[s.getName()]?.[0] ?? 99, getMaxLevel: (s) => levels[s.getName()]?.[1] ?? 99 }),
+    getCombat: () => ({ getTarget: () => playerTarget, reset: () => { resets++; playerTarget = null; } }),
+    getPacketSender: () => ({ sendGlobalGraphic: (g, at) => graphics.push([g.id, at.getX(), at.getY()]) }),
+  });
+  melzar.performGraphic = g => graphics.push([g.id]);
+  const attack = (tableRoll, distance) => {
+    melzar.calculateDistance = () => distance; roll = tableRoll / 128;
+    const method = new Combat(melzar);
+    method.start(melzar, target);
+    return method;
+  };
+  const done = (method) => method.finished(melzar);
+
+  // Beside him: Weaken under 20, Curse under 40, Fire Strike under 60, the cabbage under 80, else a kick.
+  let m = attack(0, 1); assert.equal(cast.castAnimation().getId(), 11426, 'Weaken'); assert.equal(cast.maximumHit(), 0); done(m);
+  levels.Strength = [98, 99];
+  m = attack(0, 1); assert.equal(cast.castAnimation().getId(), 11428, 'lowered Strength: no Weaken, Curse instead'); done(m);
+  levels.Defence = [98, 99];
+  m = attack(0, 1); assert.equal(cast.castAnimation().getId(), 9144, 'both lowered: Fire Strike'); done(m);
+  levels.Strength = [99, 99]; levels.Defence = [99, 99];
+  m = attack(30, 1); assert.equal(cast.castAnimation().getId(), 11428, 'Curse'); done(m);
+  m = attack(50, 1); assert.equal(cast.castAnimation().getId(), 9144, 'Fire Strike'); assert.ok(cast.maximumHit() <= 5, 'the Wiki max hit'); done(m);
+  anims.length = 0;
+  m = attack(100, 1);
+  assert.deepEqual(anims, [423], 'a kick'); assert.equal(m.type(), core.CombatType.MELEE); assert.equal(m.attackSpeed(melzar), 4); done(m);
+
+  // The cabbage: cast animation and graphic, no hit, 5 ticks to his next attack; the player stops attacking him.
+  anims.length = 0; graphics.length = 0; playerTarget = melzar;
+  m = attack(70, 1);
+  assert.deepEqual(anims, [710]); assert.deepEqual(graphics, [[177]]);
+  assert.deepEqual(m.hits(melzar, target), []); assert.equal(m.attackSpeed(melzar), 5);
+  assert.equal(resets, 1, 'the player stops attacking him');
+  core.TaskManager.process(); core.TaskManager.process();
+  assert.ok(h.ground.length > 0, 'a cabbage lands a tick later');
+  const [owner, item, tile, area, options] = h.ground.at(-1);
+  assert.equal(owner, target); assert.equal(item.getId(), I.CABBAGE); assert.equal(area, null);
+  assert.deepEqual(options, { public: true, despawnDelay: 100 });
+  const reach = Math.max(Math.abs(tile.getX() - melzarAt.getX()), Math.abs(tile.getY() - melzarAt.getY()));
+  assert.ok(reach >= 1 && reach <= 7, `a tile 1-7 from him: ${reach}`);
+  assert.deepEqual(graphics.at(-1), [86, tile.getX(), tile.getY()], 'a puff of smoke where it lands');
+  done(m);
+
+  // At range: Weaken under 8, Fire Strike under 16, the cabbage under 24; otherwise he walks in, then rolls again beside.
+  m = attack(10, 5); assert.equal(cast.castAnimation().getId(), 9144, 'Fire Strike from range'); done(m);
+  melzar.calculateDistance = () => 5; roll = 50 / 128;
+  const walking = new Combat(melzar);
+  assert.equal(walking.attackDistance(melzar), 1, 'walks in'); assert.equal(walking.type(), core.CombatType.MELEE);
+  anims.length = 0; melzar.calculateDistance = () => 1; roll = 100 / 128;
+  walking.start(melzar, target); assert.deepEqual(anims, [423], 'beside now: the beside table (a kick)'); done(walking);
+
   // The hit and the spell's effect land as its own projectile does (reviewers' P2): rev242 tick 2593's Curse
   // from one tile ends at 90 cycles, 3 ticks, where the legacy NPC timing gave 2.
-  const lands = (spell) => core.Projectile.ticksToLand(spell.arrival(melzar, target));
-  melzar.calculateDistance = () => 5; // no kick, so every roll picks a spell
-  for (const [spellRoll, anim, end] of [[0.1, 9144, 61], [0.5, 11428, 90], [0.9, 11426, 60]]) {
-    roll = spellRoll;
-    new Combat(melzar).start(melzar, target);
+  for (const [tableRoll, anim, end] of [[50, 9144, 61], [30, 11428, 90], [0, 11426, 60]]) {
+    m = attack(tableRoll, 1);
     assert.equal(cast.castAnimation().getId(), anim);
     assert.equal(cast.arrival(melzar, target), end, 'one tile: the captured end cycle');
     assert.equal(core.MagicCombatMethod.hitDelay(melzar, target, cast), Math.ceil(end / 30), 'hit on the projectile');
+    done(m);
   }
   melzarAt = new core.Location(2928, 9653, 0); // five tiles
-  new Combat(melzar).start(melzar, target);
+  m = attack(0, 5);
+  assert.equal(cast.castAnimation().getId(), 11426, 'Weaken from range');
   assert.equal(cast.arrival(melzar, target), 60 + 4 * 10, 'Weaken from five tiles: 10 cycles a tile more');
-  assert.equal(core.MagicCombatMethod.hitDelay(melzar, target, cast), lands(cast));
-  roll = 0.1; melzar.calculateDistance = () => 5; new Combat(melzar).start(melzar, target);
-  assert.equal(cast.castAnimation().getId(), 9144, 'no kick from five tiles: Fire Strike');
-  assert.ok(cast.maximumHit() <= 5, 'the Wiki max hit');
+  assert.equal(core.MagicCombatMethod.hitDelay(melzar, target, cast), core.Projectile.ticksToLand(cast.arrival(melzar, target)));
+  done(m);
 });
 
 test('Dragon Slayer answers the Pandemonium and Murder Mystery guards instead of letting them default true', () => {

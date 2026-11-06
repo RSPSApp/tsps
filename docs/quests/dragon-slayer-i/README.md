@@ -64,7 +64,24 @@ Community-reported completion accepted for scheduling (skip full manual replay).
     capture shows 29 (removed tick 2609, back at 2638).
   - Each spell's hit and effect land with its own projectile (3 ticks for Curse from one tile, its captured
     90-cycle flight), not on the generic NPC spell timing.
-  - The capture has no cabbage of any kind, so none is added.
+  - **Not from OSRS** (server/AGENTS.md rule 10): which attack he picks, the stat gating and the cabbage
+    spell come from another server's script, LostCity's 2004 (revision 274) `melzar_the_mad.rs2`, which
+    says its tables are "based off of 200 or so attacks". Nothing on OSRS confirms them yet.
+    - Beside the player, on a 0-127 roll: Weaken under 20, Curse under 40, Fire Strike under 60, the cabbage
+      under 80, else a kick. Weaken is skipped if the player's Strength is already lowered, and Curse if
+      their Defence is.
+    - At range: Weaken under 8, Fire Strike under 16, the cabbage under 24, else he walks in and rolls again
+      beside the player. LostCity's Zap (24-31, seen only when he auto-retaliates) is left out.
+    - The cabbage spell:
+      - cast animation 710 (`human_castentangle`) and graphic 177 (`entangle_casting`);
+      - he deals no damage, the player stops attacking him, and his next attack is 5 ticks away;
+      - a tick later a cabbage (1965) appears for 100 ticks on a free tile 1-7 from him, with smoke
+        (graphic 86, `smokepuff`).
+
+      LostCity also requires a line of walk to that tile, which isn't modelled.
+    - The names were checked against the revision 241 cache.
+    - The capture fits these tables: 5 attacks and no cabbage, which happens about 43% of the time at 20/128.
+      So does the Wiki, which names the cabbage spell.
 - **Map chests** (ticks 1421-1435, 2693-2709): Open first, with the Oracle chest's lid inscription and then
   the open chest. Search gives "You find a map piece in the chest." in an item box as it shuts. Close shuts it.
 - **Voyage and lair** (ticks 3158-3440):
@@ -111,7 +128,8 @@ Community-reported completion accepted for scheduling (skip full manual replay).
   `crandor-secret-wall`).
 - **Not verified:**
   - The rocks' climb from the top and the top rock's refusal: only the bottom rock was clicked.
-  - Melzar's line and kick odds: from 6 lines and 4 attacks beside the player. Nothing landed, so his max
+  - Melzar's line odds: from 6 lines in 18 ticks. His attack odds, stat gating and cabbage spell are
+    LostCity's (above), not seen on OSRS. Nothing landed, so his max
     hit is the Wiki's 5: the spells are capped at it, and the kick uses his monster definition's max hit
     (also 5).
   - Elvarg's melee and breath when the player is adjacent or under her; her wander and acquisition range.

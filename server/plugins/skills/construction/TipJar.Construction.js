@@ -55,22 +55,23 @@ function withdraw(player, house, toBank) {
   for (const [field, itemId] of [["coins", COINS], ["platinum", PLATINUM]]) {
     const amount = jar[field];
     if (!amount) continue;
-    if (toBank) {
-      bank(player, itemId, amount);
-    } else {
-      if (!player.getInventory().contains(itemId) && player.getInventory().getFreeSlots() === 0) {
-        player.sendMessage("You don't have enough inventory space.");
-        break;
-      }
-      player.getInventory().adds(itemId, amount);
+    const inventory = player.getInventory();
+    const moved = toBank ? bank(player, itemId, amount) : inventory.getAddableAmount(new Item(itemId, amount));
+    if (!toBank && moved <= 0) {
+      player.sendMessage("You don't have enough inventory space.");
+      break;
     }
-    jar[field] = 0;
+    if (!toBank) inventory.adds(itemId, moved);
+    jar[field] -= moved;
   }
   House.saveHouse(house);
 }
 
 function bank(player, itemId, amount) {
-  player.getBank(Bank.getTabForItem(player, itemId)).add(new Item(itemId, amount), false);
+  const target = player.getBank(Bank.getTabForItem(player, itemId));
+  const moved = target.getAddableAmount(new Item(itemId, amount));
+  if (moved > 0) target.add(new Item(itemId, moved), false);
+  return moved;
 }
 
 function isIron(player) {
@@ -136,10 +137,8 @@ function bankOnLogout({ player }) {
   const saved = House.houseStateFor(player);
   const jar = saved?.tipJar;
   if (!jar?.bankOnLogout || (!jar.coins && !jar.platinum)) return;
-  if (jar.coins) bank(player, COINS, jar.coins);
-  if (jar.platinum) bank(player, PLATINUM, jar.platinum);
-  jar.coins = 0;
-  jar.platinum = 0;
+  if (jar.coins) jar.coins -= bank(player, COINS, jar.coins);
+  if (jar.platinum) jar.platinum -= bank(player, PLATINUM, jar.platinum);
   player.setAttribute(Data.HOUSE_ATTRIBUTE, saved);
 }
 

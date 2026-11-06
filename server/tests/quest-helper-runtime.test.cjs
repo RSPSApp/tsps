@@ -57,6 +57,26 @@ test('different player gets an isolated engine session; malformed/oversize input
  await f.send({type:'evaluate',questKey:f.quest.key,sequence:2,snapshot:{},events:Array(1025).fill({type:'x'})});assert.equal(f.calls.length,1);
  assert.ok(f.sent.some(d=>d.type==='error'));
 });
+test('reusable snapshot sections are held per browser session and restored by digest',async()=>{
+ const f=fixture();await f.send({type:'select',questKey:f.quest.key});
+ const objects=[{id:1,x:3200,y:3200,plane:0}],widgets=[{id:7}],terrain={loadedTilesPacked:{data:'AA=='},tileHeightsPacked:{data:'AQ=='},tileSettingsPacked:{data:'Ag=='}};
+ const snapshot=extra=>({varps:{},varbits:{},inventory:[],equipment:[],localPlayer:{name:'x',x:1,y:1,plane:0},...extra});
+ await f.send({type:'evaluate',questKey:f.quest.key,sequence:1,events:[],snapshot:snapshot({objects,widgets,geometry:{x:0,y:0,width:1,height:1,...terrain},digests:{objects:'aa',widgets:'bb',terrain:'cc'}})});
+ assert.deepEqual(f.calls[0].snapshot.objects,objects);assert.equal(f.calls[0].snapshot.digests,undefined,'the bridge never sees the digests');assert.equal(f.calls[0].snapshot.reuse,undefined);
+ assert.deepEqual(f.sent.at(-1).cached,{objects:'aa',widgets:'bb',terrain:'cc'});
+ await f.send({type:'evaluate',questKey:f.quest.key,sequence:2,events:[],snapshot:snapshot({geometry:{x:0,y:0,width:2,height:2},reuse:{objects:'aa',widgets:'bb',terrain:'cc'}})});
+ assert.deepEqual(f.calls[1].snapshot.objects,objects,'the bridge gets the held objects');assert.deepEqual(f.calls[1].snapshot.widgets,widgets);
+ assert.deepEqual(f.calls[1].snapshot.geometry,{x:0,y:0,width:2,height:2,...terrain},'held terrain joins the fresh camera geometry');
+ await f.send({type:'evaluate',questKey:f.quest.key,sequence:3,events:[],snapshot:snapshot({objects:[{id:2,x:1,y:1,plane:0}],digests:{objects:'dd'},reuse:{widgets:'bb'}})});
+ assert.equal(f.calls[2].snapshot.objects[0].id,2);assert.deepEqual(f.sent.at(-1).cached,{objects:'dd',widgets:'bb',terrain:'cc'});
+ await f.send({type:'evaluate',questKey:f.quest.key,sequence:4,events:[],snapshot:snapshot({reuse:{objects:'aa'}})});
+ assert.equal(f.calls.length,3,'a digest the server does not hold is refused, not guessed');assert.match(f.sent.at(-1).message,/does not hold/);
+ await f.send({type:'evaluate',questKey:f.quest.key,sequence:5,events:[],snapshot:snapshot({digests:{objects:'not a digest'},objects})});
+ assert.equal(f.sent.at(-1).cached.objects,'dd','a malformed digest is ignored');
+ await f.runtime.receive({...f.player},{protocol:1,session:'browser-session',type:'select',questKey:f.quest.key});
+ await f.runtime.receive({...f.player},{protocol:1,session:'browser-session',type:'evaluate',questKey:f.quest.key,sequence:1,events:[],snapshot:snapshot({reuse:{objects:'dd'}})});
+ assert.equal(f.calls.length,4,'another player holds nothing');
+});
 test('Tutorial Island uses native recorded steps and exact completion boundary',()=>{
  const make=stage=>tutorialResult({session:'s',sequence:1,questKey:'learning_the_ropes'},stage);
  assert.match(make(10).activeStep.text.join(' '),/door/i);assert.ok(make(20).activeStep.targets.some(t=>t.kind==='npc'&&t.id===8503));

@@ -11,6 +11,7 @@ import type { SceneGeometry, SceneLoc } from "../../scene/SceneGeometry";
 import type { ChoiceRule, HelperNpc, HelperStep, HelperTarget, OverlayLine, ReadonlyClientSnapshot, WorldTile } from "./QuestHelperProtocol";
 
 type Rgba = [number, number, number, number];
+type HelperObject = ReadonlyClientSnapshot["objects"][number];
 type Point = [number, number];
 type Rect = { x: number; y: number; w: number; h: number };
 
@@ -53,23 +54,46 @@ export function targetNpcs(step: HelperStep, snapshot: ReadonlyClientSnapshot): 
     return snapshot.npcs.filter((npc) => npc.plane === snapshot.plane && targets.some((t) => matches(t, npc.transformedId ?? npc.id)));
 }
 
-/** Scene locs an object target names (ObjectStep.objects). */
-export function targetLocs(step: HelperStep, snapshot: ReadonlyClientSnapshot, geom: SceneGeometry | undefined): SceneLoc[] {
+/** Snapshot objects an object target names (ObjectStep.objects). */
+export function targetObjects(step: HelperStep, snapshot: ReadonlyClientSnapshot): HelperObject[] {
+    const targets = step.targets.filter((t) => t.kind === "object");
+    return snapshot.objects.filter((object) => object.plane === snapshot.plane && targets.some((t) => matches(t, object.id) && (t.x === undefined || t.x === object.x) && (t.y === undefined || t.y === object.y)));
+}
+
+/** The live scene locs of those objects: a loc that has just gone (an opened door) is gone at once. */
+export function locsOf(objects: readonly HelperObject[], geom: SceneGeometry | undefined): SceneLoc[] {
     if (!geom) return [];
     const out: SceneLoc[] = [];
-    const targets = step.targets.filter((t) => t.kind === "object");
-    for (const object of snapshot.objects) {
-        if (object.plane !== snapshot.plane) continue;
-        if (!targets.some((t) => matches(t, object.id) && (t.x === undefined || t.x === object.x) && (t.y === undefined || t.y === object.y))) continue;
-        for (const loc of geom.locsAtTile(object.x, object.y, object.plane)) if (loc.id === object.id) out.push(loc);
-    }
+    for (const object of objects) for (const loc of geom.locsAtTile(object.x, object.y, object.plane)) if (loc.id === object.id) out.push(loc);
     return out;
+}
+
+/** Scene locs an object target names (ObjectStep.objects). */
+export function targetLocs(step: HelperStep, snapshot: ReadonlyClientSnapshot, geom: SceneGeometry | undefined): SceneLoc[] {
+    return locsOf(resolveStepTargets(step, snapshot).objects, geom);
 }
 
 /** Ground items an item target names (ItemStep / DetailedQuestStep.tileHighlights). */
 export function targetGroundItems(step: HelperStep, snapshot: ReadonlyClientSnapshot): WorldTile[] {
     const targets = step.targets.filter((t) => t.kind === "item");
     return snapshot.groundItems.filter((item) => item.plane === snapshot.plane && targets.some((t) => matches(t, item.id)));
+}
+
+type ResolvedTargets = { npcs: HelperNpc[]; objects: HelperObject[]; items: WorldTile[] };
+const resolvedTargets = new WeakMap<ReadonlyClientSnapshot, { step: HelperStep; value: ResolvedTargets }>();
+
+/**
+ * The step's NPC, object and ground-item targets in the snapshot, resolved once per snapshot and
+ * step. The outline passes and the scene overlay ask every frame, and each answer scanned every
+ * scene object; a snapshot lasts a game tick, so one scan per tick serves them all. Only the
+ * snapshot's entries are kept: live scene locs are looked up per frame (locsOf).
+ */
+export function resolveStepTargets(step: HelperStep, snapshot: ReadonlyClientSnapshot): ResolvedTargets {
+    const hit = resolvedTargets.get(snapshot);
+    if (hit && hit.step === step) return hit.value;
+    const value = { npcs: targetNpcs(step, snapshot), objects: targetObjects(step, snapshot), items: targetGroundItems(step, snapshot) };
+    resolvedTargets.set(snapshot, { step, value });
+    return value;
 }
 
 /** Plain tile targets: the defined point of a DetailedQuestStep and its marked tiles. */
@@ -83,7 +107,7 @@ const outlineColour = (argb: number) => ({ color: argb & 0xffffff, alpha: (argb 
 export function questNpcOutlines(source: OverlaySource): NpcOutline[] {
     const step = source.step(), snapshot = source.snapshot(), s = source.settings();
     if (!source.active() || !step || !snapshot || s.highlightStyleNpcs !== "OUTLINE") return [];
-    return targetNpcs(step, snapshot).map((npc) => ({ ecsId: npc.ecsIndex, serverId: npc.index, width: Math.max(1, s.outlineThickness), ...outlineColour(s.targetOverlayColor) }));
+    return resolveStepTargets(step, snapshot).npcs.map((npc) => ({ ecsId: npc.ecsIndex, serverId: npc.index, width: Math.max(1, s.outlineThickness), ...outlineColour(s.targetOverlayColor) }));
 }
 
 /** ObjectStep OUTLINE: the model outline pass. */
@@ -191,7 +215,8 @@ export class QuestHelperSceneOverlay implements WidgetOverlay {
             if (p) frame.icons.push({ x: p[0], y: p[1] });
         };
         const npcs = client.npcEcs;
-        for (const npc of targetNpcs(step, snapshot)) {
+        const targets = resolveStepTargets(step, snapshot);
+        for (const npc of targets.npcs) {
             const live = npcs && typeof npcs.getWorldX === "function";
             const cx = live ? npcs.getWorldX(npc.ecsIndex) / 128 : npc.x + 0.5;
             const cy = live ? npcs.getWorldY(npc.ecsIndex) / 128 : npc.y + 0.5;
@@ -205,14 +230,14 @@ export class QuestHelperSceneOverlay implements WidgetOverlay {
             const ground = geom.tileHeight(cx, cy, plane);
             icon(cx, s.highlightStyleNpcs === "TILE" ? ground - 30 / 128 : ground - geom.npcHeight(npc.transformedId ?? npc.id) / 256, cy);
         }
-        for (const loc of targetLocs(step, snapshot, geom)) {
+        for (const loc of locsOf(targets.objects, geom)) {
             const parts = geom.locModelPoints(loc);
             const all = (parts ?? []).flat();
             if (s.highlightStyleObjects === "CLICK_BOX" && all.length) push(clickbox(geom, all), fill);
             const top = all.length ? Math.min(...all.map((p) => p[1])) : geom.tileHeight(loc.tileX + 0.5, loc.tileY + 0.5, plane);
             icon(loc.tileX + 0.5, top, loc.tileY + 0.5);
         }
-        for (const item of targetGroundItems(step, snapshot)) {
+        for (const item of targets.items) {
             if (s.highlightStyleGroundItems !== "NONE") push(tile(item.x, item.y), fill);
             icon(item.x + 0.5, geom.tileHeight(item.x + 0.5, item.y + 0.5, plane), item.y + 0.5);
         }

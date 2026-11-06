@@ -22,6 +22,7 @@ const config = {};
 const COINS = 995;
 const SHARK = 385;
 const RUNE_SCIMITAR = 1333;
+const RANGER_BOOTS = 2577;
 const ABYSSAL_WHIP = 4151; // cache value 120,001: the 1,000-coin band
 const ARMADYL_GODSWORD = 11802; // 1,250,000: the 10,000-coin band
 const IRON_ORE = 440;
@@ -74,8 +75,8 @@ function death(player, items, { killer = null, x = 3222, y = 3218 } = {}) {
     player,
     killer,
     location: new core.Location(x, y, 0),
-    items: items.filter(([id]) => core.ItemDefinition.forId(id).isTradeable()).map(([id, amount]) => new core.Item(id, amount)),
-    untradeables: items.filter(([id]) => !core.ItemDefinition.forId(id).isTradeable()).map(([id, amount]) => new core.Item(id, amount)),
+    items: items.filter(([id]) => core.ItemDefinition.forId(id).isTradeable()).map(([id, amount, meta]) => new core.Item(id, amount, meta)),
+    untradeables: items.filter(([id]) => !core.ItemDefinition.forId(id).isTradeable()).map(([id, amount, meta]) => new core.Item(id, amount, meta)),
     layout: { inventory: items.map(([id]) => id), equipment: [] },
   };
   hooks.onPlayerDeathDrops(event);
@@ -189,4 +190,98 @@ test("a second death adds to the grave and sends its resources to Death's Office
   assert.equal(graveOf(player).merged, true);
   assert.deepEqual(player.getAttribute("gravestones:office"), [{ id: IRON_ORE, amount: 5, meta: null }]);
   assert.ok(player.messages.includes("Some items have been moved to Death's Office from your gravestone."));
+});
+
+
+test("grave and Office fees use loaded GE quotes while preserving grave contents and slots", t => {
+  const definitions = core.ItemDefinition.definitions;
+  const previous = new Map([...definitions.values()].map(def => [def, [def.grandExchangeValue, def.grandExchangeSellValue]]));
+  t.after(() => {
+    for (const def of definitions.values()) {
+      const prices = previous.get(def) ?? [undefined, undefined];
+      [def.grandExchangeValue, def.grandExchangeSellValue] = prices;
+    }
+  });
+  const loaded = require("../plugins/items/ItemDefinitionLoader.plugin")._test.loadItemPrices();
+  assert.ok(loaded.loaded > 0, "the canonical snapshot loader loaded prices");
+  const boots = core.ItemDefinition.forId(RANGER_BOOTS);
+  const whip = core.ItemDefinition.forId(ABYSSAL_WHIP);
+  const scimitar = core.ItemDefinition.forId(RUNE_SCIMITAR);
+  const coins = core.ItemDefinition.forId(COINS);
+  const defender = core.ItemDefinition.forId(core.ItemIdentifiers.DRAGON_DEFENDER);
+  const sceptre = core.ItemDefinition.forId(core.ItemIdentifiers.PHARAOHS_SCEPTRE_3_);
+  assert.equal(boots.getName(), "Ranger boots");
+  assert.equal(whip.getName(), "Abyssal whip");
+  assert.equal(scimitar.getName(), "Rune scimitar");
+  assert.equal(scimitar.getValue(), 25600);
+  assert.ok([boots, whip, scimitar].every(def => def.isTradeable()), "snapshot items are tradeable in the active cache");
+  assert.equal(defender.hasGrandExchangeValue(), false);
+  assert.equal(defender.getValue(), 68007);
+  assert.equal(sceptre.getName(), "Pharaoh's sceptre");
+  assert.equal(sceptre.isTradeable(), false, "active cache marks the quoted sceptre untradeable");
+  assert.equal(sceptre.getValue(), 100);
+  assert.equal(sceptre.hasGrandExchangeValue(), true);
+  assert.equal(sceptre.getGrandExchangeValue(), 4999999, "historical quote exists for this untradeable variant");
+  assert.equal(boots.getValue(), 200, "active-cache ranger boots store value");
+  assert.equal(boots.hasGrandExchangeValue(), true);
+  assert.equal(boots.getGrandExchangeValue(), 36201000, "loader uses the greater inverted snapshot quote");
+  assert.equal(whip.getValue(), 120001);
+  assert.equal(whip.getGrandExchangeValue(), 751282);
+  assert.equal(scimitar.getGrandExchangeValue(), 15179);
+  assert.equal(coins.hasGrandExchangeValue(), false);
+  assert.equal(coins.getGrandExchangeValue(), coins.getValue(), "the existing getter falls back to cache value");
+  assert.equal(Fees.officeFee(COINS, false), 0, "unquoted cache-value free control");
+  const capacity = Common.stack([], [{ id: RANGER_BOOTS, amount: 1 }, { id: ABYSSAL_WHIP, amount: 1 }], 1);
+  assert.deepEqual([capacity.held[0].id, capacity.overflow[0].id], [ABYSSAL_WHIP, RANGER_BOOTS], "quote does not change cache-based capacity selection");
+
+  const Grave = require("../plugins/world/gravestones/Grave.Gravestones");
+  const player = account("quoted-grave");
+  t.after(() => { hooks.onPlayerLogout({ player }); core.TaskManager.cancelTasks(player); });
+  const oldSender = player.getPacketSender();
+  const sent = [];
+  let opened = false;
+  const sender = new Proxy(oldSender, { get(target, key) {
+    if (key === "sendInventory") return (id, capacity, items) => { sent.push({ id, capacity, items }); return sender; };
+    if (key === "sendSubInterface") return () => { opened = true; return sender; };
+    if (key === "isSubInterfaceOpen") return () => opened;
+    if (key === "closeInterface") return () => { opened = false; return sender; };
+    return target[key];
+  } });
+  player.getPacketSender = () => sender;
+  const bootMeta = { variant: "saved-boots" };
+  death(player, [[RANGER_BOOTS, 1, bootMeta], [ABYSSAL_WHIP, 1], [RUNE_SCIMITAR, 1]]);
+  const saved = graveOf(player);
+  assert.deepEqual(saved.items.map(item => item.id), [ABYSSAL_WHIP, RUNE_SCIMITAR, RANGER_BOOTS], "capacity selection uses cache order");
+  assert.equal(Grave.fee(player), 101000, "grave charges the loaded quote bands");
+  assert.equal(Fees.feeValue(core.ItemIdentifiers.DRAGON_DEFENDER), 68007, "unquoted items retain cache value");
+  assert.equal(Fees.feeValue(core.ItemIdentifiers.PHARAOHS_SCEPTRE_3_), 100, "quoted untradeable items retain cache value");
+  assert.equal(Fees.graveFee([{ id: core.ItemIdentifiers.PHARAOHS_SCEPTRE_3_, amount: 1 }], false), 0);
+  assert.equal(Fees.officeFee(ABYSSAL_WHIP, false), 37564);
+  assert.equal(Fees.officeFee(ABYSSAL_WHIP, true), 18782);
+  assert.equal(Fees.officeFee(RUNE_SCIMITAR, false), 0);
+  assert.equal(Fees.graveFee(saved.items, true), 50500);
+  const state = { player };
+  custom["gravestones:state"](state);
+  assert.equal(state.grave.officeFee, 1847614, "Office quote for the actual grave contents");
+
+  // A persisted grave can still be ordered by cache value when opened after this change.
+  player.setAttribute("gravestones:grave", JSON.parse(JSON.stringify(saved)));
+  Grave.open(player);
+  assert.deepEqual(graveOf(player).items.map(item => item.id), [RANGER_BOOTS, ABYSSAL_WHIP, RUNE_SCIMITAR]);
+  assert.deepEqual(sent.at(-1).items.map(item => item.id), [RANGER_BOOTS, ABYSSAL_WHIP, RUNE_SCIMITAR]);
+  assert.equal(player.varbits.get(Common.VARBIT.under100k), 3);
+  assert.equal(player.varbits.get(Common.VARBIT.under1m), 2);
+  assert.equal(player.varbits.get(Common.VARBIT.under10m), 2);
+  Grave.takeSlot(player, 0);
+  assert.equal(player.getInventory().getAmount(RANGER_BOOTS), 0, "the paid displayed slot cannot be taken for free");
+  Grave.takeSlot(player, 2);
+  assert.equal(player.getInventory().getAmount(RUNE_SCIMITAR), 1, "the displayed free slot selects the same record");
+  assert.deepEqual(graveOf(player).items.map(item => item.id), [RANGER_BOOTS, ABYSSAL_WHIP]);
+  player.setAttribute("gravestones:coffer", 101000);
+  Grave.payOrTake(player);
+  assert.equal(player.getAttribute("gravestones:coffer"), null, "the actual grave fee was paid");
+  Grave.takeSlot(player, 0);
+  const recovered = player.getInventory().getItems().find(item => item && item.getId() === RANGER_BOOTS);
+  assert.deepEqual(recovered?.getMeta(), bootMeta, "the clicked paid slot retains its metadata");
+  assert.deepEqual(graveOf(player).items.map(item => item.id), [ABYSSAL_WHIP]);
 });

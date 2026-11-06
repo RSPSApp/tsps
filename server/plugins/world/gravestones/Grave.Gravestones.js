@@ -169,9 +169,19 @@ function sendFee(player, held) {
   player.getPacketSender().sendInterfaceScript(Common.TRANSMIT_DATA_SCRIPT, [fee(player, held), Storage.coffer(player)]);
 }
 
+/** The client divides the inventory into fee bands by slot; keep sent slots in fee order. */
+function orderForFees(player, held) {
+  const ordered = [...held.items].sort((a, b) => Fees.feeValue(b.id) - Fees.feeValue(a.id));
+  if (ordered.some((entry, slot) => entry !== held.items[slot])) {
+    held.items = ordered;
+    Storage.setGrave(player, held);
+  }
+}
+
 function open(player) {
   const held = Storage.grave(player);
   if (!held) return;
+  orderForFees(player, held);
   const sender = player.getPacketSender();
   Fees.sendThresholds(player, held.items);
   Common.sendInventory(player, Common.GRAVE_INV, Common.GRAVE_SLOTS, held.items);
@@ -189,6 +199,7 @@ function close(player) {
 
 function refresh(player, held) {
   if (!isOpen(player)) return;
+  orderForFees(player, held);
   Fees.sendThresholds(player, held.items);
   Common.sendInventory(player, Common.GRAVE_INV, Common.GRAVE_SLOTS, held.items);
   sendFee(player, held);

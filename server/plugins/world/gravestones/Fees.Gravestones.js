@@ -29,14 +29,21 @@ function discount(fee, iron) {
   return iron ? Math.floor(fee / 2) : fee;
 }
 
+/** The existing GE buy quote for tradeable items; preserve cache value for the rest. */
+function feeValue(id) {
+  const definition = Common.definition(id);
+  return definition.isTradeable() && definition.hasGrandExchangeValue()
+    ? Math.max(0, definition.getGrandExchangeValue()) : Common.value(id);
+}
+
 function isPaid(id) {
-  return Common.value(id) >= FREE_UNDER;
+  return feeValue(id) >= FREE_UNDER;
 }
 
 function graveFee(records, iron) {
   let total = 0;
   for (const { id, amount } of records) {
-    const band = BANDS.find(({ from }) => Common.value(id) >= from);
+    const band = BANDS.find(({ from }) => feeValue(id) >= from);
     if (band) total += discount(band.fee * amount, iron);
   }
   return Math.min(total, discount(FEE_CAP, iron));
@@ -47,7 +54,7 @@ function graveFee(records, iron) {
  * when none is. The client counts the slots before it as the pricier band.
  */
 function threshold(records, under) {
-  const index = records.findIndex(({ id }) => Common.value(id) < under);
+  const index = records.findIndex(({ id }) => feeValue(id) < under);
   return index < 0 ? 0 : index + 1;
 }
 
@@ -58,7 +65,7 @@ function sendThresholds(player, records) {
 }
 
 function officeFee(id, iron) {
-  const worth = Common.value(id);
+  const worth = feeValue(id);
   if (worth < FREE_UNDER) return 0;
   return discount(Math.floor((worth * OFFICE_PERCENT) / 100), iron);
 }
@@ -107,4 +114,4 @@ function paymentMessage(source, fee, office = false) {
   return `Payment has been taken from ${SOURCE_TEXT[source]}: ${amount}${office ? " coins" : " x Coins"}`;
 }
 
-module.exports = { FREE_UNDER, isPaid, graveFee, threshold, sendThresholds, officeFee, pay, paymentMessage };
+module.exports = { FREE_UNDER, feeValue, isPaid, graveFee, threshold, sendThresholds, officeFee, pay, paymentMessage };

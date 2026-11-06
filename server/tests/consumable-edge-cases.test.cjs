@@ -218,7 +218,8 @@ test("a divine potion's timer pauses while logged out and the state survives a s
   assert.ok(resumed.endsAt - Date.now() >= remaining + 60 * 60 * 1000 - 50);
   player.levels.set(Skill.ATTACK, 105);
   processDivine(player);
-  assert.equal(player.levels.get(Skill.ATTACK), 118, "the divine level holds after a relog");
+  assert.equal(player.levels.get(Skill.ATTACK), 105, "the reduced divine level holds after a relog");
+  assert.equal(player.getAttribute("potions:divine:state").targets[0].target, 105);
 });
 
 const SpellTeleports = require("../plugins/combat/SpellTeleports.plugin");

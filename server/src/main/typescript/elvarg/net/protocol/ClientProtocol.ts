@@ -2498,7 +2498,7 @@ export function encodeGameframeTabSetup(group: number, root: number = 161): Buff
 
 // Transient player attribute set from the handshake's clientType byte.
 export const MOBILE_CLIENT_ATTRIBUTE = "mobile-client";
-// The session is an official OSRS client behind the gateway (gateway/): it gets the fields the
+// The session is an official OSRS client behind the gateway (runelite-gateway/): it gets the fields the
 // browser wire leaves out. Transient, set from HANDSHAKE_CAPABILITY_NATIVE_CLIENT.
 export const NATIVE_CLIENT_ATTRIBUTE = "native-client";
 export const HANDSHAKE_CAPABILITY_NATIVE_CLIENT = 0x1;

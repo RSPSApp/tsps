@@ -263,7 +263,7 @@ test('mandatory route: pay, milk, seasoned sardine, all Lumber Yard crates, kitt
   assert.equal(h.configs.get(180), 6, 'completion reaches the cache threshold');
   assert.equal(Number(h.attrs.get(runtime.QUEST_POINTS_ATTRIBUTE)), 1);
   assert.deepEqual(h.xp, [[h.core.Skill.COOKING.getIndex(), 1525]]);
-  assert.equal(h.inventory.getAmount(I.PET_KITTEN), 1);
+  assert.equal([I.PET_KITTEN, I.PET_KITTEN_2, I.PET_KITTEN_3, I.PET_KITTEN_4, I.PET_KITTEN_5, I.PET_KITTEN_6].reduce((sum, id) => sum + h.inventory.getAmount(id), 0), 1);
   assert.equal(h.inventory.getAmount(I.CHOCOLATE_CAKE), 1);
   assert.equal(h.inventory.getAmount(I.STEW), 1);
   assert.equal(h.jingles(), 1);
@@ -271,7 +271,7 @@ test('mandatory route: pay, milk, seasoned sardine, all Lumber Yard crates, kitt
   h.action(N.GERTRUDE, 'Rf4BAK');
   assert.equal(h.quest.getStage(h.player), 6);
   assert.deepEqual(h.xp, [[h.core.Skill.COOKING.getIndex(), 1525]], 'repeat hand-in grants no extra XP');
-  assert.equal(h.inventory.getAmount(I.PET_KITTEN), 1, 'repeat hand-in grants no extra kitten');
+  assert.equal([I.PET_KITTEN, I.PET_KITTEN_2, I.PET_KITTEN_3, I.PET_KITTEN_4, I.PET_KITTEN_5, I.PET_KITTEN_6].reduce((sum, id) => sum + h.inventory.getAmount(id), 0), 1, 'repeat hand-in grants no extra kitten');
   assert.equal(h.inventory.getAmount(I.CHOCOLATE_CAKE), 1);
   assert.equal(h.inventory.getAmount(I.STEW), 1);
 

@@ -50,6 +50,7 @@ function fakePlayer(items) {
     getItems: () => slots,
     contains: (id) => (amounts.get(id) || 0) > 0 || slots.some((item) => item?.getId() === id),
     getAmount: (id) => amounts.get(id) || 0,
+    getAddableAmount: (item) => Math.min(item.getAmount(), 0x7fffffff - (amounts.get(item.getId()) || 0)),
     deleteNumber(id, amount) {
       const slot = slots.findIndex((item) => item?.getId() === id);
       if (slot >= 0) slots[slot] = null;
@@ -254,6 +255,23 @@ test('a plugin can lengthen the cast (the Alchemists\' Playground: 5 ticks for L
 });
 
 
+test('alchemy refuses an oversized payout before consuming the item or runes', (t) => {
+  const { listener } = harness(t);
+  const original = PluginManager.emitCustomEvent;
+  t.mock.method(PluginManager, 'emitCustomEvent', (name, event) => {
+    const result = original.call(PluginManager, name, event);
+    if (name === 'magic:alchemy-policy') event.coins = 0x80000000;
+    return result;
+  });
+  const player = fakePlayer([fakeItem(RUNE_PLATELEGS)]);
+  listener.castOnItem(player, HIGH_ALCHEMY, RUNE_PLATELEGS, 0);
+  assert.ok(player.slots[0]);
+  assert.equal(coins(player), 0);
+  assert.equal(player.amounts.get(NATURE_RUNE), 100);
+  assert.equal(player.amounts.get(FIRE_RUNE), 500);
+  assert.equal(player.log.xp, 0);
+});
+
 test('ordinary alchemy preserves the promised coin value at stack limits', async (t) => {
   const path = require('node:path');
   const PM = PluginManager;
@@ -279,7 +297,7 @@ test('ordinary alchemy preserves the promised coin value at stack limits', async
   started = true; PM.emitServerStartup({});
   let index = 17500;
   for (const spellName of ['High Level Alchemy', 'Low Level Alchemy']) {
-    for (const mode of ['room', 'exact', 'near', 'full']) await t.test(`${spellName}: ${mode}`, async (t) => {
+    for (const mode of ['room', 'exact', 'near', 'full', 'full-item-slot', 'tagged-item-slot', 'keep-item-rune-slot', 'keep-item-free-runes']) await t.test(`${spellName}: ${mode}`, async (t) => {
       const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true,
         send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
       const player = new Player(new PlayerSession(channel));
@@ -309,10 +327,17 @@ test('ordinary alchemy preserves the promised coin value at stack limits', async
       const spell = native.CacheDefinitions.getSpellByName(spellName);
       assert.ok(spell); assert.equal(native.CacheDefinitions.getSpellName(spell.widgetId, spell.itemId), spellName);
       const headroom = mode === 'exact' ? value : mode === 'near' ? Math.floor(value / 2) : 0;
-      const initialCoins = mode === 'room' ? 100 : MAX_STACK_AMOUNT - headroom - 1;
-      inventory.add(new native.Item(I.COINS, initialCoins), false);
+      const fullPack = ['full-item-slot', 'tagged-item-slot', 'keep-item-rune-slot', 'keep-item-free-runes'].includes(mode);
+      if (!fullPack) {
+        const initialCoins = mode === 'room' ? 100 : MAX_STACK_AMOUNT - headroom - 1;
+        inventory.add(new native.Item(I.COINS, initialCoins), false);
+      } else if (mode === 'tagged-item-slot') {
+        inventory.add(new native.Item(I.COINS, 100, {source: 'tagged'}), false);
+      }
       inventory.add(new native.Item(itemId), false);
-      inventory.add(new native.Item(I.NATURE_RUNE, 20), false).add(new native.Item(I.FIRE_RUNE, 100), true);
+      inventory.add(new native.Item(I.NATURE_RUNE, mode === 'keep-item-rune-slot' ? 1 : 20), false)
+        .add(new native.Item(I.FIRE_RUNE, 100), true);
+      if (fullPack) while (inventory.getFreeSlots() > 0) inventory.add(new native.Item(I.RAKE), false);
       const slot = inventory.getSlotForItemId(itemId), selected = inventory.getItems()[slot];
       assert.equal(selected.getMeta(), null); assert.equal(selected.getAmount(), 1);
       const taken = [], policies = [], payments = [], completed = [], gains = [], casts = [];
@@ -320,6 +345,11 @@ test('ordinary alchemy preserves the promised coin value at stack limits', async
       t.mock.method(PM, 'emitCustomEvent', (name, event) => {
         const result = emit(name, event);
         if (event?.player === player) {
+          // Model content policies on the real consumer without changing ordinary target cases.
+          if (name === 'magic:alchemy-policy' && mode.startsWith('keep-item-')) {
+            event.keepItem = true;
+            if (mode === 'keep-item-free-runes') event.freeRunes = true;
+          }
           if (name === 'ground-items:taken' && event.itemId === I.COINS) taken.push({ amount: event.amount, discarded: event.discarded });
           if (name === 'magic:alchemy-policy') policies.push({ coins: event.coins, freeRunes: event.freeRunes, keepItem: event.keepItem, recast: event.recast });
           if (name === 'magic:alchemy-payment') payments.push({ allowed: event.allowed, hasRunes: event.hasRunes, free: event.free,
@@ -341,10 +371,10 @@ test('ordinary alchemy preserves the promised coin value at stack limits', async
         && g.getPrivateArea() === player.getPrivateArea() && g.getItem().getId() === id).reduce((sum, g) => sum + g.getItem().getAmount(), 0);
       const owned = id => inventory.getAmount(id) + player.getEquipment().getAmount(id)
         + player.getBanks().reduce((sum, bank, tab) => sum + (bank && tab !== native.Bank.BANK_SEARCH_TAB_INDEX ? bank.getAmount(id) : 0), 0) + floor(id);
-      const state = () => ({ coins: owned(I.COINS), items: owned(itemId), nature: owned(I.NATURE_RUNE), fire: owned(I.FIRE_RUNE),
+      const state = () => ({ coins: owned(I.COINS), items: owned(itemId), nature: owned(I.NATURE_RUNE), fire: owned(I.FIRE_RUNE), rake: owned(I.RAKE),
         xp: native.Skill.values().map(s => skill.getExperience(s)) });
       const preparedXp = state().xp;
-      if (mode !== 'room') {
+      if (!fullPack && mode !== 'room') {
         const pile = native.ItemOnGroundManager.registers(player, new native.Item(I.COINS, 1));
         assert.ok(pile); assert.equal(floor(I.COINS), 1);
         await send({ type: 'ground_item_action', itemId: I.COINS, x: 3222, y: 3218, option: 'Take' });
@@ -352,15 +382,34 @@ test('ordinary alchemy preserves the promised coin value at stack limits', async
         assert.deepEqual(taken, [{ amount: 1, discarded: 0 }]);
         assert.equal(inventory.getAmount(I.COINS), MAX_STACK_AMOUNT - headroom);
       }
-      assert.equal(inventory.getAddableAmount(new native.Item(I.COINS, value)), mode === 'room' ? value : headroom);
+      assert.equal(inventory.getAddableAmount(new native.Item(I.COINS, value)), fullPack ? 0 : mode === 'room' ? value : headroom);
       assert.equal(inventory.getItems()[slot], selected); assert.equal(inventory.getAmount(itemId), 1);
-      assert.equal(inventory.getFreeSlots(), 24); assert.deepEqual(gains, []); assert.deepEqual(state().xp, preparedXp);
+      assert.equal(inventory.getFreeSlots(), fullPack ? 0 : 24); assert.deepEqual(gains, []); assert.deepEqual(state().xp, preparedXp);
       assert.ok(Number(player.getAttribute('magic:alchemy-next-cast') ?? 0) <= native.World.getProcessCycle());
       const before = state();
       await send({ type: 'widget_target', sourceWidgetId: spell.widgetId, sourceItemId: spell.itemId, sourceSlot: -1,
         targetWidgetId: native.CacheDefinitions.getComponentId('inventory:items'), targetSlot: slot, targetItemId: itemId });
       assert.deepEqual(casts, [{ spellId: high ? HIGH_ALCHEMY : LOW_ALCHEMY, itemId, slot, sourceAbsent: true, handled: true }], 'native spell target reaches the ordinary consumer once');
       const after = state(), consumed = before.items - after.items;
+      assert.equal(after.rake, before.rake, 'unrelated full-pack items remain unchanged');
+      if (mode.startsWith('keep-item-')) {
+        assert.equal(policies.length, 1); assert.equal(policies[0].keepItem, true);
+        assert.equal(policies[0].freeRunes, mode === 'keep-item-free-runes');
+      }
+      if (mode === 'keep-item-rune-slot') {
+        assert.equal(consumed, 0, 'policy keeps the item');
+        assert.equal(after.coins - before.coins, value, 'spent rune stack makes room for the full payout');
+        assert.equal(after.nature, 0); assert.equal(after.fire, before.fire - fireCost);
+        assert.deepEqual(gains, [[native.Skill.MAGIC.getIndex(), baseXp]]);
+        assert.ok(after.xp[native.Skill.MAGIC.getIndex()] > before.xp[native.Skill.MAGIC.getIndex()]);
+        for (const other of native.Skill.values()) if (other !== native.Skill.MAGIC) assert.equal(after.xp[other.getIndex()], before.xp[other.getIndex()]);
+        assert.equal(completed.length, 1); assert.equal(completed[0].coins, value);
+        return;
+      }
+      if (mode === 'tagged-item-slot') {
+        const tagged = inventory.getItems().find(entry => entry.getId() === I.COINS && entry.getMeta()?.source === 'tagged');
+        assert.ok(tagged); assert.equal(tagged.getAmount(), 100, 'the separate tagged stack is preserved');
+      }
       if (consumed > 0) {
         assert.equal(consumed, 1);
         assert.deepEqual(policies, [{ coins: value, freeRunes: false, keepItem: false, recast: false }]);
@@ -369,7 +418,7 @@ test('ordinary alchemy preserves the promised coin value at stack limits', async
       }
       const details = JSON.stringify({ spellName, mode, value, before, after, policies, payments, completed, gains });
       assert.equal(after.coins + value * after.items, before.coins + value * before.items, 'all owned coins and alchable value remain conserved: ' + details);
-      if (mode === 'room' || mode === 'exact') assert.equal(consumed, 1, 'positive control actually converts the item');
+      if (['room', 'exact', 'full-item-slot', 'tagged-item-slot'].includes(mode)) assert.equal(consumed, 1, 'positive control actually converts the item');
       if (consumed === 0) {
         assert.deepEqual(after, before, details); assert.deepEqual(gains, [], details); assert.deepEqual(completed, [], details);
       } else {

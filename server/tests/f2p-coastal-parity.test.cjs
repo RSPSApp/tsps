@@ -408,6 +408,35 @@ test('Corsair Ithoi strikes land with their projectile at every range (#1862)', 
   } finally { core.MagicCombatMethod.prototype.start=start;core.Projectile.createProjectile=create;Math.random=random; }
 });
 
+test('Osman offers the garden help option after Prince Ali Rescue and records the choice', () => {
+  const q = register('PrinceAliRescue', 'prince_ali_rescue'), p = player();
+  require('../plugins/minigames/sorceressgarden/Apprentice.SorceresssGarden')(q.api);
+  q.quest.setStage(p, 110);
+
+  let builder;
+  p.getDialogueManager = () => ({ reset() {}, startDialogues(chain) { builder = chain; }, isActive: () => false });
+  const line = {
+    player: p,
+    npcId: core.NpcIdentifiers.OSMAN_9,
+    npc: { getId: () => core.NpcIdentifiers.OSMAN_9 },
+    text: 'Well done. A great rescue. I will remember you if I have anything dangerous to do.',
+  };
+  q.emit('npc-dialogue:line', line);
+  assert.equal(typeof line.after, 'function', 'the post-quest Osman line schedules the help menu');
+  line.after();
+
+  const menu = [...builder.getDialogues().values()].find((entry) => entry instanceof core.OptionDialogue);
+  assert.deepEqual(menu.getOptions(), ['Is there anything I can help you with?', "I'm good, thanks."]);
+  assert.equal(p.getAttribute('sorceress-s-garden:osman-help-asked'), undefined);
+
+  const menuBuilder = builder;
+  menu.execute(1);
+  assert.equal(p.getAttribute('sorceress-s-garden:osman-help-asked'), true,
+    'selecting help persists the garden prerequisite');
+  assert.notEqual(builder, menuBuilder, 'the option starts Osman’s generated sq’irk dialogue');
+  assert.ok(builder.getDialogues().size > 0, 'the transcript branch is available');
+});
+
 test('Ned sells captured quest rope for 15 coins or four wool, refusing missing payment and full inventory', () => {
   const q = register('PrinceAliRescue', 'prince_ali_rescue'), p = player(); q.quest.setStage(p, 20);
   const page = require('../data/definitions/npc-dialogues.json')['Prince Ali Rescue'];

@@ -7,6 +7,8 @@ const GAMES = {
     optionTimeLabel: 'com_42', optionRankLabel: 'com_56' },
   runelink: { id: 1, title: 'Runelink', width: 7, height: 6, squareInput: false,
     optionTimeLabel: 'com_45', optionRankLabel: 'com_43' },
+  runesquares: { id: 2, title: 'Runesquares', width: 8, height: 8, squareInput: false,
+    optionTimeLabel: 'com_42', optionRankLabel: 'com_56' },
 };
 
 module.exports = { GAMES };

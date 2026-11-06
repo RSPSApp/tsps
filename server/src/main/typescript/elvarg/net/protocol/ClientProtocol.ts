@@ -241,6 +241,7 @@ export type SkillView = {
 };
 
 export type GroundItemView = {
+  enabledOps?: number;
   id: number;
   itemId: number;
   quantity: number;
@@ -1410,7 +1411,7 @@ export function encodeBankSlot(slot: BankSlotView): Buffer {
   return encodeServerPacket(ServerPacketId.BANK_SLOT, encodeBankSlotPayload(slot));
 }
 
-export const GROUND_ITEM_BYTES = 33;
+export const GROUND_ITEM_BYTES = 34;
 
 function encodeGroundItem(stack: GroundItemView): Buffer {
   const payload = Buffer.alloc(GROUND_ITEM_BYTES);
@@ -1426,6 +1427,7 @@ function encodeGroundItem(stack: GroundItemView): Buffer {
   payload.writeInt32BE(stack.ownerId ?? -1, 27);
   payload[31] = stack.isPrivate ? 1 : 0;
   payload[32] = stack.ownership ?? 0;
+  payload[33] = (stack.enabledOps ?? 0x1f) & 0x1f;
   return payload;
 }
 

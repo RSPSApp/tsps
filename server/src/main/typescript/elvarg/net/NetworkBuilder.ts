@@ -1460,7 +1460,7 @@ export class ClientConnection {
       const index = packet.optionIndex ?? namedIndex + 1;
       if (index !== namedIndex + 1) return;
       SecondGroundItemOptionPacketListener.interact(
-        player, packet.itemId, packet.x, packet.y, index
+        player, packet.itemId, packet.x, packet.y, index, packet.stackId
       );
     } else {
       const index = packet.optionIndex ?? 3;
@@ -1471,7 +1471,7 @@ export class ClientConnection {
       }
       if (!action) return;
       SecondGroundItemOptionPacketListener.interact(
-        player, packet.itemId, packet.x, packet.y, index
+        player, packet.itemId, packet.x, packet.y, index, packet.stackId
       );
     }
   }

@@ -2,6 +2,10 @@
 
 How and when players are saved, the save history, and rolling players back.
 
+## Backing up
+
+Back up `data/saves/accounts.json` with the saves database and restore them together. It records which characters each account owns, lets alts log in with their primary's password, and keeps deleted character names reserved. See [character slots](./character-slots.md#back-it-up-with-the-saves).
+
 ## When a player is saved
 
 Every save records why it happened (`PlayerPersistence.save(player, reason)`):
@@ -95,7 +99,7 @@ The SQLite backend (`plugins/persistence/SqlitePlayerPersistence.plugin.js`, the
   - from 24 hours to 7 days, the newest of each hour;
   - from 7 to 30 days, the newest of each day;
   - nothing older.
-- **Deleting a character** ([character slots](./character-slots.md)) first adds a copy with the reason `character-delete`, then re-keys all of that name's history rows to `deleted:<ms>:<name>` in the same transaction. The name can then be reused without `::snapshots` or `::rollback` showing the old character; the rows stay in the database and nothing in game restores them.
+- **Deleting a character** ([character slots](./character-slots.md)) first adds a copy with the reason `character-delete`, then re-keys all of that name's history rows to `deleted:<ms>:<name>` in the same transaction, so `::snapshots` and `::rollback` don't show the old character under its name. The name itself is never reused (`accounts.json` keeps it as a tombstone). The rows stay in the database and nothing in game restores them.
 - **The JSON and browser (IndexedDB) backends** keep no history; the commands say so.
 
 ## Rolling a player back
@@ -128,7 +132,7 @@ yarn saves:rollback --before ... --player "Some name"        # one player
 
 ## What a rollback doesn't cover
 
-- **World files:** `doom-scoreboard.json`, `gauntlet-scoreboard.json`, the ban and mute lists.
+- **World files:** `doom-scoreboard.json`, `gauntlet-scoreboard.json`, `accounts.json`, `display-names.json`, the ban and mute lists.
 - **The other side of a trade:** rolling back one player of a trade leaves the other as they are, so items can be duplicated or lost. A whole-server rollback to one time doesn't have this problem.
 
 ## Testing

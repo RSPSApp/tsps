@@ -16,16 +16,31 @@ export interface AccountEntry {
     characters: AccountCharacter[];
 }
 
+/** A deleted character's name: never claimable again, since display names, clans and punishments are keyed by it. */
+export interface DeletedName {
+    /** The name as the account had it. */
+    name: string;
+    /** The account that deleted it. */
+    account: string;
+    deletedAt: number;
+}
+
 /**
  * Accounts: one login name owning several character names. The account is keyed by its primary
  * (login) name; every character name leads to one account. The file is written whole on every
  * change: characters change rarely.
+ *
+ * A deleted character's name is kept for good under `deleted` (a tombstone). Everything else keyed
+ * by a login name (display names, clan ranks, bans and mutes) stays behind on delete, so the name
+ * must never lead to another account. A file from before tombstones has no `deleted` and loads as none.
  */
 export class Accounts {
     static readonly FILE_ENV = "TSPS_ACCOUNTS_FILE";
     private static entries: Map<string, AccountEntry> | null = null;
     /** Character name key -> account key. */
     private static owners = new Map<string, string>();
+    /** Name key -> tombstone of a deleted character. */
+    private static deleted = new Map<string, DeletedName>();
 
     /** The key two names share when they are the same name. */
     public static key(name: string): string {
@@ -39,13 +54,15 @@ export class Accounts {
     private static load(): Map<string, AccountEntry> {
         if (this.entries) return this.entries;
         const loaded = new Map<string, AccountEntry>();
+        const deleted = new Map<string, DeletedName>();
         let saved: any;
         try {
             saved = JSON.parse(fs.readFileSync(this.file(), "utf8"));
         } catch (error: any) {
-            if (error?.code !== "ENOENT") throw error;
+            if (error?.code !== "ENOENT") throw Accounts.unreadable(this.file(), error);
             saved = { accounts: {} };
         }
+        if (!saved || typeof saved !== "object") throw Accounts.unreadable(this.file(), new Error("not a JSON object"));
         for (const [account, entry] of Object.entries<any>(saved.accounts ?? {})) {
             loaded.set(account, {
                 createdAt: Number(entry.createdAt) || 0,
@@ -58,10 +75,29 @@ export class Accounts {
                     : [],
             });
         }
+        for (const [nameKey, tombstone] of Object.entries<any>(saved.deleted ?? {})) {
+            deleted.set(this.key(nameKey), {
+                name: String(tombstone?.name ?? nameKey),
+                account: String(tombstone?.account ?? ""),
+                deletedAt: Number(tombstone?.deletedAt) || 0,
+            });
+        }
         // Only once it has all been read: a file that can't be keeps throwing, so save() can't replace it.
         this.entries = loaded;
+        this.deleted = deleted;
         this.reindex();
         return loaded;
+    }
+
+    /** The error for a file that exists but can't be read, naming it for the operator; every login is refused meanwhile. */
+    private static unreadable(file: string, cause: any): Error {
+        const error = new Error(
+            `[accounts] ${file} could not be read (${cause?.message ?? cause}). It records which characters each ` +
+                "account owns, the alts' passwords (through their primary) and deleted names. Every login is " +
+                "refused until it is repaired or restored from the backup taken together with the saves database.",
+        );
+        (error as any).cause = cause;
+        return error;
     }
 
     private static reindex(): void {
@@ -75,7 +111,7 @@ export class Accounts {
         const target = this.file();
         fs.mkdirSync(path.dirname(target), { recursive: true });
         const temporary = `${target}.tmp`;
-        fs.writeFileSync(temporary, JSON.stringify({ accounts: Object.fromEntries(this.load()) }, null, 2));
+        fs.writeFileSync(temporary, JSON.stringify({ accounts: Object.fromEntries(this.load()), deleted: Object.fromEntries(this.deleted) }, null, 2));
         fs.renameSync(temporary, target);
     }
 
@@ -83,6 +119,17 @@ export class Accounts {
     public static accountOf(name: string): string | undefined {
         this.load();
         return this.owners.get(this.key(name));
+    }
+
+    /** Whether this name belonged to a deleted character: it can never be a character or login name again. */
+    public static isDeleted(name: string): boolean {
+        this.load();
+        return this.deleted.has(this.key(name));
+    }
+
+    public static deletedOf(name: string): DeletedName | undefined {
+        this.load();
+        return this.deleted.get(this.key(name));
     }
 
     public static entryOf(accountKey: string): AccountEntry | undefined {
@@ -108,6 +155,7 @@ export class Accounts {
         const account = this.key(primaryName);
         const existing = entries.get(account);
         if (existing) return existing;
+        if (this.deleted.has(account)) throw new Error("That name belonged to a deleted character");
         const entry: AccountEntry = { createdAt: now, characters: [{ name: primaryName, createdAt: now, lastPlayedAt: 0 }] };
         entries.set(account, entry);
         try {
@@ -125,6 +173,7 @@ export class Accounts {
         const entry = this.entryOf(accountKey);
         if (!entry) throw new Error("No such account");
         if (this.accountOf(name)) throw new Error("That name is owned by an account");
+        if (this.isDeleted(name)) throw new Error("That name belonged to a deleted character");
         const character: AccountCharacter = { name, createdAt: now, lastPlayedAt: 0 };
         entry.characters.push(character);
         try {
@@ -137,17 +186,25 @@ export class Accounts {
         return character;
     }
 
-    /** Removes a character. False, changing nothing, for the primary or a name the account doesn't have. */
-    public static removeCharacter(accountKey: string, name: string): boolean {
+    /**
+     * Removes a character and keeps its name as a tombstone, in one write. False, changing nothing,
+     * for the primary or a name the account doesn't have.
+     */
+    public static removeCharacter(accountKey: string, name: string, now = Date.now()): boolean {
         const entry = this.entryOf(accountKey);
         if (!entry || this.isPrimary(accountKey, name)) return false;
         const index = entry.characters.findIndex((c) => this.key(c.name) === this.key(name));
         if (index < 0) return false;
         const [removed] = entry.characters.splice(index, 1);
+        const nameKey = this.key(removed.name);
+        const before = this.deleted.get(nameKey);
+        this.deleted.set(nameKey, { name: removed.name, account: this.key(accountKey), deletedAt: now });
         try {
             this.save();
         } catch (error) {
             entry.characters.splice(index, 0, removed);
+            if (before) this.deleted.set(nameKey, before);
+            else this.deleted.delete(nameKey);
             throw error;
         }
         this.reindex();
@@ -171,5 +228,6 @@ export class Accounts {
     public static reset(): void {
         this.entries = null;
         this.owners.clear();
+        this.deleted = new Map();
     }
 }

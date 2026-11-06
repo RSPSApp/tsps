@@ -109,8 +109,12 @@ modelled on `DisplayNames`: an in-memory map backed by one JSON file, `data/save
 { "accounts": { "<account key>": {
     "createdAt": <ms>,
     "characters": [ { "name": "<as first typed>", "createdAt": <ms>, "lastPlayedAt": <ms> } ]
-} } }
+} },
+  "deleted": { "<name key>": { "name": "<as the account had it>", "account": "<account key>", "deletedAt": <ms> } } }
 ```
+
+`deleted` holds a tombstone for every deleted character. A file without it (written before
+tombstones) loads with none.
 
 Order of `characters` is slot order; index 0 is the primary. A reverse index (character key to
 account key) is rebuilt on load. The record is created lazily: the first time an existing login
@@ -128,6 +132,11 @@ disk. The in-browser host (IndexedDb backend) does not persist either file acros
 there character creation is disabled (`maxCharacters` reported as 1) and the picker shows the
 one character; no non-primary save can be created that the record could later forget. Any other
 backend keeps the file.
+
+Hosts must back up and restore the file together with the saves database: it is the only record
+of ownership, the alts' credentials resolve through it to the primary, and it holds the
+tombstones. An unreadable file refuses every login and logs an operator message naming it; a
+missing one starts empty.
 
 ### Credentials
 
@@ -186,7 +195,11 @@ refused with `CHARACTER_RESULT` code 4 otherwise):
 - `CHARACTER_DELETE`: `string name`, `string confirmName`. Refused for the primary, for an online
   character, or when `confirmName` differs from `name` case-insensitively. Otherwise: a history
   snapshot with reason `character-delete` where the backend supports history, then the save is
-  removed for every profile, the character is removed from the account, and the name is free.
+  removed for every profile, and the character is removed from the account and its name
+  tombstoned in the same write. The name is never claimable again: display names, clan ranks and
+  punishments are keyed by it and are not released, so the tombstone keeps them unreachable.
+  Login (a brand-new name), `CHARACTER_CREATE` and `DisplayNames.loginNameInUse` (display-name
+  changes) all refuse a tombstoned name.
   Replies `CHARACTER_RESULT` then `CHARACTER_LIST`.
 
 `handshake` with no prior select enters the default character (the `defaultIndex` rule). That is
@@ -202,10 +215,9 @@ New abstract `PlayerPersistence.delete(username, profile): Promise<void>` implem
 SQLite (row delete, worker thread, history snapshot first), JSON (file unlink), IndexedDb and Null
 backends. Save keys are unchanged.
 
-`PlayerSaveSnapshot` reasons gain `character-delete`. Because the name may be reused by another
-account, the SQLite delete also re-keys that character's history rows from `<key>` to
-`deleted:<ms>:<key>` in the same worker transaction, so `::snapshots`/`::rollback` on the reused
-name never show or restore the previous owner's character. The rows stay for an admin with
+`PlayerSaveSnapshot` reasons gain `character-delete`. The SQLite delete also re-keys that character's history rows from `<key>` to
+`deleted:<ms>:<key>` in the same worker transaction, so `::snapshots`/`::rollback` on the name
+never show or restore the deleted character. The rows stay for an admin with
 database access; there is no in-game restore of a deleted character.
 
 ### Configuration
@@ -283,7 +295,7 @@ Server (`server/tests`, extend the login harness in `login-tokens.test.cjs` or a
 `character-slots.test.cjs`): account created lazily on first login; list sent only with the flag;
 select, default pick, typed non-primary name resolves to the account; create with cap, invalid
 name, every taken-name case, creation refused before the primary has a save; delete rules
-(primary, online, mismatch), that the save is gone, the name free and history re-keyed; one-account-online across two characters; token rotation and `login_forget`
+(primary, online, mismatch), that the save is gone, the name tombstoned for good and history re-keyed; one-account-online across two characters; token rotation and `login_forget`
 stay on the primary; `changePassword` from a non-primary writes the primary offline; handshake
 without select enters last played. Persistence: `delete` per backend in `player-saves.test.cjs`.
 

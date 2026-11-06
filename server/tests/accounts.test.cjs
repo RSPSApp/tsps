@@ -35,3 +35,32 @@ test('the file round-trips through a restart', () => {
   assert.deepEqual(Accounts.charactersOf('zezima').map((c) => c.name), ['Zezima', 'Second']);
   assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')).accounts.zezima.characters.length, 2);
 });
+
+test('a deleted name is tombstoned for good and survives a restart', () => {
+  Accounts.ensure('Zezima', 1000); Accounts.addCharacter('zezima', 'Zez Alt', 1100);
+  assert.equal(Accounts.isDeleted('Zez Alt'), false);
+  assert.equal(Accounts.removeCharacter('zezima', 'Zez Alt', 1200), true);
+  assert.equal(Accounts.accountOf('zez alt'), undefined);
+  assert.equal(Accounts.isDeleted('ZEZ_ALT'), true, 'key normalisation');
+  Accounts.ensure('Other', 1300);
+  assert.throws(() => Accounts.addCharacter('other', 'Zez Alt'), /deleted/);
+  assert.throws(() => Accounts.addCharacter('zezima', 'zez alt'), /deleted/, 'not even by its own account');
+  assert.throws(() => Accounts.ensure('Zez Alt'), /deleted/, 'nor as a new login');
+  Accounts.reset();
+  assert.deepEqual(Accounts.deletedOf('zez alt'), { name: 'Zez Alt', account: 'zezima', deletedAt: 1200 });
+  assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')).deleted, { 'zez alt': { name: 'Zez Alt', account: 'zezima', deletedAt: 1200 } });
+});
+
+test('a file from before tombstones still loads, and an unreadable one names itself', () => {
+  fs.writeFileSync(file, JSON.stringify({ accounts: { zezima: { createdAt: 1, characters: [{ name: 'Zezima', createdAt: 1, lastPlayedAt: 0 }, { name: 'Alt', createdAt: 2, lastPlayedAt: 0 }] } } }));
+  assert.deepEqual(Accounts.charactersOf('zezima').map((c) => c.name), ['Zezima', 'Alt']);
+  assert.equal(Accounts.isDeleted('Alt'), false);
+  assert.equal(Accounts.removeCharacter('zezima', 'Alt', 5), true);
+  Accounts.reset();
+  assert.equal(Accounts.isDeleted('Alt'), true, 'the first delete adds the tombstones');
+
+  fs.writeFileSync(file, '{"accounts": {');
+  Accounts.reset();
+  assert.throws(() => Accounts.accountOf('Zezima'), (error) => error.message.includes(file) && /backup/.test(error.message));
+  assert.equal(fs.readFileSync(file, 'utf8'), '{"accounts": {', 'an unreadable file is never replaced');
+});

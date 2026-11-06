@@ -135,7 +135,10 @@ export class DisplayNames {
         return null;
     }
 
-    /** Whether any account logs in with this name: saved on either profile, online, logging in now, or an account's character. */
+    /**
+     * Whether any account logs in with this name: saved on either profile, online, logging in now,
+     * an account's character, or a deleted character's (reserved for good, see Accounts).
+     */
     public static loginNameInUse(key: string): boolean {
         const { GameConstants } = require("../../../GameConstants") as typeof import("../../../GameConstants");
         const { World } = require("../../../World") as typeof import("../../../World");
@@ -143,6 +146,7 @@ export class DisplayNames {
         const { Accounts } = require("./Accounts") as typeof import("./Accounts");
         const persistence = GameConstants.PLAYER_PERSISTENCE;
         return Accounts.accountOf(key) !== undefined ||
+            Accounts.isDeleted(key) ||
             !!World.getPlayerByName(key) ||
             ClientConnection.isLoginPending(key) ||
             persistence.exists(key, MAIN_PROFILE) ||

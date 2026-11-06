@@ -678,3 +678,50 @@ test('a delete whose login vanished during the awaited deletes still removes the
   assert.deepEqual(Accounts.charactersOf('zezima').map((e) => e.name), ['Zezima'], 'the account no longer lists it');
   assert.equal(saves.has(saveKey('Alt')), false);
 });
+
+test('a deleted name is never claimable again: create, login and display names', async (t) => {
+  t.mock.method(PluginManager, 'getPluginConfig', (key, fallback) => (key === 'characters:maxPerAccount' ? 6 : fallback));
+  seedSave('Zezima', { passwordHash: hashOf('pw') });
+  seedSave('Owner', { passwordHash: hashOf('pw') });
+  Accounts.ensure('Zezima', 1);
+  Accounts.ensure('Owner', 1);
+  Accounts.addCharacter('zezima', 'Altguy', 2);
+  seedSave('Altguy');
+  // The alt showed a display name: it stays behind, keyed by the deleted name.
+  DisplayNames.set('Altguy', 'Shinyname', Date.now() - 1, 60_000);
+  const c = await connect('Zezima', 'pw', LOGIN_FLAG_CHARACTER_SELECT);
+  await remove(c, 'Altguy');
+  assert.deepEqual(lastResult(c.channel), { ok: true, code: 0, message: '' });
+  assert.equal(saves.has(saveKey('Altguy')), false);
+  assert.equal(Accounts.isDeleted('altguy'), true);
+
+  // Another account can't create it, nor can the account that deleted it.
+  const o = await connect('Owner', 'pw', LOGIN_FLAG_CHARACTER_SELECT);
+  await create(o, 'AltGuy');
+  assert.deepEqual(lastResult(o.channel), { ok: false, code: 1, message: "That name belonged to a deleted character and can't be used again." });
+  await create(c, 'altguy');
+  assert.equal(lastResult(c.channel).code, 1);
+  assert.deepEqual(Accounts.charactersOf('owner').map((e) => e.name), ['Owner']);
+
+  // A fresh login with the name (a new primary) is refused, with or without the picker, and claims nothing.
+  net.ClientConnection.pendingNames.clear();
+  for (const flags of [0, LOGIN_FLAG_CHARACTER_SELECT]) {
+    const fresh = await connect('Altguy', 'new password', flags);
+    assert.deepEqual([fresh.response.success, fresh.response.code, fresh.response.error],
+      [false, 3, "That name belonged to a deleted character and can't be used again."]);
+    assert.equal(packetsOf(fresh.channel, CHARACTER_LIST).length, 0);
+  }
+  assert.equal(net.ClientConnection.isLoginPending('Altguy'), false);
+  assert.equal(Accounts.entryOf('altguy'), undefined);
+  assert.equal(DisplayNames.nameOf('Altguy'), 'Shinyname', 'left in place, unreachable');
+
+  // Nobody can take it as a display name either; the deleted character's display name stays reserved.
+  assert.equal(DisplayNames.refusal('Owner', 'Altguy'), 'That name is not available.');
+  assert.equal(DisplayNames.refusal('Owner', 'Shinyname'), 'That name is not available.');
+
+  // The tombstone survives a restart.
+  Accounts.reset();
+  net.ClientConnection.pendingNames.clear();
+  assert.equal((await login('ALTGUY', 'pw')).code, 3);
+  assert.equal(DisplayNames.refusal('Owner', 'altguy'), 'That name is not available.');
+});

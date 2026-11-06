@@ -1195,13 +1195,22 @@ export class ClientConnection {
     let account: string;
     let primaryName: string;
     let accountNames: string[];
+    let deletedName = false;
     try {
-      account = Accounts.accountOf(typedName) ?? Accounts.key(typedName);
+      const owner = Accounts.accountOf(typedName);
+      // A deleted character's name is never claimed again: its display names, clan rank and
+      // punishments are still keyed by it.
+      deletedName = owner === undefined && Accounts.isDeleted(typedName);
+      account = owner ?? Accounts.key(typedName);
       primaryName = Accounts.primaryOf(account) ?? typedName;
       accountNames = [...Accounts.charactersOf(account).map((character) => character.name), typedName];
     } catch (error) {
       console.error(`[login] failed to read the account of ${typedName}`, error);
       this.failLogin(8, "The login server is busy.");
+      return;
+    }
+    if (deletedName) {
+      this.failLogin(3, "That name belonged to a deleted character and can't be used again.");
       return;
     }
     // One account online at a time, whichever of its characters.
@@ -1454,9 +1463,13 @@ export class ClientConnection {
         this.send(encodeCharacterResult(false, 2, "Names are 1 to 12 letters, numbers and spaces."));
         return;
       }
-      // Taken: another account's character, save, online or pending login, or another account's
-      // current or held display name (the shared namespace).
+      // Taken: another account's character, save, online or pending login, a deleted character's
+      // name (kept for good), or another account's current or held display name (the shared namespace).
       const nameKey = DisplayNames.key(name);
+      if (Accounts.isDeleted(nameKey)) {
+        this.send(encodeCharacterResult(false, 1, "That name belonged to a deleted character and can't be used again."));
+        return;
+      }
       const owner = DisplayNames.ownerOf(nameKey);
       if ((owner !== undefined && owner !== nameKey) || DisplayNames.loginNameInUse(nameKey)) {
         this.send(encodeCharacterResult(false, 1, "That name is not available."));

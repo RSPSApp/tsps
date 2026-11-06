@@ -24,6 +24,10 @@ reward on both routes now matches the captures.
 
 Newest first.
 
+- **fixed** Talk-to on The Thing (NPC 731) played Cold War's "I can't speak to the penguins when I'm
+  not in my disguise." for every player. Live, with Cold War not started, the player says "That's a
+  sheep...I think. I can't talk to sheep." (2026-11-06 capture, tick 333). Cold War now leaves the
+  sheep to its own page until Cold War is started. Found by the user in their own play.
 - **fixed** After meeting The Thing, Fred's "I need to talk to you about shearing these sheep!"
   always ran the hand-in, so a player with no balls said "I have some." and handed nothing over.
   Live (2026-11-06 capture, tick 499) plays the conversation for what the player carries; with

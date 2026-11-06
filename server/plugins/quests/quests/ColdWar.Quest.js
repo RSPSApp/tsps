@@ -1452,6 +1452,9 @@ module.exports = function registerColdWarQuest(api) {
     if (location && (location.getX() < 3175 || location.getX() > 3210 || location.getY() < 3250 || location.getY() > 3290)) {
       return false;
     }
+    // Before Cold War, The Thing is Sheep Shearer's sheep: live answers with its own page,
+    // "That's a sheep...I think. I can't talk to sheep." (2026-11-06 capture, Cold War unstarted).
+    if (stageOf(player) === 0) return false;
     if (!inSuit(player)) {
       startTranscript(api, player, npcId, PAGE, "extras-attempting-to-speak-to-sheep-as-a-human");
       return;

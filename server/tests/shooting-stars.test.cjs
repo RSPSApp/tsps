@@ -483,13 +483,13 @@ test("celestial ring: charge with stardust, extra ores up to adamantite spend ch
   worn.setMetaValue(Ring.CHARGES_META_KEY, 15);
   const wearer = miner();
   wearer.getEquipment().setItem(core.Equipment.RING_SLOT, worn);
-  const coal = { player: wearer, rockLevel: 30, extra: false };
+  const coal = { player: wearer, rockLevel: 30, bonuses: [] };
   Ring.extraOre(coal, () => 0.05);
-  assert.equal(coal.extra, true);
+  assert.equal(coal.bonuses.length, 1);
   assert.equal(Ring.charges(worn), 14);
-  const runite = { player: wearer, rockLevel: 85, extra: false };
+  const runite = { player: wearer, rockLevel: 85, bonuses: [] };
   Ring.extraOre(runite, () => 0.05);
-  assert.equal(runite.extra, false);
+  assert.equal(runite.bonuses.length, 0);
   assert.equal(Ring.charges(worn), 14, "runite is past adamantite: no charge");
   Ring.uncharge({ player: p, item: ring });
   assert.equal(ring.getId(), I.CELESTIAL_RING_UNCHARGED_);

@@ -107,13 +107,22 @@ function sew(event) {
   const sackContents = checkedContents(player, family);
   const pouchIds = [obj("gem_pouch"), obj("gem_pouch_open"), obj("gem_satchel"), obj("gem_satchel_open"), ...totes];
   // This server formerly allowed duplicate lower tiers. Leave every item and store intact in that state.
-  if (!bagContents || !pouchContents || !sackContents || sackContents.length
+  if (!bagContents || !pouchContents || !sackContents
     || countOwned(player, bags) !== 1 || countOwned(player, pouchIds) !== 1 || Storage.owns(player, family)) {
     player.sendMessage("Empty or remove your other gem containers before upgrading.");
     return;
   }
-  const combined = [...pouchContents, ...bagContents];
-  if (new Set(combined.map((entry) => entry.id)).size !== combined.length) return;
+  // An unowned sack can leave a valid store behind; retain it when its replacement is sewn.
+  const totals = new Map();
+  for (const { id, amount } of [...pouchContents, ...bagContents, ...sackContents]) {
+    const total = (totals.get(id) ?? 0) + amount;
+    if (total > PER_GEM) {
+      player.sendMessage("The gem sack cannot hold all your stored gems.");
+      return;
+    }
+    totals.set(id, total);
+  }
+  const combined = [...totals].map(([id, amount]) => ({ id, amount }));
   if (!costume) inv.deleteNumber(I.THREAD, 1);
   inv.deleteNumber(I.IMMACULATE_MOLE_SKIN, 1);
   inv.deleteNumber(tote, 1);

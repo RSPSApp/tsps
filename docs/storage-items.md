@@ -43,9 +43,11 @@ Log basket, Tackle box). The open and closed variants are the same container (`C
 | Plank sack | 28 planks | always: sawmill planks | Construction, after the inventory's planks |
 | Tackle box | 35 kinds of tackle (`data/storage-items.json`) | - | fishing bait only; gear has to come out first |
 
-Upgrading a tote and real gem bag to a gem sack transfers both family stores to the sack. The server
-refuses the upgrade without consuming items if another lower-tier copy is owned or a saved store is
-inconsistent; this is a conservative policy for existing server saves, not an observed game rule.
+Upgrading a tote and real gem bag to a gem sack transfers both family stores to the sack. If no sack
+is owned but its store remains, the upgrade also preserves those gems, combining matching kinds up to
+60 each. The server refuses the upgrade without consuming items if the combined contents exceed that
+capacity, another lower-tier copy is owned, or a saved store is inconsistent; this is a conservative
+policy for existing server saves, not an observed game rule.
 The sack's action and refusal messages have no retained sack transcript, and ground pickup currently
 uses the gem bag's pickup wording. Semi-precious auto-storage is limited to mining here; the source
 does not establish every live-game gather source.

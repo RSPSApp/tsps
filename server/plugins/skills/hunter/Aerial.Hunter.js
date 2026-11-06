@@ -73,6 +73,7 @@ function fish({ player, npc, npcId }) {
       // Content may make clue bottles commoner ("treasure-trails:vessel-chance", a league relic).
       const boost = { player, vessel: "bottle", tier: tier.toLowerCase(), multiplier: 1 };
       H.api.emitCustomEvent("treasure-trails:vessel-chance", boost);
+      if (boost.allowed === false) continue;
       const denominator = Math.max(1, Math.floor(636833 / (100 + level(player,H.core.Skill.FISHING)) * modifier / (boost.multiplier > 1 ? boost.multiplier : 1)));
       if (roll(1,denominator) !== 1) continue;
       const id = I[`${require("./Context.Hunter").questComplete(player,"x_marks_the_spot") ? "SCROLL_BOX" : "CLUE_BOTTLE"}_${tier}_`];

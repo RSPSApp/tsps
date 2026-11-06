@@ -218,6 +218,7 @@ function loot(player, state) {
         // Content may make clue nests commoner ("treasure-trails:vessel-chance", a league relic).
         const boost = { player, vessel: "nest", tier: tier.toLowerCase(), multiplier: 1 };
         H.api.emitCustomEvent("treasure-trails:vessel-chance", boost);
+        if (boost.allowed === false) continue;
         if (!require("./Context.Hunter").ownsClue(player,tier) && roll(1,1500) <= numerator * (boost.multiplier > 1 ? boost.multiplier : 1)) { clue = tier; break; }
       }
       if (clue) {

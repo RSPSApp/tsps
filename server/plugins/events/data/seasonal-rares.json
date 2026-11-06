@@ -1,0 +1,142 @@
+[
+  {
+    "key": "christmas-red-partyhat",
+    "event": "christmas-2025",
+    "item": "red_partyhat",
+    "id": 1038,
+    "enabled": true,
+    "perAccount": 1,
+    "stock": null,
+    "source": "Wiki Partyhat: current source is the Christmas event (partyhat sets) or a Christmas cracker."
+  },
+  {
+    "key": "christmas-yellow-partyhat",
+    "event": "christmas-2025",
+    "item": "yellow_partyhat",
+    "id": 1040,
+    "enabled": true,
+    "perAccount": 1,
+    "stock": null,
+    "source": "Wiki Partyhat: current source is the Christmas event (partyhat sets) or a Christmas cracker."
+  },
+  {
+    "key": "christmas-blue-partyhat",
+    "event": "christmas-2025",
+    "item": "blue_partyhat",
+    "id": 1042,
+    "enabled": true,
+    "perAccount": 1,
+    "stock": null,
+    "source": "Wiki Partyhat: current source is the Christmas event (partyhat sets) or a Christmas cracker."
+  },
+  {
+    "key": "christmas-green-partyhat",
+    "event": "christmas-2025",
+    "item": "green_partyhat",
+    "id": 1044,
+    "enabled": true,
+    "perAccount": 1,
+    "stock": null,
+    "source": "Wiki Partyhat: current source is the Christmas event (partyhat sets) or a Christmas cracker."
+  },
+  {
+    "key": "christmas-purple-partyhat",
+    "event": "christmas-2025",
+    "item": "purple_partyhat",
+    "id": 1046,
+    "enabled": true,
+    "perAccount": 1,
+    "stock": null,
+    "source": "Wiki Partyhat: current source is the Christmas event (partyhat sets) or a Christmas cracker."
+  },
+  {
+    "key": "christmas-white-partyhat",
+    "event": "christmas-2025",
+    "item": "white_partyhat",
+    "id": 1048,
+    "enabled": true,
+    "perAccount": 1,
+    "stock": null,
+    "source": "Wiki Partyhat: current source is the Christmas event (partyhat sets) or a Christmas cracker."
+  },
+  {
+    "key": "christmas-cracker",
+    "event": "christmas-2025",
+    "item": "christmas_cracker",
+    "id": 962,
+    "enabled": true,
+    "perAccount": 1,
+    "stock": null,
+    "source": "Wiki Christmas cracker: released in the 2001 Christmas event."
+  },
+  {
+    "key": "christmas-santa-hat",
+    "event": "christmas-2025",
+    "item": "santa_hat",
+    "id": 1050,
+    "enabled": true,
+    "perAccount": 1,
+    "stock": null,
+    "source": "Wiki Santa hat: current source is completing the Christmas holiday events."
+  },
+  {
+    "key": "halloween-green-mask",
+    "event": "halloween-2025",
+    "item": "halloweenmask_green",
+    "id": 1053,
+    "enabled": true,
+    "perAccount": 1,
+    "stock": null,
+    "source": "Wiki Halloween mask: current source is a Halloween event reward (mask set)."
+  },
+  {
+    "key": "halloween-blue-mask",
+    "event": "halloween-2025",
+    "item": "halloweenmask_blue",
+    "id": 1055,
+    "enabled": true,
+    "perAccount": 1,
+    "stock": null,
+    "source": "Wiki Halloween mask: current source is a Halloween event reward (mask set)."
+  },
+  {
+    "key": "halloween-red-mask",
+    "event": "halloween-2025",
+    "item": "halloweenmask_red",
+    "id": 1057,
+    "enabled": true,
+    "perAccount": 1,
+    "stock": null,
+    "source": "Wiki Halloween mask: current source is a Halloween event reward (mask set)."
+  },
+  {
+    "key": "halloween-pumpkin",
+    "event": "halloween-2025",
+    "item": "pumpkin",
+    "id": 1959,
+    "enabled": true,
+    "perAccount": 1,
+    "stock": null,
+    "source": "Wiki Pumpkin: current source is the Halloween holiday events."
+  },
+  {
+    "key": "easter-egg",
+    "event": "easter-2026",
+    "item": "easter_egg",
+    "id": 1961,
+    "enabled": true,
+    "perAccount": 1,
+    "stock": null,
+    "source": "Wiki Easter egg: current source is the Easter holiday events."
+  },
+  {
+    "key": "birthday-half-full-wine-jug",
+    "event": "anniversary-2026",
+    "item": "half_full_wine_jug",
+    "id": 1989,
+    "enabled": true,
+    "perAccount": 1,
+    "stock": null,
+    "source": "Wiki Half full wine jug: a birthday event reward since 2020."
+  }
+]

@@ -1442,6 +1442,9 @@ export function decodeServerPacket(data: Uint8Array | ArrayBuffer): DecodedServe
         // BANK
         // ========================================
 
+        case ServerPacketId.INVENTORY_STOP_TRANSMIT:
+            return { type: "widget", payload: { action: "inventory_stop_transmit", inventoryId: reader.readShort() } };
+
         case ServerPacketId.BANK_SNAPSHOT: {
             const capacity = reader.readShort();
             const count = reader.readShort();

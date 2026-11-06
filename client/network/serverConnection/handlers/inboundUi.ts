@@ -104,6 +104,7 @@ export function handleInboundUi(msg: any): boolean {
         } else if (payload.kind === "slot") {
             const capacityHint = state.lastBankState?.capacity ?? BANK_SLOT_COUNT_FALLBACK;
             const slot = sanitizeBankSlotMessage(payload.slot, capacityHint);
+            state.lastBankState ??= { capacity: capacityHint, slots: [] };
             if (state.lastBankState) {
                 const idx = state.lastBankState.slots.findIndex((s) => (s.slot | 0) === (slot.slot | 0));
                 if (idx >= 0) state.lastBankState.slots[idx] = { ...slot };
@@ -210,6 +211,13 @@ export function handleInboundUi(msg: any): boolean {
         return true;
     }
     if (msg.type === "widget") {
+        if (msg.payload.action === "inventory_stop_transmit") {
+            const id = msg.payload.inventoryId;
+            if (id === 93) state.lastInventorySnapshot = undefined;
+            if (id === 95) state.lastBankState = undefined;
+            if (id === 620) state.lastCollectionLogSnapshot = undefined;
+            if (id === 516) state.lastShopState.stock = [];
+        }
         if (msg.payload.action !== "set_text" && (msg.payload as any).uid !== 10616865) {
             console.log("[ServerConnection] recv widget", msg.payload);
         }

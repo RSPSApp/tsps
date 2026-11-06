@@ -1,3 +1,4 @@
+import { stopInventoryTransmit } from "./sync/InventoryStopTransmit";
 import { openClientUrl } from "../common/openUrl";
 import { applyNpcSpecificEffect } from "./sync/NpcSpecificEffects";
 import { createNpcEcs, type NpcGraphicsEcs } from "./ecs/createNpcEcs";
@@ -3070,6 +3071,8 @@ export class OsrsClient {
                         this.widgetManager.invalidateWidgetRender(parent, "flags-range");
                     }
                 }
+            } else if (payload?.action === "inventory_stop_transmit") {
+                stopInventoryTransmit(inventoriesMap, payload.inventoryId);
             } else if (payload?.action === "run_script") {
                 // RUNCLIENTSCRIPT packet - run a CS2 script with arguments
                 const scriptId = Number(payload.scriptId) | 0;

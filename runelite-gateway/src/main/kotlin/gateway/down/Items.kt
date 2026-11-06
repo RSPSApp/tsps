@@ -63,10 +63,16 @@ class Items(
                     }
                 full(SHOP, SHOP_SIZE, stock)
             }
-            TspsServerPacket.SHOP_CLOSE -> send(UpdateInvStopTransmit(SHOP))
+            TspsServerPacket.INVENTORY_STOP_TRANSMIT -> stop(reader.u16())
+            TspsServerPacket.SHOP_CLOSE -> stop(SHOP)
             else -> return false
         }
         return true
+    }
+
+    private fun stop(inventory: Int) {
+        inventories.remove(inventory)
+        send(UpdateInvStopTransmit(inventory))
     }
 
     /** How many of [item] the main inventory holds. */

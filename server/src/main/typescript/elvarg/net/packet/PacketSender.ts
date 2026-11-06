@@ -39,6 +39,7 @@ import {
   encodeTileSpotAnim,
   encodeLocDel,
   encodeInventorySlot,
+  encodeInventoryStopTransmit,
   encodeInventorySnapshot,
   encodePlayJingle,
   encodePlaySong,
@@ -196,6 +197,8 @@ export class PacketSender {
   /** The spell unlock states go out with the session's first spellbook mount only. */
   private spellUnlocksSent = false;
   private subInterfaceTargets = new Map<number, SubInterfaceMount>();
+  /** Last interface owning each transmitted client container; never authoritative contents. */
+  private inventoryOwners = new Map<number, number>();
   private chatboxGroupId = -1;
   private chatboxOwner: object | undefined;
   private presentingChatboxOwner: object | undefined;
@@ -815,6 +818,7 @@ export class PacketSender {
     const slots: BankSlotView[] = Bank.layout(this.player).map(({ tab, item }, slot) => ({
       slot, itemId: Bank.displayItemId(item), quantity: item.getAmount(), tab,
     }));
+    this.inventoryOwners.set(CacheDefinitions.getInventoryId("bank")!, 12);
     this.player.getSession().sendClientPacket(encodeBankSnapshot(1410, slots));
     return this;
   }
@@ -827,6 +831,7 @@ export class PacketSender {
 
   private resetInterfaceState(): number {
     const interfaceId = this.player.getInterfaceId?.() ?? -1;
+    this.releaseInterfaceInventories(interfaceId);
     if (interfaceId === 12) {
       this.sendConfig(548, 0).sendVarbit(12393, 0);
     }
@@ -953,6 +958,7 @@ export class PacketSender {
     const target = this.subInterfaceTargets.get(groupId);
     if (target) {
       this.subInterfaceTargets.delete(groupId);
+      this.releaseInterfaceInventories(groupId);
       this.player.getSession().sendClientPacket(encodeWidgetCloseSub(target.targetUid));
       // A sub-interface closed by name (an overlay such as a floater) closes "by any route" too.
       this.emitInterfaceClosed(groupId);
@@ -1505,7 +1511,10 @@ export class PacketSender {
   /** Include legacy native mounts without changing their packet or event sequence. */
   private rememberSubInterface(targetUid: number, groupId: number, type: number): SubInterfaceMount {
     for (const [mountedGroupId, mounted] of this.subInterfaceTargets) {
-      if (mounted.targetUid === targetUid) this.subInterfaceTargets.delete(mountedGroupId);
+      if (mounted.targetUid === targetUid) {
+        this.subInterfaceTargets.delete(mountedGroupId);
+        if (mountedGroupId !== groupId) this.releaseInterfaceInventories(mountedGroupId);
+      }
     }
     const mount: SubInterfaceMount = Object.freeze({ targetUid, groupId, type });
     this.subInterfaceTargets.set(groupId, mount);
@@ -1590,7 +1599,10 @@ export class PacketSender {
 
   closeSubInterface(targetUid: number): this {
     for (const [groupId, entry] of this.subInterfaceTargets) {
-      if (entry.targetUid === targetUid) this.subInterfaceTargets.delete(groupId);
+      if (entry.targetUid === targetUid) {
+        this.subInterfaceTargets.delete(groupId);
+        this.releaseInterfaceInventories(groupId);
+      }
     }
     this.player.getSession().sendClientPacket(encodeWidgetCloseSub(targetUid));
     return this;
@@ -1634,14 +1646,30 @@ export class PacketSender {
   sendInventory(
     inventoryId: number,
     capacity: number,
-    items: ReadonlyArray<{ id: number; amount: number } | null>
+    items: ReadonlyArray<{ id: number; amount: number } | null>,
+    ownerGroupId?: number
   ): this {
+    if (ownerGroupId !== undefined) this.inventoryOwners.set(inventoryId, ownerGroupId);
     const slots = Array.from({ length: capacity }, (_, slot) => ({
       slot,
       itemId: items[slot]?.id ?? -1,
       quantity: items[slot]?.amount ?? 0,
     }));
     return this.sendInterfaceScript(-1, [], undefined, undefined, { [inventoryId]: { capacity, slots } });
+  }
+
+  /** Discard only the client mirror. Subsequent snapshots/slots are still accepted normally. */
+  sendInventoryStopTransmit(inventoryId: number): this {
+    const packet = encodeInventoryStopTransmit(inventoryId);
+    this.inventoryOwners.delete(inventoryId);
+    this.player.getSession().sendClientPacket(packet);
+    return this;
+  }
+
+  private releaseInterfaceInventories(groupId: number): void {
+    for (const [inventoryId, owner] of this.inventoryOwners) {
+      if (owner === groupId) this.sendInventoryStopTransmit(inventoryId);
+    }
   }
 
   sendClientScript(scriptId: number, ...args: (number | string)[]): this {

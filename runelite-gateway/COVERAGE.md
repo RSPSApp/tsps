@@ -25,6 +25,7 @@ sessions, so the browser wire format doesn't change.
 | 40 / 41 / 44 VARP_SMALL / LARGE / LONG | VARP_SMALL / LARGE / LONG | mapped | 4 | ids ≥ the cache varp count (5996) dropped |
 | 42 VARBIT | VARP_SMALL / LARGE | mapped | 4 | written into the session's varp mirror from the cache varbit definition |
 | 50 / 51 INVENTORY_SNAPSHOT / SLOT | UPDATE_INV_FULL / PARTIAL (93) | mapped | 5 | |
+| 56 INVENTORY_STOP_TRANSMIT | UPDATE_INV_STOPTRANSMIT | mapped | 5 | discards the matching mirror; later full/partial updates recreate it |
 | 52 / 53 BANK_SNAPSHOT / SLOT | UPDATE_INV_FULL / PARTIAL (95) | mapped | 5 | tab/placeholder bits dropped (tabs are varbits; placeholders are their own obj ids) |
 | 54 / 55 GROUND_ITEMS / DELTA | OBJ_ADD / DEL / COUNT _SPECIFIC | mapped | 5 | stack-id state, scene-filtered and re-sent after each rebuild; tick timers become ticks until public/despawn |
 | 70 / 71 SKILLS_SNAPSHOT / DELTA | UPDATE_STAT_V2 per skill | mapped | 4 | the combat level goes to varbit 13027, which the browser sets itself |

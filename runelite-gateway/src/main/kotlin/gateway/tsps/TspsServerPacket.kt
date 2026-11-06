@@ -29,6 +29,7 @@ object TspsServerPacket {
     const val INVENTORY_SLOT = 51
     const val BANK_SNAPSHOT = 52
     const val BANK_SLOT = 53
+    const val INVENTORY_STOP_TRANSMIT = 56
     const val GROUND_ITEMS = 54
     const val GROUND_ITEMS_DELTA = 55
     const val SKILLS_SNAPSHOT = 70
@@ -135,6 +136,7 @@ object TspsServerPacket {
             INVENTORY_SLOT to -1,
             BANK_SNAPSHOT to -2,
             BANK_SLOT to -1,
+            INVENTORY_STOP_TRANSMIT to 2,
             GROUND_ITEMS to -2,
             GROUND_ITEMS_DELTA to -2,
             SKILLS_SNAPSHOT to -1,

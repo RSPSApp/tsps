@@ -42,6 +42,7 @@ export const enum ServerPacketId {
     INVENTORY_SLOT = 51,
     BANK_SNAPSHOT = 52,
     BANK_SLOT = 53,
+    INVENTORY_STOP_TRANSMIT = 56, // discard a client container; later updates recreate it
     GROUND_ITEMS = 54,
     GROUND_ITEMS_DELTA = 55,
 
@@ -209,6 +210,7 @@ export const SERVER_PACKET_LENGTHS: Record<ServerPacketId, number> = {
     [ServerPacketId.INVENTORY_SLOT]: -1,
     [ServerPacketId.BANK_SNAPSHOT]: -2,
     [ServerPacketId.BANK_SLOT]: -1,
+    [ServerPacketId.INVENTORY_STOP_TRANSMIT]: 2,
     [ServerPacketId.GROUND_ITEMS]: -2,
     [ServerPacketId.GROUND_ITEMS_DELTA]: -2,
 

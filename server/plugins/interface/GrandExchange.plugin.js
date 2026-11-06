@@ -676,6 +676,8 @@ function collect(player, action, slot = viewing.get(player), forceNotes = false)
       amount,
       destination: action === 3 ? "bank" : "inventory",
       container: destination,
+      // The item handed back from an aborted sell offer (not bought); an aborted buy returns coins.
+      returned: Boolean(offer.sell && offer.aborted),
     });
   }
   delete completedOffers(player)[slot];

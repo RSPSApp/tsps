@@ -2803,7 +2803,7 @@ export function encodePlayerAppearance(
   const equipmentSlot = (wireSlot: number): number => {
     const itemSlot = itemSlots[wireSlot];
     const itemId = itemSlot === undefined ? -1 : appearance.equip[itemSlot] ?? -1;
-    if (itemId >= 0) return itemId + 512;
+    if (itemId >= 0) return itemId + 2048;
     const kitSlot = kitSlots[wireSlot];
     const kitId = kitSlot === undefined ? -1 : appearance.kits[kitSlot] ?? -1;
     return kitId >= 0 ? kitId + 256 : 0;

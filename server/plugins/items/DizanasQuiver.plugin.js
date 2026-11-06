@@ -136,8 +136,13 @@ function stored(player) {
   return value && Number(value.id) > 0 && Number(value.amount) > 0 ? { id: Number(value.id), amount: Number(value.amount) } : null;
 }
 
-function store(player, ammo) {
-  player.setAttribute(ATTRIBUTE, ammo && ammo.amount > 0 ? { id: ammo.id, amount: ammo.amount } : null);
+function store(player, ammo, keepStack = false) {
+  const current = player.getAttribute(ATTRIBUTE);
+  if (keepStack && current && ammo && ammo.amount > 0 && Number(current.id) === ammo.id) {
+    current.amount = ammo.amount;
+  } else {
+    player.setAttribute(ATTRIBUTE, ammo && ammo.amount > 0 ? { id: ammo.id, amount: ammo.amount } : null);
+  }
   sendSlot(player);
   pluginApi.getBonusManager().update(player);
 }
@@ -361,7 +366,7 @@ function fill(player) {
   const total = Math.min(MAX_AMOUNT, (ammo?.amount ?? 0) + worn.getAmount());
   const left = (ammo?.amount ?? 0) + worn.getAmount() - total;
   setWornAmmo(player, left > 0 ? { id: worn.getId(), amount: left } : null);
-  store(player, { id: worn.getId(), amount: total });
+  store(player, { id: worn.getId(), amount: total }, true);
 }
 
 function swap(player) {
@@ -387,7 +392,7 @@ function remove(player) {
   }
   inventory.adds(ammo.id, moved);
   inventory.refreshItems();
-  store(player, { id: ammo.id, amount: ammo.amount - moved });
+  store(player, { id: ammo.id, amount: ammo.amount - moved }, true);
 }
 
 function examine(player) {
@@ -489,6 +494,7 @@ function checkAmmo(player, amountRequired, silent) {
 function decrementAmmo(player, pos, amount, delayTicks = 0) {
   if (!firedAmmunition(player)) return false;
   const { Item, ItemOnGroundManager, Misc, Task, TaskManager } = core();
+  const stack = player.getAttribute(ATTRIBUTE);
   const ammoId = stored(player).id;
   const dropChance = 80 - PluginManager.rangedAmmoRecovery(player);
   let used = 0;
@@ -501,10 +507,10 @@ function decrementAmmo(player, pos, amount, delayTicks = 0) {
   const apply = () => {
     const ammo = stored(player);
     // Swapped or emptied mid-flight: leave the new contents alone.
-    if (!ammo || ammo.id !== ammoId) return;
+    if (!ammo || ammo.id !== ammoId || player.getAttribute(ATTRIBUTE) !== stack) return;
     if (dropped > 0 && pos) ItemOnGroundManager.registerLocation(player, new Item(ammoId, dropped), pos);
     const left = ammo.amount - used - dropped;
-    store(player, { id: ammoId, amount: left });
+    store(player, { id: ammoId, amount: left }, true);
     if (left <= 0) player.sendMessage("You have run out of ammunition!");
   };
   if (delayTicks > 0) {

@@ -4,7 +4,7 @@
  */
 
 function lastPlayed(at) {
-  return at > 0 ? new Date(at).toLocaleString() : "never";
+  return at > 0 ? `${new Date(at).toISOString().slice(0, 16).replace("T", " ")} UTC` : "never";
 }
 
 module.exports = {

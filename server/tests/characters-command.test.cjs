@@ -47,7 +47,7 @@ function login(rights) {
   return Object.assign(player, { messages });
 }
 
-const date = new Date(PLAYED_AT).toLocaleString();
+const date = "2026-11-03 12:30 UTC";
 
 test("::characters lists the account's characters, primary first, with the last played time", () => {
   const dev = login(Rights.DEVELOPER);

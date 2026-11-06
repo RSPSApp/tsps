@@ -626,7 +626,7 @@ git commit -m "Show a character picker after login in the browser client"
 **Files:**
 - No source changes expected; fixes found here get their own small commits.
 
-- [ ] **Step 1: Start this worktree's server and client** (never another worktree's): in `server/` build then `AGENT_MCP=1 node ../scripts/run-with-env.mjs - ./dist/Server.js`; client via `preview_start` on the worktree's slot (http://localhost:3126). `server/data/definitions/world.local.json` already has PvP and Tutorial Island off.
+- [ ] **Step 1: Start this worktree's server and client** (never another worktree's): in `server/` build then `AGENT_MCP=1 node ../scripts/run-with-env.mjs - ./dist/Server.js`; client via `preview_start` on the worktree's slot (`http://localhost:3126`). `server/data/definitions/world.local.json` already has PvP and Tutorial Island off.
 
 - [ ] **Step 2: Browser pane flow**: log in as a new name → picker shows one card plus a greyed New slot (code 9 text) → Play → in world → log out → log in → New character → name → Create → list shows two → Play the new one → in world as that name (new-player flow ran) → log out → log in → picker preselects it (last played) → Delete it with confirmation → list shows one. Screenshot each picker state.
 

@@ -91,8 +91,24 @@ picked, so a menu left open across a close grants nothing.
 
 ## Relation to the holiday reward helper
 
-PR #2628 adds `events:grant-reward`, a once-per-account helper for the holiday events. It has no
-counts or stock caps, so this plugin keeps its own records. Once #2628 merges, single-claim rows
-could move onto it.
+PR #2628 adds `events:grant-reward`, a once-per-account helper for the holiday events, which keeps
+completion keys in the player's `events:completions` attribute. It has no counts or stock caps, so
+this plugin keeps its own records. If #2628 merges and single-claim rows move onto it, existing
+claims carry over like this:
+
+1. **Import on login.** For every row the account has already claimed (`claimedBy` of 1 or more,
+   from either record), emit `events:record-completion` with
+   `{ player, completion: "seasonal-rares-<row key>" }`. That event is idempotent and ignores the
+   window, so it can run on every login. Nothing is given.
+2. **Keep the world file.** `events:completions` is saved with the player, so it rolls back with the
+   player save. The world file stays the rollback guard and the `stock` counter, and is still
+   written before anything is given.
+3. **Claim through the helper only for `perAccount: 1` rows with no `stock`.** Write the world
+   record first, then call `events:grant-reward` with the same completion key and the row's item.
+   If it returns `granted: false` (`no-space`, `already-complete`, `inactive`), restore the previous
+   world record. Rows with `perAccount` above 1 or a `stock` cap stay on this plugin's own records,
+   because the helper cannot count.
+4. **Leave the old records.** `seasonal-rares:claims` and the world file are still read (the larger
+   count wins), so an account whose login import has not run yet still cannot claim again.
 
 Tests: `server/tests/seasonal-rares.test.cjs`.

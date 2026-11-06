@@ -1,6 +1,6 @@
 # Chompy hunt lifecycle implementation plan
 
-> For agentic workers: implement sequentially with the executing-plans workflow; independent review follows implementation. Select focused checks under Curt's testing policy.
+> For agentic workers: implement sequentially with the executing-plans workflow; independent review follows implementation. Select focused checks under the project testing policy.
 
 **Goal:** Replace guaranteed instant Chompy spawns with OSRS's documented per-bait timing and probabilities, without regressing native Drop, quest progression, or pet acquisition.
 

@@ -812,6 +812,30 @@ test("karambwan vessels fish every 4 ticks and every attempt uses the karambwanj
   assert.equal(Fishing.catchChance(65, FISH.KARAMBWAN), 107 / 256);
 });
 
+test("barehand shark plays the cache start, ready and shark-finish sequences", async () => {
+  const { core, Fishing, fisher, amount, spot, start, ticks } = await fishingLoop();
+  const { ItemIdentifiers: I, NpcIdentifiers: N, Skill } = core;
+  await withRandom(0.02, async () => {
+    const p = fisher();
+    p.getSkillManager = () => ({
+      getCurrentLevel: (skill) => (skill === Skill.STRENGTH ? 76 : 96),
+      getMaxLevel: () => 99,
+      addExperiences: () => {},
+    });
+    start(p, spot(N.FISHING_SPOT_11, 31), "Harpoon");
+    const tool = Fishing.TOOLS.BAREHAND_SHARK;
+    assert.equal(tool.animationId, 6703, "cache BRUT_PLAYER_HAND_FISHING_START");
+    assert.equal(tool.loopAnimationId, 6704, "cache BRUT_PLAYER_HAND_FISHING_READY");
+    assert.equal(tool.catchAnimationId, 6706, "cache BRUT_PLAYER_HAND_FISHING_END_SHARK_1");
+    assert.deepEqual(p.animations, [6703], "the start line plays the start sequence");
+    ticks(3);
+    assert.equal(amount(p, I.RAW_SHARK), 0, "the harpoon first roll is 4 ticks");
+    ticks(1);
+    assert.equal(amount(p, I.RAW_SHARK), 1);
+    assert.deepEqual(p.animations, [6703, 6704, 6706], "the catch plays the ready loop then the finish");
+  });
+});
+
 test("Holy Lake karambwanji: floor(level / 5) + 1 a catch, shrimps only with room", async () => {
   const { core, Fishing, fisher, amount, spot, start, ticks } = await fishingLoop();
   const { ItemIdentifiers: I, NpcIdentifiers: N } = core;

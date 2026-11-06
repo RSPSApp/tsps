@@ -17,19 +17,18 @@ Claims are refused on a league character ("Seasonal rares can only be claimed on
 character.") and while the player is in an area (minigames such as LMS and the Gauntlet replace the
 inventory on exit), busy or in combat ("You can't claim a seasonal rare right now.").
 
-## Window-only worlds and `::shops`
+## Shops no longer sell the event rares
 
-By default the permanent `::shops` panel (CustomShops, including the Rares Shop, `custom-shops.json`
-id 23, and the Event Shop, id 28) is unchanged, so rares can still be bought there all year. A world
-that wants rares **only** through event windows sets, in `world.json` / `world.local.json`:
+By default every configured rare is hidden from every shop (`shop:stock-visible`; hidden stock takes
+no slot and cannot be bought), so the event window is the only source. The rest of each shop is
+untouched: the `::shops` Rares Shop (`custom-shops.json` id 23) still lists the rares that have no row
+here (black/rainbow partyhat, black h'ween mask, disk of returning), and `custom-shops.json` itself
+is unchanged. A world that wants shops to sell the event rares all year again sets, in
+`world.json` / `world.local.json`:
 
 ```json
-"pluginConfig": { "SeasonalRares:shopsSellRares": false }
+"pluginConfig": { "SeasonalRares:shopsSellRares": true }
 ```
-
-Every configured rare is then hidden from every shop (`shop:stock-visible`; hidden stock takes no
-slot and cannot be bought), while the rest of each shop is untouched. `"CustomShops": false` (no
-custom shops at all) also works.
 
 ## Configuring a rare
 

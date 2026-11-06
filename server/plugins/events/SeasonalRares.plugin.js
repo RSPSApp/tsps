@@ -20,8 +20,9 @@
  * Claims are refused away from the main character (a league profile) and while the player is in an area, busy or in
  * combat, as minigames such as LMS and the Gauntlet replace the inventory on exit.
  *
- * world.json pluginConfig "SeasonalRares:shopsSellRares" (default true) set to false hides every configured rare from
- * every shop ("shop:stock-visible"), so on that world the windowed claim is the only source.
+ * By default every configured rare is hidden from every shop ("shop:stock-visible"), so the windowed claim is the only
+ * source; the rest of each shop is untouched. world.json pluginConfig "SeasonalRares:shopsSellRares": true lets shops
+ * (the ::shops Rares Shop, custom-shops.json 23) sell them again.
  */
 
 const fs = require("fs");
@@ -92,7 +93,7 @@ function load(source = configuredRows) {
   const saved = readStore();
   storeReadable = saved !== null;
   store = saved ?? {};
-  hiddenInShops = api.getPluginConfig(SHOPS_SELL_RARES_CONFIG, true) === false ? new Set(rows.map((row) => row.id)) : new Set();
+  hiddenInShops = api.getPluginConfig(SHOPS_SELL_RARES_CONFIG, false) === true ? new Set() : new Set(rows.map((row) => row.id));
 }
 
 function eventActive(key) {
@@ -213,7 +214,7 @@ function announce({ key, active }) {
   }
 }
 
-/** With shopsSellRares off, no shop lists a configured rare. */
+/** Unless shopsSellRares is on, no shop lists a configured rare. */
 function hideFromShops(request) {
   if (hiddenInShops.has(request.itemId)) request.visible = false;
 }

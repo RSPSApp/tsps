@@ -259,11 +259,25 @@ test('every menu page has Cancel and at most five options', async t => {
   assert.equal(held(f, santa()), 0);
 });
 
-test('shopsSellRares false hides every configured rare from shops; the default leaves shops as they are', t => {
+test('by default no shop sells a configured rare; shopsSellRares true lets shops sell them again', t => {
   const visible = itemId => {const q = {player: null, shopId: 23, shopName: 'Rares Shop', itemId, visible: true};PM.emitCustomEvent('shop:stock-visible', q);return q.visible;};
-  assert.equal(visible(santa()), true, 'default: ::shops unchanged');
-  t.mock.method(rareApi, 'getPluginConfig', (key, fallback) => key === 'SeasonalRares:shopsSellRares' ? false : fallback);
-  Rares.testing.load();
-  for (const row of rows) assert.equal(visible(row.id), false, row.key);
+  for (const row of rows) assert.equal(visible(row.id), false, `default hides ${row.key}`);
+  assert.equal(visible(core.CacheDefinitions.getObjId('rainbow_partyhat')), true, 'unconfigured Rares Shop stock stays');
   assert.equal(visible(core.ItemIdentifiers.COINS), true, 'other stock untouched');
+  t.mock.method(rareApi, 'getPluginConfig', (key, fallback) => key === 'SeasonalRares:shopsSellRares' ? true : fallback);
+  Rares.testing.load();
+  for (const row of rows) assert.equal(visible(row.id), true, `shopsSellRares true shows ${row.key}`);
+});
+
+test('the real Rares Shop (custom-shops.json 23) opens without any configured rare in its stock', t => {
+  const {ShopManager} = require('../dist/game/model/container/shop/ShopManager');
+  new (require('../dist/game/definition/loader/impl/ShopDefinitionLoader').ShopDefinitionLoader)().load();
+  ShopManager.initialize();
+  const f = actor(t);
+  assert.equal(ShopManager.open(f.p, 23), true);
+  const listed = ShopManager.getOpenShop(f.p).stock.map(entry => entry.itemId);
+  const configured = new Set(rows.map(row => row.id));
+  assert.ok(listed.length > 0, 'the shop still has its other stock');
+  assert.deepEqual(listed.filter(id => configured.has(id)), []);
+  assert.ok(listed.includes(core.CacheDefinitions.getObjId('rainbow_partyhat')));
 });

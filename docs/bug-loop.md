@@ -22,13 +22,13 @@ gh issue list --repo RSPSApp/tsps --state open --limit 150 --json number,title,a
 - **Take what you can verify** through the agent MCP (rules, items, NPCs, dialogue, drops,
   movement) or with headless screenshots (visuals). A report that needs the reporter's answer
   waits for it. Suggestions aren't bugs; take them only when asked.
-- **Ask for evidence before closing.** A useful report states what happened, what should happen,
-  how to reproduce it, and the rsprox/Wiki/cache/code or other mechanics source behind the
-  expectation (section 4). If one is missing, ask for it precisely or label the issue
-  `needs-evidence` / `capture-needed`; keep plausible bugs open. Close completed or already-fixed
-  work as **COMPLETED**, and close only confirmed non-bugs or duplicates as **NOT_PLANNED**. An
-  obvious defect can stand on a concrete reproduction or source reference when no rsprox capture
-  exists.
+- **Ask for evidence when needed.** A useful report states what happened, what should happen and
+  how to reproduce it. Evidence is not required to file: an obvious defect can be clear from the
+  reproduction alone. When the behavior is non-obvious, ask for the precise rsprox/Wiki/cache/code
+  or other mechanics evidence needed to establish or diagnose it, and label the issue
+  `needs-evidence` / `capture-needed`; keep plausible bugs open, and never reject an obvious issue
+  just for a missing link. Close completed or already-fixed work as **COMPLETED**, and close only
+  confirmed non-bugs or duplicates as **NOT_PLANNED**.
 
 ## 2. Claim it
 

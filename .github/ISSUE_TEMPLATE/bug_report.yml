@@ -15,7 +15,7 @@ body:
     id: expected-behavior
     attributes:
       label: Expected behavior
-      description: What should happen instead? State the correct behavior plainly, and name where it comes from (an rsprox log, the OSRS Wiki, a cache/source reference, or another concrete mechanics source).
+      description: What should happen instead? State the correct behavior plainly.
       placeholder: The appearance selection should persist after logging in, as another body type already does.
     validations:
       required: true
@@ -31,11 +31,11 @@ body:
     id: evidence
     attributes:
       label: Evidence / mechanics source
-      description: Cite the support for the expected behavior. For example an rsprox capture or log (https://rsprox.net/database), an OSRS Wiki page, a cache loc/item/CS2 reference, code path or another concrete mechanics source. For an obvious defect, a concrete reproduction or source reference is enough; an rsprox recording is not required if none exists.
-      placeholder: A link to an rsprox capture or log, an OSRS Wiki page, or a cache/code/mechanics reference that shows the expected behavior.
+      description: Optionally add useful supporting evidence, such as an rsprox capture or log (https://rsprox.net/database), an OSRS Wiki page, a cache/code/mechanics reference, or a screenshot. Not required; obvious defects can be clear from the reproduction alone.
+      placeholder: A link to an rsprox capture or log, an OSRS Wiki page, a cache/code/mechanics reference, or a screenshot — when useful.
       render: text
     validations:
-      required: true
+      required: false
   - type: textarea
     id: diagnostics
     attributes:

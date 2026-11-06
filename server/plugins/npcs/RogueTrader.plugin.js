@@ -58,6 +58,7 @@ const VARBITS = {
 };
 const JUNK_PRICE = 10;
 const MESBOX_CHAT = 115;
+const MAIN_MODAL = (161 << 16) | 16;
 /** Wiki (Ali's Discount Wares., Junk): one of these, 1/5 each; rsprox 3169 t8287 gave a raw chicken for 10 coins. */
 const JUNK_ITEMS = [1265, 1925, 946, 2138, 590]; // bronze pickaxe, bucket, knife, raw chicken, tinderbox
 const LOCKPICK = 1523;
@@ -145,7 +146,11 @@ function later(ticks, player, action) {
   const { Task, TaskManager } = core();
   TaskManager.submit(new (class extends Task {
     constructor() { super(Math.max(1, ticks), null, false); }
-    execute() { this.stop(); if (player.isRegistered?.() === true) action(); }
+    execute() {
+      this.stop();
+      // A newer main interface owns this target; leave it in place.
+      if (player.isRegistered?.() === true && !player.getPacketSender().getSubInterfaceAt(MAIN_MODAL)) action();
+    }
   })());
 }
 

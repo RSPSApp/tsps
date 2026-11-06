@@ -1577,7 +1577,8 @@
       "object": 30962,
       "at": [3726,10245,1],
       "level": 1,
-      "note": "rsprox captures 231/00712, 231/00714, 231/00715 (and Leagues captures): the player faces it, then a 60-cycle exact move to the far side the tick after, with human_swim_cavewall (obstacle1, the tunnel, the plant door) or human_swim_shipwall (obstacle2); no message or XP recorded. Each is crossed across the line of its _join pieces. The loc_merge protocol now exists; this loc's presentation has not yet been individually verified. The Wiki currently states 4.5 XP per crossing, unlike these captures; the verified 3760,10277 consumer follows the Wiki.",
+      "xp": 4.5,
+      "note": "rsprox captures 231/00712, 231/00714, 231/00715 (and Leagues captures): the player faces it, then a 60-cycle exact move to the far side the tick after, with human_swim_cavewall (obstacle1, the tunnel, the plant door) or human_swim_shipwall (obstacle2); no message or XP recorded. Each is crossed across the line of its _join pieces. The loc_merge protocol now exists; this loc's presentation has not yet been individually verified. The Wiki (Underwater Agility and Thieving) gives every obstacle, which cannot fail, and every hole 4.5 Agility XP, unlike the captures, which record none; every sea-floor obstacle (30962, 30964) and hole (30966) here follows the Wiki.",
       "between": {"ends":[[3725,10245,1],[3727,10245,1]],"cross":[{"face":"to"},{"wait":1},{"use":"climbOver","args":["to","SWIM_CAVEWALL",2]}]}
     },
     {
@@ -1585,6 +1586,7 @@
       "object": 30962,
       "at": [3758,10260,1],
       "level": 1,
+      "xp": 4.5,
       "between": {"ends":[[3757,10260,1],[3759,10260,1]],"cross":[{"face":"to"},{"wait":1},{"use":"climbOver","args":["to","SWIM_CAVEWALL",2]}]}
     },
     {
@@ -1601,6 +1603,7 @@
       "object": 30962,
       "at": [3763,10244,1],
       "level": 1,
+      "xp": 4.5,
       "unverified": "No capture of this one: crossed east-west like the others, as its rotation and the obstacle's _join pieces either side of it say.",
       "between": {"ends":[[3762,10244,1],[3764,10244,1]],"cross":[{"face":"to"},{"wait":1},{"use":"climbOver","args":["to","SWIM_CAVEWALL",2]}]}
     },
@@ -1609,6 +1612,7 @@
       "object": 30962,
       "at": [3771,10275,1],
       "level": 1,
+      "xp": 4.5,
       "between": {"ends":[[3770,10275,1],[3772,10275,1]],"cross":[{"face":"to"},{"wait":1},{"use":"climbOver","args":["to","SWIM_CAVEWALL",2]}]}
     },
     {
@@ -1616,6 +1620,7 @@
       "object": 30962,
       "at": [3824,10264,1],
       "level": 1,
+      "xp": 4.5,
       "unverified": "No capture of this one: crossed east-west like the others, as its rotation and the obstacle's _join pieces either side of it say.",
       "between": {"ends":[[3823,10264,1],[3825,10264,1]],"cross":[{"face":"to"},{"wait":1},{"use":"climbOver","args":["to","SWIM_CAVEWALL",2]}]}
     },
@@ -1624,6 +1629,7 @@
       "object": 30964,
       "at": [3754,10244,1],
       "level": 1,
+      "xp": 4.5,
       "between": {"ends":[[3754,10243,1],[3754,10245,1]],"cross":[{"face":"to"},{"wait":1},{"use":"climbOver","args":["to","SWIM_SHIPWALL",2]}]}
     },
     {
@@ -1631,6 +1637,7 @@
       "object": 30964,
       "at": [3755,10268,1],
       "level": 1,
+      "xp": 4.5,
       "between": {"ends":[[3754,10268,1],[3756,10268,1]],"cross":[{"face":"to"},{"wait":1},{"use":"climbOver","args":["to","SWIM_SHIPWALL",2]}]}
     },
     {
@@ -1638,6 +1645,7 @@
       "object": 30964,
       "at": [3764,10269,1],
       "level": 1,
+      "xp": 4.5,
       "between": {"ends":[[3763,10269,1],[3765,10269,1]],"cross":[{"face":"to"},{"wait":1},{"use":"climbOver","args":["to","SWIM_SHIPWALL",2]}]}
     },
     {
@@ -1645,6 +1653,7 @@
       "object": 30964,
       "at": [3770,10259,1],
       "level": 1,
+      "xp": 4.5,
       "between": {"ends":[[3769,10259,1],[3771,10259,1]],"cross":[{"face":"to"},{"wait":1},{"use":"climbOver","args":["to","SWIM_SHIPWALL",2]}]}
     },
     {
@@ -1652,6 +1661,7 @@
       "object": 30964,
       "at": [3775,10270,1],
       "level": 1,
+      "xp": 4.5,
       "between": {"ends":[[3774,10270,1],[3776,10270,1]],"cross":[{"face":"to"},{"wait":1},{"use":"climbOver","args":["to","SWIM_SHIPWALL",2]}]}
     },
     {
@@ -1659,6 +1669,7 @@
       "object": 30964,
       "at": [3808,10253,1],
       "level": 1,
+      "xp": 4.5,
       "between": {"ends":[[3807,10253,1],[3809,10253,1]],"cross":[{"face":"to"},{"wait":1},{"use":"climbOver","args":["to","SWIM_SHIPWALL",2]}]}
     },
     {
@@ -1680,6 +1691,7 @@
       "object": 30966,
       "at": [3716,10243,1],
       "level": 1,
+      "xp": 4.5,
       "note": "rsprox captures 231/00712, 231/00714, 231/00715: the normal route to the tile beside the hole, the face the tick after, a step onto it the tick after that, human_swim_hole_enter a tick later, and two ticks after that the player is on its paired hole with human_swim_hole_leave.",
       "steps": [{"face":"object"},{"wait":1},{"walk":[[3716,10243]]},{"anim":"SWIM_HOLE_ENTER"},{"wait":2},{"tele":[3779,10277,1]},{"anim":"SWIM_HOLE_LEAVE"},{"wait":1}]
     },
@@ -1688,6 +1700,7 @@
       "object": 30966,
       "at": [3754,10241,1],
       "level": 1,
+      "xp": 4.5,
       "steps": [{"face":"object"},{"wait":1},{"walk":[[3754,10241]]},{"anim":"SWIM_HOLE_ENTER"},{"wait":2},{"tele":[3779,10241,1]},{"anim":"SWIM_HOLE_LEAVE"},{"wait":1}]
     },
     {
@@ -1695,6 +1708,7 @@
       "object": 30966,
       "at": [3772,10267,1],
       "level": 1,
+      "xp": 4.5,
       "steps": [{"face":"object"},{"wait":1},{"walk":[[3772,10267]]},{"anim":"SWIM_HOLE_ENTER"},{"wait":2},{"tele":[3823,10247,1]},{"anim":"SWIM_HOLE_LEAVE"},{"wait":1}]
     },
     {
@@ -1702,6 +1716,7 @@
       "object": 30966,
       "at": [3772,10280,1],
       "level": 1,
+      "xp": 4.5,
       "steps": [{"face":"object"},{"wait":1},{"walk":[[3772,10280]]},{"anim":"SWIM_HOLE_ENTER"},{"wait":2},{"tele":[3816,10271,1]},{"anim":"SWIM_HOLE_LEAVE"},{"wait":1}]
     },
     {
@@ -1709,6 +1724,7 @@
       "object": 30966,
       "at": [3779,10241,1],
       "level": 1,
+      "xp": 4.5,
       "steps": [{"face":"object"},{"wait":1},{"walk":[[3779,10241]]},{"anim":"SWIM_HOLE_ENTER"},{"wait":2},{"tele":[3754,10241,1]},{"anim":"SWIM_HOLE_LEAVE"},{"wait":1}]
     },
     {
@@ -1716,6 +1732,7 @@
       "object": 30966,
       "at": [3779,10277,1],
       "level": 1,
+      "xp": 4.5,
       "steps": [{"face":"object"},{"wait":1},{"walk":[[3779,10277]]},{"anim":"SWIM_HOLE_ENTER"},{"wait":2},{"tele":[3716,10243,1]},{"anim":"SWIM_HOLE_LEAVE"},{"wait":1}]
     },
     {
@@ -1723,6 +1740,7 @@
       "object": 30966,
       "at": [3789,10298,1],
       "level": 1,
+      "xp": 4.5,
       "note": "rsprox captures 234/03299 (Leagues): the way from 3833,10289 lands here; this way back is taken to be its pair.",
       "steps": [{"face":"object"},{"wait":1},{"walk":[[3789,10298]]},{"anim":"SWIM_HOLE_ENTER"},{"wait":2},{"tele":[3833,10289,1]},{"anim":"SWIM_HOLE_LEAVE"},{"wait":1}]
     },
@@ -1731,6 +1749,7 @@
       "object": 30966,
       "at": [3816,10271,1],
       "level": 1,
+      "xp": 4.5,
       "steps": [{"face":"object"},{"wait":1},{"walk":[[3816,10271]]},{"anim":"SWIM_HOLE_ENTER"},{"wait":2},{"tele":[3772,10280,1]},{"anim":"SWIM_HOLE_LEAVE"},{"wait":1}]
     },
     {
@@ -1738,6 +1757,7 @@
       "object": 30966,
       "at": [3823,10247,1],
       "level": 1,
+      "xp": 4.5,
       "steps": [{"face":"object"},{"wait":1},{"walk":[[3823,10247]]},{"anim":"SWIM_HOLE_ENTER"},{"wait":2},{"tele":[3772,10267,1]},{"anim":"SWIM_HOLE_LEAVE"},{"wait":1}]
     },
     {
@@ -1745,6 +1765,7 @@
       "object": 30966,
       "at": [3833,10289,1],
       "level": 1,
+      "xp": 4.5,
       "steps": [{"face":"object"},{"wait":1},{"walk":[[3833,10289]]},{"anim":"SWIM_HOLE_ENTER"},{"wait":2},{"tele":[3789,10298,1]},{"anim":"SWIM_HOLE_LEAVE"},{"wait":1}]
     },
     {

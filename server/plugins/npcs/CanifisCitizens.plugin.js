@@ -37,6 +37,6 @@ module.exports = {
   register(api) {
     core = api.core;
     api.onServerStartup(loadForms);
-    api.onCombatHitRoll(attacked);
+    api.onCombatHitPrepare(attacked);
   },
 };

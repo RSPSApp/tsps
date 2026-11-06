@@ -302,6 +302,12 @@ export class PendingHit {
             return [];
         }
 
+        // All real hit paths share this boundary, including first-successful claw rolls.
+        // Status damage bypasses prepareHits; utility specials returned above.
+        if (hitAmount > 0) {
+            PluginManager.emitCombatHitPrepare({ attacker: this.attacker, target: this.target, combatType: this.combatType });
+        }
+
         // Declarative specials can request extra hits without hand-rolling hits().
         if (traits?.hitCount !== undefined) {
             hitAmount = Math.min(4, Math.max(hitAmount, Math.trunc(traits.hitCount)));

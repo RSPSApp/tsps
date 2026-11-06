@@ -31,7 +31,7 @@ function hit(p, npc, type = core.CombatType.MELEE) {
   return new PendingHit(p, npc, { type: () => type, accuracyDefenceType: () => undefined },
     { damage: 0, rollAccuracy: false, experience: false, handleAfterHitEffects: false });
 }
-test("all twenty cache human variants become their matching werewolf at an actual hit roll", () => {
+test("all twenty cache human variants become their matching werewolf when an actual hit is prepared", () => {
   for (const [sex, count] of [["man", 8], ["woman", 12]]) {
     for (let i = 1; i <= count; i++) {
       const npc = citizen(`canafis_${sex}${i}`), base = npc.getId();
@@ -71,7 +71,7 @@ test("transform retains missing health and only runs once, without changing NPC 
 });
 test("unrelated humans, native werewolves and NPC attackers do not trigger a citizen transform", () => {
   const p = player(), npc = citizen();
-  PluginManager.emitCombatHitRoll({ attacker: npc, target: npc, combatType: core.CombatType.MELEE });
+  PluginManager.emitCombatHitPrepare({ attacker: npc, target: npc, combatType: core.CombatType.MELEE });
   assert.equal(npc.getId(), npc.getRealId());
   for (const id of [core.NpcIdentifiers.MAN, core.CacheDefinitions.getNpcId("canafis_werewolf_man1")]) {
     const other = core.NPC.create(id, new core.Location(3495,3491));
@@ -105,4 +105,56 @@ test("existing NPC death lifecycle resets the transformed NPC to its human spawn
   assert.equal(respawn.getCurrentDefinition().getCombatLevel(), 24);
   queue.splice(before);
 
+});
+
+test("real claw PendingHits transform before accuracy, damage and HP capping", () => {
+  const { CombatSpecial } = require("../dist/game/content/combat/CombatSpecial");
+  const { CombatFactory } = require("../dist/game/content/combat/CombatFactory");
+  const { AccuracyFormulasDpsCalc } = require("../dist/game/content/combat/formula/AccuracyFormulasDpsCalc");
+  const { HitDamage } = require("../dist/game/content/combat/hit/HitDamage");
+  require("../plugins/combat/SpecialAttacks.plugin").register(PluginManager.createApi("CanifisSpecialsTest"));
+  const accuracy = AccuracyFormulasDpsCalc.rollAccuracy, damage = CombatFactory.getHitDamage;
+  try {
+    for (const id of ["dragon_claws", "burning_claws"]) {
+      const p = player(core.ItemIdentifiers[id.toUpperCase()]), npc = citizen();
+      p.setSpecialActivated(true);
+      p.getCombatSpecial = () => CombatSpecial.getById(id);
+      let rolls = 0, damages = 0;
+      AccuracyFormulasDpsCalc.rollAccuracy = (_attacker, target) => {
+        rolls++;
+        assert.equal(target.getCurrentDefinition().getCombatLevel(), 88, id + " accuracy uses wolf");
+        return true;
+      };
+      CombatFactory.getHitDamage = (_attacker, target) => {
+        damages++;
+        assert.equal(target.getCurrentDefinition().getCombatLevel(), 88, id + " damage uses wolf");
+        return new HitDamage(100, 1);
+      };
+      const hit = new PendingHit(p, npc, { type: () => core.CombatType.MELEE, accuracyDefenceType: () => undefined },
+        { experience: false, handleAfterHitEffects: false });
+      assert.equal(rolls, 1, id + " uses real first-successful branch");
+      assert.equal(damages, 1);
+      assert.equal(hit.getTotalDamage(), 100, id + " cap uses transformed HP, not human 60");
+    }
+  } finally {
+    AccuracyFormulasDpsCalc.rollAccuracy = accuracy;
+    CombatFactory.getHitDamage = damage;
+  }
+});
+
+test("eligibility queries, status damage, zero-hit and utility specials do not transform", () => {
+  const p = player(), npc = citizen();
+  const method = { type: () => core.CombatType.MELEE, accuracyDefenceType: () => undefined };
+  PluginManager.emitCanAttack(p, npc, method);
+  assert.equal(npc.getId(), npc.getRealId(), "query is pure");
+  new PendingHit(p, npc, method, { statusDamage: true, damage: 1, experience: false });
+  assert.equal(npc.getId(), npc.getRealId(), "status damage is not an attack");
+  const empty = Object.create(PendingHit.prototype);
+  empty.attacker = p; empty.target = npc; empty.ordinary = true; empty.combatType = core.CombatType.MELEE;
+  empty.prepareHits(0, false);
+  assert.equal(npc.getId(), npc.getRealId(), "zero-hit producer is not an attack");
+  p.setSpecialActivated(true);
+  p.getCombatSpecial = () => ({ getTraits: () => ({ skipAttack: true }) });
+  new PendingHit(p, npc, method, { experience: false });
+  assert.equal(npc.getId(), npc.getRealId(), "utility special is not an attack");
 });

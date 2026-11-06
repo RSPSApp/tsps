@@ -2,12 +2,12 @@
 quest: Priest in Peril
 key: priest_in_peril
 status: passed-with-issues
-tested: 2026-11-01
+tested: 2026-11-06
 tester: agent
-model: claude-opus-5-5
-commit: 2b3988c563db
+model: claude-sonnet-5-5
+commit: 58cd261da
 cache: osrs-241_2026-10-20
-start: fresh
+start: checkpoint
 travel: travel_to
 ---
 
@@ -23,6 +23,33 @@ open is outside the quest's code or has no source to settle it.
 ## Findings
 
 Newest first.
+
+- **fixed (live capture)** The temple's Monks of Zamorak only punched. Two rev 241 RSProx
+  recordings (2026-10-17 and 2026-11-02) show them casting too: 3484 Weaken and Curse, 3485
+  Weaken and Confuse, 3486 Fire Bolt, with casts 11426/11424/11428 or 9144, projectiles
+  106/103/109/127 and "You feel weakened." on a landing Weaken/Confuse/Curse (strength 63 to
+  59 and 28 to 26, attack 27 to 25, defence 1 to 0: 5% plus 1). The quest registers a combat
+  method for the six monk ids that mixes punches and these casts. The **cast share is an
+  estimate** (about 1 in 5 swings; 1 in 2 for the hooded monk), not measured. Checked in a
+  headless run: casts happen and Weaken drained strength with the message.
+- **fixed (live capture)** The hooded monk's golden-key drop tells the killer
+  "Untradeable drop: Golden key", as live does.
+- **checked, unchanged (live capture)** Varp 302 (1-8, 10, 11-60, 61), the knock, trapdoor,
+  key swap, well, cell gate, coffin, essence hand-ins and closing dialogue match both
+  recordings. "Mysterious Voice 2" and "Drevil" come from the Wiki transcript's own speakers.
+- **fixed (live capture)** Mausoleum gates 3444 and 3445 now swing in the inactive leaf 3446
+  on the tile beyond (3405,9894 and 3432,9897), let the player through and are back two ticks
+  later, as in the 2026-11-02 recording. Live also puts `inviswall` (38848) on the gate tile for
+  those ticks; that is left out, as for the other pass-through gates in Doors, because it would
+  block the step. Checked in-game from the monument side (the gate came back, the player
+  crossed). Covered by `tests/wooden-gate.test.cjs`.
+- **fixed (live capture)** The two voices behind the temple door now wear the monks' chat heads
+  the recording shows: "Mysterious Voice" 3484, "Mysterious Voice 2" 3486 (the plugin used one
+  head, 12240, for both). Unit-tested; the head itself was not seen in a client.
+- **checked, no change (travel_to)** `travel_to` climbs the temple's stairs: it finds the real
+  stairs by name (61189 up at 3417,3492 landing 3416,3493,1; 61190 at the south stairs landing
+  3416,3484,1; the click note says the data's id 16671 differs). The captured landings match.
+  `transports.json` is generated from Shortest Path and stays unedited.
 
 - **fixed (bounded inference)** During the quest, monument Study now opens the cache's
   quest-specific `priestperil_gravemonument` window (group 272, title "Grave Monument") and
@@ -79,19 +106,42 @@ Newest first.
   say south, but the Monument infobox and all six golden item pages put the needle south and
   the key north-east (3497). This plugin follows the seven. No capture uses a key on a
   monument, and the cache has no item decoration on them to tell.
-- **open (minor)** Mysterious Voice 2's lines show under Mysterious Voice's name: the plugin
-  speaks through 12240, and no capture records the live door conversation's speakers.
-- **open (Doors)** Gate 3444 opens into loc 3445 (the other mausoleum gate, still "Open") at
-  3405,9894. Live adds the inactive leaf 3446 and an invisible wall (rsprox.net #365, #4288).
+- **resolved (2026-11-06)** The earlier note that Mysterious Voice 2's lines show under
+  Mysterious Voice's name no longer holds: the transcript's speaker names are used and the
+  2026-11-02 recording gave the speakers and heads (see the chat-head finding above).
 - **open (data)** `monk_of_zamorak_paterdomus` is shared by all six monk ids (17/22/30) and its golden-key row
   carries no quest condition. Needs an osrsreboxed-db dumper fix.
-- **open (travel_to)** `transports.json` has the temple's old stairs (16671 at 3418,3486 up,
-  landing 3417,3486 down). Rev 241 has `PATERDOMUS_SPIRALSTAIRS_M` (61190, 2x2 at 3417,3484) up
-  and 16673 at 3417,3493,1 down, which lands at 3416,3493; no capture confirms that landing.
 
 ## Runs
 
 Newest first. A rerun adds an entry; it never rewrites an older one.
+
+### 2026-11-06 · agent · claude-sonnet-5-5
+
+- **Start:** a focused check, not a whole-quest run (so the status block says `checkpoint`).
+  Two fresh headless accounts; neither had the quest started at the time of the monk fights
+  (varp 302 = 0), which is enough for the monks to attack. Placement used `::tele` to the
+  temple yard (3411,3488) and, for the knock, beside the large door.
+  Declared aids: `::master` (all 99s), `::heal`, `::setlevel` to lower Magic and Defence to 1
+  and Strength to 28 so the drain showed, and a worktree server started with a non-default
+  agent MCP port (39818). The monk fights used the real combat path.
+- **Source:** the two rev 241 RSProx recordings of the quest (2026-10-17 and 2026-11-02),
+  decoded with RSProx's transcriber and compared by hand and with grep against the plugin.
+- **Route:** repeatedly attacked the Monks of Zamorak in the yard; knocked on the large door
+  at stage 0.
+- **Result:** monks 3484, 3485 and 3486 each cast (server log counts), Weaken drained
+  Strength with "You feel weakened." once seen over several fights. The knock at stage 0
+  gave "You knock at the door..." then "Doesn't seem like anyone's home.". The plugin test
+  file passes (16 tests), including new ones for the monk spells, the 5% plus 1 drain and the
+  key-drop message.
+- **Also checked:** gate 3444 from the monument side (opened, player crossed to 3405,9895,
+  the gate returned); `travel_to` up both temple stairs (see Findings). A third account was
+  put at stage 10 with `::quest priest in peril 10` (a declared aid) to play the door
+  conversation; the MCP reader names speakers from the NPC definition, so it cannot show the
+  chat-head fix, which is covered by a unit test only.
+- **Not checked:** Confuse and Curse landing in-game (only unit-tested), Fire Bolt damage
+  numbers, the cast share against live (estimated), the key-drop message in-game, a relog, the
+  chat heads in a client, gate 3445 in-game (unit-tested only).
 
 ### 2026-11-01 (second follow-up) · agent · claude-opus-5-5
 

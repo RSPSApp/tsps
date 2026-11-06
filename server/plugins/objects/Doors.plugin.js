@@ -54,6 +54,7 @@ const NAMELESS_DOOR_LEAF_IDS = Object.freeze({
   ARENA_EXIT_OPEN: 3787, // troll_stronghold_arena_exit_inactive
   PRISON_DOOR_9_OPEN: 3781, // troll_stronghold_prison_door_open, capture 740
   GRUM_DOOR_OPEN: 1542, // Grum's Gold Exchange; capture 465
+  PIP_MAUSOLEUM_GATE_OPEN: 3446, // inacpip_underground_door; Priest in Peril capture 2026-11-02
 });
 
 let SELF_OPENING_DOOR_IDS, IN_PLACE_DOOR_IDS, OWN_TILE_DOOR_IDS, SINGLE_DOOR_OPEN_IDS, COMPOSITE_DOOR_OPENINGS, WOODEN_GATES, WOODEN_GATE_BY_ID;
@@ -397,6 +398,25 @@ function defineDoorData({ ObjectIdentifiers: O }) {
       crossX: 3016,
       closeTicks: 2,
       openSoundId: 62, // the door sound, as captured
+    }),
+    // Priest in Peril mausoleum gates (RSProx recording 2026-11-02, ticks 11664-11666 and
+    // 11708-11710): Open swaps in the one inactive leaf on the tile beyond the gate, the player
+    // steps through, and the gate is back two ticks later. Live also puts loc 38848 on the gate's
+    // own tile for those ticks; it is left out, as for Guidor's gate. The quest's own key rule
+    // for the first gate runs before this (door:toggle).
+    Object.freeze({
+      closed: [[O.GATE_70, 3405, 9895, 0, 3]],
+      opened: [[NAMELESS_DOOR_LEAF_IDS.PIP_MAUSOLEUM_GATE_OPEN, 3405, 9894, 0, 0]],
+      crossY: 9895,
+      closeTicks: 2,
+      openSoundId: 69,
+    }),
+    Object.freeze({
+      closed: [[O.GATE_71, 3431, 9897, 0, 2]],
+      opened: [[NAMELESS_DOOR_LEAF_IDS.PIP_MAUSOLEUM_GATE_OPEN, 3432, 9897, 0, 3]],
+      crossX: 3432,
+      closeTicks: 2,
+      openSoundId: 69,
     }),
   ]);
   DOUBLE_DOOR_FAMILY_IDS_BY_ID = new Map(

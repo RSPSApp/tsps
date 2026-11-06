@@ -2048,6 +2048,42 @@ test('pass-through gates preserve east-west crossing and isolate private copies 
   }
 });
 
+test('the Priest in Peril mausoleum gates swing in the captured leaf, let the player through and shut', async () => {
+  await initializeMapCollisionOnce();
+  RegionManager.loadMapFiles(3405, 9895, true);
+  const h = buildHarness({ cacheObjects: new Map([3444, 3445, 3446].map(id => [id, CacheDefinitions.getObject(id)])),
+    objectManager: ObjectManager, realMapObjects: true });
+  // [gate id, gate tile, the inactive leaf's tile, player start, expected step]
+  const cases = [
+    [3444, [3405, 9895], [3405, 9894], [3405, 9894], [3405, 9895]],
+    [3444, [3405, 9895], [3405, 9894], [3405, 9895], [3405, 9894]],
+    [3445, [3431, 9897], [3432, 9897], [3431, 9897], [3432, 9897]],
+    [3445, [3431, 9897], [3432, 9897], [3432, 9897], [3431, 9897]],
+  ];
+  try {
+    for (const [id, [gx, gy], [lx, ly], [px, py], step] of cases) {
+      const steps = [];
+      const object = MapObjects.get(id, new Location(gx, gy, 0), null);
+      assert.ok(object, `the cache gate ${id} stands at ${gx},${gy}`);
+      const player = { getPrivateArea: () => null, getLocation: () => new Location(px, py, 0),
+        getMovementQueue: () => ({ reset() {}, addSteps: tile => steps.push([tile.getX(), tile.getY()]) }) };
+      assert.equal(h.handlers.get('Gate').Open({ player, object, objectId: id,
+        definition: object.getDefinition(), location: object.getLocation(), clickType: 1 }), true);
+      assert.deepEqual(steps, [step]);
+      assert.ok(MapObjects.get(3446, new Location(lx, ly, 0), null), 'the inactive leaf 3446 swings in');
+      assert.ok(!MapObjects.get(id, new Location(gx, gy, 0), null), 'the gate leaf is out while open');
+      const task = h.submitted.at(-1);
+      assert.equal(task.delay ?? 2, 2, 'it shuts two ticks later');
+      task.execute();
+      assert.ok(MapObjects.get(id, new Location(gx, gy, 0), null), 'the gate is back');
+      assert.ok(!MapObjects.get(3446, new Location(lx, ly, 0), null), 'the inactive leaf is gone');
+    }
+  } finally {
+    for (const task of h.submitted) if (task.isRunning()) task.execute();
+    h.restore();
+  }
+});
+
 test('Elena’s cabinet house opens into its nameless cache door variant', async () => {
   await initializeMapCollisionOnce();
   const closed = CacheDefinitions.getObject(2054), opened = CacheDefinitions.getObject(2055);

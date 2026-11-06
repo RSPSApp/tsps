@@ -18,6 +18,7 @@ module.exports = function registerPriestInPerilQuest(api) {
     Skill, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers, Location,
     StatementDialogue, ItemStatementDialogue, DoubleItemStatementDialogue, DialogueChainBuilder,
     HitDamage, HitMask, Item, ItemDefinition,
+    CombatMethod, MeleeCombatMethod, MagicCombatMethod, CombatSpells, Projectile, Animation,
   } = api.core;
   const { registerQuest, startTranscript, startDialogue, refreshQuestList } = require("../QuestRuntime");
 
@@ -562,6 +563,106 @@ module.exports = function registerPriestInPerilQuest(api) {
     if (stage < STAGE_TOLD_KING_ROALD || stage >= STAGE_VAMPYRE_SEALED) return;
     api.getItemOnGroundManager().registerLocation(killer, new Item(GOLDEN_KEY_ITEM_ID, 1),
       new Location(location.x, location.y, location.z));
+    // Live tells the killer about the untradeable drop (rev 241 capture, 2026-11-02).
+    killer.sendMessage("<col=ef1020>Untradeable drop: Golden key</col>");
+  }
+
+  /**
+   * The temple's Monks of Zamorak punch every 4 ticks and now and then cast a spell instead
+   * (rev 241 captures, 2026-10-17 and 2026-11-02). Casts seen per monk: 3484 Weaken and
+   * Curse, 3485 Weaken and Confuse, 3486 Fire Bolt. Cast animation, projectile and launch
+   * time are the captured ones; the cast graphic and impact come from the base spells.
+   * The share of casts is inferred (about 3 in 26 swings for 3484, 5 in 20 for 3485, 2 in 4
+   * for 3486), so it is an estimate, not a measured rate.
+   * A landed Weaken/Confuse/Curse drains 5% of the level plus 1 (strength 63 -> 59, 28 -> 26,
+   * attack 27 -> 25, defence 1 -> 0 in the captures) and says "You feel weakened.". The
+   * floor-plus-one split of that rule could not be told from a ceiling in the data.
+   */
+  // Sequence and projectile ids as captured (the cache's names in the comments).
+  const SEQ_CAST_WEAKEN = 11426; // human_castweaken_walkmerge
+  const SEQ_CAST_CONFUSE = 11424; // human_castconfuse_walkmerge
+  const SEQ_CAST_CURSE = 11428; // human_castcurse_walkmerge
+  const SEQ_CAST_STRIKE = 9144; // human_caststrike_walkmerge
+  const PROJ_WEAKEN = 106; // weaken_travel
+  const PROJ_CONFUSE = 103; // confuse_travel
+  const PROJ_CURSE = 109; // curse_travel
+  const PROJ_FIRE_BOLT = 127; // firebolt_travel
+  const MONK_SPELL_DEFS = {
+    weaken: { base: () => CombatSpells.WEAKEN, anim: SEQ_CAST_WEAKEN, projectile: PROJ_WEAKEN, launch: 44, skill: Skill.STRENGTH },
+    confuse: { base: () => CombatSpells.CONFUSE, anim: SEQ_CAST_CONFUSE, projectile: PROJ_CONFUSE, launch: 61, skill: Skill.ATTACK },
+    curse: { base: () => CombatSpells.CURSE, anim: SEQ_CAST_CURSE, projectile: PROJ_CURSE, launch: 51, skill: Skill.DEFENCE },
+    firebolt: { base: () => CombatSpells.FIRE_BOLT, anim: SEQ_CAST_STRIKE, projectile: PROJ_FIRE_BOLT, launch: 51, skill: null },
+  };
+
+  /** Per monk (3484/3485/3486, and the 16271-16273 variants the world shows): spells and the cast chance. */
+  const MONK_CASTERS = new Map([
+    [NpcIdentifiers.MONK_OF_ZAMORAK_4, { spells: ["weaken", "curse"], chance: 0.2 }],
+    [NpcIdentifiers.MONK_OF_ZAMORAK_5, { spells: ["weaken", "confuse"], chance: 0.2 }],
+    [NpcIdentifiers.MONK_OF_ZAMORAK_6, { spells: ["firebolt"], chance: 0.5 }],
+    [NpcIdentifiers.MONK_OF_ZAMORAK_15, { spells: ["weaken", "curse"], chance: 0.2 }],
+    [NpcIdentifiers.MONK_OF_ZAMORAK_16, { spells: ["weaken", "confuse"], chance: 0.2 }],
+    [NpcIdentifiers.MONK_OF_ZAMORAK_17, { spells: ["firebolt"], chance: 0.5 }],
+  ]);
+  const monkSpellCache = new Map();
+
+  function drainWeakened(target, skill) {
+    if (!skill || !target?.isPlayer?.()) return;
+    const skills = target.getSkillManager();
+    const current = skills.getCurrentLevel(skill);
+    // Like the standard curses, an already weakened skill is not lowered again.
+    if (current < skills.getMaxLevel(skill)) return;
+    skills.setCurrentLevelCombat(skill, Math.max(0, current - (Math.floor(current * 0.05) + 1)));
+    skills.updateSkill(skill);
+    target.sendMessage("You feel weakened.");
+  }
+
+  function monkSpell(name) {
+    if (monkSpellCache.has(name)) return monkSpellCache.get(name);
+    const def = MONK_SPELL_DEFS[name];
+    const spell = Object.create(def.base());
+    spell.castAnimation = () => new Animation(def.anim);
+    // Launch time as captured; it lands when the projectile does (46 + 10 cycles a tile).
+    spell.castProjectile = (source, target) => Projectile.createProjectile(source, target, def.projectile, def.launch,
+      Projectile.arrivalCycles(source, target, Projectile.LEGACY_MAGIC_END_BASE), 43, 31);
+    if (def.skill) spell.spellEffect = (_source, target) => drainWeakened(target, def.skill);
+    spell.__monkEffectOnly = !!def.skill;
+    monkSpellCache.set(name, spell);
+    return spell;
+  }
+
+  class MonkOfZamorakCombat extends CombatMethod {
+    constructor() {
+      super();
+      this.melee = new MeleeCombatMethod();
+      this.magic = new MagicCombatMethod();
+      this.active = this.melee;
+    }
+    type() { return this.active.type(); }
+    start(npc, target) {
+      const caster = MONK_CASTERS.get(npc.getId()) ?? MONK_CASTERS.get(npc.getRealId?.());
+      if (caster && Math.random() < caster.chance) {
+        npc.getCombat().setCastSpell(monkSpell(caster.spells[Math.floor(Math.random() * caster.spells.length)]));
+        this.active = this.magic;
+      } else {
+        this.active = this.melee;
+      }
+      this.active.start(npc, target);
+    }
+    hits(npc, target) {
+      const hits = this.active.hits(npc, target);
+      const spell = npc.getCombat().getSelectedSpell();
+      // A curse does its work on landing; it deals no damage.
+      if (this.active === this.magic && spell?.__monkEffectOnly) for (const hit of hits) hit.setTotalDamage(0);
+      return hits;
+    }
+    handleAfterHitEffects(hit) { this.active.handleAfterHitEffects(hit); }
+    finished(npc, target) {
+      this.active.finished(npc, target);
+      npc.getCombat().setCastSpell(null);
+    }
+    // They close in to punch range; the captured casts were at a tile or two.
+    attackDistance() { return 1; }
+    attackSpeed(npc) { return this.melee.attackSpeed(npc); }
   }
 
   /**
@@ -633,6 +734,22 @@ module.exports = function registerPriestInPerilQuest(api) {
   function crossTempleDoor(player, inside) {
     const location = player.getLocation();
     player.moveTo(new Location(inside ? TEMPLE_DOOR_OUTSIDE_X : TEMPLE_DOOR_INSIDE_X, location.getY(), location.getZ()));
+  }
+
+  /**
+   * The two voices behind the door wear monks' chat heads (rev 241 captures, 2026-11-02): the
+   * guard "Mysterious Voice" shows 3484's head, "Mysterious Voice 2" (who calls himself Drevil)
+   * shows 3486's. The names already come from the transcript's speakers.
+   */
+  const VOICE_HEADS = new Map([
+    ["Mysterious Voice", NpcIdentifiers.MONK_OF_ZAMORAK_4],
+    ["Mysterious Voice 2", NpcIdentifiers.MONK_OF_ZAMORAK_6],
+  ]);
+
+  function showVoiceHeads(event) {
+    if (event.npcId !== MYSTERIOUS_VOICE_NPC_ID || event.speakerId != null) return;
+    const head = VOICE_HEADS.get(event.step?.speaker);
+    if (head != null) event.speakerId = head;
   }
 
   /**
@@ -918,9 +1035,11 @@ module.exports = function registerPriestInPerilQuest(api) {
   api.onCustomEvent("door:toggle", handleLargeDoor);
   api.onCustomEvent("door:toggle", handleMausoleumGate);
   api.onCustomEvent("npc-dialogue:line", agreeToKillDog);
+  api.onCustomEvent("npc-dialogue:line", showVoiceHeads);
   api.onCustomEvent("ladders:climb", claimNorthTrapdoorClimb);
   api.onNpcDeath(handleGuardianDeath);
   api.onNpcDeath(handleHoodedMonkDeath);
+  api.registerNpcCombatMethodProvider([...MONK_CASTERS.keys()], MonkOfZamorakCombat, { singleton: false });
   api.onNpcInteraction(talkToUnlockedDrezel);
   api.onNpcInteraction(talkToPaidMausoleumDrezel);
   api.onObjectRoute(handleTrapdoorRoute);

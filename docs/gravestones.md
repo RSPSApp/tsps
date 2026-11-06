@@ -41,7 +41,7 @@ custom events (listed in `gravestones/Events.Gravestones.js`). Core gives them t
 - **On the death's last tick:** `gravestone_creation_death_coord`, `gravestone_duration` 1500 and `gravestone_visible` are set.
 - **A tick later:** "Some of your dropped items are being held in a gravestone, near where you died."
 - **Hint arrow:** within 20 tiles, every grave tick resets the arrow and points it at the grave again (`current_hint_arrow` 9 → 0 → 9).
-- **Contents:** stacked like a bank (two of an unstackable in one slot), most valuable first by `ItemDefinition.getValue()`, at most 120 stacks.
+- **Contents:** stacked like a bank (two of an unstackable in one slot), at most 120 stacks. The server orders and retains them by the per-item fee value, sending the least valuable excess to the Office. This overflow priority is a server policy; live selection at capacity is unverified.
 - **Check** works from up to 7 tiles away. It sends, in order:
   1. the fee thresholds;
   2. the grave's inventory (inv 525);

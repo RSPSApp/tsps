@@ -590,6 +590,12 @@ module.exports = function registerCreatureOfFenkenstrainQuest(api) {
       case BRAIN_RECEIVE_ACTION_ID: {
         const inventory = player.getInventory();
         if (inventory.getAmount(ItemIdentifiers.COINS) < 50) return;
+        // A brain can arrive while the choice is open; never charge for one that will not be added.
+        if (held(player, ItemIdentifiers.PICKLED_BRAIN) || held(player, ItemIdentifiers.DECAPITATED_HEAD_2)) {
+          event.handled = true;
+          event.end = true;
+          return;
+        }
         // Paying can free a slot, so check the inventory after the same deletion on a copy.
         const plan = new Inventory(player).setItems(inventory.getCopiedItems());
         plan.deleted(ItemIdentifiers.COINS, 50, false);

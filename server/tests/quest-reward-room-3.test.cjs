@@ -407,7 +407,7 @@ test("Roavar's public brain sale conserves payment and delivery", async (t) => {
   core.RegionManager.loadMapFiles(position.getX(), position.getY());
   assert.equal(core.RegionManager.getRegion(position.getX(), position.getY()).isLoaded(), true);
 
-  for (const mode of ["room", "exact coins", "poor", "already held", "full bag"]) {
+  for (const mode of ["room", "exact coins", "poor", "already held", "brain arrives at prompt", "full bag"]) {
     await t.test(mode, async (child) => {
       const f = actor(child, FENK, 0), p = f.p, inv = f.inv;
       put(f, coins, 0, mode === "poor" ? 49 : mode === "exact coins" ? 50 : 100);
@@ -446,9 +446,11 @@ test("Roavar's public brain sale conserves payment and delivery", async (t) => {
       const snapshot = () => ({ coins: stores(coins), brain: stores(brain), filler: stores(filler),
         stage: questState.getStage(p), xp: core.Skill.values().map(skill => p.getSkillManager().getExperience(skill)) });
       const owned = row => Object.values(row).reduce((sum, count) => sum + count, 0);
-      const before = snapshot();
+      let before = snapshot();
       assert.equal(owned(before.brain), mode === "already held" ? 1 : 0);
       assert.equal(owned(stores(I.DECAPITATED_HEAD_2)), 0);
+      const messages = [];
+      child.mock.method(p, "sendMessage", (text) => { messages.push(text); });
       const actions = [], choices = [], originalEmit = PM.emitCustomEvent.bind(PM);
       child.mock.method(PM, "emitCustomEvent", (...args) => {
         const [name, event] = args;
@@ -525,6 +527,11 @@ test("Roavar's public brain sale conserves payment and delivery", async (t) => {
       assert.equal(sender.getSubInterfaceAt(mount.targetUid), mount);
       assert.deepEqual(prompt.options.map(normalize), ["I'll buy one.", "I'm not hungry."]);
       assert.deepEqual(snapshot(), before);
+      if (mode === "brain arrives at prompt") {
+        put(f, brain, 5, 1);
+        before = snapshot();
+        assert.equal(owned(before.brain), 1);
+      }
       await input({ type: "dialogue_continue", widgetId: core.MultiChatboxPrompt.OPTIONS_WIDGET_ID, childIndex: 1 });
       assert.equal(choices.length, 1);
       await speech("I'll buy one, please.", false);
@@ -532,11 +539,14 @@ test("Roavar's public brain sale conserves payment and delivery", async (t) => {
       const after = snapshot(), paid = owned(before.coins) - owned(after.coins), delivered = owned(after.brain) - owned(before.brain);
       assert.ok((paid === 50 && delivered === 1) || (paid === 0 && delivered === 0),
         JSON.stringify({ mode, paid, delivered, before: { coins: before.coins, brain: before.brain }, after: { coins: after.coins, brain: after.brain } }));
-      if (mode !== "full bag") assert.deepEqual([paid, delivered], [50, 1], "room or exact payment delivers one brain");
+      if (mode === "brain arrives at prompt") assert.deepEqual([paid, delivered, owned(after.brain)], [0, 0, 1], "a held brain is neither charged for nor duplicated");
+      if (mode !== "full bag" && mode !== "brain arrives at prompt") assert.deepEqual([paid, delivered], [50, 1], "room or exact payment delivers one brain");
       assert.deepEqual(after.filler, before.filler);
       assert.equal(after.stage, before.stage);
       assert.deepEqual(after.xp, before.xp);
       if (paid === 0) assert.deepEqual(after, before);
+      assert.deepEqual(messages, mode === "full bag" ? ["You don't have enough inventory space."] : []);
+      if (paid === 0) assert.equal(manager.isActive(), false, "the refusal ends the dialogue");
       assert.equal(core.ItemOnGroundManager.getGroundItem(p.getUsername(), brain, position, p.getPrivateArea()), stock, "the public display is not purchased credit");
     });
   }

@@ -20,6 +20,7 @@ const Shared = require("./Shared.CorporealBeast");
 
 const PASSAGE_WIDTH = 3;
 const PET_ATTRIBUTE = "pets:current";
+const IRONMAN_ROOM_COMBAT_LEVEL = 90;
 
 function playersInRoom() {
   const { World } = Shared.core();
@@ -38,7 +39,11 @@ function enterCave({ player, objectId }) {
     player.sendMessage("You cannot enter the cave while in combat.");
     return true;
   }
-  player.moveTo(Shared.loc(Shared.shifted(Shared.CAVE_ARRIVAL)));
+  const mode = { player, mode: "none" };
+  Shared.api().emitCustomEvent("ironman:mode", mode);
+  const room = mode.mode !== "none" && player.getSkillManager().getCombatLevel() >= IRONMAN_ROOM_COMBAT_LEVEL
+    ? "ironman" : "normal";
+  player.moveTo(Shared.loc(Shared.shifted(Shared.CAVE_ARRIVAL, room)));
   return true;
 }
 

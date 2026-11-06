@@ -268,6 +268,23 @@ test('RuneSquares overlay cleanup preserves a replacement HUD when its group mov
   assert.equal(sender.getSubInterfaceAt(hud),replacement,'leave cannot close another HUD owner');
 });
 
+test('RuneSquares table cannot enter an unsupported spectator adapter or disturb its players',async()=>{
+  const a=actor(),b=actor(),m=await match(a,b,'runesquares'),v=actor();placementTick();
+  const table=m.allocation.playingTable,at=table.getLocation();
+  v.setLocation(at.clone().transform(0,-1,0));v.setNeedsPlacement(false);
+  const before=JSON.stringify(m.state);
+  await v.nativeConnection.dispatch([{type:'object_option',id:table.getId(),x:at.getX(),y:at.getY(),clickType:1}]);
+  v.nativeConnection.processTurnPackets();
+  for(let i=0;i<12;i++) {
+    core.TaskManager.processWalkTo(v.getIndex());v.getMovementQueue().process();core.TaskManager.process();
+    for(const p of actors){AreaManager.process(p);p.resetUpdating();}
+  }
+  assert.equal(require('../plugins/minigames/gamesroom/Spectator.GamesRoom').viewOf(v),undefined);
+  assert.notEqual(v.getInterfaceId(),core.CacheDefinitions.getInterfaceId('boardgames_runesquares'));
+  assert.equal(JSON.stringify(m.state),before);
+  assert.equal(Room.matchOf(a),m);assert.equal(Room.matchOf(b),m);
+});
+
 test('RuneSquares full native edge play ranks only this game and can persist; stale edge cannot reach rematch', async () => {
   const a=actor(),b=actor();const m=await match(a,b,'runesquares');placementTick();
   const initial=a.getAttribute('games-room:draughts-rank',1000);

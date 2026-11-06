@@ -145,26 +145,28 @@ class AppearanceReader {
  *
  * OSRS format:
  * - 0: empty slot
- * - 256-511: kit definition (body part)
- * - >= 512: item definition (itemId = value - 512)
+ * - 256-2047: kit definition (id = value - 256)
+ * - >= 2048: item definition (itemId = value - 2048)
+ * (runescape-client PlayerComposition.isKitDefinitionId/isItemEquipmentId)
  */
 function decodeEquipmentSlot(reader: AppearanceReader): {
     type: "empty" | "kit" | "item";
     value: number;
+    raw: number;
 } {
     const high = reader.readUnsignedByte();
     if (high === 0) {
-        return { type: "empty", value: -1 };
+        return { type: "empty", value: -1, raw: 0 };
     }
     const low = reader.readUnsignedByte();
     const value = (high << 8) | low;
 
-    if (value >= 512) {
-        return { type: "item", value: value - 512 };
+    if (value >= 2048) {
+        return { type: "item", value: value - 2048, raw: value };
     } else if (value >= 256) {
-        return { type: "kit", value: value - 256 };
+        return { type: "kit", value: value - 256, raw: value };
     }
-    return { type: "empty", value: -1 };
+    return { type: "empty", value: -1, raw: value };
 }
 
 /**
@@ -203,8 +205,8 @@ export function decodeAppearanceBinary(buffer: Uint8Array): DecodedAppearance | 
         for (let slot = 0; slot < EQUIPMENT_SLOTS; slot++) {
             const result = decodeEquipmentSlot(reader);
 
-            // Special case: NPC transform (slot 0 == 65535)
-            if (slot === 0 && result.type === "item" && result.value === 65535 - 512) {
+            // Special case: NPC transform (slot 0 raw value 0xffff, then the NPC id)
+            if (slot === 0 && result.raw === 65535) {
                 npcTransformationId = reader.readUnsignedShort();
                 break;
             }

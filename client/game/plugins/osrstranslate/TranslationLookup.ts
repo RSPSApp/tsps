@@ -70,6 +70,14 @@ export interface PatternEntry {
     readonly pattern: RegExp;
     readonly translation: string;
     readonly specificity: number;
+    /**
+     * The key's fixed text before its first placeholder and after its last, and the shortest text
+     * it can match. The pattern is anchored at both ends, so a text failing these can't match;
+     * checking them first skips the regex for nearly every pattern.
+     */
+    readonly prefix: string;
+    readonly suffix: string;
+    readonly minLength: number;
     /** Position in the specificity-sorted list: the order upstream tries patterns in. */
     readonly rank: number;
 }
@@ -101,8 +109,17 @@ export function compileRegexTranslations(source: ReadonlyMap<string, string>): P
         // untranslated sentence ending in a full stop and drops the stop, so punctuation alone
         // is not enough either.
         if (specificity === 0 || !LETTER.test(key.replace(PLACEHOLDER, ""))) continue;
-        const pattern = key.split(PLACEHOLDER).map(escapeRegExp).join("(.+?)");
-        entries.push({ key, pattern: new RegExp(`^${pattern}$`, "s"), translation, specificity });
+        const parts = key.split(PLACEHOLDER);
+        const pattern = parts.map(escapeRegExp).join("(.+?)");
+        entries.push({
+            key,
+            pattern: new RegExp(`^${pattern}$`, "s"),
+            translation,
+            specificity,
+            prefix: parts[0],
+            suffix: parts[parts.length - 1],
+            minLength: specificity + parts.length - 1,
+        });
     }
     // Stable sort keeps the dictionary's order among equally specific keys, as Java's sort does.
     entries.sort((a, b) => b.specificity - a.specificity);
@@ -111,6 +128,7 @@ export function compileRegexTranslations(source: ReadonlyMap<string, string>): P
 
 /** Fills each placeholder of the matching translation with the captured text, in order. */
 function applyPattern(entry: PatternEntry, lookup: string): string | null {
+    if (lookup.length < entry.minLength || !lookup.startsWith(entry.prefix) || !lookup.endsWith(entry.suffix)) return null;
     const match = entry.pattern.exec(lookup);
     if (!match) return null;
     let result = entry.translation;

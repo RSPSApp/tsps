@@ -1,6 +1,6 @@
-// Run after `yarn build`: node --test tests/eye-of-ayak-preset-runes.test.cjs
+// Run after `yarn build`: node --test tests/powered-staff-preset-runes.test.cjs
 // Preset copies (untradeable, unbankable, preset meta, as Presets.PvpMode's spawnPresetItem tags them) never
-// pay for Eye of Ayak charges: Uncharge refunds plain runes, so charging from them would turn free preset
+// pay for Eye of Ayak, Tumeken's shadow or Warped sceptre charges: each Uncharge refunds plain runes, so charging from them Uncharge refunds plain runes, so charging from them would turn free preset
 // runes into bankable ones. Real engine: every plugin loaded, a real Player, the native inventory_use_on,
 // dialogue_amount, inventory_action and dialogue_continue packets through ClientConnection.dispatch.
 process.env.DISABLE_PLAYER_BOTS = "1";
@@ -125,4 +125,83 @@ test("plain runes still charge as before", async (t) => {
   assert.match(f.messages.at(-1), /It currently has 100 charges\./);
   assert.equal(f.inv.getAmount(I.DEATH_RUNE), 0);
   assert.equal(f.inv.getAmount(I.CHAOS_RUNE), 0);
+});
+
+test("the Charge option with only preset demon tears names the preset rule", async (t) => {
+  const f = actor(t);
+  f.inv.setItem(0, new core.Item(I.EYE_OF_AYAK_UNCHARGED_, 1));
+  f.inv.setItem(1, preset(new core.Item(I.DEMON_TEAR, 500)));
+  await send(f, { type: "inventory_action", slot: 0, itemId: I.EYE_OF_AYAK_UNCHARGED_, widgetId: 3214, option: "Charge" });
+  assert.deepEqual(f.messages, [PRESET_TEXT]);
+  assert.equal(amount(f.inv, I.DEMON_TEAR, true), 500);
+});
+
+// Tumeken's shadow: 2 soul and 5 chaos runes a charge, applied at once (no prompt); Uncharge asks Yes/No.
+const answerPrompt = (f) => core.MultiChatboxPrompt.handleInterfaceActionClick({
+  player: f.p, buttonId: core.MultiChatboxPrompt.OPTIONS_WIDGET_ID, groupId: 219, slot: 1, action: 1,
+});
+
+test("Tumeken's shadow: preset soul and chaos runes are refused", async (t) => {
+  const f = actor(t);
+  f.inv.setItem(0, new core.Item(I.TUMEKENS_SHADOW_UNCHARGED_, 1));
+  f.inv.setItem(1, preset(new core.Item(I.SOUL_RUNE, 200)));
+  f.inv.setItem(2, preset(new core.Item(I.CHAOS_RUNE, 500)));
+  await useOnEye(f, 1, I.SOUL_RUNE);
+  assert.deepEqual(f.messages, [PRESET_TEXT]);
+  assert.equal(f.inv.getItems()[0].getId(), I.TUMEKENS_SHADOW_UNCHARGED_);
+  assert.equal(amount(f.inv, I.SOUL_RUNE, true), 200);
+  assert.equal(amount(f.inv, I.CHAOS_RUNE, true), 500);
+});
+
+test("Tumeken's shadow: with both held only the plain runes pay, and Uncharge refunds only them", async (t) => {
+  const f = actor(t);
+  f.inv.setItem(0, new core.Item(I.TUMEKENS_SHADOW_UNCHARGED_, 1));
+  f.inv.setItem(1, preset(new core.Item(I.SOUL_RUNE, 200)));
+  f.inv.setItem(2, preset(new core.Item(I.CHAOS_RUNE, 500)));
+  f.inv.setItem(3, new core.Item(I.SOUL_RUNE, 20));
+  f.inv.setItem(4, new core.Item(I.CHAOS_RUNE, 50));
+  await useOnEye(f, 3, I.SOUL_RUNE);
+  assert.equal(f.messages.at(-1), "You apply 10 charges to your Tumeken's shadow.");
+  assert.equal(amount(f.inv, I.SOUL_RUNE, false), 0);
+  assert.equal(amount(f.inv, I.SOUL_RUNE, true), 200, "the preset stack is left alone");
+  await send(f, { type: "inventory_action", slot: 0, itemId: f.inv.getItems()[0].getId(), widgetId: 3214, option: "Uncharge" });
+  answerPrompt(f);
+  assert.match(f.messages.at(-1), /regaining 20 soul runes and 50 chaos runes/);
+  assert.equal(amount(f.inv, I.SOUL_RUNE, false), 20);
+  assert.equal(amount(f.inv, I.CHAOS_RUNE, false), 50);
+  assert.equal(amount(f.inv, I.SOUL_RUNE, true), 200);
+  assert.equal(amount(f.inv, I.CHAOS_RUNE, true), 500);
+});
+
+// Warped sceptre: 2 chaos and 5 earth runes a charge, through an amount prompt; Uncharge asks Yes/No.
+test("Warped sceptre: preset chaos and earth runes are refused", async (t) => {
+  const f = actor(t);
+  f.inv.setItem(0, new core.Item(I.WARPED_SCEPTRE_UNCHARGED_, 1));
+  f.inv.setItem(1, preset(new core.Item(I.CHAOS_RUNE, 200)));
+  f.inv.setItem(2, preset(new core.Item(I.EARTH_RUNE, 500)));
+  await useOnEye(f, 1, I.CHAOS_RUNE);
+  assert.deepEqual(f.messages, [PRESET_TEXT]);
+  assert.equal(f.p.getEnteredAmountAction() ?? null, null);
+  await useOnEye(f, 2, I.EARTH_RUNE);
+  assert.equal(f.messages.at(-1), PRESET_TEXT);
+  assert.equal(f.inv.getItems()[0].getId(), I.WARPED_SCEPTRE_UNCHARGED_);
+});
+
+test("Warped sceptre: with both held only the plain runes pay, and Uncharge refunds only them", async (t) => {
+  const f = actor(t);
+  f.inv.setItem(0, new core.Item(I.WARPED_SCEPTRE_UNCHARGED_, 1));
+  f.inv.setItem(1, preset(new core.Item(I.CHAOS_RUNE, 200)));
+  f.inv.setItem(2, preset(new core.Item(I.EARTH_RUNE, 500)));
+  f.inv.setItem(3, new core.Item(I.CHAOS_RUNE, 20));
+  f.inv.setItem(4, new core.Item(I.EARTH_RUNE, 50));
+  await useOnEye(f, 3, I.CHAOS_RUNE);
+  await send(f, { type: "dialogue_amount", amount: 100 });
+  assert.equal(f.inv.getItems()[0].getId(), I.WARPED_SCEPTRE);
+  assert.equal(amount(f.inv, I.CHAOS_RUNE, false), 0);
+  assert.equal(amount(f.inv, I.CHAOS_RUNE, true), 200, "the preset stack is left alone");
+  await uncharge(f);
+  assert.equal(amount(f.inv, I.CHAOS_RUNE, false), 20);
+  assert.equal(amount(f.inv, I.EARTH_RUNE, false), 50);
+  assert.equal(amount(f.inv, I.CHAOS_RUNE, true), 200);
+  assert.equal(amount(f.inv, I.EARTH_RUNE, true), 500);
 });

@@ -184,7 +184,10 @@ function chargeEye(player, item, preferred = null) {
   }
   const most = Math.min(room, affordable(player, material));
   if (most <= 0) {
-    if (affordable(player, material, (id) => player.getInventory().getAmount(id)) > 0) {
+    const raw = (id) => player.getInventory().getAmount(id);
+    // Only preset copies held: of this material, or (nothing chosen yet) of demon tears, which the
+    // fallback to runes would otherwise hide.
+    if (affordable(player, material, raw) > 0 || (!held && !preferred && affordable(player, TEARS, raw) > 0)) {
       player.sendMessage(PRESET_TEXT);
       return true;
     }

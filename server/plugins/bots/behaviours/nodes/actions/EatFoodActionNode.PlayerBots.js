@@ -70,6 +70,8 @@ class EatFoodActionNode {
     const tickEat = !isF2pPvp && Number(pvpProfile?.confidenceTier ?? 0) >= 3 &&
       Number(player.getHitpointsAfterPendingDamage?.() ?? currentHp) <= 0 &&
       Math.random() < Number(pvpProfile.tickEatChance ?? 0);
+    const lowEnough = tickEat ||
+      currentHp <= Math.max(1, Math.ceil(maxHp * Math.max(0.1, lowHpRatio * 0.72)));
     if (currentHp > lowHpThreshold && !tickEat) {
       if (isF2pPvp) {
         state.pvp.f2pFoodPending = false;
@@ -89,7 +91,8 @@ class EatFoodActionNode {
       // A due follow-up skips the one-hit wait: it is the second half of a combo, not a new
       // reaction. Its flag is only cleared once a bite actually lands, since the same tick is
       // blocked by the food timer and clearing it there would lose the follow-up.
-      const waitsForAnotherHit = !followUp;
+      // Critical HP uses the existing combo policy instead of waiting for another damaging hit.
+      const waitsForAnotherHit = !followUp && !lowEnough;
       if (!engaged) {
         state.pvp.f2pFoodPending = false;
         state.pvp.f2pFoodPendingHp = null;
@@ -100,9 +103,6 @@ class EatFoodActionNode {
         return "failure";
       } else if (waitsForAnotherHit && currentHp >= Number(state.pvp.f2pFoodPendingHp ?? currentHp)) {
         return "failure";
-      } else {
-        state.pvp.f2pFoodPending = false;
-        state.pvp.f2pFoodPendingHp = null;
       }
     }
 
@@ -135,8 +135,6 @@ class EatFoodActionNode {
     const healOf = (slot) => Number(biteOf(slot)?.food?.heal ?? 0);
     const normalSlot = foodSlots.find((slot) => !isComboFoodItem(items[slot].getId()));
     const comboSlot = foodSlots.find((slot) => isComboFoodItem(items[slot].getId()));
-    const lowEnough = tickEat ||
-      currentHp <= Math.max(1, Math.ceil(maxHp * Math.max(0.1, lowHpRatio * 0.72)));
     // A follow-up bite takes the biggest heal left, so half a pizza is followed by a swordfish
     // rather than by the pizza's own other half.
     const biggestSlot = foodSlots.reduce(
@@ -156,6 +154,10 @@ class EatFoodActionNode {
       return remaining?.getId() !== itemId || (remaining.getAmount?.() ?? 1) < amount;
     };
     if (!consume(firstSlot)) return "failure";
+    if (isF2pPvp) {
+      state.pvp.f2pFoodPending = false;
+      state.pvp.f2pFoodPendingHp = null;
+    }
 
     let comboEatTriggered = false;
     if (Number(pvpProfile?.confidenceTier ?? 0) >= 3 && firstSlot !== comboSlot && comboSlot !== undefined &&

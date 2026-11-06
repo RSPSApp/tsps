@@ -82,7 +82,7 @@ Generic additions for these rules:
 - **The player death event** carries `itemsLost`: whether the death was dangerous.
 - **Presets** ask `presets:can-use` `{ player, allow, message }` before opening or applying one.
 - **`ShopManager`** asks `shop:buy-limit` `{ player, shopId, itemId, available, original, limit, message }` before a purchase.
-- **The Grand Exchange** asks `grand-exchange:can-open` `{ player, allow, message }` before opening.
+- **The Grand Exchange** emits `ge:offer-confirmed` `{ player, itemId, sell, quantity, accepted }` before escrow; Ironman restrictions can veto the offer. Collecting to a bank checks `onCanBank` first, including locked PIN, duel and Nightmare Zone restrictions. The collection box does not open a PIN keypad; enter the PIN elsewhere before banking a collection.
 - **The Duel Arena** asks `duelarena:can-stake` `{ player, session, allow, message }` before an
   item is offered and, whenever a staked duel is accepted, for both players, so a mode change
   between the two final confirmations still refuses it.

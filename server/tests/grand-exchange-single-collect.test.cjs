@@ -12,6 +12,7 @@
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const { before, after, test } = require("node:test");
+process.env.DISABLE_PLAYER_BOTS = "1";
 require("../dist/Server").Server.installProductionPathResolver();
 const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { PluginManager: PM } = require("../dist/plugins/PluginManager");
@@ -27,7 +28,7 @@ const OFFERS = "grand-exchange-offers";
 let core;
 let BONES;
 let NOTE;
-let next = 5700;
+let next = 1400;
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
@@ -189,4 +190,81 @@ test("the slot's Collect-note on a single still joins the note stack in a full i
   await click(f, GE, 24, 2, 2, BONES);
   assert.deepEqual(held(f), { items: 0, notes: 6 }, "the single joined the stack as a note");
   assert.equal(waiting(f), 0, "and the offer is collected");
+});
+
+
+// Actual registered bank policies and collection callbacks; dream/duel membership is set directly
+// for these focused observer tests, not a claim of live travel or session creation.
+function twoOffers(f) {
+  f.p.setAttribute(OFFERS, {
+    0: { itemId: BONES, sell: false, slot: 0, quantity: 1, price: 1000, total: 1000, finished: true, completesAt: null },
+    1: { itemId: BONES, sell: false, slot: 1, quantity: 1, price: 1000, total: 1000, finished: true, completesAt: null },
+    2: { itemId: BONES, sell: false, slot: 2, quantity: 1, price: 1000, total: 1000, finished: false, completesAt: null },
+  });
+}
+function contents(f) {
+  const items = container => container.getItems().filter(item => item.getId() > 0).map(item => [item.getId(), item.getAmount()]);
+  return { offers: JSON.stringify(f.p.getAttribute(OFFERS)), inventory: items(f.inv),
+    banks: Array.from({ length: core.Bank.TOTAL_BANK_TABS }, (_, i) => items(f.p.getBank(i))) };
+}
+for (const policy of ["pin", "dream", "duel"]) {
+  for (const route of ["exchange-all", "box-all", "box-single"]) {
+    test(`${route} preserves all offers and checks ${policy} banking once`, async t => {
+      const f = actor(t); twoOffers(f);
+      if (route === "exchange-all") openGe(f); else openBox(f);
+      const pin = require("../plugins/interface/bankpin/Common.BankPin");
+      const dream = require("../plugins/minigames/nightmarezone/Dream.NightmareZone").dreams;
+      const duel = require("../plugins/minigames/DuelArena.plugin")._test.sessions;
+      t.after(() => { dream.delete(f.p); duel.delete(f.p); });
+      if (policy === "pin") f.p.setAttribute("bank-pin:hash", pin.hash(f.p, "2468"));
+      if (policy === "dream") dream.set(f.p, { player: f.p });
+      if (policy === "duel") duel.set(f.p, {});
+      const original = PM.emitCanBank, checks = [];
+      t.mock.method(PM, "emitCanBank", (player, source) => { checks.push(source); return original.call(PM, player, source); });
+      const before = contents(f); f.messages.length = 0;
+      try {
+        if (route === "exchange-all") await click(f, GE, 6, 2);
+        else if (route === "box-all") await click(f, GE_COLLECT, 4, 1);
+        else await click(f, GE_COLLECT, 5, 3, 3, BONES);
+        assert.deepEqual(checks, ["grand-exchange-collect"], "one fresh bank-policy check");
+        assert.deepEqual(contents(f), before, "refusal conserves offers, inventory and all bank tabs");
+        assert.notEqual(f.p.getInterfaceId(), 213, "collection does not open a PIN keypad");
+        if (policy !== "duel") assert.equal(f.messages.length, 1, "one refusal message for the batch");
+        else assert.equal(f.messages.length, 0, "the duel bank policy is silent");
+        // Remove the restriction and repeat: checks are per click and the retained offers are usable.
+        if (policy === "pin") pin.unlock(f.p);
+        dream.delete(f.p); duel.delete(f.p);
+        if (route === "exchange-all") await click(f, GE, 6, 2);
+        else if (route === "box-all") await click(f, GE_COLLECT, 4, 1);
+        else await click(f, GE_COLLECT, 5, 3, 3, BONES);
+        const expected = route === "box-single" ? 1 : 2;
+        const banked = Array.from({ length: core.Bank.TOTAL_BANK_TABS }, (_, i) => f.p.getBank(i).getAmount(BONES)).reduce((a, b) => a + b, 0);
+        assert.equal(banked, expected, "the previously refused collection can complete");
+        assert.equal(waiting(f), 3 - expected, "only collected offers are removed");
+      } finally {
+        dream.delete(f.p); duel.delete(f.p);
+      }
+    });
+  }
+}
+
+test("a locked PIN still allows collection to inventory", async t => {
+  const f = actor(t); twoOffers(f); openBox(f);
+  const pin = require("../plugins/interface/bankpin/Common.BankPin");
+  f.p.setAttribute("bank-pin:hash", pin.hash(f.p, "2468"));
+  await click(f, GE_COLLECT, 3, 1);
+  assert.equal(f.inv.getAmount(BONES), 2); assert.equal(waiting(f), 1, "unfinished offer remains");
+});
+
+test("no finished bank offer does not trigger a policy check", async t => {
+  const f = actor(t); twoOffers(f); f.p.getAttribute(OFFERS)[0].finished = false; f.p.getAttribute(OFFERS)[1].finished = false; openBox(f);
+  const original = PM.emitCanBank, checks = [];
+  t.mock.method(PM, "emitCanBank", (player, source) => { checks.push(source); return original.call(PM, player, source); });
+  await click(f, GE_COLLECT, 4, 1); assert.deepEqual(checks, []);
+  assert.equal(waiting(f), 3);
+});
+
+test("normal account opening the exchange sees no Ironman-only instruction", t => {
+  const f = actor(t); openGe(f);
+  assert.ok(!f.messages.some(message => /Ironmen can only buy one bond/.test(message)));
 });

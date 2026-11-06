@@ -22,6 +22,8 @@ data class GatewayConfig(
      * connect to, which behind NAT or a domain needn't be a local interface.
      */
     val bindHost: String = DEFAULT_BIND_HOST,
+    val loginUtilitiesPort: Int = 0,
+    val loginUtilitiesTrustLoopbackProxy: Boolean = false,
 ) {
     val tspsUrl: String get() = "ws://127.0.0.1:$websocketPort/"
 
@@ -44,6 +46,8 @@ data class GatewayConfig(
                 keyFile = if (!Files.exists(keyFile) && Files.exists(legacyKeyFile)) legacyKeyFile else keyFile,
                 publicHost = env["PUBLIC_HOST"]?.takeIf { it.isNotBlank() } ?: DEFAULT_PUBLIC_HOST,
                 bindHost = env["GATEWAY_BIND_HOST"]?.takeIf { it.isNotBlank() } ?: DEFAULT_BIND_HOST,
+                loginUtilitiesPort = env["GATEWAY_LOGIN_HTTP_PORT"]?.toInt() ?: 0,
+                loginUtilitiesTrustLoopbackProxy = env["GATEWAY_LOGIN_TRUST_LOOPBACK_PROXY"] == "true",
             )
         }
 

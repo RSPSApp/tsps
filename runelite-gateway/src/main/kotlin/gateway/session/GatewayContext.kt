@@ -7,6 +7,7 @@ import gateway.cache.NpcTypes
 import gateway.cache.ObjTypes
 import gateway.cache.VarTypes
 import gateway.config.GatewayConfig
+import gateway.login.LoginBroker
 import gateway.up.UpdatePlayerModel
 import io.netty.buffer.ByteBufAllocator
 import net.rsprot.compression.provider.HuffmanCodecProvider
@@ -26,6 +27,9 @@ class GatewayContext(
     val revision: Int,
     val allocator: ByteBufAllocator = ByteBufAllocator.DEFAULT,
 ) {
+    val loginUtilities = if (config.loginUtilitiesPort > 0) {
+        LoginBroker(config.tspsUrl, revision, config.loginUtilitiesPort, allowLoopbackProxy = config.loginUtilitiesTrustLoopbackProxy)
+    } else null
     val objs = ObjTypes(cache)
     val npcTypes = NpcTypes(cache)
     val components = InterfaceComponents(cache)

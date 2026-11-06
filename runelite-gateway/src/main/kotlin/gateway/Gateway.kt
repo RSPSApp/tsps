@@ -20,8 +20,12 @@ class Gateway private constructor(
     val rsa: RsaKeyPair,
     val revision: Int,
     private val network: NetworkService<*>,
+    private val context: GatewayContext,
 ) {
-    fun stop() = network.shutdownNow()
+    fun stop() {
+        context.loginUtilities?.close()
+        network.shutdownNow()
+    }
 
     companion object {
         private const val BINARY_ARCHIVE = 10
@@ -38,7 +42,7 @@ class Gateway private constructor(
             val network = GatewayNetwork(config.bindHost, config.gatewayPort, rsa, huffman, CacheJs5Provider(cache), GatewayConnections(context)).build()
             UpdatePlayerModel.install(network)
             network.start()
-            return Gateway(config, rsa, revision, network)
+            return Gateway(config, rsa, revision, network, context)
         }
     }
 }

@@ -384,3 +384,73 @@ test("a knife grinds an ordinary chocolate bar into dust", async (t) => {
   assert.equal(other.inv.getItems()[otherKnifeSlot], otherKnife);
   assert.deepEqual(xp(other), otherXp);
 });
+
+// Grinding: a pestle (or a knife on a chocolate bar) turned a preset copy into a plain, tradeable
+// dust with no message. It is refused like a mix, and a plain copy next to it is still ground.
+// A grindable is not a spawnable preset item, so the copy is tagged by hand with the three marks
+// spawnPresetItem sets (untradeable, unbankable, preset).
+function presetCopy(id) {
+  return item(id)
+    .setMetaValue(core.Item.UNTRADEABLE_META, true)
+    .setMetaValue(core.Item.UNBANKABLE_META, true)
+    .setMetaValue(core.Item.PRESET_META, true);
+}
+
+async function grindWith(f, toolId, targetId) {
+  await useOn(f, slotOfId(f, toolId), slotOfId(f, targetId));
+  ticks(10);
+}
+
+for (const [tool, toolName] of [[() => I.KNIFE, "a knife"], [() => I.PESTLE_AND_MORTAR, "a pestle and mortar"]]) {
+  test(`a preset chocolate bar is refused with ${toolName}: nothing consumed, no dust`, async (t) => {
+    const f = actor(t);
+    f.inv.add(presetCopy(I.CHOCOLATE_BAR), false);
+    f.inv.add(item(tool()), false);
+    await grindWith(f, tool(), I.CHOCOLATE_BAR);
+    assert.equal(presetOf(f, I.CHOCOLATE_BAR), 1, "the preset bar is kept");
+    assert.equal(plainOf(f, I.CHOCOLATE_DUST) + presetOf(f, I.CHOCOLATE_DUST), 0, "no dust");
+    assert.equal(f.inv.getAmount(tool()), 1);
+    assert.ok(f.messages.includes(REFUSAL));
+  });
+
+  test(`a plain chocolate bar is still ground with ${toolName}`, async (t) => {
+    const f = actor(t);
+    f.inv.add(item(I.CHOCOLATE_BAR), false);
+    f.inv.add(item(tool()), false);
+    await grindWith(f, tool(), I.CHOCOLATE_BAR);
+    assert.equal(plainOf(f, I.CHOCOLATE_DUST), 1);
+    assert.equal(f.inv.getAmount(I.CHOCOLATE_BAR), 0);
+    assert.equal(f.messages.includes(REFUSAL), false);
+  });
+
+  test(`a preset and a plain chocolate bar with ${toolName}: only the plain one is ground`, async (t) => {
+    const f = actor(t);
+    f.inv.add(presetCopy(I.CHOCOLATE_BAR), false);
+    f.inv.add(item(I.CHOCOLATE_BAR), false);
+    f.inv.add(item(tool()), false);
+    await grindWith(f, tool(), I.CHOCOLATE_BAR);
+    assert.equal(plainOf(f, I.CHOCOLATE_DUST), 1, "the plain bar became dust");
+    assert.equal(presetOf(f, I.CHOCOLATE_BAR), 1, "the preset bar stays preset");
+    assert.equal(plainOf(f, I.CHOCOLATE_BAR), 0);
+    assert.equal(presetOf(f, I.CHOCOLATE_DUST), 0);
+  });
+}
+
+test("a preset unicorn horn is refused with a pestle and mortar", async (t) => {
+  const f = actor(t);
+  f.inv.add(presetCopy(I.UNICORN_HORN), false);
+  f.inv.add(item(I.PESTLE_AND_MORTAR), false);
+  await grindWith(f, I.PESTLE_AND_MORTAR, I.UNICORN_HORN);
+  assert.equal(presetOf(f, I.UNICORN_HORN), 1, "the preset horn is kept");
+  assert.equal(f.inv.getAmount(I.UNICORN_HORN_DUST), 0, "no dust");
+  assert.ok(f.messages.includes(REFUSAL));
+});
+
+test("a plain unicorn horn is still ground with a pestle and mortar", async (t) => {
+  const f = actor(t);
+  f.inv.add(item(I.UNICORN_HORN), false);
+  f.inv.add(item(I.PESTLE_AND_MORTAR), false);
+  await grindWith(f, I.PESTLE_AND_MORTAR, I.UNICORN_HORN);
+  assert.equal(plainOf(f, I.UNICORN_HORN_DUST), 1);
+  assert.equal(f.inv.getAmount(I.UNICORN_HORN), 0);
+});

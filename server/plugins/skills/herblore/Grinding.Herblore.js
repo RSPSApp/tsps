@@ -23,10 +23,20 @@ function amount(player, grind) {
   return diary.complete === true ? Math.floor(rolled * 1.5) : rolled;
 }
 
+/**
+ * Whether the inventory holds this item only as preset (restricted) copies: grinding would turn
+ * them into a plain, tradeable product, so it is refused, as Mixing does.
+ */
+function onlyRestricted(player, grind) {
+  const inventory = player.getInventory();
+  return inventory.getAmount(grind.itemId) > 0 && Common.plainAmount(inventory, grind.itemId) <= 0;
+}
+
 function grindOne(player, grind, requested = 1, toolId = null, withFeedback = true) {
   const inventory = player.getInventory();
   const pestle = Common.gameval("obj", "pestle_and_mortar");
-  const held = inventory.getAmount(grind.itemId);
+  // Only unrestricted copies are ground; a preset copy of the same item stays put.
+  const held = Common.plainAmount(inventory, grind.itemId);
   if (held <= 0 || inventory.getAmount(toolId ?? pestle) <= 0) return false;
   const stack = Common.core.ItemDefinition.forId(grind.itemId).isStackable();
   const used = Math.min(held, requested);
@@ -40,7 +50,8 @@ function grindOne(player, grind, requested = 1, toolId = null, withFeedback = tr
     inventory.full();
     return false;
   }
-  inventory.deleteNumber(grind.itemId, used);
+  Common.takePlain(inventory, grind.itemId, used);
+  inventory.refreshItems();
   inventory.addItem(product);
   if (withFeedback) {
     Common.animate(player, GRIND_ANIMATION);
@@ -61,7 +72,8 @@ function grind(event) {
     Common.core.TaskManager.cancelTasks(player.getIndex());
     // Wiki: knife use can repeat, but its timing and feedback are not yet captured.
     // Convert one bar without applying the pestle's animation, sound or cadence.
-    grindOne(player, chocolate, 1, KNIFE, false);
+    if (onlyRestricted(player, chocolate)) player.sendMessage(Common.PRESET_REFUSAL);
+    else grindOne(player, chocolate, 1, KNIFE, false);
     return;
   }
   const pestle = Common.gameval("obj", "pestle_and_mortar");
@@ -70,8 +82,12 @@ function grind(event) {
   if (!found) return;
   event.handled = true;
   Common.core.TaskManager.cancelTasks(player.getIndex());
+  if (onlyRestricted(player, found)) {
+    player.sendMessage(Common.PRESET_REFUSAL);
+    return;
+  }
   if (found.quantityPrompt) {
-    const held = player.getInventory().getAmount(found.itemId);
+    const held = Common.plainAmount(player.getInventory(), found.itemId);
     player.setEnteredAmountAction({
       execute(quantity) {
         if (!Number.isInteger(quantity) || quantity <= 0) return;

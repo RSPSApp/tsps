@@ -155,6 +155,9 @@ A knife on an ordinary chocolate bar also makes one chocolate dust with no XP ([
 This path currently converts one bar per use; the Wiki documents automatic repetition, but its
 knife-specific timing and feedback are not yet implemented.
 
+Preset (restricted) copies are refused with "Preset items cannot be used for this." for both tools, as
+in mixing; plain copies carried alongside are still ground and the preset ones stay.
+
 - **Timing:** at once, two ticks later, then every three ticks until none are left or the player
   does something else (also the Wiki's "0, then 2, then 3 ticks").
 - **Animation and sound:** `human_herbing_grind` (364) with synth 2608.

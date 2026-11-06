@@ -109,11 +109,12 @@ module.exports = function registerBlackKnightsFortressQuest(api) {
   const NOISE_SOUND = 1414;
   const SPLASH_SOUND = 1416;
   const CAT_MEOW_SOUND = 333;
+  /** The meow's area-sound range in tiles (sound_area range=5 in both recordings). */
+  const CAT_MEOW_RANGE = 5;
   /** Ticks after continuing past "Where has Greldo..." (rev 240: 3105 -> 3108; rev 241: 10057 -> 10059). */
   const NOISE_SOUND_DELAY = 3;
-  /** "My potion!" switches to the fortress track with no fades (rev 240 tick 66). */
-  const KNIGHTMARE_TRACK = 374;
-  const NO_FADES = { fadeOutDelay: 0, fadeOutSpeed: 0, fadeInDelay: 0, fadeInSpeed: 0 };
+  /** The throw (anim, spotanim, projectile, sound) follows the camera shake by a tick (rev 240 3068 -> 3069, rev 241 10028 -> 10029). */
+  const THROW_DELAY = 1;
 
   const START_HOOK = "quest:black-knights-fortress:start";
   const DOSSIER_ACTION_IDS = new Set(["RQQGDa", "kI0dT0"]);
@@ -421,10 +422,7 @@ module.exports = function registerBlackKnightsFortressQuest(api) {
     if (text === "Purrr....") event.after = () => player.performAnimation(new Animation(STOP_LISTENING_ANIMATION));
     const state = scenes.get(player);
     if (!state) return;
-    if (text === "My potion!") {
-      event.before = () => player.getPacketSender().sendSong(KNIGHTMARE_TRACK, NO_FADES);
-      event.after = () => state.witch?.performAnimation(new Animation(860));
-    }
+    if (text === "My potion!") event.after = () => state.witch?.performAnimation(new Animation(860));
     if (text === "Oh boy, this doesn't look good!") event.after = () => state.captain?.performAnimation(new Animation(2105));
     if (text === "Where has Greldo got to with that magic cabbage!") event.after = () => {
       later(player, state, NOISE_SOUND_DELAY, () => player.getPacketSender().sendSound(NOISE_SOUND, 1, 0));
@@ -436,7 +434,7 @@ module.exports = function registerBlackKnightsFortressQuest(api) {
       event.expression = BLACK_CAT_CHATHEAD_ANIMATION;
       event.after = () => {
         const cat = state.area.sourceTile(3027, 3507);
-        player.getPacketSender().sendAreaSound(CAT_MEOW_SOUND, cat.getX(), cat.getY(), 0, 1);
+        player.getPacketSender().sendAreaSound(CAT_MEOW_SOUND, cat.getX(), cat.getY(), 0, 1, 0, CAT_MEOW_RANGE);
         player.getDialogueManager().reset();
         StatementDialogue.send(player, "", false);
         later(player, state, 4, () => fade(player, true));
@@ -508,6 +506,14 @@ module.exports = function registerBlackKnightsFortressQuest(api) {
       steps => steps.slice(steps.findIndex(step => step.id === after || step.text === after) + 1)));
   }
 
+  function throwCabbage(player) {
+    player.performAnimation(new Animation(4553));
+    player.getPacketSender().sendSound(THROW_SOUND, 1, 0);
+    const thrown = new Graphic(771); thrown.height = 96;
+    player.performGraphic(thrown);
+    player.getPacketSender().sendProjectile(new Location(3031, 3506, 1), new Location(3031, 3507, 1), 0, 196, 772, 130, 0, null, 96, 55, 60);
+  }
+
   function startSabotage(event) {
     const { player } = event;
     event.handled = true;
@@ -518,11 +524,7 @@ module.exports = function registerBlackKnightsFortressQuest(api) {
     player.setAttribute(SCENE_ATTRIBUTE, 1);
     controls(player, true);
     for (let axis = 0; axis < 5; axis++) player.getPacketSender().sendCameraShake(axis, 0);
-    player.performAnimation(new Animation(4553));
-    player.getPacketSender().sendSound(THROW_SOUND, 1, 0);
-    const thrown = new Graphic(771); thrown.height = 96;
-    player.performGraphic(thrown);
-    player.getPacketSender().sendProjectile(new Location(3031, 3506, 1), new Location(3031, 3507, 1), 0, 196, 772, 130, 0, null, 96, 55, 60);
+    later(player, state, THROW_DELAY, () => throwCabbage(player));
     later(player, state, 6, () => fade(player, true));
     later(player, state, 8, () => {
       state.area.enter(player);

@@ -27,7 +27,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | Between a Rock... | untested |  |  |  |  |
 | [Big Chompy Bird Hunting](big-chompy-bird-hunting/README.md) | ✅ passed | 2026-10-23 | agent |  | 1 |
 | [Biohazard](biohazard/README.md) | 🔄 in progress |  | agent |  | 2 |
-| [Black Knights' Fortress](black-knights-fortress/README.md) | 🔁 needs recheck | 2026-11-01 | agent | claude-opus-5-5 | 6 |
+| [Black Knights' Fortress](black-knights-fortress/README.md) | 🔁 needs recheck | 2026-11-01 | agent | claude-opus-5-5 | 7 |
 | [Bone Voyage](bone-voyage/README.md) | ✅ passed |  | agent |  |  |
 | [Cabin Fever](cabin-fever/README.md) | 🔄 in progress | 2026-10-31 | agent | DeepSeek V4.1 Flash | 1 |
 | [Children of the Sun](children-of-the-sun/README.md) | 🔁 needs recheck | 2026-10-30 | agent | grok-4.7 | 6 |

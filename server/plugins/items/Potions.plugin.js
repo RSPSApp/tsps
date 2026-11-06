@@ -1685,7 +1685,7 @@ function cureFromHealthOrb({ player }) {
   pluginApi.emitCustomEvent("nightmare:parasite-orb-eligible", parasite);
   const items = player.getInventory().getItems();
   if (parasite.active) {
-    // Wiki: Relicym's balm is preferred to Sanfew when weakening a parasite.
+    // The Wiki supports either remedy; balm-first is the TSPS selection policy.
     let selected = null;
     for (let slot = 0; slot < items.length; slot++) {
       const itemId = items[slot]?.getId?.() ?? -1;

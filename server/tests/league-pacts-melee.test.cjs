@@ -635,3 +635,69 @@ test("ordinary hits, undamaged NPCs and zero reflected damage keep their existin
     assert.equal(npc.getCombat().getAttacker(), kind === "ordinary" ? holder : null);
   }
 });
+
+/** A wounded hill giant beside the player's footprint, processed by its own NPC turns. */
+function woundedGiant(location) {
+  const npc = new NPC(HILL_GIANT, location);
+  npc.setRegistered(true);
+  npc.setScriptedMovement(true);
+  npc.setMaxHitpoints(100);
+  npc.setHitpoints(90);
+  return npc;
+}
+
+const permission = (attacker, target) => core.CanAttackResponse[core.CombatFactory.canAttackPermission(attacker, target, true)];
+
+test("a bystander's reflected hit pauses regeneration but leaves a single-way NPC with the player fighting it", () => {
+  const { AreaManager } = require("../dist/game/model/areas/AreaManager");
+  const { PendingHit } = require("../dist/game/content/combat/hit/PendingHit");
+  const fighter = character("pact-single-fighter");
+  const bystander = character("pact-single-bystander");
+  bystander.setLocation(new Location(3201, 3200, 0));
+  const npc = woundedGiant(new Location(3200, 3201, 0));
+  assert.equal(AreaManager.inMulti(npc), false, "single-way combat");
+  cycle(13000);
+  core.CombatFactory.executeHit(new PendingHit(fighter, npc, core.CombatFactory.getMethod(fighter), 0));
+  npc.process(); // the fighter's own hit lands
+  assert.equal(npc.getCombat().getAttacker(), fighter);
+  const hp = npc.getHitpoints();
+  cycle(13005);
+  // Undying Retribution and recoil from someone the NPC is not fighting.
+  core.CombatFactory.handleRecoil(bystander, npc, 10);
+  npc.process();
+  assert.equal(npc.getHitpoints(), hp - 2, "the bystander's recoil still lands");
+  assert.equal(npc.getCombat().getAttacker(), fighter, "the fighter keeps the NPC");
+  assert.equal(npc.getCombat().getLastAttack().elapsed(), 0, "regeneration pauses");
+  assert.equal(permission(fighter, npc), "CAN_ATTACK");
+  assert.equal(permission(bystander, npc), "TARGET_IN_COMBAT");
+  // The fighter's own reflection still tags the NPC and holds its timer.
+  cycle(13010);
+  core.CombatFactory.handleRecoil(fighter, npc, 10);
+  npc.process();
+  assert.equal(npc.getHitpoints(), hp - 4);
+  assert.equal(npc.getCombat().getAttacker(), fighter);
+  assert.equal(npc.getCombat().getLastAttack().elapsed(), 0);
+});
+
+test("a reflected hit from a dead or logged-out source pauses regeneration but tags nobody", () => {
+  for (const gone of ["dead", "logged-out"]) {
+    const source = character(`pact-gone-${gone}`);
+    const other = character(`pact-gone-${gone}-other`);
+    other.setLocation(new Location(3201, 3200, 0));
+    const npc = woundedGiant(new Location(3200, 3201, 0));
+    cycle(14000);
+    core.CombatFactory.handleRecoil(source, npc, 10);
+    if (gone === "dead") source.setHitpoints(0);
+    else source.setRegistered(false);
+    npc.process();
+    assert.equal(npc.getHitpoints(), 88, `${gone}: the reflection still lands`);
+    assert.equal(npc.getCombat().getAttacker(), null, gone);
+    assert.equal(npc.getCombat().getLastAttack().elapsed(), 0, `${gone}: regeneration pauses`);
+    assert.equal(permission(other, npc), "CAN_ATTACK", gone);
+    for (let tick = 14001; tick <= 14033; tick++) {
+      cycle(tick);
+      npc.process();
+      assert.equal(npc.getHitpoints(), 88, `${gone}: no healing before the existing timeout`);
+    }
+  }
+});

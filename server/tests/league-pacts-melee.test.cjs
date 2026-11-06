@@ -560,3 +560,78 @@ test("Blindbag: the Dramen staff is no Blindbag weapon (Wiki, 6 May 2026)", () =
   holder.getInventory().add(new core.Item(ITEMS.elderMaul, 1));
   assert.deepEqual(Melee._test.heavyWeaponsCarried(holder), [ITEMS.elderMaul]);
 });
+
+test("Thorns alone holds an NPC's regeneration timer through real queued damage and NPC turns", () => {
+  const holder = character("pact-thorns-regen", { pacts: { [effect("thorns_damage")]: 1 } });
+  holder.setAutoRetaliate(false);
+  shield(holder, ITEMS.runeKiteshield);
+  const npc = new NPC(HILL_GIANT, new Location(3200, 3201, 0));
+  npc.setRegistered(true);
+  npc.setMaxHitpoints(100);
+  npc.setHitpoints(100);
+  npc.setScriptedMovement(true);
+  cycle(10000);
+  hooks.onCombatHitResolved({ attacker: npc, target: holder, hit: landed(core.CombatType.MELEE, [splat(0)]) });
+  assert.equal(holder.getCombat().getTarget(), null, "no direct tag or auto-retaliation");
+  npc.process();
+  assert.equal(npc.getHitpoints(), 97, "the real Thorns hit survives the same NPC turn's healing check");
+  assert.equal(npc.getCombat().getAttacker(), holder);
+  assert.equal(npc.getCombat().getLastAttack().elapsed(), 0);
+  assert.deepEqual(npc.getCombat().getRecentDamagers(), [], "PvM reflection keeps its existing credit policy");
+  for (let tick = 10001; tick <= 10033; tick++) {
+    cycle(tick);
+    npc.process();
+    assert.equal(npc.getHitpoints(), 97, "no fast healing before the existing timeout");
+  }
+  cycle(10034);
+  npc.process();
+  assert.equal(npc.getHitpoints(), 100, "ordinary healing resumes after the existing timer expires");
+});
+
+test("recoil and Vengeance share NPC combat bookkeeping without starting retaliation", () => {
+  for (const producer of ["recoil", "vengeance"]) {
+    const holder = character(`pact-regen-${producer}`);
+    holder.setAutoRetaliate(false);
+    const npc = new NPC(HILL_GIANT, new Location(3200, 3201, 0));
+    npc.setRegistered(true);
+    npc.setScriptedMovement(true);
+    npc.setMaxHitpoints(100);
+    npc.setHitpoints(100);
+    cycle(11000);
+    if (producer === "recoil") core.CombatFactory.handleRecoil(holder, npc, 10);
+    else core.CombatFactory.handleVengeance(holder, npc, 10);
+    npc.process();
+    const hp = producer === "recoil" ? 98 : 93;
+    assert.equal(npc.getHitpoints(), hp, producer);
+    assert.equal(npc.getCombat().getAttacker(), holder);
+    assert.equal(holder.getCombat().getTarget(), null);
+    cycle(11001);
+    npc.getCombat().setUnderAttack(null);
+    assert.equal(npc.getCombat().getAttacker(), null);
+    assert.equal(npc.getCombat().getLastAttack().elapsed(), 0, "existing clear resets the clock");
+    cycle(11034);
+    npc.process();
+    assert.equal(npc.getHitpoints(), hp);
+    cycle(11035);
+    npc.process();
+    assert.equal(npc.getHitpoints(), 100);
+  }
+});
+
+test("ordinary hits, undamaged NPCs and zero reflected damage keep their existing healing rules", () => {
+  const holder = character("pact-regen-controls");
+  for (const kind of ["ordinary", "undamaged", "zero", "sourceless"]) {
+    const npc = new NPC(HILL_GIANT, new Location(3200, 3201, 0));
+    npc.setRegistered(true);
+    npc.setScriptedMovement(true);
+    npc.setMaxHitpoints(100);
+    npc.setHitpoints(kind === "undamaged" ? 100 : 90);
+    cycle(12000);
+    if (kind === "ordinary") npc.getCombat().setUnderAttack(holder);
+    if (kind === "zero") npc.getCombat().getHitQueue().addPendingDamage([splat(0).markReflected().setSource(holder)]);
+    if (kind === "sourceless") npc.getCombat().getHitQueue().addPendingDamage([splat(1).markReflected()]);
+    npc.process();
+    assert.equal(npc.getHitpoints(), kind === "ordinary" ? 90 : kind === "sourceless" ? 99 : 100, kind);
+    assert.equal(npc.getCombat().getAttacker(), kind === "ordinary" ? holder : null);
+  }
+});

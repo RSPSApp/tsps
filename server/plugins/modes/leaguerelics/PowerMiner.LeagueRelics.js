@@ -39,6 +39,8 @@ function keepRock(request) {
     if (!request.handled) mined.delete(request.object);
     return;
   }
+  // A glove save is an additional gather, not one of this relic's four ores.
+  if (request.gloveSaveAdditive) return;
   const count = (mined.get(request.object) ?? 0) + 1;
   if (count < effect.oresPerRock) {
     mined.set(request.object, count);

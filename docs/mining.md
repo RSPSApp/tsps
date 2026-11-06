@@ -259,7 +259,8 @@ Leagues world) has `You just found a Sapphire!` while mining coal rocks, and the
   equally weighted for now.
 - Varrock armour is not modelled. Mining glove saves use a shared standing-rock budget; the precise OSRS
   behavior when miners compete or change gloves on a partly mined rock is not established here. Depletion
-  hooks see a glove-kept rock as already handled; the precise stacking with other rock-saving effects is unverified.
+  hooks see a glove-kept rock as already handled. On ordinary iron, Power Miner stacks its four-ore budget
+  with glove saves (up to seven). Other finite-yield rocks and stacking with other rock-saving effects remain unverified.
 - Access isn't checked: Shilo Village for the Shilo gem rocks, the Mining Guild for amethyst, the Yama contract for
   infernal shale, Sailing islands for lead, nickel and rubium.
 - A Daeyalt face only grows back once it is empty; a face left part-mined stays at its stage.

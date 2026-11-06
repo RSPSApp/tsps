@@ -160,6 +160,7 @@ module.exports={name:"HolidayRewards",register(api){
   api.onCustomEvent("construction:costume-retrieve",HouseRetrieval.retrieve.bind(null,api));
   api.onCustomEvent("construction:planted",HouseRetrieval.planted.bind(null,api));
   api.onNpcInteraction("Diango",{"Holiday-items":open.bind(null,api)});
+  api.onCustomEvent("holiday-rewards:open",open.bind(null,api));
   api.onInterfaceActionClick(take.bind(null,api));
   api.onCustomEvent("interface:closed",closed.bind(null,api));
   api.onCustomEvent("interface:changed",changed.bind(null,api));

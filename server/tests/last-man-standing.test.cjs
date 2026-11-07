@@ -110,6 +110,31 @@ test('the stash keeps the player\'s own things and levels, and gives them back',
   assert.equal(Stash.stashed(p), null);
 });
 
+test("the player's own antifire is held back for the game and comes back with its tier; the game's stays behind", (t) => {
+  const Dragonfire = require('../plugins/combat/DragonfireProtection');
+  const p = realPlayer(t);
+  Dragonfire.setDragonfireProtection(p, { tier: Dragonfire.DragonfireProtectionTier.ANTIFIRE, seconds: 300, label: 'antifire potion' });
+  Stash.save(p);
+  assert.equal(Dragonfire.getDragonfireProtectionTier(p), Dragonfire.DragonfireProtectionTier.NONE, 'not active during the game');
+  Dragonfire.setDragonfireProtection(p, { tier: Dragonfire.DragonfireProtectionTier.SUPER_ANTIFIRE, seconds: 360, label: 'extended super antifire' });
+  assert.ok(Stash.restore(p));
+  assert.equal(Dragonfire.getDragonfireProtectionTier(p), Dragonfire.DragonfireProtectionTier.ANTIFIRE, 'their own antifire, not the game super antifire');
+});
+
+test("a Tele Block from the game stays in it; the player's own antifire waits outside and comes back", (t) => {
+  const p = realPlayer(t);
+  const combat = p.getCombat();
+  combat.getFireImmunityTimer().start(300); // their own antifire, from before the game
+  Stash.save(p);
+  assert.equal(combat.getFireImmunityTimer().secondsRemaining(), 0, 'the game starts without it');
+  combat.getTeleblockTimer().start(300); // teleblocked in the game
+  combat.getFireImmunityTimer().start(360); // an antifire from the game's supplies
+  assert.ok(Stash.restore(p));
+  assert.equal(combat.getTeleblockTimer().secondsRemaining(), 0, "the game's Tele Block stays behind");
+  const fire = combat.getFireImmunityTimer().secondsRemaining();
+  assert.ok(fire > 290 && fire <= 300, `their own antifire back (${fire}s)`);
+});
+
 test('a build\'s load-out: the captured Max/Med kit with 5,000 bolts', (t) => {
   const p = realPlayer(t);
   Loadouts.equip(p, 0);

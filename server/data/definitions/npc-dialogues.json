@@ -294018,7 +294018,7 @@
                         {
                           "type": "line",
                           "speaker": "Guildmaster",
-                          "text": "However, the three apparently split the map into three pieces, which each of them taking one piece."
+                          "text": "However, the three apparently split the map into three pieces, with each of them taking one piece."
                         },
                         {
                           "type": "choice",
@@ -294043,6 +294043,23 @@
                                   "type": "line",
                                   "speaker": "Guildmaster",
                                   "text": "Adventurers sometimes go in there to prove themselves, so I can give you this key to Melzar's Maze."
+                                },
+                                {
+                                  "type": "condition",
+                                  "text": "If the player does not have enough free inventory space:",
+                                  "steps": [
+                                    {
+                                      "type": "line",
+                                      "speaker": "Guildmaster",
+                                      "text": "Ask me about Melzar's map piece again when you have enough free inventory space for the key."
+                                    },
+                                    {
+                                      "type": "jump",
+                                      "reference": "other",
+                                      "id": "dragon-slayer-i:melzar-key-no-space-menu"
+                                    }
+                                  ],
+                                  "id": "dragon-slayer-i:melzar-key-no-space"
                                 },
                                 {
                                   "type": "message",
@@ -294880,12 +294897,7 @@
                 {
                   "type": "line",
                   "speaker": "Klarense",
-                  "text": "Of course! I'm sure the work needed to do on it wouldn't be too expensive."
-                },
-                {
-                  "type": "line",
-                  "speaker": "Klarense",
-                  "text": "How does 2,000 gold sound? I'll even throw in my cabin boy, Jenkins, for free! He'll swab the decks and splice the mainsails for you!"
+                  "text": "Of course! How does 2,000 coins sound? I'll even throw in my cabin boy, Jenkins, for free! He'll swab the decks and splice the mainsails for you!"
                 },
                 {
                   "type": "choice",
@@ -296293,7 +296305,7 @@
                                 {
                                   "type": "line",
                                   "speaker": "Duke Horacio",
-                                  "text": "Well, you're a braver man than I!"
+                                  "text": "Well, you're braver than I!"
                                 },
                                 {
                                   "player": "Why is everyone so scared of this dragon?"
@@ -297115,7 +297127,7 @@
         {
           "type": "line",
           "speaker": "Guildmaster",
-          "text": "However, the three apparently split the map into three pieces, which each of them taking one piece."
+          "text": "However, the three apparently split the map into three pieces, with each of them taking one piece."
         },
         {
           "type": "choice",
@@ -297140,6 +297152,23 @@
                   "type": "line",
                   "speaker": "Guildmaster",
                   "text": "Adventurers sometimes go in there to prove themselves, so I can give you this key to Melzar's Maze."
+                },
+                {
+                  "type": "condition",
+                  "text": "If the player does not have enough free inventory space:",
+                  "steps": [
+                    {
+                      "type": "line",
+                      "speaker": "Guildmaster",
+                      "text": "Ask me about Melzar's map piece again when you have enough free inventory space for the key."
+                    },
+                    {
+                      "type": "jump",
+                      "reference": "other",
+                      "id": "dragon-slayer-i:melzar-key-no-space-menu"
+                    }
+                  ],
+                  "id": "dragon-slayer-i:melzar-key-no-space"
                 },
                 {
                   "type": "message",

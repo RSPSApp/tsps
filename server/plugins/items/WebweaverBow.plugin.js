@@ -1,4 +1,5 @@
 "use strict";
+const { PlayerDeathTask } = require("../../src/main/typescript/elvarg/game/task/impl/PlayerDeath");
 
 // OSRS Wiki: Webweaver bow / Webweaver bow (u). 1,000 activation ether plus 16,000
 // usable charges; one ether per shot, including the whole Swarm special (30 August 2023).
@@ -142,7 +143,7 @@ function deathItemDrop(event) {
       || !core.Wilderness.isInLocation(location)) return;
   const lost = depositOf(item) + chargesOf(item);
   // Wiki: in Wilderness PvP all ether is lost, even when the bow is protected.
-  if (lost > 0) core.ItemOnGroundManager.registerLocation(killer, new core.Item(core.ItemIdentifiers.REVENANT_ETHER, lost), location);
+  if (lost > 0) core.ItemOnGroundManager.registerLocation(PlayerDeathTask.lootOwner(player, killer), new core.Item(core.ItemIdentifiers.REVENANT_ETHER, lost), location);
   emptyBow(item);
   paidOn.delete(item);
   // Core already returns kept items; report the ether drop without dropping the bow as well.

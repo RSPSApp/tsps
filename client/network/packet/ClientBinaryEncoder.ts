@@ -208,6 +208,25 @@ export class ClientBinaryEncoder {
         return this.buffer.toPacket(ClientPacketId.LOGIN_FORGET);
     }
 
+    encodeCharacterSelect(name: string): Uint8Array {
+        this.buffer.reset();
+        this.buffer.writeString(name ?? "");
+        return this.buffer.toPacket(ClientPacketId.CHARACTER_SELECT);
+    }
+
+    encodeCharacterCreate(name: string): Uint8Array {
+        this.buffer.reset();
+        this.buffer.writeString(name ?? "");
+        return this.buffer.toPacket(ClientPacketId.CHARACTER_CREATE);
+    }
+
+    encodeCharacterDelete(name: string, confirmName: string): Uint8Array {
+        this.buffer.reset();
+        this.buffer.writeString(name ?? "");
+        this.buffer.writeString(confirmName ?? "");
+        return this.buffer.toPacket(ClientPacketId.CHARACTER_DELETE);
+    }
+
     // ========================================
     // MOVEMENT
     // ========================================
@@ -633,6 +652,15 @@ export function encodeClientMessage(msg: { type: string; payload: any }): Uint8A
 
         case "login_forget":
             return clientEncoder.encodeLoginForget(payload.username, payload.token);
+
+        case "character_select":
+            return clientEncoder.encodeCharacterSelect(payload.name);
+
+        case "character_create":
+            return clientEncoder.encodeCharacterCreate(payload.name);
+
+        case "character_delete":
+            return clientEncoder.encodeCharacterDelete(payload.name, payload.confirmName);
 
         case "walk":
             return clientEncoder.encodeWalk(

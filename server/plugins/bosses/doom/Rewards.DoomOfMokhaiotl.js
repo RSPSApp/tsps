@@ -159,13 +159,24 @@ function lookInChest({ player }) {
   return true;
 }
 
+/**
+ * The chest's buttons answer only while it is open: a click on them with it closed took or banked the loot from
+ * anywhere (the Wilderness and other no-bank areas too).
+ */
+function whileOpen(handler) {
+  return function openChestOnly(event) {
+    if (event?.player?.getInterfaceId?.() !== INTERFACE) return true;
+    return handler(event);
+  };
+}
+
 module.exports = function registerDoomRewards(api) {
   Shared.bind(api);
-  api.onInterfaceActionButton(uid(COMPONENT.CLAIM), clickClaim);
-  api.onInterfaceActionButton(uid(COMPONENT.DESCEND), clickDescend);
-  api.onInterfaceActionButton(uid(COMPONENT.LEAVE), clickLeave);
-  api.onInterfaceActionButton(uid(COMPONENT.TAKE_ALL), clickTakeAll);
-  api.onInterfaceActionButton(uid(COMPONENT.BANK_ALL), clickBankAll);
+  api.onInterfaceActionButton(uid(COMPONENT.CLAIM), whileOpen(clickClaim));
+  api.onInterfaceActionButton(uid(COMPONENT.DESCEND), whileOpen(clickDescend));
+  api.onInterfaceActionButton(uid(COMPONENT.LEAVE), whileOpen(clickLeave));
+  api.onInterfaceActionButton(uid(COMPONENT.TAKE_ALL), whileOpen(clickTakeAll));
+  api.onInterfaceActionButton(uid(COMPONENT.BANK_ALL), whileOpen(clickBankAll));
   onObject(api, Shared.OBJECT.REWARD_CHEST, lookInChest);
 };
 

@@ -269,7 +269,8 @@ function chargeDarts(player, blowpipeItem, blowpipeSlot, dartItem) {
 
   if (currentAmount > 0 && currentId !== dartId) {
     player.getInventory().add(new core.Item(currentId, currentAmount), true);
-    BlowpipeState.clear(blowpipeItem);
+    // Only the darts come out: clearing the whole state also emptied the scales (up to 16,383), lost for good.
+    BlowpipeState.swapDarts(blowpipeItem, -1, 0);
   }
 
   const add = Math.min(dartItem.getAmount(), TOXIC_BLOWPIPE_MAX_DARTS - BlowpipeState.read(blowpipeItem).dartAmount);

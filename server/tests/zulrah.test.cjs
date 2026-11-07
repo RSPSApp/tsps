@@ -582,6 +582,18 @@ test('after 50 kills reclaiming costs 100,000 coins; dying elsewhere first loses
   assert.equal(player.getAttribute(Shared.ATTR.RETRIEVAL), null, 'an unsafe death elsewhere loses them');
 });
 
+test('a second shrine death before collecting loses the first death items (Wiki: permanently lost); one death items gather', () => {
+  const { Item } = PluginManager.getCoreApi();
+  const { player, fight } = startedFight();
+  player.location = new Location(2268, 3070, 0);
+  player.setAttribute(Shared.ATTR.RETRIEVAL, { items: [[11802, 1]], paid: false }); // from an earlier death
+  for (const item of [new Item(4151, 1), new Item(560, 250)]) {
+    hooks.drops.forEach((handler) => handler({ player, item, dropEligible: true, shouldDropItems: true, handled: false }));
+  }
+  assert.deepEqual(player.getAttribute(Shared.ATTR.RETRIEVAL).items, [[4151, 1], [560, 250]], 'only this death items');
+  fight.end();
+});
+
 test('the boat asks first; Quick-Board goes straight to the shrine', () => {
   const player = fakePlayer();
   player.setAttribute('zulrah:access', 3);

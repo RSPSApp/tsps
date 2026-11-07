@@ -114,10 +114,10 @@ function chopped({ player, logId }) {
   if (logId === I.MAHOGANY_LOGS) complete(player, "cut-a-log-from-a-mahogany-tree");
 }
 
-function runecrafted({ player, runeId, rolls, amountPerEssence }) {
+function runecrafted({ player, runeId, rolls, amountPerEssence, bonusRunes }) {
   if (runeId !== core.ItemIdentifiers.NATURE_RUNE) return;
   complete(player, "craft-some-nature-runes-from-essence");
-  if (Number(rolls) * Number(amountPerEssence) >= NATURE_RUNES_SIMULTANEOUSLY) {
+  if (Number(rolls) * Number(amountPerEssence) + (Number(bonusRunes) || 0) >= NATURE_RUNES_SIMULTANEOUSLY) {
     complete(player, "craft-56-nature-runes-simultaneously-from-essenc");
   }
 }

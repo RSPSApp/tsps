@@ -1259,6 +1259,12 @@
       "name": "Broken wall (Al Kharid)",
       "object": 33344,
       "level": 70,
+      "requires": [
+        {
+          "skills": {"agility":70},
+          "quest": {"key":"prince_ali_rescue","message":"You need to complete Prince Ali Rescue to use this shortcut."}
+        }
+      ],
       "end": "You climb over the wall.",
       "between": {"ends":[[3295,3157,0],[3295,3158,0]],"cross":[{"use":"climbOver","args":["to"]}]}
     },
@@ -3013,6 +3019,12 @@
       "at": [[1324,9766,0],[1324,3364,0]],
       "level": 59,
       "unverified": "the movement and both ends (no capture; ends from the map)",
+      "requires": [
+        {
+          "skills": {"agility":59},
+          "quest": {"key":"shadows_of_custodia","message":"You need to complete Shadows of Custodia to use this shortcut."}
+        }
+      ],
       "between": {"ends":[[1323,9766,0],[1324,3363,0]],"cross":[{"use":"tunnel","args":["to"]}]}
     },
     {
@@ -3842,7 +3854,8 @@
       "object": [53234,53236],
       "at": [[2832,3248,0],[2832,3251,0]],
       "level": 84,
-      "unverified": "the reverse direction (only one direction was captured; it mirrors that one)",
+      "levelMessage": {"itembox": {"item": 6517, "text": "You need an Agility level of at least 84 to climb up these rocks."}},
+      "unverified": "the reverse direction (only one direction was captured; it mirrors that one); the top rock's refusal (only the bottom rock was clicked below 84)",
       "between": {
         "ends": [[2832,3247,0],[2832,3252,0]],
         "cross": [
@@ -3851,7 +3864,7 @@
           {"anim":-1}
         ]
       },
-      "note": "rsprox captures 362"
+      "note": "rsprox captures 362; the refusal from 20261106T101002 (revision 242) tick 3375, item agility_climb 6517"
     },
     {
       "name": "Crevice (Deepfin Mine)",

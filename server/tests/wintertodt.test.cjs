@@ -412,6 +412,27 @@ test('cold hits take ten times their hitsplat from warmth, show on bar 79, and k
   assert.deepEqual(player.damage, [99], 'a hit for all your hitpoints');
 });
 
+test('warmth dropping below 10% asks the ring of life to save the player; 10% and 0% do not', () => {
+  const player = fighter('Lifesaver');
+  startRound();
+  const asked = [];
+  (hooks.custom['ring-of-life:activate'] ??= []).push((request) => asked.push(request.player));
+  const cost = Warmth.damageFor(player, 'standard') * 10;
+  Warmth.setWarmth(player, 100 + cost);
+  Warmth.hurt(player, 'standard', Attacks.COLD_MESSAGE);
+  assert.equal(Warmth.warmthOf(player), 100);
+  assert.deepEqual(asked, [], 'exactly 10% is not below it');
+  Warmth.setWarmth(player, 99 + cost);
+  Warmth.hurt(player, 'standard', Attacks.COLD_MESSAGE);
+  assert.equal(Warmth.warmthOf(player), 99);
+  assert.deepEqual(asked, [player], 'wiki: a ring of life will activate if warmth drops below 10%');
+  Warmth.setWarmth(player, cost);
+  Warmth.hurt(player, 'standard', Attacks.COLD_MESSAGE);
+  assert.equal(Warmth.warmthOf(player), 0);
+  assert.deepEqual(asked, [player], 'dropping to 0% is instant death, not a save');
+  hooks.custom['ring-of-life:activate'].pop();
+});
+
 test('warmth regenerates 8% a minute plus 1% per warm item; food and potions restore it', () => {
   const player = fighter('Thawing');
   for (const id of [I.PYROMANCER_HOOD, I.PYROMANCER_GARB]) player.equipment.adds(id);

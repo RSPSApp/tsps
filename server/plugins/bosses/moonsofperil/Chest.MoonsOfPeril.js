@@ -328,15 +328,26 @@ function answerKillCount(request) {
   if (own > 0) request.counts[MONSTER] = Math.max(Number(request.counts[MONSTER]) || 0, own);
 }
 
+/**
+ * The chest's buttons answer only while it is open: a click on them with it closed took or banked the loot from
+ * anywhere (the Wilderness and other no-bank areas too).
+ */
+function whileOpen(handler) {
+  return function openChestOnly(event) {
+    if (event?.player?.getInterfaceId?.() !== chest().interface) return true;
+    return handler(event);
+  };
+}
+
 module.exports = function attachChest(api) {
   api.persistAttribute(CHEST_ATTRIBUTE, null);
   api.persistAttribute(PIECES_ATTRIBUTE, null);
   api.persistAttribute(COUNT_ATTRIBUTE, 0);
   api.onObjectInteraction("Lunar Chest", { Claim: claim });
-  api.onInterfaceActionButton(uid(chest().components.items), withdraw);
-  api.onInterfaceActionButton(uid(chest().components.takeAll), takeAll);
-  api.onInterfaceActionButton(uid(chest().components.bankAll), bankAll);
-  api.onInterfaceActionButton(uid(chest().components.discardYes), discardAll);
+  api.onInterfaceActionButton(uid(chest().components.items), whileOpen(withdraw));
+  api.onInterfaceActionButton(uid(chest().components.takeAll), whileOpen(takeAll));
+  api.onInterfaceActionButton(uid(chest().components.bankAll), whileOpen(bankAll));
+  api.onInterfaceActionButton(uid(chest().components.discardYes), whileOpen(discardAll));
   api.onItemOnNpc(useOnEyatlalli);
   api.onCustomEvent("combat-achievements:kill-count", answerKillCount);
 };

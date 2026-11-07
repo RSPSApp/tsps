@@ -3,6 +3,7 @@ import type { LoginRendererHost } from "./host";
 import { toLayoutPoint } from "./layout/config";
 import { getGridLayout, getSortedWorlds, findHoveredWorld } from "./world/worldData";
 import { SERVER_LIST_PANEL_WIDTH } from "./constants";
+import { toContentPoint } from "./layout/geometry";
 
 export function computeHoveredWorldIndex(host: LoginRendererHost, state: LoginState, _width: number, _height: number) {
 
@@ -54,4 +55,11 @@ export function setMousePosition(host: LoginRendererHost, x: number, y: number) 
         host.mouseX = mapped.x;
         host.mouseY = mapped.y;
     
+}
+
+/** Update a plugin's hover state in content coordinates. */
+export function updateExtensionHover(host: LoginRendererHost, state: LoginState): void {
+    if (!state.extension || state.serverListOpen) return;
+    const point = toContentPoint(host, host.mouseX, host.mouseY);
+    state.extension.hover(host, point.x, point.y);
 }

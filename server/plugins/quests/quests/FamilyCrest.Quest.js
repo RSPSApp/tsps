@@ -84,11 +84,12 @@ module.exports = function registerFamilyCrestQuest(api) {
     ItemIdentifiers.SANFEW_SERUM_1_, ItemIdentifiers.SANFEW_SERUM_2_, ItemIdentifiers.SANFEW_SERUM_3_, ItemIdentifiers.SANFEW_SERUM_4_,
   ]);
 
-  const PICKAXES = new Set([
-    ItemIdentifiers.BRONZE_PICKAXE, ItemIdentifiers.IRON_PICKAXE, ItemIdentifiers.STEEL_PICKAXE,
-    ItemIdentifiers.BLACK_PICKAXE, ItemIdentifiers.MITHRIL_PICKAXE, ItemIdentifiers.ADAMANT_PICKAXE,
-    ItemIdentifiers.RUNE_PICKAXE,
-  ]);
+  /** Any pickaxe the player can use, as Mining judges them (crystal, infernal, 3rd age... not only bronze to rune). */
+  function hasPickaxe(player) {
+    const request = { player, pickaxe: null };
+    api.emitCustomEvent("mining:best-pickaxe", request);
+    return request.pickaxe != null;
+  }
 
   const page = (p, variant) => ({ page: p, variant });
   const has = (player, itemId, quantity = 1) => player.getInventory().getAmount(itemId) >= quantity;
@@ -310,7 +311,7 @@ module.exports = function registerFamilyCrestQuest(api) {
     }
     if (player.getSkillManager().getCurrentLevel(Skill.MINING) < 40) {
       player.sendMessage("You need level 40 Mining to mine this rock.");
-    } else if (![...PICKAXES].some((id) => has(player, id))) {
+    } else if (!hasPickaxe(player)) {
       player.sendMessage("You need a pickaxe to mine this rock.");
     } else {
       player.getInventory().adds(ItemIdentifiers.PERFECT_GOLD_ORE, 1);

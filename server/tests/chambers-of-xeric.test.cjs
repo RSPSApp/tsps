@@ -106,6 +106,8 @@ function fakePlayer(name, location = new Location(1234, 3566, 0)) {
       addExperiences() {},
     }),
     getInventory: () => fakeInventory(p.inventory),
+    interfaceId: -1,
+    getInterfaceId: () => p.interfaceId,
     getPacketSender() {
       const sender = {
         sendVarbit: (id, value) => { varbits.set(id, value); return sender; },
@@ -114,8 +116,8 @@ function fakePlayer(name, location = new Location(1234, 3566, 0)) {
         sendTypedMessage: (type, text) => { p.messages.push(text); (p.typed ??= []).push([type, text]); return sender; },
         sendSong: (id) => { (p.songs ??= []).push(id); return sender; },
         sendJingle: (id) => { (p.jingles ??= []).push(id); return sender; },
-        sendInterface: (id) => { p.interfaces.push(id); return sender; },
-        sendInterfaceSet: (id) => { p.interfaces.push(id); return sender; },
+        sendInterface: (id) => { p.interfaces.push(id); p.interfaceId = id; return sender; },
+        sendInterfaceSet: (id) => { p.interfaces.push(id); p.interfaceId = id; return sender; },
         sendInterfaceDisplayState: () => sender,
         sendString: () => sender,
         sendInterfaceRemoval: () => sender,
@@ -402,6 +404,19 @@ test('a death with few points costs the team 5% instead', () => {
   assert.equal(raid.pointsOf(poor), 100, 'kept: under 5% of the total');
   assert.equal(raid.totalPoints, 10100 - Math.floor(10100 * 0.05));
   raid.destroyed = true;
+});
+
+test('a destroyed raid keeps no rejoin entries for raiders who never came back', () => {
+  const party = new Parties.Party(fakePlayer('Gone'), { key: 'Gone' });
+  const raid = new RaidModule.Raid(party);
+  const { rejoining } = RaidModule._test;
+  rejoining.set('Gone', raid);
+  rejoining.set('Elsewhere', { destroyed: false });
+  raid.destroy('empty');
+  assert.equal(rejoining.has('Gone'), false, 'this raid is no longer held');
+  assert.equal(rejoining.has('Elsewhere'), true, 'another raid entry stays');
+  rejoining.delete('Elsewhere');
+  Parties.clear();
 });
 
 // ------------------------------------------------------------------ phase 2: supplies
@@ -1008,7 +1023,10 @@ test("the Olm's lightning tells a blocked raider its own line, and only in its c
   raid.destroy();
 });
 
-test('private storage drag-reorders, and an Ultimate Ironman cannot store in a unit', () => {  const player = fakePlayer('Dragger');
+test('private storage drag-reorders, and an Ultimate Ironman cannot store in a unit', (t) => {
+  // At a unit inside the raid: the storage works only there, with its interface open.
+  t.mock.method(RaidModule, 'raidOf', () => ({}));
+  const player = fakePlayer('Dragger');
   Storage.openPrivate(player, 30);
   const items = Storage.privateItems(player);
   for (const id of [560, 565, 566]) items.push({ id, amount: 1 });

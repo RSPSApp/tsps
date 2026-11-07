@@ -179,6 +179,16 @@ const T = {
   ],
 };
 
+/** Whether Dream Mentor's spells (Humidify among them) are open to the player: the quest, or a relic's unlock. */
+function dreamMentorOpen(player, PluginManager) {
+  const query = { player, key: "dream_mentor", complete: false };
+  PluginManager.emitCustomEvent("quest:is-complete", query);
+  if (query.complete === true) return true;
+  const unlock = { player, name: "humidify", unlocked: false };
+  PluginManager.emitCustomEvent("magic:spell-unlocked", unlock);
+  return unlock.unlocked === true;
+}
+
 class OlmRoom extends Raid.Room {
   constructor(raid, record) {
     super(raid, record);
@@ -906,6 +916,8 @@ class OlmRoom extends Raid.Room {
   canHumidify(player) {
     const { Item, MagicSpellbook, PluginManager } = Shared.core();
     if (player.getSpellbook() !== MagicSpellbook.LUNAR || Shared.level(player, "MAGIC") < HUMIDIFY.LEVEL) return false;
+    // Humidify is a Dream Mentor spell (Wiki), here as everywhere: unless a league relic unlocks every spell.
+    if (!dreamMentorOpen(player, PluginManager)) return false;
     const short = HUMIDIFY.RUNES.filter(([id, amount]) => !Shared.has(player, id, amount))
       .map(([id, amount]) => new Item(id, amount - player.getInventory().getAmount(id)));
     return short.length === 0 || PluginManager.checkSpellRuneSource(player, short);

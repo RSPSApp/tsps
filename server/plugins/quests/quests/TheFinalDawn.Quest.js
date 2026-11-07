@@ -1627,14 +1627,21 @@ module.exports = function registerTheFinalDawnQuest(api) {
     player.sendMessage("You read the emissary scroll.");
   }
 
+  const POTATOES_PER_SACK = 3;
+
   function emptyPotatoSack(event) {
     const { player, itemId, option } = event;
     if (itemId !== POTATO_SACK_ITEM || option !== "Empty") return;
     if (quest.getStage(player) < STAGE_HOME || quest.getStage(player) > STAGE_JANUS) return;
     event.handled = true;
+    // The empty sack takes the sack's slot; the three potatoes need three more, or they were lost.
+    if (player.getInventory().getFreeSlots() < POTATOES_PER_SACK) {
+      player.sendMessage("You don't have enough inventory space.");
+      return;
+    }
     player.getInventory().deleteNumber(POTATO_SACK_ITEM, 1);
     player.getInventory().adds(EMPTY_SACK_ITEM, 1);
-    player.getInventory().adds(POTATO_ITEM, 3);
+    player.getInventory().adds(POTATO_ITEM, POTATOES_PER_SACK);
     player.sendMessage("You empty the sack of potatoes.");
   }
 

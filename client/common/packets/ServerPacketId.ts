@@ -15,6 +15,8 @@ export const enum ServerPacketId {
     LOGOUT_RESPONSE = 4,
     PATH_RESPONSE = 5,
     PLUGIN_MESSAGE = 6,
+    CHARACTER_LIST = 7,
+    CHARACTER_RESULT = 8,
 
     // ========================================
     // PLAYER/NPC SYNC (20-39)
@@ -192,6 +194,8 @@ export const SERVER_PACKET_LENGTHS: Record<ServerPacketId, number> = {
     [ServerPacketId.LOGIN_RESPONSE]: -1,
     [ServerPacketId.LOGOUT_RESPONSE]: -1,
     [ServerPacketId.PATH_RESPONSE]: -1,
+    [ServerPacketId.CHARACTER_LIST]: -2,
+    [ServerPacketId.CHARACTER_RESULT]: -1,
 
     [ServerPacketId.PLAYER_SYNC]: -2,
     [ServerPacketId.MOVEMENT_POSITION]: 18,

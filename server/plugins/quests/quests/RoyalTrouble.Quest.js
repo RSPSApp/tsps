@@ -61,7 +61,7 @@
  *  - The 20,000 coins are handed over by Queen Sigrid's transcript action
  *    (oTxB6D), matching OSRS; the completion scroll lists them as a reward line.
  */
-const royalTroubleCombat = require("./RoyalTroubleCombat.Quest");
+const royalTroubleCombat = require("./Combat.RoyalTrouble");
 
 module.exports = function registerRoyalTroubleQuest(api) {
   const {

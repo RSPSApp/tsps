@@ -305,6 +305,7 @@ function searchRoguesChest(event, random = Math.random) {
   return true;
 }
 
+/** A chest's option; false (not one of these chests, or outside the Wilderness) lets other handlers have it. */
 function interact(event) {
   const { player, objectId, object } = event;
   if (!player || !object || (objectId !== MUDDY_CHEST && objectId !== ROGUES_CHEST)) return false;
@@ -321,9 +322,8 @@ module.exports = {
   register(pluginApi) {
     api = pluginApi;
     core = pluginApi.core;
-    pluginApi.onObjectInteraction((event) => {
-      if (interact(event)) event.handled = true;
-    });
+    pluginApi.onObjectInteraction("Closed chest", { Open: interact });
+    pluginApi.onObjectInteraction("Chest", { Open: interact, "Search for traps": interact });
   },
   _test: { muddyLoot, roguesLoot, muddyAlways, muddyRare, roguesTable, muddyRoom, restocking, busy, MUDDY_CHEST, ROGUES_CHEST, ROGUES_CHEST_OPEN, ROGUES_RESTOCK_TICKS, ROGUES_FREE_SLOTS },
 };

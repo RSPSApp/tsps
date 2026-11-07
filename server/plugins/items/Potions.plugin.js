@@ -181,10 +181,7 @@ function applySanfewRestore(player) {
 }
 
 function applyRestorePotion(player) {
-  for (const skill of Skill.values()) {
-    if (skill === Skill.HITPOINTS || skill === Skill.PRAYER) {
-      continue;
-    }
+  for (const skill of [Skill.ATTACK, Skill.DEFENCE, Skill.STRENGTH, Skill.RANGED, Skill.MAGIC]) {
     restoreSkillToBaseWithFormula(player, skill, 10, 0.3);
   }
 }

@@ -1,5 +1,7 @@
 # Per-server Character Slots Implementation Plan
 
+
+**Historical implementation plan:** the current implementation moves character-slot behavior into the disabled-by-default Characters plugin and replaces the core-specific login code below with generic extension hooks. See [current architecture and setup](../../character-slots.md).
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** One login owns up to N characters on a server; the browser client shows a character picker after login; every other client keeps entering the last played character.

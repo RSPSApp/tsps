@@ -11,28 +11,41 @@ One login can own several characters on a server. The characters belong to that 
 - A login left on the picker for 5 minutes is disconnected, which frees its characters for another login.
 - Each character is an ordinary player with its own name, save, friends and bank. Characters do not share items or coins.
 
-## Configuring the number of slots
+## Enabling Characters
 
-Set `characters:maxPerAccount` in `world.local.json` under `pluginConfig`:
+The `Characters` plugin is disabled by default. Enable it in `server/data/definitions/world.local.json`
+(or `world.json`) and restart the server:
 
 ```json
-"pluginConfig": { "characters:maxPerAccount": 3 }
+{
+  "plugins": { "Characters": true },
+  "pluginConfig": { "characters:maxPerAccount": 6 }
+}
 ```
 
-- The default is 1 (additional characters disabled). Values are rounded down and kept between 1 and 6, the most rows the picker can show. A value that is not a number falls back to 1.
-- 1 disables character slots and uses the original login protocol: no capability announcement, character packets, selection flag or fallback delay. No new character-account records are written. Existing ownership and deleted-name reservations remain protected. The character whose name was typed enters, as on clients without a picker, so an alt kept from a higher cap never hides the primary.
-- The in-browser host (IndexedDB saves) keeps no account file between reloads, so it always has 1.
+- `pluginConfig` alone cannot enable the plugin. With `Characters` absent or false, the original login exchange runs: no capability announcement, character packets, selection flag or fallback delay, and no new character-account records.
+- When enabled, the limit defaults to 6, is rounded down and clamped to 1–6, and falls back to 6 for non-numeric values. Setting it to 1 skips the picker and additional-character behavior.
+- The in-browser host always uses 1 because it cannot persist account ownership.
+- Disabling the plugin later preserves existing ownership, account passwords, bans and deleted-name reservations. Players enter the character whose name they typed, without a picker. Back up the account file with saves even while the plugin is disabled.
 
 ## How the client detects support
 
-Only an enabled server sends a `characters:slots` message over the existing plugin-message channel,
+Only the registered Characters login extension sends a `characters:slots` message over the existing plugin-message channel,
 before its unchanged welcome packet. The client waits for that welcome and sets the character-select
 login flag only when support was advertised on the current connection. This is repeated on reconnect;
 a server with slots disabled (or an older server) follows the original login/handshake immediately.
 
+## Plugin and core responsibilities
+
+Characters registers a generic per-connection login extension. The plugin owns capability announcements,
+post-authentication character selection, create/delete requests, picker packets and account creation/last-played
+updates. Core owns credential verification, packet framing, pending-name reservations, timeouts and socket
+cleanup. Persisted ownership and deletion reservations remain core identity protections even when the plugin is off.
+Extension failures abort login rather than silently falling through to entering a player.
+
 ## Where accounts live
 
-Accounts are in `data/saves/accounts.json`. Set `TSPS_ACCOUNTS_FILE` to use another path. The file lists each account's characters in slot order, with when each was created and last played. On a world with slots enabled (cap above 1), a player who already has a save gets an account the first time they log in; a new name gets one when it first enters the world, so a login that never enters claims nothing. There is nothing to migrate. The file also keeps every deleted character's name (see [Deleting a character](#deleting-a-character)).
+Accounts are in `data/saves/accounts.json`. Set `TSPS_ACCOUNTS_FILE` to use another path. The file lists each account's characters in slot order, with when each was created and last played. With the Characters plugin enabled and a cap above 1, a player who already has a save gets an account the first time they log in; a new name gets one when it first enters the world, so a login that never enters claims nothing. There is nothing to migrate. The file also keeps every deleted character's name (see [Deleting a character](#deleting-a-character)).
 
 Last-played times are written at most every 30 seconds, and on a normal shutdown; a crash can lose the latest ones, which only changes which character the picker preselects.
 

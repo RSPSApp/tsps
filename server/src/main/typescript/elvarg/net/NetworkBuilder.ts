@@ -45,8 +45,6 @@ import {
   PlayerAppearance,
   resolveGameframeRoot,
   encodePluginMessage,
-  encodeCharacterList,
-  encodeCharacterResult,
 } from "./protocol/ClientProtocol";
 import {
   WORLD_MAP_CLOSE_WIDGET_ID,
@@ -87,10 +85,9 @@ import { TeleportHandler } from "../game/model/teleportation/TeleportHandler";
 import { ArceuusSpells } from "../game/content/combat/magic/ArceuusSpells";
 import { SpellTeleports } from "../game/content/combat/magic/SpellTeleports";
 import { LEAGUE_PROFILE, MAIN_PROFILE, type PlayerProfile } from "../game/entity/impl/player/persistence/PlayerProfile";
-import { Accounts, type AccountCharacter } from "../game/entity/impl/player/Accounts";
-import { characterDisplayName, characterListFor, defaultCharacterIndex, maxCharactersPerAccount } from "./login/CharacterSlots";
+import { Accounts } from "../game/entity/impl/player/Accounts";
+import type { PluginLoginExtension, PluginLoginPending } from "../plugins/PluginTypes";
 import {
-  LOGIN_FLAG_CHARACTER_SELECT,
   LOGIN_FLAG_REMEMBER,
   LOGIN_FLAG_TOKEN,
   LOGIN_TOKENS_ATTRIBUTE,
@@ -250,22 +247,11 @@ const NON_INPUT_PACKETS = new Set([
   "local_trigger",
 ]);
 
-type PendingLogin = {
-  /** The account's key: its primary character's name, normalised. */
-  account: string;
-  /** The character entering at handshake: the default, or the one selected since. */
-  username: string;
-  /** Which of the account's characters is logging in: the league one on a league world. */
-  profile: PlayerProfile;
-  passwordHash: string;
-  save: any | null;
-  /** The account's remembered logins after this one, or null when they didn't change. */
-  loginTokens: LoginTokenEntry[] | null;
-  /** The account's characters as they were at login; only these can be selected. */
-  characters: AccountCharacter[];
-  /** Whether the client asked for the character list (LOGIN_FLAG_CHARACTER_SELECT). */
-  wantsCharacterList: boolean;
-};
+type PendingLogin = PluginLoginPending;
+
+class LoginRejection extends Error {
+  constructor(public readonly code: number, message: string) { super(message); }
+}
 
 /** The pendingNames key for a name: the protocol form of its login key. */
 function pendingKey(name: string): string {
@@ -275,12 +261,6 @@ function pendingKey(name: string): string {
 /** Whether this character name is on the ban list (it can't enter the world). */
 function isBanned(name: string): boolean {
   return PlayerPunishment.banned(name);
-}
-
-/** Whether this account's primary is banned: a banned primary bans the whole account. */
-function isPrimaryBanned(account: string): boolean {
-  const primary = account ? Accounts.primaryOf(account) : undefined;
-  return !!primary && isBanned(primary);
 }
 
 /** Whether `username` is one of `DEV_USERNAME`'s accounts (comma-separated). */
@@ -408,6 +388,7 @@ export class ClientConnection {
   public static readonly PENDING_LOGIN_TIMEOUT_MS = 5 * 60_000;
   private pendingLoginTimeout?: ReturnType<typeof setTimeout>;
   private pending?: PendingLogin;
+  private loginExtension?: PluginLoginExtension;
   /** The pendingNames keys this connection holds: its account and the character it will enter. */
   private reservedNames: string[] = [];
   private player?: Player;
@@ -447,8 +428,32 @@ export class ClientConnection {
       this.cleanup("socket_error");
     });
     channel.onClose(() => this.cleanup("socket_close"));
-    if (maxCharactersPerAccount() > 1) {
-      this.send(encodePluginMessage("characters:slots", { maxPerAccount: maxCharactersPerAccount() }));
+    try {
+      this.loginExtension = PluginManager.createLoginExtension({
+        send: (packet) => this.send(packet),
+        pending: () => this.pending,
+        isActive: (pending) => this.pending === pending && !this.player && !this.closed,
+        reserveName: (name) => this.reservePendingName(pendingKey(name)),
+        releaseName: (name) => {
+          const key = pendingKey(name);
+          if (this.reservedNames.includes(key)) {
+            this.reservedNames = this.reservedNames.filter((reserved) => reserved !== key);
+            ClientConnection.pendingNames.delete(key);
+          }
+        },
+        isNameBusy: (name) => {
+          const key = pendingKey(name);
+          return !!World.getPlayerByName(name)
+            || World.getAddPlayerQueue().some((player) => Misc.formatNameForProtocol(player.getUsername()) === key)
+            || (ClientConnection.pendingNames.has(key) && !this.reservedNames.includes(key));
+        },
+        reject: (code, message) => { throw new LoginRejection(code, message); },
+      });
+    } catch (error) {
+      console.error("[login] extension setup failed", error);
+      this.cleanup("login_extension_error");
+      channel.close(1011, "Login extension failed");
+      return;
     }
     this.send(encodeWelcome(GameConstants.GAME_ENGINE_PROCESSING_CYCLE_RATE, Date.now()));
   }
@@ -542,6 +547,17 @@ export class ClientConnection {
           !(packet.type === "inventory_action" && EquipPacketListener.preservesInterfaceOnEquip(this.player))
         ) {
           this.player.closeInterruptibleInterfaces();
+        }
+      }
+      if (this.loginExtension?.packet) {
+        try {
+          const handled = this.loginExtension.packet(packet);
+          if (handled === true || (handled && await handled)) continue;
+        } catch (error) {
+          console.error("[login] extension packet failed", error);
+          this.cleanup("login_extension_error");
+          this.channel.close(1011, "Login extension failed");
+          return;
         }
       }
       switch (packet.type) {
@@ -1154,15 +1170,6 @@ export class ClientConnection {
         case "login_forget":
           await forgetLoginToken(packet.username, packet.token);
           continue;
-        case "character_select":
-          this.selectCharacter(packet.name);
-          continue;
-        case "character_create":
-          this.createCharacter(packet.name);
-          continue;
-        case "character_delete":
-          await this.deleteCharacter(packet.name, packet.confirmName);
-          continue;
         case "handshake":
           this.enterWorld(packet.clientType, packet.capabilities);
           continue;
@@ -1174,8 +1181,15 @@ export class ClientConnection {
     }
   }
 
+  private rejectLoginExtension(error: unknown): void {
+    if (error instanceof LoginRejection) this.failLogin(error.code, error.message);
+    else {
+      console.error("[login] extension failed", error);
+      this.failLogin(8, "The login server is busy.");
+    }
+  }
+
   private async login(rawUsername: string, password: string, revision: number, flags = 0): Promise<void> {
-    const characterSlotsEnabled = maxCharactersPerAccount() > 1;
     const tokenLogin = (flags & LOGIN_FLAG_TOKEN) !== 0;
     // A league world logs the account's league character in: a separate save under the same name.
     const profile = GameConstants.WORLD_PROFILE;
@@ -1216,7 +1230,7 @@ export class ClientConnection {
       // A deleted character's name is never a new login (only its own account re-creates it):
       // its display names, clan rank and punishments are still keyed by it.
       deletedName = owner === undefined && Accounts.isDeleted(typedName);
-      account = owner ?? (characterSlotsEnabled ? Accounts.key(typedName) : "");
+      account = owner ?? "";
       primaryName = (account ? Accounts.primaryOf(account) : undefined) ?? typedName;
       accountNames = [...Accounts.charactersOf(account).map((character) => character.name), typedName];
     } catch (error) {
@@ -1355,283 +1369,33 @@ export class ClientConnection {
       this.releasePendingName();
       return;
     }
-    // The default character enters at handshake unless the client selects another first.
-    const wantsCharacterList = characterSlotsEnabled && (flags & LOGIN_FLAG_CHARACTER_SELECT) !== 0;
-    let characters: AccountCharacter[];
-    let defaultIndex: number;
-    let username: string;
-    let primaryDisplayName: string;
-    let characterSave: any | null;
-    let characterList: ReturnType<typeof characterListFor> | null = null;
+    let username = primaryName;
+    if (!this.loginExtension && account && Accounts.key(typedName) !== Accounts.key(primaryName)) username = typedName;
+    let characterSave = save;
+    if (username !== primaryName) {
+      try { characterSave = GameConstants.PLAYER_PERSISTENCE.load(username, profile) ?? null; }
+      catch (error) { this.releasePendingName(); this.failLogin(8, "The login server is busy."); return; }
+    }
+    const pending: PendingLogin = { username, credentialName: primaryName, profile, passwordHash, save: characterSave, loginTokens };
+    const savedName = String((save ?? credentials)?.getDisplayName?.() ?? "");
+    let responseName = savedName && Accounts.key(savedName) === Accounts.key(primaryName) ? savedName : primaryName;
+    if (Accounts.key(pending.username) === Accounts.key(primaryName)) pending.username = responseName;
     try {
-      // An account record is written only for a name with a save; a name never entered stays in
-      // memory until its handshake (enterWorld), so a login alone can't claim a name for good.
-      if (characterSlotsEnabled && credentials) Accounts.ensure(primaryName);
-      characters = Accounts.entryOf(account)
-        ? Accounts.charactersOf(account)
-        : [{ name: primaryName, createdAt: Date.now(), lastPlayedAt: 0 }];
-      // Without the picker the typed character enters, primary included; with it, the typed
-      // non-primary is preselected, else the last played. With one slot the browser enters the
-      // default with no picker, so the typed character enters there too: else an old alt played
-      // last would hide the primary. Banned characters are never the default.
-      const enterTyped = !wantsCharacterList || maxCharactersPerAccount() === 1;
-      defaultIndex = defaultCharacterIndex(characters, key, { enterTyped, banned: isBanned });
-      if (defaultIndex < 0) {
-        this.releasePendingName();
-        this.failLogin(4, "Your account has been disabled.");
-        return;
-      }
-      let chosen = characters[defaultIndex]?.name ?? primaryName;
-      let isPrimary = Accounts.key(chosen) === Accounts.key(primaryName);
-      characterSave = isPrimary ? save : null;
-      if (!isPrimary) {
-        try {
-          characterSave = GameConstants.PLAYER_PERSISTENCE.load(chosen, profile) ?? null;
-        } catch (error) {
-          // One unreadable character doesn't lock the account: the primary enters instead.
-          console.error(`[login] failed to load ${chosen}; defaulting to ${primaryName}`, error);
-          defaultIndex = Math.max(0, characters.findIndex((c) => Accounts.key(c.name) === Accounts.key(primaryName)));
-          chosen = primaryName;
-          isPrimary = true;
-          characterSave = save;
-        }
-      }
-      // A character keeps the name it was first saved with (either profile's, for the primary);
-      // the typed one only names a new account.
-      const fallback = (name: string) => (Accounts.key(name) === Accounts.key(typedName) ? typedName : name);
-      primaryDisplayName = characterDisplayName(primaryName, save ?? credentials, fallback(primaryName));
-      username = isPrimary ? primaryDisplayName : characterDisplayName(chosen, characterSave, fallback(chosen));
-      if (wantsCharacterList) characterList = characterListFor(characters, profile);
+      responseName = this.loginExtension?.authenticated?.(pending, { typedName, flags, credentials }) ?? responseName;
     } catch (error) {
-      console.error(`[login] failed to read the characters of ${typedName}`, error);
       this.releasePendingName();
-      this.failLogin(8, "The login server is busy.");
+      this.rejectLoginExtension(error);
       return;
     }
+    if (this.closed) { this.releasePendingName(); return; }
+    username = pending.username;
     this.reservePendingName(pendingKey(username));
-    this.pending = { account, username, profile, passwordHash, save: characterSave, loginTokens, characters, wantsCharacterList };
+    this.pending = pending;
     this.startPendingLoginTimeout();
-    // The response names the account (its primary): remembered logins and "Log out" resolve by it.
-    this.send(encodeLoginResponse(true, -1, "", primaryDisplayName, loginToken));
-    if (characterList) this.send(encodeCharacterList(maxCharactersPerAccount(), defaultIndex, characterList));
+    this.send(encodeLoginResponse(true, -1, "", responseName, loginToken));
+    try { this.loginExtension?.accepted?.(pending); }
+    catch (error) { this.cleanup("login_extension_error"); this.channel.close(1011, "Login extension failed"); }
     console.info(`[login] accepted ${username} from ${this.channel.remoteAddress}`);
-  }
-
-  /** Between login and handshake: the character the handshake enters instead of the default. */
-  private selectCharacter(rawName: string): void {
-    if (maxCharactersPerAccount() === 1) return;
-    const pending = this.pending;
-    if (!pending || this.player || this.closed) {
-      this.send(encodeCharacterResult(false, 4, "There is no character to choose right now."));
-      return;
-    }
-    const character = pending.characters.find((c) => Accounts.key(c.name) === Accounts.key(String(rawName ?? "")));
-    if (!character) {
-      this.send(encodeCharacterResult(false, 4, "That character is not on this account."));
-      return;
-    }
-    if (PlayerPunishment.banned(character.name)) {
-      this.send(encodeCharacterResult(false, 10, "That character has been disabled."));
-      return;
-    }
-    // A ban on the primary landing while the account is on the picker covers every character.
-    let primaryBanned: boolean;
-    try {
-      primaryBanned = isPrimaryBanned(pending.account);
-    } catch (error) {
-      console.error(`[login] failed to read the account of ${pending.account}`, error);
-      this.send(encodeCharacterResult(false, 8, "The login server is busy."));
-      return;
-    }
-    if (primaryBanned) {
-      this.send(encodeCharacterResult(false, 10, "Your account has been disabled."));
-      return;
-    }
-    const characterKey = pendingKey(character.name);
-    if (
-      World.getPlayerByName(character.name) ||
-      World.getAddPlayerQueue().some((player) => Misc.formatNameForProtocol(player.getUsername()) === characterKey) ||
-      (ClientConnection.pendingNames.has(characterKey) && !this.reservedNames.includes(characterKey))
-    ) {
-      this.send(encodeCharacterResult(false, 7, "That character is already logged in."));
-      return;
-    }
-    let save: any | null;
-    try {
-      save = GameConstants.PLAYER_PERSISTENCE.load(character.name, pending.profile) ?? null;
-    } catch (error) {
-      console.error(`[login] failed to load ${character.name}`, error);
-      this.send(encodeCharacterResult(false, 8, "The login server is busy."));
-      return;
-    }
-    this.reservePendingName(characterKey);
-    pending.username = characterDisplayName(character.name, save);
-    pending.save = save;
-    this.send(encodeCharacterResult(true, 0, ""));
-  }
-
-  /** Whether this name is online, entering, or held by another connection's login. */
-  private characterBusy(name: string): boolean {
-    const key = pendingKey(name);
-    return (
-      !!World.getPlayerByName(name) ||
-      World.getAddPlayerQueue().some((player) => Misc.formatNameForProtocol(player.getUsername()) === key) ||
-      (ClientConnection.pendingNames.has(key) && !this.reservedNames.includes(key))
-    );
-  }
-
-  /** The fresh character list after a create or delete, marking the character the handshake enters. */
-  private sendCharacterList(pending: PendingLogin): void {
-    const index = pending.characters.findIndex((c) => Accounts.key(c.name) === Accounts.key(pending.username));
-    const defaultIndex = index >= 0 ? index : Math.max(0, defaultCharacterIndex(pending.characters, pending.username, { banned: isBanned }));
-    this.send(encodeCharacterList(maxCharactersPerAccount(), defaultIndex, characterListFor(pending.characters, pending.profile)));
-  }
-
-  /** Between login and handshake: adds a character to the account. Creating writes no save. */
-  private createCharacter(rawName: string): void {
-    if (maxCharactersPerAccount() === 1) return;
-    const pending = this.pending;
-    if (!pending || this.player || this.closed) {
-      this.send(encodeCharacterResult(false, 4, "There is no account to add a character to right now."));
-      return;
-    }
-    try {
-      const primary = Accounts.primaryOf(pending.account);
-      const persistence = GameConstants.PLAYER_PERSISTENCE;
-      // A banned primary bans the account (login refuses it too); a ban landing mid-picker stops creation.
-      if (isPrimaryBanned(pending.account)) {
-        this.send(encodeCharacterResult(false, 10, "Your account has been disabled."));
-        return;
-      }
-      if (!primary || !(persistence.exists(primary, MAIN_PROFILE) || persistence.exists(primary, LEAGUE_PROFILE))) {
-        this.send(encodeCharacterResult(false, 9, "Enter the world once with your first character."));
-        return;
-      }
-      const name = String(rawName ?? "").trim();
-      const protocolName = Misc.formatNameForProtocol(name);
-      if (protocolName.length < 1 || protocolName.length > 12 || !Misc.isValidName(name)) {
-        this.send(encodeCharacterResult(false, 2, "Names are 1 to 12 letters, numbers and spaces."));
-        return;
-      }
-      // Taken: another account's character, save, online or pending login, a name another account
-      // deleted (kept reserved), or another account's current or held display name (the shared
-      // namespace). A name this account deleted comes back to it.
-      const nameKey = DisplayNames.key(name);
-      if (Accounts.isDeleted(nameKey) && !Accounts.deletedBy(nameKey, pending.account)) {
-        this.send(encodeCharacterResult(false, 1, "That name belonged to a deleted character and can't be used again."));
-        return;
-      }
-      const owner = DisplayNames.ownerOf(nameKey);
-      if ((owner !== undefined && owner !== nameKey) || DisplayNames.loginNameInUse(nameKey, pending.account)) {
-        this.send(encodeCharacterResult(false, 1, "That name is not available."));
-        return;
-      }
-      if (Accounts.charactersOf(pending.account).length >= maxCharactersPerAccount()) {
-        this.send(encodeCharacterResult(false, 3, "You can't make more characters."));
-        return;
-      }
-      Accounts.addCharacter(pending.account, Misc.formatDisplayName(name));
-    } catch (error) {
-      console.error(`[login] failed to create a character for ${pending.account}`, error);
-      this.send(encodeCharacterResult(false, 8, "The login server is busy."));
-      return;
-    }
-    // The character exists from here on: always answer ok, even if refreshing the list fails.
-    this.send(encodeCharacterResult(true, 0, ""));
-    try {
-      pending.characters = Accounts.charactersOf(pending.account).slice();
-      this.sendCharacterList(pending);
-    } catch (error) {
-      console.error(`[login] failed to refresh the character list of ${pending.account}`, error);
-    }
-  }
-
-  /** Between login and handshake: deletes a non-primary character and its saves. */
-  private async deleteCharacter(rawName: string, rawConfirm: string): Promise<void> {
-    if (maxCharactersPerAccount() === 1) return;
-    const pending = this.pending;
-    if (!pending || this.player || this.closed) {
-      this.send(encodeCharacterResult(false, 4, "There is no account to delete a character from right now."));
-      return;
-    }
-    const character = pending.characters.find((c) => Accounts.key(c.name) === Accounts.key(String(rawName ?? "")));
-    if (!character) {
-      this.send(encodeCharacterResult(false, 4, "That character is not on this account."));
-      return;
-    }
-    if (Accounts.isPrimary(pending.account, character.name)) {
-      this.send(encodeCharacterResult(false, 5, "Your first character can't be deleted."));
-      return;
-    }
-    if (this.characterBusy(character.name)) {
-      this.send(encodeCharacterResult(false, 7, "That character is logged in."));
-      return;
-    }
-    if (DisplayNames.key(String(rawConfirm ?? "")) !== DisplayNames.key(character.name)) {
-      this.send(encodeCharacterResult(false, 6, "The name you typed does not match."));
-      return;
-    }
-    // Each delete reserves its name; an account can only hold so many. Refused before any save goes.
-    let canDelete: boolean;
-    try {
-      canDelete = Accounts.canDelete(pending.account);
-    } catch (error) {
-      console.error(`[login] failed to read the deleted names of ${pending.account}`, error);
-      this.send(encodeCharacterResult(false, 8, "The character could not be deleted."));
-      return;
-    }
-    if (!canDelete) {
-      this.send(encodeCharacterResult(false, 11, "You have deleted too many characters. Ask a member of staff to free a name."));
-      return;
-    }
-    const persistence = GameConstants.PLAYER_PERSISTENCE;
-    const deletedKey = pendingKey(character.name);
-    const removesPending = Accounts.key(pending.username) === Accounts.key(character.name);
-    let fallback: { name: string; save: any | null } | undefined;
-    try {
-      // Everything that can fail before the account changes: the fallback's save, then the deletes.
-      if (removesPending) {
-        const remaining = pending.characters.filter((c) => Accounts.key(c.name) !== Accounts.key(character.name));
-        const next = remaining[Math.max(0, defaultCharacterIndex(remaining, pending.account, { banned: isBanned }))];
-        fallback = { name: next.name, save: persistence.load(next.name, pending.profile) ?? null };
-      }
-      for (const profile of [MAIN_PROFILE, LEAGUE_PROFILE]) {
-        try {
-          await persistence.delete(character.name, profile);
-        } catch (error) {
-          // A backend that keeps no per-name saves has nothing to delete.
-          if (!String((error as Error)?.message ?? error).includes("does not support")) throw error;
-        }
-      }
-      if (this.pending !== pending || this.player || this.closed) {
-        // The saves are gone and the player confirmed: the account forgets the character too.
-        Accounts.removeCharacter(pending.account, character.name);
-        this.send(encodeCharacterResult(false, 4, "There is no account to delete a character from right now."));
-        return;
-      }
-      Accounts.removeCharacter(pending.account, character.name);
-    } catch (error) {
-      console.error(`[login] failed to delete ${character.name}`, error);
-      this.send(encodeCharacterResult(false, 8, "The character could not be deleted."));
-      return;
-    }
-    // The character is gone from here on: update the pending login and always answer ok.
-    pending.characters = Accounts.charactersOf(pending.account).slice();
-    if (this.reservedNames.includes(deletedKey)) {
-      this.reservedNames = this.reservedNames.filter((key) => key !== deletedKey);
-      ClientConnection.pendingNames.delete(deletedKey);
-    }
-    if (fallback) {
-      this.reservePendingName(pendingKey(fallback.name));
-      pending.username = characterDisplayName(fallback.name, fallback.save);
-      pending.save = fallback.save;
-    }
-    this.send(encodeCharacterResult(true, 0, ""));
-    try {
-      this.sendCharacterList(pending);
-    } catch (error) {
-      console.error(`[login] failed to refresh the character list of ${pending.account}`, error);
-    }
   }
 
   private enterWorld(clientType: number = 0, capabilities: number = 0): void {
@@ -1650,9 +1414,9 @@ export class ClientConnection {
     // A banned primary bans the account, also when the ban lands after login.
     let primaryBanned: boolean;
     try {
-      primaryBanned = isPrimaryBanned(pending.account);
+      primaryBanned = isBanned(pending.credentialName);
     } catch (error) {
-      console.error(`[login] failed to read the account of ${pending.account}`, error);
+      console.error(`[login] failed to read the account of ${pending.credentialName}`, error);
       this.releasePendingName();
       this.failLogin(8, "The login server is busy.");
       return;
@@ -1684,7 +1448,7 @@ export class ClientConnection {
     if (isConfiguredDeveloperUsername(player.getUsername())) player.setRights(PlayerRights.DEVELOPER);
     player.setPasswordHashWithSalt(pending.passwordHash);
     // Remembered logins live on the primary; a non-primary's were saved there at login.
-    if (pending.loginTokens && (!pending.account || Accounts.isPrimary(pending.account, pending.username))) {
+    if (pending.loginTokens && (Accounts.key(pending.credentialName) === Accounts.key(pending.username))) {
       player.setAttribute(LOGIN_TOKENS_ATTRIBUTE, pending.loginTokens);
     }
     player.setLastKnownRegion(player.getLocation().clone());
@@ -1700,15 +1464,8 @@ export class ClientConnection {
     this.startIdleCheck();
     CONNECTIONS.set(player, this);
     this.releasePendingName();
-    if (pending.account && maxCharactersPerAccount() > 1) {
-      try {
-        // A name entering for the first time gets its account record now (login kept it in memory).
-        if (!Accounts.entryOf(pending.account)) Accounts.ensure(pending.characters[0]?.name ?? pending.username);
-        Accounts.touchLastPlayed(pending.account, pending.username);
-      } catch (error) {
-        console.warn(`[login] could not record the account or last played time of ${pending.username}`, error);
-      }
-    }
+    try { this.loginExtension?.entered?.(pending); }
+    catch (error) { console.warn(`[login] post-entry extension failed for ${pending.username}`, error); }
     // Back aboard a boat they logged out on at sea.
     Sailing.onLogin(player);
     World.refreshActiveRegions();

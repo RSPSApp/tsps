@@ -428,7 +428,10 @@ function accountWithAlt(hash, { league = false, altLeague = false } = {}) {
   return { saves, hashes, writes, store };
 }
 
-test('a token login typed with a non-primary name rotates the token on the primary save and preselects that character', async () => {
+test('a token login typed with a non-primary name rotates the token on the primary save and preselects that character', async (t) => {
+  const { PluginManager } = require('../dist/plugins/PluginManager');
+  const { createLoginExtension } = require('../plugins/accounts/characters/Login.Characters');
+  t.mock.method(PluginManager, 'createLoginExtension', (context) => createLoginExtension({ ...context, api: PluginManager.createApi('Characters') }));
   const hash = await PasswordUtil.generatePasswordHashWithSalt('hunter22');
   const { saves } = accountWithAlt(hash);
   const first = await login('tokenalt', 'hunter22', tokens.LOGIN_FLAG_REMEMBER);

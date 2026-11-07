@@ -1,5 +1,7 @@
 # Per-server character slots — design
 
+
+**Implementation update:** Characters is now a disabled-by-default server plugin using generic login-extension hooks. Enable `plugins.Characters`; its character limit defaults to 6 and is capped at 6. Configuration alone never enables it. See [current behavior and setup](../../character-slots.md).
 Date: 2026-11-05. Status: draft for approval. Target repo: RSPSApp/tsps.
 
 ## Intent
@@ -176,8 +178,8 @@ connection cannot select the same character.
 ### Protocol
 
 Clients opt in. New login flag `LOGIN_FLAG_CHARACTER_SELECT = 4` in the existing flags byte. The
-gateway (flags 0), old browser clients and headless logins never set it and see no new packets.
-A server with slots enabled (cap above 1) first announces them with a `characters:slots` plugin
+gateway (flags 0), old browser clients and headless logins never set it and see no character-list/result packets.
+An enabled Characters plugin (cap above 1) first announces support with a `characters:slots` plugin
 message (opcode 6, `{ maxPerAccount }`) before the welcome; the client sets flag 4 only after that
 announcement on the current connection, so a disabled or older server never sees it.
 
@@ -244,11 +246,11 @@ database access; there is no in-game restore of a deleted character.
 
 ### Configuration
 
-`pluginConfig["characters:maxPerAccount"]`, integer, default **1** (additional characters off), read
+`pluginConfig["characters:maxPerAccount"]`, integer, default **6** when the Characters plugin is enabled, read
 through `PluginManager.getPluginConfig`, rounded down and clamped to 1..6 (the picker draws six legible
-rows); a non-numeric value falls back to 1. A value of 1 disables creation and skips the picker: the
+rows); a non-numeric value falls back to 6. The plugin must be enabled with `plugins: { "Characters": true }`; this limit alone cannot enable it. A value of 1 disables creation and skips the picker: the
 typed character enters, as on the gateway and native clients, so an alt left from a higher cap never
-hides the primary. Documented in `world.local.json`'s `_help` block and in a new `docs/character-slots.md`.
+hides the primary. Documented in `docs/character-slots.md`.
 
 ### New character entry
 

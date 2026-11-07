@@ -24,7 +24,11 @@ const { SkillManager, Skills } = require('../dist/game/content/skill/SkillManage
 const { MAIN_PROFILE, LEAGUE_PROFILE, profileStorageKey } = require('../dist/game/entity/impl/player/persistence/PlayerProfile');
 const net = require('../dist/net/NetworkBuilder');
 const { LOGIN_FLAG_CHARACTER_SELECT } = require('../dist/net/login/LoginTokens');
-const { defaultCharacterIndex, maxCharactersPerAccount } = require('../dist/net/login/CharacterSlots');
+const Characters = require('../plugins/accounts/Characters.plugin');
+const { createLoginExtension } = require('../plugins/accounts/characters/Login.Characters');
+const picker = require('../plugins/accounts/characters/Picker.Characters');
+const defaultCharacterIndex = (...args) => picker.defaultCharacterIndex(PluginManager.createApi('Characters'), ...args);
+const maxCharactersPerAccount = () => picker.maxCharactersPerAccount(PluginManager.createApi('Characters'));
 
 const LOGIN_RESPONSE = 3;
 const CHARACTER_LIST = 7;
@@ -81,6 +85,7 @@ const persistence = {
 };
 
 beforeEach((t) => {
+  t.mock.method(PluginManager, 'createLoginExtension', (context) => createLoginExtension({ ...context, api: PluginManager.createApi('Characters') }));
   t.mock.method(PluginManager, 'getPluginConfig', (key, fallback) => key === 'characters:maxPerAccount' ? 3 : fallback);
   saves.clear();
   persistence.deleted.length = 0;
@@ -219,8 +224,11 @@ test('a first login writes no account until the handshake, and sends no list wit
   assert.deepEqual(Accounts.charactersOf('zezima').map((c) => c.name), ['Zezima'], 'on disk');
 });
 
-test('disabled slots keep the original welcome/login exchange and write no character account', async (t) => {
-  t.mock.method(PluginManager, 'getPluginConfig', (_key, fallback) => fallback);
+test('a disabled plugin ignores its config and keeps the original welcome/login exchange', async (t) => {
+  assert.equal(Characters.enabled, false);
+  PluginManager.createLoginExtension.mock.restore();
+  assert.equal(PluginManager.loginExtensionFactory, undefined, 'no registration when the plugin is unloaded');
+  t.mock.method(PluginManager, 'getPluginConfig', () => 6);
   const { channel, connection, response } = await connect('Solo', 'pw', LOGIN_FLAG_CHARACTER_SELECT);
   assert.equal(response.success, true);
   assert.deepEqual(channel.sent.map((b) => b[0]), [0, LOGIN_RESPONSE], 'no capability announcement or character list');
@@ -236,6 +244,30 @@ test('disabled slots keep the original welcome/login exchange and write no chara
   await handshake(t, connection, 'Solo');
   assert.equal(connection.getPlayer().getUsername(), 'Solo');
   assert.equal(fs.existsSync(process.env.TSPS_ACCOUNTS_FILE), false);
+});
+
+test('the Characters registration installs the generic login extension and refuses competing owners', async (t) => {
+  PluginManager.createLoginExtension.mock.restore();
+  const api = PluginManager.createApi('Characters');
+  try {
+    api.registerLoginExtension(createLoginExtension);
+    assert.throws(() => api.registerLoginExtension(createLoginExtension), /already registered/);
+    const { channel, response } = await connect('Registered', 'pw', LOGIN_FLAG_CHARACTER_SELECT);
+    assert.equal(response.success, true);
+    assert.equal(channel.sent[0][0], 6);
+    assert.equal(packetsOf(channel, CHARACTER_LIST).length, 1);
+  } finally {
+    PluginManager.loginExtensionFactory = undefined;
+  }
+});
+
+test('a failing login extension cannot leave an authenticated pending login', async (t) => {
+  t.mock.method(PluginManager, 'createLoginExtension', () => ({ authenticated() { throw new Error('extension failed'); } }));
+  const { connection, response } = await connect('Rejected', 'pw', 0);
+  assert.equal(response.success, false);
+  assert.equal(response.code, 8);
+  assert.equal(connection.pending, undefined);
+  assert.equal(net.ClientConnection.pendingNames.size, 0);
 });
 
 test('enabled slots advertise support before the unchanged welcome', async () => {
@@ -344,8 +376,8 @@ test('a login without the picker enters the typed character, primary included', 
   assert.ok(Accounts.charactersOf('zezima')[1].lastPlayedAt >= before, 'last played is updated');
 });
 
-test('disabled slots still protect existing ownership and enter the typed character without a list', async (t) => {
-  t.mock.method(PluginManager, 'getPluginConfig', (_key, fallback) => fallback);
+test('a disabled plugin still protects existing ownership and enters the typed character without a list', async (t) => {
+  t.mock.method(PluginManager, 'createLoginExtension', () => undefined);
   seedSave('Zezima', { passwordHash: hashOf('pw') });
   Accounts.ensure('Zezima', 1);
   Accounts.addCharacter('zezima', 'Alt', 2);
@@ -549,7 +581,7 @@ test('the default: the typed character (primary only without the picker), else t
 
 test('the character cap reads its plugin config, clamped, and is one in the browser host', (t) => {
   const config = t.mock.method(PluginManager, 'getPluginConfig', (_key, fallback) => fallback);
-  assert.equal(maxCharactersPerAccount(), 1);
+  assert.equal(maxCharactersPerAccount(), 6);
   config.mock.mockImplementation(() => 50);
   assert.equal(maxCharactersPerAccount(), 6, 'the picker draws at most six rows');
   config.mock.mockImplementation(() => 6.9);
@@ -557,7 +589,7 @@ test('the character cap reads its plugin config, clamped, and is one in the brow
   config.mock.mockImplementation(() => 2.9);
   assert.equal(maxCharactersPerAccount(), 2, 'rounded down');
   config.mock.mockImplementation(() => 'lots');
-  assert.equal(maxCharactersPerAccount(), 1, 'a non-numeric value falls back to the default');
+  assert.equal(maxCharactersPerAccount(), 6, 'a non-numeric value falls back to the enabled plugin default');
   config.mock.mockImplementation(() => 0);
   assert.equal(maxCharactersPerAccount(), 1);
   config.mock.mockImplementation(() => 5);

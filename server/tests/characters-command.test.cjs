@@ -15,7 +15,7 @@ Server.installProductionPathResolver();
 const { PluginManager } = require("../dist/plugins/PluginManager");
 const { Player } = require("../dist/game/entity/impl/player/Player");
 const { CommandPacketListener } = require("../dist/net/packet/impl/CommandPacketListener");
-const Characters = require("../plugins/commands/Characters.plugin");
+const Characters = require("../plugins/accounts/Characters.plugin");
 
 const PLAYED_AT = Date.UTC(2026, 10, 3, 12, 30);
 let core, Rights;

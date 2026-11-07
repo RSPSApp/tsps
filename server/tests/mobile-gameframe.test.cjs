@@ -178,7 +178,7 @@ test('real login bootstraps before snapshots and completes recovery before deskt
     const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true,
       send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
     const connection = new ClientConnection(channel);
-    connection.pending = { username: 'BootstrapTester', profile: MAIN_PROFILE, passwordHash: '',
+    connection.pending = { username: 'BootstrapTester', credentialName: 'BootstrapTester', profile: MAIN_PROFILE, passwordHash: '',
       save: { applyToPlayer: p => p.setLocation(new Location(3210, 3220, 0)) } };
     try {
       connection.enterWorld(mobile ? 1 : 0);

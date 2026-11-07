@@ -289,6 +289,16 @@ test('Pete sells one saved vessel capacity upgrade through the registered shop',
   assert.equal(displaced.p.getInventory().getValidItems().find(item=>item.getId()===dummy)?.getMeta()?.origin,'replacement','same-ID replacement is preserved');
   assert.equal(displaced.p.getAttribute(currency),0); assert.equal(remainingStock(displaced),initialStock-3);
   assert.notEqual(displaced.p.getAttribute('volcanic-mine:larger-vessel'),true,'a replaced receipt never unlocks'); assert.equal(logCount(displaced.p),0);
+  const bulk=makePlayer(); bulk.p.setAttribute(currency,50000); openPete(bulk.p);
+  const bulkStock=remainingStock(bulk), bulkSlot=core.ShopManager.getOpenShop(bulk.p).stock.findIndex(row=>row.itemId===dummy);
+  assert.ok(bulkSlot>=0); assert.equal(logCount(bulk.p),0);
+  const buyFive=()=>input(bulk,{type:'widget_action',widgetId:(300<<16)|16,groupId:300,childId:16,buttonNum:3,slot:bulkSlot+1,itemId:dummy});
+  await buyFive();
+  assert.equal(bulk.p.getAttribute(currency),40000,'Buy-5 debits only one upgrade even when five are affordable');
+  assert.equal(remainingStock(bulk),bulkStock-1); assert.equal(bulk.p.getAttribute('volcanic-mine:larger-vessel'),true);
+  assert.equal(bulk.p.getInventory().getAmount(dummy),0); assert.equal(logCount(bulk.p),1);
+  await buyFive();
+  assert.equal(bulk.p.getAttribute(currency),40000); assert.equal(remainingStock(bulk),bulkStock-1); assert.equal(logCount(bulk.p),1);
   const messages=[]; t.mock.method(later.p,'sendMessage',text=>{ messages.push(text); });
   const upgradedGame=enterMine(later.p); exhaust(later.p,upgradedGame,70,messages);
 });

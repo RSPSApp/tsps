@@ -1001,6 +1001,34 @@ function handleEnterRift(event) {
   return true;
 }
 
+/** The world Dark Altar converts every carried dense block, even at zero Prayer. */
+function convertDenseEssence(player) {
+  if (!player || !pluginApi.core.WorldDefinition.isMembersWorld()) return;
+  const inventory = player.getInventory();
+  const replacements = [];
+  for (const [slot, item] of inventory.getItems().entries()) {
+    if (item?.getId() !== ItemIdentifiers.DENSE_ESSENCE_BLOCK) continue;
+    replacements.push({ slot, item: new Item(ItemIdentifiers.DARK_ESSENCE_BLOCK, item.getAmount(), item.getMeta()), amount: item.getAmount() });
+  }
+  if (!replacements.length) return;
+  const amount = replacements.reduce((total, entry) => total + entry.amount, 0);
+  for (const entry of replacements) inventory.setItem(entry.slot, entry.item);
+  inventory.refreshItems();
+  const skills = player.getSkillManager();
+  skills.decreaseCurrentLevel(Skill.PRAYER, amount, 0);
+  skills.addExperiences(Skill.RUNECRAFTING, amount * 2.5);
+}
+
+function venerateDarkAltar({ player }) {
+  convertDenseEssence(player);
+}
+
+function useDenseOnDarkAltar(event) {
+  if (event.objectId !== ObjectIdentifiers.DARK_ALTAR || event.itemId !== ItemIdentifiers.DENSE_ESSENCE_BLOCK) return;
+  event.handled = true;
+  convertDenseEssence(event.player);
+}
+
 module.exports = {
   name: "Runecrafting",
   register(api) {
@@ -1010,8 +1038,10 @@ module.exports = {
     api.onPlayerLogin(syncTiaraOptions);
     api.onPlayerDeath(cancelTravelOnDeath);
     api.onCustomEvent("equipment:changed", syncTiaraOptions);
+    api.onCustomEvent("runecrafting:dark-altar-venerate", venerateDarkAltar);
     api.onItemOnObject(handleTalismanOnRuins, { noted: false });
     api.onItemOnObject(handleBindTiara, { noted: false });
+    api.onItemOnObject(useDenseOnDarkAltar, { noted: false });
     api.onObjectInteraction("Mysterious ruins", { Enter: handleEnterRuins });
     api.onObjectInteraction("Altar", { "Craft-rune": handleCraftRunes });
     api.onObjectInteraction("Blood Altar", { Bind: handleCraftRunes });

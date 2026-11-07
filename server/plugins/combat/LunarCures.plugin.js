@@ -66,6 +66,11 @@ function sameInstance(player, target) {
   return (player.getPrivateArea() ?? null) === (target.getPrivateArea() ?? null);
 }
 
+/** A duel is the two duelists' alone: no one else's cure reaches them, and a duelist cures no one but themself. */
+function inDuel(player) {
+  return player?.getDueling?.()?.inDuel?.() === true;
+}
+
 function castSelf(core, event) {
   if (event.handled) return;
   const name = event.spellName?.trim().toLowerCase();
@@ -77,6 +82,7 @@ function castSelf(core, event) {
     if (name === 'cure me') { cure(player); return; }
     core.World.getPlayers().forEach(target => {
       if (target && target.getHitpoints() > 0 && acceptsAid(target) && sameInstance(player, target) &&
+          (target === player || (!inDuel(player) && !inDuel(target))) &&
           player.getLocation().isWithinDistance(target.getLocation(), GROUP_RADIUS)) cure(target);
     });
   });
@@ -86,7 +92,8 @@ function castOther(core, event) {
   if (event.handled || event.spellName?.trim().toLowerCase() !== 'cure other') return;
   event.handled = true;
   const { player, target } = event;
-  if (!target || target === player || !acceptsAid(target) || !sameInstance(player, target) || target.getHitpoints() <= 0 ||
+  if (!target || target === player || !acceptsAid(target) || inDuel(player) || inDuel(target) ||
+      !sameInstance(player, target) || target.getHitpoints() <= 0 ||
       !player.getLocation().isWithinDistance(target.getLocation(), TARGET_RANGE)) return;
   cast(core, player, 'cure other', () => cure(target));
 }

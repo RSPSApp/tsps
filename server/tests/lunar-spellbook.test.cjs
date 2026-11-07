@@ -157,6 +157,15 @@ test("aid spells don't reach a duelist, and a duelist aids no one (the duel is t
   assert.equal(hurt.hp, 50);
 });
 
+test("Stat Spy still reads a duelist's stats, and a duelist can still cast it: it aids no one", () => {
+  for (const [spy, target] of [[fighter(), fighter({ dueling: true })], [fighter({ dueling: true }), fighter()]]) {
+    spy.getDisplayName = () => "Spy";
+    assert.equal(castable(() => LunarSpells.handlePlayerTarget(spy, target, "Stat Spy")), true);
+    assert.ok(spy.messages.some((message) => /Hitpoints: 99/.test(message)), "the stats are read");
+    assert.deepEqual(target.messages, ["Spy is reading your skill stats!"]);
+  }
+});
+
 test("Monster Examine sends interface 522 the text live sends script 1179", () => {
   // rsprox 3235 tick 89, an Outlaw. Live also lists "Strength bonus: -21"; this server keeps no
   // NPC strength bonuses, so that line is the one difference.

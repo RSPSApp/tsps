@@ -178,3 +178,26 @@ test('Cure Other and Cure Group cannot aid actors in another private instance', 
   assert.equal(other.player.getPoisonDamage(), 30); assert.equal(outside.player.getPoisonDamage(), 30);
   assert.equal(same.player.getPoisonDamage(), 0); assert.deepEqual(caster.xp, [74]);
 });
+
+// A duel is the two duelists' alone: no one else's cure reaches them, and a duelist cures only themself.
+test('Cure Other and Cure Group neither reach a duelist nor let a duelist cure anyone else', async t => {
+  const dueling = new Set();
+  const duel = f => { dueling.add(f.player); t.mock.method(f.player, 'getDueling', () => ({ inDuel: () => dueling.has(f.player) })); };
+  const caster = actor(t), duelist = actor(t, 3201, 3200), bystander = actor(t, 3200, 3201); // Cure Group's radius is 1
+  duel(duelist);
+  for (const f of [caster, duelist, bystander]) f.player.setPoisonDamage(30);
+  await cast(t, caster, 'Cure Other', [duelist], duelist);
+  assert.equal(duelist.player.getPoisonDamage(), 30); assert.deepEqual(caster.xp, [], 'a refused Cure Other costs nothing');
+  await cast(t, caster, 'Cure Group', [duelist, bystander]);
+  assert.equal(duelist.player.getPoisonDamage(), 30, 'the group cure skips the duelist');
+  assert.equal(bystander.player.getPoisonDamage(), 0); assert.equal(caster.player.getPoisonDamage(), 0);
+
+  const opponent = actor(t, 3199, 3200), watcher = actor(t, 3199, 3199);
+  duel(caster); duel(opponent); caster.player.setPoisonDamage(30);
+  for (const f of [opponent, watcher]) f.player.setPoisonDamage(30);
+  await cast(t, caster, 'Cure Other', [watcher], watcher);
+  assert.equal(watcher.player.getPoisonDamage(), 30, 'a duelist cures no one else');
+  await cast(t, caster, 'Cure Group', [opponent, watcher]);
+  assert.equal(caster.player.getPoisonDamage(), 0, 'but still cures themself');
+  assert.equal(opponent.player.getPoisonDamage(), 30); assert.equal(watcher.player.getPoisonDamage(), 30);
+});

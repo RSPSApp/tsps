@@ -602,6 +602,10 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
     }
     const vial = inventory.getItems().find((item) => item?.getId() === VIAL_ITEM_ID);
     if (!vial) return;
+    if (restricted(inventory.getItems().find((item) => item?.getId() === BLACK_MUSHROOM_ITEM_ID))) {
+      player.sendMessage(PRESET_TEXT);
+      return;
+    }
     inventory.deleteNumber(BLACK_MUSHROOM_ITEM_ID, 1);
     vial.setId(BLACK_DYE_ITEM_ID);
     inventory.refreshItems();
@@ -614,7 +618,7 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
   }
 
   function hasOldakMaterials(player) {
-    return plainHeld(player, LAW_RUNE_ITEM_ID) >= 2 && held(player, MOLTEN_GLASS_ITEM_ID, 1);
+    return plainHeld(player, LAW_RUNE_ITEM_ID) >= 2 && plainHeld(player, MOLTEN_GLASS_ITEM_ID) >= 1;
   }
 
   function wornBodyId(player) {
@@ -1082,7 +1086,7 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
       return false;
     }
     takePlain(player, LAW_RUNE_ITEM_ID, 2);
-    player.getInventory().deleteNumber(MOLTEN_GLASS_ITEM_ID, 1);
+    takePlain(player, MOLTEN_GLASS_ITEM_ID, 1);
     player.getInventory().adds(DORGESH_KAAN_SPHERE_ITEM_ID, 1);
     return true;
   }
@@ -1746,15 +1750,17 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
     const mail = first === GOBLIN_MAIL_ITEM_ID ? second : second === GOBLIN_MAIL_ITEM_ID ? first : null;
     if (mail !== null && DYE_TO_MAIL.has(mail)) {
       event.handled = true;
-      // A preset dye (ground into a preset vial) never colours plain goblin mail: the mail is a fresh,
-      // tradeable product of the dye.
-      const dye = [event.usedItem, event.usedWithItem].find((item) => item?.getId?.() === mail);
-      if (restricted(dye)) {
+      // The clicked copies are the ones consumed; a preset dye or mail never makes a fresh, tradeable coloured mail.
+      const mailFirst = event.usedItem?.getId?.() === GOBLIN_MAIL_ITEM_ID;
+      const mailSlot = mailFirst ? event.usedItemSlot : event.usedWithItemSlot;
+      const dyeSlot = mailFirst ? event.usedWithItemSlot : event.usedItemSlot;
+      const inventory = player.getInventory();
+      if (restricted(inventory.get(mailSlot)) || restricted(inventory.get(dyeSlot))) {
         player.sendMessage(PRESET_TEXT);
         return;
       }
-      player.getInventory().deleteNumber(GOBLIN_MAIL_ITEM_ID, 1);
-      player.getInventory().deleteNumber(mail, 1);
+      inventory.deleteAtSlot(mailSlot, 1);
+      inventory.deleteAtSlot(dyeSlot, 1);
       player.getInventory().adds(DYE_TO_MAIL.get(mail), 1);
     }
   }

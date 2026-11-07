@@ -293,8 +293,9 @@ module.exports = function registerMisthalinMysteryQuest(api) {
     area.godswordProp=ItemOnGroundManager.registerLocation(area.owner,new Item(GODSWORD_PROP_ITEM_ID,1),GODSWORD_PROP_LOCATION.clone(),area,{goesGlobal:false});
     area.godswordProp.staticSpawn=true;
   }
+  // Covers Take, telegrab casts and every generic ground-item transfer.
   function protectGodswordProp(event){
-    const prop=island(event.player)?.godswordProp;if(prop&&prop===event.groundItem)event.handled=true;
+    const prop=island(event.player)?.godswordProp;if(prop&&prop===event.groundItem){event.handled=true;event.allow=false;}
   }
   const SCENES={
     sid:{variant:"arriving-to-the-manor-sid-s-demise",npc:NpcIdentifiers.SID,tile:[1615,4828],camera:[1614,4826,300],look:[1616,4831,275],delay:1},
@@ -1619,6 +1620,8 @@ module.exports = function registerMisthalinMysteryQuest(api) {
   api.onCustomEvent("interface:close", protectScene);
   api.onNpcInteraction("<col=00ffff>Mirror</col>",{Push:pushMirror});
   api.onGroundItemPickup(protectGodswordProp);
+  api.onCustomEvent("ground-items:take", protectGodswordProp);
+  api.onCustomEvent("magic:can-telekinetic-grab", protectGodswordProp);
   api.onNpcInteraction("Abigale",{Fight:fightAbigale,"Talk-to":finishedShowdown});
   api.onNpcInteraction("Hewey",{"Talk-to":finishedShowdown});
   api.onCustomEvent("door:toggle", claimQuestDoor);

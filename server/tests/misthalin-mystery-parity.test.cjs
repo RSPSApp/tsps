@@ -309,8 +309,10 @@ test('the godsword table prop is private, persistent, cannot be taken, and is re
   assert.deepEqual(h.ground.find(args=>args[1].getId()===I.BANDOS_GODSWORD_4)[4],{goesGlobal:false});
   h.hooks.onPlayerLogin[0]({player:p});assert.equal(area.godswordProp,prop);
   const own={player:p,groundItem:prop};h.hooks.onGroundItemPickup[0](own);assert.equal(own.handled,true);
+  for(const key of ['ground-items:take','magic:can-telekinetic-grab']){const request={player:p,groundItem:prop,allow:true};h.emit(key,request);assert.equal(request.allow,false,key);}
   const other=player(),otherArea=island(h,other,125);assert.notEqual(otherArea.godswordProp,prop);
   const foreign={player:other,groundItem:prop};h.hooks.onGroundItemPickup[0](foreign);assert.equal(foreign.handled,undefined);
+  const foreignTake={player:other,groundItem:prop,allow:true};h.emit('ground-items:take',foreignTake);assert.equal(foreignTake.allow,true);
   object(h,p,core.ObjectIdentifiers.DOOR_561,1628,4827);
   h.continueUntil(p,()=>p.text==="Hewey is dead because of you!");
   p.manager.advance();h.tick(3);assert.equal(area.godswordProp,prop);h.tick(1);

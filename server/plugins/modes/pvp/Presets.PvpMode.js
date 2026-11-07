@@ -12,6 +12,7 @@ const { Skill } = require("../../../src/main/typescript/elvarg/game/model/Skill"
 const { EquipmentRequirements } = require("../../../src/main/typescript/elvarg/game/model/equipment/EquipmentRequirements");
 const { EffectTimer } = require("../../../src/main/typescript/elvarg/game/model/EffectTimer");
 const { PluginManager } = require("../../../src/main/typescript/elvarg/plugins/PluginManager");
+const { DuelState } = require("../../../src/main/typescript/elvarg/game/content/Duelling");
 const { MagicSpellbook } = require("../../../src/main/typescript/elvarg/game/model/MagicSpellbook");
 const { Flag } = require("../../../src/main/typescript/elvarg/game/model/Flag");
 const { Bank } = require("../../../src/main/typescript/elvarg/game/model/container/impl/Bank");
@@ -49,24 +50,27 @@ let presetsEnabled = false;
 let pluginApi = null;
 
 /**
- * "presets:can-use" { player, allow, message }: other content may keep a player from presets
- * (an Ironman). `quiet` skips the message (the automatic opening after a death).
- */
-/**
- * Not mid-fight or mid-duel, and not in an area that keeps its own gear and won't let the player teleport out
- * (Last Man Standing, Castle Wars, raids): a preset there would re-gear them, bank the minigame's items and reset
- * their stats.
+ * Not mid-fight, nowhere in a duel (from the request to the end), and not where the player can't teleport out
+ * (Last Man Standing, Castle Wars, raids, the Inferno and Fight Caves, the Gauntlet, Pest Control and the other
+ * minigames that keep their own gear and refuse teleports, through their area or the plugins' teleport hooks, as
+ * TeleportHandler asks): a preset there would re-gear them, bank the minigame's items and reset their stats.
  */
 function presetBusyRefusal(player) {
   // Bots re-gear from presets wherever they fight, by design (as bankRefusal exempts them).
   if (player.isPlayerBot?.()) return null;
-  if (player.getDueling?.()?.inDuel?.()) return "You can't load a preset during a duel.";
+  const duel = player.getDueling?.()?.getState?.();
+  if (duel !== undefined && duel !== DuelState.NONE) return "You can't load a preset during a duel.";
   if (pluginApi?.core?.CombatFactory?.inCombat?.(player)) return "You can't load a preset during combat.";
   const area = player.getArea?.();
   if (area && area.canTeleport?.(player, 20) === false) return "You can't load a preset here.";
+  if (PluginManager.emitCanTeleport(player, 20) === false) return "You can't load a preset here.";
   return null;
 }
 
+/**
+ * "presets:can-use" { player, allow, message }: other content may keep a player from presets
+ * (an Ironman). `quiet` skips the message (the automatic opening after a death).
+ */
 function canUsePresets(player, quiet = false) {
   const request = { player, allow: true, message: null };
   pluginApi?.emitCustomEvent?.("presets:can-use", request);

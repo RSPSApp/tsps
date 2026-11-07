@@ -55,14 +55,31 @@ function refused(t, f, pattern) {
 }
 
 test("no preset during a duel", (t) => {
+  const { DuelState } = require("../dist/game/content/Duelling");
   const f = actor(t);
-  t.mock.method(f.p.getDueling(), "inDuel", () => true);
+  f.p.getDueling().setState(DuelState.IN_DUEL);
   refused(t, f, /during a duel/);
 });
 
 test("no preset in an area that keeps the player in (it refuses teleports): LMS, Castle Wars, raids", (t) => {
   const f = actor(t);
   t.mock.method(f.p, "getArea", () => ({ canTeleport: () => false }));
+  refused(t, f, /can't load a preset here/);
+});
+
+test("no preset at any stage of a duel, from the request on", (t) => {
+  const { DuelState } = require("../dist/game/content/Duelling");
+  for (const state of ["REQUESTED_DUEL", "DUEL_SCREEN", "CONFIRM_SCREEN"]) {
+    const f = actor(t);
+    f.p.getDueling().setState(DuelState[state]);
+    refused(t, f, /during a duel/);
+  }
+});
+
+test("no preset where a plugin's teleport hook refuses (the Inferno, Fight Caves, Gauntlet, Pest Control)", (t) => {
+  const f = actor(t);
+  // What the Inferno's noTeleportOut answers for a player in a run: those minigames refuse there, not by area.
+  t.mock.method(PM, "emitCanTeleport", () => false);
   refused(t, f, /can't load a preset here/);
 });
 

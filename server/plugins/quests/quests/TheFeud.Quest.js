@@ -426,7 +426,8 @@ module.exports = function registerTheFeudQuest(api) {
       skills?.getCurrentLevel?.(Skill.THIEVING) ??
       skills?.getMaxLevel?.(Skill.THIEVING) ??
       99;
-    return Number(level) >= 30;
+    const base = skills?.getMaxLevel?.(Skill.THIEVING) ?? level;
+    return Number(level) >= 30 && Number(base) >= 30;
   }
 
   function damageAndStun(player) {

@@ -611,7 +611,7 @@ export class ShopManager {
             return;
         }
         const price = fromShop ? this.buyPrice(player, shop, definition) : this.sellPrice(shop, definition, player);
-        if (price <= 0 && !(fromShop && this.itemPrice(shop, definition) > 0)) {
+        if (price <= 0 && !((fromShop || this.stockPriced(shop)) && this.itemPrice(shop, definition) > 0)) {
             player.sendMessage("This item has no value.");
             return;
         }
@@ -767,7 +767,9 @@ export class ShopManager {
             return;
         }
         const price = this.sellPrice(shop, definition, player);
-        if (price <= 0) {
+        // Wiki (Lumbridge General Store, Bandit Duty Free): a stocked pot, jug or chisel is "bought at" 0 coins. A
+        // stock-priced general store refuses only an item of no value, not one its formula rounds down to 0.
+        if (this.stockPriced(shop) ? this.itemPrice(shop, definition) <= 0 : price <= 0) {
             player.sendMessage("This item has no value.");
             return;
         }
@@ -778,11 +780,8 @@ export class ShopManager {
 
         // A multi-item sale changes the price after each unit, even when content
         // restores stock after the transaction (the league keep-stock hook).
-        const policy = shop.definition.getSalesPolicy();
-        const stockPriced = policy.generalStore === true && shop.definition.getCurrency() === "COINS"
-            && policy.sellMultiplier != null && policy.priceChangePer != null;
         let payment = quantity * price;
-        if (stockPriced) {
+        if (this.stockPriced(shop)) {
             payment = 0;
             for (let offset = 0; offset < quantity; offset++) {
                 payment += this.sellPrice(shop, definition, player, offset);
@@ -981,12 +980,18 @@ export class ShopManager {
         return Number.isSafeInteger(request.price) && request.price >= 0 ? request.price : price;
     }
 
+    /** A coin general store with the Wiki's buy percentage and change per item: its price follows its stock. */
+    private static stockPriced(shop: RuntimeShop): boolean {
+        const policy = shop.definition.getSalesPolicy();
+        return policy.generalStore === true && shop.definition.getCurrency() === "COINS"
+            && policy.sellMultiplier != null && policy.priceChangePer != null;
+    }
+
     private static sellPrice(shop: RuntimeShop, definition: ItemDefinition, player: any = null, additionalStock = 0): number {
         const buyPrice = this.itemPrice(shop, definition);
         let price = buyPrice > 1 ? Math.floor(buyPrice * this.SALES_TAX) : buyPrice;
         const policy = shop.definition.getSalesPolicy();
-        if (policy.generalStore === true && shop.definition.getCurrency() === "COINS"
-            && policy.sellMultiplier != null && policy.priceChangePer != null) {
+        if (this.stockPriced(shop)) {
             const overstock = Math.max(0, (shop.stock.get(definition.getId()) ?? 0)
                 - (shop.originalAmounts.get(definition.getId()) ?? 0) + additionalStock);
             // Wiki StoreTableHead multipliers use per mille; the general-store floor is 10%.

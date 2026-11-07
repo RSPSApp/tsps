@@ -294,6 +294,28 @@ test("Drink skips only the refused potion and plays the barrel sound once (rspro
   assert.deepEqual(sounds, [[9491, 30]]);
 });
 
+test("Drink tells each refused divine potion's reason, one per potion (rsprox 4242)", (t) => {
+  const I = core.ItemIdentifiers;
+  const f = actor(t);
+  const combat = Potions.doseOf(I.DIVINE_SUPER_COMBAT_POTION_4_);
+  const ranging = Potions.doseOf(I.DIVINE_RANGING_POTION_4_);
+  f.player.getSkillManager()
+    .setMaxLevels(core.Skill.HITPOINTS, 99, false)
+    .setCurrentLevels(core.Skill.HITPOINTS, 10, false);
+  seed(f.player, {
+    combat: { itemId: I.DIVINE_SUPER_COMBAT_POTION_4_, name: "divine super combat potion", doses: 2, slot: 0 },
+    ranging: { itemId: I.DIVINE_RANGING_POTION_4_, name: "divine ranging potion", doses: 2, slot: 1 },
+  });
+  put(f, I.CHUGGING_BARREL, 0);
+  itemAction(f, BARREL_NAME, "Drink", 0);
+  assert.ok(combat && ranging);
+  const reason = "You need more than 10 hitpoints to survive the power of a divine potion.";
+  assert.deepEqual(f.messages.filter((m) => m === reason).length, 2);
+  assert.equal(balance(f, combat.potion.name).doses, 2);
+  assert.equal(balance(f, ranging.potion.name).doses, 2);
+  assert.equal(drunkEvents.length, 0);
+});
+
 test("Drink tells a player-wide refusal once, not once per potion", (t) => {
   const I = core.ItemIdentifiers;
   const f = actor(t);

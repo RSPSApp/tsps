@@ -176,11 +176,16 @@ function drink({ player }) {
     if (!dose) continue;
     // Captured (4242): a refused potion (a divine potion at low Hitpoints) says why and keeps its dose;
     // the rest still drink, in the barrel's order, each against the state the one before left.
-    const refusal = Potions.drinkRefusal(player, dose.entry);
-    if (refusal) {
-      // The same reason (a player-wide veto, say) is told once, not once per potion.
-      if (!refused.has(refusal)) player.sendMessage(refusal);
-      refused.add(refusal);
+    // A player-wide veto (the canDrink hooks, say) is told once; a potion's own refusal is told per potion.
+    const permission = Potions.drinkPermissionRefusal(player, dose.entry);
+    if (permission) {
+      if (!refused.has(permission)) player.sendMessage(permission);
+      refused.add(permission);
+      continue;
+    }
+    const canUse = Potions.drinkCanUseRefusal(player, dose.entry);
+    if (canUse) {
+      player.sendMessage(canUse);
       continue;
     }
     if (!started) {

@@ -1,5 +1,6 @@
 /** Shield of Arrav. Capture evidence and remaining presentation gaps: docs/shield-of-arrav.md. */
 module.exports = function registerShieldOfArravQuest(api) {
+  const { giveReward } = require("../QuestRuntime");
   const { Location, Item, Area, Boundary, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers, ItemStatementDialogue, DialogueChainBuilder, Animation, GameObject, TaskManager, CountdownTask } = api.core;
   const { registerQuest, startTranscript, openBook } = require("../QuestRuntime");
   const { crossingFor } = require("../../objects/WallDoor.Doors");
@@ -306,7 +307,7 @@ module.exports = function registerShieldOfArravQuest(api) {
   }
 
   function reward(player) {
-    player.getInventory().adds(COINS_ID, 600);
+    giveReward(player, COINS_ID, 600);
   }
 
   function selectDialogueVariant({ npcId, player }) {

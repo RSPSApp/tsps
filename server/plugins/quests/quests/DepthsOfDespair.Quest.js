@@ -54,6 +54,7 @@
  * - The journal lines are written here (the wiki publishes no journal text).
  */
 module.exports = function registerDepthsOfDespairQuest(api) {
+  const { giveReward } = require("../QuestRuntime");
   const {
     DialogueChainBuilder,
     EndDialogue,
@@ -934,7 +935,7 @@ module.exports = function registerDepthsOfDespairQuest(api) {
 
   function grantReward(player) {
     player.getSkillManager().addExperiences(Skill.AGILITY, 1500);
-    player.getInventory().adds(COINS_ITEM_ID, 4000);
+    giveReward(player, COINS_ITEM_ID, 4000);
   }
 
   api.persistAttribute(BOOK_BAY_ATTRIBUTE);

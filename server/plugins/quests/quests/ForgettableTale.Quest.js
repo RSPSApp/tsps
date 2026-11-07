@@ -41,6 +41,7 @@
  *  - Kelda hops grow and the stout ferments in 15 minutes; agent:advance-time moves it.
  */
 module.exports = function registerForgettableTaleQuest(api) {
+  const { giveReward } = require("../QuestRuntime");
   const {
     Equipment,
     ItemIdentifiers,
@@ -1694,7 +1695,7 @@ module.exports = function registerForgettableTaleQuest(api) {
   function grantReward(player) {
     player.getSkillManager().addExperiences(Skill.COOKING, 5000);
     player.getSkillManager().addExperiences(Skill.FARMING, 5000);
-    player.getInventory().adds(DWARVEN_STOUT_M, 1); // registerQuest adds the first
+    giveReward(player, DWARVEN_STOUT_M, 1); // registerQuest adds the first
   }
 
   // ==========================================================================

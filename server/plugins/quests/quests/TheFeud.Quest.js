@@ -67,6 +67,7 @@
  *    branch; answered via quest:is-complete when that quest is loaded.
  */
 module.exports = function registerTheFeudQuest(api) {
+  const { giveReward } = require("../QuestRuntime");
   const {
     Equipment,
     GameObject,
@@ -1910,7 +1911,7 @@ module.exports = function registerTheFeudQuest(api) {
 
   function grantReward(player) {
     player.getSkillManager().addExperiences(Skill.THIEVING, 15000);
-    player.getInventory().adds(COINS_ITEM_ID, 499);
+    giveReward(player, COINS_ITEM_ID, 499);
     // The disguise is one of the quest's rewards; a player who entered with a
     // Karidian disguise (or lost it) still receives their own.
     if (!hasDesertDisguise(player)) {

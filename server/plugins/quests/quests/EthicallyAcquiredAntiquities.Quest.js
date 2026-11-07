@@ -39,6 +39,7 @@
  * Rewards per the capture: 1 Quest point, 6,000 Thieving XP and 5,000 coins.
  */
 module.exports = function registerEthicallyAcquiredAntiquitiesQuest(api) {
+  const { giveReward } = require("../QuestRuntime");
   const {
     ActionDialogue,
     Animation,
@@ -1399,7 +1400,7 @@ module.exports = function registerEthicallyAcquiredAntiquitiesQuest(api) {
   function grantReward(player) {
     player.getSkillManager().addExperiences(Skill.THIEVING, 6000);
     // registerQuest adds one coin; top the stack up to 5,000.
-    player.getInventory().adds(COINS_ITEM_ID, 4999);
+    giveReward(player, COINS_ITEM_ID, 4999);
     if (held(player, BETTYS_NOTES_ITEM_ID)) player.getInventory().deleteNumber(BETTYS_NOTES_ITEM_ID, 1);
     later(player, DIADEM_RETURN_TICKS, () => {
       if (player.isRegistered?.() !== false && !hasFlag(player, BIT_DIADEM)) setFlag(player, BIT_DIADEM, DIADEM_VARBIT);

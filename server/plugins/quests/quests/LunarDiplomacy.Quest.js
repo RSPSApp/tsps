@@ -81,6 +81,7 @@
  *    item flow are reachable but not every alt line is exercised.
  */
 module.exports = function registerLunarDiplomacyQuest(api) {
+  const { giveReward } = require("../QuestRuntime");
   const {
     Animation,
     Equipment,
@@ -2747,6 +2748,6 @@ module.exports = function registerLunarDiplomacyQuest(api) {
     const skills = player.getSkillManager();
     skills.addExperiences(Skill.MAGIC, 5000);
     skills.addExperiences(Skill.RUNECRAFTING, 5000);
-    player.getInventory().adds(ASTRAL_RUNE, 50);
+    giveReward(player, ASTRAL_RUNE, 50);
   }
 };

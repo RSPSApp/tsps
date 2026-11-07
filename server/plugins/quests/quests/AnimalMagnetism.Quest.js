@@ -55,6 +55,7 @@
  * Source: OSRS Wiki (Animal Magnetism, Quick guide, Transcript:Animal Magnetism).
  */
 module.exports = function registerAnimalMagnetismQuest(api) {
+  const { giveReward } = require("../QuestRuntime");
   const {
     Direction,
     Equipment,
@@ -1363,7 +1364,7 @@ module.exports = function registerAnimalMagnetismQuest(api) {
     player.getSkillManager().addExperiences(Skill.FLETCHING, 1000);
     player.getSkillManager().addExperiences(Skill.SLAYER, 1000);
     player.getSkillManager().addExperiences(Skill.WOODCUTTING, 2500);
-    player.getInventory().adds(itemId, 1);
+    giveReward(player, itemId, 1);
   }
 
   quest = registerQuest(api, {

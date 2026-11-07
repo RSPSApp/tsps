@@ -68,3 +68,24 @@ test('Spirit Tree build requires Farming 83 and accepts boosts',async t=>{
     if(!allowed){assert.equal(skills.getExperience(core.Skill.CONSTRUCTION),cxp);assert.equal(skills.getExperience(core.Skill.FARMING),fxp);} else console.log('SPIRIT_TREE_XP_OBS '+JSON.stringify({construction:skills.getExperience(core.Skill.CONSTRUCTION)-cxp,farming:skills.getExperience(core.Skill.FARMING)-fxp}));
   });
 });
+
+// Real Workbench consumer, directly invoked; this is not a UI-routing test.
+test('workbench preserves existing deferred Cooking behavior',async t=>{
+  const Workbench=require('../plugins/skills/construction/Workbench.Construction')._test;
+  const barrel=Data.BUILDABLE_BY_KEY.get('BEER_BARREL'), flatpack=Workbench.FLATPACK_OF.get('BEER_BARREL');
+  const limit=require('../plugins/skills/construction/data/workbench.json').benches.WOODEN_WORKBENCH; assert.equal(limit,20); assert.ok(barrel.level<=limit);
+  assert.ok(barrel); assert.ok(Number.isInteger(flatpack));
+  for(const [index,current,allowed] of [[1304,4,true],[1305,5,true]]) await t.test(`Cooking ${current}`,async t=>{
+    const f=actor(t,index,83,83),skills=f.p.getSkillManager(),inv=f.inv;
+    skills.setMaxLevels(core.Skill.COOKING,4,false).setExperiences(core.Skill.COOKING,core.SkillManager.getExperienceForLevel(4),false).setCurrentLevel(core.Skill.COOKING,current,false);
+    for(const material of barrel.materials){if(material.itemId!=null)inv.add(new core.Item(material.itemId,material.amount),false);else if(material.source==='NAILS')inv.add(new core.Item(core.ItemIdentifiers.STEEL_NAILS,material.amount),false);else assert.fail(`unexpected barrel material ${material.source}`);}
+    const materials=barrel.materials.map(m=>[m.itemId??core.ItemIdentifiers.STEEL_NAILS,m.amount]);
+    for(const [id,n] of materials) assert.ok(inv.getAmount(id)>=n);
+    const before=materials.map(([id])=>inv.getAmount(id)), xp=skills.getExperience(core.Skill.CONSTRUCTION);
+    Workbench.makeFlatpack(f.p,{house:f.house,limit},barrel);
+    assert.equal(inv.getAmount(flatpack),allowed?1:0);
+    for(let i=0;i<materials.length;i++) assert.equal(inv.getAmount(materials[i][0]),before[i]-(allowed?materials[i][1]:0));
+    assert.equal(inv.getAmount(core.ItemIdentifiers.HAMMER),1);assert.equal(inv.getAmount(core.ItemIdentifiers.SAW),1);
+    if(!allowed)assert.equal(skills.getExperience(core.Skill.CONSTRUCTION),xp);
+  });
+});

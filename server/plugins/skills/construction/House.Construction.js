@@ -870,7 +870,16 @@ function formatBuildable(buildable) {
  * with the missing ones in red ("You don't have the right materials: 2 x Plank, <col=ef1020>2 x Nails</col>").
  */
 function getBuildMaterials(player, house, target, buildable) {
+  if (buildable.invalidLevels) return "This build has an unsupported skill requirement.";
   if (constructionLevel(player) < buildable.level) return `You need Construction level ${buildable.level} to build that.`;
+  for (const requirement of buildable.secondaryLevels ?? []) {
+    const skill = Skill.values().find(candidate => candidate.getClientId() === requirement.statId);
+    if (!skill || !Number.isInteger(requirement.level) || requirement.level < 1) return "This build has an unsupported skill requirement.";
+    // Farming is qualified here; preserve other secondary-skill behavior until its policy is verified.
+    if (skill !== Skill.FARMING) continue;
+    if (player.getSkillManager().getCurrentLevel(skill) < requirement.level)
+      return `You need ${skill.getName()} level ${requirement.level} to build that.`;
+  }
   if (!player.getInventory().contains(HAMMER_ID) || !hasSaw(player)) return "You need a saw and a hammer in order to make furniture.";
   // A flatpack is made away from any hotspot: no furniture there to upgrade.
   const existing = target ? house.getFurnitureAtTarget(target)?.buildableKey : undefined;

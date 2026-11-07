@@ -43,6 +43,7 @@ const SCRIPT_JOURNAL_RESET = 6844;
 const SCRIPT_MAINMODAL_OPEN = 2524;
 const SCRIPT_JOURNAL_SHOW = 6845;
 const MAGIC_TAB = 6;
+const PRESET_TEXT = "Preset items cannot be used for this.";
 
 let core;
 let effect;
@@ -50,6 +51,10 @@ let effect;
 let tiers = null;
 /** Per player: { readyAt (process cycle), task (the cast waiting, if any) }. */
 const casts = new WeakMap();
+
+function restricted(item) {
+  return item.isPresetItem?.() === true || item.isUntradeable?.() === true || item.isUnbankable?.() === true;
+}
 
 function active(player) {
   return Common.effectActive(player, effect);
@@ -141,6 +146,11 @@ function cast(player, spellName, slot, itemId, clicked) {
   const inventory = player.getInventory();
   const item = inventory.getItems()[slot];
   if (!item || item.getId() !== itemId) return;
+  // A preset copy (PvP presets on a league world) would come back as a plain, tradeable product.
+  if (restricted(item)) {
+    if (clicked) player.sendMessage(PRESET_TEXT);
+    return;
+  }
   if (clicked) player.getPacketSender().sendTab(MAGIC_TAB);
   const found = lookup(itemId);
   if (!found) {

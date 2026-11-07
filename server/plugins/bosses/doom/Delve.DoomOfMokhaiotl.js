@@ -173,12 +173,15 @@ function modifyHit(event) {
 
 // ---------------------------------------------------------------- death and logging in
 
-/** What would drop lands in the lobby, as the grave would be. */
-function dropInLobby(event) {
-  if (!Run.runOf(event.player) || !event.dropEligible) return;
-  const { ItemOnGroundManager } = Shared.core();
-  ItemOnGroundManager.registerLocation(event.player, event.item, Shared.loc(Shared.TILES.RESPAWN));
-  event.handled = true;
+/**
+ * Nothing in a run is safe, and the grave stands in the lobby (Wiki, Doom of Mokhaiotl: "Their grave is also located there. All
+ * unprotected items are moved to the grave"). Tradeables went to the lobby floor here instead, and untradeables to a
+ * grave at the world spawn (an instance that names no grave tile): one death split in two.
+ */
+function graveInLobby(request) {
+  if (!Run.runOf(request.player)) return;
+  const at = Shared.loc(Shared.TILES.RESPAWN);
+  request.tile = { x: at.getX(), y: at.getY(), z: at.getZ() };
 }
 
 function dieInRun(event) {
@@ -213,7 +216,7 @@ module.exports = function registerDoomDelve(api) {
   api.onNpcHitModify(modifyHit);
   api.onAttackTiming(attackTiming);
   api.onCombatHitRoll(chargedAccuracy);
-  api.onPlayerDeathItemDrop(dropInLobby);
+  api.onCustomEvent("gravestones:grave-location", graveInLobby);
   api.onPlayerDeath(dieInRun);
   api.onPlayerLogin(returnToLobby);
 };

@@ -201,8 +201,15 @@ export class PlayerDeathTask extends Task {
                 dropEligible,
                 suppressDefaultDrop: false,
                 handled: false,
+                extraDrops: [] as Item[],
             };
             const handled = PluginManager.emitPlayerDeathItemDrop(deathDropEvent);
+            // Items a hook adds to the death (a ring's imbue paid out as coins) are lost with it: to the grave or the
+            // floor, as the rest are, or kept where the death keeps everything.
+            for (const extra of deathDropEvent.extraDrops) {
+                if (PlayerDeathTask.keepsEverything(player)) itemsToKeep.push(extra);
+                else droppedItems.push(extra);
+            }
             if (handled) {
                 pluginHandledDrop = true;
                 continue;

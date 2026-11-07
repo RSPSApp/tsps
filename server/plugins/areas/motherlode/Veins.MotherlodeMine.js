@@ -167,7 +167,10 @@ function awardPayDirt(player, vein, now) {
   state.held.push(Mine.rollOre(Mine.miningLevel(player), Math.random, nuggets.multiplier).key);
   Mine.save(player, state);
   player.getInventory().add(new Item(Mine.PAY_DIRT, 1), true);
-  player.getSkillManager().addExperiences(Skill.MINING, PAY_DIRT_XP);
+  // The prospector outfit raises it ("mining:xp-multiplier"; the Wiki's Motherlode Mine shop table lists its Exp boost).
+  const xp = { player, multiplier: 1 };
+  api?.emitCustomEvent?.("mining:xp-multiplier", xp);
+  player.getSkillManager().addExperiences(Skill.MINING, PAY_DIRT_XP * xp.multiplier);
   player.sendMessage("You manage to mine some pay-dirt.");
   player.getPacketSender().sendSound(PAY_DIRT_SOUND, 0, 0);
   if (vein.depletesAt < 0) vein.depletesAt = now + random(vein.upper ? LIFESPAN.upper : LIFESPAN.lower);

@@ -24,6 +24,24 @@ function prayerXp(npcId) {
 
 let core;
 
+/** The Zealot's robes chance and pieces are shared with the bone altars (Wiki: Zealot's robes, 1.25% per piece). */
+const ZEALOT = require("./data/bone-altars.json").zealot;
+const HEAD_SAVED_MESSAGE = "Your Zealot's robes save the ensouled head but still grant you experience.";
+let zealotIds = null;
+
+function zealotPieces(player) {
+  zealotIds ??= new Set(ZEALOT.pieces.map((name) => core.CacheDefinitions.getObjId(name)));
+  return player.getEquipment().getItems().filter((item) => zealotIds.has(item?.getId?.())).length;
+}
+
+/** "reanimation:head-consumed" { player, saved }: a cast is about to use up its head; the robes may spare it. */
+function maybeSaveHead(request) {
+  const chance = zealotPieces(request.player) * ZEALOT.chancePerPiece;
+  if (chance <= 0 || Math.random() >= chance) return;
+  request.saved = true;
+  request.player.sendMessage(HEAD_SAVED_MESSAGE);
+}
+
 function rewardReanimationKill({ npc, npcId, killer }) {
   const xp = prayerXp(npcId);
   if (!xp) return;
@@ -38,6 +56,7 @@ module.exports = {
   register(api) {
     core = api.core;
     api.onNpcDeath(rewardReanimationKill);
+    api.onCustomEvent("reanimation:head-consumed", maybeSaveHead);
   },
-  _test: { PRAYER_XP_BY_NAME, prayerXp, rewardReanimationKill },
+  _test: { zealotPieces, maybeSaveHead, PRAYER_XP_BY_NAME, prayerXp, rewardReanimationKill },
 };

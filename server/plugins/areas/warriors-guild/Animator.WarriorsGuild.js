@@ -126,18 +126,47 @@ function lostSets(player) {
   return Array.isArray(sets) ? sets : [];
 }
 
-/** The armour goes back to Shanomi: it outlived its five minutes, or its owner died or left. */
-function abandon(player) {
+/**
+ * The armour goes back to Shanomi: it outlived its five minutes, or its owner died or left. Armour already dying drops
+ * its set instead, but only once its death finds a logged-in killer (NPCDeathTask, a tick on): Shanomi keeps nothing
+ * only when that drop is certain, or the set was both dropped and kept. `leaving` is the owner logging out: in the
+ * death's own cycle the task hasn't looked yet and won't find them, but from the next tick on it has already taken them
+ * as its killer, and drops the set whether they stay or not.
+ */
+function abandon(player, leaving = false) {
   const state = animated.get(player);
   if (!state) return;
   animated.delete(player);
+  const killer = state.npc?.isDyingFunction?.() === true ? state.killer : null;
+  const ownerLeftFirst = leaving && killer === player && state.deathCycle === Guild.core.World.getProcessCycle();
+  // The owner's own logout hook runs after they are unregistered (MobileList.remove), so their registration says
+  // nothing here: only whether the task has already taken them (ownerLeftFirst) does.
+  const killerCounts = (leaving && killer === player) || killer?.isRegistered?.() === true;
+  const dropCertain = killer != null && killerCounts && !ownerLeftFirst;
   if (state.npc) Guild.despawn(state.npc);
   player.getPacketSender().sendEntityHintRemoval(false);
-  player.setAttribute(LOST_ARMOUR_ATTRIBUTE, [...lostSets(player), state.set.slice(0, 3)]);
+  if (!dropCertain) player.setAttribute(LOST_ARMOUR_ATTRIBUTE, [...lostSets(player), state.set.slice(0, 3)]);
 }
 
 function abandonArmour({ player }) {
   abandon(player);
+}
+
+function logoutArmour({ player }) {
+  abandon(player, true);
+}
+
+/**
+ * The armour's killer, as its death will find it. With none (no player's damage counted), its death drops nothing and
+ * the set goes to Shanomi now, so the owner isn't held as "already summoned" for the rest of its five minutes.
+ */
+function armourDying({ npc }) {
+  const owner = npc?.getOwner?.();
+  const state = owner ? animated.get(owner) : null;
+  if (!state || state.npc !== npc) return;
+  state.killer = npc.getCombat?.()?.getKiller?.(false) ?? null;
+  state.deathCycle = Guild.core.World.getProcessCycle();
+  if (state.killer == null) abandon(owner);
 }
 
 function tickArmour({ player }) {
@@ -194,7 +223,8 @@ module.exports = function attachAnimator(pluginApi) {
   api.onNpcDeath(armourKilled);
   api.onCustomEvent("npc-drops:roll", bonusArmourTokens);
   api.onPlayerDeath(abandonArmour);
-  api.onPlayerLogout(abandonArmour);
+  api.onPlayerLogout(logoutArmour);
+  api.onNpcBeforeDeath(armourDying);
   api.onNpcDialogueVariant(shanomiVariant);
   api.onNpcDialogueCondition(shanomiCondition);
   api.onCustomEvent("npc-dialogue:action", returnLostArmour);

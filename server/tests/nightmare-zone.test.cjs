@@ -401,6 +401,23 @@ test("overload keeps the potion delay and the food delay, and is refused while s
   Dream.wake({ player: p });
 });
 
+test('a restart mid-dream: logging in still marked as dreaming wakes the player by Dominic, effects gone', () => {
+  const p = fakePlayer();
+  p.location = new Location(9000, 9000, 0); // the gone dream's instance tiles
+  p.setAttribute('nightmare-zone:in-dream', true);
+  p.setAttribute('nightmare-zone:absorb', 500);
+  p.levels.Strength = 118;
+  for (const fn of hooks.login) fn({ player: p });
+  const [x, y, z] = Common.data.lobby.afterDream;
+  assert.deepEqual([p.location.getX(), p.location.getY(), p.location.getZ()], [x, y, z ?? 0], 'by Dominic');
+  assert.equal(p.getAttribute('nightmare-zone:in-dream'), false);
+  assert.equal(varbit(p, 'nzone_absorb_potion_effects'), 0, 'absorption gone');
+  const outside = fakePlayer();
+  const start = outside.location;
+  for (const fn of hooks.login) fn({ player: outside });
+  assert.equal(outside.location, start, 'a player not dreaming stays put');
+});
+
 test('real executeHit protects before absorption spends points', () => {
   const { Player } = require('../dist/game/entity/impl/player/Player');
   const { PlayerSession } = require('../dist/net/PlayerSession');

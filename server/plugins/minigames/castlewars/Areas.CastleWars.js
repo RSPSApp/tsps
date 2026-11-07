@@ -159,6 +159,9 @@ function defineAreas() {
       player.getPacketSender().sendPlayerOption(data.TAKE_FROM_OPTION_SLOT, "", false);
       game.closeOverlay(player);
       player.getPacketSender().sendEntityHintRemoval(true);
+      // A carrier leaving any way (logout, disconnect) drops the flag as a death or an unequip does, before the banner is
+      // stripped: it stayed "carried" by a gone player, so no one could take it from the stand for the rest of the game.
+      game.dropCarriedFlag(player);
       game.clearCastleWarsItems(player);
       game.clearBraceletEffect(player);
       if (logout) {

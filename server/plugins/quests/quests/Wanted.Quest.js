@@ -948,9 +948,22 @@ module.exports = function registerWantedQuest(api) {
     quest.setStage(player, STAGE_STARTED);
   }
 
+  /** A free slot, or one the payment frees: the made orb's gem and glass, or a stack of exactly 10,000 coins. */
+  function roomForCommorb(player, path) {
+    const inventory = player.getInventory();
+    if (inventory.getFreeSlots() > 0) return true;
+    if (path === "make") return true;
+    return path != null && inventory.getAmount(COINS_ITEM_ID) === 10000;
+  }
+
   function grantCommorbFromTiffy(player) {
     const stage = quest.getStage(player);
     if (stage < STAGE_MISSION || quest.isComplete(player) || hasItem(player, COMMORB_ITEM_ID)) return;
+    // The orb needs a slot; paying first would lose the coins (ours: the transcript has no full-inventory line).
+    if (!roomForCommorb(player, stage === STAGE_MISSION ? orbPathByPlayer.get(player) : null)) {
+      player.sendMessage("You need a free inventory slot for the Communications Orb.");
+      return;
+    }
     if (stage === STAGE_MISSION) {
       const path = orbPathByPlayer.get(player);
       orbPathByPlayer.delete(player);

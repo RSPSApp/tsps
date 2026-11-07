@@ -10,6 +10,7 @@
  * Not here: the tenfold Varlamore house valuables (house thieving is not on the server).
  */
 const Common = require("./Common.LeagueRelics");
+const { plainAmount, takePlain } = require("../../items/PoweredStaff");
 
 let effect;
 
@@ -39,14 +40,15 @@ function keepStall(request) {
 function stallLoot({ player, method, itemId }) {
   if (method !== "stall" || !Number.isInteger(itemId) || !active(player) || !Common.multipliable(itemId)) return;
   const inventory = player.getInventory();
-  if (!inventory.contains(itemId)) return;
+  // The stolen copy is plain: by id, a preset copy held earlier in the pack would be taken in its place.
+  if (plainAmount(inventory, itemId) <= 0) return;
   const noted = Common.noted(itemId);
   const amount = effect.lootMultiplier;
   if (noted === itemId) {
     inventory.adds(itemId, amount - 1);
     return;
   }
-  inventory.deleteNumber(itemId, 1);
+  takePlain(inventory, itemId, 1);
   inventory.adds(noted, amount);
 }
 

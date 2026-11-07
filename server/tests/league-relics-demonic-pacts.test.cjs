@@ -571,6 +571,19 @@ test("Larcenist: sure pickpockets, ten times the pouches, loot noted and tenfold
   }
 });
 
+test("Larcenist: a stolen item is noted from its plain copy, never from a preset copy held earlier", () => {
+  const who = cases(LARCENIST);
+  const inventory = who.relic.getInventory();
+  const preset = new core.Item(I.STEEL_SCIMITAR, 1);
+  for (const meta of [core.Item.UNTRADEABLE_META, core.Item.UNBANKABLE_META, core.Item.PRESET_META]) preset.setMetaValue(meta, true);
+  inventory.setItem(0, preset);
+  inventory.setItem(1, new core.Item(I.STEEL_SCIMITAR, 1));
+  emit("thieving:success", { player: who.relic, method: "stall", itemId: I.STEEL_SCIMITAR });
+  assert.equal(inventory.getItems()[0]?.isPresetItem(), true, "the preset scimitar stays");
+  assert.equal(inventory.getAmount(I.STEEL_SCIMITAR), 1, "only the stolen plain one was noted");
+  assert.equal(inventory.getAmount(Common.noted(I.STEEL_SCIMITAR)), 10);
+});
+
 test("Larcenist: guards never catch the relic's owner at a stall (thieving:stall-watch)", () => {
   const who = cases(LARCENIST);
   assert.equal(emit("thieving:stall-watch", { player: who.relic, object: {}, unseen: false }).unseen, true);

@@ -8,6 +8,7 @@
  *   the lobby.
  */
 const Common = require("./Common.LastManStanding");
+const Dragonfire = require("../../combat/DragonfireProtection");
 
 const COMBAT_SKILLS = ["ATTACK", "DEFENCE", "STRENGTH", "HITPOINTS", "RANGED", "PRAYER", "MAGIC"];
 
@@ -59,14 +60,27 @@ function timersOf(player) {
   return {
     teleblock: combat.getTeleblockTimer().secondsRemaining(),
     fire: combat.getFireImmunityTimer().secondsRemaining(),
+    dragonfire: dragonfireOf(player),
     poison: combat.getPoisonClock().finished() ? null : combat.getPoisonClock().snapshot(),
   };
+}
+
+/**
+ * The antifire itself (tier, label, end time) lives in an attribute the fire timer only mirrors, and is what
+ * dragonfire reads first: kept as its tier, label and remaining time, so the game doesn't run it down.
+ */
+function dragonfireOf(player) {
+  const state = player.getAttribute(Dragonfire.ATTR_DRAGONFIRE_STATE);
+  if (!state || !Number.isFinite(state.endsAt)) return null;
+  const seconds = Math.ceil((state.endsAt - Date.now()) / 1000);
+  return seconds > 0 ? { tier: state.tier, label: state.label, seconds } : null;
 }
 
 function stopTimers(player) {
   const combat = player.getCombat();
   combat.getTeleblockTimer().stop();
   combat.getFireImmunityTimer().stop();
+  player.setAttribute(Dragonfire.ATTR_DRAGONFIRE_STATE, null);
   combat.getPoisonClock().stop();
   player.getPacketSender().sendEffectTimer?.(0, Common.core.EffectTimer?.TELE_BLOCK);
 }
@@ -79,7 +93,8 @@ function restoreTimers(player, timers) {
     combat.getTeleblockTimer().start(timers.teleblock);
     player.getPacketSender().sendEffectTimer?.(timers.teleblock, Common.core.EffectTimer?.TELE_BLOCK);
   }
-  if (timers.fire > 0) combat.getFireImmunityTimer().start(timers.fire);
+  if (timers.dragonfire) Dragonfire.setDragonfireProtection(player, timers.dragonfire);
+  else if (timers.fire > 0) combat.getFireImmunityTimer().start(timers.fire);
   if (timers.poison) combat.getPoisonClock().restore(timers.poison);
 }
 

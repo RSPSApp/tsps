@@ -354,9 +354,11 @@ function voyageInterrupted(mobile) {
 function sail(player, destination, fare) {
   if (voyages.has(player)) return;
   // The fare was worked out when the question was asked; a ring of charos taken off since makes it dearer, so
-  // ask again at the fare it is now rather than charge the old one.
-  const now = fareFor(player, portAt(player.getLocation()), destination);
-  if (now !== null && now !== fare) {
+  // ask again at the fare it is now rather than charge the old one. Away from any port there is no fare to charge.
+  const port = portOf(player);
+  const now = fareFor(player, port, destination);
+  if (now === null) return;
+  if (now !== fare) {
     offerFare(player, destination, now);
     return;
   }
@@ -365,7 +367,7 @@ function sail(player, destination, fare) {
     offerFare(player, destination, fare);
     return;
   }
-  const voyage = { landing: false, from: portAt(player.getLocation()) };
+  const voyage = { landing: false, from: port };
   voyages.set(player, voyage);
   setPreviousDestination(player, destination);
   inventory.deleteNumber(core.ItemIdentifiers.COINS, fare);
@@ -458,11 +460,16 @@ function offerFare(player, destination, fare) {
     "Cancel.", cancel);
 }
 
+/** The port the player is chartering from: their own tile's, else the trader's they spoke to. */
+function portOf(player) {
+  return portAt(player.getLocation()) ?? portAt(traders.get(player)?.npc?.getLocation?.());
+}
+
 /** A destination picked on the map or list, or by Charter-to. */
 function choose(player, destination) {
   if (voyages.has(player) || !destination) return false;
   const trader = traders.get(player) ?? null;
-  const port = portAt(player.getLocation()) ?? portAt(trader?.npc?.getLocation?.());
+  const port = portOf(player);
   if (destination === port || !available(player, port, destination)) return false;
   if (destination.slug === CRANDOR) {
     closeMap(player);
@@ -578,7 +585,7 @@ module.exports = {
   name: "CharterShips",
   members: true,
   _test: {
-    destinations, portAt, available, fareBetween, fareFor, choose, sail, offerFare, openMap,
+    destinations, portAt, portOf, available, fareBetween, fareFor, choose, sail, offerFare, openMap,
     charter, charterToLast, chooseOnMap, mapClosed, transcriptOpensMap, answerTranscriptCondition,
     reset: () => { rows = null; fareData = null; },
     PREVIOUS_DESTINATION_ATTRIBUTE, SKIP_CONFIRMATION_ATTRIBUTE,

@@ -88,3 +88,42 @@ test("with nothing changed, Yes charges the fare asked", (t) => {
   yes(f);
   assert.equal(f.inv.getAmount(I.COINS), 100000 - fare);
 });
+
+test("a charter asked from beside the trader, off the port's zone, re-checks the fare at the trader's port", (t) => {
+  const f = actor(t);
+  const { from, to, tile } = route();
+  // A tile next to the zone that is in no port (zones can touch, so step out until none claims it).
+  let off = null;
+  for (let d = 1; d < 64 && !off; d++) {
+    for (const [x, y] of [[from.zone.low.x - d, from.zone.low.y], [from.zone.high.x + d, from.zone.low.y], [from.zone.low.x, from.zone.low.y - d], [from.zone.low.x, from.zone.high.y + d]]) {
+      const tileOff = new core.Location(x, y, from.zone.low.z);
+      if (!Charter.portAt(tileOff)) { off = tileOff; break; }
+    }
+  }
+  assert.equal(Charter.portAt(off), null, "the player's own tile is outside every port");
+  f.p.setLocation(off);
+  Charter.charter({ player: f.p, npc: { getLocation: () => tile, getId: () => 0 }, definition: null });
+  assert.equal(Charter.portOf(f.p), from);
+  f.p.getEquipment().setItem(core.Equipment.RING_SLOT, new core.Item(I.RING_OF_CHAROS_A_, 1));
+  const half = Charter.fareFor(f.p, from, to);
+  f.inv.setItem(0, new core.Item(I.COINS, 100000));
+  Charter.offerFare(f.p, to, half);
+  f.p.getEquipment().setItem(core.Equipment.RING_SLOT, new core.Item(-1, 0));
+  yes(f);
+  assert.equal(f.inv.getAmount(I.COINS), 100000, "nothing charged at the old fare");
+  const full = Charter.fareFor(f.p, from, to);
+  assert.match(core.MultiChatboxPrompt.getPending(f.p).title, new RegExp(`for ${full.toLocaleString("en-US")} coins`));
+});
+
+test("Yes away from any port, with no trader, charges nothing", (t) => {
+  const f = actor(t);
+  const { to, tile } = route();
+  f.p.setLocation(tile);
+  const fare = Charter.fareFor(f.p, Charter.portAt(tile), to);
+  f.inv.setItem(0, new core.Item(I.COINS, 100000));
+  Charter.offerFare(f.p, to, fare);
+  f.p.setLocation(new core.Location(3200, 3200, 0));
+  assert.equal(Charter.portOf(f.p), null);
+  yes(f);
+  assert.equal(f.inv.getAmount(I.COINS), 100000);
+});

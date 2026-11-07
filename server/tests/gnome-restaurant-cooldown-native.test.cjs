@@ -25,6 +25,9 @@ function actor(t) {
   p.setIndex(nextIndex++); p.setUsername(`restaurantqa${nextIndex}`); p.setRegistered(true);
   p.getSkillManager().setCurrentLevel(core.Skill.COOKING, 29);
   p.getSkillManager().setMaxLevel(core.Skill.COOKING, 29);
+  // Past Aluft's and Blurberry's training (#3034's gate), so orders are offered.
+  p.setAttribute("gnome-restaurant:tutorial-aluft", 6);
+  p.setAttribute("gnome-restaurant:tutorial-blurberry", 6);
   const c = new ClientConnection(channel); c.player = p;
   const npc = core.NPC.create(core.NpcIdentifiers.GIANNE_JNR_, new core.Location(2439, 3502, 1));
   t.after(() => { Restaurant._test.abandon({ player: p }); p.closeInterruptibleInterfaces(); p.setRegistered(false); core.TaskManager.cancelTasks(p.getIndex()); });

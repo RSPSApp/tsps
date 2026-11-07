@@ -6,6 +6,7 @@ const registerLeafBladedBattleaxeEffects = require("./effects/LeafBladedBattleax
 const registerJusticiarEffects = require("./effects/JusticiarArmour.EquipmentEffects");
 const registerSalveAmuletEffects = require("./effects/SalveAmulet.EquipmentEffects");
 const registerDragonHunterEffects = require("./effects/DragonHunter.EquipmentEffects");
+const registerGadderhammerEffects = require("./effects/Gadderhammer.EquipmentEffects");
 const registerDemonbaneEffects = require("./effects/Demonbane.EquipmentEffects");
 const registerVampyrebaneEffects = require("./effects/Vampyrebane.EquipmentEffects");
 const registerSpiritShieldEffects = require("./effects/SpiritShields.EquipmentEffects");
@@ -25,6 +26,7 @@ module.exports = {
     registerJusticiarEffects(api);
     registerSalveAmuletEffects(api);
     registerDragonHunterEffects(api);
+    registerGadderhammerEffects(api);
     registerDemonbaneEffects(api);
     registerVampyrebaneEffects(api);
     registerSpiritShieldEffects(api);

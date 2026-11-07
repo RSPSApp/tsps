@@ -75,6 +75,7 @@
  *    player over it. Rope spinning enforces Crafting 30 with a
  *    system message. The chest, splitting, curing, shield-making and head-taking
  *    steps use short system messages where the wiki transcript has no line.
+ *    The shield Woodcutting level refusal is silent until wording is sourced.
  *  - The weapon/shield "hands free" check follows Cold War: WEAPON_SLOT and
  *    SHIELD_SLOT empty.
  *

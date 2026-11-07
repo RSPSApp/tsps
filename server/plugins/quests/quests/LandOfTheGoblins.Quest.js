@@ -566,6 +566,51 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
 
   const held = (player, itemId, amount = 1) => player.getInventory().getAmount(itemId) >= amount;
 
+  /** The powered staves' wording for a preset copy (Presets.PvpMode tags them untradeable, unbankable and preset). */
+  const PRESET_TEXT = "Preset items cannot be used for this.";
+  const restricted = (item) => !!item && (item.isPresetItem?.() === true || item.isUntradeable?.() === true || item.isUnbankable?.() === true);
+  /** Plain copies only: a preset law rune never pays for a fresh, tradeable sphere. */
+  const plainHeld = (player, itemId) => {
+    const items = player.getInventory().getItems?.();
+    // A container without slots (a test stand-in) holds no preset copies.
+    if (!items) return player.getInventory().getAmount(itemId);
+    return items.reduce((total, item) => (item?.getId() === itemId && !restricted(item) ? total + item.getAmount() : total), 0);
+  };
+  function takePlain(player, itemId, amount) {
+    const inventory = player.getInventory();
+    if (!inventory.getItems) {
+      inventory.deleteNumber(itemId, amount);
+      return;
+    }
+    let left = amount;
+    inventory.getItems().forEach((item, slot) => {
+      if (left <= 0 || item?.getId() !== itemId || restricted(item)) return;
+      const taken = Math.min(left, item.getAmount());
+      inventory.deleteAtSlot(slot, taken);
+      left -= taken;
+    });
+  }
+
+  /** Grinds the dye into a held vial in place (setId keeps its meta: a preset vial gives a preset dye). */
+  function grindDye(player) {
+    const inventory = player.getInventory();
+    if (!inventory.getItems) {
+      inventory.deleteNumber(BLACK_MUSHROOM_ITEM_ID, 1);
+      inventory.deleteNumber(VIAL_ITEM_ID, 1);
+      inventory.adds(BLACK_DYE_ITEM_ID, 1);
+      return;
+    }
+    const vial = inventory.getItems().find((item) => item?.getId() === VIAL_ITEM_ID);
+    if (!vial) return;
+    if (restricted(inventory.getItems().find((item) => item?.getId() === BLACK_MUSHROOM_ITEM_ID))) {
+      player.sendMessage(PRESET_TEXT);
+      return;
+    }
+    inventory.deleteNumber(BLACK_MUSHROOM_ITEM_ID, 1);
+    vial.setId(BLACK_DYE_ITEM_ID);
+    inventory.refreshItems();
+  }
+
   /** Keys can legitimately be banked; a banked key is owned and must not be duplicated. */
   function bankedAmount(player, itemId) {
     const banks = player.getBanks?.() ?? (player.getBank ? [player.getBank()] : []);
@@ -573,7 +618,7 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
   }
 
   function hasOldakMaterials(player) {
-    return held(player, LAW_RUNE_ITEM_ID, 2) && held(player, MOLTEN_GLASS_ITEM_ID, 1);
+    return plainHeld(player, LAW_RUNE_ITEM_ID) >= 2 && plainHeld(player, MOLTEN_GLASS_ITEM_ID) >= 1;
   }
 
   function wornBodyId(player) {
@@ -1037,11 +1082,11 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
 
   function payForTeleport(player) {
     if (!hasOldakMaterials(player)) {
-      player.sendMessage(OLDAK_MATERIALS_HINT);
+      player.sendMessage(held(player, LAW_RUNE_ITEM_ID, 2) && held(player, MOLTEN_GLASS_ITEM_ID, 1) ? PRESET_TEXT : OLDAK_MATERIALS_HINT);
       return false;
     }
-    player.getInventory().deleteNumber(LAW_RUNE_ITEM_ID, 2);
-    player.getInventory().deleteNumber(MOLTEN_GLASS_ITEM_ID, 1);
+    takePlain(player, LAW_RUNE_ITEM_ID, 2);
+    takePlain(player, MOLTEN_GLASS_ITEM_ID, 1);
     player.getInventory().adds(DORGESH_KAAN_SPHERE_ITEM_ID, 1);
     return true;
   }
@@ -1348,8 +1393,7 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
   }
 
   function buySphere(player) {
-    if (hasOldakMaterials(player)) payForTeleport(player);
-    else player.sendMessage(OLDAK_MATERIALS_HINT);
+    payForTeleport(player);
   }
 
   /**
@@ -1690,9 +1734,7 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
         player.sendMessage("You need a pestle and mortar to grind the mushroom.");
         return;
       }
-      player.getInventory().deleteNumber(BLACK_MUSHROOM_ITEM_ID, 1);
-      player.getInventory().deleteNumber(VIAL_ITEM_ID, 1);
-      player.getInventory().adds(BLACK_DYE_ITEM_ID, 1);
+      grindDye(player);
       return;
     }
     const pestle = first === PESTLE_AND_MORTAR_ITEM_ID ? second : second === PESTLE_AND_MORTAR_ITEM_ID ? first : null;
@@ -1702,16 +1744,23 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
         player.sendMessage("You need an empty vial to make the dye.");
         return;
       }
-      player.getInventory().deleteNumber(BLACK_MUSHROOM_ITEM_ID, 1);
-      player.getInventory().deleteNumber(VIAL_ITEM_ID, 1);
-      player.getInventory().adds(BLACK_DYE_ITEM_ID, 1);
+      grindDye(player);
       return;
     }
     const mail = first === GOBLIN_MAIL_ITEM_ID ? second : second === GOBLIN_MAIL_ITEM_ID ? first : null;
     if (mail !== null && DYE_TO_MAIL.has(mail)) {
       event.handled = true;
-      player.getInventory().deleteNumber(GOBLIN_MAIL_ITEM_ID, 1);
-      player.getInventory().deleteNumber(mail, 1);
+      // The clicked copies are the ones consumed; a preset dye or mail never makes a fresh, tradeable coloured mail.
+      const mailFirst = event.usedItem?.getId?.() === GOBLIN_MAIL_ITEM_ID;
+      const mailSlot = mailFirst ? event.usedItemSlot : event.usedWithItemSlot;
+      const dyeSlot = mailFirst ? event.usedWithItemSlot : event.usedItemSlot;
+      const inventory = player.getInventory();
+      if (restricted(inventory.get(mailSlot)) || restricted(inventory.get(dyeSlot))) {
+        player.sendMessage(PRESET_TEXT);
+        return;
+      }
+      inventory.deleteAtSlot(mailSlot, 1);
+      inventory.deleteAtSlot(dyeSlot, 1);
       player.getInventory().adds(DYE_TO_MAIL.get(mail), 1);
     }
   }

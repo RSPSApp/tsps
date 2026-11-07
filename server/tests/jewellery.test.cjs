@@ -730,7 +730,7 @@ test("the digsite pendant's Lithkren and Fossil Island teleports need Dragon Sla
     inventoryClick(player, pendant, "Rub");
     pick(label);
     assert.equal(teleports.length, before, `${label}: no teleport before ${name}`);
-    assert.deepEqual(player.statements.at(-1), `You need to complete ${name} to teleport there.`);
+    assert.deepEqual(player.statements.at(-1), "You have not yet unlocked that destination.", "the Wiki's line");
     assert.equal(pendant.getId(), ItemIds.DIGSITE_PENDANT_5_, "no charge used");
     doneQuestKeys.add(key);
     inventoryClick(player, pendant, "Rub");

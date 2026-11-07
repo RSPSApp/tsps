@@ -6,7 +6,7 @@ const { CacheDefinitions } = require("../../src/main/typescript/elvarg/game/cach
 const { Wilderness } = require("../../src/main/typescript/elvarg/game/content/wilderness/Wilderness");
 const { Item } = require("../../src/main/typescript/elvarg/game/model/Item");
 const { Flag } = require("../../src/main/typescript/elvarg/game/model/Flag");
-const { JEWELLERY, DEFAULT_WILDERNESS_LEVEL } = require("./Teleports.Jewellery");
+const { JEWELLERY, DEFAULT_WILDERNESS_LEVEL, LOCKED_DESTINATION_MESSAGE } = require("./Teleports.Jewellery");
 const { castRechargeDragonstone } = require("./RechargeDragonstone.Jewellery");
 
 /** Item param holding a worn item's first equipment option (RuneLite: OC_ITEM_OP1). */
@@ -125,8 +125,7 @@ function teleport(player, item, destination) {
     return;
   }
   if (destination.quest && !questComplete(player, destination.quest.key)) {
-    // TSPS wording: the retail line has not been established.
-    statement(player, `You need to complete ${destination.quest.name} to teleport there.`);
+    statement(player, LOCKED_DESTINATION_MESSAGE);
     return;
   }
   const target = destinationTile(player, destination);

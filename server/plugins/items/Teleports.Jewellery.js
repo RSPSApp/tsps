@@ -4,6 +4,8 @@ const { Skill } = require("../../src/main/typescript/elvarg/game/model/Skill");
 
 /** Teleport jewellery usable up to this Wilderness level unless a piece says otherwise. */
 const DEFAULT_WILDERNESS_LEVEL = 20;
+/** Wiki (Digsite pendant): the refusal for a destination whose quest isn't done. */
+const LOCKED_DESTINATION_MESSAGE = "You have not yet unlocked that destination.";
 /** Dragonstone jewellery works deeper, through level 30 Wilderness. */
 const DRAGONSTONE_WILDERNESS_LEVEL = 30;
 
@@ -327,4 +329,4 @@ const RING_OF_WEALTH_DESTINATIONS = [
   { label: "Dondakan", tile: [2824, 10168, 0] },
 ];
 
-module.exports = { JEWELLERY, RING_OF_WEALTH_DESTINATIONS, DEFAULT_WILDERNESS_LEVEL };
+module.exports = { JEWELLERY, RING_OF_WEALTH_DESTINATIONS, DEFAULT_WILDERNESS_LEVEL, LOCKED_DESTINATION_MESSAGE };

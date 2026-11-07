@@ -25,6 +25,9 @@ RingOfLife.register({
   registerIncomingDamageModifier() {},
   // The Skillcapes plugin answers this; a worn Defence cape is all these tests need.
   emitCustomEvent(name, request) {
+    if (name === "phoenix-necklace:will-trigger") {
+      request.active = request.player.phoenix === true && request.remaining <= 20;
+    }
     if (name === "skillcape:ring-of-life") {
       request.active = request.player.getEquipment().get(Equipment.CAPE_SLOT)?.getId() === ItemIds.DEFENCE_CAPE;
     }
@@ -89,4 +92,13 @@ test("a Defence cape saves without being destroyed, and Tele Block stops both", 
     { getDamage: () => 95 }
   );
   assert.equal(teleports.length, 1, "a teleblocked ring does not activate");
+});
+
+test("a phoenix necklace that will heal the wearer leaves the ring of life alone", () => {
+  teleports.length = 0;
+  const player = createPlayer({ hp: 100, ring: ItemIds.RING_OF_LIFE });
+  player.phoenix = true;
+  RingOfLife._test.onIncomingDamage(player, { getDamage: () => 95 });
+  assert.equal(teleports.length, 0);
+  assert.equal(player.deleted.length, 0);
 });

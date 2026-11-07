@@ -138,6 +138,18 @@ export class HitQueue {
         HitQueue.active.delete(this);
     }
 
+    /**
+     * Drops what is still on its way in from other combatants - delayed hits, the rest of a
+     * multi-hit special - and keeps the owner's own pending damage (poison, recoil).
+     */
+    clearIncoming(): void {
+        this.pendingHits.length = 0;
+        for (let i = this.pendingDamage.length - 1; i >= 0; i--) {
+            if (HitQueue.incomingFromOther(this.pendingDamage[i], this.character)) this.pendingDamage.splice(i, 1);
+        }
+        if (!this.hasPendingWork()) HitQueue.active.delete(this);
+    }
+
     hasPendingWork(): boolean {
         return this.pendingHits.length > 0 || this.pendingDamage.length > 0;
     }

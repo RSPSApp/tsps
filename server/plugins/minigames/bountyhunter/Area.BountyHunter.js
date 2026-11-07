@@ -13,8 +13,8 @@
  *
  * Rogues can attack within five combat levels; assigned targets use the matchmaking range.
  * https://secure.runescape.com/m=news/bounty-hunter-is-back?oldschool=1
- * Phoenix necklaces (29 January 2025) need nothing: the server has no
- * phoenix necklace effect. Messages are our wording.
+ * Phoenix necklaces (29 January 2025) do nothing in the arena: the PhoenixNecklace plugin
+ * asks "phoenix-necklace:eligible". Messages are our wording.
  */
 
 const Hud = require("./Hud.BountyHunter");
@@ -202,6 +202,11 @@ function endImmunity({ attacker, target }) {
   if (isPlayer(target) && bh.inArena(attacker) && bh.immuneUntil.delete(attacker)) Hud.sendImmunity(attacker, 0);
 }
 
+/** Phoenix necklaces cannot be used in the arena (Wiki: Phoenix necklace). */
+function blockPhoenixNecklace(event) {
+  if (isPlayer(event.player) && bh.inArena(event.player)) event.blocked = true;
+}
+
 function createAreas() {
   class BountyHunterLobby extends core.Area {
     postEnter(mobile) {
@@ -352,6 +357,7 @@ module.exports = function attachArea(pluginApi, state) {
   api.onAttackTiming(noteSpecialAttack);
   api.onCombatHitResolved(endImmunity);
   api.onCustomEvent("bounty-hunter:weapon-area", allowWeapons);
+  api.onCustomEvent("phoenix-necklace:eligible", blockPhoenixNecklace);
   api.onCustomEvent("loot-keys:eligible-kill", allowLootKeys);
   api.onCustomEvent("player:respawn", respawnInLobby);
 };

@@ -415,6 +415,99 @@ test("ore used on a furnace opens the Smelt menu; sand opens molten glass", () =
   assert.equal(glass.xpSkill, Skill.CRAFTING);
 });
 
+// Wiki Molten_glass: 2 ticks per glass and 20 Crafting XP. Recording 4283:
+// a single pair needs no menu; animation, sound and the exchange happen together.
+test("molten glass finishes at +2 and repeats every two ticks with one animation per glass", t => {
+  const player = furnaceWith([[I.BUCKET_OF_SAND, 3], [I.SODA_ASH, 3]]);
+  const animations = [];
+  const sound = t.mock.method(PluginManager.getCoreApi().Sounds, "sendSound", () => {});
+  player.performAnimation = animation => animations.push(animation.getId());
+  itemOnObject({ player, itemId: I.SODA_ASH, object: furnace });
+  lastMenu(player).execute(I.MOLTEN_GLASS, 3);
+  ticks(2); // offset 0 and +1
+  assert.equal(player.items.get(I.MOLTEN_GLASS) ?? 0, 0);
+  assert.equal(animations.length, 0);
+  assert.equal(sound.mock.callCount(), 0);
+  for (let count = 1; count <= 3; count++) {
+    ticks(1); // +2, +4, +6
+    assert.equal(player.items.get(I.MOLTEN_GLASS), count);
+    assert.equal(player.items.get(I.BUCKET), count);
+    assert.equal(player.xp, count * 20);
+    assert.equal(player.xpSkill, Skill.CRAFTING);
+    assert.equal(animations.length, count);
+    assert.equal(animations.at(-1), CacheDefinitions.getSeqId("human_furnace"));
+    assert.equal(sound.mock.callCount(), count);
+    assert.equal(sound.mock.calls.at(-1).arguments[1], PluginManager.getCoreApi().Sound.SMELTING);
+    assert.equal(player.spam.at(-1), "You heat the sand and soda ash in the furnace to make glass.");
+    if (count < 3) ticks(1);
+  }
+  assert.equal(player.items.get(I.BUCKET_OF_SAND), 0);
+  assert.equal(player.items.get(I.SODA_ASH), 0);
+  ticks(4);
+  assert.equal(player.items.get(I.MOLTEN_GLASS), 3);
+});
+
+test("Smelt offers glass with only its materials, makes one pair directly, and keeps ore priority", () => {
+  const single = furnaceWith([[I.BUCKET_OF_SAND, 1], [I.SODA_ASH, 1]]);
+  objects.get("Furnace").Smelt({ player: single });
+  assert.equal(single.statements.length, 0);
+  assert.equal(lastMenu(single), undefined);
+  ticks(3);
+  assert.equal(single.items.get(I.MOLTEN_GLASS), 1);
+  const multiple = furnaceWith([[I.BUCKET_OF_SAND, 3], [I.SODA_ASH, 2]]);
+  objects.get("Furnace").Smelt({ player: multiple });
+  assert.deepEqual(lastMenu(multiple).getItems(), [I.MOLTEN_GLASS]);
+  lastMenu(multiple).execute(I.MOLTEN_GLASS, 1);
+  ticks(8);
+  assert.equal(multiple.items.get(I.MOLTEN_GLASS), 1, "honour the requested quantity");
+  assert.equal(multiple.items.get(I.BUCKET_OF_SAND), 2);
+  assert.equal(multiple.items.get(I.SODA_ASH), 1);
+  const mixed = furnaceWith([[I.BUCKET_OF_SAND, 2], [I.SODA_ASH, 2], [I.IRON_ORE, 2]]);
+  objects.get("Furnace").Smelt({ player: mixed });
+  assert.ok(lastMenu(mixed).getItems().includes(I.IRON_BAR));
+  assert.ok(!lastMenu(mixed).getItems().includes(I.MOLTEN_GLASS));
+  for (const material of [I.BUCKET_OF_SAND, I.SODA_ASH]) {
+    const incomplete = furnaceWith([[material, 2]]);
+    objects.get("Furnace").Smelt({ player: incomplete });
+    assert.equal(lastMenu(incomplete), undefined);
+    assert.equal(statementText(incomplete), "You don't have any ore to smelt.");
+  }
+});
+
+test("molten glass cannot be made in F2P by Smelt, item use, or a stale recipe selection", t => {
+  t.mock.method(PluginManager.getCoreApi().WorldDefinition, "isMembersWorld", () => false);
+  const player = furnaceWith([[I.BUCKET_OF_SAND, 2], [I.SODA_ASH, 2]]);
+  const Smelting = require("../plugins/skills/smithing/Smelting.Smithing");
+  const Data = require("../plugins/skills/smithing/Data.Smithing");
+  objects.get("Furnace").Smelt({ player });
+  assert.equal(lastMenu(player), undefined);
+  for (const itemId of [I.BUCKET_OF_SAND, I.SODA_ASH]) {
+    itemOnObject({ player, itemId, object: furnace });
+    assert.equal(lastMenu(player), undefined);
+  }
+  assert.equal(Smelting.startSmelting(player, Data.SMELTING_RECIPES.find(r => r.barId === I.MOLTEN_GLASS), 2), false);
+  ticks(12);
+  assert.equal(player.items.get(I.BUCKET_OF_SAND), 2);
+  assert.equal(player.items.get(I.SODA_ASH), 2);
+  assert.equal(player.items.get(I.MOLTEN_GLASS) ?? 0, 0);
+  assert.equal(player.xp, 0);
+});
+
+test("molten glass stops on walking or missing ingredients without partial consumption", () => {
+  for (const interrupt of [p => { p.moving = true; }, p => p.items.delete(I.SODA_ASH)]) {
+    const player = furnaceWith([[I.BUCKET_OF_SAND, 2], [I.SODA_ASH, 2]]);
+    itemOnObject({ player, itemId: I.BUCKET_OF_SAND, object: furnace });
+    lastMenu(player).execute(I.MOLTEN_GLASS, 2);
+    ticks(3);
+    assert.equal(player.items.get(I.MOLTEN_GLASS), 1);
+    interrupt(player);
+    ticks(6);
+    assert.equal(player.items.get(I.MOLTEN_GLASS), 1);
+    assert.equal(player.items.get(I.BUCKET_OF_SAND), 1);
+    assert.equal(player.xp, 20);
+  }
+});
+
 test('using the only ore on a furnace smelts an unambiguous single bar without a quantity menu', t => {
   t.mock.method(Math, 'random', () => 0);
   for (const [ore, bar] of [[I.IRON_ORE, I.IRON_BAR], [I.SILVER_ORE, I.SILVER_BAR], [I.GOLD_ORE, I.GOLD_BAR]]) {

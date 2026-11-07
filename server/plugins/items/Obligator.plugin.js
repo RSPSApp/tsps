@@ -2,11 +2,16 @@
  * Obligator (Wiki: Obligator): a two-handed extending chain mace from the Fractured Archive, 5 ticks
  * on Thrust and 3 on Smash (Smash hits one target only).
  *
- * Passive (Thrust, charged): two damage rolls a swing, and a third when the target's stab or slash
- * defence beats its crush defence; the best roll lands. Against a 2x2 target it deals 20% more, against
- * a 3x3 or larger one 40% more (before the hitpoints cap). Each roll is a full hit roll, accuracy then damage (an estimate: the
- * Wiki says "damage rolls"). The Wiki does not say how many or which targets the Thrust also reaches, so
- * it only ever strikes the target.
+ * Passive (Thrust, charged): two damage rolls a swing, and one more for each of stab and slash defence
+ * that beats the target's crush defence; the best roll lands. Against a 2x2 target it deals 20% more,
+ * against a 3x3 or larger one 40% more (before the hitpoints cap). Each roll is a full hit roll, accuracy
+ * then damage (an estimate: the Wiki says "damage rolls").
+ *
+ * Passive (Thrust, charged or not): it "can reach up to two additional targets on or behind the main
+ * target", a reach of 3 tiles (Wiki, Obligator). Those targets are the ones standing on the main target's
+ * tiles or on the two tiles behind them, away from the attacker, and need the usual secondary-target
+ * rules (multicombat, attackable). The Wiki gives them no different damage, so each takes its own full
+ * hit, with the same rolls as the main target's. Smash hits one target and spends no charge.
  *
  * Charging (Wiki): one ascension shard, 20 nature runes and 20 death runes add 10 charges, up to 20,000.
  * Uncharging returns the unused shards and runes. The Wiki does not say what spends a charge or whether
@@ -26,6 +31,9 @@ const CHARGES_META_KEY = "obligator-charges";
 const SMASH_FIGHT_TYPE_INDEX = 2;
 const SMASH_ATTACK_SPEED = 3;
 const BASE_ROLLS = 2;
+/** Wiki: up to two additional targets, on or up to two tiles behind the main target. */
+const EXTRA_TARGETS = 2;
+const REACH_BEHIND = 2;
 const SIZE_BONUS = { 2: 1.2, 3: 1.4 };
 /** BonusManager / NPC defence indices. */
 const STAB = 0;
@@ -87,6 +95,58 @@ function sizeMultiplier(target) {
   return SIZE_BONUS[Math.min(size, 3)] ?? 1;
 }
 
+const tileKey = (x, y, z) => `${x},${y},${z}`;
+
+function sizeOf(mobile) {
+  return mobile.isNpc() ? Math.max(1, Number(mobile.getAsNpc().getSize()) || 1) : 1;
+}
+
+/** The target's own tiles and the REACH_BEHIND tiles behind them, away from the attacker. */
+function reachTiles(character, target) {
+  const origin = character.getLocation();
+  const at = target.getLocation();
+  const size = sizeOf(target);
+  const axis = (from, start) => (from < start ? 1 : from >= start + size ? -1 : 0);
+  const dx = axis(origin.getX(), at.getX());
+  const dy = axis(origin.getY(), at.getY());
+  const tiles = new Set();
+  for (let step = 0; step <= REACH_BEHIND; step++) {
+    for (let x = 0; x < size; x++) {
+      for (let y = 0; y < size; y++) {
+        tiles.add(tileKey(at.getX() + x + dx * step, at.getY() + y + dy * step, at.getZ()));
+      }
+    }
+  }
+  return tiles;
+}
+
+function occupies(mobile, tiles) {
+  const at = mobile.getLocation();
+  const size = sizeOf(mobile);
+  for (let x = 0; x < size; x++) {
+    for (let y = 0; y < size; y++) {
+      if (tiles.has(tileKey(at.getX() + x, at.getY() + y, at.getZ()))) return true;
+    }
+  }
+  return false;
+}
+
+/** The additional targets a thrust reaches, nearest the main target first. */
+function reachedTargets(character, target) {
+  if (!core.CombatFactory.multiCombatBetween(character, target)) return [];
+  const candidates = [];
+  core.World.getNpcs().forEach((npc) => candidates.push(npc));
+  core.World.getPlayers().forEach((player) => candidates.push(player));
+  const others = candidates.filter((candidate) => candidate !== target && candidate !== character);
+  if (others.length === 0) return [];
+  const tiles = reachTiles(character, target);
+  const at = target.getLocation();
+  return others
+    .filter((candidate) => occupies(candidate, tiles) && core.CombatFactory.canAttackSecondaryTarget(character, target, candidate))
+    .sort((a, b) => a.getLocation().getDistance(at) - b.getLocation().getDistance(at))
+    .slice(0, EXTRA_TARGETS);
+}
+
 function createMethod() {
   const { MeleeCombatMethod, PendingHit, Animation, Graphic } = core;
   return new (class ObligatorCombatMethod extends MeleeCombatMethod {
@@ -110,12 +170,16 @@ function createMethod() {
     hits(character, target) {
       const player = character.getAsPlayer();
       const item = wieldedObligator(player);
-      if (isSmash(player) || charges(item) <= 0) {
+      if (isSmash(player)) {
         return super.hits(character, target);
       }
-      const hit = new PendingHit(character, target, this, { bestOf: rollCount(target), damageMultiplier: sizeMultiplier(target) });
-      this.useCharge(player, item);
-      return [hit];
+      const charged = charges(item) > 0;
+      const victims = [target, ...reachedTargets(character, target)];
+      const hits = victims.map((victim, index) => charged
+        ? new PendingHit(character, victim, this, { bestOf: rollCount(victim), damageMultiplier: sizeMultiplier(victim) })
+        : index === 0 ? super.hits(character, victim)[0] : new PendingHit(character, victim, this));
+      if (charged) this.useCharge(player, item);
+      return hits;
     }
 
     useCharge(player, item) {
@@ -242,6 +306,8 @@ module.exports = {
     charges,
     setCharges,
     rollCount,
+    reachTiles,
+    reachedTargets,
     sizeMultiplier,
     chargeObligator,
     checkCharges,

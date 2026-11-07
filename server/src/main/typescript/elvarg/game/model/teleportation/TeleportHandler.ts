@@ -1,3 +1,4 @@
+import { TeleBlock } from "../../content/combat/magic/TeleBlock";
 import { Player } from "../../entity/impl/player/Player";
 import { TeleportType } from "./TeleportType";
 import { Task } from "../../task/Task";
@@ -160,7 +161,7 @@ export class TeleportHandler {
 
         if (!player.getCombat().getTeleblockTimer().finished()) {
             if (Wilderness.isIn(player)) {
-                player.sendMessage("A magical spell is blocking you from teleporting.");
+                player.sendMessage(TeleBlock.attemptMessage(player));
                 return false;
             } else {
                 player.getCombat().getTeleblockTimer().stop();

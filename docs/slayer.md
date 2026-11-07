@@ -18,6 +18,7 @@ The plugin is `server/plugins/skills/Slayer.plugin.js`; its units are in
 | `Checks.Slayer.js` | The enchanted gem's and slayer ring's Check |
 | `Rewards.Slayer.js` | The Slayer Rewards interface |
 | `Equipment.Slayer.js` | Protective gear; kurask and turoth weaknesses |
+| `CaveHorror.Slayer.js` | Cave horrors' scream and magical melee |
 | `SlaughterBracelet.Slayer.js` | Bracelet of slaughter effects, shared charges, Check and Break |
 | `Finishers.Slayer.js` | Rock hammer, bag of salt, ice cooler, fungicide spray |
 | `Superiors.Slayer.js` | Superior monsters |
@@ -139,6 +140,29 @@ bit and 1 in 200, which a listener may unlock or shorten; the toggle-off always 
   inside the Wilderness Slayer Cave. A superior on such a task always drops its key. The keys are
   on no monster's drop table: `NpcDrops` strips the Wiki's "Konar task bonus" rows, which dropped
   a brimstone key from every superior kill, on task or not.
+
+### Cave horrors
+
+Sources: Wiki [Cave horror](https://oldschool.runescape.wiki/w/Cave_horror),
+[Witchwood icon](https://oldschool.runescape.wiki/w/Witchwood_icon) and
+[Magical melee](https://oldschool.runescape.wiki/w/Magical_melee); rsprox captures 4053 and 4066
+(Leagues VI), 3279 (an event world) and 1846 (Leagues V). `CaveHorror.Slayer.js`.
+
+- **Scream (no witchwood icon worn):** every attack is the scream. The horror plays its howl
+  (`harmless_island_cave_horror_howl`, 4237), the player plays `steam_head_play` (2835) and the
+  hit lands on that tick, every 4 ticks (recordings 4053 and 4066: howl, steam head and the
+  hitsplat on one tick; recording 4053 has them 4 ticks apart; the sound 497 plays on almost
+  every howl tick). It always hits for a tenth of the player's *base* Hitpoints level, rounded down, whatever
+  they wear (Wiki). Protect from Melee turns it into a 0 (recordings 3279, 4053 and 4066 show a 0 splat on
+  the scream ticks while the prayer is up). Unprotected, recording 1846 shows the splat three times, always 8;
+  it does not show the base level, so the tenth is the Wiki's.
+- **With the icon:** the horror picks the scream or a kick at random for each attack; a kick is
+  followed by a 4-tick wait and a scream by a 5-tick one (Wiki). The scream then rolls as a regular
+  attack. The kick is the horror's own attack animation (4234/4235 in the captures).
+- **Regular attacks are magical melee:** accuracy rolls against the player's Magic defence, and
+  Protect from Melee blocks them (Wiki: Magical melee).
+- **Not built:** the Wiki says the scream also hits players standing beside the horror who are not
+  already in combat with it; no capture shows it. Cave abominations are not covered.
 
 ### Bracelet of slaughter
 
@@ -282,5 +306,5 @@ Konar's lines and the gem's task line are the Wiki's.
 - **Mortimer:** Partner Slayer's rules for his tasks; showing modifiers on the gem. His tips are
   the generic line, as for the other masters.
 - **Rewards:** task storage (Store/Unstore), including a stored task's modifier. Picking tasks to block from the task list.
-- **Equipment and monsters:** the gem's Partner and Log, killerwatts, cave horrors, fever spiders,
+- **Equipment and monsters:** the gem's Partner and Log, killerwatts, fever spiders,
   harpie bug swarms and mogres. Zygomites don't regenerate.

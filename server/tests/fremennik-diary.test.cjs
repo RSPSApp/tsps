@@ -262,6 +262,11 @@ test("hard producers, including quest gates and the 56-astral guard", () => {
   assert.equal(fired("craft-56-astral-runes-simultaneously-from-essenc"), 1);
   fire("runecrafting:success", { player: astral, runeId: Item.ASTRAL_RUNE, rolls: 56, amountPerEssence: 1 });
   assert.equal(fired("craft-56-astral-runes-simultaneously-from-essenc"), 1);
+  // The Raiments of the Eye's bonus runes count toward the 56 (Wiki: Raiments of the Eye).
+  fire("runecrafting:success", { player: astral, runeId: Item.ASTRAL_RUNE, rolls: 27, amountPerEssence: 2 });
+  assert.equal(fired("craft-56-astral-runes-simultaneously-from-essenc"), 1);
+  fire("runecrafting:success", { player: astral, runeId: Item.ASTRAL_RUNE, rolls: 27, amountPerEssence: 2, bonusRunes: 2 });
+  assert.equal(fired("craft-56-astral-runes-simultaneously-from-essenc"), 2);
 });
 
 test("elite sets: Dagannoth Kings reset, GWD generals and the spiritual mage", () => {

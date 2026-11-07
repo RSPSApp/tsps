@@ -339,7 +339,8 @@ function eat(event) {
   const meta = inventory.getItems()[slot]?.getMeta();
   inventory.deleteAtSlot(slot, 1, false);
   const next = leftover(food, bite);
-  if (next !== undefined) inventory.setItem(slot, new core.Item(next, 1));
+  // What is left (the next bite, the pie dish) keeps the eaten item's meta: a preset pie leaves a preset half.
+  if (next !== undefined) inventory.setItem(slot, new core.Item(next, 1, meta));
   inventory.refreshItems();
 
   const hitpointsBefore = player.getSkillManager().getCurrentLevel(core.Skill.HITPOINTS);

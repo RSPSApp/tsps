@@ -646,6 +646,22 @@ test("Eternal Sustenance: the food eaten is back in its slot", () => {
   for (const player of others(who)) assert.notEqual(player.getInventory().getItems()[3]?.getId(), I.SHARK);
 });
 
+test("Eternal Sustenance: a preset food eaten comes back as a preset copy, not a plain one", () => {
+  const who = cases(ETERNAL_SUSTENANCE);
+  const player = who.relic;
+  const shark = new core.Item(I.SHARK, 1);
+  for (const meta of [core.Item.UNTRADEABLE_META, core.Item.UNBANKABLE_META, core.Item.PRESET_META]) shark.setMetaValue(meta, true);
+  player.getInventory().setItem(3, shark);
+  hooks.onCanEat({ player, itemId: I.SHARK, allow: null });
+  const meta = player.getInventory().getItems()[3].getMeta();
+  player.getInventory().deleteAtSlot(3, 1, false);
+  emit("food:eaten", { player, itemId: I.SHARK, heal: 20, meta });
+  const back = player.getInventory().getItems()[3];
+  assert.equal(back?.getId(), I.SHARK);
+  assert.equal(back.isPresetItem(), true, "still a preset copy");
+  assert.equal(back.isUntradeable(), true);
+});
+
 test("Culling Spree: free Slayer rewards, and 1-3 elite clues from every superior", () => {
   const who = cases(CULLING_SPREE);
   assert.equal(emit("slayer:reward-cost", { player: who.relic, kind: "unlock", cost: 100 }).cost, 0);

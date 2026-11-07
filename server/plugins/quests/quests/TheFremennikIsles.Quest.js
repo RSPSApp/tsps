@@ -1493,26 +1493,37 @@ module.exports = function registerTheFremennikIslesQuest(api) {
     return actions[event.clickType - 1] ?? "";
   }
 
+  // Each piece with the slot it is worn in: a worn piece still counts as owned.
+  const JESTER_PIECES = [
+    [JESTER_HAT, Equipment.HEAD_SLOT],
+    [JESTER_TOP, Equipment.BODY_SLOT],
+    [JESTER_TIGHTS, Equipment.LEG_SLOT],
+    [JESTER_BOOTS, Equipment.FEET_SLOT],
+  ];
+
+  function missingJesterPieces(player) {
+    return JESTER_PIECES.filter(([id, slot]) => !hasItem(player, id) && equipped(player, slot) !== id).map(([id]) => id);
+  }
+
   function openJesterChest(event) {
     const { player } = event;
     event.handled = true;
-    if (hasFlag(player, CHEST_ATTRIBUTE, 1)) {
-      player.sendMessage("You have already taken the jester costume.");
-      return;
-    }
     if (stageOf(player) < STAGE_ORES_DELIVERED) {
       player.sendMessage("You should speak to the King before rummaging through his chest.");
       return;
     }
-    // Four pieces: one free slot is not enough, and a piece with no room would be lost for good.
-    if ((player.getInventory().getFreeSlots?.() ?? 4) < 4) {
+    // A lost piece can be fetched again, so the chest gives whichever of the four the player lacks.
+    const missing = missingJesterPieces(player);
+    if (missing.length === 0) {
+      player.sendMessage("You have already taken the jester costume.");
+      return;
+    }
+    // A piece with no room would be lost for good, so nothing is given unless every missing piece fits.
+    if ((player.getInventory().getFreeSlots?.() ?? missing.length) < missing.length) {
       player.sendMessage("You need some free inventory space to take the costume.");
       return;
     }
-    player.getInventory().adds(JESTER_HAT, 1);
-    player.getInventory().adds(JESTER_TOP, 1);
-    player.getInventory().adds(JESTER_TIGHTS, 1);
-    player.getInventory().adds(JESTER_BOOTS, 1);
+    for (const id of missing) player.getInventory().adds(id, 1);
     setFlag(player, CHEST_ATTRIBUTE, 1);
     player.sendMessage("You take the silly jester costume from the chest.");
   }

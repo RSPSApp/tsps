@@ -109,7 +109,11 @@ require('../plugins/items/AvasAccumulator.plugin').register({
 PluginManager.rangedAmmoRecovery = (player) => avaRecovery.recovery(player) ?? 0;
 
 const drops = [];
-ItemOnGroundManager.registerLocation = (player, item, position) => drops.push({ id: item.getId(), amount: item.getAmount(), position });
+const droppedItems = [];
+ItemOnGroundManager.registerLocation = (player, item, position) => {
+  droppedItems.push(item);
+  drops.push({ id: item.getId(), amount: item.getAmount(), position });
+};
 
 const POS = { x: 3000, y: 3000, z: 0 };
 
@@ -199,6 +203,18 @@ test('fired ammo breaks 20% of the time and otherwise lands where the target sto
   shot(landed, 0.50); // roll 50: drop
   assert.equal(landed.ammo().getAmount(), 4);
   assert.deepEqual(drops, [{ id: Items.BRONZE_ARROW, amount: 1, position: POS }]);
+});
+
+test('preset ammo lands as preset ammo, not a plain stack; plain ammo lands plain', () => {
+  droppedItems.length = 0;
+  const preset = ammoHarness({ itemId: Items.DRAGON_ARROW, amount: 100 });
+  for (const meta of [GroundItem.UNTRADEABLE_META, GroundItem.UNBANKABLE_META, GroundItem.PRESET_META]) preset.ammo().setMetaValue(meta, true);
+  shot(preset, 0.50); // roll 50: drop
+  assert.equal(droppedItems.length, 1);
+  assert.equal(droppedItems[0].isPresetItem(), true, "the dropped arrow is still a preset copy");
+  assert.equal(droppedItems[0].isUntradeable(), true, "so it stays owner-only on the floor");
+  shot(ammoHarness({ itemId: Items.DRAGON_ARROW, amount: 100 }), 0.50);
+  assert.equal(droppedItems[1].isPresetItem(), false, "plain ammo lands plain");
 });
 
 test("Ava's attractor recovers 60% and Ava's accumulator 72%", () => {

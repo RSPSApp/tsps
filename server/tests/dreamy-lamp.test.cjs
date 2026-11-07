@@ -83,3 +83,13 @@ test("Attack and Prayer can't be chosen; the lamp stays", async (t) => {
   assert.equal(xp(f, core.Skill.PRAYER), prayer);
   assert.equal(f.inv.getAmount(lamp()), 1);
 });
+
+test("an XP-locked player keeps the lamp and gets no XP", async (t) => {
+  const f = actor(t);
+  f.inv.add(new core.Item(lamp(), 1), true);
+  f.p.setAttribute("skills:xp-locked", true);
+  const before = xp(f, core.Skill.DEFENCE);
+  await rub(f, core.Skill.DEFENCE);
+  assert.equal(xp(f, core.Skill.DEFENCE), before);
+  assert.equal(f.inv.getAmount(lamp()), 1, "the lamp is kept");
+});

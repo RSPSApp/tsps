@@ -1160,8 +1160,16 @@ module.exports = function registerDreamMentorQuest(api) {
       onConfirm: (skill, name) => {
         const inventory = player.getInventory();
         // The lamp the wish was opened with, still in its slot (not dropped or moved meanwhile).
-        if (inventory.get(slot)?.getId() !== DREAMY_LAMP_ITEM_ID || !inventory.deleteAtSlot(slot, 1)) return null;
-        player.getSkillManager().addExperience(skill, DREAMY_LAMP_XP, false);
+        if (inventory.get(slot)?.getId() !== DREAMY_LAMP_ITEM_ID) return null;
+        // XP can be refused (an XP lock, a minigame, max XP): the lamp is kept, as A Kingdom Divided's lamps do.
+        const skills = player.getSkillManager();
+        const before = skills.getExperience(skill);
+        skills.addExperience(skill, DREAMY_LAMP_XP, false);
+        if (skills.getExperience(skill) === before) {
+          player.sendMessage("You cannot gain experience in that skill right now.");
+          return null;
+        }
+        inventory.deleteAtSlot(slot, 1);
         return `Your wish has been granted! You have been awarded 15,000 ${name} experience!`;
       },
     });

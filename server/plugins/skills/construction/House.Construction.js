@@ -875,8 +875,9 @@ function getBuildMaterials(player, house, target, buildable) {
   for (const requirement of buildable.secondaryLevels ?? []) {
     const skill = Skill.values().find(candidate => candidate.getClientId() === requirement.statId);
     if (!skill || !Number.isInteger(requirement.level) || requirement.level < 1) return "This build has an unsupported skill requirement.";
-    // Farming is qualified here; preserve other secondary-skill behavior until its policy is verified.
-    if (skill !== Skill.FARMING) continue;
+    // The cache's second skills: Farming (spirit trees), Cooking (the kitchen barrels), Smithing (the armour displays)
+    // and Runecraft (the rune cases). Boostable, so the current level counts (Wiki: Beer barrel, Cooking 5; Mithril
+    // armour (Construction), Smithing 68; Rune case space, Runecraft 14, 44 and 90).
     if (player.getSkillManager().getCurrentLevel(skill) < requirement.level)
       return `You need ${skill.getName()} level ${requirement.level} to build that.`;
   }

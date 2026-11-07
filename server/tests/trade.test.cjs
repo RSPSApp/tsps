@@ -17,6 +17,8 @@ const { PluginManager } = require("../dist/plugins/PluginManager");
 
 const LOBSTER = 379;
 const COINS = 995;
+const LOGS = 1511;
+const HELM = 1153; // iron full helm
 
 const cacheDefinitionForId = ItemDefinition.forId;
 
@@ -524,4 +526,22 @@ test('native trades preserve confirmation, settle once and still cancel through 
       assert.deepEqual([count(pair[0].player, LOBSTER), count(pair[1].player, COINS)], [3, 500]);
     });
   }
+});
+
+test("a slot filled between the two accepts refuses the trade instead of deleting what is offered", () => {
+  const { alice, bob } = startTrade();
+  // Bob has exactly the 3 free slots Alice's 3 lobsters need at the first accept.
+  for (let i = bob.getInventory().getFreeSlots(); i > 3; i--) bob.getInventory().adds(LOGS, 1);
+  assert.equal(bob.getInventory().getFreeSlots(), 3);
+  alice.getTrading().acceptTrade();
+  bob.getTrading().acceptTrade();
+  alice.getTrading().getButtonDelay().stop();
+  bob.getTrading().getButtonDelay().stop();
+  bob.getInventory().adds(HELM, 1); // taken off on the confirm screen: the equipment tab stays usable
+  alice.getTrading().acceptTrade();
+  bob.getTrading().acceptTrade();
+  assert.equal(count(bob, LOBSTER), 0, "nothing given into too little room");
+  assert.equal(alice.getTrading().getContainer().getAmount(LOBSTER), 3, "the lobsters are still on offer, not deleted");
+  assert.ok(bob.messages.includes("Trade cannot be accepted, you don't have enough free inventory space."));
+  assert.equal(count(alice, COINS), 0, "and Alice did not receive Bob's side either");
 });

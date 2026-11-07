@@ -259,12 +259,8 @@ export class Trading {
         let interact_: Player = this.interact;
         let t_state = interact_.getTrading().getState();
         if (this.state == TradeState.TRADE_SCREEN) {
-            let slotsNeeded = 0;
-            for (let t of this.container.getValidItems()) {
-                slotsNeeded += t.getDefinition().isStackable() && this.interact.getInventory().contains(t.getId()) ? 0 : 1;
-            }
             let freeSlots = this.interact.getInventory().getFreeSlots();
-            if (slotsNeeded > freeSlots) {
+            if (!Trading.receiverCanHold(this.interact, this.container.getValidItems())) {
                 this.player.sendMessage("");
                 this.player.sendMessage("@or3@" + this.interact.getDisplayName() + " will not be able to hold that item.");
                 this.player.sendMessage(
@@ -291,6 +287,19 @@ export class Trading {
             this.sendState(false);
             interact_.getTrading().sendState(false);
             if (this.state === TradeState.ACCEPTED_CONFIRM_SCREEN && t_state === TradeState.ACCEPTED_CONFIRM_SCREEN) {
+                // Room was checked at the first screen; worn gear taken off since can fill it (the equipment tab stays
+                // usable through a trade), and a full inventory would drop what it receives. Ask again for both.
+                const short = [this.player, interact_].find((receiver) =>
+                    !Trading.receiverCanHold(receiver, receiver.getTrading().getInteract().getTrading().getContainer().getValidItems()));
+                if (short) {
+                    this.state = TradeState.CONFIRM_SCREEN;
+                    interact_.getTrading().setState(TradeState.CONFIRM_SCREEN);
+                    this.sendState(false);
+                    interact_.getTrading().sendState(false);
+                    short.sendMessage("Trade cannot be accepted, you don't have enough free inventory space.");
+                    short.getTrading().getInteract().sendMessage("@or3@" + short.getDisplayName() + " will not be able to hold that item.");
+                    return;
+                }
                 // Give items to both players...
                 const receivingItems = interact_.getTrading().getContainer().getValidItems();
                 for (const item of receivingItems) {
@@ -473,6 +482,26 @@ export class Trading {
 
     getState(): TradeState {
         return this.state;
+    }
+
+    /**
+     * Whether `receiver` can take all of `items`: a slot for each non-stackable and each stack not held, and room under
+     * the cap on a stack that is held (a capped stack would otherwise clamp the trade away).
+     */
+    static receiverCanHold(receiver: Player, items: Item[]): boolean {
+        const inventory = receiver.getInventory();
+        let slots = 0;
+        for (const item of items) {
+            const meta = JSON.stringify(item.getMeta() ?? null);
+            const held = item.getDefinition().isStackable() && inventory.getItems().some((entry) => entry != null
+                && entry.getId() === item.getId() && JSON.stringify(entry.getMeta() ?? null) === meta);
+            if (held) {
+                if (inventory.getAddableAmount(item) < item.getAmount()) return false;
+            } else {
+                slots++;
+            }
+        }
+        return slots <= inventory.getFreeSlots();
     }
 
     setState(state: TradeState) {

@@ -83,6 +83,18 @@ test("an elven signet saves the charge one time in ten", () => {
   assert.equal(CrystalAxe.charges(axe), 9999);
 });
 
+test("a celestial signet, charged or not, saves the charge one time in ten", () => {
+  for (const signetId of [ItemIds.CELESTIAL_SIGNET, ItemIds.CELESTIAL_SIGNET_UNCHARGED_]) {
+    const axe = item(ItemIds.CRYSTAL_AXE);
+    const player = createPlayer(axe);
+    player.getEquipment().getItems()[Equipment.RING_SLOT] = item(signetId);
+    assert.equal(CrystalAxe.tryUseCharge(player, () => 0.05), false);
+    assert.equal(CrystalAxe.charges(axe), 10000);
+    assert.equal(CrystalAxe.tryUseCharge(player, () => 0.5), true);
+    assert.equal(CrystalAxe.charges(axe), 9999);
+  }
+});
+
 test("the Check action reports the remaining charges", () => {
   const axe = item(ItemIds.CRYSTAL_AXE);
   const player = createPlayer(axe);

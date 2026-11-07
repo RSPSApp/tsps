@@ -24,6 +24,7 @@ module.exports = function registerPorcineOfInterestQuest(api) {
     Skill,
   } = api.core;
   const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
+  const Scenes = require("../QuestScenes").createQuestScenes(api);
 
   const SARAH_NPC_ID = NpcIdentifiers.SARAH; // 501, South Falador Farm
   const SPRIA_NPC_IDS = new Set([
@@ -274,10 +275,7 @@ module.exports = function registerPorcineOfInterestQuest(api) {
     player.getPacketSender().sendVarbit(6719, active ? 2 : 0).sendVarbit(12393, active ? 1 : 0);
   }
 
-  function fade(player, out) {
-    player.getPacketSender().sendSubInterface((161 << 16) | 1, 174, 1)
-      .sendString("", (174 << 16) | 4).sendClientScript(948, [0, out ? 255 : 0, 0, out ? 0 : 255, 50]);
-  }
+  const fade = Scenes.fade;
 
   class SourhogCave extends PrivateArea {
     constructor(player) { super([new Boundary(CAVE_ZONE.minX, CAVE_ZONE.maxX, CAVE_ZONE.minY, CAVE_ZONE.maxY, 0)]); this.owner = player; this.scene = false; }
@@ -287,7 +285,7 @@ module.exports = function registerPorcineOfInterestQuest(api) {
       if (mobile === this.owner) {
         caves.delete(mobile); notes.delete(mobile); TaskManager.cancelTasks(this);
         removeSourhog(mobile); corpseByPlayer.delete(mobile);
-        controls(mobile, false); mobile.getPacketSender().sendCameraReset();
+        controls(mobile, false); Scenes.closeFade(mobile); mobile.getPacketSender().sendCameraReset();
         mobile.performAnimation(new Animation(-1));
       }
       super.postLeave(mobile, logout);
@@ -345,6 +343,7 @@ module.exports = function registerPorcineOfInterestQuest(api) {
 
   function pigAttack(player) {
     const cave = enterCave(player); player.getDialogueManager().reset();
+    player.forcePositionToFace(new Location(3167, 9676, 0));
     camera(player, [3166, 9681, 500, 10, 10], [3166, 9676, 100, 10, 10]);
     later(cave, 1, () => {
       cave.pig?.performAnimation(new Animation(8770, 20));
@@ -390,7 +389,6 @@ module.exports = function registerPorcineOfInterestQuest(api) {
     later(cave, 4, () => {
       advanceStage(player, STAGE_ATTACKED); if (cave) cave.leave(player, false);
       player.moveTo(new Location(SPRIA_HOUSE_TILE.x, SPRIA_HOUSE_TILE.y, 0)); fade(player, false);
-      later(player, 2, () => player.getPacketSender().closeSubInterface((161 << 16) | 1));
       continueSkeleton(player, "EaeUfj");
     });
   }

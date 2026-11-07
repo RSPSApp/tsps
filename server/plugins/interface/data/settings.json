@@ -5,6 +5,7 @@
     "5": { "name": "Hitsplat tinting", "varbit": 10236 },
     "7": { "name": "Hide roofs", "varbit": 12378 },
     "10": { "name": "Show boss health overlay", "varbit": 12389 },
+    "11": { "name": "Transparent chatbox", "varbit": 4608 },
     "13": { "name": "Scroll wheel can change zoom distance", "varbit": 6357 },
     "34": { "name": "Show chat effects", "varp": 171 },
     "35": { "name": "Split friends private chat", "varp": 287, "script": 83 },

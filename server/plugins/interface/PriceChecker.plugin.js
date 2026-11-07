@@ -87,24 +87,54 @@ class PriceCheckerContainer extends ItemContainer {
     return this;
   }
 
+  /**
+   * Moves up to `amount` of the item in inventory `slot` (and, for an unstackable item, its sellable copies in other
+   * slots) into the checker, slot by slot. Moving by id (switchItems) deleted the first copy of the id, which could be
+   * a preset or untradeable one, while a plain copy went in: on closing, that plain copy came back as a second item.
+   */
+  depositFrom(slot, amount) {
+    const inventory = this.player.getInventory();
+    const first = inventory.getItems()[slot];
+    if (!first || first.getId() <= 0) return 0;
+    const id = first.getId();
+    const slots = [slot, ...inventory.getItems().map((_, index) => index).filter((index) => index !== slot)];
+    let left = amount;
+    let moved = 0;
+    for (const index of slots) {
+      if (left <= 0) break;
+      const source = inventory.getItems()[index];
+      if (!source || source.getId() !== id || !source.isSellable()) continue;
+      const take = Math.min(left, source.getAmount());
+      const piece = source.clone().setAmount(take);
+      if (this.getAddableAmount(piece) < take) {
+        this.full();
+        break;
+      }
+      inventory.deleteAtSlot(index, take, false);
+      this.add(piece, false);
+      left -= take;
+      moved += take;
+      if (first.getDefinition().isStackable()) break;
+    }
+    return moved;
+  }
+
   depositAll() {
     if (
       this.player.getStatus() == PlayerStatus.PRICE_CHECKING &&
       this.player.getInterfaceId() == PRICE_CHECKER_INTERFACE_ID
     ) {
       let movedAny = false;
-      for (const item of this.player.getInventory().getValidItems()) {
-        const definition = item.getDefinition();
-        if (!item.isSellable() || definition.getGrandExchangeValue() <= 0) {
+      const inventory = this.player.getInventory();
+      for (let slot = 0; slot < inventory.capacity(); slot++) {
+        const item = inventory.getItems()[slot];
+        if (!item || item.getId() <= 0 || !item.isSellable() || item.getDefinition().getGrandExchangeValue() <= 0) {
           continue;
         }
-        this.player
-          .getInventory()
-          .switchItems(this, item.clone(), false, false);
-        movedAny = true;
+        movedAny = this.depositFrom(slot, item.getAmount()) > 0 || movedAny;
       }
       this.refreshItems();
-      this.player.getInventory().refreshItems();
+      inventory.refreshItems();
       if (movedAny) {
         Sounds.sendSound(this.player, Sound.DROP_ITEM);
       }
@@ -116,45 +146,55 @@ class PriceCheckerContainer extends ItemContainer {
       this.player.getStatus() == PlayerStatus.PRICE_CHECKING &&
       this.player.getInterfaceId() == PRICE_CHECKER_INTERFACE_ID
     ) {
-      if (this.player.getInventory().getItems()[slot].getId() == id) {
-        const source = this.player.getInventory().getItems()[slot];
-        const item = source.clone().setAmount(Math.min(amount, this.player.getInventory().getAmount(id)));
-        if (!item.isSellable()) {
+      const source = this.player.getInventory().getItems()[slot];
+      if (source?.getId() == id) {
+        if (!source.isSellable()) {
           this.player.sendMessage("That item cannot be pricechecked because it isn't sellable.");
           return true;
         }
-        if (item.getDefinition().getGrandExchangeValue() == 0) {
+        if (source.getDefinition().getGrandExchangeValue() == 0) {
           this.player.sendMessage("There's no point pricechecking that item. It has no value.");
           return true;
         }
-
-        if (item.getAmount() == 1) {
-          this.player
-            .getInventory()
-            .switchItem(this, item, false, slot, true);
-        } else {
-          this.player.getInventory().switchItems(this, item, false, true);
-        }
-        Sounds.sendSound(this.player, Sound.DROP_ITEM);
+        if (this.depositFrom(slot, amount) > 0) Sounds.sendSound(this.player, Sound.DROP_ITEM);
+        this.refreshItems();
+        this.player.getInventory().refreshItems();
       }
       return true;
     }
     return false;
   }
 
+  /** Moves up to `amount` of the checker's item in `slot` (and its other copies) back, each with its own meta. */
   withdraw(id, amount, slot) {
     if (
       this.player.getStatus() == PlayerStatus.PRICE_CHECKING &&
       this.player.getInterfaceId() == PRICE_CHECKER_INTERFACE_ID
     ) {
-      if (this.items[slot].getId() == id) {
-        const item = new Item(id, amount);
-        if (item.getAmount() == 1) {
-          this.switchItem(this.player.getInventory(), item, false, slot, true);
-        } else {
-          this.switchItems(this.player.getInventory(), item, false, true);
+      if (this.items[slot]?.getId() == id) {
+        const inventory = this.player.getInventory();
+        const slots = [slot, ...this.items.map((_, index) => index).filter((index) => index !== slot)];
+        let left = amount;
+        let moved = false;
+        for (const index of slots) {
+          if (left <= 0) break;
+          const source = this.items[index];
+          if (!source || source.getId() !== id) continue;
+          const take = Math.min(left, source.getAmount(), inventory.getAddableAmount(source.clone().setAmount(Math.min(left, source.getAmount()))));
+          if (take <= 0) {
+            inventory.full();
+            break;
+          }
+          const piece = source.clone().setAmount(take);
+          this.deleteAtSlot(index, take, false);
+          inventory.add(piece, false);
+          left -= take;
+          moved = true;
+          if (source.getDefinition().isStackable()) break;
         }
-        Sounds.sendSound(this.player, Sound.PICK_UP_ITEM);
+        this.refreshItems();
+        inventory.refreshItems();
+        if (moved) Sounds.sendSound(this.player, Sound.PICK_UP_ITEM);
       }
       return true;
     }

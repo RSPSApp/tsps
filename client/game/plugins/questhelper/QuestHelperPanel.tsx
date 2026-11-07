@@ -3,6 +3,7 @@ import { NavigationButton } from "@runelite/client/ui/NavigationButton";
 import { imageIcon, runeliteImage } from "@runelite/client/ui/runeliteImages";
 import type { QuestHelperPlugin, QuestHelperSettings } from "./QuestHelperPlugin";
 import type { HelperOverview, HelperQuest, HelperSection, HelperWidget, PixelBounds, RequirementState } from "./QuestHelperProtocol";
+import { wikiHref } from "./QuestHelperProtocol";
 import { recommendedQuests } from "./QuestHelperRecommendations";
 import { questLabel } from "./QuestHelperMenus";
 import { Difficulty, QuestFilter, QuestHelperConfig, QuestOrdering } from "./QuestHelperConfig";
@@ -35,11 +36,17 @@ function requirementColor(requirement: RequirementState, settings: QuestHelperSe
 
 function Requirements({ items, settings, none = "None" }: { items?: readonly RequirementState[]; settings: QuestHelperSettings; none?: string }): JSX.Element {
     if (!items?.length) return <p className="rl-qh-none">{none}</p>;
-    return <ul className="rl-qh-reqs">{items.map((requirement, index) =>
-        <li key={index} style={{ color: requirementColor(requirement, settings) }} title={requirement.tooltip}>
+    return <ul className="rl-qh-reqs">{items.map((requirement, index) => {
+        // QuestRequirementsPanel's "Go to wiki..": an item link lands on its Item sources. Only the
+        // wiki is ever linked, so a payload cannot turn a requirement into a link elsewhere.
+        const href = wikiHref(requirement.wikiUrl);
+        return <li key={index} style={{ color: requirementColor(requirement, settings) }} title={requirement.tooltip}>
             <span aria-label={requirement.met ? "Met" : "Not met"} className="rl-qh-check">{requirement.met ? "✓" : "○"}</span>
-            {clean(requirement.name)}
-        </li>)}</ul>;
+            {href
+                ? <a className="rl-qh-req-link" href={href} target="_blank" rel="noopener noreferrer" title={requirement.tooltip ?? "Open this item's sources on the wiki."}>{clean(requirement.name)}</a>
+                : clean(requirement.name)}
+        </li>;
+    })}</ul>;
 }
 
 /** A RuneLite collapsible: a bold header that toggles its body, with Quest Helper's arrows. */
@@ -61,6 +68,8 @@ function Collapsible({ title, children, open: initial = true, active = false, ex
 function Overview({ overview, settings }: { overview: HelperOverview; settings: QuestHelperSettings }): JSX.Element {
     const rewards = overview.rewards ?? [];
     const group = (type: string) => rewards.filter(r => r.type === type).map(r => clean(r.text));
+    // Same rule as a requirement link: only the wiki is ever linked.
+    const wiki = wikiHref(overview.wikiUrl);
     return <Collapsible title="Quest overview" open={false}>
         <h4>Requirements</h4><Requirements items={overview.generalRequirements} settings={settings}/>
         <h4>Recommended</h4><Requirements items={overview.generalRecommended} settings={settings}/>
@@ -74,7 +83,7 @@ function Overview({ overview, settings }: { overview: HelperOverview; settings: 
             {[["QUEST_POINT", "Quest points"], ["EXPERIENCE", "Experience"], ["ITEM", "Items"], ["UNLOCK", "Unlocks"]].map(([type, title]) => group(type).length ?
                 <div key={type}><b>{title}</b><ul className="rl-qh-plain">{group(type).map((text, i) => <li key={i}>{text}</li>)}</ul></div> : null)}
         </>}
-        {overview.wikiUrl && <><h4>External resources</h4><a className="rl-qh-link" href={overview.wikiUrl} target="_blank" rel="noopener noreferrer" title="Open the official wiki in your browser.">Open RuneScape Wiki</a></>}
+        {wiki && <><h4>External resources</h4><a className="rl-qh-link" href={wiki} target="_blank" rel="noopener noreferrer" title="Open the official wiki in your browser.">Open RuneScape Wiki</a></>}
     </Collapsible>;
 }
 

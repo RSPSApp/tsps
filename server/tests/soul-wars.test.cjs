@@ -55,7 +55,7 @@ before(() => {
     onPlayerBeforeDeath: (fn) => { hooks.beforeDeath = fn; },
     registerArea: (area) => { hooks.lobbyArea = area; },
     onShouldDropItemsOnDeath: (fn) => hooks.drops.push(fn),
-    onPlayerLogin() {},
+    onPlayerLogin: (fn) => (hooks.login ??= []).push(fn),
     onPlayerLogout() {},
     onCustomEvent: (name, fn) => { const events = (hooks.events ??= {}); const prior = events[name]; events[name] = prior ? (e) => { prior(e); fn(e); } : fn; },
     emitCustomEvent(name, event) { if (name === 'collection-log:obtain') obtains.push(event); },
@@ -154,6 +154,8 @@ function fakePlayer({ combat = 100, total = 1500, at = new Location(2192, 2842, 
         sendInterface: (iid) => { (p.interfaces ??= []).push(iid); return sender; },
         sendSubInterface: (uid, iid) => { p.subs.push(iid); return sender; },
         closeSubInterface: () => sender,
+        // A player at the Nomad's rewards: open unless a test closes them.
+        isSubInterfaceOpen: () => p.shopClosed !== true,
         sendInterfaceScript: (sid, args) => { p.scripts.push([sid, args]); return sender; },
         sendSong: () => sender, sendEnterAmountPrompt: (title) => { p.prompts = [...(p.prompts ?? []), title]; return sender; },
         sendInterfaceFlagsRange: (uid, from, to, flags) => { (p.flags ??= []).push([uid, from, to, flags]); return sender; },
@@ -819,6 +821,15 @@ test("the Nomad's Trade opens interface 442 in place of the generic shop, with t
   assert.equal(other.allow, null, 'other shops are left alone');
 });
 
+test('the rewards answer only while open: a confirm with them closed spends no tokens', () => {
+  const p = fakePlayer();
+  Common.addVarp(p, 'zeal_tokens', 15);
+  p.shopClosed = true;
+  button('confirm_xp')({ player: p, slot: 5 });
+  assert.equal(zealTokens(p), 15);
+  assert.deepEqual(p.xp ?? [], []);
+});
+
 test('experience: floor(L*L/600) * 30 a token at 99, from level 30; tokens and level checked again, quietly', () => {
   const p = fakePlayer();
   Common.addVarp(p, 'zeal_tokens', 15);
@@ -1364,4 +1375,45 @@ test('a bandage used on a teammate reaches the registered Soul Wars handler', as
   assert.equal(nativeItemUses.length, beforePriorMatch, 'core route rejects target in prior match context');
   assert.equal(patient.p.getHitpoints(), outsideHealth, 'a player from the previous match is not healed');
   assert.equal(healer.p.getInventory().getAmount(Common.data.items.bandages), 1, 'cross-match use spends nothing');
+});
+
+// A save made mid-game (shutdown, saveall, a requested save) holds the cape, supplies and an instance tile. With no
+// game to return to at login, they go and the player is put in the lobby, as leaving does.
+test('a login from a mid-game save loses the game items and lands in the lobby', () => {
+  const { game, players: [p] } = startGame(2);
+  assert.equal(p.getAttribute(Match.IN_GAME_ATTRIBUTE), true, 'flagged while in the game');
+  const { items } = Common.data;
+  p.inventory.add(new core.Item(items.bandages, 5));
+  p.inventory.add(new core.Item(items.fragment, 3));
+  p.inventory.add(new core.Item(items.potions[0], 1));
+  p.inventory.add(new core.Item(core.ItemIdentifiers.COINS, 100));
+  const cape = p.worn[1]?.getId();
+  assert.ok(cape === items.capes.blue || cape === items.capes.red, 'team cape worn');
+  const inArena = p.getLocation();
+  // The "save": the same attributes and items on a fresh login after a restart (no game exists).
+  const saved = fakePlayer({ at: inArena });
+  saved.setAttribute(Match.IN_GAME_ATTRIBUTE, true);
+  for (const s of p.inventory.slots) if (s.amount > 0) saved.inventory.add(new core.Item(s.id, s.amount));
+  saved.worn[1] = p.worn[1];
+  Match.reset();
+  assert.equal(Match.current, null);
+  for (const login of hooks.login ?? []) login({ player: saved });
+  for (const id of [items.bandages, items.fragment, items.potions[0]]) assert.equal(saved.inventory.getAmount(id), 0, `item ${id} gone`);
+  assert.equal(saved.inventory.getAmount(core.ItemIdentifiers.COINS), 100, 'own items kept');
+  assert.equal(saved.worn[1] ?? null, null, 'team cape gone');
+  const lobby = Common.toLocation(Common.data.lobby.afterGame);
+  assert.deepEqual([saved.getLocation().getX(), saved.getLocation().getY(), saved.getLocation().getZ()], [lobby.getX(), lobby.getY(), lobby.getZ()]);
+  assert.equal(saved.getAttribute(Match.IN_GAME_ATTRIBUTE), false);
+  // The original player, released by the end, is no longer flagged either.
+  assert.equal(p.getAttribute(Match.IN_GAME_ATTRIBUTE), false);
+  void game;
+});
+
+test('a login with nothing saved mid-game is left alone', () => {
+  const p = fakePlayer();
+  p.inventory.add(new core.Item(Common.data.items.bandages, 2));
+  const at = p.getLocation();
+  for (const login of hooks.login ?? []) login({ player: p });
+  assert.equal(p.inventory.getAmount(Common.data.items.bandages), 2);
+  assert.equal(p.getLocation(), at);
 });

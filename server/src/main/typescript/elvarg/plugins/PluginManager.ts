@@ -76,6 +76,8 @@ import {
   PluginActiveRegionsEvent,
   PluginPlayerDisconnectEvent,
   PluginPlayerLoginEvent,
+  PluginLoginConnection,
+  PluginLoginExtension,
   PluginPlayerMapSquareChangeEvent,
   PluginServerLifecycleEvent,
   PluginFriendEvent,
@@ -239,6 +241,7 @@ export class PluginManager {
   private static initialized = false;
   private static loadedPlugins: string[] = [];
   private static lastPersistenceOverride: string | null = null;
+  private static loginExtensionFactory?: { pluginName: string; factory: (connection: PluginLoginConnection) => PluginLoginExtension | undefined };
   private static loginHooks: PluginHook<PluginPlayerLoginEvent>[] = [];
   private static mapSquareChangeHooks: PluginHook<PluginPlayerMapSquareChangeEvent>[] = [];
   private static disconnectHooks: PluginHook<PluginPlayerDisconnectEvent>[] = [];
@@ -744,6 +747,12 @@ export class PluginManager {
     }
   }
 
+  public static createLoginExtension(connection: Omit<PluginLoginConnection, "api">): PluginLoginExtension | undefined {
+    const entry = PluginManager.loginExtensionFactory;
+    // Authentication extensions fail closed; ordinary hook error suppression is unsafe here.
+    return entry?.factory({ ...connection, api: PluginManager.createApi(entry.pluginName) });
+  }
+
   public static emitPlayerLogin(event: PluginPlayerLoginEvent): void {
     if (PluginManager.loginHooks.length === 0) {
       return;
@@ -900,6 +909,13 @@ export class PluginManager {
   /** Equipment-tab click 1 is Remove; clicks 2+ are the worn options (item params 451+). */
   private static readonly WORN_OPTION_PARAM = 451;
   private static readonly FIRST_WORN_OPTION_CLICK = 2;
+  private static readonly MAX_WORN_OPTION_CLICK = 10;
+
+  /** Inventory items have five options; an equipped item's worn options (params 451+) run past that. */
+  private static maxItemActionClick(event: PluginItemActionEvent): number {
+    const { Equipment } = require("../game/model/container/impl/Equipment");
+    return event.interfaceId === Equipment.INVENTORY_INTERFACE_ID ? PluginManager.MAX_WORN_OPTION_CLICK : 5;
+  }
 
   /**
    * The option an item click names: a worn option when it came from the equipment tab
@@ -2462,6 +2478,13 @@ export class PluginManager {
       }),
       World: require("../game/World").World,
       DisplayNames: require("../game/entity/impl/player/DisplayNames").DisplayNames,
+      encodeCharacterList: require("../net/protocol/ClientProtocol").encodeCharacterList,
+      encodeCharacterResult: require("../net/protocol/ClientProtocol").encodeCharacterResult,
+      LOGIN_FLAG_CHARACTER_SELECT: require("../net/login/LoginTokens").LOGIN_FLAG_CHARACTER_SELECT,
+      MAIN_PROFILE: require("../game/entity/impl/player/persistence/PlayerProfile").MAIN_PROFILE,
+      LEAGUE_PROFILE: require("../game/entity/impl/player/persistence/PlayerProfile").LEAGUE_PROFILE,
+      Skills: require("../game/content/skill/SkillManager").Skills,
+      Accounts: require("../game/entity/impl/player/Accounts").Accounts,
       BoatManager: require("../game/content/sailing/BoatManager").BoatManager,
       BOAT_VIEW_DISTANCE: require("../game/content/sailing/WorldEntitySync").BOAT_VIEW_DISTANCE,
       Sailing: require("../game/content/sailing/Sailing").Sailing,
@@ -2539,6 +2562,7 @@ export class PluginManager {
       PrivateChatStatus: require(`${model}/PlayerRelations`).PrivateChatStatus,
       SpellTeleports: require(`${combat}/magic/SpellTeleports`).SpellTeleports,
       LunarSpells: require(`${combat}/magic/LunarSpells`).LunarSpells,
+      SpellbookLocks: require(`${combat}/magic/SpellbookLocks`),
       EffectSpells: require(`${combat}/magic/EffectSpells`).EffectSpells,
       ArceuusSpells: require(`${combat}/magic/ArceuusSpells`).ArceuusSpells,
       ArceuusOfferings: require(`${combat}/magic/ArceuusOfferings`),
@@ -2921,6 +2945,11 @@ export class PluginManager {
         if (typeof handler === "function") {
           PluginManager.mapSquareChangeHooks.push({ ...hookProfile(handler), handler });
         }
+      },
+      registerLoginExtension: (factory) => {
+        if (typeof factory !== "function") throw new Error("Login extension must be a function");
+        if (PluginManager.loginExtensionFactory) throw new Error("A login extension is already registered");
+        PluginManager.loginExtensionFactory = { pluginName, factory };
       },
       onPlayerLogin: (handler) => {
         if (typeof handler !== "function") {
@@ -4006,7 +4035,7 @@ export class PluginManager {
               return;
             }
             const definition = CacheDefinitions.getItem(event.itemId);
-            if (definition?.name !== handler || event.clickType < 1 || event.clickType > 5) return;
+            if (definition?.name !== handler || event.clickType < 1 || event.clickType > PluginManager.maxItemActionClick(event)) return;
             const option = PluginManager.itemActionOption(definition, event);
             const action = namedActions.get(option);
             if (action && action(event) !== false) event.handled = true;

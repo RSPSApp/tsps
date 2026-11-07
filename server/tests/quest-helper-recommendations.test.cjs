@@ -20,3 +20,14 @@ test('base levels, quest completion, quest points and combat gate eligibility; r
  done=false;assert.equal(eligibility(player).get('next').eligible,false,'completion changes are read afresh');
 });
 test('missing metadata is unknown, never silently eligible',()=>{const v=eligibility(player).get('unknown');assert.equal(v.known,false);assert.equal(v.eligible,false);});
+
+test('Tutorial Island availability gates eligibility without changing quest state',()=>{
+ const tutorial={key:'learning_the_ropes',name:'Learning the Ropes',isComplete:()=>false};
+ let enabled=false;
+ const check=createEligibility({cache,Skill:{values:()=>[skill]},getQuests:()=>[tutorial,...quests],tutorialAvailable:()=>enabled});
+ let value=check(player).get(tutorial.key);
+ assert.equal(value.known,true);assert.equal(value.eligible,false);assert.match(value.missing.join(' '),/disabled/i);
+ enabled=true;value=check(player).get(tutorial.key);assert.equal(value.eligible,true);assert.deepEqual(value.missing,[]);
+ assert.deepEqual(check(player).get('first'),eligibility(player).get('first'),'other quests keep their normal eligibility');
+ assert.equal(tutorial.isComplete(player),false);
+});

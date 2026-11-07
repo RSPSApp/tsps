@@ -11,7 +11,7 @@ function fixture(world = { plugins: { CustomCharacterSummary: true } }) {
   const commands = new Set(["teleports", "presets", "commands", "lockxp"]);
   const api = {
     core: {
-      WorldDefinition: { readWorldConfig: () => world },
+      WorldDefinition: { readWorldConfig: () => world, getWorldDefinition: () => ({ name: "Old School RuneScape" }) },
       Bank: { TOTAL_BANK_TABS: 3, BANK_SEARCH_TAB_INDEX: 2 },
       ItemIdentifiers: { COINS: 995, BLOOD_MONEY: 13307, PLATINUM_TOKEN: 13204, TOKKUL: 6529, STARDUST: 25527, MARK_OF_GRACE: 11849 },
       Skill: Object.fromEntries(["ATTACK", "STRENGTH", "DEFENCE", "RANGED", "MAGIC", "HITPOINTS", "PRAYER", "WOODCUTTING"].map(name => [name, name])),

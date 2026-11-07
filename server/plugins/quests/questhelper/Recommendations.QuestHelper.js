@@ -2,7 +2,7 @@
 const {metadata}=require('../QuestList.QuestRuntime');
 const normalize=value=>String(value).toLowerCase().replace(/[^a-z0-9]/g,'');
 /** Cache DB requirements, checked against authoritative unboosted player state. */
-function createEligibility({cache,Skill,getQuests}) {
+function createEligibility({cache,Skill,getQuests,tutorialAvailable=()=>true}) {
  return player=>{
   const all=metadata(cache),quests=getQuests(),manager=player.getSkillManager?.();
   const skills=Skill?.values()||[];
@@ -14,6 +14,7 @@ function createEligibility({cache,Skill,getQuests}) {
    const row=all.get(normalize(quest.name));
    if(!row&&quest.key!=='learning_the_ropes'){result.set(quest.key,{known:false,eligible:false,missing:['Quest requirements unavailable'],recommendedMissing:[],difficulty:99,length:99});continue;}
    const missing=[],recommendedMissing=[];
+   if(quest.key==='learning_the_ropes'&&!tutorialAvailable())missing.push('Tutorial Island is disabled on this world.');
    const checkStats=(values,out)=>{
     if(!Array.isArray(values))return;
     if(values.length%2){out.push('Skill requirements unavailable');return;}

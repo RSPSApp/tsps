@@ -100,7 +100,7 @@ export class TilePacksOverlay implements WidgetOverlay {
             const corners: [number, number][] = [[x, y], [x + 1, y], [x + 1, y + 1], [x, y + 1]];
             const poly: Point[] = [];
             for (const [cx, cy] of corners) {
-                const p = scene.worldToScreen(cx, scene.tileHeight(cx, cy, plane), cy);
+                const p = scene.worldToScreen(cx, scene.tileHeight(cx, cy, plane, x + 0.5, y + 0.5), cy);
                 if (!p) break;
                 poly.push([p[0], p[1]]);
             }

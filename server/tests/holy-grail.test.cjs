@@ -262,7 +262,10 @@ test('every variant the plugin selects exists in the generated transcript data',
   assert.ok(dialogues['Sir Percival'].variants['standard-dialogue-after-holy-grail-in-the-goblin-village']);
 });
 
-test('stage 0 reaches completion along the wiki route', () => {
+test('stage 0 reaches completion along the wiki route', (ctx) => {
+  // The teleport goes through TeleportHandler, whose checks need a real player: they pass, and it moves at once.
+  ctx.mock.method(PluginManager.getCoreApi().TeleportHandler, 'checkReqs', () => true);
+  ctx.mock.method(PluginManager.getCoreApi().TeleportHandler, 'teleport', (player, to, _type, _warn, onArrival) => { player.moveTo(to); onArrival?.(); });
   const h = harness();
   const p = h.player;
 

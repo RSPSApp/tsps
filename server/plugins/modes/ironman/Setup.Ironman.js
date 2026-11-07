@@ -38,7 +38,7 @@ function openSetup(request) {
   request.handled = true;
   const setup = setupData();
   for (const [varp, value] of Object.entries(setup.varps)) player.getPacketSender().sendConfig(Number(varp), value);
-  openSetups.set(player, { upgrades: request.upgrades === true, onClosed: request.onClosed });
+  openSetups.set(player, { upgrades: request.upgrades === true, initial: request.initial === true, onClosed: request.onClosed });
   player.getPacketSender().sendInterface(setup.interface);
 }
 
@@ -55,14 +55,20 @@ function closePopup(player) {
 }
 
 function choose(player, mode) {
-  const upgrades = openSetups.get(player)?.upgrades;
-  if (upgrades === undefined) return;
+  const open = openSetups.get(player);
+  if (!open) return;
+  const { upgrades } = open;
   const current = Ironman.modeOf(player);
   if (mode === "group") {
     player.sendMessage(Ironman.message("groupUnavailable"));
     return;
   }
   if (mode === current) {
+    if (open.initial && mode === "none") {
+      player.getPacketSender().sendInterfaceRemoval();
+      endSetup(player);
+      return;
+    }
     player.sendMessage(Ironman.message("modeAlready", { mode: Ironman.data.modes[mode].label }));
     return;
   }
@@ -88,8 +94,16 @@ function choose(player, mode) {
   player.setEnteredAmountAction({
     acceptsZero: true,
     execute(answer) {
+      if (openSetups.get(player) !== open) return;
       closePopup(player);
       if (answer !== 1) return;
+      if (Ironman.modeOf(player) !== current) return;
+      const commit = { player, from: current, to: mode, allowed: true, reason: null };
+      Ironman.api.emitCustomEvent("ironman:change-mode", commit);
+      if (commit.allowed === false) {
+        if (commit.reason) player.sendMessage(commit.reason);
+        return;
+      }
       Ironman.setMode(player, mode);
       player.getPacketSender().sendVarbit(Ironman.data.varbits.downgradePermitted, 1);
       player.getPacketSender().sendInterfaceRemoval();
@@ -152,6 +166,9 @@ function answerMode(query) {
   query.label = Ironman.data.modes[query.mode].label;
 }
 
+/** Disconnecting does not choose None for an unfinished initial setup. */
+function abandonSetup({ player }) { openSetups.delete(player); }
+
 module.exports = function attach(api) {
   core = api.core;
   const setup = setupData();
@@ -165,6 +182,8 @@ module.exports = function attach(api) {
     if (interfaceId === setup.interface) endSetup(player);
   });
   api.onCustomEvent("ironman:open-setup", openSetup);
+  api.onPlayerLogout(abandonSetup);
+  api.onPlayerDisconnect(abandonSetup);
   api.onCustomEvent("ironman:mode", answerMode);
   api.onCustomEvent("npc-dialogue:action", onDialogueAction);
   api.onNpcClick([ADAM], ARMOUR_OPTION, giveArmour);

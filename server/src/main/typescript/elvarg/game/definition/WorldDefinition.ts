@@ -25,6 +25,7 @@ export const WORLD_GAMEFRAMES = ["modern-resizable", "modern-fixed", "317-resiza
 export type WorldGameframe = (typeof WORLD_GAMEFRAMES)[number];
 
 export interface WorldDefinitionData {
+    name: string;
     spawn: WorldPosition;
     /** Shown under the world's name in the world list (up to 120 characters). */
     description: string;
@@ -178,6 +179,10 @@ export function parseWorldDefinition(value: unknown): WorldDefinitionData {
     if (world.membersWorld !== undefined && typeof world.membersWorld !== "boolean") {
         throw new WorldDefinitionValidationError("world.json membersWorld must be a boolean");
     }
+    const name = world.name === undefined ? "Old School RuneScape" : world.name;
+    if (typeof name !== "string" || !name.trim() || name.trim().length > 64 || /[\x00-\x1f\x7f<>]/.test(name)) {
+        throw new WorldDefinitionValidationError("world.json name must be plain text between 1 and 64 characters");
+    }
     const membersWorld = world.membersWorld !== false;
     const description = world.description ?? "";
     if (typeof description !== "string" || description.length > 120) {
@@ -193,6 +198,7 @@ export function parseWorldDefinition(value: unknown): WorldDefinitionData {
     }
     return {
         spawn,
+        name: name.trim(),
         description: description.trim(),
         zones,
         experienceMultiplier,
@@ -277,6 +283,7 @@ function syncRuntime(): void {
 function copyWorldDefinition(): WorldDefinitionData {
     return {
         spawn: { ...definition.spawn },
+        name: definition.name,
         description: definition.description,
         zones: definition.zones.map((zone) => ({ ...zone, tags: [...zone.tags] })),
         experienceMultiplier: definition.experienceMultiplier,

@@ -121,10 +121,10 @@ function fished({ player, itemId }) {
   done(player, TASK.trout);
 }
 
-function runesCrafted({ player, runeId, rolls, amountPerEssence }) {
+function runesCrafted({ player, runeId, rolls, amountPerEssence, bonusRunes }) {
   if (runeId !== api.core.ItemIdentifiers.EARTH_RUNE) return;
   done(player, TASK.earthRunes);
-  if ((Number(rolls) || 0) * (Number(amountPerEssence) || 0) >= 100) done(player, TASK.earthRunes100);
+  if ((Number(rolls) || 0) * (Number(amountPerEssence) || 0) + (Number(bonusRunes) || 0) >= 100) done(player, TASK.earthRunes100);
 }
 
 function potteryMade({ player, itemId, kind }) {

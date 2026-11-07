@@ -148,10 +148,17 @@ function giveProducts(player, recipe) {
   }
 }
 
+/** The Carpenter's outfit's Construction bonus (Wiki: applies at the workbench since 26 November 2025). */
+function outfitMultiplier(player) {
+  const request = { player, multiplier: 1 };
+  api.emitCustomEvent("construction:outfit-multiplier", request);
+  return request.multiplier;
+}
+
 function craft(player, recipe) {
   useMaterials(player, recipe);
   giveProducts(player, recipe);
-  player.getSkillManager().addExperiences(core.Skill.CONSTRUCTION, recipe.xp);
+  player.getSkillManager().addExperiences(core.Skill.CONSTRUCTION, recipe.xp * outfitMultiplier(player));
   player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, format(DATA.messages.crafted, recipe));
 }
 

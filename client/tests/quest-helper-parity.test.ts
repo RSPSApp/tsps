@@ -8,7 +8,7 @@ import { CLIENT_TOKEN } from "@runelite/client/plugins/PluginInjector";
 import { GameTick, PluginMessage } from "@runelite/api/events";
 import { QuestHelperPlugin } from "../game/plugins/questhelper/QuestHelperPlugin";
 import { QuestHelperPanel, defaultSettings } from "../game/plugins/questhelper/QuestHelperPanel";
-import { parseHelperCatalog, parseHelperResponse } from "../game/plugins/questhelper/QuestHelperProtocol";
+import { parseHelperCatalog, parseHelperResponse, wikiHref } from "../game/plugins/questhelper/QuestHelperProtocol";
 import { normalizeQuestName, passesSkillFilter, questListSections } from "../game/plugins/questhelper/QuestHelperOrdering";
 import { questListMenuEntries } from "../game/plugins/questhelper/QuestHelperMenus";
 import { applyChoiceRules, highlightedItems, wrapText } from "../game/plugins/questhelper/QuestHelperOverlays";
@@ -34,6 +34,16 @@ assert.ok(parseHelperResponse({ ...result, overview: undefined, sections: undefi
 assert.equal(parseHelperResponse({ ...result, sections: [{ ...section(0, true), steps: "x" }] }), null);
 assert.equal(parseHelperResponse({ ...result, activeStep: { ...step, choiceRules: [{ groupId: "219" }] } }), null);
 assert.equal(parseHelperResponse({ ...result, activeStep: { ...step, requirements: [{ name: "x", met: true, state: "maybe" }] } }), null);
+// A requirement may carry its item's wiki URL (QuestRequirementsPanel's "Go to wiki..").
+const cited = { ...result, activeStep: { ...step, requirements: [{ name: "Redberries", met: false, state: "fail", ids: [1951], quantity: 1, wikiUrl: "https://oldschool.runescape.wiki/w/Redberries#Item_sources" }] } };
+assert.ok(parseHelperResponse(cited), "a requirement with a wiki URL parses");
+assert.equal(parseHelperResponse({ ...result, activeStep: { ...step, requirements: [{ name: "x", met: false, wikiUrl: 5 }] } }), null, "a non-string wiki URL is rejected");
+// Only the wiki is ever linked: anything else must degrade to text, never to a live link.
+assert.equal(wikiHref("https://oldschool.runescape.wiki/w/Redberries#Item_sources"), "https://oldschool.runescape.wiki/w/Redberries#Item_sources");
+assert.equal(wikiHref("https://example.com/w/Redberries"), undefined, "another origin is not linked");
+assert.equal(wikiHref("javascript:alert(1)"), undefined, "a javascript URL is not linked");
+assert.equal(wikiHref("//oldschool.runescape.wiki/w/Egg"), undefined, "a protocol-relative URL is not linked");
+assert.equal(wikiHref(undefined), undefined);
 assert.equal(parseHelperCatalog({ protocol: 1, sourceCommit: "a", diagnostics: [], quests: [{ questKey: "a", name: "A", supported: true, optimalOrder: "1" }] }), null);
 
 // QuestOrdering / QuestFilter / Difficulty / SkillFiltering.

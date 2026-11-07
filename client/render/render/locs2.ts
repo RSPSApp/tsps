@@ -213,6 +213,8 @@ export function onLocDel(host: WebGLOsrsRendererHost, tile: { x: number; y: numb
                       });
 
             if (wasAdded) {
+                // A replay can arrive before the cache index; its static copy must stay hidden too.
+                host.locOverrides.set(`${tile.x | 0},${tile.y | 0},${level | 0},${added.locId | 0}`, { newId: LOC_OVERRIDE_REMOVED });
                 // Deleting a replay of the cache loc removes that loc; only scenery replaced
                 // by a different added id comes back.
                 for (const id of added.replacedIds ?? []) {

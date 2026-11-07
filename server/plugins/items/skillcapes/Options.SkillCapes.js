@@ -18,20 +18,8 @@
  * The max cape's Features and Spellbook menus call the same handlers.
  */
 const Capes = require("./Common.SkillCapes");
+const { spellbookLockedRefusal } = require("../../../src/main/typescript/elvarg/game/content/combat/magic/SpellbookLocks");
 
-/**
- * Wiki: the POH altars switch to a spellbook only when "they have the requirements to access those spellbooks"
- * (Occult altar; the Lunar altar names Lunar Diplomacy), and the magic cape "to any spellbook they have unlocked":
- * Desert Treasure I for the Ancients, Lunar Diplomacy for the Lunars. TSPS wording for the refusal.
- */
-const SPELLBOOK_QUESTS = new Map([["ANCIENT", ["desert_treasure_i", "Desert Treasure I"]], ["LUNAR", ["lunar_diplomacy", "Lunar Diplomacy"]]]);
-function spellbookLocked(pluginApi, player, key) {
-  const quest = SPELLBOOK_QUESTS.get(key);
-  if (!quest) return null;
-  const query = { player, key: quest[0], complete: false };
-  pluginApi.emitCustomEvent("quest:is-complete", query);
-  return query.complete ? null : `You need to complete ${quest[1]} to use that spellbook.`;
-}
 
 const STAMINA_KEY = "stamina";
 const GRAPPLE_KEY = "grapple";
@@ -147,7 +135,8 @@ function changeSpellbook(player, name) {
     player.sendMessage(spellbookChanges(player));
     return;
   }
-  const locked = spellbookLocked(Capes.api, player, book.key);
+  // Wiki: the magic cape switches "to any spellbook they have unlocked" (core SpellbookLocks).
+  const locked = spellbookLockedRefusal(player, MagicSpellbook[book.key]);
   if (locked) {
     player.sendMessage(locked);
     return;

@@ -17,6 +17,8 @@ import { Spell } from "./Spell";
 import { EffectSpells } from "./EffectSpells";
 import { DialogueChainBuilder } from "../../../model/dialogues/builders/DialogueChainBuilder";
 import { OptionDialogue } from "../../../model/dialogues/entries/impl/OptionDialogue";
+import { StatementDialogue } from "../../../model/dialogues/entries/impl/StatementDialogue";
+import { lockingQuest } from "./SpellbookLocks";
 import { DialogueOption } from "../../../model/dialogues/DialogueOption";
 import { PluginManager } from "../../../../plugins/PluginManager";
 import { CacheDefinitions } from "../../../cache/CacheDefinitions";
@@ -348,16 +350,31 @@ export class LunarSpells {
         return false;
     }
 
-    /** Op 1 asks which book; ops 2-4 are the Standard, Ancient and Arceuus quick picks. */
+    /**
+     * Op 1 asks which book; ops 2-4 are the Standard, Ancient and Arceuus quick picks. Only an unlocked book is
+     * swapped to (Wiki): a locked quick pick is refused before the cast, a locked choice from the menu when chosen.
+     */
     private static castSpellbookSwap(player: Player, spell: LunarSpell, option: number): boolean {
         const books = [MagicSpellbook.NORMAL, MagicSpellbook.ANCIENT, MagicSpellbook.ARCEUUS];
         const quick = option >= 2 && option <= 4 ? books[option - 2] : undefined;
+        if (quick && this.refuseLockedBook(player, quick)) return true;
         return spell.cast(player, () => {
             // Spellbook Swap ends Magic Imbue (Wiki).
             player.setAttribute("lunar:magic-imbue-until", null);
             if (quick) this.swapTo(player, quick);
             else this.openSpellbookSwap(player);
         });
+    }
+
+    /** A book the player hasn't unlocked (core SpellbookLocks): refused with the captured message box, and true. */
+    private static refuseLockedBook(player: Player, book: MagicSpellbook): boolean {
+        const quest = lockingQuest(player, book);
+        if (!quest) return false;
+        // Captured (a league recording): "You need to have completed Desert Treasure I in order to use Ancient Magicks."
+        const bookName = book === MagicSpellbook.ANCIENT ? "Ancient Magicks" : "that spellbook";
+        player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
+            new StatementDialogue(0, `You need to have completed ${quest.name} in order to use ${bookName}.`)));
+        return true;
     }
 
     /** Bakes every uncooked pie one after another, a cast (runes and XP) per pie (Wiki: Bake Pie). */
@@ -716,7 +733,7 @@ export class LunarSpells {
         builder.add(new OptionDialogue(0, { executeOption: (option: DialogueOption) => {
             const book = books[(option as number) - 1];
             player.getPacketSender().sendInterfaceRemoval();
-            if (book) this.swapTo(player, book);
+            if (book && !this.refuseLockedBook(player, book)) this.swapTo(player, book);
         } }, "Standard", "Ancient", "Arceuus"));
         player.getDialogueManager().startDialogues(builder);
     }

@@ -1,4 +1,4 @@
-// Unexecuted draft; copy into server/tests only after source/fixture review.
+// Native decoded-widget regression for Fremennik hard diary eligibility.
 process.env.DISABLE_PLAYER_BOTS = '1';
 const assert = require('node:assert/strict');
 const path = require('node:path');

@@ -74,3 +74,11 @@ test("a coin stack near the cap takes what fits and the rest of Swan Song's coin
   const given = f.p.getInventory().getAmount(I.COINS) - (MAX - 10) + droppedAmount(f, I.COINS);
   assert.ok(given >= 24999, `every coin of the reward is in the stack or on the floor (${given})`);
 });
+
+test("the runtime's own completion coin lands under the player when the coin stack is at the cap", (t) => {
+  const f = packed(t);
+  f.p.getInventory().setItem(0, new core.Item(I.COINS, 2147483647));
+  f.p.getInventory().setItem(27, new core.Item(-1, 0)); // not full: the old path took a plain add, clamped at the cap
+  QuestRuntime.questNamed("Swan Song").complete(f.p); // 24,999 from its reward, 1 from the runtime's rewardItemId
+  assert.equal(droppedAmount(f, I.COINS), 25000, "all 25,000, the capped stack takes none");
+});

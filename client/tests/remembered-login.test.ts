@@ -174,3 +174,50 @@ for (const [key, value] of Object.entries(defaultServerEnv)) {
     else process.env[envKey] = value;
 }
 console.log("remembered login: ok");
+
+async function worldNameMetadata() {
+    const originalFetch = globalThis.fetch;
+    try {
+        const state = new LoginState();
+        state.serverAddress = "solar.example:43594";
+        state.serverSecure = true;
+        state.serverTransport = "websocket";
+        state.serverSignalUrl = undefined;
+        state.serverWorldId = undefined;
+        let requested = "";
+        globalThis.fetch = (async url => {
+            requested = String(url);
+            return { ok: true, json: async () => ({ name: "Solaris RSPS" }) } as Response;
+        }) as typeof fetch;
+        await state.refreshServerName();
+        assert.equal(requested, "https://solar.example:43594/api/world-info");
+        assert.equal(state.serverName, "Solaris RSPS");
+        state.serverTransport = "webrtc";
+        state.serverSignalUrl = "wss://relay.example/signal";
+        state.serverWorldId = "solar";
+        globalThis.fetch = (async url => {
+            requested = String(url);
+            return { ok: true, json: async () => ({ worlds: [{ worldId: "solar", name: "Browser Solaris" }] }) } as Response;
+        }) as typeof fetch;
+        await state.refreshServerName();
+        assert.equal(requested, "https://relay.example/worlds");
+        assert.equal(state.serverName, "Browser Solaris");
+        let reply!: (value: Response) => void;
+        globalThis.fetch = (() => new Promise<Response>(resolve => { reply = resolve; })) as typeof fetch;
+        const pending = state.refreshServerName();
+        state.serverWorldId = "another-world";
+        reply({ ok: true, json: async () => ({ worlds: [{ worldId: "solar", name: "Stale world" }] }) } as Response);
+        await pending;
+        assert.equal(state.serverName, "Browser Solaris", "stale metadata cannot rename the next selection");
+        for (const name of ["<col=ff0000>World", "x".repeat(65), "", "bad\nname"]) {
+            globalThis.fetch = (async () => ({ ok: true, json: async () => ({ worlds: [{ worldId: "another-world", name }] }) })) as typeof fetch;
+            await state.refreshServerName();
+            assert.equal(state.serverName, "Browser Solaris", "invalid metadata retains the fallback");
+        }
+        globalThis.fetch = (async () => { throw new Error("offline or older server"); }) as typeof fetch;
+        await state.refreshServerName();
+        assert.equal(state.serverName, "Browser Solaris");
+        console.log("pre-login world name metadata: ok");
+    } finally { globalThis.fetch = originalFetch; }
+}
+void worldNameMetadata().catch(error => { console.error(error); process.exitCode = 1; });

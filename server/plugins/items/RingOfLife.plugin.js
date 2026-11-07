@@ -7,6 +7,9 @@
  * effect is toggled off, and goes to the Ardougne marketplace when its respawn is set there
  * (the Skillcapes plugin's "skillcape:ring-of-life"). The teleport works up to level 30
  * Wilderness, but Tele Block stops it and the effect never cures poison.
+ *
+ * The ring's own "Toggle-respawn" (Wiki): after the medium Ardougne Diary its teleport can be switched to East
+ * Ardougne, the marketplace tile the Defence cape's option uses. The prompt and refusal lines are TSPS wording.
  */
 const Equipment = require("../../src/main/typescript/elvarg/game/model/container/impl/Equipment").Equipment;
 const { Skill } = require("../../src/main/typescript/elvarg/game/model/Skill");
@@ -14,6 +17,29 @@ const { Skill } = require("../../src/main/typescript/elvarg/game/model/Skill");
 let core = null;
 let pluginApi = null;
 let ringIds = new Set();
+
+const ARDOUGNE_ATTRIBUTE = "ring-of-life:ardougne-respawn";
+const ARDOUGNE_MARKET = [2662, 3305, 0];
+
+function ardougneDiaryDone(player) {
+  const request = { player, diary: "ardougne", tier: "medium", complete: false };
+  pluginApi.emitCustomEvent("diary:is-complete", request);
+  return request.complete === true;
+}
+
+function toggleRespawn(event) {
+  const { player } = event;
+  if (!ringIds.has(event.itemId)) return false;
+  event.handled = true;
+  if (!ardougneDiaryDone(player)) {
+    player.sendMessage("You need to complete the medium Ardougne Diary to change where your ring takes you.");
+    return true;
+  }
+  pluginApi.sendMultiChatboxPrompt(player, "Choose a respawn destination.",
+    "Ardougne", () => player.setAttribute(ARDOUGNE_ATTRIBUTE, true),
+    "Default", () => player.setAttribute(ARDOUGNE_ATTRIBUTE, false));
+  return true;
+}
 
 function onIncomingDamage(entity, hitDamage) {
   if (!entity?.isPlayer?.() || !(hitDamage?.getDamage?.() > 0)) {
@@ -42,9 +68,10 @@ function onIncomingDamage(entity, hitDamage) {
   if (!player.getCombat()?.getTeleblockTimer?.()?.finished?.()) {
     return;
   }
-  const destination = !hasRing && cape.destination
-    ? new core.Location(cape.destination[0], cape.destination[1], cape.destination[2] ?? 0)
-    : core.GameConstants.DEFAULT_LOCATION;
+  const tile = hasRing
+    ? (player.getAttribute(ARDOUGNE_ATTRIBUTE) === true ? ARDOUGNE_MARKET : null)
+    : cape.destination;
+  const destination = tile ? new core.Location(tile[0], tile[1], tile[2] ?? 0) : core.GameConstants.DEFAULT_LOCATION;
   if (!core.TeleportHandler.checkReqs(player, destination, 30)) {
     return;
   }
@@ -62,11 +89,13 @@ function onIncomingDamage(entity, hitDamage) {
 module.exports = {
   name: "RingOfLife",
   members: true,
-  _test: { onIncomingDamage },
+  _test: { onIncomingDamage, toggleRespawn, ARDOUGNE_ATTRIBUTE, ARDOUGNE_MARKET },
   register(api) {
     core = api.core;
     pluginApi = api;
     ringIds = new Set([core.ItemIdentifiers.RING_OF_LIFE]);
+    api.persistAttribute(ARDOUGNE_ATTRIBUTE, false);
     api.registerIncomingDamageModifier(onIncomingDamage);
+    api.onItemAction("Ring of life", { "Toggle-respawn": toggleRespawn });
   },
 };

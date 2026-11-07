@@ -134,7 +134,7 @@ test("the data: every food and bite is an Eat item in the cache, and every Eat i
     if (!core.CacheDefinitions.hasItem(itemId)) continue;
     const definition = core.CacheDefinitions.getItem(itemId);
     if (definition.noteTemplate >= 0 || definition.placeholderTemplate >= 0) continue;
-    if ((definition.inventoryActions ?? []).some(option => option === "Eat" || (option === "Consume" && DATA.foods.some(food => food.name === definition.name && food.option === "Consume")))) eatNames.add(definition.name);
+    if ((definition.inventoryActions ?? []).some(option => option === "Eat" || (option !== "Eat" && DATA.foods.some(food => food.name === definition.name && food.option === option)))) eatNames.add(definition.name);
   }
   const foodNames = new Set();
   for (const food of DATA.foods) {
@@ -407,4 +407,41 @@ test('quest supplies restore bounded Prayer and share stamina, with their real c
 test("eating a Mackerel names the Mackerel, not the cod (issue #2455)", () => {
   const mackerel = DATA.foods.find((food) => food.name === "Mackerel");
   assert.equal(mackerel.message, "You eat the mackerel.");
+});
+
+test("drinks eaten as food: wine, tea and two cocktails heal, apply their Wiki effects and leave the vessel", () => {
+  const drink = (name, setup = () => {}) => {
+    const player = createPlayer({ hp: 40 });
+    setup(player);
+    player.give(0, id(name));
+    player.eat(0);
+    return player;
+  };
+
+  const wine = drink("JUG_OF_WINE");
+  assert.equal(wine.hp, 51, "Jug of wine heals 11 (Wiki: Jug of wine)");
+  assert.equal(wine.level(core.Skill.ATTACK), 58, "and lowers Attack by 2");
+  assert.equal(wine.slots[0].getId(), id("JUG"));
+  assert.equal(wine.messages[0], "You drink the wine.");
+
+  const half = drink("HALF_FULL_WINE_JUG");
+  assert.equal(half.hp, 47, "Half full wine jug heals 7 (Wiki: Half full wine jug)");
+  assert.equal(half.level(core.Skill.ATTACK), 58);
+  assert.equal(half.slots[0].getId(), id("JUG"));
+
+  for (const tea of ["CUP_OF_TEA", "CUP_OF_TEA_2"]) {
+    const cup = drink(tea);
+    assert.equal(cup.hp, 43, "a cup of tea heals 3 (Wiki: Cup of tea)");
+    assert.equal(cup.level(core.Skill.ATTACK), 63, "and boosts Attack by 2 + 2% (3 from level 50)");
+    assert.equal(cup.slots[0].getId(), id("EMPTY_CUP"));
+    assert.deepEqual(cup.messages, ["Aaah, nothing like a nice cuppa tea!"]);
+  }
+  assert.equal(Food.isFoodItem(id("CUP_OF_TEA_4")), false, "tea with an Empty option is another tea");
+
+  for (const [name, heal] of [["FRUIT_BLAST", 9], ["PINEAPPLE_PUNCH", 9]]) {
+    const cocktail = drink(name);
+    assert.equal(cocktail.hp, 40 + heal, `${name} heals ${heal} (Wiki)`);
+    assert.equal(cocktail.slots[0].getId(), id("COCKTAIL_GLASS"));
+    assert.deepEqual(cocktail.messages, ["You drink the cocktail. It tastes great."]);
+  }
 });

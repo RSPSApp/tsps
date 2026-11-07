@@ -66,3 +66,28 @@ test("Edmond gives a replacement scroll after the quest when none is carried (Wi
  line();
  assert.equal(inv.getAmount(scroll),0,'no room: none given');
 });
+
+test("a real Talk-to with Edmond after Plague City reaches his scroll offer, ahead of Song of the Elves", async t => {
+ const f=actor(t,{plagueCity:true}),scroll=core.ItemIdentifiers.ARDOUGNE_TELEPORT_SCROLL,id=core.NpcIdentifiers.EDMOND_2;
+ const npc=PM.spawnNpc({id,x:3201,y:3200,z:0,wanderRadius:0},'EdmondScrollTest');
+ assert.ok(npc);
+ t.after(()=>PM.removeNpc(npc));
+ assert.equal(PM.emitNpcInteraction({player:f.p,npc,npcId:id,clickType:1,handled:false}),true);
+ const sender=f.p.getPacketSender(),send=async packet=>{await f.conn.dispatch([packet]);f.conn.processTurnPackets();};
+ let asked=false;
+ for(let i=0;i<40;i++){
+  const menu=core.MultiChatboxPrompt.getPending(f.p);
+  if(menu){
+   const option=menu.options.indexOf('Do you have any more of those scrolls?');
+   assert.ok(option>=0,menu.options.join(', '));
+   asked=true;
+   await send({type:'dialogue_continue',widgetId:core.MultiChatboxPrompt.OPTIONS_WIDGET_ID,childIndex:option+1});
+  } else if(f.p.getDialogueManager().isActive()){
+   const group=sender.getChatboxGroupId();
+   await send({type:'dialogue_continue',widgetId:(group<<16)|(group===229?4:5),childIndex:-1});
+  } else break;
+ }
+ assert.ok(asked,"Edmond's Plague City dialogue offered the scroll");
+ assert.ok(!f.messages.some(m=>/to start this quest/.test(m)),'not Song of the Elves');
+ assert.equal(f.p.getInventory().getAmount(scroll),1,'a new scroll from his dialogue');
+});

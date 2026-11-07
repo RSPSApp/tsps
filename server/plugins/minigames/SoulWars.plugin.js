@@ -15,6 +15,7 @@
  */
 const Common = require("./soulwars/Common.SoulWars");
 const Lobby = require("./soulwars/Lobby.SoulWars");
+const Match = require("./soulwars/Match.SoulWars");
 const Death = require("./soulwars/Death.SoulWars");
 const Avatars = require("./soulwars/Avatars.SoulWars");
 const Control = require("./soulwars/Control.SoulWars");
@@ -33,6 +34,7 @@ module.exports = {
     Common.init(api);
     Stats.attachStats(api);
     Lobby.attachLobby(api);
+    Match.attachMatch(api);
     Death.attachDeath(api);
     Avatars.attachAvatars(api);
     Control.attachControl(api);

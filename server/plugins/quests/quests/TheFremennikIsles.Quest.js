@@ -473,6 +473,18 @@ module.exports = function registerTheFremennikIslesQuest(api) {
     return Number(player.getAttribute(BORK_ATTRIBUTE)) || 0;
   }
 
+  /** One of Bork's three supplies, once each (his menu stays up until all three are claimed), and only if it fits. */
+  function claimBorkSupply(player, bit, itemId, amount) {
+    if (borkFlags(player) & bit) return;
+    const inventory = player.getInventory();
+    if ((inventory.getFreeSlots?.() ?? amount) < amount) {
+      inventory.full?.();
+      return;
+    }
+    inventory.adds(itemId, amount);
+    setFlag(player, BORK_ATTRIBUTE, bit);
+  }
+
   function miningTier(player) {
     const mining = player.getSkillManager().getMaxLevel(Skill.MINING);
     if (mining >= 55) return { itemId: MITHRIL_ORE, amount: 6, word: "six", ore: "mithril", coins: 6000 };
@@ -1423,16 +1435,13 @@ module.exports = function registerTheFremennikIslesQuest(api) {
         return;
       // Bork's supplies.
       case "1eVvoF":
-        player.getInventory().adds(TUNA, 10);
-        setFlag(player, BORK_ATTRIBUTE, BORK_FOOD);
+        claimBorkSupply(player, BORK_FOOD, TUNA, 10);
         return;
       case "eJNB7e":
-        player.getInventory().adds(STRENGTH_POTION_4, 4);
-        setFlag(player, BORK_ATTRIBUTE, BORK_STRENGTH);
+        claimBorkSupply(player, BORK_STRENGTH, STRENGTH_POTION_4, 4);
         return;
       case "eCZJLI":
-        player.getInventory().adds(PRAYER_POTION_3, 4);
-        setFlag(player, BORK_ATTRIBUTE, BORK_PRAYER);
+        claimBorkSupply(player, BORK_PRAYER, PRAYER_POTION_3, 4);
         return;
       case "57Z66s":
         if (stageOf(player) >= STAGE_CHAMPION && stageOf(player) < STAGE_TEN_TROLLS) {
@@ -1495,15 +1504,16 @@ module.exports = function registerTheFremennikIslesQuest(api) {
       player.sendMessage("You should speak to the King before rummaging through his chest.");
       return;
     }
-    if (isFull(player)) {
+    // Four pieces: one free slot is not enough, and a piece with no room would be lost for good.
+    if ((player.getInventory().getFreeSlots?.() ?? 4) < 4) {
       player.sendMessage("You need some free inventory space to take the costume.");
       return;
     }
-    setFlag(player, CHEST_ATTRIBUTE, 1);
     player.getInventory().adds(JESTER_HAT, 1);
     player.getInventory().adds(JESTER_TOP, 1);
     player.getInventory().adds(JESTER_TIGHTS, 1);
     player.getInventory().adds(JESTER_BOOTS, 1);
+    setFlag(player, CHEST_ATTRIBUTE, 1);
     player.sendMessage("You take the silly jester costume from the chest.");
   }
 

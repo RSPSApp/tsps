@@ -375,6 +375,16 @@ test("a sceptre with no paid deposit refunds nothing for it, so Uncharge then Di
   assert.equal(q.amounts.get(I.REVENANT_ETHER), 40, "only its charges come back");
 });
 
+test("an unpaid Thammaron's sceptre refuses Dismantle after Uncharge", () => {
+  const bought = new Item(I.THAMMARONS_SCEPTRE, 1);
+  const p = player();
+  p.inventoryItems.push(bought);
+  Accursed._test.uncharge({ player: p, item: bought });
+  assert.equal(Accursed._test.dismantleThammarons({ player: p, item: bought }), true);
+  assert.equal(p.amounts.get(I.REVENANT_ETHER) ?? 0, 0, "no ether from dismantling");
+  assert.equal(bought.getId(), I.THAMMARONS_SCEPTRE_U_, "the sceptre is kept");
+});
+
 test("custom shops do not sell the revenant weapons that dismantle into ether", () => {
   const shops = require("../data/definitions/custom-shops.json");
   const sold = new Set(shops.flatMap((shop) => (shop.originalStock ?? []).map((entry) => entry.id)));

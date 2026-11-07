@@ -33,6 +33,8 @@ const CHARGES_KEY = "accursed-sceptre-charges";
 // Set only when addEther takes the activation ether: a sceptre from a spawn, load-out or older save has
 // no paid reserve to refund or drop (the revenant weapons and the Webweaver bow track theirs the same way).
 const DEPOSIT_META = "accursed-sceptre-deposit";
+// Set when a sceptre with no paid deposit is emptied: its ether was never paid in, so Dismantle refuses it.
+const UNPAID_META = "accursed-sceptre-unpaid";
 const MAX_CHARGES = 16000;
 const ACTIVATION_ETHER = 1000;
 const ATTACK_SPEED = 4;
@@ -216,6 +218,7 @@ function addEther(player, item, amount) {
   if (!activated) {
     item.setId(staff.chargedByUncharged.get(item.getId()));
     item.setMetaValue(DEPOSIT_META, true);
+    item.setMetaValue(UNPAID_META, undefined);
     player.sendMessage(`You use ${format(ACTIVATION_ETHER)} ether to activate the weapon.`);
   }
   staff.setCharges(item, current + added);
@@ -254,6 +257,7 @@ function uncharge({ player, item }) {
   }
   if (returned > 0) inventory.addItem(refund);
   staff.setCharges(item, 0);
+  item.setMetaValue(UNPAID_META, depositOf(item) > 0 ? undefined : true);
   item.setMetaValue(DEPOSIT_META, undefined);
   item.setId(staff.unchargedByCharged.get(item.getId()));
   inventory.refreshItems();
@@ -308,6 +312,10 @@ function dismantle({ player, item }) {
 function dismantleThammarons({ player, item }) {
   const inventory = player.getInventory();
   if (!isThammarons(item?.getId?.()) || !inventory.getItems().includes(item)) return false;
+  if (item.getMetaValue(UNPAID_META) === true) {
+    player.sendMessage("Your sceptre was never activated with ether, so it cannot be dismantled.");
+    return true;
+  }
   const slot = inventory.getItems().indexOf(item);
   inventory.deleteAtSlot(slot, 1, false);
   const ether = new core.Item(ids().REVENANT_ETHER, DISMANTLE_ETHER);
@@ -331,6 +339,7 @@ function deathItemDrop(event) {
   const lost = depositOf(item) + staff.chargesOf(item);
   if (lost > 0) core.ItemOnGroundManager.registerLocation(killer, new core.Item(ids().REVENANT_ETHER, lost), location);
   staff.setCharges(item, 0);
+  item.setMetaValue(UNPAID_META, depositOf(item) > 0 ? undefined : true);
   item.setMetaValue(DEPOSIT_META, undefined);
   item.setId(staff.unchargedByCharged.get(item.getId()));
   // Core already returns kept items; report the ether drop without dropping the sceptre as well.
@@ -350,7 +359,7 @@ module.exports = {
     CHARGES_KEY, MAX_CHARGES, ACTIVATION_ETHER,
     get sceptre() { return sceptre; },
     get autocasting() { return autocasting; },
-    DEPOSIT_META, deathItemDrop, maxHit, dismantleThammarons, DISMANTLE_ETHER, chargeSceptre, addEther, chargeWithEther, checkCharges, uncharge, swap, boostMaxHit, boostAccuracy, spellCast, dismantle,
+    DEPOSIT_META, UNPAID_META, deathItemDrop, maxHit, dismantleThammarons, DISMANTLE_ETHER, chargeSceptre, addEther, chargeWithEther, checkCharges, uncharge, swap, boostMaxHit, boostAccuracy, spellCast, dismantle,
     resolveSceptre,
   },
   register(pluginApi) {

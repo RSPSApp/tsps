@@ -243,3 +243,32 @@ test("a weapon without a paid deposit refunds and drops only its charges", () =>
   assert.equal(item.getId(), CRAW.uncharged);
   assert.equal(p.getInventory().getAmount(I.REVENANT_ETHER), 5);
 });
+
+test("a weapon bought before the deposit rule cannot be Uncharged then Dismantled for ether", () => {
+  for (const kind of WEAPONS) {
+    const p = player();
+    const bought = new core.Item(kind.charged, 1);
+    p.getInventory().addItem(bought);
+    const item = p.getInventory().getItems().find((held) => held.getId() === kind.charged);
+    actions[kind.name].Uncharge({ player: p, item });
+    assert.equal(item.getId(), kind.uncharged);
+    assert.equal(p.getInventory().getAmount(I.REVENANT_ETHER), 0);
+    assert.equal(actions[`${kind.name} (u)`].Dismantle({ player: p, item }), true);
+    assert.equal(p.getInventory().getAmount(I.REVENANT_ETHER), 0, `${kind.name}: no ether from dismantling`);
+    assert.equal(p.getInventory().getAmount(kind.uncharged), 1, `${kind.name}: the weapon is kept`);
+  }
+});
+
+test("activating an unpaid weapon again pays the deposit, so it dismantles once uncharged", () => {
+  const p = player();
+  const bought = new core.Item(CRAW.charged, 1);
+  p.getInventory().addItem(bought);
+  const item = p.getInventory().getItems().find((held) => held.getId() === CRAW.charged);
+  actions[CRAW.name].Uncharge({ player: p, item });
+  p.getInventory().addItem(new core.Item(I.REVENANT_ETHER, 1000));
+  W.addEther(p, item, 0);
+  actions[CRAW.name].Uncharge({ player: p, item });
+  assert.equal(p.getInventory().getAmount(I.REVENANT_ETHER), 1000);
+  actions[`${CRAW.name} (u)`].Dismantle({ player: p, item });
+  assert.equal(p.getInventory().getAmount(I.REVENANT_ETHER), 8500);
+});

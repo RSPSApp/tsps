@@ -21,6 +21,8 @@ const CHARGES_META = "revenant-weapon:charges";
 // Set only when addEther takes the activation ether: a weapon from a shop, spawn or older save has no
 // paid reserve to refund or drop.
 const DEPOSIT_META = "revenant-weapon:deposit";
+// Set when a weapon with no paid deposit is emptied: its ether was never paid in, so Dismantle refuses it.
+const UNPAID_META = "revenant-weapon:unpaid";
 const ACTIVATION_ETHER = 1000;
 const MAX_CHARGES = 16000;
 const DISMANTLE_ETHER = 7500;
@@ -102,6 +104,7 @@ function addEther(player, item, amount) {
   takePlain(inventory, core.ItemIdentifiers.REVENANT_ETHER, deposit + added);
   item.setId(weapon.charged);
   item.setMetaValue(DEPOSIT_META, true);
+  item.setMetaValue(UNPAID_META, undefined);
   setCharges(item, current + added);
   inventory.refreshItems();
   if (deposit) player.sendMessage(`You use ${format(ACTIVATION_ETHER)} ether to activate the weapon.`);
@@ -114,8 +117,10 @@ function check({ player, item }) {
 }
 
 function emptyWeapon(item) {
+  const paid = depositOf(item) > 0;
   setCharges(item, 0);
   item.setMetaValue(DEPOSIT_META, undefined);
+  item.setMetaValue(UNPAID_META, paid ? undefined : true);
   item.setId(weaponFor(item).uncharged);
 }
 
@@ -145,6 +150,10 @@ function dismantle({ player, item }) {
   const inventory = player.getInventory();
   if (activated(item) || !weaponFor(item) || !inventory.getItems().includes(item)) return false;
   const label = weaponFor(item).label;
+  if (item.getMetaValue(UNPAID_META) === true) {
+    player.sendMessage(`Your ${label} was never activated with ether, so it cannot be dismantled.`);
+    return true;
+  }
   // The weapon's own slot is freed for the ether, so only a full stack of it can be refused.
   const slot = inventory.getItems().indexOf(item);
   inventory.deleteAtSlot(slot, 1, false);
@@ -225,7 +234,7 @@ function deathItemDrop(event) {
 module.exports = {
   name: "RevenantWeapons",
   members: true,
-  _test: { CHARGES_META, DEPOSIT_META, ACTIVATION_ETHER, MAX_CHARGES, DISMANTLE_ETHER, chargesOf, addEther, chargeWithEther, uncharge, dismantle, attackStarted, checkAmmo, decrementAmmo, rangedBoost, meleeBoost, deathItemDrop },
+  _test: { CHARGES_META, DEPOSIT_META, UNPAID_META, ACTIVATION_ETHER, MAX_CHARGES, DISMANTLE_ETHER, chargesOf, addEther, chargeWithEther, uncharge, dismantle, attackStarted, checkAmmo, decrementAmmo, rangedBoost, meleeBoost, deathItemDrop },
   register(pluginApi) {
     api = pluginApi;
     core = pluginApi.core;

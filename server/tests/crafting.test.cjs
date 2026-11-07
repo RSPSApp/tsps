@@ -1175,4 +1175,54 @@ test("native furnace silver-bolt batches conserve inputs at output stack limits"
       assert.equal(skill.getExperience(craft),0); assert.equal(skill.getCurrentLevel(craft),1); assert.equal(skill.getMaxLevel(craft),1);
     });
   });
+
+  await t.test("Bones to Bananas awards one cast of Magic XP regardless of plain bone count", async t => {
+    for (const count of [1, 3]) await t.test(`${count} plain bones`, async t => {
+      const channel={kind:"test",remoteAddress:"127.0.0.1",isOpen:()=>true,send:()=>true,close(){},onData(){},onError(){},onClose(){}};
+      const p=new Player(new PlayerSession(channel)); p.setIndex(index++); p.setUsername("bonesxp"+index);
+      p.setRegistered(true); p.setLocation(new core.Location(3226,3218,0)); p.needsPlacement=false;
+      const c=new ClientConnection(channel), inv=p.getInventory(), skill=p.getSkillManager(), magic=core.Skill.MAGIC; c.player=p;
+      t.after(()=>{PluginManager.emitPlayerDisconnect({player:p,username:p.getUsername()});PluginManager.emitPlayerLogout({player:p,username:p.getUsername()});p.setRegistered(false);core.TaskManager.cancelTasks(p.getIndex());core.TaskManager.cancelTasks(p);});
+      const level=50, initial=core.SkillManager.getExperienceForLevel(level);
+      skill.setCurrentLevel(magic,level,false).setMaxLevels(magic,level,false).setExperience(magic,initial);
+      assert.equal(skill.getCurrentLevel(magic),level); assert.equal(skill.getMaxLevel(magic),level); assert.equal(skill.getExperience(magic),initial);
+      assert.equal(core.SkillManager.getLevelForExperience(initial),level); assert.ok(p.getHitpoints()>0);
+      assert.notEqual(p.getAttribute(core.SkillManager.XP_LOCKED_ATTRIBUTE),true);
+      for(const [id,n] of [[526,count],[561,1],[555,2],[557,2]]) inv.add(new core.Item(id,n),false);
+      for(const [id,n] of [[526,count],[561,1],[555,2],[557,2]]) { assert.equal(inv.getAmount(id),n); const def=core.ItemDefinition.forId(id); assert.ok(def.getName()); assert.equal(def.isNoted(),false); assert.notEqual(PluginManager.emitCanUseItem(p,id,"use"),false); }
+      for(const [id,name] of [[526,"Bones"],[561,"Nature rune"],[555,"Water rune"],[557,"Earth rune"]]) assert.equal(core.ItemDefinition.forId(id).getName().toLowerCase(),name.toLowerCase());
+      const boneSlots=inv.getItems().filter(item=>item?.getId()===526); assert.equal(boneSlots.length,count); assert.ok(boneSlots.every(item=>item.getAmount()===1 && item.getMeta()===null));
+      assert.equal(inv.getAmount(1963),0);
+      assert.equal(p.getEquipment().getItems().some(item=>item && item.getId()>0),false,"no equipped rune source");
+      for(const id of [526,561,555,557]) {const slot=inv.getSlotForItemId(id); assert.ok(slot>=0); assert.equal(inv.getItems()[slot].getId(),id); assert.equal(inv.getItems()[slot].getMeta(),null);}
+      const spell=core.CacheDefinitions.getSpellByName("Bones to Bananas"); assert.ok(spell);
+      const Graveyard=require("../plugins/minigames/magetrainingarena/Graveyard.MageTrainingArena");
+      assert.equal(Graveyard.inGraveyard(p.getLocation()),false,"ordinary cast is outside MTA Graveyard");
+      assert.equal(p.getSpellbook(),core.MagicSpellbook.NORMAL);
+      assert.equal(core.GameConstants.EXPERIENCE_MULTIPLIER,1,"declared native profile uses world XP rate 1");
+      const calls=[], gates=[], events=[], drops=[], dispatches=[], add=skill.addExperiences.bind(skill);
+      const dispatch=PluginManager.emitSpellCast.bind(PluginManager);
+      t.mock.method(PluginManager,"emitSpellCast",event=>{const result=dispatch(event); if(event.player===p) dispatches.push({name:event.spellName,widget:event.spellWidget,item:event.spellItemId,op:event.opId,handled:result}); return result;});
+      const sender=p.getPacketSender(), drop=sender.sendExpDrop.bind(sender);
+      t.mock.method(sender,"sendExpDrop",(which,xp)=>{if(which===magic) drops.push(xp); return drop(which,xp);});
+      const gate=PluginManager.emitCanGainExperience.bind(PluginManager), emit=PluginManager.emitCustomEvent.bind(PluginManager);
+      t.mock.method(PluginManager,"emitCanGainExperience",(who,which,xp)=>{const result=gate(who,which,xp); if(who===p && which===magic) gates.push({xp,allow:result.allow,multiplier:result.multiplier}); return result;});
+      t.mock.method(PluginManager,"emitCustomEvent",(name,event)=>{if(name==="skills:experience-gained" && event.player===p && event.skill===magic) events.push({experience:event.experience,multiplied:event.multiplied}); return emit(name,event);});
+      t.mock.method(skill,"addExperiences",(which,xp)=>{calls.push({which,xp}); return add(which,xp);});
+      let complete=false;
+      t.after(()=>{if(!complete) console.error("BONES_XP_FAILURE",JSON.stringify({count,base:calls.map(x=>x.xp),gates,events,drops,stored:skill.getExperience(magic)-initial,rate:core.GameConstants.EXPERIENCE_MULTIPLIER}));});
+      await c.dispatch([{type:"widget_action",widgetId:spell.widgetId,groupId:spell.widgetId>>>16,childId:spell.widgetId&0xffff,slot:-1,buttonNum:1,itemId:spell.itemId}]);
+      c.processTurnPackets();
+      assert.deepEqual(dispatches,[{name:"Bones to Bananas",widget:spell.widgetId,item:spell.itemId,op:1,handled:false}],"real decoded spell action reaches original plugin dispatcher");
+      assert.equal(calls.length,1,"one decoded cast must reach the actual XP API once");
+      assert.equal(calls[0].which,magic);
+      assert.equal(gates.length,1); assert.notEqual(gates[0].allow,false); assert.equal(gates[0].multiplier,1);
+      assert.equal(events.length,1,"the original XP event confirms XP landed before the target");
+      assert.equal(calls[0].xp,25,"one cast requests 25 base Magic XP regardless of bones");
+      assert.equal(inv.getAmount(526),0); assert.equal(inv.getAmount(1963),count);
+      assert.equal(inv.getAmount(561),0); assert.equal(inv.getAmount(555),0); assert.equal(inv.getAmount(557),0);
+      assert.equal(skill.getExperience(magic)-initial,25); assert.deepEqual(drops,[25]); assert.deepEqual(events,[{experience:25,multiplied:true}]);
+      complete=true;
+    });
+  });
 });

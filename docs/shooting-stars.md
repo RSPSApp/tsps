@@ -66,6 +66,15 @@ Like OSRS, it is free-to-play, with half experience on free-to-play worlds, wher
 - **Extra ore:** charged, it gives a 1 in 10 extra ore for rocks up to adamantite (`mining:extra-ore`, in the Mining plugin). A charge is spent for every such ore, whether it procs or not. Crashed stars spend none.
 - The ring's messages aren't captured; the wording is ours.
 
+## Celestial signet
+
+Wiki: https://oldschool.runescape.wiki/w/Celestial_signet (fetched for this change).
+
+- **Same as the ring:** the signet takes stardust (Charge, or stardust used on it), Check and Uncharge, gives the +4 Mining boost, and a charged one gives the 1 in 10 extra ore and spends a charge per qualifying ore, then turns back into the uncharged signet at zero.
+- **Crystal tools:** worn, charged or not, it gives the elven signet's 10% chance of not using a charge, now for the crystal axe and crystal pickaxe as well as the crystal harpoon (see `docs/fishing.md`).
+- **Singing:** using a celestial ring (charged or not) or an elven signet on a singing bowl needs a celestial ring, an elven signet, 1,000 stardust and 100 crystal shards in the inventory and 70 Smithing and 70 Crafting (boostable). After 3 ticks it makes a celestial signet and gives 5,000 Smithing and 5,000 Crafting XP, as the Wiki's creation section lists.
+- **Limits:** Conwenna and Reese singing it for 150 shards below level 70 isn't modelled. The Wiki doesn't say what happens to a charged ring's stardust, so a charged ring keeps its charges in the signet. The singing line and the refusal lines are ours.
+
 ## Clue geodes
 
 Clue geodes come from the Mining plugin (`server/plugins/skills/mining/ClueGeodes.Mining.js`), so every rock and crashed star rolls them, using the Wiki's formula.

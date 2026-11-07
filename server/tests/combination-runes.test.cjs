@@ -310,3 +310,16 @@ for (const [rolls, headroom, expected] of [[[0.1, 0.9], 1, 1], [[0.9, 0.9], 0, 0
     assert.ok(Math.abs(xpOf(f) - before - expected * 9.3) < 0.01);
   });
 }
+
+// Combination runes are members-only. The altars stand in free land and the elemental rune used is a free item, so
+// on a free world the pure essence and the product went unchecked. Now refused, spending nothing.
+test('a free world refuses combination runes and spends nothing', async (t) => {
+  t.mock.method(core.WorldDefinition, 'isMembersWorld', () => false);
+  const f = actor(t); chance(t, [0.1]);
+  give(f, I.PURE_ESSENCE, 4); give(f, I.EARTH_RUNE, 4); give(f, I.EARTH_TALISMAN, 1);
+  await use(f, WATER, I.EARTH_RUNE);
+  assert.equal(count(f, I.MUD_RUNE), 0);
+  assert.equal(count(f, I.PURE_ESSENCE), 4, 'the essence is kept');
+  assert.equal(count(f, I.EARTH_RUNE), 4);
+  assert.ok(f.all().includes("To use this item please login to a members' world."), f.all().join(' | '));
+});

@@ -619,6 +619,9 @@ function returnToLobby(player, message = null) {
   if (message) {
     player.sendMessage(message);
   }
+  // A carrier leaving by the exit portal or the idle kick drops the flag where they stand, before the move: the area's
+  // own leave hook runs after it, and dropped it in the lobby, where no one can pick it up.
+  dropCarriedFlag(player);
   if (player.getAttribute(BOT_KEY) === true) {
     player.getForcedLogoutTimer().start(0);
     player.requestLogout();

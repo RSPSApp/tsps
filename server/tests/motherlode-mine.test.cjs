@@ -33,6 +33,7 @@ MotherlodeMine.register({
   onObjectInteraction: (name, actions) => { hooks.objects[name] = { ...hooks.objects[name], ...actions }; },
   onNpcDialogueCondition: (handler) => hooks.conditions.push(handler),
   onCustomEvent: (name, handler) => { (hooks.events[name] ??= []).push(handler); },
+  emitCustomEvent: (name, event) => { for (const handler of hooks.events[name] ?? []) handler(event); },
   registerCommand() {},
   spawnNpc: ({ id, x, y }) => {
     const npc = { id, location: new Location(x, y, 0), removed: false };
@@ -44,6 +45,17 @@ MotherlodeMine.register({
   removeNpc: (npc) => { npc.removed = true; },
 });
 const { tick, percyCondition } = MotherlodeMine._test;
+// Mining isn't loaded here: this answers mining:roll-interval as it does (Wiki, Pickaxe: dragon "3 ticks by default,
+// 1/6 chance to be 2 ticks").
+(hooks.events["mining:roll-interval"] ??= []).push((request) => {
+  const fast = request.pickaxe?.fastRollChance && Math.random() < request.pickaxe.fastRollChance;
+  request.ticks ??= request.pickaxe.attemptIntervalTicks - (fast ? 1 : 0);
+});
+// The prospector outfit answers "mining:xp-multiplier" for the pay-dirt XP.
+require("../plugins/skills/mining/ProspectorOutfit.Mining").attach({
+  core: require("../dist/plugins/PluginManager").PluginManager.getCoreApi(),
+  onCustomEvent: (name, handler) => { (hooks.events[name] ??= []).push(handler); },
+});
 
 before(() => {
   CachePipeline.initialize();
@@ -95,7 +107,7 @@ function inventory(capacity = 28) {
   };
 }
 
-function player(x, y, { mining = 99, smithing = 99 } = {}) {
+function player(x, y, { mining = 99, smithing = 99, worn = {} } = {}) {
   const attributes = new Map();
   const p = {
     messages: [], xp: [], animations: [], varbits: new Map(), dialogues: [], hits: [],
@@ -108,7 +120,11 @@ function player(x, y, { mining = 99, smithing = 99 } = {}) {
     getAttribute: (key) => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
     getInventory: () => p.inventory,
-    getEquipment: () => ({ getItems: () => new Array(14).fill(null) }),
+    getEquipment: () => {
+      const items = new Array(14).fill(null);
+      for (const [slot, id] of Object.entries(worn)) items[slot] = { getId: () => id };
+      return { getItems: () => items };
+    },
     getMovementQueue: () => ({ size: () => 0 }),
     getSkillManager: () => ({
       getCurrentLevel: (skill) => (skill === Skill.SMITHING ? smithing : mining),
@@ -193,6 +209,20 @@ test("mining a vein gives pay-dirt with its ore rolled then, and the vein deplet
   assert.equal(locAt(vein.oreId, vein.tile), null);
   ticks(vein.respawnsAt - now);
   assert.ok(locAt(vein.oreId, vein.tile), "and back");
+});
+
+test("the full prospector outfit raises the pay-dirt's 60 Mining XP to 61.5 (Wiki Prospector_outfit, 2.5%)", () => {
+  const vein = [...Veins.veins.values()].find((candidate) => !candidate.upper && candidate.respawnsAt < 0 && candidate.depletesAt < 0);
+  const { ItemIdentifiers: I, Equipment: E } = require("../dist/plugins/PluginManager").PluginManager.getCoreApi();
+  const worn = { [E.HEAD_SLOT]: I.GOLDEN_PROSPECTOR_HELMET, [E.BODY_SLOT]: I.PROSPECTOR_JACKET,
+    [E.LEG_SLOT]: I.PROSPECTOR_LEGS, [E.FEET_SLOT]: I.PROSPECTOR_BOOTS };
+  const p = player(vein.tile[0] - 1, vein.tile[1], { worn });
+  p.inventory.add({ getId: () => ItemIds.DRAGON_PICKAXE, getAmount: () => 1 });
+  withRandom(0, () => interact("Ore vein", "Mine", { player: p, objectId: vein.oreId, location: { x: vein.tile[0], y: vein.tile[1], z: 0 } }));
+  withRandom(0, () => ticks(3));
+  assert.equal(p.xp.at(-1)[0], "Mining");
+  assert.ok(Math.abs(p.xp.at(-1)[1] - 61.5) < 1e-9);
+  Veins.stopMining(p);
 });
 
 test("deposited pay-dirt floats down the channel and washes into ore in the sack 12 ticks later", () => {
@@ -446,4 +476,27 @@ test("the crates give a hammer or a bronze pickaxe, unless one is carried (rspro
 
   // Every other crate is left to the other "Crate" handlers.
   assert.equal(search({ player: searcher, location: { x: 3200, y: 3200, z: 0 } }), false);
+});
+
+test("a dragon pickaxe's 1/6 quick roll mines pay-dirt on the second tick, as Mining rolls anywhere (Wiki, Pickaxe)", () => {
+  const vein = [...Veins.veins.values()].find((candidate) => !candidate.upper && candidate.respawnsAt < 0);
+  const p = player(vein.tile[0] - 1, vein.tile[1]);
+  p.inventory.add({ getId: () => ItemIds.DRAGON_PICKAXE, getAmount: () => 1 });
+  withRandom(0, () => interact("Ore vein", "Mine", { player: p, objectId: vein.oreId, location: { x: vein.tile[0], y: vein.tile[1], z: 0 } }));
+  withRandom(0, () => ticks(2));
+  assert.equal(p.inventory.getAmount(Mine.PAY_DIRT), 1, "the quick roll lands on tick 2");
+  Veins.stopMining(p);
+});
+
+test("without the quick roll a dragon pickaxe waits its full 3 ticks", () => {
+  const vein = [...Veins.veins.values()].find((candidate) => !candidate.upper && candidate.respawnsAt < 0);
+  const p = player(vein.tile[0] - 1, vein.tile[1]);
+  p.inventory.add({ getId: () => ItemIds.DRAGON_PICKAXE, getAmount: () => 1 });
+  // 0.2 misses the 1/6 quick roll but still passes the pay-dirt chance at this level.
+  withRandom(0.2, () => interact("Ore vein", "Mine", { player: p, objectId: vein.oreId, location: { x: vein.tile[0], y: vein.tile[1], z: 0 } }));
+  withRandom(0.2, () => ticks(2));
+  assert.equal(p.inventory.getAmount(Mine.PAY_DIRT), 0, "no roll yet on tick 2");
+  withRandom(0.2, () => ticks(1));
+  assert.equal(p.inventory.getAmount(Mine.PAY_DIRT), 1, "the roll lands on tick 3");
+  Veins.stopMining(p);
 });

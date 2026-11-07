@@ -50,8 +50,9 @@ function useCharge(player, item) {
 }
 
 function wearingSignet(player) {
-  const { ELVEN_SIGNET, ELVEN_SIGNET_2, ELVEN_SIGNET_3 } = core.ItemIdentifiers;
-  return [ELVEN_SIGNET, ELVEN_SIGNET_2, ELVEN_SIGNET_3].some((id) => player.getEquipment().contains(id));
+  const { ELVEN_SIGNET, ELVEN_SIGNET_2, ELVEN_SIGNET_3, CELESTIAL_SIGNET, CELESTIAL_SIGNET_UNCHARGED_ } = core.ItemIdentifiers;
+  return [ELVEN_SIGNET, ELVEN_SIGNET_2, ELVEN_SIGNET_3, CELESTIAL_SIGNET, CELESTIAL_SIGNET_UNCHARGED_]
+    .some((id) => player.getEquipment().contains(id));
 }
 
 /** Spends one charge for a chopped log; returns false when the signet saved it. */

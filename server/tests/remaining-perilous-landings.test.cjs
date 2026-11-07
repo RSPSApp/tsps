@@ -144,10 +144,13 @@ test('Nahta/Blacksmith capture spawns and exact RSMOD routes out of the shop to 
 test('shop Squeeze-through 51005 is a captured two-way transition and the real object interaction reaches the Blacksmith', () => {
   const data = require('../plugins/world/data/loc-teleports.json').locs
     .find(entry => entry.id === 51005 && entry.x === 1431 && entry.y === 9567 && entry.z === 1);
+  // Each row crosses straight to the opposite tile (1af6d9ae9, from RSProx 1098/1102/1105/1135 and 1693).
   assert.deepEqual(data.sides, [
     { from: [1430, 9567, 1], to: [1432, 9567, 1] },
+    { from: [1432, 9567, 1], to: [1430, 9567, 1] },
+    { from: [1430, 9568, 1], to: [1432, 9568, 1] },
     { from: [1432, 9568, 1], to: [1430, 9568, 1] },
-  ], 'RSProx 1693 west->east and east->west destinations');
+  ], 'west->east and east->west on both rows');
   assert.equal(data.anim, 6103); assert.equal(data.animTick, 3); assert.equal(data.tick, 4);
   assert.equal(data.sound, 2452);
 
@@ -176,7 +179,7 @@ test('shop Squeeze-through 51005 is a captured two-way transition and the real o
   assert.equal(p.animation, 6103, 'captured animation before the move');
   assert.deepEqual(pos(p), [1430, 9568, 1], 'still on the west side before the captured move tick');
   core.TaskManager.process();
-  assert.deepEqual(pos(p), [1432, 9567, 1], 'west->east landing');
+  assert.deepEqual(pos(p), [1432, 9568, 1], 'west->east landing, straight across');
 
   click(1432, 9568);
   for (let tick = 0; tick < 3; tick++) core.TaskManager.process();

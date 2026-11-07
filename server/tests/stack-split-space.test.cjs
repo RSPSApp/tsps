@@ -1,0 +1,68 @@
+// Run after `yarn build`: node --test tests/stack-split-space.test.cjs
+// Grinding a nihil shard and reverting a redirected house tablet each take one from a stack and add a different item.
+// From a stack that frees no slot, so on a full inventory the new item was lost. Real engine: every plugin loaded, a
+// real Player, the shard's own handler and the tablet's Revert through PluginManager.emitItemAction.
+process.env.DISABLE_PLAYER_BOTS = "1";
+const assert = require("node:assert/strict");
+const path = require("node:path");
+const { before, after, test } = require("node:test");
+require("../dist/Server").Server.installProductionPathResolver();
+const { CachePipeline } = require("../dist/game/cache/CachePipeline");
+const { PluginManager: PM } = require("../dist/plugins/PluginManager");
+const { Player } = require("../dist/game/entity/impl/player/Player");
+const { PlayerSession } = require("../dist/net/PlayerSession");
+
+let core, next = 9420;
+before(async () => {
+  await CachePipeline.initialize(path.resolve(__dirname, ".."));
+  PM.loadFromDirectory(path.resolve(__dirname, "../plugins"));
+  core = PM.getCoreApi();
+  PM.emitServerStartup({});
+});
+after(() => PM.emitServerShutdown({}));
+
+function holder(t, stackId, stack, free) {
+  const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+  const p = new Player(new PlayerSession(channel));
+  p.setIndex(next++); p.setUsername("stack" + p.getIndex()); p.setRegistered(true); p.setAttribute("bot-skip-persistence", true);
+  t.after(() => p.setRegistered(false));
+  p.getInventory().add(new core.Item(stackId, stack), false);
+  for (let i = 0; i < 27 - free; i++) p.getInventory().add(new core.Item(1511, 1), false);
+  const messages = [];
+  t.mock.method(p.getPacketSender(), "sendMessage", (m) => { messages.push(m); return p.getPacketSender(); });
+  return { p, messages };
+}
+
+test("grinding one nihil shard of a stack needs room for the dust", (t) => {
+  const { grindShard } = require("../plugins/bosses/nex/Items.Nex");
+  const SHARD = core.ItemIdentifiers.NIHIL_SHARD, DUST = core.ItemIdentifiers.NIHIL_DUST;
+  const full = holder(t, SHARD, 5, 0);
+  grindShard({ player: full.p });
+  assert.equal(full.p.getInventory().getAmount(SHARD), 5, "the shard is kept");
+  assert.ok(full.messages.includes("You don't have enough inventory space."), full.messages.join(" | "));
+  const room = holder(t, SHARD, 5, 1);
+  grindShard({ player: room.p });
+  assert.equal(room.p.getInventory().getAmount(SHARD), 4);
+  assert.equal(room.p.getInventory().getAmount(DUST), 1);
+  const last = holder(t, SHARD, 1, 0);
+  grindShard({ player: last.p });
+  assert.equal(last.p.getInventory().getAmount(DUST), 1, "the last shard's slot holds the dust");
+});
+
+test("reverting one redirected house tablet of a stack needs room for the house tablet", (t) => {
+  const RIMMINGTON = core.ItemIdentifiers.RIMMINGTON_TELEPORT, HOUSE = core.ItemIdentifiers.TELEPORT_TO_HOUSE;
+  const revert = (f) => {
+    const slot = f.p.getInventory().getSlotForItemId(RIMMINGTON);
+    const clickType = (core.CacheDefinitions.getItem(RIMMINGTON).inventoryActions ?? []).indexOf("Revert") + 1;
+    assert.ok(clickType > 0, "the cache's Revert");
+    PM.emitItemAction({ player: f.p, itemId: RIMMINGTON, slot, item: f.p.getInventory().getItems()[slot], option: "Revert", clickType, handled: false });
+  };
+  const full = holder(t, RIMMINGTON, 3, 0);
+  revert(full);
+  assert.equal(full.p.getInventory().getAmount(RIMMINGTON), 3, "the tablet is kept");
+  assert.equal(full.p.getInventory().getAmount(HOUSE), 0);
+  const room = holder(t, RIMMINGTON, 3, 1);
+  revert(room);
+  assert.equal(room.p.getInventory().getAmount(RIMMINGTON), 2);
+  assert.equal(room.p.getInventory().getAmount(HOUSE), 1);
+});

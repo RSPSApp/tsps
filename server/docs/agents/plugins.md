@@ -15,6 +15,18 @@ Detail behind the plugin rules in [AGENTS.md](../../AGENTS.md).
 validation and safety checks centralised in its emit/register paths so plugins stay simple.
 Do not add feature-specific logic to it unless it is genuinely generic hook infrastructure.
 
+## Extending login
+
+`api.registerLoginExtension(factory)` installs one per-connection login extension. The factory receives
+`api`, packet sending, pending-login access, name reservations, busy-name checks and a rejecting callback.
+It can return `authenticated`, `accepted`, `packet` and `entered` handlers. Authentication stays in core;
+`authenticated` runs after credential checks and can select the pending player/save. `accepted` runs after
+the unchanged login response. `packet` returns false synchronously for messages it does not handle, so
+ordinary game-turn processing does not gain an asynchronous wait. `entered` runs after world admission.
+The factory and authentication/packet handlers fail closed; name locks and socket cleanup stay in core.
+Only one extension can register, to prevent competing authentication flows. See the disabled-by-default
+`plugins/accounts/Characters.plugin.js` and its units.
+
 ## Core access
 
 Core classes and helpers are exposed on the shared, frozen `api.core` object (built once by

@@ -100,7 +100,6 @@
 module.exports = function registerTempleOfTheEyeQuest(api) {
   const {
     Animation,
-    Equipment,
     GameObject,
     Graphic,
     Item,
@@ -316,16 +315,6 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
     WEAK_CELL_ITEM_ID,
     MEDIUM_CELL_ITEM_ID,
     PORTAL_TALISMAN_WATER_ITEM_ID,
-  ];
-  const PICKAXE_ITEM_IDS = [
-    ItemIdentifiers.BRONZE_PICKAXE,
-    ItemIdentifiers.IRON_PICKAXE,
-    ItemIdentifiers.STEEL_PICKAXE,
-    ItemIdentifiers.BLACK_PICKAXE,
-    ItemIdentifiers.MITHRIL_PICKAXE,
-    ItemIdentifiers.ADAMANT_PICKAXE,
-    ItemIdentifiers.RUNE_PICKAXE,
-    ItemIdentifiers.DRAGON_PICKAXE,
   ];
 
   // Objects.
@@ -877,10 +866,11 @@ module.exports = function registerTempleOfTheEyeQuest(api) {
     return typeof inventory.getFreeSlots === "function" ? inventory.getFreeSlots() : inventory.isFull() ? 0 : 1;
   }
 
+  /** Any pickaxe the player can use, as Mining judges them (crystal, infernal, 3rd age... not only bronze to rune). */
   function hasPickaxe(player) {
-    const weapon = player.getEquipment().getItems()[Equipment.WEAPON_SLOT];
-    if (weapon && PICKAXE_ITEM_IDS.includes(weapon.getId())) return true;
-    return PICKAXE_ITEM_IDS.some((itemId) => has(player, itemId));
+    const request = { player, pickaxe: null };
+    api.emitCustomEvent("mining:best-pickaxe", request);
+    return request.pickaxe != null;
   }
 
   function isQuestComplete(player, key) {

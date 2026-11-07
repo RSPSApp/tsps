@@ -54,6 +54,15 @@ function onIncomingDamage(entity, hitDamage) {
     return;
   }
 
+  saveFromDeath(player);
+}
+
+/**
+ * The ring's (or a Defence cape's) escape once the hit has been judged dangerous: true when it
+ * teleported the wearer. Wintertodt asks for it through "ring-of-life:activate" when warmth
+ * drops below 10% (Wiki), as combat does at 10% Hitpoints.
+ */
+function saveFromDeath(player) {
   const equipment = player.getEquipment();
   const ringItem = equipment.get(Equipment.RING_SLOT);
   const ringId = ringItem?.getId?.();
@@ -62,18 +71,18 @@ function onIncomingDamage(entity, hitDamage) {
   if (!hasRing) pluginApi?.emitCustomEvent("skillcape:ring-of-life", cape);
   const hasCape = cape.active === true;
   if (!hasRing && !hasCape) {
-    return;
+    return false;
   }
 
   if (!player.getCombat()?.getTeleblockTimer?.()?.finished?.()) {
-    return;
+    return false;
   }
   const tile = hasRing
     ? (player.getAttribute(ARDOUGNE_ATTRIBUTE) === true ? ARDOUGNE_MARKET : null)
     : cape.destination;
   const destination = tile ? new core.Location(tile[0], tile[1], tile[2] ?? 0) : core.GameConstants.DEFAULT_LOCATION;
   if (!core.TeleportHandler.checkReqs(player, destination, 30)) {
-    return;
+    return false;
   }
 
   if (hasRing) {
@@ -84,18 +93,24 @@ function onIncomingDamage(entity, hitDamage) {
     player.sendMessage("Your Defence cape saves you.");
   }
   core.TeleportHandler.teleport(player, destination, core.TeleportType.NORMAL, false);
+  return true;
+}
+
+function onLowWarmth(request) {
+  if (request?.player && saveFromDeath(request.player)) request.activated = true;
 }
 
 module.exports = {
   name: "RingOfLife",
   members: true,
-  _test: { onIncomingDamage, toggleRespawn, ARDOUGNE_ATTRIBUTE, ARDOUGNE_MARKET },
+  _test: { onIncomingDamage, onLowWarmth, toggleRespawn, ARDOUGNE_ATTRIBUTE, ARDOUGNE_MARKET },
   register(api) {
     core = api.core;
     pluginApi = api;
     ringIds = new Set([core.ItemIdentifiers.RING_OF_LIFE]);
     api.persistAttribute(ARDOUGNE_ATTRIBUTE, false);
     api.registerIncomingDamageModifier(onIncomingDamage);
+    api.onCustomEvent("ring-of-life:activate", onLowWarmth);
     api.onItemAction("Ring of life", { "Toggle-respawn": toggleRespawn });
   },
 };

@@ -68,7 +68,13 @@ module.exports = function registerANightAtTheTheatre(api) {
     return request.complete;
   }
   function claimLamps(player) {
-    let claimed = value(player, LAMPS_ATTRIBUTE) + player.getInventory().getAmount(LAMP) + player.getBank().getAmount(LAMP);
+    // The lamps banked in any tab count: getBank() with no tab is the first one only, so lamps in another tab were
+    // handed out again. The search tab holds copies, so it is left out.
+    const banks = player.getBanks?.();
+    const banked = banks
+      ? banks.reduce((sum, bank, tab) => (bank && tab !== api.core.Bank.BANK_SEARCH_TAB_INDEX ? sum + bank.getAmount(LAMP) : sum), 0)
+      : player.getBank().getAmount(LAMP);
+    let claimed = value(player, LAMPS_ATTRIBUTE) + player.getInventory().getAmount(LAMP) + banked;
     while (claimed < 4 && player.getInventory().getFreeSlots()) {
       player.getInventory().adds(LAMP, 1);
       claimed++;

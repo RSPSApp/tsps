@@ -67,13 +67,23 @@ setups, but combat now always requires visibility, including when using the old 
 ## Welcome screen message
 
 `pluginConfig` `"WelcomeScreen:messageOfTheWeek"` is the text on the scroll at the bottom of
-the welcome screen. It defaults to `Welcome to Old School RuneScape!`. The text can use the game's
+the welcome screen. It defaults to `Welcome to <name>!`, using the world name below. The text can use the game's
 `<col=rrggbb>` and `<br>` tags. League worlds show their own league message instead.
 
 ```json
 {
   "pluginConfig": { "WelcomeScreen:messageOfTheWeek": "Double XP this weekend!<br>Have fun." }
 }
+```
+
+## World name
+
+`"name"` is the world's display name (default `Old School RuneScape`): the login screen, World
+list, welcome messages and bank title use it. It is plain text of 1 to 64 characters, without
+`<` or `>`.
+
+```json
+{ "name": "My World" }
 ```
 
 ## Display names

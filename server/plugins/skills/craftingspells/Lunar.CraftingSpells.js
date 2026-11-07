@@ -10,6 +10,11 @@
 const { DATA, itemId, runes } = require("./Data.CraftingSpells");
 
 const LUNAR = DATA.lunar;
+/**
+ * Casting speed in ticks (Wiki: Spin Flax "can be cast once every 5 game ticks"; Tan Leather "Casting speed: 3 ticks").
+ * Uncapped, every queued click cast once in the same tick. Superglass Make takes all the sand in one cast, so no gate.
+ */
+const CAST_TICKS = { "Spin Flax": 5, "Tan Leather": 3 };
 
 let core = null;
 let pluginApi = null;
@@ -37,6 +42,11 @@ function lunarSpells() {
     equipmentRequired() { return []; }
     startCast() {}
     getSpellbook() { return core.MagicSpellbook.LUNAR; }
+    getCastCooldown() {
+      const ticks = CAST_TICKS[this.name];
+      return ticks ? { attribute: `crafting-spells:next-cast-${this.name.toLowerCase().replace(/ /g, "-")}`,
+        duration: ticks * core.GameConstants.GAME_ENGINE_PROCESSING_CYCLE_RATE } : null;
+    }
   }
 
   return spells = new Map(Object.entries(LUNAR.spells).map(([name, data]) =>

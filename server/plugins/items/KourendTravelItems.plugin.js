@@ -211,6 +211,19 @@ function xericTeleportType() {
   return xericTeleport;
 }
 
+/**
+ * Whether the player has unlocked Xeric's Honour. Wiki (Xeric's talisman): "Players must use an ancient tablet on the
+ * talisman before being able to teleport here." That unlock is not implemented, so no one has it yet; the mounted
+ * talisman asks here ("xerics-talisman:honour-unlocked") so both open together once it is.
+ */
+function honourUnlocked(_player) {
+  return false;
+}
+
+function answerHonourUnlocked(request) {
+  if (request?.player && request.unlocked !== true) request.unlocked = honourUnlocked(request.player);
+}
+
 function talismanDestination(_player, name) {
   const destination = XERIC_BY_LABEL.get(normalise(name));
   // The ancient tablet unlock for Honour is not implemented, so Honour stays unavailable.
@@ -330,6 +343,7 @@ module.exports = {
     api.onItemOnItem(addPage, { noted: false });
     api.onItemOnItem(chargeTalisman, { noted: false });
     api.onPlayerLogin(syncPages);
+    api.onCustomEvent("xerics-talisman:honour-unlocked", answerHonourUnlocked);
   },
   _test: {
     MEMOIRS_PAGES, XERIC_DESTINATIONS, MEMOIRS_ID, BOOK_OF_THE_DEAD_ID, XERIC_TALISMAN_ID, XERIC_TALISMAN_INERT_ID,

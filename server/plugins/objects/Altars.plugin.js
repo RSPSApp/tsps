@@ -73,6 +73,9 @@ function handlePrayerAltar(player, fullMessage = "You already have full Prayer p
 }
 
 function handleJaldraochtAltar(player) {
+  // As the Ancient altar: the switch to the Ancients needs Desert Treasure I (core SpellbookLocks); refused first,
+  // so the Prayer drain doesn't happen either.
+  if (player.getSpellbook() !== MagicSpellbook.ANCIENT && refuseLocked(player, MagicSpellbook.ANCIENT)) return true;
   player.performAnimation(PRAY_AT_ALTAR_ANIMATION);
   Sounds.sendSound(player, Sound.PRAYER_RECHARGE);
   const skillManager = player.getSkillManager();
@@ -110,7 +113,11 @@ function lunarAltar({ player }) {
   return handleOccultAltar(player, player.getSpellbook() === MagicSpellbook.LUNAR ? MagicSpellbook.NORMAL : MagicSpellbook.LUNAR);
 }
 
-function darkAltar({ player }) {
+function darkAltar({ player, objectId }) {
+  if (Number.isInteger(objectId) && objectId === core.ObjectIdentifiers?.DARK_ALTAR) {
+    api.emitCustomEvent("runecrafting:dark-altar-venerate", { player });
+    return true;
+  }
   return handleOccultAltar(player, player.getSpellbook() === MagicSpellbook.ARCEUUS ? MagicSpellbook.NORMAL : MagicSpellbook.ARCEUUS);
 }
 
@@ -258,4 +265,4 @@ module.exports = {
     });
   },
 };
-module.exports._test = { ancientAltar, lunarAltar, ancientSpellbook, lunarSpellbook };
+module.exports._test = { ancientAltar, lunarAltar, ancientSpellbook, lunarSpellbook, handleJaldraochtAltar };

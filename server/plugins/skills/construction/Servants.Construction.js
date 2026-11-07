@@ -358,8 +358,10 @@ function changeServantMoney(player, amount) {
     house.save.servantMoney = balance + amount;
   } else {
     if (PluginManager.emitCanBank(player) === false) return false;
-    amount = Math.min(-amount, balance);
-    if (!amount || (!inventory.contains(Items.COINS) && !inventory.getFreeSlots()) || !Number.isSafeInteger(inventory.getAmount(Items.COINS) + amount)) return false;
+    // Only what the inventory can hold leaves the bag: a stack near the cap took the bag's full amount off and the
+    // overflow was lost (the add stops at the cap).
+    amount = inventory.getAddableAmount(new Item(Items.COINS, Math.min(-amount, balance)));
+    if (!amount) return false;
     inventory.adds(Items.COINS, amount);
     house.save.servantMoney = balance - amount;
   }

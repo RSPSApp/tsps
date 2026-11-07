@@ -334,7 +334,9 @@ function playerDied({ player, killer }) {
   player.setAttribute(Common.VISITED_ATTRIBUTE, false);
   sendFeeState(player);
   if (amount > 0) {
-    core.ItemOnGroundManager.registerLocation(killer.getAsPlayer(), new core.Item(Common.COINS, amount), player.getLocation().clone());
+    // An Ironman killer takes no other player's loot: the fee drops for the victim (PlayerDeathTask.lootOwner).
+    const owner = core.PlayerDeathTask.lootOwner(player, killer.getAsPlayer());
+    core.ItemOnGroundManager.registerLocation(owner, new core.Item(Common.COINS, amount), player.getLocation().clone());
   }
 }
 

@@ -1,3 +1,4 @@
+import type { LoginProtocolExtension } from "./types/login";
 import type { ClanState } from "../../common/social/Clans";
 import { PlayerSyncContext } from "../../game/sync/PlayerSyncContext";
 import { PlayerUpdateDecoder } from "../../game/sync/PlayerUpdateDecoder";
@@ -83,6 +84,7 @@ export const state = {
     sessionRevision: 0,
     /** LOGIN_FLAG_* for the session's credentials (a token after "Stay logged in"). */
     sessionLoginFlags: 0,
+    /** The character picked on the select screen; the re-login after a drop selects it again. */
     currentTick: 0,
     serverTickMs: 600,
     serverClockOffsetMs: 0,
@@ -95,6 +97,8 @@ export const state = {
     autoSendHandshake: true,
     playerSyncContext: null as PlayerSyncContext | null,
     playerUpdateDecoder: null as PlayerUpdateDecoder | null,
+    loginExtension: undefined as LoginProtocolExtension | undefined,
+    loginOnWelcome: null as (() => void) | null,
     lastWelcome: undefined as { tickMs: number; serverTime: number } | undefined,
     lastAnim: undefined as PlayerAnimPayload | undefined,
     lastHandshake: undefined as

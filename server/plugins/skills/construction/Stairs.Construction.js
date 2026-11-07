@@ -4,6 +4,7 @@ const { api, Animation, CountdownTask, ItemIdentifiers, Location, Skill, TaskMan
 const Ids = require("./Ids.Construction");
 const Data = require("./Data.Construction");
 const House = require("./House.Construction");
+const CarpenterOutfit = require("./CarpenterOutfit.Construction");
 const Menu = require("./Menu.Construction");
 
 // Floors: plane 0 is the basement, 1 the ground floor, 2 the upper floor. Staircases join a hall
@@ -147,7 +148,7 @@ function buildRoomThrough(player, house, room, furniture, next, template) {
   House.useMaterials(player, staircase, House.getBuildMaterials(player, house, target, staircase));
   player.getInventory().delete(COINS, template.cost);
   house.setFurniture(target, staircase);
-  player.getSkillManager().addExperiences(Skill.CONSTRUCTION, staircase.experience);
+  player.getSkillManager().addExperiences(Skill.CONSTRUCTION, CarpenterOutfit.withBonus(player, staircase.experience));
   House.rebuildHouse(player, house);
 }
 

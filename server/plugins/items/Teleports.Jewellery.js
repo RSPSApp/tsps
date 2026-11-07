@@ -93,7 +93,8 @@ const JEWELLERY = [
         api?.emitCustomEvent?.("corporeal:teleport-destination", request);
         return request.tile;
       } },
-      { label: "Tears of Guthix", tile: [3245, 9500, 2] },
+      // Wiki (Games necklace): "Requires completion of Tears of Guthix quest".
+      { label: "Tears of Guthix", tile: [3245, 9500, 2], quest: { key: "tears_of_guthix", name: "Tears of Guthix" } },
       { label: "Wintertodt Camp", tile: [1627, 3941, 0] },
     ],
   },
@@ -324,9 +325,10 @@ for (const piece of JEWELLERY) {
 /** The ring of wealth's teleports; RingOfWealth.plugin.js handles the ring itself. */
 const RING_OF_WEALTH_DESTINATIONS = [
   { label: "Grand Exchange", tile: [3163, 3478, 0] },
-  { label: "Miscellania", tile: [2539, 3864, 0] },
+  // Wiki (Ring of wealth): "Requires completion of Throne of Miscellania"; Dondakan "Requires completion of Between a Rock...".
+  { label: "Miscellania", tile: [2539, 3864, 0], quest: { key: "throne_of_miscellania", name: "Throne of Miscellania" } },
   { label: "Falador Park", tile: [2994, 3377, 0] },
-  { label: "Dondakan", tile: [2824, 10168, 0] },
+  { label: "Dondakan", tile: [2824, 10168, 0], quest: { key: "between_a_rock", name: "Between a Rock..." } },
 ];
 
 module.exports = { JEWELLERY, RING_OF_WEALTH_DESTINATIONS, DEFAULT_WILDERNESS_LEVEL, LOCKED_DESTINATION_MESSAGE };

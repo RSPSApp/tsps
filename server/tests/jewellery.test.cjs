@@ -739,3 +739,23 @@ test("the digsite pendant's Lithkren and Fossil Island teleports need Dragon Sla
     doneQuestKeys.delete(key);
   }
 });
+
+test("the games necklace's Tears of Guthix needs Tears of Guthix (Wiki)", () => {
+  const player = createPlayer();
+  const necklace = new Item(ItemIds.GAMES_NECKLACE_8_, 1);
+  player.inventory.setItem(0, necklace);
+  const before = teleports.length;
+  inventoryClick(player, necklace, "Rub");
+  pick("Tears of Guthix");
+  assert.equal(teleports.length, before, "no teleport before the quest");
+  assert.deepEqual(player.statements.at(-1), "You have not yet unlocked that destination.");
+  assert.equal(necklace.getId(), ItemIds.GAMES_NECKLACE_8_, "no charge used");
+  doneQuestKeys.add("tears_of_guthix");
+  try {
+    inventoryClick(player, necklace, "Rub");
+    pick("Tears of Guthix");
+  } finally {
+    doneQuestKeys.delete("tears_of_guthix");
+  }
+  assert.equal(teleports.length, before + 1, "teleports after it");
+});

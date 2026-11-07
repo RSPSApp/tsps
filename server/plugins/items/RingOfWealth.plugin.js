@@ -3,7 +3,7 @@ const { TeleportHandler } = require("../../src/main/typescript/elvarg/game/model
 const { TeleportType } = require("../../src/main/typescript/elvarg/game/model/teleportation/TeleportType");
 const { Equipment } = require("../../src/main/typescript/elvarg/game/model/container/impl/Equipment");
 const { Item } = require("../../src/main/typescript/elvarg/game/model/Item");
-const { RING_OF_WEALTH_DESTINATIONS } = require("./Teleports.Jewellery");
+const { RING_OF_WEALTH_DESTINATIONS, LOCKED_DESTINATION_MESSAGE } = require("./Teleports.Jewellery");
 
 const RING_OF_WEALTH_SCROLL = 12783;
 const IMBUE_COST = 50000;
@@ -33,7 +33,7 @@ const UNIMBUED_RING_IDS = new Map([
   [21458, 21456], [21459, 21457],
 ]);
 const RING_IDS = new Set([...CHARGED_RINGS.keys(), ...UNCHARGED_RINGS.keys()]);
-const TELEPORTS = RING_OF_WEALTH_DESTINATIONS.map(({ label, tile }) => ({ label, destination: new Location(...tile) }));
+const TELEPORTS = RING_OF_WEALTH_DESTINATIONS.map(({ label, tile, quest }) => ({ label, destination: new Location(...tile), quest }));
 /**
  * The ring's options in the cache's order (item params 451-456: Miscellania, Grand Exchange,
  * Falador, Dondakan, Boss Log, Coin Collection), which both the inventory Rub submenu (by sub-op)
@@ -99,12 +99,28 @@ function consumeCharge(player, item) {
   return true;
 }
 
+/** Set at register: the quest check and the refusal box need it outside the handlers' own `api`. */
+let pluginApi = null;
+
+function questComplete(player, key) {
+  const query = { player, key, complete: false };
+  pluginApi.emitCustomEvent("quest:is-complete", query);
+  return query.complete === true;
+}
+
 function teleport(player, event, item, destination) {
   if (!sourceMatches(player, event, item)) {
     return;
   }
   if (!ringState(item.getId())) {
     player.sendMessage("Your ring of wealth has no charges left.");
+    return;
+  }
+  // Miscellania and Dondakan's need their quests (Wiki), refused with the jewellery's shared line and no charge.
+  const quest = TELEPORTS.find((entry) => entry.destination === destination)?.quest;
+  if (quest && !questComplete(player, quest.key)) {
+    const { DialogueChainBuilder, StatementDialogue } = pluginApi.core;
+    player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, LOCKED_DESTINATION_MESSAGE)));
     return;
   }
   // Members' dragonstone jewellery works through level 30 Wilderness, unlike spells.
@@ -229,6 +245,7 @@ module.exports = {
   members: true,
   ACTIONS,
   register(api) {
+    pluginApi = api;
     const itemOnGroundManager = api.getItemOnGroundManager();
     api.onItemAction((event) => {
       if (!isRingOfWealth(event.itemId)) {

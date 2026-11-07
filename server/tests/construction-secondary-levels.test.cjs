@@ -26,11 +26,12 @@ test('active cache maps expected secondary families and preserves Construction a
     const vals=r.column(col),ci=vals.findIndex((v,i)=>i%2===0&&v===core.Skill.CONSTRUCTION.getClientId());assert.ok(ci>=0);assert.equal(b.level,vals[ci+1]);
     if(b.secondaryLevels?.length){count++;assert.ok(expected.has(b.menuRowId),String(b.menuRowId));assert.deepEqual(b.secondaryLevels,[{statId:expected.get(b.menuRowId)[0],level:expected.get(b.menuRowId)[1]}]);}
   }
+  assert.deepEqual(Data.CONSTRUCTION_BUILDABLES.filter(b=>b.secondaryLevels?.some(r=>r.statId===core.Skill.FARMING.getClientId())).map(b=>b.menuRowId).sort((a,b)=>a-b),[5970,5972]);
   assert.equal(count,expected.size);assert.equal(withRows,478);assert.equal(nullRows,3);for(const id of expected.keys()) assert.ok(Data.CONSTRUCTION_BUILDABLES.some(b=>b.menuRowId===id&&b.secondaryLevels?.length));
   for(const [key,level] of [['SMALL_STORAGE_UNIT',30],['MEDIUM_STORAGE_UNIT',60],['LARGE_STORAGE_UNIT',90]]){const b=Data.BUILDABLE_BY_KEY.get(key);assert.equal(b.level,level);assert.equal(b.secondaryLevels,undefined);}
 });
-test('shared build gate checks current secondary levels with fully supplied materials',()=>{
-  const cases=[['SPIRIT_TREE',core.Skill.FARMING,83],['MITHRIL_ARMOUR',core.Skill.SMITHING,68],['RUNE_CASE_2',core.Skill.RUNECRAFTING,44],['BEER_BARREL',core.Skill.COOKING,5]];
+test('shared build gate enforces Farming and preserves deferred skills with supplied materials',()=>{
+  const cases=[['SPIRIT_TREE',core.Skill.FARMING,83],['SPIRIT_TREE_AND_FAIRY_RING',core.Skill.FARMING,83],['MITHRIL_ARMOUR',core.Skill.SMITHING,68],['RUNE_CASE_2',core.Skill.RUNECRAFTING,44],['BEER_BARREL',core.Skill.COOKING,5]];
   for(const [key,skill,level] of cases){
     const p=new Player(null),skills=p.getSkillManager(),inv=p.getInventory(),b=Data.BUILDABLE_BY_KEY.get(key);
     skills.setMaxLevels(core.Skill.CONSTRUCTION,99,false).setExperiences(core.Skill.CONSTRUCTION,core.SkillManager.getExperienceForLevel(99),false).setCurrentLevel(core.Skill.CONSTRUCTION,99,false);

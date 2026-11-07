@@ -92,13 +92,16 @@ test("Spellbook Swap's Ancient quick pick is refused before Desert Treasure I, a
   assert.equal(done.p.getSpellbook(), core.MagicSpellbook.ANCIENT, "after the quest, the swap works");
 });
 
-test("choosing Ancient from Spellbook Swap's menu is refused before Desert Treasure I", (t) => {
+test("Spellbook Swap's menu offers only the books the player has access to (Wiki)", (t) => {
   const { LunarSpells } = require("../dist/game/content/combat/magic/LunarSpells");
   const f = swapper(t, false);
   LunarSpells.handleSelf(f.p, "spellbook swap", 1);
+  assert.deepEqual(f.p.getDialogueManager().getCurrent().getOptions(), ["Standard", "Arceuus"], "no Ancient before Desert Treasure I");
   f.p.getDialogueManager().handleOption(2);
-  assert.equal(f.p.getSpellbook(), core.MagicSpellbook.LUNAR);
-  assert.equal(f.boxes.length, 2, "the book menu, then the refusal box");
+  assert.equal(f.p.getSpellbook(), core.MagicSpellbook.ARCEUUS, "the paid cast swaps to the book chosen");
+  const done = swapper(t, true);
+  LunarSpells.handleSelf(done.p, "spellbook swap", 1);
+  assert.deepEqual(done.p.getDialogueManager().getCurrent().getOptions(), ["Standard", "Ancient", "Arceuus"]);
 });
 
 test("the occult altar's choice of the book already in use needs no unlock", (t) => {

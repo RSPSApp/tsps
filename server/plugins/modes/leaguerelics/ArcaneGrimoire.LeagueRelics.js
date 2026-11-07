@@ -10,7 +10,6 @@
  * made. Its Book of the Dead role (the resurrection spells' requirement) is not covered.
  */
 const Common = require("./Common.LeagueRelics");
-const { spellbookLockedRefusal } = require("../../../src/main/typescript/elvarg/game/content/combat/magic/SpellbookLocks");
 
 /** The spellbook (its key in the data) the last grimoire change left; unset until one. */
 const PREVIOUS_SPELLBOOK_ATTRIBUTE = "league:grimoire-previous-spellbook";
@@ -44,7 +43,7 @@ function allowed(player) {
 
 /** The core swap; the book left is remembered for Previous Spellbook only when the book changed (not when refused, nor when already on it after an altar). */
 function swap(player, book) {
-  const locked = spellbookLockedRefusal(player, core.MagicSpellbook[book.key]);
+  const locked = core.SpellbookLocks.spellbookLockedRefusal(player, core.MagicSpellbook[book.key]);
   if (locked) {
     player.sendMessage(locked);
     return;

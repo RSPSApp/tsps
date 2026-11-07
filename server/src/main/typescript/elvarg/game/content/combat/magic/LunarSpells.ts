@@ -352,7 +352,7 @@ export class LunarSpells {
 
     /**
      * Op 1 asks which book; ops 2-4 are the Standard, Ancient and Arceuus quick picks. Only an unlocked book is
-     * swapped to (Wiki): a locked quick pick is refused before the cast, a locked choice from the menu when chosen.
+     * swapped to (Wiki): a locked quick pick is refused before the cast, and the menu lists only open books.
      */
     private static castSpellbookSwap(player: Player, spell: LunarSpell, option: number): boolean {
         const books = [MagicSpellbook.NORMAL, MagicSpellbook.ANCIENT, MagicSpellbook.ARCEUUS];
@@ -727,14 +727,16 @@ export class LunarSpells {
         player.sendMessage("You have 2 minutes before your spellbook changes back!");
     }
 
+    /** Wiki (Spellbook Swap): the menu offers only "the spellbooks they have access to". */
     private static openSpellbookSwap(player: Player): void {
-        const books = [MagicSpellbook.NORMAL, MagicSpellbook.ANCIENT, MagicSpellbook.ARCEUUS];
+        const books = ([[MagicSpellbook.NORMAL, "Standard"], [MagicSpellbook.ANCIENT, "Ancient"], [MagicSpellbook.ARCEUUS, "Arceuus"]] as const)
+            .filter(([book]) => lockingQuest(player, book) === null);
         const builder = new DialogueChainBuilder();
         builder.add(new OptionDialogue(0, { executeOption: (option: DialogueOption) => {
-            const book = books[(option as number) - 1];
+            const book = books[(option as number) - 1]?.[0];
             player.getPacketSender().sendInterfaceRemoval();
             if (book && !this.refuseLockedBook(player, book)) this.swapTo(player, book);
-        } }, "Standard", "Ancient", "Arceuus"));
+        } }, ...books.map(([, label]) => label)));
         player.getDialogueManager().startDialogues(builder);
     }
 }

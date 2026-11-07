@@ -18,7 +18,6 @@
  * The max cape's Features and Spellbook menus call the same handlers.
  */
 const Capes = require("./Common.SkillCapes");
-const { spellbookLockedRefusal } = require("../../../src/main/typescript/elvarg/game/content/combat/magic/SpellbookLocks");
 
 
 const STAMINA_KEY = "stamina";
@@ -136,7 +135,7 @@ function changeSpellbook(player, name) {
     return;
   }
   // Wiki: the magic cape switches "to any spellbook they have unlocked" (core SpellbookLocks).
-  const locked = spellbookLockedRefusal(player, MagicSpellbook[book.key]);
+  const locked = Capes.core.SpellbookLocks.spellbookLockedRefusal(player, MagicSpellbook[book.key]);
   if (locked) {
     player.sendMessage(locked);
     return;

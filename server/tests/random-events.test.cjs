@@ -195,6 +195,7 @@ function harness(t, members = true) {
       }),
       getInventory: () => ({ get: slot => slots[slot], getItems: () => slots, getFreeSlots: () => p.free,
         containsNumber: id => slots.some(item => item?.getId() === id && item.getAmount() > 0),
+        getAmount: id => slots.reduce((sum, item) => sum + (item?.getId() === id ? item.getAmount() : 0), 0),
         getAddableAmount(item) {
           if (!item.getDefinition().isStackable()) return Math.min(item.getAmount(), p.free);
           const stack = slots.find(slot => slot?.getId() === item.getId());
@@ -1230,6 +1231,24 @@ test('Thessalia exchanges a frog token for costume pieces, keeping the rest', t 
   assert.deepEqual(pageTexts(p), ["I'll take the reward lamp, thanks."]);
   endChat(p);
   assert.equal(p.rewards.at(-1), I.LAMP);
+});
+
+// The royal sets are two pieces for one token: with no room for the second, the token is kept and nothing is lost.
+test('Thessalia keeps the token when a two-piece costume will not fit', t => {
+  const h = harness(t), p = h.player();
+  p.slots[0] = new Item(I.FROG_TOKEN, 1);
+  p.free = 0;
+  h.hooks.Thessalia['Talk-to']({ player: p, npc: {}, handled: false });
+  choose(h, p, 1);
+  endChat(p);
+  assert.ok(p.slots[0], 'the token is kept');
+  assert.deepEqual(p.rewards, [], 'no piece given');
+  assert.ok(p.messages.includes("You don't have enough inventory space."), p.messages.join(' | '));
+  p.free = 1;
+  h.hooks.Thessalia['Talk-to']({ player: p, npc: {}, handled: false });
+  choose(h, p, 1);
+  endChat(p);
+  assert.equal(p.rewards.length, 2, "the token's slot and one free slot hold both pieces");
 });
 
 // A player whose packet sender records everything and chains like the real one, for the events

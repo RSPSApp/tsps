@@ -177,6 +177,9 @@ connection cannot select the same character.
 
 Clients opt in. New login flag `LOGIN_FLAG_CHARACTER_SELECT = 4` in the existing flags byte. The
 gateway (flags 0), old browser clients and headless logins never set it and see no new packets.
+A server with slots enabled (cap above 1) first announces them with a `characters:slots` plugin
+message (opcode 6, `{ maxPerAccount }`) before the welcome; the client sets flag 4 only after that
+announcement on the current connection, so a disabled or older server never sees it.
 
 Server to client (only when the flag was set):
 

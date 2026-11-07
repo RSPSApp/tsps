@@ -6,7 +6,7 @@ const HURT_IDS = {
   body1: [509, 510],
 };
 const HURT_DELAY = 20;
-// Keep private SynthSound delivery within the existing sound listener sweep.
+// Keep private SynthSound delivery within the existing PvP listener boundary.
 const HURT_LISTENER_RANGE = 15;
 let core;
 
@@ -16,13 +16,21 @@ function playHurtSound(listener, hurtIds) {
   core.Sounds.sendSound(listener, new core.Sound(id, 1, HURT_DELAY, 1));
 }
 
-function playHurtSoundForListeners(target, hurtIds) {
+function playHurtSoundForListeners(attacker, target, hurtIds) {
+  if (attacker.isNpc()) {
+    // Pest Control4014/4025/4028/4029/4031: NPC-inflicted voices accompany
+    // local HP loss, not the many nearby players' fights. This is a private synth.
+    if (target.isRegistered()) playHurtSound(target, hurtIds);
+    return;
+  }
   const location = target.getLocation();
   const privateArea = target.getPrivateArea();
   for (const listener of core.World.getPlayers()) {
     if (listener.isPlayerBot() || listener.getPrivateArea() !== privateArea
       || !listener.getLocation().isWithinDistance(location, HURT_LISTENER_RANGE)) continue;
-    // Each client gets its own SynthSound packet and variant, as in paired Duel Arena captures.
+    // Paired Duel Arena1591/1592 confirms independent private participant variants.
+    // Preserve the existing PvP audience: Soul Wars3277 has remote voices but
+    // does not establish a general spectator radius or distance-fade contract.
     playHurtSound(listener, hurtIds);
   }
 }
@@ -52,7 +60,7 @@ function playResolvedHitSound({ attacker, target, hit }) {
     part.onApplied(taken => {
       if (!(taken > 0) || player.getNpcTransformationId() >= 0) return;
       const hurtIds = player.getAppearance().isMale() ? HURT_IDS.body0 : HURT_IDS.body1;
-      playHurtSoundForListeners(player, hurtIds);
+      playHurtSoundForListeners(attacker, player, hurtIds);
     });
   }
 }

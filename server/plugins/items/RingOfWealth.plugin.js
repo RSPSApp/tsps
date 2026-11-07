@@ -33,7 +33,8 @@ const UNIMBUED_RING_IDS = new Map([
   [21458, 21456], [21459, 21457],
 ]);
 const RING_IDS = new Set([...CHARGED_RINGS.keys(), ...UNCHARGED_RINGS.keys()]);
-const TELEPORTS = RING_OF_WEALTH_DESTINATIONS.map(({ label, tile }) => ({ label, destination: new Location(...tile) }));
+const TELEPORTS = RING_OF_WEALTH_DESTINATIONS.map(({ label, tile, quest }) => ({ label, quest, destination: new Location(...tile) }));
+let pluginApi = null;
 /**
  * The ring's options in the cache's order (item params 451-456: Miscellania, Grand Exchange,
  * Falador, Dondakan, Boss Log, Coin Collection), which both the inventory Rub submenu (by sub-op)
@@ -99,12 +100,24 @@ function consumeCharge(player, item) {
   return true;
 }
 
-function teleport(player, event, item, destination) {
+/** True when the quest is done, or this server has no such quest (the quest plugin answers). */
+function questDone(player, quest) {
+  const request = { player, name: quest, complete: null };
+  pluginApi.emitCustomEvent("quest:is-complete", request);
+  return request.complete !== false;
+}
+
+function teleport(player, event, item, destination, quest = null) {
   if (!sourceMatches(player, event, item)) {
     return;
   }
   if (!ringState(item.getId())) {
     player.sendMessage("Your ring of wealth has no charges left.");
+    return;
+  }
+  // Miscellania and Dondakan need their quests (Wiki); a refusal keeps the charge.
+  if (quest && !questDone(player, quest)) {
+    player.sendMessage(`You need to have completed ${quest} to teleport there.`);
     return;
   }
   // Members' dragonstone jewellery works through level 30 Wilderness, unlike spells.
@@ -162,9 +175,9 @@ function openTeleportPrompt(api, event) {
   api.sendMultiChatboxPrompt(
     player,
     "Where would you like to teleport to?",
-    ...TELEPORTS.flatMap(({ label, destination }) => [
+    ...TELEPORTS.flatMap(({ label, destination, quest }) => [
       label,
-      () => teleport(player, event, item, destination),
+      () => teleport(player, event, item, destination, quest),
     ])
   );
 }
@@ -201,7 +214,7 @@ function handleRingAction(event, action) {
   }
   event.handled = true;
   if (action.type === "teleport") {
-    teleport(event.player, event, event.item, action.teleport.destination);
+    teleport(event.player, event, event.item, action.teleport.destination, action.teleport.quest);
   } else if (action.type === "coin-collection") {
     toggleAutoCollect(event.player);
   } else {
@@ -229,6 +242,7 @@ module.exports = {
   members: true,
   ACTIONS,
   register(api) {
+    pluginApi = api;
     const itemOnGroundManager = api.getItemOnGroundManager();
     api.onItemAction((event) => {
       if (!isRingOfWealth(event.itemId)) {

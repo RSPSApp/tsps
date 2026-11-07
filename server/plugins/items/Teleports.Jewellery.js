@@ -318,12 +318,15 @@ for (const piece of JEWELLERY) {
   }
 }
 
-/** The ring of wealth's teleports; RingOfWealth.plugin.js handles the ring itself. */
+/**
+ * The ring of wealth's teleports; RingOfWealth.plugin.js handles the ring itself. Tiles and quest
+ * requirements are the Wiki's (https://oldschool.runescape.wiki/w/Ring_of_wealth#Teleportation).
+ */
 const RING_OF_WEALTH_DESTINATIONS = [
   { label: "Grand Exchange", tile: [3163, 3478, 0] },
-  { label: "Miscellania", tile: [2539, 3864, 0] },
-  { label: "Falador Park", tile: [2994, 3377, 0] },
-  { label: "Dondakan", tile: [2824, 10168, 0] },
+  { label: "Miscellania", tile: [2534, 3862, 0], quest: "Throne of Miscellania" },
+  { label: "Falador Park", tile: [2995, 3375, 0] },
+  { label: "Dondakan", tile: [2824, 10168, 0], quest: "Between a Rock..." },
 ];
 
 module.exports = { JEWELLERY, RING_OF_WEALTH_DESTINATIONS, DEFAULT_WILDERNESS_LEVEL };

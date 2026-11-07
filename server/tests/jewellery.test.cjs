@@ -26,7 +26,7 @@ let itemAction;
 let itemOnObject;
 const completeQuests = new Set();
 require("../plugins/quests/QuestRuntime").getRegisteredQuests = () =>
-  ["Heroes' Quest", "Legends' Quest"].map((name) => ({ name, isComplete: () => completeQuests.has(name) }));
+  ["Heroes' Quest", "Legends' Quest", "Throne of Miscellania", "Between a Rock..."].map((name) => ({ name, isComplete: () => completeQuests.has(name) }));
 const { ObjectIdentifiers } = require("../dist/util/ObjectIdentifiers");
 const { ItemIdentifiers } = require("../dist/util/ItemIdentifiers");
 const { ItemDefinition } = require("../dist/game/definition/ItemDefinition");
@@ -502,6 +502,52 @@ test("the ring of wealth spends its charge on arrival, from wherever the ring is
   }
   assert.equal(pendingArrivals.length, 0);
   assert.equal(worn.getId(), 11986, "a refused teleport keeps the charge");
+});
+
+test("the ring of wealth's Miscellania and Dondakan teleports need their quests; a refusal keeps the charge", () => {
+  const RingOfWealth = require("../plugins/items/RingOfWealth.plugin");
+  const { teleport, TELEPORTS } = RingOfWealth._test;
+  // The quest plugin answers quest:is-complete; here the completed quests are the set above.
+  RingOfWealth.register({
+    getItemOnGroundManager: () => ({}),
+    onItemAction() {},
+    onItemOnItem() {},
+    onPlayerDeathItemDrop() {},
+    emitCustomEvent: (name, payload) => {
+      if (name === "quest:is-complete") payload.complete = completeQuests.has(payload.name);
+    },
+  });
+  const byLabel = (label) => TELEPORTS.find((entry) => entry.label === label);
+  const player = createPlayer();
+  const ring = new Item(11980, 1);
+  player.inventory.setItem(0, ring);
+  const rub = (label) => {
+    const { destination, quest } = byLabel(label);
+    teleport(player, { interfaceId: 149, slot: 0 }, ring, destination, quest);
+  };
+
+  completeQuests.clear();
+  rub("Miscellania");
+  rub("Dondakan");
+  assert.equal(teleports.length, 0, "neither quest is done");
+  assert.equal(ring.getId(), 11980, "the charge is kept");
+  assert.deepEqual(player.messages, [
+    "You need to have completed Throne of Miscellania to teleport there.",
+    "You need to have completed Between a Rock... to teleport there.",
+  ]);
+
+  rub("Grand Exchange");
+  rub("Falador Park");
+  assert.equal(teleports.length, 2, "the other two need no quest");
+
+  completeQuests.add("Throne of Miscellania");
+  rub("Miscellania");
+  assert.deepEqual(teleports.at(-1).target, [2534, 3862, 0]);
+  completeQuests.add("Between a Rock...");
+  rub("Dondakan");
+  assert.deepEqual(teleports.at(-1).target, [2824, 10168, 0]);
+  assert.equal(ring.getId(), 11988, "four teleports spent four charges");
+  completeQuests.clear();
 });
 
 function useOnObject(player, item, objectId) {

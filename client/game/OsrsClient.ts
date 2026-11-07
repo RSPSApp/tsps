@@ -1443,8 +1443,7 @@ export class OsrsClient {
      * gameframe root; -1 means the component has no equivalent in this layout
      * (e.g. the buff bar in fixed mode) and the mount is dropped.
      */
-    private mapGameframeTargetUid(uid: number): number {
-        const root = this.widgetManager?.rootInterface ?? STANDARD_GAMEFRAME_ROOT;
+    private mapGameframeTargetUid(uid: number, root = this.widgetManager?.rootInterface ?? STANDARD_GAMEFRAME_ROOT): number {
         if (root === STANDARD_GAMEFRAME_ROOT) return uid;
         if (((uid >>> 16) & 0xffff) !== STANDARD_GAMEFRAME_ROOT) return uid;
         const redirect = this.getGameframePaneRedirect(root);
@@ -2694,6 +2693,26 @@ export class OsrsClient {
                 console.log("[OsrsClient] Server setting root interface", payload.groupId);
                 if (this.widgetManager) {
                     const previousMounts = [...this.serverSubInterfaces];
+                    const previousRoot = this.widgetManager.rootInterface;
+                    const gameframes = [161, 164, 165, 548, 601];
+                    const transfers = gameframes.includes(previousRoot) && gameframes.includes(payload.groupId)
+                        ? new Map<number, number>() : undefined;
+                    const transferredTargets = new Set<number>();
+                    if (transfers) {
+                        // Nested mounts keep their component address when their containing pane moves.
+                        for (const [target] of this.widgetManager.interfaceParents) {
+                            if ((target >>> 16) !== previousRoot) transfers.set(target, target);
+                        }
+                        for (const [standardTargetUid, entry] of previousMounts) {
+                            const source = this.mapGameframeTargetUid(standardTargetUid, previousRoot);
+                            const target = this.mapGameframeTargetUid(standardTargetUid, payload.groupId);
+                            if (source >= 0 && target >= 0 &&
+                                this.widgetManager.getSubInterface(source)?.group === entry.payload.groupId) {
+                                transfers.set(source, target);
+                                transferredTargets.add(standardTargetUid);
+                            }
+                        }
+                    }
                     // Set varc 170 (display mode) based on the root interface
                     // Enum 185 maps: 0->1137 (161 widgets), 1->1101, 2->1067, 3->1175, 4->1293
                     // For interface 161/165, use mode 0 since Enum 1137 has interface 161 tab widgets
@@ -2724,14 +2743,16 @@ export class OsrsClient {
                             this.varManager.setVarbit(VARBIT_POPOUT_OPEN, 0);
                         }
                     }
-                    this.widgetManager.setRootInterface(payload.groupId);
+                    this.widgetManager.setRootInterface(payload.groupId, transfers);
+                    this.widgetInputController.invalidateHoverCache();
                     // PERF: Clear CS2 handler caches when switching root interfaces
                     // This prevents memory leaks from stale cached widget references
                     this.cs2Vm.clearHandlerCaches();
-                    // OSRS keeps server-mounted interfaces across a layout change by
-                    // moving them onto the new gameframe's components; set_root drops
-                    // them, so put each one back at its translated target.
+                    // Transfers preserve widgets and listeners, without replaying onLoad,
+                    // postScripts or the original hidden state. Only bootstrap opens and
+                    // panes previously absent from the layout need initialization.
                     for (const [standardTargetUid, entry] of previousMounts) {
+                        if (transferredTargets.has(standardTargetUid)) continue;
                         this.mountSubInterface({
                             ...entry.payload,
                             targetUid: standardTargetUid,

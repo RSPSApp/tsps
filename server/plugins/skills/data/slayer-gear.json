@@ -16,5 +16,7 @@
     "weapons": ["Leaf-bladed"],
     "ammo": ["broad"],
     "spells": ["MAGIC_DART"]
-  }
+  },
+  "_thrallImmune": "Monsters a thrall deals no damage to, besides the immune names above (Wiki, Thrall: \"Thralls will no longer deal damage to kurasks and turoths\"; Vyrewatch Sentinel lists Thralls as immune).",
+  "thrallImmune": ["Vyrewatch Sentinel"]
 }

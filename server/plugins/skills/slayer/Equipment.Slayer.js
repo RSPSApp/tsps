@@ -5,6 +5,7 @@
  * - A monster that punishes the unprotected (banshees without earmuffs, dust devils without a
  *   facemask...) lands its hit, at its unprotected max, and drains stats.
  * - Kurask and turoth only take damage from leaf-bladed weapons, broad ammunition and Magic Dart.
+ * - A thrall deals them, and a Vyrewatch Sentinel, no damage ("magic:thrall-attack").
  * Content may give a Slayer helmet's protection without one ("slayer:helmet", a league relic).
  */
 const GEAR = require("../data/slayer-gear.json");
@@ -15,6 +16,7 @@ let api = null;
 const HELMET = "Slayer helmet";
 const byName = new Map();
 const immuneNames = new Set(GEAR.immune.names);
+const thrallImmuneNames = new Set([...GEAR.immune.names, ...GEAR.thrallImmune]);
 
 function init(pluginApi) {
   api = pluginApi;
@@ -114,11 +116,17 @@ function npcHit({ npc, hit }) {
   if (!hurtsImmune(attacker.getAsPlayer?.() ?? attacker, hit)) hit.setTotalDamage(0);
 }
 
+/** `magic:thrall-attack`: no damage to a monster thralls can't hurt (Wiki, Thrall; Vyrewatch Sentinel). */
+function thrallAttack(event) {
+  if (thrallImmuneNames.has(npcName(event?.target))) event.cancelled = true;
+}
+
 function attach(api) {
   api.onCombatHitRoll(hitRoll);
   api.registerIncomingDamageModifier(incomingDamage);
   api.onCombatHitResolved(hitResolved);
   api.onNpcHitModify(npcHit);
+  api.onCustomEvent("magic:thrall-attack", thrallAttack);
 }
 
-module.exports = { init, attach, hitRoll, hitResolved, incomingDamage, npcHit, protectedFrom, GEAR };
+module.exports = { init, attach, hitRoll, hitResolved, incomingDamage, npcHit, thrallAttack, protectedFrom, GEAR };

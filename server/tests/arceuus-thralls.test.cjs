@@ -16,8 +16,9 @@ const {HitMask} = require('../dist/game/content/combat/hit/HitMask');
 const {PluginManager} = require('../dist/plugins/PluginManager');
 const Rewards = require('../plugins/achievements/combatachievements/Rewards.CombatAchievements');
 const Progress = require('../plugins/achievements/combatachievements/Progress.CombatAchievements');
+const Slayer = require('../plugins/skills/slayer/Equipment.Slayer');
 
-function fixture(t,{magic=99,hp=100,claimed=false,name='Goblin'}={}) {
+function fixture(t,{magic=99,hp=100,claimed=false,name='Goblin',attackHook=null}={}) {
   const tasks=[],actors=[],shown=[],attributes=new Map(),runes=new Map([[558,100],[556,100],[560,100],[557,100],[565,100],[554,100],[564,100]]);
   const p={magic,prayer:100,registered:true,animations:[],graphics:[],isNpc:()=>false,isPlayer:()=>true,isRegistered:()=>p.registered,
     performAnimation:animation=>p.animations.push(animation.getId()),performGraphic:graphic=>p.graphics.push(graphic.getId()),
@@ -34,23 +35,27 @@ function fixture(t,{magic=99,hp=100,claimed=false,name='Goblin'}={}) {
     decrementHealth:hit=>{hit.setDamage(Math.min(hit.getDamage(),Math.max(0,target.hp)));hit.setHealthLost(hit.getDamage());target.hp-=hit.getDamage();return hit;},
     addTickHit:hit=>shown.push(hit.getDamage()),getCombat:()=>combat};
   const combat=new Combat(target);
+  const thrallAnimations=[];
   t.mock.method(NPC,'create',()=>{
     const attrs=new Map(),movement={reset(){},setPursuitCheckpoint(){}};
     const a={registered:true,following:null,graphics:[],isRegistered:()=>a.registered,getLocation:()=>p.getLocation(),getSize:()=>1,
       performGraphic:graphic=>a.graphics.push(graphic.getId()),
       setOwner(){},setPet(){},setUntargetable(){},setFollowing:v=>{a.following=v;},getFollowing:()=>a.following,
       getAttribute:k=>attrs.get(k),setAttribute:(k,v)=>attrs.set(k,v),getInteractingMobile:()=>target,setMobileInteraction(){},
-      getMovementQueue:()=>movement,calculateDistance:()=>3,getAttackAnim:()=>1,performAnimation(){}};
+      getMovementQueue:()=>movement,calculateDistance:()=>3,getAttackAnim:()=>1,performAnimation:()=>thrallAnimations.push(World.getProcessCycle())};
     actors.push(a);return a;
   });
   t.mock.method(TaskManager,'submit',task=>{task.setRunning(true);tasks.push(task);});
   const hooks=new Map();
   Rewards({core:{},onBeforeNpcInteraction(){},onPlayerLogout(){},onNpcDialogueVariant(){},onNpcDialogueCondition(){},onItemAction(){},onCustomEvent:(name,fn)=>hooks.set(name,fn)});
+  // The Slayer plugin attached as the server does: it cancels the thrall's attack on its thrall-immune monsters.
+  Slayer.attach({onCombatHitRoll(){},registerIncomingDamageModifier(){},onCombatHitResolved(){},onNpcHitModify(){},onCustomEvent:(name,fn)=>hooks.set(name,fn)});
+  if(attackHook)hooks.set('magic:thrall-attack',attackHook);
   t.mock.method(PluginManager,'emitCustomEvent',(name,event)=>hooks.get(name)?.(event));
   if(claimed)Progress.setClaimed(p,{tier:5,index:4});
   const step=(n=1,apply=true)=>{for(let i=0;i<n;i++){World.processCycle++;for(const task of tasks)if(task.isRunning())task.tick();if(apply)combat.getHitQueue().process(World.getProcessCycle());}};
   const credit=()=>combat.damageMap?.get(p)?.getDamage()??0;
-  return {p,target,tasks,actors,shown,runes,step,credit,queue:combat.getHitQueue(),attributes};
+  return {p,target,tasks,actors,shown,runes,step,credit,queue:combat.getHitQueue(),attributes,thrallAnimations};
 }
 
 test('all three thrall tiers roll inclusive zero, intermediate and maximum hits at four-tick intervals',t=>{
@@ -71,6 +76,17 @@ test('a thrall deals no damage to a kurask, a turoth or a Vyrewatch Sentinel',t=
     ArceuusThralls.summon(f.p,10880,0,3,6);f.step(8);
     assert.deepEqual(f.shown,[],name);assert.equal(f.target.hp,100,name);
   }
+});
+
+// The immunity is content's: core only respects the cancel flag. The thrall still attacks, but no hit is queued (a max
+// hit of 0 would still queue and show a 0).
+test('a cancelled thrall attack still animates but queues no hit',t=>{
+  const seen=[];
+  const f=fixture(t,{attackHook:event=>{seen.push(event.target);event.cancelled=true;}});t.mock.method(Math,'random',()=>0.999999);
+  ArceuusThralls.summon(f.p,10880,0,3,6);f.step(8);
+  assert.equal(seen.length,2,'asked on each of the two attacks');assert.equal(seen[0],f.target);
+  assert.equal(f.thrallAnimations.length,2,'the thrall still attacks');
+  assert.deepEqual(f.shown,[]);assert.equal(f.target.hp,100);assert.equal(f.credit(),0);
 });
 
 test('thrall ownership credits only applied queued damage, including overkill and cancelled impacts',t=>{

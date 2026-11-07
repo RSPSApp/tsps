@@ -188,3 +188,26 @@ test("closing returns what fits and puts the rest on the floor, and says so", as
   assert.equal(stack.p.__priceCheckerContainer.getValidItems().length, 0, "the checker is empty");
   assert.equal(onTheGround(stack), 1);
 });
+
+// Adding by id took the first copy of the id: a preset (untradeable) copy was deleted while a plain clone went in,
+// and closing returned it, so the plain item was doubled and the free preset copy became a real one. The checker now
+// moves the slots it adds.
+test("adding a plain item never takes a preset copy of it, and closing returns exactly what was added", async (t) => {
+  const f = actor(t, "pcpreset");
+  const PLATE = I.RUNE_PLATEBODY;
+  const preset = new core.Item(PLATE, 1);
+  preset.setMetaValue(core.Item.UNTRADEABLE_META, true);
+  preset.setMetaValue(core.Item.UNBANKABLE_META, true);
+  preset.setMetaValue(core.Item.PRESET_META, true);
+  f.inv.setItem(0, preset);
+  f.inv.setItem(3, new core.Item(PLATE, 1));
+  f.inv.refreshItems();
+  await send(f, widget(OPEN_PRICE_CHECKER));
+  assert.equal(f.p.getInterfaceId(), PRICE_CHECKER_INTERFACE);
+  await send(f, widget((PRICE_CHECKER_INTERFACE << 16) | 10)); // Add-All
+  assert.ok(f.inv.getItems()[0]?.isPresetItem(), "the preset copy stays where it was");
+  await send(f, { type: "interface_close" });
+  const plates = f.inv.getValidItems().filter((item) => item.getId() === PLATE);
+  assert.equal(plates.length, 2, "two platebodies, as before");
+  assert.equal(plates.filter((item) => !item.isPresetItem()).length, 1, "only one of them real");
+});

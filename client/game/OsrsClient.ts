@@ -3443,6 +3443,8 @@ export class OsrsClient {
                 context.clanChannel = clans.channels.get(OWN_CLAN_TYPE) ?? null;
                 context.listenedClanSettings = clans.settings.get(LISTENED_CLAN_TYPE) ?? null;
                 context.listenedClanChannel = clans.channels.get(LISTENED_CLAN_TYPE) ?? null;
+                context.affinedClanSettings = new Map([...clans.settings].filter(([type]) => type !== LISTENED_CLAN_TYPE));
+                context.affinedClanChannels = new Map([...clans.channels].filter(([type]) => type !== LISTENED_CLAN_TYPE));
                 context.clanVars = clans.vars;
                 markClanSettingsTransmit();
                 markClanChannelTransmit();

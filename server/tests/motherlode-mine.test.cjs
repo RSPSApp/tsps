@@ -33,6 +33,7 @@ MotherlodeMine.register({
   onObjectInteraction: (name, actions) => { hooks.objects[name] = { ...hooks.objects[name], ...actions }; },
   onNpcDialogueCondition: (handler) => hooks.conditions.push(handler),
   onCustomEvent: (name, handler) => { (hooks.events[name] ??= []).push(handler); },
+  emitCustomEvent: (name, event) => { for (const handler of hooks.events[name] ?? []) handler(event); },
   registerCommand() {},
   spawnNpc: ({ id, x, y }) => {
     const npc = { id, location: new Location(x, y, 0), removed: false };
@@ -44,6 +45,12 @@ MotherlodeMine.register({
   removeNpc: (npc) => { npc.removed = true; },
 });
 const { tick, percyCondition } = MotherlodeMine._test;
+// Mining isn't loaded here: this answers mining:roll-interval as it does (Wiki, Pickaxe: dragon "3 ticks by default,
+// 1/6 chance to be 2 ticks").
+(hooks.events["mining:roll-interval"] ??= []).push((request) => {
+  const fast = request.pickaxe?.fastRollChance && Math.random() < request.pickaxe.fastRollChance;
+  request.ticks ??= request.pickaxe.attemptIntervalTicks - (fast ? 1 : 0);
+});
 
 before(() => {
   CachePipeline.initialize();
@@ -446,4 +453,27 @@ test("the crates give a hammer or a bronze pickaxe, unless one is carried (rspro
 
   // Every other crate is left to the other "Crate" handlers.
   assert.equal(search({ player: searcher, location: { x: 3200, y: 3200, z: 0 } }), false);
+});
+
+test("a dragon pickaxe's 1/6 quick roll mines pay-dirt on the second tick, as Mining rolls anywhere (Wiki, Pickaxe)", () => {
+  const vein = [...Veins.veins.values()].find((candidate) => !candidate.upper && candidate.respawnsAt < 0);
+  const p = player(vein.tile[0] - 1, vein.tile[1]);
+  p.inventory.add({ getId: () => ItemIds.DRAGON_PICKAXE, getAmount: () => 1 });
+  withRandom(0, () => interact("Ore vein", "Mine", { player: p, objectId: vein.oreId, location: { x: vein.tile[0], y: vein.tile[1], z: 0 } }));
+  withRandom(0, () => ticks(2));
+  assert.equal(p.inventory.getAmount(Mine.PAY_DIRT), 1, "the quick roll lands on tick 2");
+  Veins.stopMining(p);
+});
+
+test("without the quick roll a dragon pickaxe waits its full 3 ticks", () => {
+  const vein = [...Veins.veins.values()].find((candidate) => !candidate.upper && candidate.respawnsAt < 0);
+  const p = player(vein.tile[0] - 1, vein.tile[1]);
+  p.inventory.add({ getId: () => ItemIds.DRAGON_PICKAXE, getAmount: () => 1 });
+  // 0.2 misses the 1/6 quick roll but still passes the pay-dirt chance at this level.
+  withRandom(0.2, () => interact("Ore vein", "Mine", { player: p, objectId: vein.oreId, location: { x: vein.tile[0], y: vein.tile[1], z: 0 } }));
+  withRandom(0.2, () => ticks(2));
+  assert.equal(p.inventory.getAmount(Mine.PAY_DIRT), 0, "no roll yet on tick 2");
+  withRandom(0.2, () => ticks(1));
+  assert.equal(p.inventory.getAmount(Mine.PAY_DIRT), 1, "the roll lands on tick 3");
+  Veins.stopMining(p);
 });

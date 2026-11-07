@@ -44,7 +44,7 @@ test("Hunter Kit, Humidify and Spellbook Swap need Dream Mentor, and spend nothi
   for (const name of ["hunter kit", "humidify", "spellbook swap"]) {
     const f = caster(t, false);
     LunarSpells.handleSelf(f.p, name, 1);
-    assert.ok(f.messages.includes("You need to complete Dream Mentor to cast this spell."), `${name}: ${f.messages.join(" | ")}`);
+    assert.ok(f.messages.includes("You must have completed Dream Mentor to use this spell."), `${name}: ${f.messages.join(" | ")}`);
     assert.equal(f.astrals(), 20, `${name}: no astral runes spent`);
   }
 });
@@ -53,5 +53,26 @@ test("after Dream Mentor, Hunter Kit casts", (t) => {
   const f = caster(t, true);
   LunarSpells.handleSelf(f.p, "hunter kit", 1);
   assert.ok(f.astrals() < 20, "astral runes spent");
-  assert.ok(!f.messages.includes("You need to complete Dream Mentor to cast this spell."));
+  assert.ok(!f.messages.includes("You must have completed Dream Mentor to use this spell."));
+});
+
+test("a league relic that unlocks every spell lifts the Dream Mentor requirement (Wiki: Grimoire)", (t) => {
+  const f = caster(t, false);
+  const api = PM.createApi("RelicUnlockTest");
+  let lifted = true;
+  api.onCustomEvent("magic:spell-unlocked", (unlock) => { if (lifted && unlock.player === f.p) unlock.unlocked = true; });
+  t.after(() => { lifted = false; });
+  LunarSpells.handleSelf(f.p, "hunter kit", 1);
+  assert.ok(f.astrals() < 20, "Hunter Kit casts with the relic");
+  assert.ok(!f.messages.includes("You must have completed Dream Mentor to use this spell."));
+});
+
+test("Olm's flames can't be doused with Humidify before Dream Mentor", (t) => {
+  const { OlmRoom } = require("../plugins/minigames/cox/Olm.ChambersOfXeric");
+  const without = caster(t, false);
+  for (const [id, n] of [[555, 3], [554, 1]]) without.p.getInventory().add(new core.Item(id, n), false);
+  assert.equal(OlmRoom.prototype.canHumidify.call({}, without.p), false, "no Humidify douse without the quest");
+  const done = caster(t, true);
+  for (const [id, n] of [[555, 3], [554, 1]]) done.p.getInventory().add(new core.Item(id, n), false);
+  assert.equal(OlmRoom.prototype.canHumidify.call({}, done.p), true, "after Dream Mentor it douses");
 });

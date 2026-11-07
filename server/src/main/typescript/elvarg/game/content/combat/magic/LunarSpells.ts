@@ -107,17 +107,23 @@ const ENERGY_TRANSFER_HITPOINTS = 10;
 
 /**
  * Wiki (Dream Mentor, Rewards): the quest gives "the ability to use" these seven Lunar spells; the rest of the book
- * needs only Lunar Diplomacy's spellbook. TSPS wording for the refusal.
+ * needs only Lunar Diplomacy's spellbook. Captured refusal (rec 1695 tick 219, rec 3448 tick 532): "You must have
+ * completed <Quest> to use this spell."
  */
 const DREAM_MENTOR_SPELLS = new Set(["monster examine", "humidify", "hunter kit", "stat spy", "dream", "plank make", "spellbook swap"]);
 
 /** A Dream Mentor spell before the quest: refused (before any other check or cost), and true. */
-function refuseBeforeDreamMentor(player: Player, key: string): boolean {
+export function refuseBeforeDreamMentor(player: Player, key: string): boolean {
     if (!DREAM_MENTOR_SPELLS.has(key)) return false;
     const query = { player, key: "dream_mentor", complete: false };
     PluginManager.emitCustomEvent("quest:is-complete", query);
     if (query.complete === true) return false;
-    player.sendMessage("You need to complete Dream Mentor to cast this spell.");
+    // Content may lift the requirement ("magic:spell-unlocked", the Grimoire league relic: "all ... spells regardless of
+    // area, quest, or diary requirements"), as the Mage Arena's god spells allow.
+    const unlock = { player, name: key, unlocked: false };
+    PluginManager.emitCustomEvent("magic:spell-unlocked", unlock);
+    if (unlock.unlocked === true) return false;
+    player.sendMessage("You must have completed Dream Mentor to use this spell.");
     return true;
 }
 

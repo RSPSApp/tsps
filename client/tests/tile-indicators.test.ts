@@ -113,7 +113,8 @@ async function main(): Promise<void> {
     // Hovered tile: RuneLite's default border is fully transparent; drawn first.
     config.setConfigValue(TileMarkersConfig, "highlightHoveredTile", true);
     assert.equal(shapes().length, 2, "no tile under the mouse");
-    client.selectedSceneTile = { tileX: 3210, tileY: 3215, plane: 0 };
+    client.selectedSceneTile = { tileX: 3210, tileY: 3215, plane: 1 };
+    assert.equal(plugin.hoveredTile()!.plane, player.plane, "picking reports a height plane; projection needs the player's server plane");
     s = shapes();
     assert.equal(s.length, 3);
     assert.deepEqual(s[0][0][0], [32100, 32150], "hovered first");
@@ -148,6 +149,12 @@ async function main(): Promise<void> {
     assert.deepEqual(sampledPlanes, [1, 1, 1, 1], "all four corners use the center's bridge plane");
     assert.deepEqual(bridged[0].points, [[32220, 32160], [32230, 32161.25], [32230, 32173.75], [32220, 32172.5]],
         "sloping bridge corners retain their individual heights");
+    config.setConfigValue(TileMarkersConfig, "highlightHoveredTile", true);
+    client.selectedSceneTile = { tileX: player.x, tileY: player.y, plane: 1 };
+    sampledPlanes.length = 0;
+    const hoveredBridge = overlay.build();
+    assert.deepEqual(sampledPlanes, Array(8).fill(1), "picked height plane 1 is not promoted a second time");
+    assert.deepEqual(hoveredBridge[0].points, bridged[0].points, "hovered and true tiles share the bridge surface");
     for (const plane of [0, 1, 2, 3]) {
         assert.equal(sceneTileHeight(host, player.x + 0.5, player.y + 0.5, plane), -Math.min(3, plane + 1) * 2 + 0.1875);
         assert.equal(sceneTileHeight(host, player.x + 1.5, player.y + 0.5, plane), -plane * 2 + 0.3125,

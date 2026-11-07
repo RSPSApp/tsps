@@ -21,16 +21,21 @@ before(async () => {
   Common = require('../plugins/world/balloontransport/Common.BalloonTransport');
   Travel = require('../plugins/world/balloontransport/Travel.BalloonTransport');
   Controls = require('../plugins/world/balloontransport/Controls.BalloonTransport');
+  let entranaCheck;
   const api = new Proxy({
     core: {
       ...core,
       TaskManager: { submit: (task) => { task.setRunning(true); tasks.push(task); } },
       World: { getNpcs: () => pets },
     },
+    onCustomEvent(name, handler) { if (name === 'entrana:check-items') entranaCheck = handler; },
     emitCustomEvent(name, event) {
       if (name === 'quest:is-complete') event.complete = questDone;
+      if (name === 'entrana:check-items') entranaCheck(event);
     },
   }, { get: (target, key) => target[key] ?? (() => {}) });
+  require('../plugins/npcs/Entrana.plugin').register(api);
+  assert.equal(typeof entranaCheck, 'function');
   Common.init(api);
 });
 
@@ -69,10 +74,11 @@ function fakePlayer({ at = [2808, 3354], firemaking = 99, items = {}, worn = {} 
       delete: (id, n) => inventory.set(id, (inventory.get(id) ?? 0) - n),
       adds: (id, n) => inventory.set(id, (inventory.get(id) ?? 0) + n),
       getItems: () => [...inventory].filter(([, n]) => n > 0).map(([id, n]) => new core.Item(id, n)),
+      getValidItems: () => [...inventory].filter(([, n]) => n > 0).map(([id, n]) => new core.Item(id, n)),
       refreshItems() {},
     }),
     inventory,
-    getEquipment: () => ({ get: (slot) => equipment[slot], getItems: () => equipment }),
+    getEquipment: () => ({ get: (slot) => equipment[slot], getItems: () => equipment, getValidItems: () => equipment.filter(item => item.getId() > 0 && item.getAmount() > 0) }),
     getSpellbook: () => ({ getInterfaceId: () => 218 }),
     setInterfaceId: (id) => { player.interface = id; },
     getMovementQueue: () => ({ setBlockMovement(v) { player.blocked = v; return this; }, reset() { return this; } }),
@@ -246,7 +252,7 @@ test("a trip needs its log and its Firemaking level; the same station refuses", 
   assert.equal(Travel.travel(player, station('taverley'), station('taverley')), false);
 });
 
-test('to Entrana the player is searched: no weapons or armour worn', () => {
+test('to Entrana the player is searched using the shared carried and worn policy', () => {
   const armed = fakePlayer({ at: [2938, 3421], items: { logs: 1 }, worn: { WEAPON_SLOT: core.ItemIdentifiers.ABYSSAL_WHIP } });
   Travel.travel(armed, station('taverley'), station('entrana'));
   assert.equal(lastLine(armed), 'Weapons are not allowed on Entrana. I must search you first.');

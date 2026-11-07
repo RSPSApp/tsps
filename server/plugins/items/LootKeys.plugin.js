@@ -144,10 +144,26 @@ function noteId(item) {
   return note?.isNoted?.() && note.getName?.().toLowerCase() === definition.getName?.().toLowerCase() ? id : item.id;
 }
 
+/** Any Ironman mode (Setup.Ironman answers "ironman:mode"; "none" for a normal account). */
+function isIronman(player) {
+  const query = { player, mode: "none" };
+  pluginApi?.emitCustomEvent?.("ironman:mode", query);
+  return query.mode != null && query.mode !== "none";
+}
+
+// Wiki (Loot key, Ironman Mode): an Ironman can "unlock and receive loot keys, but they may not retrieve the loot
+// themselves"; they "preview the looted items with the Loot Chest with the only option to destroy them". The Wiki
+// gives no message for the refused take, so this one is ours.
+const IRONMAN_REFUSAL = "As an Ironman, you can't take loot from a loot key; you can only destroy it.";
+
 function takeChestItem(player, index, destination, asNotes = false, requestedAmount = Number.MAX_SAFE_INTEGER) {
   const items = chestItems(player);
   const item = items[index];
   if (!item) return false;
+  if (isIronman(player)) {
+    player.sendMessage(IRONMAN_REFUSAL);
+    return true;
+  }
   const amount = Math.max(1, Math.min(item.amount, Math.trunc(Number(requestedAmount) || 0)));
   const moved = { ...item, id: destination === "bank" ? ItemDefinition.forId(item.id).unNote() : asNotes ? noteId(item) : item.id, amount };
   if (destination === "inventory") {
@@ -174,6 +190,10 @@ function takeChestItem(player, index, destination, asNotes = false, requestedAmo
 }
 
 const takeAllChestItems = (player, destination, asNotes) => {
+  if (chestItems(player).length && isIronman(player)) {
+    player.sendMessage(IRONMAN_REFUSAL);
+    return true;
+  }
   for (let index = chestItems(player).length - 1; index >= 0; index--) takeChestItem(player, index, destination, asNotes);
   return true;
 };
@@ -211,24 +231,9 @@ function neverKeepLootKey(event) {
   if (LootKeys.isLootKey(event.item)) event.keep = false;
 }
 
-/** Any Ironman mode (Setup.Ironman answers "ironman:mode"; "none" for a normal account). */
-function isIronman(player) {
-  const query = { player, mode: "none" };
-  pluginApi?.emitCustomEvent?.("ironman:mode", query);
-  return query.mode != null && query.mode !== "none";
-}
-
 function queueDrop(event) {
   const state = pending(event.player);
   if (LootKeys.isLootKey(event.item)) {
-    // Keys are never kept, but an Ironman takes no other player's loot: an Ironman's kill drops the victim's keys on
-    // the floor for the victim, as Ironman's own PvP rule does with the rest (Loot.Ironman playerLoot).
-    if (event.killer && isIronman(event.killer)) {
-      event.handled = true;
-      event.suppressDefaultDrop = true;
-      ItemOnGroundManager.registerLocation(event.player, event.item, event.location ?? event.player.getLocation().clone());
-      return;
-    }
     state.keys.push(event.item);
     event.handled = true; // Keys are never kept on the defeated player.
     return;

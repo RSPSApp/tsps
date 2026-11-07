@@ -25,7 +25,7 @@
  * varbit 1467 (Paterdomus spawn 6222 -> 4563 alive; the dead-monk spawn
  * 6223 -> 4564).
  *
- * Requirements per the OSRS Wiki: Wanted!, Troll Stronghold and Doric's Quest,
+ * Requirements per the OSRS Wiki: Enter the Abyss, Wanted!, Troll Stronghold and Doric's Quest,
  * plus 50 Runecraft and 50 Fletching to start. 65 Smithing (boostable) may be
  * missing when starting - the transcript only warns - and 50 Fletching
  * (boostable) is needed to string the blade.
@@ -249,6 +249,7 @@ module.exports = function registerDeviousMindsQuest(api) {
   function meetsStartRequirements(player) {
     return (
       meetsSkillRequirements(player) &&
+      isQuestComplete(player, "enter_the_abyss") &&
       isQuestComplete(player, "wanted") &&
       isQuestComplete(player, "troll_stronghold") &&
       isQuestComplete(player, "dorics_quest")
@@ -383,7 +384,8 @@ module.exports = function registerDeviousMindsQuest(api) {
       "the <col=800000>Paterdomus Temple</col>, east of Varrock.",
       "",
       "I need 50 <col=800000>Runecraft</col> and 50 <col=800000>Fletching</col>",
-      "and to have completed <col=800000>Wanted!</col>,",
+      "and to have completed <col=800000>Enter the Abyss</col>,",
+      "<col=800000>Wanted!</col>,",
       "<col=800000>Troll Stronghold</col> and <col=800000>Doric's Quest</col>.",
     ];
   }

@@ -16,6 +16,8 @@ const DEFENDER_CHANCE = 50;
 const DRAGON_DEFENDER_CHANCE = 100;
 const EARNED_ATTRIBUTE = "warriors-guild:defender";
 const LORELAI_ATTRIBUTE = "warriors-guild:basement-unlocked";
+/** The room a player logged out inside and its clock, saved so a relog resumes it ({} when outside). */
+const ROOM_ATTRIBUTE = "warriors-guild:room";
 
 /** Kamfreena's double door on the top floor (west edge of x 2847) and her lobby beside it. */
 const TOP_DOORS = { x: 2847, ys: [3540, 3541], z: 2 };
@@ -276,8 +278,24 @@ function keepCapeOn(event) {
   Guild.playTranscript(api, event.player, host(state.room), "attempting-to-take-off-the-attack-cape-or-max-cape-while-in-the-room");
 }
 
+/** Logging out inside a room keeps its clock and the defender it drops; nothing is charged or reset. */
 function leaveRooms({ player }) {
+  const state = inside.get(player);
   inside.delete(player);
+  const { room, tier, ticks, graceTicks } = state ?? {};
+  player.setAttribute(ROOM_ATTRIBUTE, state ? { room, tier, ticks, graceTicks } : {});
+}
+
+/** Back in a room they logged out in: the same clock and defender, no entry fee. */
+function resumeRoom({ player }) {
+  const saved = player.getAttribute(ROOM_ATTRIBUTE);
+  player.setAttribute(ROOM_ATTRIBUTE, {});
+  if (saved?.room !== "top" && saved?.room !== "basement") return;
+  if (!(saved.room === "top" ? inTopRoom(player.getLocation()) : inBasementRoom(player.getLocation()))) return;
+  inside.set(player, {
+    room: saved.room, tier: saved.tier, ticks: saved.ticks, graceTicks: saved.graceTicks,
+    free: Guild.wearsAttackCape(player), arriving: 0,
+  });
 }
 
 // --- Defender drops.
@@ -306,6 +324,7 @@ module.exports = function attachCyclopes(pluginApi) {
   buildIds();
   api.persistAttribute(EARNED_ATTRIBUTE);
   api.persistAttribute(LORELAI_ATTRIBUTE);
+  api.persistAttribute(ROOM_ATTRIBUTE, {});
   api.onObjectInteraction("Door", { Open: useTopDoor });
   api.onObjectInteraction("Door", { Open: useBasementDoor });
   api.onObjectInteraction("Ladder", { "Climb-down": climbLadder, "Climb-up": climbLadder });
@@ -316,6 +335,7 @@ module.exports = function attachCyclopes(pluginApi) {
   api.onPlayerProcess(spendTime);
   api.onCanUnequip(keepCapeOn);
   api.onPlayerLogout(leaveRooms);
+  api.onPlayerLogin(resumeRoom);
   api.onCustomEvent("npc-drops:roll", dropDefenders);
   api.onNpcHitModify(meleeOnly);
 };

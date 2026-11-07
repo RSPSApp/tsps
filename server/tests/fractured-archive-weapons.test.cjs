@@ -32,7 +32,12 @@ class PendingHit {
 class Animation { constructor(id) { this.id = id; } }
 let resolvers = [];
 const registered = {};
+// Everything standing in the world, as the thrust sees it; tests fill it and clear it.
+let world = [];
+let secondaryAllowed = () => true;
 const core = {
+    World: { getNpcs: () => ({ forEach: (f) => world.filter((m) => m.isNpc?.()).forEach(f) }), getPlayers: () => ({ forEach: (f) => world.filter((m) => !m.isNpc?.()).forEach(f) }) },
+    CombatFactory: { canAttackSecondaryTarget: (attacker, target, candidate) => secondaryAllowed(candidate) },
     Equipment, ItemIdentifiers, WeaponInterfaces, RangedCombatMethod, MeleeCombatMethod, PendingHit, Animation,
     Graphic: class { constructor(id) { this.id = id; } },
     Flag: { APPEARANCE: 1 },
@@ -88,6 +93,13 @@ function player(worn, extra = {}) {
 const npc = (size, defence = [0, 0, 0]) => ({
     isNpc: () => true,
     getAsNpc: () => ({ getSize: () => size, getDefenceBonus: (i) => defence[i] }),
+});
+
+const at = (x, y) => ({ getX: () => x, getY: () => y, getZ: () => 0, getDistance: (o) => Math.max(Math.abs(x - o.getX()), Math.abs(y - o.getY())) });
+const placed = (x, y, size = 1, npcMob = true, defence = [0, 0, 0]) => ({
+    isNpc: () => npcMob,
+    getAsNpc: () => ({ getSize: () => size, getDefenceBonus: (i) => defence[i] }),
+    getLocation: () => at(x, y),
 });
 
 test('ascension crossbows fire only ascension bolts, and nothing else fires them', () => {
@@ -157,6 +169,76 @@ test('a charged thrust is one PendingHit that rolls best-of-N with the size bonu
     const smashing = player(weapon(ItemIdentifiers.OBLIGATOR, { [Obligator._test.CHARGES_META_KEY]: 5 }), { fightType: smash });
     assert.deepEqual(method.hits(smashing, npc(3)), ['plain']);
     assert.equal(method.attackSpeed(smashing), 3);
+});
+
+test('a thrust reaches up to two more targets on or behind the main one, charged or not; a smash reaches none', () => {
+    const thrust = WeaponInterfaces.EXTENDING_CHAINMACE.getFightType()[0];
+    const smash = WeaponInterfaces.EXTENDING_CHAINMACE.getFightType()[2];
+    const charged = weapon(ItemIdentifiers.OBLIGATOR, { [Obligator._test.CHARGES_META_KEY]: 5 });
+    const user = player(charged, { fightType: thrust });
+    user.getLocation = () => at(10, 10);
+    const method = obligatorResolver.resolve(user);
+    const main = placed(10, 12);
+    const onTop = placed(10, 12);
+    const behind1 = placed(10, 13), behind2 = placed(10, 14), behind3 = placed(10, 15);
+    const beside = placed(11, 12), inFront = placed(10, 11), diagonal = placed(11, 13);
+    world = [main, onTop, behind1, behind2, behind3, beside, inFront, diagonal, user];
+    try {
+        const reached = Obligator._test.reachedTargets(user, main);
+        assert.deepEqual(reached, [onTop, behind1], 'the target tile first, then nearer tiles; two at most');
+        world = [main, behind2, behind3, beside, inFront];
+        assert.deepEqual(Obligator._test.reachedTargets(user, main), [behind2], 'two tiles behind is in reach, three is not, the sides and the front are not');
+        // West-east and diagonal directions follow the attacker.
+        const east = placed(14, 10);
+        world = [east, placed(15, 10), placed(16, 10), placed(17, 10)];
+        assert.equal(Obligator._test.reachedTargets(user, east).length, 2);
+        const diag = placed(12, 12);
+        world = [diag, placed(13, 13), placed(14, 14), placed(14, 13)];
+        assert.deepEqual(Obligator._test.reachedTargets(user, diag).map((m) => m.getLocation().getX()), [13, 14]);
+        // A large target covers its whole footprint: 3x3 at 10..12, the player south of it.
+        const boss = placed(10, 12, 3);
+        const behindBoss = placed(11, 15), farBehind = placed(11, 17), onBoss = placed(12, 14, 1);
+        world = [boss, behindBoss, farBehind, onBoss];
+        assert.deepEqual(Obligator._test.reachedTargets(user, boss), [onBoss, behindBoss].sort((a, b) => a.getLocation().getDistance(boss.getLocation()) - b.getLocation().getDistance(boss.getLocation())));
+        // Secondary-target rules (multicombat, attackable) still decide who is hit.
+        world = [main, behind1];
+        secondaryAllowed = () => false;
+        assert.deepEqual(Obligator._test.reachedTargets(user, main), []);
+        secondaryAllowed = () => true;
+
+        world = [main, behind1, behind2];
+        pendingHits.length = 0;
+        const hits = method.hits(user, main);
+        assert.equal(hits.length, 3, 'charged thrust: main target and two more');
+        assert.ok(pendingHits.every((h) => h.config.bestOf === 2), 'each takes the passive rolls');
+        assert.equal(Obligator._test.charges(charged), 4, 'one charge for the whole thrust');
+
+        const bare = player(weapon(ItemIdentifiers.OBLIGATOR_UNCHARGED_), { fightType: thrust });
+        bare.getLocation = () => at(10, 10);
+        pendingHits.length = 0;
+        const bareHits = obligatorResolver.resolve(bare).hits(bare, main);
+        assert.equal(bareHits.length, 3, 'uncharged keeps the reach');
+        assert.equal(bareHits[0], 'plain');
+        assert.ok(pendingHits.every((h) => h.config === undefined), 'but not the rolls');
+
+        const smashing = player(weapon(ItemIdentifiers.OBLIGATOR, { [Obligator._test.CHARGES_META_KEY]: 5 }), { fightType: smash });
+        smashing.getLocation = () => at(10, 10);
+        assert.deepEqual(obligatorResolver.resolve(smashing).hits(smashing, main), ['plain'], 'smash hits one target');
+    } finally {
+        world = [];
+        secondaryAllowed = () => true;
+    }
+});
+
+test('the boss defences in the monster data give the Wiki roll counts (Phosani 4, Graardor 2)', () => {
+    const monsters = require('../data/definitions/monsters-complete.json');
+    const list = Array.isArray(monsters) ? monsters : Object.values(monsters);
+    const rolls = (name) => {
+        const m = list.find((e) => e.name === name);
+        return Obligator._test.rollCount(npc(m.size, [m.defence_stab, m.defence_slash, m.defence_crush]));
+    };
+    assert.equal(rolls("Phosani's Nightmare"), 4);
+    assert.equal(rolls('General Graardor'), 2);
 });
 
 test('charging takes a shard, 20 nature and 20 death runes per 10 charges; uncharging gives them back', () => {

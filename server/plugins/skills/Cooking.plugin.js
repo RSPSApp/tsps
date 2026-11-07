@@ -15,6 +15,7 @@ module.exports = {
     require("./cooking/Wine.Cooking")(api);
     require("./cooking/SacredEel.Cooking")(api);
     require("./cooking/LeapingFish.Cooking")(api);
+    require("./cooking/Gnome.Cooking")(api);
   },
   isCookingActive: Cookers.isCookingActive,
   /** True for a fire, range or oven the game lets you cook on (name and Cook action). */

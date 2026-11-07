@@ -25,25 +25,41 @@
 const FORGE_LOC = "wilderness_volcanoforge";
 const FORGE_MESSAGE = "You forge the shield pieces together in the chambers of fire and are blown back by the intense heat.";
 
-/** The ward each shard set forges. The shards are the three the Wiki lists for that ward. */
-const SHARD_SETS = Object.freeze([
-  Object.freeze({ ward: 11926, shards: Object.freeze([11928, 11929, 11930]) }), // odium ward
-  Object.freeze({ ward: 11924, shards: Object.freeze([11931, 11932, 11933]) }), // malediction ward
-]);
-
 let api = null;
+let cachedSets = null;
+
+/** The ward each shard set forges, from the cache's item identifiers. */
+function buildShardSets(identifiers) {
+  return [
+    {
+      ward: identifiers.ODIUM_WARD,
+      shards: [identifiers.ODIUM_SHARD_1, identifiers.ODIUM_SHARD_2, identifiers.ODIUM_SHARD_3],
+    },
+    {
+      ward: identifiers.MALEDICTION_WARD,
+      shards: [
+        identifiers.MALEDICTION_SHARD_1,
+        identifiers.MALEDICTION_SHARD_2,
+        identifiers.MALEDICTION_SHARD_3,
+      ],
+    },
+  ];
+}
+
+/** The sets in use, built once from the connected core. */
+const shardSets = () => (cachedSets ??= buildShardSets(api.core.ItemIdentifiers));
 
 /** The set this item is a shard of, or null. */
-function setFor(itemId) {
-  return SHARD_SETS.find((set) => set.shards.includes(itemId)) ?? null;
+function setFor(itemId, sets = shardSets()) {
+  return sets.find((set) => set.shards.includes(itemId)) ?? null;
 }
 
 /**
  * The set a use forges: the item must be a shard, and all three of its set must be in the pack.
  * Null otherwise, so the use falls through untouched.
  */
-function forgeSetFor(itemId, inventory) {
-  const set = setFor(itemId);
+function forgeSetFor(itemId, inventory, sets = shardSets()) {
+  const set = setFor(itemId, sets);
   if (!set) return null;
   return set.shards.every((shard) => (inventory?.getAmount?.(shard) ?? 0) > 0) ? set : null;
 }
@@ -70,5 +86,5 @@ module.exports = {
     api = pluginApi;
     pluginApi.onItemOnObject(itemOnForge);
   },
-  _test: { SHARD_SETS, FORGE_MESSAGE, FORGE_LOC, setFor, forgeSetFor },
+  _test: { FORGE_MESSAGE, FORGE_LOC, buildShardSets, setFor, forgeSetFor },
 };

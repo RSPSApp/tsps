@@ -4,41 +4,71 @@
 const assert = require("node:assert/strict");
 const { test } = require("node:test");
 
+const { Server } = require("../dist/Server");
+Server.installProductionPathResolver();
+const { PluginManager } = require("../dist/plugins/PluginManager");
+
 const forge = require("../plugins/items/VolcanicForge.plugin");
 
-const { SHARD_SETS, FORGE_MESSAGE, setFor, forgeSetFor } = forge._test;
+const I = PluginManager.getCoreApi().ItemIdentifiers;
+const { FORGE_MESSAGE, buildShardSets, setFor, forgeSetFor } = forge._test;
+const SETS = buildShardSets(I);
 
 /** A stand-in for the inventory: `forgeSetFor` only reads `getAmount`. */
 const pack = (amounts) => ({ getAmount: (id) => amounts[id] ?? 0 });
 
+/** A pack holding one of each id given. */
+const holding = (...ids) => pack(Object.fromEntries(ids.map((id) => [id, 1])));
+
 test("each set is the three shards of one ward", () => {
   assert.deepEqual(
-    SHARD_SETS.map((set) => ({ ward: set.ward, shards: [...set.shards] })),
+    SETS.map((set) => ({ ward: set.ward, shards: [...set.shards] })),
     [
-      { ward: 11926, shards: [11928, 11929, 11930] }, // odium ward
-      { ward: 11924, shards: [11931, 11932, 11933] }, // malediction ward
+      {
+        ward: I.ODIUM_WARD,
+        shards: [I.ODIUM_SHARD_1, I.ODIUM_SHARD_2, I.ODIUM_SHARD_3],
+      },
+      {
+        ward: I.MALEDICTION_WARD,
+        shards: [I.MALEDICTION_SHARD_1, I.MALEDICTION_SHARD_2, I.MALEDICTION_SHARD_3],
+      },
     ],
   );
 });
 
+test("the identifiers it is built from are real and distinct", () => {
+  const ids = [I.ODIUM_WARD, I.MALEDICTION_WARD, ...SETS.flatMap((set) => set.shards)];
+  assert.equal(ids.length, 8);
+  for (const id of ids) assert.ok(Number.isInteger(id) && id > 0, `${id} is a real item id`);
+  assert.equal(new Set(ids).size, 8, "the two wards and six shards are all different items");
+});
+
 test("a shard resolves to its own set only", () => {
-  assert.equal(setFor(11928)?.ward, 11926);
-  assert.equal(setFor(11931)?.ward, 11924);
+  assert.equal(setFor(I.ODIUM_SHARD_1, SETS)?.ward, I.ODIUM_WARD);
+  assert.equal(setFor(I.MALEDICTION_SHARD_1, SETS)?.ward, I.MALEDICTION_WARD);
   // The wards themselves and everything else are not shards.
-  assert.equal(setFor(11926), null);
-  assert.equal(setFor(11924), null);
-  assert.equal(setFor(995), null);
+  assert.equal(setFor(I.ODIUM_WARD, SETS), null);
+  assert.equal(setFor(I.MALEDICTION_WARD, SETS), null);
+  assert.equal(setFor(995, SETS), null);
 });
 
 test("a use forges only when every shard of the set is held", () => {
-  assert.equal(forgeSetFor(11928, pack({ 11928: 1, 11929: 1, 11930: 1 }))?.ward, 11926);
+  const odium = [I.ODIUM_SHARD_1, I.ODIUM_SHARD_2, I.ODIUM_SHARD_3];
+  const malediction = [I.MALEDICTION_SHARD_1, I.MALEDICTION_SHARD_2, I.MALEDICTION_SHARD_3];
+
+  assert.equal(forgeSetFor(I.ODIUM_SHARD_1, holding(...odium), SETS)?.ward, I.ODIUM_WARD);
   // Two of three is a half set: nothing is forged and nothing is consumed.
-  assert.equal(forgeSetFor(11928, pack({ 11928: 1, 11929: 1 })), null);
-  assert.equal(forgeSetFor(11928, pack({ 11928: 1 })), null);
+  assert.equal(forgeSetFor(I.ODIUM_SHARD_1, holding(odium[0], odium[1]), SETS), null);
+  assert.equal(forgeSetFor(I.ODIUM_SHARD_1, holding(odium[0]), SETS), null);
   // A full odium set does not forge a malediction ward.
-  assert.equal(forgeSetFor(11931, pack({ 11928: 1, 11929: 1, 11930: 1 })), null);
-  // Any one shard of the set is enough to start, as on the Wiki: it is the set that must be complete.
-  assert.equal(forgeSetFor(11930, pack({ 11928: 1, 11929: 1, 11930: 1 }))?.ward, 11926);
+  assert.equal(forgeSetFor(I.MALEDICTION_SHARD_1, holding(...odium), SETS), null);
+  // Any one shard of the set is enough to start, as on the Wiki: the set must be complete.
+  assert.equal(forgeSetFor(I.ODIUM_SHARD_3, holding(...odium), SETS)?.ward, I.ODIUM_WARD);
+  // Two half sets do not add up to a whole one.
+  assert.equal(
+    forgeSetFor(I.ODIUM_SHARD_1, holding(odium[0], odium[1], malediction[0], malediction[1]), SETS),
+    null,
+  );
 });
 
 test("the message is the Wiki's wording", () => {

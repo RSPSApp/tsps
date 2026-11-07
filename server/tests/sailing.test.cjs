@@ -1547,6 +1547,35 @@ test("tools go to the tools compartment and come back out, without using space",
   }
 });
 
+test("a tool already in the tools compartment is not stored again, so a second copy is never deleted", () => {
+  const h = holdHarness();
+  try {
+    h.give(31803); // spyglass
+    h.open();
+    h.click(943, 15, 1); // Deposit inventory
+    assert.deepEqual(h.player.getSailing().tools, [1]);
+    assert.equal(h.player.getInventory().getAmount(31803), 0);
+
+    h.give(31803); // a second spyglass
+    h.click(943, 15, 1);
+    assert.equal(h.player.getInventory().getAmount(31803), 1, "Deposit inventory leaves the second spyglass held");
+    h.click(944, 1, 1, h.slotOf(31803), 31803); // Deposit-1 on it in the side panel
+    assert.equal(h.player.getInventory().getAmount(31803), 1, "Deposit-1 leaves it held too");
+    assert.equal(h.player.messages.at(-1), "You already have a spyglass in your tools compartment.");
+
+    h.give(7534);
+    h.give(7535);
+    h.click(943, 15, 1);
+    assert.deepEqual(h.player.getSailing().tools.sort(), [1, 4]);
+    h.give(7534);
+    h.give(7535);
+    h.click(943, 15, 1);
+    assert.equal(h.player.getInventory().getAmount(7534) + h.player.getInventory().getAmount(7535), 2, "a second set of diving gear stays held");
+  } finally {
+    h.done();
+  }
+});
+
 test("Deposit Cargo and Deposit Salvage only take their own items", () => {
   const h = holdHarness();
   try {

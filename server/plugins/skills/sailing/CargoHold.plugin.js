@@ -218,9 +218,22 @@ function storeItem(player, boat, itemId, amount) {
   return stored;
 }
 
-/** Puts a tool in the tools compartment; diving gear needs both parts. */
+/** How a tool is named in the compartment's lines: "a spyglass", "your current duck", "some diving gear". */
+function toolText(tool) {
+  return { 0: "your captain's log", 1: "a spyglass", 2: "your current duck", 4: "some diving gear" }[tool.slot]
+    ?? `a ${ItemDefinition.forId(tool.give[0])?.getName?.()?.toLowerCase?.() ?? "tool"}`;
+}
+
+/**
+ * Puts a tool in the tools compartment; diving gear needs both parts. The compartment holds one of each and
+ * remembers only which are in it, so a second copy is refused rather than deleted (message not captured).
+ */
 function storeTool(player, tool) {
   const inventory = player.getInventory();
+  if (player.getSailing().tools.includes(tool.slot)) {
+    player.sendMessage(`You already have ${toolText(tool)} in your tools compartment.`);
+    return false;
+  }
   const held = tool.accept.filter((id) => inventory.contains(id));
   if (tool.give.length > 1 && !tool.give.every((id) => inventory.contains(id))) {
     player.sendMessage(CANNOT_STORE);
@@ -247,9 +260,7 @@ function takeTool(player, slot) {
   tools.splice(tools.indexOf(tool.slot), 1);
   for (const id of tool.give) inventory.add(new Item(id, 1), true);
   // rsprox: "You collect your current duck from the tools compartment."
-  const what = { 0: "your captain's log", 1: "a spyglass", 2: "your current duck", 4: "some diving gear" }[tool.slot]
-    ?? `a ${ItemDefinition.forId(tool.give[0])?.getName?.()?.toLowerCase?.() ?? "tool"}`;
-  player.sendMessage(`You collect ${what} from the tools compartment.`);
+  player.sendMessage(`You collect ${toolText(tool)} from the tools compartment.`);
   playSound(player, SOUND_TOOL);
   const boat = heldBoat(player);
   if (boat) refresh(player, boat);

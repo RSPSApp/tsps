@@ -250,6 +250,13 @@ function isSpawnable(itemId) {
   return false;
 }
 
+/** How many real (not preset-spawned) copies of `itemId` a container holds. */
+function realAmount(container, itemId) {
+  return container.getValidItems()
+    .filter((item) => item.getId() === itemId && !item.isPresetItem?.())
+    .reduce((sum, item) => sum + item.getAmount(), 0);
+}
+
 /** What bankCarriedItems would bank: everything carried but the preset's own spawned items. */
 function carriedToBank(player) {
   return [...player.getInventory().getCopiedItems(), ...player.getEquipment().getCopiedItems()]
@@ -652,8 +659,10 @@ function applyPreset(player, preset) {
       }
       nonSpawnableRequirements.push(item);
 
-      const inventoryAmt = player.getInventory().getAmount(item.getId());
-      const equipmentAmt = player.getEquipment().getAmount(item.getId());
+      // Only real copies count: the preset's own spawned copies are wiped below, not banked, so counting them let a
+      // custom preset take nothing from the bank and spawn a plain copy (free preset items became tradeable ones).
+      const inventoryAmt = realAmount(player.getInventory(), item.getId());
+      const equipmentAmt = realAmount(player.getEquipment(), item.getId());
       const bankAmt = player
         .getBank(Bank.getTabForItem(player, item.getId()))
         .getAmount(item.getId());
@@ -681,18 +690,10 @@ function applyPreset(player, preset) {
   player.getInventory().resetItems().refreshItems();
   player.getEquipment().resetItems().refreshItems();
 
-  if (nonSpawnableRequirements.length > 0) {
-    for (const item of nonSpawnableRequirements) {
-      if (player.getInventory().containsItem(item)) {
-        player.getInventory().deletes(item);
-      } else if (player.getEquipment().containsItem(item)) {
-        player.getEquipment().deletes(item);
-      } else {
-        player
-          .getBank(Bank.getTabForItem(player, item.getId()))
-          .deletes(item);
-      }
-    }
+  // Every real copy is in the bank now (carried ones were banked, the inventory and equipment reset), so that is
+  // where the preset's non-spawnable items come from.
+  for (const item of nonSpawnableRequirements) {
+    player.getBank(Bank.getTabForItem(player, item.getId())).deletes(item);
   }
 
   for (const item of preset.getInventory() ?? []) {

@@ -80,3 +80,32 @@ test("a full bank holding the item's placeholder still takes it, so the load goe
   assert.equal(f.p.getInventory().getAmount(I.SHARK), 5, "the preset is loaded");
   assert.equal(tab.getAmount(I.ABYSSAL_WHIP), 1, "the whip fills its placeholder");
 });
+
+// A custom preset's non-spawnable item must come from a real copy. Counting the preset's own spawned copy (which is
+// wiped, not banked) let the load take nothing and spawn a plain, tradeable item: free preset items became real ones.
+test("a custom preset does not turn a preset copy into a real item", (t) => {
+  const f = actor(t);
+  const ags = I.ARMADYL_GODSWORD;
+  const copy = new core.Item(ags, 1);
+  copy.setMetaValue(core.Item.UNTRADEABLE_META, true);
+  copy.setMetaValue(core.Item.UNBANKABLE_META, true);
+  copy.setMetaValue(core.Item.PRESET_META, true);
+  f.p.getInventory().setItem(0, copy);
+  const custom = new Presetable("mine", [new core.Item(ags, 1)], [], [99, 99, 99, 99, 99, 99, 99], MagicSpellbook.NORMAL, false);
+  Presets.applyPreset(f.p, custom);
+  const plain = [...f.p.getInventory().getValidItems(), ...f.p.getEquipment().getValidItems()]
+    .filter((item) => item.getId() === ags && !item.isPresetItem());
+  assert.equal(plain.length, 0, "no real godsword appears");
+  assert.ok(f.messages.some((m) => /non-spawnable item/.test(m)), f.messages.join(" | "));
+});
+
+test("a custom preset still takes a real non-spawnable item from the bank", (t) => {
+  const f = actor(t);
+  const ags = I.ARMADYL_GODSWORD;
+  f.p.getBank(0).add(new core.Item(ags, 1), false);
+  const custom = new Presetable("mine", [new core.Item(ags, 1)], [], [99, 99, 99, 99, 99, 99, 99], MagicSpellbook.NORMAL, false);
+  Presets.applyPreset(f.p, custom);
+  assert.equal(f.p.getInventory().getAmount(ags), 1, "the godsword is carried");
+  const banked = Array.from({ length: 10 }, (_, tab) => f.p.getBank(tab)?.getAmount?.(ags) ?? 0).reduce((a, b) => a + b, 0);
+  assert.equal(banked, 0, "and taken from the bank");
+});

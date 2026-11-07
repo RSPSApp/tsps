@@ -22824,6 +22824,7 @@ test('In Search of Knowledge feeds Aimeri, fills the tomes and completes through
   });
   const inventory = {
     getAmount: (id) => items.get(id) ?? 0,
+    contains: (id) => (items.get(id) ?? 0) > 0,
     getItems: () => [...items.entries()].map(([id, amount]) => ({ id, getId: () => id, getAmount: () => amount })),
     adds: (id, amount) => items.set(id, (items.get(id) ?? 0) + amount),
     deleteNumber: (id, amount) => {

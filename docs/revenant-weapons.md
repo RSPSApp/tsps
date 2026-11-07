@@ -10,7 +10,7 @@
   - "You use 1,000 ether to activate the weapon."
   - "You add a further N revenant ether to your weapon, giving it a total of N charges."
 - Check: "Your chainmace has N charges left powering it." (bow: "Your bow …").
-- **Uncharge** returns every ether, the activation ether included. A weapon that did not have its activation ether paid through the weapon (a shop or spawn) refunds and drops only its charges.
+- **Uncharge** returns every ether, the activation ether included. A weapon that did not have its activation ether paid through the weapon (a shop or spawn) refunds and drops only its charges. The weapons are not sold in any shop, since an unpaid one would Uncharge and Dismantle into free ether.
 - **Dismantle** on an uncharged weapon gives 7,500 revenant ether.
 
 ## Attacks

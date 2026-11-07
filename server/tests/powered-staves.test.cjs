@@ -15,10 +15,10 @@ const { FightType } = require("../dist/game/content/combat/FightType");
 
 const core = PluginManager.getCoreApi();
 
-function register(plugin) {
+function register(plugin, pluginCore = core) {
   const hooks = { resolvers: [], events: new Map(), actions: new Map(), itemOnItem: [], specials: [] };
   plugin.register({
-    core,
+    core: pluginCore,
     registerCombatMethodResolver: (resolver) => hooks.resolvers.push(resolver),
     registerCombatSpecial: (special) => hooks.specials.push(special),
     onCustomEvent: (name, handler) => hooks.events.set(name, [...(hooks.events.get(name) ?? []), handler]),
@@ -26,6 +26,7 @@ function register(plugin) {
     onItemAction: (name, actions) => hooks.actions.set(name, actions),
     onItemOnItem: (handler) => hooks.itemOnItem.push(handler),
     onPlayerLogin() {},
+    onPlayerDeathItemDrop: (handler) => { hooks.death = handler; },
   });
   return hooks;
 }
@@ -277,6 +278,7 @@ test("Accursed sceptre: a 1,000 ether deposit, then up to 16,000 charges (Wiki, 
   assert.equal(method.canAttack(worn, NPC), false);
   assert.equal(worn.state.messages.at(-1), "There is not enough revenant ether left powering your sceptre.");
 
+  assert.equal(sceptre.getMetaValue(Accursed._test.DEPOSIT_META), true, "activating it records the paid deposit");
   sceptre.setMetaValue(CHARGES_KEY, 200);
   Accursed._test.uncharge({ player: p, item: sceptre });
   assert.equal(sceptre.getId(), I.ACCURSED_SCEPTRE_U_);
@@ -352,6 +354,57 @@ test("Thammaron's sceptre (a) autocasts, and Dismantle on an uncharged one gives
   assert.equal(accursed.actions.get("Thammaron's sceptre (u)").Dismantle({ player: q, item: bare }), true);
   assert.equal(q.amounts.get(I.REVENANT_ETHER), 7500);
   assert.equal(7500, DISMANTLE_ETHER);
+});
+
+test("a sceptre with no paid deposit refunds nothing for it, so Uncharge then Dismantle mints no ether", () => {
+  const { CHARGES_KEY, DEPOSIT_META } = Accursed._test;
+  for (const [charged, uncharged] of [[I.THAMMARONS_SCEPTRE, I.THAMMARONS_SCEPTRE_U_], [I.ACCURSED_SCEPTRE, I.ACCURSED_SCEPTRE_U_]]) {
+    const bought = new Item(charged, 1);
+    const p = player();
+    p.inventoryItems.push(bought);
+    Accursed._test.uncharge({ player: p, item: bought });
+    assert.equal(bought.getId(), uncharged);
+    assert.equal(p.amounts.get(I.REVENANT_ETHER) ?? 0, 0, "no deposit was paid, none is refunded");
+    assert.equal(bought.getMetaValue(DEPOSIT_META), undefined);
+  }
+  const held = new Item(I.THAMMARONS_SCEPTRE, 1);
+  held.setMetaValue(CHARGES_KEY, 40);
+  const q = player();
+  q.inventoryItems.push(held);
+  Accursed._test.uncharge({ player: q, item: held });
+  assert.equal(q.amounts.get(I.REVENANT_ETHER), 40, "only its charges come back");
+});
+
+test("custom shops do not sell the revenant weapons that dismantle into ether", () => {
+  const shops = require("../data/definitions/custom-shops.json");
+  const sold = new Set(shops.flatMap((shop) => (shop.originalStock ?? []).map((entry) => entry.id)));
+  for (const id of [I.CRAWS_BOW, I.THAMMARONS_SCEPTRE, I.ACCURSED_SCEPTRE, I.VIGGORAS_CHAINMACE, I.URSINE_CHAINMACE]) {
+    assert.equal(sold.has(id), false, `item ${id} is not for sale`);
+  }
+});
+
+test("a Wilderness PvP death drops a sceptre's deposit and charges to the killer, protected or not", () => {
+  const { CHARGES_KEY, DEPOSIT_META } = Accursed._test;
+  const dropped = [];
+  const stubbed = register(Accursed, { ...core, ItemOnGroundManager: { registerLocation: (owner, item) => dropped.push(item) } });
+  try {
+    for (const kept of [true, false]) {
+      dropped.length = 0;
+      const sceptre = staffItem(I.THAMMARONS_SCEPTRE, CHARGES_KEY, 7);
+      sceptre.setMetaValue(DEPOSIT_META, true);
+      const victim = player();
+      const event = { player: victim, killer: player(), item: sceptre, kept, shouldDropItems: true, location: new Location(3090, 3600, 0) };
+      stubbed.death(event);
+      assert.equal(sceptre.getId(), I.THAMMARONS_SCEPTRE_U_);
+      assert.equal(dropped[0].getAmount(), 1007);
+      assert.equal(event.handled, kept ? true : undefined);
+    }
+    const safe = staffItem(I.THAMMARONS_SCEPTRE, CHARGES_KEY, 7);
+    stubbed.death({ player: player(), killer: player(), item: safe, kept: false, shouldDropItems: true, location: new Location(3200, 3200, 0) });
+    assert.equal(safe.getId(), I.THAMMARONS_SCEPTRE, "outside the Wilderness nothing is lost");
+  } finally {
+    register(Accursed);
+  }
 });
 
 test("Soul Rend lowers Magic Defence by the damage, never below 0, keeping other overrides (Wiki)", () => {

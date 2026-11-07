@@ -114,7 +114,8 @@ From the Wiki (and Thammaron's sceptre for the ether rules):
 - 4 ticks, 7 tiles (9 on Longrange).
 - Revenant ether: the first 1,000 are a deposit that activates it, then up to 16,000 are charges, one a cast.
 - Emptied, it keeps the deposit and stays activated.
-- Uncharging returns every ether, deposit included.
+- Uncharging returns every ether, deposit included. A sceptre whose activation ether was not paid through the weapon (a spawn or load-out) refunds only its charges, so Uncharge then Dismantle cannot mint ether. Neither sceptre is sold in a shop.
+- Dying to a player in the Wilderness drops the deposit and charges to the killer, protected or not; the sceptre comes back uncharged.
 - **Swap** turns it into the (a) version, which autocasts spellbook spells and has no built-in spell.
 - Either version, charged, gives +50% magic accuracy and damage against NPCs in the Wilderness, and each attack there spends a charge.
 

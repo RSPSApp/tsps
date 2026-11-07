@@ -366,6 +366,11 @@ module.exports = function registerTheFremennikIslesQuest(api) {
     return quest.getStage(player);
   }
 
+  function legsCraftingLevel(player) {
+    const skills = player.getSkillManager();
+    return Math.max(skills.getMaxLevel(Skill.CRAFTING), skills.getCurrentLevel(Skill.CRAFTING));
+  }
+
   function setStage(player, value) {
     if (quest.getStage(player) !== value) quest.setStage(player, value);
   }
@@ -1135,7 +1140,7 @@ module.exports = function registerTheFremennikIslesQuest(api) {
         return player.getInventory().getAmount(COINS) < hides * 5;
       }
       case "FPmCig":
-        return player.getSkillManager().getMaxLevel(Skill.CRAFTING) < 43;
+        return legsCraftingLevel(player) < 43;
       case "i-PloP":
         return player.getSkillManager().getMaxLevel(Skill.CRAFTING) < 46;
       case "pYRUcM":
@@ -1154,7 +1159,7 @@ module.exports = function registerTheFremennikIslesQuest(api) {
         return hasItem(player, CURED_YAK_HIDE)
           && hasItem(player, THREAD)
           && !hasItem(player, YAK_HIDE_LEGS)
-          && player.getSkillManager().getMaxLevel(Skill.CRAFTING) >= 43;
+          && legsCraftingLevel(player) >= 43;
       // Troll King.
       case "75_TlB":
         return !hasItem(player, TROLL_HEAD);
@@ -1739,11 +1744,12 @@ module.exports = function registerTheFremennikIslesQuest(api) {
     if (stageOf(player) < STAGE_DECREE_DELIVERED) return;
     event.handled = true;
     const crafting = player.getSkillManager().getMaxLevel(Skill.CRAFTING);
+    const legsCrafting = legsCraftingLevel(player);
     if (!hasItem(player, THREAD)) {
       player.sendMessage("You need some thread to make armour from yak hide.");
       return;
     }
-    if (crafting < 46 && crafting < 43) {
+    if (crafting < 46 && legsCrafting < 43) {
       player.sendMessage("You need a Crafting level of 43 to make armour from yak hide.");
       return;
     }
@@ -1755,7 +1761,7 @@ module.exports = function registerTheFremennikIslesQuest(api) {
       player.sendMessage("You make yak-hide body armour.");
       return;
     }
-    if (!hasItem(player, YAK_HIDE_LEGS) && crafting >= 43) {
+    if (!hasItem(player, YAK_HIDE_LEGS) && legsCrafting >= 43) {
       player.getInventory().deleteNumber(CURED_YAK_HIDE, 1);
       player.getInventory().deleteNumber(THREAD, 1);
       player.getInventory().adds(YAK_HIDE_LEGS, 1);

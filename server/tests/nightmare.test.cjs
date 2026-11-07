@@ -8,7 +8,7 @@ const hooks = { custom: {}, npc: {}, drop: null, condition: null };
 const achievementEvents = [];
 const fakeApi = {
   core: {
-    Item: class { constructor(id, amount) { this.id = id; this.amount = amount; } },
+    Item: class { constructor(id, amount, meta) { this.id = id; this.amount = amount; this.meta = meta; } },
     ItemDefinition: { forId: (id) => ({ isStackable: () => id === 995 }) },
   },
   persistAttribute() {},
@@ -51,7 +51,7 @@ function fakePlayer() {
       delete: (_id, amount) => { coins.amount -= amount; },
       contains: () => false,
       getFreeSlots: () => 28,
-      add: (item) => added.push([item.id, item.amount]),
+      add: (item) => added.push(item.meta == null ? [item.id, item.amount] : [item.id, item.amount, item.meta]),
     }),
   };
 }
@@ -213,6 +213,23 @@ test("a death in a dream leaves the items with its keeper, for 60,000 coins", ()
   assert.deepEqual(player.added, [[4151, 1]]);
   assert.equal(player.coins.amount, 40_000);
   assert.equal(player.getAttribute(Common.HELD_ITEMS_ATTRIBUTE), null);
+});
+
+test("a dream death while the keeper holds a paid-for remainder is charged again, and items keep their meta", () => {
+  const player = fakePlayer();
+  player.setAttribute(Common.HELD_ITEMS_ATTRIBUTE, { holder: "shura", items: [[385, 5]], paid: true });
+  const dream = { phosani: false, players: new Set([player]) };
+  const original = Dream.dreamOf;
+  Dream.dreamOf = (who) => (who === player ? dream : null);
+  try {
+    hooks.drop({ player, item: { getId: () => 6585, getAmount: () => 1, getMeta: () => ({ charges: 30000 }) }, dropEligible: true, handled: false });
+  } finally {
+    Dream.dreamOf = original;
+  }
+  assert.equal(player.getAttribute(Common.HELD_ITEMS_ATTRIBUTE).paid, false);
+  hooks.npc.Shura.Collect({ player, definition: { getName: () => "Shura", getId: () => 9414 } });
+  assert.equal(player.coins.amount, 40_000, "the fee is taken again");
+  assert.deepEqual(player.added, [[385, 5], [6585, 1, { charges: 30000 }]]);
 });
 
 test("Sister Senga's introduction never leaves an action mid-chain, and sets its varbits in order", () => {

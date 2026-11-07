@@ -19,6 +19,12 @@ function retrievalItems(request) {
   for (const [itemId, amount] of heldItems(request.player)?.items ?? []) request.items.push({itemId, amount});
 }
 
+/** An item's meta (charges, degradation) as the save keeps it, or null. */
+function metaOf(item) {
+  const meta = item.getMeta?.();
+  return meta == null ? null : JSON.parse(JSON.stringify(meta));
+}
+
 /** A death in a dream: what would drop stays with its keeper. Elsewhere, an unsafe death loses it. */
 function hold(event) {
   const { player, item } = event;
@@ -35,7 +41,9 @@ function hold(event) {
   const holder = dream.phosani ? "senga" : "shura";
   const held = heldItems(player) ?? { holder, items: [] };
   held.holder = holder;
-  held.items.push([item.getId(), item.getAmount()]);
+  held.items.push([item.getId(), item.getAmount(), metaOf(item)]);
+  // A new death's items are not paid for: the fee is due again, as with a gravestone's merge.
+  held.paid = false;
   held.announce = true;
   player.setAttribute(Common.HELD_ITEMS_ATTRIBUTE, held);
   event.handled = true;
@@ -71,13 +79,14 @@ function collect(player, holder) {
   }
   const { Item, ItemDefinition } = Common.core;
   const left = [];
-  for (const [id, amount] of held.items) {
-    const stackable = ItemDefinition.forId(id)?.isStackable?.();
+  for (const [id, amount, meta = null] of held.items) {
+    // An item with meta (charges, degradation) goes back as itself, into a slot of its own.
+    const stackable = meta == null && ItemDefinition.forId(id)?.isStackable?.();
     const fits = stackable ? inventory.contains(id) || inventory.getFreeSlots() > 0 : inventory.getFreeSlots() > 0;
     // A stack can't grow past its cap: what it can't hold stays here.
     const moved = !fits ? 0 : stackable && inventory.contains(id) ? inventory.getAddableAmount(new Item(id, amount)) : amount;
-    if (moved > 0) inventory.add(new Item(id, moved), false);
-    if (moved < amount) left.push([id, amount - moved]);
+    if (moved > 0) inventory.add(meta == null ? new Item(id, moved) : new Item(id, moved, JSON.parse(JSON.stringify(meta))), false);
+    if (moved < amount) left.push([id, amount - moved, meta]);
   }
   inventory.refreshItems?.();
   player.setAttribute(Common.HELD_ITEMS_ATTRIBUTE, left.length > 0 ? { holder, items: left, paid: true } : null);

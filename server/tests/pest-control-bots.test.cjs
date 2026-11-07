@@ -40,6 +40,8 @@ const emitted = [];
 const api = {
   core: PluginManager.getCoreApi(),
   registerShopCurrency() {},
+  // Rewards.PestControl announces a claimed reward (claimReward); the real api always has this.
+  emitCustomEvent() {},
   registerDefinitionSource() {},
   registerNpcCombatMethodProvider() {},
   getAreaManager: () => ({ areas: [] }),
@@ -678,7 +680,7 @@ test("XP rewards preserve points while the ordinary lockxp command has locked ex
   require("../plugins/commands/PlayerCommands.plugin").register({
     core: { PlayerRights: require("../dist/game/model/rights/PlayerRights").PlayerRights },
     onInterfaceActionButton() {},
-    getWorld() {}, getItemOnGroundManager() {}, getCombatFactory() {}, getPlayerPunishment() {},
+    getWorld() {}, getItemOnGroundManager() {}, getCombatFactory() {}, getPlayerPunishment() {}, persistAttribute() {},
     registerCommand: (name, handler) => commands.set(name, handler),
   });
   const { player, calls } = rewardPlayer({ points: 100 });

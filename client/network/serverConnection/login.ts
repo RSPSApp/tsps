@@ -88,6 +88,7 @@ export async function sendLogin(
     state.sessionLoginFlags = flags;
     // A fresh login picks its character again; only a reconnect reuses it.
     state.sessionCharacter = null;
+    state.loginOnWelcome = null;
     const attemptId = ++state.loginConnectAttemptId;
     if (state.webRtcConfig && !await resolveServerTransport()) return;
     if (attemptId !== state.loginConnectAttemptId) return;
@@ -217,6 +218,7 @@ export function suppressReconnection(): void {
     state.sessionUsername = null;
     state.sessionPassword = null;
     state.sessionLoginFlags = 0;
+    state.loginOnWelcome = null;
     clearLoginConnectRetryTimer();
     try {
         const g: any = (typeof window !== "undefined" ? window : globalThis) as any;

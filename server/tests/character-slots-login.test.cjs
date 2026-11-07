@@ -219,6 +219,35 @@ test('a first login writes no account until the handshake, and sends no list wit
   assert.deepEqual(Accounts.charactersOf('zezima').map((c) => c.name), ['Zezima'], 'on disk');
 });
 
+test('disabled slots keep the original welcome/login exchange and write no character account', async (t) => {
+  t.mock.method(PluginManager, 'getPluginConfig', (_key, fallback) => fallback);
+  const { channel, connection, response } = await connect('Solo', 'pw', LOGIN_FLAG_CHARACTER_SELECT);
+  assert.equal(response.success, true);
+  assert.deepEqual(channel.sent.map((b) => b[0]), [0, LOGIN_RESPONSE], 'no capability announcement or character list');
+  assert.equal(channel.sent[0].length, 9, 'the original fixed-size welcome');
+  const sent = channel.sent.length;
+  connection.inject([
+    { type: 'character_select', name: 'Solo' },
+    { type: 'character_create', name: 'Other' },
+    { type: 'character_delete', name: 'Other', confirmName: 'Other' },
+  ]);
+  await connection.idle();
+  assert.equal(channel.sent.length, sent, 'disabled feature packets are ignored');
+  await handshake(t, connection, 'Solo');
+  assert.equal(connection.getPlayer().getUsername(), 'Solo');
+  assert.equal(fs.existsSync(process.env.TSPS_ACCOUNTS_FILE), false);
+});
+
+test('enabled slots advertise support before the unchanged welcome', async () => {
+  const { channel } = await connect('Slots', 'pw', LOGIN_FLAG_CHARACTER_SELECT);
+  assert.equal(channel.sent[0][0], 6, 'existing plugin-message opcode');
+  assert.deepEqual(JSON.parse(channel.sent[0].subarray(3).toString()), {
+    channel: 'characters:slots', data: { maxPerAccount: 3 },
+  });
+  assert.equal(channel.sent[1][0], 0);
+  assert.equal(channel.sent[1].length, 9);
+});
+
 test('a brand-new name lists itself in memory and a closed connection leaves no account', async () => {
   const { connection, list } = await loginWithList('Newbie', 'pw');
   assert.deepEqual(list.entries.map((e) => [e.name, e.primary, e.hasSave]), [['Newbie', true, false]]);
@@ -315,24 +344,25 @@ test('a login without the picker enters the typed character, primary included', 
   assert.ok(Accounts.charactersOf('zezima')[1].lastPlayedAt >= before, 'last played is updated');
 });
 
-// With one slot the browser enters the list's default with no picker (the client's "disabled slots bypass the
-// picker, including accounts with old alts"), so the default is the typed character, as without the flag.
-test('with one slot the flagged login defaults to the typed character, not an old alt played last', async (t) => {
+test('disabled slots still protect existing ownership and enter the typed character without a list', async (t) => {
   t.mock.method(PluginManager, 'getPluginConfig', (_key, fallback) => fallback);
   seedSave('Zezima', { passwordHash: hashOf('pw') });
   Accounts.ensure('Zezima', 1);
   Accounts.addCharacter('zezima', 'Alt', 2);
   Accounts.touchLastPlayed('zezima', 'Alt', 3);
-  const { connection, list } = await loginWithList('Zezima', 'pw');
-  assert.equal(list.max, 1);
-  assert.equal(list.entries[list.defaultIndex].name, 'Zezima', 'the typed primary is the default');
-  await select(connection, list.entries[list.defaultIndex].name);
+  const { connection, channel } = await connect('Zezima', 'pw', LOGIN_FLAG_CHARACTER_SELECT);
+  assert.equal(packetsOf(channel, CHARACTER_LIST).length, 0);
   await handshake(t, connection, 'Zezima');
-  assert.equal(connection.getPlayer()?.getUsername(), 'Zezima', 'the primary enters');
+  assert.equal(connection.getPlayer()?.getUsername(), 'Zezima');
   net.ClientConnection.pendingNames.clear();
-  const alt = await loginWithList('Alt', 'pw');
-  assert.equal(alt.list.entries[alt.list.defaultIndex].name, 'Alt', 'a typed alt is still the default');
+  const alt = await connect('Alt', 'pw', LOGIN_FLAG_CHARACTER_SELECT);
+  assert.equal(alt.response.success, true);
+  assert.equal(packetsOf(alt.channel, CHARACTER_LIST).length, 0);
+  await handshake(t, alt.connection, 'Alt');
+  assert.equal(alt.connection.getPlayer()?.getUsername(), 'Alt');
   net.ClientConnection.pendingNames.clear();
+  Accounts.removeCharacter('zezima', 'Alt');
+  assert.equal((await login('Alt', 'pw')).success, false, 'switching off cannot release a deleted identity');
 });
 
 test('select swaps the character, is refused after handshake, and refuses a banned one', async (t) => {

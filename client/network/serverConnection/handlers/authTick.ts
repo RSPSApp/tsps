@@ -7,6 +7,13 @@ import { LOGIN_FLAG_CHARACTER_SELECT, LOGIN_FLAG_TOKEN } from "../constants";
 import { state } from "../state";
 
 export function handleAuthTickMessage(msg: any): boolean {
+    if (msg.type === "plugin_message" && msg.payload?.channel === "characters:slots") {
+        const max = msg.payload.data?.maxPerAccount;
+        if (!state.lastWelcome && Number.isInteger(max) && max >= 2 && max <= 6) {
+            state.characterSlotsEnabled = true;
+        }
+        return true;
+    }
     if (msg.type === "welcome") {
         console.log(
             `[ws] welcome tickMs=${msg.payload.tickMs} serverTime=${msg.payload.serverTime}`,
@@ -18,6 +25,9 @@ export function handleAuthTickMessage(msg: any): boolean {
             const serverNow = Number(msg.payload.serverTime) || 0;
             if (serverNow > 0) state.serverClockOffsetMs = now - serverNow;
         } catch {}
+        const login = state.loginOnWelcome;
+        state.loginOnWelcome = null;
+        login?.();
         for (const cb of state.welcomeListeners) cb(msg.payload);
         return true;
     }

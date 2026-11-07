@@ -130,7 +130,6 @@ import type {
 import {
     sendEmote as netSendEmote,
     sendBankCustomQuantity,
-    LOGIN_FLAG_CHARACTER_SELECT,
     LOGIN_FLAG_REMEMBER,
     LOGIN_FLAG_TOKEN,
     disposeServerConnection,
@@ -5464,7 +5463,7 @@ export class OsrsClient {
             ? this.loginState.getRememberedLogin()
             : undefined;
         if (remembered) {
-            sendLogin(remembered.username, remembered.token, revision, LOGIN_FLAG_TOKEN | LOGIN_FLAG_CHARACTER_SELECT);
+            sendLogin(remembered.username, remembered.token, revision, LOGIN_FLAG_TOKEN);
             return;
         }
         this.loginState.loginWithToken = false;
@@ -5473,7 +5472,7 @@ export class OsrsClient {
             this.loginState.username.trim(),
             this.loginState.password,
             revision,
-            (this.loginState.rememberUsername ? LOGIN_FLAG_REMEMBER : 0) | LOGIN_FLAG_CHARACTER_SELECT,
+            this.loginState.rememberUsername ? LOGIN_FLAG_REMEMBER : 0,
         );
     }
 

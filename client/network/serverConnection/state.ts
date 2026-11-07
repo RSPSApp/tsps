@@ -98,6 +98,8 @@ export const state = {
     autoSendHandshake: true,
     playerSyncContext: null as PlayerSyncContext | null,
     playerUpdateDecoder: null as PlayerUpdateDecoder | null,
+    characterSlotsEnabled: false,
+    loginOnWelcome: null as (() => void) | null,
     lastWelcome: undefined as { tickMs: number; serverTime: number } | undefined,
     lastAnim: undefined as PlayerAnimPayload | undefined,
     lastHandshake: undefined as

@@ -67,6 +67,9 @@ export function initServerConnection(url: string = DEFAULT_URL): void {
             ? new WebRtcGameSocket(state.webRtcConfig)
             : new WebSocket(url);
         const ws = state.socket;
+        state.lastWelcome = undefined;
+        state.characterSlotsEnabled = false;
+        state.loginOnWelcome = null;
         try {
             ws.binaryType = "arraybuffer";
         } catch {}

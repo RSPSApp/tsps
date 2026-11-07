@@ -20,8 +20,15 @@ Set `characters:maxPerAccount` in `world.local.json` under `pluginConfig`:
 ```
 
 - The default is 1 (additional characters disabled). Values are rounded down and kept between 1 and 6, the most rows the picker can show. A value that is not a number falls back to 1.
-- 1 turns creation off and skips the picker. The character whose name was typed enters, as on clients without a picker, so an alt kept from a higher cap never hides the primary.
+- 1 disables character slots and uses the original login protocol: no capability announcement, character packets, selection flag or fallback delay. No new character-account records are written. Existing ownership and deleted-name reservations remain protected. The character whose name was typed enters, as on clients without a picker, so an alt kept from a higher cap never hides the primary.
 - The in-browser host (IndexedDB saves) keeps no account file between reloads, so it always has 1.
+
+## How the client detects support
+
+Only an enabled server sends a `characters:slots` message over the existing plugin-message channel,
+before its unchanged welcome packet. The client waits for that welcome and sets the character-select
+login flag only when support was advertised on the current connection. This is repeated on reconnect;
+a server with slots disabled (or an older server) follows the original login/handshake immediately.
 
 ## Where accounts live
 

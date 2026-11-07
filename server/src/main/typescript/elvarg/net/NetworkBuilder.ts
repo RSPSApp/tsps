@@ -447,6 +447,9 @@ export class ClientConnection {
       this.cleanup("socket_error");
     });
     channel.onClose(() => this.cleanup("socket_close"));
+    if (maxCharactersPerAccount() > 1) {
+      this.send(encodePluginMessage("characters:slots", { maxPerAccount: maxCharactersPerAccount() }));
+    }
     this.send(encodeWelcome(GameConstants.GAME_ENGINE_PROCESSING_CYCLE_RATE, Date.now()));
   }
 
@@ -1172,6 +1175,7 @@ export class ClientConnection {
   }
 
   private async login(rawUsername: string, password: string, revision: number, flags = 0): Promise<void> {
+    const characterSlotsEnabled = maxCharactersPerAccount() > 1;
     const tokenLogin = (flags & LOGIN_FLAG_TOKEN) !== 0;
     // A league world logs the account's league character in: a separate save under the same name.
     const profile = GameConstants.WORLD_PROFILE;
@@ -1212,8 +1216,8 @@ export class ClientConnection {
       // A deleted character's name is never a new login (only its own account re-creates it):
       // its display names, clan rank and punishments are still keyed by it.
       deletedName = owner === undefined && Accounts.isDeleted(typedName);
-      account = owner ?? Accounts.key(typedName);
-      primaryName = Accounts.primaryOf(account) ?? typedName;
+      account = owner ?? (characterSlotsEnabled ? Accounts.key(typedName) : "");
+      primaryName = (account ? Accounts.primaryOf(account) : undefined) ?? typedName;
       accountNames = [...Accounts.charactersOf(account).map((character) => character.name), typedName];
     } catch (error) {
       console.error(`[login] failed to read the account of ${typedName}`, error);
@@ -1231,7 +1235,7 @@ export class ClientConnection {
     }
     // One account online at a time, whichever of its characters.
     const accountKeys = accountNames.map(pendingKey);
-    const accountKey = pendingKey(account);
+    const accountKey = pendingKey(account || typedName);
     if (
       World.getPlayers().isFull() ||
       accountNames.some((name) => World.getPlayerByName(name)) ||
@@ -1352,7 +1356,7 @@ export class ClientConnection {
       return;
     }
     // The default character enters at handshake unless the client selects another first.
-    const wantsCharacterList = (flags & LOGIN_FLAG_CHARACTER_SELECT) !== 0;
+    const wantsCharacterList = characterSlotsEnabled && (flags & LOGIN_FLAG_CHARACTER_SELECT) !== 0;
     let characters: AccountCharacter[];
     let defaultIndex: number;
     let username: string;
@@ -1362,7 +1366,7 @@ export class ClientConnection {
     try {
       // An account record is written only for a name with a save; a name never entered stays in
       // memory until its handshake (enterWorld), so a login alone can't claim a name for good.
-      if (credentials) Accounts.ensure(primaryName);
+      if (characterSlotsEnabled && credentials) Accounts.ensure(primaryName);
       characters = Accounts.entryOf(account)
         ? Accounts.charactersOf(account)
         : [{ name: primaryName, createdAt: Date.now(), lastPlayedAt: 0 }];
@@ -1415,6 +1419,7 @@ export class ClientConnection {
 
   /** Between login and handshake: the character the handshake enters instead of the default. */
   private selectCharacter(rawName: string): void {
+    if (maxCharactersPerAccount() === 1) return;
     const pending = this.pending;
     if (!pending || this.player || this.closed) {
       this.send(encodeCharacterResult(false, 4, "There is no character to choose right now."));
@@ -1484,6 +1489,7 @@ export class ClientConnection {
 
   /** Between login and handshake: adds a character to the account. Creating writes no save. */
   private createCharacter(rawName: string): void {
+    if (maxCharactersPerAccount() === 1) return;
     const pending = this.pending;
     if (!pending || this.player || this.closed) {
       this.send(encodeCharacterResult(false, 4, "There is no account to add a character to right now."));
@@ -1542,6 +1548,7 @@ export class ClientConnection {
 
   /** Between login and handshake: deletes a non-primary character and its saves. */
   private async deleteCharacter(rawName: string, rawConfirm: string): Promise<void> {
+    if (maxCharactersPerAccount() === 1) return;
     const pending = this.pending;
     if (!pending || this.player || this.closed) {
       this.send(encodeCharacterResult(false, 4, "There is no account to delete a character from right now."));
@@ -1693,7 +1700,7 @@ export class ClientConnection {
     this.startIdleCheck();
     CONNECTIONS.set(player, this);
     this.releasePendingName();
-    if (pending.account) {
+    if (pending.account && maxCharactersPerAccount() > 1) {
       try {
         // A name entering for the first time gets its account record now (login kept it in memory).
         if (!Accounts.entryOf(pending.account)) Accounts.ensure(pending.characters[0]?.name ?? pending.username);

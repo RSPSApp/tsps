@@ -17,6 +17,29 @@ const Shared = require("./Shared.TombsOfAmascut");
 
 const ANIMATION = { FORTIFY: 3676, CHISEL: 8833, FUSE: 791 };
 const WARD_SOUL_RUNES = 10000;
+/** The powered staves' wording for a preset copy (Presets.PvpMode tags them untradeable, unbankable and preset). */
+const PRESET_TEXT = "Preset items cannot be used for this.";
+
+/** A preset (or meta-untradeable, unbankable) copy never pays toward a fresh, tradeable item. */
+function restricted(item) {
+  return !!item && (item.isPresetItem?.() === true || item.isUntradeable?.() === true || item.isUnbankable?.() === true);
+}
+
+/** How many plain copies of `id` the inventory holds. */
+function plainAmount(inventory, id) {
+  return inventory.getItems().reduce((total, item) => (item?.getId() === id && !restricted(item) ? total + item.getAmount() : total), 0);
+}
+
+/** Takes `amount` of `id` from plain copies only, by slot. */
+function takePlain(inventory, id, amount) {
+  let left = amount;
+  inventory.getItems().forEach((item, slot) => {
+    if (left <= 0 || item?.getId() !== id || restricted(item)) return;
+    const taken = Math.min(left, item.getAmount());
+    inventory.deleteAtSlot(slot, taken);
+    left -= taken;
+  });
+}
 
 function ids() {
   return Shared.core().ItemIdentifiers;
@@ -129,16 +152,19 @@ function fortifyWard({ player }) {
     player.sendMessage("You need a Smithing level of at least 90 to fortify Elidinis' ward.");
     return true;
   }
-  if (inventory.getAmount(I.SOUL_RUNE) < WARD_SOUL_RUNES) {
-    player.sendMessage("You need at least 10,000 soul runes to fortify Elidinis' ward.");
+  // Only plain soul runes pay: the fortified ward is a fresh, tradeable item.
+  if (plainAmount(inventory, I.SOUL_RUNE) < WARD_SOUL_RUNES) {
+    player.sendMessage(inventory.getAmount(I.SOUL_RUNE) >= WARD_SOUL_RUNES
+      ? PRESET_TEXT
+      : "You need at least 10,000 soul runes to fortify Elidinis' ward.");
     return true;
   }
   Shared.confirm(player, "Consume 10,000 soul runes to fortify Elidinis' ward?", () => {
     craft(player, ANIMATION.FUSE, () => {
-      if (!inventory.contains(I.ARCANE_SIGIL) || !inventory.contains(I.ELIDINIS_WARD) || inventory.getAmount(I.SOUL_RUNE) < WARD_SOUL_RUNES) return;
+      if (!inventory.contains(I.ARCANE_SIGIL) || !inventory.contains(I.ELIDINIS_WARD) || plainAmount(inventory, I.SOUL_RUNE) < WARD_SOUL_RUNES) return;
       inventory.deleteNumber(I.ARCANE_SIGIL, 1);
       inventory.deleteNumber(I.ELIDINIS_WARD, 1);
-      inventory.deleteNumber(I.SOUL_RUNE, WARD_SOUL_RUNES);
+      takePlain(inventory, I.SOUL_RUNE, WARD_SOUL_RUNES);
       inventory.addItem(new Item(I.ELIDINIS_WARD_F_, 1));
       player.getSkillManager().addExperiences(Skill.PRAYER, 260);
       player.getSkillManager().addExperiences(Skill.SMITHING, 260);

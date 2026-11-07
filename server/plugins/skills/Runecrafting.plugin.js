@@ -22,6 +22,7 @@ const RUINS_DATA = require("./data/runecrafting-ruins.json");
 const OURANIA_DATA = require("./data/ourania-altar.json");
 const Pouches = require("./runecrafting/Pouches.Runecrafting");
 const Combination = require("./runecrafting/Combination.Runecrafting");
+const Raiments = require("./runecrafting/Raiments.Runecrafting");
 let RUINS;
 /** The exit portal's sound (synth 200). */
 const EXIT_PORTAL_SOUND = 200;
@@ -426,6 +427,14 @@ function craftOurania(player) {
     entry.essenceIds.add(essence.id);
     crafted.set(rune, entry);
   }
+  // The raiments' bonus runes, a share of each colour's base runes and no XP (Wiki: Ourania Altar).
+  for (const [rune, entry] of crafted) {
+    const bonus = Raiments.bonusRunes(player, entry.essence);
+    if (bonus <= 0) continue;
+    inventory.addItem(new Item(rune.runeId, bonus));
+    entry.runeAmount += bonus;
+    entry.bonus = bonus;
+  }
 
   player.performGraphic(CRAFT_RUNES_GRAPHIC);
   player.performAnimation(CRAFT_RUNES_ANIMATION);
@@ -434,7 +443,7 @@ function craftOurania(player) {
   if (diary) spam(player, OURANIA_DIARY_MESSAGE);
   player.getSkillManager().addExperiences(Skill.RUNECRAFTING, xp);
   // The rift guardian rolls per essence at the altar's own base; each rune is reported for its colour.
-  for (const [rune, { essence, runeAmount, essenceIds }] of crafted) {
+  for (const [rune, { essence, runeAmount, essenceIds, bonus }] of crafted) {
     pluginApi.emitCustomEvent("runecrafting:success", {
       player,
       skill: Skill.RUNECRAFTING,
@@ -443,6 +452,7 @@ function craftOurania(player) {
       runeId: rune.runeId,
       amountPerEssence: 1,
       runeAmount,
+      bonusRunes: bonus ?? 0,
       objectId: OURANIA_ALTAR,
       essenceIds: [...essenceIds],
     });
@@ -505,12 +515,17 @@ function handleCraftRunes(event) {
   const inventory = player.getInventory();
   const preview = new pluginApi.core.Inventory(player).setItems(inventory.getCopiedItems());
   const plan = [];
+  // The raiments' bonus runes (no XP) come with the first stack, rolled once for the whole craft.
+  let bonus = Raiments.bonusRunes(
+    player, essenceIds.reduce((sum, essenceId) => sum + preview.getAmount(essenceId), 0) * amountPerEssence);
+  const bonusRunes = bonus;
   for (const essenceId of essenceIds) {
     // Simulate each complete input stack in order: its freed slot can hold the runes.
     const count = preview.getAmount(essenceId);
     if (count <= 0) continue;
     preview.deleted(essenceId, count, false);
-    const output = new Item(runeData.runeId, count * amountPerEssence);
+    const output = new Item(runeData.runeId, count * amountPerEssence + bonus);
+    bonus = 0;
     if (preview.getAddableAmount(output) < output.getAmount()) {
       inventory.full();
       event.handled = true;
@@ -545,6 +560,8 @@ function handleCraftRunes(event) {
       rolls: craftedEssence,
       runeId: runeData.runeId,
       amountPerEssence,
+      runeAmount: craftedEssence * amountPerEssence + bonusRunes,
+      bonusRunes,
       source: "altar",
       altarId: event.objectId,
       objectId: event.objectId,
@@ -1049,6 +1066,7 @@ module.exports = {
 
     Pouches.attach(api);
     Combination.attach(api);
+    Raiments.attach(api);
     api.onCustomEvent("runecrafting:altar-rune", answerAltarRune);
 
     for (const talisman of TALISMANS.values()) {

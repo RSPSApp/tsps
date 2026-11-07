@@ -26,6 +26,8 @@ export class NPCMovementCoordinator {
         }
 
         if (!this.npc.getMovementQueue().getMobility().canMove()) {
+            // An immobile NPC already home has finished retreating without taking a step.
+            if (this.npc.getLocation().equals(this.npc.getSpawnPosition())) this.coordinateState = CoordinateState.HOME;
             return;
         }
 

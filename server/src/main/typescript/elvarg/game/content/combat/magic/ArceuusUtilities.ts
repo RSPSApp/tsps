@@ -1,5 +1,6 @@
 import { Player } from "../../../entity/impl/player/Player";
 import { Skill } from "../../../model/Skill";
+import { PluginManager } from "../../../../plugins/PluginManager";
 
 const CLEANING_XP = new Map<number, number>([
     [199, 2], [201, 4], [203, 5], [205, 6], [207, 7], [209, 10],
@@ -19,10 +20,16 @@ export class ArceuusUtilities {
 
     public static degrime(player: Player): void {
         let experience = 0;
+        const boost = { player, skill: Skill.HERBLORE, boost: 0 };
+        PluginManager.emitCustomEvent("skills:level-boost", boost);
+        const level = player.getSkillManager().getCurrentLevel(Skill.HERBLORE) + Math.max(0, boost.boost | 0);
         for (const item of player.getInventory().getValidItems()) {
             const grimyId = item.getId();
             const cleanId = CLEAN_HERB.get(grimyId);
             if (cleanId != null) {
+                const herb: { grimyId: number; clean: number | null; level: number | null } = { grimyId, clean: null, level: null };
+                PluginManager.emitCustomEvent("herblore:clean", herb);
+                if (herb.level == null || level < herb.level) continue;
                 item.setId(cleanId);
                 experience += (CLEANING_XP.get(grimyId) ?? 0) / 2;
             }

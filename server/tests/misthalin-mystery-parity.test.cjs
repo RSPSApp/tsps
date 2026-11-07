@@ -22,6 +22,7 @@ function harness(name) {
     submit(task) { task.setRunning(true); tasks.push(task); },
     cancelTasks(key) { tasks.filter(task => task.key === key).forEach(task => task.stop()); },
   }, ObjectManager: { register: object => objects.push(object), deregister: noop }, ItemOnGroundManager: { registerLocation: (...args) => ground.push(args) } },
+    getTaskManager: () => api.core.TaskManager,
     persistAttribute: noop,
     onNpcInteraction: (name, actions) => npcActions.set(name, actions),
     onCustomEvent: (key, fn) => (events[key] ??= []).push(fn),
@@ -76,6 +77,7 @@ function player() {
     sendInterfaceRemoval() { p.manager.reset(); p.prompt = null; return packet; },
   }, { get: (t, key) => t[key] ?? ((...args) => { log.push([key, ...args]); return packet; }) });
   const p = { attrs, items, configs, varbits, log, xp, messages: [], animations: [], prompt: null, text: '', index: nextIndex++,
+    getHitpoints: () => 10, getForceMovement: () => null, setSkillAnimation: noop,
     getAttribute: key => attrs.get(key), setAttribute: (key, value) => attrs.set(key, value), getInventory: () => inv,
     getBanks: () => [{ getAmount: id => p.bank?.get(id) ?? 0 }], getEquipment: () => ({ get: () => p.weapon ? { getId: () => p.weapon } : null, deleteNumber: () => { p.weapon = null; } }),
     getPacketSender: () => packet, getDialogueManager: () => p.manager, getUpdateFlag: () => ({ flag: noop }),
@@ -196,6 +198,36 @@ test('the native gemstone panel waits for six switches and gives the key only on
   object(h,p,core.ObjectIdentifiers.FIREPLACE_24);for(const child of [19,3,11,23,7,15])press(child);assert.equal(h.quest.getStage(p),105);assert.equal(p.items.get(I.SAPPHIRE_KEY_2),undefined);
   object(h,p,core.ObjectIdentifiers.FIREPLACE_24);h.continueUntil(p,()=>!p.manager.getCurrent());assert.equal(p.items.get(I.SAPPHIRE_KEY_2),1);
 });
+test('gemstone indicators retain each chosen gem in input order and clear on a new attempt',()=>{
+  const h=harness('MisthalinMystery'),p=player();h.quest.setStage(p,100);
+  const models=()=>p.log.filter(row=>row[0]==='sendInterfaceRawModel');
+  const defaults=Array.from({length:6},(_,i)=>['sendInterfaceRawModel',(555<<16)|(35+i),32348]);
+  object(h,p,core.ObjectIdentifiers.FIREPLACE_24);assert.deepEqual(models(),defaults);
+  const press=child=>h.hooks.onInterfaceActionButton.at(-1)({player:p,buttonId:(555<<16)|child});
+  for(const child of [3,15,7,19,11])press(child);
+  assert.deepEqual(models().slice(6),[32333,2586,32342,32345,32349].map((id,i)=>['sendInterfaceRawModel',(555<<16)|(35+i),id]));
+  assert.equal(p.varbits.get(4050),5);assert.equal(h.quest.getStage(p),100);
+  press(23);assert.deepEqual(models().slice(-7),[['sendInterfaceRawModel',(555<<16)|40,32334],...defaults]);
+  object(h,p,core.ObjectIdentifiers.FIREPLACE_24);assert.deepEqual(models().slice(-6),defaults);
+  press(19);press(19);assert.deepEqual(models().slice(-2),[35,36].map(child=>['sendInterfaceRawModel',(555<<16)|child,32345]));
+});
+
+test('taking the table knife plays the native pickup before its grant without duplicate or refused pickups',()=>{
+  const h=harness('MisthalinMystery'),p=player();
+  object(h,p,core.ObjectIdentifiers.TABLE_258);object(h,p,core.ObjectIdentifiers.TABLE_258);
+  assert.equal(p.items.get(I.KNIFE),undefined);h.tick(1);
+  assert.deepEqual(p.animations,[832]);assert.ok(p.log.some(row=>row[0]==='sendSoundEffect'&&row[1]===2581));
+  assert.equal(p.items.get(I.KNIFE),undefined);h.tick(1);
+  assert.equal(p.items.get(I.KNIFE),1);assert.equal(p.blocked,false);assert.deepEqual(p.animations,[832]);
+  object(h,p,core.ObjectIdentifiers.TABLE_258);h.tick(2);
+  assert.equal(p.items.get(I.KNIFE),1);assert.deepEqual(p.animations,[832]);
+  const full=player();full.full=true;object(h,full,core.ObjectIdentifiers.TABLE_258);h.tick(2);
+  assert.equal(full.items.get(I.KNIFE),undefined);assert.deepEqual(full.animations,[]);
+  const leaving=player();object(h,leaving,core.ObjectIdentifiers.TABLE_258);h.tick(1);
+  h.hooks.onPlayerLogout[0]({player:leaving});h.tick(2);
+  assert.equal(leaving.items.get(I.KNIFE),undefined);assert.equal(leaving.blocked,false);
+});
+
 test('riddle notes open the captured parchment rather than chat spam',()=>{
   const h=harness('MisthalinMystery'),p=player();h.quest.setStage(p,35);h.hooks.onItemAction[0]({player:p,itemId:I.NOTES_5,option:'Read'});
   assert.equal(h.quest.getStage(p),40);assert.ok(p.log.some(row=>row[0]==='sendInterface'&&row[1]===70));assert.ok(p.log.some(row=>row[0]==='text'&&row[1]===((70<<16)|3)&&row[2].includes('work of art')));assert.equal(p.messages.length,0);

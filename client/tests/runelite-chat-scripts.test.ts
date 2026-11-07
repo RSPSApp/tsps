@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { IndexType } from "../rs/cache/IndexType";
 import { Opcodes } from "../rs/cs2/Opcodes";
@@ -51,6 +51,14 @@ assert.deepEqual(dispatched, [57, 57]);
 
 // --- RuneLite's chat scripts replace the cache's (same SHA-256 as RuneLite's .hash files) -------
 assert.deepEqual(RUNELITE_CHAT_SCRIPTS.map((s) => [s.id, s.name]), [[84, "ChatBuilder"], [89, "ChatSplitBuilder"], [4742, "ChatTimestamp"]]);
+
+// Split messages already have a native builder; a second HUD renderer duplicates them and
+// bypasses the game's stretched-layout transform.
+assert.doesNotMatch(
+    readFileSync(resolve(__dirname, "../runelite/client/plugins/index.ts"), "utf8"),
+    /SplitPrivateChat/,
+    "private messages must use the cache's split-chat widgets only",
+);
 
 // CI has no server cache, so it stops after the checks above.
 if (!existsSync(resolve(__dirname, "../../server/caches/caches.json"))) {

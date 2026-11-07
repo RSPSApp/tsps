@@ -33,6 +33,11 @@ const NO_EMPTY_ITEM = -1;
 /** Barcrawl reward: the guard's automatic vial-smashing toggle (barbarian guard). */
 const AUTO_SMASH_VIALS_VARBIT = 5668;
 const STAMINA_DURATION_MS = 2 * 60 * 1000;
+/** Extended stamina potion (Wiki): 40% run energy and a 4-minute drain cut per dose. */
+const EXTENDED_STAMINA_ENERGY = 40;
+const EXTENDED_STAMINA_DURATION_MS = 4 * 60 * 1000;
+/** A ring of endurance spends one charge per stamina dose and two per extended dose (Wiki). */
+const EXTENDED_STAMINA_RING_CHARGES = 2;
 const DIVINE_DURATION_MS = 5 * 60 * 1000;
 const OVERLOAD_DURATION_MS = 5 * 60 * 1000;
 const OVERLOAD_REFRESH_MS = 15 * 1000;
@@ -437,9 +442,16 @@ function applyStamina(player) {
   applyStaminaRequest({player});
 }
 
-function applyStaminaRequest({player,energy=20,durationMs=STAMINA_DURATION_MS}) {
-  // Ring of endurance doubles this by mutating the payload (Wiki).
-  const request = { player, energy, durationMs };
+function applyExtendedStamina(player) {
+  applyStaminaRequest({
+    player, energy: EXTENDED_STAMINA_ENERGY, durationMs: EXTENDED_STAMINA_DURATION_MS,
+    charges: EXTENDED_STAMINA_RING_CHARGES,
+  });
+}
+
+function applyStaminaRequest({player,energy=20,durationMs=STAMINA_DURATION_MS,charges=1}) {
+  // Ring of endurance doubles this by mutating the payload and spends `charges` (Wiki).
+  const request = { player, energy, durationMs, charges };
   pluginApi.emitCustomEvent("potions:stamina-effect", request);
   restoreRunEnergy(player, request.energy);
   player.setAttribute(ATTR_STAMINA_END, Date.now() + request.durationMs);
@@ -906,6 +918,11 @@ registerPotion({
   name: "Stamina potion",
   chains: [doseChain("STAMINA_POTION_4_", "STAMINA_POTION_3_", "STAMINA_POTION_2_", "STAMINA_POTION_1_")],
   effect: applyStamina,
+});
+registerPotion({
+  name: "Extended stamina potion",
+  chains: [doseChain("EXTENDED_STAMINA_POTION_4_", "EXTENDED_STAMINA_POTION_3_", "EXTENDED_STAMINA_POTION_2_", "EXTENDED_STAMINA_POTION_1_")],
+  effect: applyExtendedStamina,
 });
 
 registerPotion({

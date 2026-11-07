@@ -122,7 +122,7 @@ Every line below is a spam message (rsprox captures 335, 338, 339, 691, 2601, 30
 - **Rogue equipment:** 15% double loot per piece; the full set of 5 always doubles. A doubled coin pouch gives one pouch plus that pouch's coins (the lowest of a range). Clue scrolls are never doubled.
 - **Shadow Veil:** a 15% chance to avoid the stun, rolled first.
 - **Dodgy necklace:** a 25% chance to avoid the stun and damage. It has 10 charges, stored on the player; the last one crumbles it.
-- **Coin pouches:** Open-all says "You open all of the pouches and receive a total of N coins." as a spam message with synth 2115, even for a single pouch (2601, 3059 and others). Open (one pouch) isn't captured and keeps "You open the pouch and find N coins.". A stack of 28 of one kind blocks pickpocketing until the pouches are opened. With a full inventory, a coins-only target can still be pickpocketed while its pouch stack has room.
+- **Coin pouches:** Open-all says "You open all of the pouches and receive a total of N coins." as a spam message with synth 2115, even for a single pouch (2601, 3059 and others). Open (one pouch) isn't captured and keeps "You open the pouch and find N coins.". A stack of 28 of one kind blocks pickpocketing until the pouches are opened; the Ardougne Diary raises that to 56 (Medium), 84 (Hard) and 140 (Elite), see [diary-rewards.md](diary-rewards.md#ardougne-pickpocketing). With a full inventory, a coins-only target can still be pickpocketed while its pouch stack has room.
 
 ## Requirements
 

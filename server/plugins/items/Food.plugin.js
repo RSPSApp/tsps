@@ -140,16 +140,25 @@ function getAnglerfishHeal(hitpointsLevel) {
 }
 
 /**
- * Wiki: anglerfish cannot overheal while its eater is in combat in a PvP
- * area, with either a player or an NPC; everywhere else the heal may raise
- * Hitpoints above the base maximum.
+ * Wiki (Anglerfish, Haddock): a food that overheals cannot do so while its eater is in combat in
+ * a PvP area, with either a player or an NPC; everywhere else the heal may raise Hitpoints above
+ * the base maximum.
  */
-function canAnglerfishOverheal(player) {
+function canOverheal(player) {
   if (!core.Wilderness.isPvpArea(player?.getLocation?.())) {
     return true;
   }
   const combat = player.getCombat?.();
   return combat?.getTarget?.() == null && combat?.getAttacker?.() == null;
+}
+
+/**
+ * How far a food's `overheal` ({ percent, max }) may lift Hitpoints above the base level: a share of
+ * the level, rounded down, at most `max` (Wiki: haddock 20% or 10, whichever is lower).
+ */
+function overhealAllowance(overheal, maxHp) {
+  if (!overheal) return 0;
+  return Math.min(overheal.max, Math.floor((maxHp * overheal.percent) / 100));
 }
 
 /**
@@ -321,9 +330,10 @@ function applyFood(player, food, random = Math.random) {
   let healed;
   if (food.special === "anglerfish") {
     const amount = getAnglerfishHeal(maxHp);
-    healed = healBy(player, amount, canAnglerfishOverheal(player) ? amount : 0);
+    healed = healBy(player, amount, canOverheal(player) ? amount : 0);
   } else {
-    healed = healBy(player, healAmount(food.heal, maxHp, random, baseLevels(player)));
+    const allowance = canOverheal(player) ? overhealAllowance(food.overheal, maxHp) : 0;
+    healed = healBy(player, healAmount(food.heal, maxHp, random, baseLevels(player)), allowance);
   }
   applyStats(player, food);
   if (food.poisonImmunity) {
@@ -395,7 +405,7 @@ module.exports = {
   eatDelay,
   foodItemIds,
   _test: {
-    getAnglerfishHeal, canAnglerfishOverheal, healAmount, rollOutcome, foodBite, leftover, eatDelay, applyFood,
+    getAnglerfishHeal, canOverheal, overhealAllowance, healAmount, rollOutcome, foodBite, leftover, eatDelay, applyFood,
     FOOD_EATEN_ATTRIBUTE,
   },
   register(api) {

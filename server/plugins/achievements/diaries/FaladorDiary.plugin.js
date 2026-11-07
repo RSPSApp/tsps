@@ -185,8 +185,9 @@ function onHerbloreMade({ player, itemId }) {
   if (SARADOMIN_BREW_IDS.has(itemId) && inZone(player.getLocation(), FALADOR_EAST_BANK)) award(player, TASK.saradominBrew);
 }
 
-function onRunecraftingSuccess({ player, runeId, rolls, amountPerEssence }) {
-  const made = Number(rolls) * Number(amountPerEssence);
+function onRunecraftingSuccess({ player, runeId, rolls, amountPerEssence, bonusRunes }) {
+  // The Raiments of the Eye's bonus runes count (Wiki: Raiments of the Eye).
+  const made = Number(rolls) * Number(amountPerEssence) + (Number(bonusRunes) || 0);
   if (runeId === core.ItemIdentifiers.MIND_RUNE && made >= 140) award(player, TASK.mindRunes);
   else if (runeId === core.ItemIdentifiers.AIR_RUNE && made >= 252) award(player, TASK.airRunes);
 }

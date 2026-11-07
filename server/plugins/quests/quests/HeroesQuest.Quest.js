@@ -106,6 +106,9 @@ module.exports = function registerHeroesQuest(api) {
   const SLIME_ACTION_ID = "PTUCAO";
 
   let quest;
+  /** The Heroes' Guild door's two leaves, on the guild's east wall (x 2902: Helemos is inside at 2894, Achietties outside at 2903). */
+  const GUILD_DOORS = new Set([2624, 2625]);
+  const GUILD_DOOR_X = 2902;
 
   const has = (player, itemId) => player.getInventory().getAmount(itemId) > 0;
   const give = (player, itemId, amount = 1) => player.getInventory().adds(itemId, amount);
@@ -457,4 +460,19 @@ module.exports = function registerHeroesQuest(api) {
   api.onItemOnObject(handleChestItem, { noted: false });
   api.onItemAction(handleItemAction);
   api.onPlayerLogin(handleLogin);
+  // The generic Doors plugin asks door:toggle before opening any door, as the Champions' Guild's does.
+  api.onCustomEvent("door:toggle", guardGuildDoor);
+
+  /**
+   * Wiki (Heroes' Guild): "The guild is only accessible to members who have completed the Heroes' Quest." Its door
+   * (2624/2625 at 2902,3510-3511) opened for anyone. Refused going in; anyone inside may always leave. TSPS wording
+   * for the line, as the Legends' Guild door's.
+   */
+  function guardGuildDoor(event) {
+    if (!GUILD_DOORS.has(event.objectId) || event.handled) return;
+    const { player } = event;
+    if (quest.isComplete(player) || player.getLocation().getX() < GUILD_DOOR_X) return;
+    event.handled = true;
+    player.sendMessage("You need to complete the Heroes' Quest before you can enter the Heroes' Guild.");
+  }
 };

@@ -5,6 +5,8 @@
 // 26767 at 3049,10165,3 face 2 and 26769 at 3035,10158,0 face 0. No capture moves the boulder or uses these two.
 // Fixture seams: the boulder is made here at the spawn tile, not the world's own spawn, and npc.process() doesn't
 // run. The Agility way in is in wilderness-gwd-entry.test.cjs. No client ran.
+// One move a tick: the move is instant and the far tile is next to the boulder, so each call of the handler in one
+// tick moved the player across again, for 5.5 XP each way in.
 process.env.DISABLE_PLAYER_BOTS = "1";
 const assert = require("node:assert/strict");
 const path = require("node:path");
@@ -163,4 +165,23 @@ test("the whole route from the cavern, by packets", async (t) => {
   tick(f, 12);
   assert.deepEqual(at(f), INSIDE);
   assert.equal(done(f), true);
+});
+
+// The PR's own case, through the plugin's registered handler called directly: six calls in one tick move the player
+// once. Over native packets a burst of Move clicks already crosses once (a click sets one walk-to interaction), so
+// this calls the handler itself.
+test("several Move calls in one tick move the player once, with one 5.5 XP", () => {
+  let move;
+  require("../plugins/areas/WildernessGodWarsBoulder.plugin").register({ core, onNpcInteraction: (handler) => { move = handler; } });
+  const p = new Player(null);
+  p.getSession = () => ({ sendClientPacket: () => true, write: () => true });
+  p.setUsername("boulder");
+  p.getSkillManager().setMaxLevels(core.Skill.STRENGTH, 99, false).setCurrentLevel(core.Skill.STRENGTH, 99, false);
+  p.setLocation(new core.Location(...CAVERN_SIDE));
+  const boulder = { getRealId: () => 6621 };
+  const before = p.getSkillManager().getExperience(core.Skill.STRENGTH);
+  for (let i = 0; i < 6; i++) move({ player: p, npc: boulder, clickType: 1, handled: false });
+  assert.equal(p.getLocation().getX(), HALLWAY[0], "across to the hallway, once");
+  const gained = p.getSkillManager().getExperience(core.Skill.STRENGTH) - before;
+  assert.ok(gained > 0 && gained < 11, `one crossing's XP, not six: ${gained}`);
 });

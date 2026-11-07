@@ -133,10 +133,12 @@ queries: `accountOf(name)`, `charactersOf(accountKey)`).
 
 Durability, my call: the file lives next to `display-names.json` and has the same assumptions,
 one server process per data directory (the SQLite pid file already assumes this) and a durable
-disk. The in-browser host (IndexedDb backend) does not persist either file across reloads, so
-there character creation is disabled (`maxCharacters` reported as 1) and the picker shows the
-one character; no non-primary save can be created that the record could later forget. Any other
-backend keeps the file.
+disk. The original in-browser host (IndexedDb backend) did not persist account ownership
+across reloads and was limited to one character. Follow-up: browser hosts that checkpoint
+`data/saves/accounts.json` (or `TSPS_ACCOUNTS_FILE`), character saves and profile deletions
+together may advertise `BROWSER_HOST_ACCOUNT_PERSISTENCE=1` and use the configured limit
+(up to six). Hosts without that capability remain limited to one. See
+[the current host requirements](../../character-slots.md#enabling-characters).
 
 Hosts must back up and restore the file together with the saves database: it is the only record
 of ownership, the alts' credentials resolve through it to the primary, and it holds the
@@ -354,7 +356,7 @@ row and account entry; one gateway or headless login confirming the default pick
 - Native picker through #2693's login ticket carrying a character name.
 - Account-wide bans and mutes.
 - Moving credentials into the account record and lifting the primary-delete restriction.
-- Account records for the in-browser host, so creation can be enabled there.
+- Account records for the in-browser host: addressed by the capability-gated follow-up described above; older hosts remain limited to one.
 - Per-slot cosmetics (slot order, favourite).
 
 ## Review note

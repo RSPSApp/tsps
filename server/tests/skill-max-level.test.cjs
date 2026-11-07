@@ -1248,6 +1248,7 @@ test("sound lookup excludes Lost City IDs, altar switches use OSRS audio, and re
 
   const interactions = new Map();
   require("../plugins/objects/Altars.plugin").register({
+    core,
     onObjectInteraction: (name, actions) => interactions.set(name, actions),
     // The spellbooks' quests (Desert Treasure I, Lunar Diplomacy) are done: this is about the switches' audio.
     emitCustomEvent: (name, query) => { if (name === "quest:is-complete") query.complete = true; },

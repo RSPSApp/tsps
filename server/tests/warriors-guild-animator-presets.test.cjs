@@ -63,6 +63,7 @@ function animatorHandlers() {
       if (key === "onObjectInteraction") return (name, actions) => { h.animate = actions.Animate; };
       if (key === "onItemOnObject") return (handler) => { h.useOn = handler; };
       if (key === "onPlayerLogout") return (handler) => { h.logout = handler; };
+      if (key === "onPlayerDeath") return (handler) => { h.death = handler; };
       if (key === "onCustomEvent") return (name, handler) => { if (name === "npc-dialogue:action") h.handBack = handler; else target.onCustomEvent(name, handler); };
       return target[key];
     },
@@ -104,4 +105,93 @@ test("with plain and preset copies held only the plain set is animated, and Shan
     assert.equal(amount(f.inv, id, false), 1);
     assert.equal(amount(f.inv, id, true), 1);
   }
+});
+
+// The armour's death drops its set only when NPCDeathTask finds a logged-in killer a tick on. Shanomi's save is skipped
+// only when that drop is certain: the dupe stays closed, and no set is lost when the death drops nothing.
+function risenArmour(t) {
+  const f = actor(t);
+  const h = animatorHandlers();
+  pieces().forEach((id, slot) => f.inv.setItem(slot, new core.Item(id, 1)));
+  h.animate({ player: f.p, location: at });
+  for (let tick = 0; tick < 7; tick++) core.TaskManager.process(); // it rises
+  const spawned = [...core.World.getAddNPCQueue(), ...core.World.getNpcs()].filter((npc) => npc && npc.getOwner?.() === f.p);
+  assert.equal(spawned.length, 1, "the armour has risen");
+  const armour = spawned[0];
+  t.after(() => {
+    const queue = core.World.getAddNPCQueue();
+    if (queue.includes(armour)) queue.splice(queue.indexOf(armour), 1);
+  });
+  return { f, h, armour };
+}
+/** Kills the armour as a hit does: 0 Hitpoints, then appendDeath (the before-death hooks, then an NPCDeathTask). */
+function kill(armour, by) {
+  if (by) armour.getCombat().addDamage(by, armour.getHitpoints());
+  armour.setHitpoints(0);
+  armour.appendDeath();
+  assert.equal(armour.isDyingFunction(), true);
+}
+const runDeath = () => { for (let tick = 0; tick < 8; tick++) core.TaskManager.process(); };
+const setsHeld = (f) => (f.p.getAttribute("warriors-guild:lost-armour") ?? []).length;
+
+test("armour killed by its logged-in owner and abandoned while dying drops its set only: Shanomi keeps no second copy", (t) => {
+  const { f, h, armour } = risenArmour(t);
+  const dropped = [];
+  const register = core.ItemOnGroundManager.registerLocation;
+  t.mock.method(core.ItemOnGroundManager, "registerLocation", (owner, item, ...rest) => {
+    if (owner === f.p) dropped.push(item.getId());
+    return register.call(core.ItemOnGroundManager, owner, item, ...rest);
+  });
+  kill(armour, f.p);
+  h.death({ player: f.p }); // the owner dies in the death's window: the armour is abandoned while dying
+  runDeath();
+  assert.equal(setsHeld(f), 0, "Shanomi keeps no second copy");
+  for (const id of pieces()) assert.ok(dropped.includes(id), `the death dropped ${id}`);
+});
+
+test("an owner who logs out the tick their armour dies gets the set back from Shanomi", (t) => {
+  const { f, h, armour } = risenArmour(t);
+  kill(armour, f.p);
+  // In engine order: MobileList.remove unregisters the player, then onRemove emits the logout hook.
+  f.p.setRegistered(false);
+  h.logout({ player: f.p });
+  runDeath();
+  assert.equal(setsHeld(f), 1, "the death dropped nothing, so Shanomi keeps the set");
+  f.p.setRegistered(true);
+  h.handBack({ player: f.p, npcId: SHANOMI, text: "the set of lost armour" });
+  for (const id of pieces()) assert.equal(amount(f.inv, id, false), 1, "and hands it back");
+});
+
+// A world tick runs the tasks before it removes leaving players: from the tick after the death, NPCDeathTask has taken
+// the owner as its killer and drops the set even once they've gone. Shanomi must keep nothing then.
+for (const ticks of [1, 2, 3]) {
+  test(`an owner who logs out ${ticks} tick${ticks === 1 ? "" : "s"} into the death gets the dropped set only, nothing from Shanomi`, (t) => {
+    const { f, h, armour } = risenArmour(t);
+    const dropped = [];
+    const register = core.ItemOnGroundManager.registerLocation;
+    t.mock.method(core.ItemOnGroundManager, "registerLocation", (owner, item, ...rest) => {
+      if (owner === f.p) dropped.push(item.getId());
+      return register.call(core.ItemOnGroundManager, owner, item, ...rest);
+    });
+    kill(armour, f.p);
+    for (let i = 0; i < ticks; i++) { core.World.processCycle++; core.TaskManager.process(); }
+    f.p.setRegistered(false); // engine order: unregistered, then the logout hook
+    h.logout({ player: f.p });
+    runDeath();
+    for (const id of pieces()) assert.ok(dropped.includes(id), `the death dropped ${id}`);
+    assert.equal(setsHeld(f), 0, "Shanomi keeps no second copy");
+  });
+}
+
+test("armour dying with no player's damage counted goes to Shanomi at once, and the owner can animate again", (t) => {
+  const { f, h, armour } = risenArmour(t);
+  kill(armour, null);
+  assert.equal(setsHeld(f), 1, "kept by Shanomi straight away");
+  runDeath();
+  assert.equal(setsHeld(f), 1, "once only");
+  h.handBack({ player: f.p, npcId: SHANOMI, text: "the set of lost armour" });
+  for (const id of pieces()) assert.equal(amount(f.inv, id, false), 1);
+  f.messages.length = 0;
+  h.animate({ player: f.p, location: at });
+  assert.ok(!f.messages.includes("You've already summoned an animated armour."), "not held as already summoned");
 });

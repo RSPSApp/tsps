@@ -989,9 +989,9 @@ test("Flask of Fervour: three explosions 1, 3 and 5 ticks on, with the recording
   who.relic.getPacketSender = () => sender;
 });
 
-/** The Agility plugin, attached to a test api: its ground-item pickup hook and the marks it lays kept for the test. */
+/** The Agility plugin, attached to a test api: its ground-item taken hook and the marks it lays kept for the test. */
 function agility() {
-  const pickups = [];
+  const taken = [];
   const laid = [];
   const floor = {
     inventoryCapacity: (player, item) => player.getInventory().getAddableAmount(item),
@@ -1002,17 +1002,19 @@ function agility() {
     core,
     getTaskManager: () => ({ submit() {} }),
     getItemOnGroundManager: () => floor,
-    onGroundItemPickup: (handler) => pickups.push(handler),
-    onCustomEvent() {},
+    onCustomEvent: (name, handler) => { if (name === "ground-items:taken") taken.push(handler); },
     emitCustomEvent: (name, payload) => {
       for (const handler of custom[name] ?? []) handler(payload);
     },
   }, { get: (target, key) => (key in target ? target[key] : () => {}) });
   require("../plugins/skills/Agility.plugin").register(api);
-  /** Picks up a course mark the player owns on `tile`. */
+  /** Picks up a course mark the player owns on `tile` (credited to the inventory: "ground-items:taken"). */
   const pickUp = (player, [x, y, z]) => {
-    const groundItem = { getItem: () => new core.Item(I.MARK_OF_GRACE, 1), getgoesGlobal: () => false, getDespawnDelay: () => 1000 };
-    for (const handler of pickups) handler({ player, groundItem, groundItemId: I.MARK_OF_GRACE, clickType: 1, location: { x, y, z }, handled: false });
+    const groundItem = {
+      getItem: () => new core.Item(I.MARK_OF_GRACE, 1), getgoesGlobal: () => false, getDespawnDelay: () => 1000,
+      getPosition: () => new core.Location(x, y, z),
+    };
+    for (const handler of taken) handler({ player, groundItem, source: "pickup", itemId: I.MARK_OF_GRACE, amount: 1 });
   };
   return { pickUp, laid };
 }

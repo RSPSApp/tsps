@@ -277,10 +277,23 @@ export class AccuracyFormulasDpsCalc {
         if (enemy.isNpc()) {
             defRoll = Math.floor(defRoll * enemy.getAsNpc().getDefenceRollFactor());
         }
+        if (attackStyle === CombatType.MAGIC && defenceStyle === CombatType.MAGIC) {
+            defRoll = AccuracyFormulasDpsCalc.magicDefenceRollEvent(entity, enemy, defRoll);
+        }
 
         attRoll = Math.floor(attRoll * AccuracyFormulasDpsCalc.scopedAccuracyScale);
 
         return { attack: attRoll, defence: defRoll };
+    }
+
+    /**
+     * Lets plugins change a magic attack's defence roll (combat:magic-defence-roll: attacker, target,
+     * spell, defenceRoll), after the target's gear and defence factor are settled.
+     */
+    private static magicDefenceRollEvent(entity: any, enemy: any, defenceRoll: number): number {
+        const request = { attacker: entity, target: enemy, spell: entity.getCombat?.()?.getSelectedSpell?.(), defenceRoll };
+        PluginManager.emitCustomEvent("combat:magic-defence-roll", request);
+        return Number.isFinite(request.defenceRoll) && request.defenceRoll >= 0 ? Math.floor(request.defenceRoll) : defenceRoll;
     }
 
     private static scopedAccuracyScale = 1;

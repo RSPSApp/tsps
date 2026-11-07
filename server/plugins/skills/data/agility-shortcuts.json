@@ -1259,6 +1259,12 @@
       "name": "Broken wall (Al Kharid)",
       "object": 33344,
       "level": 70,
+      "requires": [
+        {
+          "skills": {"agility":70},
+          "quest": {"key":"prince_ali_rescue","message":"You need to complete Prince Ali Rescue to use this shortcut."}
+        }
+      ],
       "end": "You climb over the wall.",
       "between": {"ends":[[3295,3157,0],[3295,3158,0]],"cross":[{"use":"climbOver","args":["to"]}]}
     },
@@ -3013,6 +3019,12 @@
       "at": [[1324,9766,0],[1324,3364,0]],
       "level": 59,
       "unverified": "the movement and both ends (no capture; ends from the map)",
+      "requires": [
+        {
+          "skills": {"agility":59},
+          "quest": {"key":"shadows_of_custodia","message":"You need to complete Shadows of Custodia to use this shortcut."}
+        }
+      ],
       "between": {"ends":[[1323,9766,0],[1324,3363,0]],"cross":[{"use":"tunnel","args":["to"]}]}
     },
     {

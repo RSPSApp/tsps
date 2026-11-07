@@ -124,3 +124,27 @@ test("worn graceful's weight reduction applies to the drain, the packet and the 
   assert.equal(player.getWeightKg(), Math.trunc(EquipmentStats._test.getWeight(player)));
   assert.equal(drainAt1(player), MovementQueue.runEnergyDrainUnits(subject(0, 1)), "drains as 0 kg");
 });
+
+test("a run tick that moves one tile is a walk: no drain, and energy still regenerates", () => {
+  // rsprox captures: with Run on, 41,751 of 41,889 two-tile ticks lowered energy, while
+  // 4,867 of 6,357 one-tile ticks raised it.
+  const { Location } = require("../dist/game/model/Location");
+  const player = cachePlayer();
+  player.getSession = () => ({ sendClientPacket() {}, write() {}, flush() {} });
+  player.setLocation(new Location(3222, 3218, 0));
+  player.setRunning(true);
+  player.setRunEnergyUnits(5000);
+  const queue = player.getMovementQueue();
+
+  queue.requestWalk(new Location(3223, 3218, 0));
+  queue.process();
+  assert.equal(player.getLocation().getX(), 3223);
+  assert.equal(player.getRunEnergyUnits(), 5000);
+  assert.equal(queue.didRunThisCycle(), false);
+
+  queue.requestWalk(new Location(3225, 3218, 0));
+  queue.process();
+  assert.equal(player.getLocation().getX(), 3225);
+  assert.ok(player.getRunEnergyUnits() < 5000);
+  assert.equal(queue.didRunThisCycle(), true);
+});

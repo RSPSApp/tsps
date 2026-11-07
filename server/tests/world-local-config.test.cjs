@@ -64,3 +64,11 @@ test('cross-floor options are read from the real layered world configuration', (
   assert.deepEqual(loadWorld({ pluginConfig: { 'CrossFloor:visibility': true, 'CrossFloor:combat': false } }).crossFloor, [true, false]);
   assert.deepEqual(loadWorld({ pluginConfig: { 'CrossFloor:visibility': false, 'CrossFloor:combat': true } }).crossFloor, [false, false]);
 });
+
+test('world names default to OSRS and local overrides are trimmed', () => {
+  assert.equal(loadWorld().definition.name, 'Old School RuneScape');
+  assert.equal(loadWorld({ name: '  Solaris RSPS  ' }).definition.name, 'Solaris RSPS');
+});
+test('world names reject invalid types, markup, controls and excessive length', () => {
+  for (const name of [null, 1, '', '   ', 'x'.repeat(65), 'Solaris\nRSPS', '<col=ff0000>World']) assert.throws(() => loadWorld({ name }), /name must be plain text/);
+});

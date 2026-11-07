@@ -66,6 +66,8 @@ function playerWith(entries = [], { level = 99, threadUses } = {}) {
     contains: id => (amounts.get(id) ?? 0) > 0,
     getAmount: id => amounts.get(id) ?? 0,
     deleteNumber: (id, amount) => amounts.set(id, Math.max(0, (amounts.get(id) ?? 0) - amount)),
+    // By slot, as a real container: the slot's item, from the same view getItems gives.
+    deleteAtSlot: (slot, amount) => { const item = inventory.getItems()[slot]; if (item) inventory.deleteNumber(item.getId(), amount); },
     addItem: item => amounts.set(item.id, (amounts.get(item.id) ?? 0) + item.getAmount()),
     adds: (id, amount = 1) => amounts.set(id, (amounts.get(id) ?? 0) + amount),
     getItems: () => {

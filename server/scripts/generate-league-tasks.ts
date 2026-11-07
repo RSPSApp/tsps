@@ -1279,9 +1279,12 @@ function deriveTrigger(fullName: string, rawDescription: string, names: Names, w
       const castes = ["TzHaar-Ket", "TzHaar-Xil", "TzHaar-Mej", "TzHaar-Hur"].map((npc) => npcs.get(npc.toLowerCase())).filter((npc): npc is string => !!npc && attackLevels(npc).size > 0);
       if (castes.length === 4) return { trigger: { kind: "kill", npcs: castes, count } };
     }
-    // "Defeat any one of the God Wars Dungeon bosses N times" (and the combined 500): any of the
-    // five generals. A kill of one counts toward the same total.
+    // "Reach a combined kill count of 500 across all God Wars Dungeon bosses": the five generals,
+    // one total. "Defeat any one of the God Wars Dungeon bosses 100/250 times" is one boss that
+    // many times. A shared total would count a mix, and kill-each would demand all five, so those
+    // two stay unmapped.
     if (/^Any God Wars Dungeon Boss$/i.test(subject)) {
+      if (count !== 500) return { unmapped: name };
       const bosses = ["Kree'arra", "General Graardor", "Commander Zilyana", "K'ril Tsutsaroth", "Nex"].map((npc) => npcs.get(npc.toLowerCase())).filter((npc): npc is string => !!npc && attackLevels(npc).size > 0);
       if (bosses.length === 5) return { trigger: { kind: "kill", npcs: bosses, count } };
     }
@@ -1499,12 +1502,13 @@ function deriveTrigger(fullName: string, rawDescription: string, names: Names, w
       const sets = itemSetNamed(set[1]) ?? wikiSetNamed(set[1], names);
       if (sets) return { trigger: { kind: "equip", items: [...new Set(sets.flat())] } };
       // "Equip any piece of Zenyte Jewelry": the four enchanted pieces (the Zenyte page's Magic
-      // table; the task's link redirects there) and each piece's cache forms.
+      // table; the task's link redirects there) and each piece's cache forms. "Equip every piece"
+      // cannot be worn at once: the amulet and the necklace share the neck slot, so that task
+      // stays unmapped.
       if (/^zenyte jewelry$/i.test(set[1])) {
+        if (everyPiece) return {};
         const slots = ["Amulet of torture", "Necklace of anguish", "Tormented bracelet", "Ring of suffering"].map((piece) => wornVariants(piece, items)).filter((slot) => slot.length);
-        if (slots.length === 4) return everyPiece
-          ? { trigger: { kind: "equip-all", items: slots } }
-          : { trigger: { kind: "equip", items: [...new Set(slots.flat())] } };
+        if (slots.length === 4) return { trigger: { kind: "equip", items: [...new Set(slots.flat())] } };
       }
       // "any piece of Moon equipment from the Blood, Frost, or Eclipse moon set": the linked set
       // page has one table per moon, and a piece of any of them counts (the same pieces as

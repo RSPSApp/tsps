@@ -1654,8 +1654,10 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   leaving" or Raging Echoes' "must be of one difficulty" leave the task unmapped, the places
   until the area unlocks exist, even for a boss with one home ("Defeat any TzHaar in Mor Ul Rek"
   is the four attackable city castes, TzHaar-Ket, TzHaar-Xil, TzHaar-Mej and TzHaar-Hur; TzTok-Jad
-  and TzHaar-Ket-Rak are other tasks; "Defeat any one of the God Wars Dungeon bosses" is Kree'arra,
-  General Graardor, Commander Zilyana, K'ril Tsutsaroth and Nex, one total); a monster whose every location line
+  and TzHaar-Ket-Rak are other tasks; "Reach a combined kill count of 500 across all God Wars
+  Dungeon bosses" is Kree'arra, General Graardor, Commander Zilyana, K'ril Tsutsaroth and Nex, one
+  total; "Defeat any one of the God Wars Dungeon bosses 100/250 times" stays unmapped, since that
+  is one boss that many times); a monster whose every location line
   on its Wiki page is the task's place, and whose name the cache gives one attackable monster, is
   killed there whatever the task adds: "Defeat a Drake in the Karuulm Slayer Dungeon", the pages
   saved as `<dir>/npcs/<page>.wikitext`; a Combat Achievements monster no NPC is named after is the
@@ -1808,8 +1810,9 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   no raw fish is a creature hunted); "Pickpocket X [N times]" with the description's
   alternatives; "N <tier> Clue Scroll(s)". "Equip any Godsword" is every godsword its page's
   {{plinkt}} names, plus an ornament kit the cache has of one. "Equip any piece of Zenyte Jewelry"
-  is the four enchanted pieces and each one's cache forms; "Equip every piece of Zenyte Jewelry" is
-  those four worn at once, a slot taking any of its cache forms. "Equip any piece of armour from the moons
+  is the four enchanted pieces and each one's cache forms. "Equip every piece of Zenyte Jewelry"
+  stays unmapped: the amulet and the necklace share the neck slot, so the four cannot be worn at
+  once. "Equip any piece of armour from the moons
   of peril" is every piece of the Moon equipment page's three tables. "Equip any Mithril weapon" (and
   the adamant, rune and dragon ones) is that equipment page's Weapons tables. "Equip a basic elemental
   staff", an elemental or combination battlestaff or mystic staff, is the linked section's table (a

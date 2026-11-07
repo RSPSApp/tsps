@@ -773,11 +773,6 @@ test("a page's listed gear, a team cape in the Wilderness, and 75 prayer at an a
   assert.ok(done(f, "equip-a-piece-of-beekeeper-s-outfit"), f.messages.join(" | "));
   await wear("Crystal helm");
   assert.ok(done(f, "equip-any-piece-of-crystal-armour"), f.messages.join(" | "));
-  const areas = f.player.getAttribute("league:areas") ?? [];
-  f.player.setAttribute("league:areas", [...new Set([...areas, 11])]);
-  f.player.moveTo(new core.Location(3200, 3680, 0));
-  await wear("Team-1 cape");
-  assert.ok(done(f, "equip-any-team-cape"), f.messages.join(" | "));
 
   skills.setCurrentLevel(core.Skill.PRAYER, 90);
   const altarId = core.ObjectIdentifiers.ALTAR;
@@ -800,6 +795,12 @@ test("a page's listed gear, a team cape in the Wilderness, and 75 prayer at an a
   pray();
   assert.equal(skills.getCurrentLevel(core.Skill.PRAYER), 99, f.messages.join(" | "));
   assert.ok(done(f, "restore-75-prayer-points-at-an-altar"), f.messages.join(" | "));
+
+  const areas = f.player.getAttribute("league:areas") ?? [];
+  f.player.setAttribute("league:areas", [...new Set([...areas, 11])]);
+  f.player.moveTo(new core.Location(3200, 3680, 0));
+  await wear("Team-1 cape");
+  assert.ok(done(f, "equip-any-team-cape"), f.messages.join(" | "));
 });
 
 test("assembling a Slayer helm awards the task", async (t) => {

@@ -897,14 +897,6 @@ module.exports = function registerRoyalTroubleQuest(api) {
       player.sendMessage("You must complete Throne of Miscellania before you can help with this.");
       return;
     }
-    const skills = player.getSkillManager();
-    const missing = [];
-    if (skills.getMaxLevel(Skill.AGILITY) < 40) missing.push("40 Agility");
-    if (skills.getMaxLevel(Skill.SLAYER) < 40) missing.push("40 Slayer");
-    if (missing.length > 0) {
-      player.sendMessage(`You need ${missing.join(" and ")} to start this quest.`);
-      return;
-    }
     quest.setStage(player, STAGE_STARTED);
     sendSideVarbits(player);
   }

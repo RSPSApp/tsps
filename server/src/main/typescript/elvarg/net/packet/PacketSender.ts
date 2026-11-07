@@ -803,6 +803,15 @@ export class PacketSender {
     return this;
   }
 
+  /**
+   * A request line from another player (101 tradereq, 103 chalreq_trade ...): the client keeps
+   * the sender's name and index, so clicking the line answers that player.
+   */
+  sendRequestMessage(chatType: number, message: string, from: string, fromIndex: number): this {
+    this.player.getSession().sendClientPacket(encodeChatMessage("trade", message ?? "", from, "", fromIndex, chatType));
+    return this;
+  }
+
   /** `chatType` overrides the public type 2: ChatType.AUTOTYPER / MODAUTOTYPER for autochat. */
   sendPublicChat(message: string, from: string, playerId: number, chatType?: number, style?: ChatStyle): this {
     this.player.getSession().sendClientPacket(

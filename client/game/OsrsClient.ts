@@ -248,6 +248,7 @@ import {
     DEFAULT_SCREEN_WIDTH,
     MOUSE_CROSS_YELLOW,
 } from "./ClientState";
+import { type ChatRequest, chatRequestOption, chatRequestSlot } from "./chatRequests";
 import { GameRenderer } from "./GameRenderer";
 import { OsrsRendererType, createRenderer } from "./GameRenderers";
 import { InputManager } from "./InputManager";
@@ -600,7 +601,8 @@ export class OsrsClient {
     isMembersWorld: boolean = true;
     private localChatNameIcons: number[] = [];
     private localChatNamePrefix: string = "";
-    private readonly tradeRequestTargetsByName = new Map<string, number>();
+    /** Request lines (trade, challenge, load-out share) by sender: who sent it, what answers it. */
+    private readonly chatRequestsByName = new Map<string, ChatRequest>();
     private accountTypeVarbitAvailable?: boolean;
 
     // ========== Game State ==========
@@ -1565,7 +1567,7 @@ export class OsrsClient {
             getWidgetManager: () => this.widgetManager,
             getInputManager: () => this.inputManager,
             getRendererCanvas: () => this.renderer?.canvas,
-            getTradeRequestTargetsByName: () => this.tradeRequestTargetsByName,
+            getChatRequestsByName: () => this.chatRequestsByName,
         });
     }
 
@@ -2000,11 +2002,12 @@ export class OsrsClient {
             openUrl: openClientUrl,
             sendPlayerOption: (playerName: string, option: number) => {
                 const normalizedName = playerName.trim().toLowerCase();
-                const tradeTarget = self.tradeRequestTargetsByName.get(normalizedName);
-                if (tradeTarget !== undefined) {
-                    // Type-101's chat action is always Trade, even if the
-                    // cache script passes a menu-specific action value.
-                    sendPlayerOption(tradeTarget, 2);
+                const request = self.chatRequestsByName.get(normalizedName);
+                const requestSlot = request ? chatRequestSlot(request.option) : undefined;
+                if (request && requestSlot !== undefined) {
+                    // A request line's accept answers with the option it asks for (Trade, or the
+                    // Challenge / Load-outs the server labelled), whatever value the script passes.
+                    sendPlayerOption(request.playerId, requestSlot);
                     return;
                 }
                 const index = self.playerEcs.findIndexByName(playerName);
@@ -3351,11 +3354,12 @@ export class OsrsClient {
             this.unsubscribeChatMessages = subscribeChatMessages((msg) => {
                 // Add message to chat history for CS2 scripts to query
                 const isTradeRequest = msg.chatType === ChatMessageType.TRADE_REQUEST;
-                if (isTradeRequest && msg.from && msg.playerId !== undefined) {
-                    this.tradeRequestTargetsByName.set(
-                        msg.from.trim().toLowerCase(),
-                        msg.playerId | 0,
-                    );
+                const requestOption = chatRequestOption(msg.chatType ?? -1, msg.text);
+                if (requestOption && msg.from && msg.playerId !== undefined) {
+                    this.chatRequestsByName.set(msg.from.trim().toLowerCase(), {
+                        playerId: msg.playerId | 0,
+                        option: requestOption,
+                    });
                 }
                 if (msg.style && msg.playerId !== undefined) {
                     this.playerSyncManager?.setPublicChatStyle(msg.playerId, msg.style);

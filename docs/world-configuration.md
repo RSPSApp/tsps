@@ -154,4 +154,10 @@ require the optional PvP statistics plugin to display.
 
 Ranked PvP Arena match finding (the Grouping tab's PvP Arena button, `DuelArena` plugin) is only
 available on designated worlds. Enable it with `"pluginConfig": { "DuelArena:pvpArenaWorld": true }`
-in `world.local.json` (default off). Legacy Duels are unaffected.
+in `world.local.json` (default off).
+
+Unranked duels are on every world. In the Emir's Arena, player option 1 is Challenge and 4 is
+Load-outs. On a normal world, Challenge first asks whether the duel is an Unranked Duel or a Legacy
+Duel. On a PvP Arena world, Challenge goes straight to an unranked duel. The fight uses the player's
+main character: their items, stats and spellbook are set aside for the fight and come back when
+they leave the arena, or on their next login if they were still in a fight (`duelarena/Stash.DuelArena.js`).

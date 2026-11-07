@@ -1,0 +1,325 @@
+{
+  "$comment": [
+    "PvP Arena unranked duels (plugins/minigames/duelarena/). Captured: rsprox 20261106T111454, 20261107T010112, 20261107T022508 and 20261107T023226 (rev 242.1, world 578 PvP Arena): challenges both ways, the duel screen's two steps, copying a load-out, cancelling from either side, six fights (wins, a death, forfeits on both sides), the exits, the supplies chest and load-out sharing.",
+    "Load-out values are indices into enum 4390 (item) and 4389 (spellbook: 0 Ancient, 1 Standard, 2 Lunar); the defaults are what the supplies chest first sent (20261106T111454 tick 251).",
+    "Not captured: a disconnect mid-fight (a forfeit, as Legacy Duels count it) and the time limit running out (both leave, nobody wins)."
+  ],
+  "itemEnum": 4390,
+  "spellbooks": {
+    "$comment": "Load-out value -> spellbook (enum 4389).",
+    "values": [
+      "ANCIENT",
+      "NORMAL",
+      "LUNAR"
+    ]
+  },
+  "wornSlots": {
+    "hat": 0,
+    "back": 1,
+    "front": 2,
+    "rhand": 3,
+    "torso": 4,
+    "lhand": 5,
+    "legs": 7,
+    "hands": 9,
+    "feet": 10,
+    "ring": 12,
+    "quiver": 13
+  },
+  "quiverAmount": 5000,
+  "builds": [
+    {
+      "name": "Max/Med",
+      "letter": "a",
+      "levels": {
+        "ATTACK": 99,
+        "STRENGTH": 99,
+        "DEFENCE": 99,
+        "RANGED": 99,
+        "MAGIC": 99,
+        "HITPOINTS": 99,
+        "PRAYER": 99
+      },
+      "default": {
+        "spellbook": 0,
+        "worn": {
+          "hat": 419,
+          "back": 197,
+          "front": 155,
+          "rhand": 294,
+          "torso": 420,
+          "lhand": 421,
+          "legs": 422,
+          "hands": 179,
+          "feet": 423,
+          "ring": 424,
+          "quiver": 360
+        },
+        "inventory": [
+          4,
+          20,
+          264,
+          264,
+          39,
+          39,
+          18,
+          264,
+          39,
+          39,
+          18,
+          39,
+          403,
+          425,
+          18,
+          39,
+          426,
+          427,
+          18,
+          39,
+          428,
+          429,
+          18,
+          39,
+          430,
+          39,
+          39,
+          375
+        ]
+      }
+    },
+    {
+      "name": "Zerker",
+      "letter": "b",
+      "levels": {
+        "ATTACK": 75,
+        "STRENGTH": 99,
+        "DEFENCE": 50,
+        "RANGED": 99,
+        "MAGIC": 99,
+        "HITPOINTS": 99,
+        "PRAYER": 63
+      },
+      "default": {
+        "spellbook": 0,
+        "worn": {
+          "hat": 410,
+          "back": 197,
+          "front": 155,
+          "rhand": 414,
+          "torso": 408,
+          "legs": 409,
+          "hands": 179,
+          "feet": 418,
+          "ring": 222,
+          "quiver": 417
+        },
+        "inventory": [
+          4,
+          20,
+          264,
+          264,
+          39,
+          39,
+          18,
+          264,
+          39,
+          39,
+          18,
+          39,
+          416,
+          405,
+          18,
+          39,
+          406,
+          407,
+          18,
+          39,
+          335,
+          39,
+          18,
+          39,
+          39,
+          39,
+          39,
+          375
+        ]
+      }
+    },
+    {
+      "name": "1 Def Pure",
+      "letter": "c",
+      "levels": {
+        "ATTACK": 60,
+        "STRENGTH": 99,
+        "DEFENCE": 1,
+        "RANGED": 99,
+        "MAGIC": 99,
+        "HITPOINTS": 99,
+        "PRAYER": 63
+      },
+      "default": {
+        "spellbook": 0,
+        "worn": {
+          "hat": 102,
+          "back": 197,
+          "front": 155,
+          "rhand": 192,
+          "torso": 151,
+          "lhand": 202,
+          "legs": 149,
+          "hands": 187,
+          "feet": 418,
+          "ring": 222,
+          "quiver": 360
+        },
+        "inventory": [
+          4,
+          20,
+          264,
+          264,
+          39,
+          39,
+          18,
+          264,
+          39,
+          39,
+          18,
+          39,
+          403,
+          132,
+          18,
+          39,
+          295,
+          39,
+          18,
+          39,
+          123,
+          39,
+          18,
+          39,
+          39,
+          39,
+          39,
+          375
+        ]
+      }
+    }
+  ],
+  "battletype": {
+    "unranked": 1005
+  },
+  "arena": {
+    "$comment": "The battle arena: region 13384's chunks 417-422 x 578-582, planes 0-3, copied unrotated (every captured rebuild_region).",
+    "chunk": [
+      417,
+      578
+    ],
+    "size": [
+      6,
+      5
+    ],
+    "planes": 4,
+    "sides": [
+      {
+        "spawn": [
+          3356,
+          4646
+        ],
+        "trapdoor": [
+          3351,
+          4645
+        ],
+        "portal": [
+          3347,
+          4646
+        ],
+        "dead": [
+          3350,
+          4647
+        ],
+        "exits": [
+          [
+            3358,
+            3273
+          ],
+          [
+            3359,
+            3272
+          ]
+        ]
+      },
+      {
+        "spawn": [
+          3367,
+          4646
+        ],
+        "trapdoor": [
+          3372,
+          4645
+        ],
+        "portal": [
+          3376,
+          4646
+        ],
+        "dead": [
+          3373,
+          4647
+        ],
+        "exits": [
+          [
+            3376,
+            3274
+          ],
+          [
+            3376,
+            3272
+          ],
+          [
+            3375,
+            3276
+          ]
+        ]
+      }
+    ]
+  },
+  "fight": {
+    "$comment": "Captured: the first count one tick after arriving, then every two ticks; 'Combat has begun!' with FIGHT!; the time limit counts down from 2000 ticks.",
+    "countFrom": 10,
+    "countEvery": 2,
+    "timeLimit": 2000,
+    "timerEvery": 2
+  },
+  "sounds": {
+    "discard": 2381
+  },
+  "music": {
+    "silence": 147
+  },
+  "jingles": {
+    "win": 98
+  },
+  "inviteTicks": 100,
+  "messages": {
+    "unofficial": "<col=ef1020>As this is an unofficial duel, you will not receive rank or reward points for participating.</col>",
+    "challenging": "Challenging {name}...",
+    "invited": "{name} is inviting you to an unranked duel.",
+    "cancelling": "Cancelling challenge.",
+    "cancelled": "{name} has cancelled the challenge.",
+    "participation": "Unranked Duel participation: <col=ef1020>{count}</col>",
+    "notBegun": "The fight has not yet begun.",
+    "begun": "<col=ef1020>Combat has begun!</col>",
+    "won": "<col=ef1020>{name} has won!</col>",
+    "wins": "Unranked Duel wins: <col=ef1020>{wins}</col> / {count}",
+    "over": "The fight is over.",
+    "cantReach": "I can't reach that!",
+    "quitTitle": "Are you sure you wish to quit this Duel?",
+    "sharing": "Sending load-out sharing offer...",
+    "shareOffer": "wishes to share load-outs with you.",
+    "closedMenu": "{name} has closed the menu.",
+    "copied": "You've copied the {build} load-out of {name}, <col=ef1020>including</col> its rune pouch contents.",
+    "notChanged": "Your load-out has not been changed.",
+    "copyPopup": "Copy load-out from {name}?|Are you sure you want to copy this player's load-out?<br><br>If you do, it will overwrite your current {build} build.|<col=ff0000>No</col>|<col=0dc10d>Yes</col>",
+    "seek": "Attempt to scroll to item:",
+    "duelType": "Which kind of duel?"
+  }
+}

@@ -106,6 +106,27 @@ use Heal); quest, event and minigame items with their own effects (rock cakes, p
 nightshade, Servery food); event sweets and candy; food only eaten in one
 area (Vampyrium); unobtainable items; and the whole watermelon, which is sliced first.
 
+## Dwarven rock cake
+
+`plugins/items/RockCake.plugin.js` (members). The cake from Recipe for Disaster's Freeing the
+Mountain Dwarf heals nothing and is never used up; it takes no eat delay, so it can be clicked
+every tick (rsprox recording 3250, rev 233). Both versions (hot 7509, cooled 7510) hit through
+the eating animation (`human_eat`) on the click tick.
+
+- **Eat, cooled:** 1 Hitpoint, only above 2 Hitpoints (Wiki, Dwarven rock cake). Sound 1018 and
+  the messages "Ow! You nearly broke a tooth!" and "The rock cake resists all attempts to eat
+  it." Both are sent at 2 Hitpoints or less too, but then the recordings show no animation and
+  no hit.
+- **Guzzle, cooled:** 10% of the current Hitpoints rounded down, plus 1, never the last point
+  (a 0 hit at 1 Hitpoint). Sound 1018; "You bite hard into the rock cake to guzzle it down."
+  and "OW! A terrible shock jars through your skull." (recording 3250 shows hits falling from 10
+  to 1 as Hitpoints drop, then a 0 at 1; the formula is the Wiki's.)
+- **Eat, hot:** 1 Hitpoint under the same rule, with "Ow! Ow! That's hot!" and "You burn your
+  mouth on the hot rock cake." The recording shows no 1018 sound for it.
+- **Not done:** Guzzle on a hot cake (nothing recorded; the Wiki gives the same damage but no
+  messages) and the ogre Rock cake (2379), which has no recording and whose Wiki page does not
+  give a damage fraction for Eat.
+
 ## Guthix rest recipe permission
 
 The [Guthix rest Wiki page](https://oldschool.runescape.wiki/w/Guthix_rest) says

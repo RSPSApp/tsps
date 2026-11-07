@@ -1544,6 +1544,8 @@ export class ClientConnection {
     // Quest greegrees have equipment slots but no cache Wield action.
     if (/^(wield|wear|equip|hold)$/.test(option)
       && ItemDefinition.forId(packet.itemId).getEquipmentType().getSlot() >= 0) {
+      // As the left-click route refuses (ItemActionPacketListener): no gear swap mid-teleport or while dead.
+      if (player.isTeleportingReturn() || player.getHitpoints() <= 0) return;
       EquipPacketListener.equip(player, packet.itemId, packet.slot, 3214);
       return;
     }

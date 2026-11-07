@@ -781,3 +781,18 @@ test('registered axe selection preserves members choices and filters felling pro
   assert.equal(Woodcutting.findBestUsableAxe(f.p).id,ids.BRONZE_FELLING_AXE,'default keeps ration promotion');
   assert.equal(Woodcutting.findBestUsableAxe(f.p,axe=>axe.id!==ids.BRONZE_FELLING_AXE).id,ids.BRONZE_AXE,'rejected felling axe cannot be promoted');
 });
+
+test('free worlds: the shared axe request (canoes) skips a members axe and falls back to a free one', t => {
+  const f=actor(t), ids=core.ItemIdentifiers;
+  assert.equal(core.CacheDefinitions.getItem(ids.DRAGON_AXE).isMembers,true,'SETUP: active cache marks the Dragon axe members-only');
+  t.mock.method(core.WorldDefinition,'isMembersWorld',()=>false);
+  const skills=f.p.getSkillManager(); skills.setMaxLevel(core.Skill.WOODCUTTING,61); skills.setCurrentLevel(core.Skill.WOODCUTTING,61);
+  f.p.getInventory().add(new core.Item(ids.DRAGON_AXE),true);
+  const best={player:f.p,axe:null}; PM.emitCustomEvent('woodcutting:axe',best);
+  assert.equal(best.axe,null,'a Dragon axe alone answers nothing on a free world');
+  const named={player:f.p,itemId:ids.DRAGON_AXE,axe:null}; PM.emitCustomEvent('woodcutting:axe',named);
+  assert.equal(named.axe,null,'nor when asked for by id (a canoe station stored axe)');
+  f.p.getInventory().add(new core.Item(ids.BRONZE_AXE),true);
+  const fallback={player:f.p,axe:null}; PM.emitCustomEvent('woodcutting:axe',fallback);
+  assert.equal(fallback.axe?.id,ids.BRONZE_AXE,'the free Bronze axe is used instead');
+});

@@ -761,6 +761,12 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
         || "Continue.";
       return [label, () => {
         if (cancelled) return;
+        // The guard was answered when the menu was drawn; worn gear can come off while it stays open (a ring of
+        // charos(a) for a [Charm] option), so ask again and draw the menu afresh if it no longer holds.
+        if (option.condition && resolveCondition({ text: option.condition, id: option.condition_id ?? option.id }) === false) {
+          presentMenu(menu, offset, tail);
+          return;
+        }
         // Quest-gated choices carry a slug like "quest:cook-s-assistant:start";
         // let the owning quest run its action, then play the branch.
         if (option.hook) {

@@ -47,6 +47,7 @@ The full-plugin decoded Eat tests for same-name cabbage variants, energy restora
 | `boost`, `drain`, `restore` | Skills by name and amount: a boost to base + amount, a drain from it, a restore up to base. Boost and restore amounts may be `{ "flat", "percent" }` of the base level; percent is a fraction (for example, `0.02` for 2%). |
 | `stamina`, `area`, `option` | Apply the shared stamina effect, require a `food:area` scene check (its owner may set the refusal `message`), or consume via a cache action other than Eat. |
 | `runEnergy`, `curePoison`, `cureVenom`, `poisonImmunity` | Run energy restored; ordinary poison cured/venom converted to poison; explicit full poison-and-venom cure; seconds of poison immunity. |
+| `poisonDose`, `venomDamage` | Seconds started on the shared poison clock unless a longer dose is running (the venom immunity ends on the clock's next 18-second step, with the "venom resistance has worn off" message); damage dealt to the eater once. |
 | `then` | A second heal `ticks` later, with its own effects (hunter meats, 7 ticks). A newer one replaces a pending one. |
 
 ## Poison treatments
@@ -65,6 +66,13 @@ and [Venom](https://oldschool.runescape.wiki/w/Venom):
   ordinary food and potion effects do not replace it.
 - Strange fruit explicitly requests the full venom cure and retains its existing
   short protection and energy restoration.
+
+- Araxyte venom sac ([Wiki](https://oldschool.runescape.wiki/w/Araxyte_venom_sack), rsprox 1094, 2508, 2510): Eat cures venom and poison, deals 4 damage once and starts
+  poison immunity for 11.7 minutes (702 seconds, 39 steps; rsprox 2510 shows the `poison` varp at -39).
+  The first step is venom immunity too, so the message "Your venom resistance has worn off, but you
+  are still resistant to poison." (colour 7f007f in the captured text) arrives 0 to 18 seconds later, whenever the shared
+  clock next steps (15 ticks in rsprox 1094). The message follows the sac's dose; a potion drunk
+  afterwards is not tracked by it.
 
 The shared `ConsumableEffects.curePoison(player, damageReduction)` defaults to
 removing ordinary poison, with an optional reduction in displayed hit damage.

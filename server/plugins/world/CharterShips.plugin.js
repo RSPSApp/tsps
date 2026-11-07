@@ -353,6 +353,13 @@ function voyageInterrupted(mobile) {
  */
 function sail(player, destination, fare) {
   if (voyages.has(player)) return;
+  // The fare was worked out when the question was asked; a ring of charos taken off since makes it dearer, so
+  // ask again at the fare it is now rather than charge the old one.
+  const now = fareFor(player, portAt(player.getLocation()), destination);
+  if (now !== null && now !== fare) {
+    offerFare(player, destination, now);
+    return;
+  }
   const inventory = player.getInventory();
   if (inventory.getAmount(core.ItemIdentifiers.COINS) < fare) {
     offerFare(player, destination, fare);

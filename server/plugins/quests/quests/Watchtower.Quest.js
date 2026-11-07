@@ -520,6 +520,15 @@ module.exports = function registerWatchtowerQuest(api) {
     event.player?.sendMessage?.("You need to read the Watchtower spell scroll before casting this spell.");
   }
 
+  /**
+   * "magic:teleport-quest-lock": the house portals ask what casting needs (Wiki, Portal chamber: "the same Magic level
+   * and quest requirements as casting the spell"), and the cast needs the scroll read.
+   */
+  function watchtowerPortalLock(event) {
+    if (event?.name?.trim().toLowerCase() !== "watchtower teleport" || hasReadSpellScroll(event.player)) return;
+    event.refusal ??= `You need to read the Watchtower spell scroll to ${event.action ?? "cast this spell"}.`;
+  }
+
   function grantReward(player) {
     player.getSkillManager().addExperiences(Skill.MAGIC, 15250);
     giveReward(player, COINS, 5000);
@@ -1750,6 +1759,7 @@ module.exports = function registerWatchtowerQuest(api) {
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
   api.onCanTeleport(canCastWatchtowerTeleport);
+  api.onCustomEvent("magic:teleport-quest-lock", watchtowerPortalLock);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onCustomEvent("npc-dialogue:condition", handleCondition);

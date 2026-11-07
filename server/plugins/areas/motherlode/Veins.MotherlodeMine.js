@@ -9,6 +9,7 @@ const { Skill } = require("../../../src/main/typescript/elvarg/game/model/Skill"
 const { RegionManager } = require("../../../src/main/typescript/elvarg/game/collision/RegionManager");
 const { ItemIds } = require("../../../src/main/typescript/elvarg/util/IdEnums");
 const { findBestPickaxe } = require("../../skills/Mining.plugin");
+const { actionInterval } = require("../../skills/SkillActions");
 const Mine = require("./State.MotherlodeMine");
 const { loc, swapLoc, findLoc, areaSound } = require("./World.MotherlodeMine");
 
@@ -133,7 +134,7 @@ function mineVein({ player, objectId, location }) {
   const pickaxe = findBestPickaxe(player);
   player.sendMessage("You swing your pick at the rock.");
   player.performAnimation(wallAnimation(pickaxe));
-  miners.set(player, { vein, nextRollIn: pickaxe.attemptIntervalTicks, nextAnimationIn: ANIMATION_TICKS });
+  miners.set(player, { vein, nextRollIn: rollTicks(player, pickaxe), nextAnimationIn: ANIMATION_TICKS });
 }
 
 function stopMining(player, resetAnimation = true) {
@@ -142,6 +143,16 @@ function stopMining(player, resetAnimation = true) {
 }
 
 let api = null;
+
+/**
+ * Ticks to the next roll, as Mining rolls anywhere (Wiki, Pickaxe: dragon, infernal and crystal "3 ticks by default,
+ * 1/6 [1/4] chance to be 2 ticks", members only), then content's pace (a league relic's).
+ */
+function rollTicks(player, pickaxe) {
+  const request = { pickaxe, ticks: null };
+  api?.emitCustomEvent?.("mining:roll-interval", request);
+  return actionInterval(api, player, Skill.MINING, "mine", request.ticks ?? pickaxe.attemptIntervalTicks);
+}
 
 function init(pluginApi) {
   api = pluginApi;
@@ -176,7 +187,7 @@ function tickMiner(player, mining, now) {
     player.performAnimation(wallAnimation(pickaxe));
   }
   if (--mining.nextRollIn > 0) return;
-  mining.nextRollIn = pickaxe.attemptIntervalTicks;
+  mining.nextRollIn = rollTicks(player, pickaxe);
   if (Math.random() < Mine.successChance(PAY_DIRT_CHANCE.low, PAY_DIRT_CHANCE.high, Mine.miningLevel(player))) {
     awardPayDirt(player, vein, now);
   }

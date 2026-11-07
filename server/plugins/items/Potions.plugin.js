@@ -367,6 +367,8 @@ function timedEffectSkillIndexes(player) {
       }
     }
   }
+  // Other items can hold a boost (the saturated heart's Magic): "stats:boost-held" { player, held }.
+  pluginApi.emitCustomEvent("stats:boost-held", { player, held: pinned });
   return pinned;
 }
 

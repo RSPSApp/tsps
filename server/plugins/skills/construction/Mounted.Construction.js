@@ -34,7 +34,8 @@ const AMULETS = {
       { label: "Xeric's Glade", option: "Glade", loc: Ids.loc("poh_amulet_xeric_glade"), tile: [1751, 3566, 0] },
       { label: "Xeric's Inferno", option: "Inferno", loc: Ids.loc("poh_amulet_xeric_inferno"), tile: [1505, 3819, 0] },
       { label: "Xeric's Heart", option: "Heart", loc: Ids.loc("poh_amulet_xeric_heart"), tile: [1642, 3673, 0] },
-      { label: "Xeric's Honour", option: "Honour", loc: Ids.loc("poh_amulet_xeric_honour"), tile: [1254, 3563, 0] },
+      // As the worn talisman: Honour needs its ancient tablet unlock (KourendTravelItems answers).
+      { label: "Xeric's Honour", option: "Honour", loc: Ids.loc("poh_amulet_xeric_honour"), tile: [1254, 3563, 0], honour: true },
     ],
   },
   "Digsite Pendant": {
@@ -84,10 +85,16 @@ let pluginApi = null;
 
 /** A mounted destination's quest lock, as the worn piece checks it; refused with the Wiki's line. */
 function destinationUnlocked(player, destination) {
-  if (!destination.quest) return true;
-  const query = { player, key: destination.quest.key, complete: false };
-  pluginApi.emitCustomEvent("quest:is-complete", query);
-  if (query.complete === true) return true;
+  if (destination.honour) {
+    const query = { player, unlocked: false };
+    pluginApi.emitCustomEvent("xerics-talisman:honour-unlocked", query);
+    if (query.unlocked === true) return true;
+  } else {
+    if (!destination.quest) return true;
+    const query = { player, key: destination.quest.key, complete: false };
+    pluginApi.emitCustomEvent("quest:is-complete", query);
+    if (query.complete === true) return true;
+  }
   const { DialogueChainBuilder, StatementDialogue } = pluginApi.core;
   player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, LOCKED_DESTINATION_MESSAGE)));
   return false;

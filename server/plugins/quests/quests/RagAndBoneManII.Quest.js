@@ -310,38 +310,15 @@ module.exports = function registerRagAndBoneManIIQuest(api) {
     return PAGE_VARIANT_START;
   }
 
-  /** Wiki: 40 Slayer, 20 Defence, Horror from the Deep, Rag and Bone Man I and Skippy and the Mogres. */
-  const REQUIRED_SKILLS = [
-    { skill: Skill.SLAYER, level: 40, label: "Slayer" },
-    { skill: Skill.DEFENCE, level: 20, label: "Defence" },
-  ];
-
   function horrorFromTheDeepComplete(player) {
     const request = { player, key: "horror_from_the_deep", complete: undefined };
     api.emitCustomEvent("quest:is-complete", request);
     return request.complete === true;
   }
 
-  function missingSkillRequirements(player) {
-    const skills = player.getSkillManager();
-    return REQUIRED_SKILLS.filter((requirement) => skills.getMaxLevel(requirement.skill) < requirement.level);
-  }
-
-  function notifySkillRequirements(player) {
-    for (const requirement of missingSkillRequirements(player)) {
-      player.sendMessage(
-        `You need a ${requirement.label} level of at least ${requirement.level} to start this quest.`
-      );
-    }
-  }
-
   function selectVariant({ npcId, player }) {
     if (npcId !== ODD_OLD_MAN_NPC_ID) return null;
     if (!ragAndBoneManIComplete(player)) return null;
-    if (quest.getStage(player) === 0 && missingSkillRequirements(player).length > 0) {
-      notifySkillRequirements(player);
-      return null;
-    }
     if (quest.getStage(player) === 0 && !horrorFromTheDeepComplete(player)) {
       player.sendMessage("You must complete Horror from the Deep to start this quest.");
       return null;
@@ -358,10 +335,6 @@ module.exports = function registerRagAndBoneManIIQuest(api) {
     const { player } = event;
     if (!ragAndBoneManIComplete(player)) return false;
     if (boneVoyageNeedsOddOldMan(player)) return false;
-    if (quest.getStage(player) === 0 && missingSkillRequirements(player).length > 0) {
-      notifySkillRequirements(player);
-      return true;
-    }
     if (quest.getStage(player) === 0 && !horrorFromTheDeepComplete(player)) {
       player.sendMessage("You must complete Horror from the Deep to start this quest.");
       return true;

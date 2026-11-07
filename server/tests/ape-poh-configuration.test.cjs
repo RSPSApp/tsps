@@ -393,3 +393,33 @@ test('chamber: Ardougne needs Edmond\'s scroll read, not just Plague City starte
   for (const [id, amount] of cost) assert.equal(f.p.getInventory().getAmount(id), amount);
   assert.deepEqual(f.frame.destinations, existing);
 });
+
+// The Watchtower spell needs its scroll read (Watchtower quest, stage 14, past the quest's completion at 12); the
+// portals ask the same through magic:teleport-quest-lock.
+for (const kind of ['chamber', 'nexus']) {
+  test(`${kind}: Watchtower needs the spell scroll read to be directed`, async t => {
+    const f = actor(t, kind), q = questOf('watchtower'), name = 'watchtower teleport';
+    assert.ok(q);
+    const messages = [], send = f.p.sendMessage.bind(f.p);
+    t.mock.method(f.p, 'sendMessage', (...args) => { messages.push(args[0]); return send(...args); });
+    const existing = seedExisting(f, kind), cost = setupCost(f, kind, name);
+    const target = kind === 'nexus' ? [...Nexus.destinations().values()].find(d => d.spellName === name) : null;
+    if (kind === 'nexus') assert.ok(target);
+    const direct = async () => {
+      if (kind === 'chamber') { await chamberReady(f, name); await prompt(f, /consume these runes/i, /^yes$/i); }
+      else { await nexusReady(f, target.id); await nexusConfirm(f); }
+    };
+    q.setStage(f.p, q.completionValue); assert.equal(q.isComplete(f.p), true, 'the quest itself is done');
+    await direct();
+    assert.ok(messages.includes('You need to read the Watchtower spell scroll to direct this teleport.'), messages.join(' | '));
+    for (const [id, amount] of cost) assert.equal(f.p.getInventory().getAmount(id), amount);
+    if (kind === 'chamber') assert.deepEqual(f.frame.destinations, existing);
+    else assert.deepEqual(f.p.getAttribute('construction:nexus'), existing);
+    q.setStage(f.p, 14);
+    if (kind === 'nexus') f.p.closeInterruptibleInterfaces();
+    await direct();
+    for (const [id] of cost) assert.equal(f.p.getInventory().getAmount(id), 0);
+    if (kind === 'chamber') assert.deepEqual(f.frame.destinations, [name]);
+    else assert.ok(f.p.getAttribute('construction:nexus').slots.includes(target.id));
+  });
+}

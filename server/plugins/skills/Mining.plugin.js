@@ -427,6 +427,13 @@ function answerBestPickaxe(request) {
   }
 }
 
+/** "mining:pickaxe": the pickaxe `itemId` is (Mining's own list), or null; no level check, only "is it a pickaxe". */
+function answerPickaxe(request) {
+  if (request && request.itemId != null && request.pickaxe == null) {
+    request.pickaxe = PICKAXES.find((pickaxe) => pickaxe.id === request.itemId) ?? null;
+  }
+}
+
 /** "mining:roll-interval": ticks to the next roll with `pickaxe`, for other mining content (stars, GotR, Volcanic Mine). */
 function answerRollInterval(request) {
   if (request && request.pickaxe && request.ticks == null) {
@@ -812,8 +819,14 @@ class MiningTask extends Task {
       }
 
       const { outcome } = landed;
-      const oreId = outcome?.itemId ?? state.rock.oreId;
-      const amount = outcome?.min !== undefined ? outcomeAmount(outcome) : oreAmount(player, state.rock);
+      let oreId = outcome?.itemId ?? state.rock.oreId;
+      let amount = outcome?.min !== undefined ? outcomeAmount(outcome) : oreAmount(player, state.rock);
+      // Content may change what a success yields ("mining:ore-yield": a bracelet of clay softens clay and
+      // doubles soft clay). `spend` runs once the ore is really kept, so a charge is not used on an ore
+      // that content takes off the player or a pickaxe burns.
+      const oreYield = { player, rock: state.rock.objectName, oreId, amount, spend: null };
+      pluginApi.emitCustomEvent("mining:ore-yield", oreYield);
+      ({ oreId, amount } = oreYield);
       // Content may take the ore off the player as it is mined ("mining:hand-over", Miscellania's
       // coal goes to Miner Magnus): no ore, no count and no sound, only the line naming who took it.
       const handOver = { player, object: rockObject, itemId: oreId, amount, taker: null };
@@ -828,6 +841,7 @@ class MiningTask extends Task {
           pendingOre = prepareOre(player, oreId, amount, outcome?.xp ?? state.rock.xp);
           countOre(player, state.rock.countEach ? amount : 1);
           kept = true;
+          oreYield.spend?.();
         }
         player.getPacketSender().sendSoundEffect(state.rock.sound ?? MINING_SUCCESS_SOUND, 1, 0, 1);
       }
@@ -845,7 +859,7 @@ class MiningTask extends Task {
       const petRoll = { player, skill: Skill.MINING, petBase: state.rock.petBase, handled: false };
       pluginApi.emitCustomEvent("pets:skilling-roll", petRoll);
       deliverOre(player, pendingOre);
-      if (kept && !state.rock.outcomes) mineExtraOre(player, state.rock, outcome);
+      if (kept && !state.rock.outcomes) mineExtraOre(player, state.rock, outcome, oreId);
       const minedNpcRock = state.npcRock;
       pluginApi.emitCustomEvent("mining:success", { player, skill: Skill.MINING, petBase: state.rock.petBase, itemId: oreId, petRolled: petRoll.handled, pickaxeId: state.pickaxe?.id ?? null, objectId: state.objectId, location: state.location });
       if (minedNpcRock) {
@@ -940,13 +954,15 @@ function deliverOre(player, ore) {
  * A sandstone or granite piece is doubled at its own size (Wiki Sandstone rocks; rsprox capture
  * 3165: "Your cape allows you to mine an additional ore.", two 1kg pieces, two counts).
  */
-function mineExtraOre(player, rock, outcome) {
+function mineExtraOre(player, rock, outcome, minedOreId) {
   if (rock.infinite || rock.noExtraOre) {
     return;
   }
-  const oreId = outcome?.itemId ?? rock.oreId;
+  // The rock's own ore decides who may add one; `minedOreId` is what that success actually yielded.
+  const rockOreId = outcome?.itemId ?? rock.oreId;
+  const oreId = minedOreId ?? rockOreId;
   const xp = outcome?.xp ?? rock.xp;
-  const request = { player, oreId, rockLevel: rock.level, bonuses: [] };
+  const request = { player, oreId: rockOreId, rockLevel: rock.level, bonuses: [] };
   pluginApi.emitCustomEvent("mining:extra-ore", request);
   for (const bonus of request.bonuses) {
     if (inventoryBlocks(player, oreId) || giveOre(player, oreId, 1, xp) !== 1) break;
@@ -1069,6 +1085,7 @@ module.exports = {
     api.onPlayerDisconnect(endMiningSession);
     api.onCustomEvent("level-up:popup-opened", pauseMining);
     api.onCustomEvent("mining:best-pickaxe", answerBestPickaxe);
+    api.onCustomEvent("mining:pickaxe", answerPickaxe);
     api.onCustomEvent("mining:roll-interval", answerRollInterval);
     api.persistAttribute(ORE_MINED_ATTRIBUTE, 0);
     api.onPlayerLogin(sendOresMined);

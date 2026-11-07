@@ -107,11 +107,18 @@ function completed(api, player, completion) {
 function record(api, player, completion) {
   api.emitCustomEvent("events:record-completion", { player, completion });
 }
-/** Saves that claimed before EventScheduler kept completions are imported on login. */
+/** A completed Halloween event unlocks the Makeover Mage's Halloween skin colours (Wiki, Makeover). */
+function unlockSkins(api, player) {
+  api.emitCustomEvent("makeover-mage:unlock-halloween-skins", { player });
+}
+/** Saves that claimed before EventScheduler kept completions (or skin unlocks) are imported on login. */
 function importClaim(api, { player }) {
   let state;
   try { state = Progress.read(player); } catch { return; }
-  if (state.stage === STAGE.COMPLETE) record(api, player, COMPLETION);
+  if (state.stage === STAGE.COMPLETE) {
+    record(api, player, COMPLETION);
+    unlockSkins(api, player);
+  }
   if (state.tradeableClaimed) record(api, player, TRADEABLES_COMPLETION);
 }
 
@@ -130,10 +137,12 @@ function claim(api, player) {
     if (result.reason === "already-complete") {
       const claimed = completed(api, player, TRADEABLES_COMPLETION);
       Progress.update(api, player, next => next.stage === STAGE.JUDGED && (next.stage = STAGE.COMPLETE, next.tradeableClaimed = claimed, true));
+      unlockSkins(api, player);
     }
     return false;
   }
   Progress.update(api, player, next => next.stage === STAGE.JUDGED && (next.stage = STAGE.COMPLETE, next.tradeableClaimed = tradeables, true));
+  unlockSkins(api, player);
   if (tradeables) record(api, player, TRADEABLES_COMPLETION);
   announce(api, player, list);
   return list;

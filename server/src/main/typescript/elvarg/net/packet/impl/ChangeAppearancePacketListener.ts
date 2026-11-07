@@ -12,6 +12,12 @@ export class ChangeAppearancePacketListener {
     const appliedKits = kits.map((value) => (value < 0 ? -1 : value));
     const appliedColors = colors.map((value) => value & 0xff);
     const look = [...player.getAppearance().getLook()];
+    // Skin is the exception: its Halloween colours are unlocks (Appearance.SKIN_UNLOCKS). A locked
+    // or out-of-palette skin keeps the current one, which a save may hold from before the gate.
+    const skin = appliedColors[4];
+    if (skin !== look[Appearance.SKIN_COLOUR] && !player.getAppearance().isSkinColourUnlocked(skin)) {
+      appliedColors[4] = look[Appearance.SKIN_COLOUR];
+    }
     look[Appearance.GENDER] = gender;
     [Appearance.HEAD, Appearance.BEARD, Appearance.CHEST, Appearance.ARMS,
       Appearance.HANDS, Appearance.LEGS, Appearance.FEET]

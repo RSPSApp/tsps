@@ -1094,8 +1094,14 @@ module.exports = function registerDreamMentorQuest(api) {
     if (pair.has(HAMMER_ITEM_ID) && pair.has(ASTRAL_RUNE_ITEM_ID)) {
       event.handled = true;
       if (!held(player, ASTRAL_RUNE_ITEM_ID)) return true;
-      player.getInventory().deleteNumber(ASTRAL_RUNE_ITEM_ID, 1);
-      player.getInventory().adds(ASTRAL_SHARDS_ITEM_ID, 1);
+      // A rune taken from a larger stack frees no slot, and `adds` drops what has no room.
+      const inventory = player.getInventory();
+      if (inventory.getAddableAmount(new api.core.Item(ASTRAL_SHARDS_ITEM_ID, 1)) < 1 && inventory.getAmount(ASTRAL_RUNE_ITEM_ID) > 1) {
+        inventory.full();
+        return true;
+      }
+      inventory.deleteNumber(ASTRAL_RUNE_ITEM_ID, 1);
+      inventory.adds(ASTRAL_SHARDS_ITEM_ID, 1);
       player.sendMessage("You hammer the astral rune into shards.");
       return true;
     }

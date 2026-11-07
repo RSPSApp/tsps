@@ -747,6 +747,24 @@ test("pact equipment groups: a godsword, a zenyte piece, or one moon armour piec
   assert.ok(done(f, "equip-some-zenyte-jewelry"));
 });
 
+test("assembling a Slayer helm awards the task", async (t) => {
+  const f = pactsCharacter(t);
+  const skills = f.player.getSkillManager();
+  skills.setMaxLevel(core.Skill.CRAFTING, 55);
+  skills.setCurrentLevel(core.Skill.CRAFTING, 55);
+  const unlock = core.CacheDefinitions.getVarbitId("slayer_helm_unlocked");
+  assert.equal(Number.isInteger(unlock), true);
+  f.player.getPacketSender().sendVarbit(unlock, 1);
+  for (const name of ["Black mask", "Earmuffs", "Facemask", "Nose peg", "Spiny helmet", "Enchanted gem"]) {
+    f.player.getInventory().add(new core.Item(item(name)), true);
+  }
+  const { UseItemPacketListener } = require("../dist/net/packet/impl/UseItemPacketListener");
+  const inventory = f.player.getInventory();
+  UseItemPacketListener.itemOnItem(f.player, inventory.getSlotForItemId(item("Earmuffs")), inventory.getSlotForItemId(item("Black mask")));
+  assert.equal(inventory.getAmount(item("Slayer helmet")), 1, f.messages.join(" | "));
+  assert.ok(done(f, "assemble-a-slayer-helm"), f.messages.join(" | "));
+});
+
 test("item sets from the cache: a piece, the whole set, one whole Barrows set (Verac's, worn for real)", async (t) => {
   const f = pactsCharacter(t);
   const skills = f.player.getSkillManager();

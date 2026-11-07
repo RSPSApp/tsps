@@ -266,12 +266,96 @@ test("Grand Exchange item actions fall through to the interface action handler",
 });
 
 test("Bones to Bananas awards one cast of Magic XP regardless of plain bone count", async t => {
+  const previousBots = process.env.DISABLE_PLAYER_BOTS;
+  t.after(() => { if (previousBots === undefined) delete process.env.DISABLE_PLAYER_BOTS; else process.env.DISABLE_PLAYER_BOTS = previousBots; });
   process.env.DISABLE_PLAYER_BOTS = "1";
+  const nativeErrors = [], submittedNativeTasks = new Set();
+  const reportError = console.error.bind(console), submitTask = core.TaskManager.submit.bind(core.TaskManager);
+  t.mock.method(console, 'error', (...args) => { nativeErrors.push(args.map(String).join(' ')); reportError(...args); });
+  t.mock.method(core.TaskManager, 'submit', task => { submittedNativeTasks.add(task); return submitTask(task); });
+  t.after(() => {
+    try { PluginManager.emitServerShutdown({}); }
+    finally {
+      for (const task of submittedNativeTasks) task.stop();
+      core.TaskManager.process();
+      assert.ok([...submittedNativeTasks].every(task => !task.isRunning()), 'all tasks submitted by this native startup and its actors retired');
+      assert.deepEqual(nativeErrors, [], 'no swallowed native plugin or teardown errors');
+    }
+  });
   PluginManager.loadFromDirectory(path.resolve(__dirname,"../plugins"));
-  t.after(()=>PluginManager.emitServerShutdown({}));
   core.RegionManager.init(); core.RegionManager.loadMapFiles(3222,3218); PluginManager.emitServerStartup({});
   assert.equal(core.WorldDefinition.isMembersWorld(),true,"configured native members world");
   let index=6800;
+
+
+  // Fruit cutting uses the same complete native plugin startup as the spell controls.
+  for (const freeSlots of [3, 0]) await t.test(`pineapple Slice with ${freeSlots} free slots`, async t => {
+    const { player: p, connection: c } = createPlayer(t);
+    const { MultiChatboxPrompt } = require('../dist/game/model/menu/MultiChatboxPrompt');
+    p.setLocation(new core.Location(3226, 3218, 0)); p.needsPlacement = false;
+    const inv = p.getInventory(), skills = p.getSkillManager();
+    const id = name => core.CacheDefinitions.getObjId(name);
+    const knife = id('knife'), fruit = id('pineapple'), ring = id('pineapple_ring'), filler = id('bread');
+    for (const [value, name] of [[knife, 'Knife'], [fruit, 'Pineapple'], [ring, 'Pineapple ring'], [filler, 'Bread']]) {
+      assert.ok(Number.isInteger(value));
+      const definition = core.ItemDefinition.forId(value);
+      assert.equal(definition.getName(), name);
+      assert.equal(definition.isNoted(), false); assert.equal(definition.isStackable(), false);
+    }
+    assert.ok(p.isRegistered() && p.getHitpoints() > 0 && !p.busy(), 'living idle actor');
+    assert.equal(core.WorldDefinition.isMembersWorld(), true);
+    for (const value of [knife, fruit]) inv.add(new core.Item(value, 1), false);
+    inv.add(new core.Item(filler, inv.getFreeSlots() - freeSlots), false);
+    assert.equal(inv.getFreeSlots(), freeSlots);
+    const fruitSlot = inv.getSlotForItemId(fruit), knifeSlot = inv.getSlotForItemId(knife);
+    const selectedFruit = inv.getItems()[fruitSlot], selectedKnife = inv.getItems()[knifeSlot];
+    for (const item of [selectedFruit, selectedKnife]) {
+      assert.equal(item.getAmount(), 1); assert.equal(item.getMeta(), null);
+      assert.equal(item.isPresetItem(), false); assert.equal(item.isUntradeable(), false); assert.equal(item.isUnbankable(), false);
+    }
+    const owned = () => core.ItemOnGroundManager.ownedBy(p.getUsername());
+    const floor = () => owned().filter(g => g.getPrivateArea() === p.getPrivateArea() && g.getPosition().equals(p.getLocation()));
+    const itemVector = items => items.filter(item => item && item.getId() > 0).map(item => [item.getId(), item.getAmount(), item.getMeta()]).sort((a,b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+    const otherStores = () => ({ equipment: itemVector(p.getEquipment().getItems()), banks: p.getBanks().map(bank => bank === null ? null : itemVector(bank.getItems())) });
+    const beforeStores = otherStores(), beforeInventory = itemVector(inv.getItems());
+    const xp = skills.getExperience(core.Skill.COOKING);
+    assert.deepEqual(owned(), [], 'no prior owned floor output');
+    const actions = [], original = PluginManager.emitItemOnItem.bind(PluginManager);
+    t.mock.method(PluginManager, 'emitItemOnItem', event => {
+      const result = original(event);
+      if (event.player === p) actions.push({ used: event.usedItem, target: event.usedWithItem, handled: event.handled, result });
+      return result;
+    });
+    t.after(() => {
+      p.closeInterruptibleInterfaces();
+      PluginManager.emitPlayerDisconnect({ player: p, username: p.getUsername() });
+      core.TaskManager.cancelTasks(p.getIndex()); core.TaskManager.cancelTasks(p);
+      for (const g of owned()) core.ItemOnGroundManager.deregister(g);
+      core.ItemOnGroundManager.process();
+    });
+    await c.dispatch([{ type: 'inventory_use_on', itemId: knife, slot: knifeSlot,
+      target: { kind: 'inventory', id: fruit, slot: fruitSlot } }]);
+    c.processTurnPackets();
+    assert.deepEqual(actions, [{ used: selectedKnife, target: selectedFruit, handled: true, result: true }], 'decoded use reaches the real registered fruit consumer');
+    assert.deepEqual(MultiChatboxPrompt.getPending(p), { title: 'How would you like to cut the fruit?', options: ['Dice', 'Slice'] });
+    assert.equal(p.getDialogueManager().isActive(), false);
+    assert.equal(p.getPacketSender().isChatboxInterface(219), true, 'real current fruit prompt mounted');
+    assert.deepEqual(itemVector(inv.getItems()), beforeInventory, 'opening the prompt consumes nothing');
+    await c.dispatch([{ type: 'dialogue_continue', widgetId: MultiChatboxPrompt.OPTIONS_WIDGET_ID, childIndex: 2 }]);
+    c.processTurnPackets();
+    const floorRings = floor().filter(g => g.getItem().getId() === ring).reduce((n,g) => n + g.getItem().getAmount(), 0);
+    assert.equal(inv.getAmount(ring) + floorRings, 4, 'Slice conserves four rings across inventory and owned floor');
+    assert.equal(inv.getAmount(fruit), 0);
+    assert.equal(inv.getItems()[knifeSlot], selectedKnife, 'original knife retained');
+    assert.equal(skills.getExperience(core.Skill.COOKING), xp, 'cutting grants zero XP');
+    assert.deepEqual(otherStores(), beforeStores);
+    const retained = beforeInventory.filter(([value]) => value !== fruit);
+    assert.deepEqual(itemVector(inv.getItems()).filter(([value]) => value !== ring), retained);
+    assert.equal(inv.getAmount(ring), freeSlots === 3 ? 4 : 1);
+    assert.equal(floorRings, freeSlots === 3 ? 0 : 3);
+    assert.ok(owned().every(g => floor().includes(g) && g.getItem().getId() === ring && g.getItem().getMeta() === null));
+    assert.equal(MultiChatboxPrompt.getPending(p), null);
+  });
 
     for (const count of [1, 3]) await t.test(`${count} plain bones`, async t => {
       const channel={kind:"test",remoteAddress:"127.0.0.1",isOpen:()=>true,send:()=>true,close(){},onData(){},onError(){},onClose(){}};

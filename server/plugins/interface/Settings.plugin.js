@@ -522,6 +522,10 @@ function sendGameframeLayout(player, root) {
   for (const packet of encodeGameframeFlags(root)) {
     player.getSession().sendClientPacket(packet);
   }
+  // The client moves the open mounts onto the new root, but live also reopens the orbs on
+  // its orbs pane, which re-runs their onLoad scripts that place the Activity Adviser and
+  // store orbs for this layout.
+  sender.sendSubInterface(ORBS_PANE_UID, pluginApi.core.orbsGroupFor(root), 1);
 }
 
 function receiveGameframeLayout(event) {
@@ -533,7 +537,6 @@ function receiveGameframeLayout(event) {
   player.setAttribute(MOBILE_CLIENT_ATTRIBUTE, data.mobile ? true : null);
   const root = getGameframeRoot(player);
   sendGameframeLayout(player, root);
-  player.getPacketSender().sendSubInterface(ORBS_PANE_UID, pluginApi.core.orbsGroupFor(root), 1);
 }
 
 function choosePlayerAttackOption({ player, slot }) {

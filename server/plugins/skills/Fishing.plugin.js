@@ -13,6 +13,7 @@ const Guild = require("./fishing/Guild.Fishing");
 const AnglerOutfit = require("./fishing/AnglerOutfit.Fishing");
 const MinnowPlatform = require("./fishing/MinnowPlatform.Fishing");
 const RadasBlessing = require("./fishing/RadasBlessing.Fishing");
+const SpiritFlakes = require("./fishing/SpiritFlakes.Fishing");
 const KarambwanVessel = require("./fishing/Karambwan.Fishing");
 const ClueBottles = require("./fishing/ClueBottles.Fishing");
 const { pauseForLevelUp } = require("./SkillActions");
@@ -738,22 +739,26 @@ function inventoryBlocks(player, tool) {
 }
 
 /**
- * Rada's blessing: a chance to double a catch, with no experience or bait. The Wiki
- * (Rada's blessing 4) shows "Rada's blessing enabled you to catch an extra fish." for it. An
- * infernal harpoon gives the extra its own chance to be cooked (Wiki: Infernal harpoon), which
- * gives Cooking XP and uses an infernal charge. That the extra uses no crystal harpoon charge is
- * inferred, not Wiki.
+ * Rada's blessing and spirit flakes: a chance to double a catch, with no experience or bait. They
+ * stack (Wiki: Fishing enhancers), so one roll covers both: the flakes' 50% first, then the
+ * blessing's chance on top. The Wiki (Rada's blessing 4) shows "Rada's blessing enabled you to catch
+ * an extra fish." for the blessing; the flakes have no message. An infernal harpoon gives the extra
+ * its own chance to be cooked (Wiki: Infernal harpoon), which gives Cooking XP and uses an infernal
+ * charge. That the extra uses no crystal harpoon charge is inferred, not Wiki.
  * Junk is left out: the Wiki says "fish" and doesn't settle it.
  */
-function landExtra(player, variant, fish, amount) {
-  if (fish.junk || !RadasBlessing.rollExtraFish(player)) return;
+function landExtra(player, variant, fish, amount, flaked) {
+  if (fish.junk) return;
+  const source = RadasBlessing.rollExtraFish(player, flaked ? SpiritFlakes.EXTRA_FISH_CHANCE : 0);
+  if (!source) return;
+  const message = source === "blessing" ? RadasBlessing.EXTRA_FISH_MESSAGE : null;
   if (variant.infernal && InfernalHarpoon.tryCookFish(player, fish.id)) {
-    spam(player, RadasBlessing.EXTRA_FISH_MESSAGE);
+    if (message) spam(player, message);
     return;
   }
   if (!hasRoom(player, fish)) return;
   giveCatch(player, fish.id, amount);
-  spam(player, RadasBlessing.EXTRA_FISH_MESSAGE);
+  if (message) spam(player, message);
 }
 
 function landCatch(player, tool, variant, caught, spotId = null) {
@@ -764,7 +769,7 @@ function landCatch(player, tool, variant, caught, spotId = null) {
   for (const fish of caught) {
     if (!hasRoom(player, fish)) break;
     const amount = fish.amount(player);
-    landed.push({ fish, amount });
+    landed.push({ fish, amount, flaked: !fish.junk && SpiritFlakes.consumeFlake(player) });
     if (!variant.infernal || !InfernalHarpoon.tryCookFish(player, fish.id)) {
       giveCatch(player, fish.id, amount, fish.experience * xpMultiplier);
       spam(player, fish.message(amount));
@@ -777,9 +782,9 @@ function landCatch(player, tool, variant, caught, spotId = null) {
       player.getSkillManager().addExperiences(skill, xp);
     }
   }
-  // Rada's blessing rolls once for each fish, after the whole catch has its slots.
-  for (const { fish, amount } of landed) {
-    landExtra(player, variant, fish, amount);
+  // Rada's blessing and the flakes roll once for each fish, after the whole catch has its slots.
+  for (const { fish, amount, flaked } of landed) {
+    landExtra(player, variant, fish, amount, flaked);
   }
   // One bottle roll set per natural catch batch; Rada's extra is not another action.
   // The tutorial pond is outside the supported scope; no retail exclusion is inferred.
@@ -983,6 +988,7 @@ module.exports = {
     TaskManager.submit(new FishingTask(activeSessions));
     InfernalHarpoon.attach(api);
     RadasBlessing.attach(api);
+    SpiritFlakes.attach(api);
     CrystalHarpoon.attach(api);
     Guild.attach(api);
     AnglerOutfit.attach(api);

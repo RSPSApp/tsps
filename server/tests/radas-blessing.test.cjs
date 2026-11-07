@@ -185,6 +185,70 @@ function initializeCache() {
   return cacheReady;
 }
 
+test("Spirit flakes: 50% for a second fish, one flake per fish caught, stacking with Rada's blessing", async () => {
+  const { core, Fishing, fisher, amount } = await fishingLoop();
+  const { ItemIdentifiers: I } = core;
+  const { TOOLS, FISH } = Fishing;
+  const wear = (p, id) => {
+    p.getEquipment = () => ({ contains: (item) => item === id, getItems: () => new Array(14).fill(null) });
+    return p;
+  };
+  const lobster = (p) => Fishing.landCatch(p, TOOLS.LOBSTER_POT, Fishing.findTool(p, TOOLS.LOBSTER_POT), [FISH.LOBSTER]);
+
+  // Wiki (Spirit flakes): 50% chance of an extra fish, no extra experience.
+  await withRandom(0.499, async () => {
+    const p = fisher({ items: [[I.LOBSTER_POT], [I.SPIRIT_FLAKES, 10]] });
+    lobster(p);
+    assert.equal(amount(p, I.RAW_LOBSTER), 2, "just inside 50%");
+    assert.equal(amount(p, I.SPIRIT_FLAKES), 9, "one flake used");
+    assert.equal(p.xp, FISH.LOBSTER.experience, "no experience for the second fish");
+    assert.deepEqual(p.messages.filter((m) => /extra fish/.test(m)), [], "no blessing message");
+  });
+  // "Players will always lose a flake per fish caught, regardless of whether they get a single or double catch."
+  await withRandom(0.501, async () => {
+    const p = fisher({ items: [[I.LOBSTER_POT], [I.SPIRIT_FLAKES, 10]] });
+    lobster(p);
+    assert.equal(amount(p, I.RAW_LOBSTER), 1, "just outside 50%");
+    assert.equal(amount(p, I.SPIRIT_FLAKES), 9, "a single catch still uses a flake");
+  });
+  await withRandom(0.001, async () => {
+    const none = fisher({ items: [[I.LOBSTER_POT]] });
+    lobster(none);
+    assert.equal(amount(none, I.RAW_LOBSTER), 1, "no flakes, no blessing");
+    const junk = fisher({ items: [[I.BIG_FISHING_NET], [I.SPIRIT_FLAKES, 10]] });
+    Fishing.landCatch(junk, TOOLS.BIG_NET, Fishing.findTool(junk, TOOLS.BIG_NET), [FISH.SEAWEED]);
+    assert.equal(amount(junk, I.SEAWEED), 1, "junk is not a fish");
+    assert.equal(amount(junk, I.SPIRIT_FLAKES), 10, "and uses no flake");
+    // Wiki: they cannot activate with one empty slot left; the fish takes it, the flake is still lost.
+    const crowded = fisher({ items: [[I.LOBSTER_POT], [I.SPIRIT_FLAKES, 10], ...new Array(25).fill([I.LOGS])] });
+    lobster(crowded);
+    assert.equal(amount(crowded, I.RAW_LOBSTER), 1, "no room for the second");
+    assert.equal(amount(crowded, I.SPIRIT_FLAKES), 9);
+  });
+  // The last flake is used up and its slot freed.
+  await withRandom(0.001, async () => {
+    const p = fisher({ items: [[I.LOBSTER_POT], [I.SPIRIT_FLAKES, 1]] });
+    lobster(p);
+    assert.equal(amount(p, I.SPIRIT_FLAKES), 0);
+    assert.equal(amount(p, I.RAW_LOBSTER), 2);
+  });
+  // Stacks with Rada's blessing 4: flakes take the first 50%, the blessing the next 8%, with its message.
+  for (const [value, count, message] of [[0.55, 2, true], [0.585, 1, false]]) {
+    await withRandom(value, async () => {
+      const p = wear(fisher({ items: [[I.LOBSTER_POT], [I.SPIRIT_FLAKES, 10]] }), I.RADAS_BLESSING_4);
+      lobster(p);
+      assert.equal(amount(p, I.RAW_LOBSTER), count, `roll ${value}`);
+      assert.equal(p.messages.some((m) => /Rada's blessing enabled/.test(m)), message);
+    });
+  }
+  // A net lands several fish at once and takes a flake for each.
+  await withRandom(0.9, async () => {
+    const p = fisher({ items: [[I.SMALL_FISHING_NET], [I.SPIRIT_FLAKES, 10]] });
+    Fishing.landCatch(p, TOOLS.NET, Fishing.findTool(p, TOOLS.NET), [FISH.SHRIMP, FISH.ANCHOVY]);
+    assert.equal(amount(p, I.SPIRIT_FLAKES), 8, "one flake per fish");
+  });
+});
+
 async function fishingLoop() {
   const { PluginManager } = require("../dist/plugins/PluginManager");
   await initializeCache();

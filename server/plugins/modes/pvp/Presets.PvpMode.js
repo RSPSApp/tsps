@@ -694,18 +694,39 @@ function applyPreset(player, preset) {
   // where the preset's non-spawnable items come from.
   // The item given back is the one taken: its own meta (charges), not the meta saved with the preset. Copying the
   // saved meta onto a clone refilled a charged item (a toxic staff, serpentine helm, sceptre) on every reload.
-  const takenMeta = new Map();
+  // One id can sit in several bank stacks (different meta, a legacy split, a carried stack banked beside its own), so
+  // the amount is taken from each stack in turn and given back as one part per meta: taking from the first stack only
+  // and spawning the full amount made the rest out of nothing.
+  const takenParts = new Map();
   for (const item of nonSpawnableRequirements) {
     const bank = player.getBank(Bank.getTabForItem(player, item.getId()));
-    const slot = bank.getItems().findIndex((candidate) => candidate?.getId() === item.getId() && candidate.getAmount() > 0);
-    if (slot < 0) continue;
-    const real = bank.getItems()[slot];
-    takenMeta.set(item, real.getMeta() ? structuredClone(real.getMeta()) : null);
-    bank.deleteAtSlot(slot, Math.min(item.getAmount(), real.getAmount()));
+    const parts = [];
+    let needed = item.getAmount();
+    while (needed > 0) {
+      const slot = bank.getItems().findIndex((candidate) => candidate?.getId() === item.getId() && candidate.getAmount() > 0);
+      if (slot < 0) break;
+      const real = bank.getItems()[slot];
+      const taken = Math.min(needed, real.getAmount());
+      const meta = real.getMeta() ? structuredClone(real.getMeta()) : null;
+      const same = parts.find((part) => JSON.stringify(part.meta) === JSON.stringify(meta));
+      if (same) same.amount += taken;
+      else parts.push({ amount: taken, meta });
+      bank.deleteAtSlot(slot, taken);
+      needed -= taken;
+    }
+    takenParts.set(item, parts);
   }
+  // Parts after the first (another meta) can't share the preset's slot: they go to the inventory after the kit, or
+  // back to the bank when it has no room.
+  const extraParts = [];
   const spawnTaken = (item) => {
     const next = spawnPresetItem(item, preset, player);
-    if (next && takenMeta.has(item)) next.setMeta(takenMeta.get(item));
+    const parts = takenParts.get(item);
+    if (!next || !parts) return next;
+    if (parts.length === 0) return null;
+    next.setAmount(parts[0].amount);
+    next.setMeta(parts[0].meta);
+    for (const part of parts.slice(1)) extraParts.push(new Item(item.getId(), part.amount, part.meta));
     return next;
   };
 
@@ -736,6 +757,10 @@ function applyPreset(player, preset) {
       continue;
     }
     player.getEquipment().setItem(slot, next);
+  }
+  for (const part of extraParts) {
+    if (player.getInventory().getAddableAmount(part) >= part.getAmount()) player.getInventory().addItem(part);
+    else player.getBank(Bank.getTabForItem(player, part.getId())).add(part, false);
   }
 
   player.setSpellbook(preset.getSpellbook());

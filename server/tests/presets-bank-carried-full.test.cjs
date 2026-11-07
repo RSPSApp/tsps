@@ -126,3 +126,50 @@ test("a custom preset gives back the real item as it is, not as it was saved", (
   assert.ok(loaded, "the item is carried");
   assert.equal(loaded.getMetaValue("test-charges"), 100, "with the bank copy's charges, not the saved ones");
 });
+
+// One id can sit in several bank stacks: different meta, a legacy split of plain stacks, or a carried stack banked
+// beside one with meta. Loading took the amount from the first stack only but still spawned the preset's full amount,
+// so the total grew on every reload. Each case loads a preset needing 100 dragon knives (stackable, not spawnable).
+const knifeTotal = (p) => {
+  const id = I.DRAGON_KNIFE;
+  const bank = Array.from({ length: 10 }, (_, tab) => p.getBank(tab)?.getAmount?.(id) ?? 0).reduce((a, b) => a + b, 0);
+  return bank + p.getInventory().getAmount(id) + p.getEquipment().getAmount(id);
+};
+const knifePreset = () => new Presetable("knives", [new core.Item(I.DRAGON_KNIFE, 100)], [], [99, 99, 99, 99, 99, 99, 99], MagicSpellbook.NORMAL, false);
+const metaKnives = (amount) => {
+  const item = new core.Item(I.DRAGON_KNIFE, amount);
+  item.setMetaValue("test-mark", 1);
+  return item;
+};
+for (const [name, setup, total] of [
+  ["60 with meta and 60 plain banked", (p) => { p.getBank(0).add(metaKnives(60), false); p.getBank(0).add(new core.Item(I.DRAGON_KNIFE, 60), false); }, 120],
+  ["two plain stacks of 60 (a legacy split)", (p) => { p.getBank(0).setItem(0, new core.Item(I.DRAGON_KNIFE, 60)); p.getBank(0).setItem(1, new core.Item(I.DRAGON_KNIFE, 60)); }, 120],
+  ["70 plain carried and 40 with meta banked", (p) => { p.getBank(0).add(metaKnives(40), false); p.getInventory().setItem(0, new core.Item(I.DRAGON_KNIFE, 70)); }, 110],
+]) {
+  test(`a custom preset needing more than one stack keeps the total: ${name}`, (t) => {
+    const f = actor(t);
+    assert.equal(new core.Item(I.DRAGON_KNIFE, 1).getDefinition().isStackable(), true, "dragon knives stack");
+    setup(f.p);
+    assert.equal(knifeTotal(f.p), total);
+    Presets.applyPreset(f.p, knifePreset());
+    assert.equal(f.p.getInventory().getAmount(I.DRAGON_KNIFE), 100, "the preset's 100 are carried");
+    assert.equal(knifeTotal(f.p), total, "and none were made: the rest stay banked");
+    Presets.applyPreset(f.p, knifePreset());
+    assert.equal(knifeTotal(f.p), total, "a reload keeps the total too");
+  });
+}
+
+test("a worn preset stack from two stacks wears the first and carries the rest, each with its own meta", (t) => {
+  const f = actor(t);
+  f.p.getBank(0).add(metaKnives(60), false);
+  f.p.getBank(0).add(new core.Item(I.DRAGON_KNIFE, 60), false);
+  const worn = new Presetable("worn knives", [], [new core.Item(I.DRAGON_KNIFE, 100)], [99, 99, 99, 99, 99, 99, 99], MagicSpellbook.NORMAL, false);
+  Presets.applyPreset(f.p, worn);
+  const weapon = f.p.getEquipment().getItems()[core.Equipment.WEAPON_SLOT];
+  assert.equal(weapon.getId(), I.DRAGON_KNIFE);
+  assert.equal(weapon.getAmount(), 60, "the first stack is worn");
+  assert.equal(weapon.getMetaValue("test-mark"), 1, "with its own meta");
+  const carried = f.p.getInventory().getValidItems().filter((item) => item.getId() === I.DRAGON_KNIFE);
+  assert.deepEqual(carried.map((item) => [item.getAmount(), item.getMetaValue("test-mark") ?? null]), [[40, null]], "the plain rest is carried");
+  assert.equal(knifeTotal(f.p), 120, "and the total is kept");
+});

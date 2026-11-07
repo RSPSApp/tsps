@@ -708,3 +708,76 @@ test('area music follows actual same-region movement, dynamic selection and manu
   assert.deepEqual(await flush(), []);
   assert.ok(delivered.length > 0, 'the real session delivers its encoded client packets');
 });
+
+test('native music Play selects the visible cache row, refuses locked tracks and survives a jingle', async t => {
+  await setup();
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { ClientConnection } = require('../dist/net/NetworkBuilder');
+  const core = PluginManager.getCoreApi();
+  MusicPlugin.register(PluginManager.createApi('MusicSelectionTest'));
+  const channel = { kind: 'test', isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+  const session = new PlayerSession(channel);
+  const player = new Player(session);
+  session.setPlayer(player);
+  player.setUsername('musicclick');
+  assert.equal(core.World.getPlayers().add(player), true);
+  player.setLocation(new Location(3222, 3218, 0));
+  player.setNeedsPlacement(false);
+  const connection = new ClientConnection(channel);
+  connection.player = player;
+  const events = [];
+  const configs = new Map();
+  const sender = player.getPacketSender();
+  const sendConfig = sender.sendConfig.bind(sender);
+  sender.sendConfig = (id, value) => { configs.set(id, value); return sendConfig(id, value); };
+  PluginManager.createApi('MusicSelectionObserver').onCustomEvent('audio:play-song', event => {
+    if (event.player === player) events.push(event.trackId);
+  });
+  t.after(() => core.World.getPlayers().remove(player));
+  // music_list_setup uses db_find(music:hidden, false), BEFORE alphabetical sorting.
+  const rows = core.CacheDefinitions.getDbTableRows(44).filter(row => row.int(9, 0) === 0);
+  const row = rows.find(row => row.string(1) === 'Adventure');
+  const track = core.Music.tracks().find(track => track.rowId === row.id);
+  const click = async (slot, op = 1) => {
+    await connection.dispatch([{ type: 'widget_action', widgetId: (239 << 16) | 11,
+      groupId: 239, childId: 11, buttonNum: op, opId: op, slot, itemId: -1 }]);
+    connection.processTurnPackets();
+  };
+  const songIds = () => session.pendingPackets.filter(frame => frame[0] === 133)
+    .map(frame => frame.readUInt16BE(frame.length - 10));
+  await click(rows.indexOf(row));
+  assert.deepEqual(events, [], 'a locked row cannot play or satisfy a music clue');
+  assert.equal(player.getAudioSettings()[18], 0, 'a refused selection does not change mode');
+  core.RegionManager.init();
+  Progress.unlock(player, track.id);
+  await click(rows.indexOf(row));
+  assert.deepEqual(events, [track.id], 'native Play reaches the actual playback event used by Cecilia');
+  assert.equal(player.getAudioSettings()[18], 2, 'manual selection uses Single mode');
+  assert.equal(configs.get(3883), row.id);
+  assert.equal(session.getCurrentMusicTrack(), track.id);
+  player.getPacketSender().sendJingle(18);
+  assert.deepEqual(songIds(), [track.id], 'the jingle resumes the selected track, not the old area track');
+  await Promise.resolve();
+  session.flush(1);
+  assert.deepEqual(songIds(), [], 'the next area update does not overwrite the manual selection');
+  await click(-1);
+  await click(rows.length);
+  await click(0xffff);
+  await click(rows.indexOf(row), 3);
+  assert.deepEqual(events, [track.id], 'bad slots and playlist operations cannot play a track');
+  const { PlayerSave } = require('../dist/game/entity/impl/player/persistence/PlayerSave');
+  const saved = PlayerSave.fromPlayer(player);
+  const restoredSession = new PlayerSession(channel);
+  const restored = new Player(restoredSession);
+  restoredSession.setPlayer(restored);
+  saved.applyToPlayer(restored);
+  MusicPlugin._test.onMusicLogin({ player: restored });
+  assert.equal(restored.getAudioSettings()[18], 2);
+  assert.equal(restoredSession.getCurrentMusicTrack(), track.id, 'a fresh session resumes the saved Single selection');
+  restored.setAttribute(Progress.UNLOCKED_TRACKS_ATTRIBUTE, []);
+  MusicPlugin._test.onMusicLogin({ player: restored });
+  assert.equal(restored.getAudioSettings()[18], 0, 'a no-longer-unlocked selection falls back to Area mode');
+  player.applyAudioSettingFromClient(18, 0);
+  session.flush(2);
+  assert.equal(session.getCurrentMusicTrack(), core.Music.forRegion(12850), 'Area mode still restores region music');
+});

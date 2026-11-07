@@ -1763,10 +1763,21 @@ module.exports = function registerShadowOfTheStormQuest(api) {
   function dyeClothing(player, clothingId) {
     const { result, name, vial } = BLACK_DYEABLE_CLOTHING.get(clothingId);
     if (!hasItem(player, BLACK_DYE_ITEM_ID) || !hasItem(player, clothingId)) return;
-    player.getInventory().deleteNumber(BLACK_DYE_ITEM_ID, 1);
-    player.getInventory().deleteNumber(clothingId, 1);
-    player.getInventory().adds(result, 1);
-    if (vial) player.getInventory().adds(ItemIdentifiers.VIAL, 1);
+    // A preset dye (ground into a preset vial) never dyes plain clothing; when the dye leaves its vial behind,
+    // the dye becomes that vial in place (setId keeps its meta).
+    const dye = player.getInventory().getItems?.().find((item) => item?.getId() === BLACK_DYE_ITEM_ID);
+    if (dye && (dye.isPresetItem?.() === true || dye.isUntradeable?.() === true || dye.isUnbankable?.() === true)) {
+      player.sendMessage("Preset items cannot be used for this.");
+      return;
+    }
+    if (vial && dye) dye.setId(ItemIdentifiers.VIAL);
+    else player.getInventory().deleteNumber(BLACK_DYE_ITEM_ID, 1);
+    // In place (setId keeps the clothing's meta: a preset robe or hat stays preset once dyed).
+    const converted = player.getInventory().getItems?.().find((item) => item?.getId() === clothingId);
+    if (converted) converted.setId(result);
+    else { player.getInventory().deleteNumber(clothingId, 1); player.getInventory().adds(result, 1); }
+    player.getInventory().refreshItems?.();
+    if (vial && !dye) player.getInventory().adds(ItemIdentifiers.VIAL, 1);
     player.getSkillManager().addExperiences(Skill.CRAFTING, DYE_CRAFTING_XP);
     player.getPacketSender().sendSoundEffect(DYE_SOUND, 1, 0);
     player.sendMessage(`You dye the ${name} black.`);

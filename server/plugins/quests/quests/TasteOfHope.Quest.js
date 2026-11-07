@@ -1613,8 +1613,11 @@ module.exports = function registerTasteOfHopeQuest(api) {
         player.sendMessage("The fountain is bone dry.");
         return;
       }
-      player.getInventory().deleteNumber(VIAL_ITEM_ID, 1);
-      player.getInventory().adds(VIAL_OF_WATER_ITEM_ID, 1);
+      // In place (setId keeps the vial's meta: a preset vial stays preset).
+      const converted = player.getInventory().getItems?.().find((item) => item?.getId() === VIAL_ITEM_ID);
+      if (converted) converted.setId(VIAL_OF_WATER_ITEM_ID);
+      else { player.getInventory().deleteNumber(VIAL_ITEM_ID, 1); player.getInventory().adds(VIAL_OF_WATER_ITEM_ID, 1); }
+      player.getInventory().refreshItems?.();
       player.sendMessage("You fill the vial with water from the fountain.");
       return;
     }

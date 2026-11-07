@@ -572,8 +572,11 @@ module.exports = function registerDeathPlateauQuest(api) {
           return;
         }
         player.getInventory().deleteNumber(IRON_BAR_ITEM_ID, 1);
-        player.getInventory().deleteNumber(CLIMBING_BOOTS_ITEM_ID, 1);
-        player.getInventory().adds(SPIKED_BOOTS_ITEM_ID, 1);
+        // In place (setId keeps the boots' meta: preset climbing boots make preset spiked boots).
+        const converted = player.getInventory().getItems?.().find((item) => item?.getId() === CLIMBING_BOOTS_ITEM_ID);
+        if (converted) converted.setId(SPIKED_BOOTS_ITEM_ID);
+        else { player.getInventory().deleteNumber(CLIMBING_BOOTS_ITEM_ID, 1); player.getInventory().adds(SPIKED_BOOTS_ITEM_ID, 1); }
+        player.getInventory().refreshItems?.();
       }
       if (quest.getStage(player) < STAGE_BOOTS) quest.setStage(player, STAGE_BOOTS);
       return;

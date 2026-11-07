@@ -995,6 +995,13 @@ export class OsrsClient {
     tradeOfferInventory: Inventory = new Inventory(28);
     /** The other player's offered items use OSRS's inventory-other offset. */
     tradeOtherOfferInventory: Inventory = new Inventory(28);
+    /**
+     * Ids of the extra inventories (beyond inv/worn/bank) the server has actually sent. The CS2 VM
+     * map is seeded with empty trade/shop/collection inventories at startup, so presence in that
+     * map alone does not mean the server sent one; the RuneLite facade reads this set instead.
+     */
+    // Trade, shop and collection inventories arrive through their own handlers and are never added here, so getItemContainer returns null for those ids.
+    readonly serverSentInventoryIds = new Set<number>();
     private tradeState?: TradeWindowState;
     private inventorySeededFromServer: boolean = false;
     private readonly pendingInventoryMovePredictions: Array<{
@@ -3165,6 +3172,7 @@ export class OsrsClient {
                                 Array.isArray(snapshot.slots) ? snapshot.slots : [],
                                 { selectedSlot: null },
                             );
+                            this.serverSentInventoryIds.add(inventoryId);
                             // Interfaces listening to this inventory redraw, as for any update;
                             // an "other" inventory (id + 32768) notifies listeners of its id.
                             markInvTransmit(inventoryId & 0x7fff);
@@ -8536,6 +8544,33 @@ export class OsrsClient {
     }
 
     /**
+     * Forget the extra inventories the last session sent: ids no longer count as sent, VM entries
+     * the server added are dropped, and the startup-seeded trade/shop/collection ones are put back
+     * to their empty seeded state. INV/WORN/BANK are left alone.
+     */
+    private forgetSentInventories(): void {
+        this.serverSentInventoryIds.clear();
+        const map = this.cs2Vm?.context?.inventories;
+        if (!map) return;
+        const seeded = new Map<number, Inventory>([
+            [90, this.tradeOfferInventory],
+            [90 + 32768, this.tradeOtherOfferInventory],
+            [516, this.shopInventory],
+            [620, this.collectionInventory],
+        ]);
+        for (const id of [...map.keys()]) {
+            if (id === 93 || id === 94 || id === 95) continue;
+            const original = seeded.get(id);
+            if (original) {
+                original.clear();
+                map.set(id, original);
+            } else {
+                map.delete(id);
+            }
+        }
+    }
+
+    /**
      * Reset all world/game state - used on disconnect/logout to prevent memory leaks.
      * Clears all players, NPCs, widgets, ground items, and other game entities.
      * @param fullReset If true, also clears chat history, vars, and transmit cycles (for full logout to login screen)
@@ -8573,6 +8608,7 @@ export class OsrsClient {
             console.warn("[OsrsClient] WidgetManager clear error:", err);
         }
         this.serverSubInterfaces.clear();
+        this.forgetSentInventories();
 
         // Clear ground items
         try {

@@ -663,8 +663,8 @@ module.exports = function registerSinsOfTheFatherQuest(api) {
   const CRACK_MEIYERDITCH = { x: 3627, y: 3328, z: 0 };
   const CASTLE_ARENA = { x: 3565, y: 3362, z: 0 };
   const BURGH_HIDEOUT = { x: 3494, y: 9628, z: 0 };
-  const VER_SINHAZA = { x: 3663, y: 3220, z: 0 };
-  const DARKMEYER = { x: 3597, y: 3360, z: 0 };
+  // Where the medallion lands (rsprox recordings 396, 411, 1636, 1637: op4 lands at 3592,3337).
+  const DARKMEYER_MEDALLION_TILE = { x: 3592, y: 3337, z: 0 };
   const SLEPE_DOCK = { x: 3666, y: 3279, z: 0 }; // walkable shore beside the cache rowboat
 
   // ---------------------------------------------------------------------------
@@ -3695,33 +3695,10 @@ module.exports = function registerSinsOfTheFatherQuest(api) {
     return true;
   }
 
-  const MEDALLION_WILDERNESS_LIMIT = 20;
-
-  function teleportMedallion(event) {
-    const { player, itemId } = event;
-    if (itemId !== DRAKANS_MEDALLION_ITEM_ID) return false;
-    if (!quest.isComplete(player)) return false;
-    const destinations = [
-      { label: "Ver Sinhaza.", tile: VER_SINHAZA },
-      { label: "Slepe.", tile: SLEPE_DOCK },
-      { label: "Darkmeyer.", tile: DARKMEYER },
-    ];
-    // Later Myreque chapters can add a destination unlocked by their own
-    // world interaction without replacing this shared medallion menu.
-    api.emitCustomEvent("drakan-medallion:destinations", { player, destinations });
-    // Wiki (Drakan's medallion): "Players cannot teleport past level 20" Wilderness; the usual teleport rules apply.
-    const options = destinations.flatMap(({ label, tile, onTeleport }) => [label, () => {
-      const { TeleportHandler, TeleportType } = api.core;
-      const destination = new Location(tile.x, tile.y, tile.z);
-      if (!TeleportHandler.checkReqs(player, destination, MEDALLION_WILDERNESS_LIMIT)) return;
-      TeleportHandler.teleport(player, destination, TeleportType.NORMAL, false, () => onTeleport?.());
-    }]);
-    api.sendMultiChatboxPrompt(
-      player,
-      "Where would you like to teleport?",
-      ...options
-    );
-    return true;
+  /** Darkmeyer joins the medallion's destinations once the quest is done (Wiki: Drakan's medallion). */
+  function addDarkmeyerMedallionDestination(event) {
+    if (!event?.player || !Array.isArray(event.destinations) || !quest.isComplete(event.player)) return;
+    event.destinations.push({ label: "Darkmeyer", tile: DARKMEYER_MEDALLION_TILE });
   }
 
   // ---------------------------------------------------------------------------
@@ -3860,7 +3837,7 @@ module.exports = function registerSinsOfTheFatherQuest(api) {
   api.onItemOnItem(handleItemOnItem);
   api.onItemAction("Tome of Experience", { Read: readTome });
   api.onItemAction("Old note", { Read: readOldNote });
-  api.onItemAction("Drakan's medallion", { Teleport: teleportMedallion });
+  api.onCustomEvent("drakan-medallion:destinations", addDarkmeyerMedallionDestination);
   api.onNpcDeath(handleNpcDeath);
   api.onNpcBeforeDeath(handleVanstromBeforeDeath);
   api.registerArea(new CarlFollowArea());

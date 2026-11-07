@@ -79,6 +79,66 @@ test("Drakan's medallion is refused under Tele Block in the Wilderness, and tele
   assert.notDeepEqual(xy(free), WILDERNESS.slice(0, 2), "teleported");
 });
 
+const SLEPEY_TABLET = () => core.ItemIdentifiers.SLEPEY_TABLET;
+const worn = (f, option, clickType) => PM.emitItemAction({
+  player: f.p, itemId: MEDALLION(), slot: 0, item: f.p.getInventory().getItems()[0],
+  interfaceId: core.Equipment.INVENTORY_INTERFACE_ID, option, clickType, handled: false,
+});
+const prompt = (f) => core.MultiChatboxPrompt.getPending(f.p).options.filter((o) => o !== "Cancel").map((o) => o.replace(/\.$/, ""));
+
+test("Drakan's medallion lists only the destinations the player has, and lands where live OSRS does", async (t) => {
+  // Recordings 396, 403, 1429 (Ver Sinhaza), 396, 411, 1636, 1637 (Darkmeyer), 4269 (Slepe).
+  const f = actor(t, WILDERNESS, MEDALLION());
+  use(f, MEDALLION(), "Teleport");
+  assert.deepEqual(prompt(f), ["Ver Sinhaza"], "Ver Sinhaza needs no quest; Darkmeyer and Slepe are locked");
+  await choose(f, /^Ver Sinhaza/);
+  settle();
+  assert.deepEqual(xy(f), [3649, 3230]);
+
+  const done = actor(t, WILDERNESS, MEDALLION());
+  const sotf = quest("sins_of_the_father"); sotf.setStage(done.p, sotf.completionValue);
+  use(done, MEDALLION(), "Teleport");
+  assert.deepEqual(prompt(done), ["Ver Sinhaza", "Darkmeyer"], "Slepe still needs a Slepey tablet");
+  await choose(done, /^Darkmeyer/);
+  settle();
+  assert.deepEqual(xy(done), [3592, 3337], done.messages.join(" | "));
+});
+
+test("a Slepey tablet used on the medallion is used up and unlocks Slepe", async (t) => {
+  const f = actor(t, WILDERNESS, MEDALLION());
+  f.p.getInventory().add(new core.Item(SLEPEY_TABLET(), 1), false);
+  worn(f, "Slepe", 4);
+  settle();
+  assert.deepEqual(xy(f), WILDERNESS.slice(0, 2), "locked Slepe does nothing");
+  PM.emitItemOnItem({
+    player: f.p, usedItemId: SLEPEY_TABLET(), usedItemSlot: 1, usedWithItemId: MEDALLION(), usedWithItemSlot: 0,
+    usedItem: f.p.getInventory().getItems()[1], usedWithItem: f.p.getInventory().getItems()[0], handled: false,
+  });
+  assert.equal(f.p.getInventory().getAmount(SLEPEY_TABLET()), 0, "the tablet is used up");
+  use(f, MEDALLION(), "Teleport");
+  assert.deepEqual(prompt(f), ["Ver Sinhaza", "Slepe"]);
+  await choose(f, /^Slepe/);
+  settle();
+  assert.deepEqual(xy(f), [3166, 7711]);
+});
+
+test("every medallion landing is a walkable tile", () => {
+  for (const [x, y] of [[3649, 3230], [3592, 3337], [3166, 7711]]) {
+    core.RegionManager.loadMapFiles(x, y);
+    assert.equal(core.RegionManager.blocked(new core.Location(x, y, 0), null), false, `${x},${y}`);
+  }
+});
+
+test("the worn medallion's destination options teleport, and a locked one does nothing", (t) => {
+  const f = actor(t, WILDERNESS, MEDALLION());
+  worn(f, "Darkmeyer", 3);
+  settle();
+  assert.deepEqual(xy(f), WILDERNESS.slice(0, 2), "Darkmeyer is locked before Sins of the Father");
+  worn(f, "Ver Sinhaza", 2);
+  settle();
+  assert.deepEqual(xy(f), [3649, 3230]);
+});
+
 test("the goblin village sphere is refused under Tele Block and is not used up", (t) => {
   const sphere = core.ItemIdentifiers.GOBLIN_VILLAGE_SPHERE;
   const f = actor(t, WILDERNESS, sphere);

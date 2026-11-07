@@ -776,7 +776,19 @@ export class ShopManager {
             return;
         }
 
-        if (!this.canReceivePayment(player, shop.definition.getCurrency(), sellable, quantity, quantity * price)) {
+        // A multi-item sale changes the price after each unit, even when content
+        // restores stock after the transaction (the league keep-stock hook).
+        const policy = shop.definition.getSalesPolicy();
+        const stockPriced = policy.generalStore === true && shop.definition.getCurrency() === "COINS"
+            && policy.sellMultiplier != null && policy.priceChangePer != null;
+        let payment = quantity * price;
+        if (stockPriced) {
+            payment = 0;
+            for (let offset = 0; offset < quantity; offset++) {
+                payment += this.sellPrice(shop, definition, player, offset);
+            }
+        }
+        if (!this.canReceivePayment(player, shop.definition.getCurrency(), sellable, quantity, payment)) {
             player.sendMessage("You don't have enough inventory space.");
             return;
         }
@@ -792,7 +804,7 @@ export class ShopManager {
         this.addCurrency(
             player,
             shop.definition.getCurrency(),
-            quantity * price
+            payment
         );
         // Content may keep the stock as it was on a sale too ("shop:keep-stock" with `selling`, a
         // league's shops whose stock never changes): the item is paid for and not added.
@@ -938,6 +950,8 @@ export class ShopManager {
 
     /** General stores buy any item; the shop data only marks them by name. */
     private static isGeneralStore(shop: RuntimeShop): boolean {
+        const configured = shop.definition.getSalesPolicy().generalStore;
+        if (configured != null) return configured;
         return shop.definition.getId() === ShopIdentifiers.GENERAL_STORE ||
             /general store/i.test(shop.definition.getName());
     }
@@ -967,9 +981,17 @@ export class ShopManager {
         return Number.isSafeInteger(request.price) && request.price >= 0 ? request.price : price;
     }
 
-    private static sellPrice(shop: RuntimeShop, definition: ItemDefinition, player: any = null): number {
+    private static sellPrice(shop: RuntimeShop, definition: ItemDefinition, player: any = null, additionalStock = 0): number {
         const buyPrice = this.itemPrice(shop, definition);
-        const price = buyPrice > 1 ? Math.floor(buyPrice * this.SALES_TAX) : buyPrice;
+        let price = buyPrice > 1 ? Math.floor(buyPrice * this.SALES_TAX) : buyPrice;
+        const policy = shop.definition.getSalesPolicy();
+        if (policy.generalStore === true && shop.definition.getCurrency() === "COINS"
+            && policy.sellMultiplier != null && policy.priceChangePer != null) {
+            const overstock = Math.max(0, (shop.stock.get(definition.getId()) ?? 0)
+                - (shop.originalAmounts.get(definition.getId()) ?? 0) + additionalStock);
+            // Wiki StoreTableHead multipliers use per mille; the general-store floor is 10%.
+            price = Math.floor(Number(definition.getValue()) * Math.max(100, policy.sellMultiplier - overstock * policy.priceChangePer) / 1000);
+        }
         const request = {
             player, shopId: shop.definition.getId(), shopName: shop.definition.getName(), currency: shop.definition.getCurrency(),
             itemId: definition.getId(), buyPrice, price,

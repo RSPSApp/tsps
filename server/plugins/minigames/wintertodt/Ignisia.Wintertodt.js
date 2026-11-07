@@ -104,10 +104,28 @@ function giveCrates(player, count, rolls) {
   inventory.refreshItems();
 }
 
+/** Preview the same input removal without changing the live inventory or refreshing it. */
+function hasRoomForPages(player, group, count) {
+  const { Inventory, Item } = Shared.core();
+  const plan = new Inventory(player).setItems(player.getInventory().getCopiedItems());
+  let left = count;
+  for (const id of itemIds(group)) {
+    const amount = group.set ? count : Math.min(left, plan.getAmount(id));
+    if (amount > 0) plan.deleted(id, amount, false);
+    if (!group.set) left -= amount;
+  }
+  return plan.getAddableAmount(new Item(ids().BURNT_PAGE, count * group.pages)) === count * group.pages;
+}
+
 function trade(player, mode, group, count) {
   // The confirmation can stay open while the player equips, banks or drops the item.
   // Recheck every part of the offer (the whole outfit included) before taking or paying.
   if (!Number.isInteger(count) || count <= 0 || countOf(player, group) < count) return false;
+  if (mode !== "crate" && !hasRoomForPages(player, group, count)) {
+    // Local wording: the captures do not specify a full-stack refusal.
+    player.sendMessage("You don't have enough inventory space for all the burnt pages.");
+    return false;
+  }
   take(player, group, count);
   if (mode === "crate") giveCrates(player, count, group.rolls);
   else {

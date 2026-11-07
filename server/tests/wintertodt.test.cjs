@@ -64,6 +64,8 @@ function container(size) {
   const self = {
     slots,
     getItems: () => slots.map(view),
+    // Plain mock slots copied as real Items for Ignisia's native inventory preflight.
+    getCopiedItems: () => slots.map(slot => new (Shared.core().Item)(slot?.id ?? -1, slot?.amount ?? 0)),
     setItem(slot, item) {
       const id = item?.getId?.() ?? -1;
       slots[slot] = id > 0 ? { id, amount: item.getAmount?.() || 1 } : null;

@@ -73,9 +73,12 @@ function guardianHitpoints(team, averageMining, challenge) {
 function pickaxeFactor(player) {
   const { Equipment } = Shared.core();
   const weapon = player.getEquipment().getItems()[Equipment.WEAPON_SLOT]?.getId?.();
-  const pickaxe = Shared.PICKAXES.find((entry) => entry.id === weapon);
+  // Any pickaxe Mining knows (crystal, 3rd age, trailblazer...), by the level it needs.
+  const request = { itemId: weapon, pickaxe: null };
+  Shared.api().emitCustomEvent("mining:pickaxe", request);
+  const pickaxe = request.pickaxe;
   if (!pickaxe) return 0;
-  return (50 + Shared.level(player, "MINING") + Math.min(pickaxe.level, DRAGON_PICKAXE_LEVEL)) / 150;
+  return (50 + Shared.level(player, "MINING") + Math.min(pickaxe.rank ?? pickaxe.requiredLevel ?? 1, DRAGON_PICKAXE_LEVEL)) / 150;
 }
 
 /** The shared scaling's max hit for this NPC's mode and scale (Wiki: 20 Normal, 33 Challenge Mode). */

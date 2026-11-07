@@ -112,9 +112,12 @@ export class QuestHelperSession {
             return false;
         this.noteStarted(catalog.quests);
         this.patch({ catalog, status: this.state.selected ? this.state.status : "Choose a quest." });
+        if (this.state.selected === "learning_the_ropes" && catalog.quests.some(quest => quest.questKey === this.state.selected && quest.eligibility?.eligible === false)) {
+            this.select("");
+        }
         if (this.autoSelectTutorial && !this.state.selected) {
             this.autoSelectTutorial = false;
-            const tutorial = catalog.quests.find(quest => quest.questKey === "learning_the_ropes" && quest.supported && (quest.status === "NOT_STARTED" || quest.status === "IN_PROGRESS"));
+            const tutorial = catalog.quests.find(quest => quest.questKey === "learning_the_ropes" && quest.supported && quest.eligibility?.eligible !== false && (quest.status === "NOT_STARTED" || quest.status === "IN_PROGRESS"));
             if (tutorial) this.select(tutorial.questKey, tutorial.helperVariant);
         }
         return true;

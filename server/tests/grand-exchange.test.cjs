@@ -349,7 +349,7 @@ test('an unlimited item never runs out', () => {
   assert.equal(remainingLimit(p, UNLIMITED, 0), Infinity);
 });
 
-function exchange(t, config = {}, realSender = null) {
+function exchange(t, config = {}, realSender = null, { members = true, membersItems = [] } = {}) {
   const hooks = {};
   const buttons = [];
   const calls = [];
@@ -384,14 +384,14 @@ function exchange(t, config = {}, realSender = null) {
   const banks = Array.from({ length: Bank.TOTAL_BANK_TABS }, () => new Bank(p));
   p.getBank = tab => banks[tab];
   t.mock.method(CacheDefinitions, 'hasItem', id => definitions.has(id));
-  t.mock.method(CacheDefinitions, 'getItem', id => ({ name: `Item ${id}` }));
+  t.mock.method(CacheDefinitions, 'getItem', id => ({ name: `Item ${id}`, isMembers: membersItems.includes(id) }));
   t.mock.method(GameConstants.PLAYER_PERSISTENCE, 'save', () => {});
   t.mock.method(global, 'setTimeout', (callback, delay) => {
     timers.push({ callback, delay });
     return timers.length;
   });
   plugin.register(new Proxy({
-    core: { WorldDefinition: { isMembersWorld: () => true } },
+    core: { WorldDefinition: { isMembersWorld: () => members } },
     getPluginConfig: (key, defaultValue) => Object.hasOwn(config, key) ? config[key] : defaultValue,
     emitCustomEvent: emitEvent,
     onCustomEvent: (eventName, handler) => {
@@ -915,4 +915,20 @@ test('fee Info uses the native overlay and closes without changing the offer', t
   click(30);
   click(18);
   assert.equal(calls.at(-1).args[0], 4212, 'existing offer has the same information');
+});
+
+// Wiki (Grand Exchange): "free players may only purchase free-to-play items, and not members' items"; "No restriction
+// exists on selling items, regardless of membership status."
+test('a free world refuses a buy offer for a members item, and still sells one', t => {
+  const buyer = exchange(t, {}, null, { members: false, membersItems: [PRICED] });
+  buyer.inventory.add(new Item(995, 1000), false);
+  const offer = buyer.place(false, PRICED, 1, 50);
+  assert.equal(offer?.itemId === PRICED && offer?.confirmed === true, false, 'no buy offer placed');
+  assert.equal(buyer.inventory.getAmount(995), 1000, 'no coins taken');
+  assert.ok(buyer.messages.includes('You can only buy free-to-play items on a free world.'), buyer.messages.join(' | '));
+
+  const seller = exchange(t, {}, null, { members: false, membersItems: [PRICED] });
+  seller.inventory.add(new Item(PRICED, 1), false);
+  seller.place(true, PRICED, 1, 180);
+  assert.equal(seller.inventory.getAmount(PRICED), 0, 'the members item is listed for sale');
 });

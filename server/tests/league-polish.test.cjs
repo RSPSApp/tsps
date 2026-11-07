@@ -29,6 +29,8 @@ const FIRST_WORN_OPTION_CLICK = 2;
 let core;
 let I;
 let raidDeaths = 0;
+/** Enough ticks for a player death to resolve (four after animation 836 starts, 18a208f32). */
+const DEATH_TICKS = 6;
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
@@ -157,7 +159,9 @@ test("the admin and save commands address the league character on a league world
       GameConstants.setWorldProfile(profile);
       calls.length = 0;
       const owner = character(`owner${profile}`, profile, core.PlayerRights.OWNER);
-      type(owner, "unban bob");
+      // Banning looks the account up first (unbanning no longer does, since 67e82676a); the recorder says it does
+      // not exist, so nothing is banned.
+      type(owner, "ban bob");
       type(owner, "snapshots bob");
       type(owner, "rollback bob #7");
       type(owner, "reprocorruptsave bob");
@@ -168,6 +172,7 @@ test("the admin and save commands address the league character on a league world
         ["restoreSnapshot", "bob", 7, profile],
         ["resolveFilePath", "bob", profile],
       ], `every save lookup names the ${profile} profile`);
+      assert.ok(owner.sent.messages.includes("Player bob does not exist."), "ban asks the save store, by profile");
       assert.ok(owner.sent.messages.includes("#7  2026-10-01 00:00:00 UTC  autosave"), "the snapshot listed");
       assert.ok(owner.sent.messages.includes("bob is rolled back to #7  2026-10-01 00:00:00 UTC  autosave."));
       assert.ok(owner.sent.messages.some((text) => text.startsWith("No save file found for bob at ")));
@@ -193,14 +198,15 @@ test("a death Undying Retribution prevents never reaches a raid's death handler;
   league.setHitpoints(0); // a killing blow: Player.setHitpoints appends the death itself
   assert.notEqual(league.isDying, true, "the death never starts");
   assert.equal(league.getHitpoints(), maxHitpoints, "hitpoints restored");
-  for (let tick = 0; tick < 4; tick++) core.TaskManager.process();
+  // A death resolves four ticks after its animation starts (18a208f32, rsprox 426/1084/1085/2508): six ticks covers it.
+  for (let tick = 0; tick < DEATH_TICKS; tick++) core.TaskManager.process();
   assert.equal(raidDeaths, 0, "nothing for a raid to count: no death task ran");
   const readyAt = Number(league.getAttribute("league:undying-retribution-ready-at"));
   assert.ok(readyAt > Date.now(), "on cooldown");
 
   league.setHitpoints(0);
   assert.equal(league.isDying, true, "on cooldown the death goes ahead");
-  for (let tick = 0; tick < 4; tick++) core.TaskManager.process();
+  for (let tick = 0; tick < DEATH_TICKS; tick++) core.TaskManager.process();
   assert.equal(raidDeaths, 1, "the raid handled the real death");
   assert.equal(league.getAttribute("league:undying-retribution-ready-at"), 0, "a real death ends the cooldown even when another plugin handled it");
 });
@@ -219,6 +225,19 @@ test("the Arcane grimoire changes spellbook, goes back to the previous one and r
   const league = character("sorcerer", "league");
   login(league);
   assert.equal(league.getSpellbook(), MagicSpellbook.NORMAL);
+  // Only unlocked books (the relics page: "providing players have unlocked them"; core SpellbookLocks). The quest
+  // plugins aren't loaded here, so this answers "quest:is-complete" for the quests the test marks done.
+  const done = new Set();
+  PluginManager.createApi("GrimoireQuests").onCustomEvent("quest:is-complete", (query) => {
+    if (query.player === league && done.has(query.key)) query.complete = true;
+  });
+  const setQuest = (key, complete) => (complete ? done.add(key) : done.delete(key));
+  click(league, 1);
+  pick(league, "Ancient");
+  assert.equal(league.getSpellbook(), MagicSpellbook.NORMAL, "no Ancients before Desert Treasure I");
+  assert.equal(league.sent.messages.at(-1), "You need to complete Desert Treasure I to use that spellbook.");
+  setQuest("desert_treasure_i", true);
+  setQuest("lunar_diplomacy", true);
 
   assert.equal(click(league, 4), true, "Check Previous");
   assert.equal(league.sent.messages.at(-1), "You haven't changed spellbook with the grimoire yet.");

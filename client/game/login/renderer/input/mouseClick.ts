@@ -212,8 +212,17 @@ export function handleMouseClick(
             return handleServerListClick(host, state, x, y);
         }
 
-        // Server list button (bottom left, replaces world select button)
-        if (gameState >= GameState.LOGIN_SCREEN && host.worldSelectButtonSprite) {
+        if (state.extension) {
+            const point = toContentPoint(host, x, y);
+            state.extension.click(host, point.x, point.y);
+            return undefined;
+        }
+
+        // Server list button (bottom left, replaces world select button).
+        if (
+            gameState >= GameState.LOGIN_SCREEN &&
+            host.worldSelectButtonSprite
+        ) {
             const buttonPos = getServerListButtonPosition(host);
             const buttonW = host.worldSelectButtonSprite.subWidth || 100;
             const buttonH = host.worldSelectButtonSprite.subHeight || 35;

@@ -4,6 +4,8 @@ const { Skill } = require("../../src/main/typescript/elvarg/game/model/Skill");
 
 /** Teleport jewellery usable up to this Wilderness level unless a piece says otherwise. */
 const DEFAULT_WILDERNESS_LEVEL = 20;
+/** Wiki (Digsite pendant): the refusal for a destination whose quest isn't done. */
+const LOCKED_DESTINATION_MESSAGE = "You have not yet unlocked that destination.";
 /** Dragonstone jewellery works deeper, through level 30 Wilderness. */
 const DRAGONSTONE_WILDERNESS_LEVEL = 30;
 
@@ -91,7 +93,8 @@ const JEWELLERY = [
         api?.emitCustomEvent?.("corporeal:teleport-destination", request);
         return request.tile;
       } },
-      { label: "Tears of Guthix", tile: [3245, 9500, 2] },
+      // Wiki (Games necklace): "Requires completion of Tears of Guthix quest".
+      { label: "Tears of Guthix", tile: [3245, 9500, 2], quest: { key: "tears_of_guthix", name: "Tears of Guthix" } },
       { label: "Wintertodt Camp", tile: [1627, 3941, 0] },
     ],
   },
@@ -226,8 +229,9 @@ const JEWELLERY = [
     lastChargeMessage: "Your Digsite Pendant crumbles to dust.",
     destinations: [
       { label: "Digsite", tile: [3340, 3445, 0] },
-      { label: "Fossil Island", tile: [3763, 3870, 1] },
-      { label: "Lithkren Dungeon", aliases: ["Lithkren"], tile: [3547, 10456, 0] },
+      // Wiki (Digsite pendant): each teleport comes after its quest - Bone Voyage, and Dragon Slayer II.
+      { label: "Fossil Island", tile: [3763, 3870, 1], quest: { key: "bone_voyage", name: "Bone Voyage" } },
+      { label: "Lithkren Dungeon", aliases: ["Lithkren"], tile: [3547, 10456, 0], quest: { key: "dragon_slayer_ii", name: "Dragon Slayer II" } },
     ],
   },
   {
@@ -277,11 +281,13 @@ const JEWELLERY = [
     // Rub's submenu is actions, not destinations (item params 451-455); Teleport picks one.
     subOps: ["check", "teleport", "master", "partner", "log"],
     destinations: [
-      { label: "Slayer Tower", tile: [3429, 3538, 0] },
+      // Wiki (Slayer ring, Teleports): Slayer Tower needs Priest in Peril, Tarn's Lair Haunted Mine, Dark Beasts
+      // Mourning's End Part II.
+      { label: "Slayer Tower", tile: [3429, 3538, 0], quest: { key: "priest_in_peril", name: "Priest in Peril" } },
       { label: "Fremennik Slayer Dungeon", tile: [2807, 10002, 0] },
-      { label: "Tarn's Lair", tile: [3185, 4601, 0] },
+      { label: "Tarn's Lair", tile: [3185, 4601, 0], quest: { key: "haunted_mine", name: "Haunted Mine" } },
       { label: "Stronghold Slayer Cave", tile: [2431, 3424, 0] },
-      { label: "Dark Beasts", tile: [2027, 4637, 0] },
+      { label: "Dark Beasts", tile: [2027, 4637, 0], quest: { key: "mournings_end_part_ii", name: "Mourning's End Part II" } },
     ],
   },
   {
@@ -321,9 +327,10 @@ for (const piece of JEWELLERY) {
 /** The ring of wealth's teleports; RingOfWealth.plugin.js handles the ring itself. */
 const RING_OF_WEALTH_DESTINATIONS = [
   { label: "Grand Exchange", tile: [3163, 3478, 0] },
-  { label: "Miscellania", tile: [2539, 3864, 0] },
+  // Wiki (Ring of wealth): "Requires completion of Throne of Miscellania"; Dondakan "Requires completion of Between a Rock...".
+  { label: "Miscellania", tile: [2539, 3864, 0], quest: { key: "throne_of_miscellania", name: "Throne of Miscellania" } },
   { label: "Falador Park", tile: [2994, 3377, 0] },
-  { label: "Dondakan", tile: [2824, 10168, 0] },
+  { label: "Dondakan", tile: [2824, 10168, 0], quest: { key: "between_a_rock", name: "Between a Rock..." } },
 ];
 
-module.exports = { JEWELLERY, RING_OF_WEALTH_DESTINATIONS, DEFAULT_WILDERNESS_LEVEL };
+module.exports = { JEWELLERY, RING_OF_WEALTH_DESTINATIONS, DEFAULT_WILDERNESS_LEVEL, LOCKED_DESTINATION_MESSAGE };

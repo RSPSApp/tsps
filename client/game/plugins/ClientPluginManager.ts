@@ -253,6 +253,8 @@ export type ScriptCallbackEvent = { eventName: string; vm: Cs2Vm };
 export type WidgetDragEvent = { source: any; target: any };
 
 export interface ClientPlugin {
+    /** Return true to defer an accepted login's handshake to a plugin. */
+    beforeLoginHandshake?(sendHandshake: () => void): boolean;
     /** Extra player headicons; return stable, immutable sprites so textures can be reused. */
     getPlayerHeadIcons?(serverId: number): readonly IndexedSprite[] | undefined;
     transformSceneProgram?(source: ProgramSource): ProgramSource;
@@ -402,6 +404,10 @@ export class ClientPluginManager {
         let plugins = this.implementers.get(hook);
         if (!plugins) this.implementers.set(hook, (plugins = this.plugins.filter((plugin) => plugin[hook] !== undefined)));
         return plugins;
+    }
+
+    beforeLoginHandshake(sendHandshake: () => void): boolean {
+        return this.plugins.some((plugin) => plugin.beforeLoginHandshake?.(sendHandshake) === true);
     }
 
     playerHeadIcons(serverId: number): IndexedSprite[] {

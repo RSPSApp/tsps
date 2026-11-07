@@ -43,7 +43,7 @@ before(async () => {
   core = PluginManager.getCoreApi();
 });
 
-function caster(t, runes = 2) {
+function caster(t, runes = 2, { arena = true } = {}) {
   const channel = {
     kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true, send: () => true,
     close() {}, onData() {}, onError() {}, onClose() {},
@@ -55,6 +55,8 @@ function caster(t, runes = 2) {
   player.setLocation(new core.Location(3100, 3100, 0));
   player.needsPlacement = false;
   player.getSkillManager().setMaxLevel(Skill.MAGIC, 99).setCurrentLevel(Skill.MAGIC, 99, false);
+  // Mage Arena I done: the statues gave a god cape (Wiki, Charge: the miniquest is required).
+  if (arena) player.setAttribute("mage-arena:cape-received", true);
   const messages = [];
   t.mock.method(player.getPacketSender(), "sendMessage", (message) => {
     messages.push(message);
@@ -203,6 +205,19 @@ test("a cast without the runes or the level is refused and costs nothing", (t) =
   logout(player);
 });
 
+test("a league relic that unlocks every spell lifts the Mage Arena requirement (Wiki: Grimoire)", (t) => {
+  const { player, messages } = caster(t, 2, { arena: false });
+  const api = PluginManager.createApi("RelicUnlockTest");
+  let lifted = true;
+  api.onCustomEvent("magic:spell-unlocked", (unlock) => { if (lifted && unlock.player === player && unlock.name === "charge") unlock.unlocked = true; });
+  t.after(() => { lifted = false; });
+  assert.equal(cast(player), true);
+  assert.equal(count(messages, CAST_MESSAGE), 1, "Charge casts with the relic: " + messages.join(" | "));
+  assert.ok(!messages.includes("You need to complete the Mage Arena to cast this spell."));
+  assert.equal(xp(player), 180);
+  logout(player);
+});
+
 test("Charge is a members' spell: a free world refuses it and takes no runes", (t) => {
   assert.equal(CombatSpells.CHARGE.isMembers(), true, "the spell is marked members-only");
   t.mock.method(core.WorldDefinition, "isMembersWorld", () => false);
@@ -213,6 +228,16 @@ test("Charge is a members' spell: a free world refuses it and takes no runes", (
   assert.equal(xp(player), 0);
   assert.equal(amount(player, FIRE), 6, "no runes taken");
   assert.ok(messages.includes("You need to be on a members' world to cast this spell."));
+  assert.equal(count(messages, CAST_MESSAGE), 0);
+  logout(player);
+});
+
+test("Charge needs the Mage Arena I miniquest (Wiki): refused without the god cape, costing nothing", (t) => {
+  const { player, messages } = caster(t, 2, { arena: false });
+  assert.equal(cast(player), true);
+  assert.ok(messages.includes("You need to complete the Mage Arena to cast this spell."), messages.join(" | "));
+  assert.equal(xp(player), 0);
+  assert.equal(amount(player, FIRE), 6, "no runes taken");
   assert.equal(count(messages, CAST_MESSAGE), 0);
   logout(player);
 });

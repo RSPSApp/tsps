@@ -14,6 +14,7 @@
  * (rsprox 4057, 1073-1075; zalcano.json `messages`).
  */
 const Common = require("./Common.Zalcano");
+const { actionInterval } = require("../../skills/SkillActions");
 
 const actions = new Map();
 
@@ -21,6 +22,16 @@ function bestPickaxe(player) {
   const request = { player, pickaxe: null };
   Common.api.emitCustomEvent("mining:best-pickaxe", request);
   return request.pickaxe ?? null;
+}
+
+/**
+ * Ticks to the next swing, as Mining rolls anywhere (Wiki, Pickaxe: dragon, infernal and crystal "3 ticks by default,
+ * 1/6 [1/4] chance to be 2 ticks", members only), then content's pace (a league relic's).
+ */
+function swingTicks(player, pickaxe) {
+  const request = { pickaxe, ticks: null };
+  Common.api.emitCustomEvent("mining:roll-interval", request);
+  return actionInterval(Common.api, player, Common.core.Skill.MINING, "mine", request.ticks ?? pickaxe.attemptIntervalTicks ?? 3);
 }
 
 function pickaxeLevel(pickaxe) {
@@ -146,7 +157,7 @@ function tickRock(prison, player, action, random) {
     return;
   }
   player.performAnimation(miningAnimation(pickaxe));
-  action.next = prison.tickCount + (pickaxe.attemptIntervalTicks ?? 3);
+  action.next = prison.tickCount + swingTicks(player, pickaxe);
   if (random() >= (rock.glowing ? tephra.glowingChance : tephra.rockChance)) return;
   let ore = rock.glowing && random() < tephra.glowingExtra ? 2 : 1;
   while (ore-- > 0 && inventory.getFreeSlots() > 0) {
@@ -186,7 +197,7 @@ function tickMineZalcano(prison, player, action) {
   const pickaxe = bestPickaxe(player);
   if (!fight || fight.phase !== "down" || fight.finished() || !pickaxe) { stop(player); return; }
   player.performAnimation(miningAnimation(pickaxe));
-  action.next = prison.tickCount + (pickaxe.attemptIntervalTicks ?? 3);
+  action.next = prison.tickCount + swingTicks(player, pickaxe);
   // Recorded: the first swing only swings; each later one chips, her hit landing a tick after.
   if (!action.swung) {
     action.swung = true;

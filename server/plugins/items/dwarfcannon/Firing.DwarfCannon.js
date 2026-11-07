@@ -117,6 +117,19 @@ function targetFor(cannon, owner) {
   return best;
 }
 
+/**
+ * Wiki: the roll is the owner's Ranged accuracy with a ranged weapon and their melee accuracy
+ * otherwise, any magic staff included; a powered staff takes whichever of the two is higher.
+ */
+function accuracyStyle(owner, npc) {
+  const { CombatFactory, CombatType, AccuracyFormulasDpsCalc } = Cannon.core;
+  const method = CombatFactory.getMethod(owner);
+  if (method.type() === CombatType.RANGED) return CombatType.RANGED;
+  if (method.poweredStaff !== true) return CombatType.MELEE;
+  const attack = (style) => AccuracyFormulasDpsCalc.specialRolls(owner, npc, style, CombatType.RANGED, "heavy")?.attack ?? 0;
+  return attack(CombatType.RANGED) > attack(CombatType.MELEE) ? CombatType.RANGED : CombatType.MELEE;
+}
+
 /** One ball (granite first): projectile now, the hit next tick, Ranged XP for its damage. */
 function shoot(cannon, owner, npc) {
   const { Projectile, PendingHit, CombatFactory, CombatType, AccuracyFormulasDpsCalc, Skill } = Cannon.core;
@@ -131,8 +144,7 @@ function shoot(cannon, owner, npc) {
     0, cycles, Data.PROJECTILE.startHeight, Data.PROJECTILE.endHeight, null)
     .withAngle(Data.PROJECTILE.angle).withProgress(Data.PROJECTILE.progress).sendProjectile();
 
-  // The owner's Ranged accuracy with a ranged weapon, otherwise their melee, against Ranged defence (Wiki).
-  const style = CombatFactory.getMethod(owner).type() === CombatType.RANGED ? CombatType.RANGED : CombatType.MELEE;
+  const style = accuracyStyle(owner, npc);
   const accurate = AccuracyFormulasDpsCalc.rollAccuracy(owner, npc, style, CombatType.RANGED, "heavy");
   const max = granite ? Data.MAX_HIT.granite : Data.MAX_HIT.steel;
   const damage = accurate ? Math.min(npc.getHitpoints(), Math.floor(Math.random() * (max + 1))) : 0;

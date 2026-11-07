@@ -1,3 +1,4 @@
+import { CharactersPlugin } from "../../../game/plugins/characters/CharactersPlugin";
 import { AnimationSmoothingConfig } from "../../../game/plugins/animationsmoothing/AnimationSmoothingConfig";
 import { BugReportPlugin } from "../../../game/plugins/bugreport/BugReportPlugin";
 import { VoiceChatPlugin } from "../../../game/plugins/voice/VoiceChatPlugin";
@@ -44,12 +45,12 @@ import { NotesConfig } from "../../../game/plugins/notes/NotesPlugin";
 import { ObjectIndicatorsPlugin } from "../../../game/plugins/objectindicators/ObjectIndicatorsPlugin";
 import { NpcIndicatorsPlugin } from "../../../game/plugins/npcindicators/NpcIndicatorsPlugin";
 import { NotesPlugin } from "../../../game/plugins/notes/NotesPlugin";
-import { SplitPrivateChatPlugin } from "../../../game/plugins/splitprivatechat/SplitPrivateChatPlugin";
 import { StatusBarsPlugin } from "../../../game/plugins/statusbars/StatusBarsPlugin";
 import { StretchedModePlugin } from "../../../game/plugins/stretchedmode/StretchedModePlugin";
 import { OpponentInfoPlugin } from "../../../game/plugins/opponentinfo/OpponentInfoPlugin";
 import { PrayerPlugin } from "../../../game/plugins/tabreorder/PrayerPlugin";
 import { FairyRingPlugin } from "../../../game/plugins/fairyring/FairyRingPlugin";
+import { PuzzleSolverPlugin } from "../../../game/plugins/puzzlesolver/PuzzleSolverPlugin";
 import { PestControlPlugin } from "../../../game/plugins/pestcontrol/PestControlPlugin";
 import { SpellbookPlugin } from "../../../game/plugins/tabreorder/SpellbookPlugin";
 import { TimersPlugin } from "../../../game/plugins/statustimer/TimersPlugin";
@@ -105,7 +106,6 @@ export const CORE_PLUGINS: ReadonlyArray<PluginClass> = [
     NpcIndicatorsPlugin,
     ImplingsPlugin,
     ObjectIndicatorsPlugin,
-    SplitPrivateChatPlugin,
     ChatNotificationsPlugin,
     ChatPastePlugin,
     TimestampPlugin,
@@ -124,7 +124,9 @@ export const CORE_PLUGINS: ReadonlyArray<PluginClass> = [
     SpellbookPlugin,
     PrayerPlugin,
     PestControlPlugin,
+    CharactersPlugin,
     FairyRingPlugin,
+    PuzzleSolverPlugin,
     StretchedModePlugin,
     GpuPlugin,
     LowEndDevicePlugin,

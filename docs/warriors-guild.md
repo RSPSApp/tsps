@@ -8,6 +8,7 @@ The plugin lives under `areas/` so that its door and ladder handlers run before 
 
 - **Entry:** Ghommal's door (24318) lets in a combined base Attack and Strength of 130, or 99 in either. Boosts don't count.
 - **Tokens:** the dummy, catapult and shot put rooms write tokens into the guild ledger (`warriors-guild:tokens`). Staff pay them out through "May I claim my tokens please?" or their Claim-Tokens option: Gamfred, Ajjat, Kamfreena, Shanomi, both Refs, Lorelai and Sloane. Animated armour drops its tokens on the ground instead.
+  - Claimed Easy rewards double tokens and claimed Easy plus Medium rewards triple them. TSPS also requires each tier to meet its current point threshold, following its existing Combat Achievement passive policy. Room awards apply the multiplier after the existing minigame-points event; TSPS applies it to kegs when Jimmy transfers their balance to the guild ledger. Owned animated armour applies it to its token drop.
 - **Animation room:** a plain full helm, platebody and platelegs of one metal on a magical animator becomes animated armour.
   - It drops tokens and the armour from `npc-drops.json`. Bronze pieces each come back 9 times in 10 (a correction in `NpcDrops`), iron loses its legs 1 time in 10, and steel its helm 1 time in 10.
   - Armour left alive for five minutes, or whose owner dies or logs out, goes to Shanomi. Her "armour disappeared" transcript gives it back.
@@ -55,6 +56,5 @@ These need checking against live OSRS:
 
 ## Not done
 
-- The Combat Achievement token multipliers (doubled or tripled), since there are no Combat Achievements yet.
 - Animated armour running away at low hitpoints.
 - The Ref being hit by a stray shot.

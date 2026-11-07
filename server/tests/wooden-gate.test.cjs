@@ -1954,13 +1954,15 @@ test('the gate on the road east of Varrock opens both leaves into their named op
   }
 });
 
-test("the Champions' Guild door swings without a separate open cache loc", async () => {
+test("the Champions' Guild door passes the player through, as captured (rev242 ticks 969-973)", async () => {
   await initializeMapCollisionOnce();
   const h = buildHarness({ cacheObjects: new Map([1805, 1806].map((id) => [id, CacheDefinitions.getObject(id)])) });
   try {
+    // INVISWALL on the doorway and championdoor_open (23637) on the tile inside; it shuts two ticks later.
     assert.deepEqual(h.click(1805, 3191, 3363, 3, 'Open', 'Door'), [
       ['deregister', 1805, 3191, 3363, 3],
-      ['register', 1805, 3191, 3362, 0],
+      ['register', 38848, 3191, 3363, 3],
+      ['register', 23637, 3191, 3362, 0],
     ]);
   } finally {
     h.restore();

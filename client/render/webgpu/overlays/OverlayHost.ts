@@ -1,3 +1,4 @@
+import { sceneTileHeight } from "../../../game/scene/SceneGeometry";
 import { getClientCycle } from "../../../network/ServerConnection";
 import { hintArrow } from "../../../game/HintArrow";
 import { baseNpcTypeId } from "../../../custom/npcs/NpcModelOverrideRegistry";
@@ -279,7 +280,7 @@ export class OverlayHost {
                 plane: 0,
             });
         this.osrsClient.sceneGeometry = {
-            tileHeight: (x, y, plane) => this.getTileHeightAtPlane(x, y, plane),
+            tileHeight: (x, y, plane, anchorX, anchorY) => sceneTileHeight(this, x, y, plane, anchorX, anchorY),
             worldToScreen: (x, height, y) => {
                 const p = this.worldToScreen(x, height, y);
                 return p ? [p[0], p[1]] : undefined;

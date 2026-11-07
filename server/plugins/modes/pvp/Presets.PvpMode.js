@@ -692,12 +692,25 @@ function applyPreset(player, preset) {
 
   // Every real copy is in the bank now (carried ones were banked, the inventory and equipment reset), so that is
   // where the preset's non-spawnable items come from.
+  // The item given back is the one taken: its own meta (charges), not the meta saved with the preset. Copying the
+  // saved meta onto a clone refilled a charged item (a toxic staff, serpentine helm, sceptre) on every reload.
+  const takenMeta = new Map();
   for (const item of nonSpawnableRequirements) {
-    player.getBank(Bank.getTabForItem(player, item.getId())).deletes(item);
+    const bank = player.getBank(Bank.getTabForItem(player, item.getId()));
+    const slot = bank.getItems().findIndex((candidate) => candidate?.getId() === item.getId() && candidate.getAmount() > 0);
+    if (slot < 0) continue;
+    const real = bank.getItems()[slot];
+    takenMeta.set(item, real.getMeta() ? structuredClone(real.getMeta()) : null);
+    bank.deleteAtSlot(slot, Math.min(item.getAmount(), real.getAmount()));
   }
+  const spawnTaken = (item) => {
+    const next = spawnPresetItem(item, preset, player);
+    if (next && takenMeta.has(item)) next.setMeta(takenMeta.get(item));
+    return next;
+  };
 
   for (const item of preset.getInventory() ?? []) {
-    const next = spawnPresetItem(item, preset, player);
+    const next = spawnTaken(item);
     if (!next) {
       continue;
     }
@@ -706,7 +719,7 @@ function applyPreset(player, preset) {
 
   const wearer = presetWearer(preset);
   for (const item of preset.getEquipment() ?? []) {
-    const next = spawnPresetItem(item, preset, player);
+    const next = spawnTaken(item);
     if (!next) {
       continue;
     }

@@ -109,3 +109,20 @@ test("a custom preset still takes a real non-spawnable item from the bank", (t) 
   const banked = Array.from({ length: 10 }, (_, tab) => f.p.getBank(tab)?.getAmount?.(ags) ?? 0).reduce((a, b) => a + b, 0);
   assert.equal(banked, 0, "and taken from the bank");
 });
+
+// The preset saves each item with its meta (charges). Loading took any copy from the bank by id but gave back a clone
+// carrying the saved meta, so a charged item came back full on every reload. It now keeps the taken copy's own meta.
+test("a custom preset gives back the real item as it is, not as it was saved", (t) => {
+  const f = actor(t);
+  const ags = I.ARMADYL_GODSWORD;
+  const saved = new core.Item(ags, 1);
+  saved.setMetaValue("test-charges", 11000);
+  const real = new core.Item(ags, 1);
+  real.setMetaValue("test-charges", 100);
+  f.p.getBank(0).add(real, false);
+  const custom = new Presetable("charged", [saved], [], [99, 99, 99, 99, 99, 99, 99], MagicSpellbook.NORMAL, false);
+  Presets.applyPreset(f.p, custom);
+  const loaded = f.p.getInventory().getValidItems().find((item) => item.getId() === ags);
+  assert.ok(loaded, "the item is carried");
+  assert.equal(loaded.getMetaValue("test-charges"), 100, "with the bank copy's charges, not the saved ones");
+});

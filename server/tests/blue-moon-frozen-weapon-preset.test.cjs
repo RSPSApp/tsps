@@ -73,3 +73,16 @@ test("with the hands and the pack full, a preset weapon lands at the feet, not i
   assert.equal(ground.length, 1, "an AGS at the feet");
   assert.equal(ground[0].getItem().isPresetItem(), true, "still a preset copy");
 });
+
+test("a two-handed weapon comes back to the pack, not the hands, when a shield was put on meanwhile", (t) => {
+  const p = fighter(t);
+  const slot = core.Equipment.WEAPON_SLOT;
+  p.getEquipment().setItem(slot, new core.Item(I.ARMADYL_GODSWORD, 1)); // two-handed
+  const fight = { player: p, state: {} };
+  Blue.takeWeapon(fight);
+  p.getEquipment().setItem(core.Equipment.SHIELD_SLOT, new core.Item(I.DRAGONFIRE_SHIELD, 1));
+  Blue.giveWeapon(p, fight.state.weapon);
+  assert.equal(p.getEquipment().getItems()[slot].getId(), -1, "the hands stay empty: no godsword with a shield");
+  assert.equal(p.getInventory().getAmount(I.ARMADYL_GODSWORD), 1, "the godsword is in the pack");
+  assert.equal(p.getEquipment().getItems()[core.Equipment.SHIELD_SLOT].getId(), I.DRAGONFIRE_SHIELD);
+});

@@ -58,7 +58,10 @@ function giveWeapon(player, weapon) {
   const item = new Item(weapon.id, weapon.amount ?? 1, weapon.meta ?? undefined);
   const equipment = player.getEquipment();
   const held = equipment.getItems()[Equipment.WEAPON_SLOT];
-  if (!held?.isValid?.() || held.getId() <= 0) {
+  // A two-handed weapon needs the shield hand free too: one worn since the freeze sends it to the pack instead.
+  const shield = equipment.getItems()[Equipment.SHIELD_SLOT];
+  const handsFull = item.getDefinition?.()?.isDoubleHanded?.() === true && shield?.isValid?.() && shield.getId() > 0;
+  if ((!held?.isValid?.() || held.getId() <= 0) && !handsFull) {
     equipment.setItem(Equipment.WEAPON_SLOT, item);
     refreshWeapon(player);
   } else if (player.getInventory().getFreeSlots() > 0) {

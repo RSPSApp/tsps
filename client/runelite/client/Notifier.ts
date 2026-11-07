@@ -89,7 +89,7 @@ async function show(message: string): Promise<void> {
 
 /**
  * RuneLite's Notifier.notify: a highlighted game message, and (in place of the tray
- * notification) a browser notification while the page is in the background, once allowed.
+ * notification) a browser notification while the game is hidden or unfocused, once allowed.
  */
 export class Notifier {
     constructor(private readonly client: NotifierClient) {}
@@ -103,7 +103,8 @@ export class Notifier {
             askPermissionOnNextClick();
             return;
         }
-        if (Notification.permission !== "granted" || !document.hidden) return;
+        // Another desktop window can take focus without making this page hidden.
+        if (Notification.permission !== "granted" || (!document.hidden && document.hasFocus())) return;
         void show(message);
     }
 }

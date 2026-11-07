@@ -31,7 +31,7 @@ const fakeWindow = {
     },
     removeEventListener() {},
 };
-const fakeDocument = { hidden: true };
+const fakeDocument = { hidden: true, focused: true, hasFocus() { return this.focused; } };
 let userActive = true;
 let registration: { showNotification(title: string, options: { body: string }): Promise<void> } | undefined;
 const fakeNavigator = {
@@ -139,6 +139,22 @@ async function notifyCases(): Promise<void> {
     notifier.notify("worker failed");
     await flush();
     assert.deepEqual(shown.slice(2), ["page:RuneLite:worker failed"], "a failing worker falls back to the page");
+
+    fakeDocument.hidden = false;
+    fakeDocument.focused = false;
+    registration = { showNotification: (title, options) => {
+        shown.push(`worker:${title}:${options.body}`);
+        return Promise.resolve();
+    } };
+    notifier.notify("visible but unfocused");
+    await flush();
+    assert.equal(shown.at(-1), "worker:RuneLite:visible but unfocused",
+        "another desktop window can have focus without hiding the game");
+    fakeDocument.focused = true;
+    const count = shown.length;
+    notifier.notify("playing in the focused game");
+    await flush();
+    assert.equal(shown.length, count, "the visible focused game still suppresses popups");
 
     stop();
     permission = "default";

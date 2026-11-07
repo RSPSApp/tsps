@@ -31,6 +31,277 @@ function actor(t){
 }
 async function input(f,packet){await f.c.dispatch([packet]);f.c.processTurnPackets();}
 function open(f,shopId){assert.equal(core.ShopManager.open(f.p,shopId),true);assert.ok(core.ShopManager.getOpenShop(f.p));}
+
+// Volcanic Mine: real registered Pete shop and player persistence; direct interaction events
+// avoid claiming client routing or a full World tick. The scene remains the existing instance.
+test('Pete sells one saved vessel capacity upgrade through the registered shop', async t => {
+  const fs = require('node:fs'), os = require('node:os');
+  const { Misc } = require('../dist/util/Misc');
+  const { JsonPlayerPersistence } = require('../plugins/persistence/JsonPlayerPersistence.plugin');
+  const Common = require('../plugins/minigames/volcanicmine/Common.VolcanicMine');
+  const Game = require('../plugins/minigames/volcanicmine/Game.VolcanicMine');
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'tsps-vm-capacity-'));
+  const oldPersistence = core.GameConstants.PLAYER_PERSISTENCE;
+  const oldError=console.error, errors=[];
+  let saver;
+  const players = [], npcs = [], tasks = [], games = new Set();
+  const originalDeliveryHooks = [...(PM.customEventHooks.get('shop:delivery') ?? [])];
+  const originalPurchaseHooks = [...(PM.customEventHooks.get('shop:purchase') ?? [])];
+  const oldSubmit = core.TaskManager.submit.bind(core.TaskManager);
+  t.after(async () => {
+    try {
+      if (Game.current) games.add(Game.current);
+      for (const p of players) {
+        core.ShopManager.close(p); core.TaskManager.cancelTasks(p); core.TaskManager.cancelTasks(p.getIndex());
+        p.getMovementQueue().reset();
+        if (p.isRegistered()) PM.emitPlayerLogout({player:p,username:p.getUsername()});
+        p.setRegistered(false);
+      }
+      for (const game of games) {
+        game.end();
+        if (!game.area.isDestroyed()) game.area.destroy();
+        assert.equal(game.area.isDestroyed(),true,'the owned mine instance is actually destroyed');
+      }
+      for (const npc of npcs) { npc.setRegistered(false); core.World.getNpcs().remove(npc); }
+      core.ShopManager.reload();
+      assert.equal(core.ShopManager.restockAll(),false,'restock lifecycle is quiescent before owned tasks stop');
+      for (const task of tasks) task.stop();
+      if (saver) await saver.flush();
+    } finally {
+      PM.customEventHooks.set('shop:delivery', originalDeliveryHooks);
+      PM.customEventHooks.set('shop:purchase', originalPurchaseHooks);
+      core.GameConstants.PLAYER_PERSISTENCE = oldPersistence;
+      console.error=oldError;
+      assert.equal(path.dirname(path.resolve(directory)),path.resolve(os.tmpdir()));
+      assert.ok(path.basename(directory).startsWith('tsps-vm-capacity-'));
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
+    assert.deepEqual(errors,[], 'no caught plugin, persistence or cleanup errors');
+  });
+  console.error=(...args)=>{
+    const message=args.map(String).join(' ');
+    // Node may emit this documented SQLite warning while the real persistence backend loads.
+    // Forward it, but continue to treat every other console error as a failure through cleanup.
+    const sqliteWarning=/^\(node:\d+\) ExperimentalWarning: SQLite is an experimental feature and might change at any time(?:\r?\n\(Use `node --trace-warnings \.\.\.` to show where the warning was created\))?$/;
+    if(!sqliteWarning.test(message)) errors.push(message);
+    oldError.apply(console,args);
+  };
+  saver = new JsonPlayerPersistence();
+  const requests=[], writes=[];
+  const requestSave=saver.requestSave.bind(saver), enqueue=saver.enqueueSerializedWrite.bind(saver);
+  t.mock.method(saver, 'requestSave', (player,reason) => { requests.push({username:player.getUsername(),reason}); return requestSave(player,reason); });
+  t.mock.method(saver, 'enqueueSerializedWrite', (file,serialized,username) => { writes.push({file,username,data:JSON.parse(serialized)}); return enqueue(file,serialized,username); });
+  t.mock.method(saver, 'resolveFilePath', username => path.join(directory, `${saver.normalizeUsername(username)}.json`));
+  t.mock.method(core.TaskManager, 'submit', task => { tasks.push(task); return oldSubmit(task); });
+  core.GameConstants.PLAYER_PERSISTENCE = saver;
+  const spawn=require('../data/definitions/npc-spawns.json').find(row=>row.id===7776);
+  assert.ok(spawn, 'Pete comes from the actual NPC spawn input');
+  const makePlayer = () => {
+    const channel={kind:'test',remoteAddress:'127.0.0.1',isOpen:()=>true,send:()=>true,close(){},onData(){},onError(){},onClose(){}};
+    const p=new Player(new PlayerSession(channel)); players.push(p);
+    p.setIndex(next++); p.setUsername('vmcap'+next); p.setLongUsername(Misc.stringToLongBigInt(p.getUsername())); p.setRegistered(true);
+    assert.notEqual(p.getLongUsername(),0n);
+    p.setLocation(new core.Location(spawn.x,spawn.y-1,spawn.level??0)); p.needsPlacement=false;
+    return { p, c: Object.assign(new ClientConnection(channel), {player:p}) };
+  };
+  const f=makePlayer();
+  PM.emitPlayerLogin({player:f.p,username:f.p.getUsername(),isNewAccount:false});
+  const shopMessages=[]; const sendMessage=f.p.sendMessage.bind(f.p);
+  t.mock.method(f.p,'sendMessage',message=>{ shopMessages.push(message); return sendMessage(message); });
+  assert.equal(core.CacheDefinitions.getObjId('fossil_mine_water_container'),21539);
+  assert.equal(core.CacheDefinitions.getObjId('fossil_mine_water_container_dummy'),25615);
+  assert.equal(core.CacheDefinitions.getVarbitId('fossil_mine_unlocked_morewater'),5959);
+  assert.equal(core.ItemDefinition.forId(21539).isSellable(),false,'the active vessel definition is not sellable');
+  assert.equal(core.ItemDefinition.forId(21539).isTradeable(),false,'the active vessel definition is not tradeable');
+  core.RegionManager.loadMapFiles(spawn.x,spawn.y);
+  const npc=core.NPC.create(7776,new core.Location(spawn.x,spawn.y,spawn.level??0)); npcs.push(npc);
+  assert.equal(core.World.getNpcs().add(npc),true); npc.setRegistered(true);
+  const openPete = player => {
+    const definition=npc.getCurrentDefinition(player);
+    assert.equal(definition.getActions()[3], 'Trade');
+    PM.emitNpcInteraction({player,npc,npcId:7776,definition,clickType:4,handled:false});
+    assert.ok(core.ShopManager.getOpenShop(player), 'registered Pete Trade opens the real shop');
+  };
+  openPete(f.p);
+  assert.equal(core.ShopManager.activeShopByPlayer.get(f.p),1457);
+  assert.equal(core.ShopManager.getOpenShop(f.p).name,"Petrified Pete's Ore Shop");
+  assert.match(core.ShopManager.getOpenShop(f.p).currency,/volcanic mine points/i);
+  assert.ok(core.ShopManager.getOpenShop(f.p).stock.some(row=>row.itemId===440),'ordinary ore stock is present');
+  const dummy=21539, logItem=25615, currency='shop-currency:Volcanic Mine points';
+  assert.equal(core.ItemDefinition.forId(dummy).isStackable(),false,'the active vessel is nonstackable');
+  const LogData=require('../plugins/achievements/collectionlog/Data.CollectionLog');
+  assert.ok(LogData.categoriesOf(logItem).some(category=>category.name==='Volcanic Mine'), 'active collection log maps the upgrade');
+  const logCount = player => { const query={player,itemId:logItem}; PM.emitCustomEvent('collection-log:obtained',query); return query.count ?? 0; };
+  const openStock=()=>core.ShopManager.getOpenShop(f.p).stock;
+  const slot=openStock().findIndex(row=>row.itemId===dummy);
+  assert.ok(slot>=0, 'Pete offers the vessel capacity upgrade');
+  const buy=async () => input(f,{type:'widget_action',widgetId:(300<<16)|16,groupId:300,childId:16,buttonNum:2,slot:slot+1,itemId:dummy});
+  const buyOther=async actor => {
+    const entries=core.ShopManager.getOpenShop(actor.p).stock;
+    const index=entries.findIndex(row=>row.itemId===dummy); assert.ok(index>=0);
+    await input(actor,{type:'widget_action',widgetId:(300<<16)|16,groupId:300,childId:16,buttonNum:2,slot:index+1,itemId:dummy});
+  };
+  const enterMine = player => {
+    // The separate entry-payment prerequisite is seeded, not the upgrade under test.
+    player.setAttribute(Common.data.attributes.permanent,true);
+    player.getSkillManager().setCurrentLevel(core.Skill.MINING,99);
+    assert.ok(player.getSkillManager().getCurrentLevel(core.Skill.MINING)>=50);
+    const loc=Common.toLocation(Common.data.tiles.out);
+    const object=new core.GameObject(Common.data.locs.entrance,loc,10,0,null);
+    const objectDef=core.ObjectDefinition.forPlayer(Common.data.locs.entrance,player);
+    PM.emitObjectInteraction({player,object,objectId:object.getId(),definition:objectDef,clickType:1,option:'climb-down',handled:false});
+    const game=Game.gameOf(player); assert.ok(game,'registered entrance joins the actual game'); games.add(game);
+    assert.equal(player.getInventory().getAmount(21539),1); return game;
+  };
+  const exhaust = (player, game, count, messages=[]) => {
+    assert.equal(player.getAttribute('volcanic-mine:throws'),count);
+    player.moveTo(game.area.at([3816,10194,1])); player.__vmFacing=[0,1];
+    const vessel=player.getInventory().getValidItems().find(item=>item.getId()===21539);
+    const vesselSlot=player.getInventory().getItems().indexOf(vessel); assert.ok(vesselSlot>=0);
+    const throwWater = () => PM.emitItemAction({player,item:vessel,itemId:21539,slot:vesselSlot,interfaceId:core.Inventory.INTERFACE_ID,option:'Throw-water',clickType:1,handled:false});
+    for(let n=0;n<count;n++) {
+      const before=game.points.get(player); throwWater();
+      assert.equal(game.points.get(player),before+1,`successful throw ${n+1}`);
+      if(n===0 || n===5) {
+        const remaining=`${count-n-1} more throws`;
+        assert.ok(messages.some(text=>text.includes(remaining)),'automatic cadence reports remaining uses');
+        const prior=messages.length;
+        PM.emitItemAction({player,item:vessel,itemId:21539,slot:vesselSlot,interfaceId:core.Inventory.INTERFACE_ID,option:'Check-level',clickType:4,handled:false});
+        assert.ok(messages.slice(prior).some(text=>text.includes(remaining)),'the registered Check-level action reports the same uses');
+      }
+      // Re-arm the existing lava stage without pretending full World time elapsed.
+      for(const state of game.lava.values()) state.stage=1;
+    }
+    const finalPoints=game.points.get(player); throwWater();
+    assert.equal(game.points.get(player),finalPoints,'an exhausted vessel cannot award another point');
+    assert.equal(player.getAttribute('volcanic-mine:throws'),0);
+  };
+  const baseActor=makePlayer();
+  assert.notEqual(baseActor.p.getAttribute('volcanic-mine:larger-vessel'),true);
+  const baseMessages=[]; t.mock.method(baseActor.p,'sendMessage',text=>{ baseMessages.push(text); });
+  const baseGame=enterMine(baseActor.p); exhaust(baseActor.p,baseGame,36,baseMessages);
+  await t.test('the existing vessel purchase actually grants the permanent capacity entitlement', async () => {
+    const probe=makePlayer(); probe.p.setAttribute(currency,10000); openPete(probe.p);
+    await buyOther(probe);
+    assert.ok(probe.p.getInventory().getAmount(dummy) === 1 || probe.p.getAttribute('volcanic-mine:larger-vessel') === true, 'the real purchase delivered or consumed the vessel');
+    assert.equal(probe.p.getAttribute('volcanic-mine:larger-vessel'),true,'a completed purchase must grant the upgrade');
+  });
+  assert.equal(openStock()[slot].price,10000);
+  assert.ok(shopMessages.some(message=>String(message).includes('permanent 10,000-point upgrade')),'the generic shop explains the vessel row');
+  const remainingStock=(actor=f)=>core.ShopManager.getOpenShop(actor.p).stock.find(row=>row.itemId===dummy).amount;
+  const initialStock=remainingStock();
+  const seller=makePlayer(); seller.p.setAttribute(currency,500); openPete(seller.p);
+  seller.p.getInventory().add(new core.Item(dummy,1,{origin:'sale-control'}),false);
+  const saleItem=seller.p.getInventory().getValidItems().find(item=>item.getId()===dummy);
+  const saleMessages=[]; const originalSellerMessage=seller.p.sendMessage.bind(seller.p);
+  t.mock.method(seller.p,'sendMessage',text=>{saleMessages.push(text); return originalSellerMessage(text);});
+  await sale(seller,dummy);
+  assert.ok(saleMessages.some(text=>String(text).includes('This item cannot be sold.')),'the real sale route refuses the vessel');
+  assert.equal(seller.p.getAttribute(currency),500); assert.equal(remainingStock(seller),initialStock);
+  assert.equal(seller.p.getInventory().getValidItems().find(item=>item.getId()===dummy),saleItem);
+  assert.notEqual(seller.p.getAttribute('volcanic-mine:larger-vessel'),true); assert.equal(logCount(seller.p),0);
+  const full=makePlayer(); full.p.setAttribute(currency,10000);
+  for(let i=0;i<28;i++) full.p.getInventory().add(new core.Item(core.ItemIdentifiers.RAKE),false);
+  assert.equal(full.p.getInventory().getFreeSlots(),0); openPete(full.p); await buyOther(full);
+  assert.equal(full.p.getAttribute(currency),10000); assert.notEqual(full.p.getAttribute('volcanic-mine:larger-vessel'),true); assert.equal(logCount(full.p),0);
+  assert.equal(remainingStock(),initialStock,'full inventory takes no stock');
+  f.p.setAttribute(currency,9999); await buy();
+  assert.equal(f.p.getAttribute(currency),9999); assert.notEqual(f.p.getAttribute('volcanic-mine:larger-vessel'),true); assert.equal(logCount(f.p),0);
+  assert.equal(remainingStock(),initialStock,'insufficient points take no stock');
+  f.p.setAttribute(currency,10000);
+  const old=new core.Item(dummy,1,{origin:'pre-existing'}); f.p.getInventory().add(old,false);
+  const oldSlot=f.p.getInventory().getItems().findIndex(item=>item.getId()===dummy && item.getMeta()?.origin==='pre-existing');
+  assert.ok(oldSlot>=0, 'native inventory cloned the pre-existing item into a slot');
+  const held=f.p.getInventory().getItems()[oldSlot]; assert.equal(held.getMeta().origin,'pre-existing');
+  await buy();
+  assert.equal(f.p.getAttribute(currency),0); assert.equal(f.p.getAttribute('volcanic-mine:larger-vessel'),true);
+  assert.equal(remainingStock(),initialStock-1,'successful purchase transfers one unit of stock');
+  assert.equal(logCount(f.p),1,'the successful upgrade records the collection-log reward');
+  assert.equal(f.p.getInventory().getAmount(dummy),1); assert.equal(f.p.getInventory().getItems()[oldSlot],held);
+  assert.equal(held.getMeta().origin,'pre-existing');
+  await saver.flush();
+  const serialized=JSON.parse(fs.readFileSync(saver.resolveFilePath(f.p.getUsername()),'utf8'));
+  assert.ok(requests.some(entry=>entry.username===f.p.getUsername() && entry.reason==='reward-shop'));
+  assert.ok(writes.some(entry=>entry.username===f.p.getUsername() && entry.file===saver.resolveFilePath(f.p.getUsername()) && entry.data.attributes['volcanic-mine:larger-vessel']===true && (entry.data.attributes[currency]??0)===0),'the actual write boundary captured the unlock and paid balance');
+  assert.equal(serialized.attributes['volcanic-mine:larger-vessel'],true);
+  assert.equal(serialized.attributes[currency]??0,0);
+  f.p.setAttribute(currency,10000); await buy();
+  assert.equal(f.p.getAttribute(currency),10000,'a second purchase cannot debit again');
+  assert.equal(f.p.getInventory().getAmount(dummy),1);
+  assert.equal(logCount(f.p),1,'a repeat does not add another log entry');
+  assert.equal(remainingStock(),initialStock-1,'a repeat does not take stock');
+  const account=f.p.getUsername(); core.ShopManager.close(f.p);
+  PM.emitPlayerLogout({player:f.p,username:account}); f.p.setRegistered(false);
+  core.TaskManager.cancelTasks(f.p); core.TaskManager.cancelTasks(f.p.getIndex());
+  await saver.flush();
+  const saved=saver.load(account); assert.ok(saved);
+  const later=makePlayer(); later.p.setUsername(account); later.p.setLongUsername(Misc.stringToLongBigInt(account)); saved.applyToPlayer(later.p);
+  PM.emitPlayerLogin({player:later.p,username:account,isNewAccount:false});
+  assert.equal(later.p.getUsername(),account,'the loaded actor is the same account');
+  assert.equal(later.p.getAttribute('volcanic-mine:larger-vessel'),true);
+  assert.equal(logCount(later.p),1,'the same account reloads its recorded reward');
+  const legacySlot=later.p.getInventory().getItems().findIndex(item=>item.getId()===dummy && item.getMeta()?.origin==='pre-existing');
+  assert.ok(legacySlot>=0,'the earlier vessel survives save and reload');
+  later.p.getInventory().deleteAtSlot(legacySlot,1); // Remove the test setup item before the entry producer grants its vessel.
+  const other=makePlayer(); assert.notEqual(other.p.getUsername(),account);
+  assert.notEqual(other.p.getAttribute('volcanic-mine:larger-vessel'),true);
+  const otherMessages=[]; t.mock.method(other.p,'sendMessage',text=>{ otherMessages.push(text); });
+  const otherGame=enterMine(other.p);
+  assert.equal(other.p.getAttribute('volcanic-mine:throws'),36,'another account still enters with base capacity after the unlock');
+  other.p.moveTo(otherGame.area.at([3816,10194,1])); other.p.__vmFacing=[0,1];
+  const otherVessel=other.p.getInventory().getValidItems().find(item=>item.getId()===dummy);
+  const otherSlot=other.p.getInventory().getItems().indexOf(otherVessel); assert.ok(otherSlot>=0);
+  const otherPoints=otherGame.points.get(other.p);
+  PM.emitItemAction({player:other.p,item:otherVessel,itemId:dummy,slot:otherSlot,interfaceId:core.Inventory.INTERFACE_ID,option:'Throw-water',clickType:1,handled:false});
+  assert.equal(otherGame.points.get(other.p),otherPoints+1); assert.equal(other.p.getAttribute('volcanic-mine:throws'),35);
+  const otherPrior=otherMessages.length;
+  PM.emitItemAction({player:other.p,item:otherVessel,itemId:dummy,slot:otherSlot,interfaceId:core.Inventory.INTERFACE_ID,option:'Check-level',clickType:4,handled:false});
+  assert.ok(otherMessages.slice(otherPrior).some(text=>text.includes('35 more throws')));
+  for(const state of otherGame.lava.values()) state.stage=1;
+  const alternate=makePlayer(); alternate.p.setAttribute(currency,10000); openPete(alternate.p);
+  alternate.p.getInventory().add(new core.Item(dummy,1,{origin:'alternate-existing'}),false);
+  const alternateSlot=alternate.p.getInventory().getItems().findIndex(item=>item.getId()===dummy && item.getMeta()?.origin==='alternate-existing');
+  assert.ok(alternateSlot>=0); const alternateHeld=alternate.p.getInventory().getItems()[alternateSlot];
+  let conversionSeen=0;
+  PM.createApi('VmCapacityDeliveryTest').onCustomEvent('shop:delivery', event => {
+    if(event.player===alternate.p && event.itemId===dummy) { conversionSeen++; event.deliverId=core.ItemIdentifiers.RAKE; }
+  });
+  await buyOther(alternate);
+  assert.equal(conversionSeen,1); assert.equal(alternate.p.getAttribute(currency),0);
+  assert.equal(remainingStock(alternate),initialStock-2,'the converted delivery still completed its generic purchase');
+  assert.equal(alternate.p.getInventory().getAmount(core.ItemIdentifiers.RAKE),1,'converted delivery remains');
+  assert.equal(alternate.p.getInventory().getItems()[alternateSlot],alternateHeld,'converted delivery preserves the pre-existing vessel');
+  assert.notEqual(alternate.p.getAttribute('volcanic-mine:larger-vessel'),true); assert.equal(logCount(alternate.p),0);
+  const displaced=makePlayer(); displaced.p.setAttribute(currency,10000); openPete(displaced.p);
+  let replacementSeen=0, originalDelivery, replacement;
+  PM.createApi('VmCapacityReplacementTest').onCustomEvent('shop:purchase', event => {
+    if(event.player===displaced.p && event.itemId===dummy && event.deliveredSlot>=0) {
+      replacementSeen++; originalDelivery=event.deliveredItem;
+      event.player.getInventory().setItem(event.deliveredSlot,new core.Item(dummy,1,{origin:'replacement'}));
+      replacement=event.player.getInventory().getItems()[event.deliveredSlot];
+    }
+  });
+  const purchaseHooks=PM.customEventHooks.get('shop:purchase'); purchaseHooks.unshift(purchaseHooks.pop());
+  await buyOther(displaced);
+  assert.equal(replacementSeen,1);
+  assert.notEqual(replacement,originalDelivery,'the observer replaced the actual delivered object');
+  assert.equal(displaced.p.getInventory().getValidItems().find(item=>item.getId()===dummy),replacement);
+  assert.equal(displaced.p.getInventory().getValidItems().find(item=>item.getId()===dummy)?.getMeta()?.origin,'replacement','same-ID replacement is preserved');
+  assert.equal(displaced.p.getAttribute(currency),0); assert.equal(remainingStock(displaced),initialStock-3);
+  assert.notEqual(displaced.p.getAttribute('volcanic-mine:larger-vessel'),true,'a replaced receipt never unlocks'); assert.equal(logCount(displaced.p),0);
+  const bulk=makePlayer(); bulk.p.setAttribute(currency,50000); openPete(bulk.p);
+  const bulkStock=remainingStock(bulk), bulkSlot=core.ShopManager.getOpenShop(bulk.p).stock.findIndex(row=>row.itemId===dummy);
+  assert.ok(bulkSlot>=0); assert.equal(logCount(bulk.p),0);
+  const buyFive=()=>input(bulk,{type:'widget_action',widgetId:(300<<16)|16,groupId:300,childId:16,buttonNum:3,slot:bulkSlot+1,itemId:dummy});
+  await buyFive();
+  assert.equal(bulk.p.getAttribute(currency),40000,'Buy-5 debits only one upgrade even when five are affordable');
+  assert.equal(remainingStock(bulk),bulkStock-1); assert.equal(bulk.p.getAttribute('volcanic-mine:larger-vessel'),true);
+  assert.equal(bulk.p.getInventory().getAmount(dummy),0); assert.equal(logCount(bulk.p),1);
+  await buyFive();
+  assert.equal(bulk.p.getAttribute(currency),40000); assert.equal(remainingStock(bulk),bulkStock-1); assert.equal(logCount(bulk.p),1);
+  const messages=[]; t.mock.method(later.p,'sendMessage',text=>{ messages.push(text); });
+  const upgradedGame=enterMine(later.p); exhaust(later.p,upgradedGame,70,messages);
+});
 async function sale(f,itemId,buttonNum=2){
   const slot=f.p.getInventory().getSlotForItemId(itemId);assert.ok(slot>=0);
   await input(f,{type:'widget_action',widgetId:301<<16,groupId:301,childId:0,buttonNum,slot,itemId});

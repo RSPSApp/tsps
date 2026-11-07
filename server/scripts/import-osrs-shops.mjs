@@ -112,6 +112,8 @@ const EXTRA_STOCK = {
 // ITEM_PRICES sets an item row's "price"; SHOP_PRICES writes a shop-level
 // "prices" map, kept in the listed order.
 const ITEM_PRICES = {
+  // The heat-proof vessel row is Pete's one-time capacity unlock.
+  "Petrified Pete's Ore Shop": { 21539: 10000 },
   // Theatre of Blood escape crystal (Night at the Theatre).
   "Mysterious Stranger (shop)": { 22517: 75000 },
 };

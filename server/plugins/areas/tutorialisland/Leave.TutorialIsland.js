@@ -52,9 +52,7 @@ function giveStarterKit(player) {
   inv.adds(Items.WATER_RUNE, 6);
   inv.adds(Items.EARTH_RUNE, 4);
   inv.adds(Items.BODY_RUNE, 2);
-  const bank = player.getBank(0);
-  const coins = bank.getAmount(Items.COINS);
-  if (coins < 25) bank.adds(Items.COINS, 25 - coins);
+  T.giveBankCoins(player);
 }
 
 /**
@@ -228,6 +226,7 @@ module.exports = function attach(api) {
   core = api.core;
   Items = core.ItemIdentifiers;
   api.persistAttribute(T.PROGRESS_ATTRIBUTE);
+  api.persistAttribute(T.BANK_COINS_ATTRIBUTE);
   api.persistAttribute(T.LEGACY_STAGE_ATTRIBUTE);
   api.persistAttribute(T.EXPERIENCE_ATTRIBUTE);
   api.persistAttribute(SKIP_PENDING_ATTRIBUTE);

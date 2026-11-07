@@ -59,6 +59,7 @@ before(() => {
     onItemAction: (name, actions) => { hooks.actions = actions; },
     onItemDropPolicy: (fn) => { hooks.dropPolicy = fn; },
     onInterfaceActionClick: (fn) => hooks.clicks.push(fn),
+    onShouldKeepItemOnDeath: (fn) => { hooks.keep = fn; },
     onPlayerDeathItemDrop: (fn) => { hooks.death = fn; },
     onPlayerDefeated: (fn) => { hooks.defeated = fn; },
     sendMultiChatboxPrompt: (player, title, ...pairs) => {

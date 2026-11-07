@@ -484,6 +484,11 @@ function clickBankView(event) {
   sendContents(player, bag);
 }
 
+/** The bag never takes a kept slot: its contents go to the killer, and a kept bag would bring them back too. */
+function neverKeepBag(event) {
+  if (isBag(event.item)) event.keep = false;
+}
+
 function dropOnDeath(event) {
   if (!isBag(event.item)) return;
   pendingDeaths.set(event.player, { items: bagItems(event.item), location: event.location });
@@ -550,6 +555,7 @@ module.exports = {
     api.onItemDropPolicy(destroyBag);
     api.onInterfaceActionClick(clickBagInterface);
     api.onInterfaceActionClick(clickBankView);
+    api.onShouldKeepItemOnDeath(neverKeepBag);
     api.onPlayerDeathItemDrop(dropOnDeath);
     api.onPlayerDefeated(giveToKiller);
   },

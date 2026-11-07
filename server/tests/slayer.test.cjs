@@ -21,6 +21,7 @@ const Combat = require("../plugins/skills/slayer/Combat.Slayer");
 const Rewards = require("../plugins/skills/slayer/Rewards.Slayer");
 const Checks = require("../plugins/skills/slayer/Checks.Slayer");
 const Equipment = require("../plugins/skills/slayer/Equipment.Slayer");
+const CaveHorror = require("../plugins/skills/slayer/CaveHorror.Slayer");
 const Finishers = require("../plugins/skills/slayer/Finishers.Slayer");
 const Superiors = require("../plugins/skills/slayer/Superiors.Slayer");
 const Keys = require("../plugins/skills/slayer/Keys.Slayer");
@@ -29,6 +30,7 @@ const Choice = require("../plugins/skills/slayer/Choice.Slayer");
 const core = PluginManager.getCoreApi();
 const handlers = { events: new Map(), death: [], canAttack: [] };
 const emitted = [];
+const combatMethodProviders = [];
 const spawned = [];
 const commands = {};
 const persistedAttributes = new Map();
@@ -48,6 +50,7 @@ Slayer.register({
   onNpcHitModify() {},
   registerIncomingDamageModifier() {},
   onNpcBeforeDeath() {},
+  registerNpcCombatMethodProvider: (ids, ctor, options) => combatMethodProviders.push({ ids, ctor, options }),
   onItemOnNpc() {},
   onItemOnItem() {},
   registerCommand: (name, fn) => { commands[name] = fn; },
@@ -1221,5 +1224,82 @@ test("the Morytania Diary's Slayer XP also lifts Dusk's 1,350 on the Slayer Towe
     kill(player, npc(Common.ids.npcs.duskPhase4, { getX: () => 1697, getY: () => 4570, getZ: () => 0 }));
     assert.equal(varp(player, "slayer_count"), 4, "Dusk counted");
     assert.deepEqual(player.xp.map(([, amount]) => amount), [1350 * multiplier], `${tier} diary on the roof`);
+  }
+});
+
+// Wiki (Cave horror, Witchwood icon, Magical melee) and recordings 4053/4066/1846 (the howl, the steam-head animation).
+function caveHorrorFight({ baseHitpoints = 99, icon = false } = {}) {
+  const ctor = combatMethodProviders.find((entry) => entry.ids.includes(core.NpcIdentifiers.CAVE_HORROR))?.ctor;
+  const played = [];
+  const sent = [];
+  const player = createPlayer({ levels: { [Skill.HITPOINTS.getIndex()]: baseHitpoints } });
+  player.getAsPlayer = () => player;
+  player.performAnimation = (animation) => played.push(["player", animation.getId()]);
+  player.getEquipment = () => ({ get: () => (icon ? { getId: () => core.ItemIdentifiers.WITCHWOOD_ICON } : null) });
+  const npc = {
+    performAnimation: (animation) => played.push(["npc", animation.getId()]),
+    getAttackAnim: () => 4235,
+    getAttackSound: () => new core.Sound(1, 1, 0, 0),
+    getCombat: () => ({ getTarget: () => player }),
+  };
+  return { ctor, played, sent, player, npc };
+}
+
+test("cave horrors fight with their own per-attack combat method", () => {
+  const entry = combatMethodProviders.find((candidate) => candidate.ids.includes(core.NpcIdentifiers.CAVE_HORROR));
+  assert.deepEqual(entry.ids, [1047, 1048, 1049, 1050, 1051]);
+  assert.equal(entry.options.singleton, false);
+  const { ctor } = caveHorrorFight();
+  assert.equal(new ctor().accuracyDefenceType(core.CombatType.MELEE), core.CombatType.MAGIC, "magical melee rolls against Magic defence");
+  assert.equal(new ctor().type(), core.CombatType.MELEE, "and is blocked by Protect from Melee");
+});
+
+test("a cave horror screams every 4 ticks without a witchwood icon, for a tenth of the base Hitpoints level", () => {
+  for (const [base, expected] of [[99, 9], [94, 9], [89, 8], [9, 0]]) {
+    const { ctor, played, player, npc } = caveHorrorFight({ baseHitpoints: base });
+    const method = new ctor();
+    assert.equal(method.attackSpeed(npc), 4);
+    method.start(npc, player);
+    assert.deepEqual(played, [["npc", 4237], ["player", 2835]], "the howl and the steam-head animation");
+    assert.equal(CaveHorror.screamDamage(player), expected, `base ${base}`);
+  }
+});
+
+test("a witchwood icon turns the scream into a regular attack and a coin toss against the kick", () => {
+  const random = Math.random;
+  try {
+    Math.random = () => 0.25;
+    const scream = caveHorrorFight({ icon: true });
+    const screaming = new scream.ctor();
+    assert.equal(screaming.attackSpeed(scream.npc), 5, "a scream is followed by a 5-tick wait");
+    screaming.start(scream.npc, scream.player);
+    assert.deepEqual(scream.played, [["npc", 4237], ["player", 2835]]);
+    assert.equal(screaming.guaranteed, false, "the scream rolls as a regular attack");
+
+    Math.random = () => 0.75;
+    const kick = caveHorrorFight({ icon: true });
+    const kicking = new kick.ctor();
+    assert.equal(kicking.attackSpeed(kick.npc), 4, "a kick is followed by a 4-tick wait");
+    kicking.start(kick.npc, kick.player);
+    assert.deepEqual(kick.played, [["npc", 4235]], "the kick is the horror's attack animation, with no steam head");
+  } finally {
+    Math.random = random;
+  }
+});
+
+test("the attack the speed was asked for is the attack that starts", () => {
+  const random = Math.random;
+  try {
+    const { ctor, played, player, npc } = caveHorrorFight({ icon: true });
+    Math.random = () => 0.75; // kick
+    const asked = new ctor();
+    asked.attackSpeed(npc);
+    Math.random = () => 0.25; // would be a scream if it were rolled again
+    new ctor().attackSpeed(npc);
+    const started = new ctor();
+    started.start(npc, player);
+    assert.deepEqual(played, [["npc", 4235]]);
+  } finally {
+    Math.random = random;
   }
 });

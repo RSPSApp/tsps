@@ -1587,6 +1587,20 @@ test("Transmute: an item no row has, and the lowest tier, as recorded; a stackab
   assert.equal(inventory.getAmount(I.CHAOS_RUNE), 10);
 });
 
+test("Transmute: a preset stack (PvP presets on a league world) is refused, so it never comes back as plain runes", (t) => {
+  withClock(t);
+  const player = cases(TRANSMUTE).relic;
+  const inventory = player.getInventory();
+  inventory.resetItems();
+  const preset = new core.Item(I.FIRE_RUNE, 25);
+  for (const meta of [core.Item.UNTRADEABLE_META, core.Item.UNBANKABLE_META, core.Item.PRESET_META]) preset.setMetaValue(meta, true);
+  inventory.setItem(0, preset);
+  castOn(player, "Alchemic Divergence", 0);
+  assert.equal(inventory.getAmount(I.FIRE_RUNE), 25, "the preset runes stay");
+  assert.equal(inventory.getAmount(I.CHAOS_RUNE), 0, "no plain chaos runes made from them");
+  assert.equal(player.sent.messages.at(-1), "Preset items cannot be used for this.");
+});
+
 test("Transmute: with the bank toggle a stack's products go to the bank; with the alchemy toggle off the spells are alchemy", (t) => {
   withClock(t);
   const player = cases(TRANSMUTE).relic;

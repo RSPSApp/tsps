@@ -267,9 +267,14 @@ test("Nardah's cache Clay Oven cooks a wild pie through both gameplay interactio
     if (interaction === "use") PluginManager.emitItemOnObject(event);
     else PluginManager.emitObjectInteraction(event);
     assert.equal(event.handled, true, `${interaction} reaches the Clay Oven cooking handler`);
-    assert.equal(Cooking.isCookingActive(player), true);
-    tasks[0].execute();
-    tasks[0].execute();
+    if (interaction === "use") {
+      assert.equal(Cooking.isCookingActive(player), true);
+      tasks[0].execute();
+      tasks[0].execute();
+    } else {
+      // Wiki (Cooking, 2-tick cooking): a left-click Cook with one raw item cooks at once, with no session (0762ab8c4).
+      assert.equal(Cooking.isCookingActive(player), false);
+    }
     assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.RAW_WILD_PIE), 0);
     assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.WILD_PIE), 1);
     assert.equal(done(player, "bake-a-wild-pie-at-the-nardah-clay-oven"), true);

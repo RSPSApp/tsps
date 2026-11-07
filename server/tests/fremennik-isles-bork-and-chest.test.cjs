@@ -63,7 +63,7 @@ test("the jester chest needs room for all four pieces before it gives any", (t) 
   const f = actor(t, 4);
   for (let slot = 0; slot < 26; slot++) f.inv.setItem(slot, new core.Item(I.LOGS, 1));
   const chest = { getId: () => JESTER_CHEST_ID(), getLocation: () => f.p.getLocation() };
-  const open = () => PM.emitObjectInteraction({ player: f.p, object: chest, objectId: JESTER_CHEST_ID(), definition: { getActions: () => ["Open"], getName: () => "Chest" }, clickType: 1, location: f.p.getLocation(), handled: false });
+  const open = () => PM.emitObjectInteraction({ player: f.p, object: chest, objectId: JESTER_CHEST_ID(), definition: { getActions: () => ["Open"], getInteractions: () => ["Open"], getName: () => "Chest" }, clickType: 1, location: f.p.getLocation(), handled: false });
   open();
   assert.equal(f.inv.getAmount(I.SILLY_JESTER_HAT), 0, "two free slots take nothing");
   for (let slot = 22; slot < 26; slot++) f.inv.setItem(slot, new core.Item(-1, 0));
@@ -75,7 +75,7 @@ test("the jester chest needs room for all four pieces before it gives any", (t) 
 // outfit is lost, a player can retrieve another one from the chest behind King Gjuki Sorvott IV's throne").
 function jesterChest(f) {
   const chest = { getId: () => JESTER_CHEST_ID(), getLocation: () => f.p.getLocation() };
-  return () => PM.emitObjectInteraction({ player: f.p, object: chest, objectId: JESTER_CHEST_ID(), definition: { getActions: () => ["Open"], getName: () => "Chest" }, clickType: 1, location: f.p.getLocation(), handled: false });
+  return () => PM.emitObjectInteraction({ player: f.p, object: chest, objectId: JESTER_CHEST_ID(), definition: { getActions: () => ["Open"], getInteractions: () => ["Open"], getName: () => "Chest" }, clickType: 1, location: f.p.getLocation(), handled: false });
 }
 const jesterIds = () => [I.SILLY_JESTER_HAT, I.SILLY_JESTER_TOP, I.SILLY_JESTER_TIGHTS, I.SILLY_JESTER_BOOTS];
 const jesterCounts = (f) => jesterIds().map((id) => f.inv.getAmount(id));

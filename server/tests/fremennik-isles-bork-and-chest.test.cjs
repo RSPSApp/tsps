@@ -138,3 +138,134 @@ test("a reopened jester chest needs a slot for every missing piece", (t) => {
 function JESTER_CHEST_ID() {
   return core.ObjectIdentifiers.CHEST_70; // the plugin's JESTER_CHEST (21299)
 }
+
+test("a registered Neitiznot stump checks current Woodcutting before making a shield", async (t) => {
+  const { ObjectActionPacketListener } = require("../dist/net/packet/impl/ObjectActionPacketListener");
+  const { World, Location, ObjectDefinition, MapObjects, RegionManager, Skill, NPC } = core;
+  const players = [], npcs = [], errors = [], oldError = console.error;
+  console.error = (...args) => { errors.push(args.map(String).join(" ")); oldError(...args); };
+  t.after(() => {
+    const cleanupErrors = [];
+    const safely = (fn) => { try { fn(); } catch (error) { cleanupErrors.push(String(error)); } };
+    try {
+      for (const p of players) safely(() => { if (p.isRegistered()) World.getPlayers().removes(p); });
+      for (const n of npcs) safely(() => { if (n.isRegistered()) World.getNpcs().removes(n); });
+    } finally { console.error = oldError; }
+    assert.deepEqual(cleanupErrors, [], "owned actor cleanup completed");
+    assert.deepEqual(errors, [], "no captured engine or cleanup errors");
+  });
+  RegionManager.init();
+  // The checked-in Neitiznot bank rectangle is a region anchor, not a claim
+  // about a stump tile. The actual active-map object is discovered below.
+  RegionManager.loadMapFiles(2339, 3806);
+  const objects = [...MapObjects.mapObjects.values()].flat().filter((o) => {
+    const l = o.getLocation();
+    return o.getId() === core.ObjectIdentifiers.WOODCUTTING_STUMP && l.getZ() === 0
+      && l.getX() >= 2304 && l.getX() <= 2367 && l.getY() >= 3776 && l.getY() <= 3839;
+  });
+  assert.ok(objects.length > 0, "the active Neitiznot region contains a cache-backed stump");
+  const stump = objects[0], loc = stump.getLocation(), definition = ObjectDefinition.forId(stump.getId());
+  assert.equal(definition.getName(), "Woodcutting stump");
+  const clickType = definition.getActions().findIndex((name) => name?.toLowerCase() === "cut-wood") + 1;
+  assert.ok(clickType > 0, "the active cache exposes Cut-wood");
+  const rotated = stump.getFace() % 2 !== 0;
+  const width = rotated ? definition.getSizeY() : definition.getSizeX();
+  const length = rotated ? definition.getSizeX() : definition.getSizeY();
+  assert.ok(width > 0 && length > 0);
+  const candidates = [];
+  for (let x = 0; x < width; x++) candidates.push(new Location(loc.getX() + x, loc.getY() - 1, loc.getZ()), new Location(loc.getX() + x, loc.getY() + length, loc.getZ()));
+  for (let y = 0; y < length; y++) candidates.push(new Location(loc.getX() - 1, loc.getY() + y, loc.getZ()), new Location(loc.getX() + width, loc.getY() + y, loc.getZ()));
+  const adjacent = candidates.find((tile) => !RegionManager.blocked(tile, null));
+  assert.ok(adjacent, "the selected stump has an unblocked adjacent tile");
+  const quest = QuestRuntime.questNamed("The Fremennik Isles"); assert.ok(quest);
+  const channel = () => ({ kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} });
+  let nextActor = 0;
+  function nativeActor(stage, base, current) {
+    const p = new Player(new PlayerSession(channel())); players.push(p);
+    const name = `stump${nextActor++}`;
+    p.setUsername(name); p.setLongUsername(core.Misc.stringToLongBigInt(name));
+    p.setAttribute("bot-skip-persistence", true); p.setLocation(adjacent.clone());
+    assert.equal(World.getPlayers().add(p), true); p.needsPlacement = false;
+    const sm = p.getSkillManager();
+    sm.setExperiences(Skill.WOODCUTTING, core.SkillManager.getExperienceForLevel(base), false);
+    sm.setMaxLevel(Skill.WOODCUTTING, base); sm.setCurrentLevels(Skill.WOODCUTTING, Math.min(base, current));
+    if (current > base) sm.increaseCurrentLevel(Skill.WOODCUTTING, current - base, current);
+    quest.setStage(p, stage);
+    assert.equal(quest.getStage(p), stage); assert.equal(sm.getMaxLevel(Skill.WOODCUTTING), base);
+    assert.equal(sm.getCurrentLevel(Skill.WOODCUTTING), current);
+    assert.equal(ObjectDefinition.forPlayer(stump.getId(), p)?.id, stump.getId());
+    assert.equal(MapObjects.getPrivateArea(p, stump.getId(), loc), stump);
+    return p;
+  }
+  function materials(p, withNail = true) {
+    for (const [id, amount] of [[I.ARCTIC_PINE_LOGS, 2], [I.ROPE, 1], [I.HAMMER, 1], ...(withNail ? [[I.BRONZE_NAILS, 1]] : [])]) p.getInventory().add(new core.Item(id, amount), true);
+  }
+  function snapshot(p) {
+    const sm = p.getSkillManager();
+    return { inventory: p.getInventory().getItems().map((item) => [item.getId(), item.getAmount(), structuredClone(item.getMeta())]),
+      stage: quest.getStage(p), wcBase: sm.getMaxLevel(Skill.WOODCUTTING), wcCurrent: sm.getCurrentLevel(Skill.WOODCUTTING),
+      wcXp: sm.getExperience(Skill.WOODCUTTING), craftXp: sm.getExperience(Skill.CRAFTING), hp: p.getHitpoints() };
+  }
+  function useStump(p) {
+    let queued; const movement = p.getMovementQueue(), original = movement.walkToObject;
+    movement.walkToObject = (_object, action) => { queued = action; return true; };
+    try { new ObjectActionPacketListener().executeAction(p, stump.getId(), loc.getX(), loc.getY(), clickType); }
+    finally { movement.walkToObject = original; }
+    assert.equal(typeof queued?.execute, "function", "the real object listener queued the action");
+    queued.execute(); // Scoped walk adapter: no natural walking or timing claim.
+  }
+  // A fixture-placed registered Mawnis proves that an existing shield can
+  // advance the quest independently of the shield-making level.
+  const owner = nativeActor(17, 55, 55);
+  owner.getInventory().add(new core.Item(I.NEITIZNOT_SHIELD, 1), true);
+  const mawnis = NPC.create(core.NpcIdentifiers.MAWNIS_BUROWGAR, adjacent.clone()); npcs.push(mawnis);
+  mawnis.setScriptedMovement(true); assert.equal(World.getNpcs().add(mawnis), true); mawnis.needsPlacement = false;
+  const npcDefinition = mawnis.getCurrentDefinition(owner);
+  assert.equal(npcDefinition.getName(), "Mawnis Burowgar");
+  const talk = npcDefinition.getActions().findIndex((name) => name?.toLowerCase() === "talk-to") + 1;
+  assert.ok(talk > 0);
+  const nloc = mawnis.getLocation();
+  assert.equal(PM.emitNpcInteraction({ player: owner, npc: mawnis, npcId: mawnis.getId(), npcIndex: mawnis.getIndex(),
+    location: { x: nloc.getX(), y: nloc.getY(), z: nloc.getZ() }, definition: npcDefinition, clickType: talk, handled: false }), true);
+  assert.equal(quest.getStage(owner), 18, "a carried shield permits existing continuation below 56");
+  assert.equal(owner.getInventory().getAmount(I.NEITIZNOT_SHIELD), 1);
+  const refused = nativeActor(17, 55, 55); materials(refused);
+  const before = snapshot(refused); useStump(refused);
+  assert.deepEqual(snapshot(refused), before, "under-level shield attempt keeps all materials, XP and stage");
+  assert.equal(refused.getInventory().getAmount(I.SPLIT_LOG), 0, "refusal cannot fall through to log splitting");
+  assert.equal(refused.getInventory().getAmount(I.NEITIZNOT_SHIELD), 0);
+  for (const [base, current] of [[56, 56], [55, 56]]) {
+    const p = nativeActor(17, base, current); materials(p);
+    const wcXp = p.getSkillManager().getExperience(Skill.WOODCUTTING); useStump(p);
+    assert.equal(p.getInventory().getAmount(I.NEITIZNOT_SHIELD), 1);
+    assert.equal(p.getInventory().getAmount(I.ARCTIC_PINE_LOGS), 0);
+    assert.equal(p.getInventory().getAmount(I.ROPE), 0);
+    assert.equal(p.getInventory().getAmount(I.BRONZE_NAILS), 0);
+    assert.equal(p.getInventory().getAmount(I.HAMMER), 1);
+    assert.equal(quest.getStage(p), 17);
+    assert.equal(p.getSkillManager().getMaxLevel(Skill.WOODCUTTING), base);
+    assert.equal(p.getSkillManager().getCurrentLevel(Skill.WOODCUTTING), current);
+    assert.equal(p.getSkillManager().getExperience(Skill.WOODCUTTING), wcXp);
+  }
+  const drained = nativeActor(17, 56, 55); materials(drained);
+  const drainedBefore = snapshot(drained); useStump(drained);
+  assert.deepEqual(snapshot(drained), drainedBefore, "current level, not an undrained base level, governs admission");
+  for (const scenario of ["wrong stage", "missing nail", "already owned"]) {
+    const p = nativeActor(scenario === "wrong stage" ? 16 : 17, 55, 55);
+    materials(p, scenario !== "missing nail");
+    if (scenario === "already owned") p.getInventory().add(new core.Item(I.NEITIZNOT_SHIELD, 1), true);
+    const sm = p.getSkillManager(), xp = sm.getExperience(Skill.WOODCUTTING), craftXp = sm.getExperience(Skill.CRAFTING);
+    const stage = quest.getStage(p), shield = p.getInventory().getAmount(I.NEITIZNOT_SHIELD);
+    const rope = p.getInventory().getAmount(I.ROPE), nail = p.getInventory().getAmount(I.BRONZE_NAILS);
+    useStump(p);
+    assert.equal(p.getInventory().getAmount(I.ARCTIC_PINE_LOGS), 0, scenario);
+    assert.equal(p.getInventory().getAmount(I.SPLIT_LOG), 2, scenario);
+    assert.equal(p.getInventory().getAmount(I.NEITIZNOT_SHIELD), shield, scenario);
+    assert.equal(p.getInventory().getAmount(I.ROPE), rope, scenario);
+    assert.equal(p.getInventory().getAmount(I.BRONZE_NAILS), nail, scenario);
+    assert.equal(p.getInventory().getAmount(I.HAMMER), 1, scenario);
+    assert.equal(quest.getStage(p), stage, scenario);
+    assert.equal(sm.getExperience(Skill.WOODCUTTING), xp, scenario);
+    assert.equal(sm.getExperience(Skill.CRAFTING), craftXp, scenario);
+  }
+});

@@ -71,6 +71,7 @@ module.exports = {
     require("./specials/SaradominGodsword.SpecialAttack")(api);
     require("./specials/SaradominSword.SpecialAttack")(api);
     require("./specials/SaradominsBlessedSword.SpecialAttack")(api);
+    require("./specials/ScorchingBow.SpecialAttack")(api);
     require("./specials/Seercull.SpecialAttack")(api);
     require("./specials/Shove.SpecialAttack")(api);
     require("./specials/SoulflameHorn.SpecialAttack")(api);

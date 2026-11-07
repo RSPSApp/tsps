@@ -106,6 +106,8 @@ function fakePlayer(name, location = new Location(1234, 3566, 0)) {
       addExperiences() {},
     }),
     getInventory: () => fakeInventory(p.inventory),
+    interfaceId: -1,
+    getInterfaceId: () => p.interfaceId,
     getPacketSender() {
       const sender = {
         sendVarbit: (id, value) => { varbits.set(id, value); return sender; },
@@ -114,8 +116,8 @@ function fakePlayer(name, location = new Location(1234, 3566, 0)) {
         sendTypedMessage: (type, text) => { p.messages.push(text); (p.typed ??= []).push([type, text]); return sender; },
         sendSong: (id) => { (p.songs ??= []).push(id); return sender; },
         sendJingle: (id) => { (p.jingles ??= []).push(id); return sender; },
-        sendInterface: (id) => { p.interfaces.push(id); return sender; },
-        sendInterfaceSet: (id) => { p.interfaces.push(id); return sender; },
+        sendInterface: (id) => { p.interfaces.push(id); p.interfaceId = id; return sender; },
+        sendInterfaceSet: (id) => { p.interfaces.push(id); p.interfaceId = id; return sender; },
         sendInterfaceDisplayState: () => sender,
         sendString: () => sender,
         sendInterfaceRemoval: () => sender,
@@ -1008,7 +1010,10 @@ test("the Olm's lightning tells a blocked raider its own line, and only in its c
   raid.destroy();
 });
 
-test('private storage drag-reorders, and an Ultimate Ironman cannot store in a unit', () => {  const player = fakePlayer('Dragger');
+test('private storage drag-reorders, and an Ultimate Ironman cannot store in a unit', (t) => {
+  // At a unit inside the raid: the storage works only there, with its interface open.
+  t.mock.method(RaidModule, 'raidOf', () => ({}));
+  const player = fakePlayer('Dragger');
   Storage.openPrivate(player, 30);
   const items = Storage.privateItems(player);
   for (const id of [560, 565, 566]) items.push({ id, amount: 1 });

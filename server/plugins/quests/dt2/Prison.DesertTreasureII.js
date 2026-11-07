@@ -1,5 +1,11 @@
 /** The Ghorrock prison route between Sucellus' cell and the asylum. */
 module.exports = function registerSucellusPrison(api) {
+
+  /** Room for one more of `itemId` (`adds` never reports a failure); a slotless stand-in falls back to free slots. */
+  function hasRoom(inventory, itemId) {
+    if (typeof inventory.getAddableAmount === "function") return inventory.getAddableAmount(new api.core.Item(itemId, 1)) >= 1;
+    return (inventory.getFreeSlots?.() ?? 1) > 0;
+  }
   const { ItemIdentifiers: I, NpcIdentifiers: N } = api.core;
   const { startTranscript } = require("../QuestRuntime");
   const PAGE = "Desert Treasure II - The Fallen Empire";
@@ -234,10 +240,12 @@ module.exports = function registerSucellusPrison(api) {
       player.sendMessage("You need to find and read the clue for this lock first.");
       return;
     }
-    if (!player.getInventory().adds(KEYS[key], 1)) {
+    // adds never returns false: check for room first, or the key vanishes while the lock still opens.
+    if (!hasRoom(player.getInventory(), KEYS[key])) {
       player.sendMessage("You need an empty inventory slot to take the key.");
       return;
     }
+    player.getInventory().adds(KEYS[key], 1);
     const next = key === "sapphire" ? 26 : key === "emerald" ? 30 : key === "ruby" ? 36 : 40;
     setState(player, next);
     if (key === "diamond") spawnAssassin(player, player.getAttribute(AREA));

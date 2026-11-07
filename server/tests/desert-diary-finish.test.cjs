@@ -25,6 +25,8 @@ async function setup() {
   ready = (async () => {
     await CachePipeline.initialize(path.resolve(__dirname, ".."));
     core = PluginManager.getCoreApi();
+    // Dream Mentor gives these Lunar spells (Wiki); the quest plugins are not loaded here.
+    PluginManager.createApi("DreamMentorDone").onCustomEvent("quest:is-complete", (q) => { if (q.key === "dream_mentor") q.complete = true; });
     core.ObjectDefinition.init();
     core.RegionManager.init();
     api = PluginManager.createApi("DesertDiaryFinishTest");

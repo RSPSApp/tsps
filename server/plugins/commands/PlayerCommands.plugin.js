@@ -153,6 +153,7 @@ module.exports = {
     ItemOnGroundManager = api.getItemOnGroundManager();
     CombatFactory = api.getCombatFactory();
     PlayerPunishment = api.getPlayerPunishment();
+    api.persistAttribute(YELL_UNTIL_ATTRIBUTE, 0);
     api.registerCommand("home", home, api.core.PlayerRights.NONE, "Teleport to the world spawn");
     api.registerCommand("staff", staff, api.core.PlayerRights.NONE, "List online staff and their ranks");
     api.onInterfaceActionButton(JOURNAL_CLOSE, closeStaff);

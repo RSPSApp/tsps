@@ -34,6 +34,10 @@ assert.ok(parseHelperResponse({ ...result, overview: undefined, sections: undefi
 assert.equal(parseHelperResponse({ ...result, sections: [{ ...section(0, true), steps: "x" }] }), null);
 assert.equal(parseHelperResponse({ ...result, activeStep: { ...step, choiceRules: [{ groupId: "219" }] } }), null);
 assert.equal(parseHelperResponse({ ...result, activeStep: { ...step, requirements: [{ name: "x", met: true, state: "maybe" }] } }), null);
+// A requirement may carry its item's wiki URL (QuestRequirementsPanel's "Go to wiki..").
+const cited = { ...result, activeStep: { ...step, requirements: [{ name: "Redberries", met: false, state: "fail", ids: [1951], quantity: 1, wikiUrl: "https://oldschool.runescape.wiki/w/Redberries#Item_sources" }] } };
+assert.ok(parseHelperResponse(cited), "a requirement with a wiki URL parses");
+assert.equal(parseHelperResponse({ ...result, activeStep: { ...step, requirements: [{ name: "x", met: false, wikiUrl: 5 }] } }), null, "a non-string wiki URL is rejected");
 assert.equal(parseHelperCatalog({ protocol: 1, sourceCommit: "a", diagnostics: [], quests: [{ questKey: "a", name: "A", supported: true, optimalOrder: "1" }] }), null);
 
 // QuestOrdering / QuestFilter / Difficulty / SkillFiltering.

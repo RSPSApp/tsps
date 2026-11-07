@@ -670,6 +670,18 @@
     text-decoration: underline;
 }
 
+/* A requirement that links to its item sources keeps the met/not-met colour its row sets. */
+.rl-qh-req-link,
+.rl-qh-req-link:visited {
+    color: inherit;
+    text-decoration: none;
+}
+
+.rl-qh-req-link:hover {
+    color: inherit;
+    text-decoration: underline;
+}
+
 /* QuestStepPanel: steps LIGHT_GRAY, the current one BRAND_ORANGE, faded ones DARK_GRAY. */
 .rl-qh-steps {
     margin: 0;

@@ -136,6 +136,8 @@ export type RequirementState = {
     /** Upstream colour: passed, failed, in the bank, boostable, or not an actual item. */
     state?: RequirementCheck;
     tooltip?: string;
+    /** Requirement.getWikiUrl: an item's page, anchored at its "Item sources" section. */
+    wikiUrl?: string;
     ids?: number[];
     quantity?: number;
 };
@@ -334,7 +336,7 @@ const finite = (v: unknown): v is number => typeof v === "number" && Number.isFi
 const list = (v: unknown, check: (v: unknown) => boolean, max = 4096): boolean => Array.isArray(v) && v.length <= max && v.every(check);
 const optional = (o: Obj, key: string, check: (v: unknown) => boolean): boolean => o[key] === undefined || check(o[key]);
 const bounds = (v: unknown): boolean => obj(v) && finite(v.x) && finite(v.y) && finite(v.width) && finite(v.height) && v.width >= 0 && v.height >= 0;
-const requirement = (v: unknown): boolean => obj(v) && str(v.name) && typeof v.met === "boolean" && optional(v, "state", v => ["pass", "fail", "partial", "boost", "neutral"].includes(v as string)) && optional(v, "tooltip", str) && optional(v, "ids", v => list(v, int)) && optional(v, "quantity", int);
+const requirement = (v: unknown): boolean => obj(v) && str(v.name) && typeof v.met === "boolean" && optional(v, "state", v => ["pass", "fail", "partial", "boost", "neutral"].includes(v as string)) && optional(v, "tooltip", str) && optional(v, "wikiUrl", str) && optional(v, "ids", v => list(v, int)) && optional(v, "quantity", int);
 const requirements = (v: unknown): boolean => list(v, requirement, 512);
 const choiceRule = (v: unknown): boolean => obj(v) && int(v.groupId) && int(v.childId) && typeof v.number === "boolean" && optional(v, "id", int) && ["text", "pattern", "replace"].every(k => optional(v, k, str)) && optional(v, "whole", x => typeof x === "boolean") && optional(v, "excludeGroupId", int) && optional(v, "excludeChildId", int) && optional(v, "excludes", x => list(x, str, 64));
 const strings = (v: unknown): boolean => list(v, str, 512);

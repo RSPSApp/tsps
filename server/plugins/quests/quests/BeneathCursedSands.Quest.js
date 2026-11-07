@@ -342,6 +342,9 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
   const EMBLEMS_TAKEN_ATTRIBUTE = "beneath-cursed-sands:emblems-taken";
   const OWED_PARTISAN_ATTRIBUTE = "beneath-cursed-sands:owed-partisan";
   const OWED_CIRCLET_ATTRIBUTE = "beneath-cursed-sands:owed-circlet";
+  /** The partisan and circlet Maisa's chain hands over, once each (saved). */
+  const PARTISAN_GIVEN_ATTRIBUTE = "beneath-cursed-sands:partisan-given";
+  const CIRCLET_GIVEN_ATTRIBUTE = "beneath-cursed-sands:circlet-given";
 
   // Urn slots 1 (northernmost) .. 4 (southernmost); emblem types 1..4.
   const EMBLEM_TYPE_BABOON = 1;
@@ -1236,15 +1239,20 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
         });
         return;
       case "aHisly": // Maisa shows you a spear with a keris on the end
+        // Once: the High Priest's chain replays until the quest completes, so a banked partisan must not be re-given.
+        if (hasFlag(player, PARTISAN_GIVEN_ATTRIBUTE)) return;
         if (freeSlots(player) > 0) {
           if (!hasItem(player, KERIS_PARTISAN_ITEM)) player.getInventory().adds(KERIS_PARTISAN_ITEM, 1);
+          flag(player, PARTISAN_GIVEN_ATTRIBUTE, true);
         } else {
           setOwedPartisan(player, true);
         }
         return;
       case "VenWhi": // Maisa shows you an enchanted circlet
+        if (hasFlag(player, CIRCLET_GIVEN_ATTRIBUTE)) return;
         if (freeSlots(player) > 0) {
           if (!hasItem(player, CIRCLET_OF_WATER_ITEM)) player.getInventory().adds(CIRCLET_OF_WATER_ITEM, 1);
+          flag(player, CIRCLET_GIVEN_ATTRIBUTE, true);
         } else {
           setOwedCirclet(player, true);
         }
@@ -1253,6 +1261,7 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
         event.handled = true;
         if (freeSlots(player) > 0 && !hasItem(player, CIRCLET_OF_WATER_ITEM)) {
           player.getInventory().adds(CIRCLET_OF_WATER_ITEM, 1);
+          flag(player, CIRCLET_GIVEN_ATTRIBUTE, true);
           player.sendMessage("The High Priest hands you a Circlet of Water.");
           setOwedCirclet(player, false);
         } else {
@@ -1265,6 +1274,7 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
       case "eRrcx2": // Keris partisan found in the tent
         if (freeSlots(player) > 0 && !hasItem(player, KERIS_PARTISAN_ITEM)) {
           player.getInventory().adds(KERIS_PARTISAN_ITEM, 1);
+          flag(player, PARTISAN_GIVEN_ATTRIBUTE, true);
           player.sendMessage("You find a Keris partisan in the tent.");
           setOwedPartisan(player, false);
         } else {
@@ -2152,6 +2162,8 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
   // ==========================================================================
 
   api.persistAttribute(INTRO_ATTRIBUTE);
+  api.persistAttribute(PARTISAN_GIVEN_ATTRIBUTE, false);
+  api.persistAttribute(CIRCLET_GIVEN_ATTRIBUTE, false);
   api.persistAttribute(ENTRY_INSPECTED_ATTRIBUTE);
   api.persistAttribute(TABLET_FOUND_ATTRIBUTE, false);
   api.persistAttribute(TABLET_READ_ATTRIBUTE, false);

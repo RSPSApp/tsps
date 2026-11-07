@@ -38,7 +38,10 @@ function Requirements({ items, settings, none = "None" }: { items?: readonly Req
     return <ul className="rl-qh-reqs">{items.map((requirement, index) =>
         <li key={index} style={{ color: requirementColor(requirement, settings) }} title={requirement.tooltip}>
             <span aria-label={requirement.met ? "Met" : "Not met"} className="rl-qh-check">{requirement.met ? "✓" : "○"}</span>
-            {clean(requirement.name)}
+            {/* QuestRequirementsPanel's "Go to wiki..": an item link lands on its Item sources. */}
+            {requirement.wikiUrl
+                ? <a className="rl-qh-req-link" href={requirement.wikiUrl} target="_blank" rel="noopener noreferrer" title={requirement.tooltip ?? "Open this item's sources on the wiki."}>{clean(requirement.name)}</a>
+                : clean(requirement.name)}
         </li>)}</ul>;
 }
 

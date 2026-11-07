@@ -51,6 +51,8 @@ final class PresentationExport {
     x.addProperty("met", r.check(client));
     x.addProperty("state", state(r, client, config));
     if (r.getTooltip() != null) x.addProperty("tooltip", r.getTooltip());
+    // QuestRequirementsPanel's "Go to wiki..": an item's link lands on its #Item_sources.
+    if (r.getWikiUrl() != null) x.addProperty("wikiUrl", r.getWikiUrl());
     if (r instanceof ItemRequirement ir) {
       x.add("ids", BridgeEngine.GSON.toJsonTree(ir.getAllIds()));
       x.addProperty("quantity", ir.getQuantity());

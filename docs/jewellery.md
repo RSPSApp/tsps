@@ -136,3 +136,10 @@ noted stacks, both mapped fountains, the guild totem and unrelated totems. Eleve
 checks fail against the previous charging code. Live interaction checks also verified the
 mapped Rune fountain, mixed and noted charging, and both guild charging sites. Quest
 completion and supplies were test setup; the quests themselves were not replayed.
+
+## Ring of wealth teleports
+
+Source: the OSRS Wiki's Ring of wealth page (Teleportation section). The destination tiles are the
+Wiki's: Grand Exchange (3163, 3478), Falador Park (2995, 3375), Miscellania (2534, 3862) and
+Dondakan (2824, 10168). Miscellania and Dondakan are quest-locked and share the jewellery's refusal
+line (`LOCKED_DESTINATION_MESSAGE`); the charge is kept when refused.

@@ -948,6 +948,8 @@ module.exports = function registerWantedQuest(api) {
     quest.setStage(player, STAGE_STARTED);
   }
 
+  const TIFFY_NO_SPACE_TEXT = "Well we in the Temple Knights have some specific equipment for situations such as this dontchaknow, but you'll need to free up some inventory space first!";
+
   /** A free slot, or one the payment frees: the made orb's gem and glass, or a stack of exactly 10,000 coins. */
   function roomForCommorb(player, path) {
     const inventory = player.getInventory();
@@ -959,9 +961,10 @@ module.exports = function registerWantedQuest(api) {
   function grantCommorbFromTiffy(player) {
     const stage = quest.getStage(player);
     if (stage < STAGE_MISSION || quest.isComplete(player) || hasItem(player, COMMORB_ITEM_ID)) return;
-    // The orb needs a slot; paying first would lose the coins (ours: the transcript has no full-inventory line).
+    // The transcript checks for space when Buy One is picked (Pih8D4), but worn gear taken off since can fill the
+    // slot; paying first would then lose the coins. Refuse with Tiffy's own full-inventory line from that check.
     if (!roomForCommorb(player, stage === STAGE_MISSION ? orbPathByPlayer.get(player) : null)) {
-      player.sendMessage("You need a free inventory slot for the Communications Orb.");
+      player.sendMessage(TIFFY_NO_SPACE_TEXT);
       return;
     }
     if (stage === STAGE_MISSION) {

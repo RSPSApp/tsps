@@ -1,5 +1,5 @@
 {
-  "$comment": ["Food: what eating each item does, keyed by the item's cache name (every id with that name). Read by plugins/items/Food.plugin.js; the format is in docs/food.md.", "Heals, bites, eat delays, combo foods, boosts and effects: the OSRS Wiki (Food, Food/All food, Food/Fast foods and the item pages). Messages: rsprox recordings (https://rsprox.net/database), else the Wiki's quoted messages, else 'You eat the <name>.'."],
+  "$comment": ["Food: what eating each item does, keyed by cache name or exact itemId for differing same-name foods. Read by plugins/items/Food.plugin.js; the format is in docs/food.md.", "Heals, bites, eat delays, combo foods, boosts and effects: the OSRS Wiki (Food, Food/All food, Food/Fast foods and the item pages). Messages: rsprox recordings (https://rsprox.net/database), else the Wiki's quoted messages, else 'You eat the <name>.'."],
   "foods": [
     {"name": "Admiral pie", "bites": ["Admiral pie", "Half an admiral pie"], "heal": 8, "eatDelay": [1, 1], "leaves": "Pie dish", "messages": ["You eat half the Admiral pie.", "You eat the remaining Admiral pie."], "boost": {"fishing": 5}},
     {"name": "Anchovies", "heal": 1},
@@ -22,6 +22,7 @@
     {"name": "Brawk fish (3)", "heal": 14},
     {"name": "Bread", "heal": 5},
     {"name": "Cabbage", "heal": 1, "message": "You eat the cabbage. Yuck!"},
+    {"name": "Cabbage", "itemId": 1967, "heal": 1, "message": "You eat the cabbage.", "afterMessage": "It seems to taste nicer than normal.", "boost": {"defence": {"flat": 1, "percent": 0.02}}},
     {"name": "Caerula berries", "heal": 2},
     {"name": "Cake", "bites": ["Cake", "2/3 cake", "Slice of cake"], "heal": 4, "eatDelay": [2, 2, 3], "messages": ["You eat part of the cake.", "You eat some more of the cake.", "You eat the slice of cake."]},
     {"name": "Cave eel", "heal": {"min": 8, "max": 12}},

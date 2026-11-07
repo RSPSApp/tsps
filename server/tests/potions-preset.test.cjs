@@ -1000,3 +1000,160 @@ test("ale registrations retain the glass for their drink variant", () => {
     }
   }
 });
+
+// Both foods have the same display name, but only the Draynor item boosts Defence.
+const REGULAR_CABBAGE = 1965;
+const DRAYNOR_CABBAGE = 1967;
+
+test("Draynor cabbage grants its Defence boost while regular cabbage does not", async t => {
+  const actions = [];
+  const eaten = [];
+  const originalAction = PM.emitItemAction;
+  const originalEvent = PM.emitCustomEvent;
+  t.mock.method(PM, "emitItemAction", function(event) {
+    const observed = { player: event.player, item: event.item, itemId: event.itemId,
+      heldId: event.item?.getId(), slot: event.slot, clickType: event.clickType, option: event.option };
+    const result = originalAction.call(this, event);
+    observed.handled = result;
+    actions.push(observed);
+    return result;
+  });
+  t.mock.method(PM, "emitCustomEvent", function(name, payload) {
+    const observed = name === "food:eaten" ? { player: payload.player, itemId: payload.itemId,
+      meta: payload.meta, hitpointsBefore: payload.hitpointsBefore, heal: payload.heal, restores: payload.restores } : null;
+    const result = originalEvent.call(this, name, payload);
+    if (observed) eaten.push(observed);
+    return result;
+  });
+
+  function cabbageActor() {
+    const f = divineActor(t, 90);
+    const skills = f.p.getSkillManager();
+    const defence = core.Skill.DEFENCE;
+    skills.setExperience(defence, 0);
+    skills.setMaxLevel(defence, 1);
+    skills.setCurrentLevel(defence, 1, false);
+    assert.equal(skills.getExperience(defence), 0);
+    assert.equal(skills.getMaxLevel(defence), 1);
+    assert.equal(skills.getCurrentLevel(defence), 1);
+    assert.equal(f.p.getHitpoints(), 90);
+    assert.equal(core.WorldDefinition.isMembersWorld(), true);
+    assert.equal(f.p.isRegistered(), true);
+    assert.equal(f.p.isPlayerBot(), false);
+    assert.equal(f.p.isDyingReturn() ?? false, false);
+    assert.equal(f.p.isTeleportingReturn() ?? false, false);
+    assert.equal(f.p.getPrivateArea(), null);
+    assert.equal(f.p.getCombat().getTarget() ?? null, null);
+    assert.equal(f.p.getCombat().getAttacker() ?? null, null);
+    assert.equal(f.eq.getItems().filter(held => held && held.getId() > 0 && held.getAmount() > 0).length, 0);
+    assert.equal(f.p.getTimers().has(core.TimerKey.FOOD), false);
+    assert.equal(f.p.getTimers().has(core.TimerKey.STUN), false);
+    return f;
+  }
+
+  async function eatCabbage(f, id) {
+    const definition = core.CacheDefinitions.getItem(id);
+    assert.equal(definition.name, "Cabbage");
+    assert.equal(definition.inventoryActions[0], "Eat");
+    assert.equal(definition.noteTemplate, -1);
+    assert.equal(definition.placeholderTemplate, -1);
+    assert.equal(core.ItemDefinition.forId(id).isNoted(), false);
+    assert.equal(widgetOpFor(id, "Eat"), 2);
+    const held = put(f, item(id), 0);
+    assert.equal(f.inv.getItems()[0], held);
+    assert.equal(held.getId(), id);
+    assert.equal(held.getAmount(), 1);
+    assert.equal(held.getMeta(), null);
+    const actionCount = actions.length;
+    const eatenCount = eaten.length;
+    await heldOp(f, 0, "Eat");
+    // Verify the clicked item and committed full-startup food callback before testing the benefit.
+    assert.equal(actions.length, actionCount + 1);
+    const action = actions[actionCount];
+    assert.equal(action.player, f.p);
+    assert.equal(action.item, held);
+    assert.equal(action.itemId, id);
+    assert.equal(action.heldId, id);
+    assert.equal(action.slot, 0);
+    assert.equal(action.clickType, 1);
+    assert.equal(action.option, "Eat");
+    assert.equal(action.handled, true);
+    assert.equal(eaten.length, eatenCount + 1);
+    assert.equal(eaten[eatenCount].player, f.p);
+    assert.equal(eaten[eatenCount].itemId, id);
+    return eaten[eatenCount];
+  }
+
+  function assertOrdinaryConsumption(f, id, event) {
+    assert.equal(f.inv.getAmount(id), 0);
+    assert.notEqual(f.inv.getItems()[0]?.getId(), id);
+    assert.equal(f.p.getHitpoints(), 91);
+    assert.equal(f.p.getSkillManager().getExperience(core.Skill.DEFENCE), 0);
+    assert.equal(f.p.getSkillManager().getExperience(core.Skill.HITPOINTS), core.SkillManager.getExperienceForLevel(99));
+    assert.equal(f.p.getTimers().has(core.TimerKey.FOOD), true);
+    assert.equal(event.meta, null);
+    assert.equal(event.hitpointsBefore, 90);
+    assert.equal(event.heal, 1);
+    assert.equal(event.restores, 1);
+    assert.ok(f.messages.some(message => typeof message === "string" && message.toLowerCase().includes("cabbage")));
+  }
+
+  const regular = cabbageActor();
+  const regularEvent = await eatCabbage(regular, REGULAR_CABBAGE);
+  assert.equal(regular.p.getSkillManager().getCurrentLevel(core.Skill.DEFENCE), 1);
+  assertOrdinaryConsumption(regular, REGULAR_CABBAGE, regularEvent);
+
+  const draynor = cabbageActor();
+  const draynorEvent = await eatCabbage(draynor, DRAYNOR_CABBAGE);
+  assert.equal(draynor.p.getSkillManager().getCurrentLevel(core.Skill.DEFENCE), 2,
+    "Draynor cabbage gives a level-one player its Defence boost");
+  assertOrdinaryConsumption(draynor, DRAYNOR_CABBAGE, draynorEvent);
+});
+
+for (const [level, boost] of [[49, 1], [50, 2]]) {
+  test(`cabbage Defence distinction at level ${level}`, async t => {
+    async function eatAtLevel(id) {
+      const f = divineActor(t, 90);
+      const skills = f.p.getSkillManager();
+      const defence = core.Skill.DEFENCE;
+      const xp = core.SkillManager.getExperienceForLevel(level);
+      skills.setExperience(defence, xp);
+      skills.setMaxLevel(defence, level);
+      skills.setCurrentLevel(defence, level, false);
+      assert.equal(skills.getExperience(defence), xp);
+      assert.equal(skills.getMaxLevel(defence), level);
+      assert.equal(skills.getCurrentLevel(defence), level);
+      assert.equal(f.p.getTimers().has(core.TimerKey.FOOD), false);
+      assert.equal(core.CacheDefinitions.getItem(id).inventoryActions[0], "Eat");
+      assert.equal(core.ItemDefinition.forId(id).isNoted(), false);
+      const held = put(f, item(id), 0);
+      assert.equal(held.getId(), id);
+      assert.equal(held.getMeta(), null);
+      await heldOp(f, 0, "Eat");
+      assert.equal(f.inv.getAmount(id), 0);
+      assert.equal(f.p.getHitpoints(), 91);
+      assert.equal(skills.getExperience(defence), xp);
+      assert.equal(f.p.getTimers().has(core.TimerKey.FOOD), true);
+      const eatLine = id === DRAYNOR_CABBAGE ? "You eat the cabbage." : "You eat the cabbage. Yuck!";
+      assert.ok(f.messages.includes(eatLine));
+      if (id === DRAYNOR_CABBAGE) assert.ok(f.messages.includes("It seems to taste nicer than normal."));
+      return skills.getCurrentLevel(defence);
+    }
+    assert.equal(await eatAtLevel(REGULAR_CABBAGE), level, "regular cabbage does not boost Defence");
+    assert.equal(await eatAtLevel(DRAYNOR_CABBAGE), level + boost, "Draynor cabbage follows the level-based boost");
+  });
+}
+
+test("both cabbage identities remain food while their notes do not", () => {
+  const Food = require("../plugins/items/Food.plugin");
+  const ids = Food.foodItemIds();
+  for (const id of [REGULAR_CABBAGE, DRAYNOR_CABBAGE]) {
+    assert.equal(Food.isFoodItem(id), true);
+    assert.equal(ids.filter(foodId => foodId === id).length, 1);
+  }
+  for (const noted of [1966, 1968]) {
+    assert.equal(core.ItemDefinition.forId(noted).isNoted(), true);
+    assert.equal(Food.isFoodItem(noted), false);
+    assert.equal(ids.includes(noted), false);
+  }
+});

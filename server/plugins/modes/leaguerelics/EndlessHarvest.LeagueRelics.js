@@ -69,4 +69,5 @@ module.exports = function attach(api) {
   api.onCustomEvent("storage:room", room);
   api.onCustomEvent("mining:deplete-rock", endless);
   api.onCustomEvent("woodcutting:deplete-tree", endless);
+  api.onCustomEvent("fishing:continue", endless);
 };

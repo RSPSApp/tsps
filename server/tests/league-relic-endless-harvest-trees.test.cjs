@@ -102,3 +102,107 @@ test("without the relic: the same tree falls after its log and the chopping stop
   assert.equal(core.ObjectManager.objectsAt(tree.getLocation()).some((o) => o.getId() === tree.getId()), false, "a stump in its place");
   assert.equal(logs(f), 1);
 });
+
+// Wiki: Endless Harvest (Demonic Pacts), automatic fishing relocation applies to all fish types.
+async function fish(t, f, { minnow = false } = {}) {
+  const { ItemIdentifiers: I, NpcIdentifiers: N, NPC, Location, World, Skill } = core;
+  const at = minnow ? [2608, 3444, 0] : [2845, 3429, 0];
+  f.player.setAttribute("league:areas", [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+  core.RegionManager.loadMapFiles(...at);
+  f.player.setLocation(new Location(...at));
+  f.player.needsPlacement = false;
+  f.player.getSkillManager().setExperience(Skill.FISHING, core.SkillManager.getExperienceForLevel(99));
+  f.player.getSkillManager().setMaxLevel(Skill.FISHING, 99);
+  f.player.getSkillManager().setCurrentLevel(Skill.FISHING, 99);
+  f.player.getInventory().add(new core.Item(minnow ? I.SMALL_FISHING_NET : I.LOBSTER_POT), true);
+  const npc = NPC.create(minnow ? N.FISHING_SPOT_87 : N.FISHING_SPOT_10,
+    new Location(at[0] + 1, at[1], 0));
+  npc.setScriptedMovement(true);
+  assert.equal(World.getNpcs().add(npc), true);
+  npc.needsPlacement = false;
+  t.after(() => { if (npc.isRegistered()) World.getNpcs().removes(npc); });
+  t.mock.method(Math, "random", () => {
+    const stack = new Error().stack;
+    // Force ordinary simulated movement, while avoiding flying fish and unrelated reward rolls.
+    return stack.includes("getRandom") && stack.includes("FishingTask") ? 0 :
+      stack.includes("rollCatch") ? 0 : 0.5;
+  });
+  await f.connection.dispatch([{ type: "npc_option", index: npc.getIndex(), clickType: npc.getDefinition().getActions().findIndex((action) => action?.toLowerCase() === (minnow ? "small net" : "cage")) + 1 }]);
+  f.connection.processTurnPackets();
+  await ticks(f, 10);
+  return { npc, item: minnow ? I.MINNOW : I.RAW_LOBSTER };
+}
+
+function catches(f, item) {
+  return f.player.getInventory().getAmount(item) + f.player.getBank(0).getAmount(item);
+}
+
+test("Demonic Endless Harvest fishes through forced random stops; ordinary and Reloaded fishing stop", async (t) => {
+  for (const [league, relics, expected] of [[6, { 0: 1 }, true], [6, {}, false], [4, { 0: 1 }, false]]) {
+    const f = pactsCharacter(t, relics);
+    f.player.setAttribute("league:type", league);
+    const { item } = await fish(t, f);
+    assert.equal(require("../plugins/skills/Fishing.plugin").isFishingActive(f.player), expected, "league " + league);
+    assert.ok(catches(f, item) > 0);
+    const before = catches(f, item);
+    await ticks(f, 12);
+    assert.equal(catches(f, item) > before, expected);
+  }
+});
+
+test("Demonic Endless Harvest follows relocated minnow spots through real pathing; manual walking cancels", async (t) => {
+  const f = pactsCharacter(t, { 0: 1 });
+  const { npc, item } = await fish(t, f, { minnow: true });
+  const before = catches(f, item);
+  npc.moveTo(new core.Location(2611, 3444, 0));
+  await ticks(f, 12);
+  assert.equal(require("../plugins/skills/Fishing.plugin").isFishingActive(f.player), true);
+  assert.ok(catches(f, item) > before, "resumed minnow catches");
+  assert.ok(f.player.getLocation().getX() > 2608, "walked after the moving spot");
+  // A manual route replaces a pending automatic interaction.
+  npc.moveTo(new core.Location(2612, 3443, 0));
+  core.TaskManager.process();
+  f.player.getMovementQueue().walkToTile(new core.Location(2608, 3441, 0), () => {});
+  await ticks(f, 12);
+  assert.equal(require("../plugins/skills/Fishing.plugin").isFishingActive(f.player), false);
+});
+
+test("relocated spots stop without Demonic Endless Harvest; resumption rechecks the tool and relic", async (t) => {
+  for (const mode of ["ordinary", "reloaded", "tool", "relic", "plane"]) {
+    const f = pactsCharacter(t, mode === "ordinary" ? {} : { 0: 1 });
+    if (mode === "reloaded") {
+      f.player.setAttribute("league:type", 4);
+      f.player.setAttribute("league:relics", { 0: 1 });
+    }
+    const { npc, item } = await fish(t, f, { minnow: true });
+    const before = catches(f, item);
+    if (mode === "tool") f.player.getInventory().resetItems();
+    if (mode === "relic") f.player.setAttribute("league:relics", {});
+    npc.moveTo(new core.Location(2611, 3444, mode === "plane" ? 1 : 0));
+    await ticks(f, 12);
+    assert.equal(require("../plugins/skills/Fishing.plugin").isFishingActive(f.player), false, mode);
+    assert.equal(catches(f, item), before, mode + " gains no catch");
+  }
+});
+
+test("starting combat without stepping cancels Endless Harvest before a relocated spot can reset the attack", async (t) => {
+  const f = pactsCharacter(t, { 0: 1 });
+  const { npc, item } = await fish(t, f, { minnow: true });
+  const target = core.NPC.create(core.NpcIdentifiers.GOBLIN, new core.Location(2608, 3443, 0));
+  assert.equal(core.World.getNpcs().add(target), true);
+  target.needsPlacement = false;
+  t.after(() => { if (target.isRegistered()) core.World.getNpcs().removes(target); });
+  const clickType = target.getDefinition().getActions().findIndex((action) => action?.toLowerCase() === "attack") + 1;
+  assert.ok(clickType > 0);
+  await f.connection.dispatch([{ type: "npc_option", index: target.getIndex(), clickType }]);
+  f.connection.processTurnPackets();
+  assert.equal(f.player.getCombat().getTarget(), target);
+  assert.equal(f.player.getMovementQueue().size(), 0, "combat starts without a step");
+  const before = catches(f, item);
+  npc.moveTo(new core.Location(2611, 3444, 0));
+  core.TaskManager.process();
+  assert.equal(require("../plugins/skills/Fishing.plugin").isFishingActive(f.player), false);
+  assert.equal(f.player.getCombat().getTarget(), target, "auto fishing must not reset the chosen attack");
+  await ticks(f, 8);
+  assert.equal(catches(f, item), before);
+});

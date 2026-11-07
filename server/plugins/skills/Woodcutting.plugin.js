@@ -15,6 +15,7 @@ const CrystalAxe = require("./woodcutting/CrystalAxe.Woodcutting");
 const EntTrunk = require("./woodcutting/EntTrunk.Woodcutting");
 const ThickVines = require("./woodcutting/ThickVines.Woodcutting");
 const Shrine = require("./woodcutting/Shrine.Woodcutting");
+const KandarinHeadgear = require("./woodcutting/KandarinHeadgear.Woodcutting");
 const FarmedRedwood = require("./farming/Redwood.Farming");
 const { pauseForLevelUp, actionInterval } = require("./SkillActions");
 
@@ -84,11 +85,11 @@ function inventoryBlocks(player, logId) {
   return !request.room;
 }
 
-/** Storage takes the log first; retain an unstored yield until the pet opportunity resolves. */
-function prepareLog(player, logId, xp = 0) {
-  const request = { player, itemId: logId, amount: 1, stored: 0, skill: Skill.WOODCUTTING, xp };
+/** Storage takes the logs first; retain an unstored yield until the pet opportunity resolves. */
+function prepareLog(player, logId, xp = 0, amount = 1) {
+  const request = { player, itemId: logId, amount, stored: 0, skill: Skill.WOODCUTTING, xp };
   pluginApi.emitCustomEvent("storage:gather", request);
-  return request.stored === 0 ? new Item(logId, 1) : null;
+  return request.stored < amount ? new Item(logId, amount - request.stored) : null;
 }
 
 function deliverLog(player, log) {
@@ -1285,9 +1286,10 @@ function processWoodcuttingTick(activeSessions, currentTick) {
       rollForesterRationEnergy(player, state.axe);
       const baseXp = treeBaseXp(player, state.tree, state.location) * lumberjackXpMultiplier(player);
       const xp = felling.bonus ? baseXp + baseXp / 10 : baseXp;
+      const logAmount = KandarinHeadgear.logsPerChop(player, state.tree.logId);
       let pendingLog = null;
       if (!felling.skipLog && !InfernalAxe.tryBurnLog(player, state.axe.id, state.tree.logId)) {
-        pendingLog = prepareLog(player, state.tree.logId, xp);
+        pendingLog = prepareLog(player, state.tree.logId, xp, logAmount);
         countLog(player);
       }
       // A burnt log still says it was cut (rsprox captures 1637, 3996); a felling skip gives no log.
@@ -1309,7 +1311,7 @@ function processWoodcuttingTick(activeSessions, currentTick) {
         logId: state.tree.logId,
         location: state.location,
         // Resource-count consumers distinguish a felling omission from the successful action.
-        logAmount: felling.skipLog ? 0 : 1,
+        logAmount: felling.skipLog ? 0 : logAmount,
         axeId: state.axe?.id ?? null,
       });
       ClueNests.rollClueNests(player, state.tree);
@@ -1402,6 +1404,7 @@ module.exports = {
     CrystalAxe.attach(api);
     EntTrunk.attach(api, { findBestUsableAxe, calculateCutChance, lumberjackXpMultiplier, maybeDropBirdNest });
     ThickVines.attach(api, { axesBestFirst: AXES_BEST_FIRST, lumberjackXpMultiplier });
+    KandarinHeadgear.attach(api);
     Shrine.attach(api);
 
     api.onPlayerDisconnect(({ player }) => {

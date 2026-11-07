@@ -807,3 +807,44 @@ test('free worlds: findBestUsableAxe skips a members axe by default (Forestry ro
   f.p.getInventory().add(new core.Item(ids.BRONZE_AXE),true);
   assert.equal(Woodcutting.findBestUsableAxe(f.p)?.id,ids.BRONZE_AXE,'free world: the free Bronze axe');
 });
+
+// Kandarin headgear (Wiki Kandarin_headgear_1, Kandarin_Diary): worn, it doubles regular logs, with no extra XP.
+const OAK_TREE_OBJECT = 10820; // the standard "Oak tree" loc
+async function chopWithHeadgear(f, t, objectId, logId) {
+  const x = 3223, y = 3218;
+  f.p.getInventory().add(new core.Item(core.ItemIdentifiers.BRONZE_AXE),true);
+  const skills=f.p.getSkillManager(); skills.setMaxLevel(core.Skill.WOODCUTTING,60); skills.setCurrentLevel(core.Skill.WOODCUTTING,60);
+  const tree=new core.GameObject(objectId,new core.Location(x,y,0),10,0,null);core.ObjectManager.register(tree,true);
+  t.mock.method(Math,'random',missNest(0));
+  const before=skills.getExperience(core.Skill.WOODCUTTING);
+  await send(f,{type:'object_option',id:objectId,x,y,action:'Chop down'});for(let i=0;i<60;i++)core.TaskManager.process();
+  core.ObjectManager.deregister(tree,true);t.mock.restoreAll();
+  return {logs:f.p.getInventory().getAmount(logId),xp:skills.getExperience(core.Skill.WOODCUTTING)-before};
+}
+
+for (const tier of [1,2,3,4]) test('Kandarin headgear '+tier+' worn doubles the logs of a normal tree without extra XP',async t=>{
+  const f=actor(t), ids=core.ItemIdentifiers;
+  const plain=await chopWithHeadgear(f,t,core.ObjectIdentifiers.TREE,ids.LOGS);
+  assert.ok(plain.logs>=1,'control: a chop without the headgear gives logs');
+  assert.equal(plain.logs*25,plain.xp,'control: one log per 25 XP chop');
+  const g=actor(t);g.p.getEquipment().set(core.Equipment.HEAD_SLOT,new core.Item(ids['KANDARIN_HEADGEAR_'+tier]));
+  const worn=await chopWithHeadgear(g,t,core.ObjectIdentifiers.TREE,ids.LOGS);
+  assert.ok(worn.logs>=2,'worn headgear gives logs');assert.equal(worn.logs,worn.xp/25*2,'two logs for each 25 XP chop');
+});
+
+test('Kandarin headgear does not double oak logs, and carrying it does nothing',async t=>{
+  const f=actor(t), ids=core.ItemIdentifiers;
+  f.p.getInventory().add(new core.Item(ids.KANDARIN_HEADGEAR_1),true);
+  const carried=await chopWithHeadgear(f,t,core.ObjectIdentifiers.TREE,ids.LOGS);
+  assert.ok(carried.logs>=1);assert.equal(carried.logs*25,carried.xp,'carried only: one log per chop');
+  const g=actor(t);g.p.getEquipment().set(core.Equipment.HEAD_SLOT,new core.Item(ids.KANDARIN_HEADGEAR_4));
+  const oak=await chopWithHeadgear(g,t,OAK_TREE_OBJECT,ids.OAK_LOGS);
+  assert.ok(oak.logs>=1,JSON.stringify(oak));assert.equal(oak.logs*37.5,oak.xp,'oak: one log per 37.5 XP chop');
+});
+
+test('Kandarin headgear: a free world gives no extra log',async t=>{
+  const g=actor(t), ids=core.ItemIdentifiers;g.p.getEquipment().set(core.Equipment.HEAD_SLOT,new core.Item(ids.KANDARIN_HEADGEAR_2));
+  t.mock.method(core.WorldDefinition,'isMembersWorld',()=>false);
+  const free=await chopWithHeadgear(g,t,core.ObjectIdentifiers.TREE,ids.LOGS);
+  assert.ok(free.logs>=1);assert.equal(free.logs*25,free.xp,'free world: one log per chop');
+});

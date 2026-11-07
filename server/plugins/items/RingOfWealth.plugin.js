@@ -227,6 +227,12 @@ function handleRingAction(event, action) {
   return true;
 }
 
+/**
+ * Wiki (Ring of wealth (i); Items Kept on Death): the imbue is always lost on death, kept ring or not, and becomes
+ * 50,000 coins. Lost to a player, they are the killer's (an Ironman killer's go on the floor for the victim,
+ * PlayerDeathTask.lootOwner). Any other death puts them with what the death loses (`extraDrops`): the grave, or the
+ * floor where there is none. They used to go straight on the floor on every PvM death.
+ */
 function removeImbueOnDeath(event, itemOnGroundManager) {
   const unimbuedId = UNIMBUED_RING_IDS.get(event.item?.getId?.());
   if (!unimbuedId) {
@@ -234,12 +240,13 @@ function removeImbueOnDeath(event, itemOnGroundManager) {
   }
   event.item.setId(unimbuedId);
   const coins = new Item(COINS, IMBUE_COST);
-  // An Ironman killer doesn't get the coins: they drop for the victim (PlayerDeathTask.lootOwner), as the ring does.
-  if (event.killer?.getInventory && PlayerDeathTask.lootOwner(event.player, event.killer) === event.killer) {
-    event.killer.getInventory().forceAdd(event.killer, coins);
-  } else {
-    itemOnGroundManager.registerLocation(event.player, coins, event.location);
+  const killer = event.killer;
+  if (killer && killer !== event.player && killer.isPlayer?.() === true && killer.getInventory) {
+    if (PlayerDeathTask.lootOwner(event.player, killer) === killer) killer.getInventory().forceAdd(killer, coins);
+    else itemOnGroundManager.registerLocation(event.player, coins, event.location);
+    return;
   }
+  if (Array.isArray(event.extraDrops)) event.extraDrops.push(coins);
 }
 
 module.exports = {

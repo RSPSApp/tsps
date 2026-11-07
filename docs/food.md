@@ -4,7 +4,7 @@ Eating is `server/plugins/items/Food.plugin.js`. What each food does is
 `server/plugins/items/data/food.json`, one food per line, normally keyed by the item's cache name.
 An `itemId` row selects an exact same-name item when its effects differ; notes and placeholders
 are still excluded. Other same-name foods continue to use the name entry. Tests: `server/tests/food-effects.test.cjs` and `eat-attack-delay.test.cjs`.
-The full-plugin decoded Eat tests for same-name cabbage variants and energy restoration from gout tubers and purple sweets are in `server/tests/potions-preset.test.cjs`.
+The full-plugin decoded Eat tests for same-name cabbage variants, energy restoration from gout tubers and purple sweets, and Prayer restoration from bluefin are in `server/tests/potions-preset.test.cjs`.
 
 ## Sources
 

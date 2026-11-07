@@ -176,7 +176,8 @@ export class LoginState {
             if (this.serverAddress !== address || this.serverSecure !== secure || this.serverTransport !== transport
                 || this.serverSignalUrl !== signalUrl || this.serverWorldId !== worldId) return;
             this.serverName = name.trim();
-            this.saveLastServer();
+            // Renaming must not pin the build's default server as a chosen world.
+            if (getClientPreference("lastServer")) this.saveLastServer();
         } catch { /* Older servers and offline worlds retain their configured or remembered name. */ }
     }
 

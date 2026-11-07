@@ -105,7 +105,6 @@ function xpPerToken(player, row) {
   return level < rewards().xpMinLevel ? 0 : Math.floor((level * level) / 600) * multiplier;
 }
 
-/** A list click: only X needs the server (the amount). */
 /**
  * The shop's buttons answer only while it is open (mounted in the main modal): a click on them with the shop closed,
  * anywhere in the world, bought and imbued with no Nomad there.
@@ -118,6 +117,7 @@ function whileOpen(handler) {
   };
 }
 
+/** A list click: only X needs the server (the amount). */
 function xpList({ player, slot }) {
   const column = XP_TOKEN_CHILDREN[slot % XP_CHILDREN];
   if (column !== 3) return true;

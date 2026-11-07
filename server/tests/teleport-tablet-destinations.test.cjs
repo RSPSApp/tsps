@@ -44,6 +44,7 @@ before(async () => {
         onPlayerLogin: () => {},
         onSpellCast: (handler) => { castAlternate = handler; },
         onInterfaceActionClick: () => {},
+        onCustomEvent: () => {},
         sendMultiChatboxPrompt: (player, title, ...pairs) => { prompt = { title, pairs }; return true; },
         emitCustomEvent: (name, request) => {
             if (name === 'diary:is-complete') request.complete = diaries.has(`${request.diary} ${request.tier}`);

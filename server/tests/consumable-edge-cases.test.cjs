@@ -259,6 +259,7 @@ SpellTeleports.register({
   onPlayerLogin() {},
   onSpellCast() {},
   emitCustomEvent: (name, request) => houseTablet(request),
+  onCustomEvent() {},
   onInterfaceActionClick() {},
 });
 

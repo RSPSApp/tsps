@@ -6,7 +6,7 @@ const HURT_IDS = {
   body1: [509, 510],
 };
 const HURT_DELAY = 20;
-// Keep private SynthSound delivery within the existing PvP listener boundary.
+// Retain the existing range boundary for the attacking participant.
 const HURT_LISTENER_RANGE = 15;
 let core;
 
@@ -25,12 +25,14 @@ function playHurtSoundForListeners(attacker, target, hurtIds) {
   }
   const location = target.getLocation();
   const privateArea = target.getPrivateArea();
-  for (const listener of core.World.getPlayers()) {
-    if (listener.isPlayerBot() || listener.getPrivateArea() !== privateArea
+  const listeners = [target];
+  if (attacker !== target) listeners.push(attacker.getAsPlayer());
+  for (const listener of listeners) {
+    if (!listener.isRegistered() || listener.isPlayerBot() || listener.getPrivateArea() !== privateArea
       || !listener.getLocation().isWithinDistance(location, HURT_LISTENER_RANGE)) continue;
     // Paired Duel Arena1591/1592 confirms independent private participant variants.
-    // Preserve the existing PvP audience: Soul Wars3277 has remote voices but
-    // does not establish a general spectator radius or distance-fade contract.
+    // Limit ordinary hit voices to that demonstrated audience: unpositioned
+    // synths cannot fade with distance and drowned out nearby fights when broadcast.
     playHurtSound(listener, hurtIds);
   }
 }

@@ -1383,3 +1383,38 @@ test('Theatre preserves Recent Party, OFF, ignore and existing event veto behavi
   assert.equal(f.entered(), 3, 'an earlier veto remains effective');
   assert.equal(f.raid.spectators.has(f.viewer), false);
 });
+
+// A save made mid-raid (shutdown, saveall, a requested save) has no logout record. Back in the theatre with no raid,
+// the player is put outside and leaves the Theatre's own items: the Dawnbringer and the bandages.
+test('a login from a mid-raid save in the theatre leaves the Dawnbringer and bandages behind', () => {
+  const player = fakePlayer('Crashed');
+  player.location = new Location(3168, 4303, 0);
+  assert.equal(Shared.inTheatre(player.location), true, 'standing in the theatre');
+  player.inventory.setItem(0, new Item(Shared.ITEM.BANDAGES, 4));
+  player.inventory.setItem(1, new Item(4151, 1));
+  // A worn one goes through the real weapon reset: tests/tob-relog-items.test.cjs.
+  player.inventory.setItem(2, new Item(Shared.ITEM.DAWNBRINGER, 1));
+  RaidUnit.returnAfterLogout({ player });
+  assert.equal(player.inventory.getAmount(Shared.ITEM.BANDAGES), 0, 'bandages gone');
+  assert.equal(player.inventory.getAmount(Shared.ITEM.DAWNBRINGER), 0, 'Dawnbringer gone');
+  assert.equal(player.inventory.getAmount(4151), 1, 'own items kept');
+  assert.deepEqual([player.location.getX(), player.location.getY()], [Shared.OUTSIDE.x, Shared.OUTSIDE.y]);
+});
+
+test('a logout whose raid is gone leaves the Dawnbringer behind, and never in the retrieval chest', () => {
+  const { raid, players: [ann, bob] } = startRaid(['Ann4', 'Bob4']);
+  raid.room.start();
+  raid.member(ann).inFight = true;
+  raid.onLogout(ann);
+  const saved = ann.getAttribute(Raid.ATTR_LOGOUT);
+  raid.dispose();
+  const returning = fakePlayer('Ann4');
+  returning.setAttribute(Raid.ATTR_LOGOUT, saved);
+  returning.inventory.setItem(0, new Item(Shared.ITEM.DAWNBRINGER, 1));
+  returning.inventory.setItem(1, new Item(4151, 1));
+  RaidUnit.returnAfterLogout({ player: returning });
+  assert.equal(returning.inventory.getAmount(Shared.ITEM.DAWNBRINGER), 0);
+  assert.equal((Retrieval.lotOf(returning)?.items ?? []).some((item) => item.id === Shared.ITEM.DAWNBRINGER), false);
+  assert.equal((Retrieval.lotOf(returning)?.items ?? []).some((item) => item.id === 4151), true, 'the death still stores the rest');
+  void bob;
+});

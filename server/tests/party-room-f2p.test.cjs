@@ -308,3 +308,143 @@ test('free-world pie assembly keeps members-only recipes unavailable', async (t)
     });
   }
 });
+
+// A real configured free world: an object-only Cook click must not use members food.
+test('a free-world range does not cook members-only raw mackerel', async t => {
+  const Cooking = require('../plugins/skills/Cooking.plugin');
+  assert.equal(world.isMembersWorld(), false, 'SETUP: configured free world');
+  assert.equal(core.GameConstants.EXPERIENCE_MULTIPLIER, 1, 'SETUP: ordinary XP rate');
+  const ids = ['raw_mackerel', 'mackerel', 'burntfish3', 'raw_shrimp', 'shrimp', 'burnt_shrimp']
+    .map(name => core.CacheDefinitions.getObjId(name));
+  assert.deepEqual(ids, [353, 355, 357, 317, 315, 7954], 'SETUP: active item identities');
+  for (const [id, members] of [[353, true], [355, true], [357, false], [317, false], [315, false]]) {
+    assert.equal(core.CacheDefinitions.getItem(id).isMembers, members, 'SETUP: active membership');
+    assert.equal(core.ItemDefinition.forId(id).isNoted(), false, 'SETUP: ordinary item');
+    assert.equal(core.ItemDefinition.forId(id).isStackable(), false, 'SETUP: single item');
+  }
+  for (const id of [353, 317]) assert.equal(core.CacheDefinitions.getItem(id).isTradable, true);
+
+  // The configured free-land rectangle contains Al Kharid. Its map, not a manufactured loc,
+  // must supply a non-quest public range whose first option is Cook.
+  const [minX, maxX, minY, maxY] = [3264, 3327, 3136, 3199];
+  assert.equal(world.isMembersArea(minX, minY), false, 'SETUP: configured free land');
+  core.RegionManager.loadMapFiles(minX, minY);
+  assert.equal(core.RegionManager.getRegion(minX, minY)?.isLoaded(), true, 'SETUP: real map region loaded');
+  const candidates = [...core.MapObjects.mapObjects.values()].flat().filter(object => {
+    const loc = object.getLocation(), def = object.getDefinition();
+    return object.getPrivateArea() == null && loc.getZ() === 0 && loc.getX() >= minX && loc.getX() <= maxX
+      && loc.getY() >= minY && loc.getY() <= maxY && object.getId() !== core.ObjectIdentifiers.COOKING_RANGE
+      && def?.getName() === 'Range' && def.getInteractions()?.[0]?.toLowerCase() === 'cook'
+      && !world.isMembersArea(loc.getX(), loc.getY());
+  }).sort((a, b) => a.getLocation().getX() - b.getLocation().getX()
+    || a.getLocation().getY() - b.getLocation().getY() || a.getId() - b.getId());
+  const range = candidates[0];
+  assert.ok(range, 'SETUP: actual indexed non-quest free-land Range with Cook');
+  const loc = range.getLocation(), x = loc.getX(), y = loc.getY(), objectId = range.getId();
+  const start = [[-4, 0], [4, 0], [0, -4], [0, 4], [-3, 0], [3, 0], [0, -3], [0, 3]]
+    .map(([dx, dy]) => new core.Location(x + dx, y + dy, 0))
+    .find(tile => !world.isMembersArea(tile.getX(), tile.getY()) && !core.RegionManager.blocked(tile, null)
+      && !range.isWithinInteractionDistance(tile));
+  assert.ok(start, 'SETUP: unblocked free-land approach tile outside range');
+
+  async function cook(child, name, index, raw, cooked, burnt, expectedXp, freeControlTurns = 0) {
+    const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true,
+      send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+    const p = new Player(new PlayerSession(channel));
+    p.setIndex(index); p.setUsername(name); p.setRegistered(true); p.setLocation(start.clone()); p.needsPlacement = false;
+    const c = new ClientConnection(channel), inv = p.getInventory(), skills = p.getSkillManager(); c.player = p;
+    PM.emitPlayerLogin({ player: p, username: p.getUsername() });
+    p.closeInterruptibleInterfaces();
+    child.after(() => {
+      p.closeInterruptibleInterfaces();
+      PM.emitPlayerDisconnect({ player: p, username: p.getUsername() });
+      PM.emitPlayerLogout({ player: p, username: p.getUsername() });
+      p.setRegistered(false); core.TaskManager.cancelTasks(p.getIndex()); core.TaskManager.cancelTasks(p);
+    });
+    assert.ok(p.isRegistered() && p.getHitpoints() > 0 && !p.busy(), 'SETUP: living idle actor');
+    assert.equal(core.RegionManager.blocked(start, p.getPrivateArea()), false);
+    assert.equal(core.MapObjects.getPrivateArea(p, objectId, loc), range, 'SETUP: actual indexed actor-visible range');
+    assert.equal(core.MapObjects.stillStands(p, objectId, loc, range), true, 'SETUP: actual range remains');
+    const xp = core.SkillManager.getExperienceForLevel(99), skill = core.Skill.COOKING;
+    skills.setExperience(skill, xp).setMaxLevels(skill, 99, false).setCurrentLevels(skill, 99, false);
+    assert.deepEqual([skills.getExperience(skill), skills.getMaxLevel(skill), skills.getCurrentLevel(skill)], [xp, 99, 99]);
+    assert.deepEqual([inv.getAmount(raw), inv.getAmount(cooked), inv.getAmount(burnt)], [0, 0, 0]);
+    inv.add(new core.Item(raw, 1), false);
+    assert.equal(inv.getItems()[inv.getSlotForItemId(raw)].getMeta(), null, 'SETUP: plain owned input');
+    assert.deepEqual(inv.getItems().filter(item => Cooking.COOKABLE_BY_RAW.has(item.getId())).map(item => item.getId()),
+      [raw], 'SETUP: exactly one cookable item');
+    assert.ok(inv.getAddableAmount(new core.Item(cooked, 1)) >= 1, 'SETUP: output room');
+    assert.equal(Cooking.isCookingActive(p), false);
+    const calls = [], produced = [], objectDispatch = PM.emitObjectInteraction.bind(PM), custom = PM.emitCustomEvent.bind(PM);
+    child.mock.method(PM, 'emitObjectInteraction', event => {
+      const result = objectDispatch(event);
+      if (event.player === p) calls.push({ object: event.object, option: event.option, result });
+      return result;
+    });
+    child.mock.method(PM, 'emitCustomEvent', (name, event) => {
+      if (name === 'skills:produced' && event?.player === p && event.skill === skill) produced.push(event);
+      return custom(name, event);
+    });
+    // OBJECT_OPTION_1: shortAdd x, shortLE y, byteNeg modifier, shortAddLE id.
+    const frame = Buffer.from([96, (x + 128) & 255, x >> 8, y & 255, y >> 8, 0, objectId >> 8, (objectId + 128) & 255]);
+    const decoded = decodeClientPackets(frame);
+    assert.deepEqual(decoded, [{ type: 'object_option', id: objectId, x, y, clickType: 1 }], 'SETUP: decoded Cook click');
+    let turns = 0;
+    const turn = () => {
+      assert.ok(++turns <= 64, 'SETUP: bounded real task and movement phases');
+      p.resetUpdating(); core.World.processCycle = (core.World.processCycle + 1) & 0x7fffffff;
+      core.TaskManager.process(); c.processTurnPackets();
+      const movement = p.getMovementQueue(); movement.beginCycle(); movement.processEntityPursuit();
+      if (movement.hasPendingWork()) movement.process();
+      core.TaskManager.processWalkTo(p.getIndex());
+    };
+    await c.dispatch(decoded, true);
+    for (let n = 0; n < 30 && calls.length === 0; n++) turn();
+    assert.equal(calls.length, 1, 'SETUP: actual object dispatch reached');
+    assert.equal(calls[0].object, range, 'SETUP: same indexed range');
+    assert.equal(String(calls[0].option).toLowerCase(), 'cook');
+    assert.equal(calls[0].result, true, 'SETUP: registered Cook option handled');
+    assert.equal(p.getLocation().equals(start), false, 'SETUP: actual approach moved');
+    assert.equal(range.isWithinInteractionDistance(p.getLocation()), true);
+    assert.equal(p.getMovementQueue().size(), 0, 'SETUP: native approach settled');
+    const admissionTurn = turns;
+    const admitted = Cooking.isCookingActive(p);
+    const session = Cooking._test.activeSessions.get(p);
+    const snapshot = { raw: inv.getAmount(raw), cooked: inv.getAmount(cooked), burnt: inv.getAmount(burnt),
+      xp: skills.getExperience(skill), events: produced.length, admitted,
+      range: [objectId, x, y, loc.getZ(), range.getType(), range.getFace()],
+      start: [start.getX(), start.getY(), start.getZ()], turn: turns };
+    assert.deepEqual([snapshot.raw, snapshot.cooked, snapshot.burnt, snapshot.xp, snapshot.events],
+      [1, 0, 0, xp, 0], `SETUP: pre-consumption snapshot ${JSON.stringify(snapshot)}`);
+    if (session) {
+      assert.equal(session.cookable.raw, raw, 'SETUP: admitted session uses the selected raw food');
+      assert.equal(session.objectId, objectId, 'SETUP: admitted session uses the resolved range');
+    }
+    if (expectedXp > 0) {
+      assert.equal(Cooking.isCookingActive(p), true, 'SETUP: control cooking admitted');
+      for (let n = 0; n < 20 && inv.getAmount(cooked) === 0; n++) turn();
+      assert.deepEqual([inv.getAmount(raw), inv.getAmount(cooked), inv.getAmount(burnt)], [0, 1, 0]);
+      assert.equal(skills.getExperience(skill) - xp, expectedXp);
+      assert.deepEqual(produced.map(event => [event.itemId, event.amount, event.xp, event.kind]),
+        [[cooked, 1, expectedXp, 'cook']], 'SETUP: native produced-event payload');
+      return turns - admissionTurn;
+    }
+    for (let n = 0; n < Math.max(8, freeControlTurns + 2); n++) turn();
+    assert.deepEqual([inv.getAmount(raw), inv.getAmount(cooked)], [1, 0],
+      `members food stays raw on a free world (cooking admission: ${admitted})`);
+    assert.equal(inv.getAmount(burnt), 0);
+    assert.equal(skills.getExperience(skill), xp);
+    assert.deepEqual(produced, []);
+  }
+
+  let controlTurns = 0;
+  let controlPassed = false;
+  await t.test('free shrimp control uses the real range', async child => {
+    controlTurns = await cook(child, 'rangeshr', 3170, 317, 315, 7954, 30);
+    controlPassed = true;
+  });
+  assert.equal(controlPassed, true, 'SETUP: working free food control');
+  await t.test('members mackerel is conserved on the free world', async child => {
+    await cook(child, 'rangemac', 3171, 353, 355, 357, 0, controlTurns);
+  });
+});

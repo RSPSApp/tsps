@@ -441,10 +441,11 @@ test("Warstrike drains Defence, Strength, Prayer, Attack, Magic then Ranged by t
   });
   bandos.handleAfterHitEffects(hit(target, 100));
   const levels = target.skillManager;
-  assert.equal(levels.level("DEFENCE"), 1, "stats floor at 1");
-  assert.equal(levels.level("STRENGTH"), 1);
+  // Wiki (Bandos godsword): "the current stat that is being drained must hit 0".
+  assert.equal(levels.level("DEFENCE"), 0, "stats drain to 0");
+  assert.equal(levels.level("STRENGTH"), 0);
   assert.equal(levels.level("PRAYER"), 0, "prayer can reach 0");
-  assert.equal(levels.level("ATTACK"), 38, "100 - 19 - 49 - 20 = 12 left for Attack");
+  assert.equal(levels.level("ATTACK"), 40, "100 - 20 - 50 - 20 = 10 left for Attack");
   assert.equal(levels.level("MAGIC"), 50);
 
   const npc = npcTarget(60);

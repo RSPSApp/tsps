@@ -1388,3 +1388,126 @@ test("Bluefin restores five Prayer points when eaten", async t => {
   assert.equal(bluefin.prayer, 55, "Bluefin restores five Prayer points");
   assertConsumption(target, 32344, bluefin, 22);
 });
+
+// Declared coherent stat snapshot, not an observed Kebab outcome or gameplay history.
+// Observe the original potion event's synchronous return before any passive player phase.
+test("ordinary restore restores Defence without restoring Mining", async t => {
+  const f = divineActor(t, 99);
+  const skills = f.p.getSkillManager();
+  const mining = core.Skill.MINING;
+  const defence = core.Skill.DEFENCE;
+  const xp = core.SkillManager.getExperienceForLevel(99);
+  skills.setExperience(mining, xp);
+  skills.setMaxLevel(mining, 99);
+  skills.setCurrentLevel(mining, 95, false);
+  skills.setCurrentLevel(defence, 96, false);
+  for (const skill of [mining, defence]) {
+    assert.equal(skills.getExperience(skill), xp);
+    assert.equal(skills.getMaxLevel(skill), 99);
+    assert.equal(skills.getRestingLevel(skill), 99);
+  }
+  assert.equal(skills.getCurrentLevel(mining), 95);
+  assert.equal(skills.getCurrentLevel(defence), 96);
+  assert.equal(f.p.getProfile(), "main");
+  assert.equal(core.WorldDefinition.isMembersWorld(), true);
+  assert.equal(f.p.isRegistered(), true);
+  assert.equal(f.p.isPlayerBot(), false);
+  assert.equal(f.p.isDyingReturn() ?? false, false);
+  assert.equal(f.p.isTeleportingReturn() ?? false, false);
+  assert.equal(f.p.getPrivateArea(), null);
+  assert.equal(f.p.getCombat().getTarget() ?? null, null);
+  assert.equal(f.p.getCombat().getAttacker() ?? null, null);
+  assert.equal(f.p.getHitpoints(), 99);
+  assert.equal(f.p.getPrayerActive().some(Boolean), false);
+  assert.equal(f.p.getAttribute("potions:divine:state") ?? null, null);
+  assert.equal(f.eq.getItems().filter(held => held && held.getId() > 0 && held.getAmount() > 0).length, 0);
+  for (const key of [core.TimerKey.POTION, core.TimerKey.FOOD, core.TimerKey.STUN]) {
+    assert.equal(f.p.getTimers().has(key), false);
+  }
+  t.after(() => core.TaskManager.cancelTasks(f.p));
+
+  const restore = I.RESTORE_POTION_1_;
+  assert.equal(restore, 131);
+  const definition = core.CacheDefinitions.getItem(restore);
+  assert.equal(definition.name, "Restore potion(1)");
+  assert.equal(definition.inventoryActions[0], "Drink");
+  assert.equal(definition.noteTemplate, -1);
+  assert.equal(definition.placeholderTemplate, -1);
+  assert.equal(core.ItemDefinition.forId(restore).isNoted(), false);
+  assert.equal(widgetOpFor(restore, "Drink"), 2);
+  const held = put(f, item(restore), 0);
+  assert.equal(f.inv.getItems()[0], held);
+  assert.equal(held.getId(), restore);
+  assert.equal(held.getAmount(), 1);
+  assert.equal(held.getMeta(), null);
+
+  const actions = [];
+  const drinks = [];
+  const originalAction = PM.emitItemAction;
+  const originalEvent = PM.emitCustomEvent;
+  t.mock.method(PM, "emitItemAction", function(event) {
+    const observed = event.player === f.p ? {
+      player: event.player, item: event.item, itemId: event.itemId,
+      heldId: event.item?.getId(), amount: event.item?.getAmount(),
+      slot: event.slot, clickType: event.clickType, option: event.option,
+    } : null;
+    const result = originalAction.call(this, event);
+    if (observed) { observed.handled = result; actions.push(observed); }
+    return result;
+  });
+  t.mock.method(PM, "emitCustomEvent", function(name, payload) {
+    const observed = name === "potions:drunk" && payload.player === f.p ? {
+      player: payload.player, itemId: payload.itemId, name: payload.name, meta: payload.meta,
+    } : null;
+    const result = originalEvent.call(this, name, payload);
+    if (observed) {
+      observed.mining = skills.getCurrentLevel(mining);
+      observed.defence = skills.getCurrentLevel(defence);
+      observed.heldId = f.inv.getItems()[0].getId();
+      observed.amount = f.inv.getItems()[0].getAmount();
+      drinks.push(observed);
+    }
+    return result;
+  });
+
+  // Measure the actual immediate pre-Drink state; do not infer it from a claimed drain.
+  const before = {
+    mining: skills.getCurrentLevel(mining), defence: skills.getCurrentLevel(defence),
+  };
+  assert.equal(before.mining, 95);
+  assert.equal(before.defence, 96);
+  const AUTO_SMASH_VIALS_VARBIT = 5668; // The native potion consumer's cache-backed setting.
+  const autoSmash = f.p.getPacketSender().getVarbit(AUTO_SMASH_VIALS_VARBIT) === 1;
+  await heldOp(f, 0, "Drink");
+
+  assert.equal(actions.length, 1);
+  assert.equal(actions[0].player, f.p);
+  assert.equal(actions[0].item, held);
+  assert.equal(actions[0].itemId, restore);
+  assert.equal(actions[0].heldId, restore);
+  assert.equal(actions[0].amount, 1);
+  assert.equal(actions[0].slot, 0);
+  assert.equal(actions[0].clickType, 1);
+  assert.equal(actions[0].option, "Drink");
+  assert.equal(actions[0].handled, true);
+  assert.equal(drinks.length, 1, "the actual dose reached its committed potion event");
+  const drink = drinks[0];
+  assert.equal(drink.player, f.p);
+  assert.equal(drink.itemId, restore);
+  assert.equal(drink.name, "Restore potion");
+  assert.equal(drink.defence, 99, "the same ordinary dose restores eligible Defence");
+  assert.equal(drink.mining, before.mining, "ordinary restore must leave non-combat Mining unchanged");
+
+  // These late checks are not proved if the Mining assertion fails.
+  assert.equal(f.inv.getAmount(restore), 0);
+  assert.equal(drink.heldId, autoSmash ? -1 : I.VIAL);
+  assert.equal(drink.amount, autoSmash ? 0 : 1);
+  assert.equal(drink.meta, null);
+  for (const skill of [mining, defence]) {
+    assert.equal(skills.getExperience(skill), xp);
+    assert.equal(skills.getMaxLevel(skill), 99);
+  }
+  assert.equal(f.p.getHitpoints(), 99);
+  assert.equal(f.p.getTimers().has(core.TimerKey.POTION), true);
+  assert.ok(f.messages.some(message => typeof message === "string" && message.length > 0));
+});

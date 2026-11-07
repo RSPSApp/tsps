@@ -1338,6 +1338,7 @@ test('DOTI backstage bookshelf is a player-scoped stage spawn, not a global obje
 test('DOTI Attack uses the staged combat method and preserves actors through their scripted moves', () => {
   const { h, p } = doti(); h.quest.setStage(p, 40); h.action(p, 13834, 'lPk2UZ');
   const method = h.combatResolvers[0].resolve(p); assert.ok(method);
+  assert.equal(h.combatResolvers[0].overridesWeapon, true, 'stage Attack outranks weapon resolvers loaded earlier');
   for (let i = 0; i < 4; i++) {
     const npc = h.npcs.find(npc => npc.id === 13838 && !npc.removed); assert.ok(npc);
     method.start(p, npc); assert.deepEqual(method.hits(), []); finish(h, p);

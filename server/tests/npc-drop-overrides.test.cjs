@@ -41,9 +41,14 @@ test("the generated files hold no hand edits: each override changes something th
     }
     assert.ok(_test.tablesByNpc.has(Number(id)), `${overrides.addNpcs[id].name} (${id}) has its table`);
   }
-  // Overrides that the dump already covers would be dead weight: the dump would win anyway.
-  const covered = Object.keys(overrides.addNpcs).filter((id) => id !== "$comment" && dump.npcs[id]);
-  assert.deepEqual(covered, [], "the dump maps these itself now: remove them from the overrides");
+  // An override the dump already covers would be dead weight: every entry must name at least one
+  // table the dump does not map for that NPC. The dump's own tables are kept and the missing ones
+  // appended, so an entry that adds nothing is stale.
+  const dead = Object.keys(overrides.addNpcs).filter((id) => id !== "$comment").filter((id) => {
+    const mapped = new Set(dump.npcs[id]?.tables ?? []);
+    return !overrides.addNpcs[id].tables.some((table) => !mapped.has(table));
+  });
+  assert.deepEqual(dead, [], "the dump maps these tables itself now: remove them from the overrides");
   for (const name of Object.keys(overrides.subtables)) assert.equal(subtables[name], undefined, `${name} is in the dump now`);
   for (const [id, change] of Object.entries(overrides.tables)) {
     for (const section of change.removeSections ?? []) {

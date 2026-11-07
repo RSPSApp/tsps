@@ -156,7 +156,20 @@ function isNotedQuantity(raw) {
 function applyOverrides(dump, subtables, overrides) {
   for (const id of Object.keys(overrides.removeNpcs ?? {})) delete dump.npcs[id];
   for (const [id, npc] of Object.entries(overrides.addNpcs ?? {})) {
-    if (id !== "$comment" && !dump.npcs[id]) dump.npcs[id] = npc;
+    if (id === "$comment") continue;
+    const existing = dump.npcs[id];
+    if (!existing) {
+      dump.npcs[id] = npc;
+      continue;
+    }
+    // The dump maps this NPC but not every table the override names: the dumper exports each
+    // dropversion table of a page and maps only one of them (the zombie pirates' Medium
+    // Wilderness Diary table). Append the missing ones; the dump's own order stays first, so
+    // the default table is unchanged.
+    existing.tables ??= [];
+    for (const table of npc.tables ?? []) {
+      if (!existing.tables.includes(table)) existing.tables.push(table);
+    }
   }
   for (const [tableId, change] of Object.entries(overrides.tables ?? {})) {
     const table = dump.tables[tableId];
@@ -968,7 +981,7 @@ function rollTable(table, player, npc, context = killContext(player, npc), sourc
  */
 function extraRolls(event) {
   ensureDropsLoaded?.();
-  const table = tableForNpc(event.npcId);
+  const table = tableForNpc(event.npcId, event.player, event.npc);
   if (!table || !Array.isArray(event.drops)) return;
   const rolling = { ...table, entries: (table.entries || []).filter((entry) => !entry.always), tertiary: [] };
   for (let i = 0; i < (event.rolls ?? 0); i++) event.drops.push(...rollTable(rolling, event.player, event.npc));
@@ -976,10 +989,21 @@ function extraRolls(event) {
 
 let ensureDropsLoaded = null;
 
-function tableForNpc(npcId) {
+/**
+ * The table an NPC's kill rolls. A plugin may answer npc-drops:table { player, npc, npcId, tables,
+ * table } to pick a different one for this player: the Wiki lists NPCs with a second table for a
+ * condition the data cannot express on its own (the Medium Wilderness Diary's zombie pirates).
+ * Without an answer the first table is used, as before.
+ */
+function tableForNpc(npcId, player = null, npc = null) {
   const tables = tablesByNpc.get(npcId);
   if (!tables || tables.length === 0) {
     return null;
+  }
+  if (tables.length > 1 && player && pluginApi) {
+    const request = { player, npc, npcId, tables, table: null };
+    pluginApi.emitCustomEvent("npc-drops:table", request);
+    if (request.table) return request.table;
   }
   // ponytail: ID variants are resolved by the exporter; context-dependent tables still
   // use the first entry until encounter/quest conditions have an executable contract.
@@ -987,7 +1011,7 @@ function tableForNpc(npcId) {
 }
 
 function dropFor(player, npc, npcId, location, damagers = []) {
-  const table = tableForNpc(npcId);
+  const table = tableForNpc(npcId, player, npc);
   if (!itemOnGroundManager) {
     return 0;
   }
@@ -1089,7 +1113,7 @@ module.exports = {
     api.onCustomEvent("npc-drops:roll-table", (request) => {
       ensureDrops();
       const npcId = Number.isInteger(request.npcId) ? request.npcId : request.npc?.getId?.() ?? null;
-      let table = request.table ?? tableForNpc(npcId);
+      let table = request.table ?? tableForNpc(npcId, request.player, request.npc);
       if (table && typeof request.entryFilter === "function") {
         table = {
           ...table,
@@ -1150,5 +1174,5 @@ module.exports = {
   _test: { loadDrops, tablesByNpc, sharedTables },
 
   // Exposed for the smoke test.
-  __internals: { withoutOtherLocations, locationRequirement, DROP_LOCATIONS, loadDrops, rollTable, rollOnce, rollSharedTable, placeDrops, dropFor, tablesByNpc, sharedTables, applyOverrides, applyCustomDrops, isUniqueEntry, rareMultiplier },
+  __internals: { withoutOtherLocations, locationRequirement, DROP_LOCATIONS, loadDrops, rollTable, rollOnce, rollSharedTable, placeDrops, dropFor, tablesByNpc, sharedTables, applyOverrides, applyCustomDrops, isUniqueEntry, rareMultiplier, tableForNpc },
 };

@@ -877,9 +877,15 @@ module.exports = function registerRatcatchersQuest(api) {
       player.sendMessage(`You need ${cost} coins to pay the snake charmer.`);
       return;
     }
+    // Room for what he hands over first: the coins were taken and a full inventory lost the charm and scroll.
+    const wanted = [SNAKE_CHARM_ITEM_ID, MUSIC_SCROLL_ITEM_ID].filter((id) => !held(player, id));
+    const freed = inventory.getAmount(COINS_ITEM_ID) === cost ? 1 : 0;
+    if (inventory.getFreeSlots() + freed < wanted.length) {
+      player.sendMessage("You don't have enough inventory space.");
+      return;
+    }
     inventory.deleteNumber(COINS_ITEM_ID, cost);
-    if (!held(player, SNAKE_CHARM_ITEM_ID)) inventory.adds(SNAKE_CHARM_ITEM_ID, 1);
-    if (!held(player, MUSIC_SCROLL_ITEM_ID)) inventory.adds(MUSIC_SCROLL_ITEM_ID, 1);
+    for (const id of wanted) inventory.adds(id, 1);
     setStage(player, STAGE_HAS_CHARM);
   }
 

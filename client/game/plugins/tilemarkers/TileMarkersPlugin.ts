@@ -80,7 +80,7 @@ export class TileMarkersPlugin extends Plugin {
     /** wv.getSelectedSceneTile: the tile under the mouse, as Walk here picks it. */
     hoveredTile(): Tile | undefined {
         const tile = (this.osrsClient as any).selectedSceneTile as { tileX: number; tileY: number; plane?: number } | undefined;
-        return tile ? { x: tile.tileX | 0, y: tile.tileY | 0, plane: tile.plane ?? this.playerPlane() } : undefined;
+        return tile ? { x: tile.tileX | 0, y: tile.tileY | 0, plane: this.playerPlane() } : undefined;
     }
 
     /** player.getWorldLocation: the tile the server has the player on, moving or not. */

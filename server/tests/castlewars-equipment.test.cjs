@@ -38,7 +38,7 @@ before(async () => {
     onButtonClick: (handler) => { hooks.button = handler; },
     onInterfaceActionClick() {},
     onCustomEvent: (name, handler) => { nativeApi.onCustomEvent(name, handler); },
-    onServerStartup() {}, onPlayerLogin() {}, onPlayerDeath() {}, onShouldDropItemsOnDeath() {},
+    onServerStartup() {}, onPlayerLogin() {}, onPlayerDeath() {}, onShouldDropItemsOnDeath() {}, onPlayerBeforeDeath() {},
     registerArea: (area) => areas.push(area),
     onObjectInteraction: (handler) => { lobbyObject = handler; },
     onNpcInteraction() {},

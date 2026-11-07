@@ -39,7 +39,9 @@ export function computeTitleStateHash(
             state.worldId
         }|${width}|${height}|${layoutWidth}|${layoutHeight}|${skipFire}|${host.worldSortOption}|${
             host.worldSortDirection
-        }|${isCaretVisible(host)}|${getViewportTransformStateHash(host)}|${getTitleAssetStateHash(host)}`;
+        }|${isCaretVisible(host)}|${getViewportTransformStateHash(host)}|${getTitleAssetStateHash(host)}|${
+            state.extension?.hash() ?? ""
+        }`;
     
 }
 

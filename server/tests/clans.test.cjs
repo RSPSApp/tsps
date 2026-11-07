@@ -302,7 +302,7 @@ beforeEach(() => {
       RegionManager: { blocked: () => false },
       ItemOnGround: class {
         constructor(state, owner, location, item) {
-          Object.assign(this, { location, item });
+          Object.assign(this, { state, owner, location, item });
         }
       },
       GroundItemState: { SEEN_BY_EVERYONE: 1 },
@@ -2476,6 +2476,7 @@ test('the lever costs 1,000 and needs its rank; balloons drop a stack and leave 
     member.ironman = 'none';
     burst({ player: member, location: at(hooks.placed[0]) });
     assert.equal(hooks.ground[0].item.id, 4151);
+    assert.equal(hooks.ground[0].owner, member.getUsername(), "owned by who popped it, so no Ironman can take it");
     assert.equal(owner.area.chest.length, 0);
   } finally {
     Math.random = random;

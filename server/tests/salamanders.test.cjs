@@ -23,17 +23,19 @@ const { ItemDefinition } = require("../dist/game/definition/ItemDefinition");
 
 const Salamanders = require("../plugins/items/Salamanders.plugin");
 
-const SALAMANDERS = [I.SWAMP_LIZARD, I.ORANGE_SALAMANDER, I.RED_SALAMANDER, I.BLACK_SALAMANDER];
+const SALAMANDERS = [I.SWAMP_LIZARD, I.ORANGE_SALAMANDER, I.RED_SALAMANDER, I.BLACK_SALAMANDER, I.TECU_SALAMANDER];
 
 let registered;
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
-  registered = { resolvers: [], ammo: [] };
+  require("../plugins/items/ItemDefinitionLoader.plugin").register({ log() {}, onPlayerLogin() {}, registerContentEndpoint() {} });
+  registered = { resolvers: [], ammo: [], deaths: [] };
   Salamanders.register({
     core: PluginManager.getCoreApi(),
     registerCombatMethodResolver: (resolver) => registered.resolvers.push(resolver),
     registerRangedAmmoHandler: (handler) => registered.ammo.push(handler),
+    onPlayerDeathItemDrop: (handler) => registered.deaths.push(handler),
   });
 });
 
@@ -68,6 +70,8 @@ test("Blaze max hit follows the Wiki tables", () => {
     ["ORANGE_SALAMANDER", 50, 10], ["ORANGE_SALAMANDER", 55, 11], ["ORANGE_SALAMANDER", 112, 22], ["ORANGE_SALAMANDER", 123, 24],
     ["RED_SALAMANDER", 60, 13], ["RED_SALAMANDER", 62, 14], ["RED_SALAMANDER", 121, 27], ["RED_SALAMANDER", 125, 28],
     ["BLACK_SALAMANDER", 70, 17], ["BLACK_SALAMANDER", 72, 18], ["BLACK_SALAMANDER", 89, 22], ["BLACK_SALAMANDER", 117, 29], ["BLACK_SALAMANDER", 125, 30],
+    // https://oldschool.runescape.wiki/w/Tecu_salamander: 21 at 80-81 Magic, 33 at 124-125.
+    ["TECU_SALAMANDER", 80, 21], ["TECU_SALAMANDER", 81, 21], ["TECU_SALAMANDER", 124, 33], ["TECU_SALAMANDER", 125, 33],
   ];
   for (const [name, level, expected] of rows) {
     assert.equal(maxHit(level, bonus[name]), expected, `${name} at Magic ${level}`);
@@ -138,11 +142,35 @@ test("tar ranged strength matches the Wiki", () => {
   assert.equal(strength(I.MARRENTILL_TAR), 22);
   assert.equal(strength(I.TARROMIN_TAR), 31);
   assert.equal(strength(I.HARRALANDER_TAR), 49);
+  assert.equal(strength(I.IRIT_TAR), 60, "irit tar was raised from 49 to 60 in April 2024");
+});
+
+test("each salamander is fuelled by its own tar", () => {
+  const { RangedWeapon, Ammunition } = PluginManager.getCoreApi();
+  const pairs = [
+    [I.SWAMP_LIZARD, I.GUAM_TAR], [I.ORANGE_SALAMANDER, I.MARRENTILL_TAR], [I.RED_SALAMANDER, I.TARROMIN_TAR],
+    [I.BLACK_SALAMANDER, I.HARRALANDER_TAR], [I.TECU_SALAMANDER, I.IRIT_TAR],
+  ];
+  for (const [salamander, tar] of pairs) {
+    const player = wielding(salamander, FightType.SALAMANDER_FLARE, new Item(tar, 5));
+    assert.equal(RangedWeapon.getFor(player)?.getAmmunitionData()[0], Ammunition.getForItem(tar), `${salamander} burns ${tar}`);
+  }
+});
+
+test("the Tecu salamander needs 80 Attack, Ranged and Magic to wield", () => {
+  const requirements = ItemDefinition.forId(I.TECU_SALAMANDER).getRequirements();
+  assert.equal(requirements[Skill.ATTACK.getIndex()], 80);
+  assert.equal(requirements[Skill.RANGED.getIndex()], 80);
+  assert.equal(requirements[Skill.MAGIC.getIndex()], 80);
+  assert.equal(requirements[Skill.STRENGTH.getIndex()], 0);
 });
 
 test("a Flare burns exactly one tar and drops nothing", () => {
   const [{ decrementAmmo }] = registered.ammo;
   const player = wielding(I.BLACK_SALAMANDER, FightType.SALAMANDER_FLARE, new Item(I.HARRALANDER_TAR, 2));
+  const tecu = wielding(I.TECU_SALAMANDER, FightType.SALAMANDER_FLARE, new Item(I.IRIT_TAR, 1));
+  assert.equal(decrementAmmo(tecu, null, 1), true);
+  assert.equal(tecu.getEquipment().get(Equipment.AMMUNITION_SLOT).getId(), -1, "irit tar burns too");
   assert.equal(decrementAmmo(player, null, 1), true);
   assert.equal(player.getEquipment().get(Equipment.AMMUNITION_SLOT).getAmount(), 1);
   assert.equal(decrementAmmo(player, null, 1), true);
@@ -151,6 +179,7 @@ test("a Flare burns exactly one tar and drops nothing", () => {
 });
 
 test("Scorch and Blaze require the matching tar and burn exactly one each", (t) => {
+  const TAR_BY_SALAMANDER = [[I.BLACK_SALAMANDER, I.HARRALANDER_TAR, I.GUAM_TAR], [I.TECU_SALAMANDER, I.IRIT_TAR, I.HARRALANDER_TAR]];
   const { MeleeCombatMethod } = PluginManager.getCoreApi();
   const { MagicCombatMethod } = PluginManager.getCoreApi();
   t.mock.method(PluginManager.getCoreApi().Sounds, "sendSound", () => {});
@@ -158,17 +187,20 @@ test("Scorch and Blaze require the matching tar and burn exactly one each", (t) 
   t.mock.method(MagicCombatMethod.prototype, "start", () => {});
   for (const style of [FightType.SALAMANDER_SCORCH, FightType.SALAMANDER_BLAZE]) {
     let selected;
-    const player = wielding(I.BLACK_SALAMANDER, style, new Item(I.HARRALANDER_TAR, 2));
-    player.getCombat = () => ({ setCastSpell: (spell) => { selected = spell; } });
-    const method = registered.resolvers[0].resolve(player);
-    assert.equal(method.canAttack(player), true);
-    method.start(player, { getLocation: () => null });
-    assert.equal(player.getEquipment().get(Equipment.AMMUNITION_SLOT).getAmount(), 1);
-    method.start(player, { getLocation: () => null });
-    assert.equal(player.getEquipment().get(Equipment.AMMUNITION_SLOT).getId(), -1);
-    assert.equal(method.canAttack(player), false);
-    const wrong = wielding(I.BLACK_SALAMANDER, style, new Item(I.GUAM_TAR, 2));
-    assert.equal(method.canAttack(wrong), false);
+    for (const [salamander, tar, wrongTar] of TAR_BY_SALAMANDER) {
+      const player = wielding(salamander, style, new Item(tar, 2));
+      player.getCombat = () => ({ setCastSpell: (spell) => { selected = spell; } });
+      const method = registered.resolvers[0].resolve(player);
+      assert.ok(method, `a method for ${salamander}`);
+      assert.equal(method.canAttack(player), true);
+      method.start(player, { getLocation: () => null });
+      assert.equal(player.getEquipment().get(Equipment.AMMUNITION_SLOT).getAmount(), 1);
+      method.start(player, { getLocation: () => null });
+      assert.equal(player.getEquipment().get(Equipment.AMMUNITION_SLOT).getId(), -1);
+      assert.equal(method.canAttack(player), false);
+      const wrong = wielding(salamander, style, new Item(wrongTar, 2));
+      assert.equal(method.canAttack(wrong), false);
+    }
   }
 });
 
@@ -213,4 +245,21 @@ test("captured salamander attacks use an attacker flame, with no projectile or i
     }
     assert.equal(player.getEquipment().get(Equipment.AMMUNITION_SLOT).getAmount(), 1);
   }
+});
+
+test("an unprotected salamander runs away on death instead of dropping", () => {
+  // https://oldschool.runescape.wiki/w/Items_Kept_on_Death: "Living creatures such as Salamanders run away
+  // and will not be left in gravestones".
+  assert.equal(registered.deaths.length, 1, "the plugin hooks the death drop");
+  const [onDeath] = registered.deaths;
+  const death = (id, extra = {}) => {
+    const event = { item: new Item(id, 1), kept: false, shouldDropItems: true, handled: false, ...extra };
+    onDeath(event);
+    return event.handled;
+  };
+  for (const id of SALAMANDERS) assert.equal(death(id), true, `${id} is lost`);
+  assert.equal(death(I.TECU_SALAMANDER, { kept: true }), false, "Protect Item still keeps one");
+  assert.equal(death(I.TECU_SALAMANDER, { shouldDropItems: false }), false, "an owner keeps everything");
+  assert.equal(death(I.ABYSSAL_WHIP), false, "other items drop as before");
+  assert.equal(death(I.HARRALANDER_TAR), false, "tar is not a creature");
 });

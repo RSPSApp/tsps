@@ -70,7 +70,7 @@ function fillOne(player, emptyId, container, sound) {
 }
 
 function fillFromWaterSource(event) {
-  const { player, itemId, objectId } = event;
+  const { player, itemId, objectId, location } = event;
   const container = FILLED_BY_EMPTY.get(itemId);
   if (!container) return;
   const name = sourceName(player, objectId);
@@ -81,7 +81,7 @@ function fillFromWaterSource(event) {
   if (!fillOne(player, itemId, container, sound)) return;
   const from = WATER_SOURCES.get(name);
   player.sendMessage(from ? `You fill the ${container.noun} ${from}.` : `You fill the ${container.noun}.`);
-  api.emitCustomEvent("water-source:filled", { player, objectId, name, itemId, filledId: container.filled });
+  api.emitCustomEvent("water-source:filled", { player, objectId, name, itemId, filledId: container.filled, location });
 
   // Keyed to the player's index, so walking or another click cancels the rest (walkToReset).
   const at = player.getLocation().clone();

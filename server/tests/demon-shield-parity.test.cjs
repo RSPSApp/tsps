@@ -518,7 +518,14 @@ test("Champions' Guild door turns away entrants under 32 Quest Points through th
   assert.equal(condition('If the player does not have at least 32 quest points:'), true);
   assert.equal(door(3362), false, 'leaving is never stopped');
   p.attributes.set('quest.points', 32);
+  const before = started.length;
   assert.equal(door(3363), false);
+  // rev242 capture tick 971: coming in, the Guildmaster greets the player as the door opens.
+  assert.deepEqual(started.slice(before).map(([name, payload]) => [name, payload.variant ?? payload.task]),
+    [['diary:task', 'enter-the-champions-guild'], ['npc-dialogue:start', 'standard-dialogue-entering-the-champions-guild']]);
+  const leaving = started.length;
+  assert.equal(door(3362), false);
+  assert.ok(!started.slice(leaving).some(([name]) => name === 'npc-dialogue:start'), 'no greeting on the way out');
   assert.equal(condition('If the player does not have at least 32 quest points:'), false);
   assert.equal(condition('If the player has at least 32 quest points:'), true);
 });

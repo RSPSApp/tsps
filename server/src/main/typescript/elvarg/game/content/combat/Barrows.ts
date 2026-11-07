@@ -91,6 +91,11 @@ export class Barrows {
         return this.baseItemId(itemId) != null;
     }
 
+    /** The unused item in either the plain or a registered cosmetic family. */
+    public static isPristine(itemId: number): boolean {
+        return BASE_ITEMS.includes(itemId) || this.variantFor(itemId)?.baseId === itemId;
+    }
+
     public static isBroken(itemId: number): boolean {
         return this.stageOf(itemId) === 4;
     }

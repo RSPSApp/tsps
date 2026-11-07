@@ -30,7 +30,7 @@ before(async () => {
 });
 
 function harness(withDoors = false, withLadders = false, withPrince = false) {
-  const hooks = {}, events = {}, objects = [], ground = [], clicks = new Map(), interactions = new Map(), tasks = [], stageQueries = [];
+  const hooks = {}, events = {}, objects = [], ground = [], clicks = new Map(), interactions = new Map(), tasks = [], stageQueries = [], areas = [];
   // QuestRuntime fixture for the quest:get-stage query: answer from registered quest metadata,
   // never from raw stage attributes.
   (events['quest:get-stage'] ??= []).push(request => {
@@ -51,6 +51,7 @@ function harness(withDoors = false, withLadders = false, withPrince = false) {
     getItemOnGroundManager: () => ({ registerLocation: (...args) => ground.push(args) }),
     getTaskManager: () => taskManager,
     persistAttribute: () => {},
+    registerArea: area => areas.push(area),
     onObjectFirstClick: (ids, fn) => [].concat(ids).forEach(id => clicks.set(id, fn)),
     onObjectInteraction: (name, actions) => {
       if (typeof name !== 'string' || !actions) return;
@@ -72,7 +73,7 @@ function harness(withDoors = false, withLadders = false, withPrince = false) {
   if (withLadders) require('../plugins/objects/Ladders.plugin').register(api);
   if (withPrince) require('../plugins/quests/quests/PrinceAliRescue.Quest')(api);
   return {
-    hooks, events, objects, ground, clicks, interactions, stageQueries,
+    hooks, events, objects, ground, clicks, interactions, stageQueries, areas,
     emit: (name, event) => (events[name] ?? []).forEach(fn => fn(event)),
     runTasks(cycles = 8) {
       let active = [...tasks];
@@ -198,6 +199,159 @@ test('Dragon Slayer only offers the Oracle and Wormbrain map branches after the 
   assert.match(variant(h, p, N.WORMBRAIN).variant, /lozar-s-map-piece/);
 });
 
+test('Dragon Slayer withholds the Melzar key on a full inventory, and the reply returns to the menu (rev242 tick 1146)', () => {
+  const h = harness(), p = player();
+  const condition = 'If the player does not have enough free inventory space:';
+  assert.equal(answer(h, p, N.GUILDMASTER, condition), false, 'room in the pack');
+  p.getInventory().isFull = () => true;
+  assert.equal(answer(h, p, N.GUILDMASTER, condition), true, 'a full pack and no key');
+  p.items.set(I.MAZE_KEY, 1);
+  assert.equal(answer(h, p, N.GUILDMASTER, condition), false, 'already holding the key');
+
+  const record = runtime.loadTranscripts({ core })['Dragon Slayer I'];
+  const found = [];
+  const walk = node => {
+    if (Array.isArray(node)) return node.forEach(walk);
+    if (!node || typeof node !== 'object') return;
+    if (node.id === 'dragon-slayer-i:melzar-key-no-space') found.push(node);
+    Object.values(node).forEach(walk);
+  };
+  walk(record);
+  assert.equal(found.length, 2, 'the variant and the shared branch');
+  for (const node of found) {
+    assert.equal(node.text, condition);
+    assert.deepEqual(node.steps.at(-1), { type: 'jump', reference: 'other', id: 'dragon-slayer-i:melzar-key-no-space-menu' });
+  }
+});
+
+test('Melzar shouts his transcript lines only in a fight, and fights with the captured spells, kick and the cabbage spell (rev242 ticks 2584-2609)', (t) => {
+  const h = harness();
+  const maze = h.areas[0];
+  assert.equal(maze.getMusicTrack(), 365);
+  for (const [x, y, z] of [[2933, 3248, 0], [2930, 3250, 1], [2925, 3249, 2], [2929, 9649, 0]]) {
+    assert.ok(maze.getBoundaries().some(b => b.inside(new core.Location(x, y, z))), `${x},${y},${z} is in the maze`);
+  }
+  assert.ok(!maze.getBoundaries().some(b => b.inside(new core.Location(2942, 3248, 0))), 'outside the front door is not');
+
+  let target = null, hitpoints = 44, roll = 0, cast = null;
+  t.mock.method(Math, 'random', () => roll);
+  const said = [], anims = [];
+  let melzarAt = new core.Location(2928, 9649, 0);
+  const melzar = {
+    getLocation: () => melzarAt, getSize: () => 1, getIndex: () => 1, isPlayer: () => false,
+    isNpc: () => true, getId: () => N.MELZAR_THE_MAD, getHitpoints: () => hitpoints,
+    getCombat: () => ({ getTarget: () => target, setCastSpell: spell => { cast = spell; } }),
+    forceChat: text => said.push(text), calculateDistance: () => 1, performAnimation: a => anims.push(a.getId()),
+  };
+  maze.process(melzar);
+  assert.deepEqual(said, [], 'silent out of combat');
+  target = { getLocation: () => new core.Location(2928, 9648, 0), getSize: () => 1, getIndex: () => 2, isPlayer: () => true };
+  maze.process(melzar);
+  assert.deepEqual(said, ['By the power of custard!'], 'the transcript variant\'s first line');
+  roll = 0.99; maze.process(melzar);
+  assert.equal(said.length, 1, 'a roll above 1/3 stays quiet');
+  roll = 0; hitpoints = 0; maze.process(melzar);
+  assert.equal(said.length, 1, 'not while dying');
+  maze.process({ isNpc: () => false });
+  assert.equal(said.length, 1);
+
+  // His attacks follow LostCity's tables (RSPS-sourced, see the plugin): a 0-127 roll, stat-gated spells.
+  const [Combat] = h.hooks.registerNpcCombatMethodProvider;
+  t.mock.method(core.MagicCombatMethod.prototype, 'start', () => {});
+  const graphics = [], levels = { [core.Skill.STRENGTH.getName()]: [99, 99], [core.Skill.DEFENCE.getName()]: [99, 99] };
+  let playerTarget = null, resets = 0;
+  Object.assign(target, {
+    getSkillManager: () => ({ getCurrentLevel: (s) => levels[s.getName()]?.[0] ?? 99, getMaxLevel: (s) => levels[s.getName()]?.[1] ?? 99 }),
+    getCombat: () => ({ getTarget: () => playerTarget, reset: () => { resets++; playerTarget = null; } }),
+    getPacketSender: () => ({ sendGlobalGraphic: (g, at) => graphics.push([g.id, at.getX(), at.getY()]) }),
+  });
+  melzar.performGraphic = g => graphics.push([g.id]);
+  const attack = (tableRoll, distance) => {
+    melzar.calculateDistance = () => distance; roll = tableRoll / 128;
+    const method = new Combat(melzar);
+    method.start(melzar, target);
+    return method;
+  };
+  const done = (method) => method.finished(melzar);
+
+  // Beside him: Weaken under 20, Curse under 40, Fire Strike under 60, the cabbage under 80, else a kick.
+  let m = attack(0, 1); assert.equal(cast.castAnimation().getId(), 11426, 'Weaken'); assert.equal(cast.maximumHit(), 0); done(m);
+  levels.Strength = [98, 99];
+  m = attack(0, 1); assert.equal(cast.castAnimation().getId(), 11428, 'lowered Strength: no Weaken, Curse instead'); done(m);
+  levels.Defence = [98, 99];
+  m = attack(0, 1); assert.equal(cast.castAnimation().getId(), 9144, 'both lowered: Fire Strike'); done(m);
+  levels.Strength = [99, 99]; levels.Defence = [99, 99];
+  m = attack(30, 1); assert.equal(cast.castAnimation().getId(), 11428, 'Curse'); done(m);
+  m = attack(50, 1); assert.equal(cast.castAnimation().getId(), 9144, 'Fire Strike'); assert.ok(cast.maximumHit() <= 5, 'the Wiki max hit'); done(m);
+  anims.length = 0;
+  m = attack(100, 1);
+  assert.deepEqual(anims, [423], 'a kick'); assert.equal(m.type(), core.CombatType.MELEE); assert.equal(m.attackSpeed(melzar), 4); done(m);
+
+  // The cabbage: cast animation and graphic, no hit, 5 ticks to his next attack; the player stops attacking him.
+  anims.length = 0; graphics.length = 0; playerTarget = melzar;
+  m = attack(70, 1);
+  assert.deepEqual(anims, [710]); assert.deepEqual(graphics, [[177]]);
+  assert.deepEqual(m.hits(melzar, target), []); assert.equal(m.attackSpeed(melzar), 5);
+  assert.equal(resets, 1, 'the player stops attacking him');
+  core.TaskManager.process(); core.TaskManager.process();
+  assert.ok(h.ground.length > 0, 'a cabbage lands a tick later');
+  // In his own room, never through a wall or door into the next one (review P2): Quest Helper's Melzar room
+  // zones (2927-2930 x 9643-9651, 2931 x 9646-9651), from his spawn 2928,9649 on the real basement collision.
+  const inHisRoom = (x, y) => (x >= 2927 && x <= 2930 && y >= 9643 && y <= 9651) || (x === 2931 && y >= 9646 && y <= 9651);
+  for (let i = 0; i < 64; i++) {
+    roll = i / 64; const cast = new Combat(melzar); melzar.calculateDistance = () => 1; roll = 70 / 128;
+    cast.start(melzar, target); roll = i / 64;
+    core.TaskManager.process(); core.TaskManager.process();
+    const landed = h.ground.at(-1)[2];
+    assert.ok(inHisRoom(landed.getX(), landed.getY()), `cabbage at ${landed.getX()},${landed.getY()} is in Melzar's room`);
+    done(cast);
+  }
+  const [owner, item, tile, area, options] = h.ground.at(-1);
+  assert.equal(owner, target); assert.equal(item.getId(), I.CABBAGE); assert.equal(area, null);
+  assert.deepEqual(options, { public: true, despawnDelay: 100 });
+  const reach = Math.max(Math.abs(tile.getX() - melzarAt.getX()), Math.abs(tile.getY() - melzarAt.getY()));
+  assert.ok(reach >= 1 && reach <= 7, `a tile 1-7 from him: ${reach}`);
+  assert.deepEqual(graphics.at(-1), [86, tile.getX(), tile.getY()], 'a puff of smoke where it lands');
+  done(m);
+
+  // At range: Weaken under 8, Fire Strike under 16, the cabbage under 24; otherwise he walks in, then rolls again beside.
+  m = attack(10, 5); assert.equal(cast.castAnimation().getId(), 9144, 'Fire Strike from range'); done(m);
+  melzar.calculateDistance = () => 5; roll = 50 / 128;
+  const walking = new Combat(melzar);
+  assert.equal(walking.attackDistance(melzar), 1, 'walks in'); assert.equal(walking.type(), core.CombatType.MELEE);
+  anims.length = 0; melzar.calculateDistance = () => 1; roll = 100 / 128;
+  walking.start(melzar, target); assert.deepEqual(anims, [423], 'beside now: the beside table (a kick)'); done(walking);
+  // Combat reads the speed before start(): walked in, the beside roll is already the plan it sees (review P3).
+  melzar.calculateDistance = () => 5; roll = 50 / 128;
+  const arriving = new Combat(melzar);
+  assert.equal(arriving.attackDistance(melzar), 1);
+  melzar.calculateDistance = () => 1; roll = 70 / 128;
+  assert.equal(arriving.attackSpeed(melzar), 5, 'a cabbage after walking in waits 5 ticks too');
+  arriving.start(melzar, target); assert.deepEqual(arriving.hits(melzar, target), []); done(arriving);
+  // A plan is for its target: a new fight rolls afresh (review note).
+  melzar.calculateDistance = () => 1; roll = 100 / 128;
+  const forOne = new Combat(melzar); assert.equal(forOne.type(), core.CombatType.MELEE, 'a kick planned for this target');
+  const first = target; target = { ...first, getIndex: () => 3 }; roll = 0;
+  assert.equal(new Combat(melzar).type(), core.CombatType.MAGIC, 'another target: Weaken, rolled afresh');
+  target = first; done(forOne);
+
+  // The hit and the spell's effect land as its own projectile does (reviewers' P2): rev242 tick 2593's Curse
+  // from one tile ends at 90 cycles, 3 ticks, where the legacy NPC timing gave 2.
+  for (const [tableRoll, anim, end] of [[50, 9144, 61], [30, 11428, 90], [0, 11426, 60]]) {
+    m = attack(tableRoll, 1);
+    assert.equal(cast.castAnimation().getId(), anim);
+    assert.equal(cast.arrival(melzar, target), end, 'one tile: the captured end cycle');
+    assert.equal(core.MagicCombatMethod.hitDelay(melzar, target, cast), Math.ceil(end / 30), 'hit on the projectile');
+    done(m);
+  }
+  melzarAt = new core.Location(2928, 9653, 0); // five tiles
+  m = attack(0, 5);
+  assert.equal(cast.castAnimation().getId(), 11426, 'Weaken from range');
+  assert.equal(cast.arrival(melzar, target), 60 + 4 * 10, 'Weaken from five tiles: 10 cycles a tile more');
+  assert.equal(core.MagicCombatMethod.hitDelay(melzar, target, cast), core.Projectile.ticksToLand(cast.arrival(melzar, target)));
+  done(m);
+});
+
 test('Dragon Slayer answers the Pandemonium and Murder Mystery guards instead of letting them default true', () => {
   const h = harness(), p = player();
   assert.equal(answer(h, p, N.GUILDMASTER, 'If the player has completed Pandemonium:'), false);
@@ -241,6 +395,9 @@ test('Dragon Slayer hands the real shared Crandor wall to Doors both ways withou
   const first = clickCrandorWall(h, p);
   assert.equal(first.handled, true);
   assert.equal(p.attrs.get('dragon-slayer.shortcut'), true);
+  // rev242 capture tick 3520: the discovery message on the first crossing only.
+  const found = 'You found a secret door.<br>You remember where the secret door is for future reference.';
+  assert.deepEqual(p.messages, [found]);
   assert.equal(p.varbits.get(3741), 1);
   assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [2836, 9601], 'the player is not teleported');
   assert.equal(opened.length, 1);
@@ -251,6 +408,7 @@ test('Dragon Slayer hands the real shared Crandor wall to Doors both ways withou
 
   const back = clickCrandorWall(h, p);
   assert.equal(back.handled, true);
+  assert.deepEqual(p.messages, [found], 'not repeated once the shortcut is known');
   assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [2836, 9601]);
   assert.equal(opened.length, 2);
 
@@ -322,11 +480,7 @@ test('Dragon Slayer claims the Doors toggle so the maze and magic doors still re
   p.items.set(I.KEY_3, 1);
   p.moveTo(new core.Location(1, 0, 0));
   request = doorToggle(h, p, O.RED_DOOR);
-  assert.equal(p.items.get(I.KEY_3), 1, 'the key is spent when the walk through the door lands');
-  core.TaskManager.process();
-  assert.equal(p.items.get(I.KEY_3), 1, 'two tiles take two ticks');
-  core.TaskManager.process();
-  assert.equal(p.items.get(I.KEY_3), 0);
+  assert.equal(p.items.get(I.KEY_3), 0, 'the key is spent as the door opens (rev242 capture tick 2109)');
   assert.match(p.messages.at(-1), /disintegrates/);
 
   p.items.set(I.KEY_3, 1);
@@ -601,7 +755,8 @@ test('Dragon Slayer routes Melzar FUNLADDERTOP 2605 into the real basement and k
 
   const groundReturn = player();
   groundReturn.moveTo(new core.Location(2937, 3252, 0));
-  assert.equal(clickExit(groundReturn, exitDoor).handled, false);
+  // Claimed and refused: left unhandled, Doors' pass-through would carry the player back through.
+  assert.equal(clickExit(groundReturn, exitDoor).handled, true);
   assert.deepEqual([groundReturn.getLocation().getX(), groundReturn.getLocation().getY()], [2937, 3252],
     'the maze cannot re-enter the ground ladder room');
 
@@ -621,7 +776,7 @@ test('Dragon Slayer routes Melzar FUNLADDERTOP 2605 into the real basement and k
 
     const back = player();
     back.moveTo(new core.Location(to[0], to[1], 0));
-    assert.equal(clickExit(back, door).handled, false, `${label} exit corridor cannot reverse`);
+    assert.equal(clickExit(back, door).handled, true, `${label} exit corridor cannot reverse (claimed and refused)`);
     assert.deepEqual([back.getLocation().getX(), back.getLocation().getY()], to,
       `${label} reverse is refused without restarting the maze`);
   }
@@ -667,6 +822,9 @@ test('Dragon Slayer walks through the Melzar front door in both directions and k
     [2940, 3248], 'the exterior side with the maze key reaches the tile across the real door');
   assert.equal(entering.items.get(I.MAZE_KEY), 1);
   assert.equal(h.quest.getStage(entering), 2);
+  // rev242 capture (20261106T101002) tick 2070.
+  assert.deepEqual(entering.messages, ['You use the key and the door opens.']);
+  assert.deepEqual(leaving.messages, []);
 
   const locked = player();
   cleanMelzarPlayer(t, h, locked);
@@ -818,4 +976,18 @@ test('Crandor diary route credits climbing from the dungeon to the surface only'
   h.clicks.get(25213)({ player: p });
   assert.ok(p.getLocation().getY() >= 6400);
   assert.equal(arrivals.length, 1);
+});
+
+test("the Lady Lumbridge's ladder leads down into the hold, where Quest Helper's repair step looks (rev242 tick 2917)", () => {
+  RegionManager.loadMapFiles(3049, 3208, true);
+  RegionManager.loadMapFiles(3049, 9640, true);
+  const down = MapObjects.get(2590, new core.Location(3049, 3208, 1), null);
+  const up = MapObjects.get(2592, new core.Location(3049, 9640, 1), null);
+  assert.ok(down && up, 'both ladders are on the map');
+  const hold = ClimbLinks.destination(down, ClimbLinks.DOWN, new core.Location(3048, 3208, 1));
+  assert.deepEqual([hold.getX(), hold.getY(), hold.getZ()], [3048, 9640, 1], 'the hold, not the dock under the ship');
+  // Quest Helper's shipHull zone: 3041-3050, 9639-9641, plane 1.
+  assert.ok(hold.getX() >= 3041 && hold.getX() <= 3050 && hold.getY() >= 9639 && hold.getY() <= 9641 && hold.getZ() === 1);
+  const deck = ClimbLinks.destination(up, ClimbLinks.UP, hold);
+  assert.deepEqual([deck.getX(), deck.getY(), deck.getZ()], [3048, 3208, 1], 'back up on the deck');
 });

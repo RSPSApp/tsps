@@ -1,3 +1,4 @@
+import { sceneTileHeight } from "../game/scene/SceneGeometry";
 import { LocAnimated } from "./loc/LocAnimated";
 import Denque from "denque";
 import { mat4, vec2, vec3, vec4 } from "gl-matrix";
@@ -829,7 +830,7 @@ export class WebGLOsrsRenderer extends GameRenderer<WebGLMapSquare> {
                 plane: 0,
             });
         this.osrsClient.sceneGeometry = {
-            tileHeight: (x, y, plane) => this.getTileHeightAtPlane(x, y, plane),
+            tileHeight: (x, y, plane, anchorX, anchorY) => sceneTileHeight(this, x, y, plane, anchorX, anchorY),
             worldToScreen: (x, height, y) => {
                 const p = this.worldToScreen(x, height, y);
                 return p ? [p[0], p[1]] : undefined;

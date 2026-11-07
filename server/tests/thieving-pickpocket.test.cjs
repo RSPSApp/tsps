@@ -41,6 +41,8 @@ const log = [];
 const submitted = [];
 /** Whether content asks for another pickpocket ("thieving:done", a league relic's repeat). */
 let repeatAgain = false;
+/** What content (the Ardougne Diary's rewards) answers "thieving:pickpocket-target" with. */
+let pickpocketTargetAnswer = null;
 const interactions = [];
 const combat = {
     inCombat: () => false,
@@ -59,6 +61,7 @@ Thieving.register({
     emitCustomEvent: (name, request) => {
         if (name === 'thieving:success') log.push(name);
         if (name === 'thieving:done' && repeatAgain) request.again = true;
+        if (name === 'thieving:pickpocket-target') pickpocketTargetAnswer?.(request);
         // The Skillcapes plugin answers this; a worn Thieving cape is all these tests need.
         if (name === 'skillcape:has-perk' && request.skill === 'THIEVING') {
             request.result = request.player.getEquipment().get(Equipment.CAPE_SLOT)?.getId() === I.THIEVING_CAPE;
@@ -336,6 +339,18 @@ test('coin pouches: 28 of a kind block pickpocketing; a full inventory only allo
     assert.deepEqual(empty.click, ['inventory full']);
     const farmer = attempt(t, { name: 'Farmer', who: player({ inventory: { [I.COIN_POUCH_2]: 5 }, full: true }) });
     assert.deepEqual(farmer.click, ['inventory full'], 'a farmer can also give seeds');
+});
+
+test("content's pouch limit lifts the 28-pouch block, and its chance bonus scales the chart like the gloves (Ardougne Diary)", (t) => {
+    pickpocketTargetAnswer = (request) => { request.pouchLimit = 56; request.chanceBonus = 10; };
+    t.after(() => { pickpocketTargetAnswer = null; });
+    const lifted = attempt(t, { who: player({ inventory: { [I.COIN_POUCH]: 28 } }) });
+    assert.deepEqual(lifted.click, ["spam: You attempt to pick the man's pocket."], '28 pouches no longer block at a limit of 56');
+    const full = attempt(t, { who: player({ inventory: { [I.COIN_POUCH]: 56 } }) });
+    assert.deepEqual(full.click, ['You need to empty your coin pouches before you can continue pickpocketing.']);
+    const man = DATA.targets.find((target) => target.key === 'man');
+    const { successChance } = Pickpocket._test;
+    assert.equal(successChance(player({ level: 1 }), { ...man, chanceBonus: 10 }), 199 / 256, 'Man at 1: 180 * 1.1 = 198, +1');
 });
 
 test('opening coin pouches pays their coins', () => {

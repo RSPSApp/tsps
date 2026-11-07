@@ -5,6 +5,7 @@ import { PlayerStatus } from "../../PlayerStatus";
 import { ItemDefinition } from "../../../definition/ItemDefinition";
 import { StackType, MAX_STACK_AMOUNT } from "../StackType";
 import { Equipment } from "./Equipment";
+import { getWorldDefinition } from "../../../definition/WorldDefinition";
 import { GameConstants } from "../../../GameConstants";
 import { WeaponInterfaceManager } from "../../../content/combat/WeaponInterfaceManager";
 import { Inventory } from "./Inventory";
@@ -1328,7 +1329,7 @@ export class Bank extends ItemContainer {
             .sendInterfaceFlagsRange((Bank.SIDE_INTERFACE_ID << 16) | 3, 0, 27, 3278846)
             .sendInterfaceFlagsRange((Bank.SIDE_INTERFACE_ID << 16) | Bank.SIDE_WORN_CHILD, 0, 27, Bank.SIDE_WORN_FLAGS)
             .sendVarbit(12393, 1)
-            .sendString(`Bank of ${GameConstants.NAME}`, (Bank.MAIN_INTERFACE_ID << 16) | 3);
+            .sendString(`Bank of ${getWorldDefinition().name}`, (Bank.MAIN_INTERFACE_ID << 16) | 3);
         // Captured: the bank opens on the inventory, not a container left in view last time.
         if (opening && sender.getVarbit(Bank.VIEW_CONTAINER_VARBIT) !== 0) {
             sender.sendVarbit(Bank.VIEW_CONTAINER_VARBIT, 0).sendConfig(Bank.VIEW_CONTAINER_OBJ_VARP, -1);
@@ -1426,6 +1427,18 @@ export class Bank extends ItemContainer {
         if (item.getAmount() <= 0) {
             return this;
         }
+
+        // The room checks above go by id: a stack of the same id with other metadata (a preset copy) is not one this
+        // item joins, so with no free slot the add below would fail after the bank's stack was already taken.
+        const arriving = item.clone();
+        if (this.getPlayer().withdrawAsNote() && canWithdrawAsNote) arriving.setId(noteId);
+        const room = to.getAddableAmount(arriving);
+        if (room <= 0) {
+            if (to instanceof Inventory) this.getPlayer().sendMessage(INVENTORY_FULL_MESSAGE);
+            else to.full();
+            return this;
+        }
+        if (room < item.getAmount()) item.setAmount(room);
 
         if (to instanceof Inventory && this.getPlayer().isPlaceholders()
                 && item.getAmount() >= this.getItems()[slot].getAmount()

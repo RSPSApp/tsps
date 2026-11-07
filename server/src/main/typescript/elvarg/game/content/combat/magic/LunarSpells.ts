@@ -107,6 +107,28 @@ const DREAM_HEAL_TICKS = 33;
 /** Energy Transfer costs the caster 10 Hitpoints (Wiki). */
 const ENERGY_TRANSFER_HITPOINTS = 10;
 
+/**
+ * Wiki (Dream Mentor, Rewards): the quest gives "the ability to use" these seven Lunar spells; the rest of the book
+ * needs only Lunar Diplomacy's spellbook. Captured refusal (rec 1695 tick 219, rec 3448 tick 532): "You must have
+ * completed <Quest> to use this spell."
+ */
+const DREAM_MENTOR_SPELLS = new Set(["monster examine", "humidify", "hunter kit", "stat spy", "dream", "plank make", "spellbook swap"]);
+
+/** A Dream Mentor spell before the quest: refused (before any other check or cost), and true. */
+export function refuseBeforeDreamMentor(player: Player, key: string): boolean {
+    if (!DREAM_MENTOR_SPELLS.has(key)) return false;
+    const query = { player, key: "dream_mentor", complete: false };
+    PluginManager.emitCustomEvent("quest:is-complete", query);
+    if (query.complete === true) return false;
+    // Content may lift the requirement ("magic:spell-unlocked", the Grimoire league relic: "all ... spells regardless of
+    // area, quest, or diary requirements"), as the Mage Arena's god spells allow.
+    const unlock = { player, name: key, unlocked: false };
+    PluginManager.emitCustomEvent("magic:spell-unlocked", unlock);
+    if (unlock.unlocked === true) return false;
+    player.sendMessage("You must have completed Dream Mentor to use this spell.");
+    return true;
+}
+
 class LunarSpell extends Spell {
     private requirements?: { level: number; runes: Item[] };
     constructor(readonly name: string, readonly data: SpellData) { super(); this.members = true; }
@@ -241,6 +263,7 @@ export class LunarSpells {
         const groupTeleport = this.GROUP_TELEPORTS.get(key);
         const spell = this.SELF.get(key);
         if (!teleport && !groupTeleport && !spell) return false;
+        if (spell && refuseBeforeDreamMentor(player, key)) return true;
         this.interrupt(player);
         if (teleport) return teleport.castTeleport(player);
         if (groupTeleport) return this.castGroupTeleport(player, groupTeleport);
@@ -474,6 +497,7 @@ export class LunarSpells {
     public static handlePlayerTarget(player: Player, target: Player, name: string | undefined): boolean {
         const key = name?.trim().toLowerCase() ?? "";
         if (!["energy transfer", "heal other", "vengeance other", "stat spy"].includes(key)) return false;
+        if (refuseBeforeDreamMentor(player, key)) return true;
         if (target === player || !this.acceptsAid(target) || !this.sameInstance(player, target) ||
             !player.getLocation().isWithinDistance(target.getLocation(), 10)) return false;
         this.interrupt(player);
@@ -540,6 +564,7 @@ export class LunarSpells {
     public static handleNpcTarget(player: Player, target: any, name: string | undefined): boolean {
         if (name?.trim().toLowerCase() !== "monster examine" || !target || !this.sameInstance(player, target) ||
             !player.getLocation().isWithinDistance(target.getLocation(), 10)) return false;
+        if (refuseBeforeDreamMentor(player, "monster examine")) return true;
         this.interrupt(player);
         return this.SPELLS.get("monster examine")!.cast(player, () => {
             player.setPositionToFace(target.getLocation());
@@ -610,6 +635,7 @@ export class LunarSpells {
         if (key !== "plank make" && key !== "stat restore pot share" && key !== "boost potion share") return false;
         const item = player.getInventory().getItems()[slot];
         if (!item || item.getId() !== itemId) return false;
+        if (refuseBeforeDreamMentor(player, key)) return true;
         this.interrupt(player);
         const spell = this.SPELLS.get(key)!;
         if (key === "plank make") return this.castPlankMake(player, spell, itemId);

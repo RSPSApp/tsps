@@ -11,7 +11,7 @@
  *   complete           -> "Fred the Farmer" / "after-sheep-shearer"
  *
  * Wool collection follows the Wiki; fast-path handover and rewards follow rsprox 1718. The
- * shear/spin route, partial hand-ins and The Thing follow the user's 2026-11-06 rev 242 capture
+ * shear/spin route, partial hand-ins and The Thing follow the 2026-11-06 rev 242 capture
  * (docs/quests/sheep-shearer/README.md).
  */
 module.exports = function registerSheepShearerQuest(api) {

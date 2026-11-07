@@ -1654,7 +1654,10 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   leaving" or Raging Echoes' "must be of one difficulty" leave the task unmapped, the places
   until the area unlocks exist, even for a boss with one home ("Defeat any TzHaar in Mor Ul Rek"
   is the four attackable city castes, TzHaar-Ket, TzHaar-Xil, TzHaar-Mej and TzHaar-Hur; TzTok-Jad
-  and TzHaar-Ket-Rak are other tasks); a monster whose every location line
+  and TzHaar-Ket-Rak are other tasks; "Reach a combined kill count of 500 across all God Wars
+  Dungeon bosses" is Kree'arra, General Graardor, Commander Zilyana, K'ril Tsutsaroth and Nex, one
+  total; "Defeat any one of the God Wars Dungeon bosses 100/250 times" stays unmapped, since that
+  is one boss that many times); a monster whose every location line
   on its Wiki page is the task's place, and whose name the cache gives one attackable monster, is
   killed there whatever the task adds: "Defeat a Drake in the Karuulm Slayer Dungeon", the pages
   saved as `<dir>/npcs/<page>.wikitext`; a Combat Achievements monster no NPC is named after is the
@@ -1807,8 +1810,19 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   no raw fish is a creature hunted); "Pickpocket X [N times]" with the description's
   alternatives; "N <tier> Clue Scroll(s)". "Equip any Godsword" is every godsword its page's
   {{plinkt}} names, plus an ornament kit the cache has of one. "Equip any piece of Zenyte Jewelry"
-  is the four enchanted pieces and each one's cache forms. "Equip any piece of armour from the moons
-  of peril" is every piece of the Moon equipment page's three tables. A description naming a group ("any kind of logs"), a
+  is the four enchanted pieces and each one's cache forms. "Equip every piece of Zenyte Jewelry"
+  stays unmapped: the amulet and the necklace share the neck slot, so the four cannot be worn at
+  once. "Equip any piece of armour from the moons
+  of peril" is every piece of the Moon equipment page's three tables. "Equip any Mithril weapon" (and
+  the adamant, rune and dragon ones) is that equipment page's Weapons tables. "Equip a basic elemental
+  staff", an elemental or combination battlestaff or mystic staff, is the linked section's table (a
+  plain battlestaff is not an elemental one). "Equip any piece of Crystal Armour" and the full set are
+  the helm, body and legs, including a degraded piece. "Equip a piece of Beekeeper's Outfit" is the
+  outfit page's pieces. "Equip a full set of tier 5 Shayzien armour", of Graceful and of the prospector
+  kit are those pages' pieces (a graceful recolour shares the cache's name, so it is the set; the
+  recoloured task stays unmapped). "Equip a completed God Book" is the six books; "Equip a Damaged God
+  book" is the cache's "Damaged book". "Equip any Team cape in the Wilderness" is the cache's team
+  capes, worn there. "Restore 75 or more Prayer Points at any altar" is `prayer-restore`. A description naming a group ("any kind of logs"), a
   place or a condition leaves the task unmapped; so does a parenthesis remark, while one without a
   space is part of a name ("(c)", "(u)").
 - **Named places** (the catalog's `places`, by key: a guild, a dungeon, an island, each `{ name,

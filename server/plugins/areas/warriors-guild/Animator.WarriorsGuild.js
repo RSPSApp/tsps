@@ -153,6 +153,16 @@ function armourKilled({ npc }) {
   owner.getPacketSender().sendEntityHintRemoval(false);
 }
 
+/** Only tokens from the owner's own animated armour receive the achievement bonus. */
+function bonusArmourTokens({ player, npc, npcId, drops }) {
+  if (!player || npc?.getOwner?.() !== player || !SETS.some((set) => set[3] === npcId) || !Array.isArray(drops)) return;
+  const multiplier = Guild.tokenMultiplier(player);
+  if (multiplier === 1) return;
+  for (const drop of drops) {
+    if (drop.itemId === Guild.ITEMS.TOKEN) drop.amount *= multiplier;
+  }
+}
+
 function shanomiVariant({ player, npcId }) {
   return npcId === Guild.NPCS.SHANOMI && lostSets(player).length > 0 ? SHANOMI_LOST_VARIANT : null;
 }
@@ -182,6 +192,7 @@ module.exports = function attachAnimator(pluginApi) {
   api.onItemOnObject(useItemOnAnimator);
   api.onPlayerProcess(tickArmour);
   api.onNpcDeath(armourKilled);
+  api.onCustomEvent("npc-drops:roll", bonusArmourTokens);
   api.onPlayerDeath(abandonArmour);
   api.onPlayerLogout(abandonArmour);
   api.onNpcDialogueVariant(shanomiVariant);

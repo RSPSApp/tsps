@@ -1,7 +1,8 @@
 // Run after `yarn build`: node --test tests/sanfew-goutweed-herbs.test.cjs
 // Wiki (Sanfew, Goutweed Exchange): "Sanfew will trade any goutweed for a single herb, which is rolled off the standard
-// herb drop table." Here each goutweed became a clean ranarr weed, every time. Real engine: every plugin loaded, a real
-// Player, Eadgar's Ruse's own handler for the "I have some more goutweed for you." choice.
+// herb drop table." That is the shared `herb` table NpcDrops rolls (npc-drops:roll-table); each goutweed used to become
+// a clean ranarr weed, every time. Real engine: every plugin loaded (NpcDrops answers the roll), a real Player,
+// Eadgar's Ruse's own handler for the "I have some more goutweed for you." choice.
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const { before, after, test } = require("node:test");
@@ -22,11 +23,12 @@ before(async () => {
 });
 after(() => PM.emitServerShutdown({}));
 
-function trade(t, roll) {
+function trade(t, roll, fill = false) {
   const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
   const p = new Player(new PlayerSession(channel));
   p.setIndex(9300); p.setUsername("sanfew" + Math.round(roll * 1000)); p.setRegistered(true); p.setAttribute("bot-skip-persistence", true);
   t.after(() => p.setRegistered(false));
+  if (fill) for (let slot = 1; slot < 28; slot++) p.getInventory().setItem(slot, new core.Item(I.LOGS, 1));
   p.getInventory().setItem(0, new core.Item(I.GOUTWEED, 1));
   t.mock.method(Math, "random", () => roll);
   PM.emitCustomEvent("npc-dialogue:choice", { player: p, npcId: core.NpcIdentifiers.SANFEW, option: "I have some more goutweed for you." });
@@ -44,4 +46,10 @@ test("the table's last row is a grimy dwarf weed", (t) => {
   const high = trade(t, 127.5 / 128);
   assert.equal(high.getAmount(I.GRIMY_DWARF_WEED), 1);
   assert.equal(high.getAmount(I.RANARR_WEED), 0);
+});
+
+test("a full inventory still trades: the goutweed's slot takes the herb", (t) => {
+  const full = trade(t, 0, true);
+  assert.equal(full.getAmount(I.GOUTWEED), 0);
+  assert.equal(full.getAmount(I.GRIMY_GUAM_LEAF), 1);
 });

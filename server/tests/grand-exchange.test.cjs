@@ -10,6 +10,7 @@ const { CacheDefinitions } = require('../dist/game/cache/CacheDefinitions');
 const { GameConstants } = require('../dist/game/GameConstants');
 const { Item } = require('../dist/game/model/Item');
 const { Inventory } = require('../dist/game/model/container/impl/Inventory');
+const { Bank } = require('../dist/game/model/container/impl/Bank');
 const { Player } = require('../dist/game/entity/impl/player/Player');
 const { PlayerStatus } = require('../dist/game/model/PlayerStatus');
 const { ClientConnection } = require('../dist/net/NetworkBuilder');
@@ -379,6 +380,9 @@ function exchange(t, config = {}, realSender = null) {
   };
   const inventory = new Inventory(p);
   p.getInventory = () => inventory;
+  // An empty bank: a buy the inventory cannot cover looks there next.
+  const banks = Array.from({ length: Bank.TOTAL_BANK_TABS }, () => new Bank(p));
+  p.getBank = tab => banks[tab];
   t.mock.method(CacheDefinitions, 'hasItem', id => definitions.has(id));
   t.mock.method(CacheDefinitions, 'getItem', id => ({ name: `Item ${id}` }));
   t.mock.method(GameConstants.PLAYER_PERSISTENCE, 'save', () => {});

@@ -10,6 +10,9 @@
  * above the player's level stay in the menu and answer with a message box when chosen.
  */
 const Shared = require("./Shared.Crafting");
+// A combine takes its pieces by id and gives a fresh product: only plain copies count, so a preset piece (PvP
+// presets) can't come out as a plain, tradeable one.
+const { plainAmount, takePlain, PRESET_TEXT } = require("../../items/PoweredStaff");
 
 const THREAD_USES_ATTRIBUTE = "crafting:thread-uses";
 const CRAFTS_PER_THREAD = 5;
@@ -146,8 +149,8 @@ function hasCombineTool(player, toolId) {
 function hasCombineMaterials(player, recipe) {
   const inventory = player.getInventory();
   const [first, second] = combineAmounts(recipe);
-  return inventory.getAmount(recipe.pair[0]) >= first && inventory.getAmount(recipe.pair[1]) >= second &&
-    (recipe.materials ?? []).every(([id, amount]) => inventory.getAmount(id) >= amount) &&
+  return plainAmount(inventory, recipe.pair[0]) >= first && plainAmount(inventory, recipe.pair[1]) >= second &&
+    (recipe.materials ?? []).every(([id, amount]) => plainAmount(inventory, id) >= amount) &&
     (recipe.tools ?? []).every((id) => hasCombineTool(player, id));
 }
 
@@ -155,9 +158,9 @@ function combine(player, recipe) {
   if (!hasCombineMaterials(player, recipe)) return false;
   const inventory = player.getInventory();
   const [first, second] = combineAmounts(recipe);
-  inventory.deleteNumber(recipe.pair[0], first);
-  inventory.deleteNumber(recipe.pair[1], second);
-  for (const [id, amount] of recipe.materials ?? []) inventory.deleteNumber(id, amount);
+  takePlain(inventory, recipe.pair[0], first);
+  takePlain(inventory, recipe.pair[1], second);
+  for (const [id, amount] of recipe.materials ?? []) takePlain(inventory, id, amount);
   inventory.addItem(new (Shared.getCore().Item)(recipe.itemId, 1));
   Shared.addCraftingXp(player, recipe.xp);
   Shared.produced(player, recipe.itemId, 1, recipe.xp, "leather", [[recipe.pair[0], first], [recipe.pair[1], second], ...(recipe.materials ?? [])]);
@@ -173,13 +176,21 @@ function missingCombineItem(player, recipe) {
   return needs.find(([id, amount]) => inventory.getAmount(id) < amount);
 }
 
+/** Every piece is held, but enough of one only counting its preset copies. */
+function heldOnlyAsPreset(player, recipe) {
+  const inventory = player.getInventory();
+  const [first, second] = combineAmounts(recipe);
+  const needs = [[recipe.pair[0], first], [recipe.pair[1], second], ...(recipe.materials ?? [])];
+  return needs.every(([id, amount]) => inventory.getAmount(id) >= amount) && needs.some(([id, amount]) => plainAmount(inventory, id) < amount);
+}
+
 function maxCombines(player, recipe) {
   const inventory = player.getInventory();
   const [first, second] = combineAmounts(recipe);
   return Math.min(
-    Math.floor(inventory.getAmount(recipe.pair[0]) / first),
-    Math.floor(inventory.getAmount(recipe.pair[1]) / second),
-    ...(recipe.materials ?? []).map(([id, amount]) => Math.floor(inventory.getAmount(id) / amount))
+    Math.floor(plainAmount(inventory, recipe.pair[0]) / first),
+    Math.floor(plainAmount(inventory, recipe.pair[1]) / second),
+    ...(recipe.materials ?? []).map(([id, amount]) => Math.floor(plainAmount(inventory, id) / amount))
   );
 }
 
@@ -204,6 +215,10 @@ function handleCombine(event) {
     (pair[0] === usedItemId && pair[1] === usedWithItemId) || (pair[1] === usedItemId && pair[0] === usedWithItemId));
   if (!recipe) return;
   event.handled = true;
+  if (!hasCombineMaterials(player, recipe) && heldOnlyAsPreset(player, recipe)) {
+    player.sendMessage(PRESET_TEXT);
+    return;
+  }
   if (!hasCombineMaterials(player, recipe)) {
     // ponytail: not captured; names what is missing, and how many when more than one is needed.
     const [id, amount] = missingCombineItem(player, recipe);

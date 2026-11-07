@@ -670,9 +670,14 @@ export class Player extends Mobile {
             .Sailing.onLogout(this);
         this.getPacketSender().sendInterfaceRemoval();
 
-        // Leave area
+        // Leave area. An area's leave code that throws must not stop the rest of the logout: the logout hooks, the
+        // task cancel and the save below (a plugin's postLeave error left the player's tasks running and unsaved).
         if (this.getArea() != null) {
-            this.getArea().leave(this, true);
+            try {
+                this.getArea().leave(this, true);
+            } catch (err) {
+                console.error(`[World] area leave failed on logout (${this.getUsername()})`, err);
+            }
         }
 
         // Do stuff...

@@ -381,7 +381,7 @@ test('native Grouping selections use the existing teleport, cooldown and refusal
     assert.equal(busy.player.getInterfaceId(), 12, 'the grouping click cannot close a busy interface to bypass its gate');
     const blocked = who(); blocked.player.setLocation(new Location(3200, 3600, 0));
     blocked.player.getCombat().getTeleblockTimer().start(300); await click(blocked, slotFor('Castle Wars'));
-    assert.match(blocked.messages.at(-1), /blocking you from teleporting/);
+    assert.match(blocked.messages.at(-1), /A teleport block has been cast on you\. It should wear off in/);
     assert.deepEqual(position(blocked), [3200, 3600, 0]);
     const vetoed = who();
     const { Area } = require('../dist/game/model/areas/Area');

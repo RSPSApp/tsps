@@ -74,6 +74,15 @@ function player({ smithing = 99, items = {}, hands = -1 } = {}) {
       addItem: (item) => inventory.set(item.getId(), (inventory.get(item.getId()) ?? 0) + item.getAmount()),
       add: (item) => inventory.set(item.getId(), (inventory.get(item.getId()) ?? 0) + item.getAmount()),
       refreshItems() {},
+      // Slots, one unit each (as getFreeSlots counts them), in map order: the bucket swaps replace by slot.
+      getItems: () => [...inventory].flatMap(([id, n]) => Array.from({ length: Math.max(0, n) }, () => new (PluginManager.getCoreApi().Item)(id, 1))),
+      getSlotForItemId(id) { return this.getItems().findIndex((item) => item.getId() === id); },
+      setItem(slot, item) {
+        const old = this.getItems()[slot];
+        if (old) inventory.set(old.getId(), inventory.get(old.getId()) - 1);
+        inventory.set(item.getId(), (inventory.get(item.getId()) ?? 0) + item.getAmount());
+        return this;
+      },
     }),
     getEquipment: () => ({ getItems: () => equipment }),
     getSkillManager: () => ({ getCurrentLevel: () => smithing, getMaxLevel: () => smithing, addExperiences: (_, xp) => { p.xp += xp; } }),

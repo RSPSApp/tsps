@@ -105,6 +105,23 @@ encoder and no repack — `getObject`/`getNpc`/`getItem` return the overlaid clo
 `NpcDefinition` and `ItemDefinition` (all of which route through them) see it too, while the base cache
 definition stays untouched.
 
+### Custom NPC recolours and combat values
+
+A custom NPC is a `kind: "npc"` overlay row with its own ID. Its `fields.recolorFrom` and
+`fields.recolorTo` arrays are the sole source for recolours. An authoring tool composes its chosen
+colours with the base NPC's built-in cache recolours and writes the resulting arrays into this row.
+Recolour values must be 0–65535. Because the client applies pairs in order, newly introduced
+swaps and chains are rejected; any unchanged pairs inherited from the base NPC remain valid.
+The existing overlay loader clones the base definition and sends it to the client; stock NPC IDs
+and their cache definitions are not changed.
+
+For registered custom NPC IDs only, `npc-combat-defs.json` may also set `maxHit` (an integer from
+0 to 10000) and `attackType`. The latter is resolved by the same `resolveAttackType` rule as the
+monster dump: `ranged` and `magic` select those combat methods; melee tokens select melee, while
+other tokens such as `dragonfire` fall through to melee. These values take effect after a server
+restart. The external web-based NPC editor is outside this repository and needs its own authoring
+update to expose recolours.
+
 What is still missing is **placement**: a new loc id exists but nothing spawns it. That is the map
 editor's job (`WorldLocSpawnRow` / `WorldLocChangeRow`), and the next step is linking the two
 workbenches — "place this loc" from here, "inspect its definition" from there.

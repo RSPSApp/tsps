@@ -189,11 +189,8 @@ export class NpcDefinitionLoader extends DefinitionLoader {
             target.maxHit = maxHit;
         }
         const style = typeof entry.attackType === "string" ? entry.attackType.trim().toLowerCase() : "";
-        const type = style === "ranged" ? CombatType.RANGED
-            : ["magic", "fire", "water", "earth", "air", "dragonfire"].includes(style) ? CombatType.MAGIC
-            : ["crush", "slash", "stab", "melee"].includes(style) ? CombatType.MELEE : null;
-        if (type !== null) {
-            target.attackType = type;
+        if (["crush", "slash", "stab", "melee", "ranged", "magic", "fire", "water", "earth", "air", "dragonfire"].includes(style)) {
+            target.attackType = NpcDefinitionLoader.resolveAttackType([style]);
             target.attackStyle = style;
         }
     }

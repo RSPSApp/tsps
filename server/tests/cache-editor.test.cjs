@@ -13,7 +13,6 @@ const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { CacheDefinitions } = require("../dist/game/cache/CacheDefinitions");
 const Fields = require("../plugins/tools/cache-editor/Fields.CacheEditor");
 const Inspect = require("../plugins/tools/cache-editor/Inspect.CacheEditor");
-const CustomNpcOverrides = require("../plugins/tools/cache-editor/CustomNpcOverrides.CacheEditor.cjs");
 const { NpcDefinition } = require("../dist/game/definition/NpcDefinition");
 const { NpcDefinitionLoader } = require("../dist/game/definition/loader/impl/NpcDefinitionLoader");
 const { CombatType } = require("../dist/game/content/combat/CombatType");
@@ -464,9 +463,13 @@ test("manager NPC recolours and damage stay on the new ID, leaving its cache bas
   const originalFrom = [...base.recolorFrom], originalTo = [...base.recolorTo];
   const color = base.recolorTo[0];
   const newColor = (color + 1) & 65535;
-  const document = CustomNpcOverrides.withCustomNpcRecolors(core, {
-    version: 1, rows: [{ kind: "npc", id: 50000, baseId: base.id, fields: { name: "Custom colour test" } }],
-  }, { npcs: { "50000": { recolorFrom: [color], recolorTo: [newColor] } } });
+  const composedTo = originalTo.map((value) => value === color ? newColor : value);
+  const document = {
+    version: 1,
+    rows: [{ kind: "npc", id: 50000, baseId: base.id, fields: {
+      name: "Custom colour test", recolorFrom: originalFrom, recolorTo: composedTo,
+    } }],
+  };
   assert.deepEqual(Document.check(core, document), { ok: true, problems: [] });
   try {
     CacheDefinitions.registerCustomDefinitions(document.rows);
@@ -480,12 +483,30 @@ test("manager NPC recolours and damage stay on the new ID, leaving its cache bas
     const customCombat = NpcDefinition.forId(50000);
     NpcDefinitionLoader.applyCustomCombat(50000, customCombat, { maxHit: 37, attackType: "fire" });
     assert.equal(customCombat.getMaxHit(), 37);
-    assert.equal(customCombat.getAttackType(), CombatType.MAGIC);
+    assert.equal(customCombat.getAttackType(), CombatType.MELEE);
     assert.equal(baseCombat.getMaxHit(), originalMaxHit);
     assert.equal(baseCombat.getAttackType(), originalStyle);
   } finally {
     CacheDefinitions.registerCustomDefinitions([]);
     NpcDefinition.invalidateCache(50000);
+  }
+});
+
+test("NPC recolour swaps and chains are rejected before the client applies them sequentially", () => {
+  const row = { kind: "npc", id: 50000, baseId: 1, fields: { recolorFrom: [1234, 4321], recolorTo: [4321, 1234] } };
+  assert.match(Document.check(core, { rows: [row] }).problems.join("; "), /earlier pair's result/);
+  row.fields.recolorFrom = [918, 1234];
+  row.fields.recolorTo = [1234, 7777];
+  assert.match(Document.check(core, { rows: [row] }).problems.join("; "), /earlier pair's result/);
+  row.fields.recolorFrom = [918, 1234];
+  row.fields.recolorTo = [7777, 4321];
+  assert.equal(Document.check(core, { rows: [row] }).ok, true);
+});
+
+test("recolour values outside the client's 16-bit colour range are rejected", () => {
+  for (const kind of ["npc", "item", "loc"]) {
+    const row = { kind, id: 50000, baseId: 1, fields: { recolorFrom: [70000], recolorTo: [-5] } };
+    assert.match(Document.check(core, { rows: [row] }).problems.join("; "), /between 0 and 65535/);
   }
 });
 

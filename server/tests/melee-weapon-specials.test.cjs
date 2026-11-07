@@ -523,7 +523,7 @@ test("Ice Cleave plays the red slash on the attacker, not the target", () => {
 
 test("Blood Sacrifice heals 15% of the target's max Hitpoints, capped at 25 on NPCs and 15 on players", () => {
   const ags = special("ancient_godsword").getCombatMethod();
-  const run = (target) => {
+  const run = (target, hitpoints = 100) => {
     tasks.length = 0;
     const healed = [];
     const pending = [];
@@ -536,7 +536,7 @@ test("Blood Sacrifice heals 15% of the target's max Hitpoints, capped at 25 on N
     };
     Object.assign(target, {
       isRegistered: () => true,
-      getHitpoints: () => 100,
+      getHitpoints: () => hitpoints,
       sendMessage() {},
       performGraphic() {},
       getCombat: () => ({ getHitQueue: () => ({ addPendingDamage: (hits) => pending.push(hits) }) }),
@@ -559,4 +559,31 @@ test("Blood Sacrifice heals 15% of the target's max Hitpoints, capped at 25 on N
     getSkillManager: () => ({ getMaxLevel: () => 99 }),
   };
   assert.deepEqual(run(player).healed, [14], "floor(99 * 0.15)");
+});
+
+test("Blood Sacrifice heals only the damage it does to a target with fewer than 25 Hitpoints left (Wiki)", () => {
+  const ags = special("ancient_godsword").getCombatMethod();
+  tasks.length = 0;
+  const healed = [];
+  const attacker = {
+    isPlayer: () => true,
+    isRegistered: () => true,
+    getHitpoints: () => 99,
+    calculateDistance: () => 1,
+    heal: (amount) => healed.push(amount),
+  };
+  const target = {
+    isPlayer: () => false,
+    isNpc: () => true,
+    getAsNpc() { return this; },
+    getMaxHitpoints: () => 500,
+    isRegistered: () => true,
+    getHitpoints: () => 6,
+    sendMessage() {},
+    performGraphic() {},
+    getCombat: () => ({ getHitQueue: () => ({ addPendingDamage() {} }) }),
+  };
+  ags.handleAfterHitEffects(hit(target, 30, true, attacker));
+  tasks[0].execute();
+  assert.deepEqual(healed, [6], "the sacrifice can only take the 6 Hitpoints left");
 });

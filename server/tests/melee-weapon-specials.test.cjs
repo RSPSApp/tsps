@@ -21,11 +21,15 @@ function emitCustomEvent(name, payload) {
   for (const listener of listeners.get(name) ?? []) listener(payload);
 }
 
+/** The specials' onCombatHitDamage hooks: PendingHit calls them with the roll before it caps it to the target's HP. */
+const hitDamageHooks = [];
+
 function load(file, overrides) {
   require(`../plugins/combat/specials/${file}.SpecialAttack`)({
     core: overrides ? { ...core, ...overrides } : core,
     registerCombatSpecial: CombatSpecial.register,
     emitCustomEvent,
+    onCombatHitDamage: (handler) => hitDamageHooks.push(handler),
   });
 }
 
@@ -558,4 +562,19 @@ test("Blood Sacrifice heals 15% of the target's max Hitpoints, capped at 25 on N
     getSkillManager: () => ({ getMaxLevel: () => 99 }),
   };
   assert.deepEqual(run(player).healed, [14], "floor(99 * 0.15)");
+});
+
+test("Healing Blade heals from the swing's potential damage, not what a low target had left (Wiki)", () => {
+  const sgs = special("saradomin_godsword").getCombatMethod();
+  const attacker = fakePlayer({ weaponId: ItemIdentifiers.SARADOMIN_GODSWORD, levels: { HITPOINTS: 99, PRAYER: 99 } });
+  attacker.skillManager.setLevel("HITPOINTS", 50);
+  attacker.skillManager.setLevel("PRAYER", 50);
+  attacker.isSpecialActivated = () => true;
+  attacker.getCombatSpecial = () => special("saradomin_godsword");
+  // Wiki: a 60 rolled on a target with only 2 Hitpoints heals 30 and restores 15.
+  const kill = hit({}, 2, true, attacker);
+  for (const hook of hitDamageHooks) hook({ attacker, hit: kill, damage: { getDamage: () => 60 } });
+  sgs.handleAfterHitEffects(kill);
+  assert.equal(attacker.skillManager.level("HITPOINTS"), 80, "30 from the 60 rolled");
+  assert.equal(attacker.skillManager.level("PRAYER"), 65, "15 from the 60 rolled");
 });

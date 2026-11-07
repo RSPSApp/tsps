@@ -118,7 +118,7 @@ export class ObjectIndicatorsOverlay implements WidgetOverlay {
         const corners: [number, number][] = [[loc.tileX, loc.tileY], [loc.tileX + sx, loc.tileY], [loc.tileX + sx, loc.tileY + sy], [loc.tileX, loc.tileY + sy]];
         const out: Point[] = [];
         for (const [x, y] of corners) {
-            const p = geom.worldToScreen(x, geom.tileHeight(x, y, loc.plane), y);
+            const p = geom.worldToScreen(x, geom.tileHeight(x, y, loc.plane, loc.tileX + sx / 2, loc.tileY + sy / 2), y);
             if (!p) return undefined;
             out.push([p[0], p[1]]);
         }

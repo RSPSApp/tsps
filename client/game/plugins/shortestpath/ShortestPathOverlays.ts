@@ -100,14 +100,14 @@ export class PathTileOverlay extends FrameOverlay {
         if (!scene || !player) return;
         const plane = player.plane;
         const near = (x: number, y: number) => Math.max(Math.abs(x - player.x), Math.abs(y - player.y)) < MAX_DRAW_DISTANCE;
-        const project = (x: number, y: number): Point | undefined => {
-            const p = scene.worldToScreen(x, scene.tileHeight(x, y, plane), y);
+        const project = (x: number, y: number, anchorX = x, anchorY = y): Point | undefined => {
+            const p = scene.worldToScreen(x, scene.tileHeight(x, y, plane, anchorX, anchorY), y);
             return p ? [p[0], p[1]] : undefined;
         };
         const tilePoly = (x: number, y: number): Point[] | undefined => {
             const poly: Point[] = [];
             for (const [cx, cy] of [[x, y], [x + 1, y], [x + 1, y + 1], [x, y + 1]] as const) {
-                const p = project(cx, cy);
+                const p = project(cx, cy, x + 0.5, y + 0.5);
                 if (!p) return undefined;
                 poly.push(p);
             }

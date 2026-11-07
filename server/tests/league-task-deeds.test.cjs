@@ -752,6 +752,57 @@ test("pact equipment groups: a godsword, a zenyte piece, or one moon armour piec
   assert.ok(done(f, "equip-some-zenyte-jewelry"));
 });
 
+test("a page's listed gear, a team cape in the Wilderness, and 75 prayer at an altar", async (t) => {
+  const f = pactsCharacter(t);
+  const skills = f.player.getSkillManager();
+  for (const skill of [core.Skill.ATTACK, core.Skill.DEFENCE, core.Skill.STRENGTH, core.Skill.RANGED, core.Skill.MAGIC, core.Skill.PRAYER, core.Skill.AGILITY, core.Skill.HITPOINTS]) {
+    skills.setMaxLevel(skill, 99);
+    skills.setCurrentLevel(skill, 99);
+  }
+  const wear = async (name) => {
+    f.player.getInventory().add(new core.Item(item(name)), true);
+    await inventoryOption(f, name, "Wear", 2, 2);
+  };
+  await wear("Mithril scimitar");
+  assert.ok(done(f, "equip-a-mithril-weapon"), f.messages.join(" | "));
+  await wear("Staff of air");
+  assert.ok(done(f, "equip-an-elemental-staff"), f.messages.join(" | "));
+  await wear("Damaged book");
+  assert.ok(done(f, "equip-a-damaged-god-book"), f.messages.join(" | "));
+  await wear("Beekeeper's hat");
+  assert.ok(done(f, "equip-a-piece-of-beekeeper-s-outfit"), f.messages.join(" | "));
+  await wear("Crystal helm");
+  assert.ok(done(f, "equip-any-piece-of-crystal-armour"), f.messages.join(" | "));
+
+  skills.setCurrentLevel(core.Skill.PRAYER, 90);
+  const altarId = core.ObjectIdentifiers.ALTAR;
+  const definition = core.ObjectDefinition.forId(altarId);
+  const pray = () => {
+    const interactions = definition.getInteractions();
+    PM.emitObjectInteraction({
+      player: f.player,
+      object: { getId: () => altarId, getLocation: () => new core.Location(3200, 3200, 0) },
+      definition,
+      objectId: altarId,
+      clickType: interactions.findIndex((action) => action === "Pray-at" || action === "Pray") + 1,
+      location: { x: 3200, y: 3200, z: 0 },
+      handled: false,
+    });
+  };
+  pray();
+  assert.equal(done(f, "restore-75-prayer-points-at-an-altar"), false, "nine points restored is short of 75");
+  skills.setCurrentLevel(core.Skill.PRAYER, 10);
+  pray();
+  assert.equal(skills.getCurrentLevel(core.Skill.PRAYER), 99, f.messages.join(" | "));
+  assert.ok(done(f, "restore-75-prayer-points-at-an-altar"), f.messages.join(" | "));
+
+  const areas = f.player.getAttribute("league:areas") ?? [];
+  f.player.setAttribute("league:areas", [...new Set([...areas, 11])]);
+  f.player.moveTo(new core.Location(3200, 3680, 0));
+  await wear("Team-1 cape");
+  assert.ok(done(f, "equip-any-team-cape"), f.messages.join(" | "));
+});
+
 test("assembling a Slayer helm awards the task", async (t) => {
   const f = pactsCharacter(t);
   const skills = f.player.getSkillManager();

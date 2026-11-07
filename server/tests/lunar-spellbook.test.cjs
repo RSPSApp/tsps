@@ -14,6 +14,8 @@ const { Skill } = require("../dist/game/model/Skill");
 const { Spell } = require("../dist/game/content/combat/magic/Spell");
 
 before(async () => {
+  // Dream Mentor gives these Lunar spells (Wiki); the quest plugins are not loaded here.
+  require("../dist/plugins/PluginManager").PluginManager.createApi("DreamMentorDone").onCustomEvent("quest:is-complete", (q) => { if (q.key === "dream_mentor") q.complete = true; });
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
 });
 

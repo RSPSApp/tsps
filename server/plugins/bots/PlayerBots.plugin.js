@@ -49,6 +49,7 @@ const BOT_CONFIG = Object.freeze({
   // targets only the true active core for regional wilderness bots.
   wildernessRoamerBotCount: PVP_BOT_SETTINGS.botPool,
   wildernessActiveRegionBotsPerRegion: PVP_BOT_SETTINGS.activeRegionBotsPerRegion,
+  wildernessActiveRegionBotsByRegion: PVP_BOT_SETTINGS.activeRegionBotsByRegion,
   wildernessActiveRegionInset: PVP_BOT_SETTINGS.activeRegionInset,
   botWalkRadius: 10,
   objectIndexCachePath: path.join(__dirname, "data", "object-index.json"),

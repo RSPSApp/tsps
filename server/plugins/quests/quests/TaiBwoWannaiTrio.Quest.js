@@ -579,39 +579,10 @@ module.exports = function registerTaiBwoWannaiTrioQuest(api) {
   }
 
   /** "Yes." on the start confirmation carries the quest slug. */
-  /** Wiki: 30 Firemaking, 30 Cooking, 15 Agility and 5 Fishing. */
-  const REQUIRED_SKILLS = [
-    { skill: Skill.FIREMAKING, level: 30, label: "Firemaking" },
-    { skill: Skill.COOKING, level: 30, label: "Cooking" },
-    { skill: Skill.AGILITY, level: 15, label: "Agility" },
-    { skill: Skill.FISHING, level: 5, label: "Fishing" },
-  ];
-
-  function missingSkillRequirements(player) {
-    const skills = player.getSkillManager();
-    return REQUIRED_SKILLS.filter((requirement) => skills.getMaxLevel(requirement.skill) < requirement.level);
-  }
-
-  function meetsSkillRequirements(player) {
-    return missingSkillRequirements(player).length === 0;
-  }
-
-  function notifySkillRequirements(player) {
-    for (const requirement of missingSkillRequirements(player)) {
-      player.sendMessage(
-        `You need a ${requirement.label} level of at least ${requirement.level} to start this quest.`
-      );
-    }
-  }
-
   function handleStartHook({ player, npcId, hook }) {
     if (npcId !== TIMFRAKU_ID || hook !== START_HOOK) return;
     if (quest.getStage(player) >= STAGE_STARTED) return;
     if (!hasJunglePotion(player)) return;
-    if (!meetsSkillRequirements(player)) {
-      notifySkillRequirements(player);
-      return;
-    }
     if (quest.getStage(player) < STAGE_STARTED) quest.setStage(player, STAGE_STARTED);
   }
 

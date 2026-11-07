@@ -6,6 +6,9 @@
  *   teleport, 20 charges per page, five city pages, level 20 Wilderness limit; worn options
  *   are the five page names and Check.
  *   https://oldschool.runescape.wiki/w/Kharedst%27s_memoirs
+ * - Wiki Book of the Dead (A Kingdom Divided): "offers the same teleports" as the memoirs, worn options the same
+ *   five pages and Check, up to 250 charges, level 20 Wilderness limit. It shares the memoirs' charges here.
+ *   https://oldschool.runescape.wiki/w/Book_of_the_Dead
  * - Wiki Xeric's talisman: Rub opens Lookout, Glade, Inferno, Heart and Honour (Honour needs an
  *   ancient tablet); worn options are those destinations and Check; one charge per teleport,
  *   one lizardman fang per charge, 1,000 maximum.
@@ -15,6 +18,8 @@
  * - Cache: item gamevals and the kourend_diary_* teleport varbits (7917-7921).
  */
 const MEMOIRS_ID = 21760;
+const BOOK_OF_THE_DEAD_ID = 25818;
+const BOOK_OF_THE_DEAD_MAX_CHARGES = 250;
 const XERIC_TALISMAN_ID = 13393;
 const XERIC_TALISMAN_INERT_ID = 13392;
 const MEMOIRS_CHARGES_ATTRIBUTE = "kharedst-memoirs:charges";
@@ -83,17 +88,22 @@ function memoirsItem(event) {
   return event.usedItemId === MEMOIRS_ID ? event.usedItem : event.usedWithItem;
 }
 
-function memoirCharges(player, _item) {
+/** The book's capacity: 100 for the memoirs, 250 for the Book of the Dead (Wiki). */
+function maxCharges(item) {
+  return item?.getId?.() === BOOK_OF_THE_DEAD_ID ? BOOK_OF_THE_DEAD_MAX_CHARGES : MEMOIRS_MAX_CHARGES;
+}
+
+function memoirCharges(player, item) {
   const saved = Number(player.getAttribute(MEMOIRS_CHARGES_ATTRIBUTE));
   const pages = unlockedCities(player).length;
   if (!Number.isFinite(saved) || saved < 0) return pages * 20;
   // Quest-owned page handlers only set their varbit; grant their new capacity once.
   const chargedPages = Number(player.getAttribute(MEMOIRS_CHARGED_PAGES_ATTRIBUTE) ?? pages);
-  return Math.min(MEMOIRS_MAX_CHARGES, saved + Math.max(0, pages - chargedPages) * 20);
+  return Math.min(maxCharges(item), saved + Math.max(0, pages - chargedPages) * 20);
 }
 
 function setMemoirCharges(player, item, amount) {
-  const charges = Math.max(0, Math.min(MEMOIRS_MAX_CHARGES, amount));
+  const charges = Math.max(0, Math.min(maxCharges(item), amount));
   player.setAttribute(MEMOIRS_CHARGES_ATTRIBUTE, charges);
   player.setAttribute(MEMOIRS_CHARGED_PAGES_ATTRIBUTE, unlockedCities(player).length);
   player.getInventory().refreshItems();
@@ -303,7 +313,7 @@ function talismanAction(event) {
 }
 
 function onItemAction(event) {
-  if (event.itemId === MEMOIRS_ID) memoirsAction(event);
+  if (event.itemId === MEMOIRS_ID || event.itemId === BOOK_OF_THE_DEAD_ID) memoirsAction(event);
   else if (event.itemId === XERIC_TALISMAN_ID) talismanAction(event);
 }
 
@@ -322,7 +332,7 @@ module.exports = {
     api.onPlayerLogin(syncPages);
   },
   _test: {
-    MEMOIRS_PAGES, XERIC_DESTINATIONS, MEMOIRS_ID, XERIC_TALISMAN_ID, XERIC_TALISMAN_INERT_ID,
+    MEMOIRS_PAGES, XERIC_DESTINATIONS, MEMOIRS_ID, BOOK_OF_THE_DEAD_ID, XERIC_TALISMAN_ID, XERIC_TALISMAN_INERT_ID,
     memoirCharges, setMemoirCharges, memoirPageUnlocked, unlockedCities, teleport, chooseCity,
     memoirsAction, addPage, xericCharges, setXericCharges, teleportWithTalisman, talismanAction,
     chooseTalismanDestination, chargeTalisman, checkTalisman, unchargeTalisman, talismanDestination,

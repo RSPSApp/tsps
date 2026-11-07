@@ -4,6 +4,8 @@ const { Skill } = require("../../src/main/typescript/elvarg/game/model/Skill");
 
 /** Teleport jewellery usable up to this Wilderness level unless a piece says otherwise. */
 const DEFAULT_WILDERNESS_LEVEL = 20;
+/** Wiki (Digsite pendant): the refusal for a destination whose quest isn't done. */
+const LOCKED_DESTINATION_MESSAGE = "You have not yet unlocked that destination.";
 /** Dragonstone jewellery works deeper, through level 30 Wilderness. */
 const DRAGONSTONE_WILDERNESS_LEVEL = 30;
 
@@ -226,8 +228,9 @@ const JEWELLERY = [
     lastChargeMessage: "Your Digsite Pendant crumbles to dust.",
     destinations: [
       { label: "Digsite", tile: [3340, 3445, 0] },
-      { label: "Fossil Island", tile: [3763, 3870, 1] },
-      { label: "Lithkren Dungeon", aliases: ["Lithkren"], tile: [3547, 10456, 0] },
+      // Wiki (Digsite pendant): each teleport comes after its quest - Bone Voyage, and Dragon Slayer II.
+      { label: "Fossil Island", tile: [3763, 3870, 1], quest: { key: "bone_voyage", name: "Bone Voyage" } },
+      { label: "Lithkren Dungeon", aliases: ["Lithkren"], tile: [3547, 10456, 0], quest: { key: "dragon_slayer_ii", name: "Dragon Slayer II" } },
     ],
   },
   {
@@ -326,4 +329,4 @@ const RING_OF_WEALTH_DESTINATIONS = [
   { label: "Dondakan", tile: [2824, 10168, 0] },
 ];
 
-module.exports = { JEWELLERY, RING_OF_WEALTH_DESTINATIONS, DEFAULT_WILDERNESS_LEVEL };
+module.exports = { JEWELLERY, RING_OF_WEALTH_DESTINATIONS, DEFAULT_WILDERNESS_LEVEL, LOCKED_DESTINATION_MESSAGE };

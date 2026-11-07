@@ -12,6 +12,8 @@ const { ItemIds } = require("../dist/util/IdEnums");
 const RingOfLife = require("../plugins/items/RingOfLife.plugin");
 
 const teleports = [];
+const prompts = [];
+let ardougneMedium = false;
 RingOfLife.register({
   core: {
     ItemIdentifiers: ItemIds,
@@ -21,13 +23,18 @@ RingOfLife.register({
       teleport: (player, destination, type, warning) => teleports.push({ player, destination, type, warning }),
     },
     TeleportType: { NORMAL: "NORMAL" },
+    Location: class { constructor(x, y, z) { this.x = x; this.y = y; this.z = z; } getX() { return this.x; } getY() { return this.y; } getZ() { return this.z; } },
   },
   registerIncomingDamageModifier() {},
+  persistAttribute() {},
+  onItemAction() {},
+  sendMultiChatboxPrompt: (player, title, ...pairs) => prompts.push({ player, title, pairs }),
   // The Skillcapes plugin answers this; a worn Defence cape is all these tests need.
   emitCustomEvent(name, request) {
     if (name === "phoenix-necklace:will-trigger") {
       request.active = request.player.phoenix === true && request.remaining <= 20;
     }
+    if (name === "diary:is-complete" && request.diary === "ardougne" && request.tier === "medium") request.complete = ardougneMedium;
     if (name === "skillcape:ring-of-life") {
       request.active = request.player.getEquipment().get(Equipment.CAPE_SLOT)?.getId() === ItemIds.DEFENCE_CAPE;
     }
@@ -56,6 +63,9 @@ function createPlayer({ hp = 100, max = 100, ring = -1, cape = -1, teleblocked =
     }),
     getCombat: () => ({ getTeleblockTimer: () => ({ finished: () => !teleblocked }) }),
     sendMessage: (message) => messages.push(message),
+    attributes: new Map(),
+    getAttribute(key) { return this.attributes.get(key); },
+    setAttribute(key, value) { this.attributes.set(key, value); },
   };
   return player;
 }
@@ -101,4 +111,22 @@ test("a phoenix necklace that will heal the wearer leaves the ring of life alone
   RingOfLife._test.onIncomingDamage(player, { getDamage: () => 95 });
   assert.equal(teleports.length, 0);
   assert.equal(player.deleted.length, 0);
+});
+
+test("Toggle-respawn: after the medium Ardougne Diary the ring takes its wearer to East Ardougne (Wiki)", () => {
+  const player = createPlayer({ hp: 100, ring: ItemIds.RING_OF_LIFE });
+  const toggle = () => RingOfLife._test.toggleRespawn({ player, itemId: ItemIds.RING_OF_LIFE, handled: false });
+  ardougneMedium = false;
+  prompts.length = 0;
+  toggle();
+  assert.equal(prompts.length, 0, "refused before the diary");
+  assert.match(player.messages.at(-1), /medium Ardougne Diary/);
+  ardougneMedium = true;
+  toggle();
+  const [label, choose] = prompts[0].pairs;
+  assert.equal(label, "Ardougne");
+  choose();
+  teleports.length = 0;
+  RingOfLife._test.onIncomingDamage(player, { getDamage: () => 95 });
+  assert.deepEqual([teleports[0].destination.getX(), teleports[0].destination.getY()], RingOfLife._test.ARDOUGNE_MARKET.slice(0, 2));
 });

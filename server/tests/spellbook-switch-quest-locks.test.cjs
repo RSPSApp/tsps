@@ -35,7 +35,8 @@ function wizard(t, { dt1 = false, lunar = false } = {}) {
   p.setSpellbook(core.MagicSpellbook.NORMAL);
   for (const skill of [core.Skill.MAGIC, core.Skill.DEFENCE]) p.getSkillManager().setMaxLevels(skill, 99, false).setCurrentLevel(skill, 99, false);
   const quests = require("../plugins/quests/QuestRuntime").getRegisteredQuests();
-  for (const [key, done] of [["desert_treasure_i", dt1], ["lunar_diplomacy", lunar]]) {
+  // Dream Mentor gives these Lunar spells (Wiki): Spellbook Swap is one of them.
+  for (const [key, done] of [["desert_treasure_i", dt1], ["lunar_diplomacy", lunar], ["dream_mentor", true]]) {
     const q = quests.find((quest) => quest.key === key); assert.ok(q, key);
     q.setStage(p, done ? q.completionValue : 0);
   }

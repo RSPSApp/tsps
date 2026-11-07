@@ -9,18 +9,21 @@ const { PluginManager } = require("../dist/plugins/PluginManager");
 const DATA = require("../plugins/skills/data/herblore.json");
 const Herblore = require("../plugins/skills/Herblore.plugin");
 const Zahur = require("../plugins/npcs/Zahur.plugin");
+const Potions = require("../plugins/items/Potions.plugin");
+const AmuletOfChemistry = require("../plugins/items/AmuletOfChemistry.plugin");
 
 let core;
-const hooks = { firstAction: [], itemOnItem: [], customEvents: new Map() };
+const hooks = { firstAction: [], itemOnItem: [], itemActions: new Map(), customEvents: new Map() };
 const world = { quests: new Map(), cape: false, diaries: new Set() };
 
 const api = new Proxy({
   onItemFirstAction(handler) { hooks.firstAction.push(handler); },
   onItemOnItem(handler) { hooks.itemOnItem.push(handler); },
-  onCustomEvent(name, handler) { hooks.customEvents.set(name, handler); },
-  sendMultiChatboxPrompt(who, title, ...pairs) { who.sent.prompt = { title, pick: (label) => pairs[pairs.indexOf(label) + 1]() }; return true; },
+  onItemAction(name, actions) { hooks.itemActions.set(name, actions); },
+  onCustomEvent(name, handler) { hooks.customEvents.set(name, [...(hooks.customEvents.get(name) ?? []), handler]); },
+  sendMultiChatboxPrompt(who, title, ...pairs) { who.sent.prompt = { title, pick: (label) => pairs[pairs.indexOf(label) + 1](who) }; return true; },
   emitCustomEvent(name, request) {
-    hooks.customEvents.get(name)?.(request);
+    for (const handler of hooks.customEvents.get(name) ?? []) handler(request);
     if (name === "quest:is-complete") request.complete = world.quests.get(request.key) ?? true;
     if (name === "quest:is-started") request.started = world.quests.get(`${request.key}:started`) ?? true;
     if (name === "skillcape:has-perk") request.result = world.cape;
@@ -34,6 +37,9 @@ before(async () => {
   core = PluginManager.getCoreApi();
   Herblore.register(api);
   Zahur.register(api);
+  Potions.register(api);
+  AmuletOfChemistry.register(api);
+  AmuletOfChemistry._test.initialize(api);
 });
 
 beforeEach(() => {
@@ -90,8 +96,10 @@ function inventory(contents) {
   return self;
 }
 
-function player(contents, level = 99) {
+function player(contents, level = 99, { amulet = null, attributes = {} } = {}) {
   const sent = { messages: [], spam: [], sounds: [], animations: [], xp: 0 };
+  const worn = new Map(amulet ? [[core.Equipment.AMULET_SLOT, new core.Item(obj(amulet), 1)]] : []);
+  const attrs = new Map(Object.entries(attributes));
   const inv = inventory(contents);
   const sender = new Proxy({
     sendCreationMenu(menu) { sent.menu = menu; return sender; },
@@ -112,6 +120,15 @@ function player(contents, level = 99) {
     getDialogueManager: () => ({ startDialogues(chain) { sent.dialogue = JSON.stringify(chain, (key, value) => value instanceof Map ? [...value.values()] : value); } }),
     performAnimation(animation) { sent.animations.push(animation.getId()); },
     getIndex: () => 1, isRegistered: () => true, getHitpoints: () => 99,
+    getEquipment: () => ({
+      get: (slot) => worn.get(slot) ?? null,
+      set(slot, item) { if (item.getId() > 0) worn.set(slot, item); else worn.delete(slot); },
+      refreshItems() {},
+    }),
+    getUpdateFlag: () => ({ flag() {} }),
+    getAttribute: (key) => attrs.get(key),
+    setAttribute(key, value) { attrs.set(key, value); },
+    worn,
   };
 }
 
@@ -243,7 +260,7 @@ test("the Herblore cape puts a grimy herb straight into the vial", () => {
 
 test("herblore:unfinished answers Zahur with the herb's unfinished potion", () => {
   const request = { herbId: obj("toadflax"), potion: null };
-  hooks.customEvents.get("herblore:unfinished")(request);
+  hooks.customEvents.get("herblore:unfinished")[0](request);
   assert.equal(request.potion, obj("toadflaxvial"));
 });
 
@@ -614,4 +631,123 @@ test("Zahur cleans every grimy herb for 200 coins each, with no XP", () => {
   const nothing = player([["coins", 1000]]);
   Zahur._test.cleanAll(nothing, 4753);
   assert.match(nothing.sent.dialogue, /I didn't find anything that I could clean\./);
+});
+
+// Amulet of chemistry (recordings 4211 and 4213, rev 238; Wiki Amulet_of_chemistry).
+const CHARGES = AmuletOfChemistry._test.CHARGES_ATTRIBUTE;
+const STOP = AmuletOfChemistry._test.STOP_ON_BREAK_ATTRIBUTE;
+const FOUR_DOSE_SPAM = "Your amulet of chemistry helps you create a 4-dose potion.";
+
+/** Runs `body` with every 5% roll landing (or, with false, none), as Math.random would. */
+function rolling(lands, body) {
+  const random = Math.random;
+  Math.random = () => (lands ? 0 : 0.99);
+  try { body(); } finally { Math.random = random; }
+}
+
+test("a worn amulet of chemistry sometimes gives a potion one dose more and spends a charge", () => {
+  rolling(true, () => {
+    const who = player([["ranarrvial"], ["snape_grass"]], 38, { amulet: "amulet_of_chemistry" });
+    use(who, "snape_grass", "ranarrvial");
+    assert.equal(who.inv.count("4doseprayerrestore"), 1);
+    assert.equal(who.inv.count("3doseprayerrestore"), 0);
+    assert.equal(who.sent.xp, 87.5, "the extra dose gives no extra XP");
+    assert.deepEqual(who.sent.spam, ["You mix the snape grass into your potion.", `${FOUR_DOSE_SPAM} It has 4 charges left.`]);
+    assert.equal(who.getAttribute(CHARGES), 4);
+  });
+  rolling(false, () => {
+    const who = player([["ranarrvial"], ["snape_grass"]], 38, { amulet: "amulet_of_chemistry" });
+    use(who, "snape_grass", "ranarrvial");
+    assert.equal(who.inv.count("3doseprayerrestore"), 1);
+    assert.equal(who.getAttribute(CHARGES), undefined);
+  });
+  rolling(true, () => {
+    const bare = player([["ranarrvial"], ["snape_grass"]], 38);
+    use(bare, "snape_grass", "ranarrvial");
+    assert.equal(bare.inv.count("3doseprayerrestore"), 1, "only a worn amulet works");
+  });
+});
+
+test("the amulet leaves unfinished potions and 4-dose potions alone, and extends variable-dose upgrades", () => {
+  const extra = AmuletOfChemistry._test.withExtraDose;
+  assert.equal(extra(obj("ranarrvial")), null);
+  assert.equal(extra(obj("4doseprayerrestore")), null);
+  assert.equal(extra(obj("2dosestamina")), obj("3dosestamina"));
+  rolling(true, () => {
+    const who = player([["4dose2energy"], ["amylase", 4]], 77, { amulet: "amulet_of_chemistry" });
+    use(who, "amylase", "4dose2energy");
+    assert.equal(who.inv.count("4dosestamina"), 1);
+    assert.equal(who.getAttribute(CHARGES), undefined, "a 4-dose product uses no charge");
+  });
+});
+
+test("the charges run 4, 3, 2, one (red) and then the amulet crumbles and the next starts from 5", () => {
+  rolling(true, () => {
+    const who = player([...Array(5).fill(["ranarrvial"]), ...Array(5).fill(["snape_grass"])], 38, { amulet: "amulet_of_chemistry" });
+    use(who, "snape_grass", "ranarrvial");
+    choose(who, 5);
+    ticks(12);
+    assert.equal(who.inv.count("4doseprayerrestore"), 5);
+    assert.deepEqual(who.sent.spam.filter((text) => text.startsWith(FOUR_DOSE_SPAM)), [
+      `${FOUR_DOSE_SPAM} It has 4 charges left.`,
+      `${FOUR_DOSE_SPAM} It has 3 charges left.`,
+      `${FOUR_DOSE_SPAM} It has 2 charges left.`,
+    ]);
+    assert.deepEqual(who.sent.messages, [
+      `${FOUR_DOSE_SPAM} <col=ff0000>It has one charge left.</col>`,
+      `${FOUR_DOSE_SPAM} <col=ff0000>It then crumbles to dust.</col>`,
+    ]);
+    assert.equal(who.worn.size, 0, "the amulet crumbled");
+    assert.equal(who.getAttribute(CHARGES), 5);
+  });
+});
+
+test("a crumbled amulet only ends the batch when the player chose to stop", () => {
+  const batch = (stop) => {
+    const who = player([...Array(4).fill(["ranarrvial"]), ...Array(4).fill(["snape_grass"])], 38,
+      { amulet: "amulet_of_chemistry", attributes: { [CHARGES]: 1, [STOP]: stop } });
+    use(who, "snape_grass", "ranarrvial");
+    choose(who, 4);
+    ticks(12);
+    return who.inv.count("4doseprayerrestore") + who.inv.count("3doseprayerrestore");
+  };
+  rolling(true, () => {
+    assert.equal(batch(true), 1, "stopped after the potion that broke it");
+    assert.equal(batch(false), 4, "keeps mixing by default");
+  });
+});
+
+test("Options checks the charges and sets what happens when the amulet breaks", () => {
+  const who = player([["amulet_of_chemistry"]], 38, { attributes: { [CHARGES]: 3 } });
+  const actions = hooks.itemActions.get("Amulet of chemistry");
+  assert.equal(actions.Options({ player: who }), true);
+  assert.equal(who.sent.prompt.title, "Select an option");
+  who.sent.prompt.pick("Check charges.");
+  assert.deepEqual(who.sent.messages, ["Your amulet of chemistry has 3 charges left."]);
+  actions.Options({ player: who });
+  who.sent.prompt.pick("Toggle action when amulet breaks.");
+  assert.equal(who.sent.prompt.title, "When your amulet breaks, what would you like to do?");
+  who.sent.prompt.pick("Stop making potions when my amulet breaks.");
+  assert.equal(who.getAttribute(STOP), true);
+  actions.Options({ player: who });
+  who.sent.prompt.pick("Toggle action when amulet breaks.");
+  who.sent.prompt.pick("Continue making potions when my amulet breaks.");
+  assert.equal(who.getAttribute(STOP), false);
+});
+
+test("Break shatters the amulet and the next one starts afresh from 5 charges", () => {
+  const who = player([["amulet_of_chemistry"]], 38, { attributes: { [CHARGES]: 5 } });
+  const item = who.inv.getItems()[0];
+  const deleteNumber = who.inv.deleteNumber;
+  who.inv.deleteNumber = (...args) => { const result = deleteNumber(...args); item.setId(-1); return result; }; // the real container empties the Item it deletes
+  hooks.itemActions.get("Amulet of chemistry").Break({ player: who, item });
+  assert.equal(who.sent.prompt.title, "Status: 5 charges left.");
+  who.sent.prompt.pick("Cancel.");
+  assert.equal(who.inv.count("amulet_of_chemistry"), 1);
+  who.setAttribute(CHARGES, 2);
+  who.sent.prompt.pick("Break the amulet.");
+  assert.equal(who.inv.count("amulet_of_chemistry"), 0);
+  assert.equal(who.getAttribute(CHARGES), 5);
+  assert.match(who.sent.dialogue, new RegExp(`"itemId":${obj("amulet_of_chemistry")}\\b`), "the object box shows the amulet");
+  assert.match(who.sent.dialogue, /The amulet shatters\. Your next amulet of chemistry will<br>start afresh from 5 charges\./);
 });

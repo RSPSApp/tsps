@@ -32,7 +32,7 @@ function isOpen(player) {
 }
 
 function sendOffice(player, office) {
-  player.getPacketSender().sendInventory(OFFICE_INV, OFFICE_SLOTS, office.map((entry) => (entry ? { id: entry.id, amount: entry.amount } : null)));
+  player.getPacketSender().sendInventory(OFFICE_INV, OFFICE_SLOTS, office.map((entry) => (entry ? { id: entry.id, amount: entry.amount } : null)), Common.ID.officeInterface);
 }
 
 function select(player, slot, fee) {

@@ -16,6 +16,7 @@ module.exports = function registerSongOfTheElves(api) {
   const FRAGMENT_BEAM_HEAL_SPEED = 4;
   const START_HOOK = "quest:song-of-the-elves:start";
   const CHEMICAL_CHOICE = "quest.song_of_the_elves.chemical-choice";
+  const TABARD_PAID = "quest.song_of_the_elves.tabard-paid";
   const FALLS_PILLARS = "quest.song_of_the_elves.falls-pillars";
   const FALLS_ORDER = "quest.song_of_the_elves.falls-order";
   const INCITEMENTS = "quest.song_of_the_elves.incitements";
@@ -851,12 +852,20 @@ module.exports = function registerSongOfTheElves(api) {
       inventory.deleteNumber(DISGUISE.STEEL_BODY, 1);
       inventory.deleteNumber(DISGUISE.TABARD, 1);
       inventory.adds(DISGUISE.BODY, 1);
-    } else if (["tNiXqt", "0nVxB-"].includes(event.stepId) && hasItems(player, [DISGUISE.SILK, DISGUISE.PURPLE_DYE])) {
+    } else if (["tNiXqt", "0nVxB-"].includes(event.stepId)) {
+      // Alrena makes the tabard from the silk and purple dye handed over here: without them there is no tabard.
+      if (!hasItems(player, [DISGUISE.SILK, DISGUISE.PURPLE_DYE])) {
+        event.handled = true;
+        player.sendMessage("You need some silk and some purple dye for Alrena to make the tabard.");
+        return;
+      }
       inventory.deleteNumber(DISGUISE.SILK, 1);
       inventory.deleteNumber(DISGUISE.PURPLE_DYE, 1);
-    } else if (["Y45282", "bGd6H8"].includes(event.stepId) && !hasItems(player, [DISGUISE.TABARD])) {
-      inventory.deleteNumber(DISGUISE.SILK, 1);
-      inventory.deleteNumber(DISGUISE.PURPLE_DYE, 1);
+      player.setAttribute(TABARD_PAID, true);
+    } else if (["Y45282", "bGd6H8"].includes(event.stepId)) {
+      // Only the tabard paid for at the step before; the silk and dye were taken there, not a second set here.
+      if (player.getAttribute(TABARD_PAID) !== true) return;
+      player.setAttribute(TABARD_PAID, false);
       inventory.adds(DISGUISE.TABARD, 1);
     } else if (["QMXa3C", "taCC98"].includes(event.stepId)) {
       if (!CHEMICALS.some(id => inventory.getAmount(id) > 0) && inventory.getFreeSlots() < 1) {

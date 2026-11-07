@@ -15,6 +15,7 @@ const { PluginManager } = require('../dist/plugins/PluginManager');
 const { NpcDefinitionLoader } = require('../dist/game/definition/loader/impl/NpcDefinitionLoader');
 const { TaskManager } = require('../dist/game/task/TaskManager');
 const { Location } = require('../dist/game/model/Location');
+const { TimerRepository } = require('../dist/util/timers/TimerRepository');
 
 let Common, Dominic, Coffer, Dream, Potions, PowerUps, hooks, core;
 
@@ -33,6 +34,7 @@ before(() => {
   const api = {
     core,
     persistAttribute() {},
+    emitCanDrink: (player) => player.canDrink !== false,
     onObjectInteraction: (name, actions) => { for (const [op, fn] of Object.entries(actions)) chain(hooks.objects, `${name}:${op}`, fn); },
     onNpcInteraction: (name, actions) => { for (const [op, fn] of Object.entries(actions)) chain(hooks.npcs, `${name}:${op}`, fn); },
     onNpcDeath: (fn) => hooks.npcDeath.push(fn),
@@ -100,6 +102,7 @@ function fakePlayer({ quests = QUESTS().slice(0, 12), coins = 0 } = {}) {
     isPlayer: () => true, getAsPlayer: () => p, isRegistered: () => true, getUsername: () => 'Dreamer',
     getLocation: () => p.location, moveTo(l) { p.location = l; }, setLocation(l) { p.location = l; }, getArea: () => p.area, setArea(a) { p.area = a; },
     getPrivateArea: () => null, getIndex: () => 1,
+    timers: new TimerRepository(), getTimers: () => p.timers,
     getAttribute: (k) => attributes.get(k), setAttribute: (k, v) => attributes.set(k, v),
     getInventory: () => p.inventory,
     getEquipment: () => ({ getItems: () => p.worn }),
@@ -324,6 +327,7 @@ test("absorption: only in a dream; 50 a dose up to 1,000; it takes monsters' dam
   assert.equal(p.inventory.getAmount(11735), 1, 'the next dose is left');
   for (let i = 0; i < 25; i++) {
     p.inventory.add(new core.Item(11737, 1));
+    for (let tick = 0; tick < 3; tick++) p.getTimers().process(); // one dose per 3 ticks
     drink(p, 11737);
   }
   assert.equal(varbit(p, 'nzone_absorb_potion_effects'), 1000, 'capped');
@@ -334,6 +338,28 @@ test("absorption: only in a dream; 50 a dose up to 1,000; it takes monsters' dam
   assert.equal(varbit(p, 'nzone_absorb_potion_effects'), 970);
   Dream.wake({ player: p });
   assert.equal(varbit(p, 'nzone_absorb_potion_effects'), 0);
+});
+
+test("a dream's potions keep the potion delay: one dose per 3 ticks, none while stunned or where drinking is barred", () => {
+  const p = dreamer();
+  p.inventory.add(new core.Item(11737, 4));
+  drink(p, 11737);
+  drink(p, 11737);
+  assert.equal(varbit(p, 'nzone_absorb_potion_effects'), 50, 'a second dose the same tick does nothing');
+  assert.equal(p.inventory.getAmount(11737), 3);
+  for (let tick = 0; tick < 3; tick++) p.getTimers().process();
+  drink(p, 11737);
+  assert.equal(varbit(p, 'nzone_absorb_potion_effects'), 100);
+  for (let tick = 0; tick < 3; tick++) p.getTimers().process();
+  p.getTimers().registers(core.TimerKey.STUN, 5);
+  drink(p, 11737);
+  assert.equal(varbit(p, 'nzone_absorb_potion_effects'), 100, 'not while stunned');
+  assert.equal(p.messages.at(-1), "You're currently stunned and cannot use potions.");
+  p.getTimers().cancel(core.TimerKey.STUN);
+  p.canDrink = false;
+  drink(p, 11737);
+  assert.equal(varbit(p, 'nzone_absorb_potion_effects'), 100, 'not where drinking is barred');
+  Dream.wake({ player: p });
 });
 
 test('real executeHit protects before absorption spends points', () => {

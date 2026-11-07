@@ -77,6 +77,18 @@ function drink({ player, itemId }) {
     player.sendMessage(Common.message("overloadActive"));
     return true;
   }
+  // The delay every potion keeps (Potions.plugin's drink path): one dose per 3 ticks, none while stunned, and areas
+  // that bar drinking still do. Without it several Drink clicks in a tick each took effect (4 absorption doses at once).
+  const { TimerKey } = Common.core;
+  const timers = player.getTimers();
+  if (timers.has(TimerKey.STUN)) {
+    player.sendMessage("You're currently stunned and cannot use potions.");
+    return true;
+  }
+  if (timers.has(TimerKey.POTION)) return true;
+  if (Common.api.emitCanDrink(player, itemId) === false) return true;
+  timers.extendOrRegister(TimerKey.POTION, 3);
+  timers.extendOrRegister(TimerKey.FOOD, 3);
   const inventory = player.getInventory();
   inventory.delete(itemId, 1);
   const next = found.potion.doses[found.dose + 1] ?? VIAL_LESS;

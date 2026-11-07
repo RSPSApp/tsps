@@ -87,7 +87,8 @@ module.exports = function attachCowbellAmulet(api) {
     const remaining = charges(item);
     if (remaining <= 0) return true;
     const inventory = player.getInventory();
-    if (inventory.getAmount(I.AIR_RUNE) === 0 && inventory.getFreeSlots() < 1) {
+    // Plain runes never join a preset stack, so only a plain stack gives them room without a free slot.
+    if (plainAmount(inventory, I.AIR_RUNE) === 0 && inventory.getFreeSlots() < 1) {
       player.sendMessage("You need a free inventory slot for the Air Runes.");
       return true;
     }

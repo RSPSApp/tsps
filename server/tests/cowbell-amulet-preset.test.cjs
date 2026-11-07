@@ -58,3 +58,24 @@ test("preset air runes do not charge the amulet; plain ones do", (t) => {
   assert.equal(f.p.getInventory().getItems()[1]?.getAmount(), 500, "the preset stack is untouched");
   assert.equal(f.p.getInventory().getAmount(I.AIR_RUNE), 500, "only the plain stack paid");
 });
+
+test("Uncharge with a full pack and only a preset air-rune stack keeps the charges", (t) => {
+  const f = setup(t);
+  const inventory = f.p.getInventory();
+  const amulet = new core.Item(I.COWBELL_AMULET_2, 1);
+  amulet.setMetaValue("cowbell-amulet:charges", 40);
+  inventory.setItem(0, amulet);
+  inventory.setItem(1, presetRunes(500));
+  for (let slot = 2; slot < 28; slot++) inventory.setItem(slot, new core.Item(I.LOGS, 1));
+  const uncharge = () => PM.emitItemAction({ player: f.p, item: amulet, itemId: amulet.getId(), slot: 0,
+    interfaceId: core.CacheDefinitions.getComponentId("inventory:items"),
+    clickType: core.CacheDefinitions.getItem(I.COWBELL_AMULET_2).inventoryActions.indexOf("Uncharge") + 1, handled: false });
+  uncharge();
+  assert.equal(amulet.getMetaValue("cowbell-amulet:charges"), 40, "the plain runes have nowhere to go, so the charges stay");
+  assert.equal(inventory.getAmount(I.AIR_RUNE), 500);
+  inventory.deleteAtSlot(27, 1);
+  uncharge();
+  assert.equal(amulet.getId(), I.COWBELL_AMULET, "a free slot lets it uncharge");
+  assert.equal(inventory.getItems()[27]?.getAmount(), 40);
+  assert.equal(inventory.getItems()[27].isPresetItem(), false, "the refunded runes are plain");
+});

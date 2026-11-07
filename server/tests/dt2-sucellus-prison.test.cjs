@@ -228,6 +228,34 @@ test("Sucellus prison gates require the lockpick and sapphire key is earned thro
   assert.ok(emitted.some(({ name }) => name === "dt2:sucellus-prison-journal"));
 });
 
+test("a full inventory keeps the sapphire lock shut rather than losing its key", () => {
+  const { handlers, prompts, player, area, inventory, instanceLocation } = setup();
+  const state = () => player.getAttribute("desert-treasure-ii:sucellus-prison-progress");
+  handlers.custom["dt2:sucellus-prison-start"]({ player, area });
+  const padlock = { getPrivateArea: () => area, getId: () => 49120, getLocation: () => ({ equals: () => true }) };
+  area.templateObjects = [padlock];
+  inventory.adds(28415, 1);
+  handlers.object({ player, object: padlock, objectId: 49120, option: "Open", location: instanceLocation(2945, 6389, 2), handled: false });
+  enterPadlock(prompts, [2, 0, 5, 1, 4, 3]);
+  handlers.object({ player, objectId: 50001, option: "Search", location: instanceLocation(2974, 6347, 2), definition: { name: "Altar" }, handled: false });
+  handlers.item.find(([name]) => name === "Warning letter")[1].Read({ player, itemId: 28429, handled: false });
+  // `adds` never reports failure; the lock must check for room before it opens.
+  inventory.getFreeSlots = () => 0;
+  handlers.object({ player, objectId: 50000, option: "Open", location: instanceLocation(2980, 6346, 2), handled: false });
+  for (const digit of "214013") {
+    let prompt = prompts.at(-1);
+    let index = prompt.pairs.findIndex((value, i) => i % 2 === 0 && value === digit);
+    for (let page = 0; index < 0 && page < 3; page++) {
+      prompt.pairs.at(-1)();
+      prompt = prompts.at(-1);
+      index = prompt.pairs.findIndex((value, i) => i % 2 === 0 && value === digit);
+    }
+    prompt.pairs[index + 1]();
+  }
+  assert.equal(inventory.getAmount(28416), 0, "no key added to a full inventory");
+  assert.equal(state(), 24, "the lock stays shut, so it can be opened again with room");
+});
+
 test("Jhallan defense lasts three minutes (300 area ticks) and asylum transcript owns completion", () => {
   const { handlers, emitted, prompts, player, area, createdNpcs, setCycle, instanceLocation } = setup();
   player.setAttribute("desert-treasure-ii:sucellus-prison-progress", 52);

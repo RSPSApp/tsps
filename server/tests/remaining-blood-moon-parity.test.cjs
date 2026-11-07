@@ -88,7 +88,7 @@ function player(name = 'Parity') {
   const packets = { interfaces: [], closes: [], cameras: [], varbits: [], scripts: [], strings: [] };
   const inv = { getAmount: id => items.get(id) ?? 0, contains: id => (items.get(id) ?? 0) > 0,
     getFreeSlots: () => 28, isFull: () => false,
-    adds(id, n = 1) { items.set(id, (items.get(id) ?? 0) + n); },
+    adds(id, n = 1) { items.set(id, (items.get(id) ?? 0) + n); return inv; },
     forceAdd(_player, item) { items.set(item.getId(), (items.get(item.getId()) ?? 0) + (item.getAmount?.() ?? 1)); },
     deleteNumber(id, n = 1) { items.set(id, (items.get(id) ?? 0) - n); } };
   const packet = new Proxy({
@@ -536,7 +536,9 @@ test('final victory resumes at 172 after death and cannot be confirmed twice', (
   p.attrs.set('quest.the_blood_moon_rises.drakan-death-confirmed', true);
   p.attrs.set('quest.the_blood_moon_rises.final-native-stage', 170);
   h.emit('player:login', { player: p });
-  assert.equal(p.varbits.get(15464), 172, 'relog after death resumes the 172 cutscene');
+  // The login resumes at 172; the transcript then hands over the Sunspear and moves the scene on.
+  assert.ok(p.varbitHistory.some(([id, value]) => id === 15464 && value === 172), 'relog after death resumes the 172 cutscene');
+  assert.equal(p.items.get(I.SUNSPEAR), 1, 'and the Sunspear is taken from Lowerniel');
   p.attrs.set('quest.the_blood_moon_rises.drakan-defeated', true);
   h.emit('npc-dialogue:action', { player: p, stepId: 'BzMe5D' });
   assert.equal(h.quest.getStage(p), 110);

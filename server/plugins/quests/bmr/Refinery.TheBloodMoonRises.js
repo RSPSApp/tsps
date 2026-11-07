@@ -3,6 +3,12 @@
  * Coordinates/objectives follow Quest Helper; encounter advice follows the OSRS Wiki quick guide.
  */
 module.exports = function registerRefinery(api, getQuestStage) {
+
+  /** Room for one more of `itemId` (`adds` never reports a failure); a slotless stand-in falls back to free slots. */
+  function hasRoom(inventory, itemId) {
+    if (typeof inventory.getAddableAmount === "function") return inventory.getAddableAmount(new api.core.Item(itemId, 1)) >= 1;
+    return (inventory.getFreeSlots?.() ?? 1) > 0;
+  }
   const {
     Area, Boundary, Equipment, GameObject, HitDamage, HitMask, ItemIdentifiers: I,
     Location, NpcIdentifiers: N, ObjectIdentifiers: O, TemplatedInstanceArea, ObjectManager,
@@ -381,10 +387,12 @@ module.exports = function registerRefinery(api, getQuestStage) {
     if (!player) return;
     if (event.stepId === "O3RVAV" && progress(player).phase === "pickaxe") {
       const inventory = player.getInventory();
-      if (!inventory.contains(PICKAXE_ITEM) && inventory.adds(PICKAXE_ITEM, 1) === false) {
+      // adds never returns false: check for room first, or the pickaxe vanishes yet counts as borrowed.
+      if (!inventory.contains(PICKAXE_ITEM) && !hasRoom(inventory, PICKAXE_ITEM)) {
         player.sendMessage("Make room in your inventory before taking Ivan's spare pickaxe.");
         return;
       }
+      if (!inventory.contains(PICKAXE_ITEM)) inventory.adds(PICKAXE_ITEM, 1);
       setProgress(player, { phase: "pickaxe", borrowedPickaxe: true });
     } else if (event.stepId === "iYSMco" && progress(player).phase === "tomb" && mining.findBestPickaxe(player)) {
       setProgress(player, { phase: "mined" });

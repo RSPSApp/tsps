@@ -5,6 +5,12 @@
  */
 module.exports = function registerTheBloodMoonRises(api) {
   const { Animation, Boundary, Equipment, Graphic, HitDamage, HitMask, Item, ItemIdentifiers, Location, NpcIdentifiers, ObjectDefinition, ObjectIdentifiers, PrayerHandler, PrivateArea, Skill, World } = api.core;
+
+  /** Room for one more of `itemId` (`adds` never reports a failure); a slotless stand-in falls back to free slots. */
+  function hasRoom(inventory, itemId) {
+    if (typeof inventory.getAddableAmount === "function") return inventory.getAddableAmount(new Item(itemId, 1)) >= 1;
+    return (inventory.getFreeSlots?.() ?? 1) > 0;
+  }
   const { registerQuest, loadTranscripts, startTranscript } = require("../QuestRuntime");
   const { createQuestScenes } = require("../QuestScenes");
   const { handleDrakanDodgeRoll } = require("../bmr/DrakanDodgeRoll.TheBloodMoonRises");
@@ -3588,10 +3594,12 @@ module.exports = function registerTheBloodMoonRises(api) {
         player.sendMessage("That book is already on this plinth.");
         return;
       }
-      if (!player.getInventory().adds(placements[key], 1)) {
+      // adds never returns false: check for room first, or the plinth's book vanishes and the held one is placed.
+      if (!hasRoom(player.getInventory(), placements[key])) {
         player.sendMessage("Make room in your inventory before changing the book on this plinth.");
         return;
       }
+      player.getInventory().adds(placements[key], 1);
       player.sendMessage(`You take ${SLEPE_BOOKS.find(({ id }) => id === placements[key])?.name ?? "the misplaced book"} from the plinth.`);
     }
     player.getInventory().deleteNumber(event.itemId, 1);
@@ -5844,6 +5852,11 @@ module.exports = function registerTheBloodMoonRises(api) {
       const supplies = [ItemIdentifiers.MYSTERIOUS_JERKY, ItemIdentifiers.MYSTERIOUS_JERKY,
         ItemIdentifiers.FOUL_CHUNKY_POTION_3_, ItemIdentifiers.PUTRID_STICKY_POTION_2_];
       const given = [];
+      if ((inventory.getFreeSlots?.() ?? supplies.length) < supplies.length) {
+        event.end = true;
+        player.sendMessage("Make room for Ivan's four supplies before asking him to hand them over.");
+        return;
+      }
       for (const id of supplies) {
         if (inventory.adds(id, 1) === false) {
           for (const added of given) inventory.deleteNumber(added, 1);
@@ -6131,12 +6144,13 @@ module.exports = function registerTheBloodMoonRises(api) {
       (player.getAttribute(DRAKAN_ENCOUNTER_COMPLETE) || player.getAttribute(DRAKAN_DEATH_CONFIRMED) ||
         finalDrakanFight?.deathConfirmed)) {
       const inventory = player.getInventory();
-      if (!hasItem(player, ItemIdentifiers.SUNSPEAR) && !inventory.adds(ItemIdentifiers.SUNSPEAR, 1)) {
+      if (!hasItem(player, ItemIdentifiers.SUNSPEAR) && !hasRoom(inventory, ItemIdentifiers.SUNSPEAR)) {
         event.handled = true;
         player.sendMessage("Make room in your inventory to take the Sunspear from Lowerniel's body.");
         event.end = true;
         return;
       }
+      if (!hasItem(player, ItemIdentifiers.SUNSPEAR)) inventory.adds(ItemIdentifiers.SUNSPEAR, 1);
       event.handled = true;
       event.box = { items: [ItemIdentifiers.SUNSPEAR] };
     }
@@ -8441,10 +8455,11 @@ module.exports = function registerTheBloodMoonRises(api) {
       player.sendMessage("You already have all you need from these shelves.");
       return;
     }
-    if (!inventory.adds(itemId, 1)) {
+    if (!hasRoom(inventory, itemId)) {
       player.sendMessage("Make room in your inventory before taking anything from the shelves.");
       return;
     }
+    inventory.adds(itemId, 1);
     player.sendMessage(message);
   }
 

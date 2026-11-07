@@ -9323,7 +9323,8 @@ test('Desert Treasure II enters the Scar through the Catalytic Guardian and requ
     inventoryCounts.set(core.ItemIdentifiers.AIR_NERVE, 1);
     processCycle += 4;
     const inventory = player.getInventory;
-    player.getInventory = () => ({ ...inventory(), adds: () => false });
+    // A full inventory: `adds` never reports failure, so the handler must check for room first.
+    player.getInventory = () => ({ ...inventory(), getFreeSlots: () => 0 });
     objectHooks[0](airEnding);
     assert.equal(inventoryCounts.get(core.ItemIdentifiers.AIR_NERVE), 1);
     player.getInventory = inventory;
@@ -9388,7 +9389,8 @@ test('Desert Treasure II enters the Scar through the Catalytic Guardian and requ
     try {
       const leeches = queues.add.filter((npc) => npc.id === core.NpcIdentifiers.LIGHT_LEECH);
       const getInventory = player.getInventory;
-      player.getInventory = () => ({ ...getInventory(), adds: () => false });
+      // A full bag: `adds` never reports failure, so the lure handler checks for room first.
+      player.getInventory = () => ({ ...getInventory(), getFreeSlots: () => 0 });
       takeLure({ player, npc: leeches[0] });
       assert.ok(!queues.remove.includes(leeches[0]), 'a full bag keeps the leech and its obtainable lure');
       player.getInventory = getInventory;

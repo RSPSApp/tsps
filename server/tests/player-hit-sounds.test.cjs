@@ -182,6 +182,34 @@ test('body1 PvP hits use the recorded body1 variants for both participants',t=>{
   c.CombatFactory.executeHit(f.hit());f.tick();
   assert.deepEqual(f.frames,[hurt(509)]);assert.deepEqual(f.spectator.frames,[hurt(509)]);
 });
+
+test('PvP hurt voices reach the two hit participants without full-volume spectator noise',t=>{
+  const f=fixture(t,{gender:1,pvp:true}),near=actor(t),edge=actor(t);
+  edge.p.setLocation(new c.Location(3237,3218));
+  t.mock.method(c.Misc,'getRandom',()=>0);
+  c.CombatFactory.executeHit(f.hit());f.tick();
+  assert.deepEqual(f.frames,[hurt(509)],'the victim keeps the recorded voice');
+  assert.deepEqual(f.spectator.frames,[hurt(509)],'the attacker keeps a private voice');
+  assert.deepEqual(near.frames,[],'an unrelated player on the same tile gets no private hurt synth');
+  assert.deepEqual(edge.frames,[],'a fight fifteen tiles away does not sound like local damage');
+  f.p.setPlayerBot(true);f.frames.length=0;f.spectator.frames.length=0;
+  c.CombatFactory.executeHit(f.hit());f.tick();
+  assert.deepEqual(f.frames,[],'bot recipients remain suppressed');
+  assert.deepEqual(f.spectator.frames,[hurt(509)],'a human attacker still hears a bot victim');
+  assert.deepEqual(near.frames,[]);
+});
+
+test('delayed PvP voices retain their actual attacker after combat target changes',t=>{
+  const f=fixture(t,{pvp:true}),other=actor(t);
+  t.mock.method(c.Misc,'getRandom',()=>0);
+  const hit=f.hit([3]);t.mock.method(hit,'getHitDelays',()=>[2]);
+  c.CombatFactory.executeHit(hit);
+  f.p.getCombat().setTarget(other.p);f.attacker.getCombat().setTarget(other.p);
+  f.tick();f.tick();f.tick();
+  assert.equal(f.p.getHitpoints(),47);
+  assert.deepEqual(f.frames,[hurt()]);assert.deepEqual(f.spectator.frames,[hurt()]);
+  assert.deepEqual(other.frames,[],'switching current targets cannot change a pending hit\'s listeners');
+});
 test('NPC-morphed players preserve the legacy fallback and block sound',t=>{
   const f=fixture(t,{morph:true});
   c.CombatFactory.executeHit(f.hit([2,3]));

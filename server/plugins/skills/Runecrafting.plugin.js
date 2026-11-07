@@ -26,8 +26,6 @@ let RUINS;
 /** The exit portal's sound (synth 200). */
 const EXIT_PORTAL_SOUND = 200;
 let ABYSS_OBSTACLES;
-let PICKAXE_IDS;
-let AXE_IDS;
 let CRAFT_RUNES_GRAPHIC;
 /** The craft graphic (spotanim runecrafting) plays at height 92 (rsprox capture 1693). */
 const CRAFT_RUNES_GRAPHIC_HEIGHT = 92;
@@ -158,26 +156,6 @@ function initialize(api) {
     { id: ItemIdentifiers.DAEYALT_ESSENCE, xpScale: OURANIA_XP_SCALE * DAEYALT_XP_SCALE },
   ];
 
-  PICKAXE_IDS = [
-    ItemIdentifiers.BRONZE_PICKAXE,
-    ItemIdentifiers.IRON_PICKAXE,
-    ItemIdentifiers.STEEL_PICKAXE,
-    ItemIdentifiers.BLACK_PICKAXE,
-    ItemIdentifiers.MITHRIL_PICKAXE,
-    ItemIdentifiers.ADAMANT_PICKAXE,
-    ItemIdentifiers.RUNE_PICKAXE,
-    ItemIdentifiers.DRAGON_PICKAXE,
-  ];
-  AXE_IDS = [
-    ItemIdentifiers.BRONZE_AXE,
-    ItemIdentifiers.IRON_AXE,
-    ItemIdentifiers.STEEL_AXE,
-    ItemIdentifiers.BLACK_AXE,
-    ItemIdentifiers.MITHRIL_AXE,
-    ItemIdentifiers.ADAMANT_AXE,
-    ItemIdentifiers.RUNE_AXE,
-    ItemIdentifiers.DRAGON_AXE,
-  ];
 
   // What each altar binds. Wiki (Runecraft): clicking an altar converts all the essence in the
   // inventory, so rune and pure essence go together where both work.
@@ -289,12 +267,12 @@ function initialize(api) {
   ]);
 
   ABYSS_OBSTACLES = new Map([
-    [ObjectIdentifiers.ROCK_111, { objectName: "Rock", action: "Mine", skill: Skill.MINING, toolIds: PICKAXE_IDS, toolMessage: "You need a pickaxe to mine through the rock.", fail: "You fail to mine through the rock." }],
-    [ObjectIdentifiers.TENDRILS_4, { objectName: "Tendrils", action: "Chop", skill: Skill.WOODCUTTING, toolIds: AXE_IDS, toolMessage: "You need an axe to chop through the tendrils.", fail: "You fail to chop through the tendrils." }],
-    [ObjectIdentifiers.BOIL, { objectName: "Boil", action: "Burn-down", skill: Skill.FIREMAKING, toolIds: [ItemIdentifiers.TINDERBOX], toolMessage: "You need a tinderbox to burn through the boil.", fail: "You fail to burn through the boil." }],
-    [ObjectIdentifiers.EYES, { objectName: "Eyes", action: "Distract", skill: Skill.THIEVING, toolIds: null, toolMessage: null, fail: "You fail to distract the eyes." }],
-    [ObjectIdentifiers.GAP_42, { objectName: "Gap", action: "Squeeze-through", skill: Skill.AGILITY, toolIds: null, toolMessage: null, fail: "You fail to squeeze through the gap." }],
-    [ObjectIdentifiers.PASSAGE_4, { objectName: "Passage", action: "Go-through", skill: null, toolIds: null, toolMessage: null, fail: null }],
+    [ObjectIdentifiers.ROCK_111, { objectName: "Rock", action: "Mine", skill: Skill.MINING, tool: "pickaxe", toolMessage: "You need a pickaxe to mine through the rock.", fail: "You fail to mine through the rock." }],
+    [ObjectIdentifiers.TENDRILS_4, { objectName: "Tendrils", action: "Chop", skill: Skill.WOODCUTTING, tool: "axe", toolMessage: "You need an axe to chop through the tendrils.", fail: "You fail to chop through the tendrils." }],
+    [ObjectIdentifiers.BOIL, { objectName: "Boil", action: "Burn-down", skill: Skill.FIREMAKING, tool: [ItemIdentifiers.TINDERBOX], toolMessage: "You need a tinderbox to burn through the boil.", fail: "You fail to burn through the boil." }],
+    [ObjectIdentifiers.EYES, { objectName: "Eyes", action: "Distract", skill: Skill.THIEVING, tool: null, toolMessage: null, fail: "You fail to distract the eyes." }],
+    [ObjectIdentifiers.GAP_42, { objectName: "Gap", action: "Squeeze-through", skill: Skill.AGILITY, tool: null, toolMessage: null, fail: "You fail to squeeze through the gap." }],
+    [ObjectIdentifiers.PASSAGE_4, { objectName: "Passage", action: "Go-through", skill: null, tool: null, toolMessage: null, fail: null }],
   ]);
 }
 
@@ -308,12 +286,24 @@ function runeMultiplier(level, runeData) {
   return amount;
 }
 
-function hasTool(player, itemIds) {
-  const weapon = player.getEquipment().getItems()[Equipment.WEAPON_SLOT];
-  if (weapon && itemIds.includes(weapon.getId())) {
-    return true;
+/**
+ * Wiki (Abyss): the rock needs a "Pickaxe" and the tendrils an "Axe"; "the quality of the pickaxe does not impact
+ * success rate". So any one the player can use, as Mining and Woodcutting judge them (crystal, infernal, 3rd age...).
+ */
+function hasTool(player, tool) {
+  if (tool === "pickaxe") {
+    const request = { player, pickaxe: null };
+    pluginApi.emitCustomEvent("mining:best-pickaxe", request);
+    return request.pickaxe != null;
   }
-  return itemIds.some((itemId) => player.getInventory().contains(itemId));
+  if (tool === "axe") {
+    const request = { player, itemId: null, axe: null };
+    pluginApi.emitCustomEvent("woodcutting:axe", request);
+    return request.axe != null;
+  }
+  // The boil's tinderbox: held or wielded.
+  const weapon = player.getEquipment().getItems()[Equipment.WEAPON_SLOT];
+  return tool.some((itemId) => weapon?.getId() === itemId || player.getInventory().contains(itemId));
 }
 
 function hasCompletedRuneMysteries(player) {
@@ -939,7 +929,7 @@ function handleAbyssObstacle(event) {
   }
 
   const player = event.player;
-  if (obstacle.toolIds && !hasTool(player, obstacle.toolIds)) {
+  if (obstacle.tool && !hasTool(player, obstacle.tool)) {
     player.sendMessage(obstacle.toolMessage);
     return true;
   }

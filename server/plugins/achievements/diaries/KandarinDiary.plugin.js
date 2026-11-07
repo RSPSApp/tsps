@@ -139,6 +139,7 @@ function playOrgan({ player, object }) {
 
 function talkToSherlock({ player }) {
   credit(player, "speak-to-sherlock");
+  return false; // Let the normal conversation continue after diary credit.
 }
 
 module.exports = {

@@ -589,3 +589,171 @@ test('a free world does not start mining with a members-only carried pickaxe', a
     await attempt(child, dragon, 'dragon78', 3271, false);
   });
 });
+
+// Exercise ordinary carried axes through an indexed free-world tree and the real Chop route.
+test('a free world does not start chopping with a members-only carried axe', async t => {
+  const Woodcutting = require('../plugins/skills/Woodcutting.plugin');
+  const FarmingData = require('../plugins/skills/farming/Data.Farming');
+  const Forestry = require('../plugins/minigames/forestry/Spawns.Forestry');
+  assert.equal(world.isMembersWorld(), false, 'SETUP: configured free world');
+  assert.ok(PM.loadedPlugins.includes('Woodcutting'), 'SETUP: real Woodcutting plugin loaded');
+  assert.ok(PM.loadedPlugins.includes('Forestry'), 'SETUP: real Forestry plugin loaded');
+  assert.ok(Array.isArray(FarmingData.CACHE.patches), 'SETUP: actual farming patch data');
+  const bronze = 1351, dragon = 6739, logs = 1511;
+  for (const [id, members] of [[bronze, false], [dragon, true]]) {
+    assert.equal(core.CacheDefinitions.getItem(id).isMembers, members, 'SETUP: active cache membership');
+    assert.equal(core.CacheDefinitions.getItem(id).isTradable, true, 'SETUP: ordinary tradable axe');
+    assert.equal(core.ItemDefinition.forId(id).isNoted(), false, 'SETUP: unnoted axe');
+    assert.equal(core.ItemDefinition.forId(id).isStackable(), false, 'SETUP: nonstackable axe');
+  }
+  // Search bounded actual map squares: the shipped world spawn and the prior free-land square.
+  // Neither location asserts a tree exists; the real loader and staged diagnostics decide that.
+  const spawn = world.getWorldDefinition().spawn;
+  assert.ok(Number.isInteger(spawn.x) && Number.isInteger(spawn.y) && spawn.z === 0, 'SETUP: initialized ground-level world spawn');
+  assert.equal(world.isMembersArea(spawn.x, spawn.y), false, 'SETUP: initialized spawn in free land');
+  const squares = [[Math.floor(spawn.x / 64) * 64, Math.floor(spawn.y / 64) * 64], [3264, 3264]];
+  for (const [sx, sy] of squares) {
+    core.RegionManager.loadMapFiles(sx, sy);
+    assert.equal(core.RegionManager.getRegion(sx, sy)?.isLoaded(), true, 'SETUP: actual map region loaded');
+  }
+  const isPatch = object => {
+    const location = object.getLocation(), x = location.getX(), y = location.getY(), z = location.getZ();
+    const id = object.getId(), definition = core.CacheDefinitions.getObject(id);
+    return FarmingData.CACHE.patches.some(p =>
+      (p.id === id && p.z === z && x >= p.x && x <= p.maxX && y >= p.y && y <= p.maxY)
+      || (p.type === 'REDWOOD' && definition?.transformVarbit === p.varbit
+        && Math.abs(p.x - x) < 12 && Math.abs(p.y - y) < 12));
+  };
+  const treeKey = object => {
+    const l = object.getLocation(); return `${l.getX()},${l.getY()},${l.getZ()}`;
+  };
+  const withinSquares = object => {
+    const l = object.getLocation();
+    return squares.some(([sx, sy]) => l.getX() >= sx && l.getX() < sx + 64 && l.getY() >= sy && l.getY() < sy + 64);
+  };
+  const stages = [
+    ['public-ground-in-square', o => o.getPrivateArea() == null && o.getLocation().getZ() === 0 && withinSquares(o)],
+    ['free-area', o => !world.isMembersArea(o.getLocation().getX(), o.getLocation().getY())],
+    ['named-Tree', o => o.getDefinition()?.getName() === 'Tree'],
+    ['first-Chop', o => ['chop down', 'chop-down'].includes(o.getDefinition()?.getInteractions()?.[0]?.toLowerCase())],
+    ['nonpatch', o => !isPatch(o)],
+    ['nonheld', o => !Forestry.heldTrees.has(treeKey(o))],
+  ];
+  let trees = [...core.MapObjects.mapObjects.values()].flat();
+  const stageCounts = [];
+  for (const [stage, keep] of stages) { trees = trees.filter(keep); stageCounts.push([stage, trees.length]); }
+  trees.sort((a, b) => a.getLocation().getX() - b.getLocation().getX()
+    || a.getLocation().getY() - b.getLocation().getY() || a.getId() - b.getId());
+  const tree = trees[0];
+  assert.ok(tree, `SETUP: actual indexed ordinary public nonpatch nonheld tree ${JSON.stringify({ squares, stageCounts })}`);
+  const loc = tree.getLocation(), x = loc.getX(), y = loc.getY(), objectId = tree.getId();
+  const start = [[-4, 0], [4, 0], [0, -4], [0, 4], [-3, 0], [3, 0], [0, -3], [0, 3]]
+    .map(([dx, dy]) => new core.Location(x + dx, y + dy, 0))
+    .find(tile => !world.isMembersArea(tile.getX(), tile.getY()) && !core.RegionManager.blocked(tile, null)
+      && !tree.isWithinInteractionDistance(tile));
+  assert.ok(start, 'SETUP: unblocked free-land approach outside the tree');
+
+  async function attempt(child, axe, animationId, username, index, expectActive, extraAxe = null) {
+    const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true,
+      send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+    const p = new Player(new PlayerSession(channel));
+    p.setIndex(index); p.setUsername(username); p.setRegistered(true); p.setLocation(start.clone()); p.needsPlacement = false;
+    const connection = new ClientConnection(channel), inventory = p.getInventory(), skills = p.getSkillManager(); connection.player = p;
+    PM.emitPlayerLogin({ player: p, username: p.getUsername() }); p.closeInterruptibleInterfaces();
+    child.after(() => {
+      p.closeInterruptibleInterfaces(); PM.emitPlayerDisconnect({ player: p, username: p.getUsername() });
+      PM.emitPlayerLogout({ player: p, username: p.getUsername() }); p.setRegistered(false);
+      core.TaskManager.cancelTasks(p.getIndex()); core.TaskManager.cancelTasks(p);
+      assert.equal(Woodcutting.isWoodcuttingActive(p), false, 'SETUP: disconnect retires tree session');
+    });
+    assert.ok(p.isRegistered() && p.getHitpoints() > 0 && !p.busy(), 'SETUP: living idle actor');
+    assert.equal(core.RegionManager.blocked(start, p.getPrivateArea()), false);
+    assert.equal(core.MapObjects.getPrivateArea(p, objectId, loc), tree, 'SETUP: actor resolves indexed tree');
+    assert.equal(core.MapObjects.stillStands(p, objectId, loc, tree), true);
+    assert.equal(isPatch(tree), false, 'SETUP: no farming patch match');
+    assert.equal(Forestry.heldTrees.has(treeKey(tree)), false, 'SETUP: tree not held by Forestry');
+    const skill = core.Skill.WOODCUTTING, xp = core.SkillManager.getExperienceForLevel(61);
+    skills.setExperience(skill, xp).setMaxLevels(skill, 61, false).setCurrentLevels(skill, 61, false);
+    assert.deepEqual([skills.getExperience(skill), skills.getMaxLevel(skill), skills.getCurrentLevel(skill)], [xp, 61, 61]);
+    assert.ok(p.getEquipment().getItems()[core.Equipment.WEAPON_SLOT].getId() < 0, 'SETUP: no equipped tool');
+    assert.equal(inventory.getItems().filter(item => item.getId() >= 0 && item.getAmount() > 0).length, 0, 'SETUP: empty inventory');
+    inventory.add(new core.Item(axe, 1), false);
+    if (extraAxe !== null) inventory.add(new core.Item(extraAxe, 1), false);
+    const slot = inventory.getSlotForItemId(axe);
+    assert.ok(slot >= 0); assert.equal(inventory.getItems()[slot].getMeta(), null, 'SETUP: plain carried axe');
+    assert.equal(inventory.getAmount(axe), 1);
+    if (extraAxe !== null) assert.equal(inventory.getAmount(extraAxe), 1, 'SETUP: both carried axes present');
+    assert.ok(inventory.getAddableAmount(new core.Item(logs, 1)) >= 1, 'SETUP: output room');
+    assert.equal(Woodcutting.isWoodcuttingActive(p), false, 'SETUP: fresh inactive session');
+    const calls = [], validation = [], fallback = [], attempts = [], animations = [];
+    const dispatch = PM.emitObjectInteraction.bind(PM), custom = PM.emitCustomEvent.bind(PM), animate = p.performAnimation.bind(p);
+    child.mock.method(p, 'performAnimation', animation => { animations.push(animation.getId()); return animate(animation); });
+    child.mock.method(PM, 'emitObjectInteraction', event => {
+      const before = animations.length, result = dispatch(event);
+      if (event.player === p) calls.push({ object: event.object, option: event.option, result, animations: animations.slice(before) });
+      return result;
+    });
+    child.mock.method(PM, 'emitCustomEvent', (name, event) => {
+      const result = custom(name, event);
+      if (event?.player === p && name === 'woodcutting:validate-tree') validation.push({ object: event.object, allow: event.allow });
+      if (event?.player === p && name === 'woodcutting:tool') fallback.push(event);
+      if (event?.player === p && name === 'woodcutting:attempt') attempts.push(event);
+      return result;
+    });
+    const frame = Buffer.from([96, (x + 128) & 255, x >> 8, y & 255, y >> 8, 0, objectId >> 8, (objectId + 128) & 255]);
+    const decoded = decodeClientPackets(frame);
+    assert.deepEqual(decoded, [{ type: 'object_option', id: objectId, x, y, clickType: 1 }], 'SETUP: decoded Chop click');
+    let turns = 0;
+    const turn = () => {
+      assert.ok(++turns <= 128, 'SETUP: bounded natural approach');
+      p.resetUpdating(); core.World.processCycle = (core.World.processCycle + 1) & 0x7fffffff;
+      core.TaskManager.process(); connection.processTurnPackets();
+      const movement = p.getMovementQueue(); movement.beginCycle(); movement.processEntityPursuit();
+      if (movement.hasPendingWork()) movement.process();
+      core.TaskManager.processWalkTo(p.getIndex());
+    };
+    await connection.dispatch(decoded, true);
+    for (let n = 0; n < 120 && calls.length === 0; n++) turn();
+    assert.equal(calls.length, 1, `SETUP: actual Chop dispatch tree=${objectId}@${x},${y} start=${start.getX()},${start.getY()} at=${p.getLocation().getX()},${p.getLocation().getY()} turns=${turns}`);
+    assert.equal(calls[0].object, tree, 'SETUP: same indexed tree');
+    assert.ok(['chop down', 'chop-down'].includes(String(calls[0].option).toLowerCase()));
+    assert.equal(p.getLocation().equals(start), false, 'SETUP: normal approach moved');
+    assert.equal(tree.isWithinInteractionDistance(p.getLocation()), true);
+    assert.equal(p.getMovementQueue().size(), 0, 'SETUP: approach settled');
+    assert.ok(validation.some(v => v.object === tree && v.allow === true), 'SETUP: Woodcutting validation reached and allowed tree');
+    const admitted = Woodcutting.isWoodcuttingActive(p);
+    if (expectActive || admitted) {
+      assert.equal(calls[0].result, true, 'SETUP: registered Chop handled');
+      assert.equal(fallback.length, 0, 'SETUP: no substitute axe');
+      assert.ok(validation.some(v => v.object === tree && v.allow === true), 'SETUP: original validation allowed tree');
+      assert.ok(calls[0].animations.includes(animationId), 'SETUP: actual initial intended-axe animation');
+    }
+    if (expectActive) assert.equal(admitted, true, 'SETUP: Bronze starts actual Woodcutting');
+    turn();
+    assert.equal(attempts.length, 0, 'SETUP: no early woodcutting attempt');
+    assert.equal(p.getMovementQueue().size(), 0, 'SETUP: approach remains drained');
+    assert.equal(p.getMovementQueue().isMovings(), false, 'SETUP: actor settled');
+    assert.equal(Forestry.heldTrees.has(treeKey(tree)), false, 'SETUP: tree remains nonheld');
+    if (expectActive || admitted) {
+      assert.equal(Woodcutting.isWoodcuttingActive(p), true, 'SETUP: actual session survives next task phase');
+      assert.equal(fallback.length, 0, 'SETUP: no substitute after phase');
+      assert.ok(validation.filter(v => v.object === tree && v.allow === true).length >= 2, 'SETUP: original live validation allowed tree');
+    }
+    if (!expectActive) {
+      const diagnostic = `tree=${objectId}@${x},${y} start=${start.getX()},${start.getY()} admitted=${admitted}, fallback=${fallback.length}, survived=${Woodcutting.isWoodcuttingActive(p)}, attempts=${attempts.length}`;
+      assert.equal(admitted, false, `members-only carried axe must not start Woodcutting (${diagnostic})`);
+      assert.equal(Woodcutting.isWoodcuttingActive(p), false, `members-only carried axe must remain inactive (${diagnostic})`);
+    }
+  }
+  let bronzePassed = false;
+  await t.test('ordinary Bronze axe starts Woodcutting', async child => {
+    await attempt(child, bronze, 879, 'bronzeax', 3280, true); bronzePassed = true;
+  });
+  assert.equal(bronzePassed, true, 'SETUP: Bronze control passed');
+  await t.test('a free Bronze axe remains usable beside a carried Dragon axe', async child => {
+    await attempt(child, bronze, 879, 'mixedaxe', 3282, true, dragon);
+  });
+  await t.test('carried Dragon axe is unavailable on a free world', async child => {
+    await attempt(child, dragon, 2846, 'dragonax', 3281, false);
+  });
+});

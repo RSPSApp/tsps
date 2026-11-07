@@ -12,6 +12,7 @@ import net.rsprot.compression.HuffmanCodec
 import net.rsprot.crypto.cipher.NopStreamCipher
 import net.rsprot.protocol.game.outgoing.codec.specific.ObjEnabledOpsSpecificEncoder
 import net.rsprot.protocol.game.outgoing.camera.CamMoveToCyclesV3
+import net.rsprot.protocol.game.outgoing.camera.CamRotateToCoordinateV3
 import net.rsprot.protocol.game.outgoing.camera.util.CameraEaseFunction
 import net.rsprot.protocol.game.outgoing.misc.client.HideNpcOps
 import net.rsprot.protocol.game.outgoing.misc.client.HideObjOps
@@ -129,6 +130,18 @@ class WorldTest {
         assertEquals(CameraEaseFunction.EASE_OUT_CUBIC, camera.easing)
         world.handle(packet(TspsServerPacket.HINT_ARROW, TspsWriter().u8(1).u16(NPC_INDEX).u16(0).u8(0).u8(0)))
         assertEquals(NPC_INDEX, ((sent.last() as HintArrow).type as HintArrow.NpcHintArrow).index)
+    }
+
+    @Test
+    fun `coordinate rotations retain their distinct native angle tween contract`() {
+        world.handle(packet(TspsServerPacket.CAMERA_CONTROL, TspsWriter().u8(13).u16(3356).u16(2208).u16(1023).u16(150).u8(3).u8(0)))
+        val rotation = sent.single() as CamRotateToCoordinateV3
+        assertEquals(3356 to 2208, rotation.x to rotation.z)
+        assertEquals(1023, rotation.height)
+        assertEquals(150, rotation.cycles)
+        assertEquals(CameraEaseFunction.EASE_OUT_SINE, rotation.easing)
+        assertEquals(false, rotation.heightRelative)
+        assertEquals(false, rotation.trackTarget)
     }
 
     @Test

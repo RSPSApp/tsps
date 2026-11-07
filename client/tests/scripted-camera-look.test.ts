@@ -4,6 +4,8 @@ import { vec4 } from "gl-matrix";
 import { Camera } from "../game/Camera";
 import { sampleActorHeightForWorldTile, sampleBridgeHeightForWorldTile, sampleCameraHeightForWorldTile } from "../game/scene/BridgeHeightSampler";
 import { handleInboundWorld } from "../network/serverConnection/handlers/inboundWorld";
+import { decodeServerPacket } from "../network/packet/ServerBinaryDecoder";
+import { encodeCameraMoveTo, encodeCameraRotateToCoordinate, encodeCameraReset } from "../../server/src/main/typescript/elvarg/net/protocol/ClientProtocol";
 
 const previousClient = (globalThis as any).__osrsClient;
 const camera = new Camera(0, 0, 0, 200, 0);
@@ -21,6 +23,78 @@ const client = {
 };
 (globalThis as any).__osrsClient = client;
 const apply = (payload: object) => assert.equal(handleInboundWorld({ type: "camera", payload }), true);
+
+// Real wire decoder -> inbound handler -> shared rendering Camera. A coordinate
+// rotation snapshots its final angles at receipt, even as the camera moves away.
+const wire = (packet: Buffer) => handleInboundWorld(decodeServerPacket(new Uint8Array(packet)) as any);
+const coldRotation = new Camera(0, 0, 0, 256, 0);
+let coldReady = false;
+coldRotation.setScriptedPosition(10.5, 0, 0.5, 232, 100, () => coldReady ? -20 : undefined);
+coldRotation.setScriptedLookCycles(10.5, 10.5, 5, "linear", false, () => 0);
+coldReady = true;
+coldRotation.applySmoothing(100);
+assert.equal(coldRotation.getScenePitchAngle(), 360,
+    "cold scene rotation snapshots the resolved camera elevation after the pending move snap");
+const coldChain = new Camera(0, 0, 0, 256, 0);
+let sourceReady = false;
+coldChain.setScriptedPosition(10.5, 0, 0.5, 232, 100, () => sourceReady ? -20 : undefined);
+coldChain.setScriptedLook(0.5, 0, 0.5, 232, 100, () => 0);
+coldChain.setScriptedPositionCycles(20.5, 0.5, 5, "linear", true, () => -20, 2560);
+coldChain.setScriptedLookCycles(10.5, 10.5, 5, "linear", false, () => 0);
+coldChain.applySmoothing(100);
+assert.deepEqual([...coldChain.pos], [10.5, 0, 0.5], "a cold source snap is retained across the captured timed-move command chain");
+sourceReady = true;
+coldChain.applySmoothing(0);
+assert.equal(coldChain.getYaw(), 1537, "the preceding look snap sets the angular tween's starting orientation");
+coldChain.applySmoothing(100);
+assert.deepEqual([...coldChain.pos], [20.5, -20, 0.5]);
+assert.equal(coldChain.getScenePitchAngle(), 360, "angle endpoints use the source snap before the timed flight advances");
+const coldTranslated = new Camera(0, 0, 0, 256, 0);
+let translatedReady = false;
+coldTranslated.setScriptedPosition(10.5, 0, 0.5, 232, 100, () => translatedReady ? -20 : undefined);
+coldTranslated.setScriptedLook(0.5, 0, 0.5, 232, 100, () => 0);
+coldTranslated.setScriptedPositionCycles(20.5, 0.5, 5, "linear", true, () => -20, 2560);
+coldTranslated.setScriptedLookCycles(10.5, 10.5, 5, "linear", false, () => 0);
+coldTranslated.translateScriptedCamera(1000, 2000);
+translatedReady = true;
+coldTranslated.applySmoothing(0);
+assert.deepEqual([...coldTranslated.pos], [1010.5, -20, 2000.5], "private-scene rebasing includes the deferred source snap");
+assert.equal(coldTranslated.getYaw(), 1537, "rebasing also includes the deferred look snap");
+coldTranslated.applySmoothing(100);
+assert.deepEqual([...coldTranslated.pos], [1020.5, -20, 2000.5]);
+const unloadedRotation = new Camera(0, 0, 0, 256, 0);
+let lookLoaded = true;
+unloadedRotation.setScriptedLookCycles(10, 0, 5, "linear", false, () => lookLoaded ? 0 : undefined);
+lookLoaded = false;
+unloadedRotation.applySmoothing(100);
+assert.equal(unloadedRotation.getYaw(), 511, "resolved fixed angles finish after target terrain unloads");
+const unloadedMove = new Camera(0, -20, 0, 256, 0);
+let moveLoaded = true;
+unloadedMove.setScriptedPositionCycles(10, 0, 5, "linear", true, () => moveLoaded ? -20 : undefined, 2560);
+moveLoaded = false;
+unloadedMove.applySmoothing(100);
+assert.deepEqual([...unloadedMove.pos], [10, -20, 0], "absolute-height movement finishes after endpoint terrain unloads");
+try {
+    wire(encodeCameraMoveTo(3366, 2232, 1024, { rate: 232, rate2: 100 }));
+    wire(encodeCameraRotateToCoordinate(3336, 2223, 1023, 300, "ease_out_sine"));
+    const expectedYaw = Math.trunc(Math.atan2(-30 * 128, -9 * 128) * 325.9490051269531) & 2047;
+    const expectedPitch = 128; // The one-unit height difference is below the native pitch floor.
+    wire(encodeCameraMoveTo(3369, 2225, 1024, { cycles: 300, easing: "ease_out_sine", ignoreTerrain: true }));
+    camera.applySmoothing(6000);
+    assert.equal(camera.getYaw(), expectedYaw);
+    assert.equal(camera.getScenePitchAngle(), expectedPitch);
+    assert.equal(camera.getPosX(), 3369.5);
+    assert.equal(camera.getPosZ(), 2225.5);
+    wire(encodeCameraReset());
+    assert.equal(client.followPlayerCamera, true);
+    const resetYaw = camera.getYaw();
+    camera.snapToPosition(3400, -8, 2250);
+    camera.applySmoothing(1000);
+    assert.equal(camera.getYaw(), resetYaw, "reset cancels retained angular and positional tweens");
+} finally {
+    camera.clearScriptedCamera();
+    shakesCleared = 0;
+}
 
 try {
     for (const instant of [true, false]) {

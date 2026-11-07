@@ -1570,7 +1570,7 @@ export type CameraMovementOptions = {
   heightRelative?: boolean;
 };
 
-function encodeCameraPosition(mode: number, x: number, y: number, height: number, motion: boolean | CameraMovementOptions): Buffer {
+function encodeCameraPosition(mode: number, x: number, y: number, height: number, motion: boolean | CameraMovementOptions, timedMode = mode + 7): Buffer {
   const captured = typeof motion !== "boolean";
   const timed = captured && "cycles" in motion;
   if (captured) {
@@ -1586,7 +1586,7 @@ function encodeCameraPosition(mode: number, x: number, y: number, height: number
     if (timed && !CAMERA_EASINGS.includes(motion.easing)) throw new RangeError("Invalid camera easing");
   }
   const payload = Buffer.alloc(timed ? 11 : captured ? 10 : 8);
-  payload[0] = timed ? mode + 7 : captured ? mode + 3 : mode;
+  payload[0] = timed ? timedMode : captured ? mode + 3 : mode;
   payload.writeUInt16BE(x & 0xffff, 1);
   payload.writeUInt16BE(y & 0xffff, 3);
   payload.writeUInt16BE(height & 0xffff, 5);
@@ -1610,6 +1610,13 @@ export function encodeCameraMoveTo(x: number, y: number, height: number, motion:
 
 export function encodeCameraLookAt(x: number, y: number, height: number, motion: boolean | CameraMovementOptions): Buffer {
   return encodeCameraPosition(2, x, y, height, motion);
+}
+
+/** cam_rotateto_coordinate: ease to angles resolved from the coordinate at receipt. */
+export function encodeCameraRotateToCoordinate(x: number, y: number, height: number, cycles: number, easing: CameraEasing = "linear"): Buffer {
+  // Share the existing coordinate/cycle validation, but retain a distinct wire contract:
+  // CAM_LOOKAT_CYCLES interpolates coordinates, rather than fixed angular endpoints.
+  return encodeCameraPosition(2, x, y, height, { cycles, easing }, 13);
 }
 
 /** cam_rotateby: turns the view by a pitch/yaw delta (2048 units a turn) over client cycles. */

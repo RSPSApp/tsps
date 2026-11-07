@@ -35,9 +35,7 @@
  *   the six skill levels follow Quest Helper (Slayer/Construction/Sailing/Hunter
  *   unboosted, Woodcutting/Crafting boostable).
  * - The boat journey's at-sea Floopa variants and the boat-driven Little Pearl
- *   arrival/cutscene are played. The captured cam_moveto_cycles/
- *   cam_rotateto_coordinate legs use the closest supported arc/rotate movement,
- *   the only camera-attribution gap.
+ *   arrival/cutscene use the recorded timed moves and coordinate rotations.
  * - The shield's cape-slot equip gate and weight are not enforced; the Shellbane
  *   specials, shield block animation/hit reduction and the cutscene are implemented.
  * - Object repair/shake/chop lines and the monument "tracks" line are not in the
@@ -1196,9 +1194,9 @@ module.exports = function registerTroubledTortugansQuest(api) {
   /**
    * Capture 3456 ticks 2421-2451 (30 ticks): a two-leg flight from the first
    * shot at (3336,2207), across the Pearl, to (3372,2223), then a reset.
-   * The client encoders for cam_moveto_cycles/cam_rotateto_coordinate are not
-   * exposed by this server, so the two legs use the closest available arc and
-   * rotation packets with the captured heights/cycles/easing.
+   * Raw 235/03456 camera tiles are build-local. The root rebuild's unrotated
+   * chunks map instance (12264,528) to source (3336,2224); resolving those
+   * tiles restores the intermediate snap and both straight-flight endpoints.
    */
   function playPearlCamera(player, key) {
     const sender = player.getPacketSender();
@@ -1207,8 +1205,9 @@ module.exports = function registerTroubledTortugansQuest(api) {
     for (let axis = 0; axis < 5; axis++) sender.sendCameraShake(axis, 0, 0, 0);
     later(key, 6, () => {
       if (pearlCameraKeys.get(player) !== key) return;
-      sender.sendCameraMoveArc(3355, 2210, 3336, 2197, 1024, 300, "ease_out_sine", true);
-      sender.sendCameraRotateBy(0, 0, 300, "ease_out_sine");
+      camera(player, [3366, 2232, 1024], [3336, 2197, 1023], Scenes.CAMERA_RATES);
+      sender.sendCameraMoveTo(3369, 2225, 1024, { cycles: 300, easing: "ease_out_sine", ignoreTerrain: true });
+      sender.sendCameraRotateToCoordinate(3336, 2223, 1023, 300, "ease_out_sine");
     });
     later(key, 16, () => {
       if (pearlCameraKeys.get(player) !== key) return;
@@ -1216,7 +1215,8 @@ module.exports = function registerTroubledTortugansQuest(api) {
     });
     later(key, 21, () => {
       if (pearlCameraKeys.get(player) !== key) return;
-      sender.sendCameraMoveArc(3355, 2210, 3367, 2223, 1536, 150, "ease_out_sine", true);
+      sender.sendCameraMoveTo(3377, 2228, 1536, { cycles: 150, easing: "ease_out_sine", ignoreTerrain: true });
+      sender.sendCameraRotateToCoordinate(3356, 2208, 1023, 150, "ease_out_sine");
     });
     later(key, 30, () => {
       if (pearlCameraKeys.get(player) !== key) return;

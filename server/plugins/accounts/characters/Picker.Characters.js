@@ -1,5 +1,6 @@
 function maxCharactersPerAccount(api) {
-  if (process.env.BROWSER_HOST === "1") return 1;
+  // Older browser hosts do not checkpoint account ownership and profile deletions.
+  if (process.env.BROWSER_HOST === "1" && process.env.BROWSER_HOST_ACCOUNT_PERSISTENCE !== "1") return 1;
   const configured = Math.floor(Number(api.getPluginConfig("characters:maxPerAccount", 6)));
   return Number.isFinite(configured) ? Math.min(6, Math.max(1, configured)) : 6;
 }

@@ -592,7 +592,7 @@ test('the default: the typed character (primary only without the picker), else t
   assert.equal(defaultCharacterIndex(characters, 'zezima', { banned: () => true }), -1, 'every character banned');
 });
 
-test('the character cap reads its plugin config, clamped, and is one in the browser host', (t) => {
+test('the character cap reads its plugin config, clamped, and requires account persistence in the browser host', (t) => {
   const config = t.mock.method(PluginManager, 'getPluginConfig', (_key, fallback) => fallback);
   assert.equal(maxCharactersPerAccount(), 6);
   config.mock.mockImplementation(() => 50);
@@ -607,10 +607,18 @@ test('the character cap reads its plugin config, clamped, and is one in the brow
   assert.equal(maxCharactersPerAccount(), 1);
   config.mock.mockImplementation(() => 5);
   const host = process.env.BROWSER_HOST;
+  const persistence = process.env.BROWSER_HOST_ACCOUNT_PERSISTENCE;
+  delete process.env.BROWSER_HOST_ACCOUNT_PERSISTENCE;
   process.env.BROWSER_HOST = '1';
   try {
     assert.equal(maxCharactersPerAccount(), 1);
+    process.env.BROWSER_HOST_ACCOUNT_PERSISTENCE = '1';
+    assert.equal(maxCharactersPerAccount(), 5, 'upgraded browser hosts honor the configured limit');
+    config.mock.mockImplementation(() => 20);
+    assert.equal(maxCharactersPerAccount(), 6, 'the six-profile cap still applies');
   } finally {
+    if (persistence === undefined) delete process.env.BROWSER_HOST_ACCOUNT_PERSISTENCE;
+    else process.env.BROWSER_HOST_ACCOUNT_PERSISTENCE = persistence;
     if (host === undefined) delete process.env.BROWSER_HOST;
     else process.env.BROWSER_HOST = host;
   }

@@ -692,6 +692,22 @@ test("the Catherby rocks grapple needs 35 Strength (Wiki: 32 Agility, 35 Strengt
   assert.ok(!strong.state.messages.some((m) => /Strength level/.test(m)), "35 Strength is enough");
 });
 
+test("the Strong Tree crosses barehanded at 78 Agility, with no grapple fired (Wiki: Shortcuts)", () => {
+  const tree = [2873, 3134, 0];
+  const fires = (player) => player.state.animations.includes(4455); // ShortcutAnim.FIRE_GRAPPLE
+  const short = createPlayer(2874, 3142, 0, 77);
+  operate(short, 17074, tree);
+  assert.deepEqual(tileOf(short), [2874, 3142, 0], "refused: no crossbow, and short of the barehanded 78");
+  const climber = createPlayer(2874, 3142, 0, 78);
+  operate(climber, 17074, tree);
+  assert.deepEqual(tileOf(climber), [2874, 3136, 0], "barehanded across the north channel at 78");
+  assert.ok(!fires(climber), "no grapple fired");
+  const geared = createPlayer(2874, 3142, 0, 53, { skills: { strength: 21, ranged: 42 }, worn: grappleGear() });
+  operate(geared, 17074, tree);
+  assert.deepEqual(tileOf(geared), [2874, 3136, 0], "the grapple still crosses at 53");
+  assert.ok(fires(geared), "fires the grapple");
+});
+
 test("Yanille's south-wall grapple updates Ardougne medium progress after crossing", () => {
   const wall = [2556, 3074, 0];
   const credits = () => hooks.events.filter((event) => event.name === "agility:yanille-grapple");

@@ -218,6 +218,7 @@ function light({ player, object }) {
     const firemaking = wood.xp * (diaryDone(player, "elite") ? p().diaryBonus : 1);
     skills.addExperience(Common.core.Skill.PRAYER, prayer);
     skills.addExperience(Common.core.Skill.FIREMAKING, firemaking);
+    use.experienced = true;
   });
   Common.later(p().fireTicks + p().spiritTicks, () => {
     if (!current()) return;
@@ -240,12 +241,25 @@ function light({ player, object }) {
   return true;
 }
 
-/** A pyre its burner leaves is emptied for the next player. */
+/**
+ * A pyre its burner leaves is emptied for the next player. What they put on it isn't lost: before the burn has
+ * paid its experience the logs and remains go back to the pack, after it the burn's reward does (logout saves after
+ * this hook).
+ */
 function forget({ player }) {
   for (const [key, use] of pyres) {
     if (use.player !== player) continue;
     pyres.delete(key);
     swap(use.object, Common.locId(EMPTY_PYRE));
+    const { Item } = Common.core;
+    const inventory = player.getInventory();
+    if (use.experienced && use.remains) {
+      const reward = rewardFor(use.remains);
+      inventory.forceAdd(player, new Item(reward.id, reward.amount));
+      continue;
+    }
+    inventory.forceAdd(player, new Item(use.wood.logs, 1));
+    if (use.remains) inventory.forceAdd(player, new Item(use.remains.itemId, 1));
   }
 }
 

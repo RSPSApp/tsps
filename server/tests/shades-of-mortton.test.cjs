@@ -69,6 +69,7 @@ function container(capacity = 28) {
   return {
     slots,
     add(item) { slots.push({ id: item.getId(), amount: item.getAmount() }); },
+    forceAdd(_player, item) { this.add(item); },
     delete(id, amount = 1) { for (const s of slots) { if (s.id !== id || amount <= 0) continue; const n = Math.min(s.amount, amount); s.amount -= n; amount -= n; } },
     getAmount: (id) => slots.filter((s) => s.id === id).reduce((sum, s) => sum + s.amount, 0),
     getFreeSlots: () => capacity - slots.filter((s) => s.amount > 0).length,
@@ -355,6 +356,8 @@ test('a burner who logs out leaves the pyre empty for the next player, and a lit
   loaded(gone);
   hooks.logout({ player: gone });
   assert.equal(Pyres.pyres.size, 0);
+  assert.equal(gone.inventory.getAmount(Common.objId('magic_logs_pyre')), 1, "the unlit pyre's logs come back");
+  assert.equal(gone.inventory.getAmount(Common.objId('shade_bones1')), 1, 'and its remains');
   const next = burner();
   next.inventory.add(new core.Item(Common.objId('magic_logs_pyre'), 1));
   hooks.itemOnObject({ player: next, object: pyre('temple_pyre'), itemId: Common.objId('magic_logs_pyre'), handled: false });
@@ -366,6 +369,20 @@ test('a burner who logs out leaves the pyre empty for the next player, and a lit
   hooks.logout({ player: lit });
   ticks(3 + 2 + 4);
   assert.deepEqual(lit.xp, [], 'nothing more of a burn given up');
+  assert.equal(lit.inventory.getAmount(Common.objId('shade_bones1')), 1, 'lit but not yet burnt: the remains come back');
+
+  // Once the burn has paid its experience, leaving pays its reward instead (and never the remains as well).
+  const burnt = burner();
+  loaded(burnt);
+  hooks.objects.get('Magic Pyre:Light')({ player: burnt, object: pyre('temple_pyre_bones_magic') });
+  ticks(3);
+  assert.equal(burnt.xp.length, 2, 'the experience is paid');
+  const before = burnt.inventory.slots.length;
+  hooks.logout({ player: burnt });
+  assert.equal(burnt.inventory.getAmount(Common.objId('shade_bones1')), 0, 'no remains back');
+  assert.equal(burnt.inventory.slots.length, before + 1, 'the reward, a key or coins');
+  ticks(2 + 4);
+  assert.equal(burnt.inventory.slots.length, before + 1, 'and no second reward');
 });
 
 test('a coin stack at its cap keeps the key: the chest would award coins the stack cannot take', () => {

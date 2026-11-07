@@ -309,7 +309,7 @@ test('free-world pie assembly keeps members-only recipes unavailable', async (t)
   }
 });
 
-// A real configured free world: an object-only Cook click must not use members food.
+// Reuse this file's configured free-world harness for the object-only Cook path.
 test('a free-world range does not cook members-only raw mackerel', async t => {
   const Cooking = require('../plugins/skills/Cooking.plugin');
   assert.equal(world.isMembersWorld(), false, 'SETUP: configured free world');

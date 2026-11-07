@@ -1276,7 +1276,7 @@ test('native cooking on a live fire', async suite => {
       'ordinary seaweed used on a fire becomes soda ash');
     assert.equal(skills.getExperience(core.Skill.COOKING), seaweedXp, 'producing soda ash awards no Cooking XP');
   });
-// A real configured free world: an object-only Cook click must not use members food.
+  // The members-world control confirms the same range recipe remains available.
 await suite.test('a members-world range cooks raw mackerel', async t => {
   const { Player } = require('../dist/game/entity/impl/player/Player');
   const { PlayerSession } = require('../dist/net/PlayerSession');

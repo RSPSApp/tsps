@@ -1125,6 +1125,8 @@ function depleteTree(player, treeObject, tree) {
 
 // Skip held axes marked members-only on free worlds.
 function choppingAxeEligible(axe) {
+  // Before register (a fixture calling the helpers directly) there is no world to ask: every axe counts.
+  if (!pluginApi) return true;
   const { WorldDefinition, CacheDefinitions } = pluginApi.core;
   return WorldDefinition.isMembersWorld() || CacheDefinitions.getItem(axe.id)?.isMembers !== true;
 }

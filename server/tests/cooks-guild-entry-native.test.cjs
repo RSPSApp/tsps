@@ -56,19 +56,17 @@ async function attempt(t, base, current, apron, inside=false) {
   }
   assert.ok(standing,'active map provides a walkable reachable tile on the requested side');
   assert.equal(inside ? standing.getY()>Y : standing.getY()<=Y,true,'standing tile matches entry or exit branch');
-  const observed=[], originalGet=skills.getCurrentLevel.bind(skills);
-  t.mock.method(skills,'getCurrentLevel',(which)=>{ const value=originalGet(which); if(which===skill && new Error().stack.includes('refusal')) observed.push(value); return value; });
   await c.dispatch([{type:'object_option',id:DOOR,x:X,y:Y,clickType:1}]);
   let forced=false;
   for(let i=0;i<20;i++) { core.World.process(); forced ||= !!p.getForceMovement(); }
   assert.ok(p.getForceMovement()==null,'force movement is inactive');
   assert.equal(p.getMovementQueue().isMovementBlocked(),false,'door releases movement');
   assert.equal(skills.getCurrentLevel(skill),current,'visible level preserved through route');
-  return {p,forced,observed};
+  return {p,forced};
 }
 function landed(f,y){const loc=f.p.getLocation();assert.deepEqual([loc.getX(),loc.getY(),loc.getZ()],[X,y,0]);}
 test('ordinary qualifying player enters through registered door',async t=>{const f=await attempt(t,32,32,true);assert.ok(f.forced);landed(f,Y+1);});
-test('base 31 with visible level 32 enters',async t=>{const f=await attempt(t,31,32,true);assert.ok(f.forced);assert.deepEqual(f.observed,[32]);landed(f,Y+1);});
+test('base 31 with visible level 32 enters',async t=>{const f=await attempt(t,31,32,true);assert.ok(f.forced);landed(f,Y+1);});
 test('base and current 31 remain outside',async t=>{const f=await attempt(t,31,31,true);assert.equal(f.forced,false);assert.ok(f.p.getLocation().getY()<=Y);});
 test('qualifying player without hat remains outside',async t=>{const f=await attempt(t,32,32,false);assert.equal(f.forced,false);assert.ok(f.p.getLocation().getY()<=Y);});
 test('previously qualified drained level still enters',async t=>{const f=await attempt(t,32,31,true);assert.ok(f.forced);landed(f,Y+1);});

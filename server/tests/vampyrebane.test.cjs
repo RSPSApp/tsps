@@ -120,7 +120,7 @@ test("tier 2 vampyre juvinates take damage from silver only, half from other wea
 
 test("tier 3 vampyres take damage from the vampyrebane table only, silver included", () => {
   const effect = modifiers();
-  for (const name of ["Vyrewatch", "Vyrewatch Sentinel", "Ancient feral vyre"]) {
+  for (const name of ["Vyrewatch", "Vyrewatch Sentinel", "Ancient feral vyre", "Venator", "Blood-starved venator"]) {
     assert.equal(effect.meleeDamage(createPlayer(RUNE_SCIMITAR, "vampyre", name), 100), 0, name);
     assert.equal(effect.meleeDamage(createPlayer(WOLFBANE, "vampyre", name), 100), 0, name);
     assert.equal(effect.meleeDamage(createPlayer(RUNE_SCIMITAR, "vampyre", name, { ring: EFARITAYS_AID }), 100), 0, name);

@@ -4,7 +4,7 @@
  * - Tier 1 (feral vampyres, vampyre juveniles): every weapon deals full damage; Silverlight and Darklight add 10%.
  * - Tier 2 (vampyre juvinates): only silver weapons, silver bolts and the tier 3 weapons deal damage; anything
  *   else deals nothing, or half with Efaritay's aid.
- * - Tier 3 (Vyrewatch, Vyrewatch Sentinels, ancient feral vyres): only the vampyrebane table below deals damage.
+ * - Tier 3 (Vyrewatch, Vyrewatch Sentinels, venators, ancient feral vyres): only the vampyrebane table below deals damage.
  * - Efaritay's aid: +10% damage to every weapon on tier 1, +15% accuracy to silver weapons on tier 1 and 2, and +15%
  *   accuracy and +10% damage to the weapons that can hurt the tier on tiers 2 and 3.
  * Spells are left alone: the Wiki says nothing about them.
@@ -16,7 +16,7 @@ const EFARITAYS_AID = "efaritay's aid";
 const SILVER_BOLTS = "silver bolts";
 const TIER_ONE_NPCS = new Set(["feral vampyre", "vampyre juvenile"]);
 const TIER_TWO_NPCS = new Set(["vampyre juvinate"]);
-const TIER_THREE_NPCS = new Set(["vyrewatch", "vyrewatch sentinel", "ancient feral vyre"]);
+const TIER_THREE_NPCS = new Set(["vyrewatch", "vyrewatch sentinel", "ancient feral vyre", "venator", "blood-starved venator"]);
 /** Weapons that deal full damage to juvinates but cannot hurt tier 3 (Wiki, Silver weaponry). */
 const SILVER_WEAPONS = new Set([
   "blessed axe", "rod of ivandis", "silver sickle", "silver sickle (b)", "emerald sickle (b)",

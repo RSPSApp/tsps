@@ -49,7 +49,7 @@
  *    variants are not played, and the arena's one static Inadequacy
  *    (1823,5149,2) is removed on entry and respawned on leaving.
  *  - "Our lives" has no Read text, the vial/potion handovers use plain game
- *    messages, and the dreamy lamp cannot be rubbed.
+ *    messages.
  */
 module.exports = function registerDreamMentorQuest(api) {
   const {
@@ -1145,6 +1145,29 @@ module.exports = function registerDreamMentorQuest(api) {
     player.sendMessage("You light the ceremonial brazier.");
   }
 
+  // Wiki (Dreamy lamp): one wish of 15,000 XP in Strength, Ranged, Magic, Hitpoints or Defence.
+  const DREAMY_LAMP_XP = 15000;
+  const DREAMY_LAMP_SKILLS = [Skill.STRENGTH, Skill.RANGED, Skill.MAGIC, Skill.HITPOINTS, Skill.DEFENCE];
+
+  function rubDreamyLamp(event) {
+    const { player, slot } = event;
+    if (event.itemId !== DREAMY_LAMP_ITEM_ID) return false;
+    event.handled = true;
+    api.emitCustomEvent("xpreward:open", {
+      player,
+      skills: DREAMY_LAMP_SKILLS,
+      title: "Choose the stat you wish to be advanced!",
+      onConfirm: (skill, name) => {
+        const inventory = player.getInventory();
+        // The lamp the wish was opened with, still in its slot (not dropped or moved meanwhile).
+        if (inventory.get(slot)?.getId() !== DREAMY_LAMP_ITEM_ID || !inventory.deleteAtSlot(slot, 1)) return null;
+        player.getSkillManager().addExperience(skill, DREAMY_LAMP_XP, false);
+        return `Your wish has been granted! You have been awarded 15,000 ${name} experience!`;
+      },
+    });
+    return true;
+  }
+
   function lookInChest(event) {
     const { player } = event;
     const stored = chestItems(player);
@@ -1318,6 +1341,7 @@ module.exports = function registerDreamMentorQuest(api) {
   api.onItemOnItem(handleItemOnItem, { noted: false });
   api.onItemOnObject(handleItemOnObject, { noted: false });
   api.onItemAction("Cyrisus's chest", { "Look-in": lookInChest });
+  api.onItemAction("Dreamy lamp", { Rub: rubDreamyLamp });
   api.onObjectInteraction("Our lives", { Leave: leaveLectern });
   api.onNpcDeath(handleNpcDeath);
   api.onPlayerLogin(handleLogin);

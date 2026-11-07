@@ -95,4 +95,12 @@ function hammering(delay = 0) {
   return animation("human_smithing", delay);
 }
 
-module.exports = { messageBox, spam, itemBox, hasHammer, smithsUniformChance, smithingLevel, actionsPerCycle, produced, obj, varbit, varp, animation, hammering };
+/** The powered staves' wording for a preset copy (Presets.PvpMode tags them untradeable, unbankable and preset). */
+const PRESET_TEXT = "Preset items cannot be used for this.";
+
+/** A preset (or meta-untradeable, unbankable) copy: it must never come out as part of a fresh, tradeable product. */
+function restricted(item) {
+  return !!item && (item.isPresetItem?.() === true || item.isUntradeable?.() === true || item.isUnbankable?.() === true);
+}
+
+module.exports = { messageBox, spam, itemBox, hasHammer, smithsUniformChance, smithingLevel, actionsPerCycle, produced, obj, varbit, varp, animation, hammering, restricted, PRESET_TEXT };

@@ -79,16 +79,23 @@ function consumeChinchompa(player, pos, amount, delayTicks = 0) {
   const saving = { player, itemId: weapon.getId(), amount, saved: 0 };
   pluginApi.emitCustomEvent("ranged:ammo-saving", saving);
   const thrown = amount - Math.min(amount, Math.max(0, saving.saved | 0));
+  const meta = JSON.stringify(weapon.getMeta() ?? null);
+  const same = (item) => item?.getId() === weapon.getId() && JSON.stringify(item.getMeta() ?? null) === meta;
   const apply = () => {
-    // A swap mid-flight moved this stack out of the slot; leave the new one alone.
-    if (player.getEquipment().get(Equipment.WEAPON_SLOT) !== weapon) {
-      return;
-    }
     if (thrown <= 0) {
       return;
     }
-    weapon.decrementAmountBy(thrown);
-    if (weapon.getAmount() <= 0) {
+    const worn = player.getEquipment().get(Equipment.WEAPON_SLOT);
+    // Re-wielding mid-flight wields a copy, and unwielding puts the stack in the pack: the throw is paid from the
+    // same chinchompas wherever they are now. Another weapon swapped in is left alone.
+    if (worn !== weapon && !same(worn)) {
+      const inventory = player.getInventory();
+      const slot = inventory.getItems().findIndex(same);
+      if (slot >= 0) inventory.deleteAtSlot(slot, Math.min(thrown, inventory.getItems()[slot].getAmount()));
+      return;
+    }
+    worn.decrementAmountBy(thrown);
+    if (worn.getAmount() <= 0) {
       player.sendMessage("You have run out of ammunition!");
       player.getEquipment().set(Equipment.WEAPON_SLOT, new Item(-1));
       WeaponInterfaceManager.assign(player);
@@ -115,6 +122,7 @@ function consumeChinchompa(player, pos, amount, delayTicks = 0) {
 
 module.exports = {
   name: "Chinchompas",
+  _test: { consumeChinchompa },
   members: true,
   register(api) {
     core = api.core;

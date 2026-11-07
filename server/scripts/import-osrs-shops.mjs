@@ -298,6 +298,9 @@ function main() {
       id,
       name,
       currency,
+      ...(typeof record.shop_info?.general_store === "boolean" ? { generalStore: record.shop_info.general_store } : {}),
+      ...(record.shop_info?.general_store === true && Number.isSafeInteger(record.shop_info.buys_at) && Number.isSafeInteger(record.shop_info.change_per)
+        ? { sellMultiplier: record.shop_info.buys_at, priceChangePer: record.shop_info.change_per } : {}),
       originalStock: originalStock(name, record.items),
       ...(SHOP_PRICES[name] ? { prices: new Map(SHOP_PRICES[name]) } : {}),
       npcInteractions: npcInteractions(name, record.owners, shopsByNpc),

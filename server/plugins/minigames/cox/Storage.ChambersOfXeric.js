@@ -103,12 +103,24 @@ function stacks(id) {
 }
 
 /** A store of items: a list of { id, amount, meta? } with a size. Stackables stack, others take a slot each. */
+/** The most one stack can hold, as in the inventory and the bank. */
+const MAX_STACK = 2147483647;
+
+/** The powered staves' wording for a preset copy (Presets.PvpMode tags them untradeable, unbankable and preset). */
+const PRESET_TEXT = "Preset items cannot be used for this.";
+
+/** A stored stack keeps no meta, so a preset (or meta-untradeable, unbankable) stack would come back plain. */
+function restricted(item) {
+  return !!item && (item.isPresetItem?.() === true || item.isUntradeable?.() === true || item.isUnbankable?.() === true);
+}
+
 function addTo(list, size, id, amount, meta = null) {
   if (stacks(id)) {
     const existing = list.find((entry) => entry.id === id);
     if (existing) {
-      existing.amount += amount;
-      return amount;
+      const added = Math.max(0, Math.min(amount, MAX_STACK - existing.amount));
+      existing.amount += added;
+      return added;
     }
     if (list.length >= size) return 0;
     list.push({ id, amount });
@@ -273,7 +285,11 @@ function deposit(player, slot, amount) {
     return;
   }
   const store = view.kind === "private" ? privateItems(player) : sharedStore(view.raid);
-  const stored = stacks(id) ? depositStack(inventory, store, view.size, item, amount) : depositEach(inventory, store, view.size, slot, amount);
+  if (stacks(id) && restricted(item)) {
+    player.sendMessage(PRESET_TEXT);
+    return;
+  }
+  const stored = stacks(id) ? depositStack(inventory, store, view.size, slot, amount) : depositEach(inventory, store, view.size, slot, amount);
   if (stored <= 0) {
     player.sendMessage(view.kind === "private" ? "Not enough space in your private storage." : "The shared storage is full.");
     return;
@@ -282,10 +298,11 @@ function deposit(player, slot, amount) {
   else refresh(player);
 }
 
-function depositStack(inventory, store, size, item, amount) {
-  const id = item.getId();
-  const stored = addTo(store, size, id, Math.min(amount, inventory.getAmount(id)), item.getMeta());
-  if (stored > 0) inventory.delete(id, stored);
+/** The clicked stack, by its slot: another stack of the same id (a preset one) is never taken instead. */
+function depositStack(inventory, store, size, slot, amount) {
+  const item = inventory.getItems()[slot];
+  const stored = addTo(store, size, item.getId(), Math.min(amount, item.getAmount()), item.getMeta());
+  if (stored > 0) inventory.deleteAtSlot(slot, stored);
   return stored;
 }
 
@@ -310,7 +327,9 @@ function withdraw(player, id, amount, first = null) {
   const store = view.kind === "private" ? privateItems(player) : sharedStore(view.raid);
   const inventory = player.getInventory();
   const stackable = definition(id)?.isStackable?.() === true;
-  const room = stackable ? (inventory.contains(id) || inventory.getFreeSlots() > 0 ? Infinity : 0) : inventory.getFreeSlots();
+  // A stack takes only what its slot can still hold (the stack cap, or a free slot for a stack whose meta
+  // differs): pulling more out of the store would delete the rest.
+  const room = stackable ? inventory.getAddableAmount(new Item(id, countIn(store, id))) : inventory.getFreeSlots();
   const wanted = Math.min(amount, countIn(store, id), room);
   if (wanted <= 0) {
     player.sendMessage("Not enough space in your inventory.");

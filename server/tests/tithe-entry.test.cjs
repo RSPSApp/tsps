@@ -73,7 +73,7 @@ async function enter(f,t){
   assert.equal(seen.length,1); assert.equal(seen[0].handled,true); assert.equal(seen[0].object.getId(),door.getId());
 }
 test('Tithe Farm entry requires unboosted Farming 34',async t=>{
-  for(const [name,index,base,current,allowed] of [['base 34',1201,34,34,true],['boosted 33',1202,33,34,false],['decayed 33',1203,33,33,false]]) await t.test(name,async t=>{
+  for(const [name,index,base,current,allowed] of [['base 34',1201,34,34,true],['boosted 33',1202,33,34,false],['decayed 33',1203,33,33,false],['drained 34',1204,34,33,false]]) await t.test(name,async t=>{
     const f=actor(t,index,base); await acquire(f); f.skills.setCurrentLevel(core.Skill.FARMING,current,false);
     assert.equal(f.skills.getMaxLevel(core.Skill.FARMING),base); assert.equal(f.skills.getCurrentLevel(core.Skill.FARMING),current);
     assert.equal(f.skills.getExperience(core.Skill.FARMING),core.SkillManager.getExperienceForLevel(base));

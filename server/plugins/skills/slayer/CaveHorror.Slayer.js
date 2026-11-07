@@ -85,6 +85,11 @@ function createMethod() {
       target.performAnimation(new Animation(SCREAM_PLAYER_ANIMATION));
     }
 
+    /** The scream plays its own player animation; a block animation would overwrite it. */
+    playsBlockAnimation() {
+      return !this.scream;
+    }
+
     hits(npc, target) {
       if (!this.guaranteed) return [new PendingHit(npc, target, this)];
       return [new PendingHit(npc, target, this, { damage: screamDamage(target.getAsPlayer()), rollAccuracy: false })];

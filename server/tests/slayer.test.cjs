@@ -1304,6 +1304,7 @@ test("a witchwood icon turns the scream into a regular attack and a coin toss ag
     screaming.start(scream.npc, scream.player);
     assert.deepEqual(scream.played, [["npc", 4237], ["player", 2835]]);
     assert.equal(screaming.guaranteed, false, "the scream rolls as a regular attack");
+    assert.equal(screaming.playsBlockAnimation(), false, "the scream keeps its own player animation");
 
     Math.random = () => 0.75;
     const kick = caveHorrorFight({ icon: true });

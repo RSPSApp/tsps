@@ -19,6 +19,7 @@ function raise(player, amount) {
   const now = Common.favour(player);
   if (now >= Common.DATA.favourMax) return;
   Common.setFavour(player, Math.min(Common.DATA.favourMax, now + amount));
+  Common.getApi().emitCustomEvent("miscellania:approval-changed", { player, value: Common.favour(player), max: Common.DATA.favourMax });
 }
 
 function eligible(player) {

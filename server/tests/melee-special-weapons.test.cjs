@@ -273,6 +273,22 @@ test("Dragon Hasta Unleash replaces the normal swing through real animation arbi
   assert.deepEqual(attacker.log.drains, [100], "Unleash consumes all available special energy");
 });
 
+test("Dragon Hasta Unleash scales accuracy 5% and damage 2.5% per 5% of energy spent", () => {
+  const hasta = special("dragon_hasta");
+  for (const [energy, accuracy, damage] of [[100, 2, 1.5], [60, 1.6, 1.3], [5, 1.05, 1.025]]) {
+    const attacker = fakeFighter({ special: energy });
+    attacker.getCombatSpecial = () => hasta;
+    hasta.getCombatMethod().start(attacker, fakeTarget());
+    assert.equal(attacker.special, 0, `${energy}%: all the energy is spent`);
+    const traits = CombatSpecial.activeTraitsFor(attacker);
+    assert.ok(Math.abs(traits.accuracyMultiplier - accuracy) < 1e-9, `${energy}%: accuracy x${accuracy}`);
+    assert.ok(Math.abs(traits.damageMultiplier - damage) < 1e-9, `${energy}%: damage x${damage}`);
+    assert.equal(traits.meleeAttackBonusIndex, 0, "rolls against stab defence");
+    assert.equal(traits.ignoreProtectionPrayer, true);
+    hasta.getCombatMethod().handleAfterHitEffects({ isAccurate: () => false, getAttacker: () => attacker });
+  }
+});
+
 test("the ancient mace and dragon sword specials pierce NPC melee prayers; the hasta's doesn't", () => {
   assert.equal(hitRoll(wielding(ItemIdentifiers.ANCIENT_MACE)), true, "Favour");
   assert.equal(hitRoll(wielding(ItemIdentifiers.DRAGON_SWORD)), true, "Wild Stab");

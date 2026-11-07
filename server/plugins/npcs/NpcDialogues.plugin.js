@@ -488,7 +488,7 @@ function flatten(steps, opts = {}) {
       }
       // { menu }: "shows other/previous/initial options" - replay a menu already seen.
       if (target && typeof target === "object" && target.menu) {
-        out.push({ type: "gomenu", menu: target.menu });
+        out.push({ type: "gomenu", menu: target.menu, ...(target.via ? { via: target.via } : {}) });
         continue;
       }
       // Expanded when the conversation reaches it (startDialogue's run), so its conditions see
@@ -600,7 +600,7 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
   const resolveMenuJump = (reference) => {
     const current = context.currentMenu;
     const history = context.menuHistory;
-    if (/^other/i.test(reference)) return current ? { menu: current } : "end";
+    if (/^other/i.test(reference)) return current ? { menu: current, via: "other" } : "end";
     if (/^initial/i.test(reference)) return history[0] || context.pageInitialMenu
       ? { menu: history[0] ?? context.pageInitialMenu } : "end";
     const match = /^previous(\d*)/i.exec(reference);
@@ -725,11 +725,20 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
   const flattenOptions = () => ({ resolveCondition, resolveJump, lazyConditions: true,
     wrapBranch: (chosen, branch) => [{ type: "condition_chosen", id: chosen.id, text: chosen.text }, ...branch] });
 
-  function presentMenu(menu, offset = 0, tail = []) {
+  /**
+   * `via` is how a menu jump reached it ("other" for "shows other options"). A plugin's
+   * npc-dialogue:menu handler can ask the question itself (`handled`), warn first (`warning`), or
+   * replace `options` with option nodes from this or an earlier menu (`history`), given the option
+   * just chosen (`chosen`): an NPC whose "other options" are not simply this menu again.
+   */
+  function presentMenu(menu, offset = 0, tail = [], via = null) {
     if (cancelled) return;
     const { step, rest, record } = menu;
     context.currentMenu = menu;
-    const notice = { player, npcId, definition, prompt: step.prompt || "Select an option", warning: null };
+    const notice = {
+      player, npcId, definition, prompt: step.prompt || "Select an option", warning: null,
+      options: step.options || [], history: context.menuHistory, via, chosen: context.lastChoice ?? null,
+    };
     api.emitCustomEvent("npc-dialogue:menu", notice);
     // A plugin asked the question itself.
     if (notice.handled) return;
@@ -738,13 +747,17 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
       warned.add(step);
       startChain(new DialogueChainBuilder()
         .add(new api.core.StatementDialogue(0, String(notice.warning)))
-        .add(new ActionDialogue(1, { execute: () => presentMenu(menu, offset, tail) })));
+        .add(new ActionDialogue(1, { execute: () => presentMenu(menu, offset, tail, via) })));
       return;
     }
     if (!context.menuHistory.includes(menu)) context.menuHistory.push(menu);
     // An option the wiki guards ("If the player is wearing the Ring of Charos(a):") is hidden
     // only once a plugin answers its condition false; unanswered ones still show.
-    const options = (step.options || []).filter((option) =>
+    const offered = Array.isArray(notice.options) ? notice.options : (step.options || []);
+    // An option borrowed from an earlier menu continues as it did there, with that menu's own steps.
+    const ownMenu = (option) => (step.options || []).includes(option) ? menu
+      : context.menuHistory.find((shown) => (shown.step?.options || []).includes(option)) ?? menu;
+    const options = offered.filter((option) =>
       !option.condition || resolveCondition({ text: option.condition, id: option.condition_id ?? option.id }) !== false);
     const more = options.length - offset > 5;
     const visible = options.slice(offset, offset + (more ? 4 : 5));
@@ -778,11 +791,13 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
         const choice = { player, npc: event.npc, npcId, definition, option: option.text, stepId: option.id, pages: context.pages };
         api.emitCustomEvent("npc-dialogue:choice", choice);
         if (choice.end) return;
-        context.currentMenu = menu;
-        run([...(option.steps || []), ...rest, ...tail], recordOption(option));
+        const own = ownMenu(option);
+        context.currentMenu = own;
+        context.lastChoice = option.text;
+        run([...(option.steps || []), ...(own === menu ? rest : own.rest || []), ...tail], recordOption(option));
       }];
     });
-    if (more) pairs.push("More...", () => presentMenu(menu, offset + 4, tail));
+    if (more) pairs.push("More...", () => presentMenu(menu, offset + 4, tail, via));
     if (visible.length === 1) pairs.push("Goodbye.", close);
     // A parsed menu with no options is a wiki-export gap; continue the branch
     // instead of silently closing the chat.
@@ -856,7 +871,7 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
         if (next && next.type === "choice") {
           continue;
         }
-        chain.add(new ActionDialogue(index++, { execute: () => presentMenu(step.menu) }));
+        chain.add(new ActionDialogue(index++, { execute: () => presentMenu(step.menu, 0, [], step.via ?? null) }));
         startChain(chain);
         return;
       }

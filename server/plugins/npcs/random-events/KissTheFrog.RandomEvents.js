@@ -313,8 +313,17 @@ module.exports = function attach(api, Events) {
       player,
       pages: [{ player: true, text: playerLine }],
       onEnd: () => {
-        if (!player.getInventory().containsNumber(I.FROG_TOKEN)) return;
-        player.getInventory().delete(I.FROG_TOKEN, 1);
+        const inventory = player.getInventory();
+        if (!inventory.containsNumber(I.FROG_TOKEN)) return;
+        // Using the token frees its slot: the cache token doesn't stack, so every token has a slot of its own (a
+        // stacked one would free it only as the last). The royal sets are two pieces, so a full inventory lost the second.
+        const stacks = new api.core.Item(I.FROG_TOKEN, 1).getDefinition().isStackable();
+        const freed = !stacks || inventory.getAmount(I.FROG_TOKEN) === 1 ? 1 : 0;
+        if (inventory.getFreeSlots() + freed < rewards.length) {
+          player.sendMessage("You don't have enough inventory space.");
+          return;
+        }
+        inventory.delete(I.FROG_TOKEN, 1);
         for (const reward of rewards) player.getInventory().addItem(new api.core.Item(reward, 1));
         Flow.itemStatement(api, player, itemShown, message);
       },

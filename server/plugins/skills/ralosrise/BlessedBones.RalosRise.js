@@ -17,6 +17,9 @@ const { DATA } = Common;
 /** Each player's breaking-down loop, retained while the level-up dialogue is open. */
 const sessions = new WeakMap();
 
+/** The game cycle of each player's last break-down: one a tick, as the Libation bowl's sacrifices. */
+const lastBreak = new WeakMap();
+
 /** One bone of `itemId` broken down; false when there is none left to break. */
 function breakOne(player, itemId) {
   const core = Common.core();
@@ -25,6 +28,7 @@ function breakOne(player, itemId) {
   const inventory = player.getInventory();
   const slot = inventory.getSlotForItemId(itemId);
   if (!row || slot < 0 || inventory.getAmount(ids.chisel) <= 0) return false;
+  lastBreak.set(player, core.World.getProcessCycle());
   inventory.deleteAtSlot(slot, 1);
   inventory.add(new core.Item(ids.shard, row.shards), true);
   player.performAnimation(new core.Animation(ids.seq.breakdown));
@@ -71,6 +75,8 @@ function startBreaking(player, itemId) {
   }
   stopBreaking({ player });
   keepBreaking(player, itemId);
+  // Several uses in one tick each broke one at once: one a tick.
+  if (lastBreak.get(player) === Common.core().World.getProcessCycle()) return true;
   if (!breakOne(player, itemId)) stopBreaking({ player });
   return true;
 }

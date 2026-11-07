@@ -59,7 +59,7 @@ class Tethers {
   tether(player, site) {
     const sender = player.getPacketSender();
     Shared.stopAction(player);
-    player.getMovementQueue().reset();
+    player.getMovementQueue().setBlockMovement(true).reset();
     player.setPositionToFace(site.loc.getLocation());
     Shared.animate(player, ANIM.TETHER);
     Shared.graphic(player, GFX.TETHER, TETHER_HEIGHT);
@@ -84,6 +84,7 @@ class Tethers {
     const entry = this.tethered.get(player);
     if (!entry) return false;
     this.tethered.delete(player);
+    player.getMovementQueue().setBlockMovement(false);
     entry.task?.stop();
     if (!player.isRegistered()) return true;
     const sender = player.getPacketSender();
@@ -192,12 +193,20 @@ function walkWhileTethered(event) {
   player.sendMessage("You must untether yourself to move away.");
 }
 
+/** Reject walks before routing; other actions let go before their route can move the player. */
+function inputWhileTethered(event) {
+  if (!coveOf(event.player)?.fight?.tethers.siteOf(event.player)) return;
+  if (event.packet.type === "move" || event.packet.type === "world_map_click") walkWhileTethered(event);
+  else untetherFor(event.player);
+}
+
 function attachTethers(api) {
   api.onObjectInteraction("Mast", { Tether: tetherSite, Untether: untetherSite });
   api.onObjectInteraction("Totem pole", { Tether: tetherSite, Untether: untetherSite });
   api.onObjectInteraction("Damaged mast", { Repair: repairSite });
   api.onObjectInteraction("Damaged totem pole", { Repair: repairSite });
   api.onWalkRoute(walkWhileTethered);
+  api.onCustomEvent("player:world-input", inputWhileTethered);
 }
 
 module.exports = { Tethers, attachTethers, untetherFor, hasRope };

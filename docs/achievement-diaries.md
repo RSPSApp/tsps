@@ -109,6 +109,13 @@ Script 56 reads started and complete; script 2200 reads count, the total and rew
 - **Skill requirement:** Ardougne's elite reward needs 91 Smithing, per its transcript.
 - **Reclaiming:** the transcript's "<NPC> gives you another …" line hands back the highest claimed tier's item only while the player owns none of it in the inventory, worn or bank. Otherwise the NPC says "You don't need another … right now."
 
+## Fremennik noted drops
+
+From the Wiki ([Dagannoth bones](https://oldschool.runescape.wiki/w/Dagannoth_bones), [Aviansie](https://oldschool.runescape.wiki/w/Aviansie), [Thorodin](https://oldschool.runescape.wiki/w/Thorodin)); no capture covers them. `server/plugins/achievements/diaries/NotedDrops.FremennikDiary.js` marks the rolled drops on `npc-drops:roll`:
+- **Elite:** the bones of Dagannoth Rex, Prime and Supreme drop as bank notes. Regular dagannoth are not affected.
+- **Hard:** the adamantite bars of God Wars Dungeon aviansie drop noted. Wilderness aviansie always drop them noted, diary or not.
+- **Not done:** Thorodin's option to switch the bones' noting off. His dialogue is generated and the Wiki gives no wording.
+
 ## Achievement diary cape
 
 Once every diary tier is complete, Twiggy O'Korn's Talk-to conversation offers the cape and hood for 99,000 coins. The dialogue checks two free inventory slots before confirmation, and the server checks eligibility, coins and space again before transferring them. Twiggy offers another set or a hood through the existing owned-cape conversation. The cape is trimmed when the existing quest-cape requirement reports every quest complete.

@@ -52,6 +52,27 @@ On the click (or on arrival): sequence `human_runecraft` (791), spotanim `runecr
 height 92, sound 2710 (rsprox capture 1693, crafting at the water and mind altars in Guardians
 of the Rift).
 
+## Raiments of the Eye
+
+Worn Hat of the Eye, Robe top of the Eye, Robe bottoms of the Eye and Boots of the Eye (in any
+dye, by equipment slot and cache name) add runes to an altar craft (`Raiments.Runecrafting.js`;
+Wiki: [Raiments of the Eye](https://oldschool.runescape.wiki/w/Raiments_of_the_Eye), [Ourania
+Altar](https://oldschool.runescape.wiki/w/Ourania_Altar)).
+
+- With R runes made before the bonus and M of 1, 2, 3 or 6 for one to four pieces (10% a piece and
+  20% more for the full set, 60% in all), the bonus is `floor(R / 10) * M`; when 10 does not divide
+  R it is one more `M` with the remainder's chance. The Wiki says only "a chance based on the
+  remainder", so the chance is `(R mod 10) / 10`, which makes the average `R * M / 10`. The Wiki's
+  example: 28 runes with one piece give 2 or 3 bonus runes, with the full set 12 or 18.
+- The bonus runes give no XP (Wiki). They count toward the diary tasks that craft a number of
+  runes at once (the Wiki's diary tables): the event carries them as `bonusRunes`, and `runeAmount`
+  is the total.
+- The Ourania Altar applies the same bonus to each colour it makes (Wiki: the full set boosts the
+  runes "in the same way" as at regular altars). The Wiki gives no separate rule for partial sets
+  there.
+- No recording shows an altar crafted in the outfit on a main-game world (the Hat of the Eye
+  recordings, rev 227, are Leagues), so this rests on the Wiki.
+
 ## Ruins, portals and tiaras
 
 - A worn tiara (or the Runecraft cape) shows Enter on the ruins; it takes the player in at once with
@@ -77,8 +98,9 @@ of the Rift).
 
 ## Not done yet
 
-- The Raiments of the Eye's 60% extra runes, here and at the other altars.
-
+- The Raiments of the Eye's extra runes in the Guardians of the Rift altars, in combination rune
+  crafting and with the abyssal lantern: none is covered (no source checked for how the outfit
+  applies there).
 - Daeyalt essence (pure essence's runes at 1.5 times the XP) needs the Daeyalt essence mine.
 - Dark essence fragments come from the Dense essence mine, the Dark Altar and a chisel, none of
   which exist here yet; the Soul Altar has no handler.

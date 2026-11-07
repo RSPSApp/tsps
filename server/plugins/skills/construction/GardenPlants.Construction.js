@@ -15,6 +15,10 @@ const Ids = require("./Ids.Construction");
  * Wiki (Bagged plants): the plants give "the same amount of experience to both Construction and
  * Farming", the Zen theme included (474 each). The menagerie's habitats also take a bagged plant
  * and need a watering can (Wiki: Pet house), but give no Farming experience.
+ *
+ * The natural teleports (spirit tree, fairy ring and both together; Wiki: Teleport space) are
+ * built with a filled watering can in place of a saw and hammer (`tool: "watering-can"`). They
+ * reuse the garden plants' no-water line; no capture has their own.
  */
 const WATERING_ANIMATION = Ids.seq("farming_watering");
 const WATERING_GRAPHIC = Ids.spotanim("farming_wateringcan_water_spotanim");
@@ -39,9 +43,9 @@ function water(player, check) {
   return request.used === true;
 }
 
-/** Why the plant can't go in yet, or null. */
+/** Why the plant (or a natural teleport, which also needs water) can't go in yet, or null. */
 function refusal(player, buildable) {
-  return isGardenPlant(buildable) && !water(player, true) ? NO_WATER : null;
+  return (isGardenPlant(buildable) || buildable.tool === "watering-can") && !water(player, true) ? NO_WATER : null;
 }
 
 /** The pick's animation: watering for a plant. False for other furniture (the hammer plays). */
@@ -55,6 +59,8 @@ function animate(player, buildable) {
 
 /** On completion: a plant takes a charge of water and gives its experience in Farming as well. */
 function complete(player, buildable) {
+  // Natural teleports consume water too, but own their Farming XP in furniture.json.
+  if (buildable.tool === "watering-can") water(player, false);
   if (!isGardenPlant(buildable)) return;
   water(player, false);
   if (!NO_FARMING_EXPERIENCE.has(buildable.key)) player.getSkillManager().addExperiences(Skill.FARMING, buildable.experience);

@@ -118,6 +118,8 @@ const tileKey = (id: number) => `${TILE.x},${TILE.y},0,${id}`;
     updates.onLocDel(TILE, 0, 10, 0);
     assert.equal(renderer.locOverrides.has(tileKey(CACHE_LOC)), false, "deleting after a replay restores the cache loc");
 
+    renderer.locOverrides.delete(tileKey(DYNAMIC)); // Start the independent replacement case without its prior explicit deletion.
+
     // A different object taking over the slot without a delete inherits its predecessor's
     // replacements, so the cache loc still comes back when the last one goes.
     square.ids.length = 0;
@@ -228,6 +230,7 @@ for (const backend of ["WebGL", "WebGPU"]) {
         [23972, 3109, 3167, 0, 3, 3109, 3166, 0], // Wizards' Tower, straight wall door
         [23972, 3107, 3162, 9, 1, 3108, 3162, 2], // its diagonal entrance
         [1535, 3108, 9570, 0, 0, 3107, 9570, 1], // basement
+        [1540, 3238, 3210, 0, 0, 3237, 3210, 1], // Lumbridge church, issue #3393
     ]) for (const backend of ["WebGL", "WebGPU"]) {
         const mapX = x >> 6, mapY = y >> 6, baseX = mapX * 64 - 1, baseY = mapY * 64 - 1;
         const keys = new Map<number, number[]>([[maps.mapFileIndex.getLocArchiveId(mapX, mapY), cacheKeys[(mapX << 8) | mapY] ?? [0, 0, 0, 0]]]);
@@ -293,6 +296,18 @@ for (const backend of ["WebGL", "WebGPU"]) {
         try {
             rebuild(); assert.deepEqual(doors(), [closed], "the exact closed placement comes from the cache");
             const replay = encodeLocAddChange(id, x, y, 0, shape, rotation);
+            // A relog can replay the restored closed loc before the square has loaded.
+            built = [];
+            apply(replay); rebuild();
+            apply(encodeLocDel(x, y, 0, shape, rotation), encodeLocAddChange(id + 1, openX, openY, 0, shape, openRotation));
+            rebuild(); assert.deepEqual(doors(), [opened], `${backend}: opening a cold-replayed door hides its cache copy`);
+            apply(encodeLocDel(openX, openY, 0, shape, openRotation), replay);
+            rebuild(); assert.deepEqual(doors(), [closed], "closing the cold-replayed door restores one closed leaf");
+            renderer.addedLocs.clear(); renderer.locOverrides.clear(); built = [];
+            apply(encodeLocAddChange(id + 1, x, y, 0, shape, rotation)); rebuild();
+            apply(encodeLocDel(x, y, 0, shape, rotation)); rebuild();
+            assert.deepEqual(doors(), [closed], "deleting a different cold-added id preserves the cache door");
+            renderer.addedLocs.clear(); renderer.locOverrides.clear(); rebuild();
             apply(replay); rebuild(); apply(replay); rebuild();
             assert.deepEqual(doors(), [closed], "replays leave one closed door after rebuilding");
             assert.ok(renderer.addedLocs.get(`${x},${y},0,${shape}`).replacedIds.includes(id));

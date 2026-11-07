@@ -23,6 +23,8 @@ const LIT_CANDLE = 33;
 let core;
 let canAttackHook;
 
+const undoneQuests = new Set();
+
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
   core = PluginManager.getCoreApi();
@@ -30,7 +32,10 @@ before(async () => {
   TeleportHandler.checkReqs = (player) => !(player.getInterfaceId() > 0);
   FairyRings.register({
     core, persistAttribute() {}, onObjectInteraction() {}, onInterfaceActionClick() {},
-    onCustomEvent() {}, emitCustomEvent() {}, onPlayerLogin() {}, onCanAttack: handler => { canAttackHook = handler; }, log() {},
+    onCustomEvent() {},
+    // Quests are done unless a test says otherwise (the codes' own quest locks).
+    emitCustomEvent(name, event) { if (name === "quest:is-complete") event.complete = !undoneQuests.has(event.key); },
+    onPlayerLogin() {}, onCanAttack: handler => { canAttackHook = handler; }, log() {},
   });
 });
 
@@ -311,6 +316,23 @@ test("AJQ warns a player without a light source; No cancels, a lit candle skips 
     assert.ok(runTicks(lit, 6).flat().includes("teleport 2735,5221"));
   } finally {
     ItemDefinition.forId = forId;
+  }
+});
+
+// Wiki (Fairy ring): AJQ needs Death to the Dorgeshuun, BJS Regicide, CIP The Fremennik Trials, CLR Monkey Madness I,
+// DLS In Search of the Myreque.
+test("a code whose quest isn't done is refused, with no teleport and no last destination", () => {
+  for (const [code, key, name] of [["AJQ", "death_to_the_dorgeshuun", "Death to the Dorgeshuun"], ["CLR", "monkey_madness_i", "Monkey Madness I"], ["CIP", "fremennik_trials", "The Fremennik Trials"]]) {
+    undoneQuests.add(key);
+    try {
+      const f = player({ inventory: [LIT_CANDLE] });
+      T.setDials(f.p, code);
+      click(f.p, 398, 26);
+      assert.ok(f.ticks.flat().includes(`You need to complete ${name} to travel there.`), `${code}: ${f.ticks.flat().join(" | ")}`);
+      assert.ok(!runTicks(f, 6).flat().some((e) => e.startsWith("teleport")), `${code}: no teleport`);
+    } finally {
+      undoneQuests.delete(key);
+    }
   }
 });
 
@@ -603,3 +625,4 @@ test('Fairytale II: permission and the four-code hideout route through real ring
     route(p); assert.deepEqual(at(p), [2328, 4426, 0]);
   });
 });
+

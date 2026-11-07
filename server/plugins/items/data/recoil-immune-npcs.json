@@ -1,0 +1,31 @@
+{
+  "$comment": "Monsters the ring of recoil (and the ring of suffering's recoil) does not damage: OSRS Wiki, Category:Monsters immune to recoil. Matched by NPC name. Left out because the name is shared with monsters that are not immune: Skeleton Hellhound and Greater Skeleton Hellhound (only Vet'ion's and Calvar'ion's), Evil Chicken, Ogre shaman, Bee Swarm, Husk, Parasite, Undead tree. Hespori sets its own immunity attribute.",
+  "names": [
+    "Artio",
+    "Callisto",
+    "Calvar'ion",
+    "Champion of Scabaras",
+    "Fragment of Seren",
+    "Galvek",
+    "Judge of Yama",
+    "King Roald",
+    "Lowerniel Drakan",
+    "Menaphite Akh",
+    "Menaphite Shadow",
+    "Nex",
+    "Phosani's Nightmare",
+    "Ranis Drakan",
+    "Skotizo",
+    "Slug Prince",
+    "Spindel",
+    "Spindel's Spiderling",
+    "The Nightmare",
+    "Vanstrom Klause",
+    "Venenatis",
+    "Venenatis' Spiderling",
+    "Vet'ion",
+    "Vorkath",
+    "Wighted Leech",
+    "Xamphur"
+  ]
+}

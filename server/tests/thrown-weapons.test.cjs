@@ -474,7 +474,9 @@ function blowpipeScene(t, { scales, darts, recovery = 0, special = false }) {
     getWeapon: () => WeaponInterfaces.BLOWPIPE,
     isSpecialActivated: () => special,
     getCombatSpecial: () => ({ getId: () => "toxic_blowpipe", getDrainAmount: () => 50 }),
-    getEquipment: () => ({ get: (slot) => (slot === WEAPON ? pipe : new Item(-1, 0)), refreshItems() {}, getItems: () => [] }),
+    // As a real container: by slot (WeaponProfiles reads the wielded blowpipe for its dart's flight).
+    getEquipment: () => ({ get: (slot) => (slot === WEAPON ? pipe : new Item(-1, 0)), refreshItems() {},
+      getItems: () => Array.from({ length: 14 }, (_, slot) => (slot === WEAPON ? pipe : new Item(-1, 0))) }),
     getInventory: () => ({ refreshItems() {}, getItems: () => [] }),
     getSkillManager: () => ({}),
   });

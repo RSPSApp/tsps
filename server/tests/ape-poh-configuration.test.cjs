@@ -298,6 +298,9 @@ for (const kind of ['chamber', 'nexus']) {
 
 test('nexus: Arceuus Ape Atoll Dungeon is a distinct configuration', async t => {
   const f = actor(t, 'nexus'), name = 'ape atoll dungeon teleport', cost = setupCost(f, 'nexus', name);
+  // Wiki (Ape Atoll Teleport (Arceuus)): the spell needs Monkey Madness I, and directing needs the spell's quest.
+  const mm1 = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(q => q.key === 'monkey_madness_i');
+  assert.ok(mm1); mm1.setStage(f.p, mm1.completionValue);
   await nexusReady(f, 30); await nexusConfirm(f);
   assert.ok((f.p.getAttribute('construction:nexus')?.slots ?? []).includes(30));
   for (const [id] of cost) assert.equal(f.p.getInventory().getAmount(id), 0);
@@ -336,3 +339,87 @@ test('nexus: stale removed furniture cannot commit a previously opened configura
   for (const [id, amount] of cost) assert.equal(f.p.getInventory().getAmount(id), amount);
   assert.deepEqual(f.p.getAttribute('construction:nexus'), existing);
 });
+
+// Wiki (Portal chamber, Portal nexus): directing needs "the same Magic level and quest requirements as casting the
+// spell", on any spellbook the owner has unlocked.
+const questOf = key => require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(q => q.key === key);
+for (const [name, key, line] of [
+  ['kourend castle teleport', 'client_of_kourend', 'You need to complete Client of Kourend to direct this teleport.'],
+  ['paddewwa teleport', 'desert_treasure_i', 'You need to complete Desert Treasure I to direct this teleport.'],
+  ['moonclan teleport', 'lunar_diplomacy', 'You need to complete Lunar Diplomacy to direct this teleport.'],
+  ['salve graveyard teleport', 'priest_in_peril', 'You need to complete Priest in Peril to direct this teleport.'],
+]) {
+  for (const kind of ['chamber', 'nexus']) {
+    test(`${kind}: ${name} needs ${key} to be directed`, async t => {
+      const f = actor(t, kind), q = questOf(key);
+      assert.ok(q);
+      const messages = [], send = f.p.sendMessage.bind(f.p);
+      t.mock.method(f.p, 'sendMessage', (...args) => { messages.push(args[0]); return send(...args); });
+      const existing = seedExisting(f, kind), cost = setupCost(f, kind, name);
+      const target = kind === 'nexus' ? [...Nexus.destinations().values()].find(d => d.spellName === name) : null;
+      if (kind === 'nexus') assert.ok(target);
+      const direct = async () => {
+        if (kind === 'chamber') { await chamberReady(f, name); await prompt(f, /consume these runes/i, /^yes$/i); }
+        else { await nexusReady(f, target.id); await nexusConfirm(f); }
+      };
+      q.setStage(f.p, 0); assert.equal(q.isComplete(f.p), false);
+      await direct();
+      assert.ok(messages.includes(line), messages.join(' | '));
+      for (const [id, amount] of cost) assert.equal(f.p.getInventory().getAmount(id), amount);
+      if (kind === 'chamber') assert.deepEqual(f.frame.destinations, existing);
+      else assert.deepEqual(f.p.getAttribute('construction:nexus'), existing);
+      q.setStage(f.p, q.completionValue); assert.equal(q.isComplete(f.p), true);
+      if (kind === 'nexus') f.p.closeInterruptibleInterfaces();
+      await direct();
+      for (const [id] of cost) assert.equal(f.p.getInventory().getAmount(id), 0);
+      if (kind === 'chamber') assert.deepEqual(f.frame.destinations, [name]);
+      else assert.ok(f.p.getAttribute('construction:nexus').slots.includes(target.id));
+    });
+  }
+}
+
+test('chamber: Ardougne needs Edmond\'s scroll read, not just Plague City started', async t => {
+  const f = actor(t, 'chamber'), q = questOf('plague_city'), name = 'ardougne teleport';
+  assert.ok(q);
+  const messages = [], send = f.p.sendMessage.bind(f.p);
+  t.mock.method(f.p, 'sendMessage', (...args) => { messages.push(args[0]); return send(...args); });
+  q.setStage(f.p, q.completionValue);
+  const stage = { player: f.p, key: 'plague_city', stage: null };
+  PM.emitCustomEvent('quest:get-stage', stage);
+  assert.ok(Number(stage.stage) < 30, 'a complete Plague City is stage 29; the scroll is 30');
+  const existing = seedExisting(f, 'chamber'), cost = setupCost(f, 'chamber', name);
+  await chamberReady(f, name); await prompt(f, /consume these runes/i, /^yes$/i);
+  assert.ok(messages.some(m => /Edmond's magic scroll to direct this teleport/.test(m)), messages.join(' | '));
+  for (const [id, amount] of cost) assert.equal(f.p.getInventory().getAmount(id), amount);
+  assert.deepEqual(f.frame.destinations, existing);
+});
+
+// The Watchtower spell needs its scroll read (Watchtower quest, stage 14, past the quest's completion at 12); the
+// portals ask the same through magic:teleport-quest-lock.
+for (const kind of ['chamber', 'nexus']) {
+  test(`${kind}: Watchtower needs the spell scroll read to be directed`, async t => {
+    const f = actor(t, kind), q = questOf('watchtower'), name = 'watchtower teleport';
+    assert.ok(q);
+    const messages = [], send = f.p.sendMessage.bind(f.p);
+    t.mock.method(f.p, 'sendMessage', (...args) => { messages.push(args[0]); return send(...args); });
+    const existing = seedExisting(f, kind), cost = setupCost(f, kind, name);
+    const target = kind === 'nexus' ? [...Nexus.destinations().values()].find(d => d.spellName === name) : null;
+    if (kind === 'nexus') assert.ok(target);
+    const direct = async () => {
+      if (kind === 'chamber') { await chamberReady(f, name); await prompt(f, /consume these runes/i, /^yes$/i); }
+      else { await nexusReady(f, target.id); await nexusConfirm(f); }
+    };
+    q.setStage(f.p, q.completionValue); assert.equal(q.isComplete(f.p), true, 'the quest itself is done');
+    await direct();
+    assert.ok(messages.includes('You need to read the Watchtower spell scroll to direct this teleport.'), messages.join(' | '));
+    for (const [id, amount] of cost) assert.equal(f.p.getInventory().getAmount(id), amount);
+    if (kind === 'chamber') assert.deepEqual(f.frame.destinations, existing);
+    else assert.deepEqual(f.p.getAttribute('construction:nexus'), existing);
+    q.setStage(f.p, 14);
+    if (kind === 'nexus') f.p.closeInterruptibleInterfaces();
+    await direct();
+    for (const [id] of cost) assert.equal(f.p.getInventory().getAmount(id), 0);
+    if (kind === 'chamber') assert.deepEqual(f.frame.destinations, [name]);
+    else assert.ok(f.p.getAttribute('construction:nexus').slots.includes(target.id));
+  });
+}

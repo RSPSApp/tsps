@@ -1,5 +1,11 @@
 export type ShopCurrency = "COINS" | "BLOOD_MONEY" | "POINTS" | string;
 
+export interface ShopSalesPolicy {
+    generalStore?: boolean;
+    sellMultiplier?: number;
+    priceChangePer?: number;
+}
+
 export interface ShopStockDefinition {
     id: number;
     amount: number;
@@ -18,7 +24,8 @@ export class ShopDefinition {
         private readonly defaultRestockTicks: number,
         private readonly defaultDestockTicks: number,
         private readonly soldItemDestockTicks: number,
-        private readonly source: string
+        private readonly source: string,
+        private readonly salesPolicy: ShopSalesPolicy = {}
     ) {}
 
     public static replace(definitions: ShopDefinition[]): void {
@@ -75,5 +82,9 @@ export class ShopDefinition {
 
     public getSource(): string {
         return this.source;
+    }
+
+    public getSalesPolicy(): Readonly<ShopSalesPolicy> {
+        return this.salesPolicy;
     }
 }

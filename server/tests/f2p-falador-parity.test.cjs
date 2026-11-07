@@ -50,7 +50,7 @@ function setup(module) {
     getSkillManager: () => ({ getCurrentLevel: () => mining, getCombatLevel: () => combat, addExperiences(...args) { xp.push(args); } }),
     getLocation: () => location, moveTo(value) { location = value; }, getArea: () => area, getPrivateArea: () => area, setArea(value) { area = value; },
     getIndex: () => index++, isPlayer: () => true, isNpc: () => false, getAsPlayer() { return player; }, isRegistered: () => true,
-    getMovementQueue: () => movement, setUntargetable(value) { player.untargetable = value; }, getUsername: () => 'Quest tester',
+    getMovementQueue: () => movement, setUntargetable(value) { player.untargetable = value; }, getUsername: () => 'Quest tester', getDisplayName: () => 'Quest tester',
     getAppearance: () => ({ isMale: () => true }), sendMessage(text) { messages.push(text); }, performAnimation(value) { animations.push(value.id); }, performGraphic(value) { graphics.push(value.id); },
     getDialogueManager: () => ({ startDialogues(chain) { current = chain; }, getCurrent: () => current, reset() { current = null; }, isActive: () => Boolean(current) }),
   };

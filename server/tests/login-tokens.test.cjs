@@ -2,6 +2,8 @@
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 
+// Accounts writes its file to this path; keep it off the real data/saves, before `dist` is required.
+process.env.TSPS_ACCOUNTS_FILE = require('node:path').join(require('node:fs').mkdtempSync(require('node:path').join(require('node:os').tmpdir(), 'accounts-')), 'accounts.json');
 const { Server } = require('../dist/Server');
 Server.installProductionPathResolver();
 
@@ -380,4 +382,157 @@ test('a league world logs the league character in, and its tokens stay in the le
   } finally {
     GameConstants.setWorldProfile('main');
   }
+});
+
+// ---- Credentials stay on the primary ----
+
+const { Accounts } = require('../dist/game/entity/impl/player/Accounts');
+const CHARACTER_LIST = 7;
+
+/** An account "tokenuser" (primary) with one alternate "tokenalt", each with a main save, and optionally a league save for the primary. */
+function accountWithAlt(hash, { league = false, altLeague = false } = {}) {
+  const { PlayerPersistence } = require('../dist/game/entity/impl/player/persistence/PlayerPersistence');
+  Accounts.reset();
+  require('node:fs').rmSync(process.env.TSPS_ACCOUNTS_FILE, { force: true });
+  Accounts.ensure('tokenuser', 1);
+  Accounts.addCharacter('tokenuser', 'tokenalt', 2);
+  const hashes = new Map();
+  const saves = new Map();
+  const makeSave = (id) => {
+    hashes.set(id, hash);
+    const save = {
+      attributes: {},
+      getPasswordHashWithSalt: () => hashes.get(id),
+      setPasswordHashWithSalt(value) { hashes.set(id, value); },
+      getDisplayName: () => id.split('|')[0],
+      applyToPlayer() {},
+    };
+    saves.set(id, save);
+    return save;
+  };
+  makeSave('tokenuser|main');
+  makeSave('tokenalt|main');
+  if (league) makeSave('tokenuser|league');
+  if (altLeague) makeSave('tokenalt|league');
+  const writes = [];
+  const store = Object.assign(Object.create(PlayerPersistence.prototype), {
+    load: (name, profile = 'main') => saves.get(`${name.toLowerCase()}|${profile}`) ?? null,
+    exists: (name, profile = 'main') => saves.has(`${name.toLowerCase()}|${profile}`),
+    save: () => {},
+    saveOffline: (name, _save, _reason, profile = 'main') => { writes.push(`${name.toLowerCase()}|${profile}`); },
+    flush: async () => {},
+    checkPassword: (password, playerSave) => PasswordUtil.passwordsMatch(password, playerSave.getPasswordHashWithSalt()),
+    encryptPassword: (password) => PasswordUtil.generatePasswordHashWithSalt(password),
+  });
+  GameConstants.PLAYER_PERSISTENCE = store;
+  return { saves, hashes, writes, store };
+}
+
+test('a token login typed with a non-primary name rotates the token on the primary save and preselects that character', async (t) => {
+  const { PluginManager } = require('../dist/plugins/PluginManager');
+  const { createLoginExtension } = require('../plugins/accounts/characters/Login.Characters');
+  t.mock.method(PluginManager, 'createLoginExtension', (context) => createLoginExtension({ ...context, api: PluginManager.createApi('Characters') }));
+  const hash = await PasswordUtil.generatePasswordHashWithSalt('hunter22');
+  const { saves } = accountWithAlt(hash);
+  const first = await login('tokenalt', 'hunter22', tokens.LOGIN_FLAG_REMEMBER);
+  assert.equal(first.success, true);
+  assert.equal(saves.get('tokenuser|main').attributes[tokens.LOGIN_TOKENS_ATTRIBUTE].length, 1, 'the token is on the primary');
+  assert.equal(saves.get('tokenalt|main').attributes[tokens.LOGIN_TOKENS_ATTRIBUTE], undefined, 'not on the alternate');
+  const before = saves.get('tokenuser|main').attributes[tokens.LOGIN_TOKENS_ATTRIBUTE][0].hash;
+
+  CachePipeline.getActive = () => ({ revision: REVISION });
+  const channel = stubChannel();
+  const connection = new net.ClientConnection(channel);
+  connection.inject([{ type: 'login', username: 'tokenalt', password: first.token, revision: REVISION, flags: tokens.LOGIN_FLAG_TOKEN | tokens.LOGIN_FLAG_CHARACTER_SELECT }]);
+  await connection.idle();
+  net.ClientConnection.pendingNames.clear();
+  const response = channel.sent.find((bytes) => bytes[0] === 3).subarray(2);
+  assert.equal(response[0], 1, 'the token login succeeded');
+  const [list] = channel.sent.filter((bytes) => bytes[0] === CHARACTER_LIST).map((bytes) => bytes.subarray(3));
+  assert.ok(list, 'a character list followed');
+  assert.equal(list[1], 1, 'the typed alternate is the default');
+  const rotated = saves.get('tokenuser|main').attributes[tokens.LOGIN_TOKENS_ATTRIBUTE];
+  assert.equal(rotated.length, 1, 'the entry was swapped, not added');
+  assert.notEqual(rotated[0].hash, before, 'with a new token');
+  assert.equal(saves.get('tokenalt|main').attributes[tokens.LOGIN_TOKENS_ATTRIBUTE], undefined, 'still none on the alternate');
+});
+
+test('a remembered password login that enters a non-primary leaves login tokens off that player', async (t) => {
+  const { World } = require('../dist/game/World');
+  const { Sailing } = require('../dist/game/content/sailing/Sailing');
+  const { PluginManager } = require('../dist/plugins/PluginManager');
+  const hash = await PasswordUtil.generatePasswordHashWithSalt('hunter22');
+  const { saves } = accountWithAlt(hash);
+  CachePipeline.getActive = () => ({ revision: REVISION });
+  const channel = stubChannel();
+  const connection = new net.ClientConnection(channel);
+  connection.inject([{ type: 'login', username: 'tokenalt', password: 'hunter22', revision: REVISION, flags: tokens.LOGIN_FLAG_REMEMBER }]);
+  await connection.idle();
+  t.mock.method(World.getPlayers(), 'add', (p) => { p.setIndex(1); return true; });
+  t.mock.method(World, 'refreshActiveRegions', () => {});
+  t.mock.method(Sailing, 'onLogin', () => {});
+  t.mock.method(PluginManager, 'emitPlayerLogin', () => {});
+  t.mock.method(PluginManager, 'emitCustomEvent', () => {});
+  connection.inject([{ type: 'handshake', name: 'tokenalt', clientType: 0, capabilities: 0 }]);
+  await connection.idle();
+  net.ClientConnection.pendingNames.clear();
+  const player = connection.getPlayer();
+  assert.ok(player, 'the alternate entered the world');
+  assert.equal(player.getUsername().toLowerCase(), 'tokenalt');
+  assert.equal(player.getAttribute(tokens.LOGIN_TOKENS_ATTRIBUTE), undefined, 'no tokens on the alternate');
+  assert.equal(saves.get('tokenuser|main').attributes[tokens.LOGIN_TOKENS_ATTRIBUTE].length, 1, 'they went to the primary save');
+});
+
+/** Changes the password while `liveName` is online on the main profile; returns what was written. */
+async function changePasswordAs(liveName) {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { World } = require('../dist/game/World');
+  const hashA = await PasswordUtil.generatePasswordHashWithSalt('passwordA');
+  const hashB = await PasswordUtil.generatePasswordHashWithSalt('passwordB');
+  const { saves, hashes, writes, store } = accountWithAlt(hashA, { league: true, altLeague: true });
+  for (const save of saves.values()) save.attributes[tokens.LOGIN_TOKENS_ATTRIBUTE] = [{ hash: 'a'.repeat(64), lastUsed: Date.now() }];
+  const live = new Player(null);
+  live.setUsername(liveName);
+  live.setProfile('main');
+  live.setPasswordHashWithSalt(hashA);
+  const requested = [];
+  store.requestSave = (player, reason) => requested.push([player.getUsername(), reason]);
+  const byName = World.getPlayerByName;
+  World.getPlayerByName = (name) => (name.toLowerCase() === liveName ? live : undefined);
+  try {
+    await store.changePassword(live, hashB);
+  } finally {
+    World.getPlayerByName = byName;
+  }
+  return { live, hashB, saves, hashes, writes, requested };
+}
+
+for (const liveName of ['tokenuser', 'tokenalt']) {
+  test(`changing the password as ${liveName} rewrites every character's saves and signs out their tokens`, async () => {
+    const { live, hashB, saves, hashes, writes, requested } = await changePasswordAs(liveName);
+    assert.equal(live.getPasswordHashWithSalt(), hashB, 'the live character takes it');
+    assert.deepEqual(requested, [[liveName, 'password-change']], 'and its own save is written at once');
+    const ids = ['tokenuser|main', 'tokenuser|league', 'tokenalt|main', 'tokenalt|league'];
+    const offline = ids.filter((id) => id !== `${liveName}|main`);
+    assert.deepEqual(writes.sort(), offline.sort(), 'every other save is written offline, nothing twice');
+    for (const id of offline) {
+      assert.equal(hashes.get(id), hashB, `${id} holds the new hash`);
+      assert.deepEqual(saves.get(id).attributes[tokens.LOGIN_TOKENS_ATTRIBUTE], [], `${id} has no remembered logins`);
+    }
+  });
+}
+
+test('login_forget with a character name drops the token from the primary save', async () => {
+  const hash = await PasswordUtil.generatePasswordHashWithSalt('hunter22');
+  const { saves } = accountWithAlt(hash);
+  const kept = (await login('tokenuser', 'hunter22', tokens.LOGIN_FLAG_REMEMBER)).token;
+  const forgotten = (await login('tokenalt', 'hunter22', tokens.LOGIN_FLAG_REMEMBER)).token;
+  assert.equal(saves.get('tokenuser|main').attributes[tokens.LOGIN_TOKENS_ATTRIBUTE].length, 2);
+  const connection = new net.ClientConnection(stubChannel());
+  connection.inject([{ type: 'login_forget', username: 'tokenalt', token: forgotten }]);
+  await connection.idle();
+  assert.equal(saves.get('tokenuser|main').attributes[tokens.LOGIN_TOKENS_ATTRIBUTE].length, 1);
+  assert.equal(saves.get('tokenalt|main').attributes[tokens.LOGIN_TOKENS_ATTRIBUTE], undefined);
+  assert.equal((await login('tokenuser', forgotten, tokens.LOGIN_FLAG_TOKEN)).success, false, 'the forgotten token is dead');
+  assert.equal((await login('tokenuser', kept, tokens.LOGIN_FLAG_TOKEN)).success, true, 'the other stays');
 });

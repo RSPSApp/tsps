@@ -252,6 +252,9 @@ fail. The worktree client returned HTTP 200 on port 3149 and the game server lis
 - **Gem Check:** the streak line.
 - **Finishing items:** the gargoyle's "The gargoyle cracks apart." and the zygomite's "The Zygomite
   is covered in fungicide. It bubbles away to nothing!"
+- **Finishing thresholds** (Wiki pages Rockslug and Desert Lizard): a bag of salt finishes a
+  rockslug at 4 or fewer hitpoints, an ice cooler a desert lizard below 5. Used above that, the bag
+  or cooler is consumed with no effect.
 - **Superiors:** "<col=ff0000>A superior foe has appeared...</col>"
 - **Mortimer** (recording `mortimer-and-task-completion`):
   - Assignment with no task: the `slayer_choose_*` varbits and `slayer_choose_rolled_master`, then

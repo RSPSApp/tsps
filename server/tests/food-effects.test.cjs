@@ -348,10 +348,10 @@ function inCombatAt(x, y, target = null, attacker = null) {
 }
 
 test("anglerfish cannot over-heal while in combat in a PvP area", () => {
-  assert.equal(Food._test.canAnglerfishOverheal(inCombatAt(3200, 3600)), true, "idle in the Wilderness");
-  assert.equal(Food._test.canAnglerfishOverheal(inCombatAt(3200, 3600, {})), false, "fighting an NPC");
-  assert.equal(Food._test.canAnglerfishOverheal(inCombatAt(3200, 3600, null, {})), false, "being attacked");
-  assert.equal(Food._test.canAnglerfishOverheal(inCombatAt(3222, 3222, {})), true, "Edgeville is not a PvP area");
+  assert.equal(Food._test.canOverheal(inCombatAt(3200, 3600)), true, "idle in the Wilderness");
+  assert.equal(Food._test.canOverheal(inCombatAt(3200, 3600, {})), false, "fighting an NPC");
+  assert.equal(Food._test.canOverheal(inCombatAt(3200, 3600, null, {})), false, "being attacked");
+  assert.equal(Food._test.canOverheal(inCombatAt(3222, 3222, {})), true, "Edgeville is not a PvP area");
   assert.equal(Food._test.getAnglerfishHeal(99), 22);
 });
 
@@ -365,6 +365,49 @@ test("anglerfish heals off the Hitpoints level levelled up to, not the health le
   shallow.give(0, id("ANGLERFISH"));
   shallow.eat(0);
   assert.equal(shallow.hp, 28, "a level-40 eater gets the level-40 heal of 8");
+});
+
+test("haddock overheals by 20% of the Hitpoints level, at most 10, and not in PvP combat (Wiki: Haddock)", () => {
+  assert.equal(Food._test.overhealAllowance(Food._test.foodBite(id("HADDOCK")).food.overheal, 10), 2, "level 10");
+  assert.equal(Food._test.overhealAllowance(Food._test.foodBite(id("HADDOCK")).food.overheal, 14), 2, "level 14");
+  assert.equal(Food._test.overhealAllowance(Food._test.foodBite(id("HADDOCK")).food.overheal, 50), 10, "level 50");
+  assert.equal(Food._test.overhealAllowance(Food._test.foodBite(id("HADDOCK")).food.overheal, 99), 10, "level 99");
+  assert.equal(Food._test.overhealAllowance(undefined, 99), 0, "ordinary food never overheals");
+
+  const full = createPlayer({ hp: 99, maxHp: 99 });
+  full.give(0, id("HADDOCK"));
+  full.eat(0);
+  assert.equal(full.hp, 109, "a full level-99 eater rises to 109");
+
+  const boosted = createPlayer({ hp: 105, maxHp: 99 });
+  boosted.give(0, id("HADDOCK"));
+  boosted.eat(0);
+  assert.equal(boosted.hp, 109, "an overhealed eater is brought to 109, no further");
+
+  const low = createPlayer({ hp: 90, maxHp: 99 });
+  low.give(0, id("HADDOCK"));
+  low.eat(0);
+  assert.equal(low.hp, 108, "the heal of 18 is not cut short of the cap");
+
+  const shark = createPlayer({ hp: 99, maxHp: 99 });
+  shark.give(0, id("SHARK"));
+  shark.eat(0);
+  assert.equal(shark.hp, 99, "a shark still stops at the base level");
+
+  const fighting = createPlayer({ hp: 99, maxHp: 99, at: new Location(3200, 3600, 0) });
+  fighting.getCombat = () => ({ delayAttack() {}, getTarget: () => ({}), getAttacker: () => null });
+  fighting.give(0, id("HADDOCK"));
+  fighting.eat(0);
+  assert.equal(fighting.hp, 99, "no overheal in combat in a PvP area");
+});
+
+test("yellowfin heals 19 and restores 20% run energy (Wiki: Yellowfin)", () => {
+  const player = createPlayer({ hp: 50 });
+  player.give(0, id("YELLOWFIN"));
+  player.eat(0);
+  assert.equal(player.hp, 69);
+  assert.equal(player.energy, 70, "from 50% to 70%");
+  assert.deepEqual(player.messages.slice(0, 1), ["You eat the yellowfin."]);
 });
 
 test("strange fruit restores energy and cures poison, without healing", () => {

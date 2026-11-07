@@ -6,6 +6,7 @@ import { Graphic } from "../../../model/Graphic";
 import { Item } from "../../../model/Item";
 import { MagicSpellbook } from "../../../model/MagicSpellbook";
 import { Skill } from "../../../model/Skill";
+import { PluginManager } from "../../../../plugins/PluginManager";
 import { Spell } from "./Spell";
 
 type Reanimation = { level: number; experience: number; runes: Item[]; npcId: number };
@@ -70,7 +71,10 @@ export class ArceuusItemSpells {
         }
         if (!spell.canCast(player, false) || !spell.canCast(player, true)) return true;
 
-        player.getInventory().deleteNumber(itemId, 1);
+        // Zealot's robes may save the head (Wiki: Ensouled head); the cast still happens and still pays.
+        const consumed = { player, saved: false };
+        PluginManager.emitCustomEvent("reanimation:head-consumed", consumed);
+        if (!consumed.saved) player.getInventory().deleteNumber(itemId, 1);
         const npc = NPC.create(npcId, player.getLocation().clone());
         (npc as any).__skipDefaultRespawn = true;
         npc.setOwner(player);

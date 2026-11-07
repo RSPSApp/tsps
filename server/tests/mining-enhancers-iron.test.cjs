@@ -251,9 +251,12 @@ for (const config of configurations) test(`native ordinary iron enhancers: ${con
   assert.equal(groundOre.length,0,'bonus resources are not credited as undeliverable ground drops');
   assert.equal(p.getAttribute('mining:ores-mined'),baseGathers*config.expected);
   const xpAwards=baseGathers*config.expected*(config.hotfoot ? 2 : 1);
-  assert.deepEqual(gains,Array(xpAwards).fill(35));
-  assert.equal(skills.getExperience(core.Skill.MINING)-startXp,
-    35*xpAwards*rate.multiplier*GameConstants.EXPERIENCE_MULTIPLIER);
+  // Varrock armour 4 acts as a prospector jacket for XP (Wiki Varrock_armour_4): +0.8%.
+  const xpEach=config.armour&&config.armourTier===4 ? 35.28 : 35;
+  assert.deepEqual(gains,Array(xpAwards).fill(xpEach));
+  // getExperience() reports whole XP, so the tenths of 35.28 land within one.
+  assert.ok(Math.abs(skills.getExperience(core.Skill.MINING)-startXp-
+    xpEach*xpAwards*rate.multiplier*GameConstants.EXPERIENCE_MULTIPLIER)<1);
   if (config.hotfoot) assert.equal(skills.getExperience(core.Skill.SMITHING)-startSmithXp,
     17.5*config.expected*rate.multiplier*GameConstants.EXPERIENCE_MULTIPLIER,
     'the existing transformation awards Smithing XP for each logical ore request');

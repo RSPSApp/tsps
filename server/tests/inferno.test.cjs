@@ -250,11 +250,23 @@ const living = (id) => world.npcs.filter((npc) => npc.id === id && npc.registere
 const kill = (npc) => npc.setHitpoints(0);
 const killWave = (session) => [...session.npcs].forEach(kill);
 
+/** A run saved between waves: the player logged in where they were saved, in the arena. */
 function startAt(wave, attributes = {}) {
   const player = new FakePlayer({ [run.ATTR_WAVE]: wave, ...attributes });
+  player.moveTo(new Location(2271, 5343, 0));
   run.resumeRun({ player });
   return { player, session: run.sessionOf(player) };
 }
+
+test('a run saved by someone already out of the arena is dropped on login, not restarted where they stand', () => {
+  const player = new FakePlayer({ [run.ATTR_WAVE]: 12, [run.ATTR_SUPPORTS]: [true, true, true] });
+  player.moveTo(new Location(3222, 3218, 0)); // left by a route past canTeleport
+  run.resumeRun({ player });
+  assert.ok(!run.sessionOf(player), 'no run starts');
+  assert.equal(player.getAttribute(run.ATTR_WAVE), null);
+  assert.equal(player.getAttribute(run.ATTR_SUPPORTS), null);
+  assert.equal(player.getLocation().getX(), 3222, 'and they are not pulled in');
+});
 
 test('the wave table has 69 waves built from the tier rule', () => {
   assert.equal(FINAL_WAVE, 69);

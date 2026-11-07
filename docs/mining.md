@@ -254,6 +254,23 @@ bracelet's own soft clay each cost one, extras cost none), and the Wiki's soft c
 its prose 3), so soft clay rocks are not yet in the Varrock armour table. The Wiki's worn Check option is not in
 the rev 241 cache (the item has no worn option params), so there is none.
 
+## Prospector outfit
+
+`plugins/skills/mining/ProspectorOutfit.Mining.js` adds the Wiki's Mining XP bonus (source: the Wiki's
+[Prospector outfit](https://oldschool.runescape.wiki/w/Prospector_outfit) page): helmet 0.4%, jacket 0.8%, legs
+0.6%, boots 0.2%, plus 0.5% for all four, 2.5% for the set. Pieces are matched by their cache name, so the golden
+recolours and every other id the cache gives a piece count, and a golden/plain mix still completes the set.
+[Varrock armour 4](https://oldschool.runescape.wiki/w/Varrock_armour_4) "acts as a prospector jacket in terms of
+XP bonus", so it fills the jacket in the bonus and the set; the page names no other tier, so the lower ones do not.
+
+The bonus multiplies the rock's XP (the server then keeps tenths, so iron's 35 becomes 35.8 with the set) and the
+XP of each extra ore (the Varrock armour 4 page: "Additional ores gathered by Varrock armour now provide the bonus
+experience from the Prospector's outfit"; the Mining cape's extra ore takes the same path here, which no fetched page states). Content that gives Mining XP outside
+a rock session asks through the `mining:xp-multiplier` custom event: Motherlode pay-dirt (the Motherlode Mine page
+lists the pieces' Exp boost in Percy's shop) and stardust (the Shooting Stars page: 32 becomes 32.8 with the full kit).
+Rockfalls, Volcanic Mine, Guardians of the Rift and quest rewards are not raised: no fetched page says the outfit
+applies there.
+
 ## Gems while mining
 
 Before each ore roll on the ore rocks above (not sandstone, granite, essence, gem rocks, sunstone or Daeyalt,

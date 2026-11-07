@@ -105,7 +105,7 @@ function titheObject(event) {
                 if (!player.getLocation().isWithinDistance(object.getLocation(), 3)) return;
                 leave(player); player.moveTo(new core.Location(1804, 3501, 0));
             }], ["Stay", () => {}]]);
-        } else if ((player.getSkillManager().getMaxLevel(core.Skill.FARMING) < 34 || player.getSkillManager().getCurrentLevel(core.Skill.FARMING) < 34)) player.sendMessage("You need level 34 Farming to enter.");
+        } else if (player.getSkillManager().getMaxLevel(core.Skill.FARMING) < 34 || player.getSkillManager().getCurrentLevel(core.Skill.FARMING) < 34) player.sendMessage("You need level 34 Farming to enter.");
         else if (!CROPS.some(c => player.getInventory().contains(Data.itemId(c.name + " seed")))) player.sendMessage("Take some seeds from the table first.");
         else {
             enter(player); player.moveTo(new core.Location(1806, 3501, 0));

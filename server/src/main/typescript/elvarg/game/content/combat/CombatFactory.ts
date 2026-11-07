@@ -1770,7 +1770,9 @@ export class CombatFactory {
             }
 
             if (dropped > 0 && pos) {
-                ItemOnGroundManager.registerLocation(player, new Item(ammoItem.getId(), dropped), pos);
+                // The dropped shots keep the stack's meta: preset ammo (PvP presets) stays untradeable on the floor
+                // and comes back as preset ammo, owner-only like any untradeable ground item.
+                ItemOnGroundManager.registerLocation(player, new Item(ammoItem.getId(), dropped, ammoItem.getMeta()), pos);
             }
 
             const consumed = lost + dropped;

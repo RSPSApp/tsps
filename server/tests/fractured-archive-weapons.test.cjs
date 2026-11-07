@@ -35,9 +35,10 @@ const registered = {};
 // Everything standing in the world, as the thrust sees it; tests fill it and clear it.
 let world = [];
 let secondaryAllowed = () => true;
+let multiBetween = () => true;
 const core = {
     World: { getNpcs: () => ({ forEach: (f) => world.filter((m) => m.isNpc?.()).forEach(f) }), getPlayers: () => ({ forEach: (f) => world.filter((m) => !m.isNpc?.()).forEach(f) }) },
-    CombatFactory: { canAttackSecondaryTarget: (attacker, target, candidate) => secondaryAllowed(candidate) },
+    CombatFactory: { multiCombatBetween: () => multiBetween(), canAttackSecondaryTarget: (attacker, target, candidate) => secondaryAllowed(candidate) },
     Equipment, ItemIdentifiers, WeaponInterfaces, RangedCombatMethod, MeleeCombatMethod, PendingHit, Animation,
     Graphic: class { constructor(id) { this.id = id; } },
     Flag: { APPEARANCE: 1 },
@@ -205,6 +206,10 @@ test('a thrust reaches up to two more targets on or behind the main one, charged
         secondaryAllowed = () => false;
         assert.deepEqual(Obligator._test.reachedTargets(user, main), []);
         secondaryAllowed = () => true;
+        // The attacker and main target must both be in multicombat; behind targets alone are not enough.
+        multiBetween = () => false;
+        assert.deepEqual(Obligator._test.reachedTargets(user, main), []);
+        multiBetween = () => true;
 
         world = [main, behind1, behind2];
         pendingHits.length = 0;
@@ -227,6 +232,7 @@ test('a thrust reaches up to two more targets on or behind the main one, charged
     } finally {
         world = [];
         secondaryAllowed = () => true;
+        multiBetween = () => true;
     }
 });
 

@@ -133,6 +133,7 @@ function occupies(mobile, tiles) {
 
 /** The additional targets a thrust reaches, nearest the main target first. */
 function reachedTargets(character, target) {
+  if (!core.CombatFactory.multiCombatBetween(character, target)) return [];
   const candidates = [];
   core.World.getNpcs().forEach((npc) => candidates.push(npc));
   core.World.getPlayers().forEach((player) => candidates.push(player));

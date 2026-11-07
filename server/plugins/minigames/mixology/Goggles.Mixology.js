@@ -63,6 +63,8 @@ function keepVial(request, item) {
 
 function saveSecondaries(request) {
   if (!wearing(request.player)) return;
+  // A vial-of-water step (guam leaf, coral) adds the herb to the vial: no secondary at all.
+  if (request.recipe?.ingredients?.some(([name]) => name === "vial_water")) return;
   const secondaries = request.consume.filter(isSecondary);
   if (secondaries.length === 0 || Math.random() >= GOGGLES.secondarySaveChance) return;
   for (const item of secondaries) {

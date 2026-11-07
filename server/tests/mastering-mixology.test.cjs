@@ -556,6 +556,16 @@ test('prescription goggles: a vial of water step and the herb into it are not se
   });
 });
 
+test('prescription goggles: the herb or coral added to a vial of water is never saved', () => {
+  withRoll(0, () => {
+    for (const [product, herb] of [['cadantinevial', 'cadantine'], ['elkhornvial', 'coral_elkhorn'], ['pillarvial', 'coral_pillar'], ['umbralvial', 'coral_umbral']]) {
+      const request = mixRequest(product, herb, 'mm_alchemist_hat');
+      Goggles.saveSecondaries(request);
+      assert.ok(request.consume.every((item) => item.count > 0), product);
+    }
+  });
+});
+
 test('prescription goggles: every copy of a stacked secondary is kept (20 Zulrah scales on an anti-venom(4))', () => {
   withRoll(0, () => {
     const request = mixRequest('antivenom4', 'snakeboss_scale', 'mm_alchemist_hat');

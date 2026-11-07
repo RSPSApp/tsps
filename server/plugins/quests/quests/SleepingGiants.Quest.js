@@ -685,6 +685,12 @@ module.exports = function registerSleepingGiantsQuest(api) {
 
   function takeCrateItems(player) {
     if (hasBit(player, BIT_CRATE_LOOTED)) return;
+    // Room was asked when the crate was searched (jYd0Ih); worn gear taken off since can fill it, and the crate is
+    // looted once only, so ask again before anything is given.
+    if (player.getInventory().getFreeSlots() < CRATE_SLOTS_REQUIRED) {
+      player.getInventory().full?.();
+      return;
+    }
     setBit(player, BIT_CRATE_LOOTED);
     for (const [itemId, amount] of CRATE_ITEMS) {
       for (let i = 0; i < amount; i++) player.getInventory().adds(itemId, 1);

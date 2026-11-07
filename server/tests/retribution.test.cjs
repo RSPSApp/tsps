@@ -189,3 +189,21 @@ test("dying to a failed pickpocket's stun does not set it off", () => {
   die(player, stun);
   assert.equal(projectiles.length + submitted.length, 0);
 });
+
+test("the policy check tells the dying player nothing, even when an area would message a refused attack", () => {
+  const player = dyingPlayer();
+  const told = [];
+  const sender = new Proxy({}, { get: (_t, key) => (...args) => { if (key === "sendMessage") told.push(args[0]); return sender; } });
+  player.getPacketSender = () => sender;
+  const far = fakeMobile("Far", 3201, 3200, { npc: false, refused: true });
+  world.players.push(player, far);
+  stub(core.CombatFactory, "canAttackByPolicy", (attacker, target) => {
+    attacker.getPacketSender().sendMessage("Your level difference is too great.");
+    return target.refused ? core.CanAttackResponse.CANT_ATTACK_IN_AREA : core.CanAttackResponse.CAN_ATTACK;
+  });
+  die(player);
+  submitted[0].execute();
+  assert.equal(far.hits.length, 0);
+  assert.deepEqual(told, []);
+  assert.equal(player.getPacketSender(), sender, "the real sender is back afterwards");
+});

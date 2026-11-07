@@ -38,15 +38,29 @@ function setsOff(player) {
   return check.allow !== false;
 }
 
+/**
+ * The area policy as the dying player would meet it, without telling them. Areas answer a refused
+ * attack with a message to the attacker (the Wilderness level range, quest rules); the fire is not
+ * an attack the player chose, so their packet sender is muted for the check.
+ */
+function allowedQuietly(dying, target) {
+  const hadOwn = Object.prototype.hasOwnProperty.call(dying, "getPacketSender");
+  const own = dying.getPacketSender;
+  const mute = new Proxy({}, { get: () => () => mute });
+  dying.getPacketSender = () => mute;
+  try {
+    return core.CombatFactory.canAttackByPolicy(dying, target) === core.CanAttackResponse.CAN_ATTACK;
+  } finally {
+    if (hadOwn) dying.getPacketSender = own;
+    else delete dying.getPacketSender;
+  }
+}
+
 /** Whether Retribution may hurt `target`: a living enemy in an area that lets the dying player attack it. */
 function isEnemy(dying, target) {
   if (!target || target === dying || !target.isRegistered() || target.getHitpoints() <= 0 || target.isUntargetable()) return false;
-  if (target.isNpc()) {
-    return target.getAsNpc().getCurrentDefinition().isAttackable()
-      && core.CombatFactory.canAttackByPolicy(dying, target) === core.CanAttackResponse.CAN_ATTACK;
-  }
-  return !target.getAsPlayer().getDueling().inDuel()
-    && core.CombatFactory.canAttackByPolicy(dying, target) === core.CanAttackResponse.CAN_ATTACK;
+  if (target.isNpc()) return target.getAsNpc().getCurrentDefinition().isAttackable() && allowedQuietly(dying, target);
+  return !target.getAsPlayer().getDueling().inDuel() && allowedQuietly(dying, target);
 }
 
 /** Tiles from `centre` to the nearest tile a mobile covers (a big NPC's location is its south-west tile). */

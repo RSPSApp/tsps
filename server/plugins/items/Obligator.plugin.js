@@ -16,6 +16,8 @@
  * vfx_obligator_{charged,uncharged}_thrust spotanims, each with a _female twin. Which of the two
  * animations belongs to which style is an estimate: the Thrust one runs as long as its vfx seq.
  */
+const { restricted, plainAmount, takePlain, PRESET_TEXT } = require("./PoweredStaff");
+
 const MAX_CHARGES = 20000;
 const CHARGES_PER_BATCH = 10;
 const NATURE_RUNES_PER_BATCH = 20;
@@ -143,24 +145,34 @@ function chargeObligator(event) {
   if (![ASCENSION_SHARDS, NATURE_RUNE, DEATH_RUNE].includes(otherId)) return;
   event.handled = true;
   const inventory = player.getInventory();
+  // Preset copies never pay: Uncharge refunds plain shards and runes, so they would come back tradeable.
+  if (restricted(weapon === usedItem ? usedWithItem : usedItem)) {
+    player.sendMessage(PRESET_TEXT);
+    return;
+  }
   const room = Math.floor((MAX_CHARGES - charges(weapon)) / CHARGES_PER_BATCH);
   if (room < 1) {
     player.sendMessage("Your Obligator cannot hold any more charges.");
     return;
   }
-  const batches = Math.min(
+  const affordable = (count) => Math.min(
     room,
-    inventory.getAmount(ASCENSION_SHARDS),
-    Math.floor(inventory.getAmount(NATURE_RUNE) / NATURE_RUNES_PER_BATCH),
-    Math.floor(inventory.getAmount(DEATH_RUNE) / DEATH_RUNES_PER_BATCH),
+    count(ASCENSION_SHARDS),
+    Math.floor(count(NATURE_RUNE) / NATURE_RUNES_PER_BATCH),
+    Math.floor(count(DEATH_RUNE) / DEATH_RUNES_PER_BATCH),
   );
+  const batches = affordable((id) => plainAmount(inventory, id));
+  if (batches < 1 && affordable((id) => inventory.getAmount(id)) >= 1) {
+    player.sendMessage(PRESET_TEXT);
+    return;
+  }
   if (batches < 1) {
     player.sendMessage(`You need an ascension shard, ${NATURE_RUNES_PER_BATCH} nature runes and ${DEATH_RUNES_PER_BATCH} death runes for ${CHARGES_PER_BATCH} charges.`);
     return;
   }
-  inventory.deleteNumber(ASCENSION_SHARDS, batches);
-  inventory.deleteNumber(NATURE_RUNE, batches * NATURE_RUNES_PER_BATCH);
-  inventory.deleteNumber(DEATH_RUNE, batches * DEATH_RUNES_PER_BATCH);
+  takePlain(inventory, ASCENSION_SHARDS, batches);
+  takePlain(inventory, NATURE_RUNE, batches * NATURE_RUNES_PER_BATCH);
+  takePlain(inventory, DEATH_RUNE, batches * DEATH_RUNES_PER_BATCH);
   setCharges(player, weapon, charges(weapon) + batches * CHARGES_PER_BATCH);
   player.sendMessage(`You add ${batches * CHARGES_PER_BATCH} charges to your Obligator.`);
 }

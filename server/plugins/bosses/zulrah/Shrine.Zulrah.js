@@ -151,7 +151,7 @@ function placeTeleport(fight) {
   for (let y = at.getY() + 1; y >= at.getY() - 1 && !tile; y--) {
     for (let x = at.getX() + 1; x >= at.getX() - 1; x--) {
       if (x === at.getX() && y === at.getY()) continue;
-      if ((RegionManager.getClipping(x, y, 0, fight.area) & 0x1280100) === 0) {
+      if ((RegionManager.getClipping(x, y, 0, fight.area) & RegionManager.BLOCKED_MASK) === 0) {
         tile = new Location(x, y, 0);
         break;
       }

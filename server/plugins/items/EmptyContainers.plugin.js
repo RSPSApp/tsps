@@ -26,7 +26,9 @@ function emptyContainer(event) {
   const emptyId = container ? core.CacheDefinitions.getObjId(container.empty) : -1;
   const inventory = player.getInventory();
   if (emptyId == null || emptyId < 0 || inventory.getItems()[slot]?.getId() !== itemId) return false;
-  inventory.setItem(slot, new core.Item(emptyId, 1)).refreshItems();
+  // The empty bucket keeps the full one's meta: a preset bucket (PvP presets) stays a preset copy.
+  const meta = inventory.getItems()[slot].getMeta?.();
+  inventory.setItem(slot, new core.Item(emptyId, 1, meta ? JSON.parse(JSON.stringify(meta)) : undefined)).refreshItems();
   if (container.sound) core.Sounds.sendSound(player, new core.Sound(container.sound, 1, 0, 0));
   player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, container.message);
   return true;

@@ -249,7 +249,7 @@ test('winning last-slot pet and displaced ore survive real save, Bank deposit an
  assert.equal(g.p.getBank(0).getAmount(item('skillpetmining')),1);assert.equal(g.p.getInventory().getAmount(core.ItemIdentifiers.COPPER_ORE),1);assert.equal(g.p.getInventory().getAmount(item('skillpetmining')),0);core.ItemOnGroundManager.process();assert.equal(core.World.getItems().includes(logs[0]),false);
 });
 
-for(const [name,meta,combust]of [['INFERNAL_PICKAXE','infernal-pickaxe',true],['CRYSTAL_PICKAXE','crystal-pickaxe',false]])test('actual '+name+' charge and XP survive winning last-slot pet priority',async t=>{const f=actor(t);await otherFollower(f);f.p.getSkillManager().setCurrentLevel(core.Skill.MINING,99);f.p.getSkillManager().setMaxLevel(core.Skill.MINING,99);const pickaxe=new core.Item(core.ItemIdentifiers[name]);pickaxe.setMetaValue(meta,{charges:2});f.p.getInventory().add(pickaxe,true);while(f.p.getInventory().getFreeSlots()>1)f.p.getInventory().add(new core.Item(core.ItemIdentifiers.RAKE),false);const xp=f.p.getSkillManager().getExperience(core.Skill.MINING),smith=f.p.getSkillManager().getExperience(core.Skill.SMITHING);await mineOnce(t,f);assert.equal(f.p.getInventory().getItems().find(i=>i.getId()===core.ItemIdentifiers[name]).getMetaValue(meta).charges,1);assert.ok(f.p.getSkillManager().getExperience(core.Skill.MINING)>xp);assert.equal(f.p.getInventory().getAmount(item('skillpetmining')),1);assert.equal(groundOre(f).reduce((n,g)=>n+g.getItem().getAmount(),0),combust?0:1);if(combust)assert.ok(f.p.getSkillManager().getExperience(core.Skill.SMITHING)>smith);});
+for(const [name,meta,combust]of [['INFERNAL_PICKAXE','infernal-pickaxe',true],['CRYSTAL_PICKAXE','crystal-pickaxe',false]])test('actual '+name+' charge and XP survive winning last-slot pet priority',async t=>{const f=actor(t);await otherFollower(f);f.p.getSkillManager().setCurrentLevel(core.Skill.MINING,99);f.p.getSkillManager().setMaxLevel(core.Skill.MINING,99);f.p.getSkillManager().setCurrentLevel(core.Skill.AGILITY,50);/* a crystal pickaxe needs 50 Agility (Wiki) */const pickaxe=new core.Item(core.ItemIdentifiers[name]);pickaxe.setMetaValue(meta,{charges:2});f.p.getInventory().add(pickaxe,true);while(f.p.getInventory().getFreeSlots()>1)f.p.getInventory().add(new core.Item(core.ItemIdentifiers.RAKE),false);const xp=f.p.getSkillManager().getExperience(core.Skill.MINING),smith=f.p.getSkillManager().getExperience(core.Skill.SMITHING);await mineOnce(t,f);assert.equal(f.p.getInventory().getItems().find(i=>i.getId()===core.ItemIdentifiers[name]).getMetaValue(meta).charges,1);assert.ok(f.p.getSkillManager().getExperience(core.Skill.MINING)>xp);assert.equal(f.p.getInventory().getAmount(item('skillpetmining')),1);assert.equal(groundOre(f).reduce((n,g)=>n+g.getItem().getAmount(),0),combust?0:1);if(combust)assert.ok(f.p.getSkillManager().getExperience(core.Skill.SMITHING)>smith);});
 
 // Selected native phases: observe a turn's updates before the next real reset.
 function miningCancellationTurn(f) {
@@ -385,4 +385,15 @@ test('native plain mining: an outside-range approach settles before starting and
   assert.deepEqual(gains,[17.5],'ordinary approach must retain the literal copper XP: '+state());
   assert.equal(oreTotal(),1,'ordinary approach must retain one owned copper ore: '+state());
   assert.equal(f.p.getInventory().getAmount(ids.BRONZE_PICKAXE),1);
+});
+
+test('below 50 Agility a carried crystal pickaxe keeps its charges while the rune pickaxe mines',async t=>{
+  const f=actor(t);const skills=f.p.getSkillManager();
+  skills.setCurrentLevel(core.Skill.MINING,99);skills.setMaxLevel(core.Skill.MINING,99);skills.setCurrentLevel(core.Skill.AGILITY,49);
+  const crystal=new core.Item(core.ItemIdentifiers.CRYSTAL_PICKAXE);crystal.setMetaValue('crystal-pickaxe',{charges:100});
+  f.p.getInventory().add(crystal,true);f.p.getInventory().add(new core.Item(core.ItemIdentifiers.RUNE_PICKAXE),true);
+  const xp=skills.getExperience(core.Skill.MINING);
+  await mineOnce(t,f);
+  assert.ok(skills.getExperience(core.Skill.MINING)>xp,'the rune pickaxe mined');
+  assert.equal(f.p.getInventory().getItems().find(i=>i.getId()===core.ItemIdentifiers.CRYSTAL_PICKAXE).getMetaValue('crystal-pickaxe').charges,100,'no crystal charge spent');
 });

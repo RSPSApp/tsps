@@ -71,14 +71,24 @@ export class PlayerPunishment {
     public static addBannedIP(IP: string) {
         if (!this.IPSBanned.includes(IP)) {
             this.addToFile(`${this.BAN_DIRECTORY}IPBans.txt`, IP);
+            this.IPSBanned.push(IP);
         }
-        this.IPSBanned.push(IP);
     }
     public static addMutedIP(IP: string) {
         if (!this.IPSMuted.includes(IP)) {
             this.addToFile(`${this.MUTE_DIRECTORY}IPMutes.txt`, IP);
+            this.IPSMuted.push(IP);
         }
-        this.IPSMuted.push(IP);
+    }
+
+    public static removeBannedIP(IP: string) {
+        this.deleteFromFile(`${this.BAN_DIRECTORY}IPBans.txt`, IP);
+        this.IPSBanned = this.IPSBanned.filter(address => address !== IP);
+    }
+
+    public static removeMutedIP(IP: string) {
+        this.deleteFromFile(`${this.MUTE_DIRECTORY}IPMutes.txt`, IP);
+        this.IPSMuted = this.IPSMuted.filter(address => address !== IP);
     }
 
     public static ban(p: string) {

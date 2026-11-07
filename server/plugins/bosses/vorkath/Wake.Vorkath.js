@@ -24,8 +24,6 @@ const WAKE_SOUNDS = Object.freeze([[1522, 25], [1518, 115]]);
 const POKE_FIRST_MESSAGE = "You need to poke Vorkath awake first.";
 /** The loot tiles, relative to her south-west tile (her body is 0-6 on both axes). */
 const LOOT_OFFSETS = Object.freeze([[-1, -1], [3, -1], [7, -1], [-1, 3], [7, 3], [-1, 7], [3, 7], [7, 7]]);
-/** Blocked-tile flags, as the specials test walkability. */
-const WALKABLE_MASK = 0x1280100;
 
 let api = null;
 let core = null;
@@ -137,7 +135,7 @@ function placeLoot(where) {
   const tile = lootTile(
     { x: base.getX(), y: base.getY() },
     where.player,
-    (x, y) => (core.RegionManager.getClipping(x, y, z, null) & WALKABLE_MASK) === 0,
+    (x, y) => (core.RegionManager.getClipping(x, y, z, null) & core.RegionManager.BLOCKED_MASK) === 0,
   );
   if (tile) where.location = new core.Location(tile[0], tile[1], z);
 }

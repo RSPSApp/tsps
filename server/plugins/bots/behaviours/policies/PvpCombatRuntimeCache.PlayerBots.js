@@ -106,6 +106,10 @@ const ARROW_IDS = new Set(resolveConfiguredItemIds(combatDefinitions.arrows, "co
 const BOLT_IDS = new Set(resolveConfiguredItemIds(combatDefinitions.bolts, "combat.bolts"));
 const SPEC_WEAPON_IDS = new Set(resolveConfiguredItemIds(combatDefinitions.specWeapons, "combat.specWeapons"));
 const SUPPORTED_SPEC_WEAPONS = Object.freeze([...SPEC_WEAPON_IDS]);
+const SUPPORTED_KO_WEAPONS = Object.freeze([
+  ...SUPPORTED_SPEC_WEAPONS,
+  ...resolveConfiguredItemIds(combatDefinitions.koWeapons, "combat.koWeapons"),
+]);
 const COMBAT_ITEM_IDS = Object.freeze(Object.fromEntries(
   Object.entries(combatDefinitions.specialCases ?? {}).map(([name, key]) => [
     name,
@@ -387,6 +391,7 @@ module.exports = {
   CROSSBOW_INTERFACES,
   SPEC_WEAPON_IDS,
   SUPPORTED_SPEC_WEAPONS,
+  SUPPORTED_KO_WEAPONS,
   START_COMBAT_POTION_NAMES,
   classifyWeaponInterface,
   getAmmoId,

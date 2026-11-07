@@ -1,6 +1,8 @@
 import { ClientState } from "../../../game/ClientState";
 import { sampleBridgeHeightForWorldTile, sampleCameraHeightForWorldTile } from "../../../game/scene/BridgeHeightSampler";
 import { interactionModes } from "../../../game/InteractionModes";
+import { npcOpsVisibility } from "../../../game/NpcOpsVisibility";
+import { groundObjOpsVisibility } from "../../../game/GroundObjOpsVisibility";
 import {
     VARP_AREA_SOUNDS_VOLUME,
     VARP_COMBAT_TARGET_PLAYER_INDEX,
@@ -59,6 +61,14 @@ export function handleInboundWorld(msg: any): boolean {
     }
     if (msg.type === "reset_interaction_mode") {
         interactionModes.reset(msg.payload.worldId);
+        return true;
+    }
+    if (msg.type === "hide_npc_ops") {
+        npcOpsVisibility.set(msg.payload.hidden === true);
+        return true;
+    }
+    if (msg.type === "hide_obj_ops") {
+        groundObjOpsVisibility.set(msg.payload.hidden === true);
         return true;
     }
     if (msg.type === "region_replacement") {
@@ -134,14 +144,14 @@ export function handleInboundWorld(msg: any): boolean {
             }
             // Camera packets carry global tile coordinates and height above that tile's
             // ground, in 1/128-tile units. Both movement and look target tile centres.
-            if (payload.mode === "move" || payload.mode === "look") {
+            if (payload.mode === "move" || payload.mode === "look" || payload.mode === "rotate_coordinate") {
                 const x = (Number(payload.x) || 0) + 0.5;
                 const z = (Number(payload.y) || 0) + 0.5;
                 const capturedRates = Number.isInteger(payload.rate) && Number.isInteger(payload.rate2);
                 client.followPlayerCamera = false;
                 const capturedCycles = Number.isInteger(payload.cycles) && payload.cycles > 0;
                 if (capturedRates || capturedCycles) {
-                    const packetHeight = client.camera.resolveScriptedHeight(payload.mode, payload.height, payload.heightRelative === true);
+                    const packetHeight = client.camera.resolveScriptedHeight(payload.mode === "move" ? "move" : "look", payload.height, payload.heightRelative === true);
                     const heightAt = (targetX: number, targetZ: number): number | undefined => {
                         const controlledIndex = client.playerEcs?.getIndexForServerId?.(client.controlledPlayerServerId) ?? 0;
                         const plane = client.playerEcs?.getLevel?.(controlledIndex) ?? 0;
@@ -258,6 +268,10 @@ export function handleInboundWorld(msg: any): boolean {
         } catch (err) {
             console.warn("loc_del handler error", err);
         }
+        return true;
+    }
+    if (msg.type === "loc_merge") {
+        // Native revision 241 consumes LOC_MERGE without changing scene or player models.
         return true;
     }
     if (msg.type === "loc_anim") {

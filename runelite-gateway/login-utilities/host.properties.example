@@ -1,0 +1,7 @@
+# Provision in a dedicated RuneLite user.home/.login-utilities/host.properties.
+enabled=false
+endpoint=https://game.example.invalid/login-utilities/v1/session
+world=1
+worldHosts=127.0.0.1,localhost
+# Use an absolute local path and forward slashes in this properties file.
+tokenStore=C:/Users/YOUR_NAME/AppData/Local/YourServer/tools/LoginUtilities.TokenStore.exe

@@ -19,6 +19,10 @@ function core() {
   return state.core;
 }
 
+function api() {
+  return state.api;
+}
+
 function ids() {
   const { NpcIdentifiers: N } = state.core;
   return {
@@ -73,4 +77,4 @@ function onTask(player, npc) {
   return request.onTask === true;
 }
 
-module.exports = { bind, core, ids, surfacedFor, isMagicOnlyId, alive, onTask, SURFACE_ANIM };
+module.exports = { bind, api, core, ids, surfacedFor, isMagicOnlyId, alive, onTask, SURFACE_ANIM };

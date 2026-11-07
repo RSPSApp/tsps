@@ -599,7 +599,6 @@ module.exports = function registerTheFremennikExilesQuest(api) {
       skills.getMaxLevel(Skill.SLAYER) >= 60 &&
       skills.getMaxLevel(Skill.SMITHING) >= 60 &&
       skills.getMaxLevel(Skill.FISHING) >= 60 &&
-      skills.getMaxLevel(Skill.MINING) >= 60 &&
       skills.getMaxLevel(Skill.RUNECRAFTING) >= 55
     );
   }
@@ -1639,6 +1638,7 @@ module.exports = function registerTheFremennikExilesQuest(api) {
           if (option === "Yes.") {
             if (!meetsRequirements(player)) {
               player.sendMessage("You don't meet the requirements for this quest.");
+              event.end = true;
             } else if (quest.getStage(player) === 0) {
               setStage(player, STAGE_STARTED);
             }

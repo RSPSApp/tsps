@@ -256,6 +256,29 @@ test("Globetrotter: the spellbooks' teleports and the jewellery box's, no higher
   }
 });
 
+test("Banker's Note: preset copies (PvP presets on a league world) are refused, and only plain copies are noted", () => {
+  const relic = character("notepreset", "league", BANKERS_NOTE_TR, 4);
+  const inventory = relic.getInventory();
+  inventory.add(new Item(I.BANKERS_NOTE, 1), false);
+  const preset = () => {
+    const item = new Item(I.LOGS, 1);
+    for (const meta of [Item.UNTRADEABLE_META, Item.UNBANKABLE_META, Item.PRESET_META]) item.setMetaValue(meta, true);
+    return item;
+  };
+  for (let i = 0; i < 3; i++) inventory.add(preset(), false);
+  const note = inventory.getItems().find((item) => item?.getId() === I.BANKERS_NOTE);
+  const logs = inventory.getItems().find((item) => item?.getId() === I.LOGS);
+  hooks.onItemOnItem({ player: relic, usedItem: logs, usedWithItem: note, handled: false });
+  const notedLogs = core.ItemDefinition.forId(I.LOGS).getNoteId();
+  assert.equal(inventory.getAmount(notedLogs), 0, "no plain notes from preset logs");
+  assert.equal(inventory.getAmount(I.LOGS), 3, "the preset logs stay");
+  assert.equal(relic.messages.at(-1), "Preset items cannot be used for this.");
+  for (let i = 0; i < 2; i++) inventory.add(new Item(I.LOGS, 1), false);
+  hooks.onItemOnItem({ player: relic, usedItem: logs, usedWithItem: note, handled: false });
+  assert.equal(inventory.getAmount(notedLogs), 2, "the two plain logs are noted");
+  assert.equal(inventory.getAmount(I.LOGS), 3, "the three preset logs are left");
+});
+
 test("Banker's Note (both leagues): an item used on it is noted or unnoted; Activate repeats it, Toggle switches, the quantities", () => {
   for (const [picks, league] of [[BANKERS_NOTE_TR, 4], [BANKERS_NOTE_RE, 5]]) {
     const relic = character(`note${league}`, "league", picks, league);

@@ -129,7 +129,11 @@ function setup({ boneVoyage = false } = {}) {
       inventory.set(id, (inventory.get(id) ?? 0) + amount);
       return true;
     },
-    forceAdd(id, amount = 1) { inventory.set(id, (inventory.get(id) ?? 0) + amount); return true; },
+    // The real signature: forceAdd(player, item).
+    forceAdd(player, item) {
+      const id = item.getId?.() ?? item.id, amount = item.getAmount?.() ?? item.amount ?? 1;
+      inventory.set(id, (inventory.get(id) ?? 0) + amount);
+    },
     deleteNumber(id, amount = 1) {
       assert.ok((inventory.get(id) ?? 0) >= amount, `missing item ${id}`);
       inventory.set(id, (inventory.get(id) ?? 0) - amount);

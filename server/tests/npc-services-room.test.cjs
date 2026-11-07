@@ -20,6 +20,7 @@ const { MAX_STACK_AMOUNT } = require("../dist/game/model/container/StackType");
 const { DIARIES } = require("../plugins/achievements/diaries/Data.AchievementDiaries");
 const Progress = require("../plugins/achievements/diaries/Progress.AchievementDiaries");
 const QuestRuntime = require("../plugins/quests/QuestRuntime");
+const Ecto = require("../plugins/skills/ectofuntus/Common.Ectofuntus");
 
 const HOME = [3222, 3218];
 const YES = 1;
@@ -45,7 +46,7 @@ before(async () => {
 });
 after(() => PM.emitServerShutdown({}));
 
-function actor(t) {
+function actor(t, { desertDiary = true } = {}) {
   const channel = {
     kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true, send: () => true,
     close() {}, onData() {}, onError() {}, onClose() {},
@@ -68,8 +69,10 @@ function actor(t) {
     p.setRegistered(false);
     core.TaskManager.cancelTasks(p.getIndex());
   });
-  const desert = DIARIES.find((diary) => diary.key === "desert");
-  p.setAttribute(Progress.TASKS_ATTRIBUTE, { desert: desert.tiers.hard.tasks.map((task) => task.key) });
+  if (desertDiary) {
+    const desert = DIARIES.find((diary) => diary.key === "desert");
+    p.setAttribute(Progress.TASKS_ATTRIBUTE, { desert: desert.tiers.hard.tasks.map((task) => task.key) });
+  }
   return { p, c, inv: p.getInventory(), messages };
 }
 
@@ -112,6 +115,265 @@ async function npcOption(t, f, id, option) {
   await send(f, { type: "npc_option", index: npc.getIndex(), clickType });
   drain(f);
 }
+
+// These scenes place the same actor beside indexed NPC spawns; they do not claim
+// to exercise travel between scenes. Every quest and service interaction is a packet.
+// Large token stocks and a coherent capped Prayer baseline are declared consumer
+// starting states, not acquired in this run or evidence of a real saved history.
+const ectoNorm = (text) => String(text).replace(/\s+/g, " ").trim();
+function ectoTurn(f) {
+  const p = f.p;
+  p.resetUpdating(); core.World.processCycle = (core.World.processCycle + 1) & 0x7fffffff;
+  core.TaskManager.process(); f.c.processTurnPackets();
+  const queue = p.getMovementQueue(); queue.beginCycle(); queue.processEntityPursuit();
+  if (queue.hasPendingWork()) queue.process();
+  core.TaskManager.processWalkTo(p.getIndex());
+}
+async function ectoSend(f, packet) {
+  await f.c.dispatch([packet]);
+  for (let i = 0; i < 6; i++) ectoTurn(f);
+}
+async function ectoScene(t, f, id, name, x, y) {
+  const spawns = require("../data/definitions/npc-spawns.json");
+  assert.ok(spawns.some(s => s.id === id && s.name === name && s.x === x && s.y === y && (s.level ?? 0) === 0));
+  core.RegionManager.loadMapFiles(x, y);
+  const adjacent = [[0,-1], [0,1], [-1,0], [1,0]].map(([dx,dy]) => new core.Location(x+dx,y+dy,0))
+    .find(loc => !core.RegionManager.blocked(loc, null));
+  assert.ok(adjacent, `walkable approach at indexed ${name} spawn`);
+  f.p.setLocation(adjacent);
+  const npc = core.NPC.create(id, new core.Location(x,y,0));
+  assert.equal(core.World.getNpcs().add(npc), true);
+  t.after(() => core.World.getNpcs().remove(npc));
+  const definition = npc.getCurrentDefinition(f.p);
+  assert.equal(definition.getName(), name);
+  const clickType = definition.getActions().indexOf("Talk-to") + 1;
+  assert.ok(clickType > 0);
+  await ectoSend(f, {type:"npc_option", index:npc.getIndex(), clickType});
+  return npc;
+}
+
+function ectoLine(f) {
+  const manager = f.p.getDialogueManager(), sender = f.p.getPacketSender();
+  const current = manager.getCurrent(), group = sender.getChatboxGroupId();
+  assert.equal(manager.getOwner(), undefined);
+  assert.equal(sender.getChatboxOwner(), undefined);
+  const expected = new Map([[217,core.PlayerDialogue], [231,core.NpcDialogue],
+    [229,core.StatementDialogue], [193,core.ItemStatementDialogue]]).get(group);
+  assert.ok(expected && current instanceof expected, `native dialogue class/group ${group}`);
+  const mount = sender.subInterfaceTargets.get(group);
+  assert.ok(mount); assert.equal(sender.getSubInterfaceAt(mount.targetUid), mount);
+  return {current, group, text:ectoNorm(current.getText())};
+}
+
+async function ectoAdvance(f, npcId, choices, allowedLines, complete) {
+  for (let step = 0; step < 40; step++) {
+    if (complete()) return;
+    const menu = pending(f);
+    if (menu) {
+      const wanted = choices.find(value => menu.options.includes(value));
+      assert.ok(wanted, `unexpected native menu: ${JSON.stringify(menu.options)}`);
+      if (wanted === "Yes") assert.equal(menu.title, "Start The Restless Ghost quest?");
+      const mount = f.p.getPacketSender().subInterfaceTargets.get(219);
+      assert.ok(mount); assert.equal(f.p.getPacketSender().getSubInterfaceAt(mount.targetUid), mount);
+      assert.equal(f.p.getDialogueManager().getOwner(), undefined);
+      assert.equal(f.p.getPacketSender().getChatboxOwner(), undefined);
+      await ectoSend(f, {type:"dialogue_continue", widgetId:core.MultiChatboxPrompt.OPTIONS_WIDGET_ID,
+        childIndex:menu.options.indexOf(wanted) + 1});
+    } else {
+      const {current, group, text} = ectoLine(f);
+      if (group === 231) assert.equal(current.getNpcId(), npcId);
+      assert.ok(allowedLines.includes(text), `unexpected native dialogue ${group}: ${text}`);
+      assert.notEqual(group, 193, "the gifted amulet is the setup endpoint");
+      await ectoSend(f, {type:"dialogue_continue", widgetId:(group << 16) | (group === 229 ? 4 : 5), childIndex:-1});
+    }
+  }
+  assert.fail("native quest prerequisite did not reach its bounded endpoint");
+}
+
+async function ectoAcquireAmulet(t, f) {
+  const p = f.p, quest = QuestRuntime.getRegisteredQuests().find(q => q.key === "the_restless_ghost");
+  assert.ok(quest); assert.equal(quest.getStage(p), 0);
+  assert.equal(f.inv.getAmount(I.GHOSTSPEAK_AMULET), 0);
+  assert.notEqual(p.getEquipment().get(core.Equipment.AMULET_SLOT)?.getId(), I.GHOSTSPEAK_AMULET);
+  await ectoScene(t, f, core.NpcIdentifiers.FATHER_AERECK, "Father Aereck", 3244, 3206);
+  await ectoAdvance(f, core.NpcIdentifiers.FATHER_AERECK, ["I'm looking for a quest!", "Yes"], [
+    "Welcome to the church of holy Saradomin.", "I'm looking for a quest.",
+    "That's lucky, I need someone to do a quest for me.",
+    "Before starting this quest, be aware that your combat level is lower than the recommended level of 10."
+  ], () => quest.getStage(p) === 1);
+  assert.equal(quest.getStage(p), 1);
+  await ectoSend(f, {type:"interface_close"});
+  await ectoScene(t, f, core.NpcIdentifiers.FATHER_URHNEY, "Father Urhney", 3146, 3174);
+  await ectoAdvance(f, core.NpcIdentifiers.FATHER_URHNEY, ["Father Aereck sent me to talk to you.", "He's got a ghost haunting his graveyard."], [
+    "Go away! I'm meditating!", "Father Aereck sent me to talk to you.",
+    "I suppose I'd better talk to you then. What problems has he got himself into this time?",
+    "He's got a ghost haunting his graveyard.", "Oh, the silly fool.",
+    "I leave town for just five months, and ALREADY he can't manage.", "(sigh)",
+    "Well, I can't go back and exorcise it. I vowed not to leave this place. Until I had done a full two years of prayer and meditation.",
+    "Tell you what I can do though; take this amulet."
+  ], () => quest.getStage(p) === 2);
+  assert.equal(quest.getStage(p), 2); assert.equal(f.inv.getAmount(I.GHOSTSPEAK_AMULET), 1);
+  const gift = ectoLine(f); assert.equal(gift.group, 193); assert.equal(gift.current.getItemId(), I.GHOSTSPEAK_AMULET);
+  assert.equal(gift.text, "Father Urhney hands you an amulet.");
+  await ectoSend(f, {type:"interface_close"});
+  assert.equal(quest.getStage(p), 2);
+  return quest;
+}
+
+test("Ectofuntus earned tokens stay owned or pending at stack capacity", async t => {
+  const token = 4278, amulet = 552, slime = 4286, bucket = 1925, pot = 1931;
+  const meal = core.CacheDefinitions.getObjId("pot_bonemeal");
+  assert.equal(I.ECTO_TOKEN, token); assert.equal(I.GHOSTSPEAK_AMULET, amulet);
+  assert.equal(I.BUCKET_OF_SLIME, slime); assert.equal(I.BUCKET, bucket); assert.equal(I.POT, pot);
+  assert.ok(Number.isInteger(meal) && meal > 0);
+  assert.equal(core.WorldDefinition.isMembersWorld(), true, "the real configured members world");
+  for (const [id, name] of [[token,/ecto.token/i], [amulet,/ghostspeak amulet/i], [slime,/bucket of slime/i], [meal,/bonemeal/i]]) {
+    const definition = core.ItemDefinition.forId(id);
+    assert.match(definition.getName(), name); assert.equal(definition.isNoted(), false);
+  }
+  assert.equal(core.ItemDefinition.forId(token).isStackable(), true);
+  assert.equal(Ecto.worshipFor(meal).xp, 18);
+  const cases = [
+    {name:"ordinary room and repeat", stock:0, capacity:5, expected:5, control:true, repeat:true},
+    {name:"seven token headroom", stock:MAX_STACK_AMOUNT-7, capacity:5, expected:5, control:true},
+    {name:"full inventory without a token stack", stock:0, capacity:0, expected:0, control:true, full:true},
+    {name:"unworn amulet", stock:0, capacity:5, expected:0, control:true, noAmulet:true},
+    {name:"two token headroom", stock:MAX_STACK_AMOUNT-2, capacity:2},
+  ];
+  let controlsPassed = 0;
+  for (const scenario of cases) await t.test(scenario.name, async child => {
+    if (!scenario.control) assert.equal(controlsPassed, 4, "all native controls must pass before a target");
+    const f = actor(child, {desertDiary:false}), p = f.p, inv = f.inv;
+    assert.ok(p.isRegistered() && p.getHitpoints() > 0); assert.equal(p.getPrivateArea(), null);
+    child.after(() => {
+      p.closeInterruptibleInterfaces(); PM.emitPlayerDisconnect({player:p, username:p.getUsername()});
+      core.TaskManager.cancelTasks(p);
+      for (const item of core.World.getItems().filter(g => g.getOwner() === p.getUsername())) core.ItemOnGroundManager.deregister(item);
+    });
+    const stores = id => ({inventory:inv.getAmount(id), equipment:p.getEquipment().getAmount(id),
+      bank:p.getBanks().reduce((n,b,tab) => n + (b && tab !== core.Bank.BANK_SEARCH_TAB_INDEX ? b.getAmount(id) : 0), 0),
+      floor:core.World.getItems().filter(g => !g.isPendingRemoval() && g.getOwner() === p.getUsername() &&
+        g.getPrivateArea() === p.getPrivateArea() && g.getItem().getId() === id).reduce((n,g) => n + g.getItem().getAmount(), 0)});
+    const owned = id => Object.values(stores(id)).reduce((n,count) => n+count, 0);
+    const xp = () => core.Skill.values().map(skill => p.getSkillManager().getExperience(skill));
+    const pendingTokens = () => Ecto.tokens(p);
+    const startXp = xp(); assert.equal(pendingTokens(), 0); assert.equal(owned(token), 0);
+    const quest = await ectoAcquireAmulet(child, f);
+    assert.deepEqual(xp(), startXp, "the first gift does not complete the quest or award XP");
+    assert.equal(quest.getStage(p), 2);
+    if (scenario.stock) {
+      // An explicitly declared normal capped-XP state for the preowned stock.
+      // This does not claim that its historical worships were executed here.
+      assert.equal(scenario.stock % 5, 0); assert.equal(core.SkillManager.MAX_EXPERIENCE, 1000000000);
+      const s = p.getSkillManager();
+      s.setExperiences(core.Skill.PRAYER, core.SkillManager.MAX_EXPERIENCE, false);
+      s.setMaxLevels(core.Skill.PRAYER, 99, false); s.setCurrentLevel(core.Skill.PRAYER, 99, true);
+      assert.equal(s.getExperience(core.Skill.PRAYER), core.SkillManager.MAX_EXPERIENCE);
+      assert.equal(s.getCurrentLevel(core.Skill.PRAYER), 99); assert.equal(s.getMaxLevel(core.Skill.PRAYER), 99);
+      const expected = startXp.slice(); expected[core.Skill.PRAYER.getIndex()] = core.SkillManager.MAX_EXPERIENCE;
+      assert.deepEqual(xp(), expected, "the declared Prayer baseline changes no other skill XP");
+    }
+    assert.notEqual(p.getAttribute(core.SkillManager.XP_LOCKED_ATTRIBUTE), true, "no XP-lock bypass");
+    const amuletSlot = inv.getSlotForItemId(amulet);
+    assert.ok(amuletSlot >= 0); assert.equal(inv.getItems()[amuletSlot].getMeta(), null);
+    assert.ok(core.CacheDefinitions.getItem(amulet).inventoryActions.some(a => a?.toLowerCase() === "wear"));
+    assert.notEqual(PM.emitCanUseItem(p, amulet, "use"), false);
+    if (!scenario.noAmulet) {
+      await ectoSend(f, {type:"inventory_action", widgetId:3214, slot:amuletSlot, itemId:amulet, option:"Wear"});
+      assert.equal(p.getEquipment().get(core.Equipment.AMULET_SLOT)?.getId(), amulet);
+      assert.equal(inv.getAmount(amulet), 0);
+    } else assert.notEqual(p.getEquipment().get(core.Equipment.AMULET_SLOT)?.getId(), amulet);
+    for (const id of [meal, slime]) {
+      assert.notEqual(PM.emitCanUseItem(p,id,"use"), false);
+      inv.add(plain(id), false);
+      const slot = inv.getSlotForItemId(id); assert.ok(slot >= 0); assert.equal(inv.getItems()[slot].getMeta(), null);
+    }
+    if (scenario.stock) {
+      inv.add(plain(token, scenario.stock), false);
+      assert.equal(inv.getAmount(token), scenario.stock);
+      assert.equal(inv.getItems()[inv.getSlotForItemId(token)].getMeta(), null);
+    }
+    if (scenario.full) fillTo(f, 0);
+    const beforeWorship = {meal:owned(meal), slime:owned(slime), pot:owned(pot), bucket:owned(bucket), xp:xp(),
+      prayer:p.getSkillManager().getExperience(core.Skill.PRAYER)};
+    assert.equal(beforeWorship.meal, 1); assert.equal(beforeWorship.slime, 1);
+    const worn = new Set(p.getEquipment().getItems().map(item => item?.getId()));
+    for (const name of ["shades_prayer_helm", "shades_prayer_top", "shades_prayer_bottom", "shades_prayer_boots"])
+      assert.equal(worn.has(core.CacheDefinitions.getObjId(name)), false, "no Zealot save roll");
+    assert.equal(pendingTokens(), 0);
+    core.RegionManager.loadMapFiles(3658,3518);
+    const spot = new core.Location(3658,3517,0), loc = new core.Location(3658,3518,0);
+    assert.equal(core.RegionManager.blocked(spot, null), false); p.setLocation(spot);
+    const object = core.MapObjects.get(16648, loc, null);
+    assert.ok(object, "actual indexed Ectofuntus object");
+    assert.equal(object.isMapOriginal(), true); assert.equal(object.getPrivateArea(), null);
+    assert.equal(object.getDefinition().getName(), "Ectofuntus");
+    assert.ok(object.getDefinition().getInteractions().includes("Worship"));
+    const gains = [], skills = p.getSkillManager(), addExperience = skills.addExperiences.bind(skills);
+    child.mock.method(skills, "addExperiences", (skill, value) => { gains.push({skill,value}); return addExperience(skill,value); });
+    const xpGates = [], gate = PM.emitCanGainExperience.bind(PM);
+    child.mock.method(PM, "emitCanGainExperience", (who, skill, value) => {
+      const result = gate(who, skill, value); xpGates.push({who,skill,value,result}); return result;
+    });
+    const observed = [], emit = PM.emitObjectInteraction.bind(PM);
+    child.mock.method(PM, "emitObjectInteraction", event => { observed.push({player:event.player, objectId:event.objectId, option:event.option}); return emit(event); });
+    await ectoSend(f, {type:"object_option", id:16648, x:3658, y:3518, action:"Worship"});
+    assert.ok(observed.some(e => e.player === p && e.objectId === 16648 && e.option === "worship"));
+    assert.equal(pendingTokens(), 5, "genuine worship earned the pending entitlement");
+    assert.equal(owned(meal), beforeWorship.meal-1); assert.equal(owned(slime), beforeWorship.slime-1);
+    assert.equal(owned(pot), beforeWorship.pot+1); assert.equal(owned(bucket), beforeWorship.bucket+1);
+    assert.ok(gains.some(g => g.skill === core.Skill.PRAYER && g.value === 18), "real bonemeal XP call");
+    assert.ok(xpGates.some(g => g.who === p && g.skill === core.Skill.PRAYER && g.value === 18 && g.result.allow !== false), "the real XP gate does not veto worship");
+    const prayer = p.getSkillManager().getExperience(core.Skill.PRAYER);
+    if (scenario.stock) assert.equal(prayer, beforeWorship.prayer, "ordinary capped stored XP remains capped");
+    else assert.ok(prayer > beforeWorship.prayer, "genuine Prayer XP in the fresh control");
+    assert.equal(quest.getStage(p), 2);
+    for (let n = 0; n < 4 && p.getPacketSender().isChatboxInterface(233); n++) {
+      const mount = p.getPacketSender().subInterfaceTargets.get(233);
+      assert.ok(mount); assert.equal(p.getPacketSender().getSubInterfaceAt(mount.targetUid), mount);
+      await ectoSend(f, {type:"dialogue_continue", widgetId:(233 << 16) | 3, childIndex:-1});
+    }
+    assert.equal(p.getPacketSender().isChatboxInterface(233), false, "native level-up prompts resolved");
+    const beforeClaim = {owned:owned(token), pending:pendingTokens(), xp:xp(), meal:owned(meal), slime:owned(slime), pot:owned(pot), bucket:owned(bucket)};
+    assert.equal(beforeClaim.pending, 5, "the actual worship credit is still pending immediately before Talk-to");
+    assert.equal(inv.getAddableAmount(plain(token, 5)), scenario.capacity, "actual current token headroom");
+    if (scenario.full) { assert.equal(inv.getFreeSlots(), 0); assert.equal(inv.getAmount(token), 0); }
+    const disciple = await ectoScene(child, f, 2988, "Ghost disciple", 3655, 3516);
+    const first = ectoLine(f);
+    if (scenario.noAmulet) {
+      assert.equal(first.group, 231); assert.equal(first.current.getNpcId(), 2988);
+      assert.equal(first.text, "Woooo wooo wooooo woooo");
+    } else {
+      assert.equal(first.group, 217); assert.equal(first.text, "Can I have the tokens I have earned?");
+      await ectoSend(f, {type:"dialogue_continue", widgetId:(217 << 16) | 5, childIndex:-1});
+      const reply = ectoLine(f); assert.equal(reply.group, 231); assert.equal(reply.current.getNpcId(), 2988);
+      const claim = "Certainly, mortal. Here's 5 ectotokens.";
+      const noRoom = "I have 5 ectotokens waiting for you mortal, but you do not have room in your inventory for them.";
+      if (scenario.full) assert.equal(reply.text, noRoom);
+      else if (scenario.control) assert.equal(reply.text, claim);
+      else assert.ok([claim,noRoom].includes(reply.text), "native claim or genuine refusal line");
+    }
+    const afterClaim = {owned:owned(token), pending:pendingTokens(), xp:xp(), meal:owned(meal), slime:owned(slime), pot:owned(pot), bucket:owned(bucket)};
+    assert.equal(afterClaim.owned - beforeClaim.owned + afterClaim.pending, 5,
+      `earned tokens must be delivered or remain pending: ${JSON.stringify({beforeClaim, afterClaim, stores:stores(token)})}`);
+    if (scenario.control) {
+      assert.equal(afterClaim.owned - beforeClaim.owned, scenario.expected);
+      assert.equal(afterClaim.pending, 5-scenario.expected);
+    }
+    assert.deepEqual(afterClaim.xp, beforeClaim.xp); assert.equal(afterClaim.meal, beforeClaim.meal);
+    assert.equal(afterClaim.slime, beforeClaim.slime); assert.equal(afterClaim.pot, beforeClaim.pot); assert.equal(afterClaim.bucket, beforeClaim.bucket);
+    assert.equal(quest.getStage(p), 2);
+    if (scenario.repeat) {
+      await ectoSend(f, {type:"dialogue_continue", widgetId:(231 << 16) | 5, childIndex:-1});
+      const clickType = disciple.getCurrentDefinition(p).getActions().indexOf("Talk-to") + 1;
+      assert.ok(clickType > 0);
+      await ectoSend(f, {type:"npc_option", index:disciple.getIndex(), clickType});
+      assert.notEqual(ectoLine(f).text, "Can I have the tokens I have earned?");
+      assert.equal(owned(token), afterClaim.owned); assert.equal(pendingTokens(), 0);
+    }
+    if (scenario.control) controlsPassed++;
+  });
+});
 
 // ------------------------------------------------------------------ Zahur: Clean
 
@@ -290,4 +552,230 @@ test("Mawnis: too few coins is no sale, and the transcript doesn't say he handed
   const f = actor(t);
   await buyHelm(t, f, HELM_PRICE - 1, { questDone: false });
   assertRefused(f, HELM_PRICE - 1, NO_COINS);
+});
+
+
+test('deferred Thormac enchanting preserves a newer native main shop', async t => {
+  const {ShopDefinitionLoader} = require('../dist/game/definition/loader/impl/ShopDefinitionLoader');
+  assert.equal(new ShopDefinitionLoader().load(), true); core.ShopManager.initialize();
+  const quest = QuestRuntime.getRegisteredQuests().find(q => q.key === 'scorpion_catcher'); assert.ok(quest);
+  const ENCHANT = core.CacheDefinitions.getInterfaceId('thormac'); assert.equal(ENCHANT, 332);
+  const terminalText = "Yes, it'll cost you [20,000 / 30,000 / 40,000] coins for the materials needed though. Which sort of staff did you want enchanting?";
+  for (const mode of ['stationary enchant and close', 'direct shop', 'logout before deferred open', 'newer shop']) await t.test(mode, async child => {
+    const f = actor(child), p = f.p, inv = f.inv;
+    quest.setStage(p, quest.completionValue); assert.equal(quest.isComplete(p), true);
+    assert.equal(p.getPacketSender().getVarp(76), 6, 'canonical saved completed quest, not natural quest completion here');
+    PM.emitPlayerLogin({player:p, username:p.getUsername()}); p.closeInterruptibleInterfaces();
+    const kandarin = {player:p, diary:'kandarin', tier:'hard', complete:null}; PM.emitCustomEvent('diary:is-complete', kandarin);
+    assert.equal(kandarin.complete, false, 'ordinary fee control has no Kandarin discount');
+    inv.add(plain(I.COINS, 80000), false); inv.add(plain(I.AIR_BATTLESTAFF), false); inv.add(plain(I.AIR_BATTLESTAFF), false);
+    const npc = core.NPC.create(core.NpcIdentifiers.THORMAC, new core.Location(HOME[0] + 1, HOME[1], 0));
+    const shopNpc = core.NPC.create(core.NpcIdentifiers.LOWE, new core.Location(HOME[0], HOME[1] + 1, 0));
+    for (const n of [npc, shopNpc]) assert.equal(core.World.getNpcs().add(n), true);
+    assert.equal(npc.getCurrentDefinition(p).getName(), 'Thormac'); assert.equal(shopNpc.getCurrentDefinition(p).getName(), 'Lowe');
+    child.after(() => {
+      p.closeInterruptibleInterfaces(); PM.emitPlayerDisconnect({player:p, username:p.getUsername()});
+      core.TaskManager.cancelTasks(p); for (const n of [npc, shopNpc]) core.World.getNpcs().remove(n);
+      for (const g of core.World.getItems().filter(g => g.getOwner() === p.getUsername())) core.ItemOnGroundManager.deregister(g);
+    });
+    const stores = id => ({inventory:inv.getAmount(id), equipment:p.getEquipment().getAmount(id),
+      bank:p.getBanks().reduce((n,b,tab) => n + (b && tab !== core.Bank.BANK_SEARCH_TAB_INDEX ? b.getAmount(id) : 0), 0),
+      floor:core.World.getItems().filter(g => !g.isPendingRemoval() && g.getOwner() === p.getUsername()
+        && g.getPrivateArea() === p.getPrivateArea() && g.getItem().getId() === id).reduce((n,g) => n + g.getItem().getAmount(), 0)});
+    const owned = id => Object.values(stores(id)).reduce((n,a) => n + a, 0);
+    const resources = () => ({coins:stores(I.COINS), staff:stores(I.AIR_BATTLESTAFF), mystic:stores(I.MYSTIC_AIR_STAFF),
+      experience:core.Skill.values().map(skill => p.getSkillManager().getExperience(skill))});
+    const initial = resources(), sender = p.getPacketSender(), manager = p.getDialogueManager();
+    const unchanged = () => assert.deepEqual(resources(), initial, 'opening/replacing services takes no fee, item or XP');
+    let turns = 0;
+    const turn = () => {
+      assert.ok(++turns <= 28, 'bounded native task/input/movement phase budget'); p.resetUpdating();
+      core.World.processCycle = (core.World.processCycle + 1) & 0x7fffffff; core.TaskManager.process();
+      f.c.processTurnPackets(); const q = p.getMovementQueue(); q.beginCycle(); q.processEntityPursuit();
+      if (q.hasPendingWork()) q.process(); core.TaskManager.processWalkTo(p.getIndex());
+    };
+    const input = async (...packets) => { await f.c.dispatch(packets); turn(); };
+    const op = (n, label) => { const clickType = n.getCurrentDefinition(p).getActions().indexOf(label) + 1;
+      assert.ok(clickType > 0, label); return {type:'npc_option', index:n.getIndex(), clickType}; };
+    const line = () => {
+      const current = manager.getCurrent(), group = sender.getChatboxGroupId();
+      assert.ok(current instanceof core.NpcDialogue || current instanceof core.PlayerDialogue);
+      assert.ok(group === 231 || group === 217); const mount = sender.subInterfaceTargets.get(group);
+      assert.ok(mount); assert.equal(sender.getSubInterfaceAt(mount.targetUid), mount);
+      assert.equal(manager.getOwner(), undefined); return {current, group};
+    };
+    const resume = () => ({type:'dialogue_continue', widgetId:(line().group << 16) | 5, childIndex:-1});
+    const shopMount = () => {
+      assert.equal(p.getInterfaceId(), 300); assert.equal(core.ShopManager.getOpenShop(p)?.name, "Lowe's Archery Emporium");
+      const mount = sender.subInterfaceTargets.get(300); assert.ok(mount);
+      assert.equal(sender.getSubInterfaceAt((161 << 16) | 16), mount); return mount;
+    };
+    if (mode === 'direct shop') { await input(op(shopNpc, 'Trade')); const mount = shopMount(); unchanged(); turn();
+      assert.equal(sender.getSubInterfaceAt(mount.targetUid), mount); unchanged(); return; }
+    await input(op(npc, 'Talk-to'));
+    for (let n = 0; n < 5 && !core.MultiChatboxPrompt.getPending(p); n++) await input(resume());
+    const prompt = core.MultiChatboxPrompt.getPending(p); assert.ok(prompt); assert.equal(manager.isActive(), false);
+    const choice = prompt.options.indexOf("You said you'd enchant my battlestaff for me.") + 1; assert.ok(choice > 0);
+    await input({type:'dialogue_continue', widgetId:core.MultiChatboxPrompt.OPTIONS_WIDGET_ID, childIndex:choice});
+    for (let n = 0; n < 4 && !/Which sort of staff did you want enchanting\?/.test((manager.getCurrent()?.getText?.() ?? '').replace(/\s+/g, ' ').trim()); n++) await input(resume());
+    const terminal = line(); assert.ok(terminal.current instanceof core.NpcDialogue); assert.equal(terminal.group, 231);
+    assert.equal(terminal.current.getText().replace(/\s+/g, ' ').trim(), terminalText);
+    assert.equal(p.getInterfaceId(), -1); assert.equal(sender.isSubInterfaceOpen(ENCHANT), false); unchanged();
+    const queued = [], submit = core.TaskManager.submit.bind(core.TaskManager);
+    child.mock.method(core.TaskManager, 'submit', task => {
+      if (task.constructor === core.CountdownTask && task.key === p && task.getDelay() === 1) queued.push(task);
+      return submit(task);
+    });
+    // The real input queue drains both actions before the next global task phase.
+    await input(resume(), ...(mode === 'newer shop' ? [op(shopNpc, 'Trade')] : []));
+    assert.equal(queued.length, 1, 'yTpo85 produces one real player-object CountdownTask');
+    assert.equal(queued[0].key, p); assert.equal(queued[0].isImmediate(), false); assert.equal(queued[0].isRunning(), true);
+    assert.equal(sender.isSubInterfaceOpen(ENCHANT), false, 'the deferred open has not run'); unchanged();
+    if (mode === 'logout before deferred open') {
+      // Invoke the real production logout lifecycle, not a fabricated cancelTasks call or false flag.
+      // Its caller's full World removal/socket handshake is outside this selected-phase fixture.
+      p.onLogout(); assert.equal(queued[0].isStopped(), true, 'canonical logout cancels the exact raw-player-key task');
+      turn(); assert.equal(sender.isSubInterfaceOpen(ENCHANT), false); assert.equal(manager.isActive(), false); unchanged(); return;
+    }
+    if (mode === 'newer shop') {
+      const newer = shopMount(); assert.equal(queued[0].isRunning(), true, 'new NPC input did not cancel the raw-player-key request');
+      turn(); const details = JSON.stringify({interface:p.getInterfaceId(), enchantMounted:sender.isSubInterfaceOpen(ENCHANT), resources:resources()});
+      // First target: an old optional service cannot replace the exact newer main-modal lifetime.
+      assert.equal(sender.getSubInterfaceAt(newer.targetUid), newer, 'newer shop mount must survive: ' + details);
+      assert.equal(p.getInterfaceId(), 300); assert.equal(sender.isSubInterfaceOpen(ENCHANT), false); unchanged(); return;
+    }
+    turn(); assert.equal(p.getInterfaceId(), ENCHANT); assert.equal(sender.isSubInterfaceOpen(ENCHANT), true); unchanged();
+    const enchant = {type:'widget_action', widgetId:(ENCHANT << 16) | 4, groupId:ENCHANT, childId:4, buttonNum:1, opId:1, slot:-1, itemId:-1};
+    await input(enchant); assert.equal(owned(I.COINS), 40000); assert.equal(owned(I.AIR_BATTLESTAFF), 1); assert.equal(owned(I.MYSTIC_AIR_STAFF), 1);
+    assert.deepEqual(resources().experience, initial.experience);
+    await input({type:'interface_close'}); assert.equal(p.getInterfaceId(), -1); assert.equal(sender.isSubInterfaceOpen(ENCHANT), false);
+    const closed = resources(); await input(enchant); assert.deepEqual(resources(), closed, 'only closing332 ends the admitted service; stale clicks cannot bill another staff');
+  });
+});
+
+
+// Declared preowned barter inputs; no Wintertodt rewards are earned in this test.
+test('Ignisia exchanges a glove for the full fifty owned burnt pages or refuses', async t => {
+  const GLOVE = 20712, PAGE = 20718, NPC = 7374, X = 1634, Y = 3948;
+  assert.equal(I.WARM_GLOVES, GLOVE); assert.equal(I.BURNT_PAGE, PAGE);
+  assert.equal(core.WorldDefinition.isMembersWorld(), true);
+  for (const [id, name, stackable] of [[GLOVE, 'Warm gloves', false], [PAGE, 'Burnt page', true]]) {
+    const definition = core.ItemDefinition.forId(id);
+    assert.equal(definition.getName(), name); assert.equal(definition.isNoted(), false);
+    assert.equal(definition.isStackable(), stackable);
+  }
+  const spawns = require('../data/definitions/npc-spawns.json');
+  assert.ok(spawns.some(n => n.id === NPC && n.name === 'Ignisia' && n.x === X && n.y === Y
+    && (n.level ?? 0) === 0 && n.wanderRadius === 0));
+  const cases = [
+    {name:'fifty headroom', gap:50, control:true},
+    {name:'fifty-one headroom', gap:51, control:true},
+    {name:'No at the real confirmation', gap:51, control:true, no:true},
+    {name:'no glove offers nothing', gap:51, control:true, noGlove:true},
+    {name:'full bag frees the glove slot', gap:MAX_STACK_AMOUNT, control:true, fullBag:true},
+    {name:'twenty-five headroom', gap:25},
+    {name:'full page stack', gap:0},
+  ];
+  let controlsPassed = 0;
+  for (const mode of cases) await t.test(mode.name, async child => {
+    if (!mode.control) assert.equal(controlsPassed, 5, 'all native controls qualify before a target');
+    const f = actor(child, {desertDiary:false}), p = f.p, inv = f.inv;
+    const sender = p.getPacketSender(), manager = p.getDialogueManager();
+    let turns = 0;
+    const turn = () => {
+      assert.ok(++turns <= 96, 'bounded native input/task/movement turns');
+      p.resetUpdating(); core.World.processCycle = (core.World.processCycle + 1) & 0x7fffffff;
+      core.TaskManager.process(); f.c.processTurnPackets();
+      const q = p.getMovementQueue(); q.beginCycle(); q.processEntityPursuit();
+      if (q.hasPendingWork()) q.process(); core.TaskManager.processWalkTo(p.getIndex());
+    };
+    const input = async packet => { await f.c.dispatch([packet]); for (let n = 0; n < 6; n++) turn(); };
+    const stores = id => ({inventory:inv.getAmount(id), equipment:p.getEquipment().getAmount(id),
+      banks:p.getBanks().reduce((sum,b,tab) => sum + (b && tab !== core.Bank.BANK_SEARCH_TAB_INDEX ? b.getAmount(id) : 0), 0),
+      floor:core.World.getItems().filter(g => !g.isPendingRemoval() && g.getOwner() === p.getUsername()
+        && g.getPrivateArea() === p.getPrivateArea() && g.getItem().getId() === id)
+        .reduce((sum,g) => sum + g.getItem().getAmount(), 0)});
+    const total = vector => Object.values(vector).reduce((sum,n) => sum+n, 0);
+    const xp = () => core.Skill.values().map(skill => p.getSkillManager().getExperience(skill));
+    const current = (Type, group) => {
+      const entry = manager.getCurrent(); assert.ok(entry instanceof Type);
+      assert.equal(sender.getChatboxGroupId(), group);
+      assert.equal(manager.getOwner(), undefined); assert.equal(sender.getChatboxOwner(), undefined);
+      const mount = sender.subInterfaceTargets.get(group); assert.ok(mount);
+      assert.equal(sender.getSubInterfaceAt(mount.targetUid), mount);
+      return entry;
+    };
+    const option = (title, options) => {
+      assert.equal(core.MultiChatboxPrompt.getPending(p), null, 'this is the native OptionDialogue route');
+      const entry = current(core.OptionDialogue, 219);
+      assert.equal(entry.getTitle(), title); assert.deepEqual(entry.getOptions(), options);
+      return entry;
+    };
+    const choose = number => input({type:'dialogue_continue', widgetId:core.OptionDialogue.OPTIONS_WIDGET_ID, childIndex:number});
+    assert.ok(p.isRegistered() && p.getHitpoints() > 0); assert.equal(p.getPrivateArea(), null);
+    assert.equal(total(stores(GLOVE)), 0); assert.equal(total(stores(PAGE)), 0);
+    if (!mode.noGlove) inv.add(plain(GLOVE), false);
+    if (MAX_STACK_AMOUNT-mode.gap > 0) inv.add(plain(PAGE, MAX_STACK_AMOUNT-mode.gap), false);
+    if (mode.fullBag) {
+      assert.equal(core.ItemDefinition.forId(229).getName(), 'Vial');
+      assert.equal(core.ItemDefinition.forId(229).isStackable(), false);
+      for (let n = 0; n < 27; n++) inv.add(plain(229), false);
+    }
+    inv.refreshItems();
+    const initialVials = stores(229);
+    assert.equal(inv.getAmount(GLOVE), mode.noGlove ? 0 : 1);
+    assert.equal(inv.getAmount(PAGE), MAX_STACK_AMOUNT-mode.gap);
+    for (const id of [GLOVE, PAGE]) {
+      const slot = inv.getSlotForItemId(id);
+      if (slot >= 0) assert.equal(inv.getItems()[slot].getMeta(), null);
+    }
+    assert.equal(inv.getAddableAmount(plain(PAGE, 50)), mode.fullBag ? 0 : Math.min(mode.gap,50));
+    assert.equal(inv.getFreeSlots(), mode.fullBag ? 0 : mode.noGlove ? 27 : 26, 'observed physical capacity before the trade');
+    const initial = {glove:stores(GLOVE), pages:stores(PAGE), xp:xp()};
+    core.RegionManager.loadMapFiles(X,Y);
+    const stand = [[0,-1],[0,1],[-1,0],[1,0]].map(([dx,dy]) => new core.Location(X+dx,Y+dy,0))
+      .find(at => !core.RegionManager.blocked(at,null));
+    assert.ok(stand, 'a collision-checked adjacent approach at the actual indexed spawn');
+    p.setLocation(stand); p.needsPlacement = false;
+    const npc = core.NPC.create(NPC, new core.Location(X,Y,0));
+    assert.equal(core.World.getNpcs().add(npc), true);
+    child.after(() => {
+      p.closeInterruptibleInterfaces(); PM.emitPlayerDisconnect({player:p, username:p.getUsername()});
+      core.TaskManager.cancelTasks(p); core.World.getNpcs().remove(npc);
+      for (const g of core.World.getItems().filter(g => g.getOwner() === p.getUsername())) core.ItemOnGroundManager.deregister(g);
+    });
+    const definition = npc.getCurrentDefinition(p); assert.equal(definition.getName(), 'Ignisia');
+    const clickType = definition.getActions().indexOf('Exchange')+1; assert.ok(clickType > 0, 'actual cache Exchange operation');
+    await input({type:'npc_option', index:npc.getIndex(), clickType});
+    const greeting = current(core.NpcDialogue,231);
+    assert.equal(greeting.getNpcId(), NPC);
+    assert.equal(greeting.getText().replace(/\s+/g,' ').trim(), 'Do you have something for me?');
+    assert.deepEqual({glove:stores(GLOVE),pages:stores(PAGE),xp:xp()}, initial);
+    await input({type:'dialogue_continue', widgetId:(231<<16)|5, childIndex:-1});
+    option(undefined, ['Yes, I do.', 'Err... nope. Sorry.']); await choose(1);
+    if (mode.noGlove) {
+      assert.equal(manager.isActive(), false); assert.equal(core.MultiChatboxPrompt.getPending(p), null);
+      assert.deepEqual({glove:stores(GLOVE),pages:stores(PAGE),xp:xp()}, initial);
+      controlsPassed++; return;
+    }
+    option('What would you like to trade for?', ['Extra Crate.', 'Burnt Pages.']); await choose(2);
+    option('Trade in 1x Warm gloves for 50x burnt pages?', ['Yes.', 'No.']);
+    assert.equal(inv.getAmount(GLOVE), 1, 'the same declared glove is still carried at the actual confirmation');
+    assert.equal(inv.getAddableAmount(plain(PAGE,50)), mode.fullBag ? 0 : Math.min(mode.gap,50));
+    assert.deepEqual({glove:stores(GLOVE),pages:stores(PAGE),xp:xp()}, initial);
+    await choose(mode.no ? 2 : 1);
+    const after = {glove:stores(GLOVE),pages:stores(PAGE),xp:xp()};
+    const spent = total(initial.glove)-total(after.glove), credited = total(after.pages)-total(initial.pages);
+    // First economic target: the fixed invoice is fully delivered across owned stores or refused atomically.
+    assert.equal(credited, spent*50, 'fixed fifty-page barter must conserve: '+JSON.stringify({mode:mode.name,initial,after,spent,credited}));
+    assert.ok(spent === 0 || spent === 1);
+    if (mode.control && !mode.no) { assert.equal(spent,1); assert.equal(credited,50); }
+    if (mode.no) assert.deepEqual(after, initial);
+    assert.deepEqual(after.xp, initial.xp);
+    assert.deepEqual(stores(229), initialVials, 'barter retains all declared filler items');
+    if (mode.control) {
+      assert.equal(manager.isActive(), false); assert.equal(core.MultiChatboxPrompt.getPending(p), null);
+      controlsPassed++;
+    }
+  });
 });

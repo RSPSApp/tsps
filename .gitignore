@@ -94,3 +94,8 @@ client/tests/artifacts/
 
 # Per-deployment world overrides (WorldDefinition.readWorldConfig)
 server/data/definitions/world.local.json
+
+# Local keys and build caches left by the renamed gateway and removed demo tools.
+/gateway/
+/tools/runelite-gateway/
+/tools/runelite-client/

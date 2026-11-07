@@ -127,6 +127,7 @@ function makeHarness(pluginFile, levels = {}, extraPlugins = []) {
     sendCameraLookAt(...args) { packets.push(['lookAt', ...args]); return sender; },
     sendCameraMoveArc(...args) { packets.push(['moveArc', ...args]); return sender; },
     sendCameraRotateBy(...args) { packets.push(['rotateBy', ...args]); return sender; },
+    sendCameraRotateToCoordinate(...args) { packets.push(['rotateCoordinate', ...args]); return sender; },
     sendCameraShake(...args) { packets.push(['shake', ...args]); return sender; },
     sendCameraReset() { packets.push(['reset']); return sender; },
     sendCameraUnlock(value) { packets.push(['unlock', value]); return sender; },
@@ -834,15 +835,18 @@ test('Troubled Tortugans Pearl cutscene keeps the captured 30-tick camera flight
   assert.ok(h.packets.some((packet) => packet[0] === 'lookAt' && packet[1] === 3336 && packet[2] === 2192));
   assert.equal(h.packets.filter((packet) => packet[0] === 'shake').length, 5);
 
-  h.tick(6); // captured tick 2427 arc leg
-  assert.ok(h.packets.some((packet) => packet[0] === 'moveArc' && packet[5] === 1024 && packet[6] === 300));
-  assert.ok(h.packets.some((packet) => packet[0] === 'rotateBy' && packet[3] === 300));
+  h.tick(6); // captured tick 2427: snap, straight move and coordinate rotation
+  assert.ok(h.packets.some((packet) => packet[0] === 'moveTo' && packet[1] === 3366 && packet[2] === 2232));
+  assert.ok(h.packets.some((packet) => packet[0] === 'moveTo' && packet[1] === 3369 && packet[2] === 2225 && packet[4].cycles === 300 && packet[4].ignoreTerrain === true));
+  assert.ok(h.packets.some((packet) => packet[0] === 'rotateCoordinate' && packet[1] === 3336 && packet[2] === 2223 && packet[4] === 300));
 
   h.tick(10); // captured tick 2437 second shot
   assert.ok(h.packets.some((packet) => packet[0] === 'moveTo' && packet[1] === 3372 && packet[2] === 2223 && packet[3] === 1536));
 
-  h.tick(5); // captured tick 2442 second arc
-  assert.ok(h.packets.some((packet) => packet[0] === 'moveArc' && packet[5] === 1536 && packet[6] === 150));
+  h.tick(5); // captured tick 2442 second straight leg
+  assert.ok(h.packets.some((packet) => packet[0] === 'moveTo' && packet[1] === 3377 && packet[2] === 2228 && packet[4].cycles === 150));
+  assert.ok(h.packets.some((packet) => packet[0] === 'rotateCoordinate' && packet[1] === 3356 && packet[2] === 2208 && packet[4] === 150));
+  assert.equal(h.packets.filter((packet) => ['moveArc', 'rotateBy'].includes(packet[0])).length, 0);
 
   assert.equal(h.player.getMovementQueue().blocked, true, 'camera runs with controls held');
   h.tick(10); // captured tick 2451 reset

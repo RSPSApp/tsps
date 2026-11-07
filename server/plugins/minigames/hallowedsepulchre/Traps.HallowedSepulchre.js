@@ -466,12 +466,26 @@ function hit(run, tier, tile) {
   traps.pendingHit = null;
   traps.pendingPad = null;
   const to = checkpoint(run, tile);
-  if (!wearingHallowedRing(player)) {
+  const protectedByRing = wearingHallowedRing(player);
+  if (!protectedByRing) {
     const [low, high] = T().damage[String(tier)];
     player.addTickHit(player.decrementHealth(new HitDamage(Common.randomInt(low, high), HitMask.RED)));
   }
   player.getMovementQueue().reset();
   player.getMovementQueue().setBlockMovement?.(true);
+  if (protectedByRing) {
+    // The ring saves recovery time. Reuse the modeled checkpoint and omit the
+    // normal death/fade sequence; exact retail timing is not captured here.
+    player.moveTo(run.area.at(to));
+    traps.here = to;
+    traps.prev = to;
+    traps.recovering = false;
+    if (!traps.stunned) {
+      player.performAnimation(new Common.core.Animation(-1));
+      player.getMovementQueue().setBlockMovement?.(false);
+    }
+    return;
+  }
   run.schedule(respawn.deathAt, () => {
     Common.animate(player, respawn.deathSeq);
     Common.closeHud(player);

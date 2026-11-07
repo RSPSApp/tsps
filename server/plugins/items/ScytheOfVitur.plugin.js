@@ -14,6 +14,8 @@
  *
  * In multicombat the remaining hits can cleave adjacent targets in the forward 1x3 arc.
  */
+const { plainAmount, takePlain, PRESET_TEXT } = require("./PoweredStaff");
+
 const MAX_CHARGES = 20000;
 const CHARGES_PER_VIAL = 100;
 const BLOOD_RUNES_PER_VIAL = 200;
@@ -74,6 +76,19 @@ function swapToUncharged(player, item) {
   }
   item.setMetaValue?.(CHARGE_META_KEY, undefined);
   refresh(player);
+}
+
+/**
+ * "item:fill-charges" { player, item, handled }: content that hands out a scythe ready to use
+ * (the PvP Arena's load-outs) asks for a full one: charged, at its most charges.
+ */
+function fillCharges(event) {
+  const { item } = event;
+  const id = item?.getId?.();
+  if (!chargedIds.has(id) && !chargedByUncharged.has(id)) return;
+  if (chargedByUncharged.has(id)) item.setId(chargedByUncharged.get(id));
+  item.setMetaValue(CHARGE_META_KEY, MAX_CHARGES);
+  event.handled = true;
 }
 
 /** Hits per swing: the target's size, 1 to 3. Players are 1x1. */
@@ -170,17 +185,32 @@ function resolveScythe(attacker) {
 }
 
 /** Vials may be noted (Wiki), so count and consume the unnoted ids before the noted one. */
+/**
+ * Only unrestricted copies pay for charges: a scythe's charges can go into the vyre well, and the well's Empty
+ * hands back plain blood runes and vials, so a preset (untradeable, unbankable) copy would come back tradeable.
+ */
 function vialCount(inventory) {
-  return vialIds.reduce((total, id) => total + inventory.getAmount(id), 0) + inventory.getAmount(notedVialId);
+  return vialIds.reduce((total, id) => total + plainAmount(inventory, id), 0) + plainAmount(inventory, notedVialId);
+}
+
+const bloodRunes = (inventory) => plainAmount(inventory, bloodRuneId);
+
+/** Nothing plain pays, but preset copies are held: say why rather than asking for materials. */
+function onlyPresets(player) {
+  const inventory = player.getInventory();
+  const anyVial = [...vialIds, notedVialId].some((id) => inventory.getAmount(id) > 0);
+  if (!anyVial || inventory.getAmount(bloodRuneId) < BLOOD_RUNES_PER_VIAL) return false;
+  player.sendMessage(PRESET_TEXT);
+  return true;
 }
 
 function takeVials(inventory, amount) {
   let left = amount;
   for (const id of [...vialIds, notedVialId]) {
     if (left <= 0) break;
-    const taken = Math.min(left, inventory.getAmount(id));
+    const taken = Math.min(left, plainAmount(inventory, id));
     if (taken > 0) {
-      inventory.deleteNumber(id, taken);
+      takePlain(inventory, id, taken);
       left -= taken;
     }
   }
@@ -231,14 +261,15 @@ function fillWellSets(player, requested) {
     requested,
     Math.floor((WELL_MAX_CHARGES - wellCharges(player)) / CHARGES_PER_VIAL),
     vialCount(inventory),
-    Math.floor(inventory.getAmount(bloodRuneId) / BLOOD_RUNES_PER_VIAL)
+    Math.floor(bloodRunes(inventory) / BLOOD_RUNES_PER_VIAL)
   );
   if (sets < 1) {
+    if (onlyPresets(player)) return;
     player.sendMessage(`You need at least ${BLOOD_RUNES_PER_VIAL} blood runes and 1 vial of blood to start filling the well.`);
     return;
   }
   takeVials(inventory, sets);
-  inventory.deleteNumber(bloodRuneId, sets * BLOOD_RUNES_PER_VIAL);
+  takePlain(inventory, bloodRuneId, sets * BLOOD_RUNES_PER_VIAL);
   inventory.refreshItems();
   publishWell(player, wellCharges(player) + sets * CHARGES_PER_VIAL);
   // Transcript: "You fill the well with one charge" / "with [number] charges" (each is a set).
@@ -250,7 +281,8 @@ function fillWell({ player }) {
     player.sendMessage("The well is full.");
     return true;
   }
-  if (vialCount(player.getInventory()) < 1 || player.getInventory().getAmount(bloodRuneId) < BLOOD_RUNES_PER_VIAL) {
+  if (vialCount(player.getInventory()) < 1 || bloodRunes(player.getInventory()) < BLOOD_RUNES_PER_VIAL) {
+    if (onlyPresets(player)) return true;
     player.sendMessage(`You need at least ${BLOOD_RUNES_PER_VIAL} blood runes and 1 vial of blood to start filling the well.`);
     return true;
   }
@@ -390,16 +422,20 @@ function chargeScythe(event) {
   }
   const batches = Math.min(
     vialCount(inventory),
-    Math.floor(inventory.getAmount(bloodRuneId) / BLOOD_RUNES_PER_VIAL),
+    Math.floor(bloodRunes(inventory) / BLOOD_RUNES_PER_VIAL),
     Math.floor(room / CHARGES_PER_VIAL)
   );
+  if (batches < 1 && onlyPresets(player)) {
+    event.handled = true;
+    return;
+  }
   if (batches < 1) {
     player.sendMessage(`You need a vial of blood and ${BLOOD_RUNES_PER_VIAL} blood runes for 100 charges.`);
     event.handled = true;
     return;
   }
   takeVials(inventory, batches);
-  inventory.deleteNumber(bloodRuneId, batches * BLOOD_RUNES_PER_VIAL);
+  takePlain(inventory, bloodRuneId, batches * BLOOD_RUNES_PER_VIAL);
   if (chargedByUncharged.has(scythe.getId())) {
     scythe.setId(chargedByUncharged.get(scythe.getId()));
   }
@@ -452,6 +488,7 @@ module.exports = {
     api.onItemAction("Holy Scythe of Vitur", { Check: checkCharges, Uncharge: uncharge });
     api.onItemAction("Sanguine Scythe of Vitur", { Check: checkCharges, Uncharge: uncharge });
     api.onItemOnItem(chargeScythe, { noted: false });
+    api.onCustomEvent("item:fill-charges", fillCharges);
     api.onItemOnObject(depositScythe);
     api.onObjectInteraction(WELL_OBJECT, {
       "Charge-at": chargeAtWell,

@@ -440,6 +440,11 @@ test("deed: the Lunar spellbook switched to at an altar, the run turned off from
   const skills = f.player.getSkillManager();
   skills.setMaxLevel(core.Skill.DEFENCE, 40);
   skills.setCurrentLevel(core.Skill.DEFENCE, 40);
+  // The altar switches only to unlocked books (Wiki: Occult altar): Desert Treasure I and Lunar Diplomacy done.
+  for (const key of ["desert_treasure_i", "lunar_diplomacy"]) {
+    const quest = require("../plugins/quests/QuestRuntime").getRegisteredQuests().find((q) => q.key === key);
+    quest.setStage(f.player, quest.completionValue);
+  }
   const altar = new core.GameObject(core.ObjectIdentifiers.ALTAR_OF_THE_OCCULT, new core.Location(1667, 3136, 0), 10, 0, null);
   core.ObjectManager.register(altar, true);
   t.after(() => core.ObjectManager.deregister(altar, true));
@@ -726,6 +731,43 @@ test("equip-all: a set worn at once, a slot taking either (Equip a Full Bronze S
   await inventoryOption(f, "Bronze plateskirt", "Wear", 2, 2);
   assert.equal(f.player.getEquipment().getItems().filter((each) => each && each.getId() >= 0).length, 3, `the real Equipment wears them: ${f.messages}`);
   assert.ok(done(f, "equip-a-full-bronze-set"));
+});
+
+test("pact equipment groups: a godsword, a zenyte piece, or one moon armour piece", async (t) => {
+  const f = pactsCharacter(t);
+  const skills = f.player.getSkillManager();
+  for (const skill of [core.Skill.ATTACK, core.Skill.DEFENCE, core.Skill.STRENGTH, core.Skill.RANGED, core.Skill.MAGIC, core.Skill.HITPOINTS]) {
+    skills.setMaxLevel(skill, 99);
+    skills.setCurrentLevel(skill, 99);
+  }
+  const wear = async (name) => {
+    f.player.getInventory().add(new core.Item(item(name)), true);
+    await inventoryOption(f, name, "Wear", 2, 2);
+  };
+  await wear("Armadyl godsword");
+  assert.ok(done(f, "equip-a-godsword"), f.messages.join(" "));
+  await wear("Blood Moon helm");
+  assert.ok(done(f, "equip-any-piece-of-armour-from-the-moons-of-peril"));
+  await wear("Amulet of torture");
+  assert.ok(done(f, "equip-some-zenyte-jewelry"));
+});
+
+test("assembling a Slayer helm awards the task", async (t) => {
+  const f = pactsCharacter(t);
+  const skills = f.player.getSkillManager();
+  skills.setMaxLevel(core.Skill.CRAFTING, 55);
+  skills.setCurrentLevel(core.Skill.CRAFTING, 55);
+  const unlock = core.CacheDefinitions.getVarbitId("slayer_helm_unlocked");
+  assert.equal(Number.isInteger(unlock), true);
+  f.player.getPacketSender().sendVarbit(unlock, 1);
+  for (const name of ["Black mask", "Earmuffs", "Facemask", "Nose peg", "Spiny helmet", "Enchanted gem"]) {
+    f.player.getInventory().add(new core.Item(item(name)), true);
+  }
+  const { UseItemPacketListener } = require("../dist/net/packet/impl/UseItemPacketListener");
+  const inventory = f.player.getInventory();
+  UseItemPacketListener.itemOnItem(f.player, inventory.getSlotForItemId(item("Earmuffs")), inventory.getSlotForItemId(item("Black mask")));
+  assert.equal(inventory.getAmount(item("Slayer helmet")), 1, f.messages.join(" | "));
+  assert.ok(done(f, "assemble-a-slayer-helm"), f.messages.join(" | "));
 });
 
 test("item sets from the cache: a piece, the whole set, one whole Barrows set (Verac's, worn for real)", async (t) => {

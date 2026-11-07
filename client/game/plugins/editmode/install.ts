@@ -1,3 +1,5 @@
+import { getCustomDefinitionKey } from "../../../custom/definitions/CustomDefinitionStore";
+import { connectEditorCustomContent } from "./EditorCustomContent";
 import { OBJECT_SPAWNS_MESSAGE, OBJECT_SPAWNS_REQUEST_MESSAGE, parseObjectSpawns, type ObjectSpawn, type ObjectSpawnsMessage } from "./hostProtocol/objectSpawnsMessage";
 import { isKnownWaterTextureId } from "../../../render/water/WaterTextureIds";
 import { getContentApiBase } from "../../../network/serverConnection/contentApi";
@@ -163,6 +165,7 @@ interface NamedTypeLoader {
     clearCache(): void;
 }
 
+let indexKey = "";
 const indexes = new Map<EditModeSearchKind, NameIndex>();
 const indexPromises = new Map<EditModeSearchKind, Promise<NameIndex>>();
 
@@ -186,14 +189,22 @@ async function buildNameIndex(loader: NamedTypeLoader): Promise<NameIndex> {
 }
 
 function getNameIndex(kind: EditModeSearchKind, loader: NamedTypeLoader): Promise<NameIndex> {
+    const key = getCustomDefinitionKey();
+    if (key !== indexKey) {
+        indexes.clear();
+        indexPromises.clear();
+        indexKey = key;
+    }
     const cached = indexes.get(kind);
     if (cached) return Promise.resolve(cached);
 
     let pending = indexPromises.get(kind);
     if (!pending) {
         pending = buildNameIndex(loader).then((index) => {
-            indexes.set(kind, index);
-            indexPromises.delete(kind);
+            if (key === indexKey) {
+                indexes.set(kind, index);
+                indexPromises.delete(kind);
+            }
             return index;
         });
         indexPromises.set(kind, pending);
@@ -433,6 +444,10 @@ function filterIndex(index: NameIndex, query: string): EditModeSearchResult[] {
     return index
         .filter((entry) => entry.name.toLowerCase().includes(trimmed))
         .slice(0, SEARCH_RESULT_LIMIT);
+}
+
+export async function searchEditorCache(kind: EditModeSearchKind, loader: NamedTypeLoader, query: string): Promise<EditModeSearchResult[]> {
+    return filterIndex(await getNameIndex(kind, loader), query);
 }
 
 /** Wires the editor to the running client. Dev builds only - see OsrsClient. */
@@ -1748,7 +1763,7 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
                       : client.locTypeLoader
             ) as unknown as NamedTypeLoader | undefined;
             if (!loader) return [];
-            return filterIndex(await getNameIndex(kind, loader), query);
+            return searchEditorCache(kind, loader, query);
         },
         describeDefinition: (kind, id) => describeDefinition(client, kind, id),
         loadPersistedNpcSpawnEdits,
@@ -2000,6 +2015,10 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
     const host = browserHostWindow();
     if (isBrowserHostClient() && host) {
         const hostOrigin = browserHostOrigin();
+        connectEditorCustomContent(client, host, hostOrigin, () => {
+            const { query, kind } = plugin.getState().search;
+            plugin.searchCache(query, kind);
+        });
         window.addEventListener("message", (event: MessageEvent) => {
             if (event.origin !== hostOrigin || event.source !== host) return;
             const message = event.data as RegionPackMessage | NpcSpawnMessage | ObjectSpawnsMessage | undefined;

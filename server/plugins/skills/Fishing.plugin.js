@@ -156,7 +156,7 @@ const HARPOONS = Object.freeze([
   // The league's Echo harpoon (Wiki): a crystal harpoon with no requirement and no charges.
   { ids: [ItemIds.ECHO_HARPOON], level: 1, bonus: 135 },
   // Charged crystal harpoons consume one charge per fish (./fishing/CrystalHarpoon.Fishing.js).
-  { ids: [ItemIds.CRYSTAL_HARPOON, ItemIds.CRYSTAL_HARPOON_3], level: 71, bonus: 135, crystal: true },
+  { ids: [ItemIds.CRYSTAL_HARPOON, ItemIds.CRYSTAL_HARPOON_3], level: 71, agility: 50, bonus: 135, crystal: true },
   // Charged infernal harpoons can cook what they catch (./fishing/InfernalHarpoon.Fishing.js).
   {
     ids: [ItemIds.INFERNAL_HARPOON, ItemIds.INFERNAL_HARPOON_OR_, ItemIds.INFERNAL_HARPOON_OR__3],
@@ -171,7 +171,7 @@ const HARPOONS = Object.freeze([
     level: 75,
     bonus: 120,
   },
-  { ids: [ItemIds.CRYSTAL_HARPOON_INACTIVE_], level: 71, bonus: 120 },
+  { ids: [ItemIds.CRYSTAL_HARPOON_INACTIVE_], level: 71, agility: 50, bonus: 120 },
   { ids: [ItemIds.DRAGON_HARPOON, ItemIds.DRAGON_HARPOON_OR_, ItemIds.DRAGON_HARPOON_OR__3], level: 61, bonus: 120 },
   { ids: [ItemIds.HARPOON, ItemIds.BARB_TAIL_HARPOON], level: 1, bonus: 100 },
 ]);
@@ -539,7 +539,10 @@ function questAllows(player, name) {
 function findTool(player, tool) {
   const level = getFishingLevel(player);
   const has = (id) => player.getInventory().contains(id) || player.getEquipment?.()?.contains(id);
-  const found = tool.variants.find((variant) => variant.level <= level && (variant.ids.length === 0 || variant.ids.some(has))) ?? null;
+  // Wiki (Crystal harpoon): "71 Fishing, 70 Attack, and 50 Agility to wield".
+  const agility = player.getSkillManager().getCurrentLevel(Skill.AGILITY);
+  const found = tool.variants.find((variant) => variant.level <= level && agility >= (variant.agility ?? 1) &&
+    (variant.ids.length === 0 || variant.ids.some(has))) ?? null;
   if (found) return found;
   // Content may stand in for the tool ("fishing:tool", a league relic's harpoon that fishes as any of them).
   const request = { player, variants: tool.variants, variant: null };
@@ -816,7 +819,7 @@ function startFishing(player, npc, tool, activeSessions) {
   activeSessions.set(player, {
     npcIndex: npc.getIndex(),
     npcId: npc.getId(),
-    // A spot that moves ends the session, as in OSRS: the player has to click it again.
+    // Remember the spot tile so relocation can end or restart this method.
     spotX: npc.getLocation().getX(),
     spotY: npc.getLocation().getY(),
     tool,
@@ -831,6 +834,13 @@ function startFishing(player, npc, tool, activeSessions) {
 
   player.performAnimation(new Animation(tool.animationId));
   return true;
+}
+
+/** Content may keep fishing when its spot would normally end the session. */
+function continuesFishing(player) {
+  const request = { player, handled: false };
+  pluginApi.emitCustomEvent("fishing:continue", request);
+  return request.handled;
 }
 
 class FishingTask extends Task {
@@ -852,16 +862,32 @@ class FishingTask extends Task {
 
       // Global tasks precede player turns; the last step may have drained the route.
       const movement = player.getMovementQueue();
-      if (movement.size() > 0 || movement.isMovings?.() || player.getForceMovement() != null) {
+      if (movement.size() > 0 || movement.isMovings?.() || player.getForceMovement() != null ||
+          player.getCombat?.().getTarget() != null) {
         stopFishing(this.activeSessions, player);
         continue;
       }
       if (session.levelUpPaused) continue;
 
       const npc = World.getNpcs().get(session.npcIndex);
-      if (!npc || npc.getId() !== session.npcId ||
-          npc.getLocation().getX() !== session.spotX || npc.getLocation().getY() !== session.spotY) {
+      if (!npc || npc.getId() !== session.npcId) {
         stopFishing(this.activeSessions, player);
+        continue;
+      }
+      if (npc.getLocation().getX() !== session.spotX || npc.getLocation().getY() !== session.spotY) {
+        stopFishing(this.activeSessions, player);
+        if (continuesFishing(player) && player.getLocation().getZ() === npc.getLocation().getZ() &&
+            player.getLocation().isWithinDistance(npc.getLocation(), 24)) {
+          // The normal interaction route cancels on a manual click and validates the target.
+          movement.walkToEntity(npc, () => {
+            if (!player.isRegistered() || player.getHitpoints() <= 0 ||
+                World.getNpcs().get(session.npcIndex) !== npc || npc.getId() !== session.npcId ||
+                player.getLocation().getZ() !== npc.getLocation().getZ() ||
+                !player.getLocation().isWithinDistance(npc.getLocation(), 2) || !continuesFishing(player)) return;
+            player.setPositionToFace(npc.getLocation());
+            startFishing(player, npc, session.tool, this.activeSessions);
+          });
+        }
         continue;
       }
 
@@ -922,7 +948,7 @@ class FishingTask extends Task {
       // ponytail: spots without their own movement still stop at random instead of moving. A full
       // inventory waits for the next tick's check, which says so.
       if (stopAfterCatch || !hasToolRequirements(player, session.tool) ||
-          (!session.tool.spot && !session.tool.stationary && Misc.getRandom(90) === 0)) {
+          (!session.tool.spot && !session.tool.stationary && Misc.getRandom(90) === 0 && !continuesFishing(player))) {
         stopFishing(this.activeSessions, player);
       }
     }

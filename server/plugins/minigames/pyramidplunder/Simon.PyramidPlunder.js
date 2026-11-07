@@ -130,6 +130,8 @@ function talk({ player, npcId }) {
 }
 
 function forget({ player }) {
+  // The artefacts are already gone: leaving before the next line still pays for them (logout saves after this hook).
+  if ((owed.get(player) ?? 0) > 0) pay({ player });
   owed.delete(player);
   offered.delete(player);
 }
@@ -165,7 +167,8 @@ function pay(request) {
   owed.delete(player);
   request.handled = true;
   if (coins <= 0) return;
-  player.getInventory().addItem(new (Common.getCore().Item)(Common.ids().item.coins, coins));
+  // Room was checked at the sale; a slot filled since (gear taken off) puts the rest at the player's feet.
+  player.getInventory().forceAdd(player, new (Common.getCore().Item)(Common.ids().item.coins, coins));
   player.sendMessage(`Simon hands you ${coins.toLocaleString("en-GB")} coins.`);
 }
 
@@ -196,7 +199,7 @@ function sellTops(request) {
   const coins = tops * PYRAMID_TOP_COINS;
   if (!paymentFits(player.getInventory(), tops, coins)) {
     request.end = true;
-    player.sendMessage("You don't have enough inventory space.");
+    player.sendMessage("You do not have enough room to carry all of those coins.");
     return;
   }
   player.getInventory().deleteNumber(Common.ids().item.pyramidTop, tops);

@@ -1,5 +1,6 @@
 const fs = require("fs");
 const path = require("path");
+const { isIP } = require("net");
 const { Location } = require("../../src/main/typescript/elvarg/game/model/Location");
 const { Server } = require("../../src/main/typescript/elvarg/Server");
 const { GameConstants } = require("../../src/main/typescript/elvarg/game/GameConstants");
@@ -844,6 +845,93 @@ function startNpcAnimationScanner(api, player, npcId, possibleAnimations) {
   next();
 }
 
+/** Resolve an exact account or display name; destructive commands must never use prefix matching. */
+function moderationTarget(raw, parts) {
+  const { DisplayNames } = PluginManager.getCoreApi();
+  const name = DisplayNames.key(normalizePlayerCommandName(commandTail(raw, parts)));
+  const account = DisplayNames.ownerOf(name) ?? name;
+  return { name: account, target: World.getPlayerByName(account) };
+}
+
+function accountPunishmentCommand({ player, raw, parts }) {
+  const command = parts[0].toLowerCase();
+  const { name, target } = moderationTarget(raw, parts);
+  if (!name) {
+    player.sendMessage(`Usage: ::${command} player`);
+    return true;
+  }
+  const removing = command.startsWith("un");
+  const mute = command.endsWith("mute");
+  const status = mute ? "muted" : "banned";
+  const active = PlayerPunishment[status](name);
+  if (!removing && !target && !GameConstants.PLAYER_PERSISTENCE.exists(name, worldProfile())) {
+    player.sendMessage(`Player ${name} does not exist.`);
+    return true;
+  }
+  if (removing ? active : !active) {
+    PlayerPunishment[command](name);
+    player.sendMessage(`Player ${name} is now ${removing ? (mute ? "unmuted" : "unbanned") : status}.`);
+    if (target && mute) target.sendMessage(removing ? "You have been unmuted." : "You have been muted.");
+  } else {
+    player.sendMessage(`Player ${name} ${removing ? `is not ${status}` : `is already ${status}`}.`);
+  }
+  if (!mute && !removing && target) target.requestLogout();
+  return true;
+}
+
+function ipPunishmentCommand({ player, raw, parts }) {
+  const command = parts[0].toLowerCase();
+  const removing = command.startsWith("un");
+  const mute = command.endsWith("mute");
+  const input = commandTail(raw, parts);
+  if (!input) {
+    player.sendMessage(`Usage: ::${command} ${removing ? "player|ip" : "player"}`);
+    return true;
+  }
+  const { target } = moderationTarget(raw, parts);
+  const address = target?.getHostAddress() || (removing && isIP(input) ? input : "");
+  if (!isIP(address)) {
+    player.sendMessage(target ? "This player has no IP address." : `Player ${input} is not online.${removing ? " Use their IP address instead." : ""}`);
+    return true;
+  }
+  // The login IP gate has no staff exemption: your own or a proxy's loopback address would lock out you or everyone behind it.
+  if (!removing && (address === player.getHostAddress() || /^(127\.|::1$|::ffff:127\.)/.test(address))) {
+    player.sendMessage(`Refusing to IP ${mute ? "mute" : "ban"} ${address}: it is your own or a loopback address.`);
+    return true;
+  }
+  const status = mute ? "muted" : "banned";
+  const active = mute ? PlayerPunishment.IPMuted(address) : PlayerPunishment.IPBanned(address);
+  if (removing ? active : !active) {
+    if (mute) {
+      if (removing) PlayerPunishment.removeMutedIP(address);
+      else PlayerPunishment.addMutedIP(address);
+    } else {
+      if (removing) PlayerPunishment.removeBannedIP(address);
+      else PlayerPunishment.addBannedIP(address);
+    }
+    player.sendMessage(`IP address ${address} is now ${removing ? (mute ? "unmuted" : "unbanned") : status}.`);
+  } else {
+    player.sendMessage(`IP address ${address} ${removing ? `is not ${status}` : `is already ${status}`}.`);
+  }
+  if (!mute && !removing) {
+    World.getPlayers().forEach((other) => {
+      if (other?.getHostAddress() === address) other.requestLogout();
+    });
+  }
+  return true;
+}
+
+function kickCommand({ player, raw, parts }) {
+  const { name, target } = moderationTarget(raw, parts);
+  if (!name) player.sendMessage("Usage: ::kick player");
+  else if (!target) player.sendMessage(`Player ${name} is not online.`);
+  else {
+    target.requestLogout();
+    player.sendMessage(`Disconnected player ${name}.`);
+  }
+  return true;
+}
+
 /** The character a name means on this world: the one every login here gets (the league character on a league world, docs/leagues.md). */
 function worldProfile() {
   return GameConstants.WORLD_PROFILE;
@@ -1005,13 +1093,7 @@ module.exports = {
       return true;
     }, PlayerRights.ADMINISTRATOR, "Teleport a player to you");
 
-    api.registerCommand("kick", ({ player, raw, parts }) => {
-      const target = World.getPlayerByName(commandTail(raw, parts));
-      if (target) {
-        target.requestLogout();
-      }
-      return true;
-    }, PlayerRights.OWNER, "Disconnect player");
+    api.registerCommand("kick", kickCommand, PlayerRights.OWNER, "Disconnect player");
 
     api.registerCommand("exit", ({ player, raw, parts }) => {
       const targetName = commandTail(raw, parts);
@@ -1379,19 +1461,24 @@ module.exports = {
     }, PlayerRights.OWNER, "Enable noclip");
 
     api.registerCommand("up", ({ player }) => {
-      player.moveTo(player.getLocation().clone().setZ(player.getLocation().getZ() + 1));
+      const current = player.getLocation();
+      if (current.getZ() >= 3) {
+        player.sendMessage("You are already on the highest plane.");
+        return true;
+      }
+      player.moveTo(current.clone().setZ(current.getZ() + 1));
       return true;
-    }, PlayerRights.OWNER, "Move up one plane");
+    }, PlayerRights.OWNER, "Move up one plane at the same coordinates");
 
     api.registerCommand("down", ({ player }) => {
-      const next = player.getLocation().clone().setZ(player.getLocation().getZ() - 1);
-      if (next.getZ() < 0) {
-        next.setZ(0);
-        player.sendMessage("You cannot move to a negative plane!");
+      const current = player.getLocation();
+      if (current.getZ() <= 0) {
+        player.sendMessage("You are already on the lowest plane.");
+        return true;
       }
-      player.moveTo(next);
+      player.moveTo(current.clone().setZ(current.getZ() - 1));
       return true;
-    }, PlayerRights.OWNER, "Move down one plane");
+    }, PlayerRights.OWNER, "Move down one plane at the same coordinates");
 
     api.registerCommand("save", ({ player }) => {
       GameConstants.PLAYER_PERSISTENCE.save(player);
@@ -1710,86 +1797,14 @@ module.exports = {
       return true;
     }, PlayerRights.OWNER, "Reload item definitions");
 
-    api.registerCommand("mute", ({ player, raw, parts }) => {
-      const targetName = commandTail(raw, parts);
-      const target = World.getPlayerByName(targetName);
-      if (!GameConstants.PLAYER_PERSISTENCE.exists(targetName, worldProfile()) && !target) {
-        player.sendMessage(`Player ${targetName} does not exist.`);
-      }
-      return true;
-    }, PlayerRights.OWNER, "Mute player");
-
-    api.registerCommand("unmute", ({ player, raw, parts }) => {
-      const targetName = commandTail(raw, parts);
-      const target = World.getPlayerByName(targetName);
-      if (!GameConstants.PLAYER_PERSISTENCE.exists(targetName, worldProfile()) && !target) {
-        player.sendMessage(`Player ${targetName} does not exist.`);
-        return true;
-      }
-      if (!PlayerPunishment.muted(targetName)) {
-        player.sendMessage(`Player ${targetName} does not have an active mute.`);
-      }
-      return true;
-    }, PlayerRights.OWNER, "Unmute player");
-
-    api.registerCommand("ipmute", ({ player, raw, parts }) => {
-      const targetName = commandTail(raw, parts);
-      const target = World.getPlayerByName(targetName);
-      if (!target) {
-        player.sendMessage(`Player ${targetName} is not online.`);
-      }
-      return true;
-    }, PlayerRights.OWNER, "IP mute player");
-
-    api.registerCommand("unipmute", ({ player, raw, parts }) => {
-      const targetName = commandTail(raw, parts);
-      const target = World.getPlayerByName(targetName);
-      if (!target) {
-        player.sendMessage(`Player ${targetName} is not online.`);
-        return true;
-      }
-      if (CombatFactory.inCombat(target)) {
-        player.sendMessage(`Player ${targetName} is in combat!`);
-      }
-      return true;
-    }, PlayerRights.OWNER, "Remove IP mute");
-
-    api.registerCommand("ban", ({ player, raw, parts }) => {
-      const targetName = commandTail(raw, parts);
-      const target = World.getPlayerByName(targetName);
-      if (!GameConstants.PLAYER_PERSISTENCE.exists(targetName, worldProfile()) && !target) {
-        player.sendMessage(`Player ${targetName} is not a valid online player.`);
-        return true;
-      }
-      if (PlayerPunishment.banned(targetName)) {
-        player.sendMessage(`Player ${targetName} already has an active ban.`);
-        if (target) {
-          target.requestLogout();
-        }
-      }
-      return true;
-    }, PlayerRights.OWNER, "Ban player");
-
-    api.registerCommand("unban", ({ player, raw, parts }) => {
-      const targetName = commandTail(raw, parts);
-      if (!GameConstants.PLAYER_PERSISTENCE.exists(targetName, worldProfile())) {
-        player.sendMessage(`Player ${targetName} is not online.`);
-        return true;
-      }
-      if (!PlayerPunishment.banned(targetName)) {
-        player.sendMessage(`Player ${targetName} is not banned!`);
-      }
-      return true;
-    }, PlayerRights.OWNER, "Unban player");
-
-    api.registerCommand("ipban", ({ player, raw, parts }) => {
-      const targetName = commandTail(raw, parts);
-      const target = World.getPlayerByName(targetName);
-      if (!target) {
-        player.sendMessage(`Player ${targetName} is not online.`);
-      }
-      return true;
-    }, PlayerRights.OWNER, "IP ban player");
+    api.registerCommand("mute", accountPunishmentCommand, PlayerRights.OWNER, "Mute player");
+    api.registerCommand("unmute", accountPunishmentCommand, PlayerRights.OWNER, "Unmute player");
+    api.registerCommand("ban", accountPunishmentCommand, PlayerRights.OWNER, "Ban player");
+    api.registerCommand("unban", accountPunishmentCommand, PlayerRights.OWNER, "Unban player");
+    api.registerCommand("ipmute", ipPunishmentCommand, PlayerRights.OWNER, "IP mute online player");
+    api.registerCommand("unipmute", ipPunishmentCommand, PlayerRights.OWNER, "Remove IP mute (player or IP address)");
+    api.registerCommand("ipban", ipPunishmentCommand, PlayerRights.OWNER, "IP ban online player");
+    api.registerCommand("unipban", ipPunishmentCommand, PlayerRights.OWNER, "Remove IP ban (player or IP address)");
 
     if (!Server.PRODUCTION) {
       api.registerCommand("t", ({ player }) => {

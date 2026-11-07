@@ -29,6 +29,8 @@
  *                                     a sound at a tile, for every player near it
  *   { gfx: id, delay?, height? }      play a graphic on the player (delay in client cycles)
  *   { objAnim: id }                   animate the obstacle object
+ *   { merge: { start, end, minX, minZ, maxX, maxZ } }
+ *                                     send the legacy merge contract in client cycles
  *   { complete: true }                the obstacle counts as done here (XP, messages, the lap);
  *                                     the steps after it still play (a step off the landing)
  *   { run: (ctx) => void }            escape hatch for one-off behaviour
@@ -289,6 +291,11 @@ function createObstacleTask(Task) {
         player.performGraphic(step.height
           ? new Graphic(step.gfx, step.delay ?? 0, step.height)
           : new Graphic(step.gfx, step.delay ?? 0));
+      } else if (step.merge) {
+        if (this.context.object) {
+          const { start, end, ...bounds } = step.merge;
+          player.mergeObject(this.context.object, start, end, bounds);
+        }
       } else if (step.objAnim != null) {
         if (this.context.object) {
           player.getPacketSender().sendObjectAnimation(this.context.object, new Animation(step.objAnim));

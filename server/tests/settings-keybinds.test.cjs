@@ -102,6 +102,25 @@ test('responsive gameframes validate messages, ignore duplicates and restore the
   assert.deepEqual(roots, [601, 548], 'native gateway sessions keep their own layout');
 });
 
+test('a desktop layout change reopens the orbs on the new root after the root, as live does', () => {
+  const { buttons } = registered();
+  const dropdown = buttons.get((116 << 16) | 40);
+  const player = recordingPlayer();
+  const sender = player.getPacketSender();
+  sender.sendRootInterface = root => { player.sent.push(`root ${root}`); return sender; };
+  sender.sendSubInterface = (uid, group, type) => { player.sent.push(`open ${uid}:${group}:${type}`); return sender; };
+  player.getSession = () => ({ sendClientPacket() {} });
+  const orbsUid = (161 << 16) | 33; // the client's orbs pane uid, whichever root is mounted
+  const layoutChange = (slot) => {
+    player.sent.length = 0;
+    assert.equal(dropdown({ player, slot }), true);
+    return player.sent.filter(entry => entry.startsWith('root ') || entry.startsWith('open '));
+  };
+  assert.deepEqual(layoutChange(3), ['root 161', `open ${orbsUid}:160:1`], 'resizable modern');
+  assert.deepEqual(layoutChange(1), ['root 548', `open ${orbsUid}:160:1`], 'fixed: the orbs are placed again');
+  assert.deepEqual(layoutChange(2), ['root 164', `open ${orbsUid}:160:1`], 'resizable classic');
+});
+
 test('as captured: the search bar takes the keyboard, and closing All Settings by any route gives it back', () => {
   const { buttons, events } = registered();
   const player = recordingPlayer();

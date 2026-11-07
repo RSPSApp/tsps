@@ -1,4 +1,5 @@
 export type WidgetServerPayload =
+    | { action: "inventory_stop_transmit"; inventoryId: number }
     | {
           action: "close" | "open";
           groupId: number;

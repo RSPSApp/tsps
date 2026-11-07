@@ -77,14 +77,17 @@ function between({ ends, cross, ...entry }) {
   };
 }
 
-/** A two-tile stile/fence along `axis`: the player's side is `before`, the far side `after`. */
-function stile({ axis = "x", before = -1, after = 2, anim = ShortcutAnim.CLIMB_OVER, end = "You climb over the stile.", ...entry }) {
+/** A two-tile stile/fence across its rotated footprint, unless the data declares an axis. */
+function stile({ axis, before = -1, after = 2, anim = ShortcutAnim.CLIMB_OVER, end = "You climb over the stile.", ...entry }) {
   return between({
     ...entry,
     end,
-    ends: ({ obj }) => (axis === "x"
-      ? [[obj.x + before, obj.y, obj.z], [obj.x + after, obj.y, obj.z]]
-      : [[obj.x, obj.y + before, obj.z], [obj.x, obj.y + after, obj.z]]),
+    ends: ({ obj }) => {
+      const crossAxis = axis ?? (obj.sizeY > obj.sizeX ? "y" : "x");
+      return crossAxis === "x"
+        ? [[obj.x + before, obj.y, obj.z], [obj.x + after, obj.y, obj.z]]
+        : [[obj.x, obj.y + before, obj.z], [obj.x, obj.y + after, obj.z]];
+    },
     cross: (from, to) => [climbOver(to, anim)],
   });
 }

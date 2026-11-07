@@ -17,6 +17,7 @@ import { TileHighlightManager } from "../game/highlights/TileHighlightManager";
 import { Inventory } from "../rs/inventory/Inventory";
 import { state as network } from "../network/serverConnection/state";
 import { parsePluginMessage } from "../common/network/PluginMessage";
+import { retainedInventory } from "../game/sync/InventoryStopTransmit";
 
 const step: any = { id: "s", text: ["Talk to the cook."], targets: [{ kind: "npc", id: 4626, x: 3209, y: 3215, plane: 0 }], requirements: [{ name: "Egg", met: false, state: "partial", ids: [1944], quantity: 1 }],
     dialogueChoices: [], widgets: [], overlays: [], recommended: [], teleports: [{ name: "Lumbridge teleport", met: true, ids: [8008] }], inventoryHighlights: [1944],
@@ -121,8 +122,9 @@ async function main(): Promise<void> {
     config.setConfiguration("questhelper", "highlightColor", "#123456");
     config.setConfiguration("questhelper", "highlightTiles", "false");
     const player: any = { getIndexForServerId: () => 0, getLevel: () => 0, getAnimActionSeqId: () => -1, getAnimMovementSeqId: () => -1, getRotation: () => 0, getInteractionIndex: () => -1 };
+    const bank = new Inventory(1410);
     const client: any = { stateMachine: { getState: () => 30 }, localPlayerName: "A", getControlledPlayerMovementTile: () => ({ tileX: 3200, tileY: 3200 }), controlledPlayerServerId: 1, playerEcs: player, tileHighlightManager: new TileHighlightManager(),
-        varManager: { values: new Int32Array(1), customVarbits: new Map(), varbitLoader: { load: () => undefined }, varpChangeListeners: new Set() }, inventory: new Inventory(), equipment: new Inventory(14), bankInventory: new Inventory(1410),
+        varManager: { values: new Int32Array(1), customVarbits: new Map(), varbitLoader: { load: () => undefined }, varpChangeListeners: new Set() }, inventory: new Inventory(), equipment: new Inventory(14), bankInventory: bank, lastKnownBank: retainedInventory(bank),
         npcEcs: { forEachActive: () => {}, mutationListeners: new Set() }, renderer: { getLocIdsAtTileAllLevels: () => [], canvas: { width: 765, height: 503 } }, groundItems: { getAllStacks: () => [], mutationListeners: new Set() },
         widgetManager: { rootInterface: -1, interfaceParents: new Map(), getAllGroupRoots: () => [], groupLoadedListeners: new Set(), interfaceClosedListeners: new Set() } };
     manager.getInjector().provide(CLIENT_TOKEN, client);

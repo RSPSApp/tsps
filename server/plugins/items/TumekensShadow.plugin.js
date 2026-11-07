@@ -42,7 +42,7 @@ const PROJECTILE = { DELAY: 56, LENGTH: 16, PER_TILE: 10, START_HEIGHT: 62, END_
 const MAGIC_ATTACK = 3; // BonusManager.ATTACK_MAGIC
 const MAGIC_DAMAGE = 12; // BonusManager.MAGIC_STRENGTH among the "other" bonuses
 
-const { definePoweredStaff, distance } = require("./PoweredStaff");
+const { definePoweredStaff, distance, restricted, plainAmount, takePlain, PRESET_TEXT } = require("./PoweredStaff");
 
 let api = null;
 let staff = null;
@@ -145,22 +145,32 @@ function chargeShadow(event) {
   const shadow = shadowIds.includes(event.usedItemId) ? event.usedItem : event.usedWithItem;
   if (!shadow) return false;
   const inventory = player.getInventory();
+  // Preset copies never pay: Uncharge refunds plain runes, so they would come back bankable.
+  if (restricted(shadow === event.usedItem ? event.usedWithItem : event.usedItem)) {
+    player.sendMessage(PRESET_TEXT);
+    return true;
+  }
   const current = chargesOf(shadow);
   if (current >= MAX_CHARGES) {
     player.sendMessage("Your Tumeken's shadow is already fully charged.");
     return true;
   }
-  const affordable = Math.min(
-    Math.floor(inventory.getAmount(I.SOUL_RUNE) / SOULS_PER_CHARGE),
-    Math.floor(inventory.getAmount(I.CHAOS_RUNE) / CHAOS_PER_CHARGE),
+  const batches = (count) => Math.min(
+    Math.floor(count(I.SOUL_RUNE) / SOULS_PER_CHARGE),
+    Math.floor(count(I.CHAOS_RUNE) / CHAOS_PER_CHARGE),
     MAX_CHARGES - current,
   );
+  const affordable = batches((id) => plainAmount(inventory, id));
+  if (affordable < 1 && batches((id) => inventory.getAmount(id)) >= 1) {
+    player.sendMessage(PRESET_TEXT);
+    return true;
+  }
   if (affordable < 1) {
     player.sendMessage("You need two soul runes and five chaos runes for each charge.");
     return true;
   }
-  inventory.deleteNumber(I.SOUL_RUNE, affordable * SOULS_PER_CHARGE);
-  inventory.deleteNumber(I.CHAOS_RUNE, affordable * CHAOS_PER_CHARGE);
+  takePlain(inventory, I.SOUL_RUNE, affordable * SOULS_PER_CHARGE);
+  takePlain(inventory, I.CHAOS_RUNE, affordable * CHAOS_PER_CHARGE);
   setCharges(player, shadow, current + affordable);
   player.sendMessage(current === 0
     ? `You apply ${plural(affordable, "charge")} to your Tumeken's shadow.`
@@ -226,6 +236,7 @@ module.exports = {
     api = pluginApi;
     staff = defineShadow();
     pluginApi.registerCombatMethodResolver(staff.resolver);
+    pluginApi.onCustomEvent("item:fill-charges", staff.fillCharges);
     pluginApi.registerBonusProvider({ apply: shadowBonuses });
     for (const rune of ["Soul rune", "Chaos rune"]) {
       pluginApi.onItemOnItem(rune, "Tumeken's shadow", chargeShadow);

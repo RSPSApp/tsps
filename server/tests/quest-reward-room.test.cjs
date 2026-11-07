@@ -437,3 +437,317 @@ test('native Fycie first purchase conserves its fixed feather package at stack l
     }
   });
 });
+
+// ------------------------------------------------------------------ Luthas's banana wages
+
+test("Luthas pays for a completed crate without losing earned wages", async (t) => {
+  const { MAX_STACK_AMOUNT: CAP } = require("../dist/game/model/container/StackType");
+  const { PathFinder } = require("../dist/game/model/movement/path/PathFinder");
+  const q = quest("pirates_treasure"), COINS = I.COINS, BANANA = I.BANANA;
+  const EMPLOYMENT = "pirates-treasure.employment", PACKED = "pirates-treasure.bananas", RUM = "pirates-treasure.rum";
+  const NPC_ID = N.LUTHAS, CRATE_ID = core.ObjectIdentifiers.CRATE_15;
+  const home = new core.Location(2939, 3154, 0); // Luthas's recorded spawn.
+  const normalize = value => String(value ?? "").replace(/<br>/g, " ").replace(/\s+/g, " ").trim();
+  assert.equal(NPC_ID, 3647);
+  assert.equal(CRATE_ID, 2072);
+  assert.equal(core.ItemDefinition.forId(COINS).isStackable(), true);
+  assert.equal(core.ItemDefinition.forId(BANANA).isStackable(), false);
+  core.RegionManager.loadMapFiles(home.getX(), home.getY());
+  assert.equal(core.RegionManager.getRegion(home.getX(), home.getY()).isLoaded(), true);
+
+  for (const mode of ["room", "exact headroom", "not employed", "nine packed", "full coin stack", "ten coin spaces"]) {
+    await t.test(mode, async (child) => {
+      const f = actor(child), p = f.p, inv = f.inv;
+      PM.emitPlayerLogin({ player: p, username: p.getUsername() });
+      p.closeInterruptibleInterfaces();
+      assert.equal(q.getStage(p), 0, "a fresh ordinary player has not started the quest");
+      assert.equal(p.getAttribute(EMPLOYMENT) ?? 0, 0);
+      assert.equal(p.getAttribute(PACKED) ?? 0, 0);
+      assert.equal(p.getAttribute(RUM) ?? 0, 0);
+      assert.ok(p.getHitpoints() > 0, "the native player is alive");
+      assert.equal(inv.getAmount(COINS), 0, "no pre-existing coins are overwritten");
+      assert.equal(inv.getAmount(BANANA), 0, "no pre-existing bananas are overwritten");
+      const wallet = mode === "exact headroom" ? CAP - 30 : mode === "full coin stack" ? CAP : mode === "ten coin spaces" ? CAP - 10 : 100;
+      const bananas = mode === "nine packed" ? 9 : 10;
+      inv.add(new core.Item(COINS, wallet), false);
+      inv.add(new core.Item(BANANA, bananas), false);
+      assert.equal(inv.getAmount(COINS), wallet);
+      assert.equal(inv.getAmount(BANANA), bananas);
+      const coinItem = inv.getItems().find(item => item.getId() === COINS);
+      assert.deepEqual(coinItem.getMeta(), new core.Item(COINS, 1).getMeta(), "the wage would use the ordinary coin stack");
+
+      const npc = core.NPC.create(NPC_ID, home.clone());
+      assert.equal(core.World.getNpcs().add(npc), true, "register the Luthas at his recorded spawn");
+      child.after(() => {
+        p.closeInterruptibleInterfaces();
+        PM.emitPlayerDisconnect({ player: p, username: p.getUsername() });
+        core.TaskManager.cancelTasks(p);
+        core.World.getNpcs().remove(npc);
+      });
+      const npcDefinition = npc.getCurrentDefinition(p);
+      assert.equal(npcDefinition.getName(), "Luthas");
+      const talkOption = npcDefinition.getActions().findIndex(option => option === "Talk-to") + 1;
+      assert.ok(talkOption > 0, "the real NPC offers Talk-to");
+
+      // Find a walkable starting tile beside the actual spawn, before the job begins.
+      const sides = [[0, -1], [-1, 0], [1, 0], [0, 1]];
+      const start = sides.map(([dx, dy]) => new core.Location(home.getX() + dx, home.getY() + dy, 0)).find(at => {
+        p.setLocation(at);
+        p.needsPlacement = false;
+        return !core.RegionManager.blocked(at, p.getPrivateArea()) && PathFinder.reachedObj(p, home);
+      });
+      assert.ok(start, "the registered NPC has a reachable neighbouring tile");
+      p.setLocation(start);
+      p.needsPlacement = false;
+      assert.equal(p.busy(), false);
+
+      // Use an indexed cache-map crate near Luthas, not a test-created object.
+      const crates = [...core.MapObjects.mapObjects.values()].flat().filter(object => {
+        const at = object.getLocation();
+        return object.getId() === CRATE_ID && at.getZ() === 0 && object.getPrivateArea() == null
+          && Math.max(Math.abs(at.getX() - home.getX()), Math.abs(at.getY() - home.getY())) <= 32;
+      }).sort((a, b) => a.getLocation().getDistance(home) - b.getLocation().getDistance(home));
+      assert.ok(crates.length > 0, "the loaded plantation map contains the crate");
+      const crate = crates[0], crateAt = crate.getLocation();
+      if (crates.length > 1) assert.notEqual(crates[1].getLocation().getDistance(home), crateAt.getDistance(home), "the nearest crate is unambiguous");
+      assert.equal(core.MapObjects.getPrivateArea(p, CRATE_ID, crateAt), crate);
+      const crateDefinition = core.ObjectDefinition.forPlayer(CRATE_ID, p);
+      const fillOption = crateDefinition.getInteractions().findIndex(option => String(option ?? "").toLowerCase().includes("fill")) + 1;
+      assert.ok(fillOption > 0, "the actual crate definition offers Fill");
+
+      const stores = id => ({
+        inventory: inv.getAmount(id), equipment: p.getEquipment().getAmount(id),
+        bank: p.getBanks().reduce((sum, bank, tab) => sum + (bank && tab !== core.Bank.BANK_SEARCH_TAB_INDEX ? bank.getAmount(id) : 0), 0),
+        floor: core.World.getItems().filter(item => !item.isPendingRemoval() && item.getOwner() === p.getUsername()
+          && item.getPrivateArea() === p.getPrivateArea() && item.getItem().getId() === id)
+          .reduce((sum, item) => sum + item.getItem().getAmount(), 0),
+      });
+      const snapshot = () => ({ coins: stores(COINS), bananas: stores(BANANA), stage: q.getStage(p),
+        employment: p.getAttribute(EMPLOYMENT) ?? 0, packed: p.getAttribute(PACKED) ?? 0,
+        rum: p.getAttribute(RUM) ?? 0, xp: core.Skill.values().map(skill => p.getSkillManager().getExperience(skill)) });
+      const owned = row => Object.values(row).reduce((sum, count) => sum + count, 0);
+      const events = [], originalEmit = PM.emitCustomEvent.bind(PM);
+      child.mock.method(PM, "emitCustomEvent", (...args) => {
+        const [name, event] = args;
+        if (event?.player === p && name === "npc-dialogue:action" && ["A0JWWz", "76-Dox", "1YHx0E"].includes(event.stepId)) {
+          assert.equal(event.npcId, NPC_ID);
+          assert.equal(event.npc, npc);
+          if (event.stepId === "A0JWWz") assert.equal(event.kind, "message");
+          events.push(event.stepId);
+        }
+        if (event?.player === p && name === "npc-dialogue:choice" && event.option === "Could you offer me employment on your plantation?") {
+          assert.equal(event.npcId, NPC_ID);
+          assert.equal(event.npc, npc);
+          events.push("employment");
+        }
+        return originalEmit(...args);
+      });
+      let phases = 0;
+      const turn = () => {
+        assert.ok(++phases <= 250, "bounded global, input and movement phases");
+        p.resetUpdating();
+        core.World.processCycle = (core.World.processCycle + 1) & 0x7fffffff;
+        core.TaskManager.process();
+        f.c.processTurnPackets();
+        const movement = p.getMovementQueue();
+        movement.beginCycle();
+        movement.processEntityPursuit();
+        if (movement.hasPendingWork()) movement.process();
+        core.TaskManager.processWalkTo(p.getIndex());
+      };
+      const input = async packet => { await f.c.dispatch([packet]); turn(); };
+      const manager = p.getDialogueManager(), sender = p.getPacketSender();
+      const shownStrings = [], originalString = sender.sendString.bind(sender);
+      child.mock.method(sender, "sendString", (text, id, ...rest) => {
+        if (id === (229 << 16 | 3)) shownStrings.push(normalize(text));
+        return originalString(text, id, ...rest);
+      });
+      const speech = async (text, fromNpc) => {
+        const current = manager.getCurrent(), group = sender.getChatboxGroupId();
+        assert.ok(current instanceof (fromNpc ? core.NpcDialogue : core.PlayerDialogue), "current native speech type");
+        if (fromNpc) assert.equal(current.getNpcId(), NPC_ID);
+        assert.equal(group, fromNpc ? 231 : 217);
+        assert.equal(normalize(current.getText()), normalize(text));
+        assert.equal(manager.getOwner(), undefined);
+        assert.equal(sender.getChatboxOwner(), undefined);
+        const mount = sender.subInterfaceTargets.get(group);
+        assert.ok(mount);
+        assert.equal(sender.getSubInterfaceAt(mount.targetUid), mount);
+        await input({ type: "dialogue_continue", widgetId: (group << 16) | 5, childIndex: -1 });
+      };
+      const talk = async () => {
+        await input({ type: "npc_option", index: npc.getIndex(), clickType: talkOption });
+        for (let n = 0; !manager.isActive() && n < 60; n++) turn();
+        assert.ok(manager.isActive(), "the actual NPC interaction reaches dialogue");
+      };
+      const choice = async (expected, options) => {
+        const prompt = core.MultiChatboxPrompt.getPending(p);
+        assert.ok(prompt, "the native choice is current");
+        assert.equal(manager.isActive(), false);
+        assert.equal(manager.getOwner(), undefined);
+        assert.equal(sender.getChatboxOwner(), undefined);
+        assert.equal(sender.getChatboxGroupId(), 219);
+        const mount = sender.subInterfaceTargets.get(219);
+        assert.ok(mount);
+        assert.equal(sender.getSubInterfaceAt(mount.targetUid), mount);
+        assert.deepEqual(prompt.options.map(normalize), options.map(normalize));
+        const index = prompt.options.map(normalize).indexOf(normalize(expected));
+        assert.ok(index >= 0);
+        await input({ type: "dialogue_continue", widgetId: core.MultiChatboxPrompt.OPTIONS_WIDGET_ID, childIndex: index + 1 });
+      };
+      const fill = async expected => {
+        const before = p.getAttribute(PACKED) ?? 0;
+        await input({ type: "object_option", id: CRATE_ID, x: crateAt.getX(), y: crateAt.getY(), clickType: fillOption });
+        for (let n = 0; (p.getAttribute(PACKED) ?? 0) === before && !f.messages.includes("Why would I want to do that?") && n < 80; n++) turn();
+        assert.equal(p.getAttribute(PACKED) ?? 0, expected, "actual crate Fill reaches its earned count");
+      };
+
+      if (mode === "not employed") {
+        const before = snapshot();
+        await fill(0);
+        assert.ok(f.messages.includes("Why would I want to do that?"));
+        assert.deepEqual(snapshot(), before, "the unaccepted job cannot consume bananas or pay wages");
+        assert.deepEqual(events, []);
+        return;
+      }
+
+      await talk();
+      await speech("Hello I'm Luthas, I run the banana plantation here.", true);
+      await choice("Could you offer me employment on your plantation?", [
+        "Could you offer me employment on your plantation?", "That customs officer is annoying isn't she?",
+      ]);
+      assert.deepEqual(events, ["employment"]);
+      assert.equal((p.getAttribute(EMPLOYMENT) ?? 0) & 1, 1, "the real choice establishes employment");
+      await speech("Could you offer me employment on your plantation?", false);
+      await speech("Yes, I can sort something out. There's a crate ready to be loaded onto the ship.", true);
+      await speech("You wouldn't believe the demand for bananas from Wydin's shop over in Port Sarim. I think this is the third crate I've shipped him this month..", true);
+      await speech("If you could fill it up with bananas, I'll pay you 30 gold.", true);
+      assert.equal(q.getStage(p), 0, "employment did not inject quest progression");
+
+      await fill(bananas);
+      assert.equal(inv.getAmount(BANANA), 0, "the crate consumed the actual carried bananas");
+      assert.equal(sender.getChatboxGroupId(), 229, "the crate showed its native message box");
+      assert.equal(shownStrings.at(-1), bananas === 10 ? "You fill the crate with bananas." : "You pack all your bananas into the crate.");
+      const crateMessage = sender.subInterfaceTargets.get(229);
+      assert.ok(crateMessage);
+      assert.equal(sender.getSubInterfaceAt(crateMessage.targetUid), crateMessage);
+      const before = snapshot();
+      assert.equal(before.packed, bananas);
+      assert.equal(owned(before.coins), wallet);
+      assert.equal(before.rum, 0);
+      if (mode === "nine packed") {
+        await talk();
+        await speech("Have you completed your task yet?", true);
+        assert.deepEqual(snapshot(), before, "nine packed bananas do not earn a wage");
+        assert.deepEqual(events, ["employment"]);
+        return;
+      }
+
+      assert.equal(before.packed, 10, "the completed job is earned by real crate input");
+      const expectedCapacity = mode === "full coin stack" ? 0 : mode === "ten coin spaces" ? 10 : 30;
+      assert.equal(inv.getAddableAmount(new core.Item(COINS, 30)), expectedCapacity, "actual ordinary coin headroom");
+      await talk();
+      await speech("I've filled a crate with bananas.", false);
+      assert.deepEqual(snapshot(), before, "no payment before Luthas's current line");
+      await speech("Well done, here's your payment.", true);
+      const after = snapshot(), credit = owned(after.coins) - owned(before.coins);
+      assert.ok((credit === 30 && after.packed === 0) || (credit === 0 && after.packed === 10),
+        JSON.stringify({ mode, credit, beforeCoins: before.coins, afterCoins: after.coins, beforePacked: before.packed, afterPacked: after.packed }));
+      assert.deepEqual(events, credit === 30 ? ["employment", "A0JWWz", "76-Dox"] : ["employment", "A0JWWz"],
+        "the real payment action follows the unboxed message only when payment can fit");
+      if (mode === "room" || mode === "exact headroom") assert.deepEqual([credit, after.packed], [30, 0], "a complete wage is paid and consumed once");
+      assert.deepEqual(after.bananas, before.bananas);
+      assert.equal(after.stage, before.stage);
+      assert.equal(after.employment, before.employment);
+      assert.equal(after.rum, before.rum);
+      assert.deepEqual(after.xp, before.xp);
+      if (credit === 0) {
+        assert.deepEqual(after, before, "refusal keeps the completed entitlement and resources");
+        assert.ok(f.messages.includes("You can't carry all of your wages."));
+        assert.equal(f.messages.includes("Luthas hands you 30 coins."), false, "a refusal does not claim payment");
+        assert.equal(manager.isActive(), false);
+        assert.equal(sender.getChatboxGroupId(), -1);
+        assert.equal(core.MultiChatboxPrompt.getPending(p), null);
+      }
+      if (mode === "room" || mode === "exact headroom") {
+        await talk();
+        await speech("Have you completed your task yet?", true);
+        assert.deepEqual(snapshot(), after, "talking again cannot pay a second time");
+        assert.deepEqual(events, ["employment", "A0JWWz", "76-Dox"]);
+      }
+    });
+  }
+});
+
+// A single tomato and pie shell make the first garden-pie part on a members world.
+test('a members-world player can assemble the first garden-pie part', async (t) => {
+  const TOMATO = 1982, SHELL = 2315, PART = 7172;
+  const world = core.WorldDefinition;
+  assert.equal(world.isMembersWorld(), true);
+  assert.ok(world.getWorldDefinition().zones.some(zone => zone.tags.includes('f2p') && world.zoneContains(zone, HOME[0], HOME[1])));
+  assert.deepEqual(['tomato', 'pie_shell', 'unfinished_garden_pie_1'].map(name => core.CacheDefinitions.getObjId(name)), [TOMATO, SHELL, PART]);
+  for (const [id, members] of [[TOMATO, false], [SHELL, false], [PART, true]]) {
+    assert.equal(core.CacheDefinitions.getItem(id).isMembers, members);
+    assert.equal(core.ItemDefinition.forId(id).isNoted(), false);
+    assert.equal(core.ItemDefinition.forId(id).isStackable(), false);
+  }
+  for (const id of [TOMATO, SHELL]) assert.equal(core.CacheDefinitions.getItem(id).isTradable, true);
+  const f = actor(t), p = f.p, inv = f.inv, skills = p.getSkillManager(), cooking = core.Skill.COOKING;
+  PM.emitPlayerLogin({ player: p, username: p.getUsername() });
+  p.closeInterruptibleInterfaces();
+  t.after(() => PM.emitPlayerDisconnect({ player: p, username: p.getUsername() }));
+  assert.ok(p.isRegistered() && p.getHitpoints() > 0);
+  assert.equal(core.RegionManager.blocked(p.getLocation(), p.getPrivateArea()), false);
+  const xp = core.SkillManager.getExperienceForLevel(34);
+  skills.setExperience(cooking, xp).setMaxLevels(cooking, 34, false).setCurrentLevels(cooking, 34, false);
+  assert.deepEqual([skills.getExperience(cooking), skills.getMaxLevel(cooking), skills.getCurrentLevel(cooking)], [xp, 34, 34]);
+  for (const id of [TOMATO, SHELL]) {
+    assert.equal(inv.getAmount(id), 0);
+    inv.add(new core.Item(id, 1), false);
+    assert.notEqual(PM.emitCanUseItem(p, id, 'use'), false);
+  }
+  assert.notEqual(PM.emitCanUseItem(p, PART, 'use'), false);
+  const slots = [TOMATO, SHELL].map(id => inv.getSlotForItemId(id));
+  assert.ok(slots.every(slot => slot >= 0));
+  assert.notEqual(slots[0], slots[1]);
+  for (const slot of slots) assert.equal(inv.getItems()[slot].getMeta(), null);
+  assert.equal(inv.getAmount(PART), 0);
+  const uses = [], produced = [], tasks = [], original = PM.emitItemOnItem.bind(PM);
+  t.mock.method(PM, 'emitItemOnItem', event => {
+    const result = original(event);
+    if (event.player === p) uses.push([event.usedItemId, event.usedWithItemId, result]);
+    return result;
+  });
+  PM.createApi('GardenPieMembersObserver').onCustomEvent('skills:produced', event => {
+    if (event.player === p) produced.push([event.itemId, event.amount, event.xp, event.kind]);
+  });
+  const submit = core.TaskManager.submit.bind(core.TaskManager);
+  t.mock.method(core.TaskManager, 'submit', task => {
+    if (task.key === p.getIndex() && task.pluginName === 'Cooking') tasks.push(task);
+    return submit(task);
+  });
+  let turns = 0;
+  const turn = () => {
+    assert.ok(++turns <= 6);
+    p.resetUpdating();
+    core.World.processCycle = (core.World.processCycle + 1) & 0x7fffffff;
+    core.TaskManager.process();
+    f.c.processTurnPackets();
+    const movement = p.getMovementQueue();
+    movement.beginCycle(); movement.processEntityPursuit();
+    if (movement.hasPendingWork()) movement.process();
+    core.TaskManager.processWalkTo(p.getIndex());
+  };
+  await f.c.dispatch([{ type: 'inventory_use_on', slot: slots[0], itemId: TOMATO,
+    target: { kind: 'inventory', slot: slots[1], itemId: SHELL } }]);
+  turn();
+  assert.deepEqual(uses, [[TOMATO, SHELL, true]], 'the real item-on-item path handles the pair');
+  assert.equal(tasks.length, 1, 'the actual Cooking handler submits a task');
+  assert.equal(tasks[0].isRunning(), true);
+  assert.deepEqual([inv.getAmount(TOMATO), inv.getAmount(SHELL), inv.getAmount(PART)], [1, 1, 0]);
+  for (let i = 0; i < 4; i++) turn();
+  assert.equal(tasks[0].isRunning(), false, 'the actual Cooking task completes');
+  assert.deepEqual([inv.getAmount(TOMATO), inv.getAmount(SHELL), inv.getAmount(PART)], [0, 0, 1]);
+  assert.equal(skills.getExperience(cooking), xp);
+  assert.deepEqual(produced, [[PART, 1, 0, 'make']]);
+});

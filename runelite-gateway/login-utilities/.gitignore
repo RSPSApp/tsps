@@ -1,0 +1,4 @@
+.gradle/
+build/
+token-store/*.exe
+token-store/*.pdb

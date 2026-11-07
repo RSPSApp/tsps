@@ -45,6 +45,7 @@ function createContainer(capacity, initial = []) {
       else if (container.getFreeSlots() > 0) items.push(item.clone());
       return container;
     },
+    adds: (id, amount) => container.add(new Item(id, amount)),
     deleteNumber(id, amount) {
       let left = amount;
       for (const item of [...items]) {
@@ -584,6 +585,30 @@ test("Vengeance on yourself pays its runes from the carried pouch", () => {
   assert.deepEqual(varbitSlots(player), [[Items.ASTRAL_RUNE, 96], [Items.EARTH_RUNE, 90], [Items.DEATH_RUNE, 98]]);
 });
 
+
+test("Bones to Bananas pays its runes from the carried pouch, not for free", () => {
+  const { EffectSpells } = require("../dist/game/content/combat/magic/EffectSpells");
+  const bones = Array.from({ length: 5 }, () => new Item(526, 1));
+  const player = createPlayer([new Item(Items.RUNE_POUCH, 1), ...bones]);
+  const experience = [];
+  player.getSpellbook = () => MagicSpellbook.NORMAL;
+  player.getSkillManager = () => ({
+    getCurrentLevel: () => 99,
+    getMaxLevel: () => 99,
+    addExperiences: (skill, amount) => experience.push(amount),
+  });
+  player.getClickDelay = () => ({ elapsedTime: () => true, reset() {} });
+  player.performAnimation = () => {};
+  player.performGraphic = () => {};
+  player.getPacketSender().sendSoundEffect = () => player.getPacketSender();
+  pouchWith(player, [[Items.NATURE_RUNE, 100], [Items.EARTH_RUNE, 100], [Items.WATER_RUNE, 100]]);
+  const spell = EffectSpells.BONES_TO_BANANAS;
+  assert.equal(EffectSpells.handleSpell(player, spell.spellId()), true);
+  assert.equal(player.getInventory().getAmount(1963), 5, "five bananas");
+  const paid = spell.itemsRequired(player).map((rune) => [rune.getId(), 100 - rune.getAmount()]);
+  const left = new Map(varbitSlots(player));
+  for (const [id, expected] of paid) assert.equal(left.get(id), expected, "the pouch paid the spell's runes");
+});
 
 // These use real lazy banks, item identities, placeholders and native packet dispatch.
 function nativePouchActor(t, pouchId = Items.RUNE_POUCH) {

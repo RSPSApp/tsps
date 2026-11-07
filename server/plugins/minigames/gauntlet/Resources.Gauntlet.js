@@ -56,7 +56,6 @@ const YIELD_TICKS = 2;
 const SHARD_CHANCE = 5;
 const SHARDS = { min: 5, max: 30 };
 const OBJECT_TYPE = 10;
-const BLOCKING = 0x1280100;
 // The doorway strips of a room's inner floor (offsets 2-13), kept clear.
 const DOORWAY = { from: 6, to: 9 };
 
@@ -90,7 +89,8 @@ function clipAt(map, tile) {
 
 /** Inner-floor tiles beside a wall or object, as single tiles and 2x2 squares. */
 function spawnSpots(map, room) {
-  const free = (x, y) => (clipAt(map, map.roomTile(room, x, y)) & BLOCKING) === 0;
+  const { RegionManager } = Shared.core();
+  const free = (x, y) => (clipAt(map, map.roomTile(room, x, y)) & RegionManager.BLOCKED_MASK) === 0;
   const doorway = (x, y) => ((x === 2 || x === 13) && y >= DOORWAY.from && y <= DOORWAY.to)
     || ((y === 2 || y === 13) && x >= DOORWAY.from && x <= DOORWAY.to);
   const single = [];
@@ -136,7 +136,7 @@ function staysConnected(map, room, blocked) {
   const { RegionManager } = Shared.core();
   const key = (x, y) => `${x},${y}`;
   const open = (x, y) => x >= 2 && x <= 13 && y >= 2 && y <= 13 && !blocked.has(key(x, y))
-    && (clipAt(map, map.roomTile(room, x, y)) & BLOCKING) === 0;
+    && (clipAt(map, map.roomTile(room, x, y)) & RegionManager.BLOCKED_MASK) === 0;
   const doorways = DOORWAY_TILES.filter(([x, y]) => open(x, y) && leadsOut(map, room, x, y));
   if (doorways.length < 2) return true;
   const seen = new Set([key(...doorways[0])]);

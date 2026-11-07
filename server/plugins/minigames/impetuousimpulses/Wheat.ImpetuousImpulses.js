@@ -4,24 +4,28 @@
  * Magical wheat: Push-through rolls the player's Strength for a fast (6 ticks), medium
  * (8 ticks) or slow (10 ticks) push and moves them two tiles past the wheat. Chances are the
  * Wiki's (Mod Ash): first roll fast 0% at 1 -> 39% at 99, then medium 4% at 1 -> 100% at 99,
- * otherwise slow, linearly interpolated. Strength XP is off by default since 1 March 2023
- * and Elnock's re-enable toggle is not implemented, so no XP is awarded (0/2/4 off).
+ * otherwise slow, linearly interpolated. Strength XP is off by default since 1 March 2023 and
+ * is awarded only once Elnock's toggle has turned it on: 4 for a fast push, 2 for a medium one
+ * and 0 for a slow one (https://oldschool.runescape.wiki/w/Magical_wheat).
  *
  * The push is driven by the Puro-Puro Area's per-tick process: it waits the tier's ticks,
  * cancels if the player moved, and then moves them. The two-tile step assumes the wheat is
  * one tile thick; a dense hedge simply takes another push.
  */
 const TIERS = [
-  { ticks: 6, message: "You use your strength to push through the wheat in the most efficient fashion." },
-  { ticks: 8, message: "You use your strength to push through the wheat." },
-  { ticks: 10, message: "You push through the wheat. It's hard work, though." },
+  { ticks: 6, xp: 4, message: "You use your strength to push through the wheat in the most efficient fashion." },
+  { ticks: 8, xp: 2, message: "You use your strength to push through the wheat." },
+  { ticks: 10, xp: 0, message: "You push through the wheat. It's hard work, though." },
 ];
 const FAST = TIERS[0];
 const MEDIUM = TIERS[1];
 const SLOW = TIERS[2];
 
+/** Persisted: whether Elnock's toggle has Strength XP turned on. Off by default since March 2023. */
+const WHEAT_XP_ATTRIBUTE = "impetuous-impulses:wheat-xp";
+
 let core;
-/** player -> { from, to, ticks } */
+/** player -> { from, to, ticks, xp } */
 const pushes = new Map();
 
 function init(api) {
@@ -56,8 +60,15 @@ function pushThrough({ player, object, random = Math.random }) {
   if (!to) return true;
   const tier = rollTier(player.getSkillManager().getCurrentLevel(core.Skill.STRENGTH), random);
   player.sendMessage(tier.message);
-  pushes.set(player, { from, to, ticks: tier.ticks });
+  pushes.set(player, { from, to, ticks: tier.ticks, xp: tier.xp });
   return true;
+}
+
+/** Whether Elnock's toggle has Strength XP turned on for this player. */
+const xpEnabled = (player) => player.getAttribute(WHEAT_XP_ATTRIBUTE) === true;
+
+function setXpEnabled(player, enabled) {
+  player.setAttribute(WHEAT_XP_ATTRIBUTE, enabled === true);
 }
 
 /** One Area tick for a player in Puro-Puro. */
@@ -72,6 +83,8 @@ function process(player) {
   if (push.ticks > 0) return;
   pushes.delete(player);
   player.moveTo(push.to);
+  // The tier was rolled when the push started, so the reward follows the push that earned it.
+  if (push.xp > 0 && xpEnabled(player)) player.getSkillManager().addExperience(core.Skill.STRENGTH, push.xp);
 }
 
 function cancel(player) {
@@ -80,11 +93,13 @@ function cancel(player) {
 
 function registerWheat(api) {
   init(api);
+  api.persistAttribute(WHEAT_XP_ATTRIBUTE, false);
   api.onObjectInteraction("Magical wheat", { "Push-through": pushThrough });
 }
 
 module.exports = registerWheat;
 Object.assign(module.exports, {
   init, TIERS, fastChance, mediumChance, rollTier, pushThrough, process, cancel, pushes,
-  _test: { fastChance, mediumChance, rollTier, pushThrough, process, cancel, pushes },
+  WHEAT_XP_ATTRIBUTE, xpEnabled, setXpEnabled,
+  _test: { fastChance, mediumChance, rollTier, pushThrough, process, cancel, pushes, xpEnabled, setXpEnabled },
 });

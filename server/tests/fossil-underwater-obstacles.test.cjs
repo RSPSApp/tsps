@@ -96,7 +96,7 @@ test('the ship-wall obstacle at 3754,10244 is crossed north-south, its join piec
 /** An open tile beside (x, y): where the normal object route leaves the player. */
 function beside(x, y) {
   for (const [dx, dy] of [[0, -1], [1, 0], [0, 1], [-1, 0]]) {
-    if ((RegionManager.getClipping(x + dx, y + dy, 1, null) & 0x1280100) === 0) return [x + dx, y + dy];
+    if ((RegionManager.getClipping(x + dx, y + dy, 1, null) & RegionManager.BLOCKED_MASK) === 0) return [x + dx, y + dy];
   }
   throw new Error(`nothing open beside ${x},${y}`);
 }

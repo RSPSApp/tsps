@@ -8,6 +8,8 @@ const Progress = require("./Progress.HalloweenEvents");
 const { rewards, previousRewards, eventRewards } = require("./data/halloween-2025-scene.json");
 const { STAGE } = Progress;
 const TITLE = "Spook-a-thon Decoration Contest";
+const COMPLETION = "halloween-2025";
+const TRADEABLES_COMPLETION = "halloween-2025-tradeables";
 const scrolls = new WeakSet();
 
 function itemId(api, symbol) {
@@ -91,19 +93,57 @@ function announce(api, player, list) {
   }
 }
 
+function grant(api, player, completion, list, unlock = []) {
+  const request = { player, eventKey: Progress.BUNDLE, completion, unlock,
+    rewards: list.map(row => ({ itemId: row.id, amount: row.amount })) };
+  api.emitCustomEvent("events:grant-reward", request);
+  return request;
+}
+function completed(api, player, completion) {
+  const request = { player, completion };
+  api.emitCustomEvent("events:completed", request);
+  return request.completed === true;
+}
+function record(api, player, completion) {
+  api.emitCustomEvent("events:record-completion", { player, completion });
+}
+/** A completed Halloween event unlocks the Makeover Mage's Halloween skin colours (Wiki, Makeover). */
+function unlockSkins(api, player) {
+  api.emitCustomEvent("makeover-mage:unlock-halloween-skins", { player });
+}
+/** Saves that claimed before EventScheduler kept completions (or skin unlocks) are imported on login. */
+function importClaim(api, { player }) {
+  let state;
+  try { state = Progress.read(player); } catch { return; }
+  if (state.stage === STAGE.COMPLETE) {
+    record(api, player, COMPLETION);
+    unlockSkins(api, player);
+  }
+  if (state.tradeableClaimed) record(api, player, TRADEABLES_COMPLETION);
+}
+
 function claim(api, player) {
   const state = Progress.read(player);
   if (!player.isRegistered() || player.getHitpoints() <= 0 || state.stage !== STAGE.JUDGED) return false;
   const tradeables = !state.tradeableClaimed && eligibleForTradeables(api, player);
-  const list = rows(api, player, { cosmetics: true, tradeables }), items = plan(api, player, list);
-  if (!items) return false;
-  // HolidayRewards validates the whole unlock before writing; nothing else changes on refusal.
-  const unlock = { player, items: [...eventRewards] };
-  api.emitCustomEvent("holiday-rewards:unlock", unlock);
-  if (unlock.accepted !== true) return false;
-  player.getInventory().setItems(items);
-  player.getInventory().refreshItems();
+  const list = rows(api, player, { cosmetics: true, tradeables });
+  if (!plan(api, player, list)) return false;
+  // EventScheduler's grant re-plans on the live inventory, unlocks Diango's catalogue (the
+  // whole unlock is validated first) and records the once-per-account completion in one commit.
+  const result = grant(api, player, COMPLETION, list, [...eventRewards]);
+  if (!result.granted) {
+    // The completion is recorded but the progress is not (a rolled-back save): the rewards
+    // were already given, so settle the progress rather than leave the claim stuck at judging.
+    if (result.reason === "already-complete") {
+      const claimed = completed(api, player, TRADEABLES_COMPLETION);
+      Progress.update(api, player, next => next.stage === STAGE.JUDGED && (next.stage = STAGE.COMPLETE, next.tradeableClaimed = claimed, true));
+      unlockSkins(api, player);
+    }
+    return false;
+  }
   Progress.update(api, player, next => next.stage === STAGE.JUDGED && (next.stage = STAGE.COMPLETE, next.tradeableClaimed = tradeables, true));
+  unlockSkins(api, player);
+  if (tradeables) record(api, player, TRADEABLES_COMPLETION);
   announce(api, player, list);
   return list;
 }
@@ -112,13 +152,17 @@ function claim(api, player) {
 function claimTradeables(api, player) {
   const state = Progress.read(player);
   if (state.stage !== STAGE.COMPLETE || state.tradeableClaimed || !eligibleForTradeables(api, player)) return false;
-  const list = rows(api, player, { cosmetics: false, tradeables: true }), items = plan(api, player, list);
-  if (!items) {
+  const list = rows(api, player, { cosmetics: false, tradeables: true });
+  if (!plan(api, player, list)) {
     refuse(api, player, list);
     return true;
   }
-  player.getInventory().setItems(items);
-  player.getInventory().refreshItems();
+  const result = grant(api, player, TRADEABLES_COMPLETION, list);
+  if (!result.granted) {
+    // Already handed over on a rolled-back save: record it, then let Fred talk normally.
+    if (result.reason === "already-complete") Progress.update(api, player, next => !next.tradeableClaimed && (next.tradeableClaimed = true));
+    return false;
+  }
   Progress.update(api, player, next => !next.tradeableClaimed && (next.tradeableClaimed = true));
   return true;
 }
@@ -145,4 +189,4 @@ function close(api, event) {
   player.getPacketSender().sendInterfaceRemoval();
 }
 
-module.exports = { TITLE, eligibleForTradeables, unlockPrevious, canClaim, refuse, claim, claimTradeables, show, close };
+module.exports = { TITLE, COMPLETION, TRADEABLES_COMPLETION, importClaim, eligibleForTradeables, unlockPrevious, canClaim, refuse, claim, claimTradeables, show, close };

@@ -1,5 +1,6 @@
 import type { MinimapIcon } from "../../render/loader/SdMapData";
 import type { WorldMapState } from "../../rs/map/WorldMapArea";
+import type { RenderedWorldMapPoint } from "@runelite/client/ui/overlay/worldmap/worldMapLayout";
 
 export const WORLD_MAP_ELEMENT_TOOLTIP_SCRIPT_ID = 7325;
 export const WORLD_MAP_ELEMENT_TOOLTIP_CLEAR_SCRIPT_ID = 7326;
@@ -66,6 +67,8 @@ export type WorldMapStateHolder = {
     pendingWorldMapDragDisplayX: number | undefined;
     pendingWorldMapDragDisplayY: number | undefined;
     renderedWorldMapIcons: WorldMapRenderedIcon[];
+    /** RuneLite plugin points drawn this frame, for their tooltip and click-to-jump. */
+    renderedWorldMapPoints: RenderedWorldMapPoint[];
     hoveredWorldMapIcons: Map<string, WorldMapRenderedIcon>;
     worldMapImageTiles: Map<number, WorldMapImageTile>;
     worldMapImageAccess: Map<number, number>;

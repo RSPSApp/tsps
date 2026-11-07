@@ -112,7 +112,8 @@ counts once for each player credited.
 - How many husks, parasites and sleepwalkers come with more players (one target per five players; one sleepwalker per player).
 - Claws' exact tile pattern: about one tile in each 3x3 block, as many as captured; Phosani's are thick within two tiles of each player.
 - Parasite and husk max hits for Phosani's use the normal ones.
-- Spores don't spread between players, and clicking the hitpoints orb doesn't weaken a parasite yet.
+- Spores don't spread between players.
+- The hitpoints-orb Cure action uses a carried Relicym's balm before Sanfew serum for an active parasite; only a committed dose weakens it. Relicym's disease treatment is not modelled. Lunar potion-sharing effects on parasites and the exact no-remedy wording are not established here.
 - The pet's drop rate doesn't fall with team size.
 
 ## Developer commands

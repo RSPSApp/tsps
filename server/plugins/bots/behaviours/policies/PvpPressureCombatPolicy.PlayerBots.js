@@ -225,7 +225,8 @@ function scoreCandidate(candidate, state, profile, pressureContext) {
     } else {
       score -= 1.1;
     }
-    if (targetHpRatio <= Number(profile?.nextHitMeleeFinisherHpRatio ?? 0.45)) {
+    if (targetHpRatio <= Number(profile?.nextHitMeleeFinisherHpRatio ?? 0.45) &&
+        targetPrayers[protectingPrayerFor(CombatType.MELEE)] !== true) {
       score += 0.95;
     }
     if (pressureContext?.targetFrozen) {

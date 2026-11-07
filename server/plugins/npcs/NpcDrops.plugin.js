@@ -34,6 +34,10 @@ const OVERRIDES_FILE = "npc-drop-overrides.json";
 const CUSTOM_FILE = "npc-drops-custom.json";
 const MAX_STACK = 2147483647;
 const CURRENCY_IDS = new Set([995, 6529, 21555]);
+/** loottracker_add_loot (npc, key, obj, count); cache script 7192. */
+const LOOT_TRACKER_SCRIPT = 7192;
+/** Each kill's loot key (script 7192), counting up as live's do. */
+let lootKey = 1;
 const RING_OF_WEALTH_TABLES = new Set(["rareDrop", "gem", "megaRare"]);
 /** Brimstone key, Larran's key. */
 const SLAYER_KEYS = new Set([23083, 23490]);
@@ -152,7 +156,20 @@ function isNotedQuantity(raw) {
 function applyOverrides(dump, subtables, overrides) {
   for (const id of Object.keys(overrides.removeNpcs ?? {})) delete dump.npcs[id];
   for (const [id, npc] of Object.entries(overrides.addNpcs ?? {})) {
-    if (id !== "$comment" && !dump.npcs[id]) dump.npcs[id] = npc;
+    if (id === "$comment") continue;
+    const existing = dump.npcs[id];
+    if (!existing) {
+      dump.npcs[id] = npc;
+      continue;
+    }
+    // The dump maps this NPC but not every table the override names: the dumper exports each
+    // dropversion table of a page and maps only one of them (the zombie pirates' Medium
+    // Wilderness Diary table). Append the missing ones; the dump's own order stays first, so
+    // the default table is unchanged.
+    existing.tables ??= [];
+    for (const table of npc.tables ?? []) {
+      if (!existing.tables.includes(table)) existing.tables.push(table);
+    }
   }
   for (const [tableId, change] of Object.entries(overrides.tables ?? {})) {
     const table = dump.tables[tableId];
@@ -964,7 +981,7 @@ function rollTable(table, player, npc, context = killContext(player, npc), sourc
  */
 function extraRolls(event) {
   ensureDropsLoaded?.();
-  const table = tableForNpc(event.npcId);
+  const table = tableForNpc(event.npcId, event.player, event.npc);
   if (!table || !Array.isArray(event.drops)) return;
   const rolling = { ...table, entries: (table.entries || []).filter((entry) => !entry.always), tertiary: [] };
   for (let i = 0; i < (event.rolls ?? 0); i++) event.drops.push(...rollTable(rolling, event.player, event.npc));
@@ -972,10 +989,21 @@ function extraRolls(event) {
 
 let ensureDropsLoaded = null;
 
-function tableForNpc(npcId) {
+/**
+ * The table an NPC's kill rolls. A plugin may answer npc-drops:table { player, npc, npcId, tables,
+ * table } to pick a different one for this player: the Wiki lists NPCs with a second table for a
+ * condition the data cannot express on its own (the Medium Wilderness Diary's zombie pirates).
+ * Without an answer the first table is used, as before.
+ */
+function tableForNpc(npcId, player = null, npc = null) {
   const tables = tablesByNpc.get(npcId);
   if (!tables || tables.length === 0) {
     return null;
+  }
+  if (tables.length > 1 && player && pluginApi) {
+    const request = { player, npc, npcId, tables, table: null };
+    pluginApi.emitCustomEvent("npc-drops:table", request);
+    if (request.table) return request.table;
   }
   // ponytail: ID variants are resolved by the exporter; context-dependent tables still
   // use the first entry until encounter/quest conditions have an executable contract.
@@ -983,7 +1011,7 @@ function tableForNpc(npcId) {
 }
 
 function dropFor(player, npc, npcId, location, damagers = []) {
-  const table = tableForNpc(npcId);
+  const table = tableForNpc(npcId, player, npc);
   if (!itemOnGroundManager) {
     return 0;
   }
@@ -1004,7 +1032,29 @@ function dropFor(player, npc, npcId, location, damagers = []) {
   const where = { player, npc, npcId, location, public: false };
   pluginApi.emitCustomEvent("npc-drops:location", where);
   placeDrops(player, drops, where.location, where.public === true ? { public: true } : {});
+  reportLoot(player, npcId, drops);
   return drops.length;
+}
+
+/**
+ * Tells the killer's client what the kill dropped: live runs loottracker_add_loot (script 7192)
+ * once per item with the NPC, the kill's key, the item and its amount, and RuneLite's loot
+ * tracker counts NPC loot only from that script.
+ */
+function reportLoot(player, npcId, drops) {
+  const sender = player.getPacketSender?.();
+  if (!sender) return;
+  const key = lootKey++;
+  for (const drop of drops) {
+    if (!Number.isInteger(drop.itemId) || drop.amount <= 0) continue;
+    sender.sendClientScript(LOOT_TRACKER_SCRIPT, npcId, key, droppedItemId(drop), drop.amount);
+  }
+}
+
+/** The item a drop lands as: its note when the table drops it noted and a note exists. */
+function droppedItemId(drop) {
+  const noteId = ItemDefinition.forId(drop.itemId).getNoteId();
+  return drop.noted && noteId >= 0 && ItemDefinition.forId(noteId).isNoted() ? noteId : drop.itemId;
 }
 
 /**
@@ -1016,26 +1066,26 @@ function placeDrops(player, drops, location, options = {}) {
     if (!Number.isInteger(drop.itemId) || drop.amount <= 0) {
       continue;
     }
+    let amount = drop.amount;
     if (CURRENCY_IDS.has(drop.itemId) && isWearingRingOfWealth(player) && autoCollectCurrencies(player)) {
+      // Into the pack up to the stack cap; anything past it drops to the ground as it would without the ring.
       const inventory = player.getInventory();
-      if (inventory.contains(drop.itemId) || inventory.getFreeSlots() > 0) {
-        inventory.adds(drop.itemId, drop.amount);
-        continue;
-      }
+      const collected = typeof inventory.getAddableAmount === "function"
+        ? inventory.getAddableAmount(new Item(drop.itemId, amount))
+        : (inventory.contains(drop.itemId) || inventory.getFreeSlots() > 0 ? amount : 0);
+      if (collected > 0) inventory.adds(drop.itemId, collected);
+      amount -= collected;
+      if (amount <= 0) continue;
     }
-    const definition = ItemDefinition.forId(drop.itemId);
-    const noteId = definition.getNoteId();
-    const itemId = drop.noted && noteId >= 0 && ItemDefinition.forId(noteId).isNoted()
-      ? noteId
-      : drop.itemId;
-    const item = new Item(itemId, drop.amount);
+    const itemId = droppedItemId(drop);
+    const item = new Item(itemId, amount);
     const stackable = item.getDefinition && item.getDefinition()
       ? item.getDefinition().isStackable()
       : false;
     if (stackable) {
       itemOnGroundManager.registerLocation(player, item, location, undefined, options);
     } else {
-      for (let i = 0; i < drop.amount; i++) {
+      for (let i = 0; i < amount; i++) {
         itemOnGroundManager.registerLocation(player, new Item(itemId, 1), location, undefined, options);
       }
     }
@@ -1067,7 +1117,7 @@ module.exports = {
     api.onCustomEvent("npc-drops:roll-table", (request) => {
       ensureDrops();
       const npcId = Number.isInteger(request.npcId) ? request.npcId : request.npc?.getId?.() ?? null;
-      let table = request.table ?? tableForNpc(npcId);
+      let table = request.table ?? tableForNpc(npcId, request.player, request.npc);
       if (table && typeof request.entryFilter === "function") {
         table = {
           ...table,
@@ -1128,5 +1178,5 @@ module.exports = {
   _test: { loadDrops, tablesByNpc, sharedTables },
 
   // Exposed for the smoke test.
-  __internals: { withoutOtherLocations, locationRequirement, DROP_LOCATIONS, loadDrops, rollTable, rollOnce, rollSharedTable, placeDrops, tablesByNpc, sharedTables, applyOverrides, applyCustomDrops, isUniqueEntry, rareMultiplier },
+  __internals: { withoutOtherLocations, locationRequirement, DROP_LOCATIONS, loadDrops, rollTable, rollOnce, rollSharedTable, placeDrops, dropFor, tablesByNpc, sharedTables, applyOverrides, applyCustomDrops, isUniqueEntry, rareMultiplier, tableForNpc },
 };

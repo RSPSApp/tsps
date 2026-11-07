@@ -155,6 +155,449 @@ test('a missing explicit activity page or variant cannot replace the current con
   assert.equal(MultiChatboxPrompt.getPending(player), null);
 });
 
+// Troll Stronghold: exercise the registered sleeping-guard action with real
+// players and cache definitions. These helpers are separate from the annual
+// event fixture above and from the Tourist Trap block at the end of the file.
+let trollIndex = 1450;
+function trollGuardFixture(t, name, level = 30, stage = 30) {
+  const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true,
+    send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+  const player = new Player(new PlayerSession(channel));
+  let npc, inWorld = false;
+  const oldCycle = core.World.processCycle;
+  const priorAddQueue = new Set(core.World.getAddNPCQueue());
+  const priorGroundItems = new Set(core.World.getItems());
+  const createdTasks = [];
+  const originalSubmit = core.TaskManager.submit;
+  t.after(() => {
+    let cleanupError;
+    const clean = fn => { try { fn(); } catch (error) { cleanupError ??= error; } };
+    const npcIndex = npc?.getIndex();
+    try {
+      clean(() => player.closeInterruptibleInterfaces());
+      clean(() => { player.getCombat().reset(); player.getCombat().getHitQueue().clear(); });
+      if (npc) clean(() => {
+        npc.getCombat().reset(); npc.getCombat().setUnderAttack(null); npc.getCombat().getHitQueue().clear();
+      });
+      // NPCDeathTask.stop schedules a respawn even after completion. Cancel the
+      // still-running owned tasks through the base method without replaying it.
+      clean(() => { for (const task of createdTasks) if (task.isRunning()) core.Task.prototype.stop.call(task); });
+      clean(() => { core.TaskManager.cancelTasks(player); core.TaskManager.cancelTasks(player.getIndex()); });
+      // Preserve unrelated ground items; remove only this actor's new drops.
+      clean(() => {
+        const manager = PM.createApi('TrollFixtureCleanup').getItemOnGroundManager();
+        const items = core.World.getItems();
+        for (const item of [...items]) {
+          if (priorGroundItems.has(item) || item.getOwner() !== player.getUsername()) continue;
+          manager.deregister(item);
+          const index = items.indexOf(item);
+          if (index >= 0) items.splice(index, 1);
+        }
+      });
+      clean(() => core.GameConstants.PLAYER_PERSISTENCE.cancelRequestedSave(player));
+      if (npc) {
+        clean(() => core.TaskManager.cancelTasks(npc));
+        clean(() => { const local=player.getLocalNpcs(), index=local.indexOf(npc); if(index>=0)local.splice(index,1); });
+        clean(() => { const removed=core.World.getRemoveNPCQueue(); while(removed.includes(npc))removed.splice(removed.indexOf(npc),1); });
+        // MobileList.remove must see the actor registered to release its slot and indexes.
+        clean(() => { if(inWorld)core.World.getNpcs().remove(npc); });
+      }
+      clean(() => { for (const task of createdTasks) if (task.isRunning()) core.Task.prototype.stop.call(task); });
+    } finally {
+      core.TaskManager.submit = originalSubmit;
+      clean(() => core.World.unregisterPlayerPosition(player));
+      player.setRegistered(false); core.World.processCycle = oldCycle;
+    }
+    if (cleanupError) throw cleanupError;
+    assert.ok(createdTasks.every(task => !task.isRunning()), 'owned tasks are stopped');
+    assert.ok(core.World.getItems().every(item => priorGroundItems.has(item) || item.getOwner() !== player.getUsername()),
+      'no new ground items owned by this actor remain');
+    assert.ok([...priorGroundItems].every(item => core.World.getItems().includes(item)),
+      'preexisting ground item identities remain registered');
+    assert.equal(core.TaskManager.hasActiveTask(player),false);
+    assert.equal(core.TaskManager.hasActiveTask(player.getIndex()),false);
+    if (npc) {
+      assert.equal(npc.isRegistered(),false); assert.equal(core.World.getNpcs().get(npcIndex)===npc,false);
+      assert.ok(!player.getLocalNpcs().includes(npc));
+      assert.ok([...core.World.npcTileOccupants.values()].every(bucket=>!bucket.includes(npc)));
+      assert.ok([...core.World.npcRegionOccupants.values()].every(bucket=>!bucket.has(npc)));
+      assert.ok(!core.World.getRemoveNPCQueue().includes(npc));
+      assert.ok(!core.World.getAddNPCQueue().some(entry => !priorAddQueue.has(entry)
+        && entry.getRealId() === npc.getRealId() && entry.getSpawnPosition().equals(npc.getSpawnPosition())),
+        'the test did not enqueue a respawn clone');
+    }
+  });
+  const skip = require('../plugins/bots/runtime/PersistenceConstants.PlayerBots').ATTR_SKIP_PERSISTENCE;
+  player.setAttribute(skip, true); player.setIndex(trollIndex++);
+  const username = `troll${player.getIndex()}`;
+  player.setUsername(username); player.setLongUsername(core.Misc.stringToLongBigInt(username));
+  assert.ok([...priorGroundItems].every(item => item.getOwner() !== username), 'actor has no preexisting ground items');
+  assert.ok(player.getLongUsername() !== 0n); assert.ok(player.getIndex() < core.World.MAX_PLAYERS);
+  player.setRegistered(true);
+  const quests = require('../plugins/quests/QuestRuntime');
+  const prerequisite = quests.questNamed('Death Plateau');
+  assert.ok(prerequisite); prerequisite.setStage(player, prerequisite.completionValue);
+  assert.equal(prerequisite.isComplete(player), true);
+  const quest = quests.questNamed('Troll Stronghold'); assert.ok(quest);
+  quest.setStage(player, stage); assert.equal(quest.getStage(player), stage);
+  const skills = player.getSkillManager();
+  for (const [skill, amount] of [[core.Skill.AGILITY, 15], [core.Skill.THIEVING, level], [core.Skill.HITPOINTS, 40]]) {
+    skills.setExperiences(skill, core.SkillManager.getExperienceForLevel(amount), false);
+    skills.setMaxLevels(skill, amount, false).setCurrentLevel(skill, amount, false);
+  }
+  assert.equal(skills.getCurrentLevel(core.Skill.THIEVING), level);
+  const id = name === 'Twig' ? core.NpcIdentifiers.TWIG_3 : core.NpcIdentifiers.BERRY_2;
+  const awake = name === 'Twig' ? core.NpcIdentifiers.TWIG_2 : core.NpcIdentifiers.BERRY;
+  const key = name === 'Twig' ? core.ItemIdentifiers.CELL_KEY_1 : core.ItemIdentifiers.CELL_KEY_2;
+  const otherKey = name === 'Twig' ? core.ItemIdentifiers.CELL_KEY_2 : core.ItemIdentifiers.CELL_KEY_1;
+  const spawn = require('../data/definitions/npc-spawns.json').find(row => row.id === id && row.name === name);
+  assert.ok(spawn, `${name} has an authored sleeping spawn`);
+  const z = spawn.level ?? 0; core.RegionManager.init(); core.RegionManager.loadMapFiles(spawn.x, spawn.y);
+  const candidates = [[2,0,1,0],[2,1,1,1],[-1,0,0,0],[-1,1,0,1],[0,2,0,1],[1,2,1,1],[0,-1,0,0],[1,-1,1,0]];
+  const adjacent = candidates.find(([dx,dy,ax,ay]) =>
+    core.RegionManager.canMove(spawn.x+ax,spawn.y+ay,spawn.x+dx,spawn.y+dy,z,1,1,null)
+    && core.RegionManager.canMove(spawn.x+dx,spawn.y+dy,spawn.x+ax,spawn.y+ay,z,1,1,null));
+  assert.ok(adjacent, `${name} has an accessible adjacent tile`);
+  player.setLocation(new core.Location(spawn.x+adjacent[0],spawn.y+adjacent[1],z)); player.setNeedsPlacement(false);
+  npc = core.NPC.create(id,new core.Location(spawn.x,spawn.y,z)); npc.setNeedsPlacement(false);
+  assert.equal(player.isNeedsPlacement(),false); assert.equal(npc.isNeedsPlacement(),false);
+  npc.getMovementCoordinator().setRadius(0);
+  inWorld = core.World.getNpcs().add(npc); assert.equal(inWorld,true); npc.setRegistered(true);
+  player.getLocalNpcs().push(npc);
+  assert.equal(npc.getCurrentDefinition(player).getId(),id);
+  assert.equal(npc.getCurrentDefinition(player).getName(),name);
+  assert.ok(npc.getCurrentDefinition(player).getActions().includes('Pickpocket'));
+  assert.equal(npc.getDefinition().doesFightBack(),true);
+  assert.equal(npc.getDefinition().getHitpoints(),90);
+  assert.equal(core.NpcDefinition.forId(awake).getMaxHit(),13);
+  assert.equal(core.NpcDefinition.forId(awake).getAttackSpeed(),6);
+  assert.ok(core.NpcDefinition.forId(awake).getActions().includes('Attack'));
+  assert.ok(!core.NpcDefinition.forId(awake).getActions().includes('Pickpocket'));
+  const connection = new ClientConnection(channel); connection.player = player;
+  core.TaskManager.submit = function(task) {
+    if (task.npc === npc || task.key === npc || task.key === player || task.key === player.getIndex()) createdTasks.push(task);
+    return originalSubmit.call(this, task);
+  };
+  return { player, npc, quest, connection, id, awake, key, otherKey };
+}
+async function trollPickpocket(f, forcedDraw, turns = 4) {
+  const clickType = f.npc.getCurrentDefinition(f.player).getActions().indexOf('Pickpocket') + 1;
+  assert.ok(clickType > 0, 'the active cache exposes the sleeping pickpocket action');
+  const original = Math.random; let draws = 0;
+  Math.random = function() {
+    const caller = String(new Error().stack).split('\n')[2] ?? '';
+    if (caller.includes('pickpocketGuard') && caller.includes('TrollStronghold.Quest.js')) { draws++; return forcedDraw; }
+    return original();
+  };
+  try {
+    await f.connection.dispatch([{ type:'npc_option', index:f.npc.getIndex(), clickType }]);
+    for (let i=0; i<turns; i++) {
+      f.player.resetUpdating(); core.TaskManager.process(); f.connection.processTurnPackets();
+      const movement=f.player.getMovementQueue(); movement.beginCycle(); movement.processEntityPursuit();
+      if (movement.hasPendingWork()) movement.process(); core.TaskManager.processWalkTo(f.player.getIndex());
+    }
+  } finally { Math.random = original; }
+  return draws;
+}
+function trollNativeCombatTurns(f) {
+  let queued = false;
+  for (let i=0; i<8; i++) {
+    core.World.processCycle++; core.TaskManager.process();
+    f.npc.process();
+    queued ||= f.player.getCombat().getHitQueue().hasPendingHitFrom(f.npc);
+    f.player.getCombat().getHitQueue().process(core.World.getProcessCycle());
+  }
+  return queued;
+}
+test('Troll Stronghold sleeping guards resolve pickpocket attempts',async t=>{
+  const definitionMap=core.NpcDefinition.definitions, previousDefinitions=new Map(definitionMap);
+  t.after(()=>{
+    const sameMap=core.NpcDefinition.definitions===definitionMap;
+    definitionMap.clear();
+    for(const [id,definition] of previousDefinitions)definitionMap.set(id,definition);
+    core.NpcDefinition.definitions=definitionMap;
+    assert.equal(sameMap,true,'the loader uses the existing definition map');
+    assert.equal(core.NpcDefinition.definitions.size,previousDefinitions.size);
+    for(const [id,definition] of previousDefinitions) assert.equal(core.NpcDefinition.definitions.get(id)===definition,true,`definition ${id} identity restored`);
+  });
+  const { NpcDefinitionLoader }=require('../dist/game/definition/loader/impl/NpcDefinitionLoader');
+  new NpcDefinitionLoader().load();
+  for (const name of ['Twig','Berry']) {
+  await t.test(`${name} failed pickpocket wakes the actual guard and starts combat`, async t => {
+    const f = trollGuardFixture(t,name), draws = await trollPickpocket(f,132/256);
+    assert.equal(f.npc.getCombat().getTarget()===f.player,true,'failed pickpocket starts the actual NPC combat target');
+    assert.equal(draws,1,'one attempt performs one scoped roll');
+    assert.equal(f.npc.getId(),f.awake); assert.equal(f.player.getInventory().getAmount(f.key),0);
+    assert.equal(f.quest.getStage(f.player),30);
+    assert.equal(f.player.getInventory().getAmount(f.otherKey),0);
+    assert.ok(!f.npc.getCurrentDefinition(f.player).getActions().includes('Pickpocket'));
+    assert.equal(trollNativeCombatTurns(f),true,'the real NPC combat turn queues an attack');
+    // Prime only the killing attribution, then let the real NPC death task emit
+    // its registered death event. This is not a player attack/playthrough.
+    f.player.closeInterruptibleInterfaces(); f.npc.getCombat().addDamage(f.player,f.npc.getHitpoints());
+    f.npc.setHitpoints(0);
+    for (let i=0;i<80 && f.player.getInventory().getAmount(f.key)===0;i++) core.TaskManager.process();
+    assert.equal(f.player.getInventory().getAmount(f.key),1,'the real death task reaches the kill fallback');
+    assert.ok(core.World.getItems().some(item => item.getOwner() === f.player.getUsername() && item.getItem().getId() === core.ItemIdentifiers.BIG_BONES),
+      'the registered NPC drop handler places the guard drop of big bones');
+    assert.equal(f.player.getInventory().getAmount(f.otherKey),0);
+  });
+  await t.test(`${name} successful pickpocket grants only the matching key`, async t => {
+    const f = trollGuardFixture(t,name), draws = await trollPickpocket(f,131/256);
+    assert.equal(f.player.getInventory().getAmount(f.key),1,'the successful native action grants the matching key');
+    assert.equal(draws,1); assert.equal(f.player.getInventory().getAmount(f.otherKey),0);
+    assert.equal(f.quest.getStage(f.player),30);
+    assert.equal(f.npc.getId(),f.id); assert.equal(f.npc.getCombat().getTarget()===null,true);
+    assert.equal(await trollPickpocket(f,0),0,'the already-held key is refused before another roll');
+    assert.equal(f.player.getInventory().getAmount(f.key),1,'an owned key is not duplicated');
+  });
+  }
+await t.test('the published level-81 endpoint succeeds for a high roll',async t=>{
+  const f=trollGuardFixture(t,'Berry',81), draws=await trollPickpocket(f,0.999999);
+  assert.equal(f.player.getInventory().getAmount(f.key),1);
+  assert.equal(f.npc.getCombat().getTarget()===null,true); assert.equal(draws,1);
+});
+await t.test('the second native guard key advances the existing quest stage',async t=>{
+  const f=trollGuardFixture(t,'Twig'); f.player.getInventory().adds(f.otherKey,1);
+  assert.equal(f.quest.getStage(f.player),30); assert.equal(f.player.getInventory().getAmount(f.otherKey),1);
+  const draws=await trollPickpocket(f,0);
+  assert.equal(f.player.getInventory().getAmount(f.key),1);
+  assert.equal(f.player.getInventory().getAmount(f.otherKey),1);
+  assert.equal(f.quest.getStage(f.player),40); assert.equal(draws,1);
+});
+await t.test('closing the failed guard overhead does not disturb a replacement dialogue',async t=>{
+  const f=trollGuardFixture(t,'Twig'), draws=await trollPickpocket(f,0.999999,1);
+  assert.equal(f.npc.getCombat().getTarget()===f.player,true,'the failed native interaction starts combat');
+  assert.equal(draws,1);
+  const manager=f.player.getDialogueManager(), old=manager.getCurrent();
+  assert.ok(old instanceof core.ActionDialogue,'the actual failure overhead is awaiting its continuation');
+  f.player.closeInterruptibleInterfaces();
+  const builder=new core.DialogueChainBuilder(); builder.add(new core.NpcDialogue(0,f.awake,'Replacement dialogue.'));
+  manager.startDialogues(builder); const replacement=manager.getCurrent(); assert.ok(replacement);
+  assert.equal(replacement===old,false);
+  for(let i=0;i<3;i++) core.TaskManager.process();
+  assert.equal(manager.getCurrent()===replacement,true,'the old overhead task does not close the replacement');
+  assert.equal(f.player.getInventory().getAmount(f.key),0);
+  assert.equal(f.quest.getStage(f.player),30);
+});
+for (const [label,stage,level,owned,full] of [
+  ['unstarted quest',0,30,false,false], ['low Thieving',30,29,false,false],
+  ['already owned key',30,30,true,false], ['full inventory',30,30,false,true],
+]) {
+  await t.test(`Twig pickpocket preserves the ${label} gate`,async t=>{
+    const f=trollGuardFixture(t,'Twig',level,stage), inventory=f.player.getInventory();
+    if (owned) inventory.adds(f.key,1);
+    if (full) {
+      assert.equal(core.ItemDefinition.forId(core.ItemIdentifiers.BONES).isStackable(),false);
+      for (let i=0;i<28;i++) inventory.adds(core.ItemIdentifiers.BONES,1);
+    }
+    if (full) assert.equal(inventory.isFull(),true);
+    const before=inventory.getAmount(f.key),draws=await trollPickpocket(f,0);
+    assert.equal(inventory.getAmount(f.key),before); assert.equal(f.npc.getId(),f.id);
+    assert.equal(f.npc.getCombat().getTarget()===null,true); assert.equal(draws,0,'denied interactions do not roll');
+  });
+}
+});
+
+// Darkness of Hallowvale: seed the prerequisite checkpoint, then use the
+// registered, cache-backed Veliaf route and the actual quest-start prompt.
+let hallowvaleIndex = 1800;
+function hallowvaleStartFixture(t, { skill = null, boosted = false, missingAid = false } = {}) {
+  const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true,
+    send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+  const player = new Player(new PlayerSession(channel));
+  const connection = new ClientConnection(channel); connection.player = player;
+  const oldCycle = core.World.processCycle, originalSubmit = core.TaskManager.submit;
+  const ownedTasks = [], messages = [], operated = [], starts = [];
+  let npc, originalSend = player.sendMessage;
+  const ownedNpc = () => [...new Set([...core.World.getNpcs(), ...core.World.getAddNPCQueue()])]
+    .filter(actor => actor?.getOwner?.() === player);
+  const subscriptions = [];
+  t.after(() => {
+    let error;
+    const clean = fn => { try { fn(); } catch (caught) { error ??= caught; } };
+    try {
+      clean(() => player.closeInterruptibleInterfaces());
+      clean(() => { player.getCombat().reset(); player.getCombat().getHitQueue().clear(); });
+      clean(() => { for (const task of ownedTasks) if (task.isRunning()) core.Task.prototype.stop.call(task); });
+      clean(() => { core.TaskManager.cancelTasks(player); core.TaskManager.cancelTasks(player.getIndex()); });
+      clean(() => core.GameConstants.PLAYER_PERSISTENCE.cancelRequestedSave(player));
+      clean(() => { for (const actor of ownedNpc()) {
+        core.TaskManager.cancelTasks(actor);
+        const local = player.getLocalNpcs(), index = local.indexOf(actor); if (index >= 0) local.splice(index, 1);
+        PM.removeNpc(actor);
+      } });
+      clean(() => { for (const [hooks, hook] of subscriptions) { const index = hooks.indexOf(hook); if (index >= 0) hooks.splice(index, 1); } });
+    } finally {
+      core.TaskManager.submit = originalSubmit;
+      player.sendMessage = originalSend;
+      clean(() => core.World.unregisterPlayerPosition(player));
+      player.setRegistered(false); core.World.processCycle = oldCycle;
+    }
+    if (error) throw error;
+    assert.ok(ownedTasks.every(task => !task.isRunning()), 'owned tasks stopped');
+    assert.equal(core.TaskManager.hasActiveTask(player), false);
+    assert.equal(core.TaskManager.hasActiveTask(player.getIndex()), false);
+    assert.equal(ownedNpc().length, 0, 'no actor-owned NPC remains registered or queued');
+    if (npc) {
+      assert.equal(npc.isRegistered(), false);
+      assert.notEqual(core.World.getNpcs().get(npc.getIndex()), npc);
+      assert.ok(!core.World.getAddNPCQueue().includes(npc));
+      assert.ok(!player.getLocalNpcs().includes(npc));
+      assert.ok([...core.World.npcTileOccupants.values()].every(bucket => !bucket.includes(npc)));
+      assert.ok([...core.World.npcRegionOccupants.values()].every(bucket => !bucket.has(npc)));
+    }
+  });
+  core.TaskManager.submit = function(task) {
+    if (task.key === player || task.key === player.getIndex() || task.key?.getOwner?.() === player || task.npc?.getOwner?.() === player) ownedTasks.push(task);
+    return originalSubmit.call(this, task);
+  };
+  const skip = require('../plugins/bots/runtime/PersistenceConstants.PlayerBots').ATTR_SKIP_PERSISTENCE;
+  player.setAttribute(skip, true); player.setIndex(hallowvaleIndex++);
+  const username = `hallow${player.getIndex()}`;
+  player.setUsername(username); player.setLongUsername(core.Misc.stringToLongBigInt(username));
+  assert.ok(player.getLongUsername() !== 0n); assert.ok(player.getIndex() < core.World.MAX_PLAYERS);
+  player.setRegistered(true);
+  player.sendMessage = function(message) { messages.push(String(message)); return originalSend.call(this, message); };
+  const skills = player.getSkillManager();
+  const requirements = [[core.Skill.CONSTRUCTION, 5], [core.Skill.MINING, 20], [core.Skill.THIEVING, 22],
+    [core.Skill.AGILITY, 26], [core.Skill.CRAFTING, 32], [core.Skill.MAGIC, 33], [core.Skill.STRENGTH, 40]];
+  for (const [entry, target] of [...requirements, [core.Skill.HITPOINTS, 40]]) {
+    const base = entry === skill ? target - 1 : target;
+    skills.setExperiences(entry, core.SkillManager.getExperienceForLevel(base), false);
+    skills.setMaxLevels(entry, base, false).setCurrentLevel(entry, base, false);
+    if (entry === skill && boosted) skills.setCurrentLevel(entry, target, false);
+    assert.equal(skills.getMaxLevel(entry), base); assert.equal(skills.getCurrentLevel(entry), entry === skill && boosted ? target : base);
+    assert.equal(skills.getExperience(entry), core.SkillManager.getExperienceForLevel(base));
+  }
+  const quests = require('../plugins/quests/QuestRuntime').getRegisteredQuests();
+  const quest = key => { const found = quests.find(entry => entry.key === key); assert.ok(found, key); return found; };
+  for (const key of ['the_restless_ghost', 'priest_in_peril', 'nature_spirit', 'in_search_of_the_myreque']) {
+    const prerequisite = quest(key); prerequisite.setStage(player, prerequisite.completionValue);
+    assert.equal(prerequisite.isComplete(player), true, `${key} checkpoint`);
+  }
+  const aid = quest('in_aid_of_the_myreque');
+  aid.setStage(player, missingAid ? 300 : aid.completionValue);
+  assert.equal(aid.isComplete(player), !missingAid);
+  const targetQuest = quest('darkness_of_hallowvale'); assert.equal(targetQuest.getStage(player), 0);
+  const snapshot = () => requirements.map(([entry]) => ({ skill: entry.getIndex(), base: skills.getMaxLevel(entry),
+    current: skills.getCurrentLevel(entry), xp: skills.getExperience(entry) }));
+  function observe(name, callback) {
+    PM.createApi('HallowvaleStartFixture').onCustomEvent(name, callback);
+    const hooks = PM.customEventHooks.get(name); subscriptions.push([hooks, hooks.at(-1)]);
+  }
+  observe('npc:operated', event => { if (event.player === player) operated.push({ npcId: event.npcId, option: event.option, levels: snapshot() }); });
+  observe('npc-dialogue:hook', event => { if (event.player === player && event.hook === 'quest:darkness-of-hallowvale:start')
+    starts.push({ npcId: event.npcId, levels: snapshot(), stage: targetQuest.getStage(player) }); });
+  // This is the same actor ID, tile and owner-only policy used by In Aid's
+  // post-quest spawn; this test creates it directly, not through quest login.
+  const tile = new core.Location(3494, 9628, 0);
+  core.RegionManager.init(); core.RegionManager.loadMapFiles(tile.getX(), tile.getY());
+  const candidates = [[1,0],[-1,0],[0,1],[0,-1]];
+  const adjacent = candidates.find(([dx,dy]) =>
+    core.RegionManager.canMove(tile.getX(), tile.getY(), tile.getX()+dx, tile.getY()+dy, 0, 1, 1, null)
+    && core.RegionManager.canMove(tile.getX()+dx, tile.getY()+dy, tile.getX(), tile.getY(), 0, 1, 1, null));
+  assert.ok(adjacent, 'the canonical cellar actor has a reachable adjacent tile');
+  player.setLocation(new core.Location(tile.getX()+adjacent[0], tile.getY()+adjacent[1], 0));
+  player.setNeedsPlacement(false);
+  npc = PM.spawnNpc({ id: core.NpcIdentifiers.VELIAF_HURTZ_2, x: tile.getX(), y: tile.getY(), z: 0,
+    wanderRadius: 0, owner: player, ownerOnly: true }, 'HallowvaleStartFixture');
+  assert.ok(npc && npc.isRegistered()); assert.equal(npc.getOwner(), player); npc.setNeedsPlacement(false);
+  assert.equal(npc.getCurrentDefinition(player).getName(), 'Veliaf Hurtz');
+  assert.ok(npc.getCurrentDefinition(player).getActions().includes('Talk-to'));
+  player.getLocalNpcs().push(npc);
+  return { player, connection, npc, skills, quest: targetQuest, aid, requirements, messages, operated, starts, snapshot };
+}
+async function hallowvaleTalk(f) {
+  const actions = f.npc.getCurrentDefinition(f.player).getActions(), clickType = actions.indexOf('Talk-to') + 1;
+  assert.ok(clickType > 0);
+  const before = f.operated.length;
+  await f.connection.dispatch([{ type: 'npc_option', index: f.npc.getIndex(), clickType }]);
+  for (let i=0; i<4; i++) {
+    core.World.processCycle++; f.player.resetUpdating(); core.TaskManager.process(); f.connection.processTurnPackets();
+    const movement = f.player.getMovementQueue(); movement.beginCycle(); movement.processEntityPursuit();
+    if (movement.hasPendingWork()) movement.process(); core.TaskManager.processWalkTo(f.player.getIndex());
+  }
+  assert.equal(f.operated.length, before + 1, 'real registered Veliaf operation reached');
+  assert.equal(f.operated.at(-1).npcId, f.npc.getContentId(f.player));
+  assert.equal(f.operated.at(-1).option, 'talk-to');
+}
+async function hallowvaleMenu(f) {
+  for (let i=0; i<24 && !MultiChatboxPrompt.getPending(f.player) && f.player.getDialogueManager().getCurrent(); i++) await nextLine(f);
+  return MultiChatboxPrompt.getPending(f.player);
+}
+async function hallowvaleStartPrompt(f) {
+  const menu = await hallowvaleMenu(f);
+  const help = menu?.options.indexOf('Is there something I can do to help out?') ?? -1;
+  assert.ok(help >= 0, `eligible Veliaf action offers quest help; messages=${JSON.stringify(f.messages)}`);
+  await choose(f, help + 1);
+  const start = await hallowvaleMenu(f);
+  assert.equal(start?.title, 'Start the Darkness of Hallowvale quest?');
+  assert.ok(start.options.includes('Yes.'));
+  const owner = MultiChatboxPrompt.pendingPrompts.get(f.player);
+  assert.ok(owner, 'the actual native prompt owns a pending callback');
+  assert.equal(f.player.getPacketSender().isChatboxInterface(219), true);
+  return { start, owner };
+}
+async function hallowvaleAccept(f, observed) {
+  assert.equal(MultiChatboxPrompt.pendingPrompts.get(f.player), observed.owner, 'the same native prompt still owns the choice');
+  assert.deepEqual(MultiChatboxPrompt.getPending(f.player), observed.start);
+  assert.equal(f.player.getPacketSender().isChatboxInterface(219), true);
+  await choose(f, observed.start.options.indexOf('Yes.') + 1);
+}
+test('Darkness of Hallowvale applies boostable start skills at both registered checks', async t => {
+  const targets = [[core.Skill.CONSTRUCTION, 5, 'Construction'], [core.Skill.AGILITY, 26, 'Agility'], [core.Skill.MAGIC, 33, 'Magic']];
+  for (const [skill, level, label] of targets) {
+    await t.test(`${label} temporary level can start the quest`, async t => {
+      const f = hallowvaleStartFixture(t, { skill, boosted: true });
+      await hallowvaleTalk(f);
+      const observed = f.operated.at(-1).levels.find(row => row.skill === skill.getIndex());
+      assert.equal(observed.base, level - 1); assert.equal(observed.current, level);
+      const start = await hallowvaleStartPrompt(f);
+      assert.equal(f.quest.getStage(f.player), 0);
+      await hallowvaleAccept(f, start);
+      assert.equal(f.quest.getStage(f.player), 10, 'decoded Yes starts the quest');
+      const atStart = f.starts.at(-1); assert.ok(atStart); assert.equal(atStart.stage, 10);
+      assert.equal(atStart.levels.find(row => row.skill === skill.getIndex()).current, level);
+    });
+    await t.test(`${label} below requirement without boost is refused`, async t => {
+      const f = hallowvaleStartFixture(t, { skill }); await hallowvaleTalk(f);
+      assert.equal(f.quest.getStage(f.player), 0);
+      assert.ok(f.messages.some(message => message.includes(`You need ${level} ${label}`)));
+      assert.equal(MultiChatboxPrompt.getPending(f.player), null);
+      assert.equal(f.starts.length, 0);
+    });
+  }
+  await t.test('base requirements normally reach the same native start', async t => {
+    const f = hallowvaleStartFixture(t); await hallowvaleTalk(f);
+    const start = await hallowvaleStartPrompt(f); await hallowvaleAccept(f, start);
+    assert.equal(f.quest.getStage(f.player), 10); assert.equal(f.starts.length, 1);
+  });
+  await t.test('boosted Mining does not replace its required base level', async t => {
+    const f = hallowvaleStartFixture(t, { skill: core.Skill.MINING, boosted: true }); await hallowvaleTalk(f);
+    const mining = f.operated.at(-1).levels.find(row => row.skill === core.Skill.MINING.getIndex());
+    assert.equal(mining.base, 19); assert.equal(mining.current, 20);
+    assert.equal(f.quest.getStage(f.player), 0); assert.ok(f.messages.some(message => message.includes('You need 20 Mining')));
+    assert.equal(MultiChatboxPrompt.getPending(f.player), null);
+  });
+  await t.test('incomplete In Aid does not start Darkness', async t => {
+    const f = hallowvaleStartFixture(t, { missingAid: true }); await hallowvaleTalk(f);
+    assert.equal(f.aid.isComplete(f.player), false); assert.equal(f.quest.getStage(f.player), 0);
+    assert.equal(f.starts.length, 0);
+    assert.notEqual(MultiChatboxPrompt.getPending(f.player)?.title, 'Start the Darkness of Hallowvale quest?');
+  });
+  await t.test('the Yes choice rechecks a temporary boost that expired after Talk-to', async t => {
+    const f = hallowvaleStartFixture(t, { skill: core.Skill.AGILITY, boosted: true });
+    await hallowvaleTalk(f); const start = await hallowvaleStartPrompt(f);
+    f.skills.setCurrentLevel(core.Skill.AGILITY, 25, false);
+    await hallowvaleAccept(f, start);
+    assert.equal(f.quest.getStage(f.player), 0);
+    const observed = f.starts.at(-1); assert.ok(observed); assert.equal(observed.stage, 0);
+    assert.equal(observed.levels.find(row => row.skill === core.Skill.AGILITY.getIndex()).current, 25);
+    assert.ok(f.messages.some(message => message.includes('You need 26 Agility')));
+  });
+});
+
 const AGE_QUESTION = "Can you tell me how long I've been here?";
 const AGE_INTRO = "Ahh, I see all the newcomers arriving in Lumbridge, fresh-faced and eager for adventure. I remember you...";
 const AGE_TASK = 'learn-your-age-from-hans-in-lumbridge';
@@ -2194,7 +2637,6 @@ function sourceStartChoice(page, hook) {
 }
 
 for (const [page, key, npcKey, hook, reasons] of [
-  ['Lost City', 'lost_city', 'WARRIOR', 'quest:lost-city:start', ['Crafting level of at least 31', 'Woodcutting level of at least 36']],
   ['In Search of the Myreque', 'in_search_of_the_myreque', 'VANSTROM_KLAUSE_8', 'quest:in-search-of-the-myreque:start', ['Agility level of at least 25']],
 ]) test(`${page} native start refusal exposes existing reasons without playing accepted dialogue`, async t => {
   const f = fixture(t), quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(q => q.key === key);
@@ -2216,16 +2658,10 @@ for (const [page, key, npcKey, hook, reasons] of [
     for (const reason of expected) assert.ok(packets.includes(reason), reason);
   };
   await refuse(reasons);
-  if (key === 'lost_city') {
-    f.player.getSkillManager().setMaxLevels(core.Skill.CRAFTING, 31, false);
-    await refuse(['Woodcutting level of at least 36']);
-    f.player.getSkillManager().setMaxLevels(core.Skill.WOODCUTTING, 36, false);
-  } else {
-    f.player.getSkillManager().setMaxLevels(core.Skill.AGILITY, 25, false);
-    await refuse(['You must complete Nature Spirit to start this quest.']);
-    const prerequisite = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(q => q.key === 'nature_spirit');
-    prerequisite.setStage(f.player, prerequisite.completionValue);
-  }
+  f.player.getSkillManager().setMaxLevels(core.Skill.AGILITY, 25, false);
+  await refuse(['You must complete Nature Spirit to start this quest.']);
+  const prerequisite = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(q => q.key === 'nature_spirit');
+  prerequisite.setStage(f.player, prerequisite.completionValue);
   show(); await choose(f, choice.options.findIndex(option => option.hook === hook) + 1);
   assert.ok(quest.getStage(f.player) > 0, 'meeting the existing requirements starts normally');
   assert.ok(f.player.getDialogueManager().getCurrent(), 'the canonical accepted branch is still played');
@@ -3206,4 +3642,338 @@ test('Legends guard still refuses an ineligible player after the RFD opening', a
   assert.ok(lines.some(text => text.startsWith("I'm very sorry but you need to complete more quests")), 'actual Legends requirements refusal remains');
   assert.equal(f.quest('legends_quest').getStage(player), 0);
   assert.equal(rfdSavedProgress(player), before);
+});
+
+function lostTribeSilverwareFixture(t, { ham = 2, stage = 9, contact = 2, silverware = true } = {}) {
+  const f = fixture(t);
+  f.quest = registeredQuest('the_lost_tribe');
+  f.quest.setStage(f.player, stage);
+  f.player.setAttribute('quest.the_lost_tribe.ham', ham);
+  f.player.setAttribute('quest.the_lost_tribe.contact', contact);
+  f.npc = core.NPC.create(core.NpcIdentifiers.DUKE_HORACIO, new core.Location(3211, 3220, 1));
+  if (silverware) f.player.getInventory().add(new core.Item(core.ItemIdentifiers.SILVERWARE, 1), false);
+  f.talk = () => PM.emitNpcInteraction({ player: f.player, npc: f.npc, npcId: f.npc.getId(), action: 'Talk-to', clickType: 1, handled: false });
+  f.search = () => {
+    const id = core.ObjectIdentifiers.CRATE_65, location = new core.Location(3152, 9645, 0);
+    const object = new core.GameObject(id, location, 10, 0, null);
+    return PM.emitObjectInteraction({ player: f.player, object, location,
+      objectId: id, x: 3152, y: 9645, z: 0, option: 'Search', clickType: 1, handled: false });
+  };
+  return f;
+}
+async function lostTribeContinue(f) {
+  const group = f.player.getPacketSender().getChatboxGroupId();
+  await f.connection.dispatch([{ type: 'dialogue_continue', widgetId: (group << 16) | 5, childIndex: -1 }]);
+  f.connection.processTurnPackets();
+}
+async function lostTribeHandIn(f) {
+  f.talk();
+  for (let n = 0; n < 10 && !MultiChatboxPrompt.getPending(f.player); n++) await lostTribeContinue(f);
+  const options = MultiChatboxPrompt.getPending(f.player)?.options ?? [];
+  const index = options.indexOf('I found the missing silverware in the HAM cave!');
+  assert.ok(index >= 0, 'actual Duke transcript offers the hand-in');
+  await choose(f, index + 1);
+  for (let n = 0; n < 20 && f.player.getDialogueManager().getCurrent(); n++) await lostTribeContinue(f);
+}
+test('Lost Tribe silverware stays owned across Duke opener cancellation and signs only at real hand-in (#2893)', async t => {
+  const f = lostTribeSilverwareFixture(t), I = core.ItemIdentifiers;
+  assert.equal(f.talk(), true);
+  assert.equal(f.player.getInventory().getAmount(I.SILVERWARE), 1, 'opening Duke dialogue does not consume the item');
+  f.player.closeInterruptibleInterfaces();
+  assert.equal(f.quest.getStage(f.player), 9);
+  for (let n = f.player.getInventory().getFreeSlots(); n > 0; n--) f.player.getInventory().add(new core.Item(I.BRONZE_DAGGER, 1), false);
+  assert.equal(f.player.getInventory().getFreeSlots(), 0);
+  await lostTribeHandIn(f);
+  assert.equal(f.quest.getStage(f.player), 10);
+  assert.equal(f.player.getInventory().getAmount(I.SILVERWARE), 0);
+  assert.equal(f.player.getInventory().getAmount(I.PEACE_TREATY), 1, 'silverware slot becomes treaty even with full inventory');
+  f.player.closeInterruptibleInterfaces(); f.talk();
+  assert.equal(f.player.getInventory().getAmount(I.PEACE_TREATY), 1, 'retalk does not duplicate treaty');
+});
+test('Lost Tribe historical consumed silverware can be recovered from the real crate and handed in after save reload (#2893)', async t => {
+  const f = lostTribeSilverwareFixture(t, { silverware: false }), I = core.ItemIdentifiers;
+  const save = require('../dist/game/entity/impl/player/persistence/PlayerSave').PlayerSave.fromPlayer(f.player);
+  const restored = lostTribeSilverwareFixture(t, { silverware: false });
+  save.applyToPlayer(restored.player);
+  restored.search();
+  for (let n = 0; n < 12 && restored.player.getDialogueManager().getCurrent(); n++) await lostTribeContinue(restored);
+  assert.equal(restored.player.getInventory().getAmount(I.SILVERWARE), 1, 'ham2 without item remains recoverable');
+  restored.search();
+  assert.equal(restored.player.getInventory().getAmount(I.SILVERWARE), 1, 'no duplicate silverware');
+  await lostTribeHandIn(restored);
+  assert.equal(restored.quest.getStage(restored.player), 10);
+  assert.equal(restored.player.getInventory().getAmount(I.PEACE_TREATY), 1);
+});
+
+test('Lost Tribe silverware search preserves capacity, duplicate and stage/contact gates (#2893)', async t => {
+  const I = core.ItemIdentifiers;
+  for (const ham of [0, 2]) {
+    const f = lostTribeSilverwareFixture(t, { ham, silverware: false });
+    for (let n = 0; n < 28; n++) f.player.getInventory().add(new core.Item(I.BRONZE_DAGGER, 1), false);
+    f.search();
+    assert.equal(f.player.getInventory().getAmount(I.SILVERWARE), 0, 'full inventory cannot acquire silverware');
+    assert.equal(f.player.getAttribute('quest.the_lost_tribe.ham'), ham, 'failed acquisition preserves progress');
+    f.player.closeInterruptibleInterfaces();
+    f.player.getInventory().deleteNumber(I.BRONZE_DAGGER, 1);
+    f.search();
+    for (let n = 0; n < 12 && f.player.getDialogueManager().getCurrent(); n++) await lostTribeContinue(f);
+    assert.equal(f.player.getInventory().getAmount(I.SILVERWARE), 1);
+    f.search();
+    assert.equal(f.player.getInventory().getAmount(I.SILVERWARE), 1, 'repeat does not duplicate');
+  }
+  const banked = lostTribeSilverwareFixture(t, { silverware: false });
+  banked.player.getBank(0).add(new core.Item(I.SILVERWARE, 1), false);
+  banked.search();
+  assert.equal(banked.player.getInventory().getAmount(I.SILVERWARE), 0, 'banked silverware is not lost');
+  assert.equal(banked.player.getBanks()[0].getAmount(I.SILVERWARE), 1);
+  for (const setup of [{ stage: 8 }, { stage: 10 }, { stage: 12 }, { contact: 1 }]) {
+    const f = lostTribeSilverwareFixture(t, { ...setup, silverware: false });
+    f.search();
+    assert.equal(f.player.getInventory().getAmount(I.SILVERWARE), 0, 'only the current objective can recover it');
+    assert.equal(f.quest.getStage(f.player), setup.stage ?? 9);
+  }
+});
+
+// The Tourist Trap: use the registered NPC/dialogue/cart paths with a seeded quest stage.
+// The NPC and cart come from the active cache/map; no client or full quest was run.
+let touristDriverMapReady = false;
+function touristDriverFixture(t, { stage = 25, coins = 0 } = {}) {
+  const f = fixture(t), { player } = f, I = core.ItemIdentifiers;
+  const errors = [];
+  const originalError = console.error;
+  t.mock.method(console, 'error', (...args) => { errors.push(args.map(String).join(' ')); originalError.apply(console, args); });
+  let npc;
+  t.after(() => {
+    try {
+      try { player.closeInterruptibleInterfaces(); }
+      finally {
+        core.TaskManager.cancelTasks(player); core.TaskManager.cancelTasks(player.getIndex());
+        if (npc && core.World.getNpcs().get(npc.getIndex()) === npc) core.World.getNpcs().remove(npc);
+      }
+      assert.ok(!npc || core.World.getNpcs().get(npc.getIndex()) !== npc);
+      assert.ok(!npc || !npc.isRegistered());
+      assert.equal(player.isRegistered(), false);
+      assert.equal(core.TaskManager.hasActiveTask(player), false);
+      assert.equal(core.TaskManager.hasActiveTask(player.getIndex()), false);
+      assert.equal(MultiChatboxPrompt.getPending(player), null);
+      assert.equal(player.getDialogueManager().getCurrent(), undefined);
+    } finally { assert.deepEqual(errors, [], 'no caught dialogue, hook or cleanup errors'); }
+  });
+  const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(q => q.key === 'the_tourist_trap');
+  assert.ok(quest, 'Tourist Trap is registered');
+  player.setAttribute('the-tourist-trap:stage-version', 1);
+  quest.setStage(player, stage);
+  player.getPacketSender().sendVarbit(2809, stage >= 25 ? 1 : 0);
+  if (coins) player.getInventory().add(new core.Item(I.COINS, coins), false);
+  if (!touristDriverMapReady) {
+    core.RegionManager.init();
+    core.RegionManager.loadMapFiles(3287, 3022);
+    touristDriverMapReady = true;
+  }
+  player.setLocation(new core.Location(3288, 3022, 0));
+  player.setNeedsPlacement(false);
+  npc = core.NPC.create(core.NpcIdentifiers.MINE_CART_DRIVER, new core.Location(3287, 3022, 0));
+  assert.equal(core.World.getNpcs().add(npc), true);
+  assert.equal(core.World.getNpcs().get(npc.getIndex()), npc);
+  const carts = [...core.MapObjects.mapObjects.values()].flat().filter(object => {
+    const loc = object.getLocation();
+    return object.getId() === 2682 && loc.getZ() === 0
+      && Math.abs(loc.getX() - 3287) < 64 && Math.abs(loc.getY() - 3022) < 64;
+  });
+  assert.equal(carts.length, 1, 'loaded map contains the camp flatback-cart parent');
+  const cart = carts[0], loc = cart.getLocation();
+  f.npc = npc; f.quest = quest;
+  f.stage = () => quest.getStage(player);
+  f.coins = () => player.getInventory().getAmount(I.COINS);
+  f.talk = () => {
+    const definition = npc.getCurrentDefinition(player);
+    assert.equal(definition.getName(), 'Mine cart driver');
+    assert.ok(definition.getActions().includes('Talk-to'));
+    return PM.emitNpcInteraction({ player, npc, npcId: npc.getId(), action: 'Talk-to', clickType: 1, handled: false });
+  };
+  f.search = () => {
+    player.closeInterruptibleInterfaces();
+    // This fixture enters the registered object hook directly after placing the player
+    // next to the actual cache object; it does not claim object packet/pathing coverage.
+    player.setLocation(new core.Location(loc.getX() + 1, loc.getY(), loc.getZ()));
+    player.setNeedsPlacement(false);
+    const current = core.ObjectDefinition.forPlayer(cart.getId(), player);
+    const clickType = current.getInteractions().indexOf('Search') + 1;
+    assert.ok(clickType > 0, 'the active cart has a Search action');
+    const beforeSearch = player.getLocation().clone();
+    const handled = PM.emitObjectInteraction({ player, object: cart, definition: current, location: loc, objectId: current.id,
+      x: loc.getX(), y: loc.getY(), z: loc.getZ(), option: 'Search', clickType, handled: false });
+    return { handled, beforeSearch };
+  };
+  return f;
+}
+
+const TOURIST_JOKES = [
+  'Nice cart.',
+  "One wagon wheel says to the other, 'I'll see you around'.",
+  "'One good turn deserves another'",
+  'Fired... no, shot perhaps!',
+  'In for a penny in for a pound.',
+  "Well, you see, it's like this...",
+];
+async function touristUntil(f, stop) {
+  const player = f.player, manager = player.getDialogueManager();
+  for (let n = 0; n < 80; n++) {
+    if (stop()) return;
+    const pending = MultiChatboxPrompt.getPending(player);
+    assert.equal(pending, null, `unexpected prompt ${pending?.title}: ${pending?.options?.join(' | ')}`);
+    const current = manager.getCurrent();
+    assert.ok(current, 'the real dialogue remains active until the requested step');
+    if (typeof current.getText === 'function') await nextLine(f);
+    else core.TaskManager.process();
+  }
+  assert.fail('the dialogue did not reach the requested step');
+}
+async function touristChoose(f, option) {
+  await touristUntil(f, () => MultiChatboxPrompt.getPending(f.player) !== null);
+  const prompt = MultiChatboxPrompt.getPending(f.player);
+  const index = prompt.options.indexOf(option);
+  assert.ok(index >= 0, `native prompt offers ${option}; got ${prompt.options.join(' | ')}`);
+  await choose(f, index + 1);
+}
+async function touristJokes(f) {
+  assert.equal(f.talk(), true, 'the registered Talk-to starts dialogue');
+  for (const option of TOURIST_JOKES) await touristChoose(f, option);
+}
+async function touristTerminal(f, text) {
+  await touristUntil(f, () => {
+    const current = f.player.getDialogueManager().getCurrent();
+    return current instanceof core.NpcDialogue && current.getText().replace(/\s+/g, ' ').trim() === text;
+  });
+  const current = f.player.getDialogueManager().getCurrent();
+  assert.ok(current instanceof core.NpcDialogue);
+  assert.equal(current.getNpcId(), core.NpcIdentifiers.MINE_CART_DRIVER);
+  assert.equal(f.player.getPacketSender().isChatboxInterface(231), true);
+}
+const RIOT_LINE = "Oh, right... Okay, you'd better jump in the cart then! Quickly!";
+const BRIBE_LINE = 'Okay, get in the back of the cart then!';
+
+test('Tourist Trap driver: talking alone does not unlock the camp cart', t => {
+  const f = touristDriverFixture(t, { coins: 100 });
+  assert.equal(f.talk(), true);
+  assert.ok(f.player.getDialogueManager().getCurrent() || MultiChatboxPrompt.getPending(f.player));
+  const { beforeSearch } = f.search();
+  assert.equal(f.stage(), 25, 'without agreement Search cannot move the quest to escape');
+  assert.equal(f.coins(), 100);
+  assert.ok(f.player.getLocation().equals(beforeSearch), 'refused Search leaves position unchanged');
+});
+
+test('Tourist Trap driver: the full riot dialogue permits the actual cart search', async t => {
+  const f = touristDriverFixture(t, { coins: 127 });
+  await touristJokes(f);
+  await touristChoose(f, 'Prison riot in ten minutes, get your cart out of here!');
+  await touristChoose(f, "You can't leave me here, I'll get killed!");
+  await touristTerminal(f, RIOT_LINE);
+  assert.equal(f.stage(), 25, 'the accepting line has not yet been continued');
+  await nextLine(f);
+  assert.equal(f.stage(), 26);
+  assert.equal(f.coins(), 127);
+  f.search();
+  assert.equal(f.stage(), 27);
+  assert.deepEqual([f.player.getLocation().getX(), f.player.getLocation().getY(), f.player.getLocation().getZ()], [3304, 3112, 0]);
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.ANA_IN_A_BARREL), 1);
+});
+
+test('Tourist Trap driver: a 100-coin agreement is charged once and permits escape', async t => {
+  const f = touristDriverFixture(t, { coins: 200 });
+  await touristJokes(f);
+  await touristChoose(f, "There's ten gold in it for you if you leave now - no questions asked.");
+  await touristChoose(f, 'A hundred it is!');
+  await touristTerminal(f, BRIBE_LINE);
+  assert.equal(f.coins(), 200, 'payment is held until the accepting line is continued');
+  await nextLine(f);
+  assert.equal(f.stage(), 26);
+  assert.equal(f.coins(), 100, 'the driver takes exactly 100');
+  f.player.closeInterruptibleInterfaces();
+  await touristJokes(f);
+  await touristChoose(f, "There's ten gold in it for you if you leave now - no questions asked.");
+  await touristChoose(f, 'A hundred it is!');
+  await touristTerminal(f, BRIBE_LINE);
+  await nextLine(f);
+  assert.equal(f.coins(), 100, 'a second accepting conversation cannot debit again');
+  f.search();
+  assert.equal(f.stage(), 27);
+  assert.deepEqual([f.player.getLocation().getX(), f.player.getLocation().getY(), f.player.getLocation().getZ()], [3304, 3112, 0]);
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.ANA_IN_A_BARREL), 1);
+});
+
+test('Tourist Trap driver: insufficient coins cannot unlock or debit the cart', async t => {
+  const f = touristDriverFixture(t, { coins: 99 });
+  await touristJokes(f);
+  await touristChoose(f, "There's ten gold in it for you if you leave now - no questions asked.");
+  await touristChoose(f, 'A hundred it is!');
+  await touristTerminal(f, "You little cheat, trying to trick me! I'll show you! Guards! Guards!");
+  assert.equal(f.coins(), 99);
+  f.search();
+  assert.equal(f.stage(), 25);
+  assert.equal(f.coins(), 99);
+});
+
+test('Tourist Trap driver: lost coins at the final line cannot buy an agreement', async t => {
+  const f = touristDriverFixture(t, { coins: 100 });
+  await touristJokes(f);
+  await touristChoose(f, "There's ten gold in it for you if you leave now - no questions asked.");
+  await touristChoose(f, 'A hundred it is!');
+  await touristTerminal(f, BRIBE_LINE);
+  f.player.getInventory().deleteNumber(core.ItemIdentifiers.COINS, 1);
+  await nextLine(f);
+  assert.equal(f.stage(), 25);
+  assert.equal(f.coins(), 99);
+  f.search();
+  assert.equal(f.stage(), 25);
+});
+
+test('Tourist Trap driver: cancelling the accepting line or changing stage consumes nothing', async t => {
+  const f = touristDriverFixture(t, { coins: 100 });
+  await touristJokes(f);
+  await touristChoose(f, "There's ten gold in it for you if you leave now - no questions asked.");
+  await touristChoose(f, 'A hundred it is!');
+  await touristTerminal(f, BRIBE_LINE);
+  f.player.closeInterruptibleInterfaces();
+  await nextLine(f);
+  assert.equal(f.stage(), 25);
+  assert.equal(f.coins(), 100);
+  await touristJokes(f);
+  await touristChoose(f, "There's ten gold in it for you if you leave now - no questions asked.");
+  await touristChoose(f, 'A hundred it is!');
+  await touristTerminal(f, BRIBE_LINE);
+  f.quest.setStage(f.player, 26);
+  await nextLine(f);
+  assert.equal(f.coins(), 100, 'a stale continuation cannot take coins after stage changes');
+});
+
+test('Tourist Trap driver: a wrong riot outcome and below-stage talk do not allow escape', async t => {
+  const f = touristDriverFixture(t);
+  await touristJokes(f);
+  await touristChoose(f, 'Prison riot in ten minutes, get your cart out of here!');
+  await touristChoose(f, 'Good luck!');
+  await touristTerminal(f, 'Yeah, you too!');
+  await nextLine(f);
+  f.search();
+  assert.equal(f.stage(), 25, 'the driver did not agree to carry the player');
+});
+
+test('Tourist Trap driver: ordinary conversation remains available before stage 25', t => {
+  const f = touristDriverFixture(t, { stage: 24 });
+  assert.equal(f.talk(), true);
+  assert.equal(f.stage(), 24);
+});
+
+test('Tourist Trap driver: exactly 100 coins reaches the bribe acceptance branch', async t => {
+  const f = touristDriverFixture(t, { coins: 100 });
+  await touristJokes(f);
+  await touristChoose(f, "There's ten gold in it for you if you leave now - no questions asked.");
+  await touristChoose(f, 'A hundred it is!');
+  await touristTerminal(f, BRIBE_LINE);
+  assert.equal(f.coins(), 100);
+  await nextLine(f);
+  assert.equal(f.stage(), 26);
+  assert.equal(f.coins(), 0);
+  f.search();
+  assert.equal(f.stage(), 27);
 });

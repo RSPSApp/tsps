@@ -1,6 +1,6 @@
 /**
- * Eating. What each food does is plugins/items/data/food.json, keyed by the item's cache name
- * so every id with that name eats the same way; the format is in docs/food.md.
+ * Eating. What each food does is plugins/items/data/food.json, keyed by cache name or an
+ * exact item id when same-name foods differ; the format is in docs/food.md.
  *
  * Wiki (Food, Food/Fast foods): eating adds 3 ticks to the attack timer (2 for combo foods)
  * and blocks the next bite for the food's eat delay, 3 ticks unless it is a fast food. Combo
@@ -31,7 +31,12 @@ const FOOD_EATEN_ATTRIBUTE = "food:eaten";
 
 /** Each eatable name -> its food and which bite it is (0 for the first). */
 const FOODS_BY_NAME = new Map();
+const FOODS_BY_ID = new Map();
 for (const food of DATA.foods) {
+  if (Number.isInteger(food.itemId)) {
+    FOODS_BY_ID.set(food.itemId, { food, bite: 0 });
+    continue;
+  }
   const names = Array.isArray(food.bites) ? food.bites : [food.name];
   names.forEach((name, bite) => FOODS_BY_NAME.set(name, { food, bite }));
 }
@@ -57,7 +62,9 @@ function itemName(itemId) {
 
 /** The food an item is and which bite, or undefined. */
 function foodBite(itemId) {
-  const entry = FOODS_BY_NAME.get(itemName(itemId));
+  const name = itemName(itemId);
+  const exact = FOODS_BY_ID.get(itemId);
+  const entry = exact?.food.name === name ? exact : FOODS_BY_NAME.get(name);
   if (!entry || typeof entry.food.bites !== "number") return entry;
   // Bites that share one name: its ids, lowest first, are the bites in order.
   const bite = idsFor(entry.food.name).indexOf(itemId);
@@ -90,7 +97,9 @@ function isComboFoodItem(itemId) {
 
 /** Every item id that is food. */
 function foodItemIds() {
-  return [...FOODS_BY_NAME.keys()].flatMap(idsFor);
+  return [...new Set([...FOODS_BY_NAME.keys()].flatMap(idsFor).concat(
+    [...FOODS_BY_ID.keys()].filter(isFoodItem),
+  ))];
 }
 
 /** What the bite leaves in its slot: the next bite, the dish, or nothing. */
@@ -171,7 +180,10 @@ function healBy(player, amount, overheal = 0) {
 }
 
 function applyStats(player, effect) {
-  for (const [name, amount] of Object.entries(effect.boost ?? {})) boostSkill(player, skill(name), amount, 0);
+  for (const [name, amount] of Object.entries(effect.boost ?? {})) {
+    boostSkill(player, skill(name), typeof amount === "number" ? amount : amount.flat ?? 0,
+      typeof amount === "number" ? 0 : amount.percent ?? 0);
+  }
   for (const [name, amount] of Object.entries(effect.drain ?? {})) lowerSkillByMax(player, skill(name), amount, 0, 1);
   for (const [name, amount] of Object.entries(effect.restore ?? {})) {
     restoreSkillToBaseWithFormula(player, skill(name), typeof amount === "number" ? amount : amount.flat ?? 0,
@@ -327,7 +339,8 @@ function eat(event) {
   const meta = inventory.getItems()[slot]?.getMeta();
   inventory.deleteAtSlot(slot, 1, false);
   const next = leftover(food, bite);
-  if (next !== undefined) inventory.setItem(slot, new core.Item(next, 1));
+  // What is left (the next bite, the pie dish) keeps the eaten item's meta: a preset pie leaves a preset half.
+  if (next !== undefined) inventory.setItem(slot, new core.Item(next, 1, meta));
   inventory.refreshItems();
 
   const hitpointsBefore = player.getSkillManager().getCurrentLevel(core.Skill.HITPOINTS);

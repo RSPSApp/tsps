@@ -698,14 +698,7 @@ function harvest(player, patch) {
     award(player, Number.isFinite(pick.experience) && pick.experience >= 0 ? pick.experience : experience, patch);
     const variable = Data.COMPOSTABLE_YIELD.has(crop.type) || ["BUSH", "CACTUS", "GRAPES", "CORAL"].includes(crop.type);
     // Wiki: a worn Farming cape (or max cape) saves herb lives more often.
-    const capePerk = { player, skill: "FARMING", result: false };
-    core.PluginManager.emitCustomEvent("skillcape:has-perk", capePerk);
-    const cape = capePerk.result === true;
-    const vars = player.getPacketSender();
-    const diary = crop.type !== "HERB" ? 0 : patch.x === 2813 && patch.y === 3463
-        ? vars.getVarbit(4478) ? 25 : vars.getVarbit(4477) ? 17 : vars.getVarbit(4476) ? 10 : 0
-        : [1738, 1238].includes(patch.x) && vars.getVarbit(7927) ? 10 : 0;
-    const chance = Model.saveLifeChance(crop, level, hasTool(player, "Magic secateurs"), cape, diary, attas);
+    const chance = saveLifeChance(player, patch, crop, level, attas);
     if (!variable || Math.random() >= chance) state.lives--;
     if (["FLOWER", "BELLADONNA", "CRYSTAL_TREE"].includes(crop.type)) state.lives = 0;
     if (state.lives === 0) {
@@ -718,6 +711,17 @@ function harvest(player, patch) {
         return false;
     }
     return true;
+}
+
+function saveLifeChance(player, patch, crop, level, attas) {
+    const capePerk = { player, skill: "FARMING", result: false };
+    core.PluginManager.emitCustomEvent("skillcape:has-perk", capePerk);
+    const cape = capePerk.result === true;
+    const vars = player.getPacketSender();
+    const diary = crop.type !== "HERB" ? 0 : patch.x === 2813 && patch.y === 3463
+        ? vars.getVarbit(4478) ? 25 : vars.getVarbit(4477) ? 17 : vars.getVarbit(4476) ? 10 : 0
+        : [1738, 1238].includes(patch.x) && vars.getVarbit(7927) ? 10 : 0;
+    return Model.saveLifeChance(crop, level, hasTool(player, "Magic secateurs"), cape, diary, attas);
 }
 function dig(player, patch) {
     const state = stateFor(player, patch);
@@ -830,8 +834,9 @@ function objectInteraction(event) {
     const patch = findPatch(object.getId(), location);
     if (!patch) return;
     event.handled = true;
-    if (!canUsePatch(player, patch)) return;
-    Model.advanceFarm(farmFor(player), Date.now());
+    if (AUTO_RUNNING.has(player) || !canUsePatch(player, patch)) return;
+    cancelAuto(player, patch);
+    advanceFarm(player);
     if (!gate(player)) return;
     const action = core.ObjectDefinition.forPlayer(object.getId(), player)?.getInteractions()?.[event.clickType - 1]?.toLowerCase() ?? "";
     if (patch.type.includes("COMPOST")) { Services.binAction(player, patch, action); syncPatch(player, patch); return; }
@@ -886,9 +891,10 @@ function itemOnObject(event) {
         return;
     }
     event.handled = true;
-    if (!canUsePatch(player, patch)) return;
+    if (AUTO_RUNNING.has(player) || !canUsePatch(player, patch)) return;
     if (!gate(player) || !player.getInventory().contains(id)) return;
-    Model.advanceFarm(farmFor(player), Date.now());
+    cancelAuto(player, patch);
+    advanceFarm(player);
     const state = stateFor(player, patch);
     if (patch.type.includes("COMPOST")) { Services.binAction(player, patch, "", id, event.itemSlot); syncPatch(player, patch); return; }
     const compostTier = ["Compost", "Supercompost", "Ultracompost"].findIndex(name => id === Data.itemId(name)) + 1;
@@ -999,6 +1005,10 @@ const dueMinuteOf = new WeakMap();
 const immediate = new Set();
 const dirty = new Set(); // players whose patches changed; rescheduled on the next tick
 const tracked = new WeakSet();
+// Partially banked automatic herb harvests belong to this online session only.
+const AUTO_PENDING = new WeakMap();
+const AUTO_RUNNING = new WeakSet();
+const AUTO_DISCONNECTED = new WeakSet();
 const seedlingDue = new WeakMap();
 // Only owners of depleted redwood spots need sub-minute checks.
 const redwoodRegrowth = new Map();
@@ -1007,13 +1017,129 @@ const redwoodRegrowth = new Map();
 const nearPatches = new Map();
 let lastMinute = null;
 
-function grow(player) {
+function autoBusy(player) { return AUTO_RUNNING.has(player); }
+
+function cancelAuto(player, patch) {
+    const pending = AUTO_PENDING.get(player);
+    if (!pending) return;
+    if (patch) pending.delete(Data.patchKey(patch));
+    else pending.clear();
+    if (!pending.size) AUTO_PENDING.delete(player);
+}
+
+function autoEnabled(player) {
+    const request = { player, enabled: false };
+    core.PluginManager.emitCustomEvent("farming:auto-harvest-rules", request);
+    return request.enabled === true;
+}
+
+function syncAutomaticPatch(player, patch) {
+    dirty.add(player);
+    if (nearPatch(player, patch)) syncPatch(player, patch);
+}
+
+function automaticHerb(player, patch, state, expectedLives = state.lives) {
+    const farm = farmFor(player), key = Data.patchKey(patch), crop = Data.CROPS.get(state.crop);
+    if (crop?.type !== "HERB" || WORK.get(player)?.patch === patch
+        || !tracked.has(player) || AUTO_DISCONNECTED.has(player) || !autoEnabled(player)
+        || farmFor(player) !== farm || farm.patches[key] !== state || state.status !== "grown" || state.lives !== expectedLives
+        || state.compost !== 3 || crop.produce <= 0
+        || !Vault.eligible(crop.seed) || Vault.held(farm, crop.seed) < 1) {
+        cancelAuto(player, patch);
+        return;
+    }
+    let credited = false;
+    while (state.lives > 0) {
+        if (!tracked.has(player) || AUTO_DISCONNECTED.has(player) || !autoEnabled(player)
+            || farmFor(player) !== farm || farm.patches[key] !== state || state.status !== "grown"
+            || state.crop !== crop.key || state.compost !== 3 || !Vault.eligible(crop.seed)
+            || Vault.held(farm, crop.seed) < 1) {
+            cancelAuto(player, patch);
+            return;
+        }
+        const level = player.getSkillManager().getCurrentLevel(core.Skill.FARMING);
+        const attas = Model.activeAnima(farm, Date.now()) === "ATTAS";
+        const tab = player.getBank(core.Bank.getTabForItem(player, crop.produce));
+        const item = new core.Item(crop.produce, 1);
+        if (tab.getAddableAmount(item) < 1) {
+            if (credited) {
+                const pending = AUTO_PENDING.get(player) ?? new Map();
+                pending.set(key, { patch, state, lives: state.lives });
+                AUTO_PENDING.set(player, pending);
+                syncAutomaticPatch(player, patch);
+            }
+            return;
+        }
+        const before = tab.getAmount(crop.produce);
+        tab.add(item, true);
+        if (tab.getAmount(crop.produce) !== before + 1) {
+            cancelAuto(player, patch);
+            return;
+        }
+        credited = true;
+        award(player, crop.harvest, patch);
+        const chance = saveLifeChance(player, patch, crop, level, attas);
+        if (Math.random() >= chance) state.lives--;
+    }
+    cancelAuto(player, patch);
+    const exhausted = () => farmFor(player) === farm && farm.patches[key] === state && state.crop === crop.key
+        && state.status === "grown" && state.lives === 0 && state.compost === 3;
+    const readyToReplant = () => {
+        if (!exhausted() || !tracked.has(player) || AUTO_DISCONNECTED.has(player)
+            || !Vault.eligible(crop.seed) || Vault.held(farm, crop.seed) < 1) return false;
+        const enabled = autoEnabled(player);
+        return enabled && exhausted() && tracked.has(player) && !AUTO_DISCONNECTED.has(player)
+            && Vault.eligible(crop.seed) && Vault.held(farm, crop.seed) >= 1;
+    };
+    const discardExhausted = () => {
+        if (!exhausted()) return;
+        farm.patches[key] = Model.emptyPatch(Date.now(), farm);
+        syncAutomaticPatch(player, patch);
+    };
+    awardPendingPlantExperience(player, patch, state);
+    if (!readyToReplant()) { discardExhausted(); return; }
+    Guild.harvestContract({ player, crop: crop.key, patch });
+    if (!readyToReplant()) { discardExhausted(); return; }
+    const rules = { player, crop: crop.key, seedId: crop.seed, patch, keepSeed: false,
+        grown: false, diseaseFree: false, undying: false, message: null };
+    core.PluginManager.emitCustomEvent("farming:plant-rules", rules);
+    if (!readyToReplant()) { discardExhausted(); return; }
+    const usedSeed = rules.keepSeed !== true;
+    if (usedSeed) farm.vault[crop.seed]--;
+    const plantedAt = Date.now();
+    farm.patches[key] = { ...Model.emptyPatch(plantedAt, farm), crop: crop.key, compost: 3,
+        plantedAt, plantedTick: Model.tickIndex(plantedAt, farm.offset),
+        nextAt: Model.nextGrowth(plantedAt, Data.stageMinutes(crop, 0), farm.offset),
+        diseaseFree: rules.diseaseFree === true, undying: rules.undying === true,
+        plantExperiencePending: true };
+    syncAutomaticPatch(player, patch);
+    if (usedSeed) Vault.refreshOpen(player);
+}
+
+function advanceFarm(player, now = Date.now()) {
+    if (AUTO_RUNNING.has(player)) return;
+    const farm = farmFor(player), matured = [];
+    Model.advanceFarm(farm, now, Math.random, tracked.has(player) && !AUTO_DISCONNECTED.has(player)
+        ? (patch, state) => matured.push({ patch, state }) : null);
+    if (!tracked.has(player) || AUTO_DISCONNECTED.has(player)) return;
+    AUTO_RUNNING.add(player);
+    try {
+        for (const entry of [...(AUTO_PENDING.get(player)?.values() ?? [])])
+            automaticHerb(player, entry.patch, entry.state, entry.lives);
+        for (const { patch, state } of matured) automaticHerb(player, patch, state);
+    } finally {
+        AUTO_RUNNING.delete(player);
+    }
+}
+
+function grow(player, allowAuto = true) {
     const farm = farmFor(player);
     const now = Date.now();
     if (player.getPacketSender().getVarbit(7925)) farm.hosidiusProtected = true;
     if (player.getPacketSender().getVarbit(4465)) farm.faladorProtected = true;
     if (player.getPacketSender().getVarp(4130) >= 16000) farm.fortisProtected = true;
-    Model.advanceFarm(farm, now);
+    if (allowAuto) advanceFarm(player, now);
+    else Model.advanceFarm(farm, now);
     seedlingDue.set(player, Services.growSeedlings(player, now));
     const bound = farm.patches[farm.boundPatch];
     const status = bound?.crop ? bound.status : "empty";
@@ -1050,8 +1176,8 @@ function schedule(player) {
     players.add(player);
     dueMinuteOf.set(player, minute);
 }
-function refresh(player) {
-    grow(player);
+function refresh(player, allowAuto = true) {
+    grow(player, allowAuto);
     syncNearby(player);
     schedule(player);
     dirty.delete(player);
@@ -1127,17 +1253,25 @@ function login(event) {
     for (const state of Object.values(farmFor(player).patches)) state.hesporiFight = false;
     RENDERED.delete(player);
     if (player.isPlayerBot?.() === true) return;
+    // Advance offline growth first: automatic cycles belong to the new online epoch.
+    tracked.delete(player);
+    cancelAuto(player);
+    AUTO_DISCONNECTED.delete(player);
     tracked.add(player);
     followPatches(player);
-    refresh(player);
+    refresh(player, false);
 }
 function logout({ player }) {
+    tracked.delete(player);
+    cancelAuto(player);
+    AUTO_DISCONNECTED.add(player);
     Hespori.hesporiLogout({ player });
     runPending(player, true);
     redwoodRegrowth.delete(player);
     WORK.delete(player); RENDERED.delete(player);
-    unschedule(player); tracked.delete(player); dirty.delete(player); nearPatches.delete(player); seedlingDue.delete(player);
+    unschedule(player); dirty.delete(player); nearPatches.delete(player); seedlingDue.delete(player);
 }
+function disconnect({ player }) { cancelAuto(player); AUTO_DISCONNECTED.add(player); }
 function cancelWork({ player }) { WORK.delete(player); }
 
 function pauseWork(event) {
@@ -1155,6 +1289,7 @@ function attach(api) {
     api.onCanShop(Rewards.canShop);
     api.onPlayerMapSquareChange(mapSquareChanged);
     api.onPlayerLogout(logout);
+    api.onPlayerDisconnect(disconnect);
     api.onPlayerLogout(Vault.logout);
     api.onInterfaceActionClick(Vault.click);
     api.onCustomEvent("player:widget-action", Vault.drag);
@@ -1216,5 +1351,5 @@ function attach(api) {
     api.registerNpcCombatMethodProvider(core.NpcIdentifiers.HESPORI_2, Hespori.HesporiCombat, { singleton: false });
 }
 
-Object.assign(module.exports, { FARM_ATTRIBUTE, SCARECROW_LEVEL, farmFor, hasLevel, stateFor, hasTool, requireTool, award, give, choose, clearPatch, syncPatch, nearPatch, water, fertilize, pourCompost, cure, harvest, noteSeedling, advanceTime, attach, tick: farmingTick, retrievalItems, startBinWork,
+Object.assign(module.exports, { FARM_ATTRIBUTE, SCARECROW_LEVEL, farmFor, hasLevel, stateFor, hasTool, requireTool, award, give, choose, clearPatch, syncPatch, nearPatch, water, fertilize, pourCompost, cure, harvest, noteSeedling, advanceTime, advanceFarm, cancelAuto, autoBusy, attach, tick: farmingTick, retrievalItems, startBinWork,
     startClear, after, spam, sound, awardPendingPlantExperience });

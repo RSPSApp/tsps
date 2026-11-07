@@ -65,7 +65,7 @@ function setup({ x = 2933, y = 3290, level = 40, bodyId = 1757 } = {}) {
       sendObject: (object) => packets.push(["restore", object]),
       sendObjectRemoval: (object) => packets.push(["remove", object]),
     }),
-    getSkillManager: () => ({ getMaxLevel: () => level }),
+    getSkillManager: () => ({ getMaxLevel: () => level, getCurrentLevel: () => level }),
     moveTo: (next) => { location = next; },
     sendMessage: (message) => events.push({ message }),
   };

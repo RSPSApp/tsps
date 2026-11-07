@@ -73,7 +73,7 @@ function openDoor(event) {
     crossDoor(player, event.object, false);
     return true;
   }
-  if (player.getSkillManager().getMaxLevel(core.Skill.CRAFTING) < REQUIRED_LEVEL) {
+  if (Math.max(player.getSkillManager().getMaxLevel(core.Skill.CRAFTING), player.getSkillManager().getCurrentLevel(core.Skill.CRAFTING)) < REQUIRED_LEVEL) {
     player.sendMessage(`You need a Crafting level of ${REQUIRED_LEVEL} to enter the Crafting Guild.`);
     return true;
   }

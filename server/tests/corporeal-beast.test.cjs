@@ -12,6 +12,8 @@ const { TaskManager } = require('../dist/game/task/TaskManager');
 const { Location } = require('../dist/game/model/Location');
 const { Wilderness } = require('../dist/game/content/wilderness/Wilderness');
 const { NpcDefinition } = require('../dist/game/definition/NpcDefinition');
+const { Player } = require('../dist/game/entity/impl/player/Player');
+const { SkillManager } = require('../dist/game/content/skill/SkillManager');
 const Shared = require('../plugins/bosses/corporealbeast/Shared.CorporealBeast');
 const Lair = require('../plugins/bosses/corporealbeast/Lair.CorporealBeast');
 const Beast = require('../plugins/bosses/corporealbeast/Beast.CorporealBeast');
@@ -21,10 +23,13 @@ const Shields = require('../plugins/bosses/corporealbeast/SpiritShields.Corporea
 const Commands = require('../plugins/bosses/corporealbeast/Commands.CorporealBeast');
 
 const hooks = { objects: {}, zones: [], prompts: [], startup: [], methods: {}, hitModify: [], death: [] };
+let modeApi;
 
 function fakeApi() {
   return {
     core: PluginManager.getCoreApi(),
+    emitCustomEvent: (name, payload) => PluginManager.emitCustomEvent(name, payload),
+    onCustomEvent: (name, handler) => modeApi.onCustomEvent(name, handler),
     onObjectInteraction: (name, actions) => { hooks.objects[name] = actions; },
     onZoneEnter: (zone, handler) => hooks.zones.push({ zone, enter: handler }),
     onZoneExit: (zone, handler) => hooks.zones.push({ zone, exit: handler }),
@@ -104,6 +109,9 @@ before(() => {
   World.getPlayers = () => worldPlayers;
   CachePipeline.initialize();
   RegionManager.init();
+  modeApi = PluginManager.createApi('CorpRoomModeTest');
+  require('../plugins/modes/ironman/Common.Ironman').init(modeApi);
+  require('../plugins/modes/ironman/Setup.Ironman')(modeApi);
   const api = fakeApi();
   Lair(api);
   Beast(api);
@@ -168,6 +176,46 @@ test('the cave leads to the lobby, and its exit asks before the Wilderness', () 
   prompt.args[1]();
   assert.deepEqual([player.location.getX(), player.location.getY(), player.location.getZ()], [3206, 3681, 0]);
 });
+
+function realModePlayer(t, mode, combatLevel) {
+  const player = new Player(null);
+  const errors = [];
+  t.mock.method(console, 'error', (...args) => errors.push(args));
+  t.after(() => {
+    try { TaskManager.cancelTasks(player); } finally { assert.deepEqual(errors, [], 'no mode or cleanup errors'); }
+  });
+  const sender = new Proxy({}, { get: () => () => sender });
+  player.getPacketSender = () => sender;
+  player.setUsername(`corp${mode[0]}${combatLevel}`);
+  const { Skill } = PluginManager.getCoreApi();
+  const levels = combatLevel === 89 ? [70, 70, 70, 70, 70, 70, 70]
+    : combatLevel === 90 ? [71, 71, 71, 70, 70, 70, 70]
+      : [99, 99, 99, 99, 99, 99, 99];
+  const skills = [Skill.ATTACK, Skill.DEFENCE, Skill.STRENGTH, Skill.HITPOINTS, Skill.PRAYER, Skill.RANGED, Skill.MAGIC];
+  for (let i = 0; i < skills.length; i++) {
+    player.getSkillManager().setMaxLevels(skills[i], levels[i], false)
+      .setExperiences(skills[i], SkillManager.getExperienceForLevel(levels[i]), false)
+      .setCurrentLevel(skills[i], levels[i], false);
+  }
+  assert.equal(player.getSkillManager().getCombatLevel(), combatLevel);
+  require('../plugins/modes/ironman/Common.Ironman').setMode(player, mode);
+  const query = { player, mode: 'none' };
+  PluginManager.emitCustomEvent('ironman:mode', query);
+  assert.equal(query.mode, mode);
+  player.setLocation(new Location(3201, 3684, 0));
+  return player;
+}
+
+for (const [mode, combatLevel, expectedY] of [
+  ['none', 90, 4254], ['ironman', 89, 4254], ['ironman', 90, 4382],
+  ['ultimate', 90, 4382], ['hardcore', 90, 4382], ['ironman', 126, 4382],
+]) {
+  test(`cave routes ${mode} combat ${combatLevel} to the appropriate lobby`, (t) => {
+    const player = realModePlayer(t, mode, combatLevel);
+    assert.equal(hooks.objects.Cave.Enter({ player, objectId: Shared.OBJECT.CAVE }), true);
+    assert.deepEqual([player.getLocation().getX(), player.getLocation().getY(), player.getLocation().getZ()], [2964, expectedY, 2]);
+  });
+}
 
 test("the Beast's room shows the damage overlay, in both copies", () => {
   const player = fakePlayer({ x: 2980, y: 4383 });
@@ -338,7 +386,9 @@ test('poison stuns the core until it hops again, and only once', () => {
 
 function shieldMaker({ prayer = 99, smithing = 99, items = [] } = {}) {
   const { Skill } = PluginManager.getCoreApi();
-  const slots = items.map((id) => ({ id }));
+  // Each slot reads like an Item: the shields are converted in place with setId.
+  const slot = (id) => ({ id, getId() { return this.id; }, setId(next) { this.id = next; } });
+  const slots = items.map(slot);
   const p = fakePlayer();
   p.xp = 0;
   p.boxes = [];
@@ -350,9 +400,10 @@ function shieldMaker({ prayer = 99, smithing = 99, items = [] } = {}) {
   p.getInventory = () => ({
     slots,
     contains: (id) => slots.some((slot) => slot.id === id),
-    setItem: (slot, item) => { slots[slot] = { id: item.getId() }; },
+    getItems: () => slots,
+    setItem: (index, item) => { slots[index] = slot(item.getId()); },
     deleteNumber: (id) => { const slot = slots.find((s) => s.id === id); if (slot) slot.id = -1; },
-    adds: (id) => slots.push({ id }),
+    adds: (id) => slots.push(slot(id)),
     refreshItems() {},
   });
   p.getDialogueManager = () => ({ startDialogues: (chain) => p.boxes.push(chain) });

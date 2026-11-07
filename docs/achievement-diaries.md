@@ -109,6 +109,12 @@ Script 56 reads started and complete; script 2200 reads count, the total and rew
 - **Skill requirement:** Ardougne's elite reward needs 91 Smithing, per its transcript.
 - **Reclaiming:** the transcript's "<NPC> gives you another …" line hands back the highest claimed tier's item only while the player owns none of it in the inventory, worn or bank. Otherwise the NPC says "You don't need another … right now."
 
+## Achievement diary cape
+
+Once every diary tier is complete, Twiggy O'Korn's Talk-to conversation offers the cape and hood for 99,000 coins. The dialogue checks two free inventory slots before confirmation, and the server checks eligibility, coins and space again before transferring them. Twiggy offers another set or a hood through the existing owned-cape conversation. The cape is trimmed when the existing quest-cape requirement reports every quest complete.
+
+The owned-cape route covers a cape in inventory or bank. With only a worn cape, the server uses the completed-diary conversation; the exact retail variant for that case is unknown. The words come from the imported Wiki transcript; the transaction checks and stale-confirmation message are server behavior. Exact live packet timing has not been verified.
+
 ## Lamps and the xpreward interface
 
 Every lamp (the genie's lamp and the diary lamps) uses OSRS's "Choose the stat you wish to be advanced!" interface (xpreward, 240), through `server/plugins/interface/XpReward.plugin.js` and the `xpreward:open` event. As captured rubbing a genie's lamp:

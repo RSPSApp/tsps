@@ -4,6 +4,8 @@ const { api, Animation, CacheDefinitions, Skill } = require("./Core.Construction
 const Ids = require("./Ids.Construction");
 const House = require("./House.Construction");
 const Mounted = require("./Mounted.Construction");
+// The hanger keeps only ids, so a preset copy (PvP presets) would come back plain: only plain copies are mounted.
+const { plainAmount, takePlain, PRESET_TEXT } = require("../../items/PoweredStaff");
 
 // The cape hanger (rsprox captures, Wiki): using a cape (and its hood, for capes that have one) on
 // the blank hanger plays human_pickuptable and "You mount your cape and hood for display." ("You
@@ -97,8 +99,10 @@ function mount(event) {
   if (!cape || !capeLocs.has(cape)) return player.sendMessage("You need both the cape and the hood for display.");
   const hood = MOUNTED[capeLocs.get(cape)].hood;
   if (hood && !player.getInventory().contains(hood)) return player.sendMessage("You need both the cape and the hood for display.");
-  player.getInventory().delete(cape, 1);
-  if (hood) player.getInventory().delete(hood, 1);
+  const inventory = player.getInventory();
+  if (plainAmount(inventory, cape) < 1 || (hood && plainAmount(inventory, hood) < 1)) return player.sendMessage(PRESET_TEXT);
+  takePlain(inventory, cape, 1);
+  if (hood) takePlain(inventory, hood, 1);
   player.performAnimation(new Animation(PICK_UP));
   furniture.mountedCape = hood ? { cape, hood } : { cape };
   show(house, furniture);

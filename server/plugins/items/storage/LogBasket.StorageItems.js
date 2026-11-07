@@ -19,6 +19,10 @@ const MESSAGE = {
   EMPTIED_SOME: "You empty as many logs as you can carry.",
   EMPTIED_TO_BANK: "You empty your basket into the bank.",
   /** Ours (not captured). */
+  EMPTIED_SOME_TO_BANK: "You empty some of your basket's contents into the bank.",
+  /** Ours (not captured). */
+  BANK_NO_ROOM: "Your bank cannot hold the remaining contents of your basket.",
+  /** Ours (not captured). */
   NO_LOGS: "You have no logs to put in the basket.",
   /** Ours (not captured). */
   NO_ROOM_TO_DISMANTLE: "You need two free inventory spaces to dismantle the basket.",
@@ -96,8 +100,9 @@ function emptyToBank(player) {
     player.sendMessage(MESSAGE.EMPTY);
     return;
   }
-  Storage.emptyToBank(player, family);
-  player.sendMessage(MESSAGE.EMPTIED_TO_BANK);
+  const moved = Storage.emptyToBank(player, family);
+  const left = Storage.total(player, family);
+  player.sendMessage(left === 0 ? MESSAGE.EMPTIED_TO_BANK : moved > 0 ? MESSAGE.EMPTIED_SOME_TO_BANK : MESSAGE.BANK_NO_ROOM);
 }
 
 function toggle({ player, item }) {

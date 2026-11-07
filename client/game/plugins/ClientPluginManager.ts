@@ -111,6 +111,40 @@ export type WorldMapOverlayContext = {
 /** A right-click entry on an overlay: "<option> <target>". */
 export type OverlayMenuEntry = { option: string; target: string; onClick(): void };
 
+/** The font metrics a text rewrite needs to fit its text (BitmapFont's). */
+export type WidgetTextFont = {
+    measure(text: string): number;
+    readonly lineHeight: number;
+    readonly ascent: number;
+    maxAscent?: number;
+    maxDescent?: number;
+};
+
+/** A text component about to be drawn; `text` is what it would draw, `<br>` breaks included. */
+export type WidgetTextEvent = {
+    readonly groupId: number;
+    readonly text: string;
+    /** The component's own size and line height, before UI scaling. */
+    readonly width: number;
+    readonly height: number;
+    readonly lineHeight: number;
+    readonly font?: WidgetTextFont;
+    /** The component's uid (group << 16 | child). */
+    readonly uid?: number;
+    /**
+     * The uid of the component it sits in. Text a script creates (cc_create) has a made-up uid,
+     * so its container is what identifies it.
+     */
+    readonly parentUid?: number;
+    /**
+     * The text of the component `offset` children away in the same group, or undefined when
+     * there is none: journals put one line in each component, so a sentence can span several.
+     */
+    siblingText?(offset: number): string | undefined;
+};
+
+export type WidgetDisplayText = { text: string; lineHeight?: number };
+
 /** A loc model outline a plugin asks for: colour 0xRRGGBB, alpha 0-1, width in pixels. */
 export type LocOutline = {
     loc: import("../scene/SceneGeometry").SceneLoc;
@@ -253,6 +287,17 @@ export interface ClientPlugin {
      * history keeps the message as sent.
      */
     overheadChatText?(event: { name: string; text: string }): string | undefined;
+    /**
+     * Text is about to show over an NPC's head: return the text to show instead, or undefined
+     * to leave it. Separate from overheadChatText, whose plugins treat the speaker as a player.
+     */
+    npcOverheadText?(event: { npcIndex: number; text: string }): string | undefined;
+    /**
+     * A text component is about to be drawn: return what to draw instead, and optionally a
+     * line height for this draw, or undefined to leave it. Display only: the component's text,
+     * which scripts and plugins read, is unchanged.
+     */
+    widgetDisplayText?(event: WidgetTextEvent): WidgetDisplayText | undefined;
     /** A menu option is about to be dispatched (RuneLite's MenuOptionClicked); true consumes it. */
     onMenuOptionClicked?(action: MenuActionData): boolean;
     /** A clientscript finished, nested calls included (RuneLite's ScriptPostFired). */
@@ -261,7 +306,8 @@ export interface ClientPlugin {
      * A clientscript is about to run, before pre-script listeners such as Bank Tags' (RuneLite's
      * ScriptPreFired with a subscriber priority above theirs).
      */
-    onScriptPreFired?(scriptId: number): void;
+    /** `vm` is set when the script was invoked by another and its arguments are still on the stacks. */
+    onScriptPreFired?(scriptId: number, vm?: Cs2Vm): void;
     /** A clientscript ran `runelite_callback`. */
     onScriptCallback?(event: ScriptCallbackEvent): void;
     /** A widget was dropped on another; return true to keep the drag from the server. */
@@ -480,12 +526,42 @@ export class ClientPluginManager {
         return text;
     }
 
+    /** The NPC overhead text after every plugin has had its say. */
+    npcOverheadText(npcIndex: number, text: string): string {
+        for (const plugin of this.implementing("npcOverheadText")) {
+            text = plugin.npcOverheadText!({ npcIndex, text }) ?? text;
+        }
+        return text;
+    }
+
+    /**
+     * Whether a running plugin may rewrite drawn component text, so the draw loop can skip
+     * building the event. Disabled plugins stay registered, so their started state is checked.
+     */
+    hasWidgetDisplayText(): boolean {
+        return this.implementing("widgetDisplayText").some(
+            (plugin) => (plugin as { isStarted?(): boolean }).isStarted?.() !== false,
+        );
+    }
+
+    /** The text to draw for a component, each plugin seeing the last one's; the smallest line height wins. */
+    widgetDisplayText(event: WidgetTextEvent): WidgetDisplayText | undefined {
+        let result: WidgetDisplayText | undefined;
+        for (const plugin of this.implementing("widgetDisplayText")) {
+            const next = plugin.widgetDisplayText!(result ? { ...event, text: result.text } : event);
+            if (!next) continue;
+            const heights = [result?.lineHeight, next.lineHeight].filter((h): h is number => h !== undefined);
+            result = heights.length ? { text: next.text, lineHeight: Math.min(...heights) } : { text: next.text };
+        }
+        return result;
+    }
+
     onScriptFinished(scriptId: number): void {
         for (const plugin of this.implementing("onScriptFinished")) plugin.onScriptFinished!(scriptId);
     }
 
-    onScriptPreFired(scriptId: number): void {
-        for (const plugin of this.implementing("onScriptPreFired")) plugin.onScriptPreFired!(scriptId);
+    onScriptPreFired(scriptId: number, vm?: Cs2Vm): void {
+        for (const plugin of this.implementing("onScriptPreFired")) plugin.onScriptPreFired!(scriptId, vm);
     }
 
     onScriptCallback(event: ScriptCallbackEvent): void {

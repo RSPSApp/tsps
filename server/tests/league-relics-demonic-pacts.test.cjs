@@ -571,6 +571,19 @@ test("Larcenist: sure pickpockets, ten times the pouches, loot noted and tenfold
   }
 });
 
+test("Larcenist: a stolen item is noted from its plain copy, never from a preset copy held earlier", () => {
+  const who = cases(LARCENIST);
+  const inventory = who.relic.getInventory();
+  const preset = new core.Item(I.STEEL_SCIMITAR, 1);
+  for (const meta of [core.Item.UNTRADEABLE_META, core.Item.UNBANKABLE_META, core.Item.PRESET_META]) preset.setMetaValue(meta, true);
+  inventory.setItem(0, preset);
+  inventory.setItem(1, new core.Item(I.STEEL_SCIMITAR, 1));
+  emit("thieving:success", { player: who.relic, method: "stall", itemId: I.STEEL_SCIMITAR });
+  assert.equal(inventory.getItems()[0]?.isPresetItem(), true, "the preset scimitar stays");
+  assert.equal(inventory.getAmount(I.STEEL_SCIMITAR), 1, "only the stolen plain one was noted");
+  assert.equal(inventory.getAmount(Common.noted(I.STEEL_SCIMITAR)), 10);
+});
+
 test("Larcenist: guards never catch the relic's owner at a stall (thieving:stall-watch)", () => {
   const who = cases(LARCENIST);
   assert.equal(emit("thieving:stall-watch", { player: who.relic, object: {}, unseen: false }).unseen, true);
@@ -644,6 +657,22 @@ test("Eternal Sustenance: the food eaten is back in its slot", () => {
   }
   assert.equal(who.relic.getInventory().getItems()[3]?.getId(), I.SHARK);
   for (const player of others(who)) assert.notEqual(player.getInventory().getItems()[3]?.getId(), I.SHARK);
+});
+
+test("Eternal Sustenance: a preset food eaten comes back as a preset copy, not a plain one", () => {
+  const who = cases(ETERNAL_SUSTENANCE);
+  const player = who.relic;
+  const shark = new core.Item(I.SHARK, 1);
+  for (const meta of [core.Item.UNTRADEABLE_META, core.Item.UNBANKABLE_META, core.Item.PRESET_META]) shark.setMetaValue(meta, true);
+  player.getInventory().setItem(3, shark);
+  hooks.onCanEat({ player, itemId: I.SHARK, allow: null });
+  const meta = player.getInventory().getItems()[3].getMeta();
+  player.getInventory().deleteAtSlot(3, 1, false);
+  emit("food:eaten", { player, itemId: I.SHARK, heal: 20, meta });
+  const back = player.getInventory().getItems()[3];
+  assert.equal(back?.getId(), I.SHARK);
+  assert.equal(back.isPresetItem(), true, "still a preset copy");
+  assert.equal(back.isUntradeable(), true);
 });
 
 test("Culling Spree: free Slayer rewards, and 1-3 elite clues from every superior", () => {
@@ -1256,6 +1285,7 @@ test("Map of Alacrity: every destination is open floor to walk from, landed on a
   for (const destination of ALACRITY_DATA.areas.flatMap((entry) => entry.destinations)) {
     const tile = new Location(destination.x, destination.y, destination.z ?? 0);
     core.RegionManager.loadMapFiles(tile.getX(), tile.getY());
+    assert.equal(core.RegionManager.blocked(tile, null), false, `${destination.name}: destination is open floor, including floor decorations`);
     const landed = Teleports.landing(tile);
     assert.ok(landed.equals(tile), `${destination.name}: lands on its own tile, not ${landed.getX()},${landed.getY()}`);
     assert.ok(Teleports.reach(tile, 30) >= 30, `${destination.name}: 30 tiles walkable from it`);
@@ -1315,6 +1345,60 @@ test("Evil Eye: Teleport's area submenu, carried or worn, lists its destinations
   const fresh = character("fresh-eye", "league", EVIL_EYE);
   assert.equal(click(fresh, I.EVIL_EYE, "Last-destination").handled, true);
   assert.equal(fresh.sent.messages.at(-1), Common.message("noLastDestination"));
+});
+
+test("Evil Eye: Mimic stays in Watson's small upstairs room, including Last-destination (#2876)", () => {
+  core.RegionManager.init();
+  const Teleports = require("../plugins/modes/leaguerelics/Teleports.LeagueRelics");
+  const destination = area(EVIL_EYE_DATA, "Kourend").destinations.find(entry => entry.name === "Mimic");
+  const tile = new Location(destination.x, destination.y, destination.z);
+  const watson = require("../plugins/bosses/mimic/Shared.Mimic").WATSON_TILE;
+  assert.deepEqual([tile.getX(), tile.getY(), tile.getZ()], watson);
+  core.RegionManager.loadMapFiles(tile.getX(), tile.getY());
+  assert.ok(!core.RegionManager.blocked(tile, null), "canonical room tile is open");
+  assert.equal(Teleports.reach(tile, 30), 21, "actual upstairs room is smaller than the fallback's target");
+  assert.ok(Teleports.landing(tile).equals(tile), "do not cross a wall looking for a larger component");
+  const player = character("mimic-eye", "league", EVIL_EYE);
+  withLeague({}, () => {
+    click(player, I.EVIL_EYE, "Teleport");
+    pick(player, "Great Kourend");
+    pick(player, "Mimic");
+    assert.ok(ticksTo(player, destination) > 0, "menu lands beside the Strange casket");
+    const last = player.getAttribute("league:last-destination:evil-eye");
+    assert.deepEqual([last.x, last.y, last.z], watson, "remember the safe upstairs tile and plane");
+    relocate(player, new Location(3200, 3200, 0));
+    click(player, I.EVIL_EYE, "Last-destination");
+    assert.ok(ticksTo(player, destination) > 0, "repeat keeps the room and plane");
+    relocate(player, new Location(3200, 3200, 0));
+    click(player, I.EVIL_EYE, "Teleport");
+    pick(player, "Great Kourend");
+    pick(player, "Mimic");
+    core.TaskManager.process(); // cast tick 0, before its recorded animation/lock tick
+    relocate(player, new Location(3201, 3200, 0)); // movement interrupts an unlocked cast
+    assert.equal(ticksTo(player, destination, 10), -1, "interrupted cast does not land");
+    assert.deepEqual([player.getLocation().getX(), player.getLocation().getY(), player.getLocation().getZ()],
+      [3201, 3200, 0]);
+    assert.deepEqual(player.getAttribute("league:last-destination:evil-eye"), last, "cancel does not replace remembered arrival");
+  });
+});
+
+test("league teleport landing preserves open destinations and still repairs blocked targets", () => {
+  core.RegionManager.init();
+  const Teleports = require("../plugins/modes/leaguerelics/Teleports.LeagueRelics");
+  for (const data of [EVIL_EYE_DATA, ALACRITY_DATA]) {
+    for (const destination of data.areas.flatMap(entry => entry.destinations)) {
+      const tile = new Location(destination.x, destination.y, destination.z ?? 0);
+      core.RegionManager.loadMapFiles(tile.getX(), tile.getY());
+      if (!core.RegionManager.blocked(tile, null)) {
+        assert.ok(Teleports.landing(tile).equals(tile), destination.name + " retains its canonical destination");
+      }
+    }
+  }
+  const casket = new Location(1645, 3569, 1);
+  assert.ok(core.RegionManager.blocked(casket, null), "the actual Strange casket is solid");
+  const repaired = Teleports.landing(casket);
+  assert.ok(!core.RegionManager.blocked(repaired, null), "blocked targets still find open floor");
+  assert.equal(repaired.getZ(), casket.getZ(), "fallback preserves the destination plane");
 });
 
 test("Evil Eye: a destination in an area not unlocked is refused, from the menu and Last-destination", () => {
@@ -1531,6 +1615,67 @@ test("Transmute: an item no row has, and the lowest tier, as recorded; a stackab
   castOn(player, "Alchemic Divergence", 0);
   assert.equal(inventory.getAmount(I.FIRE_RUNE), 15);
   assert.equal(inventory.getAmount(I.CHAOS_RUNE), 10);
+});
+
+test("Transmute: a preset stack (PvP presets on a league world) is refused, so it never comes back as plain runes", (t) => {
+  withClock(t);
+  const player = cases(TRANSMUTE).relic;
+  const inventory = player.getInventory();
+  inventory.resetItems();
+  const preset = new core.Item(I.FIRE_RUNE, 25);
+  for (const meta of [core.Item.UNTRADEABLE_META, core.Item.UNBANKABLE_META, core.Item.PRESET_META]) preset.setMetaValue(meta, true);
+  inventory.setItem(0, preset);
+  castOn(player, "Alchemic Divergence", 0);
+  assert.equal(inventory.getAmount(I.FIRE_RUNE), 25, "the preset runes stay");
+  assert.equal(inventory.getAmount(I.CHAOS_RUNE), 0, "no plain chaos runes made from them");
+  assert.equal(player.sent.messages.at(-1), "Preset items cannot be used for this.");
+});
+
+function presetStack(id, amount) {
+  const preset = new core.Item(id, amount);
+  for (const meta of [core.Item.UNTRADEABLE_META, core.Item.UNBANKABLE_META, core.Item.PRESET_META]) preset.setMetaValue(meta, true);
+  return preset;
+}
+
+test("Transmute: a preset stack of the product is no room for a plain one: a full inventory refuses with nothing deleted, a free slot takes it", (t) => {
+  withClock(t);
+  const player = cases(TRANSMUTE).relic;
+  const inventory = player.getInventory();
+  inventory.resetItems();
+  inventory.adds(I.FIRE_RUNE, 25);
+  inventory.setItem(1, presetStack(I.CHAOS_RUNE, 7));
+  for (let slot = 2; slot < 28; slot++) inventory.setItem(slot, new core.Item(I.BRONZE_BAR, 1));
+  assert.equal(inventory.getFreeSlots(), 0);
+  const messages = player.sent.messages.length;
+  castOn(player, "Alchemic Divergence", 0);
+  assert.equal(inventory.getAmount(I.FIRE_RUNE), 25, "nothing deleted");
+  assert.equal(inventory.getItems()[1].getAmount(), 7, "the preset stack is untouched");
+  assert.equal(inventory.getAmount(I.CHAOS_RUNE), 7, "no chaos runes arrived");
+  assert.equal(player.sent.messages.at(-1), "<col=ff3045>You do not have inventory space for anymore transmuted items of that type.");
+  assert.equal(player.sent.messages.length, messages + 1);
+  // One free slot: the plain product lands there, apart from the preset stack.
+  inventory.deleteAtSlot(27, 1);
+  castOn(player, "Alchemic Divergence", 0);
+  assert.equal(inventory.getAmount(I.FIRE_RUNE), 15);
+  assert.equal(inventory.getItems()[1].getAmount(), 7, "the preset stack is still 7");
+  assert.equal(inventory.getItems()[27].getId(), I.CHAOS_RUNE);
+  assert.equal(inventory.getItems()[27].getAmount(), 10, "a plain stack of 10 in the free slot");
+  assert.equal(inventory.getItems()[27].isPresetItem?.() === true, false);
+});
+
+test("Transmute: a loose item converts only its plain copies, never a preset copy in another slot", (t) => {
+  withClock(t);
+  const player = cases(TRANSMUTE).relic;
+  const inventory = player.getInventory();
+  inventory.resetItems();
+  for (let count = 0; count < 3; count++) inventory.adds(I.UNCUT_RUBY, 1);
+  inventory.setItem(3, presetStack(I.UNCUT_RUBY, 1));
+  for (let slot = 4; slot < 28; slot++) inventory.setItem(slot, new core.Item(I.BRONZE_BAR, 1));
+  castOn(player, "Alchemic Divergence", 0);
+  assert.equal(inventory.getAmount(I.UNCUT_DIAMOND), 3, "the 3 plain rubies");
+  assert.equal(inventory.getItems()[3].getId(), I.UNCUT_RUBY, "the preset ruby stays");
+  assert.equal(inventory.getItems()[3].isPresetItem?.(), true);
+  assert.equal(inventory.getAmount(I.UNCUT_RUBY), 1);
 });
 
 test("Transmute: with the bank toggle a stack's products go to the bank; with the alchemy toggle off the spells are alchemy", (t) => {

@@ -96,6 +96,7 @@ module.exports = function registerNatureSpiritQuest(api) {
   const SPELL_OFFERING_ATTRIBUTE = "nature-spirit:spell-offering";
 
   const SWAMP_GATE_IDS = new Set([ObjectIdentifiers.GATE_72, ObjectIdentifiers.GATE_73]); // 3506/3507
+  const SWAMP_GATE_PASSAGE = { minX: 3443, maxX: 3444, y: 3458 }; // cache gate leaves; Doors Mort Myre pair
   const GROTTO_ID = ObjectIdentifiers.GROTTO; // 3516 surface entrance
   const GROTTO_TREE_ID = ObjectIdentifiers.GROTTO_TREE; // 3517
   const GROTTO_EXIT_ID = ObjectIdentifiers.GROTTO_3; // 3525 cave exit
@@ -185,6 +186,7 @@ module.exports = function registerNatureSpiritQuest(api) {
 
   /** Owner-only quest NPC spawns (Filliman outside, Nature Spirit inside). */
   const spawnedByPlayer = new Map();
+  const swampGateApproach = new WeakMap();
   const nextBloom = new WeakMap();
   const nextPouch = new WeakMap();
 
@@ -1067,6 +1069,7 @@ module.exports = function registerNatureSpiritQuest(api) {
         if (!mobile?.isPlayer?.()) return;
         const player = mobile.getAsPlayer();
         if (player.getPrivateArea?.()) return;
+        checkSwampGateCrossing(player);
         const cycle = World.getProcessCycle();
         const next = ghastNextAttack.get(player);
         if (next === undefined) {
@@ -1087,13 +1090,34 @@ module.exports = function registerNatureSpiritQuest(api) {
    * not appear"): passing through it writes stage 10. Doors still swings the gate.
    */
   function handleSwampGate(request) {
-    if (!SWAMP_GATE_IDS.has(request.objectId)) return;
-    const { player } = request;
+    if (SWAMP_GATE_IDS.has(request.objectId)) recordSwampEntry(request.player);
+  }
+
+  function recordSwampEntry(player) {
     const stage = quest.getStage(player);
     if (stage < STAGE_STARTED || stage >= STAGE_ENTERED_SWAMP) return;
     quest.setStage(player, STAGE_ENTERED_SWAMP);
     player.sendMessage("You walk into the gloomy atmosphere of Mort Myre.");
     ensureWashingBowl(player);
+  }
+
+  /** Opening credits its actor; walking through another player's open gate must credit the walker. */
+  function checkSwampGateCrossing(player) {
+    const stage = quest.getStage(player);
+    if (stage < STAGE_STARTED || stage >= STAGE_ENTERED_SWAMP) {
+      swampGateApproach.delete(player);
+      return;
+    }
+    const at = player.getLocation();
+    const previous = swampGateApproach.get(player);
+    swampGateApproach.set(player, at.clone());
+    if (!previous || player.needsPlacement || previous.getZ() !== 0 || at.getZ() !== 0) return;
+    if (previous.getY() >= SWAMP_GATE_PASSAGE.y && at.getY() < SWAMP_GATE_PASSAGE.y
+      && Math.max(Math.abs(at.getX() - previous.getX()), Math.abs(at.getY() - previous.getY())) <= 2
+      && Math.min(previous.getX(), at.getX()) <= SWAMP_GATE_PASSAGE.maxX
+      && Math.max(previous.getX(), at.getX()) >= SWAMP_GATE_PASSAGE.minX) {
+      recordSwampEntry(player);
+    }
   }
 
   /** The grotto cave entrance/exit and the journal hidden in the grotto tree. */
@@ -1161,6 +1185,10 @@ module.exports = function registerNatureSpiritQuest(api) {
     return true;
   }
 
+  function prayAtNatureAltarRequest(request) {
+    if (prayAtNatureAltar(request)) request.handled = true;
+  }
+
   function handleLogin({ player }) {
     if (quest.isComplete(player) && inGrotto(player)
       && player.getLocation().getZ() === 0) {
@@ -1176,6 +1204,7 @@ module.exports = function registerNatureSpiritQuest(api) {
     if (!player) return;
     nextBloom.delete(player);
     nextPouch.delete(player);
+    swampGateApproach.delete(player);
     clearSpawns(player);
     for (const [npc, reveal] of [...visibleGhasts]) {
       if (reveal.owner !== player) continue;
@@ -1228,6 +1257,8 @@ module.exports = function registerNatureSpiritQuest(api) {
   api.onGroundItemPickup(handleWashingBowlPickup);
   api.onObjectInteraction(handleGrotto);
   api.onObjectInteraction(handleBloomPick);
+  api.onCustomEvent("altar:nature-quest-prayer", prayAtNatureAltarRequest);
+  // Fallback when the generic Altars plugin is disabled.
   api.onObjectInteraction("Altar of nature", { "Pray-at": prayAtNatureAltar });
   api.onPlayerLogin(handleLogin);
   api.onPlayerLogout(handleLogout);

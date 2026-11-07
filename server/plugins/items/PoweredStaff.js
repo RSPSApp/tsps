@@ -66,6 +66,16 @@ function definePoweredStaff(api, config) {
     return charges;
   }
 
+  /**
+   * "item:fill-charges" { player, item, handled }: content that hands out a staff ready to use
+   * (the PvP Arena's load-outs) asks for a full one: charged, at its most charges.
+   */
+  function fillCharges(event) {
+    if (!isStaff(event.item?.getId?.())) return;
+    setCharges(event.item, config.maxCharges);
+    event.handled = true;
+  }
+
   function spellFor(player) {
     let spell = spells.get(player);
     if (spell) return spell;
@@ -232,6 +242,7 @@ function definePoweredStaff(api, config) {
     useCharge,
     chargesOf,
     setCharges,
+    fillCharges,
     weaponOf,
     wields,
     isStaff,
@@ -283,12 +294,18 @@ function restricted(item) {
 
 /** How many of `id` can pay for a charge: the unrestricted copies. */
 function plainAmount(inventory, id) {
+  // A container without slots (a test stand-in) holds no restricted copies.
+  if (typeof inventory.getItems !== "function") return inventory.getAmount(id);
   return inventory.getItems().reduce((total, item) =>
     (item?.getId() === id && !restricted(item) ? total + item.getAmount() : total), 0);
 }
 
 /** Takes `amount` of `id` from its unrestricted copies, leaving any restricted one alone. */
 function takePlain(inventory, id, amount) {
+  if (typeof inventory.getItems !== "function") {
+    inventory.deleteNumber(id, amount);
+    return;
+  }
   let left = amount;
   inventory.getItems().forEach((item, slot) => {
     if (left <= 0 || item?.getId() !== id || restricted(item)) return;

@@ -92,6 +92,9 @@ test("fishing spots, catch chances and the catch cascade follow OSRS", async () 
   assert.equal(findTool(player({ inventory: [I.HARPOON], equipment: [I.DRAGON_HARPOON] }), TOOLS.HARPOON).bonus, 120);
   assert.equal(findTool(player({ inventory: [I.CRYSTAL_HARPOON] }), TOOLS.HARPOON).bonus, 135);
   assert.equal(findTool(player({ inventory: [I.CRYSTAL_HARPOON_INACTIVE_] }), TOOLS.HARPOON).bonus, 120);
+  // Wiki (Crystal harpoon): 50 Agility to wield; below it the crystal harpoon isn't a tool, and a plain one is.
+  assert.equal(findTool(player({ levels: { Agility: 49 }, inventory: [I.CRYSTAL_HARPOON] }), TOOLS.HARPOON), null, "crystal harpoon at 49 Agility");
+  assert.equal(findTool(player({ levels: { Agility: 49 }, inventory: [I.CRYSTAL_HARPOON_INACTIVE_, I.HARPOON] }), TOOLS.HARPOON).bonus, 100);
   assert.equal(findTool(player({ fishing: 60, inventory: [I.HARPOON], equipment: [I.DRAGON_HARPOON] }), TOOLS.HARPOON).bonus, 100);
   assert.equal(findTool(player({ fishing: 60, equipment: [I.DRAGON_HARPOON] }), TOOLS.HARPOON), null);
   assert.equal(findTool(player({ inventory: [I.PEARL_FISHING_ROD] }), TOOLS.FISHING_ROD).bonus, 100, "pearl rod");
@@ -1778,9 +1781,7 @@ test("native ordinary trout catch can award an eligible beginner clue bottle", a
         if (name === "treasure-trails:vessel-chance" && payload.player === player && payload.vessel === "bottle") policyQueries++;
         return emit.apply(this, arguments);
       };
-      const draws = enabled
-        ? [0.5, 0, ...Array.from({length: 9}, () => [0.5, 0, 0]).flat()]
-        : Array.from({length: 10}, () => [0.5, 0]).flat();
+      const draws = Array.from({length: 10}, () => [0.5, 0]).flat();
       Math.random = () => {
         const stack = new Error().stack;
         if (stack.includes("rewards") && stack.includes("DriftNets.Hunter")) return draws[randomCalls++] ?? 0.5;
@@ -1801,7 +1802,8 @@ test("native ordinary trout catch can award an eligible beginner clue bottle", a
       }
       assert.equal(policyQueries, 1);
       assert.equal(inventory.getAmount(I.SCROLL_BOX_MEDIUM_), enabled ? 1 : 0);
-      assert.equal(inventory.getAmount(I.OYSTER), enabled ? 9 : 10, "the opted-out clue branch falls back to fish");
+      assert.equal(inventory.getAmount(I.OYSTER), enabled ? 0 : 10, "the opted-out clue branch falls back to fish");
+      assert.equal(inventory.getAmount(I.PUFFERFISH), enabled ? 9 : 0, "repeated clue wins become pufferfish");
       assert.equal(DriftNets.state(player).nets[anchorId], undefined, "the real take action completes");
     } finally {
       Date.now = originalNow;

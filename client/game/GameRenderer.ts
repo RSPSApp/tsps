@@ -684,6 +684,9 @@ export abstract class GameRenderer<T extends MapSquare = MapSquare> extends Rend
 
     registerNpcSpotAnimation(_event: NpcSpotAnimationEvent): void {}
 
+    /** Drop all attached slots when an NPC leaves view, before its index can be reused. */
+    clearNpcSpotAnimations(_serverId: number): void {}
+
     /** Plays a graphic on a tile; returns its id, for killWorldSpotAnimation. */
     registerWorldSpotAnimation(_event: WorldSpotAnimationEvent): number | undefined {
         return undefined;

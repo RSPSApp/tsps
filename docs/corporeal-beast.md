@@ -25,11 +25,11 @@ The Corporeal Beast, built from the OSRS Wiki, a live rsprox capture (a games ne
 
 ## The lair
 
-The lair is in the map twice, 128 tiles apart, with the same locs: the room everyone uses and the one for ironmen of combat level 90 and up (Wiki). The capture was taken in the northern copy (y around 4382). The Wiki puts the normal room in the southern copy (y around 4254), so `CorpShared.ROOMS` does too; the ironman room isn't used yet.
+The lair is in the map twice, 128 tiles apart, with the same locs: the normal room and the one intended for ironmen of combat level 90 and up (Wiki). The capture was taken in the northern copy (y around 4382). The normal room is the southern copy (y around 4254). With the Corporeal Beast plugin active, cave entry and the supported teleport routes select the copy by account mode and base combat level.
 
 | What | Where | Notes |
 | --- | --- | --- |
-| Cave (678, Enter) | (3201, 3679), Wilderness | Not while in combat (Wiki). Puts you at (2964, 4254) in the normal copy (Offline_Scape). |
+| Cave (678, Enter) | (3201, 3679), Wilderness | Not while in combat (Wiki). Ironmen of combat level 90+ enter at (2964, 4382); others enter at (2964, 4254). The arrival tile is based on Offline_Scape. |
 | Cave exit (679, Exit) | (2963, 4254) and (2963, 4382) | "This exit leads to the Wilderness, are you sure?", then (3206, 3681) (Offline_Scape). |
 | Passage (677, Go-through, Peek) | (2971, 4254) and (2971, 4382), 3 tiles wide | Go-through moves you across a tick later: x 2970 to 2974 and back (capture). No pets (Wiki); the message is Offline_Scape's. Peek counts the players in the room (Offline_Scape's messages). |
 | Corporeal Beast (319) | (2994, 4253) and (2994, 4381), facing south | Capture: (2994, 4381) facing south; the southern copy is the same tile 128 south. Respawns 50 ticks after dying (Wiki). |
@@ -39,7 +39,7 @@ The lair is in the map twice, 128 tiles apart, with the same locs: the room ever
 - **The overlay:** in the room east of the passage, the Corp overlay (interface 13) opens on the HUD, and it closes on leaving (capture).
   - Script 693 shows varbit 999 as "Damage: N" ("Damage: Lots!" from 4,000).
   - Phase 2 keeps varbit 999 up to date.
-- **The games necklace** lands at (2967, 4381), in the northern copy, where the capture's necklace landed (2966, 4380). `::teleports` (Bosses) goes to the normal room's lobby at (2966, 4252).
+- **The games necklace and jewellery box** target (2967, 4381) in the northern copy for eligible ironmen and the corresponding tile 128 south for other accounts. `::teleports` (Bosses) uses the existing lobby tile in the appropriate copy. The copy is selected when the teleport starts; it is not rechecked at arrival. This does not implement the ironman fight's kill-credit or brazier rules, or establish isolation for every possible arrival route.
 
 ## The capture
 

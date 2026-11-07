@@ -13,6 +13,13 @@ const { pauseForLevelUp, actionInterval } = require("../SkillActions");
 const FIRST_COOK_TICKS = 2;
 const SECOND_COOK_TICKS = 3;
 const COOK_INTERVAL_TICKS = 4;
+/**
+ * Ticks from a manual re-use of raw karambwan while it is already cooking to the next food.
+ * The Wiki's 1-tick Cooking method re-opens the cooking dialogue on the tick a karambwan is
+ * cooked, so the next one follows a tick later instead of restarting the first-food delay.
+ * The Wiki documents this method for raw karambwan; other foods keep their queued timing.
+ */
+const KARAMBWAN_RECLICK_TICKS = 1;
 const ONE_TYPE_TITLE = "How many would you like to cook?";
 const MANY_TYPES_TITLE = "What would you like to cook?";
 /** clientscript skillmulti_setup's first argument on every captured cooking menu. */
@@ -26,19 +33,32 @@ const SUCCESS_COUNT_ATTRIBUTE = "cooking:success-count";
 const BUSY_VARBIT = "busy";
 
 /**
- * Wiki (Cooked meat): unlike other food it can be burnt on purpose on a fire or range, for no
- * XP. Kept apart from the cookables so content that cooks raw food leaves it alone.
+ * Wiki (Burnt chicken: https://oldschool.runescape.wiki/w/Burnt_chicken): cooked meat and
+ * chicken can be burnt on purpose. Keep them apart from the raw-food cookables.
  */
 const DELIBERATE_BURN = { name: "meat", level: 1, xp: 0, stopBurn: 1, deliberate: true, message: "You deliberately burn the nicely cooked meat." };
 
 function deliberateBurnFor(itemId) {
   const { ItemIds } = Common.core;
-  if (itemId !== ItemIds.COOKED_MEAT) return undefined;
-  return { ...DELIBERATE_BURN, raw: ItemIds.COOKED_MEAT, cooked: ItemIds.BURNT_MEAT, burnt: ItemIds.BURNT_MEAT };
+  if (itemId === ItemIds.COOKED_MEAT) {
+    return { ...DELIBERATE_BURN, raw: ItemIds.COOKED_MEAT, cooked: ItemIds.BURNT_MEAT, burnt: ItemIds.BURNT_MEAT };
+  }
+  if (itemId === ItemIds.COOKED_CHICKEN) {
+    return { ...DELIBERATE_BURN, name: "chicken", message: "You deliberately burn the nicely cooked chicken.",
+      raw: ItemIds.COOKED_CHICKEN, cooked: ItemIds.BURNT_CHICKEN, burnt: ItemIds.BURNT_CHICKEN };
+  }
+  return undefined;
+}
+
+// Free worlds cannot use members-only raw food, including through a range's Cook option.
+function availableOnWorld(cookable) {
+  return Common.core.WorldDefinition.isMembersWorld()
+    || (!cookable.gnomeTutorial && Common.core.CacheDefinitions.getItem(cookable.raw)?.isMembers !== true);
 }
 
 function cookableFor(itemId) {
-  return Common.cookables().get(itemId) ?? deliberateBurnFor(itemId);
+  const cookable = Common.cookables().get(itemId) ?? deliberateBurnFor(itemId);
+  return cookable && availableOnWorld(cookable) ? cookable : undefined;
 }
 
 // Wiki: cooking a raw karambwan yields a poison karambwan until Tinsay teaches
@@ -167,6 +187,14 @@ function sendSuccessCount({ player }) {
 
 /** Whether the player may cook this here; says why not in a message box. */
 function canCook(player, object, cookable) {
+  if (!availableOnWorld(cookable)) {
+    player.sendMessage("To use this item please login to a members' world.");
+    return false;
+  }
+  if (cookable.gnomeTutorial && FIRE_OBJECT_NAMES.has(object.getDefinition().getName())) {
+    Common.mesbox(player, CANNOT_COOK_MESSAGE);
+    return false;
+  }
   if (object.getId() === Common.core.ObjectIdentifiers.COOKING_RANGE) {
     const request = { player, key: "cooks_assistant", complete: null };
     Common.api.emitCustomEvent("quest:is-complete", request);
@@ -184,7 +212,9 @@ function canCook(player, object, cookable) {
 
 /**
  * Cooks `amount` of the food (all of it by default), the first FIRST_COOK_TICKS after this tick.
- * Clicks are handled after the tick's tasks, so the cooking task has already run this tick.
+ * Re-using raw karambwan while it cooks (the Wiki's 1-tick method) makes the next one due
+ * KARAMBWAN_RECLICK_TICKS later instead of restarting the first-food delay. Clicks are handled
+ * after the tick's tasks, so the cooking task has already run this tick.
  */
 function startCooking(player, object, cookable, sessions = activeSessions, amount = Infinity) {
   if (!canCook(player, object, cookable)) return false;
@@ -192,6 +222,9 @@ function startCooking(player, object, cookable, sessions = activeSessions, amoun
     return false;
   }
 
+  const previous = sessions.get(player);
+  const reusing = !!previous && previous.cookable.raw === cookable.raw
+    && cookable.raw === Common.core.ItemIds.RAW_KARAMBWAN;
   stopCooking(player, false);
   ensureCookTask();
   sessions.set(player, {
@@ -200,11 +233,15 @@ function startCooking(player, object, cookable, sessions = activeSessions, amoun
     objectId: object.getId(),
     location: object.getLocation().clone(),
     privateArea: object.getPrivateArea(),
-    nextCookTick: (cookingTask?.cycle ?? 0) + (cookable.firstCookTicks ?? FIRST_COOK_TICKS),
-    cooked: 0,
+    // Repeated clicks must not shorten the initial captured first-food delay.
+    nextCookTick: reusing && previous.cooked === 0 ? previous.nextCookTick
+      : (cookingTask?.cycle ?? 0) + (reusing
+        ? KARAMBWAN_RECLICK_TICKS
+        : (cookable.firstCookTicks ?? FIRST_COOK_TICKS)),
+    cooked: reusing ? previous.cooked : 0,
     remaining: amount,
   });
-  Common.sendVarbit(player, BUSY_VARBIT, 1);
+  if (!reusing || previous.cooked === 0) Common.sendVarbit(player, BUSY_VARBIT, 1);
 
   return true;
 }
@@ -215,7 +252,8 @@ function carriedCookables(player, onFire) {
   for (const item of player.getInventory().getItems()) {
     if (!item || Common.core.ItemDefinition.forId(item.getId()).isNoted()) continue;
     const cookable = Common.cookables().get(item.getId());
-    if (cookable && !(cookable.rangeOnly && onFire) && !found.has(cookable.raw)) found.set(cookable.raw, cookable);
+    if (cookable && availableOnWorld(cookable)
+      && !(cookable.rangeOnly && onFire) && !found.has(cookable.raw)) found.set(cookable.raw, cookable);
   }
   return [...found.values()];
 }
@@ -304,7 +342,7 @@ function cookTick(task) {
     // Content may cook several in the one cycle ("skills:actions-per-cycle", a league relic's all at once).
     const actions = Common.actionsPerCycle(player, "cook");
     for (let done = 0; done < actions && player.getInventory().contains(session.cookable.raw); done++) {
-      cookOne(player, session);
+      if (cookOne(player, session) === false) { stopCooking(player); break; }
     }
   }
 }
@@ -313,15 +351,27 @@ function cookOne(player, session) {
   const { Item, Skill } = Common.core;
   const cookable = cookedResult(player, session.cookable);
   const inventory = player.getInventory();
+  if (!availableOnWorld(cookable)) return false;
   if (cookable.deliberate) {
     inventory.deleteNumber(session.cookable.raw, 1);
     player.getInventory().addItem(new Item(cookable.cooked, 1));
     Common.spam(player, successMessage(cookable));
     return;
   }
-  const rawItem = inventory.getItems().find((item) => item?.getId() === session.cookable.raw);
+  const rawSlot = cookable.gnomeTutorial ? inventory.getItems().findIndex((item) =>
+    item?.getId() === session.cookable.raw && item.getAmount() === 1
+      && !item.isPresetItem() && !item.isUntradeable() && !item.isUnbankable()) : -1;
+  if (cookable.gnomeTutorial && rawSlot < 0) { player.sendMessage("Preset items cannot be used for this."); return false; }
+  const rawItem = cookable.gnomeTutorial ? inventory.getItems()[rawSlot]
+    : inventory.getItems().find((item) => item?.getId() === session.cookable.raw);
   const rawRestore = rawItem?.clone ? rawItem.clone().setAmount(1) : new Item(session.cookable.raw, 1);
-  inventory.deleteNumber(session.cookable.raw, 1);
+  if (cookable.gnomeTutorial) {
+    // Success may return the tray/tin as a second nonstackable item. Reserve
+    // that slot before the roll or any mutation; burns retain the burnt item.
+    if (rawItem.getDefinition().isStackable() || new Item(cookable.cooked, 1).getDefinition().isStackable()
+      || (cookable.returnItem !== undefined && new Item(cookable.returnItem, 1).getDefinition().isStackable())) return false;
+    if (cookable.returnItem !== undefined && inventory.getFreeSlots() < 1) { inventory.full(); return false; }
+  } else inventory.deleteNumber(session.cookable.raw, 1);
   const burnRequest = {
     player,
     rawId: session.cookable.raw,
@@ -329,6 +379,14 @@ function cookOne(player, session) {
     burn: !isSuccess(player, session.cookable, session.objectId),
   };
   Common.api.emitCustomEvent("cooking:burn", burnRequest);
+  if (cookable.gnomeTutorial) {
+    // The burn hook may run other content: revalidate the selected input and
+    // the reserved capacity before consuming anything.
+    if (inventory.getItems()[rawSlot] !== rawItem || rawItem.getId() !== session.cookable.raw
+      || rawItem.getAmount() !== 1 || rawItem.isPresetItem() || rawItem.isUntradeable() || rawItem.isUnbankable()
+      || (cookable.returnItem !== undefined && inventory.getFreeSlots() < 1)) return false;
+    inventory.deleteAtSlot(rawSlot, 1);
+  }
   if (!burnRequest.burn) {
     const output = new Item(cookable.cooked, 1);
     if (typeof inventory.getAddableAmount === "function" && inventory.getAddableAmount(output) === 0) {
@@ -342,6 +400,7 @@ function cookOne(player, session) {
       inventory.addItem(rawRestore);
       return;
     }
+    if (cookable.returnItem !== undefined) inventory.addItem(new Item(cookable.returnItem, 1));
     Common.spam(player, successMessage(cookable));
     countCook(player, false);
     if (amount > 0) {

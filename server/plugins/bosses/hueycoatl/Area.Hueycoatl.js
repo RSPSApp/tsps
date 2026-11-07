@@ -14,7 +14,8 @@
  * - The meeting flag (Fight-privately) opens "Select an option": a public/friends fight (your
  *   friends may join), a solo fight, join a friend's fight, or cancel. A private fight copies the
  *   camp and the arena into an instance and fades the player in at (1524, 3294); its flag and
- *   rockslide (Leave-group) fade them back. It costs 50,000 coins (Wiki).
+ *   rockslide (Leave-group) fade them back. It costs 50,000 coins, or 25,000 with the current
+ *   Hard Combat Achievement reward threshold (Wiki).
  * - Deaths are unsafe; the grave is left at the base camp (Wiki). Logging out of a private
  *   fight lands outside it.
  */
@@ -26,6 +27,7 @@ const CombatAchievements = require("./CombatAchievements.Hueycoatl");
 
 const TEAM_LIMIT = 20;
 const PRIVATE_FEE = 50000;
+const HARD_PRIVATE_FEE = 25000;
 const COINS = 995;
 const MENU_TITLE = "Select an option";
 const MENU_OPTIONS = Object.freeze([
@@ -36,7 +38,7 @@ const MENU_OPTIONS = Object.freeze([
 ]);
 const JOIN_PROMPT = "Whose fight would you like to join?";
 /** Not captured: our wording [EST]. */
-const NO_FEE_MESSAGE = `You need ${PRIVATE_FEE.toLocaleString("en-US")} coins to start a private fight.`;
+const NO_FEE_MESSAGE = (fee) => `You need ${fee.toLocaleString("en-US")} coins to start a private fight.`;
 const NO_FIGHT_MESSAGE = "That player isn't fighting the Hueycoatl.";
 const NOT_FRIENDS_MESSAGE = "You must be on their friends list to join their fight.";
 const FULL_MESSAGE = "That fight is full.";
@@ -342,6 +344,11 @@ function travel(player, move) {
   Shared.later(TRAVEL.closeTicks, () => player.isRegistered() && sender.closeSubInterface(OVERLAY_ATMOSPHERE_UID));
 }
 
+/** A private fight its owner never reached (they logged out on the way in) is torn down. */
+function abandonUnentered(session) {
+  if (session.members.size === 0 && !session.area.isDestroyed()) session.area.destroy();
+}
+
 function intoPrivate(player, session) {
   travel(player, () => {
     if (session.area.isDestroyed()) return;
@@ -354,12 +361,15 @@ function intoPrivate(player, session) {
 /** A new private fight: the camp and the arena copied, the camp's people and a fresh set. */
 function createPrivate(player, kind) {
   const inventory = player.getInventory();
-  if (inventory.getAmount(COINS) < PRIVATE_FEE) {
+  const tier = { player, tier: "Hard" };
+  api.emitCustomEvent("combat-achievements:tier", tier);
+  const fee = tier.currentThresholdMet === true ? HARD_PRIVATE_FEE : PRIVATE_FEE;
+  if (inventory.getAmount(COINS) < fee) {
     player.getPacketSender().sendInterfaceRemoval();
-    player.sendMessage(NO_FEE_MESSAGE);
+    player.sendMessage(NO_FEE_MESSAGE(fee));
     return;
   }
-  inventory.delete(COINS, PRIVATE_FEE);
+  inventory.delete(COINS, fee);
   const area = new InstanceArea();
   const session = new Session(area, player, kind);
   area.session = session;
@@ -373,6 +383,8 @@ function createPrivate(player, kind) {
   session.setLoc(PRIVATE_ROCKSLIDE_TILE, Shared.SCENERY_SHAPE, 0, Shared.LOC.ROCKSLIDE_PRIVATE);
   Fight.newFight(session);
   intoPrivate(player, session);
+  // Logged out during the fade, the owner never arrives: a fight nobody entered goes with its NPCs.
+  Shared.later(TRAVEL.moveTicks + 1, () => abandonUnentered(session));
 }
 
 function joinFriend(player, name) {

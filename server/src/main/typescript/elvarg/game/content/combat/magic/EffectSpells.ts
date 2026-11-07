@@ -38,7 +38,10 @@ export class EffectSpells extends Spell {
                     player.sendMessage("You do not have any bones in your inventory.");
                     return true;
                 }
-                player.getInventory().deleteItemSet(spell.itemsToConsume(player));
+                // Pays the runes as they were counted: the inventory and any rune source (rune pouch), as Vengeance.
+                if (!spell.canCast(player, true)) {
+                    return true;
+                }
                 let i = 0;
                 player.getInventory().getValidItems().forEach(invItem => {
                     if (invItem.getId() == 526) {
@@ -55,7 +58,7 @@ export class EffectSpells extends Spell {
                 player.performAnimation(new Animation(722));
                 // Wiki, List of sound IDs: 114, bones_to_bananas_all, used for both spells.
                 player.getPacketSender().sendSoundEffect(114, 1, 0, 255);
-                player.getSkillManager().addExperiences(Skill.MAGIC, spell.baseExperience() * i);
+                player.getSkillManager().addExperiences(Skill.MAGIC, spell.baseExperience());
                 player.getClickDelay().reset();
                 if (i > 0 && spell === EffectSpells.BONES_TO_PEACHES) {
                     PluginManager.emitCustomEvent("magic:spell-effect-succeeded", {
@@ -130,7 +133,7 @@ export class EffectSpells extends Spell {
     public static readonly BONES_TO_BANANAS = new EffectSpells(
         () => { return 1159; },
         () => { return 15; },
-        () => { return 650; },
+        () => { return 25; },
         () => { return [new Item(561), new Item(555, 2), new Item(557, 2)]; },
         () => { return null; },
         () => { }
@@ -172,7 +175,7 @@ export class EffectSpells extends Spell {
     public static BONES_TO_PEACHES = new EffectSpells(
         () => { return 15877; },
         () => { return 60; },
-        () => { return 4121; },
+        () => { return 35.5; },
         () => { return [new Item(561, 2), new Item(555, 4), new Item(557, 4)]; },
         () => { return null; },
         () => { }

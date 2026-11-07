@@ -1,3 +1,9 @@
+/** A transient effect on an already known NPC, for this connection only. */
+export type NpcSpecificEffect =
+    | { kind: "animation"; index: number; id: number; delay: number }
+    | { kind: "spot"; index: number; id: number; slot: number; height: number; delay: number }
+    | { kind: "headicon"; index: number; slot: number; archiveId: number; spriteId: number };
+
 export interface RebuildRegionPayload {
     regionX: number;
     regionY: number;

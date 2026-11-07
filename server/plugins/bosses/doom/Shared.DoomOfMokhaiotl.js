@@ -378,7 +378,7 @@ function distanceTo(actor, tile) {
 function floorFree(area, tile) {
   const { RegionManager } = core();
   const location = tile.getX ? tile : loc(tile);
-  return (RegionManager.getClipping(location.getX(), location.getY(), location.getZ(), area) & 0x1280100) === 0;
+  return (RegionManager.getClipping(location.getX(), location.getY(), location.getZ(), area) & RegionManager.BLOCKED_MASK) === 0;
 }
 
 function onFloor(at) {

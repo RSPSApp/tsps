@@ -58,8 +58,6 @@ export interface SpecialAttackFirstSuccessfulRange extends SpecialAttackDamageRa
 export interface WeaponSpecialTraits {
     // --- hit shape -------------------------------------------------------
     readonly hitCount?: number;
-    /** Splits the final maximum hit across this many sequential hits. */
-    readonly maximumHitSplitCount?: number;
     /** Extra reveal delays for each hit, relative to the normal hit delay. */
     readonly hitDelayTicks?: readonly number[];
     /**

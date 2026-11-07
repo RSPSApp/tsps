@@ -173,6 +173,17 @@ archive's message log.
   specifies one dust per shard and auto-crushing at 0, then 2, then every 3 ticks. Stackability
   does not make this a bulk conversion. Walking or another action interrupts the loop.
 
+A knife on an ordinary chocolate bar also makes one chocolate dust with no XP ([Wiki](https://oldschool.runescape.wiki/w/Chocolate_dust)).
+This path currently converts one bar per use; the Wiki documents automatic repetition, but its
+knife-specific timing and feedback are not yet implemented.
+
+Grinding rows in `server/plugins/skills/data/herblore.json` use a pestle and mortar by default. A row
+may declare `alternateTool` as a cache item gameval; the chocolate bar row declares `"knife"`.
+
+Herblore's grinding handler does not consume ingredient copies marked preset, untradeable or
+unbankable. If only restricted copies of the ingredient are held, it says "Preset items cannot be
+used for this."; if unrestricted copies are also held, it can grind those instead.
+
 Regression coverage exercises the registered item-on-item handler for quantity selection,
 partial/all messages, zero/invalid input, supply removal, capacity/stack limits and nihil
 cadence/cancellation. Live checks cover selected/all/zero quantities, full-inventory

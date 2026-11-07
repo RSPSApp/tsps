@@ -600,6 +600,8 @@
       "name": "Corporeal Beast",
       "tab": "bosses",
       "group": "Bosses",
+      "live": "corporeal:teleport-destination",
+      "unavailable": "The Corporeal Beast's cave is unavailable.",
       "tile": [
         2966,
         4252,

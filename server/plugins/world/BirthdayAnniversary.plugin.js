@@ -40,6 +40,7 @@ function calendar(api, event) {
 }
 function shutdown(api) { calendar(api, { key: Data.EVENT_KEY, active: false }); }
 function login(api, { player }) {
+  Rewards.importClaim(api, { player });
   if (!Scene.active()) Rewards.settle(api, { player });
   if (!Scene.active() && Scene.inRealm(player.getLocation())) Interactions.leaveRealm(api, { player });
   Sync.safeRefresh(api, { player });

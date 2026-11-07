@@ -63,6 +63,8 @@ function playerLoot(event) {
   const { player, killer, item, location } = event;
   if (!killer || !Common.isIron(killer) || !event.dropEligible) return;
   event.suppressDefaultDrop = true;
+  // Handled: the item is on the floor for its owner now, so a loot key (the killer's setting) must not take it too.
+  event.handled = true;
   Common.core.ItemOnGroundManager.registerLocation(player, item, location);
 }
 

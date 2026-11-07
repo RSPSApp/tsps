@@ -1,5 +1,6 @@
 {
   "cookables": [
+    {"raw":"seaweed","cooked":"soda_ash","burnt":"soda_ash","level":1,"xp":0,"stopBurn":1,"name":"seaweed","article":"some"},
     {"raw":"raw_beef","cooked":"cooked_meat","burnt":"burnt_meat","level":1,"xp":30,"lumbridgeStopBurn":31,"stopBurn":34,"name":"meat","message":"You cook a piece of meat."},
     {"raw":"raw_rat_meat","cooked":"cooked_meat","burnt":"burnt_meat","level":1,"xp":30,"lumbridgeStopBurn":31,"stopBurn":34,"name":"meat","message":"You cook a piece of meat."},
     {"raw":"raw_chicken","cooked":"cooked_chicken","burnt":"burnt_chicken","level":1,"xp":30,"lumbridgeStopBurn":31,"stopBurn":34,"name":"chicken"},
@@ -85,6 +86,12 @@
     {"raw":"raids_bat4_raw","cooked":"raids_bat4_cooked","burnt":"raids_bat_burnt","level":60,"xp":22,"stopBurn":75,"name":"kryket bat"},
     {"raw":"raids_bat5_raw","cooked":"raids_bat5_cooked","burnt":"raids_bat_burnt","level":75,"xp":25,"stopBurn":85,"name":"murng bat"},
     {"raw":"raids_bat6_raw","cooked":"raids_bat6_cooked","burnt":"raids_bat_burnt","level":90,"xp":28,"stopBurn":97,"name":"psykk bat"},
+    {"raw":"raw_crunchies","cooked":"half_baked_crunchy","burnt":"burnt_crunchies","level":1,"xp":30,"stopBurn":38,"name":"raw crunchies","gnomeTutorial":true,"rangeOnly":true},
+    {"raw":9581,"cooked":9582,"burnt":"burnt_crunchies","level":10,"xp":0,"stopBurn":38,"name":"half made toad crunchy","gnomeTutorial":true,"rangeOnly":true,"returnItem":"crunchy_tray"},
+    {"raw":9577,"cooked":9578,"burnt":"burnt_crunchies","level":16,"xp":0,"stopBurn":38,"name":"half made chocchip crunchy","gnomeTutorial":true,"rangeOnly":true,"returnItem":"crunchy_tray"},
+    {"raw":"raw_batta","cooked":"half_baked_batta","burnt":"burnt_batta","level":1,"xp":30,"stopBurn":38,"name":"raw batta","gnomeTutorial":true,"rangeOnly":true},
+    {"raw":9482,"cooked":"toad_batta","burnt":"burnt_batta","level":26,"xp":82,"stopBurn":38,"name":"half made toad batta","gnomeTutorial":true,"rangeOnly":true,"returnItem":"batta_tin"},
+    {"raw":9483,"cooked":9484,"burnt":"burnt_batta","level":29,"xp":0,"stopBurn":38,"name":"half made cheese and tomato batta","gnomeTutorial":true,"rangeOnly":true,"returnItem":"batta_tin"},
     {"raw":"raw_gnomebowl","cooked":"half_baked_bowl","burnt":"burnt_gnomebowl","level":1,"xp":30,"stopBurn":38,"name":"raw gnomebowl","firstCookTicks":4},
     {"raw":9563,"cooked":9564,"burnt":"burnt_gnomebowl","level":42,"xp":0,"stopBurn":42,"name":"half made bowl","firstCookTicks":4}
   ],
@@ -137,7 +144,7 @@
     {"product":"chocolate_bomb","level":1,"xp":110,"ingredients":[[9564,1],["chocolate_dust",1],["pot_of_cream",2]],"timing":[1,2]}
   ],
   "wines": [
-    {"grapes": "grapes", "unfermented": "jug_unfermented_wine", "wine": "jug_wine", "bad": "jug_bad_wine", "level": 35, "xp": 200, "chance": [48, 352]},
+    {"grapes": "grapes", "unfermented": "jug_unfermented_wine", "wine": "jug_wine", "bad": "jug_bad_wine", "level": 35, "xp": 200, "chance": [48, 352], "pendingLimit": 60000},
     {"grapes": "zamorak_grapes", "unfermented": "jug_unfermented_zamorak_wine", "wine": "wine_of_zamorak", "bad": "jug_bad_wine", "level": 65, "xp": 200, "chance": [-125, 260]}
   ]
 }

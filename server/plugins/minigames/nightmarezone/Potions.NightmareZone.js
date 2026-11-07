@@ -202,7 +202,9 @@ function take({ player, object }) {
   player.setEnteredAmountAction?.({
     execute: (amount) => {
       const inventory = player.getInventory();
-      let wanted = Math.min(doses, Math.max(0, Math.floor(Number(amount) || 0)));
+      // Read again now: a Store while the prompt was open changed what the barrel holds.
+      const held = stored(player, barrel.potion);
+      let wanted = Math.min(held, Math.max(0, Math.floor(Number(amount) || 0)));
       let given = 0;
       while (wanted > 0 && inventory.getFreeSlots() > 0) {
         const size = Math.min(4, wanted);
@@ -211,7 +213,7 @@ function take({ player, object }) {
         given += size;
       }
       inventory.refreshItems?.();
-      setStored(player, barrel.potion, doses - given);
+      setStored(player, barrel.potion, held - given);
     },
   });
   player.getPacketSender().sendEnterAmountPrompt(Common.message("takePrompt", { potion: barrel.potion.barrelName.toLowerCase(), doses }));

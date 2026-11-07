@@ -3,6 +3,10 @@
 const configuredEvents = require("./data/events.json");
 const TASK_KEY = "event-scheduler:clock";
 const CHECK_INTERVAL_MS = 60_000;
+const COMPLETIONS_ATTRIBUTE = "events:completions";
+const COMPLETION_KEY = /^[a-z][a-z0-9-]*$/;
+const MAX_STACK = 2147483647;
+const granting = new WeakSet();
 const definitions = new Map();
 const overrides = new Map();
 const active = new Set();
@@ -117,6 +121,123 @@ function answerStatus(request) {
   if (request && typeof request === "object") request.active = running && active.has(request.key);
 }
 
+function completions(player) {
+  const value = player.getAttribute(COMPLETIONS_ATTRIBUTE);
+  return Array.isArray(value) ? value.filter(key => typeof key === "string") : [];
+}
+
+function completionKey(request) {
+  const key = request.completion ?? request.eventKey;
+  return typeof key === "string" && COMPLETION_KEY.test(key) ? key : null;
+}
+
+function answerCompleted(request) {
+  if (!request?.player) return;
+  const key = completionKey(request);
+  request.completed = key !== null && completions(request.player).includes(key);
+}
+
+function rewardItems(api, rewards) {
+  if (!Array.isArray(rewards)) return null;
+  const items = [];
+  for (const reward of rewards) {
+    const id = reward?.itemId, amount = reward?.amount ?? 1;
+    // forId answers ids past the cache with a default definition, so bound them here.
+    if (!Number.isInteger(id) || id <= 0 || id >= api.core.CacheDefinitions.getCounts().items) return null;
+    if (!Number.isInteger(amount) || amount <= 0 || amount > MAX_STACK) return null;
+    items.push(new api.core.Item(id, amount));
+  }
+  return items;
+}
+
+// Plans every reward on a copy of the inventory with the container's own stack rules
+// (getAddableAmount/add), as Christmas Din-Dins' reward plan does. Items the event
+// consumes (`take`) leave the copy first, so their slots are free for the rewards.
+// Returns the planned items, "missing" when a taken item is not held, or null when a
+// reward won't fit.
+function plan(api, player, items, take = []) {
+  const copy = new api.core.Inventory(player).setItems(player.getInventory().getCopiedItems());
+  for (const item of take) {
+    if (copy.getAmount(item.getId()) < item.getAmount()) return "missing";
+    // The copy is bound to the player: never refresh it, or the client sees uncommitted items.
+    copy.deleted(item.getId(), item.getAmount(), false);
+  }
+  for (const item of items) {
+    if (copy.getAddableAmount(item) !== item.getAmount()) return null;
+    // The copy is bound to the player: never refresh it, or the client sees uncommitted items.
+    copy.add(item, false);
+  }
+  return copy.getItems();
+}
+
+function grantReward(api, request) {
+  if (!request || typeof request !== "object") return;
+  request.granted = false;
+  if (request.player && granting.has(request.player)) {
+    // A listener of the unlock below must not grant again against a stale plan.
+    request.reason = "busy";
+    return;
+  }
+  if (request.player) granting.add(request.player);
+  try {
+    grantOnce(api, request);
+  } finally {
+    if (request.player) granting.delete(request.player);
+  }
+}
+
+function grantOnce(api, request) {
+  const {player} = request, key = completionKey(request);
+  const items = rewardItems(api, request.rewards ?? []);
+  const take = rewardItems(api, request.take ?? []);
+  const unlock = request.unlock ?? [];
+  if (!player || typeof request.eventKey !== "string" || key === null || !items || !take || !Array.isArray(unlock)) {
+    request.reason = "invalid";
+    return;
+  }
+  if (!(running && active.has(request.eventKey))) {
+    request.reason = "inactive";
+    return;
+  }
+  if (completions(player).includes(key)) {
+    request.reason = "already-complete";
+    return;
+  }
+  const planned = plan(api, player, items, take);
+  if (planned === "missing") {
+    request.reason = "missing-items";
+    return;
+  }
+  if (!planned) {
+    request.reason = "no-space";
+    return;
+  }
+  if (unlock.length) {
+    const unlocking = {player, items: unlock, accepted: false};
+    api.emitCustomEvent("holiday-rewards:unlock", unlocking);
+    if (!unlocking.accepted) {
+      request.reason = "unlock-refused";
+      return;
+    }
+  }
+  player.getInventory().setItems(planned);
+  player.getInventory().refreshItems();
+  player.setAttribute(COMPLETIONS_ATTRIBUTE, [...completions(player), key]);
+  request.granted = true;
+  request.reason = null;
+}
+
+// Records a completion without granting anything: content imports claims its own saves
+// already show (before this helper existed) and settles rewards handed out another way.
+// Idempotent, and independent of the event window.
+function recordCompletion(request) {
+  if (!request?.player) return;
+  const key = completionKey(request);
+  request.recorded = key !== null;
+  if (key === null || completions(request.player).includes(key)) return;
+  request.player.setAttribute(COMPLETIONS_ATTRIBUTE, [...completions(request.player), key]);
+}
+
 function forceEvent(api, { player, parts }) {
   if (!running) {
     player.sendMessage("The event scheduler is not running.");
@@ -149,7 +270,11 @@ module.exports = {
   register(api) {
     api.onServerStartup(start.bind(null, api));
     api.onServerShutdown(stop.bind(null, api));
+    api.persistAttribute(COMPLETIONS_ATTRIBUTE, []);
     api.onCustomEvent("events:status", answerStatus);
+    api.onCustomEvent("events:completed", answerCompleted);
+    api.onCustomEvent("events:record-completion", recordCompletion);
+    api.onCustomEvent("events:grant-reward", grantReward.bind(null, api));
     api.registerCommand("forceevent", forceEvent.bind(null, api), api.core.PlayerRights.OWNER,
       "Override a configured holiday window for testing; reset restores the calendar");
   },

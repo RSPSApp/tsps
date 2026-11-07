@@ -95,6 +95,10 @@ function createQuestScenes(api, { onEnd } = {}) {
       const cinematic = active && cutscene ? 1 : 0;
       player.getPacketSender().sendVarbit(CUTSCENE_STATUS_VARBIT, cinematic);
       player.getPacketSender().sendVarbit(GRAVESTONE_TLI_HIDE_VARBIT, cinematic);
+      // Live toggles hidenpcops, hidelocops and hideobjops with cutscene_status in the same tick
+      // (capture facts in the PR); loc ops remain a separate change.
+      player.getPacketSender().sendHideNpcOps(cinematic === 1);
+      player.getPacketSender().sendHideObjOps(cinematic === 1);
     }
   }
 

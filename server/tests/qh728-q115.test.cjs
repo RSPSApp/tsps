@@ -160,6 +160,12 @@ function choice(h, event) {
   return event;
 }
 
+/** Shows an NPC dialogue line, then continues it (runs the plugin's after()). */
+function line(h, event) {
+  h.events['npc-dialogue:line'].forEach(handler => handler(event));
+  return event;
+}
+
 function stage(h, p) {
   return h.quest.getStage(p);
 }
@@ -476,9 +482,11 @@ test('the guard distraction, barrel route and escape reach the Shantay Pass with
   assert.equal(p.items.get(K.ANA_IN_A_BARREL), 0);
   assert.equal(stage(h, p), 25);
 
-  const driver = { player: p, npcId: core.NpcIdentifiers.MINE_CART_DRIVER, handled: false };
-  const driverResult = h.npcActions.get('Mine cart driver')['Talk-to'](driver);
-  assert.equal(driverResult, false, 'the transcript still plays');
+  assert.equal(h.npcActions.get('Mine cart driver'), undefined, 'the transcript still plays');
+  const riot = line(h, { player: p, npcId: core.NpcIdentifiers.MINE_CART_DRIVER,
+    text: "Oh, right... Okay, you'd better jump in the cart then! Quickly!" });
+  assert.equal(stage(h, p), 25, 'the riot line has not been continued yet');
+  riot.after();
   assert.equal(stage(h, p), 26);
 
   object(h, 'Wooden cart', 'Search', { player: p, objectId: 18958, handled: false });
@@ -654,9 +662,13 @@ test('the placed winch barrel and camp cart carry Ana out of the camp', () => {
   assert.equal(stage(h, p), 25);
   assert.equal(varbit(p, 2809), 1, 'Ana rides the flatback cart');
 
-  const driver = { player: p, npcId: core.NpcIdentifiers.MINE_CART_DRIVER, handled: false };
-  assert.equal(h.npcActions.get('Mine cart driver')['Talk-to'](driver), false);
+  p.items.set(K.COINS, 150);
+  const bribe = line(h, { player: p, npcId: core.NpcIdentifiers.MINE_CART_DRIVER,
+    text: 'Okay, get in the back of the cart then!' });
+  assert.equal(stage(h, p), 25, 'the accepting line has not been continued yet');
+  bribe.after();
   assert.equal(stage(h, p), 26);
+  assert.equal(p.items.get(K.COINS), 50, 'the driver takes 100 coins');
 
   object(h, 'Wooden cart', 'Search', { player: p, objectId: 2682, handled: false });
   assert.equal(p.items.get(K.ANA_IN_A_BARREL), 1);

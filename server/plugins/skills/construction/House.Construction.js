@@ -41,6 +41,7 @@ const MaxHouse = require("./MaxHouse.Construction");
 const Nexus = require("./Nexus.Construction");
 
 const HAMMER_ID = ItemIdentifiers.HAMMER;
+const HAMMERS = [HAMMER_ID, ItemIdentifiers.IMCANDO_HAMMER, ItemIdentifiers.IMCANDO_HAMMER_OFF_HAND_];
 const SAW_ID = ItemIdentifiers.SAW;
 const SAWS = [ItemIdentifiers.SAW, ItemIdentifiers.CRYSTAL_SAW, ItemIdentifiers.AMYS_SAW];
 const TINDERBOX_ID = ItemIdentifiers.TINDERBOX;
@@ -870,8 +871,18 @@ function formatBuildable(buildable) {
  * with the missing ones in red ("You don't have the right materials: 2 x Plank, <col=ef1020>2 x Nails</col>").
  */
 function getBuildMaterials(player, house, target, buildable) {
+  if (buildable.invalidLevels) return "This build has an unsupported skill requirement.";
   if (constructionLevel(player) < buildable.level) return `You need Construction level ${buildable.level} to build that.`;
-  if (!player.getInventory().contains(HAMMER_ID) || !hasSaw(player)) return "You need a saw and a hammer in order to make furniture.";
+  for (const requirement of buildable.secondaryLevels ?? []) {
+    const skill = Skill.values().find(candidate => candidate.getClientId() === requirement.statId);
+    if (!skill || !Number.isInteger(requirement.level) || requirement.level < 1) return "This build has an unsupported skill requirement.";
+    // The cache's second skills: Farming (spirit trees), Cooking (the kitchen barrels), Smithing (the armour displays)
+    // and Runecraft (the rune cases). Boostable, so the current level counts (Wiki: Beer barrel, Cooking 5; Mithril
+    // armour (Construction), Smithing 68; Rune case space, Runecraft 14, 44 and 90).
+    if (player.getSkillManager().getCurrentLevel(skill) < requirement.level)
+      return `You need ${skill.getName()} level ${requirement.level} to build that.`;
+  }
+  if (!hasHammer(player) || !hasSaw(player)) return "You need a saw and a hammer in order to make furniture.";
   // A flatpack is made away from any hotspot: no furniture there to upgrade.
   const existing = target ? house.getFurnitureAtTarget(target)?.buildableKey : undefined;
   const previous = buildable.materials.find(material => Data.BUILDABLE_BY_KEY.has(material.source))?.source;
@@ -913,6 +924,13 @@ function getBuildMaterials(player, house, target, buildable) {
     }).join(", ")}`);
   }
   return requiredItems;
+}
+
+/** Wiki (Imcando hammer): either repaired variant works carried or wielded. */
+function hasHammer(player) {
+  const equipment = player.getEquipment();
+  const wielded = [Equipment.WEAPON_SLOT, Equipment.SHIELD_SLOT].map(slot => equipment.get(slot)?.getId());
+  return HAMMERS.some(id => player.getInventory().contains(id) || wielded.includes(id));
 }
 
 /** A saw, the crystal saw or Amy's saw, carried or (Amy's) in the off-hand. */
@@ -997,6 +1015,15 @@ function buildFurniture(player, house, target, buildable) {
 function completeFurniture(player, house, target, buildable, materials) {
   useMaterials(player, buildable, materials);
   player.getSkillManager().addExperiences(Skill.CONSTRUCTION, buildable.experience);
+  // Wiki (Spirit tree (Construction), Spirit tree & fairy ring): a planted spirit tree gives Farming experience too.
+  if (buildable.farmingExperience > 0) player.getSkillManager().addExperiences(Skill.FARMING, buildable.farmingExperience);
+  // Wiki (Mithril armour (Construction), Rune case space): 25 experience in the piece's second skill too.
+  if (buildable.secondSkillExperience > 0) {
+    for (const requirement of buildable.secondaryLevels ?? []) {
+      const skill = Skill.values().find(candidate => candidate.getClientId() === requirement.statId);
+      if (skill) player.getSkillManager().addExperiences(skill, buildable.secondSkillExperience);
+    }
+  }
   GardenPlants.complete(player, buildable);
   house.setFurniture(target, buildable);
   api.emitCustomEvent("construction:furniture-built", { player, buildable });
@@ -1113,7 +1140,7 @@ function onObject(event) {
 function onItemOnObject(event) {
   if (Altars.offerHouseBones(event) || Storage.storeItemOnFurniture(event)) return true;
   if ((event.itemId === TINDERBOX_ID || event.itemId === ItemIdentifiers.MARRENTILL) && Altars.lightHouseBurner(event)) return true;
-  if (event.itemId !== HAMMER_ID && event.itemId !== SAW_ID) return false;
+  if (!HAMMERS.includes(event.itemId) && event.itemId !== SAW_ID) return false;
   return openBuildMenu(event);
 }
 
@@ -1458,4 +1485,4 @@ function attach(api) {
   api.onPlayerLogout(logoutHouse);
 }
 
-Object.assign(module.exports, { enterHouse, visitHouse, storedAmount, houseStateFor, releaseHouse, canVisitHouse, syncHouseOptions, isSeatedForDinner, houseFor, saveHouse, rebuildHouse, isBuildingMode, constructionLevel, getBuildMaterials, useMaterial, useMaterials, hammer, hotspotChoices, furnitureCreationText, processOccupant, leftHouse, attach });
+Object.assign(module.exports, { completeFurniture, enterHouse, visitHouse, storedAmount, houseStateFor, releaseHouse, canVisitHouse, syncHouseOptions, isSeatedForDinner, houseFor, saveHouse, rebuildHouse, isBuildingMode, constructionLevel, hasHammer, getBuildMaterials, useMaterial, useMaterials, hammer, hotspotChoices, furnitureCreationText, processOccupant, leftHouse, attach });

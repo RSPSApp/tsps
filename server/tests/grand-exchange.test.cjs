@@ -10,6 +10,7 @@ const { CacheDefinitions } = require('../dist/game/cache/CacheDefinitions');
 const { GameConstants } = require('../dist/game/GameConstants');
 const { Item } = require('../dist/game/model/Item');
 const { Inventory } = require('../dist/game/model/container/impl/Inventory');
+const { Bank } = require('../dist/game/model/container/impl/Bank');
 const { Player } = require('../dist/game/entity/impl/player/Player');
 const { PlayerStatus } = require('../dist/game/model/PlayerStatus');
 const { ClientConnection } = require('../dist/net/NetworkBuilder');
@@ -379,6 +380,9 @@ function exchange(t, config = {}, realSender = null) {
   };
   const inventory = new Inventory(p);
   p.getInventory = () => inventory;
+  // An empty bank: a buy the inventory cannot cover looks there next.
+  const banks = Array.from({ length: Bank.TOTAL_BANK_TABS }, () => new Bank(p));
+  p.getBank = tab => banks[tab];
   t.mock.method(CacheDefinitions, 'hasItem', id => definitions.has(id));
   t.mock.method(CacheDefinitions, 'getItem', id => ({ name: `Item ${id}` }));
   t.mock.method(GameConstants.PLAYER_PERSISTENCE, 'save', () => {});
@@ -865,4 +869,50 @@ test('walking with no prompt and nothing open sends nothing', () => {
   const { player, frames } = promptWithNoInterface(() => {});
   Player.prototype.closeInterruptibleInterfaces.call(player);
   assert.equal(frames.length, 0);
+});
+
+test('fee descriptions and native rate follow the selected item on setup and details', t => {
+  const { p, inventory, place, click, calls, hooks } = exchange(t);
+  const taxed = 19001;
+  const exempt = 19002;
+  define(taxed, { getName: () => 'Steel platelegs', getGrandExchangeValue: () => 309 });
+  define(exempt, { getName: () => 'Teleport to house' });
+  inventory.add(new Item(taxed, 1), false);
+  inventory.add(new Item(exempt, 2), false);
+  place(true, taxed, 1, 309);
+  const description = (component) => calls.findLast(c => c.name === 'sendInterfaceScript' &&
+    c.args[0] === 5730 && c.args[1][2] === ((465 << 16) | component));
+  assert.equal(description(27).args[1][1], 'Convenience fee: 2%');
+  assert.equal(description(16).args[1][1], 'Convenience fee: 2%');
+  assert.equal(calls.findLast(c => c.name === 'sendInterfaceScript' && c.args[0] === 786).args[3][13139], 20);
+  click(4);
+  hooks.onItemFirstAction({ player: p, itemId: exempt, slot: inventory.getSlotForItemId(exempt) });
+  assert.equal(description(27).args[1][1], 'Convenience fee: None');
+  assert.equal(calls.findLast(c => c.name === 'sendVarbit' && c.args[0] === 13139).args[1], 0);
+  click(4);
+  click(7);
+  assert.equal(description(16).args[1][1], 'Convenience fee: 2%');
+  assert.equal(calls.findLast(c => c.name === 'sendVarbit' && c.args[0] === 13139).args[1], 20);
+  click(4);
+  click(8, 3);
+  p.syntaxAction.execute(String(taxed));
+  assert.equal(description(27).args[1][1], '', 'buying has no seller fee label');
+});
+
+test('fee Info uses the native overlay and closes without changing the offer', t => {
+  const { p, inventory, click, calls, hooks } = exchange(t);
+  inventory.add(new Item(PRICED, 1), false);
+  hooks.onItemFirstAction({ player: p, itemId: PRICED, slot: 0 });
+  click(29);
+  const popup = calls.findLast(c => c.name === 'sendSubInterface');
+  assert.deepEqual(popup.args, [(465 << 16) | 32, 289, 1]);
+  const text = calls.findLast(c => c.name === 'sendInterfaceScript' && c.args[0] === 4212);
+  assert.ok(text.args[1][0].startsWith('Convenience Fees|The Grand Exchange charges'));
+  assert.ok(text.args[1][0].endsWith('|Close'));
+  assert.equal(p.amountAction.acceptsZero, true);
+  p.amountAction.execute(0);
+  assert.deepEqual(calls.at(-1), { name: 'closeSubInterface', args: [(465 << 16) | 32] });
+  click(30);
+  click(18);
+  assert.equal(calls.at(-1).args[0], 4212, 'existing offer has the same information');
 });

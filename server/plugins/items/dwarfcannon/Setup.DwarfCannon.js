@@ -24,8 +24,6 @@ const MESSAGE = {
 };
 /** Further than this from the cannon and the setup stops where it is (ours). */
 const SETUP_RANGE = 5;
-/** RegionManager.blocked()'s solid flags: a loc or floor decoration fills the tile. */
-const SOLID = 0x1280100;
 /** Wall flags by the edge (or corner) they sit on: N, E, S, W, then NW, NE, SE, SW. */
 const WALL = { N: 0x2, E: 0x8, S: 0x20, W: 0x80, NW: 0x1, NE: 0x4, SE: 0x10, SW: 0x40 };
 
@@ -44,7 +42,7 @@ function obstructed(sw) {
   return footprint(sw).some((tile) => {
     const dx = tile.getX() - sw.getX(), dy = tile.getY() - sw.getY();
     const n = dy < 2, e = dx < 2, s = dy > 0, w = dx > 0;
-    const inner = SOLID | (n ? WALL.N : 0) | (e ? WALL.E : 0) | (s ? WALL.S : 0) | (w ? WALL.W : 0)
+    const inner = Cannon.core.RegionManager.BLOCKED_MASK | (n ? WALL.N : 0) | (e ? WALL.E : 0) | (s ? WALL.S : 0) | (w ? WALL.W : 0)
       | (n && w ? WALL.NW : 0) | (n && e ? WALL.NE : 0) | (s && e ? WALL.SE : 0) | (s && w ? WALL.SW : 0);
     return (Cannon.core.RegionManager.getClipping(tile.getX(), tile.getY(), tile.getZ(), null) & inner) !== 0;
   });

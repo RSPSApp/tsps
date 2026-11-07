@@ -267,7 +267,7 @@ export class ShortestPathPlugin extends Plugin {
 
     private player(): PlayerSnapshot {
         if (this.deps.player) return this.deps.player();
-        if ((this.osrsClient.bankInventory?.getSlots?.() ?? []).some((slot) => slot.itemId >= 0)) this.bankSeen = true;
+        if ((this.osrsClient.lastKnownBank?.getSlots?.() ?? []).some((slot) => slot.itemId >= 0)) this.bankSeen = true;
         return capturePlayer(this.osrsClient, this.bankSeen);
     }
 

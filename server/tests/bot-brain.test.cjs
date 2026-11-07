@@ -2810,6 +2810,53 @@ test('regional culling waits for an incoming ranged hit before the first attacke
   assert.equal(logouts, 1, 'culling resumes after the incoming hit is gone');
 });
 
+test('regional roamers in the Revenant Caves spawn only where the player can walk to them (#2834)', (t) => {
+  let seed = 2834;
+  t.mock.method(Math, 'random', () => ((seed = Math.imul(seed, 1664525) + 1013904223 >>> 0) / 2 ** 32));
+  const { createBotRegistry } = require('../plugins/bots/runtime/Registry.PlayerBots');
+  const { RegionManager } = require('../dist/game/collision/RegionManager');
+  const { RsmodRouteFinding } = require('../dist/game/model/movement/path/RsmodRouteFinding');
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  RegionManager.init();
+  RegionManager.loadMapFiles(3226, 10140);
+  const route = new RsmodRouteFinding((x, y, z, area) => RegionManager.getClipping(x, y, z, area));
+  const walkable = (x, y) => {
+    const path = route.findRoute({ level: 0, srcX: x, srcY: y, srcSize: 1, destX: 3226, destY: 10140, privateArea: null, moveNear: false });
+    return path.success && !path.alternative;
+  };
+  assert.equal(RegionManager.blocked(new Location(3249, 10120), null), false, 'the cave void is not flagged');
+  assert.equal(walkable(3249, 10120), false, 'so it is only unreachable');
+  const human = nativeFollowCombatPlayer(t, 'rev-cave-human', new Location(3226, 10140));
+  human.setPlayerBot(false);
+  let regionsUpdated;
+  const snapshot = { regions: [{ key: '0:50:158', regionX: 50, regionY: 158, z: 0 }] };
+  const registry = createBotRegistry({
+    botApi: { getRegionManager: () => RegionManager, log() {}, core: {
+      DisplayNames: { refusal: () => null }, RsmodRouteFinding,
+      World: { getPlayers: () => [human], getAddPlayerQueue: () => [] },
+    } },
+    botCount: 0, wildernessRoamerBotCount: 16, wildernessActiveRegionBotsPerRegion: 16,
+    spawn: new Location(3222, 3218), behaviorMode: { PVP: 'pvp' },
+    worldGetPlayerByName: () => null,
+    createBotPlayer: (name, location) => nativeFollowCombatPlayer(t, name, location),
+    createInitialState: () => ({ pvp: {} }), applyInitialPvpLoadout: () => true,
+    emitPlayerLogin() {}, ensureBehaviorTaskStarted() {},
+    randomInRange: (min, max) => min + Math.floor(Math.random() * (max - min + 1)),
+    onActiveRegionsUpdated: (handler) => { regionsUpdated = handler; },
+    getActiveRegionSnapshot: () => snapshot,
+  });
+  registry.scheduleInitialSpawn();
+  regionsUpdated(snapshot);
+  t.mock.timers.tick(60000);
+  const caveRoamers = registry.entries.filter(({ state }) => state.roaming.roamBounds?.minY >= 6400);
+  assert.ok(caveRoamers.length > 0, 'regional roamers still spawn in the caves');
+  assert.ok(registry.entries.some(({ player }) => player.getLocation().getY() < 6400), 'persistent surface hotspots remain populated');
+  for (const { player } of caveRoamers) {
+    const at = player.getLocation();
+    assert.ok(walkable(at.getX(), at.getY()), `${player.getUsername()} at ${at.getX()},${at.getY()} is reachable`);
+  }
+});
+
 test('every PvP archetype equips real, wearable, un-noted gear', () => {
   // A noted item and an item with no wear position are both slot -1, so both would silently drop
   // out of the equipment filter and leave the bot half-dressed instead of failing loudly.
@@ -2847,4 +2894,92 @@ test('every PvP archetype equips real, wearable, un-noted gear', () => {
     }
   }
   assert.deepEqual(problems, []);
+});
+
+
+function nativePvpSwitchKit(t, weaponId, spell, staffId) {
+  const { Item } = require('../dist/game/model/Item');
+  const { ItemIdentifiers: ids } = require('../dist/util/ItemIdentifiers');
+  const { Equipment } = require('../dist/game/model/container/impl/Equipment');
+  const { WeaponInterfaceManager } = require('../dist/game/content/combat/WeaponInterfaceManager');
+  const player = nativeFollowCombatPlayer(t, 'switch-kit', new Location(3100, 3550));
+  const target = nativeFollowCombatPlayer(t, 'switch-target', new Location(3101, 3550));
+  player.getEquipment().set(Equipment.WEAPON_SLOT, new Item(weaponId));
+  player.getInventory().setItem(0, new Item(staffId));
+  for (const [i, id] of [ids.AIR_RUNE, ids.FIRE_RUNE, ids.DEATH_RUNE].entries()) {
+    player.getInventory().setItem(i + 1, new Item(id, 100));
+  }
+  player.setAttribute('pvp:current-preset', { getAutocastSpellId: () => spell.spellId() });
+  WeaponInterfaceManager.assign(player);
+  target.getEquipment().set(Equipment.WEAPON_SLOT, new Item(ids.STAFF_OF_AIR));
+  WeaponInterfaceManager.assign(target);
+  return { player, target, state: { pvp: { generatedPrimaryWeaponId: staffId } } };
+}
+
+test('F2P pressure restores the elemental staff and queues magic against melee protection', t => {
+  const { CombatSpells } = require('../dist/game/content/combat/magic/CombatSpells');
+  const { ItemIdentifiers: ids } = require('../dist/util/ItemIdentifiers');
+  const { PrayerHandler } = require('../dist/game/content/PrayerHandler');
+  const { CombatType } = require('../dist/game/content/combat/CombatType');
+  const { initPvpPressureCombatPolicyCoreAccess, maybeRunPressureCombatScript } =
+    require('../plugins/bots/behaviours/policies/PvpPressureCombatPolicy.PlayerBots');
+  initPvpPressureCombatPolicyCoreAccess({
+    getPrayerHandler: () => PrayerHandler,
+    getServerPerf: () => ({ measurePhase: (_, fn) => fn() }),
+  });
+  t.mock.method(Math, 'random', () => 0);
+  for (const weapon of [ids.RUNE_2H_SWORD, ids.RUNE_BATTLEAXE, ids.RUNE_WARHAMMER]) {
+   for (const hp of [20, 99]) {
+    const spell = CombatSpells.FIRE_BLAST, staff = ids.STAFF_OF_FIRE;
+    const h = nativePvpSwitchKit(t, weapon, spell, staff);
+    h.target.setHitpoints(hp);
+    h.target.getPrayerActive()[PrayerHandler.PROTECT_FROM_MELEE] = true;
+    const result = maybeRunPressureCombatScript({ ...h, nowMs: 100000, profile: {
+      id: 'standard', nextHitScriptChance: 1, nextHitStyleSwitchChance: 1,
+    } });
+    assert.equal(result.forcedCombatType, CombatType.MAGIC);
+    assert.equal(h.player.getEquipment().getWeapon().getId(), staff);
+    assert.equal(h.player.getCombat().getCastSpell(), spell);
+    assert.equal(h.player.getCombat().getTarget(), h.target);
+    assert.equal(spell.canCast(h.player, false), true, 'real cast requirements pass after equip');
+   }
+  }
+  for (const protection of [PrayerHandler.PROTECT_FROM_MAGIC, PrayerHandler.PROTECT_FROM_MISSILES]) {
+    const h = nativePvpSwitchKit(t, ids.RUNE_BATTLEAXE, CombatSpells.FIRE_BLAST, ids.STAFF_OF_FIRE);
+    h.target.setHitpoints(20);
+    h.target.getPrayerActive()[protection] = true;
+    const result = maybeRunPressureCombatScript({ ...h, nowMs: 100000, profile: {
+      id: 'standard', nextHitScriptChance: 1, nextHitStyleSwitchChance: 1,
+    } });
+    assert.equal(result.forcedCombatType, CombatType.MELEE, 'unprotected melee finisher stays viable');
+    assert.equal(h.player.getEquipment().getWeapon().getId(), ids.RUNE_BATTLEAXE);
+  }
+});
+
+test('all F2P KO weapons share P2P hold/stow and primary/ordinary weapons stay excluded', t => {
+  const { CombatSpells } = require('../dist/game/content/combat/magic/CombatSpells');
+  const { ItemIdentifiers: ids } = require('../dist/util/ItemIdentifiers');
+  const { trackSpecWeaponHold, maybeSwitchBackToPrimaryWeapon } =
+    require('../plugins/bots/behaviours/policies/PvpSpecialAttackPolicy.PlayerBots');
+  const { SUPPORTED_SPEC_WEAPONS } = require('../plugins/bots/behaviours/policies/PvpCombatRuntimeCache.PlayerBots');
+  t.mock.method(Math, 'random', () => 0);
+  for (const weapon of [ids.RUNE_2H_SWORD, ids.RUNE_BATTLEAXE, ids.RUNE_WARHAMMER, SUPPORTED_SPEC_WEAPONS[0]]) {
+    const h = nativePvpSwitchKit(t, weapon, CombatSpells.FIRE_BLAST, ids.STAFF_OF_FIRE);
+    const pvp = h.state.pvp;
+    assert.equal(trackSpecWeaponHold(pvp, h.player, 1000), false);
+    assert.ok(pvp.specWeaponStowAt >= 16000 && pvp.specWeaponStowAt <= 21000);
+    assert.equal(trackSpecWeaponHold(pvp, h.player, pvp.specWeaponStowAt - 1), false);
+    assert.equal(trackSpecWeaponHold(pvp, h.player, pvp.specWeaponStowAt), true);
+    assert.equal(maybeSwitchBackToPrimaryWeapon({ ...h, nowMs: pvp.specWeaponStowAt }), true);
+    assert.equal(h.player.getEquipment().getWeapon().getId(), ids.STAFF_OF_FIRE);
+    assert.equal(pvp.heldSpecWeaponId, 0);
+    assert.equal(pvp.specWeaponStowAt, 0);
+    assert.equal(trackSpecWeaponHold(pvp, h.player, 50000), false, 'primary excluded');
+  }
+  const h = nativePvpSwitchKit(t, ids.RUNE_SCIMITAR, CombatSpells.FIRE_BLAST, ids.STAFF_OF_FIRE);
+  assert.equal(trackSpecWeaponHold(h.state.pvp, h.player, 1000), false, 'ordinary weapon excluded');
+  assert.equal(maybeSwitchBackToPrimaryWeapon({ ...h, nowMs: 50000 }), false);
+  for (const id of [ids.RUNE_2H_SWORD, ids.RUNE_BATTLEAXE, ids.RUNE_WARHAMMER]) {
+    assert.equal(SUPPORTED_SPEC_WEAPONS.includes(id), false, 'KO lifecycle does not enable special attacks');
+  }
 });

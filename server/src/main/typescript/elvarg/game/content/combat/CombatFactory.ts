@@ -71,6 +71,8 @@ export type SpecialDamageBounds = {
     maximumBonus?: number;
     cap?: number;
     reduction?: number;
+    /** Split the completed maximum across equally sized hits, preserving the remainder. */
+    maximumSplit?: { index: number; count: number };
 };
 
 const getPlayerCombatSpecial = (player: Player): CombatSpecial | null => {
@@ -479,6 +481,12 @@ export class CombatFactory {
             const swap = minimum;
             minimum = maximum;
             maximum = swap;
+        }
+        if (boundsOverride?.maximumSplit) {
+            const count = Math.max(1, Math.trunc(boundsOverride.maximumSplit.count));
+            const index = Math.max(0, Math.min(count - 1, Math.trunc(boundsOverride.maximumSplit.index)));
+            maximum = Math.floor(maximum * (index + 1) / count) - Math.floor(maximum * index / count);
+            minimum = Math.min(minimum, maximum);
         }
         minimum = Math.max(minimum, Math.min(maximum, Math.max(0, minimumFloor)));
         return { minimum: Math.max(0, minimum), maximum: Math.max(0, maximum) };
@@ -1312,6 +1320,9 @@ export class CombatFactory {
         if (!attackerInWilderness || !targetInWilderness) {
             return;
         }
+        const skulls = CombatFactory.wouldSkull(attacker, target);
+        // The target may now hit back without a skull, whatever this attack's damage and before it lands.
+        CombatFactory.recordAttackedBy(target, attacker);
 
         // Wiki (Skull (status)): attacking a player while skulled restarts the 30 minutes, so
         // the skull "cannot disappear during PvP combat". The skull keeps its colour.
@@ -1320,7 +1331,7 @@ export class CombatFactory {
             return;
         }
 
-        if (!CombatFactory.wouldSkull(attacker, target)) {
+        if (!skulls) {
             return;
         }
 
@@ -1352,7 +1363,32 @@ export class CombatFactory {
             return false;
         }
 
+        // Wiki (Skull (status)): "Players who are attacked by another player in the Wilderness can retaliate against
+        // that player without getting skulled themselves" - attacked, so a splash counts, and so does an attack whose
+        // hit is still on its way.
+        if (CombatFactory.wasAttackedBy(attacker, target)) {
+            return false;
+        }
+
         return true;
+    }
+
+    /** Who attacked a player in PvP, by username (a relog doesn't forget it), and on which process cycle. */
+    private static readonly ATTACKED_BY_ATTRIBUTE = "combat:pvp-attacked-by";
+    /** As long as kill credit's damage record (CombatConstants.DAMAGE_CACHE_TIMEOUT). */
+    private static readonly ATTACKED_BY_TICKS = Misc.getTicks(CombatConstants.DAMAGE_CACHE_TIMEOUT / 1000);
+
+    private static recordAttackedBy(target: Player, attacker: Player): void {
+        const existing = target.getAttribute(CombatFactory.ATTACKED_BY_ATTRIBUTE);
+        const record: Map<string, number> = existing instanceof Map ? existing : new Map<string, number>();
+        if (record !== existing) target.setAttribute(CombatFactory.ATTACKED_BY_ATTRIBUTE, record);
+        record.set(attacker.getUsername(), World.getProcessCycle());
+    }
+
+    private static wasAttackedBy(player: Player, other: Player): boolean {
+        const record = player.getAttribute(CombatFactory.ATTACKED_BY_ATTRIBUTE);
+        const at = record instanceof Map ? record.get(other.getUsername()) : undefined;
+        return typeof at === "number" && World.getProcessCycle() - at < CombatFactory.ATTACKED_BY_TICKS;
     }
 
     public static readonly PVP_SKULL_SECONDS = 30 * 60;
@@ -1755,23 +1791,43 @@ export class CombatFactory {
             // Otherwise the device recovered it before it hit the floor.
         }
 
+        // Fixed at the shot: paying from the pack can empty this very object in place (an unequip moves it there).
+        const ammoId = ammoItem.getId();
+        const firedMeta = ammoItem.getMeta();
+        const ammoMeta = JSON.stringify(firedMeta ?? null);
+        const sameAmmo = (item: Item | null | undefined) => !!item && item.getId() === ammoId
+            && JSON.stringify(item.getMeta() ?? null) === ammoMeta;
         const apply = () => {
-            // A swap mid-flight moved this stack out of the slot; don't touch the new one.
-            if (player.getEquipment().get(slot) !== ammoItem) {
+            const consumed = lost + dropped;
+            const worn = player.getEquipment().get(slot);
+            if (worn !== ammoItem && !sameAmmo(worn)) {
+                // Unequipping mid-flight puts this stack in the pack, and re-equipping wears a copy: the shot is
+                // still paid from the same ammo. A different stack swapped in is left alone.
+                const inventory = player.getInventory();
+                const at = inventory.getItems().findIndex(sameAmmo);
+                if (at < 0 || consumed <= 0) {
+                    return;
+                }
+                const paid = Math.min(consumed, inventory.getItems()[at].getAmount());
+                inventory.deleteAtSlot(at, paid);
+                if (dropped > 0 && pos) {
+                    ItemOnGroundManager.registerLocation(player, new Item(ammoId, Math.min(dropped, paid), firedMeta), pos);
+                }
                 return;
             }
 
             if (dropped > 0 && pos) {
-                ItemOnGroundManager.registerLocation(player, new Item(ammoItem.getId(), dropped), pos);
+                // The dropped shots keep the stack's meta: preset ammo (PvP presets) stays untradeable on the floor
+                // and comes back as preset ammo, owner-only like any untradeable ground item.
+                ItemOnGroundManager.registerLocation(player, new Item(worn.getId(), dropped, worn.getMeta()), pos);
             }
 
-            const consumed = lost + dropped;
             if (consumed > 0) {
-                ammoItem.decrementAmountBy(consumed);
+                worn.decrementAmountBy(consumed);
             }
 
             // If we are at 0 ammo remove the item from the equipment completely.
-            if (ammoItem.getAmount() == 0) {
+            if (worn.getAmount() == 0) {
                 player.sendMessage("You have run out of ammunition!");
                 player.getEquipment().set(slot, new Item(-1));
 

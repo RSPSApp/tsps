@@ -63,6 +63,8 @@ function player(worn, extra = {}) {
         getInventory: () => ({
             getAmount: (id) => stacks[id] ?? 0,
             deleteNumber: (id, n) => { stacks[id] -= n; },
+            // Charging takes by slot (PoweredStaff.takePlain); the slots follow getItems' order.
+            deleteAtSlot: (slot, n) => { stacks[Object.keys(stacks)[slot]] -= n; },
             getItems: () => Object.entries(stacks).map(([id, amount]) => new core.Item(Number(id), amount)),
             getAddableAmount: (item) => item.getAmount(),
             addItem: (item) => { stacks[item.getId()] = (stacks[item.getId()] ?? 0) + item.getAmount(); },

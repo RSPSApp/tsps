@@ -7,22 +7,24 @@
  * Gianne jnr. hands out an easy (6 minutes, coins tip) or hard (11 minutes, item tip) order:
  * a random gnome dish or cocktail and a random customer, plus an Aluft Aloft box carrying the
  * details. The dish is handed over with item-on-NPC (Delivery.GnomeRestaurant.js) within the
- * limit; the box must be held. Declining a tier locks it for 5 minutes (the wiki says 5:30,
- * the task 5:00). 12 credits earn a reward token. Only one order at a time; logout, death and
+ * limit; the box must be held. Confirming refusal locks hard orders for 5:30 (Wiki mechanics);
+ * easy orders retain the transcript's five-minute wait. 12 credits earn a reward token. Only
+ * one order at a time; logout, death and
  * disconnection abandon it with no reward.
  *
- * The wiki tutorial (Aluft Gianne snr. + Blurberry recommendations) is not implemented, so
- * the gate is just the documented 29 Cooking.
+ * Aluft Gianne snr. and Blurberry provide the tutorial recommendations before orders.
  */
 
 const DATA = require("./data/gnome-restaurant-orders.json");
+const Tutorial = require("./Tutorial.GnomeRestaurant");
 
 const GIANNE_NAME = "Gianne jnr.";
 const BOX_NAME = "Aluft Aloft box";
 const TIER_EASY = "easy";
 const TIER_HARD = "hard";
 const MIN_COOKING = 29;
-const LOCKOUT_MS = 300_000;
+const EASY_LOCKOUT_MS = 300_000;
+const HARD_LOCKOUT_MS = 330_000;
 const CREDITS_PER_TOKEN = 12;
 const MAX_CREDITS = 120;
 const CREDITS_ATTRIBUTE = "gnome-restaurant:credits";
@@ -31,6 +33,7 @@ const MS_PER_MINUTE = 60_000;
 
 const ALREADY_LINE = "You already have a delivery on the go. Check your Aluft Aloft box if you've forgotten the details.";
 const REFUSAL_LINE = "I'm afraid you don't have the required cooking experience for this job. If you want to work for me you'll have to train up to level 29 Cooking.";
+const TRAINING_LINE = "First of all you will need some basic Gnome Cooking and Cocktail making training. Go and talk to my Father, Aluft Gianne snr. and Blurberry, if you haven't already, and they'll tell you what you need to do.";
 const NO_ORDERS_LINE = "I'm afraid I have no orders for you at the moment - come back in";
 const OFFER_TITLE = "Do you want to take on an easy or a hard delivery?";
 const TAKE_TITLE = "Take this order?";
@@ -40,6 +43,10 @@ const CHANGED_MIND = "I've changed my mind, there's something else I need to do 
 const TAKE_EASY = "Easy-peasy! I'll get started.";
 const TAKE_HARD = "Easy-peasy! I'm on the job.";
 const DECLINE_OPTION = "I don't think I can complete this one.";
+const DECLINE_HARD_OPTION = "I won't be able to do this order.";
+const REFUSE_TITLE = "Do you want to refuse this order";
+const TAKE_AFTER_WARNING = "I'll take this order then!";
+const CONFIRM_REFUSAL = "Yes I'm sure.";
 const START_LINE = "You'd better get a move on then. The clock is already running!";
 
 let api;
@@ -156,11 +163,18 @@ function questOwnsDialogue(event) {
   return selection != null;
 }
 
+/** The three entry paths and their delayed callbacks share the same prerequisites. */
+function canOrder(player) {
+  if (sessions.has(player)) { npcSays(player, ALREADY_LINE); return false; }
+  if (cookingLevel(player) < MIN_COOKING) { npcSays(player, REFUSAL_LINE); return false; }
+  if (!Tutorial.completed(player)) { npcSays(player, TRAINING_LINE); return false; }
+  return true;
+}
+
 function talkTo(event) {
   if (questOwnsDialogue(event)) return false;
   const { player } = event;
-  if (sessions.has(player)) return npcSays(player, ALREADY_LINE);
-  if (cookingLevel(player) < MIN_COOKING) return npcSays(player, REFUSAL_LINE);
+  if (!canOrder(player)) return;
   const available = [TIER_EASY, TIER_HARD].filter((tier) => !isLocked(player, tier));
   if (!available.length) return npcSays(player, `${NO_ORDERS_LINE} ${remainingText(player, TIER_EASY, TIER_HARD)}.`);
   const pairs = available.map((tier) => [
@@ -180,23 +194,32 @@ function getHardJob(event) {
 }
 
 function getJob({ player }, tier) {
-  if (sessions.has(player)) return npcSays(player, ALREADY_LINE);
-  if (cookingLevel(player) < MIN_COOKING) return npcSays(player, REFUSAL_LINE);
+  if (!canOrder(player)) return;
   offerOrder(player, tier);
 }
 
 function offerOrder(player, tier, rng = Math.random) {
-  if (sessions.has(player)) return npcSays(player, ALREADY_LINE);
+  if (!canOrder(player)) return;
   if (isLocked(player, tier)) return npcSays(player, lockedLine(player, tier));
   const order = rollOrder(tier, rng);
   npcThenPrompt(player, [`${order.npcName} wants a ${order.itemName}.`, order.hint], TAKE_TITLE, [
     [tier === TIER_EASY ? TAKE_EASY : TAKE_HARD, () => acceptOrder(player, order)],
-    [DECLINE_OPTION, () => declineOrder(player, tier)],
+    [tier === TIER_EASY ? DECLINE_OPTION : DECLINE_HARD_OPTION, () => confirmDecline(player, order)],
+  ]);
+}
+
+function confirmDecline(player, order) {
+  const warning = order.tier === TIER_EASY
+    ? "Are you sure you want to turn this order down, you'll have to wait 5 minutes before I can give you another easy order. I may have a hard one available for you though..."
+    : "Are you sure you want to turn this order down, you'll have to wait 5 minutes for another hard order, although I may be able to give you an easy one.";
+  npcThenPrompt(player, [warning], REFUSE_TITLE, [
+    [TAKE_AFTER_WARNING, () => acceptOrder(player, order)],
+    [CONFIRM_REFUSAL, () => declineOrder(player, order.tier)],
   ]);
 }
 
 function acceptOrder(player, order) {
-  if (sessions.has(player)) return npcSays(player, ALREADY_LINE);
+  if (!canOrder(player)) return;
   const inventory = player.getInventory();
   if (inventory.getFreeSlots() < 1) {
     player.sendMessage("You need a free inventory space to carry your delivery box.");
@@ -214,7 +237,9 @@ function acceptOrder(player, order) {
 }
 
 function declineOrder(player, tier) {
-  const lockouts = { ...lockoutsOf(player), [tier]: Date.now() + LOCKOUT_MS };
+  // Spoken warnings round to five minutes; the Wiki specifies 5:30 for hard refusals.
+  const duration = tier === TIER_HARD ? HARD_LOCKOUT_MS : EASY_LOCKOUT_MS;
+  const lockouts = { ...lockoutsOf(player), [tier]: Date.now() + duration };
   player.setAttribute(LOCKOUTS_ATTRIBUTE, lockouts);
   const line = tier === TIER_EASY
     ? "Fine, your loss. If you want another easy job, come back in five minutes and maybe I'll be able to find you one."

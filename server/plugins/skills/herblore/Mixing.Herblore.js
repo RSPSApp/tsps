@@ -12,35 +12,8 @@ const UPGRADE_LEVEL_MESSAGE = (level) => `You need level ${level} Herblore to up
 /** Super antifire before Dragon Slayer II (rsprox captures). */
 const SUPER_ANTIFIRE_QUEST_MESSAGE = "You don't know how to make super antifire potions yet. Maybe someone can teach you.";
 
-const PRESET_REFUSAL = "Preset items cannot be used for this.";
-
-/** Preset, untradeable and unbankable copies keep their restrictions, so a mix never takes them. */
-function restricted(item) {
-  const { Item } = Common.core;
-  return item.isPresetItem?.() === true
-    || item.getMetaValue?.(Item.PRESET_META) === true
-    || item.getMetaValue?.(Item.UNTRADEABLE_META) === true
-    || item.getMetaValue?.(Item.UNBANKABLE_META) === true;
-}
-
-/** How many of `id` the inventory holds as unrestricted copies. */
-function plainAmount(inventory, id) {
-  return inventory.getItems().reduce((sum, item) => (item && item.getId() === id && !restricted(item) ? sum + item.getAmount() : sum), 0);
-}
-
-/** Takes `count` unrestricted copies of `id`, by slot, so a restricted copy of the same id stays put. */
-function takePlain(inventory, id, count) {
-  let left = count;
-  inventory.getItems().forEach((item, slot) => {
-    if (left <= 0 || !item || item.getId() !== id || restricted(item)) return;
-    const take = Math.min(item.getAmount(), left);
-    inventory.deleteAtSlot(slot, take, false);
-    left -= take;
-  });
-}
-
 function hasIngredients(inventory, recipe) {
-  return recipe.ingredients.every(({ id, count }) => plainAmount(inventory, id) >= count);
+  return recipe.ingredients.every(({ id, count }) => Common.plainAmount(inventory, id) >= count);
 }
 
 /** Whether restricted copies are all that keeps the inventory from the recipe. */
@@ -75,8 +48,8 @@ function makeOne(player, recipe) {
   };
   Common.api.emitCustomEvent("herblore:mix", mix);
   // A listener may have changed what is taken: it still has to be there as unrestricted copies.
-  if (!mix.consume.every(({ id, count }) => count <= 0 || plainAmount(inventory, id) >= count)) return false;
-  for (const { id, count } of mix.consume) if (count > 0) takePlain(inventory, id, count);
+  if (!mix.consume.every(({ id, count }) => count <= 0 || Common.plainAmount(inventory, id) >= count)) return false;
+  for (const { id, count } of mix.consume) if (count > 0) Common.takePlain(inventory, id, count);
   inventory.refreshItems();
   inventory.addItem(new Common.core.Item(mix.productId, 1));
   for (const { id, count } of mix.returns) if (count > 0) inventory.addItem(new Common.core.Item(id, count));
@@ -142,7 +115,7 @@ function chooseRecipe(player, recipes) {
   const recipe = able.find((candidate) => hasIngredients(player.getInventory(), candidate));
   if (!recipe) {
     // The right ingredients, but some only as preset copies: refuse rather than turn them into plain ones.
-    if (able.some((candidate) => onlyRestrictedShort(player.getInventory(), candidate))) player.sendMessage(PRESET_REFUSAL);
+    if (able.some((candidate) => onlyRestrictedShort(player.getInventory(), candidate))) player.sendMessage(Common.PRESET_REFUSAL);
     else Common.mesbox(player, missingIngredients(able[0]));
   }
   return recipe ?? null;
@@ -150,7 +123,7 @@ function chooseRecipe(player, recipes) {
 
 /** How many of the recipe the inventory holds the ingredients for. */
 function makeable(inventory, recipe) {
-  return Math.min(...recipe.ingredients.map(({ id, count }) => Math.floor(plainAmount(inventory, id) / count)));
+  return Math.min(...recipe.ingredients.map(({ id, count }) => Math.floor(Common.plainAmount(inventory, id) / count)));
 }
 
 /**

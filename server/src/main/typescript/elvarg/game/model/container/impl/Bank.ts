@@ -133,6 +133,7 @@ export class Bank extends ItemContainer {
     /** bank_requestedquantity: the remembered X amount. */
     public static readonly REQUESTED_QUANTITY_VARBIT = 3960;
     public static readonly PLACEHOLDER_CHILD = 40; // bankmain:placeholder
+    public static readonly DEPOSIT_CONTAINERS_CHILD = 45; // bankmain:depositcontainers
     public static readonly DEPOSIT_INVENTORY_CHILD = 47; // bankmain:depositinv
     public static readonly DEPOSIT_WORN_CHILD = 49; // bankmain:depositworn
     /** bankmain:incinerator_target (0x36), a drop target that destroys the dragged bank stack. */
@@ -577,7 +578,26 @@ export class Bank extends ItemContainer {
         const targetGroup = drag.targetWidgetId >>> 16, targetChild = drag.targetWidgetId & 0xffff;
         const fromBank = sourceGroup === Bank.MAIN_INTERFACE_ID && sourceChild === Bank.ITEMS_CHILD;
         const fromInventory = sourceGroup === Bank.SIDE_INTERFACE_ID && sourceChild === Bank.SIDE_ITEMS_CHILD;
-        if (!(fromBank || fromInventory) || !Bank.isOpen(player)) return false;
+        const fromTab = sourceGroup === Bank.MAIN_INTERFACE_ID && sourceChild === Bank.TABS_CHILD;
+        if (!(fromBank || fromInventory || fromTab) || !Bank.isOpen(player)) return false;
+
+        if (fromTab) {
+            const from = drag.sourceSlot - Bank.TAB_BUTTON_SLOT_OFFSET;
+            const to = drag.targetSlot - Bank.TAB_BUTTON_SLOT_OFFSET;
+            const count = Bank.getTabCount(player);
+            // Cache script 512 accepts populated custom tabs only, not the main or new-tab slots.
+            if (targetGroup !== Bank.MAIN_INTERFACE_ID || targetChild !== Bank.TABS_CHILD
+                || !Number.isInteger(from) || !Number.isInteger(to)
+                || from < 1 || to < 1 || from > count || to > count || from === to) return true;
+            const source = player.getBank(from);
+            player.setBank(from, player.getBank(to));
+            player.setBank(to, source);
+            const viewed = player.getCurrentBankTab();
+            if (viewed === from || viewed === to) Bank.viewTab(player, viewed === from ? to : from);
+            else player.getBank(0).refreshItems();
+            GameConstants.PLAYER_PERSISTENCE.requestSave(player, "bank-tab-reorder");
+            return true;
+        }
 
         let tab: number | undefined;
         if (targetGroup === Bank.MAIN_INTERFACE_ID && targetChild === Bank.TABS_CHILD) {
@@ -938,6 +958,8 @@ export class Bank extends ItemContainer {
         } else if (packet.childId === Bank.PLACEHOLDER_CHILD) {
             player.setPlaceholders(!player.isPlaceholders());
             sender.sendVarbit(3755, player.isPlaceholders() ? 1 : 0);
+        } else if (packet.childId === Bank.DEPOSIT_CONTAINERS_CHILD) {
+            getPluginManager().emitCustomEvent("bank:empty-containers", { player });
         } else if (packet.childId === Bank.DEPOSIT_INVENTORY_CHILD) Bank.depositItems(player, player.getInventory(), false);
         else if (packet.childId === Bank.DEPOSIT_WORN_CHILD) Bank.depositItems(player, player.getEquipment(), false);
         else return false;

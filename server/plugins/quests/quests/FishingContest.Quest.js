@@ -105,6 +105,17 @@ module.exports = function registerFishingContestQuest(api) {
   const GATE_ATTRIBUTE = "fishing-contest:gate-pass-shown";
   /** Garlic can go in the pipe before or after paying; the stranger moves on entry. */
   const GARLIC_ATTRIBUTE = "fishing-contest:garlic-in-pipe";
+  // Counts successful awards across reconnects; generation invalidates queued casts.
+  const ROUND_ATTRIBUTE = "fishing-contest:round";
+  const EMPTY_ROUND = Object.freeze({ generation: 0, catches: 0, sardines: 0, carps: 0, closed: false });
+  const round = (player) => player.getAttribute(ROUND_ATTRIBUTE) || EMPTY_ROUND;
+  const saveRound = (player, state) => player.setAttribute(ROUND_ATTRIBUTE, state);
+  // Estimated server guidance; the original re-entry wording is not captured.
+  const ROUND_ENDED_MESSAGE = "Your fishing round has ended. Use Bonzo's Pay option to start another round.";
+  const restartRound = (player) => {
+    const previous = round(player);
+    saveRound(player, { ...EMPTY_ROUND, generation: previous.generation + 1 });
+  };
 
   const page = (variant) => ({ page: PAGE, variant });
   const has = (player, itemId) => player.getInventory().getAmount(itemId) > 0;
@@ -256,6 +267,7 @@ module.exports = function registerFishingContestQuest(api) {
       return false;
     }
     player.getInventory().deleteNumber(COINS_ITEM_ID, ENTRY_FEE);
+    restartRound(player);
     quest.setStage(player, STAGE_COMPETING);
     return true;
   }
@@ -283,6 +295,12 @@ module.exports = function registerFishingContestQuest(api) {
       return;
     }
     if (stage >= STAGE_COMPETING) {
+      const previous = round(player);
+      if (stage < STAGE_WON && previous.closed) {
+        // Existing Pay already treats a competitor as paid. Reopening here is
+        // a recovery policy; the retail retry interaction is not established.
+        restartRound(player);
+      }
       // Re-entry after paying before the garlic: the stranger still has to move.
       if (stage < STAGE_GARLIC && player.getAttribute(GARLIC_ATTRIBUTE)) {
         startTranscript(api, player, BONZO_NPC_ID, PAGE, "the-contest-speaking-to-bonzo", enterContestBranch);
@@ -323,6 +341,10 @@ module.exports = function registerFishingContestQuest(api) {
       return;
     }
     if (stage >= STAGE_COMPETING) {
+      if (round(player).closed) {
+        player.sendMessage(ROUND_ENDED_MESSAGE);
+        return;
+      }
       startTranscript(api, player, BONZO_NPC_ID, PAGE, "the-contest-speaking-to-bonzo-after-catching-a-fish",
         (steps) => withoutWinningOption(steps, player));
       return;
@@ -338,7 +360,12 @@ module.exports = function registerFishingContestQuest(api) {
   function handleAction(event) {
     const { player, npcId, stepId } = event;
     if (npcId === BONZO_NPC_ID && stepId === REGULAR_FISH_HANDOVER_ID) {
+      const state = round(player);
+      const stage = quest.getStage(player);
+      if (state.closed || stage < STAGE_COMPETING || stage >= STAGE_WON) return;
       player.getInventory().deleteNumber(RAW_SARDINE_ITEM_ID, 1);
+      saveRound(player, { ...state, sardines: Math.max(0, state.sardines - 1),
+        closed: true, generation: state.generation + 1 });
       return;
     }
     if (npcId === BONZO_NPC_ID && stepId === MOVE_SPOT_ACTION_ID) {
@@ -348,6 +375,8 @@ module.exports = function registerFishingContestQuest(api) {
     }
     if (npcId === BONZO_NPC_ID && stepId === TROPHY_MESSAGE_ID) {
       if (quest.getStage(player) >= STAGE_WON) return;
+      const state = round(player);
+      saveRound(player, { ...state, closed: true, generation: state.generation + 1 });
       // Bonzo takes every raw giant carp the player carries.
       const carps = amount(player, RAW_GIANT_CARP_ITEM_ID);
       if (carps > 0) player.getInventory().deleteNumber(RAW_GIANT_CARP_ITEM_ID, carps);
@@ -465,8 +494,34 @@ module.exports = function registerFishingContestQuest(api) {
       (equipment?.contains(FISHING_ROD_ITEM_ID) ?? false) || (equipment?.contains(PEARL_FISHING_ROD_ITEM_ID) ?? false);
   }
 
+  /** Complete the transaction once, then replay only the existing result lines. */
+  function finishRound(player, state) {
+    const inventory = player.getInventory();
+    const sardines = Math.min(state.sardines, amount(player, RAW_SARDINE_ITEM_ID));
+    const carps = Math.min(state.carps, amount(player, RAW_GIANT_CARP_ITEM_ID));
+    saveRound(player, { ...state, closed: true, generation: state.generation + 1 });
+    if (sardines) inventory.deleteNumber(RAW_SARDINE_ITEM_ID, sardines);
+    if (carps) inventory.deleteNumber(RAW_GIANT_CARP_ITEM_ID, carps);
+    if (carps) {
+      if (!has(player, FISHING_TROPHY_ITEM_ID)) inventory.adds(FISHING_TROPHY_ITEM_ID, 1);
+      quest.setStage(player, STAGE_WON);
+    }
+    startTranscript(api, player, BONZO_NPC_ID, PAGE, "the-contest-speaking-to-bonzo-after-catching-a-fish", (steps) => {
+      const regular = steps.find((step) => step.id === "H12Vw3")?.steps ?? [];
+      const choices = steps.find((step) => step.type === "choice")?.options ?? [];
+      const winning = choices.find((option) => /big fish/i.test(option.text))?.steps ?? [];
+      const handover = carps ? winning.findIndex((step) => step.id === "YAG_64") :
+        regular.findIndex((step) => step.id === REGULAR_FISH_HANDOVER_ID);
+      const tail = handover < 0 ? [] : (carps ? winning : regular).slice(handover);
+      // The transaction has already happened: message IDs would run it again.
+      return tail.map(({ id, ...step }) => step);
+    });
+  }
+
   /** One contest cast: animation now, the fish lands a few ticks later. */
   function startContestCast(player, npc, fishId, caughtLine) {
+    const initial = round(player);
+    if (initial.closed) return;
     if (fishingLevel(player) < FISHING_LEVEL) {
       player.sendMessage(`You need a Fishing level of at least ${FISHING_LEVEL} to fish here.`);
       return;
@@ -487,6 +542,8 @@ module.exports = function registerFishingContestQuest(api) {
     player.sendMessage("You begin to fish..");
     player.performAnimation(new Animation(FISHING_ANIMATION));
     TaskManager.submit(new CountdownTask(player, CAST_TICKS, () => {
+      const current = round(player);
+      if (current.closed || current.generation !== initial.generation || quest.getStage(player) >= STAGE_WON || quest.getStage(player) < STAGE_COMPETING) return;
       if (player.isRegistered?.() === false || player.getHitpoints() <= 0) return;
       if (!player.getLocation().isWithinDistance(spot, 2)) return;
       if (!has(player, RED_VINE_WORM_ITEM_ID)) return;
@@ -496,8 +553,13 @@ module.exports = function registerFishingContestQuest(api) {
       }
       player.getInventory().deleteNumber(RED_VINE_WORM_ITEM_ID, 1);
       player.getInventory().addItem(new Item(fishId, 1));
+      const state = { ...current, catches: current.catches + 1,
+        sardines: current.sardines + (fishId === RAW_SARDINE_ITEM_ID ? 1 : 0),
+        carps: current.carps + (fishId === RAW_GIANT_CARP_ITEM_ID ? 1 : 0) };
+      saveRound(player, state);
       player.sendMessage(caughtLine);
       player.performAnimation(Animation.DEFAULT_RESET_ANIMATION);
+      if (state.catches === 3) finishRound(player, state);
     }));
   }
 
@@ -513,6 +575,10 @@ module.exports = function registerFishingContestQuest(api) {
     }
     if (stage < STAGE_COMPETING) {
       startTranscript(api, player, BONZO_NPC_ID, PAGE, "the-contest-fishing-before-entering-the-competition");
+      return;
+    }
+    if (round(player).closed) {
+      player.sendMessage(ROUND_ENDED_MESSAGE);
       return;
     }
     if (npcId === BIG_DAVE_SPOT_NPC_ID) {
@@ -629,6 +695,7 @@ module.exports = function registerFishingContestQuest(api) {
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
   api.persistAttribute(GARLIC_ATTRIBUTE);
+  api.persistAttribute(ROUND_ATTRIBUTE, EMPTY_ROUND);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onCustomEvent("npc-dialogue:action", handlePassMessage);

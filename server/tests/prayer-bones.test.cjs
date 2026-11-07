@@ -356,7 +356,10 @@ test("real Telegrab rejects Bull bones before consuming runes or scheduling a pr
   t.mock.method(listener, "runeCosts", () => []);
   t.mock.method(listener, "hasRunes", () => true);
   t.mock.method(listener, "consumeRunes", () => { consumed++; });
-  t.mock.method(listener, "findVisibleGroundItem", () => ({ getItem: () => ({ getId: () => Items.BULL_BONES }) }));
+  t.mock.method(listener, "findVisibleGroundItem", () => ({
+    getItem: () => ({ getId: () => Items.BULL_BONES }),
+    getPosition: () => who.getLocation().clone(),
+  }));
   t.mock.method(TaskManager, "submit", () => { scheduled++; });
   t.mock.method(Projectile.prototype, "sendProjectile", () => { projectile++; });
   t.mock.method(Sounds, "sendSound", () => {});

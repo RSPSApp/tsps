@@ -123,6 +123,29 @@ test("five Barrows tablets: one essence and the runes each, 90 XP each, every 4 
   assert.match(f.messages().at(-1), /^You do not have enough (Law|Soul|Blood) Runes to cast this spell\.$/);
 });
 
+test("preset runes make no tablet: only plain runes pay for a tradeable teletab, as the study's sphere", () => {
+  const f = fixture();
+  give(f, [[I.DARK_ESSENCE_BLOCK, 2], [I.SOUL_RUNE, 4], [I.BLOOD_RUNE, 2]]);
+  const law = new core.Item(I.LAW_RUNE, 4);
+  for (const meta of [core.Item.UNTRADEABLE_META, core.Item.UNBANKABLE_META, core.Item.PRESET_META]) law.setMetaValue(meta, true);
+  f.player.getInventory().add(law); // the law runes are a preset's
+  study(f);
+  click(f, 19 + barrowsTab());
+  click(f, 6);
+  click(f, 14);
+  run(10);
+  assert.equal(f.player.getInventory().getAmount(I.BARROWS_TELEPORT), 0, "no tablet from preset law runes");
+  assert.equal(f.player.getInventory().getAmount(I.LAW_RUNE), 4, "the preset runes stay");
+  give(f, [[I.LAW_RUNE, 2]]); // plain ones
+  study(f);
+  click(f, 19 + barrowsTab());
+  click(f, 6);
+  click(f, 14);
+  run(10);
+  assert.equal(f.player.getInventory().getAmount(I.BARROWS_TELEPORT), 1, "one tablet from the plain law runes");
+  assert.equal(f.player.getInventory().getAmount(I.LAW_RUNE), 4, "and the preset ones are still there");
+});
+
 test("the Magic level is the tablet's, and Create-last remembers the Arceuus lectern's own choice", () => {
   const low = fixture({ magic: 82 });
   give(low, [[I.DARK_ESSENCE_BLOCK, 1], ...BARROWS_RUNES()]);

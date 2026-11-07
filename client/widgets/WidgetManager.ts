@@ -175,6 +175,12 @@ export class WidgetManager {
     private groupToContainerUid: Map<number, number> = new Map();
 
     readonly groupLoadedListeners = new Set<(groupId: number) => void>();
+    /**
+     * A sub-interface open of a group that was already loaded (the same dialogue group re-mounted
+     * for its next page). Together with `groupLoadedListeners` this is every interface open, as
+     * RuneLite's WidgetLoaded sees it.
+     */
+    readonly groupRemountedListeners = new Set<(groupId: number) => void>();
     readonly interfaceClosedListeners = new Set<(groupId: number, modalMode: number, unload: boolean) => void>();
 
     onLoadListener?: (scriptId: number, sourceWidget: WidgetNode) => void;
@@ -203,7 +209,7 @@ export class WidgetManager {
     canvasHeight: number = 0;
     private pendingRootOnLoad: number = -1;
 
-    private notifyInterfacesClosed(includeLoadedGroups = false): void {
+    private notifyInterfacesClosed(includeLoadedGroups = false, retainedGroups: ReadonlySet<number> = new Set()): void {
         const groupIds = new Set<number>();
         if (includeLoadedGroups) {
             for (const groupId of this.groups.keys()) {
@@ -217,6 +223,7 @@ export class WidgetManager {
             groupIds.add(parent.group);
         }
         for (const groupId of groupIds) {
+            if (retainedGroups.has(groupId)) continue;
             this.onInterfaceClose?.(groupId);
             for (const listener of this.interfaceClosedListeners) listener(groupId, 0, includeLoadedGroups);
         }
@@ -1823,8 +1830,14 @@ export class WidgetManager {
      * This loads the interface and triggers onLoad scripts.
      * Does NOT clear widget caches - loaded groups persist in memory
      */
-    setRootInterface(groupId: number): WidgetGroupInstance | undefined {
-        this.notifyInterfacesClosed();
+    setRootInterface(groupId: number, transfers?: ReadonlyMap<number, number>): WidgetGroupInstance | undefined {
+        // A layout transfer keeps the InterfaceParent and its widgets alive. In particular,
+        // bank onLoad deletes/recreates dynamic item slots; replaying an open is not a move.
+        const retained = [...this.interfaceParents].flatMap(([target, parent]) => {
+            const destination = transfers?.get(target);
+            return destination === undefined ? [] : [[destination, parent] as const];
+        });
+        this.notifyInterfacesClosed(false, new Set(retained.map(([, parent]) => parent.group)));
 
         // Do NOT clear all caches here. Widgets stay loaded in memory.
         // Only clear special widget references and interface parents for the new root.
@@ -1837,6 +1850,10 @@ export class WidgetManager {
         // Clear mounted sub-interfaces (they belong to the old root)
         this.interfaceParents.clear();
         this.groupToContainerUid.clear();
+        for (const [target, parent] of retained) {
+            this.interfaceParents.set(target, parent);
+            this.groupToContainerUid.set(parent.group, target);
+        }
         this.timerWidgetPaths = undefined;
         // Mounted interfaces keep their server flags when only the gameframe changes (e.g. an open bank).
         const gameframes = [161, 164, 165, 548, 601];
@@ -1872,6 +1889,16 @@ export class WidgetManager {
         } else {
             this.pendingRootOnLoad = groupId;
         }
+
+        for (const [, parent] of retained) {
+            for (const root of this.getAllGroupRoots(parent.group)) {
+                const width = root.width, height = root.height;
+                this.invalidateWidget(root, "interface-transfer");
+                this.ensureLayout(root);
+                if (root.width !== width || root.height !== height) this.triggerOnResize(root);
+            }
+        }
+        if (retained.length) this.triggerOnSubChange();
 
         return instance;
     }
@@ -1974,6 +2001,7 @@ export class WidgetManager {
         // Close any existing interface mounted here. Reopening the same group keeps it loaded.
         const existing = this.interfaceParents.get(targetUid);
         this.closeSubInterface(targetUid, existing?.group !== groupId);
+        const wasLoaded = this.loadedGroups[groupId] === true;
 
         // Load the interface
         const instance = this.getGroup(groupId);
@@ -2069,6 +2097,9 @@ export class WidgetManager {
         // This is critical for OSRS - when sub-interfaces are mounted, the root interface's
         // onSubChange handler runs, which calls toplevel_sidebuttons_enable to show/hide tab icons
         this.triggerOnSubChange();
+
+        // An open that did not load the group (it stayed loaded, as a re-mounted dialogue page does).
+        if (wasLoaded) for (const listener of this.groupRemountedListeners) listener(groupId);
     }
 
     /**

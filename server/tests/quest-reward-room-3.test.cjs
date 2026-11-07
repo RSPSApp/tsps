@@ -38,6 +38,9 @@ before(async () => {
   O = core.ObjectIdentifiers;
   core.RegionManager.init();
   core.RegionManager.loadMapFiles(...HOME);
+  // The real public ground spawns normally load before server startup.
+  const { GroundItemSpawnDefinitionLoader } = require("../dist/game/definition/loader/impl/GroundItemSpawnDefinitionLoader");
+  assert.equal(new GroundItemSpawnDefinitionLoader().load(), true);
   PM.emitServerStartup({});
 });
 after(() => PM.emitServerShutdown({}));
@@ -380,4 +383,206 @@ test("Fenkenstrain: a dropped part comes back; one held or handed in doesn't", a
   await dig(head);
   assert.equal(head.inv.getAmount(I.DECAPITATED_HEAD), 0, "the head with its brain counts as the head");
   assert.ok(head.messages.includes(EMPTY), JSON.stringify(head.messages));
+});
+
+// ------------------------------------------------------------------ Roavar's pickled brain
+
+test("Roavar's public brain sale conserves payment and delivery", async (t) => {
+  const { State } = require("../dist/game/entity/impl/grounditem/ItemOnGround");
+  const { PathFinder } = require("../dist/game/model/movement/path/PathFinder");
+  const brain = I.PICKLED_BRAIN, coins = I.COINS, filler = I.RAKE;
+  const position = new core.Location(3492, 3474, 0);
+  const questState = quest(FENK);
+  const normalize = value => String(value ?? "").replace(/<br>/g, " ").replace(/\s+/g, " ").trim();
+  const lines = [
+    "You're interested in our speciality, I see. Would you like to buy some?",
+    "What exactly is in the jar?",
+    "Pickled brain, my friend. Only 50 gold to you.",
+    "Err...pickled brain from what animal?",
+    "Animal? Don't be disgusting, man! No, this is a human brain - only the best for my customers.",
+  ];
+  assert.equal(brain, 4199);
+  assert.equal(core.ItemDefinition.forId(brain).isStackable(), false);
+  assert.equal(core.NpcDefinition.forId(6527).getName(), "Roavar");
+  core.RegionManager.loadMapFiles(position.getX(), position.getY());
+  assert.equal(core.RegionManager.getRegion(position.getX(), position.getY()).isLoaded(), true);
+
+  for (const mode of ["room", "exact coins", "poor", "already held", "brain held at action", "head held at action", "full bag"]) {
+    await t.test(mode, async (child) => {
+      const f = actor(child, FENK, 0), p = f.p, inv = f.inv;
+      put(f, coins, 0, mode === "poor" ? 49 : mode === "exact coins" ? 50 : 100);
+      if (mode === "already held") put(f, brain, 1);
+      if (mode === "exact coins" || mode === "full bag") fill(f);
+
+      // Use a genuinely reachable neighbouring tile; never put the actor on the table.
+      const sides = [[3492, 3473], [3491, 3474], [3493, 3474], [3492, 3475]];
+      const start = sides.map(([x, y]) => new core.Location(x, y, 0)).find(at => {
+        p.setLocation(at);
+        p.needsPlacement = false;
+        return !core.RegionManager.blocked(at, p.getPrivateArea()) && PathFinder.reachedObj(p, position);
+      });
+      assert.ok(start, "a walkable adjacent tile can reach the public stock");
+      p.setLocation(start);
+      p.needsPlacement = false;
+      assert.equal(p.busy(), false);
+      assert.equal(p.getLastItemPickup().elapsedTime(300), true);
+      const stock = core.ItemOnGroundManager.getGroundItem(p.getUsername(), brain, position, p.getPrivateArea());
+      assert.ok(stock, "canonical loader placed the public display");
+      assert.equal(stock.getOwner(), undefined);
+      assert.equal(stock.getState(), State.SEEN_BY_EVERYONE);
+      assert.equal(stock.isStaticSpawn(), true);
+      assert.equal(stock.getRespawnTimer(), 100);
+      assert.equal(stock.getItem().getAmount(), 1);
+      assert.equal(inv.getFreeSlots(), mode === "full bag" || mode === "exact coins" ? 0 : mode === "already held" ? 26 : 27);
+
+      const stores = id => ({
+        inventory: inv.getAmount(id),
+        equipment: p.getEquipment().getAmount(id),
+        bank: p.getBanks().reduce((sum, bank, tab) => sum + (bank && tab !== core.Bank.BANK_SEARCH_TAB_INDEX ? bank.getAmount(id) : 0), 0),
+        floor: core.World.getItems().filter(item => !item.isPendingRemoval() && item.getOwner() === p.getUsername()
+          && item.getPrivateArea() === p.getPrivateArea() && item.getItem().getId() === id)
+          .reduce((sum, item) => sum + item.getItem().getAmount(), 0),
+      });
+      const snapshot = () => ({ coins: stores(coins), brain: stores(brain), head: stores(I.DECAPITATED_HEAD_2), filler: stores(filler),
+        stage: questState.getStage(p), xp: core.Skill.values().map(skill => p.getSkillManager().getExperience(skill)) });
+      const owned = row => Object.values(row).reduce((sum, count) => sum + count, 0);
+      let before = snapshot();
+      assert.equal(owned(before.brain), mode === "already held" ? 1 : 0);
+      assert.equal(owned(before.head), 0);
+      const messages = [], sendMessage = p.sendMessage.bind(p);
+      child.mock.method(p, "sendMessage", (text) => { messages.push(text); return sendMessage(text); });
+      const actions = [], choices = [], originalEmit = PM.emitCustomEvent.bind(PM);
+      child.mock.method(PM, "emitCustomEvent", (...args) => {
+        const [name, event] = args;
+        if (event?.player === p && name === "npc-dialogue:action" && event.stepId === "KK0w2z") {
+          assert.equal(event.npcId, 6527);
+          assert.equal(event.npc, null);
+          assert.equal(event.definition.getName(), "Roavar");
+          assert.equal(event.action, "receive");
+          actions.push(event.stepId);
+        }
+        if (event?.player === p && name === "npc-dialogue:choice" && normalize(event.option) === "I'll buy one.") {
+          assert.equal(event.npcId, 6527);
+          assert.equal(event.npc, null);
+          choices.push(event.option);
+        }
+        return originalEmit(...args);
+      });
+      let phases = 0;
+      const turn = () => {
+        assert.ok(++phases <= 100, "bounded task, input and movement phases");
+        p.resetUpdating();
+        core.World.processCycle = (core.World.processCycle + 1) & 0x7fffffff;
+        core.TaskManager.process();
+        f.c.processTurnPackets();
+        const movement = p.getMovementQueue();
+        movement.beginCycle();
+        movement.processEntityPursuit();
+        if (movement.hasPendingWork()) movement.process();
+        core.TaskManager.processWalkTo(p.getIndex());
+      };
+      const input = async packet => { await f.c.dispatch([packet]); turn(); };
+      const manager = p.getDialogueManager(), sender = p.getPacketSender();
+      const speech = async (text, npc) => {
+        const current = manager.getCurrent(), group = sender.getChatboxGroupId();
+        assert.ok(current instanceof (npc ? core.NpcDialogue : core.PlayerDialogue), "current speech type");
+        if (npc) assert.equal(current.getNpcId(), 6527);
+        assert.equal(group, npc ? 231 : 217);
+        assert.equal(normalize(current.getText()), normalize(text));
+        assert.equal(manager.getOwner(), undefined);
+        assert.equal(sender.getChatboxOwner(), undefined);
+        const mount = sender.subInterfaceTargets.get(group);
+        assert.ok(mount);
+        assert.equal(sender.getSubInterfaceAt(mount.targetUid), mount);
+        await input({ type: "dialogue_continue", widgetId: (group << 16) | 5, childIndex: -1 });
+      };
+
+      await input({ type: "ground_item_action", itemId: brain, x: position.getX(), y: position.getY(), option: "Take", optionIndex: 3 });
+      for (let n = 0; !manager.isActive() && n < 12; n++) turn();
+      assert.ok(manager.isActive(), "the real Take reached Roavar's dialogue");
+      assert.ok(PathFinder.reachedObj(p, position), "the real walk arrived within pickup reach");
+      assert.equal(core.ItemOnGroundManager.getGroundItem(p.getUsername(), brain, position, p.getPrivateArea()), stock);
+
+      if (mode === "already held") {
+        await speech("You can leave that alone, my friend. I've already sold you one of your own - eat that. I can't afford to give away freebies in this business!", true);
+        assert.equal(actions.length, 0);
+        assert.deepEqual(snapshot(), before);
+        return;
+      }
+      for (let i = 0; i < lines.length; i++) await speech(lines[i], i % 2 === 0);
+      if (mode === "poor") {
+        await speech("That sounds very nice, but I'm afraid I don't have enough gold at the moment.", false);
+        assert.equal(actions.length, 0);
+        assert.deepEqual(snapshot(), before);
+        return;
+      }
+      const prompt = core.MultiChatboxPrompt.getPending(p);
+      assert.ok(prompt, "the actual sale choice is mounted");
+      assert.equal(manager.isActive(), false);
+      assert.equal(manager.getOwner(), undefined);
+      assert.equal(sender.getChatboxOwner(), undefined);
+      assert.equal(sender.getChatboxGroupId(), 219);
+      const mount = sender.subInterfaceTargets.get(219);
+      assert.ok(mount);
+      assert.equal(sender.getSubInterfaceAt(mount.targetUid), mount);
+      assert.deepEqual(prompt.options.map(normalize), ["I'll buy one.", "I'm not hungry."]);
+      assert.deepEqual(snapshot(), before);
+      if (mode === "brain held at action" || mode === "head held at action") {
+        // Inject a late state to exercise the action; this is not a tested trade route.
+        put(f, mode === "brain held at action" ? brain : I.DECAPITATED_HEAD_2, 5, 1);
+        before = snapshot();
+        assert.equal(owned(mode === "brain held at action" ? before.brain : before.head), 1);
+      }
+      await input({ type: "dialogue_continue", widgetId: core.MultiChatboxPrompt.OPTIONS_WIDGET_ID, childIndex: 1 });
+      assert.equal(choices.length, 1);
+      const purchaseMount = sender.subInterfaceTargets.get(217);
+      assert.ok(purchaseMount, "the player's purchase line is mounted");
+      await speech("I'll buy one, please.", false);
+      assert.equal(actions.length, 1, "real KK0w2z receive action was reached");
+      const after = snapshot(), paid = owned(before.coins) - owned(after.coins), delivered = owned(after.brain) - owned(before.brain);
+      assert.ok((paid === 50 && delivered === 1) || (paid === 0 && delivered === 0),
+        JSON.stringify({ mode, paid, delivered, before: { coins: before.coins, brain: before.brain }, after: { coins: after.coins, brain: after.brain } }));
+      if (mode === "brain held at action" || mode === "head held at action") {
+        assert.deepEqual([paid, delivered], [0, 0], "an already-held quest item is not charged for");
+        assert.deepEqual(after.head, before.head, "the head is preserved");
+      } else if (mode === "full bag") {
+        assert.deepEqual([paid, delivered], [0, 0], "a full bag refuses without payment");
+      } else {
+        assert.deepEqual([paid, delivered], [50, 1], "room or exact payment delivers one brain");
+      }
+      assert.deepEqual(after.filler, before.filler);
+      assert.equal(after.stage, before.stage);
+      assert.deepEqual(after.xp, before.xp);
+      if (paid === 0) assert.deepEqual(after, before);
+      assert.deepEqual(messages, mode === "full bag" ? ["You don't have enough inventory space."] : []);
+      if (paid === 0) {
+        assert.equal(manager.isActive(), false, "the refusal ends the dialogue");
+        assert.equal(sender.getChatboxGroupId(), -1, "the chatbox is closed");
+        assert.equal(sender.getSubInterfaceAt(purchaseMount.targetUid), undefined, "the purchase mount is removed");
+        assert.equal(core.MultiChatboxPrompt.getPending(p), null, "the sale choice is no longer pending");
+      }
+      assert.equal(core.ItemOnGroundManager.getGroundItem(p.getUsername(), brain, position, p.getPrivateArea()), stock, "the public display is not purchased credit");
+    });
+  }
+});
+
+// This calls the registered action with a real player; it does not model a second client choice.
+test("Roavar's receive action cannot charge twice for one brain", (t) => {
+  const f = actor(t, FENK, 0);
+  put(f, I.COINS, 0, 100);
+  const receive = () => {
+    const step = { type: "action", action: "receive", text: "pickled brain", id: "KK0w2z" };
+    const event = { player: f.p, npcId: 6527, npc: null, definition: core.NpcDefinition.forId(6527), step,
+      pages: [{ page: "Creature of Fenkenstrain", variants: ["decapitated-head-finding-the-brains"] }],
+      text: step.text, action: step.action, target: undefined, stepId: step.id, handled: false };
+    PM.emitCustomEvent("npc-dialogue:action", event);
+    return event;
+  };
+  const first = receive();
+  assert.equal(first.handled, true);
+  assert.deepEqual([f.inv.getAmount(I.COINS), f.inv.getAmount(I.PICKLED_BRAIN)], [50, 1]);
+  const second = receive();
+  assert.equal(second.handled, true);
+  assert.equal(second.end, true);
+  assert.deepEqual([f.inv.getAmount(I.COINS), f.inv.getAmount(I.PICKLED_BRAIN)], [50, 1]);
 });

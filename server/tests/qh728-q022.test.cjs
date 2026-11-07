@@ -44,7 +44,7 @@ function setup(options = {}) {
   const itemActions = [];
   const loginHandlers = [];
   const npcHandlers = [];
-  const completed = new Set(options.completed ?? ['wanted', 'troll_stronghold', 'dorics_quest']);
+  const completed = new Set(options.completed ?? ['wanted', 'troll_stronghold', 'dorics_quest', 'enter_the_abyss']);
 
   const api = new Proxy({
     core: { ...core, CountdownTask: undefined, TaskManager: undefined },
@@ -216,6 +216,14 @@ test('fresh stage 0 start hook enters the quest wire at 10', () => {
   h.hook('quest:devious-minds:start', MONK);
   assert.equal(h.quest.getStage(h.player), 1);
   assert.equal(lastMainVarbit(h), 10);
+});
+
+test('start hook rejects missing Enter the Abyss with the other prerequisites complete', () => {
+  const h = setup({ completed: ['wanted', 'troll_stronghold', 'dorics_quest'] });
+  h.at(0);
+  h.hook('quest:devious-minds:start', MONK);
+  assert.equal(h.quest.getStage(h.player), 0);
+  assert.equal(h.varbits.has(MAIN_VARBIT), false);
 });
 
 test('start hook rejects a player without the quest prerequisites and sends no start', () => {

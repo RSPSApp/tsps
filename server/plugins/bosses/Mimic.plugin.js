@@ -14,8 +14,7 @@
  * Estimates (no capture yet): DISTURB/wake ranges, throw-adjacent timings, the exact
  * candy flight arc, and the challenge transform having no animation. Elite and master
  * Treasure Trails caskets hand out the Mimic through Reward.Mimic's
- * "treasure-trails:mimic-casket" answer. The 90k strange-casket death
- * retrieval and the boss timer are follow-ups (arena graves go outside instead).
+ * "treasure-trails:mimic-casket" answer. The boss timer remains a follow-up.
  */
 
 const Shared = require("./mimic/Shared.Mimic");
@@ -26,6 +25,7 @@ const Minions = require("./mimic/Minions.Mimic");
 const Commands = require("./mimic/Commands.Mimic");
 const Dialogue = require("./mimic/Dialogue.Mimic");
 const Reward = require("./mimic/Reward.Mimic");
+const Retrieval = require("./mimic/Retrieval.Mimic");
 
 module.exports = {
   name: "Mimic",
@@ -37,6 +37,7 @@ module.exports = {
     Fight.attach(api);
     Minions.attach(api);
     Commands.attach(api);
+    Retrieval.attach(api);
     Dialogue.attach(api);
     Reward.attach(api);
   },

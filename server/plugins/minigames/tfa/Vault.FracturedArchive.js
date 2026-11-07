@@ -176,9 +176,9 @@ class VaultRoom extends Raid.Room {
     const loot = this.loot.get(player.getUsername());
     if (!loot) return;
     logLoot(player, loot);
-    for (const entry of loot.entries) move(player, entry, entry.amount, "bank");
+    const result = deliver(player, [...held(player), ...loot.entries]);
     this.loot.delete(player.getUsername());
-    player.sendMessage("Your unclaimed rewards from the Archive have been sent to your bank.");
+    player.sendMessage(deliveredMessage(result));
   }
 }
 
@@ -280,7 +280,54 @@ function logLoot(player, loot) {
  * Up to `amount` of an entry into the inventory (bulky drops noted, as the other raids' chests
  * give them) or the bank (unnoted); how many moved.
  */
-function move(player, entry, amount, destination) {
+/** Unclaimed loot neither the bank nor the inventory could take, kept for the next login rather than deleted. */
+const HELD_ATTRIBUTE = "tfa:unclaimed-held";
+/** Not captured (inferred). */
+const MESSAGE_HELD = "Your bank couldn't hold all of your unclaimed rewards from the Archive; the rest will be given to you when you have space.";
+
+/**
+ * Banks what it can of `entries`, puts what's left in the inventory, and keeps the rest in HELD_ATTRIBUTE
+ * (saved with the player). Returns what is kept.
+ */
+function deliver(player, entries) {
+  const kept = [];
+  let carried = false;
+  for (const entry of entries) {
+    let left = entry.amount - move(player, entry, entry.amount, "bank", true);
+    if (left > 0) {
+      const moved = move(player, { ...entry, amount: left }, left, "inventory", true);
+      carried ||= moved > 0;
+      left -= moved;
+    }
+    if (left > 0) kept.push({ id: entry.id, amount: left });
+  }
+  player.setAttribute(HELD_ATTRIBUTE, kept.length > 0 ? kept : null);
+  return { kept, carried };
+}
+
+/** What became of the rewards (the inventory and held lines are not captured). */
+function deliveredMessage({ kept, carried }) {
+  if (kept.length > 0) return MESSAGE_HELD;
+  return carried
+    ? "Your bank couldn't hold all of your unclaimed rewards from the Archive; the rest are in your inventory."
+    : "Your unclaimed rewards from the Archive have been sent to your bank.";
+}
+
+function held(player) {
+  const value = player.getAttribute(HELD_ATTRIBUTE);
+  return Array.isArray(value) ? value : [];
+}
+
+/** Each login tries the held rewards again. */
+function deliverHeld({ player }) {
+  if (held(player).length === 0) return;
+  const result = deliver(player, held(player));
+  player.sendMessage(result.kept.length > 0
+    ? "You still have unclaimed rewards from the Archive waiting for bank or inventory space."
+    : deliveredMessage(result));
+}
+
+function move(player, entry, amount, destination, quiet = false) {
   const { Item, ItemDefinition, Bank } = Shared.core();
   const wanted = Math.max(0, Math.min(entry.amount, amount));
   if (wanted === 0) return 0;
@@ -288,7 +335,7 @@ function move(player, entry, amount, destination) {
     const bank = player.getBank(Bank.getTabForItem(player, entry.id));
     const banked = bank.getAddableAmount(new Item(entry.id, wanted));
     if (banked <= 0) {
-      player.sendMessage("You need more space in your bank.");
+      if (!quiet) player.sendMessage("You need more space in your bank.");
       return 0;
     }
     bank.add(new Item(entry.id, banked), false);
@@ -299,7 +346,7 @@ function move(player, entry, amount, destination) {
   const id = !definition.isStackable() && wanted > 1 && definition.getNoteId() >= 0 ? definition.getNoteId() : entry.id;
   const moved = inventory.getAddableAmount(new Item(id, wanted));
   if (moved <= 0) {
-    player.sendMessage("You don't have enough inventory space.");
+    if (!quiet) player.sendMessage("You don't have enough inventory space.");
     return 0;
   }
   inventory.add(new Item(id, moved), false);
@@ -378,6 +425,8 @@ module.exports = function registerVault(api) {
   api.onNpcInteraction("<col=00ffff>Rift</col>", { Search: searchChest, Leave: leaveVault, "Quick-leave": leaveVault });
   api.onObjectInteraction("Merit scroll", { Read: readMerits });
   api.onInterfaceActionClick(chestClick);
+  api.persistAttribute(HELD_ATTRIBUTE, null);
+  api.onPlayerLogin(deliverHeld);
 };
 
-Object.assign(module.exports, { VaultRoom, LAYOUT, rollLoot, toEntries, awardPet, logLoot });
+Object.assign(module.exports, { VaultRoom, LAYOUT, rollLoot, toEntries, awardPet, logLoot, HELD_ATTRIBUTE, deliverHeld });

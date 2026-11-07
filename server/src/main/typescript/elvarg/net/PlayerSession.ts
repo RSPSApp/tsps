@@ -1,4 +1,6 @@
 import { CrossFloor } from "../game/CrossFloor";
+import { NpcSpecificEffects } from "./NpcSpecificEffects";
+import type { NPC } from "../game/entity/impl/npc/NPC";
 import { PluginManager } from "../plugins/PluginManager";
 import { MAX_GAME_MESSAGE_BYTES } from "./BinaryChannel";
 import { BoatManager } from "../game/content/sailing/BoatManager";
@@ -9,7 +11,7 @@ import { PacketBuilder } from "./packet/PacketBuilder";
 import { NetworkConstants } from "./NetworkConstants";
 import type { Player } from "../game/entity/impl/player/Player";
 import type { NpcExactMove } from "../game/entity/impl/npc/NPC";
-import type { Location } from "../game/model/Location";
+import { Location } from "../game/model/Location";
 import { Appearance } from "../game/model/Appearance";
 import { Flag } from "../game/model/Flag";
 import {
@@ -19,6 +21,8 @@ import {
   encodePlayerAppearance,
   encodeInitialPlayerSync,
   encodeLogoutResponse,
+  encodeHideNpcOps,
+  encodeHideObjOps,
   encodeWalkInteractionMode,
   encodeNpcSync,
   encodePlayerSync,
@@ -102,6 +106,11 @@ export class PlayerSession {
   private hasReplayedScene = false;
   private playerSyncState?: PlayerSyncState;
   private npcSyncState: NpcSyncState = createNpcSyncState();
+  private readonly npcSpecificEffects = new NpcSpecificEffects();
+
+  public queueNpcSpecificEffect(npc: NPC, packet: Buffer): void {
+    if (this.player && this.isBinaryChannelOpen()) this.npcSpecificEffects.queue(npc, packet);
+  }
   private appearanceCache = new Map<number, { player: Player; payload: Buffer }>();
   private lastMusicRegion = -1;
   private lastMusicTrack = -1;
@@ -152,6 +161,7 @@ export class PlayerSession {
   // }
 
   public setPlayer(player: Player) {
+    if (this.player !== player) this.npcSpecificEffects.clear();
     this.player = player;
   }
 
@@ -160,10 +170,14 @@ export class PlayerSession {
   }
 
   public isTileInScene(x: number, y: number, level: number): boolean {
-    return this.hasReplayedScene
-      && level === this.replayedSceneLevel
-      && x >= this.replayedSceneBaseX && x < this.replayedSceneBaseX + 104
-      && y >= this.replayedSceneBaseY && y < this.replayedSceneBaseY + 104;
+    if (!this.hasReplayedScene
+      || x < this.replayedSceneBaseX || x >= this.replayedSceneBaseX + 104
+      || y < this.replayedSceneBaseY || y >= this.replayedSceneBaseY + 104) return false;
+    if (level === this.replayedSceneLevel) return true;
+    const player = this.player;
+    return !!player && CrossFloor.visible(
+      player.getLocation(), new Location(x, y, level), 52,
+    );
   }
 
   private sendRebuildNormal(
@@ -223,7 +237,10 @@ export class PlayerSession {
    * Live first sets clicks back to walking, as the client keeps interaction modes (rsprox).
    */
   public logout(): void {
+    this.npcSpecificEffects.clear();
     this.sendClientPacket(encodeWalkInteractionMode());
+    this.sendClientPacket(encodeHideNpcOps(false));
+    this.sendClientPacket(encodeHideObjOps(false));
     this.sendClientPacket(encodeLogoutResponse());
     this.flushPackets();
     this.channel.close?.(1000, "logout");
@@ -254,6 +271,8 @@ export class PlayerSession {
   }
 
   private flushClient(tick: number): void {
+    // Discard undeliverable one-shots, including disconnected and out-of-view actors.
+    const specificEffects = this.npcSpecificEffects.take();
     const player = this.player;
     if (!player || !this.isBinaryChannelOpen()) return;
     if (this.getBufferedAmount() >= NetworkConstants.OUTBOUND_WS_BUFFER_CRITICAL_BYTES) {
@@ -310,6 +329,10 @@ export class PlayerSession {
 
     const initialSync = !this.playerSyncState;
     if (initialSync) {
+      // Live sends hidenpcops=false and hideobjops=false at login, so a world switch cannot
+      // inherit the previous world's cutscene state; the client keeps the booleans across logins.
+      this.sendClientPacket(encodeHideNpcOps(false));
+      this.sendClientPacket(encodeHideObjOps(false));
       this.sceneBaseX = Math.max(0, (sceneTile.x - 48) & ~7);
       this.sceneBaseY = Math.max(0, (sceneTile.y - 48) & ~7);
     } else {
@@ -478,6 +501,22 @@ export class PlayerSession {
       return true;
     });
     if (!syncSent) return;
+
+    // Both clients must know the actor before applying its viewer-specific effects.
+    // Keep object identity as well as index: a removed NPC's replacement inherits nothing.
+    const visibleNpcs = new Set(player.getLocalNpcs());
+    const sentIndices = new Set(this.npcSyncState.indices);
+    for (const effect of specificEffects) {
+      if (visibleNpcs.has(effect.npc) && effect.npc.isRegistered()
+        && effect.npc.getIndex() === effect.index && sentIndices.has(effect.index)) {
+        if (!this.sendClientPacket(effect.packet)) return;
+      }
+    }
+    // Content can refresh transient viewer visuals when an actor enters local view.
+    // Use the indices actually encoded, not the pre-cull candidate list.
+    PluginManager.emitCustomEvent("network:npc-sync", {
+      player, tick, npcs: [...visibleNpcs].filter(npc => sentIndices.has(npc.getIndex()) && npc.isRegistered()),
+    });
 
     if (!initialSync && sceneChanged) {
       ObjectManager.onRegionChange(player, this.sceneBaseX, this.sceneBaseY);

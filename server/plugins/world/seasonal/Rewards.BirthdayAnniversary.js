@@ -27,11 +27,30 @@ function grant(api, { player }) {
   const inventory = player.getInventory(), all = [...items(api), jugs(api)];
   // All or nothing: a full inventory leaves the reward waiting with Wizard Gary.
   if (missingSlots(api, player) > 0 || all.some(item => inventory.getAddableAmount(item) !== item.getAmount())) return;
+  // EventScheduler's grant adds the items all or nothing and records the once-per-account
+  // completion. Diango's unlock stays separate, as before: a refused unlock is logged and
+  // does not hold back the items.
+  const request = { player, eventKey: Data.EVENT_KEY, completion: Data.EVENT_KEY,
+    rewards: all.map(item => ({ itemId: item.getId(), amount: item.getAmount() })) };
+  api.emitCustomEvent("events:grant-reward", request);
+  if (request.granted !== true) {
+    // The completion is recorded but the progress is not (a rolled-back save): the rewards were
+    // already given, so settle the progress rather than leave Gary holding a second set.
+    if (request.reason === "already-complete") {
+      Progress.markRewarded(player);
+      Progress.advance(api, player, "rewarding", "complete");
+    }
+    return;
+  }
   Progress.markRewarded(player);
-  for (const item of all) inventory.addItem(item);
   Progress.advance(api, player, "rewarding", "complete");
   unlock(api, player);
 }
+function record(api, player) {
+  api.emitCustomEvent("events:record-completion", { player, completion: Data.EVENT_KEY });
+}
+/** Saves rewarded before EventScheduler kept completions are imported on login. */
+function importClaim(api, { player }) { if (Progress.rewarded(player)) record(api, player); }
 /**
  * After the window, a player who finished but never had room for the hand-out keeps the
  * cosmetics through Diango. The reward is then settled, so a reopened window cannot hand
@@ -40,9 +59,10 @@ function grant(api, { player }) {
 function settle(api, { player }) {
   if (!Progress.complete(player) || Progress.rewarded(player)) return;
   Progress.markRewarded(player);
+  record(api, player);
   Progress.advance(api, player, "rewarding", "complete");
   unlock(api, player);
 }
 function space(api, request) { request.needed = missingSlots(api, request.player); }
 
-module.exports = { grant, settle, space, slotsNeeded, missingSlots };
+module.exports = { grant, settle, importClaim, space, slotsNeeded, missingSlots };

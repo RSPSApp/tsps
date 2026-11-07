@@ -86,6 +86,7 @@ inventory option, even from the bank panel; it now leaves the bank panel's ops t
 | Gem bag | "You just found a/an [gem]!" / "You put it straight into your open gem bag." / "You open your gem bag, ready to fill it." / "You close your gem bag." / "Sapphires: # / Emeralds: # / Rubies: #" / "Diamonds: # / Dragonstones: #" / "Only uncut gems can be stored in the bag." / "Your bag is too full to hold all your gems." / "You have nothing suitable for storing in the bag." | Wiki; Fill itself has no line |
 | Fish barrel | "The barrel is full. It may be emptied at a bank." | Wiki |
 | Log basket | "The basket is full." / "Your basket is empty." / "The basket is empty." / "You empty your basket." / "You empty as many logs as you can carry." / "You empty your basket into the bank." | parsed from live chat |
+| Log basket | "You empty some of your basket's contents into the bank." / "Your bank cannot hold the remaining contents of your basket." | Ours (not captured) |
 | Tackle box | "The tackle box is now empty." | captured |
 | Tackle box | "The tackle box cannot hold itself! How weird would that be?" | Wiki |
 

@@ -25,6 +25,7 @@ module.exports = {
     APPRECIATION: Shared.APPRECIATION,
     HUD: Shared.HUD,
     sessions: Shared.sessions,
+    worldSession: Shared.worldSession,
     sessionOf: Shared.sessionOf,
     level: Shared.level,
     xpFor: Shared.xpFor,

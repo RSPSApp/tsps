@@ -1478,6 +1478,8 @@ module.exports = function registerGhostsAhoyQuest(api) {
   }
 
   function grantReward(player) {
+    // Wiki (Ghosts Ahoy, Rewards): 2,400 Prayer experience, as the scroll lists it.
+    player.getSkillManager().addExperiences(Skill.PRAYER, 2400);
     setAttr(player, GIVEN_BOOK_ATTRIBUTE, 1);
     setAttr(player, GIVEN_MANUAL_ATTRIBUTE, 1);
     setAttr(player, GIVEN_ROBES_ATTRIBUTE, 1);

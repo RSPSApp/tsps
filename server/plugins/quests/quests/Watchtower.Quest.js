@@ -32,6 +32,7 @@
  * gates are wired here because no shared handler owns them.
  */
 module.exports = function registerWatchtowerQuest(api) {
+  const { giveReward } = require("../QuestRuntime");
   const { Skill, Location, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
   const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
 
@@ -521,7 +522,7 @@ module.exports = function registerWatchtowerQuest(api) {
 
   function grantReward(player) {
     player.getSkillManager().addExperiences(Skill.MAGIC, 15250);
-    player.getInventory().adds(COINS, 5000);
+    giveReward(player, COINS, 5000);
   }
 
   function selectOgVariant(player, stage) {

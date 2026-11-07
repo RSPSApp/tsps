@@ -108,7 +108,7 @@ function setCurrentLevel(player, skill, level) {
 function heal(player, amount, extraCap = 0) {
   const current = getCurrentLevel(player, Skill.HITPOINTS);
   const baseMax = getMaxLevel(player, Skill.HITPOINTS);
-  const max = baseMax + Math.max(0, extraCap);
+  const max = Math.max(current, baseMax + Math.max(0, extraCap));
   player.setHitpoints(clamp(current + amount, 0, max));
 }
 
@@ -164,7 +164,8 @@ function applyPrayerRestore(player, isSuperRestore) {
 function restorePrayer(player, flat, percent) {
   const max = getMaxLevel(player, Skill.PRAYER);
   const restored = Math.floor(flat + max * percent);
-  getSkillManager(player).increaseCurrentLevel(Skill.PRAYER, restored, max);
+  const cap = Math.max(max, getCurrentLevel(player, Skill.PRAYER));
+  getSkillManager(player).increaseCurrentLevel(Skill.PRAYER, restored, cap);
   Sounds.sendSound(player, Sound.PRAYER_RECHARGE);
 }
 
@@ -180,10 +181,7 @@ function applySanfewRestore(player) {
 }
 
 function applyRestorePotion(player) {
-  for (const skill of Skill.values()) {
-    if (skill === Skill.HITPOINTS || skill === Skill.PRAYER) {
-      continue;
-    }
+  for (const skill of [Skill.ATTACK, Skill.DEFENCE, Skill.STRENGTH, Skill.RANGED, Skill.MAGIC]) {
     restoreSkillToBaseWithFormula(player, skill, 10, 0.3);
   }
 }
@@ -518,7 +516,9 @@ function drinkPermissionRefusal(player, entry) {
 }
 
 function drinkCanUseRefusal(player, entry) {
-  if (entry.potion.canUse && !entry.potion.canUse(player)) return "You need more than 50 Hitpoints to drink this potion.";
+  if (entry.potion.canUse && !entry.potion.canUse(player)) {
+    return entry.potion.canUseMessage ?? "You need more than 50 Hitpoints to drink this potion.";
+  }
   return null;
 }
 
@@ -546,6 +546,7 @@ function registerPotion(definition) {
     name: definition.name,
     effect: definition.effect,
     canUse: typeof definition.canUse === "function" ? definition.canUse : null,
+    canUseMessage: definition.canUseMessage ?? null,
     area: definition.area ?? null,
     requiresFoodPermission: Boolean(definition.requiresFoodPermission),
     shareable: definition.shareable !== false,
@@ -639,7 +640,7 @@ for (const [id, cup, boost, animation] of [[Items.CUP_OF_TEA_9, Items.EMPTY_CUP_
     requiresFoodPermission: true, effect: player => boostSkill(player, Skill.CONSTRUCTION, boost, 0),
     drink: { animation, messages: (itemId) => [itemId === id ? "You drink the cup of tea." : "You drink the cup of milky tea.", "You feel refreshed and ready for more building."] } });
 }
-for (const [id, effect] of [
+for (const [id, effect, emptyItemId = Items.BEER_GLASS_4] of [
   [Items.BEER_3, player => { boostSkill(player, Skill.STRENGTH, 1, 0.02); lowerSkillByCurrent(player, Skill.ATTACK, 1, 0.06); }],
   [Items.CIDER_3, player => { boostSkill(player, Skill.FARMING, 1, 0); lowerSkillByCurrent(player, Skill.ATTACK, 2, 0); lowerSkillByCurrent(player, Skill.STRENGTH, 2, 0); }],
   [Items.ASGARNIAN_ALE_3, player => { boostSkill(player, Skill.STRENGTH, 2, 0); lowerSkillByCurrent(player, Skill.ATTACK, 2, 0.05); }],
@@ -647,32 +648,32 @@ for (const [id, effect] of [
   [Items.DRAGON_BITTER_3, player => { boostSkill(player, Skill.STRENGTH, 2, 0); lowerSkillByCurrent(player, Skill.ATTACK, 2, 0.05); }],
   [Items.CHEFS_DELIGHT_3, player => { boostSkill(player, Skill.COOKING, 1, 0.05); lowerSkillByCurrent(player, Skill.ATTACK, 2, 0.05); lowerSkillByCurrent(player, Skill.STRENGTH, 2, 0.05); }],
   // Wiki: Wizard's mind bomb +2/+3 Magic, -1/-5 Attack, Strength and Defence.
-  [Items.WIZARDS_MIND_BOMB, player => { boostSkill(player, Skill.MAGIC, 2, 0.02); for (const skill of [Skill.ATTACK, Skill.STRENGTH, Skill.DEFENCE]) lowerSkillByCurrent(player, skill, 1, 0.05); }],
+  [Items.WIZARDS_MIND_BOMB, player => { boostSkill(player, Skill.MAGIC, 2, 0.02); for (const skill of [Skill.ATTACK, Skill.STRENGTH, Skill.DEFENCE]) lowerSkillByCurrent(player, skill, 1, 0.05); }, Items.BEER_GLASS],
   // Wiki: Dwarven stout +1 Mining and Smithing, -4% - 2 Attack, Strength and Defence.
-  [Items.DWARVEN_STOUT, player => { boostSkill(player, Skill.MINING, 1, 0); boostSkill(player, Skill.SMITHING, 1, 0); for (const skill of [Skill.ATTACK, Skill.STRENGTH, Skill.DEFENCE]) lowerSkillByCurrent(player, skill, 2, 0.04); }],
+  [Items.DWARVEN_STOUT, player => { boostSkill(player, Skill.MINING, 1, 0); boostSkill(player, Skill.SMITHING, 1, 0); for (const skill of [Skill.ATTACK, Skill.STRENGTH, Skill.DEFENCE]) lowerSkillByCurrent(player, skill, 2, 0.04); }, Items.BEER_GLASS],
   // Wiki: Axeman's folly +1 Woodcutting, -3 Attack and Strength.
-  [Items.AXEMANS_FOLLY, player => { boostSkill(player, Skill.WOODCUTTING, 1, 0); for (const skill of [Skill.ATTACK, Skill.STRENGTH]) lowerSkillByCurrent(player, skill, 3, 0); }],
+  [Items.AXEMANS_FOLLY, player => { boostSkill(player, Skill.WOODCUTTING, 1, 0); for (const skill of [Skill.ATTACK, Skill.STRENGTH]) lowerSkillByCurrent(player, skill, 3, 0); }, Items.BEER_GLASS],
   // Wiki: Bandit's brew +1 Thieving and Attack, -6% - 3 Strength and Defence.
-  [Items.BANDITS_BREW, player => { boostSkill(player, Skill.THIEVING, 1, 0); boostSkill(player, Skill.ATTACK, 1, 0); for (const skill of [Skill.STRENGTH, Skill.DEFENCE]) lowerSkillByCurrent(player, skill, 3, 0.06); }],
+  [Items.BANDITS_BREW, player => { boostSkill(player, Skill.THIEVING, 1, 0); boostSkill(player, Skill.ATTACK, 1, 0); for (const skill of [Skill.STRENGTH, Skill.DEFENCE]) lowerSkillByCurrent(player, skill, 3, 0.06); }, Items.BEER_GLASS],
 ]) {
-  registerPotion({ name: "House ale", chains: [[id]], emptyItemId: Items.BEER_GLASS_4,
+  registerPotion({ name: "House ale", chains: [[id]], emptyItemId,
     requiresFoodPermission: true, effect: player => { heal(player, 1); effect(player); } });
 }
 
 // Wiki: Moonlight mead heals 4 (mature 6) with no boosts or drains.
-registerPotion({ name: "Moonlight mead", chains: [[Items.MOONLIGHT_MEAD]], emptyItemId: Items.BEER_GLASS_4,
+registerPotion({ name: "Moonlight mead", chains: [[Items.MOONLIGHT_MEAD]], emptyItemId: Items.BEER_GLASS,
   requiresFoodPermission: true, effect: (player) => heal(player, 4) });
-registerPotion({ name: "Moonlight mead(m)", chains: [[Items.MOONLIGHT_MEAD_M_]], emptyItemId: Items.BEER_GLASS_4,
+registerPotion({ name: "Moonlight mead(m)", chains: [[Items.MOONLIGHT_MEAD_M_]], emptyItemId: Items.BEER_GLASS,
   requiresFoodPermission: true, effect: (player) => heal(player, 6) });
 // Wiki: Slayer's respite boosts Slayer by 2 (mature 4) and drains Attack and
 // Strength by floor(current * 0.02) + 2 (mature + 3); it heals 1 (mature 2).
-registerPotion({ name: "Slayer's respite", chains: [[Items.SLAYERS_RESPITE]], emptyItemId: Items.BEER_GLASS_4,
+registerPotion({ name: "Slayer's respite", chains: [[Items.SLAYERS_RESPITE]], emptyItemId: Items.BEER_GLASS,
   requiresFoodPermission: true, effect: (player) => {
     heal(player, 1);
     boostSkill(player, Skill.SLAYER, 2, 0);
     for (const skill of [Skill.ATTACK, Skill.STRENGTH]) lowerSkillByCurrent(player, skill, 2, 0.02);
   } });
-registerPotion({ name: "Slayer's respite(m)", chains: [[Items.SLAYERS_RESPITE_M_]], emptyItemId: Items.BEER_GLASS_4,
+registerPotion({ name: "Slayer's respite(m)", chains: [[Items.SLAYERS_RESPITE_M_]], emptyItemId: Items.BEER_GLASS,
   requiresFoodPermission: true, effect: (player) => {
     heal(player, 2);
     boostSkill(player, Skill.SLAYER, 4, 0);
@@ -1069,32 +1070,40 @@ registerPotion({
   chains: [doseChain("MOONLIGHT_POTION_4_", "MOONLIGHT_POTION_3_", "MOONLIGHT_POTION_2_", "MOONLIGHT_POTION_1_")],
   effect: applyMoonlightPotion,
 });
-registerPotion({
+function registerDivinePotion(definition) {
+  registerPotion({
+    ...definition,
+    canUse: (player) => getCurrentLevel(player, Skill.HITPOINTS) > 10,
+    canUseMessage: "You need more than 10 hitpoints to survive the power of a divine potion.",
+  });
+}
+
+registerDivinePotion({
   name: "Divine super attack potion",
   chains: [doseChain("DIVINE_SUPER_ATTACK_POTION_4_", "DIVINE_SUPER_ATTACK_POTION_3_", "DIVINE_SUPER_ATTACK_POTION_2_", "DIVINE_SUPER_ATTACK_POTION_1_")],
   effect: (player) => applyDivine(player, (p) => boostSkill(p, Skill.ATTACK, 5, 0.15), [Skill.ATTACK]),
 });
-registerPotion({
+registerDivinePotion({
   name: "Divine super strength potion",
   chains: [doseChain("DIVINE_SUPER_STRENGTH_POTION_4_", "DIVINE_SUPER_STRENGTH_POTION_3_", "DIVINE_SUPER_STRENGTH_POTION_2_", "DIVINE_SUPER_STRENGTH_POTION_1_")],
   effect: (player) => applyDivine(player, (p) => boostSkill(p, Skill.STRENGTH, 5, 0.15), [Skill.STRENGTH]),
 });
-registerPotion({
+registerDivinePotion({
   name: "Divine super defence potion",
   chains: [doseChain("DIVINE_SUPER_DEFENCE_POTION_4_", "DIVINE_SUPER_DEFENCE_POTION_3_", "DIVINE_SUPER_DEFENCE_POTION_2_", "DIVINE_SUPER_DEFENCE_POTION_1_")],
   effect: (player) => applyDivine(player, (p) => boostSkill(p, Skill.DEFENCE, 5, 0.15), [Skill.DEFENCE]),
 });
-registerPotion({
+registerDivinePotion({
   name: "Divine ranging potion",
   chains: [doseChain("DIVINE_RANGING_POTION_4_", "DIVINE_RANGING_POTION_3_", "DIVINE_RANGING_POTION_2_", "DIVINE_RANGING_POTION_1_")],
   effect: (player) => applyDivine(player, (p) => boostSkill(p, Skill.RANGED, 4, 0.1), [Skill.RANGED]),
 });
-registerPotion({
+registerDivinePotion({
   name: "Divine magic potion",
   chains: [doseChain("DIVINE_MAGIC_POTION_4_", "DIVINE_MAGIC_POTION_3_", "DIVINE_MAGIC_POTION_2_", "DIVINE_MAGIC_POTION_1_")],
   effect: (player) => applyDivine(player, (p) => boostSkill(p, Skill.MAGIC, 4, 0), [Skill.MAGIC]),
 });
-registerPotion({
+registerDivinePotion({
   name: "Divine bastion potion",
   chains: [doseChain("DIVINE_BASTION_POTION_4_", "DIVINE_BASTION_POTION_3_", "DIVINE_BASTION_POTION_2_", "DIVINE_BASTION_POTION_1_")],
   effect: (player) =>
@@ -1107,7 +1116,7 @@ registerPotion({
       [Skill.RANGED, Skill.DEFENCE]
     ),
 });
-registerPotion({
+registerDivinePotion({
   name: "Divine battlemage potion",
   chains: [doseChain("DIVINE_BATTLEMAGE_POTION_4_", "DIVINE_BATTLEMAGE_POTION_3_", "DIVINE_BATTLEMAGE_POTION_2_", "DIVINE_BATTLEMAGE_POTION_1_")],
   effect: (player) =>
@@ -1120,7 +1129,7 @@ registerPotion({
       [Skill.MAGIC, Skill.DEFENCE]
     ),
 });
-registerPotion({
+registerDivinePotion({
   name: "Divine super combat potion",
   chains: [doseChain("DIVINE_SUPER_COMBAT_POTION_4_", "DIVINE_SUPER_COMBAT_POTION_3_", "DIVINE_SUPER_COMBAT_POTION_2_", "DIVINE_SUPER_COMBAT_POTION_1_")],
   effect: (player) =>
@@ -1158,9 +1167,16 @@ registerPotion({
   effect: applyMenaphiteRemedy,
 });
 
+// Relicym's balm can be drunk for the Nightmare parasite. Player disease itself is not modelled.
+registerPotion({
+  name: "Relicym's balm",
+  chains: [doseChain("RELICYMS_BALM_4_", "RELICYMS_BALM_3_", "RELICYMS_BALM_2_", "RELICYMS_BALM_1_")],
+  effect: () => {},
+});
+
 // ---------------------------------------------------------------- barbarian mixes of the potions above
 // Wiki (Barbarian Training's mix table): a mix drinks as its potion and heals 3 or 6 per dose.
-// Relicym's and magic essence mixes are left out: their potions have no drink here yet.
+// Relicym's and magic essence mixes are left out; their mix effects are not implemented.
 
 /** A mix drinking as the registered potion `potionName` (or `effect`), healing `healAmount` per dose. */
 function registerMix(name, potionName, healAmount, twoDose, oneDose, effect) {
@@ -1171,6 +1187,7 @@ function registerMix(name, potionName, healAmount, twoDose, oneDose, effect) {
     chains: [doseChain(twoDose, oneDose)],
     requiresFoodPermission: true,
     canUse: potion.canUse ?? undefined,
+    canUseMessage: potion.canUseMessage ?? undefined,
     area: potion.area ?? undefined,
     effect: applyMix(effect ?? potion.effect, healAmount),
   });
@@ -1292,6 +1309,14 @@ function staminaStatus(entity, status) {
   }
 }
 
+/** Remember drains as they happen, before the player's next restoration phase. */
+function noteDivineDrain({ player, skill, previous, current }) {
+  const state = player?.getAttribute(ATTR_DIVINE_STATE);
+  if (!(current < previous) || !(state?.endsAt > Date.now()) || !Array.isArray(state.targets)) return;
+  const entry = state.targets.find((target) => target?.skillIndex === skill?.getIndex());
+  if (entry && current < entry.target) entry.target = current;
+}
+
 function processDivine(player) {
   const state = player.getAttribute(ATTR_DIVINE_STATE);
   if (!state || !Array.isArray(state.targets)) {
@@ -1313,7 +1338,11 @@ function processDivine(player) {
   for (const entry of state.targets) {
     const skill = Skill.values()[entry?.skillIndex];
     if (skill) {
-      setCurrentLevel(player, skill, entry.target);
+      const current = getCurrentLevel(player, skill);
+      if (current !== entry.target) {
+        // Drains, restoration and later boosts change the level being maintained.
+        entry.target = current;
+      }
     }
   }
 }
@@ -1648,15 +1677,38 @@ const CURE_POTIONS = new Map([
  * Consumption still uses the ordinary drink handler and its restrictions.
  */
 function cureFromHealthOrb({ player }) {
-  if (!player || (!player.isPoisoned?.() && !player.isVenomed?.())) return;
+  if (!player) return;
+  const poisoned = player.isPoisoned?.() || player.isVenomed?.();
+  const parasite = { player, active: false };
+  pluginApi.emitCustomEvent("nightmare:parasite-orb-eligible", parasite);
   const items = player.getInventory().getItems();
+  if (parasite.active) {
+    // The Wiki supports either remedy; balm-first is the TSPS selection policy.
+    let selected = null;
+    for (let slot = 0; slot < items.length; slot++) {
+      const itemId = items[slot]?.getId?.() ?? -1;
+      const entry = POTION_BY_ITEM_ID.get(itemId);
+      if (!entry || pluginApi.core.ItemDefinition.forId(itemId).isNoted()) continue;
+      const priority = entry.potion.name === "Relicym's balm" ? 2 : entry.potion.name === "Sanfew serum" ? 1 : 0;
+      if (!priority) continue;
+      if (!selected || priority > selected.priority ||
+          (entry.potion === selected.entry.potion && entry.doses < selected.entry.doses)) {
+        selected = { entry, priority, itemId, slot };
+      }
+    }
+    if (selected) {
+      handlePotionDrink(player, selected.itemId, selected.slot);
+      return;
+    }
+  }
+  if (!poisoned) return;
   let selected = null;
   for (let slot = 0; slot < items.length; slot++) {
     const itemId = items[slot]?.getId?.() ?? -1;
     if (itemId <= 0) continue;
     const entry = POTION_BY_ITEM_ID.get(itemId);
     const strength = entry && CURE_POTIONS.get(entry.potion.name);
-    if (strength === undefined || !entry) continue;
+    if (strength === undefined || !entry || pluginApi.core.ItemDefinition.forId(itemId).isNoted()) continue;
     if (!selected || strength > selected.strength ||
         (entry.potion === selected.entry.potion && entry.doses < selected.entry.doses)) {
       selected = { entry, strength, itemId, slot };
@@ -1737,6 +1789,7 @@ module.exports = {
       return handlePotionDrink(player, itemId, slot);
     });
     api.onInterfaceActionButton(componentIds(api, HEALTH_ORB_CURE_COMPONENTS), cureFromHealthOrb);
+    api.onCustomEvent("skills:current-level-changed", noteDivineDrain);
 
     api.onPlayerProcess(({ player }) => {
       if (player?.isPlayerBot?.()) {

@@ -1,4 +1,5 @@
 /** Cowbell amulet: Wiki mechanics; Ring/no-air statements and sounds from rsprox 4153. */
+const { plainAmount, takePlain, PRESET_TEXT } = require("../../../items/PoweredStaff");
 module.exports = function attachCowbellAmulet(api) {
   const { ItemIdentifiers: I, Equipment, DialogueChainBuilder, StatementDialogue, ItemStatementDialogue,
     Animation, Graphic, TeleportType, TeleportHandler, Location, Flag, World } = api.core;
@@ -50,11 +51,16 @@ module.exports = function attachCowbellAmulet(api) {
       showMessage(player, "You don't have any Air Runes to charge the amulet with.");
       return true;
     }
+    // Uncharge pays plain runes back, so only plain ones charge it (a preset's runes would come back plain).
+    if (plainAmount(player.getInventory(), I.AIR_RUNE) <= 0) {
+      showMessage(player, PRESET_TEXT);
+      return true;
+    }
     player.setEnteredAmountAction({ execute(amount) {
       if (!Number.isInteger(amount) || amount <= 0 || !held(player, item)) return;
-      const used = Math.min(amount, MAX_CHARGES - charges(item), player.getInventory().getAmount(I.AIR_RUNE));
+      const used = Math.min(amount, MAX_CHARGES - charges(item), plainAmount(player.getInventory(), I.AIR_RUNE));
       if (used <= 0) return;
-      player.getInventory().deleteNumber(I.AIR_RUNE, used);
+      takePlain(player.getInventory(), I.AIR_RUNE, used);
       setCharges(player, item, charges(item) + used);
     } });
     player.getPacketSender().sendEnterAmountPrompt("How many Air Runes would you like to add?");
@@ -81,7 +87,8 @@ module.exports = function attachCowbellAmulet(api) {
     const remaining = charges(item);
     if (remaining <= 0) return true;
     const inventory = player.getInventory();
-    if (inventory.getAmount(I.AIR_RUNE) === 0 && inventory.getFreeSlots() < 1) {
+    // Plain runes never join a preset stack, so only a plain stack gives them room without a free slot.
+    if (plainAmount(inventory, I.AIR_RUNE) === 0 && inventory.getFreeSlots() < 1) {
       player.sendMessage("You need a free inventory slot for the Air Runes.");
       return true;
     }

@@ -24,6 +24,8 @@ const Nulodion = require("../plugins/items/dwarfcannon/Nulodion.DwarfCannon");
 const Ornament = require("../plugins/items/dwarfcannon/Ornament.DwarfCannon");
 const Restrictions = require("../plugins/items/dwarfcannon/Restrictions.DwarfCannon");
 
+/** A cache floor decoration (type 22) that blocks walking: the TzHaar sulphur vent. */
+const SULPHUR_VENT = 11851;
 let core;
 let Items;
 /** Open ground with a wall row five tiles south (the line-of-sight test uses it). */
@@ -159,6 +161,22 @@ test("setting up is refused: a second cannon, missing or mixed parts, no room, a
   const exchange = gunner({ at: new core.Location(3165, 3490, 0) });
   Setup.setUp({ player: exchange, itemId: Items.CANNON_BASE });
   assert.ok(exchange.ticks[0].includes("The Grand Exchange staff prefer not to have heavy artillery operated around their premises."));
+});
+
+test("setting up is refused when a blocking floor decoration fills a footprint tile, as it blocks walking", () => {
+  const vent = new core.GameObject(SULPHUR_VENT, CENTRE.transform(1, 1), 22, 0, null);
+  assert.equal(core.RegionManager.getClipping(CENTRE.getX() + 1, CENTRE.getY() + 1, 0, null), 0, "open ground before");
+  core.RegionManager.addObjectClipping(vent);
+  try {
+    assert.equal(core.RegionManager.getClipping(CENTRE.getX() + 1, CENTRE.getY() + 1, 0, null), 0x40000, "only the floor decoration");
+    assert.equal(core.RegionManager.blocked(vent.getLocation(), null), true, "core movement can't step there");
+    const p = gunner();
+    Setup.setUp({ player: p, itemId: Items.CANNON_BASE });
+    assert.deepEqual(p.ticks[0], [Setup.MESSAGE.SPACE]);
+  } finally {
+    core.RegionManager.removeObjectClipping(vent);
+  }
+  assert.equal(Setup.refusal(gunner(), "plain"), null, "the same spot is fine once the decoration is gone");
 });
 
 test("firing: the flag the next tick, then a turn a tick; a target is shot before the turn, the hit lands next tick", () => {

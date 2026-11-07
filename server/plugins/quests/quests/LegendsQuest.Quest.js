@@ -445,7 +445,7 @@ module.exports = function registerLegendsQuest(api) {
   function standableTile(x, y, z) {
     RegionManager.loadMapFiles?.(x, y);
     const clip = RegionManager.getRegion?.(x, y)?.getClip?.(x, y, z);
-    return typeof clip === "number" && (clip & 0x12c0100) === 0;
+    return typeof clip === "number" && (clip & RegionManager.BLOCKED_MASK) === 0;
   }
 
   /**

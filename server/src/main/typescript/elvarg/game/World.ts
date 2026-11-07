@@ -439,6 +439,7 @@ export class World {
         }
     }
 
+    /** Pets stay spatially indexed for visibility and lifecycle, but never block another NPC. */
     public static isNpcOccupyingTile(
         location: Location | null | undefined,
         ignoredNpc: NPC | null = null,
@@ -451,7 +452,7 @@ export class World {
         for (let x = 0; x < Math.max(1, size); x++) {
             for (let y = 0; y < Math.max(1, size); y++) {
                 const key = World.getNpcTileKey(location.getX() + x, location.getY() + y, location.getZ());
-                if (World.npcTileOccupants.get(key)?.some((npc) => npc && npc !== ignoredNpc &&
+                if (World.npcTileOccupants.get(key)?.some((npc) => npc && npc !== ignoredNpc && !npc.isPet() &&
                     (privateArea === undefined || npc.getPrivateArea() === privateArea))) {
                     return true;
                 }

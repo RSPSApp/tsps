@@ -90,6 +90,12 @@ function playerAt(x, y, items = new Map()) {
       getAmount: (id) => items.get(id) ?? 0,
       deleteNumber: (id, amount) => items.set(id, (items.get(id) ?? 0) - amount),
       addItem: (item) => items.set(item.getId(), (items.get(item.getId()) ?? 0) + item.getAmount()),
+      // Plain stand-ins, one per held id, for the dragon shields' preset check, which reads and deletes by slot.
+      getItems: () => [...items].filter(([, n]) => n > 0).map(([id, n]) => ({ getId: () => id, getAmount: () => n })),
+      deleteAtSlot(slot, amount = 1) {
+        const id = [...items].filter(([, n]) => n > 0)[slot]?.[0];
+        if (id !== undefined) items.set(id, items.get(id) - amount);
+      },
     }),
     getEquipment: () => ({ contains: () => false, get: () => null }),
     getAttribute: (key) => player.attributes[key],

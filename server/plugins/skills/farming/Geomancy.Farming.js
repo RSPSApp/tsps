@@ -171,7 +171,7 @@ function render(player, seen) {
     const farm = Patches.farmFor(player),
         now = Date.now(),
         sender = player.getPacketSender();
-    Model.advanceFarm(farm, now);
+    Patches.advanceFarm(player, now);
     for (const panel of layout()) {
         const row = snapshot(farm, panel.patch, now),
             key = JSON.stringify(row);

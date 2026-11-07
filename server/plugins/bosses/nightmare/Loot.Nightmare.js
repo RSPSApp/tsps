@@ -10,6 +10,20 @@ const UNIQUE_NAMES = [
   "INQUISITORS_MACE", "ELDRITCH_ORB", "HARMONISED_ORB", "VOLATILE_ORB",
 ];
 
+/**
+ * Wiki (The Nightmare, Drops): her unique tables roll per kill, not per player - "when unique drops are rolled, a
+ * weighting system based on damage dealt determines which player will receive it" - with a second roll of both
+ * tables at (party size - 5)%, from 0 to 75%. Everyone eligible still rolls the rest of the table.
+ */
+const SECOND_ROLL_FROM_PARTY = 5;
+/**
+ * Wiki (The Nightmare): the pet is 1/800 solo, 1/1,600 for 2, ... 1/4,000 for 5 or more - her table's 1/800, shared;
+ * "The team size is counted when the fight starts."
+ */
+const PET_ITEM_ID = 24491; // Little nightmare
+const PET_SHARE_MAX_PARTY = 5;
+const SECOND_ROLL_MAX_PERCENT = 75;
+
 /** Damage a player has done to her shield and to the totems, for loot. */
 function credit(fight, player, kind, amount) {
   if (!player || amount <= 0) return;
@@ -33,15 +47,34 @@ function reward(fight, players) {
   const uniques = new Set(UNIQUE_NAMES.map((name) => ItemIdentifiers[name]));
   const manager = Common.api.getItemOnGroundManager();
   const where = fight.dream.tile(Common.data.arena.lootTile);
-  for (const player of eligible) {
+  const rollTable = (player) => {
     const request = { player, npcId, drops: [] };
     Common.api.emitCustomEvent("npc-drops:roll-table", request);
-    let drops = request.drops;
+    return request.drops;
+  };
+  // The kill's uniques, each to one player by weight of damage (Phosani's is solo: her own roll keeps them).
+  const awarded = new Map();
+  if (!fight.phosani) {
+    const secondChance = Math.max(0, Math.min(SECOND_ROLL_MAX_PERCENT, eligible.length - SECOND_ROLL_FROM_PARTY));
+    const rolls = 1 + (Math.random() * 100 < secondChance ? 1 : 0);
+    for (let roll = 0; roll < rolls; roll++) {
+      for (const drop of rollTable(mvp).filter((entry) => uniques.has(entry.itemId))) {
+        let pick = Math.random() * eligible.reduce((sum, player) => sum + total(player), 0);
+        const winner = eligible.find((player) => (pick -= total(player)) < 0) ?? mvp;
+        awarded.set(winner, [...(awarded.get(winner) ?? []), drop]);
+      }
+    }
+  }
+  for (const player of eligible) {
+    let drops = rollTable(player);
     if (!fight.phosani) {
-      const unique = drops.some((drop) => uniques.has(drop.itemId));
-      drops = drops.filter((drop) => {
+      const won = awarded.get(player) ?? [];
+      // Counted when the fight starts (Wiki), as the shield and totems are (fight.teamSize, set in awaken()).
+      const petShare = Math.min(PET_SHARE_MAX_PARTY, Math.max(1, fight.teamSize ?? players.length));
+      drops = [...drops.filter((drop) => !uniques.has(drop.itemId)), ...won].filter((drop) => {
+        if (drop.itemId === PET_ITEM_ID) return Math.random() * petShare < 1;
         if (drop.itemId === ItemIdentifiers.BIG_BONES) return player === mvp;
-        return drop.itemId === ItemIdentifiers.BONES ? unique : true;
+        return drop.itemId === ItemIdentifiers.BONES ? won.length > 0 : true;
       });
     }
     // The kill is counted by the fight's own count(); this roll only logs the loot.

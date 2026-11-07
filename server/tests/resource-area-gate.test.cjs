@@ -292,3 +292,26 @@ test("logging in elsewhere in the Wilderness, or outside the gate, moves nobody"
   PM.emitPlayerLogin({ player: elsewhere.p, username: elsewhere.p.getUsername() });
   assert.deepEqual(where(elsewhere), [3222, 3218]);
 });
+
+test("re-clicking the gate while it is still shutting behind a player who left never takes the fee without letting them in", async (t) => {
+  // The gate stays mid-crossing for two ticks after the step out. A Yes in that window used to take the
+  // coins while cross() refused to walk the player in (7,500 gone, still outside).
+  for (const extra of [0, 1, 2, 3]) {
+    for (const delay of [0, 1, 2]) {
+      const f = actor(t, [3185, 3943], { coins: 10000 });
+      await f.c.dispatch([{ type: "object_option", id: GATE, x: GATE_AT[0], y: GATE_AT[1], clickType: 1 }]);
+      for (let n = 0; n < 12 && !(where(f)[0] === OUTSIDE[0] && where(f)[1] === OUTSIDE[1]); n++) tick(f);
+      assert.deepEqual(where(f), OUTSIDE, "the player stepped out");
+      tick(f, extra);
+      await f.c.dispatch([{ type: "object_option", id: GATE, x: GATE_AT[0], y: GATE_AT[1], clickType: 1 }]);
+      for (let n = 0; n < 4 && !pending(f); n++) tick(f);
+      assert.ok(pending(f), `the fee prompt (re-click ${extra} ticks after stepping out)`);
+      tick(f, delay);
+      answer(f, YES);
+      tick(f, 8);
+      const label = `re-click +${extra}, Yes +${delay}`;
+      if (inside(f)) assert.equal(coins(f), 2500, `${label}: entered and paid once`);
+      else assert.equal(coins(f), 10000, `${label}: outside, so nothing taken`);
+    }
+  }
+});

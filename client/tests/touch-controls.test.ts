@@ -12,6 +12,8 @@ import { GameState } from "../game/login/GameState";
 import { MenuOpcode } from "../ui/menu/MenuState";
 import { setMenuTransform } from "../ui/menu/menuTransforms";
 import { applyMenuSwaps } from "../game/plugins/menuswapper/menuSwaps";
+import { npcOpsVisibility } from "../game/NpcOpsVisibility";
+import { groundObjOpsVisibility } from "../game/GroundObjOpsVisibility";
 
 type Move = { dx: number; dy: number; running: boolean; rotation: number };
 
@@ -238,6 +240,14 @@ const refusal = (fromX: number, fromY: number, toX: number, toY: number): Contin
     assert.deepEqual(plugin.getUiState().action, { kind: "npc", options: [{ option: "Attack", target: "Cow", id: 0 }] });
     plugin.interact(0);
     assert.deepEqual(sent[0].slice(2), [MenuOpcode.NpcSecondOption, 11, "Attack", "Cow"]);
+    // hidenpcops takes the NPC's button away; it comes back with the next scan once shown again.
+    npcOpsVisibility.set(true);
+    plugin.onClientTick();
+    assert.equal(plugin.getUiState().action, undefined, "hidden NPC actions offer no button");
+    npcOpsVisibility.clear();
+    plugin.onGameTick();
+    plugin.onClientTick();
+    assert.equal(plugin.getUiState().action?.options[0].target, "Cow", "shown again, the cow's button returns");
     // Held, the cow stays the target after the player steps off it.
     plugin.pin(true);
     at = { x: 61, y: 61 };
@@ -308,8 +318,8 @@ const refusal = (fromX: number, fromY: number, toX: number, toY: number): Contin
 // Standing on ground items lists every stack's options, the last to land first; Take goes by stack.
 {
     const stacks = [
-        { id: 1, itemId: 526, quantity: 1, tile: { x: 40, y: 40, level: 0 } },
-        { id: 2, itemId: 995, quantity: 250, tile: { x: 40, y: 40, level: 0 } },
+        { id: 1, itemId: 526, quantity: 1, enabledOps: 31, tile: { x: 40, y: 40, level: 0 } },
+        { id: 2, itemId: 995, quantity: 250, enabledOps: 31, tile: { x: 40, y: 40, level: 0 } },
     ];
     const objTypes: Record<number, { name: string; groundActions: (string | null)[] }> = {
         526: { name: "Bones", groundActions: [null, null, "Take", null, null] },
@@ -338,6 +348,18 @@ const refusal = (fromX: number, fromY: number, toX: number, toY: number): Contin
         "the newest stack first, a hidden item's Take last");
     plugin.interact(options[1].id);
     assert.deepEqual(taken, [1], "Take sends that stack");
+    // hideobjops takes the pile's button away; it comes back with the next scan once shown again.
+    groundObjOpsVisibility.set(true);
+    plugin.onClientTick();
+    assert.equal(plugin.getUiState().action, undefined, "hidden ground-item actions offer no button");
+    groundObjOpsVisibility.clear();
+    version++;
+    plugin.onClientTick();
+    assert.equal(plugin.getUiState().action?.options.length, 2, "shown again, the pile's button returns");
+    stacks[1].enabledOps = 0; version++; plugin.onClientTick();
+    assert.deepEqual(plugin.getUiState().action?.options.map(o => o.target), ["Bones"]);
+    stacks[1].enabledOps = 31; version++; plugin.onClientTick();
+    assert.equal(plugin.getUiState().action?.options.length, 2);
     stacks.splice(1, 1);
     version++;
     plugin.onClientTick();

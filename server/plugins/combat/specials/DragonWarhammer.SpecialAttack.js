@@ -33,7 +33,8 @@ function buildSpecial(api) {
     const level = currentLevel - drainAmount;
     if (skillManager) skillManager.setCurrentLevels(Skill.DEFENCE, level);
     else target.getAsNpc().setDefenceLevel(level);
-    hit.getAttacker().getAsPlayer().sendMessage(`You reduce your opponent's Defence by ${drainAmount}, from ${currentLevel} to ${level}.`);
+    const actual = skillManager ? skillManager.getCurrentLevel(Skill.DEFENCE) : target.getAsNpc().getDefenceLevel();
+    hit.getAttacker().getAsPlayer().sendMessage(`You reduce your opponent's Defence by ${currentLevel - actual}, from ${currentLevel} to ${actual}.`);
   }
 
   class DragonWarhammerCombatMethod extends MeleeCombatMethod {

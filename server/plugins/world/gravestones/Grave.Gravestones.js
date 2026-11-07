@@ -29,7 +29,6 @@ const HINT_RANGE = 20;
 const HINT_ARROW_NPC = 9;
 /** Unstackables "cannot be stockpiled up to 56" (Wiki: Grave). */
 const MAX_UNSTACKABLE = 28;
-const BLOCKED_FLOOR = 0x1280100;
 
 const MESSAGE = {
   created: "Some of your dropped items are being held in a gravestone, near where you died.",
@@ -116,7 +115,7 @@ function clearHint(player) {
 /** The death tile, or a random free tile in the nearest ring that has one. */
 function graveTile(location) {
   const { RegionManager, Location } = Common.core();
-  const free = (x, y) => (RegionManager.getClipping(x, y, location.getZ(), null) & BLOCKED_FLOOR) === 0;
+  const free = (x, y) => (RegionManager.getClipping(x, y, location.getZ(), null) & RegionManager.BLOCKED_MASK) === 0;
   const x = location.getX();
   const y = location.getY();
   if (free(x, y)) return { x, y, z: location.getZ() };

@@ -17,6 +17,8 @@
 const Shared = require("./Shared.ValeTotems");
 const State = require("./State.ValeTotems");
 const Totems = require("./Totems.ValeTotems");
+const Spirits = require("./Spirits.ValeTotems");
+const Icons = require("./Icons.ValeTotems");
 
 const { DATA } = Shared;
 const POINTS_MAX = (1 << 14) - 1;
@@ -41,10 +43,11 @@ function visit(player, site) {
   State.set(player, site, { points: Math.min(POINTS_MAX, totem.points + offeringsFor(player, site, totem)) });
   if (totem.decay > 1) {
     State.set(player, site, { decay: totem.decay - 1 });
-    return;
+  } else {
+    State.collapse(player, site);
+    State.rollAnimals(player, site);
   }
-  State.collapse(player, site);
-  State.rollAnimals(player, site);
+  Icons.refresh(player);
 }
 
 /** One ent visit at every site, for one player. */
@@ -60,7 +63,8 @@ function spawnSpirits(api) {
   for (const { site, x, y } of DATA.sites) {
     DATA.animals.forEach((animal, index) => {
       const [dx, dy] = SPIRIT_OFFSETS[index];
-      api.spawnNpc({ id: Shared.npc(`ent_totems_site_${site}_animal_${animal.key}_1`), x: x + dx, y: y + dy, z: 0, wanderRadius: SPIRIT_WANDER });
+      const npc = api.spawnNpc({ id: Shared.npc(`ent_totems_site_${site}_animal_${animal.key}_1`), x: x + dx, y: y + dy, z: 0, wanderRadius: SPIRIT_WANDER });
+      Spirits.retain(site, index + 1, npc);
     });
   }
 }

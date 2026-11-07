@@ -1,10 +1,12 @@
 import { ItemOnGroundManager } from "../../../game/entity/impl/grounditem/ItemOnGroundManager";
+import { CrossFloor } from "../../../game/CrossFloor";
 import { State } from "../../../game/entity/impl/grounditem/ItemOnGround";
 import { ItemDefinition } from "../../../game/definition/ItemDefinition";
 import { Animation } from "../../../game/model/Animation";
 import { Graphic } from "../../../game/model/Graphic";
 import { GraphicHeight } from "../../../game/model/GraphicHeight";
 import { Item } from "../../../game/model/Item";
+import { MAX_STACK_AMOUNT } from "../../../game/model/container/StackType";
 import { Location } from "../../../game/model/Location";
 import { MagicSpellbook } from "../../../game/model/MagicSpellbook";
 import { Projectile } from "../../../game/model/Projectile";
@@ -135,24 +137,27 @@ export class MagicOnItemPacketListener {
       return;
     }
 
-    const position = new Location(x, y, player.getLocation().getZ());
-    if (!CombatRange.withinApproachDistance(player, position, MagicOnItemPacketListener.TELEKINETIC_GRAB_RANGE)) {
-      // Out of approach distance: walk in and resolve the cast on arrival, rather
-      // than rejecting the click outright.
-      player.getMovementQueue().walkToTile(
-        position,
-        () => this.castGroundItem(player, groundItemId, x, y, spellId),
-        (entity: any, destination: Location) =>
-          CombatRange.withinApproachDistance(entity, destination, MagicOnItemPacketListener.TELEKINETIC_GRAB_RANGE)
-      );
-      return;
-    }
-
-    const groundItem = this.findVisibleGroundItem(player, groundItemId, position);
+    const groundItem = this.findVisibleGroundItem(player, groundItemId, x, y);
     if (!groundItem) {
       player.sendMessage("Nothing interesting happens.");
       return;
     }
+    const position = groundItem.getPosition().clone();
+    if (!this.withinTelegrabRange(player, position)) {
+      // Out of approach distance: walk in and resolve the cast on arrival, rather
+      // than rejecting the click outright.
+      const approachTile = new Location(x, y, player.getLocation().getZ());
+      player.getMovementQueue().walkToTile(
+        approachTile,
+        () => this.castGroundItem(player, groundItemId, x, y, spellId),
+        (entity: any) => {
+          const target = this.findVisibleGroundItem(entity, groundItemId, x, y);
+          return !!target && this.withinTelegrabRange(entity, target.getPosition());
+        }
+      );
+      return;
+    }
+
     if (!this.canGrabGroundItem(player, groundItem)) return;
     if (!this.canReceiveGroundItem(player, groundItem.getItem())) {
       player.getInventory().full();
@@ -186,12 +191,13 @@ export class MagicOnItemPacketListener {
     // The item comes away when the projectile lands, not on the cast; the grab doesn't stall the
     // player, and anyone can still take the item first.
     const listener = this;
+    const casterFloor = player.getLocation().getZ();
     TaskManager.submit(new class extends Task {
       // Not keyed to the player, so walking off or clicking doesn't cancel a grab already flying.
       constructor() { super(Math.ceil(MagicOnItemPacketListener.TELEKINETIC_GRAB_LANDS_CYCLES / 30), false); }
       execute(): void {
         this.stop();
-        listener.landGroundItemGrab(player, groundItemId, position);
+        listener.landGroundItemGrab(player, groundItemId, position, casterFloor);
       }
     });
   }
@@ -203,17 +209,32 @@ export class MagicOnItemPacketListener {
     return request.allow !== false;
   }
 
+  private withinTelegrabRange(player: any, position: Location): boolean {
+    if (player.getLocation().getZ() === position.getZ()) {
+      return CombatRange.withinApproachDistance(
+        player, position, MagicOnItemPacketListener.TELEKINETIC_GRAB_RANGE,
+      );
+    }
+    return CrossFloor.visible(
+      player.getLocation(), position, MagicOnItemPacketListener.TELEKINETIC_GRAB_RANGE,
+    );
+  }
+
   /** The telegrab projectile has landed: the item is taken if it is still there. */
-  private landGroundItemGrab(player: any, groundItemId: number, position: Location): void {
+  private landGroundItemGrab(player: any, groundItemId: number, position: Location, casterFloor = position.getZ()): void {
     if (!player.isRegistered?.() || player.getHitpoints?.() <= 0) {
       return;
     }
-    if (player.getLocation().getZ() !== position.getZ()) {
+    if (casterFloor === position.getZ()
+      ? player.getLocation().getZ() !== casterFloor
+      : !this.withinTelegrabRange(player, position)) {
       player.sendMessage("Your telegrab fizzles as you move too far away.");
       return;
     }
     player.getSkillManager().addExperiences(Skill.MAGIC, MagicOnItemPacketListener.TELEKINETIC_GRAB_XP);
-    const groundItem = this.findVisibleGroundItem(player, groundItemId, position);
+    const groundItem = this.findVisibleGroundItem(
+      player, groundItemId, position.getX(), position.getY(), position.getZ(),
+    );
     if (!groundItem) {
       player.sendMessage("Too late - it's gone!");
       return;
@@ -307,19 +328,22 @@ export class MagicOnItemPacketListener {
     if (!payment.allowAnySpellbook && player.getSpellbook()?.getInterfaceId?.() !== MagicSpellbook.NORMAL.getInterfaceId()) {
       return;
     }
-    // The coins need somewhere to go: their stack, a free slot, the slot the item leaves, or a rune
-    // stack the cast uses up (consumeRunes takes the inventory's runes first).
-    const freesRuneSlot = !payment.free && runes.some(rune => {
-      const held = inventory.getAmount?.(rune.getId()) ?? 0;
-      return held > 0 && held <= rune.getAmount();
-    });
-    const noRoom = policy.coins > 0 && (inventory.getFreeSlots?.() ?? 1) <= 0
-      && !inventory.contains?.(ItemIdentifiers.COINS)
-      && !(policy.keepItem !== true && (item.getAmount?.() ?? 1) === 1)
-      && !freesRuneSlot;
-    if (noRoom) {
-      player.sendMessage("You don't have enough inventory space.");
-      return;
+    // An existing matching coin stack cannot overflow, even when other slots are free.
+    // A new stack may instead use a slot released by the item or spent runes.
+    if (policy.coins > 0) {
+      const coins = new Item(ItemIdentifiers.COINS, policy.coins);
+      const matchingCoins = inventory.getItems().some((held: any) => held?.getId?.() === ItemIdentifiers.COINS
+        && JSON.stringify(held.getMeta?.() ?? null) === JSON.stringify(coins.getMeta() ?? null));
+      const fitsNow = inventory.getAddableAmount(coins) === policy.coins;
+      const freesItemSlot = policy.keepItem !== true && (item.getAmount?.() ?? 1) === 1;
+      const freesRuneSlot = !payment.free && runes.some(rune => {
+        const held = inventory.getAmount?.(rune.getId()) ?? 0;
+        return held > 0 && held <= rune.getAmount();
+      });
+      if (!fitsNow && (matchingCoins || policy.coins > MAX_STACK_AMOUNT || !(freesItemSlot || freesRuneSlot))) {
+        player.sendMessage("You don't have enough inventory space.");
+        return;
+      }
     }
     if (!confirmed && policy.confirm) {
       this.confirmUntradeableAlchemy(player, spellId, slot, itemId, definition.getName(), clickedItem, source);
@@ -399,32 +423,32 @@ export class MagicOnItemPacketListener {
     player.getDialogueManager().startDialogues(chain);
   }
 
-  private findVisibleGroundItem(player: any, groundItemId: number, position: Location): any | null {
-    const exact = ItemOnGroundManager.getGroundItem(player.getUsername(), groundItemId, position, player.getPrivateArea());
-    if (exact && ItemOnGroundManager.canSee(player, exact)) {
-      return exact;
-    }
-
-    for (const item of World.getItems()) {
+  private findVisibleGroundItem(player: any, groundItemId: number, x: number, y: number, z?: number): any | null {
+    const candidates = World.getItems().filter((item) => {
       if (!item || item.isPendingRemoval?.()) {
-        continue;
+        return false;
       }
       if (item.getItem?.().getId?.() !== groundItemId) {
-        continue;
+        return false;
       }
-      if (!item.getPosition?.().equals?.(position)) {
-        continue;
+      const position = item.getPosition?.();
+      if (position?.getX?.() !== x || position?.getY?.() !== y) {
+        return false;
+      }
+      if (z !== undefined && position.getZ?.() !== z) {
+        return false;
       }
       if (item.getPrivateArea?.() !== player.getPrivateArea?.()) {
-        continue;
+        return false;
       }
-      if (!ItemOnGroundManager.canSee(player, item)) continue;
+      if (!CrossFloor.visible(player.getLocation(), position, 64)) return false;
       if (item.getState?.() === State.SEEN_BY_PLAYER && item.getOwner?.() !== player.getUsername?.()) {
-        continue;
+        return false;
       }
-      return item;
-    }
-    return null;
+      return ItemOnGroundManager.canSee(player, item);
+    });
+    candidates.sort((a, b) => b.getPosition().getZ() - a.getPosition().getZ());
+    return candidates[0] ?? null;
   }
 
   public castOnItem(player: any, spellId: number, itemId: number, slot: number, source?: unknown): boolean {

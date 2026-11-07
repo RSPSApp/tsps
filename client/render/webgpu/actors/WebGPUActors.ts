@@ -612,6 +612,10 @@ export class WebGPUActors {
         }
     }
 
+    clearNpcSpotAnimations(serverId: number): void {
+        this.gfx?.manager.removeActorInstances("npc", serverId);
+    }
+
     /** Port of overlays4.ts registerNpcSpotAnimation (spells, specials on an NPC target). */
     registerNpcSpotAnimation(event: NpcSpotAnimationEvent): void {
         try {

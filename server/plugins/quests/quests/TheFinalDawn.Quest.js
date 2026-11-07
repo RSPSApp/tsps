@@ -1538,10 +1538,14 @@ module.exports = function registerTheFinalDawnQuest(api) {
     const { player, itemId, objectId } = event;
     if (objectId === SAFEHOUSE_SAND_POT_OBJECT && itemId === EMPTY_COIN_PURSE_ITEM) {
       event.handled = true;
-      if (quest.getStage(player) !== STAGE_PURSE_OPEN) return;
+      // The sandy purse can be emptied at any stage, so it can be filled again until the blackjack is made.
+      const stage = quest.getStage(player);
+      if (stage < STAGE_PURSE_OPEN || stage > STAGE_TRAP || held(player, MAKESHIFT_BLACKJACK_ITEM)) return;
+      // A second use in the same tick finds the purse already filled: nothing to fill, nothing to add.
+      if (!held(player, EMPTY_COIN_PURSE_ITEM)) return;
       player.getInventory().deleteNumber(EMPTY_COIN_PURSE_ITEM, 1);
       player.getInventory().adds(SANDY_COIN_PURSE_ITEM, 1);
-      setStage(player, STAGE_PURSE_SAND);
+      if (stage === STAGE_PURSE_OPEN) setStage(player, STAGE_PURSE_SAND);
       player.sendMessage("You fill the coin purse with sand from the plant pot.");
       return;
     }

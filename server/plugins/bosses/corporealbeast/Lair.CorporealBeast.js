@@ -38,8 +38,18 @@ function enterCave({ player, objectId }) {
     player.sendMessage("You cannot enter the cave while in combat.");
     return true;
   }
-  player.moveTo(Shared.loc(Shared.shifted(Shared.CAVE_ARRIVAL)));
+  player.moveTo(Shared.loc(Shared.shifted(Shared.CAVE_ARRIVAL, Shared.roomFor(player))));
   return true;
+}
+
+/** request.tile, when supplied, is a northern-copy [x, y, z] anchor; omission uses the northern lobby. */
+function teleportDestination(request) {
+  if (!request?.player) return;
+  const anchor = Array.isArray(request.tile)
+    ? { x: request.tile[0], y: request.tile[1], z: request.tile[2] ?? 0 }
+    : Shared.LOBBY;
+  const tile = Shared.shifted(anchor, Shared.roomFor(request.player));
+  request.tile = [tile.x, tile.y, tile.z];
 }
 
 function exitCave({ player, objectId }) {
@@ -88,6 +98,7 @@ module.exports = function registerCorporealBeastLair(api) {
   api.onObjectInteraction("Cave", { Enter: enterCave });
   api.onObjectInteraction("Cave exit", { Exit: exitCave });
   api.onObjectInteraction("Passage", { "Go-through": goThrough, Peek: peek });
+  api.onCustomEvent("corporeal:teleport-destination", teleportDestination);
   for (const room of Shared.ROOM_AREAS) {
     api.onZoneEnter(room, showOverlay);
     api.onZoneExit(room, hideOverlay);

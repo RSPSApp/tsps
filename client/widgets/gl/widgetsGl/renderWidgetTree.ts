@@ -54,6 +54,12 @@ import { ps } from "./profilingState";
 import { FONT_VERDANA_11, FONT_VERDANA_13, FONT_VERDANA_15 } from "../../../ui/fonts";
 import type { WorldMapLabelDraw, WorldMapLabelMetrics } from "./worldMapLabels";
 import { hasSpriteOverride } from "../spriteOverrides";
+import { layoutWorldMapPoint, type PluginWorldMapPointEntry, type RenderedWorldMapPoint, renderedWorldMapPointAt } from "@runelite/client/ui/overlay/worldmap/worldMapLayout";
+import { CanvasTextureCache } from "@runelite/client/ui/overlay/CanvasTextureCache";
+import { overlayFont } from "@runelite/client/ui/overlay/OverlayFonts";
+
+/** Textures for RuneLite world map point images, one per canvas, bounded. */
+const worldMapPointTextures = new CanvasTextureCache(64);
 
 export type { WidgetNode };
 type Widget = WidgetNode;
@@ -1963,13 +1969,31 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                     glr.drawRect(dot.x - dotSize / 2, dot.y - dotSize / 2, dotSize, dotSize,
                         isBot ? [1, 1, 1, 1] : [1, 1, 0, 1]);
                 }
-                // Plugin WorldMapPoints (e.g. Quest Helper's step location), edge-snapped when asked.
-                const pluginPoints: any[] = worldMapRenderHost?.pluginWorldMapPoints ?? [];
+                // Plugin WorldMapPoints (Quest Helper's step location, RuneLite plugins' markers),
+                // edge-snapped when asked. A RuneLite point draws its own image anchored on the tile
+                // (RuneLite's WorldMapOverlay), swaps it on the edge transitions, and is remembered
+                // for its tooltip and click-to-jump.
+                const pluginPoints: PluginWorldMapPointEntry[] = worldMapRenderHost?.pluginWorldMapPoints ?? [];
                 const pointSize = 16 * renderScale;
+                const mapBounds = { x, y, w: width, h: height };
+                const renderedPoints: RenderedWorldMapPoint[] = [];
                 for (const point of pluginPoints) {
                     const displayPos = currentArea.position(point.plane, point.x, point.y);
                     if (!displayPos) continue;
                     const at = projectDisplayToScreen(displayPos.x + 0.5, displayPos.y + 0.5);
+                    const rlPoint = point.point;
+                    if (rlPoint) {
+                        const placed = layoutWorldMapPoint(rlPoint, at, mapBounds, renderScale);
+                        if (!placed) continue;
+                        const image = rlPoint.getImage();
+                        const w = (image ? image.width : 16) * renderScale;
+                        const h = (image ? image.height : 16) * renderScale;
+                        const texture = image ? worldMapPointTextures.texture(glr, image) : undefined;
+                        if (texture) glr.drawTexture(texture, placed.x, placed.y, w, h);
+                        else glr.drawRect(placed.x + w / 4, placed.y + h / 4, w / 2, h / 2, [1, 1, 1, 1]);
+                        renderedPoints.push({ x0: placed.x, y0: placed.y, x1: placed.x + w, y1: placed.y + h, point: rlPoint });
+                        continue;
+                    }
                     const inside = at.x >= x && at.y >= y && at.x <= x + width && at.y <= y + height;
                     if (!inside && !point.snapToEdge) continue;
                     const half = pointSize / 2;
@@ -1982,6 +2006,24 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                         glr.drawRect(px - half / 2, py - half / 2, half, half,
                             [((c >>> 16) & 0xff) / 255, ((c >>> 8) & 0xff) / 255, (c & 0xff) / 255, 1]);
                     }
+                }
+                osrsClient?.setRenderedWorldMapPoints?.(renderedPoints);
+                // The name of the RuneLite point under the mouse, as RuneLite's tooltip shows it.
+                const mouseX = worldMapRenderHost?.inputManager?.mouseX ?? -1;
+                const mouseY = worldMapRenderHost?.inputManager?.mouseY ?? -1;
+                const hovered = renderedWorldMapPointAt(renderedPoints, mouseX, mouseY);
+                const hoveredName = hovered?.getName();
+                if (hoveredName) {
+                    const font = overlayFont("tooltip");
+                    const bitmap = opts.fontLoader(font.id);
+                    const pad = 4 * renderScale;
+                    const textW = (bitmap ? bitmap.measure(hoveredName) : hoveredName.length * 6) * renderScale * font.scale;
+                    const textH = 16 * renderScale * font.scale;
+                    const boxW = textW + 2 * pad, boxH = textH + 2 * pad;
+                    const boxX = Math.min(mouseX, x + width - boxW);
+                    const boxY = Math.min(mouseY + 24 * renderScale, y + height - boxH);
+                    glr.drawRect(boxX, boxY, boxW, boxH, [70 / 255, 61 / 255, 50 / 255, 156 / 255]);
+                    drawTextGL(hoveredName, boxX + pad, boxY + pad, textW, textH, font.id, 0xffffff, 0, 1);
                 }
                 osrsClient?.setWorldMapViewport?.({
                     x, y, width, height, displayX, displayY, pixelsPerTileX, pixelsPerTileY,
@@ -3114,39 +3156,8 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
 
             // No client-side bob if no sequence; rely on server/script-provided sequence/animationId.
 
-            // If this widget is currently set to display an item, override angles/offsets/zoom
-            // from the item definition.
-            try {
-                const itemId = w.itemId;
-                const qty = (w.itemQuantity ?? 0) | 0 || 1;
-                const objLoader = (opts as any).objLoader;
-                if (typeof itemId === "number" && itemId >= 0 && objLoader?.load) {
-                    let it = objLoader.load(itemId);
-                    if (it && typeof it.getCountObj === "function") {
-                        it = it.getCountObj(objLoader, qty);
-                    }
-                    if (it) {
-                        rx = (it.xan2d | 0) as number;
-                        ry = (it.yan2d | 0) as number;
-                        rz = (it.zan2d | 0) as number;
-                        offX = (it.offsetX2d | 0) as number;
-                        offY = (it.offsetY2d | 0) as number;
-                        zoom = Math.max(1, (it.zoom2d | 0) as number);
-                    }
-                }
-            } catch {}
-
-            // Apply normalization only when the widget is displaying an item (OSRS behavior)
-            try {
-                const itemId = w.itemId;
-                if (typeof itemId === "number" && itemId >= 0) {
-                    const zUnitsX = (w as any).modelZoomWidthUnits | 0 || 0;
-                    // only width-based units are used; fallback is rawWidth
-                    if (zUnitsX > 0) zoom = Math.max(1, Math.floor((zoom * 32) / zUnitsX));
-                    else if ((w.rawWidth ?? 0) > 0)
-                        zoom = Math.max(1, Math.floor((zoom * 32) / (w.rawWidth ?? 1)));
-                }
-            } catch {}
+            // Item setters initialize the transform. Draw the current widget values so
+            // CC_SETMODELANGLE timers (including the welcome rune pulse) remain visible.
             // PERF: Build cache key FIRST and check if we have cached render result
             // Only cache static models (no animation)
             const isAnimated = sequenceId !== undefined && sequenceId >= 0;
@@ -3476,12 +3487,40 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
             // Where the text landed, so wheel input can tell text from the empty box around it.
             w._textBounds = undefined;
             if (effectiveText.length) {
+                const resolvedFont = opts.fontLoader(w.fontId ?? -1);
+                // A plugin may draw other text (a translation) and pick the line height it needs
+                // to fit; the widget's own text, which scripts read, stays as it is.
+                let displayLineHeight: number | undefined;
+                const plugins = osrsClient?.clientPlugins;
+                if (plugins?.hasWidgetDisplayText?.()) {
+                    const uid = (w.uid as number) | 0;
+                    const display = plugins.widgetDisplayText({
+                        groupId: w.groupId | 0,
+                        text: effectiveText,
+                        width: logicalWidth,
+                        height: logicalHeight,
+                        lineHeight: (w.lineHeight as number) | 0,
+                        font: resolvedFont,
+                        uid,
+                        parentUid: typeof w.parentUid === "number" && w.parentUid >= 0 ? w.parentUid : undefined,
+                        siblingText: (offset: number) => {
+                            const child = (uid & 0xffff) + offset;
+                            if (child < 0 || child > 0xffff) return undefined;
+                            const sibling = widgetManager?.getWidgetByUid?.((uid & ~0xffff) | child);
+                            return typeof sibling?.text === "string" ? sibling.text : undefined;
+                        },
+                    });
+                    if (display) {
+                        effectiveText = display.text;
+                        displayLineHeight = display.lineHeight;
+                    }
+                }
                 const normalized = effectiveText.replace(/<br\s*\/?\s*>/gi, "\n");
                 // OSRS type-4 widgets use drawLines(), but short widgets disable automatic
                 // word wrapping and only honor explicit line breaks.
                 // When textLineHeight == 0, OSRS uses font.ascent as the line height.
-                const resolvedFont = opts.fontLoader(w.fontId ?? -1);
                 const lineH =
+                    displayLineHeight ||
                     (w.lineHeight as number) | 0 ||
                     ((resolvedFont as any)?.lineHeight as number) ||
                     ((resolvedFont as any)?.ascent as number) ||

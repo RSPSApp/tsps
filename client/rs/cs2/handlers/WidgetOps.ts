@@ -6,6 +6,7 @@ import {
     markWidgetsLoaded,
 } from "../../../game/TransmitCycles";
 import { markWidgetInteractionDirty } from "../../../widgets/WidgetInteraction";
+import { initializeWidgetItemModel } from "../../../widgets/WidgetItemModel";
 import { MAX_WIDGET_OPS } from "../../../widgets/WidgetFlags";
 import { SCRIPT_LAYOUT, type WidgetNode } from "../../../widgets/WidgetManager";
 import { getViewportSize } from "../../../common/utils/DeviceUtil";
@@ -461,27 +462,7 @@ function applySetObjectWidget(
     try {
         const obj = ctx.objTypeLoader?.load(itemId) as any;
         if (obj) {
-            const xan2d = (obj.xan2d ?? 0) | 0;
-            const yan2d = (obj.yan2d ?? 0) | 0;
-            const zan2d = (obj.zan2d ?? 0) | 0;
-
-            w.rotationX = xan2d;
-            w.rotationY = zan2d;
-            w.rotationZ = yan2d;
-            w.modelAngleX = xan2d;
-            w.modelAngleY = zan2d;
-            w.modelAngleZ = yan2d;
-            w.modelOffsetX = (obj.offsetX2d ?? 0) | 0;
-            w.modelOffsetY = (obj.offsetY2d ?? 0) | 0;
-
-            let zoom = Math.max(1, (obj.zoom2d ?? 0) | 0);
-            const zoomWidthUnits = ((w as any).modelZoomWidthUnits ?? 0) | 0;
-            if (zoomWidthUnits > 0) {
-                zoom = Math.max(1, Math.floor((zoom * 32) / zoomWidthUnits));
-            } else if (((w.rawWidth ?? 0) | 0) > 0) {
-                zoom = Math.max(1, Math.floor((zoom * 32) / ((w.rawWidth ?? 1) | 0)));
-            }
-            w.modelZoom = zoom;
+            initializeWidgetItemModel(w, obj);
         }
     } catch {}
 

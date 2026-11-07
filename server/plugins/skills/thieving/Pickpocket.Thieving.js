@@ -252,7 +252,8 @@ function giveLoot(player, target, loot, random = Math.random, multiplier = 1) {
   for (const item of loot) {
     const { id, amount, clue } = item;
     if (id === core.ItemIdentifiers.COINS && target.coinPouch) {
-      inventory.adds(target.coinPouch.id, 1);
+      // The full-inventory check ran at the click; worn gear taken off before this resolves can fill the last slot.
+      inventory.forceAdd(player, new core.Item(target.coinPouch.id, 1));
       // Wiki (Coin pouch): a doubled pouch gives one pouch plus its coins directly.
       const coins = (times - 1) * (Array.isArray(target.coinPouch.coins) ? target.coinPouch.coins[0] : target.coinPouch.coins);
       if (coins > 0) inventory.forceAdd(player, new core.Item(core.ItemIdentifiers.COINS, coins));
@@ -486,6 +487,9 @@ function pouchCoins(pouchId, random = Math.random) {
 function register(api) {
   core = api.core;
   pluginApi = api;
+  // The gloves' wear and the necklace's charges outlast a relog (Wiki: both wear out on use, not per session).
+  api.persistAttribute(GLOVES_OF_SILENCE_ATTRIBUTE, 0);
+  api.persistAttribute(DODGY_NECKLACE_ATTRIBUTE, DODGY_NECKLACE_CHARGES);
   api.onNpcsInteraction([...new Set(TARGETS.filter((t) => !t.option).flatMap((t) => t.npcs))], { Pickpocket: pickpocket });
   api.onNpcInteraction("Digsite workman", { "Steal-from": pickpocket });
 }

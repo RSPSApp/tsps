@@ -134,7 +134,16 @@ function makePlayer(options = {}) {
       const slots = Array.from({ length: 28 }, () => new core.Item(-1, 0));
       let slot = 0;
       for (const [id, amount] of items) {
-        if (amount > 0) slots[slot++] = new core.Item(id, amount);
+        if (amount <= 0) continue;
+        // A converted item (setId in place, as the real container's item would be) moves its stack in the map.
+        const item = new core.Item(id, amount);
+        const setId = item.setId.bind(item);
+        item.setId = (next) => {
+          items.set(id, Math.max(0, (items.get(id) ?? 0) - item.getAmount()));
+          items.set(next, (items.get(next) ?? 0) + item.getAmount());
+          return setId(next);
+        };
+        slots[slot++] = item;
       }
       return slots;
     },

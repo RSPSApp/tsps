@@ -262,12 +262,11 @@ The client draws everything from varbits; the server keeps them right.
 
 ## Rewards outside the minigame
 
-- Smithing catalyst (`Smelting.Smithing.js`, Superheat Item): for a bar that uses coal, one catalyst per bar halves the coal and doubles the Smithing XP. When there aren't enough catalysts or coal for that, the bar is smelted as normal.
+- Smithing catalyst (`Smelting.Smithing.js`, Superheat Item): for a bar that uses coal, one catalyst per bar halves the coal and doubles the Smithing XP. When there aren't enough catalysts or coal for that, the bar is smelted as normal. At the [Blast Furnace](./blast-furnace.md#smithing-catalyst), it doubles XP without further coal savings.
 - Double ammo mould: `Cannonballs.Smithing.js`.
 - Smiths' uniform at an anvil (`Anvil.Smithing.js`): each item takes 4 ticks instead of 5 at the same chance.
 - Colossal blade (`ColossalBlade.EquipmentEffects.js`): the melee max hit is raised by 2 × the target's size, at most 10.
 
 ## Follow-ups
 
-- The smithing catalyst at the Blast Furnace (the Wiki: double XP there, no further coal saving). The Wiki doesn't say when the catalyst is taken there.
 - Combat achievements, diaries and the minigame's league tasks.

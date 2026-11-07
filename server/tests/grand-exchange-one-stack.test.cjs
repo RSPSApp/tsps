@@ -8,6 +8,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 const { before, after, test } = require("node:test");
 require("../dist/Server").Server.installProductionPathResolver();
+require("./helpers/pvp-mode-on.cjs");
 const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { PluginManager: PM } = require("../dist/plugins/PluginManager");
 const { Player } = require("../dist/game/entity/impl/player/Player");
@@ -168,4 +169,65 @@ test("a buy costing more than the first coin stack is refused and takes nothing"
   assert.ok(f.messages.includes(REFUSAL), "the refusal");
   assert.equal(placed(f).length, 0, "no offer");
   assert.deepEqual(stacks(f, I.COINS), [1, 100000000], "nothing taken");
+});
+
+test("Sell All includes notes and items from either selected form", async (t) => {
+  const base = I.RUNE_SCIMITAR;
+  const note = core.ItemDefinition.forId(base).getNoteId();
+  assert.ok(core.ItemDefinition.forId(note).isNoted());
+  for (const selectedNote of [false, true]) {
+    const f = actor(t);
+    put(f, item(base), 0);
+    put(f, item(base), 1);
+    put(f, item(note, 3), 2);
+    await sell(f, selectedNote ? note : base, selectedNote ? 2 : 0, ALL);
+    assert.equal(placed(f).length, 1);
+    assert.equal(placed(f)[0].quantity, 5, "both inventory forms were offered");
+    assert.equal(placed(f)[0].itemId, base, "offers store the tradeable item");
+    assert.equal(f.inv.getAmount(base), 0);
+    assert.equal(f.inv.getAmount(note), 0);
+  }
+});
+
+test("mixed-form custom quantities remove only the requested amount", async (t) => {
+  const f = actor(t);
+  const base = I.RUNE_SCIMITAR;
+  const note = core.ItemDefinition.forId(base).getNoteId();
+  put(f, item(base), 0);
+  put(f, item(note, 3), 1);
+  open(f);
+  await button(f, SIDE, 0, 1, note);
+  await button(f, GE, 34, 7);
+  f.p.getEnteredAmountAction().execute(2);
+  await button(f, GE, 30);
+  assert.equal(placed(f)[0].quantity, 2);
+  assert.equal(f.inv.getAmount(base), 0);
+  assert.equal(f.inv.getAmount(note), 2);
+});
+
+test("mixed forms retain the first-stack limit and never consume restricted notes", async (t) => {
+  const base = I.RUNE_SCIMITAR;
+  const note = core.ItemDefinition.forId(base).getNoteId();
+  const f = actor(t);
+  put(f, item(note, 2), 0);
+  put(f, item(note, 5), 1);
+  put(f, item(base), 2);
+  open(f);
+  await button(f, SIDE, 0, 0, note);
+  await button(f, GE, 34, 7);
+  f.p.getEnteredAmountAction().execute(3);
+  await button(f, GE, 30);
+  assert.equal(placed(f)[0].quantity, 3);
+  assert.deepEqual(stacks(f, note), [5], "the second note stack was not taken");
+  assert.equal(f.inv.getAmount(base), 0);
+
+  const restricted = actor(t);
+  put(restricted, item(base), 0);
+  const marked = item(note, 3);
+  marked.setMetaValue(core.Item.PRESET_META, true);
+  put(restricted, marked, 1);
+  await sell(restricted, base, 0, ALL);
+  assert.equal(placed(restricted).length, 0);
+  assert.equal(restricted.inv.getAmount(base), 1);
+  assert.equal(restricted.inv.getAmount(note), 3);
 });

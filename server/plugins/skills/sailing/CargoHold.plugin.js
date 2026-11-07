@@ -1,6 +1,7 @@
 // A boat's cargo hold: opening it, withdrawing and depositing by the selected quantity, the
 // deposit buttons, and the tools compartment. Packets, ids and messages follow live captures of
 // the raft's hold (docs/sailing-osrs-reference.md); what it accepts, the OSRS Wiki's Cargo hold.
+const { restricted, plainAmount, takePlain, PRESET_TEXT } = require("../../items/PoweredStaff");
 const { Item } = require("../../../src/main/typescript/elvarg/game/model/Item");
 const { ItemDefinition } = require("../../../src/main/typescript/elvarg/game/definition/ItemDefinition");
 const { Sailing } = require("../../../src/main/typescript/elvarg/game/content/sailing/Sailing");
@@ -200,6 +201,11 @@ function deposit(player, slot, itemId, amount) {
     player.sendMessage(CANNOT_STORE);
     return;
   }
+  // The hold keeps only ids and amounts, so a preset copy (PvP presets) would come back plain.
+  if (restricted(item)) {
+    player.sendMessage(PRESET_TEXT);
+    return;
+  }
   if (cargo.toolFor(itemId)) {
     storeTool(player, cargo.toolFor(itemId));
   } else {
@@ -211,16 +217,29 @@ function deposit(player, slot, itemId, amount) {
 /** Moves up to `amount` of an item from the inventory into the hold. */
 function storeItem(player, boat, itemId, amount) {
   const inventory = player.getInventory();
-  const wanted = Math.min(amount, inventory.getAmount(itemId));
+  const wanted = Math.min(amount, plainAmount(inventory, itemId));
   const stored = cargo.store(boat, itemId, wanted);
-  if (stored > 0) inventory.delete(itemId, stored);
+  if (stored > 0) takePlain(inventory, itemId, stored);
   if (stored < wanted) player.sendMessage("Your cargo hold is full.");
   return stored;
 }
 
-/** Puts a tool in the tools compartment; diving gear needs both parts. */
+/** How a tool is named in the compartment's lines: "a spyglass", "your current duck", "some diving gear". */
+function toolText(tool) {
+  return { 0: "your captain's log", 1: "a spyglass", 2: "your current duck", 4: "some diving gear" }[tool.slot]
+    ?? `a ${ItemDefinition.forId(tool.give[0])?.getName?.()?.toLowerCase?.() ?? "tool"}`;
+}
+
+/**
+ * Puts a tool in the tools compartment; diving gear needs both parts. The compartment holds one of each and
+ * remembers only which are in it, so a second copy is refused rather than deleted (message not captured).
+ */
 function storeTool(player, tool) {
   const inventory = player.getInventory();
+  if (player.getSailing().tools.includes(tool.slot)) {
+    player.sendMessage(`You already have ${toolText(tool)} in your tools compartment.`);
+    return false;
+  }
   const held = tool.accept.filter((id) => inventory.contains(id));
   if (tool.give.length > 1 && !tool.give.every((id) => inventory.contains(id))) {
     player.sendMessage(CANNOT_STORE);
@@ -247,9 +266,7 @@ function takeTool(player, slot) {
   tools.splice(tools.indexOf(tool.slot), 1);
   for (const id of tool.give) inventory.add(new Item(id, 1), true);
   // rsprox: "You collect your current duck from the tools compartment."
-  const what = { 0: "your captain's log", 1: "a spyglass", 2: "your current duck", 4: "some diving gear" }[tool.slot]
-    ?? `a ${ItemDefinition.forId(tool.give[0])?.getName?.()?.toLowerCase?.() ?? "tool"}`;
-  player.sendMessage(`You collect ${what} from the tools compartment.`);
+  player.sendMessage(`You collect ${toolText(tool)} from the tools compartment.`);
   playSound(player, SOUND_TOOL);
   const boat = heldBoat(player);
   if (boat) refresh(player, boat);
@@ -271,8 +288,10 @@ function depositAll(player, category) {
     const tool = cargo.toolFor(id);
     if (tool) {
       if (inventory.contains(id)) storeTool(player, tool);
-    } else if (storeItem(player, boat, id, inventory.getAmount(id)) === 0) {
-      break;
+    } else {
+      // Preset copies stay in the pack (the hold would hand them back plain); the plain ones go in.
+      const plain = plainAmount(inventory, id);
+      if (plain > 0 && storeItem(player, boat, id, plain) === 0) break;
     }
   }
   playSound(player, SOUND_DEPOSIT_ALL);

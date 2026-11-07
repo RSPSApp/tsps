@@ -341,3 +341,186 @@ test("::npc reports the nearby display limit without increasing the protocol's c
   assert.equal(core.World.MAX_LOCAL_NPCS, 255);
   assert.match(owner.messages.at(-1), /nearby NPC display limit \(255\).*Remove nearby NPCs/);
 });
+
+/** Exercise the real punishment store without touching world saves or staff lists. */
+function moderation(t) {
+  const fs = require("node:fs");
+  const os = require("node:os");
+  const { PlayerPunishment: punishments } = require("../dist/util/PlayerPunishment");
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "tsps-moderation-"));
+  const previous = { ban: punishments.BAN_DIRECTORY, mute: punishments.MUTE_DIRECTORY,
+    displayNames: process.env.TSPS_DISPLAY_NAMES_FILE };
+  process.env.TSPS_DISPLAY_NAMES_FILE = path.join(directory, "display-names.json");
+  core.DisplayNames.reset();
+  punishments.BAN_DIRECTORY = punishments.MUTE_DIRECTORY = directory + path.sep;
+  punishments.init();
+  const saved = new Set();
+  const snapshots = [];
+  t.mock.method(core.GameConstants.PLAYER_PERSISTENCE, "exists", name => saved.has(core.DisplayNames.key(name)));
+  t.mock.method(core.GameConstants.PLAYER_PERSISTENCE, "requestSave", (player, reason) => snapshots.push([player.getUsername(), reason]));
+  const removals = core.World.getRemovePlayerQueue();
+  const previousRemovals = [...removals];
+  removals.length = 0;
+  t.after(async () => {
+    await punishments.flush();
+    punishments.BAN_DIRECTORY = previous.ban;
+    punishments.MUTE_DIRECTORY = previous.mute;
+    punishments.init();
+    if (previous.displayNames === undefined) delete process.env.TSPS_DISPLAY_NAMES_FILE;
+    else process.env.TSPS_DISPLAY_NAMES_FILE = previous.displayNames;
+    core.DisplayNames.reset();
+    removals.splice(0, removals.length, ...previousRemovals);
+    fs.rmSync(directory, { recursive: true, force: true });
+  });
+  return { punishments, saved, snapshots, removals,
+    read: file => fs.readFileSync(path.join(directory, file + ".txt"), "utf8") };
+}
+
+test("::ban persists, queues logout and survives reload; ::unban reverses it offline", async t => {
+  const { punishments, snapshots, removals, read } = moderation(t);
+  const owner = login("Owner", Rights.OWNER);
+  const bob = login("Bob Smith");
+  type(owner, "ban BOB_SMITH");
+  assert.equal(punishments.banned(bob.getUsername()), true, "the login gate reads this list");
+  assert.ok(removals.includes(bob));
+  assert.deepEqual(snapshots, [["Bob Smith", "staff-punishment"]]);
+  type(owner, "ban bob smith");
+  assert.match(owner.messages.at(-1), /already banned/);
+  await punishments.flush();
+  assert.equal(read("Bans"), "Bob Smith\n", "repeating the command does not duplicate the ban");
+  online = [owner];
+  punishments.init();
+  assert.equal(punishments.banned("bOb sMiTh"), true);
+  type(owner, "unban bob_smith");
+  assert.equal(punishments.banned("Bob Smith"), false);
+  await punishments.flush();
+  assert.equal(read("Bans"), "");
+  punishments.init();
+  assert.equal(punishments.banned("Bob Smith"), false);
+});
+
+test("::mute blocks public, private and shared social chat checks; ::unmute restores chat", async t => {
+  const { punishments, read } = moderation(t);
+  const { ChatPacketListener } = require("../dist/net/packet/impl/ChatPacketListener");
+  const { FriendsChatManager } = require("../plugins/interface/FriendsChatManager");
+  const owner = login("Owner", Rights.OWNER);
+  const bob = login("Bob").setHostAddress("192.0.2.2");
+  let spoken = false;
+  bob.forceChat = () => { spoken = true; };
+  type(owner, "mute bob");
+  type(owner, "mute bob");
+  ChatPacketListener.handleText(bob, "hello");
+  assert.equal(spoken, false);
+  assert.equal(bob.messages.at(-1), "You are muted and cannot chat.");
+  FriendsChatManager.handlePrivateMessage(bob, "Owner", "hello");
+  assert.equal(bob.messages.at(-1), "You are muted and cannot chat.");
+  assert.equal(FriendsChatManager.allowChat(bob, "hello"), false, "also used by friends and clan channels");
+  await punishments.flush();
+  assert.equal(read("Mutes"), "Bob\n");
+  punishments.init();
+  assert.equal(punishments.muted("BOB"), true);
+  type(owner, "unmute bob");
+  assert.equal(FriendsChatManager.allowChat(bob, "hello"), true);
+  assert.equal(bob.messages.at(-1), "You have been unmuted.");
+  await punishments.flush();
+  assert.equal(read("Mutes"), "");
+});
+
+test("account punishments work offline and resolve display names to the login account", async t => {
+  const { punishments, saved } = moderation(t);
+  const owner = login("Owner", Rights.OWNER);
+  saved.add("bob smith");
+  core.DisplayNames.set("bob smith", "New Name", Date.now(), 100000);
+  type(owner, "mute NEW_NAME");
+  type(owner, "ban new name");
+  assert.equal(punishments.muted("Bob Smith"), true);
+  assert.equal(punishments.banned("Bob Smith"), true);
+  assert.equal(punishments.banned("New Name"), false, "never ban only the display alias");
+  type(owner, "unmute new name");
+  type(owner, "unban new name");
+  assert.equal(punishments.muted("Bob Smith"), false);
+  assert.equal(punishments.banned("Bob Smith"), false);
+});
+
+test("IP punishments persist, affect shared-IP accounts and can be removed by address after logout", async t => {
+  const { punishments, removals, read } = moderation(t);
+  const { FriendsChatManager } = require("../plugins/interface/FriendsChatManager");
+  const owner = login("Owner", Rights.OWNER).setHostAddress("192.0.2.1");
+  const bob = login("Bob").setHostAddress("192.0.2.2");
+  const alt = login("Alt").setHostAddress("192.0.2.2");
+  type(owner, "ipmute bob");
+  type(owner, "ipmute bob");
+  assert.equal(punishments.IPMuted(bob.getHostAddress()), true);
+  assert.equal(FriendsChatManager.allowChat(alt, "hello"), false);
+  assert.equal(FriendsChatManager.allowChat(owner, "hello"), true);
+  assert.equal(punishments.muted("Bob"), false, "account and IP lists are independent");
+  type(owner, "ipban bob");
+  assert.ok(removals.includes(bob));
+  assert.ok(removals.includes(alt));
+  assert.ok(!removals.includes(owner));
+  await punishments.flush();
+  assert.equal(read("IPMutes"), "192.0.2.2\n");
+  assert.equal(read("IPBans"), "192.0.2.2\n");
+  online = [owner];
+  punishments.init();
+  assert.equal(punishments.IPBanned("192.0.2.2"), true);
+  type(owner, "unipmute 192.0.2.2");
+  type(owner, "unipban 192.0.2.2");
+  assert.equal(punishments.IPMuted("192.0.2.2"), false);
+  assert.equal(punishments.IPBanned("192.0.2.2"), false);
+  await punishments.flush();
+  assert.equal(read("IPMutes"), "");
+  assert.equal(read("IPBans"), "");
+  punishments.init();
+  assert.equal(punishments.IPBanned("192.0.2.2"), false);
+});
+
+test("IP removals accept an online player or an IPv6 address", async t => {
+  const { punishments } = moderation(t);
+  const owner = login("Owner", Rights.OWNER);
+  login("Bob").setHostAddress("::ffff:192.0.2.2");
+  type(owner, "ipmute bob");
+  type(owner, "unipmute bob");
+  assert.equal(punishments.IPMuted("::ffff:192.0.2.2"), false);
+  type(owner, "ipban bob");
+  type(owner, "unipban ::ffff:192.0.2.2");
+  assert.equal(punishments.IPBanned("::ffff:192.0.2.2"), false);
+});
+
+test("IP punishments refuse the issuer's own address and loopback proxy addresses", t => {
+  const { punishments, removals } = moderation(t);
+  const owner = login("Owner", Rights.OWNER).setHostAddress("192.0.2.1");
+  login("Housemate").setHostAddress("192.0.2.1");
+  login("Proxied").setHostAddress("127.0.0.1");
+  for (const command of ["ipban housemate", "ipmute housemate", "ipban proxied", "ipmute proxied"]) {
+    type(owner, command);
+    assert.match(owner.messages.at(-1), /^Refusing/, command);
+  }
+  assert.equal(punishments.IPBanned("192.0.2.1"), false);
+  assert.equal(punishments.IPBanned("127.0.0.1"), false);
+  assert.equal(punishments.IPMuted("127.0.0.1"), false);
+  assert.equal(removals.length, 0);
+});
+
+test("moderation preserves permissions, rejects missing targets and never matches prefixes", t => {
+  const { punishments, removals } = moderation(t);
+  const owner = login("Owner", Rights.OWNER);
+  const admin = login("Admin", Rights.ADMINISTRATOR);
+  login("Bob Smith");
+  for (const command of ["ban", "unban", "mute", "unmute", "ipban", "unipban", "ipmute", "unipmute", "kick"]) {
+    type(admin, `${command} Bob Smith`);
+    assert.equal(admin.messages.at(-1), NO_PERMISSION, command);
+    type(owner, command);
+    assert.match(owner.messages.at(-1), /^Usage:/, command);
+    type(owner, `${command} bob`);
+    assert.match(owner.messages.at(-1), /does not exist|not online|is not (muted|banned)/, command);
+  }
+  type(owner, "ipban Bob Smith");
+  assert.match(owner.messages.at(-1), /no IP address/);
+  assert.equal(punishments.banned("Bob Smith"), false);
+  assert.equal(punishments.muted("Bob Smith"), false);
+  assert.equal(punishments.IPBanned(""), false);
+  assert.equal(removals.length, 0);
+  type(owner, "kick bob smith");
+  assert.equal(removals.length, 1);
+});

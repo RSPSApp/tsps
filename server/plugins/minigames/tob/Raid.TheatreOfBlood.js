@@ -149,12 +149,15 @@ function returnAfterLogout({ player }) {
     // Wiki (Escape crystal, 26 March 2025): one carried is used up, and the player returns outside.
     if (EscapeCrystal.usedOnLogin(player)) {
       raid?.forget(player);
+      Shared.removeBandages(player);
       player.setAttribute(Raid.ATTR_LOGOUT, null);
       player.moveTo(Shared.loc(Shared.OUTSIDE));
       return;
     }
     if (raid?.rejoin(player)) return;
     player.setAttribute(Raid.ATTR_LOGOUT, null);
+    // Not back in the raid, so its bandages stay behind (before anything is stored for retrieval).
+    Shared.removeBandages(player);
     if (left.fight) {
       Retrieval.storeAfterWipe(player, { free: left.mode === "entry" });
       player.sendMessage("Your party could not be found. A magical chest has retrieved some of your items; you can collect them from it outside of the Theatre of Blood.");

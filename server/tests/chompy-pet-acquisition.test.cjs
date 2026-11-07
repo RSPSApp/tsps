@@ -1,22 +1,25 @@
 const assert = require("node:assert/strict");
 const path = require("node:path");
-const {before,test} = require("node:test");
+const {before,after,test} = require("node:test");
+process.env.DISABLE_PLAYER_BOTS = "1";
 require("../dist/Server").Server.installProductionPathResolver();
 const {CachePipeline} = require("../dist/game/cache/CachePipeline");
 const {PluginManager: PM} = require("../dist/plugins/PluginManager");
 const {Player} = require("../dist/game/entity/impl/player/Player");
 const {PlayerSession} = require("../dist/net/PlayerSession");
 const {ClientConnection} = require("../dist/net/NetworkBuilder");
-let core,quest,western,Progress,Pets,next=700;
+let core,quest,western,Progress,Pets,next=700,nextBaitTile=0;
 before(async()=>{
   await CachePipeline.initialize(path.resolve(__dirname,".."));
   PM.loadFromDirectory(path.resolve(__dirname,"../plugins"));core=PM.getCoreApi();
   core.RegionManager.init();core.RegionManager.loadMapFiles(2635,2966);
+  PM.emitServerStartup({});
   quest=require("../plugins/quests/QuestRuntime").getRegisteredQuests().find(q=>q.key==="big_chompy_bird_hunting");
   western=require("../plugins/achievements/diaries/Data.AchievementDiaries").BY_KEY.get("western");
   Progress=require("../plugins/achievements/diaries/Progress.AchievementDiaries");
   Pets=require("../plugins/npcs/Pets.plugin");
 });
+after(()=>PM.emitServerShutdown({}));
 function actor(t,claimed=false){
   const channel={kind:"test",remoteAddress:"127.0.0.1",isOpen:()=>true,send:()=>true,close(){},onData(){},onError(){},onClose(){}};
   const p=new Player(new PlayerSession(channel));p.setIndex(next++);p.setUsername("chickqa"+next);p.setRegistered(true);
@@ -34,10 +37,17 @@ const chick=()=>core.ItemIdentifiers.CHOMPY_CHICK;
 const raw=()=>core.ItemIdentifiers.RAW_CHOMPY;
 function award(f){PM.emitCustomEvent("npc-drops:roll",{player:f.p,drops:[{itemId:chick(),amount:1}]});}
 async function hunt(t,f,win=false){
+  const offset=nextBaitTile++;
+  f.p.setLocation(new core.Location(2633+(offset%6),2965+Math.floor(offset/6)));
+  f.p.needsPlacement=false;
+  f.baitsPlaced=(f.baitsPlaced??0)+1;
+  const previousBirds=new Set([...core.World.getNpcs()].filter(n=>n?.getId?.()===core.NpcIdentifiers.CHOMPY_BIRD&&n.getOwner()===f.p));
   f.p.getInventory().add(new core.Item(core.ItemIdentifiers.BLOATED_TOAD),false);
   const slot=f.p.getInventory().getItems().findIndex(i=>i.getId()===core.ItemIdentifiers.BLOATED_TOAD);
-  await f.c.dispatch([{type:"inventory_action",widgetId:3214,itemId:core.ItemIdentifiers.BLOATED_TOAD,slot,option:"Release"}]);f.c.processTurnPackets();
-  const npc=[...core.World.getNpcs()].find(n=>n?.getId?.()===core.NpcIdentifiers.CHOMPY_BIRD&&n.getOwner()===f.p);
+  await f.c.dispatch([{type:"inventory_action",widgetId:3214,itemId:core.ItemIdentifiers.BLOATED_TOAD,slot,option:"Drop"}]);f.c.processTurnPackets();
+  t.mock.method(Math,"random",()=>0); // controlled successful lure; pet roll is set separately below
+  for(let tick=0;tick<25;tick++)core.TaskManager.process();
+  const npc=[...core.World.getNpcs()].find(n=>n?.getId?.()===core.NpcIdentifiers.CHOMPY_BIRD&&n.getOwner()===f.p&&!previousBirds.has(n));
   assert.ok(npc,"real quest-spawned hunted Chompy");
   const previousCorpses=new Set([...core.World.getNpcs()].filter(n=>n?.getId?.()===core.NpcIdentifiers.CHOMPY_BIRD_2&&n.getOwner()===f.p));
   t.mock.method(Math,"random",()=>win?0:0.999999);
@@ -48,7 +58,11 @@ async function hunt(t,f,win=false){
 }
 async function pluck(f,corpse){
   await f.c.dispatch([{type:"npc_option",index:corpse.getIndex(),clickType:4}]);f.c.processTurnPackets();
-  f.p.getMovementQueue().process();
+  for(let tick=0;tick<25;tick++){
+    core.TaskManager.process();
+    f.p.getMovementQueue().process();
+    core.TaskManager.processWalkTo(f.p.getIndex());
+  }
 }
 function directPluck(f,corpse){PM.emitNpcInteraction({player:f.p,npc:corpse,npcId:corpse.getId(),definition:corpse.getDefinition(),clickType:4,handled:false});}
 test("canonical claimed elite reward authorizes the pet; the old synthetic flag does not",t=>{

@@ -185,7 +185,7 @@ No capture shows any of this, so the menu's and the messages' words are ours. Th
 
 From the entrance without a party, or Abigaila (Lumbridge general store, the Grand Exchange): by a member's or spectator's name, or the most recent party; carrying nothing but an oculus orb, not poisoned or diseased (Wiki). A spectator sees the raid's area from the room's `spectate` tile, follows the party's rooms, can't attack and is put out when the raid ends. They leave by teleporting (our rule).
 
-Not built: the rooms' "Arena: View" ledges (a loc with that option exists, id 8718), the camera's chatbox buttons, the war table, and the friends-only check, which only has a `tob:may-spectate` event nothing answers.
+Not built: the rooms' "Arena: View" ledges (a loc with that option exists, id 8718), the camera's chatbox buttons, and the war table. The named-player Friends Only check uses the named participant or spectator's friends list. Recent Party retains its existing admission behavior; its privacy selection is not established here.
 
 ## Combat Achievements
 

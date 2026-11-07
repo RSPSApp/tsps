@@ -30,7 +30,7 @@ import type {
     SpotAnimationPayload,
     TradeWindowState,
 } from "./types";
-import type { SkillsUpdateEvent } from "./types/sync";
+import type { NpcSpecificEffect, SkillsUpdateEvent } from "./types/sync";
 import type {
     RebuildNormalPayload,
     RebuildRegionPayload,
@@ -127,6 +127,7 @@ export const state = {
     pending: new Map<number, PathCallback>(),
     tickListeners: new Set<(tick: number, time: number) => void>(),
     npcInfoListeners: new Set<(payload: NpcInfoPayload) => void>(),
+    npcSpecificEffectListeners: new Set<(effect: NpcSpecificEffect) => void>(),
     spellResultListeners: new Set<(payload: SpellResultPayload) => void>(),
     projectileListeners: new Set<(spawn: ProjectileLaunch) => void>(),
     soundListeners: new Set<

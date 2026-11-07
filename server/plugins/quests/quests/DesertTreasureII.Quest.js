@@ -1,6 +1,12 @@
 /** Desert Treasure II - The Fallen Empire. */
 module.exports = function registerDesertTreasureII(api) {
   const { Skill, Item, MagicSpellbook, ItemIdentifiers: I, NpcIdentifiers: N, ObjectIdentifiers: O } = api.core;
+
+  /** Room for one more of `itemId` (`adds` never reports a failure); a slotless stand-in falls back to free slots. */
+  function hasRoom(inventory, itemId) {
+    if (typeof inventory.getAddableAmount === "function") return inventory.getAddableAmount(new Item(itemId, 1)) >= 1;
+    return (inventory.getFreeSlots?.() ?? 1) > 0;
+  }
   const { registerQuest, startTranscript } = require("../QuestRuntime");
   const PAGE = "Desert Treasure II - The Fallen Empire";
   const { findBestPickaxe } = require("../../skills/Mining.plugin");
@@ -2152,8 +2158,7 @@ module.exports = function registerDesertTreasureII(api) {
     if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
     const regionManager = api.core.RegionManager;
     if (typeof regionManager?.getClipping !== "function") return true;
-    // Match the walkable-tile test used by the existing boss hazard plugins.
-    return (regionManager.getClipping(x, y, z, area) & 0x1280100) === 0;
+    return (regionManager.getClipping(x, y, z, area) & regionManager.BLOCKED_MASK) === 0;
   }
   function finalWightHasProjectileLine(area, source, destination) {
     const regionManager = api.core.RegionManager;
@@ -3644,10 +3649,11 @@ module.exports = function registerDesertTreasureII(api) {
     const mazeThree = owned?.scarMazeThreeLightLeeches?.includes(npc);
     if (!owned?.scarLightLeeches?.includes(npc) && !mazeThree) return false;
     if (Math.random() < 0.5) {
-      if (p.getInventory().adds(I.ILLUMINATING_LURE, 1) === false) {
+      if (!hasRoom(p.getInventory(), I.ILLUMINATING_LURE)) {
         p.sendMessage("You need inventory space to take the illuminating lure.");
         return true;
       }
+      p.getInventory().adds(I.ILLUMINATING_LURE, 1);
       const area = mazeThree ? p.getAttribute(ATTR_SCAR_MAZE_THREE) : p.getAttribute(ATTR_SCAR_MAZE_ONE);
       area?.remove?.(npc);
       if (npc.isRegistered?.() && !api.core.World.getRemoveNPCQueue().includes(npc)) api.core.World.getRemoveNPCQueue().push(npc);
@@ -3736,10 +3742,11 @@ module.exports = function registerDesertTreasureII(api) {
       p.sendMessage("That nerve ending is still regrowing.");
       return true;
     }
-    if (p.getInventory().adds(itemId, 1) === false) {
+    if (!hasRoom(p.getInventory(), itemId)) {
       p.sendMessage("You need inventory space to take the rune nerve.");
       return true;
     }
+    p.getInventory().adds(itemId, 1);
     // shortcut: the Wiki says endings regrow shortly; calibrate these four ticks against a live capture.
     p.setAttribute(attribute, { ...regrowAt, [tileKey]: now + 4 });
     p.sendMessage("You break the nerve ending and take its rune nerve.");

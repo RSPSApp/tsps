@@ -115,6 +115,15 @@ function castLunarCraftingSpell(event) {
     player.sendMessage(`You need at least level ${LUNAR.defenceLevel} Defence to cast Lunar spells.`);
     return;
   }
+  if (spell.name === "Tan Leather") {
+    // Completion is necessary; whether claiming the reward is also required is not established.
+    const diary = { player, diary: "fremennik", tier: "hard", complete: false };
+    pluginApi.emitCustomEvent("diary:is-complete", diary);
+    if (diary.complete !== true) {
+      player.sendMessage("You need to complete the hard Fremennik Diary to cast this spell.");
+      return;
+    }
+  }
   if (!spell.effect.has(player, spell)) {
     player.sendMessage(spell.data.noneMessage);
     return;

@@ -218,6 +218,8 @@ function refuse(player, refused) {
 
 /** Into a mode's waiting area, beside the barrier tile they used (captured). */
 function enterWaiting(player, mode, x) {
+  // Lisa's menu can be answered after a game has taken the player; a player in one isn't moved out of it.
+  if (Match.gameOf(player)) return;
   const refused = refusal(player, mode);
   if (refused) {
     refuse(player, refused);
@@ -243,7 +245,8 @@ function barrier({ player, object }) {
   const x = object?.getLocation?.().getX?.() ?? player.getLocation().getX();
   if (waiting(player, mode)) {
     Common.api.sendMultiChatboxPrompt(player, Common.message("forfeit"),
-      "Yes.", () => leaveWaiting(player, mode, x),
+      // The game can start while the question is open; Yes then leaves nothing (their stash is the game's to give back).
+      "Yes.", () => { if (waiting(player, mode)) leaveWaiting(player, mode, x); },
       "No.", () => {});
     return true;
   }

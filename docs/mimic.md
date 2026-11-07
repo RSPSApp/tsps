@@ -14,6 +14,7 @@ The plugin is `server/plugins/bosses/Mimic.plugin.js`, units in
 | `Shared.Mimic.js` | Ids (cache gamevals), arena tiles, candy table, anims. |
 | `State.Mimic.js` | Per-casket identity, origin, original clue-roll count, remaining attempts and victory; saved loss ledger for dropped/grave-held caskets. |
 | `Lair.Mimic.js` | PrivateArea over the real arena (multicombat, so boss + minions can pile one player), entry (casket on strange casket), keyhole exit behind the "Are you sure you wish to leave?" confirm, stomp ticks, cleanup. |
+| `Retrieval.Mimic.js` | Holds unprotected death losses at the strange casket and handles the 90,000-coin retrieval. |
 | `Challenge.Mimic.js` | `Challenge` on the casket form (7979) wakes the boss (8633). |
 | `Fight.Mimic.js` | Attack script: melee crush, candy volley, minions, stomp hits, death cleanup. |
 | `Minions.Mimic.js` | Minion attacks: ranger fire-arrow flight + synced hits, mage Earth Wave cast/flight/impact + synced hits. |
@@ -58,6 +59,20 @@ Already in data (not this plugin): combat stats (`monsters-complete.json`: 8633 
 `::item 23184`, use it on the strange casket, `Challenge`, survive: melee hits ~23s,
 candy volleys of six with minion spawns, escalating stomps, joint minion death.
 
+## Death retrieval
+
+An unsafe death during the fight puts the lost items, including unprotected untradeables, at the
+strange casket. Search it to pay 90,000 coins and retrieve them. Using another Mimic casket on it
+still offers a new fight while items are held. Items that do not fit stay there
+until taken; a later unsafe death removes what remains. Ultimate Ironmen can retrieve their items.
+For ordinary accounts, the fee uses Death's Coffer first, then one source that covers the balance:
+carried coins, the bank, or coins held in the casket. Ultimate Ironmen use carried or stored coins;
+the service does not use their bank or Coffer. This source priority and partial-withdrawal sequence
+are TSPS choices. The shared retrieval interface uses the cache's Mimic-specific states (17 unpaid, 18
+paid). The precise interaction and payment order are not verified by a recording. Safe deaths do
+not clear the held items. Sources: [Strange casket](https://oldschool.runescape.wiki/w/Strange_casket)
+and [Item Retrieval Service](https://oldschool.runescape.wiki/w/Item_Retrieval_Service).
+
 ## Casket state
 
 The [Mimic item page](https://oldschool.runescape.wiki/w/Mimic) permits juggling
@@ -99,4 +114,4 @@ master casket, `mimic:encountered`). The Mimic keeps the casket's clue rolls thr
   chests default elite); every leave or death with the fight on costs one,
   simultaneous death does not; at zero the chest disappears. Origin/attempt state is implemented above. Tertiary scroll case, ring rate shift and base4–6 elite/5–7 master clue rolls
   are follow-ups with the same.
-- **Death retrieval fee** (NR: 90k at the strange casket) and the boss timer.
+- **Boss timer.**

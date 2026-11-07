@@ -1,5 +1,6 @@
 let core;
 let pluginApi;
+const { restricted, PRESET_TEXT } = require("./PoweredStaff");
 const methods = new Map();
 const uncappedDamage = new WeakMap();
 
@@ -243,7 +244,10 @@ function chargeScales(player, blowpipeItem, blowpipeSlot, scaleItem) {
   if (add <= 0) {
     return;
   }
-  player.getInventory().deleteNumber(core.ItemIdentifiers.ZULRAHS_SCALES, add);
+  // Only the stack used pays, by its slot: an id-wide delete could take a preset copy instead.
+  const slot = player.getInventory().getItems().indexOf(scaleItem);
+  if (slot < 0) return;
+  player.getInventory().deleteAtSlot(slot, add);
   BlowpipeState.addScales(blowpipeItem, add);
   refreshBlowpipeState(player, blowpipeItem, blowpipeSlot);
   player.sendMessage(`You add ${add} Zulrah scales to the blowpipe.`);
@@ -273,7 +277,10 @@ function chargeDarts(player, blowpipeItem, blowpipeSlot, dartItem) {
     return;
   }
 
-  player.getInventory().deleteNumber(dartId, add);
+  // Only the stack used pays, by its slot: an id-wide delete could take a preset copy instead.
+  const slot = player.getInventory().getItems().indexOf(dartItem);
+  if (slot < 0) return;
+  player.getInventory().deleteAtSlot(slot, add);
   BlowpipeState.addDarts(blowpipeItem, dartId, add);
   refreshBlowpipeState(player, blowpipeItem, blowpipeSlot);
   player.sendMessage(`You load ${add} ${getAmmoName(dartId)} into the blowpipe.`);
@@ -670,6 +677,12 @@ function itemOnItem(event) {
   const blowpipeItem = blowpipeOnLeft ? usedItem : usedWithItem;
   const otherItem = blowpipeOnLeft ? usedWithItem : usedItem;
   const otherItemId = blowpipeOnLeft ? usedWithItemId : usedItemId;
+  // Preset copies never load: Unload and Uncharge pay back plain scales and darts.
+  if ((otherItemId === core.ItemIdentifiers.ZULRAHS_SCALES || isToxicBlowpipeDartId(otherItemId)) && restricted(otherItem)) {
+    event.handled = true;
+    player.sendMessage(PRESET_TEXT);
+    return;
+  }
   if (otherItemId === core.ItemIdentifiers.ZULRAHS_SCALES) {
     event.handled = true;
     chargeScales(player, blowpipeItem, blowpipeSlot, otherItem);
@@ -685,6 +698,22 @@ function rememberDamage({ attacker, hit, damage }) {
   if (attacker?.isPlayer?.() && attacker.isSpecialActivated?.() && attacker.getCombatSpecial?.()?.getId() === "toxic_blowpipe") {
     uncappedDamage.set(hit, damage.getDamage());
   }
+}
+
+/**
+ * "item:fill-charges" { player, item, handled }: content that hands out a blowpipe ready to use
+ * (the PvP Arena's load-outs) asks for a full one: every scale and dart it holds, dragon darts
+ * (the arena's load-outs name no dart; inferred).
+ */
+function fillCharges(event) {
+  const { item } = event;
+  if (!item || !isToxicBlowpipeItemId(item.getId())) return;
+  BlowpipeState.write(item, {
+    scales: TOXIC_BLOWPIPE_MAX_SCALES,
+    dartId: core.ItemIdentifiers.DRAGON_DART,
+    dartAmount: TOXIC_BLOWPIPE_MAX_DARTS,
+  });
+  event.handled = true;
 }
 
 module.exports = {
@@ -703,6 +732,7 @@ module.exports = {
     api.registerBonusProvider({ apply: bonusProviderApply });
     api.registerCombatMethodResolver({ resolve: combatMethodResolverResolve });
     api.onItemOnItem(itemOnItem);
+    api.onCustomEvent("item:fill-charges", fillCharges);
     api.onItemAction("Toxic blowpipe", {
       Check: checkBlowpipe,
       Unload: unloadBlowpipe,
@@ -726,5 +756,5 @@ module.exports = {
     api.onInterfaceActionButton(CONFIRM_BUTTON, confirmPrompt);
     api.onCustomEvent("destroy-item:prompt", forgetPrompt);
   },
-  _test: { dartShot, BlowpipeState, checkBlowpipe, removeDarts, removeEverything, CONFIRM_GROUP_ID },
+  _test: { dartShot, BlowpipeState, checkBlowpipe, removeDarts, removeEverything, fillCharges, CONFIRM_GROUP_ID },
 };

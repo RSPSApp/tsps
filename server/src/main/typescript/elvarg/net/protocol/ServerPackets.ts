@@ -23,6 +23,9 @@ export const enum ServerPacketId {
     NPC_INFO = 21,
     ANIM = 22,
     MOVEMENT_POSITION = 23,
+    NPC_ANIM_SPECIFIC = 24,
+    NPC_SPOTANIM_SPECIFIC = 25,
+    NPC_HEADICON_SPECIFIC = 26,
 
     // ========================================
     // VARPS/VARBITS (40-49)
@@ -40,6 +43,7 @@ export const enum ServerPacketId {
     INVENTORY_SLOT = 51,
     BANK_SNAPSHOT = 52,
     BANK_SLOT = 53,
+    INVENTORY_STOP_TRANSMIT = 56, // discard a client container; later updates recreate it
     GROUND_ITEMS = 54,
     GROUND_ITEMS_DELTA = 55,
 
@@ -109,6 +113,7 @@ export const enum ServerPacketId {
     LOC_DEL = 135,
     LOC_ANIM = 136,
     CAMERA_CONTROL = 137,
+    LOC_MERGE = 138, // temporary player/loc model attachment
     SOUND = 131,
     PLAY_JINGLE = 132,
     PLAY_SONG = 133,
@@ -120,6 +125,8 @@ export const enum ServerPacketId {
     SET_INTERACTION_MODE = 145, // OSRS set_interaction_mode: what tile/entity clicks do in a world
     RESET_INTERACTION_MODE = 146, // OSRS reset_interaction_mode: drops a world's own mode
     REGION_REPLACEMENT_COMPRESSED = 147, // deflated REGION_REPLACEMENT payload; dense regions do not fit raw
+    HIDE_NPC_OPS = 148, // OSRS set_hide_npc_actions: one global boolean hiding NPC menu actions
+    HIDE_OBJ_OPS = 149, // OSRS set_item_ops_disabled (ground items): one global boolean hiding ground-item menu actions
 
     // ========================================
     // SHOP/TRADE (150-169)
@@ -190,6 +197,9 @@ export const SERVER_PACKET_LENGTHS: Record<ServerPacketId, number> = {
     [ServerPacketId.PLAYER_SYNC]: -2,
     [ServerPacketId.MOVEMENT_POSITION]: 18,
     [ServerPacketId.NPC_INFO]: -2,
+    [ServerPacketId.NPC_ANIM_SPECIFIC]: 5,
+    [ServerPacketId.NPC_SPOTANIM_SPECIFIC]: 9,
+    [ServerPacketId.NPC_HEADICON_SPECIFIC]: 7,
     [ServerPacketId.ANIM]: 22, // 11 shorts for animation IDs
 
     [ServerPacketId.VARP_SMALL]: 3, // varpId(2) + value(1)
@@ -203,6 +213,7 @@ export const SERVER_PACKET_LENGTHS: Record<ServerPacketId, number> = {
     [ServerPacketId.INVENTORY_SLOT]: -1,
     [ServerPacketId.BANK_SNAPSHOT]: -2,
     [ServerPacketId.BANK_SLOT]: -1,
+    [ServerPacketId.INVENTORY_STOP_TRANSMIT]: 2,
     [ServerPacketId.GROUND_ITEMS]: -2,
     [ServerPacketId.GROUND_ITEMS_DELTA]: -2,
 
@@ -258,6 +269,7 @@ export const SERVER_PACKET_LENGTHS: Record<ServerPacketId, number> = {
     [ServerPacketId.LOC_CHANGE]: -1,
     [ServerPacketId.LOC_ADD_CHANGE]: -1,
     [ServerPacketId.LOC_DEL]: -1,
+    [ServerPacketId.LOC_MERGE]: 18, // loc/tile/shape + player index + cycle interval + signed bounds
     [ServerPacketId.LOC_ANIM]: 10, // locId(2) + x(2) + y(2) + level(1) + shape/rot(1) + animId(2)
     [ServerPacketId.SOUND]: -1,
     [ServerPacketId.PLAY_JINGLE]: 5, // jingleId(2) + delay(3, IME)
@@ -272,6 +284,8 @@ export const SERVER_PACKET_LENGTHS: Record<ServerPacketId, number> = {
     [ServerPacketId.REGION_REPLACEMENT_COMPRESSED]: -2, // regionId(2) + flags(1) + lengths(8) + deflated data
     [ServerPacketId.SET_INTERACTION_MODE]: 4, // worldId(2) + tileMode(1) + entityMode(1)
     [ServerPacketId.RESET_INTERACTION_MODE]: 2, // worldId(2)
+    [ServerPacketId.HIDE_NPC_OPS]: 1, // hidden(1)
+    [ServerPacketId.HIDE_OBJ_OPS]: 1, // hidden(1)
 
     [ServerPacketId.SHOP_OPEN]: -2,
     [ServerPacketId.SHOP_SLOT]: -1,

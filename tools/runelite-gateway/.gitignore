@@ -1,8 +1,0 @@
-vendor/
-.runtime/
-branding.local.json
-branding-assets/
-.gradle/
-build/
-.kotlin/
-!gradle/wrapper/gradle-wrapper.jar

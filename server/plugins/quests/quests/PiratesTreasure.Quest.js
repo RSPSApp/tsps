@@ -1,6 +1,6 @@
 /** Pirate's Treasure. Capture evidence: docs/f2p-coastal-parity.md. */
 module.exports = function registerPiratesTreasureQuest(api) {
-  const { Equipment, Location, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers, GameObject, Animation, Task, TaskManager, CountdownTask, TemplatedInstanceArea, StatementDialogue } = api.core;
+  const { Equipment, Item, Location, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers, GameObject, Animation, Task, TaskManager, CountdownTask, TemplatedInstanceArea, StatementDialogue } = api.core;
   const { registerQuest, startTranscript } = require("../QuestRuntime");
 
   const FRANK_NPC_ID = NpcIdentifiers.REDBEARD_FRANK;
@@ -87,6 +87,8 @@ module.exports = function registerPiratesTreasureQuest(api) {
   const RUM_CONFISCATE_STEP_IDS = new Set(["JN4f2Q", "pUSUQY", "et2BjU", "CO6KKg", "pNZxTm"]);
   /** "30 coins" actions on the two Luthas payment pages. */
   const PAYMENT_STEP_IDS = new Set(["76-Dox", "1YHx0E"]);
+  const PAYMENT_MESSAGE_ID = "A0JWWz";
+  const BANANA_WAGE = 30;
   const RECLAIM_KEY_STEP_ID = "0m95Tl";
   /** "Frank happily takes the rum... and hands you a key." */
   const RUM_HANDIN_STEP_ID = "Uy0FFQ";
@@ -311,9 +313,19 @@ module.exports = function registerPiratesTreasureQuest(api) {
       event.handled = true;
       return;
     }
-    if (npcId === LUTHAS_NPC_ID && PAYMENT_STEP_IDS.has(stepId)) {
-      payForBananas(player);
-      event.handled = true;
+    if (npcId === LUTHAS_NPC_ID && (stepId === PAYMENT_MESSAGE_ID || PAYMENT_STEP_IDS.has(stepId))) {
+      if (attr(player, BANANA_ATTRIBUTE) >= 10
+          && player.getInventory().getAddableAmount(new Item(COINS_ITEM_ID, BANANA_WAGE)) < BANANA_WAGE) {
+        // No capture covers a capped coin stack; this refusal wording is ours.
+        player.sendMessage("You can't carry all of your wages.");
+        event.handled = true;
+        event.end = true;
+        return;
+      }
+      if (PAYMENT_STEP_IDS.has(stepId)) {
+        payForBananas(player);
+        event.handled = true;
+      }
       return;
     }
     if (CUSTOMS_OFFICER_IDS.has(npcId) && RUM_CONFISCATE_STEP_IDS.has(stepId)) {
@@ -644,7 +656,7 @@ module.exports = function registerPiratesTreasureQuest(api) {
 
   function payForBananas(player) {
     if (attr(player, BANANA_ATTRIBUTE) < 10) return;
-    player.getInventory().adds(COINS_ITEM_ID, 30);
+    player.getInventory().adds(COINS_ITEM_ID, BANANA_WAGE);
     player.sendMessage("Luthas hands you 30 coins.");
     setAttr(player, BANANA_ATTRIBUTE, 0);
     if (attr(player, RUM_ATTRIBUTE) === 1) setAttr(player, RUM_ATTRIBUTE, 2);

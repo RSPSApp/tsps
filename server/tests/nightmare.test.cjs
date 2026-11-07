@@ -8,7 +8,7 @@ const hooks = { custom: {}, npc: {}, drop: null, condition: null };
 const achievementEvents = [];
 const fakeApi = {
   core: {
-    Item: class { constructor(id, amount) { this.id = id; this.amount = amount; } },
+    Item: class { constructor(id, amount, meta) { this.id = id; this.amount = amount; this.meta = meta; } },
     ItemDefinition: { forId: (id) => ({ isStackable: () => id === 995 }) },
   },
   persistAttribute() {},
@@ -51,7 +51,7 @@ function fakePlayer() {
       delete: (_id, amount) => { coins.amount -= amount; },
       contains: () => false,
       getFreeSlots: () => 28,
-      add: (item) => added.push([item.id, item.amount]),
+      add: (item) => added.push(item.meta == null ? [item.id, item.amount] : [item.id, item.amount, item.meta]),
     }),
   };
 }
@@ -215,6 +215,23 @@ test("a death in a dream leaves the items with its keeper, for 60,000 coins", ()
   assert.equal(player.getAttribute(Common.HELD_ITEMS_ATTRIBUTE), null);
 });
 
+test("a dream death while the keeper holds a paid-for remainder is charged again, and items keep their meta", () => {
+  const player = fakePlayer();
+  player.setAttribute(Common.HELD_ITEMS_ATTRIBUTE, { holder: "shura", items: [[385, 5]], paid: true });
+  const dream = { phosani: false, players: new Set([player]) };
+  const original = Dream.dreamOf;
+  Dream.dreamOf = (who) => (who === player ? dream : null);
+  try {
+    hooks.drop({ player, item: { getId: () => 6585, getAmount: () => 1, getMeta: () => ({ charges: 30000 }) }, dropEligible: true, handled: false });
+  } finally {
+    Dream.dreamOf = original;
+  }
+  assert.equal(player.getAttribute(Common.HELD_ITEMS_ATTRIBUTE).paid, false);
+  hooks.npc.Shura.Collect({ player, definition: { getName: () => "Shura", getId: () => 9414 } });
+  assert.equal(player.coins.amount, 40_000, "the fee is taken again");
+  assert.deepEqual(player.added, [[385, 5], [6585, 1, { charges: 30000 }]]);
+});
+
 test("Sister Senga's introduction never leaves an action mid-chain, and sets its varbits in order", () => {
   const Sanctuary = require("../plugins/bosses/nightmare/Sanctuary.Nightmare");
   const objects = {};
@@ -300,4 +317,58 @@ test("The Nightmare's loot roll is marked as loot, not a second kill: the fight 
   assert.equal(rolls.length, 1);
   assert.equal(rolls[0].countKill, false);
   assert.equal(rolls[0].npc, fight.boss);
+});
+
+test("a team's kill gives its uniques once, to one player by weight of damage (Wiki), and everyone their own roll", (t) => {
+  const Loot = require("../plugins/bosses/nightmare/Loot.Nightmare");
+  const STAFF = 24422;
+  fakeApi.emitCustomEvent = (name, payload) => {
+    // Every roll of her table comes up with a staff: a per-player unique roll would give one to everybody.
+    if (name === "npc-drops:roll-table") payload.drops.push({ itemId: STAFF, amount: 1 }, { itemId: 995, amount: 1 });
+  };
+  const placed = [];
+  fakeApi.getItemOnGroundManager = () => ({ registerLocation(player, item) { placed.push([player, item.itemId]); } });
+  fakeApi.core.ItemIdentifiers = { BIG_BONES: 532, BONES: 526, NIGHTMARE_STAFF: STAFF };
+  fakeApi.core.Item = class { constructor(itemId, amount) { this.itemId = itemId; this.amount = amount; } };
+  fakeApi.core.ItemDefinition = { forId: () => ({ getNoteId: () => -1, isNoted: () => false, isStackable: () => true }) };
+  const [a, b, c] = [fakePlayer(), fakePlayer(), fakePlayer()];
+  const fight = {
+    phosani: false, boss: {}, dream: { tile: () => ({}), area: {} },
+    contribution: new Map([[a, { shield: 1, totems: 1 }], [b, { shield: 1, totems: 1 }], [c, { shield: 97, totems: 1 }]]),
+  };
+  t.mock.method(Math, "random", () => 0.5); // halfway through the damage: player c's share
+  Loot.reward(fight, [a, b, c]);
+  const staffs = placed.filter(([, id]) => id === STAFF);
+  assert.equal(staffs.length, 1, "one staff for the kill, not one each");
+  assert.equal(staffs[0][0], c, "to the player whose damage the roll fell in");
+  for (const player of [a, b, c]) assert.ok(placed.some(([who, id]) => who === player && id === 995), "everyone rolls the rest");
+});
+
+test("the pet's 1/800 is shared by party size (Wiki: 1/800 solo, 1/2,400 for 3, 1/4,000 at 5 or more)", (t) => {
+  const Loot = require("../plugins/bosses/nightmare/Loot.Nightmare");
+  const PET = 24491;
+  fakeApi.emitCustomEvent = (name, payload) => {
+    if (name === "npc-drops:roll-table") payload.drops.push({ itemId: PET, amount: 1 }, { itemId: 995, amount: 1 });
+  };
+  const placed = [];
+  fakeApi.getItemOnGroundManager = () => ({ registerLocation(player, item) { placed.push([player, item.itemId]); } });
+  fakeApi.core.ItemIdentifiers = { BIG_BONES: 532, BONES: 526 };
+  fakeApi.core.Item = class { constructor(itemId, amount) { this.itemId = itemId; this.amount = amount; } };
+  fakeApi.core.ItemDefinition = { forId: () => ({ getNoteId: () => -1, isNoted: () => false, isStackable: () => true }) };
+  const fightOf = (players) => ({ phosani: false, boss: {}, dream: { tile: () => ({}), area: {} },
+    contribution: new Map(players.map((player) => [player, { shield: 1, totems: 1 }])) });
+  // Every table roll comes up with the pet; a roll of 0.5 keeps it only for a party of one (0.5 * 1 < 1, not 0.5 * 3).
+  t.mock.method(Math, "random", () => 0.5);
+  const solo = fakePlayer();
+  Loot.reward(fightOf([solo]), [solo]);
+  assert.equal(placed.filter(([, id]) => id === PET).length, 1, "solo: the table's 1/800 as it is");
+  placed.length = 0;
+  const trio = [fakePlayer(), fakePlayer(), fakePlayer()];
+  Loot.reward(fightOf(trio), trio);
+  assert.equal(placed.filter(([, id]) => id === PET).length, 0, "a party of three keeps it only a third of the time");
+  // Five started, four have gone by the kill: the one left still shares the pet as a party of five.
+  placed.length = 0;
+  const last = fakePlayer();
+  Loot.reward({ ...fightOf([last]), teamSize: 5 }, [last]);
+  assert.equal(placed.filter(([, id]) => id === PET).length, 0, "the team counted when the fight started");
 });

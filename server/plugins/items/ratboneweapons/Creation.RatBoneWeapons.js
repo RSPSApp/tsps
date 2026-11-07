@@ -11,6 +11,7 @@
  */
 const Common = require("./Common.RatBoneWeapons");
 const Staff = require("./Staff.RatBoneWeapons");
+const { plainAmount, takePlain } = require("../PoweredStaff");
 
 const LEVEL = 35;
 const EXPERIENCE = 300;
@@ -30,7 +31,7 @@ function hasMaterials(player, weapon) {
   const inventory = player.getInventory();
   const I = core.ItemIdentifiers;
   return inventory.contains(I.SCURRIUS_SPINE) && inventory.contains(weapon.base)
-    && inventory.getAmount(I.CHAOS_RUNE) >= (weapon.chaosRunes ?? 0);
+    && plainAmount(inventory, I.CHAOS_RUNE) >= (weapon.chaosRunes ?? 0);
 }
 
 function itemBox(player, itemId, text) {
@@ -42,12 +43,21 @@ function itemBox(player, itemId, text) {
 function make(player, weapon) {
   const inventory = player.getInventory();
   const I = core.ItemIdentifiers;
-  inventory.delete(weapon.base, 1);
+  // The base becomes the weapon in place (setId keeps its meta: a preset mace makes a preset bone mace), and
+  // only plain chaos runes become a bone staff's charges, since Uncharge refunds plain runes.
   inventory.delete(I.SCURRIUS_SPINE, 1);
-  if (weapon.chaosRunes) inventory.deleteNumber(I.CHAOS_RUNE, weapon.chaosRunes);
-  const item = new core.Item(weapon.id, 1);
+  if (weapon.chaosRunes) takePlain(inventory, I.CHAOS_RUNE, weapon.chaosRunes);
+  let item = inventory.getItems?.().find((held) => held?.getId() === weapon.base);
+  if (item) {
+    item.setId(weapon.id);
+  } else {
+    // A container without slots (a test stand-in): the old delete and add.
+    inventory.delete(weapon.base, 1);
+    item = new core.Item(weapon.id, 1);
+  }
   if (weapon.chaosRunes) Staff.setCharges(item, weapon.chaosRunes);
-  inventory.addItem(item);
+  if (!inventory.getItems) inventory.addItem(item);
+  inventory.refreshItems?.();
 }
 
 /** The player's own creation: the tool, the level, the materials, then the weapon. */

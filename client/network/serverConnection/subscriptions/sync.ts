@@ -3,6 +3,7 @@ import type { NpcInfoPayload, SpellResultPayload } from "../types";
 import type { PlayerSyncFrame } from "../../../game/sync/PlayerSyncTypes";
 import type { ProjectileLaunch } from "../../../common/projectiles/ProjectileLaunch";
 import type {
+    NpcSpecificEffect,
     RebuildNormalPayload,
     RebuildRegionPayload,
     RebuildWorldEntityPayload,
@@ -54,6 +55,12 @@ export function subscribePlayerSync(cb: (frame: PlayerSyncFrame) => void): () =>
 export function subscribeNpcInfo(cb: (payload: NpcInfoPayload) => void): () => void {
     state.npcInfoListeners.add(cb);
     return () => state.npcInfoListeners.delete(cb);
+}
+
+/** No snapshot or replay: effects apply only to NPCs present when the event arrives. */
+export function subscribeNpcSpecificEffects(cb: (effect: NpcSpecificEffect) => void): () => void {
+    state.npcSpecificEffectListeners.add(cb);
+    return () => state.npcSpecificEffectListeners.delete(cb);
 }
 
 export function subscribeSpellResults(cb: (payload: SpellResultPayload) => void): () => void {

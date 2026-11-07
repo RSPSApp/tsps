@@ -17,12 +17,13 @@ const { Player } = require("../dist/game/entity/impl/player/Player");
 let giantDwarfStarted = false;
 let dwarfOperated = true;
 let playerIndex = 0;
+let nativeRun = false, mockApi;
 const prompts = [];
 const { init, tick, stateOf, putOre, takeBars, take, fillBucket, foremanCondition, foremanPaid, coolWithWater, stairs } = BlastFurnace._test;
 before(async () => {
  await require("../dist/game/cache/CachePipeline").CachePipeline.initialize(process.cwd());
  PluginManager.getCoreApi().RegionManager.init();
- init({
+ mockApi = {
   core: { ...PluginManager.getCoreApi(), WorldDefinition: { hasGlobalWorldTag: () => dwarfOperated } },
   spawnNpc: ({ id }) => {
     const npc = { id, removed: false, moveTo() {}, performAnimation() {}, setScriptedMovement() {} };
@@ -35,7 +36,8 @@ before(async () => {
   },
   getTaskManager: () => ({ submit: (task) => task.setRunning(true) }),
   sendMultiChatboxPrompt: (player, title, ...choices) => prompts.push({ player, title, choices }),
- });
+ };
+ init(mockApi);
 });
 
 const DISPENSER = 936;
@@ -67,10 +69,20 @@ function player({ smithing = 99, items = {}, hands = -1 } = {}) {
       getAmount: (id) => inventory.get(id) ?? 0,
       contains: (id) => (inventory.get(id) ?? 0) > 0,
       getFreeSlots: () => 28 - [...inventory.values()].reduce((sum, n) => sum + n, 0),
+      getAddableAmount: (item) => Math.min(item.getAmount(), Math.max(0, 28 - [...inventory.values()].reduce((sum, n) => sum + n, 0))),
       deleteNumber: (id, n) => inventory.set(id, inventory.get(id) - n),
       addItem: (item) => inventory.set(item.getId(), (inventory.get(item.getId()) ?? 0) + item.getAmount()),
       add: (item) => inventory.set(item.getId(), (inventory.get(item.getId()) ?? 0) + item.getAmount()),
       refreshItems() {},
+      // Slots, one unit each (as getFreeSlots counts them), in map order: the bucket swaps replace by slot.
+      getItems: () => [...inventory].flatMap(([id, n]) => Array.from({ length: Math.max(0, n) }, () => new (PluginManager.getCoreApi().Item)(id, 1))),
+      getSlotForItemId(id) { return this.getItems().findIndex((item) => item.getId() === id); },
+      setItem(slot, item) {
+        const old = this.getItems()[slot];
+        if (old) inventory.set(old.getId(), inventory.get(old.getId()) - 1);
+        inventory.set(item.getId(), (inventory.get(item.getId()) ?? 0) + item.getAmount());
+        return this;
+      },
     }),
     getEquipment: () => ({ getItems: () => equipment }),
     getSkillManager: () => ({ getCurrentLevel: () => smithing, getMaxLevel: () => smithing, addExperiences: (_, xp) => { p.xp += xp; } }),
@@ -104,6 +116,7 @@ function ticks(count) {
 }
 
 beforeEach(() => {
+  if (nativeRun) return;
   dwarfOperated = true;
   Machinery._test.reset();
   ticks(10); // let anything a previous test left on the belt or pouring finish
@@ -656,4 +669,228 @@ test("logging out elsewhere does not create furnace state", () => {
   const p = player();
   BlastFurnace._test.logout({ player: p });
   assert.equal(p.getAttribute("blast-furnace"), undefined);
+});
+
+// Registered belt callback, real player/inventory, NPCs and furnace task; no decoded packet or walking is simulated.
+test("native Blast Furnace catalyst applies to coal bars at production", async t => {
+  const core = PluginManager.getCoreApi();
+  const { PlayerSession } = require("../dist/net/PlayerSession");
+  const { SkillManager } = require("../dist/game/content/skill/SkillManager");
+  const { NpcDefinitionLoader } = require("../dist/game/definition/loader/impl/NpcDefinitionLoader");
+  const { World, TaskManager, ItemIdentifiers: I } = core;
+  const originalSubmit = TaskManager.submit, ownedTasks = [], spawnedNpcs = [];
+  let started = false, liveApi;
+  nativeRun = true;
+  t.after(() => {
+    try {
+      if (started) PluginManager.emitServerShutdown({});
+      for (const task of ownedTasks) task.stop();
+      TaskManager.process();
+      for (const npc of spawnedNpcs) if (npc?.isRegistered()) liveApi.removeNpc(npc);
+      World.refreshActiveRegions();
+    } finally {
+      TaskManager.submit = originalSubmit;
+      init(mockApi);
+      nativeRun = false;
+    }
+  });
+  TaskManager.submit = function(task) { ownedTasks.push(task); return originalSubmit.call(this, task); };
+  new NpcDefinitionLoader().load();
+  core.ObjectDefinition.init();
+  assert.equal(core.CacheDefinitions.getObjId("smithing_catalyst"), I.SMITHING_CATALYST);
+  assert.equal(I.SMITHING_CATALYST, 27017);
+  assert.equal(core.ItemDefinition.forId(I.SMITHING_CATALYST).isStackable(), false);
+  assert.equal(core.WorldDefinition.hasGlobalWorldTag("blast-furnace"), true);
+  const api = liveApi = PluginManager.createApi("native-blast-furnace-catalyst");
+  const spawnNpc = api.spawnNpc;
+  api.spawnNpc = options => { const npc = spawnNpc(options); spawnedNpcs.push(npc); return npc; };
+  BlastFurnace.register(api);
+  started = true;
+  PluginManager.emitServerStartup({});
+  assert.equal(ownedTasks.length, 1, "startup registers the furnace task");
+  const belt = [...core.MapObjects.mapObjects.values()].flat().find(object =>
+    object.getDefinition()?.getName() === "Conveyor belt" &&
+    object.getDefinition().getInteractions()?.includes("Put-ore-on") &&
+    object.getLocation().isWithinDistance(new core.Location(1942, 4966, 0), 20));
+  assert.ok(belt, "loaded scene contains the cache-defined belt and action");
+  const clickType = belt.getDefinition().getInteractions().indexOf("Put-ore-on") + 1;
+  const rate = core.GameConstants.EXPERIENCE_MULTIPLIER;
+  assert.equal(rate, 1, "normal-world XP multiplier");
+  let serial = 0;
+  function actor(test, contents) {
+    const channel = { kind: "test", isOpen: () => true, send: () => true, close() {}, onData() {}, onClose() {}, onError() {} };
+    const session = new PlayerSession(channel), p = new Player(session);
+    session.setPlayer(p);
+    p.setUsername(`native-bf-catalyst-${serial++}`);
+    p.setLocation(new core.Location(1942, 4965, 0));
+    test.mock.method(p, "onAdd", () => {});
+    test.mock.method(p, "onRemove", () => {});
+    test.after(() => {
+      BlastFurnace._test.logout({ player: p });
+      if (p.isRegistered()) World.getPlayers().remove(p);
+      TaskManager.cancelTasks(p);
+      TaskManager.cancelTasks(p.getIndex());
+    });
+    assert.equal(World.getPlayers().add(p), true);
+    assert.equal(World.getPlayers().get(p.getIndex()), p);
+    p.getSkillManager().setMaxLevels(core.Skill.SMITHING, 99, false).setCurrentLevel(core.Skill.SMITHING, 99, false)
+      .setExperience(core.Skill.SMITHING, SkillManager.getExperienceForLevel(99));
+    assert.equal(p.getSkillManager().getCurrentLevel(core.Skill.SMITHING), 99);
+    for (const [id, amount] of contents) p.getInventory().adds(id, amount);
+    for (const [id, amount] of contents) assert.equal(p.getInventory().getAmount(id), amount);
+    stateOf(p).coffer = 1000;
+    return p;
+  }
+  const xp = p => p.getSkillManager().getSkills().getExperiences()[core.Skill.SMITHING.getIndex()];
+  const gain = value => Math.floor(value * rate * 10 + 1e-6) / 10;
+  const load = p => PluginManager.emitObjectInteraction({ player:p, object:belt, objectId:belt.getId(), clickType, location:belt.getLocation(), handled:false });
+  const advance = n => { for (let i = 0; i < n; i++) TaskManager.process(); };
+  function start(p) {
+    const old = spawnedNpcs.length, inventory = p.getInventory();
+    const iron = inventory.getAmount(I.IRON_ORE), mithril = inventory.getAmount(I.MITHRIL_ORE);
+    const coal = inventory.getAmount(I.COAL), catalyst = inventory.getAmount(I.SMITHING_CATALYST);
+    assert.equal(load(p), true, "registered belt action handled");
+    assert.equal(inventory.getAmount(I.IRON_ORE), 0, "iron ore was loaded");
+    assert.equal(inventory.getAmount(I.MITHRIL_ORE), 0, "mithril ore was loaded");
+    assert.equal(inventory.getAmount(I.COAL), 0, "coal was loaded");
+    assert.equal(inventory.getAmount(I.SMITHING_CATALYST), catalyst, "loading leaves catalyst carried");
+    assert.equal(stateOf(p).conveyor.reduce((n, load) => n + load.count, 0), iron + mithril + coal);
+    assert.ok(stateOf(p).conveyor.length > 0, "real ore loads enter the conveyor");
+    assert.ok(spawnedNpcs.length > old, "real ore-load NPCs spawned");
+    for (const npc of spawnedNpcs.slice(old)) assert.equal(World.getNpcs().get(npc.getIndex()), npc);
+    return spawnedNpcs.slice(old);
+  }
+  function finish(npcs) {
+    advance(4);
+    for (const npc of npcs) assert.equal(npc.isRegistered(), false, "delivered ore NPC removed");
+  }
+  await t.test("normal steel without catalyst retains the existing ore, coal and XP rules", test => {
+    const p = actor(test, [[I.IRON_ORE, 2], [I.COAL, 2]]), before = xp(p);
+    const npcs = start(p); finish(npcs);
+    assert.equal(stateOf(p).bars[I.STEEL_BAR], 2);
+    assert.equal(stateOf(p).ores[I.IRON_ORE], 0);
+    assert.equal(stateOf(p).ores[I.COAL], 0);
+    assert.equal(xp(p) - before, gain(35));
+  });
+  await t.test("a catalyst does not apply to a non-coal iron bar", test => {
+    const p = actor(test, [[I.IRON_ORE, 1], [I.SMITHING_CATALYST, 1]]), before = xp(p);
+    const npcs = start(p); finish(npcs);
+    assert.equal(stateOf(p).bars[I.IRON_BAR], 1);
+    assert.equal(p.getInventory().getAmount(I.SMITHING_CATALYST), 1);
+    assert.equal(xp(p) - before, gain(12.5));
+  });
+  await t.test("one carried catalyst is consumed only when a steel bar is made", test => {
+    const p = actor(test, [[I.IRON_ORE, 1], [I.COAL, 1], [I.SMITHING_CATALYST, 1]]), before = xp(p);
+    const npcs = start(p);
+    advance(3);
+    assert.equal(stateOf(p).bars[I.STEEL_BAR] ?? 0, 0);
+    assert.equal(p.getInventory().getAmount(I.SMITHING_CATALYST), 1, "belt travel does not consume catalyst");
+    advance(1);
+    assert.equal(stateOf(p).bars[I.STEEL_BAR], 1);
+    assert.equal(stateOf(p).ores[I.IRON_ORE], 0);
+    assert.equal(stateOf(p).ores[I.COAL], 0, "the usual single coal is used");
+    assert.equal(xp(p) - before, gain(35));
+    assert.equal(p.getInventory().getAmount(I.SMITHING_CATALYST), 0);
+    for (const npc of npcs) assert.equal(npc.isRegistered(), false);
+  });
+  // Direct inventory changes while the server task waits characterize this TSPS commit point,
+  // not the precise retail reservation lifecycle or a decoded inventory interaction.
+  await t.test("a catalyst added during belt travel is available when the bar is made", test => {
+    const p = actor(test, [[I.IRON_ORE, 1], [I.COAL, 1]]), before = xp(p);
+    const npcs = start(p);
+    advance(3);
+    assert.equal(stateOf(p).bars[I.STEEL_BAR] ?? 0, 0);
+    p.getInventory().adds(I.SMITHING_CATALYST, 1);
+    assert.equal(p.getInventory().getAmount(I.SMITHING_CATALYST), 1);
+    advance(1);
+    assert.equal(stateOf(p).bars[I.STEEL_BAR], 1);
+    assert.equal(p.getInventory().getAmount(I.SMITHING_CATALYST), 0);
+    assert.equal(xp(p) - before, gain(35));
+    for (const npc of npcs) assert.equal(npc.isRegistered(), false);
+  });
+  await t.test("a catalyst removed during belt travel cannot boost the later bar", test => {
+    const p = actor(test, [[I.IRON_ORE, 1], [I.COAL, 1], [I.SMITHING_CATALYST, 1]]), before = xp(p);
+    const npcs = start(p);
+    advance(3);
+    assert.equal(stateOf(p).bars[I.STEEL_BAR] ?? 0, 0);
+    p.getInventory().deleteNumber(I.SMITHING_CATALYST, 1);
+    assert.equal(p.getInventory().getAmount(I.SMITHING_CATALYST), 0);
+    advance(1);
+    assert.equal(stateOf(p).bars[I.STEEL_BAR], 1);
+    assert.equal(xp(p) - before, gain(17.5));
+    for (const npc of npcs) assert.equal(npc.isRegistered(), false);
+  });
+  await t.test("partial catalyst stock boosts only the produced bars it covers", test => {
+    const p = actor(test, [[I.IRON_ORE, 3], [I.COAL, 3], [I.SMITHING_CATALYST, 2]]), before = xp(p);
+    assert.equal(p.getInventory().getItems().filter(item => item?.getId() === I.SMITHING_CATALYST).length, 2);
+    const npcs = start(p); finish(npcs);
+    assert.equal(stateOf(p).bars[I.STEEL_BAR], 3);
+    assert.equal(stateOf(p).ores[I.IRON_ORE], 0);
+    assert.equal(stateOf(p).ores[I.COAL], 0);
+    assert.equal(p.getInventory().getAmount(I.SMITHING_CATALYST), 0);
+    assert.equal(xp(p) - before, gain(17.5 * 5));
+  });
+  await t.test("dispenser room limits both smelting and catalyst use", test => {
+    const p = actor(test, [[I.MITHRIL_ORE, 2], [I.COAL, 4], [I.SMITHING_CATALYST, 2]]), before = xp(p);
+    stateOf(p).bars[I.MITHRIL_BAR] = 27;
+    const npcs = start(p); finish(npcs);
+    assert.equal(stateOf(p).bars[I.MITHRIL_BAR], 28);
+    assert.equal(stateOf(p).ores[I.MITHRIL_ORE], 1);
+    assert.equal(stateOf(p).ores[I.COAL], 2);
+    assert.equal(p.getInventory().getAmount(I.SMITHING_CATALYST), 1);
+    assert.equal(xp(p) - before, gain(60));
+  });
+  await t.test("stored ore cannot consume catalyst without ingredients or dispenser room", test => {
+    const p = actor(test, [[I.SMITHING_CATALYST, 2], [I.SPADE, 1]]), before = xp(p);
+    const state = stateOf(p);
+    state.ores[I.MITHRIL_ORE] = 1;
+    state.ores[I.COAL] = 1;
+    BlastFurnace._test.smelt(p);
+    assert.equal(state.ores[I.MITHRIL_ORE], 1);
+    assert.equal(state.ores[I.COAL], 1);
+    assert.equal(state.bars[I.MITHRIL_BAR] ?? 0, 0);
+    assert.equal(p.getInventory().getAmount(I.SMITHING_CATALYST), 2);
+    state.ores[I.COAL] = 2;
+    state.bars[I.MITHRIL_BAR] = 28;
+    BlastFurnace._test.smelt(p);
+    assert.equal(state.ores[I.MITHRIL_ORE], 1);
+    assert.equal(state.ores[I.COAL], 2);
+    assert.equal(state.bars[I.MITHRIL_BAR], 28);
+    assert.equal(p.getInventory().getAmount(I.SMITHING_CATALYST), 2);
+    assert.equal(p.getInventory().getAmount(I.SPADE), 1);
+    assert.equal(xp(p), before);
+  });
+  await t.test("a full dispenser refuses loading and preserves ore and catalyst", test => {
+    const p = actor(test, [[I.MITHRIL_ORE, 1], [I.COAL, 2], [I.SMITHING_CATALYST, 1]]), before = xp(p);
+    stateOf(p).bars[I.MITHRIL_BAR] = 28;
+    assert.equal(load(p), true);
+    assert.equal(stateOf(p).conveyor.length, 0);
+    assert.equal(p.getInventory().getAmount(I.MITHRIL_ORE), 1);
+    assert.equal(p.getInventory().getAmount(I.COAL), 2);
+    assert.equal(p.getInventory().getAmount(I.SMITHING_CATALYST), 1);
+    assert.equal(xp(p), before);
+  });
+  await t.test("paused belt retains catalyst until production resumes", test => {
+    const p = actor(test, [[I.IRON_ORE, 1], [I.COAL, 1], [I.SMITHING_CATALYST, 1]]), before = xp(p);
+    const npcs = start(p);
+    stateOf(p).coffer = 0;
+    advance(4);
+    assert.equal(stateOf(p).bars[I.STEEL_BAR] ?? 0, 0);
+    assert.equal(p.getInventory().getAmount(I.SMITHING_CATALYST), 1);
+    assert.equal(xp(p), before);
+    stateOf(p).coffer = 1000;
+    finish(npcs);
+    assert.equal(stateOf(p).bars[I.STEEL_BAR], 1);
+    assert.equal(p.getInventory().getAmount(I.SMITHING_CATALYST), 0);
+    assert.equal(xp(p) - before, gain(35));
+  });
+  await t.test("one catalyst in a mixed coal batch is used once", test => {
+    const p = actor(test, [[I.IRON_ORE, 1], [I.MITHRIL_ORE, 1], [I.COAL, 3], [I.SMITHING_CATALYST, 1]]), before = xp(p);
+    const npcs = start(p); finish(npcs);
+    assert.equal(stateOf(p).bars[I.STEEL_BAR], 1);
+    assert.equal(stateOf(p).bars[I.MITHRIL_BAR], 1);
+    assert.equal(stateOf(p).ores[I.COAL], 0);
+    assert.equal(p.getInventory().getAmount(I.SMITHING_CATALYST), 0);
+    assert.ok([gain(65), gain(77.5)].includes(xp(p) - before), "one bonus for one eligible bar; allocation order is a TSPS choice");
+  });
 });

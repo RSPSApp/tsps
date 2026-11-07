@@ -321,18 +321,33 @@ function countsFor(task, npc, player = null) {
   const query = { player, npc, eligible: true };
   api.emitCustomEvent("slayer:target-eligible", query);
   if (query.eligible === false) return false;
-  return countsForTarget(task, { id: npc.getId(), name: npcName(npc), location: npc.getLocation() });
+  return countsForTarget(task, { id: npc.getId(), name: npcName(npc), location: npc.getLocation(), npc, player });
+}
+
+/**
+ * `slayer:task-area-match` { player, npc, area, location, allowed }: a specific encounter may
+ * admit its actual NPC for the selected area after task matching and Wilderness checks. The
+ * default is false; id-only or alternate-location queries keep the ordinary area result.
+ */
+function matchesTaskArea(task, { id, location, npc, player }) {
+  if (!task.area || Data.inArea(task.area, location)) return true;
+  if (!npc || npc.getId() !== id || !location) return false;
+  const actual = npc.getLocation();
+  if (!actual || actual.getX() !== location.getX() || actual.getY() !== location.getY() || actual.getZ() !== location.getZ()) return false;
+  const request = { player, npc, area: task.area, location, allowed: false };
+  api.emitCustomEvent("slayer:task-area-match", request);
+  return request.allowed === true;
 }
 
 /** The same check from an NPC's id, name and where it is. */
-function countsForTarget(task, { id, name, location }) {
+function countsForTarget(task, { id, name, location, npc = null, player = null }) {
   if (!task) return false;
   const matches = task.taskId === Data.BOSS_TASK_ID
     ? Data.isBossNpc(task.bossId, name)
     : Data.npcCountsFor(task.taskId, id, name);
   if (!matches) return false;
   if (task.masterId === KRYSTILIA && !core.Wilderness.isInLocation(location)) return false;
-  if (task.area && !Data.inArea(task.area, location)) return false;
+  if (!matchesTaskArea(task, { id, location, npc, player })) return false;
   return true;
 }
 
@@ -364,7 +379,7 @@ function onTaskEvent(request) {
   if (Number.isInteger(request.npcId)) {
     const name = core.NpcDefinition.forId(request.npcId)?.getName?.() ?? "";
     const location = request.location ?? request.npc?.getLocation?.();
-    request.onTask = countsForTarget(task, { id: request.npcId, name, location }) || alwaysOnTask(request.player, request.npc ?? null, request.npcId, name);
+    request.onTask = countsForTarget(task, { id: request.npcId, name, location, npc: request.npc ?? null, player: request.player }) || alwaysOnTask(request.player, request.npc ?? null, request.npcId, name);
     return;
   }
   request.onTask = countsFor(task, request.npc, request.player)

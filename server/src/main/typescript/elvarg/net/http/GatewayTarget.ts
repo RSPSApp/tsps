@@ -1,5 +1,5 @@
 /**
- * What RSProx needs to point the official client at this server's gateway (gateway/README.md):
+ * What RSProx needs to point the official client at this server's gateway (runelite-gateway/README.md):
  * a jav_config and the binary world list it names. Served next to the game socket so a
  * worktree's RSProx target follows its own ports.
  *

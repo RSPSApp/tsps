@@ -2,7 +2,7 @@
 // QH q006 Big Chompy Bird Hunting: the canonical QH arrow hand-in is item-use
 // (use 6+ ogre arrows on Rantz), not only the Talk-to variant.
 const assert = require('node:assert/strict');
-const { test, before } = require('node:test');
+const { test, before, afterEach } = require('node:test');
 const path = require('node:path');
 const root = path.resolve(__dirname, '..');
 require(root + '/dist/Server').Server.installProductionPathResolver();
@@ -10,6 +10,13 @@ const core = require(root + '/dist/plugins/PluginManager').PluginManager.getCore
 const runtime = require(root + '/plugins/quests/QuestRuntime');
 const { PluginManager } = require(root + '/dist/plugins/PluginManager');
 const noop = () => {};
+const activeHarnesses = [];
+afterEach(() => {
+  for (const h of activeHarnesses.splice(0)) {
+    for (const handler of h.hooks.onServerShutdown ?? []) handler({});
+    for (const npc of [...h.spawned, h.rantz]) PluginManager.removeNpc(npc);
+  }
+});
 
 before(async () => {
   const { CachePipeline } = require(root + '/dist/game/cache/CachePipeline');
@@ -22,7 +29,7 @@ before(async () => {
 
 function player(items = [], attrs = [], levels = {}) {
   const attributes = new Map(attrs), inventory = new Map(items);
-  let location = new core.Location(3210, 3220, 0);
+  let location = new core.Location(2635, 2966, 0);
   const packet = new Proxy({
     sendInterfaceRemoval() { p.manager?.reset(); p.prompt = null; return packet; },
     sendCameraMoveTo(...args) { p.camera.push(['move', ...args]); return packet; },
@@ -91,20 +98,15 @@ function dialoguePlayer(items, attrs, levels) {
 function questHarness() {
   const hooks = {};
   const spawned = [], removed = [], tasks = [], sceneChat = [];
-  const rantz = {
-    getId: () => core.NpcIdentifiers.RANTZ,
-    getLocation: () => new core.Location(2630, 2981, 0),
-    isRegistered: () => true,
-    forceChat: text => sceneChat.push(text),
-    performAnimation: noop,
-  };
+  const rantz = PluginManager.spawnNpc({ id: core.NpcIdentifiers.RANTZ, x: 2630, y: 2981, wanderRadius: 0 });
+  const forceChat = rantz.forceChat.bind(rantz);
+  rantz.forceChat = text => { sceneChat.push(text); forceChat(text); };
   const taskManager = {
     submit(task) { task.setRunning(true); tasks.push(task); },
     cancelTasks(key) { for (const task of tasks) if (task.key === key) task.stop(); },
   };
   const api = new Proxy({
-    core: { ...core, TaskManager: taskManager,
-      World: { ...core.World, getNpcsNear: () => [rantz] } },
+    core: { ...core, TaskManager: taskManager },
     persistAttribute: noop,
     onCustomEvent: (key, fn) => (hooks[key] ??= []).push(fn),
     emitCustomEvent: (key, event) => (hooks[key] ?? []).forEach(fn => fn(event)),
@@ -113,30 +115,29 @@ function questHarness() {
       return true;
     },
     spawnNpc(definition) {
-      const npc = {
-        ...definition,
-        getId: () => definition.id,
-        getLocation: () => new core.Location(definition.x, definition.y, definition.z ?? 0),
-        getOwner: () => definition.owner,
-        getPrivateArea: () => null,
-        isRegistered: () => true,
-      };
+      const npc = PluginManager.spawnNpc(definition);
       spawned.push(npc);
       return npc;
     },
-    removeNpc(npc) { removed.push(npc); },
+    removeNpc(npc) { removed.push(npc); PluginManager.removeNpc(npc); },
   }, { get: (target, key) => target[key] ?? ((...args) => {
     (hooks[key] ??= []).push(args.find(arg => typeof arg === 'function'));
   }) });
   require(root + '/plugins/quests/quests/BigChompyBirdHunting.Quest')(api);
-  return { api, hooks, spawned, removed, tasks, sceneChat,
+  const h = { api, hooks, spawned, removed, tasks, sceneChat,
     quest: runtime.getRegisteredQuests().at(-1) };
+  activeHarnesses.push({ ...h, rantz });
+  return h;
 }
 
 function tickTasks(h, ticks) {
-  for (let tick = 0; tick < ticks; tick++) {
-    for (const task of [...h.tasks]) if (task.isRunning()) task.tick();
-  }
+  const random = Math.random;
+  Math.random = () => 0; // controlled successful lure; probability boundaries have real-object coverage separately
+  try {
+    for (let tick = 0; tick < ticks; tick++) {
+      for (const task of [...h.tasks]) if (task.isRunning()) task.tick();
+    }
+  } finally { Math.random = random; }
 }
 
 function withConditions(hooks, fn) {
@@ -386,10 +387,13 @@ test('stage 0 to completion: cave, bellows, toads, bow, chompy, ingredients and 
     continueUntil(p, () => quest.getStage(p) === 25);
     assert.equal(quest.getStage(p), 25, 'showing the toad tells you where to place it');
     reset();
+    p.moveTo(new core.Location(2635, 2966)); // fixture travel; real cave routing is checked separately
 
-    hooks.onItemAction[0]({ player: p, itemId: I.BLOATED_TOAD, option: 'Release', handled: false });
+    hooks.onItemAction[0]({ player: p, itemId: I.BLOATED_TOAD, option: 'Drop', handled: false });
     assert.equal(quest.getStage(p), 30, 'first toad places the bait and waits for a chompy');
     assert.equal(p.items.get(I.BLOATED_TOAD), 1);
+    assert.equal(spawned.at(-1).id, core.NpcIdentifiers.BLOATED_TOAD, 'Drop places a real bait actor');
+    tickTasks(h, 25);
     const firstChompy = spawned.at(-1);
     assert.equal(firstChompy.id, core.NpcIdentifiers.CHOMPY_BIRD, 'the first chompy arrives');
     assert.ok(p.camera.some(entry => entry[0] === 'move'), 'the scene pans to the clearing');
@@ -397,7 +401,7 @@ test('stage 0 to completion: cave, bellows, toads, bow, chompy, ingredients and 
     assert.equal(quest.getStage(p), 35, 'Rantz takes his shot');
     assert.ok(h.sceneChat.includes("Hey, dere's da chompy, I's gonna shoot it."));
     tickTasks(h, 2);
-    assert.ok(removed.includes(firstChompy), 'the missed chompy leaves');
+    assert.ok(!removed.includes(firstChompy), 'Rantz missing does not prematurely delete the bird');
     tickTasks(h, 3);
     assert.equal(quest.getStage(p), 40, 'the missed shot leads to the bow conversation');
     assert.ok(h.sceneChat.includes("Grrr...de'ese arrows are rubbish."));
@@ -411,7 +415,9 @@ test('stage 0 to completion: cave, bellows, toads, bow, chompy, ingredients and 
     assert.equal(p.items.get(I.OGRE_BOW), 1, 'Rantz hands over the ogre bow');
     reset();
 
-    hooks.onItemAction[0]({ player: p, itemId: I.BLOATED_TOAD, option: 'Release', handled: false });
+    p.moveTo(new core.Location(2636, 2966));
+    hooks.onItemAction[0]({ player: p, itemId: I.BLOATED_TOAD, option: 'Drop', handled: false });
+    tickTasks(h, 25);
     assert.equal(spawned.at(-1).id, core.NpcIdentifiers.CHOMPY_BIRD, 'second toad attracts a chompy');
     assert.equal(p.items.get(I.BLOATED_TOAD), 0);
 
@@ -679,7 +685,8 @@ test('post-quest hat trade grants one threshold hat and cooked chompy hand-in is
   assert.equal(p.items.get(I.COOKED_CHOMPY), 0, 'the cooked chompy is handed over');
 
   p.items.set(I.BLOATED_TOAD, 1);
-  h.hooks.onItemAction[0]({ player: p, itemId: I.BLOATED_TOAD, option: 'Release', handled: false });
+  h.hooks.onItemAction[0]({ player: p, itemId: I.BLOATED_TOAD, option: 'Drop', handled: false });
+  tickTasks(h, 25);
   const postQuestChompy = h.spawned.at(-1);
   assert.equal(postQuestChompy.id, core.NpcIdentifiers.CHOMPY_BIRD, 'post-quest toad still attracts a chompy');
   assert.equal(p.items.get(I.BLOATED_TOAD), 0);
@@ -774,7 +781,7 @@ test('full inventory cannot lose the bow, reclaim coins, a toad charge or a carc
   const pluck = dialoguePlayer([[I.BLOATED_TOAD, 1]]);
   pluckHarness.quest.setStage(pluck, 50);
   pluck.moveTo(new core.Location(2634, 2966, 0));
-  releaseToad(pluckHarness, pluck);
+  dropToad(pluckHarness, pluck);
   pluckHarness.hooks.onNpcDeath[0]({ killer: pluck, npcId: core.NpcIdentifiers.CHOMPY_BIRD,
     npc: pluckHarness.spawned.at(-1), location: { x: 2635, y: 2966, z: 0 } });
   pluck.inventoryFull = true;
@@ -795,21 +802,26 @@ test('full inventory cannot lose the bow, reclaim coins, a toad charge or a carc
   assert.ok(pluckHarness.removed.includes(firstCarcass));
 });
 
-test('replacement removes the prior chompy and raw/seasoned loss can be recovered', () => {
+test('concurrent bait preserves prior birds and raw/seasoned loss can be recovered', () => {
   const I = core.ItemIdentifiers;
   const h = questHarness();
   const p = dialoguePlayer([[I.BLOATED_TOAD, 2]]);
   h.quest.setStage(p, 45);
-  h.hooks.onItemAction[0]({ player: p, itemId: I.BLOATED_TOAD, option: 'Release', handled: false });
+  h.hooks.onItemAction[0]({ player: p, itemId: I.BLOATED_TOAD, option: 'Drop', handled: false });
+  tickTasks(h, 25);
   const first = h.spawned.at(-1);
-  h.hooks.onItemAction[0]({ player: p, itemId: I.BLOATED_TOAD, option: 'Release', handled: false });
-  assert.ok(h.removed.includes(first), 'the previous quest chompy is removed on replacement');
+  p.moveTo(new core.Location(2636, 2966));
+  h.hooks.onItemAction[0]({ player: p, itemId: I.BLOATED_TOAD, option: 'Drop', handled: false });
+  tickTasks(h, 25);
+  assert.ok(!h.removed.includes(first), 'another bait does not delete an existing bird');
   assert.notEqual(h.spawned.at(-1), first);
+  h.hooks.onPlayerLogout[0]({ player: p });
 
   const rawHarness = questHarness();
   const raw = dialoguePlayer([[I.BLOATED_TOAD, 1]]);
   rawHarness.quest.setStage(raw, 50);
-  rawHarness.hooks.onItemAction[0]({ player: raw, itemId: I.BLOATED_TOAD, option: 'Release', handled: false });
+  rawHarness.hooks.onItemAction[0]({ player: raw, itemId: I.BLOATED_TOAD, option: 'Drop', handled: false });
+  tickTasks(rawHarness, 25);
   assert.equal(rawHarness.quest.getStage(raw), 50, 'raw loss can re-bait at stage 50');
   const recoveryChompy = rawHarness.spawned.at(-1);
   assert.equal(recoveryChompy.id, core.NpcIdentifiers.CHOMPY_BIRD);
@@ -853,9 +865,10 @@ test('swamp bubbles only accept an actual bellows item', () => {
   assert.equal(p.items.get(I.OGRE_BELLOWS_3_), 1);
 });
 
-function releaseToad(h, p) {
+function dropToad(h, p) {
   h.hooks.onItemAction[0]({ player: p, itemId: core.ItemIdentifiers.BLOATED_TOAD,
-    option: 'Release', handled: false });
+    option: 'Drop', handled: false });
+  tickTasks(h, 25);
 }
 
 // Source handler-contract test: fixture stage/items, real timer/task interleavings.
@@ -864,17 +877,18 @@ test('first-hunt timers are identity-bound, cancellable and cannot write after l
   const success = questHarness();
   const settled = dialoguePlayer([[I.BLOATED_TOAD, 1]]);
   success.quest.setStage(settled, 25);
-  releaseToad(success, settled);
+  dropToad(success, settled);
   tickTasks(success, 5);
   assert.equal(success.quest.getStage(settled), 35);
   tickTasks(success, 2);
   tickTasks(success, 3);
   assert.equal(success.quest.getStage(settled), 40, 'logged-in settlement reaches stage 40');
+  success.hooks.onPlayerLogout[0]({ player: settled });
 
   const logout = questHarness();
   const gone = dialoguePlayer([[I.BLOATED_TOAD, 1]]);
   logout.quest.setStage(gone, 25);
-  releaseToad(logout, gone);
+  dropToad(logout, gone);
   tickTasks(logout, 5);
   tickTasks(logout, 2);
   assert.equal(logout.quest.getStage(gone), 35);
@@ -887,7 +901,7 @@ test('first-hunt timers are identity-bound, cancellable and cannot write after l
   const detached = questHarness();
   const unregistered = dialoguePlayer([[I.BLOATED_TOAD, 1]]);
   detached.quest.setStage(unregistered, 25);
-  releaseToad(detached, unregistered);
+  dropToad(detached, unregistered);
   tickTasks(detached, 5);
   tickTasks(detached, 2);
   unregistered.isRegistered = () => false;
@@ -897,17 +911,13 @@ test('first-hunt timers are identity-bound, cancellable and cannot write after l
   const replaced = questHarness();
   const again = dialoguePlayer([[I.BLOATED_TOAD, 2]]);
   replaced.quest.setStage(again, 25);
-  releaseToad(replaced, again);
+  dropToad(replaced, again);
   tickTasks(replaced, 5);
   tickTasks(replaced, 2);
-  releaseToad(replaced, again);
-  assert.equal(replaced.quest.getStage(again), 30, 'replacement restarts the hunt');
-  tickTasks(replaced, 3);
-  assert.equal(replaced.quest.getStage(again), 30, 'old settle cannot fire after replacement');
-  tickTasks(replaced, 5);
-  tickTasks(replaced, 2);
-  tickTasks(replaced, 3);
-  assert.equal(replaced.quest.getStage(again), 40, 'replacement hunt settles normally');
+  again.moveTo(new core.Location(2636, 2966));
+  dropToad(replaced, again);
+  assert.equal(replaced.quest.getStage(again), 40, 'later bait cannot restart the running demonstration');
+  assert.equal(again.messages.filter(text => text.includes("Hey, dere's da chompy")).length, 1);
 });
 
 // Source handler-contract test: real PluginManager canAttack hook + CombatFactory policy.
@@ -931,8 +941,12 @@ test('canAttack policy only gates the tracked chompy, not other owner-only quest
   quest.setStage(p, 45);
   assert.equal(PluginManager.emitItemAction({
     player: p, item: new core.Item(I.BLOATED_TOAD, 1), itemId: I.BLOATED_TOAD,
-    slot: 0, clickType: 1, option: 'Release', handled: false,
+    slot: 0, clickType: 1, option: 'Drop', handled: false,
   }), true);
+  const random = Math.random;
+  Math.random = () => 0;
+  try { for (let i = 0; i < 25; i++) core.TaskManager.process(); }
+  finally { Math.random = random; }
   const chompy = [...World.getNpcs()].find(npc => npc.getId?.() === core.NpcIdentifiers.CHOMPY_BIRD
     && npc.getOwner?.() === p);
   assert.ok(chompy, 'real handler spawned the tracked chompy');
@@ -956,6 +970,7 @@ test('canAttack policy only gates the tracked chompy, not other owner-only quest
   p.equipped.set(core.Equipment.AMMUNITION_SLOT, { getId: () => I.OGRE_ARROW });
   assert.equal(CombatFactory.canAttackByPolicy(p, chompy), CanAttackResponse.CAN_ATTACK,
     'tracked chompy is attackable with the canonical bow and arrows');
+  PluginManager.emitServerShutdown({});
 });
 
 test('claiming a Chompy bird hat credits the collection log', () => {

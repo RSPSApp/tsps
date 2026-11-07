@@ -184,8 +184,9 @@ test("a hunter loses interest outside the aggression range and walks home", (t) 
 });
 
 test("an engaged ranged NPC does not retreat from a reachable player on another floor", (t) => {
-  const previous = process.env.CROSS_FLOOR_COMBAT;
-  t.after(() => { if (previous === undefined) delete process.env.CROSS_FLOOR_COMBAT; else process.env.CROSS_FLOOR_COMBAT = previous; });
+  const previous = Object.fromEntries(["CROSS_FLOOR_VISIBILITY", "CROSS_FLOOR_COMBAT"].map(key => [key, process.env[key]]));
+  t.after(() => { for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; } });
+  process.env.CROSS_FLOOR_VISIBILITY = "1";
   process.env.CROSS_FLOOR_COMBAT = "1";
   const s = scene(t, {
     spawn: new core.Location(FIELD.x, FIELD.y, 0),

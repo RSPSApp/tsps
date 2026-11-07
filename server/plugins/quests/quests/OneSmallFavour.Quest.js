@@ -64,10 +64,9 @@
  * scripts/lookup-gameval.ts varbit osf_* (varp 417 bits); quest DB row 107.
  *
  * Gaps / approximations:
- *  - Captain Bleemadge (10459), Wizard Cromperty (8480) and Gnormadium Avlafrim
- *    (7516) have no npc-spawns.json entry, so they are spawned once per world on
- *    the first login at their OSRS spots (White Wolf Mountain, NE Ardougne,
- *    Feldip Hills).
+ *  - Captain Bleemadge (10459) and Gnormadium Avlafrim (7516) have no
+ *    npc-spawns.json entry, so they are spawned once per world on the first login
+ *    at their OSRS spots (White Wolf Mountain and Feldip Hills).
  *  - Rantz's spawn is the nameless cache placeholder 1470; its transform varp
  *    (293, Big Chompy) resolves to 14793, which has no npc-dialogue-index entry,
  *    so his quest variants are driven by our own Talk-to hook.
@@ -93,6 +92,7 @@
  *    falls back to their own standard transcript page.
  */
 module.exports = function registerOneSmallFavourQuest(api) {
+  const { giveReward } = require("../QuestRuntime");
   const {
     Item,
     ItemIdentifiers,
@@ -224,6 +224,10 @@ module.exports = function registerOneSmallFavourQuest(api) {
   const CHICKEN_CAGE = ItemIdentifiers.CHICKEN_CAGE; // 4443
   const STEEL_KEY_RING = ItemIdentifiers.STEEL_KEY_RING; // 4446
   const ANTIQUE_LAMP = ItemIdentifiers.ANTIQUE_LAMP; // 4447
+  // Wiki (One Small Favour; Antique lamp (One Small Favour)): two lamps, each 10,000 XP in a skill over level 30.
+  const LAMP_XP = 10000;
+  const LAMP_MIN_LEVEL = 30;
+  const pendingLamp = new WeakMap();
   const BOWL_OF_HOT_WATER = ItemIdentifiers.BOWL_OF_HOT_WATER; // 4456
   const CUP_OF_HOT_WATER = ItemIdentifiers.CUP_OF_HOT_WATER; // 4460
   const EMPTY_CUP = ItemIdentifiers.EMPTY_CUP; // 1980
@@ -835,7 +839,7 @@ module.exports = function registerOneSmallFavourQuest(api) {
     // Quest NPCs with no npc-spawns.json entry, at their OSRS spots.
     api.spawnNpc({ id: NpcIdentifiers.GNORMADIUM_AVLAFRIM, x: 2544, y: 2971, z: 0, wanderRadius: 0 });
     api.spawnNpc({ id: NpcIdentifiers.CAPTAIN_BLEEMADGE, x: 2846, y: 3498, z: 0, wanderRadius: 0 });
-    api.spawnNpc({ id: NpcIdentifiers.WIZARD_CROMPERTY, x: 2681, y: 3325, z: 0, wanderRadius: 0 });
+    // Cromperty is the canonical diary-dependent ardounge_wizard spawn (5314).
   }
 
   function syncGroundItems(player) {
@@ -1949,8 +1953,34 @@ module.exports = function registerOneSmallFavourQuest(api) {
   }
 
   function grantReward(player) {
-    if (!hasItem(player, STEEL_KEY_RING)) addItem(player, STEEL_KEY_RING, 1);
-    addItem(player, ANTIQUE_LAMP, 1);
+    if (!hasItem(player, STEEL_KEY_RING)) giveReward(player, STEEL_KEY_RING, 1);
+    giveReward(player, ANTIQUE_LAMP, 1); // the runtime's rewardItemId gives the other one
+  }
+
+  function rubLamp(event) {
+    if (event.itemId !== ANTIQUE_LAMP) return false;
+    const { player, item, slot } = event;
+    pendingLamp.set(player, { item, slot });
+    api.emitCustomEvent("xpreward:open", {
+      player,
+      minLevel: LAMP_MIN_LEVEL,
+      title: "Choose the stat you wish to be advanced!",
+      onConfirm: (skill, name) => confirmLamp(player, item, slot, skill, name),
+    });
+    return true;
+  }
+
+  function confirmLamp(player, item, slot, skill, name) {
+    if (pendingLamp.get(player)?.item !== item) return null;
+    pendingLamp.delete(player);
+    const inventory = player.getInventory();
+    if (inventory.get(slot) !== item) return null;
+    const manager = player.getSkillManager();
+    const before = manager.getExperience(skill);
+    manager.addExperience(skill, LAMP_XP, false);
+    if (manager.getExperience(skill) === before) return null;
+    inventory.deleteAtSlot(slot, 1);
+    return `You have been awarded ${LAMP_XP} ${name ?? skill.getName()} XP!`;
   }
 
   // ==========================================================================
@@ -1996,6 +2026,7 @@ module.exports = function registerOneSmallFavourQuest(api) {
   api.onItemOnObject(handleItemOnObject, { noted: false });
   api.onItemOnItem(handleItemOnItem);
   api.onItemAction("Animate rock scroll", { Read: readAnimateRockScroll });
+  api.onItemAction("Antique lamp", { Rub: rubLamp });
   api.onObjectInteraction("Sculpture", { Look: lookSculpture, Search: searchSculpture });
   api.onObjectInteraction("Weathervane", { Look: lookVane, Search: searchVane });
   api.onObjectInteraction("Gnome landing light", { Search: searchLandingLight });

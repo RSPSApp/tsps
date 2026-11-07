@@ -61,6 +61,8 @@ import { ServerPerf } from "../../../../util/ServerPerf";
 import { getSequencePriority } from "../../../cache/NpcAnimationScanner";
 import { LOGIN_TOKENS_ATTRIBUTE } from "../../../../net/login/LoginTokens";
 import { CacheDefinitions } from "../../../cache/CacheDefinitions";
+import type { GameObject } from "../object/GameObject";
+import { type LocMergeBounds, validateLocMerge } from "../../../../net/protocol/LocMerge";
 
 const ATTR_SKIP_PERSISTENCE = "bot-skip-persistence";
 const DEFAULT_AUDIO_SETTINGS: Readonly<Record<number, number>> = {
@@ -989,6 +991,25 @@ export class Player extends Mobile {
         if (this.viewDistance < Player.PREFERRED_VIEW_DISTANCE) this.viewDistance++;
     }
 
+    /** Send the legacy loc_merge contract; revision241 consumes it without rendering changes. */
+    public mergeObject(object: GameObject, start: number, end: number, bounds: LocMergeBounds): this {
+        const location = object.getLocation();
+        const merge = {
+            ...bounds, locId: object.getId(), tile: { x: location.getX(), y: location.getY() },
+            level: location.getZ(), shape: object.getType(), rotation: object.getFace(),
+            playerIndex: this.getIndex(), start, end,
+        };
+        validateLocMerge(merge);
+        this.getPacketSender().sendObjectMerge(merge);
+        // View membership belongs to the recipient and can be asymmetric at crowded edges.
+        World.getPlayers().forEach(viewer => {
+            if (viewer !== this && viewer.getLocalPlayers().includes(this)) {
+                viewer.getPacketSender().sendObjectMerge(merge);
+            }
+        });
+        return this;
+    }
+
     public getLocalPlayers(): Player[] {
         return this.localPlayers;
     }
@@ -1239,9 +1260,19 @@ export class Player extends Mobile {
         return this.skullTimer > 0;
     }
 
-    /** Counts the skull down a tick; the appearance drops the skull icon on the tick it runs out. */
+    /**
+     * Counts the skull down a tick; the appearance drops the skull icon on the tick it runs out. It stands still
+     * while dying: the items a death keeps follow the skull at the killing blow, not four ticks on.
+     */
     public processSkullTimer(): void {
-        if (!this.isSkulled()) {
+        if (!this.isSkulled() || this.isDying) {
+            return;
+        }
+        // Wiki (Skull (status), 9 December 2021): a skull "cannot disappear during PvP combat". Its last tick waits
+        // while a player is this player's target or attacker (the attacker clears six seconds after the last hit).
+        const combat = this.getCombat();
+        const inPvpCombat = combat.getTarget?.()?.isPlayer?.() === true || combat.getAttacker?.()?.isPlayer?.() === true;
+        if (this.skullTimer <= 1 && inPvpCombat) {
             return;
         }
         if (--this.skullTimer === 0) {

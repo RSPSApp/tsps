@@ -4,6 +4,7 @@ import { CLIENT_PACKET_LENGTHS as NATIVE_CLIENT_PACKET_LENGTHS, ClientPacketId a
 import { SERVER_PACKET_LENGTHS, ServerPacketId } from "./ServerPackets";
 import { EntityInteractionMode, INTERACTION_WORLD_DEFAULT, TileInteractionMode } from "./InteractionMode";
 import { deflateSync } from "zlib";
+import { type LocMergePayload, validateLocMerge } from "./LocMerge";
 
 export const enum ClientPacket {
   NPC_OPTION_2 = 12,
@@ -131,6 +132,42 @@ export function encodeFinePosition(position: FinePositionView): Buffer {
   return encodeServerPacket(ServerPacketId.MOVEMENT_POSITION, finePositionPayload(position));
 }
 
+function effectInteger(name: string, value: number, min: number, max: number): number {
+  if (!Number.isInteger(value) || value < min || value > max) throw new RangeError(`${name} outside ${min}..${max}`);
+  return value;
+}
+
+/** A one-shot sequence for one viewer; -1 clears the NPC's current sequence. */
+export function encodeNpcAnimationSpecific(index: number, id: number, delay = 0): Buffer {
+  const out = Buffer.alloc(5);
+  out.writeUInt16BE(effectInteger("NPC index", index, 0, 65534), 0);
+  out.writeUInt16BE(effectInteger("sequence", id, -1, 65534) & 65535, 2);
+  out[4] = effectInteger("sequence delay", delay, 0, 255);
+  return encodeServerPacket(ServerPacketId.NPC_ANIM_SPECIFIC, out);
+}
+
+/** Actor spot effects use independent slots; -1 clears only the requested slot. */
+export function encodeNpcSpotAnimationSpecific(index: number, id: number, slot = 0, height = 0, delay = 0): Buffer {
+  const out = Buffer.alloc(9);
+  out.writeUInt16BE(effectInteger("NPC index", index, 0, 65534), 0);
+  out.writeUInt16BE(effectInteger("spotanim", id, -1, 65534) & 65535, 2);
+  out[4] = effectInteger("spotanim slot", slot, 0, 255);
+  out.writeUInt16BE(effectInteger("spotanim height", height, 0, 65535), 5);
+  out.writeUInt16BE(effectInteger("spotanim delay", delay, 0, 65535), 7);
+  return encodeServerPacket(ServerPacketId.NPC_SPOTANIM_SPECIFIC, out);
+}
+
+/** Replace one of this viewer's eight head-icon slots; -1 clears that slot. */
+export function encodeNpcHeadIconSpecific(index: number, slot: number, archive: number, frame: number): Buffer {
+  const out = Buffer.alloc(7);
+  out.writeUInt16BE(effectInteger("NPC index", index, 0, 65534), 0);
+  out[2] = effectInteger("head icon slot", slot, 0, 7);
+  out.writeUInt16BE(effectInteger("head icon archive", archive, -1, 65535) & 65535, 3);
+  // The native client reads the frame as a signed short; 65535 is its clear sentinel.
+  out.writeUInt16BE(effectInteger("head icon frame", frame, -1, 32767) & 65535, 5);
+  return encodeServerPacket(ServerPacketId.NPC_HEADICON_SPECIFIC, out);
+}
+
 export type PlayerSyncState = {
   flags: Uint8Array;
   active: Uint16Array;
@@ -215,6 +252,7 @@ export type SkillView = {
 };
 
 export type GroundItemView = {
+  enabledOps?: number;
   id: number;
   itemId: number;
   quantity: number;
@@ -1345,6 +1383,16 @@ export function encodeInventorySnapshot(slots: Array<{ slot: number; itemId: num
   ]));
 }
 
+/** UPDATE_INV_STOPTRANSMIT clears client data only, never authoritative item storage. */
+export function encodeInventoryStopTransmit(inventoryId: number): Buffer {
+  if (!Number.isInteger(inventoryId) || inventoryId < 0 || inventoryId > 0xffff) {
+    throw new RangeError("inventoryId must be an unsigned short");
+  }
+  const body = Buffer.alloc(2);
+  body.writeUInt16BE(inventoryId);
+  return encodeServerPacket(ServerPacketId.INVENTORY_STOP_TRANSMIT, body);
+}
+
 export function encodeInventorySlot(slot: number, itemId: number, quantity: number): Buffer {
   return encodeServerPacket(ServerPacketId.INVENTORY_SLOT, encodeItemSlot(slot, itemId, quantity));
 }
@@ -1386,7 +1434,7 @@ export function encodeBankSlot(slot: BankSlotView): Buffer {
   return encodeServerPacket(ServerPacketId.BANK_SLOT, encodeBankSlotPayload(slot));
 }
 
-export const GROUND_ITEM_BYTES = 33;
+export const GROUND_ITEM_BYTES = 34;
 
 function encodeGroundItem(stack: GroundItemView): Buffer {
   const payload = Buffer.alloc(GROUND_ITEM_BYTES);
@@ -1402,6 +1450,7 @@ function encodeGroundItem(stack: GroundItemView): Buffer {
   payload.writeInt32BE(stack.ownerId ?? -1, 27);
   payload[31] = stack.isPrivate ? 1 : 0;
   payload[32] = stack.ownership ?? 0;
+  payload[33] = (stack.enabledOps ?? 0x1f) & 0x1f;
   return payload;
 }
 
@@ -1446,6 +1495,24 @@ export function encodeLocDel(x: number, y: number, level: number, shape: number,
   payload[4] = level;
   payload[5] = (shape << 2) | (rotation & 3);
   return encodeServerPacket(ServerPacketId.LOC_DEL, payload);
+}
+
+export function encodeLocMerge(merge: LocMergePayload): Buffer {
+  validateLocMerge(merge);
+  const payload = Buffer.alloc(18);
+  payload.writeUInt16BE(merge.locId, 0);
+  payload.writeUInt16BE(merge.tile.x, 2);
+  payload.writeUInt16BE(merge.tile.y, 4);
+  payload[6] = merge.level;
+  payload[7] = (merge.shape << 2) | merge.rotation;
+  payload.writeUInt16BE(merge.playerIndex, 8);
+  payload.writeUInt16BE(merge.start, 10);
+  payload.writeUInt16BE(merge.end, 12);
+  payload.writeInt8(merge.minX, 14);
+  payload.writeInt8(merge.minZ, 15);
+  payload.writeInt8(merge.maxX, 16);
+  payload.writeInt8(merge.maxZ, 17);
+  return encodeServerPacket(ServerPacketId.LOC_MERGE, payload);
 }
 
 export function encodeLocAnim(id: number, x: number, y: number, level: number, shape: number, rotation: number, animationId: number): Buffer {
@@ -1505,7 +1572,7 @@ export type CameraMovementOptions = {
   heightRelative?: boolean;
 };
 
-function encodeCameraPosition(mode: number, x: number, y: number, height: number, motion: boolean | CameraMovementOptions): Buffer {
+function encodeCameraPosition(mode: number, x: number, y: number, height: number, motion: boolean | CameraMovementOptions, timedMode = mode + 7): Buffer {
   const captured = typeof motion !== "boolean";
   const timed = captured && "cycles" in motion;
   if (captured) {
@@ -1521,7 +1588,7 @@ function encodeCameraPosition(mode: number, x: number, y: number, height: number
     if (timed && !CAMERA_EASINGS.includes(motion.easing)) throw new RangeError("Invalid camera easing");
   }
   const payload = Buffer.alloc(timed ? 11 : captured ? 10 : 8);
-  payload[0] = timed ? mode + 7 : captured ? mode + 3 : mode;
+  payload[0] = timed ? timedMode : captured ? mode + 3 : mode;
   payload.writeUInt16BE(x & 0xffff, 1);
   payload.writeUInt16BE(y & 0xffff, 3);
   payload.writeUInt16BE(height & 0xffff, 5);
@@ -1545,6 +1612,13 @@ export function encodeCameraMoveTo(x: number, y: number, height: number, motion:
 
 export function encodeCameraLookAt(x: number, y: number, height: number, motion: boolean | CameraMovementOptions): Buffer {
   return encodeCameraPosition(2, x, y, height, motion);
+}
+
+/** cam_rotateto_coordinate: ease to angles resolved from the coordinate at receipt. */
+export function encodeCameraRotateToCoordinate(x: number, y: number, height: number, cycles: number, easing: CameraEasing = "linear"): Buffer {
+  // Share the existing coordinate/cycle validation, but retain a distinct wire contract:
+  // CAM_LOOKAT_CYCLES interpolates coordinates, rather than fixed angular endpoints.
+  return encodeCameraPosition(2, x, y, height, { cycles, easing }, 13);
 }
 
 /** cam_rotateby: turns the view by a pitch/yaw delta (2048 units a turn) over client cycles. */
@@ -1622,6 +1696,23 @@ export function encodeResetInteractionMode(worldId: number): Buffer {
   const payload = Buffer.alloc(2);
   payload.writeInt16BE(worldId, 0);
   return encodeServerPacket(ServerPacketId.RESET_INTERACTION_MODE, payload);
+}
+
+/**
+ * set_hide_npc_actions (hidenpcops): one boolean for the whole client. While hidden, NPC
+ * menus keep Examine but drop Use, Cast, every action and Attack.
+ */
+export function encodeHideNpcOps(hidden: boolean): Buffer {
+  return encodeServerPacket(ServerPacketId.HIDE_NPC_OPS, Buffer.from([hidden ? 1 : 0]));
+}
+
+/**
+ * set_item_ops_disabled (hideobjops): one boolean for the whole client. While hidden, ground-item
+ * menus drop Use, Cast and every ground action (including the Take fallback); Examine stays only
+ * when no spell is selected.
+ */
+export function encodeHideObjOps(hidden: boolean): Buffer {
+  return encodeServerPacket(ServerPacketId.HIDE_OBJ_OPS, Buffer.from([hidden ? 1 : 0]));
 }
 
 /** Puts the camera back on the player and stops any shake (cam_reset). */
@@ -2500,7 +2591,7 @@ export function encodeGameframeTabSetup(group: number, root: number = 161): Buff
 
 // Transient player attribute set from the handshake's clientType byte.
 export const MOBILE_CLIENT_ATTRIBUTE = "mobile-client";
-// The session is an official OSRS client behind the gateway (gateway/): it gets the fields the
+// The session is an official OSRS client behind the gateway (runelite-gateway/): it gets the fields the
 // browser wire leaves out. Transient, set from HANDSHAKE_CAPABILITY_NATIVE_CLIENT.
 export const NATIVE_CLIENT_ATTRIBUTE = "native-client";
 export const HANDSHAKE_CAPABILITY_NATIVE_CLIENT = 0x1;

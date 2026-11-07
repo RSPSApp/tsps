@@ -615,12 +615,12 @@ module.exports = function registerDarknessOfHallowvaleQuest(api) {
   // Cache DB row 22 column 23: Strength 40, Magic 33, Crafting 32, Agility 26,
   // Thieving 22, Mining 20, Construction 5.
   const REQUIRED_SKILLS = [
-    { skill: Skill.CONSTRUCTION, level: 5, label: "Construction" },
+    { skill: Skill.CONSTRUCTION, level: 5, label: "Construction", boostable: true },
     { skill: Skill.MINING, level: 20, label: "Mining" },
     { skill: Skill.THIEVING, level: 22, label: "Thieving" },
-    { skill: Skill.AGILITY, level: 26, label: "Agility" },
+    { skill: Skill.AGILITY, level: 26, label: "Agility", boostable: true },
     { skill: Skill.CRAFTING, level: 32, label: "Crafting" },
-    { skill: Skill.MAGIC, level: 33, label: "Magic" },
+    { skill: Skill.MAGIC, level: 33, label: "Magic", boostable: true },
     { skill: Skill.STRENGTH, level: 40, label: "Strength" },
   ];
 
@@ -632,10 +632,14 @@ module.exports = function registerDarknessOfHallowvaleQuest(api) {
     return request.needsRod === true;
   }
 
+  function requiredSkillLevel(skills, entry) {
+    return entry.boostable ? skills.getCurrentLevel(entry.skill) : skills.getMaxLevel(entry.skill);
+  }
+
   function meetsRequirements(player) {
     if (!inAidComplete(player)) return false;
     const skills = player.getSkillManager();
-    return REQUIRED_SKILLS.every((entry) => skills.getMaxLevel(entry.skill) >= entry.level);
+    return REQUIRED_SKILLS.every((entry) => requiredSkillLevel(skills, entry) >= entry.level);
   }
 
   function requirementsMessage(player) {
@@ -644,7 +648,7 @@ module.exports = function registerDarknessOfHallowvaleQuest(api) {
     }
     const skills = player.getSkillManager();
     for (const entry of REQUIRED_SKILLS) {
-      if (skills.getMaxLevel(entry.skill) < entry.level) {
+      if (requiredSkillLevel(skills, entry) < entry.level) {
         player.sendMessage(`You need ${entry.level} ${entry.label} to start this quest.`);
       }
     }

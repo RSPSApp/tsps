@@ -60,6 +60,7 @@ module.exports={
   register(api){
     api.registerArea(Music.createArea(api));
     api.persistAttribute(Progress.PROGRESS_ATTRIBUTE,Progress.initial());
+    api.onPlayerLogin(Rewards.importClaim.bind(null,api));
     api.onPlayerLogin(Sync.refresh.bind(null,api));
     api.onPlayerLogin(Actors.login.bind(null,api));
     api.onPlayerLogin(Items.sweep.bind(null,api));

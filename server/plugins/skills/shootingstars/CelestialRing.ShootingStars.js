@@ -51,7 +51,7 @@ function addBoost(request) {
 function extraOre(request, random = Math.random) {
   const ring = wornRing(request.player);
   if (!ring || ring.getId() !== ids().charged || request.rockLevel > RING.extraOreMaxLevel) return;
-  if (random() * RING.extraOreChance < 1) request.extra = true;
+  if (random() * RING.extraOreChance < 1) request.bonuses.push({});
   const left = charges(ring) - 1;
   if (left > 0) {
     ring.setMetaValue(CHARGES_META_KEY, left);
@@ -63,8 +63,15 @@ function extraOre(request, random = Math.random) {
   request.player.sendMessage("Your celestial ring has run out of charges.");
 }
 
+/** Whether this very ring is still carried: equipping it puts a copy in the ring slot (EquipPacketListener). */
+function held(player, ring) {
+  return [player.getInventory(), player.getEquipment()].some((container) => container.getItems().includes(ring));
+}
+
 /** Moves up to `amount` stardust from the inventory into the ring. */
 function addCharges(player, ring, amount) {
+  // The amount prompt outlives a slot change (wearing the ring keeps it open): charge only a ring still carried.
+  if (!held(player, ring)) return;
   const inventory = player.getInventory();
   const stardust = Common.core.ItemIdentifiers.STARDUST;
   const room = RING.maxCharges - charges(ring);
@@ -126,4 +133,4 @@ module.exports = function attachCelestialRing(api) {
   api.onItemOnItem("Stardust", "Celestial ring", chargeWithStardust, { noted: false });
 };
 
-Object.assign(module.exports, { charges, addBoost, extraOre, addCharges, uncharge, check, CHARGES_META_KEY });
+Object.assign(module.exports, { charges, addBoost, extraOre, addCharges, charge, uncharge, check, CHARGES_META_KEY });

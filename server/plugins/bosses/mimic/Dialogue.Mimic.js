@@ -14,6 +14,7 @@
 
 const Shared = require("./Shared.Mimic");
 const Lair = require("./Lair.Mimic");
+const Retrieval = require("./Retrieval.Mimic");
 
 const OPTED_IN_ATTRIBUTE = "mimic:opted-in";
 
@@ -207,9 +208,17 @@ function foundYou(api, player) {
   );
 }
 
-/** Search / presenting the casket all open the same transcript. */
-function talk(api, player) {
+/** Searching opens retrieval; presenting a Mimic casket still offers its challenge. */
+function talk(api, player, presentingCasket = false) {
   if (!Shared.alive(player)) return false;
+  if (presentingCasket && hasCasket(player)) {
+    foundYou(api, player);
+    return true;
+  }
+  if (Retrieval.held(player)) {
+    Retrieval.open(player);
+    return true;
+  }
   if (hasCasket(player)) {
     foundYou(api, player);
     return true;
@@ -225,7 +234,7 @@ function talk(api, player) {
 function attach(api) {
   api.persistAttribute(OPTED_IN_ATTRIBUTE, false);
   api.onObjectInteraction("<col=ffff00>Strange casket</col>", { Search: (event) => talk(api, event.player) });
-  api.onItemOnObject("Mimic", "<col=ffff00>Strange casket</col>", (event) => talk(api, event.player));
+  api.onItemOnObject("Mimic", "<col=ffff00>Strange casket</col>", (event) => talk(api, event.player, true));
 }
 
 module.exports = { attach, talk, OPTED_IN_ATTRIBUTE };

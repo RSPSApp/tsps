@@ -869,6 +869,7 @@ class Raid {
   remove(player) {
     const member = this.members.get(player);
     Shared.removeDawnbringer(player);
+    Shared.removeBandages(player);
     if (member?.jailed) {
       member.jailed = false;
       player.getMovementQueue().setBlockMovement(false);

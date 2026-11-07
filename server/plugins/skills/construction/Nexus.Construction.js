@@ -221,7 +221,17 @@ function doneClicked(player, session) {
 
 /** Done: pay for new destinations (inventory runes, the spell's Magic level), then save. */
 function done(player, session) {
+  if (session.house.owner !== player || !Portals.current(player, session.house, session.furniture)) {
+    if (open.get(player) === session) open.delete(player);
+    // TSPS fallback; the exact retail stale-session wording is not established.
+    player.sendMessage("This nexus is no longer available for configuration.");
+    return;
+  }
   const added = session.slots.filter(id => !stateOf(player, session.furniture).slots.includes(id));
+  for (const id of added) {
+    const destination = destinations().get(id);
+    if (destination && !Portals.mayConfigureHouseDestination(player, destination.spellName)) return;
+  }
   const magic = player.getSkillManager().getMaxLevel(Skill.MAGIC);
   const tooHigh = added.map(id => destinations().get(id)).find(data => data && data.level > magic);
   if (tooHigh) return player.sendMessage(`You need a Magic level of ${tooHigh.level} to add ${tooHigh.name}.`);

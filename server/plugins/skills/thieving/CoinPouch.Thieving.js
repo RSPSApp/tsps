@@ -9,6 +9,8 @@
 const { pouchCoins, POUCH_COINS } = require("./Pickpocket.Thieving");
 
 const OPEN_SOUND = 2115;
+/** Not captured: the coins would not fit. */
+const NO_SPACE = "You don't have enough inventory space.";
 
 let core;
 
@@ -16,6 +18,15 @@ function open(player, pouchId, count, all = false) {
   if (!POUCH_COINS.has(pouchId) || count <= 0) return;
   let coins = 0;
   for (let i = 0; i < count; i++) coins += pouchCoins(pouchId);
+  // The coins must fit, or they'd vanish: into the coin stack or a free slot, or the slot the pouches free when
+  // the whole stack is opened (one pouch left in its stack frees nothing).
+  const inventory = player.getInventory();
+  const COINS = core.ItemIdentifiers.COINS;
+  const freesSlot = inventory.getAmount(pouchId) <= count && inventory.getAmount(COINS) === 0;
+  if (!freesSlot && inventory.getAddableAmount(new core.Item(COINS, coins)) < coins) {
+    player.sendMessage(NO_SPACE);
+    return;
+  }
   player.getInventory().delete(pouchId, count);
   player.getInventory().adds(core.ItemIdentifiers.COINS, coins);
   if (!all) {

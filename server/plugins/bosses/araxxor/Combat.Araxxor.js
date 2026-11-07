@@ -216,15 +216,17 @@ function combatClass() {
       if (!character || !target) return [];
       if (!this.attack || this.attack === Shared.Attack.CLEAVE) return [];
       const protect = protections(target);
+      // The Wiki's protect-prayer reductions are applied here, so the engine must not apply the prayer
+      // again (at the roll or at impact): that would zero every hit through the matching prayer.
       if (this.attack === Shared.Attack.MELEE) {
-        const hit = new core.PendingHit(character, target, this, 0);
+        const hit = new core.PendingHit(character, target, this, { delay: 0, bypassProtectionPrayer: true });
         const rolled = Math.min(Shared.MELEE_MAX, hit.getTotalDamage());
         hit.setTotalDamage(protect.melee ? Math.min(rolled, Shared.PROTECT_MELEE_CAP) : rolled);
         return [hit];
       }
       const ranged = this.attack === Shared.Attack.RANGED;
       const delay = this.shotDelay ?? 1;
-      const hit = new core.PendingHit(character, target, this, { delay });
+      const hit = new core.PendingHit(character, target, this, { delay, bypassProtectionPrayer: true });
       const rolled = Math.min(ranged ? Shared.RANGED_MAX : Shared.MAGIC_MAX, hit.getTotalDamage());
       const factor = ranged ? protect.ranged : protect.magic;
       const prayerReduced = ranged ? Shared.PROTECT_RANGED_FACTOR : Shared.PROTECT_MAGIC_FACTOR;

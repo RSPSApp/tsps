@@ -124,9 +124,9 @@ export class PlayerSave {
     /**
      * Valid color index ranges per palette, derived from the real OSRS client
      * palettes (see client/rs/config/player/PlayerDesignColors.ts
-     * PLAYER_BODY_RECOLOR_TO_1 lengths: 30/29/29/6/13). Skin is clamped to 0-7
-     * because the client's makeup interface only offers the first 8 skin
-     * colors (PlayerDesignController restricts skin to < 8). Clamping these to
+     * PLAYER_BODY_RECOLOR_TO_1 lengths: 30/29/29/6/13). Skin keeps all 13,
+     * the unlockable green/black/white/blue/purple included, since the
+     * designer offers them all. Clamping these to
      * narrower ranges silently rewrote players' shirt/pants colors on save,
      * so they came back wrong after relogging.
      */
@@ -135,7 +135,7 @@ export class PlayerSave {
         [0, 28], // torso
         [0, 28], // legs
         [0, 5],  // feet
-        [0, 7],  // skin
+        [0, 12], // skin
     ];
     /** The name as the player first typed it, capitals included; later logins keep it. */
     private displayName: string;
@@ -592,7 +592,9 @@ export class PlayerSave {
         colorIndices.forEach((colorIndex, idx) => {
             const [min, max] = PlayerSave.COLOR_RANGES[idx];
             const candidate = PlayerSave.toFiniteInt(raw[colorIndex], defaults[colorIndex]);
-            sanitized[colorIndex] = PlayerSave.clamp(candidate, min, max);
+            // An unknown skin (a native client's red, 13) is no nearby colour: it goes back to the default.
+            const unknownSkin = colorIndex === Appearance.SKIN_COLOUR && (candidate < min || candidate > max);
+            sanitized[colorIndex] = unknownSkin ? defaults[colorIndex] : PlayerSave.clamp(candidate, min, max);
         });
 
         sanitized[Appearance.GENDER] = gender;
@@ -813,6 +815,13 @@ export class PlayerSave {
             }
         }
         playerSave.banks = banks;
+
+        // "persistence:snapshot" { player, save }: content that lends the player a temporary
+        // character (the PvP Arena's fights) writes their own one into the save instead, so a
+        // save never holds the lent one. Handlers change `save` (inventory, equipment, skills,
+        // spellBook, position, attributes ...), never the live player.
+        const { PluginManager } = require("../../../../../plugins/PluginManager") as typeof import("../../../../../plugins/PluginManager");
+        PluginManager.emitCustomEvent("persistence:snapshot", { player, save: playerSave });
 
         return playerSave;
     }

@@ -167,6 +167,12 @@ test('leaving the course loses the payment, the reward and the streak, not the t
   p.setAttribute(Dispenser.ATTRIBUTES.paymentWarning, 1);
   op(p, 'Pay');
   lap(p);
+  for (const [x, y] of [[3005, 10357], [3000, 10345]]) {
+    p.location = new Location(x, y, 0);
+    core.TaskManager.process();
+    assert.equal(p.getAttribute(Dispenser.ATTRIBUTES.deposit), 1, 'falling into the course dungeon keeps the payment');
+    assert.equal(p.getAttribute(Dispenser.ATTRIBUTES.reward), 1);
+  }
   p.location = new Location(2998, 3916, 0);
   core.TaskManager.process();
   assert.equal(p.varbits.get(varbit('wildy_agility_deposit')), 0);
@@ -290,4 +296,87 @@ test('the paid-player watch runs only while someone has paid: one watch, gone wh
   core.TaskManager.process();
   core.TaskManager.process();
   assert.equal(again.getAttribute(Dispenser.ATTRIBUTES.deposit), 0, 'and still forfeits on leaving');
+});
+
+
+function packetPlayer() {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const p = new Player(null), frames = [];
+  p.setUsername('dispenser-refresh');
+  p.setLocation(new Location(3004, 3936, 0));
+  p.getSession = () => ({ sendClientPacket(frame) { frames.push(Buffer.from(frame)); return true; } });
+  return { p, frames };
+}
+
+// Decode the actual inventory snapshot frame produced by Inventory -> PacketSender.
+function inventoryPackets(frames) {
+  return frames.filter((frame) => frame[0] === 50).map((frame) => {
+    const result = new Map(), count = frame.readUInt16BE(3);
+    let at = 5;
+    for (let i = 0; i < count; i++) {
+      const slot = frame.readUInt16BE(at), id = frame.readUInt16BE(at + 2) - 1;
+      let amount = frame[at + 4]; at += 5;
+      if (amount === 255) { amount = frame.readInt32BE(at); at += 4; }
+      if (id >= 0) result.set(id, (result.get(id) ?? 0) + amount);
+    }
+    return result;
+  });
+}
+
+test('Tag immediately emits the real inventory snapshot for a new ticket and an existing large stack', () => {
+  for (const initial of [0, 300]) {
+    const { p, frames } = packetPlayer();
+    if (initial) p.getInventory().add(new core.Item(TICKET, initial), false);
+    lap(p); frames.length = 0;
+    op(p, 'Tag');
+    assert.equal(p.getInventory().getAmount(TICKET), initial + 1);
+    const packets = inventoryPackets(frames);
+    assert.equal(packets.length, 1, 'successful ticket claim sends one inventory refresh');
+    assert.equal(packets[0].get(TICKET), initial + 1, 'the wire stack is updated before another action');
+  }
+});
+
+test('paid Tag sends one final inventory snapshot containing ticket and bonus food', (t) => {
+  t.mock.method(Math, 'random', () => 0.5); // No clue; deterministic existing reward table.
+  const { p, frames } = packetPlayer();
+  p.getInventory().add(new core.Item(OPEN_BAG, 1), false);
+  p.setAttribute(Dispenser.ATTRIBUTES.deposit, 1);
+  lap(p); frames.length = 0;
+  op(p, 'Tag');
+  const packets = inventoryPackets(frames);
+  assert.equal(packets.length, 1, 'publish the completed reward batch');
+  assert.equal(packets[0].get(TICKET), 1);
+  const food = Dispenser.DATA.extra.map(([id]) => id).find((id) => p.getInventory().getAmount(id) > 0);
+  assert.ok(food, 'existing roll awarded an extra');
+  assert.equal(packets[0].get(food), 1, 'bonus appears in the same immediate refresh');
+  const bag = p.getInventory().getItems().find((item) => item.getId() === OPEN_BAG);
+  assert.equal(LootingBag._test.bagItems(bag).length, 2, 'noted loot still goes into the bag');
+});
+
+test('failed paid claim emits no inventory reward update and leaves the pending claim untouched', () => {
+  const { p, frames } = packetPlayer();
+  p.setAttribute(Dispenser.ATTRIBUTES.deposit, 1);
+  lap(p); frames.length = 0;
+  op(p, 'Tag');
+  assert.equal(inventoryPackets(frames).length, 0);
+  assert.equal(p.getInventory().getAmount(TICKET), 0);
+  assert.equal(p.getAttribute(Dispenser.ATTRIBUTES.ticket), 1);
+  assert.equal(p.getAttribute(Dispenser.ATTRIBUTES.reward), 1);
+});
+
+test('a full inventory still updates its existing ticket stack without adding an extra', (t) => {
+  t.mock.method(Math, 'random', () => 0.5);
+  const { p, frames } = packetPlayer();
+  p.getInventory().add(new core.Item(OPEN_BAG, 1), false);
+  p.getInventory().add(new core.Item(TICKET, 300), false);
+  while (p.getInventory().getFreeSlots()) p.getInventory().add(new core.Item(1511, 1), false);
+  p.setAttribute(Dispenser.ATTRIBUTES.deposit, 1);
+  lap(p); frames.length = 0;
+  op(p, 'Tag');
+  const packets = inventoryPackets(frames);
+  assert.equal(p.getInventory().getAmount(TICKET), 301);
+  assert.equal(packets.length, 1);
+  assert.equal(packets[0].get(TICKET), 301);
+  assert.equal(p.getInventory().getFreeSlots(), 0);
+  assert.ok(Dispenser.DATA.extra.every(([id]) => !packets[0].has(id)), 'no extra when full');
 });

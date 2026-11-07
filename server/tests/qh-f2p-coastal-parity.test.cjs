@@ -241,6 +241,14 @@ test('Prince Ali onReward keeps 700 coins for a full bag and an existing stack',
   const merged = captureDrops(() => quest.onReward(stacked.p, quest));
   assert.equal(merged.length, 0);
   assert.equal(stacked.inventory.getAmount(core.ItemIdentifiers.COINS), 720);
+
+  // As captured: Hassan takes the bronze key in the payment update, so its slot takes the coins.
+  const keyed = rewardPlayer(); fillSlots(keyed.inventory, 28);
+  keyed.inventory.getItems()[4] = new core.Item(core.ItemIdentifiers.BRONZE_KEY, 1);
+  const kept = captureDrops(() => quest.onReward(keyed.p, quest));
+  assert.equal(kept.length, 0);
+  assert.equal(keyed.inventory.getAmount(core.ItemIdentifiers.BRONZE_KEY), 0);
+  assert.equal(keyed.inventory.getAmount(core.ItemIdentifiers.COINS), 700);
 });
 
 test('Black Knights completion rewards once even when the bag is full', () => {

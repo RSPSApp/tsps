@@ -34,6 +34,9 @@ function dropCoins(event, amount) {
 function breakOnPvpDeath(event) {
   const { player, killer, item } = event;
   if (event.kept || !isPvpDeath(player, killer)) return;
+  // A preset or meta-untradeable copy (Presets.PvpMode tags them) was never paid for: it does not break into
+  // its repair cost, or every free preset would mint coins for whoever kills its wearer.
+  if (item.isPresetItem?.() === true || item.isUntradeable?.() === true) return;
   const found = Common.lookup(item.getId());
   if (!found || found.entry.ownDeathRules || found.entry.repairCost == null) return;
   const { entry, form } = found;

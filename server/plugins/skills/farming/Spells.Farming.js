@@ -45,7 +45,9 @@ function farmingSpell(event, patch) {
             new core.PlayerDialogue(0, "Umm... this spell won't cure that!")));
         return;
     }
-    Model.advanceFarm(Patches.farmFor(player), Date.now());
+    if (Patches.autoBusy(player)) return;
+    Patches.cancelAuto(player, patch);
+    Patches.advanceFarm(player);
     const state = Patches.stateFor(player, patch);
     if (key === "cure plant") {
         const refusal = curePlantRefusal(patch, state);

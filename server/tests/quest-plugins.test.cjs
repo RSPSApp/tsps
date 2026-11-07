@@ -2428,11 +2428,16 @@ test('Blood Moon Paterdomus books must be placed on all six matching plinths bef
   const counts = new Map();
   const bits = new Map();
   const moveCalls = [];
+  let capacity = 28;
+  // As a real inventory: with no free slot `adds` drops the item and still returns the container.
   const inventory = {
     contains: id => (counts.get(id) ?? 0) > 0,
     getAmount: id => counts.get(id) ?? 0,
-    getFreeSlots: () => 28 - [...counts.values()].filter(value => value > 0).length,
-    adds: (id, amount) => (counts.set(id, (counts.get(id) ?? 0) + amount), true),
+    getFreeSlots: () => capacity - [...counts.values()].filter(value => value > 0).length,
+    adds: (id, amount) => {
+      if (inventory.getFreeSlots() > 0 || (counts.get(id) ?? 0) > 0) counts.set(id, (counts.get(id) ?? 0) + amount);
+      return inventory;
+    },
     deleteNumber: (id, amount) => counts.set(id, Math.max(0, (counts.get(id) ?? 0) - amount)),
   };
   const player = {
@@ -2465,9 +2470,11 @@ test('Blood Moon Paterdomus books must be placed on all six matching plinths bef
   useBook(wrong);
   assert.equal(attributes.get('quest.the_blood_moon_rises.slepe-story').booksPlaced, undefined,
     'a wrong portrait cannot satisfy the ordered matching puzzle');
+  capacity = [...counts.values()].filter(value => value > 0).length; // a full inventory
   useBook({ player, itemId: ids.ESSIANDARS_NOTES, location: { x: 3409, y: 3483, z: 1 }, handled: false });
   assert.equal(inventory.contains(ids.PIOUS_PROCEEDINGS), true,
-    'placing the intended book returns a book that was put on the wrong plinth');
+    'placing the intended book returns a book that was put on the wrong plinth, even into a full inventory');
+  capacity = 28;
   for (const [itemId, x, y] of placements.slice(1)) useBook({ player, itemId, location: { x, y, z: 1 }, handled: false });
   const story = attributes.get('quest.the_blood_moon_rises.slepe-story');
   assert.equal(story.booksPlaced, true);
@@ -2514,6 +2521,8 @@ test('Blood Moon Hallowed preparations make the stew, upgraded flail and stakes 
   const counts = new Map();
   const inventory = {
     getFreeSlots: () => 0,
+    // Room for each pickup (handlePrepObject checks it: `adds` never reports failure).
+    getAddableAmount: (item) => item.getAmount(),
     contains: (id) => (counts.get(id) ?? 0) > 0,
     getAmount: (id) => counts.get(id) ?? 0,
     adds: (id, amount) => (counts.set(id, (counts.get(id) ?? 0) + amount), true),
@@ -8269,13 +8278,13 @@ test('Desert Treasure II vault cache has blocked Ketla clone lanes and nearby cl
   const blockedTile = area.tile(32, 46, 0);
   const clearButOccluded = area.tile(35, 46, 0);
   const replacement = area.tile(35, 44, 0);
-  assert.notEqual(RegionManager.getClipping(blockedTile.getX(), blockedTile.getY(), 0, area) & 0x1280100, 0,
+  assert.notEqual(RegionManager.getClipping(blockedTile.getX(), blockedTile.getY(), 0, area) & RegionManager.BLOCKED_MASK, 0,
     'the original southern cardinal clone tile is blocked by the copied vault floor');
-  assert.equal(RegionManager.getClipping(clearButOccluded.getX(), clearButOccluded.getY(), 0, area) & 0x1280100, 0,
+  assert.equal(RegionManager.getClipping(clearButOccluded.getX(), clearButOccluded.getY(), 0, area) & RegionManager.BLOCKED_MASK, 0,
     'the original diagonal clone tile is walkable');
   assert.equal(RegionManager.canProjectileAttackBounds(ketla, clearButOccluded, 1, 1, 1, 1, area), false,
     'the original diagonal clone tile is hidden from Ketla by the copied vault geometry');
-  assert.equal(RegionManager.getClipping(replacement.getX(), replacement.getY(), 0, area) & 0x1280100, 0);
+  assert.equal(RegionManager.getClipping(replacement.getX(), replacement.getY(), 0, area) & RegionManager.BLOCKED_MASK, 0);
   assert.equal(RegionManager.canProjectileAttackBounds(ketla, replacement, 1, 1, 1, 1, area), true,
     'the nearby replacement tile is clear and has a projectile line');
 });
@@ -8328,9 +8337,9 @@ test('Desert Treasure II final wights expose their distinct smoke, clone, vial a
     TemplatedInstanceArea: TestInstance, GameObject: TestObject, RangedCombatMethod: TestRangedCombatMethod,
     MeleeCombatMethod: TestMeleeCombatMethod, PendingHit: TestPendingHit,
     Animation: class { constructor(id) { this.id = id; } },
-    RegionManager: { getClipping(x, y, z, area) {
+    RegionManager: { BLOCKED_MASK: base.core.RegionManager.BLOCKED_MASK, getClipping(x, y, z, area) {
       clipChecks.push({ x, y, z, area });
-      return (x === 8227 && y === 1614) || (x === 8227 && y === 1646) || (x === 8224 && y === 1646) ? 0x20100 : 0;
+      return (x === 8227 && y === 1614) || (x === 8227 && y === 1643) || (x === 8227 && y === 1646) || (x === 8224 && y === 1646) ? 0x20100 : 0;
     }, canProjectileAttackBounds(_source, destination) {
       const x = destination.getX?.() ?? destination.x, y = destination.getY?.() ?? destination.y;
       return !(x === 8227 && y === 1646) && !(x === 8224 && y === 1646);
@@ -8549,8 +8558,10 @@ test('Desert Treasure II final wights expose their distinct smoke, clone, vial a
     for (const hook of hitRollHooks) hook(ordinaryNpcRoll);
     assert.equal(ordinaryNpcRoll.bypassProtectionPrayer, false, 'other NPCs do not inherit the clone prayer rule');
     assert.ok(clones.every(clone => !((clone.location.x === 8227 && clone.location.y === 1646)
-      || (clone.location.x === 8224 && clone.location.y === 1646))), 'clones avoid floor-blocked or projectile-blocked cache cover points');
-    assert.ok(clones.every(clone => (core.RegionManager.getClipping(clone.location.x, clone.location.y, 0, area) & 0x1280100) === 0
+      || (clone.location.x === 8227 && clone.location.y === 1643)
+      || (clone.location.x === 8224 && clone.location.y === 1646))),
+    'clones avoid floor-blocked or projectile-blocked cache cover points (8227,1643 is a preferred clone lane blocked by the floor alone)');
+    assert.ok(clones.every(clone => (core.RegionManager.getClipping(clone.location.x, clone.location.y, 0, area) & core.RegionManager.BLOCKED_MASK) === 0
       && core.RegionManager.canProjectileAttackBounds(current.getLocation(), clone.location, 1, 1, 1, 1, area)),
     'each placed clone occupies clear floor with a projectile path from Ketla');
     ketlaCombat.start(current, p);
@@ -9321,7 +9332,8 @@ test('Desert Treasure II enters the Scar through the Catalytic Guardian and requ
     inventoryCounts.set(core.ItemIdentifiers.AIR_NERVE, 1);
     processCycle += 4;
     const inventory = player.getInventory;
-    player.getInventory = () => ({ ...inventory(), adds: () => false });
+    // A full inventory: `adds` never reports failure, so the handler must check for room first.
+    player.getInventory = () => ({ ...inventory(), getFreeSlots: () => 0 });
     objectHooks[0](airEnding);
     assert.equal(inventoryCounts.get(core.ItemIdentifiers.AIR_NERVE), 1);
     player.getInventory = inventory;
@@ -9386,7 +9398,8 @@ test('Desert Treasure II enters the Scar through the Catalytic Guardian and requ
     try {
       const leeches = queues.add.filter((npc) => npc.id === core.NpcIdentifiers.LIGHT_LEECH);
       const getInventory = player.getInventory;
-      player.getInventory = () => ({ ...getInventory(), adds: () => false });
+      // A full bag: `adds` never reports failure, so the lure handler checks for room first.
+      player.getInventory = () => ({ ...getInventory(), getFreeSlots: () => 0 });
       takeLure({ player, npc: leeches[0] });
       assert.ok(!queues.remove.includes(leeches[0]), 'a full bag keeps the leech and its obtainable lure');
       player.getInventory = getInventory;

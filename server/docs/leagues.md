@@ -1017,9 +1017,17 @@ Animal Wrangler's Hunter and cooking ones) do not.
   (`farming:open-seed-vault`); crops never die (a diseased crop waits for a cure instead,
   `farming:plant-rules` `undying`); planting keeps the seed 75% of the time, with live's message
   ("Botanical allows you to keep your ...", Wiki trivia). These need only the relic (Wiki). Both
-  rules are kept on what is planted from then on. Not here: the automatic harvest and replanting
-  of a grown patch from the vault's seeds (with its ultracompost memory, contract, pet and Hespori
-  rules), which needs a Farming replant path of its own.
+  rules are kept on what is planted from then on. Online herb patches previously treated with
+  ultracompost can automatically harvest on reaching maturity if the matching seed is in the vault:
+  their herbs go to the bank, award normal Farming XP and complete matching Guild contracts without
+  manual harvest tasks or pet/Hespori rolls. The same seed is replanted using the existing planting
+  rules (applying the seed-saving roll here is our inference). Without the seed at maturity the
+  crop remains for manual harvesting; depositing a seed later does not restart it. Other crop types,
+  herbs without prior ultracompost and offline catch-up are not yet automated. Farming still uses the
+  server's ordinary growth grid, not the league's one-minute tick. Our capacity policy stops a full
+  bank without losing produce or XP; a partially banked cycle may resume during the same session,
+  but a manual patch action, logout, disconnect or missing seed/relic cancels the remainder. Retail
+  full-bank behavior is not established.
 - **Pocket Kingdom** (Raging Echoes tier 7): the Pocket kingdom's Check (the approval and coffers;
   the wording is ours), Collect (Advisor Ghrim's collection, to the bank) and Manage-kingdom (the
   kingdom's interface) work anywhere, without Throne of Miscellania and with Royal Trouble's
@@ -1644,7 +1652,9 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   description lists join it: "Defeat Callisto or Artio 50 times", "Defeat The Nightmare or
   Phosani's Nightmare 50 times combined"; "in the Fremennik Province", "on Ungael", "without
   leaving" or Raging Echoes' "must be of one difficulty" leave the task unmapped, the places
-  until the area unlocks exist, even for a boss with one home; a monster whose every location line
+  until the area unlocks exist, even for a boss with one home ("Defeat any TzHaar in Mor Ul Rek"
+  is the four attackable city castes, TzHaar-Ket, TzHaar-Xil, TzHaar-Mej and TzHaar-Hur; TzTok-Jad
+  and TzHaar-Ket-Rak are other tasks); a monster whose every location line
   on its Wiki page is the task's place, and whose name the cache gives one attackable monster, is
   killed there whatever the task adds: "Defeat a Drake in the Karuulm Slayer Dungeon", the pages
   saved as `<dir>/npcs/<page>.wikitext`; a Combat Achievements monster no NPC is named after is the
@@ -1795,7 +1805,10 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   Brew / Clean / Cut / Spin [N] X" ("Successfully" before it is the deed; a potion's name without
   "potion", whatever its dosage) as an item made (a fish caught raw, a herb counted clean; a catch with
   no raw fish is a creature hunted); "Pickpocket X [N times]" with the description's
-  alternatives; "N <tier> Clue Scroll(s)". A description naming a group ("any kind of logs"), a
+  alternatives; "N <tier> Clue Scroll(s)". "Equip any Godsword" is every godsword its page's
+  {{plinkt}} names, plus an ornament kit the cache has of one. "Equip any piece of Zenyte Jewelry"
+  is the four enchanted pieces and each one's cache forms. "Equip any piece of armour from the moons
+  of peril" is every piece of the Moon equipment page's three tables. A description naming a group ("any kind of logs"), a
   place or a condition leaves the task unmapped; so does a parenthesis remark, while one without a
   space is part of a name ("(c)", "(u)").
 - **Named places** (the catalog's `places`, by key: a guild, a dungeon, an island, each `{ name,
@@ -1871,8 +1884,8 @@ Most task triggers (see Tasks), the Echo bosses (and so three of the mastery poi
 passives left out above (clue-step progress and farming ticks), the boosted sources their own
 plugins have yet to ask about, and Shattered Relics' rules (see its section). Each is its own item
 on the progress tracker.
-Of the relics, Overgrown's automatic harvest and replanting and Pocket Kingdom's hourly cycle are
-their own items, as are the relics this cache cannot carry (Not in this cache, above).
+Of the relics, the remaining Overgrown crop types and Pocket Kingdom's hourly cycle are their own
+items, as are the relics this cache cannot carry (Not in this cache, above).
 
 The records have no POH league hall to stand in: its trophy case, pedestals and scroll need the
 house's league hall, which this server doesn't build yet, so the scroll's options answer only where

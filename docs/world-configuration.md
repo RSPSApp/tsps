@@ -36,6 +36,34 @@ Amascut) and other reward chests are not affected.
 }
 ```
 
+## Cross-floor visibility and combat
+
+Set `pluginConfig` `"CrossFloor:visibility"` to sync nearby players, NPCs, ground items and
+temporary objects on your floor and lower floors. Floors above you remain hidden. This also
+activates lower-floor NPC spawns and permits Telekinetic Grab on a lower floor. It defaults to
+`false`.
+
+Set `"CrossFloor:combat"` to allow ranged and magic attacks between floors; melee stays on the
+same floor. Combat is a child of visibility, so it only works when `"CrossFloor:visibility"` is
+`true`. Attacks can go in both floor directions, but a lower-floor player does not see a higher-floor
+attacker or their projectiles. Combat also defaults to `false`.
+
+The host exposes these under **Settings → Technical**, with combat nested below visibility.
+Restart the world after changing them.
+
+```json
+{
+  "pluginConfig": {
+    "CrossFloor:visibility": true,
+    "CrossFloor:combat": false
+  }
+}
+```
+
+Explicit boolean values override the older `CROSS_FLOOR_VISIBILITY`, `CROSS_FLOOR_COMBAT` and
+`CROSS_FLOOR_VISIBILITY_AND_COMBAT` environment flags. Those flags remain fallbacks for existing
+setups, but combat now always requires visibility, including when using the old flags.
+
 ## Welcome screen message
 
 `pluginConfig` `"WelcomeScreen:messageOfTheWeek"` is the text on the scroll at the bottom of
@@ -126,4 +154,12 @@ require the optional PvP statistics plugin to display.
 
 Ranked PvP Arena match finding (the Grouping tab's PvP Arena button, `DuelArena` plugin) is only
 available on designated worlds. Enable it with `"pluginConfig": { "DuelArena:pvpArenaWorld": true }`
-in `world.local.json` (default off). Legacy Duels are unaffected.
+in `world.local.json` (default off).
+
+Unranked duels are on every world. In the Emir's Arena, player option 1 is Challenge and 4 is
+Load-outs. On a normal world, Challenge first asks whether the duel is an Unranked Duel or a Legacy
+Duel. On a PvP Arena world, Challenge goes straight to an unranked duel. The fight uses the player's
+main character: their items, stats and spellbook are set aside for the fight and come back when
+they leave the arena (`duelarena/Stash.DuelArena.js`). A save taken mid-fight (a periodic save,
+a crash) writes their own character standing in the Emir's Arena, never the arena's gear, so a
+world sharing saves with this one is safe with `DuelArena` turned off.

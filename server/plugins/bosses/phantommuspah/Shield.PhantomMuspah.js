@@ -79,6 +79,8 @@ function raise(fight) {
   fight.shield = shield.points;
   fight.spikes.hardenAll();
   fight.setForm("shielded");
+  const defence = Common.core.Skill.DEFENCE;
+  fight.muspah.setCurrentLevels(defence, fight.muspah.getMaxLevel(defence));
   fight.muspah.setHealthBar(shield.healthBar);
   fight.showShield();
   Common.overlayFade(fight.player, overlay.clear);

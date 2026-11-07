@@ -197,11 +197,12 @@ function ticks(count) {
   for (let i = 0; i < count; i++) TaskManager.process();
 }
 
+const realCalculateWalkRoute = PluginManager.getCoreApi().PathFinder.calculateWalkRoute;
 const SCOREBOARD_FILE = require('node:path').join(require('node:os').tmpdir(), `colosseum-scoreboard-${process.pid}.json`);
 after(() => require('node:fs').rmSync(SCOREBOARD_FILE, { force: true }));
 
-before(() => {
-  CachePipeline.initialize();
+before(async () => {
+  await CachePipeline.initialize();
   RegionManager.init();
   // The scoreboard's world records go to a scratch file, never the server's saves.
   Scoreboard._useFile(SCOREBOARD_FILE);
@@ -473,7 +474,7 @@ test('the Manticore throws magic and ranged in either order, then melee, a tick 
   assert.deepEqual([...seen].sort(), ['MAGIC-RANGED', 'RANGED-MAGIC']);
 });
 
-test('a Minotaur away from the player heals damaged enemies within 6 tiles to full', () => {
+test('a Minotaur away from the player heals an eligible nearby enemy to full', () => {
   const I = Waves.ids();
   const minotaur = fakeNpc(I.minotaur, 1820, 3100);
   const near = fakeNpc(I.javelin, 1824, 3102);
@@ -646,10 +647,10 @@ test('Solarflare circles a pillar on its 16 open tiles', () => {
     assert.equal(path.length, 16);
     assert.equal(path.filter((tile) => tile.corner).length, 4);
     for (const tile of path) {
-      assert.equal(RegionManager.getClipping(tile.x, tile.y, 0) & 0x1280100, 0, `${tile.x},${tile.y} is open`);
+      assert.equal(RegionManager.getClipping(tile.x, tile.y, 0) & RegionManager.BLOCKED_MASK, 0, `${tile.x},${tile.y} is open`);
     }
     for (let x = pillar.x; x < pillar.x + 3; x++) {
-      assert.notEqual(RegionManager.getClipping(x, pillar.y + 1, 0) & 0x1280100, 0, 'the pillar blocks');
+      assert.notEqual(RegionManager.getClipping(x, pillar.y + 1, 0) & RegionManager.BLOCKED_MASK, 0, 'the pillar blocks');
     }
   }
 });
@@ -768,7 +769,7 @@ test("Sol's patterns: Spear 1 is 5x6 and two lines of 4; the Shields leave one s
 test('the barricade closes the gaps between the four pillars', () => {
   const tiles = Patterns.barricade();
   const blocked = (x, y) => tiles.some((tile) => tile.x === x && tile.y === y) ||
-    (RegionManager.getClipping(x, y, 0) & 0x1280100) !== 0;
+    (RegionManager.getClipping(x, y, 0) & RegionManager.BLOCKED_MASK) !== 0;
   const { minX, maxX, minY, maxY } = Patterns.BARRICADE;
   for (let x = minX; x <= maxX; x++) assert.ok(blocked(x, minY) && blocked(x, maxY), `x ${x}`);
   for (let y = minY; y <= maxY; y++) assert.ok(blocked(minX, y) && blocked(maxX, y), `y ${y}`);
@@ -1047,4 +1048,151 @@ test("reinforcements follow the Wiki's waves, and Sol Heredit's wave has none", 
   assert.deepEqual(Waves.reinforcements(8, none), [I.minotaur]);
   assert.deepEqual(Waves.reinforcements(11, none), [I.shaman, I.minotaur]);
   assert.deepEqual(Waves.reinforcements(12, none), []);
+});
+
+// Controlled Run.tick calls use real registered actors, the private arena and cache clipping.
+// This does not advance the World clock or demonstrate NPC routing or retail timing.
+test('native Minotaur healing uses the arena visibility and eligibility rules', async t => {
+  const core = PluginManager.getCoreApi();
+  const { PlayerSession } = require('../dist/net/PlayerSession');
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { NpcDefinitionLoader } = require('../dist/game/definition/loader/impl/NpcDefinitionLoader');
+  new NpcDefinitionLoader().load();
+  assert.deepEqual([Waves.ids().minotaur, Waves.ids().minotaurRouting, Waves.ids().javelin], [12812, 12813, 12817]);
+  const oldRoute = core.PathFinder.calculateWalkRoute;
+  core.PathFinder.calculateWalkRoute = realCalculateWalkRoute;
+  t.after(() => { core.PathFinder.calculateWalkRoute = oldRoute; Shared.bind(fakeApi()); });
+  const liveApi = PluginManager.createApi('native-colosseum-minotaur');
+  Shared.bind(liveApi);
+  const tile = (x, y) => new Location(x, y, 0);
+  const center = npc => core.Projectile.centreOf(npc);
+  const sight = (a, b, area) => RegionManager.canProjectileAttackReturn(center(a), center(b), 1, area);
+  let serial = 0;
+
+  function fixture(test, targetId = Waves.ids().javelin) {
+    let player, run;
+    test.after(() => {
+      if (run) {
+        const npcs = [...run.npcs].map(npc => [npc, npc.getIndex()]);
+        for (const [npc] of npcs) npc.getCombat().reset();
+        run.end('logout');
+        assert.equal(Run.runOf(player), null);
+        for (const [npc, index] of npcs) {
+          assert.notEqual(core.World.getNpcs().get(index), npc);
+          assert.equal(npc.isRegistered(), false);
+        }
+        core.TaskManager.cancelTasks(run);
+      }
+      if (player?.isRegistered()) core.World.getPlayers().remove(player);
+      if (player) {
+        core.TaskManager.cancelTasks(player);
+        core.TaskManager.cancelTasks(player.getIndex());
+      }
+      core.World.refreshActiveRegions();
+    });
+    const channel = { kind: 'test', isOpen: () => true, send: () => true, close() {}, onData() {}, onClose() {}, onError() {} };
+    const session = new PlayerSession(channel);
+    player = new Player(session);
+    session.setPlayer(player);
+    player.setUsername(`native-colosseum-${serial++}`);
+    player.setLocation(tile(1830, 3106));
+    test.mock.method(player, 'onAdd', () => {});
+    test.mock.method(player, 'onRemove', () => {});
+    assert.equal(core.World.getPlayers().add(player), true);
+    assert.equal(core.World.getPlayers().get(player.getIndex()), player);
+    run = new Run.ColosseumRun(player);
+    run.area.add(player);
+    run.stage = 'wave';
+    run.reinforced = true;
+    const minotaur = run.spawnEnemy({ id: Waves.ids().minotaur, x: 1815, y: 3110 });
+    const target = run.spawnEnemy({ id: targetId, x: 1815, y: 3116 });
+    assert.ok(minotaur?.isRegistered() && target?.isRegistered());
+    assert.equal(core.World.getNpcs().get(minotaur.getIndex()), minotaur);
+    assert.equal(core.World.getNpcs().get(target.getIndex()), target);
+    assert.ok(run.npcs.has(minotaur) && run.npcs.has(target));
+    assert.equal(minotaur.getPrivateArea(), run.area);
+    assert.equal(target.getPrivateArea(), run.area);
+    assert.equal(minotaur.getSize(), 3);
+    assert.equal(target.getSize(), 3);
+    assert.equal(target.getMaxHitpoints(), targetId === Waves.ids().minotaurRouting ? 225 : 220);
+    target.setHitpoints(Math.floor(target.getMaxHitpoints() / 2));
+    const pulse = () => {
+      for (const actor of [player, minotaur, target]) {
+        const at = actor.getLocation();
+        for (let dx = 0; dx < actor.getSize(); dx++) for (let dy = 0; dy < actor.getSize(); dy++) {
+          assert.equal(RegionManager.getClipping(at.getX() + dx, at.getY() + dy, at.getZ(), run.area) & RegionManager.BLOCKED_MASK, 0, 'actor occupies an open cache tile');
+        }
+      }
+      run.waveTicks = 4;
+      assert.equal(run.tick(), true);
+    };
+    return { player, run, minotaur, target, pulse };
+  }
+
+  await t.test('the same pair is blocked behind the actual pillar, heals in the open, and is blocked again', test => {
+    const f = fixture(test);
+    const { run, minotaur, target, pulse } = f;
+    assert.equal(target.getSize(), 3);
+    assert.equal(target.getMaxHitpoints(), 220);
+    assert.notEqual(RegionManager.getClipping(1816, 3114, 0, run.area) & RegionManager.BLOCKED_MASK, 0);
+    assert.equal(center(minotaur).getDistance(center(target)), 6);
+    assert.equal(sight(minotaur, target, run.area), false, 'centre ray hits the cache pillar');
+    assert.equal(RegionManager.canProjectileAttackBounds(minotaur.getLocation(), target.getLocation(), 3, 3, 3, 3, run.area), true, 'closest footprint edge is open');
+    pulse();
+    assert.equal(target.getHitpoints(), 110, 'pillar blocks the heal');
+    target.setLocation(tile(1812, 3116));
+    assert.equal(sight(minotaur, target, run.area), true, 'moved clear of the same pillar');
+    pulse();
+    assert.equal(target.getHitpoints(), 220);
+    target.setHitpoints(110).setLocation(tile(1815, 3116));
+    assert.equal(sight(minotaur, target, run.area), false);
+    pulse();
+    assert.equal(target.getHitpoints(), 110);
+  });
+
+  for (const [label, hp, expected] of [['below 75%', 164, 220], ['at 75%', 165, 165], ['above 75%', 166, 166]]) {
+    await t.test(`health ${label}`, test => {
+      const { run, minotaur, target, pulse } = fixture(test);
+      target.setLocation(tile(1812, 3116)).setHitpoints(hp);
+      assert.equal(sight(minotaur, target, run.area), true);
+      assert.ok(center(minotaur).getDistance(center(target)) <= 7);
+      pulse();
+      assert.equal(target.getHitpoints(), expected);
+    });
+  }
+
+  for (const [distance, expected] of [[7, 220], [8, 110]]) {
+    await t.test(`centre distance ${distance}`, test => {
+      const { run, minotaur, target, pulse } = fixture(test);
+      minotaur.setLocation(tile(1819, 3103));
+      target.setLocation(tile(1819 + distance, 3103));
+      assert.equal(center(minotaur).getDistance(center(target)), distance);
+      assert.equal(sight(minotaur, target, run.area), true);
+      pulse();
+      assert.equal(target.getHitpoints(), expected);
+    });
+  }
+
+  await t.test('another Minotaur is not an eligible target', test => {
+    const { run, minotaur, target, pulse } = fixture(test, Waves.ids().minotaurRouting);
+    target.setLocation(tile(1812, 3116));
+    assert.equal(sight(minotaur, target, run.area), true);
+    assert.ok(center(minotaur).getDistance(center(target)) <= 7);
+    pulse();
+    assert.equal(target.getMaxHitpoints(), 225);
+    assert.equal(target.getHitpoints(), 112);
+  });
+
+  await t.test('the player at the south-east diagonal of the footprint has melee priority', test => {
+    const { player, run, minotaur, target, pulse } = fixture(test);
+    target.setLocation(tile(1812, 3116));
+    player.setLocation(tile(1818, 3109));
+    assert.equal(core.CombatRange.footprintDistance(minotaur.getLocation(), 3, player.getLocation()), 1);
+    assert.equal(sight(minotaur, target, run.area), true);
+    pulse();
+    assert.equal(target.getHitpoints(), 110);
+    player.setLocation(tile(1830, 3106));
+    pulse();
+    assert.equal(target.getHitpoints(), 220);
+  });
 });

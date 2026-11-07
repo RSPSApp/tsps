@@ -9,8 +9,7 @@ let revision = 0;
 let key = "";
 const forbidden = new Set(["id", "cacheInfo", "cacheType", "__proto__", "constructor", "prototype"]);
 
-/** Each world replaces its complete overlay; no previous world's definitions survive a connection. */
-export function replaceCustomDefinitions(input: unknown): void {
+export function parseCustomDefinitions(input: unknown): CustomDefinitionRow[] {
     if (!Array.isArray(input)) throw new Error("Custom definitions must be a list");
     const copy: CustomDefinitionRow[] = JSON.parse(JSON.stringify(input));
     const seen = new Set<string>();
@@ -24,7 +23,12 @@ export function replaceCustomDefinitions(input: unknown): void {
         if (seen.has(identity)) throw new Error("Duplicate custom definition");
         seen.add(identity);
     }
-    rows = copy;
+    return copy;
+}
+
+/** Each world replaces its complete overlay; no previous world's definitions survive a connection. */
+export function replaceCustomDefinitions(input: unknown): void {
+    rows = parseCustomDefinitions(input);
     key = rows.length ? crc32(new TextEncoder().encode(JSON.stringify(rows))).toString(36) : "";
     revision++;
 }

@@ -10,11 +10,14 @@
  *                          | "finishing-up" (enough balls to hand in)
  *   complete           -> "Fred the Farmer" / "after-sheep-shearer"
  *
- * Wool collection follows the Wiki; fast-path handover and rewards follow rsprox 1718.
+ * Wool collection follows the Wiki; fast-path handover and rewards follow rsprox 1718. The
+ * shear/spin route, partial hand-ins and The Thing follow the 2026-11-06 rev 242 capture
+ * (docs/quests/sheep-shearer/README.md).
  */
 module.exports = function registerSheepShearerQuest(api) {
+  const { giveReward } = require("../QuestRuntime");
   const { Skill, Animation, ItemIdentifiers, NpcIdentifiers, TaskManager, CountdownTask } = api.core;
-  const { registerQuest, refreshQuestList } = require("../QuestRuntime");
+  const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
 
   const FRED_THE_FARMER_NPC_ID = NpcIdentifiers.FRED_THE_FARMER;
   // The cache calls 731 "Sheep"; the plugin names it for "The Thing" (strange sheep).
@@ -29,6 +32,8 @@ module.exports = function registerSheepShearerQuest(api) {
   const WOOL_ITEM_ID = ItemIdentifiers.WOOL;
   const BALL_OF_WOOL_ITEM_ID = ItemIdentifiers.BALL_OF_WOOL;
   const COINS_ITEM_ID = ItemIdentifiers.COINS;
+  /** obj crafting_icon_dummy: the Spinning Wheel map icon in Fred's object box (2026-11-06 capture). */
+  const SPINNING_WHEEL_ICON_ITEM_ID = 7670;
 
   const SHEAR_ANIMATION = new Animation(893);
   const THE_THING_SHEAR_ANIMATION = new Animation(3570);
@@ -102,6 +107,8 @@ module.exports = function registerSheepShearerQuest(api) {
   const FINISHING_UP_STEP_ID = "l--V3R";
   const HANDING_IN_STEP_ID = "XaM2d6";
   const AFTER_THING_STEP_ID = "0OkI2g";
+  const SPINNING_WHEEL_ICON_STEP_ID = "xlDu6G";
+  const SPINNING_WHEEL_ICON_REMINDER_STEP_ID = "ooEaXS";
 
   const PAGE_FRED_THE_FARMER = "Fred the Farmer";
   const PAGE_SHEEP_SHEARER = "Sheep Shearer";
@@ -112,12 +119,16 @@ module.exports = function registerSheepShearerQuest(api) {
   const VARIANT_HANDING_IN = "handing-in-any-balls-of-wool";
   const VARIANT_STARTING_WITH_WOOL = "starting-off-with-regular-wool";
   const VARIANT_STARTING_BEFORE_DELIVERY = "starting-off-before-delivering-any-balls-of-wool";
+  /** The Thing's menu option that leads into Fred's wool conversation. */
+  const OPTION_SHEARING = "I need to talk to you about shearing these sheep!";
 
   /** "Yes." on "Start the Sheep Shearer quest?" carries this slug. */
   const START_HOOK = "quest:sheep-shearer:start";
 
   let quest;
   const pendingStart = new WeakSet();
+  /** Players Fred handed shears to in this talk; the shears they now hold are not "already" theirs. */
+  const shearsHandedOut = new WeakSet();
 
   const deliveredWool = (stage) => (stage <= STAGE_STARTED ? 0 : stage >= STAGE_COMPLETE ? TOTAL_BALLS_OF_WOOL : stage - STAGE_STARTED);
   const remainingWool = (stage) => TOTAL_BALLS_OF_WOOL - deliveredWool(stage);
@@ -242,13 +253,14 @@ module.exports = function registerSheepShearerQuest(api) {
   }
 
   function reward(player) {
-    player.getInventory().adds(COINS_ITEM_ID, 60);
+    giveReward(player, COINS_ITEM_ID, 60);
     player.getSkillManager().addExperiences(Skill.CRAFTING, 150);
   }
 
   // Which Fred transcript plays, by quest stage and inventory.
   function selectVariant({ npcId, player }) {
     if (npcId !== FRED_THE_FARMER_NPC_ID) return null;
+    shearsHandedOut.delete(player);
     const stage = quest.getStage(player);
     if (stage >= STAGE_COMPLETE) return { page: PAGE_FRED_THE_FARMER, variant: VARIANT_AFTER };
     if (stage >= STAGE_STARTED) {
@@ -273,7 +285,10 @@ module.exports = function registerSheepShearerQuest(api) {
     if (stepId === SPEEDRUNNING_STEP_ID || value.includes(CONDITION_SPEEDRUNNING)) return false;
     if (stepId === ALREADY_HAS_WOOL_STEP_ID || value.includes(CONDITION_ALREADY_HAS_WOOL)) return woolBalls(player) >= TOTAL_BALLS_OF_WOOL;
     if (stepId === NO_SHEARS_STEP_ID || stepId === NO_SHEARS_STEP_ID_2) return !hasShears(player);
-    if (stepId === HAS_SHEARS_STEP_ID || stepId === HAS_SHEARS_STEP_ID_2) return hasShears(player);
+    // The no-shears hand-out continues to "Do you know how to spin wool?" (Wiki); the transcript
+    // evaluates the has-shears branch after it, when the new shears would otherwise count.
+    if (stepId === HAS_SHEARS_STEP_ID) return hasShears(player) && !shearsHandedOut.has(player);
+    if (stepId === HAS_SHEARS_STEP_ID_2) return hasShears(player);
     if (value.includes(CONDITION_NO_SHEARS) || value.includes(CONDITION_DOES_NOT_HAVE_SHEARS)) return !hasShears(player);
     if (value.includes(CONDITION_HAS_SHEARS)) return hasShears(player);
     return null;
@@ -314,9 +329,16 @@ module.exports = function registerSheepShearerQuest(api) {
           event.end = true;
           return;
         }
-        if (!hasShears(player)) player.getInventory().adds(SHEARS_ITEM_ID, 1);
+        if (!hasShears(player)) {
+          player.getInventory().adds(SHEARS_ITEM_ID, 1);
+          shearsHandedOut.add(player);
+        }
         event.box = { items: [SHEARS_ITEM_ID] };
         return; // leave unhandled so the message still shows
+      case SPINNING_WHEEL_ICON_STEP_ID:
+      case SPINNING_WHEEL_ICON_REMINDER_STEP_ID: // live shows the map icon in an object box (2026-11-06 capture)
+        event.box = { items: [SPINNING_WHEEL_ICON_ITEM_ID] };
+        return;
       case "sheep-shearer:finish-handover": {
         if (player.getAttribute(FINAL_DELIVERY_ATTRIBUTE) === true) { event.handled = true; return; }
         const remaining = remainingWool(quest.getStage(player));
@@ -327,6 +349,12 @@ module.exports = function registerSheepShearerQuest(api) {
         }
         // Live takes the wool with the reward, on the last page (rsprox 1718), not at this box.
         player.setAttribute(FINAL_DELIVERY_ATTRIBUTE, true);
+        // After earlier deliveries, live goes from "Give 'em here then." straight to "That's the
+        // last of them." with no box (2026-11-06 capture). The start-with-20 branch keeps it (1718).
+        if (quest.getStage(player) > STAGE_STARTED) {
+          event.handled = true;
+          return;
+        }
         event.text = remaining === 1 ? "You give Fred a ball of wool." : `You give Fred ${remaining} balls of wool.`;
         event.box = { statement: true };
         return;
@@ -358,6 +386,24 @@ module.exports = function registerSheepShearerQuest(api) {
       }
       default:
         return;
+    }
+  }
+
+  /**
+   * After The Thing, Fred's menu leads into the wool talk that fits the inventory. With no balls
+   * to hand in, live plays the wool-only or empty-handed conversation (2026-11-06 capture,
+   * "How many more do I need to give you?"), not the hand-in. Balls in hand stay on the
+   * Thing variant's hand-in or the finishing-up variant.
+   */
+  function routeShearingChoice(choice) {
+    if (choice.npcId !== FRED_THE_FARMER_NPC_ID || choice.option !== OPTION_SHEARING) return;
+    const { player } = choice;
+    const stage = quest.getStage(player);
+    if (stage < STAGE_STARTED || stage >= STAGE_COMPLETE || woolBalls(player) > 0) return;
+    const variant = player.getInventory().getAmount(WOOL_ITEM_ID) > 0 ? VARIANT_STARTING_WITH_WOOL : VARIANT_STARTING_BEFORE_DELIVERY;
+    // Drop the variant's opening "What are you doing on my land?"; the menu already followed it.
+    if (startTranscript(api, player, FRED_THE_FARMER_NPC_ID, PAGE_SHEEP_SHEARER, variant, (steps) => steps.slice(1), choice.npc ?? null)) {
+      choice.end = true;
     }
   }
 
@@ -430,6 +476,7 @@ module.exports = function registerSheepShearerQuest(api) {
   api.onCustomEvent("npc-dialogue:line", updateDialogueLine);
   api.onCustomEvent("npc-dialogue:action", handleDialogueAction);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
+  api.onCustomEvent("npc-dialogue:choice", routeShearingChoice);
 
   // Shearing sheep: the Shear option, or shears used on a sheep.
   api.onNpcInteraction(handleNpcInteraction);

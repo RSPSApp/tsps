@@ -524,6 +524,17 @@ function takeDawnbringer(player) {
 }
 
 /**
+ * Entry Mode's bandages are the Theatre's own supplies (Wiki: neither tradeable nor bankable), so they
+ * go with anyone leaving the raid, as the Dawnbringer does.
+ */
+function removeBandages(player) {
+  const inventory = player.getInventory();
+  const carried = inventory.getAmount(ITEM.BANDAGES);
+  if (carried > 0) inventory.delete(ITEM.BANDAGES, carried);
+  return carried;
+}
+
+/**
  * The Dawnbringer never leaves Verzik's room: it's taken when her shield falls and from anyone
  * leaving the raid. True when it was in the player's hand.
  */
@@ -544,7 +555,7 @@ function removeDawnbringer(player) {
 }
 
 module.exports = {
-  removeDawnbringer, takeDawnbringer, unscript, restoreDefence, random, randomOf, shuffle, gfx, graphicAt, sound, areaSound, damage, heal, projectile, lineOfSight, floorFree,
+  removeDawnbringer, removeBandages, takeDawnbringer, unscript, restoreDefence, random, randomOf, shuffle, gfx, graphicAt, sound, areaSound, damage, heal, projectile, lineOfSight, floorFree,
   distanceTo, covers, walkStraight, frozen, isProtected,
   bind, core, api,
   THEATRE, THEATRE_PLANES, VER_SINHAZA, OUTSIDE, NPC, OBJECT, ITEM, INTERFACE, SCRIPT, VARP, VARBIT,

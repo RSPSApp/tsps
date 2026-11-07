@@ -12,6 +12,7 @@ const Combat = require("../plugins/minigames/championschallenge/Combat.Champions
 const Gallery = require("../plugins/minigames/championschallenge/Gallery.ChampionsChallenge");
 const Rewards = require("../plugins/minigames/championschallenge/Rewards.ChampionsChallenge");
 const { QUEST_POINTS_ATTRIBUTE } = require("../plugins/quests/QuestRuntime");
+const { RegionManager } = require("../dist/game/collision/RegionManager");
 
 const WEAPON_SLOT = 3;
 const CombatType = { MELEE: "melee", RANGED: "ranged", MAGIC: "magic" };
@@ -29,6 +30,7 @@ const baseCore = {
   Projectile: { centreOf: (mobile) => mobile.getLocation(), arrivalTicks: () => 3 },
   applyPrayerDrainModifiers: (player, amount) => amount,
   CacheDefinitions: { getItem: () => ({ category: -1 }) },
+  RegionManager,
 };
 const initCore = (extra = {}) => Common.init({ core: { ...baseCore, ...extra }, emitCustomEvent: () => {} });
 

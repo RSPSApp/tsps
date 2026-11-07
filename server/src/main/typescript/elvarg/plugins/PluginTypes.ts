@@ -573,6 +573,13 @@ export interface PluginAttackSpeedEvent {
   speed: number;
 }
 
+/** A real hit is being prepared, before accuracy, damage and the target HP cap. */
+export interface PluginCombatHitPrepareEvent {
+  attacker: any;
+  target: any;
+  combatType: any;
+}
+
 export interface PluginCombatHitRollEvent {
   attacker: any;
   target: any;
@@ -1089,6 +1096,7 @@ export interface PluginApi {
   onPlayerDealtDamage(
     handler: (event: PluginPlayerDealtDamageEvent) => void
   ): void;
+  onCombatHitPrepare(handler: (event: PluginCombatHitPrepareEvent) => void): void;
   onCombatHitRoll(handler: (event: PluginCombatHitRollEvent) => void): void;
   onCombatHitDamage(handler: (event: PluginCombatHitDamageEvent) => void): void;
   /** Lets an attack ignore the attack timer, or leave it untouched (see PluginAttackTimingEvent). */

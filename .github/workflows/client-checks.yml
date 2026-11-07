@@ -21,5 +21,5 @@ jobs:
               working-directory: client
             - run: yarn typecheck
               working-directory: client
-            - run: yarn test engine-event-hooks widget-action-dispatch widget-primary-op widget-script-inventory widget-menu-use menu-click menu-swapper widget-drag map-square-cache runelite item-stats-plugin item-prices-plugin first-person-reticle-input combat-level game-container-sidebar-lifecycle bank-value
+            - run: yarn test edit-mode-custom-content engine-event-hooks widget-action-dispatch widget-primary-op widget-script-inventory widget-menu-use menu-click menu-swapper widget-drag map-square-cache runelite item-stats-plugin item-prices-plugin first-person-reticle-input combat-level game-container-sidebar-lifecycle bank-value
               working-directory: client

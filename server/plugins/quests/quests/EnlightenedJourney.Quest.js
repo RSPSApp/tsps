@@ -57,6 +57,7 @@
  * rewards, walkthrough) and its transcript.
  */
 module.exports = function registerEnlightenedJourneyQuest(api) {
+  const { giveReward } = require("../QuestRuntime");
   const {
     Equipment,
     ItemIdentifiers,
@@ -1128,7 +1129,7 @@ module.exports = function registerEnlightenedJourneyQuest(api) {
     skills.addExperiences(Skill.FARMING, 3000);
     skills.addExperiences(Skill.WOODCUTTING, 1500);
     skills.addExperiences(Skill.FIREMAKING, 4000);
-    player.getInventory().adds(BOMBER_CAP, 1);
+    giveReward(player, BOMBER_CAP, 1);
   }
 
   api.persistAttribute(FLAGS_ATTRIBUTE);

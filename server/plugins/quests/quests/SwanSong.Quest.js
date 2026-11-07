@@ -58,6 +58,7 @@
  *   are filled from live counts.
  */
 module.exports = function registerSwanSongQuest(api) {
+  const { giveReward } = require("../QuestRuntime");
   const {
     Animation,
     GameObject,
@@ -1392,7 +1393,7 @@ module.exports = function registerSwanSongQuest(api) {
 
   function grantReward(player) {
     // registerQuest adds one coin from rewardItemId; top the stack up to 25,000.
-    player.getInventory().adds(COINS_ITEM_ID, 24999);
+    giveReward(player, COINS_ITEM_ID, 24999);
     const skills = player.getSkillManager();
     skills.addExperiences(Skill.MAGIC, 15000);
     skills.addExperiences(Skill.PRAYER, 10000);

@@ -19,6 +19,7 @@ ToxicStaff.register({
   persistAttribute() {},
   onItemAction() {},
   onItemOnItem() {},
+  onCustomEvent() {},
   onCombatHitResolved() {},
   onPlayerProcess() {},
 });
@@ -147,4 +148,20 @@ test('charging leaves unrelated target items and their materials untouched', () 
   const event={player,usedItem:material,usedWithItem:target,usedItemId:material.getId(),usedWithItemId:target.getId()};
   ToxicStaff._test.chargeStaff(event);
   assert.equal(event.handled,undefined);assert.deepEqual(target.meta,{});
+});
+
+test('"item:fill-charges" hands out a full staff, charging an uncharged one; other items are left alone', () => {
+  for (const id of [ItemIds.TOXIC_STAFF_OF_THE_DEAD, ItemIds.TOXIC_STAFF_UNCHARGED_]) {
+    const staff = item(id);
+    const event = { item: staff, handled: false };
+    ToxicStaff._test.fillCharges(event);
+    assert.equal(event.handled, true);
+    assert.equal(staff.getId(), ItemIds.TOXIC_STAFF_OF_THE_DEAD);
+    assert.equal(ToxicStaff._test.charges(staff), ToxicStaff._test.MAX_CHARGES);
+  }
+  const other = item(12924);
+  const event = { item: other, handled: false };
+  ToxicStaff._test.fillCharges(event);
+  assert.equal(event.handled, false);
+  assert.deepEqual(other.meta, {});
 });

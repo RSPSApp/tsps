@@ -160,7 +160,7 @@ test("Blood Moon access opens a private solo lair and cleans it up on escape and
   for (let x = spawnX; x < spawnX + 5; x++) {
     for (let y = spawnY; y < spawnY + 5; y++) {
       const clip = firstSession.area.getClip(firstSession.tile([x, y, plane]));
-      assert.equal(clip & 0x1280100, 0, `Maggot King footprint tile ${x},${y} is clear`);
+      assert.equal(clip & RegionManager.BLOCKED_MASK, 0, `Maggot King footprint tile ${x},${y} is clear`);
     }
   }
 

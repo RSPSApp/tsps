@@ -217,7 +217,7 @@ function mapClass() {
     landing(tile) {
       if (!tile) return null;
       const { RegionManager } = Shared.core();
-      const open = (x, y) => (RegionManager.getClipping(x, y, tile.getZ(), this) & 0x1280100) === 0;
+      const open = (x, y) => (RegionManager.getClipping(x, y, tile.getZ(), this) & RegionManager.BLOCKED_MASK) === 0;
       if (open(tile.getX(), tile.getY())) return tile;
       for (let radius = 1; radius <= 3; radius++) {
         for (let dx = -radius; dx <= radius; dx++) {

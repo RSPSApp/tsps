@@ -48,6 +48,7 @@ The captures agree: Attack 1, Strength 2, Thieving 10, Farming 21, Sailing 24.
 - **Tabs** (860:7): no server response in any capture. The guide's scripts switch them.
 - **Close** (860:4): `if_closesub` on the floater.
 - **A link to another skill's guide** (860:18, sent by cache script 9190 with `if_triggeroplocal` and one int, the skill's number): the guide opens again on that skill, the same three steps as above.
+- **"View-journal" on a Quest XP row** (860:17, sent by cache script 9189 with one int): script 9195 builds each row from a quest table row (table 0, whose column 33 lists the XP rewards) and passes that row's `id` column, the same id the quest list (399:7) sends. Live OSRS closes the guide, sets varp `latest_quest_journal` and opens that quest's journal. tsps closes the guide and runs the quest list's "Read journal": the overview for a quest not started yet, otherwise the journal. A quest tsps neither defines nor has start text for opens nothing, as in the quest list, and the guide stays open.
 
 ## PvP worlds
 
@@ -55,6 +56,5 @@ Before opening, the click is offered to other plugins as `skills:stat-clicked` (
 
 ## Not done yet
 
-- **The quest link** (860:17, cache script 9189, one int): live OSRS closes the guide, sets varp `latest_quest_journal` and opens that quest's journal. tsps quests are defined by name, so the int still needs mapping to a tsps quest.
 - **Clicking a list entry**: in the captures only Sailing entries answer, with a game message listing that entry's materials (for example "Adamant keel (skiff): # x Adamant keel parts, # x Lead bar").
 - **The `IF_SCRIPT_TRIGGER` event** that live OSRS sets on the two link components is not sent: the tsps client doesn't check it before sending a script trigger.

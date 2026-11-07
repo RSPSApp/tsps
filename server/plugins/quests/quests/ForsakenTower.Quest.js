@@ -61,6 +61,7 @@
  *    (crate/cupboard/empty-case/furnace/pylon feedback) are authored and marked in code.
  */
 module.exports = function registerForsakenTowerQuest(api) {
+  const { giveReward } = require("../QuestRuntime");
   const {
     ItemIdentifiers,
     NpcIdentifiers,
@@ -1005,7 +1006,7 @@ module.exports = function registerForsakenTowerQuest(api) {
     skills.addExperiences(Skill.MINING, REWARD_XP);
     skills.addExperiences(Skill.SMITHING, REWARD_XP);
     // registerQuest adds the first coin; top the stack up to the wiki's 6,000.
-    player.getInventory().adds(COINS_ITEM_ID, REWARD_COINS - 1);
+    giveReward(player, COINS_ITEM_ID, REWARD_COINS - 1);
     sendVarbit(player, VARBIT_REWARD, 1);
     sendVarbit(player, VARBIT_FAVOUR, 1);
   }

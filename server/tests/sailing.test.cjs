@@ -1487,6 +1487,30 @@ test("depositing and withdrawing follow the selected quantity and the op", () =>
   }
 });
 
+test("the hold refuses preset food (PvP presets), so it never comes back plain; Deposit inventory leaves it", () => {
+  const h = holdHarness();
+  try {
+    const SHARK = 385;
+    const preset = (amount) => {
+      const item = new Item(SHARK, amount);
+      for (const meta of [Item.UNTRADEABLE_META, Item.UNBANKABLE_META, Item.PRESET_META]) item.setMetaValue(meta, true);
+      return item;
+    };
+    h.player.getInventory().add(preset(1), false);
+    h.player.getInventory().add(preset(1), false);
+    h.give(SHARK);
+    h.open();
+    h.click(944, 1, 1, h.slotOf(SHARK), SHARK);
+    assert.equal(cargo.countIn(h.boat(), SHARK), 0, "the preset shark clicked is refused");
+    assert.equal(h.player.messages.at(-1), "Preset items cannot be used for this.");
+    h.click(943, 15, 1); // Deposit inventory
+    assert.equal(cargo.countIn(h.boat(), SHARK), 1, "only the plain shark goes in");
+    assert.equal(h.player.getInventory().getAmount(SHARK), 2, "the two preset sharks stay");
+  } finally {
+    h.done();
+  }
+});
+
 test("X prompts for an amount, and the hold refuses what it can't store", () => {
   const h = holdHarness();
   try {
@@ -1542,6 +1566,35 @@ test("tools go to the tools compartment and come back out, without using space",
     assert.deepEqual(h.player.messages.slice(-1), ["You collect some diving gear from the tools compartment."]);
     assert.deepEqual(h.player.getSailing().tools, [0]);
     assert.ok(h.sent.sounds.includes(2582));
+  } finally {
+    h.done();
+  }
+});
+
+test("a tool already in the tools compartment is not stored again, so a second copy is never deleted", () => {
+  const h = holdHarness();
+  try {
+    h.give(31803); // spyglass
+    h.open();
+    h.click(943, 15, 1); // Deposit inventory
+    assert.deepEqual(h.player.getSailing().tools, [1]);
+    assert.equal(h.player.getInventory().getAmount(31803), 0);
+
+    h.give(31803); // a second spyglass
+    h.click(943, 15, 1);
+    assert.equal(h.player.getInventory().getAmount(31803), 1, "Deposit inventory leaves the second spyglass held");
+    h.click(944, 1, 1, h.slotOf(31803), 31803); // Deposit-1 on it in the side panel
+    assert.equal(h.player.getInventory().getAmount(31803), 1, "Deposit-1 leaves it held too");
+    assert.equal(h.player.messages.at(-1), "You already have a spyglass in your tools compartment.");
+
+    h.give(7534);
+    h.give(7535);
+    h.click(943, 15, 1);
+    assert.deepEqual(h.player.getSailing().tools.sort(), [1, 4]);
+    h.give(7534);
+    h.give(7535);
+    h.click(943, 15, 1);
+    assert.equal(h.player.getInventory().getAmount(7534) + h.player.getInventory().getAmount(7535), 2, "a second set of diving gear stays held");
   } finally {
     h.done();
   }

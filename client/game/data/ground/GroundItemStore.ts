@@ -3,6 +3,11 @@ import {
     GroundItemsServerPayload,
 } from "../../../network/ServerConnection";
 
+/** Native OBJ operation index (zero-based), independent of labels and global hideobjops. */
+export function isGroundItemOperationEnabled(stack: { enabledOps?: number }, index: number): boolean {
+    return index >= 0 && index < 5 && (((stack.enabledOps ?? 0x1f) & (1 << index)) !== 0);
+}
+
 export type ClientGroundItemStack = GroundItemStackMessage & {
     name: string;
     gePrice: number;
@@ -67,6 +72,7 @@ export class GroundItemStore {
         return {
             id: stack.id | 0,
             itemId: stack.itemId | 0,
+            enabledOps: (stack.enabledOps ?? 0x1f) & 0x1f,
             quantity: Math.max(1, stack.quantity | 0),
             tile: { x: tile.x | 0, y: tile.y | 0, level: tile.level | 0 },
             createdTick:

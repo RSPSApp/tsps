@@ -20,8 +20,8 @@ const collectionObtains = [];
 /** Whether the test player has done Sins of the Father (the Sepulchre's quest). */
 let questDone = true;
 
-before(() => {
-  CachePipeline.initialize();
+before(async () => {
+  await CachePipeline.initialize();
   RegionManager.init();
   hooks = { objects: new Map(), npcs: new Map(), items: {}, login: [], prompts: [], spawned: [], removed: [] };
   const key = (ids, click) => (Array.isArray(ids) ? ids : [ids]).map((id) => `${id}:${click}`);
@@ -574,23 +574,25 @@ test('fire: standing in a blast on its first tick is a hit; then the death, the 
   ticks(2);
   assert.equal(p.anims.at(-1), Common.seq('human_death'));
   ticks(2);
-  assert.deepEqual(run.area.templateOf(p.getLocation()), [2282, 6000, 2], 'recorded respawn (1862 T19070)');
+  assert.deepEqual(run.area.templateOf(p.getLocation()), [2282, 6000, 2], 'recorded respawn (1862 T19074, hit T19070)');
   run.finish();
 });
 
-test('the Hallowed ring negates trap damage but still sends the player back to the checkpoint', () => {
+test('the Hallowed ring negates damage and skips normal recovery at the checkpoint', () => {
   for (const ring of [Common.core.ItemIdentifiers.HALLOWED_RING, Common.core.ItemIdentifiers.HALLOWED_RING_2]) {
     const { p, run } = trapFloor(1, 0, [2282, 5992, 2], ring);
-    trapsTo(run, 3);
-    Traps.tick(run);
-    assert.equal(p.decrements.length, 0, `no damage with ring ${ring}`);
-    assert.equal(p.hits.length, 0, `no hitsplat with ring ${ring}`);
-    assert.equal(run.traps.recovering, true, 'the hit still plays out');
-    ticks(2);
-    assert.equal(p.anims.at(-1), Common.seq('human_death'));
-    ticks(2);
-    assert.deepEqual(run.area.templateOf(p.getLocation()), [2282, 6000, 2], 'still back at the checkpoint');
-    run.finish();
+    try {
+      trapsTo(run, 3);
+      Traps.tick(run);
+      assert.equal(p.decrements.length, 0, `no damage with ring ${ring}`);
+      assert.equal(p.hits.length, 0, `no hitsplat with ring ${ring}`);
+      assert.deepEqual(run.area.templateOf(p.getLocation()), [2282, 6000, 2], 'returns to the modeled checkpoint');
+      assert.equal(run.traps.recovering, false, 'the ordinary recovery hold is skipped');
+      assert.equal(p.blocked, false, 'movement is available without a separate stun');
+      assert.ok(!p.anims.includes(Common.seq('human_death')), 'the normal death animation is skipped');
+    } finally {
+      run.finish();
+    }
   }
 });
 
@@ -644,6 +646,30 @@ test('lightning: the recorded floor 4 patch in front of (2496,5837) and a 2-tick
   assert.equal(p.hits.length, 0);
   assert.equal(p.blocked, true);
   run.finish();
+});
+
+test('a ring recovery does not clear an independently active lightning stun', () => {
+  const { p, run } = trapFloor(4, 0, [2502, 5838, 2], Common.core.ItemIdentifiers.HALLOWED_RING);
+  try {
+    const statue = run.traps.lightning.find((l) => l.at.join() === '2496,5837,2');
+    assert.ok(statue, 'the cache-backed lightning producer exists');
+    trapsTo(run, statue.start + 2);
+    assert.equal(run.traps.stunned, true, 'the actual lightning producer stuns');
+    assert.equal(p.blocked, true);
+    const stunAnimation = p.anims.at(-1);
+    // Model a coincident environmental hit at the shared pending-hit consumer.
+    run.traps.pendingHit = [1, [2502, 5838, 2]];
+    Traps.tick(run);
+    assert.equal(run.traps.recovering, false, 'ring recovery completes');
+    assert.equal(run.traps.stunned, true, 'the independent stun remains active');
+    assert.equal(p.blocked, true, 'the independent stun still blocks movement');
+    assert.equal(p.anims.at(-1), stunAnimation, 'the stun animation is not reset');
+    for (let i = 0; i < Common.data.traps.lightning.stunTicks + 1; i++) TaskManager.process();
+    assert.equal(run.traps.stunned, false, 'the real scheduled stun release runs');
+    assert.equal(p.blocked, false, 'movement releases after the independent stun');
+  } finally {
+    run.finish();
+  }
 });
 
 test('pads: a forward pad pushes the player on the way they were going, a backward one back', () => {
@@ -709,4 +735,156 @@ test("a trap's hold never carries to the next floor", () => {
   assert.equal(p.blocked, false);
   assert.equal(run.traps, null, "the old floor's traps are gone");
   run.finish();
+});
+
+test('native environmental recovery is faster with the equipped Hallowed ring', async (t) => {
+  const path = require('node:path');
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { PlayerSession } = require('../dist/net/PlayerSession');
+  const { SkillManager } = require('../dist/game/content/skill/SkillManager');
+  const core = PluginManager.getCoreApi();
+  const oldBots = process.env.DISABLE_PLAYER_BOTS, oldSubmit = core.TaskManager.submit, oldError = console.error;
+  const tasks = new Set(), actors = [], ownedRuns = [], ownedAreas = [], ownedNpcs = new Set(), errors = [];
+  let started = false;
+  process.env.DISABLE_PLAYER_BOTS = '1';
+  function observeOwned() {
+    for (const run of ownedRuns) if (run.area) {
+      for (const npc of run.area.spawned) ownedNpcs.add(npc);
+      for (const npc of run.area.getNpcs()) ownedNpcs.add(npc);
+    }
+  }
+  function closeRun(run) {
+    if (!run || run.ended) return;
+    const area = run.area, player = run.player;
+    observeOwned();
+    if (area && player.getArea() === area) {
+      run.moving = true;
+      try {
+        if (area.hasMember(player)) area.leave(player, false);
+        player.moveTo(Common.toLocation(Common.data.lobby.exitTile));
+      } finally { run.moving = false; }
+    }
+    run.finish();
+  }
+  t.after(() => {
+    try {
+      for (const player of actors) {
+        const run = Run.runOf(player);
+        if (run && !ownedRuns.includes(run)) ownedRuns.push(run);
+        if (run?.area && !ownedAreas.includes(run.area)) ownedAreas.push(run.area);
+      }
+      observeOwned();
+      for (const run of ownedRuns) closeRun(run);
+      for (const player of actors) if (player.isRegistered()) core.World.getPlayers().removes(player);
+      if (started) PluginManager.emitServerShutdown({});
+      for (const task of tasks) if (task.isRunning()) task.stop();
+      core.World.process();
+      assert.ok(ownedRuns.every((run) => run.ended), 'fixture runs ended');
+      assert.ok(ownedAreas.every((area) => area.isDestroyed()), 'fixture floor instances destroyed');
+      assert.ok([...ownedNpcs].every((npc) => !npc.isRegistered() && !core.World.getAddNPCQueue().includes(npc)), 'fixture trap NPCs removed');
+      assert.ok([...tasks].every((task) => !task.isRunning()), 'fixture tasks stopped');
+      assert.deepEqual(errors, [], 'native execution and teardown have no hidden errors');
+    } finally {
+      core.TaskManager.submit = oldSubmit; console.error = oldError;
+      if (oldBots === undefined) delete process.env.DISABLE_PLAYER_BOTS; else process.env.DISABLE_PLAYER_BOTS = oldBots;
+    }
+  });
+  core.TaskManager.submit = function (...args) { if (args[0]) tasks.add(args[0]); return oldSubmit.apply(this, args); };
+  console.error = (...args) => { errors.push(args.map(String).join(' ')); return oldError.apply(console, args); };
+  const earlierFakeApi = Common.api;
+  PluginManager.loadFromDirectory(path.resolve(__dirname, '../plugins'));
+  assert.notEqual(Common.api, earlierFakeApi, 'real Hallowed plugin registration replaced the legacy fake API');
+  PluginManager.emitServerStartup({}); started = true;
+  const { World, Item, ItemIdentifiers: I, Equipment, Skill } = core;
+  const channel = () => ({ kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true,
+    send: () => true, close() {}, onData() {}, onError() {}, onClose() {} });
+  function tick() { World.process(); observeOwned(); }
+  function actor(name, mode) {
+    assert.match(name, /^[a-z0-9]{1,12}$/, 'fixture actor has a legal username');
+    const player = new Player(new PlayerSession(channel())); actors.push(player);
+    player.setUsername(name); player.setLongUsername(core.Misc.stringToLongBigInt(name));
+    player.setAttribute('bot-skip-persistence', true);
+    player.setLocation(Common.toLocation(Common.data.lobby.exitTile));
+    assert.equal(World.getPlayers().add(player), true, 'real player joins World'); player.needsPlacement = false;
+    const agility = Common.data.floors[0].agility, skills = player.getSkillManager();
+    skills.setExperience(Skill.AGILITY, SkillManager.getExperienceForLevel(agility));
+    skills.setMaxLevel(Skill.AGILITY, agility); skills.setCurrentLevel(Skill.AGILITY, agility, true);
+    assert.equal(skills.getCurrentLevel(Skill.AGILITY), agility, 'actor meets the actual floor requirement');
+    if (mode === 'equipped') player.getEquipment().setItem(Equipment.RING_SLOT, new Item(I.HALLOWED_RING, 1));
+    if (mode === 'inventory') player.getInventory().add(new Item(I.HALLOWED_RING, 1), true);
+    if (mode === 'equipped') {
+      assert.equal(player.getEquipment().getItems()[Equipment.RING_SLOT].getId(), I.HALLOWED_RING);
+      const definition = core.CacheDefinitions.getItem(I.HALLOWED_RING);
+      assert.equal(definition.wearPos, Equipment.RING_SLOT, 'active cache assigns the ring slot');
+      assert.ok(definition.inventoryActions.includes('Wear'), 'active cache offers Wear');
+      assert.equal(definition.placeholderTemplate, -1, 'the native test uses the wearable item');
+    }
+    return player;
+  }
+  function trial(name, mode, hp, watchTicks = 0) {
+    const player = actor(name, mode);
+    player.setHitpoints(hp);
+    assert.equal(player.getHitpoints(), hp, 'fixture starts at the intended hitpoints');
+    // Direct run start is fixture setup; actual scheduled descent, instance and trap ticks follow.
+    const run = Run.start(player, 0); ownedRuns.push(run);
+    for (let i = 0; i < 24 && !(run.running && run.traps && run.area); i++) tick();
+    assert.ok(run.running && run.traps && run.area, 'real floor and timer start');
+    const area = run.area; ownedAreas.push(area);
+    assert.equal(run.floorNumber, 1);
+    const fire = run.traps.fires.find((entry) => entry.at.join() === '2279,5992,2');
+    assert.ok(fire, 'active cache contains the recorded fire statue');
+    assert.deepEqual(fire.tiles, [[2281, 5992, 2], [2282, 5992, 2], [2283, 5992, 2]]);
+    const animations = [], fadeOpens = [], perform = player.performAnimation.bind(player);
+    player.performAnimation = (animation, ...args) => { animations.push(animation.getId()); return perform(animation, ...args); };
+    const sender = player.getPacketSender(), sendSub = sender.sendSubInterface.bind(sender);
+    sender.sendSubInterface = (...args) => {
+      if (args[1] === Common.data.interfaces.fade) fadeOpens.push(args);
+      return sendSub(...args);
+    };
+    const fireTile = [2282, 5992, 2], checkpoint = [2282, 6000, 2];
+    player.moveTo(area.at(fireTile));
+    const initialRemaining = run.remaining;
+    let hit = false;
+    for (let i = 0; i < 24; i++) {
+      tick();
+      if (run.traps.recovering || area.templateOf(player.getLocation()).join() !== fireTile.join()) { hit = true; break; }
+    }
+    assert.equal(hit, true, 'the real fire producer reaches an environmental hit');
+    assert.ok(run.remaining < initialRemaining, 'the real floor timer continues');
+    const tookDamage = player.getHitpoints() < hp;
+    const recoveryRemaining = run.remaining;
+    let releaseTicks = 0;
+    while (run.traps.recovering && releaseTicks < 20) { tick(); releaseTicks++; }
+    assert.equal(run.traps.recovering, false, 'the recovery hold ends');
+    if (releaseTicks) assert.ok(run.remaining < recoveryRemaining, 'timer continues during ordinary recovery');
+    assert.equal(player.getMovementQueue().isMovementBlocked(), false, 'the player can move after recovery');
+    assert.deepEqual(area.templateOf(player.getLocation()), checkpoint, 'the modeled recorded corridor checkpoint is used');
+    assert.equal(run.traps.pendingHit, null); assert.equal(run.traps.pendingPad, null);
+    const watchRemaining = run.remaining;
+    for (let i = 0; i < watchTicks; i++) tick();
+    if (watchTicks) {
+      assert.ok(run.remaining < watchRemaining, 'timer continues after the ring return');
+      assert.equal(player.getHitpoints(), hp, 'no delayed damage after the ring return');
+      assert.deepEqual(area.templateOf(player.getLocation()), checkpoint, 'no stale recovery moves the player');
+      assert.equal(player.getMovementQueue().isMovementBlocked(), false, 'no stale recovery blocks movement');
+    }
+    const result = { tookDamage, hp: player.getHitpoints(), releaseTicks, animations, fadeOpens, remaining: run.remaining };
+    closeRun(run);
+    return result;
+  }
+  const normal = trial('hsnormal', 'none', 10);
+  assert.equal(normal.tookDamage, true, 'control: an unprotected fire hit deals damage');
+  assert.ok(normal.releaseTicks > 0, 'control: ordinary recovery holds movement');
+  assert.ok(normal.animations.includes(Common.seq('human_death')), 'control: ordinary recovery uses the death animation');
+  assert.ok(normal.fadeOpens.length > 0, 'control: ordinary recovery opens the recorded fade');
+  const bag = trial('hsbag', 'inventory', 10);
+  assert.equal(bag.tookDamage, true, 'a ring in inventory alone does not protect');
+  assert.equal(bag.releaseTicks, normal.releaseTicks, 'inventory-only recovery uses the ordinary sequence');
+  const ring = trial('hsring', 'equipped', 1, normal.releaseTicks + 2);
+  assert.equal(ring.tookDamage, false, 'equipped ring prevents the hit');
+  assert.equal(ring.hp, 1, 'one-hitpoint player survives and returns');
+  assert.ok(ring.releaseTicks < normal.releaseTicks, 'equipped ring releases control sooner');
+  assert.ok(!ring.animations.includes(Common.seq('human_death')), 'ring recovery does not run the ordinary death animation');
+  assert.equal(ring.fadeOpens.length, 0, 'no delayed normal recovery fade opens');
+  assert.deepEqual(errors, [], 'real run and trap callbacks do not report hidden errors');
 });

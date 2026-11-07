@@ -47,7 +47,7 @@ function index() {
   unfinishedByHerb = new Map();
   grindsByItem = new Map();
   for (const row of DATA.grinding) {
-    grindsByItem.set(gameval("obj", row.item), { ...row, itemId: gameval("obj", row.item), productId: gameval("obj", row.product), amount: row.amount ?? [1, 1] });
+    grindsByItem.set(gameval("obj", row.item), { ...row, itemId: gameval("obj", row.item), productId: gameval("obj", row.product), amount: row.amount ?? [1, 1], alternateToolId: row.alternateTool ? gameval("obj", row.alternateTool) : null });
   }
   const vialOfWater = gameval("obj", "vial_water");
   for (const row of DATA.recipes) {
@@ -209,8 +209,35 @@ function answerHerbs(request) {
   request.herbs = [...herbsByGrimy.values()].map(({ grimyId, cleanId, level, xp }) => ({ grimyId, cleanId, level, xp }));
 }
 
+const PRESET_REFUSAL = "Preset items cannot be used for this.";
+
+/** Preset, untradeable and unbankable copies keep their restrictions, so a mix never takes them. */
+function restricted(item) {
+  const { Item } = core;
+  return item.isPresetItem?.() === true
+    || item.getMetaValue?.(Item.PRESET_META) === true
+    || item.getMetaValue?.(Item.UNTRADEABLE_META) === true
+    || item.getMetaValue?.(Item.UNBANKABLE_META) === true;
+}
+
+/** How many of `id` the inventory holds as unrestricted copies. */
+function plainAmount(inventory, id) {
+  return inventory.getItems().reduce((sum, item) => (item && item.getId() === id && !restricted(item) ? sum + item.getAmount() : sum), 0);
+}
+
+/** Takes `count` unrestricted copies of `id`, by slot, so a restricted copy of the same id stays put. */
+function takePlain(inventory, id, count) {
+  let left = count;
+  inventory.getItems().forEach((item, slot) => {
+    if (left <= 0 || !item || item.getId() !== id || restricted(item)) return;
+    const take = Math.min(item.getAmount(), left);
+    inventory.deleteAtSlot(slot, take, false);
+    left -= take;
+  });
+}
+
 module.exports = {
-  MIX_ANIMATION, MIX_SOUND,
+  MIX_ANIMATION, MIX_SOUND, PRESET_REFUSAL, restricted, plainAmount, takePlain,
   init, gameval, herbFor, grindFor, recipesWith, repeatMessage, answerClean, answerUnfinished, answerHerbs, level, actionsPerCycle, questDone, unlocked, questStage, canUseHerblore,
   wearsHerbloreCape, spam, mesbox, animate, sound, addXp, run,
   get api() { return api; },

@@ -30,11 +30,13 @@ WarpedSceptre.register({
   registerCombatMethodResolver: (resolver) => { combatResolver = resolver; },
 });
 
-function item(id) {
+function item(id, amount = 1) {
   return {
     id,
+    amount,
     meta: {},
     getId() { return this.id; },
+    getAmount() { return this.amount; },
     setId(next) { this.id = next; },
     getMetaValue(key) { return this.meta[key]; },
     setMetaValue(key, value) {
@@ -65,6 +67,11 @@ function playerWithRunes({ chaos = 2, earth = 5, freeSlots = 28 } = {}) {
       getAddableAmount: (rune) => ((runes.get(rune.getId()) ?? 0) > 0 || freeSlots > 0 ? rune.getAmount() : 0),
       getAmount: (id) => runes.get(id) ?? 0,
       deleteNumber: (id, amount) => runes.set(id, Math.max(0, (runes.get(id) ?? 0) - amount)),
+      // Charging takes runes by slot (PoweredStaff.takePlain): the rune slots follow the carried items.
+      deleteAtSlot(slot, amount) {
+        const id = this.getItems()[slot]?.getId();
+        if (runes.has(id)) runes.set(id, Math.max(0, runes.get(id) - amount));
+      },
       contains: (id) => (runes.get(id) ?? 0) > 0,
       getFreeSlots: () => freeSlots,
       addItem: (rune) => runes.set(rune.getId(), (runes.get(rune.getId()) ?? 0) + rune.getAmount()),

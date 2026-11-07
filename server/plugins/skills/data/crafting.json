@@ -1503,7 +1503,7 @@
     ]
   },
   "strungAmulets": {
-    "$comment": "A ball of wool on unstrung jewellery, 4 XP (Wiki: ball of wool products).",
+    "$comment": "String material and unstrung jewellery, 4 XP (Wiki: ball of wool products and pre-nature amulet). The optional fourth field names the material; wool is the default.",
     "xp": 4,
     "pairs": [
       [
@@ -1527,6 +1527,12 @@
       [
         "EMERALD_AMULET_U_",
         "EMERALD_AMULET"
+      ],
+      [
+        "EMERALD_AMULET_U_",
+        "PRE_NATURE_AMULET",
+        "amulet",
+        "MAGIC_STRING"
       ],
       [
         "RUBY_AMULET_U_",

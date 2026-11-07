@@ -70,6 +70,9 @@ function summon(player, itemId, dock, slot) {
     sender.sendVarbit(VARBIT_BUSY, 0);
     return;
   }
+  // The tablet goes with the boat's move, not with the cast two ticks later (when the captures show it leave the
+  // pack): dropping or banking it in between summoned the boat for free and kept the tablet.
+  player.getInventory().deleteNumber(itemId, 1);
   Sailing.recover(player, slot, dock.id);
   dropLostOnRecovery(boat);
   sendBoatVarbits(player);
@@ -82,7 +85,6 @@ function summon(player, itemId, dock, slot) {
     player.performAnimation(new core.Animation(SEQ_CAST));
     const at = player.getLocation();
     core.Sounds.playAreaSound({ soundId: SOUND_CAST, x: at.getX(), y: at.getY(), level: at.getZ(), radius: 10 });
-    player.getInventory().deleteNumber(itemId, 1);
   });
   later(player, BUSY_TICKS, () => sender.sendVarbit(VARBIT_BUSY, 0));
 }

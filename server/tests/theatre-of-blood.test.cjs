@@ -212,7 +212,7 @@ beforeEach(() => {
 test('every room\'s arrival tile is open floor', () => {
   for (const room of Object.values(Shared.ROOMS)) {
     const { x, y, z } = room.entrance;
-    assert.equal(RegionManager.getClipping(x, y, z) & 0x1280100, 0, `${room.key} ${x},${y},${z}`);
+    assert.equal(RegionManager.getClipping(x, y, z) & RegionManager.BLOCKED_MASK, 0, `${room.key} ${x},${y},${z}`);
     for (const jail of room.jails) assert.ok(Shared.inTheatre(Shared.loc(jail, jail.z ?? z)), `${room.key} jail ${jail.x},${jail.y}`);
   }
 });
@@ -1263,4 +1263,123 @@ test('Xarpus: a mixed run over a pool still hurts after the engine clears the st
   ticks(2);
   assert.equal(hurts.length, 1, 'once');
   raid.dispose();
+});
+
+/** Real relation sets and deferred action, with a synthetic raid/area and no World registration. */
+function spectatorFixture(t) {
+  const Spectate = require('../plugins/minigames/tob/Spectate.TheatreOfBlood');
+  const { Misc } = require('../dist/util/Misc');
+  const { World } = require('../dist/game/World');
+  const { PrivateChatStatus } = require('../dist/game/model/PlayerRelations');
+  const names = ['tob:may-spectate', 'tob:observe', 'tob:room-built', 'tob:raid-over'];
+  const savedHandlers = new Map(names.map((name) => [name, hooks.customHandlers[name]]));
+  const key = Symbol('spectator fixture');
+  let viewer, raid;
+  t.after(() => {
+    if (viewer) {
+      viewer.setEnteredSyntaxAction(null);
+      viewer.setUntargetable(false);
+      viewer.getMovementQueue().reset();
+      raid?.spectators.delete(viewer);
+    }
+    Raid.raids.delete(key);
+    for (const [name, handlers] of savedHandlers) {
+      if (handlers) hooks.customHandlers[name] = handlers;
+      else delete hooks.customHandlers[name];
+    }
+  });
+  // Network and World list adapters; addFriend still populates the real relation set.
+  t.mock.method(World, 'getPlayers', () => ({ forEach() {}, search() { return undefined; } }));
+  t.mock.method(World, 'getPlayerByName', () => undefined);
+  const actor = (name) => {
+    const p = realReader(t, name);
+    p.setLongUsername(Misc.stringToLongBigInt(name));
+    return p;
+  };
+  let member, other, spectator;
+  [viewer, member, other, spectator] = ['Viewer', 'Member', 'Other', 'Spectator'].map(actor);
+  const ids = [viewer, member, other, spectator].map((p) => p.getLongUsername());
+  assert.ok(ids.every((id) => id !== 0n));
+  assert.equal(new Set(ids).size, ids.length);
+  let entered = 0;
+  raid = { id: Number.MAX_SAFE_INTEGER, over: false, players: [member, other],
+    spectators: new Set([spectator]), area: { enter() { entered++; } }, room: null };
+  Raid.raids.set(key, raid);
+  hooks.customHandlers['tob:may-spectate'] = [];
+  Spectate(hooks.api);
+  const chooseName = (name) => {
+    viewer.setEnteredSyntaxAction(null);
+    hooks.api.emitCustomEvent('tob:observe', { player: viewer, recent: false });
+    const action = viewer.getEnteredSyntaxAction();
+    assert.ok(action && typeof action.execute === 'function', 'observe armed a fresh name action');
+    action.execute(name);
+  };
+  const reset = () => { raid.spectators.delete(viewer); viewer.setUntargetable(false); };
+  assert.equal(raid.spectators.has(viewer), false);
+  assert.equal(viewer.isUntargetable(), false);
+  assert.equal(entered, 0);
+  return { viewer, member, other, spectator, raid, chooseName, reset,
+    entered: () => entered, PrivateChatStatus };
+}
+
+test('named Theatre admission accepts ON and an actual listed friend', (t) => {
+  const f = spectatorFixture(t);
+  f.other.getRelations().setStatus(f.PrivateChatStatus.FRIENDS_ONLY, false);
+  f.member.getRelations().setStatus(f.PrivateChatStatus.ON, false);
+  f.chooseName('Member');
+  assert.equal(f.entered(), 1, 'ON succeeds even though another member has a strict list');
+  assert.equal(f.raid.spectators.has(f.viewer), true);
+  f.reset();
+  f.member.getRelations().setStatus(f.PrivateChatStatus.FRIENDS_ONLY, false);
+  f.member.getRelations().addFriend(f.viewer.getLongUsername());
+  assert.equal(f.member.getRelations().hasFriend(f.viewer.getLongUsername()), true);
+  f.chooseName('Member');
+  assert.equal(f.entered(), 2, 'the named member listed the viewer');
+});
+
+test('named Theatre member with Friends Only denies an unlisted viewer', (t) => {
+  const f = spectatorFixture(t);
+  f.member.getRelations().setStatus(f.PrivateChatStatus.FRIENDS_ONLY, false);
+  f.viewer.getRelations().addFriend(f.member.getLongUsername());
+  assert.equal(f.member.getRelations().hasFriend(f.viewer.getLongUsername()), false, 'reverse friendship is insufficient');
+  f.chooseName('Member');
+  assert.equal(f.entered(), 0, 'an unlisted viewer is refused before entering the area');
+  assert.equal(f.raid.spectators.has(f.viewer), false);
+  assert.equal(f.viewer.isUntargetable(), false);
+  f.member.getRelations().addFriend(f.viewer.getLongUsername());
+  f.chooseName('Member');
+  assert.equal(f.entered(), 1, 'adding the viewer grants admission');
+});
+
+test('named Theatre spectator with Friends Only owns the admission list', (t) => {
+  const f = spectatorFixture(t);
+  f.spectator.getRelations().setStatus(f.PrivateChatStatus.FRIENDS_ONLY, false);
+  f.chooseName('Spectator');
+  assert.equal(f.entered(), 0, 'an unlisted viewer is refused before entering the area');
+  assert.equal(f.raid.spectators.has(f.viewer), false);
+  assert.equal(f.viewer.isUntargetable(), false);
+  f.spectator.getRelations().addFriend(f.viewer.getLongUsername());
+  f.chooseName('Spectator');
+  assert.equal(f.entered(), 1, 'the spectator listing the viewer grants admission');
+});
+
+test('Theatre preserves Recent Party, OFF, ignore and existing event veto behavior', (t) => {
+  const f = spectatorFixture(t);
+  f.member.getRelations().setStatus(f.PrivateChatStatus.OFF, false);
+  f.chooseName('Member');
+  assert.equal(f.entered(), 1, 'OFF retains existing TSPS behavior');
+  f.reset();
+  f.member.getRelations().addIgnore(f.viewer.getLongUsername());
+  f.member.getRelations().setStatus(f.PrivateChatStatus.ON, false);
+  f.chooseName('Member');
+  assert.equal(f.entered(), 2, 'ignore retains existing TSPS behavior');
+  f.reset();
+  f.other.getRelations().setStatus(f.PrivateChatStatus.FRIENDS_ONLY, false);
+  hooks.api.emitCustomEvent('tob:observe', { player: f.viewer, recent: true });
+  assert.equal(f.entered(), 3, 'Recent retains existing TSPS behavior');
+  f.reset();
+  hooks.customHandlers['tob:may-spectate'].unshift((request) => { request.allowed = false; });
+  f.chooseName('Member');
+  assert.equal(f.entered(), 3, 'an earlier veto remains effective');
+  assert.equal(f.raid.spectators.has(f.viewer), false);
 });

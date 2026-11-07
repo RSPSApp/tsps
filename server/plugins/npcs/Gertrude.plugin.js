@@ -105,7 +105,7 @@ function onGertrudeKitten(api, event) {
   return true;
 }
 
-function openKittenColourMenu(api, player, page = 0) {
+function openKittenColourMenu(api, player, page = 0, onInitialChoice = null, onInitialCancel = null) {
   const first = page * COLOURS_PER_PAGE;
   const colours = KITTEN_COLOURS.slice(first, first + COLOURS_PER_PAGE);
   const labels = [...colours];
@@ -116,16 +116,25 @@ function openKittenColourMenu(api, player, page = 0) {
       const pick = Number(option) - 1;
       if (pick >= 0 && pick < colours.length) {
         player.getPacketSender().sendInterfaceRemoval();
-        chooseKittenColour(api, player, first + pick);
+        if (onInitialChoice) onInitialChoice(KITTEN_ITEM_IDS[first + pick]);
+        else chooseKittenColour(api, player, first + pick);
       } else if (more && pick === colours.length) {
         player.getPacketSender().sendInterfaceRemoval();
-        openKittenColourMenu(api, player, page + 1);
+        openKittenColourMenu(api, player, page + 1, onInitialChoice, onInitialCancel);
       } else {
         player.getPacketSender().sendInterfaceRemoval();
+        if (onInitialCancel) onInitialCancel();
       }
     },
   }, ...labels).setTitle("Select a colour for your kitten");
   player.getDialogueManager().startDialogues(new api.core.DialogueChainBuilder().add(menu));
+}
+
+/** The quest owns the free initial reward; share only this server's colour picker. */
+function onInitialKittenMenu(api, request) {
+  if (!request.player || typeof request.choose !== "function") return;
+  request.opened = true;
+  openKittenColourMenu(api, request.player, 0, request.choose, request.cancel);
 }
 
 function onDialogueAction(api, event) {
@@ -145,6 +154,7 @@ module.exports = {
   register(api) {
     api.onNpcInteraction("Gertrude", { Kitten: onGertrudeKitten.bind(null, api) });
     api.onCustomEvent("npc-dialogue:action", onDialogueAction.bind(null, api));
+    api.onCustomEvent("gertrude:initial-kitten-menu", onInitialKittenMenu.bind(null, api));
   },
   _test: {
     GERTRUDES_CAT_QUEST, KITTEN_COST, RING_OF_CHAROS_A, KITTEN_ITEM_IDS, KITTEN_COLOURS,

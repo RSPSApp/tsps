@@ -560,3 +560,210 @@ test("Blindbag: the Dramen staff is no Blindbag weapon (Wiki, 6 May 2026)", () =
   holder.getInventory().add(new core.Item(ITEMS.elderMaul, 1));
   assert.deepEqual(Melee._test.heavyWeaponsCarried(holder), [ITEMS.elderMaul]);
 });
+
+test("Thorns alone holds an NPC's regeneration timer through real queued damage and NPC turns", () => {
+  const holder = character("pact-thorns-regen", { pacts: { [effect("thorns_damage")]: 1 } });
+  holder.setAutoRetaliate(false);
+  shield(holder, ITEMS.runeKiteshield);
+  const npc = new NPC(HILL_GIANT, new Location(3200, 3201, 0));
+  npc.setRegistered(true);
+  npc.setMaxHitpoints(100);
+  npc.setHitpoints(100);
+  npc.setScriptedMovement(true);
+  cycle(10000);
+  hooks.onCombatHitResolved({ attacker: npc, target: holder, hit: landed(core.CombatType.MELEE, [splat(0)]) });
+  assert.equal(holder.getCombat().getTarget(), null, "no direct tag or auto-retaliation");
+  npc.process();
+  assert.equal(npc.getHitpoints(), 97, "the real Thorns hit survives the same NPC turn's healing check");
+  assert.equal(npc.getCombat().getAttacker(), holder);
+  assert.equal(npc.getCombat().getLastAttack().elapsed(), 0);
+  assert.deepEqual(npc.getCombat().getRecentDamagers(), [], "PvM reflection keeps its existing credit policy");
+  for (let tick = 10001; tick <= 10033; tick++) {
+    cycle(tick);
+    npc.process();
+    assert.equal(npc.getHitpoints(), 97, "no fast healing before the existing timeout");
+  }
+  cycle(10034);
+  npc.process();
+  assert.equal(npc.getHitpoints(), 100, "ordinary healing resumes after the existing timer expires");
+});
+
+test("recoil and Vengeance share NPC combat bookkeeping without starting retaliation", () => {
+  for (const producer of ["recoil", "vengeance"]) {
+    const holder = character(`pact-regen-${producer}`);
+    holder.setAutoRetaliate(false);
+    const npc = new NPC(HILL_GIANT, new Location(3200, 3201, 0));
+    npc.setRegistered(true);
+    npc.setScriptedMovement(true);
+    npc.setMaxHitpoints(100);
+    npc.setHitpoints(100);
+    cycle(11000);
+    if (producer === "recoil") core.CombatFactory.handleRecoil(holder, npc, 10);
+    else core.CombatFactory.handleVengeance(holder, npc, 10);
+    npc.process();
+    const hp = producer === "recoil" ? 98 : 93;
+    assert.equal(npc.getHitpoints(), hp, producer);
+    assert.equal(npc.getCombat().getAttacker(), holder);
+    assert.equal(holder.getCombat().getTarget(), null);
+    cycle(11001);
+    npc.getCombat().setUnderAttack(null);
+    assert.equal(npc.getCombat().getAttacker(), null);
+    assert.equal(npc.getCombat().getLastAttack().elapsed(), 0, "existing clear resets the clock");
+    cycle(11034);
+    npc.process();
+    assert.equal(npc.getHitpoints(), hp);
+    cycle(11035);
+    npc.process();
+    assert.equal(npc.getHitpoints(), 100);
+  }
+});
+
+test("ordinary hits, undamaged NPCs and zero reflected damage keep their existing healing rules", () => {
+  const holder = character("pact-regen-controls");
+  for (const kind of ["ordinary", "undamaged", "zero", "sourceless"]) {
+    const npc = new NPC(HILL_GIANT, new Location(3200, 3201, 0));
+    npc.setRegistered(true);
+    npc.setScriptedMovement(true);
+    npc.setMaxHitpoints(100);
+    npc.setHitpoints(kind === "undamaged" ? 100 : 90);
+    cycle(12000);
+    if (kind === "ordinary") npc.getCombat().setUnderAttack(holder);
+    if (kind === "zero") npc.getCombat().getHitQueue().addPendingDamage([splat(0).markReflected().setSource(holder)]);
+    if (kind === "sourceless") npc.getCombat().getHitQueue().addPendingDamage([splat(1).markReflected()]);
+    npc.process();
+    assert.equal(npc.getHitpoints(), kind === "ordinary" ? 90 : kind === "sourceless" ? 99 : 100, kind);
+    assert.equal(npc.getCombat().getAttacker(), kind === "ordinary" ? holder : null);
+  }
+});
+
+/** A wounded hill giant beside the player's footprint, processed by its own NPC turns. */
+function woundedGiant(location) {
+  const npc = new NPC(HILL_GIANT, location);
+  npc.setRegistered(true);
+  npc.setScriptedMovement(true);
+  npc.setMaxHitpoints(100);
+  npc.setHitpoints(90);
+  return npc;
+}
+
+const permission = (attacker, target) => core.CanAttackResponse[core.CombatFactory.canAttackPermission(attacker, target, true)];
+
+test("a bystander's reflected hit pauses regeneration but leaves a single-way NPC with the player fighting it", () => {
+  const { AreaManager } = require("../dist/game/model/areas/AreaManager");
+  const { PendingHit } = require("../dist/game/content/combat/hit/PendingHit");
+  const fighter = character("pact-single-fighter");
+  const bystander = character("pact-single-bystander");
+  bystander.setLocation(new Location(3201, 3200, 0));
+  const npc = woundedGiant(new Location(3200, 3201, 0));
+  assert.equal(AreaManager.inMulti(npc), false, "single-way combat");
+  cycle(13000);
+  core.CombatFactory.executeHit(new PendingHit(fighter, npc, core.CombatFactory.getMethod(fighter), 0));
+  npc.process(); // the fighter's own hit lands
+  assert.equal(npc.getCombat().getAttacker(), fighter);
+  const hp = npc.getHitpoints();
+  cycle(13005);
+  // Undying Retribution and recoil from someone the NPC is not fighting.
+  core.CombatFactory.handleRecoil(bystander, npc, 10);
+  npc.process();
+  assert.equal(npc.getHitpoints(), hp - 2, "the bystander's recoil still lands");
+  assert.equal(npc.getCombat().getAttacker(), fighter, "the fighter keeps the NPC");
+  assert.equal(npc.getCombat().getLastAttack().elapsed(), 5 * GameConstants.GAME_ENGINE_PROCESSING_CYCLE_RATE,
+    "the fighter's own timer runs on; regeneration waits on it");
+  assert.equal(permission(fighter, npc), "CAN_ATTACK");
+  assert.equal(permission(bystander, npc), "TARGET_IN_COMBAT");
+  // The fighter's own reflection still tags the NPC and holds its timer.
+  cycle(13010);
+  core.CombatFactory.handleRecoil(fighter, npc, 10);
+  npc.process();
+  assert.equal(npc.getHitpoints(), hp - 4);
+  assert.equal(npc.getCombat().getAttacker(), fighter);
+  assert.equal(npc.getCombat().getLastAttack().elapsed(), 0);
+});
+
+/** A fighter's single-way tag on a hill giant that targets a bystander wearing a ring of recoil; the fighter walks off. */
+function staleTagScenario(name, start) {
+  const { AreaManager } = require("../dist/game/model/areas/AreaManager");
+  const { PendingHit } = require("../dist/game/content/combat/hit/PendingHit");
+  const fighter = character(`${name}-fighter`);
+  const bystander = character(`${name}-bystander`);
+  bystander.setAutoRetaliate(false);
+  equip(bystander, core.Equipment.RING_SLOT, ITEMS.ringOfRecoil);
+  const npc = new NPC(HILL_GIANT, new Location(3200, 3201, 0));
+  npc.setRegistered(true);
+  npc.setMaxHitpoints(100);
+  npc.setHitpoints(100);
+  assert.equal(AreaManager.inMulti(npc), false, "single-way combat");
+  forceAccurate = true;
+  randoms([], 0.99);
+  cycle(start);
+  return { fighter, bystander, npc, PendingHit };
+}
+
+/** The fighter's real hit tags the NPC, which keeps the bystander as its target. */
+function fighterTags({ fighter, bystander, npc, PendingHit }) {
+  core.CombatFactory.executeHit(new PendingHit(fighter, npc, core.CombatFactory.getMethod(fighter), 0));
+  npc.process();
+  assert.equal(npc.getCombat().getAttacker(), fighter);
+  assert.equal(npc.getCombat().getTarget(), bystander, "a single-way NPC doesn't retarget");
+  fighter.setLocation(new Location(3220, 3220, 0));
+  return npc.getHitpoints();
+}
+
+test("ordinary single-way melee: the NPC waits out a fighter's tag before hitting a bystander", () => {
+  const scenario = staleTagScenario("pact-stale-melee", 15000);
+  const { bystander, npc } = scenario;
+  npc.getCombat().attack(bystander);
+  const tagged = fighterTags(scenario);
+  for (let tick = 15001; tick <= 15060; tick++) {
+    cycle(tick);
+    bystander.getCombat().getHitQueue().process(tick);
+    npc.process();
+  }
+  assert.ok(bystander.getHitpoints() < 99, "the NPC hit the bystander once the tag expired");
+  assert.ok(npc.getHitpoints() < tagged - 5, "the bystander's recoil kept landing");
+  assert.equal(npc.getCombat().getAttacker(), bystander, "the bystander's own recoil tags the untagged NPC");
+  assert.equal(permission(bystander, npc), "CAN_ATTACK");
+});
+
+test("a bystander's recoil doesn't keep an absent fighter's single-way tag alive", () => {
+  // NPC hits that land without the NPC's attack-permission check: one already in flight when the
+  // fighter's tag lands, or a scripted/plugin attack that queues hits on players directly.
+  const scenario = staleTagScenario("pact-stale-scripted", 16000);
+  const { bystander, npc, PendingHit } = scenario;
+  npc.getCombat().setTarget(bystander);
+  const tagged = fighterTags(scenario);
+  for (let tick = 16001; tick <= 16060; tick++) {
+    cycle(tick);
+    if ((tick - 16001) % 4 === 0) core.CombatFactory.executeHit(new PendingHit(npc, bystander, core.CombatFactory.getMethod(npc), 0));
+    bystander.getCombat().getHitQueue().process(tick);
+    npc.process();
+    if (tick === 16005) assert.equal(npc.getCombat().getAttacker(), scenario.fighter, "the fighter's tag holds for 6 seconds");
+  }
+  assert.ok(bystander.getHitpoints() < 99 - 20, "the NPC kept hitting the bystander");
+  assert.ok(npc.getHitpoints() < tagged - 10, "the bystander's recoil kept landing");
+  assert.notEqual(npc.getCombat().getAttacker(), scenario.fighter, "the absent fighter's tag expires");
+  assert.equal(permission(bystander, npc), "CAN_ATTACK");
+});
+
+test("a reflected hit from a dead or logged-out source pauses regeneration but tags nobody", () => {
+  for (const gone of ["dead", "logged-out"]) {
+    const source = character(`pact-gone-${gone}`);
+    const other = character(`pact-gone-${gone}-other`);
+    other.setLocation(new Location(3201, 3200, 0));
+    const npc = woundedGiant(new Location(3200, 3201, 0));
+    cycle(14000);
+    core.CombatFactory.handleRecoil(source, npc, 10);
+    if (gone === "dead") source.setHitpoints(0);
+    else source.setRegistered(false);
+    npc.process();
+    assert.equal(npc.getHitpoints(), 88, `${gone}: the reflection still lands`);
+    assert.equal(npc.getCombat().getAttacker(), null, gone);
+    assert.equal(npc.getCombat().getLastAttack().elapsed(), 0, `${gone}: regeneration pauses`);
+    assert.equal(permission(other, npc), "CAN_ATTACK", gone);
+    for (let tick = 14001; tick <= 14033; tick++) {
+      cycle(tick);
+      npc.process();
+      assert.equal(npc.getHitpoints(), 88, `${gone}: no healing before the existing timeout`);
+    }
+  }
+});

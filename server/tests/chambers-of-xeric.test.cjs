@@ -251,7 +251,7 @@ test('Challenge Mode is always the same three floors, every combat and puzzle ro
 // ------------------------------------------------------------------ the map
 
 test('the map: floors on planes 3, 2 (and 1), the Olm beside them, every landing open', () => {
-  const free = (map, tile) => (RegionManager.getClipping(tile.getX(), tile.getY(), tile.getZ(), map) & 0x1280100) === 0;
+  const free = (map, tile) => (RegionManager.getClipping(tile.getX(), tile.getY(), tile.getZ(), map) & RegionManager.BLOCKED_MASK) === 0;
   for (let i = 0; i < 8; i++) {
     const layout = i === 0 ? Layout.challengeLayout() : Layout.normalLayout();
     const map = CoxMap.createMap(layout);
@@ -856,6 +856,60 @@ test("the chest's reward book varbit clears as the rewards close, not when loot 
   Rewards.chestClosed({ player: looter, interfaceId: Shared.INTERFACE.REWARDS });
   assert.equal(looter.getPacketSender().getVarbit(5457), 0, 'the chest closing clears it');
   raid.destroy();
+});
+
+test('loot left in the chest goes to the private storage when its raider logs out, and the closed raid keeps it', () => {
+  // Wiki (Chambers of Xeric, 26 January 2017): leaving before collecting sends the rewards to the private storage.
+  const Rewards = require('../plugins/minigames/cox/Rewards.ChambersOfXeric');
+  const party = new Parties.Party(fakePlayer('Soloer'), { key: 'Soloer' });
+  const raid = new RaidModule.Raid(party);
+  const soloer = fakePlayer('Soloer');
+  raid.players.add(soloer);
+  raid.original.add('Soloer');
+  soloer.setAttribute(RaidModule.ATTR_RAID, raid);
+  raid.rewards = new Map([['Soloer', [{ id: 20997, amount: 1 }, { id: 560, amount: 500 }]]]); // a twisted bow, death runes
+  // A logout at the chest: the leave hook (Rewards registers it on the raid) runs, then the solo raid closes.
+  Rewards.unclaimedLoot(raid, soloer, true);
+  raid.playerLeftArea(soloer, true);
+  assert.equal(raid.destroyed, true);
+  const stored = soloer.getAttribute('cox:private-storage') ?? [];
+  assert.deepEqual(stored.map((entry) => [entry.id, entry.amount]), [[20997, 1], [560, 500]], 'both in the private storage');
+});
+
+test('a logout at the chest drops what the private storage cannot take outside the raid, as for an Ultimate Ironman', (t) => {
+  const Rewards = require('../plugins/minigames/cox/Rewards.ChambersOfXeric');
+  const Storage = require('../plugins/minigames/cox/Storage.ChambersOfXeric');
+  const { ItemOnGroundManager } = PluginManager.getCoreApi();
+  const drops = [];
+  t.mock.method(ItemOnGroundManager, 'registerLocation', (_p, item, at) => { drops.push([item.getId(), item.getAmount(), at.getX(), at.getY(), at.getZ()]); });
+  const outside = [Shared.OUTSIDE.x, Shared.OUTSIDE.y, Shared.OUTSIDE.z ?? 0];
+  const raider = (name) => {
+    const party = new Parties.Party(fakePlayer(name), { key: name });
+    const raid = new RaidModule.Raid(party);
+    const p = fakePlayer(name);
+    p.location = new Location(3300, 5200, 1); // inside the raid
+    raid.players.add(p);
+    raid.original.add(name);
+    p.setAttribute(RaidModule.ATTR_RAID, raid);
+    raid.rewards = new Map([[name, [{ id: 20997, amount: 1 }, { id: 21003, amount: 1 }, { id: 560, amount: 500 }]]]);
+    return { raid, p };
+  };
+
+  // 119 of the 120 slots taken: the bow goes in, the other two drop.
+  const full = raider('Hoarder');
+  full.p.setAttribute('cox:private-storage', Array.from({ length: 119 }, () => ({ id: 1511, amount: 1 })));
+  Rewards.unclaimedLoot(full.raid, full.p, true);
+  full.raid.playerLeftArea(full.p, true);
+  assert.equal(full.p.getAttribute('cox:private-storage').filter((entry) => entry.id === 20997).length, 1, 'the bow is stored');
+  assert.deepEqual(drops, [[21003, 1, ...outside], [560, 500, ...outside]], 'the rest drops outside, not in the closing raid');
+
+  // An Ultimate Ironman can't use the storage: all of it drops outside.
+  drops.length = 0;
+  t.mock.method(Storage, 'isUltimateIronman', () => true);
+  const uim = raider('Uimer');
+  Rewards.unclaimedLoot(uim.raid, uim.p, true);
+  uim.raid.playerLeftArea(uim.p, true);
+  assert.deepEqual(drops.map(([id, , ...at]) => [id, ...at]), [[20997, ...outside], [21003, ...outside], [560, ...outside]]);
 });
 
 test('the Challenge Timeboard keeps the five fastest Challenge Mode times and says so', (t) => {

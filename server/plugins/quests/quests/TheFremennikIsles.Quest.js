@@ -72,10 +72,10 @@
  *    placed in this cache).
  *  - Bridges keep their broken appearance after Repair (the swap object has no
  *    placement here); clicking Walk-across on a repaired bridge moves the
- *    player over it. The 56 Woodcutting gate on the shield is not enforced (the
- *    shop path does not need it); rope spinning enforces Crafting 30 with a
+ *    player over it. Rope spinning enforces Crafting 30 with a
  *    system message. The chest, splitting, curing, shield-making and head-taking
  *    steps use short system messages where the wiki transcript has no line.
+ *    The shield Woodcutting level refusal is silent until wording is sourced.
  *  - The weapon/shield "hands free" check follows Cold War: WEAPON_SLOT and
  *    SHIELD_SLOT empty.
  *
@@ -366,6 +366,15 @@ module.exports = function registerTheFremennikIslesQuest(api) {
     return quest.getStage(player);
   }
 
+  /** Wiki (Yak-hide armour (top) and (legs)): both are boostable, so the higher of base and current Crafting counts. */
+  function yakHideCraftingLevel(player) {
+    const skills = player.getSkillManager();
+    return Math.max(skills.getMaxLevel(Skill.CRAFTING), skills.getCurrentLevel(Skill.CRAFTING));
+  }
+
+  /** Wiki: either piece gives 32 Crafting experience. */
+  const YAK_HIDE_ARMOUR_XP = 32;
+
   function setStage(player, value) {
     if (quest.getStage(player) !== value) quest.setStage(player, value);
   }
@@ -471,6 +480,18 @@ module.exports = function registerTheFremennikIslesQuest(api) {
 
   function borkFlags(player) {
     return Number(player.getAttribute(BORK_ATTRIBUTE)) || 0;
+  }
+
+  /** One of Bork's three supplies, once each (his menu stays up until all three are claimed), and only if it fits. */
+  function claimBorkSupply(player, bit, itemId, amount) {
+    if (borkFlags(player) & bit) return;
+    const inventory = player.getInventory();
+    if ((inventory.getFreeSlots?.() ?? amount) < amount) {
+      inventory.full?.();
+      return;
+    }
+    inventory.adds(itemId, amount);
+    setFlag(player, BORK_ATTRIBUTE, bit);
   }
 
   function miningTier(player) {
@@ -1123,9 +1144,9 @@ module.exports = function registerTheFremennikIslesQuest(api) {
         return player.getInventory().getAmount(COINS) < hides * 5;
       }
       case "FPmCig":
-        return player.getSkillManager().getMaxLevel(Skill.CRAFTING) < 43;
+        return yakHideCraftingLevel(player) < 43;
       case "i-PloP":
-        return player.getSkillManager().getMaxLevel(Skill.CRAFTING) < 46;
+        return yakHideCraftingLevel(player) < 46;
       case "pYRUcM":
       case "PreHMM":
         return false;
@@ -1137,12 +1158,12 @@ module.exports = function registerTheFremennikIslesQuest(api) {
         return hasItem(player, CURED_YAK_HIDE, 2)
           && hasItem(player, THREAD)
           && !hasItem(player, YAK_HIDE_BODY)
-          && player.getSkillManager().getMaxLevel(Skill.CRAFTING) >= 46;
+          && yakHideCraftingLevel(player) >= 46;
       case "FfydyU":
         return hasItem(player, CURED_YAK_HIDE)
           && hasItem(player, THREAD)
           && !hasItem(player, YAK_HIDE_LEGS)
-          && player.getSkillManager().getMaxLevel(Skill.CRAFTING) >= 43;
+          && yakHideCraftingLevel(player) >= 43;
       // Troll King.
       case "75_TlB":
         return !hasItem(player, TROLL_HEAD);
@@ -1423,16 +1444,13 @@ module.exports = function registerTheFremennikIslesQuest(api) {
         return;
       // Bork's supplies.
       case "1eVvoF":
-        player.getInventory().adds(TUNA, 10);
-        setFlag(player, BORK_ATTRIBUTE, BORK_FOOD);
+        claimBorkSupply(player, BORK_FOOD, TUNA, 10);
         return;
       case "eJNB7e":
-        player.getInventory().adds(STRENGTH_POTION_4, 4);
-        setFlag(player, BORK_ATTRIBUTE, BORK_STRENGTH);
+        claimBorkSupply(player, BORK_STRENGTH, STRENGTH_POTION_4, 4);
         return;
       case "eCZJLI":
-        player.getInventory().adds(PRAYER_POTION_3, 4);
-        setFlag(player, BORK_ATTRIBUTE, BORK_PRAYER);
+        claimBorkSupply(player, BORK_PRAYER, PRAYER_POTION_3, 4);
         return;
       case "57Z66s":
         if (stageOf(player) >= STAGE_CHAMPION && stageOf(player) < STAGE_TEN_TROLLS) {
@@ -1484,26 +1502,38 @@ module.exports = function registerTheFremennikIslesQuest(api) {
     return actions[event.clickType - 1] ?? "";
   }
 
+  // Each piece with the slot it is worn in: a worn piece still counts as owned.
+  const JESTER_PIECES = [
+    [JESTER_HAT, Equipment.HEAD_SLOT],
+    [JESTER_TOP, Equipment.BODY_SLOT],
+    [JESTER_TIGHTS, Equipment.LEG_SLOT],
+    [JESTER_BOOTS, Equipment.FEET_SLOT],
+  ];
+
+  function missingJesterPieces(player) {
+    return JESTER_PIECES.filter(([id, slot]) => !hasItem(player, id) && equipped(player, slot) !== id).map(([id]) => id);
+  }
+
   function openJesterChest(event) {
     const { player } = event;
     event.handled = true;
-    if (hasFlag(player, CHEST_ATTRIBUTE, 1)) {
-      player.sendMessage("You have already taken the jester costume.");
-      return;
-    }
     if (stageOf(player) < STAGE_ORES_DELIVERED) {
       player.sendMessage("You should speak to the King before rummaging through his chest.");
       return;
     }
-    if (isFull(player)) {
+    // A lost piece can be fetched again, so the chest gives whichever of the four the player lacks.
+    const missing = missingJesterPieces(player);
+    if (missing.length === 0) {
+      player.sendMessage("You have already taken the jester costume.");
+      return;
+    }
+    // A piece with no room would be lost for good, so nothing is given unless every missing piece fits.
+    if ((player.getInventory().getFreeSlots?.() ?? missing.length) < missing.length) {
       player.sendMessage("You need some free inventory space to take the costume.");
       return;
     }
+    for (const id of missing) player.getInventory().adds(id, 1);
     setFlag(player, CHEST_ATTRIBUTE, 1);
-    player.getInventory().adds(JESTER_HAT, 1);
-    player.getInventory().adds(JESTER_TOP, 1);
-    player.getInventory().adds(JESTER_TIGHTS, 1);
-    player.getInventory().adds(JESTER_BOOTS, 1);
     player.sendMessage("You take the silly jester costume from the chest.");
   }
 
@@ -1637,6 +1667,9 @@ module.exports = function registerTheFremennikIslesQuest(api) {
         hasItem(player, HAMMER)
       ) {
         event.handled = true;
+        if (player.getSkillManager().getCurrentLevel(Skill.WOODCUTTING) < 56) {
+          return;
+        }
         player.getInventory().deleteNumber(ARCTIC_PINE_LOGS, 2);
         player.getInventory().deleteNumber(ROPE, 1);
         player.getInventory().deleteNumber(BRONZE_NAILS, 1);
@@ -1714,12 +1747,13 @@ module.exports = function registerTheFremennikIslesQuest(api) {
     if (!pair.has(NEEDLE) || !pair.has(CURED_YAK_HIDE)) return;
     if (stageOf(player) < STAGE_DECREE_DELIVERED) return;
     event.handled = true;
-    const crafting = player.getSkillManager().getMaxLevel(Skill.CRAFTING);
+    const crafting = yakHideCraftingLevel(player);
+    const legsCrafting = crafting;
     if (!hasItem(player, THREAD)) {
       player.sendMessage("You need some thread to make armour from yak hide.");
       return;
     }
-    if (crafting < 46 && crafting < 43) {
+    if (crafting < 46 && legsCrafting < 43) {
       player.sendMessage("You need a Crafting level of 43 to make armour from yak hide.");
       return;
     }
@@ -1728,13 +1762,15 @@ module.exports = function registerTheFremennikIslesQuest(api) {
       player.getInventory().deleteNumber(CURED_YAK_HIDE, 2);
       player.getInventory().deleteNumber(THREAD, 1);
       player.getInventory().adds(YAK_HIDE_BODY, 1);
+      player.getSkillManager().addExperiences(Skill.CRAFTING, YAK_HIDE_ARMOUR_XP);
       player.sendMessage("You make yak-hide body armour.");
       return;
     }
-    if (!hasItem(player, YAK_HIDE_LEGS) && crafting >= 43) {
+    if (!hasItem(player, YAK_HIDE_LEGS) && legsCrafting >= 43) {
       player.getInventory().deleteNumber(CURED_YAK_HIDE, 1);
       player.getInventory().deleteNumber(THREAD, 1);
       player.getInventory().adds(YAK_HIDE_LEGS, 1);
+      player.getSkillManager().addExperiences(Skill.CRAFTING, YAK_HIDE_ARMOUR_XP);
       player.sendMessage("You make yak-hide leg armour.");
       return;
     }

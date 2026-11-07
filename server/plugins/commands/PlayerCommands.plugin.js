@@ -121,6 +121,18 @@ function canChangeSkull(player) {
   return false;
 }
 
+/**
+ * A self-skull only adds to a skull already there: a red one stays red and the longer timer stays (Wiki, Skull
+ * (status): nothing shortens a PvP skull but death), so these commands never shed a real skull's item loss.
+ */
+function skullAtLeast(player, type, duration) {
+  const wasSkulled = player.isSkulled();
+  const before = wasSkulled ? player.getSkullTimer() : 0;
+  const keepRed = wasSkulled && player.getSkullType() === SkullType.RED_SKULL;
+  CombatFactory.skull(player, keepRed ? SkullType.RED_SKULL : type, duration);
+  if (player.getSkullTimer() < before) player.setSkullTimer(before);
+}
+
 function confirmSkull(api, player, type, duration, warning) {
   if (!canChangeSkull(player)) {
     return;
@@ -130,9 +142,7 @@ function confirmSkull(api, player, type, duration, warning) {
     warning,
     "Yes",
     () => {
-      if (canChangeSkull(player)) {
-        CombatFactory.skull(player, type, duration);
-      }
+      if (canChangeSkull(player)) skullAtLeast(player, type, duration);
     },
     "No",
     () => {}
@@ -146,6 +156,7 @@ let PlayerPunishment;
 let core;
 
 module.exports = {
+  _test: { skullAtLeast },
   name: "PlayerCommands",
   register(api) {
     core = api.core;
@@ -153,6 +164,7 @@ module.exports = {
     ItemOnGroundManager = api.getItemOnGroundManager();
     CombatFactory = api.getCombatFactory();
     PlayerPunishment = api.getPlayerPunishment();
+    api.persistAttribute(YELL_UNTIL_ATTRIBUTE, 0);
     api.registerCommand("home", home, api.core.PlayerRights.NONE, "Teleport to the world spawn");
     api.registerCommand("staff", staff, api.core.PlayerRights.NONE, "List online staff and their ranks");
     api.onInterfaceActionButton(JOURNAL_CLOSE, closeStaff);

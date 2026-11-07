@@ -37,8 +37,8 @@
  * all three errands done, the expand-your-business option (Wiki).
  *
  * The finish (549): the first talk with all three done thanks the player and sets 914, and 914 makes the magic carpets cheaper
- * (MagicCarpets asks "rogue-trader:cheap-flights"). Not done: the four Alis (6552-6555), whose generated pages are empty, and the shop owners'
- * remarks about Ali (Wiki, Post-errand task; the generated file has them, nothing here answers their Rogue Trader conditions).
+ * (MagicCarpets asks "rogue-trader:cheap-flights"). The shop owners' generated remarks require those three errands and Prince Ali Rescue
+ * (Wiki, Post-errand task). Not done: the four Alis (6552-6555), whose generated pages are empty.
  */
 
 const QuestRuntime = require("../quests/QuestRuntime");
@@ -58,6 +58,7 @@ const VARBITS = {
 };
 const JUNK_PRICE = 10;
 const MESBOX_CHAT = 115;
+const MAIN_MODAL = (161 << 16) | 16;
 /** Wiki (Ali's Discount Wares., Junk): one of these, 1/5 each; rsprox 3169 t8287 gave a raw chicken for 10 coins. */
 const JUNK_ITEMS = [1265, 1925, 946, 2138, 590]; // bronze pickaxe, bucket, knife, raw chicken, tinderbox
 const LOCKPICK = 1523;
@@ -145,7 +146,11 @@ function later(ticks, player, action) {
   const { Task, TaskManager } = core();
   TaskManager.submit(new (class extends Task {
     constructor() { super(Math.max(1, ticks), null, false); }
-    execute() { this.stop(); if (player.isRegistered?.() === true) action(); }
+    execute() {
+      this.stop();
+      // A newer main interface owns this target; leave it in place.
+      if (player.isRegistered?.() === true && !player.getPacketSender().getSubInterfaceAt(MAIN_MODAL)) action();
+    }
   })());
 }
 
@@ -488,14 +493,24 @@ function aliAction(request) {
   if (action === "receive" && String(request.text).includes("Ali's Discount Wares")) { request.handled = true; junkSale(player); }
 }
 
-/**
- * The generated Ali page's Captain Dalbur options: nothing here tracks that question, so they are not offered. The dialogue runtime
- * asks every plugin about every condition, so this answers for Ali's own conversation only (event.npcId, Ali's 3533): other pages
- * that mention Captain Dalbur, such as Gianne jnr.'s delivery steps in the Gnome Restaurant, are not ours to answer.
- */
+/** The exact generated shopkeeper conditions, scoped to their Al Kharid NPCs. */
+const DOMMIK = 2879, ELLIS = 3231, KARIM = 2877, ZEKE = 2875;
+const AL_KHARID_SHOP_ASSISTANT = 2818, AL_KHARID_SHOP_KEEPER = 2817;
+const SHOPKEEPER_CONDITIONS = new Map([
+  [DOMMIK, "After Rogue Trader:"],
+  [ELLIS, "With Rogue Trader completed?"],
+  [AL_KHARID_SHOP_ASSISTANT, "After Rogue Trader:"],
+  [AL_KHARID_SHOP_KEEPER, "After Rogue Trader:"],
+  [KARIM, "After Rogue Trader"],
+  [ZEKE, "After Rogue Trader"],
+]);
+
+/** Preserve Ali's Captain Dalbur guard; other conditions belong to their own providers. */
 function aliCondition(request) {
-  if (request.npcId !== ALI) return null;
-  if (/Captain Dalbur/.test(String(request.text))) return false;
+  if (request.npcId === ALI && /Captain Dalbur/.test(String(request.text))) return false;
+  if (SHOPKEEPER_CONDITIONS.has(request.npcId) && SHOPKEEPER_CONDITIONS.get(request.npcId) === request.text) {
+    return allDone(request.player) && done("Prince Ali Rescue", request.player);
+  }
   return null;
 }
 

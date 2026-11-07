@@ -88,7 +88,7 @@ function player(name = 'Parity') {
   const packets = { interfaces: [], closes: [], cameras: [], varbits: [], scripts: [], strings: [] };
   const inv = { getAmount: id => items.get(id) ?? 0, contains: id => (items.get(id) ?? 0) > 0,
     getFreeSlots: () => 28, isFull: () => false,
-    adds(id, n = 1) { items.set(id, (items.get(id) ?? 0) + n); },
+    adds(id, n = 1) { items.set(id, (items.get(id) ?? 0) + n); return inv; },
     forceAdd(_player, item) { items.set(item.getId(), (items.get(item.getId()) ?? 0) + (item.getAmount?.() ?? 1)); },
     deleteNumber(id, n = 1) { items.set(id, (items.get(id) ?? 0) - n); } };
   const packet = new Proxy({
@@ -536,7 +536,9 @@ test('final victory resumes at 172 after death and cannot be confirmed twice', (
   p.attrs.set('quest.the_blood_moon_rises.drakan-death-confirmed', true);
   p.attrs.set('quest.the_blood_moon_rises.final-native-stage', 170);
   h.emit('player:login', { player: p });
-  assert.equal(p.varbits.get(15464), 172, 'relog after death resumes the 172 cutscene');
+  // The login resumes at 172; the transcript then hands over the Sunspear and moves the scene on.
+  assert.ok(p.varbitHistory.some(([id, value]) => id === 15464 && value === 172), 'relog after death resumes the 172 cutscene');
+  assert.equal(p.items.get(I.SUNSPEAR), 1, 'and the Sunspear is taken from Lowerniel');
   p.attrs.set('quest.the_blood_moon_rises.drakan-defeated', true);
   h.emit('npc-dialogue:action', { player: p, stepId: 'BzMe5D' });
   assert.equal(h.quest.getStage(p), 110);
@@ -2141,8 +2143,9 @@ test('Quest Helper sub-progress varbits publish from modeled actions and login r
   const fullBag = player('FullBag');
   h.quest.setStage(fullBag, 30);
   fullBag.attrs.set('the-blood-moon-rises:refinery-progress', { started: true, phase: 'pickaxe' });
-  const fullInventory = { contains: () => false, adds: () => false, getFreeSlots: () => 0,
-    isFull: () => true, deleteNumber: noop, getAmount: () => 0 };
+  // As a real full inventory: `adds` drops the item and still returns the container.
+  const fullInventory = { contains: () => false, adds: () => fullInventory, getFreeSlots: () => 0,
+    isFull: () => true, deleteNumber: noop, getAmount: () => 0, full: noop };
   fullBag.getInventory = () => fullInventory;
   h.emit('npc-dialogue:action', { player: fullBag, stepId: 'O3RVAV', kind: 'action' });
   assert.equal(fullBag.varbits.get(15469), 0, 'full bag does not set the borrowed flag');
@@ -2200,3 +2203,40 @@ test('prepared lobby portal returns to the captured palace entrance without rese
       'normal palace actors sync on the return');
   }
 });
+
+/** A real inventory's full behaviour over a stand-in: `adds` drops what has no room and returns the container. */
+function fillUp(p) {
+  const base = p.getInventory();
+  const full = { ...base, getFreeSlots: () => 0, isFull: () => true, full() { p.messages.push("You don't have enough inventory space."); },
+    adds() { return full; } };
+  p.getInventory = () => full;
+  return () => { p.getInventory = () => base; };
+}
+
+test('a full inventory keeps the Sunspear and the amitire leaves to be taken, not lost', () => {
+  const h = harness(), p = player('Packed');
+  enablePrereqs(h, new Set(PREREQS));
+  h.quest.setStage(p, 100);
+  p.attrs.set('quest.the_blood_moon_rises.drakan-defeated', true);
+  const restore = fillUp(p);
+  const spear = { player: p, stepId: 'YweyKw', handled: false };
+  h.emit('npc-dialogue:action', spear);
+  assert.equal(spear.end, true, 'the Sunspear step stops for room rather than going on without it');
+  restore();
+  const again = { player: p, stepId: 'YweyKw', handled: false };
+  h.emit('npc-dialogue:action', again);
+  assert.equal(p.items.get(I.SUNSPEAR), 1, 'with room the Sunspear is taken');
+
+  h.quest.setStage(p, 60);
+  const amitire = h.objectHooks.find(fn => fn.name === 'handlePrepObject');
+  const pick = () => ({ player: p, definition: { getName: () => 'Amitire plant' }, option: 'Pick', location: { x: 2982, y: 7679, z: 0 }, handled: false });
+  const back = fillUp(p);
+  const full = pick();
+  amitire(full);
+  assert.equal(full.handled, true, 'a full inventory is answered, not passed on');
+  assert.ok(p.messages.includes("You don't have enough inventory space."));
+  back();
+  amitire(pick());
+  assert.equal(p.items.get(I.AMITIRE_LEAVES), 1, 'with room the leaves are picked');
+});
+

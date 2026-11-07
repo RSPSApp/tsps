@@ -85,6 +85,7 @@ Scythe.register({
     persistAttribute: () => {},
     onItemAction: () => {},
     onItemOnItem: () => {},
+    onCustomEvent: () => {},
     onItemOnObject: (handler) => { itemOnObject = handler; },
     onObjectInteraction: (name, actions) => { wellActions = actions; },
     onPlayerLogin: (handler) => { loginHook = handler; },
@@ -180,7 +181,9 @@ function chargePlayer(weapon, { runes = 0, vials = 0, notedVials = 0, vialId = I
             counts.set(id, left);
             if (left < 1) heldStacks.delete(id);
         },
-        getItems: () => [...heldStacks].map((id) => ({ getId: () => id, getMeta: () => undefined })),
+        getItems: () => [...heldStacks].map((id) => ({ getId: () => id, getAmount: () => amountOf(id), getMeta: () => undefined })),
+        // Charging takes plain copies by slot (PoweredStaff.takePlain); the slots follow getItems' order.
+        deleteAtSlot(slot, amount = 1) { inventory.deleteNumber([...heldStacks][slot], amount); },
         getFreeSlots: freeSlots,
         getAddableAmount: (item) => heldStacks.has(item.getId()) || freeSlots() > 0 ? item.getAmount() : 0,
         add(item) {

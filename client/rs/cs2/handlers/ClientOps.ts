@@ -17,6 +17,7 @@ import { chatHistory } from "../ChatHistory";
 import { getHoverTarget, getInteractionCanvases, minMenuSnapshot, type MinMenuSnapshot } from "../minimenu";
 import { Opcodes } from "../Opcodes";
 import type { HandlerMap } from "./HandlerTypes";
+import { menuOptionDisplayText } from "../../../ui/menu/menuOptionDisplayText";
 
 const DEVICE_OPTION_INTERFACE_SCALING = 27;
 // Fixed layout toplevel (OSRS fixed mode).
@@ -989,7 +990,8 @@ export function registerClientOps(handlers: HandlerMap): void {
 
     handlers.set(Opcodes.MINIMENU_ENTRY, (ctx) => {
         const snap = getMinMenuSnapshot(ctx);
-        ctx.pushString(snap.option);
+        // Shown text only (script 4726's mouseover); the snapshot keeps the game's option.
+        ctx.pushString(menuOptionDisplayText(snap.option));
         ctx.pushString(snap.target);
     });
 

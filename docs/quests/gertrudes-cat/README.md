@@ -15,6 +15,10 @@ travel:
 
 Fresh natural house/fence/ladder/crate route with rewards paid once. A post-quest 100-coin kitten purchase worked and persisted.
 
+## Current server implementation
+
+At the final hand-in, an equipped Ring of Charos(a) offers the server's existing paginated kitten-colour picker before the quest rewards are granted. Without the activated ring, the server selects a kitten variant randomly. The exact retail picker layout and colour probabilities are not established by this contribution's evidence; the server's six item/colour associations follow its existing pet mapping, supported by matching pinned-cache recolour patterns and the Wiki's colour variants.
+
 ## Findings
 
 - **open** Varp 181's random-crate selection is an approximation.

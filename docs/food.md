@@ -1,9 +1,10 @@
 # Food
 
 Eating is `server/plugins/items/Food.plugin.js`. What each food does is
-`server/plugins/items/data/food.json`, one food per line, keyed by the item's cache name: every
-id with that name eats the same way, so variants (a minigame's shark, the noted-and-unnoted pairs)
-need no id lists. Tests: `server/tests/food-effects.test.cjs` and `eat-attack-delay.test.cjs`.
+`server/plugins/items/data/food.json`, one food per line, normally keyed by the item's cache name.
+An `itemId` row selects an exact same-name item when its effects differ; notes and placeholders
+are still excluded. Other same-name foods continue to use the name entry. Tests: `server/tests/food-effects.test.cjs` and `eat-attack-delay.test.cjs`.
+The full-plugin decoded Eat tests for same-name cabbage variants, energy restoration from gout tubers and purple sweets, and Prayer restoration from bluefin are in `server/tests/potions-preset.test.cjs`.
 
 ## Sources
 
@@ -37,12 +38,13 @@ need no id lists. Tests: `server/tests/food-effects.test.cjs` and `eat-attack-de
 | Field | Meaning |
 | --- | --- |
 | `name` | The item's cache name. |
+| `itemId` | Optional exact cache id for a single-bite food whose effects differ from the same-name entry. |
 | `bites` | The bite names, first to last (`["Cake", "2/3 cake", "Slice of cake"]`), or a number when every bite has the same name: that name's ids, lowest first, are the bites (giant crab meat). |
 | `heal` | A number, `{ "min", "max" }` (a roll), `{ "flat", "percent" }` of the Hitpoints level (strawberry, sweetcorn, watermelon slice), or `{ "lowestOf": { skill: divisor }, "round"? }`: the lowest of those base levels divided by their numbers, rounded down or `"nearest"` (the Neypotzli foods: cooked bream the lower of Cooking/3 and Fishing/3, to the nearest, as the Wiki's 7 at 20 Fishing shows; cooked moss lizard the lower of Cooking/3 and Hunter/2, down). |
 | `eatDelay` | Ticks until the next bite, per bite or for all (default 3). |
 | `combo` | A combo food. |
 | `leaves` | The item left after the last bite (`Pie dish`, `Bowl`). |
-| `boost`, `drain`, `restore` | Skills by name and amount: a boost to base + amount, a drain from it, a restore up to base. Restore amounts may be `{ "flat", "percent" }` of the base level. |
+| `boost`, `drain`, `restore` | Skills by name and amount: a boost to base + amount, a drain from it, a restore up to base. Boost and restore amounts may be `{ "flat", "percent" }` of the base level; percent is a fraction (for example, `0.02` for 2%). |
 | `stamina`, `area`, `option` | Apply the shared stamina effect, require a `food:area` scene check (its owner may set the refusal `message`), or consume via a cache action other than Eat. |
 | `runEnergy`, `curePoison`, `cureVenom`, `poisonImmunity` | Run energy restored; ordinary poison cured/venom converted to poison; explicit full poison-and-venom cure; seconds of poison immunity. |
 | `then` | A second heal `ticks` later, with its own effects (hunter meats, 7 ticks). A newer one replaces a pending one. |
@@ -170,3 +172,16 @@ and sound retain the existing drink path.
 Regression coverage in `server/tests/consumable-edge-cases.test.cjs` dispatches the
 registered drink handler, checks both messages and the returned glass, and checks
 that a second beer during the cooldown produces no success feedback or consumption.
+
+## Draynor cabbage
+
+The [Draynor Manor cabbage](https://oldschool.runescape.wiki/w/Cabbage_%28Draynor_Manor%29)
+uses a different item id from regular cabbage despite sharing its cache name. It heals one
+Hitpoint and boosts Defence by one plus 2% of its base level, rounded down. Its two eat
+messages come from the Wiki item page; their live timing has not been captured here.
+
+## Food and run energy
+
+[Gout tuber](https://oldschool.runescape.wiki/w/Gout_tuber) restores 50 run energy
+points, and [Purple sweets](https://oldschool.runescape.wiki/w/Purple_sweets) restore 10.
+Both use the existing food energy-restoration path, which caps energy at its maximum.

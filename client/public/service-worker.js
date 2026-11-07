@@ -24,6 +24,22 @@ self.addEventListener("activate", (event) => {
     );
 });
 
+// Plugin notifications (RuneLite's Notifier) shown through the worker: a click brings the game back.
+self.addEventListener("notificationclick", (event) => {
+    event.notification.close();
+    event.waitUntil(
+        self.clients
+            .matchAll({ type: "window", includeUncontrolled: true })
+            .then((windows) => {
+                const scope = self.registration.scope;
+                const open = windows.find((client) => client.url.startsWith(scope) && "focus" in client);
+                if (open) return open.focus();
+                return self.clients.openWindow ? self.clients.openWindow(self.registration.scope) : undefined;
+            })
+            .catch(() => {}),
+    );
+});
+
 self.addEventListener("fetch", (event) => {
     if (event.request.method !== "GET") return;
 

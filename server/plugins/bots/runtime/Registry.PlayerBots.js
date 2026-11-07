@@ -20,6 +20,10 @@ const { generateBotName } = require("../lib/BotNames.PlayerBots");
 const WILDERNESS_SPAWN_TILE_PROBE_LIMIT = 256;
 const WILDERNESS_REGION_SIZE = 64;
 const WILDERNESS_REGION_DESPAWN_DELAY_MS = 30000;
+/** Underground maps sit 6400 tiles north of the surface they lie under. */
+const UNDERGROUND_MIN_Y = 6400;
+/** RsmodRouteFinding searches 128x128 tiles centred on its source. */
+const ROUTE_SEARCH_RADIUS = 63;
 
 function createBotRegistry(options) {
   const {
@@ -59,6 +63,7 @@ function createBotRegistry(options) {
     entriesByUsername: providedEntriesByUsername,
   } = options;
   const RegionManager = botApi.getRegionManager();
+  let routeFinder = null;
   const applyForcedModeForDiagnosis =
     typeof applyForcedModeForDiagnosisFn === "function"
       ? applyForcedModeForDiagnosisFn
@@ -987,6 +992,34 @@ function createBotRegistry(options) {
     setTimeout(() => spawnConfiguredBots(), 0);
   }
 
+  /**
+   * Cave maps leave the void beyond their walls unflagged, so an underground tile that is not
+   * blocked can still be one no player can walk to (#2834). Underground, a roamer only spawns
+   * where it can walk to the nearest real player within route-finding range.
+   * Without a nearby player, the tile cannot be verified and is skipped.
+   */
+  function reachesNearestPlayer(candidate) {
+    if (candidate.getY() < UNDERGROUND_MIN_Y) return true;
+    let nearest = null;
+    let nearestDistance = ROUTE_SEARCH_RADIUS;
+    for (const player of botApi.core.World.getPlayers()) {
+      const at = player?.getLocation?.();
+      if (!at || player.isPlayerBot?.() || at.getZ() !== candidate.getZ()) continue;
+      const distance = Math.max(Math.abs(at.getX() - candidate.getX()), Math.abs(at.getY() - candidate.getY()));
+      if (distance < nearestDistance) {
+        nearest = at;
+        nearestDistance = distance;
+      }
+    }
+    if (!nearest) return false;
+    routeFinder ??= new botApi.core.RsmodRouteFinding((x, y, z, area) => RegionManager.getClipping(x, y, z, area));
+    const route = routeFinder.findRoute({
+      level: candidate.getZ(), srcX: candidate.getX(), srcY: candidate.getY(), srcSize: 1,
+      destX: nearest.getX(), destY: nearest.getY(), privateArea: null, moveNear: false,
+    });
+    return route.success && !route.alternative;
+  }
+
   function createWildernessRoamerSpawn(baseSpawn, bounds, index) {
     if (!baseSpawn || !bounds) {
       return null;
@@ -1020,7 +1053,8 @@ function createBotRegistry(options) {
       const candidate = new Location(minX + offsetX, minY + offsetY, z);
       if (Wilderness.isInLocation(candidate) && isOutsideWildernessHotspots(candidate) &&
           !isMembersArea(candidate.getX(), candidate.getY()) &&
-          !RegionManager.blocked(candidate, null) && !RegionManager.isWater(candidate)) {
+          !RegionManager.blocked(candidate, null) && !RegionManager.isWater(candidate) &&
+          reachesNearestPlayer(candidate)) {
         return candidate;
       }
     }

@@ -22,7 +22,6 @@ const PROJECTILE = { startHeight: 43, endHeight: 31 };
 const PROJECTILE_DELAY = { RANGED: 41, MAGIC: 51 };
 /** The Imp's own teleport, when a hit lands (Wiki: short distances, never outside the arena). */
 const IMP_TELEPORT = { chance: 0.33, cooldownTicks: 4, minDistance: 2, maxDistance: 6, attempts: 64 };
-const BLOCKED_TILE = 0x1280100;
 /** Ordinary poison stores five severity points per starting damage (CombatPoisonEffect). */
 const POISON_SEVERITY_PER_DAMAGE = 5;
 
@@ -58,7 +57,7 @@ function choose(attacks, npc, target) {
 /** A tile the Imp can reach without leaving the arena or standing in a wall. */
 function freeArenaTile(session, x, y, z) {
   const tile = session.tile([x, y, z]);
-  if ((session.area.getClip(tile) & BLOCKED_TILE) !== 0) return null;
+  if ((session.area.getClip(tile) & Common.core.RegionManager.BLOCKED_MASK) !== 0) return null;
   const player = session.player.getLocation();
   if (tile.equals(player)) return null;
   return tile;

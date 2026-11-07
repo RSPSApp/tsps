@@ -248,7 +248,7 @@ const nativeInteraction = new WidgetInteractionController({
     getWidgetManager: () => closeManager,
     getInputManager: () => nativeInput,
     getRendererCanvas: () => undefined,
-    getTradeRequestTargetsByName: () => new Map(),
+    getChatRequestsByName: () => new Map(),
 });
 const nativeDeps = {
     getCs2Vm: () => closeVm,

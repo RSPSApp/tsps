@@ -61,6 +61,7 @@
  */
 
 module.exports = function registerSoulsBaneQuest(api) {
+  const { giveReward } = require("../QuestRuntime");
   const {
     Equipment,
     ItemIdentifiers,
@@ -1515,7 +1516,7 @@ module.exports = function registerSoulsBaneQuest(api) {
 
   function grantReward(player) {
     // registerQuest adds the first coin; top the stack up to 500.
-    player.getInventory().adds(ItemIdentifiers.COINS, 499);
+    giveReward(player, ItemIdentifiers.COINS, 499);
     player.getSkillManager().addExperiences(Skill.DEFENCE, 500);
     player.getSkillManager().addExperiences(Skill.HITPOINTS, 500);
   }

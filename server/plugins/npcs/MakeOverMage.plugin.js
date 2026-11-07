@@ -17,7 +17,10 @@ const NO_SLOT = -1;
 // its palette, and A/B switch body type to the first selectable kit of each part.
 const DESIGN_KIT_SLOTS = [1, 7, 2, 3, 4, 5, 6]; // Appearance HEAD, BEARD, CHEST, ARMS, HANDS, LEGS, FEET
 const DESIGN_COLOUR_SLOTS = [8, 9, 10, 11, 12]; // Appearance HAIR, TORSO, LEG, FEET, SKIN colours
-const DESIGN_COLOUR_COUNTS = [30, 29, 29, 6, 8]; // the palettes; skin offers its first 8
+// The palettes (client PLAYER_BODY_RECOLOR_TO_1). Skin has 13, but its Halloween colours (8-11)
+// are offered only once unlocked (core Appearance.SKIN_UNLOCKS, the cache's makeover_unlockedcolour).
+const DESIGN_COLOUR_COUNTS = [30, 29, 29, 6, 13];
+const DESIGN_SKIN_ROW = 4;
 const DESIGN_GENDER_SLOT = 0;
 const FEMALE_BODY_PARTS = 7;
 const DESIGN_BODY_TYPE_VARBIT = 14021; // player_design_bodytype, which the A/B buttons show
@@ -99,9 +102,11 @@ function cycleKit(player, part, direction) {
 }
 
 function cycleColour(player, slot, direction) {
-  const colours = Array.from({ length: DESIGN_COLOUR_COUNTS[slot] }, (_, colour) => colour);
   designLook(player, (look) => {
-    look[DESIGN_COLOUR_SLOTS[slot]] = step(colours, look[DESIGN_COLOUR_SLOTS[slot]], direction);
+    const current = look[DESIGN_COLOUR_SLOTS[slot]];
+    look[DESIGN_COLOUR_SLOTS[slot]] = slot === DESIGN_SKIN_ROW
+      ? core.Appearance.stepSkinColour(current, direction, player.getAppearance().unlockedSkinColours())
+      : step(Array.from({ length: DESIGN_COLOUR_COUNTS[slot] }, (_, colour) => colour), current, direction);
   });
 }
 
@@ -133,6 +138,24 @@ function clickDesign({ player, buttonId }) {
   else if (component === DESIGN_CONFIRM) confirmDesign(player);
   else return false;
   return true;
+}
+
+/** Shows the client which skin colours are unlocked (the browser designer reads the varbits). */
+function syncSkinUnlocks({ player }) {
+  for (const unlock of core.Appearance.SKIN_UNLOCKS) {
+    const varbit = core.CacheDefinitions.getVarbitId(unlock.varbit);
+    if (varbit !== null) player.getPacketSender().sendVarbit(varbit, player.getAttribute(unlock.attribute) === true ? 1 : 0);
+  }
+}
+
+/** A completed Halloween event unlocks every Halloween skin colour released before it (Wiki, Makeover). */
+function unlockHalloweenSkins({ player }) {
+  for (const unlock of core.Appearance.SKIN_UNLOCKS) player.setAttribute(unlock.attribute, true);
+  syncSkinUnlocks({ player });
+}
+
+function persistSkinUnlocks(api) {
+  for (const unlock of core.Appearance.SKIN_UNLOCKS) api.persistAttribute(unlock.attribute, false);
 }
 
 function syncPronouns({ player }) {
@@ -183,12 +206,15 @@ function openFromMakeover({ player }) {
 
 module.exports = {
   name: "MakeOverMage",
-  _test: { canOpenMakeover, clickDesign },
+  _test: { canOpenMakeover, clickDesign, unlockHalloweenSkins },
   register(api) {
     core = api.core;
     api.onInterfaceActionButton(MAKEOVER_BUTTON_UIDS, clickDesign);
     api.persistAttribute(core.Appearance.PRONOUNS_ATTRIBUTE, -1);
     api.onPlayerLogin(syncPronouns);
+    persistSkinUnlocks(api);
+    api.onPlayerLogin(syncSkinUnlocks);
+    api.onCustomEvent("makeover-mage:unlock-halloween-skins", unlockHalloweenSkins);
     api.onInterfaceActionButton(PRONOUN_DROPDOWN_UID, chooseDesignerPronouns);
     api.onCustomEvent("settings:option-chosen", chooseSettingPronouns);
     api.onCustomEvent("player:varp-transmit", transmitPronouns);

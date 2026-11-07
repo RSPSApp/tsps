@@ -461,14 +461,27 @@ module.exports = function registerTempleOfIkovQuest(api) {
     startTranscript(api, killer, HOUSE_LUCIEN_NPC_ID, PAGE, "finishing-up-defeating-lucien");
   }
 
-  /**
-   * Lucien cannot be harmed without the Armadyl pendant: attacking him without
-   * one plays the "he is your friend" stage direction instead of a fight.
-   */
+  function canLaunchFireWarriorAttack(player, method) {
+    const { Ammunition, CombatType, Equipment, RangedWeapon, WeaponInterfaces } = api.core;
+    const arrows = player.getEquipment().get(Equipment.AMMUNITION_SLOT);
+    if (method?.type?.() !== CombatType.RANGED || arrows?.getId?.() !== ICE_ARROWS_ITEM_ID || arrows.getAmount() < 1) return false;
+    const weapon = player.getWeapon();
+    if (weapon && [WeaponInterfaces.DART, WeaponInterfaces.KNIFE, WeaponInterfaces.THROWNAXE,
+      WeaponInterfaces.OBBY_RINGS, WeaponInterfaces.BLOWPIPE].filter(Boolean).includes(weapon)) return true;
+    return Ammunition.firesFromAmmoSlot(player) &&
+      RangedWeapon.getFor(player)?.getAmmunitionData()?.some(ammo => ammo.getItemId() === ICE_ARROWS_ITEM_ID) === true;
+  }
+
   function handleCanAttack(event) {
-    const { attacker, target } = event;
+    const { attacker, target, method } = event;
     if (!attacker?.getEquipment || !target) return;
     const targetId = typeof target.getId === "function" ? target.getId() : undefined;
+    if (targetId === FIRE_WARRIOR_NPC_ID && attacker.isPlayer?.() && method) {
+      // Judge ordinary attacks before launch; previously queued and reflected damage is unchanged.
+      if (!canLaunchFireWarriorAttack(attacker, method)) event.allow = false;
+      return;
+    }
+    // Lucien instead requires the Armadyl pendant; his transcript explains a refusal.
     if (targetId !== HOUSE_LUCIEN_NPC_ID) return;
     if (wearingArmadylPendant(attacker)) return;
     event.allow = false;

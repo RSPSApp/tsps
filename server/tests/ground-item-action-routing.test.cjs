@@ -64,11 +64,11 @@ function nativeOp5(itemId, x = 3222, y = 3218) {
   return Buffer.from([82, (itemId & 255) + 128 & 255, itemId >>> 8, x & 255, x >>> 8, y & 255, y >>> 8, 128]);
 }
 
-function browserAction({ itemId, x = 3222, y = 3218, option, optionIndex = 3 }) {
+function browserAction({ itemId, x = 3222, y = 3218, option, optionIndex = 3, stackId = 1 }) {
   const optionBytes = Buffer.from(option, 'utf8');
   const payload = Buffer.alloc(4 + 2 + 2 + 1 + 2 + 4 + optionBytes.length + 1 + 1);
   let offset = 0;
-  payload.writeInt32BE(1, offset); offset += 4;
+  payload.writeInt32BE(stackId, offset); offset += 4;
   payload.writeUInt16BE(x, offset); offset += 2;
   payload.writeUInt16BE(y, offset); offset += 2;
   payload[offset++] = 0;
@@ -233,7 +233,7 @@ test('native Giant bones Bury reaches the live ground-item listener and removes 
   await f.connection.dispatch(decoded, true);
 
   assert.equal(interactions.length, 1);
-  assert.deepEqual(interactions[0].slice(1), [id, 3222, 3218, 3]);
+  assert.deepEqual(interactions[0].slice(1), [id, 3222, 3218, 3, undefined]);
   assert.equal(groundEvents.length, 1);
   assert.equal(groundEvents[0].handled, true, messages.join(' | '));
   assert.equal(ground.isPendingRemoval(), true);
@@ -295,7 +295,7 @@ test('named browser Giant bones Take reaches the pickup guard without removing t
   const messages = [];
   t.mock.method(f.player, 'sendMessage', message => messages.push(message));
 
-  const decoded = decodeClientPackets(browserAction({ itemId: id, option: 'Take' }));
+  const decoded = decodeClientPackets(browserAction({ itemId: id, option: 'Take', stackId: ground.getId() }));
   await f.connection.dispatch(decoded, true);
 
   assert.ok(messages.some(message => /backpack/i.test(message)));

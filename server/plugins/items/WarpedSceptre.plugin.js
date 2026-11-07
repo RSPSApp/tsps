@@ -1,5 +1,5 @@
 // OSRS Wiki: https://oldschool.runescape.wiki/w/Warped_sceptre
-const { definePoweredStaff, refundsFit } = require("./PoweredStaff");
+const { definePoweredStaff, refundsFit, restricted, plainAmount, takePlain, PRESET_TEXT } = require("./PoweredStaff");
 
 const MAX_CHARGES = 20000;
 const CHAOS_RUNES_PER_CHARGE = 2;
@@ -128,11 +128,14 @@ function checkCharges({ player, item }) {
   return true;
 }
 
-function affordableCharges(player, sceptre) {
-  const inventory = player.getInventory();
+/**
+ * What the runes held pay for. Only unrestricted copies pay (Uncharge refunds plain runes, so a preset
+ * copy would come back bankable); `count` defaults to that plain count.
+ */
+function affordableCharges(player, sceptre, count = (id) => plainAmount(player.getInventory(), id)) {
   return Math.min(
-    Math.floor(inventory.getAmount(ItemIdentifiers.CHAOS_RUNE) / CHAOS_RUNES_PER_CHARGE),
-    Math.floor(inventory.getAmount(ItemIdentifiers.EARTH_RUNE) / EARTH_RUNES_PER_CHARGE),
+    Math.floor(count(ItemIdentifiers.CHAOS_RUNE) / CHAOS_RUNES_PER_CHARGE),
+    Math.floor(count(ItemIdentifiers.EARTH_RUNE) / EARTH_RUNES_PER_CHARGE),
     MAX_CHARGES - charges(sceptre),
   );
 }
@@ -144,6 +147,10 @@ function chargeSceptre(player, sceptre) {
     return true;
   }
   const most = affordableCharges(player, sceptre);
+  if (most <= 0 && affordableCharges(player, sceptre, (id) => inventory.getAmount(id)) > 0) {
+    player.sendMessage(PRESET_TEXT);
+    return true;
+  }
   if (most <= 0) {
     player.sendMessage("You don't have enough runes to charge your warped sceptre. You need 2 chaos runes and 5 earth runes per charge.");
     return true;
@@ -158,8 +165,8 @@ function chargeSceptre(player, sceptre) {
       const current = charges(sceptre);
       const added = Math.min(Math.floor(Number(amount)), affordableCharges(player, sceptre));
       if (!(added > 0)) return;
-      inventory.deleteNumber(ItemIdentifiers.CHAOS_RUNE, added * CHAOS_RUNES_PER_CHARGE);
-      inventory.deleteNumber(ItemIdentifiers.EARTH_RUNE, added * EARTH_RUNES_PER_CHARGE);
+      takePlain(inventory, ItemIdentifiers.CHAOS_RUNE, added * CHAOS_RUNES_PER_CHARGE);
+      takePlain(inventory, ItemIdentifiers.EARTH_RUNE, added * EARTH_RUNES_PER_CHARGE);
       if (chargedByUncharged.has(sceptre.getId())) {
         sceptre.setId(chargedByUncharged.get(sceptre.getId()));
       }
@@ -195,6 +202,11 @@ function chargeWithRunes(event) {
       : null;
   const otherItemId = sceptre === usedItem ? usedWithItemId : usedItemId;
   if (!sceptre || ![ItemIdentifiers.CHAOS_RUNE, ItemIdentifiers.EARTH_RUNE].includes(otherItemId)) {
+    return;
+  }
+  if (restricted(sceptre === usedItem ? usedWithItem : usedItem)) {
+    player.sendMessage(PRESET_TEXT);
+    event.handled = true;
     return;
   }
   event.handled = chargeSceptre(player, sceptre);
@@ -269,6 +281,11 @@ function resolveSceptre(attacker) {
   return staff?.resolver.resolve(attacker) ?? null;
 }
 
+/** "item:fill-charges": a sceptre handed out ready to use (PvP Arena load-outs) comes full. */
+function fillCharges(event) {
+  staff?.fillCharges(event);
+}
+
 module.exports = {
   name: "WarpedSceptre",
   members: true,
@@ -310,5 +327,6 @@ module.exports = {
     api.onCustomEvent("interface:closed", closeChargingInterface);
     api.onPlayerLogout(closeChargingInterface);
     api.registerCombatMethodResolver({ resolve: resolveSceptre });
+    api.onCustomEvent("item:fill-charges", fillCharges);
   },
 };

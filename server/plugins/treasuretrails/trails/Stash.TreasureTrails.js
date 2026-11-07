@@ -76,6 +76,17 @@ function build(player, unit) {
   if (unit.varbit >= 0) player.getPacketSender().sendVarbit(unit.varbit, 1);
 }
 
+/** Not captured: the shared powered-staff wording for a preset copy. */
+const PRESET_TEXT = "Preset items cannot be used for this.";
+
+/**
+ * A STASH keeps only item ids, so what comes back is a plain copy: a preset or meta-untradeable copy
+ * (Presets.PvpMode tags them) is never stored, or it would come back tradeable.
+ */
+function restricted(item) {
+  return item.isPresetItem?.() === true || item.isUntradeable?.() === true || item.isUnbankable?.() === true;
+}
+
 function deposit(player, unit) {
   const inventory = player.getInventory();
   const taken = [];
@@ -83,9 +94,10 @@ function deposit(player, unit) {
     if (requirement.emptySlot != null) continue;
     const fits = id => requirement.anyOf ? requirement.anyOf.includes(id) :
       core.CacheDefinitions.getItem(id)?.params?.get?.(Catalogue.TRAIL_ITEM_GROUP_PARAM) === requirement.group;
-    const slot = inventory.getItems().findIndex((item, index) => item && fits(item.getId()) && !taken.some(entry => entry.slot === index));
+    const free = (item, index) => item && fits(item.getId()) && !taken.some(entry => entry.slot === index);
+    const slot = inventory.getItems().findIndex((item, index) => free(item, index) && !restricted(item));
     if (slot < 0) {
-      player.sendMessage("You need all the items for this STASH unit's emote clue to store them.");
+      player.sendMessage(inventory.getItems().some(free) ? PRESET_TEXT : "You need all the items for this STASH unit's emote clue to store them.");
       return;
     }
     taken.push({ slot, id: inventory.getItems()[slot].getId() });

@@ -29,7 +29,7 @@ const Cycle = require("./Cycle.MoonsOfPeril");
 const Curses = require("./Curses.MoonsOfPeril");
 const Pieces = require("./Pieces.MoonsOfPeril");
 
-/** A weapon frozen when its owner logged out: { id, amount }. */
+/** A weapon frozen when its owner logged out: { id, amount, meta }. */
 const FROZEN_WEAPON_ATTRIBUTE = "moons-of-peril:frozen-weapon";
 
 const freeze = () => Common.data.specials.freeze;
@@ -43,7 +43,8 @@ function takeWeapon(fight) {
   const equipment = player.getEquipment();
   const weapon = equipment.getItems()[Equipment.WEAPON_SLOT];
   if (!weapon?.isValid?.() || weapon.getId() <= 0) return false;
-  fight.state.weapon = { id: weapon.getId(), amount: weapon.getAmount() };
+  // The meta comes back with it: a preset weapon (PvP presets) stays a preset copy, a charged one keeps its charges.
+  fight.state.weapon = { id: weapon.getId(), amount: weapon.getAmount(), meta: Item.cloneMeta(weapon.getMeta()) ?? null };
   player.setAttribute(FROZEN_WEAPON_ATTRIBUTE, fight.state.weapon);
   equipment.setItem(Equipment.WEAPON_SLOT, new Item(-1, 0));
   refreshWeapon(player);
@@ -54,14 +55,20 @@ function takeWeapon(fight) {
 function giveWeapon(player, weapon) {
   if (!weapon) return;
   const { Equipment, Item } = Common.core;
-  const item = new Item(weapon.id, weapon.amount ?? 1);
+  const item = new Item(weapon.id, weapon.amount ?? 1, weapon.meta ?? undefined);
   const equipment = player.getEquipment();
   const held = equipment.getItems()[Equipment.WEAPON_SLOT];
-  if (!held?.isValid?.() || held.getId() <= 0) {
+  // A two-handed weapon needs the shield hand free too: one worn since the freeze sends it to the pack instead.
+  const shield = equipment.getItems()[Equipment.SHIELD_SLOT];
+  const handsFull = item.getDefinition?.()?.isDoubleHanded?.() === true && shield?.isValid?.() && shield.getId() > 0;
+  if ((!held?.isValid?.() || held.getId() <= 0) && !handsFull) {
     equipment.setItem(Equipment.WEAPON_SLOT, item);
     refreshWeapon(player);
   } else if (player.getInventory().getFreeSlots() > 0) {
     player.getInventory().add(item);
+  } else if (item.isUnbankable?.()) {
+    // An unbankable copy (a preset) can't go to the bank: it lands at the player's feet instead.
+    player.getInventory().forceAdd(player, item);
   } else {
     player.getBank(0)?.add?.(item);
   }
@@ -457,3 +464,4 @@ module.exports = function attachBlueMoon(api) {
   api.onCanEquip(canEquip);
   api.onPlayerLogin(returnFrozenWeapon);
 };
+module.exports._test = { takeWeapon, giveWeapon, FROZEN_WEAPON_ATTRIBUTE };

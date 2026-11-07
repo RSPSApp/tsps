@@ -18,6 +18,34 @@
  * character, its options and its transcript only appear once the matching
  * varbit says so, so the plugin drives those varbits from the quest stage.
  */
+const STAGE_ANA_ON_CAMP_CART = 25;
+const STAGE_ESCAPED = 26;
+const DRIVER_BRIBE_COINS = 100;
+const DRIVER_INSUFFICIENT_COINS_CONDITION_ID = "UcVjZ2";
+
+// The transcript has separate accepting lines for the riot and the 100-coin offer.
+// Commit on continuing the accepting line: this is the server's dialogue timing,
+// not a claim about the exact OSRS payment tick.
+function handleDriverAgreement(stageOf, advance, driverId, coinsId, event) {
+  if (event.npcId !== driverId || stageOf(event.player) !== STAGE_ANA_ON_CAMP_CART) return;
+  const riot = event.text === "Oh, right... Okay, you'd better jump in the cart then! Quickly!";
+  const bribe = event.text === "Okay, get in the back of the cart then!";
+  if (!riot && !bribe) return;
+  event.after = () => {
+    const player = event.player;
+    if (stageOf(player) !== STAGE_ANA_ON_CAMP_CART) return;
+    if (bribe) {
+      const inventory = player.getInventory();
+      if (inventory.getAmount(coinsId) < DRIVER_BRIBE_COINS) {
+        player.sendMessage("You no longer have enough coins.");
+        return;
+      }
+      inventory.deleteNumber(coinsId, DRIVER_BRIBE_COINS);
+    }
+    advance(player, STAGE_ESCAPED);
+  };
+}
+
 module.exports = function registerTouristTrapQuest(api) {
   const { Skill, Location, Equipment, ItemIdentifiers, NpcIdentifiers } = api.core;
   const { registerQuest, refreshQuestList } = require("../QuestRuntime");
@@ -88,8 +116,6 @@ module.exports = function registerTouristTrapQuest(api) {
   const STAGE_ANA_ON_CART = 22;
   const STAGE_ANA_SENT_UP = 23;
   const STAGE_ANA_SURFACE = 24;
-  const STAGE_ANA_ON_CAMP_CART = 25;
-  const STAGE_ESCAPED = 26;
   const STAGE_RETURNED = 27;
   const STAGE_COMPLETE = 30;
 
@@ -438,7 +464,7 @@ module.exports = function registerTouristTrapQuest(api) {
   }
 
   /** Answer the page's prose conditions. */
-  function answerCondition({ player, npcId, text }) {
+  function answerCondition({ player, npcId, text, stepId }) {
     const known = IRENA_NPC_IDS.has(npcId) || ANA_NPC_IDS.has(npcId) || MALE_SLAVE_NPC_IDS.has(npcId)
       || ESCAPING_SLAVE_NPC_IDS.has(npcId)
       || MINE_GUARD_NPC_IDS.has(npcId)
@@ -446,6 +472,7 @@ module.exports = function registerTouristTrapQuest(api) {
     if (!known) return null;
     const value = String(text).toLowerCase();
     const has = (itemId, amount = 1) => held(player, itemId, amount);
+    if (npcId === MINE_CART_DRIVER_NPC_ID && stepId === DRIVER_INSUFFICIENT_COINS_CONDITION_ID) return !has(COINS_ITEM_ID, DRIVER_BRIBE_COINS);
     if (value.includes("does not have 5 coins")) return !has(COINS_ITEM_ID, 5);
     if (value.includes("has any filled waterskins")) return false;
     if (value.includes("already placed a bet")) return true;
@@ -910,16 +937,6 @@ module.exports = function registerTouristTrapQuest(api) {
     advance(player, STAGE_PROTOTYPE_DART);
   }
 
-  function handleDriverTalk(event) {
-    const { player, npcId } = event;
-    if (npcId !== MINE_CART_DRIVER_NPC_ID) return false;
-    if (stageOf(player) < STAGE_ANA_ON_CAMP_CART) return false;
-    player.sendMessage("The mine cart driver agrees to take you out of the camp.");
-    advance(player, STAGE_ESCAPED);
-    // Let the transcript NPC dialogue play; this hook only records the agreement.
-    return false;
-  }
-
   function migrateLegacyStage(player) {
     if (player.getAttribute(STAGE_VERSION_ATTRIBUTE) === STAGE_VERSION) return;
     if (player.getAttribute(LEGACY_STAGE_VERSION_ATTRIBUTE) === STAGE_VERSION) {
@@ -967,6 +984,7 @@ module.exports = function registerTouristTrapQuest(api) {
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onCustomEvent("npc-dialogue:choice", handleChoice);
+  api.onCustomEvent("npc-dialogue:line", handleDriverAgreement.bind(null, stageOf, advance, MINE_CART_DRIVER_NPC_ID, COINS_ITEM_ID));
   api.onNpcDeath(handleNpcDeath);
   api.onObjectInteraction("Gate", { Open: openCampGate });
   api.onObjectInteraction("Mine door entrance", { Open: openMineDoor });
@@ -982,6 +1000,5 @@ module.exports = function registerTouristTrapQuest(api) {
   api.onItemOnNpc(handleItemOnNpc);
   api.onItemOnObject(handleItemOnObject);
   api.onItemOnItem(handleItemOnItem);
-  api.onNpcInteraction("Mine cart driver", { "Talk-to": handleDriverTalk });
   api.onPlayerLogin(handleLogin);
 };

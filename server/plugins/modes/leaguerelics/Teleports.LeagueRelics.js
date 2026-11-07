@@ -68,13 +68,16 @@ function reach(tile, limit) {
 }
 
 /**
- * Where to land for `location`: the tile itself when it is open floor, else the nearest open tile
+ * Where to land for `location`: preserve an open destination, including small rooms. For a blocked
+ * destination, use the nearest open tile
  * within 4 from which 30 tiles can be walked (a STASH unit, a clue's loc, a bank booth: not the
  * banker's side of the counter), else the open tile that reaches furthest.
  */
 function landing(location) {
   const { RegionManager, Location } = Common.core;
   if (!RegionManager?.blocked || !RegionManager.canMoveIsBlocked) return location;
+  // A small room is a valid destination; a larger component across its walls may be outside.
+  if (!RegionManager.blocked(location, null)) return location;
   let best = null;
   for (let radius = 0; radius <= LANDING_RADIUS; radius++) {
     for (let dx = -radius; dx <= radius; dx++) {

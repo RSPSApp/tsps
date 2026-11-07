@@ -306,6 +306,7 @@ export function decodeServerPacket(data: Uint8Array | ArrayBuffer): DecodedServe
         const ownerIdRaw = reader.readInt();
         const isPrivateRaw = reader.readBoolean();
         const ownershipRaw = reader.readByte();
+        const enabledOps = reader.readByte() & 0x1f;
 
         const createdTick = createdTickRaw >= 0 ? createdTickRaw : undefined;
         const privateUntilTick = privateUntilTickRaw > 0 ? privateUntilTickRaw : undefined;
@@ -330,6 +331,7 @@ export function decodeServerPacket(data: Uint8Array | ArrayBuffer): DecodedServe
             ownerId,
             isPrivate,
             ownership,
+            enabledOps,
         };
     };
 
@@ -725,6 +727,27 @@ export function decodeServerPacket(data: Uint8Array | ArrayBuffer): DecodedServe
                 type: "npc_info",
                 payload: { loopCycle, large, crossFloor, rootTileX, rootTileY, packet },
             };
+        }
+
+        case ServerPacketId.NPC_ANIM_SPECIFIC: {
+            const index = reader.readShort();
+            const id = reader.readShort();
+            return { type: "npc_specific_effect", payload: { kind: "animation", index, id: id === 65535 ? -1 : id, delay: reader.readByte() } };
+        }
+        case ServerPacketId.NPC_SPOTANIM_SPECIFIC: {
+            const index = reader.readShort();
+            const id = reader.readShort();
+            return { type: "npc_specific_effect", payload: { kind: "spot", index, id: id === 65535 ? -1 : id,
+                slot: reader.readByte(), height: reader.readShort(), delay: reader.readShort() } };
+        }
+
+        case ServerPacketId.NPC_HEADICON_SPECIFIC: {
+            const index = reader.readShort();
+            const slot = reader.readByte();
+            const archiveId = reader.readShort();
+            const spriteId = reader.readShort();
+            return { type: "npc_specific_effect", payload: { kind: "headicon", index, slot,
+                archiveId: archiveId === 65535 ? -1 : archiveId, spriteId: spriteId === 65535 ? -1 : spriteId } };
         }
 
         case ServerPacketId.INVENTORY_SNAPSHOT: {
@@ -1430,6 +1453,9 @@ export function decodeServerPacket(data: Uint8Array | ArrayBuffer): DecodedServe
         // BANK
         // ========================================
 
+        case ServerPacketId.INVENTORY_STOP_TRANSMIT:
+            return { type: "widget", payload: { action: "inventory_stop_transmit", inventoryId: reader.readShort() } };
+
         case ServerPacketId.BANK_SNAPSHOT: {
             const capacity = reader.readShort();
             const count = reader.readShort();
@@ -1693,6 +1719,32 @@ export function decodeServerPacket(data: Uint8Array | ArrayBuffer): DecodedServe
             return { type: "reset_interaction_mode", payload: { worldId: reader.readSignedShort() } };
         }
 
+        case ServerPacketId.HIDE_NPC_OPS: {
+            return { type: "hide_npc_ops", payload: { hidden: (reader.readByte() & 0xff) !== 0 } };
+        }
+
+        case ServerPacketId.HIDE_OBJ_OPS: {
+            return { type: "hide_obj_ops", payload: { hidden: (reader.readByte() & 0xff) !== 0 } };
+        }
+
+        case ServerPacketId.LOC_MERGE: {
+            const locId = reader.readShort();
+            const tile = { x: reader.readShort(), y: reader.readShort() };
+            const level = reader.readByte();
+            const shapeRot = reader.readByte();
+            const playerIndex = reader.readShort();
+            const start = reader.readShort();
+            const end = reader.readShort();
+            const minX = (reader.readByte() << 24) >> 24;
+            const minZ = (reader.readByte() << 24) >> 24;
+            const maxX = (reader.readByte() << 24) >> 24;
+            const maxZ = (reader.readByte() << 24) >> 24;
+            return { type: "loc_merge", payload: {
+                locId, tile, level, shape: shapeRot >> 2, rotation: shapeRot & 3,
+                playerIndex, start, end, minX, minZ, maxX, maxZ,
+            } };
+        }
+
         case ServerPacketId.LOC_ANIM: {
             const locId = reader.readShort();
             const tile = { x: reader.readShort(), y: reader.readShort() };
@@ -1764,6 +1816,13 @@ export function decodeServerPacket(data: Uint8Array | ArrayBuffer): DecodedServe
                 const easing = CAMERA_EASINGS[reader.readByte()];
                 if (!easing) return null;
                 return { type: "camera", payload: { mode: "rotate", pitch, yaw, cycles, easing } };
+            }
+            if (mode === 13) {
+                const x = reader.readShort(), y = reader.readShort(), height = reader.readSignedShort();
+                const cycles = reader.readShort(), easing = CAMERA_EASINGS[reader.readByte()];
+                reader.readByte(); // Reserved flags: coordinate rotations use absolute, fixed endpoints.
+                if (!easing) return null;
+                return { type: "camera", payload: { mode: "rotate_coordinate", x, y, height, cycles, easing } };
             }
             if (mode === 11) {
                 const centreX = reader.readShort(), centreY = reader.readShort(), x = reader.readShort(), y = reader.readShort();

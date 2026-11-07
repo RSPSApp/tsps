@@ -221,7 +221,11 @@ function capeAction(event) {
       player.sendMessage("You need to unlock every non-holiday music track to use the music cape.");
       return;
     }
-    core.TeleportHandler.teleport(player, new core.Location(2689, 3550, 0), core.TeleportType.NORMAL, false);
+    // The usual teleport checks, as the other skill capes make (Common.SkillCapes teleport): Wilderness level,
+    // teleblock, busy, and the area's and plugins' own refusals (jail, instances, duels).
+    const destination = new core.Location(2689, 3550, 0);
+    if (!core.TeleportHandler.checkReqs(player, destination)) return;
+    core.TeleportHandler.teleport(player, destination, core.TeleportType.NORMAL, false);
   } else if (option === (itemId === core.ItemIdentifiers.MUSIC_CAPE ? "trim" : "untrim")) {
     event.handled = true;
     if (!core.WorldDefinition.isMembersWorld()) return;

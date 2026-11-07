@@ -233,8 +233,14 @@ function roomComplete(raid) {
     if(raid.bmrIndex===BMR_ENCOUNTERS.length-1)api.emitCustomEvent("tob:bmr-completed",{player:raid.player});
   }
 }
+/** The bandages are the Theatre's own supplies (Wiki: neither tradeable nor bankable): they stay behind. */
+function removeBandages(player) {
+  const bandages=player.getInventory().getAmount(core.ItemIdentifiers.BANDAGES_4);
+  if(bandages>0)player.getInventory().delete(core.ItemIdentifiers.BANDAGES_4,bandages);
+}
 function leave(raid, teleport=true) {
   RAIDS.delete(raid.player);
+  removeBandages(raid.player);
   clearRoom(raid);
   raid.player.getMovementQueue().setBlockMovement(false);
   raid.player.getArea()?.leave(raid.player,false);
@@ -583,7 +589,7 @@ function createArea() {
       return null;
     }
     canTeleport(){return false;}
-    postLeave(mobile,logout){if(mobile.isPlayer?.()){const raid=RAIDS.get(mobile.getAsPlayer());if(raid){RAIDS.delete(raid.player);clearRoom(raid);raid.player.getMovementQueue().setBlockMovement(false);}}super.postLeave(mobile,logout);}
+    postLeave(mobile,logout){if(mobile.isPlayer?.()){const raid=RAIDS.get(mobile.getAsPlayer());if(raid){RAIDS.delete(raid.player);clearRoom(raid);raid.player.getMovementQueue().setBlockMovement(false);removeBandages(raid.player);}}super.postLeave(mobile,logout);}
   })();
 }
 function enter({player,objectId}) {

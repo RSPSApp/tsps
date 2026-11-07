@@ -23,7 +23,7 @@
  * the uncharged staff into 10,000 demon tears, after a Yes / No.
  */
 
-const { definePoweredStaff, refundsFit, distance, ticksFor } = require("./PoweredStaff");
+const { definePoweredStaff, refundsFit, restricted, plainAmount, takePlain, PRESET_TEXT, distance, ticksFor } = require("./PoweredStaff");
 
 const CHARGES_KEY = "eye-of-ayak-charges";
 const MATERIAL_KEY = "eye-of-ayak-charge-material";
@@ -135,14 +135,17 @@ function materialOf(item) {
   return staff.chargesOf(item) > 0 ? (item.getMetaValue(MATERIAL_KEY) ?? null) : null;
 }
 
-/** How many charges the inventory pays for in one material. */
-function affordable(player, material) {
-  const inventory = player.getInventory();
+/**
+ * How many charges the inventory pays for in one material. Only unrestricted copies pay: a preset
+ * (untradeable, unbankable) rune or tear never becomes a charge, since Uncharge refunds plain items.
+ * `count` defaults to that plain count; the raw count tells a preset-only inventory apart.
+ */
+function affordable(player, material, count = (id) => plainAmount(player.getInventory(), id)) {
   const I = ids();
-  if (material === TEARS) return inventory.getAmount(I.DEMON_TEAR);
+  if (material === TEARS) return count(I.DEMON_TEAR);
   return Math.min(
-    Math.floor(inventory.getAmount(I.DEATH_RUNE) / DEATH_RUNES_PER_CHARGE),
-    Math.floor(inventory.getAmount(I.CHAOS_RUNE) / CHAOS_RUNES_PER_CHARGE),
+    Math.floor(count(I.DEATH_RUNE) / DEATH_RUNES_PER_CHARGE),
+    Math.floor(count(I.CHAOS_RUNE) / CHAOS_RUNES_PER_CHARGE),
   );
 }
 
@@ -150,11 +153,11 @@ function pay(player, material, charges) {
   const inventory = player.getInventory();
   const I = ids();
   if (material === TEARS) {
-    inventory.deleteNumber(I.DEMON_TEAR, charges);
+    takePlain(inventory, I.DEMON_TEAR, charges);
     return;
   }
-  inventory.deleteNumber(I.DEATH_RUNE, charges * DEATH_RUNES_PER_CHARGE);
-  inventory.deleteNumber(I.CHAOS_RUNE, charges * CHAOS_RUNES_PER_CHARGE);
+  takePlain(inventory, I.DEATH_RUNE, charges * DEATH_RUNES_PER_CHARGE);
+  takePlain(inventory, I.CHAOS_RUNE, charges * CHAOS_RUNES_PER_CHARGE);
 }
 
 /** The material a charge would use: what it already holds, else tears before runes. */
@@ -181,6 +184,13 @@ function chargeEye(player, item, preferred = null) {
   }
   const most = Math.min(room, affordable(player, material));
   if (most <= 0) {
+    const raw = (id) => player.getInventory().getAmount(id);
+    // Only preset copies held: of this material, or (nothing chosen yet) of demon tears, which the
+    // fallback to runes would otherwise hide.
+    if (affordable(player, material, raw) > 0 || (!held && !preferred && affordable(player, TEARS, raw) > 0)) {
+      player.sendMessage(PRESET_TEXT);
+      return true;
+    }
     player.sendMessage("You need at least one chaos rune and two death runes or one demon tear in order to charge the Eye of Ayak.");
     return true;
   }
@@ -215,6 +225,12 @@ function chargeWithItem(event) {
   if (!item) return;
   const I = ids();
   const other = Number(item === usedItem ? usedWithItemId : usedItemId);
+  if ((other === I.DEMON_TEAR || other === I.DEATH_RUNE || other === I.CHAOS_RUNE)
+    && restricted(item === usedItem ? usedWithItem : usedItem)) {
+    player.sendMessage(PRESET_TEXT);
+    event.handled = true;
+    return;
+  }
   if (other === I.DEMON_TEAR) {
     event.handled = chargeEye(player, item, TEARS);
   } else if (other === I.DEATH_RUNE || other === I.CHAOS_RUNE) {
@@ -317,6 +333,7 @@ module.exports = {
     core = pluginApi.core;
     staff = defineEye();
     pluginApi.registerCombatMethodResolver(staff.resolver);
+    pluginApi.onCustomEvent("item:fill-charges", staff.fillCharges);
     pluginApi.onCustomEvent("powered-staff:spell", staff.answerSpell);
     pluginApi.onItemAction("Eye of Ayak", { Check: checkCharges, Uncharge: uncharge });
     pluginApi.onItemAction("Eye of Ayak (uncharged)", { Charge: chargeOption, Dismantle: dismantle });

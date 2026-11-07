@@ -11,6 +11,7 @@
 //   [--check-mobile-combat-hud 1] (mobile client in Wilderness; checks rotation and captures each layout)
 //   [--check-responsive-gameframe 1] (desktop login, narrow/portrait windows keep the desktop layout)
 //   [--check-responsive-mobile-start 1] (phone-emulated login, disable emulation, then repeat resize switches)
+//   [--check-npc-specific-effects 1] (Vale Totems developer scene; native ::entvisit, records real received effects)
 // VISION_CHROME_FLAGS is an optional JSON array for software rendering in CI.
 // --url defaults to this worktree's client (PORT in the root .env, see
 // docs/worktrees.md), then http://localhost:3000; VISION_CLIENT_URL overrides.
@@ -85,10 +86,10 @@ function freePort() {
 }
 
 // Kill only browsers this harness launched, identified by their unique
-// --user-data-dir (mkdtemp temp profile, prefix vision-cap-). Never touches
+// --user-data-dir (mkdtemp profile unique to this invocation). Never touches
 // other Chrome/Edge processes: the user's own windows keep running, even if
 // they spawn tabs mid-capture. (A blanket PID-diff kill used to catch them.)
-const PROFILE_MARKER = "vision-cap-";
+const PROFILE_MARKER = `vision-cap-${process.pid}-`;
 
 function killOurBrowserProcesses() {
   if (process.platform !== "win32") return;
@@ -182,7 +183,7 @@ const SMOOTHING_JS = `((pm) => pm.getPlugins().find((p) => pm.getDescriptor(p).n
 // SwiftShader.
 async function tryBrowser(bin, viewport, budgetMs, targetHref) {
   const debugPort = await freePort();
-  const profile = fs.mkdtempSync(path.join(os.tmpdir(), "vision-cap-"));
+  const profile = fs.mkdtempSync(path.join(os.tmpdir(), PROFILE_MARKER));
   const proc = spawn(bin, [
     "--headless=new", "--no-first-run", "--no-default-browser-check",
     "--mute-audio", "--hide-scrollbars",
@@ -271,7 +272,7 @@ async function main() {
 
     const candidates = findBrowsers();
     if (candidates.length === 0) throw new Error("no Chromium found (set VISION_CHROME_PATH)");
-    // Reap stale harness browsers from earlier (crashed) runs before probing.
+    // Reap only this invocation's prior browser candidates before probing.
     killOurBrowserProcesses();
     const tried = [];
     let cdp = null;
@@ -341,6 +342,10 @@ async function main() {
       await sleep(Number(arg("settle-ms", "1500")));
     } else {
       await sleep(Number(arg("settle-ms", "2500")));
+    }
+
+    if (arg("check-npc-specific-effects", "0") === "1") {
+      summary.npcSpecificEffects = await checkNpcSpecificEffects(cdp, out, deadline);
     }
 
     const crossFloorPlayer = arg("check-cross-floor-player", null);
@@ -836,6 +841,144 @@ async function main() {
   summary.ms = Date.now() - started;
   console.log(JSON.stringify(summary));
   process.exit(summary.ok ? 0 : 1);
+}
+
+async function checkNpcSpecificEffects(cdp, out, deadline) {
+  await cdp.evaluate(`(() => {
+    const c = ${CLIENT_JS}, r = c.renderer, ecs = c.npcEcs;
+    const manager = r.actors?.gfx?.manager ?? r.gfxManager;
+    const data = { events: [], keys: [], outgoing: [], started: performance.now() };
+    const socketSend = WebSocket.prototype.send;
+    WebSocket.prototype.send = function(payload) {
+      const bytes = payload instanceof ArrayBuffer ? new Uint8Array(payload) : ArrayBuffer.isView(payload)
+        ? new Uint8Array(payload.buffer, payload.byteOffset, payload.byteLength) : null;
+      data.outgoing.push({ ms: performance.now()-data.started, bytes:bytes?.length ?? null,
+        commandText:bytes ? new TextDecoder().decode(bytes).includes("entvisit") : String(payload).includes("entvisit") });
+      return socketSend.call(this, payload);
+    };
+    const sequence = ecs.handleServerSequence, spot = r.registerNpcSpotAnimation;
+    ecs.handleServerSequence = function(index, id, delay, cycle) {
+      const serverId = this.getServerId(index);
+      data.events.push({ kind: "animation", serverId, id, delay, cycle, ms: performance.now() - data.started,
+        typeId: this.getNpcTypeId(index), mapped: this.getEcsIdForServer(serverId) === index });
+      return sequence.apply(this, arguments);
+    };
+    r.registerNpcSpotAnimation = function(event) {
+      const result = spot.call(this, event), index = ecs.getEcsIdForServer(event.npcServerId);
+      data.events.push({ kind: "spot", ...event, ms: performance.now() - data.started, mapped: index !== undefined,
+        typeId: index === undefined ? null : ecs.getNpcTypeId(index),
+        slots: manager ? [...manager.getActorInstances("npc", event.npcServerId)].map(s => ({slot:s.slot,id:s.spotId,startCycle:s.startCycle})) : [] });
+      return result;
+    };
+    const keyListener = event => data.keys.push({ key: event.key, trusted: event.isTrusted });
+    const canvas = r.canvas;
+    canvas.addEventListener("keydown", keyListener, true);
+    canvas.focus();
+    data.restore = () => { ecs.handleServerSequence = sequence; r.registerNpcSpotAnimation = spot;
+      WebSocket.prototype.send = socketSend;
+      canvas.removeEventListener("keydown", keyListener, true); };
+    window.__npcSpecificEffectCapture = data;
+  })()`);
+  const captures = [];
+  const states = [];
+  const attempts = [];
+  const snapshot = async label => {
+    const value = await cdp.evaluate(`(() => {
+      const c = ${CLIENT_JS};
+      return { input:c.varManager?.getVarcString(335), root:c.widgetManager?.rootInterface,
+        inputDialogType:c.cs2Vm?.inputDialogType, inputDialogString:c.cs2Vm?.inputDialogString,
+        focus:document.activeElement?.tagName,
+        messages:window.__chatHistory?.getAllMessageNodes().slice(-12).map(m => ({uid:m.uid,type:m.type,text:m.text})) ?? [] };
+    })()`);
+    states.push({ label, ...value });
+    return value;
+  };
+  const capture = async label => {
+    const file = out
+      ? path.join(path.dirname(path.resolve(out)), path.basename(out, path.extname(out)) + "-" + label + ".png")
+      : path.join(os.tmpdir(), "npc-specific-effects-" + Date.now() + "-" + label + ".png");
+    const shot = await cdp.send("Page.captureScreenshot", { format: "png" });
+    if (!shot.result?.data) throw new Error("NPC effects screenshot returned no pixels");
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, Buffer.from(shot.result.data, "base64"));
+    captures.push({ label, file });
+  };
+  try {
+    await snapshot("before");
+    await capture("npc-before");
+    let successfulAttempt;
+    // A legitimate roll can retain the same three species. Retry only a newly
+    // acknowledged visit with no effect events, without changing RNG or state.
+    for (let attempt = 1; attempt <= 5 && Date.now() < deadline; attempt++) {
+      const before = await snapshot("attempt-" + attempt + "-before");
+      if (before.input !== "") throw new Error("native chat draft was not empty before command");
+      const ackBaseline = Math.max(-1, ...before.messages.map(message => message.uid));
+      const eventBaseline = await cdp.evaluate("window.__npcSpecificEffectCapture.events.length");
+      const entry = { attempt, eventBaseline, ackUid: null, effectEvents: 0, spots: 0 };
+      attempts.push(entry);
+      // Keyboard events enter through the real canvas/chat input path.
+      for (const char of "::entvisit") {
+        const code = char === ":" ? "Semicolon" : "Key" + char.toUpperCase();
+        const keyCode = char === ":" ? 186 : char.toUpperCase().charCodeAt(0);
+        const key = { key: char, code, windowsVirtualKeyCode: keyCode, nativeVirtualKeyCode: keyCode,
+          modifiers: char === ":" ? 8 : 0 };
+        await cdp.send("Input.dispatchKeyEvent", { type: "keyDown", ...key, text: char });
+        await cdp.send("Input.dispatchKeyEvent", { type: "keyUp", ...key });
+      }
+      const typed = await snapshot("attempt-" + attempt + "-typed");
+      if (typed.input !== "::entvisit") throw new Error("native command draft was not preserved exactly");
+      await cdp.send("Input.dispatchKeyEvent", { type: "keyDown", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13 });
+      await cdp.send("Input.dispatchKeyEvent", { type: "keyUp", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13 });
+      const stopAt = Math.min(deadline, Date.now() + 6000);
+      let spotsSeen = 0;
+      while (Date.now() < stopAt) {
+        const observed = await cdp.evaluate(`(() => {
+          const events = window.__npcSpecificEffectCapture.events.slice(${eventBaseline});
+          const ack = window.__chatHistory?.getAllMessageNodes().find(message => message.uid > ${ackBaseline}
+            && message.text === "The ents visit every totem site.");
+          return { ackUid:ack?.uid ?? null, effectEvents:events.length,
+            spots:events.filter(event => event.kind === "spot" && event.slot === 2).length };
+        })()`);
+        Object.assign(entry, observed);
+        if (entry.spots > spotsSeen && captures.length < 4) {
+          await capture("npc-attempt-" + attempt + "-effects-" + entry.spots);
+          spotsSeen = entry.spots;
+        }
+        await sleep(75);
+      }
+      await snapshot("attempt-" + attempt + "-after");
+      if (entry.ackUid === null) throw new Error("native entvisit had no fresh server acknowledgement");
+      if (entry.spots > 0) { successfulAttempt = entry; break; }
+      if (entry.effectEvents > 0) throw new Error("acknowledged visit produced effects but no rendered slot2 graphic");
+    }
+    if (!successfulAttempt) throw new Error("no rendered spirit transition within five acknowledged native visits or the QA deadline");
+    const result = await cdp.evaluate(`(() => {
+      const data = window.__npcSpecificEffectCapture;
+      const r = ${CLIENT_JS}.renderer;
+      return { backend:r.constructor.name, events:data.events, keys:data.keys, outgoing:data.outgoing, frames:r.stats?.frameCount,
+        graphicsErrors:[], glError:(r.gl ?? r.app?.gl)?.getError?.() ?? 0 };
+    })()`);
+    result.graphicsErrors = [...cdp.graphicsErrors].slice(0, 10);
+    await snapshot("after");
+    await capture("npc-after");
+    result.states = states;
+    result.attempts = attempts;
+    result.captures = captures;
+    if (!result.keys.some(key => key.key === "Enter" && key.trusted)) throw new Error("native chat Enter was not observed");
+    const spots = result.events.slice(successfulAttempt.eventBaseline).filter(event => event.kind === "spot" && event.slot === 2);
+    if (spots.length === 0) throw new Error("native entvisit produced no rendered slot2 effects: " + JSON.stringify(result));
+    if (spots.some(event => !event.mapped || !event.slots.some(slot => slot.slot === 2 && slot.id === event.spotId))) {
+      throw new Error("a received spirit spot did not reach its mapped renderer slot: " + JSON.stringify(result));
+    }
+    if (result.glError || result.graphicsErrors.length) throw new Error("NPC effects graphics error: " + JSON.stringify(result));
+    return result;
+  } catch (error) {
+    await snapshot("failed");
+    await capture("npc-failed");
+    throw new Error(String(error?.message ?? error) + "; input/capture state: " + JSON.stringify({ attempts, states, captures }));
+  } finally {
+    await cdp.evaluate("window.__npcSpecificEffectCapture?.restore(); delete window.__npcSpecificEffectCapture;");
+  }
 }
 
 async function waitForTab(port, budgetMs) {

@@ -81,7 +81,7 @@ export class InventorySetupsPlugin extends Plugin {
     protected async startUp(): Promise<void> {
         this.unsubscribers.push(this.client.inventory.subscribe(() => this.commit()));
         this.unsubscribers.push(this.client.equipment.subscribe(() => this.commit()));
-        this.unsubscribers.push(this.client.bankInventory.subscribe(() => this.commit()));
+        this.unsubscribers.push(this.client.lastKnownBank.subscribe(() => this.commit()));
         const bankGroupId = Bankmain.ITEMS >>> 16;
         const onGroupLoaded = (groupId: number) => { if (groupId === bankGroupId) this.commit(); };
         const onInterfaceClosed = (groupId: number) => { if (groupId === bankGroupId) this.commit(); };
@@ -123,7 +123,7 @@ export class InventorySetupsPlugin extends Plugin {
 
     getBankCounts(): Map<number, number> {
         const counts = new Map<number, number>();
-        for (const slot of this.client.bankInventory.getSlots()) {
+        for (const slot of this.client.lastKnownBank.getSlots()) {
             if (slot.itemId < 0 || slot.quantity <= 0) continue;
             counts.set(slot.itemId, (counts.get(slot.itemId) ?? 0) + slot.quantity);
         }

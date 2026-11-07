@@ -124,6 +124,15 @@ function defineDoorData({ ObjectIdentifiers: O }) {
     [O.LARGE_DOOR_11, O.LARGE_DOOR_14],
     [O.DOOR_180, O.DOOR_181],
     [O.DOOR_499, O.DOOR_498],
+    // Games Room experienced variants share the ordinary elf door's reverse
+    // open leaf (active rev241 cache; pinned Games Room reference next_loc_stage).
+    [O.DOOR_129, O.DOOR_132],
+    [O.DOOR_130, O.DOOR_132],
+    // Runeversi's ordinary same-tile counterpart is elfdoor_reverse at the
+    // exact coordinates on plane 0; the experienced cache variant shares it.
+    [O.DOOR_271, O.DOOR_132],
+    // RuneSquares experienced room: same close-only leaf as the normal room.
+    [O.DOOR_272, O.DOOR_132],
     // Vitur clothing-shop door is a transformed 61840 parent whose visible closed/open
     // children are 61842/61843. The unnamed parent cannot be catalogued by its cache name.
     [O.DOOR_837, O.DOOR_838],
@@ -159,7 +168,7 @@ function defineDoorData({ ObjectIdentifiers: O }) {
   // 21403/21405 at 2413,3797 face 3 open as 21404/21406 face 2/0 on the same tiles).
   // Yanille's south entrance door has blocked floor immediately west of the doorway, so its
   // map-backed open pose turns on the closed tile instead of swinging into that wall.
-  OWN_TILE_DOOR_IDS = new Set([O.GATE_155, O.GATE_157, O.DOOR_287]);
+  OWN_TILE_DOOR_IDS = new Set([O.GATE_155, O.GATE_157, O.DOOR_287, O.DOOR_129, O.DOOR_130, O.DOOR_271, O.DOOR_272]);
 
   // Tree Gnome Stronghold main gate: one 5x2 loc (190, face 2) opens into two
   // nameless 2x2 leaves (191/192), leaving the centre tile clear.
@@ -865,6 +874,21 @@ function resolveClosedId(objectId) {
   return closedId ?? null;
 }
 
+// Several closed variants can share one open cache loc. The live leaf's full
+// identity identifies its retained original; the cache reverse map alone cannot.
+function currentSingleDoorState(object, privateArea) {
+  if (object.getOwner?.()) return null;
+  for (const state of OPEN_OBJECT_STATES.values()) {
+    if (state.closed?.length !== 1 || state.current?.length !== 1) continue;
+    const current = state.current[0];
+    if ((current.privateArea ?? null) === privateArea
+        && current.id === object.getId() && current.type === object.getType()
+        && current.face === object.getFace()
+        && locationKey(current.location) === locationKey(object.getLocation())) return state;
+  }
+  return null;
+}
+
 function findOpenDoorState(closedId, location, privateArea) {
   const directKey = doorStateKey(locationKey(location), privateArea);
   const direct = OPEN_OBJECT_STATES.get(directKey);
@@ -1167,12 +1191,13 @@ function handleMappedDoor(player, object, objectId, location) {
 
   const visibleObjectId = core.ObjectDefinition?.forPlayer?.(object.getId?.() ?? objectId, player)?.id
     ?? objectId;
-  const closedId = resolveClosedId(visibleObjectId);
+  const privateArea = player?.getPrivateArea?.() ?? null;
+  const tracked = currentSingleDoorState(object, privateArea);
+  const closedId = tracked ? (tracked.closedId ?? tracked.closed[0].id) : resolveClosedId(visibleObjectId);
   if (closedId == null) {
     return false;
   }
 
-  const privateArea = player?.getPrivateArea?.() ?? null;
   const [anchorKey, existingState] = findOpenDoorState(closedId, location, privateArea);
   const activeObject = existingState?.current?.[0]
     ? objectFromSnapshot(existingState.current[0], privateArea)

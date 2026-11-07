@@ -6,6 +6,9 @@ const path = require('node:path');
 const { test } = require('node:test');
 
 const modulePath = require.resolve('../dist/game/definition/WorldDefinition');
+// Load runtime dependencies before the fixture switches to a minimal data directory.
+const { PluginManager } = require('../dist/plugins/PluginManager');
+const { CrossFloor } = require('../dist/game/CrossFloor');
 const shipped = {
   spawn: { x: 3222, y: 3219, z: 0 },
   zones: [{ tags: [] }],
@@ -27,9 +30,12 @@ function loadWorld(local) {
     process.chdir(directory);
     delete require.cache[modulePath];
     const world = require(modulePath);
-    return { config: world.readWorldConfig(), definition: world.getWorldDefinition() };
+    PluginManager.pluginConfigCache = undefined;
+    return { config: world.readWorldConfig(), definition: world.getWorldDefinition(),
+      crossFloor: [CrossFloor.enabled(), CrossFloor.combatEnabled()] };
   } finally {
     process.chdir(cwd);
+    PluginManager.pluginConfigCache = undefined;
     delete require.cache[modulePath];
     fs.rmSync(directory, { recursive: true, force: true });
   }
@@ -51,4 +57,10 @@ test('world.local.json replaces top-level keys and merges pluginConfig and plugi
   assert.deepEqual(definition.plugins, { TutorialIsland: true, PvpMode: false });
   assert.deepEqual(config.pluginConfig, { a: 1, b: 3 });
   assert.deepEqual(definition.spawn, shipped.spawn, 'keys it does not set stay as shipped');
+});
+
+test('cross-floor options are read from the real layered world configuration', () => {
+  assert.deepEqual(loadWorld({ pluginConfig: { 'CrossFloor:visibility': true, 'CrossFloor:combat': true } }).crossFloor, [true, true]);
+  assert.deepEqual(loadWorld({ pluginConfig: { 'CrossFloor:visibility': true, 'CrossFloor:combat': false } }).crossFloor, [true, false]);
+  assert.deepEqual(loadWorld({ pluginConfig: { 'CrossFloor:visibility': false, 'CrossFloor:combat': true } }).crossFloor, [false, false]);
 });

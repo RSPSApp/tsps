@@ -117,6 +117,21 @@ function refuseFood(event) {
   event.player.sendMessage(Common.message("lastStandNoFood"));
 }
 
+/**
+ * A logout mid-stand stops its drain task, and the save keeps current levels: the boosts are settled to where the
+ * drain ends (base + 15) first, so nobody logs back in at 255.
+ */
+function settleOnLogout({ player }) {
+  const stand = stands.get(player);
+  if (!stand) return;
+  const manager = player.getSkillManager();
+  for (const skill of stand.boosted) {
+    const floor = manager.getMaxLevel(skill) + effect.drainFloorAboveBase;
+    if (manager.getCurrentLevel(skill) > floor) manager.setCurrentLevel(skill, floor, true);
+  }
+  stands.delete(player);
+}
+
 /** A real death ends the cooldown (Wiki). */
 function death({ player }) {
   if (Number(player?.getAttribute?.(READY_AT_ATTRIBUTE)) > 0) player.setAttribute(READY_AT_ATTRIBUTE, 0);
@@ -132,4 +147,5 @@ module.exports = function attach(pluginApi) {
   api.onPlayerDealtDamage(dealtDamage);
   api.onCanEat(refuseFood);
   api.onPlayerDeath(death);
+  api.onPlayerLogout(settleOnLogout);
 };

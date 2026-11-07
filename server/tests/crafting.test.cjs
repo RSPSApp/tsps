@@ -66,6 +66,8 @@ function playerWith(entries = [], { level = 99, threadUses } = {}) {
     contains: id => (amounts.get(id) ?? 0) > 0,
     getAmount: id => amounts.get(id) ?? 0,
     deleteNumber: (id, amount) => amounts.set(id, Math.max(0, (amounts.get(id) ?? 0) - amount)),
+    // By slot, as a real container: the slot's item, from the same view getItems gives.
+    deleteAtSlot: (slot, amount) => { const item = inventory.getItems()[slot]; if (item) inventory.deleteNumber(item.getId(), amount); },
     addItem: item => amounts.set(item.id, (amounts.get(item.id) ?? 0) + item.getAmount()),
     adds: (id, amount = 1) => amounts.set(id, (amounts.get(id) ?? 0) + amount),
     getItems: () => {
@@ -921,5 +923,258 @@ test("native furnace silver-bolt batches conserve inputs at output stack limits"
     for(let i=0;i<5;i++)turn();
     assert.equal(inv.getAmount(ids.GOLD_BAR),0);assert.equal(inv.getAmount(ids.GOLD_RING),1);assert.equal(inv.getAmount(ids.RING_MOULD),1);
     assert.equal(p.getAttribute(Shared.CRAFTING_TASK_ATTRIBUTE),null);
+  });
+  await t.test("a selected costume needle works even when an ordinary needle is also carried", async t => {
+    const { CREATION_MENU_GROUP_ID, CREATION_MENU_FIRST_ITEM_COMPONENT } = require("../dist/net/packet/PacketSender");
+    assert.equal(CREATION_MENU_GROUP_ID,270);
+    assert.equal(ids.NEEDLE,1733); assert.equal(ids.COSTUME_NEEDLE,29920);
+    assert.equal(ids.LEATHER,1741); assert.equal(ids.LEATHER_BOOTS,1061);
+    const recipe=Shared.DATA.leather.LEATHER.find(r=>r.item==="LEATHER_BOOTS");
+    assert.ok(recipe); assert.equal(recipe.level,7); assert.equal(recipe.leather,1); assert.equal(recipe.xp,16.25);
+    for (const [mode,entries,chosen,expected] of [
+      ["costume only",[[ids.COSTUME_NEEDLE,1],[ids.LEATHER,1]],ids.COSTUME_NEEDLE,true],
+      ["ordinary needle and thread",[[ids.NEEDLE,1],[ids.THREAD,1],[ids.LEATHER,1]],ids.NEEDLE,true],
+      ["ordinary needle without thread",[[ids.NEEDLE,1],[ids.LEATHER,1]],ids.NEEDLE,false],
+      ["selected costume with both needles",[[ids.NEEDLE,1],[ids.COSTUME_NEEDLE,1],[ids.LEATHER,1]],ids.COSTUME_NEEDLE,true],
+    ]) await t.test(mode,async t=>{
+      const channel={kind:"test",remoteAddress:"127.0.0.1",isOpen:()=>true,send:()=>true,close(){},onData(){},onError(){},onClose(){}};
+      const p=new Player(new PlayerSession(channel));p.setIndex(index++);p.setUsername("leathertool"+index);p.setRegistered(true);p.setLocation(new core.Location(3226,3218,0));p.needsPlacement=false;
+      const c=new ClientConnection(channel),inv=p.getInventory(),skill=p.getSkillManager(),craft=core.Skill.CRAFTING;c.player=p;
+      t.after(()=>{Shared.stopCrafting(p);PluginManager.emitPlayerDisconnect({player:p,username:p.getUsername()});PluginManager.emitPlayerLogout({player:p,username:p.getUsername()});p.setRegistered(false);core.TaskManager.cancelTasks(p.getIndex());core.TaskManager.cancelTasks(p);});
+      skill.setCurrentLevel(craft,99,false).setMaxLevels(craft,99,false).setExperience(craft,core.SkillManager.getExperienceForLevel(99));
+      assert.equal(skill.getCurrentLevel(craft),99);assert.equal(skill.getMaxLevel(craft),99);
+      for(const [id,n] of entries)inv.add(new core.Item(id,n),false);
+      for(const [id,n] of entries){assert.equal(inv.getAmount(id),n);const def=core.ItemDefinition.forId(id);assert.ok(def.getName());assert.equal(def.isNoted(),false);}
+      assert.equal(p.getEquipment().getItems().some(i=>i&&i.getId()>0),false);
+      assert.equal(inv.getAmount(ids.THREAD),mode==="ordinary needle and thread"?1:0,"thread state before using the needle");
+      assert.notEqual(PluginManager.emitCanUseItem(p,chosen,"use"),false);assert.notEqual(PluginManager.emitCanUseItem(p,ids.LEATHER,"use"),false);
+      const initialXp=skill.getExperience(craft),initialUses=p.getAttribute("crafting:thread-uses")??0;assert.equal(initialUses,0);
+      const slot=inv.getSlotForItemId(chosen),target=inv.getSlotForItemId(ids.LEATHER);assert.ok(slot>=0&&target>=0&&slot!==target);
+      assert.equal(inv.getItems()[slot].getId(),chosen);assert.equal(inv.getItems()[target].getId(),ids.LEATHER);
+      assert.equal(inv.getItems()[slot].getMeta(),null);assert.match(core.ItemDefinition.forId(chosen).getName(),chosen===ids.COSTUME_NEEDLE?/^costume needle$/i:/^needle$/i);
+      let turns=0;const turn=()=>{assert.ok(++turns<=16);p.resetUpdating();core.World.processCycle=(core.World.processCycle+1)&0x7fffffff;core.TaskManager.process();c.processTurnPackets();const q=p.getMovementQueue();q.beginCycle();q.processEntityPursuit();if(q.hasPendingWork())q.process();core.TaskManager.processWalkTo(p.getIndex());};
+      await c.dispatch([{type:"inventory_use_on",slot,itemId:chosen,target:{kind:"inventory",slot:target,itemId:ids.LEATHER}}]);turn();
+      const menu=p.getCreationMenu();
+      if(!expected){assert.ok(!menu,"ordinary needle requires thread");assert.equal(inv.getAmount(ids.LEATHER),1);assert.equal(inv.getAmount(ids.LEATHER_BOOTS),0);assert.equal(skill.getExperience(craft),initialXp);return;}
+      assert.ok(menu,"native item-on-item opens the leather make menu");const child=menu.getItems().indexOf(ids.LEATHER_BOOTS);assert.ok(child>=0);
+      assert.equal(inv.getAmount(ids.LEATHER),1);assert.equal(inv.getAmount(ids.LEATHER_BOOTS),0);
+      await c.dispatch([{type:"dialogue_continue",widgetId:(CREATION_MENU_GROUP_ID<<16)|(CREATION_MENU_FIRST_ITEM_COMPONENT+child),childIndex:1}]);turn();
+      for(let i=0;i<5;i++)turn();
+      assert.equal(inv.getAmount(ids.LEATHER_BOOTS),1,"selected needle must produce the requested leather boots");
+      assert.equal(inv.getAmount(ids.LEATHER),0);assert.equal(inv.getAmount(chosen),1);
+      if(mode==="selected costume with both needles")assert.equal(inv.getAmount(ids.NEEDLE),1);
+      assert.equal(inv.getAmount(ids.THREAD),mode==="ordinary needle and thread"?1:0);
+      assert.equal(p.getAttribute("crafting:thread-uses")??0,mode==="ordinary needle and thread"?1:0);
+      assert.ok(skill.getExperience(craft)>initialXp);assert.equal(skill.getCurrentLevel(craft),99);assert.equal(skill.getMaxLevel(craft),99);
+    });
+  });
+  await t.test("a carried Imcando hammer works for a hard leather shield", async t => {
+    const { CREATION_MENU_GROUP_ID, CREATION_MENU_FIRST_ITEM_COMPONENT } = require("../dist/net/packet/PacketSender");
+    assert.equal(CREATION_MENU_GROUP_ID,270);assert.equal(ids.IMCANDO_HAMMER,25644);assert.equal(ids.IMCANDO_HAMMER_OFF_HAND_,29775);
+    const recipe=Shared.DATA.combine.recipes.find(r=>r.item==="HARD_LEATHER_SHIELD");
+    assert.ok(recipe);assert.deepEqual(recipe.pair,["HARD_LEATHER","OAK_SHIELD"]);assert.deepEqual(recipe.pairAmounts,[2,1]);
+    assert.deepEqual(recipe.materials,[["BRONZE_NAILS",15]]);assert.deepEqual(recipe.tools,["HAMMER"]);assert.equal(recipe.level,41);assert.equal(recipe.xp,70);
+    for(const [mode,tool,expectMenu,remove] of [["ordinary hammer",ids.HAMMER,true,false],["no hammer",null,false,false],["ordinary hammer removed before make",ids.HAMMER,true,true],["carried Imcando hammer",ids.IMCANDO_HAMMER,true,false],["carried off-hand Imcando hammer",ids.IMCANDO_HAMMER_OFF_HAND_,true,false]]) await t.test(mode,async t=>{
+      const channel={kind:"test",remoteAddress:"127.0.0.1",isOpen:()=>true,send:()=>true,close(){},onData(){},onError(){},onClose(){}};
+      const p=new Player(new PlayerSession(channel));p.setIndex(index++);p.setUsername("shieldtool"+index);p.setRegistered(true);p.setLocation(new core.Location(3226,3218,0));p.needsPlacement=false;
+      const c=new ClientConnection(channel),inv=p.getInventory(),skill=p.getSkillManager(),craft=core.Skill.CRAFTING;c.player=p;
+      t.after(()=>{Shared.stopCrafting(p);PluginManager.emitPlayerDisconnect({player:p,username:p.getUsername()});PluginManager.emitPlayerLogout({player:p,username:p.getUsername()});p.setRegistered(false);core.TaskManager.cancelTasks(p.getIndex());core.TaskManager.cancelTasks(p);});
+      skill.setCurrentLevel(craft,99,false).setMaxLevels(craft,99,false).setExperience(craft,core.SkillManager.getExperienceForLevel(99));
+      assert.equal(skill.getCurrentLevel(craft),99);assert.equal(skill.getMaxLevel(craft),99);
+      const entries=[[ids.HARD_LEATHER,2],[ids.OAK_SHIELD,1],[ids.BRONZE_NAILS,15],...(tool==null?[]:[[tool,1]])];
+      for(const [id,n] of entries)inv.add(new core.Item(id,n),false);
+      for(const [id,n] of entries){assert.equal(inv.getAmount(id),n);const def=core.ItemDefinition.forId(id);assert.ok(def.getName());assert.equal(def.isNoted(),false);}
+      assert.equal(p.getEquipment().getItems().some(i=>i&&i.getId()>0),false);
+      assert.equal(inv.getAmount(ids.HAMMER),tool===ids.HAMMER?1:0);assert.equal(inv.getAmount(ids.IMCANDO_HAMMER),tool===ids.IMCANDO_HAMMER?1:0);
+      if(tool!=null){const toolSlot=inv.getSlotForItemId(tool);assert.ok(toolSlot>=0);assert.equal(inv.getItems()[toolSlot].getId(),tool);assert.equal(inv.getItems()[toolSlot].getMeta(),null);assert.match(core.ItemDefinition.forId(tool).getName(),tool===ids.IMCANDO_HAMMER?/^imcando hammer$/i:tool===ids.IMCANDO_HAMMER_OFF_HAND_?/^imcando hammer \(off-hand\)$/i:/^hammer$/i);assert.notEqual(PluginManager.emitCanUseItem(p,tool,"use"),false);}
+      assert.notEqual(PluginManager.emitCanUseItem(p,ids.HARD_LEATHER,"use"),false);assert.notEqual(PluginManager.emitCanUseItem(p,ids.OAK_SHIELD,"use"),false);
+      const initialXp=skill.getExperience(craft),slot=inv.getSlotForItemId(ids.HARD_LEATHER),target=inv.getSlotForItemId(ids.OAK_SHIELD);
+      assert.ok(slot>=0&&target>=0&&slot!==target);assert.equal(inv.getItems()[slot].getId(),ids.HARD_LEATHER);assert.equal(inv.getItems()[target].getId(),ids.OAK_SHIELD);
+      let turns=0;const turn=()=>{assert.ok(++turns<=16);p.resetUpdating();core.World.processCycle=(core.World.processCycle+1)&0x7fffffff;core.TaskManager.process();c.processTurnPackets();const q=p.getMovementQueue();q.beginCycle();q.processEntityPursuit();if(q.hasPendingWork())q.process();core.TaskManager.processWalkTo(p.getIndex());};
+      const untouched=()=>{assert.equal(inv.getAmount(ids.HARD_LEATHER),2);assert.equal(inv.getAmount(ids.OAK_SHIELD),1);assert.equal(inv.getAmount(ids.BRONZE_NAILS),15);assert.equal(inv.getAmount(ids.HARD_LEATHER_SHIELD),0);assert.equal(skill.getExperience(craft),initialXp);};
+      await c.dispatch([{type:"inventory_use_on",slot,itemId:ids.HARD_LEATHER,target:{kind:"inventory",slot:target,itemId:ids.OAK_SHIELD}}]);turn();
+      const menu=p.getCreationMenu();
+      if(!expectMenu){assert.ok(!menu,"no hammer refuses the recipe");untouched();return;}
+      assert.ok(menu,"the carried hammer must admit the hard leather shield menu");const child=menu.getItems().indexOf(ids.HARD_LEATHER_SHIELD);assert.ok(child>=0);untouched();
+      if(remove){inv.deleteNumber(ids.HAMMER,1);assert.equal(inv.getAmount(ids.HAMMER),0,"tool must actually be removed before selection");}
+      await c.dispatch([{type:"dialogue_continue",widgetId:(CREATION_MENU_GROUP_ID<<16)|(CREATION_MENU_FIRST_ITEM_COMPONENT+child),childIndex:1}]);turn();
+      for(let i=0;i<8;i++)turn();
+      if(remove){untouched();return;}
+      assert.equal(inv.getAmount(ids.HARD_LEATHER_SHIELD),1);assert.equal(inv.getAmount(ids.HARD_LEATHER),0);assert.equal(inv.getAmount(ids.OAK_SHIELD),0);assert.equal(inv.getAmount(ids.BRONZE_NAILS),0);assert.equal(inv.getAmount(tool),1);
+      assert.ok(skill.getExperience(craft)>initialXp);assert.equal(skill.getCurrentLevel(craft),99);assert.equal(skill.getMaxLevel(craft),99);
+    });
+  });
+  await t.test("leather crafting keeps the selected needle and accepts wielded Imcando hammers", async t => {
+    const { CREATION_MENU_GROUP_ID, CREATION_MENU_FIRST_ITEM_COMPONENT } = require("../dist/net/packet/PacketSender");
+    for(const [mode,chosen,removed] of [["costume selected with both needles and thread",ids.COSTUME_NEEDLE,false],["ordinary selected with both needles and thread",ids.NEEDLE,false],["selected costume removed before make",ids.COSTUME_NEEDLE,true]]) await t.test(mode,async t=>{
+      const channel={kind:"test",remoteAddress:"127.0.0.1",isOpen:()=>true,send:()=>true,close(){},onData(){},onError(){},onClose(){}};
+      const p=new Player(new PlayerSession(channel));p.setIndex(index++);p.setUsername("needlectrl"+index);p.setRegistered(true);p.setLocation(new core.Location(3226,3218,0));p.needsPlacement=false;
+      const c=new ClientConnection(channel),inv=p.getInventory(),skill=p.getSkillManager(),craft=core.Skill.CRAFTING;c.player=p;
+      t.after(()=>{Shared.stopCrafting(p);PluginManager.emitPlayerDisconnect({player:p,username:p.getUsername()});PluginManager.emitPlayerLogout({player:p,username:p.getUsername()});p.setRegistered(false);core.TaskManager.cancelTasks(p.getIndex());core.TaskManager.cancelTasks(p);});
+      skill.setCurrentLevel(craft,99,false).setMaxLevels(craft,99,false).setExperience(craft,core.SkillManager.getExperienceForLevel(99));
+      for(const [id,n] of [[ids.NEEDLE,1],[ids.COSTUME_NEEDLE,1],[ids.THREAD,1],[ids.LEATHER,5]])inv.add(new core.Item(id,n),false);
+      assert.equal(inv.getAmount(ids.NEEDLE),1);assert.equal(inv.getAmount(ids.COSTUME_NEEDLE),1);assert.equal(inv.getAmount(ids.THREAD),1);assert.equal(inv.getAmount(ids.LEATHER),5);assert.equal(p.getAttribute("crafting:thread-uses")??0,0);
+      const initialXp=skill.getExperience(craft),slot=inv.getSlotForItemId(chosen),target=inv.getSlotForItemId(ids.LEATHER);assert.ok(slot>=0&&target>=0&&slot!==target);assert.equal(inv.getItems()[slot].getId(),chosen);assert.notEqual(PluginManager.emitCanUseItem(p,chosen,"use"),false);
+      let turns=0;const turn=()=>{assert.ok(++turns<=32);p.resetUpdating();core.World.processCycle=(core.World.processCycle+1)&0x7fffffff;core.TaskManager.process();c.processTurnPackets();const q=p.getMovementQueue();q.beginCycle();q.processEntityPursuit();if(q.hasPendingWork())q.process();core.TaskManager.processWalkTo(p.getIndex());};
+      await c.dispatch([{type:"inventory_use_on",slot,itemId:chosen,target:{kind:"inventory",slot:target,itemId:ids.LEATHER}}]);turn();const menu=p.getCreationMenu();assert.ok(menu);const child=menu.getItems().indexOf(ids.LEATHER_BOOTS);assert.ok(child>=0);
+      if(removed){inv.deleteNumber(chosen,1);assert.equal(inv.getAmount(chosen),0);}
+      await c.dispatch([{type:"dialogue_continue",widgetId:(CREATION_MENU_GROUP_ID<<16)|(CREATION_MENU_FIRST_ITEM_COMPONENT+child),childIndex:5}]);turn();for(let i=0;i<17;i++)turn();
+      assert.equal(inv.getAmount(ids.LEATHER_BOOTS),removed?0:5);assert.equal(inv.getAmount(ids.LEATHER),removed?5:0);assert.equal(inv.getAmount(ids.NEEDLE),1);assert.equal(inv.getAmount(ids.COSTUME_NEEDLE),removed?0:1);
+      assert.equal(inv.getAmount(ids.THREAD),mode==="ordinary selected with both needles and thread"?0:1);assert.equal(p.getAttribute("crafting:thread-uses")??0,0);
+      if(removed)assert.equal(skill.getExperience(craft),initialXp);else assert.ok(skill.getExperience(craft)>initialXp);
+      assert.equal(skill.getCurrentLevel(craft),99);assert.equal(skill.getMaxLevel(craft),99);
+    });
+    for(const [label,tool,wearSlot] of [["wielded Imcando hammer",ids.IMCANDO_HAMMER,core.Equipment.WEAPON_SLOT],["wielded off-hand Imcando hammer",ids.IMCANDO_HAMMER_OFF_HAND_,core.Equipment.SHIELD_SLOT]]) await t.test(label,async t=>{
+      const channel={kind:"test",remoteAddress:"127.0.0.1",isOpen:()=>true,send:()=>true,close(){},onData(){},onError(){},onClose(){}};
+      const p=new Player(new PlayerSession(channel));p.setIndex(index++);p.setUsername("hammerctrl"+index);p.setRegistered(true);p.setLocation(new core.Location(3226,3218,0));p.needsPlacement=false;
+      const c=new ClientConnection(channel),inv=p.getInventory(),skill=p.getSkillManager(),craft=core.Skill.CRAFTING;c.player=p;
+      t.after(()=>{Shared.stopCrafting(p);PluginManager.emitPlayerDisconnect({player:p,username:p.getUsername()});PluginManager.emitPlayerLogout({player:p,username:p.getUsername()});p.setRegistered(false);core.TaskManager.cancelTasks(p.getIndex());core.TaskManager.cancelTasks(p);});
+      skill.setCurrentLevel(craft,99,false).setMaxLevels(craft,99,false).setExperience(craft,core.SkillManager.getExperienceForLevel(99));
+      for(const [id,n] of [[ids.HARD_LEATHER,2],[ids.OAK_SHIELD,1],[ids.BRONZE_NAILS,15],[tool,1]])inv.add(new core.Item(id,n),false);
+      assert.equal(inv.getAmount(ids.HAMMER),0);assert.equal(inv.getAmount(tool),1);const toolSlot=inv.getSlotForItemId(tool);assert.ok(toolSlot>=0);assert.equal(inv.getItems()[toolSlot].getMeta(),null);
+      let turns=0;const turn=()=>{assert.ok(++turns<=20);p.resetUpdating();core.World.processCycle=(core.World.processCycle+1)&0x7fffffff;core.TaskManager.process();c.processTurnPackets();const q=p.getMovementQueue();q.beginCycle();q.processEntityPursuit();if(q.hasPendingWork())q.process();core.TaskManager.processWalkTo(p.getIndex());};
+      await c.dispatch([{type:"inventory_action",widgetId:3214,slot:toolSlot,itemId:tool,option:"Wield"}]);turn();
+      assert.equal(p.getEquipment().get(wearSlot)?.getId(),tool,"native Wield must equip the repaired hammer in its real slot");assert.equal(inv.getAmount(tool),0);
+      const xp=skill.getExperience(craft),slot=inv.getSlotForItemId(ids.HARD_LEATHER),target=inv.getSlotForItemId(ids.OAK_SHIELD);assert.ok(slot>=0&&target>=0);
+      await c.dispatch([{type:"inventory_use_on",slot,itemId:ids.HARD_LEATHER,target:{kind:"inventory",slot:target,itemId:ids.OAK_SHIELD}}]);turn();const menu=p.getCreationMenu();assert.ok(menu);const child=menu.getItems().indexOf(ids.HARD_LEATHER_SHIELD);assert.ok(child>=0);
+      await c.dispatch([{type:"dialogue_continue",widgetId:(CREATION_MENU_GROUP_ID<<16)|(CREATION_MENU_FIRST_ITEM_COMPONENT+child),childIndex:1}]);turn();for(let i=0;i<8;i++)turn();
+      assert.equal(inv.getAmount(ids.HARD_LEATHER_SHIELD),1);assert.equal(inv.getAmount(ids.HARD_LEATHER),0);assert.equal(inv.getAmount(ids.OAK_SHIELD),0);assert.equal(inv.getAmount(ids.BRONZE_NAILS),0);assert.equal(p.getEquipment().get(wearSlot)?.getId(),tool);assert.ok(skill.getExperience(craft)>xp);
+    });
+  });
+  await t.test("native emerald amulet stringing selects the used material", async t => {
+    assert.equal(ids.EMERALD_AMULET_U_, 1677);
+    assert.equal(ids.BALL_OF_WOOL, 1759);
+    assert.equal(ids.EMERALD_AMULET, 1696);
+    assert.equal(ids.MAGIC_STRING, 6038);
+    assert.equal(ids.PRE_NATURE_AMULET, 6041);
+    let woolControlsPassed = 0;
+    const cases = [
+      ["wool first", ids.BALL_OF_WOOL, false, false],
+      ["amulet on wool", ids.BALL_OF_WOOL, true, false],
+      ["wool selected with both strings", ids.BALL_OF_WOOL, false, true],
+      ["amulet on wool with both strings", ids.BALL_OF_WOOL, true, true],
+      ["magic string first", ids.MAGIC_STRING, false, false],
+      ["amulet on magic string", ids.MAGIC_STRING, true, false],
+      ["magic string selected with both strings", ids.MAGIC_STRING, false, true],
+      ["amulet on magic string with both strings", ids.MAGIC_STRING, true, true],
+    ];
+    for (const [label, material, reverse, both] of cases) await t.test(label, async t => {
+      const isWool = material === ids.BALL_OF_WOOL;
+      if (!isWool) assert.equal(woolControlsPassed, 4, "all same-route wool controls must qualify before target");
+      const channel = {kind:"test",remoteAddress:"127.0.0.1",isOpen:()=>true,send:()=>true,close(){},onData(){},onError(){},onClose(){}};
+      const p = new Player(new PlayerSession(channel));
+      p.setIndex(index++); p.setUsername("naturestring" + index); p.setRegistered(true);
+      p.setLocation(new core.Location(3226,3218,0)); p.needsPlacement = false;
+      const c = new ClientConnection(channel), inv = p.getInventory(), skill = p.getSkillManager(), craft = core.Skill.CRAFTING;
+      c.player = p;
+      t.after(() => {
+        Shared.stopCrafting(p);
+        PluginManager.emitPlayerDisconnect({player:p,username:p.getUsername()});
+        PluginManager.emitPlayerLogout({player:p,username:p.getUsername()});
+        p.setRegistered(false); core.TaskManager.cancelTasks(p.getIndex()); core.TaskManager.cancelTasks(p);
+      });
+      skill.setCurrentLevel(craft,1,false).setMaxLevels(craft,1,false).setExperience(craft,0);
+      assert.equal(skill.getCurrentLevel(craft),1); assert.equal(skill.getMaxLevel(craft),1);
+      assert.equal(skill.getExperience(craft),0); assert.ok(p.getHitpoints() > 0);
+      assert.equal(p.getEquipment().getItems().some(i=>i && i.getId()>0),false);
+      const other = isWool ? ids.MAGIC_STRING : ids.BALL_OF_WOOL;
+      const expected = isWool ? ids.EMERALD_AMULET : ids.PRE_NATURE_AMULET;
+      const otherProduct = isWool ? ids.PRE_NATURE_AMULET : ids.EMERALD_AMULET;
+      const total = id => inv.getAmount(id) + p.getEquipment().getAmount(id) +
+        core.World.getItems().filter(g => !g.isPendingRemoval() && g.getOwner() === p.getUsername() && g.getPrivateArea() === p.getPrivateArea() && g.getItem().getId() === id).reduce((n,g) => n + g.getItem().getAmount(),0);
+      const inputs = [ids.EMERALD_AMULET_U_, material, ...(both ? [other] : [])];
+      for (const id of inputs) inv.add(new core.Item(id,1),false);
+      for (const id of inputs) {
+        assert.equal(inv.getAmount(id),1);
+        const slot = inv.getSlotForItemId(id), def = core.ItemDefinition.forId(id);
+        assert.ok(slot >= 0); assert.equal(inv.getItems()[slot].getId(),id);
+        assert.equal(inv.getItems()[slot].getMeta(),null);
+        assert.ok(def?.getName()); assert.equal(def.isNoted(),false);
+        assert.notEqual(PluginManager.emitCanUseItem(p,id,"use"),false);
+      }
+      assert.match(core.ItemDefinition.forId(ids.EMERALD_AMULET_U_).getName(),/^emerald amulet \(u\)$/i);
+      assert.match(core.ItemDefinition.forId(material).getName(),isWool ? /^ball of wool$/i : /^magic string$/i);
+      assert.match(core.ItemDefinition.forId(expected).getName(),isWool ? /^emerald amulet$/i : /^pre-nature amulet$/i);
+      assert.equal(core.ItemDefinition.forId(expected).isNoted(),false);
+      assert.equal(inv.getAddableAmount(new core.Item(expected,1)),1);
+      assert.equal(inv.getAmount(expected),0); assert.equal(inv.getAmount(otherProduct),0);
+      assert.equal(inv.getAmount(other),both ? 1 : 0);
+      const first = reverse ? ids.EMERALD_AMULET_U_ : material;
+      const second = reverse ? material : ids.EMERALD_AMULET_U_;
+      const slot = inv.getSlotForItemId(first), target = inv.getSlotForItemId(second);
+      assert.ok(slot >= 0 && target >= 0 && slot !== target);
+      const events = [], produced = [], gains = [];
+      const emitItem = PluginManager.emitItemOnItem.bind(PluginManager);
+      t.mock.method(PluginManager,"emitItemOnItem",event=>{
+        const row = {player:event.player,used:event.usedItemId,with:event.usedWithItemId,slot:event.usedItemSlot,target:event.usedWithItemSlot};
+        const result = emitItem(event); row.handled = event.handled; if (event.player === p) events.push(row); return result;
+      });
+      const emitCustom = PluginManager.emitCustomEvent.bind(PluginManager);
+      t.mock.method(PluginManager,"emitCustomEvent",(name,event)=>{
+        if (name === "skills:produced" && event.player === p) produced.push({itemId:event.itemId,amount:event.amount,xp:event.xp,kind:event.kind,materials:event.materials});
+        return emitCustom(name,event);
+      });
+      const add = skill.addExperiences.bind(skill);
+      t.mock.method(skill,"addExperiences",(s,xp)=>{if(s===craft) gains.push(xp); return add(s,xp);});
+      let turns = 0;
+      const turn = () => {
+        assert.ok(++turns <= 8); p.resetUpdating(); core.World.processCycle = (core.World.processCycle+1)&0x7fffffff;
+        core.TaskManager.process(); c.processTurnPackets();
+        const q = p.getMovementQueue(); q.beginCycle(); q.processEntityPursuit(); if(q.hasPendingWork()) q.process();
+        core.TaskManager.processWalkTo(p.getIndex());
+      };
+      await c.dispatch([{type:"inventory_use_on",slot,itemId:first,target:{kind:"inventory",slot:target,itemId:second}}]);
+      for (let i=0;i<4;i++) turn();
+      assert.equal(events.length,1,"native packet must reach the full registered item-on-item dispatcher");
+      assert.equal(events[0].player,p); assert.equal(events[0].used,first); assert.equal(events[0].with,second);
+      assert.equal(events[0].slot,slot); assert.equal(events[0].target,target);
+      assert.equal(inv.getAmount(expected),1,"the selected string must make its matching amulet");
+      assert.equal(inv.getAmount(ids.EMERALD_AMULET_U_),0); assert.equal(inv.getAmount(material),0);
+      assert.equal(inv.getAmount(other),both ? 1 : 0); assert.equal(inv.getAmount(otherProduct),0);
+      assert.equal(total(expected),1); assert.equal(total(otherProduct),0);
+      assert.equal(total(ids.EMERALD_AMULET_U_),0); assert.equal(total(material),0); assert.equal(total(other),both ? 1 : 0);
+      const outputSlot = inv.getSlotForItemId(expected); assert.ok(outputSlot>=0);
+      assert.equal(inv.getItems()[outputSlot].getId(),expected); assert.equal(inv.getItems()[outputSlot].getMeta(),null);
+      assert.deepEqual(gains,[4]); assert.ok(skill.getExperience(craft)>0);
+      assert.equal(skill.getCurrentLevel(craft),skill.getMaxLevel(craft));
+      assert.deepEqual(produced,[{itemId:expected,amount:1,xp:4,kind:"string",materials:[[ids.EMERALD_AMULET_U_,1],[material,1]]}]);
+      if (isWool) woolControlsPassed++;
+    });
+  });
+  await t.test("magic stringing rechecks the selected materials before its task", async t => {
+    for (const [label, removed] of [["selected magic string removed", ids.MAGIC_STRING], ["unstrung amulet removed", ids.EMERALD_AMULET_U_]]) await t.test(label, async t => {
+      const channel = {kind:"test",remoteAddress:"127.0.0.1",isOpen:()=>true,send:()=>true,close(){},onData(){},onError(){},onClose(){}};
+      const p = new Player(new PlayerSession(channel));
+      p.setIndex(index++); p.setUsername("naturecancel"+index); p.setRegistered(true);
+      p.setLocation(new core.Location(3226,3218,0)); p.needsPlacement=false;
+      const c = new ClientConnection(channel), inv = p.getInventory(), skill = p.getSkillManager(), craft = core.Skill.CRAFTING;
+      c.player = p;
+      t.after(()=>{Shared.stopCrafting(p);PluginManager.emitPlayerDisconnect({player:p,username:p.getUsername()});PluginManager.emitPlayerLogout({player:p,username:p.getUsername()});p.setRegistered(false);core.TaskManager.cancelTasks(p.getIndex());core.TaskManager.cancelTasks(p);});
+      skill.setCurrentLevel(craft,1,false).setMaxLevels(craft,1,false).setExperience(craft,0);
+      for (const id of [ids.EMERALD_AMULET_U_,ids.MAGIC_STRING,ids.BALL_OF_WOOL]) inv.add(new core.Item(id,1),false);
+      for (const id of [ids.EMERALD_AMULET_U_,ids.MAGIC_STRING,ids.BALL_OF_WOOL]) {
+        const slot=inv.getSlotForItemId(id); assert.ok(slot>=0); assert.equal(inv.getAmount(id),1);
+        assert.equal(inv.getItems()[slot].getMeta(),null); assert.notEqual(PluginManager.emitCanUseItem(p,id,"use"),false);
+      }
+      assert.equal(skill.getCurrentLevel(craft),1); assert.equal(skill.getMaxLevel(craft),1); assert.equal(skill.getExperience(craft),0);
+      assert.equal(inv.getAmount(ids.PRE_NATURE_AMULET),0); assert.equal(inv.getAmount(ids.EMERALD_AMULET),0);
+      const source=inv.getSlotForItemId(ids.MAGIC_STRING),target=inv.getSlotForItemId(ids.EMERALD_AMULET_U_);
+      let observed=null; const emit=PluginManager.emitItemOnItem.bind(PluginManager);
+      t.mock.method(PluginManager,"emitItemOnItem",event=>{const result=emit(event); if(event.player===p) observed={used:event.usedItemId,with:event.usedWithItemId,handled:event.handled}; return result;});
+      let turns=0;
+      const turn=()=>{assert.ok(++turns<=8);p.resetUpdating();core.World.processCycle=(core.World.processCycle+1)&0x7fffffff;core.TaskManager.process();c.processTurnPackets();const q=p.getMovementQueue();q.beginCycle();q.processEntityPursuit();if(q.hasPendingWork())q.process();core.TaskManager.processWalkTo(p.getIndex());};
+      await c.dispatch([{type:"inventory_use_on",slot:source,itemId:ids.MAGIC_STRING,target:{kind:"inventory",slot:target,itemId:ids.EMERALD_AMULET_U_}}]);
+      turn();
+      assert.deepEqual(observed,{used:ids.MAGIC_STRING,with:ids.EMERALD_AMULET_U_,handled:true});
+      assert.equal(core.TaskManager.hasActiveTask(p.getIndex(),"NextTick"),true,"real stringing task is pending before removal");
+      inv.deleteNumber(removed,1); assert.equal(inv.getAmount(removed),0);
+      for(let i=0;i<3;i++) turn();
+      assert.equal(core.TaskManager.hasActiveTask(p.getIndex(),"NextTick"),false);
+      assert.equal(inv.getAmount(ids.MAGIC_STRING),removed===ids.MAGIC_STRING?0:1);
+      assert.equal(inv.getAmount(ids.EMERALD_AMULET_U_),removed===ids.EMERALD_AMULET_U_?0:1);
+      assert.equal(inv.getAmount(ids.BALL_OF_WOOL),1);
+      assert.equal(inv.getAmount(ids.PRE_NATURE_AMULET),0); assert.equal(inv.getAmount(ids.EMERALD_AMULET),0);
+      assert.equal(skill.getExperience(craft),0); assert.equal(skill.getCurrentLevel(craft),1); assert.equal(skill.getMaxLevel(craft),1);
+    });
   });
 });

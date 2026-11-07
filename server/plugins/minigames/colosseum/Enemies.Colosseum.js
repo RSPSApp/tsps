@@ -18,7 +18,7 @@
  * RuneLite (the Fortis Colosseum plugin's LosLinks): the charged orbs are the orb projectiles'
  * spotanims held on the Manticore, several at once, appearing in throwing order.
  * - The Minotaur's damage lands a tick after its swing, and while not in melee range it heals
- *   damaged enemies within 6 tiles to full.
+ *   eligible enemies in centre-to-centre range and line of sight to full.
  * Capture: the trio's and the shaman's animations, projectiles and graphics.
  * Offline_Scape (from its captures): the colossi's and the Manticore's animations,
  * projectiles and graphics, and the javelin landing 3 ticks after it is thrown.
@@ -67,7 +67,7 @@ const MANTICORE = {
   orbRefreshTicks: 1,
   orbTravel: 25,
 };
-const MINOTAUR_HEAL = { range: 6, every: 5 };
+const MINOTAUR_HEAL = { range: 7, every: 5 };
 const PROTECTION = { MAGIC: "PROTECT_FROM_MAGIC", RANGED: "PROTECT_FROM_MISSILES", MELEE: "PROTECT_FROM_MELEE" };
 const ORB_ORDERS = {
   usual: [["MAGIC", "RANGED", "MELEE"], ["RANGED", "MAGIC", "MELEE"]],
@@ -292,7 +292,7 @@ function offsetOf(npc) {
 
 function open(run, x, y) {
   const { RegionManager } = Shared.core();
-  return (RegionManager.getClipping(x, y, 0, run.area) & 0x1280100) === 0;
+  return (RegionManager.getClipping(x, y, 0, run.area) & RegionManager.BLOCKED_MASK) === 0;
 }
 
 /**
@@ -339,17 +339,22 @@ function weakness(event) {
   event.forceMaxHit = true;
 }
 
-/** A Minotaur out of melee range heals every damaged enemy within 6 tiles to full. */
+/** Mod Arcane: a Minotaur heals eligible enemies below 75%, using centre-to-centre sight. */
 function tendMinotaurs(run, ticks) {
   if (ticks % MINOTAUR_HEAL.every !== 0) return;
+  const { CombatRange, Projectile, RegionManager } = Shared.core();
   for (const minotaur of run.npcs) {
     if (kindOf(minotaur.getId()) !== "minotaur" || minotaur.getHitpoints() <= 0) continue;
-    if (distance(minotaur, run.player) <= 1) continue;
+    if (CombatRange.footprintDistance(minotaur.getLocation(), minotaur.getSize(), run.player.getLocation()) <= 1) continue;
+    const centre = Projectile.centreOf(minotaur);
     for (const other of run.npcs) {
-      if (other === minotaur || other.getHitpoints() <= 0) continue;
-      if (distance(minotaur, other) > MINOTAUR_HEAL.range) continue;
+      if (kindOf(other.getId()) === "minotaur" || other.getHitpoints() <= 0) continue;
       const max = other.getMaxHitpoints?.() ?? other.getHitpoints();
-      if (other.getHitpoints() < max) other.setHitpoints(max);
+      if (other.getHitpoints() * 4 >= max * 3) continue;
+      const targetCentre = Projectile.centreOf(other);
+      if (centre.getDistance(targetCentre) > MINOTAUR_HEAL.range) continue;
+      if (!RegionManager.canProjectileAttackReturn(centre, targetCentre, 1, minotaur.getPrivateArea())) continue;
+      other.setHitpoints(max);
     }
   }
 }

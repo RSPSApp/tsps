@@ -55,6 +55,7 @@
  * Source: OSRS Wiki (Animal Magnetism, Quick guide, Transcript:Animal Magnetism).
  */
 module.exports = function registerAnimalMagnetismQuest(api) {
+  const { giveReward } = require("../QuestRuntime");
   const {
     Direction,
     Equipment,
@@ -1012,7 +1013,12 @@ module.exports = function registerAnimalMagnetismQuest(api) {
 
       const inventory = player.getInventory();
       const hasAttractor = inventory.getAmount(AVAS_ATTRACTOR_ITEM_ID) > 0;
-      if (inventory.getAmount(STEEL_ARROW_ITEM_ID) < 75) {
+      // Only plain steel arrows pay: a preset (untradeable, unbankable) copy never buys a fresh accumulator.
+      const restricted = (item) => !!item && (item.isPresetItem?.() === true || item.isUntradeable?.() === true || item.isUnbankable?.() === true);
+      const slotted = typeof inventory.getItems === "function"; // a test stand-in has no slots (and no presets)
+      const arrowSlots = slotted ? inventory.getItems().map((item, slot) => (item?.getId() === STEEL_ARROW_ITEM_ID && !restricted(item) ? slot : -1)).filter((slot) => slot >= 0) : [];
+      const plainArrows = slotted ? arrowSlots.reduce((total, slot) => total + inventory.getItems()[slot].getAmount(), 0) : inventory.getAmount(STEEL_ARROW_ITEM_ID);
+      if (plainArrows < 75) {
         player.sendMessage("You need 75 steel arrows to upgrade your device.");
         return;
       }
@@ -1025,7 +1031,17 @@ module.exports = function registerAnimalMagnetismQuest(api) {
         return;
       }
 
-      inventory.deleteNumber(STEEL_ARROW_ITEM_ID, 75);
+      let arrowsLeft = 75;
+      if (!slotted) {
+        inventory.deleteNumber(STEEL_ARROW_ITEM_ID, 75);
+        arrowsLeft = 0;
+      }
+      for (const slot of arrowSlots) {
+        if (arrowsLeft <= 0) break;
+        const taken = Math.min(arrowsLeft, inventory.getItems()[slot].getAmount());
+        inventory.deleteAtSlot(slot, taken);
+        arrowsLeft -= taken;
+      }
       if (hasAttractor) inventory.deleteNumber(AVAS_ATTRACTOR_ITEM_ID, 1);
       else inventory.deleteNumber(COINS_ITEM_ID, 999);
       inventory.adds(AVAS_ACCUMULATOR_ITEM_ID, 1);
@@ -1348,7 +1364,7 @@ module.exports = function registerAnimalMagnetismQuest(api) {
     player.getSkillManager().addExperiences(Skill.FLETCHING, 1000);
     player.getSkillManager().addExperiences(Skill.SLAYER, 1000);
     player.getSkillManager().addExperiences(Skill.WOODCUTTING, 2500);
-    player.getInventory().adds(itemId, 1);
+    giveReward(player, itemId, 1);
   }
 
   quest = registerQuest(api, {

@@ -1,5 +1,7 @@
 const assert=require('node:assert/strict'),path=require('node:path');
 const {before,test}=require('node:test');
+// The reward commits through EventScheduler's events:grant-reward, which trusts only its window.
+const {setWindow}=require('./helpers/event-window.cjs');
 require('../dist/Server').Server.installProductionPathResolver();
 const {CachePipeline}=require('../dist/game/cache/CachePipeline');
 const {PluginManager:PM}=require('../dist/plugins/PluginManager');
@@ -17,6 +19,8 @@ before(async()=>{
   require('../plugins/world/PlayerOnlineTimer.plugin').register(PM.createApi('PlayerOnlineTimer'));
   require('../plugins/world/Music.plugin').register(PM.createApi('Music'));
   require('../plugins/world/ChristmasDinner.plugin').register(api);
+  // One real EventScheduler for the file: the reward test forces its window, the calendar test drives its clock.
+  require('../plugins/world/EventScheduler.plugin').register(PM.createApi('EventScheduler'));
   for(const row of data.placements)c.RegionManager.loadMapFiles(row.x,row.y,false);
 });
 function at(row){return new c.Location(row.x,row.y,row.z);}
@@ -197,7 +201,7 @@ test('native final Table Serve enforces source capacity and calendar closure can
 
   // Retry the exact native route, now letting the real chef movement queue and
   // source overhead dialogue complete. Only the three prior meals are fixtures.
-  PM.emitCustomEvent('events:active',{key:'christmas-2025',active:true});apply('reclaim');
+  setWindow(PM,'christmas-2025',true);t.after(()=>setWindow(PM,'christmas-2025',null));apply('reclaim');
   player.setAttribute('player-online:lifetime-seconds',90000);
   const retryTable=Scene.objects().find(row=>row.symbol==='xmas25_table_4').object,p=retryTable.getLocation();
   await connection.dispatch([{type:'object_option',id:retryTable.getId(),x:p.getX(),y:p.getY(),clickType:1,action:'Serve'}]);connection.processTurnPackets();
@@ -577,8 +581,7 @@ test('window close takes a leftover platter; shutdown keeps it for the save; a c
   assert.equal(Scene.active(),false);assert.equal(player.getInventory().getAmount(platter),1,'a restart mid-event keeps it in the save');
 });
 test('the shipped events.json window opens the dinner on 10 December and closes it on 7 January',t=>{
-  // Real EventScheduler, real data/events.json and its owned clock task; only Date.now is mocked.
-  require('../plugins/world/EventScheduler.plugin').register(PM.createApi('EventScheduler'));
+  // Real EventScheduler (registered in before), real data/events.json and its owned clock task; only Date.now is mocked.
   let now=Date.parse('2026-12-09T23:59:59Z');t.mock.method(Date,'now',()=>now);
   const clock=()=>{const task=[...c.TaskManager.pendingTasks.toArray(),...c.TaskManager.activeTasks].find(k=>k.key==='event-scheduler:clock'&&k.isRunning());assert.ok(task,'scheduler owns one clock');task.execute();};
   t.after(()=>{PM.emitServerShutdown({timestamp:now});assert.equal(Scene.active(),false);});

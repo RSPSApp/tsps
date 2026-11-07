@@ -11,7 +11,15 @@ import {
     encodeCameraTranslate,
     encodeCameraRotateBy,
     encodeCameraMoveArc,
+    encodeCameraRotateToCoordinate,
 } from "../../server/src/main/typescript/elvarg/net/protocol/ClientProtocol";
+
+// A coordinate rotation freezes command-time angles; it is not CAM_LOOKAT_CYCLES.
+assert.deepEqual(decodeServerPacket(new Uint8Array(encodeCameraRotateToCoordinate(3356, 2208, 1023, 150, "ease_out_sine"))), {
+    type: "camera", payload: { mode: "rotate_coordinate", x: 3356, y: 2208, height: 1023, cycles: 150, easing: "ease_out_sine" },
+});
+assert.throws(() => encodeCameraRotateToCoordinate(3356, 2208, 1023, 0, "linear"), RangeError);
+assert.throws(() => encodeCameraRotateToCoordinate(3356, 2208, 32768, 150, "linear"), RangeError);
 
 // The server's camera shake and reset reach the client's CAMERA_CONTROL decoder intact.
 const shake = decodeServerPacket(new Uint8Array(encodeCameraShake(1, 7, 0, 0))) as any;

@@ -211,6 +211,12 @@ function guardAction(event) {
   if (event.stepId !== PAY_STEP) return;
   event.handled = true;
   event.end = true;
+  // The guard's "understands ghosts" branch was chosen earlier; an amulet taken off since leaves the dialogue open,
+  // so ask again here, as the barrier's own Pay-toll does.
+  if (!understandsGhosts(event.player)) {
+    event.player.sendMessage(MAY_NOT_PASS);
+    return;
+  }
   const near = guardBarrier(event.player);
   if (near) payAndCross(event.player, near.barrier, near.from);
 }

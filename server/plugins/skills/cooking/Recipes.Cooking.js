@@ -5,6 +5,7 @@
  * captures (recordings 75, 564, 1858). None of these steps plays an animation or sound.
  */
 const Common = require("./Common.Cooking");
+const FreeToPlay = require("../../modes/FreeToPlay.plugin");
 
 /** The dough menu (rsprox captures): all four doughs, whatever the player's level. */
 const DOUGH_TITLE = "What sort of dough do you wish to make?";
@@ -39,8 +40,25 @@ function productName(recipe) {
   return Common.core.ItemDefinition.forId(recipe.productId).getName().toLowerCase();
 }
 
-/** Whether the player has the level; says why not in a message box. */
+/**
+ * A recipe is members-only when its product is (cache definition), so a first step made only from
+ * free items (a trout on a pie shell) is refused on a free world too. A row's own `members` field
+ * overrides the cache when the two disagree.
+ */
+function isMembersRecipe(recipe) {
+  return recipe.members ?? Common.core.CacheDefinitions.getItem(recipe.productId).isMembers === true;
+}
+
+function availableOnWorld(recipe) {
+  return Common.core.WorldDefinition.isMembersWorld() || !isMembersRecipe(recipe);
+}
+
+/** Whether the player can make the recipe; says why not when it is members-only here or the level is too low. */
 function canMake(player, recipe) {
+  if (!availableOnWorld(recipe)) {
+    player.sendMessage(FreeToPlay.ITEM_MESSAGE);
+    return false;
+  }
   if (Common.level(player) >= recipe.level) return true;
   Common.mesbox(player, `You need a Cooking level of ${recipe.level} to make ${Common.withArticle(productName(recipe))}.`);
   return false;
@@ -50,7 +68,7 @@ function canMake(player, recipe) {
 function makeOne(player, recipe) {
   const { Item, Skill } = Common.core;
   const inventory = player.getInventory();
-  if (!hasIngredients(inventory, recipe) || !hasRoom(inventory, recipe)) return false;
+  if (!availableOnWorld(recipe) || !hasIngredients(inventory, recipe) || !hasRoom(inventory, recipe)) return false;
   for (const { id, count } of recipe.ingredients) inventory.deleteNumber(id, count);
   inventory.addItem(new Item(recipe.productId, 1));
   for (const { id, count } of recipe.returns) inventory.addItem(new Item(id, count));
@@ -62,11 +80,13 @@ function makeOne(player, recipe) {
 
 /**
  * Makes `amount` on the recipe's timing. `hooks.cycle(remaining)` runs as each item is started
- * (the choice, then each item that has another after it), `hooks.made()` after each item and
+ * (the choice, then each item that has another after it), `hooks.canMake()` before spending
+ * each item's ingredients, `hooks.made()` after each item and
  * `hooks.done()` after the last one made.
  */
 function start(player, recipe, amount, hooks = {}) {
   Common.core.TaskManager.cancelTasks(player.getIndex());
+  if (hooks.canMake?.() === false) return;
   let remaining = amount;
   let made = 0;
   let wait = recipe.timing[0];
@@ -75,7 +95,7 @@ function start(player, recipe, amount, hooks = {}) {
     if (--wait > 0) return true;
     const actions = Common.actionsPerCycle(player, "make");
     for (let done = 0; done < actions && remaining > 0; done++) {
-      if (!makeOne(player, recipe)) {
+      if (hooks.canMake?.() === false || !makeOne(player, recipe)) {
         if (made > 0) hooks.done?.();
         return false;
       }
@@ -83,7 +103,7 @@ function start(player, recipe, amount, hooks = {}) {
       remaining--;
       hooks.made?.();
     }
-    if (remaining <= 0 || !hasIngredients(player.getInventory(), recipe)) {
+    if (remaining <= 0 || !hasIngredients(player.getInventory(), recipe) || hooks.canMake?.() === false) {
       hooks.done?.();
       return false;
     }
@@ -118,6 +138,7 @@ function offer(player, recipe, hooks) {
 function doughRecipe(dough, water, product) {
   return {
     productId: product.productId,
+    members: product.members,
     level: product.level,
     xp: 0,
     message: product.message,

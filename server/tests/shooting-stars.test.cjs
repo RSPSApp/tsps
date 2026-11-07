@@ -483,15 +483,36 @@ test("celestial ring: charge with stardust, extra ores up to adamantite spend ch
   worn.setMetaValue(Ring.CHARGES_META_KEY, 15);
   const wearer = miner();
   wearer.getEquipment().setItem(core.Equipment.RING_SLOT, worn);
-  const coal = { player: wearer, rockLevel: 30, extra: false };
+  const coal = { player: wearer, rockLevel: 30, bonuses: [] };
   Ring.extraOre(coal, () => 0.05);
-  assert.equal(coal.extra, true);
+  assert.equal(coal.bonuses.length, 1);
   assert.equal(Ring.charges(worn), 14);
-  const runite = { player: wearer, rockLevel: 85, extra: false };
+  const runite = { player: wearer, rockLevel: 85, bonuses: [] };
   Ring.extraOre(runite, () => 0.05);
-  assert.equal(runite.extra, false);
+  assert.equal(runite.bonuses.length, 0);
   assert.equal(Ring.charges(worn), 14, "runite is past adamantite: no charge");
   Ring.uncharge({ player: p, item: ring });
   assert.equal(ring.getId(), I.CELESTIAL_RING_UNCHARGED_);
   assert.equal(p.getInventory().getAmount(I.STARDUST), 20);
+});
+
+test("celestial ring: equipping the ring while the stardust prompt is open spends no stardust", () => {
+  const p = miner();
+  const I = core.ItemIdentifiers;
+  p.getInventory().adds(I.STARDUST, 20);
+  p.getInventory().adds(I.CELESTIAL_RING_UNCHARGED_, 1);
+  const slot = p.getInventory().getItems().findIndex((item) => item?.getId() === I.CELESTIAL_RING_UNCHARGED_);
+  const ring = p.getInventory().getItems()[slot];
+  Ring.charge({ player: p, item: ring });
+  // What EquipPacketListener does: the worn ring is a clone, and the inventory slot empties.
+  p.getEquipment().setItem(core.Equipment.RING_SLOT, ring.clone());
+  p.getInventory().setItem(slot, new core.Item(-1, 0));
+  p.getEnteredAmountAction().execute(15);
+  assert.equal(p.getInventory().getAmount(I.STARDUST), 20, "no stardust spent on the ring left behind");
+  // Charging the worn ring itself still works.
+  const worn = p.getEquipment().getItems()[core.Equipment.RING_SLOT];
+  Ring.charge({ player: p, item: worn });
+  p.getEnteredAmountAction().execute(15);
+  assert.equal(Ring.charges(worn), 15);
+  assert.equal(p.getInventory().getAmount(I.STARDUST), 5);
 });

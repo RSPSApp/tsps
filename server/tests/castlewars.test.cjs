@@ -225,7 +225,7 @@ test('seeded bots log out once no real player is left', () => {
   assert.equal(bot.logouts, 1, 'the bot was logged out');
 });
 
-test("leaving a waiting room keeps the player's own skull, Tele Block, poison and stats", () => {
+test("leaving a waiting room restores stats (Wiki) but keeps the player's own skull, Tele Block, poison and boosts", () => {
   const { Player } = require('../dist/game/entity/impl/player/Player');
   const registered = [];
   const island = {
@@ -249,11 +249,17 @@ test("leaving a waiting room keeps the player's own skull, Tele Block, poison an
   p.setSkullTimer(3000);
   p.getCombat().getTeleblockTimer().start(300);
   p.setPoisonDamage(6);
+  skills.setMaxLevels(core.Skill.PRAYER, 70, false).setCurrentLevel(core.Skill.PRAYER, 5, false);
+  skills.setMaxLevels(core.Skill.STRENGTH, 90, false).setCurrentLevel(core.Skill.STRENGTH, 109, false);
+  p.setRunEnergy(10);
   waitingRoom.postLeave(p, false);
   assert.ok(p.getSkullTimer() > 0, 'still skulled');
   assert.ok(p.getCombat().getTeleblockTimer().secondsRemaining() > 0, 'still tele-blocked');
   assert.equal(p.getPoisonDamage(), 6, 'still poisoned');
-  assert.equal(skills.getCurrentLevel(core.Skill.HITPOINTS), 10, 'no free heal');
+  assert.equal(skills.getCurrentLevel(core.Skill.HITPOINTS), 99, 'Hitpoints restored');
+  assert.equal(skills.getCurrentLevel(core.Skill.PRAYER), 70, 'Prayer restored');
+  assert.equal(skills.getCurrentLevel(core.Skill.STRENGTH), 109, 'a boost stays');
+  assert.equal(p.getRunEnergy(), 100, 'run energy restored');
 });
 
 test('both waiting rooms release seeded bots on leave and honour the transition path', () => {
@@ -285,7 +291,13 @@ test('both waiting rooms release seeded bots on leave and honour the transition 
   const waitingRooms = registered.filter((area) => area.getName().includes('waiting room'));
   assert.equal(waitingRooms.length, 2, 'both waiting rooms are registered');
   for (const waitingRoom of waitingRooms) {
-    const real = { getAsPlayer: () => real, getAttribute: () => false, isPlayerBot: () => false, resetAttributes: () => {} };
+    const real = {
+      getAsPlayer: () => real, getAttribute: () => false, isPlayerBot: () => false, isPlayer: () => true, isNpc: () => false,
+      // Leaving restores stats (restoreStats): the skills, run energy and prayers it touches.
+      getSkillManager: () => ({ getCurrentLevel: () => 1, getMaxLevel: () => 1, setCurrentLevel() {} }),
+      setRunEnergy() {}, getPrayerActive: () => [],
+      getQuickPrayers: () => ({ setEnabled() {} }), getPacketSender: () => ({ sendQuickPrayersState() {} }),
+    };
     waitingRoom.postLeave(real, false);
     assert.equal(calls.released, 1, 'leaving releases seeded bots');
     assert.equal(calls.countdown, 1, 'leaving cancels a pending countdown');

@@ -10,14 +10,16 @@ let core = null;
 let data = null;
 const ids = { components: {}, varbits: {}, interfaces: {}, locs: {}, objs: {} };
 
-/** Saved figures (kebab-case attributes). */
-const ATTRIBUTES = {
-  stash: "pvp-arena:stash",
-  loadouts: "pvp-arena:loadouts",
-  build: "pvp-arena:build",
-  participation: "pvp-arena:unranked-participation",
-  wins: "pvp-arena:unranked-wins",
-};
+/** Saved figures. */
+const LOADOUTS_ATTRIBUTE = "pvp-arena:loadouts";
+const BUILD_ATTRIBUTE = "pvp-arena:build";
+const PARTICIPATION_ATTRIBUTE = "pvp-arena:unranked-participation";
+const WINS_ATTRIBUTE = "pvp-arena:unranked-wins";
+
+/** Cache script toplevel_mainmodal_open (2524), which the captures run before each main modal. */
+const TOPLEVEL_MAINMODAL_OPEN_SCRIPT = 2524;
+/** The magic tab's side-panel slot (sendTabInterface), as the core's login sends the spellbook. */
+const MAGIC_TAB = 6;
 
 /** The client's chat types for the lines the captures show (ChatMessageType's 101-103). */
 const CHAT = { TRADEREQ: 101, TRADE: 102, CHALREQ_TRADE: 103 };
@@ -32,7 +34,8 @@ const EVENTS = {
   DRAGTARGET: 1 << 20,
 };
 
-function init(pluginApi) {
+/** The shared api and data, before the other units attach. */
+function attachCommon(pluginApi) {
   api = pluginApi;
   core = pluginApi.core;
   data = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "data", "pvp-arena.json"), "utf8"));
@@ -114,12 +117,12 @@ function location([x, y], z = 0) {
 /** Opens a main modal as the captures do (toplevel_mainmodal_open, then the group). */
 function openModal(player, name) {
   const sender = player.getPacketSender();
-  sender.sendInterfaceScript(2524, [-1, -1]);
+  sender.sendInterfaceScript(TOPLEVEL_MAINMODAL_OPEN_SCRIPT, [-1, -1]);
   sender.sendInterface(interfaceId(name));
 }
 
 module.exports = {
-  init,
+  attachCommon,
   get api() {
     return api;
   },
@@ -129,7 +132,11 @@ module.exports = {
   get data() {
     return data;
   },
-  ATTRIBUTES,
+  LOADOUTS_ATTRIBUTE,
+  BUILD_ATTRIBUTE,
+  PARTICIPATION_ATTRIBUTE,
+  WINS_ATTRIBUTE,
+  MAGIC_TAB,
   CHAT,
   EVENTS,
   component,

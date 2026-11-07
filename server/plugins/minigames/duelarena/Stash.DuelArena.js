@@ -1,16 +1,25 @@
 /**
  * The player's own character while they fight an unranked duel. Live PvP Arena worlds give a
  * separate arena character; here the main one fights, so its belongings are put aside for the
- * fight, as Last Man Standing does (lms/Stash.LastManStanding.js has the same shape):
- * - the fight starting saves the inventory, the equipment (with each item's meta), the combat
- *   skills, the spellbook, special and run energy in a saved attribute, then empties both;
- * - leaving the arena (a win, a death, a forfeit) puts everything back as it was;
- * - a player who logs out or whose world stops mid-fight gets theirs back on the next login, in
- *   the Emir's Arena.
+ * fight, in the shape of Last Man Standing's stash (lms/Stash.LastManStanding.js):
+ * - the fight starting puts aside the inventory, the equipment (with each item's meta), the
+ *   combat skills, the spellbook, special and run energy, the autocast spell and the
+ *   per-character attributes the data names (the ring of recoil's count, the imbued heart's
+ *   cooldown), then empties both containers and resets those attributes;
+ * - leaving the arena (a win, a death, a forfeit, a logout) puts everything back as it was;
+ * - the stash is never saved: any save taken mid-fight (a periodic save, a crash) writes the
+ *   player's own character and an Emir's Arena tile instead of the arena's ("persistence:
+ *   snapshot"), so no save ever holds arena gear or a stash, whatever plugins the next world
+ *   runs.
  */
 const Common = require("./Common.DuelArena");
 
 const COMBAT_SKILLS = ["ATTACK", "DEFENCE", "STRENGTH", "HITPOINTS", "RANGED", "PRAYER", "MAGIC"];
+const INVENTORY_SIZE = 28;
+const EQUIPMENT_SIZE = 14;
+
+/** Player -> their own character, from the fight's start until they leave it. */
+const stashes = new WeakMap();
 
 function itemsOf(container) {
   return container.getItems().map((item) => (item && item.getId() > 0 ? [item.getId(), item.getAmount(), item.getMeta()] : null));
@@ -26,7 +35,7 @@ function skillsOf(player) {
 }
 
 function stashed(player) {
-  return player.getAttribute(Common.ATTRIBUTES.stash) ?? null;
+  return stashes.get(player) ?? null;
 }
 
 function spellbookName(player) {
@@ -40,25 +49,45 @@ function clear(player) {
   player.getEquipment().resetItems().refreshItems();
 }
 
-/** Saves everything the fight replaces; a second call while one is held keeps the first. */
-function save(player) {
-  if (stashed(player)) return;
-  player.setAttribute(Common.ATTRIBUTES.stash, {
+/** The character attributes the arena starts afresh, by key: their value outside it. */
+function characterKeys() {
+  return Object.keys(Common.data.characterAttributes).filter((key) => !key.startsWith("$"));
+}
+
+function characterAttributes(player) {
+  return Object.fromEntries(characterKeys().map((key) => [key, player.getAttribute(key)]));
+}
+
+/**
+ * Puts the player's own character aside, leaving them empty-handed. False, and nothing
+ * touched, when one is already held: a second fight must not start on top of it.
+ */
+function save(player, exit) {
+  if (stashed(player)) return false;
+  stashes.set(player, {
     inventory: itemsOf(player.getInventory()),
     equipment: itemsOf(player.getEquipment()),
     skills: skillsOf(player),
     spellbook: spellbookName(player),
     special: player.getSpecialPercentage(),
     run: player.getRunEnergy(),
+    autocast: player.getCombat().getAutocastSpell?.() ?? null,
+    attributes: characterAttributes(player),
+    exit: exit ?? Common.data.arena.sides[0].exits[0],
   });
   clear(player);
+  for (const key of characterKeys()) player.setAttribute(key, Common.data.characterAttributes[key]);
+  player.setHasVengeance(false);
+  return true;
+}
+
+function itemOf([id, amount, meta]) {
+  return new Common.core.Item(id, amount, meta ? { ...meta } : null);
 }
 
 function fill(container, items) {
   const { Item } = Common.core;
-  items.forEach((entry, slot) => {
-    container.setItem(slot, entry ? new Item(entry[0], entry[1], entry[2] ? { ...entry[2] } : null) : new Item(-1, 0));
-  });
+  items.forEach((entry, slot) => container.setItem(slot, entry ? itemOf(entry) : new Item(-1, 0)));
   container.refreshItems();
 }
 
@@ -66,6 +95,7 @@ function fill(container, items) {
 function restore(player) {
   const stash = stashed(player);
   if (!stash) return false;
+  stashes.delete(player);
   const { Skill, MagicSpellbook, Flag, WeaponInterfaceManager, BonusManager, CombatSpecial } = Common.core;
   fill(player.getInventory(), stash.inventory);
   fill(player.getEquipment(), stash.equipment);
@@ -80,28 +110,52 @@ function restore(player) {
   });
   const book = MagicSpellbook[stash.spellbook] ?? MagicSpellbook.NORMAL;
   player.setSpellbook(book);
-  player.getPacketSender().sendTabInterface(6, book.getInterfaceId());
+  player.getPacketSender().sendTabInterface(Common.MAGIC_TAB, book.getInterfaceId());
   player.setSpecialPercentage(stash.special ?? 100);
   CombatSpecial.updateBar(player);
   player.setRunEnergy(stash.run ?? 100);
-  player.setAttribute(Common.ATTRIBUTES.stash, null);
+  for (const [key, value] of Object.entries(stash.attributes)) player.setAttribute(key, value);
+  player.setHasVengeance(false);
+  player.getCombat().setAutocastSpell(stash.autocast);
   WeaponInterfaceManager.assign(player);
   BonusManager.update(player);
   player.getUpdateFlag().flag(Flag.APPEARANCE);
   return true;
 }
 
-/** A save made mid-fight (a crash, a restart): their belongings back, in the Emir's Arena. */
-function login({ player }) {
-  if (!stashed(player)) return;
-  restore(player);
-  const exits = Common.data.arena.sides[0].exits;
-  player.moveTo(Common.location(exits[Math.floor(Math.random() * exits.length)]));
+/** A save taken mid-fight writes the player's own character, standing in the Emir's Arena. */
+function snapshot({ player, save: playerSave }) {
+  const stash = stashed(player);
+  if (!stash) return;
+  const { Item, Skill, MagicSpellbook, Location } = Common.core;
+  const items = (entries, size) => Array.from({ length: size }, (_, slot) => (entries[slot] ? itemOf(entries[slot]) : new Item(-1, 0)));
+  playerSave.setInventory(items(stash.inventory, INVENTORY_SIZE));
+  playerSave.setEquipment(items(stash.equipment, EQUIPMENT_SIZE));
+  const skills = playerSave.getSkills();
+  COMBAT_SKILLS.forEach((name, index) => {
+    const [level, max, experience] = stash.skills[index] ?? [];
+    if (max == null) return;
+    const at = Skill[name].getIndex();
+    skills.level[at] = level;
+    skills.maxLevel[at] = max;
+    skills.experience[at] = experience;
+  });
+  playerSave.setSpellBook(MagicSpellbook[stash.spellbook] ?? MagicSpellbook.NORMAL);
+  playerSave.setSpecPercentage(stash.special ?? 100);
+  playerSave.setRunEnergy(stash.run ?? 100);
+  playerSave.setHasVengeance(false);
+  playerSave.autocastSpellId = stash.autocast?.spellId?.() ?? -1;
+  playerSave.setPosition(new Location(stash.exit[0], stash.exit[1], 0));
+  const attributes = { ...(playerSave.attributes ?? {}) };
+  for (const [key, value] of Object.entries(stash.attributes)) {
+    if (value === undefined || value === null) delete attributes[key];
+    else attributes[key] = value;
+  }
+  playerSave.attributes = attributes;
 }
 
 function attachStash(api) {
-  api.persistAttribute(Common.ATTRIBUTES.stash, null);
-  api.onPlayerLogin(login);
+  api.onCustomEvent("persistence:snapshot", snapshot);
 }
 
-module.exports = { attachStash, save, restore, stashed, clear, COMBAT_SKILLS };
+module.exports = { attachStash, save, restore, stashed, clear, snapshot, COMBAT_SKILLS };

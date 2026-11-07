@@ -37,7 +37,7 @@ const SCROLL_TO_SCRIPT = 6319;
 const SUPPLIES = "pvp_arena_stagingarea_supplies";
 const SHARE = "pvp_arena_stagingarea_shareloadout";
 const LOADOUTS_OPTION = 4;
-const ITEMS_LIST_END = 463;
+const SPELLBOOKS = 3;
 
 /** Editors (758, 757) by interface name: who may edit which column, and who to tell. */
 const editors = new Map();
@@ -54,30 +54,57 @@ function buildName(build) {
 }
 
 function preferredBuild(player) {
-  const build = Common.number(player, Common.ATTRIBUTES.build);
+  const build = Common.number(player, Common.BUILD_ATTRIBUTE);
   return build >= 0 && build <= 2 ? build : 0;
 }
 
 function setPreferredBuild(player, build) {
-  player.setAttribute(Common.ATTRIBUTES.build, build);
+  player.setAttribute(Common.BUILD_ATTRIBUTE, build);
   Common.varbit(player, "pvpa_transmit_build", build);
 }
 
+/** The items list's last index: enum 4390's highest key (its entries are 0 to N). */
+function itemsListEnd() {
+  const values = Common.core.CacheDefinitions.getEnumValues(Common.data.itemEnum);
+  return values ? Math.max(0, ...values.keys()) : 0;
+}
+
+/** A load-out value as an item index: an integer the items list holds, or 0 (empty). */
+function entry(value) {
+  return Number.isInteger(value) && value > 0 && value <= itemsListEnd() ? value : 0;
+}
+
+/**
+ * A load-out in its fixed shape: the spellbook (0-2), the named worn slots and exactly 28
+ * inventory slots, each a valid item index. Saves and copies go through it, so a load-out can
+ * never hold more slots or other keys than the screens draw.
+ */
 function copyLoadout(loadout) {
-  return { spellbook: loadout.spellbook ?? 0, worn: { ...loadout.worn }, inventory: [...loadout.inventory] };
+  const spellbook = Number.isInteger(loadout?.spellbook) && loadout.spellbook >= 0 && loadout.spellbook < SPELLBOOKS ? loadout.spellbook : 0;
+  const worn = {};
+  for (const slot of Object.keys(Common.data.wornSlots)) {
+    const value = entry(loadout?.worn?.[slot]);
+    if (value) worn[slot] = value;
+  }
+  const inventory = Array.from({ length: INVENTORY_SIZE }, (_, slot) => entry(loadout?.inventory?.[slot]));
+  return { spellbook, worn, inventory };
 }
 
 /** The player's load-out for a build (0-2), the captured default until they change it. */
 function loadout(player, build) {
-  const saved = player.getAttribute(Common.ATTRIBUTES.loadouts);
+  const saved = player.getAttribute(Common.LOADOUTS_ATTRIBUTE);
   const own = saved?.[BUILD_LETTERS[build]];
-  return own ? own : copyLoadout(Common.data.builds[build].default);
+  return copyLoadout(own ?? Common.data.builds[build].default);
 }
 
 function saveLoadout(player, build, value) {
-  const saved = { ...(player.getAttribute(Common.ATTRIBUTES.loadouts) ?? {}) };
-  saved[BUILD_LETTERS[build]] = value;
-  player.setAttribute(Common.ATTRIBUTES.loadouts, saved);
+  const saved = {};
+  for (const letter of BUILD_LETTERS) {
+    const own = player.getAttribute(Common.LOADOUTS_ATTRIBUTE)?.[letter];
+    if (own) saved[letter] = copyLoadout(own);
+  }
+  saved[BUILD_LETTERS[build]] = copyLoadout(value);
+  player.setAttribute(Common.LOADOUTS_ATTRIBUTE, saved);
 }
 
 function sendLoadout(player, build, value = loadout(player, build)) {
@@ -174,7 +201,7 @@ function equip(player, build) {
   inventory.refreshItems();
   const book = MagicSpellbook[Common.data.spellbooks.values[value.spellbook ?? 0]] ?? MagicSpellbook.ANCIENT;
   player.setSpellbook(book);
-  player.getPacketSender().sendTabInterface(6, book.getInterfaceId());
+  player.getPacketSender().sendTabInterface(Common.MAGIC_TAB, book.getInterfaceId());
   player.getCombat?.().setAutocastSpell?.(null);
   player.setRunEnergy(100);
   player.setSpecialPercentage(100);
@@ -245,7 +272,8 @@ function sendColumnEvents(player, iface) {
     }
   }
   for (let build = 0; build < 3; build++) sender.sendInterfaceFlagsRange(columnUid(iface, build, "trash"), -1, -1, DRAGTARGET);
-  for (let build = 0; build < 3; build++) sender.sendInterfaceFlagsRange(columnUid(iface, build, "items_list"), 1, ITEMS_LIST_END, OP1 | OP10 | DEPTH3);
+  const end = itemsListEnd();
+  for (let build = 0; build < 3; build++) sender.sendInterfaceFlagsRange(columnUid(iface, build, "items_list"), 1, end, OP1 | OP10 | DEPTH3);
   for (let build = 0; build < 3; build++) sender.sendInterfaceFlagsRange(columnUid(iface, build, "spellbook_menu"), 1, 3, OP1);
 }
 
@@ -270,6 +298,17 @@ function examine(player, id) {
   if (id > 0) player.sendMessage(Common.core.ItemDefinition.forId(id)?.getExamine() ?? "");
 }
 
+/**
+ * Whether a slot the client sent fits the part it names: 0-27 in an inventory, an item index
+ * in the items list, 1-3 in the spellbook menu. Anything else is a forged packet.
+ */
+function validSlot(part, slot) {
+  if (part === "inventory") return Number.isInteger(slot) && slot >= 0 && slot < INVENTORY_SIZE;
+  if (part === "items_list") return entry(slot) > 0;
+  if (part === "spellbook_menu") return Number.isInteger(slot) && slot >= 1 && slot <= SPELLBOOKS;
+  return true;
+}
+
 function click(iface, event) {
   const where = partOf(iface, event.buttonId);
   if (!where) return false;
@@ -278,6 +317,7 @@ function click(iface, event) {
   const slot = event.slot ?? -1;
   const { build, part } = where;
   const op = event.opId ?? event.action;
+  if (!validSlot(part, slot)) return true;
   if (op === 10) {
     const value = part === "items_list" ? slot : part === "inventory" ? loadout(player, build).inventory[slot] : loadout(player, build).worn[where.slot];
     examine(player, itemOf(value));
@@ -336,6 +376,7 @@ function drag(iface, event) {
   if (!to || to.build !== from.build || !editable(player, iface, from.build)) return true;
   const fromSlot = packet.sourceSlot;
   const toSlot = packet.targetSlot;
+  if (!validSlot(from.part, fromSlot) || !validSlot(to.part, toSlot)) return true;
   change(player, iface, from.build, (value) => {
     if (to.part === "trash") {
       if (from.part === "inventory" && value.inventory[fromSlot]) value.inventory[fromSlot] = 0;
@@ -513,8 +554,9 @@ let loadoutsOffered = () => false;
 
 function attachLoadouts(api, { offersLoadouts }) {
   loadoutsOffered = offersLoadouts;
-  api.persistAttribute(Common.ATTRIBUTES.loadouts, null);
-  api.persistAttribute(Common.ATTRIBUTES.build, 0);
+  api.persistAttribute(Common.LOADOUTS_ATTRIBUTE, null);
+  api.persistAttribute(Common.BUILD_ATTRIBUTE, 0);
+  // By gameval id, not name: the chest's name is "Supplies", which other locs share.
   api.onObjectFirstClick([Common.locId("pvpa_lobby_supplies_chest")], openChest);
   api.onInterfaceActionButton(Common.component(`${SUPPLIES}:buildtypes`), chooseChestBuild);
   api.onInterfaceActionButton(editorComponents(), editorClick);

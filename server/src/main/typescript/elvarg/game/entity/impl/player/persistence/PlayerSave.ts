@@ -816,6 +816,13 @@ export class PlayerSave {
         }
         playerSave.banks = banks;
 
+        // "persistence:snapshot" { player, save }: content that lends the player a temporary
+        // character (the PvP Arena's fights) writes their own one into the save instead, so a
+        // save never holds the lent one. Handlers change `save` (inventory, equipment, skills,
+        // spellBook, position, attributes ...), never the live player.
+        const { PluginManager } = require("../../../../../plugins/PluginManager") as typeof import("../../../../../plugins/PluginManager");
+        PluginManager.emitCustomEvent("persistence:snapshot", { player, save: playerSave });
+
         return playerSave;
     }
 }

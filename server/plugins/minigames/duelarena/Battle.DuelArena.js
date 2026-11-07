@@ -111,6 +111,8 @@ class Fight {
     this.winner = null;
     this.timeLeft = Common.data.fight.timeLimit;
     this.toldNotBegun = new Map();
+    /** Each player's Emir's Arena tile, by their side's steps: where they leave (and any save puts them). */
+    this.exits = new Map(players.map((player) => [player, pick(this.side(player).exits)]));
   }
 
   opponentOf(player) {
@@ -129,12 +131,12 @@ class Fight {
 
   arrive(player) {
     fightOf.set(player, this);
-    const count = Common.add(player, Common.ATTRIBUTES.participation, 1);
-    player.sendMessage(Common.message("participation", { count }));
     clearCombat(player);
     player.getMovementQueue().reset();
     Common.core.PrayerHandler.deactivatePrayers(player);
-    Stash.save(player);
+    Stash.save(player, this.exits.get(player));
+    const count = Common.add(player, Common.PARTICIPATION_ATTRIBUTE, 1);
+    player.sendMessage(Common.message("participation", { count }));
     Loadouts.equip(player, this.build);
     Common.varbit(player, "pvp_area_client", 1);
     Common.varbit(player, "pvpa_battlearea_longbattle", 1);
@@ -205,8 +207,8 @@ class Fight {
     this.over = true;
     this.winner = winner;
     for (const player of this.inArena()) player.sendMessage(Common.message("won", { name: winner.getDisplayName() }));
-    const wins = Common.add(winner, Common.ATTRIBUTES.wins, 1);
-    const count = Common.number(winner, Common.ATTRIBUTES.participation);
+    const wins = Common.add(winner, Common.WINS_ATTRIBUTE, 1);
+    const count = Common.number(winner, Common.PARTICIPATION_ATTRIBUTE);
     winner.sendMessage(Common.message("wins", { wins, count }));
     if (byDeath) winner.sendMessage(Common.message("over"));
     const sender = winner.getPacketSender();
@@ -215,14 +217,12 @@ class Fight {
     clearCombat(winner);
     const loser = this.opponentOf(winner);
     if (loser) clearCombat(loser);
-    Common.api.emitCustomEvent("pvp-arena:unranked-ended", { players: this.players, winner, loser });
   }
 
   /** The time ran out: nobody wins, both leave. */
   timeUp() {
     if (this.over) return;
     this.over = true;
-    Common.api.emitCustomEvent("pvp-arena:unranked-ended", { players: this.players, winner: null, loser: null });
     for (const player of this.inArena()) {
       player.sendMessage(Common.message("over"));
       this.exit(player);
@@ -277,8 +277,7 @@ class Fight {
   /** Back to the Emir's Arena by their side's steps. */
   exit(player) {
     if (fightOf.get(player) !== this) return;
-    const exits = this.side(player).exits;
-    player.moveTo(Common.location(exits[Math.floor(Math.random() * exits.length)]));
+    player.moveTo(Common.location(this.exits.get(player)));
     if (player.getArea() === this.area) this.area.leave(player, false);
   }
 
@@ -290,21 +289,18 @@ class Fight {
       if (winner && fightOf.get(winner) === this) this.decide(winner, false);
     }
     fightOf.delete(player);
-    dying.delete(player);
+    // A death begun here still ends safe (no drop, no respawn elsewhere) once they're out.
+    if (!player.isDying && player.getHitpoints() > 0) dying.delete(player);
     this.toldNotBegun.delete(player);
     clearCombat(player);
     const sender = player.getPacketSender();
     for (const name of ["pvp_area_client", "pvpa_battlearea_status", "pvpa_battlearea_longbattle"]) Common.varbit(player, name, 0);
     sender.sendPlayerOption(FIGHT_OPTION, "", false);
     sender.closeSubInterface(Common.component("toplevel_osrs_stretch:overlay_atmosphere"));
-    if (logout) {
-      // The save holds the stash and the lobby tile; Stash's login hands everything back.
-      player.setLocation(Common.location(this.side(player).exits[0]));
-    } else {
-      Common.core.PrayerHandler.deactivatePrayers(player);
-      Stash.restore(player);
-      Common.api.emitCustomEvent("prayer:sync-unlocks", { player });
-    }
+    Common.core.PrayerHandler.deactivatePrayers(player);
+    Stash.restore(player);
+    if (logout) player.setLocation(Common.location(this.exits.get(player)));
+    else Common.api.emitCustomEvent("prayer:sync-unlocks", { player });
     if (this.inArena().length === 0) {
       fights.delete(this);
       Common.later(2, () => {
@@ -316,6 +312,10 @@ class Fight {
 }
 
 /** What a fight leaves on a player: queued hits, poison, venom and freeze (as Last Man Standing clears them). */
+function pick(list) {
+  return list[Math.floor(Math.random() * list.length)];
+}
+
 function clearCombat(player) {
   const { TimerKey } = Common.core;
   const combat = player.getCombat();
@@ -327,7 +327,9 @@ function clearCombat(player) {
   player.getTimers().cancel(TimerKey.FREEZE_IMMUNITY);
 }
 
+/** A fight for two players, or null when either still has a character put aside. */
 function start(players, build) {
+  if (players.some((player) => Stash.stashed(player) || fightOf.has(player))) return null;
   const fight = new Fight(players, build);
   fight.begin();
   return fight;
@@ -395,15 +397,20 @@ function usePortal({ player }) {
   return true;
 }
 
+/** The world stopping: every fight ends with no winner, and everyone's own character comes back. */
 function shutdown() {
-  for (const fight of [...fights]) for (const player of fight.inArena()) fight.exit(player);
+  for (const fight of [...fights]) {
+    fight.over = true;
+    for (const player of fight.inArena()) fight.exit(player);
+  }
 }
 
 function attachBattle(api, { leftFight }) {
   onLeft = leftFight;
-  api.persistAttribute(Common.ATTRIBUTES.participation, 0);
-  api.persistAttribute(Common.ATTRIBUTES.wins, 0);
+  api.persistAttribute(Common.PARTICIPATION_ATTRIBUTE, 0);
+  api.persistAttribute(Common.WINS_ATTRIBUTE, 0);
   api.registerSpellRuneSource({ check: pouchCovers, consume: pouchSpends });
+  // By gameval id, not name: they're named "Gateway" and "Portal", as many other locs are.
   api.onObjectFirstClick([Common.locId("pvpa_battlearea_trapdoor")], useTrapdoor);
   api.onObjectFirstClick([Common.locId("pvpa_battlearea_spectatorportal")], usePortal);
   api.onObjectSecondClick([Common.locId("pvpa_battlearea_spectatorportal")], usePortal);

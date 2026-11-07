@@ -290,12 +290,15 @@
     "timerEvery": 2
   },
   "sounds": {
+    "$comment": "Synth ids, as captured: discard is the supplies chest's discard sound (LMS's chest plays the same).",
     "discard": 2381
   },
   "music": {
+    "$comment": "Midi ids, as captured: 147 'silence' plays as the win jingle starts.",
     "silence": 147
   },
   "jingles": {
+    "$comment": "Jingle ids, as captured: 98 'duel win2'.",
     "win": 98
   },
   "inviteTicks": 100,
@@ -321,5 +324,10 @@
     "copyPopup": "Copy load-out from {name}?|Are you sure you want to copy this player's load-out?<br><br>If you do, it will overwrite your current {build} build.|<col=ff0000>No</col>|<col=0dc10d>Yes</col>",
     "seek": "Attempt to scroll to item:",
     "duelType": "Which kind of duel?"
+  },
+  "characterAttributes": {
+    "$comment": "Per-character attributes the fight starts afresh and Stash puts back (key -> the arena's starting value): the ring of recoil's damage count, the imbued heart's cooldown.",
+    "ring-of-recoil:damage": 0,
+    "imbued-heart:ready-at": 0
   }
 }

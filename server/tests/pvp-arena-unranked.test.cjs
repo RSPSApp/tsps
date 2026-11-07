@@ -24,7 +24,7 @@ const ToxicStaff = require('../plugins/items/ToxicStaffOfTheDead.plugin');
 const config = { pvpArenaWorld: true };
 const hooks = {
   buttons: new Map(), custom: {}, objects: new Map(), beforeDeath: [], deaths: [], drops: [],
-  process: [], logins: [], prompts: [], options: [],
+  process: [], logins: [], prompts: [], options: [], shutdowns: [],
 };
 let core;
 let cache;
@@ -45,6 +45,7 @@ before(() => {
     onShouldDropItemsOnDeath: (handler) => hooks.drops.push(handler),
     onPlayerProcess: (handler) => hooks.process.push(handler),
     onPlayerOption: (handler) => hooks.options.push(handler),
+    onServerShutdown: (handler) => hooks.shutdowns.push(handler),
     sendMultiChatboxPrompt: (player, title, ...pairs) => hooks.prompts.push({ player, title, pairs }),
   }, { get: (target, key) => target[key] ?? noop });
   DuelArena.register(api);
@@ -321,4 +322,107 @@ test('a load-out\'s charged items come full: the Max/Med toxic staff has its sca
   assert.equal(staff.getId(), core.ItemIdentifiers.TOXIC_STAFF_OF_THE_DEAD);
   assert.equal(ToxicStaff._test.charges(staff), ToxicStaff._test.MAX_CHARGES);
   Stash.restore(a);
+});
+
+test('a save taken mid-fight writes their own character in the Emir\'s Arena, never the arena\'s', (t) => {
+  const { PlayerSave } = require('../dist/game/entity/impl/player/persistence/PlayerSave');
+  const [a, b] = toLoadouts(t, 1);
+  a.getInventory().add(new core.Item(995, 777));
+  const ownMagicXp = a.getSkillManager().getExperience(core.Skill.MAGIC);
+  click(a, 'pvp_arena_unrankedduel:opponent_confirm');
+  click(b, 'pvp_arena_unrankedduel:opponent_confirm');
+  assert.ok(Battle.fightFor(a));
+  const save = PlayerSave.fromPlayer(a);
+  Stash.snapshot({ player: a, save });
+  const saved = save.getInventory().filter((item) => item.getId() > 0).map((item) => [item.getId(), item.getAmount()]);
+  assert.deepEqual(saved, [[995, 777]], 'only their own items');
+  assert.equal(save.getEquipment().some((item) => item.getId() > 0), false);
+  assert.equal(save.getSkills().experience[core.Skill.MAGIC.getIndex()], ownMagicXp);
+  const at = save.getPosition();
+  assert.ok(at.getX() > 3300 && at.getX() < 3400 && at.getY() > 3200 && at.getY() < 3300, 'standing in the Emir\'s Arena');
+  assert.equal(Object.keys(save.attributes ?? {}).some((key) => /stash/.test(key)), false);
+  for (const handler of hooks.shutdowns) handler();
+});
+
+test('a fight never starts on top of a character already put aside', (t) => {
+  const [a, b] = toLoadouts(t, 1);
+  a.getInventory().add(new core.Item(995, 5));
+  Stash.save(a);
+  a.getInventory().add(new core.Item(995, 9));
+  click(a, 'pvp_arena_unrankedduel:opponent_confirm');
+  click(b, 'pvp_arena_unrankedduel:opponent_confirm');
+  assert.equal(Battle.fightFor(a), null);
+  assert.equal(Battle.fightFor(b), null);
+  assert.equal(a.getInventory().getAmount(995), 9, 'nothing replaced');
+  Stash.restore(a);
+  assert.equal(a.getInventory().getAmount(995), 5);
+});
+
+test('a shutdown ends fights with no winner, and a death under way still drops nothing', (t) => {
+  const [a, b] = toFight(t);
+  tick(21);
+  for (const handler of hooks.beforeDeath) handler({ player: b, preventDeath: false });
+  b.isDying = true; // the core's death task is under way (4 ticks) as the world stops
+  const wins = a.sent.messages.filter((m) => /wins:/.test(m)).length;
+  const [c, d] = toFight(t);
+  tick(21);
+  for (const handler of hooks.shutdowns) handler();
+  assert.equal(Battle.fightFor(c), null);
+  assert.equal(Battle.fightFor(d), null);
+  assert.ok(!c.sent.messages.some((m) => /has won/.test(m)) && !d.sent.messages.some((m) => /has won/.test(m)), 'no winner');
+  assert.equal(a.sent.messages.filter((m) => /wins:/.test(m)).length, wins);
+  assert.equal(Battle.fightFor(b), null, 'out of the arena, their own character back');
+  const drop = { player: b, shouldDrop: true };
+  for (const handler of hooks.drops) handler(drop);
+  assert.equal(drop.shouldDrop, false, 'the dying loser keeps their own items');
+  const death = { player: b, killer: a, handled: false };
+  for (const handler of hooks.deaths) handler(death);
+  assert.equal(death.handled, true);
+  b.isDying = false;
+});
+
+test('forged load-out slots change nothing', (t) => {
+  const a = realPlayer(t, 'Alpha');
+  hooks.objects.get(cache.getLocId('pvpa_lobby_supplies_chest'))({ player: a });
+  const before = JSON.stringify(Loadouts.loadout(a, 0));
+  const inv = cache.getComponentId('pvp_arena_stagingarea_supplies:0inventory');
+  const list = cache.getComponentId('pvp_arena_stagingarea_supplies:0items_list');
+  for (const [from, to, fromSlot, toSlot] of [[inv, inv, 0, 65535], [list, inv, 39, 65535], [list, inv, 99999, 3], [inv, inv, -1, 2]]) {
+    emit('player:widget-action', { player: a, packet: { sourceWidgetId: from, targetWidgetId: to, sourceSlot: fromSlot, targetSlot: toSlot }, handled: false });
+  }
+  click(a, 'pvp_arena_stagingarea_supplies:0items_list', 70000);
+  click(a, 'pvp_arena_stagingarea_supplies:0inventory', 500, 2);
+  assert.equal(JSON.stringify(Loadouts.loadout(a, 0)), before);
+  a.setAttribute('pvp-arena:loadouts', { a: { spellbook: 9, worn: { hat: 1e9, bogus: 4 }, inventory: new Array(70000).fill(39) } });
+  const value = Loadouts.loadout(a, 0);
+  assert.equal(value.inventory.length, 28);
+  assert.equal(value.spellbook, 0);
+  assert.deepEqual(Object.keys(value.worn), []);
+});
+
+test('the arena starts per-character counters afresh and puts the real ones back', (t) => {
+  const a = realPlayer(t, 'Alpha');
+  a.setAttribute('ring-of-recoil:damage', 17);
+  a.setAttribute('imbued-heart:ready-at', 123456);
+  a.setHasVengeance(true);
+  Stash.save(a);
+  assert.equal(a.getAttribute('ring-of-recoil:damage'), 0);
+  assert.equal(a.getAttribute('imbued-heart:ready-at'), 0);
+  assert.equal(a.hasVengeanceReturn(), false);
+  a.setAttribute('ring-of-recoil:damage', 30);
+  a.setHasVengeance(true);
+  Stash.restore(a);
+  assert.equal(a.getAttribute('ring-of-recoil:damage'), 17);
+  assert.equal(a.getAttribute('imbued-heart:ready-at'), 123456);
+  assert.equal(a.hasVengeanceReturn(), false);
+});
+
+test('a player who died with the screen open is not taken into a fight', (t) => {
+  const [a, b] = toLoadouts(t, 1);
+  click(a, 'pvp_arena_unrankedduel:opponent_confirm');
+  a.isDying = true;
+  click(b, 'pvp_arena_unrankedduel:opponent_confirm');
+  assert.equal(Battle.fightFor(a), null);
+  assert.equal(Battle.fightFor(b), null);
+  a.isDying = false;
 });

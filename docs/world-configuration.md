@@ -160,4 +160,6 @@ Unranked duels are on every world. In the Emir's Arena, player option 1 is Chall
 Load-outs. On a normal world, Challenge first asks whether the duel is an Unranked Duel or a Legacy
 Duel. On a PvP Arena world, Challenge goes straight to an unranked duel. The fight uses the player's
 main character: their items, stats and spellbook are set aside for the fight and come back when
-they leave the arena, or on their next login if they were still in a fight (`duelarena/Stash.DuelArena.js`).
+they leave the arena (`duelarena/Stash.DuelArena.js`). A save taken mid-fight (a periodic save,
+a crash) writes their own character standing in the Emir's Arena, never the arena's gear, so a
+world sharing saves with this one is safe with `DuelArena` turned off.

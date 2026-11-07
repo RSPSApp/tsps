@@ -92,6 +92,7 @@ function accept(player, challenger) {
   };
   for (const p of session.players) sessions.set(p, session);
   for (const p of session.players) open(p, session);
+  Common.every(() => watch(session));
 }
 
 function opponent(session, player) {
@@ -187,12 +188,13 @@ function acceptLoadout({ player }) {
   Common.varbit(player, "pvpa_unrankedduel_transmit_iacceptloadout", 1);
   Common.varbit(player, "pvpa_legacyduel_transmit_iacceptconfirm", 1);
   if (session.acceptedLoadout.size < 2) return true;
+  // Checked as the challenge was: either one may have died, started another duel or walked off.
+  const ready = session.players.every((p) => !Battle.fightFor(p) && !legacy.busy(p) && p.getHitpoints() > 0 && !p.isDying)
+    && nearby(...session.players);
   for (const p of session.players) sessions.delete(p);
-  if (session.players.some((p) => !nearby(p, opponent(session, p)) || Battle.fightFor(p))) {
+  if (!ready || !Battle.start(session.players, session.build)) {
     for (const p of session.players) p.getPacketSender().sendInterfaceRemoval();
-    return true;
   }
-  Battle.start(session.players, session.build);
   return true;
 }
 
@@ -219,10 +221,13 @@ function gone({ player }) {
   cancel(player);
 }
 
-/** Every tick a screen is open: both still there and close by, or it's off. */
-function watch({ player }) {
-  const session = sessions.get(player);
-  if (session && !nearby(...session.players)) cancel(player);
+/** Each tick a duel screen is open: both still there and close by, or it's off (false stops the watch). */
+function watch(session) {
+  const [player] = session.players;
+  if (sessions.get(player) !== session) return false;
+  if (nearby(...session.players)) return true;
+  cancel(player);
+  return false;
 }
 
 function inFight(player) {
@@ -243,7 +248,6 @@ function attachUnranked(api, options) {
   api.onInterfaceActionButton(uid("opponent_copy"), copyOpponent);
   api.onInterfaceActionButton(uid("opponent_confirm"), acceptLoadout);
   api.onCustomEvent("interface:closed", closed);
-  api.onPlayerProcess(watch);
   api.onPlayerLogout(gone);
   api.onPlayerDisconnect(gone);
 }

@@ -837,7 +837,7 @@ module.exports = {
   enableStaking,
   register(api) {
     pluginApi = api;
-    Common.init(api);
+    Common.attachCommon(api);
     api.registerCustomInterface(DUEL_INTERFACE);
     api.onPlayerLogin(processPlayer);
     api.onPlayerProcess(processPlayer);

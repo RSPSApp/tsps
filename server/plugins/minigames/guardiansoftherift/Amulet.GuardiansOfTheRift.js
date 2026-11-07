@@ -4,6 +4,7 @@
 // GOTR's cache flags distinguish finding the locket from actually exchanging it.
 const Shared = require("./Shared.GuardiansOfTheRift");
 const Records = require("./Records.GuardiansOfTheRift");
+const Game = require("./Game.GuardiansOfTheRift");
 const PAGE = "Lumbridge Guide";
 const QUEST_KEY = "temple_of_the_eye";
 const UNLOCK = "gotr_amulet_of_the_eye_obtained";
@@ -76,7 +77,8 @@ function teleport(player) {
   const { Location, TeleportHandler, TeleportType } = Shared.core();
   const target = new Location(LOBBY_TILE.x, LOBBY_TILE.y, 0);
   if (!TeleportHandler.checkReqs(player, target)) return;
-  TeleportHandler.teleport(player, target, TeleportType.NORMAL, false);
+  // The lobby is inside the temple Area, so its postLeave never fires: leaving the game on arrival matches walking out through the barrier.
+  TeleportHandler.teleport(player, target, TeleportType.NORMAL, false, () => Game.leave(player));
 }
 function wornOption(event) {
   const { CacheDefinitions, Equipment } = Shared.core();

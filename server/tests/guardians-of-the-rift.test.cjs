@@ -1912,3 +1912,25 @@ test('the Amulet of the Eye teleports to the Temple of the Eye from the inventor
     TeleportHandler.teleport = teleport;
   }
 });
+
+test('the Amulet of the Eye teleport made during a game leaves the game on arrival', () => {
+  const { TeleportHandler, Item } = Shared.core();
+  const { checkReqs, teleport } = TeleportHandler;
+  let arrive = null;
+  TeleportHandler.checkReqs = () => true;
+  TeleportHandler.teleport = (player, target, type, warn, onArrival) => { arrive = onArrival; };
+  try {
+    const player = fakePlayer('EyeGame');
+    openGame(player);
+    assert.ok(Game.isPlaying(player));
+    const id = Shared.obj('gotr_amulet_of_the_eye');
+    hooks.itemHandlers.forEach((handler) => handler({ player, itemId: id, item: new Item(id, 1), option: 'Teleport', interfaceId: 3214 }));
+    assert.ok(Game.isPlaying(player), 'still in the game until the teleport lands');
+    arrive();
+    assert.equal(Game.isPlaying(player), false, 'arriving in the temple leaves the game');
+  } finally {
+    TeleportHandler.checkReqs = checkReqs;
+    TeleportHandler.teleport = teleport;
+    resetGame();
+  }
+});

@@ -66,6 +66,9 @@ function fakePlayer(x = 1519, y = 3732, coins = 100) {
     getMovementQueue: () => ({ setBlockMovement: (b) => { player.blocked = b; }, reset() {} }),
     getDialogueManager: () => ({ startDialogues: (chain) => player.dialogues.push(chain) }),
     getPacketSender: () => ({
+      // This legacy mock models main-slot occupancy; native lifetime identity is checked in npc-services-room.
+      getSubInterfaceAt: (targetUid) => targetUid === ((161 << 16) | 16) && player.interface >= 0
+        ? Object.freeze({ targetUid, groupId: player.interface, type: 0 }) : undefined,
       sendInterfaceRemoval: () => { player.interface = -1; },
       sendInterface: (id) => { player.interface = id; },
       sendClientScript: (...args) => player.scripts.push(args),

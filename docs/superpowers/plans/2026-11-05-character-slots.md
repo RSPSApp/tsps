@@ -6,7 +6,7 @@
 
 **Architecture:** A small core `Accounts` record (JSON file beside `display-names.json`) maps a login name to its character names. Each character stays an ordinary player with its own name and save, so nothing name-keyed changes. The existing two-packet login (`login` → `handshake`) gains an optional middle step: clients that set a new login flag receive a `CHARACTER_LIST` and may `CHARACTER_SELECT`/`CREATE`/`DELETE` before `handshake`; clients that don't get the default character. The browser login screen gains one new `LoginIndex` stage.
 
-**Tech Stack:** TypeScript server (`server/`, built with Yarn 4 via `npx --yes --package @yarnpkg/cli-dist@4.12.0 -- yarn build`, tests `node --test tests/<file>.test.cjs`), JS plugins, TypeScript browser client (`client/`, tests `node scripts/run-tests.mjs <word>`), Kotlin gateway table (`gateway/`), node:sqlite.
+**Tech Stack:** TypeScript server (`server/`, built with Yarn 4 via `npx --yes --package @yarnpkg/cli-dist@4.12.0 -- yarn build`, tests `node --test tests/<file>.test.cjs`), JS plugins, TypeScript browser client (`client/`, tests `node scripts/run-tests.mjs <word>`), Kotlin gateway table (`runelite-gateway/`), node:sqlite.
 
 **Spec:** `docs/superpowers/specs/2026-11-05-character-slots-design.md`
 
@@ -173,7 +173,7 @@ git commit -m "Count account character names as login names in use"
 - Modify: `server/src/main/typescript/elvarg/net/protocol/ServerPackets.ts` (enum block 0-19 and `SERVER_PACKET_LENGTHS`)
 - Modify: `server/src/main/typescript/elvarg/net/protocol/ClientProtocol.ts` (`ClientPacket` enum, `ServerPacket` enum, `ClientMessage` union at :260, decoder switch at :942, new encoders beside `encodeLoginResponse` :2625)
 - Modify: `server/src/main/typescript/elvarg/net/login/LoginTokens.ts:16-18` (flag)
-- Modify: `gateway/src/main/kotlin/gateway/tsps/TspsServerPacket.kt` (consts and `LENGTHS`)
+- Modify: `runelite-gateway/src/main/kotlin/gateway/tsps/TspsServerPacket.kt` (consts and `LENGTHS`)
 - Test: `server/tests/character-slots-protocol.test.cjs`
 
 **Interfaces:**
@@ -244,13 +244,13 @@ Expected: FAIL (ids undefined, encoders missing)
 
 Run: `npx --yes --package @yarnpkg/cli-dist@4.12.0 -- yarn build && node --test tests/character-slots-protocol.test.cjs`
 Expected: PASS, 3 tests
-Run (in `gateway/`, JAVA_HOME = Adoptium JDK 21; if the rsprox clone fails on `jvmToolchain(11)`, set it to 17 inside the gitignored `gateway/build/rsprox` clone only): `./gradlew :test --tests gateway.tsps.TspsServerPacketTest`
+Run (in `runelite-gateway/`, JAVA_HOME = Adoptium JDK 21; if the rsprox clone fails on `jvmToolchain(11)`, set it to 17 inside the gitignored `runelite-gateway/build/rsprox` clone only): `./gradlew :test --tests gateway.tsps.TspsServerPacketTest`
 Expected: BUILD SUCCESSFUL
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add server/src/main/typescript/elvarg/net/protocol/ServerPackets.ts server/src/main/typescript/elvarg/net/protocol/ClientProtocol.ts server/src/main/typescript/elvarg/net/login/LoginTokens.ts gateway/src/main/kotlin/gateway/tsps/TspsServerPacket.kt server/tests/character-slots-protocol.test.cjs
+git add server/src/main/typescript/elvarg/net/protocol/ServerPackets.ts server/src/main/typescript/elvarg/net/protocol/ClientProtocol.ts server/src/main/typescript/elvarg/net/login/LoginTokens.ts runelite-gateway/src/main/kotlin/gateway/tsps/TspsServerPacket.kt server/tests/character-slots-protocol.test.cjs
 git commit -m "Add CHARACTER_LIST, CHARACTER_RESULT and the character select packets"
 ```
 

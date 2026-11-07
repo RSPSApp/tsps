@@ -65,7 +65,7 @@ function actor(t) {
   const player = new Player(null);
   const inventory = player.getInventory();
   const messages = [];
-  const sender = { sendInterfaceRemoval() {} };
+  const sender = { sendInterfaceRemoval() {}, sendSoundEffect() {} };
   t.mock.method(player, "sendMessage", (message) => messages.push(message));
   t.mock.method(player, "performAnimation", () => {});
   t.mock.method(player, "getPacketSender", () => sender);
@@ -241,6 +241,43 @@ test("Drink applies one dose per stored type, emits potion events and starts sha
   itemAction(f, BARREL_NAME, "Drink", 0);
   assert.deepEqual(effects, ["Prayer potion", "Energy potion"], "the potion delay blocks another drink in the same tick");
   assert.equal(f.player.getAttribute(ATTRIBUTE)["Prayer potion"].doses, 2);
+});
+
+test("Drink skips only the refused potion and plays the barrel sound once (rsprox 4242)", (t) => {
+  const f = actor(t);
+  const I = core.ItemIdentifiers;
+  const prayer = Potions.doseOf(I.PRAYER_POTION_4_);
+  const divine = Potions.doseOf(I.DIVINE_SUPER_COMBAT_POTION_4_);
+  const energy = Potions.doseOf(I.ENERGY_POTION_4_);
+  const effects = [];
+  for (const dose of [prayer, divine, energy]) {
+    t.mock.method(dose.potion, "effect", () => effects.push(dose.potion.name));
+  }
+  const sounds = [];
+  t.mock.method(core.Sounds, "sendSound", (_player, sound) => sounds.push([sound.getId(), sound.getDelay()]));
+  f.player.getSkillManager()
+    .setMaxLevels(core.Skill.HITPOINTS, 99, false)
+    .setCurrentLevels(core.Skill.HITPOINTS, 10, false);
+  seed(f.player, {
+    "Prayer potion": { itemId: I.PRAYER_POTION_4_, name: "prayer potion", doses: 3 },
+    [divine.potion.name]: { itemId: I.DIVINE_SUPER_COMBAT_POTION_4_, name: "divine super combat potion", doses: 2 },
+    "Energy potion": { itemId: I.ENERGY_POTION_4_, name: "energy potion", doses: 2 },
+  });
+  put(f, I.CHUGGING_BARREL, 0);
+
+  itemAction(f, BARREL_NAME, "Drink", 0);
+  assert.deepEqual(effects, ["Prayer potion", "Energy potion"], "the refused divine potion is skipped, the rest drink");
+  assert.deepEqual(f.messages, [
+    "You drink some of your prayer potion.",
+    "You need more than 10 hitpoints to survive the power of a divine potion.",
+    "You drink some of your energy potion.",
+  ]);
+  const stored = f.player.getAttribute(ATTRIBUTE);
+  assert.equal(stored["Prayer potion"].doses, 2);
+  assert.equal(stored[divine.potion.name].doses, 2, "a refused potion keeps its dose");
+  assert.equal(stored["Energy potion"].doses, 1);
+  assert.equal(drunkEvents.length, 2);
+  assert.deepEqual(sounds, [[9491, 30]]);
 });
 
 test("Drink enforces bank, area, food permission, content and stun refusals", (t) => {

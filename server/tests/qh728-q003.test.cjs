@@ -143,7 +143,12 @@ function setup(options = {}) {
         inventory.set(id, (inventory.get(id) ?? 0) + amount);
       },
       deleteNumber(id, amount = 1) { inventory.set(id, Math.max(0, (inventory.get(id) ?? 0) - amount)); },
-      forceAdd(player, item) { dropped.push(item.getId()); },
+      // As the real forceAdd(player, item): what fits is added, the rest lands under the player.
+      forceAdd(player, item) {
+        const id = item.getId?.() ?? item.id, amount = item.getAmount?.() ?? item.amount ?? 1;
+        if (options.fullBag) dropped.push(id);
+        else inventory.set(id, (inventory.get(id) ?? 0) + amount);
+      },
     }),
     getBank: () => ({ getAmount: (id) => bank.get(id) ?? 0 }),
     getBanks: () => [player.getBank()],

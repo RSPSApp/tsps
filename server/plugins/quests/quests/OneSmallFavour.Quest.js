@@ -92,6 +92,7 @@
  *    falls back to their own standard transcript page.
  */
 module.exports = function registerOneSmallFavourQuest(api) {
+  const { giveReward } = require("../QuestRuntime");
   const {
     Item,
     ItemIdentifiers,
@@ -1948,8 +1949,8 @@ module.exports = function registerOneSmallFavourQuest(api) {
   }
 
   function grantReward(player) {
-    if (!hasItem(player, STEEL_KEY_RING)) addItem(player, STEEL_KEY_RING, 1);
-    addItem(player, ANTIQUE_LAMP, 1);
+    if (!hasItem(player, STEEL_KEY_RING)) giveReward(player, STEEL_KEY_RING, 1);
+    giveReward(player, ANTIQUE_LAMP, 1);
   }
 
   // ==========================================================================

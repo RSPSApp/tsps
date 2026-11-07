@@ -873,13 +873,10 @@ function startTranscript(api, player, npcId, page, variant, select, npc = null, 
  * own completion item already is. `adds` alone drops a full inventory's reward on the spot.
  */
 function giveReward(player, itemId, amount = 1) {
+  // forceAdd adds what fits (stacks included, up to the cap) and puts the rest on the floor. A container without it
+  // (a test stand-in) takes a plain add.
   const inventory = player.getInventory();
-  // As complete()'s own reward item: forceAdd only when it may not fit (it puts the rest on the floor). A stack needs
-  // one slot (none if it is already held); anything else a slot per item.
-  const definition = coreApi?.ItemDefinition?.forId?.(itemId);
-  const slots = definition && definition.isStackable?.() === false ? amount : (inventory.contains?.(itemId) ? 0 : 1);
-  const mayNotFit = slots > 0 && (inventory.getFreeSlots?.() ?? Infinity) < slots;
-  if (mayNotFit && typeof inventory.forceAdd === "function") inventory.forceAdd(player, new coreApi.Item(itemId, amount));
+  if (typeof inventory.forceAdd === "function") inventory.forceAdd(player, new coreApi.Item(itemId, amount));
   else inventory.adds(itemId, amount);
 }
 

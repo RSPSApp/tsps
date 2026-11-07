@@ -1,6 +1,5 @@
 /** Misthalin Mystery: OSRS Wiki and supplied live capture. See docs/misthalin-mystery.md. */
 module.exports = function registerMisthalinMysteryQuest(api) {
-  const { giveReward } = require("../QuestRuntime");
   const { Skill, Location, Direction, ObjectDefinition, PrivateArea, Boundary, Animation, Graphic, CountdownTask, TaskManager, DialogueChainBuilder, ActionDialogue, StatementDialogue, GameObject, ObjectManager, Item, ItemOnGroundManager, Equipment, HitDamage, HitMask, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
   const { registerQuest, startTranscript, refreshQuestList } = require("../QuestRuntime");
   const ObstacleRunner = require("../../skills/agility/ObstacleRunner.Agility");
@@ -617,9 +616,9 @@ module.exports = function registerMisthalinMysteryQuest(api) {
 
   function grantReward(player) {
     player.getSkillManager().addExperiences(Skill.CRAFTING, 600);
-    giveReward(player, ItemIdentifiers.UNCUT_RUBY, 1);
-    giveReward(player, ItemIdentifiers.UNCUT_EMERALD, 1);
-    giveReward(player, ItemIdentifiers.UNCUT_SAPPHIRE, 1);
+    player.getInventory().adds(ItemIdentifiers.UNCUT_RUBY, 1);
+    player.getInventory().adds(ItemIdentifiers.UNCUT_EMERALD, 1);
+    player.getInventory().adds(ItemIdentifiers.UNCUT_SAPPHIRE, 1);
   }
 
   /** Which transcript variant each speaker plays, by quest stage. */

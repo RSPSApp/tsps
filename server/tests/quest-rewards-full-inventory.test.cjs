@@ -54,3 +54,23 @@ test("Troll Romance's uncut gems land under a player with a full inventory", (t)
   QuestRuntime.questNamed("Troll Romance").complete(f.p);
   assert.deepEqual([I.UNCUT_DIAMOND, I.UNCUT_RUBY, I.UNCUT_EMERALD].map((id) => droppedAmount(f, id)), [1, 2, 4]);
 });
+
+test("The Feud's coins and One Small Favour's key ring and lamp land under a player with a full inventory", (t) => {
+  const feud = packed(t);
+  QuestRuntime.questNamed("The Feud").complete(feud.p);
+  assert.ok(droppedAmount(feud, I.COINS) >= 499, "The Feud's 499 coins");
+  const favour = packed(t);
+  QuestRuntime.questNamed("One Small Favour").complete(favour.p);
+  assert.equal(droppedAmount(favour, I.STEEL_KEY_RING), 1);
+  assert.equal(droppedAmount(favour, I.ANTIQUE_LAMP), 2, "the runtime's lamp and the quest's second one");
+});
+
+test("a coin stack near the cap takes what fits and the rest of Swan Song's coins land under the player", (t) => {
+  const f = packed(t);
+  const MAX = 2147483647;
+  f.p.getInventory().setItem(0, new core.Item(I.COINS, MAX - 10));
+  QuestRuntime.questNamed("Swan Song").complete(f.p);
+  assert.equal(f.p.getInventory().getAmount(I.COINS), MAX, "the stack fills to the cap");
+  const given = f.p.getInventory().getAmount(I.COINS) - (MAX - 10) + droppedAmount(f, I.COINS);
+  assert.ok(given >= 24999, `every coin of the reward is in the stack or on the floor (${given})`);
+});

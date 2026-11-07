@@ -681,6 +681,17 @@ test("a grapple needs the gear and skills, or the barehanded Agility level (Wiki
   assert.ok(!fires(climber), "no grapple fired");
 });
 
+test("the Catherby rocks grapple needs 35 Strength (Wiki: 32 Agility, 35 Strength, 35 Ranged)", () => {
+  const rocks = [2869, 3429, 0];
+  const weak = createPlayer(2869, 3428, 0, 32, { skills: { strength: 34, ranged: 35 }, worn: grappleGear() });
+  operate(weak, 17042, rocks);
+  assert.ok(weak.state.messages.includes("You need a Strength level of at least 35 to attempt this."), weak.state.messages.join(" | "));
+  assert.deepEqual(tileOf(weak), [2869, 3428, 0], "refused at 34 Strength");
+  const strong = createPlayer(2869, 3428, 0, 32, { skills: { strength: 35, ranged: 35 }, worn: grappleGear() });
+  operate(strong, 17042, rocks);
+  assert.ok(!strong.state.messages.some((m) => /Strength level/.test(m)), "35 Strength is enough");
+});
+
 test("Yanille's south-wall grapple updates Ardougne medium progress after crossing", () => {
   const wall = [2556, 3074, 0];
   const credits = () => hooks.events.filter((event) => event.name === "agility:yanille-grapple");

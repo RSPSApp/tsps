@@ -18,6 +18,7 @@ const itemActions = new Map();
 const itemOnItem = [];
 const customEvents = new Map();
 const ammoHandlers = [];
+const finishedHandlers = [];
 const events = [];
 
 function api() {
@@ -26,7 +27,10 @@ function api() {
         emitCustomEvent: (name, payload) => events.push([name, payload]),
         onItemAction: (name, actions) => itemActions.set(name, actions),
         onItemOnItem: (a, b, handler) => itemOnItem.push({ a, b, handler }),
-        onCustomEvent: (name, handler) => customEvents.set(name, handler),
+        onCustomEvent: (name, handler) => {
+            if (name === 'combat:attack-finished') finishedHandlers.push(handler);
+            else customEvents.set(name, handler);
+        },
         registerRangedAmmoHandler: (handler) => ammoHandlers.push(handler),
     };
 }
@@ -72,6 +76,8 @@ test('a bow of Faerdhinen with no saved count is new: 10,000 charges, one per sh
 test('the last charge turns the bow into the inactive bow', () => {
     const player = wielder(I.BOW_OF_FAERDHINEN, { key: BOW_KEY, value: { charges: 1, used: 5 } });
     ammoHandlers[0].decrementAmmo(player, null, 1);
+    assert.equal(player.weapon.getId(), I.BOW_OF_FAERDHINEN, 'still charged while the last shot is rolled');
+    finishedHandlers.forEach((handler) => handler({ attacker: player }));
     assert.equal(player.weapon.getId(), I.BOW_OF_FAERDHINEN_INACTIVE_);
     assert.equal(player.weapon.getMetaValue(BOW_KEY).charges, 0);
 });
@@ -100,6 +106,9 @@ test('a blade of Saeldor spends a charge on every melee swing and not on other a
     assert.equal(player.weapon.getMetaValue(BLADE_KEY).charges, 2);
     attack({ attacker: player, method: { type: () => core.CombatType.MELEE } });
     attack({ attacker: player, method: { type: () => core.CombatType.MELEE } });
+    assert.equal(player.weapon.getId(), I.BLADE_OF_SAELDOR, 'last swing is rolled with the charged blade');
+    assert.equal(player.weapon.getMetaValue(BLADE_KEY).charges, 0);
+    finishedHandlers.forEach((handler) => handler({ attacker: player }));
     assert.equal(player.weapon.getId(), I.BLADE_OF_SAELDOR_INACTIVE_);
 });
 

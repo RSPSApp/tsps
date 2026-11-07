@@ -7,7 +7,7 @@ Test: `tests/crystal-weapons.test.cjs`.
 
 - A new weapon has 10,000 charges; crystal shards add 100 each, up to 20,000.
 - Every shot (bow) or swing (blade) uses one charge, whether it hits or misses; the elven signet does not save any.
-- At 0 charges the weapon becomes its inactive form (no bonuses) until it is charged again; shards may be added
+- At 0 charges the weapon becomes (after the shot or swing that spent the last charge, which still uses the charged bonuses) its inactive form (no bonuses) until it is charged again; shards may be added
   before that too.
 - Corruption progress: 1% is 2,000 charges used for the bow and 1,000 for the blade.
 - Corrupted (c) weapons are permanent and use no charges; they are not touched here.

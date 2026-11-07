@@ -24,6 +24,8 @@ function defineCrystalWeapon(api, config) {
 
   const isCharged = (id) => inactiveByCharged.has(Number(id));
   const isWeapon = (id) => isCharged(id) || chargedByInactive.has(Number(id));
+  /** Player -> the weapon whose last charge their current shot or swing spent. */
+  const spent = new WeakMap();
   const weaponOf = (player) => player.getEquipment().getItems()[core.Equipment.WEAPON_SLOT] ?? null;
 
   function saved(item) {
@@ -72,8 +74,25 @@ function defineCrystalWeapon(api, config) {
     api.emitCustomEvent("combat:consume-charge", consume);
     if (consume.skip) return;
     const left = Math.max(0, chargesOf(item) - 1);
+    if (left === 0) {
+      // The shot or swing is rolled with the charged bonuses; the weapon turns inactive after it.
+      item.setMetaValue(config.chargesKey, { charges: 0, used: usedOf(item) + 1 });
+      spent.set(player, item);
+      return;
+    }
     store(item, left, usedOf(item) + 1);
-    if (left === 0) refresh(player);
+  }
+
+  /** The last charge's attack is over: the emptied weapon becomes its inactive form. */
+  function onAttackFinished({ attacker }) {
+    const player = attacker?.isPlayer?.() ? attacker.getAsPlayer() : null;
+    const item = player ? spent.get(player) : null;
+    if (!item) return;
+    spent.delete(player);
+    if (isCharged(item.getId()) && chargesOf(item) === 0) {
+      store(item, 0, usedOf(item));
+      refresh(player);
+    }
   }
 
   function check({ player, item }) {
@@ -104,12 +123,13 @@ function defineCrystalWeapon(api, config) {
   }
 
   function attach() {
+    api.onCustomEvent("combat:attack-finished", onAttackFinished);
     api.onItemAction(config.chargedName, { Check: check });
     api.onItemOnItem(SHARD_NAME, config.chargedName, addShards, { noted: false });
     api.onItemOnItem(SHARD_NAME, config.inactiveName, addShards, { noted: false });
   }
 
-  return { attach, useCharge, check, addShards, chargesOf, progressOf, isCharged, isWeapon, weaponOf };
+  return { attach, useCharge, onAttackFinished, check, addShards, chargesOf, progressOf, isCharged, isWeapon, weaponOf };
 }
 
 module.exports = { defineCrystalWeapon, NEW_CHARGES, MAX_CHARGES, CHARGES_PER_SHARD };

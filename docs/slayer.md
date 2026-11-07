@@ -19,6 +19,7 @@ The plugin is `server/plugins/skills/Slayer.plugin.js`; its units are in
 | `Rewards.Slayer.js` | The Slayer Rewards interface |
 | `Equipment.Slayer.js` | Protective gear; kurask and turoth weaknesses |
 | `SlaughterBracelet.Slayer.js` | Bracelet of slaughter effects, shared charges, Check and Break |
+| `ExpeditiousBracelet.Slayer.js` | Expeditious bracelet: double kill credit, shared charges, Check and Break |
 | `Finishers.Slayer.js` | Rock hammer, bag of salt, ice cooler, fungicide spray |
 | `Superiors.Slayer.js` | Superior monsters |
 | `Keys.Slayer.js` | Brimstone and Larran's keys from Konar's and Krystilia's task kills |
@@ -160,7 +161,7 @@ and the [Elite rewards list](https://oldschool.runescape.wiki/w/Combat_Achieveme
 (“10% chance to fully recharge instead of breaking”); the Wiki says rewards are claimed from
 Ghommal once the points are reached. Inventory Break consumes that exact
 bracelet and resets the pool; Check works in inventory and while worn. Notes and bank
-placeholders cannot use either action. This does not implement the expeditious bracelet.
+placeholders cannot use either action.
 
 Evidence:
 
@@ -191,6 +192,33 @@ passed all 78 tests. Omitting the bracelet kill-count integration made four new 
 fail. The worktree client returned HTTP 200 on port 3149 and the game server listened on
 43749. Live MCP checks were not completed: the OS rejected the assigned port 49849 with
 `EADDRINUSE`, including an independent bind probe. No worktree port was overridden.
+
+### Expeditious bracelet
+
+[Wiki mechanics](https://oldschool.runescape.wiki/w/Expeditious_bracelet): while item
+`EXPEDITIOUS_BRACELET` is in the hands slot at the Slayer XP drop, a task kill has a 25% chance
+to count as two kills toward the task; no extra Slayer XP is given. A doubled kill that needs
+only one more ends the task (the count stops at 0), and a doubled final kill is allowed. The Wiki lists
+no excluded monsters.
+
+Charges follow the bracelet of slaughter's model: the persisted attribute
+`slayer:expeditious-charges` starts at 30 and is shared by every expeditious bracelet; only
+activations spend one. The last activation resets the pool to 30 and removes the worn bracelet,
+except for a 10% regeneration roll once the Elite Combat Achievements rewards are claimed (Wiki:
+the message is “Your expeditious bracelet helps you progress your slayer task faster. It then
+regenerates itself to full charge!”). Inventory Break consumes that exact bracelet and resets
+the pool; Check works in inventory and while worn. Notes and placeholders (items 21178, 21179)
+can use neither action.
+
+Evidence and limits: the Wiki page above is the only source. The local rsprox index knows the
+item in many recordings but has no recorded activation, Check or Break, so the wording of the
+charges-left suffix, the crumble text, Check and Break is copied from the slaughter bracelet's
+captured wording (recording-backed above) and is unverified for this bracelet.
+
+Regression coverage extends `server/tests/slayer.test.cjs` (25% boundary, no extra XP, a
+doubled kill finishing the task, shared charges, save/load key, Break, crumble and the 10%
+regeneration boundary, note rejection); `tests/leviathan-rewards.test.cjs` initialises the unit
+its task-kill path now calls.
 
 ### Completing
 

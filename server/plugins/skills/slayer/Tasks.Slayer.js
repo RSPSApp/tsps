@@ -27,6 +27,7 @@
 const Data = require("./Data.Slayer");
 const State = require("./State.Slayer");
 const SlaughterBracelet = require("./SlaughterBracelet.Slayer");
+const ExpeditiousBracelet = require("./ExpeditiousBracelet.Slayer");
 const MorytaniaDiary = require("./MorytaniaDiary.Slayer");
 
 const COMPLETE = "<col=ef1020>You have completed your task! You killed</col> {amount} {name}<col=ef1020>. You gained</col> {xp} xp<col=ef1020>.";
@@ -406,7 +407,8 @@ function npcKilled({ killer, npc }) {
   player.setAttribute(TASK_XP_ATTRIBUTE, (Number(player.getAttribute(TASK_XP_ATTRIBUTE)) || 0) + (kill.taskXp ?? kill.xp) * boost);
   if (task.modifier) killModifiers.set(npc, { player, modifier: task.modifier });
   if (SlaughterBracelet.preventsDecrement(player, npc)) return;
-  const remaining = task.count - 1;
+  // An expeditious bracelet credits a second kill; a task cannot go below zero.
+  const remaining = Math.max(0, task.count - 1 - ExpeditiousBracelet.extraKills(player, npc));
   State.setVarp(player, "slayer_count", remaining);
   if (remaining > 0) return;
   complete(player, task);

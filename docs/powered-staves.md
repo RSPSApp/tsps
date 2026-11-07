@@ -128,6 +128,14 @@ Messages (rsprox 1703, 3126, 3994, 4096, 4101):
 No capture shows its built-in spell. It uses the powered staff cast (11430) and Thammaron's
 projectile (`spells_thammaron01_travel01`, 2340), with no impact graphic.
 
+## Thammaron's sceptre
+
+`AccursedSceptre.plugin.js` also runs the sceptre the accursed sceptre is made from (Wiki: Thammaron's sceptre):
+- Max hit `floor(Magic / 3) − 8`, 60 Magic; the built-in spell, speed, range, ether rules, Swap to the (a) version and the Wilderness passive are the accursed sceptre's.
+- No special attack.
+- **Dismantle** on an uncharged one (either version) gives 7,500 revenant ether.
+- The messages and the built-in spell's look are the accursed sceptre's; no capture shows Thammaron's sceptre itself.
+
 **Condemn** (Wiki):
 - 50% energy and a charge.
 - 1.5× accuracy and max hit.

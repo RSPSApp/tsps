@@ -1716,7 +1716,7 @@ export class CombatFactory {
             rangedWeapon === RangedWeapon.WEBWEAVER_BOW ||
             rangedWeapon === RangedWeapon.CRAWS_BOW
         ) {
-            // TODO: consume a revenant ether; charge storage is not modelled yet.
+            // The bows spend their revenant ether through the plugin ammo handlers above; no ammunition here.
             return;
         }
 

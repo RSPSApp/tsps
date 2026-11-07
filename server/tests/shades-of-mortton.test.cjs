@@ -4,6 +4,7 @@
 // their remains; 227/01858: the catacombs' entrance, a tomb door and a chest) and the Wiki (the
 // chests' loot and coins).
 const assert = require('node:assert/strict');
+const path = require('node:path');
 const { test, before } = require('node:test');
 
 const { Server } = require('../dist/Server');
@@ -22,8 +23,8 @@ function chain(map, key, fn) {
   map.set(key, prior ? (event) => prior(event) || fn(event) : fn);
 }
 
-before(() => {
-  CachePipeline.initialize();
+before(async () => {
+  await CachePipeline.initialize();
   RegionManager.init();
   core = PluginManager.getCoreApi();
   hooks = { objects: new Map(), events: { emitted: [] }, npcHit: [], npcDeath: [], spawned: [] };
@@ -545,4 +546,163 @@ test('other bones are not taken by the Altar of the Damned', () => {
   assert.equal(event.handled, false);
   assert.equal(p.prayer(), 10);
   assert.equal(p.inventory.getAmount(526), 1);
+});
+
+// Registered producer and real floor-item consumer; callbacks are dispatched directly,
+// not through decoded item packets or a live client.
+test('a cremation reward stays private for 500 world cycles', async t => {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { PlayerSession } = require('../dist/net/PlayerSession');
+  const { World } = require('../dist/game/World');
+  const actors=[], created=[], ownedTasks=[], ownedObjects=[], ownedNpcs=[];
+  const priorItems=new Set(World.getItems()), priorObjects=new Set(World.getObjects());
+  const priorNpcs=new Set([...World.getNpcs(),...World.getAddNPCQueue(),...World.getRemoveNPCQueue()]);
+  const oldBots=process.env.DISABLE_PLAYER_BOTS, fakeApi=Common.api; let started=false, captureTask=false, position=null;
+  t.after(() => {
+    let failure;
+    try {
+      for (const p of actors) if (p.isRegistered()) PluginManager.emitPlayerLogout({player:p,username:p.getUsername()});
+      for (const task of ownedTasks) task.stop();
+      if(position && actors[0]) for(const item of World.getItems()) {
+        if (!priorItems.has(item) && item.getOwner()===actors[0].getUsername() && item.getPrivateArea()===actors[0].getPrivateArea()
+          && item.getPosition().getDistance(position)<=Common.data.pyres.standReach && !created.includes(item)) created.push(item);
+      }
+      for (const item of created) if (World.getItems().includes(item)) {
+        core.ItemOnGroundManager.deregister(item); const i=World.getItems().indexOf(item); if(i>=0) World.getItems().splice(i,1);
+      }
+      if (position) for (const object of World.getObjects()) if (!priorObjects.has(object) && object.getLocation().equals(position) && !ownedObjects.includes(object)) ownedObjects.push(object);
+      for (const object of ownedObjects) if (World.getObjects().includes(object)) core.ObjectManager.deregister(object,true);
+      if(position && actors[0]) for(const npc of [...World.getNpcs(),...World.getAddNPCQueue(),...World.getRemoveNPCQueue()]) {
+        if (!priorNpcs.has(npc) && npc.getId()===Common.npcId(Common.data.pyres.spirit) && npc.getLocation().equals(position)
+          && npc.getPrivateArea()===actors[0].getPrivateArea() && !ownedNpcs.includes(npc)) ownedNpcs.push(npc);
+      }
+      for (const npc of ownedNpcs) {
+        for (const queue of [World.getAddNPCQueue(),World.getRemoveNPCQueue()]) { const i=queue.indexOf(npc); if(i>=0) queue.splice(i,1); }
+        if (npc.isRegistered()) World.getNpcs().remove(npc);
+      }
+      for (const p of actors) { core.TaskManager.cancelTasks(p); core.TaskManager.cancelTasks(p.getIndex()); if (p.isRegistered()) World.getPlayers().remove(p); }
+      for (const item of created) assert.equal(World.getItems().includes(item),false);
+      for (const object of ownedObjects) assert.equal(World.getObjects().includes(object),false);
+      for (const npc of ownedNpcs) assert.equal(npc.isRegistered(),false);
+      for (const p of actors) assert.equal(p.isRegistered(),false);
+    } catch (error) { failure=error; }
+    try { if (started) PluginManager.emitServerShutdown({}); }
+    catch (error) { failure=failure ? new AggregateError([failure,error],'cleanup and shutdown failed') : error; }
+    try { Common.init(fakeApi); }
+    finally { if (oldBots===undefined) delete process.env.DISABLE_PLAYER_BOTS; else process.env.DISABLE_PLAYER_BOTS=oldBots; }
+    if (failure) throw failure;
+  });
+  process.env.DISABLE_PLAYER_BOTS='1';
+  PluginManager.loadFromDirectory(path.resolve(__dirname,'../plugins'));
+  assert.notEqual(Common.api,fakeApi,'the real plugin registration replaced the fake API');
+  assert.equal(Common.core.ItemOnGroundManager,core.ItemOnGroundManager);
+  RegionManager.loadMapFiles(3506,3315);
+  core.ObjectDefinition.init();
+  new (require('../dist/game/definition/loader/impl/NpcDefinitionLoader').NpcDefinitionLoader)().load();
+  started=true; PluginManager.emitServerStartup({});
+  assert.equal(Pyres.pyres.size,0,'no inherited pyre is in use');
+  function actor(name) {
+    const channel={kind:'test',remoteAddress:'127.0.0.1',isOpen:()=>true,send:()=>true,close(){},onData(){},onError(){},onClose(){}};
+    const session=new PlayerSession(channel), p=new Player(session); session.setPlayer(p);
+    p.setUsername(name); p.setLongUsername(core.Misc.stringToLongBigInt(name)); assert.notEqual(p.getLongUsername(),0n);
+    t.mock.method(p,'onAdd',()=>{}); t.mock.method(p,'onRemove',()=>{}); actors.push(p);
+    p.setAttribute('bot-skip-persistence',true); p.setLocation(new Location(3506,3315,0));
+    assert.equal(World.getPlayers().add(p),true); assert.equal(World.getPlayers().get(p.getIndex()),p);
+    assert.ok(p.getIndex()>0 && p.getIndex()<2048);
+    p.getSkillManager().setMaxLevels(core.Skill.HITPOINTS,99,false);
+    p.getSkillManager().setExperience(core.Skill.HITPOINTS,core.SkillManager.getExperienceForLevel(99)); p.setHitpoints(99);
+    p.setAutoRetaliate(false);
+    p.getSkillManager().setMaxLevels(core.Skill.FIREMAKING,99,false);
+    p.getSkillManager().setExperience(core.Skill.FIREMAKING,core.SkillManager.getExperienceForLevel(99));
+    p.getSkillManager().setCurrentLevel(core.Skill.FIREMAKING,99,false);
+    return p;
+  }
+  const owner=actor('pyreowner'), observer=actor('pyreobserver');
+  assert.notEqual(owner.getLongUsername(),observer.getLongUsername());
+  assert.equal(owner.getPrivateArea(),observer.getPrivateArea());
+  const quests=require('../plugins/quests/QuestRuntime').getRegisteredQuests();
+  const quest=quests.filter(q=>q.key==='shades_of_mortton').at(-1); assert.ok(quest); quest.setStage(owner,70);
+  const query={player:owner,key:'shades_of_mortton'}; PluginManager.createApi('pyre-stage-check').emitCustomEvent('quest:get-stage',query); assert.ok(query.stage>=70);
+  const logs=Common.objId('magic_logs_pyre'), remains=Common.objId('shade_bones5'), tinder=Common.objId('tinderbox');
+  assert.equal(Common.data.pyres.rewardDespawnTicks,500,'authored reward lifetime is 500 cycles');
+  for (const id of [logs,remains,tinder]) owner.getInventory().add(new core.Item(id,1),false);
+  assert.ok(owner.getSkillManager().getCurrentLevel(core.Skill.FIREMAKING)>=80);
+  position=new Location(3506,3315,0);
+  assert.equal([...priorObjects].some(object=>object.getLocation().equals(position)),false,'test tile has no prior dynamic object');
+  const empty=new core.GameObject(Common.locId('temple_pyre'),position,10,0,null);
+  function useItem(object,id) {
+    const slot=owner.getInventory().getSlotForItemId(id), item=owner.getInventory().get(slot);
+    assert.ok(item && item.getId()===id && !item.getDefinition().isNoted());
+    const at=object.getLocation();
+    return PluginManager.emitItemOnObject({player:owner,object,objectId:object.getId(),item,itemId:id,itemSlot:slot,
+      interfaceType:149,location:{x:at.getX(),y:at.getY(),z:at.getZ()},handled:false});
+  }
+  assert.equal(useItem(empty,logs),true); assert.equal(owner.getInventory().getAmount(logs),0);
+  const key=`${position.getX()},${position.getY()},${position.getZ()}`; let use=Pyres.pyres.get(key); assert.ok(use);
+  ownedObjects.push(use.object);
+  assert.equal(useItem(use.object,remains),true); assert.equal(owner.getInventory().getAmount(remains),0);
+  use=Pyres.pyres.get(key); assert.ok(use?.remains);
+  const ready=use.object; ownedObjects.push(ready);
+  const definition=core.ObjectDefinition.forPlayer(ready.getId(),owner), clickType=definition.getInteractions().indexOf('Light')+1;
+  assert.ok(clickType>0,'the active object exposes Light'); let reward;
+  assert.equal(World.getItems().some(item=>item.getOwner()===owner.getUsername()),false,'no existing owner stack can merge');
+  PluginManager.createApi('pyre-reward-observer').onCustomEvent('shades-of-mortton:cremated',e=>{ if(e.player===owner) reward=e.reward; });
+  const submit=core.TaskManager.submit.bind(core.TaskManager), later=Common.later;
+  t.mock.method(core.TaskManager,'submit',task=>{ if(captureTask) ownedTasks.push(task); return submit(task); });
+  t.mock.method(Common,'later',(delay,action)=>{ captureTask=true; try { return later(delay,action); } finally { captureTask=false; } });
+  assert.equal(PluginManager.emitObjectInteraction({player:owner,object:ready,objectId:ready.getId(),definition,clickType,handled:false}),true);
+  function worldTurn() {
+    for (const npc of [...World.getAddNPCQueue(),...World.getRemoveNPCQueue()]) if (!priorNpcs.has(npc)
+      && npc.getId()===Common.npcId(Common.data.pyres.spirit) && npc.getLocation().equals(position)
+      && npc.getPrivateArea()===owner.getPrivateArea() && !ownedNpcs.includes(npc)) ownedNpcs.push(npc);
+    World.process();
+    for (const npc of World.getNpcs()) if (!priorNpcs.has(npc) && npc.getId()===Common.npcId(Common.data.pyres.spirit)
+      && npc.getLocation().equals(position) && npc.getPrivateArea()===owner.getPrivateArea() && !ownedNpcs.includes(npc)) ownedNpcs.push(npc);
+    for (const object of World.getObjects()) if (!priorObjects.has(object) && object.getLocation().equals(position) && !ownedObjects.includes(object)) ownedObjects.push(object);
+  }
+  for(let i=0;i<30 && !reward;i++) worldTurn();
+  assert.ok(reward,'registered Light produced a cremation reward');
+  const manager=core.ItemOnGroundManager, items=World.getItems();
+  const ground=items.find(item=>item.getOwner()===owner.getUsername() && item.getItem().getId()===reward.id);
+  assert.ok(ground,'the actual reward was registered'); created.push(ground);
+  const tile=ground.getPosition(), area=owner.getPrivateArea();
+  assert.equal(ground.getPrivateArea(),area); assert.ok(tile.getDistance(position)<=Common.data.pyres.standReach);
+  if (!tile.equals(position)) assert.ok(core.MapObjects.get(Common.locId(Common.data.pyres.stand),tile,area),'reward is on an actual cache stand');
+  const fiyr=Common.data.pyres.remains.shade_bones5;
+  const allowedKeys=fiyr.keys.flatMap(([,keys])=>keys.map(name=>Common.objId(`shadekey_${name}`)));
+  assert.ok(reward.id===995 || allowedKeys.includes(reward.id),'actual reward is a Fiyr coin/key result');
+  if(reward.id===995) assert.ok(reward.amount>=fiyr.coins[0] && reward.amount<=fiyr.coins[1]);
+  else assert.equal(reward.amount,1);
+  assert.ok(reward.amount>0); assert.equal(ground.getItem().getAmount(),reward.amount);
+  assert.equal(Pyres.pyres.has(key),false,'the registered burn completed and released the pyre');
+  const initialAge=ground.getTick(), initialCycle=World.getProcessCycle(), agedCycle=ground.getAgedCycle();
+  t.diagnostic(`pyre-reward-start ${JSON.stringify({age:initialAge,worldCycle:initialCycle,agedCycle,position:[tile.getX(),tile.getY(),tile.getZ()]})}`);
+  assert.equal(manager.getGroundItem(owner.getUsername(),reward.id,tile,area),ground);
+  assert.equal(manager.canSee(owner,ground),true); assert.equal(manager.canSee(observer,ground),false);
+  assert.equal(manager.getGroundItem(observer.getUsername(),reward.id,tile,area),null);
+  const take=manager.takeOperation(reward.id); assert.ok(take>0,'active cache exposes Take');
+  assert.equal(manager.canOperate(owner,ground,take),true); assert.equal(manager.canOperate(observer,ground,take),false);
+  function checkActors() {
+    for(const p of [owner,observer]) {
+      assert.equal(p.isRegistered(),true); assert.equal(World.getPlayers().get(p.getIndex()),p);
+      assert.ok(p.getHitpoints()>0); assert.equal(p.getPrivateArea(),area); assert.equal(p.getLocation().getZ(),tile.getZ());
+      assert.ok(p.getLocation().getDistance(tile)<=15); assert.equal(p.getInteractingMobile()==null,true);
+    }
+  }
+  checkActors();
+  const publicControl=manager.registerLocation(owner,new core.Item(core.ItemIdentifiers.RAKE,1),new Location(3507,3315,0),area,{public:true}); created.push(publicControl);
+  assert.equal(manager.canSee(observer,publicControl),true,'observer can see an ordinary public item');
+  const ordinary=manager.registerLocation(owner,new core.Item(core.ItemIdentifiers.SPADE,1),new Location(3508,3315,0),area,{goesGlobal:false}); created.push(ordinary);
+  assert.equal(ordinary.getDespawnDelay(),300); assert.ok(ground.getTick()<299);
+  for(let i=0;i<300 && ordinary.getTick()<299;i++) worldTurn();
+  assert.equal(ordinary.getTick(),299); assert.ok(items.includes(ordinary)); worldTurn();
+  assert.equal(items.includes(ordinary),false,'the ordinary 300-cycle control expired');
+  assert.ok(items.includes(ground),'the cremation reward survives the ordinary expiry');
+  assert.equal(ground.getDespawnDelay(),500);
+  for(let i=0;i<500 && ground.getTick()<499;i++) worldTurn();
+  assert.equal(ground.getTick(),499);
+  assert.equal(ground.getTick()-initialAge,World.getProcessCycle()-initialCycle,'age advances once per World turn');
+  assert.ok(items.includes(ground)); checkActors(); assert.equal(manager.canSee(owner,ground),true); assert.equal(manager.canSee(observer,ground),false);
+  assert.equal(manager.canOperate(owner,ground,take),true); assert.equal(manager.canOperate(observer,ground,take),false);
+  worldTurn(); assert.equal(ground.getTick(),500); assert.equal(items.includes(ground),false,'the reward expires at age 500');
 });

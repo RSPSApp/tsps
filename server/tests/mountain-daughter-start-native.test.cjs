@@ -83,12 +83,14 @@ test('registered Mountain Daughter start after actual rope entry', async t => {
     const skills=p.getSkillManager(), agility=core.Skill.AGILITY, xp=core.SkillManager.getExperienceForLevel(level);
     skills.setMaxLevels(agility,level,false);skills.setExperience(agility,xp);skills.setCurrentLevel(agility,level,false);
     assert.equal(skills.getExperience(agility),xp);assert.equal(skills.getMaxLevel(agility),level);assert.equal(skills.getCurrentLevel(agility),level);
-    assert.ok(level>=10,'fixture meets sourced initial camp entry level');
+    const messages=[];
+    const sender=p.getPacketSender(), sendMessage=sender.sendMessage.bind(sender);
+    child.mock.method(sender,'sendMessage',(...args)=>{messages.push(String(args[0]));return sendMessage(...args);});
     const rope=new core.Item(core.ItemIdentifiers.ROPE,1);p.getInventory().add(rope,false);
     const item=p.getInventory().getItems().find(i=>i?.getId()===core.ItemIdentifiers.ROPE);
     assert.ok(item);const slot=p.getInventory().getItems().indexOf(item);assert.ok(slot>=0);
     assert.equal(quest.getStage(p),0);
-    return {p,item,slot,owned};
+    return {p,item,slot,owned,messages};
   }
   function placeReachable(f, object, permitted = () => true) {
     const at=object.getLocation(), queue=f.p.getMovementQueue();
@@ -113,13 +115,22 @@ test('registered Mountain Daughter start after actual rope entry', async t => {
     assert.equal(manager.isActive(),false,'entry transcript completed');
     assert.equal(core.MultiChatboxPrompt.getPending(f.p),null);
   }
-  function useRope(f) {
+  function useRope(f, allowed = true) {
     placeReachable(f,boulder);
+    const before=f.p.getLocation().clone();
     const definition=core.ObjectDefinition.forPlayer(boulder.getId(),f.p), at=boulder.getLocation();
     assert.equal(definition.getName(),'Boulder');
     const event={player:f.p,item:f.item,itemId:f.item.getId(),slot:f.slot,object:boulder,objectId:boulder.getId(),definition,
       location:{x:at.getX(),y:at.getY(),z:at.getZ()},handled:false};
     assert.equal(PluginManager.emitItemOnObject(event),true);
+    if (!allowed) {
+      assert.ok(f.p.getLocation().equals(before),'under-level entry leaves the player outside');
+      assert.equal(f.p.getInventory().getAmount(core.ItemIdentifiers.ROPE),1,'refusal keeps the rope');
+      assert.equal(quest.getStage(f.p),0,'refusal does not start the quest');
+      assert.equal(f.p.getDialogueManager().isActive(),false,'refusal does not start the successful entry transcript');
+      assert.ok(f.messages.some(message=>/Agility.*10|10.*Agility/i.test(message)),'refusal explains the Agility requirement');
+      return;
+    }
     assert.deepEqual([f.p.getLocation().getX(),f.p.getLocation().getY(),f.p.getLocation().getZ()],[2764,3667,0]);
     assert.equal(f.p.getInventory().getAmount(core.ItemIdentifiers.ROPE),1);
     finishDialogue(f);
@@ -162,6 +173,29 @@ test('registered Mountain Daughter start after actual rope entry', async t => {
     const index=pending.options.indexOf(text);assert.ok(index>=0,`${text} in ${JSON.stringify(pending.options)}`);
     assert.equal(PluginManager.emitInterfaceActionClick({player:f.p,groupId:219,childId:1,buttonId:(219<<16)|1,slot:index+1,action:1,handled:false}),true);
   }
+  for(const level of [1,9]) await t.test(`Agility ${level} refuses initial rope entry and repeat use`, child => {
+    const f=actor(child,level);
+    useRope(f,false);useRope(f,false);
+    assert.deepEqual(stageEvents.get(f.p),[]);
+  });
+  await t.test('a drained visible level below 10 refuses rope entry', child => {
+    const f=actor(child,10);
+    f.p.getSkillManager().setCurrentLevel(core.Skill.AGILITY,9,false);
+    assert.equal(f.p.getSkillManager().getMaxLevel(core.Skill.AGILITY),10);
+    assert.equal(f.p.getSkillManager().getCurrentLevel(core.Skill.AGILITY),9);
+    useRope(f,false);
+  });
+  await t.test('an actual Agility potion boost from 7 to 10 permits rope entry', child => {
+    const f=actor(child,7), id=core.ItemIdentifiers.AGILITY_POTION_1_;
+    f.p.getInventory().add(new core.Item(id,1),false);
+    const slot=f.p.getInventory().getSlotForItemId(id), item=f.p.getInventory().getItems()[slot];
+    assert.equal(PluginManager.emitItemAction({player:f.p,item,itemId:id,slot,interfaceId:core.Inventory.INTERFACE_ID,
+      clickType:1,option:'Drink',handled:false}),true);
+    assert.equal(f.p.getSkillManager().getMaxLevel(core.Skill.AGILITY),7);
+    assert.equal(f.p.getSkillManager().getCurrentLevel(core.Skill.AGILITY),10);
+    assert.equal(f.p.getInventory().getAmount(id),0,'the registered potion action consumes the dose');
+    useRope(f);
+  });
   for(const level of [10,19,20]) await t.test(`Agility ${level} uses rope and accepts Hamal request`, child => {
     const f=actor(child,level);useRope(f);talk(f);
     choose(f,'Why is everyone so hostile?');choose(f,'So what are you doing up here?');choose(f,'I will search for her!');

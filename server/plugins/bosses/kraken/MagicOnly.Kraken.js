@@ -11,8 +11,8 @@
  * 6 September 2023, cited on Kraken and Kraken/Strategies).
  *
  * Only player attackers are filtered (id test first): thralls attack as NPCs, so their
- * hits pass through untouched — the boss is not thrall-immune (Wiki), and per-NPC
- * thrall immunity is not modelled anywhere yet. Cannons need no handling here either:
+ * hits pass through untouched — the boss is not thrall-immune (Wiki); monsters that are
+ * cancel the thrall's attack through "magic:thrall-attack". Cannons need no handling here either:
  * cannon-restrictions.json bans them cove-wide ("You can't set up a cannon here.").
  */
 

@@ -12,6 +12,7 @@
  */
 const Common = require("./Common.LovakengjMinecarts");
 
+const MAIN_MODAL_TARGET_UID = (161 << 16) | 16;
 const MENU_SCRIPT = 217;
 const MENU_OPTIONS_CHILD = 3;
 const PAUSE_BUTTON_EVENTS = 1;
@@ -165,7 +166,11 @@ function onAction(event) {
   event.handled = true;
   event.end = true;
   // The conversation closes its window as it ends; the list opens on the next tick.
-  Common.later(1, () => openMenu(event.player, station));
+  Common.later(1, () => {
+    // A main opened after this conversation owns its current lifetime.
+    if (event.player.getPacketSender().getSubInterfaceAt(MAIN_MODAL_TARGET_UID)) return;
+    openMenu(event.player, station);
+  });
 }
 
 /** The six conductors the generated spawns don't have (skipped once they do). */

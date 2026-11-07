@@ -38,7 +38,7 @@ before(() => {
     onPlayerDeathDrops: (handler) => { (hooks.deathDrops ??= []).push(handler); },
     sendMultiChatboxPrompt: (player, title, ...args) => hooks.prompts.push({ player, title, args }),
     emitCustomEvent: (name, request) => {
-      if (name === 'mining:best-pickaxe') request.pickaxe = { id: 11920, attemptIntervalTicks: 3, animation: new core.Animation(7139) };
+      if (name === 'mining:best-pickaxe' && !request.player?.pickaxeGone) request.pickaxe = { id: 11920, attemptIntervalTicks: 3, animation: new core.Animation(7139) };
     },
     spawnNpc: ({ id, x, y, z }) => {
       const npc = { id, location: new Location(x, y, z), glides: [], registered: true, area: null };
@@ -718,4 +718,24 @@ test("Pete's lot is lost to an unsafe death outside the mine, but not to the min
   assert.deepEqual(Retrieval.stored(p).map((i) => i.id), [4151], "the mine death's own drop keeps it");
   for (const handler of hooks.deathDrops) handler({ player: p, killer: null, items: [], untradeables: [] });
   assert.equal(Retrieval.stored(p), null, 'a later unsafe death elsewhere loses it');
+});
+
+// As Mining re-asks each tick: a pickaxe dropped or banked mid-swing ends the mining.
+test('the boulder: no more chips once the pickaxe is gone', () => {
+  const p = enter();
+  const game = Game.gameOf(p);
+  ticks(51);
+  p.moveTo(game.area.at([3805, 10123, 1]));
+  Math.random = () => 0.99;
+  try {
+    click(p, 31034, 1, null);
+    ticks(4);
+    const chips = () => p.spam.filter((m) => m === 'You chip off a part of the boulder.').length;
+    assert.equal(chips(), 1, 'the first chip');
+    p.pickaxeGone = true;
+    ticks(12);
+    assert.equal(chips(), 1, 'nothing more without a pickaxe');
+  } finally {
+    Math.random = random;
+  }
 });

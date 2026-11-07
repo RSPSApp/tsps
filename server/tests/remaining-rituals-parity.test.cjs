@@ -409,8 +409,11 @@ test("Shades of Mort'ton repairs to native 100/20, sanctifies serum and complete
   assert.ok((h.configs.get(340) & 128) !== 0, 'sanctifying 207 sets made_perm_serum bit 7');
 
   h.give(I.SACRED_OIL_4_, 5);
+  const xpBefore = h.xp.length;
   h.hooks.itemOnItem[0]({ player: h.player, usedItemId: I.SACRED_OIL_4_, usedWithItemId: I.MAGIC_LOGS });
   assert.equal(h.quest.getStage(h.player), 70);
+  // Wiki (Pyre logs): magic pyre logs take 4 doses, at 5 Firemaking XP a dose.
+  assert.deepEqual(h.xp.slice(xpBefore).map(({ skill, amount }) => [skill.getName?.() ?? String(skill), amount]), [["Firemaking", 20]]);
   // The funeral pyres are the minigame's (ShadesOfMortton.plugin.js): it tells the quest.
   h.emit('shades-of-mortton:pyre-logs');
   assert.equal(h.quest.getStage(h.player), 75);

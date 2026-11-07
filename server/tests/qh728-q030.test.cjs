@@ -37,6 +37,16 @@ before(async () => {
   h = harness();
 });
 
+/** Stands in for Mining's mining:best-pickaxe / mining:pickaxe answers with the plain bronze-to-dragon tools. */
+function answerPickaxes(api) {
+  const I = core.ItemIdentifiers;
+  const ids = [I.BRONZE_PICKAXE, I.IRON_PICKAXE, I.STEEL_PICKAXE, I.BLACK_PICKAXE, I.MITHRIL_PICKAXE, I.ADAMANT_PICKAXE, I.RUNE_PICKAXE, I.DRAGON_PICKAXE];
+  const holds = (player, id) => player.getInventory?.().getAmount?.(id) > 0 || player.getInventory?.().contains?.(id)
+    || player.getEquipment?.().getItems?.()?.some?.((item) => item?.getId?.() === id);
+  api.onCustomEvent('mining:best-pickaxe', (request) => { request.pickaxe ??= ids.find((id) => holds(request.player, id)) != null ? { id: 0 } : null; });
+  api.onCustomEvent('mining:pickaxe', (request) => { request.pickaxe ??= ids.includes(request.itemId) ? { id: request.itemId } : null; });
+}
+
 function harness() {
   const hooks = {}, events = {}, transcripts = [];
   let lastSpawned = null;
@@ -63,6 +73,9 @@ function harness() {
       if (fn) (hooks[key] ??= []).push(fn);
     }),
   });
+  // The quests ask Mining for the player's pickaxe; Mining isn't loaded here, so this stands in for it with the plain
+  // tools these routes carry (held or wielded).
+  answerPickaxes(api);
   // Production order: ElementalWorkshopI before ElementalWorkshopII.
   require('../plugins/quests/quests/ElementalWorkshopI.Quest')(api);
   require('../plugins/quests/quests/ElementalWorkshopII.Quest')(api);

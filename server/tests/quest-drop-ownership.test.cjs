@@ -116,3 +116,75 @@ test('Rag and Bone Man bones only drop while their quest still needs them', asyn
     assert.ok(itemIds(withLuckyDrops(() => roll(questingI, 'giant_rat_drop_table3', core.NpcIdentifiers.GIANT_RAT_4))).includes(giantRatBone),
         'the giant rat bone drops while Rag and Bone Man I is in progress');
 });
+
+test('Between a Rock owns page 1 instead of the unconditional scorpion table', async () => {
+    await CachePipeline.initialize(require('node:path').resolve(__dirname, '..'));
+    const core = PluginManager.getCoreApi();
+    const listeners = new Map();
+    let questDeath;
+    const api = new Proxy({
+        core, onNpcDeath(handler) { questDeath ??= handler; },
+        onCustomEvent(name, handler) {
+            if (!listeners.has(name)) listeners.set(name, []);
+            listeners.get(name).push(handler);
+        },
+        emitCustomEvent(name, event) { for (const handler of listeners.get(name) || []) handler(event); },
+    }, { get: (object, name) => object[name] ?? (() => {}) });
+    require('../plugins/quests/quests/BetweenARock.Quest')(api);
+    Drops.register(api);
+    const page = core.ItemIdentifiers.BOOK_PAGE_1;
+    for (const questFirst of [false, true]) {
+        for (const [label, stage, tile, carried, expected] of [
+            ['Al Kharid before quest', 0, [3300, 3300], false, 0],
+            ['Al Kharid during quest', 30, [3300, 3300], false, 0],
+            ['Dwarven Mine before page stage', 20, [3020, 9750], false, 0],
+            ['Dwarven Mine page stage', 30, [3020, 9750], false, 1],
+            ['Dwarven Mine already held', 30, [3020, 9750], true, 1],
+            ['Dwarven Mine after page stage', 40, [3020, 9750], false, 0],
+            ['Dwarven Mine quest complete', 100, [3020, 9750], false, 0],
+        ]) {
+            const player = new Player(null);
+            player.getPacketSender = () => new Proxy({}, { get: () => () => {} });
+            player.setLocation(new core.Location(...tile));
+            player.setAttribute('quest.between_a_rock.stage', stage);
+            if (carried) player.getInventory().adds(page, 1);
+            const npcId = core.NpcIdentifiers.SCORPION_3;
+            const npc = { getId: () => npcId };
+            let drops;
+            const roll = () => withLuckyDrops(() => Drops.__internals.rollTable(dump.tables.scorpion, player, npc));
+            if (!questFirst) drops = roll();
+            questDeath({ killer: player, npcId, npc });
+            if (questFirst) drops = roll();
+            assert.ok(!drops.some(drop => drop.itemId === page), label + ': general loot never duplicates the quest award');
+            assert.equal(player.getInventory().getAmount(page), expected, label);
+        }
+    }
+    const pageHunter = new Player(null);
+    pageHunter.getPacketSender = () => new Proxy({}, { get: () => () => {} });
+    pageHunter.setAttribute('quest.between_a_rock.stage', 30);
+    pageHunter.setLocation(new core.Location(3020, 9750));
+    for (const [id, definition] of Object.entries(dump.npcs)) {
+        if (!definition.tables.includes('scorpion')) continue;
+        const npcId = Number(id);
+        const npc = { getId: () => npcId };
+        questDeath({ killer: pageHunter, npcId, npc });
+        assert.equal(pageHunter.getInventory().getAmount(page), npcId === core.NpcIdentifiers.SCORPION_3 ? 1 : 0,
+            'only the quest scorpion identity awards a page');
+        pageHunter.getInventory().deleteNumber(page, 1);
+        const drops = withLuckyDrops(() => Drops.__internals.rollTable(dump.tables.scorpion, pageHunter, npc));
+        assert.ok(!drops.some(drop => drop.itemId === page), 'all scorpion identities suppress the table page');
+    }
+    const otherPlayer = new Player(null);
+    otherPlayer.setAttribute('quest.between_a_rock.stage', 30);
+    otherPlayer.setLocation(new core.Location(3020, 9750));
+    questDeath({ killer: pageHunter, npcId: core.NpcIdentifiers.SCORPION_3 });
+    assert.equal(pageHunter.getInventory().getAmount(page), 1);
+    assert.equal(otherPlayer.getInventory().getAmount(page), 0, 'the page belongs to the killer only');
+    const unrelatedNpc = { getId: () => core.NpcIdentifiers.MAN };
+    const unrelatedTable = { entries: [{ item_id: core.ItemIdentifiers.BONES, quantity: [1, 1], always: true }] };
+    assert.deepEqual(Drops.__internals.rollTable(unrelatedTable, otherPlayer, unrelatedNpc).map(drop => drop.itemId),
+        [core.ItemIdentifiers.BONES], 'ordinary loot is unchanged');
+    const context = { handledItemIds: new Set() };
+    api.emitCustomEvent('npc-drops:context', { npcId: core.NpcIdentifiers.MAN, context });
+    assert.deepEqual([...context.handledItemIds], [page], 'only the quest-owned page is suppressed');
+});

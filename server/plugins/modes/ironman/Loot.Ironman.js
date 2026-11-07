@@ -8,7 +8,8 @@
  * - Attacking an npc another player has damaged warns once: "As an Ironman, you might not receive
  *   kill-credit for this monster."
  * - A player an Ironman kills drops loot the Ironman can't take: it's registered to the fallen
- *   player instead, so only non-Iron players get it once it goes public (Wiki).
+ *   player instead, so only non-Iron players get it once it goes public (Wiki). The same answer,
+ *   `player-death:loot-owner`, covers what other plugins drop for the killer (repair coins, ether, fees).
  * - No combat experience from fighting players (Wiki).
  */
 const Common = require("./Common.Ironman");
@@ -68,6 +69,11 @@ function playerLoot(event) {
   Common.core.ItemOnGroundManager.registerLocation(player, item, location);
 }
 
+/** `player-death:loot-owner` (PlayerDeathTask.lootOwner): an Ironman killer's PvP loot is the victim's. */
+function lootOwner(event) {
+  if (event?.killer && event.killer !== event.player && Common.isIron(event.killer)) event.owner = event.player;
+}
+
 function experience(event) {
   const { player, skill } = event;
   if (!Common.isIron(player)) return;
@@ -83,5 +89,6 @@ module.exports = function attach(api) {
   api.onCustomEvent("npc-drops:roll", rolledDrops);
   api.onCanAttack(attacking);
   api.onPlayerDeathItemDrop(playerLoot);
+  api.onCustomEvent("player-death:loot-owner", lootOwner);
   api.onCanGainExperience(experience);
 };

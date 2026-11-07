@@ -52,6 +52,9 @@ type CombatAnimation = {
     deathTicks?: number;
     /** Ticks from removal to respawn; 25 when absent, 0 to disable. */
     respawn?: number;
+    /** Manager-authored combat values, applied only to cloned custom NPC IDs. */
+    maxHit?: number;
+    attackType?: string;
 };
 
 type CombatAnimationRole = "attack" | "block" | "death";
@@ -177,6 +180,21 @@ const normalizeName = (value?: string) => (value ?? "").replace(/\s+/g, " ").tri
 const MELEE_ATTACK_TYPES = new Set(["stab", "slash", "crush", "melee"]);
 
 export class NpcDefinitionLoader extends DefinitionLoader {
+    /** A custom ID may change its own damage and style; its cache base never changes. */
+    public static applyCustomCombat(id: number, definition: NpcDefinition, entry?: CombatAnimation): void {
+        if (!CacheDefinitions.hasCustomDefinition("npc", id) || !entry) return;
+        const target = definition as any;
+        const maxHit = entry.maxHit;
+        if (typeof maxHit === "number" && Number.isSafeInteger(maxHit) && maxHit >= 0 && maxHit <= 10000) {
+            target.maxHit = maxHit;
+        }
+        const style = typeof entry.attackType === "string" ? entry.attackType.trim().toLowerCase() : "";
+        if (["crush", "slash", "stab", "melee", "ranged", "magic", "fire", "water", "earth", "air", "dragonfire"].includes(style)) {
+            target.attackType = NpcDefinitionLoader.resolveAttackType([style]);
+            target.attackStyle = style;
+        }
+    }
+
     /**
      * Translates one osrsreboxed monsters-complete.json entry into the internal
      * stats shape. Undefined (rather than 0) is used wherever the dump has no
@@ -448,6 +466,7 @@ export class NpcDefinitionLoader extends DefinitionLoader {
                     deathTicks: Number.isInteger(animation.deathTicks) ? animation.deathTicks : definition.getDeathTicks(),
                 });
             }
+            NpcDefinitionLoader.applyCustomCombat(id, definition, animationFile.npcs?.[key]);
         }
         (mismatched > 0 ? console.warn : console.debug)(
             `[npc-definitions] cache-backed; configured stats applied=${applied}, mismatched=${mismatched}, ` +

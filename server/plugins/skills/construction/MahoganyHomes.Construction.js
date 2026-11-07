@@ -6,6 +6,7 @@ const {
 } = require("./Core.Construction");
 const Ids = require("./Ids.Construction");
 const House = require("./House.Construction");
+const CarpenterOutfit = require("./CarpenterOutfit.Construction");
 
 // Mahogany Homes (Wiki, and one Leagues rsprox capture, recording 1863, for the tier menu, the
 // hotspot sounds and the last-job line; the other dialogue lines and messages here are ours
@@ -61,8 +62,6 @@ const HOTSPOT_VARBITS = Array.from({ length: 8 }, (_, index) => Ids.varbit(`con_
 const AMY = ["con_contractor", "con_contractor_1op", "con_contractor_3op"].map(Ids.npc); // and the forms it shows
 const CITIES = { varrock: "Varrock", falador: "Falador", ardy: "East Ardougne", hosidius: "Hosidius" };
 const PARTS = { north: "north", south: "south", east: "east", west: "west", mid: "middle", southeast: "south-east" };
-const OUTFIT = ["construction_hat", "construction_shirt", "construction_trousers", "construction_boots"].map(Ids.obj);
-const OUTFIT_BONUS = 1.025;
 const CONTRACT_ATTRIBUTE = "construction:contract";
 const LAST_TIER_ATTRIBUTE = "construction:contract-last-tier";
 const POINTS_ATTRIBUTE = "construction:carpenter-points";
@@ -257,16 +256,11 @@ function take(player, itemId, amount) {
   return true;
 }
 
-function outfitBonus(player) {
-  const worn = new Set(player.getEquipment().getItems().map(item => item?.getId?.()));
-  return OUTFIT.every(id => worn.has(id)) ? OUTFIT_BONUS : 1;
-}
-
 function finishJob(player, contract, hotspot, state, experience) {
   contract.states[hotspot.index] = state;
   if (state === 0) delete contract.states[hotspot.index];
   setContract(player, contract);
-  if (experience) player.getSkillManager().addExperiences(Skill.CONSTRUCTION, experience * outfitBonus(player));
+  if (experience) player.getSkillManager().addExperiences(Skill.CONSTRUCTION, CarpenterOutfit.withBonus(player, experience));
   if (remaining(contract)) return;
   // rsprox captures (recording 1863 and the message index): the client, in green.
   const client = clientName(HOME_BY_KEY.get(contract.home));
@@ -293,7 +287,7 @@ function talkToClient(event) {
   player.setAttribute(POINTS_ATTRIBUTE, points);
   player.setAttribute(COMPLETED_ATTRIBUTE, Math.min(COMPLETED_CAP, (player.getAttribute(COMPLETED_ATTRIBUTE) ?? 0) + 1));
   setContract(player, null);
-  player.getSkillManager().addExperiences(Skill.CONSTRUCTION, tier.contractXp * outfitBonus(player));
+  player.getSkillManager().addExperiences(Skill.CONSTRUCTION, CarpenterOutfit.withBonus(player, tier.contractXp));
   player.setRunEnergy(100);
   say(player, npcId, ["Wonderful, it all looks lovely! Here, have a cup of tea before you go."], () => {
     player.sendMessage(`You have completed a ${tier.name.toLowerCase()} contract and earned ${tier.points} Carpenter points. You now have ${points.toLocaleString("en-US")}.`);
@@ -314,6 +308,8 @@ function shopClick(event) {
   if (event.groupId !== SHOP) return;
   event.handled = true;
   const player = event.player;
+  // Only while Amy's shop is open: a click on it closed bought rewards anywhere.
+  if (player.getInterfaceId?.() !== SHOP) return;
   if (event.childId === SHOP_OPTIONS && SHOP_SLOTS[event.slot] !== undefined) return picked.set(player, SHOP_SLOTS[event.slot]);
   if (event.childId !== SHOP_CONFIRM) return;
   const reward = REWARDS[picked.get(player)];
@@ -357,4 +353,4 @@ function attachMahoganyHomes(api) {
   api.onPlayerLogin(({ player }) => sendHotspots(player));
 }
 
-Object.assign(module.exports, { attachMahoganyHomes });
+Object.assign(module.exports, { attachMahoganyHomes, finishJob, HOMES });

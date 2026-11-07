@@ -153,6 +153,18 @@ function buyBenefit(player, id, count) {
   return true;
 }
 
+/**
+ * The shop's buttons answer only while it is open (mounted in the main modal): a click on them with the shop closed,
+ * anywhere in the world, bought and imbued with no reward chest there.
+ */
+function whileOpen(handler) {
+  return function openShopOnly(event) {
+    const group = Common.core.CacheDefinitions.getInterfaceId(rewards().interface);
+    if (!event?.player?.getPacketSender?.()?.isSubInterfaceOpen?.(group)) return true;
+    return handler(event);
+  };
+}
+
 function resources({ player, slot, opId }) {
   const id = enumOf("resources").get(Math.floor(slot / 2));
   if (id == null || slot % 2 !== 0) return true;
@@ -211,9 +223,9 @@ function attachRewards(api) {
   api.persistAttribute(HERB_BOX_DAY_ATTRIBUTE, 0);
   api.persistAttribute(HERB_BOX_COUNT_ATTRIBUTE, 0);
   api.onObjectInteraction("Rewards chest", { Search: search });
-  api.onInterfaceActionButton(uid("resources"), resources);
-  api.onInterfaceActionButton(uid("benefits"), benefits);
-  api.onInterfaceActionButton(uid("upgrades"), upgrades);
+  api.onInterfaceActionButton(uid("resources"), whileOpen(resources));
+  api.onInterfaceActionButton(uid("benefits"), whileOpen(benefits));
+  api.onInterfaceActionButton(uid("upgrades"), whileOpen(upgrades));
 }
 
 module.exports = { attachRewards, open, search, resources, benefits, upgrades, imbuePrice, uncert };

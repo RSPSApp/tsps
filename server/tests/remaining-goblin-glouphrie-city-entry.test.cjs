@@ -37,6 +37,9 @@ function player() {
   const sender = new Proxy({}, { get: (_, key) => key === 'getVarbit' || key === 'getVarp' ? () => 0 : (...args) => sender });
   p.getPacketSender = () => sender;
   p.isRegistered = () => true;
+  // Entering the city needs Death to the Dorgeshuun (Wiki, Dorgesh-Kaan).
+  const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().find((q) => q.key === 'death_to_the_dorgeshuun');
+  quest.setStage(p, quest.completionValue);
   return p;
 }
 

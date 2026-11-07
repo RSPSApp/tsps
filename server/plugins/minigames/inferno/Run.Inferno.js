@@ -684,13 +684,19 @@ function runLogout({ player }) {
 }
 
 // A run kept over a logout between waves starts again at the next wave, from the middle of the
-// arena, with the supports as they stood. Anyone left inside without a run is put back outside.
+// arena, with the supports as they stood. Anyone left inside without a run is put back outside,
+// and a run saved by someone who had already left the arena is dropped, as the Fight Caves do:
+// a way out past canTeleport (a staff teleport, another plugin's move) left the wave set, and the
+// next login started a fresh run wherever they were.
 function resumeRun({ player }) {
   const wave = Number(player.getAttribute(ATTR_WAVE) ?? 0);
-  if (wave >= 1 && wave <= FINAL_WAVE) {
+  if (wave >= 1 && wave <= FINAL_WAVE && inArena(player)) {
     startRun(player, wave, player.getAttribute(ATTR_SUPPORTS) ?? null);
   } else if (inArena(player)) {
     player.moveTo(tile(EXIT));
+  } else if (wave !== 0) {
+    player.setAttribute(ATTR_WAVE, null);
+    player.setAttribute(ATTR_SUPPORTS, null);
   }
 }
 

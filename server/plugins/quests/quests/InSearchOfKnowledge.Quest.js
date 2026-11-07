@@ -664,6 +664,8 @@ module.exports = function registerInSearchOfKnowledgeQuest(api) {
       minLevel: LAMP_MIN_LEVEL,
       title: "Choose the stat you wish to be advanced!",
       onConfirm: (skill, name) => {
+        // The lamp must still be held at Confirm: the XP came first and the delete quietly did nothing without it.
+        if (!player.getInventory().contains(itemId)) return null;
         const manager = player.getSkillManager();
         const before = manager.getExperience(skill);
         manager.addExperience(skill, LAMP_XP, false);

@@ -730,6 +730,20 @@ test('the pickaxe interval comes from the Mining plugin, so a dragon pickaxe som
   }
 });
 
+// As Mining re-asks each tick: a pickaxe dropped or banked mid-swing ends the mining.
+test('mining stops once the pickaxe is gone, rather than mining on with it', () => {
+  const player = fakePlayer('Miner');
+  player.pickaxe = DRAGON_PICKAXE;
+  openGame(player);
+  mine(player, 'gotr_essence_tier_2');
+  ticks(2);
+  assert.equal(player.xpBySkill.Mining, 5);
+  player.pickaxe = null;
+  ticks(9);
+  assert.equal(player.xpBySkill.Mining, 5, 'nothing more without a pickaxe');
+  Shared.stopAction(player);
+});
+
 test('huge remains give 4-6 essence until the inventory is full', () => {
   const player = fakePlayer('Miner');
   player.pickaxe = DRAGON_PICKAXE;

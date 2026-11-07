@@ -37,6 +37,7 @@ const Scrying = require("./Scrying.Construction");
 const CapeHanger = require("./CapeHanger.Construction");
 const Trophies = require("./Trophies.Construction");
 const MahoganyHomes = require("./MahoganyHomes.Construction");
+const CarpenterOutfit = require("./CarpenterOutfit.Construction");
 const MaxHouse = require("./MaxHouse.Construction");
 const Nexus = require("./Nexus.Construction");
 
@@ -882,7 +883,8 @@ function getBuildMaterials(player, house, target, buildable) {
     if (player.getSkillManager().getCurrentLevel(skill) < requirement.level)
       return `You need ${skill.getName()} level ${requirement.level} to build that.`;
   }
-  if (!hasHammer(player) || !hasSaw(player)) return "You need a saw and a hammer in order to make furniture.";
+  // Natural teleports use a filled watering can instead (Wiki: Teleport space).
+  if (buildable.tool !== "watering-can" && (!hasHammer(player) || !hasSaw(player))) return "You need a saw and a hammer in order to make furniture.";
   // A flatpack is made away from any hotspot: no furniture there to upgrade.
   const existing = target ? house.getFurnitureAtTarget(target)?.buildableKey : undefined;
   const previous = buildable.materials.find(material => Data.BUILDABLE_BY_KEY.has(material.source))?.source;
@@ -1014,7 +1016,7 @@ function buildFurniture(player, house, target, buildable) {
 
 function completeFurniture(player, house, target, buildable, materials) {
   useMaterials(player, buildable, materials);
-  player.getSkillManager().addExperiences(Skill.CONSTRUCTION, buildable.experience);
+  player.getSkillManager().addExperiences(Skill.CONSTRUCTION, CarpenterOutfit.withBonus(player, buildable.experience));
   // Wiki (Spirit tree (Construction), Spirit tree & fairy ring): a planted spirit tree gives Farming experience too.
   if (buildable.farmingExperience > 0) player.getSkillManager().addExperiences(Skill.FARMING, buildable.farmingExperience);
   // Wiki (Mithril armour (Construction), Rune case space): 25 experience in the piece's second skill too.
@@ -1442,6 +1444,7 @@ function attach(api) {
   CapeHanger.attachCapeHanger(api);
   Trophies.attachTrophies(api);
   MahoganyHomes.attachMahoganyHomes(api);
+  CarpenterOutfit.attachCarpenterOutfit(api);
   Nexus.attachNexus(api);
   api.persistAttribute(HOUSE_ATTRIBUTE, defaultHouse());
   api.onObjectFirstClick(HOUSE_PORTAL_IDS, enterDefaultHouse);

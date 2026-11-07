@@ -16,8 +16,11 @@ const UNIQUE_NAMES = [
  * tables at (party size - 5)%, from 0 to 75%. Everyone eligible still rolls the rest of the table.
  */
 const SECOND_ROLL_FROM_PARTY = 5;
-/** Wiki (The Nightmare): the pet is 1/800 solo, 1/1,600 for 2, ... 1/4,000 for 5 or more - her table's 1/800, shared. */
-const PET_ITEM_ID = 24491;
+/**
+ * Wiki (The Nightmare): the pet is 1/800 solo, 1/1,600 for 2, ... 1/4,000 for 5 or more - her table's 1/800, shared;
+ * "The team size is counted when the fight starts."
+ */
+const PET_ITEM_ID = 24491; // Little nightmare
 const PET_SHARE_MAX_PARTY = 5;
 const SECOND_ROLL_MAX_PERCENT = 75;
 
@@ -66,7 +69,8 @@ function reward(fight, players) {
     let drops = rollTable(player);
     if (!fight.phosani) {
       const won = awarded.get(player) ?? [];
-      const petShare = Math.min(PET_SHARE_MAX_PARTY, Math.max(1, players.length));
+      // Counted when the fight starts (Wiki), as the shield and totems are (fight.teamSize, set in awaken()).
+      const petShare = Math.min(PET_SHARE_MAX_PARTY, Math.max(1, fight.teamSize ?? players.length));
       drops = [...drops.filter((drop) => !uniques.has(drop.itemId)), ...won].filter((drop) => {
         if (drop.itemId === PET_ITEM_ID) return Math.random() * petShare < 1;
         if (drop.itemId === ItemIdentifiers.BIG_BONES) return player === mvp;

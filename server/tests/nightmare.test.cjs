@@ -366,4 +366,9 @@ test("the pet's 1/800 is shared by party size (Wiki: 1/800 solo, 1/2,400 for 3, 
   const trio = [fakePlayer(), fakePlayer(), fakePlayer()];
   Loot.reward(fightOf(trio), trio);
   assert.equal(placed.filter(([, id]) => id === PET).length, 0, "a party of three keeps it only a third of the time");
+  // Five started, four have gone by the kill: the one left still shares the pet as a party of five.
+  placed.length = 0;
+  const last = fakePlayer();
+  Loot.reward({ ...fightOf([last]), teamSize: 5 }, [last]);
+  assert.equal(placed.filter(([, id]) => id === PET).length, 0, "the team counted when the fight started");
 });

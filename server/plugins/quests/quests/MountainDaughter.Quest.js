@@ -505,10 +505,6 @@ module.exports = function registerMountainDaughterQuest(api) {
     const { player, npcId, option } = event;
     if (npcId === HAMAL_NPC_ID) {
       if (option === "I will search for her!" && quest.getStage(player) === 0) {
-        if (player.getSkillManager().getMaxLevel(Skill.AGILITY) < 20) {
-          player.sendMessage("You need an Agility level of at least 20 to start this quest.");
-          return;
-        }
         quest.setStage(player, STAGE_STARTED);
         return;
       }

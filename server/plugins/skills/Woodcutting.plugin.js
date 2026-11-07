@@ -1289,9 +1289,13 @@ function processWoodcuttingTick(activeSessions, currentTick) {
       const xp = felling.bonus ? baseXp + baseXp / 10 : baseXp;
       const logAmount = KandarinHeadgear.logsPerChop(player, state.tree.logId);
       let pendingLog = null;
-      if (!felling.skipLog && !InfernalAxe.tryBurnLog(player, state.axe.id, state.tree.logId)) {
-        pendingLog = prepareLog(player, state.tree.logId, xp, logAmount);
-        countLog(player);
+      let burnt = false;
+      if (!felling.skipLog) {
+        burnt = InfernalAxe.tryBurnLog(player, state.axe.id, state.tree.logId);
+        if (!burnt) {
+          pendingLog = prepareLog(player, state.tree.logId, xp, logAmount);
+          countLog(player);
+        }
       }
       // A burnt log still says it was cut (rsprox captures 1637, 3996); a felling skip gives no log.
       if (!felling.skipLog) sendSpam(player, logMessage(state.tree));
@@ -1312,7 +1316,8 @@ function processWoodcuttingTick(activeSessions, currentTick) {
         logId: state.tree.logId,
         location: state.location,
         // Resource-count consumers distinguish a felling omission from the successful action.
-        logAmount: felling.skipLog ? 0 : logAmount,
+        // A burnt log still reports one (as before the headgear), never the doubled amount.
+        logAmount: felling.skipLog ? 0 : burnt ? 1 : logAmount,
         axeId: state.axe?.id ?? null,
       });
       ClueNests.rollClueNests(player, state.tree);

@@ -143,12 +143,13 @@ const cases = [
     PM.emitCustomEvent("looting-bag:store", request);
     assert.equal(request.result, "stored");
   }, () => [I.ABYSSAL_WHIP]],
-  // The emptied bow keeps its untradeable id, so it is kept, not dropped: only its ether is loot.
-  ["the Webweaver bow's ether", (v) => {
+  // Its hook empties the bow into the tradeable Webweaver bow (u) (27652), which the core's drop, after the hooks,
+  // then drops: the bow and its ether are both loot.
+  ["the emptied Webweaver bow (u) and its ether", (v) => {
     const bow = new core.Item(I.WEBWEAVER_BOW, 1);
     bow.setMetaValue("webweaver-bow:charges", 500);
     v.inv.setItem(0, bow);
-  }, () => [ETHER]],
+  }, () => [I.WEBWEAVER_BOW_U_, ETHER]],
   ["the bracelet of ethereum and its ether", (v) => {
     const bracelet = new core.Item(21816, 1);
     bracelet.setMetaValue("charges", 200);

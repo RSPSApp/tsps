@@ -874,7 +874,12 @@ function startTranscript(api, player, npcId, page, variant, select, npc = null, 
  */
 function giveReward(player, itemId, amount = 1) {
   const inventory = player.getInventory();
-  if (typeof inventory.forceAdd === "function" && coreApi?.Item) inventory.forceAdd(player, new coreApi.Item(itemId, amount));
+  // As complete()'s own reward item: forceAdd only when it may not fit (it puts the rest on the floor). A stack needs
+  // one slot (none if it is already held); anything else a slot per item.
+  const definition = coreApi?.ItemDefinition?.forId?.(itemId);
+  const slots = definition && definition.isStackable?.() === false ? amount : (inventory.contains?.(itemId) ? 0 : 1);
+  const mayNotFit = slots > 0 && (inventory.getFreeSlots?.() ?? Infinity) < slots;
+  if (mayNotFit && typeof inventory.forceAdd === "function") inventory.forceAdd(player, new coreApi.Item(itemId, amount));
   else inventory.adds(itemId, amount);
 }
 

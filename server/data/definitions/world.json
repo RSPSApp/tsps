@@ -1,4 +1,5 @@
 {
+  "name": "Old School RuneScape",
   "plugins": { "TutorialIsland": false },
   "description": "",
   "experienceMultiplier": 1,

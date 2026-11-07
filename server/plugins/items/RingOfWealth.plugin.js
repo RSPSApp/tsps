@@ -1,9 +1,10 @@
+const { PlayerDeathTask } = require("../../src/main/typescript/elvarg/game/task/impl/PlayerDeath");
 const { Location } = require("../../src/main/typescript/elvarg/game/model/Location");
 const { TeleportHandler } = require("../../src/main/typescript/elvarg/game/model/teleportation/TeleportHandler");
 const { TeleportType } = require("../../src/main/typescript/elvarg/game/model/teleportation/TeleportType");
 const { Equipment } = require("../../src/main/typescript/elvarg/game/model/container/impl/Equipment");
 const { Item } = require("../../src/main/typescript/elvarg/game/model/Item");
-const { RING_OF_WEALTH_DESTINATIONS } = require("./Teleports.Jewellery");
+const { RING_OF_WEALTH_DESTINATIONS, LOCKED_DESTINATION_MESSAGE } = require("./Teleports.Jewellery");
 
 const RING_OF_WEALTH_SCROLL = 12783;
 const IMBUE_COST = 50000;
@@ -33,8 +34,7 @@ const UNIMBUED_RING_IDS = new Map([
   [21458, 21456], [21459, 21457],
 ]);
 const RING_IDS = new Set([...CHARGED_RINGS.keys(), ...UNCHARGED_RINGS.keys()]);
-const TELEPORTS = RING_OF_WEALTH_DESTINATIONS.map(({ label, tile, quest }) => ({ label, quest, destination: new Location(...tile) }));
-let pluginApi = null;
+const TELEPORTS = RING_OF_WEALTH_DESTINATIONS.map(({ label, tile, quest }) => ({ label, destination: new Location(...tile), quest }));
 /**
  * The ring's options in the cache's order (item params 451-456: Miscellania, Grand Exchange,
  * Falador, Dondakan, Boss Log, Coin Collection), which both the inventory Rub submenu (by sub-op)
@@ -100,14 +100,16 @@ function consumeCharge(player, item) {
   return true;
 }
 
-/** True when the quest is done, or this server has no such quest (the quest plugin answers). */
-function questDone(player, quest) {
-  const request = { player, name: quest, complete: null };
-  pluginApi.emitCustomEvent("quest:is-complete", request);
-  return request.complete !== false;
+/** Set at register: the quest check and the refusal box need it outside the handlers' own `api`. */
+let pluginApi = null;
+
+function questComplete(player, key) {
+  const query = { player, key, complete: false };
+  pluginApi.emitCustomEvent("quest:is-complete", query);
+  return query.complete === true;
 }
 
-function teleport(player, event, item, destination, quest = null) {
+function teleport(player, event, item, destination) {
   if (!sourceMatches(player, event, item)) {
     return;
   }
@@ -115,9 +117,11 @@ function teleport(player, event, item, destination, quest = null) {
     player.sendMessage("Your ring of wealth has no charges left.");
     return;
   }
-  // Miscellania and Dondakan need their quests (Wiki); a refusal keeps the charge.
-  if (quest && !questDone(player, quest)) {
-    player.sendMessage(`You need to have completed ${quest} to teleport there.`);
+  // Miscellania and Dondakan's need their quests (Wiki), refused with the jewellery's shared line and no charge.
+  const quest = TELEPORTS.find((entry) => entry.destination === destination)?.quest;
+  if (quest && !questComplete(player, quest.key)) {
+    const { DialogueChainBuilder, StatementDialogue } = pluginApi.core;
+    player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, LOCKED_DESTINATION_MESSAGE)));
     return;
   }
   // Members' dragonstone jewellery works through level 30 Wilderness, unlike spells.
@@ -175,9 +179,9 @@ function openTeleportPrompt(api, event) {
   api.sendMultiChatboxPrompt(
     player,
     "Where would you like to teleport to?",
-    ...TELEPORTS.flatMap(({ label, destination, quest }) => [
+    ...TELEPORTS.flatMap(({ label, destination }) => [
       label,
-      () => teleport(player, event, item, destination, quest),
+      () => teleport(player, event, item, destination),
     ])
   );
 }
@@ -214,7 +218,7 @@ function handleRingAction(event, action) {
   }
   event.handled = true;
   if (action.type === "teleport") {
-    teleport(event.player, event, event.item, action.teleport.destination, action.teleport.quest);
+    teleport(event.player, event, event.item, action.teleport.destination);
   } else if (action.type === "coin-collection") {
     toggleAutoCollect(event.player);
   } else {
@@ -223,6 +227,12 @@ function handleRingAction(event, action) {
   return true;
 }
 
+/**
+ * Wiki (Ring of wealth (i); Items Kept on Death): the imbue is always lost on death, kept ring or not, and becomes
+ * 50,000 coins. Lost to a player, they are the killer's (an Ironman killer's go on the floor for the victim,
+ * PlayerDeathTask.lootOwner). Any other death puts them with what the death loses (`extraDrops`): the grave, or the
+ * floor where there is none. They used to go straight on the floor on every PvM death.
+ */
 function removeImbueOnDeath(event, itemOnGroundManager) {
   const unimbuedId = UNIMBUED_RING_IDS.get(event.item?.getId?.());
   if (!unimbuedId) {
@@ -230,11 +240,13 @@ function removeImbueOnDeath(event, itemOnGroundManager) {
   }
   event.item.setId(unimbuedId);
   const coins = new Item(COINS, IMBUE_COST);
-  if (event.killer?.getInventory) {
-    event.killer.getInventory().forceAdd(event.killer, coins);
-  } else {
-    itemOnGroundManager.registerLocation(event.player, coins, event.location);
+  const killer = event.killer;
+  if (killer && killer !== event.player && killer.isPlayer?.() === true && killer.getInventory) {
+    if (PlayerDeathTask.lootOwner(event.player, killer) === killer) killer.getInventory().forceAdd(killer, coins);
+    else itemOnGroundManager.registerLocation(event.player, coins, event.location);
+    return;
   }
+  if (Array.isArray(event.extraDrops)) event.extraDrops.push(coins);
 }
 
 module.exports = {

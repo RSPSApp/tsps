@@ -197,11 +197,17 @@ function buy(player, entry, amount) {
   sender.sendVarbit(VARBIT.SUPPLY_STAMINA_BOUGHT, member.staminaBought ? 1 : 0);
 }
 
+/** The supplies open at a chest (searchChest, which gives a death's onion instead); not a click from elsewhere. */
+function suppliesOpen(player) {
+  return player.getInterfaceId?.() === INTERFACE.SUPPLIES;
+}
+
 function clickSupply(event) {
   const { player } = event;
   const member = memberOf(player);
   const entry = STOCK[Number.isInteger(event.slot) ? event.slot : -1];
-  if (!member || !entry) return;
+  // A click on the supplies with them closed bought from anywhere in the raid, past the onion too.
+  if (!member || !entry || !suppliesOpen(player)) return;
   const op = event.opId ?? event.action;
   const sender = player.getPacketSender();
   if (op === OPS.VALUE) {
@@ -216,6 +222,7 @@ function clickSupply(event) {
   } else if (op === OPS.BUY_X) {
     player.setEnteredAmountAction({
       execute: (value) => {
+        if (!suppliesOpen(player)) return;
         const amount = Math.max(0, value | 0);
         sender.sendVarbit(VARBIT.SUPPLY_LAST_AMOUNT, amount);
         buy(player, entry, amount);

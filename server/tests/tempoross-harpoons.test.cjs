@@ -40,3 +40,11 @@ test("an inactive crystal harpoon needs 71 Fishing and 50 Agility, as in Fishing
   assert.equal(harpoonOf(fisher({ FISHING: 70, AGILITY: 50 }, carried)), null);
   assert.equal(harpoonOf(fisher({ FISHING: 71, AGILITY: 49 }, carried)), null);
 });
+
+test("an infernal harpoon needs 75 Fishing, as in Fishing; below it the next harpoon carried is used", () => {
+  const ids = core.ItemIdentifiers;
+  const carried = [ids.INFERNAL_HARPOON, ids.HARPOON];
+  assert.equal(harpoonOf(fisher({ FISHING: 75 }, carried))?.tier, "dragon");
+  assert.equal(harpoonOf(fisher({ FISHING: 74 }, carried))?.tier, "harpoon");
+  assert.equal(harpoonOf(fisher({ FISHING: 74 }, [ids.INFERNAL_HARPOON_UNCHARGED_])), null, "uncharged too");
+});

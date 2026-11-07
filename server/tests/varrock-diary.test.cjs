@@ -27,6 +27,8 @@ test.before(async () => {
   core = PluginManager.getCoreApi();
   const handlers = new Map();
   dispatch = (name, event) => {
+    // Dream Mentor gives Plank Make (Wiki); the quest plugins are not loaded here.
+    if (name === "quest:is-complete" && event?.key === "dream_mentor") event.complete = true;
     if (name === "museum:get-kudos") event.kudos = kudos;
     for (const handler of handlers.get(name) ?? []) handler(event);
   };
@@ -119,6 +121,13 @@ test("Varrock earth runes credit both the easy task and the 100-rune elite task"
   const elite = fixture(t).player;
   dispatch("runecrafting:success", { player: elite, runeId: core.ItemIdentifiers.EARTH_RUNE, rolls: 25, amountPerEssence: 4 });
   assert.equal(completed(elite, TASK.earthRunes100), true);
+
+  // The Raiments of the Eye's bonus runes count toward the 100 (Wiki: Raiments of the Eye).
+  const raiments = fixture(t).player;
+  dispatch("runecrafting:success", { player: raiments, runeId: core.ItemIdentifiers.EARTH_RUNE, rolls: 52, amountPerEssence: 1, bonusRunes: 31 });
+  assert.equal(completed(raiments, TASK.earthRunes100), false);
+  dispatch("runecrafting:success", { player: raiments, runeId: core.ItemIdentifiers.EARTH_RUNE, rolls: 52, amountPerEssence: 1, bonusRunes: 48 });
+  assert.equal(completed(raiments, TASK.earthRunes100), true);
 
   const air = fixture(t).player;
   dispatch("runecrafting:success", { player: air, runeId: core.ItemIdentifiers.AIR_RUNE, rolls: 100, amountPerEssence: 1 });

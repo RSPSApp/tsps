@@ -127,14 +127,16 @@ function itemName(id) {
   return Shared.core().ItemDefinition.forId(id)?.getName?.() ?? `Item ${id}`;
 }
 
+/**
+ * Held in the inventory, worn, or in any bank tab but the search tab (as the diary rewards check). This passed a bare id
+ * to Bank.contains, which wants an Item: it threw, the catch said no, and only the inventory ever counted, so a banked
+ * or worn Xeric's cape (or dark journal) was handed out again and again.
+ */
 function owns(player, id) {
-  if (player.getInventory().contains(id)) return true;
-  try {
-    const { Bank } = Shared.core();
-    return Bank.contains?.(player, id) ?? player.getBank?.(Bank.getTabForItem(player, id))?.contains?.(id) ?? false;
-  } catch {
-    return false;
-  }
+  const searchTab = Shared.core().Bank.BANK_SEARCH_TAB_INDEX;
+  return player.getInventory().contains(id)
+    || (player.getEquipment?.().contains?.(id) ?? false)
+    || (player.getBanks?.() ?? []).some((bank, tab) => tab !== searchTab && bank?.contains?.(id));
 }
 
 /** The noted form of an item, if it has one. */
@@ -513,4 +515,4 @@ module.exports = function registerCoxRewards(api) {
   api.onNpcInteraction("Captain Rimor", { "Claim-cape": claimCape });
 };
 
-Object.assign(module.exports, { uniqueRolls, commonLoot, targetTicks, teamSize, collectionLogCount, generate, completed, openChest, logRewards, chestClosed, clickReward, unclaimedLoot, UNIQUES, COMMONS });
+Object.assign(module.exports, { uniqueRolls, commonLoot, targetTicks, teamSize, collectionLogCount, generate, completed, openChest, logRewards, chestClosed, clickReward, unclaimedLoot, claimCape, UNIQUES, COMMONS });

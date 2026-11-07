@@ -1,6 +1,7 @@
 const { Animation } = require("../../src/main/typescript/elvarg/game/model/Animation");
 const { Skill } = require("../../src/main/typescript/elvarg/game/model/Skill");
 const { MagicSpellbook } = require("../../src/main/typescript/elvarg/game/model/MagicSpellbook");
+const { spellbookLockedRefusal } = require("../../src/main/typescript/elvarg/game/content/combat/magic/SpellbookLocks");
 const { Sound } = require("../../src/main/typescript/elvarg/game/Sound");
 const { Sounds } = require("../../src/main/typescript/elvarg/game/Sounds");
 const { ObjectIds } = require("../../src/main/typescript/elvarg/util/IdEnums");
@@ -34,24 +35,9 @@ const OCCULT_ALTAR_SPELLBOOKS = new Map([
   [ObjectIds.ALTAR_OF_THE_OCCULT_4, MagicSpellbook.ARCEUUS],
 ]);
 
-/**
- * Wiki: the POH altars switch to a spellbook only when "they have the requirements to access those spellbooks"
- * (Occult altar; the Lunar altar names Lunar Diplomacy), and the magic cape "to any spellbook they have unlocked":
- * Desert Treasure I for the Ancients, Lunar Diplomacy for the Lunars. TSPS wording for the refusal.
- */
-const SPELLBOOK_QUESTS = new Map([["ANCIENT", ["desert_treasure_i", "Desert Treasure I"]], ["LUNAR", ["lunar_diplomacy", "Lunar Diplomacy"]]]);
-function spellbookLocked(pluginApi, player, key) {
-  const quest = SPELLBOOK_QUESTS.get(key);
-  if (!quest) return null;
-  const query = { player, key: quest[0], complete: false };
-  pluginApi.emitCustomEvent("quest:is-complete", query);
-  return query.complete ? null : `You need to complete ${quest[1]} to use that spellbook.`;
-}
-
-/** A switch to `spellbook` the player hasn't unlocked: refused with the line, and true (handled). */
+/** A switch to `spellbook` the player hasn't unlocked (core SpellbookLocks): refused with the line, and true (handled). */
 function refuseLocked(player, spellbook) {
-  const key = spellbook === MagicSpellbook.ANCIENT ? "ANCIENT" : spellbook === MagicSpellbook.LUNAR ? "LUNAR" : null;
-  const refusal = key ? spellbookLocked(api, player, key) : null;
+  const refusal = spellbookLockedRefusal(player, spellbook);
   if (refusal) player.sendMessage(refusal);
   return refusal !== null;
 }
@@ -87,6 +73,9 @@ function handlePrayerAltar(player, fullMessage = "You already have full Prayer p
 }
 
 function handleJaldraochtAltar(player) {
+  // As the Ancient altar: the switch to the Ancients needs Desert Treasure I (core SpellbookLocks); refused first,
+  // so the Prayer drain doesn't happen either.
+  if (player.getSpellbook() !== MagicSpellbook.ANCIENT && refuseLocked(player, MagicSpellbook.ANCIENT)) return true;
   player.performAnimation(PRAY_AT_ALTAR_ANIMATION);
   Sounds.sendSound(player, Sound.PRAYER_RECHARGE);
   const skillManager = player.getSkillManager();
@@ -108,7 +97,8 @@ function handleJaldraochtAltar(player) {
 }
 
 function handleOccultAltar(player, spellbook) {
-  if (refuseLocked(player, spellbook)) return true;
+  // Choosing the book already in use needs no unlock check, as the Ancient altar's own toggle.
+  if (player.getSpellbook() !== spellbook && refuseLocked(player, spellbook)) return true;
   player.performAnimation(PRAY_AT_ALTAR_ANIMATION);
   Sounds.sendSound(player, Sound.PRAYER_RECHARGE);
   MagicSpellbook.changeSpellbook(player, spellbook);
@@ -123,7 +113,11 @@ function lunarAltar({ player }) {
   return handleOccultAltar(player, player.getSpellbook() === MagicSpellbook.LUNAR ? MagicSpellbook.NORMAL : MagicSpellbook.LUNAR);
 }
 
-function darkAltar({ player }) {
+function darkAltar({ player, objectId }) {
+  if (Number.isInteger(objectId) && objectId === core.ObjectIdentifiers?.DARK_ALTAR) {
+    api.emitCustomEvent("runecrafting:dark-altar-venerate", { player });
+    return true;
+  }
   return handleOccultAltar(player, player.getSpellbook() === MagicSpellbook.ARCEUUS ? MagicSpellbook.NORMAL : MagicSpellbook.ARCEUUS);
 }
 
@@ -271,4 +265,4 @@ module.exports = {
     });
   },
 };
-module.exports._test = { ancientAltar, lunarAltar, ancientSpellbook, lunarSpellbook };
+module.exports._test = { ancientAltar, lunarAltar, ancientSpellbook, lunarSpellbook, handleJaldraochtAltar };

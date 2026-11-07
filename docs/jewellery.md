@@ -139,9 +139,7 @@ completion and supplies were test setup; the quests themselves were not replayed
 
 ## Ring of wealth teleports
 
-Source: the OSRS Wiki's Ring of wealth page (Teleportation section). The ring teleports to the
-Grand Exchange entrance (3163, 3478), Falador Park (2995, 3375), Miscellania (2534, 3862) and
-Dondakan (2824, 10168), one charge each, from the Wilderness up to level 30. The Wiki states that
-Miscellania needs Throne of Miscellania and Dondakan needs Between a Rock... completed. Without the
-quest the teleport is refused and the charge is kept. The Wiki gives no refusal text and no
-recording of one exists, so the message is ours. The destination tiles are the Wiki's.
+Source: the OSRS Wiki's Ring of wealth page (Teleportation section). The destination tiles are the
+Wiki's: Grand Exchange (3163, 3478), Falador Park (2995, 3375), Miscellania (2534, 3862) and
+Dondakan (2824, 10168). Miscellania and Dondakan are quest-locked and share the jewellery's refusal
+line (`LOCKED_DESTINATION_MESSAGE`); the charge is kept when refused.

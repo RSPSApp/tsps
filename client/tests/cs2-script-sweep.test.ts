@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { sweepScripts } from "../scripts/cache/cs2-sweep";
+import { createCacheVm, sweepScripts } from "../scripts/cache/cs2-sweep";
+import { NPC_SEARCH_TITLE, setSpawnSearch } from "../rs/cs2/spawnSearch";
 
 /**
  * Every client script in the cache runs once (scripts/cache/cs2-sweep.ts). An instruction whose
@@ -29,4 +30,39 @@ test("every script's instructions keep the stacks as their signatures say", () =
         [],
     );
     assert.deepEqual([...report.crashes.keys()], [], "JavaScript errors inside handlers");
+});
+
+
+test("item search bounds every producer before building cache rows", () => {
+    const { vm, scripts } = createCacheVm();
+    const widgets = vm.context.widgetManager;
+    widgets.getGroup(162);
+    const parent = widgets.getWidgetByUid(10616885);
+    parent.width = 512;
+    parent.height = 100;
+    const errors: string[] = [];
+    vm.logError = (error: Error) => errors.push(error.message);
+    const supply = () => {
+        vm.itemSearchResults = Array.from({ length: 4000 }, (_, id) => id);
+        vm.itemSearchCount = 4000;
+        vm.itemSearchIndex = 0;
+        return true;
+    };
+    try {
+        for (const mode of ["item", "npc", "override"]) {
+            setSpawnSearch(mode === "npc" ? NPC_SEARCH_TITLE : "Grand Exchange Item Search");
+            if (mode === "override") vm.itemSearchListeners.add(supply);
+            vm.context.varManager.setVarcString(359, "a");
+            vm.context.varManager.setVarcInt(66, 1);
+            vm.execute(scripts.load(751), [0, -1, 0], [], 500000);
+            assert.deepEqual(errors, [], mode);
+            assert.equal(vm.itemSearchCount, -1, mode);
+            assert.ok(vm.opcount < 500000, mode);
+            assert.ok(widgets.getDynamicChildrenByParent(parent).some((widget: any) =>
+                widget.text === "Too many matches found. Please refine your search."), mode);
+        }
+    } finally {
+        vm.itemSearchListeners.delete(supply);
+        setSpawnSearch("");
+    }
 });

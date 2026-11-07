@@ -173,6 +173,23 @@ function tidyUntilStarted(event) {
 
 // ---------------------------------------------------------------- logging in
 
+/**
+ * Raid-only items can't leave the raid; a logout drops them inside. A save made mid-raid (shutdown, saveall, a
+ * requested save) still holds them, so they go here when the party can't be re-found.
+ */
+function removeRaidItems(player) {
+  const { Item } = Shared.core();
+  for (const container of [player.getInventory(), player.getEquipment()]) {
+    let removed = false;
+    (container.getItems?.() ?? []).forEach((item, slot) => {
+      if (!item || item.getId() < 0 || !Shared.isRaidItem(item.getId())) return;
+      container.setItem(slot, new Item(-1, 0));
+      removed = true;
+    });
+    if (removed) container.refreshItems();
+  }
+}
+
 /** Back into the raid if it is still on and they were in it from the start; else outside. */
 function returnOnLogin({ player }) {
   const raid = Raid.takeRejoin(player.getUsername());
@@ -182,6 +199,7 @@ function returnOnLogin({ player }) {
   }
   if (!player.getAttribute(Shared.ATTR.INSIDE)) return;
   player.setAttribute(Shared.ATTR.INSIDE, null);
+  removeRaidItems(player);
   player.moveTo(Shared.loc(Shared.OUTSIDE));
   Shared.raidMessage(player, "Your party could not be re-found.");
 }

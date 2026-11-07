@@ -25,7 +25,8 @@
  * - `canAttack(player, target)`: false refuses (after sending its own message).
  * - `useChargeAt`: "canAttack" (default) or "start".
  * - `noChargesMessage`, `ranOutMessage`, `chargeUsed(player, staff, left)`, `emptied(player)`.
- * - `methodFlags`: properties copied onto the combat method for other content to read.
+ * - `methodFlags`: properties copied onto the combat method for other content to read. Every
+ *   staff's method carries `poweredStaff: true` (the dwarf multicannon's accuracy reads it).
  * - `swapWhenEmpty`: false keeps an emptied staff charged (a revenant weapon keeps its deposit).
  */
 
@@ -202,7 +203,7 @@ function definePoweredStaff(api, config) {
 
   function getMethod() {
     // Flags other content reads off the method (the Wilderness plugin's warpedSceptreBuiltInSpell).
-    return method ?? (method = Object.assign(buildMethod(), config.methodFlags ?? {}));
+    return method ?? (method = Object.assign(buildMethod(), { poweredStaff: true }, config.methodFlags ?? {}));
   }
 
   function resolve(attacker) {

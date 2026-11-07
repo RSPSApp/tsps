@@ -1114,6 +1114,8 @@ module.exports = function registerCreatureOfFenkenstrainQuest(api) {
     completionValue: STAGE_COMPLETE,
     questPoints: 2,
     xpRewards: [{ skillId: Skill.THIEVING.getIndex(), amount: 1000, label: "Thieving" }],
+    // The runtime only shows xpRewards on the scroll; the experience itself is paid here.
+    onReward: (player) => player.getSkillManager().addExperiences(Skill.THIEVING, 1000),
     rewardItemId: ItemIdentifiers.RING_OF_CHAROS,
     rewardItemLabel: "Ring of Charos",
     otherRewards: ["Access to the Werewolf Agility Course"],

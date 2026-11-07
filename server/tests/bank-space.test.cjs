@@ -398,3 +398,19 @@ test("login sends the blocks bought", () => {
 });
 
 process.on("exit", () => { PluginManager.emitCustomEvent = originalEmit; });
+
+test("a withdraw onto an inventory stack of the same id with other metadata, and no free slot, leaves the bank's stack", () => {
+  const player = createPlayer();
+  player.setInterfaceId(Bank.MAIN_INTERFACE_ID);
+  player.getBank(0).add(new Item(COINS, 500), false);
+  const preset = new Item(COINS, 10);
+  preset.setMeta({ preset: true });
+  player.inventory.add(preset, false);
+  for (let i = 1; i < 28; i++) player.inventory.add(new Item(SWORD, 1), false);
+  assert.equal(player.inventory.getFreeSlots(), 0);
+  const bank = player.getBank(0);
+  bank.switchsItem(player.inventory, bank.getItems()[0].clone(), 0, false, false);
+  assert.equal(bank.getAmount(COINS), 500, "the plain coins stay in the bank");
+  assert.equal(player.inventory.getAmount(COINS), 10, "the preset stack is untouched");
+  assert.ok(player.messages.length > 0, "and the player is told the inventory is full");
+});

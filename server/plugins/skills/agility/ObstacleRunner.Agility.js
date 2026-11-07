@@ -63,6 +63,7 @@ let TaskManager;
 let ChatType;
 let Sounds;
 let StatementDialogue;
+let ItemStatementDialogue;
 let DialogueChainBuilder;
 let Location;
 let Animation;
@@ -78,7 +79,7 @@ let ObstacleTask = null;
 function init(api) {
   TaskManager = api.getTaskManager();
   ({ Location, Animation, Graphic, Direction, Flag, ForceMovement, HitDamage, HitMask } = api.core);
-  ({ ChatType, Sounds, StatementDialogue, DialogueChainBuilder } = api.core);
+  ({ ChatType, Sounds, StatementDialogue, ItemStatementDialogue, DialogueChainBuilder } = api.core);
   ObstacleTask = createObstacleTask(api.core.Task);
 }
 
@@ -111,7 +112,8 @@ function animate(player, id, delay = 0) {
 
 /**
  * An obstacle's message: a string is a game message, `{ spam: text }` goes to the filterable spam
- * channel, and `{ mesbox: text }` is a message box (live sends most obstacle lines as spam).
+ * channel, `{ mesbox: text }` is a message box (live sends most obstacle lines as spam), and
+ * `{ itembox: { item, text } }` is a message box showing an item, its text logged as live does.
  */
 function sendMessage(player, message) {
   if (typeof message === "string") {
@@ -120,6 +122,10 @@ function sendMessage(player, message) {
     player.getPacketSender().sendTypedMessage(ChatType.SPAM, message.spam);
   } else if (message?.mesbox) {
     player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, message.mesbox)));
+  } else if (message?.itembox) {
+    const { item, text } = message.itembox;
+    player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new ItemStatementDialogue(0, item, text)));
+    player.getPacketSender().sendTypedMessage(ChatType.MESBOX, text);
   }
 }
 

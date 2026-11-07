@@ -14,6 +14,8 @@ object TspsServerPacket {
     const val LOGOUT_RESPONSE = 4
     const val PATH_RESPONSE = 5
     const val PLUGIN_MESSAGE = 6
+    const val CHARACTER_LIST = 7
+    const val CHARACTER_RESULT = 8
     const val PLAYER_SYNC = 20
     const val NPC_INFO = 21
     const val ANIM = 22
@@ -115,6 +117,8 @@ object TspsServerPacket {
     val LENGTHS: Map<Int, Int> =
         mapOf(
             PLUGIN_MESSAGE to -2,
+            CHARACTER_LIST to -2,
+            CHARACTER_RESULT to -1,
             WELCOME to 8,
             TICK to 8,
             HANDSHAKE to -1,

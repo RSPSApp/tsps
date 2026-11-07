@@ -26,7 +26,7 @@ let itemAction;
 let itemOnObject;
 const completeQuests = new Set();
 require("../plugins/quests/QuestRuntime").getRegisteredQuests = () =>
-  ["Heroes' Quest", "Legends' Quest", "Throne of Miscellania", "Between a Rock..."].map((name) => ({ name, isComplete: () => completeQuests.has(name) }));
+  ["Heroes' Quest", "Legends' Quest"].map((name) => ({ name, isComplete: () => completeQuests.has(name) }));
 const { ObjectIdentifiers } = require("../dist/util/ObjectIdentifiers");
 const { ItemIdentifiers } = require("../dist/util/ItemIdentifiers");
 const { ItemDefinition } = require("../dist/game/definition/ItemDefinition");
@@ -35,6 +35,8 @@ const Jewellery = require("../plugins/items/Jewellery.plugin");
 const customEvents = [];
 /** Players the Colosseum plugin would say have the Hero title. */
 const colosseumHeroes = new Set();
+/** Quest keys "quest:is-complete" answers done. */
+const doneQuestKeys = new Set();
 class DialogueChainBuilder {
   add(dialogue) { this.dialogue = dialogue; return this; }
 }
@@ -50,6 +52,7 @@ Jewellery.register({
   emitCustomEvent: (name, payload) => {
     customEvents.push([name, payload]);
     if (name === "colosseum:has-rank" && payload.rank === "Hero") payload.reached = colosseumHeroes.has(payload.player);
+    if (name === "quest:is-complete") payload.complete = doneQuestKeys.has(payload.key);
   },
   sendMultiChatboxPrompt: (player, title, ...pairs) => {
     const options = [];
@@ -233,7 +236,12 @@ test("inventory sub-menu options teleport by position", () => {
   const player = createPlayer();
   const pendant = new Item(ItemIds.DIGSITE_PENDANT_5_, 1);
   player.inventory.setItem(0, pendant);
-  inventoryClick(player, pendant, "Rub", { subOpId: 2 });
+  doneQuestKeys.add("bone_voyage"); // Fossil Island, the second sub-option, needs it (Wiki)
+  try {
+    inventoryClick(player, pendant, "Rub", { subOpId: 2 });
+  } finally {
+    doneQuestKeys.delete("bone_voyage");
+  }
   assert.deepEqual(teleports[0].target, [3763, 3870, 1]);
   assert.equal(pendant.getId(), ItemIds.DIGSITE_PENDANT_4_);
 });
@@ -364,9 +372,37 @@ test("the slayer ring teleports up to level 30 Wilderness (Wiki)", () => {
   const player = createPlayer();
   const ring = new Item(ItemIds.SLAYER_RING_8_, 1);
   player.inventory.setItem(0, ring);
-  inventoryClick(player, ring, "Rub", { subOpId: 2 });
-  pick("Slayer Tower");
+  doneQuestKeys.add("priest_in_peril"); // Slayer Tower needs it (Wiki)
+  try {
+    inventoryClick(player, ring, "Rub", { subOpId: 2 });
+    pick("Slayer Tower");
+  } finally {
+    doneQuestKeys.delete("priest_in_peril");
+  }
   assert.equal(teleports.at(-1).wildernessLevel, 30);
+});
+
+test("the slayer ring's Slayer Tower, Tarn's Lair and Dark Beasts need their quests (Wiki)", () => {
+  for (const [label, key, name] of [
+    ["Slayer Tower", "priest_in_peril", "Priest in Peril"],
+    ["Tarn's Lair", "haunted_mine", "Haunted Mine"],
+    ["Dark Beasts", "mournings_end_part_ii", "Mourning's End Part II"],
+  ]) {
+    const player = createPlayer();
+    const ring = new Item(ItemIds.SLAYER_RING_8_, 1);
+    player.inventory.setItem(0, ring);
+    const before = teleports.length;
+    inventoryClick(player, ring, "Rub", { subOpId: 2 });
+    pick(label);
+    assert.equal(teleports.length, before, `${label}: no teleport before ${name}`);
+    assert.deepEqual(player.statements.at(-1), "You have not yet unlocked that destination.");
+    assert.equal(ring.getId(), ItemIds.SLAYER_RING_8_, "no charge used");
+    doneQuestKeys.add(key);
+    inventoryClick(player, ring, "Rub", { subOpId: 2 });
+    pick(label);
+    assert.equal(teleports.length, before + 1, `${label}: after ${name} it teleports`);
+    doneQuestKeys.delete(key);
+  }
 });
 
 test("the charge is spent on arrival even if the piece was equipped mid-teleport", () => {
@@ -464,11 +500,29 @@ test("banking and death keep jewellery's charge id", async () => {
   assert.deepEqual(PlayerDeathTask.getItemsToKeep(victim).map((item) => item.getId()).sort(),
     carried.map((item) => item.getId()).sort());
 
-  // An imbued ring of wealth loses its imbue on death but keeps its three charges.
+  // An imbued ring of wealth always loses its imbue on death, keeping its three charges (Wiki: Ring of wealth (i)). A
+  // player killer gets its 50,000 coins; any other death adds them to what it loses (ring-of-wealth-death.test.cjs).
   const { removeImbueOnDeath } = require("../plugins/items/RingOfWealth.plugin")._test;
+  const paid = [];
+  const killer = { isPlayer: () => true, getInventory: () => ({ forceAdd: (_who, coins) => paid.push(coins.getAmount()) }) };
   const ring = new Item(20788, 1);
-  removeImbueOnDeath({ item: ring, killer: { getInventory: () => ({ forceAdd() {} }) } }, null);
+  removeImbueOnDeath({ item: ring, killer });
   assert.equal(ring.getId(), 11984, "ring of wealth (3)");
+  assert.deepEqual(paid, [50000]);
+  for (const [name, event] of [
+    ["a PvM death", { killer: null }],
+    ["an NPC kill", { killer: { isPlayer: () => false, getInventory: () => ({ forceAdd: () => paid.push("npc") }) } }],
+  ]) {
+    const extraDrops = [];
+    const lost = new Item(20788, 1);
+    removeImbueOnDeath({ item: lost, ...event, extraDrops });
+    assert.equal(lost.getId(), 11984, `${name}: unimbued`);
+    assert.deepEqual(extraDrops.map((item) => [item.getId(), item.getAmount()]), [[995, 50000]], `${name}: coins go with the death`);
+  }
+  const kept = new Item(20788, 1);
+  removeImbueOnDeath({ item: kept, killer, kept: true });
+  assert.equal(kept.getId(), 11984, "a kept ring is unimbued too");
+  assert.deepEqual(paid, [50000, 50000], "a player killer is paid for a kept ring as well; no NPC is");
 });
 
 test("the ring of wealth spends its charge on arrival, from wherever the ring is", () => {
@@ -504,50 +558,11 @@ test("the ring of wealth spends its charge on arrival, from wherever the ring is
   assert.equal(worn.getId(), 11986, "a refused teleport keeps the charge");
 });
 
-test("the ring of wealth's Miscellania and Dondakan teleports need their quests; a refusal keeps the charge", () => {
-  const RingOfWealth = require("../plugins/items/RingOfWealth.plugin");
-  const { teleport, TELEPORTS } = RingOfWealth._test;
-  // The quest plugin answers quest:is-complete; here the completed quests are the set above.
-  RingOfWealth.register({
-    getItemOnGroundManager: () => ({}),
-    onItemAction() {},
-    onItemOnItem() {},
-    onPlayerDeathItemDrop() {},
-    emitCustomEvent: (name, payload) => {
-      if (name === "quest:is-complete") payload.complete = completeQuests.has(payload.name);
-    },
-  });
-  const byLabel = (label) => TELEPORTS.find((entry) => entry.label === label);
-  const player = createPlayer();
-  const ring = new Item(11980, 1);
-  player.inventory.setItem(0, ring);
-  const rub = (label) => {
-    const { destination, quest } = byLabel(label);
-    teleport(player, { interfaceId: 149, slot: 0 }, ring, destination, quest);
-  };
-
-  completeQuests.clear();
-  rub("Miscellania");
-  rub("Dondakan");
-  assert.equal(teleports.length, 0, "neither quest is done");
-  assert.equal(ring.getId(), 11980, "the charge is kept");
-  assert.deepEqual(player.messages, [
-    "You need to have completed Throne of Miscellania to teleport there.",
-    "You need to have completed Between a Rock... to teleport there.",
-  ]);
-
-  rub("Grand Exchange");
-  rub("Falador Park");
-  assert.equal(teleports.length, 2, "the other two need no quest");
-
-  completeQuests.add("Throne of Miscellania");
-  rub("Miscellania");
-  assert.deepEqual(teleports.at(-1).target, [2534, 3862, 0]);
-  completeQuests.add("Between a Rock...");
-  rub("Dondakan");
-  assert.deepEqual(teleports.at(-1).target, [2824, 10168, 0]);
-  assert.equal(ring.getId(), 11988, "four teleports spent four charges");
-  completeQuests.clear();
+test("the ring of wealth's destination tiles are the Wiki's", () => {
+  const { RING_OF_WEALTH_DESTINATIONS } = require("../plugins/items/Teleports.Jewellery");
+  const tiles = Object.fromEntries(RING_OF_WEALTH_DESTINATIONS.map((d) => [d.label, d.tile]));
+  assert.deepEqual(tiles["Miscellania"], [2534, 3862, 0]);
+  assert.deepEqual(tiles["Falador Park"], [2995, 3375, 0]);
 });
 
 function useOnObject(player, item, objectId) {
@@ -757,4 +772,43 @@ test("desktop and mobile cache transforms both resolve the charging sites", () =
       assert.equal(item.getId(), after);
     }
   }
+});
+
+test("the digsite pendant's Lithkren and Fossil Island teleports need Dragon Slayer II and Bone Voyage (Wiki)", () => {
+  for (const [label, key, name] of [["Lithkren Dungeon", "dragon_slayer_ii", "Dragon Slayer II"], ["Fossil Island", "bone_voyage", "Bone Voyage"]]) {
+    const player = createPlayer();
+    const pendant = new Item(ItemIds.DIGSITE_PENDANT_5_, 1);
+    player.inventory.setItem(0, pendant);
+    const before = teleports.length;
+    inventoryClick(player, pendant, "Rub");
+    pick(label);
+    assert.equal(teleports.length, before, `${label}: no teleport before ${name}`);
+    assert.deepEqual(player.statements.at(-1), "You have not yet unlocked that destination.", "the Wiki's line");
+    assert.equal(pendant.getId(), ItemIds.DIGSITE_PENDANT_5_, "no charge used");
+    doneQuestKeys.add(key);
+    inventoryClick(player, pendant, "Rub");
+    pick(label);
+    assert.equal(teleports.length, before + 1, `${label}: after ${name} it teleports`);
+    doneQuestKeys.delete(key);
+  }
+});
+
+test("the games necklace's Tears of Guthix needs Tears of Guthix (Wiki)", () => {
+  const player = createPlayer();
+  const necklace = new Item(ItemIds.GAMES_NECKLACE_8_, 1);
+  player.inventory.setItem(0, necklace);
+  const before = teleports.length;
+  inventoryClick(player, necklace, "Rub");
+  pick("Tears of Guthix");
+  assert.equal(teleports.length, before, "no teleport before the quest");
+  assert.deepEqual(player.statements.at(-1), "You have not yet unlocked that destination.");
+  assert.equal(necklace.getId(), ItemIds.GAMES_NECKLACE_8_, "no charge used");
+  doneQuestKeys.add("tears_of_guthix");
+  try {
+    inventoryClick(player, necklace, "Rub");
+    pick("Tears of Guthix");
+  } finally {
+    doneQuestKeys.delete("tears_of_guthix");
+  }
+  assert.equal(teleports.length, before + 1, "teleports after it");
 });

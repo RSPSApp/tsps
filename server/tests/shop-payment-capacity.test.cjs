@@ -111,6 +111,8 @@ test('Pete sells one saved vessel capacity upgrade through the registered shop',
   assert.equal(core.CacheDefinitions.getObjId('fossil_mine_water_container'),21539);
   assert.equal(core.CacheDefinitions.getObjId('fossil_mine_water_container_dummy'),25615);
   assert.equal(core.CacheDefinitions.getVarbitId('fossil_mine_unlocked_morewater'),5959);
+  assert.equal(core.ItemDefinition.forId(21539).isSellable(),false,'the active vessel definition is not sellable');
+  assert.equal(core.ItemDefinition.forId(21539).isTradeable(),false,'the active vessel definition is not tradeable');
   core.RegionManager.loadMapFiles(spawn.x,spawn.y);
   const npc=core.NPC.create(7776,new core.Location(spawn.x,spawn.y,spawn.level??0)); npcs.push(npc);
   assert.equal(core.World.getNpcs().add(npc),true); npc.setRegistered(true);
@@ -188,6 +190,16 @@ test('Pete sells one saved vessel capacity upgrade through the registered shop',
   assert.ok(shopMessages.some(message=>String(message).includes('permanent 10,000-point upgrade')),'the generic shop explains the vessel row');
   const remainingStock=(actor=f)=>core.ShopManager.getOpenShop(actor.p).stock.find(row=>row.itemId===dummy).amount;
   const initialStock=remainingStock();
+  const seller=makePlayer(); seller.p.setAttribute(currency,500); openPete(seller.p);
+  seller.p.getInventory().add(new core.Item(dummy,1,{origin:'sale-control'}),false);
+  const saleItem=seller.p.getInventory().getValidItems().find(item=>item.getId()===dummy);
+  const saleMessages=[]; const originalSellerMessage=seller.p.sendMessage.bind(seller.p);
+  t.mock.method(seller.p,'sendMessage',text=>{saleMessages.push(text); return originalSellerMessage(text);});
+  await sale(seller,dummy);
+  assert.ok(saleMessages.some(text=>String(text).includes('This item cannot be sold.')),'the real sale route refuses the vessel');
+  assert.equal(seller.p.getAttribute(currency),500); assert.equal(remainingStock(seller),initialStock);
+  assert.equal(seller.p.getInventory().getValidItems().find(item=>item.getId()===dummy),saleItem);
+  assert.notEqual(seller.p.getAttribute('volcanic-mine:larger-vessel'),true); assert.equal(logCount(seller.p),0);
   const full=makePlayer(); full.p.setAttribute(currency,10000);
   for(let i=0;i<28;i++) full.p.getInventory().add(new core.Item(core.ItemIdentifiers.RAKE),false);
   assert.equal(full.p.getInventory().getFreeSlots(),0); openPete(full.p); await buyOther(full);

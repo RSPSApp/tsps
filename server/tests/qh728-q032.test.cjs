@@ -217,7 +217,8 @@ function setup() {
     isFull: () => full,
     getFreeSlots: () => full ? 0 : 28,
     adds(id, amount) { inventory.set(id, (inventory.get(id) ?? 0) + amount); },
-    forceAdd(id, amount) { inventory.set(id, (inventory.get(id) ?? 0) + amount); },
+    // The real signature: forceAdd(player, item).
+    forceAdd(player, item) { const id = item.getId?.() ?? item.id, amount = item.getAmount?.() ?? item.amount ?? 1; inventory.set(id, (inventory.get(id) ?? 0) + amount); },
     deleteNumber(id, amount) {
       assert.ok((inventory.get(id) ?? 0) >= amount, `missing item ${id}`);
       inventory.set(id, (inventory.get(id) ?? 0) - amount);

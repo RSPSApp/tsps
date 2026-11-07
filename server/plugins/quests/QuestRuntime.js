@@ -732,11 +732,8 @@ function registerQuest(api, def) {
       player.getPacketSender().sendConfig(QUEST_POINTS_VARP, points | 0);
 
       if (def.onReward) def.onReward(player, quest, options);
-      if (def.rewardItemId !== undefined) {
-        const inventory = player.getInventory();
-        if (inventory.isFull()) inventory.forceAdd(player, new coreApi.Item(def.rewardItemId, 1));
-        else inventory.adds(def.rewardItemId, 1);
-      }
+      // A plain add would clamp at a capped stack; giveReward's forceAdd floors what does not fit.
+      if (def.rewardItemId !== undefined) giveReward(player, def.rewardItemId, 1);
       if (options.scroll !== false) player.getPacketSender().sendJingle(def.completionJingleId ?? QUEST_COMPLETE_JINGLE, 0);
       if (options.announce !== false) {
         player.sendMessage(`Congratulations, you've completed a quest: <col=${def.completionMessageColor ?? "081190"}>${def.name}</col>`);

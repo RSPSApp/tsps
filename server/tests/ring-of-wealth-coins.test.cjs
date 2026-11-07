@@ -40,3 +40,23 @@ test("a worn ring of wealth collects them, unless Coin collection is off", () =>
   assert.equal(coinsGoTo(RING_OF_WEALTH_5), "pack");
   assert.equal(coinsGoTo(RING_OF_WEALTH_5, { "ring-of-wealth-auto-collect": false }), "ground");
 });
+
+test("a coin stack near the cap collects what fits, and the rest drops to the ground instead of vanishing", () => {
+  const MAX = 2147483647;
+  let held = MAX - 10;
+  grounded.length = 0;
+  const player = {
+    getEquipment: () => ({ get: () => ({ getId: () => RING_OF_WEALTH_5 }) }),
+    // As the real container: a held stack takes only up to the cap.
+    getInventory: () => ({
+      contains: () => true,
+      getFreeSlots: () => 0,
+      getAddableAmount: (item) => Math.min(item.getAmount(), MAX - held),
+      adds: (id, amount) => { held = Math.min(MAX, held + amount); },
+    }),
+    getAttribute: () => undefined,
+  };
+  NpcDrops.__internals.placeDrops(player, [{ itemId: COINS, amount: 25 }], null);
+  assert.equal(held, MAX, "the stack fills to the cap");
+  assert.ok(grounded.includes(COINS), "the other 15 drop to the ground");
+});

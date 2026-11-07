@@ -83,6 +83,7 @@ function makePlayer() {
     setCurrentLevel: noop,
     getExperience: () => 0,
     addExperience: noop,
+    addExperiences: noop,
   };
   let full = false;
   let location = new core.Location(1542, 3560, 0);

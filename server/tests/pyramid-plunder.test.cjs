@@ -362,7 +362,7 @@ test("the chest always gives its artefact; a scarab swarm takes the XP instead",
   flush(1);
   assert.equal(q.xp.THIEVING, 0, "the swarm takes the XP");
   assert.equal(artefactCount(q), 1);
-  assert.deepEqual(q.hits, [3]);
+  assert.deepEqual(q.hits, [4], "the trap deals 1-4, not a fixed 3");
   assert.equal(spawned[0].definition.id, ids().npc.scarabs);
   assert.equal(spawned[0].attacked, q);
   C.endRun(q);
@@ -409,6 +409,20 @@ test("the sarcophagus opens on Strength and gives Strength XP", () => {
   T.Containers.openSarcophagus({ player: p, ...objectAt(1, ids().sarcophagus) }, () => 0.5);
   assert.equal(artefactCount(p), 1, "opens once");
   C.endRun(p);
+});
+
+test("a failed sarcophagus push still rolls the sceptre, which ends the run", () => {
+  const p = player({ thieving: 99, strength: 1 });
+  T.Entrance.tryStart(p, () => 0);
+  let rolls = 0;
+  // Push 1 only pushes. Push 2: the Strength roll fails (0.999), then the sceptre roll hits (0).
+  const sceptreRoll = () => (++rolls === 1 ? 0.999 : 0);
+  T.Containers.openSarcophagus({ player: p, ...objectAt(1, ids().sarcophagus) }, sceptreRoll);
+  flush(6);
+  assert.equal(p.inventory.get(ids().item.sceptre), 1, "the failed push found the sceptre");
+  assert.equal(C.sessionOf(p), null, "finding it ends the run");
+  assert.equal(artefactCount(p), 0, "no artefact: the lid never moved");
+  assert.equal(p.xp.STRENGTH ?? 0, 0);
 });
 
 test("containers in another room do nothing", () => {
@@ -803,8 +817,8 @@ test("captured sarcophagus: a push every tick, the lid with area sound 1218 and 
   const p = player({ thieving: 99, strength: 99 });
   T.Entrance.tryStart(p, () => 0);
   let rolls = 0;
-  // Two failed rolls, then the lid moves; 0.5 afterwards: no mummy, no sceptre.
-  const random = () => (++rolls <= 2 ? 0.999 : 0.5);
+  // Two failed pushes (each also rolls the sceptre), then the lid moves; 0.5 afterwards: no mummy, no sceptre.
+  const random = () => (++rolls <= 4 ? 0.999 : 0.5);
   T.Containers.openSarcophagus({ player: p, ...objectAt(1, ids().sarcophagus) }, random);
   const ticks = watch(p, 10);
   assert.ok(has(ticks[0], ids().varbit.busy, 1));

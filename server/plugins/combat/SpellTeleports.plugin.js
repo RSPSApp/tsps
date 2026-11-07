@@ -318,7 +318,8 @@ function questLockRefusal(player, name, action) {
  * casting the spell". The house portals ask here so the two share one list; sets `event.refusal`.
  */
 function teleportQuestLock(event) {
-  event.refusal = questLockRefusal(event.player, event.name?.trim().toLowerCase(), event.action ?? "cast this spell");
+  // Other answerers (a quest's own lock, as Watchtower) may refuse too: the first refusal stands.
+  event.refusal ??= questLockRefusal(event.player, event.name?.trim().toLowerCase(), event.action ?? "cast this spell");
 }
 
 /**

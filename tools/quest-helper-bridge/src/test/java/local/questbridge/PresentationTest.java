@@ -51,6 +51,25 @@ class PresentationTest {
   }
 
   @Test
+  void inventoryHighlightsCarryOnlyTheStepsHighlightedRequirements() {
+    try (var engine = new BridgeEngine()) {
+      engine.evaluate(BridgeTest.request("highlights", 1, "CooksAssistant"));
+      var s = engine.sessions.get("highlights");
+      var knife = new ItemRequirement("Knife", 946);
+      var step =
+          new DetailedQuestStep(
+              s.helper, "Use a knife on the marked painting.", knife.highlighted());
+      var ids = s.export(step).getAsJsonArray("inventoryHighlights");
+      assertEquals(1, ids.size(), "the highlighted requirement is exported");
+      assertEquals(946, ids.get(0).getAsInt());
+
+      // An unhighlighted requirement stays out: it is a checklist entry, not a hint.
+      var plain = new DetailedQuestStep(s.helper, "Use a knife on the marked painting.", knife);
+      assertEquals(0, s.export(plain).getAsJsonArray("inventoryHighlights").size());
+    }
+  }
+
+  @Test
   void standardWidgetStepRetainsActualHighlightDrawing() {
     try (var engine = new BridgeEngine()) {
       var req = BridgeTest.request("widget", 1, "CooksAssistant");

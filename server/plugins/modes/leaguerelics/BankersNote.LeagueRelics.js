@@ -11,8 +11,12 @@
  * guardian essence has no note in this cache).
  */
 const Common = require("./Common.LeagueRelics");
+// Preset copies (PvP presets on a league world) carry no meta into notes or back: only plain copies convert.
+const { plainAmount, takePlain, PRESET_TEXT } = require("../../items/PoweredStaff");
 
 const STATE_ATTRIBUTE = "league:bankers-note";
+/** note/unnote's answer when only preset copies are held. */
+const PRESET_ONLY = -2;
 /** A stack's limit (the client's 32-bit amount). */
 const MAX_STACK = 2147483647;
 
@@ -63,12 +67,14 @@ function note(player, itemId, limit) {
   const inventory = player.getInventory();
   const noted = Common.noted(itemId);
   if (noted === itemId || isNote(itemId)) return 0;
-  const wanted = Math.min(inventory.getAmount(itemId), limit ?? Infinity);
+  const plain = plainAmount(inventory, itemId);
+  if (plain <= 0 && inventory.getAmount(itemId) > 0) return PRESET_ONLY;
+  const wanted = Math.min(plain, limit ?? Infinity);
   if (wanted <= 0) return -1;
   // The unnoted items leave their slots first, so the note's stack has one.
   const count = room(inventory, noted, wanted, true);
   if (count <= 0) return 0;
-  inventory.deleteNumber(itemId, count);
+  takePlain(inventory, itemId, count);
   inventory.adds(noted, count);
   return count;
 }
@@ -78,14 +84,15 @@ function unnote(player, noteId, limit) {
   const inventory = player.getInventory();
   const itemId = base(noteId);
   if (itemId === noteId) return 0;
-  const held = inventory.getAmount(noteId);
+  const held = plainAmount(inventory, noteId);
+  if (held <= 0 && inventory.getAmount(noteId) > 0) return PRESET_ONLY;
   const wanted = Math.min(held, limit ?? Infinity);
   if (wanted <= 0) return -1;
   // The note's slot comes free only when the whole stack goes.
   let count = room(inventory, itemId, wanted, true);
   if (count < held) count = room(inventory, itemId, count, false);
   if (count <= 0) return 0;
-  inventory.deleteNumber(noteId, count);
+  takePlain(inventory, noteId, count);
   inventory.adds(itemId, count);
   return count;
 }
@@ -95,6 +102,10 @@ function convert(player, itemId, mode = isNote(itemId) ? "unnote" : "note") {
   const state = stateOf(player);
   const done = mode === "note" ? note(player, base(itemId), state.noteQuantity) : unnote(player, Common.noted(base(itemId)), state.unnoteQuantity);
   save(player, { itemId: base(itemId), mode });
+  if (done === PRESET_ONLY) {
+    player.sendMessage(PRESET_TEXT);
+    return 0;
+  }
   if (done > 0) player.sendMessage(Common.message(mode === "note" ? "bankersNoteNoted" : "bankersNoteUnnoted", { amount: done, item: name(base(itemId)) }));
   else if (done < 0) player.sendMessage(Common.message("bankersNoteNothing"));
   else player.getInventory().full();

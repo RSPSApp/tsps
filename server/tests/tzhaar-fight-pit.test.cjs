@@ -40,7 +40,7 @@ function fighter(name, at = ARENA_TILE) {
     getSkillManager: () => ({ getCombatLevel: () => 100 }),
     getInventory: () => ({ adds: (id, amount) => { if (id === core.ItemIdentifiers.TOKKUL) player.tokkul += amount; } }),
     setSkullTimer: (ticks) => { player.skullTicks = ticks; },
-    setSkullIconOverride: (icon) => { player.skullIcon = icon; },
+    setSkullIconOverride: (icon, always) => { player.skullIcon = icon; player.skullIconAlways = always === true; },
   };
   return player;
 }
@@ -55,17 +55,38 @@ function champion(at = ARENA_TILE) {
 
 const skulled = (player) => T.isChampion(player) && player.skullIcon !== null;
 
-test('the last one standing is champion: the red skull for an hour', () => {
+test('the last one standing is champion: the red skull for an hour, cosmetic only', () => {
+  // Wiki (Skull (status)): the champion's skull "is purely cosmetic and has no effect on gameplay or items kept on death".
+  const cycle = core.World.getProcessCycle;
   const winner = champion();
-  assert.equal(winner.skullTicks, 6000, 'one hour');
+  assert.equal(winner.skullTicks, null, 'the real skull timer is not set: no items lost for it');
   assert.equal(winner.skullIcon, 1);
+  assert.equal(winner.skullIconAlways, true, 'drawn without a real skull');
+  try {
+    const start = cycle.call(core.World);
+    core.World.getProcessCycle = () => start + 5999;
+    T.processPits({ player: winner });
+    assert.equal(skulled(winner), true, 'still there just short of the hour');
+    core.World.getProcessCycle = () => start + 6000;
+    T.processPits({ player: winner });
+    assert.equal(skulled(winner), false, 'gone after an hour');
+  } finally {
+    core.World.getProcessCycle = cycle;
+  }
+});
+
+test("losing the champion's skull never clears a real PvP skull", () => {
+  const winner = champion();
+  winner.skullTicks = 3000; // skulled for attacking a player first
+  T.championTeleports({ player: winner, allow: null });
+  assert.equal(skulled(winner), false, 'the champion skull goes');
+  assert.equal(winner.skullTicks, 3000, 'the PvP skull stays');
 });
 
 test('a teleport of any kind takes the skull', () => {
   const winner = champion();
   T.championTeleports({ player: winner, allow: null });
   assert.equal(skulled(winner), false);
-  assert.equal(winner.skullTicks, 0);
 });
 
 test('changing weapons or armour takes it only after leaving the pits; ammunition does not', () => {

@@ -152,8 +152,9 @@ test("armour killed by its logged-in owner and abandoned while dying drops its s
 test("an owner who logs out the tick their armour dies gets the set back from Shanomi", (t) => {
   const { f, h, armour } = risenArmour(t);
   kill(armour, f.p);
+  // In engine order: MobileList.remove unregisters the player, then onRemove emits the logout hook.
+  f.p.setRegistered(false);
   h.logout({ player: f.p });
-  f.p.setRegistered(false); // gone before the death task looks for a killer
   runDeath();
   assert.equal(setsHeld(f), 1, "the death dropped nothing, so Shanomi keeps the set");
   f.p.setRegistered(true);
@@ -163,7 +164,7 @@ test("an owner who logs out the tick their armour dies gets the set back from Sh
 
 // A world tick runs the tasks before it removes leaving players: from the tick after the death, NPCDeathTask has taken
 // the owner as its killer and drops the set even once they've gone. Shanomi must keep nothing then.
-for (const ticks of [1, 2]) {
+for (const ticks of [1, 2, 3]) {
   test(`an owner who logs out ${ticks} tick${ticks === 1 ? "" : "s"} into the death gets the dropped set only, nothing from Shanomi`, (t) => {
     const { f, h, armour } = risenArmour(t);
     const dropped = [];
@@ -174,8 +175,8 @@ for (const ticks of [1, 2]) {
     });
     kill(armour, f.p);
     for (let i = 0; i < ticks; i++) { core.World.processCycle++; core.TaskManager.process(); }
+    f.p.setRegistered(false); // engine order: unregistered, then the logout hook
     h.logout({ player: f.p });
-    f.p.setRegistered(false);
     runDeath();
     for (const id of pieces()) assert.ok(dropped.includes(id), `the death dropped ${id}`);
     assert.equal(setsHeld(f), 0, "Shanomi keeps no second copy");

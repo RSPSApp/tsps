@@ -139,7 +139,10 @@ function abandon(player, leaving = false) {
   animated.delete(player);
   const killer = state.npc?.isDyingFunction?.() === true ? state.killer : null;
   const ownerLeftFirst = leaving && killer === player && state.deathCycle === Guild.core.World.getProcessCycle();
-  const dropCertain = killer != null && killer.isRegistered?.() === true && !ownerLeftFirst;
+  // The owner's own logout hook runs after they are unregistered (MobileList.remove), so their registration says
+  // nothing here: only whether the task has already taken them (ownerLeftFirst) does.
+  const killerCounts = (leaving && killer === player) || killer?.isRegistered?.() === true;
+  const dropCertain = killer != null && killerCounts && !ownerLeftFirst;
   if (state.npc) Guild.despawn(state.npc);
   player.getPacketSender().sendEntityHintRemoval(false);
   if (!dropCertain) player.setAttribute(LOST_ARMOUR_ATTRIBUTE, [...lostSets(player), state.set.slice(0, 3)]);

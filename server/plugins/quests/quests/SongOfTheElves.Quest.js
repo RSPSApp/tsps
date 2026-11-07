@@ -853,9 +853,13 @@ module.exports = function registerSongOfTheElves(api) {
       inventory.deleteNumber(DISGUISE.TABARD, 1);
       inventory.adds(DISGUISE.BODY, 1);
     } else if (["tNiXqt", "0nVxB-"].includes(event.stepId)) {
-      // Alrena makes the tabard from the silk and purple dye handed over here: without them there is no tabard.
+      // A tabard already paid for (the player logged out before it was given) is given now, not paid for again.
+      if (player.getAttribute(TABARD_PAID) === true) return;
+      // Alrena makes the tabard from the silk and purple dye handed over here: without them there is no tabard, and
+      // the conversation ends here (`handled` alone only hides this line; her "Here you go" would still follow).
       if (!hasItems(player, [DISGUISE.SILK, DISGUISE.PURPLE_DYE])) {
         event.handled = true;
+        event.end = true;
         player.sendMessage("You need some silk and some purple dye for Alrena to make the tabard.");
         return;
       }
@@ -4229,6 +4233,8 @@ module.exports = function registerSongOfTheElves(api) {
   api.persistAttribute(YSGAWYN_RETURN_MEETING);
   api.persistAttribute(ELENA_PRE_MEETING_RESPONSE);
   api.persistAttribute(FALLS_PILLARS);
+  // Paid but not yet given: a logout between the two keeps the tabard owed.
+  api.persistAttribute(TABARD_PAID);
   api.persistAttribute(FALLS_ORDER);
   api.persistAttribute(INCITEMENTS);
   api.persistAttribute(RESISTANCE_MEMBERS);

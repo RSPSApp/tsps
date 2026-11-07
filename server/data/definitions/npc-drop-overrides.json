@@ -8,7 +8,7 @@
   "6407": "Tai Bwo Wannai Cleanup's tribesman: only bones (Wiki, and every recorded kill), dropped by plugins/minigames/taibwowannaicleanup/Events."
  },
  "addNpcs": {
-  "$comment": "NPC ids the dumper doesn't map to their table: variants and versions it misses (added 2026-09-15, 'import missing NPC tables with corrected variant mappings').",
+  "$comment": "NPC ids the dumper doesn't map to their table: variants and versions it misses (added 2026-09-15, 'import missing NPC tables with corrected variant mappings'). An NPC the dump already maps gets the tables it lacks appended, in the order listed, so the dump's own first table stays the default (the zombie pirates' Medium Wilderness Diary table).",
   "377": {"npc_id": 377, "name": "Phosani's Nightmare", "cache_name": "Phosani's Nightmare", "wiki_page": "Phosani's Nightmare", "tables": ["phosanis_nightmare"]},
   "378": {"npc_id": 378, "name": "The Nightmare", "wiki_page": "The Nightmare", "tables": ["the_nightmare"]},
   "945": {"npc_id": 945, "name": "Ghast", "wiki_page": "Ghast", "tables": ["ghast"]},
@@ -116,7 +116,12 @@
   "16310": {"npc_id": 16310, "name": "Mad Angel", "wiki_page": "Mad Angel", "tables": ["mad_angel"]},
   "16312": {"npc_id": 16312, "name": "Mad Angel", "wiki_page": "Mad Angel", "tables": ["mad_angel"]},
   "16314": {"npc_id": 16314, "name": "Mad Angel", "wiki_page": "Mad Angel", "tables": ["mad_angel"]},
-  "16315": {"npc_id": 16315, "name": "Mad Angel", "wiki_page": "Mad Angel", "tables": ["mad_angel"]}
+  "16315": {"npc_id": 16315, "name": "Mad Angel", "wiki_page": "Mad Angel", "tables": ["mad_angel"]},
+  "13489": {"npc_id": 13489, "name": "Zombie pirate", "cache_name": "Zombie pirate", "wiki_page": "Zombie pirate", "tables": ["zombie_pirate_2", "zombie_pirate"]},
+  "13490": {"npc_id": 13490, "name": "Zombie pirate", "cache_name": "Zombie pirate", "wiki_page": "Zombie pirate", "tables": ["zombie_pirate_2", "zombie_pirate"]},
+  "13491": {"npc_id": 13491, "name": "Zombie pirate", "cache_name": "Zombie pirate", "wiki_page": "Zombie pirate", "tables": ["zombie_pirate_2", "zombie_pirate"]},
+  "13492": {"npc_id": 13492, "name": "Zombie pirate", "cache_name": "Zombie pirate", "wiki_page": "Zombie pirate", "tables": ["zombie_pirate_2", "zombie_pirate"]},
+  "13493": {"npc_id": 13493, "name": "Zombie pirate", "cache_name": "Zombie pirate", "wiki_page": "Zombie pirate", "tables": ["zombie_pirate_2", "zombie_pirate"]}
  },
  "bossNpcs": {
   "$comment": "Bosses the cache does not mark with param 1361, so NpcDrops' boss rare multiplier would skip them. Yama is not in monsters-complete yet and its NPC carries no params; Araxxor and the Shellbane gryphon are Wiki bosses whose cache rows omit the param. Remove an id once the cache (or the dump) marks it.",

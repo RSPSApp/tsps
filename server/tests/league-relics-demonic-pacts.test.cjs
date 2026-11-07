@@ -1285,6 +1285,7 @@ test("Map of Alacrity: every destination is open floor to walk from, landed on a
   for (const destination of ALACRITY_DATA.areas.flatMap((entry) => entry.destinations)) {
     const tile = new Location(destination.x, destination.y, destination.z ?? 0);
     core.RegionManager.loadMapFiles(tile.getX(), tile.getY());
+    assert.equal(core.RegionManager.blocked(tile, null), false, `${destination.name}: destination is open floor, including floor decorations`);
     const landed = Teleports.landing(tile);
     assert.ok(landed.equals(tile), `${destination.name}: lands on its own tile, not ${landed.getX()},${landed.getY()}`);
     assert.ok(Teleports.reach(tile, 30) >= 30, `${destination.name}: 30 tiles walkable from it`);

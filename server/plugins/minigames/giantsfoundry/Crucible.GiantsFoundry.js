@@ -37,6 +37,31 @@ const ANIM_PUSH = 810; // human_push
 const SOUND_POUR = 5605;
 const LOC_ANIM_POUR = 9447; // giants_foundry_crucible_pour01
 const ADD_DELAY = 3;
+/** The powered staves' wording for a preset copy (Presets.PvpMode tags them untradeable, unbankable and preset). */
+const PRESET_TEXT = "Preset items cannot be used for this.";
+
+/** A preset (or meta-untradeable, unbankable) copy is never melted: the metal pays Kovac in coins and reputation. */
+function restricted(item) {
+  return !!item && (item.isPresetItem?.() === true || item.isUntradeable?.() === true || item.isUnbankable?.() === true);
+}
+
+/** How many plain copies of `itemId` the inventory holds. */
+function plainHeld(player, itemId) {
+  return player.getInventory().getItems().reduce((total, item) =>
+    (item?.getId() === itemId && !restricted(item) ? total + item.getAmount() : total), 0);
+}
+
+/** Takes `amount` plain copies of `itemId`, by slot, leaving restricted copies alone. */
+function takePlain(player, itemId, amount) {
+  const inventory = player.getInventory();
+  let left = amount;
+  inventory.getItems().forEach((item, slot) => {
+    if (left <= 0 || item?.getId() !== itemId || restricted(item)) return;
+    const taken = Math.min(left, item.getAmount());
+    inventory.deleteAtSlot(slot, taken, false);
+    left -= taken;
+  });
+}
 const POUR_SCORE_DELAY = 1;
 const POUR_ARRIVE_DELAY = 6;
 const POURED_AT = "pouredAt";
@@ -112,7 +137,7 @@ function canSmelt(player, metal) {
 function melt(player, itemId, value, amount) {
   const { DialogueChainBuilder, ItemStatementDialogue, DoubleItemStatementDialogue, ActionDialogue } = Shared.core();
   if (busy.has(player)) return;
-  const held = player.getInventory().getAmount(itemId);
+  const held = plainHeld(player, itemId);
   const count = Math.min(amount, held);
   if (count <= 0) return;
   busy.add(player);
@@ -120,9 +145,9 @@ function melt(player, itemId, value, amount) {
   Shared.sound(player, SOUND_LEVER);
   Shared.later(ADD_DELAY, () => {
     busy.delete(player);
-    const taken = Math.min(count, player.getInventory().getAmount(itemId));
+    const taken = Math.min(count, plainHeld(player, itemId));
     if (taken <= 0) return;
-    player.getInventory().delete(itemId, taken);
+    takePlain(player, itemId, taken);
     player.getInventory().refreshItems();
     const worth = taken * value.bars;
     const space = Math.max(0, CAPACITY - total(player));
@@ -173,7 +198,7 @@ function itemIdByName(name) {
 
 /** Melts after asking, when the metal would spill over the top. */
 function addWithConfirm(player, itemId, value, amount) {
-  const count = Math.min(amount, player.getInventory().getAmount(itemId));
+  const count = Math.min(amount, plainHeld(player, itemId));
   if (count <= 0) return;
   const space = CAPACITY - total(player);
   const lost = count * value.bars - space;
@@ -222,7 +247,11 @@ function useOnCrucible(event) {
   if (!value) return;
   event.handled = true;
   if (!canFill(player, value)) return;
-  const held = player.getInventory().getAmount(itemId);
+  const held = plainHeld(player, itemId);
+  if (held <= 0) {
+    Shared.statement(player, PRESET_TEXT);
+    return;
+  }
   if (held <= 1) {
     addWithConfirm(player, itemId, value, 1);
     return;

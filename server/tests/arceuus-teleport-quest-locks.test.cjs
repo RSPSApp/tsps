@@ -47,7 +47,8 @@ function caster(t, priestInPeril) {
 test("Salve Graveyard Teleport is refused before Priest in Peril, and spends nothing", (t) => {
   const f = caster(t, false);
   assert.equal(f.teleports.length, 0);
-  assert.ok(f.messages.includes("You need to complete Priest in Peril to cast this spell."), f.messages.join(" | "));
+  // Wiki (Salve Graveyard Teleport): the retail refusal.
+  assert.ok(f.messages.includes("You must have completed Priest in Peril and received Drezel's warning to cast this spell."), f.messages.join(" | "));
   assert.equal(f.p.getInventory().getAmount(566), 2, "no soul runes spent");
 });
 

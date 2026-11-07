@@ -24,7 +24,7 @@ type TeleportSpell = {
     destination: Location;
     cooldown?: { attribute: string; duration: number };
     /** A quest the teleport needs completed (Wiki: Arceuus spellbook). */
-    quest?: { key: string; name: string };
+    quest?: { key: string; name: string; message?: string };
 };
 
 type SelfSpell = {
@@ -92,8 +92,8 @@ class ArceuusTeleportSpell extends Spell {
             const query = { player, key: quest.key, complete: false };
             PluginManager.emitCustomEvent("quest:is-complete", query);
             if (!query.complete) {
-                // TSPS wording: the retail refusal line has not been established.
-                player.sendMessage(`You need to complete ${quest.name} to cast this spell.`);
+                // A quest without its own line (West Ardougne, Harmony Island) uses TSPS wording.
+                player.sendMessage(quest.message ?? `You need to complete ${quest.name} to cast this spell.`);
                 return true;
             }
         }
@@ -113,7 +113,15 @@ const rune = (id: number, amount = 1) => new Item(id, amount);
 const teleport = (level: number, experience: number, runes: Item[], x: number, y: number, z = 0, cooldown?: TeleportSpell["cooldown"],
     quest?: TeleportSpell["quest"]) =>
     new ArceuusTeleportSpell({ level, experience, runes, destination: new Location(x, y, z), cooldown, quest });
-const PRIEST_IN_PERIL = { key: "priest_in_peril", name: "Priest in Peril" };
+/**
+ * Wiki (Salve Graveyard Teleport): "You must have completed Priest in Peril and received Drezel's warning to cast
+ * this spell." Fenkenstrain's Castle Teleport has the same requirement, so the same line (inferred).
+ */
+const PRIEST_IN_PERIL = {
+    key: "priest_in_peril",
+    name: "Priest in Peril",
+    message: "You must have completed Priest in Peril and received Drezel's warning to cast this spell.",
+};
 const THRALL_COOLDOWN = { attribute: "arceuus:thrall-until", duration: 10_000 };
 /**
  * Resurrect, as in rsprox captures: the caster plays human_spellcast_resurrect with its kind's cast

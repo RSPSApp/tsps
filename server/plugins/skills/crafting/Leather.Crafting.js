@@ -222,6 +222,7 @@ function handleCombine(event) {
 }
 
 module.exports = function attach(api) {
+  api.persistAttribute(THREAD_USES_ATTRIBUTE, 0);
   api.onItemOnItem(handleNeedleOnLeather, { noted: false });
   api.onItemOnItem(handleCombine, { noted: false });
 };

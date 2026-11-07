@@ -71,9 +71,11 @@ function gather(request) {
   const { player, amount } = request;
   if (request.stored >= amount || request.skill !== core.Skill.MINING || !withTool(player)) return;
   const result = processed(player, request.itemId);
-  if (Common.bank(player, result.itemId, amount - request.stored)) {
+  // Only what this relic banks is smelted or cut; what another store already took stays ore and pays nothing here.
+  const banking = amount - request.stored;
+  if (Common.bank(player, result.itemId, banking)) {
     request.stored = amount;
-    if (result.skill && result.xp > 0) player.getSkillManager().addExperiences(result.skill, result.xp * amount);
+    if (result.skill && result.xp > 0) player.getSkillManager().addExperiences(result.skill, result.xp * banking);
     return;
   }
   // The processed item has no room: the ore itself, as it is.

@@ -2428,11 +2428,16 @@ test('Blood Moon Paterdomus books must be placed on all six matching plinths bef
   const counts = new Map();
   const bits = new Map();
   const moveCalls = [];
+  let capacity = 28;
+  // As a real inventory: with no free slot `adds` drops the item and still returns the container.
   const inventory = {
     contains: id => (counts.get(id) ?? 0) > 0,
     getAmount: id => counts.get(id) ?? 0,
-    getFreeSlots: () => 28 - [...counts.values()].filter(value => value > 0).length,
-    adds: (id, amount) => (counts.set(id, (counts.get(id) ?? 0) + amount), true),
+    getFreeSlots: () => capacity - [...counts.values()].filter(value => value > 0).length,
+    adds: (id, amount) => {
+      if (inventory.getFreeSlots() > 0 || (counts.get(id) ?? 0) > 0) counts.set(id, (counts.get(id) ?? 0) + amount);
+      return inventory;
+    },
     deleteNumber: (id, amount) => counts.set(id, Math.max(0, (counts.get(id) ?? 0) - amount)),
   };
   const player = {
@@ -2465,9 +2470,11 @@ test('Blood Moon Paterdomus books must be placed on all six matching plinths bef
   useBook(wrong);
   assert.equal(attributes.get('quest.the_blood_moon_rises.slepe-story').booksPlaced, undefined,
     'a wrong portrait cannot satisfy the ordered matching puzzle');
+  capacity = [...counts.values()].filter(value => value > 0).length; // a full inventory
   useBook({ player, itemId: ids.ESSIANDARS_NOTES, location: { x: 3409, y: 3483, z: 1 }, handled: false });
   assert.equal(inventory.contains(ids.PIOUS_PROCEEDINGS), true,
-    'placing the intended book returns a book that was put on the wrong plinth');
+    'placing the intended book returns a book that was put on the wrong plinth, even into a full inventory');
+  capacity = 28;
   for (const [itemId, x, y] of placements.slice(1)) useBook({ player, itemId, location: { x, y, z: 1 }, handled: false });
   const story = attributes.get('quest.the_blood_moon_rises.slepe-story');
   assert.equal(story.booksPlaced, true);
@@ -2514,6 +2521,8 @@ test('Blood Moon Hallowed preparations make the stew, upgraded flail and stakes 
   const counts = new Map();
   const inventory = {
     getFreeSlots: () => 0,
+    // Room for each pickup (handlePrepObject checks it: `adds` never reports failure).
+    getAddableAmount: (item) => item.getAmount(),
     contains: (id) => (counts.get(id) ?? 0) > 0,
     getAmount: (id) => counts.get(id) ?? 0,
     adds: (id, amount) => (counts.set(id, (counts.get(id) ?? 0) + amount), true),

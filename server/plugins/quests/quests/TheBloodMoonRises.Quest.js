@@ -3589,20 +3589,16 @@ module.exports = function registerTheBloodMoonRises(api) {
     if (!player.getInventory().contains(event.itemId)) return;
     const placements = { ...(story.bookPlacements ?? {}) };
     const key = `${plinth.x},${plinth.y}`;
+    if (placements[key] === book.id) {
+      player.sendMessage("That book is already on this plinth.");
+      return;
+    }
+    // The held book goes onto the plinth first: its slot then takes the plinth's book, even in a full inventory.
+    player.getInventory().deleteNumber(event.itemId, 1);
     if (placements[key]) {
-      if (placements[key] === book.id) {
-        player.sendMessage("That book is already on this plinth.");
-        return;
-      }
-      // adds never returns false: check for room first, or the plinth's book vanishes and the held one is placed.
-      if (!hasRoom(player.getInventory(), placements[key])) {
-        player.sendMessage("Make room in your inventory before changing the book on this plinth.");
-        return;
-      }
       player.getInventory().adds(placements[key], 1);
       player.sendMessage(`You take ${SLEPE_BOOKS.find(({ id }) => id === placements[key])?.name ?? "the misplaced book"} from the plinth.`);
     }
-    player.getInventory().deleteNumber(event.itemId, 1);
     placements[key] = book.id;
     const complete = SLEPE_PLINTHS.every((spot) =>
       placements[`${spot.x},${spot.y}`] === spot.itemId);
@@ -5852,11 +5848,6 @@ module.exports = function registerTheBloodMoonRises(api) {
       const supplies = [ItemIdentifiers.MYSTERIOUS_JERKY, ItemIdentifiers.MYSTERIOUS_JERKY,
         ItemIdentifiers.FOUL_CHUNKY_POTION_3_, ItemIdentifiers.PUTRID_STICKY_POTION_2_];
       const given = [];
-      if ((inventory.getFreeSlots?.() ?? supplies.length) < supplies.length) {
-        event.end = true;
-        player.sendMessage("Make room for Ivan's four supplies before asking him to hand them over.");
-        return;
-      }
       for (const id of supplies) {
         if (inventory.adds(id, 1) === false) {
           for (const added of given) inventory.deleteNumber(added, 1);
@@ -8519,10 +8510,10 @@ module.exports = function registerTheBloodMoonRises(api) {
     let variant = null;
     let changed = false;
     if (name === "amitire plant" && prepObjectAt(event, 2982, 7679, 0) && !hasItem(player, PREP.leaves)) {
-      changed = inventory.adds(PREP.leaves, 1);
+      changed = takeOne(player, PREP.leaves);
       variant = "hallowed-preparations-picking-the-amitire-plant";
     } else if (name === "shelves" && prepObjectAt(event, 3159, 7824, 1) && !hasItem(player, PREP.bowl)) {
-      changed = inventory.adds(PREP.bowl, 1);
+      changed = takeOne(player, PREP.bowl);
       variant = "hallowed-preparations-searching-the-shelves";
     } else if (name === "cupboard" && prepObjectAt(event, 3155, 7832, 1)) {
       event.handled = true;
@@ -8540,18 +8531,18 @@ module.exports = function registerTheBloodMoonRises(api) {
         "Nothing.", () => {});
       return;
     } else if ((name.includes("crate") || name.includes("blisterwood")) && prepObjectAt(event, 3177, 7843, 1) && !hasItem(player, PREP.logs)) {
-      changed = inventory.adds(PREP.logs, 1);
+      changed = takeOne(player, PREP.logs);
       variant = "hallowed-preparations-searching-the-blisterwood-crate";
     } else if ((name.includes("crate") || name.includes("sickle")) && prepObjectAt(event, 3181, 7841, 1) && !hasItem(player, PREP.blessedSickle)) {
-      changed = inventory.adds(PREP.blessedSickle, 1);
+      changed = takeOne(player, PREP.blessedSickle);
       variant = "hallowed-preparations-searching-the-sickle-crate";
     } else if (name === "chest" && !hasItem(player, PREP.diamond) && hasItem(player, PREP.blessedSickle) &&
       prepObjectAt(event, 3181, 7835, 1)) {
-      changed = inventory.adds(PREP.diamond, 1);
+      changed = takeOne(player, PREP.diamond);
       variant = "hallowed-preparations-searching-the-workshop-s-eastern-chest";
     } else if (name === "chest" && !hasItem(player, PREP.diamondTablet) && hasItem(player, PREP.diamondSickle) &&
       prepObjectAt(event, 3175, 7836, 1)) {
-      changed = inventory.adds(PREP.diamondTablet, 1);
+      changed = takeOne(player, PREP.diamondTablet);
       variant = "hallowed-preparations-searching-the-workshop-s-western-chest";
     } else if (name.includes("range") && prepObjectAt(event, 3160, 7826, 1) && inventory.contains(PREP.rawMeat)) {
       changed = replaceItems(player, [PREP.rawMeat], [PREP.rawMeat], [[PREP.cookedMeat, 1]]);
@@ -8570,6 +8561,10 @@ module.exports = function registerTheBloodMoonRises(api) {
           player.sendMessage("You upgrade your flail by swapping out the sickle and shortening the shaft before enhancing it with pure silvthrill.");
         }
       }, "No.", () => {});
+      return;
+    }
+    if (changed === null) {
+      event.handled = true;
       return;
     }
     if (!changed) return;
@@ -8632,7 +8627,18 @@ module.exports = function registerTheBloodMoonRises(api) {
 
   function takePrepItem(player, id, message) {
     if (stage(player) !== STAGE.PREPARATIONS || hasItem(player, id)) return;
-    if (player.getInventory().adds(id, 1)) player.sendMessage(message);
+    if (takeOne(player, id)) player.sendMessage(message);
+  }
+
+  /** One of `id`, or null (with the inventory's own full message) when there is no room: `adds` never says. */
+  function takeOne(player, id) {
+    const inventory = player.getInventory();
+    if (!hasRoom(inventory, id)) {
+      inventory.full?.();
+      return null;
+    }
+    inventory.adds(id, 1);
+    return true;
   }
 
   function craftPrepRecipe(player, recipe, pair) {

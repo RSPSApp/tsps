@@ -14734,8 +14734,15 @@ test("Mourning's End I publishes and restores the completed Arianwyn briefing", 
   }
 });
 
-test("Mourning's End I last teleport crystal charge becomes a saveable seed", () => {
+test("Mourning's End I last teleport crystal charge becomes a saveable seed", (t) => {
   const { api: base } = mockApi();
+  // The crystal teleports through TeleportHandler now; its own checks need a real player, so they pass here.
+  const moved = [];
+  t.mock.method(base.core.TeleportHandler, 'checkReqs', () => true);
+  t.mock.method(base.core.TeleportHandler, 'teleport', (_player, location, _type, _warn, onArrival) => {
+    moved.push([location.getX(), location.getY(), location.getZ()]);
+    onArrival?.();
+  });
   const itemActions = new Map();
   const api = new Proxy(base, {
     get: (target, prop) => prop === 'onItemAction'
@@ -14744,7 +14751,6 @@ test("Mourning's End I last teleport crystal charge becomes a saveable seed", ()
   });
   require('../plugins/quests/quests/MourningsEndPartI.Quest')(api);
   const items = new Map([[6102, 1]]);
-  const moved = [];
   const messages = [];
   const inventory = {
     getAmount: (id) => items.get(id) ?? 0,

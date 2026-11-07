@@ -1164,6 +1164,18 @@ const STRANGE_FRUIT_ENERGY = 464;
 const GOUT_TUBER_ENERGY = 6311;
 const PURPLE_SWEETS_ENERGY = 10476;
 
+// Gout tuber: the Wiki's quoted eat message. Purple sweets: rsprox recording (the Wiki's text, with its line break).
+const EAT_LINES = {
+  [GOUT_TUBER_ENERGY]: {
+    full: ["You eat the tuber. Hmmm, peculiar taste! It heals some run energy."],
+    healed: ["You eat the tuber. Hmmm, peculiar taste! It heals some run energy.", "It heals some health anyway."],
+  },
+  [PURPLE_SWEETS_ENERGY]: {
+    full: ["You eat the sweets.<br>The sugary goodness heals some energy."],
+    healed: ["You eat the sweets.<br>The sugary goodness heals some energy.", "It also heals some hitpoints."],
+  },
+};
+
 for (const [name, id, expectedOp, expectedGain] of [
   ["Gout tuber", GOUT_TUBER_ENERGY, 6, 5000],
   ["Purple sweets", PURPLE_SWEETS_ENERGY, 2, 1000],
@@ -1260,6 +1272,18 @@ for (const [name, id, expectedOp, expectedGain] of [
     assert.equal(target.p.getTimers().has(core.TimerKey.FOOD), true);
     assert.equal(observed.event.meta, null);
     assert.equal(observed.event.hitpointsBefore, 50);
-    assert.ok(target.messages.some(message => typeof message === "string" && message.length > 0));
+    assert.deepEqual(target.messages, EAT_LINES[id].healed, "the exact eat lines when health is restored");
+  });
+
+  test(`${name} at full health shows its eat line without the health line`, async t => {
+    const f = divineActor(t, 99);
+    const stack = id === PURPLE_SWEETS_ENERGY ? 2 : 1; // sweets stack; the tuber does not
+    f.p.setRunEnergyUnits(1000);
+    put(f, item(id, stack), 0);
+    await heldOp(f, 0, "Eat");
+    assert.equal(f.p.getHitpoints(), 99);
+    assert.equal(f.p.getRunEnergyUnits(), 1000 + expectedGain);
+    assert.equal(f.inv.getAmount(id), stack - 1);
+    assert.deepEqual(f.messages, EAT_LINES[id].full);
   });
 }

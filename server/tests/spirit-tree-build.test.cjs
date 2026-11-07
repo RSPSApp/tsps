@@ -65,7 +65,7 @@ test('Spirit Tree build requires Farming 83 and accepts boosts',async t=>{
     assert.equal(f.house.getFurnitureAtTarget(f.target),null);const cxp=skills.getExperience(core.Skill.CONSTRUCTION),fxp=skills.getExperience(core.Skill.FARMING);
     await build(f,t,allowed);assert.equal(f.inv.getAmount(f.sapling),allowed?0:1);assert.equal(f.house.getFurnitureAtTarget(f.target)?.buildableKey??null,allowed?'SPIRIT_TREE':null);
     assert.equal(f.inv.getAmount(core.ItemIdentifiers.HAMMER),1);assert.equal(f.inv.getAmount(core.ItemIdentifiers.SAW),1);
-    if(!allowed){assert.equal(skills.getExperience(core.Skill.CONSTRUCTION),cxp);assert.equal(skills.getExperience(core.Skill.FARMING),fxp);} else console.log('SPIRIT_TREE_XP_OBS '+JSON.stringify({construction:skills.getExperience(core.Skill.CONSTRUCTION)-cxp,farming:skills.getExperience(core.Skill.FARMING)-fxp}));
+    if(!allowed){assert.equal(skills.getExperience(core.Skill.CONSTRUCTION),cxp);assert.equal(skills.getExperience(core.Skill.FARMING),fxp);} else assert.deepEqual({construction:skills.getExperience(core.Skill.CONSTRUCTION)-cxp,farming:skills.getExperience(core.Skill.FARMING)-fxp},{construction:350,farming:350},'Wiki (Spirit tree (Construction)): 350 Construction and 350 Farming');
   });
 });
 
@@ -101,4 +101,10 @@ test('every second skill the cache gives is checked: Smithing for the armour dis
   assert.equal(refusal('MITHRIL_ARMOUR',core.Skill.SMITHING,67),'You need Smithing level 68 to build that.');
   assert.notEqual(refusal('MITHRIL_ARMOUR',core.Skill.SMITHING,68),'You need Smithing level 68 to build that.');
   assert.equal(refusal('RUNE_CASE_1',core.Skill.RUNECRAFTING,13),'You need Runecrafting level 14 to build that.');
+});
+
+test('the spirit tree & fairy ring pays 885 Construction and 885 Farming (Wiki), the fairy ring alone 535 Construction',()=>{
+  const both=Data.BUILDABLE_BY_KEY.get('SPIRIT_TREE_AND_FAIRY_RING'), ring=Data.BUILDABLE_BY_KEY.get('FAIRY_RING');
+  assert.deepEqual([both.experience,both.farmingExperience],[885,885]);
+  assert.deepEqual([ring.experience,ring.farmingExperience??0],[535,0]);
 });

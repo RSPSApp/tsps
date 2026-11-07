@@ -1007,6 +1007,8 @@ function buildFurniture(player, house, target, buildable) {
 function completeFurniture(player, house, target, buildable, materials) {
   useMaterials(player, buildable, materials);
   player.getSkillManager().addExperiences(Skill.CONSTRUCTION, buildable.experience);
+  // Wiki (Spirit tree (Construction), Spirit tree & fairy ring): a planted spirit tree gives Farming experience too.
+  if (buildable.farmingExperience > 0) player.getSkillManager().addExperiences(Skill.FARMING, buildable.farmingExperience);
   GardenPlants.complete(player, buildable);
   house.setFurniture(target, buildable);
   api.emitCustomEvent("construction:furniture-built", { player, buildable });

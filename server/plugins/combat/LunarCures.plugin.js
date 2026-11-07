@@ -66,7 +66,10 @@ function sameInstance(player, target) {
   return (player.getPrivateArea() ?? null) === (target.getPrivateArea() ?? null);
 }
 
-/** A duel is the two duelists' alone: no one else's cure reaches them, and a duelist cures no one but themself. */
+/**
+ * A duel is the two duelists' alone, as for the other Lunar aid spells (LunarSpells): no one else's cure reaches a
+ * duelist, a duelist's Cure Other reaches no one, and a duelist's Cure Group cures themself and non-duelists only.
+ */
 function inDuel(player) {
   return player?.getDueling?.()?.inDuel?.() === true;
 }
@@ -82,7 +85,7 @@ function castSelf(core, event) {
     if (name === 'cure me') { cure(player); return; }
     core.World.getPlayers().forEach(target => {
       if (target && target.getHitpoints() > 0 && acceptsAid(target) && sameInstance(player, target) &&
-          (target === player || (!inDuel(player) && !inDuel(target))) &&
+          (target === player || !inDuel(target)) &&
           player.getLocation().isWithinDistance(target.getLocation(), GROUP_RADIUS)) cure(target);
     });
   });

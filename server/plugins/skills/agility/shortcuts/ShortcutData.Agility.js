@@ -56,7 +56,7 @@ const ENTRY_KEYS = new Set([
 const FAIL_KEYS = new Set([
   "low", "high", "baseChance", "neverFailLevel", "fromLevel", "xp", "start", "end", "render", "steps", "cross", "hit", "hits",
 ]);
-const REQUIREMENT_KEYS = new Set(["method", "skills", "equipped", "items", "quest", "diary", "slayerTask", "slayerTaskMessage", "steps", "cross", "start", "end"]);
+const REQUIREMENT_KEYS = new Set(["method", "skills", "equipped", "items", "quest", "diary", "slayerTask", "slayerTaskMessage", "steps", "cross", "params", "start", "end"]);
 
 function animation(name, where) {
   const id = ANIMATIONS[name];
@@ -256,6 +256,14 @@ function build(raw, index) {
   if (raw.between && built.requires) {
     built.requires = built.requires.map((alternative) => (alternative.cross
       ? { ...alternative, steps: betweenEntry({}, { ...raw.between, cross: alternative.cross }, where).steps }
+      : alternative));
+  }
+
+  // A scripted entry's alternative with its own `params` (the Strong Tree's barehanded crossing): the script's steps
+  // made again with them.
+  if (raw.script && built.requires) {
+    built.requires = built.requires.map((alternative) => (alternative.params
+      ? { ...alternative, steps: SCRIPTS[raw.script]({ ...(raw.params ?? {}), ...alternative.params }, raw).steps }
       : alternative));
   }
 

@@ -4169,9 +4169,15 @@
             {"slot": "weapon", "name": "crossbow", "message": "You need a crossbow equipped to do that."},
             {"slot": "ammunition", "ids": [9419], "message": "You need a mithril grapple tipped bolt with a rope to do that."}
           ]
+        },
+        {
+          "method": "barehanded",
+          "skills": {"agility": 78},
+          "params": {"barehanded": true}
         }
       ],
-      "note": "OSRS Wiki: Strong Tree (Karamja) grapple, 53 Agility/21 Strength/42 Ranged. Object 17074 at 2873,3134 (yarn dump:loc); the two channels' ends are the cache map's walkable shore/island tiles."
+      "unverified": "the barehanded crossing's animation and timing (no capture; the other barehanded river crossings' climb)",
+      "note": "OSRS Wiki: Strong Tree (Karamja) grapple, 53 Agility/21 Strength/42 Ranged, or barehanded at 78 Agility. Object 17074 at 2873,3134 (yarn dump:loc); the two channels' ends are the cache map's walkable shore/island tiles."
     }
   ]
 }

@@ -53,6 +53,40 @@ for (const [shopName, delta] of [["Martin Thwait's Lost and Found.", 20], ['Band
     assert.equal(stock(f, id), 2);
   });
 }
+// Wiki (Bandit Duty Free, Lumbridge General Store): a stocked pot is "bought at" 0 coins. The stock formula rounds a
+// low-value item down to 0; the sale still goes through (and the Value check says 0) rather than "This item has no value."
+for (const [shopName, ids] of [['Bandit Duty Free', ['POT']], ['Lumbridge General Store', ['POT', 'ASHES']]]) {
+  test(`${shopName} buys ${ids.join(' and ').toLowerCase()} for 0 coins instead of refusing it`, async t => {
+    const f = actor(t), inv = f.p.getInventory();
+    const shop = core.ShopDefinition.all().find(s => s.getName() === shopName);
+    assert.ok(shop, shopName);
+    open(f, shop.getId());
+    for (const name of ids) {
+      const id = core.ItemIdentifiers[name];
+      inv.add(new core.Item(id, 1), false);
+      const before = stock(f, id) ?? 0;
+      await sale(f, id, 1);
+      assert.ok(f.messages.some(m => /shop will buy for 0 /.test(m)), `${name} value: ${f.messages.join(' | ')}`);
+      await sale(f, id);
+      assert.ok(!f.messages.includes('This item has no value.'), `${name}: ${f.messages.join(' | ')}`);
+      assert.equal(inv.getAmount(id), 0, `${name} sold`);
+      assert.equal(stock(f, id), before + 1, `${name} stock up by 1`);
+    }
+    assert.equal(inv.getAmount(core.ItemIdentifiers.COINS), 0, 'for 0 coins');
+  });
+}
+// The shop's own currency isn't bought for 0 of itself: coins keep main's refusal at a stock-priced general store.
+test('Lumbridge General Store refuses coins with "This item has no value."', async t => {
+  const f = actor(t), inv = f.p.getInventory(), coins = core.ItemIdentifiers.COINS;
+  const shop = core.ShopDefinition.all().find(s => s.getName() === 'Lumbridge General Store');
+  inv.add(new core.Item(coins, 10), false);
+  open(f, shop.getId());
+  await sale(f, coins, 1);
+  await sale(f, coins, 3);
+  assert.deepEqual(f.messages, ['This item has no value.', 'This item has no value.'], 'Value and Sell 5 refused');
+  assert.equal(inv.getAmount(coins), 10, 'no coins taken');
+  assert.equal(stock(f, coins), undefined, 'coins not listed in the shop');
+});
 test('returning original stock has the same payment in bulk and single sales', async t => {
   const f = actor(t), inv = f.p.getInventory(), id = core.ItemIdentifiers.ROPE, coins = core.ItemIdentifiers.COINS;
   const shop = core.ShopDefinition.all().find(s => s.getName() === "Martin Thwait's Lost and Found.");

@@ -131,9 +131,12 @@ function abandon(player) {
   const state = animated.get(player);
   if (!state) return;
   animated.delete(player);
+  // Armour already at 0 Hitpoints is dying: its death still drops the set two ticks on, so Shanomi keeps nothing.
+  // Abandoned in that window (its five minutes up, the owner's death or logout), it was both dropped and kept.
+  const dying = state.npc != null && (state.npc.isDying === true || state.npc.getHitpoints?.() <= 0);
   if (state.npc) Guild.despawn(state.npc);
   player.getPacketSender().sendEntityHintRemoval(false);
-  player.setAttribute(LOST_ARMOUR_ATTRIBUTE, [...lostSets(player), state.set.slice(0, 3)]);
+  if (!dying) player.setAttribute(LOST_ARMOUR_ATTRIBUTE, [...lostSets(player), state.set.slice(0, 3)]);
 }
 
 function abandonArmour({ player }) {

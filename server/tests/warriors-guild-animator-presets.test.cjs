@@ -105,3 +105,21 @@ test("with plain and preset copies held only the plain set is animated, and Shan
     assert.equal(amount(f.inv, id, true), 1);
   }
 });
+
+test("armour already dying when it's abandoned drops its set only: Shanomi keeps no second copy", (t) => {
+  const f = actor(t);
+  const h = animatorHandlers();
+  pieces().forEach((id, slot) => f.inv.setItem(slot, new core.Item(id, 1)));
+  h.animate({ player: f.p, location: at });
+  for (let tick = 0; tick < 7; tick++) core.TaskManager.process(); // it rises
+  const spawned = [...core.World.getAddNPCQueue(), ...core.World.getNpcs()].filter((npc) => npc && npc.getOwner?.() === f.p);
+  assert.equal(spawned.length, 1, "the armour has risen");
+  const armour = spawned[0];
+  armour.isDying = true; // killed: its drop lands two ticks on, whatever happens to the owner
+  h.logout({ player: f.p });
+  h.handBack({ player: f.p, npcId: SHANOMI, text: "the set of lost armour" });
+  for (const id of pieces()) assert.equal(amount(f.inv, id, false), 0, "no set from Shanomi as well");
+  assert.deepEqual(f.p.getAttribute("warriors-guild:lost-armour") ?? [], []);
+  const queue = core.World.getAddNPCQueue();
+  if (queue.includes(armour)) queue.splice(queue.indexOf(armour), 1);
+});

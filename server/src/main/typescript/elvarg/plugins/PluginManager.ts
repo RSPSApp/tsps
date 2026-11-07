@@ -909,6 +909,13 @@ export class PluginManager {
   /** Equipment-tab click 1 is Remove; clicks 2+ are the worn options (item params 451+). */
   private static readonly WORN_OPTION_PARAM = 451;
   private static readonly FIRST_WORN_OPTION_CLICK = 2;
+  private static readonly MAX_WORN_OPTION_CLICK = 10;
+
+  /** Inventory items have five options; an equipped item's worn options (params 451+) run past that. */
+  private static maxItemActionClick(event: PluginItemActionEvent): number {
+    const { Equipment } = require("../game/model/container/impl/Equipment");
+    return event.interfaceId === Equipment.INVENTORY_INTERFACE_ID ? PluginManager.MAX_WORN_OPTION_CLICK : 5;
+  }
 
   /**
    * The option an item click names: a worn option when it came from the equipment tab
@@ -4028,7 +4035,7 @@ export class PluginManager {
               return;
             }
             const definition = CacheDefinitions.getItem(event.itemId);
-            if (definition?.name !== handler || event.clickType < 1 || event.clickType > 5) return;
+            if (definition?.name !== handler || event.clickType < 1 || event.clickType > PluginManager.maxItemActionClick(event)) return;
             const option = PluginManager.itemActionOption(definition, event);
             const action = namedActions.get(option);
             if (action && action(event) !== false) event.handled = true;

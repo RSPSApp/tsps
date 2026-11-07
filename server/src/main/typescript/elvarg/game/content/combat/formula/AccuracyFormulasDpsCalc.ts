@@ -301,7 +301,12 @@ export class AccuracyFormulasDpsCalc {
         if (rolls == null) {
             return false;
         }
-        return this.randomInclusive(rolls.attack) > this.randomInclusive(rolls.defence);
+        const attackRolled = this.randomInclusive(rolls.attack);
+        const defenceRolled = this.randomInclusive(rolls.defence);
+        // Plugins may grant a further roll (the Osmumten's fang) by setting `accurate`.
+        const rolled = { attacker: entity, target: enemy, combatType: style, attack: rolls.attack, defence: rolls.defence, attackRolled, defenceRolled, accurate: attackRolled > defenceRolled };
+        PluginManager.emitCustomEvent("combat:accuracy-rolled", rolled);
+        return rolled.accurate === true;
     }
 
     /** Number of successful independent accuracy rolls out of `count`. */

@@ -153,11 +153,14 @@ function explosive({ player, target, itemId }) {
   }
   if (pendingWakes.has(target)) return true;
   pendingWakes.add(target);
+  const startingArea = target.getPrivateArea?.();
   const { SURFACE_ANIM } = Shared;
   player.performAnimation(new Animation(THROW_ANIM));
   later(THROW_DELAY_TICKS, () => {
     pendingWakes.delete(target);
     if (!Shared.alive(target) || target.getId?.() !== BOSS_WHIRLPOOL || !Shared.alive(player)) return;
+    if (startingArea?.isKrakenInstance === true
+      && (startingArea.isDestroyed() || player.getPrivateArea?.() !== startingArea || target.getPrivateArea?.() !== startingArea)) return;
     player.getInventory()?.deleteNumber?.(itemId, 1);
     surface(target, BOSS, SURFACE_ANIM.boss, player);
     wakeNearbyTentacles(target, player);

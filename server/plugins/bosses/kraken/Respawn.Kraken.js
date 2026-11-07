@@ -11,10 +11,9 @@
  * - A tentacle killed while the Kraken is down respawns normally as its whirlpool.
  * Deaths respawn as whirlpools because the engine clears the transformation first.
  *
- * State is keyed by private area (open world included): each area runs its own pending
- * flag and dead list, so a future instanced fight cannot mix with the public one. A
- * server restart clears the memory, and the engine re-spawns every whirlpool from
- * npc-spawns.json at boot, so nothing can strand whirlpools missing.
+ * State is keyed by private area (open world included). Private rooms retain their
+ * own independent standalone and joint timers and discard them on room closure.
+ * A server restart clears memory; public whirlpools come from npc-spawns.json.
  */
 
 const Shared = require("./Shared.Kraken");
@@ -23,20 +22,54 @@ const Shared = require("./Shared.Kraken");
 const simultaneousPending = new Set();
 /** Area -> whirlpools to respawn together: [{ id, at }]. */
 const deadByArea = new Map();
+const privatePending = new Map();
+const privateJointTentacles = new WeakSet();
 
-function later(ticks, action) {
+function later(ticks, action, key = null) {
   const { Task, TaskManager } = Shared.core();
-  TaskManager.submit(
-    new (class extends Task {
+  const task = new (class extends Task {
       constructor() {
-        super(Math.max(1, ticks), null, false);
+      super(Math.max(1, ticks), key, false);
       }
       execute() {
         this.stop();
         action();
       }
-    })(),
-  );
+    })();
+  TaskManager.submit(task);
+  return task;
+}
+
+function schedulePrivate(area, delay, entries = null) {
+  if (area.isDestroyed()) return;
+  // TSPS backpressure: retry at the existing respawn delay when world capacity
+  // temporarily prevents an atomic private batch; this is not a retail timer.
+  const nextDelay = Math.max(1, delay);
+  const task = later(nextDelay, () => {
+    const tasks = privatePending.get(area);
+    tasks?.delete(task);
+    if (tasks?.size === 0) privatePending.delete(area);
+    respawnPrivate(area, nextDelay, entries);
+  }, area);
+  let tasks = privatePending.get(area);
+  if (!tasks) { tasks = new Set(); privatePending.set(area, tasks); }
+  tasks.add(task);
+}
+
+function respawnPrivate(area, delay, entries) {
+  if (area.isDestroyed()) { releaseArea(area); return; }
+  // null is the boss's joint batch. Standalone tentacles each retain their own
+  // timer and never pull deaths that must wait until the boss dies.
+  const list = entries ?? deadByArea.get(area) ?? [];
+  if (list.some(entry => entry.previous?.isDyingFunction?.() || entry.previous?.isRegistered?.())
+    || (list.length && !area.spawnBatch(list))) {
+    schedulePrivate(area, delay, entries);
+    return;
+  }
+  if (entries === null) {
+    deadByArea.delete(area);
+    simultaneousPending.delete(area);
+  }
 }
 
 function areaOf(npc) {
@@ -78,10 +111,30 @@ function bossUp(area) {
 function tentacleDied({ npc }) {
   if (!npc || npc.getId?.() !== Shared.ids().TENTACLE) return;
   const area = areaOf(npc);
+  if (privateJointTentacles.has(npc)) {
+    npc.__skipDefaultRespawn = true;
+    return;
+  }
+  if (area?.isKrakenInstance === true && area.isDestroyed()) {
+    npc.__skipDefaultRespawn = true;
+    return;
+  }
   if (simultaneousPending.has(area) || bossUp(area)) {
     // Mid-fight (or fight cleanup): stay dead, come back with the rest after the fight.
     npc.__skipDefaultRespawn = true;
-    deadList(area).push({ id: Shared.ids().TENTACLE_WHIRLPOOL, at: npc.getSpawnPosition() });
+    if (area?.isKrakenInstance === true) {
+      privateJointTentacles.add(npc);
+      deadList(area).push({ id: Shared.ids().TENTACLE_WHIRLPOOL, at: npc.getSpawnPosition(), previous: npc });
+    } else {
+      deadList(area).push({ id: Shared.ids().TENTACLE_WHIRLPOOL, at: npc.getSpawnPosition() });
+    }
+    return;
+  }
+  if (area?.isKrakenInstance === true) {
+    npc.__skipDefaultRespawn = true;
+    const entries = [{ id: Shared.ids().TENTACLE_WHIRLPOOL, at: npc.getSpawnPosition(), previous: npc }];
+    const delay = npc.getDefinition?.()?.getRespawn?.() ?? 25;
+    schedulePrivate(area, delay, entries);
     return;
   }
   // Boss is down: a normal respawn as the whirlpool.
@@ -104,19 +157,43 @@ function respawnAll(area) {
 function bossDied({ npc }) {
   if (!npc || npc.getId?.() !== Shared.ids().BOSS) return;
   const area = areaOf(npc);
+  if (area?.isKrakenInstance === true && area.isDestroyed()) {
+    npc.__skipDefaultRespawn = true;
+    return;
+  }
   simultaneousPending.add(area);
   npc.__skipDefaultRespawn = true;
-  deadList(area).push({ id: Shared.ids().BOSS_WHIRLPOOL, at: npc.getSpawnPosition() });
-  // The remaining tentacles die with the Kraken; their deaths join the same respawn.
-  for (const tentacle of livingIn(area, Shared.ids().TENTACLE)) {
+  deadList(area).push({ id: Shared.ids().BOSS_WHIRLPOOL, at: npc.getSpawnPosition(),
+    ...(area?.isKrakenInstance === true ? { previous: npc } : {}) });
+  // NPCDeathTask emits a death event only when it found a player killer. In a
+  // private room a tentacle killed by the boss cleanup may have no such event,
+  // including one already dying; capture it before scheduling the joint batch.
+  const tentacles = area?.isKrakenInstance === true
+    ? [...Shared.core().World.getNpcs()].filter(other => other?.isNpc?.() && other.isRegistered?.()
+      && other.getId?.() === Shared.ids().TENTACLE && other.getPrivateArea?.() === area)
+    : livingIn(area, Shared.ids().TENTACLE);
+  for (const tentacle of tentacles) {
     try {
-      tentacle.setHitpoints(0);
+      if (area?.isKrakenInstance === true && !privateJointTentacles.has(tentacle)) {
+        privateJointTentacles.add(tentacle);
+        tentacle.__skipDefaultRespawn = true;
+        deadList(area).push({ id: Shared.ids().TENTACLE_WHIRLPOOL, at: tentacle.getSpawnPosition(), previous: tentacle });
+      }
+      if ((tentacle.getHitpoints?.() ?? 0) > 0) tentacle.setHitpoints(0);
     } catch {
       // Already dying; its death event still joins the respawn.
     }
   }
   const delay = npc.getDefinition?.()?.getRespawn?.() ?? 25;
-  later(delay, () => respawnAll(area));
+  if (area?.isKrakenInstance === true) schedulePrivate(area, delay);
+  else later(delay, () => respawnAll(area));
+}
+
+function releaseArea(area) {
+  for (const task of privatePending.get(area) ?? []) task.stop();
+  privatePending.delete(area);
+  simultaneousPending.delete(area);
+  deadByArea.delete(area);
 }
 
 function attach(api) {
@@ -124,4 +201,4 @@ function attach(api) {
   api.onNpcDeath(bossDied);
 }
 
-module.exports = { attach, tentacleDied, bossDied, bossUp, respawnAll };
+module.exports = { attach, tentacleDied, bossDied, bossUp, respawnAll, releaseArea };

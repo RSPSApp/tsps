@@ -23,7 +23,7 @@
  * "Nothing happens." message, explosive consumption, the throw animation (783) and
  * the 6-tick throw-to-wake delay. The boss-side crevice landing is RSPS-cross-checked
  * (see Crevice.Kraken.js). The cove refuses attacks off-task (Area.Kraken.js); the 25k
- * private instance is a follow-up, not implemented here.
+ * private room is owned and cleaned up by Instance.Kraken.js.
  */
 
 const Shared = require("./kraken/Shared.Kraken");
@@ -35,6 +35,7 @@ const Fight = require("./kraken/Fight.Kraken");
 const Area = require("./kraken/Area.Kraken");
 const Respawn = require("./kraken/Respawn.Kraken");
 const Loot = require("./kraken/Loot.Kraken");
+const Instance = require("./kraken/Instance.Kraken");
 
 module.exports = {
   name: "Kraken",
@@ -47,6 +48,7 @@ module.exports = {
     Crevice.attach(api);
     Fight.attach(api);
     Area.attach(api);
+    Instance.attach(api);
     Respawn.attach(api);
     Loot.attach(api);
   },

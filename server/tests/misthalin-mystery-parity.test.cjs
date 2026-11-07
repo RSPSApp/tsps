@@ -17,11 +17,13 @@ const noop = () => {};
 before(async () => { await CachePipeline.initialize(path.resolve(__dirname, '..')); new NpcDefinitionLoader().load(); });
 
 function harness(name) {
-  const hooks = {}, events = {}, tasks = [], npcs = [], removed = [], ground = [], objects = [], npcActions = new Map();
+  const hooks = {}, events = {}, tasks = [], npcs = [], removed = [], ground = [], removedGround = [], objects = [], npcActions = new Map();
   const api = new Proxy({ core: { ...core, World: { ...core.World, getNpcsNear: () => npcs }, TaskManager: {
     submit(task) { task.setRunning(true); tasks.push(task); },
     cancelTasks(key) { tasks.filter(task => task.key === key).forEach(task => task.stop()); },
-  }, ObjectManager: { register: object => objects.push(object), deregister: noop }, ItemOnGroundManager: { registerLocation: (...args) => ground.push(args) } },
+  }, ObjectManager: { register: object => objects.push(object), deregister: noop }, ItemOnGroundManager: { registerLocation: (...args) => {
+      ground.push(args);return { getItem:()=>args[1],getPosition:()=>args[2],getPrivateArea:()=>args[3]??args[0].getPrivateArea() };
+    },deregister:item=>removedGround.push(item) } },
     persistAttribute: noop,
     onNpcInteraction: (name, actions) => npcActions.set(name, actions),
     onCustomEvent: (key, fn) => (events[key] ??= []).push(fn),
@@ -53,7 +55,7 @@ function harness(name) {
     for (const fn of hooks.onNpcDialogueCondition ?? []) { const answer = fn(event); if (answer !== null && answer !== undefined) return answer; }
     return null;
   };
-  const h = { api, hooks, events, tasks, npcs, removed, ground, objects, npcActions, quest: runtime.getRegisteredQuests().at(-1),
+  const h = { api, hooks, events, tasks, npcs, removed, ground, removedGround, objects, npcActions, quest: runtime.getRegisteredQuests().at(-1),
     emit: (name, event) => (events[name] ?? []).forEach(fn => fn(event)),
     line(p, npcId, text) { const event = { player: p, npcId, text }; h.emit('npc-dialogue:line', event); return event; },
     action(p, npcId, stepId) { const event = { player: p, npcId, stepId }; h.emit('npc-dialogue:action', event); return event; },
@@ -283,8 +285,8 @@ test('mirror pushing, shadow warnings and three correctly faced reflections unlo
   area.warning=[1619,4828,0];const original=Math.random;Math.random=()=>0.99;
   try{h.tick(54);}finally{Math.random=original;}
   assert.equal(area.reflections,3);assert.equal(h.quest.getStage(p),115);assert.equal(area.fighting,false);assert.equal(area.scene,'reveal');h.tick(2);const reaction=h.npcs.find(n=>n.id===7639);assert.equal(reaction.hitpoints,10);assert.equal(reaction.hits.length,3);assert.equal(mirror.transform,7640);
-  assert.equal(h.ground.length,0,'the weapon only drops after the killers reveal themselves');
-  h.continueUntil(p,()=>h.quest.getStage(p)===120,150);assert.equal(h.ground.length,1);assert.equal(h.ground[0][1].getId(),I.KILLERS_KNIFE_2);
+  assert.equal(h.ground.filter(args=>args[1].getId()===I.KILLERS_KNIFE_2).length,0,'the weapon only drops after the killers reveal themselves');
+  h.continueUntil(p,()=>h.quest.getStage(p)===120,150);assert.equal(h.ground.filter(args=>args[1].getId()===I.KILLERS_KNIFE_2).length,1);
   assert.deepEqual(p.log.filter(row=>row[0]==='sendCameraMoveTo').at(-1),['sendCameraMoveTo',1622,4828,300,{rate:5,rate2:5,heightRelative:false}]);
   assert.deepEqual(p.log.filter(row=>row[0]==='sendCameraLookAt').slice(-2),[
     ['sendCameraLookAt',1627,4831,275,{rate:5,rate2:5,heightRelative:false}],['sendCameraLookAt',1624,4831,275,{rate:5,rate2:5,heightRelative:false}],
@@ -300,6 +302,50 @@ test('Abigale requires the equipped dropped knife, then Mandy rescues the player
   assert.deepEqual(p.log.filter(row=>row[0]==='sendCameraLookAt').at(-1),['sendCameraLookAt',1626,4833,150,{rate:232,rate2:232,heightRelative:false}]);
   h.talk(p,N.MANDY_2);h.continueUntil(p,()=>h.quest.isComplete(p));assert.equal(p.attrs.get('quest.points'),1);assert.deepEqual(p.xp,[[core.Skill.CRAFTING.getIndex(),600]]);for(const id of [I.UNCUT_RUBY,I.UNCUT_EMERALD,I.UNCUT_SAPPHIRE])assert.equal(p.items.get(id),1);
 });
+test('the godsword table prop is private, persistent, cannot be taken, and is restored after the rescue',()=>{
+  const h=harness('MisthalinMystery'),p=player(),area=island(h,p,125),prop=area.godswordProp;
+  assert.equal(prop.getItem().getId(),I.BANDOS_GODSWORD_4);assert.notEqual(I.BANDOS_GODSWORD_4,I.BANDOS_GODSWORD);
+  assert.ok(prop.getPosition().equals(new core.Location(1626,4843,0)));assert.equal(prop.getPrivateArea(),area);assert.equal(prop.staticSpawn,true);
+  assert.deepEqual(h.ground.find(args=>args[1].getId()===I.BANDOS_GODSWORD_4)[4],{goesGlobal:false});
+  h.hooks.onPlayerLogin[0]({player:p});assert.equal(area.godswordProp,prop);
+  const own={player:p,groundItem:prop};h.hooks.onGroundItemPickup[0](own);assert.equal(own.handled,true);
+  const other=player(),otherArea=island(h,other,125);assert.notEqual(otherArea.godswordProp,prop);
+  const foreign={player:other,groundItem:prop};h.hooks.onGroundItemPickup[0](foreign);assert.equal(foreign.handled,undefined);
+  object(h,p,core.ObjectIdentifiers.DOOR_561,1628,4827);
+  h.continueUntil(p,()=>p.text==="Hewey is dead because of you!");
+  p.manager.advance();h.tick(3);assert.equal(area.godswordProp,prop);h.tick(1);
+  assert.equal(area.godswordProp,null);assert.ok(h.removedGround.includes(prop));
+  h.continueUntil(p,()=>h.quest.getStage(p)===130,140);
+  assert.notEqual(area.godswordProp,prop);assert.equal(area.godswordProp.getItem().getId(),I.BANDOS_GODSWORD_4);
+  assert.equal(p.items.get(I.BANDOS_GODSWORD_4),undefined);assert.equal(p.items.get(I.BANDOS_GODSWORD),undefined);
+});
+
+test('the rescue reverses Abigale death, waits for Mandy approach, and drops Abigale only after Continue',()=>{
+  const h=harness('MisthalinMystery'),p=player(),area=island(h,p,125),abigale=area.actors.get(N.ABIGALE_3);
+  object(h,p,core.ObjectIdentifiers.DOOR_561,1628,4827);
+  h.continueUntil(p,()=>p.text==="You'll never escape me!");assert.equal(abigale.transform,N.ABIGALE_2);assert.deepEqual(abigale.animations,[7330]);
+  p.manager.advance();assert.ok(area.actors.get(N.MANDY).getLocation().equals(new core.Location(1627,4841,0)));
+  h.continueUntil(p,()=>p.text==="You're not killing anyone else!");
+  const mandy=area.actors.get(N.MANDY);assert.ok(mandy.getLocation().equals(new core.Location(1622,4833,0)));
+  assert.equal(mandy.id,N.MANDY_3);assert.equal(mandy.animations.includes(7642),false);
+  p.manager.advance();h.tick(1);assert.equal(mandy.animations.includes(7642),false);
+  h.tick(1);assert.ok(mandy.getLocation().equals(new core.Location(1623,4832,0)));
+  h.tick(1);assert.equal(mandy.animations.includes(7642),false);h.tick(1);
+  assert.ok(mandy.animations.includes(7642));assert.ok(mandy.graphics.includes(1212));assert.deepEqual(abigale.animations,[7330]);
+  h.tick(2);assert.equal(p.text,"No....this can't be it....");assert.deepEqual(abigale.animations,[7330]);
+  p.manager.advance();assert.deepEqual(abigale.animations,[7330,836]);h.tick(2);assert.equal(p.text,"Wow, that was close!");
+});
+
+test('leaving during the godsword pickup cancels its delayed scene effects and reentry restores the prop',()=>{
+  const h=harness('MisthalinMystery'),p=player(),area=island(h,p,125);
+  object(h,p,core.ObjectIdentifiers.DOOR_561,1628,4827);h.continueUntil(p,()=>p.text==="Hewey is dead because of you!");
+  p.manager.advance();h.tick(2);const mandy=area.actors.get(N.MANDY),prop=area.godswordProp;
+  h.hooks.onPlayerLogout[0]({player:p});h.tick(8);
+  assert.equal(mandy.transform,undefined);assert.equal(h.removedGround.includes(prop),false);
+  h.hooks.onPlayerLogin[0]({player:p});const next=p.getArea();assert.notEqual(next,area);assert.notEqual(next.godswordProp,prop);
+  assert.equal(h.quest.getStage(p),125);assert.equal(p.items.get(I.BANDOS_GODSWORD_4),undefined);
+});
+
 test('all four Lacey answers continue through her murder and the next note',()=>{
   for(const answer of ['Count Draynor','Count Check','Lord Drakan','Say nothing']){
     const h=harness('MisthalinMystery'),p=player(),area=island(h,p,65);p.moveTo(new core.Location(1631,4849,0));area.process(p);continueToMenu(h,p);h.choose(p,answer);h.continueUntil(p,()=>h.quest.getStage(p)===70,100);assert.equal(area.scene,null,answer);

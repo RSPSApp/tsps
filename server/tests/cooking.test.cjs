@@ -269,6 +269,31 @@ test("flour on water opens the four-dough menu; pastry dough comes a tick after 
   assert.ok(p.sent.spam.some(([, text]) => text === "You mix the water and flour to make some pastry dough."));
 });
 
+// Isolated recipe checks: the native free-world fixture covers actual world configuration.
+test("free-world dough choices still make bread, pastry and pizza bases", (t) => {
+  t.mock.method(core.WorldDefinition, "isMembersWorld", () => false);
+  for (const product of ["bread_dough", "pastry_dough", "pizza_base"]) {
+    const p = maker(35, [[obj("pot_flour"), 1], [obj("bucket_water"), 1]]);
+    assert.equal(useItems(p, "pot_flour", "bucket_water").handled, true);
+    p.sent.menu.execute(obj(product), 1);
+    ticks(1);
+    assert.equal(p.getInventory().getAmount(obj(product)), 1, product);
+    assert.deepEqual(p.xp, []);
+  }
+});
+
+test("a queued members recipe rechecks world admission before consuming ingredients", (t) => {
+  let membersWorld = true;
+  t.mock.method(core.WorldDefinition, "isMembersWorld", () => membersWorld);
+  const p = maker(34, [[obj("tomato"), 1], [obj("pie_shell"), 1]]);
+  assert.equal(useItems(p, "tomato", "pie_shell").handled, true);
+  membersWorld = false; // Isolate the execution-time guard; world configuration is normally fixed.
+  ticks(1);
+  assert.deepEqual([p.getInventory().getAmount(obj("tomato")), p.getInventory().getAmount(obj("pie_shell")),
+    p.getInventory().getAmount(obj("unfinished_garden_pie_1"))], [1, 1, 0]);
+  assert.deepEqual(p.xp, []);
+});
+
 test("the gnome chocolate-bomb steps use the Wiki materials, XP and four-tick bakes", (t) => {
   Cooking._test.activeSessions.clear();
   core.ObjectDefinition.init();

@@ -42,9 +42,45 @@ function save(player) {
     spellbook: spellbookName(player),
     special: player.getSpecialPercentage(),
     run: player.getRunEnergy(),
+    timers: timersOf(player),
   });
   clear(player);
+  stopTimers(player);
   Common.varbit(player, HOLDING, HOLDING_LMS);
+}
+
+/**
+ * The player's own Tele Block, antifire and poison/venom state are put aside with their things, and the game's
+ * stopped when they leave: a Tele Block from an LMS fight never follows them out, and an antifire from before
+ * the game is not carried into it.
+ */
+function timersOf(player) {
+  const combat = player.getCombat();
+  return {
+    teleblock: combat.getTeleblockTimer().secondsRemaining(),
+    fire: combat.getFireImmunityTimer().secondsRemaining(),
+    poison: combat.getPoisonClock().finished() ? null : combat.getPoisonClock().snapshot(),
+  };
+}
+
+function stopTimers(player) {
+  const combat = player.getCombat();
+  combat.getTeleblockTimer().stop();
+  combat.getFireImmunityTimer().stop();
+  combat.getPoisonClock().stop();
+  player.getPacketSender().sendEffectTimer?.(0, Common.core.EffectTimer?.TELE_BLOCK);
+}
+
+function restoreTimers(player, timers) {
+  stopTimers(player);
+  if (!timers) return;
+  const combat = player.getCombat();
+  if (timers.teleblock > 0) {
+    combat.getTeleblockTimer().start(timers.teleblock);
+    player.getPacketSender().sendEffectTimer?.(timers.teleblock, Common.core.EffectTimer?.TELE_BLOCK);
+  }
+  if (timers.fire > 0) combat.getFireImmunityTimer().start(timers.fire);
+  if (timers.poison) combat.getPoisonClock().restore(timers.poison);
 }
 
 function spellbookName(player) {
@@ -88,6 +124,7 @@ function restore(player) {
   player.setSpecialPercentage(stash.special ?? 100);
   CombatSpecial.updateBar(player);
   player.setRunEnergy(stash.run ?? 100);
+  restoreTimers(player, stash.timers);
   player.setAttribute(Common.ATTRIBUTES.stash, null);
   Common.varbit(player, HOLDING, 0);
   WeaponInterfaceManager.assign(player);

@@ -376,6 +376,7 @@ module.exports = {
     api.onCustomEvent("runecrafting:success", onRunecraftingSuccess);
     api.onCustomEvent("godwars:kill", onGodWarsKill);
     api.onCustomEvent("diary:task", onDiaryTask);
+    require("./NotedDrops.FremennikDiary")(api);
   },
   _test: {
     inBox, questComplete, questStarted, onShopOpened, onHunterSuccess, onNpcDeath, onGroundItemsTaken,

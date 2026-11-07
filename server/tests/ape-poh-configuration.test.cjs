@@ -321,11 +321,18 @@ test('nexus: reordering an already saved Marim does not require a new unlock', a
 
 test('nexus: stale removed furniture cannot commit a previously opened configuration', async t => {
   const f = actor(t, 'nexus', { rescued: true }), existing = seedExisting(f, 'nexus');
+  const messages = [], send = f.p.sendMessage.bind(f.p);
+  t.mock.method(f.p, 'sendMessage', (...args) => { messages.push(args[0]); return send(...args); });
   const cost = setupCost(f, 'nexus', 'ape atoll teleport');
   await nexusReady(f, 8);
   const at = f.object.getLocation(), loc = { x: at.getX(), y: at.getY(), z: at.getZ() };
   assert.equal(f.house.removeFurniture(loc, f.object.getId(), f.object.getType()), f.furnishing);
   await nexusConfirm(f);
+  assert.equal(messages.filter(message => message === 'This nexus is no longer available for configuration.').length, 1);
+  for (const [id, amount] of cost) assert.equal(f.p.getInventory().getAmount(id), amount);
+  assert.deepEqual(f.p.getAttribute('construction:nexus'), existing);
+  await nexusConfirm(f);
+  assert.equal(messages.filter(message => message === 'This nexus is no longer available for configuration.').length, 1);
   for (const [id, amount] of cost) assert.equal(f.p.getInventory().getAmount(id), amount);
   assert.deepEqual(f.p.getAttribute('construction:nexus'), existing);
 });

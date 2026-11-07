@@ -343,3 +343,32 @@ test("a team's kill gives its uniques once, to one player by weight of damage (W
   assert.equal(staffs[0][0], c, "to the player whose damage the roll fell in");
   for (const player of [a, b, c]) assert.ok(placed.some(([who, id]) => who === player && id === 995), "everyone rolls the rest");
 });
+
+test("the pet's 1/800 is shared by party size (Wiki: 1/800 solo, 1/2,400 for 3, 1/4,000 at 5 or more)", (t) => {
+  const Loot = require("../plugins/bosses/nightmare/Loot.Nightmare");
+  const PET = 24491;
+  fakeApi.emitCustomEvent = (name, payload) => {
+    if (name === "npc-drops:roll-table") payload.drops.push({ itemId: PET, amount: 1 }, { itemId: 995, amount: 1 });
+  };
+  const placed = [];
+  fakeApi.getItemOnGroundManager = () => ({ registerLocation(player, item) { placed.push([player, item.itemId]); } });
+  fakeApi.core.ItemIdentifiers = { BIG_BONES: 532, BONES: 526 };
+  fakeApi.core.Item = class { constructor(itemId, amount) { this.itemId = itemId; this.amount = amount; } };
+  fakeApi.core.ItemDefinition = { forId: () => ({ getNoteId: () => -1, isNoted: () => false, isStackable: () => true }) };
+  const fightOf = (players) => ({ phosani: false, boss: {}, dream: { tile: () => ({}), area: {} },
+    contribution: new Map(players.map((player) => [player, { shield: 1, totems: 1 }])) });
+  // Every table roll comes up with the pet; a roll of 0.5 keeps it only for a party of one (0.5 * 1 < 1, not 0.5 * 3).
+  t.mock.method(Math, "random", () => 0.5);
+  const solo = fakePlayer();
+  Loot.reward(fightOf([solo]), [solo]);
+  assert.equal(placed.filter(([, id]) => id === PET).length, 1, "solo: the table's 1/800 as it is");
+  placed.length = 0;
+  const trio = [fakePlayer(), fakePlayer(), fakePlayer()];
+  Loot.reward(fightOf(trio), trio);
+  assert.equal(placed.filter(([, id]) => id === PET).length, 0, "a party of three keeps it only a third of the time");
+  // Five started, four have gone by the kill: the one left still shares the pet as a party of five.
+  placed.length = 0;
+  const last = fakePlayer();
+  Loot.reward({ ...fightOf([last]), teamSize: 5 }, [last]);
+  assert.equal(placed.filter(([, id]) => id === PET).length, 0, "the team counted when the fight started");
+});

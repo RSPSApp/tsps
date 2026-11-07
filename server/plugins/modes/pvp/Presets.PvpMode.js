@@ -230,6 +230,41 @@ function isSpawnable(itemId) {
   return false;
 }
 
+/** What bankCarriedItems would bank: everything carried but the preset's own spawned items. */
+function carriedToBank(player) {
+  return [...player.getInventory().getCopiedItems(), ...player.getEquipment().getCopiedItems()]
+    .filter((item) => isValidItem(item) && !item.isPresetItem?.());
+}
+
+/**
+ * Why the carried items can't all go to the bank, or null: one the bank refuses (a loot key, a raid's own item), or
+ * no room. A full bank's `add` drops the item, and the inventory and equipment are reset straight after.
+ */
+function bankRefusal(player) {
+  // A bot's carried items are its own generated kit, never a player's to lose.
+  if (isPlayerBot(player)) return null;
+  let slots = 0;
+  const counted = new Set();
+  for (const item of carriedToBank(player)) {
+    if (pluginApi?.emitCanBankItem?.(player, item) === false || item.isUnbankable?.()) {
+      return `Your ${item.getDefinition?.()?.getName?.() ?? "item"} can't be sent to the bank.`;
+    }
+    const key = `${item.getDefinition?.()?.unNote?.() ?? item.getId()}:${JSON.stringify(item.getMeta?.() ?? null)}`;
+    if (counted.has(key)) continue;
+    counted.add(key);
+    // As Bank.canTake: a live stack with the same meta, or a placeholder (its own or its family's), takes no new slot.
+    const id = item.getDefinition?.()?.unNote?.() ?? item.getId(); // a noted item is banked as its unnoted id
+    const tab = player.getBank(Bank.getTabForItem(player, id));
+    const meta = JSON.stringify(item.getMeta?.() ?? null);
+    const reused = (typeof tab?.getItems === "function" ? tab.getItems() : []).some((held) => held != null && (
+      (held.getId() === id && (held.getAmount() === 0 || JSON.stringify(held.getMeta?.() ?? null) === meta))
+      || (held.getAmount() === 0 && Bank.sharesPlaceholder(held.getId(), id))));
+    if (!reused) slots++;
+  }
+  if (slots === 0) return null;
+  return slots > Bank.freeSlots(player) ? "You don't have enough bank space for the items you are carrying." : null;
+}
+
 /** Banks everything the player carries except the preset's own spawned items. */
 function bankCarriedItems(player) {
   let moved = false;
@@ -599,6 +634,11 @@ function applyPreset(player, preset) {
     }
   }
 
+  const refused = bankRefusal(player);
+  if (refused) {
+    sender.sendMessage(refused);
+    return false;
+  }
   if (bankCarriedItems(player)) {
     sender.sendMessage("The items you had on you have been sent to your bank.");
   }
@@ -834,7 +874,7 @@ module.exports = {
   openPresetInterface,
   shouldOpenOnDeath,
   canUsePresets,
-  _test: { spawnPresetItem, bankCarriedItems, presetCombatLevel },
+  _test: { spawnPresetItem, bankCarriedItems, bankRefusal, presetCombatLevel },
   register(api) {
     pluginApi = api;
     presetsEnabled = true;

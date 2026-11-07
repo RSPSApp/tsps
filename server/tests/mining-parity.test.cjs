@@ -1443,3 +1443,80 @@ test("free worlds skip members pickaxes and keep the best free tool", () => {
     core.WorldDefinition.isMembersWorld = original;
   }
 });
+
+// A bracelet of clay softens clay and doubles soft clay (Wiki Bracelet_of_clay, Soft_clay_rocks). Mining
+// only asks "mining:ore-yield"; the item plugin (tests/bracelet-of-clay.test.cjs) answers.
+function yieldHarness({ oreId, amount, taker = null, extra = false }) {
+  const spent = [];
+  const extraAsked = [];
+  const h = harness({
+    emit: (key, request) => {
+      if (key === "mining:ore-yield") {
+        request.oreId = oreId ?? request.oreId;
+        request.amount = amount ?? request.amount;
+        request.spend = () => spent.push(request.oreId);
+      } else if (key === "mining:hand-over") request.taker = taker;
+      else if (key === "mining:extra-ore" && extra) { extraAsked.push(request.oreId); request.bonuses.push({}); }
+    },
+  });
+  return { h, spent, extraAsked };
+}
+
+test("\"mining:ore-yield\" decides the ore and amount a success gives, and a charge is spent once it is kept", () => {
+  const { h, spent } = yieldHarness({ oreId: ItemIds.SOFT_CLAY, amount: 2 });
+  const player = createPlayer();
+  const restoreRandom = scriptRandom([], 0);
+  const { restore } = mineRock(h, player, "Clay rocks", loc("clayrock1"));
+  try {
+    h.tick(3);
+    assert.deepEqual(player.added, [[ItemIds.SOFT_CLAY, 2]]);
+    assert.deepEqual(spent, [ItemIds.SOFT_CLAY]);
+  } finally {
+    restoreRandom();
+    restore();
+  }
+});
+
+test("an ore handed over as it is mined spends no \"mining:ore-yield\" charge", () => {
+  const { h, spent } = yieldHarness({ oreId: ItemIds.SOFT_CLAY, taker: "Miner Magnus" });
+  const player = createPlayer();
+  const restoreRandom = scriptRandom([], 0);
+  const { restore } = mineRock(h, player, "Clay rocks", loc("clayrock1"));
+  try {
+    h.tick(3);
+    assert.deepEqual(player.added, []);
+    assert.deepEqual(spent, []);
+  } finally {
+    restoreRandom();
+    restore();
+  }
+});
+
+test("an extra ore is asked for by the rock's own ore but given as what the success yielded", () => {
+  const { h, extraAsked } = yieldHarness({ oreId: ItemIds.SOFT_CLAY, extra: true });
+  const player = createPlayer();
+  const restoreRandom = scriptRandom([], 0);
+  const { restore } = mineRock(h, player, "Clay rocks", loc("clayrock1"));
+  try {
+    h.tick(3);
+    assert.deepEqual(extraAsked, [ItemIds.CLAY]);
+    assert.deepEqual(player.added, [[ItemIds.SOFT_CLAY, 1], [ItemIds.SOFT_CLAY, 1]]);
+  } finally {
+    restoreRandom();
+    restore();
+  }
+});
+
+test("Varrock armour 1 may add an extra clay (Wiki Mining_enhancers: clay is armour tier 1)", () => {
+  let handler;
+  require("../plugins/skills/mining/VarrockArmour.Mining").attach({ core, onCustomEvent: (key, fn) => { if (key === "mining:extra-ore") handler = fn; } });
+  const original = Math.random;
+  Math.random = () => 0;
+  try {
+    const request = { player: { getEquipment: () => ({ getItems: () => ({ [core.Equipment.BODY_SLOT]: { getId: () => ItemIds.VARROCK_ARMOUR_1 } }) }) }, oreId: ItemIds.CLAY, bonuses: [] };
+    handler(request);
+    assert.equal(request.bonuses.length, 1);
+  } finally {
+    Math.random = original;
+  }
+});

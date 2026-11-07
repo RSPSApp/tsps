@@ -1,3 +1,4 @@
+const { PlayerDeathTask } = require("../../src/main/typescript/elvarg/game/task/impl/PlayerDeath");
 const { Location } = require("../../src/main/typescript/elvarg/game/model/Location");
 const { TeleportHandler } = require("../../src/main/typescript/elvarg/game/model/teleportation/TeleportHandler");
 const { TeleportType } = require("../../src/main/typescript/elvarg/game/model/teleportation/TeleportType");
@@ -233,7 +234,8 @@ function removeImbueOnDeath(event, itemOnGroundManager) {
   }
   event.item.setId(unimbuedId);
   const coins = new Item(COINS, IMBUE_COST);
-  if (event.killer?.getInventory) {
+  // An Ironman killer doesn't get the coins: they drop for the victim (PlayerDeathTask.lootOwner), as the ring does.
+  if (event.killer?.getInventory && PlayerDeathTask.lootOwner(event.player, event.killer) === event.killer) {
     event.killer.getInventory().forceAdd(event.killer, coins);
   } else {
     itemOnGroundManager.registerLocation(event.player, coins, event.location);

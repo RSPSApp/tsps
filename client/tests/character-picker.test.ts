@@ -1,12 +1,13 @@
 import assert from "node:assert/strict";
 
-import { CHARACTER_LIST_WAIT_MS, CharacterListWait } from "../game/login/characterListWait";
-import { decideCharacterList, decideCharacterResult, leaveRefusedReconnect } from "../game/login/characterFlow";
+import { CHARACTER_LIST_WAIT_MS, CharacterListWait } from "../game/plugins/characters/characterListWait";
+import { decideCharacterList, decideCharacterResult, leaveRefusedReconnect } from "../game/plugins/characters/characterFlow";
 import { GameState, LoginIndex } from "../game/login/GameState";
-import { LoginActions } from "../game/login/LoginAction";
+import { PickerActions as LoginActions } from "../game/plugins/characters/PickerAction";
+import { CharacterPickerState } from "../game/plugins/characters/CharacterPickerState";
 import { LoginState } from "../game/login/LoginState";
-import { handleKeyInput, getCharacterSelectEnterAction } from "../game/login/renderer/input/keyboard";
-import { handleCharacterSelectClick } from "../game/login/renderer/input/mouseHandlers";
+import { handlePickerKey, getCharacterSelectEnterAction } from "../game/plugins/characters/pickerInput";
+import { handleCharacterSelectClick } from "../game/plugins/characters/pickerInput";
 import {
     getPickerRowHeight,
     PICKER_BUTTON_Y,
@@ -14,7 +15,7 @@ import {
     PICKER_ROWS_Y,
     PICKER_SIGN_OUT_Y,
     PICKER_TITLE_Y,
-} from "../game/login/renderer/layout/geometry";
+} from "../game/plugins/characters/pickerGeometry";
 
 // Rows are tall enough for the stats and last-played lines, and three characters plus the New
 // row end above the titlebuttons (about 40 tall, centred on PICKER_BUTTON_Y) and below the title.
@@ -39,9 +40,8 @@ const alt = { name: "Zezalt", combatLevel: 3, totalLevel: 32, lastPlayedAt: 2, p
 const host = { loginBoxX: 202, contentScale: 1, layoutConfig: { isTouch: false, minTouchTarget: 0 } } as any;
 
 // State transitions: the list shows the picker with the server's default selected.
-const state = new LoginState();
+const state = new CharacterPickerState(new LoginState());
 state.showCharacterSelect({ maxCharacters: 3, defaultIndex: 1, characters: [zezima, alt] });
-assert.equal(state.loginIndex, LoginIndex.CHARACTER_SELECT);
 assert.equal(state.selectedCharacter, 1);
 assert.equal(state.pickerMode, "list");
 
@@ -77,16 +77,16 @@ assert.equal(
 assert.equal(getCharacterSelectEnterAction(state), LoginActions.SUBMIT_PICKER_INPUT, "Enter in a field submits");
 
 // Keyboard: typing edits the field, at most 12 characters.
-handleKeyInput(host, state, "", "a");
-handleKeyInput(host, state, "", "b");
+handlePickerKey(state, "", "a");
+handlePickerKey(state, "", "b");
 assert.equal(state.pickerInput, "ab");
-handleKeyInput(host, state, "Backspace", "");
+handlePickerKey(state, "Backspace", "");
 assert.equal(state.pickerInput, "a");
-for (const ch of "bcdefghijklmnop") handleKeyInput(host, state, "", ch);
+for (const ch of "bcdefghijklmnop") handlePickerKey(state, "", ch);
 assert.equal(state.pickerInput, "abcdefghijkl");
 state.pickerMode = "list";
 state.pickerInput = "";
-assert.equal(handleKeyInput(host, state, "", "x"), false, "the list has no field to type into");
+assert.equal(handlePickerKey(state, "", "x"), false, "the list has no field to type into");
 assert.equal(state.pickerInput, "");
 
 // A full account shows no New row.
@@ -138,11 +138,11 @@ assert.equal(handshakes, 2);
 assert.equal(pending, undefined);
 
 // CHARACTER_LIST: the list a login waited for shows the picker; strays are ignored.
-const list = (gameState: GameState, loginIndex: LoginIndex, expected: boolean, sessionCharacter: string | null = null) =>
-    decideCharacterList({ gameState, loginIndex, expected, sessionCharacter, maxCharacters: 3, characters: [zezima] });
+const list = (gameState: GameState, pickerOpen: boolean, expected: boolean, sessionCharacter: string | null = null) =>
+    decideCharacterList({ gameState, pickerOpen, expected, sessionCharacter, maxCharacters: 3, characters: [zezima] });
 assert.equal(decideCharacterList({
     gameState: GameState.CONNECTING,
-    loginIndex: LoginIndex.LOGIN_FORM,
+    pickerOpen: false,
     expected: true,
     sessionCharacter: null,
     maxCharacters: 3,
@@ -150,7 +150,7 @@ assert.equal(decideCharacterList({
 }), "select_default", "a first login enters the primary without an extra click");
 assert.equal(decideCharacterList({
     gameState: GameState.CONNECTING,
-    loginIndex: LoginIndex.LOGIN_FORM,
+    pickerOpen: false,
     expected: false,
     sessionCharacter: null,
     maxCharacters: 3,
@@ -159,31 +159,31 @@ assert.equal(decideCharacterList({
 for (const characters of [[zezima], [zezima, alt]]) {
     assert.equal(decideCharacterList({
         gameState: GameState.CONNECTING,
-        loginIndex: LoginIndex.LOGIN_FORM,
+        pickerOpen: false,
         expected: true,
         sessionCharacter: null,
         maxCharacters: 1,
         characters,
     }), "select_default", "disabled slots bypass the picker, including accounts with old alts");
 }
-assert.equal(list(GameState.CONNECTING, LoginIndex.LOGIN_FORM, true), "show_picker");
-assert.equal(list(GameState.CONNECTING, LoginIndex.CHARACTER_SELECT, false), "show_picker", "the refresh after a create");
-assert.equal(list(GameState.CONNECTING, LoginIndex.LOGIN_FORM, false), "ignore", "late, after the fallback handshake");
-assert.equal(list(GameState.LOADING_GAME, LoginIndex.LOGIN_FORM, false), "ignore", "late, after the fallback handshake");
-assert.equal(list(GameState.LOGGED_IN, LoginIndex.CHARACTER_SELECT, false, "Zezima"), "ignore", "in game");
-assert.equal(list(GameState.LOGGED_IN, LoginIndex.CHARACTER_SELECT, true, "Zezima"), "ignore", "in game");
-assert.equal(list(GameState.LOGIN_SCREEN, LoginIndex.WELCOME, true), "ignore");
-assert.equal(list(GameState.CONNECTION_LOST, LoginIndex.CHARACTER_SELECT, true, "Zezalt"), "reselect");
-assert.equal(list(GameState.CONNECTION_LOST, LoginIndex.CHARACTER_SELECT, false, "Zezalt"), "ignore");
+assert.equal(list(GameState.CONNECTING, false, true), "show_picker");
+assert.equal(list(GameState.CONNECTING, true, false), "show_picker", "the refresh after a create");
+assert.equal(list(GameState.CONNECTING, false, false), "ignore", "late, after the fallback handshake");
+assert.equal(list(GameState.LOADING_GAME, false, false), "ignore", "late, after the fallback handshake");
+assert.equal(list(GameState.LOGGED_IN, true, false, "Zezima"), "ignore", "in game");
+assert.equal(list(GameState.LOGGED_IN, true, true, "Zezima"), "ignore", "in game");
+assert.equal(list(GameState.LOGIN_SCREEN, false, true), "ignore");
+assert.equal(list(GameState.CONNECTION_LOST, true, true, "Zezalt"), "reselect");
+assert.equal(list(GameState.CONNECTION_LOST, true, false, "Zezalt"), "ignore");
 assert.equal(
-    list(GameState.CONNECTION_LOST, LoginIndex.CHARACTER_SELECT, true, null),
+    list(GameState.CONNECTION_LOST, true, true, null),
     "reopen_picker",
     "dropped while choosing: the picker again, no select sent",
 );
 
 assert.equal(decideCharacterList({
     gameState: GameState.CONNECTION_LOST,
-    loginIndex: LoginIndex.CHARACTER_SELECT,
+    pickerOpen: true,
     expected: true,
     sessionCharacter: null,
     maxCharacters: 1,
@@ -205,7 +205,7 @@ assert.equal(result("select", false, GameState.CONNECTION_LOST), "abandon_reconn
 // A refused reconnect select drops the connection for good and shows why on Try again.
 const calls: string[] = [];
 const refused = new LoginState();
-refused.loginIndex = LoginIndex.CHARACTER_SELECT;
+refused.loginIndex = LoginIndex.LOGIN_FORM;
 leaveRefusedReconnect(refused, "That character is already logged in.", {
     suppressReconnection: () => calls.push("suppress"),
     disposeServerConnection: () => calls.push("dispose"),

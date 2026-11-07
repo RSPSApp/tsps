@@ -68,7 +68,7 @@ export function initServerConnection(url: string = DEFAULT_URL): void {
             : new WebSocket(url);
         const ws = state.socket;
         state.lastWelcome = undefined;
-        state.characterSlotsEnabled = false;
+        state.loginExtension?.resetConnection();
         state.loginOnWelcome = null;
         try {
             ws.binaryType = "arraybuffer";

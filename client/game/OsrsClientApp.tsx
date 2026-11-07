@@ -6,8 +6,6 @@ import WebFont from "webfontloader";
 import {
     sendHandshake,
     setAutoSendHandshake,
-    subscribeCharacterList,
-    subscribeCharacterResult,
     subscribeHandshake,
     subscribeLoginResponse,
 } from "../network/ServerConnection";
@@ -383,13 +381,12 @@ function OsrsClientApp() {
 
             const unsubLogin = subscribeLoginResponse((response) => {
                 if (response.success) {
-                    console.log("[OsrsClientApp] Login successful, waiting for the character list");
+                    console.log("[OsrsClientApp] Login successful");
                     client.onLoginAccepted(response.loginToken, response.displayName);
                     const username =
                         client.loginState?.username || response.displayName || "Player";
-                    // The picker (or a reconnect's re-select) sends the handshake; a server
-                    // without character slots gets it here after a short wait.
-                    client.awaitCharacterList(() => sendHandshake(username));
+                    const handshake = () => sendHandshake(username);
+                    if (!client.clientPlugins.beforeLoginHandshake(handshake)) handshake();
                 } else {
                     console.log(
                         "[OsrsClientApp] Login failed:",
@@ -408,9 +405,7 @@ function OsrsClientApp() {
                 console.log("[OsrsClientApp] Handshake received, player logged in:", info.name);
                 client.onLoginSuccess();
             });
-            const unsubCharacterList = subscribeCharacterList((payload) => client.onCharacterList(payload));
-            const unsubCharacterResult = subscribeCharacterResult((result) => client.onCharacterResult(result));
-            loginUnsubscribers.push(unsubLogin, unsubHandshake, unsubCharacterList, unsubCharacterResult);
+            loginUnsubscribers.push(unsubLogin, unsubHandshake);
 
             try {
                 const fileNames = cache.files.getFileNames();

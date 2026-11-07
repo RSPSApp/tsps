@@ -31,14 +31,8 @@ export type LoginAction =
     | { type: "world_page_right" }
     | { type: "world_sort"; column: number }
     | { type: "toggle_music" }
-    | { type: "field_click"; field: number }
-    | { type: "select_character"; index: number }
-    | { type: "play_character" }
-    | { type: "new_character" }
-    | { type: "delete_character" }
-    | { type: "submit_picker_input" }
-    | { type: "cancel_picker_input" }
-    | { type: "sign_out_picker" };
+    | { type: "field_click"; field: number };
+
 
 /**
  * Pre-allocated action objects to avoid allocations during input handling.
@@ -71,10 +65,4 @@ export const LoginActions = {
     TOGGLE_MUSIC: { type: "toggle_music" } as const,
     FIELD_USERNAME: { type: "field_click", field: 0 } as const,
     FIELD_PASSWORD: { type: "field_click", field: 1 } as const,
-    PLAY_CHARACTER: { type: "play_character" } as const,
-    NEW_CHARACTER: { type: "new_character" } as const,
-    DELETE_CHARACTER: { type: "delete_character" } as const,
-    SUBMIT_PICKER_INPUT: { type: "submit_picker_input" } as const,
-    CANCEL_PICKER_INPUT: { type: "cancel_picker_input" } as const,
-    SIGN_OUT_PICKER: { type: "sign_out_picker" } as const,
 } as const;

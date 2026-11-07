@@ -3,17 +3,11 @@ import { clearHintArrow, setHintArrowNpc, setHintArrowPlayer,
     setHintArrowWorldEntity, setHintArrowTile } from "../../../game/HintArrow";
 import { clearAttackTimer, setAttackTimer } from "../../../game/plugins/attacktimer/attackTimerState";
 import { loadItemPrices } from "../domain/itemPrices";
-import { LOGIN_FLAG_CHARACTER_SELECT, LOGIN_FLAG_TOKEN } from "../constants";
+import { LOGIN_FLAG_REMEMBER, LOGIN_FLAG_TOKEN } from "../constants";
 import { state } from "../state";
 
 export function handleAuthTickMessage(msg: any): boolean {
-    if (msg.type === "plugin_message" && msg.payload?.channel === "characters:slots") {
-        const max = msg.payload.data?.maxPerAccount;
-        if (!state.lastWelcome && Number.isInteger(max) && max >= 2 && max <= 6) {
-            state.characterSlotsEnabled = true;
-        }
-        return true;
-    }
+    if (state.loginExtension?.handleMessage(msg)) return true;
     if (msg.type === "welcome") {
         console.log(
             `[ws] welcome tickMs=${msg.payload.tickMs} serverTime=${msg.payload.serverTime}`,
@@ -36,9 +30,9 @@ export function handleAuthTickMessage(msg: any): boolean {
         if (msg.payload.success && msg.payload.loginToken) {
             // The token just used (or the password) is spent; a resumed session logs in with this.
             state.sessionPassword = msg.payload.loginToken;
-            // Keeps asking for the character list, so a reconnect re-enters the same character.
+            // Preserve negotiated extension flags when replacing the credential with a token.
             state.sessionLoginFlags =
-                LOGIN_FLAG_TOKEN | (state.sessionLoginFlags & LOGIN_FLAG_CHARACTER_SELECT);
+                LOGIN_FLAG_TOKEN | (state.sessionLoginFlags & ~(LOGIN_FLAG_REMEMBER | LOGIN_FLAG_TOKEN));
         }
         if (msg.payload.success) {
             clearHintArrow();
@@ -52,26 +46,6 @@ export function handleAuthTickMessage(msg: any): boolean {
                 cb(msg.payload);
             } catch (e) {
                 console.warn("[ws] login response listener error:", e);
-            }
-        }
-        return true;
-    }
-    if (msg.type === "character_list") {
-        for (const cb of state.characterListListeners) {
-            try {
-                cb(msg.payload);
-            } catch (e) {
-                console.warn("[ws] character list listener error:", e);
-            }
-        }
-        return true;
-    }
-    if (msg.type === "character_result") {
-        for (const cb of state.characterResultListeners) {
-            try {
-                cb(msg.payload);
-            } catch (e) {
-                console.warn("[ws] character result listener error:", e);
             }
         }
         return true;

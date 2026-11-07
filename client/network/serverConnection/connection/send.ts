@@ -1,6 +1,5 @@
 import { encodeClientMessage } from "../../packet/ClientBinaryEncoder";
 import type { ClientToServer } from "../types/clientMessages";
-import { LOGIN_FLAG_CHARACTER_SELECT } from "../constants";
 import { state } from "../state";
 
 export function send(msg: ClientToServer): void {
@@ -11,8 +10,7 @@ export function send(msg: ClientToServer): void {
             state.loginOnWelcome = () => { if (state.socket === socket) send(msg); };
             return;
         }
-        const flags = ((msg.payload.flags ?? 0) & ~LOGIN_FLAG_CHARACTER_SELECT)
-            | (state.characterSlotsEnabled ? LOGIN_FLAG_CHARACTER_SELECT : 0);
+        const flags = state.loginExtension?.loginFlags(msg.payload.flags ?? 0) ?? (msg.payload.flags ?? 0);
         state.sessionLoginFlags = flags;
         msg = { ...msg, payload: { ...msg.payload, flags } };
     }

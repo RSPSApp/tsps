@@ -19,7 +19,6 @@ import {
     drawWelcomeDisplayName,
     drawTerms,
     drawMustAcceptTerms,
-    drawCharacterSelect,
 } from "./loginScreensSecondary";
 import {
     drawBanned,
@@ -37,6 +36,8 @@ export function drawLoginScreenToCtx(host: LoginRendererHost, ctx: RenderContext
             if (host.titleboxSprite) {
                 drawSprite(host, ctx, host.titleboxSprite, host.LOGIN_BOX_X, host.TITLEBOX_Y);
             }
+
+            if (state.extension) { state.extension.draw(host, ctx); return; }
 
             // Route to appropriate screen
             switch (state.loginIndex) {
@@ -93,9 +94,6 @@ export function drawLoginScreenToCtx(host: LoginRendererHost, ctx: RenderContext
                     break;
                 case LoginIndex.WORLD_HOP_WARNING:
                     drawWorldHopWarning(host, ctx, state);
-                    break;
-                case LoginIndex.CHARACTER_SELECT:
-                    drawCharacterSelect(host, ctx, state);
                     break;
             }
         });

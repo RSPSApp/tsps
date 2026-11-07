@@ -1,4 +1,4 @@
-import { LOGIN_FLAG_CHARACTER_SELECT } from "../../network/serverConnection/constants";
+import { LOGIN_FLAG_CHARACTER_SELECT } from "../../../network/serverConnection/constants";
 
 /**
  * How long an accepted login with character select waits for the server's character list. A

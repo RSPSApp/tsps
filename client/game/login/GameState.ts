@@ -70,8 +70,6 @@ export enum LoginIndex {
     MUST_ACCEPT_TERMS = 13,
     /** Ban information */
     BANNED = 14,
-    /** The account's characters on this server, after a login with character select */
-    CHARACTER_SELECT = 15,
     /** Generic OK message */
     OK_MESSAGE = 24,
     /** Date of birth not set */

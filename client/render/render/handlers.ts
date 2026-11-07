@@ -40,7 +40,7 @@ export function onMobileLoginKeyDown(host: WebGLOsrsRendererHost, event: Keyboar
     if (event.key !== "Enter") return;
     event.preventDefault();
     const state = host.osrsClient.loginState;
-    if (state.loginIndex === LoginIndex.CHARACTER_SELECT) {
+    if (state.extension) {
         host.osrsClient.submitLoginFromKeyboard();
         return;
     }

@@ -9,17 +9,6 @@ import {
     getRememberedPlayBounds,
     REMEMBERED_SIGN_OUT_Y,
     REMEMBER_USERNAME_TEXT,
-    getPickerRowCount,
-    getPickerRowHeight,
-    getPickerRowX,
-    PICKER_BUTTON_Y,
-    PICKER_LEFT_BUTTON_DX,
-    PICKER_RIGHT_BUTTON_DX,
-    PICKER_ROW_W,
-    PICKER_ROWS_Y,
-    PICKER_SIGN_OUT_HALF_H,
-    PICKER_SIGN_OUT_HALF_W,
-    PICKER_SIGN_OUT_Y,
 } from "../layout/geometry";
 import { measureText } from "../render/drawUtils";
 
@@ -269,45 +258,4 @@ export function isButtonHit(
             clickY <= buttonCenterY + hitHalfH
         );
     
-}
-
-/** The picker row at a content-space point: a character index, characters.length for New, or -1. */
-export function getCharacterRowAt(host: LoginRendererHost, state: LoginState, x: number, y: number): number {
-    if (state.pickerMode !== "list") return -1;
-    const rows = getPickerRowCount(state);
-    const rowH = getPickerRowHeight(rows);
-    const rowX = getPickerRowX(host);
-    if (x < rowX || x >= rowX + PICKER_ROW_W || y < PICKER_ROWS_Y || y >= PICKER_ROWS_Y + rows * rowH) return -1;
-    return Math.floor((y - PICKER_ROWS_Y) / rowH);
-}
-
-export function handleCharacterSelectClick(host: LoginRendererHost, state: LoginState, x: number, y: number): LoginAction | undefined {
-    if (state.pickerMode === "list") {
-        const row = getCharacterRowAt(host, state, x, y);
-        if (row >= 0 && row < state.characters.length) {
-            return { type: "select_character", index: row };
-        }
-        if (row === state.characters.length) {
-            return state.canCreateCharacter() ? LoginActions.NEW_CHARACTER : undefined;
-        }
-    }
-    // Checked before the buttons above it; on touch it only grows downwards, away from them.
-    const scale = host.contentScale > 0 ? host.contentScale : 1;
-    const touchHalf = host.layoutConfig.isTouch ? Math.ceil(host.layoutConfig.minTouchTarget / 2 / scale) : 0;
-    if (
-        Math.abs(x - (host.loginBoxX + 180)) <= Math.max(PICKER_SIGN_OUT_HALF_W, touchHalf) &&
-        y >= PICKER_SIGN_OUT_Y - PICKER_SIGN_OUT_HALF_H &&
-        y <= PICKER_SIGN_OUT_Y + Math.max(PICKER_SIGN_OUT_HALF_H, touchHalf)
-    ) {
-        return LoginActions.SIGN_OUT_PICKER;
-    }
-    if (isButtonHit(host, x, y, host.loginBoxX + PICKER_LEFT_BUTTON_DX, PICKER_BUTTON_Y)) {
-        return state.pickerMode === "list" ? LoginActions.PLAY_CHARACTER : LoginActions.SUBMIT_PICKER_INPUT;
-    }
-    if (isButtonHit(host, x, y, host.loginBoxX + PICKER_RIGHT_BUTTON_DX, PICKER_BUTTON_Y)) {
-        if (state.pickerMode !== "list") return LoginActions.CANCEL_PICKER_INPUT;
-        const selected = state.characters[state.selectedCharacter];
-        return selected && !selected.primary ? LoginActions.DELETE_CHARACTER : undefined;
-    }
-    return undefined;
 }

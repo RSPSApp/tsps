@@ -11,7 +11,7 @@ import {
 
 import type { OsrsClient } from "../../game/OsrsClient";
 import { isMapEditorUrl } from "../../config/clientEnv";
-import { GameState, LoginIndex } from "../../game/login";
+import { GameState } from "../../game/login";
 import { withRenderTransform } from "../../game/login/renderer/layout/config";
 import { drawServerListOverlay } from "../../game/login/renderer/render/serverListOverlay";
 import { getCanvasCssSize } from "../../common/utils/DeviceUtil";
@@ -292,7 +292,7 @@ export class LoginOverlay implements Overlay {
             renderLayoutHeight,
         );
 
-        loginState.hoveredCharacter = loginRenderer.computeHoveredCharacter(loginState);
+        loginRenderer.updateExtensionHover(loginState);
 
         // Performance: compute state hash to detect changes
         const cursorBlink = loginRenderer.cycle % 40 < 20;
@@ -523,7 +523,7 @@ export class LoginOverlay implements Overlay {
         }|${
             loginState.downloadTotal
         }|${loginRenderer.getViewportTransformStateHash()}|${loginRenderer.getTitleAssetStateHash()}|${
-            loginState.loginIndex === LoginIndex.CHARACTER_SELECT ? loginState.pickerHash() : ""
+            loginState.extension?.hash() ?? ""
         }`;
     }
 

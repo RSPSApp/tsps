@@ -43,6 +43,17 @@ updates. Core owns credential verification, packet framing, pending-name reserva
 cleanup. Persisted ownership and deletion reservations remain core identity protections even when the plugin is off.
 Extension failures abort login rather than silently falling through to entering a player.
 
+## Browser client plugin
+
+The browser's Characters plugin owns capability negotiation, picker state, drawing, input and reconnect
+selection. It uses the existing RuneLite-style plugin lifecycle, injection and `GameStateChanged` event,
+and `hidden: true` keeps it out of the plugin list and search. It activates selection only when the server
+announces support.
+
+Core exposes small **custom browser-client hooks**, not upstream RuneLite APIs: a login-panel extension
+(draw/input/hash/mobile field), a pre-handshake callback, and a connection-local login-protocol extension.
+Packet codecs remain in core; character-specific screens, actions and listeners do not.
+
 ## Where accounts live
 
 Accounts are in `data/saves/accounts.json`. Set `TSPS_ACCOUNTS_FILE` to use another path. The file lists each account's characters in slot order, with when each was created and last played. With the Characters plugin enabled and a cap above 1, a player who already has a save gets an account the first time they log in; a new name gets one when it first enters the world, so a login that never enters claims nothing. There is nothing to migrate. The file also keeps every deleted character's name (see [Deleting a character](#deleting-a-character)).

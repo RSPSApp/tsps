@@ -120,7 +120,6 @@ import type { ClientGroundItemStack, GroundItemOverlayEntry } from "../../game/d
 import { NpcEcs } from "../../game/ecs/NpcEcs";
 import type { PlayerAnimKey } from "../../game/ecs/PlayerEcs";
 import { GameState, LoginIndex } from "../../game/login";
-import { PICKER_FIELD_Y, PICKER_MAX_NAME_LENGTH } from "../../game/login/renderer/layout/geometry";
 import { Ray, rayIntersectsBox } from "../../game/math/Raycast";
 import { isMouseInUIRegion as checkMouseInUIRegion } from "../../game/menu/WorldMenuBuilder";
 import {
@@ -194,7 +193,7 @@ export function shouldUseMobileLoginInput(host: WebGLOsrsRendererHost, ): boolea
 
         const state = host.osrsClient.loginState;
         if (!host.osrsClient.isOnLoginScreen()) return false;
-        if (state.loginIndex === LoginIndex.CHARACTER_SELECT) return state.pickerMode !== "list";
+        if (state.extension) return state.extension.textInput?.() !== undefined;
         return state.loginIndex === LoginIndex.LOGIN_FORM && state.virtualKeyboardVisible === true;
     
 }
@@ -212,10 +211,9 @@ export function getCanvasTouchPos(host: WebGLOsrsRendererHost, touch: Touch): { 
 export function resolveLoginFieldAt(host: WebGLOsrsRendererHost, y: number): 0 | 1 | undefined {
 
         const state = host.osrsClient.loginState;
-        if (state.loginIndex === LoginIndex.CHARACTER_SELECT) {
-            // The picker's one field, only while it shows; a tap on a row stays a click.
-            if (state.pickerMode === "list") return undefined;
-            return y >= PICKER_FIELD_Y - 12 && y < PICKER_FIELD_Y + 3 ? 0 : undefined;
+        if (state.extension) {
+            const input = state.extension.textInput?.();
+            return input && y >= input.y - 12 && y < input.y + 3 ? 0 : undefined;
         }
 
         if (y >= host.LOGIN_FIELD_BASE_Y - 12 && y < host.LOGIN_FIELD_BASE_Y + 3) {
@@ -418,7 +416,7 @@ export function syncLoginRendererLayoutForCanvas(host: WebGLOsrsRendererHost, ):
 export function getActiveLoginFieldValue(host: WebGLOsrsRendererHost, ): string {
 
         const state = host.osrsClient.loginState;
-        if (state.loginIndex === LoginIndex.CHARACTER_SELECT) return state.pickerInput;
+        if (state.extension) return state.extension.textInput?.()?.value ?? "";
         return state.currentLoginField === 0 ? state.username : state.password;
     
 }
@@ -426,12 +424,7 @@ export function getActiveLoginFieldValue(host: WebGLOsrsRendererHost, ): string 
 export function setActiveLoginFieldValue(host: WebGLOsrsRendererHost, raw: string): void {
 
         const state = host.osrsClient.loginState;
-        if (state.loginIndex === LoginIndex.CHARACTER_SELECT) {
-            if (state.pickerMode !== "list") {
-                state.pickerInput = raw.replace(/[^A-Za-z0-9 _-]/g, "").slice(0, PICKER_MAX_NAME_LENGTH);
-            }
-            return;
-        }
+        if (state.extension) { state.extension.textInput?.()?.setValue(raw); return; }
         if (state.currentLoginField === 0) {
             state.username = raw.slice(0, 320);
         } else {
@@ -517,13 +510,13 @@ export function syncMobileLoginInput(host: WebGLOsrsRendererHost, focus: boolean
 
         const state = host.osrsClient.loginState;
         const wantsPassword =
-            state.loginIndex !== LoginIndex.CHARACTER_SELECT && state.currentLoginField === 1;
+            !state.extension && state.currentLoginField === 1;
         const nextType = wantsPassword ? "password" : "text";
         if (input.type !== nextType) {
             input.type = nextType;
         }
-        input.inputMode = wantsPassword ? "text" : "email";
-        (input as any).enterKeyHint = wantsPassword ? "go" : "next";
+        input.inputMode = state.extension || wantsPassword ? "text" : "email";
+        (input as any).enterKeyHint = state.extension || wantsPassword ? "go" : "next";
 
         const value = host.getActiveLoginFieldValue();
         if (input.value !== value) {

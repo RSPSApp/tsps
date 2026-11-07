@@ -21,7 +21,7 @@ import {
     type RememberedLoginPreference,
 } from "../preferences/ClientPreferences";
 import { readLocalStorageJson, removeLocalStorageItem } from "../../common/utils/localStorage";
-import type { CharacterListPayload, CharacterSummary } from "../../network/packet/ServerBinaryDecoder";
+import type { LoginScreenExtension } from "./LoginScreenExtension";
 import { LoginIndex } from "./GameState";
 
 const STORAGE_KEY_IOS_PWA_LOGIN_STATE = "osrs:iosPwaLoginState";
@@ -435,62 +435,8 @@ export class LoginState {
         });
     }
 
-    // ========== Character select ==========
-
-    /** The account's characters on this server, from the last character list. */
-    characters: CharacterSummary[] = [];
-
-    /** How many characters the account may have here; below it the picker offers a New row. */
-    maxCharacters: number = 1;
-
-    /** Index into characters of the highlighted row (Play enters it). */
-    selectedCharacter: number = 0;
-
-    /** Picker row under the mouse (-1 = none); characters.length is the New row. */
-    hoveredCharacter: number = -1;
-
-    /** The rows, or the name field for a new character or a delete confirmation. */
-    pickerMode: "list" | "create" | "delete" = "list";
-
-    /** Text typed into the picker's name field. */
-    pickerInput: string = "";
-
-    /** The server's answer to the last refused request, drawn in red. */
-    pickerMessage: string = "";
-
-    /** A select, create or delete is waiting for the server's result. */
-    pickerBusy: boolean = false;
-
-    /** Shows the character picker for a character list from the server. */
-    showCharacterSelect(payload: CharacterListPayload): void {
-        this.characters = payload.characters;
-        this.maxCharacters = payload.maxCharacters;
-        this.selectedCharacter = Math.max(0, Math.min(payload.defaultIndex, payload.characters.length - 1));
-        this.hoveredCharacter = -1;
-        this.pickerMode = "list";
-        this.pickerInput = "";
-        this.pickerMessage = "";
-        this.pickerBusy = false;
-        this.virtualKeyboardVisible = false;
-        this.loginIndex = LoginIndex.CHARACTER_SELECT;
-    }
-
-    /** Whether the picker offers a New character row. */
-    hasNewCharacterRow(): boolean {
-        return this.characters.length < this.maxCharacters;
-    }
-
-    /** The server refuses a new character until the first one has entered the world once. */
-    canCreateCharacter(): boolean {
-        return this.hasNewCharacterRow() && this.characters[0]?.hasSave !== false;
-    }
-
-    /** Everything the picker draws, for the title's redraw hash. */
-    pickerHash(): string {
-        return `${this.characters.map((c) => c.name + c.lastPlayedAt).join(",")}|${this.selectedCharacter}|${
-            this.hoveredCharacter
-        }|${this.pickerMode}|${this.pickerInput.length}|${this.pickerMessage}|${this.pickerBusy}|${this.maxCharacters}`;
-    }
+    /** A plugin-provided login screen, when one is active. */
+    extension?: LoginScreenExtension;
 
     // ========== World Select ==========
 

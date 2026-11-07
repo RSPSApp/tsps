@@ -1,18 +1,8 @@
 import { LoginIndex } from "../../GameState";
-import { LoginActions } from "../../LoginAction";
 import type { LoginState } from "../../LoginState";
 import type { LoginRendererHost } from "../host";
-import { PICKER_MAX_NAME_LENGTH } from "../layout/geometry";
-
-/** Characters a character name may hold; the server checks the rest. */
-const PICKER_NAME_CHAR = /^[A-Za-z0-9 _-]$/;
-
-/** Enter on the character picker: Play in the list, else submit the name field. */
-export function getCharacterSelectEnterAction(state: LoginState) {
-    return state.pickerMode === "list" ? LoginActions.PLAY_CHARACTER : LoginActions.SUBMIT_PICKER_INPUT;
-}
-
 export function handleKeyInput(host: LoginRendererHost, state: LoginState, key: string, char: string) {
+        if (state.extension) return state.extension.key(key, char);
 
         if (state.loginIndex === LoginIndex.LOGIN_FORM) {
             if (key === "Tab") {
@@ -48,19 +38,6 @@ export function handleKeyInput(host: LoginRendererHost, state: LoginState, key: 
                     if (state.password.length < 20) {
                         state.password += char;
                     }
-                }
-                return true;
-            }
-        } else if (state.loginIndex === LoginIndex.CHARACTER_SELECT) {
-            // Enter goes through getCharacterSelectEnterAction; the list has no field.
-            if (state.pickerMode === "list") return false;
-            if (key === "Backspace") {
-                state.pickerInput = state.pickerInput.slice(0, -1);
-                return true;
-            }
-            if (PICKER_NAME_CHAR.test(char)) {
-                if (state.pickerInput.length < PICKER_MAX_NAME_LENGTH) {
-                    state.pickerInput += char;
                 }
                 return true;
             }

@@ -1,5 +1,5 @@
-import { GameState, LoginIndex } from "./GameState";
-import type { LoginState } from "./LoginState";
+import { GameState, LoginIndex } from "../../login/GameState";
+import type { LoginState } from "../../login/LoginState";
 
 export type CharacterRequestKind = "select" | "create" | "delete";
 
@@ -18,23 +18,23 @@ function isReconnecting(gameState: GameState): boolean {
  */
 export function decideCharacterList(args: {
     gameState: GameState;
-    loginIndex: LoginIndex;
+    pickerOpen: boolean;
     expected: boolean;
     sessionCharacter: string | null;
     maxCharacters: number;
     characters: readonly { primary: boolean; hasSave: boolean }[];
 }): "show_picker" | "reopen_picker" | "reselect" | "select_default" | "ignore" {
-    const { gameState, loginIndex, expected, sessionCharacter } = args;
+    const { gameState, pickerOpen, expected, sessionCharacter } = args;
     if (gameState === GameState.CONNECTING) {
         if (expected && (args.maxCharacters === 1 || (args.characters.length === 1 && args.characters[0].primary && !args.characters[0].hasSave))) {
             return "select_default";
         }
         // The picker's own refresh after a create or delete, or the list a login waited for.
-        return expected || loginIndex === LoginIndex.CHARACTER_SELECT ? "show_picker" : "ignore";
+        return expected || pickerOpen ? "show_picker" : "ignore";
     }
     if (!expected || !isReconnecting(gameState)) return "ignore";
     // Dropped while still choosing: ask again rather than entering the default character.
-    if (sessionCharacter === null && loginIndex === LoginIndex.CHARACTER_SELECT && args.maxCharacters > 1) return "reopen_picker";
+    if (sessionCharacter === null && pickerOpen && args.maxCharacters > 1) return "reopen_picker";
     return "reselect";
 }
 

@@ -3,9 +3,7 @@ import type { LoginRendererHost } from "./host";
 import { toLayoutPoint } from "./layout/config";
 import { getGridLayout, getSortedWorlds, findHoveredWorld } from "./world/worldData";
 import { SERVER_LIST_PANEL_WIDTH } from "./constants";
-import { LoginIndex } from "../GameState";
 import { toContentPoint } from "./layout/geometry";
-import { getCharacterRowAt } from "./input/mouseHandlers";
 
 export function computeHoveredWorldIndex(host: LoginRendererHost, state: LoginState, _width: number, _height: number) {
 
@@ -59,9 +57,9 @@ export function setMousePosition(host: LoginRendererHost, x: number, y: number) 
     
 }
 
-/** The character picker row under the mouse, or -1. */
-export function computeHoveredCharacter(host: LoginRendererHost, state: LoginState): number {
-    if (state.loginIndex !== LoginIndex.CHARACTER_SELECT || state.serverListOpen) return -1;
+/** Update a plugin's hover state in content coordinates. */
+export function updateExtensionHover(host: LoginRendererHost, state: LoginState): void {
+    if (!state.extension || state.serverListOpen) return;
     const point = toContentPoint(host, host.mouseX, host.mouseY);
-    return getCharacterRowAt(host, state, point.x, point.y);
+    state.extension.hover(host, point.x, point.y);
 }

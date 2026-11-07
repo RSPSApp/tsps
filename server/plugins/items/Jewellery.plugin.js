@@ -124,6 +124,11 @@ function teleport(player, item, destination) {
     statement(player, destination.lockedMessage);
     return;
   }
+  if (destination.quest && !questComplete(player, destination.quest.key)) {
+    // TSPS wording: the retail line has not been established.
+    statement(player, `You need to complete ${destination.quest.name} to teleport there.`);
+    return;
+  }
   const target = destinationTile(player, destination);
   if (!TeleportHandler.checkReqs(player, target, piece.wildernessLevel ?? DEFAULT_WILDERNESS_LEVEL)) {
     return;
@@ -133,6 +138,12 @@ function teleport(player, item, destination) {
     useCharge(player, item, castId);
     pluginApi.emitCustomEvent("jewellery:teleport-arrival", { player, key: piece.key, label: destination.label });
   });
+}
+
+function questComplete(player, key) {
+  const query = { player, key, complete: false };
+  pluginApi.emitCustomEvent("quest:is-complete", query);
+  return query.complete === true;
 }
 
 /** Whether the player has reached a Fortis Colosseum Glory title (the Colosseum plugin answers). */

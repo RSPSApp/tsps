@@ -226,8 +226,9 @@ const JEWELLERY = [
     lastChargeMessage: "Your Digsite Pendant crumbles to dust.",
     destinations: [
       { label: "Digsite", tile: [3340, 3445, 0] },
-      { label: "Fossil Island", tile: [3763, 3870, 1] },
-      { label: "Lithkren Dungeon", aliases: ["Lithkren"], tile: [3547, 10456, 0] },
+      // Wiki (Digsite pendant): each teleport comes after its quest - Bone Voyage, and Dragon Slayer II.
+      { label: "Fossil Island", tile: [3763, 3870, 1], quest: { key: "bone_voyage", name: "Bone Voyage" } },
+      { label: "Lithkren Dungeon", aliases: ["Lithkren"], tile: [3547, 10456, 0], quest: { key: "dragon_slayer_ii", name: "Dragon Slayer II" } },
     ],
   },
   {

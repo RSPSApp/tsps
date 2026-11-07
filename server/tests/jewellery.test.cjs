@@ -35,6 +35,8 @@ const Jewellery = require("../plugins/items/Jewellery.plugin");
 const customEvents = [];
 /** Players the Colosseum plugin would say have the Hero title. */
 const colosseumHeroes = new Set();
+/** Quest keys "quest:is-complete" answers done. */
+const doneQuestKeys = new Set();
 class DialogueChainBuilder {
   add(dialogue) { this.dialogue = dialogue; return this; }
 }
@@ -50,6 +52,7 @@ Jewellery.register({
   emitCustomEvent: (name, payload) => {
     customEvents.push([name, payload]);
     if (name === "colosseum:has-rank" && payload.rank === "Hero") payload.reached = colosseumHeroes.has(payload.player);
+    if (name === "quest:is-complete") payload.complete = doneQuestKeys.has(payload.key);
   },
   sendMultiChatboxPrompt: (player, title, ...pairs) => {
     const options = [];
@@ -233,7 +236,12 @@ test("inventory sub-menu options teleport by position", () => {
   const player = createPlayer();
   const pendant = new Item(ItemIds.DIGSITE_PENDANT_5_, 1);
   player.inventory.setItem(0, pendant);
-  inventoryClick(player, pendant, "Rub", { subOpId: 2 });
+  doneQuestKeys.add("bone_voyage"); // Fossil Island, the second sub-option, needs it (Wiki)
+  try {
+    inventoryClick(player, pendant, "Rub", { subOpId: 2 });
+  } finally {
+    doneQuestKeys.delete("bone_voyage");
+  }
   assert.deepEqual(teleports[0].target, [3763, 3870, 1]);
   assert.equal(pendant.getId(), ItemIds.DIGSITE_PENDANT_4_);
 });
@@ -710,5 +718,24 @@ test("desktop and mobile cache transforms both resolve the charging sites", () =
       assert.equal(useOnObject(player, item, objectId).handled, true);
       assert.equal(item.getId(), after);
     }
+  }
+});
+
+test("the digsite pendant's Lithkren and Fossil Island teleports need Dragon Slayer II and Bone Voyage (Wiki)", () => {
+  for (const [label, key, name] of [["Lithkren Dungeon", "dragon_slayer_ii", "Dragon Slayer II"], ["Fossil Island", "bone_voyage", "Bone Voyage"]]) {
+    const player = createPlayer();
+    const pendant = new Item(ItemIds.DIGSITE_PENDANT_5_, 1);
+    player.inventory.setItem(0, pendant);
+    const before = teleports.length;
+    inventoryClick(player, pendant, "Rub");
+    pick(label);
+    assert.equal(teleports.length, before, `${label}: no teleport before ${name}`);
+    assert.deepEqual(player.statements.at(-1), `You need to complete ${name} to teleport there.`);
+    assert.equal(pendant.getId(), ItemIds.DIGSITE_PENDANT_5_, "no charge used");
+    doneQuestKeys.add(key);
+    inventoryClick(player, pendant, "Rub");
+    pick(label);
+    assert.equal(teleports.length, before + 1, `${label}: after ${name} it teleports`);
+    doneQuestKeys.delete(key);
   }
 });

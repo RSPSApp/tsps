@@ -14,6 +14,8 @@ import { Location } from "../../../model/Location";
 import { Misc } from "../../../../util/Misc";
 import { PluginManager } from "../../../../plugins/PluginManager";
 
+/** Monsters a thrall deals no damage to (Wiki: Thrall; Vyrewatch Sentinel), by cache name. */
+const THRALL_IMMUNE = new Set(["Kurask", "Turoth", "Vyrewatch Sentinel"]);
 const THRALL_KEY = "arceuus:thrall";
 const THRALL_PURSUIT_KEY = "arceuus:thrall-pursuit";
 
@@ -92,6 +94,10 @@ export class ArceuusThralls {
 
                 if (++attackTicks % 4 === 0) {
                     thrall.performAnimation(new Animation(thrall.getAttackAnim()));
+                    // Wiki (Thrall, 11 June 2025): "Thralls will no longer deal damage to kurasks and turoths"; the
+                    // Vyrewatch Sentinel lists Thralls as immune. The thrall's hit skips the hit-modify hooks those
+                    // monsters' own immunity uses, so it is refused here.
+                    if (THRALL_IMMUNE.has((target as NPC).getDefinition?.()?.getName?.() ?? "")) return;
                     // Content may raise each attack's max hit (a league fragment), as for the duration.
                     const max = { player, thrall, target, maxHit };
                     PluginManager.emitCustomEvent("magic:thrall-max-hit", max);

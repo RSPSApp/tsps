@@ -17,7 +17,7 @@ const {PluginManager} = require('../dist/plugins/PluginManager');
 const Rewards = require('../plugins/achievements/combatachievements/Rewards.CombatAchievements');
 const Progress = require('../plugins/achievements/combatachievements/Progress.CombatAchievements');
 
-function fixture(t,{magic=99,hp=100,claimed=false}={}) {
+function fixture(t,{magic=99,hp=100,claimed=false,name='Goblin'}={}) {
   const tasks=[],actors=[],shown=[],attributes=new Map(),runes=new Map([[558,100],[556,100],[560,100],[557,100],[565,100],[554,100],[564,100]]);
   const p={magic,prayer:100,registered:true,animations:[],graphics:[],isNpc:()=>false,isPlayer:()=>true,isRegistered:()=>p.registered,
     performAnimation:animation=>p.animations.push(animation.getId()),performGraphic:graphic=>p.graphics.push(graphic.getId()),
@@ -28,7 +28,7 @@ function fixture(t,{magic=99,hp=100,claimed=false}={}) {
     getSkillManager:()=>({getCurrentLevel:s=>s===Skill.PRAYER?p.prayer:p.magic,
       decreaseCurrentLevel:(_s,n)=>{p.prayer-=n;},addExperiences(){}}),
     getCombat:()=>({getTarget:()=>target,getAttacker:()=>null,reset(){},setCastSpell(){}})};
-  const target={hp,registered:true,isNpc:()=>true,isPlayer:()=>false,isRegistered:()=>target.registered,isUntargetable:()=>false,
+  const target={hp,registered:true,getDefinition:()=>({getName:()=>name}),isNpc:()=>true,isPlayer:()=>false,isRegistered:()=>target.registered,isUntargetable:()=>false,
     getHitpoints:()=>target.hp,getSize:()=>1,getLocation:()=>new Location(3203,3200,0),
     // Match Mobile's pre-healing applied-damage bookkeeping.
     decrementHealth:hit=>{hit.setDamage(Math.min(hit.getDamage(),Math.max(0,target.hp)));hit.setHealthLost(hit.getDamage());target.hp-=hit.getDamage();return hit;},
@@ -61,6 +61,15 @@ test('all three thrall tiers roll inclusive zero, intermediate and maximum hits 
     f.step();const damage=Math.floor(random*(max+1));
     assert.deepEqual(f.shown,[damage]);assert.equal(f.credit(),damage);
     f.step(4);assert.deepEqual(f.shown,[damage,damage]);
+  }
+});
+
+// Wiki (Thrall): "Thralls will no longer deal damage to kurasks and turoths"; Vyrewatch Sentinels are immune too.
+test('a thrall deals no damage to a kurask, a turoth or a Vyrewatch Sentinel',t=>{
+  for(const name of ['Kurask','Turoth','Vyrewatch Sentinel']){
+    const f=fixture(t,{name});t.mock.method(Math,'random',()=>0.999999);
+    ArceuusThralls.summon(f.p,10880,0,3,6);f.step(8);
+    assert.deepEqual(f.shown,[],name);assert.equal(f.target.hp,100,name);
   }
 });
 

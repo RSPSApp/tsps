@@ -201,3 +201,11 @@ Lady Keli, Prince Ali and Joe were spawned as their visible ids (11578, 11579, 1
 - **Lady Keli** `lady_keli` (11643): shows as 11578 at varp 273 values 0-40, then nothing, so she's gone from stage 50, when she's tied up and put in a cupboard.
 - **Prince Ali** `prince_ali_prison` (11644): 11579 at 0-90, then gone once he's freed (100).
 - **Joe** (11642): 11577 at 0-101.
+
+## Emir's Arena guides (PvP Arena)
+
+The Wiki put the 1v1 Tournament Guide (11672) and the Duel Guide (11673) on one tile, (3367, 3268), and they wandered. Live has them stand still on their own tiles. In every rsprox recording of the arena (20261106T111454, 20261107T115923, 20261107T121755) they only appear (`add`) and never walk:
+- 1v1 Tournament Guide at (3365, 3267);
+- Duel Guide at (3368, 3269).
+
+Both now spawn there with `wanderRadius` 0.

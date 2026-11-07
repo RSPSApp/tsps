@@ -570,6 +570,31 @@ test('a carrier who logs out drops the flag before the banner is stripped, as a 
   assert.deepEqual(calls, ['drop flag', 'strip items', 'lobby']);
 });
 
+// The exit portal (and the idle kick) go through returnToLobby, which moves the player before the area's leave hook
+// runs: the flag must drop where the carrier stood, not in the lobby.
+test('a carrier who leaves by the exit portal drops the flag in the game, not in the lobby', () => {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { PlayerSession } = require('../dist/net/PlayerSession');
+  const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+  const carrier = new Player(new PlayerSession(channel));
+  carrier.setUsername('cwportal');
+  const standing = new core.Location(2426, 3080, 0); // the Saradomin castle's ground floor
+  assert.ok(game.inGameBounds(standing));
+  carrier.setLocation(standing);
+  game.setTeamId(carrier, TEAM.SARADOMIN);
+  game.carryFlag(carrier, TEAM.ZAMORAK);
+  assert.equal(game.flagStatus[TEAM.ZAMORAK], 1, 'carried');
+  const portal = { getId: () => [...data.GAME_EXIT_IDS][0], getLocation: () => standing };
+  objectHandler({ player: carrier, object: portal, clickType: 1, handled: false });
+  assert.equal(game.flagStatus[TEAM.ZAMORAK], 2, 'the flag was dropped');
+  const dropped = game.getDroppedFlagObject(TEAM.ZAMORAK);
+  assert.ok(dropped?.getLocation().equals(standing), `dropped where the carrier stood, not at ${dropped?.getLocation()}`);
+  assert.ok(game.inGameBounds(dropped.getLocation()), 'inside the game, where it can be picked up');
+  assert.ok(!game.inGameBounds(carrier.getLocation()), 'and the carrier was sent out to the lobby');
+  game.restoreFlagToBase(TEAM.ZAMORAK);
+  game.setTeamId(carrier, null);
+});
+
 test('Castle Wars deaths keep gear and supplies, drop flags but no bones; other deaths still drop bones', (t) => {
   const { PlayerDeathTask } = require('../dist/game/task/impl/PlayerDeath');
   const { ItemOnGroundManager } = require('../dist/game/entity/impl/grounditem/ItemOnGroundManager');

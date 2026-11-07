@@ -240,7 +240,7 @@ export class Ammunition {
     public static readonly MARRENTILL_TAR = new Ammunition(ItemIdentifiers.MARRENTILL_TAR, null, 33, 22)
     public static readonly TARROMIN_TAR = new Ammunition(ItemIdentifiers.TARROMIN_TAR, null, 33, 31)
     public static readonly HARRALANDER_TAR = new Ammunition(ItemIdentifiers.HARRALANDER_TAR, null, 33, 49)
-    public static readonly IRIT_TAR = new Ammunition(ItemIdentifiers.IRIT_TAR, null, 33, 36)
+    public static readonly IRIT_TAR = new Ammunition(ItemIdentifiers.IRIT_TAR, null, 33, 60)
     public static readonly TONALZTICS_OF_RALOS_UNCHARGED = new Ammunition(ItemIdentifiers.TONALZTICS_OF_RALOS_UNCHARGED_, null, 2729, 0) // PROJANIM_GLAIVE_01_REGULAR
     public static readonly TONALZTICS_OF_RALOS = new Ammunition(ItemIdentifiers.TONALZTICS_OF_RALOS, null, 2729, 0) // PROJANIM_GLAIVE_01_REGULAR
 
@@ -551,6 +551,7 @@ export class RangedWeapon {
     public static readonly ORANGE_SALAMANDER = new RangedWeapon([10146], [Ammunition.MARRENTILL_TAR], RangedWeaponType.SALAMANDER)
     public static readonly RED_SALAMANDER = new RangedWeapon([10147], [Ammunition.TARROMIN_TAR], RangedWeaponType.SALAMANDER)
     public static readonly BLACK_SALAMANDER = new RangedWeapon([10148], [Ammunition.HARRALANDER_TAR], RangedWeaponType.SALAMANDER)
+    public static readonly TECU_SALAMANDER = new RangedWeapon([ItemIdentifiers.TECU_SALAMANDER], [Ammunition.IRIT_TAR], RangedWeaponType.SALAMANDER)
     public static readonly DRAGON_THROWNAXE = new RangedWeapon([ItemIdentifiers.DRAGON_THROWNAXE, ItemIdentifiers.DRAGON_THROWNAXE_2, ItemIdentifiers.DRAGON_THROWNAXE_3], [Ammunition.DRAGON_THROWNAXE], RangedWeaponType.THROWNAXE)
     public static readonly MORRIGANS_THROWING_AXE = new RangedWeapon([ItemIdentifiers.MORRIGANS_THROWING_AXE, ItemIdentifiers.MORRIGANS_THROWING_AXE_2, ItemIdentifiers.MORRIGANS_THROWING_AXE_BH_, ItemIdentifiers.MORRIGANS_THROWING_AXE_BH__2], [Ammunition.MORRIGANS_THROWING_AXE], RangedWeaponType.THROWNAXE)
     // The league's Sage's axe: a dart-interface thrown weapon (item-gameplay.json), 3 ticks, 2 on Rapid (Wiki).

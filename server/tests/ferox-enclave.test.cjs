@@ -168,7 +168,7 @@ test("coming back in needs no warning; a teleblocked player is turned away", () 
   assert.ok(p.ticks[0].includes("anim 4282"), "straight through");
   const blocked = player({ at: new Location(3122, 3629, 0), teleblocked: true });
   Barriers.passThrough({ player: blocked, object: barrier });
-  assert.deepEqual(blocked.ticks[0], ["A magical force prevents you from entering the Ferox Enclave while teleblocked."]);
+  assert.deepEqual(blocked.ticks[0], ["<col=ef1020>You are currently teleblocked, it would be too dangerous to allow you into the Enclave.</col>"]);
 });
 
 test("the Pool of Refreshment: drink, restore everything (prayers off) and the captured message", () => {

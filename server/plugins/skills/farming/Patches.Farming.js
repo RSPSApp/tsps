@@ -8,6 +8,7 @@ const Tithe = require("./Tithe.Farming");
 const Rewards = require("./Rewards.Farming");
 const Guild = require("./Guild.Farming");
 const Vault = require("./Vault.Farming");
+const SeedBox = require("./SeedBox.Farming");
 const Hespori = require("./Hespori.Farming");
 const Redwood = require("./Redwood.Farming");
 const Tools = require("./Tools.Farming");
@@ -1291,6 +1292,9 @@ function attach(api) {
     api.onPlayerLogout(logout);
     api.onPlayerDisconnect(disconnect);
     api.onPlayerLogout(Vault.logout);
+    api.onPlayerLogout(SeedBox.logout);
+    api.onInterfaceActionClick(SeedBox.click);
+    api.onCustomEvent("interface:closed", SeedBox.closed);
     api.onInterfaceActionClick(Vault.click);
     api.onCustomEvent("player:widget-action", Vault.drag);
     api.onPlayerLogout(Geomancy.logout);

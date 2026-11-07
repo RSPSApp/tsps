@@ -313,6 +313,8 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
   ];
   const NECROPOLIS_RUBBLE = ObjectIdentifiers.RUBBLE_60; // 44003, climbable
   const BLOCKED_ENTRY = 44008; // toa_entrance_blocked, Inspect at the Jaltevas Pyramid
+  // Quest Helper DigStep and the Wiki: one tile north of the southern ritual pillar.
+  const CHEST_DIG_TILE = new Location(3411, 2786, 0);
   const DIG_PILLARS = new Set([
     ObjectIdentifiers.PILLAR_86, // 43994
     ObjectIdentifiers.PILLAR_87, // 43995
@@ -534,9 +536,10 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
     return null;
   }
 
-  /** The native bcs_found_mould values the helper reads: 1 found, 2 read, 4 mould taken. */
+  /** The native bcs_found_mould values the helper reads: 1 found, 2 read, 3 chest, 4 mould taken. */
   function foundMouldState(player) {
     if (hasFlag(player, MOULD_FOUND_ATTRIBUTE) || quest.getStage(player) >= STAGE_EMBLEM) return 4;
+    if (hasItem(player, CHEST_ITEM) || player.getBanks().some((bank) => bank?.contains(CHEST_ITEM))) return 3;
     if (hasFlag(player, TABLET_READ_ATTRIBUTE)) return 2;
     if (hasFlag(player, TABLET_FOUND_ATTRIBUTE)) return 1;
     return 0;
@@ -1093,6 +1096,7 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
       case "D9NBz-": // dig up an old chest
         if (!hasItem(player, CHEST_ITEM)) player.getInventory().adds(CHEST_ITEM, 1);
         if (quest.getStage(player) < STAGE_CHEST_DUG) setStage(player, STAGE_CHEST_DUG);
+        syncQuestVarbits(player);
         return;
       case "aCMKC-": // scarab emblem placed in the pillar opens the rotation puzzle
         if (hasItem(player, SCARAB_EMBLEM_ITEM)) player.getInventory().deleteNumber(SCARAB_EMBLEM_ITEM, 1);
@@ -1446,6 +1450,21 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
     }
   }
 
+  function digChest(player) {
+    if (quest.getStage(player) !== STAGE_TABLET || foundMouldState(player) !== 2) return false;
+    if (freeSlots(player) === 0) {
+      player.sendMessage("Your spade hits an old chest, but you don't have enough room to take it.");
+      return true;
+    }
+    startTranscript(api, player, MAISA_CAMP, PAGE, "the-ruins-of-ullek-digging-under-the-ritual-pillar");
+    return true;
+  }
+
+  function handleSpadeDig({ player }) {
+    if (!Location.isSameTile(player.getLocation(), CHEST_DIG_TILE)) return false;
+    return digChest(player);
+  }
+
   function openChest(player) {
     if (!hasItem(player, CHEST_ITEM)) return;
     const sender = player.getPacketSender();
@@ -1534,12 +1553,7 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
       }
     }
     if (itemId === SPADE_ITEM && DIG_PILLARS.has(objectId)) {
-      event.handled = true;
-      if (freeSlots(player) === 0) {
-        player.sendMessage("Your spade hits an old chest, but you don't have enough room to take it.");
-        return;
-      }
-      startTranscript(api, player, MAISA_CAMP, PAGE, "the-ruins-of-ullek-digging-under-the-ritual-pillar");
+      event.handled = digChest(player);
     }
   }
 
@@ -2215,6 +2229,7 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
   api.onCustomEvent("npc-dialogue:line", handleLine);
   api.onCustomEvent("door:toggle", claimQuestDoor);
   api.onItemAction(handleItemAction);
+  api.onItemAction("Spade", { Dig: handleSpadeDig });
   api.onItemOnObject(handleItemOnObject, { noted: false });
   api.onObjectInteraction(handleObjectInteraction);
   api.onInterfaceActionButton(CHEMISTRY_BUTTONS, handleChemistryButton);

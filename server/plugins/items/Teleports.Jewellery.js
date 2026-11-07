@@ -328,8 +328,8 @@ for (const piece of JEWELLERY) {
 const RING_OF_WEALTH_DESTINATIONS = [
   { label: "Grand Exchange", tile: [3163, 3478, 0] },
   // Wiki (Ring of wealth): "Requires completion of Throne of Miscellania"; Dondakan "Requires completion of Between a Rock...".
-  { label: "Miscellania", tile: [2539, 3864, 0], quest: { key: "throne_of_miscellania", name: "Throne of Miscellania" } },
-  { label: "Falador Park", tile: [2994, 3377, 0] },
+  { label: "Miscellania", tile: [2534, 3862, 0], quest: { key: "throne_of_miscellania", name: "Throne of Miscellania" } },
+  { label: "Falador Park", tile: [2995, 3375, 0] },
   { label: "Dondakan", tile: [2824, 10168, 0], quest: { key: "between_a_rock", name: "Between a Rock..." } },
 ];
 

@@ -64,7 +64,7 @@ function passThrough({ player, object }) {
   if (!crossing) return true;
   if (crossing.entering) {
     if (isTeleblocked(player)) {
-      player.sendMessage("A magical force prevents you from entering the Ferox Enclave while teleblocked.");
+      player.sendMessage("<col=ef1020>You are currently teleblocked, it would be too dangerous to allow you into the Enclave.</col>");
       return true;
     }
     cross(player, crossing);

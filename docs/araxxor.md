@@ -33,6 +33,11 @@ Ticks below count from the action named; the captured gamevals are in brackets.
 - **Enrage at 25%:** 11488, then two ticks later 11489 with the body change (model 54288 in slot 0, 54290 in slot 1). No sound packet goes with either; the screech is in the animations. The first cleave comes about 5 ticks after the enrage starts.
 - **Cleave pools:** three acid pools land two ticks after the swing, in a line *across* the blow. A player west or east of her gets a north-south line, a player north or south an east-west one.
 
+- **Aranea boots (rsprox recordings 4060 and 4067, rev 237; [Wiki](https://oldschool.runescape.wiki/w/Aranea_boots)):** a player wearing them gets "Your Aranea boots let you avoid the spider-based attack." and takes nothing from:
+  - **Ranged shot:** the message comes on the tick of the cast (11493) and the splat four ticks later is a 0 that drains nothing. At most one shot is negated per 8 ticks (the Wiki's cooldown): in recording 4060 the messages come 12 ticks apart on 6-tick casts (every second cast), apart from one 18-tick gap. The casts in between that were ready but splatted 0 with no message are why a cast that would have missed anyway is not negated, so the boots stay ready for the next. That reading is ours: three such casts in the recording fit it, and the Wiki doesn't say. Magic and the melee jab are never negated.
+  - **Cleave:** the message arrives with the blow, two ticks after the swing, and no hit lands. The Wiki says one cleave per 20 ticks, and the messages in recording 4060 are 20 ticks apart; the first cleave of each enrage is negated in every capture that has the boots (4060, 4067, 550, 1768). The pools still spawn.
+- **Drains:** a landed ranged hit takes 9% of Defence and a landed magic hit 9% of Prayer, rounded down (recording 4060: Defence 77 to 71, 86 to 79 and 94 to 86; Prayer 95 to 87 and 76 to 70). A 0 splat, whether a miss or a negated shot, drains nothing.
+
 ## Specials
 
 - **Acid ball (Acidic first):**

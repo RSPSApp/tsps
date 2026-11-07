@@ -129,14 +129,17 @@ function lostSets(player) {
 /**
  * The armour goes back to Shanomi: it outlived its five minutes, or its owner died or left. Armour already dying drops
  * its set instead, but only once its death finds a logged-in killer (NPCDeathTask, a tick on): Shanomi keeps nothing
- * only when that drop is certain, or the set was both dropped and kept. `leaving` is the owner logging out.
+ * only when that drop is certain, or the set was both dropped and kept. `leaving` is the owner logging out: in the
+ * death's own cycle the task hasn't looked yet and won't find them, but from the next tick on it has already taken them
+ * as its killer, and drops the set whether they stay or not.
  */
 function abandon(player, leaving = false) {
   const state = animated.get(player);
   if (!state) return;
   animated.delete(player);
   const killer = state.npc?.isDyingFunction?.() === true ? state.killer : null;
-  const dropCertain = killer != null && killer.isRegistered?.() === true && !(leaving && killer === player);
+  const ownerLeftFirst = leaving && killer === player && state.deathCycle === Guild.core.World.getProcessCycle();
+  const dropCertain = killer != null && killer.isRegistered?.() === true && !ownerLeftFirst;
   if (state.npc) Guild.despawn(state.npc);
   player.getPacketSender().sendEntityHintRemoval(false);
   if (!dropCertain) player.setAttribute(LOST_ARMOUR_ATTRIBUTE, [...lostSets(player), state.set.slice(0, 3)]);
@@ -159,6 +162,7 @@ function armourDying({ npc }) {
   const state = owner ? animated.get(owner) : null;
   if (!state || state.npc !== npc) return;
   state.killer = npc.getCombat?.()?.getKiller?.(false) ?? null;
+  state.deathCycle = Guild.core.World.getProcessCycle();
   if (state.killer == null) abandon(owner);
 }
 

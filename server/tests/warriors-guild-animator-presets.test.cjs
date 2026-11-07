@@ -161,6 +161,27 @@ test("an owner who logs out the tick their armour dies gets the set back from Sh
   for (const id of pieces()) assert.equal(amount(f.inv, id, false), 1, "and hands it back");
 });
 
+// A world tick runs the tasks before it removes leaving players: from the tick after the death, NPCDeathTask has taken
+// the owner as its killer and drops the set even once they've gone. Shanomi must keep nothing then.
+for (const ticks of [1, 2]) {
+  test(`an owner who logs out ${ticks} tick${ticks === 1 ? "" : "s"} into the death gets the dropped set only, nothing from Shanomi`, (t) => {
+    const { f, h, armour } = risenArmour(t);
+    const dropped = [];
+    const register = core.ItemOnGroundManager.registerLocation;
+    t.mock.method(core.ItemOnGroundManager, "registerLocation", (owner, item, ...rest) => {
+      if (owner === f.p) dropped.push(item.getId());
+      return register.call(core.ItemOnGroundManager, owner, item, ...rest);
+    });
+    kill(armour, f.p);
+    for (let i = 0; i < ticks; i++) { core.World.processCycle++; core.TaskManager.process(); }
+    h.logout({ player: f.p });
+    f.p.setRegistered(false);
+    runDeath();
+    for (const id of pieces()) assert.ok(dropped.includes(id), `the death dropped ${id}`);
+    assert.equal(setsHeld(f), 0, "Shanomi keeps no second copy");
+  });
+}
+
 test("armour dying with no player's damage counted goes to Shanomi at once, and the owner can animate again", (t) => {
   const { f, h, armour } = risenArmour(t);
   kill(armour, null);

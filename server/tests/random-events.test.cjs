@@ -2910,3 +2910,32 @@ test('native random-event followers and Count Check use real movement, account m
     assert.deepEqual(rewards(), received, 'a stale Confirm after return cannot award again');
   });
 });
+
+test('spoken dialogue keeps native cache spacing for short and multi-line pages', () => {
+  // Cache 241 chat_left:6 and chat_right:6 both use a 16-pixel line height.
+  const { Misc } = require('../dist/util/Misc');
+  const strings = [], scripts = [], flags = [];
+  const sender = {
+    sendChatboxInterface() { return this; }, sendNpcHeadOnInterface() { return this; },
+    sendPlayerHeadOnInterface() { return this; }, sendInterfaceAnimation() { return this; },
+    sendString(...args) { strings.push(args); return this; },
+    sendClientScript(...args) { scripts.push(args); return this; },
+    sendInterfaceFlagsRange(...args) { flags.push(args); return this; },
+  };
+  const player = { getPacketSender: () => sender, getDisplayName: () => 'AgentWhisky' };
+  const texts = ['Hello.', 'Hey, AgentWhisky, can you come and help me with some pheasants?',
+    'First line.<br>Second line.<br>Third line.', 'One.<br>Two.<br>Three.<br>Four.'];
+  for (const [group, make] of [
+    [231, text => new NpcDialogue(0, N.FREAKY_FORESTER_2, text, 'Freaky Forester')],
+    [217, text => new PlayerDialogue(0, text)],
+  ]) {
+    for (const text of texts) {
+      strings.length = scripts.length = flags.length = 0;
+      make(text).send(player);
+      assert.deepEqual(scripts, [[600, 1, 1, 16, (group << 16) | 6]]);
+      assert.ok(strings.some(([value, uid]) => uid === ((group << 16) | 6) &&
+        value === text.split('<br>').flatMap(part => Misc.wrapText(part, 53)).join('<br>')));
+      assert.deepEqual(flags, [[(group << 16) | 5, -1, -1, 1]]);
+    }
+  }
+});

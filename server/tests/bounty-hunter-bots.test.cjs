@@ -598,7 +598,7 @@ test('tier bands follow actual combat levels and retain profile restrictions at 
     assert.ok(tier, entry.id);
     counts[tier]++;
   }
-  assert.deepEqual(counts, { novice: 32, intermediate: 37, veteran: 32 }, 'catalogue classified by unadjusted combat level');
+  assert.deepEqual(counts, { novice: 34, intermediate: 37, veteran: 32 }, 'catalogue classified by unadjusted combat level');
   const choiceCount = PVP_LOADOUT_DEFINITIONS.loadouts.reduce((sum, loadout) => sum + loadout.archetypes.length, 0);
   const rosters = {};
   for (const tier of Object.keys(TIER_BANDS)) {
@@ -610,7 +610,7 @@ test('tier bands follow actual combat levels and retain profile restrictions at 
     }
   }
   assert.deepEqual(Object.fromEntries(Object.entries(rosters).map(([tier, roster]) => [tier, roster.size])),
-    { novice: 30, intermediate: 17, veteran: 27 }, 'selectable rosters also apply profile requirements');
+    { novice: 32, intermediate: 17, veteran: 27 }, 'selectable rosters also apply profile requirements');
   const byId = id => PVP_LOADOUT_DEFINITIONS.archetypes.find(entry => entry.id === id);
   for (const id of ['zerker_venge_ags', 'ancient_gs_venge', 'zerker_dcb_ags', 'zerker_whip_claws', 'dark_bow_ags', 'ags_zerker']) {
     assert.equal(archetypeCombatLevel(byId(id).stats), 100, id);

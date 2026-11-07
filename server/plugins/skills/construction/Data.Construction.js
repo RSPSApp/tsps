@@ -1,6 +1,6 @@
 "use strict";
 
-const { CacheDefinitions } = require("./Core.Construction");
+const { CacheDefinitions, Skill } = require("./Core.Construction");
 
 /**
  * Construction tables. What the cache has is read from it when the plugin loads: furniture names,
@@ -36,6 +36,23 @@ function cacheMaterials(row) {
   return materials;
 }
 
+/** Validate cache client-stat/level pairs without coercion; unsupported rows refuse at build time. */
+function cacheLevels(row) {
+  const values = row.column(FURNITURE.level);
+  if (!Array.isArray(values) || values.length === 0 || values.length % 2 !== 0)
+    return { level: 1, secondaryLevels: [], invalidLevels: true };
+  const pairs = [];
+  for (let i = 0; i < values.length; i += 2) {
+    const [statId, level] = values.slice(i, i + 2);
+    if (!Number.isInteger(statId) || !Number.isInteger(level) || level < 1)
+      return { level: 1, secondaryLevels: [], invalidLevels: true };
+    pairs.push({ statId, level });
+  }
+  const construction = pairs.filter(pair => pair.statId === Skill.CONSTRUCTION.getClientId());
+  if (construction.length !== 1) return { level: 1, secondaryLevels: [], invalidLevels: true };
+  return { level: construction[0].level, secondaryLevels: pairs.filter(pair => pair.statId !== Skill.CONSTRUCTION.getClientId()) };
+}
+
 /** Furniture: the hand data with the cache's fields on top (rows the cache lacks keep the hand data). */
 const CONSTRUCTION_BUILDABLES = require("./data/furniture.json").map((entry) => {
   const row = entry.menuRowId != null ? CacheDefinitions.getDbRow(entry.menuRowId) : null;
@@ -45,7 +62,7 @@ const CONSTRUCTION_BUILDABLES = require("./data/furniture.json").map((entry) => 
   return {
     ...entry,
     name: String(row.column(FURNITURE.name)[0] ?? entry.key),
-    level: Number(row.column(FURNITURE.level)[1] ?? 1),
+    ...cacheLevels(row),
     menuItemId: Number(row.column(FURNITURE.menuObj)[0] ?? -1),
     materials: [...own, ...cacheMaterials(row)],
     ...(hidden ? { hidden } : {}),
@@ -96,4 +113,4 @@ function hotspotIn(roomKey, objectId) {
   return HOTSPOTS_BY_ROOM.get(roomKey)?.get(objectId) ?? null;
 }
 
-Object.assign(module.exports, { HOUSE_ATTRIBUTE, CONSTRUCTION_ROOMS, HOUSE_TEMPLATE_CHUNKS, CONSTRUCTION_HOTSPOTS, CONSTRUCTION_BUILDABLES, ROOM_BY_KEY, HOTSPOT_BY_OBJECT_ID, HOTSPOT_BY_KEY, BUILDABLE_BY_KEY, CONSTRUCTION_VIEWER_FURNITURE, ROOM_ROW_BY_ID, ROOM_DOOR_HOTSPOT_IDS, hotspotIn });
+Object.assign(module.exports, { cacheLevels, HOUSE_ATTRIBUTE, CONSTRUCTION_ROOMS, HOUSE_TEMPLATE_CHUNKS, CONSTRUCTION_HOTSPOTS, CONSTRUCTION_BUILDABLES, ROOM_BY_KEY, HOTSPOT_BY_OBJECT_ID, HOTSPOT_BY_KEY, BUILDABLE_BY_KEY, CONSTRUCTION_VIEWER_FURNITURE, ROOM_ROW_BY_ID, ROOM_DOOR_HOTSPOT_IDS, hotspotIn });

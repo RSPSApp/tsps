@@ -1,5 +1,6 @@
 /** Imp Catcher: dialogue branches and the captured bead ritual. See docs/f2p-varrock-parity.md. */
 module.exports = function registerImpCatcherQuest(api) {
+  const { giveReward } = require("../QuestRuntime");
   const { Skill, Animation, Graphic, Location, World, CountdownTask, TaskManager, DialogueChainBuilder, ActionDialogue, StatementDialogue, ItemIdentifiers, NpcIdentifiers } = api.core;
   const { registerQuest, startTranscript } = require("../QuestRuntime");
 
@@ -155,7 +156,7 @@ module.exports = function registerImpCatcherQuest(api) {
   function reward(player) {
     if (player.getAttribute(REWARDED_ATTRIBUTE)) return;
     player.setAttribute(REWARDED_ATTRIBUTE,1);
-    player.getInventory().adds(ItemIdentifiers.AMULET_OF_ACCURACY,1);
+    giveReward(player, ItemIdentifiers.AMULET_OF_ACCURACY, 1);
     player.sendMessage("The wizard hands you an amulet.");
     player.getSkillManager().addExperiences(Skill.MAGIC, 875);
   }

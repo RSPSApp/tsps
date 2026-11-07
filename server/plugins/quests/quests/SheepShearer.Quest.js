@@ -15,6 +15,7 @@
  * (docs/quests/sheep-shearer/README.md).
  */
 module.exports = function registerSheepShearerQuest(api) {
+  const { giveReward } = require("../QuestRuntime");
   const { Skill, Animation, ItemIdentifiers, NpcIdentifiers, TaskManager, CountdownTask } = api.core;
   const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
 
@@ -252,7 +253,7 @@ module.exports = function registerSheepShearerQuest(api) {
   }
 
   function reward(player) {
-    player.getInventory().adds(COINS_ITEM_ID, 60);
+    giveReward(player, COINS_ITEM_ID, 60);
     player.getSkillManager().addExperiences(Skill.CRAFTING, 150);
   }
 

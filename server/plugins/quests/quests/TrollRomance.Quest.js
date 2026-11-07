@@ -35,6 +35,7 @@
  * acceptance lines so only the refusal message is seen.
  */
 module.exports = function registerTrollRomanceQuest(api) {
+  const { giveReward } = require("../QuestRuntime");
   const {
     Animation,
     Equipment,
@@ -202,9 +203,9 @@ module.exports = function registerTrollRomanceQuest(api) {
   function grantReward(player) {
     player.getSkillManager().addExperiences(Skill.AGILITY, 8000);
     player.getSkillManager().addExperiences(Skill.STRENGTH, 4000);
-    player.getInventory().adds(UNCUT_DIAMOND_ITEM_ID, 1);
-    player.getInventory().adds(UNCUT_RUBY_ITEM_ID, 2);
-    player.getInventory().adds(UNCUT_EMERALD_ITEM_ID, 4);
+    giveReward(player, UNCUT_DIAMOND_ITEM_ID, 1);
+    giveReward(player, UNCUT_RUBY_ITEM_ID, 2);
+    giveReward(player, UNCUT_EMERALD_ITEM_ID, 4);
   }
 
   // ==========================================================================

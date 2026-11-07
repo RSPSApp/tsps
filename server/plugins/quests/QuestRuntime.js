@@ -868,6 +868,16 @@ function startTranscript(api, player, npcId, page, variant, select, npc = null, 
   return true;
 }
 
+/**
+ * A quest reward item: into the inventory, or (what does not fit) onto the floor under the player, as the runtime's
+ * own completion item already is. `adds` alone drops a full inventory's reward on the spot.
+ */
+function giveReward(player, itemId, amount = 1) {
+  const inventory = player.getInventory();
+  if (typeof inventory.forceAdd === "function" && coreApi?.Item) inventory.forceAdd(player, new coreApi.Item(itemId, amount));
+  else inventory.adds(itemId, amount);
+}
+
 module.exports = {
   openBook,
   openIndexedBook,
@@ -877,6 +887,7 @@ module.exports = {
   QUEST_COMPLETE_JINGLE,
   registerQuestWidgets,
   registerQuest,
+  giveReward,
   getRegisteredQuests: () => quests.slice(),
   questNamed,
   pickQuestShopVersion,

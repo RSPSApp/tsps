@@ -1,5 +1,6 @@
 /** X Marks the Spot. Capture evidence: docs/f2p-coastal-parity.md. */
 module.exports = function registerXMarksTheSpotQuest(api) {
+  const { giveReward } = require("../QuestRuntime");
   const { Animation, ItemIdentifiers, NpcIdentifiers, WorldDefinition, ItemStatementDialogue, DialogueChainBuilder } = api.core;
   const { registerQuest, refreshQuestList, startTranscript, getRegisteredQuests } = require("../QuestRuntime");
 
@@ -578,8 +579,8 @@ module.exports = function registerXMarksTheSpotQuest(api) {
 
   function grantReward(player) {
     player.getPacketSender().sendVarbit(COIN_REWARD_VARBIT, 1);
-    player.getInventory().adds(COINS, 200);
-    if (!ownsItem(player, ANTIQUE_LAMP)) player.getInventory().adds(ANTIQUE_LAMP, 1);
+    giveReward(player, COINS, 200);
+    if (!ownsItem(player, ANTIQUE_LAMP)) giveReward(player, ANTIQUE_LAMP, 1);
     settleClueBox(player);
   }
 

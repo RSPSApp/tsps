@@ -43,6 +43,7 @@
  *     Tiffy, who plays the Wiki failure lines on the next conversation.
  */
 module.exports = function registerRecruitmentDriveQuest(api) {
+  const { giveReward } = require("../QuestRuntime");
   const { Equipment, Item, ItemIdentifiers, Location, NpcIdentifiers, ObjectIdentifiers, Skill } =
     api.core;
   const { refreshQuestList, registerQuest, startTranscript, loadTranscripts } = require("../QuestRuntime");
@@ -1001,7 +1002,7 @@ module.exports = function registerRecruitmentDriveQuest(api) {
     player.getSkillManager().addExperiences(Skill.PRAYER, 1000.5);
     player.getSkillManager().addExperiences(Skill.HERBLORE, 1000.5);
     player.getSkillManager().addExperiences(Skill.AGILITY, 1000.5);
-    player.getInventory().adds(ItemIdentifiers.COINS, 3000);
+    giveReward(player, ItemIdentifiers.COINS, 3000);
   }
 
   api.persistAttribute(TESTS_ATTRIBUTE);

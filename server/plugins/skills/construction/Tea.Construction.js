@@ -1,6 +1,6 @@
 "use strict";
 
-const { CountdownTask, ItemIdentifiers, TaskManager } = require("./Core.Construction");
+const { CountdownTask, ItemIdentifiers, Skill, TaskManager } = require("./Core.Construction");
 const Ids = require("./Ids.Construction");
 const House = require("./House.Construction");
 
@@ -97,11 +97,13 @@ function brew(event) {
   let done = false;
   for (const set of SETS) {
     if (has(TEA_LEAVES) && has(set.empty)) {
+      if (player.getSkillManager().getCurrentLevel(Skill.COOKING) < 20) { event.handled = true; return; }
       player.getInventory().delete(TEA_LEAVES, 1);
       swap(player, set.empty, set.leaves);
       player.sendMessage("You add the leaves to the teapot.");
       done = true;
     } else if (has(HOT_KETTLE) && has(set.leaves)) {
+      if (player.getSkillManager().getCurrentLevel(Skill.COOKING) < 20) { event.handled = true; return; }
       swap(player, HOT_KETTLE, KETTLE);
       swap(player, set.leaves, set.pots[3]);
       player.sendMessage("You pour the water into the teapot.");

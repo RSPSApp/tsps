@@ -1746,6 +1746,13 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
     const mail = first === GOBLIN_MAIL_ITEM_ID ? second : second === GOBLIN_MAIL_ITEM_ID ? first : null;
     if (mail !== null && DYE_TO_MAIL.has(mail)) {
       event.handled = true;
+      // A preset dye (ground into a preset vial) never colours plain goblin mail: the mail is a fresh,
+      // tradeable product of the dye.
+      const dye = [event.usedItem, event.usedWithItem].find((item) => item?.getId?.() === mail);
+      if (restricted(dye)) {
+        player.sendMessage(PRESET_TEXT);
+        return;
+      }
       player.getInventory().deleteNumber(GOBLIN_MAIL_ITEM_ID, 1);
       player.getInventory().deleteNumber(mail, 1);
       player.getInventory().adds(DYE_TO_MAIL.get(mail), 1);

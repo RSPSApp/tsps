@@ -105,3 +105,13 @@ test("a plain vial still makes plain black dye, with the pestle used on the mush
   assert.equal(amount(f.inv, I.BLACK_DYE, false), 1);
   assert.equal(f.inv.getAmount(I.VIAL), 0);
 });
+
+test("a preset black dye cannot dye goblin mail", (t) => {
+  const f = actor(t);
+  f.inv.setItem(0, preset(new core.Item(I.BLACK_DYE, 1)));
+  f.inv.setItem(1, new core.Item(I.GOBLIN_MAIL, 1));
+  itemOnItem(f, I.BLACK_DYE, I.GOBLIN_MAIL);
+  assert.equal(f.messages.at(-1), PRESET_TEXT);
+  assert.equal(f.inv.getAmount(I.GOBLIN_MAIL), 1);
+  assert.equal(amount(f.inv, I.BLACK_DYE, true), 1);
+});

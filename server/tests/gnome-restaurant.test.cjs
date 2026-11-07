@@ -1,6 +1,44 @@
 // Run after `yarn build`: node --test tests/gnome-restaurant.test.cjs
 const assert = require("node:assert/strict");
-const { test, beforeEach } = require("node:test");
+const { test, beforeEach, after } = require("node:test");
+const fs = require("node:fs"), os = require("node:os"), path = require("node:path");
+
+// Give the real world parser a private PvP-off configuration before its first
+// import, preserving all other effective settings. This checks canonical plugin
+// spellings used by the shipped configuration and existing test helper.
+// The directory is fixture-owned.
+const originalCwd = process.cwd();
+const shipped = JSON.parse(fs.readFileSync(path.resolve(__dirname, "../data/definitions/world.json"), "utf8"));
+const localPath = path.resolve(__dirname, "../data/definitions/world.local.json");
+const localOverridePresent = fs.existsSync(localPath);
+console.log(JSON.stringify({ event: "gnome-feedback-world-config", localOverridePresent }));
+const local = localOverridePresent ? JSON.parse(fs.readFileSync(localPath, "utf8")) : {};
+const originalWorld = { ...shipped, ...local };
+for (const key of ["pluginConfig", "plugins"]) {
+  if (shipped[key] && local[key] && typeof shipped[key] === "object" && typeof local[key] === "object"
+      && !Array.isArray(shipped[key]) && !Array.isArray(local[key])) originalWorld[key] = { ...shipped[key], ...local[key] };
+}
+const offWorld = structuredClone(originalWorld);
+if (offWorld.disabledPlugins !== undefined) {
+  assert.ok(Array.isArray(offWorld.disabledPlugins));
+  if (!offWorld.disabledPlugins.some((name) => String(name).toLowerCase() === "pvpmode")) offWorld.disabledPlugins.push("PvpMode");
+} else {
+  offWorld.plugins = { ...(offWorld.plugins ?? {}) };
+  const key = Object.keys(offWorld.plugins).find((name) => name.toLowerCase() === "pvpmode") ?? "PvpMode";
+  offWorld.plugins[key] = false;
+}
+const worldTemp = fs.mkdtempSync(path.join(os.tmpdir(), "gnome-pvp-off-"));
+after(() => fs.rmSync(worldTemp, { recursive: true, force: true }));
+const tempDefinitions = path.join(worldTemp, "data", "definitions");
+fs.mkdirSync(tempDefinitions, { recursive: true });
+fs.writeFileSync(path.join(tempDefinitions, "world.json"), JSON.stringify(offWorld));
+assert.equal(fs.existsSync(path.join(tempDefinitions, "world.local.json")), false);
+const worldModule = require.resolve("../dist/game/definition/WorldDefinition");
+assert.equal(require.cache[worldModule], undefined, "world definition has not been imported before the fixture");
+let fixtureWorld;
+try { process.chdir(worldTemp); fixtureWorld = require(worldModule); }
+finally { process.chdir(originalCwd); }
+assert.deepEqual(fixtureWorld.readWorldConfig(), originalWorld, "the normal cwd still reads its original configuration");
 
 const { Server } = require("../dist/Server");
 Server.installProductionPathResolver();
@@ -392,7 +430,32 @@ test("registered tutor training gates all Gianne order entry paths", async (t) =
   }
   PluginManager.createApi("GnomeCloseControl").onCustomEvent("interface:closed", reopenEarlier);
   await CachePipeline.initialize();
-  PluginManager.loadFromDirectory(path.resolve(__dirname, "../plugins"));
+  const WorldDefinition = require("../dist/game/definition/WorldDefinition");
+  const readWorldConfig = WorldDefinition.readWorldConfig;
+  function pvpDisabled(config) {
+    if (config.disabledPlugins !== undefined) {
+      return Array.isArray(config.disabledPlugins) && config.disabledPlugins.some((name) => String(name).toLowerCase() === "pvpmode");
+    }
+    const entry = Object.entries(config.plugins ?? {}).find(([name]) => name.toLowerCase() === "pvpmode");
+    return entry?.[1] === false;
+  }
+  function readFixtureWorld() {
+    const previousCwd = process.cwd();
+    try { process.chdir(worldTemp); return readWorldConfig(); }
+    finally { process.chdir(previousCwd); }
+  }
+  assert.deepEqual(readFixtureWorld(), offWorld, "the real parser reads the complete private configuration");
+  assert.equal(pvpDisabled(readFixtureWorld()), true, "the private configuration disables PvP mode");
+  WorldDefinition.readWorldConfig = readFixtureWorld;
+  try {
+    require("./helpers/pvp-mode-on.cjs");
+    assert.equal(pvpDisabled(WorldDefinition.readWorldConfig()), false, "the helper enables PvP mode for discovery");
+    PluginManager.loadFromDirectory(path.resolve(__dirname, "../plugins"));
+  } finally { WorldDefinition.readWorldConfig = readWorldConfig; }
+  assert.equal(WorldDefinition.readWorldConfig, readWorldConfig, "the temporary PvP configuration reader is restored");
+  assert.deepEqual(readFixtureWorld(), offWorld, "the private PvP-off configuration remains unchanged");
+  assert.deepEqual(WorldDefinition.readWorldConfig(), originalWorld, "the original cwd configuration remains unchanged");
+  assert.equal(process.cwd(), originalCwd);
   assert.ok(PluginManager.loadedPlugins.includes("GnomeRestaurant"));
   assert.ok(PluginManager.loadedPlugins.includes("Cooking"));
   core.RegionManager.init(); core.RegionManager.loadMapFiles(3222, 3218);
@@ -524,6 +587,30 @@ test("registered tutor training gates all Gianne order entry paths", async (t) =
     await clients.get(p).dispatch([{ type: "widget_action", widgetId, groupId: 49, childId: child, slot: row, buttonNum: 1 }]);
     clients.get(p).processTurnPackets();
   }
+  const unrelatedWidget = (999 << 16) | 1;
+  let unrelatedClicks = 0;
+  function observeUnrelatedClick(event) { if (event.buttonId === unrelatedWidget) unrelatedClicks++; }
+  PluginManager.createApi("GnomeWidgetControl").onInterfaceActionClick(observeUnrelatedClick);
+  async function assertUnrelatedWidgetDoesNotResolveCuisine(p) {
+    const cache = core.CacheDefinitions, names = ["getInterfaceId", "getComponentId", "getVarbitId"], originals = new Map();
+    let lookups = 0;
+    try {
+      for (const name of names) {
+        const original = cache[name]; originals.set(name, original);
+        cache[name] = function (value, ...args) {
+          if (String(value).includes("aluft_cooking") || value === "gnome_chosen_cuisine"
+            || value === "toplevel_osrs_stretch:mainmodal") lookups++;
+          return original.call(this, value, ...args);
+        };
+        assert.notEqual(cache[name], original, `the ${name} observation is installed`);
+      }
+      const before = unrelatedClicks;
+      await clients.get(p).dispatch([{ type: "widget_action", widgetId: unrelatedWidget, groupId: 999, childId: 1, buttonNum: 1 }]);
+      clients.get(p).processTurnPackets();
+      assert.equal(unrelatedClicks, before + 1, "the registered interface route received the unrelated click");
+      assert.equal(lookups, 0, "an unrelated click performs no cuisine definition lookup");
+    } finally { for (const [name, original] of originals) cache[name] = original; }
+  }
   async function prepare(p, source, option, row, output) {
     const expectedPhaseXp = source === "half_baked_batta" ? 40 : 30;
     const xpGate = PluginManager.emitCanGainExperience(p, Skill.COOKING, expectedPhaseXp);
@@ -619,6 +706,7 @@ test("registered tutor training gates all Gianne order entry paths", async (t) =
     }
   }
   const ordinary = actor("gnomebread", 99);
+  await assertUnrelatedWidgetDoesNotResolveCuisine(ordinary);
   assert.equal(core.RegionManager.blocked(ordinary.getLocation(), null), false);
   const dough = core.CacheDefinitions.getObjId("bread_dough"), bread = core.CacheDefinitions.getObjId("bread");
   assert.ok(Number.isInteger(dough) && Number.isInteger(bread));
@@ -848,6 +936,7 @@ test("registered tutor training gates all Gianne order entry paths", async (t) =
   use(learner, "gianne_dough", "crunchy_tray");
   cook(learner, "raw_crunchies", "half_baked_crunchy");
   await prepare(learner, "half_baked_crunchy", "Prepare", 0, 9581);
+  await assertUnrelatedWidgetDoesNotResolveCuisine(learner);
   cook(learner, 9581, 9582);
   assert.equal(learner.getInventory().getAmount(obj("crunchy_tray")), 1);
   use(learner, 9582, "equa_leaves");

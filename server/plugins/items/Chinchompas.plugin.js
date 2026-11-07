@@ -79,8 +79,10 @@ function consumeChinchompa(player, pos, amount, delayTicks = 0) {
   const saving = { player, itemId: weapon.getId(), amount, saved: 0 };
   pluginApi.emitCustomEvent("ranged:ammo-saving", saving);
   const thrown = amount - Math.min(amount, Math.max(0, saving.saved | 0));
+  // Fixed at the throw: paying from the pack can empty this very object in place (an unwield moves it there).
+  const weaponId = weapon.getId();
   const meta = JSON.stringify(weapon.getMeta() ?? null);
-  const same = (item) => item?.getId() === weapon.getId() && JSON.stringify(item.getMeta() ?? null) === meta;
+  const same = (item) => item?.getId() === weaponId && JSON.stringify(item.getMeta() ?? null) === meta;
   const apply = () => {
     if (thrown <= 0) {
       return;

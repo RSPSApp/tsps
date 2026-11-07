@@ -61,3 +61,19 @@ test("re-wielding mid-flight (a copy) still pays the throw; another weapon swapp
   land();
   assert.equal(p.getEquipment().getItems()[core.Equipment.WEAPON_SLOT].getId(), I.MAGIC_SHORTBOW, "the bow is untouched");
 });
+
+test("two throws in flight after the last chinchompa is unwielded: the second leaves the empty slots alone", (t) => {
+  const p = thrower(t);
+  p.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(I.RED_CHINCHOMPA_2, 1));
+  consume(p, null, 1, 2);
+  consume(p, null, 1, 2);
+  const worn = p.getEquipment().getItems()[core.Equipment.WEAPON_SLOT];
+  p.getInventory().setItem(0, worn); // unwielded: the same object, into the pack
+  p.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(-1, 0));
+  land();
+  assert.equal(p.getInventory().getAmount(I.RED_CHINCHOMPA_2), 0, "the one chinchompa paid the first throw");
+  const slot = p.getEquipment().getItems()[core.Equipment.WEAPON_SLOT];
+  assert.equal(slot.getId(), -1);
+  assert.equal(slot.getAmount(), 0, "the empty weapon slot isn't charged for the second throw");
+  assert.ok(p.getInventory().getItems().every((item) => item.getAmount() >= 0), "no negative stack anywhere");
+});

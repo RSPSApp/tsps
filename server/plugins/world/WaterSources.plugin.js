@@ -61,7 +61,9 @@ function fillOne(player, emptyId, container, sound) {
   const inventory = player.getInventory();
   const slot = inventory.getSlotForItemId(emptyId);
   if (slot < 0) return false;
-  inventory.setItem(slot, new core.Item(container.filled, 1)).refreshItems();
+  // The filled container keeps the empty one's meta: a preset vial (PvP presets) stays a preset copy.
+  const meta = inventory.getItems()[slot]?.getMeta?.();
+  inventory.setItem(slot, new core.Item(container.filled, 1, meta ? JSON.parse(JSON.stringify(meta)) : undefined)).refreshItems();
   player.performAnimation(new core.Animation(FILL_ANIMATION));
   player.getPacketSender().sendSoundEffect(sound, 1, 0);
   return true;

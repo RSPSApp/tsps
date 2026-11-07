@@ -558,6 +558,13 @@ test("the ring of wealth spends its charge on arrival, from wherever the ring is
   assert.equal(worn.getId(), 11986, "a refused teleport keeps the charge");
 });
 
+test("the ring of wealth's destination tiles are the Wiki's", () => {
+  const { RING_OF_WEALTH_DESTINATIONS } = require("../plugins/items/Teleports.Jewellery");
+  const tiles = Object.fromEntries(RING_OF_WEALTH_DESTINATIONS.map((d) => [d.label, d.tile]));
+  assert.deepEqual(tiles["Miscellania"], [2534, 3862, 0]);
+  assert.deepEqual(tiles["Falador Park"], [2995, 3375, 0]);
+});
+
 function useOnObject(player, item, objectId) {
   const event = { player, item, itemId: item.getId(), objectId, handled: false };
   itemOnObject(event);

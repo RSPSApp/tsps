@@ -58,3 +58,18 @@ When the inventory fills: spam "You have run out of inventory space.", on the ti
 
 - **Harvest a grown Hespori:** a tick later game "The Hespori doesn't take kindly to your attempt to harvest it.", sound 4059, the player is moved to (1246, 10085) in front of the patch, and the fight starts.
 - **Clear after the fight:** spam "You start digging the farming patch...", `human_dig` + 1470 at 0 and +3, then at +5 the loot and spam "You have successfully cleared this patch for new crops.". No spade: "You need a spade to clear a farming patch."; fewer than two free slots: message box "You need at least two free spaces in your inventory to clear this patch."
+
+## Seed box (rsprox captures 960, 966, 982, 1022, 1029, 3883, 3906, 4222, 4293, 4295)
+
+- Fill answers one `Stored N x <Seed> in your seed box.` line per kind stored; with no seed to store it says
+  `You have no seeds that will fit in the seed box.` (960). `You don't have space in your seed box for that.` is also
+  recorded on Fill (966, 974); the captures do not show its trigger, so ours sends it when the box takes none of the
+  seeds carried because its six kind slots are full (and for a seed used on such a box).
+- Empty answers `Emptied N x <Seed> to your inventory.` per kind; the native bank Empty op answers
+  `Your seed box is now empty.` or `Your seed box is already empty.` (1029).
+- Check opens `hosidius_seedbox` (modal over `seed_box`, six slots, the `busy` varbit set while open). Ops 1-5 are
+  `Withdraw 1`, `Withdraw 3`, `Withdraw 4`, `Withdraw X`, `Withdraw All` (each prints the Emptied line), op 10 examines
+  the seed. Close lists `The seed box contains:` then `N x <Seed>.` per kind (3906, 1022). The slot order is ours
+  (ascending item id): the captures do not show how the live box orders the kinds, and drag-to-reorder is not built.
+- The Wiki's Seed_box page (fetched this session) says Check lists the contents in chat; the captures show the window
+  instead, so the captures are followed.

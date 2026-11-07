@@ -39,6 +39,10 @@ let savedPersistence;
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, '..'));
+  assert.equal(world.isMembersWorld(), false, 'configure the free world before the real plugin loader');
+  assert.deepEqual({ ...world.readWorldConfig(), membersWorld: false }, JSON.parse(fs.readFileSync(worldFile, 'utf8')),
+    'plugin switches and configuration match the copied world with no local override');
+  assert.equal(process.env.AUTOSAVE_INTERVAL_TICKS, undefined, 'the existing persistence stub is used below the default autosave interval');
   core = PM.getCoreApi();
   try {
     PM.loadFromDirectory(path.resolve(__dirname, '../plugins'));
@@ -48,6 +52,7 @@ before(async () => {
   }
   core.RegionManager.init();
   core.GameConstants.PLAYER_PERSISTENCE = { requestSave() {}, flush: () => Promise.resolve() };
+  PM.emitServerStartup({});
 });
 
 after(async () => {
@@ -177,4 +182,118 @@ test('a free-world lever opens the knight choice and preserves payment on refusa
   for (let i = 0; i < 50; i++) core.TaskManager.process();
   assert.equal(Knights.performance(), null);
   assert.ok(show.knights.every((npc) => !npc.isRegistered()), 'all actors are removed after the show');
+});
+
+// The ordinary pie assembly path must continue to work on a configured free world.
+test('free-world pie assembly keeps members-only recipes unavailable', async (t) => {
+  const TOMATO = 1982, SHELL = 2315, PART = 7172, REDBERRIES = 1951, BERRY_PIE = 2321;
+  assert.equal(world.isMembersWorld(), false);
+  assert.equal(world.isMembersArea(3222, 3218), false, 'the actor is on configured free land');
+  assert.deepEqual(['tomato', 'pie_shell', 'unfinished_garden_pie_1', 'redberries', 'uncooked_redberry_pie']
+    .map(name => core.CacheDefinitions.getObjId(name)), [TOMATO, SHELL, PART, REDBERRIES, BERRY_PIE]);
+  for (const [id, members] of [[TOMATO, false], [SHELL, false], [PART, true], [REDBERRIES, false], [BERRY_PIE, false]]) {
+    assert.equal(core.CacheDefinitions.getItem(id).isMembers, members);
+    assert.equal(core.ItemDefinition.forId(id).isNoted(), false);
+    assert.equal(core.ItemDefinition.forId(id).isStackable(), false);
+  }
+  for (const id of [TOMATO, SHELL, REDBERRIES]) assert.equal(core.CacheDefinitions.getItem(id).isTradable, true);
+  core.RegionManager.loadMapFiles(3222, 3218);
+
+  for (const [name, ingredient, product] of [['redberry control', REDBERRIES, BERRY_PIE], ['garden pie', TOMATO, PART]]) {
+    await t.test(name, async (child) => {
+      const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true,
+        send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+      const p = new Player(new PlayerSession(channel));
+      p.setIndex(name === 'redberry control' ? 2910 : 2911);
+      p.setUsername(name === 'redberry control' ? 'freeberry' : 'freegarden');
+      p.setRegistered(true);
+      p.setLocation(new core.Location(3222, 3218, 0));
+      p.needsPlacement = false;
+      const c = new ClientConnection(channel), inv = p.getInventory(), skills = p.getSkillManager(), cooking = core.Skill.COOKING;
+      c.player = p;
+      PM.emitPlayerLogin({ player: p, username: p.getUsername() });
+      p.closeInterruptibleInterfaces();
+      child.after(() => {
+        p.closeInterruptibleInterfaces();
+        PM.emitPlayerDisconnect({ player: p, username: p.getUsername() });
+        PM.emitPlayerLogout({ player: p, username: p.getUsername() });
+        p.setRegistered(false);
+        core.TaskManager.cancelTasks(p.getIndex());
+        core.TaskManager.cancelTasks(p);
+      });
+      assert.ok(p.isRegistered() && p.getHitpoints() > 0);
+      assert.equal(core.RegionManager.blocked(p.getLocation(), p.getPrivateArea()), false);
+      const xp = core.SkillManager.getExperienceForLevel(34);
+      skills.setExperience(cooking, xp).setMaxLevels(cooking, 34, false).setCurrentLevels(cooking, 34, false);
+      assert.deepEqual([skills.getExperience(cooking), skills.getMaxLevel(cooking), skills.getCurrentLevel(cooking)], [xp, 34, 34]);
+      for (const id of [ingredient, SHELL]) {
+        assert.equal(inv.getAmount(id), 0);
+        inv.add(new core.Item(id, 1), false);
+        assert.notEqual(PM.emitCanUseItem(p, id, 'use'), false, 'the real free-world item gate permits the ingredient');
+      }
+      assert.equal(PM.emitCanUseItem(p, PART, 'use'), false, 'the registered free-world item gate is active');
+      const slots = [ingredient, SHELL].map(id => inv.getSlotForItemId(id));
+      assert.ok(slots.every(slot => slot >= 0));
+      assert.notEqual(slots[0], slots[1]);
+      for (const slot of slots) assert.equal(inv.getItems()[slot].getMeta(), null);
+      const owned = id => inv.getAmount(id) + p.getEquipment().getAmount(id)
+        + p.getBanks().reduce((sum, bank, tab) => sum + (bank && tab !== core.Bank.BANK_SEARCH_TAB_INDEX ? bank.getAmount(id) : 0), 0)
+        + core.World.getItems().filter(item => !item.isPendingRemoval() && item.getOwner() === p.getUsername()
+          && item.getPrivateArea() === p.getPrivateArea() && item.getItem().getId() === id)
+          .reduce((sum, item) => sum + item.getItem().getAmount(), 0);
+      assert.equal(owned(product), 0);
+      assert.equal(owned(ingredient), 1);
+      assert.equal(owned(SHELL), 1);
+      const beforeXp = core.Skill.values().map(skill => skills.getExperience(skill));
+      const uses = [], produced = [], tasks = [], original = PM.emitItemOnItem.bind(PM);
+      child.mock.method(PM, 'emitItemOnItem', event => {
+        const result = original(event);
+        if (event.player === p) uses.push([event.usedItemId, event.usedWithItemId, result]);
+        return result;
+      });
+      PM.createApi('FreePieObserver' + p.getIndex()).onCustomEvent('skills:produced', event => {
+        if (event.player === p) produced.push([event.itemId, event.amount, event.xp, event.kind]);
+      });
+      const submit = core.TaskManager.submit.bind(core.TaskManager);
+      child.mock.method(core.TaskManager, 'submit', task => {
+        if (task.key === p.getIndex() && task.pluginName === 'Cooking') tasks.push(task);
+        return submit(task);
+      });
+      let turns = 0;
+      const turn = () => {
+        assert.ok(++turns <= 6);
+        p.resetUpdating();
+        core.World.processCycle = (core.World.processCycle + 1) & 0x7fffffff;
+        core.TaskManager.process();
+        c.processTurnPackets();
+        const movement = p.getMovementQueue();
+        movement.beginCycle(); movement.processEntityPursuit();
+        if (movement.hasPendingWork()) movement.process();
+        core.TaskManager.processWalkTo(p.getIndex());
+      };
+      await c.dispatch([{ type: 'inventory_use_on', slot: slots[0], itemId: ingredient,
+        target: { kind: 'inventory', slot: slots[1], itemId: SHELL } }]);
+      turn();
+      assert.deepEqual(uses, [[ingredient, SHELL, true]], 'the real item-on-item path handles the pair');
+      if (name === 'redberry control') {
+        assert.equal(tasks.length, 1, 'the actual Cooking handler submits a task');
+        assert.equal(tasks[0].isRunning(), true);
+        assert.deepEqual([owned(ingredient), owned(SHELL), owned(product)], [1, 1, 0]);
+        for (let i = 0; i < 4; i++) turn();
+        assert.equal(tasks[0].isRunning(), false, 'the actual Cooking task completes');
+        assert.equal(owned(BERRY_PIE), 1, 'a free recipe completes through the same path');
+        assert.deepEqual([inv.getAmount(REDBERRIES), inv.getAmount(SHELL)], [0, 0]);
+        assert.deepEqual(produced, [[BERRY_PIE, 1, 0, 'make']]);
+      } else {
+        assert.equal(tasks.length, 0, 'a members-only recipe does not start a Cooking task');
+        for (let i = 0; i < 4; i++) turn();
+        assert.equal(owned(PART), 0, 'free worlds must not make the members-only garden-pie part');
+        assert.deepEqual([inv.getAmount(TOMATO), inv.getAmount(SHELL)], [1, 1]);
+        assert.deepEqual([owned(TOMATO), owned(SHELL)], [1, 1]);
+        for (const slot of slots) assert.equal(inv.getItems()[slot].getMeta(), null);
+        assert.deepEqual(produced, []);
+      }
+      assert.deepEqual(core.Skill.values().map(skill => skills.getExperience(skill)), beforeXp);
+    });
+  }
 });

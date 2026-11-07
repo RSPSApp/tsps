@@ -510,8 +510,9 @@ function mixRequest(product, secondaryName, wearsGoggles) {
   assert.ok(recipe, `${product} with ${secondaryName}`);
   const id = (name) => CacheDefinitions.getObjId(name);
   const head = wearsGoggles ? { getId: () => id(wearsGoggles) } : { getId: () => -1 };
+  const runtimeRecipe = { ...recipe, ingredients: recipe.ingredients.map(([name, count]) => ({ id: id(name), count })) };
   return {
-    recipe,
+    recipe: runtimeRecipe,
     player: { getEquipment: () => ({ getItems: () => ({ [PluginManager.getCoreApi().Equipment.HEAD_SLOT]: head }) }) },
     consume: recipe.ingredients.map(([name, count]) => ({ id: id(name), count })),
     returns: (recipe.returns ?? []).map(([name, count]) => ({ id: id(name), count })),
@@ -558,7 +559,7 @@ test('prescription goggles: a vial of water step and the herb into it are not se
 
 test('prescription goggles: the herb or coral added to a vial of water is never saved', () => {
   withRoll(0, () => {
-    for (const [product, herb] of [['cadantinevial', 'cadantine'], ['elkhornvial', 'coral_elkhorn'], ['pillarvial', 'coral_pillar'], ['umbralvial', 'coral_umbral']]) {
+    for (const [product, herb] of [['cadantinevial', 'cadantine'], ['elkhornvial', 'coral_elkhorn'], ['pillarvial', 'coral_pillar'], ['umbralvial', 'coral_umbral'], ['toadflaxvial', 'toadflax']]) {
       const request = mixRequest(product, herb, 'mm_alchemist_hat');
       Goggles.saveSecondaries(request);
       assert.ok(request.consume.every((item) => item.count > 0), product);

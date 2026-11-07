@@ -79,8 +79,11 @@ function changeStaff(player, itemId, staff, element) {
     return say(player, `You need ${staff.cost.toLocaleString("en-US")} ${element.toLowerCase()} runes to change that staff.`);
   }
   if (staff.cost) player.getInventory().delete(RUNES[element], staff.cost);
-  player.getInventory().delete(itemId, 1);
-  player.getInventory().adds(into, 1);
+  // In place (setId keeps the staff's meta: a preset staff stays preset in its new element).
+  const converted = player.getInventory().getItems?.().find((item) => item?.getId() === itemId);
+  if (converted) converted.setId(into);
+  else { player.getInventory().deleteNumber(itemId, 1); player.getInventory().adds(into, 1); }
+  player.getInventory().refreshItems?.();
 }
 
 // Clocks: "It's Rune o'clock." (captures).

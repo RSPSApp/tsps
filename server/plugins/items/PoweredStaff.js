@@ -283,12 +283,18 @@ function restricted(item) {
 
 /** How many of `id` can pay for a charge: the unrestricted copies. */
 function plainAmount(inventory, id) {
+  // A container without slots (a test stand-in) holds no restricted copies.
+  if (typeof inventory.getItems !== "function") return inventory.getAmount(id);
   return inventory.getItems().reduce((total, item) =>
     (item?.getId() === id && !restricted(item) ? total + item.getAmount() : total), 0);
 }
 
 /** Takes `amount` of `id` from its unrestricted copies, leaving any restricted one alone. */
 function takePlain(inventory, id, amount) {
+  if (typeof inventory.getItems !== "function") {
+    inventory.deleteNumber(id, amount);
+    return;
+  }
   let left = amount;
   inventory.getItems().forEach((item, slot) => {
     if (left <= 0 || item?.getId() !== id || restricted(item)) return;

@@ -633,8 +633,11 @@ module.exports = function registerTheGolemQuest(api) {
         player.sendMessage("You crush the mushroom, but you have no vial to put the dye in and it goes everywhere!");
         return;
       }
-      player.getInventory().deleteNumber(VIAL_ITEM_ID, 1);
-      player.getInventory().adds(INK_ITEM_ID, 1);
+      // In place (setId keeps the vial's meta: a preset vial gives preset ink).
+      const converted = player.getInventory().getItems?.().find((item) => item?.getId() === VIAL_ITEM_ID);
+      if (converted) converted.setId(INK_ITEM_ID);
+      else { player.getInventory().deleteNumber(VIAL_ITEM_ID, 1); player.getInventory().adds(INK_ITEM_ID, 1); }
+      player.getInventory().refreshItems?.();
       player.sendMessage("You crush the mushroom and pour the juice into a vial.");
       return;
     }

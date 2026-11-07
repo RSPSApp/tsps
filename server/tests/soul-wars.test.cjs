@@ -268,6 +268,20 @@ test('the waiting-area barrier: refusals, in, and out after asking', () => {
   assert.equal(hooks.prompts.at(-1).title, 'Are you sure you want to leave?');
   hooks.prompts.at(-1).args[1]();
   assert.deepEqual([p.location.getX(), p.location.getY()], [2199, 2842]);
+  // Asked to leave, then the game starts before Yes: Yes no longer walks them out of it.
+  hooks.objects.get('Barrier:Pass')({ player: p, object: barrier });
+  hooks.objects.get('Barrier:Pass')({ player: p, object: barrier });
+  const late = hooks.prompts.at(-1);
+  assert.equal(late.title, 'Are you sure you want to leave?');
+  const gameOf = Match.gameOf;
+  Match.gameOf = (who) => (who === p ? {} : gameOf(who));
+  const before = p.location;
+  try {
+    late.args[1]();
+  } finally {
+    Match.gameOf = gameOf;
+  }
+  assert.equal(p.location, before, 'still where the game put them');
   const weak = fakePlayer({ combat: 30, at: new Location(2200, 2842, 0) });
   hooks.objects.get('Barrier:Pass')({ player: weak, object: barrier });
   assert.equal(weak.messages.at(-1), 'You need a total level of 500 and a combat level of 40 to play Soul Wars.');

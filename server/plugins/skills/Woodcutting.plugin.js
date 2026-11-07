@@ -680,7 +680,9 @@ function canUseAxe(player, axe) {
   );
 }
 
-function findBestUsableAxe(player, eligible = () => true) {
+// The default skips members axes on free worlds, as every chop does (Forestry's roots, Wintertodt and the Ent
+// trunk call it without a filter).
+function findBestUsableAxe(player, eligible = choppingAxeEligible) {
   const equippedWeaponId = getEquippedWeaponId(player);
   const inventory = player.getInventory();
 

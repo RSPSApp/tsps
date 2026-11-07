@@ -1541,6 +1541,8 @@ module.exports = function registerTheFinalDawnQuest(api) {
       // The sandy purse can be emptied at any stage, so it can be filled again until the blackjack is made.
       const stage = quest.getStage(player);
       if (stage < STAGE_PURSE_OPEN || stage > STAGE_TRAP || held(player, MAKESHIFT_BLACKJACK_ITEM)) return;
+      // A second use in the same tick finds the purse already filled: nothing to fill, nothing to add.
+      if (!held(player, EMPTY_COIN_PURSE_ITEM)) return;
       player.getInventory().deleteNumber(EMPTY_COIN_PURSE_ITEM, 1);
       player.getInventory().adds(SANDY_COIN_PURSE_ITEM, 1);
       if (stage === STAGE_PURSE_OPEN) setStage(player, STAGE_PURSE_SAND);

@@ -43,3 +43,21 @@ test("a sandy purse emptied after it was first filled can be filled again at the
   assert.equal(inv.getAmount(I.EMPTY_COIN_PURSE), 0);
   assert.equal(quest.getStage(p), PURSE_SAND, "the stage does not move back or on");
 });
+
+test("two uses of one empty purse on the pot in one tick make one sandy purse, at every stage it can be filled", (t) => {
+  for (const stage of [20, 21, 22]) {
+    const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+    const p = new Player(new PlayerSession(channel));
+    p.setIndex(9041 + stage); p.setUsername("dawn" + stage); p.setRegistered(true); p.setAttribute("bot-skip-persistence", true);
+    t.after(() => p.setRegistered(false));
+    QuestRuntime.questNamed("The Final Dawn").setStage(p, stage);
+    const inv = p.getInventory();
+    inv.setItem(0, new core.Item(I.EMPTY_COIN_PURSE, 1));
+    const pot = { getId: () => SAND_POT, getLocation: () => p.getLocation(), getDefinition: () => null };
+    const use = () => PM.emitItemOnObject({ player: p, itemId: I.EMPTY_COIN_PURSE, item: inv.getItems()[0], slot: 0, objectId: SAND_POT, object: pot, location: p.getLocation(), handled: false });
+    use();
+    use();
+    assert.equal(inv.getAmount(I.SANDY_COIN_PURSE), 1, `one sandy purse at stage ${stage}`);
+  }
+});
+

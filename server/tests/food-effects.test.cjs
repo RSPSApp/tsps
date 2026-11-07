@@ -26,7 +26,7 @@ const customEvents = [];
 const NOT_FOOD = {
   "Handled by another plugin": ["Poisoned cheese", "White pearl", "Honey locust"],
   "Not plain food: a quest, event or minigame item with its own effect (Wiki)": [
-    "Abyssal potato", "Araxyte venom sac", "Bologano fruit", "Bruised banana", "Cave nightshade",
+    "Abyssal potato", "Bologano fruit", "Bruised banana", "Cave nightshade",
     "Chocolate strawberry", "Corrupted shark", "Dwarven rock cake", "Fishlike thing", "Golovanova fruit",
     "Infernal eel", "Jar of congealed blood", "Leechfin", "Leftovers", "Logavano fruit", "Melted easter egg", "Mint cake",
     "Mystery fruit", "Nightshade", "Poison karambwan", "Rock cake",

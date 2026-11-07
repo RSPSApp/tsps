@@ -25,6 +25,8 @@ const COMBO_ATTACK_DELAY = 2;
 const EAT_DELAY = 3;
 const COMBO_DELAY = 3;
 const HEAL_MESSAGE = "It heals some health.";
+/** Sent when a sac's venom immunity ends but its poison immunity goes on (rsprox 1094). */
+const VENOM_RESISTANCE_ENDED = "<col=7f007f>Your venom resistance has worn off, but you are still resistant to poison.</col>";
 /** tracking_food_eaten: every bite counts (rsprox recordings). */
 const VARP_FOOD_EATEN = 4518;
 const FOOD_EATEN_ATTRIBUTE = "food:eaten";
@@ -47,6 +49,8 @@ let core;
 let idsByName;
 /** Each player's pending second hunter-meat heal: a newer meat replaces it. */
 const pendingSecondHeals = new WeakMap();
+/** Each player's pending "venom resistance has worn off" message: a newer sac replaces it. */
+const venomWatches = new WeakMap();
 
 function init(api) {
   pluginApi = api;
@@ -195,6 +199,29 @@ function applyStats(player, effect) {
   else if (effect.curePoison) curePoison(player);
 }
 
+/**
+ * Wiki (Araxyte venom sac): poison immunity for 11.7 minutes, 39 of the 18-second steps, the first of them
+ * venom immunity too. A stronger dose already running is kept. The venom immunity ends on the next pulse of
+ * the shared poison clock, which the sac does not restart (rsprox 1094: the message follows 15 ticks later).
+ */
+function startPoisonDose(player, seconds) {
+  const timer = player.getCombat().getPoisonImmunityTimer();
+  if (timer.secondsRemaining() < seconds) timer.start(seconds);
+  const clock = player.getCombat().getPoisonClock();
+  const token = {};
+  venomWatches.set(player, token);
+  core.TaskManager.submit(new (class extends core.Task {
+    constructor() { super(1, {}, false); }
+    execute() {
+      if (venomWatches.get(player) !== token || !player.isRegistered() || !clock.hasCounter()) return this.stop();
+      if (clock.isVenomImmune()) return;
+      this.stop();
+      venomWatches.delete(player);
+      player.sendMessage(VENOM_RESISTANCE_ENDED);
+    }
+  })());
+}
+
 /** Wiki (Kebab): a random skill but Hitpoints, never drained below 1 nor when 2 or lower. */
 function drainRandomSkill(player, amount, random) {
   const skills = core.Skill.values().filter((s) => s !== core.Skill.HITPOINTS);
@@ -303,6 +330,8 @@ function applyFood(player, food, random = Math.random) {
     const immunity = player.getCombat().getPoisonImmunityTimer();
     immunity.protectBriefly(food.poisonImmunity, food.cureVenom === true);
   }
+  if (food.poisonDose) startPoisonDose(player, food.poisonDose);
+  if (food.venomDamage) player.getCombat().getHitQueue().addPendingDamage([new core.HitDamage(food.venomDamage, core.HitMask.GREEN)]);
   if (food.then) scheduleSecondHeal(player, food.then);
   const healMessage = food.healMessage === undefined ? HEAL_MESSAGE : food.healMessage;
   if (healed > 0 && healMessage) after.push(healMessage);

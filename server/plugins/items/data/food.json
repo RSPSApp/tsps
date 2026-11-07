@@ -6,6 +6,7 @@
     {"name": "Anchovy pizza", "bites": ["Anchovy pizza", "1/2 anchovy pizza"], "heal": 9, "eatDelay": [1, 2], "messages": ["You eat half the anchovy pizza.", "You eat the remaining anchovy pizza."]},
     {"name": "Anglerfish", "special": "anglerfish"},
     {"name": "Apple pie", "bites": ["Apple pie", "Half an apple pie"], "heal": 7, "eatDelay": [1, 2], "leaves": "Pie dish", "messages": ["You eat half the apple pie.", "You eat the remaining apple pie."]},
+    {"name": "Araxyte venom sac", "heal": 0, "cureVenom": true, "poisonDose": 702, "venomDamage": 4, "message": "You eat the Araxyte venom sack, It grants you immunity from venom."},
     {"name": "Baguette", "heal": 6},
     {"name": "Baked potato", "heal": 4},
     {"name": "Banana", "heal": 2},

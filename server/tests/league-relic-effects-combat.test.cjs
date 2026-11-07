@@ -496,6 +496,28 @@ test("Specialist: specials cost a fifth with double accuracy, a miss refunds 10%
   }
 });
 
+test("Last Stand: logging out mid-stand settles the boosts at base + 15 before the save", () => {
+  const who = cases(LAST_STAND, 5);
+  const tasks = [];
+  const submit = core.TaskManager.submit;
+  core.TaskManager.submit = (task) => tasks.push(task);
+  try {
+    const skills = who.relic.getSkillManager();
+    skills.setMaxLevels(Skill.HITPOINTS, 99, false);
+    skills.setMaxLevels(Skill.ATTACK, 70, false);
+    skills.setCurrentLevels(Skill.ATTACK, 70, false);
+    cycle = 300;
+    who.relic.setAttribute("league:last-stand-ready-at", 0);
+    skills.setCurrentLevel(Skill.HITPOINTS, 0, false);
+    hooks.onPlayerBeforeDeath({ player: who.relic, preventDeath: false });
+    assert.equal(skills.getCurrentLevel(Skill.ATTACK), 255);
+    hooks.onPlayerLogout({ player: who.relic });
+    assert.equal(skills.getCurrentLevel(Skill.ATTACK), 85, "base 70 + 15, as the drain would leave it");
+  } finally {
+    core.TaskManager.submit = submit;
+  }
+});
+
 test("Last Stand: a lethal hit leaves 1 hitpoint, boosts to 255 draining to base + 15, shields for 16 ticks, then heals the damage dealt", () => {
   const who = cases(LAST_STAND, 5);
   const preview = character("preview", "league", LAST_STAND_PREVIEW, 5);

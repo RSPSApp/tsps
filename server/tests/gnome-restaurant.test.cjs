@@ -969,7 +969,7 @@ test("registered tutor training gates all Gianne order entry paths", async (t) =
     "I think I'll warm up with an easy one.", "The edge of the world is no limit for Aluft Aloft Food Deliveries!",
     "I've changed my mind, there's something else I need to do now."], index: 1 };
   const take = (tier) => ({ title: "Take this order?", options: [tier === "easy" ? "Easy-peasy! I'll get started." : "Easy-peasy! I'm on the job.",
-    "I don't think I can complete this one."], index: 1 });
+    tier === "easy" ? "I don't think I can complete this one." : "I won't be able to do this order."], index: 1 });
   async function createAndAbandon(p, option, tier) {
     assert.equal(p.getInventory().getAmount(BOX), 0);
     const coins = p.getInventory().getAmount(COINS), xp = p.getSkillManager().getExperience(Skill.COOKING);

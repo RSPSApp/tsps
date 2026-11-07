@@ -699,9 +699,9 @@ function findBestUsableAxe(player, eligible = () => true) {
 }
 
 // Bots only ever get the standard bronze-to-dragon axes.
-function findBestUsableAxeByLevel(level) {
+function findBestUsableAxeByLevel(level, eligible = () => true) {
   for (const axe of AXES_BEST_FIRST) {
-    if (axe.standard && level >= axe.requiredLevel) {
+    if (axe.standard && level >= axe.requiredLevel && eligible(axe)) {
       return axe;
     }
   }

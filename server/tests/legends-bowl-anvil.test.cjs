@@ -72,11 +72,10 @@ test('boosted Smithing level reaches the canonical attempt',async t=>{
 });
 
 test("Doric's restricted anvil still denies an unfinished player",async t=>{
- core.RegionManager.loadMapFiles(2950,3450);const found=[];
- for(let x=2940;x<=2960;x++)for(let y=3440;y<=3460;y++)for(const o of core.MapObjects.getObjectsAt(new core.Location(x,y,0),null))if(o.getId()===2031)found.push(o);
- assert.ok(found.length,"actual Doric anvil map loc");const station=found[0],a=station.getLocation(),f=actor(t,1416,new core.Location(a.getX()-1,a.getY(),0));
+ // Test-owned Doric loc exercises the real access hook; no natural hut or travel claim.
+ const id=core.CacheDefinitions.getLocId('dorics_anvil');assert.equal(id,2031,'Doric access hook identity');const f=actor(t,1416,new core.Location(3222,3218,0));
  const doric=require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(q=>q.key==='dorics_quest');assert.ok(doric);doric.setStage(f.p,0);assert.equal(doric.isComplete(f.p),false);
- const definition=core.ObjectDefinition.forPlayer(station.getId(),f.p);assert.equal(definition.getName(),'Anvil');assert.ok(core.MapObjects.getPrivateArea(f.p,station.getId(),a));
+ const definition=core.ObjectDefinition.forPlayer(id,f.p);assert.equal(definition.getName(),'Anvil');const {object:station,loc:a}=ownedStation(t,f,id);
  const seen=observe(t,f,'itemOnObjectHooks','handleItemOnObject',e=>e.itemId===f.I.GOLD_BAR&&e.objectId===station.getId());
  const access=[],emit=PM.emitCustomEvent.bind(PM);t.mock.method(PM,'emitCustomEvent',(name,event)=>{const result=emit(name,event);if(name==='smithing:anvil-access'&&event.player===f.p&&event.object?.getId()===station.getId())access.push({denied:event.denied});return result;});
  const before=[f.inv.getAmount(f.I.SKETCH),f.inv.getAmount(f.I.HAMMER),f.inv.getAmount(f.I.GOLD_BAR),f.inv.getAmount(f.I.GOLD_BOWL)],xp=f.p.getSkillManager().getExperience(core.Skill.SMITHING),slot=f.inv.getSlotForItemId(f.I.GOLD_BAR);
@@ -84,17 +83,21 @@ test("Doric's restricted anvil still denies an unfinished player",async t=>{
  assert.equal(seen.length,1);assert.equal(seen[0].before,false);assert.equal(seen[0].after,true);assert.deepEqual(access,[{denied:true}]);assert.deepEqual([f.inv.getAmount(f.I.SKETCH),f.inv.getAmount(f.I.HAMMER),f.inv.getAmount(f.I.GOLD_BAR),f.inv.getAmount(f.I.GOLD_BOWL)],before);assert.equal(f.p.getSkillManager().getExperience(core.Skill.SMITHING),xp);assert.equal(quest.getStage(f.p),8);
 });
 
-// Owned registered placements exercise real map resolution, not natural station location or access.
-test('special-purpose anvils do not claim a gold bowl attempt',async t=>{
- for(const [name,index] of [['chasm_anvil',1421],['ds2_ac_forge_anvil',1422]]) await t.test(name,async t=>{
-  const id=core.CacheDefinitions.getLocId(name);assert.ok(Number.isInteger(id));const f=actor(t,index,new core.Location(3222,3218,0));
-  const def=core.ObjectDefinition.forPlayer(id,f.p);assert.ok(def);assert.equal(def.getName(),'Anvil');assert.equal(def.id,id);
+function ownedStation(t,f,id){
   // Choose an unoccupied bounded tile; registration must not replace shared or removed records.
   let loc;for(let x=3223;x<=3227&&!loc;x++)for(let y=3216;y<=3220&&!loc;y++){const candidate=new core.Location(x,y,0);if(core.MapObjects.getObjectsAt(candidate,null).length===0&&core.ObjectManager.objectsAt(candidate).length===0&&!core.World.getRemovedObjects().some(o=>o.getLocation().equals(candidate)&&o.getType()===10))loc=candidate;}
   assert.ok(loc,'clear owned placement tile');const baseBefore=[...core.MapObjects.getObjectsAt(loc,null)],runtimeBefore=[...core.ObjectManager.objectsAt(loc)],removedBefore=core.World.getRemovedObjects().filter(o=>o.getLocation().equals(loc)&&o.getType()===10);
   const object=new core.GameObject(id,loc,10,0,null).setOwner(f.p);assert.equal(object.getOwner(),f.p);let registrationAttempted=false;
   t.after(()=>{try{if(registrationAttempted)core.ObjectManager.deregister(object,true);}finally{assert.equal(core.ObjectManager.objectsAt(loc).includes(object),false);assert.equal(core.World.getObjects().includes(object),false);assert.equal(core.MapObjects.ownerObjectsInScene(f.p,loc.getX(),loc.getY(),1).includes(object),false);assert.deepEqual([...core.MapObjects.getObjectsAt(loc,null)],baseBefore);assert.deepEqual([...core.ObjectManager.objectsAt(loc)],runtimeBefore);assert.deepEqual(core.World.getRemovedObjects().filter(o=>o.getLocation().equals(loc)&&o.getType()===10),removedBefore);}});
   registrationAttempted=true;core.ObjectManager.register(object,true);assert.equal(core.MapObjects.getPrivateArea(f.p,id,loc),object);
+  return {object,loc};
+}
+// Owned registered placements exercise real map resolution, not natural station location or access.
+test('special-purpose anvils do not claim a gold bowl attempt',async t=>{
+ for(const [name,index] of [['chasm_anvil',1421],['ds2_ac_forge_anvil',1422]]) await t.test(name,async t=>{
+  const id=core.CacheDefinitions.getLocId(name);assert.ok(Number.isInteger(id));const f=actor(t,index,new core.Location(3222,3218,0));
+  const def=core.ObjectDefinition.forPlayer(id,f.p);assert.ok(def);assert.equal(def.getName(),'Anvil');assert.equal(def.id,id);
+  const {object,loc}=ownedStation(t,f,id);
   const before=[f.inv.getAmount(f.I.SKETCH),f.inv.getAmount(f.I.HAMMER),f.inv.getAmount(f.I.GOLD_BAR),f.inv.getAmount(f.I.GOLD_BOWL)],xp=f.p.getSkillManager().getExperience(core.Skill.SMITHING);
   const seen=observe(t,f,'itemOnObjectHooks','handleItemOnObject',e=>e.itemId===f.I.GOLD_BAR&&e.objectId===id),slot=f.inv.getSlotForItemId(f.I.GOLD_BAR);
   await send(f,{type:'inventory_use_on',slot,itemId:f.I.GOLD_BAR,target:{kind:'loc',id,x:loc.getX(),y:loc.getY()}},()=>seen.length>0);

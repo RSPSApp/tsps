@@ -10,6 +10,10 @@ const UNLOCK = "gotr_amulet_of_the_eye_obtained";
 const OPENED = "gotr_locket_opened";
 const AMULETS = ["gotr_amulet_of_the_eye", "gotr_amulet_of_the_eye_red", "gotr_amulet_of_the_eye_green", "gotr_amulet_of_the_eye_blue"];
 const LOCKET = "gotr_tarnished_locket";
+const LOBBY_TILE = Shared.LOBBY_TILE;
+// Cache params for equipment actions, shared with Jewellery.plugin.js.
+const WORN_OPTION_PARAM = 451;
+const FIRST_WORN_OPTION_CLICK = 2;
 const NO_SPACE = "9nafop";
 const RECLAIM = "xm3rMD";
 const EXCHANGE = "HnwS8y";
@@ -67,6 +71,24 @@ function locketOnGuide(event) {
   });
   event.handled = true;
 }
+/** The Wiki gives the amulet unlimited teleports to the Temple of the Eye, the lobby of the minigame. */
+function teleport(player) {
+  const { Location, TeleportHandler, TeleportType } = Shared.core();
+  const target = new Location(LOBBY_TILE.x, LOBBY_TILE.y, 0);
+  if (!TeleportHandler.checkReqs(player, target)) return;
+  TeleportHandler.teleport(player, target, TeleportType.NORMAL, false);
+}
+function wornOption(event) {
+  const { CacheDefinitions, Equipment } = Shared.core();
+  if (event.interfaceId !== Equipment.INVENTORY_INTERFACE_ID || event.clickType < FIRST_WORN_OPTION_CLICK) return null;
+  return CacheDefinitions.getItem(event.itemId)?.params?.get(WORN_OPTION_PARAM + event.clickType - FIRST_WORN_OPTION_CLICK);
+}
+function amuletAction(event) {
+  if (!event.item || !AMULETS.some(name => Shared.obj(name) === event.itemId)) return;
+  if (String(event.option ?? wornOption(event) ?? "").toLowerCase() !== "teleport") return;
+  event.handled = true;
+  teleport(event.player);
+}
 function inspectLocket({ player }) {
   Records.setSetting(player, OPENED, 1);
   player.sendMessage("The locket opens, revealing a note inside.");
@@ -77,6 +99,7 @@ module.exports = {
     api.onNpcDialogueCondition(condition);
     api.onCustomEvent("npc-dialogue:action", action);
     api.onItemOnNpc(locketOnGuide);
+    api.onItemAction(amuletAction);
     api.onItemAction("Tarnished locket", { Inspect: inspectLocket });
   },
 };

@@ -236,8 +236,14 @@ test("Demonic Pacts, the cache's own league: no catalog overrides, and a task's 
   const giant = catalog.leagues["6"].tasks.find((task) => task.id === "defeat-a-hill-giant");
   const last = catalog.leagues["6"].tasks.at(-1);
   assert.deepEqual([last.position, catalog.leagues["6"].tasks.length], [1592, 1592], "past the one row the cache leaves out of the league, a task keeps its cache position");
+  kill(pacts, "TzTok-Jad");
+  kill(pacts, "TzHaar-Ket-Rak");
+  assert.deepEqual(completed(pacts), [], "a Fight Cave monster and Ket-Rak are not the city's TzHaar");
+  kill(pacts, "TzHaar-Xil");
+  assert.deepEqual(completed(pacts), ["defeat-a-tzhaar"]);
+  assert.equal(emitted.filter(([name, payload]) => name === "league:task-completed" && payload.id === "defeat-a-tzhaar").at(-1)[1].pactTask, true);
   kill(pacts, "Hill Giant");
-  assert.deepEqual(completed(pacts), ["defeat-a-hill-giant"]);
+  assert.deepEqual(completed(pacts), ["defeat-a-tzhaar", "defeat-a-hill-giant"]);
   assert.equal(pacts.sent.varps.get(bitVarp(giant.position)), 1 << (giant.position % 32), "the bit the client's script 9470 reads");
   assert.equal(pacts.sent.messages.at(-1), "Congratulations, you've completed an easy task: <col=FE206A>Defeat a Hill Giant</col>.", "in the league's colour");
 });

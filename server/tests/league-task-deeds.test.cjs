@@ -728,6 +728,25 @@ test("equip-all: a set worn at once, a slot taking either (Equip a Full Bronze S
   assert.ok(done(f, "equip-a-full-bronze-set"));
 });
 
+test("pact equipment groups: a godsword, a zenyte piece, or one moon armour piece", async (t) => {
+  const f = pactsCharacter(t);
+  const skills = f.player.getSkillManager();
+  for (const skill of [core.Skill.ATTACK, core.Skill.DEFENCE, core.Skill.STRENGTH, core.Skill.RANGED, core.Skill.MAGIC, core.Skill.HITPOINTS]) {
+    skills.setMaxLevel(skill, 99);
+    skills.setCurrentLevel(skill, 99);
+  }
+  const wear = async (name) => {
+    f.player.getInventory().add(new core.Item(item(name)), true);
+    await inventoryOption(f, name, "Wear", 2, 2);
+  };
+  await wear("Armadyl godsword");
+  assert.ok(done(f, "equip-a-godsword"), f.messages.join(" "));
+  await wear("Blood Moon helm");
+  assert.ok(done(f, "equip-any-piece-of-armour-from-the-moons-of-peril"));
+  await wear("Amulet of torture");
+  assert.ok(done(f, "equip-some-zenyte-jewelry"));
+});
+
 test("item sets from the cache: a piece, the whole set, one whole Barrows set (Verac's, worn for real)", async (t) => {
   const f = pactsCharacter(t);
   const skills = f.player.getSkillManager();

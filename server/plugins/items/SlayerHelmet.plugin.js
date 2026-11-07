@@ -195,6 +195,7 @@ function assemble(event) {
   inventory.adds(imbued ? ItemIdentifiers.SLAYER_HELMET_I_ : ItemIdentifiers.SLAYER_HELMET, 1);
   inventory.refreshItems();
   pluginApi.emitCustomEvent("equipment:changed", { player });
+  pluginApi.emitCustomEvent("league:complete-task", { player, id: "assemble-a-slayer-helm" });
   player.sendMessage("You combine the items into a Slayer helmet.");
 }
 

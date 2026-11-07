@@ -50,9 +50,15 @@ function deliberateBurnFor(itemId) {
   return undefined;
 }
 
+// Free worlds cannot use members-only raw food, including through a range's Cook option.
+function availableOnWorld(cookable) {
+  return Common.core.WorldDefinition.isMembersWorld()
+    || (!cookable.gnomeTutorial && Common.core.CacheDefinitions.getItem(cookable.raw)?.isMembers !== true);
+}
+
 function cookableFor(itemId) {
   const cookable = Common.cookables().get(itemId) ?? deliberateBurnFor(itemId);
-  return cookable?.gnomeTutorial && !Common.core.WorldDefinition.isMembersWorld() ? undefined : cookable;
+  return cookable && availableOnWorld(cookable) ? cookable : undefined;
 }
 
 // Wiki: cooking a raw karambwan yields a poison karambwan until Tinsay teaches
@@ -181,7 +187,7 @@ function sendSuccessCount({ player }) {
 
 /** Whether the player may cook this here; says why not in a message box. */
 function canCook(player, object, cookable) {
-  if (cookable.gnomeTutorial && !Common.core.WorldDefinition.isMembersWorld()) {
+  if (!availableOnWorld(cookable)) {
     player.sendMessage("To use this item please login to a members' world.");
     return false;
   }
@@ -246,7 +252,7 @@ function carriedCookables(player, onFire) {
   for (const item of player.getInventory().getItems()) {
     if (!item || Common.core.ItemDefinition.forId(item.getId()).isNoted()) continue;
     const cookable = Common.cookables().get(item.getId());
-    if (cookable && !(cookable.gnomeTutorial && !Common.core.WorldDefinition.isMembersWorld())
+    if (cookable && availableOnWorld(cookable)
       && !(cookable.rangeOnly && onFire) && !found.has(cookable.raw)) found.set(cookable.raw, cookable);
   }
   return [...found.values()];
@@ -345,7 +351,7 @@ function cookOne(player, session) {
   const { Item, Skill } = Common.core;
   const cookable = cookedResult(player, session.cookable);
   const inventory = player.getInventory();
-  if (cookable.gnomeTutorial && !Common.core.WorldDefinition.isMembersWorld()) return false;
+  if (!availableOnWorld(cookable)) return false;
   if (cookable.deliberate) {
     inventory.deleteNumber(session.cookable.raw, 1);
     player.getInventory().addItem(new Item(cookable.cooked, 1));

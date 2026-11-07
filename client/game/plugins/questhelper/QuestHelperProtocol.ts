@@ -130,6 +130,17 @@ export type HelperTarget = {
     label?: string;
 };
 export type RequirementCheck = "pass" | "fail" | "partial" | "boost" | "neutral";
+/**
+ * The only origin a Quest Helper link may point at. Upstream builds these from item wiki terms, so
+ * any other value is a bug or a tampered bridge: it renders as plain text rather than a live link.
+ */
+export const WIKI_ORIGIN = "https://oldschool.runescape.wiki/";
+
+/** The URL when it points at the OSRS wiki, otherwise undefined. */
+export function wikiHref(url?: string): string | undefined {
+    return url !== undefined && url.startsWith(WIKI_ORIGIN) ? url : undefined;
+}
+
 export type RequirementState = {
     name: string;
     met: boolean;

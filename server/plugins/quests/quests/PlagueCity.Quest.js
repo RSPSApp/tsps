@@ -311,6 +311,22 @@ module.exports = function registerPlagueCityQuest(api) {
     }
   }
 
+  /**
+   * Wiki (Ardougne teleport scroll): "If a player loses this scroll, they can go back to Edmond." His after-quest
+   * transcript ("Do you have any more of those scrolls?" / "Yes, here you go.") has no item step, so the line gives it.
+   */
+  function handleLine(event) {
+    const { player, npcId, text } = event;
+    if (npcId !== EDMOND_NPC_ID || text !== "Yes, here you go." || !quest.isComplete(player)) return;
+    if (held(player, ARDOUGNE_SCROLL_ITEM_ID)) return;
+    const inventory = player.getInventory();
+    if (inventory.getFreeSlots() < 1) {
+      player.sendMessage("You don't have enough inventory space.");
+      return;
+    }
+    inventory.adds(ARDOUGNE_SCROLL_ITEM_ID, 1);
+  }
+
   /** Bravek's hangover cure: chocolate dust + milk, then snape grass. */
   function handleItemOnItem(event) {
     const ids = [event.usedItemId, event.usedWithItemId];
@@ -336,6 +352,28 @@ module.exports = function registerPlagueCityQuest(api) {
     refreshQuestList(player);
   }
 
+  /**
+   * Wiki (Ardougne teleport scroll): reading it after the quest teaches the Ardougne Teleport spell and uses the
+   * scroll up; any further scroll "will explode on use, converting into ashes" (no line is given for that).
+   */
+  function readScroll(event) {
+    const { player, item, slot } = event;
+    if (event.itemId !== ARDOUGNE_SCROLL_ITEM_ID) return false;
+    event.handled = true;
+    const inventory = player.getInventory();
+    if (inventory.get(slot) !== item || !quest.isComplete(player)) return true;
+    if (quest.getStage(player) >= STAGE_READ_SCROLL) {
+      inventory.setItem(slot, new api.core.Item(ItemIdentifiers.ASHES, 1));
+      inventory.refreshItems();
+      return true;
+    }
+    inventory.deleteAtSlot(slot, 1);
+    quest.setStage(player, STAGE_READ_SCROLL);
+    player.sendMessage("You memorise what is written on the scroll. You can now use the Ardougne Teleport Spell.");
+    refreshQuestList(player);
+    return true;
+  }
+
   quest = registerQuest(api, {
     key: "plague_city",
     name: "Plague City",
@@ -355,6 +393,8 @@ module.exports = function registerPlagueCityQuest(api) {
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:action", handleAction);
+  api.onCustomEvent("npc-dialogue:line", handleLine);
   api.onItemOnItem(handleItemOnItem);
+  api.onItemAction("Ardougne teleport scroll", { Read: readScroll });
   api.onPlayerLogin(handleLogin);
 };

@@ -496,6 +496,61 @@ test("celestial ring: charge with stardust, extra ores up to adamantite spend ch
   assert.equal(p.getInventory().getAmount(I.STARDUST), 20);
 });
 
+test("celestial signet: charge with stardust, extra ores spend charges, run out, uncharge returns it", () => {
+  const p = miner();
+  const I = core.ItemIdentifiers;
+  p.getInventory().adds(I.STARDUST, 20);
+  p.getInventory().adds(I.CELESTIAL_SIGNET_UNCHARGED_, 1);
+  const signet = p.getInventory().getItems().find((item) => item?.getId() === I.CELESTIAL_SIGNET_UNCHARGED_);
+  Ring.addCharges(p, signet, 15);
+  assert.equal(signet.getId(), I.CELESTIAL_SIGNET);
+  assert.equal(Ring.charges(signet), 15);
+  assert.equal(p.getInventory().getAmount(I.STARDUST), 5);
+  const worn = new core.Item(I.CELESTIAL_SIGNET, 1);
+  worn.setMetaValue(Ring.CHARGES_META_KEY, 2);
+  const wearer = miner();
+  wearer.getEquipment().setItem(core.Equipment.RING_SLOT, worn);
+  const coal = { player: wearer, rockLevel: 30, bonuses: [] };
+  Ring.extraOre(coal, () => 0.05);
+  assert.equal(coal.bonuses.length, 1, "a charged signet gives the extra ore like the ring");
+  assert.equal(Ring.charges(worn), 1);
+  Ring.extraOre({ player: wearer, rockLevel: 30, bonuses: [] }, () => 0.5);
+  assert.equal(worn.getId(), I.CELESTIAL_SIGNET_UNCHARGED_, "the last charge turns it back into the uncharged signet");
+  Ring.uncharge({ player: p, item: signet });
+  assert.equal(signet.getId(), I.CELESTIAL_SIGNET_UNCHARGED_);
+  assert.equal(p.getInventory().getAmount(I.STARDUST), 20);
+});
+
+test("celestial signet: a celestial ring, elven signet, 1,000 stardust and 100 shards sing into one at 70 Smithing and Crafting", () => {
+  const p = miner();
+  const I = core.ItemIdentifiers;
+  const stock = () => {
+    p.getInventory().adds(I.STARDUST, 1000);
+    p.getInventory().adds(I.CRYSTAL_SHARD, 100);
+    p.getInventory().adds(I.ELVEN_SIGNET, 1);
+    p.getInventory().adds(I.CELESTIAL_RING_UNCHARGED_, 1);
+  };
+  stock();
+  p.getSkillManager().setLevel(core.Skill.SMITHING, 69);
+  p.getSkillManager().setLevel(core.Skill.CRAFTING, 99);
+  assert.match(Ring.signetProblem(p), /level 70 Smithing and Crafting/);
+  Ring.singSignet(p);
+  assert.equal(p.getInventory().getAmount(I.CELESTIAL_SIGNET_UNCHARGED_), 0, "nothing is made below 70");
+  assert.equal(p.getInventory().getAmount(I.STARDUST), 1000);
+  p.getSkillManager().setLevel(core.Skill.SMITHING, 70);
+  const smithing = p.getSkillManager().getExperience(core.Skill.SMITHING);
+  const crafting = p.getSkillManager().getExperience(core.Skill.CRAFTING);
+  Ring.singSignet(p);
+  assert.equal(p.getInventory().getAmount(I.CELESTIAL_SIGNET_UNCHARGED_), 1);
+  assert.equal(p.getInventory().getAmount(I.CELESTIAL_RING_UNCHARGED_), 0);
+  assert.equal(p.getInventory().getAmount(I.ELVEN_SIGNET), 0);
+  assert.equal(p.getInventory().getAmount(I.STARDUST), 0);
+  assert.equal(p.getInventory().getAmount(I.CRYSTAL_SHARD), 0);
+  assert.equal(p.getSkillManager().getExperience(core.Skill.SMITHING) - smithing, 5000);
+  assert.equal(p.getSkillManager().getExperience(core.Skill.CRAFTING) - crafting, 5000);
+  assert.match(Ring.signetProblem(p), /celestial ring and an elven signet/);
+});
+
 test("celestial ring: equipping the ring while the stardust prompt is open spends no stardust", () => {
   const p = miner();
   const I = core.ItemIdentifiers;

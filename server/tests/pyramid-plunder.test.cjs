@@ -116,6 +116,7 @@ function player({ thieving = 99, strength = 99, items = {}, at = { x: 3289, y: 2
     getInventory: () => ({
       getAmount: (id) => inventory.get(id) ?? 0,
       addItem: (item) => inventory.set(item.getId(), (inventory.get(item.getId()) ?? 0) + item.getAmount()),
+      forceAdd: (_player, item) => inventory.set(item.getId(), (inventory.get(item.getId()) ?? 0) + item.getAmount()),
       deleteNumber: (id, amount) => inventory.set(id, (inventory.get(id) ?? 0) - amount),
       getFreeSlots: () => 28 - [...inventory.values()].filter((amount) => amount > 0).length,
       getAddableAmount: (item) => Math.min(item.getAmount(), 0x7fffffff - (inventory.get(item.getId()) ?? 0)),
@@ -495,6 +496,16 @@ test("Simon takes every artefact, noted or not, and pays his prices", () => {
   assert.equal(artefactCount(p), 0);
   assert.equal(p.inventory.get(noted.goldenStatuette), 0);
   assert.equal(T.Simon.onDialogueVariant({ player: p, npcId: 5786 }), T.Simon.VARIANT.firstTalk, "nothing left: his introduction");
+});
+
+test("logging out between handing Simon the artefacts and his payment still pays them", () => {
+  const noted = ids().item.noted;
+  const p = player({ items: { [noted.goldenStatuette]: 3 } });
+  T.Simon.onDialogueAction({ player: p, npcId: 5786, stepId: "Kn2FnM", handled: false });
+  assert.equal(p.inventory.get(noted.goldenStatuette), 0, "the statuettes are handed over");
+  assert.equal(p.inventory.get(ids().item.coins) ?? 0, 0, "not paid yet: the next line pays");
+  T.Simon.forget({ player: p }); // the logout and disconnect hook, which runs before the save
+  assert.equal(p.inventory.get(ids().item.coins), 3 * 1250, "paid on the way out");
 });
 
 test("an artefact used on Simon sells just that one", () => {

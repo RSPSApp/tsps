@@ -321,7 +321,10 @@ module.exports = {
       }
     });
     api.onPlayerDeathItemDrop((event) => {
-      if (Barrows.isBarrowsItem(event.item?.getId?.())) setDurability(event.item, 0);
+      // Wiki (Items Kept on Death): an unprotected piece goes to the grave unbroken after a PvM death, and to the
+      // PKer as its broken version; a protected piece is kept as it is.
+      const pvp = event.killer?.isPlayer?.() === true && event.killer !== event.player;
+      if (Barrows.isBarrowsItem(event.item?.getId?.()) && !event.kept && pvp) setDurability(event.item, 0);
       if (event.item?.getId?.() === Barrows.AMULET_OF_THE_DAMNED) {
         event.item.setId(-1);
         event.handled = true;

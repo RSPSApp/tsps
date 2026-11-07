@@ -231,8 +231,9 @@ function light({ player, object }) {
     if (!current()) return;
     const stand = standNear(object);
     const reward = rewardFor(remains);
-    // Recorded: the burner's alone, never public.
-    Common.core.ItemOnGroundManager.registerNonGlobals(player, new Common.core.Item(reward.id, reward.amount), stand);
+    // Cremation rewards remain private to the burner for five minutes (500 game cycles).
+    Common.core.ItemOnGroundManager.registerLocation(player, new Common.core.Item(reward.id, reward.amount),
+      stand, player.getPrivateArea(), { goesGlobal: false, despawnDelay: p().rewardDespawnTicks });
     graphicAt(p().graphics.smoke, stand, nearbyPlayers(stand));
     pyres.delete(key);
     swap(object, Common.locId(EMPTY_PYRE));

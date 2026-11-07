@@ -366,10 +366,14 @@ module.exports = function registerTheFremennikIslesQuest(api) {
     return quest.getStage(player);
   }
 
-  function legsCraftingLevel(player) {
+  /** Wiki (Yak-hide armour (top) and (legs)): both are boostable, so the higher of base and current Crafting counts. */
+  function yakHideCraftingLevel(player) {
     const skills = player.getSkillManager();
     return Math.max(skills.getMaxLevel(Skill.CRAFTING), skills.getCurrentLevel(Skill.CRAFTING));
   }
+
+  /** Wiki: either piece gives 32 Crafting experience. */
+  const YAK_HIDE_ARMOUR_XP = 32;
 
   function setStage(player, value) {
     if (quest.getStage(player) !== value) quest.setStage(player, value);
@@ -1140,9 +1144,9 @@ module.exports = function registerTheFremennikIslesQuest(api) {
         return player.getInventory().getAmount(COINS) < hides * 5;
       }
       case "FPmCig":
-        return legsCraftingLevel(player) < 43;
+        return yakHideCraftingLevel(player) < 43;
       case "i-PloP":
-        return player.getSkillManager().getMaxLevel(Skill.CRAFTING) < 46;
+        return yakHideCraftingLevel(player) < 46;
       case "pYRUcM":
       case "PreHMM":
         return false;
@@ -1154,12 +1158,12 @@ module.exports = function registerTheFremennikIslesQuest(api) {
         return hasItem(player, CURED_YAK_HIDE, 2)
           && hasItem(player, THREAD)
           && !hasItem(player, YAK_HIDE_BODY)
-          && player.getSkillManager().getMaxLevel(Skill.CRAFTING) >= 46;
+          && yakHideCraftingLevel(player) >= 46;
       case "FfydyU":
         return hasItem(player, CURED_YAK_HIDE)
           && hasItem(player, THREAD)
           && !hasItem(player, YAK_HIDE_LEGS)
-          && legsCraftingLevel(player) >= 43;
+          && yakHideCraftingLevel(player) >= 43;
       // Troll King.
       case "75_TlB":
         return !hasItem(player, TROLL_HEAD);
@@ -1743,8 +1747,8 @@ module.exports = function registerTheFremennikIslesQuest(api) {
     if (!pair.has(NEEDLE) || !pair.has(CURED_YAK_HIDE)) return;
     if (stageOf(player) < STAGE_DECREE_DELIVERED) return;
     event.handled = true;
-    const crafting = player.getSkillManager().getMaxLevel(Skill.CRAFTING);
-    const legsCrafting = legsCraftingLevel(player);
+    const crafting = yakHideCraftingLevel(player);
+    const legsCrafting = crafting;
     if (!hasItem(player, THREAD)) {
       player.sendMessage("You need some thread to make armour from yak hide.");
       return;
@@ -1758,6 +1762,7 @@ module.exports = function registerTheFremennikIslesQuest(api) {
       player.getInventory().deleteNumber(CURED_YAK_HIDE, 2);
       player.getInventory().deleteNumber(THREAD, 1);
       player.getInventory().adds(YAK_HIDE_BODY, 1);
+      player.getSkillManager().addExperiences(Skill.CRAFTING, YAK_HIDE_ARMOUR_XP);
       player.sendMessage("You make yak-hide body armour.");
       return;
     }
@@ -1765,6 +1770,7 @@ module.exports = function registerTheFremennikIslesQuest(api) {
       player.getInventory().deleteNumber(CURED_YAK_HIDE, 1);
       player.getInventory().deleteNumber(THREAD, 1);
       player.getInventory().adds(YAK_HIDE_LEGS, 1);
+      player.getSkillManager().addExperiences(Skill.CRAFTING, YAK_HIDE_ARMOUR_XP);
       player.sendMessage("You make yak-hide leg armour.");
       return;
     }

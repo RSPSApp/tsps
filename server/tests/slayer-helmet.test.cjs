@@ -19,6 +19,7 @@ const NAMES = new Map([
 ]);
 
 const HELM_UNLOCKED_VARBIT = 3202;
+const events = [];
 const modifiers = {};
 let onTask = true;
 const SlayerHelmet = require("../plugins/items/SlayerHelmet.plugin");
@@ -30,7 +31,10 @@ SlayerHelmet.register({
     ItemDefinition: { forId: (id) => ({ getName: () => NAMES.get(id) ?? "" }) },
     CacheDefinitions: { getVarbitId: (name) => (name === "slayer_helm_unlocked" ? HELM_UNLOCKED_VARBIT : null) },
   },
-  emitCustomEvent: (name, request) => { if (name === "slayer:on-task") request.onTask = onTask; },
+  emitCustomEvent: (name, request) => {
+    events.push([name, request]);
+    if (name === "slayer:on-task") request.onTask = onTask;
+  },
   registerMeleeAttackAccuracyModifier: (fn) => { modifiers.meleeAccuracy = fn; },
   registerMeleeHitModifier: (fn) => { modifiers.meleeHit = fn; },
   registerRangedAttackAccuracyModifier: (fn) => { modifiers.rangedAccuracy = fn; },
@@ -137,6 +141,7 @@ test("any component on another assembles the helmet, and a charged mask loses it
   assemble(event);
   assert.equal(event.handled, true);
   assert.deepEqual(player.items.map((entry) => entry.getId()), [ItemIdentifiers.SLAYER_HELMET, ...Array(5).fill(-1)]);
+  assert.deepEqual(events.filter(([name]) => name === "league:complete-task"), [["league:complete-task", { player, id: "assemble-a-slayer-helm" }]]);
 });
 
 test("mask-on-mask retains the existing first-owned fallback", () => {
@@ -169,10 +174,12 @@ test("assembly needs 55 Crafting and every component", () => {
 test("assembly needs the Malevolent masquerade unlock", () => {
   const player = createPlayer({ helmUnlocked: false, inventory: [ItemIdentifiers.BLACK_MASK_7_, ...PARTS] });
   const event = { player, usedItemId: ItemIdentifiers.EARMUFFS, usedWithItemId: ItemIdentifiers.BLACK_MASK_7_, handled: false };
+  const awarded = events.filter(([name]) => name === "league:complete-task").length;
   assemble(event);
   assert.equal(event.handled, true);
   assert.deepEqual(player.items.map((entry) => entry.getId()), [ItemIdentifiers.BLACK_MASK_7_, ...PARTS]);
   assert.match(player.messages[0], /Malevolent masquerade/);
+  assert.equal(events.filter(([name]) => name === "league:complete-task").length, awarded, "a refused assembly awards nothing");
 });
 
 test("a scroll of imbuing turns a black mask into its imbued form, keeping its charges", () => {

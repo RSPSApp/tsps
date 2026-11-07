@@ -42,6 +42,20 @@ import { CacheDefinitions } from "../src/main/typescript/elvarg/game/cache/Cache
 const OUTPUT = path.resolve(__dirname, "../plugins/modes/data/league-tasks.json");
 const QUESTS_DIR = path.resolve(__dirname, "../plugins/quests/quests");
 const USER_AGENT = "tsps league-tasks generator (https://github.com/RSPSApp/tsps)";
+
+/** A Wiki raw page. A 429 waits and tries again; the generator reads a few hundred pages. */
+async function wikiText(url: string): Promise<string> {
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const response = await fetch(url, { headers: { "User-Agent": USER_AGENT }, signal: AbortSignal.timeout(60_000) });
+    if (response.status !== 429 && response.status !== 503) {
+      if (!response.ok) throw new Error(`${url}: HTTP ${response.status}`);
+      return response.text();
+    }
+    const wait = Number(response.headers.get("retry-after")) || (attempt + 1) * 2;
+    await new Promise((resolve) => setTimeout(resolve, wait * 1000));
+  }
+  throw new Error(`${url}: HTTP 429`);
+}
 const TASK_TABLE = 118;
 /** The enum the task list's scripts read (position -> row of the task table), the cache's current league. */
 const TASK_ENUM = 5950;
@@ -372,6 +386,15 @@ function wornNamed(text: string, items: Map<string, string>): string | null {
     if (item) return item;
   }
   return null;
+}
+
+/** A worn item and the cache's parenthetical forms of it ("Amulet of torture", "(or)"). Empty when the base is no item. */
+function wornVariants(base: string, items: Map<string, string>): string[] {
+  const lower = base.toLowerCase();
+  const forms = [...items.entries()].filter(([key]) => key === lower || key.startsWith(`${lower} (`)).map(([, name]) => name);
+  if (!forms.some((name) => name.toLowerCase() === lower)) return [];
+  forms.sort((a, b) => (a.toLowerCase() === lower ? -1 : b.toLowerCase() === lower ? 1 : a < b ? -1 : a > b ? 1 : 0));
+  return forms;
 }
 
 /**
@@ -1250,6 +1273,12 @@ function deriveTrigger(fullName: string, rawDescription: string, names: Names): 
     // A named place the server knows the bounds of ("in the Warriors' Guild"): a kill there.
     const spot = placeOf(description);
     if (spot.place) description = spot.text;
+    // "Defeat any TzHaar in Mor Ul Rek": the four attackable city castes. TzTok-Jad and
+    // TzHaar-Ket-Rak are named otherwise, and are other tasks. The place is where those four live.
+    if (/^Defeat any TzHaar in Mor Ul Rek\.?$/i.test(description)) {
+      const castes = ["TzHaar-Ket", "TzHaar-Xil", "TzHaar-Mej", "TzHaar-Hur"].map((npc) => npcs.get(npc.toLowerCase())).filter((npc): npc is string => !!npc && attackLevels(npc).size > 0);
+      if (castes.length === 4) return { trigger: { kind: "kill", npcs: castes, count } };
+    }
     // A condition in the description (where, how, how fast) is not a plain kill count: a place
     // ("in the Fremennik Province", "on Ungael") needs the area unlocks, which do not exist yet.
     // "(must be of one difficulty, normal and awakened together do not count)" is one too.
@@ -1444,6 +1473,20 @@ function deriveTrigger(fullName: string, rawDescription: string, names: Names): 
       }
       const sets = itemSetNamed(set[1]) ?? wikiSetNamed(set[1], names);
       if (sets) return { trigger: { kind: "equip", items: [...new Set(sets.flat())] } };
+      // "Equip any piece of Zenyte Jewelry": the four enchanted pieces (the Zenyte page's Magic
+      // table; the task's link redirects there) and each piece's cache forms.
+      if (/^zenyte jewelry$/i.test(set[1])) {
+        const pieces = ["Amulet of torture", "Necklace of anguish", "Tormented bracelet", "Ring of suffering"].flatMap((piece) => wornVariants(piece, items));
+        if (pieces.length) return { trigger: { kind: "equip", items: pieces } };
+      }
+      // "any piece of Moon equipment from the Blood, Frost, or Eclipse moon set": the linked set
+      // page has one table per moon, and a piece of any of them counts (the same pieces as
+      // "Equip a piece of Blood Moon armour" and its two siblings, weapons included).
+      const titled = [...(names.sets?.keys() ?? [])].filter((key) => set[1].toLowerCase().startsWith(`${key} `)).sort((a, b) => b.length - a.length)[0];
+      if (titled) {
+        const named = names.sets!.get(titled)!.flat().map((piece) => names.items.get(piece.toLowerCase()) ?? null);
+        if (named.length && named.every((piece): piece is string => !!piece)) return { trigger: { kind: "equip", items: [...new Set(named)] } };
+      }
     }
   }
   // "Steal some bread" ("from a bakery stall"), "Steal From a Gem Stall", "Steal from a Fur Stall in
@@ -1556,6 +1599,18 @@ function deriveTrigger(fullName: string, rawDescription: string, names: Names): 
       const parts = list.split(/,\s*(?:or )?|\s+or\s+/).map((part) => part.replace(/^(?:a pair of |an? |the |some )/i, "").trim()).filter(Boolean);
       const named = parts.map((part) => wornNamed(part, items));
       if (!/ and /.test(list) && named.length && named.every(Boolean)) return { trigger: { kind: "equip", items: [...new Set(named as string[])], area: placed.area } };
+    }
+  }
+  // "Equip any Godsword": the versions its page's {{plinkt}} names, each ending with the page's
+  // title, and an ornament kit of one when the cache has it.
+  if ((match = /^Equip any (.+?)\.?$/i.exec(clean(description)))) {
+    const versions = names.subjects?.get(match[1].toLowerCase());
+    if (versions?.length) {
+      const worn = versions.flatMap((item) => {
+        const kit = items.get(`${item} (or)`.toLowerCase());
+        return kit ? [item, kit] : [item];
+      });
+      return { trigger: { kind: "equip", items: worn } };
     }
   }
   // A condition, or a group the description names ("Chop any kind of logs", "Catch any butterfly"):
@@ -1758,9 +1813,7 @@ function summarise(league: League, tasks: Task[], duplicateWikiIds: string[], un
 async function wikitextOf(league: League, options: { from?: string; save?: string }): Promise<string> {
   if (options.from) return fs.readFileSync(path.join(options.from, `${league.key}.wikitext`), "utf8");
   const url = `https://oldschool.runescape.wiki/w/${league.page}?action=raw`;
-  const response = await fetch(url, { headers: { "User-Agent": USER_AGENT }, signal: AbortSignal.timeout(60_000) });
-  if (!response.ok) throw new Error(`${url}: HTTP ${response.status}`);
-  const text = await response.text();
+  const text = await wikiText(url);
   if (options.save) {
     fs.mkdirSync(options.save, { recursive: true });
     fs.writeFileSync(path.join(options.save, `${league.key}.wikitext`), text);
@@ -1892,9 +1945,7 @@ async function wikiPageOf(kind: string, page: string, options: { from?: string; 
   let text = "";
   for (let hop = 0; hop < 3; hop++) {
     const url = `https://oldschool.runescape.wiki/w/${encodeURIComponent(title.replace(/ /g, "_")).replace(/%2F/g, "/")}?action=raw`;
-    const response = await fetch(url, { headers: { "User-Agent": USER_AGENT }, signal: AbortSignal.timeout(60_000) });
-    if (!response.ok) throw new Error(`${url}: HTTP ${response.status}`);
-    text = await response.text();
+    text = await wikiText(url);
     const redirect = /^#REDIRECT\s*\[\[([^\]#|]+)/i.exec(text);
     if (!redirect) break;
     title = redirect[1].trim();
@@ -1910,9 +1961,7 @@ async function wikiPageOf(kind: string, page: string, options: { from?: string; 
 async function placePageOf(page: string, options: { from?: string; save?: string }): Promise<string> {
   if (options.from) return fs.readFileSync(path.join(options.from, "places", `${page}.wikitext`), "utf8");
   const url = `https://oldschool.runescape.wiki/w/${encodeURIComponent(page).replace(/%2F/g, "/")}?action=raw`;
-  const response = await fetch(url, { headers: { "User-Agent": USER_AGENT }, signal: AbortSignal.timeout(60_000) });
-  if (!response.ok) throw new Error(`${url}: HTTP ${response.status}`);
-  const text = await response.text();
+  const text = await wikiText(url);
   if (options.save) {
     fs.mkdirSync(path.join(options.save, "places"), { recursive: true });
     fs.writeFileSync(path.join(options.save, "places", `${page}.wikitext`), text);
@@ -1976,9 +2025,16 @@ async function main() {
     const npcs = infoboxNames(text, ["Infobox Monster", "Infobox NPC"]).map((each) => names.npcs.get(each.toLowerCase())).filter((each): each is string => !!each)
       .filter((each) => npcIdsNamed(each).every((id) => ids.includes(id)));
     const key = page.toLowerCase();
+    // A page that is the thing ("Godsword"): the {{plinkt}} items whose names end with its title.
+    // Materials beside them ("godsword shard") do not.
+    let listed = items;
+    if (!listed.length && !npcs.length) {
+      const linked = [...text.matchAll(/\{\{plinkt\|([^|}]+)/gi)].map((match) => names.items.get(match[1].trim().toLowerCase())).filter((each): each is string => !!each);
+      listed = [...new Set(linked.filter((each) => each.toLowerCase().endsWith(key)))];
+    }
     if (new Set(items).size === 1 && !npcs.length) names.items.set(key, items[0]);
     else if (new Set(npcs).size === 1 && !items.length) names.npcs.set(key, npcs[0]);
-    else if (items.length > 1 && !npcs.length) names.subjects.set(key, [...new Set(items)]);
+    else if (listed.length > 1 && !npcs.length) names.subjects.set(key, [...new Set(listed)]);
   }
   // The ids of the NPCs the talk and pet tasks link to, by lower-cased page title.
   names.npcIds = new Map();

@@ -71,6 +71,70 @@ test("the jester chest needs room for all four pieces before it gives any", (t) 
   assert.deepEqual([I.SILLY_JESTER_HAT, I.SILLY_JESTER_TOP, I.SILLY_JESTER_TIGHTS, I.SILLY_JESTER_BOOTS].map((id) => f.inv.getAmount(id)), [1, 1, 1, 1]);
 });
 
+// The chest also replaces a lost costume: it gives whichever of the four pieces the player lacks (Wiki: "If the jester
+// outfit is lost, a player can retrieve another one from the chest behind King Gjuki Sorvott IV's throne").
+function jesterChest(f) {
+  const chest = { getId: () => JESTER_CHEST_ID(), getLocation: () => f.p.getLocation() };
+  return () => PM.emitObjectInteraction({ player: f.p, object: chest, objectId: JESTER_CHEST_ID(), definition: { getActions: () => ["Open"], getName: () => "Chest" }, clickType: 1, location: f.p.getLocation(), handled: false });
+}
+const jesterIds = () => [I.SILLY_JESTER_HAT, I.SILLY_JESTER_TOP, I.SILLY_JESTER_TIGHTS, I.SILLY_JESTER_BOOTS];
+const jesterCounts = (f) => jesterIds().map((id) => f.inv.getAmount(id));
+
+test("a reopened jester chest gives back only the lost piece", (t) => {
+  const f = actor(t, 4);
+  const open = jesterChest(f);
+  open();
+  f.inv.delete(I.SILLY_JESTER_HAT, 1);
+  open();
+  assert.deepEqual(jesterCounts(f), [1, 1, 1, 1]);
+  assert.equal(f.messages.at(-1), "You take the silly jester costume from the chest.");
+});
+
+test("a reopened jester chest gives all four after the whole costume is lost", (t) => {
+  const f = actor(t, 4);
+  const open = jesterChest(f);
+  open();
+  for (const id of jesterIds()) f.inv.delete(id, 1);
+  open();
+  assert.deepEqual(jesterCounts(f), [1, 1, 1, 1]);
+});
+
+test("a jester chest gives nothing while the whole costume is held", (t) => {
+  const f = actor(t, 4);
+  const open = jesterChest(f);
+  open();
+  open();
+  assert.deepEqual(jesterCounts(f), [1, 1, 1, 1]);
+  assert.equal(f.messages.at(-1), "You have already taken the jester costume.");
+});
+
+test("worn jester pieces count as owned", (t) => {
+  const f = actor(t, 4);
+  const open = jesterChest(f);
+  open();
+  f.inv.delete(I.SILLY_JESTER_HAT, 1);
+  f.p.getEquipment().setItem(core.Equipment.HEAD_SLOT, new core.Item(I.SILLY_JESTER_HAT, 1));
+  open();
+  assert.deepEqual(jesterCounts(f), [0, 1, 1, 1], "no second hat");
+  assert.equal(f.messages.at(-1), "You have already taken the jester costume.");
+});
+
+test("a reopened jester chest needs a slot for every missing piece", (t) => {
+  const f = actor(t, 4);
+  const open = jesterChest(f);
+  open();
+  f.inv.delete(I.SILLY_JESTER_TOP, 1);
+  f.inv.delete(I.SILLY_JESTER_TIGHTS, 1);
+  for (let slot = 0; slot < 28; slot++) if (!(f.inv.get(slot)?.getId?.() > 0)) f.inv.setItem(slot, new core.Item(I.LOGS, 1));
+  f.inv.setItem(27, new core.Item(-1, 0));
+  open();
+  assert.deepEqual(jesterCounts(f), [1, 0, 0, 1], "one free slot takes neither missing piece");
+  assert.equal(f.messages.at(-1), "You need some free inventory space to take the costume.");
+  f.inv.setItem(26, new core.Item(-1, 0));
+  open();
+  assert.equal(f.inv.getAmount(I.SILLY_JESTER_TOP) + f.inv.getAmount(I.SILLY_JESTER_TIGHTS), 2);
+});
+
 function JESTER_CHEST_ID() {
   return core.ObjectIdentifiers.CHEST_70; // the plugin's JESTER_CHEST (21299)
 }
